@@ -1,0 +1,638 @@
+<script setup>
+import { computed, onMounted, reactive, ref, watch } from 'vue'
+import {
+  createCategoryDetail,
+  createCategoryGroup,
+  createEntry,
+  createPaymentMethod,
+  deactivateCategoryDetail,
+  deactivateCategoryGroup,
+  deactivatePaymentMethod,
+  deleteEntry,
+  fetchCategories,
+  fetchCategoryBreakdown,
+  fetchCompare,
+  fetchDashboard,
+  fetchEntries,
+  fetchOverview,
+  fetchPaymentBreakdown,
+  fetchPaymentMethods,
+  updateEntry,
+} from '../lib/api'
+import {
+  buildCalendarWeeks,
+  formatCurrency,
+  formatDateRange,
+  formatMonthLabel,
+  formatShortDate,
+  formatTime,
+  getMonthRange,
+  getWeekdayLabels,
+  toIsoDate,
+} from '../lib/format'
+import {
+  buildInsights,
+  buildPastComparisonRanges,
+  filterEntries,
+  getDefaultTimeValue,
+  getPresetOptions,
+  resolveRange,
+  shiftRange,
+  summarizeEntries,
+} from '../lib/analytics'
+import CalendarWorkspace from './CalendarWorkspace.vue'
+import ManagementWorkspace from './ManagementWorkspace.vue'
+import StatisticsWorkspace from './StatisticsWorkspace.vue'
+
+const compareUnitLabels = {
+  DAY: '일간',
+  WEEK: '주간',
+  MONTH: '월간',
+  QUARTER: '분기',
+  YEAR: '연간',
+}
+
+const today = toIsoDate(new Date())
+const quickAmountButtons = [10000, 30000, 50000, 100000]
+
+const isLoading = ref(false)
+const isSubmitting = ref(false)
+const activeSubmit = ref('')
+const feedback = ref('')
+const errorMessage = ref('')
+const householdTab = ref('calendar')
+const calendarAnchorDate = ref(today)
+const calendarReady = ref(false)
+const statsReady = ref(false)
+
+const dashboard = ref({
+  anchorDate: today,
+  quickStats: [],
+  calendar: [],
+  expenseBreakdown: [],
+  paymentBreakdown: [],
+  monthlyComparison: [],
+  recentEntries: [],
+})
+const monthEntries = ref([])
+const statsEntries = ref([])
+const statsOverview = ref({
+  from: today,
+  to: today,
+  income: 0,
+  expense: 0,
+  balance: 0,
+  entryCount: 0,
+})
+const comparisonRows = ref([])
+const expenseBreakdown = ref([])
+const paymentBreakdown = ref([])
+const pastComparisons = ref([])
+const categories = ref([])
+const paymentMethods = ref([])
+const editingEntryId = ref(null)
+const amountInput = ref('')
+
+const entryForm = reactive({
+  entryDate: today,
+  entryTime: getDefaultTimeValue(),
+  title: '',
+  memo: '',
+  amount: '',
+  entryType: 'EXPENSE',
+  categoryGroupId: '',
+  categoryDetailId: '',
+  paymentMethodId: '',
+})
+
+const statsControls = reactive({
+  anchorDate: today,
+  preset: 'MONTH',
+  customFrom: today,
+  customTo: today,
+  compareUnit: 'MONTH',
+  comparePeriods: 12,
+})
+
+const searchForm = reactive({
+  keyword: '',
+  entryType: '',
+  paymentMethodId: '',
+  categoryGroupId: '',
+  minAmount: '',
+  maxAmount: '',
+  sortBy: 'DATE_DESC',
+})
+
+const groupForm = reactive({
+  entryType: 'EXPENSE',
+  name: '',
+  displayOrder: 0,
+})
+
+const detailForm = reactive({
+  groupId: '',
+  name: '',
+  displayOrder: 0,
+})
+
+const paymentForm = reactive({
+  kind: 'CARD',
+  name: '',
+  displayOrder: 0,
+})
+
+const presetOptions = getPresetOptions()
+const weekdayLabels = getWeekdayLabels()
+
+const availableGroups = computed(() => categories.value.filter((group) => group.entryType === entryForm.entryType))
+const availableDetails = computed(() => {
+  const group = categories.value.find((item) => String(item.id) === String(entryForm.categoryGroupId))
+  return group?.details ?? []
+})
+const amountPreview = computed(() => Number(entryForm.amount || 0))
+const quickStats = computed(() => dashboard.value.quickStats ?? [])
+const monthLabel = computed(() => formatMonthLabel(calendarAnchorDate.value))
+const calendarWeeks = computed(() => buildCalendarWeeks(dashboard.value.calendar ?? [], calendarAnchorDate.value))
+const statsRange = computed(() => resolveRange(statsControls.anchorDate, statsControls.preset, statsControls.customFrom, statsControls.customTo))
+const statsRangeLabel = computed(() => statsRange.value.label)
+const statsCards = computed(() => [
+  { key: 'selected', label: '선택 범위', overview: statsOverview.value },
+  ...quickStats.value.slice(0, 3),
+])
+const comparisonBadge = computed(() => `${compareUnitLabels[statsControls.compareUnit] || statsControls.compareUnit} / ${statsControls.comparePeriods}개 구간`)
+const sortedMonthEntries = computed(() =>
+  monthEntries.value
+    .slice()
+    .sort((left, right) => `${right.entryDate}${right.entryTime || '99:99'}${String(right.id).padStart(10, '0')}`.localeCompare(`${left.entryDate}${left.entryTime || '99:99'}${String(left.id).padStart(10, '0')}`)),
+)
+const searchResults = computed(() => filterEntries(statsEntries.value, searchForm))
+const searchSummary = computed(() => summarizeEntries(searchResults.value))
+const insights = computed(() => buildInsights(statsEntries.value))
+const isEditingEntry = computed(() => editingEntryId.value !== null)
+
+watch(
+  () => entryForm.entryType,
+  () => {
+    if (!availableGroups.value.some((item) => String(item.id) === String(entryForm.categoryGroupId))) {
+      entryForm.categoryGroupId = availableGroups.value[0] ? String(availableGroups.value[0].id) : ''
+    }
+    if (!availableDetails.value.some((item) => String(item.id) === String(entryForm.categoryDetailId))) {
+      entryForm.categoryDetailId = availableDetails.value[0] ? String(availableDetails.value[0].id) : ''
+    }
+  },
+)
+
+watch(
+  () => entryForm.categoryGroupId,
+  () => {
+    if (!availableDetails.value.some((item) => String(item.id) === String(entryForm.categoryDetailId))) {
+      entryForm.categoryDetailId = availableDetails.value[0] ? String(availableDetails.value[0].id) : ''
+    }
+  },
+)
+
+watch(calendarAnchorDate, async () => {
+  if (calendarReady.value) {
+    await loadCalendarData()
+  }
+  if (!isEditingEntry.value) {
+    entryForm.entryDate = calendarAnchorDate.value
+  }
+})
+
+watch(
+  () => [statsControls.anchorDate, statsControls.preset, statsControls.customFrom, statsControls.customTo, statsControls.compareUnit, statsControls.comparePeriods],
+  async () => {
+    if (statsReady.value) {
+      await loadStatisticsData()
+    }
+  },
+)
+
+onMounted(async () => {
+  isLoading.value = true
+  try {
+    await Promise.all([loadMetadata(), loadCalendarData(), loadStatisticsData()])
+    resetEntryForm()
+    calendarReady.value = true
+    statsReady.value = true
+  } catch (error) {
+    setFeedback('', error.message)
+  } finally {
+    isLoading.value = false
+  }
+})
+
+function setFeedback(message = '', error = '') {
+  feedback.value = message
+  errorMessage.value = error
+}
+
+function sanitizeAmountInput(value) {
+  return String(value || '').replace(/[^0-9]/g, '')
+}
+
+function syncEntryDefaults() {
+  if (!availableGroups.value.some((item) => String(item.id) === String(entryForm.categoryGroupId))) {
+    entryForm.categoryGroupId = availableGroups.value[0] ? String(availableGroups.value[0].id) : ''
+  }
+  if (!availableDetails.value.some((item) => String(item.id) === String(entryForm.categoryDetailId))) {
+    entryForm.categoryDetailId = availableDetails.value[0] ? String(availableDetails.value[0].id) : ''
+  }
+  if (!paymentMethods.value.some((item) => String(item.id) === String(entryForm.paymentMethodId))) {
+    entryForm.paymentMethodId = paymentMethods.value[0] ? String(paymentMethods.value[0].id) : ''
+  }
+  if (!detailForm.groupId && categories.value[0]) {
+    detailForm.groupId = String(categories.value[0].id)
+  }
+}
+
+async function loadMetadata() {
+  const [groupItems, paymentItems] = await Promise.all([fetchCategories(), fetchPaymentMethods()])
+  categories.value = groupItems
+  paymentMethods.value = paymentItems
+  syncEntryDefaults()
+}
+
+function handleChangeCalendarMonth(value) {
+  calendarAnchorDate.value = value
+}
+
+async function loadCalendarData() {
+  const range = getMonthRange(calendarAnchorDate.value)
+  const [dashboardResponse, entryItems] = await Promise.all([
+    fetchDashboard(calendarAnchorDate.value),
+    fetchEntries(range.from, range.to),
+  ])
+  dashboard.value = dashboardResponse
+  monthEntries.value = entryItems
+}
+
+async function loadStatisticsData() {
+  const range = statsRange.value
+  const [overview, categoryItems, paymentItems, compareItems, entryItems] = await Promise.all([
+    fetchOverview(range.from, range.to),
+    fetchCategoryBreakdown(range.from, range.to, 'EXPENSE'),
+    fetchPaymentBreakdown(range.from, range.to),
+    fetchCompare(statsControls.anchorDate, statsControls.compareUnit, statsControls.comparePeriods),
+    fetchEntries(range.from, range.to),
+  ])
+
+  statsOverview.value = overview
+  expenseBreakdown.value = categoryItems
+  paymentBreakdown.value = paymentItems
+  comparisonRows.value = compareItems
+  statsEntries.value = entryItems
+  await loadPastComparisons()
+}
+
+async function loadPastComparisons() {
+  const configs = buildPastComparisonRanges()
+  pastComparisons.value = await Promise.all(
+    configs.map(async (config) => {
+      const currentRange = resolveRange(statsControls.anchorDate, config.preset, statsControls.customFrom, statsControls.customTo)
+      const previousRange = shiftRange(statsControls.anchorDate, config.preset, statsControls.customFrom, statsControls.customTo, 1)
+      const [currentOverview, previousOverview] = await Promise.all([
+        fetchOverview(currentRange.from, currentRange.to),
+        fetchOverview(previousRange.from, previousRange.to),
+      ])
+
+      return {
+        key: config.key,
+        label: config.label,
+        from: previousRange.from,
+        to: previousRange.to,
+        overview: previousOverview,
+        deltaExpense: Number(previousOverview.expense || 0) - Number(currentOverview.expense || 0),
+      }
+    }),
+  )
+}
+
+function resetEntryForm() {
+  editingEntryId.value = null
+  entryForm.entryDate = calendarAnchorDate.value
+  entryForm.entryTime = getDefaultTimeValue()
+  entryForm.title = ''
+  entryForm.memo = ''
+  entryForm.amount = ''
+  entryForm.entryType = 'EXPENSE'
+  amountInput.value = ''
+  syncEntryDefaults()
+}
+
+function fillEntryForm(entry) {
+  editingEntryId.value = entry.id
+  entryForm.entryDate = entry.entryDate
+  entryForm.entryTime = entry.entryTime || ''
+  entryForm.title = entry.title || ''
+  entryForm.memo = entry.memo || ''
+  entryForm.amount = String(Number(entry.amount || 0))
+  entryForm.entryType = entry.entryType
+  entryForm.categoryGroupId = String(entry.categoryGroupId)
+  entryForm.categoryDetailId = entry.categoryDetailId != null ? String(entry.categoryDetailId) : ''
+  entryForm.paymentMethodId = String(entry.paymentMethodId)
+  amountInput.value = String(Number(entry.amount || 0))
+}
+
+function buildEntryPayload() {
+  return {
+    entryDate: entryForm.entryDate,
+    entryTime: entryForm.entryTime || null,
+    title: entryForm.title.trim(),
+    memo: entryForm.memo.trim() || null,
+    amount: Number(entryForm.amount || 0),
+    entryType: entryForm.entryType,
+    categoryGroupId: Number(entryForm.categoryGroupId),
+    categoryDetailId: entryForm.categoryDetailId ? Number(entryForm.categoryDetailId) : null,
+    paymentMethodId: Number(entryForm.paymentMethodId),
+  }
+}
+
+function handleAmountInput(value) {
+  const digits = sanitizeAmountInput(value)
+  amountInput.value = digits
+  entryForm.amount = digits ? String(Number(digits)) : ''
+}
+
+function fillAmount(value) {
+  amountInput.value = String(Number(value || 0))
+  entryForm.amount = amountInput.value
+}
+
+function addAmount(value) {
+  const nextValue = amountPreview.value + Number(value || 0)
+  amountInput.value = String(nextValue)
+  entryForm.amount = String(nextValue)
+}
+
+function formatAmountShortcut(value) {
+  const amount = Number(value || 0)
+  if (amount >= 10000) {
+    return `+${(amount / 10000).toLocaleString('ko-KR')}만`
+  }
+  return `+${amount.toLocaleString('ko-KR')}`
+}
+
+async function refreshLedgerViews() {
+  await Promise.all([loadCalendarData(), loadStatisticsData()])
+}
+
+async function submitEntry() {
+  isSubmitting.value = true
+  activeSubmit.value = 'entry'
+  setFeedback()
+  try {
+    if (editingEntryId.value) {
+      await updateEntry(editingEntryId.value, buildEntryPayload())
+      setFeedback('가계부 내역을 수정했습니다.')
+    } else {
+      await createEntry(buildEntryPayload())
+      setFeedback('가계부 내역을 등록했습니다.')
+    }
+    await refreshLedgerViews()
+    resetEntryForm()
+  } catch (error) {
+    setFeedback('', error.message)
+  } finally {
+    isSubmitting.value = false
+    activeSubmit.value = ''
+  }
+}
+
+async function removeEntry(entry) {
+  isSubmitting.value = true
+  activeSubmit.value = 'entry-delete'
+  setFeedback()
+  try {
+    await deleteEntry(entry.id)
+    await refreshLedgerViews()
+    if (editingEntryId.value === entry.id) {
+      resetEntryForm()
+    }
+    setFeedback('가계부 내역을 삭제했습니다.')
+  } catch (error) {
+    setFeedback('', error.message)
+  } finally {
+    isSubmitting.value = false
+    activeSubmit.value = ''
+  }
+}
+
+async function createGroup() {
+  if (!groupForm.name.trim()) return
+  isSubmitting.value = true
+  activeSubmit.value = 'group'
+  setFeedback()
+  try {
+    await createCategoryGroup({
+      entryType: groupForm.entryType,
+      name: groupForm.name.trim(),
+      displayOrder: Number(groupForm.displayOrder || 0),
+    })
+    groupForm.name = ''
+    groupForm.displayOrder = 0
+    await Promise.all([loadMetadata(), refreshLedgerViews()])
+    setFeedback('카테고리 그룹을 추가했습니다.')
+  } catch (error) {
+    setFeedback('', error.message)
+  } finally {
+    isSubmitting.value = false
+    activeSubmit.value = ''
+  }
+}
+
+async function createDetail() {
+  if (!detailForm.groupId || !detailForm.name.trim()) return
+  isSubmitting.value = true
+  activeSubmit.value = 'detail'
+  setFeedback()
+  try {
+    await createCategoryDetail({
+      groupId: Number(detailForm.groupId),
+      name: detailForm.name.trim(),
+      displayOrder: Number(detailForm.displayOrder || 0),
+    })
+    detailForm.name = ''
+    detailForm.displayOrder = 0
+    await Promise.all([loadMetadata(), refreshLedgerViews()])
+    setFeedback('세부 카테고리를 추가했습니다.')
+  } catch (error) {
+    setFeedback('', error.message)
+  } finally {
+    isSubmitting.value = false
+    activeSubmit.value = ''
+  }
+}
+
+async function createPayment() {
+  if (!paymentForm.name.trim()) return
+  isSubmitting.value = true
+  activeSubmit.value = 'payment'
+  setFeedback()
+  try {
+    await createPaymentMethod({
+      kind: paymentForm.kind,
+      name: paymentForm.name.trim(),
+      displayOrder: Number(paymentForm.displayOrder || 0),
+    })
+    paymentForm.name = ''
+    paymentForm.displayOrder = 0
+    await Promise.all([loadMetadata(), refreshLedgerViews()])
+    setFeedback('결제수단을 추가했습니다.')
+  } catch (error) {
+    setFeedback('', error.message)
+  } finally {
+    isSubmitting.value = false
+    activeSubmit.value = ''
+  }
+}
+
+async function deactivateGroup(groupId) {
+  isSubmitting.value = true
+  activeSubmit.value = 'group'
+  setFeedback()
+  try {
+    await deactivateCategoryGroup(groupId)
+    await Promise.all([loadMetadata(), refreshLedgerViews()])
+    setFeedback('카테고리 그룹을 비활성화했습니다.')
+  } catch (error) {
+    setFeedback('', error.message)
+  } finally {
+    isSubmitting.value = false
+    activeSubmit.value = ''
+  }
+}
+
+async function deactivateDetail(detailId) {
+  isSubmitting.value = true
+  activeSubmit.value = 'detail'
+  setFeedback()
+  try {
+    await deactivateCategoryDetail(detailId)
+    await Promise.all([loadMetadata(), refreshLedgerViews()])
+    setFeedback('세부 카테고리를 비활성화했습니다.')
+  } catch (error) {
+    setFeedback('', error.message)
+  } finally {
+    isSubmitting.value = false
+    activeSubmit.value = ''
+  }
+}
+
+async function deactivatePayment(paymentId) {
+  isSubmitting.value = true
+  activeSubmit.value = 'payment'
+  setFeedback()
+  try {
+    await deactivatePaymentMethod(paymentId)
+    await Promise.all([loadMetadata(), refreshLedgerViews()])
+    setFeedback('결제수단을 비활성화했습니다.')
+  } catch (error) {
+    setFeedback('', error.message)
+  } finally {
+    isSubmitting.value = false
+    activeSubmit.value = ''
+  }
+}
+</script>
+
+<template>
+  <div class="workspace-stack">
+    <div v-if="feedback" class="feedback feedback--success">{{ feedback }}</div>
+    <div v-if="errorMessage" class="feedback feedback--error">{{ errorMessage }}</div>
+
+    <section class="panel">
+      <div class="panel__header">
+        <div>
+          <h2>가계부 전체 기능</h2>
+          <p>예전처럼 달력형 입력, 통계, 검색, 인사이트, 분류 관리 기능을 한 페이지 안에서 다시 사용할 수 있습니다.</p>
+        </div>
+        <span class="panel__badge">{{ isLoading ? '불러오는 중' : '준비됨' }}</span>
+      </div>
+
+      <div class="scope-toggle scope-toggle--wrap">
+        <button class="button" :class="{ 'button--primary': householdTab === 'calendar' }" @click="householdTab = 'calendar'">달력 가계부</button>
+        <button class="button" :class="{ 'button--primary': householdTab === 'stats-overview' }" @click="householdTab = 'stats-overview'">통계 요약</button>
+        <button class="button" :class="{ 'button--primary': householdTab === 'stats-search' }" @click="householdTab = 'stats-search'">검색</button>
+        <button class="button" :class="{ 'button--primary': householdTab === 'stats-insights' }" @click="householdTab = 'stats-insights'">인사이트</button>
+        <button class="button" :class="{ 'button--primary': householdTab === 'stats-compare' }" @click="householdTab = 'stats-compare'">비교</button>
+        <button class="button" :class="{ 'button--primary': householdTab === 'management' }" @click="householdTab = 'management'">분류 관리</button>
+      </div>
+    </section>
+
+    <CalendarWorkspace
+      v-if="householdTab === 'calendar'"
+      :quick-stats="quickStats"
+      :month-label="monthLabel"
+      :anchor-date="calendarAnchorDate"
+      :weekday-labels="weekdayLabels"
+      :calendar-weeks="calendarWeeks"
+      :entries="sortedMonthEntries"
+      :entry-form="entryForm"
+      :is-editing-entry="isEditingEntry"
+      :is-submitting="isSubmitting"
+      :active-submit="activeSubmit"
+      :available-groups="availableGroups"
+      :available-details="availableDetails"
+      :payment-methods="paymentMethods"
+      :amount-input="amountInput"
+      :amount-preview="amountPreview"
+      :quick-amount-buttons="quickAmountButtons"
+      :format-amount-shortcut="formatAmountShortcut"
+      :format-currency="formatCurrency"
+      :format-short-date="formatShortDate"
+      :format-time="formatTime"
+      @update:amount-input="handleAmountInput"
+      @fill-amount="fillAmount"
+      @add-amount="addAmount"
+      @submit-entry="submitEntry"
+      @reset-entry="resetEntryForm"
+      @edit-entry="fillEntryForm"
+      @delete-entry="removeEntry"
+      @change-anchor-month="handleChangeCalendarMonth"
+    />
+
+    <StatisticsWorkspace
+      v-else-if="householdTab.startsWith('stats-')"
+      :route="householdTab"
+      :stats-controls="statsControls"
+      :search-form="searchForm"
+      :preset-options="presetOptions"
+      :stats-cards="statsCards"
+      :stats-range-label="statsRangeLabel"
+      :comparison-rows="comparisonRows"
+      :comparison-badge="comparisonBadge"
+      :search-results="searchResults"
+      :search-summary="searchSummary"
+      :insights="insights"
+      :past-comparisons="pastComparisons"
+      :expense-breakdown="expenseBreakdown"
+      :payment-breakdown="paymentBreakdown"
+      :payment-methods="paymentMethods"
+      :categories="categories"
+      :format-currency="formatCurrency"
+      :format-short-date="formatShortDate"
+      :format-date-range="formatDateRange"
+      :format-time="formatTime"
+    />
+
+    <ManagementWorkspace
+      v-else
+      :categories="categories"
+      :payment-methods="paymentMethods"
+      :group-form="groupForm"
+      :detail-form="detailForm"
+      :payment-form="paymentForm"
+      :is-submitting="isSubmitting"
+      :active-submit="activeSubmit"
+      @create-group="createGroup"
+      @create-detail="createDetail"
+      @create-payment="createPayment"
+      @deactivate-group="deactivateGroup"
+      @deactivate-detail="deactivateDetail"
+      @deactivate-payment="deactivatePayment"
+    />
+  </div>
+</template>

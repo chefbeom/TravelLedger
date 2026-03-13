@@ -1,0 +1,296 @@
+package com.playdata.calen.travel.web;
+
+import com.playdata.calen.account.security.AppUserPrincipal;
+import com.playdata.calen.travel.domain.TravelMediaType;
+import com.playdata.calen.travel.dto.TravelBudgetItemRequest;
+import com.playdata.calen.travel.dto.TravelBudgetItemResponse;
+import com.playdata.calen.travel.dto.TravelCategoryCatalogResponse;
+import com.playdata.calen.travel.dto.TravelCommunityPostResponse;
+import com.playdata.calen.travel.dto.TravelExchangeRateResponse;
+import com.playdata.calen.travel.dto.TravelExpenseRecordRequest;
+import com.playdata.calen.travel.dto.TravelExpenseRecordResponse;
+import com.playdata.calen.travel.dto.TravelMediaResponse;
+import com.playdata.calen.travel.dto.TravelMediaUploadCompleteRequest;
+import com.playdata.calen.travel.dto.TravelMediaUploadPrepareRequest;
+import com.playdata.calen.travel.dto.TravelMediaUploadPrepareResponse;
+import com.playdata.calen.travel.dto.TravelMemoryRecordRequest;
+import com.playdata.calen.travel.dto.TravelMemoryRecordResponse;
+import com.playdata.calen.travel.dto.TravelPlanDetailResponse;
+import com.playdata.calen.travel.dto.TravelPlanRequest;
+import com.playdata.calen.travel.dto.TravelPlanSummaryResponse;
+import com.playdata.calen.travel.dto.TravelPortfolioResponse;
+import com.playdata.calen.travel.dto.TravelRouteSegmentRequest;
+import com.playdata.calen.travel.dto.TravelRouteSegmentResponse;
+import com.playdata.calen.travel.service.TravelService;
+import jakarta.validation.Valid;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
+import java.util.List;
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
+
+@RestController
+@RequestMapping("/api/travel")
+@RequiredArgsConstructor
+public class TravelController {
+
+    private final TravelService travelService;
+
+    @GetMapping("/plans")
+    public List<TravelPlanSummaryResponse> getPlans(@AuthenticationPrincipal AppUserPrincipal currentUser) {
+        return travelService.getPlans(currentUser.userId());
+    }
+
+    @GetMapping("/plans/{planId}")
+    public TravelPlanDetailResponse getPlan(
+            @AuthenticationPrincipal AppUserPrincipal currentUser,
+            @PathVariable Long planId
+    ) {
+        return travelService.getPlan(currentUser.userId(), planId);
+    }
+
+    @GetMapping("/portfolio")
+    public TravelPortfolioResponse getPortfolio(@AuthenticationPrincipal AppUserPrincipal currentUser) {
+        return travelService.getPortfolio(currentUser.userId());
+    }
+
+    @GetMapping("/categories")
+    public TravelCategoryCatalogResponse getCategoryCatalog(@AuthenticationPrincipal AppUserPrincipal currentUser) {
+        return travelService.getCategoryCatalog(currentUser.userId());
+    }
+
+    @GetMapping("/community-feed")
+    public List<TravelCommunityPostResponse> getCommunityFeed(@AuthenticationPrincipal AppUserPrincipal currentUser) {
+        return travelService.getCommunityFeed(currentUser.userId());
+    }
+
+    @PostMapping("/plans")
+    public TravelPlanSummaryResponse createPlan(
+            @AuthenticationPrincipal AppUserPrincipal currentUser,
+            @Valid @RequestBody TravelPlanRequest request
+    ) {
+        return travelService.createPlan(currentUser.userId(), request);
+    }
+
+    @PutMapping("/plans/{planId}")
+    public TravelPlanSummaryResponse updatePlan(
+            @AuthenticationPrincipal AppUserPrincipal currentUser,
+            @PathVariable Long planId,
+            @Valid @RequestBody TravelPlanRequest request
+    ) {
+        return travelService.updatePlan(currentUser.userId(), planId, request);
+    }
+
+    @DeleteMapping("/plans/{planId}")
+    public void deletePlan(
+            @AuthenticationPrincipal AppUserPrincipal currentUser,
+            @PathVariable Long planId
+    ) {
+        travelService.deletePlan(currentUser.userId(), planId);
+    }
+
+    @PostMapping("/plans/{planId}/routes")
+    public TravelRouteSegmentResponse createRouteSegment(
+            @AuthenticationPrincipal AppUserPrincipal currentUser,
+            @PathVariable Long planId,
+            @Valid @RequestBody TravelRouteSegmentRequest request
+    ) {
+        return travelService.createRouteSegment(currentUser.userId(), planId, request);
+    }
+
+    @DeleteMapping("/routes/{routeId}")
+    public void deleteRouteSegment(
+            @AuthenticationPrincipal AppUserPrincipal currentUser,
+            @PathVariable Long routeId
+    ) {
+        travelService.deleteRouteSegment(currentUser.userId(), routeId);
+    }
+
+    @PostMapping("/plans/{planId}/budget-items")
+    public TravelBudgetItemResponse createBudgetItem(
+            @AuthenticationPrincipal AppUserPrincipal currentUser,
+            @PathVariable Long planId,
+            @Valid @RequestBody TravelBudgetItemRequest request
+    ) {
+        return travelService.createBudgetItem(currentUser.userId(), planId, request);
+    }
+
+    @PutMapping("/budget-items/{itemId}")
+    public TravelBudgetItemResponse updateBudgetItem(
+            @AuthenticationPrincipal AppUserPrincipal currentUser,
+            @PathVariable Long itemId,
+            @Valid @RequestBody TravelBudgetItemRequest request
+    ) {
+        return travelService.updateBudgetItem(currentUser.userId(), itemId, request);
+    }
+
+    @DeleteMapping("/budget-items/{itemId}")
+    public void deleteBudgetItem(
+            @AuthenticationPrincipal AppUserPrincipal currentUser,
+            @PathVariable Long itemId
+    ) {
+        travelService.deleteBudgetItem(currentUser.userId(), itemId);
+    }
+
+    @PostMapping("/plans/{planId}/records")
+    public TravelExpenseRecordResponse createExpenseRecord(
+            @AuthenticationPrincipal AppUserPrincipal currentUser,
+            @PathVariable Long planId,
+            @Valid @RequestBody TravelExpenseRecordRequest request
+    ) {
+        return travelService.createExpenseRecord(currentUser.userId(), planId, request);
+    }
+
+    @PutMapping("/records/{recordId}")
+    public TravelExpenseRecordResponse updateExpenseRecord(
+            @AuthenticationPrincipal AppUserPrincipal currentUser,
+            @PathVariable Long recordId,
+            @Valid @RequestBody TravelExpenseRecordRequest request
+    ) {
+        return travelService.updateExpenseRecord(currentUser.userId(), recordId, request);
+    }
+
+    @DeleteMapping("/records/{recordId}")
+    public void deleteExpenseRecord(
+            @AuthenticationPrincipal AppUserPrincipal currentUser,
+            @PathVariable Long recordId
+    ) {
+        travelService.deleteExpenseRecord(currentUser.userId(), recordId);
+    }
+
+    @PostMapping("/plans/{planId}/memories")
+    public TravelMemoryRecordResponse createMemoryRecord(
+            @AuthenticationPrincipal AppUserPrincipal currentUser,
+            @PathVariable Long planId,
+            @Valid @RequestBody TravelMemoryRecordRequest request
+    ) {
+        return travelService.createMemoryRecord(currentUser.userId(), planId, request);
+    }
+
+    @PutMapping("/memories/{memoryId}")
+    public TravelMemoryRecordResponse updateMemoryRecord(
+            @AuthenticationPrincipal AppUserPrincipal currentUser,
+            @PathVariable Long memoryId,
+            @Valid @RequestBody TravelMemoryRecordRequest request
+    ) {
+        return travelService.updateMemoryRecord(currentUser.userId(), memoryId, request);
+    }
+
+    @DeleteMapping("/memories/{memoryId}")
+    public void deleteMemoryRecord(
+            @AuthenticationPrincipal AppUserPrincipal currentUser,
+            @PathVariable Long memoryId
+    ) {
+        travelService.deleteMemoryRecord(currentUser.userId(), memoryId);
+    }
+
+    @PostMapping("/records/{recordId}/media")
+    public List<TravelMediaResponse> uploadRecordMedia(
+            @AuthenticationPrincipal AppUserPrincipal currentUser,
+            @PathVariable Long recordId,
+            @RequestParam TravelMediaType mediaType,
+            @RequestParam(required = false) String caption,
+            @RequestParam("files") List<MultipartFile> files
+    ) {
+        return travelService.uploadRecordMedia(currentUser.userId(), recordId, mediaType, caption, files);
+    }
+
+    @PostMapping("/records/{recordId}/media/presign")
+    public TravelMediaUploadPrepareResponse prepareRecordMediaUpload(
+            @AuthenticationPrincipal AppUserPrincipal currentUser,
+            @PathVariable Long recordId,
+            @Valid @RequestBody TravelMediaUploadPrepareRequest request
+    ) {
+        return travelService.prepareRecordMediaUpload(currentUser.userId(), recordId, request);
+    }
+
+    @PostMapping("/records/{recordId}/media/complete")
+    public List<TravelMediaResponse> completeRecordMediaUpload(
+            @AuthenticationPrincipal AppUserPrincipal currentUser,
+            @PathVariable Long recordId,
+            @Valid @RequestBody TravelMediaUploadCompleteRequest request
+    ) {
+        return travelService.completeRecordMediaUpload(currentUser.userId(), recordId, request);
+    }
+
+    @PostMapping("/memories/{memoryId}/media")
+    public List<TravelMediaResponse> uploadMemoryMedia(
+            @AuthenticationPrincipal AppUserPrincipal currentUser,
+            @PathVariable Long memoryId,
+            @RequestParam(required = false) String caption,
+            @RequestParam("files") List<MultipartFile> files
+    ) {
+        return travelService.uploadMemoryMedia(currentUser.userId(), memoryId, caption, files);
+    }
+
+    @PostMapping("/memories/{memoryId}/media/presign")
+    public TravelMediaUploadPrepareResponse prepareMemoryMediaUpload(
+            @AuthenticationPrincipal AppUserPrincipal currentUser,
+            @PathVariable Long memoryId,
+            @Valid @RequestBody TravelMediaUploadPrepareRequest request
+    ) {
+        return travelService.prepareMemoryMediaUpload(currentUser.userId(), memoryId, request);
+    }
+
+    @PostMapping("/memories/{memoryId}/media/complete")
+    public List<TravelMediaResponse> completeMemoryMediaUpload(
+            @AuthenticationPrincipal AppUserPrincipal currentUser,
+            @PathVariable Long memoryId,
+            @Valid @RequestBody TravelMediaUploadCompleteRequest request
+    ) {
+        return travelService.completeMemoryMediaUpload(currentUser.userId(), memoryId, request);
+    }
+
+    @DeleteMapping("/media/{mediaId}")
+    public void deleteMedia(
+            @AuthenticationPrincipal AppUserPrincipal currentUser,
+            @PathVariable Long mediaId
+    ) {
+        travelService.deleteMedia(currentUser.userId(), mediaId);
+    }
+
+    @GetMapping("/media/{mediaId}/content")
+    public ResponseEntity<?> downloadMedia(
+            @AuthenticationPrincipal AppUserPrincipal currentUser,
+            @PathVariable Long mediaId
+    ) {
+        TravelService.MediaDownload download = travelService.getMediaDownload(currentUser.userId(), mediaId);
+        String encodedFileName = URLEncoder.encode(download.fileName(), StandardCharsets.UTF_8).replace("+", "%20");
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType(download.contentType()))
+                .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.inline().filename(encodedFileName).build().toString())
+                .body(download.resource());
+    }
+
+    @GetMapping("/public/media/{mediaId}/content")
+    public ResponseEntity<?> downloadSharedMedia(@PathVariable Long mediaId) {
+        TravelService.MediaDownload download = travelService.getSharedMediaDownload(mediaId);
+        String encodedFileName = URLEncoder.encode(download.fileName(), StandardCharsets.UTF_8).replace("+", "%20");
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType(download.contentType()))
+                .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.inline().filename(encodedFileName).build().toString())
+                .body(download.resource());
+    }
+
+    @GetMapping("/exchange-rates")
+    public List<TravelExchangeRateResponse> getExchangeRates(
+            @AuthenticationPrincipal AppUserPrincipal currentUser,
+            @RequestParam(required = false) String currencies
+    ) {
+        return travelService.getExchangeRates(currentUser.userId(), currencies);
+    }
+}

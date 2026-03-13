@@ -1,0 +1,133 @@
+package com.playdata.calen.ledger;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.playdata.calen.account.domain.AppUser;
+import com.playdata.calen.account.repository.AppUserRepository;
+import com.playdata.calen.ledger.domain.LedgerEntry;
+import com.playdata.calen.ledger.repository.LedgerEntryRepository;
+import jakarta.servlet.http.Cookie;
+import java.time.LocalDate;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.http.MediaType;
+import org.springframework.mock.web.MockHttpSession;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
+
+@SpringBootTest(properties = {
+        "app.seed.enabled=true",
+        "spring.datasource.url=jdbc:h2:mem:calen-test;MODE=MySQL;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE",
+        "spring.datasource.driver-class-name=org.h2.Driver",
+        "spring.datasource.username=sa",
+        "spring.datasource.password="
+})
+@AutoConfigureMockMvc
+class LedgerEntryUserScopeIntegrationTest {
+
+    @Autowired
+    private MockMvc mockMvc;
+
+    @Autowired
+    private ObjectMapper objectMapper;
+
+    @Autowired
+    private AppUserRepository appUserRepository;
+
+    @Autowired
+    private LedgerEntryRepository ledgerEntryRepository;
+
+    @Test
+    void entryCrudIsScopedPerUser() throws Exception {
+        MockHttpSession hanaSession = loginAndGetSession("hana", false);
+        MockHttpSession minsuSession = loginAndGetSession("minsu", false);
+
+        AppUser hana = appUserRepository.findByLoginId("hana").orElseThrow();
+
+        LedgerEntry hanaEntry = ledgerEntryRepository.findAllByOwnerIdAndEntryDateBetweenOrderByEntryDateAscIdAsc(
+                        hana.getId(),
+                        LocalDate.now().minusYears(1),
+                        LocalDate.now().plusDays(1)
+                ).stream()
+                .findFirst()
+                .orElseThrow();
+
+        mockMvc.perform(delete("/api/entries/{id}", hanaEntry.getId()).session(minsuSession))
+                .andExpect(status().isNotFound());
+
+        assertThat(ledgerEntryRepository.findById(hanaEntry.getId())).isPresent();
+
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("entryDate", hanaEntry.getEntryDate().toString());
+        payload.put("title", "Updated entry");
+        payload.put("memo", "Updated by owner");
+        payload.put("amount", hanaEntry.getAmount());
+        payload.put("entryType", hanaEntry.getEntryType().name());
+        payload.put("categoryGroupId", hanaEntry.getCategoryGroup().getId());
+        payload.put("categoryDetailId", hanaEntry.getCategoryDetail() != null ? hanaEntry.getCategoryDetail().getId() : null);
+        payload.put("paymentMethodId", hanaEntry.getPaymentMethod().getId());
+
+        mockMvc.perform(put("/api/entries/{id}", hanaEntry.getId())
+                        .session(hanaSession)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(payload)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.title").value("Updated entry"))
+                .andExpect(jsonPath("$.memo").value("Updated by owner"));
+
+        mockMvc.perform(delete("/api/entries/{id}", hanaEntry.getId()).session(hanaSession))
+                .andExpect(status().isOk());
+
+        assertThat(ledgerEntryRepository.findById(hanaEntry.getId())).isEmpty();
+    }
+
+    @Test
+    void rememberMeRestoresUserWithoutSession() throws Exception {
+        Cookie rememberMeCookie = loginAndGetRememberMeCookie("hana");
+
+        assertThat(rememberMeCookie).isNotNull();
+        assertThat(rememberMeCookie.getValue()).isNotBlank();
+
+        mockMvc.perform(get("/api/auth/me").cookie(rememberMeCookie))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.loginId").value("hana"))
+                .andExpect(jsonPath("$.displayName").isNotEmpty());
+    }
+
+    private MockHttpSession loginAndGetSession(String loginId, boolean rememberDevice) throws Exception {
+        MvcResult result = login(loginId, rememberDevice);
+        MockHttpSession session = (MockHttpSession) result.getRequest().getSession(false);
+        assertThat(session).isNotNull();
+        return session;
+    }
+
+    private Cookie loginAndGetRememberMeCookie(String loginId) throws Exception {
+        MvcResult result = login(loginId, true);
+        return result.getResponse().getCookie("CALEN_REMEMBER_ME");
+    }
+
+    private MvcResult login(String loginId, boolean rememberDevice) throws Exception {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("loginId", loginId);
+        payload.put("password", "test1234");
+        payload.put("rememberDevice", rememberDevice);
+
+        return mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(payload)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.loginId").value(loginId))
+                .andReturn();
+    }
+}

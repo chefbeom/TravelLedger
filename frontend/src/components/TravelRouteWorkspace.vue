@@ -1,0 +1,758 @@
+<script setup>
+import { computed, reactive, ref, watch } from 'vue'
+import { formatDate, formatTime, safeNumber, todayIso, toIsoDate } from '../lib/uiFormat'
+import TravelMapPanel from './TravelMapPanel.vue'
+
+const props = defineProps({
+  travelPlan: {
+    type: Object,
+    default: null,
+  },
+  isSubmitting: {
+    type: Boolean,
+    default: false,
+  },
+  activeSubmit: {
+    type: String,
+    default: '',
+  },
+  refreshKey: {
+    type: Number,
+    default: 0,
+  },
+})
+
+const emit = defineEmits(['save-route', 'delete-route'])
+
+const transportOptions = [
+  { value: 'WALK', label: '도보' },
+  { value: 'BUS', label: '버스' },
+  { value: 'TAXI', label: '택시' },
+  { value: 'TRAIN', label: '기차' },
+  { value: 'SUBWAY', label: '지하철' },
+  { value: 'CAR', label: '자동차' },
+  { value: 'FLIGHT', label: '항공' },
+  { value: 'ETC', label: '기타' },
+]
+
+const draft = reactive({
+  routeDate: todayIso(),
+  title: '',
+  transportMode: 'WALK',
+  durationMinutes: '',
+  stepCount: '',
+  sourceType: 'MANUAL',
+  startPlaceName: '',
+  endPlaceName: '',
+  memo: '',
+})
+
+const draftPoints = ref([])
+const gpxFileName = ref('')
+const activeDayDate = ref('')
+const highlightedDraftIndex = ref(-1)
+
+const routeSegments = computed(() => props.travelPlan?.routeSegments ?? [])
+const tripDays = computed(() => {
+  const startText = props.travelPlan?.startDate || todayIso()
+  const endText = props.travelPlan?.endDate || startText
+  const start = new Date(`${startText}T00:00:00`)
+  const end = new Date(`${endText}T00:00:00`)
+
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end < start) {
+    return [{ index: 1, date: startText, label: '1일차' }]
+  }
+
+  const days = []
+  const cursor = new Date(start)
+  let index = 1
+
+  while (cursor <= end) {
+    days.push({
+      index,
+      date: toIsoDate(cursor),
+      label: `${index}일차`,
+    })
+    cursor.setDate(cursor.getDate() + 1)
+    index += 1
+  }
+
+  return days.length ? days : [{ index: 1, date: startText, label: '1일차' }]
+})
+
+const activeDay = computed(() => tripDays.value.find((day) => day.date === activeDayDate.value) || tripDays.value[0] || null)
+const selectedDayMemories = computed(() =>
+  (props.travelPlan?.memoryRecords ?? []).filter((item) => {
+    if (!activeDayDate.value) {
+      return true
+    }
+    return item.memoryDate === activeDayDate.value
+  }),
+)
+
+const routeMapMarkers = computed(() =>
+  selectedDayMemories.value
+    .filter((item) => item.latitude !== null && item.latitude !== undefined && item.longitude !== null && item.longitude !== undefined)
+    .map((item) => ({
+      id: item.id,
+      planId: item.planId,
+      planName: item.planName,
+      colorHex: item.planColorHex || props.travelPlan?.colorHex || '#3182F6',
+      latitude: Number(item.latitude),
+      longitude: Number(item.longitude),
+      country: item.country,
+      region: item.region,
+      placeName: item.placeName,
+      title: item.title,
+      visitedDate: item.memoryDate,
+      visitedTime: item.memoryTime,
+      mediaItems: [],
+      photoCount: 0,
+      receiptCount: 0,
+      iconKey: item.category,
+    })),
+)
+
+const routesForActiveDay = computed(() =>
+  routeSegments.value.filter((route) => {
+    if (!activeDayDate.value) {
+      return true
+    }
+    return route.routeDate === activeDayDate.value
+  }),
+)
+
+const mapRoutes = computed(() =>
+  routesForActiveDay.value.map((route) => ({
+    ...route,
+    colorHex: route.planColorHex || props.travelPlan?.colorHex || '#3182F6',
+  })),
+)
+
+const draftDistanceKm = computed(() => {
+  if (draftPoints.value.length < 2) {
+    return 0
+  }
+
+  let total = 0
+  for (let index = 1; index < draftPoints.value.length; index += 1) {
+    total += haversineDistance(draftPoints.value[index - 1], draftPoints.value[index])
+  }
+  return total
+})
+
+const estimatedSteps = computed(() => {
+  if (draft.stepCount) {
+    return Number(draft.stepCount)
+  }
+  return draft.transportMode === 'WALK' ? Math.round(draftDistanceKm.value * 1400) : 0
+})
+
+const selectedDraftPoint = computed(() => {
+  if (highlightedDraftIndex.value < 0) {
+    return null
+  }
+  return draftPoints.value[highlightedDraftIndex.value] ?? null
+})
+
+const selectedDraftPointLabel = computed(() => {
+  if (highlightedDraftIndex.value < 0) {
+    return '선택한 핀 없음'
+  }
+  return describeDraftPoint(highlightedDraftIndex.value, draftPoints.value.length)
+})
+
+const draftPointRows = computed(() =>
+  draftPoints.value.map((point, index) => ({
+    index,
+    label: describeDraftPoint(index, draftPoints.value.length),
+    latitude: Number(point.latitude),
+    longitude: Number(point.longitude),
+  })),
+)
+
+const activeDayTimeline = computed(() => {
+  const rows = []
+
+  selectedDayMemories.value.forEach((memory) => {
+    rows.push({
+      id: `memory-${memory.id}`,
+      type: 'MEMORY',
+      title: memory.title || memory.placeName || '여행 기록',
+      time: memory.memoryTime || '',
+      summary: [memory.country, memory.region, memory.placeName].filter(Boolean).join(' / ') || '-',
+      memo: memory.memo || '-',
+    })
+  })
+
+  routesForActiveDay.value.forEach((route) => {
+    rows.push({
+      id: `route-${route.id}`,
+      type: 'ROUTE',
+      title: route.title,
+      time: '',
+      summary: routeSummary(route) || '-',
+      memo: [route.startPlaceName, route.endPlaceName].filter(Boolean).join(' -> ') || '-',
+    })
+  })
+
+  return rows.sort((left, right) => `${left.time || '99:99'}-${left.id}`.localeCompare(`${right.time || '99:99'}-${right.id}`))
+})
+
+const activeDayRouteStats = computed(() => {
+  const totalDistanceKm = routesForActiveDay.value.reduce((sum, route) => sum + safeNumber(route.distanceKm), 0)
+  const totalDurationMinutes = routesForActiveDay.value.reduce((sum, route) => sum + safeNumber(route.durationMinutes), 0)
+  const totalSteps = routesForActiveDay.value.reduce((sum, route) => sum + safeNumber(route.stepCount), 0)
+
+  return {
+    totalDistanceKm,
+    totalDurationMinutes,
+    totalSteps,
+  }
+})
+
+watch(
+  () => props.travelPlan?.id,
+  () => {
+    initializeDaySelection()
+    resetDraft()
+  },
+  { immediate: true },
+)
+
+watch(
+  () => props.refreshKey,
+  () => {
+    initializeDaySelection()
+    resetDraft()
+  },
+)
+
+watch(
+  tripDays,
+  (days) => {
+    if (!days.some((day) => day.date === activeDayDate.value)) {
+      activeDayDate.value = days[0]?.date || props.travelPlan?.startDate || todayIso()
+    }
+    draft.routeDate = activeDayDate.value || props.travelPlan?.startDate || todayIso()
+  },
+  { deep: true },
+)
+
+watch(
+  () => activeDayDate.value,
+  (value) => {
+    draft.routeDate = value || props.travelPlan?.startDate || todayIso()
+  },
+)
+
+function initializeDaySelection() {
+  activeDayDate.value = tripDays.value[0]?.date || props.travelPlan?.startDate || todayIso()
+  draft.routeDate = activeDayDate.value
+  highlightedDraftIndex.value = -1
+}
+
+function selectTripDay(day) {
+  activeDayDate.value = day.date
+  draft.routeDate = day.date
+  highlightedDraftIndex.value = -1
+}
+
+function transportLabel(mode) {
+  return transportOptions.find((option) => option.value === mode)?.label || mode || '기타'
+}
+
+function sourceLabel(sourceType) {
+  return sourceType === 'GPX' ? 'GPX 불러오기' : '직접 그리기'
+}
+
+function timelineTypeLabel(type) {
+  return type === 'ROUTE' ? '이동 경로' : '여행 기록'
+}
+
+function haversineDistance(from, to) {
+  const toRadians = (value) => (value * Math.PI) / 180
+  const earthRadiusKm = 6371
+  const dLat = toRadians(Number(to.latitude) - Number(from.latitude))
+  const dLon = toRadians(Number(to.longitude) - Number(from.longitude))
+  const lat1 = toRadians(Number(from.latitude))
+  const lat2 = toRadians(Number(to.latitude))
+
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.sin(dLon / 2) * Math.sin(dLon / 2) * Math.cos(lat1) * Math.cos(lat2)
+
+  return earthRadiusKm * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)))
+}
+
+function describeDraftPoint(index, total) {
+  if (index === 0) return '출발 핀'
+  if (index === total - 1) return '도착 핀'
+  return `${index + 1}번 경유 핀`
+}
+
+function addDraftPoint(point) {
+  draftPoints.value = [...draftPoints.value, point]
+  highlightedDraftIndex.value = draftPoints.value.length - 1
+
+  if (draft.sourceType === 'GPX') {
+    draft.sourceType = 'MANUAL'
+    gpxFileName.value = ''
+  }
+}
+
+function removeLastPoint() {
+  draftPoints.value = draftPoints.value.slice(0, -1)
+  if (highlightedDraftIndex.value >= draftPoints.value.length) {
+    highlightedDraftIndex.value = draftPoints.value.length - 1
+  }
+}
+
+function removeDraftPoint(index) {
+  draftPoints.value = draftPoints.value.filter((_, pointIndex) => pointIndex !== index)
+  if (!draftPoints.value.length) {
+    highlightedDraftIndex.value = -1
+    return
+  }
+  highlightedDraftIndex.value = Math.min(highlightedDraftIndex.value, draftPoints.value.length - 1)
+}
+
+function updateDraftPoint(index, key, rawValue) {
+  const numeric = Number(rawValue)
+  if (!Number.isFinite(numeric)) {
+    return
+  }
+
+  draftPoints.value = draftPoints.value.map((point, pointIndex) => {
+    if (pointIndex !== index) {
+      return point
+    }
+
+    return {
+      ...point,
+      [key]: Number(numeric.toFixed(7)),
+    }
+  })
+}
+
+function updateSelectedDraftPoint(key, rawValue) {
+  if (highlightedDraftIndex.value < 0) {
+    return
+  }
+  updateDraftPoint(highlightedDraftIndex.value, key, rawValue)
+}
+
+function focusDraftPoint(index) {
+  highlightedDraftIndex.value = index
+}
+
+function focusPreviousPoint() {
+  if (highlightedDraftIndex.value > 0) {
+    highlightedDraftIndex.value -= 1
+  }
+}
+
+function focusNextPoint() {
+  if (highlightedDraftIndex.value < draftPoints.value.length - 1) {
+    highlightedDraftIndex.value += 1
+  }
+}
+
+function handleMoveDraftPoint(payload) {
+  if (!payload || !Number.isInteger(payload.index) || !payload.point) {
+    return
+  }
+
+  draftPoints.value = draftPoints.value.map((point, index) => {
+    if (index !== payload.index) {
+      return point
+    }
+    return payload.point
+  })
+  highlightedDraftIndex.value = payload.index
+}
+
+function resetDraft() {
+  draft.title = ''
+  draft.transportMode = 'WALK'
+  draft.durationMinutes = ''
+  draft.stepCount = ''
+  draft.sourceType = 'MANUAL'
+  draft.startPlaceName = ''
+  draft.endPlaceName = ''
+  draft.memo = ''
+  draftPoints.value = []
+  gpxFileName.value = ''
+  highlightedDraftIndex.value = -1
+  draft.routeDate = activeDayDate.value || props.travelPlan?.startDate || todayIso()
+}
+
+function buildPayload() {
+  return {
+    routeDate: draft.routeDate,
+    title: draft.title.trim(),
+    transportMode: draft.transportMode,
+    distanceKm: Number(draftDistanceKm.value.toFixed(3)),
+    durationMinutes: safeNumber(draft.durationMinutes, 0),
+    stepCount: draft.stepCount ? safeNumber(draft.stepCount, 0) : estimatedSteps.value,
+    sourceType: draft.sourceType,
+    startPlaceName: draft.startPlaceName.trim() || null,
+    endPlaceName: draft.endPlaceName.trim() || null,
+    memo: draft.memo.trim() || null,
+    points: draftPoints.value.map((point) => ({
+      latitude: Number(point.latitude),
+      longitude: Number(point.longitude),
+    })),
+  }
+}
+
+function submitRoute() {
+  if (!props.travelPlan || draftPoints.value.length < 2 || !draft.title.trim()) {
+    return
+  }
+
+  emit('save-route', buildPayload())
+}
+
+async function handleGpxSelection(event) {
+  const [file] = [...(event.target.files ?? [])]
+  if (!file) {
+    return
+  }
+
+  const xmlText = await file.text()
+  const parser = new DOMParser()
+  const xml = parser.parseFromString(xmlText, 'application/xml')
+  const points = [...xml.querySelectorAll('trkpt, rtept')]
+    .map((node) => ({
+      latitude: Number(node.getAttribute('lat')),
+      longitude: Number(node.getAttribute('lon')),
+      time: node.querySelector('time')?.textContent || '',
+    }))
+    .filter((point) => Number.isFinite(point.latitude) && Number.isFinite(point.longitude))
+
+  if (points.length < 2) {
+    return
+  }
+
+  draftPoints.value = points.map((point) => ({
+    latitude: Number(point.latitude.toFixed(7)),
+    longitude: Number(point.longitude.toFixed(7)),
+  }))
+  highlightedDraftIndex.value = draftPoints.value.length - 1
+  draft.title = file.name.replace(/\.gpx$/i, '')
+  draft.transportMode = 'WALK'
+  draft.sourceType = 'GPX'
+  gpxFileName.value = file.name
+
+  const timestamps = points
+    .map((point) => point.time)
+    .filter(Boolean)
+    .map((value) => new Date(value))
+    .filter((value) => !Number.isNaN(value.getTime()))
+
+  if (timestamps.length >= 2) {
+    draft.durationMinutes = String(Math.round((timestamps[timestamps.length - 1] - timestamps[0]) / 60000))
+    const routeDate = timestamps[0].toISOString().slice(0, 10)
+    draft.routeDate = routeDate
+    if (tripDays.value.some((day) => day.date === routeDate)) {
+      activeDayDate.value = routeDate
+    }
+  }
+
+  draft.stepCount = String(Math.round(draftDistanceKm.value * 1400))
+}
+
+function routeSummary(route) {
+  return [
+    transportLabel(route.transportMode),
+    route.distanceKm ? `${Number(route.distanceKm).toFixed(2)}km` : '',
+    route.durationMinutes ? `${route.durationMinutes}분` : '',
+    route.stepCount ? `${Number(route.stepCount).toLocaleString('ko-KR')}걸음` : '',
+    route.sourceType ? sourceLabel(route.sourceType) : '',
+  ]
+    .filter(Boolean)
+    .join(' / ')
+}
+</script>
+
+<template>
+  <div v-if="travelPlan" class="workspace-stack">
+    <section class="panel">
+      <div class="panel__header">
+        <div>
+          <h2>이동 경로 작성</h2>
+          <p>여행 기간에 맞게 일차 버튼이 자동으로 생기고, 선택한 날짜 기준으로 경로를 만들 수 있습니다.</p>
+        </div>
+        <span class="panel__badge">{{ routeSegments.length }}개 경로</span>
+      </div>
+
+      <div class="travel-day-tabs">
+        <button
+          v-for="day in tripDays"
+          :key="day.date"
+          class="travel-day-tabs__button"
+          :class="{ 'is-active': activeDayDate === day.date }"
+          type="button"
+          @click="selectTripDay(day)"
+        >
+          <strong>{{ day.label }}</strong>
+          <small>{{ formatDate(day.date) }}</small>
+        </button>
+      </div>
+
+      <div class="travel-file-chip-row">
+        <span class="chip chip--neutral">현재 선택 {{ activeDay?.label || '1일차' }}</span>
+        <span class="chip chip--neutral">당일 저장 경로 {{ routesForActiveDay.length }}개</span>
+        <span class="chip chip--neutral">당일 기록 핀 {{ routeMapMarkers.length }}개</span>
+        <span class="chip chip--neutral">당일 이동 {{ activeDayRouteStats.totalDistanceKm.toFixed(2) }}km</span>
+      </div>
+    </section>
+
+    <section class="panel panel--map-fill travel-route-map-panel">
+      <div class="panel__header">
+        <div>
+          <h2>경로 지도</h2>
+          <p>지도를 넓게 보면서 바로 핀을 찍고, 방금 추가한 핀은 아래 편집 카드에서 바로 수정할 수 있습니다.</p>
+        </div>
+      </div>
+
+      <TravelMapPanel
+        :markers="routeMapMarkers"
+        :routes="mapRoutes"
+        :draft-path="draftPoints"
+        :selected-point="null"
+        :enable-pick-location="false"
+        :enable-draw-route="true"
+        :draggable-draft-path="true"
+        :highlighted-draft-index="highlightedDraftIndex"
+        :view-key="`${travelPlan.id || 'route'}-${activeDayDate}`"
+        initial-map-size="expanded"
+        hint-title="서울 강서구를 기준으로 시작합니다"
+        hint-text="지도를 누르면 새 핀이 추가되고 아래 편집 카드가 즉시 바뀝니다. 기존 핀은 클릭하거나 드래그해서 수정할 수 있습니다."
+        @pick-route-point="addDraftPoint"
+        @move-draft-point="handleMoveDraftPoint"
+        @select-draft-point="focusDraftPoint"
+      />
+
+      <div class="travel-route-map-footer">
+        <article class="travel-route-focus-card">
+          <div class="travel-route-focus-card__header">
+            <div>
+              <h3>선택 핀 편집</h3>
+              <p>지도를 누른 직후 여기서 위도와 경도를 바로 조정할 수 있습니다.</p>
+            </div>
+            <span class="panel__badge">{{ highlightedDraftIndex >= 0 ? `${highlightedDraftIndex + 1}번 핀` : '대기 중' }}</span>
+          </div>
+
+          <template v-if="selectedDraftPoint">
+            <div class="travel-route-focus-grid">
+              <label class="field">
+                <span class="field__label">핀 역할</span>
+                <input :value="selectedDraftPointLabel" type="text" readonly />
+              </label>
+              <label class="field">
+                <span class="field__label">위도</span>
+                <input :value="selectedDraftPoint.latitude" type="number" step="0.0000001" @change="updateSelectedDraftPoint('latitude', $event.target.value)" />
+              </label>
+              <label class="field">
+                <span class="field__label">경도</span>
+                <input :value="selectedDraftPoint.longitude" type="number" step="0.0000001" @change="updateSelectedDraftPoint('longitude', $event.target.value)" />
+              </label>
+            </div>
+            <div class="entry-editor__actions">
+              <button class="button button--ghost" type="button" :disabled="highlightedDraftIndex <= 0" @click="focusPreviousPoint">이전 핀</button>
+              <button class="button button--ghost" type="button" :disabled="highlightedDraftIndex >= draftPoints.length - 1" @click="focusNextPoint">다음 핀</button>
+              <button class="button button--danger" type="button" @click="removeDraftPoint(highlightedDraftIndex)">현재 핀 삭제</button>
+            </div>
+          </template>
+          <p v-else class="panel__empty">지도 위를 눌러 첫 번째 핀을 추가해 보세요.</p>
+        </article>
+
+        <article class="travel-route-focus-card">
+          <div class="travel-route-focus-card__header">
+            <div>
+              <h3>경로 요약</h3>
+              <p>현재 초안의 거리와 걸음 수, GPX 상태를 빠르게 확인합니다.</p>
+            </div>
+          </div>
+          <div class="travel-file-chip-row">
+            <span class="chip chip--neutral">핀 {{ draftPoints.length }}개</span>
+            <span class="chip chip--neutral">총 거리 {{ draftDistanceKm.toFixed(2) }}km</span>
+            <span class="chip chip--neutral">예상 걸음 {{ estimatedSteps.toLocaleString('ko-KR') }}걸음</span>
+            <span v-if="gpxFileName" class="chip chip--neutral">{{ gpxFileName }}</span>
+          </div>
+          <div class="entry-editor__actions">
+            <button class="button button--ghost" type="button" @click="removeLastPoint">마지막 핀 삭제</button>
+            <button class="button button--ghost" type="button" @click="resetDraft">임시 경로 비우기</button>
+            <button class="button button--primary" :disabled="isSubmitting || draftPoints.length < 2 || !draft.title.trim()" @click="submitRoute">
+              {{ isSubmitting && activeSubmit === 'route' ? '저장 중...' : '경로 저장' }}
+            </button>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="panel__header">
+        <div>
+          <h2>경로 정보 입력</h2>
+          <p>지도는 크게 유지하고, 필요한 값은 아래 압축 폼에서 한 번에 입력합니다.</p>
+        </div>
+      </div>
+
+      <div class="travel-route-form">
+        <label class="field">
+          <span class="field__label">날짜</span>
+          <input v-model="draft.routeDate" type="date" />
+        </label>
+        <label class="field field--wide">
+          <span class="field__label">경로 제목</span>
+          <input v-model="draft.title" type="text" placeholder="예: 2일차 오사카 성에서 난바까지" />
+        </label>
+        <label class="field">
+          <span class="field__label">이동 수단</span>
+          <select v-model="draft.transportMode">
+            <option v-for="option in transportOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
+          </select>
+        </label>
+        <label class="field">
+          <span class="field__label">입력 방식</span>
+          <select v-model="draft.sourceType">
+            <option value="MANUAL">직접 그리기</option>
+            <option value="GPX">GPX 불러오기</option>
+          </select>
+        </label>
+        <label class="field">
+          <span class="field__label">총 소요 시간(분)</span>
+          <input v-model="draft.durationMinutes" type="number" min="0" step="1" placeholder="85" />
+        </label>
+        <label class="field">
+          <span class="field__label">걸음 수</span>
+          <input v-model="draft.stepCount" type="number" min="0" step="1" :placeholder="String(estimatedSteps || 0)" />
+        </label>
+        <label class="field">
+          <span class="field__label">출발 장소</span>
+          <input v-model="draft.startPlaceName" type="text" placeholder="오사카 성" />
+        </label>
+        <label class="field">
+          <span class="field__label">도착 장소</span>
+          <input v-model="draft.endPlaceName" type="text" placeholder="난바" />
+        </label>
+        <label class="field field--wide">
+          <span class="field__label">GPX 파일</span>
+          <input accept=".gpx" type="file" @change="handleGpxSelection" />
+        </label>
+        <label class="field field--full">
+          <span class="field__label">메모</span>
+          <textarea v-model="draft.memo" rows="3" placeholder="걷기 구간, 버스 환승, 택시 이동 이유 등을 적어두세요." />
+        </label>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="panel__header">
+        <div>
+          <h2>경로 핀 순서 리스트</h2>
+          <p>출발부터 도착까지 순서대로 확인하고, 중간 핀도 바로 수정할 수 있습니다.</p>
+        </div>
+        <span class="panel__badge">{{ draftPoints.length }}개 핀</span>
+      </div>
+
+      <div v-if="draftPointRows.length" class="travel-point-list">
+        <article
+          v-for="row in draftPointRows"
+          :key="`draft-point-${row.index}`"
+          class="travel-point-list__item"
+          :class="{ 'is-active': highlightedDraftIndex === row.index }"
+        >
+          <div class="travel-point-list__head">
+            <strong>{{ row.index + 1 }}번</strong>
+            <small>{{ row.label }}</small>
+          </div>
+          <label class="field">
+            <span class="field__label">위도</span>
+            <input :value="row.latitude" type="number" step="0.0000001" @change="updateDraftPoint(row.index, 'latitude', $event.target.value)" />
+          </label>
+          <label class="field">
+            <span class="field__label">경도</span>
+            <input :value="row.longitude" type="number" step="0.0000001" @change="updateDraftPoint(row.index, 'longitude', $event.target.value)" />
+          </label>
+          <div class="travel-point-list__actions">
+            <button class="button button--ghost" type="button" @click="focusDraftPoint(row.index)">지도에서 강조</button>
+            <button class="button button--danger" type="button" @click="removeDraftPoint(row.index)">삭제</button>
+          </div>
+        </article>
+      </div>
+      <p v-else class="panel__empty">지도를 눌러 출발 핀부터 추가해 보세요. GPX 파일을 올리면 자동으로 리스트가 채워집니다.</p>
+    </section>
+
+    <section class="panel">
+      <div class="panel__header">
+        <div>
+          <h2>{{ activeDay?.label || '선택한 날짜' }} 일정 타임라인</h2>
+          <p>선택한 일차에 작성된 여행 기록과 이동 경로를 함께 보며 하루 흐름을 확인할 수 있습니다.</p>
+        </div>
+      </div>
+
+      <div class="travel-file-chip-row">
+        <span class="chip chip--neutral">당일 총 이동 {{ activeDayRouteStats.totalDistanceKm.toFixed(2) }}km</span>
+        <span class="chip chip--neutral">당일 총 소요 {{ activeDayRouteStats.totalDurationMinutes }}분</span>
+        <span class="chip chip--neutral">당일 총 걸음 {{ activeDayRouteStats.totalSteps.toLocaleString('ko-KR') }}걸음</span>
+      </div>
+
+      <div v-if="activeDayTimeline.length" class="travel-pending-grid">
+        <article v-for="item in activeDayTimeline" :key="item.id" class="travel-pending-card">
+          <strong>{{ timelineTypeLabel(item.type) }}: {{ item.title }}</strong>
+          <small>{{ item.time ? formatTime(item.time) : '-' }}</small>
+          <small>{{ item.summary }}</small>
+          <small>{{ item.memo }}</small>
+        </article>
+      </div>
+      <p v-else class="panel__empty">선택한 날짜에는 아직 기록된 일정이 없습니다.</p>
+    </section>
+
+    <section class="panel">
+      <div class="panel__header">
+        <div>
+          <h2>{{ activeDay?.label || '선택한 날짜' }} 저장 경로</h2>
+          <p>선택한 일차에 저장된 경로만 모아 보고, 이동 수단과 거리, 걸음 수를 빠르게 확인할 수 있습니다.</p>
+        </div>
+      </div>
+
+      <div class="sheet-table-wrap">
+        <table class="sheet-table">
+          <thead>
+            <tr>
+              <th>날짜</th>
+              <th>제목</th>
+              <th>요약</th>
+              <th>출발 / 도착</th>
+              <th>핀 개수</th>
+              <th>작업</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="route in routesForActiveDay" :key="route.id">
+              <td>{{ formatDate(route.routeDate) }}</td>
+              <td>{{ route.title }}</td>
+              <td>{{ routeSummary(route) }}</td>
+              <td>{{ [route.startPlaceName, route.endPlaceName].filter(Boolean).join(' -> ') || '-' }}</td>
+              <td>{{ route.points?.length || 0 }}</td>
+              <td class="sheet-table__actions">
+                <button class="button button--danger" @click="emit('delete-route', route)">삭제</button>
+              </td>
+            </tr>
+            <tr v-if="!routesForActiveDay.length">
+              <td colspan="6" class="sheet-table__empty">선택한 날짜에 저장된 이동 경로가 아직 없습니다.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+
+  <section v-else class="panel">
+    <p class="panel__empty">먼저 여행을 만들거나 선택해 주세요.</p>
+  </section>
+</template>

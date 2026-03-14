@@ -13,5 +13,7 @@ public interface CategoryGroupRepository extends JpaRepository<CategoryGroup, Lo
 
     List<CategoryGroup> findAllByOwnerIdAndEntryTypeAndActiveTrueOrderByDisplayOrderAscIdAsc(Long ownerId, EntryType entryType);
 
+    java.util.Optional<CategoryGroup> findByOwnerIdAndEntryTypeAndNameIgnoreCase(Long ownerId, EntryType entryType, String name);
+
     java.util.Optional<CategoryGroup> findByIdAndOwnerId(Long id, Long ownerId);
 }

@@ -11,5 +11,7 @@ public interface LedgerEntryRepository extends JpaRepository<LedgerEntry, Long> 
 
     List<LedgerEntry> findTop8ByOwnerIdOrderByEntryDateDescIdDesc(Long ownerId);
 
+    boolean existsByOwnerIdAndEntryDateAndTitleAndAmount(Long ownerId, LocalDate entryDate, String title, java.math.BigDecimal amount);
+
     java.util.Optional<LedgerEntry> findByIdAndOwnerId(Long id, Long ownerId);
 }

@@ -160,6 +160,23 @@ export function deactivatePaymentMethod(id) {
   return request(`/payment-methods/${id}`, { method: 'DELETE' })
 }
 
+export async function previewLedgerExcelImport(file) {
+  const formData = new FormData()
+  formData.append('file', file)
+
+  return request('/entries/imports/excel/preview', {
+    method: 'POST',
+    body: formData,
+  })
+}
+
+export function commitLedgerExcelImport(rows) {
+  return request('/entries/imports/excel/commit', {
+    method: 'POST',
+    body: JSON.stringify({ rows }),
+  })
+}
+
 export function fetchTravelPlans() {
   return request('/travel/plans')
 }

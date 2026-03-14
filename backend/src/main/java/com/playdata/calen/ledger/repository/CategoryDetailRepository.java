@@ -9,5 +9,7 @@ public interface CategoryDetailRepository extends JpaRepository<CategoryDetail, 
 
     List<CategoryDetail> findAllByGroupIdOrderByDisplayOrderAscIdAsc(Long groupId);
 
+    Optional<CategoryDetail> findByGroupIdAndNameIgnoreCase(Long groupId, String name);
+
     Optional<CategoryDetail> findByIdAndGroupOwnerId(Long id, Long ownerId);
 }

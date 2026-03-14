@@ -41,6 +41,7 @@ import {
   summarizeEntries,
 } from '../lib/analytics'
 import CalendarWorkspace from './CalendarWorkspace.vue'
+import LedgerImportWorkspace from './LedgerImportWorkspace.vue'
 import ManagementWorkspace from './ManagementWorkspace.vue'
 import StatisticsWorkspace from './StatisticsWorkspace.vue'
 
@@ -379,6 +380,25 @@ async function refreshLedgerViews() {
   await Promise.all([loadCalendarData(), loadStatisticsData()])
 }
 
+async function handleImported(result) {
+  await Promise.all([loadMetadata(), refreshLedgerViews()])
+  const details = []
+  if (result.createdCategoryGroups?.length) {
+    details.push('category groups ' + result.createdCategoryGroups.length)
+  }
+  if (result.createdCategoryDetails?.length) {
+    details.push('category details ' + result.createdCategoryDetails.length)
+  }
+  if (result.createdPaymentMethods?.length) {
+    details.push('payment methods ' + result.createdPaymentMethods.length)
+  }
+  setFeedback(
+    details.length
+      ? 'Excel import completed. Created ' + details.join(', ') + '.'
+      : 'Excel import completed.',
+  )
+}
+
 async function submitEntry() {
   isSubmitting.value = true
   activeSubmit.value = 'entry'
@@ -558,6 +578,7 @@ async function deactivatePayment(paymentId) {
         <button class="button" :class="{ 'button--primary': householdTab === 'stats-search' }" @click="householdTab = 'stats-search'">검색</button>
         <button class="button" :class="{ 'button--primary': householdTab === 'stats-insights' }" @click="householdTab = 'stats-insights'">인사이트</button>
         <button class="button" :class="{ 'button--primary': householdTab === 'stats-compare' }" @click="householdTab = 'stats-compare'">비교</button>
+        <button class="button" :class="{ 'button--primary': householdTab === 'import' }" @click="householdTab = 'import'">엑셀 가져오기</button>
         <button class="button" :class="{ 'button--primary': householdTab === 'management' }" @click="householdTab = 'management'">분류 관리</button>
       </div>
     </section>
@@ -616,6 +637,11 @@ async function deactivatePayment(paymentId) {
       :format-short-date="formatShortDate"
       :format-date-range="formatDateRange"
       :format-time="formatTime"
+    />
+
+    <LedgerImportWorkspace
+      v-else-if="householdTab === 'import'"
+      @imported="handleImported"
     />
 
     <ManagementWorkspace

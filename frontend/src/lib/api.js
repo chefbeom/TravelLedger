@@ -27,7 +27,7 @@ async function request(path, options = {}) {
   })
 
   if (!response.ok) {
-    let message = '?붿껌 泥섎━ 以??ㅻ쪟媛 諛쒖깮?덉뒿?덈떎.'
+    let message = '요청을 처리하는 중 문제가 발생했습니다.'
     let details = null
 
     try {

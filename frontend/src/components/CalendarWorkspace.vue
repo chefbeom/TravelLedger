@@ -157,6 +157,22 @@ const sheetWrapStyle = computed(() => ({
   '--calendar-sheet-height': `${sheetHeightValue.value}px`,
 }))
 
+const normalizedEntries = computed(() =>
+  props.entries.map((entry) => ({
+    ...entry,
+    visibleMemo: stripImportedMemo(entry.memo),
+  })),
+)
+
+const normalizedSelectedDateEntries = computed(() =>
+  selectedDateEntries.value.map((entry) => ({
+    ...entry,
+    visibleMemo: stripImportedMemo(entry.memo),
+  })),
+)
+
+const hasSheetMemoColumn = computed(() => normalizedEntries.value.some((entry) => entry.visibleMemo))
+
 watch(
   () => props.anchorDate,
   (value) => {
@@ -214,6 +230,18 @@ function normalizePresetKey(presets, value, fallbackKey) {
   }
 
   return fallbackKey
+}
+
+function stripImportedMemo(value) {
+  if (!value) {
+    return ''
+  }
+
+  return String(value)
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line && !line.startsWith('Imported from Excel'))
+    .join('\n')
 }
 
 function getExpenseRatio(day) {
@@ -382,8 +410,8 @@ function getMonthTag(day) {
             </div>
           </div>
 
-          <div v-if="selectedDateEntries.length" class="calendar-detail__list">
-            <article v-for="entry in selectedDateEntries" :key="entry.id" class="calendar-detail__item">
+          <div v-if="normalizedSelectedDateEntries.length" class="calendar-detail__list">
+            <article v-for="entry in normalizedSelectedDateEntries" :key="entry.id" class="calendar-detail__item">
               <div class="calendar-detail__meta">
                 <span class="chip" :class="entry.entryType === 'INCOME' ? 'chip--income' : 'chip--expense'">
                   {{ entry.entryType === 'INCOME' ? '수입' : '지출' }}
@@ -394,7 +422,7 @@ function getMonthTag(day) {
               </div>
               <div class="calendar-detail__amount">
                 <strong :class="entry.entryType === 'INCOME' ? 'is-income' : 'is-expense'">{{ formatCurrency(entry.amount) }}</strong>
-                <small>{{ entry.memo || '메모 없음' }}</small>
+                <small v-if="entry.visibleMemo">{{ entry.visibleMemo }}</small>
               </div>
               <div class="sheet-table__actions">
                 <button class="button button--ghost" @click="emit('edit-entry', entry)">수정</button>
@@ -571,12 +599,12 @@ function getMonthTag(day) {
               <th>카테고리</th>
               <th>결제수단</th>
               <th>금액</th>
-              <th>메모</th>
+              <th v-if="hasSheetMemoColumn">메모</th>
               <th>작업</th>
             </tr>
           </thead>
           <tbody>
-            <tr v-for="entry in entries" :key="entry.id">
+            <tr v-for="entry in normalizedEntries" :key="entry.id">
               <td>{{ formatShortDate(entry.entryDate) }}</td>
               <td>{{ formatTime(entry.entryTime) }}</td>
               <td>
@@ -585,7 +613,7 @@ function getMonthTag(day) {
                 </span>
               </td>
               <td class="sheet-table__title">{{ entry.title }}</td>
-              <td>
+              <td class="sheet-table__category">
                 {{ entry.categoryGroupName }}
                 <template v-if="entry.categoryDetailName"> / {{ entry.categoryDetailName }}</template>
               </td>
@@ -593,14 +621,14 @@ function getMonthTag(day) {
               <td :class="['sheet-table__amount', entry.entryType === 'INCOME' ? 'is-income' : 'is-expense']">
                 {{ formatCurrency(entry.amount) }}
               </td>
-              <td>{{ entry.memo || '-' }}</td>
+              <td v-if="hasSheetMemoColumn" class="sheet-table__memo">{{ entry.visibleMemo || '-' }}</td>
               <td class="sheet-table__actions">
                 <button class="button button--ghost" @click="emit('edit-entry', entry)">수정</button>
                 <button class="button button--danger" @click="emit('delete-entry', entry)">삭제</button>
               </td>
             </tr>
             <tr v-if="!entries.length">
-              <td colspan="9" class="sheet-table__empty">선택한 기간에 거래가 없습니다.</td>
+              <td :colspan="hasSheetMemoColumn ? 9 : 8" class="sheet-table__empty">선택한 기간에 거래가 없습니다.</td>
             </tr>
           </tbody>
         </table>

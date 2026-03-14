@@ -83,7 +83,7 @@ public class LedgerEntryService {
                 entry.getEntryDate(),
                 entry.getEntryTime(),
                 entry.getTitle(),
-                entry.getMemo(),
+                LedgerEntryTextSanitizer.stripImportedMemo(entry.getMemo()),
                 entry.getAmount(),
                 entry.getEntryType(),
                 entry.getCategoryGroup().getId(),

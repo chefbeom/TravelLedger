@@ -643,6 +643,8 @@ button {
 .sheet-table__actions {
   display: flex;
   gap: 8px;
+  justify-content: flex-end;
+  white-space: nowrap;
 }
 
 .sheet-table__empty {
@@ -651,8 +653,28 @@ button {
 }
 
 .sheet-table__title,
+.sheet-table__category,
+.sheet-table__memo {
+  white-space: normal !important;
+  word-break: break-word;
+}
+
+.sheet-table__title,
 .sheet-table__amount {
   font-weight: 700;
+}
+
+.sheet-table__title {
+  min-width: 260px;
+}
+
+.sheet-table__category {
+  min-width: 160px;
+}
+
+.sheet-table__memo {
+  min-width: 220px;
+  color: var(--text-muted);
 }
 
 .stats-toolbar {

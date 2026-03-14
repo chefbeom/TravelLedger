@@ -590,22 +590,7 @@ public class LedgerExcelImportService {
     }
 
     private String buildImportedMemo(LedgerExcelImportRowRequest row) {
-        String sourceMemo = blankToNull(row.memo());
-        if (row.sourceRowNumber() == null && blankToNull(row.sourceSheetName()) == null) {
-            return sourceMemo;
-        }
-        List<String> tags = new ArrayList<>();
-        if (blankToNull(row.sourceSheetName()) != null) {
-            tags.add("sheet " + row.sourceSheetName());
-        }
-        if (row.sourceRowNumber() != null) {
-            tags.add("row " + row.sourceRowNumber());
-        }
-        String importedTag = "Imported from Excel " + String.join(", ", tags);
-        if (sourceMemo == null) {
-            return importedTag;
-        }
-        return sourceMemo + System.lineSeparator() + importedTag;
+        return blankToNull(row.memo());
     }
 
     private CategoryGroup resolveOrCreateCategoryGroup(AppUser owner, LedgerExcelImportRowRequest row, Set<String> createdGroupNames) {

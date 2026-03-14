@@ -57,6 +57,7 @@ public class LedgerExcelImportService {
     private static final DataFormatter DATA_FORMATTER = new DataFormatter(Locale.KOREA);
     private static final Pattern DIGIT_PATTERN = Pattern.compile("[^0-9.\\-]");
     private static final Pattern MONTH_SHEET_PATTERN = Pattern.compile("^[0-9]{1,2}월$");
+    private static final Pattern YEAR_PATTERN = Pattern.compile("(19|20)\\d{2}");
     private static final int MONTH_HEADER_ROW_INDEX = 2;
     private static final int MONTH_NO_COLUMN = 10;
     private static final int MONTH_DATE_COLUMN = 11;
@@ -71,6 +72,7 @@ public class LedgerExcelImportService {
             DateTimeFormatter.ofPattern("yyyy.M.d"),
             DateTimeFormatter.ofPattern("yyyyMMdd")
     );
+    private static final String DEFAULT_IMPORTED_TITLE = "작성하지 않음";
 
     private final AppUserService appUserService;
     private final LedgerEntryRepository ledgerEntryRepository;
@@ -111,7 +113,9 @@ public class LedgerExcelImportService {
                 continue;
             }
 
-            if (ledgerEntryRepository.existsByOwnerIdAndEntryDateAndTitleAndAmount(userId, row.entryDate(), row.title().trim(), row.amount())) {
+            String resolvedTitle = defaultIfBlank(row.title(), DEFAULT_IMPORTED_TITLE);
+
+            if (ledgerEntryRepository.existsByOwnerIdAndEntryDateAndTitleAndAmount(userId, row.entryDate(), resolvedTitle.trim(), row.amount())) {
                 skippedCount++;
                 warnings.add(buildWarning(row, "Skipped as a likely duplicate."));
                 continue;
@@ -121,7 +125,7 @@ public class LedgerExcelImportService {
             CategoryDetail detail = resolveOrCreateCategoryDetail(group, row, createdDetailNames);
             PaymentMethod paymentMethod = resolveOrCreatePaymentMethod(owner, row, createdPaymentNames);
             LedgerEntryTextSanitizer.SanitizedLedgerText sanitizedText =
-                    LedgerEntryTextSanitizer.sanitize(row.title(), buildImportedMemo(row));
+                    LedgerEntryTextSanitizer.sanitize(resolvedTitle, buildImportedMemo(row));
 
             LedgerEntry entry = new LedgerEntry();
             entry.setOwner(owner);
@@ -171,7 +175,7 @@ public class LedgerExcelImportService {
             }
 
             sheetNames.add(sheet.getSheetName());
-            MonthlyPreviewResult result = extractMonthlyRows(sheet, rows.size());
+            MonthlyPreviewResult result = extractMonthlyRows(sheet, rows.size(), resolveMonthlyFallbackDate(fileName, sheet));
             rows.addAll(result.rows());
             skippedRowCount += result.skippedRowCount();
         }
@@ -182,7 +186,7 @@ public class LedgerExcelImportService {
 
         List<String> notes = List.of(
                 "Imported monthly sheets that use K:P columns.",
-                "Blank dates inherit the latest date in the same month sheet.",
+                "Blank dates inherit the latest date in the same month sheet, or fall back to the 1st day of that month.",
                 "Wrapped descriptions are merged until an amount row closes the transaction."
         );
 
@@ -269,7 +273,7 @@ public class LedgerExcelImportService {
                 && normalizeHeaderValue(readCellText(headerRow, MONTH_CATEGORY_COLUMN)).contains(normalizeHeaderValue("소비분류"));
     }
 
-    private MonthlyPreviewResult extractMonthlyRows(Sheet sheet, int previewOffset) {
+    private MonthlyPreviewResult extractMonthlyRows(Sheet sheet, int previewOffset, LocalDate monthlyFallbackDate) {
         List<LedgerExcelPreviewRowResponse> rows = new ArrayList<>();
         List<String> pendingTitleParts = new ArrayList<>();
         String pendingPaymentMethod = null;
@@ -325,17 +329,20 @@ public class LedgerExcelImportService {
                 continue;
             }
 
-            String title = mergeTitleParts(pendingTitleParts, titlePart);
-            LocalDate entryDate = parsedDate != null ? parsedDate : pendingDate != null ? pendingDate : currentDate;
+            String title = defaultIfBlank(mergeTitleParts(pendingTitleParts, titlePart), DEFAULT_IMPORTED_TITLE);
+            LocalDate entryDate = parsedDate != null
+                    ? parsedDate
+                    : pendingDate != null
+                            ? pendingDate
+                            : currentDate != null
+                                    ? currentDate
+                                    : monthlyFallbackDate;
             String resolvedPaymentMethod = defaultIfBlank(paymentMethodName, defaultIfBlank(pendingPaymentMethod, "기타"));
             String resolvedCategory = defaultIfBlank(categoryGroupName, defaultIfBlank(pendingCategoryName, "미분류"));
 
             List<String> issues = new ArrayList<>();
             if (entryDate == null) {
                 issues.add("Missing date");
-            }
-            if (title == null) {
-                issues.add("Missing title");
             }
             if (amount.signum() <= 0) {
                 issues.add("Amount must be positive");
@@ -405,7 +412,7 @@ public class LedgerExcelImportService {
 
             LocalDate entryDate = parseDate(row, header.columns().get(ColumnType.DATE));
             BigDecimal amount = parseAmount(row, header.columns().get(ColumnType.AMOUNT));
-            String title = normalizeText(rawTitle);
+            String title = defaultIfBlank(normalizeText(rawTitle), DEFAULT_IMPORTED_TITLE);
             String paymentMethodName = defaultIfBlank(readCellText(row, header.columns().get(ColumnType.PAYMENT)), "기타");
             String categoryGroupName = defaultIfBlank(readCellText(row, header.columns().get(ColumnType.GROUP)), "미분류");
             String categoryDetailName = blankToNull(readCellText(row, header.columns().get(ColumnType.DETAIL)));
@@ -413,9 +420,6 @@ public class LedgerExcelImportService {
             List<String> issues = new ArrayList<>();
             if (entryDate == null) {
                 issues.add("거래일을 읽지 못했습니다.");
-            }
-            if (title == null) {
-                issues.add("지출내용이 비어 있습니다.");
             }
             if (amount == null || amount.signum() <= 0) {
                 issues.add("지출금액을 읽지 못했습니다.");
@@ -525,7 +529,7 @@ public class LedgerExcelImportService {
     }
 
     private LocalDate parseDate(Row row, Integer columnIndex) {
-        if (columnIndex == null) {
+        if (row == null || columnIndex == null) {
             return null;
         }
         Cell cell = row.getCell(columnIndex);
@@ -591,6 +595,49 @@ public class LedgerExcelImportService {
 
     private String buildImportedMemo(LedgerExcelImportRowRequest row) {
         return blankToNull(row.memo());
+    }
+
+    private LocalDate resolveMonthlyFallbackDate(String fileName, Sheet sheet) {
+        Integer month = inferMonthFromSheetName(sheet.getSheetName());
+        if (month == null) {
+            return null;
+        }
+
+        Integer year = inferYearFromFileName(fileName);
+        if (year == null) {
+            year = inferYearFromSheet(sheet);
+        }
+        if (year == null) {
+            year = LocalDate.now().getYear();
+        }
+
+        return LocalDate.of(year, month, 1);
+    }
+
+    private Integer inferMonthFromSheetName(String sheetName) {
+        String normalized = Optional.ofNullable(sheetName).orElse("").trim();
+        if (!MONTH_SHEET_PATTERN.matcher(normalized).matches()) {
+            return null;
+        }
+        return Integer.parseInt(normalized.replace("월", ""));
+    }
+
+    private Integer inferYearFromFileName(String fileName) {
+        java.util.regex.Matcher matcher = YEAR_PATTERN.matcher(Optional.ofNullable(fileName).orElse(""));
+        if (!matcher.find()) {
+            return null;
+        }
+        return Integer.parseInt(matcher.group());
+    }
+
+    private Integer inferYearFromSheet(Sheet sheet) {
+        for (int rowIndex = MONTH_HEADER_ROW_INDEX + 1; rowIndex <= sheet.getLastRowNum(); rowIndex++) {
+            LocalDate parsedDate = parseDate(sheet.getRow(rowIndex), MONTH_DATE_COLUMN);
+            if (parsedDate != null) {
+                return parsedDate.getYear();
+            }
+        }
+        return null;
     }
 
     private CategoryGroup resolveOrCreateCategoryGroup(AppUser owner, LedgerExcelImportRowRequest row, Set<String> createdGroupNames) {

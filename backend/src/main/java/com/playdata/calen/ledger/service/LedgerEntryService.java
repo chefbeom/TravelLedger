@@ -115,10 +115,12 @@ public class LedgerEntryService {
             }
         }
 
+        LedgerEntryTextSanitizer.SanitizedLedgerText sanitizedText = LedgerEntryTextSanitizer.sanitize(request.title(), request.memo());
+
         ledgerEntry.setEntryDate(request.entryDate());
         ledgerEntry.setEntryTime(request.entryTime());
-        ledgerEntry.setTitle(request.title());
-        ledgerEntry.setMemo(request.memo());
+        ledgerEntry.setTitle(sanitizedText.title());
+        ledgerEntry.setMemo(sanitizedText.memo());
         ledgerEntry.setAmount(request.amount());
         ledgerEntry.setEntryType(request.entryType());
         ledgerEntry.setCategoryGroup(group);

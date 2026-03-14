@@ -120,13 +120,15 @@ public class LedgerExcelImportService {
             CategoryGroup group = resolveOrCreateCategoryGroup(owner, row, createdGroupNames);
             CategoryDetail detail = resolveOrCreateCategoryDetail(group, row, createdDetailNames);
             PaymentMethod paymentMethod = resolveOrCreatePaymentMethod(owner, row, createdPaymentNames);
+            LedgerEntryTextSanitizer.SanitizedLedgerText sanitizedText =
+                    LedgerEntryTextSanitizer.sanitize(row.title(), buildImportedMemo(row));
 
             LedgerEntry entry = new LedgerEntry();
             entry.setOwner(owner);
             entry.setEntryDate(row.entryDate());
             entry.setEntryTime(row.entryTime());
-            entry.setTitle(row.title().trim());
-            entry.setMemo(buildImportedMemo(row));
+            entry.setTitle(sanitizedText.title());
+            entry.setMemo(sanitizedText.memo());
             entry.setAmount(row.amount());
             entry.setEntryType(row.entryType());
             entry.setCategoryGroup(group);

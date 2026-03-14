@@ -62,7 +62,8 @@ const activeSubmit = ref('')
 const feedback = ref('')
 const errorMessage = ref('')
 const householdTab = ref('calendar')
-const calendarAnchorDate = ref(today)
+const householdAnchorDate = ref(today)
+const calendarAnchorDate = householdAnchorDate
 const calendarReady = ref(false)
 const statsReady = ref(false)
 
@@ -107,7 +108,7 @@ const entryForm = reactive({
 })
 
 const statsControls = reactive({
-  anchorDate: today,
+  anchorDate: householdAnchorDate.value,
   preset: 'MONTH',
   customFrom: today,
   customTo: today,
@@ -200,7 +201,19 @@ watch(calendarAnchorDate, async () => {
   if (!isEditingEntry.value) {
     entryForm.entryDate = calendarAnchorDate.value
   }
+  if (statsControls.anchorDate !== calendarAnchorDate.value) {
+    statsControls.anchorDate = calendarAnchorDate.value
+  }
 })
+
+watch(
+  () => statsControls.anchorDate,
+  (value) => {
+    if (value && value !== calendarAnchorDate.value) {
+      calendarAnchorDate.value = value
+    }
+  },
+)
 
 watch(
   () => [statsControls.anchorDate, statsControls.preset, statsControls.customFrom, statsControls.customTo, statsControls.compareUnit, statsControls.comparePeriods],
@@ -258,6 +271,13 @@ async function loadMetadata() {
 
 function handleChangeCalendarMonth(value) {
   calendarAnchorDate.value = value
+}
+
+function handleChangeHouseholdAnchorDate(value) {
+  if (!value) {
+    return
+  }
+  householdAnchorDate.value = value
 }
 
 async function loadCalendarData() {
@@ -570,6 +590,20 @@ async function deactivatePayment(paymentId) {
           <p>예전처럼 달력형 입력, 통계, 검색, 인사이트, 분류 관리 기능을 한 페이지 안에서 다시 사용할 수 있습니다.</p>
         </div>
         <span class="panel__badge">{{ isLoading ? '불러오는 중' : '준비됨' }}</span>
+      </div>
+
+      <div class="household-anchor-toolbar">
+        <div class="household-anchor-toolbar__meta">
+          <strong>기준 날짜</strong>
+          <span>탭을 바꿔도 같은 날짜 기준으로 달력과 통계가 유지됩니다.</span>
+        </div>
+        <div class="household-anchor-toolbar__actions">
+          <label class="field">
+            <span class="field__label">조회 기준</span>
+            <input :value="householdAnchorDate" type="date" @input="handleChangeHouseholdAnchorDate($event.target.value)" />
+          </label>
+          <button class="button button--secondary" @click="handleChangeHouseholdAnchorDate(today)">오늘</button>
+        </div>
       </div>
 
       <div class="scope-toggle scope-toggle--wrap">

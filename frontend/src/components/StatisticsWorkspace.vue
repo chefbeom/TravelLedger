@@ -175,11 +175,6 @@ const monthOfYearChartItems = computed(() =>
         </div>
 
         <div class="stats-toolbar__fields">
-          <label class="field">
-            <span class="field__label">기준 날짜</span>
-            <input v-model="statsControls.anchorDate" type="date" />
-          </label>
-
           <label v-if="statsControls.preset === 'CUSTOM'" class="field">
             <span class="field__label">조회 시작일</span>
             <input v-model="statsControls.customFrom" type="date" />

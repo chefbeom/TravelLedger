@@ -266,15 +266,26 @@ function formatCompactCurrency(value) {
   return `${amount.toLocaleString('ko-KR')}원`
 }
 
+function updateAnchorMonth(year, month) {
+  const safeMonth = `${Math.min(12, Math.max(1, Number(month) || 1))}`.padStart(2, '0')
+  emit('change-anchor-month', `${Number(year)}-${safeMonth}-01`)
+}
+
 function handleChangeYear(event) {
-  const year = Number(event.target.value)
-  const month = `${calendarMonth.value}`.padStart(2, '0')
-  emit('change-anchor-month', `${year}-${month}-01`)
+  updateAnchorMonth(event.target.value, calendarMonth.value)
 }
 
 function handleChangeMonth(event) {
-  const month = `${Number(event.target.value)}`.padStart(2, '0')
-  emit('change-anchor-month', `${calendarYear.value}-${month}-01`)
+  updateAnchorMonth(calendarYear.value, event.target.value)
+}
+
+function shiftAnchorYear(offset) {
+  updateAnchorMonth(calendarYear.value + Number(offset || 0), calendarMonth.value)
+}
+
+function shiftAnchorMonth(offset) {
+  const nextDate = new Date(calendarYear.value, calendarMonth.value - 1 + Number(offset || 0), 1)
+  updateAnchorMonth(nextDate.getFullYear(), nextDate.getMonth() + 1)
 }
 
 function handleSelectDay(day) {
@@ -309,18 +320,30 @@ function getMonthTag(day) {
         </div>
 
         <div class="calendar-toolbar">
-          <label class="field">
-            <span class="field__label">연도</span>
-            <select :value="calendarYear" @change="handleChangeYear">
-              <option v-for="year in yearOptions" :key="year" :value="year">{{ year }}년</option>
-            </select>
-          </label>
-          <label class="field">
-            <span class="field__label">월</span>
-            <select :value="calendarMonth" @change="handleChangeMonth">
-              <option v-for="month in 12" :key="month" :value="month">{{ month }}월</option>
-            </select>
-          </label>
+          <div class="calendar-stepper">
+            <span class="calendar-stepper__label">연도</span>
+            <div class="calendar-stepper__controls">
+              <button type="button" class="calendar-stepper__arrow" aria-label="이전 연도" @click="shiftAnchorYear(-1)">&lt;</button>
+              <label class="field calendar-stepper__field">
+                <select :value="calendarYear" @change="handleChangeYear">
+                  <option v-for="year in yearOptions" :key="year" :value="year">{{ year }}년</option>
+                </select>
+              </label>
+              <button type="button" class="calendar-stepper__arrow" aria-label="다음 연도" @click="shiftAnchorYear(1)">&gt;</button>
+            </div>
+          </div>
+          <div class="calendar-stepper">
+            <span class="calendar-stepper__label">월</span>
+            <div class="calendar-stepper__controls">
+              <button type="button" class="calendar-stepper__arrow" aria-label="이전 달" @click="shiftAnchorMonth(-1)">&lt;</button>
+              <label class="field calendar-stepper__field">
+                <select :value="calendarMonth" @change="handleChangeMonth">
+                  <option v-for="month in 12" :key="month" :value="month">{{ month }}월</option>
+                </select>
+              </label>
+              <button type="button" class="calendar-stepper__arrow" aria-label="다음 달" @click="shiftAnchorMonth(1)">&gt;</button>
+            </div>
+          </div>
         </div>
 
         <div class="calendar-size-toolbar">

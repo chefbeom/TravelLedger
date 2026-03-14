@@ -330,9 +330,53 @@ button {
 
 .calendar-toolbar {
   display: grid;
-  grid-template-columns: repeat(2, minmax(140px, 180px));
+  grid-template-columns: repeat(2, minmax(220px, 280px));
   gap: 14px;
   margin-bottom: 18px;
+}
+
+.calendar-stepper {
+  display: grid;
+  gap: 8px;
+}
+
+.calendar-stepper__label {
+  color: var(--text-soft);
+  font-size: 0.85rem;
+  font-weight: 800;
+}
+
+.calendar-stepper__controls {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) 44px;
+  gap: 10px;
+  align-items: center;
+}
+
+.calendar-stepper__field {
+  gap: 0;
+}
+
+.calendar-stepper__field select {
+  width: 100%;
+}
+
+.calendar-stepper__arrow {
+  min-height: 48px;
+  border: 1px solid rgba(148, 163, 184, 0.26);
+  border-radius: 16px;
+  background: linear-gradient(180deg, rgba(248, 250, 252, 0.96), rgba(241, 245, 249, 0.92));
+  color: var(--text);
+  font: inherit;
+  font-size: 1rem;
+  font-weight: 800;
+  transition: border-color 0.18s ease, background-color 0.18s ease, transform 0.18s ease;
+}
+
+.calendar-stepper__arrow:hover {
+  transform: translateY(-1px);
+  border-color: rgba(49, 130, 246, 0.34);
+  background: rgba(239, 246, 255, 0.95);
 }
 
 .calendar__weeks {
@@ -1247,6 +1291,43 @@ button {
   gap: 10px;
 }
 
+.household-anchor-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
+  padding: 16px 18px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 20px;
+  background: linear-gradient(135deg, rgba(49, 130, 246, 0.08), rgba(255, 255, 255, 0.96));
+}
+
+.household-anchor-toolbar__meta {
+  display: grid;
+  gap: 4px;
+}
+
+.household-anchor-toolbar__meta strong {
+  font-size: 1rem;
+}
+
+.household-anchor-toolbar__meta span {
+  color: var(--text-soft);
+}
+
+.household-anchor-toolbar__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.household-anchor-toolbar__actions .field {
+  min-width: 220px;
+}
+
 .scope-toggle--filters {
   margin-top: 14px;
 }
@@ -1907,7 +1988,7 @@ textarea {
   }
 
   .calendar-toolbar {
-    grid-template-columns: repeat(2, minmax(120px, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .calendar-detail__item {
@@ -1936,6 +2017,15 @@ textarea {
   .scope-toggle,
   .travel-media-actions {
     align-items: stretch;
+  }
+
+  .household-anchor-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .household-anchor-toolbar__actions {
+    justify-content: flex-start;
   }
 }
 
@@ -2926,6 +3016,12 @@ textarea {
 .calendar-sheet-table-wrap {
   block-size: var(--calendar-sheet-height, 460px);
   min-block-size: 300px;
+}
+
+@media (max-width: 720px) {
+  .calendar-toolbar {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 900px) {

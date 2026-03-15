@@ -1,7 +1,7 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { extractPhotoMetadata, reverseGeocode } from '../lib/photoMetadata'
-import { formatDateTime, toNullableNumber, todayIso } from '../lib/uiFormat'
+import { formatDate, formatDateTime, toIsoDate, toNullableNumber, todayIso } from '../lib/uiFormat'
 import TravelMapPanel from './TravelMapPanel.vue'
 
 const pinPresetOptions = [
@@ -44,9 +44,15 @@ const props = defineProps({
 
 const emit = defineEmits(['save-memory', 'delete-memory', 'delete-media'])
 
+const activeDayDate = ref('')
+
+function resolveDefaultMemoryDate() {
+  return activeDayDate.value || props.travelPlan?.startDate || todayIso()
+}
+
 function createDefaultForm() {
   return {
-    memoryDate: todayIso(),
+    memoryDate: resolveDefaultMemoryDate(),
     memoryTime: '',
     category: '장소',
     title: '',
@@ -106,6 +112,37 @@ const memoryRecords = computed(() => props.travelPlan?.memoryRecords ?? [])
 const memoryMediaItems = computed(() =>
   (props.travelPlan?.mediaItems ?? []).filter((item) => item.recordType === 'MEMORY' && item.mediaType === 'PHOTO'),
 )
+const tripDays = computed(() => {
+  const startText = props.travelPlan?.startDate || todayIso()
+  const endText = props.travelPlan?.endDate || startText
+  const start = new Date(`${startText}T00:00:00`)
+  const end = new Date(`${endText}T00:00:00`)
+
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end < start) {
+    return [{ index: 1, date: startText, label: '1일차' }]
+  }
+
+  const days = []
+  const cursor = new Date(start)
+  let index = 1
+
+  while (cursor <= end) {
+    days.push({
+      index,
+      date: toIsoDate(cursor),
+      label: `${index}일차`,
+    })
+    cursor.setDate(cursor.getDate() + 1)
+    index += 1
+  }
+
+  return days.length ? days : [{ index: 1, date: startText, label: '1일차' }]
+})
+const activeDay = computed(() => tripDays.value.find((day) => day.date === activeDayDate.value) || null)
+const activeDayLabel = computed(() => activeDay.value?.label || '전체 일정')
+const scopedMemoryRecords = computed(() =>
+  memoryRecords.value.filter((item) => !activeDayDate.value || item.memoryDate === activeDayDate.value),
+)
 
 const memoryMediaMap = computed(() => {
   const bucket = new Map()
@@ -119,14 +156,14 @@ const memoryMediaMap = computed(() => {
 })
 
 const countryOptions = computed(() => {
-  const values = new Set((props.travelPlan?.memoryRecords ?? []).map((item) => item.country).filter(Boolean))
+  const values = new Set(scopedMemoryRecords.value.map((item) => item.country).filter(Boolean))
   return [...values].sort((left, right) => left.localeCompare(right))
 })
 
 const regionOptions = computed(() => {
   const selectedCountry = String(locationFilter.country || '').trim()
   const values = new Set(
-    memoryRecords.value
+    scopedMemoryRecords.value
       .filter((item) => !selectedCountry || item.country === selectedCountry)
       .map((item) => item.region)
       .filter(Boolean),
@@ -135,7 +172,7 @@ const regionOptions = computed(() => {
 })
 
 const filteredMemoryRecords = computed(() =>
-  memoryRecords.value
+  scopedMemoryRecords.value
     .filter((item) => !locationFilter.country || item.country === locationFilter.country)
     .filter((item) => !locationFilter.region || item.region === locationFilter.region)
     .map((item) => ({
@@ -151,7 +188,7 @@ const filteredMemoryRecords = computed(() =>
 )
 
 const photoBackedMemories = computed(() =>
-  memoryRecords.value
+  scopedMemoryRecords.value
     .map((item) => {
       const photos = (memoryMediaMap.value.get(String(item.id)) ?? [])
         .slice()
@@ -209,7 +246,7 @@ const selectedPoint = computed(() => {
 })
 
 const mapMarkers = computed(() =>
-  memoryRecords.value
+  filteredMemoryRecords.value
     .filter((item) => item.latitude !== null && item.latitude !== undefined && item.longitude !== null && item.longitude !== undefined)
     .map((item) => {
       const preset = resolvePinPreset(item.category)
@@ -247,6 +284,7 @@ watch(
     resetForm()
     clearPendingPoint()
     isEditorOpen.value = false
+    activeDayDate.value = ''
     queuedCategory.value = '장소'
     locationFilter.country = ''
     locationFilter.region = ''
@@ -261,6 +299,16 @@ watch(
     clearPendingPoint()
     isEditorOpen.value = false
   },
+)
+
+watch(
+  tripDays,
+  (days) => {
+    if (activeDayDate.value && !days.some((day) => day.date === activeDayDate.value)) {
+      activeDayDate.value = ''
+    }
+  },
+  { deep: true },
 )
 
 watch(
@@ -288,6 +336,17 @@ watch(
   },
 )
 
+watch(
+  countryOptions,
+  (options) => {
+    if (locationFilter.country && !options.includes(locationFilter.country)) {
+      locationFilter.country = ''
+      locationFilter.region = ''
+    }
+  },
+  { deep: true },
+)
+
 function resetPendingFiles() {
   photoFiles.value = []
   photoCaption.value = ''
@@ -300,6 +359,17 @@ function resetForm() {
   Object.assign(form, createDefaultForm())
   editingMemoryId.value = null
   resetPendingFiles()
+}
+
+function selectAllDays() {
+  activeDayDate.value = ''
+}
+
+function selectTripDay(day) {
+  activeDayDate.value = day.date
+  if (!editingMemoryId.value) {
+    form.memoryDate = day.date
+  }
 }
 
 function clearPendingPoint() {
@@ -629,6 +699,29 @@ function submitMemory() {
         </div>
       </div>
 
+      <div class="travel-day-tabs">
+        <button
+          class="travel-day-tabs__button"
+          :class="{ 'is-active': !activeDayDate }"
+          type="button"
+          @click="selectAllDays"
+        >
+          <strong>전체 일정</strong>
+          <small>모든 날짜</small>
+        </button>
+        <button
+          v-for="day in tripDays"
+          :key="day.date"
+          class="travel-day-tabs__button"
+          :class="{ 'is-active': activeDayDate === day.date }"
+          type="button"
+          @click="selectTripDay(day)"
+        >
+          <strong>{{ day.label }}</strong>
+          <small>{{ formatDate(day.date) }}</small>
+        </button>
+      </div>
+
       <TravelMapPanel
         :markers="mapMarkers"
         :selected-point="selectedPoint"
@@ -699,7 +792,7 @@ function submitMemory() {
     <section class="panel">
       <div class="panel__header">
         <div>
-          <h2>저장한 여행 기록</h2>
+          <h2>{{ activeDayLabel }} 여행 기록</h2>
           <p>국가와 지역으로 걸러보고, 저장된 기록을 다시 열어 메모와 사진, 공유 여부, 좌표까지 이어서 수정할 수 있습니다.</p>
         </div>
         <span class="panel__badge">{{ filteredMemoryRecords.length }}건</span>

@@ -653,12 +653,15 @@ async function handleGpxSelection(event) {
     draft.durationMinutes = String(totalDurationMinutes)
   }
 
+  const selectedRouteDate = activeDayDate.value || draft.routeDate || props.travelPlan?.startDate || todayIso()
   const firstTrackDate = orderedTracks.find((track) => track.startTimestamp)?.startTimestamp
-  if (firstTrackDate) {
-    const routeDate = toIsoDate(firstTrackDate)
-    draft.routeDate = routeDate
-    if (tripDays.value.some((day) => day.date === routeDate)) {
-      activeDayDate.value = routeDate
+  if (selectedRouteDate) {
+    draft.routeDate = selectedRouteDate
+  } else if (firstTrackDate) {
+    const detectedRouteDate = toIsoDate(firstTrackDate)
+    draft.routeDate = detectedRouteDate
+    if (tripDays.value.some((day) => day.date === detectedRouteDate)) {
+      activeDayDate.value = detectedRouteDate
     }
   }
 

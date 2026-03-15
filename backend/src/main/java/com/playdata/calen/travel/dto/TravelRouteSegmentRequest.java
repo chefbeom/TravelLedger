@@ -1,5 +1,6 @@
 package com.playdata.calen.travel.dto;
 
+import com.playdata.calen.travel.domain.TravelRouteLineStyle;
 import com.playdata.calen.travel.domain.TravelRouteSourceType;
 import com.playdata.calen.travel.domain.TravelRouteTransportMode;
 import jakarta.validation.Valid;
@@ -43,6 +44,11 @@ public record TravelRouteSegmentRequest(
 
         @Size(max = 160, message = "End place must be 160 characters or fewer.")
         String endPlaceName,
+
+        @Size(max = 7, message = "Route color must use #RRGGBB format.")
+        String lineColorHex,
+
+        TravelRouteLineStyle lineStyle,
 
         @Size(max = 500, message = "Memo must be 500 characters or fewer.")
         String memo,

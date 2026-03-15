@@ -14,6 +14,7 @@ import com.playdata.calen.travel.domain.TravelMediaType;
 import com.playdata.calen.travel.domain.TravelPlan;
 import com.playdata.calen.travel.domain.TravelPlanStatus;
 import com.playdata.calen.travel.domain.TravelRecordType;
+import com.playdata.calen.travel.domain.TravelRouteLineStyle;
 import com.playdata.calen.travel.domain.TravelRouteSegment;
 import com.playdata.calen.travel.domain.TravelRouteSourceType;
 import com.playdata.calen.travel.domain.TravelRouteTransportMode;
@@ -46,6 +47,7 @@ import com.playdata.calen.travel.repository.TravelPlanRepository;
 import com.playdata.calen.travel.repository.TravelRouteSegmentRepository;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
@@ -70,6 +72,7 @@ public class TravelService {
     private static final BigDecimal ZERO_DISTANCE = BigDecimal.ZERO.setScale(3, RoundingMode.HALF_UP);
     private static final String KRW = "KRW";
     private static final String DEFAULT_TRAVEL_COLOR = "#3182F6";
+    private static final int MAX_STORED_ROUTE_POINTS = 900;
     private static final List<String> DEFAULT_CURRENCIES = List.of("KRW", "USD", "JPY", "CNY", "EUR");
     private static final List<String> DEFAULT_BUDGET_CATEGORIES = List.of(
             "Flight",
@@ -728,7 +731,8 @@ public class TravelService {
     }
 
     private void applyRouteSegmentRequest(TravelRouteSegment routeSegment, TravelRouteSegmentRequest request) {
-        validateRoutePoints(request.points());
+        TravelRouteSourceType sourceType = request.sourceType() != null ? request.sourceType() : TravelRouteSourceType.MANUAL;
+        List<TravelRoutePointRequest> normalizedPoints = normalizeRoutePointsForStorage(request.points(), sourceType);
 
         routeSegment.setRouteDate(request.routeDate());
         routeSegment.setTitle(request.title().trim());
@@ -736,10 +740,12 @@ public class TravelService {
         routeSegment.setDistanceKm(request.distanceKm().setScale(3, RoundingMode.HALF_UP));
         routeSegment.setDurationMinutes(request.durationMinutes());
         routeSegment.setStepCount(request.stepCount());
-        routeSegment.setSourceType(request.sourceType() != null ? request.sourceType() : TravelRouteSourceType.MANUAL);
+        routeSegment.setSourceType(sourceType);
         routeSegment.setStartPlaceName(trimToNull(request.startPlaceName()));
         routeSegment.setEndPlaceName(trimToNull(request.endPlaceName()));
-        routeSegment.setRoutePathJson(serializeRoutePoints(request.points()));
+        routeSegment.setRoutePathJson(serializeRoutePoints(normalizedPoints));
+        routeSegment.setLineColorHex(resolveRouteLineColor(request.lineColorHex(), routeSegment.getPlan().getColorHex()));
+        routeSegment.setLineStyle(request.lineStyle() != null ? request.lineStyle() : TravelRouteLineStyle.SOLID);
         routeSegment.setMemo(trimToNull(request.memo()));
     }
 
@@ -897,6 +903,8 @@ public class TravelService {
                 routeSegment.getSourceType(),
                 routeSegment.getStartPlaceName(),
                 routeSegment.getEndPlaceName(),
+                resolveRouteLineColor(routeSegment.getLineColorHex(), plan.getColorHex()),
+                routeSegment.getLineStyle() != null ? routeSegment.getLineStyle() : TravelRouteLineStyle.SOLID,
                 routeSegment.getMemo(),
                 deserializeRoutePoints(routeSegment.getRoutePathJson())
         );
@@ -1063,6 +1071,14 @@ public class TravelService {
         return normalized;
     }
 
+    private String resolveRouteLineColor(String value, String fallback) {
+        String normalized = value == null ? "" : value.trim().toUpperCase();
+        if (normalized.isEmpty()) {
+            return normalizeColorHex(fallback);
+        }
+        return normalizeColorHex(normalized);
+    }
+
     private void validateCoordinates(BigDecimal latitude, BigDecimal longitude) {
         if ((latitude == null) != (longitude == null)) {
             throw new BadRequestException("Latitude and longitude must be provided together.");
@@ -1094,6 +1110,70 @@ public class TravelService {
             normalizeCoordinate(point.latitude(), true);
             normalizeCoordinate(point.longitude(), false);
         });
+    }
+
+    private List<TravelRoutePointRequest> normalizeRoutePointsForStorage(List<TravelRoutePointRequest> points, TravelRouteSourceType sourceType) {
+        validateRoutePoints(points);
+
+        List<TravelRoutePointRequest> normalized = points.stream()
+                .map(point -> new TravelRoutePointRequest(
+                        normalizeCoordinate(point.latitude(), true),
+                        normalizeCoordinate(point.longitude(), false)
+                ))
+                .toList();
+
+        List<TravelRoutePointRequest> deduplicated = deduplicateRoutePoints(normalized);
+        if (deduplicated.size() < 2) {
+            throw new BadRequestException("At least two distinct route points are required.");
+        }
+
+        if (sourceType == TravelRouteSourceType.GPX && deduplicated.size() > MAX_STORED_ROUTE_POINTS) {
+            return thinRoutePoints(deduplicated, MAX_STORED_ROUTE_POINTS);
+        }
+
+        if (deduplicated.size() > MAX_STORED_ROUTE_POINTS * 2) {
+            return thinRoutePoints(deduplicated, MAX_STORED_ROUTE_POINTS * 2);
+        }
+
+        return deduplicated;
+    }
+
+    private List<TravelRoutePointRequest> deduplicateRoutePoints(List<TravelRoutePointRequest> points) {
+        List<TravelRoutePointRequest> deduplicated = new ArrayList<>();
+
+        for (TravelRoutePointRequest point : points) {
+            TravelRoutePointRequest previous = deduplicated.isEmpty() ? null : deduplicated.get(deduplicated.size() - 1);
+            if (previous != null
+                    && previous.latitude().compareTo(point.latitude()) == 0
+                    && previous.longitude().compareTo(point.longitude()) == 0) {
+                continue;
+            }
+            deduplicated.add(point);
+        }
+
+        return List.copyOf(deduplicated);
+    }
+
+    private List<TravelRoutePointRequest> thinRoutePoints(List<TravelRoutePointRequest> points, int maxPoints) {
+        if (points.size() <= maxPoints) {
+            return points;
+        }
+
+        List<TravelRoutePointRequest> reduced = new ArrayList<>();
+        int step = Math.max(1, (int) Math.ceil((double) (points.size() - 1) / Math.max(1, maxPoints - 1)));
+
+        for (int index = 0; index < points.size(); index += step) {
+            reduced.add(points.get(index));
+        }
+
+        TravelRoutePointRequest lastPoint = points.get(points.size() - 1);
+        TravelRoutePointRequest reducedLastPoint = reduced.get(reduced.size() - 1);
+        if (reducedLastPoint.latitude().compareTo(lastPoint.latitude()) != 0
+                || reducedLastPoint.longitude().compareTo(lastPoint.longitude()) != 0) {
+            reduced.add(lastPoint);
+        }
+
+        return List.copyOf(reduced);
     }
 
     private String serializeRoutePoints(List<TravelRoutePointRequest> points) {

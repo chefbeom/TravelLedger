@@ -32,6 +32,14 @@ const props = defineProps({
     type: Array,
     default: () => [],
   },
+  draftPathColorHex: {
+    type: String,
+    default: '#FF6B6B',
+  },
+  draftPathLineStyle: {
+    type: String,
+    default: 'SOLID',
+  },
   showDraftPointMarkers: {
     type: Boolean,
     default: true,
@@ -132,6 +140,40 @@ function escapeHtml(value) {
 
 function normalizeColorHex(value, fallback = '#3182F6') {
   return /^#[0-9A-Fa-f]{6}$/.test(String(value || '').trim()) ? String(value).trim().toUpperCase() : fallback
+}
+
+function normalizeLineStyle(value) {
+  const normalized = String(value || '').trim().toUpperCase()
+  if (['SOLID', 'DASHED', 'DOTTED', 'LONG_DASH'].includes(normalized)) {
+    return normalized
+  }
+  return 'SOLID'
+}
+
+function dashArrayForLineStyle(value) {
+  switch (normalizeLineStyle(value)) {
+    case 'DASHED':
+      return '10 8'
+    case 'DOTTED':
+      return '3 10'
+    case 'LONG_DASH':
+      return '18 10'
+    default:
+      return undefined
+  }
+}
+
+function buildPolylineOptions(colorHex, lineStyle, { draft = false } = {}) {
+  const normalizedStyle = normalizeLineStyle(lineStyle)
+
+  return {
+    color: normalizeColorHex(colorHex, draft ? '#FF6B6B' : '#3182F6'),
+    weight: draft ? 4 : 4,
+    opacity: draft ? 0.9 : 0.85,
+    dashArray: dashArrayForLineStyle(normalizedStyle),
+    lineCap: normalizedStyle === 'DOTTED' ? 'round' : 'round',
+    lineJoin: 'round',
+  }
 }
 
 function normalizeIconKey(value) {
@@ -523,11 +565,7 @@ function renderMapLayers({ shouldFit = false } = {}) {
       return
     }
 
-    const polyline = L.polyline(linePoints, {
-      color: normalizeColorHex(route.colorHex || route.planColorHex, '#3182F6'),
-      weight: 4,
-      opacity: 0.85,
-    })
+    const polyline = L.polyline(linePoints, buildPolylineOptions(route.lineColorHex || route.colorHex || route.planColorHex, route.lineStyle))
 
     if (route.title) {
       polyline.bindTooltip(route.title)
@@ -543,12 +581,7 @@ function renderMapLayers({ shouldFit = false } = {}) {
   if (draftPoints.length >= 2) {
     L.polyline(
       thinLinePoints(draftPoints).map((point) => [point.latitude, point.longitude]),
-      {
-        color: '#FF6B6B',
-        weight: 4,
-        opacity: 0.9,
-        dashArray: '10 8',
-      },
+      buildPolylineOptions(props.draftPathColorHex, props.draftPathLineStyle, { draft: true }),
     ).addTo(draftLayer)
   }
 
@@ -703,6 +736,8 @@ watch(
     props.markers,
     props.routes,
     props.draftPath,
+    props.draftPathColorHex,
+    props.draftPathLineStyle,
     props.showDraftPointMarkers,
     props.selectedPoint,
     props.highlightedDraftIndex,

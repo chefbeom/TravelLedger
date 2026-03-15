@@ -1,5 +1,6 @@
 package com.playdata.calen.travel.dto;
 
+import com.playdata.calen.travel.domain.TravelRouteLineStyle;
 import com.playdata.calen.travel.domain.TravelRouteSourceType;
 import com.playdata.calen.travel.domain.TravelRouteTransportMode;
 import java.math.BigDecimal;
@@ -20,6 +21,8 @@ public record TravelRouteSegmentResponse(
         TravelRouteSourceType sourceType,
         String startPlaceName,
         String endPlaceName,
+        String lineColorHex,
+        TravelRouteLineStyle lineStyle,
         String memo,
         List<TravelRoutePointResponse> points
 ) {

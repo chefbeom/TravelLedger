@@ -64,6 +64,13 @@ public class TravelRouteSegment {
     @Column(nullable = false)
     private String routePathJson;
 
+    @Column(length = 7)
+    private String lineColorHex;
+
+    @Enumerated(EnumType.STRING)
+    @Column(length = 20)
+    private TravelRouteLineStyle lineStyle = TravelRouteLineStyle.SOLID;
+
     @Column(length = 500)
     private String memo;
 }

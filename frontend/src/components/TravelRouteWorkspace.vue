@@ -35,6 +35,13 @@ const transportOptions = [
   { value: 'ETC', label: '기타' },
 ]
 
+const lineStyleOptions = [
+  { value: 'SOLID', label: '실선' },
+  { value: 'DASHED', label: '점선' },
+  { value: 'DOTTED', label: '도트' },
+  { value: 'LONG_DASH', label: '긴 점선' },
+]
+
 const draft = reactive({
   routeDate: todayIso(),
   title: '',
@@ -44,6 +51,8 @@ const draft = reactive({
   sourceType: 'MANUAL',
   startPlaceName: '',
   endPlaceName: '',
+  lineColorHex: '#3182F6',
+  lineStyle: 'SOLID',
   memo: '',
 })
 
@@ -125,7 +134,8 @@ const routesForActiveDay = computed(() =>
 const mapRoutes = computed(() =>
   routesForActiveDay.value.map((route) => ({
     ...route,
-    colorHex: route.planColorHex || props.travelPlan?.colorHex || '#3182F6',
+    lineColorHex: route.lineColorHex || route.planColorHex || props.travelPlan?.colorHex || '#3182F6',
+    lineStyle: route.lineStyle || 'SOLID',
   })),
 )
 
@@ -154,6 +164,7 @@ const canPlaceRoutePoints = computed(() => draft.sourceType === 'MANUAL' && !has
 const showDraftPointMarkers = computed(() => canPlaceRoutePoints.value)
 const gpxStartPoint = computed(() => draftPoints.value[0] ?? null)
 const gpxEndPoint = computed(() => draftPoints.value[draftPoints.value.length - 1] ?? null)
+const storedRoutePointCount = computed(() => compressRoutePointsForSave(draftPoints.value, hasGpxGeometry.value).length)
 const routePointBadge = computed(() => (hasGpxGeometry.value ? `${draftPoints.value.length}개 트랙 포인트` : `${draftPoints.value.length}개 제어점`))
 const routeMapHintTitle = computed(() =>
   isGpxMode.value ? 'GPX는 방문 장소 핀이 아니라 이동 경로 선으로만 표시됩니다' : '지도를 눌러 경로 제어점을 순서대로 추가합니다',
@@ -286,6 +297,10 @@ function sourceLabel(sourceType) {
   return sourceType === 'GPX' ? 'GPX 불러오기' : '직접 그리기'
 }
 
+function lineStyleLabel(style) {
+  return lineStyleOptions.find((option) => option.value === style)?.label || '실선'
+}
+
 function timelineTypeLabel(type) {
   return type === 'ROUTE' ? '이동 경로' : '여행 기록'
 }
@@ -316,6 +331,35 @@ function formatCoordinate(point) {
     return '-'
   }
   return `${Number(point.latitude).toFixed(5)}, ${Number(point.longitude).toFixed(5)}`
+}
+
+function thinRoutePoints(points, maxPoints = 900) {
+  if (!Array.isArray(points) || points.length <= maxPoints) {
+    return points
+  }
+
+  const reduced = []
+  const step = Math.max(1, Math.ceil((points.length - 1) / Math.max(1, maxPoints - 1)))
+
+  for (let index = 0; index < points.length; index += step) {
+    reduced.push(points[index])
+  }
+
+  const lastPoint = points[points.length - 1]
+  const reducedLastPoint = reduced[reduced.length - 1]
+  if (reducedLastPoint !== lastPoint) {
+    reduced.push(lastPoint)
+  }
+
+  return reduced
+}
+
+function compressRoutePointsForSave(points, isGpxRoute) {
+  const normalizedPoints = [...(points ?? [])].filter((point) => Number.isFinite(Number(point.latitude)) && Number.isFinite(Number(point.longitude)))
+  if (!isGpxRoute) {
+    return normalizedPoints
+  }
+  return thinRoutePoints(normalizedPoints, 900)
 }
 
 function addDraftPoint(point) {
@@ -407,6 +451,8 @@ function resetDraft() {
   draft.sourceType = 'MANUAL'
   draft.startPlaceName = ''
   draft.endPlaceName = ''
+  draft.lineColorHex = props.travelPlan?.colorHex || '#3182F6'
+  draft.lineStyle = 'SOLID'
   draft.memo = ''
   draftPoints.value = []
   gpxFileName.value = ''
@@ -415,6 +461,8 @@ function resetDraft() {
 }
 
 function buildPayload() {
+  const pointsForSave = compressRoutePointsForSave(draftPoints.value, hasGpxGeometry.value)
+
   return {
     routeDate: draft.routeDate,
     title: draft.title.trim(),
@@ -425,8 +473,10 @@ function buildPayload() {
     sourceType: hasGpxGeometry.value ? 'GPX' : draft.sourceType,
     startPlaceName: draft.startPlaceName.trim() || null,
     endPlaceName: draft.endPlaceName.trim() || null,
+    lineColorHex: draft.lineColorHex,
+    lineStyle: draft.lineStyle,
     memo: draft.memo.trim() || null,
-    points: draftPoints.value.map((point) => ({
+    points: pointsForSave.map((point) => ({
       latitude: Number(point.latitude),
       longitude: Number(point.longitude),
     })),
@@ -496,6 +546,7 @@ function routeSummary(route) {
     route.distanceKm ? `${Number(route.distanceKm).toFixed(2)}km` : '',
     route.durationMinutes ? `${route.durationMinutes}분` : '',
     route.stepCount ? `${Number(route.stepCount).toLocaleString('ko-KR')}걸음` : '',
+    route.lineStyle ? lineStyleLabel(route.lineStyle) : '',
     route.sourceType ? sourceLabel(route.sourceType) : '',
   ]
     .filter(Boolean)
@@ -548,6 +599,8 @@ function routeSummary(route) {
         :markers="routeMapMarkers"
         :routes="mapRoutes"
         :draft-path="draftPoints"
+        :draft-path-color-hex="draft.lineColorHex"
+        :draft-path-line-style="draft.lineStyle"
         :show-draft-point-markers="showDraftPointMarkers"
         :selected-point="null"
         :enable-pick-location="false"
@@ -633,8 +686,10 @@ function routeSummary(route) {
           </div>
           <div class="travel-file-chip-row">
             <span class="chip chip--neutral">{{ hasGpxGeometry ? `트랙 포인트 ${draftPoints.length}개` : `제어점 ${draftPoints.length}개` }}</span>
+            <span class="chip chip--neutral">저장 포인트 {{ storedRoutePointCount }}개</span>
             <span class="chip chip--neutral">총 거리 {{ draftDistanceKm.toFixed(2) }}km</span>
             <span class="chip chip--neutral">예상 걸음 {{ estimatedSteps.toLocaleString('ko-KR') }}걸음</span>
+            <span class="chip chip--neutral">선 스타일 {{ lineStyleLabel(draft.lineStyle) }}</span>
             <span v-if="isGpxMode" class="chip chip--neutral">표시 방식 선 그리기</span>
             <span v-if="gpxFileName" class="chip chip--neutral">{{ gpxFileName }}</span>
           </div>
@@ -688,6 +743,16 @@ function routeSummary(route) {
           <input v-model="draft.stepCount" type="number" min="0" step="1" :placeholder="String(estimatedSteps || 0)" />
         </label>
         <label class="field">
+          <span class="field__label">경로 색상</span>
+          <input v-model="draft.lineColorHex" type="color" />
+        </label>
+        <label class="field">
+          <span class="field__label">선 스타일</span>
+          <select v-model="draft.lineStyle">
+            <option v-for="option in lineStyleOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
+          </select>
+        </label>
+        <label class="field">
           <span class="field__label">출발 장소</span>
           <input v-model="draft.startPlaceName" type="text" placeholder="오사카 성" />
         </label>
@@ -700,7 +765,7 @@ function routeSummary(route) {
           <input accept=".gpx" type="file" @change="handleGpxSelection" />
         </label>
         <p v-if="hasGpxGeometry" class="travel-map-note field field--full">
-          GPX는 방문 장소 핀이 아니라 이동 경로 선으로만 표시됩니다. 필요하면 임시 경로를 비운 뒤 직접 그리기로 새 경로를 시작해 주세요.
+          GPX는 방문 장소 핀이 아니라 이동 경로 선으로만 표시됩니다. 저장할 때는 렌더링이 무거워지지 않도록 포인트를 자동으로 줄여 보관합니다.
         </p>
         <p v-else-if="draft.sourceType === 'GPX'" class="travel-map-note field field--full">
           GPX 파일을 올리면 시간, 이동 거리, 걸음 수를 자동으로 계산하고 지도에는 선 형태로만 그립니다.
@@ -815,7 +880,7 @@ function routeSummary(route) {
               <th>제목</th>
               <th>요약</th>
               <th>출발 / 도착</th>
-              <th>핀 개수</th>
+              <th>경로 포인트</th>
               <th>작업</th>
             </tr>
           </thead>

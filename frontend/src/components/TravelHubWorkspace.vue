@@ -22,6 +22,7 @@ import {
   updateTravelMemory,
   updateTravelPlan,
   updateTravelRecord,
+  updateTravelRoute,
   uploadTravelMemoryMedia,
   uploadTravelRouteGpxFiles,
   uploadTravelRecordMedia,
@@ -752,10 +753,12 @@ async function handleSaveRoute(payload) {
   activeSubmit.value = 'route'
   setFeedback()
   try {
-    const { gpxFiles = [], ...routePayload } = payload || {}
-    const createdRoute = await createTravelRoute(selectedPlanId.value, routePayload)
+    const { id, gpxFiles = [], ...routePayload } = payload || {}
+    const savedRoute = id
+      ? await updateTravelRoute(id, routePayload)
+      : await createTravelRoute(selectedPlanId.value, routePayload)
     if (gpxFiles.length) {
-      await uploadTravelRouteGpxFiles(createdRoute.id, gpxFiles)
+      await uploadTravelRouteGpxFiles(savedRoute.id, gpxFiles)
     }
     await refreshTravelData(selectedPlanId.value, props.route === 'photo-album')
     routeRefreshKey.value += 1

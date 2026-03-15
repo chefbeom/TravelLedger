@@ -61,6 +61,7 @@ const gpxFileNames = ref([])
 const gpxSelectedFiles = ref([])
 const activeDayDate = ref('')
 const highlightedDraftIndex = ref(-1)
+const editingRouteId = ref(null)
 
 const routeSegments = computed(() => props.travelPlan?.routeSegments ?? [])
 const tripDays = computed(() => {
@@ -91,6 +92,12 @@ const tripDays = computed(() => {
 })
 
 const activeDay = computed(() => tripDays.value.find((day) => day.date === activeDayDate.value) || tripDays.value[0] || null)
+const activeDayLabel = computed(() => {
+  if (!activeDayDate.value) {
+    return '전체 일정'
+  }
+  return activeDay.value?.label || formatDate(activeDayDate.value)
+})
 const selectedDayMemories = computed(() =>
   (props.travelPlan?.memoryRecords ?? []).filter((item) => {
     if (!activeDayDate.value) {
@@ -159,7 +166,7 @@ const estimatedSteps = computed(() => {
   return draft.transportMode === 'WALK' ? Math.round(draftDistanceKm.value * 1400) : 0
 })
 
-const hasGpxGeometry = computed(() => gpxFileNames.value.length > 0 && draftPoints.value.length >= 2)
+const hasGpxGeometry = computed(() => draft.sourceType === 'GPX' && draftPoints.value.length >= 2)
 const isGpxMode = computed(() => draft.sourceType === 'GPX' || hasGpxGeometry.value)
 const canPlaceRoutePoints = computed(() => draft.sourceType === 'MANUAL' && !hasGpxGeometry.value)
 const showDraftPointMarkers = computed(() => canPlaceRoutePoints.value)
@@ -219,6 +226,7 @@ const activeDayTimeline = computed(() => {
     rows.push({
       id: `memory-${memory.id}`,
       type: 'MEMORY',
+      date: memory.memoryDate || '',
       title: memory.title || memory.placeName || '여행 기록',
       time: memory.memoryTime || '',
       summary: [memory.country, memory.region, memory.placeName].filter(Boolean).join(' / ') || '-',
@@ -230,6 +238,7 @@ const activeDayTimeline = computed(() => {
     rows.push({
       id: `route-${route.id}`,
       type: 'ROUTE',
+      date: route.routeDate || '',
       title: route.title,
       time: '',
       summary: routeSummary(route) || '-',
@@ -237,7 +246,11 @@ const activeDayTimeline = computed(() => {
     })
   })
 
-  return rows.sort((left, right) => `${left.time || '99:99'}-${left.id}`.localeCompare(`${right.time || '99:99'}-${right.id}`))
+  return rows.sort((left, right) => {
+    const leftKey = `${left.date || ''} ${left.time || '99:99'}-${left.id}`
+    const rightKey = `${right.date || ''} ${right.time || '99:99'}-${right.id}`
+    return leftKey.localeCompare(rightKey)
+  })
 })
 
 const activeDayRouteStats = computed(() => {
@@ -272,10 +285,12 @@ watch(
 watch(
   tripDays,
   (days) => {
-    if (!days.some((day) => day.date === activeDayDate.value)) {
+    if (activeDayDate.value && !days.some((day) => day.date === activeDayDate.value)) {
       activeDayDate.value = days[0]?.date || props.travelPlan?.startDate || todayIso()
     }
-    draft.routeDate = activeDayDate.value || props.travelPlan?.startDate || todayIso()
+    if (!editingRouteId.value || activeDayDate.value) {
+      draft.routeDate = activeDayDate.value || props.travelPlan?.startDate || todayIso()
+    }
   },
   { deep: true },
 )
@@ -283,6 +298,9 @@ watch(
 watch(
   () => activeDayDate.value,
   (value) => {
+    if (editingRouteId.value && !value && draft.routeDate) {
+      return
+    }
     draft.routeDate = value || props.travelPlan?.startDate || todayIso()
   },
 )
@@ -296,6 +314,11 @@ function initializeDaySelection() {
 function selectTripDay(day) {
   activeDayDate.value = day.date
   draft.routeDate = day.date
+  highlightedDraftIndex.value = -1
+}
+
+function selectAllDays() {
+  activeDayDate.value = ''
   highlightedDraftIndex.value = -1
 }
 
@@ -515,6 +538,7 @@ function handleMoveDraftPoint(payload) {
 }
 
 function resetDraft() {
+  editingRouteId.value = null
   draft.title = ''
   draft.transportMode = 'WALK'
   draft.durationMinutes = ''
@@ -532,10 +556,38 @@ function resetDraft() {
   draft.routeDate = activeDayDate.value || props.travelPlan?.startDate || todayIso()
 }
 
+function startEditRoute(route) {
+  if (!route) {
+    return
+  }
+
+  editingRouteId.value = route.id
+  activeDayDate.value = tripDays.value.some((day) => day.date === route.routeDate) ? route.routeDate : ''
+  draft.routeDate = route.routeDate || props.travelPlan?.startDate || todayIso()
+  draft.title = route.title || ''
+  draft.transportMode = route.transportMode || 'WALK'
+  draft.durationMinutes = route.durationMinutes != null ? String(route.durationMinutes) : ''
+  draft.stepCount = route.stepCount != null ? String(route.stepCount) : ''
+  draft.sourceType = route.sourceType || 'MANUAL'
+  draft.startPlaceName = route.startPlaceName || ''
+  draft.endPlaceName = route.endPlaceName || ''
+  draft.lineColorHex = route.lineColorHex || props.travelPlan?.colorHex || '#3182F6'
+  draft.lineStyle = route.lineStyle || 'SOLID'
+  draft.memo = route.memo || ''
+  draftPoints.value = (route.points ?? []).map((point) => ({
+    latitude: Number(point.latitude),
+    longitude: Number(point.longitude),
+  }))
+  gpxFileNames.value = Array.isArray(route.gpxFileNames) ? [...route.gpxFileNames] : []
+  gpxSelectedFiles.value = []
+  highlightedDraftIndex.value = -1
+}
+
 function buildPayload() {
   const pointsForSave = compressRoutePointsForSave(draftPoints.value, hasGpxGeometry.value)
 
   return {
+    id: editingRouteId.value,
     routeDate: draft.routeDate,
     title: draft.title.trim(),
     transportMode: draft.transportMode,
@@ -603,7 +655,7 @@ async function handleGpxSelection(event) {
 
   const firstTrackDate = orderedTracks.find((track) => track.startTimestamp)?.startTimestamp
   if (firstTrackDate) {
-    const routeDate = firstTrackDate.toISOString().slice(0, 10)
+    const routeDate = toIsoDate(firstTrackDate)
     draft.routeDate = routeDate
     if (tripDays.value.some((day) => day.date === routeDate)) {
       activeDayDate.value = routeDate
@@ -641,6 +693,15 @@ function routeSummary(route) {
 
       <div class="travel-day-tabs">
         <button
+          class="travel-day-tabs__button"
+          :class="{ 'is-active': !activeDayDate }"
+          type="button"
+          @click="selectAllDays"
+        >
+          <strong>전체 일정</strong>
+          <small>모든 날짜</small>
+        </button>
+        <button
           v-for="day in tripDays"
           :key="day.date"
           class="travel-day-tabs__button"
@@ -654,10 +715,10 @@ function routeSummary(route) {
       </div>
 
       <div class="travel-file-chip-row">
-        <span class="chip chip--neutral">현재 선택 {{ activeDay?.label || '1일차' }}</span>
-        <span class="chip chip--neutral">당일 저장 경로 {{ routesForActiveDay.length }}개</span>
-        <span class="chip chip--neutral">당일 기록 핀 {{ routeMapMarkers.length }}개</span>
-        <span class="chip chip--neutral">당일 이동 {{ activeDayRouteStats.totalDistanceKm.toFixed(2) }}km</span>
+        <span class="chip chip--neutral">현재 선택 {{ activeDayLabel }}</span>
+        <span class="chip chip--neutral">선택 범위 경로 {{ routesForActiveDay.length }}개</span>
+        <span class="chip chip--neutral">선택 범위 기록 핀 {{ routeMapMarkers.length }}개</span>
+        <span class="chip chip--neutral">선택 범위 이동 {{ activeDayRouteStats.totalDistanceKm.toFixed(2) }}km</span>
       </div>
     </section>
 
@@ -772,7 +833,7 @@ function routeSummary(route) {
             <button v-if="!hasGpxGeometry" class="button button--ghost" type="button" @click="removeLastPoint">마지막 제어점 삭제</button>
             <button class="button button--ghost" type="button" @click="resetDraft">{{ hasGpxGeometry ? 'GPX 경로 비우기' : '임시 경로 비우기' }}</button>
             <button class="button button--primary" :disabled="isSubmitting || draftPoints.length < 2 || !draft.title.trim()" @click="submitRoute">
-              {{ isSubmitting && activeSubmit === 'route' ? '저장 중...' : '경로 저장' }}
+              {{ isSubmitting && activeSubmit === 'route' ? '저장 중...' : editingRouteId ? '경로 수정' : '경로 저장' }}
             </button>
           </div>
         </article>
@@ -917,7 +978,7 @@ function routeSummary(route) {
     <section class="panel">
       <div class="panel__header">
         <div>
-          <h2>{{ activeDay?.label || '선택한 날짜' }} 일정 타임라인</h2>
+          <h2>{{ activeDayLabel }} 일정 타임라인</h2>
           <p>선택한 일차에 작성된 여행 기록과 이동 경로를 함께 보며 하루 흐름을 확인할 수 있습니다.</p>
         </div>
       </div>
@@ -942,7 +1003,7 @@ function routeSummary(route) {
     <section class="panel">
       <div class="panel__header">
         <div>
-          <h2>{{ activeDay?.label || '선택한 날짜' }} 저장 경로</h2>
+          <h2>{{ activeDayLabel }} 저장 경로</h2>
           <p>선택한 일차에 저장된 경로만 모아 보고, 이동 수단과 거리, 걸음 수를 빠르게 확인할 수 있습니다.</p>
         </div>
       </div>
@@ -967,6 +1028,7 @@ function routeSummary(route) {
               <td>{{ [route.startPlaceName, route.endPlaceName].filter(Boolean).join(' -> ') || '-' }}</td>
               <td>{{ route.points?.length || 0 }}</td>
               <td class="sheet-table__actions">
+                <button class="button button--ghost" @click="startEditRoute(route)">수정</button>
                 <button class="button button--danger" @click="emit('delete-route', route)">삭제</button>
               </td>
             </tr>

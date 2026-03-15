@@ -5,7 +5,7 @@ const dateFormatter = new Intl.DateTimeFormat('en-CA', {
 })
 
 export function todayIso() {
-  return new Date().toISOString().slice(0, 10)
+  return toIsoDate(new Date())
 }
 
 export function nowTimeIso() {

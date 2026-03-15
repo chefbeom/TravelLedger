@@ -431,6 +431,14 @@ public class TravelService {
     }
 
     @Transactional
+    public TravelRouteSegmentResponse updateRouteSegment(Long userId, Long routeId, TravelRouteSegmentRequest request) {
+        TravelRouteSegment routeSegment = travelRouteSegmentRepository.findByIdAndPlanOwnerId(routeId, userId)
+                .orElseThrow(() -> new NotFoundException("Travel route not found."));
+        applyRouteSegmentRequest(routeSegment, request);
+        return toRouteSegmentResponse(routeSegment);
+    }
+
+    @Transactional
     public TravelRouteSegmentResponse uploadRouteGpxFiles(Long userId, Long routeId, List<MultipartFile> files) {
         TravelRouteSegment routeSegment = travelRouteSegmentRepository.findByIdAndPlanOwnerId(routeId, userId)
                 .orElseThrow(() -> new NotFoundException("Travel route not found."));

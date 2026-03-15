@@ -112,6 +112,15 @@ public class TravelController {
         return travelService.createRouteSegment(currentUser.userId(), planId, request);
     }
 
+    @PutMapping("/routes/{routeId}")
+    public TravelRouteSegmentResponse updateRouteSegment(
+            @AuthenticationPrincipal AppUserPrincipal currentUser,
+            @PathVariable Long routeId,
+            @Valid @RequestBody TravelRouteSegmentRequest request
+    ) {
+        return travelService.updateRouteSegment(currentUser.userId(), routeId, request);
+    }
+
     @PostMapping(value = "/routes/{routeId}/gpx-files", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public TravelRouteSegmentResponse uploadRouteGpxFiles(
             @AuthenticationPrincipal AppUserPrincipal currentUser,

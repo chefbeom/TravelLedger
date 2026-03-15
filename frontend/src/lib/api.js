@@ -420,6 +420,13 @@ export function createTravelRoute(planId, payload) {
   })
 }
 
+export function updateTravelRoute(routeId, payload) {
+  return request(`/travel/routes/${routeId}`, {
+    method: 'PUT',
+    body: JSON.stringify(payload),
+  })
+}
+
 export function uploadTravelRouteGpxFiles(routeId, files) {
   const formData = new FormData()
   ;(files ?? []).forEach((file) => {

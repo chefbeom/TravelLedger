@@ -57,6 +57,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import javax.sql.DataSource;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Service;
@@ -73,6 +74,8 @@ public class TravelService {
     private static final String KRW = "KRW";
     private static final String DEFAULT_TRAVEL_COLOR = "#3182F6";
     private static final int MAX_STORED_ROUTE_POINTS = 900;
+    private static final int DEFAULT_ROUTE_PATH_CHAR_BUDGET = 12000;
+    private static final int MIN_ROUTE_PATH_CHAR_BUDGET = 220;
     private static final List<String> DEFAULT_CURRENCIES = List.of("KRW", "USD", "JPY", "CNY", "EUR");
     private static final List<String> DEFAULT_BUDGET_CATEGORIES = List.of(
             "Flight",
@@ -116,6 +119,9 @@ public class TravelService {
     private final ExchangeRateService exchangeRateService;
     private final TravelMediaStorageService travelMediaStorageService;
     private final ObjectMapper objectMapper;
+    private final DataSource dataSource;
+
+    private volatile Integer routePathCharBudget;
 
     public List<TravelPlanSummaryResponse> getPlans(Long userId) {
         appUserService.getRequiredUser(userId);
@@ -1127,15 +1133,24 @@ public class TravelService {
             throw new BadRequestException("At least two distinct route points are required.");
         }
 
+        List<TravelRoutePointRequest> candidate = deduplicated;
         if (sourceType == TravelRouteSourceType.GPX && deduplicated.size() > MAX_STORED_ROUTE_POINTS) {
-            return thinRoutePoints(deduplicated, MAX_STORED_ROUTE_POINTS);
+            candidate = thinRoutePoints(deduplicated, MAX_STORED_ROUTE_POINTS);
+        } else if (deduplicated.size() > MAX_STORED_ROUTE_POINTS * 2) {
+            candidate = thinRoutePoints(deduplicated, MAX_STORED_ROUTE_POINTS * 2);
         }
 
-        if (deduplicated.size() > MAX_STORED_ROUTE_POINTS * 2) {
-            return thinRoutePoints(deduplicated, MAX_STORED_ROUTE_POINTS * 2);
+        int budget = resolveRoutePathCharBudget();
+        String serialized = serializeRoutePoints(candidate);
+        while (candidate.size() > 2 && serialized.length() > budget) {
+            int nextTarget = candidate.size() <= 8
+                    ? Math.max(2, candidate.size() - 1)
+                    : Math.max(2, (int) Math.ceil(candidate.size() * 0.65));
+            candidate = thinRoutePoints(candidate, nextTarget);
+            serialized = serializeRoutePoints(candidate);
         }
 
-        return deduplicated;
+        return candidate;
     }
 
     private List<TravelRoutePointRequest> deduplicateRoutePoints(List<TravelRoutePointRequest> points) {
@@ -1182,6 +1197,72 @@ public class TravelService {
         } catch (JsonProcessingException exception) {
             throw new BadRequestException("Failed to save route points.");
         }
+    }
+
+    private int resolveRoutePathCharBudget() {
+        Integer cached = routePathCharBudget;
+        if (cached != null) {
+            return cached;
+        }
+
+        synchronized (this) {
+            if (routePathCharBudget != null) {
+                return routePathCharBudget;
+            }
+
+            routePathCharBudget = inspectRoutePathCharBudget();
+            return routePathCharBudget;
+        }
+    }
+
+    private int inspectRoutePathCharBudget() {
+        try (var connection = dataSource.getConnection()) {
+            var metaData = connection.getMetaData();
+
+            int budget = readRoutePathColumnBudget(metaData, connection.getCatalog(), "travel_route_segments", "route_path_json");
+            if (budget > 0) {
+                return budget;
+            }
+
+            budget = readRoutePathColumnBudget(metaData, connection.getCatalog(), "TRAVEL_ROUTE_SEGMENTS", "ROUTE_PATH_JSON");
+            if (budget > 0) {
+                return budget;
+            }
+        } catch (Exception ignored) {
+            return DEFAULT_ROUTE_PATH_CHAR_BUDGET;
+        }
+
+        return DEFAULT_ROUTE_PATH_CHAR_BUDGET;
+    }
+
+    private int readRoutePathColumnBudget(
+            java.sql.DatabaseMetaData metaData,
+            String catalog,
+            String tableName,
+            String columnName
+    ) throws java.sql.SQLException {
+        try (var columns = metaData.getColumns(catalog, null, tableName, columnName)) {
+            if (!columns.next()) {
+                return -1;
+            }
+
+            int columnSize = columns.getInt("COLUMN_SIZE");
+            String typeName = columns.getString("TYPE_NAME");
+            if (typeName != null) {
+                String normalizedType = typeName.trim().toUpperCase();
+                if (normalizedType.contains("LONGTEXT") || normalizedType.contains("CLOB")) {
+                    return DEFAULT_ROUTE_PATH_CHAR_BUDGET;
+                }
+                if (normalizedType.contains("TEXT") && columnSize >= DEFAULT_ROUTE_PATH_CHAR_BUDGET) {
+                    return DEFAULT_ROUTE_PATH_CHAR_BUDGET;
+                }
+            }
+
+            if (columnSize > 0) {
+                return Math.max(MIN_ROUTE_PATH_CHAR_BUDGET, (int) Math.floor(columnSize * 0.9d));
+            }
+        }
+        return -1;
     }
 
     private List<TravelRoutePointResponse> deserializeRoutePoints(String routePathJson) {

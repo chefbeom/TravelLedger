@@ -38,6 +38,7 @@ import {
 import TravelCommunityWorkspace from './TravelCommunityWorkspace.vue'
 import TravelMapPanel from './TravelMapPanel.vue'
 import TravelMemoryPanel from './TravelMemoryPanel.vue'
+import TravelOverviewWorkspace from './TravelOverviewWorkspace.vue'
 import TravelRouteWorkspace from './TravelRouteWorkspace.vue'
 
 const props = defineProps({
@@ -73,7 +74,7 @@ const workspaceMeta = computed(() => {
     case 'travel-log':
       return {
         title: '여행 로그',
-        description: '날짜별 메모, 지도 핀, 직접 그린 경로와 GPX 가져오기를 연결해 기록합니다.',
+        description: '날짜별 메모와 GPX 경로를 기록하고, 전체 또는 일차별 여행 보기를 함께 확인합니다.',
       }
     default:
       return {
@@ -98,7 +99,7 @@ const travelCategories = ref({ ...fallbackCategories })
 const communityFeed = ref([])
 
 const moneyTab = ref('planner')
-const logTab = ref('memories')
+const logTab = ref('overview')
 const albumTab = ref('upload')
 const planFormMode = ref('create')
 const editingBudgetItemId = ref(null)
@@ -978,8 +979,9 @@ function openMemoryEditor(memoryId) {
     </template>
 
     <template v-else-if="route === 'travel-log'">
-      <section class="panel"><div class="scope-toggle"><button class="button" :class="{ 'button--primary': logTab === 'memories' }" @click="logTab = 'memories'">여행 기록</button><button class="button" :class="{ 'button--primary': logTab === 'routes' }" @click="logTab = 'routes'">이동 경로</button></div></section>
-      <TravelMemoryPanel v-if="logTab === 'memories'" :travel-plan="travelPlan" :category-options="memoryCategoryOptions" :is-submitting="isSubmitting" :active-submit="activeSubmit" :refresh-key="memoryRefreshKey" :focus-request="memoryFocusRequest" @save-memory="handleSaveMemory" @delete-memory="handleDeleteMemory" @delete-media="handleDeleteMedia" />
+      <section class="panel"><div class="scope-toggle"><button class="button" :class="{ 'button--primary': logTab === 'overview' }" @click="logTab = 'overview'">여행 보기</button><button class="button" :class="{ 'button--primary': logTab === 'memories' }" @click="logTab = 'memories'">여행 기록</button><button class="button" :class="{ 'button--primary': logTab === 'routes' }" @click="logTab = 'routes'">이동 경로</button></div></section>
+      <TravelOverviewWorkspace v-if="logTab === 'overview'" :travel-plan="travelPlan" />
+      <TravelMemoryPanel v-else-if="logTab === 'memories'" :travel-plan="travelPlan" :category-options="memoryCategoryOptions" :is-submitting="isSubmitting" :active-submit="activeSubmit" :refresh-key="memoryRefreshKey" :focus-request="memoryFocusRequest" @save-memory="handleSaveMemory" @delete-memory="handleDeleteMemory" @delete-media="handleDeleteMedia" />
       <TravelRouteWorkspace v-else :travel-plan="travelPlan" :is-submitting="isSubmitting" :active-submit="activeSubmit" :refresh-key="routeRefreshKey" @save-route="handleSaveRoute" @delete-route="handleDeleteRoute" />
     </template>
 

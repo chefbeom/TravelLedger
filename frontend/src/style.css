@@ -2533,6 +2533,64 @@ textarea {
   min-height: 760px;
 }
 
+.travel-overview-map-panel .travel-map__canvas {
+  min-height: 760px;
+}
+
+.travel-overview-day-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.travel-overview-timeline {
+  display: grid;
+  gap: 16px;
+}
+
+.travel-overview-day-group {
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 24px;
+  background: var(--surface-soft);
+}
+
+.travel-overview-day-group__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.travel-overview-day-group__head h3 {
+  margin: 0 0 6px;
+}
+
+.travel-overview-day-group__head p {
+  margin: 0;
+  color: var(--text-soft);
+}
+
+.travel-overview-place-list {
+  display: grid;
+  gap: 12px;
+}
+
+.travel-overview-place-card {
+  display: grid;
+  gap: 8px;
+  padding: 16px 18px;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: var(--surface-soft);
+}
+
+.travel-overview-place-card small {
+  color: var(--text-soft);
+}
+
 .travel-route-map-footer {
   display: grid;
   grid-template-columns: minmax(0, 1.1fr) minmax(280px, 0.8fr);
@@ -2737,6 +2795,10 @@ textarea {
   .travel-route-map-panel .travel-map__canvas {
     min-height: 620px;
   }
+
+  .travel-overview-map-panel .travel-map__canvas {
+    min-height: 620px;
+  }
 }
 
 @media (max-width: 820px) {
@@ -2770,6 +2832,10 @@ textarea {
   .travel-route-form,
   .travel-route-focus-grid {
     grid-template-columns: 1fr;
+  }
+
+  .travel-overview-day-group__head {
+    flex-direction: column;
   }
 }
 .travel-memory-map-panel .travel-map__canvas {

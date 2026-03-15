@@ -57,7 +57,7 @@ const draft = reactive({
 })
 
 const draftPoints = ref([])
-const gpxFileName = ref('')
+const gpxFileNames = ref([])
 const activeDayDate = ref('')
 const highlightedDraftIndex = ref(-1)
 
@@ -158,13 +158,22 @@ const estimatedSteps = computed(() => {
   return draft.transportMode === 'WALK' ? Math.round(draftDistanceKm.value * 1400) : 0
 })
 
-const hasGpxGeometry = computed(() => Boolean(gpxFileName.value) && draftPoints.value.length >= 2)
+const hasGpxGeometry = computed(() => gpxFileNames.value.length > 0 && draftPoints.value.length >= 2)
 const isGpxMode = computed(() => draft.sourceType === 'GPX' || hasGpxGeometry.value)
 const canPlaceRoutePoints = computed(() => draft.sourceType === 'MANUAL' && !hasGpxGeometry.value)
 const showDraftPointMarkers = computed(() => canPlaceRoutePoints.value)
 const gpxStartPoint = computed(() => draftPoints.value[0] ?? null)
 const gpxEndPoint = computed(() => draftPoints.value[draftPoints.value.length - 1] ?? null)
 const storedRoutePointCount = computed(() => compressRoutePointsForSave(draftPoints.value, hasGpxGeometry.value).length)
+const gpxFileLabel = computed(() => {
+  if (!gpxFileNames.value.length) {
+    return ''
+  }
+  if (gpxFileNames.value.length === 1) {
+    return gpxFileNames.value[0]
+  }
+  return `${gpxFileNames.value[0]} 외 ${gpxFileNames.value.length - 1}개`
+})
 const routePointBadge = computed(() => (hasGpxGeometry.value ? `${draftPoints.value.length}개 트랙 포인트` : `${draftPoints.value.length}개 제어점`))
 const routeMapHintTitle = computed(() =>
   isGpxMode.value ? 'GPX는 방문 장소 핀이 아니라 이동 경로 선으로만 표시됩니다' : '지도를 눌러 경로 제어점을 순서대로 추가합니다',
@@ -362,13 +371,72 @@ function compressRoutePointsForSave(points, isGpxRoute) {
   return thinRoutePoints(normalizedPoints, 900)
 }
 
+function stripGpxExtension(fileName) {
+  return String(fileName || '').replace(/\.gpx$/i, '')
+}
+
+function mergeTrackPoints(trackBatches) {
+  const merged = []
+
+  trackBatches.forEach((track) => {
+    track.points.forEach((point) => {
+      const previous = merged[merged.length - 1]
+      if (
+        previous &&
+        Number(previous.latitude) === Number(point.latitude) &&
+        Number(previous.longitude) === Number(point.longitude)
+      ) {
+        return
+      }
+
+      merged.push({
+        latitude: Number(point.latitude.toFixed(7)),
+        longitude: Number(point.longitude.toFixed(7)),
+      })
+    })
+  })
+
+  return merged
+}
+
+async function parseGpxFile(file) {
+  const xmlText = await file.text()
+  const parser = new DOMParser()
+  const xml = parser.parseFromString(xmlText, 'application/xml')
+  const points = [...xml.querySelectorAll('trkpt, rtept')]
+    .map((node) => ({
+      latitude: Number(node.getAttribute('lat')),
+      longitude: Number(node.getAttribute('lon')),
+      time: node.querySelector('time')?.textContent || '',
+    }))
+    .filter((point) => Number.isFinite(point.latitude) && Number.isFinite(point.longitude))
+
+  if (points.length < 2) {
+    return null
+  }
+
+  const timestamps = points
+    .map((point) => point.time)
+    .filter(Boolean)
+    .map((value) => new Date(value))
+    .filter((value) => !Number.isNaN(value.getTime()))
+
+  return {
+    fileName: file.name,
+    points,
+    startTimestamp: timestamps[0] ?? null,
+    endTimestamp: timestamps[timestamps.length - 1] ?? null,
+    durationMinutes: timestamps.length >= 2 ? Math.max(0, Math.round((timestamps[timestamps.length - 1] - timestamps[0]) / 60000)) : 0,
+  }
+}
+
 function addDraftPoint(point) {
   draftPoints.value = [...draftPoints.value, point]
   highlightedDraftIndex.value = draftPoints.value.length - 1
 
   if (draft.sourceType === 'GPX') {
     draft.sourceType = 'MANUAL'
-    gpxFileName.value = ''
+    gpxFileNames.value = []
   }
 }
 
@@ -455,7 +523,7 @@ function resetDraft() {
   draft.lineStyle = 'SOLID'
   draft.memo = ''
   draftPoints.value = []
-  gpxFileName.value = ''
+  gpxFileNames.value = []
   highlightedDraftIndex.value = -1
   draft.routeDate = activeDayDate.value || props.travelPlan?.startDate || todayIso()
 }
@@ -492,45 +560,44 @@ function submitRoute() {
 }
 
 async function handleGpxSelection(event) {
-  const [file] = [...(event.target.files ?? [])]
-  if (!file) {
+  const files = [...(event.target.files ?? [])]
+  if (!files.length) {
     return
   }
 
-  const xmlText = await file.text()
-  const parser = new DOMParser()
-  const xml = parser.parseFromString(xmlText, 'application/xml')
-  const points = [...xml.querySelectorAll('trkpt, rtept')]
-    .map((node) => ({
-      latitude: Number(node.getAttribute('lat')),
-      longitude: Number(node.getAttribute('lon')),
-      time: node.querySelector('time')?.textContent || '',
-    }))
-    .filter((point) => Number.isFinite(point.latitude) && Number.isFinite(point.longitude))
-
-  if (points.length < 2) {
+  const parsedTracks = (await Promise.all(files.map((file) => parseGpxFile(file)))).filter(Boolean)
+  if (!parsedTracks.length) {
     return
   }
 
-  draftPoints.value = points.map((point) => ({
-    latitude: Number(point.latitude.toFixed(7)),
-    longitude: Number(point.longitude.toFixed(7)),
-  }))
+  const orderedTracks = parsedTracks
+    .map((track, index) => ({ ...track, orderIndex: index }))
+    .sort((left, right) => {
+      const leftTime = left.startTimestamp?.getTime() ?? Number.POSITIVE_INFINITY
+      const rightTime = right.startTimestamp?.getTime() ?? Number.POSITIVE_INFINITY
+      if (leftTime === rightTime) {
+        return left.orderIndex - right.orderIndex
+      }
+      return leftTime - rightTime
+    })
+
+  draftPoints.value = mergeTrackPoints(orderedTracks)
   highlightedDraftIndex.value = -1
-  draft.title = file.name.replace(/\.gpx$/i, '')
+  draft.title = orderedTracks.length === 1
+    ? stripGpxExtension(orderedTracks[0].fileName)
+    : `${stripGpxExtension(orderedTracks[0].fileName)} 외 ${orderedTracks.length - 1}개`
   draft.transportMode = 'WALK'
   draft.sourceType = 'GPX'
-  gpxFileName.value = file.name
+  gpxFileNames.value = orderedTracks.map((track) => track.fileName)
 
-  const timestamps = points
-    .map((point) => point.time)
-    .filter(Boolean)
-    .map((value) => new Date(value))
-    .filter((value) => !Number.isNaN(value.getTime()))
+  const totalDurationMinutes = orderedTracks.reduce((sum, track) => sum + track.durationMinutes, 0)
+  if (totalDurationMinutes > 0) {
+    draft.durationMinutes = String(totalDurationMinutes)
+  }
 
-  if (timestamps.length >= 2) {
-    draft.durationMinutes = String(Math.round((timestamps[timestamps.length - 1] - timestamps[0]) / 60000))
-    const routeDate = timestamps[0].toISOString().slice(0, 10)
+  const firstTrackDate = orderedTracks.find((track) => track.startTimestamp)?.startTimestamp
+  if (firstTrackDate) {
+    const routeDate = firstTrackDate.toISOString().slice(0, 10)
     draft.routeDate = routeDate
     if (tripDays.value.some((day) => day.date === routeDate)) {
       activeDayDate.value = routeDate
@@ -538,6 +605,7 @@ async function handleGpxSelection(event) {
   }
 
   draft.stepCount = String(Math.round(draftDistanceKm.value * 1400))
+  event.target.value = ''
 }
 
 function routeSummary(route) {
@@ -638,7 +706,7 @@ function routeSummary(route) {
             <div class="travel-route-focus-grid">
               <label class="field">
                 <span class="field__label">GPX 파일</span>
-                <input :value="gpxFileName || '-'" type="text" readonly />
+                <input :value="gpxFileLabel || '-'" type="text" readonly />
               </label>
               <label class="field">
                 <span class="field__label">시작 좌표</span>
@@ -673,7 +741,7 @@ function routeSummary(route) {
             </div>
           </template>
           <p v-else class="panel__empty">
-            {{ isGpxMode ? 'GPX 파일을 올리면 이동 경로 선과 요약 정보가 여기에 나타납니다.' : '지도를 눌러 첫 번째 제어점을 추가해 보세요.' }}
+            {{ isGpxMode ? 'GPX 파일들을 올리면 이동 경로 선과 요약 정보가 여기에 나타납니다.' : '지도를 눌러 첫 번째 제어점을 추가해 보세요.' }}
           </p>
         </article>
 
@@ -691,7 +759,8 @@ function routeSummary(route) {
             <span class="chip chip--neutral">예상 걸음 {{ estimatedSteps.toLocaleString('ko-KR') }}걸음</span>
             <span class="chip chip--neutral">선 스타일 {{ lineStyleLabel(draft.lineStyle) }}</span>
             <span v-if="isGpxMode" class="chip chip--neutral">표시 방식 선 그리기</span>
-            <span v-if="gpxFileName" class="chip chip--neutral">{{ gpxFileName }}</span>
+            <span v-if="gpxFileNames.length" class="chip chip--neutral">GPX {{ gpxFileNames.length }}개</span>
+            <span v-if="gpxFileLabel" class="chip chip--neutral">{{ gpxFileLabel }}</span>
           </div>
           <div class="entry-editor__actions">
             <button v-if="!hasGpxGeometry" class="button button--ghost" type="button" @click="removeLastPoint">마지막 제어점 삭제</button>
@@ -761,14 +830,14 @@ function routeSummary(route) {
           <input v-model="draft.endPlaceName" type="text" placeholder="난바" />
         </label>
         <label class="field field--wide">
-          <span class="field__label">GPX 파일</span>
-          <input accept=".gpx" type="file" @change="handleGpxSelection" />
+          <span class="field__label">GPX 파일들</span>
+          <input accept=".gpx" multiple type="file" @change="handleGpxSelection" />
         </label>
         <p v-if="hasGpxGeometry" class="travel-map-note field field--full">
-          GPX는 방문 장소 핀이 아니라 이동 경로 선으로만 표시됩니다. 저장할 때는 렌더링이 무거워지지 않도록 포인트를 자동으로 줄여 보관합니다.
+          GPX 여러 개를 한 번에 읽어 하루 경로로 합칩니다. 저장할 때는 렌더링이 무거워지지 않도록 포인트를 자동으로 줄여 보관합니다.
         </p>
         <p v-else-if="draft.sourceType === 'GPX'" class="travel-map-note field field--full">
-          GPX 파일을 올리면 시간, 이동 거리, 걸음 수를 자동으로 계산하고 지도에는 선 형태로만 그립니다.
+          GPX 파일을 여러 개까지 올릴 수 있고, 시간과 거리, 걸음 수를 합산해 하나의 경로 선으로 그립니다.
         </p>
         <label class="field field--full">
           <span class="field__label">메모</span>
@@ -835,7 +904,7 @@ function routeSummary(route) {
         <p class="travel-map-note">GPX를 넣으면 수천 개의 포인트를 핀으로 찍지 않고, 전체 이동선을 하나의 경로로 표시합니다.</p>
       </article>
       <p v-else class="panel__empty">
-        {{ draft.sourceType === 'GPX' ? 'GPX 파일을 올리면 이동 경로 선이 생성됩니다.' : '지도를 눌러 출발 제어점부터 추가해 보세요.' }}
+        {{ draft.sourceType === 'GPX' ? 'GPX 파일들을 올리면 이동 경로 선이 생성됩니다.' : '지도를 눌러 출발 제어점부터 추가해 보세요.' }}
       </p>
     </section>
 

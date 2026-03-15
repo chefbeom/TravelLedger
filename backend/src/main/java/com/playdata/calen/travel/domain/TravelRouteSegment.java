@@ -73,4 +73,7 @@ public class TravelRouteSegment {
 
     @Column(length = 500)
     private String memo;
+
+    @Lob
+    private String gpxFilesJson;
 }

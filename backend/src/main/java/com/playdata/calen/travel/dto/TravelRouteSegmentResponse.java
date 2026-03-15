@@ -23,6 +23,7 @@ public record TravelRouteSegmentResponse(
         String endPlaceName,
         String lineColorHex,
         TravelRouteLineStyle lineStyle,
+        List<String> gpxFileNames,
         String memo,
         List<TravelRoutePointResponse> points
 ) {

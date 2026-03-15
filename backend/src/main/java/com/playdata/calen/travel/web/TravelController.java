@@ -112,6 +112,15 @@ public class TravelController {
         return travelService.createRouteSegment(currentUser.userId(), planId, request);
     }
 
+    @PostMapping(value = "/routes/{routeId}/gpx-files", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public TravelRouteSegmentResponse uploadRouteGpxFiles(
+            @AuthenticationPrincipal AppUserPrincipal currentUser,
+            @PathVariable Long routeId,
+            @RequestParam("files") List<MultipartFile> files
+    ) {
+        return travelService.uploadRouteGpxFiles(currentUser.userId(), routeId, files);
+    }
+
     @DeleteMapping("/routes/{routeId}")
     public void deleteRouteSegment(
             @AuthenticationPrincipal AppUserPrincipal currentUser,

@@ -58,6 +58,7 @@ const draft = reactive({
 
 const draftPoints = ref([])
 const gpxFileNames = ref([])
+const gpxSelectedFiles = ref([])
 const activeDayDate = ref('')
 const highlightedDraftIndex = ref(-1)
 
@@ -422,6 +423,7 @@ async function parseGpxFile(file) {
     .filter((value) => !Number.isNaN(value.getTime()))
 
   return {
+    file,
     fileName: file.name,
     points,
     startTimestamp: timestamps[0] ?? null,
@@ -437,6 +439,7 @@ function addDraftPoint(point) {
   if (draft.sourceType === 'GPX') {
     draft.sourceType = 'MANUAL'
     gpxFileNames.value = []
+    gpxSelectedFiles.value = []
   }
 }
 
@@ -524,6 +527,7 @@ function resetDraft() {
   draft.memo = ''
   draftPoints.value = []
   gpxFileNames.value = []
+  gpxSelectedFiles.value = []
   highlightedDraftIndex.value = -1
   draft.routeDate = activeDayDate.value || props.travelPlan?.startDate || todayIso()
 }
@@ -544,6 +548,7 @@ function buildPayload() {
     lineColorHex: draft.lineColorHex,
     lineStyle: draft.lineStyle,
     memo: draft.memo.trim() || null,
+    gpxFiles: hasGpxGeometry.value ? [...gpxSelectedFiles.value] : [],
     points: pointsForSave.map((point) => ({
       latitude: Number(point.latitude),
       longitude: Number(point.longitude),
@@ -589,6 +594,7 @@ async function handleGpxSelection(event) {
   draft.transportMode = 'WALK'
   draft.sourceType = 'GPX'
   gpxFileNames.value = orderedTracks.map((track) => track.fileName)
+  gpxSelectedFiles.value = orderedTracks.map((track) => track.file)
 
   const totalDurationMinutes = orderedTracks.reduce((sum, track) => sum + track.durationMinutes, 0)
   if (totalDurationMinutes > 0) {

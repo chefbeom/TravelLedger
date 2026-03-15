@@ -32,6 +32,7 @@ public class TravelRouteSchemaUpdater implements ApplicationRunner {
                 jdbcTemplate.execute("ALTER TABLE travel_route_segments MODIFY COLUMN route_path_json LONGTEXT NOT NULL");
                 jdbcTemplate.execute("ALTER TABLE travel_route_segments ADD COLUMN IF NOT EXISTS line_color_hex VARCHAR(7) NULL");
                 jdbcTemplate.execute("ALTER TABLE travel_route_segments ADD COLUMN IF NOT EXISTS line_style VARCHAR(20) NULL");
+                jdbcTemplate.execute("ALTER TABLE travel_route_segments ADD COLUMN IF NOT EXISTS gpx_files_json LONGTEXT NULL");
             }
         } catch (SQLException exception) {
             log.warn("Failed to verify travel route schema: {}", exception.getMessage());

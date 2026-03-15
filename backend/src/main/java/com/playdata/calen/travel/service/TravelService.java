@@ -47,6 +47,7 @@ import com.playdata.calen.travel.repository.TravelPlanRepository;
 import com.playdata.calen.travel.repository.TravelRouteSegmentRepository;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -57,12 +58,16 @@ import java.util.Map;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import javax.xml.XMLConstants;
+import javax.xml.parsers.DocumentBuilderFactory;
 import javax.sql.DataSource;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
+import org.w3c.dom.Element;
+import org.w3c.dom.NodeList;
 
 @Service
 @RequiredArgsConstructor
@@ -76,6 +81,8 @@ public class TravelService {
     private static final int MAX_STORED_ROUTE_POINTS = 900;
     private static final int DEFAULT_ROUTE_PATH_CHAR_BUDGET = 12000;
     private static final int MIN_ROUTE_PATH_CHAR_BUDGET = 220;
+    private static final String ROUTE_PATH_FORMAT_POLYLINE6 = "POLYLINE6";
+    private static final int ROUTE_PATH_PRECISION = 6;
     private static final List<String> DEFAULT_CURRENCIES = List.of("KRW", "USD", "JPY", "CNY", "EUR");
     private static final List<String> DEFAULT_BUDGET_CATEGORIES = List.of(
             "Flight",
@@ -122,6 +129,20 @@ public class TravelService {
     private final DataSource dataSource;
 
     private volatile Integer routePathCharBudget;
+
+    private record RoutePathPayload(
+            String format,
+            String encodedPath
+    ) {
+    }
+
+    private record RouteGpxFile(
+            String originalFileName,
+            String storagePath,
+            String contentType,
+            long fileSize
+    ) {
+    }
 
     public List<TravelPlanSummaryResponse> getPlans(Long userId) {
         appUserService.getRequiredUser(userId);
@@ -325,6 +346,7 @@ public class TravelService {
         TravelPlan plan = getRequiredPlan(userId, planId);
         deleteMediaAssets(getPlanMedia(userId, planId));
         travelMediaAssetRepository.deleteAllByPlanId(plan.getId());
+        deleteRouteAssets(getPlanRoutes(userId, planId));
         travelRouteSegmentRepository.deleteAllByPlanId(plan.getId());
         travelBudgetItemRepository.deleteAllByPlanId(plan.getId());
         travelExpenseRecordRepository.deleteAllByPlanId(plan.getId());
@@ -409,9 +431,41 @@ public class TravelService {
     }
 
     @Transactional
+    public TravelRouteSegmentResponse uploadRouteGpxFiles(Long userId, Long routeId, List<MultipartFile> files) {
+        TravelRouteSegment routeSegment = travelRouteSegmentRepository.findByIdAndPlanOwnerId(routeId, userId)
+                .orElseThrow(() -> new NotFoundException("Travel route not found."));
+        if (files == null || files.isEmpty()) {
+            throw new BadRequestException("Select at least one GPX file.");
+        }
+
+        deleteRouteGpxFilesQuietly(routeSegment);
+
+        List<RouteGpxFile> storedFiles = new ArrayList<>();
+        for (MultipartFile file : files) {
+            TravelMediaStorageService.StoredTravelMedia storedFile = travelMediaStorageService.storeRouteGpx(
+                    userId,
+                    routeSegment.getPlan().getId(),
+                    routeSegment.getId(),
+                    file
+            );
+            storedFiles.add(new RouteGpxFile(
+                    storedFile.originalFileName(),
+                    storedFile.storagePath(),
+                    storedFile.contentType(),
+                    storedFile.fileSize()
+            ));
+        }
+
+        routeSegment.setSourceType(TravelRouteSourceType.GPX);
+        routeSegment.setGpxFilesJson(serializeRouteGpxFiles(storedFiles));
+        return toRouteSegmentResponse(routeSegment);
+    }
+
+    @Transactional
     public void deleteRouteSegment(Long userId, Long routeId) {
         TravelRouteSegment routeSegment = travelRouteSegmentRepository.findByIdAndPlanOwnerId(routeId, userId)
                 .orElseThrow(() -> new NotFoundException("Travel route not found."));
+        deleteRouteGpxFilesQuietly(routeSegment);
         travelRouteSegmentRepository.delete(routeSegment);
     }
 
@@ -895,6 +949,7 @@ public class TravelService {
 
     private TravelRouteSegmentResponse toRouteSegmentResponse(TravelRouteSegment routeSegment) {
         TravelPlan plan = routeSegment.getPlan();
+        List<RouteGpxFile> routeGpxFiles = deserializeRouteGpxFiles(routeSegment.getGpxFilesJson());
         return new TravelRouteSegmentResponse(
                 routeSegment.getId(),
                 plan.getId(),
@@ -911,8 +966,12 @@ public class TravelService {
                 routeSegment.getEndPlaceName(),
                 resolveRouteLineColor(routeSegment.getLineColorHex(), plan.getColorHex()),
                 routeSegment.getLineStyle() != null ? routeSegment.getLineStyle() : TravelRouteLineStyle.SOLID,
+                routeGpxFiles.stream()
+                        .map(RouteGpxFile::originalFileName)
+                        .filter(name -> name != null && !name.isBlank())
+                        .toList(),
                 routeSegment.getMemo(),
-                deserializeRoutePoints(routeSegment.getRoutePathJson())
+                resolveRoutePoints(routeSegment)
         );
     }
 
@@ -1000,6 +1059,10 @@ public class TravelService {
 
     private void deleteMediaAssets(List<TravelMediaAsset> mediaAssets) {
         mediaAssets.forEach(asset -> travelMediaStorageService.deleteQuietly(asset.getStoragePath()));
+    }
+
+    private void deleteRouteAssets(List<TravelRouteSegment> routeSegments) {
+        routeSegments.forEach(this::deleteRouteGpxFilesQuietly);
     }
 
     private TravelMediaAsset saveMediaAsset(
@@ -1193,7 +1256,10 @@ public class TravelService {
 
     private String serializeRoutePoints(List<TravelRoutePointRequest> points) {
         try {
-            return objectMapper.writeValueAsString(points);
+            return objectMapper.writeValueAsString(new RoutePathPayload(
+                    ROUTE_PATH_FORMAT_POLYLINE6,
+                    encodeRoutePolyline(points)
+            ));
         } catch (JsonProcessingException exception) {
             throw new BadRequestException("Failed to save route points.");
         }
@@ -1265,20 +1331,227 @@ public class TravelService {
         return -1;
     }
 
+    private String serializeRouteGpxFiles(List<RouteGpxFile> files) {
+        try {
+            return objectMapper.writeValueAsString(files == null ? Collections.emptyList() : files);
+        } catch (JsonProcessingException exception) {
+            throw new BadRequestException("Failed to save GPX file metadata.");
+        }
+    }
+
+    private List<RouteGpxFile> deserializeRouteGpxFiles(String gpxFilesJson) {
+        if (gpxFilesJson == null || gpxFilesJson.isBlank()) {
+            return Collections.emptyList();
+        }
+
+        try {
+            List<RouteGpxFile> files = objectMapper.readValue(gpxFilesJson, new TypeReference<>() {
+            });
+            return files == null ? Collections.emptyList() : files.stream()
+                    .filter(file -> file != null && file.storagePath() != null && !file.storagePath().isBlank())
+                    .toList();
+        } catch (JsonProcessingException exception) {
+            return Collections.emptyList();
+        }
+    }
+
+    private void deleteRouteGpxFilesQuietly(TravelRouteSegment routeSegment) {
+        deserializeRouteGpxFiles(routeSegment.getGpxFilesJson()).forEach(file ->
+                travelMediaStorageService.deleteQuietly(file.storagePath())
+        );
+    }
+
+    private List<TravelRoutePointResponse> resolveRoutePoints(TravelRouteSegment routeSegment) {
+        if (routeSegment.getSourceType() == TravelRouteSourceType.GPX) {
+            List<RouteGpxFile> routeGpxFiles = deserializeRouteGpxFiles(routeSegment.getGpxFilesJson());
+            if (!routeGpxFiles.isEmpty()) {
+                try {
+                    List<TravelRoutePointRequest> mergedPoints = new ArrayList<>();
+                    for (RouteGpxFile routeGpxFile : routeGpxFiles) {
+                        Resource resource = travelMediaStorageService.loadAsResource(routeGpxFile.storagePath());
+                        mergedPoints.addAll(parseGpxResource(resource));
+                    }
+
+                    List<TravelRoutePointRequest> deduplicatedPoints = deduplicateRoutePoints(mergedPoints);
+                    if (deduplicatedPoints.size() >= 2) {
+                        return deduplicatedPoints.stream()
+                                .map(point -> new TravelRoutePointResponse(point.latitude(), point.longitude()))
+                                .toList();
+                    }
+                } catch (RuntimeException ignored) {
+                    // Fall back to the reduced path snapshot if the original GPX file is unavailable.
+                }
+            }
+        }
+
+        return deserializeRoutePoints(routeSegment.getRoutePathJson());
+    }
+
+    private List<TravelRoutePointRequest> parseGpxResource(Resource resource) {
+        DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+        try {
+            factory.setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true);
+            factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
+            factory.setFeature("http://xml.org/sax/features/external-general-entities", false);
+            factory.setFeature("http://xml.org/sax/features/external-parameter-entities", false);
+            factory.setXIncludeAware(false);
+            factory.setExpandEntityReferences(false);
+
+            try (InputStream inputStream = resource.getInputStream()) {
+                var documentBuilder = factory.newDocumentBuilder();
+                var document = documentBuilder.parse(inputStream);
+                List<TravelRoutePointRequest> trackPoints = extractGpxPoints(document, "trkpt");
+                if (trackPoints.size() >= 2) {
+                    return trackPoints;
+                }
+                return extractGpxPoints(document, "rtept");
+            }
+        } catch (Exception exception) {
+            throw new BadRequestException("Failed to read GPX route file.");
+        }
+    }
+
+    private List<TravelRoutePointRequest> extractGpxPoints(org.w3c.dom.Document document, String tagName) {
+        NodeList pointNodes = document.getElementsByTagName(tagName);
+        List<TravelRoutePointRequest> points = new ArrayList<>();
+
+        for (int index = 0; index < pointNodes.getLength(); index += 1) {
+            if (!(pointNodes.item(index) instanceof Element element)) {
+                continue;
+            }
+
+            String latitudeText = trimToNull(element.getAttribute("lat"));
+            String longitudeText = trimToNull(element.getAttribute("lon"));
+            if (latitudeText == null || longitudeText == null) {
+                continue;
+            }
+
+            try {
+                points.add(new TravelRoutePointRequest(
+                        normalizeCoordinate(new BigDecimal(latitudeText), true),
+                        normalizeCoordinate(new BigDecimal(longitudeText), false)
+                ));
+            } catch (NumberFormatException ignored) {
+                // Skip invalid GPX coordinates and keep parsing the remaining track.
+            }
+        }
+
+        return points;
+    }
+
     private List<TravelRoutePointResponse> deserializeRoutePoints(String routePathJson) {
         if (routePathJson == null || routePathJson.isBlank()) {
             return Collections.emptyList();
         }
 
         try {
-            List<TravelRoutePointRequest> points = objectMapper.readValue(routePathJson, new TypeReference<>() {
-            });
-            return points.stream()
+            String trimmed = routePathJson.trim();
+            if (trimmed.startsWith("[")) {
+                List<TravelRoutePointRequest> points = objectMapper.readValue(trimmed, new TypeReference<>() {
+                });
+                return points.stream()
+                        .map(point -> new TravelRoutePointResponse(point.latitude(), point.longitude()))
+                        .toList();
+            }
+
+            RoutePathPayload payload = objectMapper.readValue(trimmed, RoutePathPayload.class);
+            if (payload == null || payload.encodedPath() == null || payload.encodedPath().isBlank()) {
+                return Collections.emptyList();
+            }
+
+            if (!ROUTE_PATH_FORMAT_POLYLINE6.equalsIgnoreCase(String.valueOf(payload.format()))) {
+                throw new BadRequestException("Failed to read saved route points.");
+            }
+
+            return decodeRoutePolyline(payload.encodedPath()).stream()
                     .map(point -> new TravelRoutePointResponse(point.latitude(), point.longitude()))
                     .toList();
         } catch (JsonProcessingException exception) {
             throw new BadRequestException("Failed to read saved route points.");
         }
+    }
+
+    private String encodeRoutePolyline(List<TravelRoutePointRequest> points) {
+        StringBuilder encoded = new StringBuilder();
+        long previousLatitude = 0L;
+        long previousLongitude = 0L;
+
+        for (TravelRoutePointRequest point : points) {
+            long latitude = scaleRouteCoordinate(point.latitude());
+            long longitude = scaleRouteCoordinate(point.longitude());
+            appendEncodedDifference(encoded, latitude - previousLatitude);
+            appendEncodedDifference(encoded, longitude - previousLongitude);
+            previousLatitude = latitude;
+            previousLongitude = longitude;
+        }
+
+        return encoded.toString();
+    }
+
+    private List<TravelRoutePointRequest> decodeRoutePolyline(String encodedPath) {
+        List<TravelRoutePointRequest> points = new ArrayList<>();
+        int index = 0;
+        long latitude = 0L;
+        long longitude = 0L;
+
+        while (index < encodedPath.length()) {
+            DecodeStep latitudeStep = decodePolylineValue(encodedPath, index);
+            index = latitudeStep.nextIndex();
+            latitude += latitudeStep.delta();
+
+            if (index >= encodedPath.length()) {
+                break;
+            }
+
+            DecodeStep longitudeStep = decodePolylineValue(encodedPath, index);
+            index = longitudeStep.nextIndex();
+            longitude += longitudeStep.delta();
+
+            points.add(new TravelRoutePointRequest(
+                    BigDecimal.valueOf(latitude, ROUTE_PATH_PRECISION).setScale(7, RoundingMode.HALF_UP),
+                    BigDecimal.valueOf(longitude, ROUTE_PATH_PRECISION).setScale(7, RoundingMode.HALF_UP)
+            ));
+        }
+
+        return List.copyOf(points);
+    }
+
+    private long scaleRouteCoordinate(BigDecimal coordinate) {
+        return coordinate
+                .movePointRight(ROUTE_PATH_PRECISION)
+                .setScale(0, RoundingMode.HALF_UP)
+                .longValue();
+    }
+
+    private void appendEncodedDifference(StringBuilder builder, long difference) {
+        long value = difference < 0 ? ~(difference << 1) : (difference << 1);
+        while (value >= 0x20) {
+            builder.append((char) ((0x20 | (value & 0x1f)) + 63));
+            value >>= 5;
+        }
+        builder.append((char) (value + 63));
+    }
+
+    private DecodeStep decodePolylineValue(String encodedPath, int startIndex) {
+        long result = 0L;
+        int shift = 0;
+        int index = startIndex;
+        int chunk;
+
+        do {
+            chunk = encodedPath.charAt(index++) - 63;
+            result |= (long) (chunk & 0x1f) << shift;
+            shift += 5;
+        } while (chunk >= 0x20 && index < encodedPath.length());
+
+        long delta = (result & 1L) != 0L ? ~(result >> 1) : (result >> 1);
+        return new DecodeStep(delta, index);
+    }
+
+    private record DecodeStep(
+            long delta,
+            int nextIndex
+    ) {
     }
 
     private TravelMediaType resolveMediaType(TravelRecordType recordType, TravelMediaType mediaType) {

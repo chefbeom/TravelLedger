@@ -47,6 +47,7 @@ public class TravelMediaStorageService {
             "heif"
     );
     private static final Set<String> PDF_FILE_EXTENSIONS = Set.of("pdf");
+    private static final Set<String> GPX_FILE_EXTENSIONS = Set.of("gpx", "xml");
 
     private final Path rootPath;
     private final String mediaObjectPrefix;
@@ -83,6 +84,33 @@ public class TravelMediaStorageService {
                         ownerId,
                         planId,
                         recordId,
+                        exception.getMessage()
+                );
+                return storeToLocal(file, originalFileName, storedFileName, localStoragePath);
+            }
+        }
+
+        return storeToLocal(file, originalFileName, storedFileName, localStoragePath);
+    }
+
+    public StoredTravelMedia storeRouteGpx(Long ownerId, Long planId, Long routeId, MultipartFile file) {
+        validateRouteGpxFile(file);
+
+        String originalFileName = file.getOriginalFilename() != null ? file.getOriginalFilename() : "route.gpx";
+        String safeFileName = sanitizeFileName(originalFileName);
+        String storedFileName = UUID.randomUUID() + "-" + safeFileName;
+        String localStoragePath = buildRouteLocalStoragePath(ownerId, planId, routeId, storedFileName);
+
+        if (isMinioEnabled()) {
+            String objectKey = buildRouteMinioObjectKey(ownerId, planId, routeId, storedFileName);
+            try {
+                return storeToMinio(file, originalFileName, storedFileName, objectKey);
+            } catch (BadRequestException exception) {
+                log.warn(
+                        "MinIO GPX upload failed for ownerId={}, planId={}, routeId={}. Falling back to local storage. Reason={}",
+                        ownerId,
+                        planId,
+                        routeId,
                         exception.getMessage()
                 );
                 return storeToLocal(file, originalFileName, storedFileName, localStoragePath);
@@ -305,6 +333,28 @@ public class TravelMediaStorageService {
         validateUploadCandidate(file.getOriginalFilename(), file.getContentType(), file.getSize());
     }
 
+    private void validateRouteGpxFile(MultipartFile file) {
+        if (file == null || file.isEmpty()) {
+            throw new BadRequestException("Select a GPX file to upload.");
+        }
+
+        String originalFileName = file.getOriginalFilename();
+        if (!StringUtils.hasText(originalFileName)) {
+            throw new BadRequestException("GPX file name is required.");
+        }
+        if (file.getSize() <= 0) {
+            throw new BadRequestException("Select a GPX file to upload.");
+        }
+        if (file.getSize() > MAX_FILE_SIZE) {
+            throw new BadRequestException("GPX files up to 10MB are allowed.");
+        }
+
+        String extension = extractExtension(originalFileName);
+        if (!GPX_FILE_EXTENSIONS.contains(extension)) {
+            throw new BadRequestException("Only .gpx files are allowed.");
+        }
+    }
+
     private String sanitizeFileName(String fileName) {
         String sanitized = fileName.replaceAll("[^a-zA-Z0-9._-]", "-");
         return sanitized.isBlank() ? "file" : sanitized.toLowerCase(Locale.ROOT);
@@ -372,6 +422,29 @@ public class TravelMediaStorageService {
                 String.valueOf(ownerId),
                 String.valueOf(planId),
                 String.valueOf(recordId),
+                storedFileName
+        );
+    }
+
+    private String buildRouteLocalStoragePath(Long ownerId, Long planId, Long routeId, String storedFileName) {
+        return String.join(
+                "/",
+                String.valueOf(ownerId),
+                String.valueOf(planId),
+                "routes",
+                String.valueOf(routeId),
+                storedFileName
+        );
+    }
+
+    private String buildRouteMinioObjectKey(Long ownerId, Long planId, Long routeId, String storedFileName) {
+        return String.join(
+                "/",
+                mediaObjectPrefix,
+                String.valueOf(ownerId),
+                String.valueOf(planId),
+                "routes",
+                String.valueOf(routeId),
                 storedFileName
         );
     }

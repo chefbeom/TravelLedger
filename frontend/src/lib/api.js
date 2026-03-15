@@ -420,6 +420,18 @@ export function createTravelRoute(planId, payload) {
   })
 }
 
+export function uploadTravelRouteGpxFiles(routeId, files) {
+  const formData = new FormData()
+  ;(files ?? []).forEach((file) => {
+    formData.append('files', file)
+  })
+
+  return request(`/travel/routes/${routeId}/gpx-files`, {
+    method: 'POST',
+    body: formData,
+  })
+}
+
 export function deleteTravelRoute(routeId) {
   return request(`/travel/routes/${routeId}`, {
     method: 'DELETE',

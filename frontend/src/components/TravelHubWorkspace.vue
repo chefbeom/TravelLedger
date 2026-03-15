@@ -23,6 +23,7 @@ import {
   updateTravelPlan,
   updateTravelRecord,
   uploadTravelMemoryMedia,
+  uploadTravelRouteGpxFiles,
   uploadTravelRecordMedia,
 } from '../lib/api'
 import { extractPhotoMetadata } from '../lib/photoMetadata'
@@ -751,7 +752,11 @@ async function handleSaveRoute(payload) {
   activeSubmit.value = 'route'
   setFeedback()
   try {
-    await createTravelRoute(selectedPlanId.value, payload)
+    const { gpxFiles = [], ...routePayload } = payload || {}
+    const createdRoute = await createTravelRoute(selectedPlanId.value, routePayload)
+    if (gpxFiles.length) {
+      await uploadTravelRouteGpxFiles(createdRoute.id, gpxFiles)
+    }
     await refreshTravelData(selectedPlanId.value, props.route === 'photo-album')
     routeRefreshKey.value += 1
     setFeedback('이동 경로를 저장했습니다.')

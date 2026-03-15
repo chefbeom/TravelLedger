@@ -148,28 +148,48 @@ const estimatedSteps = computed(() => {
   return draft.transportMode === 'WALK' ? Math.round(draftDistanceKm.value * 1400) : 0
 })
 
+const hasGpxGeometry = computed(() => Boolean(gpxFileName.value) && draftPoints.value.length >= 2)
+const isGpxMode = computed(() => draft.sourceType === 'GPX' || hasGpxGeometry.value)
+const canPlaceRoutePoints = computed(() => draft.sourceType === 'MANUAL' && !hasGpxGeometry.value)
+const showDraftPointMarkers = computed(() => canPlaceRoutePoints.value)
+const gpxStartPoint = computed(() => draftPoints.value[0] ?? null)
+const gpxEndPoint = computed(() => draftPoints.value[draftPoints.value.length - 1] ?? null)
+const routePointBadge = computed(() => (hasGpxGeometry.value ? `${draftPoints.value.length}개 트랙 포인트` : `${draftPoints.value.length}개 제어점`))
+const routeMapHintTitle = computed(() =>
+  isGpxMode.value ? 'GPX는 방문 장소 핀이 아니라 이동 경로 선으로만 표시됩니다' : '지도를 눌러 경로 제어점을 순서대로 추가합니다',
+)
+const routeMapHintText = computed(() =>
+  isGpxMode.value
+    ? '방문한 장소는 여행 기록 핀으로 따로 보이고, GPX는 이동한 길만 선으로 그립니다. 거리와 시간은 GPX 데이터로 계산합니다.'
+    : '여행 기록에서 저장한 장소 핀을 참고하면서, 지도 클릭으로 출발-경유-도착 제어점을 추가하고 드래그로 미세 조정할 수 있습니다.',
+)
+
 const selectedDraftPoint = computed(() => {
-  if (highlightedDraftIndex.value < 0) {
+  if (!canPlaceRoutePoints.value || highlightedDraftIndex.value < 0) {
     return null
   }
   return draftPoints.value[highlightedDraftIndex.value] ?? null
 })
 
 const selectedDraftPointLabel = computed(() => {
-  if (highlightedDraftIndex.value < 0) {
-    return '선택한 핀 없음'
+  if (!canPlaceRoutePoints.value || highlightedDraftIndex.value < 0) {
+    return '선택한 제어점 없음'
   }
   return describeDraftPoint(highlightedDraftIndex.value, draftPoints.value.length)
 })
 
-const draftPointRows = computed(() =>
-  draftPoints.value.map((point, index) => ({
+const draftPointRows = computed(() => {
+  if (!canPlaceRoutePoints.value) {
+    return []
+  }
+
+  return draftPoints.value.map((point, index) => ({
     index,
     label: describeDraftPoint(index, draftPoints.value.length),
     latitude: Number(point.latitude),
     longitude: Number(point.longitude),
-  })),
-)
+  }))
+})
 
 const activeDayTimeline = computed(() => {
   const rows = []
@@ -286,9 +306,16 @@ function haversineDistance(from, to) {
 }
 
 function describeDraftPoint(index, total) {
-  if (index === 0) return '출발 핀'
-  if (index === total - 1) return '도착 핀'
-  return `${index + 1}번 경유 핀`
+  if (index === 0) return '출발 제어점'
+  if (index === total - 1) return '도착 제어점'
+  return `${index + 1}번 경유 제어점`
+}
+
+function formatCoordinate(point) {
+  if (!point) {
+    return '-'
+  }
+  return `${Number(point.latitude).toFixed(5)}, ${Number(point.longitude).toFixed(5)}`
 }
 
 function addDraftPoint(point) {
@@ -395,7 +422,7 @@ function buildPayload() {
     distanceKm: Number(draftDistanceKm.value.toFixed(3)),
     durationMinutes: safeNumber(draft.durationMinutes, 0),
     stepCount: draft.stepCount ? safeNumber(draft.stepCount, 0) : estimatedSteps.value,
-    sourceType: draft.sourceType,
+    sourceType: hasGpxGeometry.value ? 'GPX' : draft.sourceType,
     startPlaceName: draft.startPlaceName.trim() || null,
     endPlaceName: draft.endPlaceName.trim() || null,
     memo: draft.memo.trim() || null,
@@ -439,7 +466,7 @@ async function handleGpxSelection(event) {
     latitude: Number(point.latitude.toFixed(7)),
     longitude: Number(point.longitude.toFixed(7)),
   }))
-  highlightedDraftIndex.value = draftPoints.value.length - 1
+  highlightedDraftIndex.value = -1
   draft.title = file.name.replace(/\.gpx$/i, '')
   draft.transportMode = 'WALK'
   draft.sourceType = 'GPX'
@@ -513,7 +540,7 @@ function routeSummary(route) {
       <div class="panel__header">
         <div>
           <h2>경로 지도</h2>
-          <p>지도를 넓게 보면서 바로 핀을 찍고, 방금 추가한 핀은 아래 편집 카드에서 바로 수정할 수 있습니다.</p>
+          <p>수동 작성은 제어점을 추가해 경로를 만들고, GPX는 방문 핀 없이 이동 선만 표시합니다.</p>
         </div>
       </div>
 
@@ -521,15 +548,16 @@ function routeSummary(route) {
         :markers="routeMapMarkers"
         :routes="mapRoutes"
         :draft-path="draftPoints"
+        :show-draft-point-markers="showDraftPointMarkers"
         :selected-point="null"
         :enable-pick-location="false"
-        :enable-draw-route="true"
-        :draggable-draft-path="true"
+        :enable-draw-route="canPlaceRoutePoints"
+        :draggable-draft-path="canPlaceRoutePoints"
         :highlighted-draft-index="highlightedDraftIndex"
         :view-key="`${travelPlan.id || 'route'}-${activeDayDate}`"
         initial-map-size="expanded"
-        hint-title="서울 강서구를 기준으로 시작합니다"
-        hint-text="지도를 누르면 새 핀이 추가되고 아래 편집 카드가 즉시 바뀝니다. 기존 핀은 클릭하거나 드래그해서 수정할 수 있습니다."
+        :hint-title="routeMapHintTitle"
+        :hint-text="routeMapHintText"
         @pick-route-point="addDraftPoint"
         @move-draft-point="handleMoveDraftPoint"
         @select-draft-point="focusDraftPoint"
@@ -539,16 +567,41 @@ function routeSummary(route) {
         <article class="travel-route-focus-card">
           <div class="travel-route-focus-card__header">
             <div>
-              <h3>선택 핀 편집</h3>
-              <p>지도를 누른 직후 여기서 위도와 경도를 바로 조정할 수 있습니다.</p>
+              <h3>{{ hasGpxGeometry ? 'GPX 추출 정보' : '선택 제어점 편집' }}</h3>
+              <p>
+                {{
+                  hasGpxGeometry
+                    ? 'GPX는 방문 장소 핀이 아니라 이동 경로 선으로만 표시합니다. 아래 값은 GPX에서 읽은 시작점과 종료점입니다.'
+                    : '지도를 누른 직후 여기서 위도와 경도를 바로 조정할 수 있습니다.'
+                }}
+              </p>
             </div>
-            <span class="panel__badge">{{ highlightedDraftIndex >= 0 ? `${highlightedDraftIndex + 1}번 핀` : '대기 중' }}</span>
+            <span class="panel__badge">
+              {{ hasGpxGeometry ? '선 경로 모드' : highlightedDraftIndex >= 0 ? `${highlightedDraftIndex + 1}번 제어점` : '대기 중' }}
+            </span>
           </div>
 
-          <template v-if="selectedDraftPoint">
+          <template v-if="hasGpxGeometry">
             <div class="travel-route-focus-grid">
               <label class="field">
-                <span class="field__label">핀 역할</span>
+                <span class="field__label">GPX 파일</span>
+                <input :value="gpxFileName || '-'" type="text" readonly />
+              </label>
+              <label class="field">
+                <span class="field__label">시작 좌표</span>
+                <input :value="formatCoordinate(gpxStartPoint)" type="text" readonly />
+              </label>
+              <label class="field">
+                <span class="field__label">종료 좌표</span>
+                <input :value="formatCoordinate(gpxEndPoint)" type="text" readonly />
+              </label>
+            </div>
+            <p class="travel-map-note">방문한 장소는 여행 기록 핀으로 따로 관리하고, GPX는 지나간 길만 선으로 저장합니다.</p>
+          </template>
+          <template v-else-if="selectedDraftPoint">
+            <div class="travel-route-focus-grid">
+              <label class="field">
+                <span class="field__label">제어점 역할</span>
                 <input :value="selectedDraftPointLabel" type="text" readonly />
               </label>
               <label class="field">
@@ -561,12 +614,14 @@ function routeSummary(route) {
               </label>
             </div>
             <div class="entry-editor__actions">
-              <button class="button button--ghost" type="button" :disabled="highlightedDraftIndex <= 0" @click="focusPreviousPoint">이전 핀</button>
-              <button class="button button--ghost" type="button" :disabled="highlightedDraftIndex >= draftPoints.length - 1" @click="focusNextPoint">다음 핀</button>
-              <button class="button button--danger" type="button" @click="removeDraftPoint(highlightedDraftIndex)">현재 핀 삭제</button>
+              <button class="button button--ghost" type="button" :disabled="highlightedDraftIndex <= 0" @click="focusPreviousPoint">이전 제어점</button>
+              <button class="button button--ghost" type="button" :disabled="highlightedDraftIndex >= draftPoints.length - 1" @click="focusNextPoint">다음 제어점</button>
+              <button class="button button--danger" type="button" @click="removeDraftPoint(highlightedDraftIndex)">현재 제어점 삭제</button>
             </div>
           </template>
-          <p v-else class="panel__empty">지도 위를 눌러 첫 번째 핀을 추가해 보세요.</p>
+          <p v-else class="panel__empty">
+            {{ isGpxMode ? 'GPX 파일을 올리면 이동 경로 선과 요약 정보가 여기에 나타납니다.' : '지도를 눌러 첫 번째 제어점을 추가해 보세요.' }}
+          </p>
         </article>
 
         <article class="travel-route-focus-card">
@@ -577,14 +632,15 @@ function routeSummary(route) {
             </div>
           </div>
           <div class="travel-file-chip-row">
-            <span class="chip chip--neutral">핀 {{ draftPoints.length }}개</span>
+            <span class="chip chip--neutral">{{ hasGpxGeometry ? `트랙 포인트 ${draftPoints.length}개` : `제어점 ${draftPoints.length}개` }}</span>
             <span class="chip chip--neutral">총 거리 {{ draftDistanceKm.toFixed(2) }}km</span>
             <span class="chip chip--neutral">예상 걸음 {{ estimatedSteps.toLocaleString('ko-KR') }}걸음</span>
+            <span v-if="isGpxMode" class="chip chip--neutral">표시 방식 선 그리기</span>
             <span v-if="gpxFileName" class="chip chip--neutral">{{ gpxFileName }}</span>
           </div>
           <div class="entry-editor__actions">
-            <button class="button button--ghost" type="button" @click="removeLastPoint">마지막 핀 삭제</button>
-            <button class="button button--ghost" type="button" @click="resetDraft">임시 경로 비우기</button>
+            <button v-if="!hasGpxGeometry" class="button button--ghost" type="button" @click="removeLastPoint">마지막 제어점 삭제</button>
+            <button class="button button--ghost" type="button" @click="resetDraft">{{ hasGpxGeometry ? 'GPX 경로 비우기' : '임시 경로 비우기' }}</button>
             <button class="button button--primary" :disabled="isSubmitting || draftPoints.length < 2 || !draft.title.trim()" @click="submitRoute">
               {{ isSubmitting && activeSubmit === 'route' ? '저장 중...' : '경로 저장' }}
             </button>
@@ -643,6 +699,12 @@ function routeSummary(route) {
           <span class="field__label">GPX 파일</span>
           <input accept=".gpx" type="file" @change="handleGpxSelection" />
         </label>
+        <p v-if="hasGpxGeometry" class="travel-map-note field field--full">
+          GPX는 방문 장소 핀이 아니라 이동 경로 선으로만 표시됩니다. 필요하면 임시 경로를 비운 뒤 직접 그리기로 새 경로를 시작해 주세요.
+        </p>
+        <p v-else-if="draft.sourceType === 'GPX'" class="travel-map-note field field--full">
+          GPX 파일을 올리면 시간, 이동 거리, 걸음 수를 자동으로 계산하고 지도에는 선 형태로만 그립니다.
+        </p>
         <label class="field field--full">
           <span class="field__label">메모</span>
           <textarea v-model="draft.memo" rows="3" placeholder="걷기 구간, 버스 환승, 택시 이동 이유 등을 적어두세요." />
@@ -653,10 +715,16 @@ function routeSummary(route) {
     <section class="panel">
       <div class="panel__header">
         <div>
-          <h2>경로 핀 순서 리스트</h2>
-          <p>출발부터 도착까지 순서대로 확인하고, 중간 핀도 바로 수정할 수 있습니다.</p>
+          <h2>{{ hasGpxGeometry ? 'GPX 경로 요약' : '경로 제어점 순서 리스트' }}</h2>
+          <p>
+            {{
+              hasGpxGeometry
+                ? 'GPX는 제어점 목록 대신 선 경로와 핵심 좌표만 보여 줍니다. 방문 장소는 여행 기록 핀으로 따로 관리합니다.'
+                : '출발부터 도착까지 순서대로 확인하고, 중간 제어점도 바로 수정할 수 있습니다.'
+            }}
+          </p>
         </div>
-        <span class="panel__badge">{{ draftPoints.length }}개 핀</span>
+        <span class="panel__badge">{{ routePointBadge }}</span>
       </div>
 
       <div v-if="draftPointRows.length" class="travel-point-list">
@@ -684,7 +752,26 @@ function routeSummary(route) {
           </div>
         </article>
       </div>
-      <p v-else class="panel__empty">지도를 눌러 출발 핀부터 추가해 보세요. GPX 파일을 올리면 자동으로 리스트가 채워집니다.</p>
+      <article v-else-if="hasGpxGeometry" class="travel-route-focus-card">
+        <div class="travel-route-focus-grid">
+          <label class="field">
+            <span class="field__label">트랙 포인트 수</span>
+            <input :value="draftPoints.length" type="text" readonly />
+          </label>
+          <label class="field">
+            <span class="field__label">시작 좌표</span>
+            <input :value="formatCoordinate(gpxStartPoint)" type="text" readonly />
+          </label>
+          <label class="field">
+            <span class="field__label">종료 좌표</span>
+            <input :value="formatCoordinate(gpxEndPoint)" type="text" readonly />
+          </label>
+        </div>
+        <p class="travel-map-note">GPX를 넣으면 수천 개의 포인트를 핀으로 찍지 않고, 전체 이동선을 하나의 경로로 표시합니다.</p>
+      </article>
+      <p v-else class="panel__empty">
+        {{ draft.sourceType === 'GPX' ? 'GPX 파일을 올리면 이동 경로 선이 생성됩니다.' : '지도를 눌러 출발 제어점부터 추가해 보세요.' }}
+      </p>
     </section>
 
     <section class="panel">

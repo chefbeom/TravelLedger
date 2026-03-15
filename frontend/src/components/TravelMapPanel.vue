@@ -32,6 +32,10 @@ const props = defineProps({
     type: Array,
     default: () => [],
   },
+  showDraftPointMarkers: {
+    type: Boolean,
+    default: true,
+  },
   selectedPoint: {
     type: Object,
     default: null,
@@ -161,6 +165,27 @@ function normalizePoint(pointLike) {
     latitude: Number(latitude.toFixed(7)),
     longitude: Number(longitude.toFixed(7)),
   }
+}
+
+function thinLinePoints(points, maxPoints = 1200) {
+  if (!Array.isArray(points) || points.length <= maxPoints) {
+    return points
+  }
+
+  const reduced = []
+  const step = Math.max(1, Math.ceil((points.length - 1) / (maxPoints - 1)))
+
+  for (let index = 0; index < points.length; index += step) {
+    reduced.push(points[index])
+  }
+
+  const lastPoint = points[points.length - 1]
+  const reducedLastPoint = reduced[reduced.length - 1]
+  if (reducedLastPoint !== lastPoint) {
+    reduced.push(lastPoint)
+  }
+
+  return reduced
 }
 
 function createPopupContent(marker) {
@@ -488,10 +513,11 @@ function renderMapLayers({ shouldFit = false } = {}) {
   })
 
   props.routes.forEach((route) => {
-    const linePoints = (route.points ?? [])
-      .map((point) => normalizePoint(point))
-      .filter(Boolean)
-      .map((point) => [point.latitude, point.longitude])
+    const linePoints = thinLinePoints(
+      (route.points ?? [])
+        .map((point) => normalizePoint(point))
+        .filter(Boolean),
+    ).map((point) => [point.latitude, point.longitude])
 
     if (linePoints.length < 2) {
       return
@@ -516,7 +542,7 @@ function renderMapLayers({ shouldFit = false } = {}) {
 
   if (draftPoints.length >= 2) {
     L.polyline(
-      draftPoints.map((point) => [point.latitude, point.longitude]),
+      thinLinePoints(draftPoints).map((point) => [point.latitude, point.longitude]),
       {
         color: '#FF6B6B',
         weight: 4,
@@ -526,33 +552,35 @@ function renderMapLayers({ shouldFit = false } = {}) {
     ).addTo(draftLayer)
   }
 
-  draftPoints.forEach((point, index) => {
-    const isActive = props.highlightedDraftIndex === index
-    const marker = L.marker([point.latitude, point.longitude], {
-      draggable: props.draggableDraftPath,
-      icon: buildMarkerIcon({
-        type: 'route',
-        colorHex: isActive ? '#111827' : '#FF6B6B',
-        iconKey: 'route',
-        iconText: String(index + 1),
-        active: isActive,
-      }),
-    })
-
-    marker.bindTooltip(describeDraftPoint(index, draftPoints.length))
-    marker.on('click', () => emit('select-draft-point', index))
-
-    if (props.draggableDraftPath) {
-      marker.on('dragend', (event) => {
-        emit('move-draft-point', {
-          index,
-          point: normalizePoint(event.target.getLatLng()),
-        })
+  if (props.showDraftPointMarkers) {
+    draftPoints.forEach((point, index) => {
+      const isActive = props.highlightedDraftIndex === index
+      const marker = L.marker([point.latitude, point.longitude], {
+        draggable: props.draggableDraftPath,
+        icon: buildMarkerIcon({
+          type: 'route',
+          colorHex: isActive ? '#111827' : '#FF6B6B',
+          iconKey: 'route',
+          iconText: String(index + 1),
+          active: isActive,
+        }),
       })
-    }
 
-    marker.addTo(draftLayer)
-  })
+      marker.bindTooltip(describeDraftPoint(index, draftPoints.length))
+      marker.on('click', () => emit('select-draft-point', index))
+
+      if (props.draggableDraftPath) {
+        marker.on('dragend', (event) => {
+          emit('move-draft-point', {
+            index,
+            point: normalizePoint(event.target.getLatLng()),
+          })
+        })
+      }
+
+      marker.addTo(draftLayer)
+    })
+  }
 
   const selectedPoint = normalizePoint(props.selectedPoint)
   if (selectedPoint) {
@@ -675,6 +703,7 @@ watch(
     props.markers,
     props.routes,
     props.draftPath,
+    props.showDraftPointMarkers,
     props.selectedPoint,
     props.highlightedDraftIndex,
     props.markerRadius,

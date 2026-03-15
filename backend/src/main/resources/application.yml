@@ -52,5 +52,8 @@ app:
     exchange-rate-cache-minutes: ${TRAVEL_EXCHANGE_RATE_CACHE_MINUTES:30}
     media-storage-path: ${TRAVEL_MEDIA_STORAGE_PATH:${user.dir}/uploads/travel-media}
     media-object-prefix: ${TRAVEL_MEDIA_OBJECT_PREFIX:travel-media}
+  family:
+    media-storage-path: ${FAMILY_MEDIA_STORAGE_PATH:${user.dir}/uploads/family-media}
+    media-object-prefix: ${FAMILY_MEDIA_OBJECT_PREFIX:family-media}
   seed:
     enabled: ${APP_SEED_ENABLED:false}

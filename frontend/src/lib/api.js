@@ -444,3 +444,37 @@ export function deleteTravelRoute(routeId) {
     method: 'DELETE',
   })
 }
+
+export function fetchFamilyAlbumBootstrap() {
+  return request('/family-album/bootstrap')
+}
+
+export function createFamilyCategory(payload) {
+  return request('/family-album/categories', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+}
+
+export function uploadFamilyMedia(categoryId, files, caption = '') {
+  const formData = new FormData()
+  formData.append('categoryId', String(categoryId))
+  if (caption) {
+    formData.append('caption', caption)
+  }
+  ;(files ?? []).forEach((file) => {
+    formData.append('files', file)
+  })
+
+  return request('/family-album/media', {
+    method: 'POST',
+    body: formData,
+  })
+}
+
+export function createFamilyAlbum(payload) {
+  return request('/family-album/albums', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+}

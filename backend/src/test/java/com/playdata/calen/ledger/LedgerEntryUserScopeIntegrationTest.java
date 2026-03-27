@@ -1,6 +1,7 @@
 package com.playdata.calen.ledger;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -63,7 +64,7 @@ class LedgerEntryUserScopeIntegrationTest {
                 .findFirst()
                 .orElseThrow();
 
-        mockMvc.perform(delete("/api/entries/{id}", hanaEntry.getId()).session(minsuSession))
+        mockMvc.perform(delete("/api/entries/{id}", hanaEntry.getId()).with(csrf()).session(minsuSession))
                 .andExpect(status().isNotFound());
 
         assertThat(ledgerEntryRepository.findById(hanaEntry.getId())).isPresent();
@@ -79,6 +80,7 @@ class LedgerEntryUserScopeIntegrationTest {
         payload.put("paymentMethodId", hanaEntry.getPaymentMethod().getId());
 
         mockMvc.perform(put("/api/entries/{id}", hanaEntry.getId())
+                        .with(csrf())
                         .session(hanaSession)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(payload)))
@@ -86,7 +88,7 @@ class LedgerEntryUserScopeIntegrationTest {
                 .andExpect(jsonPath("$.title").value("Updated entry"))
                 .andExpect(jsonPath("$.memo").value("Updated by owner"));
 
-        mockMvc.perform(delete("/api/entries/{id}", hanaEntry.getId()).session(hanaSession))
+        mockMvc.perform(delete("/api/entries/{id}", hanaEntry.getId()).with(csrf()).session(hanaSession))
                 .andExpect(status().isOk());
 
         assertThat(ledgerEntryRepository.findById(hanaEntry.getId())).isEmpty();
@@ -124,6 +126,7 @@ class LedgerEntryUserScopeIntegrationTest {
         payload.put("rememberDevice", rememberDevice);
 
         return mockMvc.perform(post("/api/auth/login")
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(payload)))
                 .andExpect(status().isOk())

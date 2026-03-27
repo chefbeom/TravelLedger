@@ -1,6 +1,7 @@
 package com.playdata.calen.travel;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
@@ -33,6 +34,12 @@ import org.springframework.test.web.servlet.MvcResult;
 @AutoConfigureMockMvc
 class TravelPlanUserScopeIntegrationTest {
 
+    private static final byte[] TEST_JPEG_BYTES = new byte[] {
+            (byte) 0xFF, (byte) 0xD8, (byte) 0xFF, (byte) 0xE0,
+            0x00, 0x10, 0x4A, 0x46,
+            0x49, 0x46, 0x00, 0x01
+    };
+
     @Autowired
     private MockMvc mockMvc;
 
@@ -54,7 +61,7 @@ class TravelPlanUserScopeIntegrationTest {
         mockMvc.perform(get("/api/travel/plans/{planId}", planId).session(minsuSession))
                 .andExpect(status().isNotFound());
 
-        mockMvc.perform(delete("/api/travel/budget-items/{itemId}", budgetItemId).session(minsuSession))
+        mockMvc.perform(delete("/api/travel/budget-items/{itemId}", budgetItemId).with(csrf()).session(minsuSession))
                 .andExpect(status().isNotFound());
 
         mockMvc.perform(get("/api/travel/plans/{planId}", planId).session(hanaSession))
@@ -80,7 +87,7 @@ class TravelPlanUserScopeIntegrationTest {
                 .andExpect(jsonPath("$.mediaItemCount").value(1))
                 .andExpect(jsonPath("$.records.length()").value(1));
 
-        mockMvc.perform(delete("/api/travel/plans/{planId}", planId).session(hanaSession))
+        mockMvc.perform(delete("/api/travel/plans/{planId}", planId).with(csrf()).session(hanaSession))
                 .andExpect(status().isOk());
 
         mockMvc.perform(get("/api/travel/plans/{planId}", planId).session(hanaSession))
@@ -97,7 +104,7 @@ class TravelPlanUserScopeIntegrationTest {
 
         uploadTravelMemoryMedia(hanaSession, memoryId);
 
-        mockMvc.perform(delete("/api/travel/memories/{memoryId}", memoryId).session(minsuSession))
+        mockMvc.perform(delete("/api/travel/memories/{memoryId}", memoryId).with(csrf()).session(minsuSession))
                 .andExpect(status().isNotFound());
 
         mockMvc.perform(get("/api/travel/plans/{planId}", planId).session(hanaSession))
@@ -115,6 +122,7 @@ class TravelPlanUserScopeIntegrationTest {
         payload.put("rememberDevice", false);
 
         MvcResult result = mockMvc.perform(post("/api/auth/login")
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(payload)))
                 .andExpect(status().isOk())
@@ -137,6 +145,7 @@ class TravelPlanUserScopeIntegrationTest {
         payload.put("memo", "Scope test trip");
 
         return readId(mockMvc.perform(post("/api/travel/plans")
+                        .with(csrf())
                         .session(session)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(payload)))
@@ -163,6 +172,7 @@ class TravelPlanUserScopeIntegrationTest {
         payload.put("displayOrder", 1);
 
         return readId(mockMvc.perform(post("/api/travel/plans/{planId}/budget-items", planId)
+                        .with(csrf())
                         .session(session)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(payload)))
@@ -195,6 +205,7 @@ class TravelPlanUserScopeIntegrationTest {
         payload.put("memo", "Actual spend");
 
         return readId(mockMvc.perform(post("/api/travel/plans/{planId}/records", planId)
+                        .with(csrf())
                         .session(session)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(payload)))
@@ -221,6 +232,7 @@ class TravelPlanUserScopeIntegrationTest {
         payload.put("memo", "Morning walk");
 
         return readId(mockMvc.perform(post("/api/travel/plans/{planId}/memories", planId)
+                        .with(csrf())
                         .session(session)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(payload)))
@@ -240,6 +252,7 @@ class TravelPlanUserScopeIntegrationTest {
         payload.put("files", List.of(file));
 
         mockMvc.perform(post("/api/travel/records/{recordId}/media/presign", recordId)
+                        .with(csrf())
                         .session(session)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(payload)))
@@ -253,13 +266,14 @@ class TravelPlanUserScopeIntegrationTest {
                 "files",
                 "takoyaki.jpg",
                 "image/jpeg",
-                "fake-image".getBytes()
+                TEST_JPEG_BYTES
         );
 
         mockMvc.perform(multipart("/api/travel/records/{recordId}/media", recordId)
                         .file(file)
                         .param("mediaType", "PHOTO")
                         .param("caption", "Takoyaki stand")
+                        .with(csrf())
                         .session(session))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].mediaType").value("PHOTO"))
@@ -271,12 +285,13 @@ class TravelPlanUserScopeIntegrationTest {
                 "files",
                 "fushimi.jpg",
                 "image/jpeg",
-                "fake-image".getBytes()
+                TEST_JPEG_BYTES
         );
 
         mockMvc.perform(multipart("/api/travel/memories/{memoryId}/media", memoryId)
                         .file(file)
                         .param("caption", "Shrine gate")
+                        .with(csrf())
                         .session(session))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].mediaType").value("PHOTO"))

@@ -7,6 +7,7 @@ import com.playdata.calen.familyalbum.dto.FamilyAlbumResponse;
 import com.playdata.calen.familyalbum.dto.FamilyCategoryCreateRequest;
 import com.playdata.calen.familyalbum.dto.FamilyCategoryResponse;
 import com.playdata.calen.familyalbum.dto.FamilyMediaResponse;
+import com.playdata.calen.familyalbum.dto.FamilyUserSearchResponse;
 import com.playdata.calen.familyalbum.service.FamilyAlbumService;
 import jakarta.validation.Valid;
 import java.net.URLEncoder;
@@ -37,6 +38,14 @@ public class FamilyAlbumController {
     @GetMapping("/bootstrap")
     public FamilyAlbumBootstrapResponse getBootstrap(@AuthenticationPrincipal AppUserPrincipal currentUser) {
         return familyAlbumService.getBootstrap(currentUser.userId());
+    }
+
+    @GetMapping("/users/search")
+    public List<FamilyUserSearchResponse> searchUsers(
+            @AuthenticationPrincipal AppUserPrincipal currentUser,
+            @RequestParam String q
+    ) {
+        return familyAlbumService.searchUsers(currentUser.userId(), q);
     }
 
     @PostMapping("/categories")
@@ -75,6 +84,7 @@ public class FamilyAlbumController {
         return ResponseEntity.ok()
                 .contentType(MediaType.parseMediaType(download.contentType()))
                 .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.inline().filename(encodedFileName).build().toString())
+                .header("X-Content-Type-Options", "nosniff")
                 .body(download.resource());
     }
 }

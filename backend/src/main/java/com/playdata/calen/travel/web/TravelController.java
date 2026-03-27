@@ -288,9 +288,13 @@ public class TravelController {
     ) {
         TravelService.MediaDownload download = travelService.getMediaDownload(currentUser.userId(), mediaId);
         String encodedFileName = URLEncoder.encode(download.fileName(), StandardCharsets.UTF_8).replace("+", "%20");
+        ContentDisposition disposition = "application/pdf".equalsIgnoreCase(download.contentType())
+                ? ContentDisposition.attachment().filename(encodedFileName).build()
+                : ContentDisposition.inline().filename(encodedFileName).build();
         return ResponseEntity.ok()
                 .contentType(MediaType.parseMediaType(download.contentType()))
-                .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.inline().filename(encodedFileName).build().toString())
+                .header(HttpHeaders.CONTENT_DISPOSITION, disposition.toString())
+                .header("X-Content-Type-Options", "nosniff")
                 .body(download.resource());
     }
 
@@ -298,9 +302,13 @@ public class TravelController {
     public ResponseEntity<?> downloadSharedMedia(@PathVariable Long mediaId) {
         TravelService.MediaDownload download = travelService.getSharedMediaDownload(mediaId);
         String encodedFileName = URLEncoder.encode(download.fileName(), StandardCharsets.UTF_8).replace("+", "%20");
+        ContentDisposition disposition = "application/pdf".equalsIgnoreCase(download.contentType())
+                ? ContentDisposition.attachment().filename(encodedFileName).build()
+                : ContentDisposition.inline().filename(encodedFileName).build();
         return ResponseEntity.ok()
                 .contentType(MediaType.parseMediaType(download.contentType()))
-                .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.inline().filename(encodedFileName).build().toString())
+                .header(HttpHeaders.CONTENT_DISPOSITION, disposition.toString())
+                .header("X-Content-Type-Options", "nosniff")
                 .body(download.resource());
     }
 

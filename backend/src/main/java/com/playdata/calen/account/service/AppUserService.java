@@ -32,7 +32,7 @@ public class AppUserService {
         String password = passwordRaw.trim();
 
         if (appUserRepository.existsByLoginId(loginId)) {
-            throw new BadRequestException("이미 사용 중인 로그인 ID입니다.");
+            throw new BadRequestException("사용할 수 없는 로그인 ID입니다.");
         }
         if (password.length() < 8) {
             throw new BadRequestException("비밀번호는 8자 이상이어야 합니다.");

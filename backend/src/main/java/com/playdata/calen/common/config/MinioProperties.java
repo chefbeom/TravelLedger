@@ -14,6 +14,7 @@ import org.springframework.stereotype.Component;
 public class MinioProperties {
 
     private String endpoint;
+    private String publicEndpoint;
     private String accessKey;
     private String secretKey;
     private String bucket_cloud;
@@ -26,6 +27,10 @@ public class MinioProperties {
 
     public String getAccessKey() {
         return sanitize(accessKey);
+    }
+
+    public String getPublicEndpoint() {
+        return sanitize(publicEndpoint);
     }
 
     public String getSecretKey() {

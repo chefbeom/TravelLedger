@@ -2,8 +2,8 @@ package com.playdata.calen.travel.service;
 
 import com.playdata.calen.common.config.MinioProperties;
 import com.playdata.calen.common.exception.BadRequestException;
-import io.minio.GetPresignedObjectUrlArgs;
 import io.minio.GetObjectArgs;
+import io.minio.GetPresignedObjectUrlArgs;
 import io.minio.MinioClient;
 import io.minio.PutObjectArgs;
 import io.minio.RemoveObjectArgs;
@@ -12,10 +12,12 @@ import io.minio.StatObjectResponse;
 import io.minio.http.Method;
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
@@ -28,23 +30,19 @@ import org.springframework.core.io.UrlResource;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
-import org.springframework.web.server.ResponseStatusException;
-import lombok.extern.slf4j.Slf4j;
 
 @Service
-@Slf4j
 public class TravelMediaStorageService {
 
     private static final long MAX_FILE_SIZE = 10L * 1024 * 1024;
+    private static final int HEADER_BYTES = 32;
     private static final Set<String> IMAGE_FILE_EXTENSIONS = Set.of(
             "jpg",
             "jpeg",
             "png",
             "webp",
             "gif",
-            "bmp",
-            "heic",
-            "heif"
+            "bmp"
     );
     private static final Set<String> PDF_FILE_EXTENSIONS = Set.of("pdf");
     private static final Set<String> GPX_FILE_EXTENSIONS = Set.of("gpx", "xml");
@@ -53,21 +51,24 @@ public class TravelMediaStorageService {
     private final String mediaObjectPrefix;
     private final MinioClient minioClient;
     private final MinioProperties minioProperties;
+    private final boolean presignedUploadEnabled;
 
     public TravelMediaStorageService(
             @Value("${app.travel.media-storage-path}") String mediaStoragePath,
             @Value("${app.travel.media-object-prefix:travel-media}") String mediaObjectPrefix,
+            @Value("${app.travel.presigned-upload-enabled:false}") boolean presignedUploadEnabled,
             ObjectProvider<MinioClient> minioClientProvider,
             MinioProperties minioProperties
     ) {
         this.rootPath = Paths.get(mediaStoragePath).toAbsolutePath().normalize();
         this.mediaObjectPrefix = normalizeObjectPrefix(mediaObjectPrefix);
+        this.presignedUploadEnabled = presignedUploadEnabled;
         this.minioClient = minioClientProvider.getIfAvailable();
         this.minioProperties = minioProperties;
     }
 
     public StoredTravelMedia store(Long ownerId, Long planId, Long recordId, MultipartFile file) {
-        validateFile(file);
+        String verifiedContentType = validateFile(file);
 
         String originalFileName = file.getOriginalFilename() != null ? file.getOriginalFilename() : "upload";
         String safeFileName = sanitizeFileName(originalFileName);
@@ -77,20 +78,13 @@ public class TravelMediaStorageService {
         if (isMinioEnabled()) {
             String objectKey = buildMinioObjectKey(ownerId, planId, recordId, storedFileName);
             try {
-                return storeToMinio(file, originalFileName, storedFileName, objectKey);
+                return storeToMinio(file, originalFileName, storedFileName, objectKey, verifiedContentType);
             } catch (BadRequestException exception) {
-                log.warn(
-                        "MinIO upload failed for ownerId={}, planId={}, recordId={}. Falling back to local storage. Reason={}",
-                        ownerId,
-                        planId,
-                        recordId,
-                        exception.getMessage()
-                );
-                return storeToLocal(file, originalFileName, storedFileName, localStoragePath);
+                return storeToLocal(file, originalFileName, storedFileName, localStoragePath, verifiedContentType);
             }
         }
 
-        return storeToLocal(file, originalFileName, storedFileName, localStoragePath);
+        return storeToLocal(file, originalFileName, storedFileName, localStoragePath, verifiedContentType);
     }
 
     public StoredTravelMedia storeRouteGpx(Long ownerId, Long planId, Long routeId, MultipartFile file) {
@@ -104,24 +98,17 @@ public class TravelMediaStorageService {
         if (isMinioEnabled()) {
             String objectKey = buildRouteMinioObjectKey(ownerId, planId, routeId, storedFileName);
             try {
-                return storeToMinio(file, originalFileName, storedFileName, objectKey);
+                return storeToMinio(file, originalFileName, storedFileName, objectKey, "application/gpx+xml");
             } catch (BadRequestException exception) {
-                log.warn(
-                        "MinIO GPX upload failed for ownerId={}, planId={}, routeId={}. Falling back to local storage. Reason={}",
-                        ownerId,
-                        planId,
-                        routeId,
-                        exception.getMessage()
-                );
-                return storeToLocal(file, originalFileName, storedFileName, localStoragePath);
+                return storeToLocal(file, originalFileName, storedFileName, localStoragePath, "application/gpx+xml");
             }
         }
 
-        return storeToLocal(file, originalFileName, storedFileName, localStoragePath);
+        return storeToLocal(file, originalFileName, storedFileName, localStoragePath, "application/gpx+xml");
     }
 
     public boolean supportsPresignedUpload() {
-        return isMinioEnabled();
+        return presignedUploadEnabled && isMinioEnabled();
     }
 
     public void validateUploadCandidates(List<UploadCandidate> files) {
@@ -159,7 +146,11 @@ public class TravelMediaStorageService {
             throw new BadRequestException("MinIO presigned upload is not available.");
         }
 
-        validateUploadCandidate(upload.originalFileName(), upload.contentType(), upload.fileSize());
+        String verifiedContentType = validateUploadCandidate(
+                upload.originalFileName(),
+                upload.contentType(),
+                upload.fileSize()
+        );
         validateObjectKey(ownerId, planId, recordId, upload.objectKey());
 
         try {
@@ -174,11 +165,13 @@ public class TravelMediaStorageService {
                 throw new BadRequestException("Uploaded file verification failed.");
             }
 
+            validateStoredObjectSignature(upload.objectKey(), verifiedContentType);
+
             return new StoredTravelMedia(
                     upload.originalFileName(),
                     extractObjectName(upload.objectKey()),
                     upload.objectKey(),
-                    normalizeContentType(upload.contentType()),
+                    verifiedContentType,
                     stat.size()
             );
         } catch (BadRequestException exception) {
@@ -222,7 +215,8 @@ public class TravelMediaStorageService {
             MultipartFile file,
             String originalFileName,
             String storedFileName,
-            String localStoragePath
+            String localStoragePath,
+            String contentType
     ) {
         Path relativePath = Path.of(localStoragePath);
         Path targetPath = rootPath.resolve(relativePath).normalize();
@@ -240,7 +234,7 @@ public class TravelMediaStorageService {
                 originalFileName,
                 storedFileName,
                 localStoragePath,
-                normalizeContentType(file.getContentType()),
+                contentType,
                 file.getSize()
         );
     }
@@ -249,7 +243,8 @@ public class TravelMediaStorageService {
             MultipartFile file,
             String originalFileName,
             String storedFileName,
-            String objectKey
+            String objectKey,
+            String contentType
     ) {
         try (InputStream inputStream = file.getInputStream()) {
             minioClient.putObject(
@@ -257,18 +252,18 @@ public class TravelMediaStorageService {
                             .bucket(minioProperties.getBucket_cloud())
                             .object(objectKey)
                             .stream(inputStream, file.getSize(), -1)
-                            .contentType(normalizeContentType(file.getContentType()))
+                            .contentType(contentType)
                             .build()
             );
         } catch (Exception exception) {
-            throw new BadRequestException(buildStorageErrorMessage("Failed to store file.", exception));
+            throw new BadRequestException(buildStorageErrorMessage("Failed to store file."));
         }
 
         return new StoredTravelMedia(
                 originalFileName,
                 storedFileName,
                 objectKey,
-                normalizeContentType(file.getContentType()),
+                contentType,
                 file.getSize()
         );
     }
@@ -297,7 +292,7 @@ public class TravelMediaStorageService {
                         .build())) {
             return new ByteArrayResource(inputStream.readAllBytes());
         } catch (Exception exception) {
-            throw new BadRequestException(buildStorageErrorMessage("Failed to load file.", exception));
+            throw new BadRequestException(buildStorageErrorMessage("Failed to load file."));
         }
     }
 
@@ -325,12 +320,14 @@ public class TravelMediaStorageService {
         }
     }
 
-    private void validateFile(MultipartFile file) {
+    private String validateFile(MultipartFile file) {
         if (file == null || file.isEmpty()) {
             throw new BadRequestException("Select a file to upload.");
         }
 
-        validateUploadCandidate(file.getOriginalFilename(), file.getContentType(), file.getSize());
+        String verifiedContentType = validateUploadCandidate(file.getOriginalFilename(), file.getContentType(), file.getSize());
+        validateBinarySignature(file, verifiedContentType);
+        return verifiedContentType;
     }
 
     private void validateRouteGpxFile(MultipartFile file) {
@@ -361,23 +358,24 @@ public class TravelMediaStorageService {
     }
 
     private String normalizeContentType(String contentType) {
-        return contentType == null ? "application/octet-stream" : contentType.toLowerCase(Locale.ROOT);
+        return contentType == null ? "application/octet-stream" : contentType.trim().toLowerCase(Locale.ROOT);
     }
 
     private PresignedUpload createPresignedUpload(Long ownerId, Long planId, Long recordId, UploadCandidate file) {
+        String verifiedContentType = validateUploadCandidate(file.originalFileName(), file.contentType(), file.fileSize());
         String safeFileName = sanitizeFileName(file.originalFileName());
         String storedFileName = UUID.randomUUID() + "-" + safeFileName;
         String objectKey = buildMinioObjectKey(ownerId, planId, recordId, storedFileName);
 
         try {
-            String uploadUrl = minioClient.getPresignedObjectUrl(
+            String uploadUrl = rewritePublicUploadUrl(minioClient.getPresignedObjectUrl(
                     GetPresignedObjectUrlArgs.builder()
                             .method(Method.PUT)
                             .bucket(minioProperties.getBucket_cloud())
                             .object(objectKey)
                             .expiry(minioProperties.getPresignedUrlExpirySeconds())
                             .build()
-            );
+            ));
 
             return new PresignedUpload(
                     "PUT",
@@ -385,11 +383,11 @@ public class TravelMediaStorageService {
                     objectKey,
                     storedFileName,
                     file.originalFileName(),
-                    normalizeContentType(file.contentType()),
+                    verifiedContentType,
                     file.fileSize()
             );
         } catch (Exception exception) {
-            throw new BadRequestException(buildStorageErrorMessage("Failed to generate upload URL.", exception));
+            throw new BadRequestException(buildStorageErrorMessage("Failed to generate upload URL."));
         }
     }
 
@@ -449,7 +447,7 @@ public class TravelMediaStorageService {
         );
     }
 
-    private void validateUploadCandidate(String originalFileName, String contentType, long fileSize) {
+    private String validateUploadCandidate(String originalFileName, String contentType, long fileSize) {
         if (!StringUtils.hasText(originalFileName)) {
             throw new BadRequestException("File name is required.");
         }
@@ -460,10 +458,7 @@ public class TravelMediaStorageService {
             throw new BadRequestException("Files up to 10MB are allowed.");
         }
 
-        String normalizedContentType = detectContentType(contentType, originalFileName);
-        if (!isAllowedContentType(normalizedContentType)) {
-            throw new BadRequestException("Only image files and PDF receipts are allowed.");
-        }
+        return resolveAllowedContentType(originalFileName, contentType);
     }
 
     private void validateObjectKey(Long ownerId, Long planId, Long recordId, String objectKey) {
@@ -502,25 +497,151 @@ public class TravelMediaStorageService {
                 .replaceAll("/+", "/");
     }
 
-    private boolean isAllowedContentType(String contentType) {
-        return contentType.startsWith("image/") || "application/pdf".equals(contentType);
+    private String rewritePublicUploadUrl(String uploadUrl) {
+        String publicEndpoint = minioProperties.getPublicEndpoint();
+        if (!StringUtils.hasText(publicEndpoint) || !StringUtils.hasText(uploadUrl)) {
+            return uploadUrl;
+        }
+
+        try {
+            URI publicBase = URI.create(publicEndpoint);
+            URI signedUrl = URI.create(uploadUrl);
+            String mergedPath = mergePath(publicBase.getPath(), signedUrl.getPath());
+            return new URI(
+                    publicBase.getScheme(),
+                    publicBase.getUserInfo(),
+                    publicBase.getHost(),
+                    publicBase.getPort(),
+                    mergedPath,
+                    signedUrl.getQuery(),
+                    signedUrl.getFragment()
+            ).toString();
+        } catch (IllegalArgumentException | java.net.URISyntaxException exception) {
+            return uploadUrl;
+        }
     }
 
-    private String detectContentType(String contentType, String originalFileName) {
-        String normalizedContentType = normalizeContentType(contentType);
-        if (!"application/octet-stream".equals(normalizedContentType)) {
-            return normalizedContentType;
+    private String mergePath(String basePath, String signedPath) {
+        String normalizedBase = StringUtils.hasText(basePath) && !"/".equals(basePath)
+                ? basePath.replaceAll("/+$", "")
+                : "";
+        String normalizedSigned = StringUtils.hasText(signedPath) ? signedPath : "";
+        if (!normalizedSigned.startsWith("/")) {
+            normalizedSigned = "/" + normalizedSigned;
         }
+        return normalizedBase + normalizedSigned;
+    }
 
+    private String resolveAllowedContentType(String originalFileName, String contentType) {
         String extension = extractExtension(originalFileName);
-        if (IMAGE_FILE_EXTENSIONS.contains(extension)) {
-            return "image/" + ("jpg".equals(extension) ? "jpeg" : extension);
-        }
-        if (PDF_FILE_EXTENSIONS.contains(extension)) {
-            return "application/pdf";
+        String inferredContentType = inferContentTypeFromExtension(extension);
+        if (inferredContentType == null) {
+            throw new BadRequestException("Only JPG, PNG, WEBP, GIF, BMP images and PDF files are allowed.");
         }
 
-        return normalizedContentType;
+        String normalizedContentType = normalizeContentType(contentType);
+        if ("application/octet-stream".equals(normalizedContentType)) {
+            return inferredContentType;
+        }
+        if (!inferredContentType.equals(normalizedContentType)) {
+            throw new BadRequestException("File extension and content type must match.");
+        }
+        return inferredContentType;
+    }
+
+    private String inferContentTypeFromExtension(String extension) {
+        return switch (extension) {
+            case "jpg", "jpeg" -> "image/jpeg";
+            case "png" -> "image/png";
+            case "webp" -> "image/webp";
+            case "gif" -> "image/gif";
+            case "bmp" -> "image/bmp";
+            case "pdf" -> "application/pdf";
+            default -> null;
+        };
+    }
+
+    private void validateBinarySignature(MultipartFile file, String contentType) {
+        try (InputStream inputStream = file.getInputStream()) {
+            byte[] header = readHeader(inputStream);
+            if (!matchesSignature(header, contentType)) {
+                throw new BadRequestException("Uploaded file contents do not match the file type.");
+            }
+        } catch (IOException exception) {
+            throw new BadRequestException("Failed to read the uploaded file.");
+        }
+    }
+
+    private void validateStoredObjectSignature(String objectKey, String contentType) {
+        try (InputStream inputStream = minioClient.getObject(
+                GetObjectArgs.builder()
+                        .bucket(minioProperties.getBucket_cloud())
+                        .object(objectKey)
+                        .build())) {
+            byte[] header = readHeader(inputStream);
+            if (!matchesSignature(header, contentType)) {
+                throw new BadRequestException("Uploaded file contents do not match the file type.");
+            }
+        } catch (BadRequestException exception) {
+            throw exception;
+        } catch (Exception exception) {
+            throw new BadRequestException("Uploaded file verification failed.");
+        }
+    }
+
+    private byte[] readHeader(InputStream inputStream) throws IOException {
+        byte[] header = new byte[HEADER_BYTES];
+        int offset = 0;
+        while (offset < HEADER_BYTES) {
+            int read = inputStream.read(header, offset, HEADER_BYTES - offset);
+            if (read < 0) {
+                break;
+            }
+            offset += read;
+        }
+        return Arrays.copyOf(header, offset);
+    }
+
+    private boolean matchesSignature(byte[] header, String contentType) {
+        return switch (contentType) {
+            case "image/jpeg" -> startsWith(header, (byte) 0xFF, (byte) 0xD8, (byte) 0xFF);
+            case "image/png" -> startsWith(header, (byte) 0x89, (byte) 0x50, (byte) 0x4E, (byte) 0x47,
+                    (byte) 0x0D, (byte) 0x0A, (byte) 0x1A, (byte) 0x0A);
+            case "image/gif" -> startsWith(header, "GIF87a") || startsWith(header, "GIF89a");
+            case "image/bmp" -> startsWith(header, "BM");
+            case "image/webp" -> startsWith(header, "RIFF") && hasAsciiAt(header, 8, "WEBP");
+            case "application/pdf" -> startsWith(header, "%PDF-");
+            default -> false;
+        };
+    }
+
+    private boolean startsWith(byte[] header, String expected) {
+        return startsWith(header, expected.getBytes(java.nio.charset.StandardCharsets.US_ASCII));
+    }
+
+    private boolean startsWith(byte[] header, byte... expected) {
+        if (header.length < expected.length) {
+            return false;
+        }
+        for (int index = 0; index < expected.length; index += 1) {
+            if (header[index] != expected[index]) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private boolean hasAsciiAt(byte[] header, int offset, String expected) {
+        byte[] bytes = expected.getBytes(java.nio.charset.StandardCharsets.US_ASCII);
+        if (header.length < offset + bytes.length) {
+            return false;
+        }
+        for (int index = 0; index < bytes.length; index += 1) {
+            if (header[offset + index] != bytes[index]) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private String extractExtension(String fileName) {
@@ -536,19 +657,8 @@ public class TravelMediaStorageService {
         return fileName.substring(dotIndex + 1).trim().toLowerCase(Locale.ROOT);
     }
 
-    private String buildStorageErrorMessage(String defaultMessage, Exception exception) {
-        if (exception instanceof ResponseStatusException responseStatusException) {
-            String statusReason = responseStatusException.getReason();
-            if (StringUtils.hasText(statusReason)) {
-                return defaultMessage + " (" + statusReason + ")";
-            }
-            return defaultMessage + " (" + responseStatusException.getStatusCode() + ")";
-        }
-        String detail = exception.getMessage();
-        if (!StringUtils.hasText(detail)) {
-            return defaultMessage;
-        }
-        return defaultMessage + " (" + detail + ")";
+    private String buildStorageErrorMessage(String defaultMessage) {
+        return defaultMessage;
     }
 
     public record StoredTravelMedia(

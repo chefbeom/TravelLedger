@@ -34,13 +34,13 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(AuthenticationException.class)
     public ResponseEntity<Map<String, Object>> handleAuthentication(AuthenticationException exception) {
         log.warn("Authentication failed: {}", exception.getMessage());
-        return buildResponse(HttpStatus.UNAUTHORIZED, "Login information is invalid.", null);
+        return buildResponse(HttpStatus.UNAUTHORIZED, "로그인 정보가 올바르지 않습니다.", null);
     }
 
     @ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<Map<String, Object>> handleAccessDenied(AccessDeniedException exception) {
         log.warn("Access denied: {}", exception.getMessage());
-        return buildResponse(HttpStatus.FORBIDDEN, "Access is denied.", null);
+        return buildResponse(HttpStatus.FORBIDDEN, "접근 권한이 없습니다.", null);
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
@@ -50,25 +50,31 @@ public class GlobalExceptionHandler {
             details.put(fieldError.getField(), fieldError.getDefaultMessage());
         }
         log.warn("Validation failed: {}", details);
-        return buildResponse(HttpStatus.BAD_REQUEST, "Please check the request values.", details);
+        return buildResponse(HttpStatus.BAD_REQUEST, "요청 값을 확인해 주세요.", details);
     }
 
     @ExceptionHandler(ConstraintViolationException.class)
     public ResponseEntity<Map<String, Object>> handleConstraintViolation(ConstraintViolationException exception) {
         log.warn("Constraint violation: {}", exception.getMessage());
-        return buildResponse(HttpStatus.BAD_REQUEST, exception.getMessage(), null);
+        return buildResponse(HttpStatus.BAD_REQUEST, "요청 값을 확인해 주세요.", null);
+    }
+
+    @ExceptionHandler(TooManyRequestsException.class)
+    public ResponseEntity<Map<String, Object>> handleTooManyRequests(TooManyRequestsException exception) {
+        log.warn("Too many requests: {}", exception.getMessage());
+        return buildResponse(HttpStatus.TOO_MANY_REQUESTS, exception.getMessage(), null);
     }
 
     @ExceptionHandler(NoResourceFoundException.class)
     public ResponseEntity<Map<String, Object>> handleNoResourceFound(NoResourceFoundException exception) {
         log.warn("Static resource not found: {}", exception.getMessage());
-        return buildResponse(HttpStatus.NOT_FOUND, exception.getMessage(), null);
+        return buildResponse(HttpStatus.NOT_FOUND, "요청한 리소스를 찾을 수 없습니다.", null);
     }
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<Map<String, Object>> handleUnexpected(Exception exception) {
         log.error("Unhandled exception", exception);
-        return buildResponse(HttpStatus.INTERNAL_SERVER_ERROR, exception.getMessage(), null);
+        return buildResponse(HttpStatus.INTERNAL_SERVER_ERROR, "요청을 처리하는 중 문제가 발생했습니다.", null);
     }
 
     private ResponseEntity<Map<String, Object>> buildResponse(HttpStatus status, String message, Object details) {

@@ -1,6 +1,12 @@
 <script setup>
 import { computed, onMounted, reactive, ref, watch } from 'vue'
-import { createFamilyAlbum, createFamilyCategory, fetchFamilyAlbumBootstrap, uploadFamilyMedia } from '../lib/api'
+import {
+  createFamilyAlbum,
+  createFamilyCategory,
+  fetchFamilyAlbumBootstrap,
+  searchFamilyUsers,
+  uploadFamilyMedia,
+} from '../lib/api'
 
 const timestampFormatter = new Intl.DateTimeFormat('ko-KR', {
   year: 'numeric',
@@ -10,17 +16,24 @@ const timestampFormatter = new Intl.DateTimeFormat('ko-KR', {
   minute: '2-digit',
 })
 
+const FAMILY_MEDIA_ACCEPT = '.jpg,.jpeg,.png,.webp,.gif,.bmp,.mp4,.m4v,.mov,.webm'
+const DEFAULT_MEMBER_SEARCH_MESSAGE = '이름이나 로그인 ID를 2글자 이상 입력해 검색하세요.'
+
 const isLoading = ref(false)
 const isCreatingCategory = ref(false)
 const isUploading = ref(false)
 const isCreatingAlbum = ref(false)
+const isSearchingUsers = ref(false)
 const uploadInputKey = ref(0)
 const successMessage = ref('')
 const errorMessage = ref('')
+const memberSearchQuery = ref('')
+const memberSearchMessage = ref(DEFAULT_MEMBER_SEARCH_MESSAGE)
+const memberSearchResults = ref([])
+const selectedInvitees = ref([])
 
 const bootstrap = reactive({
   currentUserId: null,
-  users: [],
   categories: [],
   mediaItems: [],
   albums: [],
@@ -33,7 +46,6 @@ const selectedMediaIds = ref([])
 const categoryForm = reactive({
   name: '',
   description: '',
-  memberUserIds: [],
 })
 
 const uploadForm = reactive({
@@ -46,13 +58,7 @@ const albumForm = reactive({
   description: '',
 })
 
-const mediaById = computed(() => {
-  return new Map((bootstrap.mediaItems ?? []).map((item) => [String(item.id), item]))
-})
-
-const otherUsers = computed(() => {
-  return (bootstrap.users ?? []).filter((user) => user.id !== bootstrap.currentUserId)
-})
+const mediaById = computed(() => new Map((bootstrap.mediaItems ?? []).map((item) => [String(item.id), item])))
 
 const selectedCategory = computed(() => {
   return (bootstrap.categories ?? []).find((category) => String(category.id) === String(selectedCategoryId.value)) ?? null
@@ -89,14 +95,9 @@ const selectedAlbumMedia = computed(() => {
 })
 
 const selectedMediaCount = computed(() => selectedMediaIds.value.length)
-
-const totalVideoCount = computed(() => {
-  return (bootstrap.mediaItems ?? []).filter((item) => item.mediaType === 'VIDEO').length
-})
-
-const totalPhotoCount = computed(() => {
-  return (bootstrap.mediaItems ?? []).filter((item) => item.mediaType === 'PHOTO').length
-})
+const selectedInviteeCount = computed(() => selectedInvitees.value.length)
+const totalVideoCount = computed(() => (bootstrap.mediaItems ?? []).filter((item) => item.mediaType === 'VIDEO').length)
+const totalPhotoCount = computed(() => (bootstrap.mediaItems ?? []).filter((item) => item.mediaType === 'PHOTO').length)
 
 watch(
   () => bootstrap.categories,
@@ -146,7 +147,6 @@ async function loadBootstrap(preferredCategoryId = selectedCategoryId.value, pre
   try {
     const response = await fetchFamilyAlbumBootstrap()
     bootstrap.currentUserId = response.currentUserId
-    bootstrap.users = response.users ?? []
     bootstrap.categories = response.categories ?? []
     bootstrap.mediaItems = response.mediaItems ?? []
     bootstrap.albums = response.albums ?? []
@@ -163,14 +163,50 @@ async function loadBootstrap(preferredCategoryId = selectedCategoryId.value, pre
   }
 }
 
-function toggleMember(userId) {
-  const key = String(userId)
-  if (categoryForm.memberUserIds.includes(key)) {
-    categoryForm.memberUserIds = categoryForm.memberUserIds.filter((item) => item !== key)
+async function handleSearchUsers() {
+  const query = memberSearchQuery.value.trim()
+  if (query.length < 2) {
+    memberSearchResults.value = []
+    memberSearchMessage.value = '검색어를 2글자 이상 입력해 주세요.'
     return
   }
 
-  categoryForm.memberUserIds = [...categoryForm.memberUserIds, key]
+  isSearchingUsers.value = true
+  memberSearchMessage.value = '사용자를 검색하고 있습니다.'
+
+  try {
+    const results = await searchFamilyUsers(query)
+    memberSearchResults.value = results
+    memberSearchMessage.value = results.length
+      ? `${results.length}명의 사용자를 찾았습니다.`
+      : '검색 결과가 없습니다.'
+  } catch (error) {
+    memberSearchResults.value = []
+    memberSearchMessage.value = error.message
+  } finally {
+    isSearchingUsers.value = false
+  }
+}
+
+function isSelectedInvitee(userId) {
+  return selectedInvitees.value.some((user) => String(user.id) === String(userId))
+}
+
+function toggleMember(user) {
+  const key = String(user.id)
+  if (isSelectedInvitee(key)) {
+    selectedInvitees.value = selectedInvitees.value.filter((item) => String(item.id) !== key)
+    return
+  }
+
+  selectedInvitees.value = [...selectedInvitees.value, user]
+}
+
+function resetMemberSearch() {
+  memberSearchQuery.value = ''
+  memberSearchResults.value = []
+  selectedInvitees.value = []
+  memberSearchMessage.value = DEFAULT_MEMBER_SEARCH_MESSAGE
 }
 
 function handlePickFiles(event) {
@@ -199,12 +235,12 @@ async function handleCreateCategory() {
     const created = await createFamilyCategory({
       name: categoryForm.name,
       description: categoryForm.description,
-      memberUserIds: categoryForm.memberUserIds.map((item) => Number(item)),
+      memberUserIds: selectedInvitees.value.map((item) => Number(item.id)),
     })
 
     categoryForm.name = ''
     categoryForm.description = ''
-    categoryForm.memberUserIds = []
+    resetMemberSearch()
     await loadBootstrap(created.id, '')
     selectedCategoryId.value = String(created.id)
     setFeedback('가족 카테고리를 만들었습니다.')
@@ -217,7 +253,7 @@ async function handleCreateCategory() {
 
 async function handleUploadMedia() {
   if (!selectedCategoryId.value) {
-    setFeedback('', '먼저 업로드할 가족 카테고리를 선택하세요.')
+    setFeedback('', '먼저 업로드할 가족 카테고리를 선택해 주세요.')
     return
   }
 
@@ -240,7 +276,7 @@ async function handleUploadMedia() {
 
 async function handleCreateAlbum() {
   if (!selectedCategoryId.value) {
-    setFeedback('', '먼저 가족 카테고리를 선택하세요.')
+    setFeedback('', '먼저 가족 카테고리를 선택해 주세요.')
     return
   }
 
@@ -260,7 +296,7 @@ async function handleCreateAlbum() {
     selectedMediaIds.value = []
     await loadBootstrap(selectedCategoryId.value, created.id)
     selectedAlbumId.value = String(created.id)
-    setFeedback('선택한 사진과 동영상을 새 앨범으로 묶었습니다.')
+    setFeedback('선택한 파일로 앨범을 만들었습니다.')
   } catch (error) {
     setFeedback('', error.message)
   } finally {
@@ -300,7 +336,7 @@ onMounted(() => {
       <div class="panel__header">
         <div>
           <h2>가족 사진첩</h2>
-          <p>여행 사진 페이지와 분리된 독립 업로드 공간입니다. 가족 카테고리를 만들고, 구성원을 넣고, 사진과 동영상을 시간순으로 공유할 수 있습니다.</p>
+          <p>가족별 카테고리를 만들고, 검색으로 멤버를 초대한 뒤 사진과 동영상을 안전하게 공유하세요.</p>
         </div>
         <span class="panel__badge">{{ bootstrap.categories.length }}개 카테고리</span>
       </div>
@@ -308,17 +344,17 @@ onMounted(() => {
         <article class="summary-card family-album-summary-card">
           <span>전체 사진</span>
           <strong>{{ totalPhotoCount }}장</strong>
-          <small>가족별로 공유되는 사진</small>
+          <small>공유 가능한 사진 파일</small>
         </article>
         <article class="summary-card family-album-summary-card">
           <span>전체 동영상</span>
           <strong>{{ totalVideoCount }}개</strong>
-          <small>같은 흐름으로 업로드됩니다</small>
+          <small>허용된 형식만 업로드됩니다</small>
         </article>
         <article class="summary-card family-album-summary-card">
-          <span>앨범 묶음</span>
+          <span>앨범 모음</span>
           <strong>{{ bootstrap.albums.length }}개</strong>
-          <small>선택한 파일만 그룹화</small>
+          <small>선택한 파일로 만든 묶음</small>
         </article>
       </div>
     </section>
@@ -330,9 +366,9 @@ onMounted(() => {
       <div class="panel__header">
         <div>
           <h2>가족 카테고리</h2>
-          <p>카테고리를 만들 때 구성원을 같이 넣고, 그 카테고리 안에서 사진과 동영상을 같이 봅니다.</p>
+          <p>초대한 멤버만 접근할 수 있는 카테고리 단위로 파일을 나눠 관리합니다.</p>
         </div>
-        <span class="panel__badge">{{ selectedCategory ? `${selectedCategory.memberCount}명 구성원` : '카테고리 선택 전' }}</span>
+        <span class="panel__badge">{{ selectedCategory ? `${selectedCategory.memberCount}명 참여 중` : '카테고리 선택 필요' }}</span>
       </div>
 
       <div v-if="bootstrap.categories.length" class="family-category-grid">
@@ -346,39 +382,63 @@ onMounted(() => {
         >
           <strong>{{ category.name }}</strong>
           <small>{{ category.ownerName }} 가족</small>
-          <span>{{ category.mediaCount }}개 파일 · {{ category.memberCount }}명</span>
+          <span>{{ category.mediaCount }}개 파일, {{ category.memberCount }}명</span>
         </button>
       </div>
-      <p v-else class="panel__empty">아직 만든 가족 카테고리가 없습니다. 먼저 카테고리를 만들면 업로드를 시작할 수 있습니다.</p>
+      <p v-else class="panel__empty">아직 만든 가족 카테고리가 없습니다. 먼저 카테고리를 만든 뒤 업로드를 시작해 보세요.</p>
     </section>
 
     <div class="family-album-layout">
       <section class="panel">
         <div class="panel__header">
           <div>
-            <h2>새 가족 카테고리 만들기</h2>
-            <p>이름을 정하고, 같이 볼 사용자를 체크하세요. 본인은 자동으로 포함됩니다.</p>
+            <h2>새 가족 카테고리</h2>
+            <p>멤버 전체 목록은 노출하지 않고, 검색으로 필요한 사용자만 찾아 초대할 수 있습니다.</p>
           </div>
         </div>
 
         <form class="stack-form" @submit.prevent="handleCreateCategory">
-          <input v-model="categoryForm.name" type="text" placeholder="예: 부모님 가족, 형제 가족, 여름휴가 모임" />
-          <textarea v-model="categoryForm.description" rows="4" placeholder="이 카테고리를 어떤 용도로 쓸지 적어두면 나중에 구분하기 편합니다." />
-          <div class="family-member-picker">
+          <input v-model="categoryForm.name" type="text" placeholder="예: 부모님 가족사진, 주말 모임, 2026 설날" />
+          <textarea v-model="categoryForm.description" rows="4" placeholder="카테고리 설명을 적어두면 나중에 구분하기 편합니다." />
+          <div class="stack-form">
+            <input
+              v-model="memberSearchQuery"
+              type="text"
+              placeholder="이름 또는 로그인 ID로 검색"
+              @keydown.enter.prevent="handleSearchUsers"
+            />
+            <button class="button button--ghost" type="button" :disabled="isSearchingUsers" @click="handleSearchUsers">
+              {{ isSearchingUsers ? '검색 중' : '사용자 검색' }}
+            </button>
+            <small>{{ memberSearchMessage }}</small>
+          </div>
+          <div v-if="selectedInviteeCount" class="family-member-picker">
             <button
-              v-for="user in otherUsers"
+              v-for="user in selectedInvitees"
+              :key="`selected-${user.id}`"
+              type="button"
+              class="family-member-chip family-member-chip--active"
+              @click="toggleMember(user)"
+            >
+              <strong>{{ user.displayName }}</strong>
+              <small>@{{ user.loginIdHint }}</small>
+            </button>
+          </div>
+          <div v-if="memberSearchResults.length" class="family-member-picker">
+            <button
+              v-for="user in memberSearchResults"
               :key="user.id"
               type="button"
               class="family-member-chip"
-              :class="{ 'family-member-chip--active': categoryForm.memberUserIds.includes(String(user.id)) }"
-              @click="toggleMember(user.id)"
+              :class="{ 'family-member-chip--active': isSelectedInvitee(user.id) }"
+              @click="toggleMember(user)"
             >
               <strong>{{ user.displayName }}</strong>
-              <small>@{{ user.loginId }}</small>
+              <small>@{{ user.loginIdHint }}</small>
             </button>
           </div>
           <button class="button button--primary" type="submit" :disabled="isCreatingCategory">
-            {{ isCreatingCategory ? '카테고리 생성 중...' : '가족 카테고리 만들기' }}
+            {{ isCreatingCategory ? '카테고리 생성 중' : '가족 카테고리 만들기' }}
           </button>
         </form>
       </section>
@@ -386,34 +446,34 @@ onMounted(() => {
       <section class="panel">
         <div class="panel__header">
           <div>
-            <h2>사진·동영상 업로드</h2>
-            <p>업로드한 파일은 선택한 가족 카테고리 안에서 기본 공유되며, 시간순으로 정렬됩니다.</p>
+            <h2>사진과 동영상 업로드</h2>
+            <p>허용된 형식과 실제 파일 내용이 일치하는 경우에만 저장됩니다.</p>
           </div>
           <span class="panel__badge">{{ selectedCategory ? selectedCategory.name : '카테고리 선택 필요' }}</span>
         </div>
 
         <form class="stack-form" @submit.prevent="handleUploadMedia">
           <select v-model="selectedCategoryId">
-            <option value="" disabled>업로드할 가족 카테고리를 선택하세요</option>
+            <option value="" disabled>업로드할 가족 카테고리를 선택해 주세요</option>
             <option v-for="category in bootstrap.categories" :key="category.id" :value="String(category.id)">
               {{ category.name }}
             </option>
           </select>
-          <textarea v-model="uploadForm.caption" rows="3" placeholder="파일에 공통으로 붙일 짧은 설명이 있으면 적어주세요." />
+          <textarea v-model="uploadForm.caption" rows="3" placeholder="업로드 파일에 붙일 공통 설명을 입력해 주세요." />
           <input
             :key="uploadInputKey"
             type="file"
-            accept="image/*,video/*"
+            :accept="FAMILY_MEDIA_ACCEPT"
             multiple
             @change="handlePickFiles"
           />
           <div class="travel-file-chip-row">
-            <span class="chip chip--neutral">기본 공유</span>
+            <span class="chip chip--neutral">공유 기본값</span>
             <span class="chip chip--neutral">시간순 정렬</span>
-            <span class="chip chip--neutral">사진·동영상 동시 업로드</span>
+            <span class="chip chip--neutral">허용 형식: JPG PNG WEBP GIF BMP MP4 M4V MOV WEBM</span>
           </div>
           <button class="button button--primary" type="submit" :disabled="isUploading || !bootstrap.categories.length">
-            {{ isUploading ? '업로드 중...' : '파일 업로드' }}
+            {{ isUploading ? '업로드 중' : '파일 업로드' }}
           </button>
         </form>
       </section>
@@ -424,7 +484,7 @@ onMounted(() => {
         <div class="panel__header">
           <div>
             <h2>공유 파일 라이브러리</h2>
-            <p>현재 선택한 가족 카테고리의 파일을 시간순으로 확인하고, 앨범에 넣을 파일을 바로 선택할 수 있습니다.</p>
+            <p>현재 카테고리의 파일을 확인하고, 앨범에 담을 항목을 바로 선택할 수 있습니다.</p>
           </div>
           <span class="panel__badge">{{ categoryMediaItems.length }}개 파일</span>
         </div>
@@ -459,7 +519,7 @@ onMounted(() => {
             :class="{ 'family-media-card--selected': isSelectedMedia(media.id) }"
           >
             <button class="family-media-card__select" type="button" @click="toggleMediaSelection(media.id)">
-              {{ isSelectedMedia(media.id) ? '선택됨' : '앨범에 넣기' }}
+              {{ isSelectedMedia(media.id) ? '선택됨' : '앨범에 담기' }}
             </button>
             <img v-if="media.mediaType === 'PHOTO'" :src="media.contentUrl" :alt="media.originalFileName" class="family-media-card__preview" />
             <video v-else class="family-media-card__preview" controls preload="metadata" playsinline>
@@ -471,7 +531,7 @@ onMounted(() => {
                 <span class="chip chip--neutral">{{ media.ownerName }}</span>
               </div>
               <strong>{{ media.originalFileName }}</strong>
-              <small>{{ media.caption || '기본 공유 파일' }}</small>
+              <small>{{ media.caption || '공유 파일' }}</small>
               <small>{{ formatTimestamp(media.capturedAt || media.uploadedAt) }}</small>
             </div>
           </article>
@@ -484,16 +544,16 @@ onMounted(() => {
         <div class="panel__header">
           <div>
             <h2>앨범 만들기</h2>
-            <p>보고 싶은 사진과 동영상만 골라 한 앨범으로 묶어두면 한 번에 볼 수 있습니다.</p>
+            <p>보고 싶은 사진과 동영상만 골라 별도의 앨범으로 묶어둘 수 있습니다.</p>
           </div>
           <span class="panel__badge">{{ selectedMediaCount }}개 선택</span>
         </div>
 
         <form class="stack-form" @submit.prevent="handleCreateAlbum">
-          <input v-model="albumForm.title" type="text" placeholder="예: 2026 설날 가족 모임, 강릉 1박 2일" />
-          <textarea v-model="albumForm.description" rows="4" placeholder="앨범 설명이나 같이 남길 메모를 적어주세요." />
+          <input v-model="albumForm.title" type="text" placeholder="예: 2026 설날 모임, 강릉 1박 2일" />
+          <textarea v-model="albumForm.description" rows="4" placeholder="앨범 설명이나 메모를 적어 주세요." />
           <button class="button button--primary" type="submit" :disabled="isCreatingAlbum || !selectedMediaCount">
-            {{ isCreatingAlbum ? '앨범 생성 중...' : '선택 파일로 앨범 만들기' }}
+            {{ isCreatingAlbum ? '앨범 생성 중' : '선택 파일로 앨범 만들기' }}
           </button>
         </form>
 
@@ -507,7 +567,7 @@ onMounted(() => {
             @click="openAlbum(album.id)"
           >
             <strong>{{ album.title }}</strong>
-            <small>{{ album.itemCount }}개 파일 · {{ album.ownerName }}</small>
+            <small>{{ album.itemCount }}개 파일, {{ album.ownerName }}</small>
           </button>
         </div>
         <p v-if="!categoryAlbums.length" class="panel__empty">이 카테고리에는 아직 앨범이 없습니다.</p>

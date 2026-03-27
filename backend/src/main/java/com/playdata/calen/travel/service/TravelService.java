@@ -1080,6 +1080,8 @@ public class TravelService {
             String caption,
             TravelMediaStorageService.StoredTravelMedia storedFile
     ) {
+        validateStoredMediaType(mediaType, storedFile.contentType());
+
         TravelMediaAsset asset = new TravelMediaAsset();
         asset.setPlan(record.getPlan());
         asset.setRecord(record);
@@ -1092,6 +1094,18 @@ public class TravelService {
         asset.setFileSize(storedFile.fileSize());
         asset.setCaption(trimToNull(caption));
         return travelMediaAssetRepository.save(asset);
+    }
+
+    private void validateStoredMediaType(TravelMediaType mediaType, String contentType) {
+        boolean isImage = contentType != null && contentType.startsWith("image/");
+        boolean isPdf = "application/pdf".equals(contentType);
+
+        if ((mediaType == null || mediaType == TravelMediaType.PHOTO) && !isImage) {
+            throw new BadRequestException("Photos must use JPG, PNG, WEBP, GIF, or BMP files.");
+        }
+        if (mediaType == TravelMediaType.RECEIPT && !(isImage || isPdf)) {
+            throw new BadRequestException("Receipts must use JPG, PNG, WEBP, GIF, BMP, or PDF files.");
+        }
     }
 
     private <T> BigDecimal sumAmountKrw(Collection<T> items, Function<T, BigDecimal> extractor) {

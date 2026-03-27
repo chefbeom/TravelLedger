@@ -3,7 +3,7 @@ spring:
     name: calen-backend
   datasource:
     url: ${DB_URL:jdbc:h2:mem:calen;MODE=MySQL;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE}
-    driver-class-name: ${DB_SERVER:org.h2.Driver}
+    driver-class-name: ${DB_DRIVER:${DB_SERVER:org.h2.Driver}}
     username: ${DB_ID:sa}
     password: ${DB_PASS:}
   jpa:
@@ -27,6 +27,7 @@ spring:
 
 minio:
   endpoint: ${MINIO_API:}
+  public-endpoint: ${MINIO_PUBLIC_API:}
   access-key: ${MINIO_NAME:}
   secret-key: ${MINIO_SECRET:}
   bucket_cloud: ${MINIO_CLOUD_BUCKET:budgetjourneybucket}
@@ -34,11 +35,23 @@ minio:
   presigned-url-expiry-seconds: ${MINIO_PRESIGNED_URL_EXPIRY_SECONDS:6000}
 
 server:
+  forward-headers-strategy: framework
   servlet:
     encoding:
       charset: UTF-8
       enabled: true
       force: true
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: never
 
 app:
   security:
@@ -52,6 +65,7 @@ app:
     exchange-rate-cache-minutes: ${TRAVEL_EXCHANGE_RATE_CACHE_MINUTES:30}
     media-storage-path: ${TRAVEL_MEDIA_STORAGE_PATH:${user.dir}/uploads/travel-media}
     media-object-prefix: ${TRAVEL_MEDIA_OBJECT_PREFIX:travel-media}
+    presigned-upload-enabled: ${TRAVEL_PRESIGNED_UPLOAD_ENABLED:false}
   family:
     media-storage-path: ${FAMILY_MEDIA_STORAGE_PATH:${user.dir}/uploads/family-media}
     media-object-prefix: ${FAMILY_MEDIA_OBJECT_PREFIX:family-media}

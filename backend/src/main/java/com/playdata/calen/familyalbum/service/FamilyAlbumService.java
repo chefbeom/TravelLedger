@@ -17,7 +17,7 @@ import com.playdata.calen.familyalbum.dto.FamilyCategoryCreateRequest;
 import com.playdata.calen.familyalbum.dto.FamilyCategoryMemberResponse;
 import com.playdata.calen.familyalbum.dto.FamilyCategoryResponse;
 import com.playdata.calen.familyalbum.dto.FamilyMediaResponse;
-import com.playdata.calen.familyalbum.dto.FamilyUserOptionResponse;
+import com.playdata.calen.familyalbum.dto.FamilyUserSearchResponse;
 import com.playdata.calen.familyalbum.repository.FamilyAlbumItemRepository;
 import com.playdata.calen.familyalbum.repository.FamilyAlbumRepository;
 import com.playdata.calen.familyalbum.repository.FamilyCategoryMemberRepository;
@@ -36,6 +36,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.Resource;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -85,9 +86,7 @@ public class FamilyAlbumService {
 
         return new FamilyAlbumBootstrapResponse(
                 userId,
-                appUserRepository.findAllByActiveTrueOrderByDisplayNameAscIdAsc().stream()
-                        .map(this::toUserOptionResponse)
-                        .toList(),
+                List.of(),
                 categories.stream()
                         .map(category -> toCategoryResponse(
                                 category,
@@ -105,12 +104,29 @@ public class FamilyAlbumService {
         );
     }
 
+    public List<FamilyUserSearchResponse> searchUsers(Long userId, String query) {
+        appUserService.getRequiredUser(userId);
+
+        String normalizedQuery = normalizeOptionalText(query, 80);
+        if (!StringUtils.hasText(normalizedQuery) || normalizedQuery.length() < 2) {
+            return List.of();
+        }
+
+        return appUserRepository.searchActiveUsersForInvitation(
+                        userId,
+                        normalizedQuery,
+                        PageRequest.of(0, 10)
+                ).stream()
+                .map(this::toUserSearchResponse)
+                .toList();
+    }
+
     @Transactional
     public FamilyCategoryResponse createCategory(Long userId, FamilyCategoryCreateRequest request) {
         AppUser owner = appUserService.getRequiredUser(userId);
         FamilyCategory category = new FamilyCategory();
         category.setOwner(owner);
-        category.setName(normalizeRequiredText(request.name(), "카테고리 이름이 필요합니다.", 120));
+        category.setName(normalizeRequiredText(request.name(), "카테고리 이름은 필수입니다.", 120));
         category.setDescription(normalizeOptionalText(request.description(), 500));
         FamilyCategory savedCategory = familyCategoryRepository.save(category);
 
@@ -127,7 +143,7 @@ public class FamilyAlbumService {
                 .collect(Collectors.toMap(AppUser::getId, Function.identity()));
 
         if (usersById.size() != memberUserIds.size()) {
-            throw new BadRequestException("카테고리에 넣을 수 없는 사용자가 포함되어 있습니다.");
+            throw new BadRequestException("카테고리에 초대할 수 없는 사용자가 포함되어 있습니다.");
         }
 
         List<FamilyCategoryMember> members = memberUserIds.stream()
@@ -158,7 +174,7 @@ public class FamilyAlbumService {
                 .toList();
 
         if (selectedFiles.isEmpty()) {
-            throw new BadRequestException("업로드할 사진이나 동영상을 선택하세요.");
+            throw new BadRequestException("업로드할 사진이나 동영상을 선택해 주세요.");
         }
 
         LocalDateTime now = LocalDateTime.now();
@@ -177,24 +193,24 @@ public class FamilyAlbumService {
         FamilyCategory category = getAccessibleCategory(userId, request.categoryId());
         List<Long> mediaIds = distinctIds(request.mediaIds());
         if (mediaIds.isEmpty()) {
-            throw new BadRequestException("앨범에 넣을 사진이나 동영상을 하나 이상 선택하세요.");
+            throw new BadRequestException("앨범에 담을 사진이나 동영상을 하나 이상 선택해 주세요.");
         }
 
         List<FamilyMediaAsset> mediaAssets = familyMediaAssetRepository.findAllById(mediaIds);
         if (mediaAssets.size() != mediaIds.size()) {
-            throw new NotFoundException("앨범에 넣을 파일을 찾을 수 없습니다.");
+            throw new NotFoundException("앨범에 담을 파일을 찾을 수 없습니다.");
         }
 
         boolean hasDifferentCategory = mediaAssets.stream()
                 .anyMatch(asset -> !Objects.equals(asset.getCategory().getId(), category.getId()));
         if (hasDifferentCategory) {
-            throw new BadRequestException("한 앨범에는 같은 카테고리의 파일만 넣을 수 있습니다.");
+            throw new BadRequestException("앨범에는 같은 카테고리의 파일만 담을 수 있습니다.");
         }
 
         FamilyAlbum album = new FamilyAlbum();
         album.setOwner(owner);
         album.setCategory(category);
-        album.setTitle(normalizeRequiredText(request.title(), "앨범 이름을 입력하세요.", 120));
+        album.setTitle(normalizeRequiredText(request.title(), "앨범 이름을 입력해 주세요.", 120));
         album.setDescription(normalizeOptionalText(request.description(), 500));
         FamilyAlbum savedAlbum = familyAlbumRepository.save(album);
 
@@ -313,12 +329,29 @@ public class FamilyAlbumService {
                 .collect(Collectors.collectingAndThen(Collectors.toCollection(LinkedHashSet::new), List::copyOf));
     }
 
-    private FamilyUserOptionResponse toUserOptionResponse(AppUser user) {
-        return new FamilyUserOptionResponse(
+    private FamilyUserSearchResponse toUserSearchResponse(AppUser user) {
+        return new FamilyUserSearchResponse(
                 user.getId(),
-                user.getLoginId(),
-                user.getDisplayName()
+                user.getDisplayName(),
+                maskLoginId(user.getLoginId())
         );
+    }
+
+    private String maskLoginId(String loginId) {
+        if (!StringUtils.hasText(loginId)) {
+            return "";
+        }
+
+        String normalized = loginId.trim();
+        if (normalized.length() <= 2) {
+            return normalized.charAt(0) + "*";
+        }
+
+        int visibleTailLength = Math.min(2, normalized.length() - 1);
+        String head = normalized.substring(0, 1);
+        String tail = normalized.substring(normalized.length() - visibleTailLength);
+        String middle = "*".repeat(Math.max(1, normalized.length() - (1 + visibleTailLength)));
+        return head + middle + tail;
     }
 
     private FamilyCategoryResponse toCategoryResponse(

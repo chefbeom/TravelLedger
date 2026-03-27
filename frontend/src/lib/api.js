@@ -1,4 +1,42 @@
 const API_BASE = '/api'
+const CSRF_COOKIE_NAME = 'XSRF-TOKEN'
+const CSRF_HEADER_NAME = 'X-XSRF-TOKEN'
+
+function getCookie(name) {
+  return document.cookie
+    .split(';')
+    .map((item) => item.trim())
+    .find((item) => item.startsWith(`${name}=`))
+    ?.slice(name.length + 1) ?? ''
+}
+
+async function ensureCsrfToken() {
+  let token = decodeURIComponent(getCookie(CSRF_COOKIE_NAME))
+  if (token) {
+    return token
+  }
+
+  const response = await fetch(`${API_BASE}/auth/csrf`, {
+    credentials: 'include',
+  })
+
+  if (!response.ok) {
+    throw new Error('CSRF token request failed.')
+  }
+
+  try {
+    const body = await response.json()
+    token = decodeURIComponent(getCookie(CSRF_COOKIE_NAME)) || body.token || ''
+  } catch {
+    token = decodeURIComponent(getCookie(CSRF_COOKIE_NAME))
+  }
+
+  if (!token) {
+    throw new Error('CSRF token is missing.')
+  }
+
+  return token
+}
 
 function buildUrl(path, params = {}) {
   const search = new URLSearchParams()
@@ -15,8 +53,12 @@ function buildUrl(path, params = {}) {
 
 async function request(path, options = {}) {
   const isFormData = typeof FormData !== 'undefined' && options.body instanceof FormData
+  const method = String(options.method || 'GET').toUpperCase()
+  const needsCsrf = !['GET', 'HEAD', 'OPTIONS', 'TRACE'].includes(method)
+  const csrfToken = needsCsrf ? await ensureCsrfToken() : ''
   const headers = {
     ...(!isFormData && options.body ? { 'Content-Type': 'application/json' } : {}),
+    ...(csrfToken ? { [CSRF_HEADER_NAME]: csrfToken } : {}),
     ...(options.headers ?? {}),
   }
 
@@ -287,30 +329,8 @@ function uploadTravelMediaDirect(path, mediaType, files, caption = '', includeMe
   })
 }
 
-function buildUploadFilePayload(file) {
-  return {
-    originalFileName: file.name,
-    contentType: file.type || 'application/octet-stream',
-    fileSize: file.size,
-  }
-}
-
-async function uploadFileToPresignedUrl(upload, file) {
-  const response = await fetch(upload.uploadUrl, {
-    method: upload.method || 'PUT',
-    headers: upload.contentType ? { 'Content-Type': upload.contentType } : undefined,
-    body: file,
-  })
-
-  if (!response.ok) {
-    throw new Error('MinIO direct upload failed. Check MinIO endpoint and CORS settings.')
-  }
-}
-
 async function uploadTravelMediaInternal({
   directPath,
-  presignPath,
-  completePath,
   mediaType,
   files,
   caption = '',
@@ -321,59 +341,12 @@ async function uploadTravelMediaInternal({
     return []
   }
 
-  let prepare
-  try {
-    prepare = await request(presignPath, {
-      method: 'POST',
-      body: JSON.stringify({
-        mediaType,
-        caption,
-        files: selectedFiles.map(buildUploadFilePayload),
-      }),
-    })
-  } catch (error) {
-    if (error.status && error.status >= 400) {
-      return uploadTravelMediaDirect(directPath, mediaType, selectedFiles, caption, includeMediaTypeInDirect)
-    }
-    throw error
-  }
-
-  if (prepare.uploadMode !== 'PRESIGNED') {
-    return uploadTravelMediaDirect(directPath, mediaType, selectedFiles, caption, includeMediaTypeInDirect)
-  }
-
-  if (!Array.isArray(prepare.uploads) || prepare.uploads.length !== selectedFiles.length) {
-    throw new Error('Upload ticket response is invalid.')
-  }
-
-  try {
-    await Promise.all(
-      prepare.uploads.map((upload, index) => uploadFileToPresignedUrl(upload, selectedFiles[index])),
-    )
-
-    return await request(completePath, {
-      method: 'POST',
-      body: JSON.stringify({
-        mediaType,
-        caption,
-        files: prepare.uploads.map((upload) => ({
-          objectKey: upload.objectKey,
-          originalFileName: upload.originalFileName,
-          contentType: upload.contentType,
-          fileSize: upload.fileSize,
-        })),
-      }),
-    })
-  } catch (error) {
-    return uploadTravelMediaDirect(directPath, mediaType, selectedFiles, caption, includeMediaTypeInDirect)
-  }
+  return uploadTravelMediaDirect(directPath, mediaType, selectedFiles, caption, includeMediaTypeInDirect)
 }
 
 export async function uploadTravelRecordMedia(recordId, mediaType, files, caption = '') {
   return uploadTravelMediaInternal({
     directPath: `/travel/records/${recordId}/media`,
-    presignPath: `/travel/records/${recordId}/media/presign`,
-    completePath: `/travel/records/${recordId}/media/complete`,
     mediaType,
     files,
     caption,
@@ -384,8 +357,6 @@ export async function uploadTravelRecordMedia(recordId, mediaType, files, captio
 export async function uploadTravelMemoryMedia(memoryId, files, caption = '') {
   return uploadTravelMediaInternal({
     directPath: `/travel/memories/${memoryId}/media`,
-    presignPath: `/travel/memories/${memoryId}/media/presign`,
-    completePath: `/travel/memories/${memoryId}/media/complete`,
     mediaType: 'PHOTO',
     files,
     caption,
@@ -447,6 +418,10 @@ export function deleteTravelRoute(routeId) {
 
 export function fetchFamilyAlbumBootstrap() {
   return request('/family-album/bootstrap')
+}
+
+export function searchFamilyUsers(query) {
+  return request(buildUrl('/family-album/users/search', { q: query }).replace(API_BASE, ''))
 }
 
 export function createFamilyCategory(payload) {

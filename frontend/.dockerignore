@@ -1,0 +1,5 @@
+node_modules
+dist
+.git.frontend-backup
+.script-check
+.vscode

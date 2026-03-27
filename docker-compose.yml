@@ -1,0 +1,139 @@
+name: ${COMPOSE_PROJECT_NAME:-calen}
+
+services:
+  mariadb:
+    image: mariadb:11.4
+    restart: unless-stopped
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+    environment:
+      TZ: ${TZ:-Asia/Seoul}
+      MARIADB_DATABASE: ${DB_NAME:-calen}
+      MARIADB_USER: ${DB_USER:-calen}
+      MARIADB_PASSWORD: ${DB_PASSWORD:-calen1234}
+      MARIADB_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-change-me-db-root-password}
+    volumes:
+      - mariadb-data:/var/lib/mysql
+    networks:
+      - calen-internal
+    healthcheck:
+      test: ["CMD-SHELL", "mariadb-admin ping -h 127.0.0.1 -uroot -p$${MARIADB_ROOT_PASSWORD} --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  minio:
+    image: minio/minio:latest
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      TZ: ${TZ:-Asia/Seoul}
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-change-me-minio-password}
+      MINIO_BROWSER_REDIRECT_URL: ${MINIO_CONSOLE_EXTERNAL_URL:-http://localhost:9001}
+    ports:
+      - "${MINIO_API_EXTERNAL_PORT:-9000}:9000"
+      - "${MINIO_CONSOLE_EXTERNAL_PORT:-9001}:9001"
+    volumes:
+      - minio-data:/data
+    networks:
+      - calen-internal
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:9000/minio/health/live || curl -fsS http://127.0.0.1:9000/minio/health/live >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  minio-init:
+    image: minio/mc:latest
+    restart: "no"
+    depends_on:
+      minio:
+        condition: service_started
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        until mc alias set local ${MINIO_API_INTERNAL_URL:-http://minio:9000} ${MINIO_ROOT_USER:-minioadmin} ${MINIO_ROOT_PASSWORD:-change-me-minio-password}; do
+          echo "Waiting for MinIO..."
+          sleep 2
+        done
+        mc mb --ignore-existing local/${MINIO_CLOUD_BUCKET:-budgetjourneybucket}
+    networks:
+      - calen-internal
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      mariadb:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+    environment:
+      TZ: ${TZ:-Asia/Seoul}
+      DB_URL: jdbc:mariadb://${DB_INTERNAL_HOST:-mariadb}:${DB_INTERNAL_PORT:-3306}/${DB_NAME:-calen}?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Seoul
+      DB_DRIVER: org.mariadb.jdbc.Driver
+      DB_ID: ${DB_USER:-calen}
+      DB_PASS: ${DB_PASSWORD:-calen1234}
+      JWT_KEY: ${JWT_KEY:-change-me-remember-me-key}
+      APP_SEED_ENABLED: ${APP_SEED_ENABLED:-true}
+      H2_CONSOLE_ENABLED: ${H2_CONSOLE_ENABLED:-false}
+      MINIO_API: ${MINIO_API_INTERNAL_URL:-http://minio:9000}
+      MINIO_NAME: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_SECRET: ${MINIO_ROOT_PASSWORD:-change-me-minio-password}
+      MINIO_CLOUD_BUCKET: ${MINIO_CLOUD_BUCKET:-budgetjourneybucket}
+      TRAVEL_EXCHANGE_RATE_BASE_URL: ${TRAVEL_EXCHANGE_RATE_BASE_URL:-https://api.frankfurter.dev/v1}
+      TRAVEL_EXCHANGE_RATE_CACHE_MINUTES: ${TRAVEL_EXCHANGE_RATE_CACHE_MINUTES:-30}
+      TRAVEL_PRESIGNED_UPLOAD_ENABLED: ${TRAVEL_PRESIGNED_UPLOAD_ENABLED:-false}
+      TRAVEL_MEDIA_STORAGE_PATH: /app/uploads/travel-media
+      FAMILY_MEDIA_STORAGE_PATH: /app/uploads/family-media
+      JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=75.0
+    expose:
+      - "8080"
+    volumes:
+      - backend-uploads:/app/uploads
+    networks:
+      - calen-internal
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8080/actuator/health/readiness >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 40s
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    environment:
+      BACKEND_INTERNAL_HOST: ${BACKEND_INTERNAL_HOST:-backend}
+      BACKEND_INTERNAL_PORT: ${BACKEND_INTERNAL_PORT:-8080}
+    ports:
+      - "${APP_EXTERNAL_PORT:-8080}:80"
+    networks:
+      - calen-internal
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+volumes:
+  mariadb-data:
+  minio-data:
+  backend-uploads:
+
+networks:
+  calen-internal:
+    driver: bridge

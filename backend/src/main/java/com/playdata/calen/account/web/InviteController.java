@@ -64,7 +64,7 @@ public class InviteController {
 
     private AppUserPrincipal requirePrincipal(Authentication authentication) {
         if (authentication == null || !authentication.isAuthenticated() || !(authentication.getPrincipal() instanceof AppUserPrincipal principal)) {
-            throw new AccessDeniedException("You do not have permission to create invite links.");
+            throw new AccessDeniedException("초대 링크를 만들 권한이 없습니다.");
         }
         return principal;
     }

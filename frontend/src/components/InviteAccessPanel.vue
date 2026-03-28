@@ -29,9 +29,9 @@ defineProps({
 const emit = defineEmits(['change-expiry', 'create-invite', 'copy-invite'])
 
 const expiryOptions = [
-  { value: 24, label: '24 hours' },
-  { value: 72, label: '72 hours' },
-  { value: 168, label: '7 days' },
+  { value: 24, label: '24시간' },
+  { value: 72, label: '72시간' },
+  { value: 168, label: '7일' },
 ]
 
 function formatDateTime(value) {
@@ -55,15 +55,15 @@ function formatDateTime(value) {
   <section class="panel invite-panel">
     <div class="panel__header">
       <div>
-        <h2>Create an invite link</h2>
-        <p>Open signup stays disabled. Only people with this one-time link can create a new account.</p>
+        <h2>초대 링크 만들기</h2>
+        <p>공개 회원가입은 계속 비활성화되어 있고, 이 1회용 링크를 받은 사람만 새 계정을 만들 수 있습니다.</p>
       </div>
-      <span class="panel__badge">Invite Only</span>
+      <span class="panel__badge">초대 전용</span>
     </div>
 
     <div class="invite-panel__controls">
       <label class="field">
-        <span class="field__label">Link lifetime</span>
+        <span class="field__label">링크 유효 시간</span>
         <select
           :value="expiresInHours"
           :disabled="isCreating"
@@ -77,20 +77,20 @@ function formatDateTime(value) {
 
       <div class="invite-panel__actions">
         <button class="button button--primary" :disabled="isCreating" @click="emit('create-invite')">
-          {{ isCreating ? 'Creating...' : 'Create invite link' }}
+          {{ isCreating ? '생성 중...' : '초대 링크 만들기' }}
         </button>
         <button class="button button--ghost" :disabled="!generatedLink" @click="emit('copy-invite')">
-          Copy link
+          링크 복사
         </button>
       </div>
     </div>
 
     <div v-if="generatedLink" class="invite-panel__result">
       <label class="field field--full">
-        <span class="field__label">Generated link</span>
+        <span class="field__label">생성된 링크</span>
         <input :value="generatedLink" readonly />
       </label>
-      <p class="invite-panel__meta">Expires at: {{ formatDateTime(generatedExpiresAt) }}</p>
+      <p class="invite-panel__meta">만료 시간: {{ formatDateTime(generatedExpiresAt) }}</p>
     </div>
 
     <div v-if="feedbackMessage" class="feedback feedback--success">{{ feedbackMessage }}</div>

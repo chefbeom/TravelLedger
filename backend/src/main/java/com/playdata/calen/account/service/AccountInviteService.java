@@ -24,7 +24,7 @@ public class AccountInviteService {
 
     private static final int DEFAULT_EXPIRES_IN_HOURS = 72;
     private static final int MAX_EXPIRES_IN_HOURS = 168;
-    private static final String INVALID_INVITE_MESSAGE = "This invite link is not valid.";
+    private static final String INVALID_INVITE_MESSAGE = "초대 링크가 유효하지 않습니다.";
 
     private final AccountInviteRepository accountInviteRepository;
     private final AppUserService appUserService;

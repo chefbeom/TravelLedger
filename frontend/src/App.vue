@@ -18,63 +18,63 @@ const featureItems = [
   {
     key: 'household',
     number: '1',
-    title: 'Ledger',
-    description: 'Open the household ledger, charts, search, and management tools from one screen.',
+    title: '가계부',
+    description: '가계부, 통계, 검색, 분류 관리까지 한 화면에서 바로 사용할 수 있습니다.',
   },
   {
     key: 'travel-money',
     number: '2',
-    title: 'Travel Budget',
-    description: 'Manage travel plans, budget items, actual spending, and summaries together.',
+    title: '여행 예산',
+    description: '여행 계획, 예산안, 실제 지출과 요약 통계를 함께 관리합니다.',
   },
   {
     key: 'travel-log',
     number: '3',
-    title: 'Travel Log',
-    description: 'Organize travel records, routes, photos, and GPX files in one workspace.',
+    title: '여행 로그',
+    description: '여행 기록, 경로, 사진, GPX 파일을 한 워크스페이스에서 정리합니다.',
   },
   {
     key: 'photo-album',
     number: '4',
-    title: 'Travel Photos',
-    description: 'Browse travel memories and uploaded photos in a dedicated gallery view.',
+    title: '여행 사진',
+    description: '기록에 연결된 여행 사진과 추억을 전용 갤러리 화면에서 볼 수 있습니다.',
   },
   {
     key: 'family-album',
     number: '5',
-    title: 'Family Album',
-    description: 'Share photos and videos with invited family members by category.',
+    title: '가족 앨범',
+    description: '초대된 가족 구성원과 카테고리별 사진과 영상을 공유합니다.',
   },
 ]
 
 const routeMeta = {
   launcher: {
-    title: 'Workspace Launcher',
-    description: 'Choose the area you want to open next.',
+    title: '기능 선택',
+    description: '다음으로 열고 싶은 기능 영역을 선택하세요.',
   },
   household: {
-    title: 'Household Ledger',
-    description: 'Check the calendar ledger, statistics, search, and category management together.',
+    title: '가계부',
+    description: '달력 가계부, 통계, 검색, 분류 관리 기능을 함께 확인합니다.',
   },
   'travel-money': {
-    title: 'Travel Budget',
-    description: 'Track the travel budget plan and actual spending in one place.',
+    title: '여행 예산',
+    description: '여행 예산안과 실제 지출을 한 곳에서 관리합니다.',
   },
   'travel-log': {
-    title: 'Travel Log',
-    description: 'Review travel notes, routes, places, and uploaded files.',
+    title: '여행 로그',
+    description: '여행 메모, 이동 경로, 장소, 업로드 파일을 확인합니다.',
   },
   'photo-album': {
-    title: 'Travel Photos',
-    description: 'Browse the photo-focused travel view built from your records.',
+    title: '여행 사진',
+    description: '기록을 기반으로 구성된 사진 중심 여행 화면을 둘러봅니다.',
   },
   'family-album': {
-    title: 'Family Album',
-    description: 'Share family categories, albums, and media with invited members.',
+    title: '가족 앨범',
+    description: '초대된 구성원과 가족 카테고리, 앨범, 미디어를 공유합니다.',
   },
   invite: {
-    title: 'Invite Signup',
-    description: 'A new account can be created only through a one-time invite link.',
+    title: '초대 링크 가입',
+    description: '새 계정은 1회용 초대 링크로만 만들 수 있습니다.',
   },
 }
 
@@ -199,7 +199,7 @@ async function loadInviteDetails(token) {
   if (!token) {
     inviteInfo.value = null
     isInviteLoading.value = false
-    setFeedback('', 'This invite link is not valid.')
+    setFeedback('', '초대 링크가 올바르지 않습니다.')
     return
   }
 
@@ -238,7 +238,7 @@ async function handleLogin() {
       rememberDevice: loginForm.rememberDevice,
     })
     navigate('launcher')
-    setFeedback('You are now signed in.')
+    setFeedback('로그인되었습니다.')
   } catch (error) {
     setFeedback('', error.message)
   } finally {
@@ -249,7 +249,7 @@ async function handleLogin() {
 
 async function handleAcceptInvite() {
   if (!inviteInfo.value || !inviteToken.value) {
-    setFeedback('', 'Please open a valid invite link first.')
+    setFeedback('', '유효한 초대 링크를 먼저 열어주세요.')
     return
   }
 
@@ -278,7 +278,7 @@ async function handleAcceptInvite() {
     inviteForm.displayName = ''
     inviteForm.password = ''
     navigate('launcher')
-    setFeedback('The invited account was created and signed in.')
+    setFeedback('초대 링크로 계정을 만들고 바로 로그인했습니다.')
   } catch (error) {
     setFeedback('', error.message)
   } finally {
@@ -298,7 +298,7 @@ async function handleCreateInvite() {
 
     inviteManager.generatedLink = buildInviteUrl(response.token)
     inviteManager.generatedExpiresAt = response.expiresAt
-    inviteManager.feedbackMessage = 'A one-time invite link is ready to share.'
+    inviteManager.feedbackMessage = '1회용 초대 링크를 만들었습니다. 복사해서 전달해주세요.'
   } catch (error) {
     inviteManager.errorMessage = error.message
   } finally {
@@ -328,9 +328,9 @@ async function copyInviteLink() {
       element.remove()
     }
 
-    inviteManager.feedbackMessage = 'The invite link has been copied to the clipboard.'
+    inviteManager.feedbackMessage = '초대 링크를 클립보드에 복사했습니다.'
   } catch {
-    inviteManager.errorMessage = 'Automatic copy is not available in this browser. Please copy the link manually.'
+    inviteManager.errorMessage = '브라우저에서 자동 복사를 지원하지 않아 직접 복사해야 합니다.'
   }
 }
 
@@ -343,7 +343,7 @@ async function handleLogout() {
 
   currentUser.value = null
   navigate('launcher')
-  setFeedback('You have been signed out.')
+  setFeedback('로그아웃했습니다.')
 }
 
 watch([activeRoute, inviteToken], ([route, token]) => {
@@ -369,53 +369,53 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="app-shell">
-    <div v-if="!authChecked" class="loading-overlay">Checking your session...</div>
+    <div v-if="!authChecked" class="loading-overlay">세션을 확인하는 중입니다...</div>
 
     <template v-else-if="activeRoute === 'invite'">
       <section class="auth-shell">
         <div class="auth-copy">
-          <span class="auth-copy__badge">Invite Signup</span>
-          <h1>New accounts can be created only through a one-time invite link.</h1>
-          <p>If the link is valid, enter a login ID, display name, and password to create the account and sign in immediately.</p>
+          <span class="auth-copy__badge">초대 링크 가입</span>
+          <h1>새 계정은 1회용 초대 링크로만 만들 수 있습니다.</h1>
+          <p>링크가 유효하면 로그인 ID, 표시 이름, 비밀번호를 입력해 계정을 만들고 바로 로그인할 수 있습니다.</p>
           <p v-if="currentUser" class="auth-copy__hint">
-            You are currently signed in as {{ currentUser.displayName }} ({{ currentUser.loginId }}). After signup, this browser will switch to the new account.
+            현재 {{ currentUser.displayName }} ({{ currentUser.loginId }}) 계정으로 로그인 중입니다. 가입이 끝나면 이 브라우저는 새 계정으로 전환됩니다.
           </p>
         </div>
 
         <div class="auth-grid">
           <article class="auth-card">
-            <h2>Invite status</h2>
+            <h2>초대 상태</h2>
             <div class="stack-form stack-form--readonly">
-              <p v-if="isInviteLoading">Checking the invite link...</p>
+              <p v-if="isInviteLoading">초대 링크를 확인하는 중입니다...</p>
               <template v-else-if="inviteInfo">
-                <p><strong>{{ inviteInfo.inviterDisplayName }}</strong> created this invite.</p>
-                <p>Expires at: {{ formatDateTime(inviteInfo.expiresAt) }}</p>
+                <p><strong>{{ inviteInfo.inviterDisplayName }}</strong> 님이 만든 초대 링크입니다.</p>
+                <p>만료 시간: {{ formatDateTime(inviteInfo.expiresAt) }}</p>
               </template>
-              <p v-else>This link cannot be used to create an account.</p>
+              <p v-else>이 링크로는 계정을 만들 수 없습니다.</p>
             </div>
           </article>
 
           <article class="auth-card">
-            <h2>Create an invited account</h2>
+            <h2>초대 계정 만들기</h2>
             <form class="stack-form" @submit.prevent="handleAcceptInvite">
               <input
                 v-model="inviteForm.loginId"
                 type="text"
-                placeholder="Login ID"
+                placeholder="로그인 ID"
                 autocomplete="username"
                 :disabled="isSubmitting || isInviteLoading || !inviteInfo"
               />
               <input
                 v-model="inviteForm.displayName"
                 type="text"
-                placeholder="Display name"
+                placeholder="표시 이름"
                 autocomplete="name"
                 :disabled="isSubmitting || isInviteLoading || !inviteInfo"
               />
               <input
                 v-model="inviteForm.password"
                 type="password"
-                placeholder="Password (8+ characters)"
+                placeholder="비밀번호 (8자 이상)"
                 autocomplete="new-password"
                 :disabled="isSubmitting || isInviteLoading || !inviteInfo"
               />
@@ -425,10 +425,10 @@ onBeforeUnmount(() => {
                   type="checkbox"
                   :disabled="isSubmitting || isInviteLoading || !inviteInfo"
                 />
-                <span>Keep this browser signed in</span>
+                <span>이 브라우저에서 로그인 상태 유지</span>
               </label>
               <button class="button button--primary" type="submit" :disabled="isSubmitting || isInviteLoading || !inviteInfo">
-                {{ isSubmitting && activeSubmit === 'invite' ? 'Creating account...' : 'Create account and sign in' }}
+                {{ isSubmitting && activeSubmit === 'invite' ? '계정 생성 중...' : '계정 만들고 로그인' }}
               </button>
             </form>
           </article>
@@ -442,32 +442,32 @@ onBeforeUnmount(() => {
     <template v-else-if="!currentUser">
       <section class="auth-shell">
         <div class="auth-copy">
-          <span class="auth-copy__badge">Sign in to continue</span>
-          <h1>Sign in to use the ledger, travel, and family album workspaces.</h1>
-          <p>Public signup is disabled. New accounts can be created only through a one-time invite link from an existing user.</p>
+          <span class="auth-copy__badge">로그인 후 사용</span>
+          <h1>로그인하면 가계부, 여행, 가족 앨범 기능을 바로 사용할 수 있습니다.</h1>
+          <p>공개 회원가입은 비활성화되어 있고, 새 계정은 기존 사용자가 만든 1회용 초대 링크로만 생성됩니다.</p>
         </div>
 
         <div class="auth-grid">
           <article class="auth-card">
-            <h2>Sign in</h2>
+            <h2>로그인</h2>
             <form class="stack-form" @submit.prevent="handleLogin">
-              <input v-model="loginForm.loginId" type="text" placeholder="Login ID" autocomplete="username" />
-              <input v-model="loginForm.password" type="password" placeholder="Password" autocomplete="current-password" />
+              <input v-model="loginForm.loginId" type="text" placeholder="로그인 ID" autocomplete="username" />
+              <input v-model="loginForm.password" type="password" placeholder="비밀번호" autocomplete="current-password" />
               <label class="checkbox-row">
                 <input v-model="loginForm.rememberDevice" type="checkbox" />
-                <span>Keep this browser signed in</span>
+                <span>이 브라우저에서 로그인 상태 유지</span>
               </label>
               <button class="button button--primary" type="submit" :disabled="isSubmitting">
-                {{ isSubmitting && activeSubmit === 'login' ? 'Signing in...' : 'Sign in' }}
+                {{ isSubmitting && activeSubmit === 'login' ? '로그인 중...' : '로그인' }}
               </button>
             </form>
           </article>
 
           <article class="auth-card">
-            <h2>Account access</h2>
+            <h2>계정 안내</h2>
             <div class="stack-form stack-form--readonly">
-              <p>Open signup is turned off.</p>
-              <p>Ask an existing user or administrator to create a one-time invite link for the next account.</p>
+              <p>공개 회원가입은 꺼져 있습니다.</p>
+              <p>새 계정이 필요하면 기존 사용자나 관리자에게 1회용 초대 링크 생성을 요청해주세요.</p>
             </div>
           </article>
         </div>
@@ -485,8 +485,8 @@ onBeforeUnmount(() => {
             <h1>{{ pageMeta.description }}</h1>
           </div>
           <div class="topbar__actions">
-            <button v-if="activeRoute !== 'launcher'" class="button button--ghost" @click="navigate('launcher')">Back to launcher</button>
-            <button class="button button--ghost" @click="handleLogout">Sign out</button>
+            <button v-if="activeRoute !== 'launcher'" class="button button--ghost" @click="navigate('launcher')">기능 선택으로</button>
+            <button class="button button--ghost" @click="handleLogout">로그아웃</button>
           </div>
         </header>
 

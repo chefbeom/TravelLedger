@@ -3048,111 +3048,128 @@ textarea {
   }
 }
 
-:root[data-theme='metal-dark'] {
-  color-scheme: dark;
-  --bg: #070b10;
-  --surface: #11161d;
-  --surface-panel: linear-gradient(180deg, rgba(24, 31, 42, 0.98) 0%, rgba(12, 17, 24, 0.98) 100%);
-  --surface-elevated: linear-gradient(180deg, #151c26 0%, #0d1219 100%);
-  --surface-soft: #171e27;
-  --surface-soft-strong: #1b2430;
-  --line: #283243;
-  --text: #eef3fb;
-  --text-soft: #bcc7d8;
-  --text-muted: #8a97ab;
-  --blue: #72a5ff;
-  --blue-soft: rgba(114, 165, 255, 0.16);
-  --income: #2fd2a0;
-  --expense: #ff7385;
-  --shadow: 0 22px 60px rgba(0, 0, 0, 0.36);
-  --shadow-strong: 0 18px 34px rgba(0, 0, 0, 0.48);
+:root[data-theme='toss'] {
+  color-scheme: light;
+  --bg: #eef5ff;
+  --surface: #ffffff;
+  --surface-panel: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(246, 250, 255, 0.98) 100%);
+  --surface-elevated: linear-gradient(180deg, #ffffff 0%, #f7fbff 100%);
+  --surface-soft: #f4f8ff;
+  --surface-soft-strong: #e8f0ff;
+  --line: #dbe7fb;
+  --text: #0f172a;
+  --text-soft: #475569;
+  --text-muted: #7c8aa5;
+  --blue: #3182f6;
+  --blue-soft: rgba(49, 130, 246, 0.12);
+  --income: #0ea371;
+  --expense: #f04452;
+  --shadow: 0 20px 50px rgba(49, 130, 246, 0.08);
+  --shadow-strong: 0 16px 30px rgba(37, 99, 235, 0.16);
   --bg-gradient:
-    radial-gradient(circle at top, rgba(124, 151, 189, 0.18), transparent 32%),
-    linear-gradient(180deg, #0b1016 0%, #06090d 100%);
-  --interactive-contrast-bg: linear-gradient(180deg, #edf1f7 0%, #cfd7e3 100%);
-  --interactive-contrast-text: #10151c;
-  --calendar-size-toggle-bg: rgba(17, 24, 39, 0.82);
+    radial-gradient(circle at top, rgba(79, 141, 247, 0.16), transparent 32%),
+    linear-gradient(180deg, #eef5ff 0%, #f7fbff 48%, #edf4ff 100%);
+  --interactive-contrast-bg: linear-gradient(180deg, #1f6feb 0%, #1659c7 100%);
+  --interactive-contrast-text: #ffffff;
+  --calendar-size-toggle-bg: rgba(255, 255, 255, 0.92);
 }
 
-:root[data-theme='metal-dark'] .theme-toggle {
-  background: rgba(12, 17, 24, 0.88);
+:root[data-theme='toss'] .theme-toggle {
+  background: rgba(255, 255, 255, 0.9);
+  border-color: rgba(49, 130, 246, 0.18);
+  color: #1d4ed8;
 }
 
-:root[data-theme='metal-dark'] .button--secondary,
-:root[data-theme='metal-dark'] .button--ghost,
-:root[data-theme='metal-dark'] .field input,
-:root[data-theme='metal-dark'] .field select,
-:root[data-theme='metal-dark'] .sheet-table-wrap,
-:root[data-theme='metal-dark'] .invite-panel__result {
+:root[data-theme='toss'] .sidebar,
+:root[data-theme='toss'] .panel,
+:root[data-theme='toss'] .auth-card,
+:root[data-theme='toss'] .auth-copy,
+:root[data-theme='toss'] .launcher-card,
+:root[data-theme='toss'] .feature-card,
+:root[data-theme='toss'] .summary-card {
+  background: var(--surface-panel);
+}
+
+:root[data-theme='toss'] .button--secondary,
+:root[data-theme='toss'] .button--ghost,
+:root[data-theme='toss'] .field input,
+:root[data-theme='toss'] .field select,
+:root[data-theme='toss'] .sheet-table-wrap,
+:root[data-theme='toss'] .invite-panel__result {
   background: var(--surface-soft);
 }
 
-:root[data-theme='metal-dark'] .button {
-  border-color: #334154;
-  background: #1a222d;
+:root[data-theme='toss'] .button {
+  border-color: #d4e4ff;
+  background: #ffffff;
   color: var(--text);
 }
 
-:root[data-theme='metal-dark'] .button--primary {
+:root[data-theme='toss'] .button--primary {
   border-color: transparent;
-  background: linear-gradient(180deg, #7fb0ff 0%, #4b86f7 100%);
+  background: linear-gradient(180deg, #4b95ff 0%, #2f80f7 100%);
   color: #f8fbff;
 }
 
-:root[data-theme='metal-dark'] .button--secondary {
+:root[data-theme='toss'] .button--secondary {
   color: var(--text);
 }
 
-:root[data-theme='metal-dark'] .button--ghost {
+:root[data-theme='toss'] .button--ghost {
+  color: #356fd9;
+}
+
+:root[data-theme='toss'] .button--danger {
+  background: rgba(240, 68, 82, 0.1);
+  color: #cf3140;
+}
+
+:root[data-theme='toss'] .toggle-chip {
+  color: var(--text-soft);
+  background: rgba(255, 255, 255, 0.88);
+}
+
+:root[data-theme='toss'] .toggle-chip--active {
+  background: linear-gradient(180deg, #4b95ff 0%, #2f80f7 100%);
+  color: #ffffff;
+}
+
+:root[data-theme='toss'] .entry-type-toggle {
+  background: #edf4ff;
+  border: 1px solid #d6e4ff;
+}
+
+:root[data-theme='toss'] .amount-input {
+  border-color: rgba(49, 130, 246, 0.24);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(236, 244, 255, 0.98));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
+}
+
+:root[data-theme='toss'] .amount-input span,
+:root[data-theme='toss'] .amount-input input {
+  color: #1f2937;
+}
+
+:root[data-theme='toss'] .field__hint,
+:root[data-theme='toss'] .calendar-size-toolbar__hint,
+:root[data-theme='toss'] .calendar-size-toolbar__label,
+:root[data-theme='toss'] .panel__empty,
+:root[data-theme='toss'] .panel__header p,
+:root[data-theme='toss'] .sheet-table__memo,
+:root[data-theme='toss'] .checkbox-row,
+:root[data-theme='toss'] .calendar__metric span,
+:root[data-theme='toss'] .calendar__label {
   color: var(--text-soft);
 }
 
-:root[data-theme='metal-dark'] .button--danger {
-  background: rgba(255, 115, 133, 0.12);
-  color: #ff9eaa;
-}
-
-:root[data-theme='metal-dark'] .toggle-chip {
-  color: var(--text-soft);
-}
-
-:root[data-theme='metal-dark'] .toggle-chip--active {
-  background: rgba(237, 241, 247, 0.92);
-  color: #121821;
-}
-
-:root[data-theme='metal-dark'] .entry-type-toggle {
-  background: #0f151d;
-  border: 1px solid #283243;
-}
-
-:root[data-theme='metal-dark'] .amount-input {
-  border-color: rgba(114, 165, 255, 0.3);
-  background: linear-gradient(180deg, rgba(114, 165, 255, 0.12), rgba(18, 24, 33, 0.96));
-}
-
-:root[data-theme='metal-dark'] .amount-input span,
-:root[data-theme='metal-dark'] .amount-input input,
-:root[data-theme='metal-dark'] .field__hint,
-:root[data-theme='metal-dark'] .calendar-size-toolbar__hint,
-:root[data-theme='metal-dark'] .calendar-size-toolbar__label,
-:root[data-theme='metal-dark'] .panel__empty,
-:root[data-theme='metal-dark'] .panel__header p {
-  color: var(--text-soft);
-}
-
-:root[data-theme='metal-dark'] .sheet-table th,
-:root[data-theme='metal-dark'] .sheet-table td,
-:root[data-theme='metal-dark'] .sheet-table__title,
-:root[data-theme='metal-dark'] .sheet-table__category {
+:root[data-theme='toss'] .sheet-table th,
+:root[data-theme='toss'] .sheet-table td,
+:root[data-theme='toss'] .sheet-table__title,
+:root[data-theme='toss'] .sheet-table__category,
+:root[data-theme='toss'] .field label,
+:root[data-theme='toss'] .panel__header h2,
+:root[data-theme='toss'] .panel__header h3 {
   color: var(--text);
-}
-
-:root[data-theme='metal-dark'] .sheet-table__memo,
-:root[data-theme='metal-dark'] .checkbox-row,
-:root[data-theme='metal-dark'] .calendar__metric span,
-:root[data-theme='metal-dark'] .calendar__label {
-  color: var(--text-soft);
 }
 
 @media (max-width: 720px) {

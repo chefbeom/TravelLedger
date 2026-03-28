@@ -117,7 +117,7 @@ const inviteManager = reactive({
 })
 
 const pageMeta = computed(() => routeMeta[activeRoute.value] || routeMeta.launcher)
-const isMetalTheme = computed(() => themeMode.value === 'metal-dark')
+const isTossTheme = computed(() => themeMode.value === 'toss')
 
 let inviteRequestSequence = 0
 
@@ -174,12 +174,12 @@ function buildInviteUrl(token) {
 }
 
 function applyTheme(mode) {
-  const normalized = mode === 'metal-dark' ? 'metal-dark' : 'default'
+  const normalized = mode === 'toss' || mode === 'metal-dark' ? 'toss' : 'default'
   themeMode.value = normalized
 
   if (typeof document !== 'undefined') {
-    if (normalized === 'metal-dark') {
-      document.documentElement.setAttribute('data-theme', 'metal-dark')
+    if (normalized === 'toss') {
+      document.documentElement.setAttribute('data-theme', 'toss')
     } else {
       document.documentElement.removeAttribute('data-theme')
     }
@@ -191,7 +191,7 @@ function applyTheme(mode) {
 }
 
 function toggleTheme() {
-  applyTheme(isMetalTheme.value ? 'default' : 'metal-dark')
+  applyTheme(isTossTheme.value ? 'default' : 'toss')
 }
 
 function navigate(route) {
@@ -398,7 +398,7 @@ onBeforeUnmount(() => {
 <template>
   <div class="app-shell">
     <button class="theme-toggle" type="button" @click="toggleTheme">
-      {{ isMetalTheme ? '기본 테마' : '메탈릭 테마' }}
+      {{ isTossTheme ? '기본 테마' : '토스 테마' }}
     </button>
 
     <div v-if="!authChecked" class="loading-overlay">세션을 확인하는 중입니다...</div>

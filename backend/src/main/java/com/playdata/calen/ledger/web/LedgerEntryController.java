@@ -5,9 +5,15 @@ import com.playdata.calen.ledger.dto.LedgerEntryRequest;
 import com.playdata.calen.ledger.dto.LedgerEntryResponse;
 import com.playdata.calen.ledger.service.LedgerEntryService;
 import jakarta.validation.Valid;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.springframework.core.io.ByteArrayResource;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -34,6 +40,21 @@ public class LedgerEntryController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to
     ) {
         return ledgerEntryService.getEntries(currentUser.userId(), from, to);
+    }
+
+    @GetMapping("/export/csv")
+    public ResponseEntity<ByteArrayResource> exportEntriesCsv(
+            @AuthenticationPrincipal AppUserPrincipal currentUser,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to
+    ) {
+        LedgerEntryService.LedgerCsvExport export = ledgerEntryService.exportEntriesCsv(currentUser.userId(), from, to);
+        String encodedFileName = URLEncoder.encode(export.fileName(), StandardCharsets.UTF_8).replace("+", "%20");
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename*=UTF-8''" + encodedFileName)
+                .contentType(MediaType.parseMediaType("text/csv; charset=" + export.charset()))
+                .contentLength(export.content().length)
+                .body(new ByteArrayResource(export.content()));
     }
 
     @PostMapping

@@ -14,6 +14,7 @@ import com.playdata.calen.ledger.repository.CategoryDetailRepository;
 import com.playdata.calen.ledger.repository.CategoryGroupRepository;
 import com.playdata.calen.ledger.repository.LedgerEntryRepository;
 import com.playdata.calen.ledger.repository.PaymentMethodRepository;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.time.YearMonth;
 import java.util.List;
@@ -38,6 +39,19 @@ public class LedgerEntryService {
         return ledgerEntryRepository.findAllByOwnerIdAndEntryDateBetweenOrderByEntryDateAscIdAsc(userId, range.from(), range.to()).stream()
                 .map(this::toResponse)
                 .toList();
+    }
+
+    public LedgerCsvExport exportEntriesCsv(Long userId, LocalDate from, LocalDate to) {
+        appUserService.getRequiredUser(userId);
+        DateRange range = normalizeRange(from, to);
+        List<LedgerEntryResponse> entries = ledgerEntryRepository.findAllByOwnerIdAndEntryDateBetweenOrderByEntryDateAscIdAsc(userId, range.from(), range.to()).stream()
+                .map(this::toResponse)
+                .toList();
+        return new LedgerCsvExport(
+                LedgerCsvFormatter.buildFileName(range.from(), range.to()),
+                LedgerCsvFormatter.format(entries),
+                StandardCharsets.UTF_8.name()
+        );
     }
 
     public List<LedgerEntryResponse> getRecentEntries(Long userId) {
@@ -143,5 +157,12 @@ public class LedgerEntryService {
     }
 
     private record DateRange(LocalDate from, LocalDate to) {
+    }
+
+    public record LedgerCsvExport(
+            String fileName,
+            byte[] content,
+            String charset
+    ) {
     }
 }

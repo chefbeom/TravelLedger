@@ -9,6 +9,7 @@ import {
   deactivateCategoryGroup,
   deactivatePaymentMethod,
   deleteEntry,
+  downloadLedgerCsv,
   fetchCategories,
   fetchCategoryBreakdown,
   fetchCompare,
@@ -163,6 +164,12 @@ const statsCards = computed(() => [
   ...quickStats.value.slice(0, 3),
 ])
 const comparisonBadge = computed(() => `${compareUnitLabels[statsControls.compareUnit] || statsControls.compareUnit} / ${statsControls.comparePeriods}개 구간`)
+const csvExportRange = computed(() => (
+  householdTab.value.startsWith('stats-')
+    ? statsRange.value
+    : getMonthRange(calendarAnchorDate.value)
+))
+const csvExportLabel = computed(() => formatDateRange(csvExportRange.value.from, csvExportRange.value.to))
 const sortedMonthEntries = computed(() =>
   monthEntries.value
     .slice()
@@ -419,6 +426,21 @@ async function handleImported(result) {
   )
 }
 
+async function exportEntriesToCsv() {
+  isSubmitting.value = true
+  activeSubmit.value = 'export-csv'
+  setFeedback()
+  try {
+    await downloadLedgerCsv(csvExportRange.value.from, csvExportRange.value.to)
+    setFeedback(`CSV 파일을 저장했습니다. (${csvExportLabel.value})`)
+  } catch (error) {
+    setFeedback('', error.message)
+  } finally {
+    isSubmitting.value = false
+    activeSubmit.value = ''
+  }
+}
+
 async function submitEntry() {
   isSubmitting.value = true
   activeSubmit.value = 'entry'
@@ -603,6 +625,9 @@ async function deactivatePayment(paymentId) {
             <input :value="householdAnchorDate" type="date" @input="handleChangeHouseholdAnchorDate($event.target.value)" />
           </label>
           <button class="button button--secondary" @click="handleChangeHouseholdAnchorDate(today)">오늘</button>
+          <button class="button button--secondary" :disabled="isSubmitting" @click="exportEntriesToCsv">
+            {{ isSubmitting && activeSubmit === 'export-csv' ? 'CSV 저장 중...' : `CSV 저장 (${csvExportLabel})` }}
+          </button>
         </div>
       </div>
 

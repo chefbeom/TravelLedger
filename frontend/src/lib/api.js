@@ -134,6 +134,55 @@ export function fetchEntries(from, to) {
   return request(buildUrl('/entries', { from, to }).replace(API_BASE, ''))
 }
 
+function resolveDownloadFileName(response, fallback) {
+  const disposition = response.headers.get('Content-Disposition') || ''
+  const utf8Match = disposition.match(/filename\*=UTF-8''([^;]+)/i)
+  if (utf8Match?.[1]) {
+    return decodeURIComponent(utf8Match[1])
+  }
+  const basicMatch = disposition.match(/filename=\"?([^\";]+)\"?/i)
+  return basicMatch?.[1] || fallback
+}
+
+async function downloadFile(path, fallbackFileName) {
+  const response = await fetch(`${API_BASE}${path}`, {
+    credentials: 'include',
+  })
+
+  if (!response.ok) {
+    let message = '요청을 처리하는 중 문제가 발생했습니다.'
+
+    try {
+      const body = await response.json()
+      message = body.message ?? message
+    } catch {
+      // Keep the generic message when the body is not JSON.
+    }
+
+    const error = new Error(message)
+    error.status = response.status
+    throw error
+  }
+
+  const blob = await response.blob()
+  const fileName = resolveDownloadFileName(response, fallbackFileName)
+  const objectUrl = window.URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = objectUrl
+  link.download = fileName
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  window.URL.revokeObjectURL(objectUrl)
+}
+
+export function downloadLedgerCsv(from, to) {
+  return downloadFile(
+    buildUrl('/entries/export/csv', { from, to }).replace(API_BASE, ''),
+    `ledger-${from}_to_${to}.csv`,
+  )
+}
+
 export function createEntry(payload) {
   return request('/entries', {
     method: 'POST',

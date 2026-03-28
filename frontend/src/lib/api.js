@@ -90,7 +90,12 @@ async function request(path, options = {}) {
     return null
   }
 
-  return response.json()
+  const text = await response.text()
+  if (!text) {
+    return null
+  }
+
+  return JSON.parse(text)
 }
 
 export function fetchCurrentUser() {

@@ -48,9 +48,60 @@ If `APP_SEED_ENABLED=true`, test accounts are created:
 
 Use `docker-compose.oci.yml` when you run everything on a single OCI VM and terminate TLS on the host machine.
 
+## Local VM HTTP-Only Deployment
+
+If you first want to test on a VM inside your own PC without SSL, you can skip host Nginx entirely.
+
 ### Architecture
 
-- Public HTTPS entrypoint: `https://www.innoutdrive.space`
+- Browser -> `http://<vm-ip>:8081`
+- Frontend container -> backend container over the Docker network
+- Backend container -> `mariadb` and `minio` over the Docker network
+- No domain and no certificate required for this stage
+
+### 1. Prepare `.env`
+
+```bash
+cp .env.example .env
+```
+
+For HTTP-only testing from your host machine to the VM, set at least:
+
+```env
+OCI_FRONTEND_BIND_HOST=0.0.0.0
+OCI_FRONTEND_BIND_PORT=8081
+OCI_BACKEND_BIND_HOST=127.0.0.1
+OCI_BACKEND_BIND_PORT=18080
+OCI_MINIO_CONSOLE_BIND_HOST=127.0.0.1
+OCI_MINIO_CONSOLE_BIND_PORT=9101
+
+APP_SEED_ENABLED=true
+TRAVEL_PRESIGNED_UPLOAD_ENABLED=false
+H2_CONSOLE_ENABLED=false
+```
+
+If port `8081` is already used on the VM, choose another free port.
+
+### 2. Start the stack
+
+```bash
+docker compose -f docker-compose.oci.yml up -d --build
+```
+
+### 3. Open the app
+
+- `http://<vm-ip>:8081`
+
+If `APP_SEED_ENABLED=true`, test accounts are created:
+
+- `hana / test1234`
+- `minsu / test1234`
+
+At this stage, you do not need Nginx, certificates, or `www.travelledger.kro.kr`.
+
+### Architecture
+
+- Public HTTPS entrypoint: `https://www.travelledger.kro.kr`
 - Host Nginx proxies `/` to `127.0.0.1:8081`
 - Host Nginx proxies `/api/` to `127.0.0.1:8080`
 - Backend talks to `mariadb` and `minio` on the private Docker network
@@ -120,16 +171,16 @@ cat certificate.crt ca_bundle.crt > fullchain.crt
 
 Copy the files to:
 
-- `/etc/nginx/ssl/www.innoutdrive.space/fullchain.crt`
-- `/etc/nginx/ssl/www.innoutdrive.space/private.key`
+- `/etc/nginx/ssl/www.travelledger.kro.kr/fullchain.crt`
+- `/etc/nginx/ssl/www.travelledger.kro.kr/private.key`
 
 ### 5. Install the Nginx site config
 
-Use [www.innoutdrive.space.conf](/C:/Users/kjs99/Desktop/calen/deploy/oci/nginx/www.innoutdrive.space.conf).
+Use [www.travelledger.kro.kr.conf](/C:/Users/kjs99/Desktop/calen/deploy/oci/nginx/www.travelledger.kro.kr.conf).
 
 ```bash
-sudo cp deploy/oci/nginx/www.innoutdrive.space.conf /etc/nginx/sites-available/www.innoutdrive.space
-sudo ln -sf /etc/nginx/sites-available/www.innoutdrive.space /etc/nginx/sites-enabled/www.innoutdrive.space
+sudo cp deploy/oci/nginx/www.travelledger.kro.kr.conf /etc/nginx/sites-available/www.travelledger.kro.kr
+sudo ln -sf /etc/nginx/sites-available/www.travelledger.kro.kr /etc/nginx/sites-enabled/www.travelledger.kro.kr
 sudo rm -f /etc/nginx/sites-enabled/default
 ```
 
@@ -142,7 +193,7 @@ sudo systemctl reload nginx
 
 ### 7. Open the app
 
-- `https://www.innoutdrive.space`
+- `https://www.travelledger.kro.kr`
 
 ### 8. Logs and status
 

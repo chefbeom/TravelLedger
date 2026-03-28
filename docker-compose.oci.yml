@@ -32,11 +32,11 @@ services:
       TZ: ${TZ:-Asia/Seoul}
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-change-me-minio-password}
-      MINIO_BROWSER_REDIRECT_URL: http://127.0.0.1:${OCI_MINIO_CONSOLE_BIND_PORT:-9001}
+      MINIO_BROWSER_REDIRECT_URL: ${MINIO_CONSOLE_EXTERNAL_URL:-http://127.0.0.1:9001}
     volumes:
       - minio-data:/data
     ports:
-      - "127.0.0.1:${OCI_MINIO_CONSOLE_BIND_PORT:-9001}:9001"
+      - "${OCI_MINIO_CONSOLE_BIND_HOST:-127.0.0.1}:${OCI_MINIO_CONSOLE_BIND_PORT:-9001}:9001"
     networks:
       - calen-internal
     healthcheck:
@@ -94,7 +94,7 @@ services:
       FAMILY_MEDIA_STORAGE_PATH: /app/uploads/family-media
       JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=75.0
     ports:
-      - "127.0.0.1:${OCI_BACKEND_BIND_PORT:-8080}:8080"
+      - "${OCI_BACKEND_BIND_HOST:-127.0.0.1}:${OCI_BACKEND_BIND_PORT:-8080}:8080"
     volumes:
       - backend-uploads:/app/uploads
     networks:
@@ -118,7 +118,7 @@ services:
       BACKEND_INTERNAL_HOST: ${BACKEND_INTERNAL_HOST:-backend}
       BACKEND_INTERNAL_PORT: ${BACKEND_INTERNAL_PORT:-8080}
     ports:
-      - "127.0.0.1:${OCI_FRONTEND_BIND_PORT:-8081}:80"
+      - "${OCI_FRONTEND_BIND_HOST:-127.0.0.1}:${OCI_FRONTEND_BIND_PORT:-8081}:80"
     networks:
       - calen-internal
     healthcheck:

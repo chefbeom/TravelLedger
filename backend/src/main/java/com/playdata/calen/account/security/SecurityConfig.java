@@ -73,6 +73,8 @@ public class SecurityConfig {
                             "/api/auth/login",
                             "/api/auth/me",
                             "/api/auth/logout",
+                            "/api/invites/*",
+                            "/api/invites/accept",
                             "/actuator/health",
                             "/actuator/health/**",
                             "/error"

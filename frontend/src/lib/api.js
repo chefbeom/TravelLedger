@@ -110,6 +110,24 @@ export function logout() {
   })
 }
 
+export function createInvite(payload) {
+  return request('/invites', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+}
+
+export function fetchInvite(token) {
+  return request(`/invites/${encodeURIComponent(token)}`)
+}
+
+export function acceptInvite(payload) {
+  return request('/invites/accept', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+}
+
 export function fetchDashboard(anchorDate) {
   return request(buildUrl('/dashboard', { anchorDate }).replace(API_BASE, ''))
 }

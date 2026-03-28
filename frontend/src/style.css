@@ -1846,9 +1846,20 @@ textarea {
   color: var(--text-soft);
 }
 
+.auth-copy__hint {
+  padding: 14px 16px;
+  border-radius: 18px;
+  background: rgba(49, 130, 246, 0.08);
+}
+
 .auth-grid {
   display: grid;
   gap: 16px;
+}
+
+.stack-form--readonly p {
+  margin: 0;
+  color: var(--text-soft);
 }
 
 .auth-feedback {
@@ -2046,6 +2057,38 @@ textarea {
   gap: 18px;
 }
 
+.invite-panel {
+  display: grid;
+  gap: 18px;
+}
+
+.invite-panel__controls {
+  display: grid;
+  grid-template-columns: minmax(220px, 300px) auto;
+  gap: 14px;
+  align-items: end;
+}
+
+.invite-panel__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.invite-panel__result {
+  display: grid;
+  gap: 10px;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: var(--surface-soft);
+}
+
+.invite-panel__meta {
+  margin: 0;
+  color: var(--text-soft);
+}
+
 .launcher-card {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
@@ -2110,6 +2153,10 @@ textarea {
     width: 100%;
     justify-content: flex-start;
     flex-wrap: wrap;
+  }
+
+  .invite-panel__controls {
+    grid-template-columns: 1fr;
   }
 }
 .travel-map {

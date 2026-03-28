@@ -20,6 +20,14 @@
   --income: #12b886;
   --expense: #f04452;
   --shadow: 0 12px 40px rgba(15, 23, 42, 0.06);
+  --shadow-strong: 0 10px 22px rgba(15, 23, 42, 0.18);
+  --surface-panel: var(--surface);
+  --surface-elevated: #ffffff;
+  --surface-soft-strong: #eff3f8;
+  --bg-gradient: var(--bg);
+  --interactive-contrast-bg: #111827;
+  --interactive-contrast-text: #ffffff;
+  --calendar-size-toggle-bg: rgba(248, 250, 252, 0.94);
 }
 
 * {
@@ -35,7 +43,7 @@ body,
 body {
   margin: 0;
   min-width: 320px;
-  background: var(--bg);
+  background: var(--bg-gradient);
 }
 
 button,
@@ -53,6 +61,21 @@ button {
   color: var(--text);
 }
 
+.theme-toggle {
+  position: fixed;
+  top: 18px;
+  right: 18px;
+  z-index: 80;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 11px 16px;
+  background: rgba(255, 255, 255, 0.82);
+  color: var(--text);
+  font-weight: 800;
+  backdrop-filter: blur(16px);
+  box-shadow: var(--shadow);
+}
+
 .app-layout {
   display: grid;
   grid-template-columns: 280px minmax(0, 1fr);
@@ -65,7 +88,7 @@ button {
   gap: 22px;
   padding: 28px 20px;
   border-right: 1px solid var(--line);
-  background: #ffffff;
+  background: var(--surface-elevated);
 }
 
 .sidebar__brand {
@@ -144,7 +167,7 @@ button {
   min-height: 48px;
   border: 0;
   border-radius: 16px;
-  background: #eff3f8;
+  background: var(--surface-soft-strong);
   color: var(--text-soft);
   font-weight: 700;
 }
@@ -188,7 +211,7 @@ button {
 .compare-card {
   border: 1px solid var(--line);
   border-radius: 24px;
-  background: var(--surface);
+  background: var(--surface-panel);
   box-shadow: var(--shadow);
 }
 
@@ -3025,6 +3048,45 @@ textarea {
   }
 }
 
+:root[data-theme='metal-dark'] {
+  color-scheme: dark;
+  --bg: #070b10;
+  --surface: #11161d;
+  --surface-panel: linear-gradient(180deg, rgba(24, 31, 42, 0.98) 0%, rgba(12, 17, 24, 0.98) 100%);
+  --surface-elevated: linear-gradient(180deg, #151c26 0%, #0d1219 100%);
+  --surface-soft: #171e27;
+  --surface-soft-strong: #1b2430;
+  --line: #283243;
+  --text: #eef3fb;
+  --text-soft: #bcc7d8;
+  --text-muted: #8a97ab;
+  --blue: #72a5ff;
+  --blue-soft: rgba(114, 165, 255, 0.16);
+  --income: #2fd2a0;
+  --expense: #ff7385;
+  --shadow: 0 22px 60px rgba(0, 0, 0, 0.36);
+  --shadow-strong: 0 18px 34px rgba(0, 0, 0, 0.48);
+  --bg-gradient:
+    radial-gradient(circle at top, rgba(124, 151, 189, 0.18), transparent 32%),
+    linear-gradient(180deg, #0b1016 0%, #06090d 100%);
+  --interactive-contrast-bg: linear-gradient(180deg, #edf1f7 0%, #cfd7e3 100%);
+  --interactive-contrast-text: #10151c;
+  --calendar-size-toggle-bg: rgba(17, 24, 39, 0.82);
+}
+
+:root[data-theme='metal-dark'] .theme-toggle {
+  background: rgba(12, 17, 24, 0.88);
+}
+
+:root[data-theme='metal-dark'] .button--secondary,
+:root[data-theme='metal-dark'] .button--ghost,
+:root[data-theme='metal-dark'] .field input,
+:root[data-theme='metal-dark'] .field select,
+:root[data-theme='metal-dark'] .sheet-table-wrap,
+:root[data-theme='metal-dark'] .invite-panel__result {
+  background: var(--surface-soft);
+}
+
 @media (max-width: 720px) {
   .travel-modal {
     padding: 12px;
@@ -3047,7 +3109,7 @@ textarea {
   --calendar-day-padding: 12px;
   --calendar-expense-total-size: 1.18rem;
   --calendar-metric-size: 0.8rem;
-  --calendar-detail-margin: 16px;
+  --calendar-toolbar-gap: 18px;
 }
 
 .household-calendar-layout .calendar {
@@ -3073,9 +3135,8 @@ textarea {
   font-size: var(--calendar-metric-size);
 }
 
-.household-calendar-layout .calendar-detail {
-  margin-top: var(--calendar-detail-margin);
-  padding-top: var(--calendar-detail-margin);
+.household-calendar-panel .calendar-shell {
+  margin-top: var(--calendar-toolbar-gap);
 }
 
 .calendar-size-toolbar {
@@ -3085,11 +3146,6 @@ textarea {
   gap: 12px;
   flex-wrap: wrap;
   margin-bottom: 18px;
-}
-
-.calendar-size-toolbar--sheet {
-  margin-bottom: 0;
-  justify-content: flex-end;
 }
 
 .calendar-size-toolbar__block {
@@ -3115,9 +3171,9 @@ textarea {
   align-items: center;
   gap: 6px;
   padding: 6px;
-  border: 1px solid rgba(148, 163, 184, 0.24);
+  border: 1px solid var(--line);
   border-radius: 999px;
-  background: rgba(248, 250, 252, 0.94);
+  background: var(--calendar-size-toggle-bg);
 }
 
 .calendar-size-toggle__button {
@@ -3139,18 +3195,47 @@ textarea {
 }
 
 .calendar-size-toggle__button.is-active {
-  background: #111827;
-  color: #fff;
-  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.18);
+  background: var(--interactive-contrast-bg);
+  color: var(--interactive-contrast-text);
+  box-shadow: var(--shadow-strong);
 }
 
-.panel__header--sheet-scale {
-  align-items: flex-start;
+.household-ledger-grid {
+  display: grid;
+  grid-template-columns: minmax(340px, 0.78fr) minmax(0, 1.22fr);
+  gap: 18px;
+  align-items: start;
 }
 
-.calendar-sheet-table-wrap {
-  block-size: var(--calendar-sheet-height, 460px);
-  min-block-size: 300px;
+.household-entry-panel {
+  position: sticky;
+  top: 18px;
+}
+
+.household-sheet-panel {
+  min-width: 0;
+}
+
+.household-sheet-header {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.household-sheet-table-wrap {
+  max-height: 640px;
+}
+
+.household-time-field {
+  gap: 8px;
+}
+
+.household-time-toggle {
+  justify-content: flex-start;
+  gap: 8px;
+  min-height: auto;
 }
 
 @media (max-width: 720px) {
@@ -3160,15 +3245,18 @@ textarea {
 }
 
 @media (max-width: 900px) {
-  .panel__header--sheet-scale {
-    flex-direction: column;
-  }
-
   .calendar-size-toolbar,
-  .calendar-size-toolbar--sheet,
   .calendar-size-toolbar__block {
     width: 100%;
     justify-content: flex-start;
+  }
+
+  .household-ledger-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .household-entry-panel {
+    position: static;
   }
 }
 

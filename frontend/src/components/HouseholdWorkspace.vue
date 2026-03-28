@@ -104,6 +104,7 @@ const categories = ref([])
 const paymentMethods = ref([])
 const editingEntryId = ref(null)
 const amountInput = ref('')
+const isEntryTimeEnabled = ref(false)
 
 const entryForm = reactive({
   entryDate: today,
@@ -357,19 +358,20 @@ async function loadPastComparisons() {
 function resetEntryForm() {
   editingEntryId.value = null
   entryForm.entryDate = calendarAnchorDate.value
-  entryForm.entryTime = getDefaultTimeValue()
+  entryForm.entryTime = '00:00'
   entryForm.title = ''
   entryForm.memo = ''
   entryForm.amount = ''
   entryForm.entryType = 'EXPENSE'
   amountInput.value = ''
+  isEntryTimeEnabled.value = false
   syncEntryDefaults()
 }
 
 function fillEntryForm(entry) {
   editingEntryId.value = entry.id
   entryForm.entryDate = entry.entryDate
-  entryForm.entryTime = entry.entryTime || ''
+  entryForm.entryTime = entry.entryTime || '00:00'
   entryForm.title = entry.title || ''
   entryForm.memo = entry.memo || ''
   entryForm.amount = String(Number(entry.amount || 0))
@@ -378,12 +380,13 @@ function fillEntryForm(entry) {
   entryForm.categoryDetailId = entry.categoryDetailId != null ? String(entry.categoryDetailId) : ''
   entryForm.paymentMethodId = String(entry.paymentMethodId)
   amountInput.value = String(Number(entry.amount || 0))
+  isEntryTimeEnabled.value = Boolean(entry.entryTime && entry.entryTime !== '00:00')
 }
 
 function buildEntryPayload() {
   return {
     entryDate: entryForm.entryDate,
-    entryTime: entryForm.entryTime || null,
+    entryTime: isEntryTimeEnabled.value ? (entryForm.entryTime || '00:00') : '00:00',
     title: entryForm.title.trim(),
     memo: entryForm.memo.trim() || null,
     amount: Number(entryForm.amount || 0),
@@ -409,6 +412,19 @@ function addAmount(value) {
   const nextValue = amountPreview.value + Number(value || 0)
   amountInput.value = String(nextValue)
   entryForm.amount = String(nextValue)
+}
+
+function updateTimeEnabled(value) {
+  isEntryTimeEnabled.value = Boolean(value)
+
+  if (!isEntryTimeEnabled.value) {
+    entryForm.entryTime = '00:00'
+    return
+  }
+
+  if (!entryForm.entryTime || entryForm.entryTime === '00:00') {
+    entryForm.entryTime = getDefaultTimeValue()
+  }
 }
 
 function formatAmountShortcut(value) {
@@ -556,11 +572,37 @@ async function removeEntry(entry) {
   setFeedback()
   try {
     await deleteEntry(entry.id)
-    await refreshLedgerViews()
+    monthEntries.value = monthEntries.value.filter((item) => item.id !== entry.id)
+    statsEntries.value = statsEntries.value.filter((item) => item.id !== entry.id)
+    dashboard.value = {
+      ...dashboard.value,
+      recentEntries: (dashboard.value.recentEntries ?? []).filter((item) => item.id !== entry.id),
+      calendar: (dashboard.value.calendar ?? []).map((day) => {
+        if (day.date !== entry.entryDate) {
+          return day
+        }
+
+        return {
+          ...day,
+          summary: {
+            ...day.summary,
+            entryCount: Math.max(0, Number(day.summary?.entryCount ?? 0) - 1),
+            income: entry.entryType === 'INCOME'
+              ? Math.max(0, Number(day.summary?.income ?? 0) - Number(entry.amount ?? 0))
+              : Number(day.summary?.income ?? 0),
+            expense: entry.entryType === 'EXPENSE'
+              ? Math.max(0, Number(day.summary?.expense ?? 0) - Number(entry.amount ?? 0))
+              : Number(day.summary?.expense ?? 0),
+          },
+        }
+      }),
+    }
+
     if (editingEntryId.value === entry.id) {
       resetEntryForm()
     }
     setFeedback('가계부 내역을 삭제했습니다.')
+    refreshLedgerViews().catch(() => {})
   } catch (error) {
     setFeedback('', error.message)
   } finally {
@@ -762,12 +804,14 @@ async function deactivatePayment(paymentId) {
       :payment-methods="paymentMethods"
       :amount-input="amountInput"
       :amount-preview="amountPreview"
+      :is-time-enabled="isEntryTimeEnabled"
       :quick-amount-buttons="quickAmountButtons"
       :format-amount-shortcut="formatAmountShortcut"
       :format-currency="formatCurrency"
       :format-short-date="formatShortDate"
       :format-time="formatTime"
       @update:amount-input="handleAmountInput"
+      @update:time-enabled="updateTimeEnabled"
       @fill-amount="fillAmount"
       @add-amount="addAmount"
       @submit-entry="submitEntry"

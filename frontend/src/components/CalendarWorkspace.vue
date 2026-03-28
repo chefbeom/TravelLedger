@@ -1,20 +1,13 @@
 <script setup>
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import SummaryCard from './SummaryCard.vue'
 
 const CALENDAR_SCALE_KEY = 'calen-household-calendar-scale-preset'
-const CALENDAR_SHEET_HEIGHT_KEY = 'calen-household-calendar-sheet-height-preset'
 
 const calendarScalePresets = [
   { key: 'compact', label: '작게', value: 74 },
-  { key: 'default', label: '기본', value: 100 },
-  { key: 'expanded', label: '크게', value: 138 },
-]
-
-const sheetHeightPresets = [
-  { key: 'compact', label: '짧게', value: 300 },
-  { key: 'default', label: '기본', value: 460 },
-  { key: 'expanded', label: '길게', value: 760 },
+  { key: 'default', label: '기본', value: 112 },
+  { key: 'expanded', label: '크게', value: 150 },
 ]
 
 const props = defineProps({
@@ -78,6 +71,10 @@ const props = defineProps({
     type: Number,
     default: 0,
   },
+  isTimeEnabled: {
+    type: Boolean,
+    default: false,
+  },
   quickAmountButtons: {
     type: Array,
     default: () => [],
@@ -102,6 +99,7 @@ const props = defineProps({
 
 const emit = defineEmits([
   'update:amountInput',
+  'update:timeEnabled',
   'fill-amount',
   'add-amount',
   'submit-entry',
@@ -114,7 +112,7 @@ const emit = defineEmits([
 const selectedDate = ref(props.anchorDate)
 const selectedDaySort = ref('ASC')
 const calendarScalePreset = ref('default')
-const sheetHeightPreset = ref('default')
+const ledgerSheetRef = ref(null)
 
 const maxDailyExpense = computed(() => {
   const expenses = props.calendarWeeks.flat().map((day) => Number(day.summary?.expense ?? 0))
@@ -138,7 +136,6 @@ const yearOptions = computed(() => {
 })
 
 const calendarScaleValue = computed(() => getPresetValue(calendarScalePresets, calendarScalePreset.value, 'default'))
-const sheetHeightValue = computed(() => getPresetValue(sheetHeightPresets, sheetHeightPreset.value, 'default'))
 
 const calendarViewStyle = computed(() => {
   const zoom = calendarScaleValue.value / 100
@@ -149,20 +146,9 @@ const calendarViewStyle = computed(() => {
     '--calendar-day-padding': `${Math.round(12 * zoom)}px`,
     '--calendar-expense-total-size': `${Math.max(1, 1.18 * zoom).toFixed(2)}rem`,
     '--calendar-metric-size': `${Math.max(0.72, 0.8 * zoom).toFixed(2)}rem`,
-    '--calendar-detail-margin': `${Math.round(16 * zoom)}px`,
+    '--calendar-toolbar-gap': `${Math.round(18 * zoom)}px`,
   }
 })
-
-const sheetWrapStyle = computed(() => ({
-  '--calendar-sheet-height': `${sheetHeightValue.value}px`,
-}))
-
-const normalizedEntries = computed(() =>
-  props.entries.map((entry) => ({
-    ...entry,
-    visibleMemo: stripImportedMemo(entry.memo),
-  })),
-)
 
 const normalizedSelectedDateEntries = computed(() =>
   selectedDateEntries.value.map((entry) => ({
@@ -171,7 +157,8 @@ const normalizedSelectedDateEntries = computed(() =>
   })),
 )
 
-const hasSheetMemoColumn = computed(() => normalizedEntries.value.some((entry) => entry.visibleMemo))
+const hasSelectedMemoColumn = computed(() => normalizedSelectedDateEntries.value.some((entry) => entry.visibleMemo))
+const selectedDateCountLabel = computed(() => `${normalizedSelectedDateEntries.value.length}건`)
 
 watch(
   () => props.anchorDate,
@@ -184,15 +171,15 @@ watch(
   { immediate: true },
 )
 
-watch(calendarScalePreset, (value) => {
-  if (typeof window !== 'undefined') {
-    window.localStorage.setItem(CALENDAR_SCALE_KEY, value)
+watch(selectedDate, (value) => {
+  if (!props.isEditingEntry) {
+    props.entryForm.entryDate = value
   }
 })
 
-watch(sheetHeightPreset, (value) => {
+watch(calendarScalePreset, (value) => {
   if (typeof window !== 'undefined') {
-    window.localStorage.setItem(CALENDAR_SHEET_HEIGHT_KEY, value)
+    window.localStorage.setItem(CALENDAR_SCALE_KEY, value)
   }
 })
 
@@ -202,14 +189,9 @@ onMounted(() => {
   }
 
   const savedScale = window.localStorage.getItem(CALENDAR_SCALE_KEY)
-  const savedSheetHeight = window.localStorage.getItem(CALENDAR_SHEET_HEIGHT_KEY)
 
   if (savedScale) {
     calendarScalePreset.value = normalizePresetKey(calendarScalePresets, savedScale, 'default')
-  }
-
-  if (savedSheetHeight) {
-    sheetHeightPreset.value = normalizePresetKey(sheetHeightPresets, savedSheetHeight, 'default')
   }
 })
 
@@ -288,11 +270,19 @@ function shiftAnchorMonth(offset) {
   updateAnchorMonth(nextDate.getFullYear(), nextDate.getMonth() + 1)
 }
 
-function handleSelectDay(day) {
+async function handleSelectDay(day) {
   selectedDate.value = day.date
+
+  if (!props.isEditingEntry) {
+    props.entryForm.entryDate = day.date
+  }
+
   if (!day.inCurrentMonth) {
     emit('change-anchor-month', day.date)
   }
+
+  await nextTick()
+  ledgerSheetRef.value?.scrollIntoView({ behavior: 'smooth', block: 'start' })
 }
 
 function getMonthTag(day) {
@@ -309,162 +299,126 @@ function getMonthTag(day) {
       <SummaryCard v-for="card in quickStats" :key="card.key" :card="card" />
     </section>
 
-    <div class="content-grid content-grid--calendar household-calendar-layout" :style="calendarViewStyle">
-      <section class="panel">
-        <div class="panel__header">
-          <div>
-            <h2>{{ monthLabel }}</h2>
-            <p>월간 달력에서 수입과 지출 흐름을 한눈에 보고, 날짜별 거래를 바로 이어서 확인할 수 있습니다.</p>
-          </div>
-          <span class="panel__badge">{{ anchorDate.slice(0, 7) }}</span>
+    <section class="panel household-calendar-panel household-calendar-layout" :style="calendarViewStyle">
+      <div class="panel__header">
+        <div>
+          <h2>{{ monthLabel }}</h2>
+          <p>달력을 넓게 보고 날짜를 누르면 바로 아래 거래 시트로 이동해 해당 날짜 거래를 바로 확인할 수 있습니다.</p>
         </div>
+        <span class="panel__badge">{{ anchorDate.slice(0, 7) }}</span>
+      </div>
 
-        <div class="calendar-toolbar">
-          <div class="calendar-stepper">
-            <span class="calendar-stepper__label">연도</span>
-            <div class="calendar-stepper__controls">
-              <button type="button" class="calendar-stepper__arrow" aria-label="이전 연도" @click="shiftAnchorYear(-1)">&lt;</button>
-              <label class="field calendar-stepper__field">
-                <select :value="calendarYear" @change="handleChangeYear">
-                  <option v-for="year in yearOptions" :key="year" :value="year">{{ year }}년</option>
-                </select>
-              </label>
-              <button type="button" class="calendar-stepper__arrow" aria-label="다음 연도" @click="shiftAnchorYear(1)">&gt;</button>
-            </div>
-          </div>
-          <div class="calendar-stepper">
-            <span class="calendar-stepper__label">월</span>
-            <div class="calendar-stepper__controls">
-              <button type="button" class="calendar-stepper__arrow" aria-label="이전 달" @click="shiftAnchorMonth(-1)">&lt;</button>
-              <label class="field calendar-stepper__field">
-                <select :value="calendarMonth" @change="handleChangeMonth">
-                  <option v-for="month in 12" :key="month" :value="month">{{ month }}월</option>
-                </select>
-              </label>
-              <button type="button" class="calendar-stepper__arrow" aria-label="다음 달" @click="shiftAnchorMonth(1)">&gt;</button>
-            </div>
+      <div class="calendar-toolbar">
+        <div class="calendar-stepper">
+          <span class="calendar-stepper__label">연도</span>
+          <div class="calendar-stepper__controls">
+            <button type="button" class="calendar-stepper__arrow" aria-label="이전 연도" @click="shiftAnchorYear(-1)">&lt;</button>
+            <label class="field calendar-stepper__field">
+              <select :value="calendarYear" @change="handleChangeYear">
+                <option v-for="year in yearOptions" :key="year" :value="year">{{ year }}년</option>
+              </select>
+            </label>
+            <button type="button" class="calendar-stepper__arrow" aria-label="다음 연도" @click="shiftAnchorYear(1)">&gt;</button>
           </div>
         </div>
+        <div class="calendar-stepper">
+          <span class="calendar-stepper__label">월</span>
+          <div class="calendar-stepper__controls">
+            <button type="button" class="calendar-stepper__arrow" aria-label="이전 달" @click="shiftAnchorMonth(-1)">&lt;</button>
+            <label class="field calendar-stepper__field">
+              <select :value="calendarMonth" @change="handleChangeMonth">
+                <option v-for="month in 12" :key="month" :value="month">{{ month }}월</option>
+              </select>
+            </label>
+            <button type="button" class="calendar-stepper__arrow" aria-label="다음 달" @click="shiftAnchorMonth(1)">&gt;</button>
+          </div>
+        </div>
+      </div>
 
-        <div class="calendar-size-toolbar">
-          <div class="calendar-size-toolbar__block">
-            <span class="calendar-size-toolbar__label">달력 크기</span>
-            <div class="calendar-size-toggle">
-              <button
-                v-for="preset in calendarScalePresets"
-                :key="preset.key"
-                type="button"
-                class="calendar-size-toggle__button"
-                :class="{ 'is-active': calendarScalePreset === preset.key }"
-                @click="calendarScalePreset = preset.key"
+      <div class="calendar-size-toolbar">
+        <div class="calendar-size-toolbar__block">
+          <span class="calendar-size-toolbar__label">달력 크기</span>
+          <div class="calendar-size-toggle">
+            <button
+              v-for="preset in calendarScalePresets"
+              :key="preset.key"
+              type="button"
+              class="calendar-size-toggle__button"
+              :class="{ 'is-active': calendarScalePreset === preset.key }"
+              @click="calendarScalePreset = preset.key"
+            >
+              {{ preset.label }}
+            </button>
+          </div>
+        </div>
+        <strong class="calendar-size-toolbar__hint">현재 {{ calendarScalePresets.find((item) => item.key === calendarScalePreset)?.label }}</strong>
+      </div>
+
+      <div class="calendar-shell">
+        <div class="calendar">
+          <div class="calendar__weekdays">
+            <span v-for="weekday in weekdayLabels" :key="weekday">{{ weekday }}</span>
+          </div>
+
+          <div class="calendar__weeks">
+            <div v-for="(week, weekIndex) in calendarWeeks" :key="`week-${weekIndex}`" class="calendar__week">
+              <article
+                v-for="day in week"
+                :key="day.date"
+                :class="[
+                  'calendar__day',
+                  {
+                    'calendar__day--muted': !day.inCurrentMonth,
+                    'calendar__day--active': Number(day.summary.expense) > 0,
+                    'calendar__day--selected': selectedDate === day.date,
+                  },
+                ]"
+                role="button"
+                tabindex="0"
+                @click="handleSelectDay(day)"
+                @keydown.enter.prevent="handleSelectDay(day)"
               >
-                {{ preset.label }}
-              </button>
-            </div>
-          </div>
-          <strong class="calendar-size-toolbar__hint">현재 {{ calendarScalePresets.find((item) => item.key === calendarScalePreset)?.label }}</strong>
-        </div>
-
-        <div class="calendar-shell">
-          <div class="calendar">
-            <div class="calendar__weekdays">
-              <span v-for="weekday in weekdayLabels" :key="weekday">{{ weekday }}</span>
-            </div>
-
-            <div class="calendar__weeks">
-              <div v-for="(week, weekIndex) in calendarWeeks" :key="`week-${weekIndex}`" class="calendar__week">
-                <article
-                  v-for="day in week"
-                  :key="day.date"
-                  :class="[
-                    'calendar__day',
-                    {
-                      'calendar__day--muted': !day.inCurrentMonth,
-                      'calendar__day--active': Number(day.summary.expense) > 0,
-                      'calendar__day--selected': selectedDate === day.date,
-                    },
-                  ]"
-                  role="button"
-                  tabindex="0"
-                  @click="handleSelectDay(day)"
-                  @keydown.enter.prevent="handleSelectDay(day)"
-                >
-                  <div class="calendar__day-head">
-                    <div class="calendar__day-stamp">
-                      <span v-if="getMonthTag(day)" class="calendar__month-tag">{{ getMonthTag(day) }}</span>
-                      <strong>{{ day.dayNumber }}</strong>
-                    </div>
-                    <span>{{ day.summary.entryCount }}건</span>
+                <div class="calendar__day-head">
+                  <div class="calendar__day-stamp">
+                    <span v-if="getMonthTag(day)" class="calendar__month-tag">{{ getMonthTag(day) }}</span>
+                    <strong>{{ day.dayNumber }}</strong>
                   </div>
-                  <div class="calendar__expense-block">
-                    <span class="calendar__label">오늘 사용</span>
-                    <strong class="calendar__expense-total">
-                      {{ formatCompactCurrency(day.summary.expense) }}
-                    </strong>
+                  <span>{{ day.summary.entryCount }}건</span>
+                </div>
+                <div class="calendar__expense-block">
+                  <span class="calendar__label">오늘 사용</span>
+                  <strong class="calendar__expense-total">
+                    {{ formatCompactCurrency(day.summary.expense) }}
+                  </strong>
+                </div>
+                <div class="calendar__metrics">
+                  <div class="calendar__metric calendar__metric--expense">
+                    <span>지출</span>
+                    <strong class="is-expense">{{ formatCurrency(day.summary.expense) }}</strong>
                   </div>
-                  <div class="calendar__metrics">
-                    <div class="calendar__metric calendar__metric--expense">
-                      <span>지출</span>
-                      <strong class="is-expense">{{ formatCurrency(day.summary.expense) }}</strong>
-                    </div>
-                    <div class="calendar__metric calendar__metric--income">
-                      <span>수입</span>
-                      <strong class="is-income">{{ formatCurrency(day.summary.income) }}</strong>
-                    </div>
+                  <div class="calendar__metric calendar__metric--income">
+                    <span>수입</span>
+                    <strong class="is-income">{{ formatCurrency(day.summary.income) }}</strong>
                   </div>
-                  <div class="calendar__bar">
-                    <span :style="{ width: `${getExpenseRatio(day)}%` }" />
-                  </div>
-                </article>
-              </div>
+                </div>
+                <div class="calendar__bar">
+                  <span :style="{ width: `${getExpenseRatio(day)}%` }" />
+                </div>
+              </article>
             </div>
           </div>
         </div>
+      </div>
+    </section>
 
-        <section class="calendar-detail">
-          <div class="panel__header">
-            <div>
-              <h3>{{ formatShortDate(selectedDate) }} 거래</h3>
-              <p>선택한 날짜의 거래를 시간 순서대로 바로 확인할 수 있습니다.</p>
-            </div>
-            <div class="scope-toggle">
-              <button class="button" :class="{ 'button--primary': selectedDaySort === 'ASC' }" @click="selectedDaySort = 'ASC'">시간 오름차순</button>
-              <button class="button" :class="{ 'button--primary': selectedDaySort === 'DESC' }" @click="selectedDaySort = 'DESC'">시간 내림차순</button>
-            </div>
-          </div>
-
-          <div v-if="normalizedSelectedDateEntries.length" class="calendar-detail__list">
-            <article v-for="entry in normalizedSelectedDateEntries" :key="entry.id" class="calendar-detail__item">
-              <div class="calendar-detail__meta">
-                <span class="chip" :class="entry.entryType === 'INCOME' ? 'chip--income' : 'chip--expense'">
-                  {{ entry.entryType === 'INCOME' ? '수입' : '지출' }}
-                </span>
-                <strong>{{ entry.title }}</strong>
-                <small>{{ formatTime(entry.entryTime) }} · {{ entry.paymentMethodName }}</small>
-                <small>{{ entry.categoryGroupName }}<template v-if="entry.categoryDetailName"> / {{ entry.categoryDetailName }}</template></small>
-              </div>
-              <div class="calendar-detail__amount">
-                <strong :class="entry.entryType === 'INCOME' ? 'is-income' : 'is-expense'">{{ formatCurrency(entry.amount) }}</strong>
-                <small v-if="entry.visibleMemo">{{ entry.visibleMemo }}</small>
-              </div>
-              <div class="sheet-table__actions">
-                <button class="button button--ghost" @click="emit('edit-entry', entry)">수정</button>
-                <button class="button button--danger" @click="emit('delete-entry', entry)">삭제</button>
-              </div>
-            </article>
-          </div>
-
-          <p v-else class="panel__empty">선택한 날짜에는 거래가 없습니다.</p>
-        </section>
-      </section>
-
-      <section class="panel">
+    <div class="household-ledger-grid">
+      <section class="panel household-entry-panel">
         <div class="panel__header">
           <div>
             <h2>{{ isEditingEntry ? '거래 수정' : '빠른 거래 입력' }}</h2>
-            <p>금액을 먼저 입력하고 결제수단, 카테고리, 메모를 빠르게 채우는 흐름으로 정리했습니다.</p>
+            <p>선택한 날짜를 기본값으로 이어받아 빠르게 기록하고, 시간 입력이 필요할 때만 켜서 저장할 수 있습니다.</p>
           </div>
-          <span class="panel__badge">{{ entries.length }}건</span>
+          <span class="panel__badge">{{ formatShortDate(entryForm.entryDate) }}</span>
         </div>
 
         <div class="entry-editor">
@@ -523,9 +477,18 @@ function getMonthTag(day) {
               <input v-model="entryForm.entryDate" type="date" />
             </label>
 
-            <label class="field">
+            <label class="field household-time-field">
               <span class="field__label">시간</span>
-              <input v-model="entryForm.entryTime" type="time" />
+              <label class="checkbox-row household-time-toggle">
+                <input
+                  :checked="isTimeEnabled"
+                  type="checkbox"
+                  @change="emit('update:timeEnabled', $event.target.checked)"
+                />
+                <span>시간 입력 사용</span>
+              </label>
+              <input v-model="entryForm.entryTime" type="time" :disabled="!isTimeEnabled" />
+              <small class="field__hint">시간 입력을 끄면 자동으로 00:00으로 저장됩니다.</small>
             </label>
 
             <label class="field field--full">
@@ -583,79 +546,66 @@ function getMonthTag(day) {
           </button>
         </div>
       </section>
-    </div>
 
-    <section class="panel">
-      <div class="panel__header panel__header--sheet-scale">
-        <div>
-          <h2>{{ monthLabel }} 거래 시트</h2>
-          <p>월 전체 거래를 표로 확인하고 바로 수정하거나 삭제할 수 있습니다.</p>
-        </div>
-        <div class="calendar-size-toolbar calendar-size-toolbar--sheet">
-          <div class="calendar-size-toolbar__block">
-            <span class="calendar-size-toolbar__label">시트 높이</span>
-            <div class="calendar-size-toggle">
-              <button
-                v-for="preset in sheetHeightPresets"
-                :key="preset.key"
-                type="button"
-                class="calendar-size-toggle__button"
-                :class="{ 'is-active': sheetHeightPreset === preset.key }"
-                @click="sheetHeightPreset = preset.key"
-              >
-                {{ preset.label }}
-              </button>
+      <section ref="ledgerSheetRef" class="panel household-sheet-panel">
+        <div class="panel__header">
+          <div>
+            <h2>{{ formatShortDate(selectedDate) }} 거래 시트</h2>
+            <p>달력에서 고른 날짜의 거래만 모아서 바로 수정하거나 삭제할 수 있습니다.</p>
+          </div>
+          <div class="household-sheet-header">
+            <span class="panel__badge">{{ selectedDateCountLabel }}</span>
+            <div class="scope-toggle">
+              <button class="button" :class="{ 'button--primary': selectedDaySort === 'ASC' }" @click="selectedDaySort = 'ASC'">시간 오름차순</button>
+              <button class="button" :class="{ 'button--primary': selectedDaySort === 'DESC' }" @click="selectedDaySort = 'DESC'">시간 내림차순</button>
             </div>
           </div>
-          <strong class="calendar-size-toolbar__hint">현재 {{ sheetHeightPresets.find((item) => item.key === sheetHeightPreset)?.label }}</strong>
         </div>
-      </div>
 
-      <div class="sheet-table-wrap calendar-sheet-table-wrap" :style="sheetWrapStyle">
-        <table class="sheet-table">
-          <thead>
-            <tr>
-              <th>날짜</th>
-              <th>시간</th>
-              <th>구분</th>
-              <th>제목</th>
-              <th>카테고리</th>
-              <th>결제수단</th>
-              <th>금액</th>
-              <th v-if="hasSheetMemoColumn">메모</th>
-              <th>작업</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="entry in normalizedEntries" :key="entry.id">
-              <td>{{ formatShortDate(entry.entryDate) }}</td>
-              <td>{{ formatTime(entry.entryTime) }}</td>
-              <td>
-                <span :class="['chip', entry.entryType === 'INCOME' ? 'chip--income' : 'chip--expense']">
-                  {{ entry.entryType === 'INCOME' ? '수입' : '지출' }}
-                </span>
-              </td>
-              <td class="sheet-table__title">{{ entry.title }}</td>
-              <td class="sheet-table__category">
-                {{ entry.categoryGroupName }}
-                <template v-if="entry.categoryDetailName"> / {{ entry.categoryDetailName }}</template>
-              </td>
-              <td>{{ entry.paymentMethodName }}</td>
-              <td :class="['sheet-table__amount', entry.entryType === 'INCOME' ? 'is-income' : 'is-expense']">
-                {{ formatCurrency(entry.amount) }}
-              </td>
-              <td v-if="hasSheetMemoColumn" class="sheet-table__memo">{{ entry.visibleMemo || '-' }}</td>
-              <td class="sheet-table__actions">
-                <button class="button button--ghost" @click="emit('edit-entry', entry)">수정</button>
-                <button class="button button--danger" @click="emit('delete-entry', entry)">삭제</button>
-              </td>
-            </tr>
-            <tr v-if="!entries.length">
-              <td :colspan="hasSheetMemoColumn ? 9 : 8" class="sheet-table__empty">선택한 기간에 거래가 없습니다.</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </section>
+        <div class="sheet-table-wrap household-sheet-table-wrap">
+          <table class="sheet-table">
+            <thead>
+              <tr>
+                <th>시간</th>
+                <th>구분</th>
+                <th>제목</th>
+                <th>카테고리</th>
+                <th>결제수단</th>
+                <th>금액</th>
+                <th v-if="hasSelectedMemoColumn">메모</th>
+                <th>작업</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="entry in normalizedSelectedDateEntries" :key="entry.id">
+                <td>{{ formatTime(entry.entryTime) }}</td>
+                <td>
+                  <span :class="['chip', entry.entryType === 'INCOME' ? 'chip--income' : 'chip--expense']">
+                    {{ entry.entryType === 'INCOME' ? '수입' : '지출' }}
+                  </span>
+                </td>
+                <td class="sheet-table__title">{{ entry.title }}</td>
+                <td class="sheet-table__category">
+                  {{ entry.categoryGroupName }}
+                  <template v-if="entry.categoryDetailName"> / {{ entry.categoryDetailName }}</template>
+                </td>
+                <td>{{ entry.paymentMethodName }}</td>
+                <td :class="['sheet-table__amount', entry.entryType === 'INCOME' ? 'is-income' : 'is-expense']">
+                  {{ formatCurrency(entry.amount) }}
+                </td>
+                <td v-if="hasSelectedMemoColumn" class="sheet-table__memo">{{ entry.visibleMemo || '-' }}</td>
+                <td class="sheet-table__actions">
+                  <button class="button button--ghost" @click="emit('edit-entry', entry)">수정</button>
+                  <button class="button button--danger" @click="emit('delete-entry', entry)">삭제</button>
+                </td>
+              </tr>
+              <tr v-if="!normalizedSelectedDateEntries.length">
+                <td :colspan="hasSelectedMemoColumn ? 8 : 7" class="sheet-table__empty">선택한 날짜에는 거래가 없습니다.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
   </div>
 </template>

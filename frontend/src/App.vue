@@ -47,6 +47,8 @@ const featureItems = [
   },
 ]
 
+const THEME_STORAGE_KEY = 'calen-theme-mode'
+
 const routeMeta = {
   launcher: {
     title: '기능 선택',
@@ -91,6 +93,7 @@ const inviteToken = ref(initialRouteState.token)
 const inviteInfo = ref(null)
 const isInviteLoading = ref(false)
 const isCreatingInvite = ref(false)
+const themeMode = ref('default')
 
 const loginForm = reactive({
   loginId: '',
@@ -114,6 +117,7 @@ const inviteManager = reactive({
 })
 
 const pageMeta = computed(() => routeMeta[activeRoute.value] || routeMeta.launcher)
+const isMetalTheme = computed(() => themeMode.value === 'metal-dark')
 
 let inviteRequestSequence = 0
 
@@ -142,7 +146,7 @@ function formatDateTime(value) {
     return String(value)
   }
 
-  return new Intl.DateTimeFormat('en-US', {
+  return new Intl.DateTimeFormat('ko-KR', {
     dateStyle: 'medium',
     timeStyle: 'short',
   }).format(normalized)
@@ -167,6 +171,27 @@ function applyHashRoute(hash) {
 function buildInviteUrl(token) {
   const path = window.location.pathname || '/'
   return `${window.location.origin}${path}#invite/${encodeURIComponent(token)}`
+}
+
+function applyTheme(mode) {
+  const normalized = mode === 'metal-dark' ? 'metal-dark' : 'default'
+  themeMode.value = normalized
+
+  if (typeof document !== 'undefined') {
+    if (normalized === 'metal-dark') {
+      document.documentElement.setAttribute('data-theme', 'metal-dark')
+    } else {
+      document.documentElement.removeAttribute('data-theme')
+    }
+  }
+
+  if (typeof window !== 'undefined') {
+    window.localStorage.setItem(THEME_STORAGE_KEY, normalized)
+  }
+}
+
+function toggleTheme() {
+  applyTheme(isMetalTheme.value ? 'default' : 'metal-dark')
 }
 
 function navigate(route) {
@@ -358,6 +383,9 @@ watch([activeRoute, inviteToken], ([route, token]) => {
 }, { immediate: true })
 
 onMounted(() => {
+  if (typeof window !== 'undefined') {
+    applyTheme(window.localStorage.getItem(THEME_STORAGE_KEY) || 'default')
+  }
   window.addEventListener('hashchange', handleHashChange)
   restoreSession()
 })
@@ -369,6 +397,10 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="app-shell">
+    <button class="theme-toggle" type="button" @click="toggleTheme">
+      {{ isMetalTheme ? '기본 테마' : '메탈릭 테마' }}
+    </button>
+
     <div v-if="!authChecked" class="loading-overlay">세션을 확인하는 중입니다...</div>
 
     <template v-else-if="activeRoute === 'invite'">

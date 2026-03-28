@@ -1,4 +1,4 @@
-FROM eclipse-temurin:17-jdk-alpine AS build
+FROM eclipse-temurin:17-jdk-jammy AS build
 
 WORKDIR /workspace
 
@@ -12,11 +12,13 @@ COPY src src
 
 RUN ./gradlew --no-daemon clean bootWar
 
-FROM eclipse-temurin:17-jre-alpine
+FROM eclipse-temurin:17-jre-jammy
 
-RUN apk add --no-cache curl \
-    && addgroup -S spring \
-    && adduser -S spring -G spring
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends curl \
+    && rm -rf /var/lib/apt/lists/* \
+    && groupadd --system spring \
+    && useradd --system --gid spring --home-dir /app --shell /usr/sbin/nologin spring
 
 WORKDIR /app
 

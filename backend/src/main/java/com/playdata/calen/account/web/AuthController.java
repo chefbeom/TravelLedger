@@ -1,9 +1,7 @@
 package com.playdata.calen.account.web;
 
-import com.playdata.calen.account.domain.AppUser;
 import com.playdata.calen.account.dto.AppUserResponse;
 import com.playdata.calen.account.dto.AuthLoginRequest;
-import com.playdata.calen.account.dto.AuthRegisterRequest;
 import com.playdata.calen.account.security.AppUserPrincipal;
 import com.playdata.calen.account.service.AppUserService;
 import com.playdata.calen.account.service.LoginAttemptService;
@@ -49,18 +47,6 @@ public class AuthController {
         );
     }
 
-    @PostMapping("/register")
-    public AppUserResponse register(
-            @Valid @RequestBody AuthRegisterRequest request,
-            HttpServletRequest httpRequest,
-            HttpServletResponse httpResponse
-    ) {
-        AppUser user = appUserService.registerUser(request.loginId(), request.displayName(), request.password());
-        Authentication authentication = authenticate(request.loginId(), request.password());
-        signIn(authentication, request.rememberDevice(), httpRequest, httpResponse);
-        return appUserService.toResponse(user);
-    }
-
     @PostMapping("/login")
     public AppUserResponse login(
             @Valid @RequestBody AuthLoginRequest request,
@@ -69,17 +55,17 @@ public class AuthController {
     ) {
         String normalizedLoginId = request.loginId().trim();
         String clientIp = resolveClientIp(httpRequest);
-        loginAttemptService.ensureAllowed(normalizedLoginId, clientIp);
+        loginAttemptService.ensureAllowed(clientIp);
 
         Authentication authentication;
         try {
             authentication = authenticate(normalizedLoginId, request.password());
         } catch (AuthenticationException exception) {
-            loginAttemptService.recordFailure(normalizedLoginId, clientIp);
+            loginAttemptService.recordFailure(clientIp);
             throw exception;
         }
 
-        loginAttemptService.recordSuccess(normalizedLoginId, clientIp);
+        loginAttemptService.recordSuccess(clientIp);
         signIn(authentication, request.rememberDevice(), httpRequest, httpResponse);
         return appUserService.toResponse(appUserService.getRequiredUser(((AppUserPrincipal) authentication.getPrincipal()).userId()));
     }

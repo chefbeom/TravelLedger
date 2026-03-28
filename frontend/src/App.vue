@@ -4,65 +4,65 @@ import FeatureLauncher from './components/FeatureLauncher.vue'
 import FamilyAlbumWorkspace from './components/FamilyAlbumWorkspace.vue'
 import HouseholdWorkspace from './components/HouseholdWorkspace.vue'
 import TravelHubWorkspace from './components/TravelHubWorkspace.vue'
-import { fetchCurrentUser, login, logout as logoutRequest, register } from './lib/api'
+import { fetchCurrentUser, login, logout as logoutRequest } from './lib/api'
 
 const featureItems = [
   {
     key: 'household',
     number: '1',
     title: '가계부',
-    description: '이전에 만들었던 가계부 기능 전체를 다시 사용하는 페이지입니다.',
+    description: '가계부, 통계, 검색과 관리 기능을 한 화면에서 바로 사용할 수 있습니다.',
   },
   {
     key: 'travel-money',
     number: '2',
-    title: '여행 돈 장부',
-    description: '여행 생성, 예산안, 실제 지출 장부와 통계를 관리합니다.',
+    title: '여행 예산',
+    description: '여행 생성, 예산 계획, 실제 지출과 통계를 함께 관리합니다.',
   },
   {
     key: 'travel-log',
     number: '3',
     title: '여행 로그',
-    description: '날짜별 여행 기록, 장소 핀, 이동 경로와 GPX를 남기는 페이지입니다.',
+    description: '여행 기록, 경로, 사진과 GPX 파일을 묶어서 관리합니다.',
   },
   {
     key: 'photo-album',
     number: '4',
-    title: '여행 사진 지도',
-    description: '여행 기록과 연결된 사진을 지도와 카드로 확인하는 페이지입니다.',
+    title: '여행 사진',
+    description: '여행 기록과 연결된 사진을 카드 형태로 모아 볼 수 있습니다.',
   },
   {
     key: 'family-album',
     number: '5',
-    title: '가족 사진첩',
-    description: '가족 카테고리를 만들고 사진과 동영상을 업로드해 공유하는 독립 페이지입니다.',
+    title: '가족 앨범',
+    description: '가족 카테고리별 사진과 영상을 업로드하고 공유할 수 있습니다.',
   },
 ]
 
 const routeMeta = {
   launcher: {
     title: '기능 선택',
-    description: '원하는 기능 페이지 하나를 골라 바로 들어가세요.',
+    description: '원하는 기능 페이지를 골라 바로 들어갈 수 있습니다.',
   },
   household: {
     title: '가계부',
-    description: '달력 가계부, 통계, 검색, 인사이트와 관리 기능이 있는 페이지입니다.',
+    description: '달력 가계부, 통계, 검색, 카테고리 관리까지 한 번에 확인합니다.',
   },
   'travel-money': {
-    title: '여행 돈 장부',
-    description: '여행 예산과 실제 지출 기록을 관리하는 독립 페이지입니다.',
+    title: '여행 예산',
+    description: '여행 예산과 실제 지출 기록을 함께 관리하는 페이지입니다.',
   },
   'travel-log': {
     title: '여행 로그',
-    description: '여행 기록, 핀, 이동 경로를 남기는 독립 페이지입니다.',
+    description: '여행 기록, 이동 경로, 메모와 사진을 정리하는 페이지입니다.',
   },
   'photo-album': {
-    title: '여행 사진 지도',
-    description: '여행 로그에서 공유한 사진을 지도와 카드로 보는 독립 페이지입니다.',
+    title: '여행 사진',
+    description: '여행 로그에서 공유한 사진을 모아보는 페이지입니다.',
   },
   'family-album': {
-    title: '가족 사진첩',
-    description: '가족 카테고리별로 사진과 동영상을 업로드하고 앨범으로 묶는 독립 페이지입니다.',
+    title: '가족 앨범',
+    description: '가족 구성원과 함께 사진과 영상을 나누는 페이지입니다.',
   },
 }
 
@@ -77,13 +77,6 @@ const activeRoute = ref(resolveRoute(window.location.hash))
 const loginForm = reactive({
   loginId: 'hana',
   password: 'test1234',
-  rememberDevice: true,
-})
-
-const registerForm = reactive({
-  displayName: '',
-  loginId: '',
-  password: '',
   rememberDevice: true,
 })
 
@@ -142,36 +135,11 @@ async function handleLogin() {
   }
 }
 
-async function handleRegister() {
-  isSubmitting.value = true
-  activeSubmit.value = 'register'
-  setFeedback()
-
-  try {
-    currentUser.value = await register({
-      displayName: registerForm.displayName.trim(),
-      loginId: registerForm.loginId.trim(),
-      password: registerForm.password,
-      rememberDevice: registerForm.rememberDevice,
-    })
-    registerForm.displayName = ''
-    registerForm.loginId = ''
-    registerForm.password = ''
-    navigate('launcher')
-    setFeedback('회원가입이 완료되었고 바로 로그인되었습니다.')
-  } catch (error) {
-    setFeedback('', error.message)
-  } finally {
-    isSubmitting.value = false
-    activeSubmit.value = ''
-  }
-}
-
 async function handleLogout() {
   try {
     await logoutRequest()
   } catch {
-    // 로그아웃 요청이 실패해도 화면 상태는 정리합니다.
+    // 로그아웃 요청이 실패해도 화면 상태는 바로 정리합니다.
   }
 
   currentUser.value = null
@@ -197,8 +165,8 @@ onBeforeUnmount(() => {
       <section class="auth-shell">
         <div class="auth-copy">
           <span class="auth-copy__badge">로그인 후 기능 선택</span>
-          <h1>로그인하면 먼저 1번부터 5번까지 기능을 고르는 시작 페이지가 열립니다.</h1>
-          <p>가계부, 여행 돈 장부, 여행 로그, 여행 사진 지도, 가족 사진첩이 서로 독립된 페이지로 구성되어 있습니다.</p>
+          <h1>로그인하면 가계부, 여행, 가족 앨범 기능을 바로 사용할 수 있습니다.</h1>
+          <p>회원가입은 비활성화되어 있으며, 새 계정은 개발자 또는 관리자만 직접 추가할 수 있습니다.</p>
         </div>
 
         <div class="auth-grid">
@@ -218,19 +186,11 @@ onBeforeUnmount(() => {
           </article>
 
           <article class="auth-card">
-            <h2>회원가입</h2>
-            <form class="stack-form" @submit.prevent="handleRegister">
-              <input v-model="registerForm.displayName" type="text" placeholder="표시 이름" autocomplete="name" />
-              <input v-model="registerForm.loginId" type="text" placeholder="아이디" autocomplete="username" />
-              <input v-model="registerForm.password" type="password" placeholder="비밀번호" autocomplete="new-password" />
-              <label class="checkbox-row">
-                <input v-model="registerForm.rememberDevice" type="checkbox" />
-                <span>이 기기에서 로그인 유지</span>
-              </label>
-              <button class="button" type="submit" :disabled="isSubmitting">
-                {{ isSubmitting && activeSubmit === 'register' ? '가입 중...' : '계정 만들기' }}
-              </button>
-            </form>
+            <h2>계정 안내</h2>
+            <div class="stack-form stack-form--readonly">
+              <p>회원가입 기능은 제공하지 않습니다.</p>
+              <p>새 계정이 필요하면 개발자에게 직접 사용자 정보를 추가해 달라고 요청해 주세요.</p>
+            </div>
           </article>
         </div>
       </section>

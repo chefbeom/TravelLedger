@@ -10,6 +10,12 @@ Uploads are now backend-mediated only:
 
 The browser does not upload directly to MinIO in the default deployment.
 
+Account policy:
+
+- Self-service registration is disabled
+- Accounts must be created directly by a developer or administrator
+- Login is blocked for 24 hours after 5 failed attempts from the same IP
+
 ## Stack
 
 - `frontend`: Vue 3 + Vite build served by Nginx
@@ -202,6 +208,29 @@ docker compose -f docker-compose.oci.yml ps
 docker compose -f docker-compose.oci.yml logs -f backend
 docker compose -f docker-compose.oci.yml logs -f frontend
 ```
+
+## DB Access From Your PC
+
+For OCI, MariaDB is published to the server loopback only:
+
+- `OCI_DB_BIND_HOST=127.0.0.1`
+- `OCI_DB_BIND_PORT=3306`
+
+Recommended access is SSH tunneling from your PC.
+
+Example:
+
+```bash
+ssh -L 13306:127.0.0.1:3306 ubuntu@168.107.62.187
+```
+
+Then connect from MySQL Workbench, VS Code, or DBeaver with:
+
+- Host: `127.0.0.1`
+- Port: `13306`
+- Database: `calen`
+- Username: `.env` `DB_USER`
+- Password: `.env` `DB_PASSWORD`
 
 ## Data Volumes
 

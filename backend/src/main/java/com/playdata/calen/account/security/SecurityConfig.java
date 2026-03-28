@@ -71,7 +71,6 @@ public class SecurityConfig {
                     auth.requestMatchers(
                             "/api/auth/csrf",
                             "/api/auth/login",
-                            "/api/auth/register",
                             "/api/auth/me",
                             "/api/auth/logout",
                             "/actuator/health",

@@ -1,6 +1,7 @@
 package com.playdata.calen.account.service;
 
 import com.playdata.calen.common.exception.TooManyRequestsException;
+import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Map;
@@ -11,28 +12,33 @@ import org.springframework.util.StringUtils;
 @Service
 public class LoginAttemptService {
 
-    private static final int MAX_LOGIN_FAILURES = 5;
-    private static final int MAX_IP_FAILURES = 20;
-    private static final Duration FAILURE_WINDOW = Duration.ofMinutes(15);
-    private static final Duration LOCK_DURATION = Duration.ofMinutes(15);
+    private static final int MAX_IP_FAILURES = 5;
+    private static final Duration FAILURE_WINDOW = Duration.ofHours(24);
+    private static final Duration LOCK_DURATION = Duration.ofHours(24);
 
     private final Map<String, AttemptState> attempts = new ConcurrentHashMap<>();
+    private final Clock clock;
 
-    public void ensureAllowed(String loginId, String clientIp) {
-        Instant now = Instant.now();
-        enforceLock(keyForLogin(loginId), now);
+    public LoginAttemptService() {
+        this(Clock.systemUTC());
+    }
+
+    LoginAttemptService(Clock clock) {
+        this.clock = clock;
+    }
+
+    public void ensureAllowed(String clientIp) {
+        Instant now = Instant.now(clock);
         enforceLock(keyForIp(clientIp), now);
     }
 
-    public void recordSuccess(String loginId, String clientIp) {
-        attempts.remove(keyForLogin(loginId));
+    public void recordSuccess(String clientIp) {
         attempts.remove(keyForIp(clientIp));
     }
 
-    public void recordFailure(String loginId, String clientIp) {
-        Instant now = Instant.now();
-        updateFailure(keyForLogin(loginId), MAX_LOGIN_FAILURES, now);
-        updateFailure(keyForIp(clientIp), MAX_IP_FAILURES, now);
+    public void recordFailure(String clientIp) {
+        Instant now = Instant.now(clock);
+        updateFailure(keyForIp(clientIp), now);
         pruneExpiredEntries(now);
     }
 
@@ -43,7 +49,7 @@ public class LoginAttemptService {
         }
 
         if (state.lockedUntil() != null && state.lockedUntil().isAfter(now)) {
-            throw new TooManyRequestsException("로그인 시도가 너무 많습니다. 잠시 후 다시 시도해 주세요.");
+            throw new TooManyRequestsException("같은 IP에서 로그인 실패가 5회 이상 발생해 24시간 동안 차단되었습니다.");
         }
 
         if (state.windowStartedAt().plus(FAILURE_WINDOW).isBefore(now) && state.lockedUntil() == null) {
@@ -51,7 +57,7 @@ public class LoginAttemptService {
         }
     }
 
-    private void updateFailure(String key, int maxFailures, Instant now) {
+    private void updateFailure(String key, Instant now) {
         attempts.compute(key, (ignored, existing) -> {
             AttemptState current = existing;
             if (current == null || current.windowStartedAt().plus(FAILURE_WINDOW).isBefore(now)) {
@@ -59,7 +65,7 @@ public class LoginAttemptService {
             }
 
             int nextCount = current.failureCount() + 1;
-            Instant lockedUntil = nextCount >= maxFailures ? now.plus(LOCK_DURATION) : current.lockedUntil();
+            Instant lockedUntil = nextCount >= MAX_IP_FAILURES ? now.plus(LOCK_DURATION) : current.lockedUntil();
             return new AttemptState(nextCount, current.windowStartedAt(), lockedUntil);
         });
     }
@@ -71,10 +77,6 @@ public class LoginAttemptService {
             boolean windowExpired = state.windowStartedAt().plus(FAILURE_WINDOW).isBefore(now);
             return lockExpired && windowExpired;
         });
-    }
-
-    private String keyForLogin(String loginId) {
-        return "LOGIN:" + normalize(loginId);
     }
 
     private String keyForIp(String clientIp) {

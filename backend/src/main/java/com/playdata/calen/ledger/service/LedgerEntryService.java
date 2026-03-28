@@ -43,6 +43,17 @@ public class LedgerEntryService {
 
     public LedgerCsvExport exportEntriesCsv(Long userId, LocalDate from, LocalDate to) {
         appUserService.getRequiredUser(userId);
+        if (from == null && to == null) {
+            List<LedgerEntryResponse> entries = ledgerEntryRepository.findAllByOwnerIdOrderByEntryDateAscIdAsc(userId).stream()
+                    .map(this::toResponse)
+                    .toList();
+            return new LedgerCsvExport(
+                    LedgerCsvFormatter.buildAllFileName(),
+                    LedgerCsvFormatter.format(entries),
+                    StandardCharsets.UTF_8.name()
+            );
+        }
+
         DateRange range = normalizeRange(from, to);
         List<LedgerEntryResponse> entries = ledgerEntryRepository.findAllByOwnerIdAndEntryDateBetweenOrderByEntryDateAscIdAsc(userId, range.from(), range.to()).stream()
                 .map(this::toResponse)

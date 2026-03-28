@@ -47,6 +47,10 @@ final class LedgerCsvFormatter {
         return "ledger-" + from + "_to_" + to + ".csv";
     }
 
+    static String buildAllFileName() {
+        return "ledger-all.csv";
+    }
+
     private static void appendRow(ByteArrayOutputStream output, List<String> columns) {
         String row = String.join(",", columns.stream().map(LedgerCsvFormatter::escapeCell).toList()) + "\r\n";
         output.writeBytes(row.getBytes(StandardCharsets.UTF_8));

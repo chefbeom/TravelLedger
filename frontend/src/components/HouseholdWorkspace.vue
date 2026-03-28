@@ -28,6 +28,7 @@ import {
   formatShortDate,
   formatTime,
   getMonthRange,
+  parseIsoDate,
   getWeekdayLabels,
   toIsoDate,
 } from '../lib/format'
@@ -56,6 +57,14 @@ const compareUnitLabels = {
 
 const today = toIsoDate(new Date())
 const quickAmountButtons = [10000, 30000, 50000, 100000]
+const csvExportOptions = [
+  { value: 'ALL', label: '전체 데이터' },
+  { value: 'LAST_6_MONTHS', label: '최근 6개월' },
+  { value: 'LAST_1_YEAR', label: '최근 1년' },
+  { value: 'LAST_3_YEARS', label: '최근 3년' },
+  { value: 'CURRENT_VIEW', label: '현재 조회 범위' },
+  { value: 'CUSTOM', label: '직접 선택' },
+]
 
 const isLoading = ref(false)
 const isSubmitting = ref(false)
@@ -127,6 +136,12 @@ const searchForm = reactive({
   sortBy: 'DATE_DESC',
 })
 
+const csvExportControls = reactive({
+  preset: 'ALL',
+  customFrom: today,
+  customTo: today,
+})
+
 const groupForm = reactive({
   entryType: 'EXPENSE',
   name: '',
@@ -164,12 +179,13 @@ const statsCards = computed(() => [
   ...quickStats.value.slice(0, 3),
 ])
 const comparisonBadge = computed(() => `${compareUnitLabels[statsControls.compareUnit] || statsControls.compareUnit} / ${statsControls.comparePeriods}개 구간`)
-const csvExportRange = computed(() => (
+const currentViewCsvRange = computed(() => (
   householdTab.value.startsWith('stats-')
     ? statsRange.value
     : getMonthRange(calendarAnchorDate.value)
 ))
-const csvExportLabel = computed(() => formatDateRange(csvExportRange.value.from, csvExportRange.value.to))
+const csvExportRange = computed(() => resolveCsvExportRange(csvExportControls.preset))
+const csvExportLabel = computed(() => csvExportRange.value.label)
 const sortedMonthEntries = computed(() =>
   monthEntries.value
     .slice()
@@ -403,6 +419,74 @@ function formatAmountShortcut(value) {
   return `+${amount.toLocaleString('ko-KR')}`
 }
 
+function shiftIsoDate(value, { months = 0, years = 0 } = {}) {
+  const date = parseIsoDate(value)
+  if (years) {
+    date.setFullYear(date.getFullYear() - years)
+  }
+  if (months) {
+    date.setMonth(date.getMonth() - months)
+  }
+  return toIsoDate(date)
+}
+
+function resolveCsvExportRange(preset) {
+  if (preset === 'ALL') {
+    return {
+      from: null,
+      to: null,
+      label: '전체 데이터',
+      isAll: true,
+    }
+  }
+
+  if (preset === 'LAST_6_MONTHS') {
+    const from = shiftIsoDate(today, { months: 6 })
+    return {
+      from,
+      to: today,
+      label: `최근 6개월 · ${formatDateRange(from, today)}`,
+      isAll: false,
+    }
+  }
+
+  if (preset === 'LAST_1_YEAR') {
+    const from = shiftIsoDate(today, { years: 1 })
+    return {
+      from,
+      to: today,
+      label: `최근 1년 · ${formatDateRange(from, today)}`,
+      isAll: false,
+    }
+  }
+
+  if (preset === 'LAST_3_YEARS') {
+    const from = shiftIsoDate(today, { years: 3 })
+    return {
+      from,
+      to: today,
+      label: `최근 3년 · ${formatDateRange(from, today)}`,
+      isAll: false,
+    }
+  }
+
+  if (preset === 'CUSTOM') {
+    return {
+      from: csvExportControls.customFrom,
+      to: csvExportControls.customTo,
+      label: `직접 선택 · ${formatDateRange(csvExportControls.customFrom, csvExportControls.customTo)}`,
+      isAll: false,
+    }
+  }
+
+  return {
+    from: currentViewCsvRange.value.from,
+    to: currentViewCsvRange.value.to,
+    label: `현재 조회 범위 · ${formatDateRange(currentViewCsvRange.value.from, currentViewCsvRange.value.to)}`,
+    isAll: false,
+  }
+}
+
 async function refreshLedgerViews() {
   await Promise.all([loadCalendarData(), loadStatisticsData()])
 }
@@ -431,6 +515,9 @@ async function exportEntriesToCsv() {
   activeSubmit.value = 'export-csv'
   setFeedback()
   try {
+    if (!csvExportRange.value.isAll && (!csvExportRange.value.from || !csvExportRange.value.to)) {
+      throw new Error('CSV 저장 범위를 먼저 확인해 주세요.')
+    }
     await downloadLedgerCsv(csvExportRange.value.from, csvExportRange.value.to)
     setFeedback(`CSV 파일을 저장했습니다. (${csvExportLabel.value})`)
   } catch (error) {
@@ -625,6 +712,22 @@ async function deactivatePayment(paymentId) {
             <input :value="householdAnchorDate" type="date" @input="handleChangeHouseholdAnchorDate($event.target.value)" />
           </label>
           <button class="button button--secondary" @click="handleChangeHouseholdAnchorDate(today)">오늘</button>
+          <label class="field">
+            <span class="field__label">CSV 범위</span>
+            <select v-model="csvExportControls.preset">
+              <option v-for="option in csvExportOptions" :key="option.value" :value="option.value">
+                {{ option.label }}
+              </option>
+            </select>
+          </label>
+          <label v-if="csvExportControls.preset === 'CUSTOM'" class="field">
+            <span class="field__label">시작일</span>
+            <input v-model="csvExportControls.customFrom" type="date" />
+          </label>
+          <label v-if="csvExportControls.preset === 'CUSTOM'" class="field">
+            <span class="field__label">종료일</span>
+            <input v-model="csvExportControls.customTo" type="date" />
+          </label>
           <button class="button button--secondary" :disabled="isSubmitting" @click="exportEntriesToCsv">
             {{ isSubmitting && activeSubmit === 'export-csv' ? 'CSV 저장 중...' : `CSV 저장 (${csvExportLabel})` }}
           </button>

@@ -7,6 +7,8 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface LedgerEntryRepository extends JpaRepository<LedgerEntry, Long> {
 
+    List<LedgerEntry> findAllByOwnerIdOrderByEntryDateAscIdAsc(Long ownerId);
+
     List<LedgerEntry> findAllByOwnerIdAndEntryDateBetweenOrderByEntryDateAscIdAsc(Long ownerId, LocalDate from, LocalDate to);
 
     List<LedgerEntry> findTop8ByOwnerIdOrderByEntryDateDescIdDesc(Long ownerId);

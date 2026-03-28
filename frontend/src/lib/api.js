@@ -177,9 +177,12 @@ async function downloadFile(path, fallbackFileName) {
 }
 
 export function downloadLedgerCsv(from, to) {
+  const fallbackFileName = from && to
+    ? `ledger-${from}_to_${to}.csv`
+    : 'ledger-all.csv'
   return downloadFile(
     buildUrl('/entries/export/csv', { from, to }).replace(API_BASE, ''),
-    `ledger-${from}_to_${to}.csv`,
+    fallbackFileName,
   )
 }
 

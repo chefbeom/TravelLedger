@@ -1,5 +1,6 @@
 package com.playdata.calen.ledger.service;
 
+import com.playdata.calen.ledger.domain.EntryType;
 import com.playdata.calen.ledger.dto.LedgerEntryResponse;
 import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
@@ -11,15 +12,12 @@ final class LedgerCsvFormatter {
     private static final byte[] UTF8_BOM = new byte[]{(byte) 0xEF, (byte) 0xBB, (byte) 0xBF};
     private static final List<String> HEADER = List.of(
             "거래일",
-            "시간",
-            "제목",
-            "메모",
-            "금액",
             "구분",
-            "대분류",
-            "소분류",
+            "내용",
+            "금액",
             "결제수단",
-            "결제종류"
+            "대분류",
+            "소분류"
     );
 
     private LedgerCsvFormatter() {
@@ -33,15 +31,12 @@ final class LedgerCsvFormatter {
         for (LedgerEntryResponse entry : entries) {
             appendRow(output, List.of(
                     stringify(entry.entryDate()),
-                    stringify(entry.entryTime()),
+                    toImportEntryType(entry.entryType()),
                     safe(entry.title()),
-                    safe(entry.memo()),
                     stringify(entry.amount()),
-                    stringify(entry.entryType()),
-                    safe(entry.categoryGroupName()),
-                    safe(entry.categoryDetailName()),
                     safe(entry.paymentMethodName()),
-                    stringify(entry.paymentMethodKind())
+                    safe(entry.categoryGroupName()),
+                    safe(entry.categoryDetailName())
             ));
         }
 
@@ -83,5 +78,15 @@ final class LedgerCsvFormatter {
 
     private static String safe(String value) {
         return value == null ? "" : value;
+    }
+
+    private static String toImportEntryType(EntryType entryType) {
+        if (entryType == null) {
+            return "";
+        }
+        return switch (entryType) {
+            case INCOME -> "수입";
+            case EXPENSE -> "지출";
+        };
     }
 }

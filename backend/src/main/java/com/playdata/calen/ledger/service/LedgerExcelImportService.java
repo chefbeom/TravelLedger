@@ -237,7 +237,7 @@ public class LedgerExcelImportService {
 
             for (int cellIndex = 0; cellIndex < lastCellNum; cellIndex++) {
                 String normalized = normalizeHeaderValue(DATA_FORMATTER.formatCellValue(row.getCell(cellIndex)));
-                ColumnType type = detectColumnType(normalized);
+                ColumnType type = detectImportColumnType(normalized);
                 if (type != null && !columns.containsKey(type)) {
                     columns.put(type, cellIndex);
                 }
@@ -412,6 +412,7 @@ public class LedgerExcelImportService {
 
             LocalDate entryDate = parseDate(row, header.columns().get(ColumnType.DATE));
             BigDecimal amount = parseAmount(row, header.columns().get(ColumnType.AMOUNT));
+            EntryType entryType = parseEntryType(row, header.columns().get(ColumnType.TYPE));
             String title = defaultIfBlank(normalizeText(rawTitle), DEFAULT_IMPORTED_TITLE);
             String paymentMethodName = defaultIfBlank(readCellText(row, header.columns().get(ColumnType.PAYMENT)), "기타");
             String categoryGroupName = defaultIfBlank(readCellText(row, header.columns().get(ColumnType.GROUP)), "미분류");
@@ -439,7 +440,7 @@ public class LedgerExcelImportService {
                     title,
                     null,
                     amount,
-                    EntryType.EXPENSE,
+                    entryType,
                     paymentMethodName,
                     categoryGroupName,
                     categoryDetailName,
@@ -580,6 +581,17 @@ public class LedgerExcelImportService {
         } catch (NumberFormatException exception) {
             return null;
         }
+    }
+
+    private EntryType parseEntryType(Row row, Integer columnIndex) {
+        String value = normalizeHeaderValue(readCellText(row, columnIndex));
+        if (value.isBlank()) {
+            return EntryType.EXPENSE;
+        }
+        if (containsAny(value, "수입", "입금", "income")) {
+            return EntryType.INCOME;
+        }
+        return EntryType.EXPENSE;
     }
 
     private String readCellText(Row row, Integer columnIndex) {
@@ -737,6 +749,34 @@ public class LedgerExcelImportService {
         return null;
     }
 
+    private ColumnType detectImportColumnType(String normalizedHeader) {
+        if (normalizedHeader.isBlank()) {
+            return null;
+        }
+        if (containsAny(normalizedHeader, "거래일", "날짜", "지출일", "입금일")) {
+            return ColumnType.DATE;
+        }
+        if (containsAny(normalizedHeader, "구분", "거래구분", "수입지출", "입금지출")) {
+            return ColumnType.TYPE;
+        }
+        if (containsAny(normalizedHeader, "지출내역", "지출내용", "거래내용", "내용", "적요", "항목")) {
+            return ColumnType.TITLE;
+        }
+        if (containsAny(normalizedHeader, "지출금액", "금액", "사용금액", "거래금액", "입출금금액")) {
+            return ColumnType.AMOUNT;
+        }
+        if (containsAny(normalizedHeader, "지출방법", "결제수단", "결제방법", "사용수단")) {
+            return ColumnType.PAYMENT;
+        }
+        if (containsAny(normalizedHeader, "소비분류", "카테고리", "대분류", "분류")) {
+            return ColumnType.GROUP;
+        }
+        if (containsAny(normalizedHeader, "비소비분류", "소분류", "세부분류", "비고분류")) {
+            return ColumnType.DETAIL;
+        }
+        return null;
+    }
+
     private boolean containsAny(String value, String... candidates) {
         for (String candidate : candidates) {
             if (value.contains(normalizeHeaderValue(candidate))) {
@@ -771,6 +811,7 @@ public class LedgerExcelImportService {
 
     private enum ColumnType {
         DATE,
+        TYPE,
         TITLE,
         AMOUNT,
         PAYMENT,

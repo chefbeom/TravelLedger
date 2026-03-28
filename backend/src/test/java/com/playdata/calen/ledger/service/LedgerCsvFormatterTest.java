@@ -16,7 +16,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class LedgerCsvFormatterTest {
 
     @Test
-    void addsUtf8BomAndEscapesFormulaLikeCells() {
+    void formatsImportCompatibleColumnsWithUtf8Bom() {
         LedgerEntryResponse entry = new LedgerEntryResponse(
                 1L,
                 LocalDate.of(2026, 3, 28),
@@ -41,8 +41,10 @@ class LedgerCsvFormatterTest {
         assertEquals((byte) 0xBF, csv[2]);
 
         String text = new String(csv, StandardCharsets.UTF_8);
+        assertTrue(text.contains("\"거래일\",\"구분\",\"내용\",\"금액\",\"결제수단\",\"대분류\",\"소분류\""));
+        assertTrue(text.contains("\"지출\""));
         assertTrue(text.contains("\"'=SUM(A1:A2)\""));
-        assertTrue(text.contains("\"\"\"quoted\"\" memo\""));
+        assertTrue(text.contains("\"신한카드\",\"식비\",\"카페\""));
     }
 
     @Test

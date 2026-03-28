@@ -3,6 +3,7 @@ import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import SummaryCard from './SummaryCard.vue'
 
 const CALENDAR_SCALE_KEY = 'calen-household-calendar-scale-preset'
+const CALENDAR_COLLAPSE_KEY = 'calen-household-calendar-collapsed'
 
 const calendarScalePresets = [
   { key: 'compact', label: '작게', value: 74 },
@@ -112,6 +113,7 @@ const emit = defineEmits([
 const selectedDate = ref(props.anchorDate)
 const selectedDaySort = ref('ASC')
 const calendarScalePreset = ref('default')
+const isCalendarCollapsed = ref(false)
 const ledgerSheetRef = ref(null)
 
 const maxDailyExpense = computed(() => {
@@ -189,9 +191,20 @@ onMounted(() => {
   }
 
   const savedScale = window.localStorage.getItem(CALENDAR_SCALE_KEY)
+  const savedCollapsed = window.localStorage.getItem(CALENDAR_COLLAPSE_KEY)
 
   if (savedScale) {
     calendarScalePreset.value = normalizePresetKey(calendarScalePresets, savedScale, 'default')
+  }
+
+  if (savedCollapsed) {
+    isCalendarCollapsed.value = savedCollapsed === 'true'
+  }
+})
+
+watch(isCalendarCollapsed, (value) => {
+  if (typeof window !== 'undefined') {
+    window.localStorage.setItem(CALENDAR_COLLAPSE_KEY, value ? 'true' : 'false')
   }
 })
 
@@ -291,6 +304,10 @@ function getMonthTag(day) {
   }
   return ''
 }
+
+function toggleCalendarCollapsed() {
+  isCalendarCollapsed.value = !isCalendarCollapsed.value
+}
 </script>
 
 <template>
@@ -305,10 +322,15 @@ function getMonthTag(day) {
           <h2>{{ monthLabel }}</h2>
           <p>달력을 넓게 보고 날짜를 누르면 바로 아래 거래 시트로 이동해 해당 날짜 거래를 바로 확인할 수 있습니다.</p>
         </div>
-        <span class="panel__badge">{{ anchorDate.slice(0, 7) }}</span>
+        <div class="household-calendar-header-actions">
+          <span class="panel__badge">{{ anchorDate.slice(0, 7) }}</span>
+          <button class="button button--secondary" type="button" @click="toggleCalendarCollapsed">
+            {{ isCalendarCollapsed ? '달력 펼치기' : '달력 접기' }}
+          </button>
+        </div>
       </div>
 
-      <div class="calendar-toolbar">
+      <div v-if="!isCalendarCollapsed" class="calendar-toolbar">
         <div class="calendar-stepper">
           <span class="calendar-stepper__label">연도</span>
           <div class="calendar-stepper__controls">
@@ -335,7 +357,7 @@ function getMonthTag(day) {
         </div>
       </div>
 
-      <div class="calendar-size-toolbar">
+      <div v-if="!isCalendarCollapsed" class="calendar-size-toolbar">
         <div class="calendar-size-toolbar__block">
           <span class="calendar-size-toolbar__label">달력 크기</span>
           <div class="calendar-size-toggle">
@@ -354,7 +376,7 @@ function getMonthTag(day) {
         <strong class="calendar-size-toolbar__hint">현재 {{ calendarScalePresets.find((item) => item.key === calendarScalePreset)?.label }}</strong>
       </div>
 
-      <div class="calendar-shell">
+      <div v-if="!isCalendarCollapsed" class="calendar-shell">
         <div class="calendar">
           <div class="calendar__weekdays">
             <span v-for="weekday in weekdayLabels" :key="weekday">{{ weekday }}</span>
@@ -408,6 +430,11 @@ function getMonthTag(day) {
             </div>
           </div>
         </div>
+      </div>
+
+      <div v-else class="household-calendar-collapsed-note">
+        <strong>{{ formatShortDate(selectedDate) }}</strong>
+        <span>달력을 접어두었습니다. 다시 펼치면 날짜별 흐름을 바로 확인할 수 있습니다.</span>
       </div>
     </section>
 

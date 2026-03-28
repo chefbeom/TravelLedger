@@ -3087,6 +3087,74 @@ textarea {
   background: var(--surface-soft);
 }
 
+:root[data-theme='metal-dark'] .button {
+  border-color: #334154;
+  background: #1a222d;
+  color: var(--text);
+}
+
+:root[data-theme='metal-dark'] .button--primary {
+  border-color: transparent;
+  background: linear-gradient(180deg, #7fb0ff 0%, #4b86f7 100%);
+  color: #f8fbff;
+}
+
+:root[data-theme='metal-dark'] .button--secondary {
+  color: var(--text);
+}
+
+:root[data-theme='metal-dark'] .button--ghost {
+  color: var(--text-soft);
+}
+
+:root[data-theme='metal-dark'] .button--danger {
+  background: rgba(255, 115, 133, 0.12);
+  color: #ff9eaa;
+}
+
+:root[data-theme='metal-dark'] .toggle-chip {
+  color: var(--text-soft);
+}
+
+:root[data-theme='metal-dark'] .toggle-chip--active {
+  background: rgba(237, 241, 247, 0.92);
+  color: #121821;
+}
+
+:root[data-theme='metal-dark'] .entry-type-toggle {
+  background: #0f151d;
+  border: 1px solid #283243;
+}
+
+:root[data-theme='metal-dark'] .amount-input {
+  border-color: rgba(114, 165, 255, 0.3);
+  background: linear-gradient(180deg, rgba(114, 165, 255, 0.12), rgba(18, 24, 33, 0.96));
+}
+
+:root[data-theme='metal-dark'] .amount-input span,
+:root[data-theme='metal-dark'] .amount-input input,
+:root[data-theme='metal-dark'] .field__hint,
+:root[data-theme='metal-dark'] .calendar-size-toolbar__hint,
+:root[data-theme='metal-dark'] .calendar-size-toolbar__label,
+:root[data-theme='metal-dark'] .panel__empty,
+:root[data-theme='metal-dark'] .panel__header p {
+  color: var(--text-soft);
+}
+
+:root[data-theme='metal-dark'] .sheet-table th,
+:root[data-theme='metal-dark'] .sheet-table td,
+:root[data-theme='metal-dark'] .sheet-table__title,
+:root[data-theme='metal-dark'] .sheet-table__category {
+  color: var(--text);
+}
+
+:root[data-theme='metal-dark'] .sheet-table__memo,
+:root[data-theme='metal-dark'] .checkbox-row,
+:root[data-theme='metal-dark'] .calendar__metric span,
+:root[data-theme='metal-dark'] .calendar__label {
+  color: var(--text-soft);
+}
+
 @media (max-width: 720px) {
   .travel-modal {
     padding: 12px;
@@ -3202,9 +3270,11 @@ textarea {
 
 .household-ledger-grid {
   display: grid;
-  grid-template-columns: minmax(340px, 0.78fr) minmax(0, 1.22fr);
-  gap: 18px;
+  grid-template-columns: minmax(360px, 0.92fr) minmax(0, 1.48fr);
+  gap: 20px;
   align-items: start;
+  width: calc(100% + 40px);
+  margin-inline: -20px;
 }
 
 .household-entry-panel {
@@ -3224,6 +3294,14 @@ textarea {
   flex-wrap: wrap;
 }
 
+.household-calendar-header-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
 .household-sheet-table-wrap {
   max-height: 640px;
 }
@@ -3238,9 +3316,88 @@ textarea {
   min-height: auto;
 }
 
+.household-calendar-collapsed-note {
+  display: grid;
+  gap: 6px;
+  margin-top: 8px;
+  padding: 18px 20px;
+  border: 1px dashed var(--line);
+  border-radius: 18px;
+  background: var(--surface-soft);
+}
+
+.household-calendar-collapsed-note strong {
+  font-size: 1rem;
+}
+
+.household-calendar-collapsed-note span {
+  color: var(--text-soft);
+}
+
 @media (max-width: 720px) {
   .calendar-toolbar {
     grid-template-columns: 1fr;
+  }
+
+  .household-ledger-grid {
+    width: 100%;
+    margin-inline: 0;
+  }
+
+  .household-calendar-header-actions,
+  .household-sheet-header {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .household-entry-panel {
+    overflow: hidden;
+  }
+
+  .entry-editor {
+    gap: 10px;
+  }
+
+  .entry-editor__amount,
+  .entry-editor__fields {
+    padding: 14px;
+    border-radius: 18px;
+  }
+
+  .field {
+    min-width: 0;
+  }
+
+  .amount-input {
+    min-height: 64px;
+    padding: 0 14px;
+    gap: 10px;
+  }
+
+  .amount-input span {
+    font-size: 1.2rem;
+  }
+
+  .amount-input input {
+    min-height: 54px;
+    font-size: clamp(1.3rem, 7vw, 1.8rem);
+  }
+
+  .amount-shortcuts {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .amount-shortcuts__button {
+    width: 100%;
+    min-width: 0;
+    padding-inline: 10px;
+  }
+
+  .household-time-field .checkbox-row {
+    gap: 8px;
+    flex-wrap: wrap;
   }
 }
 
@@ -3253,10 +3410,32 @@ textarea {
 
   .household-ledger-grid {
     grid-template-columns: 1fr;
+    width: 100%;
+    margin-inline: 0;
   }
 
   .household-entry-panel {
     position: static;
+  }
+}
+
+@media (max-width: 560px) {
+  .main-shell {
+    padding: 16px 12px 24px;
+  }
+
+  .panel {
+    padding: 16px;
+    border-radius: 20px;
+  }
+
+  .amount-shortcuts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .field__label,
+  .field__hint {
+    font-size: 0.84rem;
   }
 }
 

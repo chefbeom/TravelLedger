@@ -59,6 +59,12 @@ export function formatFullDate(value) {
   return fullDateFormatter.format(parseIsoDate(value))
 }
 
+export function formatCompactNumber(value) {
+  return new Intl.NumberFormat('ko-KR', {
+    maximumFractionDigits: 0,
+  }).format(Number(value ?? 0))
+}
+
 export function formatMonthLabel(value) {
   return monthFormatter.format(parseIsoDate(value))
 }

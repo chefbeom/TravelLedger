@@ -1,6 +1,7 @@
 <script setup>
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import SummaryCard from './SummaryCard.vue'
+import { formatCompactNumber } from '../lib/format'
 
 const CALENDAR_SCALE_KEY = 'calen-household-calendar-scale-preset'
 const CALENDAR_COLLAPSE_KEY = 'calen-household-calendar-collapsed'
@@ -161,6 +162,19 @@ const normalizedSelectedDateEntries = computed(() =>
 
 const hasSelectedMemoColumn = computed(() => normalizedSelectedDateEntries.value.some((entry) => entry.visibleMemo))
 const selectedDateCountLabel = computed(() => `${normalizedSelectedDateEntries.value.length}건`)
+const featuredQuickStats = computed(() => {
+  const order = ['month', 'week', 'day']
+  return order
+    .map((key) => props.quickStats.find((card) => card.key === key))
+    .filter(Boolean)
+})
+const formattedAmountInput = computed(() => {
+  if (!props.amountInput) {
+    return ''
+  }
+
+  return formatCompactNumber(props.amountInput)
+})
 
 watch(
   () => props.anchorDate,
@@ -312,9 +326,154 @@ function toggleCalendarCollapsed() {
 
 <template>
   <div class="workspace-stack">
-    <section class="summary-grid summary-grid--compact">
-      <SummaryCard v-for="card in quickStats" :key="card.key" :card="card" />
-    </section>
+    <div class="household-entry-summary-grid">
+      <section class="panel household-entry-panel">
+        <div class="panel__header">
+          <div>
+            <h2>{{ isEditingEntry ? '거래 수정' : '빠른 거래 입력' }}</h2>
+            <p>날짜를 고른 뒤 금액과 분류를 먼저 적고, 시간은 필요할 때만 켜서 빠르게 기록합니다.</p>
+          </div>
+          <span class="panel__badge">{{ formatShortDate(entryForm.entryDate) }}</span>
+        </div>
+
+        <div class="entry-editor">
+          <div class="entry-editor__amount">
+            <div class="entry-type-toggle">
+              <button
+                :class="['toggle-chip', { 'toggle-chip--active': entryForm.entryType === 'EXPENSE' }]"
+                @click="entryForm.entryType = 'EXPENSE'"
+              >
+                지출
+              </button>
+              <button
+                :class="['toggle-chip', { 'toggle-chip--active': entryForm.entryType === 'INCOME' }]"
+                @click="entryForm.entryType = 'INCOME'"
+              >
+                수입
+              </button>
+            </div>
+
+            <label class="field field--amount">
+              <span class="field__label">금액</span>
+              <div class="amount-input">
+                <span>₩</span>
+                <input
+                  :value="formattedAmountInput"
+                  type="text"
+                  inputmode="numeric"
+                  placeholder="예: 48,000"
+                  @input="emit('update:amountInput', $event.target.value)"
+                />
+              </div>
+              <small class="field__hint">현재 입력 금액 {{ formatCurrency(amountPreview) }}</small>
+            </label>
+
+            <div class="amount-shortcuts">
+              <button
+                v-for="value in quickAmountButtons"
+                :key="value"
+                class="button button--secondary amount-shortcuts__button"
+                @click="emit('fill-amount', value)"
+              >
+                {{ formatAmountShortcut(value) }}
+              </button>
+              <button class="button button--secondary amount-shortcuts__button" @click="emit('add-amount', 5000)">
+                +5천
+              </button>
+              <button class="button button--secondary amount-shortcuts__button" @click="emit('add-amount', 10000)">
+                +1만
+              </button>
+            </div>
+          </div>
+
+          <div class="entry-editor__fields">
+            <label class="field">
+              <span class="field__label">날짜</span>
+              <input v-model="entryForm.entryDate" type="date" />
+            </label>
+
+            <label class="field household-time-field">
+              <span class="field__label">시간</span>
+              <label class="checkbox-row household-time-toggle">
+                <input
+                  :checked="isTimeEnabled"
+                  type="checkbox"
+                  @change="emit('update:timeEnabled', $event.target.checked)"
+                />
+                <span>시간 입력 사용</span>
+              </label>
+              <input v-model="entryForm.entryTime" type="time" :disabled="!isTimeEnabled" />
+              <small class="field__hint">시간 입력을 끄면 자동으로 00:00으로 저장됩니다.</small>
+            </label>
+
+            <label class="field field--full">
+              <span class="field__label">제목</span>
+              <input v-model="entryForm.title" type="text" placeholder="예: 식사, 택시, 급여" />
+            </label>
+
+            <label class="field">
+              <span class="field__label">결제수단</span>
+              <select v-model="entryForm.paymentMethodId">
+                <option v-for="payment in paymentMethods" :key="payment.id" :value="String(payment.id)">
+                  {{ payment.name }}
+                </option>
+              </select>
+            </label>
+
+            <label class="field">
+              <span class="field__label">대분류</span>
+              <select v-model="entryForm.categoryGroupId">
+                <option v-for="group in availableGroups" :key="group.id" :value="String(group.id)">
+                  {{ group.name }}
+                </option>
+              </select>
+            </label>
+
+            <label class="field">
+              <span class="field__label">소분류</span>
+              <select v-model="entryForm.categoryDetailId">
+                <option value="">소분류 없음</option>
+                <option v-for="detail in availableDetails" :key="detail.id" :value="String(detail.id)">
+                  {{ detail.name }}
+                </option>
+              </select>
+            </label>
+
+            <label class="field field--full">
+              <span class="field__label">메모</span>
+              <input v-model="entryForm.memo" type="text" placeholder="상세 메모를 남기고 싶다면 입력해 주세요." />
+            </label>
+          </div>
+        </div>
+
+        <div class="entry-editor__actions">
+          <button class="button button--primary" :disabled="isSubmitting" @click="emit('submit-entry')">
+            {{
+              isSubmitting && activeSubmit === 'entry'
+                ? '저장 중...'
+                : isEditingEntry
+                  ? '거래 수정'
+                  : '거래 등록'
+            }}
+          </button>
+          <button v-if="isEditingEntry" class="button button--secondary" @click="emit('reset-entry')">
+            편집 취소
+          </button>
+        </div>
+      </section>
+
+      <section class="panel household-quickstats-panel">
+        <div class="panel__header">
+          <div>
+            <h2>간단 통계</h2>
+            <p>이번 달, 주, 일 흐름을 빠르게 확인하고 바로 입력할 수 있습니다.</p>
+          </div>
+        </div>
+        <div class="summary-grid summary-grid--compact household-quickstats-grid">
+          <SummaryCard v-for="card in featuredQuickStats" :key="card.key" :card="card" />
+        </div>
+      </section>
+    </div>
 
     <section class="panel household-calendar-panel household-calendar-layout" :style="calendarViewStyle">
       <div class="panel__header">
@@ -438,143 +597,7 @@ function toggleCalendarCollapsed() {
       </div>
     </section>
 
-    <div class="household-ledger-grid">
-      <section class="panel household-entry-panel">
-        <div class="panel__header">
-          <div>
-            <h2>{{ isEditingEntry ? '거래 수정' : '빠른 거래 입력' }}</h2>
-            <p>선택한 날짜를 기본값으로 이어받아 빠르게 기록하고, 시간 입력이 필요할 때만 켜서 저장할 수 있습니다.</p>
-          </div>
-          <span class="panel__badge">{{ formatShortDate(entryForm.entryDate) }}</span>
-        </div>
-
-        <div class="entry-editor">
-          <div class="entry-editor__amount">
-            <div class="entry-type-toggle">
-              <button
-                :class="['toggle-chip', { 'toggle-chip--active': entryForm.entryType === 'EXPENSE' }]"
-                @click="entryForm.entryType = 'EXPENSE'"
-              >
-                지출
-              </button>
-              <button
-                :class="['toggle-chip', { 'toggle-chip--active': entryForm.entryType === 'INCOME' }]"
-                @click="entryForm.entryType = 'INCOME'"
-              >
-                수입
-              </button>
-            </div>
-
-            <label class="field field--amount">
-              <span class="field__label">금액</span>
-              <div class="amount-input">
-                <span>₩</span>
-                <input
-                  :value="amountInput"
-                  type="text"
-                  inputmode="numeric"
-                  placeholder="예: 48,000"
-                  @input="emit('update:amountInput', $event.target.value)"
-                />
-              </div>
-              <small class="field__hint">현재 입력 금액 {{ formatCurrency(amountPreview) }}</small>
-            </label>
-
-            <div class="amount-shortcuts">
-              <button
-                v-for="value in quickAmountButtons"
-                :key="value"
-                class="button button--secondary amount-shortcuts__button"
-                @click="emit('fill-amount', value)"
-              >
-                {{ formatAmountShortcut(value) }}
-              </button>
-              <button class="button button--secondary amount-shortcuts__button" @click="emit('add-amount', 5000)">
-                +5천
-              </button>
-              <button class="button button--secondary amount-shortcuts__button" @click="emit('add-amount', 10000)">
-                +1만
-              </button>
-            </div>
-          </div>
-
-          <div class="entry-editor__fields">
-            <label class="field">
-              <span class="field__label">날짜</span>
-              <input v-model="entryForm.entryDate" type="date" />
-            </label>
-
-            <label class="field household-time-field">
-              <span class="field__label">시간</span>
-              <label class="checkbox-row household-time-toggle">
-                <input
-                  :checked="isTimeEnabled"
-                  type="checkbox"
-                  @change="emit('update:timeEnabled', $event.target.checked)"
-                />
-                <span>시간 입력 사용</span>
-              </label>
-              <input v-model="entryForm.entryTime" type="time" :disabled="!isTimeEnabled" />
-              <small class="field__hint">시간 입력을 끄면 자동으로 00:00으로 저장됩니다.</small>
-            </label>
-
-            <label class="field field--full">
-              <span class="field__label">제목</span>
-              <input v-model="entryForm.title" type="text" placeholder="예: 식사, 택시, 급여" />
-            </label>
-
-            <label class="field">
-              <span class="field__label">결제수단</span>
-              <select v-model="entryForm.paymentMethodId">
-                <option v-for="payment in paymentMethods" :key="payment.id" :value="String(payment.id)">
-                  {{ payment.name }}
-                </option>
-              </select>
-            </label>
-
-            <label class="field">
-              <span class="field__label">대분류</span>
-              <select v-model="entryForm.categoryGroupId">
-                <option v-for="group in availableGroups" :key="group.id" :value="String(group.id)">
-                  {{ group.name }}
-                </option>
-              </select>
-            </label>
-
-            <label class="field">
-              <span class="field__label">소분류</span>
-              <select v-model="entryForm.categoryDetailId">
-                <option value="">소분류 없음</option>
-                <option v-for="detail in availableDetails" :key="detail.id" :value="String(detail.id)">
-                  {{ detail.name }}
-                </option>
-              </select>
-            </label>
-
-            <label class="field field--full">
-              <span class="field__label">메모</span>
-              <input v-model="entryForm.memo" type="text" placeholder="상세 메모를 남기고 싶다면 입력해 주세요." />
-            </label>
-          </div>
-        </div>
-
-        <div class="entry-editor__actions">
-          <button class="button button--primary" :disabled="isSubmitting" @click="emit('submit-entry')">
-            {{
-              isSubmitting && activeSubmit === 'entry'
-                ? '저장 중...'
-                : isEditingEntry
-                  ? '거래 수정'
-                  : '거래 등록'
-            }}
-          </button>
-          <button v-if="isEditingEntry" class="button button--secondary" @click="emit('reset-entry')">
-            편집 취소
-          </button>
-        </div>
-      </section>
-
-      <section ref="ledgerSheetRef" class="panel household-sheet-panel">
+    <section ref="ledgerSheetRef" class="panel household-sheet-panel">
         <div class="panel__header">
           <div>
             <h2>{{ formatShortDate(selectedDate) }} 거래 시트</h2>
@@ -633,6 +656,5 @@ function toggleCalendarCollapsed() {
           </table>
         </div>
       </section>
-    </div>
   </div>
 </template>

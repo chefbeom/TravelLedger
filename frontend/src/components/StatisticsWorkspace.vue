@@ -81,6 +81,10 @@ const props = defineProps({
     type: Function,
     required: true,
   },
+  formatFullDate: {
+    type: Function,
+    required: true,
+  },
   formatDateRange: {
     type: Function,
     required: true,
@@ -355,7 +359,7 @@ const monthOfYearChartItems = computed(() =>
             </thead>
             <tbody>
               <tr v-for="entry in searchResults" :key="entry.id">
-                <td>{{ formatShortDate(entry.entryDate) }}</td>
+                <td>{{ formatFullDate(entry.entryDate) }}</td>
                 <td>{{ formatTime(entry.entryTime) }}</td>
                 <td>{{ entry.title }}</td>
                 <td>{{ entry.categoryGroupName }}<template v-if="entry.categoryDetailName"> / {{ entry.categoryDetailName }}</template></td>

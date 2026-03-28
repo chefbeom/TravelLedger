@@ -23,6 +23,7 @@ import {
 import {
   buildCalendarWeeks,
   formatCurrency,
+  formatFullDate,
   formatDateRange,
   formatMonthLabel,
   formatShortDate,
@@ -430,9 +431,9 @@ function updateTimeEnabled(value) {
 function formatAmountShortcut(value) {
   const amount = Number(value || 0)
   if (amount >= 10000) {
-    return `+${(amount / 10000).toLocaleString('ko-KR')}만`
+    return `${(amount / 10000).toLocaleString('ko-KR')}만`
   }
-  return `+${amount.toLocaleString('ko-KR')}`
+  return amount.toLocaleString('ko-KR')
 }
 
 function shiftIsoDate(value, { months = 0, years = 0 } = {}) {
@@ -841,6 +842,7 @@ async function deactivatePayment(paymentId) {
       :categories="categories"
       :format-currency="formatCurrency"
       :format-short-date="formatShortDate"
+      :format-full-date="formatFullDate"
       :format-date-range="formatDateRange"
       :format-time="formatTime"
     />

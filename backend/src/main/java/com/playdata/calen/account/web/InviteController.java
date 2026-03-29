@@ -37,7 +37,7 @@ public class InviteController {
             Authentication authentication,
             @Valid @RequestBody(required = false) AccountInviteCreateRequest request
     ) {
-        AppUserPrincipal principal = requirePrincipal(authentication);
+        AppUserPrincipal principal = requireAdminPrincipal(authentication);
         return accountInviteService.createInvite(
                 principal.userId(),
                 request != null ? request.expiresInHours() : null
@@ -63,9 +63,13 @@ public class InviteController {
         );
     }
 
-    private AppUserPrincipal requirePrincipal(Authentication authentication) {
-        if (authentication == null || !authentication.isAuthenticated() || !(authentication.getPrincipal() instanceof AppUserPrincipal principal)) {
-            throw new AccessDeniedException("초대 링크를 만들 권한이 없습니다.");
+    private AppUserPrincipal requireAdminPrincipal(Authentication authentication) {
+        if (authentication == null || !authentication.isAuthenticated()
+                || !(authentication.getPrincipal() instanceof AppUserPrincipal principal)) {
+            throw new AccessDeniedException("관리자만 초대 링크를 만들 수 있습니다.");
+        }
+        if (!principal.isAdmin()) {
+            throw new AccessDeniedException("관리자만 초대 링크를 만들 수 있습니다.");
         }
         return principal;
     }

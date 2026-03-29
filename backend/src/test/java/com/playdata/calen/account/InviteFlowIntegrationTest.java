@@ -51,14 +51,14 @@ class InviteFlowIntegrationTest {
 
     @Test
     void inviteOnlySignupCreatesAccountAndConsumesInvite() throws Exception {
-        MockHttpSession hanaSession = loginAndGetSession("hana", "test1234", false);
-        AppUser hana = appUserRepository.findByLoginId("hana").orElseThrow();
+        MockHttpSession adminSession = loginAndGetSession("admin", "test1234", false);
+        AppUser admin = appUserRepository.findByLoginId("admin").orElseThrow();
 
-        String token = createInviteAndGetToken(hanaSession);
+        String token = createInviteAndGetToken(adminSession);
 
         mockMvc.perform(get("/api/invites/{token}", token))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.inviterDisplayName").value(hana.getDisplayName()))
+                .andExpect(jsonPath("$.inviterDisplayName").value(admin.getDisplayName()))
                 .andExpect(jsonPath("$.expiresAt").isNotEmpty());
 
         Map<String, Object> acceptPayload = new LinkedHashMap<>();
@@ -97,6 +97,18 @@ class InviteFlowIntegrationTest {
                         ))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.loginId").value("invite-user"));
+    }
+
+    @Test
+    void regularUserCannotCreateInvite() throws Exception {
+        MockHttpSession hanaSession = loginAndGetSession("hana", "test1234", false);
+
+        mockMvc.perform(post("/api/invites")
+                        .with(csrf())
+                        .session(hanaSession)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of("expiresInHours", 72))))
+                .andExpect(status().isForbidden());
     }
 
     private MockHttpSession loginAndGetSession(String loginId, String password, boolean rememberDevice) throws Exception {

@@ -578,6 +578,7 @@ onBeforeUnmount(() => {
             @navigate="navigate"
           />
           <InviteAccessPanel
+            v-if="currentUser?.admin"
             :expires-in-hours="inviteManager.expiresInHours"
             :generated-link="inviteManager.generatedLink"
             :generated-expires-at="inviteManager.generatedExpiresAt"

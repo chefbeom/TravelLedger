@@ -1907,6 +1907,106 @@ textarea {
   color: var(--text-soft);
 }
 
+.pin-pad {
+  display: grid;
+  gap: 10px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: var(--surface-soft);
+}
+
+.pin-pad--disabled {
+  opacity: 0.7;
+}
+
+.pin-pad__header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+}
+
+.pin-pad__progress {
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.pin-pad__display {
+  display: grid;
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.pin-pad__slot {
+  display: grid;
+  place-items: center;
+  min-height: 48px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 1.1rem;
+  font-weight: 800;
+}
+
+.pin-pad__slot--filled {
+  border-color: rgba(49, 130, 246, 0.35);
+  background: rgba(49, 130, 246, 0.08);
+}
+
+.pin-pad__hint {
+  margin: 0;
+  color: var(--text-soft);
+  font-size: 0.84rem;
+}
+
+.pin-pad__grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.pin-pad__key {
+  min-height: 46px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--surface);
+  color: var(--text);
+  font-weight: 800;
+}
+
+.pin-pad__key--ghost {
+  background: var(--surface-soft-strong);
+  color: var(--text-soft);
+}
+
+.entry-type-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.entry-type-pill--income {
+  background: rgba(18, 184, 134, 0.12);
+  color: var(--income);
+}
+
+.entry-type-pill--expense {
+  background: rgba(240, 68, 82, 0.1);
+  color: var(--expense);
+}
+
+.admin-workspace .sheet-table td:last-child,
+.admin-workspace .sheet-table th:last-child {
+  text-align: right;
+}
+
 .auth-feedback {
   max-width: 1100px;
   margin: 0 auto 12px;
@@ -2062,6 +2162,10 @@ textarea {
     align-items: stretch;
   }
 
+  .pin-pad__display {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
   .travel-split-result {
     align-items: stretch;
   }
@@ -2202,6 +2306,10 @@ textarea {
 
   .invite-panel__controls {
     grid-template-columns: 1fr;
+  }
+
+  .pin-pad {
+    padding: 14px;
   }
 }
 .travel-map {

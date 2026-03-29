@@ -57,7 +57,8 @@ public class InviteController {
                         request.token(),
                         request.loginId(),
                         request.displayName(),
-                        request.password()
+                        request.password(),
+                        request.secondaryPin()
                 )
         );
     }

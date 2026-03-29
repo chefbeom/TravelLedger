@@ -66,6 +66,7 @@ class InviteFlowIntegrationTest {
         acceptPayload.put("loginId", "invite-user");
         acceptPayload.put("displayName", "Invite User");
         acceptPayload.put("password", "strongpass1");
+        acceptPayload.put("secondaryPin", "23456789");
 
         mockMvc.perform(post("/api/invites/accept")
                         .with(csrf())
@@ -91,6 +92,7 @@ class InviteFlowIntegrationTest {
                         .content(objectMapper.writeValueAsString(Map.of(
                                 "loginId", "invite-user",
                                 "password", "strongpass1",
+                                "secondaryPin", "23456789",
                                 "rememberDevice", false
                         ))))
                 .andExpect(status().isOk())
@@ -104,6 +106,7 @@ class InviteFlowIntegrationTest {
                         .content(objectMapper.writeValueAsString(Map.of(
                                 "loginId", loginId,
                                 "password", password,
+                                "secondaryPin", "12345678",
                                 "rememberDevice", rememberDevice
                         ))))
                 .andExpect(status().isOk())

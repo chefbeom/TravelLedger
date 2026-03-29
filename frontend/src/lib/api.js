@@ -122,6 +122,23 @@ export function createInvite(payload) {
   })
 }
 
+export function fetchAdminDashboard() {
+  return request('/admin/dashboard')
+}
+
+export function updateAdminUserActive(userId, active) {
+  return request(`/admin/users/${userId}/active`, {
+    method: 'PATCH',
+    body: JSON.stringify({ active }),
+  })
+}
+
+export function unlockBlockedIp(ip) {
+  return request(`/admin/blocked-ips?ip=${encodeURIComponent(ip)}`, {
+    method: 'DELETE',
+  })
+}
+
 export function fetchInvite(token) {
   return request(`/invites/${encodeURIComponent(token)}`)
 }

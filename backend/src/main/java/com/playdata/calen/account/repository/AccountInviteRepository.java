@@ -1,6 +1,7 @@
 package com.playdata.calen.account.repository;
 
 import com.playdata.calen.account.domain.AccountInvite;
+import java.util.List;
 import java.util.Optional;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -11,6 +12,10 @@ import org.springframework.data.repository.query.Param;
 public interface AccountInviteRepository extends JpaRepository<AccountInvite, Long> {
 
     Optional<AccountInvite> findByTokenHash(String tokenHash);
+
+    long countByUsedAtIsNullAndExpiresAtAfter(java.time.LocalDateTime now);
+
+    List<AccountInvite> findTop30ByOrderByCreatedAtDescIdDesc();
 
     @Query("""
             select invite

@@ -119,6 +119,7 @@ class TravelPlanUserScopeIntegrationTest {
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("loginId", loginId);
         payload.put("password", "test1234");
+        payload.put("secondaryPin", "hana".equals(loginId) ? "12345678" : "87654321");
         payload.put("rememberDevice", false);
 
         MvcResult result = mockMvc.perform(post("/api/auth/login")

@@ -1,9 +1,11 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import AdminWorkspace from './components/AdminWorkspace.vue'
 import FeatureLauncher from './components/FeatureLauncher.vue'
 import FamilyAlbumWorkspace from './components/FamilyAlbumWorkspace.vue'
 import HouseholdWorkspace from './components/HouseholdWorkspace.vue'
 import InviteAccessPanel from './components/InviteAccessPanel.vue'
+import PinPadInput from './components/PinPadInput.vue'
 import TravelHubWorkspace from './components/TravelHubWorkspace.vue'
 import {
   acceptInvite,
@@ -47,6 +49,13 @@ const featureItems = [
   },
 ]
 
+const adminFeatureItem = {
+  key: 'admin',
+  number: 'A',
+  title: '관리자',
+  description: '로그인 로그, 차단 IP, 사용자 상태, 초대 현황을 관리합니다.',
+}
+
 const THEME_STORAGE_KEY = 'calen-theme-mode'
 
 const routeMeta = {
@@ -74,6 +83,10 @@ const routeMeta = {
     title: '가족 앨범',
     description: '초대된 구성원과 가족 카테고리, 앨범, 미디어를 공유합니다.',
   },
+  admin: {
+    title: '관리자',
+    description: '로그인 로그와 사용자 상태, 초대 현황을 점검합니다.',
+  },
   invite: {
     title: '초대 링크 가입',
     description: '새 계정은 1회용 초대 링크로만 만들 수 있습니다.',
@@ -98,6 +111,7 @@ const themeMode = ref('default')
 const loginForm = reactive({
   loginId: '',
   password: '',
+  secondaryPin: '',
   rememberDevice: true,
 })
 
@@ -105,6 +119,7 @@ const inviteForm = reactive({
   loginId: '',
   displayName: '',
   password: '',
+  secondaryPin: '',
   rememberDevice: true,
 })
 
@@ -118,6 +133,9 @@ const inviteManager = reactive({
 
 const pageMeta = computed(() => routeMeta[activeRoute.value] || routeMeta.launcher)
 const isTossTheme = computed(() => themeMode.value === 'toss')
+const launcherItems = computed(() => (
+  currentUser.value?.admin ? [...featureItems, adminFeatureItem] : featureItems
+))
 
 let inviteRequestSequence = 0
 
@@ -260,8 +278,11 @@ async function handleLogin() {
     currentUser.value = await login({
       loginId: loginForm.loginId.trim(),
       password: loginForm.password,
+      secondaryPin: loginForm.secondaryPin,
       rememberDevice: loginForm.rememberDevice,
     })
+    loginForm.password = ''
+    loginForm.secondaryPin = ''
     navigate('launcher')
     setFeedback('로그인되었습니다.')
   } catch (error) {
@@ -291,17 +312,20 @@ async function handleAcceptInvite() {
       loginId: normalizedLoginId,
       displayName: normalizedDisplayName,
       password: inviteForm.password,
+      secondaryPin: inviteForm.secondaryPin,
     })
 
     currentUser.value = await login({
       loginId: normalizedLoginId,
       password: inviteForm.password,
+      secondaryPin: inviteForm.secondaryPin,
       rememberDevice: inviteForm.rememberDevice,
     })
 
     inviteForm.loginId = ''
     inviteForm.displayName = ''
     inviteForm.password = ''
+    inviteForm.secondaryPin = ''
     navigate('launcher')
     setFeedback('초대 링크로 계정을 만들고 바로 로그인했습니다.')
   } catch (error) {
@@ -367,6 +391,10 @@ async function handleLogout() {
   }
 
   currentUser.value = null
+  loginForm.password = ''
+  loginForm.secondaryPin = ''
+  inviteForm.password = ''
+  inviteForm.secondaryPin = ''
   navigate('launcher')
   setFeedback('로그아웃했습니다.')
 }
@@ -380,6 +408,12 @@ watch([activeRoute, inviteToken], ([route, token]) => {
   inviteRequestSequence += 1
   inviteInfo.value = null
   isInviteLoading.value = false
+}, { immediate: true })
+
+watch([currentUser, activeRoute], ([user, route]) => {
+  if (route === 'admin' && !(user && user.admin)) {
+    navigate('launcher')
+  }
 }, { immediate: true })
 
 onMounted(() => {
@@ -451,6 +485,12 @@ onBeforeUnmount(() => {
                 autocomplete="new-password"
                 :disabled="isSubmitting || isInviteLoading || !inviteInfo"
               />
+              <PinPadInput
+                v-model="inviteForm.secondaryPin"
+                label="2차 비밀번호"
+                hint="가입 후 로그인할 때도 같은 숫자 8자리를 마우스로 눌러 입력합니다."
+                :disabled="isSubmitting || isInviteLoading || !inviteInfo"
+              />
               <label class="checkbox-row">
                 <input
                   v-model="inviteForm.rememberDevice"
@@ -485,6 +525,12 @@ onBeforeUnmount(() => {
             <form class="stack-form" @submit.prevent="handleLogin">
               <input v-model="loginForm.loginId" type="text" placeholder="로그인 ID" autocomplete="username" />
               <input v-model="loginForm.password" type="password" placeholder="비밀번호" autocomplete="current-password" />
+              <PinPadInput
+                v-model="loginForm.secondaryPin"
+                label="2차 비밀번호"
+                hint="키보드 대신 숫자 버튼을 눌러 8자리를 입력해주세요."
+                :disabled="isSubmitting"
+              />
               <label class="checkbox-row">
                 <input v-model="loginForm.rememberDevice" type="checkbox" />
                 <span>이 브라우저에서 로그인 상태 유지</span>
@@ -528,7 +574,7 @@ onBeforeUnmount(() => {
         <div v-if="activeRoute === 'launcher'" class="workspace-stack">
           <FeatureLauncher
             :current-user="currentUser"
-            :items="featureItems"
+            :items="launcherItems"
             @navigate="navigate"
           />
           <InviteAccessPanel
@@ -543,6 +589,7 @@ onBeforeUnmount(() => {
             @copy-invite="copyInviteLink"
           />
         </div>
+        <AdminWorkspace v-else-if="activeRoute === 'admin'" :current-user="currentUser" />
         <HouseholdWorkspace v-else-if="activeRoute === 'household'" />
         <FamilyAlbumWorkspace v-else-if="activeRoute === 'family-album'" />
         <TravelHubWorkspace v-else :route="activeRoute" />

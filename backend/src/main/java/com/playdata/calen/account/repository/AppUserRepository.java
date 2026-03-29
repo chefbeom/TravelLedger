@@ -1,6 +1,7 @@
 package com.playdata.calen.account.repository;
 
 import com.playdata.calen.account.domain.AppUser;
+import com.playdata.calen.account.domain.AppUserRole;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.domain.Pageable;
@@ -11,6 +12,14 @@ import org.springframework.data.repository.query.Param;
 public interface AppUserRepository extends JpaRepository<AppUser, Long> {
 
     boolean existsByLoginId(String loginId);
+
+    long countByActiveTrue();
+
+    long countByRole(AppUserRole role);
+
+    long countByRoleAndActiveTrue(AppUserRole role);
+
+    List<AppUser> findAllByOrderByIdAsc();
 
     List<AppUser> findAllByActiveTrueOrderByDisplayNameAscIdAsc();
 

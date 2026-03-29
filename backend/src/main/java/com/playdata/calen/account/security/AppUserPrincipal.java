@@ -1,6 +1,7 @@
 package com.playdata.calen.account.security;
 
 import com.playdata.calen.account.domain.AppUser;
+import com.playdata.calen.account.domain.AppUserRole;
 import java.util.Collection;
 import java.util.List;
 import org.springframework.security.core.GrantedAuthority;
@@ -12,22 +13,32 @@ public record AppUserPrincipal(
         String loginId,
         String displayName,
         String passwordHash,
+        AppUserRole role,
         boolean active
 ) implements UserDetails {
 
     public static AppUserPrincipal from(AppUser user) {
+        AppUserRole normalizedRole = user.getRole() != null ? user.getRole() : AppUserRole.USER;
         return new AppUserPrincipal(
                 user.getId(),
                 user.getLoginId(),
                 user.getDisplayName(),
                 user.getPasswordHash(),
+                normalizedRole,
                 user.isActive()
         );
     }
 
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
-        return List.of(new SimpleGrantedAuthority("ROLE_USER"));
+        return List.of(
+                new SimpleGrantedAuthority("ROLE_USER"),
+                new SimpleGrantedAuthority("ROLE_" + role.name())
+        );
+    }
+
+    public boolean isAdmin() {
+        return role == AppUserRole.ADMIN;
     }
 
     @Override

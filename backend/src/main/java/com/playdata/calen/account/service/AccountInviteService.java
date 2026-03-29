@@ -58,13 +58,13 @@ public class AccountInviteService {
     }
 
     @Transactional
-    public AppUser acceptInvite(String rawToken, String loginId, String displayName, String password) {
+    public AppUser acceptInvite(String rawToken, String loginId, String displayName, String password, String secondaryPin) {
         AccountInvite invite = accountInviteRepository.findForUpdateByTokenHash(hashToken(rawToken))
                 .orElseThrow(() -> new BadRequestException(INVALID_INVITE_MESSAGE));
 
         ensureAvailable(invite);
 
-        AppUser createdUser = appUserService.registerUser(loginId, displayName, password);
+        AppUser createdUser = appUserService.registerUser(loginId, displayName, password, secondaryPin);
         invite.setUsedBy(createdUser);
         invite.setUsedAt(LocalDateTime.now());
         return createdUser;

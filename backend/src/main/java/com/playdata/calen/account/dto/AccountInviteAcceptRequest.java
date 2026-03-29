@@ -12,6 +12,9 @@ public record AccountInviteAcceptRequest(
         String displayName,
         @NotBlank(message = "비밀번호는 필수입니다.")
         @Size(min = 8, message = "비밀번호는 8자 이상이어야 합니다.")
-        String password
+        String password,
+        @NotBlank(message = "2차 비밀번호는 필수입니다.")
+        @Size(min = 8, max = 8, message = "2차 비밀번호는 숫자 8자리여야 합니다.")
+        String secondaryPin
 ) {
 }

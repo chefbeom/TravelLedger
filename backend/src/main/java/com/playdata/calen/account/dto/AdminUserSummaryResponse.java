@@ -1,12 +1,10 @@
 package com.playdata.calen.account.dto;
 
-import com.playdata.calen.account.domain.AppUserRole;
-
-public record AppUserResponse(
+public record AdminUserSummaryResponse(
         Long id,
         String loginId,
         String displayName,
-        AppUserRole role,
+        String role,
         boolean admin,
         boolean active
 ) {

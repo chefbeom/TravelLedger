@@ -2,6 +2,8 @@ package com.playdata.calen.account.domain;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
@@ -29,6 +31,13 @@ public class AppUser {
 
     @Column(nullable = false, length = 100)
     private String passwordHash;
+
+    @Column(length = 100)
+    private String secondaryPinHash;
+
+    @Enumerated(EnumType.STRING)
+    @Column(length = 20)
+    private AppUserRole role = AppUserRole.USER;
 
     @Column(nullable = false)
     private boolean active = true;

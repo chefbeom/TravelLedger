@@ -1,6 +1,7 @@
 package com.playdata.calen.common.config;
 
 import com.playdata.calen.account.domain.AppUser;
+import com.playdata.calen.account.domain.AppUserRole;
 import com.playdata.calen.account.repository.AppUserRepository;
 import com.playdata.calen.account.service.AccountSetupService;
 import com.playdata.calen.ledger.domain.CategoryDetail;
@@ -42,9 +43,11 @@ public class DataInitializer {
                 return;
             }
 
-            AppUser hana = createUser("hana", "김하나", "test1234");
-            AppUser minsu = createUser("minsu", "박민수", "test1234");
+            AppUser admin = createUser("admin", "관리자", "test1234", "12345678", AppUserRole.ADMIN);
+            AppUser hana = createUser("hana", "김하나", "test1234", "12345678", AppUserRole.USER);
+            AppUser minsu = createUser("minsu", "박민수", "test1234", "87654321", AppUserRole.USER);
 
+            accountSetupService.initializeDefaults(admin);
             accountSetupService.initializeDefaults(hana);
             accountSetupService.initializeDefaults(minsu);
 
@@ -53,11 +56,13 @@ public class DataInitializer {
         };
     }
 
-    private AppUser createUser(String loginId, String displayName, String password) {
+    private AppUser createUser(String loginId, String displayName, String password, String secondaryPin, AppUserRole role) {
         AppUser user = new AppUser();
         user.setLoginId(loginId);
         user.setDisplayName(displayName);
         user.setPasswordHash(passwordEncoder.encode(password));
+        user.setSecondaryPinHash(passwordEncoder.encode(secondaryPin));
+        user.setRole(role);
         user.setActive(true);
         return appUserRepository.save(user);
     }

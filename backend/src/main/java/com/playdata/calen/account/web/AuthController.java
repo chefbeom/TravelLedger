@@ -2,9 +2,13 @@ package com.playdata.calen.account.web;
 
 import com.playdata.calen.account.dto.AppUserResponse;
 import com.playdata.calen.account.dto.AuthLoginRequest;
+import com.playdata.calen.account.domain.AppUser;
+import com.playdata.calen.account.domain.LoginAuditStatus;
 import com.playdata.calen.account.security.AppUserPrincipal;
 import com.playdata.calen.account.service.AppUserService;
+import com.playdata.calen.account.service.LoginAuditLogService;
 import com.playdata.calen.account.service.LoginAttemptService;
+import com.playdata.calen.common.exception.TooManyRequestsException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
@@ -34,6 +38,7 @@ public class AuthController {
 
     private final AppUserService appUserService;
     private final LoginAttemptService loginAttemptService;
+    private final LoginAuditLogService loginAuditLogService;
     private final AuthenticationManager authenticationManager;
     private final SecurityContextRepository securityContextRepository;
     private final PersistentTokenBasedRememberMeServices rememberMeServices;
@@ -55,19 +60,63 @@ public class AuthController {
     ) {
         String normalizedLoginId = request.loginId().trim();
         String clientIp = resolveClientIp(httpRequest);
-        loginAttemptService.ensureAllowed(clientIp);
+        String userAgent = httpRequest.getHeader("User-Agent");
+        try {
+            loginAttemptService.ensureAllowed(clientIp);
+        } catch (TooManyRequestsException exception) {
+            loginAuditLogService.record(
+                    normalizedLoginId,
+                    clientIp,
+                    userAgent,
+                    LoginAuditStatus.BLOCKED,
+                    exception.getMessage(),
+                    null
+            );
+            throw exception;
+        }
 
         Authentication authentication;
+        AppUser authenticatedUser;
         try {
             authentication = authenticate(normalizedLoginId, request.password());
+            authenticatedUser = appUserService.getRequiredUser(((AppUserPrincipal) authentication.getPrincipal()).userId());
+            appUserService.ensureSecondaryPinMatches(authenticatedUser, request.secondaryPin());
+        } catch (com.playdata.calen.account.security.SecondaryPinMismatchException exception) {
+            loginAttemptService.recordFailure(clientIp);
+            AppUser user = appUserService.findActiveUserByLoginId(normalizedLoginId).orElse(null);
+            loginAuditLogService.record(
+                    normalizedLoginId,
+                    clientIp,
+                    userAgent,
+                    LoginAuditStatus.BAD_SECONDARY_PIN,
+                    exception.getMessage(),
+                    user
+            );
+            throw exception;
         } catch (AuthenticationException exception) {
             loginAttemptService.recordFailure(clientIp);
+            loginAuditLogService.record(
+                    normalizedLoginId,
+                    clientIp,
+                    userAgent,
+                    LoginAuditStatus.BAD_CREDENTIALS,
+                    exception.getMessage(),
+                    null
+            );
             throw exception;
         }
 
         loginAttemptService.recordSuccess(clientIp);
+        loginAuditLogService.record(
+                normalizedLoginId,
+                clientIp,
+                userAgent,
+                LoginAuditStatus.SUCCESS,
+                "로그인 성공",
+                authenticatedUser
+        );
         signIn(authentication, request.rememberDevice(), httpRequest, httpResponse);
-        return appUserService.toResponse(appUserService.getRequiredUser(((AppUserPrincipal) authentication.getPrincipal()).userId()));
+        return appUserService.toResponse(authenticatedUser);
     }
 
     @GetMapping("/me")

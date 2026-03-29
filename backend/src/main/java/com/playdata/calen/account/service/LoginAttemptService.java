@@ -4,6 +4,8 @@ import com.playdata.calen.common.exception.TooManyRequestsException;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Comparator;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import org.springframework.stereotype.Service;
@@ -40,6 +42,24 @@ public class LoginAttemptService {
         Instant now = Instant.now(clock);
         updateFailure(keyForIp(clientIp), now);
         pruneExpiredEntries(now);
+    }
+
+    public void clearFailures(String clientIp) {
+        attempts.remove(keyForIp(clientIp));
+    }
+
+    public List<BlockedIpSnapshot> getBlockedIps() {
+        Instant now = Instant.now(clock);
+        pruneExpiredEntries(now);
+        return attempts.entrySet().stream()
+                .filter(entry -> entry.getValue().lockedUntil() != null && entry.getValue().lockedUntil().isAfter(now))
+                .map(entry -> new BlockedIpSnapshot(
+                        entry.getKey().replaceFirst("^IP:", ""),
+                        entry.getValue().failureCount(),
+                        entry.getValue().lockedUntil()
+                ))
+                .sorted(Comparator.comparing(BlockedIpSnapshot::lockedUntil).reversed())
+                .toList();
     }
 
     private void enforceLock(String key, Instant now) {
@@ -90,6 +110,13 @@ public class LoginAttemptService {
     private record AttemptState(
             int failureCount,
             Instant windowStartedAt,
+            Instant lockedUntil
+    ) {
+    }
+
+    public record BlockedIpSnapshot(
+            String clientIp,
+            int failureCount,
             Instant lockedUntil
     ) {
     }

@@ -305,8 +305,20 @@ function handleChangeHouseholdAnchorDate(value) {
   householdAnchorDate.value = value
 }
 
+function buildCalendarEntryRange(anchorDate) {
+  const range = getMonthRange(anchorDate)
+  const from = parseIsoDate(range.from)
+  const to = parseIsoDate(range.to)
+  from.setDate(from.getDate() - 7)
+  to.setDate(to.getDate() + 7)
+  return {
+    from: toIsoDate(from),
+    to: toIsoDate(to),
+  }
+}
+
 async function loadCalendarData() {
-  const range = getMonthRange(calendarAnchorDate.value)
+  const range = buildCalendarEntryRange(calendarAnchorDate.value)
   const [dashboardResponse, entryItems] = await Promise.all([
     fetchDashboard(calendarAnchorDate.value),
     fetchEntries(range.from, range.to),

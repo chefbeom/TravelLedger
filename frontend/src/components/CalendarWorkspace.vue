@@ -1,15 +1,27 @@
 <script setup>
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
-import SummaryCard from './SummaryCard.vue'
 import { formatCompactNumber } from '../lib/format'
+import { resolveRange, summarizeEntries } from '../lib/analytics'
 
 const CALENDAR_SCALE_KEY = 'calen-household-calendar-scale-preset'
 const CALENDAR_COLLAPSE_KEY = 'calen-household-calendar-collapsed'
+const AGGREGATE_WIDGETS_KEY = 'calen-household-aggregate-widgets'
 
 const calendarScalePresets = [
-  { key: 'compact', label: '작게', value: 74 },
+  { key: 'compact', label: '좁게', value: 74 },
   { key: 'default', label: '기본', value: 112 },
-  { key: 'expanded', label: '크게', value: 150 },
+  { key: 'expanded', label: '넓게', value: 150 },
+]
+
+const aggregateWidgetKinds = [
+  { value: 'TOTAL', label: '합계' },
+  { value: 'PAYMENT_METHOD', label: '결제수단' },
+]
+
+const aggregateWidgetPeriods = [
+  { value: 'MONTH', label: '이번 달' },
+  { value: 'WEEK', label: '이번 주' },
+  { value: 'DAY', label: '오늘' },
 ]
 
 const props = defineProps({
@@ -116,6 +128,7 @@ const selectedDaySort = ref('ASC')
 const calendarScalePreset = ref('default')
 const isCalendarCollapsed = ref(false)
 const ledgerSheetRef = ref(null)
+const aggregateWidgetConfigs = ref(createDefaultAggregateConfigs())
 
 const maxDailyExpense = computed(() => {
   const expenses = props.calendarWeeks.flat().map((day) => Number(day.summary?.expense ?? 0))
@@ -162,12 +175,6 @@ const normalizedSelectedDateEntries = computed(() =>
 
 const hasSelectedMemoColumn = computed(() => normalizedSelectedDateEntries.value.some((entry) => entry.visibleMemo))
 const selectedDateCountLabel = computed(() => `${normalizedSelectedDateEntries.value.length}건`)
-const featuredQuickStats = computed(() => {
-  const order = ['month', 'week', 'day']
-  return order
-    .map((key) => props.quickStats.find((card) => card.key === key))
-    .filter(Boolean)
-})
 const formattedAmountInput = computed(() => {
   if (!props.amountInput) {
     return ''
@@ -175,6 +182,8 @@ const formattedAmountInput = computed(() => {
 
   return formatCompactNumber(props.amountInput)
 })
+
+const aggregateCards = computed(() => aggregateWidgetConfigs.value.slice(0, 4).map((config, index) => buildAggregateCard(config, index)))
 
 watch(
   () => props.anchorDate,
@@ -199,6 +208,30 @@ watch(calendarScalePreset, (value) => {
   }
 })
 
+watch(
+  () => props.paymentMethods,
+  () => {
+    aggregateWidgetConfigs.value = normalizeAggregateConfigs(aggregateWidgetConfigs.value)
+  },
+  { deep: true },
+)
+
+watch(isCalendarCollapsed, (value) => {
+  if (typeof window !== 'undefined') {
+    window.localStorage.setItem(CALENDAR_COLLAPSE_KEY, value ? 'true' : 'false')
+  }
+})
+
+watch(
+  aggregateWidgetConfigs,
+  (value) => {
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem(AGGREGATE_WIDGETS_KEY, JSON.stringify(value))
+    }
+  },
+  { deep: true },
+)
+
 onMounted(() => {
   if (typeof window === 'undefined') {
     return
@@ -206,6 +239,7 @@ onMounted(() => {
 
   const savedScale = window.localStorage.getItem(CALENDAR_SCALE_KEY)
   const savedCollapsed = window.localStorage.getItem(CALENDAR_COLLAPSE_KEY)
+  const savedWidgets = window.localStorage.getItem(AGGREGATE_WIDGETS_KEY)
 
   if (savedScale) {
     calendarScalePreset.value = normalizePresetKey(calendarScalePresets, savedScale, 'default')
@@ -214,11 +248,15 @@ onMounted(() => {
   if (savedCollapsed) {
     isCalendarCollapsed.value = savedCollapsed === 'true'
   }
-})
 
-watch(isCalendarCollapsed, (value) => {
-  if (typeof window !== 'undefined') {
-    window.localStorage.setItem(CALENDAR_COLLAPSE_KEY, value ? 'true' : 'false')
+  if (savedWidgets) {
+    try {
+      aggregateWidgetConfigs.value = normalizeAggregateConfigs(JSON.parse(savedWidgets))
+    } catch {
+      aggregateWidgetConfigs.value = normalizeAggregateConfigs(aggregateWidgetConfigs.value)
+    }
+  } else {
+    aggregateWidgetConfigs.value = normalizeAggregateConfigs(aggregateWidgetConfigs.value)
   }
 })
 
@@ -239,6 +277,92 @@ function normalizePresetKey(presets, value, fallbackKey) {
   }
 
   return fallbackKey
+}
+
+function createDefaultAggregateConfigs() {
+  const defaultPaymentMethodId = props.paymentMethods[0] ? String(props.paymentMethods[0].id) : ''
+  return [
+    { id: 'aggregate-1', kind: 'TOTAL', period: 'MONTH', paymentMethodId: '' },
+    { id: 'aggregate-2', kind: 'TOTAL', period: 'WEEK', paymentMethodId: '' },
+    { id: 'aggregate-3', kind: 'TOTAL', period: 'DAY', paymentMethodId: '' },
+    { id: 'aggregate-4', kind: 'PAYMENT_METHOD', period: 'MONTH', paymentMethodId: defaultPaymentMethodId },
+  ]
+}
+
+function normalizeAggregateConfigs(configs) {
+  const fallback = createDefaultAggregateConfigs()
+  const validPaymentIds = new Set(props.paymentMethods.map((item) => String(item.id)))
+  const firstPaymentMethodId = props.paymentMethods[0] ? String(props.paymentMethods[0].id) : ''
+
+  return fallback.map((baseConfig, index) => {
+    const current = configs?.[index] ?? {}
+    const kind = aggregateWidgetKinds.some((item) => item.value === current.kind) ? current.kind : baseConfig.kind
+    const period = aggregateWidgetPeriods.some((item) => item.value === current.period) ? current.period : baseConfig.period
+    const paymentMethodId = kind === 'PAYMENT_METHOD'
+      ? (validPaymentIds.has(String(current.paymentMethodId ?? '')) ? String(current.paymentMethodId) : (baseConfig.paymentMethodId || firstPaymentMethodId))
+      : ''
+
+    return {
+      id: current.id || baseConfig.id,
+      kind,
+      period,
+      paymentMethodId,
+    }
+  })
+}
+
+function updateAggregateWidget(index, field, value) {
+  aggregateWidgetConfigs.value = normalizeAggregateConfigs(
+    aggregateWidgetConfigs.value.map((config, configIndex) => {
+      if (configIndex !== index) {
+        return config
+      }
+
+      const nextConfig = {
+        ...config,
+        [field]: value,
+      }
+
+      if (field === 'kind' && value !== 'PAYMENT_METHOD') {
+        nextConfig.paymentMethodId = ''
+      }
+
+      if (field === 'kind' && value === 'PAYMENT_METHOD' && !nextConfig.paymentMethodId) {
+        nextConfig.paymentMethodId = props.paymentMethods[0] ? String(props.paymentMethods[0].id) : ''
+      }
+
+      return nextConfig
+    }),
+  )
+}
+
+function getAggregateRange(period) {
+  return resolveRange(selectedDate.value || props.anchorDate, period, props.anchorDate, props.anchorDate)
+}
+
+function buildAggregateCard(config, index) {
+  const range = getAggregateRange(config.period)
+  const rangeEntries = props.entries.filter((entry) => entry.entryDate >= range.from && entry.entryDate <= range.to)
+  const filteredEntries = config.kind === 'PAYMENT_METHOD' && config.paymentMethodId
+    ? rangeEntries.filter((entry) => String(entry.paymentMethodId) === String(config.paymentMethodId))
+    : rangeEntries
+  const overview = summarizeEntries(filteredEntries)
+  const totalAmount = Number(overview.income) + Number(overview.expense)
+  const paymentMethodName = props.paymentMethods.find((item) => String(item.id) === String(config.paymentMethodId))?.name || '결제수단'
+  const periodLabel = aggregateWidgetPeriods.find((item) => item.value === config.period)?.label || '이번 달'
+  const title = config.kind === 'PAYMENT_METHOD'
+    ? `${periodLabel} ${paymentMethodName}`
+    : `${periodLabel} 합계`
+
+  return {
+    id: config.id || `aggregate-${index + 1}`,
+    index,
+    config,
+    title,
+    periodLabel,
+    totalAmount,
+    overview,
+  }
 }
 
 function stripImportedMemo(value) {
@@ -331,7 +455,7 @@ function toggleCalendarCollapsed() {
         <div class="panel__header">
           <div>
             <h2>{{ isEditingEntry ? '거래 수정' : '빠른 거래 입력' }}</h2>
-            <p>날짜를 고른 뒤 금액과 분류를 먼저 적고, 시간은 필요할 때만 켜서 빠르게 기록합니다.</p>
+            <p>날짜를 고른 뒤 금액과 분류를 먼저 입력하고, 시간은 필요할 때만 켜서 빠르게 기록할 수 있습니다.</p>
           </div>
           <span class="panel__badge">{{ formatShortDate(entryForm.entryDate) }}</span>
         </div>
@@ -340,12 +464,14 @@ function toggleCalendarCollapsed() {
           <div class="entry-editor__amount">
             <div class="entry-type-toggle">
               <button
+                type="button"
                 :class="['toggle-chip', { 'toggle-chip--active': entryForm.entryType === 'EXPENSE' }]"
                 @click="entryForm.entryType = 'EXPENSE'"
               >
                 지출
               </button>
               <button
+                type="button"
                 :class="['toggle-chip', { 'toggle-chip--active': entryForm.entryType === 'INCOME' }]"
                 @click="entryForm.entryType = 'INCOME'"
               >
@@ -372,15 +498,16 @@ function toggleCalendarCollapsed() {
               <button
                 v-for="value in quickAmountButtons"
                 :key="value"
+                type="button"
                 class="button button--secondary amount-shortcuts__button"
                 @click="emit('fill-amount', value)"
               >
                 {{ formatAmountShortcut(value) }}
               </button>
-              <button class="button button--secondary amount-shortcuts__button" @click="emit('add-amount', 5000)">
+              <button type="button" class="button button--secondary amount-shortcuts__button" @click="emit('add-amount', 5000)">
                 +5천
               </button>
-              <button class="button button--secondary amount-shortcuts__button" @click="emit('add-amount', 10000)">
+              <button type="button" class="button button--secondary amount-shortcuts__button" @click="emit('add-amount', 10000)">
                 +1만
               </button>
             </div>
@@ -447,7 +574,7 @@ function toggleCalendarCollapsed() {
         </div>
 
         <div class="entry-editor__actions">
-          <button class="button button--primary" :disabled="isSubmitting" @click="emit('submit-entry')">
+          <button type="button" class="button button--primary" :disabled="isSubmitting" @click="emit('submit-entry')">
             {{
               isSubmitting && activeSubmit === 'entry'
                 ? '저장 중...'
@@ -456,8 +583,8 @@ function toggleCalendarCollapsed() {
                   : '거래 등록'
             }}
           </button>
-          <button v-if="isEditingEntry" class="button button--secondary" @click="emit('reset-entry')">
-            편집 취소
+          <button v-if="isEditingEntry" type="button" class="button button--secondary" @click="emit('reset-entry')">
+            입력 취소
           </button>
         </div>
       </section>
@@ -465,12 +592,51 @@ function toggleCalendarCollapsed() {
       <section class="panel household-quickstats-panel">
         <div class="panel__header">
           <div>
-            <h2>간단 통계</h2>
-            <p>이번 달, 주, 일 흐름을 빠르게 확인하고 바로 입력할 수 있습니다.</p>
+            <h2>사용자 설정 집계</h2>
+            <p>카드마다 기간과 집계 방식을 골라 최대 4개까지 빠르게 확인할 수 있습니다.</p>
           </div>
         </div>
-        <div class="summary-grid summary-grid--compact household-quickstats-grid">
-          <SummaryCard v-for="card in featuredQuickStats" :key="card.key" :card="card" />
+        <div class="household-aggregate-grid">
+          <article v-for="card in aggregateCards" :key="card.id" class="household-aggregate-card">
+            <div class="household-aggregate-card__controls">
+              <label class="field household-aggregate-card__field">
+                <span class="field__label">집계</span>
+                <select :value="card.config.kind" @change="updateAggregateWidget(card.index, 'kind', $event.target.value)">
+                  <option v-for="option in aggregateWidgetKinds" :key="option.value" :value="option.value">
+                    {{ option.label }}
+                  </option>
+                </select>
+              </label>
+              <label class="field household-aggregate-card__field">
+                <span class="field__label">기간</span>
+                <select :value="card.config.period" @change="updateAggregateWidget(card.index, 'period', $event.target.value)">
+                  <option v-for="option in aggregateWidgetPeriods" :key="option.value" :value="option.value">
+                    {{ option.label }}
+                  </option>
+                </select>
+              </label>
+            </div>
+
+            <label v-if="card.config.kind === 'PAYMENT_METHOD'" class="field household-aggregate-card__field">
+              <span class="field__label">결제수단</span>
+              <select :value="card.config.paymentMethodId" @change="updateAggregateWidget(card.index, 'paymentMethodId', $event.target.value)">
+                <option v-for="payment in paymentMethods" :key="payment.id" :value="String(payment.id)">
+                  {{ payment.name }}
+                </option>
+              </select>
+            </label>
+
+            <div class="household-aggregate-card__copy">
+              <span class="household-aggregate-card__eyebrow">{{ card.title }}</span>
+              <strong>{{ formatCurrency(card.totalAmount) }}</strong>
+              <small>{{ card.periodLabel }} 기준 {{ card.overview.entryCount }}건</small>
+            </div>
+
+            <div class="household-aggregate-card__meta">
+              <span>수입 {{ formatCurrency(card.overview.income) }}</span>
+              <span>지출 {{ formatCurrency(card.overview.expense) }}</span>
+            </div>
+          </article>
         </div>
       </section>
     </div>
@@ -593,68 +759,68 @@ function toggleCalendarCollapsed() {
 
       <div v-else class="household-calendar-collapsed-note">
         <strong>{{ formatShortDate(selectedDate) }}</strong>
-        <span>달력을 접어두었습니다. 다시 펼치면 날짜별 흐름을 바로 확인할 수 있습니다.</span>
+        <span>달력을 접어 두었습니다. 다시 펼치면 날짜별 흐름을 바로 확인할 수 있습니다.</span>
       </div>
     </section>
 
     <section ref="ledgerSheetRef" class="panel household-sheet-panel">
-        <div class="panel__header">
-          <div>
-            <h2>{{ formatShortDate(selectedDate) }} 거래 시트</h2>
-            <p>달력에서 고른 날짜의 거래만 모아서 바로 수정하거나 삭제할 수 있습니다.</p>
-          </div>
-          <div class="household-sheet-header">
-            <span class="panel__badge">{{ selectedDateCountLabel }}</span>
-            <div class="scope-toggle">
-              <button class="button" :class="{ 'button--primary': selectedDaySort === 'ASC' }" @click="selectedDaySort = 'ASC'">시간 오름차순</button>
-              <button class="button" :class="{ 'button--primary': selectedDaySort === 'DESC' }" @click="selectedDaySort = 'DESC'">시간 내림차순</button>
-            </div>
+      <div class="panel__header">
+        <div>
+          <h2>{{ formatShortDate(selectedDate) }} 거래 시트</h2>
+          <p>달력에서 고른 날짜의 거래만 모아서 바로 수정하거나 삭제할 수 있습니다.</p>
+        </div>
+        <div class="household-sheet-header">
+          <span class="panel__badge">{{ selectedDateCountLabel }}</span>
+          <div class="scope-toggle">
+            <button type="button" class="button" :class="{ 'button--primary': selectedDaySort === 'ASC' }" @click="selectedDaySort = 'ASC'">시간 오름차순</button>
+            <button type="button" class="button" :class="{ 'button--primary': selectedDaySort === 'DESC' }" @click="selectedDaySort = 'DESC'">시간 내림차순</button>
           </div>
         </div>
+      </div>
 
-        <div class="sheet-table-wrap household-sheet-table-wrap">
-          <table class="sheet-table">
-            <thead>
-              <tr>
-                <th>시간</th>
-                <th>구분</th>
-                <th>제목</th>
-                <th>카테고리</th>
-                <th>결제수단</th>
-                <th>금액</th>
-                <th v-if="hasSelectedMemoColumn">메모</th>
-                <th>작업</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="entry in normalizedSelectedDateEntries" :key="entry.id">
-                <td>{{ formatTime(entry.entryTime) }}</td>
-                <td>
-                  <span :class="['chip', entry.entryType === 'INCOME' ? 'chip--income' : 'chip--expense']">
-                    {{ entry.entryType === 'INCOME' ? '수입' : '지출' }}
-                  </span>
-                </td>
-                <td class="sheet-table__title">{{ entry.title }}</td>
-                <td class="sheet-table__category">
-                  {{ entry.categoryGroupName }}
-                  <template v-if="entry.categoryDetailName"> / {{ entry.categoryDetailName }}</template>
-                </td>
-                <td>{{ entry.paymentMethodName }}</td>
-                <td :class="['sheet-table__amount', entry.entryType === 'INCOME' ? 'is-income' : 'is-expense']">
-                  {{ formatCurrency(entry.amount) }}
-                </td>
-                <td v-if="hasSelectedMemoColumn" class="sheet-table__memo">{{ entry.visibleMemo || '-' }}</td>
-                <td class="sheet-table__actions">
-                  <button class="button button--ghost" @click="emit('edit-entry', entry)">수정</button>
-                  <button class="button button--danger" @click="emit('delete-entry', entry)">삭제</button>
-                </td>
-              </tr>
-              <tr v-if="!normalizedSelectedDateEntries.length">
-                <td :colspan="hasSelectedMemoColumn ? 8 : 7" class="sheet-table__empty">선택한 날짜에는 거래가 없습니다.</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </section>
+      <div class="sheet-table-wrap household-sheet-table-wrap">
+        <table class="sheet-table">
+          <thead>
+            <tr>
+              <th>시간</th>
+              <th>구분</th>
+              <th>제목</th>
+              <th>카테고리</th>
+              <th>결제수단</th>
+              <th>금액</th>
+              <th v-if="hasSelectedMemoColumn">메모</th>
+              <th>작업</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="entry in normalizedSelectedDateEntries" :key="entry.id">
+              <td>{{ formatTime(entry.entryTime) }}</td>
+              <td>
+                <span :class="['chip', entry.entryType === 'INCOME' ? 'chip--income' : 'chip--expense']">
+                  {{ entry.entryType === 'INCOME' ? '수입' : '지출' }}
+                </span>
+              </td>
+              <td class="sheet-table__title">{{ entry.title }}</td>
+              <td class="sheet-table__category">
+                {{ entry.categoryGroupName }}
+                <template v-if="entry.categoryDetailName"> / {{ entry.categoryDetailName }}</template>
+              </td>
+              <td>{{ entry.paymentMethodName }}</td>
+              <td :class="['sheet-table__amount', entry.entryType === 'INCOME' ? 'is-income' : 'is-expense']">
+                {{ formatCurrency(entry.amount) }}
+              </td>
+              <td v-if="hasSelectedMemoColumn" class="sheet-table__memo">{{ entry.visibleMemo || '-' }}</td>
+              <td class="sheet-table__actions">
+                <button type="button" class="button button--ghost" @click="emit('edit-entry', entry)">수정</button>
+                <button type="button" class="button button--danger" @click="emit('delete-entry', entry)">삭제</button>
+              </td>
+            </tr>
+            <tr v-if="!normalizedSelectedDateEntries.length">
+              <td :colspan="hasSelectedMemoColumn ? 8 : 7" class="sheet-table__empty">선택한 날짜에는 거래가 없습니다.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
   </div>
 </template>

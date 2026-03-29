@@ -3280,14 +3280,53 @@ textarea {
   color: var(--text-muted);
 }
 
+:root[data-theme='toss'] input,
+:root[data-theme='toss'] select,
+:root[data-theme='toss'] textarea,
+:root[data-theme='toss'] .field input,
+:root[data-theme='toss'] .field select,
+:root[data-theme='toss'] .stack-form input,
+:root[data-theme='toss'] .stack-form select {
+  background: #1b212c;
+  border-color: #2d3645;
+  color: var(--text);
+}
+
+:root[data-theme='toss'] select option {
+  background: #151922;
+  color: var(--text);
+}
+
 :root[data-theme='toss'] .sheet-table th,
 :root[data-theme='toss'] .sheet-table td,
+:root[data-theme='toss'] .comparison-table th,
+:root[data-theme='toss'] .comparison-table td,
 :root[data-theme='toss'] .sheet-table__title,
 :root[data-theme='toss'] .sheet-table__category,
+:root[data-theme='toss'] .sheet-table__empty,
 :root[data-theme='toss'] .field label,
 :root[data-theme='toss'] .panel__header h2,
 :root[data-theme='toss'] .panel__header h3 {
   color: var(--text);
+}
+
+:root[data-theme='toss'] .sheet-table th,
+:root[data-theme='toss'] .comparison-table th {
+  background: #1b212c;
+}
+
+:root[data-theme='toss'] .sheet-table td,
+:root[data-theme='toss'] .comparison-table td {
+  background: transparent;
+}
+
+:root[data-theme='toss'] .calendar__metric {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+:root[data-theme='toss'] .calendar__day--active {
+  border-color: rgba(255, 93, 115, 0.18);
+  background: linear-gradient(180deg, rgba(255, 93, 115, 0.08), rgba(24, 29, 38, 0.96));
 }
 
 :root[data-theme='toss'] .sheet-table tr:hover td,
@@ -3307,6 +3346,15 @@ textarea {
 :root[data-theme='toss'] .calendar-size-toolbar__choice,
 :root[data-theme='toss'] .calendar-size-toolbar__control {
   background: #191f29;
+  border-color: #2d3645;
+  color: var(--text);
+}
+
+:root[data-theme='toss'] .calendar-stepper__arrow,
+:root[data-theme='toss'] .household-aggregate-card,
+:root[data-theme='toss'] .household-calendar-collapsed-note,
+:root[data-theme='toss'] .chip--neutral {
+  background: #1b212c;
   border-color: #2d3645;
   color: var(--text);
 }
@@ -3448,10 +3496,66 @@ textarea {
 
 .household-quickstats-panel {
   min-width: 0;
+  display: grid;
+  align-content: start;
 }
 
 .household-quickstats-grid {
   grid-template-columns: 1fr;
+}
+
+.household-aggregate-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.household-aggregate-card {
+  display: grid;
+  gap: 12px;
+  min-height: 220px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: var(--surface-soft);
+}
+
+.household-aggregate-card__controls {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.household-aggregate-card__field {
+  min-width: 0;
+}
+
+.household-aggregate-card__copy {
+  display: grid;
+  gap: 6px;
+  margin-top: auto;
+}
+
+.household-aggregate-card__eyebrow {
+  color: var(--text-soft);
+  font-size: 0.88rem;
+  font-weight: 700;
+}
+
+.household-aggregate-card__copy strong {
+  font-size: 1.5rem;
+  line-height: 1.1;
+  letter-spacing: -0.03em;
+}
+
+.household-aggregate-card__copy small,
+.household-aggregate-card__meta span {
+  color: var(--text-soft);
+}
+
+.household-aggregate-card__meta {
+  display: grid;
+  gap: 6px;
 }
 
 .household-sheet-panel {
@@ -3572,6 +3676,11 @@ textarea {
   .household-time-field .checkbox-row {
     gap: 8px;
     flex-wrap: wrap;
+  }
+
+  .household-aggregate-grid,
+  .household-aggregate-card__controls {
+    grid-template-columns: 1fr;
   }
 }
 

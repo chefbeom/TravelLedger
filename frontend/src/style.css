@@ -3157,35 +3157,35 @@ textarea {
 }
 
 :root[data-theme='toss'] {
-  color-scheme: light;
-  --bg: #eef5ff;
-  --surface: #ffffff;
-  --surface-panel: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(246, 250, 255, 0.98) 100%);
-  --surface-elevated: linear-gradient(180deg, #ffffff 0%, #f7fbff 100%);
-  --surface-soft: #f4f8ff;
-  --surface-soft-strong: #e8f0ff;
-  --line: #dbe7fb;
-  --text: #0f172a;
-  --text-soft: #475569;
-  --text-muted: #7c8aa5;
-  --blue: #3182f6;
-  --blue-soft: rgba(49, 130, 246, 0.12);
-  --income: #0ea371;
-  --expense: #f04452;
-  --shadow: 0 20px 50px rgba(49, 130, 246, 0.08);
-  --shadow-strong: 0 16px 30px rgba(37, 99, 235, 0.16);
+  color-scheme: dark;
+  --bg: #0e1117;
+  --surface: #151922;
+  --surface-panel: linear-gradient(180deg, rgba(24, 29, 38, 0.98) 0%, rgba(18, 22, 30, 0.98) 100%);
+  --surface-elevated: linear-gradient(180deg, #181d26 0%, #121720 100%);
+  --surface-soft: #1a202b;
+  --surface-soft-strong: #232b38;
+  --line: #2a3240;
+  --text: #f3f5fa;
+  --text-soft: #b0bacb;
+  --text-muted: #7e8aa0;
+  --blue: #4f8cff;
+  --blue-soft: rgba(79, 140, 255, 0.18);
+  --income: #16c784;
+  --expense: #ff5d73;
+  --shadow: 0 24px 64px rgba(0, 0, 0, 0.42);
+  --shadow-strong: 0 18px 36px rgba(0, 0, 0, 0.52);
   --bg-gradient:
-    radial-gradient(circle at top, rgba(79, 141, 247, 0.16), transparent 32%),
-    linear-gradient(180deg, #eef5ff 0%, #f7fbff 48%, #edf4ff 100%);
-  --interactive-contrast-bg: linear-gradient(180deg, #1f6feb 0%, #1659c7 100%);
+    radial-gradient(circle at top, rgba(79, 140, 255, 0.16), transparent 28%),
+    linear-gradient(180deg, #0e1117 0%, #10141c 48%, #0c1016 100%);
+  --interactive-contrast-bg: linear-gradient(180deg, #4f8cff 0%, #2f6df3 100%);
   --interactive-contrast-text: #ffffff;
-  --calendar-size-toggle-bg: rgba(255, 255, 255, 0.92);
+  --calendar-size-toggle-bg: rgba(24, 29, 38, 0.94);
 }
 
 :root[data-theme='toss'] .theme-toggle {
-  background: rgba(255, 255, 255, 0.9);
-  border-color: rgba(49, 130, 246, 0.18);
-  color: #1d4ed8;
+  background: rgba(23, 28, 37, 0.92);
+  border-color: rgba(79, 140, 255, 0.24);
+  color: #dce7ff;
 }
 
 :root[data-theme='toss'] .sidebar,
@@ -3202,20 +3202,24 @@ textarea {
 :root[data-theme='toss'] .button--ghost,
 :root[data-theme='toss'] .field input,
 :root[data-theme='toss'] .field select,
+:root[data-theme='toss'] .stack-form input,
+:root[data-theme='toss'] .stack-form select,
 :root[data-theme='toss'] .sheet-table-wrap,
-:root[data-theme='toss'] .invite-panel__result {
+:root[data-theme='toss'] .invite-panel__result,
+:root[data-theme='toss'] .sidebar__user,
+:root[data-theme='toss'] .sidebar__logout {
   background: var(--surface-soft);
 }
 
 :root[data-theme='toss'] .button {
-  border-color: #d4e4ff;
-  background: #ffffff;
+  border-color: #2d3645;
+  background: #1b212c;
   color: var(--text);
 }
 
 :root[data-theme='toss'] .button--primary {
   border-color: transparent;
-  background: linear-gradient(180deg, #4b95ff 0%, #2f80f7 100%);
+  background: linear-gradient(180deg, #4f8cff 0%, #2f6df3 100%);
   color: #f8fbff;
 }
 
@@ -3224,38 +3228,39 @@ textarea {
 }
 
 :root[data-theme='toss'] .button--ghost {
-  color: #356fd9;
+  color: #9fc0ff;
 }
 
 :root[data-theme='toss'] .button--danger {
-  background: rgba(240, 68, 82, 0.1);
-  color: #cf3140;
+  background: rgba(255, 93, 115, 0.14);
+  color: #ff9aa7;
 }
 
 :root[data-theme='toss'] .toggle-chip {
   color: var(--text-soft);
-  background: rgba(255, 255, 255, 0.88);
+  background: rgba(28, 34, 45, 0.96);
+  border-color: #2d3645;
 }
 
 :root[data-theme='toss'] .toggle-chip--active {
-  background: linear-gradient(180deg, #4b95ff 0%, #2f80f7 100%);
+  background: linear-gradient(180deg, #4f8cff 0%, #2f6df3 100%);
   color: #ffffff;
 }
 
 :root[data-theme='toss'] .entry-type-toggle {
-  background: #edf4ff;
-  border: 1px solid #d6e4ff;
+  background: #131924;
+  border: 1px solid #273245;
 }
 
 :root[data-theme='toss'] .amount-input {
-  border-color: rgba(49, 130, 246, 0.24);
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(236, 244, 255, 0.98));
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
+  border-color: rgba(79, 140, 255, 0.32);
+  background: linear-gradient(180deg, rgba(29, 35, 46, 0.98), rgba(21, 26, 35, 0.98));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
 }
 
 :root[data-theme='toss'] .amount-input span,
 :root[data-theme='toss'] .amount-input input {
-  color: #1f2937;
+  color: #eef3ff;
 }
 
 :root[data-theme='toss'] .field__hint,
@@ -3270,6 +3275,11 @@ textarea {
   color: var(--text-soft);
 }
 
+:root[data-theme='toss'] .field input::placeholder,
+:root[data-theme='toss'] .stack-form input::placeholder {
+  color: var(--text-muted);
+}
+
 :root[data-theme='toss'] .sheet-table th,
 :root[data-theme='toss'] .sheet-table td,
 :root[data-theme='toss'] .sheet-table__title,
@@ -3277,6 +3287,27 @@ textarea {
 :root[data-theme='toss'] .field label,
 :root[data-theme='toss'] .panel__header h2,
 :root[data-theme='toss'] .panel__header h3 {
+  color: var(--text);
+}
+
+:root[data-theme='toss'] .sheet-table tr:hover td,
+:root[data-theme='toss'] .calendar__day:hover,
+:root[data-theme='toss'] .sidebar__link:hover {
+  background: rgba(79, 140, 255, 0.08);
+}
+
+:root[data-theme='toss'] .sidebar__link--active,
+:root[data-theme='toss'] .panel__badge,
+:root[data-theme='toss'] .calendar__day--selected {
+  background: rgba(79, 140, 255, 0.14);
+  border-color: rgba(79, 140, 255, 0.24);
+}
+
+:root[data-theme='toss'] .calendar-size-toolbar__button,
+:root[data-theme='toss'] .calendar-size-toolbar__choice,
+:root[data-theme='toss'] .calendar-size-toolbar__control {
+  background: #191f29;
+  border-color: #2d3645;
   color: var(--text);
 }
 

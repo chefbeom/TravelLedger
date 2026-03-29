@@ -5,7 +5,6 @@ import { resolveRange, summarizeEntries } from '../lib/analytics'
 
 const CALENDAR_SCALE_KEY = 'calen-household-calendar-scale-preset'
 const CALENDAR_COLLAPSE_KEY = 'calen-household-calendar-collapsed'
-const AGGREGATE_WIDGETS_KEY = 'calen-household-aggregate-widgets'
 
 const calendarScalePresets = [
   { key: 'compact', label: '좁게', value: 74 },
@@ -77,6 +76,18 @@ const props = defineProps({
     type: Array,
     default: () => [],
   },
+  aggregateWidgetConfigs: {
+    type: Array,
+    default: () => [],
+  },
+  aggregateSettingsReady: {
+    type: Boolean,
+    default: false,
+  },
+  aggregateSettingsSaving: {
+    type: Boolean,
+    default: false,
+  },
   amountInput: {
     type: String,
     default: '',
@@ -121,14 +132,16 @@ const emit = defineEmits([
   'edit-entry',
   'delete-entry',
   'change-anchor-month',
+  'save-aggregate-widget-configs',
 ])
 
 const selectedDate = ref(props.anchorDate)
 const selectedDaySort = ref('ASC')
 const calendarScalePreset = ref('default')
 const isCalendarCollapsed = ref(false)
+const isAggregateEditMode = ref(false)
 const ledgerSheetRef = ref(null)
-const aggregateWidgetConfigs = ref(createDefaultAggregateConfigs())
+const aggregateWidgetDraftConfigs = ref(createDefaultAggregateConfigs())
 
 const maxDailyExpense = computed(() => {
   const expenses = props.calendarWeeks.flat().map((day) => Number(day.summary?.expense ?? 0))
@@ -183,7 +196,10 @@ const formattedAmountInput = computed(() => {
   return formatCompactNumber(props.amountInput)
 })
 
-const aggregateCards = computed(() => aggregateWidgetConfigs.value.slice(0, 4).map((config, index) => buildAggregateCard(config, index)))
+const aggregateCards = computed(() => {
+  const sourceConfigs = isAggregateEditMode.value ? aggregateWidgetDraftConfigs.value : props.aggregateWidgetConfigs
+  return normalizeAggregateConfigs(sourceConfigs).slice(0, 4).map((config, index) => buildAggregateCard(config, index))
+})
 
 watch(
   () => props.anchorDate,
@@ -211,9 +227,19 @@ watch(calendarScalePreset, (value) => {
 watch(
   () => props.paymentMethods,
   () => {
-    aggregateWidgetConfigs.value = normalizeAggregateConfigs(aggregateWidgetConfigs.value)
+    aggregateWidgetDraftConfigs.value = normalizeAggregateConfigs(aggregateWidgetDraftConfigs.value)
   },
   { deep: true },
+)
+
+watch(
+  () => props.aggregateWidgetConfigs,
+  () => {
+    if (!isAggregateEditMode.value) {
+      syncAggregateWidgetDraft()
+    }
+  },
+  { deep: true, immediate: true },
 )
 
 watch(isCalendarCollapsed, (value) => {
@@ -222,16 +248,6 @@ watch(isCalendarCollapsed, (value) => {
   }
 })
 
-watch(
-  aggregateWidgetConfigs,
-  (value) => {
-    if (typeof window !== 'undefined') {
-      window.localStorage.setItem(AGGREGATE_WIDGETS_KEY, JSON.stringify(value))
-    }
-  },
-  { deep: true },
-)
-
 onMounted(() => {
   if (typeof window === 'undefined') {
     return
@@ -239,7 +255,6 @@ onMounted(() => {
 
   const savedScale = window.localStorage.getItem(CALENDAR_SCALE_KEY)
   const savedCollapsed = window.localStorage.getItem(CALENDAR_COLLAPSE_KEY)
-  const savedWidgets = window.localStorage.getItem(AGGREGATE_WIDGETS_KEY)
 
   if (savedScale) {
     calendarScalePreset.value = normalizePresetKey(calendarScalePresets, savedScale, 'default')
@@ -247,16 +262,6 @@ onMounted(() => {
 
   if (savedCollapsed) {
     isCalendarCollapsed.value = savedCollapsed === 'true'
-  }
-
-  if (savedWidgets) {
-    try {
-      aggregateWidgetConfigs.value = normalizeAggregateConfigs(JSON.parse(savedWidgets))
-    } catch {
-      aggregateWidgetConfigs.value = normalizeAggregateConfigs(aggregateWidgetConfigs.value)
-    }
-  } else {
-    aggregateWidgetConfigs.value = normalizeAggregateConfigs(aggregateWidgetConfigs.value)
   }
 })
 
@@ -312,8 +317,8 @@ function normalizeAggregateConfigs(configs) {
 }
 
 function updateAggregateWidget(index, field, value) {
-  aggregateWidgetConfigs.value = normalizeAggregateConfigs(
-    aggregateWidgetConfigs.value.map((config, configIndex) => {
+  aggregateWidgetDraftConfigs.value = normalizeAggregateConfigs(
+    aggregateWidgetDraftConfigs.value.map((config, configIndex) => {
       if (configIndex !== index) {
         return config
       }
@@ -334,6 +339,32 @@ function updateAggregateWidget(index, field, value) {
       return nextConfig
     }),
   )
+}
+
+function syncAggregateWidgetDraft() {
+  aggregateWidgetDraftConfigs.value = normalizeAggregateConfigs(props.aggregateWidgetConfigs)
+}
+
+function startAggregateEdit() {
+  syncAggregateWidgetDraft()
+  isAggregateEditMode.value = true
+}
+
+function cancelAggregateEdit() {
+  syncAggregateWidgetDraft()
+  isAggregateEditMode.value = false
+}
+
+function saveAggregateWidgetConfigs() {
+  emit(
+    'save-aggregate-widget-configs',
+    normalizeAggregateConfigs(aggregateWidgetDraftConfigs.value).map(({ kind, period, paymentMethodId }) => ({
+      kind,
+      period,
+      paymentMethodId: paymentMethodId ? Number(paymentMethodId) : null,
+    })),
+  )
+  isAggregateEditMode.value = false
 }
 
 function getAggregateRange(period) {
@@ -590,15 +621,49 @@ function toggleCalendarCollapsed() {
       </section>
 
       <section class="panel household-quickstats-panel">
-        <div class="panel__header">
+        <div class="panel__header household-aggregate-header">
           <div>
             <h2>사용자 설정 집계</h2>
-            <p>카드마다 기간과 집계 방식을 골라 최대 4개까지 빠르게 확인할 수 있습니다.</p>
+            <p>최대 4칸까지 집계 내용을 가로로 두고, 필요할 때만 수정 버튼으로 설정을 바꿀 수 있습니다.</p>
+          </div>
+          <div class="household-aggregate-header__actions">
+            <span v-if="aggregateSettingsReady" class="panel__badge">{{ aggregateCards.length }}칸</span>
+            <template v-if="isAggregateEditMode">
+              <button
+                type="button"
+                class="button button--primary"
+                :disabled="aggregateSettingsSaving"
+                @click="saveAggregateWidgetConfigs"
+              >
+                {{ aggregateSettingsSaving ? '저장 중...' : '저장' }}
+              </button>
+              <button
+                type="button"
+                class="button button--secondary"
+                :disabled="aggregateSettingsSaving"
+                @click="cancelAggregateEdit"
+              >
+                취소
+              </button>
+            </template>
+            <button
+              v-else
+              type="button"
+              class="button button--secondary"
+              :disabled="!aggregateSettingsReady"
+              @click="startAggregateEdit"
+            >
+              수정
+            </button>
           </div>
         </div>
-        <div class="household-aggregate-grid">
+        <div v-if="!aggregateSettingsReady" class="household-aggregate-empty">
+          <strong>집계 설정을 불러오는 중입니다.</strong>
+          <span>저장된 카드 구성을 불러온 뒤 현재 달력 데이터로 집계를 보여줍니다.</span>
+        </div>
+        <div v-else class="household-aggregate-grid">
           <article v-for="card in aggregateCards" :key="card.id" class="household-aggregate-card">
-            <div class="household-aggregate-card__controls">
+            <div v-if="isAggregateEditMode" class="household-aggregate-card__controls">
               <label class="field household-aggregate-card__field">
                 <span class="field__label">집계</span>
                 <select :value="card.config.kind" @change="updateAggregateWidget(card.index, 'kind', $event.target.value)">
@@ -617,7 +682,7 @@ function toggleCalendarCollapsed() {
               </label>
             </div>
 
-            <label v-if="card.config.kind === 'PAYMENT_METHOD'" class="field household-aggregate-card__field">
+            <label v-if="isAggregateEditMode && card.config.kind === 'PAYMENT_METHOD'" class="field household-aggregate-card__field">
               <span class="field__label">결제수단</span>
               <select :value="card.config.paymentMethodId" @change="updateAggregateWidget(card.index, 'paymentMethodId', $event.target.value)">
                 <option v-for="payment in paymentMethods" :key="payment.id" :value="String(payment.id)">

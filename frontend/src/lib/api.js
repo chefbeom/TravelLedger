@@ -276,6 +276,17 @@ export function fetchPaymentMethods() {
   return request('/payment-methods')
 }
 
+export function fetchHouseholdAggregatePreferences() {
+  return request('/account/preferences/household-aggregates')
+}
+
+export function saveHouseholdAggregatePreferences(widgets) {
+  return request('/account/preferences/household-aggregates', {
+    method: 'PUT',
+    body: JSON.stringify({ widgets }),
+  })
+}
+
 export function createPaymentMethod(payload) {
   return request('/payment-methods', {
     method: 'POST',

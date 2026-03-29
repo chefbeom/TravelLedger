@@ -7,6 +7,7 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.Lob;
 import jakarta.persistence.Table;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -38,6 +39,10 @@ public class AppUser {
     @Enumerated(EnumType.STRING)
     @Column(length = 20)
     private AppUserRole role = AppUserRole.USER;
+
+    @Lob
+    @Column(columnDefinition = "TEXT")
+    private String householdAggregateSettingsJson;
 
     @Column(nullable = false)
     private boolean active = true;

@@ -15,9 +15,11 @@ import {
   fetchCompare,
   fetchDashboard,
   fetchEntries,
+  fetchHouseholdAggregatePreferences,
   fetchOverview,
   fetchPaymentBreakdown,
   fetchPaymentMethods,
+  saveHouseholdAggregatePreferences,
   updateEntry,
 } from '../lib/api'
 import {
@@ -103,6 +105,8 @@ const paymentBreakdown = ref([])
 const pastComparisons = ref([])
 const categories = ref([])
 const paymentMethods = ref([])
+const aggregateWidgetConfigs = ref([])
+const aggregateSettingsReady = ref(false)
 const editingEntryId = ref(null)
 const amountInput = ref('')
 const isEntryTimeEnabled = ref(false)
@@ -252,7 +256,8 @@ watch(
 onMounted(async () => {
   isLoading.value = true
   try {
-    await Promise.all([loadMetadata(), loadCalendarData(), loadStatisticsData()])
+    await loadMetadata()
+    await Promise.all([loadCalendarData(), loadStatisticsData(), loadAggregatePreferences()])
     resetEntryForm()
     calendarReady.value = true
     statsReady.value = true
@@ -292,6 +297,12 @@ async function loadMetadata() {
   categories.value = groupItems
   paymentMethods.value = paymentItems
   syncEntryDefaults()
+}
+
+async function loadAggregatePreferences() {
+  const response = await fetchHouseholdAggregatePreferences()
+  aggregateWidgetConfigs.value = Array.isArray(response?.widgets) ? response.widgets : []
+  aggregateSettingsReady.value = true
 }
 
 function handleChangeCalendarMonth(value) {
@@ -521,7 +532,7 @@ async function refreshLedgerViews() {
 }
 
 async function handleImported(result) {
-  await Promise.all([loadMetadata(), refreshLedgerViews()])
+  await Promise.all([loadMetadata(), refreshLedgerViews(), loadAggregatePreferences()])
   const details = []
   if (result.createdCategoryGroups?.length) {
     details.push('category groups ' + result.createdCategoryGroups.length)
@@ -549,6 +560,22 @@ async function exportEntriesToCsv() {
     }
     await downloadLedgerCsv(csvExportRange.value.from, csvExportRange.value.to)
     setFeedback(`CSV 파일을 저장했습니다. (${csvExportLabel.value})`)
+  } catch (error) {
+    setFeedback('', error.message)
+  } finally {
+    isSubmitting.value = false
+    activeSubmit.value = ''
+  }
+}
+
+async function updateAggregatePreferences(widgets) {
+  isSubmitting.value = true
+  activeSubmit.value = 'aggregate-settings'
+  setFeedback()
+  try {
+    const response = await saveHouseholdAggregatePreferences(widgets)
+    aggregateWidgetConfigs.value = Array.isArray(response?.widgets) ? response.widgets : []
+    setFeedback('사용자 설정 집계를 저장했습니다.')
   } catch (error) {
     setFeedback('', error.message)
   } finally {
@@ -683,7 +710,7 @@ async function createPayment() {
     })
     paymentForm.name = ''
     paymentForm.displayOrder = 0
-    await Promise.all([loadMetadata(), refreshLedgerViews()])
+    await Promise.all([loadMetadata(), refreshLedgerViews(), loadAggregatePreferences()])
     setFeedback('결제수단을 추가했습니다.')
   } catch (error) {
     setFeedback('', error.message)
@@ -731,7 +758,7 @@ async function deactivatePayment(paymentId) {
   setFeedback()
   try {
     await deactivatePaymentMethod(paymentId)
-    await Promise.all([loadMetadata(), refreshLedgerViews()])
+    await Promise.all([loadMetadata(), refreshLedgerViews(), loadAggregatePreferences()])
     setFeedback('결제수단을 비활성화했습니다.')
   } catch (error) {
     setFeedback('', error.message)
@@ -815,6 +842,9 @@ async function deactivatePayment(paymentId) {
       :available-groups="availableGroups"
       :available-details="availableDetails"
       :payment-methods="paymentMethods"
+      :aggregate-widget-configs="aggregateWidgetConfigs"
+      :aggregate-settings-ready="aggregateSettingsReady"
+      :aggregate-settings-saving="isSubmitting && activeSubmit === 'aggregate-settings'"
       :amount-input="amountInput"
       :amount-preview="amountPreview"
       :is-time-enabled="isEntryTimeEnabled"
@@ -832,6 +862,7 @@ async function deactivatePayment(paymentId) {
       @edit-entry="fillEntryForm"
       @delete-entry="removeEntry"
       @change-anchor-month="handleChangeCalendarMonth"
+      @save-aggregate-widget-configs="updateAggregatePreferences"
     />
 
     <StatisticsWorkspace

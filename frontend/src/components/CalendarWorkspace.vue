@@ -13,6 +13,7 @@ const calendarScalePresets = [
 ]
 
 const aggregateWidgetKinds = [
+  { value: 'NONE', label: '사용 안 함' },
   { value: 'TOTAL', label: '합계' },
   { value: 'PAYMENT_METHOD', label: '결제수단' },
 ]
@@ -198,7 +199,8 @@ const formattedAmountInput = computed(() => {
 
 const aggregateCards = computed(() => {
   const sourceConfigs = isAggregateEditMode.value ? aggregateWidgetDraftConfigs.value : props.aggregateWidgetConfigs
-  return normalizeAggregateConfigs(sourceConfigs).slice(0, 4).map((config, index) => buildAggregateCard(config, index))
+  const cards = normalizeAggregateConfigs(sourceConfigs).slice(0, 4).map((config, index) => buildAggregateCard(config, index))
+  return isAggregateEditMode.value ? cards : cards.filter((card) => card.config.kind !== 'NONE')
 })
 
 watch(
@@ -288,9 +290,9 @@ function createDefaultAggregateConfigs() {
   const defaultPaymentMethodId = props.paymentMethods[0] ? String(props.paymentMethods[0].id) : ''
   return [
     { id: 'aggregate-1', kind: 'TOTAL', period: 'MONTH', paymentMethodId: '' },
-    { id: 'aggregate-2', kind: 'TOTAL', period: 'WEEK', paymentMethodId: '' },
-    { id: 'aggregate-3', kind: 'TOTAL', period: 'DAY', paymentMethodId: '' },
-    { id: 'aggregate-4', kind: 'PAYMENT_METHOD', period: 'MONTH', paymentMethodId: defaultPaymentMethodId },
+    { id: 'aggregate-2', kind: 'NONE', period: 'MONTH', paymentMethodId: '' },
+    { id: 'aggregate-3', kind: 'NONE', period: 'WEEK', paymentMethodId: '' },
+    { id: 'aggregate-4', kind: 'NONE', period: 'DAY', paymentMethodId: defaultPaymentMethodId },
   ]
 }
 
@@ -372,6 +374,18 @@ function getAggregateRange(period) {
 }
 
 function buildAggregateCard(config, index) {
+  if (config.kind === 'NONE') {
+    return {
+      id: config.id || `aggregate-${index + 1}`,
+      index,
+      config,
+      title: '사용 안 함',
+      periodLabel: '',
+      totalAmount: 0,
+      overview: summarizeEntries([]),
+    }
+  }
+
   const range = getAggregateRange(config.period)
   const rangeEntries = props.entries.filter((entry) => entry.entryDate >= range.from && entry.entryDate <= range.to)
   const filteredEntries = config.kind === 'PAYMENT_METHOD' && config.paymentMethodId
@@ -382,8 +396,8 @@ function buildAggregateCard(config, index) {
   const paymentMethodName = props.paymentMethods.find((item) => String(item.id) === String(config.paymentMethodId))?.name || '결제수단'
   const periodLabel = aggregateWidgetPeriods.find((item) => item.value === config.period)?.label || '이번 달'
   const title = config.kind === 'PAYMENT_METHOD'
-    ? `${periodLabel} ${paymentMethodName}`
-    : `${periodLabel} 합계`
+    ? `${periodLabel} ${paymentMethodName} 합계`
+    : `${periodLabel} 총 합계`
 
   return {
     id: config.id || `aggregate-${index + 1}`,
@@ -624,7 +638,7 @@ function toggleCalendarCollapsed() {
         <div class="panel__header household-aggregate-header">
           <div>
             <h2>사용자 설정 집계</h2>
-            <p>최대 4칸까지 집계 내용을 가로로 두고, 필요할 때만 수정 버튼으로 설정을 바꿀 수 있습니다.</p>
+            <p>한 줄에 하나씩 집계 결과만 배치하고, 필요할 때만 수정 버튼으로 표시 항목을 바꿀 수 있습니다.</p>
           </div>
           <div class="household-aggregate-header__actions">
             <span v-if="aggregateSettingsReady" class="panel__badge">{{ aggregateCards.length }}칸</span>
@@ -661,7 +675,7 @@ function toggleCalendarCollapsed() {
           <strong>집계 설정을 불러오는 중입니다.</strong>
           <span>저장된 카드 구성을 불러온 뒤 현재 달력 데이터로 집계를 보여줍니다.</span>
         </div>
-        <div v-else class="household-aggregate-grid">
+        <div v-else-if="aggregateCards.length" class="household-aggregate-grid">
           <article v-for="card in aggregateCards" :key="card.id" class="household-aggregate-card">
             <div v-if="isAggregateEditMode" class="household-aggregate-card__controls">
               <label class="field household-aggregate-card__field">
@@ -693,15 +707,25 @@ function toggleCalendarCollapsed() {
 
             <div class="household-aggregate-card__copy">
               <span class="household-aggregate-card__eyebrow">{{ card.title }}</span>
-              <strong>{{ formatCurrency(card.totalAmount) }}</strong>
-              <small>{{ card.periodLabel }} 기준 {{ card.overview.entryCount }}건</small>
+              <template v-if="card.config.kind === 'NONE'">
+                <strong>-</strong>
+                <small>이 슬롯은 저장 후 화면에서 숨김 처리됩니다.</small>
+              </template>
+              <template v-else>
+                <strong>{{ formatCurrency(card.totalAmount) }}</strong>
+                <small>{{ card.periodLabel }} 기준 {{ card.overview.entryCount }}건</small>
+              </template>
             </div>
 
-            <div class="household-aggregate-card__meta">
+            <div v-if="card.config.kind !== 'NONE'" class="household-aggregate-card__meta">
               <span>수입 {{ formatCurrency(card.overview.income) }}</span>
               <span>지출 {{ formatCurrency(card.overview.expense) }}</span>
             </div>
           </article>
+        </div>
+        <div v-else class="household-aggregate-empty">
+          <strong>표시 중인 집계가 없습니다.</strong>
+          <span>우측 상단 수정 버튼에서 필요한 집계만 골라 등록하면 이 영역에 바로 나타납니다.</span>
         </div>
       </section>
     </div>

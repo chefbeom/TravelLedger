@@ -3515,19 +3515,15 @@ textarea {
 
 .household-aggregate-grid {
   display: grid;
-  grid-auto-flow: column;
-  grid-auto-columns: minmax(220px, 1fr);
+  grid-template-columns: 1fr;
   gap: 14px;
-  overflow-x: auto;
-  padding-bottom: 6px;
-  scrollbar-width: thin;
 }
 
 .household-aggregate-card {
   display: grid;
   gap: 12px;
-  min-height: 220px;
-  min-width: 220px;
+  min-height: 0;
+  width: 100%;
   padding: 16px;
   border: 1px solid var(--line);
   border-radius: 20px;
@@ -3713,9 +3709,6 @@ textarea {
     grid-template-columns: 1fr;
   }
 
-  .household-aggregate-grid {
-    grid-auto-columns: minmax(240px, 86%);
-  }
 }
 
 @media (max-width: 900px) {

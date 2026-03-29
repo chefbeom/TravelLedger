@@ -26,7 +26,7 @@ import org.springframework.util.StringUtils;
 public class HouseholdAggregatePreferenceService {
 
     private static final int MAX_WIDGETS = 4;
-    private static final Set<String> ALLOWED_KINDS = Set.of("TOTAL", "PAYMENT_METHOD");
+    private static final Set<String> ALLOWED_KINDS = Set.of("NONE", "TOTAL", "PAYMENT_METHOD");
     private static final Set<String> ALLOWED_PERIODS = Set.of("MONTH", "WEEK", "DAY");
 
     private final AppUserRepository appUserRepository;
@@ -116,7 +116,7 @@ public class HouseholdAggregatePreferenceService {
                 .map(PaymentMethod::getId)
                 .toList();
         Long fallbackPaymentMethodId = validPaymentMethodIds.isEmpty() ? null : validPaymentMethodIds.get(0);
-        List<StoredWidget> defaultWidgets = buildDefaultWidgets(fallbackPaymentMethodId);
+        List<StoredWidget> defaultWidgets = buildDefaultWidgets();
         List<StoredWidget> normalizedWidgets = new ArrayList<>(MAX_WIDGETS);
 
         for (int index = 0; index < MAX_WIDGETS; index++) {
@@ -139,12 +139,12 @@ public class HouseholdAggregatePreferenceService {
         return normalizedWidgets;
     }
 
-    private List<StoredWidget> buildDefaultWidgets(Long defaultPaymentMethodId) {
+    private List<StoredWidget> buildDefaultWidgets() {
         return List.of(
                 new StoredWidget("TOTAL", "MONTH", null),
-                new StoredWidget("TOTAL", "WEEK", null),
-                new StoredWidget("TOTAL", "DAY", null),
-                new StoredWidget("PAYMENT_METHOD", "MONTH", defaultPaymentMethodId)
+                new StoredWidget("NONE", "MONTH", null),
+                new StoredWidget("NONE", "WEEK", null),
+                new StoredWidget("NONE", "DAY", null)
         );
     }
 

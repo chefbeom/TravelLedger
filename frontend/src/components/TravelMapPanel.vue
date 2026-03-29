@@ -283,7 +283,9 @@ function createPopupContent(marker) {
 
   if (marker.photoCount || marker.receiptCount) {
     const metaLine = document.createElement('span')
-    metaLine.textContent = `사진 ${marker.photoCount || 0}장 / 영수증 ${marker.receiptCount || 0}장`
+    metaLine.textContent = marker.receiptCount
+      ? `사진 ${marker.photoCount || 0}장 / 영수증 ${marker.receiptCount || 0}장`
+      : `사진 ${marker.photoCount || 0}장`
     copy.appendChild(metaLine)
   }
 

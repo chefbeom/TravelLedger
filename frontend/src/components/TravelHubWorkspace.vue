@@ -137,8 +137,6 @@ const recordForm = reactive({
   title: '',
   amount: '',
   currencyCode: 'JPY',
-  country: '',
-  region: '',
   placeName: '',
   latitude: '',
   longitude: '',
@@ -146,15 +144,35 @@ const recordForm = reactive({
 })
 
 const recordPhotoFiles = ref([])
-const recordReceiptFiles = ref([])
 const recordPhotoCaption = ref('')
-const recordReceiptCaption = ref('')
-const recordAutofillMessage = ref('사진이나 영수증을 고르면 메타데이터가 있을 때 날짜와 위치를 자동으로 채웁니다.')
+const recordAutofillMessage = ref('사진을 고르면 메타데이터가 있을 때 날짜와 위치를 자동으로 채워줍니다.')
 
 const planStatusOptions = computed(() => travelCategories.value.planStatuses?.length ? travelCategories.value.planStatuses : fallbackCategories.planStatuses)
 const budgetCategoryOptions = computed(() => travelCategories.value.budgetCategories?.length ? travelCategories.value.budgetCategories : fallbackCategories.budgetCategories)
 const expenseCategoryOptions = computed(() => travelCategories.value.expenseCategories?.length ? travelCategories.value.expenseCategories : fallbackCategories.expenseCategories)
 const memoryCategoryOptions = computed(() => travelCategories.value.memoryCategories?.length ? travelCategories.value.memoryCategories : fallbackCategories.memoryCategories)
+const requiresExplicitPlanSelection = computed(() => props.route === 'travel-log' || props.route === 'photo-album')
+const showPlanGate = computed(() => requiresExplicitPlanSelection.value && !travelPlan.value)
+
+function normalizeTravelRecordTime(value) {
+  const normalized = String(value || '').trim()
+  return normalized || '00:00'
+}
+
+function formatTravelLocationLabel(record) {
+  const placeName = String(record?.placeName || '').trim()
+  if (placeName) {
+    return placeName
+  }
+
+  const latitude = Number(record?.latitude)
+  const longitude = Number(record?.longitude)
+  if (Number.isFinite(latitude) && Number.isFinite(longitude)) {
+    return `${latitude.toFixed(5)}, ${longitude.toFixed(5)}`
+  }
+
+  return '-'
+}
 
 const actualByCategory = computed(() => {
   const bucket = new Map()
@@ -183,12 +201,11 @@ const budgetByCategory = computed(() => {
 const spendingLocations = computed(() => {
   const bucket = new Map()
   ;(travelPlan.value?.records ?? []).forEach((record) => {
-    const key = [record.country || '', record.region || '', record.placeName || ''].join('::')
+    const label = formatTravelLocationLabel(record) === '-' ? '위치 미입력' : formatTravelLocationLabel(record)
+    const key = label
     const current = bucket.get(key) ?? {
       key,
-      country: record.country || '',
-      region: record.region || '',
-      placeName: record.placeName || '',
+      label,
       totalKrw: 0,
       count: 0,
     }
@@ -202,16 +219,12 @@ const spendingLocations = computed(() => {
 const recordMediaCountMap = computed(() => {
   const bucket = new Map()
   ;(travelPlan.value?.mediaItems ?? []).forEach((item) => {
-    if (item.recordType === 'MEMORY') {
+    if (item.recordType === 'MEMORY' || item.mediaType !== 'PHOTO') {
       return
     }
     const key = String(item.recordId)
-    const current = bucket.get(key) ?? { photos: 0, receipts: 0 }
-    if (item.mediaType === 'RECEIPT') {
-      current.receipts += 1
-    } else {
-      current.photos += 1
-    }
+    const current = bucket.get(key) ?? { photos: 0 }
+    current.photos += 1
     bucket.set(key, current)
   })
   return bucket
@@ -237,7 +250,7 @@ const recordMarkers = computed(() =>
       visitedDate: record.expenseDate,
       visitedTime: record.expenseTime,
       photoCount: recordMediaCountMap.value.get(String(record.id))?.photos || 0,
-      receiptCount: recordMediaCountMap.value.get(String(record.id))?.receipts || 0,
+      receiptCount: 0,
       mediaItems: (travelPlan.value?.mediaItems ?? []).filter((item) => String(item.recordId) === String(record.id)),
     })),
 )
@@ -383,38 +396,30 @@ function resetRecordForm() {
   recordForm.title = ''
   recordForm.amount = ''
   recordForm.currencyCode = travelPlan.value?.homeCurrency === 'KRW' ? 'JPY' : travelPlan.value?.homeCurrency || 'JPY'
-  recordForm.country = ''
-  recordForm.region = ''
   recordForm.placeName = ''
   recordForm.latitude = ''
   recordForm.longitude = ''
   recordForm.memo = ''
   recordPhotoFiles.value = []
-  recordReceiptFiles.value = []
   recordPhotoCaption.value = ''
-  recordReceiptCaption.value = ''
-  recordAutofillMessage.value = '사진이나 영수증을 고르면 메타데이터가 있을 때 날짜와 위치를 자동으로 채웁니다.'
+  recordAutofillMessage.value = '사진을 고르면 메타데이터가 있을 때 날짜와 위치를 자동으로 채워줍니다.'
 }
 
 function fillRecordForm(record) {
   editingRecordId.value = record.id
   recordForm.expenseDate = record.expenseDate || travelPlan.value?.startDate || todayIso()
-  recordForm.expenseTime = record.expenseTime || ''
+  recordForm.expenseTime = record.expenseTime || '00:00'
   recordForm.category = record.category || expenseCategoryOptions.value[0] || '식비'
   recordForm.title = record.title || ''
   recordForm.amount = String(record.amount || '')
   recordForm.currencyCode = record.currencyCode || 'KRW'
-  recordForm.country = record.country || ''
-  recordForm.region = record.region || ''
   recordForm.placeName = record.placeName || ''
   recordForm.latitude = record.latitude != null ? String(record.latitude) : ''
   recordForm.longitude = record.longitude != null ? String(record.longitude) : ''
   recordForm.memo = record.memo || ''
   recordPhotoFiles.value = []
-  recordReceiptFiles.value = []
   recordPhotoCaption.value = ''
-  recordReceiptCaption.value = ''
-  recordAutofillMessage.value = '사진이나 영수증을 고르면 메타데이터가 있을 때 날짜와 위치를 자동으로 채웁니다.'
+  recordAutofillMessage.value = '사진을 고르면 메타데이터가 있을 때 날짜와 위치를 자동으로 채워줍니다.'
 }
 
 function buildPlanPayload() {
@@ -444,13 +449,13 @@ function buildBudgetPayload() {
 function buildRecordPayload() {
   return {
     expenseDate: recordForm.expenseDate,
-    expenseTime: recordForm.expenseTime || null,
+    expenseTime: normalizeTravelRecordTime(recordForm.expenseTime),
     category: recordForm.category.trim(),
     title: recordForm.title.trim(),
     amount: Number(recordForm.amount),
     currencyCode: String(recordForm.currencyCode || 'KRW').trim().toUpperCase(),
-    country: recordForm.country.trim() || null,
-    region: recordForm.region.trim() || null,
+    country: null,
+    region: null,
     placeName: recordForm.placeName.trim() || null,
     latitude: toNullableNumber(recordForm.latitude),
     longitude: toNullableNumber(recordForm.longitude),
@@ -488,8 +493,19 @@ async function refreshTravelData(preferredPlanId = selectedPlanId.value, include
     await loadTravelCategoriesSafe()
     const plans = await fetchTravelPlans()
     travelPlans.value = plans
-    const nextPlanId = plans.length ? String(preferredPlanId || selectedPlanId.value || plans[0].id) : ''
-    selectedPlanId.value = plans.some((item) => String(item.id) === String(nextPlanId)) ? String(nextPlanId) : plans[0] ? String(plans[0].id) : ''
+    const requestedPlanId = String(preferredPlanId || '').trim()
+    const currentPlanId = String(selectedPlanId.value || '').trim()
+    let nextPlanId = ''
+
+    if (plans.some((item) => String(item.id) === requestedPlanId)) {
+      nextPlanId = requestedPlanId
+    } else if (!requiresExplicitPlanSelection.value && plans.some((item) => String(item.id) === currentPlanId)) {
+      nextPlanId = currentPlanId
+    } else if (!requiresExplicitPlanSelection.value && plans[0]) {
+      nextPlanId = String(plans[0].id)
+    }
+
+    selectedPlanId.value = nextPlanId
     travelPlan.value = selectedPlanId.value ? await fetchTravelPlan(selectedPlanId.value) : null
     travelPortfolio.value = await fetchTravelPortfolio()
     await loadTravelRates()
@@ -509,10 +525,13 @@ async function refreshTravelData(preferredPlanId = selectedPlanId.value, include
 
 watch(
   () => props.route,
-  async (route) => {
-    if (route === 'photo-album') {
-      await loadTravelCommunityFeed()
+  async (route, previousRoute) => {
+    if (route !== previousRoute && (route === 'travel-log' || route === 'photo-album')) {
+      selectedPlanId.value = ''
+      travelPlan.value = null
+      memoryFocusRequest.value = null
     }
+    await refreshTravelData(route === 'travel-money' ? selectedPlanId.value : '', route === 'photo-album')
   },
 )
 
@@ -526,6 +545,12 @@ async function handleSelectPlan(planId) {
   await refreshTravelData(selectedPlanId.value, props.route === 'photo-album')
   resetBudgetForm()
   resetRecordForm()
+}
+
+function handleOpenTravelPlanner() {
+  resetPlanForm()
+  moneyTab.value = 'planner'
+  window.location.hash = 'travel-money'
 }
 
 async function handleSubmitPlan() {
@@ -620,7 +645,7 @@ async function handleRecordPhotoSelection(event) {
   const files = [...(event.target.files ?? [])]
   recordPhotoFiles.value = files
   if (!files.length) {
-    recordAutofillMessage.value = '사진이나 영수증을 고르면 메타데이터가 있을 때 날짜와 위치를 자동으로 채웁니다.'
+    recordAutofillMessage.value = '사진을 고르면 메타데이터가 있을 때 날짜와 위치를 자동으로 채워줍니다.'
     return
   }
   try {
@@ -631,8 +656,6 @@ async function handleRecordPhotoSelection(event) {
     }
     if (metadata.date) recordForm.expenseDate = metadata.date
     if (metadata.time) recordForm.expenseTime = metadata.time
-    if (metadata.country && !recordForm.country.trim()) recordForm.country = metadata.country
-    if (metadata.region && !recordForm.region.trim()) recordForm.region = metadata.region
     if (metadata.placeName && !recordForm.placeName.trim()) recordForm.placeName = metadata.placeName
     if (metadata.latitude !== null && metadata.latitude !== undefined) recordForm.latitude = String(metadata.latitude)
     if (metadata.longitude !== null && metadata.longitude !== undefined) recordForm.longitude = String(metadata.longitude)
@@ -640,10 +663,6 @@ async function handleRecordPhotoSelection(event) {
   } catch (error) {
     recordAutofillMessage.value = error?.message || '사진 메타데이터를 읽지 못했습니다.'
   }
-}
-
-function handleRecordReceiptSelection(event) {
-  recordReceiptFiles.value = [...(event.target.files ?? [])]
 }
 
 async function handleSubmitRecord() {
@@ -661,7 +680,6 @@ async function handleSubmitRecord() {
       setFeedback('지출 장부를 추가했습니다.')
     }
     if (recordPhotoFiles.value.length) await uploadTravelRecordMedia(savedRecord.id, 'PHOTO', recordPhotoFiles.value, recordPhotoCaption.value.trim())
-    if (recordReceiptFiles.value.length) await uploadTravelRecordMedia(savedRecord.id, 'RECEIPT', recordReceiptFiles.value, recordReceiptCaption.value.trim())
     await refreshTravelData(selectedPlanId.value, props.route === 'photo-album')
     resetRecordForm()
   } catch (error) {
@@ -826,7 +844,7 @@ function openMemoryEditor(memoryId) {
 
         <div class="travel-toolbar__actions">
           <button class="button button--ghost" :disabled="isLoading" @click="refreshTravelData(selectedPlanId, route === 'photo-album')">새로고침</button>
-          <button class="button button--secondary" @click="resetPlanForm">새 여행</button>
+          <button class="button button--secondary" @click="route === 'travel-money' ? resetPlanForm() : handleOpenTravelPlanner()">{{ route === 'travel-money' ? '새 여행' : '여행 만들기' }}</button>
           <button class="button button--ghost" :disabled="!travelPlan" @click="fillPlanForm(travelPlan)">여행 수정</button>
         </div>
       </div>
@@ -836,9 +854,49 @@ function openMemoryEditor(memoryId) {
         <span>{{ travelPlan.startDate }} - {{ travelPlan.endDate }}</span>
         <small>{{ planStatusLabel(travelPlan.status) }} / {{ travelPlan.headCount }}명 / {{ travelPlan.homeCurrency }}</small>
       </div>
-      <p v-else class="panel__empty">먼저 여행을 만들어야 예산안, 이동 경로, 사진첩 기능을 이어서 사용할 수 있습니다.</p>
+      <p v-else class="panel__empty">{{ showPlanGate ? '계속하려면 먼저 여행 하나를 선택하세요.' : '먼저 여행을 만들어야 예산안, 이동 경로, 사진첩 기능을 이어서 사용할 수 있습니다.' }}</p>
     </section>
 
+    <template v-if="showPlanGate">
+      <section v-if="travelPlans.length" class="panel">
+        <div class="panel__header">
+          <div>
+            <h2>여행 선택</h2>
+            <p>여행 로그를 열기 전에 이번에 볼 여행을 먼저 골라주세요.</p>
+          </div>
+          <span class="panel__badge">{{ travelPlans.length }}개 여행</span>
+        </div>
+        <div class="travel-plan-picker-grid">
+          <button
+            v-for="plan in travelPlans"
+            :key="plan.id"
+            class="travel-plan-picker-card"
+            type="button"
+            @click="handleSelectPlan(plan.id)"
+          >
+            <strong>{{ plan.name }}</strong>
+            <span>{{ plan.destination || '목적지 미정' }}</span>
+            <small>{{ formatDate(plan.startDate) }} - {{ formatDate(plan.endDate) }}</small>
+            <small>{{ planStatusLabel(plan.status) }} / {{ formatCurrency(plan.actualTotalKrw) }}</small>
+          </button>
+        </div>
+      </section>
+
+      <section v-else class="panel">
+        <div class="panel__header">
+          <div>
+            <h2>여행이 아직 없습니다</h2>
+            <p>먼저 여행을 하나 만든 뒤 여행 로그, 경로, 사진 화면을 사용할 수 있습니다.</p>
+          </div>
+        </div>
+        <div class="travel-plan-picker-empty">
+          <p class="panel__empty">등록된 여행이 없어서 선택할 수 있는 항목이 없습니다.</p>
+          <button class="button button--primary" type="button" @click="handleOpenTravelPlanner">여행 만들러 가기</button>
+        </div>
+      </section>
+    </template>
+
+    <template v-else>
     <section v-if="travelPlan" class="travel-summary-grid">
       <article class="travel-stat-card"><span>예산안</span><strong>{{ formatCurrency(travelPlan.plannedTotalKrw) }}</strong><small>{{ travelPlan.budgetItemCount }}개 항목</small></article>
       <article class="travel-stat-card"><span>실사용 금액</span><strong>{{ formatCurrency(travelPlan.actualTotalKrw) }}</strong><small>{{ travelPlan.recordCount }}개 지출 기록</small></article>
@@ -923,32 +981,26 @@ function openMemoryEditor(memoryId) {
           </div>
         </section>
       </div>      <div v-else-if="moneyTab === 'records'" class="workspace-stack">
-        <div class="content-grid content-grid--travel">
+        <div class="content-grid content-grid--travel content-grid--travel-records">
           <section class="panel">
-            <div class="panel__header"><div><h2>{{ editingRecordId ? '지출 기록 수정' : '지출 기록 추가' }}</h2><p>어디에서 얼마를 썼는지와 함께 사진, 영수증, 위치를 같이 남겨 여행 돈 장부를 만듭니다.</p></div></div>
+            <div class="panel__header"><div><h2>{{ editingRecordId ? '지출 기록 수정' : '지출 기록 추가' }}</h2><p>언제 어디서 얼마를 썼는지와 사진, 위치를 함께 기록해 여행 지출 장부를 정리합니다.</p></div></div>
             <div class="travel-form-grid">
               <label class="field"><span class="field__label">날짜</span><input v-model="recordForm.expenseDate" type="date" /></label>
-              <label class="field"><span class="field__label">시간</span><input v-model="recordForm.expenseTime" type="time" /></label>
+              <label class="field"><span class="field__label">시간</span><input v-model="recordForm.expenseTime" type="time" /><small class="field__hint">비워두면 00:00으로 저장됩니다.</small></label>
               <label class="field"><span class="field__label">분류</span><input v-model="recordForm.category" list="expense-category-options" type="text" /></label>
               <label class="field"><span class="field__label">통화</span><input v-model="recordForm.currencyCode" type="text" maxlength="3" /></label>
               <label class="field field--full"><span class="field__label">항목명</span><input v-model="recordForm.title" type="text" placeholder="도톤보리 점심, 지하철 충전, 기념품 구매" /></label>
               <label class="field"><span class="field__label">금액</span><input v-model="recordForm.amount" type="number" min="0" step="0.01" /></label>
-              <label class="field"><span class="field__label">국가</span><input v-model="recordForm.country" list="travel-country-options" type="text" placeholder="일본" /></label>
-              <label class="field"><span class="field__label">지역 / 도시</span><input v-model="recordForm.region" list="travel-region-options" type="text" placeholder="오사카" /></label>
               <label class="field field--full"><span class="field__label">장소명</span><input v-model="recordForm.placeName" list="travel-place-options" type="text" placeholder="도톤보리" /></label>
               <label class="field"><span class="field__label">위도</span><input v-model="recordForm.latitude" type="number" step="0.0000001" /></label>
               <label class="field"><span class="field__label">경도</span><input v-model="recordForm.longitude" type="number" step="0.0000001" /></label>
               <label class="field field--full"><span class="field__label">메모</span><textarea v-model="recordForm.memo" rows="3" placeholder="쿠폰 사용 여부, 결제 메모, 지출 이유를 남겨두세요." /></label>
             </div>
             <datalist id="expense-category-options"><option v-for="option in expenseCategoryOptions" :key="option" :value="option" /></datalist>
-            <datalist id="travel-country-options"><option v-for="option in travelCategories.countries" :key="option" :value="option" /></datalist>
-            <datalist id="travel-region-options"><option v-for="option in travelCategories.regions" :key="option" :value="option" /></datalist>
             <datalist id="travel-place-options"><option v-for="option in travelCategories.places" :key="option" :value="option" /></datalist>
             <div class="travel-form-grid travel-form-grid--compact">
               <label class="field field--full"><span class="field__label">사진</span><input accept="image/*" multiple type="file" @change="handleRecordPhotoSelection" /></label>
               <label class="field field--full"><span class="field__label">사진 설명</span><input v-model="recordPhotoCaption" type="text" placeholder="업로드할 사진에 붙일 설명" /></label>
-              <label class="field field--full"><span class="field__label">영수증</span><input accept="image/*,.pdf" multiple type="file" @change="handleRecordReceiptSelection" /></label>
-              <label class="field field--full"><span class="field__label">영수증 설명</span><input v-model="recordReceiptCaption" type="text" placeholder="업로드할 영수증 설명" /></label>
             </div>
             <p class="travel-autofill-note">{{ recordAutofillMessage }}</p>
             <div class="entry-editor__actions">
@@ -964,12 +1016,12 @@ function openMemoryEditor(memoryId) {
         </div>
 
         <section class="panel">
-          <div class="panel__header"><div><h2>지출 장부 표</h2><p>금액, 분류, 위치, 첨부 파일 개수를 함께 저장해 이후 통계 화면에서 바로 집계할 수 있습니다.</p></div></div>
+          <div class="panel__header"><div><h2>지출 장부 표</h2><p>금액, 분류, 장소와 사진 개수를 함께 정리해 이후 통계 화면에서 바로 집계할 수 있습니다.</p></div></div>
           <div class="sheet-table-wrap">
             <table class="sheet-table">
-              <thead><tr><th>날짜</th><th>분류</th><th>항목명</th><th>위치</th><th>원통화</th><th>KRW</th><th>첨부</th><th>작업</th></tr></thead>
+              <thead><tr><th>날짜</th><th>분류</th><th>항목명</th><th>장소</th><th>원통화</th><th>KRW</th><th>사진</th><th>작업</th></tr></thead>
               <tbody>
-                <tr v-for="record in travelPlan?.records ?? []" :key="record.id"><td>{{ formatDateTime(record.expenseDate, record.expenseTime) }}</td><td>{{ record.category }}</td><td>{{ record.title }}</td><td>{{ [record.country, record.region, record.placeName].filter(Boolean).join(' / ') || '-' }}</td><td>{{ formatCurrencyByCode(record.amount, record.currencyCode) }}</td><td>{{ formatCurrency(record.amountKrw) }}</td><td><div class="travel-record-media-count"><strong>사진 {{ recordMediaCountMap.get(String(record.id))?.photos || 0 }}장</strong><small>영수증 {{ recordMediaCountMap.get(String(record.id))?.receipts || 0 }}개</small></div></td><td class="sheet-table__actions"><button class="button button--ghost" @click="fillRecordForm(record)">수정</button><button class="button button--danger" @click="handleDeleteRecord(record)">삭제</button></td></tr>
+                <tr v-for="record in travelPlan?.records ?? []" :key="record.id"><td>{{ formatDateTime(record.expenseDate, record.expenseTime) }}</td><td>{{ record.category }}</td><td>{{ record.title }}</td><td>{{ formatTravelLocationLabel(record) }}</td><td>{{ formatCurrencyByCode(record.amount, record.currencyCode) }}</td><td>{{ formatCurrency(record.amountKrw) }}</td><td><div class="travel-record-media-count"><strong>사진 {{ recordMediaCountMap.get(String(record.id))?.photos || 0 }}장</strong></div></td><td class="sheet-table__actions"><button class="button button--ghost" @click="fillRecordForm(record)">수정</button><button class="button button--danger" @click="handleDeleteRecord(record)">삭제</button></td></tr>
                 <tr v-if="!(travelPlan?.records ?? []).length"><td colspan="8" class="sheet-table__empty">지출 기록이 아직 없습니다.</td></tr>
               </tbody>
             </table>
@@ -980,7 +1032,7 @@ function openMemoryEditor(memoryId) {
       <div v-else class="workspace-stack">
         <div class="content-grid content-grid--travel">
           <section class="panel"><div class="panel__header"><div><h2>카테고리별 예산안과 실제 사용 금액</h2><p>같은 여행 안에서 예산 항목과 실제 지출 항목을 묶어 초과 지출 여부를 바로 확인할 수 있습니다.</p></div></div><div class="sheet-table-wrap"><table class="sheet-table"><thead><tr><th>카테고리</th><th>예산안</th><th>실사용</th></tr></thead><tbody><tr v-for="row in budgetByCategory" :key="row.label"><td>{{ row.label }}</td><td>{{ formatCurrency(row.totalKrw) }}</td><td>{{ formatCurrency(actualByCategory.find((item) => item.label === row.label)?.totalKrw || 0) }}</td></tr><tr v-if="!budgetByCategory.length && !actualByCategory.length"><td colspan="3" class="sheet-table__empty">카테고리별 데이터가 아직 없습니다.</td></tr></tbody></table></div></section>
-          <section class="panel"><div class="panel__header"><div><h2>장소별 지출</h2><p>입력한 나라, 지역, 장소명을 기준으로 어느 곳에서 얼마나 썼는지 집계합니다.</p></div></div><div class="sheet-table-wrap"><table class="sheet-table"><thead><tr><th>국가</th><th>지역</th><th>장소</th><th>KRW 합계</th><th>건수</th></tr></thead><tbody><tr v-for="row in spendingLocations" :key="row.key"><td>{{ row.country || '-' }}</td><td>{{ row.region || '-' }}</td><td>{{ row.placeName || '-' }}</td><td>{{ formatCurrency(row.totalKrw) }}</td><td>{{ row.count }}</td></tr><tr v-if="!spendingLocations.length"><td colspan="5" class="sheet-table__empty">장소별 지출 데이터가 아직 없습니다.</td></tr></tbody></table></div></section>
+          <section class="panel"><div class="panel__header"><div><h2>장소별 지출</h2><p>입력한 장소명이나 좌표를 기준으로 어느 곳에서 얼마나 썼는지 집계합니다.</p></div></div><div class="sheet-table-wrap"><table class="sheet-table"><thead><tr><th>장소</th><th>KRW 합계</th><th>건수</th></tr></thead><tbody><tr v-for="row in spendingLocations" :key="row.key"><td>{{ row.label }}</td><td>{{ formatCurrency(row.totalKrw) }}</td><td>{{ row.count }}</td></tr><tr v-if="!spendingLocations.length"><td colspan="3" class="sheet-table__empty">장소별 지출 데이터가 아직 없습니다.</td></tr></tbody></table></div></section>
         </div>
         <section class="panel"><div class="panel__header"><div><h2>여행 돈 장부 환율 정보</h2><p>예산안과 지출 장부에 사용된 통화는 백엔드에서 KRW 환산 환율을 계산해 함께 보여줍니다.</p></div></div><div class="travel-rate-grid"><article v-for="rate in travelRates" :key="rate.currencyCode" class="travel-rate-card"><strong>{{ rate.currencyCode }}</strong><span>{{ rate.available ? '사용 가능' : '없음' }}</span><small>{{ rate.rateToKrw ? `${formatCurrency(rate.rateToKrw)} / 1단위` : '-' }}</small></article></div></section>
       </div>
@@ -1002,6 +1054,7 @@ function openMemoryEditor(memoryId) {
         <section class="panel"><div class="panel__header"><div><h2>사진첩 카드</h2><p>여행 로그에서 올린 사진을 여기서 그대로 재사용하며, 카드에서 바로 원본 보기와 기록 편집이 가능합니다.</p></div></div><div v-if="photoAlbumCards.length" class="travel-media-grid travel-media-grid--gallery"><article v-for="item in photoAlbumCards" :key="item.id" class="travel-media-card"><img v-if="item.heroPhotoUrl" :src="item.heroPhotoUrl" :alt="item.caption || item.title" class="travel-media-thumb" /><div v-else class="travel-media-thumb travel-media-thumb--receipt">사진 없음</div><div class="travel-media-copy"><div class="travel-media-tags"><span class="chip chip--neutral">{{ item.planName || '여행' }}</span><span class="chip chip--neutral">사진 {{ item.photoCount }}장</span></div><strong>{{ item.title }}</strong><small>{{ formatDateTime(item.memoryDate, item.memoryTime) }}</small><small>{{ item.locationLabel }}</small><small>{{ item.memo || '이 기록을 다시 열면 기존 사진이 남아 있는 상태에서 이어서 편집할 수 있습니다.' }}</small></div><div class="travel-media-actions"><button class="button button--primary" @click="openMemoryEditor(item.memoryId)">기록 편집</button><a v-if="item.heroPhotoUrl" class="button button--ghost" :href="item.heroPhotoUrl" target="_blank" rel="noreferrer">대표 사진 열기</a><button class="button button--danger" :disabled="!item.heroPhoto" @click="handleDeleteMedia(item.heroPhoto)">대표 사진 삭제</button></div></article></div><p v-else class="panel__empty">사진첩에 표시할 사진이 아직 없습니다.</p></section>
       </div>
       <TravelCommunityWorkspace v-else :travel-plan="travelPlan" :community-feed="communityFeed" />
+    </template>
     </template>
   </div>
 </template>

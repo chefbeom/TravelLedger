@@ -1608,6 +1608,10 @@ button {
   gap: 4px;
 }
 
+.travel-record-media-count strong {
+  font-size: 0.95rem;
+}
+
 .travel-record-media-count small {
   color: var(--text-soft);
 }
@@ -1664,6 +1668,46 @@ button {
 .travel-plan-card__actions {
   display: flex;
   gap: 10px;
+}
+
+.travel-plan-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 14px;
+}
+
+.travel-plan-picker-card {
+  display: grid;
+  gap: 6px;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 22px;
+  background: var(--surface);
+  color: var(--text);
+  text-align: left;
+  box-shadow: var(--shadow);
+  transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.travel-plan-picker-card:hover {
+  transform: translateY(-1px);
+  border-color: rgba(49, 130, 246, 0.34);
+  box-shadow: var(--shadow-strong);
+}
+
+.travel-plan-picker-card span,
+.travel-plan-picker-card small {
+  color: var(--text-soft);
+}
+
+.travel-plan-picker-card strong {
+  font-size: 1.08rem;
+}
+
+.travel-plan-picker-empty {
+  display: grid;
+  gap: 16px;
+  justify-items: start;
 }
 
 .manager-grid {
@@ -3236,6 +3280,29 @@ textarea {
   color: #ff9aa7;
 }
 
+:root[data-theme='toss'] .travel-modal {
+  background: rgba(5, 8, 14, 0.58);
+}
+
+:root[data-theme='toss'] .travel-modal__dialog {
+  background: linear-gradient(180deg, rgba(24, 29, 38, 0.99) 0%, rgba(17, 22, 31, 0.99) 100%);
+  border-color: rgba(78, 95, 125, 0.56);
+  box-shadow: 0 30px 60px rgba(0, 0, 0, 0.42);
+}
+
+:root[data-theme='toss'] .travel-modal__header h2,
+:root[data-theme='toss'] .travel-modal__header p,
+:root[data-theme='toss'] .travel-modal__body .field__label,
+:root[data-theme='toss'] .travel-modal__body .checkbox-row,
+:root[data-theme='toss'] .travel-modal__body .travel-media-copy strong {
+  color: var(--text);
+}
+
+:root[data-theme='toss'] .travel-modal__body .field__hint,
+:root[data-theme='toss'] .travel-modal__body .travel-media-copy small {
+  color: var(--text-soft);
+}
+
 :root[data-theme='toss'] .toggle-chip {
   color: var(--text-soft);
   background: rgba(28, 34, 45, 0.96);
@@ -3292,9 +3359,51 @@ textarea {
   color: var(--text);
 }
 
+:root[data-theme='toss'] textarea::placeholder {
+  color: var(--text-muted);
+}
+
 :root[data-theme='toss'] select option {
   background: #151922;
   color: var(--text);
+}
+
+:root[data-theme='toss'] .travel-modal input[type='file'] {
+  background: #1b212c;
+  border-color: #2d3645;
+  color: var(--text);
+}
+
+:root[data-theme='toss'] .travel-modal input[type='file']::file-selector-button {
+  margin-right: 12px;
+  border: 1px solid #2d3645;
+  border-radius: 10px;
+  padding: 8px 12px;
+  background: #252c38;
+  color: #f3f7ff;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+:root[data-theme='toss'] .travel-modal .travel-autofill-note {
+  background: rgba(79, 140, 255, 0.12);
+  color: #d5e4ff;
+}
+
+:root[data-theme='toss'] .travel-modal .travel-autofill-note--filled {
+  background: rgba(22, 199, 132, 0.14);
+  color: #b8f3db;
+}
+
+:root[data-theme='toss'] .travel-modal .travel-autofill-note--manual {
+  background: rgba(255, 184, 0, 0.16);
+  color: #ffe4a3;
+}
+
+:root[data-theme='toss'] .travel-modal .travel-media-card {
+  background: #1b212c;
+  border-color: #2d3645;
 }
 
 :root[data-theme='toss'] .sheet-table th,
@@ -3995,6 +4104,138 @@ textarea {
   color: var(--text) !important;
 }
 
+:root[data-theme='toss'] .travel-map__toolbar-group,
+:root[data-theme='toss'] .travel-map__search-form,
+:root[data-theme='toss'] .travel-map__search-results {
+  background: rgba(14, 18, 25, 0.92);
+  border-color: rgba(78, 95, 125, 0.56);
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.38);
+}
+
+:root[data-theme='toss'] .travel-map__toolbar-label,
+:root[data-theme='toss'] .travel-map__search-message,
+:root[data-theme='toss'] .travel-map__search-result span,
+:root[data-theme='toss'] .travel-map__popup-copy span,
+:root[data-theme='toss'] .travel-map__slider-counter,
+:root[data-theme='toss'] .travel-map__hint span {
+  color: #aeb8cb;
+}
+
+:root[data-theme='toss'] .travel-map__toolbar-button,
+:root[data-theme='toss'] .travel-map__slider-button {
+  background: rgba(24, 30, 40, 0.96);
+  border-color: rgba(78, 95, 125, 0.62);
+  color: #edf3ff;
+}
+
+:root[data-theme='toss'] .travel-map__toolbar-button:hover,
+:root[data-theme='toss'] .travel-map__search-result:hover,
+:root[data-theme='toss'] .travel-map__slider-button:hover {
+  background: rgba(34, 42, 56, 0.98);
+  border-color: rgba(79, 140, 255, 0.54);
+}
+
+:root[data-theme='toss'] .travel-map__toolbar-button.is-active {
+  background: linear-gradient(180deg, #4f8cff 0%, #2f6df3 100%);
+  border-color: transparent;
+  color: #ffffff;
+}
+
+:root[data-theme='toss'] .travel-map__toolbar-button:disabled {
+  color: #7f899c;
+}
+
+:root[data-theme='toss'] .travel-map__search-input {
+  background: rgba(16, 21, 30, 0.96);
+  border-color: rgba(78, 95, 125, 0.62);
+  color: #f3f7ff;
+}
+
+:root[data-theme='toss'] .travel-map__search-input::placeholder {
+  color: #8f9ab0;
+}
+
+:root[data-theme='toss'] .travel-map__search-input:focus {
+  border-color: rgba(79, 140, 255, 0.72);
+  box-shadow: 0 0 0 3px rgba(79, 140, 255, 0.18);
+}
+
+:root[data-theme='toss'] .travel-map__search-result {
+  background: rgba(21, 27, 37, 0.94);
+  border-color: rgba(78, 95, 125, 0.42);
+  color: #edf3ff;
+}
+
+:root[data-theme='toss'] .travel-map__search-result strong,
+:root[data-theme='toss'] .travel-map__popup-copy strong,
+:root[data-theme='toss'] .travel-map__hint strong {
+  color: #f6f9ff;
+}
+
+:root[data-theme='toss'] .travel-map__hint {
+  background: linear-gradient(135deg, rgba(34, 64, 122, 0.48), rgba(16, 53, 79, 0.42));
+  border: 1px solid rgba(79, 140, 255, 0.22);
+}
+
+:root[data-theme='toss'] .travel-pending-card,
+:root[data-theme='toss'] .travel-overview-day-group,
+:root[data-theme='toss'] .travel-overview-place-card {
+  background: #1b212c;
+  border-color: #2d3645;
+}
+
+:root[data-theme='toss'] .travel-pending-card strong,
+:root[data-theme='toss'] .travel-overview-day-group__head h3,
+:root[data-theme='toss'] .travel-overview-place-card strong {
+  color: #f6f9ff;
+}
+
+:root[data-theme='toss'] .travel-pending-card small,
+:root[data-theme='toss'] .travel-overview-day-group__head p,
+:root[data-theme='toss'] .travel-overview-place-card small,
+:root[data-theme='toss'] .travel-media-tags,
+:root[data-theme='toss'] .travel-overview-place-list + .panel__empty {
+  color: #aeb8cb;
+}
+
+:root[data-theme='toss'] .travel-overview-day-grid .travel-pending-card {
+  background: linear-gradient(180deg, rgba(26, 33, 44, 0.98), rgba(20, 25, 34, 0.98));
+}
+
+:root[data-theme='toss'] .travel-overview-day-grid .travel-pending-card strong,
+:root[data-theme='toss'] .travel-overview-day-grid .travel-pending-card small {
+  color: #edf3ff;
+}
+
+:root[data-theme='toss'] .travel-overview-timeline .panel__empty,
+:root[data-theme='toss'] .travel-overview-place-list + .panel__empty,
+:root[data-theme='toss'] .travel-overview-day-grid + .panel__empty {
+  color: #aeb8cb;
+}
+
+:root[data-theme='toss'] .travel-overview-timeline .panel__badge,
+:root[data-theme='toss'] .travel-overview-place-list .chip--neutral,
+:root[data-theme='toss'] .travel-overview-day-grid .chip--neutral {
+  background: rgba(79, 140, 255, 0.12);
+  border-color: rgba(79, 140, 255, 0.2);
+  color: #dfeaff;
+}
+
+:root[data-theme='toss'] .leaflet-popup-content-wrapper,
+:root[data-theme='toss'] .leaflet-popup-tip {
+  background: #161c25;
+  color: #eef4ff;
+}
+
+:root[data-theme='toss'] .leaflet-popup-content-wrapper {
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.34);
+}
+
+:root[data-theme='toss'] .leaflet-popup-close-button,
+:root[data-theme='toss'] .leaflet-container a.leaflet-popup-close-button {
+  color: #d7e4ff;
+}
+
 @media (max-width: 1180px) {
   .family-album-layout,
   .family-album-layout--library {
@@ -4010,5 +4251,57 @@ textarea {
   .family-album-focus__head {
     flex-direction: column;
     align-items: flex-start;
+  }
+}
+
+@media (max-width: 980px) {
+  .travel-toolbar__select {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .travel-toolbar__actions {
+    width: 100%;
+  }
+
+  .travel-toolbar__actions .button {
+    flex: 1 1 calc(50% - 6px);
+    min-width: 0;
+  }
+
+  .content-grid--travel-records {
+    gap: 14px;
+  }
+}
+
+@media (max-width: 720px) {
+  .travel-plan-banner,
+  .travel-stat-card,
+  .travel-rate-card {
+    padding: 16px;
+  }
+
+  .travel-map__hint {
+    padding: 12px 14px;
+  }
+
+  .travel-record-media-count {
+    gap: 2px;
+  }
+}
+
+@media (max-width: 560px) {
+  .travel-toolbar__actions .button {
+    flex-basis: 100%;
+  }
+
+  .travel-rate-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .travel-map--compact .travel-map__canvas,
+  .travel-map__canvas,
+  .travel-map--expanded .travel-map__canvas {
+    min-height: 320px;
   }
 }

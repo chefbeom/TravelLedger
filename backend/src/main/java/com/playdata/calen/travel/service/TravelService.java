@@ -48,6 +48,7 @@ import com.playdata.calen.travel.repository.TravelRouteSegmentRepository;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.io.InputStream;
+import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -761,7 +762,7 @@ public class TravelService {
 
         record.setRecordType(recordType);
         record.setExpenseDate(request.expenseDate());
-        record.setExpenseTime(request.expenseTime());
+        record.setExpenseTime(request.expenseTime() != null ? request.expenseTime() : LocalTime.MIDNIGHT);
         record.setCategory(request.category().trim());
         record.setTitle(request.title().trim());
         record.setAmount(request.amount().setScale(2, RoundingMode.HALF_UP));

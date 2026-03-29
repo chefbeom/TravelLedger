@@ -4305,3 +4305,120 @@ textarea {
     min-height: 320px;
   }
 }
+
+@media (max-width: 900px) {
+  .travel-plan-picker-grid,
+  .family-category-grid,
+  .family-member-picker,
+  .family-media-grid,
+  .family-media-grid--compact {
+    grid-template-columns: 1fr;
+  }
+
+  .travel-plan-card-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .travel-media-grid--gallery {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .travel-plan-card__actions,
+  .travel-media-actions {
+    flex-direction: column;
+  }
+
+  .travel-plan-card__actions > *,
+  .travel-media-actions > * {
+    width: 100%;
+  }
+
+  .travel-media-section__header,
+  .travel-memory-pending__header,
+  .travel-route-focus-card__header,
+  .panel__header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .travel-route-map-panel .travel-map__canvas,
+  .travel-overview-map-panel .travel-map__canvas,
+  .travel-memory-map-panel .travel-map__canvas {
+    min-height: 520px;
+  }
+}
+
+@media (max-width: 680px) {
+  .travel-summary-grid,
+  .travel-visit-grid,
+  .travel-media-summary-grid,
+  .travel-plan-card-grid,
+  .travel-overview-day-grid,
+  .travel-pending-grid,
+  .family-album-summary-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .travel-plan-banner {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .travel-toolbar {
+    align-items: stretch;
+  }
+
+  .travel-toolbar__actions {
+    width: 100%;
+  }
+
+  .travel-toolbar__actions .button {
+    width: 100%;
+    flex: 1 1 100%;
+  }
+
+  .travel-map__toolbar {
+    gap: 6px;
+  }
+
+  .travel-map__toolbar-group {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .travel-map__hint {
+    border-radius: 16px;
+  }
+
+  .travel-media-thumb,
+  .travel-plan-card__media,
+  .travel-plan-card__placeholder {
+    height: 180px;
+  }
+
+  .travel-media-card,
+  .travel-plan-card,
+  .travel-pending-card,
+  .travel-overview-day-group,
+  .travel-overview-place-card,
+  .family-media-card,
+  .family-category-card,
+  .family-album-focus {
+    padding: 16px;
+    border-radius: 20px;
+  }
+
+  .family-album-list__item {
+    padding: 14px 16px;
+  }
+
+  .family-media-card__body {
+    padding: 14px;
+  }
+
+  .family-media-card__select {
+    top: 10px;
+    right: 10px;
+    padding: 8px 10px;
+  }
+}

@@ -260,6 +260,8 @@ const insights = computed(() => buildInsights(statsEntries.value))
 const searchPageInfo = computed(() => searchPageState.value)
 const trashPageInfo = computed(() => trashPageState.value)
 const isEditingEntry = computed(() => editingEntryId.value !== null)
+const dataActionMenuRef = ref(null)
+const dataActionMenuOpen = ref(false)
 const entrySuggestions = computed(() => {
   const keyword = entryForm.title.trim().toLowerCase()
   if (!keyword) {
@@ -411,6 +413,7 @@ watch(
 )
 
 onMounted(async () => {
+  window.addEventListener('pointerdown', handleGlobalPointerDown)
   isLoading.value = true
   try {
     await loadMetadata()
@@ -428,6 +431,7 @@ onMounted(async () => {
 })
 
 onBeforeUnmount(() => {
+  window.removeEventListener('pointerdown', handleGlobalPointerDown)
   if (feedbackTimerId) {
     window.clearTimeout(feedbackTimerId)
   }
@@ -854,6 +858,27 @@ function formatAmountShortcut(value) {
   return amount.toLocaleString('ko-KR')
 }
 
+function handleGlobalPointerDown(event) {
+  if (!dataActionMenuOpen.value) {
+    return
+  }
+
+  if (dataActionMenuRef.value?.contains(event.target)) {
+    return
+  }
+
+  dataActionMenuOpen.value = false
+}
+
+function toggleDataActionMenu() {
+  dataActionMenuOpen.value = !dataActionMenuOpen.value
+}
+
+function openImportWorkspace() {
+  householdTab.value = 'import'
+  dataActionMenuOpen.value = false
+}
+
 function shiftIsoDate(value, { months = 0, years = 0 } = {}) {
   const date = parseIsoDate(value)
   if (years) {
@@ -954,6 +979,7 @@ async function handleImported(result) {
 async function exportEntriesToCsv() {
   isSubmitting.value = true
   activeSubmit.value = 'export-csv'
+  dataActionMenuOpen.value = false
   setFeedback()
   try {
     if (!csvExportRange.value.isAll && (!csvExportRange.value.from || !csvExportRange.value.to)) {
@@ -1303,25 +1329,6 @@ async function deactivatePayment(paymentId) {
             <input :value="householdAnchorDate" type="date" @input="handleChangeHouseholdAnchorDate($event.target.value)" />
           </label>
           <button class="button button--secondary" @click="handleChangeHouseholdAnchorDate(today)">오늘</button>
-          <label class="field">
-            <span class="field__label">CSV 범위</span>
-            <select v-model="csvExportControls.preset">
-              <option v-for="option in csvExportOptions" :key="option.value" :value="option.value">
-                {{ option.label }}
-              </option>
-            </select>
-          </label>
-          <label v-if="csvExportControls.preset === 'CUSTOM'" class="field">
-            <span class="field__label">시작일</span>
-            <input v-model="csvExportControls.customFrom" type="date" />
-          </label>
-          <label v-if="csvExportControls.preset === 'CUSTOM'" class="field">
-            <span class="field__label">종료일</span>
-            <input v-model="csvExportControls.customTo" type="date" />
-          </label>
-          <button class="button button--secondary" :disabled="isSubmitting" @click="exportEntriesToCsv">
-            {{ isSubmitting && activeSubmit === 'export-csv' ? 'CSV 저장 중...' : `CSV 저장 (${csvExportLabel})` }}
-          </button>
         </div>
       </div>
 
@@ -1332,7 +1339,40 @@ async function deactivatePayment(paymentId) {
         <button class="button" :class="{ 'button--primary': householdTab === 'stats-trash' }" @click="householdTab = 'stats-trash'">휴지통</button>
         <button class="button" :class="{ 'button--primary': householdTab === 'stats-insights' }" @click="householdTab = 'stats-insights'">인사이트</button>
         <button class="button" :class="{ 'button--primary': householdTab === 'stats-compare' }" @click="householdTab = 'stats-compare'">비교</button>
-        <button class="button" :class="{ 'button--primary': householdTab === 'import' }" @click="householdTab = 'import'">엑셀 가져오기</button>
+        <div ref="dataActionMenuRef" class="household-data-actions">
+          <button
+            class="button"
+            :class="{ 'button--primary': householdTab === 'import' || dataActionMenuOpen }"
+            @click.stop="toggleDataActionMenu"
+          >
+            데이터 입/출
+          </button>
+          <div v-if="dataActionMenuOpen" class="household-data-actions__menu" @click.stop>
+            <button type="button" class="button button--ghost household-data-actions__menu-button" @click="openImportWorkspace">
+              엑셀 가져오기
+            </button>
+            <div class="household-data-actions__divider"></div>
+            <label class="field">
+              <span class="field__label">CSV 범위</span>
+              <select v-model="csvExportControls.preset">
+                <option v-for="option in csvExportOptions" :key="option.value" :value="option.value">
+                  {{ option.label }}
+                </option>
+              </select>
+            </label>
+            <label v-if="csvExportControls.preset === 'CUSTOM'" class="field">
+              <span class="field__label">시작일</span>
+              <input v-model="csvExportControls.customFrom" type="date" />
+            </label>
+            <label v-if="csvExportControls.preset === 'CUSTOM'" class="field">
+              <span class="field__label">종료일</span>
+              <input v-model="csvExportControls.customTo" type="date" />
+            </label>
+            <button class="button button--secondary household-data-actions__menu-button" :disabled="isSubmitting" @click="exportEntriesToCsv">
+              {{ isSubmitting && activeSubmit === 'export-csv' ? 'CSV 저장 중...' : `CSV로 저장하기 (${csvExportLabel})` }}
+            </button>
+          </div>
+        </div>
         <button class="button" :class="{ 'button--primary': householdTab === 'management' }" @click="householdTab = 'management'">분류 관리</button>
       </div>
     </section>

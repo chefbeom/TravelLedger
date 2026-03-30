@@ -1481,6 +1481,40 @@ button {
   min-width: 220px;
 }
 
+.household-data-actions {
+  position: relative;
+}
+
+.household-data-actions__menu {
+  position: absolute;
+  top: calc(100% + 10px);
+  left: 0;
+  z-index: 20;
+  min-width: 280px;
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 18px;
+  background: rgba(17, 24, 39, 0.96);
+  box-shadow: 0 20px 44px rgba(15, 23, 42, 0.26);
+  backdrop-filter: blur(14px);
+}
+
+.household-data-actions__menu .field {
+  min-width: 0;
+}
+
+.household-data-actions__menu-button {
+  justify-content: center;
+  width: 100%;
+}
+
+.household-data-actions__divider {
+  height: 1px;
+  background: rgba(148, 163, 184, 0.18);
+}
+
 .scope-toggle--filters {
   margin-top: 14px;
 }
@@ -2355,6 +2389,12 @@ textarea {
 
   .household-anchor-toolbar__actions {
     justify-content: flex-start;
+  }
+
+  .household-data-actions__menu {
+    position: static;
+    min-width: 100%;
+    margin-top: 10px;
   }
 }
 

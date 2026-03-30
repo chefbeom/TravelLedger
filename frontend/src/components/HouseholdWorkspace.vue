@@ -75,6 +75,8 @@ const isSubmitting = ref(false)
 const activeSubmit = ref('')
 const feedback = ref('')
 const errorMessage = ref('')
+const undoableCreate = ref(null)
+const showUndoFeedback = ref(false)
 const householdTab = ref('calendar')
 const householdAnchorDate = ref(today)
 const calendarAnchorDate = householdAnchorDate
@@ -182,6 +184,7 @@ const availableDetails = computed(() => {
   return group?.details ?? []
 })
 const amountPreview = computed(() => Number(entryForm.amount || 0))
+const canUndoLastCreate = computed(() => Boolean(undoableCreate.value?.entryId) && showUndoFeedback.value)
 const quickStats = computed(() => dashboard.value.quickStats ?? [])
 const monthLabel = computed(() => formatMonthLabel(calendarAnchorDate.value))
 const calendarWeeks = computed(() => buildCalendarWeeks(dashboard.value.calendar ?? [], calendarAnchorDate.value))
@@ -342,6 +345,8 @@ onMounted(async () => {
     calendarReady.value = true
     statsReady.value = true
   } catch (error) {
+    undoableCreate.value = null
+    showUndoFeedback.value = false
     setFeedback('', error.message)
   } finally {
     isLoading.value = false
@@ -357,6 +362,9 @@ onBeforeUnmount(() => {
 function setFeedback(message = '', error = '') {
   feedback.value = message
   errorMessage.value = error
+  if (!message) {
+    showUndoFeedback.value = false
+  }
 
   if (feedbackTimerId) {
     window.clearTimeout(feedbackTimerId)
@@ -367,9 +375,47 @@ function setFeedback(message = '', error = '') {
     feedbackTimerId = window.setTimeout(() => {
       feedback.value = ''
       errorMessage.value = ''
+      undoableCreate.value = null
+      showUndoFeedback.value = false
       feedbackTimerId = null
     }, 5000)
   }
+}
+
+function buildEntryFormSnapshot() {
+  return {
+    entryDate: entryForm.entryDate,
+    entryTime: entryForm.entryTime || '00:00',
+    title: entryForm.title,
+    memo: entryForm.memo,
+    amount: entryForm.amount,
+    entryType: entryForm.entryType,
+    categoryGroupId: entryForm.categoryGroupId,
+    categoryDetailId: entryForm.categoryDetailId,
+    paymentMethodId: entryForm.paymentMethodId,
+    amountInput: amountInput.value,
+    isTimeEnabled: isEntryTimeEnabled.value,
+  }
+}
+
+function restoreEntryFormSnapshot(snapshot) {
+  if (!snapshot) {
+    return
+  }
+
+  editingEntryId.value = null
+  entryForm.entryDate = snapshot.entryDate || calendarAnchorDate.value
+  entryForm.entryTime = snapshot.entryTime || '00:00'
+  entryForm.title = snapshot.title || ''
+  entryForm.memo = snapshot.memo || ''
+  entryForm.amount = snapshot.amount || ''
+  entryForm.entryType = snapshot.entryType || 'EXPENSE'
+  entryForm.categoryGroupId = snapshot.categoryGroupId || ''
+  entryForm.categoryDetailId = snapshot.categoryDetailId || ''
+  entryForm.paymentMethodId = snapshot.paymentMethodId || ''
+  amountInput.value = snapshot.amountInput || ''
+  isEntryTimeEnabled.value = Boolean(snapshot.isTimeEnabled)
+  syncEntryDefaults()
 }
 
 function sanitizeAmountInput(value) {
@@ -411,7 +457,7 @@ async function loadEntryDateRange() {
     latestDate: response?.latestDate || null,
   }
 
-  if (statsControls.preset === 'ALL' && entryDateRange.value.latestDate) {
+  if (!calendarReady.value && statsControls.preset === 'ALL' && entryDateRange.value.latestDate) {
     statsControls.anchorDate = entryDateRange.value.latestDate
   }
 }
@@ -741,14 +787,49 @@ async function submitEntry() {
   setFeedback()
   try {
     if (editingEntryId.value) {
+      undoableCreate.value = null
+      showUndoFeedback.value = false
       await updateEntry(editingEntryId.value, buildEntryPayload())
       setFeedback('가계부 내역을 수정했습니다.')
     } else {
-      await createEntry(buildEntryPayload())
+      const snapshot = buildEntryFormSnapshot()
+      const createdEntry = await createEntry(buildEntryPayload())
+      undoableCreate.value = {
+        entryId: createdEntry?.id ?? null,
+        snapshot,
+      }
+      showUndoFeedback.value = true
       setFeedback('가계부 내역을 등록했습니다.')
     }
     await refreshLedgerViews()
     resetEntryForm()
+  } catch (error) {
+    setFeedback('', error.message)
+  } finally {
+    isSubmitting.value = false
+    activeSubmit.value = ''
+  }
+}
+
+async function undoLastCreatedEntry() {
+  if (!undoableCreate.value?.entryId) {
+    return
+  }
+
+  isSubmitting.value = true
+  activeSubmit.value = 'entry-undo'
+  setFeedback()
+
+  try {
+    const snapshot = undoableCreate.value.snapshot
+    await deleteEntry(undoableCreate.value.entryId)
+    await refreshLedgerViews()
+    restoreEntryFormSnapshot(snapshot)
+    undoableCreate.value = null
+    showUndoFeedback.value = false
+    setFeedback('방금 등록한 내역을 취소하고 입력값을 복구했습니다.')
+    await nextTick()
+    calendarWorkspaceRef.value?.scrollToEntryEditor?.()
   } catch (error) {
     setFeedback('', error.message)
   } finally {
@@ -922,7 +1003,17 @@ async function deactivatePayment(paymentId) {
 
 <template>
   <div class="workspace-stack">
-    <div v-if="feedback" class="feedback feedback--success">{{ feedback }}</div>
+    <div v-if="feedback" class="feedback feedback--success feedback--actionable">
+      <span>{{ feedback }}</span>
+      <button
+        v-if="canUndoLastCreate"
+        class="button button--ghost feedback__action"
+        :disabled="isSubmitting"
+        @click="undoLastCreatedEntry"
+      >
+        실행 취소
+      </button>
+    </div>
     <div v-if="errorMessage" class="feedback feedback--error">{{ errorMessage }}</div>
 
     <section class="panel">

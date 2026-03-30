@@ -346,7 +346,7 @@ const monthOfYearChartItems = computed(() =>
         </div>
 
         <div class="sheet-table-wrap">
-          <table class="sheet-table">
+          <table class="sheet-table stats-search-table">
             <thead>
               <tr>
                 <th>날짜</th>
@@ -361,9 +361,9 @@ const monthOfYearChartItems = computed(() =>
               <tr v-for="entry in searchResults" :key="entry.id">
                 <td>{{ formatFullDate(entry.entryDate) }}</td>
                 <td>{{ formatTime(entry.entryTime) }}</td>
-                <td>{{ entry.title }}</td>
-                <td>{{ entry.categoryGroupName }}<template v-if="entry.categoryDetailName"> / {{ entry.categoryDetailName }}</template></td>
-                <td>{{ entry.paymentMethodName }}</td>
+                <td class="sheet-table__title">{{ entry.title }}</td>
+                <td class="sheet-table__category">{{ entry.categoryGroupName }}<template v-if="entry.categoryDetailName"> / {{ entry.categoryDetailName }}</template></td>
+                <td class="sheet-table__textwrap">{{ entry.paymentMethodName }}</td>
                 <td :class="entry.entryType === 'INCOME' ? 'is-income' : 'is-expense'">
                   {{ formatCurrency(entry.amount) }}
                 </td>

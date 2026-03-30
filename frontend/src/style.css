@@ -272,6 +272,20 @@ button {
   border: 1px solid var(--line);
 }
 
+.feedback--actionable {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.feedback__action {
+  min-height: 38px;
+  padding-inline: 14px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
 .feedback--success {
   background: rgba(18, 184, 134, 0.08);
   color: var(--income);
@@ -808,6 +822,7 @@ button {
 .sheet-table__memo {
   white-space: normal !important;
   word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
 .sheet-table__title,
@@ -826,6 +841,19 @@ button {
 .sheet-table__memo {
   min-width: 220px;
   color: var(--text-muted);
+}
+
+.sheet-table__textwrap {
+  white-space: normal !important;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.stats-search-table .sheet-table__title,
+.stats-search-table .sheet-table__category,
+.stats-search-table .sheet-table__textwrap {
+  line-height: 1.45;
+  min-width: 0;
 }
 
 .stats-toolbar {
@@ -1013,6 +1041,18 @@ button {
   grid-template-columns: 14px minmax(0, 1fr);
   gap: 12px;
   align-items: start;
+}
+
+.donut-chart__legend-item > div {
+  min-width: 0;
+}
+
+.donut-chart__legend-item strong,
+.donut-chart__legend-item p,
+.donut-chart__legend-item small {
+  white-space: normal;
+  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
 .donut-chart__legend-item p,
@@ -1846,6 +1886,18 @@ button {
   display: flex;
   justify-content: space-between;
   gap: 10px;
+  align-items: flex-start;
+}
+
+.breakdown-list__row strong {
+  min-width: 0;
+  white-space: normal;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.breakdown-list__row span {
+  flex-shrink: 0;
 }
 
 .breakdown-list__bar {
@@ -2315,6 +2367,12 @@ textarea {
   display: flex;
   gap: 12px;
   align-items: center;
+}
+
+.topbar__actions .button {
+  white-space: nowrap;
+  word-break: keep-all;
+  flex-shrink: 0;
 }
 
 .launcher-grid {

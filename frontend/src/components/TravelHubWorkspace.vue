@@ -163,11 +163,20 @@ const expenseCategoryOptions = computed(() => travelCategories.value.expenseCate
 const memoryCategoryOptions = computed(() => travelCategories.value.memoryCategories?.length ? travelCategories.value.memoryCategories : fallbackCategories.memoryCategories)
 const requiresExplicitPlanSelection = computed(() => props.route === 'travel-log' || props.route === 'photo-album')
 const isSharedExhibitTab = computed(() => props.route === 'photo-album' && albumTab.value === 'shared')
-const showPlanGate = computed(() => requiresExplicitPlanSelection.value && !travelPlan.value && !isSharedExhibitTab.value)
+const hasSharedExhibits = computed(() => sharedExhibitSummaries.value.length > 0)
+const showPlanGate = computed(() =>
+  requiresExplicitPlanSelection.value
+  && !travelPlan.value
+  && !isSharedExhibitTab.value
+  && !(props.route === 'photo-album' && hasSharedExhibits.value)
+)
 const canShareTravelPlan = computed(() => Boolean(travelPlan.value) && travelPlan.value.status === 'COMPLETED')
 const emptyTravelPlanMessage = computed(() => {
   if (isSharedExhibitTab.value) {
     return '공유 전시 탭에서는 여행 선택 없이도 공유받은 전시를 볼 수 있습니다.'
+  }
+  if (props.route === 'photo-album' && hasSharedExhibits.value) {
+    return '공유받은 전시가 있어 여행 선택 없이도 공유 전시를 바로 볼 수 있습니다.'
   }
   if (showPlanGate.value) {
     return '계속하려면 먼저 여행 하나를 선택해주세요.'
@@ -506,9 +515,14 @@ async function loadSharedExhibits(preferredShareId = selectedSharedExhibitId.val
     sharedExhibitSummaries.value = exhibits
 
     const requestedShareId = String(preferredShareId || '').trim()
-    const nextShareId = exhibits.some((item) => String(item.id) === requestedShareId) ? requestedShareId : ''
+    const nextShareId = exhibits.some((item) => String(item.id) === requestedShareId)
+      ? requestedShareId
+      : (exhibits[0] ? String(exhibits[0].id) : '')
     selectedSharedExhibitId.value = nextShareId
     selectedSharedExhibit.value = nextShareId ? await fetchTravelSharedExhibit(nextShareId) : null
+    if (props.route === 'photo-album' && !travelPlan.value && exhibits.length) {
+      albumTab.value = 'shared'
+    }
   } catch (error) {
     sharedExhibitSummaries.value = []
     selectedSharedExhibitId.value = ''

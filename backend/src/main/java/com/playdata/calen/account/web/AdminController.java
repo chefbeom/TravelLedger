@@ -1,6 +1,7 @@
 package com.playdata.calen.account.web;
 
 import com.playdata.calen.account.dto.AdminDashboardResponse;
+import com.playdata.calen.account.dto.AdminLoginAuditPageResponse;
 import com.playdata.calen.account.dto.SupportInquiryReplyRequest;
 import com.playdata.calen.account.dto.SupportInquiryResponse;
 import com.playdata.calen.account.dto.AdminUserActiveRequest;
@@ -39,6 +40,11 @@ public class AdminController {
     @GetMapping("/dashboard")
     public AdminDashboardResponse getDashboard() {
         return adminService.getDashboard();
+    }
+
+    @GetMapping("/login-audit-logs")
+    public AdminLoginAuditPageResponse getLoginAuditLogs(@RequestParam(name = "page", defaultValue = "0") int page) {
+        return adminService.getLoginAuditLogs(page);
     }
 
     @PatchMapping("/users/{userId}/active")

@@ -2,6 +2,7 @@
 import { computed, onMounted, reactive } from 'vue'
 import {
   fetchAdminDashboard,
+  fetchAdminLoginAuditLogs,
   fetchAdminSupportInquiries,
   replyAdminSupportInquiry,
   unlockBlockedIp,
@@ -17,12 +18,14 @@ const props = defineProps({
 
 const state = reactive({
   loading: true,
+  loadingLoginLogs: false,
   mutatingUserId: null,
   unlockingIp: '',
   savingReply: false,
   errorMessage: '',
   summary: null,
   recentLoginLogs: [],
+  loginLogPage: { content: [], page: 0, size: 10, totalElements: 0, totalPages: 0 },
   blockedIps: [],
   users: [],
   recentInvites: [],
@@ -43,8 +46,7 @@ const summaryCards = [
 const loginStatusLabel = {
   SUCCESS: '성공',
   BLOCKED: '차단',
-  BAD_CREDENTIALS: '비밀번호 실패',
-  BAD_SECONDARY_PIN: '2차 비밀번호 실패',
+  FAILED: '인증 실패',
 }
 
 const inviteStatusLabel = {
@@ -88,13 +90,15 @@ async function loadDashboard() {
   state.errorMessage = ''
 
   try {
-    const [dashboard, supportInquiries] = await Promise.all([
+    const [dashboard, supportInquiries, loginLogPage] = await Promise.all([
       fetchAdminDashboard(),
       fetchAdminSupportInquiries(),
+      fetchAdminLoginAuditLogs(0),
     ])
 
     state.summary = dashboard.summary
-    state.recentLoginLogs = dashboard.recentLoginLogs ?? []
+    state.loginLogPage = loginLogPage
+    state.recentLoginLogs = loginLogPage.content ?? []
     state.blockedIps = dashboard.blockedIps ?? []
     state.users = dashboard.users ?? []
     state.recentInvites = dashboard.recentInvites ?? []
@@ -112,6 +116,20 @@ async function loadDashboard() {
     state.errorMessage = error.message
   } finally {
     state.loading = false
+  }
+}
+
+async function loadLoginAuditLogs(page = 0) {
+  state.loadingLoginLogs = true
+  state.errorMessage = ''
+
+  try {
+    state.loginLogPage = await fetchAdminLoginAuditLogs(page)
+    state.recentLoginLogs = state.loginLogPage.content ?? []
+  } catch (error) {
+    state.errorMessage = error.message
+  } finally {
+    state.loadingLoginLogs = false
   }
 }
 
@@ -184,7 +202,7 @@ onMounted(loadDashboard)
       <div class="panel__header">
         <div>
           <h2>관리자 페이지</h2>
-          <p>{{ currentUser.displayName }} 계정으로 로그인한 상태에서 사용자 상태, 로그인 로그, 문의 메일함을 관리합니다.</p>
+          <p>{{ currentUser.displayName }} 계정으로 로그인한 상태에서 사용자 상태, 로그인 기록, 문의 메일함을 관리합니다.</p>
         </div>
         <button class="button button--ghost" type="button" :disabled="state.loading" @click="loadDashboard">
           {{ state.loading ? '불러오는 중..' : '새로고침' }}
@@ -203,7 +221,7 @@ onMounted(loadDashboard)
       <div class="panel__header">
         <div>
           <h2>문의 메일함</h2>
-          <p>사용자가 보낸 요청사항과 건의 사항을 확인하고, 선택한 메일에 바로 답변할 수 있습니다.</p>
+          <p>사용자가 보낸 요청사항과 건의사항을 확인하고, 선택한 메일에 바로 답변할 수 있습니다.</p>
         </div>
       </div>
       <div class="sheet-table-wrap">
@@ -220,7 +238,7 @@ onMounted(loadDashboard)
           </thead>
           <tbody>
             <tr v-if="!state.supportInquiries.length">
-              <td colspan="6" class="sheet-table__empty">도착한 문의 메일이 아직 없습니다.</td>
+              <td colspan="6" class="sheet-table__empty">아직 문의 메일이 없습니다.</td>
             </tr>
             <tr
               v-for="inquiry in state.supportInquiries"
@@ -283,7 +301,7 @@ onMounted(loadDashboard)
           <div class="support-inquiry-reply__header">
             <strong>답변하기</strong>
             <small>
-              {{ selectedSupportInquiry.replyContent ? '기존 답변을 수정할 수 있습니다.' : '아직 답변하지 않은 메일입니다.' }}
+              {{ selectedSupportInquiry.replyContent ? '기존 답변을 수정할 수 있습니다.' : '아직 답변되지 않은 메일입니다.' }}
             </small>
           </div>
           <textarea
@@ -346,8 +364,8 @@ onMounted(loadDashboard)
     <section class="panel">
       <div class="panel__header">
         <div>
-          <h2>최근 로그인 로그</h2>
-          <p>어떤 IP와 어떤 계정으로 로그인 시도가 들어왔는지 최근 기록 순서대로 확인합니다.</p>
+          <h2>최근 로그인 기록</h2>
+          <p>최근 10개씩 보여주며, 이전 기록은 페이지로 넘겨 확인할 수 있습니다.</p>
         </div>
       </div>
       <div class="sheet-table-wrap">
@@ -359,12 +377,11 @@ onMounted(loadDashboard)
               <th>로그인 ID</th>
               <th>표시 이름</th>
               <th>IP</th>
-              <th>세부 내용</th>
             </tr>
           </thead>
           <tbody>
             <tr v-if="!state.recentLoginLogs.length">
-              <td colspan="6" class="sheet-table__empty">아직 기록된 로그인 로그가 없습니다.</td>
+              <td colspan="5" class="sheet-table__empty">아직 기록된 로그인 로그가 없습니다.</td>
             </tr>
             <tr v-for="log in state.recentLoginLogs" :key="log.id">
               <td>{{ formatDateTime(log.attemptedAt) }}</td>
@@ -376,10 +393,28 @@ onMounted(loadDashboard)
               <td>{{ log.loginId }}</td>
               <td>{{ log.displayName || '-' }}</td>
               <td>{{ log.clientIp }}</td>
-              <td>{{ log.detail || '-' }}</td>
             </tr>
           </tbody>
         </table>
+      </div>
+      <div class="panel__actions">
+        <button
+          class="button button--ghost"
+          type="button"
+          :disabled="state.loadingLoginLogs || state.loginLogPage.page <= 0"
+          @click="loadLoginAuditLogs(state.loginLogPage.page - 1)"
+        >
+          이전
+        </button>
+        <span>{{ state.loginLogPage.page + 1 }} / {{ Math.max(state.loginLogPage.totalPages, 1) }}</span>
+        <button
+          class="button button--ghost"
+          type="button"
+          :disabled="state.loadingLoginLogs || state.loginLogPage.page + 1 >= Math.max(state.loginLogPage.totalPages, 1)"
+          @click="loadLoginAuditLogs(state.loginLogPage.page + 1)"
+        >
+          다음
+        </button>
       </div>
     </section>
 
@@ -387,7 +422,7 @@ onMounted(loadDashboard)
       <div class="panel__header">
         <div>
           <h2>사용자 상태</h2>
-          <p>관리자 여부와 활성 상태를 확인하고, 필요하면 계정을 비활성화하거나 다시 활성화할 수 있습니다.</p>
+          <p>관리자 여부와 활성 상태를 확인하고, 일반 사용자만 활성/비활성 처리할 수 있습니다.</p>
         </div>
       </div>
       <div class="sheet-table-wrap">
@@ -415,7 +450,9 @@ onMounted(loadDashboard)
               </td>
               <td>{{ user.active ? '활성' : '비활성' }}</td>
               <td>
+                <template v-if="user.admin">-</template>
                 <button
+                  v-else
                   class="button button--ghost"
                   type="button"
                   :disabled="state.mutatingUserId === user.id"
@@ -434,7 +471,7 @@ onMounted(loadDashboard)
       <div class="panel__header">
         <div>
           <h2>최근 초대 링크</h2>
-          <p>최근에 발급된 초대 링크가 사용됐는지, 아직 남아 있는지 확인할 수 있습니다.</p>
+          <p>최근에 발급한 초대 링크가 사용됐는지, 아직 남아 있는지 확인할 수 있습니다.</p>
         </div>
       </div>
       <div class="sheet-table-wrap">
@@ -461,9 +498,7 @@ onMounted(loadDashboard)
                 <template v-if="invite.usedByLoginId">
                   {{ invite.usedByDisplayName }} ({{ invite.usedByLoginId }})
                 </template>
-                <template v-else>
-                  -
-                </template>
+                <template v-else>-</template>
               </td>
             </tr>
           </tbody>

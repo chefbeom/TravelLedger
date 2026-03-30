@@ -5,8 +5,9 @@ import com.playdata.calen.account.domain.LoginAuditLog;
 import com.playdata.calen.account.domain.LoginAuditStatus;
 import com.playdata.calen.account.repository.LoginAuditLogRepository;
 import java.time.LocalDateTime;
-import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -37,8 +38,8 @@ public class LoginAuditLogService {
         loginAuditLogRepository.save(log);
     }
 
-    public List<LoginAuditLog> getRecentLogs() {
-        return loginAuditLogRepository.findTop100ByOrderByAttemptedAtDescIdDesc();
+    public Page<LoginAuditLog> getRecentLogs(int page, int size) {
+        return loginAuditLogRepository.findAllByOrderByAttemptedAtDescIdDesc(PageRequest.of(Math.max(page, 0), Math.max(size, 1)));
     }
 
     public long countRecentFailures() {

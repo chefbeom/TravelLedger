@@ -1,11 +1,14 @@
 package com.playdata.calen.account;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
@@ -35,25 +38,90 @@ class AdminDashboardIntegrationTest {
 
     @Test
     void adminCanReadDashboardButRegularUserCannot() throws Exception {
-        MockHttpSession adminSession = login("admin", "12345678");
-        MockHttpSession userSession = login("hana", "12345678");
+        MockHttpSession adminSession = login("admin", "test1234", "12345678");
+        MockHttpSession userSession = login("hana", "test1234", "12345678");
 
         mockMvc.perform(get("/api/admin/dashboard").session(adminSession))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.summary.adminUsers").value(1))
+                .andExpect(jsonPath("$.recentLoginLogs").isArray())
+                .andExpect(jsonPath("$.recentLoginLogs").isNotEmpty())
                 .andExpect(jsonPath("$.users.length()").isNotEmpty());
 
         mockMvc.perform(get("/api/admin/dashboard").session(userSession))
                 .andExpect(status().isForbidden());
     }
 
-    private MockHttpSession login(String loginId, String secondaryPin) throws Exception {
+    @Test
+    void dashboardShowsOnlyTenLoginLogsAndSupportsPaging() throws Exception {
+        MockHttpSession adminSession = login("admin", "test1234", "12345678");
+        for (int index = 0; index < 11; index++) {
+            login("admin", "test1234", "12345678");
+        }
+
+        mockMvc.perform(get("/api/admin/dashboard").session(adminSession))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.recentLoginLogs.length()").value(10))
+                .andExpect(jsonPath("$.recentLoginLogTotalElements").value(12))
+                .andExpect(jsonPath("$.recentLoginLogTotalPages").value(2));
+
+        mockMvc.perform(get("/api/admin/login-audit-logs")
+                        .param("page", "1")
+                        .session(adminSession))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.page").value(1))
+                .andExpect(jsonPath("$.content.length()").value(2));
+    }
+
+    @Test
+    void adminCannotDeactivateAdminAccountAndFailedLoginReasonStaysGeneric() throws Exception {
+        MockHttpSession adminSession = login("admin", "test1234", "12345678");
+
+        mockMvc.perform(post("/api/auth/login")
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of(
+                                "loginId", "hana",
+                                "password", "test1234",
+                                "secondaryPin", "00000000",
+                                "rememberDevice", false
+                        ))))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.message").value("로그인 정보가 올바르지 않습니다."));
+
+        mockMvc.perform(get("/api/admin/login-audit-logs").session(adminSession))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].status").value("FAILED"));
+
+        MvcResult dashboardResult = mockMvc.perform(get("/api/admin/dashboard").session(adminSession))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        JsonNode users = objectMapper.readTree(dashboardResult.getResponse().getContentAsString()).get("users");
+        long adminUserId = -1L;
+        for (JsonNode user : users) {
+            if ("admin".equals(user.get("loginId").asText())) {
+                adminUserId = user.get("id").asLong();
+                break;
+            }
+        }
+        assertThat(adminUserId).isPositive();
+
+        mockMvc.perform(patch("/api/admin/users/{userId}/active", adminUserId)
+                        .session(adminSession)
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of("active", false))))
+                .andExpect(status().isBadRequest());
+    }
+
+    private MockHttpSession login(String loginId, String password, String secondaryPin) throws Exception {
         MvcResult result = mockMvc.perform(post("/api/auth/login")
                         .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(Map.of(
                                 "loginId", loginId,
-                                "password", "test1234",
+                                "password", password,
                                 "secondaryPin", secondaryPin,
                                 "rememberDevice", false
                         ))))

@@ -126,6 +126,10 @@ export function fetchAdminDashboard() {
   return request('/admin/dashboard')
 }
 
+export function fetchAdminLoginAuditLogs(page = 0) {
+  return request(`/admin/login-audit-logs?page=${page}`)
+}
+
 export function updateAdminUserActive(userId, active) {
   return request(`/admin/users/${userId}/active`, {
     method: 'PATCH',

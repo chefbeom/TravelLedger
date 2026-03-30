@@ -7,7 +7,6 @@ public record AdminLoginAuditResponse(
         String clientIp,
         String userAgent,
         String status,
-        String detail,
         boolean success,
         Long userId,
         String displayName,

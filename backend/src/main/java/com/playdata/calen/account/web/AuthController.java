@@ -91,7 +91,7 @@ public class AuthController {
                     clientIp,
                     userAgent,
                     LoginAuditStatus.BAD_SECONDARY_PIN,
-                    exception.getMessage(),
+                    "로그인 정보가 올바르지 않습니다.",
                     user
             );
             throw exception;
@@ -102,7 +102,7 @@ public class AuthController {
                     clientIp,
                     userAgent,
                     LoginAuditStatus.BAD_CREDENTIALS,
-                    exception.getMessage(),
+                    "로그인 정보가 올바르지 않습니다.",
                     null
             );
             throw exception;

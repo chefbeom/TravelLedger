@@ -8,6 +8,7 @@ import com.playdata.calen.ledger.domain.CategoryDetail;
 import com.playdata.calen.ledger.domain.CategoryGroup;
 import com.playdata.calen.ledger.domain.LedgerEntry;
 import com.playdata.calen.ledger.domain.PaymentMethod;
+import com.playdata.calen.ledger.dto.LedgerEntryDateRangeResponse;
 import com.playdata.calen.ledger.dto.LedgerEntryRequest;
 import com.playdata.calen.ledger.dto.LedgerEntryResponse;
 import com.playdata.calen.ledger.repository.CategoryDetailRepository;
@@ -19,6 +20,12 @@ import java.time.LocalDate;
 import java.time.YearMonth;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import net.lingala.zip4j.io.outputstream.ZipOutputStream;
+import net.lingala.zip4j.model.ZipParameters;
+import net.lingala.zip4j.model.enums.AesKeyStrength;
+import net.lingala.zip4j.model.enums.CompressionLevel;
+import net.lingala.zip4j.model.enums.CompressionMethod;
+import net.lingala.zip4j.model.enums.EncryptionMethod;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -65,11 +72,34 @@ public class LedgerEntryService {
         );
     }
 
+    public LedgerProtectedExport exportEntriesCsvProtected(Long userId, LocalDate from, LocalDate to, String secondaryPin) {
+        AppUser user = appUserService.getRequiredUser(userId);
+        appUserService.ensureSecondaryPinMatches(user, secondaryPin);
+
+        LedgerCsvExport export = exportEntriesCsv(userId, from, to);
+        return new LedgerProtectedExport(
+                export.fileName() + ".zip",
+                createPasswordProtectedZip(export.fileName(), export.content(), secondaryPin),
+                "application/zip"
+        );
+    }
+
     public List<LedgerEntryResponse> getRecentEntries(Long userId) {
         appUserService.getRequiredUser(userId);
         return ledgerEntryRepository.findTop8ByOwnerIdOrderByEntryDateDescIdDesc(userId).stream()
                 .map(this::toResponse)
                 .toList();
+    }
+
+    public LedgerEntryDateRangeResponse getEntryDateRange(Long userId) {
+        appUserService.getRequiredUser(userId);
+        LocalDate earliestDate = ledgerEntryRepository.findTop1ByOwnerIdOrderByEntryDateAscIdAsc(userId)
+                .map(LedgerEntry::getEntryDate)
+                .orElse(null);
+        LocalDate latestDate = ledgerEntryRepository.findTop1ByOwnerIdOrderByEntryDateDescIdDesc(userId)
+                .map(LedgerEntry::getEntryDate)
+                .orElse(null);
+        return new LedgerEntryDateRangeResponse(earliestDate, latestDate);
     }
 
     @Transactional
@@ -175,5 +205,33 @@ public class LedgerEntryService {
             byte[] content,
             String charset
     ) {
+    }
+
+    public record LedgerProtectedExport(
+            String fileName,
+            byte[] content,
+            String contentType
+    ) {
+    }
+
+    private byte[] createPasswordProtectedZip(String fileName, byte[] content, String password) {
+        try (
+                java.io.ByteArrayOutputStream outputStream = new java.io.ByteArrayOutputStream();
+                ZipOutputStream zipOutputStream = new ZipOutputStream(outputStream, password.toCharArray())
+        ) {
+            ZipParameters zipParameters = new ZipParameters();
+            zipParameters.setFileNameInZip(fileName);
+            zipParameters.setEncryptFiles(true);
+            zipParameters.setEncryptionMethod(EncryptionMethod.AES);
+            zipParameters.setAesKeyStrength(AesKeyStrength.KEY_STRENGTH_256);
+            zipParameters.setCompressionMethod(CompressionMethod.DEFLATE);
+            zipParameters.setCompressionLevel(CompressionLevel.NORMAL);
+            zipOutputStream.putNextEntry(zipParameters);
+            zipOutputStream.write(content);
+            zipOutputStream.closeEntry();
+            return outputStream.toByteArray();
+        } catch (java.io.IOException exception) {
+            throw new IllegalStateException("CSV 압축 파일을 생성하지 못했습니다.", exception);
+        }
     }
 }

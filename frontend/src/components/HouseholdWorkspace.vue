@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import {
   createCategoryDetail,
   createCategoryGroup,
@@ -14,6 +14,7 @@ import {
   fetchCategoryBreakdown,
   fetchCompare,
   fetchDashboard,
+  fetchEntryDateRange,
   fetchEntries,
   fetchHouseholdAggregatePreferences,
   fetchOverview,
@@ -105,11 +106,17 @@ const paymentBreakdown = ref([])
 const pastComparisons = ref([])
 const categories = ref([])
 const paymentMethods = ref([])
+const entryDateRange = ref({
+  earliestDate: null,
+  latestDate: null,
+})
 const aggregateWidgetConfigs = ref([])
 const aggregateSettingsReady = ref(false)
 const editingEntryId = ref(null)
 const amountInput = ref('')
 const isEntryTimeEnabled = ref(false)
+const calendarWorkspaceRef = ref(null)
+let feedbackTimerId = null
 
 const entryForm = reactive({
   entryDate: today,
@@ -178,7 +185,14 @@ const amountPreview = computed(() => Number(entryForm.amount || 0))
 const quickStats = computed(() => dashboard.value.quickStats ?? [])
 const monthLabel = computed(() => formatMonthLabel(calendarAnchorDate.value))
 const calendarWeeks = computed(() => buildCalendarWeeks(dashboard.value.calendar ?? [], calendarAnchorDate.value))
-const statsRange = computed(() => resolveRange(statsControls.anchorDate, statsControls.preset, statsControls.customFrom, statsControls.customTo))
+const statsRange = computed(() => resolveRange(
+  statsControls.anchorDate,
+  statsControls.preset,
+  statsControls.customFrom,
+  statsControls.customTo,
+  entryDateRange.value.earliestDate,
+  entryDateRange.value.latestDate,
+))
 const statsRangeLabel = computed(() => statsRange.value.label)
 const statsCards = computed(() => [
   { key: 'selected', label: '선택 범위', overview: statsOverview.value },
@@ -190,6 +204,12 @@ const currentViewCsvRange = computed(() => (
     ? statsRange.value
     : getMonthRange(calendarAnchorDate.value)
 ))
+const comparisonAnchorDate = computed(() => {
+  if (statsControls.preset === 'ALL') {
+    return entryDateRange.value.latestDate || statsControls.anchorDate
+  }
+  return statsRange.value.to || statsControls.anchorDate
+})
 const csvExportRange = computed(() => resolveCsvExportRange(csvExportControls.preset))
 const csvExportLabel = computed(() => csvExportRange.value.label)
 const sortedMonthEntries = computed(() =>
@@ -201,6 +221,62 @@ const searchResults = computed(() => filterEntries(statsEntries.value, searchFor
 const searchSummary = computed(() => summarizeEntries(searchResults.value))
 const insights = computed(() => buildInsights(statsEntries.value))
 const isEditingEntry = computed(() => editingEntryId.value !== null)
+const entrySuggestions = computed(() => {
+  const keyword = entryForm.title.trim().toLowerCase()
+  const baseEntries = [
+    ...(dashboard.value.recentEntries ?? []),
+    ...monthEntries.value,
+    ...statsEntries.value,
+  ]
+  const suggestions = []
+  const seen = new Set()
+
+  baseEntries
+    .filter((entry) => entry.entryType === entryForm.entryType)
+    .sort((left, right) => `${right.entryDate}${right.entryTime || ''}${String(right.id).padStart(10, '0')}`.localeCompare(`${left.entryDate}${left.entryTime || ''}${String(left.id).padStart(10, '0')}`))
+    .forEach((entry) => {
+      const target = [entry.title, entry.memo, entry.categoryGroupName, entry.categoryDetailName, entry.paymentMethodName]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase()
+
+      if (keyword && !target.includes(keyword)) {
+        return
+      }
+
+      const signature = [
+        entry.entryType,
+        entry.title || '',
+        entry.memo || '',
+        entry.amount || 0,
+        entry.categoryGroupId || '',
+        entry.categoryDetailId || '',
+        entry.paymentMethodId || '',
+      ].join('|')
+
+      if (seen.has(signature)) {
+        return
+      }
+
+      seen.add(signature)
+      suggestions.push({
+        id: entry.id,
+        entryDate: entry.entryDate,
+        entryTime: entry.entryTime || '00:00',
+        title: entry.title || '',
+        memo: entry.memo || '',
+        amount: Number(entry.amount || 0),
+        entryType: entry.entryType,
+        categoryGroupId: entry.categoryGroupId != null ? String(entry.categoryGroupId) : '',
+        categoryDetailId: entry.categoryDetailId != null ? String(entry.categoryDetailId) : '',
+        paymentMethodId: entry.paymentMethodId != null ? String(entry.paymentMethodId) : '',
+        categoryLabel: [entry.categoryGroupName, entry.categoryDetailName].filter(Boolean).join(' / ') || '-',
+        paymentMethodName: entry.paymentMethodName || '-',
+      })
+    })
+
+  return suggestions.slice(0, keyword ? 6 : 4)
+})
 
 watch(
   () => entryForm.entryType,
@@ -257,6 +333,7 @@ onMounted(async () => {
   isLoading.value = true
   try {
     await loadMetadata()
+    await loadEntryDateRange()
     await Promise.all([loadCalendarData(), loadStatisticsData(), loadAggregatePreferences()])
     resetEntryForm()
     calendarReady.value = true
@@ -268,9 +345,28 @@ onMounted(async () => {
   }
 })
 
+onBeforeUnmount(() => {
+  if (feedbackTimerId) {
+    window.clearTimeout(feedbackTimerId)
+  }
+})
+
 function setFeedback(message = '', error = '') {
   feedback.value = message
   errorMessage.value = error
+
+  if (feedbackTimerId) {
+    window.clearTimeout(feedbackTimerId)
+    feedbackTimerId = null
+  }
+
+  if (message || error) {
+    feedbackTimerId = window.setTimeout(() => {
+      feedback.value = ''
+      errorMessage.value = ''
+      feedbackTimerId = null
+    }, 5000)
+  }
 }
 
 function sanitizeAmountInput(value) {
@@ -303,6 +399,18 @@ async function loadAggregatePreferences() {
   const response = await fetchHouseholdAggregatePreferences()
   aggregateWidgetConfigs.value = Array.isArray(response?.widgets) ? response.widgets : []
   aggregateSettingsReady.value = true
+}
+
+async function loadEntryDateRange() {
+  const response = await fetchEntryDateRange()
+  entryDateRange.value = {
+    earliestDate: response?.earliestDate || null,
+    latestDate: response?.latestDate || null,
+  }
+
+  if (statsControls.preset === 'ALL' && entryDateRange.value.latestDate) {
+    statsControls.anchorDate = entryDateRange.value.latestDate
+  }
 }
 
 function handleChangeCalendarMonth(value) {
@@ -344,7 +452,7 @@ async function loadStatisticsData() {
     fetchOverview(range.from, range.to),
     fetchCategoryBreakdown(range.from, range.to, 'EXPENSE'),
     fetchPaymentBreakdown(range.from, range.to),
-    fetchCompare(statsControls.anchorDate, statsControls.compareUnit, statsControls.comparePeriods),
+    fetchCompare(comparisonAnchorDate.value, statsControls.compareUnit, statsControls.comparePeriods),
     fetchEntries(range.from, range.to),
   ])
 
@@ -360,8 +468,23 @@ async function loadPastComparisons() {
   const configs = buildPastComparisonRanges()
   pastComparisons.value = await Promise.all(
     configs.map(async (config) => {
-      const currentRange = resolveRange(statsControls.anchorDate, config.preset, statsControls.customFrom, statsControls.customTo)
-      const previousRange = shiftRange(statsControls.anchorDate, config.preset, statsControls.customFrom, statsControls.customTo, 1)
+      const currentRange = resolveRange(
+        comparisonAnchorDate.value,
+        config.preset,
+        statsControls.customFrom,
+        statsControls.customTo,
+        entryDateRange.value.earliestDate,
+        entryDateRange.value.latestDate,
+      )
+      const previousRange = shiftRange(
+        comparisonAnchorDate.value,
+        config.preset,
+        statsControls.customFrom,
+        statsControls.customTo,
+        1,
+        entryDateRange.value.earliestDate,
+        entryDateRange.value.latestDate,
+      )
       const [currentOverview, previousOverview] = await Promise.all([
         fetchOverview(currentRange.from, currentRange.to),
         fetchOverview(previousRange.from, previousRange.to),
@@ -405,6 +528,30 @@ function fillEntryForm(entry) {
   entryForm.paymentMethodId = String(entry.paymentMethodId)
   amountInput.value = String(Number(entry.amount || 0))
   isEntryTimeEnabled.value = Boolean(entry.entryTime && entry.entryTime !== '00:00')
+}
+
+async function fillEntryFormAndScroll(entry) {
+  fillEntryForm(entry)
+  await nextTick()
+  calendarWorkspaceRef.value?.scrollToEntryEditor?.()
+}
+
+function applyEntrySuggestion(suggestion) {
+  editingEntryId.value = null
+  entryForm.title = suggestion.title || ''
+  entryForm.memo = suggestion.memo || ''
+  entryForm.amount = String(Number(suggestion.amount || 0))
+  entryForm.entryType = suggestion.entryType || entryForm.entryType
+  amountInput.value = String(Number(suggestion.amount || 0))
+  entryForm.categoryGroupId = suggestion.categoryGroupId || ''
+  entryForm.categoryDetailId = suggestion.categoryDetailId || ''
+  entryForm.paymentMethodId = suggestion.paymentMethodId || ''
+
+  if (isEntryTimeEnabled.value) {
+    entryForm.entryTime = suggestion.entryTime || '00:00'
+  }
+
+  syncEntryDefaults()
 }
 
 function buildEntryPayload() {
@@ -528,6 +675,7 @@ function resolveCsvExportRange(preset) {
 }
 
 async function refreshLedgerViews() {
+  await loadEntryDateRange()
   await Promise.all([loadCalendarData(), loadStatisticsData()])
 }
 
@@ -558,8 +706,15 @@ async function exportEntriesToCsv() {
     if (!csvExportRange.value.isAll && (!csvExportRange.value.from || !csvExportRange.value.to)) {
       throw new Error('CSV 저장 범위를 먼저 확인해 주세요.')
     }
-    await downloadLedgerCsv(csvExportRange.value.from, csvExportRange.value.to)
-    setFeedback(`CSV 파일을 저장했습니다. (${csvExportLabel.value})`)
+    const secondaryPin = window.prompt('CSV를 내려받으려면 2차 비밀번호 8자리를 입력하세요.')
+    if (secondaryPin === null) {
+      return
+    }
+    if (!/^\d{8}$/.test(secondaryPin.trim())) {
+      throw new Error('2차 비밀번호는 숫자 8자리여야 합니다.')
+    }
+    await downloadLedgerCsv(csvExportRange.value.from, csvExportRange.value.to, secondaryPin.trim())
+    setFeedback(`2차 비밀번호로 보호된 CSV 압축 파일을 저장했습니다. (${csvExportLabel.value})`)
   } catch (error) {
     setFeedback('', error.message)
   } finally {
@@ -828,6 +983,7 @@ async function deactivatePayment(paymentId) {
     </section>
 
     <CalendarWorkspace
+      ref="calendarWorkspaceRef"
       v-if="householdTab === 'calendar'"
       :quick-stats="quickStats"
       :month-label="monthLabel"
@@ -842,6 +998,7 @@ async function deactivatePayment(paymentId) {
       :available-groups="availableGroups"
       :available-details="availableDetails"
       :payment-methods="paymentMethods"
+      :entry-suggestions="entrySuggestions"
       :aggregate-widget-configs="aggregateWidgetConfigs"
       :aggregate-settings-ready="aggregateSettingsReady"
       :aggregate-settings-saving="isSubmitting && activeSubmit === 'aggregate-settings'"
@@ -859,8 +1016,9 @@ async function deactivatePayment(paymentId) {
       @add-amount="addAmount"
       @submit-entry="submitEntry"
       @reset-entry="resetEntryForm"
-      @edit-entry="fillEntryForm"
+      @edit-entry="fillEntryFormAndScroll"
       @delete-entry="removeEntry"
+      @apply-entry-suggestion="applyEntrySuggestion"
       @change-anchor-month="handleChangeCalendarMonth"
       @save-aggregate-widget-configs="updateAggregatePreferences"
     />

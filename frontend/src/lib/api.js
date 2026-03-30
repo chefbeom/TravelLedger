@@ -174,6 +174,10 @@ export function fetchEntries(from, to) {
   return request(buildUrl('/entries', { from, to }).replace(API_BASE, ''))
 }
 
+export function fetchEntryDateRange() {
+  return request('/entries/date-range')
+}
+
 function resolveDownloadFileName(response, fallback) {
   const disposition = response.headers.get('Content-Disposition') || ''
   const utf8Match = disposition.match(/filename\*=UTF-8''([^;]+)/i)
@@ -184,9 +188,21 @@ function resolveDownloadFileName(response, fallback) {
   return basicMatch?.[1] || fallback
 }
 
-async function downloadFile(path, fallbackFileName) {
+async function downloadFile(path, fallbackFileName, options = {}) {
+  const isFormData = typeof FormData !== 'undefined' && options.body instanceof FormData
+  const method = String(options.method || 'GET').toUpperCase()
+  const needsCsrf = !['GET', 'HEAD', 'OPTIONS', 'TRACE'].includes(method)
+  const csrfToken = needsCsrf ? await ensureCsrfToken() : ''
+  const headers = {
+    ...(!isFormData && options.body ? { 'Content-Type': 'application/json' } : {}),
+    ...(csrfToken ? { [CSRF_HEADER_NAME]: csrfToken } : {}),
+    ...(options.headers ?? {}),
+  }
+
   const response = await fetch(`${API_BASE}${path}`, {
     credentials: 'include',
+    ...options,
+    headers,
   })
 
   if (!response.ok) {
@@ -216,13 +232,21 @@ async function downloadFile(path, fallbackFileName) {
   window.URL.revokeObjectURL(objectUrl)
 }
 
-export function downloadLedgerCsv(from, to) {
+export function downloadLedgerCsv(from, to, secondaryPin) {
   const fallbackFileName = from && to
-    ? `ledger-${from}_to_${to}.csv`
-    : 'ledger-all.csv'
+    ? `ledger-${from}_to_${to}.csv.zip`
+    : 'ledger-all.csv.zip'
   return downloadFile(
-    buildUrl('/entries/export/csv', { from, to }).replace(API_BASE, ''),
+    '/entries/export/csv',
     fallbackFileName,
+    {
+      method: 'POST',
+      body: JSON.stringify({
+        from,
+        to,
+        secondaryPin,
+      }),
+    },
   )
 }
 

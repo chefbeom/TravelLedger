@@ -1,6 +1,8 @@
 package com.playdata.calen.ledger.web;
 
 import com.playdata.calen.account.security.AppUserPrincipal;
+import com.playdata.calen.ledger.dto.LedgerCsvExportRequest;
+import com.playdata.calen.ledger.dto.LedgerEntryDateRangeResponse;
 import com.playdata.calen.ledger.dto.LedgerEntryRequest;
 import com.playdata.calen.ledger.dto.LedgerEntryResponse;
 import com.playdata.calen.ledger.service.LedgerEntryService;
@@ -42,17 +44,28 @@ public class LedgerEntryController {
         return ledgerEntryService.getEntries(currentUser.userId(), from, to);
     }
 
-    @GetMapping("/export/csv")
+    @GetMapping("/date-range")
+    public LedgerEntryDateRangeResponse getEntryDateRange(
+            @AuthenticationPrincipal AppUserPrincipal currentUser
+    ) {
+        return ledgerEntryService.getEntryDateRange(currentUser.userId());
+    }
+
+    @PostMapping("/export/csv")
     public ResponseEntity<ByteArrayResource> exportEntriesCsv(
             @AuthenticationPrincipal AppUserPrincipal currentUser,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to
+            @Valid @RequestBody LedgerCsvExportRequest request
     ) {
-        LedgerEntryService.LedgerCsvExport export = ledgerEntryService.exportEntriesCsv(currentUser.userId(), from, to);
+        LedgerEntryService.LedgerProtectedExport export = ledgerEntryService.exportEntriesCsvProtected(
+                currentUser.userId(),
+                request.from(),
+                request.to(),
+                request.secondaryPin()
+        );
         String encodedFileName = URLEncoder.encode(export.fileName(), StandardCharsets.UTF_8).replace("+", "%20");
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename*=UTF-8''" + encodedFileName)
-                .contentType(MediaType.parseMediaType("text/csv; charset=" + export.charset()))
+                .contentType(MediaType.parseMediaType(export.contentType()))
                 .contentLength(export.content().length)
                 .body(new ByteArrayResource(export.content()));
     }

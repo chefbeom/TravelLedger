@@ -107,8 +107,34 @@ const selectedDayMemories = computed(() =>
   }),
 )
 
+const orderedDayMemories = computed(() =>
+  [...selectedDayMemories.value].sort((left, right) => {
+    const leftKey = `${left.memoryDate || ''}-${left.memoryTime || '00:00'}-${String(left.id || '').padStart(12, '0')}`
+    const rightKey = `${right.memoryDate || ''}-${right.memoryTime || '00:00'}-${String(right.id || '').padStart(12, '0')}`
+    return leftKey.localeCompare(rightKey)
+  }),
+)
+
+const memoryRouteSeedPoints = computed(() =>
+  orderedDayMemories.value
+    .filter((item) => item.latitude !== null && item.latitude !== undefined && item.longitude !== null && item.longitude !== undefined)
+    .map((item, index) =>
+      createDraftPoint(
+        {
+          latitude: Number(item.latitude),
+          longitude: Number(item.longitude),
+        },
+        {
+          pointType: 'MEMORY',
+          linkedMemoryId: item.id ?? null,
+          label: item.placeName || item.title || `기록 핀 ${index + 1}`,
+        },
+      ),
+    ),
+)
+
 const routeMapMarkers = computed(() =>
-  selectedDayMemories.value
+  orderedDayMemories.value
     .filter((item) => item.latitude !== null && item.latitude !== undefined && item.longitude !== null && item.longitude !== undefined)
     .map((item) => ({
       id: item.id,
@@ -218,6 +244,21 @@ const draftPointRows = computed(() => {
     longitude: Number(point.longitude),
   }))
 })
+
+const selectedDraftPointDisplayLabel = computed(() => {
+  if (!canPlaceRoutePoints.value || highlightedDraftIndex.value < 0) {
+    return '?좏깮???쒖뼱???놁쓬'
+  }
+  return buildDraftPointDisplayLabel(draftPoints.value[highlightedDraftIndex.value], highlightedDraftIndex.value, draftPoints.value.length)
+})
+
+const draftPointRowsDetailed = computed(() =>
+  draftPointRows.value.map((row) => ({
+    ...row,
+    label: buildDraftPointDisplayLabel(draftPoints.value[row.index], row.index, draftPoints.value.length),
+    kindLabel: draftPoints.value[row.index]?.pointType === 'MEMORY' ? '여행 기록 핀' : '경로 핀',
+  })),
+)
 
 const activeDayTimeline = computed(() => {
   const rows = []
@@ -359,6 +400,63 @@ function describeDraftPoint(index, total) {
   return `${index + 1}번 경유 제어점`
 }
 
+function nextRoutePinLabel(points = draftPoints.value) {
+  const routePinCount = (points ?? []).filter((point) => point?.pointType === 'ROUTE').length
+  return `경로 핀 ${routePinCount + 1}`
+}
+
+function createDraftPoint(point, overrides = {}) {
+  return {
+    latitude: Number(Number(point.latitude).toFixed(7)),
+    longitude: Number(Number(point.longitude).toFixed(7)),
+    pointType: overrides.pointType || point.pointType || 'ROUTE',
+    linkedMemoryId: overrides.linkedMemoryId ?? point.linkedMemoryId ?? null,
+    label: overrides.label || point.label || '',
+  }
+}
+
+function buildDraftPointDisplayLabel(point, index, total) {
+  if (point?.label) {
+    return point.label
+  }
+  return describeDraftPoint(index, total)
+}
+
+function moveDraftPointByOffset(index, offset) {
+  const targetIndex = index + offset
+  if (index < 0 || targetIndex < 0 || targetIndex >= draftPoints.value.length) {
+    return
+  }
+
+  const reordered = [...draftPoints.value]
+  const [movedPoint] = reordered.splice(index, 1)
+  reordered.splice(targetIndex, 0, movedPoint)
+  draftPoints.value = reordered
+  highlightedDraftIndex.value = targetIndex
+}
+
+function applyMemoryPinsToDraft() {
+  if (memoryRouteSeedPoints.value.length < 2) {
+    return
+  }
+
+  draft.sourceType = 'MANUAL'
+  gpxFileNames.value = []
+  gpxSelectedFiles.value = []
+  draftPoints.value = memoryRouteSeedPoints.value.map((point) => ({ ...point }))
+  highlightedDraftIndex.value = -1
+
+  if (!draft.title.trim()) {
+    draft.title = `${activeDayLabel.value} 경로`
+  }
+
+  draft.startPlaceName = memoryRouteSeedPoints.value[0]?.label || draft.startPlaceName
+  draft.endPlaceName = memoryRouteSeedPoints.value[memoryRouteSeedPoints.value.length - 1]?.label || draft.endPlaceName
+  if (!draft.lineColorHex) {
+    draft.lineColorHex = props.travelPlan?.colorHex || '#3182F6'
+  }
+}
+
 function formatCoordinate(point) {
   if (!point) {
     return '-'
@@ -456,7 +554,13 @@ async function parseGpxFile(file) {
 }
 
 function addDraftPoint(point) {
-  draftPoints.value = [...draftPoints.value, point]
+  draftPoints.value = [
+    ...draftPoints.value,
+    createDraftPoint(point, {
+      pointType: 'ROUTE',
+      label: nextRoutePinLabel(),
+    }),
+  ]
   highlightedDraftIndex.value = draftPoints.value.length - 1
 
   if (draft.sourceType === 'GPX') {
@@ -532,7 +636,11 @@ function handleMoveDraftPoint(payload) {
     if (index !== payload.index) {
       return point
     }
-    return payload.point
+    return {
+      ...point,
+      latitude: payload.point.latitude,
+      longitude: payload.point.longitude,
+    }
   })
   highlightedDraftIndex.value = payload.index
 }
@@ -574,10 +682,18 @@ function startEditRoute(route) {
   draft.lineColorHex = route.lineColorHex || props.travelPlan?.colorHex || '#3182F6'
   draft.lineStyle = route.lineStyle || 'SOLID'
   draft.memo = route.memo || ''
-  draftPoints.value = (route.points ?? []).map((point) => ({
-    latitude: Number(point.latitude),
-    longitude: Number(point.longitude),
-  }))
+  draftPoints.value = (route.points ?? []).map((point, index) =>
+    createDraftPoint(
+      {
+        latitude: Number(point.latitude),
+        longitude: Number(point.longitude),
+      },
+      {
+        pointType: 'ROUTE',
+        label: describeDraftPoint(index, (route.points ?? []).length),
+      },
+    ),
+  )
   gpxFileNames.value = Array.isArray(route.gpxFileNames) ? [...route.gpxFileNames] : []
   gpxSelectedFiles.value = []
   highlightedDraftIndex.value = -1
@@ -721,6 +837,7 @@ function routeSummary(route) {
         <span class="chip chip--neutral">현재 선택 {{ activeDayLabel }}</span>
         <span class="chip chip--neutral">선택 범위 경로 {{ routesForActiveDay.length }}개</span>
         <span class="chip chip--neutral">선택 범위 기록 핀 {{ routeMapMarkers.length }}개</span>
+        <span class="chip chip--neutral">경로 생성용 핀 {{ memoryRouteSeedPoints.length }}개</span>
         <span class="chip chip--neutral">선택 범위 이동 {{ activeDayRouteStats.totalDistanceKm.toFixed(2) }}km</span>
       </div>
     </section>
@@ -793,7 +910,7 @@ function routeSummary(route) {
             <div class="travel-route-focus-grid">
               <label class="field">
                 <span class="field__label">제어점 역할</span>
-                <input :value="selectedDraftPointLabel" type="text" readonly />
+                <input :value="selectedDraftPointDisplayLabel" type="text" readonly />
               </label>
               <label class="field">
                 <span class="field__label">위도</span>
@@ -833,6 +950,7 @@ function routeSummary(route) {
             <span v-if="gpxFileLabel" class="chip chip--neutral">{{ gpxFileLabel }}</span>
           </div>
           <div class="entry-editor__actions">
+            <button class="button button--ghost" type="button" :disabled="memoryRouteSeedPoints.length < 2" @click="applyMemoryPinsToDraft">기록 핀으로 경로 만들기</button>
             <button v-if="!hasGpxGeometry" class="button button--ghost" type="button" @click="removeLastPoint">마지막 제어점 삭제</button>
             <button class="button button--ghost" type="button" @click="resetDraft">{{ hasGpxGeometry ? 'GPX 경로 비우기' : '임시 경로 비우기' }}</button>
             <button class="button button--primary" :disabled="isSubmitting || draftPoints.length < 2 || !draft.title.trim()" @click="submitRoute">
@@ -931,16 +1049,16 @@ function routeSummary(route) {
         <span class="panel__badge">{{ routePointBadge }}</span>
       </div>
 
-      <div v-if="draftPointRows.length" class="travel-point-list">
+      <div v-if="draftPointRowsDetailed.length" class="travel-point-list">
         <article
-          v-for="row in draftPointRows"
+          v-for="row in draftPointRowsDetailed"
           :key="`draft-point-${row.index}`"
           class="travel-point-list__item"
           :class="{ 'is-active': highlightedDraftIndex === row.index }"
         >
           <div class="travel-point-list__head">
             <strong>{{ row.index + 1 }}번</strong>
-            <small>{{ row.label }}</small>
+            <small>{{ row.kindLabel }} · {{ row.label }}</small>
           </div>
           <label class="field">
             <span class="field__label">위도</span>
@@ -951,6 +1069,8 @@ function routeSummary(route) {
             <input :value="row.longitude" type="number" step="0.0000001" @change="updateDraftPoint(row.index, 'longitude', $event.target.value)" />
           </label>
           <div class="travel-point-list__actions">
+            <button class="button button--ghost" type="button" :disabled="row.index <= 0" @click="moveDraftPointByOffset(row.index, -1)">위로</button>
+            <button class="button button--ghost" type="button" :disabled="row.index >= draftPoints.length - 1" @click="moveDraftPointByOffset(row.index, 1)">아래로</button>
             <button class="button button--ghost" type="button" @click="focusDraftPoint(row.index)">지도에서 강조</button>
             <button class="button button--danger" type="button" @click="removeDraftPoint(row.index)">삭제</button>
           </div>

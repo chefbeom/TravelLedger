@@ -77,6 +77,10 @@ const props = defineProps({
     type: Array,
     default: () => [],
   },
+  entrySuggestions: {
+    type: Array,
+    default: () => [],
+  },
   aggregateWidgetConfigs: {
     type: Array,
     default: () => [],
@@ -132,6 +136,7 @@ const emit = defineEmits([
   'reset-entry',
   'edit-entry',
   'delete-entry',
+  'apply-entry-suggestion',
   'change-anchor-month',
   'save-aggregate-widget-configs',
 ])
@@ -141,6 +146,7 @@ const selectedDaySort = ref('ASC')
 const calendarScalePreset = ref('default')
 const isCalendarCollapsed = ref(false)
 const isAggregateEditMode = ref(false)
+const quickEntryPanelRef = ref(null)
 const ledgerSheetRef = ref(null)
 const aggregateWidgetDraftConfigs = ref(createDefaultAggregateConfigs())
 
@@ -491,12 +497,20 @@ function getMonthTag(day) {
 function toggleCalendarCollapsed() {
   isCalendarCollapsed.value = !isCalendarCollapsed.value
 }
+
+function scrollToEntryEditor() {
+  quickEntryPanelRef.value?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+}
+
+defineExpose({
+  scrollToEntryEditor,
+})
 </script>
 
 <template>
   <div class="workspace-stack">
     <div class="household-entry-summary-grid">
-      <section class="panel household-entry-panel">
+      <section ref="quickEntryPanelRef" class="panel household-entry-panel">
         <div class="panel__header">
           <div>
             <h2>{{ isEditingEntry ? '거래 수정' : '빠른 거래 입력' }}</h2>
@@ -582,6 +596,20 @@ function toggleCalendarCollapsed() {
               <span class="field__label">제목</span>
               <input v-model="entryForm.title" type="text" placeholder="예: 식사, 택시, 급여" />
             </label>
+
+            <div v-if="entrySuggestions.length" class="entry-suggestion-list field--full">
+              <button
+                v-for="suggestion in entrySuggestions"
+                :key="`${suggestion.id}-${suggestion.title}-${suggestion.amount}`"
+                type="button"
+                class="entry-suggestion-item"
+                @click="emit('apply-entry-suggestion', suggestion)"
+              >
+                <strong>{{ suggestion.title }}</strong>
+                <span>{{ suggestion.categoryLabel }} · {{ suggestion.paymentMethodName }} · {{ formatCurrency(suggestion.amount) }}</span>
+                <small>{{ formatShortDate(suggestion.entryDate) }}<template v-if="suggestion.memo"> · {{ suggestion.memo }}</template></small>
+              </button>
+            </div>
 
             <label class="field">
               <span class="field__label">결제수단</span>

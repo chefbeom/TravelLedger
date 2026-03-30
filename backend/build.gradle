@@ -33,6 +33,7 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-security'
     implementation 'io.minio:minio:8.5.17'
     implementation 'org.apache.poi:poi-ooxml:5.4.1'
+    implementation 'net.lingala.zip4j:zip4j:2.11.5'
 
     runtimeOnly 'com.h2database:h2'
     runtimeOnly 'org.mariadb.jdbc:mariadb-java-client'

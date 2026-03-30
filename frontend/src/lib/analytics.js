@@ -12,7 +12,8 @@ const presetLabels = {
   MONTH: '월간',
   QUARTER: '분기',
   YEAR: '연간',
-  CUSTOM: '원하는 기간',
+  ALL: '전체 기간',
+  CUSTOM: '사용자 기간',
 }
 
 export function getDefaultTimeValue() {
@@ -24,12 +25,23 @@ export function getPresetOptions() {
   return Object.entries(presetLabels).map(([value, label]) => ({ value, label }))
 }
 
-export function resolveRange(anchorDate, preset, customFrom, customTo) {
+export function resolveRange(anchorDate, preset, customFrom, customTo, overallFrom = null, overallTo = null) {
   const anchor = parseIsoDate(anchorDate)
 
   if (preset === 'CUSTOM') {
     const from = customFrom || anchorDate
     const to = customTo || anchorDate
+    return {
+      from,
+      to,
+      label: formatDateRange(from, to),
+      presetLabel: presetLabels[preset],
+    }
+  }
+
+  if (preset === 'ALL') {
+    const from = overallFrom || anchorDate
+    const to = overallTo || anchorDate
     return {
       from,
       to,
@@ -110,8 +122,8 @@ export function buildPastComparisonRanges() {
   ]
 }
 
-export function shiftRange(anchorDate, preset, customFrom, customTo, step = 1) {
-  const current = resolveRange(anchorDate, preset, customFrom, customTo)
+export function shiftRange(anchorDate, preset, customFrom, customTo, step = 1, overallFrom = null, overallTo = null) {
+  const current = resolveRange(anchorDate, preset, customFrom, customTo, overallFrom, overallTo)
   const from = parseIsoDate(current.from)
   const to = parseIsoDate(current.to)
 
@@ -119,6 +131,18 @@ export function shiftRange(anchorDate, preset, customFrom, customTo, step = 1) {
     const length = Math.round((to - from) / 86400000) + 1
     const shiftedTo = new Date(from)
     shiftedTo.setDate(shiftedTo.getDate() - 1)
+    const shiftedFrom = new Date(shiftedTo)
+    shiftedFrom.setDate(shiftedFrom.getDate() - (length - 1))
+    return {
+      from: toIsoDate(shiftedFrom),
+      to: toIsoDate(shiftedTo),
+    }
+  }
+
+  if (preset === 'ALL') {
+    const length = Math.round((to - from) / 86400000) + 1
+    const shiftedTo = new Date(from)
+    shiftedTo.setDate(shiftedTo.getDate() - 1 - (Math.max(step, 1) - 1) * length)
     const shiftedFrom = new Date(shiftedTo)
     shiftedFrom.setDate(shiftedFrom.getDate() - (length - 1))
     return {
@@ -148,7 +172,7 @@ export function shiftRange(anchorDate, preset, customFrom, customTo, step = 1) {
       break
   }
 
-  return resolveRange(toIsoDate(shiftedAnchor), preset, customFrom, customTo)
+  return resolveRange(toIsoDate(shiftedAnchor), preset, customFrom, customTo, overallFrom, overallTo)
 }
 
 export function filterEntries(entries, filters) {
@@ -341,20 +365,20 @@ export function buildInsights(entries) {
       : { label: '시간 기록 없음', total: 0, count: 0, caption: '거래 시간을 입력하면 분석됩니다.' },
     strongestWeekday: strongestWeekday
       ? { ...strongestWeekday, caption: `${formatCurrency(strongestWeekday.total)} / ${strongestWeekday.count}건` }
-      : { label: '데이터 없음', total: 0, count: 0, caption: '선택한 기간의 지출이 없습니다.' },
+      : { label: '데이터 없음', total: 0, count: 0, caption: '선택한 기간에 지출이 없습니다.' },
     strongestWeekOfMonth: strongestWeekOfMonth
       ? { ...strongestWeekOfMonth, caption: `${formatCurrency(strongestWeekOfMonth.total)} / ${strongestWeekOfMonth.count}건` }
-      : { label: '데이터 없음', total: 0, count: 0, caption: '선택한 기간의 지출이 없습니다.' },
+      : { label: '데이터 없음', total: 0, count: 0, caption: '선택한 기간에 지출이 없습니다.' },
     strongestMonthOfYear: strongestMonthOfYear
       ? { ...strongestMonthOfYear, caption: `${formatCurrency(strongestMonthOfYear.total)} / ${strongestMonthOfYear.count}건` }
-      : { label: '데이터 없음', total: 0, count: 0, caption: '선택한 기간의 지출이 없습니다.' },
+      : { label: '데이터 없음', total: 0, count: 0, caption: '선택한 기간에 지출이 없습니다.' },
     peakExpenseDay: peakExpenseDayEntry
       ? {
           label: peakExpenseDayEntry.date,
           total: peakExpenseDayEntry.total,
           caption: `${formatDateRange(peakExpenseDayEntry.date, peakExpenseDayEntry.date)} / ${formatCurrency(peakExpenseDayEntry.total)}`,
         }
-      : { label: '데이터 없음', total: 0, caption: '선택한 기간의 지출이 없습니다.' },
+      : { label: '데이터 없음', total: 0, caption: '선택한 기간에 지출이 없습니다.' },
     hourlySeries,
     weekdaySeries,
     weekOfMonthSeries,

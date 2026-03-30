@@ -247,7 +247,7 @@ const monthOfYearChartItems = computed(() =>
           <div class="panel__header">
             <div>
               <h2>기간 비교 표</h2>
-              <p>선택한 단위 기준으로 수입, 지출, 잔액 흐름을 표로 비교합니다.</p>
+              <p>선택한 단위 기준으로 수입, 지출, 증감률 흐름을 표로 비교합니다.</p>
             </div>
             <span class="panel__badge">{{ comparisonBadge }}</span>
           </div>

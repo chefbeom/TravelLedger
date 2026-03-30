@@ -71,3 +71,5 @@ app:
     media-object-prefix: ${FAMILY_MEDIA_OBJECT_PREFIX:family-media}
   seed:
     enabled: ${APP_SEED_ENABLED:false}
+  support:
+    attachment-storage-path: ${SUPPORT_ATTACHMENT_STORAGE_PATH:${user.dir}/uploads/support-inquiries}

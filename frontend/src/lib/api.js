@@ -139,6 +139,17 @@ export function unlockBlockedIp(ip) {
   })
 }
 
+export function fetchAdminSupportInquiries() {
+  return request('/admin/support-inquiries')
+}
+
+export function replyAdminSupportInquiry(inquiryId, content) {
+  return request(`/admin/support-inquiries/${inquiryId}/reply`, {
+    method: 'PUT',
+    body: JSON.stringify({ content }),
+  })
+}
+
 export function fetchInvite(token) {
   return request(`/invites/${encodeURIComponent(token)}`)
 }
@@ -147,6 +158,17 @@ export function acceptInvite(payload) {
   return request('/invites/accept', {
     method: 'POST',
     body: JSON.stringify(payload),
+  })
+}
+
+export function fetchMySupportInquiries() {
+  return request('/support/inquiries/me')
+}
+
+export function createSupportInquiry(formData) {
+  return request('/support/inquiries', {
+    method: 'POST',
+    body: formData,
   })
 }
 
@@ -501,6 +523,21 @@ export function fetchTravelCategories() {
 
 export function fetchTravelCommunityFeed() {
   return request('/travel/community-feed')
+}
+
+export function shareTravelPlan(planId, payload) {
+  return request(`/travel/plans/${planId}/shares`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+}
+
+export function fetchTravelSharedExhibits() {
+  return request('/travel/shared-exhibits')
+}
+
+export function fetchTravelSharedExhibit(shareId) {
+  return request(`/travel/shared-exhibits/${shareId}`)
 }
 
 export function createTravelRoute(planId, payload) {

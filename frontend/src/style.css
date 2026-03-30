@@ -1763,6 +1763,11 @@ button {
   box-shadow: var(--shadow-strong);
 }
 
+.travel-plan-picker-card--active {
+  border-color: rgba(49, 130, 246, 0.52);
+  box-shadow: 0 0 0 1px rgba(49, 130, 246, 0.22), var(--shadow-strong);
+}
+
 .travel-plan-picker-card span,
 .travel-plan-picker-card small {
   color: var(--text-soft);
@@ -2393,6 +2398,73 @@ textarea {
   justify-self: start;
 }
 
+.profile-summary-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.support-inquiry-list {
+  display: grid;
+  gap: 16px;
+}
+
+.support-inquiry-card {
+  display: grid;
+  gap: 12px;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: var(--surface-soft);
+}
+
+.support-inquiry-meta,
+.support-inquiry-reply__header,
+.support-inquiry-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.support-inquiry-content,
+.support-inquiry-reply p {
+  margin: 0;
+  white-space: pre-wrap;
+  color: var(--text-soft);
+}
+
+.support-inquiry-attachment {
+  display: grid;
+  gap: 12px;
+}
+
+.support-inquiry-preview {
+  width: min(100%, 460px);
+  max-height: 280px;
+  object-fit: cover;
+  border-radius: 18px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.support-inquiry-reply {
+  display: grid;
+  gap: 10px;
+  padding: 16px;
+  border-radius: 18px;
+  background: rgba(49, 130, 246, 0.08);
+}
+
+.support-inquiry-row--selected td {
+  background: rgba(49, 130, 246, 0.08);
+}
+
+.support-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+
 .scope-toggle--wrap {
   flex-wrap: wrap;
 }
@@ -2408,6 +2480,11 @@ textarea {
 
   .launcher-card__action {
     grid-column: auto;
+  }
+
+  .profile-summary-grid,
+  .support-detail-grid {
+    grid-template-columns: 1fr;
   }
 
   .topbar__actions {
@@ -3530,10 +3607,27 @@ textarea {
 :root[data-theme='toss'] .calendar-stepper__arrow,
 :root[data-theme='toss'] .household-aggregate-card,
 :root[data-theme='toss'] .household-calendar-collapsed-note,
-:root[data-theme='toss'] .chip--neutral {
+:root[data-theme='toss'] .chip--neutral,
+:root[data-theme='toss'] .support-inquiry-card {
   background: #1b212c;
   border-color: #2d3645;
   color: var(--text);
+}
+
+:root[data-theme='toss'] .support-inquiry-row--selected td,
+:root[data-theme='toss'] .support-inquiry-reply {
+  background: rgba(79, 140, 255, 0.12);
+}
+
+:root[data-theme='toss'] .support-inquiry-content,
+:root[data-theme='toss'] .support-inquiry-reply p,
+:root[data-theme='toss'] .support-inquiry-reply small {
+  color: var(--text-soft);
+}
+
+:root[data-theme='toss'] .support-inquiry-preview {
+  background: #151922;
+  border-color: #2d3645;
 }
 
 @media (max-width: 720px) {

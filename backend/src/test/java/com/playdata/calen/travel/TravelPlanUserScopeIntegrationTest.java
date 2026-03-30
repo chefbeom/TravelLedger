@@ -184,6 +184,71 @@ class TravelPlanUserScopeIntegrationTest {
                 .andExpect(jsonPath("$.routeSegments[0].points[1].label").value("경로 핀 1"));
     }
 
+    @Test
+    void completedTravelCanBeSharedAsReadOnlyExhibit() throws Exception {
+        MockHttpSession hanaSession = loginAndGetSession("hana");
+        MockHttpSession minsuSession = loginAndGetSession("minsu");
+
+        Long planId = createTravelPlan(hanaSession, "Shared Kyoto", "COMPLETED");
+        Long memoryId = createMemoryRecord(hanaSession, planId, "Spot", "Arashiyama");
+        uploadTravelMemoryMedia(hanaSession, memoryId);
+
+        Map<String, Object> sharePayload = new LinkedHashMap<>();
+        sharePayload.put("loginId", "minsu");
+
+        MvcResult shareResult = mockMvc.perform(post("/api/travel/plans/{planId}/shares", planId)
+                        .with(csrf())
+                        .session(hanaSession)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(sharePayload)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.planId").value(planId))
+                .andExpect(jsonPath("$.recipientLoginId").value("minsu"))
+                .andReturn();
+
+        Long shareId = readId(shareResult);
+
+        mockMvc.perform(get("/api/travel/shared-exhibits").session(minsuSession))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].id").value(shareId))
+                .andExpect(jsonPath("$[0].planId").value(planId))
+                .andExpect(jsonPath("$[0].sharedByLoginId").value("hana"));
+
+        MvcResult detailResult = mockMvc.perform(get("/api/travel/shared-exhibits/{shareId}", shareId).session(minsuSession))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(shareId))
+                .andExpect(jsonPath("$.travelPlan.id").value(planId))
+                .andExpect(jsonPath("$.travelPlan.memoryRecords.length()").value(1))
+                .andExpect(jsonPath("$.travelPlan.mediaItems.length()").value(1))
+                .andReturn();
+
+        JsonNode detailBody = objectMapper.readTree(detailResult.getResponse().getContentAsString());
+        JsonNode mediaNode = detailBody.path("travelPlan").path("mediaItems").path(0);
+        Long mediaId = mediaNode.path("id").asLong();
+        String contentUrl = mediaNode.path("contentUrl").asText();
+        assertThat(contentUrl).isEqualTo("/api/travel/shared-exhibits/" + shareId + "/media/" + mediaId + "/content");
+
+        mockMvc.perform(get("/api/travel/shared-exhibits/{shareId}/media/{mediaId}/content", shareId, mediaId).session(minsuSession))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void plannedTravelCannotBeShared() throws Exception {
+        MockHttpSession hanaSession = loginAndGetSession("hana");
+
+        Long planId = createTravelPlan(hanaSession, "Planned trip", "PLANNED");
+
+        Map<String, Object> sharePayload = new LinkedHashMap<>();
+        sharePayload.put("loginId", "minsu");
+
+        mockMvc.perform(post("/api/travel/plans/{planId}/shares", planId)
+                        .with(csrf())
+                        .session(hanaSession)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(sharePayload)))
+                .andExpect(status().isBadRequest());
+    }
+
     private MockHttpSession loginAndGetSession(String loginId) throws Exception {
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("loginId", loginId);
@@ -204,6 +269,10 @@ class TravelPlanUserScopeIntegrationTest {
     }
 
     private Long createTravelPlan(MockHttpSession session, String name) throws Exception {
+        return createTravelPlan(session, name, "PLANNED");
+    }
+
+    private Long createTravelPlan(MockHttpSession session, String name, String status) throws Exception {
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("name", name);
         payload.put("destination", "Japan");
@@ -211,6 +280,7 @@ class TravelPlanUserScopeIntegrationTest {
         payload.put("endDate", "2026-05-07");
         payload.put("homeCurrency", "JPY");
         payload.put("headCount", 4);
+        payload.put("status", status);
         payload.put("colorHex", "#FF6B6B");
         payload.put("memo", "Scope test trip");
 

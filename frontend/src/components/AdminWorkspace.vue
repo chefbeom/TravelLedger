@@ -1,6 +1,12 @@
 <script setup>
-import { onMounted, reactive } from 'vue'
-import { fetchAdminDashboard, unlockBlockedIp, updateAdminUserActive } from '../lib/api'
+import { computed, onMounted, reactive } from 'vue'
+import {
+  fetchAdminDashboard,
+  fetchAdminSupportInquiries,
+  replyAdminSupportInquiry,
+  unlockBlockedIp,
+  updateAdminUserActive,
+} from '../lib/api'
 
 const props = defineProps({
   currentUser: {
@@ -13,12 +19,16 @@ const state = reactive({
   loading: true,
   mutatingUserId: null,
   unlockingIp: '',
+  savingReply: false,
   errorMessage: '',
   summary: null,
   recentLoginLogs: [],
   blockedIps: [],
   users: [],
   recentInvites: [],
+  supportInquiries: [],
+  selectedSupportInquiryId: null,
+  supportReplyContent: '',
 })
 
 const summaryCards = [
@@ -43,6 +53,15 @@ const inviteStatusLabel = {
   EXPIRED: '만료',
 }
 
+const inquiryStatusLabel = {
+  PENDING: '답변 대기',
+  ANSWERED: '답변 완료',
+}
+
+const selectedSupportInquiry = computed(() => (
+  state.supportInquiries.find((inquiry) => inquiry.id === state.selectedSupportInquiryId) ?? null
+))
+
 function formatDateTime(value) {
   if (!value) {
     return '-'
@@ -59,17 +78,36 @@ function formatDateTime(value) {
   }).format(normalized)
 }
 
+function selectSupportInquiry(inquiry) {
+  state.selectedSupportInquiryId = inquiry?.id ?? null
+  state.supportReplyContent = inquiry?.replyContent ?? ''
+}
+
 async function loadDashboard() {
   state.loading = true
   state.errorMessage = ''
 
   try {
-    const response = await fetchAdminDashboard()
-    state.summary = response.summary
-    state.recentLoginLogs = response.recentLoginLogs ?? []
-    state.blockedIps = response.blockedIps ?? []
-    state.users = response.users ?? []
-    state.recentInvites = response.recentInvites ?? []
+    const [dashboard, supportInquiries] = await Promise.all([
+      fetchAdminDashboard(),
+      fetchAdminSupportInquiries(),
+    ])
+
+    state.summary = dashboard.summary
+    state.recentLoginLogs = dashboard.recentLoginLogs ?? []
+    state.blockedIps = dashboard.blockedIps ?? []
+    state.users = dashboard.users ?? []
+    state.recentInvites = dashboard.recentInvites ?? []
+    state.supportInquiries = supportInquiries ?? []
+
+    const matchedSelectedInquiry = state.supportInquiries.find((item) => item.id === state.selectedSupportInquiryId)
+    if (matchedSelectedInquiry) {
+      selectSupportInquiry(matchedSelectedInquiry)
+    } else if (state.supportInquiries.length) {
+      selectSupportInquiry(state.supportInquiries[0])
+    } else {
+      selectSupportInquiry(null)
+    }
   } catch (error) {
     state.errorMessage = error.message
   } finally {
@@ -111,6 +149,30 @@ async function handleUnlockIp(ip) {
   }
 }
 
+async function handleReplySupportInquiry() {
+  if (!selectedSupportInquiry.value) {
+    return
+  }
+
+  state.savingReply = true
+  state.errorMessage = ''
+
+  try {
+    const updatedInquiry = await replyAdminSupportInquiry(
+      selectedSupportInquiry.value.id,
+      state.supportReplyContent,
+    )
+    state.supportInquiries = state.supportInquiries.map((item) => (
+      item.id === updatedInquiry.id ? updatedInquiry : item
+    ))
+    selectSupportInquiry(updatedInquiry)
+  } catch (error) {
+    state.errorMessage = error.message
+  } finally {
+    state.savingReply = false
+  }
+}
+
 onMounted(loadDashboard)
 </script>
 
@@ -122,10 +184,10 @@ onMounted(loadDashboard)
       <div class="panel__header">
         <div>
           <h2>관리자 페이지</h2>
-          <p>{{ currentUser.displayName }} 계정으로 로그인 시도, 차단 IP, 초대 현황, 사용자 상태를 확인할 수 있습니다.</p>
+          <p>{{ currentUser.displayName }} 계정으로 로그인한 상태에서 사용자 상태, 로그인 로그, 문의 메일함을 관리합니다.</p>
         </div>
         <button class="button button--ghost" type="button" :disabled="state.loading" @click="loadDashboard">
-          {{ state.loading ? '불러오는 중...' : '새로고침' }}
+          {{ state.loading ? '불러오는 중..' : '새로고침' }}
         </button>
       </div>
     </section>
@@ -135,6 +197,109 @@ onMounted(loadDashboard)
         <span>{{ card.label }}</span>
         <strong>{{ state.summary?.[card.key] ?? 0 }}</strong>
       </article>
+    </section>
+
+    <section class="panel">
+      <div class="panel__header">
+        <div>
+          <h2>문의 메일함</h2>
+          <p>사용자가 보낸 요청사항과 건의 사항을 확인하고, 선택한 메일에 바로 답변할 수 있습니다.</p>
+        </div>
+      </div>
+      <div class="sheet-table-wrap">
+        <table class="sheet-table">
+          <thead>
+            <tr>
+              <th>보낸 시각</th>
+              <th>상태</th>
+              <th>보낸 사람</th>
+              <th>제목</th>
+              <th>첨부</th>
+              <th>관리</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-if="!state.supportInquiries.length">
+              <td colspan="6" class="sheet-table__empty">도착한 문의 메일이 아직 없습니다.</td>
+            </tr>
+            <tr
+              v-for="inquiry in state.supportInquiries"
+              :key="inquiry.id"
+              :class="{ 'support-inquiry-row--selected': inquiry.id === state.selectedSupportInquiryId }"
+            >
+              <td>{{ formatDateTime(inquiry.createdAt) }}</td>
+              <td>
+                <span :class="['entry-type-pill', inquiry.status === 'ANSWERED' ? 'entry-type-pill--income' : 'entry-type-pill--expense']">
+                  {{ inquiryStatusLabel[inquiry.status] ?? inquiry.status }}
+                </span>
+              </td>
+              <td>{{ inquiry.senderDisplayName }} ({{ inquiry.senderLoginId }})</td>
+              <td>{{ inquiry.title }}</td>
+              <td>{{ inquiry.attachmentFileName || '-' }}</td>
+              <td>
+                <button class="button button--ghost" type="button" @click="selectSupportInquiry(inquiry)">
+                  {{ inquiry.id === state.selectedSupportInquiryId ? '선택됨' : '열기' }}
+                </button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="panel__header">
+        <div>
+          <h2>문의 상세 / 답변</h2>
+          <p>선택한 메일의 내용을 확인하고, 답변을 저장하면 사용자 프로필에 바로 표시됩니다.</p>
+        </div>
+      </div>
+
+      <div v-if="selectedSupportInquiry" class="support-detail-grid">
+        <div class="support-inquiry-card">
+          <div class="support-inquiry-meta">
+            <strong>{{ selectedSupportInquiry.title }}</strong>
+            <span :class="['entry-type-pill', selectedSupportInquiry.status === 'ANSWERED' ? 'entry-type-pill--income' : 'entry-type-pill--expense']">
+              {{ inquiryStatusLabel[selectedSupportInquiry.status] ?? selectedSupportInquiry.status }}
+            </span>
+          </div>
+          <small>{{ selectedSupportInquiry.senderDisplayName }} ({{ selectedSupportInquiry.senderLoginId }}) · {{ formatDateTime(selectedSupportInquiry.createdAt) }}</small>
+          <p class="support-inquiry-content">{{ selectedSupportInquiry.content }}</p>
+
+          <div v-if="selectedSupportInquiry.attachmentUrl" class="support-inquiry-attachment">
+            <a class="button button--ghost" :href="selectedSupportInquiry.attachmentUrl" target="_blank" rel="noreferrer">
+              첨부 이미지 열기
+            </a>
+            <img
+              v-if="selectedSupportInquiry.attachmentContentType?.startsWith('image/')"
+              :src="selectedSupportInquiry.attachmentUrl"
+              :alt="selectedSupportInquiry.attachmentFileName || selectedSupportInquiry.title"
+              class="support-inquiry-preview"
+            />
+          </div>
+        </div>
+
+        <div class="support-inquiry-card">
+          <div class="support-inquiry-reply__header">
+            <strong>답변하기</strong>
+            <small>
+              {{ selectedSupportInquiry.replyContent ? '기존 답변을 수정할 수 있습니다.' : '아직 답변하지 않은 메일입니다.' }}
+            </small>
+          </div>
+          <textarea
+            v-model="state.supportReplyContent"
+            rows="8"
+            placeholder="사용자에게 전달할 답변을 입력해 주세요."
+            :disabled="state.savingReply"
+          />
+          <div class="support-inquiry-actions">
+            <button class="button button--primary" type="button" :disabled="state.savingReply" @click="handleReplySupportInquiry">
+              {{ state.savingReply ? '저장 중..' : selectedSupportInquiry.replyContent ? '답변 수정 저장' : '답변 저장' }}
+            </button>
+          </div>
+        </div>
+      </div>
+      <p v-else class="panel__empty">왼쪽 메일함 목록에서 확인할 문의를 선택해 주세요.</p>
     </section>
 
     <section class="panel">
@@ -169,7 +334,7 @@ onMounted(loadDashboard)
                   :disabled="state.unlockingIp === blockedIp.clientIp"
                   @click="handleUnlockIp(blockedIp.clientIp)"
                 >
-                  {{ state.unlockingIp === blockedIp.clientIp ? '해제 중...' : '차단 해제' }}
+                  {{ state.unlockingIp === blockedIp.clientIp ? '해제 중..' : '차단 해제' }}
                 </button>
               </td>
             </tr>
@@ -256,7 +421,7 @@ onMounted(loadDashboard)
                   :disabled="state.mutatingUserId === user.id"
                   @click="toggleUserActive(user)"
                 >
-                  {{ state.mutatingUserId === user.id ? '저장 중...' : user.active ? '비활성화' : '활성화' }}
+                  {{ state.mutatingUserId === user.id ? '처리 중..' : user.active ? '비활성화' : '활성화' }}
                 </button>
               </td>
             </tr>
@@ -269,7 +434,7 @@ onMounted(loadDashboard)
       <div class="panel__header">
         <div>
           <h2>최근 초대 링크</h2>
-          <p>최근에 발급된 초대 링크가 사용됐는지, 아직 살아 있는지 확인할 수 있습니다.</p>
+          <p>최근에 발급된 초대 링크가 사용됐는지, 아직 남아 있는지 확인할 수 있습니다.</p>
         </div>
       </div>
       <div class="sheet-table-wrap">

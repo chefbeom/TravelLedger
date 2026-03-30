@@ -6,6 +6,7 @@ import FamilyAlbumWorkspace from './components/FamilyAlbumWorkspace.vue'
 import HouseholdWorkspace from './components/HouseholdWorkspace.vue'
 import InviteAccessPanel from './components/InviteAccessPanel.vue'
 import PinPadInput from './components/PinPadInput.vue'
+import ProfileWorkspace from './components/ProfileWorkspace.vue'
 import TravelHubWorkspace from './components/TravelHubWorkspace.vue'
 import {
   acceptInvite,
@@ -86,6 +87,10 @@ const routeMeta = {
   admin: {
     title: '관리자',
     description: '로그인 로그와 사용자 상태, 초대 현황을 점검합니다.',
+  },
+  profile: {
+    title: '내 프로필',
+    description: '내 계정 정보와 문의 내역, 관리자 답변을 한 곳에서 확인합니다.',
   },
   invite: {
     title: '초대 링크 가입',
@@ -563,6 +568,7 @@ onBeforeUnmount(() => {
             <h1>{{ pageMeta.description }}</h1>
           </div>
           <div class="topbar__actions">
+            <button v-if="activeRoute !== 'profile'" class="button button--ghost" @click="navigate('profile')">내 프로필</button>
             <button v-if="activeRoute !== 'launcher'" class="button button--ghost" @click="navigate('launcher')">기능 선택으로</button>
             <button class="button button--ghost" @click="handleLogout">로그아웃</button>
           </div>
@@ -591,6 +597,7 @@ onBeforeUnmount(() => {
           />
         </div>
         <AdminWorkspace v-else-if="activeRoute === 'admin'" :current-user="currentUser" />
+        <ProfileWorkspace v-else-if="activeRoute === 'profile'" :current-user="currentUser" />
         <HouseholdWorkspace v-else-if="activeRoute === 'household'" />
         <FamilyAlbumWorkspace v-else-if="activeRoute === 'family-album'" />
         <TravelHubWorkspace v-else :route="activeRoute" />

@@ -17,10 +17,14 @@ import com.playdata.calen.travel.dto.TravelMemoryRecordRequest;
 import com.playdata.calen.travel.dto.TravelMemoryRecordResponse;
 import com.playdata.calen.travel.dto.TravelPlanDetailResponse;
 import com.playdata.calen.travel.dto.TravelPlanRequest;
+import com.playdata.calen.travel.dto.TravelPlanShareRequest;
+import com.playdata.calen.travel.dto.TravelPlanShareResponse;
 import com.playdata.calen.travel.dto.TravelPlanSummaryResponse;
 import com.playdata.calen.travel.dto.TravelPortfolioResponse;
 import com.playdata.calen.travel.dto.TravelRouteSegmentRequest;
 import com.playdata.calen.travel.dto.TravelRouteSegmentResponse;
+import com.playdata.calen.travel.dto.TravelSharedExhibitDetailResponse;
+import com.playdata.calen.travel.dto.TravelSharedExhibitSummaryResponse;
 import com.playdata.calen.travel.service.TravelService;
 import jakarta.validation.Valid;
 import java.net.URLEncoder;
@@ -78,6 +82,21 @@ public class TravelController {
         return travelService.getCommunityFeed(currentUser.userId());
     }
 
+    @GetMapping("/shared-exhibits")
+    public List<TravelSharedExhibitSummaryResponse> getSharedExhibits(
+            @AuthenticationPrincipal AppUserPrincipal currentUser
+    ) {
+        return travelService.getSharedExhibits(currentUser.userId());
+    }
+
+    @GetMapping("/shared-exhibits/{shareId}")
+    public TravelSharedExhibitDetailResponse getSharedExhibit(
+            @AuthenticationPrincipal AppUserPrincipal currentUser,
+            @PathVariable Long shareId
+    ) {
+        return travelService.getSharedExhibit(currentUser.userId(), shareId);
+    }
+
     @PostMapping("/plans")
     public TravelPlanSummaryResponse createPlan(
             @AuthenticationPrincipal AppUserPrincipal currentUser,
@@ -93,6 +112,15 @@ public class TravelController {
             @Valid @RequestBody TravelPlanRequest request
     ) {
         return travelService.updatePlan(currentUser.userId(), planId, request);
+    }
+
+    @PostMapping("/plans/{planId}/shares")
+    public TravelPlanShareResponse sharePlan(
+            @AuthenticationPrincipal AppUserPrincipal currentUser,
+            @PathVariable Long planId,
+            @Valid @RequestBody TravelPlanShareRequest request
+    ) {
+        return travelService.shareCompletedPlan(currentUser.userId(), planId, request.loginId());
     }
 
     @DeleteMapping("/plans/{planId}")
@@ -301,6 +329,24 @@ public class TravelController {
     @GetMapping("/public/media/{mediaId}/content")
     public ResponseEntity<?> downloadSharedMedia(@PathVariable Long mediaId) {
         TravelService.MediaDownload download = travelService.getSharedMediaDownload(mediaId);
+        String encodedFileName = URLEncoder.encode(download.fileName(), StandardCharsets.UTF_8).replace("+", "%20");
+        ContentDisposition disposition = "application/pdf".equalsIgnoreCase(download.contentType())
+                ? ContentDisposition.attachment().filename(encodedFileName).build()
+                : ContentDisposition.inline().filename(encodedFileName).build();
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType(download.contentType()))
+                .header(HttpHeaders.CONTENT_DISPOSITION, disposition.toString())
+                .header("X-Content-Type-Options", "nosniff")
+                .body(download.resource());
+    }
+
+    @GetMapping("/shared-exhibits/{shareId}/media/{mediaId}/content")
+    public ResponseEntity<?> downloadSharedExhibitMedia(
+            @AuthenticationPrincipal AppUserPrincipal currentUser,
+            @PathVariable Long shareId,
+            @PathVariable Long mediaId
+    ) {
+        TravelService.MediaDownload download = travelService.getSharedExhibitMediaDownload(currentUser.userId(), shareId, mediaId);
         String encodedFileName = URLEncoder.encode(download.fileName(), StandardCharsets.UTF_8).replace("+", "%20");
         ContentDisposition disposition = "application/pdf".equalsIgnoreCase(download.contentType())
                 ? ContentDisposition.attachment().filename(encodedFileName).build()

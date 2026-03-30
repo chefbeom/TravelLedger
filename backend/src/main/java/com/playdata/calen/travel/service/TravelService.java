@@ -12,6 +12,7 @@ import com.playdata.calen.travel.domain.TravelExpenseRecord;
 import com.playdata.calen.travel.domain.TravelMediaAsset;
 import com.playdata.calen.travel.domain.TravelMediaType;
 import com.playdata.calen.travel.domain.TravelPlan;
+import com.playdata.calen.travel.domain.TravelPlanShare;
 import com.playdata.calen.travel.domain.TravelPlanStatus;
 import com.playdata.calen.travel.domain.TravelRecordType;
 import com.playdata.calen.travel.domain.TravelRouteLineStyle;
@@ -34,16 +35,20 @@ import com.playdata.calen.travel.dto.TravelMemoryRecordRequest;
 import com.playdata.calen.travel.dto.TravelMemoryRecordResponse;
 import com.playdata.calen.travel.dto.TravelPlanDetailResponse;
 import com.playdata.calen.travel.dto.TravelPlanRequest;
+import com.playdata.calen.travel.dto.TravelPlanShareResponse;
 import com.playdata.calen.travel.dto.TravelPlanSummaryResponse;
 import com.playdata.calen.travel.dto.TravelPortfolioResponse;
 import com.playdata.calen.travel.dto.TravelRoutePointRequest;
 import com.playdata.calen.travel.dto.TravelRoutePointResponse;
 import com.playdata.calen.travel.dto.TravelRouteSegmentRequest;
 import com.playdata.calen.travel.dto.TravelRouteSegmentResponse;
+import com.playdata.calen.travel.dto.TravelSharedExhibitDetailResponse;
+import com.playdata.calen.travel.dto.TravelSharedExhibitSummaryResponse;
 import com.playdata.calen.travel.repository.TravelBudgetItemRepository;
 import com.playdata.calen.travel.repository.TravelExpenseRecordRepository;
 import com.playdata.calen.travel.repository.TravelMediaAssetRepository;
 import com.playdata.calen.travel.repository.TravelPlanRepository;
+import com.playdata.calen.travel.repository.TravelPlanShareRepository;
 import com.playdata.calen.travel.repository.TravelRouteSegmentRepository;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -126,6 +131,7 @@ public class TravelService {
     private final TravelExpenseRecordRepository travelExpenseRecordRepository;
     private final TravelMediaAssetRepository travelMediaAssetRepository;
     private final TravelRouteSegmentRepository travelRouteSegmentRepository;
+    private final TravelPlanShareRepository travelPlanShareRepository;
     private final ExchangeRateService exchangeRateService;
     private final TravelMediaStorageService travelMediaStorageService;
     private final ObjectMapper objectMapper;
@@ -314,6 +320,68 @@ public class TravelService {
                 .toList();
     }
 
+    public TravelPlanShareResponse shareCompletedPlan(Long userId, Long planId, String recipientLoginIdRaw) {
+        AppUser sharer = appUserService.getRequiredUser(userId);
+        TravelPlan plan = getRequiredPlan(userId, planId);
+        ensureCompletedPlan(plan);
+
+        String recipientLoginId = trimToNull(recipientLoginIdRaw);
+        if (recipientLoginId == null) {
+            throw new BadRequestException("공유할 사용자 아이디를 입력해주세요.");
+        }
+
+        AppUser recipient = appUserService.findActiveUserByLoginId(recipientLoginId)
+                .orElseThrow(() -> new NotFoundException("공유할 사용자를 찾을 수 없습니다."));
+
+        if (recipient.getId().equals(sharer.getId())) {
+            throw new BadRequestException("자기 자신에게는 여행 전시를 공유할 수 없습니다.");
+        }
+
+        TravelPlanShare share = travelPlanShareRepository.findByPlanIdAndRecipientId(planId, recipient.getId())
+                .orElseGet(() -> {
+                    TravelPlanShare created = new TravelPlanShare();
+                    created.setPlan(plan);
+                    created.setSharedBy(sharer);
+                    created.setRecipient(recipient);
+                    created.setCreatedAt(java.time.LocalDateTime.now());
+                    return travelPlanShareRepository.save(created);
+                });
+
+        return toTravelPlanShareResponse(share);
+    }
+
+    public List<TravelSharedExhibitSummaryResponse> getSharedExhibits(Long userId) {
+        appUserService.getRequiredUser(userId);
+        return travelPlanShareRepository.findAllByRecipientIdOrderByCreatedAtDescIdDesc(userId).stream()
+                .map(this::toSharedExhibitSummaryResponse)
+                .toList();
+    }
+
+    public TravelSharedExhibitDetailResponse getSharedExhibit(Long userId, Long shareId) {
+        appUserService.getRequiredUser(userId);
+        TravelPlanShare share = getRequiredShare(userId, shareId);
+        TravelPlan plan = share.getPlan();
+        Long ownerId = plan.getOwner().getId();
+
+        TravelPlanDetailResponse detail = toPlanDetail(
+                plan,
+                getPlanBudgetItems(ownerId, plan.getId()),
+                getPlanRecords(ownerId, plan.getId()),
+                getPlanMemoryRecords(ownerId, plan.getId()),
+                getPlanMedia(ownerId, plan.getId()),
+                getPlanRoutes(ownerId, plan.getId()),
+                mediaAsset -> "/api/travel/shared-exhibits/" + share.getId() + "/media/" + mediaAsset.getId() + "/content"
+        );
+
+        return new TravelSharedExhibitDetailResponse(
+                share.getId(),
+                share.getSharedBy().getLoginId(),
+                share.getSharedBy().getDisplayName(),
+                share.getCreatedAt(),
+                detail
+        );
+    }
+
     @Transactional
     public TravelPlanSummaryResponse createPlan(Long userId, TravelPlanRequest request) {
         TravelPlan plan = new TravelPlan();
@@ -351,6 +419,7 @@ public class TravelService {
         travelMediaAssetRepository.deleteAllByPlanId(plan.getId());
         deleteRouteAssets(getPlanRoutes(userId, planId));
         travelRouteSegmentRepository.deleteAllByPlanId(plan.getId());
+        travelPlanShareRepository.deleteAllByPlanId(plan.getId());
         travelBudgetItemRepository.deleteAllByPlanId(plan.getId());
         travelExpenseRecordRepository.deleteAllByPlanId(plan.getId());
         travelPlanRepository.delete(plan);
@@ -557,6 +626,20 @@ public class TravelService {
         if (!isMemoryRecord(record) || !Boolean.TRUE.equals(record.getSharedWithCommunity()) || mediaAsset.getMediaType() != TravelMediaType.PHOTO) {
             throw new NotFoundException("Shared media not found.");
         }
+        Resource resource = travelMediaStorageService.loadAsResource(mediaAsset.getStoragePath());
+        return new MediaDownload(resource, mediaAsset.getContentType(), mediaAsset.getOriginalFileName());
+    }
+
+    public MediaDownload getSharedExhibitMediaDownload(Long userId, Long shareId, Long mediaId) {
+        appUserService.getRequiredUser(userId);
+        TravelPlanShare share = getRequiredShare(userId, shareId);
+        TravelMediaAsset mediaAsset = travelMediaAssetRepository.findById(mediaId)
+                .orElseThrow(() -> new NotFoundException("Shared exhibit media not found."));
+
+        if (!mediaAsset.getPlan().getId().equals(share.getPlan().getId())) {
+            throw new NotFoundException("Shared exhibit media not found.");
+        }
+
         Resource resource = travelMediaStorageService.loadAsResource(mediaAsset.getStoragePath());
         return new MediaDownload(resource, mediaAsset.getContentType(), mediaAsset.getOriginalFileName());
     }
@@ -864,6 +947,26 @@ public class TravelService {
             List<TravelMediaAsset> mediaItems,
             List<TravelRouteSegment> routeSegments
     ) {
+        return toPlanDetail(
+                plan,
+                budgetItems,
+                records,
+                memoryRecords,
+                mediaItems,
+                routeSegments,
+                mediaAsset -> "/api/travel/media/" + mediaAsset.getId() + "/content"
+        );
+    }
+
+    private TravelPlanDetailResponse toPlanDetail(
+            TravelPlan plan,
+            List<TravelBudgetItem> budgetItems,
+            List<TravelExpenseRecord> records,
+            List<TravelExpenseRecord> memoryRecords,
+            List<TravelMediaAsset> mediaItems,
+            List<TravelRouteSegment> routeSegments,
+            Function<TravelMediaAsset, String> mediaContentUrlResolver
+    ) {
         TravelPlanSummaryResponse summary = toPlanSummary(plan, budgetItems, records, memoryRecords, mediaItems, routeSegments);
 
         return new TravelPlanDetailResponse(
@@ -890,7 +993,7 @@ public class TravelService {
                 budgetItems.stream().sorted(BUDGET_ITEM_ORDER).map(this::toBudgetItemResponse).toList(),
                 records.stream().sorted(RECORD_ORDER).map(this::toExpenseRecordResponse).toList(),
                 memoryRecords.stream().sorted(RECORD_ORDER).map(this::toMemoryRecordResponse).toList(),
-                mediaItems.stream().sorted(MEDIA_ORDER).map(this::toMediaResponse).toList(),
+                mediaItems.stream().sorted(MEDIA_ORDER).map(item -> toMediaResponse(item, mediaContentUrlResolver.apply(item))).toList(),
                 routeSegments.stream().sorted(ROUTE_ORDER).map(this::toRouteSegmentResponse).toList()
         );
     }
@@ -1011,6 +1114,10 @@ public class TravelService {
     }
 
     private TravelMediaResponse toMediaResponse(TravelMediaAsset mediaAsset) {
+        return toMediaResponse(mediaAsset, "/api/travel/media/" + mediaAsset.getId() + "/content");
+    }
+
+    private TravelMediaResponse toMediaResponse(TravelMediaAsset mediaAsset, String contentUrl) {
         TravelExpenseRecord record = mediaAsset.getRecord();
         TravelPlan plan = mediaAsset.getPlan();
         String colorHex = normalizeColorHex(plan.getColorHex());
@@ -1028,7 +1135,7 @@ public class TravelService {
                 mediaAsset.getCaption(),
                 mediaAsset.getUploadedBy().getDisplayName(),
                 mediaAsset.getUploadedAt(),
-                "/api/travel/media/" + mediaAsset.getId() + "/content",
+                contentUrl,
                 record.getExpenseDate(),
                 record.getExpenseTime(),
                 record.getTitle(),
@@ -1040,6 +1147,53 @@ public class TravelService {
                 record.getPlaceName(),
                 record.getLatitude(),
                 record.getLongitude()
+        );
+    }
+
+    private TravelPlanShare getRequiredShare(Long recipientUserId, Long shareId) {
+        return travelPlanShareRepository.findByIdAndRecipientId(shareId, recipientUserId)
+                .orElseThrow(() -> new NotFoundException("공유된 여행 전시를 찾을 수 없습니다."));
+    }
+
+    private void ensureCompletedPlan(TravelPlan plan) {
+        if (resolvePlanStatus(plan.getStatus()) != TravelPlanStatus.COMPLETED) {
+            throw new BadRequestException("완성된 여행만 다른 사용자에게 공유할 수 있습니다.");
+        }
+    }
+
+    private TravelPlanShareResponse toTravelPlanShareResponse(TravelPlanShare share) {
+        return new TravelPlanShareResponse(
+                share.getId(),
+                share.getPlan().getId(),
+                share.getPlan().getName(),
+                share.getRecipient().getLoginId(),
+                share.getRecipient().getDisplayName(),
+                share.getCreatedAt()
+        );
+    }
+
+    private TravelSharedExhibitSummaryResponse toSharedExhibitSummaryResponse(TravelPlanShare share) {
+        TravelPlan plan = share.getPlan();
+        Long ownerId = plan.getOwner().getId();
+        List<TravelExpenseRecord> memoryRecords = getPlanMemoryRecords(ownerId, plan.getId());
+        List<TravelMediaAsset> mediaItems = getPlanMedia(ownerId, plan.getId());
+        List<TravelRouteSegment> routeSegments = getPlanRoutes(ownerId, plan.getId());
+
+        return new TravelSharedExhibitSummaryResponse(
+                share.getId(),
+                plan.getId(),
+                plan.getName(),
+                plan.getDestination(),
+                plan.getStartDate(),
+                plan.getEndDate(),
+                resolvePlanStatus(plan.getStatus()).name(),
+                normalizeColorHex(plan.getColorHex()),
+                share.getSharedBy().getLoginId(),
+                share.getSharedBy().getDisplayName(),
+                share.getCreatedAt(),
+                memoryRecords.size(),
+                routeSegments.size(),
+                mediaItems.size()
         );
     }
 

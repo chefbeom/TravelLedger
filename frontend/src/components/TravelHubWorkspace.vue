@@ -18,11 +18,14 @@ import {
   fetchTravelPlan,
   fetchTravelPlans,
   fetchTravelPortfolio,
+  fetchTravelSharedExhibit,
+  fetchTravelSharedExhibits,
   updateTravelBudgetItem,
   updateTravelMemory,
   updateTravelPlan,
   updateTravelRecord,
   updateTravelRoute,
+  shareTravelPlan,
   uploadTravelMemoryMedia,
   uploadTravelRouteGpxFiles,
   uploadTravelRecordMedia,
@@ -42,6 +45,7 @@ import TravelMapPanel from './TravelMapPanel.vue'
 import TravelMemoryPanel from './TravelMemoryPanel.vue'
 import TravelOverviewWorkspace from './TravelOverviewWorkspace.vue'
 import TravelRouteWorkspace from './TravelRouteWorkspace.vue'
+import TravelSharedExhibitWorkspace from './TravelSharedExhibitWorkspace.vue'
 
 const props = defineProps({
   route: {
@@ -109,6 +113,12 @@ const editingRecordId = ref(null)
 const memoryRefreshKey = ref(0)
 const routeRefreshKey = ref(0)
 const memoryFocusRequest = ref(null)
+const sharedExhibitSummaries = ref([])
+const selectedSharedExhibitId = ref('')
+const selectedSharedExhibit = ref(null)
+const shareForm = reactive({
+  recipientLoginId: '',
+})
 
 const planForm = reactive({
   name: '',
@@ -152,7 +162,18 @@ const budgetCategoryOptions = computed(() => travelCategories.value.budgetCatego
 const expenseCategoryOptions = computed(() => travelCategories.value.expenseCategories?.length ? travelCategories.value.expenseCategories : fallbackCategories.expenseCategories)
 const memoryCategoryOptions = computed(() => travelCategories.value.memoryCategories?.length ? travelCategories.value.memoryCategories : fallbackCategories.memoryCategories)
 const requiresExplicitPlanSelection = computed(() => props.route === 'travel-log' || props.route === 'photo-album')
-const showPlanGate = computed(() => requiresExplicitPlanSelection.value && !travelPlan.value)
+const isSharedExhibitTab = computed(() => props.route === 'photo-album' && albumTab.value === 'shared')
+const showPlanGate = computed(() => requiresExplicitPlanSelection.value && !travelPlan.value && !isSharedExhibitTab.value)
+const canShareTravelPlan = computed(() => Boolean(travelPlan.value) && travelPlan.value.status === 'COMPLETED')
+const emptyTravelPlanMessage = computed(() => {
+  if (isSharedExhibitTab.value) {
+    return '공유 전시 탭에서는 여행 선택 없이도 공유받은 전시를 볼 수 있습니다.'
+  }
+  if (showPlanGate.value) {
+    return '계속하려면 먼저 여행 하나를 선택해주세요.'
+  }
+  return '먼저 여행을 만들어야 예산, 이동 경로, 사진첩 기능을 이어서 사용할 수 있습니다.'
+})
 
 function normalizeTravelRecordTime(value) {
   const normalized = String(value || '').trim()
@@ -479,6 +500,23 @@ async function loadTravelCommunityFeed() {
   }
 }
 
+async function loadSharedExhibits(preferredShareId = selectedSharedExhibitId.value) {
+  try {
+    const exhibits = await fetchTravelSharedExhibits()
+    sharedExhibitSummaries.value = exhibits
+
+    const requestedShareId = String(preferredShareId || '').trim()
+    const nextShareId = exhibits.some((item) => String(item.id) === requestedShareId) ? requestedShareId : ''
+    selectedSharedExhibitId.value = nextShareId
+    selectedSharedExhibit.value = nextShareId ? await fetchTravelSharedExhibit(nextShareId) : null
+  } catch (error) {
+    sharedExhibitSummaries.value = []
+    selectedSharedExhibitId.value = ''
+    selectedSharedExhibit.value = null
+    setFeedback('', error.message)
+  }
+}
+
 async function loadTravelRates() {
   try {
     travelRates.value = await fetchTravelExchangeRates(collectCurrencyCodes())
@@ -510,6 +548,7 @@ async function refreshTravelData(preferredPlanId = selectedPlanId.value, include
     travelPortfolio.value = await fetchTravelPortfolio()
     await loadTravelRates()
     if (includeCommunity) await loadTravelCommunityFeed()
+    if (props.route === 'photo-album') await loadSharedExhibits(selectedSharedExhibitId.value)
     if (!travelPlan.value) {
       resetPlanForm()
       resetBudgetForm()
@@ -517,6 +556,26 @@ async function refreshTravelData(preferredPlanId = selectedPlanId.value, include
       memoryFocusRequest.value = null
     }
   } catch (error) {
+    setFeedback('', error.message)
+  } finally {
+    isLoading.value = false
+  }
+}
+
+async function handleSelectSharedExhibit(shareId) {
+  const normalizedShareId = String(shareId || '').trim()
+  selectedSharedExhibitId.value = normalizedShareId
+  if (!normalizedShareId) {
+    selectedSharedExhibit.value = null
+    return
+  }
+
+  isLoading.value = true
+  try {
+    selectedSharedExhibit.value = await fetchTravelSharedExhibit(normalizedShareId)
+  } catch (error) {
+    selectedSharedExhibitId.value = ''
+    selectedSharedExhibit.value = null
     setFeedback('', error.message)
   } finally {
     isLoading.value = false
@@ -545,6 +604,25 @@ async function handleSelectPlan(planId) {
   await refreshTravelData(selectedPlanId.value, props.route === 'photo-album')
   resetBudgetForm()
   resetRecordForm()
+}
+
+async function handleShareTravelPlan() {
+  if (!selectedPlanId.value || !shareForm.recipientLoginId.trim()) return
+  isSubmitting.value = true
+  activeSubmit.value = 'share-plan'
+  setFeedback()
+  try {
+    const response = await shareTravelPlan(selectedPlanId.value, {
+      loginId: shareForm.recipientLoginId.trim(),
+    })
+    shareForm.recipientLoginId = ''
+    setFeedback(`${response.recipientDisplayName} (${response.recipientLoginId}) 님에게 여행 전시를 공유했습니다.`)
+  } catch (error) {
+    setFeedback('', error.message)
+  } finally {
+    isSubmitting.value = false
+    activeSubmit.value = ''
+  }
 }
 
 function handleOpenTravelPlanner() {
@@ -854,7 +932,7 @@ function openMemoryEditor(memoryId) {
         <span>{{ travelPlan.startDate }} - {{ travelPlan.endDate }}</span>
         <small>{{ planStatusLabel(travelPlan.status) }} / {{ travelPlan.headCount }}명 / {{ travelPlan.homeCurrency }}</small>
       </div>
-      <p v-else class="panel__empty">{{ showPlanGate ? '계속하려면 먼저 여행 하나를 선택하세요.' : '먼저 여행을 만들어야 예산안, 이동 경로, 사진첩 기능을 이어서 사용할 수 있습니다.' }}</p>
+      <p v-else class="panel__empty">{{ emptyTravelPlanMessage }}</p>
     </section>
 
     <template v-if="showPlanGate">
@@ -1040,19 +1118,41 @@ function openMemoryEditor(memoryId) {
 
     <template v-else-if="route === 'travel-log'">
       <section class="panel"><div class="scope-toggle"><button class="button" :class="{ 'button--primary': logTab === 'overview' }" @click="logTab = 'overview'">여행 보기</button><button class="button" :class="{ 'button--primary': logTab === 'memories' }" @click="logTab = 'memories'">여행 기록</button><button class="button" :class="{ 'button--primary': logTab === 'routes' }" @click="logTab = 'routes'">이동 경로</button></div></section>
+      <section class="panel">
+        <div class="panel__header">
+          <div>
+            <h2>여행 전시 공유</h2>
+            <p>완성된 여행 로그만 다른 사용자에게 아이디 기준으로 공유할 수 있습니다. 공유받은 사람은 여행 사진 탭에서 읽기 전용 전시 페이지로 확인합니다.</p>
+          </div>
+          <span class="panel__badge">{{ canShareTravelPlan ? '공유 가능' : '완성 후 공유' }}</span>
+        </div>
+        <div class="travel-toolbar">
+          <label class="field travel-toolbar__select">
+            <span class="field__label">공유 받을 아이디</span>
+            <input v-model="shareForm.recipientLoginId" type="text" placeholder="예: minsu" />
+          </label>
+          <div class="travel-toolbar__actions">
+            <button class="button button--primary" :disabled="isSubmitting || !canShareTravelPlan || !shareForm.recipientLoginId.trim()" @click="handleShareTravelPlan">
+              {{ isSubmitting && activeSubmit === 'share-plan' ? '공유 중...' : '전시 공유' }}
+            </button>
+          </div>
+        </div>
+        <small class="field__hint">{{ canShareTravelPlan ? '공유된 전시는 상대방 계정의 여행 사진 > 공유 전시에서 수정 없이 감상됩니다.' : '여행 상태가 완료(COMPLETED)일 때만 공유할 수 있습니다.' }}</small>
+      </section>
       <TravelOverviewWorkspace v-if="logTab === 'overview'" :travel-plan="travelPlan" />
       <TravelMemoryPanel v-else-if="logTab === 'memories'" :travel-plan="travelPlan" :category-options="memoryCategoryOptions" :is-submitting="isSubmitting" :active-submit="activeSubmit" :refresh-key="memoryRefreshKey" :focus-request="memoryFocusRequest" @save-memory="handleSaveMemory" @delete-memory="handleDeleteMemory" @delete-media="handleDeleteMedia" />
       <TravelRouteWorkspace v-else :travel-plan="travelPlan" :is-submitting="isSubmitting" :active-submit="activeSubmit" :refresh-key="routeRefreshKey" @save-route="handleSaveRoute" @delete-route="handleDeleteRoute" />
     </template>
 
     <template v-else-if="route === 'photo-album'">
-      <section class="panel"><div class="scope-toggle"><button class="button" :class="{ 'button--primary': albumTab === 'upload' }" @click="albumTab = 'upload'">업로드와 기록</button><button class="button" :class="{ 'button--primary': albumTab === 'gallery' }" @click="albumTab = 'gallery'">지도 갤러리</button><button class="button" :class="{ 'button--primary': albumTab === 'community' }" @click="albumTab = 'community'">커뮤니티 피드</button></div></section>
+      <section class="panel"><div class="scope-toggle"><button class="button" :class="{ 'button--primary': albumTab === 'upload' }" @click="albumTab = 'upload'">업로드와 기록</button><button class="button" :class="{ 'button--primary': albumTab === 'gallery' }" @click="albumTab = 'gallery'">지도 갤러리</button><button class="button" :class="{ 'button--primary': albumTab === 'shared' }" @click="albumTab = 'shared'">공유 전시</button><button class="button" :class="{ 'button--primary': albumTab === 'community' }" @click="albumTab = 'community'">커뮤니티 피드</button></div></section>
       <TravelMemoryPanel v-if="albumTab === 'upload'" :travel-plan="travelPlan" :category-options="memoryCategoryOptions" :is-submitting="isSubmitting" :active-submit="activeSubmit" :refresh-key="memoryRefreshKey" :focus-request="memoryFocusRequest" @save-memory="handleSaveMemory" @delete-memory="handleDeleteMemory" @delete-media="handleDeleteMedia" />
       <div v-else-if="albumTab === 'gallery'" class="workspace-stack">
         <section class="panel"><div class="panel__header"><div><h2>사진 재사용 흐름</h2><p>갤러리 카드에서 바로 기록 편집을 누르면 업로드 화면이 열리고, 기존 사진은 그대로 유지된 채 새 사진과 메모만 이어서 추가할 수 있습니다.</p></div><span class="panel__badge">{{ photoAlbumCards.length }}개 기록</span></div></section>
         <section class="panel panel--map-fill"><div class="panel__header"><div><h2>사진첩 지도</h2><p>선택한 여행의 사진 기록이 위치별로 묶여 큰 지도에 표시됩니다.</p></div><span class="panel__badge">{{ photoAlbumPhotoCount }}장</span></div><TravelMapPanel :markers="photoAlbumMarkers" :selected-point="null" :enable-pick-location="false" :enable-draw-route="false" :view-key="travelPlan?.id || 'photo-album-map'" hint-title="사진 핀 보기" hint-text="여행 기록에 연결된 사진을 위치별로 묶어 보여줍니다." /></section>
         <section class="panel"><div class="panel__header"><div><h2>사진첩 카드</h2><p>여행 로그에서 올린 사진을 여기서 그대로 재사용하며, 카드에서 바로 원본 보기와 기록 편집이 가능합니다.</p></div></div><div v-if="photoAlbumCards.length" class="travel-media-grid travel-media-grid--gallery"><article v-for="item in photoAlbumCards" :key="item.id" class="travel-media-card"><img v-if="item.heroPhotoUrl" :src="item.heroPhotoUrl" :alt="item.caption || item.title" class="travel-media-thumb" /><div v-else class="travel-media-thumb travel-media-thumb--receipt">사진 없음</div><div class="travel-media-copy"><div class="travel-media-tags"><span class="chip chip--neutral">{{ item.planName || '여행' }}</span><span class="chip chip--neutral">사진 {{ item.photoCount }}장</span></div><strong>{{ item.title }}</strong><small>{{ formatDateTime(item.memoryDate, item.memoryTime) }}</small><small>{{ item.locationLabel }}</small><small>{{ item.memo || '이 기록을 다시 열면 기존 사진이 남아 있는 상태에서 이어서 편집할 수 있습니다.' }}</small></div><div class="travel-media-actions"><button class="button button--primary" @click="openMemoryEditor(item.memoryId)">기록 편집</button><a v-if="item.heroPhotoUrl" class="button button--ghost" :href="item.heroPhotoUrl" target="_blank" rel="noreferrer">대표 사진 열기</a><button class="button button--danger" :disabled="!item.heroPhoto" @click="handleDeleteMedia(item.heroPhoto)">대표 사진 삭제</button></div></article></div><p v-else class="panel__empty">사진첩에 표시할 사진이 아직 없습니다.</p></section>
       </div>
+      <TravelSharedExhibitWorkspace v-else-if="albumTab === 'shared'" :exhibits="sharedExhibitSummaries" :selected-exhibit-id="selectedSharedExhibitId" :selected-exhibit="selectedSharedExhibit" :is-loading="isLoading" @select-exhibit="handleSelectSharedExhibit" />
       <TravelCommunityWorkspace v-else :travel-plan="travelPlan" :community-feed="communityFeed" />
     </template>
     </template>

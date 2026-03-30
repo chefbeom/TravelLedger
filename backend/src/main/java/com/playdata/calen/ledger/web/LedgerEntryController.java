@@ -7,8 +7,11 @@ import com.playdata.calen.ledger.dto.LedgerCsvExportRequest;
 import com.playdata.calen.ledger.dto.LedgerEntryDateRangeResponse;
 import com.playdata.calen.ledger.dto.LedgerEntryRequest;
 import com.playdata.calen.ledger.dto.LedgerEntryResponse;
+import com.playdata.calen.ledger.dto.LedgerEntrySearchPageResponse;
+import com.playdata.calen.ledger.domain.EntryType;
 import com.playdata.calen.ledger.service.LedgerEntryService;
 import jakarta.validation.Valid;
+import java.math.BigDecimal;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
@@ -45,6 +48,37 @@ public class LedgerEntryController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to
     ) {
         return ledgerEntryService.getEntries(currentUser.userId(), from, to);
+    }
+
+    @GetMapping("/search")
+    public LedgerEntrySearchPageResponse searchEntries(
+            @AuthenticationPrincipal AppUserPrincipal currentUser,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) EntryType entryType,
+            @RequestParam(required = false) Long paymentMethodId,
+            @RequestParam(required = false) Long categoryGroupId,
+            @RequestParam(required = false) BigDecimal minAmount,
+            @RequestParam(required = false) BigDecimal maxAmount,
+            @RequestParam(defaultValue = "DATE_DESC") String sortBy,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "100") int size
+    ) {
+        return ledgerEntryService.searchEntries(
+                currentUser.userId(),
+                from,
+                to,
+                keyword,
+                entryType,
+                paymentMethodId,
+                categoryGroupId,
+                minAmount,
+                maxAmount,
+                sortBy,
+                page,
+                size
+        );
     }
 
     @GetMapping("/date-range")

@@ -213,6 +213,10 @@ export function fetchEntries(from, to) {
   return request(buildUrl('/entries', { from, to }).replace(API_BASE, ''))
 }
 
+export function fetchEntrySearchPage(params) {
+  return request(buildUrl('/entries/search', params).replace(API_BASE, ''))
+}
+
 export function fetchEntryDateRange() {
   return request('/entries/date-range')
 }

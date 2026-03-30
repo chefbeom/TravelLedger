@@ -7,6 +7,7 @@ import DonutChartCard from './DonutChartCard.vue'
 import SummaryCard from './SummaryCard.vue'
 
 const chartPalette = ['#3182f6', '#12b886', '#f59f00', '#ff6b6b', '#7c5cff', '#00b8d9', '#fd7e14', '#5c7cfa']
+const emit = defineEmits(['change-search-page'])
 
 const props = defineProps({
   route: {
@@ -44,6 +45,10 @@ const props = defineProps({
   searchResults: {
     type: Array,
     default: () => [],
+  },
+  searchPageInfo: {
+    type: Object,
+    required: true,
   },
   searchSummary: {
     type: Object,
@@ -153,6 +158,8 @@ const monthOfYearChartItems = computed(() =>
     color: chartPalette[index % chartPalette.length],
   })),
 )
+
+const searchPageLabel = computed(() => Math.max(props.searchPageInfo.totalPages ?? 0, 1))
 </script>
 
 <template>
@@ -271,7 +278,7 @@ const monthOfYearChartItems = computed(() =>
             <h2>검색</h2>
             <p>제목, 금액, 결제방법, 대분류 조건을 조합해서 거래를 찾습니다.</p>
           </div>
-          <span class="panel__badge">{{ searchResults.length }}건</span>
+          <span class="panel__badge">{{ searchPageInfo.totalElements }}건</span>
         </div>
 
         <div class="search-grid">
@@ -373,6 +380,26 @@ const monthOfYearChartItems = computed(() =>
               </tr>
             </tbody>
           </table>
+        </div>
+
+        <div class="panel__actions">
+          <button
+            class="button button--ghost"
+            type="button"
+            :disabled="searchPageInfo.page <= 0"
+            @click="emit('change-search-page', searchPageInfo.page - 1)"
+          >
+            이전
+          </button>
+          <span>{{ searchPageInfo.page + 1 }} / {{ searchPageLabel }}</span>
+          <button
+            class="button button--ghost"
+            type="button"
+            :disabled="searchPageInfo.page + 1 >= searchPageLabel"
+            @click="emit('change-search-page', searchPageInfo.page + 1)"
+          >
+            다음
+          </button>
         </div>
       </section>
     </template>

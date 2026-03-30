@@ -15,6 +15,7 @@ import {
   fetchCompare,
   fetchDashboard,
   fetchEntryDateRange,
+  fetchEntrySearchPage,
   fetchEntries,
   fetchHouseholdAggregatePreferences,
   fetchOverview,
@@ -39,12 +40,10 @@ import {
 import {
   buildInsights,
   buildPastComparisonRanges,
-  filterEntries,
   getDefaultTimeValue,
   getPresetOptions,
   resolveRange,
   shiftRange,
-  summarizeEntries,
 } from '../lib/analytics'
 import CalendarWorkspace from './CalendarWorkspace.vue'
 import LedgerImportWorkspace from './LedgerImportWorkspace.vue'
@@ -61,6 +60,7 @@ const compareUnitLabels = {
 
 const today = toIsoDate(new Date())
 const quickAmountButtons = [10000, 30000, 50000, 100000]
+const SEARCH_PAGE_SIZE = 100
 const csvExportOptions = [
   { value: 'ALL', label: '전체 데이터' },
   { value: 'LAST_6_MONTHS', label: '최근 6개월' },
@@ -106,6 +106,19 @@ const comparisonRows = ref([])
 const expenseBreakdown = ref([])
 const paymentBreakdown = ref([])
 const pastComparisons = ref([])
+const searchPageState = ref({
+  content: [],
+  page: 0,
+  size: SEARCH_PAGE_SIZE,
+  totalElements: 0,
+  totalPages: 0,
+  summary: {
+    income: 0,
+    expense: 0,
+    balance: 0,
+    count: 0,
+  },
+})
 const categories = ref([])
 const paymentMethods = ref([])
 const entryDateRange = ref({
@@ -119,6 +132,7 @@ const amountInput = ref('')
 const isEntryTimeEnabled = ref(false)
 const calendarWorkspaceRef = ref(null)
 let feedbackTimerId = null
+let searchRequestTimerId = null
 
 const entryForm = reactive({
   entryDate: today,
@@ -220,9 +234,15 @@ const sortedMonthEntries = computed(() =>
     .slice()
     .sort((left, right) => `${right.entryDate}${right.entryTime || '99:99'}${String(right.id).padStart(10, '0')}`.localeCompare(`${left.entryDate}${left.entryTime || '99:99'}${String(left.id).padStart(10, '0')}`)),
 )
-const searchResults = computed(() => filterEntries(statsEntries.value, searchForm))
-const searchSummary = computed(() => summarizeEntries(searchResults.value))
+const searchResults = computed(() => searchPageState.value.content ?? [])
+const searchSummary = computed(() => searchPageState.value.summary ?? {
+  income: 0,
+  expense: 0,
+  balance: 0,
+  count: 0,
+})
 const insights = computed(() => buildInsights(statsEntries.value))
+const searchPageInfo = computed(() => searchPageState.value)
 const isEditingEntry = computed(() => editingEntryId.value !== null)
 const entrySuggestions = computed(() => {
   const keyword = entryForm.title.trim().toLowerCase()
@@ -335,6 +355,41 @@ watch(
   },
 )
 
+watch(
+  householdTab,
+  async (value, previousValue) => {
+    if (!statsReady.value || value === previousValue || !value.startsWith('stats-')) {
+      return
+    }
+
+    await loadStatisticsData()
+    if (value === 'stats-search') {
+      await loadSearchResults(0)
+    }
+  },
+)
+
+watch(
+  () => [
+    householdTab.value,
+    statsRange.value.from,
+    statsRange.value.to,
+    searchForm.keyword,
+    searchForm.entryType,
+    searchForm.paymentMethodId,
+    searchForm.categoryGroupId,
+    searchForm.minAmount,
+    searchForm.maxAmount,
+    searchForm.sortBy,
+  ],
+  () => {
+    if (!statsReady.value || householdTab.value !== 'stats-search') {
+      return
+    }
+    queueSearchResultsReload()
+  },
+)
+
 onMounted(async () => {
   isLoading.value = true
   try {
@@ -356,6 +411,9 @@ onMounted(async () => {
 onBeforeUnmount(() => {
   if (feedbackTimerId) {
     window.clearTimeout(feedbackTimerId)
+  }
+  if (searchRequestTimerId) {
+    window.clearTimeout(searchRequestTimerId)
   }
 })
 
@@ -497,12 +555,13 @@ async function loadCalendarData() {
 
 async function loadStatisticsData() {
   const range = statsRange.value
+  const shouldLoadInsightEntries = householdTab.value === 'stats-insights'
   const [overview, categoryItems, paymentItems, compareItems, entryItems] = await Promise.all([
     fetchOverview(range.from, range.to),
     fetchCategoryBreakdown(range.from, range.to, 'EXPENSE'),
     fetchPaymentBreakdown(range.from, range.to),
     fetchCompare(comparisonAnchorDate.value, statsControls.compareUnit, statsControls.comparePeriods),
-    fetchEntries(range.from, range.to),
+    shouldLoadInsightEntries ? fetchEntries(range.from, range.to) : Promise.resolve([]),
   ])
 
   statsOverview.value = overview
@@ -511,6 +570,58 @@ async function loadStatisticsData() {
   comparisonRows.value = compareItems
   statsEntries.value = entryItems
   await loadPastComparisons()
+}
+
+function queueSearchResultsReload() {
+  if (searchRequestTimerId) {
+    window.clearTimeout(searchRequestTimerId)
+  }
+  searchRequestTimerId = window.setTimeout(() => {
+    if (householdTab.value !== 'stats-search') {
+      searchRequestTimerId = null
+      return
+    }
+    loadSearchResults(0).catch((error) => {
+      setFeedback('', error.message)
+    })
+    searchRequestTimerId = null
+  }, 200)
+}
+
+async function loadSearchResults(page = 0) {
+  const range = statsRange.value
+  const response = await fetchEntrySearchPage({
+    from: range.from,
+    to: range.to,
+    keyword: searchForm.keyword,
+    entryType: searchForm.entryType,
+    paymentMethodId: searchForm.paymentMethodId,
+    categoryGroupId: searchForm.categoryGroupId,
+    minAmount: searchForm.minAmount,
+    maxAmount: searchForm.maxAmount,
+    sortBy: searchForm.sortBy,
+    page,
+    size: SEARCH_PAGE_SIZE,
+  })
+
+  if (response.totalPages > 0 && page >= response.totalPages) {
+    await loadSearchResults(response.totalPages - 1)
+    return
+  }
+
+  searchPageState.value = {
+    content: response.content ?? [],
+    page: response.page ?? 0,
+    size: response.size ?? SEARCH_PAGE_SIZE,
+    totalElements: response.totalElements ?? 0,
+    totalPages: response.totalPages ?? 0,
+    summary: response.summary ?? {
+      income: 0,
+      expense: 0,
+      balance: 0,
+      count: 0,
+    },
+  }
 }
 
 async function loadPastComparisons() {
@@ -726,6 +837,9 @@ function resolveCsvExportRange(preset) {
 async function refreshLedgerViews() {
   await loadEntryDateRange()
   await Promise.all([loadCalendarData(), loadStatisticsData()])
+  if (householdTab.value === 'stats-search') {
+    await loadSearchResults(searchPageState.value.page ?? 0)
+  }
 }
 
 async function handleImported(result) {
@@ -1121,6 +1235,7 @@ async function deactivatePayment(paymentId) {
       :comparison-rows="comparisonRows"
       :comparison-badge="comparisonBadge"
       :search-results="searchResults"
+      :search-page-info="searchPageInfo"
       :search-summary="searchSummary"
       :insights="insights"
       :past-comparisons="pastComparisons"
@@ -1133,6 +1248,7 @@ async function deactivatePayment(paymentId) {
       :format-full-date="formatFullDate"
       :format-date-range="formatDateRange"
       :format-time="formatTime"
+      @change-search-page="loadSearchResults"
     />
 
     <LedgerImportWorkspace

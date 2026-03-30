@@ -6,9 +6,12 @@ import com.playdata.calen.common.exception.BadRequestException;
 import com.playdata.calen.common.exception.NotFoundException;
 import com.playdata.calen.ledger.domain.CategoryDetail;
 import com.playdata.calen.ledger.domain.CategoryGroup;
+import com.playdata.calen.ledger.domain.EntryType;
 import com.playdata.calen.ledger.domain.LedgerEntry;
 import com.playdata.calen.ledger.domain.PaymentMethod;
 import com.playdata.calen.ledger.dto.LedgerEntryDateRangeResponse;
+import com.playdata.calen.ledger.dto.LedgerEntrySearchPageResponse;
+import com.playdata.calen.ledger.dto.LedgerEntrySearchSummaryResponse;
 import com.playdata.calen.ledger.dto.LedgerEntryRequest;
 import com.playdata.calen.ledger.dto.LedgerEntryResponse;
 import com.playdata.calen.ledger.repository.CategoryDetailRepository;
@@ -16,6 +19,7 @@ import com.playdata.calen.ledger.repository.CategoryGroupRepository;
 import com.playdata.calen.ledger.repository.LedgerEntryRepository;
 import com.playdata.calen.ledger.repository.PaymentMethodRepository;
 import java.io.ByteArrayInputStream;
+import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -28,6 +32,9 @@ import net.lingala.zip4j.model.ZipParameters;
 import net.lingala.zip4j.model.enums.CompressionLevel;
 import net.lingala.zip4j.model.enums.CompressionMethod;
 import net.lingala.zip4j.model.enums.EncryptionMethod;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -42,12 +49,90 @@ public class LedgerEntryService {
     private final CategoryDetailRepository categoryDetailRepository;
     private final PaymentMethodRepository paymentMethodRepository;
 
+    private static final int MAX_SEARCH_PAGE_SIZE = 100;
+
     public List<LedgerEntryResponse> getEntries(Long userId, LocalDate from, LocalDate to) {
         appUserService.getRequiredUser(userId);
         DateRange range = normalizeRange(from, to);
         return ledgerEntryRepository.findAllByOwnerIdAndEntryDateBetweenOrderByEntryDateAscIdAsc(userId, range.from(), range.to()).stream()
                 .map(this::toResponse)
                 .toList();
+    }
+
+    public LedgerEntrySearchPageResponse searchEntries(
+            Long userId,
+            LocalDate from,
+            LocalDate to,
+            String keyword,
+            EntryType entryType,
+            Long paymentMethodId,
+            Long categoryGroupId,
+            BigDecimal minAmount,
+            BigDecimal maxAmount,
+            String sortBy,
+            int page,
+            int size
+    ) {
+        appUserService.getRequiredUser(userId);
+        DateRange range = normalizeRange(from, to);
+        String normalizedKeyword = normalizeKeyword(keyword);
+        int safePage = Math.max(page, 0);
+        int safeSize = Math.min(Math.max(size, 1), MAX_SEARCH_PAGE_SIZE);
+
+        Page<LedgerEntry> resultPage = ledgerEntryRepository.searchPageByOwnerIdAndFilters(
+                userId,
+                range.from(),
+                range.to(),
+                normalizedKeyword,
+                entryType,
+                paymentMethodId,
+                categoryGroupId,
+                minAmount,
+                maxAmount,
+                PageRequest.of(safePage, safeSize, resolveSearchSort(sortBy))
+        );
+
+        BigDecimal income = ledgerEntryRepository.sumAmountByOwnerIdAndFilters(
+                userId,
+                range.from(),
+                range.to(),
+                normalizedKeyword,
+                entryType,
+                paymentMethodId,
+                categoryGroupId,
+                minAmount,
+                maxAmount,
+                EntryType.INCOME
+        );
+        BigDecimal expense = ledgerEntryRepository.sumAmountByOwnerIdAndFilters(
+                userId,
+                range.from(),
+                range.to(),
+                normalizedKeyword,
+                entryType,
+                paymentMethodId,
+                categoryGroupId,
+                minAmount,
+                maxAmount,
+                EntryType.EXPENSE
+        );
+        LedgerEntrySearchSummaryResponse summary = new LedgerEntrySearchSummaryResponse(
+                income == null ? BigDecimal.ZERO : income,
+                expense == null ? BigDecimal.ZERO : expense,
+                (income == null ? BigDecimal.ZERO : income).subtract(expense == null ? BigDecimal.ZERO : expense),
+                resultPage.getTotalElements()
+        );
+
+        return new LedgerEntrySearchPageResponse(
+                resultPage.getContent().stream()
+                        .map(this::toResponse)
+                        .toList(),
+                resultPage.getNumber(),
+                resultPage.getSize(),
+                resultPage.getTotalElements(),
+                resultPage.getTotalPages(),
+                summary
+        );
     }
 
     public LedgerCsvExport exportEntriesCsv(Long userId, LocalDate from, LocalDate to) {
@@ -197,6 +282,44 @@ public class LedgerEntryService {
             throw new BadRequestException("from 날짜는 to 날짜보다 앞서야 합니다.");
         }
         return new DateRange(from, to);
+    }
+
+    private String normalizeKeyword(String keyword) {
+        if (keyword == null) {
+            return null;
+        }
+        String trimmedKeyword = keyword.trim().toLowerCase();
+        return trimmedKeyword.isBlank() ? null : trimmedKeyword;
+    }
+
+    private Sort resolveSearchSort(String sortBy) {
+        return switch (sortBy) {
+            case "AMOUNT_DESC" -> Sort.by(
+                    Sort.Order.desc("amount"),
+                    Sort.Order.desc("entryDate"),
+                    Sort.Order.desc("id")
+            );
+            case "AMOUNT_ASC" -> Sort.by(
+                    Sort.Order.asc("amount"),
+                    Sort.Order.desc("entryDate"),
+                    Sort.Order.desc("id")
+            );
+            case "DATE_ASC" -> Sort.by(
+                    Sort.Order.asc("entryDate"),
+                    Sort.Order.asc("entryTime"),
+                    Sort.Order.asc("id")
+            );
+            case "DATE_DESC" -> Sort.by(
+                    Sort.Order.desc("entryDate"),
+                    Sort.Order.desc("entryTime"),
+                    Sort.Order.desc("id")
+            );
+            default -> Sort.by(
+                    Sort.Order.desc("entryDate"),
+                    Sort.Order.desc("entryTime"),
+                    Sort.Order.desc("id")
+            );
+        };
     }
 
     private record DateRange(LocalDate from, LocalDate to) {

@@ -115,6 +115,75 @@ class TravelPlanUserScopeIntegrationTest {
                 .andExpect(jsonPath("$.mediaItems[0].mediaType").value("PHOTO"));
     }
 
+    @Test
+    void travelRoutePreservesPointOrderAndMetadataForEditing() throws Exception {
+        MockHttpSession hanaSession = loginAndGetSession("hana");
+
+        Long planId = createTravelPlan(hanaSession, "Route metadata trip");
+        Long startMemoryId = createMemoryRecord(hanaSession, planId, "Spot", "Start place");
+        Long endMemoryId = createMemoryRecord(hanaSession, planId, "Spot", "End place");
+
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("routeDate", "2026-05-05");
+        payload.put("title", "Day 1 route");
+        payload.put("transportMode", "WALK");
+        payload.put("distanceKm", "3.450");
+        payload.put("durationMinutes", 55);
+        payload.put("stepCount", 4800);
+        payload.put("sourceType", "MANUAL");
+        payload.put("startPlaceName", "Start place");
+        payload.put("endPlaceName", "End place");
+        payload.put("lineColorHex", "#3182F6");
+        payload.put("lineStyle", "SOLID");
+        payload.put("memo", "Connected route");
+        payload.put("points", List.of(
+                Map.of(
+                        "latitude", "34.9671400",
+                        "longitude", "135.7726710",
+                        "pointType", "MEMORY",
+                        "linkedMemoryId", startMemoryId,
+                        "label", "후시미 이나리"
+                ),
+                Map.of(
+                        "latitude", "34.9685000",
+                        "longitude", "135.7740000",
+                        "pointType", "ROUTE",
+                        "label", "경로 핀 1"
+                ),
+                Map.of(
+                        "latitude", "34.9699000",
+                        "longitude", "135.7763000",
+                        "pointType", "MEMORY",
+                        "linkedMemoryId", endMemoryId,
+                        "label", "교토역"
+                )
+        ));
+
+        mockMvc.perform(post("/api/travel/plans/{planId}/routes", planId)
+                        .with(csrf())
+                        .session(hanaSession)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(payload)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.points.length()").value(3))
+                .andExpect(jsonPath("$.points[0].pointType").value("MEMORY"))
+                .andExpect(jsonPath("$.points[0].linkedMemoryId").value(startMemoryId))
+                .andExpect(jsonPath("$.points[0].label").value("후시미 이나리"))
+                .andExpect(jsonPath("$.points[1].pointType").value("ROUTE"))
+                .andExpect(jsonPath("$.points[1].label").value("경로 핀 1"))
+                .andExpect(jsonPath("$.points[2].pointType").value("MEMORY"))
+                .andExpect(jsonPath("$.points[2].linkedMemoryId").value(endMemoryId));
+
+        mockMvc.perform(get("/api/travel/plans/{planId}", planId).session(hanaSession))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.routeSegments.length()").value(1))
+                .andExpect(jsonPath("$.routeSegments[0].points.length()").value(3))
+                .andExpect(jsonPath("$.routeSegments[0].points[0].pointType").value("MEMORY"))
+                .andExpect(jsonPath("$.routeSegments[0].points[1].pointType").value("ROUTE"))
+                .andExpect(jsonPath("$.routeSegments[0].points[2].pointType").value("MEMORY"))
+                .andExpect(jsonPath("$.routeSegments[0].points[1].label").value("경로 핀 1"));
+    }
+
     private MockHttpSession loginAndGetSession(String loginId) throws Exception {
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("loginId", loginId);

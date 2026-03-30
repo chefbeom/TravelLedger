@@ -84,6 +84,8 @@ public class TravelService {
     private static final int MIN_ROUTE_PATH_CHAR_BUDGET = 220;
     private static final String ROUTE_PATH_FORMAT_POLYLINE6 = "POLYLINE6";
     private static final int ROUTE_PATH_PRECISION = 6;
+    private static final String ROUTE_POINT_TYPE_ROUTE = "ROUTE";
+    private static final String ROUTE_POINT_TYPE_MEMORY = "MEMORY";
     private static final List<String> DEFAULT_CURRENCIES = List.of("KRW", "USD", "JPY", "CNY", "EUR");
     private static final List<String> DEFAULT_BUDGET_CATEGORIES = List.of(
             "Flight",
@@ -812,7 +814,7 @@ public class TravelService {
         routeSegment.setSourceType(sourceType);
         routeSegment.setStartPlaceName(trimToNull(request.startPlaceName()));
         routeSegment.setEndPlaceName(trimToNull(request.endPlaceName()));
-        routeSegment.setRoutePathJson(serializeRoutePoints(normalizedPoints));
+        routeSegment.setRoutePathJson(serializeRoutePoints(normalizedPoints, sourceType));
         routeSegment.setLineColorHex(resolveRouteLineColor(request.lineColorHex(), routeSegment.getPlan().getColorHex()));
         routeSegment.setLineStyle(request.lineStyle() != null ? request.lineStyle() : TravelRouteLineStyle.SOLID);
         routeSegment.setMemo(trimToNull(request.memo()));
@@ -1210,7 +1212,10 @@ public class TravelService {
         List<TravelRoutePointRequest> normalized = points.stream()
                 .map(point -> new TravelRoutePointRequest(
                         normalizeCoordinate(point.latitude(), true),
-                        normalizeCoordinate(point.longitude(), false)
+                        normalizeCoordinate(point.longitude(), false),
+                        normalizeRoutePointType(point.pointType()),
+                        point.linkedMemoryId(),
+                        trimRoutePointLabel(point.label())
                 ))
                 .toList();
 
@@ -1227,16 +1232,34 @@ public class TravelService {
         }
 
         int budget = resolveRoutePathCharBudget();
-        String serialized = serializeRoutePoints(candidate);
+        String serialized = serializeRoutePoints(candidate, sourceType);
         while (candidate.size() > 2 && serialized.length() > budget) {
             int nextTarget = candidate.size() <= 8
                     ? Math.max(2, candidate.size() - 1)
                     : Math.max(2, (int) Math.ceil(candidate.size() * 0.65));
             candidate = thinRoutePoints(candidate, nextTarget);
-            serialized = serializeRoutePoints(candidate);
+            serialized = serializeRoutePoints(candidate, sourceType);
         }
 
         return candidate;
+    }
+
+    private String normalizeRoutePointType(String pointType) {
+        String normalized = trimToNull(pointType);
+        if (normalized == null) {
+            return ROUTE_POINT_TYPE_ROUTE;
+        }
+        return ROUTE_POINT_TYPE_MEMORY.equalsIgnoreCase(normalized)
+                ? ROUTE_POINT_TYPE_MEMORY
+                : ROUTE_POINT_TYPE_ROUTE;
+    }
+
+    private String trimRoutePointLabel(String label) {
+        String trimmed = trimToNull(label);
+        if (trimmed == null) {
+            return null;
+        }
+        return trimmed.length() > 160 ? trimmed.substring(0, 160) : trimmed;
     }
 
     private List<TravelRoutePointRequest> deduplicateRoutePoints(List<TravelRoutePointRequest> points) {
@@ -1277,8 +1300,11 @@ public class TravelService {
         return List.copyOf(reduced);
     }
 
-    private String serializeRoutePoints(List<TravelRoutePointRequest> points) {
+    private String serializeRoutePoints(List<TravelRoutePointRequest> points, TravelRouteSourceType sourceType) {
         try {
+            if (sourceType != TravelRouteSourceType.GPX) {
+                return objectMapper.writeValueAsString(points);
+            }
             return objectMapper.writeValueAsString(new RoutePathPayload(
                     ROUTE_PATH_FORMAT_POLYLINE6,
                     encodeRoutePolyline(points)
@@ -1398,7 +1424,7 @@ public class TravelService {
                     List<TravelRoutePointRequest> deduplicatedPoints = deduplicateRoutePoints(mergedPoints);
                     if (deduplicatedPoints.size() >= 2) {
                         return deduplicatedPoints.stream()
-                                .map(point -> new TravelRoutePointResponse(point.latitude(), point.longitude()))
+                                .map(this::toRoutePointResponse)
                                 .toList();
                     }
                 } catch (RuntimeException ignored) {
@@ -1473,7 +1499,7 @@ public class TravelService {
                 List<TravelRoutePointRequest> points = objectMapper.readValue(trimmed, new TypeReference<>() {
                 });
                 return points.stream()
-                        .map(point -> new TravelRoutePointResponse(point.latitude(), point.longitude()))
+                        .map(this::toRoutePointResponse)
                         .toList();
             }
 
@@ -1487,11 +1513,21 @@ public class TravelService {
             }
 
             return decodeRoutePolyline(payload.encodedPath()).stream()
-                    .map(point -> new TravelRoutePointResponse(point.latitude(), point.longitude()))
+                    .map(this::toRoutePointResponse)
                     .toList();
         } catch (JsonProcessingException exception) {
             throw new BadRequestException("Failed to read saved route points.");
         }
+    }
+
+    private TravelRoutePointResponse toRoutePointResponse(TravelRoutePointRequest point) {
+        return new TravelRoutePointResponse(
+                point.latitude(),
+                point.longitude(),
+                normalizeRoutePointType(point.pointType()),
+                point.linkedMemoryId(),
+                trimRoutePointLabel(point.label())
+        );
     }
 
     private String encodeRoutePolyline(List<TravelRoutePointRequest> points) {

@@ -223,6 +223,9 @@ const insights = computed(() => buildInsights(statsEntries.value))
 const isEditingEntry = computed(() => editingEntryId.value !== null)
 const entrySuggestions = computed(() => {
   const keyword = entryForm.title.trim().toLowerCase()
+  if (!keyword) {
+    return []
+  }
   const baseEntries = [
     ...(dashboard.value.recentEntries ?? []),
     ...monthEntries.value,
@@ -275,7 +278,7 @@ const entrySuggestions = computed(() => {
       })
     })
 
-  return suggestions.slice(0, keyword ? 6 : 4)
+  return suggestions.slice(0, 6)
 })
 
 watch(
@@ -706,15 +709,8 @@ async function exportEntriesToCsv() {
     if (!csvExportRange.value.isAll && (!csvExportRange.value.from || !csvExportRange.value.to)) {
       throw new Error('CSV 저장 범위를 먼저 확인해 주세요.')
     }
-    const secondaryPin = window.prompt('CSV를 내려받으려면 2차 비밀번호 8자리를 입력하세요.')
-    if (secondaryPin === null) {
-      return
-    }
-    if (!/^\d{8}$/.test(secondaryPin.trim())) {
-      throw new Error('2차 비밀번호는 숫자 8자리여야 합니다.')
-    }
-    await downloadLedgerCsv(csvExportRange.value.from, csvExportRange.value.to, secondaryPin.trim())
-    setFeedback(`2차 비밀번호로 보호된 CSV 압축 파일을 저장했습니다. (${csvExportLabel.value})`)
+    await downloadLedgerCsv(csvExportRange.value.from, csvExportRange.value.to)
+    setFeedback(`현재 로그인에 사용한 2차 비밀번호로 보호된 CSV 압축 파일을 저장했습니다. (${csvExportLabel.value})`)
   } catch (error) {
     setFeedback('', error.message)
   } finally {

@@ -932,6 +932,7 @@ button {
   border-radius: 18px;
   background: linear-gradient(180deg, #f8fbff, #eff3f8);
   min-width: 0;
+  overflow: hidden;
 }
 
 .bar-chart__bar {

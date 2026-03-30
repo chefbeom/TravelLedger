@@ -32,7 +32,7 @@ const maxValue = computed(() => {
   return Math.max(...props.items.map((item) => Number(item.value ?? 0)), 1)
 })
 
-const trackHeight = 180
+const trackHeight = 164
 
 function getHeight(item) {
   const value = Number(item.value ?? 0)

@@ -6,6 +6,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -105,6 +106,23 @@ class LedgerEntryUserScopeIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.loginId").value("hana"))
                 .andExpect(jsonPath("$.displayName").isNotEmpty());
+    }
+
+    @Test
+    void csvExportUsesVerifiedSecondaryPinFromSession() throws Exception {
+        MockHttpSession hanaSession = loginAndGetSession("hana", false);
+
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("from", null);
+        payload.put("to", null);
+
+        mockMvc.perform(post("/api/entries/export/csv")
+                        .with(csrf())
+                        .session(hanaSession)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(payload)))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Content-Disposition", org.hamcrest.Matchers.containsString("ledger-all.csv.zip")));
     }
 
     private MockHttpSession loginAndGetSession(String loginId, boolean rememberDevice) throws Exception {

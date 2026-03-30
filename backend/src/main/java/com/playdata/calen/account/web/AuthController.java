@@ -5,6 +5,7 @@ import com.playdata.calen.account.dto.AuthLoginRequest;
 import com.playdata.calen.account.domain.AppUser;
 import com.playdata.calen.account.domain.LoginAuditStatus;
 import com.playdata.calen.account.security.AppUserPrincipal;
+import com.playdata.calen.account.security.SecondaryPinSessionSupport;
 import com.playdata.calen.account.service.AppUserService;
 import com.playdata.calen.account.service.LoginAuditLogService;
 import com.playdata.calen.account.service.LoginAttemptService;
@@ -59,6 +60,7 @@ public class AuthController {
             HttpServletResponse httpResponse
     ) {
         String normalizedLoginId = request.loginId().trim();
+        String normalizedSecondaryPin = request.secondaryPin().trim();
         String clientIp = resolveClientIp(httpRequest);
         String userAgent = httpRequest.getHeader("User-Agent");
         try {
@@ -80,7 +82,7 @@ public class AuthController {
         try {
             authentication = authenticate(normalizedLoginId, request.password());
             authenticatedUser = appUserService.getRequiredUser(((AppUserPrincipal) authentication.getPrincipal()).userId());
-            appUserService.ensureSecondaryPinMatches(authenticatedUser, request.secondaryPin());
+            appUserService.ensureSecondaryPinMatches(authenticatedUser, normalizedSecondaryPin);
         } catch (com.playdata.calen.account.security.SecondaryPinMismatchException exception) {
             loginAttemptService.recordFailure(clientIp);
             AppUser user = appUserService.findActiveUserByLoginId(normalizedLoginId).orElse(null);
@@ -116,6 +118,7 @@ public class AuthController {
                 authenticatedUser
         );
         signIn(authentication, request.rememberDevice(), httpRequest, httpResponse);
+        SecondaryPinSessionSupport.storeVerifiedSecondaryPin(httpRequest, normalizedSecondaryPin);
         return appUserService.toResponse(authenticatedUser);
     }
 

@@ -232,7 +232,7 @@ async function downloadFile(path, fallbackFileName, options = {}) {
   window.URL.revokeObjectURL(objectUrl)
 }
 
-export function downloadLedgerCsv(from, to, secondaryPin) {
+export function downloadLedgerCsv(from, to) {
   const fallbackFileName = from && to
     ? `ledger-${from}_to_${to}.csv.zip`
     : 'ledger-all.csv.zip'
@@ -244,7 +244,6 @@ export function downloadLedgerCsv(from, to, secondaryPin) {
       body: JSON.stringify({
         from,
         to,
-        secondaryPin,
       }),
     },
   )

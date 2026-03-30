@@ -405,6 +405,40 @@ function nextRoutePinLabel(points = draftPoints.value) {
   return `경로 핀 ${routePinCount + 1}`
 }
 
+function syncDraftPointMetadata(points) {
+  let routePinCount = 0
+
+  return (points ?? []).map((point) => {
+    const normalized = createDraftPoint(point, {
+      pointType: point?.pointType === 'MEMORY' ? 'MEMORY' : 'ROUTE',
+      linkedMemoryId: point?.linkedMemoryId ?? null,
+      label: point?.label || '',
+    })
+
+    if (normalized.pointType === 'ROUTE') {
+      routePinCount += 1
+      return {
+        ...normalized,
+        label: `경로 핀 ${routePinCount}`,
+      }
+    }
+
+    return {
+      ...normalized,
+      label: normalized.label || '기록 핀',
+    }
+  })
+}
+
+function setDraftPoints(nextPoints, nextHighlightedIndex = highlightedDraftIndex.value) {
+  draftPoints.value = syncDraftPointMetadata(nextPoints)
+  if (!draftPoints.value.length) {
+    highlightedDraftIndex.value = -1
+    return
+  }
+  highlightedDraftIndex.value = Math.max(-1, Math.min(nextHighlightedIndex, draftPoints.value.length - 1))
+}
+
 function createDraftPoint(point, overrides = {}) {
   return {
     latitude: Number(Number(point.latitude).toFixed(7)),
@@ -431,8 +465,7 @@ function moveDraftPointByOffset(index, offset) {
   const reordered = [...draftPoints.value]
   const [movedPoint] = reordered.splice(index, 1)
   reordered.splice(targetIndex, 0, movedPoint)
-  draftPoints.value = reordered
-  highlightedDraftIndex.value = targetIndex
+  setDraftPoints(reordered, targetIndex)
 }
 
 function applyMemoryPinsToDraft() {
@@ -443,8 +476,7 @@ function applyMemoryPinsToDraft() {
   draft.sourceType = 'MANUAL'
   gpxFileNames.value = []
   gpxSelectedFiles.value = []
-  draftPoints.value = memoryRouteSeedPoints.value.map((point) => ({ ...point }))
-  highlightedDraftIndex.value = -1
+  setDraftPoints(memoryRouteSeedPoints.value.map((point) => ({ ...point })), -1)
 
   if (!draft.title.trim()) {
     draft.title = `${activeDayLabel.value} 경로`
@@ -554,14 +586,19 @@ async function parseGpxFile(file) {
 }
 
 function addDraftPoint(point) {
-  draftPoints.value = [
-    ...draftPoints.value,
+  const insertionIndex = highlightedDraftIndex.value >= 0
+    ? Math.min(highlightedDraftIndex.value + 1, draftPoints.value.length)
+    : draftPoints.value.length
+  const nextPoints = [...draftPoints.value]
+  nextPoints.splice(
+    insertionIndex,
+    0,
     createDraftPoint(point, {
       pointType: 'ROUTE',
-      label: nextRoutePinLabel(),
+      label: nextRoutePinLabel(nextPoints),
     }),
-  ]
-  highlightedDraftIndex.value = draftPoints.value.length - 1
+  )
+  setDraftPoints(nextPoints, insertionIndex)
 
   if (draft.sourceType === 'GPX') {
     draft.sourceType = 'MANUAL'
@@ -571,19 +608,14 @@ function addDraftPoint(point) {
 }
 
 function removeLastPoint() {
-  draftPoints.value = draftPoints.value.slice(0, -1)
-  if (highlightedDraftIndex.value >= draftPoints.value.length) {
-    highlightedDraftIndex.value = draftPoints.value.length - 1
-  }
+  setDraftPoints(draftPoints.value.slice(0, -1))
 }
 
 function removeDraftPoint(index) {
-  draftPoints.value = draftPoints.value.filter((_, pointIndex) => pointIndex !== index)
-  if (!draftPoints.value.length) {
-    highlightedDraftIndex.value = -1
-    return
-  }
-  highlightedDraftIndex.value = Math.min(highlightedDraftIndex.value, draftPoints.value.length - 1)
+  setDraftPoints(
+    draftPoints.value.filter((_, pointIndex) => pointIndex !== index),
+    highlightedDraftIndex.value > index ? highlightedDraftIndex.value - 1 : highlightedDraftIndex.value,
+  )
 }
 
 function updateDraftPoint(index, key, rawValue) {
@@ -632,7 +664,7 @@ function handleMoveDraftPoint(payload) {
     return
   }
 
-  draftPoints.value = draftPoints.value.map((point, index) => {
+  setDraftPoints(draftPoints.value.map((point, index) => {
     if (index !== payload.index) {
       return point
     }
@@ -641,8 +673,7 @@ function handleMoveDraftPoint(payload) {
       latitude: payload.point.latitude,
       longitude: payload.point.longitude,
     }
-  })
-  highlightedDraftIndex.value = payload.index
+  }), payload.index)
 }
 
 function resetDraft() {
@@ -657,10 +688,9 @@ function resetDraft() {
   draft.lineColorHex = props.travelPlan?.colorHex || '#3182F6'
   draft.lineStyle = 'SOLID'
   draft.memo = ''
-  draftPoints.value = []
+  setDraftPoints([], -1)
   gpxFileNames.value = []
   gpxSelectedFiles.value = []
-  highlightedDraftIndex.value = -1
   draft.routeDate = activeDayDate.value || props.travelPlan?.startDate || todayIso()
 }
 
@@ -682,21 +712,24 @@ function startEditRoute(route) {
   draft.lineColorHex = route.lineColorHex || props.travelPlan?.colorHex || '#3182F6'
   draft.lineStyle = route.lineStyle || 'SOLID'
   draft.memo = route.memo || ''
-  draftPoints.value = (route.points ?? []).map((point, index) =>
+  setDraftPoints((route.points ?? []).map((point, index) =>
     createDraftPoint(
       {
         latitude: Number(point.latitude),
         longitude: Number(point.longitude),
+        pointType: point.pointType,
+        linkedMemoryId: point.linkedMemoryId,
+        label: point.label,
       },
       {
-        pointType: 'ROUTE',
-        label: describeDraftPoint(index, (route.points ?? []).length),
+        pointType: point.pointType || 'ROUTE',
+        linkedMemoryId: point.linkedMemoryId,
+        label: point.label || describeDraftPoint(index, (route.points ?? []).length),
       },
     ),
-  )
+  ), -1)
   gpxFileNames.value = Array.isArray(route.gpxFileNames) ? [...route.gpxFileNames] : []
   gpxSelectedFiles.value = []
-  highlightedDraftIndex.value = -1
 }
 
 function buildPayload() {
@@ -720,6 +753,9 @@ function buildPayload() {
     points: pointsForSave.map((point) => ({
       latitude: Number(point.latitude),
       longitude: Number(point.longitude),
+      pointType: point.pointType || 'ROUTE',
+      linkedMemoryId: point.linkedMemoryId ?? null,
+      label: point.label || null,
     })),
   }
 }

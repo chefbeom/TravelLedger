@@ -1,6 +1,8 @@
 package com.playdata.calen.ledger.web;
 
 import com.playdata.calen.account.security.AppUserPrincipal;
+import com.playdata.calen.account.security.SecondaryPinSessionSupport;
+import com.playdata.calen.common.exception.BadRequestException;
 import com.playdata.calen.ledger.dto.LedgerCsvExportRequest;
 import com.playdata.calen.ledger.dto.LedgerEntryDateRangeResponse;
 import com.playdata.calen.ledger.dto.LedgerEntryRequest;
@@ -12,6 +14,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -54,13 +57,18 @@ public class LedgerEntryController {
     @PostMapping("/export/csv")
     public ResponseEntity<ByteArrayResource> exportEntriesCsv(
             @AuthenticationPrincipal AppUserPrincipal currentUser,
-            @Valid @RequestBody LedgerCsvExportRequest request
+            @Valid @RequestBody LedgerCsvExportRequest request,
+            HttpServletRequest httpRequest
     ) {
+        String verifiedSecondaryPin = SecondaryPinSessionSupport.getVerifiedSecondaryPin(httpRequest);
+        if (verifiedSecondaryPin == null || verifiedSecondaryPin.isBlank()) {
+            throw new BadRequestException("CSV를 저장하려면 2차 비밀번호가 검증된 로그인 세션이 필요합니다. 다시 로그인해 주세요.");
+        }
         LedgerEntryService.LedgerProtectedExport export = ledgerEntryService.exportEntriesCsvProtected(
                 currentUser.userId(),
                 request.from(),
                 request.to(),
-                request.secondaryPin()
+                verifiedSecondaryPin
         );
         String encodedFileName = URLEncoder.encode(export.fileName(), StandardCharsets.UTF_8).replace("+", "%20");
         return ResponseEntity.ok()

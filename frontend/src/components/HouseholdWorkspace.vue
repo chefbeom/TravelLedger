@@ -75,7 +75,7 @@ const isSubmitting = ref(false)
 const activeSubmit = ref('')
 const feedback = ref('')
 const errorMessage = ref('')
-const undoableCreate = ref(null)
+const undoableEntryAction = ref(null)
 const showUndoFeedback = ref(false)
 const householdTab = ref('calendar')
 const householdAnchorDate = ref(today)
@@ -198,7 +198,7 @@ const availableDetails = computed(() => {
   return group?.details ?? []
 })
 const amountPreview = computed(() => Number(entryForm.amount || 0))
-const canUndoLastCreate = computed(() => Boolean(undoableCreate.value?.entryId) && showUndoFeedback.value)
+const canUndoLastEntryAction = computed(() => Boolean(undoableEntryAction.value?.entryId) && showUndoFeedback.value)
 const quickStats = computed(() => dashboard.value.quickStats ?? [])
 const monthLabel = computed(() => formatMonthLabel(calendarAnchorDate.value))
 const calendarWeeks = computed(() => buildCalendarWeeks(dashboard.value.calendar ?? [], calendarAnchorDate.value))
@@ -400,7 +400,7 @@ onMounted(async () => {
     calendarReady.value = true
     statsReady.value = true
   } catch (error) {
-    undoableCreate.value = null
+    undoableEntryAction.value = null
     showUndoFeedback.value = false
     setFeedback('', error.message)
   } finally {
@@ -433,7 +433,7 @@ function setFeedback(message = '', error = '') {
     feedbackTimerId = window.setTimeout(() => {
       feedback.value = ''
       errorMessage.value = ''
-      undoableCreate.value = null
+      undoableEntryAction.value = null
       showUndoFeedback.value = false
       feedbackTimerId = null
     }, 5000)
@@ -474,6 +474,36 @@ function restoreEntryFormSnapshot(snapshot) {
   amountInput.value = snapshot.amountInput || ''
   isEntryTimeEnabled.value = Boolean(snapshot.isTimeEnabled)
   syncEntryDefaults()
+}
+
+function restoreSubmittedEntryAction(action) {
+  if (!action?.submittedSnapshot) {
+    return
+  }
+
+  restoreEntryFormSnapshot(action.submittedSnapshot)
+
+  if (action.type === 'update' && action.entryId) {
+    editingEntryId.value = action.entryId
+  }
+}
+
+function buildEntryPayloadFromEntry(entry) {
+  if (!entry) {
+    return null
+  }
+
+  return {
+    entryDate: entry.entryDate,
+    entryTime: entry.entryTime || '00:00',
+    title: entry.title || '',
+    memo: entry.memo || null,
+    amount: Number(entry.amount || 0),
+    entryType: entry.entryType,
+    categoryGroupId: Number(entry.categoryGroupId),
+    categoryDetailId: entry.categoryDetailId != null ? Number(entry.categoryDetailId) : null,
+    paymentMethodId: Number(entry.paymentMethodId),
+  }
 }
 
 function sanitizeAmountInput(value) {
@@ -900,19 +930,32 @@ async function submitEntry() {
   activeSubmit.value = 'entry'
   setFeedback()
   try {
+    const submittedSnapshot = buildEntryFormSnapshot()
+    const submittedPayload = buildEntryPayload()
     if (editingEntryId.value) {
-      undoableCreate.value = null
-      showUndoFeedback.value = false
-      await updateEntry(editingEntryId.value, buildEntryPayload())
+      const rollbackEntry = monthEntries.value.find((entry) => entry.id === editingEntryId.value)
+        ?? statsEntries.value.find((entry) => entry.id === editingEntryId.value)
+        ?? dashboard.value.recentEntries?.find((entry) => entry.id === editingEntryId.value)
+      const rollbackPayload = buildEntryPayloadFromEntry(rollbackEntry)
+      await updateEntry(editingEntryId.value, submittedPayload)
+      undoableEntryAction.value = rollbackPayload
+        ? {
+            type: 'update',
+            entryId: editingEntryId.value,
+            rollbackPayload,
+            submittedSnapshot,
+          }
+        : null
+      showUndoFeedback.value = Boolean(undoableEntryAction.value?.entryId)
       setFeedback('가계부 내역을 수정했습니다.')
     } else {
-      const snapshot = buildEntryFormSnapshot()
-      const createdEntry = await createEntry(buildEntryPayload())
-      undoableCreate.value = {
+      const createdEntry = await createEntry(submittedPayload)
+      undoableEntryAction.value = {
+        type: 'create',
         entryId: createdEntry?.id ?? null,
-        snapshot,
+        submittedSnapshot,
       }
-      showUndoFeedback.value = true
+      showUndoFeedback.value = Boolean(undoableEntryAction.value?.entryId)
       setFeedback('가계부 내역을 등록했습니다.')
     }
     await refreshLedgerViews()
@@ -925,8 +968,8 @@ async function submitEntry() {
   }
 }
 
-async function undoLastCreatedEntry() {
-  if (!undoableCreate.value?.entryId) {
+async function undoLastEntryAction() {
+  if (!undoableEntryAction.value?.entryId) {
     return
   }
 
@@ -935,11 +978,15 @@ async function undoLastCreatedEntry() {
   setFeedback()
 
   try {
-    const snapshot = undoableCreate.value.snapshot
-    await deleteEntry(undoableCreate.value.entryId)
+    const action = undoableEntryAction.value
+    if (action.type === 'update' && action.rollbackPayload) {
+      await updateEntry(action.entryId, action.rollbackPayload)
+    } else {
+      await deleteEntry(action.entryId)
+    }
     await refreshLedgerViews()
-    restoreEntryFormSnapshot(snapshot)
-    undoableCreate.value = null
+    restoreSubmittedEntryAction(action)
+    undoableEntryAction.value = null
     showUndoFeedback.value = false
     setFeedback('방금 등록한 내역을 취소하고 입력값을 복구했습니다.')
     await nextTick()
@@ -1120,10 +1167,10 @@ async function deactivatePayment(paymentId) {
     <div v-if="feedback" class="feedback feedback--success feedback--actionable">
       <span>{{ feedback }}</span>
       <button
-        v-if="canUndoLastCreate"
+        v-if="canUndoLastEntryAction"
         class="button button--ghost feedback__action"
         :disabled="isSubmitting"
-        @click="undoLastCreatedEntry"
+        @click="undoLastEntryAction"
       >
         실행 취소
       </button>

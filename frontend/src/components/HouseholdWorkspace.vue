@@ -76,7 +76,6 @@ const activeSubmit = ref('')
 const feedback = ref('')
 const errorMessage = ref('')
 const undoableEntryAction = ref(null)
-const showUndoFeedback = ref(false)
 const householdTab = ref('calendar')
 const householdAnchorDate = ref(today)
 const calendarAnchorDate = householdAnchorDate
@@ -198,7 +197,12 @@ const availableDetails = computed(() => {
   return group?.details ?? []
 })
 const amountPreview = computed(() => Number(entryForm.amount || 0))
-const canUndoLastEntryAction = computed(() => Boolean(undoableEntryAction.value?.entryId) && showUndoFeedback.value)
+const canUndoLastEntryAction = computed(() => Boolean(undoableEntryAction.value?.entryId))
+const undoEntryActionLabel = computed(() => (
+  undoableEntryAction.value?.type === 'update'
+    ? '수정 취소'
+    : '등록 취소'
+))
 const quickStats = computed(() => dashboard.value.quickStats ?? [])
 const monthLabel = computed(() => formatMonthLabel(calendarAnchorDate.value))
 const calendarWeeks = computed(() => buildCalendarWeeks(dashboard.value.calendar ?? [], calendarAnchorDate.value))
@@ -401,7 +405,6 @@ onMounted(async () => {
     statsReady.value = true
   } catch (error) {
     undoableEntryAction.value = null
-    showUndoFeedback.value = false
     setFeedback('', error.message)
   } finally {
     isLoading.value = false
@@ -420,9 +423,6 @@ onBeforeUnmount(() => {
 function setFeedback(message = '', error = '') {
   feedback.value = message
   errorMessage.value = error
-  if (!message) {
-    showUndoFeedback.value = false
-  }
 
   if (feedbackTimerId) {
     window.clearTimeout(feedbackTimerId)
@@ -433,8 +433,6 @@ function setFeedback(message = '', error = '') {
     feedbackTimerId = window.setTimeout(() => {
       feedback.value = ''
       errorMessage.value = ''
-      undoableEntryAction.value = null
-      showUndoFeedback.value = false
       feedbackTimerId = null
     }, 5000)
   }
@@ -453,6 +451,26 @@ function buildEntryFormSnapshot() {
     paymentMethodId: entryForm.paymentMethodId,
     amountInput: amountInput.value,
     isTimeEnabled: isEntryTimeEnabled.value,
+  }
+}
+
+function buildEntryFormSnapshotFromEntry(entry) {
+  if (!entry) {
+    return null
+  }
+
+  return {
+    entryDate: entry.entryDate,
+    entryTime: entry.entryTime || '00:00',
+    title: entry.title || '',
+    memo: entry.memo || '',
+    amount: String(Number(entry.amount || 0)),
+    amountInput: String(Number(entry.amount || 0)),
+    entryType: entry.entryType || 'EXPENSE',
+    categoryGroupId: entry.categoryGroupId != null ? String(entry.categoryGroupId) : '',
+    categoryDetailId: entry.categoryDetailId != null ? String(entry.categoryDetailId) : '',
+    paymentMethodId: entry.paymentMethodId != null ? String(entry.paymentMethodId) : '',
+    isTimeEnabled: Boolean(entry.entryTime && entry.entryTime !== '00:00'),
   }
 }
 
@@ -477,15 +495,19 @@ function restoreEntryFormSnapshot(snapshot) {
 }
 
 function restoreSubmittedEntryAction(action) {
+  if (action.type === 'update' && action.rollbackSnapshot && action.entryId) {
+    restoreEntryFormSnapshot(action.rollbackSnapshot)
+    editingEntryId.value = action.entryId
+    return
+  }
+
   if (!action?.submittedSnapshot) {
     return
   }
 
   restoreEntryFormSnapshot(action.submittedSnapshot)
 
-  if (action.type === 'update' && action.entryId) {
-    editingEntryId.value = action.entryId
-  }
+  editingEntryId.value = null
 }
 
 function buildEntryPayloadFromEntry(entry) {
@@ -937,16 +959,16 @@ async function submitEntry() {
         ?? statsEntries.value.find((entry) => entry.id === editingEntryId.value)
         ?? dashboard.value.recentEntries?.find((entry) => entry.id === editingEntryId.value)
       const rollbackPayload = buildEntryPayloadFromEntry(rollbackEntry)
+      const rollbackSnapshot = buildEntryFormSnapshotFromEntry(rollbackEntry)
       await updateEntry(editingEntryId.value, submittedPayload)
       undoableEntryAction.value = rollbackPayload
         ? {
             type: 'update',
             entryId: editingEntryId.value,
             rollbackPayload,
-            submittedSnapshot,
+            rollbackSnapshot,
           }
         : null
-      showUndoFeedback.value = Boolean(undoableEntryAction.value?.entryId)
       setFeedback('가계부 내역을 수정했습니다.')
     } else {
       const createdEntry = await createEntry(submittedPayload)
@@ -955,7 +977,6 @@ async function submitEntry() {
         entryId: createdEntry?.id ?? null,
         submittedSnapshot,
       }
-      showUndoFeedback.value = Boolean(undoableEntryAction.value?.entryId)
       setFeedback('가계부 내역을 등록했습니다.')
     }
     await refreshLedgerViews()
@@ -987,8 +1008,9 @@ async function undoLastEntryAction() {
     await refreshLedgerViews()
     restoreSubmittedEntryAction(action)
     undoableEntryAction.value = null
-    showUndoFeedback.value = false
-    setFeedback('방금 제출한 내역을 취소하고 입력값을 빠른 거래 입력에 복구했습니다.')
+    setFeedback(action.type === 'update'
+      ? '방금 수정한 내역을 취소하고 수정 전 값으로 복구했습니다.'
+      : '방금 등록한 내역을 취소하고 입력값을 빠른 거래 입력에 복구했습니다.')
     await nextTick()
     calendarWorkspaceRef.value?.scrollToEntryEditor?.()
   } catch (error) {
@@ -1166,14 +1188,6 @@ async function deactivatePayment(paymentId) {
   <div class="workspace-stack">
     <div v-if="feedback" class="feedback feedback--success feedback--actionable">
       <span>{{ feedback }}</span>
-      <button
-        v-if="canUndoLastEntryAction"
-        class="button button--ghost feedback__action"
-        :disabled="isSubmitting"
-        @click="undoLastEntryAction"
-      >
-        입력 취소
-      </button>
     </div>
     <div v-if="errorMessage" class="feedback feedback--error">{{ errorMessage }}</div>
 
@@ -1258,12 +1272,14 @@ async function deactivatePayment(paymentId) {
       :format-currency="formatCurrency"
       :format-short-date="formatShortDate"
       :format-time="formatTime"
+      :can-undo-last-entry-action="canUndoLastEntryAction"
+      :undo-entry-action-label="undoEntryActionLabel"
       @update:amount-input="handleAmountInput"
       @update:time-enabled="updateTimeEnabled"
       @fill-amount="fillAmount"
       @add-amount="addAmount"
       @submit-entry="submitEntry"
-      @reset-entry="resetEntryForm"
+      @undo-entry-action="undoLastEntryAction"
       @edit-entry="fillEntryFormAndScroll"
       @delete-entry="removeEntry"
       @apply-entry-suggestion="applyEntrySuggestion"

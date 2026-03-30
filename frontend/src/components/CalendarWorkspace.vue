@@ -61,6 +61,14 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
+  canUndoLastEntryAction: {
+    type: Boolean,
+    default: false,
+  },
+  undoEntryActionLabel: {
+    type: String,
+    default: '등록 취소',
+  },
   activeSubmit: {
     type: String,
     default: '',
@@ -133,7 +141,7 @@ const emit = defineEmits([
   'fill-amount',
   'add-amount',
   'submit-entry',
-  'reset-entry',
+  'undo-entry-action',
   'edit-entry',
   'delete-entry',
   'apply-entry-suggestion',
@@ -656,8 +664,14 @@ defineExpose({
                   : '거래 등록'
             }}
           </button>
-          <button v-if="isEditingEntry" type="button" class="button button--secondary" @click="emit('reset-entry')">
-            입력 취소
+          <button
+            v-if="canUndoLastEntryAction"
+            type="button"
+            class="button button--secondary"
+            :disabled="isSubmitting"
+            @click="emit('undo-entry-action')"
+          >
+            {{ undoEntryActionLabel }}
           </button>
         </div>
       </section>

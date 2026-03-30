@@ -988,7 +988,7 @@ async function undoLastEntryAction() {
     restoreSubmittedEntryAction(action)
     undoableEntryAction.value = null
     showUndoFeedback.value = false
-    setFeedback('방금 등록한 내역을 취소하고 입력값을 복구했습니다.')
+    setFeedback('방금 제출한 내역을 취소하고 입력값을 빠른 거래 입력에 복구했습니다.')
     await nextTick()
     calendarWorkspaceRef.value?.scrollToEntryEditor?.()
   } catch (error) {
@@ -1172,7 +1172,7 @@ async function deactivatePayment(paymentId) {
         :disabled="isSubmitting"
         @click="undoLastEntryAction"
       >
-        실행 취소
+        입력 취소
       </button>
     </div>
     <div v-if="errorMessage" class="feedback feedback--error">{{ errorMessage }}</div>

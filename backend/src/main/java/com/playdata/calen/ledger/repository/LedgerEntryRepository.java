@@ -11,19 +11,23 @@ import org.springframework.data.repository.query.Param;
 
 public interface LedgerEntryRepository extends JpaRepository<LedgerEntry, Long> {
 
-    List<LedgerEntry> findAllByOwnerIdOrderByEntryDateAscIdAsc(Long ownerId);
+    List<LedgerEntry> findAllByOwnerIdAndDeletedAtIsNullOrderByEntryDateAscIdAsc(Long ownerId);
 
-    List<LedgerEntry> findAllByOwnerIdAndEntryDateBetweenOrderByEntryDateAscIdAsc(Long ownerId, LocalDate from, LocalDate to);
+    List<LedgerEntry> findAllByOwnerIdAndDeletedAtIsNullAndEntryDateBetweenOrderByEntryDateAscIdAsc(Long ownerId, LocalDate from, LocalDate to);
 
-    List<LedgerEntry> findTop8ByOwnerIdOrderByEntryDateDescIdDesc(Long ownerId);
+    List<LedgerEntry> findTop8ByOwnerIdAndDeletedAtIsNullOrderByEntryDateDescIdDesc(Long ownerId);
 
-    java.util.Optional<LedgerEntry> findTop1ByOwnerIdOrderByEntryDateAscIdAsc(Long ownerId);
+    java.util.Optional<LedgerEntry> findTop1ByOwnerIdAndDeletedAtIsNullOrderByEntryDateAscIdAsc(Long ownerId);
 
-    java.util.Optional<LedgerEntry> findTop1ByOwnerIdOrderByEntryDateDescIdDesc(Long ownerId);
+    java.util.Optional<LedgerEntry> findTop1ByOwnerIdAndDeletedAtIsNullOrderByEntryDateDescIdDesc(Long ownerId);
 
-    boolean existsByOwnerIdAndEntryDateAndTitleAndAmount(Long ownerId, LocalDate entryDate, String title, java.math.BigDecimal amount);
+    boolean existsByOwnerIdAndDeletedAtIsNullAndEntryDateAndTitleAndAmount(Long ownerId, LocalDate entryDate, String title, java.math.BigDecimal amount);
 
-    java.util.Optional<LedgerEntry> findByIdAndOwnerId(Long id, Long ownerId);
+    java.util.Optional<LedgerEntry> findByIdAndOwnerIdAndDeletedAtIsNull(Long id, Long ownerId);
+
+    java.util.Optional<LedgerEntry> findByIdAndOwnerIdAndDeletedAtIsNotNull(Long id, Long ownerId);
+
+    Page<LedgerEntry> findAllByOwnerIdAndDeletedAtIsNotNullOrderByDeletedAtDescEntryDateDescIdDesc(Long ownerId, Pageable pageable);
 
     @Query(
             value = """
@@ -33,6 +37,7 @@ public interface LedgerEntryRepository extends JpaRepository<LedgerEntry, Long> 
                     left join entry.categoryDetail categoryDetail
                     join entry.paymentMethod paymentMethod
                     where entry.owner.id = :userId
+                      and entry.deletedAt is null
                       and entry.entryDate between :from and :to
                       and (
                             :keyword is null
@@ -55,6 +60,7 @@ public interface LedgerEntryRepository extends JpaRepository<LedgerEntry, Long> 
                     left join entry.categoryDetail categoryDetail
                     join entry.paymentMethod paymentMethod
                     where entry.owner.id = :userId
+                      and entry.deletedAt is null
                       and entry.entryDate between :from and :to
                       and (
                             :keyword is null
@@ -91,6 +97,7 @@ public interface LedgerEntryRepository extends JpaRepository<LedgerEntry, Long> 
             left join entry.categoryDetail categoryDetail
             join entry.paymentMethod paymentMethod
             where entry.owner.id = :userId
+              and entry.deletedAt is null
               and entry.entryDate between :from and :to
               and (
                     :keyword is null

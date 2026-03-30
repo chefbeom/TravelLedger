@@ -5,6 +5,7 @@ import com.playdata.calen.account.security.SecondaryPinSessionSupport;
 import com.playdata.calen.common.exception.BadRequestException;
 import com.playdata.calen.ledger.dto.LedgerCsvExportRequest;
 import com.playdata.calen.ledger.dto.LedgerEntryDateRangeResponse;
+import com.playdata.calen.ledger.dto.LedgerEntryPageResponse;
 import com.playdata.calen.ledger.dto.LedgerEntryRequest;
 import com.playdata.calen.ledger.dto.LedgerEntryResponse;
 import com.playdata.calen.ledger.dto.LedgerEntrySearchPageResponse;
@@ -88,6 +89,15 @@ public class LedgerEntryController {
         return ledgerEntryService.getEntryDateRange(currentUser.userId());
     }
 
+    @GetMapping("/trash")
+    public LedgerEntryPageResponse getDeletedEntries(
+            @AuthenticationPrincipal AppUserPrincipal currentUser,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "100") int size
+    ) {
+        return ledgerEntryService.getDeletedEntries(currentUser.userId(), page, size);
+    }
+
     @PostMapping("/export/csv")
     public ResponseEntity<ByteArrayResource> exportEntriesCsv(
             @AuthenticationPrincipal AppUserPrincipal currentUser,
@@ -130,7 +140,19 @@ public class LedgerEntryController {
     }
 
     @DeleteMapping("/{id}")
-    public void deleteEntry(@AuthenticationPrincipal AppUserPrincipal currentUser, @PathVariable Long id) {
-        ledgerEntryService.delete(currentUser.userId(), id);
+    public void deleteEntry(
+            @AuthenticationPrincipal AppUserPrincipal currentUser,
+            @PathVariable Long id,
+            @RequestParam(defaultValue = "false") boolean permanent
+    ) {
+        ledgerEntryService.delete(currentUser.userId(), id, permanent);
+    }
+
+    @PostMapping("/{id}/restore")
+    public LedgerEntryResponse restoreEntry(
+            @AuthenticationPrincipal AppUserPrincipal currentUser,
+            @PathVariable Long id
+    ) {
+        return ledgerEntryService.restore(currentUser.userId(), id);
     }
 }

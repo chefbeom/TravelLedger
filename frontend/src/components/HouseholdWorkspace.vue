@@ -14,6 +14,7 @@ import {
   fetchCategoryBreakdown,
   fetchCompare,
   fetchDashboard,
+  fetchDeletedEntryPage,
   fetchEntryDateRange,
   fetchEntrySearchPage,
   fetchEntries,
@@ -21,6 +22,7 @@ import {
   fetchOverview,
   fetchPaymentBreakdown,
   fetchPaymentMethods,
+  restoreEntry,
   saveHouseholdAggregatePreferences,
   updateEntry,
 } from '../lib/api'
@@ -117,6 +119,13 @@ const searchPageState = ref({
     balance: 0,
     count: 0,
   },
+})
+const trashPageState = ref({
+  content: [],
+  page: 0,
+  size: SEARCH_PAGE_SIZE,
+  totalElements: 0,
+  totalPages: 0,
 })
 const categories = ref([])
 const paymentMethods = ref([])
@@ -245,8 +254,10 @@ const searchSummary = computed(() => searchPageState.value.summary ?? {
   balance: 0,
   count: 0,
 })
+const trashResults = computed(() => trashPageState.value.content ?? [])
 const insights = computed(() => buildInsights(statsEntries.value))
 const searchPageInfo = computed(() => searchPageState.value)
+const trashPageInfo = computed(() => trashPageState.value)
 const isEditingEntry = computed(() => editingEntryId.value !== null)
 const entrySuggestions = computed(() => {
   const keyword = entryForm.title.trim().toLowerCase()
@@ -362,13 +373,17 @@ watch(
 watch(
   householdTab,
   async (value, previousValue) => {
-    if (!statsReady.value || value === previousValue || !value.startsWith('stats-')) {
+    if (!statsReady.value || value === previousValue) {
       return
     }
 
-    await loadStatisticsData()
+    if (value.startsWith('stats-') && value !== 'stats-trash') {
+      await loadStatisticsData()
+    }
     if (value === 'stats-search') {
       await loadSearchResults(0)
+    } else if (value === 'stats-trash') {
+      await loadTrashResults(0)
     }
   },
 )
@@ -676,6 +691,26 @@ async function loadSearchResults(page = 0) {
   }
 }
 
+async function loadTrashResults(page = 0) {
+  const response = await fetchDeletedEntryPage({
+    page,
+    size: SEARCH_PAGE_SIZE,
+  })
+
+  if (response.totalPages > 0 && page >= response.totalPages) {
+    await loadTrashResults(response.totalPages - 1)
+    return
+  }
+
+  trashPageState.value = {
+    content: response.content ?? [],
+    page: response.page ?? 0,
+    size: response.size ?? SEARCH_PAGE_SIZE,
+    totalElements: response.totalElements ?? 0,
+    totalPages: response.totalPages ?? 0,
+  }
+}
+
 async function loadPastComparisons() {
   const configs = buildPastComparisonRanges()
   pastComparisons.value = await Promise.all(
@@ -891,6 +926,8 @@ async function refreshLedgerViews() {
   await Promise.all([loadCalendarData(), loadStatisticsData()])
   if (householdTab.value === 'stats-search') {
     await loadSearchResults(searchPageState.value.page ?? 0)
+  } else if (householdTab.value === 'stats-trash') {
+    await loadTrashResults(trashPageState.value.page ?? 0)
   }
 }
 
@@ -1003,7 +1040,7 @@ async function undoLastEntryAction() {
     if (action.type === 'update' && action.rollbackPayload) {
       await updateEntry(action.entryId, action.rollbackPayload)
     } else {
-      await deleteEntry(action.entryId)
+      await deleteEntry(action.entryId, { permanent: true })
     }
     await refreshLedgerViews()
     restoreSubmittedEntryAction(action)
@@ -1013,6 +1050,37 @@ async function undoLastEntryAction() {
       : '방금 등록한 내역을 취소하고 입력값을 빠른 거래 입력에 복구했습니다.')
     await nextTick()
     calendarWorkspaceRef.value?.scrollToEntryEditor?.()
+  } catch (error) {
+    setFeedback('', error.message)
+  } finally {
+    isSubmitting.value = false
+    activeSubmit.value = ''
+  }
+}
+
+async function editEntryFromSearch(entry) {
+  householdTab.value = 'calendar'
+  calendarAnchorDate.value = entry.entryDate
+  await nextTick()
+  calendarWorkspaceRef.value?.setSelectedDate?.(entry.entryDate)
+  await fillEntryFormAndScroll(entry)
+}
+
+async function deleteEntryFromSearch(entry) {
+  if (!window.confirm(`'${entry.title}' 내역을 휴지통으로 이동할까요?`)) {
+    return
+  }
+  await removeEntry(entry)
+}
+
+async function restoreEntryFromTrash(entry) {
+  isSubmitting.value = true
+  activeSubmit.value = 'entry-restore'
+  setFeedback()
+  try {
+    await restoreEntry(entry.id)
+    await refreshLedgerViews()
+    setFeedback('휴지통의 가계부 내역을 복구했습니다.')
   } catch (error) {
     setFeedback('', error.message)
   } finally {
@@ -1237,6 +1305,7 @@ async function deactivatePayment(paymentId) {
         <button class="button" :class="{ 'button--primary': householdTab === 'calendar' }" @click="householdTab = 'calendar'">달력 가계부</button>
         <button class="button" :class="{ 'button--primary': householdTab === 'stats-overview' }" @click="householdTab = 'stats-overview'">통계 요약</button>
         <button class="button" :class="{ 'button--primary': householdTab === 'stats-search' }" @click="householdTab = 'stats-search'">검색</button>
+        <button class="button" :class="{ 'button--primary': householdTab === 'stats-trash' }" @click="householdTab = 'stats-trash'">휴지통</button>
         <button class="button" :class="{ 'button--primary': householdTab === 'stats-insights' }" @click="householdTab = 'stats-insights'">인사이트</button>
         <button class="button" :class="{ 'button--primary': householdTab === 'stats-compare' }" @click="householdTab = 'stats-compare'">비교</button>
         <button class="button" :class="{ 'button--primary': householdTab === 'import' }" @click="householdTab = 'import'">엑셀 가져오기</button>
@@ -1300,6 +1369,8 @@ async function deactivatePayment(paymentId) {
       :search-results="searchResults"
       :search-page-info="searchPageInfo"
       :search-summary="searchSummary"
+      :trash-results="trashResults"
+      :trash-page-info="trashPageInfo"
       :insights="insights"
       :past-comparisons="pastComparisons"
       :expense-breakdown="expenseBreakdown"
@@ -1312,6 +1383,10 @@ async function deactivatePayment(paymentId) {
       :format-date-range="formatDateRange"
       :format-time="formatTime"
       @change-search-page="loadSearchResults"
+      @change-trash-page="loadTrashResults"
+      @edit-search-entry="editEntryFromSearch"
+      @delete-search-entry="deleteEntryFromSearch"
+      @restore-trash-entry="restoreEntryFromTrash"
     />
 
     <LedgerImportWorkspace

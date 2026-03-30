@@ -15,6 +15,7 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.LocalTime;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -65,4 +66,7 @@ public class LedgerEntry {
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "payment_method_id", nullable = false)
     private PaymentMethod paymentMethod;
+
+    @Column(name = "deleted_at")
+    private LocalDateTime deletedAt;
 }

@@ -510,8 +510,13 @@ function scrollToEntryEditor() {
   quickEntryPanelRef.value?.scrollIntoView({ behavior: 'smooth', block: 'start' })
 }
 
+function setSelectedDate(value) {
+  selectedDate.value = value
+}
+
 defineExpose({
   scrollToEntryEditor,
+  setSelectedDate,
 })
 </script>
 

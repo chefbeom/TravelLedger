@@ -115,7 +115,7 @@ public class LedgerExcelImportService {
 
             String resolvedTitle = defaultIfBlank(row.title(), DEFAULT_IMPORTED_TITLE);
 
-            if (ledgerEntryRepository.existsByOwnerIdAndEntryDateAndTitleAndAmount(userId, row.entryDate(), resolvedTitle.trim(), row.amount())) {
+            if (ledgerEntryRepository.existsByOwnerIdAndDeletedAtIsNullAndEntryDateAndTitleAndAmount(userId, row.entryDate(), resolvedTitle.trim(), row.amount())) {
                 skippedCount++;
                 warnings.add(buildWarning(row, "Skipped as a likely duplicate."));
                 continue;

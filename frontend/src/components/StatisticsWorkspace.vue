@@ -7,7 +7,13 @@ import DonutChartCard from './DonutChartCard.vue'
 import SummaryCard from './SummaryCard.vue'
 
 const chartPalette = ['#3182f6', '#12b886', '#f59f00', '#ff6b6b', '#7c5cff', '#00b8d9', '#fd7e14', '#5c7cfa']
-const emit = defineEmits(['change-search-page'])
+const emit = defineEmits([
+  'change-search-page',
+  'change-trash-page',
+  'edit-search-entry',
+  'delete-search-entry',
+  'restore-trash-entry',
+])
 
 const props = defineProps({
   route: {
@@ -51,6 +57,14 @@ const props = defineProps({
     required: true,
   },
   searchSummary: {
+    type: Object,
+    required: true,
+  },
+  trashResults: {
+    type: Array,
+    default: () => [],
+  },
+  trashPageInfo: {
     type: Object,
     required: true,
   },
@@ -160,6 +174,7 @@ const monthOfYearChartItems = computed(() =>
 )
 
 const searchPageLabel = computed(() => Math.max(props.searchPageInfo.totalPages ?? 0, 1))
+const trashPageLabel = computed(() => Math.max(props.trashPageInfo.totalPages ?? 0, 1))
 </script>
 
 <template>
@@ -362,6 +377,7 @@ const searchPageLabel = computed(() => Math.max(props.searchPageInfo.totalPages 
                 <th>카테고리</th>
                 <th>결제수단</th>
                 <th>금액</th>
+                <th>관리</th>
               </tr>
             </thead>
             <tbody>
@@ -374,9 +390,15 @@ const searchPageLabel = computed(() => Math.max(props.searchPageInfo.totalPages 
                 <td :class="entry.entryType === 'INCOME' ? 'is-income' : 'is-expense'">
                   {{ formatCurrency(entry.amount) }}
                 </td>
+                <td>
+                  <div class="sheet-table__actions">
+                    <button type="button" class="button button--ghost" @click="emit('edit-search-entry', entry)">수정</button>
+                    <button type="button" class="button button--ghost" @click="emit('delete-search-entry', entry)">삭제</button>
+                  </div>
+                </td>
               </tr>
               <tr v-if="!searchResults.length">
-                <td colspan="6" class="sheet-table__empty">조건에 맞는 거래가 없습니다.</td>
+                <td colspan="7" class="sheet-table__empty">조건에 맞는 거래가 없습니다.</td>
               </tr>
             </tbody>
           </table>
@@ -397,6 +419,74 @@ const searchPageLabel = computed(() => Math.max(props.searchPageInfo.totalPages 
             type="button"
             :disabled="searchPageInfo.page + 1 >= searchPageLabel"
             @click="emit('change-search-page', searchPageInfo.page + 1)"
+          >
+            다음
+          </button>
+        </div>
+      </section>
+    </template>
+
+    <template v-else-if="route === 'stats-trash'">
+      <section class="panel">
+        <div class="panel__header">
+          <div>
+            <h2>휴지통</h2>
+            <p>삭제한 가계부 내역을 보관하고, 필요하면 다시 복구할 수 있습니다.</p>
+          </div>
+          <span class="panel__badge">{{ trashPageInfo.totalElements }}건</span>
+        </div>
+
+        <div class="sheet-table-wrap">
+          <table class="sheet-table stats-search-table">
+            <thead>
+              <tr>
+                <th>날짜</th>
+                <th>시각</th>
+                <th>제목</th>
+                <th>카테고리</th>
+                <th>결제수단</th>
+                <th>금액</th>
+                <th>관리</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="entry in trashResults" :key="entry.id">
+                <td>{{ formatFullDate(entry.entryDate) }}</td>
+                <td>{{ formatTime(entry.entryTime) }}</td>
+                <td class="sheet-table__title">{{ entry.title }}</td>
+                <td class="sheet-table__category">{{ entry.categoryGroupName }}<template v-if="entry.categoryDetailName"> / {{ entry.categoryDetailName }}</template></td>
+                <td class="sheet-table__textwrap">{{ entry.paymentMethodName }}</td>
+                <td :class="entry.entryType === 'INCOME' ? 'is-income' : 'is-expense'">
+                  {{ formatCurrency(entry.amount) }}
+                </td>
+                <td>
+                  <div class="sheet-table__actions">
+                    <button type="button" class="button button--ghost" @click="emit('restore-trash-entry', entry)">복구</button>
+                  </div>
+                </td>
+              </tr>
+              <tr v-if="!trashResults.length">
+                <td colspan="7" class="sheet-table__empty">휴지통에 보관된 거래가 없습니다.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="panel__actions">
+          <button
+            class="button button--ghost"
+            type="button"
+            :disabled="trashPageInfo.page <= 0"
+            @click="emit('change-trash-page', trashPageInfo.page - 1)"
+          >
+            이전
+          </button>
+          <span>{{ trashPageInfo.page + 1 }} / {{ trashPageLabel }}</span>
+          <button
+            class="button button--ghost"
+            type="button"
+            :disabled="trashPageInfo.page + 1 >= trashPageLabel"
+            @click="emit('change-trash-page', trashPageInfo.page + 1)"
           >
             다음
           </button>

@@ -10,6 +10,7 @@ import com.playdata.calen.ledger.domain.EntryType;
 import com.playdata.calen.ledger.domain.LedgerEntry;
 import com.playdata.calen.ledger.domain.PaymentMethod;
 import com.playdata.calen.ledger.dto.LedgerEntryDateRangeResponse;
+import com.playdata.calen.ledger.dto.LedgerEntryPageResponse;
 import com.playdata.calen.ledger.dto.LedgerEntrySearchPageResponse;
 import com.playdata.calen.ledger.dto.LedgerEntrySearchSummaryResponse;
 import com.playdata.calen.ledger.dto.LedgerEntryRequest;
@@ -24,6 +25,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.YearMonth;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -50,13 +52,35 @@ public class LedgerEntryService {
     private final PaymentMethodRepository paymentMethodRepository;
 
     private static final int MAX_SEARCH_PAGE_SIZE = 100;
+    private static final int MAX_TRASH_PAGE_SIZE = 100;
 
     public List<LedgerEntryResponse> getEntries(Long userId, LocalDate from, LocalDate to) {
         appUserService.getRequiredUser(userId);
         DateRange range = normalizeRange(from, to);
-        return ledgerEntryRepository.findAllByOwnerIdAndEntryDateBetweenOrderByEntryDateAscIdAsc(userId, range.from(), range.to()).stream()
+        return ledgerEntryRepository.findAllByOwnerIdAndDeletedAtIsNullAndEntryDateBetweenOrderByEntryDateAscIdAsc(userId, range.from(), range.to()).stream()
                 .map(this::toResponse)
                 .toList();
+    }
+
+    public LedgerEntryPageResponse getDeletedEntries(Long userId, int page, int size) {
+        appUserService.getRequiredUser(userId);
+        int safePage = Math.max(page, 0);
+        int safeSize = Math.min(Math.max(size, 1), MAX_TRASH_PAGE_SIZE);
+
+        Page<LedgerEntry> resultPage = ledgerEntryRepository.findAllByOwnerIdAndDeletedAtIsNotNullOrderByDeletedAtDescEntryDateDescIdDesc(
+                userId,
+                PageRequest.of(safePage, safeSize)
+        );
+
+        return new LedgerEntryPageResponse(
+                resultPage.getContent().stream()
+                        .map(this::toResponse)
+                        .toList(),
+                resultPage.getNumber(),
+                resultPage.getSize(),
+                resultPage.getTotalElements(),
+                resultPage.getTotalPages()
+        );
     }
 
     public LedgerEntrySearchPageResponse searchEntries(
@@ -138,7 +162,7 @@ public class LedgerEntryService {
     public LedgerCsvExport exportEntriesCsv(Long userId, LocalDate from, LocalDate to) {
         appUserService.getRequiredUser(userId);
         if (from == null && to == null) {
-            List<LedgerEntryResponse> entries = ledgerEntryRepository.findAllByOwnerIdOrderByEntryDateAscIdAsc(userId).stream()
+            List<LedgerEntryResponse> entries = ledgerEntryRepository.findAllByOwnerIdAndDeletedAtIsNullOrderByEntryDateAscIdAsc(userId).stream()
                     .map(this::toResponse)
                     .toList();
             return new LedgerCsvExport(
@@ -149,7 +173,7 @@ public class LedgerEntryService {
         }
 
         DateRange range = normalizeRange(from, to);
-        List<LedgerEntryResponse> entries = ledgerEntryRepository.findAllByOwnerIdAndEntryDateBetweenOrderByEntryDateAscIdAsc(userId, range.from(), range.to()).stream()
+        List<LedgerEntryResponse> entries = ledgerEntryRepository.findAllByOwnerIdAndDeletedAtIsNullAndEntryDateBetweenOrderByEntryDateAscIdAsc(userId, range.from(), range.to()).stream()
                 .map(this::toResponse)
                 .toList();
         return new LedgerCsvExport(
@@ -173,17 +197,17 @@ public class LedgerEntryService {
 
     public List<LedgerEntryResponse> getRecentEntries(Long userId) {
         appUserService.getRequiredUser(userId);
-        return ledgerEntryRepository.findTop8ByOwnerIdOrderByEntryDateDescIdDesc(userId).stream()
+        return ledgerEntryRepository.findTop8ByOwnerIdAndDeletedAtIsNullOrderByEntryDateDescIdDesc(userId).stream()
                 .map(this::toResponse)
                 .toList();
     }
 
     public LedgerEntryDateRangeResponse getEntryDateRange(Long userId) {
         appUserService.getRequiredUser(userId);
-        LocalDate earliestDate = ledgerEntryRepository.findTop1ByOwnerIdOrderByEntryDateAscIdAsc(userId)
+        LocalDate earliestDate = ledgerEntryRepository.findTop1ByOwnerIdAndDeletedAtIsNullOrderByEntryDateAscIdAsc(userId)
                 .map(LedgerEntry::getEntryDate)
                 .orElse(null);
-        LocalDate latestDate = ledgerEntryRepository.findTop1ByOwnerIdOrderByEntryDateDescIdDesc(userId)
+        LocalDate latestDate = ledgerEntryRepository.findTop1ByOwnerIdAndDeletedAtIsNullOrderByEntryDateDescIdDesc(userId)
                 .map(LedgerEntry::getEntryDate)
                 .orElse(null);
         return new LedgerEntryDateRangeResponse(earliestDate, latestDate);
@@ -200,23 +224,35 @@ public class LedgerEntryService {
 
     @Transactional
     public LedgerEntryResponse update(Long userId, Long entryId, LedgerEntryRequest request) {
-        LedgerEntry ledgerEntry = ledgerEntryRepository.findByIdAndOwnerId(entryId, userId)
+        LedgerEntry ledgerEntry = ledgerEntryRepository.findByIdAndOwnerIdAndDeletedAtIsNull(entryId, userId)
                 .orElseThrow(() -> new NotFoundException("거래를 찾을 수 없습니다."));
         applyRequest(userId, ledgerEntry, request);
         return toResponse(ledgerEntry);
     }
 
     @Transactional
-    public void delete(Long userId, Long entryId) {
-        LedgerEntry ledgerEntry = ledgerEntryRepository.findByIdAndOwnerId(entryId, userId)
+    public void delete(Long userId, Long entryId, boolean permanent) {
+        LedgerEntry ledgerEntry = ledgerEntryRepository.findByIdAndOwnerIdAndDeletedAtIsNull(entryId, userId)
                 .orElseThrow(() -> new NotFoundException("거래를 찾을 수 없습니다."));
-        ledgerEntryRepository.delete(ledgerEntry);
+        if (permanent) {
+            ledgerEntryRepository.delete(ledgerEntry);
+            return;
+        }
+        ledgerEntry.setDeletedAt(LocalDateTime.now());
+    }
+
+    @Transactional
+    public LedgerEntryResponse restore(Long userId, Long entryId) {
+        LedgerEntry ledgerEntry = ledgerEntryRepository.findByIdAndOwnerIdAndDeletedAtIsNotNull(entryId, userId)
+                .orElseThrow(() -> new NotFoundException("복구할 내역을 찾을 수 없습니다."));
+        ledgerEntry.setDeletedAt(null);
+        return toResponse(ledgerEntry);
     }
 
     public List<LedgerEntry> loadRawEntries(Long userId, LocalDate from, LocalDate to) {
         appUserService.getRequiredUser(userId);
         DateRange range = normalizeRange(from, to);
-        return ledgerEntryRepository.findAllByOwnerIdAndEntryDateBetweenOrderByEntryDateAscIdAsc(userId, range.from(), range.to());
+        return ledgerEntryRepository.findAllByOwnerIdAndDeletedAtIsNullAndEntryDateBetweenOrderByEntryDateAscIdAsc(userId, range.from(), range.to());
     }
 
     private LedgerEntryResponse toResponse(LedgerEntry entry) {

@@ -221,6 +221,10 @@ export function fetchEntryDateRange() {
   return request('/entries/date-range')
 }
 
+export function fetchDeletedEntryPage(params = {}) {
+  return request(buildUrl('/entries/trash', params).replace(API_BASE, ''))
+}
+
 function resolveDownloadFileName(response, fallback) {
   const disposition = response.headers.get('Content-Disposition') || ''
   const utf8Match = disposition.match(/filename\*=UTF-8''([^;]+)/i)
@@ -306,9 +310,16 @@ export function updateEntry(id, payload) {
   })
 }
 
-export function deleteEntry(id) {
-  return request(`/entries/${id}`, {
+export function deleteEntry(id, { permanent = false } = {}) {
+  const suffix = permanent ? '?permanent=true' : ''
+  return request(`/entries/${id}${suffix}`, {
     method: 'DELETE',
+  })
+}
+
+export function restoreEntry(id) {
+  return request(`/entries/${id}/restore`, {
+    method: 'POST',
   })
 }
 

@@ -62,7 +62,7 @@ class LedgerEntryUserScopeIntegrationTest {
 
         AppUser hana = appUserRepository.findByLoginId("hana").orElseThrow();
 
-        LedgerEntry hanaEntry = ledgerEntryRepository.findAllByOwnerIdAndEntryDateBetweenOrderByEntryDateAscIdAsc(
+        LedgerEntry hanaEntry = ledgerEntryRepository.findAllByOwnerIdAndDeletedAtIsNullAndEntryDateBetweenOrderByEntryDateAscIdAsc(
                         hana.getId(),
                         LocalDate.now().minusYears(1),
                         LocalDate.now().plusDays(1)
@@ -97,7 +97,18 @@ class LedgerEntryUserScopeIntegrationTest {
         mockMvc.perform(delete("/api/entries/{id}", hanaEntry.getId()).with(csrf()).session(hanaSession))
                 .andExpect(status().isOk());
 
-        assertThat(ledgerEntryRepository.findById(hanaEntry.getId())).isEmpty();
+        assertThat(ledgerEntryRepository.findById(hanaEntry.getId())).isPresent();
+        assertThat(ledgerEntryRepository.findById(hanaEntry.getId()).orElseThrow().getDeletedAt()).isNotNull();
+
+        mockMvc.perform(get("/api/entries/trash").session(hanaSession))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].id").value(hanaEntry.getId()));
+
+        mockMvc.perform(post("/api/entries/{id}/restore", hanaEntry.getId()).with(csrf()).session(hanaSession))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(hanaEntry.getId()));
+
+        assertThat(ledgerEntryRepository.findById(hanaEntry.getId()).orElseThrow().getDeletedAt()).isNull();
     }
 
     @Test

@@ -16,9 +16,14 @@ import com.playdata.calen.account.repository.AppUserRepository;
 import com.playdata.calen.ledger.domain.LedgerEntry;
 import com.playdata.calen.ledger.repository.LedgerEntryRepository;
 import jakarta.servlet.http.Cookie;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.LocalDate;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import net.lingala.zip4j.ZipFile;
+import net.lingala.zip4j.model.FileHeader;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -116,13 +121,31 @@ class LedgerEntryUserScopeIntegrationTest {
         payload.put("from", null);
         payload.put("to", null);
 
-        mockMvc.perform(post("/api/entries/export/csv")
+        MvcResult result = mockMvc.perform(post("/api/entries/export/csv")
                         .with(csrf())
                         .session(hanaSession)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(payload)))
                 .andExpect(status().isOk())
-                .andExpect(header().string("Content-Disposition", org.hamcrest.Matchers.containsString("ledger-all.csv.zip")));
+                .andExpect(header().string("Content-Disposition", org.hamcrest.Matchers.containsString("ledger-all.csv.zip")))
+                .andReturn();
+
+        Path zipPath = Files.createTempFile("ledger-export-", ".zip");
+        try {
+            Files.write(zipPath, result.getResponse().getContentAsByteArray());
+
+            try (ZipFile zipFile = new ZipFile(zipPath.toFile(), "12345678".toCharArray())) {
+                assertThat(zipFile.isValidZipFile()).isTrue();
+                assertThat(zipFile.isEncrypted()).isTrue();
+
+                FileHeader fileHeader = zipFile.getFileHeader("ledger-all.csv");
+                assertThat(fileHeader).isNotNull();
+                String csvText = new String(zipFile.getInputStream(fileHeader).readAllBytes(), StandardCharsets.UTF_8);
+                assertThat(csvText).contains("거래일");
+            }
+        } finally {
+            Files.deleteIfExists(zipPath);
+        }
     }
 
     private MockHttpSession loginAndGetSession(String loginId, boolean rememberDevice) throws Exception {

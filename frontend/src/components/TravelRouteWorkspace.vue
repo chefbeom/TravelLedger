@@ -215,7 +215,9 @@ const routeMapHintTitle = computed(() =>
 const routeMapHintText = computed(() =>
   isGpxMode.value
     ? '방문한 장소는 여행 기록 핀으로 따로 보이고, GPX는 이동한 길만 선으로 그립니다. 거리와 시간은 GPX 데이터로 계산합니다.'
-    : '여행 기록에서 저장한 장소 핀을 참고하면서, 지도 클릭으로 출발-경유-도착 제어점을 추가하고 드래그로 미세 조정할 수 있습니다.',
+    : highlightedDraftIndex.value >= 0
+      ? `${selectedDraftPointLabel.value} 뒤에 새 경로 핀을 넣으려면 지도를 클릭하세요.`
+      : '여행 기록에서 저장한 장소 핀을 참고하면서, 지도 클릭으로 출발-경유-도착 제어점을 추가하고 드래그로 미세 조정할 수 있습니다.',
 )
 
 const selectedDraftPoint = computed(() => {
@@ -647,6 +649,32 @@ function focusDraftPoint(index) {
   highlightedDraftIndex.value = index
 }
 
+function focusRoutePointFromMarker(marker) {
+  if (!marker || !draftPoints.value.length) {
+    return
+  }
+
+  const linkedIndex = draftPoints.value.findIndex((point) =>
+    point.pointType === 'MEMORY'
+      && point.linkedMemoryId != null
+      && String(point.linkedMemoryId) === String(marker.id),
+  )
+
+  if (linkedIndex >= 0) {
+    highlightedDraftIndex.value = linkedIndex
+    return
+  }
+
+  const coordinateIndex = draftPoints.value.findIndex((point) =>
+    Number(point.latitude) === Number(marker.latitude)
+      && Number(point.longitude) === Number(marker.longitude),
+  )
+
+  if (coordinateIndex >= 0) {
+    highlightedDraftIndex.value = coordinateIndex
+  }
+}
+
 function focusPreviousPoint() {
   if (highlightedDraftIndex.value > 0) {
     highlightedDraftIndex.value -= 1
@@ -905,6 +933,7 @@ function routeSummary(route) {
         @pick-route-point="addDraftPoint"
         @move-draft-point="handleMoveDraftPoint"
         @select-draft-point="focusDraftPoint"
+        @select-marker="focusRoutePointFromMarker"
       />
 
       <div class="travel-route-map-footer">

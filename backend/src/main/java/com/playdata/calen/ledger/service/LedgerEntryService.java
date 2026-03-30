@@ -15,14 +15,16 @@ import com.playdata.calen.ledger.repository.CategoryDetailRepository;
 import com.playdata.calen.ledger.repository.CategoryGroupRepository;
 import com.playdata.calen.ledger.repository.LedgerEntryRepository;
 import com.playdata.calen.ledger.repository.PaymentMethodRepository;
+import java.io.ByteArrayInputStream;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.LocalDate;
 import java.time.YearMonth;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
-import net.lingala.zip4j.io.outputstream.ZipOutputStream;
+import net.lingala.zip4j.ZipFile;
 import net.lingala.zip4j.model.ZipParameters;
-import net.lingala.zip4j.model.enums.AesKeyStrength;
 import net.lingala.zip4j.model.enums.CompressionLevel;
 import net.lingala.zip4j.model.enums.CompressionMethod;
 import net.lingala.zip4j.model.enums.EncryptionMethod;
@@ -215,23 +217,30 @@ public class LedgerEntryService {
     }
 
     private byte[] createPasswordProtectedZip(String fileName, byte[] content, String password) {
-        try (
-                java.io.ByteArrayOutputStream outputStream = new java.io.ByteArrayOutputStream();
-                ZipOutputStream zipOutputStream = new ZipOutputStream(outputStream, password.toCharArray())
-        ) {
+        Path tempZipPath = null;
+        try {
+            tempZipPath = Files.createTempFile("ledger-export-", ".zip");
             ZipParameters zipParameters = new ZipParameters();
             zipParameters.setFileNameInZip(fileName);
             zipParameters.setEncryptFiles(true);
-            zipParameters.setEncryptionMethod(EncryptionMethod.AES);
-            zipParameters.setAesKeyStrength(AesKeyStrength.KEY_STRENGTH_256);
+            zipParameters.setEncryptionMethod(EncryptionMethod.ZIP_STANDARD);
             zipParameters.setCompressionMethod(CompressionMethod.DEFLATE);
             zipParameters.setCompressionLevel(CompressionLevel.NORMAL);
-            zipOutputStream.putNextEntry(zipParameters);
-            zipOutputStream.write(content);
-            zipOutputStream.closeEntry();
-            return outputStream.toByteArray();
+            try (ZipFile zipFile = new ZipFile(tempZipPath.toFile(), password.toCharArray());
+                 ByteArrayInputStream inputStream = new ByteArrayInputStream(content)) {
+                zipFile.addStream(inputStream, zipParameters);
+            }
+            return Files.readAllBytes(tempZipPath);
         } catch (java.io.IOException exception) {
             throw new IllegalStateException("CSV 압축 파일을 생성하지 못했습니다.", exception);
+        } finally {
+            if (tempZipPath != null) {
+                try {
+                    Files.deleteIfExists(tempZipPath);
+                } catch (java.io.IOException ignored) {
+                    // Ignore cleanup errors for temporary files.
+                }
+            }
         }
     }
 }

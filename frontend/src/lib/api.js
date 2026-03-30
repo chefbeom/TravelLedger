@@ -225,6 +225,12 @@ export function fetchDeletedEntryPage(params = {}) {
   return request(buildUrl('/entries/trash', params).replace(API_BASE, ''))
 }
 
+export function emptyDeletedEntries() {
+  return request('/entries/trash', {
+    method: 'DELETE',
+  })
+}
+
 function resolveDownloadFileName(response, fallback) {
   const disposition = response.headers.get('Content-Disposition') || ''
   const utf8Match = disposition.match(/filename\*=UTF-8''([^;]+)/i)

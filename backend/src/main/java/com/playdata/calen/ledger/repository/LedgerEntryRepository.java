@@ -6,6 +6,7 @@ import java.util.List;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -126,4 +127,12 @@ public interface LedgerEntryRepository extends JpaRepository<LedgerEntry, Long> 
             @Param("maxAmount") java.math.BigDecimal maxAmount,
             @Param("entryTypeToSum") com.playdata.calen.ledger.domain.EntryType entryTypeToSum
     );
+
+    @Modifying
+    @Query("""
+            delete from LedgerEntry entry
+            where entry.owner.id = :userId
+              and entry.deletedAt is not null
+            """)
+    int deleteAllDeletedByOwnerId(@Param("userId") Long userId);
 }

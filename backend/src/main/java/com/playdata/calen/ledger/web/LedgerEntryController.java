@@ -98,6 +98,13 @@ public class LedgerEntryController {
         return ledgerEntryService.getDeletedEntries(currentUser.userId(), page, size);
     }
 
+    @DeleteMapping("/trash")
+    public void emptyTrash(
+            @AuthenticationPrincipal AppUserPrincipal currentUser
+    ) {
+        ledgerEntryService.emptyTrash(currentUser.userId());
+    }
+
     @PostMapping("/export/csv")
     public ResponseEntity<ByteArrayResource> exportEntriesCsv(
             @AuthenticationPrincipal AppUserPrincipal currentUser,

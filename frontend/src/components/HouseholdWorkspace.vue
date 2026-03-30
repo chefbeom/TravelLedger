@@ -10,6 +10,7 @@ import {
   deactivatePaymentMethod,
   deleteEntry,
   downloadLedgerCsv,
+  emptyDeletedEntries,
   fetchCategories,
   fetchCategoryBreakdown,
   fetchCompare,
@@ -1089,6 +1090,29 @@ async function restoreEntryFromTrash(entry) {
   }
 }
 
+async function emptyTrash() {
+  if (!trashResults.value.length && !(trashPageInfo.value.totalElements > 0)) {
+    return
+  }
+  if (!window.confirm('휴지통을 비우면 더이상 복구할 수 없습니다. 정말 비우시겠습니까?')) {
+    return
+  }
+
+  isSubmitting.value = true
+  activeSubmit.value = 'entry-empty-trash'
+  setFeedback()
+  try {
+    await emptyDeletedEntries()
+    await refreshLedgerViews()
+    setFeedback('휴지통을 비웠습니다. 삭제된 가계부 내역은 더이상 복구할 수 없습니다.')
+  } catch (error) {
+    setFeedback('', error.message)
+  } finally {
+    isSubmitting.value = false
+    activeSubmit.value = ''
+  }
+}
+
 async function removeEntry(entry) {
   isSubmitting.value = true
   activeSubmit.value = 'entry-delete'
@@ -1387,6 +1411,7 @@ async function deactivatePayment(paymentId) {
       @edit-search-entry="editEntryFromSearch"
       @delete-search-entry="deleteEntryFromSearch"
       @restore-trash-entry="restoreEntryFromTrash"
+      @empty-trash="emptyTrash"
     />
 
     <LedgerImportWorkspace

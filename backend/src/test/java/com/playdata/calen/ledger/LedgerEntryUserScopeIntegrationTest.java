@@ -109,6 +109,14 @@ class LedgerEntryUserScopeIntegrationTest {
                 .andExpect(jsonPath("$.id").value(hanaEntry.getId()));
 
         assertThat(ledgerEntryRepository.findById(hanaEntry.getId()).orElseThrow().getDeletedAt()).isNull();
+
+        mockMvc.perform(delete("/api/entries/{id}", hanaEntry.getId()).with(csrf()).session(hanaSession))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(delete("/api/entries/trash").with(csrf()).session(hanaSession))
+                .andExpect(status().isOk());
+
+        assertThat(ledgerEntryRepository.findById(hanaEntry.getId())).isEmpty();
     }
 
     @Test

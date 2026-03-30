@@ -13,6 +13,7 @@ const emit = defineEmits([
   'edit-search-entry',
   'delete-search-entry',
   'restore-trash-entry',
+  'empty-trash',
 ])
 
 const props = defineProps({
@@ -434,6 +435,17 @@ const trashPageLabel = computed(() => Math.max(props.trashPageInfo.totalPages ??
             <p>삭제한 가계부 내역을 보관하고, 필요하면 다시 복구할 수 있습니다.</p>
           </div>
           <span class="panel__badge">{{ trashPageInfo.totalElements }}건</span>
+        </div>
+
+        <div class="panel__actions panel__actions--end">
+          <button
+            type="button"
+            class="button button--ghost"
+            :disabled="!trashPageInfo.totalElements"
+            @click="emit('empty-trash')"
+          >
+            휴지통 비우기
+          </button>
         </div>
 
         <div class="sheet-table-wrap">

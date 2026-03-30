@@ -249,6 +249,12 @@ public class LedgerEntryService {
         return toResponse(ledgerEntry);
     }
 
+    @Transactional
+    public int emptyTrash(Long userId) {
+        appUserService.getRequiredUser(userId);
+        return ledgerEntryRepository.deleteAllDeletedByOwnerId(userId);
+    }
+
     public List<LedgerEntry> loadRawEntries(Long userId, LocalDate from, LocalDate to) {
         appUserService.getRequiredUser(userId);
         DateRange range = normalizeRange(from, to);

@@ -3,13 +3,17 @@ package com.playdata.calen.account.service;
 import com.playdata.calen.account.domain.AppUser;
 import com.playdata.calen.account.domain.SupportInquiry;
 import com.playdata.calen.account.domain.SupportInquiryStatus;
+import com.playdata.calen.account.dto.SupportInquiryPageResponse;
 import com.playdata.calen.account.dto.SupportInquiryResponse;
 import com.playdata.calen.account.repository.SupportInquiryRepository;
 import com.playdata.calen.common.exception.BadRequestException;
 import com.playdata.calen.common.exception.NotFoundException;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -21,14 +25,27 @@ import org.springframework.web.multipart.MultipartFile;
 @Transactional(readOnly = true)
 public class SupportInquiryService {
 
+    private static final int MAX_DAILY_INQUIRIES = 3;
+    private static final int MAX_MY_INQUIRIES_PAGE_SIZE = 5;
+
     private final AppUserService appUserService;
     private final SupportInquiryRepository supportInquiryRepository;
     private final SupportInquiryStorageService supportInquiryStorageService;
 
-    public List<SupportInquiryResponse> getMyInquiries(Long userId) {
-        return supportInquiryRepository.findAllBySenderIdOrderByCreatedAtDescIdDesc(userId).stream()
-                .map(this::toResponse)
-                .toList();
+    public SupportInquiryPageResponse getMyInquiries(Long userId, int page, int size) {
+        int safePage = Math.max(page, 0);
+        int safeSize = Math.min(Math.max(size, 1), MAX_MY_INQUIRIES_PAGE_SIZE);
+        Page<SupportInquiry> inquiryPage = supportInquiryRepository.findAllBySenderIdOrderByCreatedAtDescIdDesc(
+                userId,
+                PageRequest.of(safePage, safeSize)
+        );
+        return new SupportInquiryPageResponse(
+                inquiryPage.getContent().stream().map(this::toResponse).toList(),
+                inquiryPage.getNumber(),
+                inquiryPage.getSize(),
+                inquiryPage.getTotalElements(),
+                inquiryPage.getTotalPages()
+        );
     }
 
     public List<SupportInquiryResponse> getAdminInbox() {
@@ -40,6 +57,7 @@ public class SupportInquiryService {
     @Transactional
     public SupportInquiryResponse createInquiry(Long userId, String titleRaw, String contentRaw, MultipartFile attachment) {
         AppUser sender = appUserService.getRequiredUser(userId);
+        validateDailyInquiryLimit(userId);
         String title = normalizeTitle(titleRaw);
         String content = normalizeContent(contentRaw);
 
@@ -122,6 +140,20 @@ public class SupportInquiryService {
 
     public long countPendingInquiries() {
         return supportInquiryRepository.countByStatusAndAdminDeletedFalse(SupportInquiryStatus.PENDING);
+    }
+
+    private void validateDailyInquiryLimit(Long userId) {
+        LocalDate today = LocalDate.now();
+        LocalDateTime from = today.atStartOfDay();
+        LocalDateTime to = today.plusDays(1).atStartOfDay();
+        long dailyCount = supportInquiryRepository.countBySenderIdAndCreatedAtGreaterThanEqualAndCreatedAtLessThan(
+                userId,
+                from,
+                to
+        );
+        if (dailyCount >= MAX_DAILY_INQUIRIES) {
+            throw new BadRequestException("문의는 하루에 최대 3개까지만 보낼 수 있습니다.");
+        }
     }
 
     private SupportInquiryResponse toResponse(SupportInquiry inquiry) {

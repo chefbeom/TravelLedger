@@ -2505,6 +2505,10 @@ textarea {
   gap: 16px;
 }
 
+.support-inquiry-list--compact {
+  gap: 12px;
+}
+
 .support-inquiry-card {
   display: grid;
   gap: 12px;
@@ -2512,6 +2516,12 @@ textarea {
   border: 1px solid var(--line);
   border-radius: 20px;
   background: var(--surface-soft);
+}
+
+.support-inquiry-card--compact {
+  gap: 0;
+  padding: 0;
+  overflow: hidden;
 }
 
 .support-inquiry-meta,
@@ -2522,6 +2532,43 @@ textarea {
   justify-content: space-between;
   gap: 12px;
   flex-wrap: wrap;
+}
+
+.support-inquiry-row {
+  width: 100%;
+  display: grid;
+  gap: 10px;
+  padding: 16px 18px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+}
+
+.support-inquiry-row__summary,
+.support-inquiry-row__meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.support-inquiry-row__title {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.support-inquiry-row__toggle {
+  color: var(--brand);
+  font-weight: 700;
+}
+
+.support-inquiry-row__body {
+  display: grid;
+  gap: 12px;
+  padding: 0 18px 18px;
+  border-top: 1px solid var(--line);
 }
 
 .support-inquiry-content,
@@ -3730,6 +3777,10 @@ textarea {
 :root[data-theme='toss'] .support-inquiry-row--selected td,
 :root[data-theme='toss'] .support-inquiry-reply {
   background: rgba(79, 140, 255, 0.12);
+}
+
+:root[data-theme='toss'] .support-inquiry-row__body {
+  border-top-color: #2d3645;
 }
 
 :root[data-theme='toss'] .support-inquiry-content,

@@ -1,5 +1,5 @@
 <script setup>
-import { onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { createSupportInquiry, fetchMySupportInquiries } from '../lib/api'
 
 const props = defineProps({
@@ -9,6 +9,7 @@ const props = defineProps({
   },
 })
 
+const PAGE_SIZE = 5
 const attachmentInput = ref(null)
 
 const state = reactive({
@@ -17,6 +18,13 @@ const state = reactive({
   errorMessage: '',
   successMessage: '',
   inquiries: [],
+  pageInfo: {
+    page: 0,
+    size: PAGE_SIZE,
+    totalElements: 0,
+    totalPages: 0,
+  },
+  expandedInquiryId: null,
 })
 
 const form = reactive({
@@ -29,6 +37,8 @@ const statusLabel = {
   PENDING: '답변 대기',
   ANSWERED: '답변 완료',
 }
+
+const pageCount = computed(() => Math.max(state.pageInfo.totalPages || 0, 1))
 
 function formatDateTime(value) {
   if (!value) {
@@ -59,17 +69,52 @@ function handleAttachmentChange(event) {
   form.attachment = event.target.files?.[0] ?? null
 }
 
-async function loadInquiries() {
+function toggleInquiry(inquiryId) {
+  state.expandedInquiryId = state.expandedInquiryId === inquiryId ? null : inquiryId
+}
+
+function syncExpandedInquiry(preferredId = state.expandedInquiryId) {
+  if (!state.inquiries.length) {
+    state.expandedInquiryId = null
+    return
+  }
+
+  const nextInquiry = state.inquiries.find((item) => item.id === preferredId) ?? state.inquiries[0]
+  state.expandedInquiryId = nextInquiry?.id ?? null
+}
+
+async function loadInquiries(page = state.pageInfo.page, preferredId = state.expandedInquiryId) {
   state.loading = true
   state.errorMessage = ''
 
   try {
-    state.inquiries = await fetchMySupportInquiries()
+    const response = await fetchMySupportInquiries(page, PAGE_SIZE)
+    state.inquiries = response.content ?? []
+    state.pageInfo = {
+      page: response.page ?? page,
+      size: response.size ?? PAGE_SIZE,
+      totalElements: response.totalElements ?? 0,
+      totalPages: response.totalPages ?? 0,
+    }
+
+    if ((response.totalPages ?? 0) > 0 && page >= response.totalPages) {
+      await loadInquiries(response.totalPages - 1, preferredId)
+      return
+    }
+
+    syncExpandedInquiry(preferredId)
   } catch (error) {
     state.errorMessage = error.message
   } finally {
     state.loading = false
   }
+}
+
+async function changePage(nextPage) {
+  if (nextPage < 0 || nextPage >= pageCount.value || nextPage === state.pageInfo.page) {
+    return
+  }
+  await loadInquiries(nextPage)
 }
 
 async function handleSubmitInquiry() {
@@ -86,9 +131,9 @@ async function handleSubmitInquiry() {
     }
 
     const createdInquiry = await createSupportInquiry(formData)
-    state.inquiries = [createdInquiry, ...state.inquiries]
     state.successMessage = '문의가 관리자 메일함으로 전송되었습니다.'
     resetForm()
+    await loadInquiries(0, createdInquiry.id)
   } catch (error) {
     state.errorMessage = error.message
   } finally {
@@ -96,7 +141,9 @@ async function handleSubmitInquiry() {
   }
 }
 
-onMounted(loadInquiries)
+onMounted(() => {
+  loadInquiries(0)
+})
 </script>
 
 <template>
@@ -167,47 +214,74 @@ onMounted(loadInquiries)
       <div class="panel__header">
         <div>
           <h2>내 문의 내역</h2>
-          <p>보낸 문의와 관리자 답변을 최신순으로 확인할 수 있습니다.</p>
+          <p>문의는 한 줄 목록으로 보고, 필요한 항목만 펼쳐서 상세 내용을 확인할 수 있습니다.</p>
         </div>
-        <button class="button button--ghost" type="button" :disabled="state.loading" @click="loadInquiries">
+        <button class="button button--ghost" type="button" :disabled="state.loading" @click="loadInquiries(state.pageInfo.page)">
           {{ state.loading ? '불러오는 중..' : '새로고침' }}
         </button>
       </div>
 
       <p v-if="state.loading" class="panel__empty">문의 내역을 불러오는 중입니다.</p>
-      <div v-else-if="state.inquiries.length" class="support-inquiry-list">
-        <article v-for="inquiry in state.inquiries" :key="inquiry.id" class="support-inquiry-card">
-          <div class="support-inquiry-meta">
-            <strong>{{ inquiry.title }}</strong>
-            <span :class="['entry-type-pill', inquiry.status === 'ANSWERED' ? 'entry-type-pill--income' : 'entry-type-pill--expense']">
-              {{ statusLabel[inquiry.status] ?? inquiry.status }}
-            </span>
-          </div>
-          <small>{{ formatDateTime(inquiry.createdAt) }}</small>
-          <p class="support-inquiry-content">{{ inquiry.content }}</p>
-
-          <div v-if="inquiry.attachmentUrl" class="support-inquiry-attachment">
-            <a class="button button--ghost" :href="inquiry.attachmentUrl" target="_blank" rel="noreferrer">
-              첨부 이미지 보기
-            </a>
-            <img
-              v-if="inquiry.attachmentContentType?.startsWith('image/')"
-              :src="inquiry.attachmentUrl"
-              :alt="inquiry.attachmentFileName || inquiry.title"
-              class="support-inquiry-preview"
-            />
-          </div>
-
-          <div v-if="inquiry.replyContent" class="support-inquiry-reply">
-            <div class="support-inquiry-reply__header">
-              <strong>관리자 답변</strong>
-              <small>{{ inquiry.repliedByDisplayName || inquiry.repliedByLoginId || '관리자' }} · {{ formatDateTime(inquiry.repliedAt) }}</small>
+      <div v-else-if="state.inquiries.length" class="support-inquiry-list support-inquiry-list--compact">
+        <article
+          v-for="inquiry in state.inquiries"
+          :key="inquiry.id"
+          class="support-inquiry-card support-inquiry-card--compact"
+        >
+          <button class="support-inquiry-row" type="button" @click="toggleInquiry(inquiry.id)">
+            <div class="support-inquiry-row__summary">
+              <strong class="support-inquiry-row__title">{{ inquiry.title }}</strong>
+              <span :class="['entry-type-pill', inquiry.status === 'ANSWERED' ? 'entry-type-pill--income' : 'entry-type-pill--expense']">
+                {{ statusLabel[inquiry.status] ?? inquiry.status }}
+              </span>
             </div>
-            <p>{{ inquiry.replyContent }}</p>
+            <div class="support-inquiry-row__meta">
+              <small>{{ formatDateTime(inquiry.createdAt) }}</small>
+              <span class="support-inquiry-row__toggle">{{ state.expandedInquiryId === inquiry.id ? '접기' : '열기' }}</span>
+            </div>
+          </button>
+
+          <div v-if="state.expandedInquiryId === inquiry.id" class="support-inquiry-row__body">
+            <p class="support-inquiry-content">{{ inquiry.content }}</p>
+
+            <div v-if="inquiry.attachmentUrl" class="support-inquiry-attachment">
+              <a class="button button--ghost" :href="inquiry.attachmentUrl" target="_blank" rel="noreferrer">
+                첨부 이미지 보기
+              </a>
+              <img
+                v-if="inquiry.attachmentContentType?.startsWith('image/')"
+                :src="inquiry.attachmentUrl"
+                :alt="inquiry.attachmentFileName || inquiry.title"
+                class="support-inquiry-preview"
+              />
+            </div>
+
+            <div v-if="inquiry.replyContent" class="support-inquiry-reply">
+              <div class="support-inquiry-reply__header">
+                <strong>관리자 답변</strong>
+                <small>{{ inquiry.repliedByDisplayName || inquiry.repliedByLoginId || '관리자' }} · {{ formatDateTime(inquiry.repliedAt) }}</small>
+              </div>
+              <p>{{ inquiry.replyContent }}</p>
+            </div>
           </div>
         </article>
       </div>
       <p v-else class="panel__empty">아직 보낸 문의가 없습니다.</p>
+
+      <div v-if="!state.loading && state.pageInfo.totalElements > 0" class="panel__actions">
+        <button class="button button--ghost" type="button" :disabled="state.pageInfo.page <= 0" @click="changePage(state.pageInfo.page - 1)">
+          이전
+        </button>
+        <span>{{ state.pageInfo.page + 1 }} / {{ pageCount }}</span>
+        <button
+          class="button button--ghost"
+          type="button"
+          :disabled="state.pageInfo.page + 1 >= pageCount"
+          @click="changePage(state.pageInfo.page + 1)"
+        >
+          다음
+        </button>
+      </div>
     </section>
   </section>
 </template>

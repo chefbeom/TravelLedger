@@ -178,8 +178,8 @@ export function acceptInvite(payload) {
   })
 }
 
-export function fetchMySupportInquiries() {
-  return request('/support/inquiries/me')
+export function fetchMySupportInquiries(page = 0, size = 5) {
+  return request(buildUrl('/support/inquiries/me', { page, size }).replace(API_BASE, ''))
 }
 
 export function createSupportInquiry(formData) {

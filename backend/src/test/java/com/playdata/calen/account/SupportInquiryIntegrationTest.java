@@ -21,18 +21,20 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
 @SpringBootTest(properties = {
         "app.seed.enabled=true",
-        "spring.datasource.url=jdbc:h2:mem:support-inquiry-test;MODE=MySQL;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE",
+        "spring.datasource.url=jdbc:h2:mem:support-inquiry-test;MODE=MySQL;DB_CLOSE_ON_EXIT=FALSE",
         "spring.datasource.driver-class-name=org.h2.Driver",
         "spring.datasource.username=sa",
         "spring.datasource.password=",
         "app.support.attachment-storage-path=build/support-inquiries-test"
 })
 @AutoConfigureMockMvc
+@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_EACH_TEST_METHOD)
 class SupportInquiryIntegrationTest {
 
     @Autowired
@@ -81,11 +83,11 @@ class SupportInquiryIntegrationTest {
                         .session(adminSession)
                         .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(Map.of("content", "확인했고 다음 배포 때 검토하겠습니다."))))
+                        .content(objectMapper.writeValueAsString(Map.of("content", "확인하고 다음 배포 때 검토하겠습니다."))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("ANSWERED"))
                 .andExpect(jsonPath("$.archived").value(true))
-                .andExpect(jsonPath("$.replyContent").value("확인했고 다음 배포 때 검토하겠습니다."));
+                .andExpect(jsonPath("$.replyContent").value("확인하고 다음 배포 때 검토하겠습니다."));
 
         mockMvc.perform(patch("/api/admin/support-inquiries/{inquiryId}/archive", inquiryId)
                         .session(adminSession)
@@ -110,12 +112,35 @@ class SupportInquiryIntegrationTest {
 
         mockMvc.perform(get("/api/support/inquiries/me").session(userSession))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[0].replyContent").value("확인했고 다음 배포 때 검토하겠습니다."))
-                .andExpect(jsonPath("$[0].attachmentUrl").isNotEmpty());
+                .andExpect(jsonPath("$.content[0].replyContent").value("확인하고 다음 배포 때 검토하겠습니다."))
+                .andExpect(jsonPath("$.content[0].attachmentUrl").isNotEmpty())
+                .andExpect(jsonPath("$.size").value(5));
 
         mockMvc.perform(get("/api/admin/support-inquiries").session(adminSession))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$").isEmpty());
+    }
+
+    @Test
+    void userCanCreateOnlyThreeInquiriesPerDay() throws Exception {
+        MockHttpSession userSession = login("hana", "test1234", "12345678");
+
+        for (int index = 1; index <= 3; index++) {
+            mockMvc.perform(multipart("/api/support/inquiries")
+                            .param("title", "문의 " + index)
+                            .param("content", "내용 " + index)
+                            .session(userSession)
+                            .with(csrf()))
+                    .andExpect(status().isOk());
+        }
+
+        mockMvc.perform(multipart("/api/support/inquiries")
+                        .param("title", "문의 4")
+                        .param("content", "내용 4")
+                        .session(userSession)
+                        .with(csrf()))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("문의는 하루에 최대 3개까지만 보낼 수 있습니다."));
     }
 
     private MockHttpSession login(String loginId, String password, String secondaryPin) throws Exception {

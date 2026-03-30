@@ -1,9 +1,9 @@
 package com.playdata.calen.account.web;
 
+import com.playdata.calen.account.dto.SupportInquiryPageResponse;
 import com.playdata.calen.account.dto.SupportInquiryResponse;
 import com.playdata.calen.account.security.AppUserPrincipal;
 import com.playdata.calen.account.service.SupportInquiryService;
-import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.Resource;
 import org.springframework.http.ContentDisposition;
@@ -27,8 +27,12 @@ public class SupportInquiryController {
     private final SupportInquiryService supportInquiryService;
 
     @GetMapping("/me")
-    public List<SupportInquiryResponse> getMyInquiries(@AuthenticationPrincipal AppUserPrincipal currentUser) {
-        return supportInquiryService.getMyInquiries(currentUser.userId());
+    public SupportInquiryPageResponse getMyInquiries(
+            @AuthenticationPrincipal AppUserPrincipal currentUser,
+            @RequestParam(name = "page", defaultValue = "0") int page,
+            @RequestParam(name = "size", defaultValue = "5") int size
+    ) {
+        return supportInquiryService.getMyInquiries(currentUser.userId(), page, size);
     }
 
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)

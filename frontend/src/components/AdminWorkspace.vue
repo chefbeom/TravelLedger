@@ -1,6 +1,8 @@
 <script setup>
 import { computed, onMounted, reactive } from 'vue'
 import {
+  archiveAdminSupportInquiry,
+  deleteAdminSupportInquiry,
   fetchAdminDashboard,
   fetchAdminLoginAuditLogs,
   fetchAdminSupportInquiries,
@@ -16,20 +18,28 @@ const props = defineProps({
   },
 })
 
+const PAGE_SIZE = 10
+
 const state = reactive({
   loading: true,
   loadingLoginLogs: false,
   mutatingUserId: null,
   unlockingIp: '',
   savingReply: false,
+  mutatingInquiryId: null,
   errorMessage: '',
   summary: null,
   recentLoginLogs: [],
   loginLogPage: { content: [], page: 0, size: 10, totalElements: 0, totalPages: 0 },
   blockedIps: [],
+  blockedIpPage: 0,
   users: [],
+  userPage: 0,
   recentInvites: [],
+  invitePage: 0,
   supportInquiries: [],
+  supportTab: 'inbox',
+  supportPages: { inbox: 0, archive: 0 },
   selectedSupportInquiryId: null,
   supportReplyContent: '',
 })
@@ -60,10 +70,6 @@ const inquiryStatusLabel = {
   ANSWERED: '답변 완료',
 }
 
-const selectedSupportInquiry = computed(() => (
-  state.supportInquiries.find((inquiry) => inquiry.id === state.selectedSupportInquiryId) ?? null
-))
-
 function formatDateTime(value) {
   if (!value) {
     return '-'
@@ -78,6 +84,66 @@ function formatDateTime(value) {
     dateStyle: 'medium',
     timeStyle: 'short',
   }).format(normalized)
+}
+
+function clampPage(page, totalItems) {
+  const totalPages = Math.max(1, Math.ceil(totalItems / PAGE_SIZE))
+  return Math.min(Math.max(page, 0), totalPages - 1)
+}
+
+function paginate(items, page) {
+  const start = page * PAGE_SIZE
+  return items.slice(start, start + PAGE_SIZE)
+}
+
+const inboxSupportInquiries = computed(() => (
+  state.supportInquiries.filter((inquiry) => !inquiry.archived)
+))
+
+const archivedSupportInquiries = computed(() => (
+  state.supportInquiries.filter((inquiry) => inquiry.archived)
+))
+
+const currentSupportSource = computed(() => (
+  state.supportTab === 'archive' ? archivedSupportInquiries.value : inboxSupportInquiries.value
+))
+
+const currentSupportPage = computed(() => state.supportPages[state.supportTab])
+
+const pagedSupportInquiries = computed(() => (
+  paginate(currentSupportSource.value, currentSupportPage.value)
+))
+
+const supportPageCount = computed(() => Math.max(1, Math.ceil(currentSupportSource.value.length / PAGE_SIZE)))
+
+const selectedSupportInquiry = computed(() => (
+  currentSupportSource.value.find((inquiry) => inquiry.id === state.selectedSupportInquiryId) ?? null
+))
+
+const pagedBlockedIps = computed(() => paginate(state.blockedIps, state.blockedIpPage))
+const blockedIpPageCount = computed(() => Math.max(1, Math.ceil(state.blockedIps.length / PAGE_SIZE)))
+
+const pagedUsers = computed(() => paginate(state.users, state.userPage))
+const userPageCount = computed(() => Math.max(1, Math.ceil(state.users.length / PAGE_SIZE)))
+
+const pagedInvites = computed(() => paginate(state.recentInvites, state.invitePage))
+const invitePageCount = computed(() => Math.max(1, Math.ceil(state.recentInvites.length / PAGE_SIZE)))
+
+function syncSelection(preferredId = state.selectedSupportInquiryId) {
+  state.supportPages.inbox = clampPage(state.supportPages.inbox, inboxSupportInquiries.value.length)
+  state.supportPages.archive = clampPage(state.supportPages.archive, archivedSupportInquiries.value.length)
+
+  const visibleList = currentSupportSource.value
+  const preferred = visibleList.find((item) => item.id === preferredId)
+  const fallback = pagedSupportInquiries.value[0] ?? visibleList[0] ?? null
+  const nextInquiry = preferred ?? fallback
+  state.selectedSupportInquiryId = nextInquiry?.id ?? null
+  state.supportReplyContent = nextInquiry?.replyContent ?? ''
+}
+
+function setSupportTab(tab) {
+  state.supportTab = tab
+  syncSelection()
 }
 
 function selectSupportInquiry(inquiry) {
@@ -103,15 +169,10 @@ async function loadDashboard() {
     state.users = dashboard.users ?? []
     state.recentInvites = dashboard.recentInvites ?? []
     state.supportInquiries = supportInquiries ?? []
-
-    const matchedSelectedInquiry = state.supportInquiries.find((item) => item.id === state.selectedSupportInquiryId)
-    if (matchedSelectedInquiry) {
-      selectSupportInquiry(matchedSelectedInquiry)
-    } else if (state.supportInquiries.length) {
-      selectSupportInquiry(state.supportInquiries[0])
-    } else {
-      selectSupportInquiry(null)
-    }
+    state.blockedIpPage = clampPage(state.blockedIpPage, state.blockedIps.length)
+    state.userPage = clampPage(state.userPage, state.users.length)
+    state.invitePage = clampPage(state.invitePage, state.recentInvites.length)
+    syncSelection()
   } catch (error) {
     state.errorMessage = error.message
   } finally {
@@ -154,6 +215,7 @@ async function handleUnlockIp(ip) {
   try {
     await unlockBlockedIp(ip)
     state.blockedIps = state.blockedIps.filter((item) => item.clientIp !== ip)
+    state.blockedIpPage = clampPage(state.blockedIpPage, state.blockedIps.length)
     if (state.summary) {
       state.summary = {
         ...state.summary,
@@ -183,11 +245,45 @@ async function handleReplySupportInquiry() {
     state.supportInquiries = state.supportInquiries.map((item) => (
       item.id === updatedInquiry.id ? updatedInquiry : item
     ))
-    selectSupportInquiry(updatedInquiry)
+    state.supportTab = 'archive'
+    syncSelection(updatedInquiry.id)
   } catch (error) {
     state.errorMessage = error.message
   } finally {
     state.savingReply = false
+  }
+}
+
+async function handleArchiveToggle(inquiry, archived) {
+  state.mutatingInquiryId = inquiry.id
+  state.errorMessage = ''
+
+  try {
+    const updatedInquiry = await archiveAdminSupportInquiry(inquiry.id, archived)
+    state.supportInquiries = state.supportInquiries.map((item) => (
+      item.id === updatedInquiry.id ? updatedInquiry : item
+    ))
+    state.supportTab = archived ? 'archive' : 'inbox'
+    syncSelection(updatedInquiry.id)
+  } catch (error) {
+    state.errorMessage = error.message
+  } finally {
+    state.mutatingInquiryId = null
+  }
+}
+
+async function handleDeleteSupportInquiry(inquiry) {
+  state.mutatingInquiryId = inquiry.id
+  state.errorMessage = ''
+
+  try {
+    await deleteAdminSupportInquiry(inquiry.id)
+    state.supportInquiries = state.supportInquiries.filter((item) => item.id !== inquiry.id)
+    syncSelection()
+  } catch (error) {
+    state.errorMessage = error.message
+  } finally {
+    state.mutatingInquiryId = null
   }
 }
 
@@ -221,7 +317,25 @@ onMounted(loadDashboard)
       <div class="panel__header">
         <div>
           <h2>문의 메일함</h2>
-          <p>사용자가 보낸 요청사항과 건의사항을 확인하고, 선택한 메일에 바로 답변할 수 있습니다.</p>
+          <p>답변 완료된 문의는 자동으로 보관함으로 이동하며, 보관함에서 꺼내기·삭제·재답변을 할 수 있습니다.</p>
+        </div>
+        <div class="scope-toggle scope-toggle--wrap">
+          <button
+            class="button button--ghost"
+            type="button"
+            :class="{ 'is-active': state.supportTab === 'inbox' }"
+            @click="setSupportTab('inbox')"
+          >
+            진행 중
+          </button>
+          <button
+            class="button button--ghost"
+            type="button"
+            :class="{ 'is-active': state.supportTab === 'archive' }"
+            @click="setSupportTab('archive')"
+          >
+            보관함
+          </button>
         </div>
       </div>
       <div class="sheet-table-wrap">
@@ -237,11 +351,13 @@ onMounted(loadDashboard)
             </tr>
           </thead>
           <tbody>
-            <tr v-if="!state.supportInquiries.length">
-              <td colspan="6" class="sheet-table__empty">아직 문의 메일이 없습니다.</td>
+            <tr v-if="!pagedSupportInquiries.length">
+              <td colspan="6" class="sheet-table__empty">
+                {{ state.supportTab === 'archive' ? '보관된 문의가 없습니다.' : '진행 중인 문의가 없습니다.' }}
+              </td>
             </tr>
             <tr
-              v-for="inquiry in state.supportInquiries"
+              v-for="inquiry in pagedSupportInquiries"
               :key="inquiry.id"
               :class="{ 'support-inquiry-row--selected': inquiry.id === state.selectedSupportInquiryId }"
             >
@@ -263,13 +379,32 @@ onMounted(loadDashboard)
           </tbody>
         </table>
       </div>
+      <div class="panel__actions">
+        <button
+          class="button button--ghost"
+          type="button"
+          :disabled="currentSupportPage <= 0"
+          @click="state.supportPages[state.supportTab] = currentSupportPage - 1"
+        >
+          이전
+        </button>
+        <span>{{ currentSupportPage + 1 }} / {{ supportPageCount }}</span>
+        <button
+          class="button button--ghost"
+          type="button"
+          :disabled="currentSupportPage + 1 >= supportPageCount"
+          @click="state.supportPages[state.supportTab] = currentSupportPage + 1"
+        >
+          다음
+        </button>
+      </div>
     </section>
 
     <section class="panel">
       <div class="panel__header">
         <div>
           <h2>문의 상세 / 답변</h2>
-          <p>선택한 메일의 내용을 확인하고, 답변을 저장하면 사용자 프로필에 바로 표시됩니다.</p>
+          <p>선택한 문의 내용을 확인하고 답변을 저장하면, 사용자 프로필에서 답변을 확인할 수 있습니다.</p>
         </div>
       </div>
 
@@ -299,25 +434,47 @@ onMounted(loadDashboard)
 
         <div class="support-inquiry-card">
           <div class="support-inquiry-reply__header">
-            <strong>답변하기</strong>
+            <strong>{{ state.supportTab === 'archive' ? '보관 문의 관리' : '답변하기' }}</strong>
             <small>
-              {{ selectedSupportInquiry.replyContent ? '기존 답변을 수정할 수 있습니다.' : '아직 답변되지 않은 메일입니다.' }}
+              {{ selectedSupportInquiry.replyContent ? '기존 답변을 수정할 수 있습니다.' : '아직 답변되지 않은 문의입니다.' }}
             </small>
           </div>
           <textarea
             v-model="state.supportReplyContent"
             rows="8"
             placeholder="사용자에게 전달할 답변을 입력해 주세요."
-            :disabled="state.savingReply"
+            :disabled="state.savingReply || state.mutatingInquiryId === selectedSupportInquiry.id"
           />
           <div class="support-inquiry-actions">
-            <button class="button button--primary" type="button" :disabled="state.savingReply" @click="handleReplySupportInquiry">
-              {{ state.savingReply ? '저장 중..' : selectedSupportInquiry.replyContent ? '답변 수정 저장' : '답변 저장' }}
+            <button
+              class="button button--ghost"
+              type="button"
+              :disabled="state.mutatingInquiryId === selectedSupportInquiry.id"
+              @click="handleArchiveToggle(selectedSupportInquiry, !selectedSupportInquiry.archived)"
+            >
+              {{ selectedSupportInquiry.archived ? '꺼내기' : '보관하기' }}
+            </button>
+            <button
+              v-if="selectedSupportInquiry.archived"
+              class="button button--ghost"
+              type="button"
+              :disabled="state.mutatingInquiryId === selectedSupportInquiry.id"
+              @click="handleDeleteSupportInquiry(selectedSupportInquiry)"
+            >
+              삭제
+            </button>
+            <button
+              class="button button--primary"
+              type="button"
+              :disabled="state.savingReply"
+              @click="handleReplySupportInquiry"
+            >
+              {{ state.savingReply ? '저장 중..' : selectedSupportInquiry.replyContent ? '재답변 저장' : '답변 저장' }}
             </button>
           </div>
         </div>
       </div>
-      <p v-else class="panel__empty">왼쪽 메일함 목록에서 확인할 문의를 선택해 주세요.</p>
+      <p v-else class="panel__empty">현재 탭에서 확인할 문의를 선택해 주세요.</p>
     </section>
 
     <section class="panel">
@@ -338,10 +495,10 @@ onMounted(loadDashboard)
             </tr>
           </thead>
           <tbody>
-            <tr v-if="!state.blockedIps.length">
+            <tr v-if="!pagedBlockedIps.length">
               <td colspan="4" class="sheet-table__empty">현재 차단된 IP가 없습니다.</td>
             </tr>
-            <tr v-for="blockedIp in state.blockedIps" :key="blockedIp.clientIp">
+            <tr v-for="blockedIp in pagedBlockedIps" :key="blockedIp.clientIp">
               <td>{{ blockedIp.clientIp }}</td>
               <td>{{ blockedIp.failureCount }}회</td>
               <td>{{ formatDateTime(blockedIp.lockedUntil) }}</td>
@@ -359,13 +516,18 @@ onMounted(loadDashboard)
           </tbody>
         </table>
       </div>
+      <div class="panel__actions">
+        <button class="button button--ghost" type="button" :disabled="state.blockedIpPage <= 0" @click="state.blockedIpPage -= 1">이전</button>
+        <span>{{ state.blockedIpPage + 1 }} / {{ blockedIpPageCount }}</span>
+        <button class="button button--ghost" type="button" :disabled="state.blockedIpPage + 1 >= blockedIpPageCount" @click="state.blockedIpPage += 1">다음</button>
+      </div>
     </section>
 
     <section class="panel">
       <div class="panel__header">
         <div>
           <h2>최근 로그인 기록</h2>
-          <p>최근 10개씩 보여주며, 이전 기록은 페이지로 넘겨 확인할 수 있습니다.</p>
+          <p>최근 10개만 먼저 보여주고, 이후 기록은 페이지를 넘겨 확인할 수 있습니다.</p>
         </div>
       </div>
       <div class="sheet-table-wrap">
@@ -437,10 +599,10 @@ onMounted(loadDashboard)
             </tr>
           </thead>
           <tbody>
-            <tr v-if="!state.users.length">
+            <tr v-if="!pagedUsers.length">
               <td colspan="5" class="sheet-table__empty">사용자 정보가 없습니다.</td>
             </tr>
-            <tr v-for="user in state.users" :key="user.id">
+            <tr v-for="user in pagedUsers" :key="user.id">
               <td>{{ user.loginId }}</td>
               <td>{{ user.displayName }}</td>
               <td>
@@ -465,6 +627,11 @@ onMounted(loadDashboard)
           </tbody>
         </table>
       </div>
+      <div class="panel__actions">
+        <button class="button button--ghost" type="button" :disabled="state.userPage <= 0" @click="state.userPage -= 1">이전</button>
+        <span>{{ state.userPage + 1 }} / {{ userPageCount }}</span>
+        <button class="button button--ghost" type="button" :disabled="state.userPage + 1 >= userPageCount" @click="state.userPage += 1">다음</button>
+      </div>
     </section>
 
     <section class="panel">
@@ -486,10 +653,10 @@ onMounted(loadDashboard)
             </tr>
           </thead>
           <tbody>
-            <tr v-if="!state.recentInvites.length">
+            <tr v-if="!pagedInvites.length">
               <td colspan="5" class="sheet-table__empty">초대 링크 기록이 없습니다.</td>
             </tr>
-            <tr v-for="invite in state.recentInvites" :key="invite.id">
+            <tr v-for="invite in pagedInvites" :key="invite.id">
               <td>{{ formatDateTime(invite.createdAt) }}</td>
               <td>{{ invite.createdByDisplayName }} ({{ invite.createdByLoginId }})</td>
               <td>{{ formatDateTime(invite.expiresAt) }}</td>
@@ -503,6 +670,11 @@ onMounted(loadDashboard)
             </tr>
           </tbody>
         </table>
+      </div>
+      <div class="panel__actions">
+        <button class="button button--ghost" type="button" :disabled="state.invitePage <= 0" @click="state.invitePage -= 1">이전</button>
+        <span>{{ state.invitePage + 1 }} / {{ invitePageCount }}</span>
+        <button class="button button--ghost" type="button" :disabled="state.invitePage + 1 >= invitePageCount" @click="state.invitePage += 1">다음</button>
       </div>
     </section>
   </section>

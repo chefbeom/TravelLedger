@@ -13,6 +13,7 @@ public record SupportInquiryResponse(
         String attachmentFileName,
         String attachmentContentType,
         String attachmentUrl,
+        boolean archived,
         String replyContent,
         LocalDateTime repliedAt,
         String repliedByLoginId,

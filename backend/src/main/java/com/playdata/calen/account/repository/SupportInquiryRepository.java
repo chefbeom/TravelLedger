@@ -9,7 +9,7 @@ public interface SupportInquiryRepository extends JpaRepository<SupportInquiry, 
 
     List<SupportInquiry> findAllBySenderIdOrderByCreatedAtDescIdDesc(Long senderId);
 
-    List<SupportInquiry> findAllByOrderByCreatedAtDescIdDesc();
+    List<SupportInquiry> findAllByAdminDeletedFalseOrderByCreatedAtDescIdDesc();
 
-    long countByStatus(SupportInquiryStatus status);
+    long countByStatusAndAdminDeletedFalse(SupportInquiryStatus status);
 }

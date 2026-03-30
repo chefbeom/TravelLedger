@@ -32,7 +32,7 @@ public class SupportInquiryService {
     }
 
     public List<SupportInquiryResponse> getAdminInbox() {
-        return supportInquiryRepository.findAllByOrderByCreatedAtDescIdDesc().stream()
+        return supportInquiryRepository.findAllByAdminDeletedFalseOrderByCreatedAtDescIdDesc().stream()
                 .map(this::toResponse)
                 .toList();
     }
@@ -74,9 +74,31 @@ public class SupportInquiryService {
         inquiry.setRepliedBy(adminUser);
         inquiry.setRepliedAt(LocalDateTime.now());
         inquiry.setStatus(SupportInquiryStatus.ANSWERED);
+        inquiry.setAdminArchived(true);
+        inquiry.setAdminDeleted(false);
         inquiry.setUpdatedAt(LocalDateTime.now());
 
         return toResponse(inquiry);
+    }
+
+    @Transactional
+    public SupportInquiryResponse setArchived(Long inquiryId, boolean archived) {
+        SupportInquiry inquiry = supportInquiryRepository.findById(inquiryId)
+                .orElseThrow(() -> new NotFoundException("문의 내역을 찾을 수 없습니다."));
+
+        inquiry.setAdminArchived(archived);
+        inquiry.setAdminDeleted(false);
+        inquiry.setUpdatedAt(LocalDateTime.now());
+        return toResponse(inquiry);
+    }
+
+    @Transactional
+    public void deleteForAdmin(Long inquiryId) {
+        SupportInquiry inquiry = supportInquiryRepository.findById(inquiryId)
+                .orElseThrow(() -> new NotFoundException("문의 내역을 찾을 수 없습니다."));
+
+        inquiry.setAdminDeleted(true);
+        inquiry.setUpdatedAt(LocalDateTime.now());
     }
 
     public AttachmentPayload loadAttachment(Long requesterUserId, boolean requesterAdmin, Long inquiryId) {
@@ -99,7 +121,7 @@ public class SupportInquiryService {
     }
 
     public long countPendingInquiries() {
-        return supportInquiryRepository.countByStatus(SupportInquiryStatus.PENDING);
+        return supportInquiryRepository.countByStatusAndAdminDeletedFalse(SupportInquiryStatus.PENDING);
     }
 
     private SupportInquiryResponse toResponse(SupportInquiry inquiry) {
@@ -118,6 +140,7 @@ public class SupportInquiryService {
                 StringUtils.hasText(inquiry.getAttachmentStoragePath())
                         ? "/api/support/inquiries/" + inquiry.getId() + "/attachment"
                         : null,
+                inquiry.isAdminArchived(),
                 inquiry.getReplyContent(),
                 inquiry.getRepliedAt(),
                 repliedBy != null ? repliedBy.getLoginId() : null,

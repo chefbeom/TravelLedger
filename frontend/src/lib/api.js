@@ -154,6 +154,19 @@ export function replyAdminSupportInquiry(inquiryId, content) {
   })
 }
 
+export function archiveAdminSupportInquiry(inquiryId, archived) {
+  return request(`/admin/support-inquiries/${inquiryId}/archive`, {
+    method: 'PATCH',
+    body: JSON.stringify({ archived }),
+  })
+}
+
+export function deleteAdminSupportInquiry(inquiryId) {
+  return request(`/admin/support-inquiries/${inquiryId}`, {
+    method: 'DELETE',
+  })
+}
+
 export function fetchInvite(token) {
   return request(`/invites/${encodeURIComponent(token)}`)
 }

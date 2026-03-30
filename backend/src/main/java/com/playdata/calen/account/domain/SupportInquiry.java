@@ -70,5 +70,11 @@ public class SupportInquiry {
     private LocalDateTime createdAt = LocalDateTime.now();
 
     @Column(nullable = false)
+    private boolean adminArchived = false;
+
+    @Column(nullable = false)
+    private boolean adminDeleted = false;
+
+    @Column(nullable = false)
     private LocalDateTime updatedAt = LocalDateTime.now();
 }

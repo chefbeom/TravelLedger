@@ -2,6 +2,7 @@ package com.playdata.calen.account.web;
 
 import com.playdata.calen.account.dto.AdminDashboardResponse;
 import com.playdata.calen.account.dto.AdminLoginAuditPageResponse;
+import com.playdata.calen.account.dto.SupportInquiryArchiveRequest;
 import com.playdata.calen.account.dto.SupportInquiryReplyRequest;
 import com.playdata.calen.account.dto.SupportInquiryResponse;
 import com.playdata.calen.account.dto.AdminUserActiveRequest;
@@ -74,5 +75,19 @@ public class AdminController {
             @Valid @RequestBody SupportInquiryReplyRequest request
     ) {
         return supportInquiryService.reply(currentUser.userId(), inquiryId, request.content());
+    }
+
+    @PatchMapping("/support-inquiries/{inquiryId}/archive")
+    public SupportInquiryResponse archiveSupportInquiry(
+            @PathVariable Long inquiryId,
+            @RequestBody SupportInquiryArchiveRequest request
+    ) {
+        return supportInquiryService.setArchived(inquiryId, request.archived());
+    }
+
+    @DeleteMapping("/support-inquiries/{inquiryId}")
+    public ResponseEntity<Void> deleteSupportInquiry(@PathVariable Long inquiryId) {
+        supportInquiryService.deleteForAdmin(inquiryId);
+        return ResponseEntity.noContent().build();
     }
 }

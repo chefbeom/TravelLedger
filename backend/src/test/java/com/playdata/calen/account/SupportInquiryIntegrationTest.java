@@ -2,10 +2,12 @@ package com.playdata.calen.account;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -40,7 +42,7 @@ class SupportInquiryIntegrationTest {
     private ObjectMapper objectMapper;
 
     @Test
-    void userCanSendInquiryAndAdminCanReply() throws Exception {
+    void userCanSendInquiryAndAdminCanArchiveRestoreReplyAndDelete() throws Exception {
         MockHttpSession userSession = login("hana", "test1234", "12345678");
         MockHttpSession adminSession = login("admin", "test1234", "12345678");
 
@@ -60,7 +62,8 @@ class SupportInquiryIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.title").value("앱 문의"))
                 .andExpect(jsonPath("$.attachmentUrl").isNotEmpty())
-                .andExpect(jsonPath("$.status").value("PENDING"));
+                .andExpect(jsonPath("$.status").value("PENDING"))
+                .andExpect(jsonPath("$.archived").value(false));
 
         MvcResult inboxResult = mockMvc.perform(get("/api/admin/support-inquiries").session(adminSession))
                 .andExpect(status().isOk())
@@ -81,12 +84,38 @@ class SupportInquiryIntegrationTest {
                         .content(objectMapper.writeValueAsString(Map.of("content", "확인했고 다음 배포 때 검토하겠습니다."))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("ANSWERED"))
+                .andExpect(jsonPath("$.archived").value(true))
                 .andExpect(jsonPath("$.replyContent").value("확인했고 다음 배포 때 검토하겠습니다."));
+
+        mockMvc.perform(patch("/api/admin/support-inquiries/{inquiryId}/archive", inquiryId)
+                        .session(adminSession)
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of("archived", false))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.archived").value(false));
+
+        mockMvc.perform(patch("/api/admin/support-inquiries/{inquiryId}/archive", inquiryId)
+                        .session(adminSession)
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of("archived", true))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.archived").value(true));
+
+        mockMvc.perform(delete("/api/admin/support-inquiries/{inquiryId}", inquiryId)
+                        .session(adminSession)
+                        .with(csrf()))
+                .andExpect(status().isNoContent());
 
         mockMvc.perform(get("/api/support/inquiries/me").session(userSession))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].replyContent").value("확인했고 다음 배포 때 검토하겠습니다."))
                 .andExpect(jsonPath("$[0].attachmentUrl").isNotEmpty());
+
+        mockMvc.perform(get("/api/admin/support-inquiries").session(adminSession))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$").isEmpty());
     }
 
     private MockHttpSession login(String loginId, String password, String secondaryPin) throws Exception {

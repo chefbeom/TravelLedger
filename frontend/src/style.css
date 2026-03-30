@@ -2459,6 +2459,21 @@ textarea {
   background: rgba(49, 130, 246, 0.08);
 }
 
+.panel__actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 14px;
+  flex-wrap: wrap;
+}
+
+.scope-toggle .button.is-active {
+  background: var(--brand);
+  color: #fff;
+  border-color: transparent;
+}
+
 .support-detail-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

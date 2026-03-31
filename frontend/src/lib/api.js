@@ -126,6 +126,23 @@ export function fetchAdminDashboard() {
   return request('/admin/dashboard')
 }
 
+export function fetchAdminDataManagement() {
+  return request('/admin/data-management')
+}
+
+export function createAdminDataBackup() {
+  return request('/admin/data-management/backup', {
+    method: 'POST',
+  })
+}
+
+export function restoreAdminDataBackup(fileName) {
+  return request('/admin/data-management/restore', {
+    method: 'POST',
+    body: JSON.stringify({ fileName }),
+  })
+}
+
 export function fetchAdminAccessStatus() {
   return request('/admin/access/status')
 }

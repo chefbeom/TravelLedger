@@ -2234,6 +2234,40 @@ textarea {
   text-align: right;
 }
 
+.admin-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.admin-data-modal {
+  width: min(1120px, 100%);
+}
+
+.admin-data-stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.admin-data-stats__section {
+  display: grid;
+  gap: 10px;
+}
+
+.admin-data-stats__section h3 {
+  margin: 0;
+}
+
+.admin-data-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
 .auth-feedback {
   max-width: 1100px;
   margin: 0 auto 12px;
@@ -2679,6 +2713,10 @@ textarea {
 
   .profile-summary-grid,
   .support-detail-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-data-stats {
     grid-template-columns: 1fr;
   }
 

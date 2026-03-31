@@ -10,11 +10,15 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface SupportInquiryRepository extends JpaRepository<SupportInquiry, Long> {
 
+    long countByAdminDeletedFalse();
+
     Page<SupportInquiry> findAllBySenderIdOrderByCreatedAtDescIdDesc(Long senderId, Pageable pageable);
 
     List<SupportInquiry> findAllByAdminDeletedFalseOrderByCreatedAtDescIdDesc();
 
     long countByStatusAndAdminDeletedFalse(SupportInquiryStatus status);
+
+    long countByAdminArchivedTrueAndAdminDeletedFalse();
 
     long countBySenderIdAndCreatedAtGreaterThanEqualAndCreatedAtLessThan(
             Long senderId,

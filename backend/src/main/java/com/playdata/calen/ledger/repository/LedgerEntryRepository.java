@@ -12,6 +12,10 @@ import org.springframework.data.repository.query.Param;
 
 public interface LedgerEntryRepository extends JpaRepository<LedgerEntry, Long> {
 
+    long countByDeletedAtIsNull();
+
+    long countByDeletedAtIsNotNull();
+
     List<LedgerEntry> findAllByOwnerIdAndDeletedAtIsNullOrderByEntryDateAscIdAsc(Long ownerId);
 
     List<LedgerEntry> findAllByOwnerIdAndDeletedAtIsNullAndEntryDateBetweenOrderByEntryDateAscIdAsc(Long ownerId, LocalDate from, LocalDate to);
@@ -126,6 +130,16 @@ public interface LedgerEntryRepository extends JpaRepository<LedgerEntry, Long> 
             @Param("minAmount") java.math.BigDecimal minAmount,
             @Param("maxAmount") java.math.BigDecimal maxAmount,
             @Param("entryTypeToSum") com.playdata.calen.ledger.domain.EntryType entryTypeToSum
+    );
+
+    @Query("""
+            select coalesce(sum(entry.amount), 0)
+            from LedgerEntry entry
+            where entry.deletedAt is null
+              and entry.entryType = :entryType
+            """)
+    java.math.BigDecimal sumAmountByEntryTypeAndDeletedAtIsNull(
+            @Param("entryType") com.playdata.calen.ledger.domain.EntryType entryType
     );
 
     @Modifying

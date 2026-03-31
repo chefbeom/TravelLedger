@@ -4,9 +4,17 @@ import com.playdata.calen.travel.domain.TravelExpenseRecord;
 import com.playdata.calen.travel.domain.TravelRecordType;
 import java.util.List;
 import java.util.Optional;
+import java.math.BigDecimal;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
 
 public interface TravelExpenseRecordRepository extends JpaRepository<TravelExpenseRecord, Long> {
+
+    @Query("""
+            select coalesce(sum(record.amountKrw), 0)
+            from TravelExpenseRecord record
+            """)
+    BigDecimal sumAmountKrw();
 
     List<TravelExpenseRecord> findAllByPlanIdAndPlanOwnerIdOrderByExpenseDateDescIdDesc(Long planId, Long ownerId);
 

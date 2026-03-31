@@ -2,12 +2,15 @@
 import { computed, onMounted, reactive } from 'vue'
 import {
   archiveAdminSupportInquiry,
+  createAdminDataBackup,
   deleteAdminSupportInquiry,
   fetchAdminAccessStatus,
+  fetchAdminDataManagement,
   fetchAdminDashboard,
   fetchAdminLoginAuditLogs,
   fetchAdminSupportInquiries,
   replyAdminSupportInquiry,
+  restoreAdminDataBackup,
   unlockBlockedIp,
   updateAdminUserActive,
   verifyAdminAccess,
@@ -36,6 +39,12 @@ const state = reactive({
   adminAccessCode: '',
   adminAccessError: '',
   summary: null,
+  dataManagementOpen: false,
+  loadingDataManagement: false,
+  creatingDataBackup: false,
+  restoringBackupFile: '',
+  dataManagementError: '',
+  dataManagement: null,
   recentLoginLogs: [],
   loginLogPage: { content: [], page: 0, size: 10, totalElements: 0, totalPages: 0 },
   blockedIps: [],
@@ -358,6 +367,92 @@ async function handleDeleteSupportInquiry(inquiry) {
   }
 }
 
+function formatFileSize(bytes) {
+  if (!Number.isFinite(bytes) || bytes <= 0) {
+    return '0 B'
+  }
+
+  const units = ['B', 'KB', 'MB', 'GB', 'TB']
+  let value = bytes
+  let unitIndex = 0
+
+  while (value >= 1024 && unitIndex < units.length - 1) {
+    value /= 1024
+    unitIndex += 1
+  }
+
+  return `${value >= 10 || unitIndex === 0 ? value.toFixed(0) : value.toFixed(1)} ${units[unitIndex]}`
+}
+
+async function loadDataManagement() {
+  state.loadingDataManagement = true
+  state.dataManagementError = ''
+
+  try {
+    state.dataManagement = await fetchAdminDataManagement()
+  } catch (error) {
+    if (!handleAdminAccessRequired(error)) {
+      state.dataManagementError = error.message
+    }
+  } finally {
+    state.loadingDataManagement = false
+  }
+}
+
+async function openDataManagement() {
+  state.dataManagementOpen = true
+  await loadDataManagement()
+}
+
+function closeDataManagement() {
+  state.dataManagementOpen = false
+  state.dataManagementError = ''
+}
+
+async function handleCreateDataBackup() {
+  state.creatingDataBackup = true
+  state.dataManagementError = ''
+
+  try {
+    await createAdminDataBackup()
+    await loadDataManagement()
+  } catch (error) {
+    if (!handleAdminAccessRequired(error)) {
+      state.dataManagementError = error.message
+    }
+  } finally {
+    state.creatingDataBackup = false
+  }
+}
+
+async function handleRestoreDataBackup(backup) {
+  if (!backup?.fileName) {
+    return
+  }
+
+  const confirmed = window.confirm(
+    `선택한 백업(${backup.fileName})으로 현재 데이터를 복구합니다. 현재 데이터는 덮어써지며, 복구 후에는 즉시 되돌릴 수 없습니다. 계속할까요?`,
+  )
+  if (!confirmed) {
+    return
+  }
+
+  state.restoringBackupFile = backup.fileName
+  state.dataManagementError = ''
+
+  try {
+    await restoreAdminDataBackup(backup.fileName)
+    await loadDataManagement()
+    await loadDashboard()
+  } catch (error) {
+    if (!handleAdminAccessRequired(error)) {
+      state.dataManagementError = error.message
+    }
+  } finally {
+    state.restoringBackupFile = ''
+  }
+}
+
 onMounted(initializeAdminWorkspace)
 </script>
 
@@ -399,6 +494,125 @@ onMounted(initializeAdminWorkspace)
       </div>
     </div>
 
+    <div v-if="state.dataManagementOpen" class="travel-modal">
+      <div class="travel-modal__dialog admin-data-modal">
+        <div class="travel-modal__header">
+          <div>
+            <h2>데이터 백업/복구</h2>
+            <p>현재 저장된 데이터 통계, 수동 백업, Google Drive 백업 목록 조회와 복구를 한 화면에서 관리합니다.</p>
+          </div>
+          <button class="button button--ghost" type="button" @click="closeDataManagement">
+            닫기
+          </button>
+        </div>
+        <div class="travel-modal__body">
+          <div v-if="state.dataManagementError" class="feedback feedback--error">{{ state.dataManagementError }}</div>
+
+          <section class="panel panel--compact">
+            <div class="panel__header">
+              <div>
+                <h2>현재 데이터 통계</h2>
+                <p>관리자 기준으로 저장된 전체 데이터의 개수와 합계를 요약합니다.</p>
+              </div>
+              <button class="button button--ghost" type="button" :disabled="state.loadingDataManagement" @click="loadDataManagement">
+                {{ state.loadingDataManagement ? '불러오는 중...' : '통계 새로고침' }}
+              </button>
+            </div>
+            <div v-if="state.dataManagement?.stats?.sections?.length" class="admin-data-stats">
+              <section
+                v-for="section in state.dataManagement.stats.sections"
+                :key="section.key"
+                class="admin-data-stats__section"
+              >
+                <h3>{{ section.title }}</h3>
+                <div class="sheet-table-wrap">
+                  <table class="sheet-table">
+                    <tbody>
+                      <tr v-for="item in section.items" :key="`${section.key}-${item.label}`">
+                        <th>{{ item.label }}</th>
+                        <td>{{ item.value }}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+            </div>
+            <p v-else class="panel__empty">
+              {{ state.loadingDataManagement ? '현재 데이터 통계를 불러오는 중입니다.' : '표시할 데이터 통계가 없습니다.' }}
+            </p>
+          </section>
+
+          <section class="panel panel--compact">
+            <div class="panel__header">
+              <div>
+                <h2>수동 백업</h2>
+                <p>현재 상태를 즉시 Google Drive 백업 목록에 추가합니다. 자동 새벽 백업과 별개로 원하는 시점 백업을 만들 수 있습니다.</p>
+              </div>
+              <div class="admin-data-status">
+                <span v-if="state.dataManagement?.busy" class="entry-type-pill entry-type-pill--expense">
+                  {{ state.dataManagement?.runningOperation === 'restore' ? '복구 진행 중' : '백업 진행 중' }}
+                </span>
+                <button
+                  class="button button--primary"
+                  type="button"
+                  :disabled="state.creatingDataBackup || state.loadingDataManagement || state.dataManagement?.busy"
+                  @click="handleCreateDataBackup"
+                >
+                  {{ state.creatingDataBackup ? '백업 생성 중...' : '지금 백업하기' }}
+                </button>
+              </div>
+            </div>
+          </section>
+
+          <section class="panel panel--compact">
+            <div class="panel__header">
+              <div>
+                <h2>백업 목록</h2>
+                <p>Google Drive에 저장된 백업 파일 목록입니다. 복구할 시점을 선택해 즉시 현재 데이터에 적용할 수 있습니다.</p>
+              </div>
+            </div>
+            <div v-if="state.dataManagement?.backupsError" class="feedback feedback--error">
+              {{ state.dataManagement.backupsError }}
+            </div>
+            <div class="sheet-table-wrap">
+              <table class="sheet-table">
+                <thead>
+                  <tr>
+                    <th>파일명</th>
+                    <th>수정 시각</th>
+                    <th>크기</th>
+                    <th>관리</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-if="!(state.dataManagement?.backups?.length)">
+                    <td colspan="4" class="sheet-table__empty">
+                      {{ state.loadingDataManagement ? '백업 목록을 불러오는 중입니다.' : '표시할 백업 파일이 없습니다.' }}
+                    </td>
+                  </tr>
+                  <tr v-for="backup in state.dataManagement?.backups ?? []" :key="backup.fileName">
+                    <td>{{ backup.fileName }}</td>
+                    <td>{{ formatDateTime(backup.modifiedAt) }}</td>
+                    <td>{{ formatFileSize(backup.sizeBytes) }}</td>
+                    <td>
+                      <button
+                        class="button button--ghost"
+                        type="button"
+                        :disabled="state.restoringBackupFile === backup.fileName || state.dataManagement?.busy"
+                        @click="handleRestoreDataBackup(backup)"
+                      >
+                        {{ state.restoringBackupFile === backup.fileName ? '복구 중...' : '이 시점으로 복구' }}
+                      </button>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </div>
+      </div>
+    </div>
+
     <template v-if="state.adminAccessVerified">
       <div v-if="state.errorMessage" class="feedback feedback--error">{{ state.errorMessage }}</div>
 
@@ -408,9 +622,14 @@ onMounted(initializeAdminWorkspace)
             <h2>관리자 페이지</h2>
             <p>{{ currentUser.displayName }} 계정으로 로그인한 상태에서 사용자 상태, 로그인 기록, 문의 메일함을 관리합니다.</p>
           </div>
-          <button class="button button--ghost" type="button" :disabled="state.loading" @click="loadDashboard">
-            {{ state.loading ? '불러오는 중...' : '새로고침' }}
-          </button>
+          <div class="admin-toolbar">
+            <button class="button button--ghost" type="button" :disabled="state.loading" @click="openDataManagement">
+              데이터 백업/복구
+            </button>
+            <button class="button button--ghost" type="button" :disabled="state.loading" @click="loadDashboard">
+              {{ state.loading ? '불러오는 중...' : '새로고침' }}
+            </button>
+          </div>
         </div>
       </section>
 

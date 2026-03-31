@@ -15,7 +15,7 @@ RUN ./gradlew --no-daemon clean bootWar
 FROM eclipse-temurin:17-jre-jammy
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends curl \
+    && apt-get install -y --no-install-recommends curl mariadb-client rclone \
     && rm -rf /var/lib/apt/lists/* \
     && groupadd --system spring \
     && useradd --system --gid spring --home-dir /app --shell /usr/sbin/nologin spring
@@ -24,8 +24,8 @@ WORKDIR /app
 
 COPY --from=build /workspace/build/libs/*.war /app/app.war
 
-RUN mkdir -p /app/uploads \
-    && chown -R spring:spring /app
+RUN mkdir -p /app/uploads /app/.config/rclone /opt/calen-backup \
+    && chown -R spring:spring /app /opt/calen-backup
 
 VOLUME ["/app/uploads"]
 

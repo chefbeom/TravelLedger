@@ -232,8 +232,21 @@ const photoBackedMemories = computed(() =>
 
 const photoQuickOpenSort = ref('desc')
 const photoQuickOpenPage = ref(0)
-const photoQuickOpenPageCount = computed(() => 1)
-const pagedPhotoBackedMemories = computed(() => photoBackedMemories.value.slice(0, 5))
+const PHOTO_QUICK_OPEN_PAGE_SIZE = 5
+const sortedPhotoBackedMemories = computed(() => {
+  const items = photoBackedMemories.value.slice()
+  if (photoQuickOpenSort.value === 'asc') {
+    items.reverse()
+  }
+  return items
+})
+const photoQuickOpenPageCount = computed(() =>
+  Math.max(1, Math.ceil(sortedPhotoBackedMemories.value.length / PHOTO_QUICK_OPEN_PAGE_SIZE)),
+)
+const pagedPhotoBackedMemories = computed(() => {
+  const start = photoQuickOpenPage.value * PHOTO_QUICK_OPEN_PAGE_SIZE
+  return sortedPhotoBackedMemories.value.slice(start, start + PHOTO_QUICK_OPEN_PAGE_SIZE)
+})
 
 const isMultiPhotoMode = computed(() => multiPhotoUploadEnabled.value && !editingMemoryId.value)
 const hasMultiPhotoDrafts = computed(() => isMultiPhotoMode.value && multiPhotoDrafts.value.length > 0)
@@ -339,6 +352,20 @@ watch(filteredMemoryRecords, (items) => {
   const maxPage = Math.max(0, Math.ceil(items.length / MEMORY_RECORD_PAGE_SIZE) - 1)
   if (memoryRecordPage.value > maxPage) {
     memoryRecordPage.value = maxPage
+  }
+})
+
+watch(
+  () => [photoQuickOpenSort.value, scopedMemoryRecords.value.length],
+  () => {
+    photoQuickOpenPage.value = 0
+  },
+)
+
+watch(sortedPhotoBackedMemories, (items) => {
+  const maxPage = Math.max(0, Math.ceil(items.length / PHOTO_QUICK_OPEN_PAGE_SIZE) - 1)
+  if (photoQuickOpenPage.value > maxPage) {
+    photoQuickOpenPage.value = maxPage
   }
 })
 

@@ -13,7 +13,9 @@ import com.playdata.calen.common.exception.NotFoundException;
 import com.playdata.calen.ledger.domain.PaymentMethod;
 import com.playdata.calen.ledger.repository.PaymentMethodRepository;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -85,7 +87,12 @@ public class HouseholdAggregatePreferenceService {
 
         try {
             StoredWidget[] widgets = objectMapper.readValue(rawJson, StoredWidget[].class);
-            return List.of(widgets);
+            if (widgets == null || widgets.length == 0) {
+                return List.of();
+            }
+            return Arrays.stream(widgets)
+                    .filter(Objects::nonNull)
+                    .toList();
         } catch (JsonProcessingException exception) {
             return List.of();
         }
@@ -123,10 +130,15 @@ public class HouseholdAggregatePreferenceService {
 
         for (int index = 0; index < MAX_WIDGETS; index++) {
             StoredWidget baseWidget = defaultWidgets.get(index);
-            StoredWidget requestedWidget = index < widgets.size() ? widgets.get(index) : baseWidget;
-            String kind = ALLOWED_KINDS.contains(requestedWidget.kind()) ? requestedWidget.kind() : baseWidget.kind();
-            String period = ALLOWED_PERIODS.contains(requestedWidget.period()) ? requestedWidget.period() : baseWidget.period();
-            String amountType = ALLOWED_AMOUNT_TYPES.contains(requestedWidget.amountType()) ? requestedWidget.amountType() : baseWidget.amountType();
+            StoredWidget requestedWidget = index < widgets.size() && widgets.get(index) != null ? widgets.get(index) : baseWidget;
+            String requestedKind = requestedWidget.kind();
+            String requestedPeriod = requestedWidget.period();
+            String requestedAmountType = requestedWidget.amountType();
+            String kind = requestedKind != null && ALLOWED_KINDS.contains(requestedKind) ? requestedKind : baseWidget.kind();
+            String period = requestedPeriod != null && ALLOWED_PERIODS.contains(requestedPeriod) ? requestedPeriod : baseWidget.period();
+            String amountType = requestedAmountType != null && ALLOWED_AMOUNT_TYPES.contains(requestedAmountType)
+                    ? requestedAmountType
+                    : baseWidget.amountType();
             Long paymentMethodId = null;
 
             if ("PAYMENT_METHOD".equals(kind)) {

@@ -6,6 +6,7 @@ import { resolveRange, summarizeEntries } from '../lib/analytics'
 const CALENDAR_SCALE_KEY = 'calen-household-calendar-scale-preset'
 const CALENDAR_COLLAPSE_KEY = 'calen-household-calendar-collapsed'
 const CALENDAR_HIGHLIGHT_KEY = 'calen-household-calendar-highlight-mode'
+const DEFAULT_CALENDAR_HIGHLIGHT_MODE = 'net'
 
 const calendarScalePresets = [
   { key: 'compact', label: '좁게', value: 74 },
@@ -164,7 +165,7 @@ const emit = defineEmits([
 const selectedDate = ref(props.anchorDate)
 const selectedDaySort = ref('ASC')
 const calendarScalePreset = ref('default')
-const calendarHighlightMode = ref('net')
+const calendarHighlightMode = ref(DEFAULT_CALENDAR_HIGHLIGHT_MODE)
 const isCalendarCollapsed = ref(false)
 const isAggregateEditMode = ref(false)
 const quickEntryPanelRef = ref(null)
@@ -349,6 +350,9 @@ onMounted(() => {
 
   if (savedHighlight && calendarHighlightModes.some((item) => item.key === savedHighlight)) {
     calendarHighlightMode.value = savedHighlight
+  } else {
+    calendarHighlightMode.value = DEFAULT_CALENDAR_HIGHLIGHT_MODE
+    window.localStorage.setItem(CALENDAR_HIGHLIGHT_KEY, DEFAULT_CALENDAR_HIGHLIGHT_MODE)
   }
 
   if (savedCollapsed) {

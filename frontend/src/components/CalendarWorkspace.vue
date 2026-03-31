@@ -707,6 +707,25 @@ defineExpose({
           </div>
 
           <div class="entry-editor__fields">
+            <label class="field">
+              <span class="field__label">날짜</span>
+              <input v-model="entryForm.entryDate" type="date" />
+            </label>
+
+            <label class="field household-time-field">
+              <span class="field__label">시간</span>
+              <label class="checkbox-row household-time-toggle">
+                <input
+                  :checked="isTimeEnabled"
+                  type="checkbox"
+                  @change="emit('update:timeEnabled', $event.target.checked)"
+                />
+                <span>시간 입력 사용</span>
+              </label>
+              <input v-model="entryForm.entryTime" type="time" :disabled="!isTimeEnabled" />
+              <small class="field__hint">시간 입력을 끄면 자동으로 00:00으로 저장됩니다.</small>
+            </label>
+
             <label v-if="entryForm.entryType === 'EXPENSE'" class="field">
   <span class="field__label">결제수단</span>
   <select v-model="entryForm.paymentMethodId">

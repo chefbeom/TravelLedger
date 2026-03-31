@@ -604,8 +604,78 @@ function uploadTravelMediaDirect(path, mediaType, files, caption = '', includeMe
   })
 }
 
+async function uploadPresignedTravelMediaFile(target, file) {
+  const response = await fetch(target.uploadUrl, {
+    method: target.method || 'PUT',
+    headers: file?.type
+      ? {
+          'Content-Type': file.type,
+        }
+      : {},
+    body: file,
+  })
+
+  if (!response.ok) {
+    throw new Error('파일 업로드 중 문제가 발생했습니다.')
+  }
+}
+
+async function uploadTravelMediaWithPresignedUrls({
+  preparePath,
+  completePath,
+  mediaType,
+  files,
+  caption = '',
+}) {
+  const selectedFiles = [...(files ?? [])].filter(Boolean)
+  if (!selectedFiles.length) {
+    return []
+  }
+
+  const prepared = await request(preparePath, {
+    method: 'POST',
+    body: JSON.stringify({
+      mediaType,
+      caption,
+      files: selectedFiles.map((file) => ({
+        originalFileName: file.name,
+        contentType: file.type || 'application/octet-stream',
+        fileSize: file.size,
+      })),
+    }),
+  })
+
+  if (
+    prepared?.uploadMode !== 'PRESIGNED' ||
+    !Array.isArray(prepared.uploads) ||
+    prepared.uploads.length !== selectedFiles.length
+  ) {
+    return null
+  }
+
+  for (let index = 0; index < prepared.uploads.length; index += 1) {
+    await uploadPresignedTravelMediaFile(prepared.uploads[index], selectedFiles[index])
+  }
+
+  return request(completePath, {
+    method: 'POST',
+    body: JSON.stringify({
+      mediaType,
+      caption,
+      files: prepared.uploads.map((upload) => ({
+        objectKey: upload.objectKey,
+        originalFileName: upload.originalFileName,
+        contentType: upload.contentType,
+        fileSize: upload.fileSize,
+      })),
+    }),
+  })
+}
+
 async function uploadTravelMediaInternal({
   directPath,
+  preparePath,
+  completePath,
   mediaType,
   files,
   caption = '',
@@ -616,12 +686,32 @@ async function uploadTravelMediaInternal({
     return []
   }
 
+  if (preparePath && completePath) {
+    try {
+      const uploadedWithPresign = await uploadTravelMediaWithPresignedUrls({
+        preparePath,
+        completePath,
+        mediaType,
+        files: selectedFiles,
+        caption,
+      })
+
+      if (uploadedWithPresign) {
+        return uploadedWithPresign
+      }
+    } catch {
+      // Fall back to the existing server upload flow when presigned upload is unavailable.
+    }
+  }
+
   return uploadTravelMediaDirect(directPath, mediaType, selectedFiles, caption, includeMediaTypeInDirect)
 }
 
 export async function uploadTravelRecordMedia(recordId, mediaType, files, caption = '') {
   return uploadTravelMediaInternal({
     directPath: `/travel/records/${recordId}/media`,
+    preparePath: `/travel/records/${recordId}/media/presign`,
+    completePath: `/travel/records/${recordId}/media/complete`,
     mediaType,
     files,
     caption,
@@ -632,6 +722,8 @@ export async function uploadTravelRecordMedia(recordId, mediaType, files, captio
 export async function uploadTravelMemoryMedia(memoryId, files, caption = '') {
   return uploadTravelMediaInternal({
     directPath: `/travel/memories/${memoryId}/media`,
+    preparePath: `/travel/memories/${memoryId}/media/presign`,
+    completePath: `/travel/memories/${memoryId}/media/complete`,
     mediaType: 'PHOTO',
     files,
     caption,

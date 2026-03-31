@@ -28,6 +28,7 @@ public class HouseholdAggregatePreferenceService {
     private static final int MAX_WIDGETS = 4;
     private static final Set<String> ALLOWED_KINDS = Set.of("NONE", "TOTAL", "PAYMENT_METHOD");
     private static final Set<String> ALLOWED_PERIODS = Set.of("MONTH", "WEEK", "DAY");
+    private static final Set<String> ALLOWED_AMOUNT_TYPES = Set.of("NET", "INCOME", "EXPENSE");
 
     private final AppUserRepository appUserRepository;
     private final PaymentMethodRepository paymentMethodRepository;
@@ -71,10 +72,10 @@ public class HouseholdAggregatePreferenceService {
 
     private StoredWidget toStoredWidget(HouseholdAggregateWidgetRequest widget) {
         if (widget == null) {
-            return new StoredWidget(null, null, null);
+            return new StoredWidget(null, null, null, null);
         }
 
-        return new StoredWidget(widget.kind(), widget.period(), widget.paymentMethodId());
+        return new StoredWidget(widget.kind(), widget.period(), widget.paymentMethodId(), widget.amountType());
     }
 
     private List<StoredWidget> readWidgets(String rawJson) {
@@ -104,7 +105,8 @@ public class HouseholdAggregatePreferenceService {
                         .map(widget -> new HouseholdAggregateWidgetResponse(
                                 widget.kind(),
                                 widget.period(),
-                                widget.paymentMethodId()
+                                widget.paymentMethodId(),
+                                widget.amountType()
                         ))
                         .toList()
         );
@@ -124,6 +126,7 @@ public class HouseholdAggregatePreferenceService {
             StoredWidget requestedWidget = index < widgets.size() ? widgets.get(index) : baseWidget;
             String kind = ALLOWED_KINDS.contains(requestedWidget.kind()) ? requestedWidget.kind() : baseWidget.kind();
             String period = ALLOWED_PERIODS.contains(requestedWidget.period()) ? requestedWidget.period() : baseWidget.period();
+            String amountType = ALLOWED_AMOUNT_TYPES.contains(requestedWidget.amountType()) ? requestedWidget.amountType() : baseWidget.amountType();
             Long paymentMethodId = null;
 
             if ("PAYMENT_METHOD".equals(kind)) {
@@ -133,7 +136,7 @@ public class HouseholdAggregatePreferenceService {
                         : fallbackPaymentMethodId;
             }
 
-            normalizedWidgets.add(new StoredWidget(kind, period, paymentMethodId));
+            normalizedWidgets.add(new StoredWidget(kind, period, paymentMethodId, amountType));
         }
 
         return normalizedWidgets;
@@ -141,17 +144,18 @@ public class HouseholdAggregatePreferenceService {
 
     private List<StoredWidget> buildDefaultWidgets() {
         return List.of(
-                new StoredWidget("TOTAL", "MONTH", null),
-                new StoredWidget("NONE", "MONTH", null),
-                new StoredWidget("NONE", "WEEK", null),
-                new StoredWidget("NONE", "DAY", null)
+                new StoredWidget("TOTAL", "MONTH", null, "NET"),
+                new StoredWidget("NONE", "MONTH", null, "NET"),
+                new StoredWidget("NONE", "WEEK", null, "NET"),
+                new StoredWidget("NONE", "DAY", null, "NET")
         );
     }
 
     private record StoredWidget(
             String kind,
             String period,
-            Long paymentMethodId
+            Long paymentMethodId,
+            String amountType
     ) {
     }
 }

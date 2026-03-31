@@ -43,6 +43,12 @@ const aggregateWidgetPeriods = [
   { value: 'DAY', label: '오늘' },
 ]
 
+const aggregateWidgetAmountTypes = [
+  { value: 'NET', label: '전체' },
+  { value: 'INCOME', label: '수입' },
+  { value: 'EXPENSE', label: '지출' },
+]
+
 const props = defineProps({
   quickStats: {
     type: Array,
@@ -650,10 +656,10 @@ function getCalendarBarRatio(day) {
 function createDefaultAggregateConfigs() {
   const defaultPaymentMethodId = props.paymentMethods[0] ? String(props.paymentMethods[0].id) : ''
   return [
-    { id: 'aggregate-1', kind: 'TOTAL', period: 'MONTH', paymentMethodId: '' },
-    { id: 'aggregate-2', kind: 'NONE', period: 'MONTH', paymentMethodId: '' },
-    { id: 'aggregate-3', kind: 'NONE', period: 'WEEK', paymentMethodId: '' },
-    { id: 'aggregate-4', kind: 'NONE', period: 'DAY', paymentMethodId: defaultPaymentMethodId },
+    { id: 'aggregate-1', kind: 'TOTAL', period: 'MONTH', paymentMethodId: '', amountType: 'NET' },
+    { id: 'aggregate-2', kind: 'NONE', period: 'MONTH', paymentMethodId: '', amountType: 'NET' },
+    { id: 'aggregate-3', kind: 'NONE', period: 'WEEK', paymentMethodId: '', amountType: 'NET' },
+    { id: 'aggregate-4', kind: 'NONE', period: 'DAY', paymentMethodId: defaultPaymentMethodId, amountType: 'NET' },
   ]
 }
 
@@ -666,6 +672,7 @@ function normalizeAggregateConfigs(configs) {
     const current = configs?.[index] ?? {}
     const kind = aggregateWidgetKinds.some((item) => item.value === current.kind) ? current.kind : baseConfig.kind
     const period = aggregateWidgetPeriods.some((item) => item.value === current.period) ? current.period : baseConfig.period
+    const amountType = aggregateWidgetAmountTypes.some((item) => item.value === current.amountType) ? current.amountType : baseConfig.amountType
     const paymentMethodId = kind === 'PAYMENT_METHOD'
       ? (validPaymentIds.has(String(current.paymentMethodId ?? '')) ? String(current.paymentMethodId) : (baseConfig.paymentMethodId || firstPaymentMethodId))
       : ''
@@ -675,6 +682,7 @@ function normalizeAggregateConfigs(configs) {
       kind,
       period,
       paymentMethodId,
+      amountType,
     }
   })
 }
@@ -721,10 +729,11 @@ function cancelAggregateEdit() {
 function saveAggregateWidgetConfigs() {
   emit(
     'save-aggregate-widget-configs',
-    normalizeAggregateConfigs(aggregateWidgetDraftConfigs.value).map(({ kind, period, paymentMethodId }) => ({
+    normalizeAggregateConfigs(aggregateWidgetDraftConfigs.value).map(({ kind, period, paymentMethodId, amountType }) => ({
       kind,
       period,
       paymentMethodId: paymentMethodId ? Number(paymentMethodId) : null,
+      amountType,
     })),
   )
   isAggregateEditMode.value = false
@@ -737,7 +746,7 @@ function getAggregateRange(period) {
 function buildAggregateCard(config, index) {
   if (config.kind === 'NONE') {
     return {
-      id: config.id || `aggregate-${index + 1}`,
+      id: config.id || ('aggregate-' + (index + 1)),
       index,
       config,
       title: '사용 안 함',
@@ -753,15 +762,22 @@ function buildAggregateCard(config, index) {
     ? rangeEntries.filter((entry) => String(entry.paymentMethodId) === String(config.paymentMethodId))
     : rangeEntries
   const overview = summarizeEntries(filteredEntries)
-  const totalAmount = Number(overview.income) + Number(overview.expense)
+  const totalAmount = config.amountType === 'INCOME'
+    ? Number(overview.income)
+    : config.amountType === 'EXPENSE'
+      ? Number(overview.expense)
+      : Number(overview.income) + Number(overview.expense)
   const paymentMethodName = props.paymentMethods.find((item) => String(item.id) === String(config.paymentMethodId))?.name || '결제수단'
   const periodLabel = aggregateWidgetPeriods.find((item) => item.value === config.period)?.label || '이번 달'
+  const amountTypeLabel = aggregateWidgetAmountTypes.find((item) => item.value === config.amountType)?.label || '전체'
   const title = config.kind === 'PAYMENT_METHOD'
-    ? `${periodLabel} ${paymentMethodName} 합계`
-    : `${periodLabel} 총 합계`
+    ? (periodLabel + ' ' + paymentMethodName + ' ' + amountTypeLabel + ' 합계')
+    : (config.amountType === 'NET'
+        ? (periodLabel + ' 총 합계')
+        : (periodLabel + ' 총 ' + amountTypeLabel + ' 합계'))
 
   return {
-    id: config.id || `aggregate-${index + 1}`,
+    id: config.id || ('aggregate-' + (index + 1)),
     index,
     config,
     title,
@@ -999,7 +1015,7 @@ defineExpose({
   </label>
 
   <label class="field">
-    <span class="field__label">소분류</span>
+    <span class="field__label">분류</span>
     <select v-model="entryForm.categoryDetailId">
       <option value="">소분류 없음</option>
       <option v-for="detail in availableDetails" :key="detail.id" :value="String(detail.id)">
@@ -1098,7 +1114,16 @@ defineExpose({
                   </option>
                 </select>
               </label>
+              <label v-if="card.config.kind !== 'NONE'" class="field household-aggregate-card__field">
+                <span class="field__label">기준</span>
+                <select :value="card.config.amountType" @change="updateAggregateWidget(card.index, 'amountType', $event.target.value)">
+                  <option v-for="option in aggregateWidgetAmountTypes" :key="option.value" :value="option.value">
+                    {{ option.label }}
+                  </option>
+                </select>
+              </label>
             </div>
+
 
             <label v-if="isAggregateEditMode && card.config.kind === 'PAYMENT_METHOD'" class="field household-aggregate-card__field">
               <span class="field__label">결제수단</span>
@@ -1171,13 +1196,13 @@ defineExpose({
         <div class="calendar-stepper">
           <span class="calendar-stepper__label">월</span>
           <div class="calendar-stepper__controls">
-            <button type="button" class="calendar-stepper__arrow" aria-label="이전 달" @click="shiftAnchorMonth(-1)">&lt;</button>
+            <button type="button" class="calendar-stepper__arrow" aria-label="이전 월" @click="shiftAnchorMonth(-1)">&lt;</button>
             <label class="field calendar-stepper__field">
               <select :value="calendarMonth" @change="handleChangeMonth">
                 <option v-for="month in 12" :key="month" :value="month">{{ month }}월</option>
               </select>
             </label>
-            <button type="button" class="calendar-stepper__arrow" aria-label="다음 달" @click="shiftAnchorMonth(1)">&gt;</button>
+            <button type="button" class="calendar-stepper__arrow" aria-label="다음 월" @click="shiftAnchorMonth(1)">&gt;</button>
           </div>
         </div>
       </div>
@@ -1390,3 +1415,6 @@ defineExpose({
     </section>
   </div>
 </template>
+
+
+

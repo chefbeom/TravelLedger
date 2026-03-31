@@ -86,6 +86,11 @@ public class AdminController {
         return adminDataManagementService.createManualBackup();
     }
 
+    @PostMapping("/data-management/minio-backup")
+    public AdminBackupFileResponse createManualMinioBackup() {
+        return adminDataManagementService.createManualMinioBackup();
+    }
+
     @PostMapping("/data-management/backup/download")
     public ResponseEntity<StreamingResponseBody> downloadCurrentBackup() {
         AdminDataManagementService.PreparedBackupDownload preparedBackup = adminDataManagementService.createDownloadableBackup();

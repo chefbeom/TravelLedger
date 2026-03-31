@@ -6,6 +6,7 @@ import com.playdata.calen.account.domain.AppUserRole;
 import com.playdata.calen.account.domain.SupportInquiryStatus;
 import com.playdata.calen.account.dto.AdminBackupFileResponse;
 import com.playdata.calen.account.dto.AdminDataManagementResponse;
+import com.playdata.calen.account.dto.AdminMinioStorageSummaryResponse;
 import com.playdata.calen.account.dto.AdminDataStatItemResponse;
 import com.playdata.calen.account.dto.AdminDataStatSectionResponse;
 import com.playdata.calen.account.dto.AdminDataStatsResponse;
@@ -65,6 +66,8 @@ public class AdminDataManagementService {
     private static final String DEFAULT_OPERATION_LABEL = "idle";
     private static final String BACKUP_CACHE_FILE = "backup-manifest.json";
     private static final String LOCAL_BACKUP_DIRECTORY = "files";
+    private static final String MINIO_BACKUP_CACHE_FILE = "minio-backup-manifest.json";
+    private static final String LOCAL_MINIO_BACKUP_DIRECTORY = "minio-files";
     private static final long[] RCLONE_RETRY_DELAYS_MILLIS = {2_000L, 5_000L, 10_000L};
 
     private final AppUserRepository appUserRepository;
@@ -87,6 +90,7 @@ public class AdminDataManagementService {
     private final FamilyAlbumRepository familyAlbumRepository;
     private final FamilyAlbumItemRepository familyAlbumItemRepository;
     private final FamilyMediaAssetRepository familyMediaAssetRepository;
+    private final MinioBackupArchiveService minioBackupArchiveService;
     private final SystemCommandRunner commandRunner;
     private final ObjectMapper objectMapper;
     private final JdbcTemplate jdbcTemplate;
@@ -110,6 +114,9 @@ public class AdminDataManagementService {
     @Value("${app.data-ops.backup-remote-dir:calen-db-backups}")
     private String backupRemoteDir;
 
+    @Value("${app.data-ops.minio-backup-remote-dir:calen-minio-backups}")
+    private String minioBackupRemoteDir;
+
     @Value("${app.data-ops.rclone-config-path:/app/.config/rclone/rclone.conf}")
     private String rcloneConfigPath;
 
@@ -122,6 +129,9 @@ public class AdminDataManagementService {
     public AdminDataManagementResponse getSnapshot() {
         List<AdminBackupFileResponse> backups = mergeBackupLists(loadCachedBackups(), listLocalBackups());
         String backupsError = null;
+        List<AdminBackupFileResponse> minioBackups = mergeBackupLists(loadCachedMinioBackups(), listLocalMinioBackups());
+        String minioBackupsError = null;
+        AdminMinioStorageSummaryResponse minioStorage = minioBackupArchiveService.getSummary();
 
         try {
             backups = mergeBackupLists(listBackups(), listLocalBackups());
@@ -132,10 +142,22 @@ public class AdminDataManagementService {
             }
         }
 
+        try {
+            minioBackups = mergeBackupLists(listMinioBackups(), listLocalMinioBackups());
+            persistMinioBackupCache(minioBackups);
+        } catch (BadRequestException exception) {
+            if (minioBackups.isEmpty()) {
+                minioBackupsError = exception.getMessage();
+            }
+        }
+
         return new AdminDataManagementResponse(
                 buildStats(),
                 backups,
                 backupsError,
+                minioStorage,
+                minioBackups,
+                minioBackupsError,
                 operationLock.isLocked(),
                 currentOperation()
         );
@@ -165,6 +187,33 @@ public class AdminDataManagementService {
                     DISPLAY_DATE_TIME_FORMATTER.format(LocalDateTime.now(KST))
             );
             updateBackupCache(response);
+            return response;
+        });
+    }
+
+    public AdminBackupFileResponse createManualMinioBackup() {
+        return runExclusive("minio-backup", () -> {
+            Path outputFile = localMinioBackupDirectory().resolve(
+                    "calen-minio-" + LocalDateTime.now(KST).format(BACKUP_FILE_FORMATTER) + ".zip"
+            );
+
+            minioBackupArchiveService.writeBackupArchive(outputFile);
+            long sizeBytes = fileSize(outputFile);
+
+            try {
+                uploadMinioBackup(outputFile, outputFile.getFileName().toString());
+            } catch (BadRequestException exception) {
+                if (!isDriveQuotaFallbackMessage(exception.getMessage())) {
+                    throw exception;
+                }
+            }
+
+            AdminBackupFileResponse response = new AdminBackupFileResponse(
+                    outputFile.getFileName().toString(),
+                    sizeBytes,
+                    DISPLAY_DATE_TIME_FORMATTER.format(LocalDateTime.now(KST))
+            );
+            updateMinioBackupCache(response);
             return response;
         });
     }
@@ -360,6 +409,39 @@ public class AdminDataManagementService {
         }
     }
 
+    private List<AdminBackupFileResponse> listMinioBackups() {
+        String resolvedRcloneConfig = resolveRcloneConfigPath();
+        CommandResult result = runRcloneListCommand(List.of(
+                "rclone",
+                "--config",
+                resolvedRcloneConfig,
+                "lsjson",
+                minioRemoteDirectory(),
+                "--files-only"
+        ));
+
+        String stderr = result.stderr() == null ? "" : result.stderr();
+        if (stderr.toLowerCase().contains("directory not found")) {
+            return List.of();
+        }
+
+        try {
+            JsonNode root = objectMapper.readTree(result.stdout());
+            List<AdminBackupFileResponse> backups = new ArrayList<>();
+            for (JsonNode node : root) {
+                backups.add(new AdminBackupFileResponse(
+                        node.path("Name").asText(),
+                        node.path("Size").asLong(),
+                        node.path("ModTime").asText()
+                ));
+            }
+            backups.sort(Comparator.comparing(AdminBackupFileResponse::modifiedAt, Comparator.nullsLast(Comparator.reverseOrder())));
+            return backups;
+        } catch (Exception exception) {
+            throw new BadRequestException("MinIO 백업 목록 응답을 해석하지 못했습니다.");
+        }
+    }
+
     private List<AdminBackupFileResponse> listLocalBackups() {
         Path directory = localBackupDirectory();
         if (!Files.isDirectory(directory)) {
@@ -370,6 +452,24 @@ public class AdminDataManagementService {
             return stream
                     .filter(Files::isRegularFile)
                     .filter(path -> path.getFileName().toString().matches("[A-Za-z0-9._-]+\\.sql\\.gz"))
+                    .map(this::toLocalBackupResponse)
+                    .sorted(Comparator.comparing(AdminBackupFileResponse::modifiedAt, Comparator.nullsLast(Comparator.reverseOrder())))
+                    .toList();
+        } catch (IOException exception) {
+            return List.of();
+        }
+    }
+
+    private List<AdminBackupFileResponse> listLocalMinioBackups() {
+        Path directory = localMinioBackupDirectory();
+        if (!Files.isDirectory(directory)) {
+            return List.of();
+        }
+
+        try (Stream<Path> stream = Files.list(directory)) {
+            return stream
+                    .filter(Files::isRegularFile)
+                    .filter(path -> path.getFileName().toString().matches("[A-Za-z0-9._-]+\\.zip"))
                     .map(this::toLocalBackupResponse)
                     .sorted(Comparator.comparing(AdminBackupFileResponse::modifiedAt, Comparator.nullsLast(Comparator.reverseOrder())))
                     .toList();
@@ -419,6 +519,18 @@ public class AdminDataManagementService {
                 localFile.toString(),
                 remoteDirectory() + "/" + fileName
         ), "Google Drive 백업 업로드에 실패했습니다.");
+    }
+
+    private void uploadMinioBackup(Path localFile, String fileName) {
+        String resolvedRcloneConfig = resolveRcloneConfigPath();
+        runRcloneCommand(List.of(
+                "rclone",
+                "--config",
+                resolvedRcloneConfig,
+                "copyto",
+                localFile.toString(),
+                minioRemoteDirectory() + "/" + fileName
+        ), "Google Drive MinIO 백업 업로드에 실패했습니다.");
     }
 
     private void downloadBackup(String fileName, Path localFile) {
@@ -500,6 +612,14 @@ public class AdminDataManagementService {
             return directory;
         }
         throw new BadRequestException("로컬 백업 폴더를 준비하지 못했습니다.");
+    }
+
+    private Path localMinioBackupDirectory() {
+        Path directory = workdir().resolve(LOCAL_MINIO_BACKUP_DIRECTORY);
+        if (canUseDirectory(directory)) {
+            return directory;
+        }
+        throw new BadRequestException("로컬 MinIO 백업 폴더를 준비하지 못했습니다.");
     }
 
     private boolean canUseDirectory(Path path) {
@@ -652,8 +772,41 @@ public class AdminDataManagementService {
         }
     }
 
+    private List<AdminBackupFileResponse> loadCachedMinioBackups() {
+        Path cacheFile = minioBackupCacheFile();
+        if (!Files.isReadable(cacheFile)) {
+            return List.of();
+        }
+
+        try {
+            JsonNode root = objectMapper.readTree(cacheFile.toFile());
+            List<AdminBackupFileResponse> cachedBackups = new ArrayList<>();
+            for (JsonNode node : root) {
+                cachedBackups.add(new AdminBackupFileResponse(
+                        node.path("fileName").asText(),
+                        node.path("sizeBytes").asLong(),
+                        node.path("modifiedAt").asText()
+                ));
+            }
+            cachedBackups.sort(Comparator.comparing(AdminBackupFileResponse::modifiedAt, Comparator.nullsLast(Comparator.reverseOrder())));
+            return cachedBackups;
+        } catch (Exception ignored) {
+            return List.of();
+        }
+    }
+
     private void persistBackupCache(List<AdminBackupFileResponse> backups) {
         Path cacheFile = backupCacheFile();
+        try {
+            Files.createDirectories(cacheFile.getParent());
+            objectMapper.writerWithDefaultPrettyPrinter().writeValue(cacheFile.toFile(), backups);
+        } catch (Exception ignored) {
+            // Cache write failure should not break backup UI.
+        }
+    }
+
+    private void persistMinioBackupCache(List<AdminBackupFileResponse> backups) {
+        Path cacheFile = minioBackupCacheFile();
         try {
             Files.createDirectories(cacheFile.getParent());
             objectMapper.writerWithDefaultPrettyPrinter().writeValue(cacheFile.toFile(), backups);
@@ -670,8 +823,20 @@ public class AdminDataManagementService {
         persistBackupCache(cachedBackups);
     }
 
+    private void updateMinioBackupCache(AdminBackupFileResponse backup) {
+        List<AdminBackupFileResponse> cachedBackups = new ArrayList<>(mergeBackupLists(loadCachedMinioBackups(), listLocalMinioBackups()));
+        cachedBackups.removeIf(item -> item.fileName().equals(backup.fileName()));
+        cachedBackups.add(backup);
+        cachedBackups.sort(Comparator.comparing(AdminBackupFileResponse::modifiedAt, Comparator.nullsLast(Comparator.reverseOrder())));
+        persistMinioBackupCache(cachedBackups);
+    }
+
     private Path backupCacheFile() {
         return workdir().resolve(BACKUP_CACHE_FILE);
+    }
+
+    private Path minioBackupCacheFile() {
+        return workdir().resolve(MINIO_BACKUP_CACHE_FILE);
     }
 
     private void clearCurrentDatabase() {
@@ -709,6 +874,10 @@ public class AdminDataManagementService {
 
     private String remoteDirectory() {
         return backupRemoteName + ":" + backupRemoteDir;
+    }
+
+    private String minioRemoteDirectory() {
+        return backupRemoteName + ":" + minioBackupRemoteDir;
     }
 
     private long fileSize(Path file) {

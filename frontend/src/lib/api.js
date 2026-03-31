@@ -136,6 +136,12 @@ export function createAdminDataBackup() {
   })
 }
 
+export function createAdminMinioBackup() {
+  return request('/admin/data-management/minio-backup', {
+    method: 'POST',
+  })
+}
+
 export async function downloadAdminDataBackup() {
   const csrfToken = await ensureCsrfToken()
   const response = await fetch(`${API_BASE}/admin/data-management/backup/download`, {

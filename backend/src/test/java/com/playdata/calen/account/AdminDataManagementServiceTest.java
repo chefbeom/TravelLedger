@@ -12,9 +12,11 @@ import com.playdata.calen.account.domain.AppUserRole;
 import com.playdata.calen.account.domain.SupportInquiryStatus;
 import com.playdata.calen.account.dto.AdminBackupFileResponse;
 import com.playdata.calen.account.dto.AdminDataManagementResponse;
+import com.playdata.calen.account.dto.AdminMinioStorageSummaryResponse;
 import com.playdata.calen.account.service.AdminDataManagementService;
 import com.playdata.calen.account.service.CommandResult;
 import com.playdata.calen.account.service.LoginAttemptService;
+import com.playdata.calen.account.service.MinioBackupArchiveService;
 import com.playdata.calen.account.service.RestoreMaintenanceService;
 import com.playdata.calen.account.service.SystemCommandRunner;
 import com.playdata.calen.account.repository.AccountInviteRepository;
@@ -78,6 +80,7 @@ class AdminDataManagementServiceTest {
     @Mock private FamilyAlbumRepository familyAlbumRepository;
     @Mock private FamilyAlbumItemRepository familyAlbumItemRepository;
     @Mock private FamilyMediaAssetRepository familyMediaAssetRepository;
+    @Mock private MinioBackupArchiveService minioBackupArchiveService;
     @Mock private SystemCommandRunner commandRunner;
     @Mock private JdbcTemplate jdbcTemplate;
 
@@ -108,6 +111,7 @@ class AdminDataManagementServiceTest {
                 familyAlbumRepository,
                 familyAlbumItemRepository,
                 familyMediaAssetRepository,
+                minioBackupArchiveService,
                 commandRunner,
                 new ObjectMapper(),
                 jdbcTemplate,
@@ -124,6 +128,7 @@ class AdminDataManagementServiceTest {
         ReflectionTestUtils.setField(service, "backupWorkdir", tempDir.toString());
         ReflectionTestUtils.setField(service, "backupRemoteName", "db-backup");
         ReflectionTestUtils.setField(service, "backupRemoteDir", "calen-db-backups");
+        ReflectionTestUtils.setField(service, "minioBackupRemoteDir", "calen-minio-backups");
         ReflectionTestUtils.setField(service, "rcloneConfigPath", rcloneConfig.toString());
 
         when(appUserRepository.count()).thenReturn(3L);
@@ -159,6 +164,9 @@ class AdminDataManagementServiceTest {
         when(supportInquiryRepository.countByAdminArchivedTrueAndAdminDeletedFalse()).thenReturn(3L);
         when(accountInviteRepository.count()).thenReturn(5L);
         when(accountInviteRepository.countByUsedAtIsNullAndExpiresAtAfter(any())).thenReturn(2L);
+        when(minioBackupArchiveService.getSummary()).thenReturn(
+                new AdminMinioStorageSummaryResponse(true, "budgetjourneybucket", 12L, 4096L, null)
+        );
     }
 
     @Test
@@ -183,6 +191,7 @@ class AdminDataManagementServiceTest {
         assertThat(response.backups()).hasSize(1);
         assertThat(response.backups().get(0).fileName()).isEqualTo("calen-2026-03-31-120000.sql.gz");
         assertThat(response.backupsError()).isNull();
+        assertThat(response.minioStorage().bucketName()).isEqualTo("budgetjourneybucket");
     }
 
     @Test
@@ -264,6 +273,38 @@ class AdminDataManagementServiceTest {
                 path.toString().contains(tempDir.toString())
                         && path.toString().endsWith("calen-2026-03-31-120000.sql.gz")
         ), any());
+    }
+
+    @Test
+    void createManualMinioBackupUsesArchiveServiceAndUploadsToDedicatedDirectory() throws Exception {
+        doAnswer(invocation -> {
+            Path outputFile = invocation.getArgument(0, Path.class);
+            Files.createDirectories(outputFile.getParent());
+            Files.writeString(outputFile, "minio-backup");
+            return null;
+        }).when(minioBackupArchiveService).writeBackupArchive(any());
+
+        when(commandRunner.run(any())).thenReturn(new CommandResult(0, "", ""));
+
+        AdminBackupFileResponse response = service.createManualMinioBackup();
+
+        assertThat(response.fileName()).startsWith("calen-minio-");
+        assertThat(response.fileName()).endsWith(".zip");
+        verify(minioBackupArchiveService).writeBackupArchive(argThat(path ->
+                path.toString().contains("minio-files")
+                        && path.toString().endsWith(".zip")
+        ));
+        verify(commandRunner).run(argThat(command ->
+                command.size() == 6
+                        && "rclone".equals(command.get(0))
+                        && "--config".equals(command.get(1))
+                        && rcloneConfig.toString().equals(command.get(2))
+                        && "copyto".equals(command.get(3))
+                        && command.get(4).contains("minio-files")
+                        && command.get(4).endsWith(".zip")
+                        && command.get(5).startsWith("db-backup:calen-minio-backups/calen-minio-")
+                        && command.get(5).endsWith(".zip")
+        ));
     }
 
     @Test

@@ -3,6 +3,7 @@ import { computed, onMounted, reactive } from 'vue'
 import {
   archiveAdminSupportInquiry,
   createAdminDataBackup,
+  createAdminMinioBackup,
   downloadAdminDataBackup,
   deleteAdminSupportInquiry,
   fetchAdminAccessStatus,
@@ -44,6 +45,7 @@ const state = reactive({
   dataManagementOpen: false,
   loadingDataManagement: false,
   creatingDataBackup: false,
+  creatingMinioBackup: false,
   downloadingDataBackup: false,
   restoringBackupFile: '',
   restoringUploadedBackup: false,
@@ -431,6 +433,22 @@ async function handleCreateDataBackup() {
   }
 }
 
+async function handleCreateMinioBackup() {
+  state.creatingMinioBackup = true
+  state.dataManagementError = ''
+
+  try {
+    await createAdminMinioBackup()
+    await loadDataManagement()
+  } catch (error) {
+    if (!handleAdminAccessRequired(error)) {
+      state.dataManagementError = error.message
+    }
+  } finally {
+    state.creatingMinioBackup = false
+  }
+}
+
 async function handleDownloadDataBackup() {
   state.downloadingDataBackup = true
   state.dataManagementError = ''
@@ -705,6 +723,57 @@ onMounted(initializeAdminWorkspace)
                         {{ state.restoringBackupFile === backup.fileName ? '복구 중...' : '이 시점으로 복구' }}
                       </button>
                     </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section class="panel panel--compact">
+            <div class="panel__header">
+              <div>
+                <h2>MinIO 파일 백업</h2>
+                <p>여행 사진, GPX, 가족 앨범, 문의 첨부처럼 MinIO 버킷에 저장된 파일을 묶어서 Google Drive에 백업합니다.</p>
+              </div>
+              <div class="admin-data-status">
+                <span v-if="state.dataManagement?.minioStorage" class="field__hint">
+                  버킷 {{ state.dataManagement.minioStorage.bucketName || '-' }} · 파일 {{ state.dataManagement.minioStorage.objectCount ?? 0 }}개 · {{ formatFileSize(state.dataManagement.minioStorage.totalSizeBytes ?? 0) }}
+                </span>
+                <button
+                  class="button button--primary"
+                  type="button"
+                  :disabled="state.creatingMinioBackup || state.loadingDataManagement || state.dataManagement?.busy"
+                  @click="handleCreateMinioBackup"
+                >
+                  {{ state.creatingMinioBackup ? 'MinIO 백업 생성 중...' : '지금 MinIO 백업하기' }}
+                </button>
+              </div>
+            </div>
+            <div v-if="state.dataManagement?.minioStorage?.errorMessage" class="feedback feedback--error">
+              {{ state.dataManagement.minioStorage.errorMessage }}
+            </div>
+            <div v-if="state.dataManagement?.minioBackupsError" class="feedback feedback--error">
+              {{ state.dataManagement.minioBackupsError }}
+            </div>
+            <div class="sheet-table-wrap">
+              <table class="sheet-table">
+                <thead>
+                  <tr>
+                    <th>파일명</th>
+                    <th>수정 시각</th>
+                    <th>크기</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-if="!(state.dataManagement?.minioBackups?.length)">
+                    <td colspan="3" class="sheet-table__empty">
+                      {{ state.loadingDataManagement ? 'MinIO 백업 목록을 불러오는 중입니다.' : '표시할 MinIO 백업 파일이 없습니다.' }}
+                    </td>
+                  </tr>
+                  <tr v-for="backup in state.dataManagement?.minioBackups ?? []" :key="`minio-${backup.fileName}`">
+                    <td>{{ backup.fileName }}</td>
+                    <td>{{ formatDateTime(backup.modifiedAt) }}</td>
+                    <td>{{ formatFileSize(backup.sizeBytes) }}</td>
                   </tr>
                 </tbody>
               </table>

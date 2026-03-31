@@ -650,6 +650,12 @@ button {
   gap: 14px;
 }
 
+.entry-editor__category-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
 .entry-editor__actions {
   display: flex;
   flex-wrap: wrap;
@@ -4106,6 +4112,10 @@ textarea {
 
   .field {
     min-width: 0;
+  }
+
+  .entry-editor__category-grid {
+    grid-template-columns: 1fr;
   }
 
   .amount-input {

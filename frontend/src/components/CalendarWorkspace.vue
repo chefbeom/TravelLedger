@@ -610,71 +610,53 @@ defineExpose({
           </div>
 
           <div class="entry-editor__fields">
-            <label class="field">
-              <span class="field__label">날짜</span>
-              <input v-model="entryForm.entryDate" type="date" />
-            </label>
+            <label v-if="entryForm.entryType === 'EXPENSE'" class="field">
+  <span class="field__label">결제수단</span>
+  <select v-model="entryForm.paymentMethodId">
+    <option v-for="payment in paymentMethods" :key="payment.id" :value="String(payment.id)">
+      {{ payment.name }}
+    </option>
+  </select>
+</label>
 
-            <label class="field household-time-field">
-              <span class="field__label">시간</span>
-              <label class="checkbox-row household-time-toggle">
-                <input
-                  :checked="isTimeEnabled"
-                  type="checkbox"
-                  @change="emit('update:timeEnabled', $event.target.checked)"
-                />
-                <span>시간 입력 사용</span>
-              </label>
-              <input v-model="entryForm.entryTime" type="time" :disabled="!isTimeEnabled" />
-              <small class="field__hint">시간 입력을 끄면 자동으로 00:00으로 저장됩니다.</small>
-            </label>
+<template v-if="entryForm.entryType === 'INCOME'">
+  <div class="field field--full">
+    <span class="field__label">분류</span>
+    <div class="entry-editor__category-grid">
+      <select v-model="entryForm.categoryGroupId">
+        <option v-for="group in availableGroups" :key="group.id" :value="String(group.id)">
+          {{ group.name }}
+        </option>
+      </select>
+      <select v-model="entryForm.categoryDetailId">
+        <option value="">소분류 없음</option>
+        <option v-for="detail in availableDetails" :key="detail.id" :value="String(detail.id)">
+          {{ detail.name }}
+        </option>
+      </select>
+    </div>
+  </div>
+</template>
+<template v-else>
+  <label class="field">
+    <span class="field__label">대분류</span>
+    <select v-model="entryForm.categoryGroupId">
+      <option v-for="group in availableGroups" :key="group.id" :value="String(group.id)">
+        {{ group.name }}
+      </option>
+    </select>
+  </label>
 
-            <label class="field field--full">
-              <span class="field__label">제목</span>
-              <input v-model="entryForm.title" type="text" placeholder="예: 식사, 택시, 급여" />
-            </label>
-
-            <div v-if="entrySuggestions.length" class="entry-suggestion-list field--full">
-              <button
-                v-for="suggestion in entrySuggestions"
-                :key="`${suggestion.id}-${suggestion.title}-${suggestion.amount}`"
-                type="button"
-                class="entry-suggestion-item"
-                @click="emit('apply-entry-suggestion', suggestion)"
-              >
-                <strong>{{ suggestion.title }}</strong>
-                <span>{{ suggestion.categoryLabel }} · {{ suggestion.paymentMethodName }} · {{ formatCurrency(suggestion.amount) }}</span>
-                <small>{{ formatShortDate(suggestion.entryDate) }}<template v-if="suggestion.memo"> · {{ suggestion.memo }}</template></small>
-              </button>
-            </div>
-
-            <label class="field">
-              <span class="field__label">결제수단</span>
-              <select v-model="entryForm.paymentMethodId">
-                <option v-for="payment in paymentMethods" :key="payment.id" :value="String(payment.id)">
-                  {{ payment.name }}
-                </option>
-              </select>
-            </label>
-
-            <label class="field">
-              <span class="field__label">대분류</span>
-              <select v-model="entryForm.categoryGroupId">
-                <option v-for="group in availableGroups" :key="group.id" :value="String(group.id)">
-                  {{ group.name }}
-                </option>
-              </select>
-            </label>
-
-            <label class="field">
-              <span class="field__label">소분류</span>
-              <select v-model="entryForm.categoryDetailId">
-                <option value="">소분류 없음</option>
-                <option v-for="detail in availableDetails" :key="detail.id" :value="String(detail.id)">
-                  {{ detail.name }}
-                </option>
-              </select>
-            </label>
+  <label class="field">
+    <span class="field__label">소분류</span>
+    <select v-model="entryForm.categoryDetailId">
+      <option value="">소분류 없음</option>
+      <option v-for="detail in availableDetails" :key="detail.id" :value="String(detail.id)">
+        {{ detail.name }}
+      </option>
+    </select>
+  </label>
+</template>
 
             <label class="field field--full">
               <span class="field__label">메모</span>

@@ -399,11 +399,12 @@ function getCalendarDisplayMetrics(mode, width) {
 
   if (mode === 'fit') {
     const baseWidth = width || 1120
-    const estimatedDayWidth = clamp((baseWidth - 48) / 7, 86, 178)
-    const zoom = clamp(estimatedDayWidth / 150, 0.78, 1.06)
+    const widthZoom = clamp(baseWidth / 1400, 0.76, 1)
+    const estimatedDayWidth = clamp((baseWidth - 56) / 7, 84, 156)
+    const zoom = clamp(Math.min(widthZoom, estimatedDayWidth / 148), 0.76, 1)
     return {
       zoom,
-      minHeight: clamp(Math.round(estimatedDayWidth * 1.02), 116, 154),
+      minHeight: clamp(Math.round(estimatedDayWidth * 0.96), 112, 142),
     }
   }
 

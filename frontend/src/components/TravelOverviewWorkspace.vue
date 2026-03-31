@@ -11,6 +11,10 @@ const props = defineProps({
 })
 
 const activeScope = ref('ALL')
+const TIMELINE_PAGE_SIZE = 5
+const PLACE_PAGE_SIZE = 5
+const timelinePage = ref(0)
+const placePage = ref(0)
 
 function resolvePinPreset(category) {
   const text = String(category || '').trim().toLowerCase()
@@ -238,10 +242,30 @@ const timelineGroups = computed(() => {
   }).filter((group) => group.date && (activeScope.value !== 'ALL' || group.items.length))
 })
 
+const timelinePageCount = computed(() =>
+  Math.max(1, Math.ceil(timelineGroups.value.length / TIMELINE_PAGE_SIZE)),
+)
+
+const pagedTimelineGroups = computed(() => {
+  const start = timelinePage.value * TIMELINE_PAGE_SIZE
+  return timelineGroups.value.slice(start, start + TIMELINE_PAGE_SIZE)
+})
+
+const placePageCount = computed(() =>
+  Math.max(1, Math.ceil(placeCards.value.length / PLACE_PAGE_SIZE)),
+)
+
+const pagedPlaceCards = computed(() => {
+  const start = placePage.value * PLACE_PAGE_SIZE
+  return placeCards.value.slice(start, start + PLACE_PAGE_SIZE)
+})
+
 watch(
   () => props.travelPlan?.id,
   () => {
     activeScope.value = 'ALL'
+    timelinePage.value = 0
+    placePage.value = 0
   },
   { immediate: true },
 )
@@ -255,6 +279,28 @@ watch(
   },
   { deep: true },
 )
+
+watch(
+  () => activeScope.value,
+  () => {
+    timelinePage.value = 0
+    placePage.value = 0
+  },
+)
+
+watch(timelineGroups, (groups) => {
+  const maxPage = Math.max(0, Math.ceil(groups.length / TIMELINE_PAGE_SIZE) - 1)
+  if (timelinePage.value > maxPage) {
+    timelinePage.value = maxPage
+  }
+})
+
+watch(placeCards, (items) => {
+  const maxPage = Math.max(0, Math.ceil(items.length / PLACE_PAGE_SIZE) - 1)
+  if (placePage.value > maxPage) {
+    placePage.value = maxPage
+  }
+})
 
 function selectScope(scopeKey) {
   activeScope.value = scopeKey
@@ -414,7 +460,7 @@ function itemTypeLabel(type) {
       </div>
 
       <div v-if="timelineGroups.length" class="travel-overview-timeline">
-        <article v-for="group in timelineGroups" :key="group.date" class="travel-overview-day-group">
+        <article v-for="group in pagedTimelineGroups" :key="group.date" class="travel-overview-day-group">
           <div class="travel-overview-day-group__head">
             <div>
               <h3>{{ group.label }}</h3>
@@ -437,7 +483,26 @@ function itemTypeLabel(type) {
           <p v-else class="panel__empty">이 날짜에는 아직 작성된 장소나 경로가 없습니다.</p>
         </article>
       </div>
-      <p v-else class="panel__empty">표시할 여행 기록이 아직 없습니다.</p>
+      <div v-if="timelineGroups.length > TIMELINE_PAGE_SIZE" class="panel__actions">
+        <button
+          class="button button--ghost"
+          type="button"
+          :disabled="timelinePage <= 0"
+          @click="timelinePage -= 1"
+        >
+          이전
+        </button>
+        <span>{{ timelinePage + 1 }} / {{ timelinePageCount }}</span>
+        <button
+          class="button button--ghost"
+          type="button"
+          :disabled="timelinePage + 1 >= timelinePageCount"
+          @click="timelinePage += 1"
+        >
+          다음
+        </button>
+      </div>
+      <p v-if="!timelineGroups.length" class="panel__empty">표시할 여행 기록이 아직 없습니다.</p>
     </section>
 
     <div class="content-grid content-grid--travel">
@@ -451,7 +516,7 @@ function itemTypeLabel(type) {
         </div>
 
         <div v-if="placeCards.length" class="travel-overview-place-list">
-          <article v-for="memory in placeCards" :key="memory.id" class="travel-overview-place-card">
+          <article v-for="memory in pagedPlaceCards" :key="memory.id" class="travel-overview-place-card">
             <div class="travel-media-tags">
               <span class="chip chip--neutral">{{ memory.category || '장소' }}</span>
               <span class="chip chip--neutral">사진 {{ memory.photoCount }}장</span>
@@ -462,7 +527,26 @@ function itemTypeLabel(type) {
             <small>{{ memory.memo || '메모 없음' }}</small>
           </article>
         </div>
-        <p v-else class="panel__empty">선택한 범위에 표시할 장소 기록이 없습니다.</p>
+        <div v-if="placeCards.length > PLACE_PAGE_SIZE" class="panel__actions">
+          <button
+            class="button button--ghost"
+            type="button"
+            :disabled="placePage <= 0"
+            @click="placePage -= 1"
+          >
+            이전
+          </button>
+          <span>{{ placePage + 1 }} / {{ placePageCount }}</span>
+          <button
+            class="button button--ghost"
+            type="button"
+            :disabled="placePage + 1 >= placePageCount"
+            @click="placePage += 1"
+          >
+            다음
+          </button>
+        </div>
+        <p v-if="!placeCards.length" class="panel__empty">선택한 범위에 표시할 장소 기록이 없습니다.</p>
       </section>
 
       <section class="panel">

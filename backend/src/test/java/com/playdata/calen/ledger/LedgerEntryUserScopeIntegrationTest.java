@@ -15,6 +15,7 @@ import com.playdata.calen.account.domain.AppUser;
 import com.playdata.calen.account.repository.AppUserRepository;
 import com.playdata.calen.ledger.domain.LedgerEntry;
 import com.playdata.calen.ledger.repository.LedgerEntryRepository;
+import com.playdata.calen.ledger.repository.PaymentMethodRepository;
 import jakarta.servlet.http.Cookie;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -54,6 +55,9 @@ class LedgerEntryUserScopeIntegrationTest {
 
     @Autowired
     private LedgerEntryRepository ledgerEntryRepository;
+
+    @Autowired
+    private PaymentMethodRepository paymentMethodRepository;
 
     @Test
     void entryCrudIsScopedPerUser() throws Exception {
@@ -165,6 +169,53 @@ class LedgerEntryUserScopeIntegrationTest {
         } finally {
             Files.deleteIfExists(zipPath);
         }
+    }
+
+    @Test
+    void incomeEntriesUseDashPaymentMethod() throws Exception {
+        MockHttpSession hanaSession = loginAndGetSession("hana", false);
+        AppUser hana = appUserRepository.findByLoginId("hana").orElseThrow();
+
+        LedgerEntry incomeTemplate = ledgerEntryRepository.findAllByOwnerIdAndDeletedAtIsNullAndEntryDateBetweenOrderByEntryDateAscIdAsc(
+                        hana.getId(),
+                        LocalDate.now().minusYears(5),
+                        LocalDate.now().plusDays(1)
+                ).stream()
+                .filter(entry -> entry.getEntryType().name().equals("INCOME"))
+                .findFirst()
+                .orElseThrow();
+
+        LedgerEntry paymentTemplate = ledgerEntryRepository.findAllByOwnerIdAndDeletedAtIsNullAndEntryDateBetweenOrderByEntryDateAscIdAsc(
+                        hana.getId(),
+                        LocalDate.now().minusYears(5),
+                        LocalDate.now().plusDays(1)
+                ).stream()
+                .findFirst()
+                .orElseThrow();
+
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("entryDate", incomeTemplate.getEntryDate().toString());
+        payload.put("title", "income payment placeholder");
+        payload.put("memo", "test");
+        payload.put("amount", incomeTemplate.getAmount());
+        payload.put("entryType", incomeTemplate.getEntryType().name());
+        payload.put("categoryGroupId", incomeTemplate.getCategoryGroup().getId());
+        payload.put("categoryDetailId", incomeTemplate.getCategoryDetail() != null ? incomeTemplate.getCategoryDetail().getId() : null);
+        payload.put("paymentMethodId", paymentTemplate.getPaymentMethod().getId());
+
+        MvcResult result = mockMvc.perform(post("/api/entries")
+                        .with(csrf())
+                        .session(hanaSession)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(payload)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.paymentMethodName").value("-"))
+                .andReturn();
+
+        Long createdEntryId = objectMapper.readTree(result.getResponse().getContentAsString()).get("id").asLong();
+        LedgerEntry createdEntry = ledgerEntryRepository.findById(createdEntryId).orElseThrow();
+        Long storedPaymentMethodId = createdEntry.getPaymentMethod().getId();
+        assertThat(paymentMethodRepository.findById(storedPaymentMethodId).orElseThrow().getName()).isEqualTo("-");
     }
 
     private MockHttpSession loginAndGetSession(String loginId, boolean rememberDevice) throws Exception {

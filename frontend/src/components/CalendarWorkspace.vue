@@ -726,6 +726,11 @@ defineExpose({
               <small class="field__hint">시간 입력을 끄면 자동으로 00:00으로 저장됩니다.</small>
             </label>
 
+            <label class="field field--full">
+              <span class="field__label">제목</span>
+              <input v-model="entryForm.title" type="text" placeholder="예: 식사, 택시, 급여" />
+            </label>
+
             <label v-if="entryForm.entryType === 'EXPENSE'" class="field">
   <span class="field__label">결제수단</span>
   <select v-model="entryForm.paymentMethodId">

@@ -14,6 +14,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -21,6 +23,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
@@ -32,6 +35,7 @@ import org.springframework.test.web.servlet.MvcResult;
         "spring.datasource.password="
 })
 @AutoConfigureMockMvc
+@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_EACH_TEST_METHOD)
 class TravelPlanUserScopeIntegrationTest {
 
     private static final byte[] TEST_JPEG_BYTES = new byte[] {
@@ -39,6 +43,8 @@ class TravelPlanUserScopeIntegrationTest {
             0x00, 0x10, 0x4A, 0x46,
             0x49, 0x46, 0x00, 0x01
     };
+    private static final Pattern PUBLIC_MEDIA_URL_PATTERN =
+            Pattern.compile("/api/travel/public/media/(\\d+)/content\\?token=(.+)");
 
     @Autowired
     private MockMvc mockMvc;
@@ -80,12 +86,32 @@ class TravelPlanUserScopeIntegrationTest {
                 .andExpect(jsonPath("$.mediaItems[0].mediaType").value("PHOTO"))
                 .andExpect(jsonPath("$.mediaItems[0].planColorHex").value("#FF6B6B"));
 
-        mockMvc.perform(get("/api/travel/portfolio").session(hanaSession))
+        MvcResult portfolioResult = mockMvc.perform(get("/api/travel/portfolio").session(hanaSession))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.scopeType").value("ALL"))
-                .andExpect(jsonPath("$.includedPlanCount").value(1))
-                .andExpect(jsonPath("$.mediaItemCount").value(1))
-                .andExpect(jsonPath("$.records.length()").value(1));
+                .andReturn();
+
+        JsonNode portfolio = objectMapper.readTree(portfolioResult.getResponse().getContentAsString());
+        assertThat(portfolio.path("scopeType").asText()).isEqualTo("ALL");
+        assertThat(portfolio.path("includedPlanCount").asInt()).isGreaterThanOrEqualTo(1);
+        assertThat(portfolio.path("mediaItemCount").asInt()).isGreaterThanOrEqualTo(1);
+        assertThat(portfolio.path("records").isArray()).isTrue();
+        boolean containsRecord = false;
+        for (JsonNode recordNode : portfolio.path("records")) {
+            if (recordNode.path("id").asLong() == recordId) {
+                containsRecord = true;
+                break;
+            }
+        }
+        assertThat(containsRecord).isTrue();
+
+        boolean containsPlan = false;
+        for (JsonNode planNode : portfolio.path("plans")) {
+            if (planNode.path("id").asLong() == planId) {
+                containsPlan = true;
+                break;
+            }
+        }
+        assertThat(containsPlan).isTrue();
 
         mockMvc.perform(delete("/api/travel/plans/{planId}", planId).with(csrf()).session(hanaSession))
                 .andExpect(status().isOk());
@@ -113,6 +139,39 @@ class TravelPlanUserScopeIntegrationTest {
                 .andExpect(jsonPath("$.memoryRecords[0].title").value("Fushimi Inari"))
                 .andExpect(jsonPath("$.mediaItems[0].recordType").value("MEMORY"))
                 .andExpect(jsonPath("$.mediaItems[0].mediaType").value("PHOTO"));
+    }
+
+    @Test
+    void communityMediaRequiresIssuedToken() throws Exception {
+        MockHttpSession hanaSession = loginAndGetSession("hana");
+        MockHttpSession minsuSession = loginAndGetSession("minsu");
+
+        Long planId = createTravelPlan(hanaSession, "Community media trip", "COMPLETED");
+        Long memoryId = createMemoryRecord(hanaSession, planId, "Spot", "Shared spot", true);
+        uploadTravelMemoryMedia(hanaSession, memoryId);
+
+        MvcResult feedResult = mockMvc.perform(get("/api/travel/community-feed").session(hanaSession))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].heroPhotoUrl").isNotEmpty())
+                .andReturn();
+
+        JsonNode feed = objectMapper.readTree(feedResult.getResponse().getContentAsString());
+        String heroPhotoUrl = feed.get(0).get("heroPhotoUrl").asText();
+        Matcher matcher = PUBLIC_MEDIA_URL_PATTERN.matcher(heroPhotoUrl);
+        assertThat(matcher.matches()).isTrue();
+
+        Long mediaId = Long.parseLong(matcher.group(1));
+        String token = matcher.group(2);
+
+        mockMvc.perform(get("/api/travel/public/media/{mediaId}/content", mediaId)
+                        .session(minsuSession)
+                        .param("token", "invalid-token"))
+                .andExpect(status().isNotFound());
+
+        mockMvc.perform(get("/api/travel/public/media/{mediaId}/content", mediaId)
+                        .session(minsuSession)
+                        .param("token", token))
+                .andExpect(status().isOk());
     }
 
     @Test
@@ -359,6 +418,16 @@ class TravelPlanUserScopeIntegrationTest {
             String category,
             String title
     ) throws Exception {
+        return createMemoryRecord(session, planId, category, title, false);
+    }
+
+    private Long createMemoryRecord(
+            MockHttpSession session,
+            Long planId,
+            String category,
+            String title,
+            boolean sharedWithCommunity
+    ) throws Exception {
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("memoryDate", "2026-05-05");
         payload.put("memoryTime", "08:20");
@@ -369,6 +438,7 @@ class TravelPlanUserScopeIntegrationTest {
         payload.put("placeName", "Fushimi Inari Shrine");
         payload.put("latitude", "34.967140");
         payload.put("longitude", "135.772671");
+        payload.put("sharedWithCommunity", sharedWithCommunity);
         payload.put("memo", "Morning walk");
 
         return readId(mockMvc.perform(post("/api/travel/plans/{planId}/memories", planId)

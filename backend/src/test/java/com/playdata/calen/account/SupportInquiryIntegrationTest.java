@@ -13,6 +13,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.time.LocalDate;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -47,6 +50,7 @@ class SupportInquiryIntegrationTest {
     void userCanSendInquiryAndAdminCanArchiveRestoreReplyAndDelete() throws Exception {
         MockHttpSession userSession = login("hana", "test1234", "12345678");
         MockHttpSession adminSession = login("admin", "test1234", "12345678");
+        verifyAdminAccess(adminSession);
 
         MockMultipartFile attachment = new MockMultipartFile(
                 "attachment",
@@ -157,5 +161,18 @@ class SupportInquiryIntegrationTest {
                 .andReturn();
 
         return (MockHttpSession) result.getRequest().getSession(false);
+    }
+
+    private void verifyAdminAccess(MockHttpSession session) throws Exception {
+        String code = String.valueOf(
+                19990515 + Integer.parseInt(LocalDate.now(ZoneId.of("Asia/Seoul")).format(DateTimeFormatter.BASIC_ISO_DATE))
+        );
+
+        mockMvc.perform(post("/api/admin/access/verify")
+                        .session(session)
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of("code", code))))
+                .andExpect(status().isNoContent());
     }
 }

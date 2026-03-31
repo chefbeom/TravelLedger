@@ -1,11 +1,13 @@
 package com.playdata.calen.account;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.playdata.calen.account.security.SecondaryPinSessionSupport;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -49,6 +51,15 @@ class ProfileCredentialIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(Map.of("secondaryPin", "00000000"))))
                 .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void loginStoresProtectedSecondaryPinInsteadOfRawValue() throws Exception {
+        MockHttpSession session = login("hana", "test1234", "12345678");
+
+        Object storedValue = session.getAttribute(SecondaryPinSessionSupport.VERIFIED_SECONDARY_PIN_KEY);
+        assertThat(storedValue).isInstanceOf(String.class);
+        assertThat(storedValue).isNotEqualTo("12345678");
     }
 
     @Test

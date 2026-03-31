@@ -126,6 +126,17 @@ export function fetchAdminDashboard() {
   return request('/admin/dashboard')
 }
 
+export function fetchAdminAccessStatus() {
+  return request('/admin/access/status')
+}
+
+export function verifyAdminAccess(code) {
+  return request('/admin/access/verify', {
+    method: 'POST',
+    body: JSON.stringify({ code }),
+  })
+}
+
 export function fetchAdminLoginAuditLogs(page = 0) {
   return request(`/admin/login-audit-logs?page=${page}`)
 }

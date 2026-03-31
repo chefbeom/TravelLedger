@@ -47,6 +47,7 @@ public class AuthController {
     private final AuthenticationManager authenticationManager;
     private final SecurityContextRepository securityContextRepository;
     private final PersistentTokenBasedRememberMeServices rememberMeServices;
+    private final SecondaryPinSessionSupport secondaryPinSessionSupport;
 
     @GetMapping("/csrf")
     public Map<String, String> csrf(CsrfToken csrfToken) {
@@ -122,7 +123,7 @@ public class AuthController {
                 authenticatedUser
         );
         signIn(authentication, request.rememberDevice(), httpRequest, httpResponse);
-        SecondaryPinSessionSupport.storeVerifiedSecondaryPin(httpRequest, normalizedSecondaryPin);
+        secondaryPinSessionSupport.storeVerifiedSecondaryPin(httpRequest, normalizedSecondaryPin);
         return appUserService.toResponse(authenticatedUser);
     }
 
@@ -187,7 +188,7 @@ public class AuthController {
                 request.secondaryPin(),
                 request.newSecondaryPin()
         );
-        SecondaryPinSessionSupport.storeVerifiedSecondaryPin(httpRequest, updatedSecondaryPin);
+        secondaryPinSessionSupport.storeVerifiedSecondaryPin(httpRequest, updatedSecondaryPin);
         return ResponseEntity.noContent().build();
     }
 

@@ -327,8 +327,11 @@ public class TravelController {
     }
 
     @GetMapping("/public/media/{mediaId}/content")
-    public ResponseEntity<?> downloadSharedMedia(@PathVariable Long mediaId) {
-        TravelService.MediaDownload download = travelService.getSharedMediaDownload(mediaId);
+    public ResponseEntity<?> downloadSharedMedia(
+            @PathVariable Long mediaId,
+            @RequestParam("token") String token
+    ) {
+        TravelService.MediaDownload download = travelService.getSharedMediaDownload(mediaId, token);
         String encodedFileName = URLEncoder.encode(download.fileName(), StandardCharsets.UTF_8).replace("+", "%20");
         ContentDisposition disposition = "application/pdf".equalsIgnoreCase(download.contentType())
                 ? ContentDisposition.attachment().filename(encodedFileName).build()

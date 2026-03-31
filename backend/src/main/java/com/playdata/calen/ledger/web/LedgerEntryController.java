@@ -41,6 +41,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class LedgerEntryController {
 
     private final LedgerEntryService ledgerEntryService;
+    private final SecondaryPinSessionSupport secondaryPinSessionSupport;
 
     @GetMapping
     public List<LedgerEntryResponse> getEntries(
@@ -111,7 +112,7 @@ public class LedgerEntryController {
             @Valid @RequestBody LedgerCsvExportRequest request,
             HttpServletRequest httpRequest
     ) {
-        String verifiedSecondaryPin = SecondaryPinSessionSupport.getVerifiedSecondaryPin(httpRequest);
+        String verifiedSecondaryPin = secondaryPinSessionSupport.getVerifiedSecondaryPin(httpRequest);
         if (verifiedSecondaryPin == null || verifiedSecondaryPin.isBlank()) {
             throw new BadRequestException("CSV를 저장하려면 2차 비밀번호가 검증된 로그인 세션이 필요합니다. 다시 로그인해 주세요.");
         }

@@ -134,6 +134,7 @@ public class TravelService {
     private final TravelPlanShareRepository travelPlanShareRepository;
     private final ExchangeRateService exchangeRateService;
     private final TravelMediaStorageService travelMediaStorageService;
+    private final TravelPublicMediaTokenService travelPublicMediaTokenService;
     private final ObjectMapper objectMapper;
     private final DataSource dataSource;
 
@@ -619,7 +620,10 @@ public class TravelService {
         return new MediaDownload(resource, mediaAsset.getContentType(), mediaAsset.getOriginalFileName());
     }
 
-    public MediaDownload getSharedMediaDownload(Long mediaId) {
+    public MediaDownload getSharedMediaDownload(Long mediaId, String token) {
+        if (!travelPublicMediaTokenService.matches(mediaId, token)) {
+            throw new NotFoundException("Shared media not found.");
+        }
         TravelMediaAsset mediaAsset = travelMediaAssetRepository.findById(mediaId)
                 .orElseThrow(() -> new NotFoundException("Shared media not found."));
         TravelExpenseRecord record = mediaAsset.getRecord();
@@ -1107,10 +1111,14 @@ public class TravelService {
                 record.getPlaceName(),
                 record.getLatitude(),
                 record.getLongitude(),
-                "/api/travel/public/media/" + hero.getId() + "/content",
+                buildPublicMediaUrl(hero.getId()),
                 hero.getCaption(),
                 photos.size()
         );
+    }
+
+    private String buildPublicMediaUrl(Long mediaId) {
+        return "/api/travel/public/media/" + mediaId + "/content?token=" + travelPublicMediaTokenService.issueToken(mediaId);
     }
 
     private TravelMediaResponse toMediaResponse(TravelMediaAsset mediaAsset) {

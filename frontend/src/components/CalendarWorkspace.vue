@@ -28,9 +28,9 @@ const calendarViewportPresets = [
 ]
 
 const calendarHighlightModes = [
+  { key: 'net', label: '수입-지출 보기' },
   { key: 'expense', label: '지출만 보기' },
   { key: 'income', label: '수입만 보기' },
-  { key: 'net', label: '수입-지출 보기' },
 ]
 
 const aggregateWidgetKinds = [
@@ -466,20 +466,29 @@ function getCalendarDisplayMetrics(mode, width, viewportPresetKey) {
     const viewportWidth = typeof window !== 'undefined' ? window.innerWidth : 1280
     const safeWidth = Math.max(width || viewportWidth || 1280, 320)
     const referenceWidth = calendarViewportPresets.find((item) => item.key === viewportPresetKey)?.width || safeWidth
-    const densityRatio = clamp(safeWidth / referenceWidth, 0.82, 1.24)
-    const estimatedDayWidth = clamp(((safeWidth - 32) / 7) / densityRatio, 68, 156)
+    const actualScale = clamp(safeWidth / 1440, 0.78, 1.02)
+    const presetScale = clamp(1920 / referenceWidth, 0.74, 1.24)
+    const fitScale = clamp(actualScale * presetScale, 0.72, 1.24)
+    const estimatedDayWidth = clamp(((safeWidth - 32) / 7) * fitScale, 62, 160)
+    const dayHeight = clamp(Math.round(estimatedDayWidth * 1.02), 100, 148)
+    const dayPadding = clamp(Math.round(estimatedDayWidth * 0.08), 7, 12)
+    const gap = clamp(Math.round(estimatedDayWidth * 0.065), 4, 10)
+    const weekGap = clamp(Math.round(estimatedDayWidth * 0.05), 4, 8)
+    const totalSize = clamp(estimatedDayWidth / 118, 0.86, 1.14)
+    const metricSize = clamp(estimatedDayWidth / 176, 0.62, 0.82)
+    const headSize = clamp(estimatedDayWidth / 164, 0.7, 0.9)
 
     return {
       responsive: true,
       minWidth: '100%',
-      gap: 'clamp(6px, 0.8vw, 10px)',
-      weekGap: 'clamp(4px, 0.7vw, 8px)',
-      minHeight: `clamp(108px, ${Math.round(estimatedDayWidth * 1.06)}px, 142px)`,
-      padding: 'clamp(8px, 1vw, 12px)',
-      totalSize: 'clamp(0.92rem, 1.05vw, 1.12rem)',
-      metricSize: 'clamp(0.66rem, 0.82vw, 0.8rem)',
-      toolbarGap: 'clamp(12px, 1.2vw, 18px)',
-      headSize: 'clamp(0.72rem, 0.82vw, 0.88rem)',
+      gap: `${gap}px`,
+      weekGap: `${weekGap}px`,
+      minHeight: `${dayHeight}px`,
+      padding: `${dayPadding}px`,
+      totalSize: `${totalSize.toFixed(2)}rem`,
+      metricSize: `${metricSize.toFixed(2)}rem`,
+      toolbarGap: `${clamp(Math.round(gap * 1.8), 12, 18)}px`,
+      headSize: `${headSize.toFixed(2)}rem`,
     }
   }
 

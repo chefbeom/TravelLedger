@@ -1846,12 +1846,72 @@ button {
   background: var(--surface-soft);
 }
 
+.travel-batch-memory-card--skeleton {
+  pointer-events: none;
+}
+
 .travel-batch-memory-card__thumb {
   width: 100%;
   height: 90px;
   object-fit: cover;
   border-radius: 14px;
   background: var(--surface);
+}
+
+.travel-skeleton-block,
+.travel-skeleton-line {
+  position: relative;
+  overflow: hidden;
+  background: rgba(148, 163, 184, 0.18);
+}
+
+.travel-skeleton-block::after,
+.travel-skeleton-line::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.35), transparent);
+  animation: travel-skeleton-shimmer 1.2s ease-in-out infinite;
+}
+
+.travel-skeleton-line {
+  display: block;
+  height: 12px;
+  border-radius: 999px;
+}
+
+.travel-skeleton-line--lg {
+  width: min(220px, 85%);
+}
+
+.travel-skeleton-line--md {
+  width: min(180px, 70%);
+}
+
+.travel-skeleton-line--sm {
+  width: min(260px, 95%);
+}
+
+.travel-skeleton-line--label {
+  width: 48px;
+  margin-bottom: 8px;
+}
+
+.travel-skeleton-block--input {
+  width: 100%;
+  height: 44px;
+  border-radius: 14px;
+}
+
+.travel-batch-memory-card__title--skeleton {
+  display: block;
+}
+
+@keyframes travel-skeleton-shimmer {
+  100% {
+    transform: translateX(100%);
+  }
 }
 
 .travel-batch-memory-card__meta {

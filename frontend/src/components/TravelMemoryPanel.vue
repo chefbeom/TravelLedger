@@ -199,6 +199,12 @@ const pagedFilteredMemoryRecords = computed(() => {
   return filteredMemoryRecords.value.slice(start, start + MEMORY_RECORD_PAGE_SIZE)
 })
 
+const multiPhotoLoading = ref(false)
+const multiPhotoLoadingCount = ref(0)
+const multiPhotoSkeletonItems = computed(() =>
+  Array.from({ length: Math.max(1, multiPhotoLoadingCount.value) }, (_, index) => `multi-photo-skeleton-${index}`),
+)
+
 const photoBackedMemories = computed(() =>
   scopedMemoryRecords.value
     .map((item) => {
@@ -392,6 +398,8 @@ function revokeMultiPhotoPreviews() {
 function resetMultiPhotoDrafts() {
   revokeMultiPhotoPreviews()
   multiPhotoDrafts.value = []
+  multiPhotoLoading.value = false
+  multiPhotoLoadingCount.value = 0
 }
 
 function resetAutofillMessage() {
@@ -617,12 +625,19 @@ async function handlePhotoSelection(event) {
 
   if (!files.length) {
     resetPendingFiles()
+    multiPhotoLoading.value = false
+    multiPhotoLoadingCount.value = 0
     return
   }
 
   if (isMultiPhotoMode.value) {
     resetMultiPhotoDrafts()
     photoCaption.value = ''
+    multiPhotoLoading.value = true
+    multiPhotoLoadingCount.value = files.length
+    autofillState.status = 'loading'
+    autofillState.fileName = ''
+    autofillState.message = `${files.length}장의 사진 정보를 불러오는 중입니다.`
 
     try {
       multiPhotoDrafts.value = await buildMultiPhotoDrafts(files)
@@ -640,6 +655,8 @@ async function handlePhotoSelection(event) {
       autofillState.fileName = files[0]?.name || ''
       autofillState.message = error?.message || '?ъ쭊 硫뷀??곗씠?곕? ?쎌? 紐삵뻽?듬땲??'
     }
+    multiPhotoLoading.value = false
+    multiPhotoLoadingCount.value = 0
     return
   }
 
@@ -1190,7 +1207,26 @@ function submitMemory() {
             </label>
           </div>
 
-          <div v-if="hasMultiPhotoDrafts" class="travel-batch-memory-list">
+          <div v-if="multiPhotoLoading" class="travel-batch-memory-list">
+            <article
+              v-for="item in multiPhotoSkeletonItems"
+              :key="item"
+              class="travel-batch-memory-card travel-batch-memory-card--skeleton"
+            >
+              <div class="travel-batch-memory-card__thumb travel-skeleton-block" aria-hidden="true" />
+              <div class="travel-batch-memory-card__meta">
+                <span class="travel-skeleton-line travel-skeleton-line--lg" aria-hidden="true" />
+                <span class="travel-skeleton-line travel-skeleton-line--md" aria-hidden="true" />
+                <span class="travel-skeleton-line travel-skeleton-line--sm" aria-hidden="true" />
+              </div>
+              <div class="travel-batch-memory-card__title travel-batch-memory-card__title--skeleton">
+                <span class="travel-skeleton-line travel-skeleton-line--label" aria-hidden="true" />
+                <span class="travel-skeleton-block travel-skeleton-block--input" aria-hidden="true" />
+              </div>
+            </article>
+          </div>
+
+          <div v-else-if="hasMultiPhotoDrafts" class="travel-batch-memory-list">
             <article v-for="item in multiPhotoDrafts" :key="item.id" class="travel-batch-memory-card">
               <img :src="item.previewUrl" :alt="item.fileName" class="travel-batch-memory-card__thumb" />
               <div class="travel-batch-memory-card__meta">

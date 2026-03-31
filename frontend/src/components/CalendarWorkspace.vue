@@ -6,6 +6,7 @@ import { resolveRange, summarizeEntries } from '../lib/analytics'
 const CALENDAR_SCALE_KEY = 'calen-household-calendar-scale-preset'
 const CALENDAR_COLLAPSE_KEY = 'calen-household-calendar-collapsed'
 const CALENDAR_HIGHLIGHT_KEY = 'calen-household-calendar-highlight-mode'
+const CALENDAR_VIEWPORT_KEY = 'calen-household-calendar-viewport-preset'
 const DEFAULT_CALENDAR_HIGHLIGHT_MODE = 'net'
 
 const calendarScalePresets = [
@@ -17,6 +18,13 @@ const calendarScalePresets = [
 const calendarDisplayModes = [
   { key: 'default', label: '지금처럼 보기' },
   { key: 'fit', label: '내 화면에 맞추기' },
+]
+
+const calendarViewportPresets = [
+  { key: 'auto', label: '자동', width: null },
+  { key: 'hd', label: 'HD', width: 1280 },
+  { key: 'fhd', label: 'FHD', width: 1920 },
+  { key: 'qhd', label: 'QHD', width: 2560 },
 ]
 
 const calendarHighlightModes = [
@@ -165,6 +173,7 @@ const emit = defineEmits([
 const selectedDate = ref(props.anchorDate)
 const selectedDaySort = ref('ASC')
 const calendarScalePreset = ref('default')
+const calendarViewportPreset = ref('auto')
 const calendarHighlightMode = ref(DEFAULT_CALENDAR_HIGHLIGHT_MODE)
 const isCalendarCollapsed = ref(false)
 const isAggregateEditMode = ref(false)
@@ -208,9 +217,12 @@ const yearOptions = computed(() => {
 
 const isAmountOnlyCalendar = computed(() => false)
 const isFitCalendar = computed(() => calendarScalePreset.value === 'fit')
+const currentViewportPresetLabel = computed(
+  () => calendarViewportPresets.find((item) => item.key === calendarViewportPreset.value)?.label ?? '자동',
+)
 
 const calendarViewStyle = computed(() => {
-  const metrics = getCalendarDisplayMetrics(calendarScalePreset.value, calendarShellWidth.value)
+  const metrics = getCalendarDisplayMetrics(calendarScalePreset.value, calendarShellWidth.value, calendarViewportPreset.value)
   if (metrics.responsive) {
     return {
       '--calendar-min-width': metrics.minWidth,
@@ -285,6 +297,12 @@ watch(calendarScalePreset, (value) => {
   }
 })
 
+watch(calendarViewportPreset, (value) => {
+  if (typeof window !== 'undefined') {
+    window.localStorage.setItem(CALENDAR_VIEWPORT_KEY, value)
+  }
+})
+
 watch(calendarHighlightMode, (value) => {
   if (typeof window !== 'undefined') {
     window.localStorage.setItem(CALENDAR_HIGHLIGHT_KEY, value)
@@ -343,9 +361,14 @@ onMounted(() => {
   const savedScale = window.localStorage.getItem(CALENDAR_SCALE_KEY)
   const savedCollapsed = window.localStorage.getItem(CALENDAR_COLLAPSE_KEY)
   const savedHighlight = window.localStorage.getItem(CALENDAR_HIGHLIGHT_KEY)
+  const savedViewport = window.localStorage.getItem(CALENDAR_VIEWPORT_KEY)
 
   if (savedScale) {
     calendarScalePreset.value = normalizePresetKey(calendarDisplayModes, savedScale, 'default')
+  }
+
+  if (savedViewport && calendarViewportPresets.some((item) => item.key === savedViewport)) {
+    calendarViewportPreset.value = savedViewport
   }
 
   if (savedHighlight && calendarHighlightModes.some((item) => item.key === savedHighlight)) {
@@ -438,11 +461,13 @@ function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value))
 }
 
-function getCalendarDisplayMetrics(mode, width) {
+function getCalendarDisplayMetrics(mode, width, viewportPresetKey) {
   if (mode === 'fit') {
     const viewportWidth = typeof window !== 'undefined' ? window.innerWidth : 1280
     const safeWidth = Math.max(width || viewportWidth || 1280, 320)
-    const estimatedDayWidth = clamp((safeWidth - 32) / 7, 70, 156)
+    const referenceWidth = calendarViewportPresets.find((item) => item.key === viewportPresetKey)?.width || safeWidth
+    const densityRatio = clamp(safeWidth / referenceWidth, 0.82, 1.24)
+    const estimatedDayWidth = clamp(((safeWidth - 32) / 7) / densityRatio, 68, 156)
 
     return {
       responsive: true,
@@ -1121,6 +1146,21 @@ defineExpose({
           </div>
         </div>
         <div class="calendar-size-toolbar__block">
+          <span class="calendar-size-toolbar__label">기준 화면</span>
+          <div class="calendar-size-toggle">
+            <button
+              v-for="preset in calendarViewportPresets"
+              :key="preset.key"
+              type="button"
+              class="calendar-size-toggle__button"
+              :class="{ 'is-active': calendarViewportPreset === preset.key }"
+              @click="calendarViewportPreset = preset.key"
+            >
+              {{ preset.label }}
+            </button>
+          </div>
+        </div>
+        <div class="calendar-size-toolbar__block">
           <span class="calendar-size-toolbar__label">표시 기준</span>
           <div class="calendar-size-toggle">
             <button
@@ -1135,7 +1175,10 @@ defineExpose({
             </button>
           </div>
         </div>
-        <strong class="calendar-size-toolbar__hint">현재 {{ calendarDisplayModes.find((item) => item.key === calendarScalePreset)?.label }}</strong>
+        <strong class="calendar-size-toolbar__hint">
+          현재 {{ calendarDisplayModes.find((item) => item.key === calendarScalePreset)?.label }}
+          <template v-if="isFitCalendar"> · {{ currentViewportPresetLabel }} 기준</template>
+        </strong>
       </div>
 
       <div v-if="!isCalendarCollapsed" ref="calendarShellRef" class="calendar-shell">

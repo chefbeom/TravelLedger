@@ -1,6 +1,7 @@
 package com.playdata.calen.account;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.verify;
@@ -9,6 +10,7 @@ import static org.mockito.Mockito.when;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.playdata.calen.account.domain.AppUserRole;
 import com.playdata.calen.account.domain.SupportInquiryStatus;
+import com.playdata.calen.account.dto.AdminBackupFileResponse;
 import com.playdata.calen.account.dto.AdminDataManagementResponse;
 import com.playdata.calen.account.service.AdminDataManagementService;
 import com.playdata.calen.account.service.CommandResult;
@@ -180,6 +182,47 @@ class AdminDataManagementServiceTest {
         assertThat(response.backups()).hasSize(1);
         assertThat(response.backups().get(0).fileName()).isEqualTo("calen-2026-03-31-120000.sql.gz");
         assertThat(response.backupsError()).isNull();
+    }
+
+    @Test
+    void getSnapshotFallsBackToLocalBackupsWhenDriveIsRateLimited() throws Exception {
+        Path localBackup = Files.createDirectories(tempDir.resolve("files"))
+                .resolve("calen-2026-03-31-130000.sql.gz");
+        Files.writeString(localBackup, "backup");
+
+        when(commandRunner.run(any())).thenReturn(new CommandResult(
+                1,
+                "",
+                "googleapi: Error 403: RATE_LIMIT_EXCEEDED"
+        ));
+
+        AdminDataManagementResponse response = service.getSnapshot();
+
+        assertThat(response.backups()).extracting(AdminBackupFileResponse::fileName)
+                .contains("calen-2026-03-31-130000.sql.gz");
+        assertThat(response.backupsError()).isNull();
+    }
+
+    @Test
+    void createManualBackupKeepsLocalBackupWhenDriveIsRateLimited() throws Exception {
+        doAnswer(invocation -> {
+            Path outputFile = invocation.getArgument(1, Path.class);
+            Files.createDirectories(outputFile.getParent());
+            Files.writeString(outputFile, "backup");
+            return null;
+        }).when(commandRunner).runDumpToGzip(any(), any());
+
+        when(commandRunner.run(any())).thenReturn(new CommandResult(
+                1,
+                "",
+                "googleapi: Error 403: RATE_LIMIT_EXCEEDED"
+        ));
+
+        AdminBackupFileResponse response = service.createManualBackup();
+
+        Path createdBackup = tempDir.resolve("files").resolve(response.fileName());
+        assertThat(Files.exists(createdBackup)).isTrue();
+        assertThat(response.fileName()).endsWith(".sql.gz");
     }
 
     @Test

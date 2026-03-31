@@ -31,18 +31,23 @@ import com.playdata.calen.travel.repository.TravelMediaAssetRepository;
 import com.playdata.calen.travel.repository.TravelPlanRepository;
 import com.playdata.calen.travel.repository.TravelPlanShareRepository;
 import com.playdata.calen.travel.repository.TravelRouteSegmentRepository;
+import java.io.IOException;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.FileTime;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.stream.Stream;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -56,6 +61,9 @@ public class AdminDataManagementService {
     private static final DateTimeFormatter BACKUP_FILE_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd-HHmmss");
     private static final DateTimeFormatter DISPLAY_DATE_TIME_FORMATTER = DateTimeFormatter.ISO_LOCAL_DATE_TIME;
     private static final String DEFAULT_OPERATION_LABEL = "idle";
+    private static final String BACKUP_CACHE_FILE = "backup-manifest.json";
+    private static final String LOCAL_BACKUP_DIRECTORY = "files";
+    private static final long[] RCLONE_RETRY_DELAYS_MILLIS = {2_000L, 5_000L, 10_000L};
 
     private final AppUserRepository appUserRepository;
     private final AccountInviteRepository accountInviteRepository;
@@ -107,12 +115,16 @@ public class AdminDataManagementService {
     private final AtomicReference<String> runningOperation = new AtomicReference<>(DEFAULT_OPERATION_LABEL);
 
     public AdminDataManagementResponse getSnapshot() {
-        List<AdminBackupFileResponse> backups = List.of();
+        List<AdminBackupFileResponse> backups = mergeBackupLists(loadCachedBackups(), listLocalBackups());
         String backupsError = null;
+
         try {
-            backups = listBackups();
+            backups = mergeBackupLists(listBackups(), listLocalBackups());
+            persistBackupCache(backups);
         } catch (BadRequestException exception) {
-            backupsError = exception.getMessage();
+            if (backups.isEmpty()) {
+                backupsError = exception.getMessage();
+            }
         }
 
         return new AdminDataManagementResponse(
@@ -127,23 +139,28 @@ public class AdminDataManagementService {
     public AdminBackupFileResponse createManualBackup() {
         return runExclusive("backup", () -> {
             DatabaseCommandTarget target = parseDataSourceUrl();
-            Path backupDirectory = prepareOperationDirectory("backup");
-            String fileName = "calen-" + LocalDateTime.now(KST).format(BACKUP_FILE_FORMATTER) + ".sql.gz";
-            Path outputFile = backupDirectory.resolve(fileName);
+            Path outputFile = localBackupDirectory().resolve(
+                    "calen-" + LocalDateTime.now(KST).format(BACKUP_FILE_FORMATTER) + ".sql.gz"
+            );
+
+            commandRunner.runDumpToGzip(buildDumpCommand(target), outputFile);
+            long sizeBytes = fileSize(outputFile);
 
             try {
-                commandRunner.runDumpToGzip(buildDumpCommand(target), outputFile);
-                long fileSize = fileSize(outputFile);
-                uploadBackup(outputFile, fileName);
-                return new AdminBackupFileResponse(
-                        fileName,
-                        fileSize,
-                        DISPLAY_DATE_TIME_FORMATTER.format(LocalDateTime.now(KST))
-                );
-            } finally {
-                cleanupPath(outputFile);
-                cleanupPath(backupDirectory);
+                uploadBackup(outputFile, outputFile.getFileName().toString());
+            } catch (BadRequestException exception) {
+                if (!isDriveQuotaFallbackMessage(exception.getMessage())) {
+                    throw exception;
+                }
             }
+
+            AdminBackupFileResponse response = new AdminBackupFileResponse(
+                    outputFile.getFileName().toString(),
+                    sizeBytes,
+                    DISPLAY_DATE_TIME_FORMATTER.format(LocalDateTime.now(KST))
+            );
+            updateBackupCache(response);
+            return response;
         });
     }
 
@@ -153,12 +170,16 @@ public class AdminDataManagementService {
             DatabaseCommandTarget target = parseDataSourceUrl();
             Path restoreDirectory = prepareOperationDirectory("restore");
             Path downloadedFile = restoreDirectory.resolve(fileName);
+            Path localBackupFile = localBackupDirectory().resolve(fileName);
+            Path restoreSource = Files.isReadable(localBackupFile) ? localBackupFile : downloadedFile;
 
             restoreMaintenanceService.start();
             try {
-                downloadBackup(fileName, downloadedFile);
+                if (!Files.isReadable(localBackupFile)) {
+                    downloadBackup(fileName, downloadedFile);
+                }
                 clearCurrentDatabase();
-                commandRunner.runGzipImport(downloadedFile, buildImportCommand(target));
+                commandRunner.runGzipImport(restoreSource, buildImportCommand(target));
             } finally {
                 restoreMaintenanceService.finish();
                 cleanupPath(downloadedFile);
@@ -199,7 +220,7 @@ public class AdminDataManagementService {
                         "가계부 데이터",
                         List.of(
                                 item("거래 내역", formatCount(ledgerEntries)),
-                                item("삭제된 내역", formatCount(deletedLedgerEntries)),
+                                item("휴지통 내역", formatCount(deletedLedgerEntries)),
                                 item("총 수입", formatAmount(totalIncome)),
                                 item("총 지출", formatAmount(totalExpense)),
                                 item("분류 수", formatCount(categoryGroupRepository.count() + categoryDetailRepository.count())),
@@ -217,7 +238,7 @@ public class AdminDataManagementService {
                                 item("여행 사진", formatCount(travelMediaAssetRepository.count())),
                                 item("이동 경로", formatCount(travelRouteSegmentRepository.count())),
                                 item("공유 전시", formatCount(travelPlanShareRepository.count())),
-                                item("여행 지출 합계(KRW)", formatAmount(totalTravelExpense))
+                                item("여행 지출 합계", formatAmount(totalTravelExpense))
                         )
                 ),
                 new AdminDataStatSectionResponse(
@@ -236,11 +257,11 @@ public class AdminDataManagementService {
                         "문의 및 초대",
                         List.of(
                                 item("문의 총수", formatCount(totalSupportInquiries)),
-                                item("답변 대기 문의", formatCount(supportInquiryRepository.countByStatusAndAdminDeletedFalse(SupportInquiryStatus.PENDING))),
-                                item("답변 완료 문의", formatCount(supportInquiryRepository.countByStatusAndAdminDeletedFalse(SupportInquiryStatus.ANSWERED))),
+                                item("답변 대기", formatCount(supportInquiryRepository.countByStatusAndAdminDeletedFalse(SupportInquiryStatus.PENDING))),
+                                item("답변 완료", formatCount(supportInquiryRepository.countByStatusAndAdminDeletedFalse(SupportInquiryStatus.ANSWERED))),
                                 item("보관 문의", formatCount(archivedSupportInquiries)),
                                 item("초대 링크 총수", formatCount(accountInviteRepository.count())),
-                                item("사용 가능한 초대", formatCount(accountInviteRepository.countByUsedAtIsNullAndExpiresAtAfter(LocalDateTime.now(KST))))
+                                item("사용 가능 초대", formatCount(accountInviteRepository.countByUsedAtIsNullAndExpiresAtAfter(LocalDateTime.now(KST))))
                         )
                 )
         );
@@ -250,7 +271,7 @@ public class AdminDataManagementService {
 
     private List<AdminBackupFileResponse> listBackups() {
         String resolvedRcloneConfig = resolveRcloneConfigPath();
-        CommandResult result = commandRunner.run(List.of(
+        CommandResult result = runRcloneListCommand(List.of(
                 "rclone",
                 "--config",
                 resolvedRcloneConfig,
@@ -259,12 +280,9 @@ public class AdminDataManagementService {
                 "--files-only"
         ));
 
-        if (result.exitCode() != 0) {
-            String stderr = result.stderr() == null ? "" : result.stderr();
-            if (stderr.toLowerCase().contains("directory not found")) {
-                return List.of();
-            }
-            throw new BadRequestException(resolveOperationMessage("백업 목록을 불러오지 못했습니다.", result.stderr()));
+        String stderr = result.stderr() == null ? "" : result.stderr();
+        if (stderr.toLowerCase().contains("directory not found")) {
+            return List.of();
         }
 
         try {
@@ -284,34 +302,77 @@ public class AdminDataManagementService {
         }
     }
 
+    private List<AdminBackupFileResponse> listLocalBackups() {
+        Path directory = localBackupDirectory();
+        if (!Files.isDirectory(directory)) {
+            return List.of();
+        }
+
+        try (Stream<Path> stream = Files.list(directory)) {
+            return stream
+                    .filter(Files::isRegularFile)
+                    .filter(path -> path.getFileName().toString().matches("[A-Za-z0-9._-]+\\.sql\\.gz"))
+                    .map(this::toLocalBackupResponse)
+                    .sorted(Comparator.comparing(AdminBackupFileResponse::modifiedAt, Comparator.nullsLast(Comparator.reverseOrder())))
+                    .toList();
+        } catch (IOException exception) {
+            return List.of();
+        }
+    }
+
+    private AdminBackupFileResponse toLocalBackupResponse(Path path) {
+        try {
+            FileTime modifiedTime = Files.getLastModifiedTime(path);
+            return new AdminBackupFileResponse(
+                    path.getFileName().toString(),
+                    fileSize(path),
+                    DISPLAY_DATE_TIME_FORMATTER.format(LocalDateTime.ofInstant(modifiedTime.toInstant(), KST))
+            );
+        } catch (IOException exception) {
+            return new AdminBackupFileResponse(
+                    path.getFileName().toString(),
+                    fileSize(path),
+                    DISPLAY_DATE_TIME_FORMATTER.format(LocalDateTime.now(KST))
+            );
+        }
+    }
+
+    private List<AdminBackupFileResponse> mergeBackupLists(List<AdminBackupFileResponse> primary, List<AdminBackupFileResponse> secondary) {
+        Map<String, AdminBackupFileResponse> merged = new LinkedHashMap<>();
+        for (AdminBackupFileResponse backup : primary) {
+            merged.put(backup.fileName(), backup);
+        }
+        for (AdminBackupFileResponse backup : secondary) {
+            merged.putIfAbsent(backup.fileName(), backup);
+        }
+
+        return merged.values().stream()
+                .sorted(Comparator.comparing(AdminBackupFileResponse::modifiedAt, Comparator.nullsLast(Comparator.reverseOrder())))
+                .toList();
+    }
+
     private void uploadBackup(Path localFile, String fileName) {
         String resolvedRcloneConfig = resolveRcloneConfigPath();
-        CommandResult result = commandRunner.run(List.of(
+        runRcloneCommand(List.of(
                 "rclone",
                 "--config",
                 resolvedRcloneConfig,
                 "copyto",
                 localFile.toString(),
                 remoteDirectory() + "/" + fileName
-        ));
-        if (result.exitCode() != 0) {
-            throw new BadRequestException(resolveOperationMessage("Google Drive 백업 업로드에 실패했습니다.", result.stderr()));
-        }
+        ), "Google Drive 백업 업로드에 실패했습니다.");
     }
 
     private void downloadBackup(String fileName, Path localFile) {
         String resolvedRcloneConfig = resolveRcloneConfigPath();
-        CommandResult result = commandRunner.run(List.of(
+        runRcloneCommand(List.of(
                 "rclone",
                 "--config",
                 resolvedRcloneConfig,
                 "copyto",
                 remoteDirectory() + "/" + fileName,
                 localFile.toString()
-        ));
-        if (result.exitCode() != 0) {
-            throw new BadRequestException(resolveOperationMessage("선택한 백업 파일을 가져오지 못했습니다.", result.stderr()));
-        }
+        ), "선택한 백업 파일을 가져오지 못했습니다.");
     }
 
     private List<String> buildDumpCommand(DatabaseCommandTarget target) {
@@ -375,6 +436,14 @@ public class AdminDataManagementService {
         throw new BadRequestException("데이터 작업용 폴더를 준비하지 못했습니다.");
     }
 
+    private Path localBackupDirectory() {
+        Path directory = workdir().resolve(LOCAL_BACKUP_DIRECTORY);
+        if (canUseDirectory(directory)) {
+            return directory;
+        }
+        throw new BadRequestException("로컬 백업 폴더를 준비하지 못했습니다.");
+    }
+
     private boolean canUseDirectory(Path path) {
         try {
             Files.createDirectories(path);
@@ -405,6 +474,84 @@ public class AdminDataManagementService {
         }
     }
 
+    private CommandResult runRcloneCommand(List<String> command, String fallbackMessage) {
+        CommandResult lastResult = null;
+
+        for (int attempt = 0; attempt <= RCLONE_RETRY_DELAYS_MILLIS.length; attempt += 1) {
+            lastResult = commandRunner.run(command);
+            if (lastResult.exitCode() == 0) {
+                return lastResult;
+            }
+
+            if (!isDriveRateLimited(lastResult.stderr()) || attempt == RCLONE_RETRY_DELAYS_MILLIS.length) {
+                break;
+            }
+
+            sleepRetryDelay(RCLONE_RETRY_DELAYS_MILLIS[attempt]);
+        }
+
+        String stderr = lastResult == null ? "" : lastResult.stderr();
+        if (isDriveRateLimited(stderr)) {
+            throw new BadRequestException("Google Drive API 요청 한도를 초과했습니다. 잠시 후 다시 시도하거나, rclone에 개인 Google API client_id/client_secret을 설정해 주세요.");
+        }
+
+        throw new BadRequestException(resolveOperationMessage(fallbackMessage, stderr));
+    }
+
+    private CommandResult runRcloneListCommand(List<String> command) {
+        CommandResult lastResult = null;
+
+        for (int attempt = 0; attempt <= RCLONE_RETRY_DELAYS_MILLIS.length; attempt += 1) {
+            lastResult = commandRunner.run(command);
+            if (lastResult.exitCode() == 0) {
+                return lastResult;
+            }
+
+            String stderr = lastResult.stderr() == null ? "" : lastResult.stderr().toLowerCase();
+            if (stderr.contains("directory not found")) {
+                return lastResult;
+            }
+
+            if (!isDriveRateLimited(lastResult.stderr()) || attempt == RCLONE_RETRY_DELAYS_MILLIS.length) {
+                break;
+            }
+
+            sleepRetryDelay(RCLONE_RETRY_DELAYS_MILLIS[attempt]);
+        }
+
+        String stderr = lastResult == null ? "" : lastResult.stderr();
+        if (isDriveRateLimited(stderr)) {
+            throw new BadRequestException("Google Drive API 요청 한도를 초과했습니다. 잠시 후 다시 시도하거나, rclone에 개인 Google API client_id/client_secret을 설정해 주세요.");
+        }
+
+        throw new BadRequestException(resolveOperationMessage("백업 목록을 불러오지 못했습니다.", stderr));
+    }
+
+    private boolean isDriveRateLimited(String stderr) {
+        String normalized = stderr == null ? "" : stderr.toLowerCase();
+        return normalized.contains("ratelimitexceeded")
+                || normalized.contains("rate_limit_exceeded")
+                || normalized.contains("quota exceeded")
+                || normalized.contains("quota metric")
+                || normalized.contains("couldn't find root directory id");
+    }
+
+    private boolean isDriveQuotaFallbackMessage(String message) {
+        String normalized = message == null ? "" : message.toLowerCase();
+        return normalized.contains("google drive api")
+                || normalized.contains("quota")
+                || normalized.contains("rate");
+    }
+
+    private void sleepRetryDelay(long delayMillis) {
+        try {
+            Thread.sleep(delayMillis);
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            throw new BadRequestException("데이터 작업이 중단되었습니다.");
+        }
+    }
+
     private String resolveRcloneConfigPath() {
         List<Path> candidates = List.of(
                 Path.of(rcloneConfigPath),
@@ -422,6 +569,51 @@ public class AdminDataManagementService {
         }
 
         throw new BadRequestException("rclone 설정 파일을 찾을 수 없습니다. 서버 백업 설정을 먼저 확인해 주세요.");
+    }
+
+    private List<AdminBackupFileResponse> loadCachedBackups() {
+        Path cacheFile = backupCacheFile();
+        if (!Files.isReadable(cacheFile)) {
+            return List.of();
+        }
+
+        try {
+            JsonNode root = objectMapper.readTree(cacheFile.toFile());
+            List<AdminBackupFileResponse> cachedBackups = new ArrayList<>();
+            for (JsonNode node : root) {
+                cachedBackups.add(new AdminBackupFileResponse(
+                        node.path("fileName").asText(),
+                        node.path("sizeBytes").asLong(),
+                        node.path("modifiedAt").asText()
+                ));
+            }
+            cachedBackups.sort(Comparator.comparing(AdminBackupFileResponse::modifiedAt, Comparator.nullsLast(Comparator.reverseOrder())));
+            return cachedBackups;
+        } catch (Exception ignored) {
+            return List.of();
+        }
+    }
+
+    private void persistBackupCache(List<AdminBackupFileResponse> backups) {
+        Path cacheFile = backupCacheFile();
+        try {
+            Files.createDirectories(cacheFile.getParent());
+            objectMapper.writerWithDefaultPrettyPrinter().writeValue(cacheFile.toFile(), backups);
+        } catch (Exception ignored) {
+            // Cache write failure should not break backup UI.
+        }
+    }
+
+    private void updateBackupCache(AdminBackupFileResponse backup) {
+        List<AdminBackupFileResponse> cachedBackups = new ArrayList<>(mergeBackupLists(loadCachedBackups(), listLocalBackups()));
+        cachedBackups.removeIf(item -> item.fileName().equals(backup.fileName()));
+        cachedBackups.add(backup);
+        cachedBackups.sort(Comparator.comparing(AdminBackupFileResponse::modifiedAt, Comparator.nullsLast(Comparator.reverseOrder())));
+        persistBackupCache(cachedBackups);
+    }
+
+    private Path backupCacheFile() {
+        return workdir().resolve(BACKUP_CACHE_FILE);
     }
 
     private void clearCurrentDatabase() {

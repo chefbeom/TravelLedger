@@ -206,11 +206,27 @@ const yearOptions = computed(() => {
 })
 
 const isAmountOnlyCalendar = computed(() => false)
+const isFitCalendar = computed(() => calendarScalePreset.value === 'fit')
 
 const calendarViewStyle = computed(() => {
   const metrics = getCalendarDisplayMetrics(calendarScalePreset.value, calendarShellWidth.value)
+  if (metrics.responsive) {
+    return {
+      '--calendar-min-width': metrics.minWidth,
+      '--calendar-gap': metrics.gap,
+      '--calendar-week-gap': metrics.weekGap,
+      '--calendar-day-min-height': metrics.minHeight,
+      '--calendar-day-padding': metrics.padding,
+      '--calendar-expense-total-size': metrics.totalSize,
+      '--calendar-metric-size': metrics.metricSize,
+      '--calendar-toolbar-gap': metrics.toolbarGap,
+      '--calendar-day-head-size': metrics.headSize,
+    }
+  }
+
   const zoom = metrics.zoom
   return {
+    '--calendar-min-width': metrics.minWidth,
     '--calendar-gap': `${Math.round(10 * zoom)}px`,
     '--calendar-week-gap': `${Math.round(8 * zoom)}px`,
     '--calendar-day-min-height': `${Math.round(metrics.minHeight)}px`,
@@ -218,6 +234,7 @@ const calendarViewStyle = computed(() => {
     '--calendar-expense-total-size': `${Math.max(1, 1.18 * zoom).toFixed(2)}rem`,
     '--calendar-metric-size': `${Math.max(0.72, 0.8 * zoom).toFixed(2)}rem`,
     '--calendar-toolbar-gap': `${Math.round(18 * zoom)}px`,
+    '--calendar-day-head-size': `${Math.max(0.78, 0.88 * zoom).toFixed(2)}rem`,
   }
 })
 
@@ -418,27 +435,29 @@ function clamp(value, min, max) {
 }
 
 function getCalendarDisplayMetrics(mode, width) {
-  if (mode === 'amount-only') {
-    return {
-      zoom: 0.88,
-      minHeight: 122,
-    }
-  }
-
   if (mode === 'fit') {
-    const baseWidth = width || 1120
-    const widthZoom = clamp(baseWidth / 1400, 0.76, 1)
-    const estimatedDayWidth = clamp((baseWidth - 56) / 7, 84, 156)
-    const zoom = clamp(Math.min(widthZoom, estimatedDayWidth / 148), 0.76, 1)
+    const viewportWidth = typeof window !== 'undefined' ? window.innerWidth : 1280
+    const safeWidth = Math.max(width || viewportWidth || 1280, 320)
+    const estimatedDayWidth = clamp((safeWidth - 32) / 7, 70, 156)
+
     return {
-      zoom,
-      minHeight: clamp(Math.round(estimatedDayWidth * 0.96), 112, 142),
+      responsive: true,
+      minWidth: '100%',
+      gap: 'clamp(6px, 0.8vw, 10px)',
+      weekGap: 'clamp(4px, 0.7vw, 8px)',
+      minHeight: `clamp(108px, ${Math.round(estimatedDayWidth * 1.06)}px, 142px)`,
+      padding: 'clamp(8px, 1vw, 12px)',
+      totalSize: 'clamp(0.92rem, 1.05vw, 1.12rem)',
+      metricSize: 'clamp(0.66rem, 0.82vw, 0.8rem)',
+      toolbarGap: 'clamp(12px, 1.2vw, 18px)',
+      headSize: 'clamp(0.72rem, 0.82vw, 0.88rem)',
     }
   }
 
   return {
     zoom: 1.12,
     minHeight: 146,
+    minWidth: '860px',
   }
 }
 
@@ -1037,6 +1056,7 @@ defineExpose({
       :class="[
         'panel household-calendar-panel household-calendar-layout',
         { 'household-calendar-layout--amount-only': isAmountOnlyCalendar },
+        { 'household-calendar-layout--fit': isFitCalendar },
       ]"
       :style="calendarViewStyle"
     >

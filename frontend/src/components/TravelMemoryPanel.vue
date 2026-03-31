@@ -87,6 +87,8 @@ const editingMemoryId = ref(null)
 const isEditorOpen = ref(false)
 const photoFiles = ref([])
 const photoCaption = ref('')
+const multiPhotoUploadEnabled = ref(false)
+const multiPhotoDrafts = ref([])
 const queuedCategory = ref('장소')
 const pendingPoint = ref(null)
 const locationFilter = reactive({
@@ -229,6 +231,9 @@ const pagedPhotoBackedMemories = computed(() => {
   const start = photoQuickOpenPage.value * PHOTO_QUICK_OPEN_PAGE_SIZE
   return sortedPhotoBackedMemories.value.slice(start, start + PHOTO_QUICK_OPEN_PAGE_SIZE)
 })
+
+const isMultiPhotoMode = computed(() => multiPhotoUploadEnabled.value && !editingMemoryId.value)
+const hasMultiPhotoDrafts = computed(() => isMultiPhotoMode.value && multiPhotoDrafts.value.length > 0)
 
 const activePinPreset = computed(() => resolvePinPreset(isEditorOpen.value ? form.category : queuedCategory.value))
 const editorTitle = computed(() => (editingMemoryId.value ? '여행 기록 수정' : '새 여행 기록 작성'))
@@ -381,9 +386,92 @@ watch(
   { deep: true },
 )
 
-function resetPendingFiles() {
+function revokeMultiPhotoPreviews() {
+  multiPhotoDrafts.value.forEach((item) => {
+    if (item?.previewUrl && item.previewUrl.startsWith('blob:')) {
+      URL.revokeObjectURL(item.previewUrl)
+    }
+  })
+}
+
+function resetMultiPhotoDrafts() {
+  revokeMultiPhotoPreviews()
+  multiPhotoDrafts.value = []
+}
+
+function resetAutofillMessage() {
+  autofillState.status = 'idle'
+  autofillState.fileName = ''
+  autofillState.message = '?ъ쭊??怨좊Ⅴ硫?EXIF ?뺣낫媛 ?덉쓣 ???좎쭨, ?쒓컙, GPS 醫뚰몴瑜??먮룞?쇰줈 梨꾩썙以띾땲??'
+}
+
+function extractDraftTitleSeed(fileName) {
+  const text = String(fileName || '').trim()
+  if (!text) {
+    return ''
+  }
+  return text.replace(/\.[^/.]+$/, '').trim()
+}
+
+function buildMultiPhotoPayload(item) {
+  return {
+    memoryDate: item.memoryDate || form.memoryDate,
+    memoryTime: item.memoryTime || null,
+    category: (form.category || queuedCategory.value || '?μ냼').trim(),
+    title: item.title.trim(),
+    country: item.country || null,
+    region: item.region || null,
+    placeName: item.placeName || null,
+    latitude: toNullableNumber(item.latitude),
+    longitude: toNullableNumber(item.longitude),
+    sharedWithCommunity: Boolean(form.sharedWithCommunity),
+    memo: form.memo.trim() || null,
+  }
+}
+
+async function buildMultiPhotoDrafts(files) {
+  const drafts = []
+
+  for (const [index, file] of files.entries()) {
+    let metadata = null
+    try {
+      metadata = await extractPhotoMetadata(file)
+    } catch {
+      metadata = null
+    }
+
+    drafts.push({
+      id: `${file.name}-${file.lastModified}-${index}`,
+      file,
+      fileName: file.name,
+      previewUrl: URL.createObjectURL(file),
+      title: '',
+      suggestedTitle: extractDraftTitleSeed(file.name),
+      memoryDate: metadata?.date || form.memoryDate || resolveDefaultMemoryDate(),
+      memoryTime: metadata?.time || '',
+      country: metadata?.country || '',
+      region: metadata?.region || '',
+      placeName: metadata?.placeName || '',
+      latitude: metadata?.latitude != null ? String(metadata.latitude) : '',
+      longitude: metadata?.longitude != null ? String(metadata.longitude) : '',
+    })
+  }
+
+  return drafts
+}
+
+function handleMultiPhotoModeChange() {
+  resetMultiPhotoDrafts()
   photoFiles.value = []
   photoCaption.value = ''
+  resetAutofillMessage()
+}
+
+function resetPendingFiles() {
+  resetMultiPhotoDrafts()
+  photoFiles.value = []
+  photoCaption.value = ''
+  multiPhotoUploadEnabled.value = false
   autofillState.status = 'idle'
   autofillState.fileName = ''
   autofillState.message = '사진을 고르면 EXIF 정보가 있을 때 날짜, 시간, GPS 좌표를 자동으로 채워줍니다.'
@@ -537,6 +625,29 @@ async function handlePhotoSelection(event) {
     return
   }
 
+  if (isMultiPhotoMode.value) {
+    resetMultiPhotoDrafts()
+    photoCaption.value = ''
+
+    try {
+      multiPhotoDrafts.value = await buildMultiPhotoDrafts(files)
+      const enrichedCount = multiPhotoDrafts.value.filter((item) =>
+        Boolean(item.memoryDate || item.memoryTime || item.country || item.region || item.placeName || item.latitude || item.longitude),
+      ).length
+      autofillState.status = enrichedCount ? 'filled' : 'manual'
+      autofillState.fileName = ''
+      autofillState.message = enrichedCount
+        ? `${multiPhotoDrafts.value.length}장의 사진 정보를 불러왔습니다. 각 사진 제목을 입력한 뒤 저장하세요.`
+        : `${multiPhotoDrafts.value.length}장의 사진을 불러왔지만 메타데이터가 부족한 항목은 빈 값으로 저장됩니다.`
+    } catch (error) {
+      resetMultiPhotoDrafts()
+      autofillState.status = 'manual'
+      autofillState.fileName = files[0]?.name || ''
+      autofillState.message = error?.message || '?ъ쭊 硫뷀??곗씠?곕? ?쎌? 紐삵뻽?듬땲??'
+    }
+    return
+  }
+
   const fieldLabels = {
     date: '날짜',
     time: '시간',
@@ -670,6 +781,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   pendingLookupToken += 1
+  revokeMultiPhotoPreviews()
   window.removeEventListener('keydown', handleWindowKeydown)
 })
 
@@ -679,6 +791,25 @@ function submitMemory() {
   }
 
   queuedCategory.value = form.category.trim() || queuedCategory.value
+
+  if (hasMultiPhotoDrafts.value) {
+    const missingTitle = multiPhotoDrafts.value.find((item) => !item.title.trim())
+    if (missingTitle) {
+      autofillState.status = 'manual'
+      autofillState.fileName = missingTitle.fileName || ''
+      autofillState.message = '복수 사진 기록에서는 모든 사진의 제목을 입력해야 합니다.'
+      return
+    }
+
+    emit('save-memory', {
+      batchItems: multiPhotoDrafts.value.map((item) => ({
+        payload: buildMultiPhotoPayload(item),
+        file: item.file,
+      })),
+    })
+    return
+  }
+
   emit('save-memory', {
     id: editingMemoryId.value,
     payload: buildPayload(),
@@ -939,6 +1070,25 @@ function submitMemory() {
 
         <div class="travel-modal__body">
           <div class="travel-form-grid">
+            <template v-if="hasMultiPhotoDrafts">
+              <label class="field">
+                <span class="field__label">분류</span>
+                <input v-model="form.category" list="memory-category-options" type="text" placeholder="장소, 음식점, 박물관, 관광지" />
+              </label>
+              <div class="field travel-batch-memory-summary">
+                <span class="field__label">일괄 기록 안내</span>
+                <small class="field__hint">사진마다 날짜, 시간, 위치 정보는 자동으로 들어가고 제목만 개별 입력합니다.</small>
+              </div>
+              <label class="checkbox-row field--full">
+                <input v-model="form.sharedWithCommunity" type="checkbox" />
+                <span>이 기록을 커뮤니티 지도 월드에 공유하기</span>
+              </label>
+              <label class="field field--full">
+                <span class="field__label">메모</span>
+                <textarea v-model="form.memo" rows="4" placeholder="모든 사진 기록에 공통으로 남길 메모가 있다면 입력해 주세요." />
+              </label>
+            </template>
+            <template v-else>
             <label class="field">
               <span class="field__label">날짜</span>
               <input v-model="form.memoryDate" type="date" />
@@ -983,6 +1133,7 @@ function submitMemory() {
               <span class="field__label">메모</span>
               <textarea v-model="form.memo" rows="4" placeholder="1~2줄 정도로 장소, 이동, 인상 등을 적어보세요." />
             </label>
+            </template>
           </div>
 
           <datalist id="memory-category-options">
@@ -996,14 +1147,37 @@ function submitMemory() {
           </datalist>
 
           <div class="travel-form-grid travel-form-grid--compact">
+            <label v-if="!editingMemoryId" class="checkbox-row field--full travel-batch-toggle">
+              <input v-model="multiPhotoUploadEnabled" type="checkbox" @change="handleMultiPhotoModeChange" />
+              <span>여러 사진 받기</span>
+            </label>
             <label class="field field--full">
               <span class="field__label">사진 업로드</span>
               <input accept="image/*" multiple type="file" @change="handlePhotoSelection" />
             </label>
-            <label class="field field--full">
+            <label v-if="!isMultiPhotoMode" class="field field--full">
               <span class="field__label">사진 설명</span>
               <input v-model="photoCaption" type="text" placeholder="업로드할 사진에 붙일 짧은 설명" />
             </label>
+          </div>
+
+          <div v-if="hasMultiPhotoDrafts" class="travel-batch-memory-list">
+            <article v-for="item in multiPhotoDrafts" :key="item.id" class="travel-batch-memory-card">
+              <img :src="item.previewUrl" :alt="item.fileName" class="travel-batch-memory-card__thumb" />
+              <div class="travel-batch-memory-card__meta">
+                <strong>{{ item.fileName }}</strong>
+                <small>{{ formatDateTime(item.memoryDate, item.memoryTime) }}</small>
+                <small>{{ [item.country, item.region, item.placeName].filter(Boolean).join(' / ') || '위치 정보 없음' }}</small>
+              </div>
+              <label class="field travel-batch-memory-card__title">
+                <span class="field__label">제목</span>
+                <input
+                  v-model="item.title"
+                  type="text"
+                  :placeholder="item.suggestedTitle || '사진마다 제목을 입력해 주세요.'"
+                />
+              </label>
+            </article>
           </div>
 
           <p

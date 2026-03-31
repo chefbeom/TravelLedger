@@ -1815,6 +1815,61 @@ button {
   flex-wrap: wrap;
 }
 
+.travel-batch-toggle {
+  align-items: center;
+  min-height: 44px;
+  padding: 0 4px;
+}
+
+.travel-batch-memory-summary {
+  align-content: start;
+}
+
+.travel-batch-memory-list {
+  display: grid;
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.travel-batch-memory-card {
+  display: grid;
+  grid-template-columns: 120px minmax(0, 1fr) minmax(240px, 0.9fr);
+  gap: 14px;
+  align-items: center;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: var(--surface-soft);
+}
+
+.travel-batch-memory-card__thumb {
+  width: 100%;
+  height: 90px;
+  object-fit: cover;
+  border-radius: 14px;
+  background: var(--surface);
+}
+
+.travel-batch-memory-card__meta {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.travel-batch-memory-card__meta strong,
+.travel-batch-memory-card__meta small {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.travel-batch-memory-card__meta small {
+  color: var(--text-soft);
+}
+
+.travel-batch-memory-card__title {
+  min-width: 0;
+}
+
 .travel-record-media-count {
   display: grid;
   gap: 4px;
@@ -4911,6 +4966,14 @@ textarea {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .travel-batch-memory-card {
+    grid-template-columns: 96px minmax(0, 1fr);
+  }
+
+  .travel-batch-memory-card__title {
+    grid-column: 1 / -1;
+  }
+
   .travel-plan-card__actions,
   .travel-media-actions {
     flex-direction: column;
@@ -4982,6 +5045,14 @@ textarea {
   .travel-plan-card__media,
   .travel-plan-card__placeholder {
     height: 180px;
+  }
+
+  .travel-batch-memory-card {
+    grid-template-columns: 1fr;
+  }
+
+  .travel-batch-memory-card__thumb {
+    height: 150px;
   }
 
   .travel-media-card--compact .travel-media-thumb {

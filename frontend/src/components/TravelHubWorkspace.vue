@@ -820,6 +820,17 @@ async function handleSaveMemory(submission) {
   activeSubmit.value = 'memory'
   setFeedback()
   try {
+    if (submission.batchItems?.length) {
+      for (const item of submission.batchItems) {
+        const savedBatchMemory = await createTravelMemory(selectedPlanId.value, item.payload)
+        await uploadTravelMemoryMedia(savedBatchMemory.id, [item.file], '')
+      }
+      await refreshTravelData(selectedPlanId.value, true)
+      memoryRefreshKey.value += 1
+      setFeedback(`여행 기록 ${submission.batchItems.length}건을 저장했습니다.`)
+      return
+    }
+
     let saved
     if (submission.id) {
       saved = await updateTravelMemory(submission.id, submission.payload)

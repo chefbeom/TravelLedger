@@ -4,6 +4,8 @@ import { extractPhotoMetadata, reverseGeocode } from '../lib/photoMetadata'
 import { formatDate, formatDateTime, toIsoDate, toNullableNumber, todayIso } from '../lib/uiFormat'
 import TravelMapPanel from './TravelMapPanel.vue'
 
+const PHOTO_QUICK_OPEN_PAGE_SIZE = 10
+
 const pinPresetOptions = [
   { key: 'general', label: '📍 기본 핀', category: '장소', iconText: '📍' },
   { key: 'lodging', label: '🏠 숙소', category: '숙소', iconText: '🏠' },
@@ -211,6 +213,23 @@ const photoBackedMemories = computed(() =>
     .sort((left, right) => right.sortKey.localeCompare(left.sortKey)),
 )
 
+const photoQuickOpenSort = ref('desc')
+const photoQuickOpenPage = ref(0)
+
+const sortedPhotoBackedMemories = computed(() => {
+  const items = [...photoBackedMemories.value]
+  return photoQuickOpenSort.value === 'asc' ? items.reverse() : items
+})
+
+const photoQuickOpenPageCount = computed(() =>
+  Math.max(1, Math.ceil(sortedPhotoBackedMemories.value.length / PHOTO_QUICK_OPEN_PAGE_SIZE)),
+)
+
+const pagedPhotoBackedMemories = computed(() => {
+  const start = photoQuickOpenPage.value * PHOTO_QUICK_OPEN_PAGE_SIZE
+  return sortedPhotoBackedMemories.value.slice(start, start + PHOTO_QUICK_OPEN_PAGE_SIZE)
+})
+
 const activePinPreset = computed(() => resolvePinPreset(isEditorOpen.value ? form.category : queuedCategory.value))
 const editorTitle = computed(() => (editingMemoryId.value ? '여행 기록 수정' : '새 여행 기록 작성'))
 
@@ -299,6 +318,21 @@ watch(
     clearPendingPoint()
     isEditorOpen.value = false
   },
+)
+
+watch(photoQuickOpenSort, () => {
+  photoQuickOpenPage.value = 0
+})
+
+watch(
+  sortedPhotoBackedMemories,
+  (items) => {
+    const maxPage = Math.max(0, Math.ceil(items.length / PHOTO_QUICK_OPEN_PAGE_SIZE) - 1)
+    if (photoQuickOpenPage.value > maxPage) {
+      photoQuickOpenPage.value = maxPage
+    }
+  },
+  { deep: true },
 )
 
 watch(
@@ -665,8 +699,52 @@ function submitMemory() {
         <span class="panel__badge">{{ photoBackedMemories.length }}개 기록</span>
       </div>
 
-      <div class="travel-media-grid travel-media-grid--gallery">
-        <article v-for="memory in photoBackedMemories" :key="`photo-memory-${memory.id}`" class="travel-media-card">
+      <div class="travel-memory-quick-open__controls">
+        <div class="scope-toggle">
+          <button
+            class="button button--ghost"
+            :class="{ 'is-active': photoQuickOpenSort === 'desc' }"
+            type="button"
+            @click="photoQuickOpenSort = 'desc'"
+          >
+            최신순
+          </button>
+          <button
+            class="button button--ghost"
+            :class="{ 'is-active': photoQuickOpenSort === 'asc' }"
+            type="button"
+            @click="photoQuickOpenSort = 'asc'"
+          >
+            오래된순
+          </button>
+        </div>
+        <div v-if="photoQuickOpenPageCount > 1" class="panel__actions">
+          <button
+            class="button button--ghost"
+            type="button"
+            :disabled="photoQuickOpenPage <= 0"
+            @click="photoQuickOpenPage -= 1"
+          >
+            이전
+          </button>
+          <span>{{ photoQuickOpenPage + 1 }} / {{ photoQuickOpenPageCount }}</span>
+          <button
+            class="button button--ghost"
+            type="button"
+            :disabled="photoQuickOpenPage + 1 >= photoQuickOpenPageCount"
+            @click="photoQuickOpenPage += 1"
+          >
+            다음
+          </button>
+        </div>
+      </div>
+
+      <div class="travel-media-grid travel-media-grid--gallery travel-media-grid--quick-open">
+        <article
+          v-for="memory in pagedPhotoBackedMemories"
+          :key="`photo-memory-${memory.id}`"
+          class="travel-media-card travel-media-card--compact"
+        >
           <img v-if="memory.heroPhoto?.contentUrl" :src="memory.heroPhoto.contentUrl" :alt="memory.heroPhoto.originalFileName" class="travel-media-thumb" />
           <div v-else class="travel-media-thumb travel-media-thumb--receipt">사진 없음</div>
           <div class="travel-media-copy">

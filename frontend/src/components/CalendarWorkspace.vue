@@ -859,6 +859,7 @@ defineExpose({
                   {
                     'calendar__day--muted': !day.inCurrentMonth,
                     'calendar__day--active': Number(day.summary.expense) > 0,
+                    'calendar__day--income': Number(day.summary.income) > Number(day.summary.expense) && Number(day.summary.income) > 0,
                     'calendar__day--selected': selectedDate === day.date,
                   },
                 ]"
@@ -890,7 +891,14 @@ defineExpose({
                     <strong class="is-income">{{ formatCurrency(day.summary.income) }}</strong>
                   </div>
                 </div>
-                <div class="calendar__bar">
+                <div
+                  :class="[
+                    'calendar__bar',
+                    {
+                      'calendar__bar--income': Number(day.summary.income) > Number(day.summary.expense) && Number(day.summary.income) > 0,
+                    },
+                  ]"
+                >
                   <span :style="{ width: `${getExpenseRatio(day)}%` }" />
                 </div>
               </article>

@@ -553,7 +553,7 @@ defineExpose({
             <h2>{{ isEditingEntry ? '거래 수정' : '빠른 거래 입력' }}</h2>
             <p>날짜를 고른 뒤 금액과 분류를 먼저 입력하고, 시간은 필요할 때만 켜서 빠르게 기록할 수 있습니다.</p>
           </div>
-          <span class="panel__badge">{{ formatShortDate(entryForm.entryDate) }}</span>
+          <span class="panel__badge household-entry-panel__date-badge">{{ formatShortDate(entryForm.entryDate) }}</span>
         </div>
 
         <div class="entry-editor">

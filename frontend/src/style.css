@@ -3953,6 +3953,11 @@ textarea {
   min-width: 0;
 }
 
+.household-entry-panel__date-badge {
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
 .household-quickstats-panel {
   min-width: 0;
   display: grid;

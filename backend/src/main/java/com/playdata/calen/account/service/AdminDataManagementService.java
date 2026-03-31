@@ -45,6 +45,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.ReentrantLock;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -78,6 +79,8 @@ public class AdminDataManagementService {
     private final FamilyMediaAssetRepository familyMediaAssetRepository;
     private final SystemCommandRunner commandRunner;
     private final ObjectMapper objectMapper;
+    private final JdbcTemplate jdbcTemplate;
+    private final RestoreMaintenanceService restoreMaintenanceService;
 
     @Value("${spring.datasource.url}")
     private String dataSourceUrl;
@@ -124,20 +127,23 @@ public class AdminDataManagementService {
     public AdminBackupFileResponse createManualBackup() {
         return runExclusive("backup", () -> {
             DatabaseCommandTarget target = parseDataSourceUrl();
-            Path backupDirectory = workdir().resolve("files");
-            ensureDirectoryExists(backupDirectory);
-
+            Path backupDirectory = prepareOperationDirectory("backup");
             String fileName = "calen-" + LocalDateTime.now(KST).format(BACKUP_FILE_FORMATTER) + ".sql.gz";
             Path outputFile = backupDirectory.resolve(fileName);
 
-            commandRunner.runDumpToGzip(buildDumpCommand(target), outputFile);
-            uploadBackup(outputFile, fileName);
-
-            return new AdminBackupFileResponse(
-                    fileName,
-                    fileSize(outputFile),
-                    DISPLAY_DATE_TIME_FORMATTER.format(LocalDateTime.now(KST))
-            );
+            try {
+                commandRunner.runDumpToGzip(buildDumpCommand(target), outputFile);
+                long fileSize = fileSize(outputFile);
+                uploadBackup(outputFile, fileName);
+                return new AdminBackupFileResponse(
+                        fileName,
+                        fileSize,
+                        DISPLAY_DATE_TIME_FORMATTER.format(LocalDateTime.now(KST))
+                );
+            } finally {
+                cleanupPath(outputFile);
+                cleanupPath(backupDirectory);
+            }
         });
     }
 
@@ -145,17 +151,18 @@ public class AdminDataManagementService {
         validateBackupFileName(fileName);
         runExclusive("restore", () -> {
             DatabaseCommandTarget target = parseDataSourceUrl();
-            Path restoreDirectory = workdir().resolve("restore-ui");
-            ensureDirectoryExists(restoreDirectory);
-
+            Path restoreDirectory = prepareOperationDirectory("restore");
             Path downloadedFile = restoreDirectory.resolve(fileName);
-            downloadBackup(fileName, downloadedFile);
-            commandRunner.runGzipImport(downloadedFile, buildImportCommand(target));
 
+            restoreMaintenanceService.start();
             try {
-                Files.deleteIfExists(downloadedFile);
-            } catch (Exception ignored) {
-                // Best-effort cleanup only.
+                downloadBackup(fileName, downloadedFile);
+                clearCurrentDatabase();
+                commandRunner.runGzipImport(downloadedFile, buildImportCommand(target));
+            } finally {
+                restoreMaintenanceService.finish();
+                cleanupPath(downloadedFile);
+                cleanupPath(restoreDirectory);
             }
             return null;
         });
@@ -192,7 +199,7 @@ public class AdminDataManagementService {
                         "가계부 데이터",
                         List.of(
                                 item("거래 내역", formatCount(ledgerEntries)),
-                                item("휴지통 내역", formatCount(deletedLedgerEntries)),
+                                item("삭제된 내역", formatCount(deletedLedgerEntries)),
                                 item("총 수입", formatAmount(totalIncome)),
                                 item("총 지출", formatAmount(totalExpense)),
                                 item("분류 수", formatCount(categoryGroupRepository.count() + categoryDetailRepository.count())),
@@ -228,11 +235,11 @@ public class AdminDataManagementService {
                         "support",
                         "문의 및 초대",
                         List.of(
-                                item("문의 총 수", formatCount(totalSupportInquiries)),
+                                item("문의 총수", formatCount(totalSupportInquiries)),
                                 item("답변 대기 문의", formatCount(supportInquiryRepository.countByStatusAndAdminDeletedFalse(SupportInquiryStatus.PENDING))),
                                 item("답변 완료 문의", formatCount(supportInquiryRepository.countByStatusAndAdminDeletedFalse(SupportInquiryStatus.ANSWERED))),
                                 item("보관 문의", formatCount(archivedSupportInquiries)),
-                                item("초대 링크 총 수", formatCount(accountInviteRepository.count())),
+                                item("초대 링크 총수", formatCount(accountInviteRepository.count())),
                                 item("사용 가능한 초대", formatCount(accountInviteRepository.countByUsedAtIsNullAndExpiresAtAfter(LocalDateTime.now(KST))))
                         )
                 )
@@ -242,12 +249,11 @@ public class AdminDataManagementService {
     }
 
     private List<AdminBackupFileResponse> listBackups() {
-        ensureReadableFile(Path.of(rcloneConfigPath), "rclone 설정 파일을 찾을 수 없습니다. 서버 백업 설정을 먼저 확인해 주세요.");
-
+        String resolvedRcloneConfig = resolveRcloneConfigPath();
         CommandResult result = commandRunner.run(List.of(
                 "rclone",
                 "--config",
-                rcloneConfigPath,
+                resolvedRcloneConfig,
                 "lsjson",
                 remoteDirectory(),
                 "--files-only"
@@ -279,10 +285,11 @@ public class AdminDataManagementService {
     }
 
     private void uploadBackup(Path localFile, String fileName) {
+        String resolvedRcloneConfig = resolveRcloneConfigPath();
         CommandResult result = commandRunner.run(List.of(
                 "rclone",
                 "--config",
-                rcloneConfigPath,
+                resolvedRcloneConfig,
                 "copyto",
                 localFile.toString(),
                 remoteDirectory() + "/" + fileName
@@ -293,10 +300,11 @@ public class AdminDataManagementService {
     }
 
     private void downloadBackup(String fileName, Path localFile) {
+        String resolvedRcloneConfig = resolveRcloneConfigPath();
         CommandResult result = commandRunner.run(List.of(
                 "rclone",
                 "--config",
-                rcloneConfigPath,
+                resolvedRcloneConfig,
                 "copyto",
                 remoteDirectory() + "/" + fileName,
                 localFile.toString()
@@ -354,23 +362,93 @@ public class AdminDataManagementService {
     }
 
     private Path workdir() {
-        Path path = Path.of(backupWorkdir);
-        ensureDirectoryExists(path);
-        return path;
+        Path configuredPath = Path.of(backupWorkdir);
+        if (canUseDirectory(configuredPath)) {
+            return configuredPath;
+        }
+
+        Path fallbackPath = Path.of(System.getProperty("java.io.tmpdir"), "calen-data-ops");
+        if (canUseDirectory(fallbackPath)) {
+            return fallbackPath;
+        }
+
+        throw new BadRequestException("데이터 작업용 폴더를 준비하지 못했습니다.");
     }
 
-    private void ensureDirectoryExists(Path path) {
+    private boolean canUseDirectory(Path path) {
         try {
             Files.createDirectories(path);
+            Path probe = Files.createTempFile(path, "probe-", ".tmp");
+            Files.deleteIfExists(probe);
+            return true;
+        } catch (Exception exception) {
+            return false;
+        }
+    }
+
+    private Path prepareOperationDirectory(String prefix) {
+        try {
+            return Files.createTempDirectory(workdir(), prefix + "-");
         } catch (Exception exception) {
             throw new BadRequestException("데이터 작업용 폴더를 준비하지 못했습니다.");
         }
     }
 
-    private void ensureReadableFile(Path path, String message) {
-        if (!Files.isReadable(path)) {
-            throw new BadRequestException(message);
+    private void cleanupPath(Path path) {
+        if (path == null) {
+            return;
         }
+        try {
+            Files.deleteIfExists(path);
+        } catch (Exception ignored) {
+            // Best-effort cleanup only.
+        }
+    }
+
+    private String resolveRcloneConfigPath() {
+        List<Path> candidates = List.of(
+                Path.of(rcloneConfigPath),
+                Path.of("/app/.config/rclone/rclone.conf"),
+                Path.of(System.getProperty("user.home"), ".config", "rclone", "rclone.conf"),
+                Path.of("/root/.config/rclone/rclone.conf"),
+                Path.of("/home/ubuntu/.config/rclone/rclone.conf"),
+                Path.of("/home/opc/.config/rclone/rclone.conf")
+        );
+
+        for (Path candidate : candidates) {
+            if (Files.isReadable(candidate)) {
+                return candidate.toString();
+            }
+        }
+
+        throw new BadRequestException("rclone 설정 파일을 찾을 수 없습니다. 서버 백업 설정을 먼저 확인해 주세요.");
+    }
+
+    private void clearCurrentDatabase() {
+        jdbcTemplate.execute("SET FOREIGN_KEY_CHECKS=0");
+        try {
+            dropObjects("VIEW");
+            dropObjects("BASE TABLE");
+        } finally {
+            jdbcTemplate.execute("SET FOREIGN_KEY_CHECKS=1");
+        }
+    }
+
+    private void dropObjects(String tableType) {
+        List<String> objectNames = jdbcTemplate.queryForList(
+                "SELECT table_name FROM information_schema.tables WHERE table_schema = DATABASE() AND table_type = ?",
+                String.class,
+                tableType
+        );
+
+        String keyword = "VIEW".equals(tableType) ? "VIEW" : "TABLE";
+        for (String objectName : objectNames) {
+            jdbcTemplate.execute("DROP " + keyword + " IF EXISTS `" + escapeIdentifier(objectName) + "`");
+        }
+    }
+
+    private String escapeIdentifier(String value) {
+        return value.replace("`", "``");
     }
 
     private void validateBackupFileName(String fileName) {

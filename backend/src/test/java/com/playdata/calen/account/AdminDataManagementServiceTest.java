@@ -13,6 +13,7 @@ import com.playdata.calen.account.dto.AdminDataManagementResponse;
 import com.playdata.calen.account.service.AdminDataManagementService;
 import com.playdata.calen.account.service.CommandResult;
 import com.playdata.calen.account.service.LoginAttemptService;
+import com.playdata.calen.account.service.RestoreMaintenanceService;
 import com.playdata.calen.account.service.SystemCommandRunner;
 import com.playdata.calen.account.repository.AccountInviteRepository;
 import com.playdata.calen.account.repository.AppUserRepository;
@@ -47,6 +48,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.util.ReflectionTestUtils;
 
 @ExtendWith(MockitoExtension.class)
@@ -74,6 +76,7 @@ class AdminDataManagementServiceTest {
     @Mock private FamilyAlbumItemRepository familyAlbumItemRepository;
     @Mock private FamilyMediaAssetRepository familyMediaAssetRepository;
     @Mock private SystemCommandRunner commandRunner;
+    @Mock private JdbcTemplate jdbcTemplate;
 
     private AdminDataManagementService service;
     private Path tempDir;
@@ -103,7 +106,9 @@ class AdminDataManagementServiceTest {
                 familyAlbumItemRepository,
                 familyMediaAssetRepository,
                 commandRunner,
-                new ObjectMapper()
+                new ObjectMapper(),
+                jdbcTemplate,
+                new RestoreMaintenanceService()
         );
 
         tempDir = Files.createTempDirectory("admin-data-management-test");
@@ -182,6 +187,9 @@ class AdminDataManagementServiceTest {
         when(commandRunner.run(any()))
                 .thenReturn(new CommandResult(0, "", ""))
                 .thenReturn(new CommandResult(0, "", ""));
+        when(jdbcTemplate.queryForList(any(String.class), org.mockito.ArgumentMatchers.eq(String.class), any()))
+                .thenReturn(List.of())
+                .thenReturn(List.of());
 
         service.createManualBackup();
         service.restoreBackup("calen-2026-03-31-120000.sql.gz");
@@ -193,7 +201,7 @@ class AdminDataManagementServiceTest {
                         && "--config".equals(command.get(1))
                         && rcloneConfig.toString().equals(command.get(2))
                         && "copyto".equals(command.get(3))
-                        && command.get(4).contains("files")
+                        && command.get(4).contains(tempDir.toString())
                         && command.get(4).endsWith(".sql.gz")
                         && command.get(5).startsWith("db-backup:calen-db-backups/calen-")
                         && command.get(5).endsWith(".sql.gz")
@@ -205,14 +213,12 @@ class AdminDataManagementServiceTest {
                         && rcloneConfig.toString().equals(command.get(2))
                         && "copyto".equals(command.get(3))
                         && "db-backup:calen-db-backups/calen-2026-03-31-120000.sql.gz".equals(command.get(4))
-                        && (
-                            command.get(5).endsWith("restore-ui\\calen-2026-03-31-120000.sql.gz")
-                                || command.get(5).endsWith("restore-ui/calen-2026-03-31-120000.sql.gz")
-                        )
+                        && command.get(5).contains(tempDir.toString())
+                        && command.get(5).endsWith("calen-2026-03-31-120000.sql.gz")
         ));
         verify(commandRunner).runGzipImport(argThat(path ->
-                path.toString().endsWith("restore-ui\\calen-2026-03-31-120000.sql.gz")
-                        || path.toString().endsWith("restore-ui/calen-2026-03-31-120000.sql.gz")
+                path.toString().contains(tempDir.toString())
+                        && path.toString().endsWith("calen-2026-03-31-120000.sql.gz")
         ), any());
     }
 }

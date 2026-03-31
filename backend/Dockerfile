@@ -15,7 +15,7 @@ RUN ./gradlew --no-daemon clean bootWar
 FROM eclipse-temurin:17-jre-jammy
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends curl mariadb-client rclone \
+    && apt-get install -y --no-install-recommends curl mariadb-client rclone gosu \
     && rm -rf /var/lib/apt/lists/* \
     && groupadd --system spring \
     && useradd --system --gid spring --home-dir /app --shell /usr/sbin/nologin spring
@@ -23,14 +23,14 @@ RUN apt-get update \
 WORKDIR /app
 
 COPY --from=build /workspace/build/libs/*.war /app/app.war
+COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 
-RUN mkdir -p /app/uploads /app/.config/rclone /opt/calen-backup \
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh \
+    && mkdir -p /app/uploads /app/.config/rclone /app/.config/rclone-host /opt/calen-backup \
     && chown -R spring:spring /app /opt/calen-backup
 
 VOLUME ["/app/uploads"]
 
-USER spring:spring
-
 EXPOSE 8080
 
-ENTRYPOINT ["java", "-Duser.dir=/app", "-jar", "/app/app.war"]
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]

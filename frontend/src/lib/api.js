@@ -136,10 +136,51 @@ export function createAdminDataBackup() {
   })
 }
 
+export async function downloadAdminDataBackup() {
+  const csrfToken = await ensureCsrfToken()
+  const response = await fetch(`${API_BASE}/admin/data-management/backup/download`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: {
+      [CSRF_HEADER_NAME]: csrfToken,
+    },
+  })
+
+  if (!response.ok) {
+    let message = '?붿껌??泥섎━?섎뒗 以?臾몄젣媛 諛쒖깮?덉뒿?덈떎.'
+
+    try {
+      const body = await response.json()
+      message = body.message ?? message
+    } catch {
+      // Keep the generic message when the body is not JSON.
+    }
+
+    const error = new Error(message)
+    error.status = response.status
+    throw error
+  }
+
+  const disposition = response.headers.get('Content-Disposition') || ''
+  const fileNameMatch = disposition.match(/filename=\"?([^\";]+)\"?/)
+  const fileName = fileNameMatch?.[1] || 'calen-backup.sql.gz'
+  const blob = await response.blob()
+  return { blob, fileName }
+}
+
 export function restoreAdminDataBackup(fileName) {
   return request('/admin/data-management/restore', {
     method: 'POST',
     body: JSON.stringify({ fileName }),
+  })
+}
+
+export function restoreAdminUploadedBackup(file) {
+  const formData = new FormData()
+  formData.append('file', file)
+  return request('/admin/data-management/restore/upload', {
+    method: 'POST',
+    body: formData,
   })
 }
 

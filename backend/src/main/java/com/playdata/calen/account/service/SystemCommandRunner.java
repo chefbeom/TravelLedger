@@ -10,4 +10,6 @@ public interface SystemCommandRunner {
     void runDumpToGzip(List<String> command, Path outputFile);
 
     void runGzipImport(Path gzipFile, List<String> command);
+
+    void runSqlImport(Path sqlFile, List<String> command);
 }

@@ -32,6 +32,7 @@ import com.playdata.calen.travel.repository.TravelPlanRepository;
 import com.playdata.calen.travel.repository.TravelPlanShareRepository;
 import com.playdata.calen.travel.repository.TravelRouteSegmentRepository;
 import java.io.IOException;
+import java.io.InputStream;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.nio.file.Files;
@@ -52,6 +53,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.web.multipart.MultipartFile;
 
 @Service
 @RequiredArgsConstructor
@@ -114,6 +116,9 @@ public class AdminDataManagementService {
     private final ReentrantLock operationLock = new ReentrantLock();
     private final AtomicReference<String> runningOperation = new AtomicReference<>(DEFAULT_OPERATION_LABEL);
 
+    public record PreparedBackupDownload(Path path, String fileName, long sizeBytes) {
+    }
+
     public AdminDataManagementResponse getSnapshot() {
         List<AdminBackupFileResponse> backups = mergeBackupLists(loadCachedBackups(), listLocalBackups());
         String backupsError = null;
@@ -164,6 +169,23 @@ public class AdminDataManagementService {
         });
     }
 
+    public PreparedBackupDownload createDownloadableBackup() {
+        return runExclusive("backup", () -> {
+            DatabaseCommandTarget target = parseDataSourceUrl();
+            Path downloadDirectory = prepareOperationDirectory("backup-download");
+            Path outputFile = downloadDirectory.resolve(
+                    "calen-" + LocalDateTime.now(KST).format(BACKUP_FILE_FORMATTER) + ".sql.gz"
+            );
+
+            commandRunner.runDumpToGzip(buildDumpCommand(target), outputFile);
+            return new PreparedBackupDownload(
+                    outputFile,
+                    outputFile.getFileName().toString(),
+                    fileSize(outputFile)
+            );
+        });
+    }
+
     public void restoreBackup(String fileName) {
         validateBackupFileName(fileName);
         runExclusive("restore", () -> {
@@ -183,6 +205,42 @@ public class AdminDataManagementService {
             } finally {
                 restoreMaintenanceService.finish();
                 cleanupPath(downloadedFile);
+                cleanupPath(restoreDirectory);
+            }
+            return null;
+        });
+    }
+
+    public void restoreUploadedBackup(MultipartFile file) {
+        if (file == null || file.isEmpty()) {
+            throw new BadRequestException("복구할 SQL 파일을 선택해 주세요.");
+        }
+
+        String originalFileName = sanitizeUploadFileName(file.getOriginalFilename());
+        if (!originalFileName.toLowerCase().endsWith(".sql")) {
+            throw new BadRequestException("복구 업로드는 .sql 파일만 지원합니다.");
+        }
+
+        runExclusive("restore", () -> {
+            DatabaseCommandTarget target = parseDataSourceUrl();
+            Path restoreDirectory = prepareOperationDirectory("restore-upload");
+            Path uploadedFile = restoreDirectory.resolve("uploaded-backup.sql");
+
+            try (InputStream inputStream = file.getInputStream()) {
+                Files.copy(inputStream, uploadedFile);
+            } catch (IOException exception) {
+                cleanupPath(uploadedFile);
+                cleanupPath(restoreDirectory);
+                throw new BadRequestException("업로드한 SQL 파일을 저장하지 못했습니다.");
+            }
+
+            restoreMaintenanceService.start();
+            try {
+                clearCurrentDatabase();
+                commandRunner.runSqlImport(uploadedFile, buildImportCommand(target));
+            } finally {
+                restoreMaintenanceService.finish();
+                cleanupPath(uploadedFile);
                 cleanupPath(restoreDirectory);
             }
             return null;
@@ -703,6 +761,21 @@ public class AdminDataManagementService {
     private String resolveOperationMessage(String fallback, String stderr) {
         String normalized = stderr == null ? "" : stderr.trim();
         return normalized.isBlank() ? fallback : normalized;
+    }
+
+    public void cleanupPreparedBackup(PreparedBackupDownload preparedBackupDownload) {
+        if (preparedBackupDownload == null) {
+            return;
+        }
+        cleanupPath(preparedBackupDownload.path());
+        cleanupPath(preparedBackupDownload.path().getParent());
+    }
+
+    private String sanitizeUploadFileName(String fileName) {
+        if (fileName == null || fileName.isBlank()) {
+            return "uploaded-backup.sql";
+        }
+        return Path.of(fileName).getFileName().toString();
     }
 
     private record DatabaseCommandTarget(String host, int port, String database) {

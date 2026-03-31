@@ -71,6 +71,29 @@ public class DefaultSystemCommandRunner implements SystemCommandRunner {
         }
     }
 
+    @Override
+    public void runSqlImport(Path sqlFile, List<String> command) {
+        Process process = start(command);
+        ByteArrayOutputStream stderr = new ByteArrayOutputStream();
+        Thread stderrThread = copyAsync(process.getErrorStream(), stderr);
+        Thread stdoutThread = copyAsync(process.getInputStream(), OutputStream.nullOutputStream());
+
+        try (InputStream fileInput = Files.newInputStream(sqlFile);
+             OutputStream processInput = process.getOutputStream()) {
+            fileInput.transferTo(processInput);
+        } catch (IOException exception) {
+            process.destroyForcibly();
+            throw new BadRequestException("백업 SQL 파일을 복구 데이터베이스로 적용하지 못했습니다.");
+        }
+
+        join(stdoutThread);
+        join(stderrThread);
+        int exitCode = waitFor(process, command);
+        if (exitCode != 0) {
+            throw new BadRequestException(resolveProcessMessage("백업 SQL 복구에 실패했습니다.", stderr.toString(StandardCharsets.UTF_8)));
+        }
+    }
+
     private Process start(List<String> command) {
         try {
             return new ProcessBuilder(command).start();

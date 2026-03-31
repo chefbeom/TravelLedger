@@ -51,6 +51,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.util.ReflectionTestUtils;
 
 @ExtendWith(MockitoExtension.class)
@@ -262,6 +263,43 @@ class AdminDataManagementServiceTest {
         verify(commandRunner).runGzipImport(argThat(path ->
                 path.toString().contains(tempDir.toString())
                         && path.toString().endsWith("calen-2026-03-31-120000.sql.gz")
+        ), any());
+    }
+
+    @Test
+    void createDownloadableBackupProducesSqlGzipFileWithoutRcloneUpload() {
+        doAnswer(invocation -> {
+            Path outputFile = invocation.getArgument(1, Path.class);
+            Files.createDirectories(outputFile.getParent());
+            Files.writeString(outputFile, "backup");
+            return null;
+        }).when(commandRunner).runDumpToGzip(any(), any());
+
+        AdminDataManagementService.PreparedBackupDownload preparedBackup = service.createDownloadableBackup();
+
+        assertThat(preparedBackup.fileName()).endsWith(".sql.gz");
+        assertThat(Files.exists(preparedBackup.path())).isTrue();
+        verify(commandRunner).runDumpToGzip(any(), any());
+    }
+
+    @Test
+    void restoreUploadedBackupUsesPlainSqlImport() {
+        when(jdbcTemplate.queryForList(any(String.class), org.mockito.ArgumentMatchers.eq(String.class), any()))
+                .thenReturn(List.of())
+                .thenReturn(List.of());
+
+        MockMultipartFile file = new MockMultipartFile(
+                "file",
+                "restore.sql",
+                "application/sql",
+                "select 1;".getBytes()
+        );
+
+        service.restoreUploadedBackup(file);
+
+        verify(commandRunner).runSqlImport(argThat(path ->
+                path.toString().contains("restore-upload")
+                        && path.toString().endsWith("uploaded-backup.sql")
         ), any());
     }
 }

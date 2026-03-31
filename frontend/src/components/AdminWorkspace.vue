@@ -3,6 +3,7 @@ import { computed, onMounted, reactive } from 'vue'
 import {
   archiveAdminSupportInquiry,
   createAdminDataBackup,
+  downloadAdminDataBackup,
   deleteAdminSupportInquiry,
   fetchAdminAccessStatus,
   fetchAdminDataManagement,
@@ -11,6 +12,7 @@ import {
   fetchAdminSupportInquiries,
   replyAdminSupportInquiry,
   restoreAdminDataBackup,
+  restoreAdminUploadedBackup,
   unlockBlockedIp,
   updateAdminUserActive,
   verifyAdminAccess,
@@ -42,7 +44,10 @@ const state = reactive({
   dataManagementOpen: false,
   loadingDataManagement: false,
   creatingDataBackup: false,
+  downloadingDataBackup: false,
   restoringBackupFile: '',
+  restoringUploadedBackup: false,
+  restoreUploadFile: null,
   dataManagementError: '',
   dataManagement: null,
   recentLoginLogs: [],
@@ -407,6 +412,7 @@ async function openDataManagement() {
 function closeDataManagement() {
   state.dataManagementOpen = false
   state.dataManagementError = ''
+  state.restoreUploadFile = null
 }
 
 async function handleCreateDataBackup() {
@@ -423,6 +429,33 @@ async function handleCreateDataBackup() {
   } finally {
     state.creatingDataBackup = false
   }
+}
+
+async function handleDownloadDataBackup() {
+  state.downloadingDataBackup = true
+  state.dataManagementError = ''
+
+  try {
+    const { blob, fileName } = await downloadAdminDataBackup()
+    const url = window.URL.createObjectURL(blob)
+    const anchor = document.createElement('a')
+    anchor.href = url
+    anchor.download = fileName
+    document.body.appendChild(anchor)
+    anchor.click()
+    anchor.remove()
+    window.URL.revokeObjectURL(url)
+  } catch (error) {
+    if (!handleAdminAccessRequired(error)) {
+      state.dataManagementError = error.message
+    }
+  } finally {
+    state.downloadingDataBackup = false
+  }
+}
+
+function handleRestoreUploadSelection(event) {
+  state.restoreUploadFile = event.target.files?.[0] ?? null
 }
 
 async function handleRestoreDataBackup(backup) {
@@ -450,6 +483,35 @@ async function handleRestoreDataBackup(backup) {
     }
   } finally {
     state.restoringBackupFile = ''
+  }
+}
+
+async function handleRestoreUploadedBackup() {
+  if (!state.restoreUploadFile) {
+    return
+  }
+
+  const confirmed = window.confirm(
+    `업로드한 백업(${state.restoreUploadFile.name})으로 현재 데이터를 복구합니다. 현재 데이터는 덮어써지며, 복구 후에는 즉시 되돌릴 수 없습니다. 계속할까요?`,
+  )
+  if (!confirmed) {
+    return
+  }
+
+  state.restoringUploadedBackup = true
+  state.dataManagementError = ''
+
+  try {
+    await restoreAdminUploadedBackup(state.restoreUploadFile)
+    state.restoreUploadFile = null
+    await loadDataManagement()
+    await loadDashboard()
+  } catch (error) {
+    if (!handleAdminAccessRequired(error)) {
+      state.dataManagementError = error.message
+    }
+  } finally {
+    state.restoringUploadedBackup = false
   }
 }
 
@@ -539,6 +601,45 @@ onMounted(initializeAdminWorkspace)
             </div>
             <p v-else class="panel__empty">
               {{ state.loadingDataManagement ? '현재 데이터 통계를 불러오는 중입니다.' : '표시할 데이터 통계가 없습니다.' }}
+            </p>
+          </section>
+
+          <section class="panel panel--compact">
+            <div class="panel__header">
+              <div>
+                <h2>파일 백업/복구</h2>
+                <p>현재 데이터를 Google Drive 백업 형식인 `.sql.gz` 파일로 내려받고, 준비한 `.sql` 파일을 업로드해 현재 데이터에 복구 적용할 수 있습니다.</p>
+              </div>
+            </div>
+            <div class="admin-data-upload-row">
+              <button
+                class="button button--secondary"
+                type="button"
+                :disabled="state.downloadingDataBackup || state.dataManagement?.busy"
+                @click="handleDownloadDataBackup"
+              >
+                {{ state.downloadingDataBackup ? '백업 파일 준비 중...' : '현재 데이터 파일로 다운로드' }}
+              </button>
+              <label class="field admin-data-upload-field">
+                <span class="field__label">복구할 SQL 파일</span>
+                <input
+                  type="file"
+                  accept=".sql"
+                  :disabled="state.restoringUploadedBackup || state.dataManagement?.busy"
+                  @change="handleRestoreUploadSelection"
+                />
+              </label>
+              <button
+                class="button button--ghost"
+                type="button"
+                :disabled="!state.restoreUploadFile || state.restoringUploadedBackup || state.dataManagement?.busy"
+                @click="handleRestoreUploadedBackup"
+              >
+                {{ state.restoringUploadedBackup ? '업로드 복구 중...' : '업로드 파일로 복구' }}
+              </button>
+            </div>
+            <p v-if="state.restoreUploadFile" class="field__hint">
+              선택한 파일: {{ state.restoreUploadFile.name }}
             </p>
           </section>
 

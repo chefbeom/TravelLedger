@@ -1821,6 +1821,11 @@ button {
   padding: 0 4px;
 }
 
+.travel-memory-pin-picker__options {
+  width: 100%;
+  justify-content: flex-start;
+}
+
 .travel-batch-memory-summary {
   align-content: start;
 }

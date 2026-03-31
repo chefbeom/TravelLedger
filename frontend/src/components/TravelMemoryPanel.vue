@@ -1070,6 +1070,21 @@ function submitMemory() {
 
         <div class="travel-modal__body">
           <div class="travel-form-grid">
+            <label class="field field--full travel-memory-pin-picker">
+              <span class="field__label">핀 종류</span>
+              <div class="travel-map__toolbar-group travel-map__toolbar-group--wrap travel-memory-pin-picker__options">
+                <button
+                  v-for="preset in pinPresetOptions"
+                  :key="`editor-pin-${preset.key}`"
+                  class="travel-map__toolbar-button"
+                  :class="{ 'is-active': activePinPreset.key === preset.key }"
+                  type="button"
+                  @click="applyPinPreset(preset)"
+                >
+                  {{ preset.label }}
+                </button>
+              </div>
+            </label>
             <template v-if="hasMultiPhotoDrafts">
               <label class="field">
                 <span class="field__label">분류</span>

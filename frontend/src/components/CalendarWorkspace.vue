@@ -6,7 +6,6 @@ import { resolveRange, summarizeEntries } from '../lib/analytics'
 const CALENDAR_SCALE_KEY = 'calen-household-calendar-scale-preset'
 const CALENDAR_COLLAPSE_KEY = 'calen-household-calendar-collapsed'
 const CALENDAR_HIGHLIGHT_KEY = 'calen-household-calendar-highlight-mode'
-const CALENDAR_VIEWPORT_KEY = 'calen-household-calendar-viewport-preset'
 const DEFAULT_CALENDAR_HIGHLIGHT_MODE = 'net'
 
 const calendarScalePresets = [
@@ -20,11 +19,11 @@ const calendarDisplayModes = [
   { key: 'fit', label: '내 화면에 맞추기' },
 ]
 
-const calendarViewportPresets = [
-  { key: 'auto', label: '자동', width: null },
-  { key: 'hd', label: 'HD', width: 1280 },
-  { key: 'fhd', label: 'FHD', width: 1920 },
-  { key: 'qhd', label: 'QHD', width: 2560 },
+const calendarWeekModes = [
+  { key: 'month', label: '전체 달' },
+  { key: 'prev', label: '-1주' },
+  { key: 'current', label: '이번 주' },
+  { key: 'next', label: '+1주' },
 ]
 
 const calendarHighlightModes = [
@@ -173,7 +172,7 @@ const emit = defineEmits([
 const selectedDate = ref(props.anchorDate)
 const selectedDaySort = ref('ASC')
 const calendarScalePreset = ref('default')
-const calendarViewportPreset = ref('auto')
+const calendarWeekMode = ref('month')
 const calendarHighlightMode = ref(DEFAULT_CALENDAR_HIGHLIGHT_MODE)
 const isCalendarCollapsed = ref(false)
 const isAggregateEditMode = ref(false)
@@ -217,12 +216,31 @@ const yearOptions = computed(() => {
 
 const isAmountOnlyCalendar = computed(() => false)
 const isFitCalendar = computed(() => calendarScalePreset.value === 'fit')
-const currentViewportPresetLabel = computed(
-  () => calendarViewportPresets.find((item) => item.key === calendarViewportPreset.value)?.label ?? '자동',
-)
+const todayIso = getLocalIsoDate(new Date())
+const currentWeekReferenceDate = computed(() => (
+  props.anchorDate.slice(0, 7) === todayIso.slice(0, 7) ? todayIso : props.anchorDate
+))
+const referenceWeekIndex = computed(() => {
+  const byCurrentDate = props.calendarWeeks.findIndex((week) => week.some((day) => day.date === currentWeekReferenceDate.value))
+  if (byCurrentDate >= 0) {
+    return byCurrentDate
+  }
+
+  const byAnchorDate = props.calendarWeeks.findIndex((week) => week.some((day) => day.date === props.anchorDate))
+  return byAnchorDate >= 0 ? byAnchorDate : 0
+})
+const displayedCalendarWeeks = computed(() => {
+  if (calendarWeekMode.value === 'month') {
+    return props.calendarWeeks
+  }
+
+  const weekOffset = calendarWeekMode.value === 'prev' ? -1 : calendarWeekMode.value === 'next' ? 1 : 0
+  const nextIndex = clamp(referenceWeekIndex.value + weekOffset, 0, Math.max(props.calendarWeeks.length - 1, 0))
+  return props.calendarWeeks[nextIndex] ? [props.calendarWeeks[nextIndex]] : props.calendarWeeks
+})
 
 const calendarViewStyle = computed(() => {
-  const metrics = getCalendarDisplayMetrics(calendarScalePreset.value, calendarShellWidth.value, calendarViewportPreset.value)
+  const metrics = getCalendarDisplayMetrics(calendarScalePreset.value, calendarShellWidth.value)
   if (metrics.responsive) {
     return {
       '--calendar-min-width': metrics.minWidth,
@@ -297,17 +315,32 @@ watch(calendarScalePreset, (value) => {
   }
 })
 
-watch(calendarViewportPreset, (value) => {
-  if (typeof window !== 'undefined') {
-    window.localStorage.setItem(CALENDAR_VIEWPORT_KEY, value)
-  }
-})
-
 watch(calendarHighlightMode, (value) => {
   if (typeof window !== 'undefined') {
     window.localStorage.setItem(CALENDAR_HIGHLIGHT_KEY, value)
   }
 })
+
+watch([calendarWeekMode, displayedCalendarWeeks], () => {
+  if (calendarWeekMode.value === 'month') {
+    return
+  }
+
+  const visibleDates = displayedCalendarWeeks.value.flat().map((day) => day.date)
+  if (visibleDates.includes(selectedDate.value)) {
+    return
+  }
+
+  const nextDate = displayedCalendarWeeks.value
+    .flat()
+    .find((day) => day.date === currentWeekReferenceDate.value)?.date
+    ?? displayedCalendarWeeks.value.flat().find((day) => day.inCurrentMonth)?.date
+    ?? displayedCalendarWeeks.value.flat()[0]?.date
+
+  if (nextDate) {
+    selectedDate.value = nextDate
+  }
+}, { immediate: true })
 
 watch(
   () => props.paymentMethods,
@@ -361,14 +394,9 @@ onMounted(() => {
   const savedScale = window.localStorage.getItem(CALENDAR_SCALE_KEY)
   const savedCollapsed = window.localStorage.getItem(CALENDAR_COLLAPSE_KEY)
   const savedHighlight = window.localStorage.getItem(CALENDAR_HIGHLIGHT_KEY)
-  const savedViewport = window.localStorage.getItem(CALENDAR_VIEWPORT_KEY)
 
   if (savedScale) {
     calendarScalePreset.value = normalizePresetKey(calendarDisplayModes, savedScale, 'default')
-  }
-
-  if (savedViewport && calendarViewportPresets.some((item) => item.key === savedViewport)) {
-    calendarViewportPreset.value = savedViewport
   }
 
   if (savedHighlight && calendarHighlightModes.some((item) => item.key === savedHighlight)) {
@@ -461,15 +489,19 @@ function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value))
 }
 
-function getCalendarDisplayMetrics(mode, width, viewportPresetKey) {
+function getLocalIsoDate(date) {
+  const year = date.getFullYear()
+  const month = `${date.getMonth() + 1}`.padStart(2, '0')
+  const day = `${date.getDate()}`.padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+function getCalendarDisplayMetrics(mode, width) {
   if (mode === 'fit') {
     const viewportWidth = typeof window !== 'undefined' ? window.innerWidth : 1280
     const safeWidth = Math.max(width || viewportWidth || 1280, 320)
-    const referenceWidth = calendarViewportPresets.find((item) => item.key === viewportPresetKey)?.width || safeWidth
-    const actualScale = clamp(safeWidth / 1440, 0.78, 1.02)
-    const presetScale = clamp(1920 / referenceWidth, 0.74, 1.24)
-    const fitScale = clamp(actualScale * presetScale, 0.72, 1.24)
-    const estimatedDayWidth = clamp(((safeWidth - 32) / 7) * fitScale, 62, 160)
+    const fitScale = clamp(safeWidth / 1440, 0.74, 1.04)
+    const estimatedDayWidth = clamp(((safeWidth - 32) / 7) * fitScale, 62, 156)
     const dayHeight = clamp(Math.round(estimatedDayWidth * 1.02), 100, 148)
     const dayPadding = clamp(Math.round(estimatedDayWidth * 0.08), 7, 12)
     const gap = clamp(Math.round(estimatedDayWidth * 0.065), 4, 10)
@@ -1155,17 +1187,17 @@ defineExpose({
           </div>
         </div>
         <div class="calendar-size-toolbar__block">
-          <span class="calendar-size-toolbar__label">기준 화면</span>
+          <span class="calendar-size-toolbar__label">주차 보기</span>
           <div class="calendar-size-toggle">
             <button
-              v-for="preset in calendarViewportPresets"
-              :key="preset.key"
+              v-for="mode in calendarWeekModes"
+              :key="mode.key"
               type="button"
               class="calendar-size-toggle__button"
-              :class="{ 'is-active': calendarViewportPreset === preset.key }"
-              @click="calendarViewportPreset = preset.key"
+              :class="{ 'is-active': calendarWeekMode === mode.key }"
+              @click="calendarWeekMode = mode.key"
             >
-              {{ preset.label }}
+              {{ mode.label }}
             </button>
           </div>
         </div>
@@ -1186,7 +1218,7 @@ defineExpose({
         </div>
         <strong class="calendar-size-toolbar__hint">
           현재 {{ calendarDisplayModes.find((item) => item.key === calendarScalePreset)?.label }}
-          <template v-if="isFitCalendar"> · {{ currentViewportPresetLabel }} 기준</template>
+          <template v-if="calendarWeekMode !== 'month'"> · {{ calendarWeekModes.find((item) => item.key === calendarWeekMode)?.label }}</template>
         </strong>
       </div>
 
@@ -1197,7 +1229,7 @@ defineExpose({
           </div>
 
           <div class="calendar__weeks">
-            <div v-for="(week, weekIndex) in calendarWeeks" :key="`week-${weekIndex}`" class="calendar__week">
+            <div v-for="(week, weekIndex) in displayedCalendarWeeks" :key="`week-${weekIndex}`" class="calendar__week">
               <article
                 v-for="day in week"
                 :key="day.date"

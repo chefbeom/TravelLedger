@@ -1,6 +1,7 @@
 package com.playdata.calen.travel.web;
 
 import com.playdata.calen.account.security.AppUserPrincipal;
+import com.playdata.calen.common.media.ImageThumbnailService;
 import com.playdata.calen.travel.domain.TravelMediaType;
 import com.playdata.calen.travel.dto.TravelBudgetItemRequest;
 import com.playdata.calen.travel.dto.TravelBudgetItemResponse;
@@ -53,6 +54,7 @@ import org.springframework.web.multipart.MultipartFile;
 public class TravelController {
 
     private final TravelService travelService;
+    private final ImageThumbnailService imageThumbnailService;
 
     @GetMapping("/plans")
     public List<TravelPlanSummaryResponse> getPlans(@AuthenticationPrincipal AppUserPrincipal currentUser) {
@@ -312,48 +314,58 @@ public class TravelController {
     @GetMapping("/media/{mediaId}/content")
     public ResponseEntity<?> downloadMedia(
             @AuthenticationPrincipal AppUserPrincipal currentUser,
-            @PathVariable Long mediaId
+            @PathVariable Long mediaId,
+            @RequestParam(name = "thumbnail", defaultValue = "false") boolean thumbnail,
+            @RequestParam(name = "w", required = false) Integer width
     ) {
         TravelService.MediaDownload download = travelService.getMediaDownload(currentUser.userId(), mediaId);
-        String encodedFileName = URLEncoder.encode(download.fileName(), StandardCharsets.UTF_8).replace("+", "%20");
-        ContentDisposition disposition = "application/pdf".equalsIgnoreCase(download.contentType())
-                ? ContentDisposition.attachment().filename(encodedFileName).build()
-                : ContentDisposition.inline().filename(encodedFileName).build();
-        return ResponseEntity.ok()
-                .contentType(MediaType.parseMediaType(download.contentType()))
-                .header(HttpHeaders.CONTENT_DISPOSITION, disposition.toString())
-                .header("X-Content-Type-Options", "nosniff")
-                .body(download.resource());
+        return buildMediaResponse(download, thumbnail, width);
     }
 
     @GetMapping("/public/media/{mediaId}/content")
     public ResponseEntity<?> downloadSharedMedia(
             @PathVariable Long mediaId,
-            @RequestParam("token") String token
+            @RequestParam("token") String token,
+            @RequestParam(name = "thumbnail", defaultValue = "false") boolean thumbnail,
+            @RequestParam(name = "w", required = false) Integer width
     ) {
         TravelService.MediaDownload download = travelService.getSharedMediaDownload(mediaId, token);
-        String encodedFileName = URLEncoder.encode(download.fileName(), StandardCharsets.UTF_8).replace("+", "%20");
-        ContentDisposition disposition = "application/pdf".equalsIgnoreCase(download.contentType())
-                ? ContentDisposition.attachment().filename(encodedFileName).build()
-                : ContentDisposition.inline().filename(encodedFileName).build();
-        return ResponseEntity.ok()
-                .contentType(MediaType.parseMediaType(download.contentType()))
-                .header(HttpHeaders.CONTENT_DISPOSITION, disposition.toString())
-                .header("X-Content-Type-Options", "nosniff")
-                .body(download.resource());
+        return buildMediaResponse(download, thumbnail, width);
     }
 
     @GetMapping("/shared-exhibits/{shareId}/media/{mediaId}/content")
     public ResponseEntity<?> downloadSharedExhibitMedia(
             @AuthenticationPrincipal AppUserPrincipal currentUser,
             @PathVariable Long shareId,
-            @PathVariable Long mediaId
+            @PathVariable Long mediaId,
+            @RequestParam(name = "thumbnail", defaultValue = "false") boolean thumbnail,
+            @RequestParam(name = "w", required = false) Integer width
     ) {
         TravelService.MediaDownload download = travelService.getSharedExhibitMediaDownload(currentUser.userId(), shareId, mediaId);
+        return buildMediaResponse(download, thumbnail, width);
+    }
+
+    private ResponseEntity<?> buildMediaResponse(TravelService.MediaDownload download, boolean thumbnail, Integer width) {
         String encodedFileName = URLEncoder.encode(download.fileName(), StandardCharsets.UTF_8).replace("+", "%20");
         ContentDisposition disposition = "application/pdf".equalsIgnoreCase(download.contentType())
                 ? ContentDisposition.attachment().filename(encodedFileName).build()
                 : ContentDisposition.inline().filename(encodedFileName).build();
+
+        if (thumbnail) {
+            return imageThumbnailService.createThumbnail(download.resource(), download.contentType(), width)
+                    .<ResponseEntity<?>>map(preview -> ResponseEntity.ok()
+                            .contentType(MediaType.parseMediaType(preview.contentType()))
+                            .header(HttpHeaders.CONTENT_DISPOSITION, disposition.toString())
+                            .header("Cache-Control", "public, max-age=3600")
+                            .header("X-Content-Type-Options", "nosniff")
+                            .body(preview.bytes()))
+                    .orElseGet(() -> ResponseEntity.ok()
+                            .contentType(MediaType.parseMediaType(download.contentType()))
+                            .header(HttpHeaders.CONTENT_DISPOSITION, disposition.toString())
+                            .header("X-Content-Type-Options", "nosniff")
+                            .body(download.resource()));
+        }
+
         return ResponseEntity.ok()
                 .contentType(MediaType.parseMediaType(download.contentType()))
                 .header(HttpHeaders.CONTENT_DISPOSITION, disposition.toString())

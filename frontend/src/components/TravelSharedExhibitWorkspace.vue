@@ -1,5 +1,6 @@
 <script setup>
 import { computed } from 'vue'
+import { buildThumbnailUrl } from '../lib/mediaPreview'
 import { formatDate, formatDateTime } from '../lib/uiFormat'
 import TravelOverviewWorkspace from './TravelOverviewWorkspace.vue'
 
@@ -123,7 +124,7 @@ function isSelectedExhibit(exhibitId) {
 
       <div v-if="photoCards.length" class="travel-media-grid travel-media-grid--gallery">
         <article v-for="item in photoCards" :key="item.id" class="travel-media-card">
-          <img v-if="item.contentUrl" :src="item.contentUrl" :alt="item.title" class="travel-media-thumb" />
+          <img v-if="item.contentUrl" :src="buildThumbnailUrl(item.contentUrl)" :alt="item.title" class="travel-media-thumb" />
           <div v-else class="travel-media-thumb travel-media-thumb--receipt">사진 없음</div>
           <div class="travel-media-copy">
             <div class="travel-media-tags">

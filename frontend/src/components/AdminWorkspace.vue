@@ -1,5 +1,6 @@
 <script setup>
 import { computed, onMounted, reactive } from 'vue'
+import { buildThumbnailUrl } from '../lib/mediaPreview'
 import {
   archiveAdminSupportInquiry,
   createAdminDataBackup,
@@ -922,7 +923,7 @@ onMounted(initializeAdminWorkspace)
               </a>
               <img
                 v-if="selectedSupportInquiry.attachmentContentType?.startsWith('image/')"
-                :src="selectedSupportInquiry.attachmentUrl"
+                :src="buildThumbnailUrl(selectedSupportInquiry.attachmentUrl)"
                 :alt="selectedSupportInquiry.attachmentFileName || selectedSupportInquiry.title"
                 class="support-inquiry-preview"
               />

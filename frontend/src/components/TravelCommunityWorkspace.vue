@@ -1,5 +1,6 @@
 <script setup>
 import { computed } from 'vue'
+import { buildThumbnailUrl } from '../lib/mediaPreview'
 import { formatDateTime } from '../lib/uiFormat'
 import TravelMapPanel from './TravelMapPanel.vue'
 
@@ -111,7 +112,7 @@ const communityMarkers = computed(() =>
 
       <div v-if="communityFeed.length" class="travel-media-grid travel-media-grid--gallery">
         <article v-for="item in communityFeed" :key="item.memoryId" class="travel-media-card">
-          <img v-if="item.heroPhotoUrl" :src="item.heroPhotoUrl" :alt="item.title" class="travel-media-thumb" />
+          <img v-if="item.heroPhotoUrl" :src="buildThumbnailUrl(item.heroPhotoUrl)" :alt="item.title" class="travel-media-thumb" />
           <div v-else class="travel-media-thumb travel-media-thumb--receipt">사진 없음</div>
           <div class="travel-media-copy">
             <div class="travel-media-tags">

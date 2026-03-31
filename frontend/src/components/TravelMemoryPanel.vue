@@ -1,5 +1,6 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { buildThumbnailUrl, createLocalImagePreview } from '../lib/mediaPreview'
 import { extractPhotoMetadata, reverseGeocode } from '../lib/photoMetadata'
 import { formatDate, formatDateTime, toIsoDate, toNullableNumber, todayIso } from '../lib/uiFormat'
 import TravelMapPanel from './TravelMapPanel.vue'
@@ -447,7 +448,7 @@ async function buildMultiPhotoDrafts(files) {
       id: `${file.name}-${file.lastModified}-${index}`,
       file,
       fileName: file.name,
-      previewUrl: URL.createObjectURL(file),
+      previewUrl: await createLocalImagePreview(file),
       title: '',
       suggestedTitle: extractDraftTitleSeed(file.name),
       memoryDate: metadata?.date || form.memoryDate || resolveDefaultMemoryDate(),
@@ -888,7 +889,7 @@ function submitMemory() {
           :key="`photo-memory-${memory.id}`"
           class="travel-media-card travel-media-card--compact"
         >
-          <img v-if="memory.heroPhoto?.contentUrl" :src="memory.heroPhoto.contentUrl" :alt="memory.heroPhoto.originalFileName" class="travel-media-thumb" />
+          <img v-if="memory.heroPhoto?.contentUrl" :src="buildThumbnailUrl(memory.heroPhoto.contentUrl)" :alt="memory.heroPhoto.originalFileName" class="travel-media-thumb" />
           <div v-else class="travel-media-thumb travel-media-thumb--receipt">사진 없음</div>
           <div class="travel-media-copy">
             <div class="travel-media-tags">
@@ -1258,7 +1259,7 @@ function submitMemory() {
 
           <div v-if="editingPhotos.length" class="travel-media-grid">
             <article v-for="media in editingPhotos" :key="media.id" class="travel-media-card">
-              <img :src="media.contentUrl" :alt="media.originalFileName" class="travel-media-thumb" />
+              <img :src="buildThumbnailUrl(media.contentUrl)" :alt="media.originalFileName" class="travel-media-thumb" />
               <div class="travel-media-copy">
                 <strong>{{ media.caption || media.originalFileName }}</strong>
                 <small>{{ [media.country, media.region, media.placeName].filter(Boolean).join(' / ') || '-' }}</small>

@@ -1,5 +1,6 @@
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
+import { buildThumbnailUrl } from '../lib/mediaPreview'
 import {
   changeProfilePassword,
   changeProfileSecondaryPin,
@@ -359,7 +360,7 @@ onMounted(() => {
               </a>
               <img
                 v-if="inquiry.attachmentContentType?.startsWith('image/')"
-                :src="inquiry.attachmentUrl"
+                :src="buildThumbnailUrl(inquiry.attachmentUrl)"
                 :alt="inquiry.attachmentFileName || inquiry.title"
                 class="support-inquiry-preview"
               />

@@ -1,6 +1,7 @@
 package com.playdata.calen.familyalbum.web;
 
 import com.playdata.calen.account.security.AppUserPrincipal;
+import com.playdata.calen.common.media.ImageThumbnailService;
 import com.playdata.calen.familyalbum.dto.FamilyAlbumBootstrapResponse;
 import com.playdata.calen.familyalbum.dto.FamilyAlbumCreateRequest;
 import com.playdata.calen.familyalbum.dto.FamilyAlbumResponse;
@@ -34,6 +35,7 @@ import org.springframework.web.multipart.MultipartFile;
 public class FamilyAlbumController {
 
     private final FamilyAlbumService familyAlbumService;
+    private final ImageThumbnailService imageThumbnailService;
 
     @GetMapping("/bootstrap")
     public FamilyAlbumBootstrapResponse getBootstrap(@AuthenticationPrincipal AppUserPrincipal currentUser) {
@@ -77,10 +79,28 @@ public class FamilyAlbumController {
     @GetMapping("/media/{mediaId}/content")
     public ResponseEntity<?> downloadMedia(
             @AuthenticationPrincipal AppUserPrincipal currentUser,
-            @PathVariable Long mediaId
+            @PathVariable Long mediaId,
+            @RequestParam(name = "thumbnail", defaultValue = "false") boolean thumbnail,
+            @RequestParam(name = "w", required = false) Integer width
     ) {
         FamilyAlbumService.MediaDownload download = familyAlbumService.getMediaDownload(currentUser.userId(), mediaId);
         String encodedFileName = URLEncoder.encode(download.fileName(), StandardCharsets.UTF_8).replace("+", "%20");
+
+        if (thumbnail) {
+            return imageThumbnailService.createThumbnail(download.resource(), download.contentType(), width)
+                    .<ResponseEntity<?>>map(preview -> ResponseEntity.ok()
+                            .contentType(MediaType.parseMediaType(preview.contentType()))
+                            .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.inline().filename(encodedFileName).build().toString())
+                            .header("Cache-Control", "public, max-age=3600")
+                            .header("X-Content-Type-Options", "nosniff")
+                            .body(preview.bytes()))
+                    .orElseGet(() -> ResponseEntity.ok()
+                            .contentType(MediaType.parseMediaType(download.contentType()))
+                            .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.inline().filename(encodedFileName).build().toString())
+                            .header("X-Content-Type-Options", "nosniff")
+                            .body(download.resource()));
+        }
+
         return ResponseEntity.ok()
                 .contentType(MediaType.parseMediaType(download.contentType()))
                 .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.inline().filename(encodedFileName).build().toString())

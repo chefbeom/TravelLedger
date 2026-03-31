@@ -7,6 +7,7 @@ import {
   searchFamilyUsers,
   uploadFamilyMedia,
 } from '../lib/api'
+import { buildThumbnailUrl } from '../lib/mediaPreview'
 
 const timestampFormatter = new Intl.DateTimeFormat('ko-KR', {
   year: 'numeric',
@@ -499,7 +500,7 @@ onMounted(() => {
           </div>
           <div class="family-media-grid family-media-grid--compact">
             <article v-for="media in selectedAlbumMedia" :key="`album-${media.id}`" class="family-media-card family-media-card--album">
-              <img v-if="media.mediaType === 'PHOTO'" :src="media.contentUrl" :alt="media.originalFileName" class="family-media-card__preview" />
+              <img v-if="media.mediaType === 'PHOTO'" :src="buildThumbnailUrl(media.contentUrl)" :alt="media.originalFileName" class="family-media-card__preview" />
               <video v-else class="family-media-card__preview" controls preload="metadata" playsinline>
                 <source :src="media.contentUrl" :type="media.contentType" />
               </video>
@@ -521,7 +522,7 @@ onMounted(() => {
             <button class="family-media-card__select" type="button" @click="toggleMediaSelection(media.id)">
               {{ isSelectedMedia(media.id) ? '선택됨' : '앨범에 담기' }}
             </button>
-            <img v-if="media.mediaType === 'PHOTO'" :src="media.contentUrl" :alt="media.originalFileName" class="family-media-card__preview" />
+            <img v-if="media.mediaType === 'PHOTO'" :src="buildThumbnailUrl(media.contentUrl)" :alt="media.originalFileName" class="family-media-card__preview" />
             <video v-else class="family-media-card__preview" controls preload="metadata" playsinline>
               <source :src="media.contentUrl" :type="media.contentType" />
             </video>

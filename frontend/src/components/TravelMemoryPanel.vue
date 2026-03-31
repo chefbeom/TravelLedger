@@ -189,6 +189,16 @@ const filteredMemoryRecords = computed(() =>
     }),
 )
 
+const MEMORY_RECORD_PAGE_SIZE = 10
+const memoryRecordPage = ref(0)
+const memoryRecordPageCount = computed(() =>
+  Math.max(1, Math.ceil(filteredMemoryRecords.value.length / MEMORY_RECORD_PAGE_SIZE)),
+)
+const pagedFilteredMemoryRecords = computed(() => {
+  const start = memoryRecordPage.value * MEMORY_RECORD_PAGE_SIZE
+  return filteredMemoryRecords.value.slice(start, start + MEMORY_RECORD_PAGE_SIZE)
+})
+
 const photoBackedMemories = computed(() =>
   scopedMemoryRecords.value
     .map((item) => {
@@ -310,6 +320,20 @@ watch(
     isEditorOpen.value = false
   },
 )
+
+watch(
+  () => [activeDayDate.value, locationFilter.country, locationFilter.region],
+  () => {
+    memoryRecordPage.value = 0
+  },
+)
+
+watch(filteredMemoryRecords, (items) => {
+  const maxPage = Math.max(0, Math.ceil(items.length / MEMORY_RECORD_PAGE_SIZE) - 1)
+  if (memoryRecordPage.value > maxPage) {
+    memoryRecordPage.value = maxPage
+  }
+})
 
 watch(
   tripDays,
@@ -1009,7 +1033,7 @@ function submitMemory() {
             </tr>
           </thead>
           <tbody>
-            <tr v-for="memory in filteredMemoryRecords" :key="memory.id">
+            <tr v-for="memory in pagedFilteredMemoryRecords" :key="memory.id">
               <td>{{ formatDateTime(memory.memoryDate, memory.memoryTime) }}</td>
               <td>{{ memory.category }}</td>
               <td>{{ memory.title }}</td>
@@ -1026,6 +1050,25 @@ function submitMemory() {
             </tr>
           </tbody>
         </table>
+      </div>
+      <div v-if="filteredMemoryRecords.length > MEMORY_RECORD_PAGE_SIZE" class="panel__actions">
+        <button
+          class="button button--ghost"
+          type="button"
+          :disabled="memoryRecordPage <= 0"
+          @click="memoryRecordPage -= 1"
+        >
+          이전
+        </button>
+        <span>{{ memoryRecordPage + 1 }} / {{ memoryRecordPageCount }}</span>
+        <button
+          class="button button--ghost"
+          type="button"
+          :disabled="memoryRecordPage + 1 >= memoryRecordPageCount"
+          @click="memoryRecordPage += 1"
+        >
+          다음
+        </button>
       </div>
     </section>
 

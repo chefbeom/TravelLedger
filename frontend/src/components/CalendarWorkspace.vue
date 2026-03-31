@@ -1,5 +1,5 @@
 <script setup>
-import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { formatCompactNumber } from '../lib/format'
 import { resolveRange, summarizeEntries } from '../lib/analytics'
 
@@ -10,6 +10,12 @@ const calendarScalePresets = [
   { key: 'compact', label: '좁게', value: 74 },
   { key: 'default', label: '기본', value: 112 },
   { key: 'expanded', label: '넓게', value: 150 },
+]
+
+const calendarDisplayModes = [
+  { key: 'default', label: '지금처럼 보기' },
+  { key: 'fit', label: '내 화면에 맞추기' },
+  { key: 'amount-only', label: '사용금액만 보기' },
 ]
 
 const aggregateWidgetKinds = [
@@ -156,7 +162,10 @@ const isCalendarCollapsed = ref(false)
 const isAggregateEditMode = ref(false)
 const quickEntryPanelRef = ref(null)
 const ledgerSheetRef = ref(null)
+const calendarShellRef = ref(null)
 const aggregateWidgetDraftConfigs = ref(createDefaultAggregateConfigs())
+const calendarShellWidth = ref(0)
+let calendarResizeObserver = null
 
 const maxDailyExpense = computed(() => {
   const expenses = props.calendarWeeks.flat().map((day) => Number(day.summary?.expense ?? 0))
@@ -179,14 +188,15 @@ const yearOptions = computed(() => {
   return Array.from({ length: 13 }, (_, index) => baseYear - 6 + index)
 })
 
-const calendarScaleValue = computed(() => getPresetValue(calendarScalePresets, calendarScalePreset.value, 'default'))
+const isAmountOnlyCalendar = computed(() => calendarScalePreset.value === 'amount-only')
 
 const calendarViewStyle = computed(() => {
-  const zoom = calendarScaleValue.value / 100
+  const metrics = getCalendarDisplayMetrics(calendarScalePreset.value, calendarShellWidth.value)
+  const zoom = metrics.zoom
   return {
     '--calendar-gap': `${Math.round(10 * zoom)}px`,
     '--calendar-week-gap': `${Math.round(8 * zoom)}px`,
-    '--calendar-day-min-height': `${Math.round(146 * zoom)}px`,
+    '--calendar-day-min-height': `${Math.round(metrics.minHeight)}px`,
     '--calendar-day-padding': `${Math.round(12 * zoom)}px`,
     '--calendar-expense-total-size': `${Math.max(1, 1.18 * zoom).toFixed(2)}rem`,
     '--calendar-metric-size': `${Math.max(0.72, 0.8 * zoom).toFixed(2)}rem`,
@@ -262,6 +272,26 @@ watch(isCalendarCollapsed, (value) => {
   if (typeof window !== 'undefined') {
     window.localStorage.setItem(CALENDAR_COLLAPSE_KEY, value ? 'true' : 'false')
   }
+
+  if (value) {
+    if (calendarResizeObserver) {
+      calendarResizeObserver.disconnect()
+    }
+    return
+  }
+
+  nextTick(() => {
+    updateCalendarShellWidth()
+
+    if (typeof ResizeObserver !== 'undefined' && calendarShellRef.value) {
+      if (!calendarResizeObserver) {
+        calendarResizeObserver = new ResizeObserver(() => {
+          updateCalendarShellWidth()
+        })
+      }
+      calendarResizeObserver.observe(calendarShellRef.value)
+    }
+  })
 })
 
 onMounted(() => {
@@ -273,11 +303,29 @@ onMounted(() => {
   const savedCollapsed = window.localStorage.getItem(CALENDAR_COLLAPSE_KEY)
 
   if (savedScale) {
-    calendarScalePreset.value = normalizePresetKey(calendarScalePresets, savedScale, 'default')
+    calendarScalePreset.value = normalizePresetKey(calendarDisplayModes, savedScale, 'default')
   }
 
   if (savedCollapsed) {
     isCalendarCollapsed.value = savedCollapsed === 'true'
+  }
+
+  nextTick(() => {
+    updateCalendarShellWidth()
+
+    if (typeof ResizeObserver !== 'undefined' && calendarShellRef.value) {
+      calendarResizeObserver = new ResizeObserver(() => {
+        updateCalendarShellWidth()
+      })
+      calendarResizeObserver.observe(calendarShellRef.value)
+    }
+  })
+})
+
+onBeforeUnmount(() => {
+  if (calendarResizeObserver) {
+    calendarResizeObserver.disconnect()
+    calendarResizeObserver = null
   }
 })
 
@@ -310,6 +358,14 @@ function getPresetValue(presets, key, fallbackKey) {
 }
 
 function normalizePresetKey(presets, value, fallbackKey) {
+  if (value === 'compact') {
+    return 'amount-only'
+  }
+
+  if (value === 'expanded') {
+    return 'fit'
+  }
+
   const direct = presets.find((item) => item.key === value)
   if (direct) {
     return direct.key
@@ -317,11 +373,52 @@ function normalizePresetKey(presets, value, fallbackKey) {
 
   const numeric = Number(value)
   if (Number.isFinite(numeric)) {
-    const nearest = presets.slice().sort((left, right) => Math.abs(left.value - numeric) - Math.abs(right.value - numeric))[0]
-    return nearest?.key || fallbackKey
+    if (numeric <= 82) {
+      return 'amount-only'
+    }
+    if (numeric >= 135) {
+      return 'fit'
+    }
+    return 'default'
   }
 
   return fallbackKey
+}
+
+function clamp(value, min, max) {
+  return Math.min(max, Math.max(min, value))
+}
+
+function getCalendarDisplayMetrics(mode, width) {
+  if (mode === 'amount-only') {
+    return {
+      zoom: 0.88,
+      minHeight: 122,
+    }
+  }
+
+  if (mode === 'fit') {
+    const baseWidth = width || 1120
+    const estimatedDayWidth = clamp((baseWidth - 48) / 7, 86, 178)
+    const zoom = clamp(estimatedDayWidth / 150, 0.78, 1.06)
+    return {
+      zoom,
+      minHeight: clamp(Math.round(estimatedDayWidth * 1.02), 116, 154),
+    }
+  }
+
+  return {
+    zoom: 1.12,
+    minHeight: 146,
+  }
+}
+
+function updateCalendarShellWidth() {
+  if (!calendarShellRef.value) {
+    return
+  }
+
+  calendarShellWidth.value = calendarShellRef.value.clientWidth || 0
 }
 
 function createDefaultAggregateConfigs() {
@@ -783,7 +880,13 @@ defineExpose({
       </section>
     </div>
 
-    <section class="panel household-calendar-panel household-calendar-layout" :style="calendarViewStyle">
+    <section
+      :class="[
+        'panel household-calendar-panel household-calendar-layout',
+        { 'household-calendar-layout--amount-only': isAmountOnlyCalendar },
+      ]"
+      :style="calendarViewStyle"
+    >
       <div class="panel__header">
         <div>
           <h2>{{ monthLabel }}</h2>
@@ -829,7 +932,7 @@ defineExpose({
           <span class="calendar-size-toolbar__label">달력 크기</span>
           <div class="calendar-size-toggle">
             <button
-              v-for="preset in calendarScalePresets"
+              v-for="preset in calendarDisplayModes"
               :key="preset.key"
               type="button"
               class="calendar-size-toggle__button"
@@ -840,10 +943,10 @@ defineExpose({
             </button>
           </div>
         </div>
-        <strong class="calendar-size-toolbar__hint">현재 {{ calendarScalePresets.find((item) => item.key === calendarScalePreset)?.label }}</strong>
+        <strong class="calendar-size-toolbar__hint">현재 {{ calendarDisplayModes.find((item) => item.key === calendarScalePreset)?.label }}</strong>
       </div>
 
-      <div v-if="!isCalendarCollapsed" class="calendar-shell">
+      <div v-if="!isCalendarCollapsed" ref="calendarShellRef" class="calendar-shell">
         <div class="calendar">
           <div class="calendar__weekdays">
             <span v-for="weekday in weekdayLabels" :key="weekday">{{ weekday }}</span>
@@ -873,15 +976,15 @@ defineExpose({
                     <span v-if="getMonthTag(day)" class="calendar__month-tag">{{ getMonthTag(day) }}</span>
                     <strong>{{ day.dayNumber }}</strong>
                   </div>
-                  <span>{{ day.summary.entryCount }}건</span>
+                  <span v-if="!isAmountOnlyCalendar">{{ day.summary.entryCount }}건</span>
                 </div>
                 <div class="calendar__expense-block">
-                  <span class="calendar__label">오늘 사용</span>
+                  <span v-if="!isAmountOnlyCalendar" class="calendar__label">오늘 사용</span>
                   <strong class="calendar__expense-total">
                     {{ formatCompactCurrency(day.summary.expense) }}
                   </strong>
                 </div>
-                <div class="calendar__metrics">
+                <div v-if="!isAmountOnlyCalendar" class="calendar__metrics">
                   <div class="calendar__metric calendar__metric--expense">
                     <span>지출</span>
                     <strong class="is-expense">{{ formatCurrency(day.summary.expense) }}</strong>

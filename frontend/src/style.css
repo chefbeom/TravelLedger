@@ -508,6 +508,11 @@ button {
   color: var(--text-muted);
 }
 
+.calendar__day-head > span {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
 .calendar__day-stamp {
   display: grid;
   gap: 6px;
@@ -3858,6 +3863,28 @@ textarea {
   padding: var(--calendar-day-padding);
 }
 
+.household-calendar-layout--amount-only .calendar__day {
+  gap: 8px;
+}
+
+.household-calendar-layout--amount-only .calendar__day-head {
+  align-items: flex-start;
+}
+
+.household-calendar-layout--amount-only .calendar__expense-block {
+  gap: 0;
+  margin-top: auto;
+}
+
+.household-calendar-layout--amount-only .calendar__expense-total {
+  font-size: 1.05rem;
+  line-height: 1.15;
+}
+
+.household-calendar-layout--amount-only .calendar__day-stamp strong {
+  font-size: 1rem;
+}
+
 .household-calendar-layout .calendar__expense-total {
   font-size: var(--calendar-expense-total-size);
 }
@@ -3916,6 +3943,7 @@ textarea {
   font: inherit;
   font-size: 0.88rem;
   font-weight: 800;
+  white-space: nowrap;
   cursor: pointer;
   transition: background-color 0.18s ease, color 0.18s ease, transform 0.18s ease;
 }

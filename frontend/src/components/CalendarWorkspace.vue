@@ -5,6 +5,7 @@ import { resolveRange, summarizeEntries } from '../lib/analytics'
 
 const CALENDAR_SCALE_KEY = 'calen-household-calendar-scale-preset'
 const CALENDAR_COLLAPSE_KEY = 'calen-household-calendar-collapsed'
+const CALENDAR_HIGHLIGHT_KEY = 'calen-household-calendar-highlight-mode'
 
 const calendarScalePresets = [
   { key: 'compact', label: '좁게', value: 74 },
@@ -16,6 +17,12 @@ const calendarDisplayModes = [
   { key: 'default', label: '지금처럼 보기' },
   { key: 'fit', label: '내 화면에 맞추기' },
   { key: 'amount-only', label: '사용금액만 보기' },
+]
+
+const calendarHighlightModes = [
+  { key: 'expense', label: '지출만 보기' },
+  { key: 'income', label: '수입만 보기' },
+  { key: 'net', label: '수입-지출 보기' },
 ]
 
 const aggregateWidgetKinds = [
@@ -158,6 +165,7 @@ const emit = defineEmits([
 const selectedDate = ref(props.anchorDate)
 const selectedDaySort = ref('ASC')
 const calendarScalePreset = ref('default')
+const calendarHighlightMode = ref('net')
 const isCalendarCollapsed = ref(false)
 const isAggregateEditMode = ref(false)
 const quickEntryPanelRef = ref(null)
@@ -170,6 +178,11 @@ let calendarResizeObserver = null
 const maxDailyExpense = computed(() => {
   const expenses = props.calendarWeeks.flat().map((day) => Number(day.summary?.expense ?? 0))
   return Math.max(...expenses, 1)
+})
+
+const maxDailyIncome = computed(() => {
+  const incomes = props.calendarWeeks.flat().map((day) => Number(day.summary?.income ?? 0))
+  return Math.max(...incomes, 1)
 })
 
 const selectedDateEntries = computed(() => {
@@ -250,6 +263,12 @@ watch(calendarScalePreset, (value) => {
   }
 })
 
+watch(calendarHighlightMode, (value) => {
+  if (typeof window !== 'undefined') {
+    window.localStorage.setItem(CALENDAR_HIGHLIGHT_KEY, value)
+  }
+})
+
 watch(
   () => props.paymentMethods,
   () => {
@@ -301,9 +320,14 @@ onMounted(() => {
 
   const savedScale = window.localStorage.getItem(CALENDAR_SCALE_KEY)
   const savedCollapsed = window.localStorage.getItem(CALENDAR_COLLAPSE_KEY)
+  const savedHighlight = window.localStorage.getItem(CALENDAR_HIGHLIGHT_KEY)
 
   if (savedScale) {
     calendarScalePreset.value = normalizePresetKey(calendarDisplayModes, savedScale, 'default')
+  }
+
+  if (savedHighlight && calendarHighlightModes.some((item) => item.key === savedHighlight)) {
+    calendarHighlightMode.value = savedHighlight
   }
 
   if (savedCollapsed) {
@@ -420,6 +444,73 @@ function updateCalendarShellWidth() {
   }
 
   calendarShellWidth.value = calendarShellRef.value.clientWidth || 0
+}
+
+function getExpenseAmount(day) {
+  return Number(day.summary?.expense ?? 0)
+}
+
+function getIncomeAmount(day) {
+  return Number(day.summary?.income ?? 0)
+}
+
+function isExpenseHighlighted(day) {
+  const expense = getExpenseAmount(day)
+  const income = getIncomeAmount(day)
+
+  if (calendarHighlightMode.value === 'expense') {
+    return expense > 0
+  }
+
+  if (calendarHighlightMode.value === 'income') {
+    return false
+  }
+
+  return expense > income && expense > 0
+}
+
+function isIncomeHighlighted(day) {
+  const expense = getExpenseAmount(day)
+  const income = getIncomeAmount(day)
+
+  if (calendarHighlightMode.value === 'income') {
+    return income > 0
+  }
+
+  if (calendarHighlightMode.value === 'expense') {
+    return false
+  }
+
+  return income > expense && income > 0
+}
+
+function getCalendarBarRatio(day) {
+  const expense = getExpenseAmount(day)
+  const income = getIncomeAmount(day)
+
+  if (calendarHighlightMode.value === 'expense') {
+    if (!expense) {
+      return 0
+    }
+    return Math.max(12, Math.round((expense / maxDailyExpense.value) * 100))
+  }
+
+  if (calendarHighlightMode.value === 'income') {
+    if (!income) {
+      return 0
+    }
+    return Math.max(12, Math.round((income / maxDailyIncome.value) * 100))
+  }
+
+  if (isIncomeHighlighted(day)) {
+    return Math.max(12, Math.round((income / maxDailyIncome.value) * 100))
+  }
+
+  if (isExpenseHighlighted(day)) {
+    return Math.max(12, Math.round((expense / maxDailyExpense.value) * 100))
+  }
+
+  return 0
 }
 
 function createDefaultAggregateConfigs() {
@@ -968,6 +1059,21 @@ defineExpose({
             </button>
           </div>
         </div>
+        <div class="calendar-size-toolbar__block">
+          <span class="calendar-size-toolbar__label">표시 기준</span>
+          <div class="calendar-size-toggle">
+            <button
+              v-for="mode in calendarHighlightModes"
+              :key="mode.key"
+              type="button"
+              class="calendar-size-toggle__button"
+              :class="{ 'is-active': calendarHighlightMode === mode.key }"
+              @click="calendarHighlightMode = mode.key"
+            >
+              {{ mode.label }}
+            </button>
+          </div>
+        </div>
         <strong class="calendar-size-toolbar__hint">현재 {{ calendarDisplayModes.find((item) => item.key === calendarScalePreset)?.label }}</strong>
       </div>
 
@@ -986,8 +1092,8 @@ defineExpose({
                   'calendar__day',
                   {
                     'calendar__day--muted': !day.inCurrentMonth,
-                    'calendar__day--active': Number(day.summary.expense) > 0,
-                    'calendar__day--income': Number(day.summary.income) > Number(day.summary.expense) && Number(day.summary.income) > 0,
+                    'calendar__day--active': isExpenseHighlighted(day),
+                    'calendar__day--income': isIncomeHighlighted(day),
                     'calendar__day--selected': selectedDate === day.date,
                   },
                 ]"
@@ -1023,11 +1129,11 @@ defineExpose({
                   :class="[
                     'calendar__bar',
                     {
-                      'calendar__bar--income': Number(day.summary.income) > Number(day.summary.expense) && Number(day.summary.income) > 0,
+                      'calendar__bar--income': isIncomeHighlighted(day),
                     },
                   ]"
                 >
-                  <span :style="{ width: `${getExpenseRatio(day)}%` }" />
+                  <span :style="{ width: `${getCalendarBarRatio(day)}%` }" />
                 </div>
               </article>
             </div>

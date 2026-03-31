@@ -368,7 +368,7 @@ onMounted(initializeAdminWorkspace)
         <div class="travel-modal__header">
           <div>
             <h2>관리자 추가 인증</h2>
-            <p>관리자 페이지를 열려면 오늘 기준 8자리 3차 비밀번호를 입력해야 합니다.</p>
+            <p>관리자 페이지를 열려면 8자리 3차 비밀번호를 입력해야 합니다.</p>
           </div>
         </div>
         <form class="travel-modal__body" @submit.prevent="handleVerifyAdminAccess">

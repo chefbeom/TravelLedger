@@ -170,6 +170,7 @@ const emit = defineEmits([
 
 const selectedDate = ref(props.anchorDate)
 const selectedDaySort = ref('ASC')
+const selectedDayEntryFilter = ref('ALL')
 const calendarScalePreset = ref('default')
 const calendarWeekMode = ref('month')
 const calendarPreviousWeekOffset = ref(1)
@@ -199,7 +200,9 @@ const maxDailyNetDifference = computed(() => {
 })
 
 const selectedDateEntries = computed(() => {
-  const filtered = props.entries.filter((entry) => entry.entryDate === selectedDate.value)
+  const filtered = props.entries
+    .filter((entry) => entry.entryDate === selectedDate.value)
+    .filter((entry) => selectedDayEntryFilter.value === 'ALL' || entry.entryType === selectedDayEntryFilter.value)
   return filtered.slice().sort((left, right) => {
     const leftKey = `${left.entryDate} ${left.entryTime || '99:99'} ${String(left.id).padStart(10, '0')}`
     const rightKey = `${right.entryDate} ${right.entryTime || '99:99'} ${String(right.id).padStart(10, '0')}`
@@ -839,6 +842,10 @@ async function handleSelectDay(day) {
   ledgerSheetRef.value?.scrollIntoView({ behavior: 'smooth', block: 'start' })
 }
 
+function formatPaymentMethodForSheet(entry) {
+  return entry.entryType === 'INCOME' ? '-' : entry.paymentMethodName
+}
+
 function getMonthTag(day) {
   if (day.showMonthTag) {
     return `${day.monthNumber}월`
@@ -1326,6 +1333,11 @@ defineExpose({
         <div class="household-sheet-header">
           <span class="panel__badge">{{ selectedDateCountLabel }}</span>
           <div class="scope-toggle">
+            <button type="button" class="button" :class="{ 'button--primary': selectedDayEntryFilter === 'ALL' }" @click="selectedDayEntryFilter = 'ALL'">전체</button>
+            <button type="button" class="button" :class="{ 'button--primary': selectedDayEntryFilter === 'INCOME' }" @click="selectedDayEntryFilter = 'INCOME'">수입</button>
+            <button type="button" class="button" :class="{ 'button--primary': selectedDayEntryFilter === 'EXPENSE' }" @click="selectedDayEntryFilter = 'EXPENSE'">지출</button>
+          </div>
+          <div class="scope-toggle">
             <button type="button" class="button" :class="{ 'button--primary': selectedDaySort === 'ASC' }" @click="selectedDaySort = 'ASC'">시간 오름차순</button>
             <button type="button" class="button" :class="{ 'button--primary': selectedDaySort === 'DESC' }" @click="selectedDaySort = 'DESC'">시간 내림차순</button>
           </div>
@@ -1359,7 +1371,7 @@ defineExpose({
                 {{ entry.categoryGroupName }}
                 <template v-if="entry.categoryDetailName"> / {{ entry.categoryDetailName }}</template>
               </td>
-              <td>{{ entry.paymentMethodName }}</td>
+              <td>{{ formatPaymentMethodForSheet(entry) }}</td>
               <td :class="['sheet-table__amount', entry.entryType === 'INCOME' ? 'is-income' : 'is-expense']">
                 {{ formatCurrency(entry.amount) }}
               </td>

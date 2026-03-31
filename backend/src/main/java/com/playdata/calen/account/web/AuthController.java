@@ -2,6 +2,9 @@ package com.playdata.calen.account.web;
 
 import com.playdata.calen.account.dto.AppUserResponse;
 import com.playdata.calen.account.dto.AuthLoginRequest;
+import com.playdata.calen.account.dto.ProfilePasswordChangeRequest;
+import com.playdata.calen.account.dto.ProfileSecondaryPinChangeRequest;
+import com.playdata.calen.account.dto.ProfileSecondaryPinVerifyRequest;
 import com.playdata.calen.account.domain.AppUser;
 import com.playdata.calen.account.domain.LoginAuditStatus;
 import com.playdata.calen.account.security.AppUserPrincipal;
@@ -28,6 +31,7 @@ import org.springframework.security.web.context.SecurityContextRepository;
 import org.springframework.security.web.csrf.CsrfToken;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -150,10 +154,56 @@ public class AuthController {
         return ResponseEntity.noContent().build();
     }
 
+    @PostMapping("/profile/verify-secondary-pin")
+    public ResponseEntity<Void> verifyProfileSecondaryPin(
+            @Valid @RequestBody ProfileSecondaryPinVerifyRequest request,
+            Authentication authentication
+    ) {
+        appUserService.verifySecondaryPin(requireAuthenticatedUserId(authentication), request.secondaryPin());
+        return ResponseEntity.noContent().build();
+    }
+
+    @PutMapping("/profile/password")
+    public ResponseEntity<Void> updateProfilePassword(
+            @Valid @RequestBody ProfilePasswordChangeRequest request,
+            Authentication authentication
+    ) {
+        appUserService.updatePassword(
+                requireAuthenticatedUserId(authentication),
+                request.secondaryPin(),
+                request.newPassword()
+        );
+        return ResponseEntity.noContent().build();
+    }
+
+    @PutMapping("/profile/secondary-pin")
+    public ResponseEntity<Void> updateProfileSecondaryPin(
+            @Valid @RequestBody ProfileSecondaryPinChangeRequest request,
+            Authentication authentication,
+            HttpServletRequest httpRequest
+    ) {
+        String updatedSecondaryPin = appUserService.updateSecondaryPin(
+                requireAuthenticatedUserId(authentication),
+                request.secondaryPin(),
+                request.newSecondaryPin()
+        );
+        SecondaryPinSessionSupport.storeVerifiedSecondaryPin(httpRequest, updatedSecondaryPin);
+        return ResponseEntity.noContent().build();
+    }
+
     private Authentication authenticate(String loginId, String password) {
         return authenticationManager.authenticate(
                 UsernamePasswordAuthenticationToken.unauthenticated(loginId.trim(), password)
         );
+    }
+
+    private Long requireAuthenticatedUserId(Authentication authentication) {
+        if (!(authentication != null
+                && authentication.isAuthenticated()
+                && authentication.getPrincipal() instanceof AppUserPrincipal principal)) {
+            throw new org.springframework.security.authentication.InsufficientAuthenticationException("로그인이 필요합니다.");
+        }
+        return principal.userId();
     }
 
     private String resolveClientIp(HttpServletRequest request) {

@@ -81,6 +81,33 @@ public class AppUserService {
         }
     }
 
+    public void verifySecondaryPin(Long userId, String secondaryPinRaw) {
+        ensureSecondaryPinMatches(getRequiredUser(userId), secondaryPinRaw);
+    }
+
+    @Transactional
+    public void updatePassword(Long userId, String secondaryPinRaw, String newPasswordRaw) {
+        AppUser user = getRequiredUser(userId);
+        ensureSecondaryPinMatches(user, secondaryPinRaw);
+
+        String newPassword = newPasswordRaw != null ? newPasswordRaw.trim() : "";
+        if (newPassword.length() < 8) {
+            throw new BadRequestException("비밀번호는 8자 이상이어야 합니다.");
+        }
+
+        user.setPasswordHash(passwordEncoder.encode(newPassword));
+    }
+
+    @Transactional
+    public String updateSecondaryPin(Long userId, String currentSecondaryPinRaw, String newSecondaryPinRaw) {
+        AppUser user = getRequiredUser(userId);
+        ensureSecondaryPinMatches(user, currentSecondaryPinRaw);
+
+        String normalizedSecondaryPin = normalizeSecondaryPin(newSecondaryPinRaw);
+        user.setSecondaryPinHash(passwordEncoder.encode(normalizedSecondaryPin));
+        return normalizedSecondaryPin;
+    }
+
     public AppUserRole normalizeRole(AppUser user) {
         return user.getRole() != null ? user.getRole() : AppUserRole.USER;
     }

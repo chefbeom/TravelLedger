@@ -189,6 +189,27 @@ export function createSupportInquiry(formData) {
   })
 }
 
+export function verifyProfileSecondaryPin(secondaryPin) {
+  return request('/auth/profile/verify-secondary-pin', {
+    method: 'POST',
+    body: JSON.stringify({ secondaryPin }),
+  })
+}
+
+export function changeProfilePassword(payload) {
+  return request('/auth/profile/password', {
+    method: 'PUT',
+    body: JSON.stringify(payload),
+  })
+}
+
+export function changeProfileSecondaryPin(payload) {
+  return request('/auth/profile/secondary-pin', {
+    method: 'PUT',
+    body: JSON.stringify(payload),
+  })
+}
+
 export function fetchDashboard(anchorDate) {
   return request(buildUrl('/dashboard', { anchorDate }).replace(API_BASE, ''))
 }

@@ -1,6 +1,12 @@
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
-import { createSupportInquiry, fetchMySupportInquiries } from '../lib/api'
+import {
+  changeProfilePassword,
+  changeProfileSecondaryPin,
+  createSupportInquiry,
+  fetchMySupportInquiries,
+  verifyProfileSecondaryPin,
+} from '../lib/api'
 
 const props = defineProps({
   currentUser: {
@@ -33,12 +39,29 @@ const form = reactive({
   attachment: null,
 })
 
+const security = reactive({
+  gateVisible: false,
+  changeVisible: false,
+  mode: 'password',
+  verifying: false,
+  saving: false,
+  errorMessage: '',
+  secondaryPin: '',
+  verifiedSecondaryPin: '',
+  newPassword: '',
+  confirmPassword: '',
+  newSecondaryPin: '',
+  confirmSecondaryPin: '',
+})
+
 const statusLabel = {
   PENDING: '답변 대기',
   ANSWERED: '답변 완료',
 }
 
 const pageCount = computed(() => Math.max(state.pageInfo.totalPages || 0, 1))
+const securityModeLabel = computed(() => (security.mode === 'password' ? '비밀번호' : '2차 비밀번호'))
+const securitySaveLabel = computed(() => (security.mode === 'password' ? '비밀번호 변경' : '2차 비밀번호 변경'))
 
 function formatDateTime(value) {
   if (!value) {
@@ -63,6 +86,30 @@ function resetForm() {
   if (attachmentInput.value) {
     attachmentInput.value.value = ''
   }
+}
+
+function resetSecurityState() {
+  security.gateVisible = false
+  security.changeVisible = false
+  security.verifying = false
+  security.saving = false
+  security.errorMessage = ''
+  security.secondaryPin = ''
+  security.verifiedSecondaryPin = ''
+  security.newPassword = ''
+  security.confirmPassword = ''
+  security.newSecondaryPin = ''
+  security.confirmSecondaryPin = ''
+}
+
+function openSecurityGate(mode) {
+  resetSecurityState()
+  security.mode = mode
+  security.gateVisible = true
+}
+
+function closeSecurityModal() {
+  resetSecurityState()
 }
 
 function handleAttachmentChange(event) {
@@ -141,6 +188,64 @@ async function handleSubmitInquiry() {
   }
 }
 
+async function handleVerifySecondaryPin() {
+  security.verifying = true
+  security.errorMessage = ''
+
+  try {
+    await verifyProfileSecondaryPin(security.secondaryPin)
+    security.verifiedSecondaryPin = security.secondaryPin.trim()
+    security.secondaryPin = ''
+    security.gateVisible = false
+    security.changeVisible = true
+  } catch (error) {
+    security.errorMessage = error.message
+  } finally {
+    security.verifying = false
+  }
+}
+
+async function handleCredentialChange() {
+  security.saving = true
+  security.errorMessage = ''
+
+  try {
+    if (security.mode === 'password') {
+      if (security.newPassword.trim().length < 8) {
+        throw new Error('비밀번호는 8자 이상이어야 합니다.')
+      }
+      if (security.newPassword !== security.confirmPassword) {
+        throw new Error('새 비밀번호 확인이 일치하지 않습니다.')
+      }
+
+      await changeProfilePassword({
+        secondaryPin: security.verifiedSecondaryPin,
+        newPassword: security.newPassword,
+      })
+      state.successMessage = '비밀번호를 변경했습니다.'
+    } else {
+      if (!/^\d{8}$/.test(security.newSecondaryPin.trim())) {
+        throw new Error('2차 비밀번호는 숫자 8자리여야 합니다.')
+      }
+      if (security.newSecondaryPin !== security.confirmSecondaryPin) {
+        throw new Error('새 2차 비밀번호 확인이 일치하지 않습니다.')
+      }
+
+      await changeProfileSecondaryPin({
+        secondaryPin: security.verifiedSecondaryPin,
+        newSecondaryPin: security.newSecondaryPin,
+      })
+      state.successMessage = '2차 비밀번호를 변경했습니다.'
+    }
+
+    closeSecurityModal()
+  } catch (error) {
+    security.errorMessage = error.message
+  } finally {
+    security.saving = false
+  }
+}
+
 onMounted(() => {
   loadInquiries(0)
 })
@@ -152,7 +257,7 @@ onMounted(() => {
       <div class="panel__header">
         <div>
           <h2>내 프로필</h2>
-          <p>계정 정보와 내가 보낸 문의, 관리자 답변을 한 곳에서 확인합니다.</p>
+          <p>계정 정보와 내가 보낸 문의, 관리자 답변을 이곳에서 확인합니다.</p>
         </div>
       </div>
       <div class="summary-grid profile-summary-grid">
@@ -168,6 +273,10 @@ onMounted(() => {
           <span>권한</span>
           <strong>{{ currentUser.admin ? '관리자' : '일반 사용자' }}</strong>
         </article>
+      </div>
+      <div class="profile-security-actions">
+        <button class="button button--ghost" type="button" @click="openSecurityGate('password')">비밀번호 변경</button>
+        <button class="button button--ghost" type="button" @click="openSecurityGate('secondary-pin')">2차 비밀번호 변경</button>
       </div>
     </section>
 
@@ -205,7 +314,7 @@ onMounted(() => {
         />
         <p class="field__hint">첨부 이미지는 선택 사항이며, 관리자와 본인만 볼 수 있습니다.</p>
         <button class="button button--primary" type="submit" :disabled="state.sending">
-          {{ state.sending ? '전송 중..' : '문의 보내기' }}
+          {{ state.sending ? '전송 중...' : '문의 보내기' }}
         </button>
       </form>
     </section>
@@ -214,10 +323,10 @@ onMounted(() => {
       <div class="panel__header">
         <div>
           <h2>내 문의 내역</h2>
-          <p>문의는 한 줄 목록으로 보고, 필요한 항목만 펼쳐서 상세 내용을 확인할 수 있습니다.</p>
+          <p>문의는 한 줄 목록으로 보고, 필요한 항목만 열어서 상세 내용과 답변을 확인할 수 있습니다.</p>
         </div>
         <button class="button button--ghost" type="button" :disabled="state.loading" @click="loadInquiries(state.pageInfo.page)">
-          {{ state.loading ? '불러오는 중..' : '새로고침' }}
+          {{ state.loading ? '불러오는 중...' : '새로고침' }}
         </button>
       </div>
 
@@ -283,5 +392,110 @@ onMounted(() => {
         </button>
       </div>
     </section>
+
+    <div v-if="security.gateVisible" class="travel-modal" @click.self="closeSecurityModal">
+      <div class="travel-modal__dialog profile-security-modal">
+        <div class="travel-modal__header">
+          <div>
+            <h2>{{ securityModeLabel }} 열기</h2>
+            <p>{{ securityModeLabel }} 변경 모달을 열려면 현재 2차 비밀번호를 먼저 입력해 주세요.</p>
+          </div>
+          <button class="button button--ghost" type="button" @click="closeSecurityModal">닫기</button>
+        </div>
+
+        <div class="travel-modal__body">
+          <div v-if="security.errorMessage" class="feedback feedback--error">{{ security.errorMessage }}</div>
+          <label class="field">
+            <span class="field__label">현재 2차 비밀번호</span>
+            <input
+              v-model="security.secondaryPin"
+              type="password"
+              inputmode="numeric"
+              maxlength="8"
+              placeholder="숫자 8자리"
+              :disabled="security.verifying"
+            />
+          </label>
+        </div>
+
+        <div class="travel-modal__footer">
+          <button class="button button--ghost" type="button" :disabled="security.verifying" @click="closeSecurityModal">취소</button>
+          <button class="button button--primary" type="button" :disabled="security.verifying" @click="handleVerifySecondaryPin">
+            {{ security.verifying ? '확인 중...' : '확인' }}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div v-if="security.changeVisible" class="travel-modal" @click.self="closeSecurityModal">
+      <div class="travel-modal__dialog profile-security-modal">
+        <div class="travel-modal__header">
+          <div>
+            <h2>{{ securitySaveLabel }}</h2>
+            <p>{{ security.mode === 'password'
+              ? '새 비밀번호를 입력하면 즉시 계정에 적용됩니다.'
+              : '새 2차 비밀번호는 숫자 8자리여야 합니다.' }}</p>
+          </div>
+          <button class="button button--ghost" type="button" @click="closeSecurityModal">닫기</button>
+        </div>
+
+        <div class="travel-modal__body">
+          <div v-if="security.errorMessage" class="feedback feedback--error">{{ security.errorMessage }}</div>
+
+          <template v-if="security.mode === 'password'">
+            <label class="field">
+              <span class="field__label">새 비밀번호</span>
+              <input
+                v-model="security.newPassword"
+                type="password"
+                placeholder="8자 이상"
+                :disabled="security.saving"
+              />
+            </label>
+            <label class="field">
+              <span class="field__label">새 비밀번호 확인</span>
+              <input
+                v-model="security.confirmPassword"
+                type="password"
+                placeholder="한 번 더 입력"
+                :disabled="security.saving"
+              />
+            </label>
+          </template>
+
+          <template v-else>
+            <label class="field">
+              <span class="field__label">새 2차 비밀번호</span>
+              <input
+                v-model="security.newSecondaryPin"
+                type="password"
+                inputmode="numeric"
+                maxlength="8"
+                placeholder="숫자 8자리"
+                :disabled="security.saving"
+              />
+            </label>
+            <label class="field">
+              <span class="field__label">새 2차 비밀번호 확인</span>
+              <input
+                v-model="security.confirmSecondaryPin"
+                type="password"
+                inputmode="numeric"
+                maxlength="8"
+                placeholder="한 번 더 입력"
+                :disabled="security.saving"
+              />
+            </label>
+          </template>
+        </div>
+
+        <div class="travel-modal__footer">
+          <button class="button button--ghost" type="button" :disabled="security.saving" @click="closeSecurityModal">취소</button>
+          <button class="button button--primary" type="button" :disabled="security.saving" @click="handleCredentialChange">
+            {{ security.saving ? '저장 중...' : securitySaveLabel }}
+          </button>
+        </div>
+      </div>
+    </div>
   </section>
 </template>

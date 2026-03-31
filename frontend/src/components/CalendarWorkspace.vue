@@ -281,6 +281,30 @@ onMounted(() => {
   }
 })
 
+function isEditableTarget(target) {
+  if (!(target instanceof HTMLElement)) {
+    return false
+  }
+
+  if (target.isContentEditable) {
+    return true
+  }
+
+  return Boolean(target.closest('input, textarea, select, [contenteditable="true"]'))
+}
+
+function handleWorkspaceKeydown(event) {
+  if (event.key !== 'Backspace') {
+    return
+  }
+
+  if (isEditableTarget(event.target)) {
+    return
+  }
+
+  event.preventDefault()
+}
+
 function getPresetValue(presets, key, fallbackKey) {
   return presets.find((item) => item.key === key)?.value ?? presets.find((item) => item.key === fallbackKey)?.value ?? presets[0].value
 }
@@ -521,7 +545,7 @@ defineExpose({
 </script>
 
 <template>
-  <div class="workspace-stack">
+  <div class="workspace-stack" @keydown.capture="handleWorkspaceKeydown">
     <div class="household-entry-summary-grid">
       <section ref="quickEntryPanelRef" class="panel household-entry-panel">
         <div class="panel__header">

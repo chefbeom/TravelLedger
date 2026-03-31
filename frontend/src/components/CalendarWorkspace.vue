@@ -234,9 +234,14 @@ const displayedCalendarWeeks = computed(() => {
     return props.calendarWeeks
   }
 
-  const weekOffset = calendarWeekMode.value === 'previous' ? -calendarPreviousWeekOffset.value : 0
-  const nextIndex = clamp(referenceWeekIndex.value + weekOffset, 0, Math.max(props.calendarWeeks.length - 1, 0))
-  return props.calendarWeeks[nextIndex] ? [props.calendarWeeks[nextIndex]] : props.calendarWeeks
+  if (calendarWeekMode.value === 'current') {
+    return props.calendarWeeks[referenceWeekIndex.value] ? [props.calendarWeeks[referenceWeekIndex.value]] : props.calendarWeeks
+  }
+
+  const startIndex = clamp(referenceWeekIndex.value - calendarPreviousWeekOffset.value, 0, Math.max(props.calendarWeeks.length - 1, 0))
+  const endIndex = clamp(referenceWeekIndex.value, 0, Math.max(props.calendarWeeks.length - 1, 0))
+  const weeks = props.calendarWeeks.slice(startIndex, endIndex + 1)
+  return weeks.length ? weeks : props.calendarWeeks
 })
 
 const calendarViewStyle = computed(() => {
@@ -1200,13 +1205,18 @@ defineExpose({
               {{ mode.label }}
             </button>
           </div>
-          <div v-if="calendarWeekMode === 'previous'" class="calendar-size-toggle">
+          <div
+            class="calendar-size-toggle"
+            :class="{ 'calendar-size-toggle--inactive': calendarWeekMode !== 'previous' }"
+            aria-hidden="true"
+          >
             <button
               v-for="offset in [1, 2]"
               :key="offset"
               type="button"
               class="calendar-size-toggle__button"
               :class="{ 'is-active': calendarPreviousWeekOffset === offset }"
+              :disabled="calendarWeekMode !== 'previous'"
               @click="calendarPreviousWeekOffset = offset"
             >
               {{ offset }}주 전
@@ -1232,7 +1242,7 @@ defineExpose({
           현재 {{ calendarDisplayModes.find((item) => item.key === calendarScalePreset)?.label }}
           <template v-if="calendarWeekMode !== 'month'">
             · {{ calendarWeekModes.find((item) => item.key === calendarWeekMode)?.label }}
-            <template v-if="calendarWeekMode === 'previous'"> {{ calendarPreviousWeekOffset }}주 전</template>
+            <template v-if="calendarWeekMode === 'previous'"> (이번 주 포함 {{ calendarPreviousWeekOffset + 1 }}주)</template>
           </template>
         </strong>
       </div>

@@ -3958,6 +3958,11 @@ textarea {
   background: var(--calendar-size-toggle-bg);
 }
 
+.calendar-size-toggle--inactive {
+  visibility: hidden;
+  pointer-events: none;
+}
+
 .calendar-size-toggle__button {
   border: 0;
   border-radius: 999px;

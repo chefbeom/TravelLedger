@@ -16,7 +16,6 @@ const calendarScalePresets = [
 const calendarDisplayModes = [
   { key: 'default', label: '지금처럼 보기' },
   { key: 'fit', label: '내 화면에 맞추기' },
-  { key: 'amount-only', label: '사용금액만 보기' },
 ]
 
 const calendarHighlightModes = [
@@ -185,6 +184,11 @@ const maxDailyIncome = computed(() => {
   return Math.max(...incomes, 1)
 })
 
+const maxDailyNetDifference = computed(() => {
+  const differences = props.calendarWeeks.flat().map((day) => Math.abs(Number(day.summary?.income ?? 0) - Number(day.summary?.expense ?? 0)))
+  return Math.max(...differences, 1)
+})
+
 const selectedDateEntries = computed(() => {
   const filtered = props.entries.filter((entry) => entry.entryDate === selectedDate.value)
   return filtered.slice().sort((left, right) => {
@@ -201,7 +205,7 @@ const yearOptions = computed(() => {
   return Array.from({ length: 13 }, (_, index) => baseYear - 6 + index)
 })
 
-const isAmountOnlyCalendar = computed(() => calendarScalePreset.value === 'amount-only')
+const isAmountOnlyCalendar = computed(() => false)
 
 const calendarViewStyle = computed(() => {
   const metrics = getCalendarDisplayMetrics(calendarScalePreset.value, calendarShellWidth.value)
@@ -382,8 +386,8 @@ function getPresetValue(presets, key, fallbackKey) {
 }
 
 function normalizePresetKey(presets, value, fallbackKey) {
-  if (value === 'compact') {
-    return 'amount-only'
+  if (value === 'compact' || value === 'amount-only') {
+    return 'default'
   }
 
   if (value === 'expanded') {
@@ -454,6 +458,42 @@ function getIncomeAmount(day) {
   return Number(day.summary?.income ?? 0)
 }
 
+function getNetDifference(day) {
+  return getIncomeAmount(day) - getExpenseAmount(day)
+}
+
+function getCalendarSummaryLabel() {
+  if (calendarHighlightMode.value === 'expense') {
+    return '지출'
+  }
+
+  if (calendarHighlightMode.value === 'income') {
+    return '수입'
+  }
+
+  return '증감'
+}
+
+function getCalendarSummaryAmount(day) {
+  if (calendarHighlightMode.value === 'expense') {
+    return getExpenseAmount(day)
+  }
+
+  if (calendarHighlightMode.value === 'income') {
+    return getIncomeAmount(day)
+  }
+
+  return Math.abs(getNetDifference(day))
+}
+
+function shouldShowExpenseMetric() {
+  return calendarHighlightMode.value !== 'income'
+}
+
+function shouldShowIncomeMetric() {
+  return calendarHighlightMode.value !== 'expense'
+}
+
 function isExpenseHighlighted(day) {
   const expense = getExpenseAmount(day)
   const income = getIncomeAmount(day)
@@ -502,15 +542,12 @@ function getCalendarBarRatio(day) {
     return Math.max(12, Math.round((income / maxDailyIncome.value) * 100))
   }
 
-  if (isIncomeHighlighted(day)) {
-    return Math.max(12, Math.round((income / maxDailyIncome.value) * 100))
+  const difference = Math.abs(getNetDifference(day))
+  if (!difference) {
+    return 0
   }
 
-  if (isExpenseHighlighted(day)) {
-    return Math.max(12, Math.round((expense / maxDailyExpense.value) * 100))
-  }
-
-  return 0
+  return Math.max(12, Math.round((difference / maxDailyNetDifference.value) * 100))
 }
 
 function createDefaultAggregateConfigs() {
@@ -1110,17 +1147,17 @@ defineExpose({
                   <span v-if="!isAmountOnlyCalendar">{{ day.summary.entryCount }}건</span>
                 </div>
                 <div class="calendar__expense-block">
-                  <span v-if="!isAmountOnlyCalendar" class="calendar__label">오늘 사용</span>
+                  <span v-if="!isAmountOnlyCalendar" class="calendar__label">{{ getCalendarSummaryLabel() }}</span>
                   <strong class="calendar__expense-total">
-                    {{ formatCompactCurrency(day.summary.expense) }}
+                    {{ formatCompactCurrency(getCalendarSummaryAmount(day)) }}
                   </strong>
                 </div>
                 <div v-if="!isAmountOnlyCalendar" class="calendar__metrics">
-                  <div class="calendar__metric calendar__metric--expense">
+                  <div v-if="shouldShowExpenseMetric()" class="calendar__metric calendar__metric--expense">
                     <span>지출</span>
                     <strong class="is-expense">{{ formatCurrency(day.summary.expense) }}</strong>
                   </div>
-                  <div class="calendar__metric calendar__metric--income">
+                  <div v-if="shouldShowIncomeMetric()" class="calendar__metric calendar__metric--income">
                     <span>수입</span>
                     <strong class="is-income">{{ formatCurrency(day.summary.income) }}</strong>
                   </div>

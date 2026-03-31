@@ -20,10 +20,9 @@ const calendarDisplayModes = [
 ]
 
 const calendarWeekModes = [
-  { key: 'month', label: '전체 달' },
-  { key: 'prev', label: '-1주' },
-  { key: 'current', label: '이번 주' },
-  { key: 'next', label: '+1주' },
+  { key: 'month', label: '이번달 보기' },
+  { key: 'current', label: '이번 주 보기' },
+  { key: 'previous', label: '이전 주 보기' },
 ]
 
 const calendarHighlightModes = [
@@ -173,6 +172,7 @@ const selectedDate = ref(props.anchorDate)
 const selectedDaySort = ref('ASC')
 const calendarScalePreset = ref('default')
 const calendarWeekMode = ref('month')
+const calendarPreviousWeekOffset = ref(1)
 const calendarHighlightMode = ref(DEFAULT_CALENDAR_HIGHLIGHT_MODE)
 const isCalendarCollapsed = ref(false)
 const isAggregateEditMode = ref(false)
@@ -234,7 +234,7 @@ const displayedCalendarWeeks = computed(() => {
     return props.calendarWeeks
   }
 
-  const weekOffset = calendarWeekMode.value === 'prev' ? -1 : calendarWeekMode.value === 'next' ? 1 : 0
+  const weekOffset = calendarWeekMode.value === 'previous' ? -calendarPreviousWeekOffset.value : 0
   const nextIndex = clamp(referenceWeekIndex.value + weekOffset, 0, Math.max(props.calendarWeeks.length - 1, 0))
   return props.calendarWeeks[nextIndex] ? [props.calendarWeeks[nextIndex]] : props.calendarWeeks
 })
@@ -1200,6 +1200,18 @@ defineExpose({
               {{ mode.label }}
             </button>
           </div>
+          <div v-if="calendarWeekMode === 'previous'" class="calendar-size-toggle">
+            <button
+              v-for="offset in [1, 2]"
+              :key="offset"
+              type="button"
+              class="calendar-size-toggle__button"
+              :class="{ 'is-active': calendarPreviousWeekOffset === offset }"
+              @click="calendarPreviousWeekOffset = offset"
+            >
+              {{ offset }}주 전
+            </button>
+          </div>
         </div>
         <div class="calendar-size-toolbar__block">
           <span class="calendar-size-toolbar__label">표시 기준</span>
@@ -1218,7 +1230,10 @@ defineExpose({
         </div>
         <strong class="calendar-size-toolbar__hint">
           현재 {{ calendarDisplayModes.find((item) => item.key === calendarScalePreset)?.label }}
-          <template v-if="calendarWeekMode !== 'month'"> · {{ calendarWeekModes.find((item) => item.key === calendarWeekMode)?.label }}</template>
+          <template v-if="calendarWeekMode !== 'month'">
+            · {{ calendarWeekModes.find((item) => item.key === calendarWeekMode)?.label }}
+            <template v-if="calendarWeekMode === 'previous'"> {{ calendarPreviousWeekOffset }}주 전</template>
+          </template>
         </strong>
       </div>
 

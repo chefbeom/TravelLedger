@@ -109,6 +109,9 @@ const autofillState = reactive({
   fileName: '',
 })
 
+const defaultAutofillMessage = '사진을 고르면 EXIF 정보가 있을 때 날짜, 시간, GPS 좌표를 자동으로 채워줍니다.'
+autofillState.message = defaultAutofillMessage
+
 let pendingLookupToken = 0
 
 const memoryRecords = computed(() => props.travelPlan?.memoryRecords ?? [])
@@ -433,6 +436,8 @@ function resetMultiPhotoDrafts() {
 function resetAutofillMessage() {
   autofillState.status = 'idle'
   autofillState.fileName = ''
+  autofillState.message = defaultAutofillMessage
+  return
   autofillState.message = '?ъ쭊??怨좊Ⅴ硫?EXIF ?뺣낫媛 ?덉쓣 ???좎쭨, ?쒓컙, GPS 醫뚰몴瑜??먮룞?쇰줈 梨꾩썙以띾땲??'
 }
 
@@ -444,12 +449,31 @@ function extractDraftTitleSeed(fileName) {
   return text.replace(/\.[^/.]+$/, '').trim()
 }
 
+function resolveMultiPhotoTitle(item) {
+  const explicitTitle = String(item?.title || '').trim()
+  if (explicitTitle) {
+    return explicitTitle
+  }
+
+  const placeName = String(item?.placeName || '').trim()
+  if (placeName) {
+    return placeName
+  }
+
+  const suggestedTitle = String(item?.suggestedTitle || '').trim()
+  if (suggestedTitle) {
+    return suggestedTitle
+  }
+
+  return String(item?.fileName || '').trim() || '사진 기록'
+}
+
 function buildMultiPhotoPayload(item) {
   return {
     memoryDate: item.memoryDate || form.memoryDate,
     memoryTime: item.memoryTime || null,
     category: (form.category || queuedCategory.value || '?μ냼').trim(),
-    title: item.title.trim(),
+    title: resolveMultiPhotoTitle(item),
     country: item.country || null,
     region: item.region || null,
     placeName: item.placeName || null,
@@ -512,6 +536,7 @@ function resetForm() {
   Object.assign(form, createDefaultForm())
   editingMemoryId.value = null
   resetPendingFiles()
+  resetAutofillMessage()
 }
 
 function selectAllDays() {
@@ -552,6 +577,7 @@ function fillForm(memory) {
   form.memo = memory.memo || ''
   queuedCategory.value = form.category
   resetPendingFiles()
+  resetAutofillMessage()
 }
 
 function buildPayload() {
@@ -833,7 +859,7 @@ function submitMemory() {
   queuedCategory.value = form.category.trim() || queuedCategory.value
 
   if (hasMultiPhotoDrafts.value) {
-    const missingTitle = multiPhotoDrafts.value.find((item) => !item.title.trim())
+    const missingTitle = multiPhotoDrafts.value.find((item) => !resolveMultiPhotoTitle(item))
     if (missingTitle) {
       autofillState.status = 'manual'
       autofillState.fileName = missingTitle.fileName || ''

@@ -56,6 +56,7 @@ const draft = reactive({
   memo: '',
 })
 
+const AUTO_MERGE_GPX_SEGMENT_POINT_LIMIT = 40
 const draftPoints = ref([])
 const gpxFileNames = ref([])
 const gpxSelectedFiles = ref([])
@@ -164,6 +165,37 @@ const routesForActiveDay = computed(() =>
     return route.routeDate === activeDayDate.value
   }),
 )
+
+const activeDayStoredGpxRoutes = computed(() => {
+  if (!activeDayDate.value) {
+    return []
+  }
+
+  return routesForActiveDay.value
+    .filter((route) => String(route.sourceType || '').toUpperCase() === 'GPX' && Array.isArray(route.points) && route.points.length >= 2)
+    .map((route, routeIndex) => ({
+      routeId: route.id ?? `gpx-${routeIndex}`,
+      sortKey: Number(route.id) || routeIndex,
+      durationMinutes: safeNumber(route.durationMinutes),
+      stepCount: safeNumber(route.stepCount),
+      points: thinRoutePoints(
+        (route.points ?? []).map((point) =>
+          createDraftPoint(
+            {
+              latitude: Number(point.latitude),
+              longitude: Number(point.longitude),
+            },
+            {
+              pointType: 'ROUTE',
+              linkedMemoryId: null,
+              label: point.label || '',
+            },
+          ),
+        ),
+        AUTO_MERGE_GPX_SEGMENT_POINT_LIMIT,
+      ),
+    }))
+})
 
 const mapRoutes = computed(() =>
   routesForActiveDay.value.map((route) => ({
@@ -508,6 +540,106 @@ function moveDraftPointByOffset(index, offset) {
   setDraftPoints(reordered, targetIndex)
 }
 
+function hasSameCoordinate(left, right) {
+  return Number(left?.latitude) === Number(right?.latitude) && Number(left?.longitude) === Number(right?.longitude)
+}
+
+function appendDraftPointIfNeeded(target, point) {
+  if (!point) {
+    return
+  }
+
+  const normalized = createDraftPoint(point, {
+    pointType: point?.pointType === 'MEMORY' ? 'MEMORY' : 'ROUTE',
+    linkedMemoryId: point?.linkedMemoryId ?? null,
+    label: point?.label || '',
+  })
+  const previous = target[target.length - 1]
+  if (previous && hasSameCoordinate(previous, normalized)) {
+    return
+  }
+  target.push(normalized)
+}
+
+function matchGpxSegmentToMemoryPair(segment, memoryPoints) {
+  if (!segment?.points?.length || memoryPoints.length < 2) {
+    return null
+  }
+
+  const startPoint = segment.points[0]
+  const endPoint = segment.points[segment.points.length - 1]
+  let bestMatch = null
+
+  for (let pairIndex = 0; pairIndex < memoryPoints.length - 1; pairIndex += 1) {
+    const pairStart = memoryPoints[pairIndex]
+    const pairEnd = memoryPoints[pairIndex + 1]
+    const forwardScore = haversineDistance(startPoint, pairStart) + haversineDistance(endPoint, pairEnd)
+    const backwardScore = haversineDistance(endPoint, pairStart) + haversineDistance(startPoint, pairEnd)
+    const candidate = backwardScore < forwardScore
+      ? { pairIndex, score: backwardScore, reversed: true }
+      : { pairIndex, score: forwardScore, reversed: false }
+
+    if (!bestMatch || candidate.score < bestMatch.score || (candidate.score === bestMatch.score && candidate.pairIndex < bestMatch.pairIndex)) {
+      bestMatch = candidate
+    }
+  }
+
+  if (!bestMatch) {
+    return null
+  }
+
+  return {
+    ...segment,
+    pairIndex: bestMatch.pairIndex,
+    score: bestMatch.score,
+    points: bestMatch.reversed ? [...segment.points].reverse() : [...segment.points],
+  }
+}
+
+function mergeMemoryPinsWithStoredGpx(memoryPoints, storedGpxRoutes) {
+  if (memoryPoints.length < 2) {
+    return []
+  }
+
+  const baseMemoryPoints = memoryPoints.map((point) => ({ ...point }))
+  if (!storedGpxRoutes.length) {
+    return baseMemoryPoints
+  }
+
+  const matchedSegments = storedGpxRoutes
+    .map((segment) => matchGpxSegmentToMemoryPair(segment, baseMemoryPoints))
+    .filter(Boolean)
+    .sort((left, right) => left.pairIndex - right.pairIndex || left.sortKey - right.sortKey || left.score - right.score)
+
+  const segmentsByPair = new Map()
+  matchedSegments.forEach((segment) => {
+    if (!segmentsByPair.has(segment.pairIndex)) {
+      segmentsByPair.set(segment.pairIndex, [])
+    }
+    segmentsByPair.get(segment.pairIndex).push(segment)
+  })
+
+  const merged = []
+  appendDraftPointIfNeeded(merged, baseMemoryPoints[0])
+
+  for (let pairIndex = 0; pairIndex < baseMemoryPoints.length - 1; pairIndex += 1) {
+    const segments = segmentsByPair.get(pairIndex) || []
+    segments.forEach((segment) => {
+      segment.points.forEach((point) => {
+        appendDraftPointIfNeeded(merged, {
+          ...point,
+          pointType: 'ROUTE',
+          linkedMemoryId: null,
+          label: '',
+        })
+      })
+    })
+    appendDraftPointIfNeeded(merged, baseMemoryPoints[pairIndex + 1])
+  }
+
+  return merged
+}
+
 function applyMemoryPinsToDraft() {
   if (memoryRouteSeedPoints.value.length < 2) {
     return
@@ -516,7 +648,7 @@ function applyMemoryPinsToDraft() {
   draft.sourceType = 'MANUAL'
   gpxFileNames.value = []
   gpxSelectedFiles.value = []
-  setDraftPoints(memoryRouteSeedPoints.value.map((point) => ({ ...point })), -1)
+  setDraftPoints(mergeMemoryPinsWithStoredGpx(memoryRouteSeedPoints.value, activeDayStoredGpxRoutes.value), -1)
 
   if (!draft.title.trim()) {
     draft.title = `${activeDayLabel.value} 경로`
@@ -524,6 +656,14 @@ function applyMemoryPinsToDraft() {
 
   draft.startPlaceName = memoryRouteSeedPoints.value[0]?.label || draft.startPlaceName
   draft.endPlaceName = memoryRouteSeedPoints.value[memoryRouteSeedPoints.value.length - 1]?.label || draft.endPlaceName
+  const mergedRouteDurationMinutes = activeDayStoredGpxRoutes.value.reduce((sum, route) => sum + safeNumber(route.durationMinutes), 0)
+  const mergedRouteStepCount = activeDayStoredGpxRoutes.value.reduce((sum, route) => sum + safeNumber(route.stepCount), 0)
+  if (mergedRouteDurationMinutes > 0) {
+    draft.durationMinutes = String(mergedRouteDurationMinutes)
+  }
+  if (mergedRouteStepCount > 0) {
+    draft.stepCount = String(mergedRouteStepCount)
+  }
   if (!draft.lineColorHex) {
     draft.lineColorHex = props.travelPlan?.colorHex || '#3182F6'
   }

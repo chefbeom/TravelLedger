@@ -95,6 +95,27 @@ const selectedAlbumMedia = computed(() => {
     .filter(Boolean)
 })
 
+const FAMILY_MEDIA_PAGE_SIZE = 10
+const FAMILY_ALBUM_PAGE_SIZE = 10
+const categoryMediaPage = ref(0)
+const albumMediaPage = ref(0)
+const categoryAlbumPage = ref(0)
+const categoryMediaPageCount = computed(() => Math.max(Math.ceil(categoryMediaItems.value.length / FAMILY_MEDIA_PAGE_SIZE), 1))
+const albumMediaPageCount = computed(() => Math.max(Math.ceil(selectedAlbumMedia.value.length / FAMILY_MEDIA_PAGE_SIZE), 1))
+const categoryAlbumPageCount = computed(() => Math.max(Math.ceil(categoryAlbums.value.length / FAMILY_ALBUM_PAGE_SIZE), 1))
+const pagedCategoryMediaItems = computed(() => {
+  const start = categoryMediaPage.value * FAMILY_MEDIA_PAGE_SIZE
+  return categoryMediaItems.value.slice(start, start + FAMILY_MEDIA_PAGE_SIZE)
+})
+const pagedSelectedAlbumMedia = computed(() => {
+  const start = albumMediaPage.value * FAMILY_MEDIA_PAGE_SIZE
+  return selectedAlbumMedia.value.slice(start, start + FAMILY_MEDIA_PAGE_SIZE)
+})
+const pagedCategoryAlbums = computed(() => {
+  const start = categoryAlbumPage.value * FAMILY_ALBUM_PAGE_SIZE
+  return categoryAlbums.value.slice(start, start + FAMILY_ALBUM_PAGE_SIZE)
+})
+
 const selectedMediaCount = computed(() => selectedMediaIds.value.length)
 const selectedInviteeCount = computed(() => selectedInvitees.value.length)
 const totalVideoCount = computed(() => (bootstrap.mediaItems ?? []).filter((item) => item.mediaType === 'VIDEO').length)
@@ -134,7 +155,41 @@ watch(
 watch(selectedCategoryId, () => {
   const validIds = new Set(categoryMediaItems.value.map((item) => String(item.id)))
   selectedMediaIds.value = selectedMediaIds.value.filter((mediaId) => validIds.has(String(mediaId)))
+  categoryMediaPage.value = 0
+  categoryAlbumPage.value = 0
+  albumMediaPage.value = 0
 })
+
+watch(selectedAlbumId, () => {
+  albumMediaPage.value = 0
+})
+
+watch(
+  () => categoryMediaItems.value.length,
+  () => {
+    if (categoryMediaPage.value >= categoryMediaPageCount.value) {
+      categoryMediaPage.value = Math.max(categoryMediaPageCount.value - 1, 0)
+    }
+  },
+)
+
+watch(
+  () => selectedAlbumMedia.value.length,
+  () => {
+    if (albumMediaPage.value >= albumMediaPageCount.value) {
+      albumMediaPage.value = Math.max(albumMediaPageCount.value - 1, 0)
+    }
+  },
+)
+
+watch(
+  () => categoryAlbums.value.length,
+  () => {
+    if (categoryAlbumPage.value >= categoryAlbumPageCount.value) {
+      categoryAlbumPage.value = Math.max(categoryAlbumPageCount.value - 1, 0)
+    }
+  },
+)
 
 function setFeedback(success = '', error = '') {
   successMessage.value = success
@@ -499,7 +554,7 @@ onMounted(() => {
             <button class="button button--ghost" type="button" @click="clearAlbumViewer">앨범 보기 닫기</button>
           </div>
           <div class="family-media-grid family-media-grid--compact">
-            <article v-for="media in selectedAlbumMedia" :key="`album-${media.id}`" class="family-media-card family-media-card--album">
+            <article v-for="media in pagedSelectedAlbumMedia" :key="`album-${media.id}`" class="family-media-card family-media-card--album">
               <img v-if="media.mediaType === 'PHOTO'" :src="buildThumbnailUrl(media.contentUrl)" :alt="media.originalFileName" class="family-media-card__preview" />
               <video v-else class="family-media-card__preview" controls preload="metadata" playsinline>
                 <source :src="media.contentUrl" :type="media.contentType" />
@@ -510,11 +565,16 @@ onMounted(() => {
               </div>
             </article>
           </div>
+          <div v-if="selectedAlbumMedia.length > FAMILY_MEDIA_PAGE_SIZE" class="panel__actions">
+            <button class="button button--ghost" type="button" :disabled="albumMediaPage <= 0" @click="albumMediaPage -= 1">이전</button>
+            <span>{{ albumMediaPage + 1 }} / {{ albumMediaPageCount }}</span>
+            <button class="button button--ghost" type="button" :disabled="albumMediaPage + 1 >= albumMediaPageCount" @click="albumMediaPage += 1">다음</button>
+          </div>
         </div>
 
         <div v-if="categoryMediaItems.length" class="family-media-grid">
           <article
-            v-for="media in categoryMediaItems"
+            v-for="media in pagedCategoryMediaItems"
             :key="media.id"
             class="family-media-card"
             :class="{ 'family-media-card--selected': isSelectedMedia(media.id) }"
@@ -536,6 +596,11 @@ onMounted(() => {
               <small>{{ formatTimestamp(media.capturedAt || media.uploadedAt) }}</small>
             </div>
           </article>
+        </div>
+        <div v-if="categoryMediaItems.length > FAMILY_MEDIA_PAGE_SIZE" class="panel__actions">
+          <button class="button button--ghost" type="button" :disabled="categoryMediaPage <= 0" @click="categoryMediaPage -= 1">이전</button>
+          <span>{{ categoryMediaPage + 1 }} / {{ categoryMediaPageCount }}</span>
+          <button class="button button--ghost" type="button" :disabled="categoryMediaPage + 1 >= categoryMediaPageCount" @click="categoryMediaPage += 1">다음</button>
         </div>
         <p v-else-if="!isLoading" class="panel__empty">선택한 가족 카테고리에 아직 업로드된 파일이 없습니다.</p>
         <p v-else class="panel__empty">가족 사진첩을 불러오는 중입니다.</p>
@@ -560,7 +625,7 @@ onMounted(() => {
 
         <div class="family-album-list">
           <button
-            v-for="album in categoryAlbums"
+            v-for="album in pagedCategoryAlbums"
             :key="album.id"
             type="button"
             class="family-album-list__item"
@@ -570,6 +635,11 @@ onMounted(() => {
             <strong>{{ album.title }}</strong>
             <small>{{ album.itemCount }}개 파일, {{ album.ownerName }}</small>
           </button>
+        </div>
+        <div v-if="categoryAlbums.length > FAMILY_ALBUM_PAGE_SIZE" class="panel__actions">
+          <button class="button button--ghost" type="button" :disabled="categoryAlbumPage <= 0" @click="categoryAlbumPage -= 1">이전</button>
+          <span>{{ categoryAlbumPage + 1 }} / {{ categoryAlbumPageCount }}</span>
+          <button class="button button--ghost" type="button" :disabled="categoryAlbumPage + 1 >= categoryAlbumPageCount" @click="categoryAlbumPage += 1">다음</button>
         </div>
         <p v-if="!categoryAlbums.length" class="panel__empty">이 카테고리에는 아직 앨범이 없습니다.</p>
       </section>

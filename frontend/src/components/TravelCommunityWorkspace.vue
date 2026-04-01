@@ -1,5 +1,5 @@
 <script setup>
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { buildThumbnailUrl } from '../lib/mediaPreview'
 import { formatDateTime } from '../lib/uiFormat'
 import TravelMapPanel from './TravelMapPanel.vue'
@@ -51,6 +51,23 @@ const communityMarkers = computed(() =>
           ]
         : [],
     })),
+)
+
+const COMMUNITY_PAGE_SIZE = 10
+const communityPage = ref(0)
+const communityPageCount = computed(() => Math.max(Math.ceil(props.communityFeed.length / COMMUNITY_PAGE_SIZE), 1))
+const pagedCommunityFeed = computed(() => {
+  const start = communityPage.value * COMMUNITY_PAGE_SIZE
+  return props.communityFeed.slice(start, start + COMMUNITY_PAGE_SIZE)
+})
+
+watch(
+  () => props.communityFeed.length,
+  () => {
+    if (communityPage.value >= communityPageCount.value) {
+      communityPage.value = Math.max(communityPageCount.value - 1, 0)
+    }
+  },
 )
 </script>
 
@@ -111,7 +128,7 @@ const communityMarkers = computed(() =>
       </div>
 
       <div v-if="communityFeed.length" class="travel-media-grid travel-media-grid--gallery">
-        <article v-for="item in communityFeed" :key="item.memoryId" class="travel-media-card">
+        <article v-for="item in pagedCommunityFeed" :key="item.memoryId" class="travel-media-card">
           <img v-if="item.heroPhotoUrl" :src="buildThumbnailUrl(item.heroPhotoUrl)" :alt="item.title" class="travel-media-thumb" />
           <div v-else class="travel-media-thumb travel-media-thumb--receipt">사진 없음</div>
           <div class="travel-media-copy">
@@ -125,6 +142,25 @@ const communityMarkers = computed(() =>
             <small>{{ item.memo || '아직 짧은 메모가 등록되지 않았습니다.' }}</small>
           </div>
         </article>
+      </div>
+      <div v-if="communityFeed.length > COMMUNITY_PAGE_SIZE" class="panel__actions">
+        <button
+          class="button button--ghost"
+          type="button"
+          :disabled="communityPage <= 0"
+          @click="communityPage -= 1"
+        >
+          이전
+        </button>
+        <span>{{ communityPage + 1 }} / {{ communityPageCount }}</span>
+        <button
+          class="button button--ghost"
+          type="button"
+          :disabled="communityPage + 1 >= communityPageCount"
+          @click="communityPage += 1"
+        >
+          다음
+        </button>
       </div>
       <p v-else class="panel__empty">공유된 사진 게시물이 아직 없습니다.</p>
     </section>

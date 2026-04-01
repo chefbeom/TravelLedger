@@ -301,6 +301,8 @@ const memoryPhotoMap = computed(() => {
   return bucket
 })
 const photoAlbumPhotoCount = computed(() => [...memoryPhotoMap.value.values()].reduce((total, items) => total + items.length, 0))
+const PHOTO_ALBUM_PAGE_SIZE = 10
+const photoAlbumPage = ref(0)
 const photoAlbumCards = computed(() =>
   [...memoryPhotoMap.value.entries()]
     .map(([recordId, items]) => {
@@ -334,6 +336,11 @@ const photoAlbumCards = computed(() =>
     .filter(Boolean)
     .sort((left, right) => right.sortKey.localeCompare(left.sortKey)),
 )
+const photoAlbumPageCount = computed(() => Math.max(Math.ceil(photoAlbumCards.value.length / PHOTO_ALBUM_PAGE_SIZE), 1))
+const pagedPhotoAlbumCards = computed(() => {
+  const start = photoAlbumPage.value * PHOTO_ALBUM_PAGE_SIZE
+  return photoAlbumCards.value.slice(start, start + PHOTO_ALBUM_PAGE_SIZE)
+})
 const photoAlbumMarkers = computed(() =>
   photoAlbumCards.value
     .filter((item) => item.latitude !== null && item.latitude !== undefined && item.longitude !== null && item.longitude !== undefined)
@@ -353,8 +360,21 @@ const photoAlbumMarkers = computed(() =>
       photoCount: item.photoCount,
       receiptCount: 0,
       mediaItems: item.mediaItems,
-    })),
+  })),
 )
+
+watch(
+  () => photoAlbumCards.value.length,
+  () => {
+    if (photoAlbumPage.value >= photoAlbumPageCount.value) {
+      photoAlbumPage.value = Math.max(photoAlbumPageCount.value - 1, 0)
+    }
+  },
+)
+
+watch(albumTab, () => {
+  photoAlbumPage.value = 0
+})
 
 function setFeedback(message = '', error = '') {
   feedback.value = message
@@ -1176,7 +1196,7 @@ function openMemoryEditor(memoryId) {
       <div v-else-if="albumTab === 'gallery'" class="workspace-stack">
         <section class="panel"><div class="panel__header"><div><h2>사진 재사용 흐름</h2><p>갤러리 카드에서 바로 기록 편집을 누르면 업로드 화면이 열리고, 기존 사진은 그대로 유지된 채 새 사진과 메모만 이어서 추가할 수 있습니다.</p></div><span class="panel__badge">{{ photoAlbumCards.length }}개 기록</span></div></section>
         <section class="panel panel--map-fill"><div class="panel__header"><div><h2>사진첩 지도</h2><p>선택한 여행의 사진 기록이 위치별로 묶여 큰 지도에 표시됩니다.</p></div><span class="panel__badge">{{ photoAlbumPhotoCount }}장</span></div><TravelMapPanel :markers="photoAlbumMarkers" :selected-point="null" :enable-pick-location="false" :enable-draw-route="false" :view-key="travelPlan?.id || 'photo-album-map'" hint-title="사진 핀 보기" hint-text="여행 기록에 연결된 사진을 위치별로 묶어 보여줍니다." /></section>
-        <section class="panel"><div class="panel__header"><div><h2>사진첩 카드</h2><p>여행 로그에서 올린 사진을 여기서 그대로 재사용하며, 카드에서 바로 원본 보기와 기록 편집이 가능합니다.</p></div></div><div v-if="photoAlbumCards.length" class="travel-media-grid travel-media-grid--gallery"><article v-for="item in photoAlbumCards" :key="item.id" class="travel-media-card"><img v-if="item.heroPhotoUrl" :src="buildThumbnailUrl(item.heroPhotoUrl)" :alt="item.caption || item.title" class="travel-media-thumb" /><div v-else class="travel-media-thumb travel-media-thumb--receipt">사진 없음</div><div class="travel-media-copy"><div class="travel-media-tags"><span class="chip chip--neutral">{{ item.planName || '여행' }}</span><span class="chip chip--neutral">사진 {{ item.photoCount }}장</span></div><strong>{{ item.title }}</strong><small>{{ formatDateTime(item.memoryDate, item.memoryTime) }}</small><small>{{ item.locationLabel }}</small><small>{{ item.memo || '이 기록을 다시 열면 기존 사진이 남아 있는 상태에서 이어서 편집할 수 있습니다.' }}</small></div><div class="travel-media-actions"><button class="button button--primary" @click="openMemoryEditor(item.memoryId)">기록 편집</button><a v-if="item.heroPhotoUrl" class="button button--ghost" :href="item.heroPhotoUrl" target="_blank" rel="noreferrer">대표 사진 열기</a><button class="button button--danger" :disabled="!item.heroPhoto" @click="handleDeleteMedia(item.heroPhoto)">대표 사진 삭제</button></div></article></div><p v-else class="panel__empty">사진첩에 표시할 사진이 아직 없습니다.</p></section>
+        <section class="panel"><div class="panel__header"><div><h2>사진첩 카드</h2><p>여행 로그에서 올린 사진을 여기서 그대로 재사용하며, 카드에서 바로 원본 보기와 기록 편집이 가능합니다.</p></div></div><div v-if="photoAlbumCards.length" class="travel-media-grid travel-media-grid--gallery"><article v-for="item in pagedPhotoAlbumCards" :key="item.id" class="travel-media-card"><img v-if="item.heroPhotoUrl" :src="buildThumbnailUrl(item.heroPhotoUrl)" :alt="item.caption || item.title" class="travel-media-thumb" /><div v-else class="travel-media-thumb travel-media-thumb--receipt">사진 없음</div><div class="travel-media-copy"><div class="travel-media-tags"><span class="chip chip--neutral">{{ item.planName || '여행' }}</span><span class="chip chip--neutral">사진 {{ item.photoCount }}장</span></div><strong>{{ item.title }}</strong><small>{{ formatDateTime(item.memoryDate, item.memoryTime) }}</small><small>{{ item.locationLabel }}</small><small>{{ item.memo || '이 기록을 다시 열면 기존 사진이 남아 있는 상태에서 이어서 편집할 수 있습니다.' }}</small></div><div class="travel-media-actions"><button class="button button--primary" @click="openMemoryEditor(item.memoryId)">기록 편집</button><a v-if="item.heroPhotoUrl" class="button button--ghost" :href="item.heroPhotoUrl" target="_blank" rel="noreferrer">대표 사진 열기</a><button class="button button--danger" :disabled="!item.heroPhoto" @click="handleDeleteMedia(item.heroPhoto)">대표 사진 삭제</button></div></article></div><div v-if="photoAlbumCards.length > PHOTO_ALBUM_PAGE_SIZE" class="panel__actions"><button class="button button--ghost" type="button" :disabled="photoAlbumPage <= 0" @click="photoAlbumPage -= 1">이전</button><span>{{ photoAlbumPage + 1 }} / {{ photoAlbumPageCount }}</span><button class="button button--ghost" type="button" :disabled="photoAlbumPage + 1 >= photoAlbumPageCount" @click="photoAlbumPage += 1">다음</button></div><p v-else class="panel__empty">사진첩에 표시할 사진이 아직 없습니다.</p></section>
       </div>
       <TravelSharedExhibitWorkspace v-else-if="albumTab === 'shared'" :exhibits="sharedExhibitSummaries" :selected-exhibit-id="selectedSharedExhibitId" :selected-exhibit="selectedSharedExhibit" :is-loading="isLoading" @select-exhibit="handleSelectSharedExhibit" />
       <TravelCommunityWorkspace v-else :travel-plan="travelPlan" :community-feed="communityFeed" />

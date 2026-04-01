@@ -308,6 +308,21 @@ const activeDayRouteStats = computed(() => {
   }
 })
 
+const ROUTE_TIMELINE_PAGE_SIZE = 5
+const ROUTE_TABLE_PAGE_SIZE = 10
+const activeDayTimelinePage = ref(0)
+const activeDayRoutePage = ref(0)
+const activeDayTimelinePageCount = computed(() => Math.max(Math.ceil(activeDayTimeline.value.length / ROUTE_TIMELINE_PAGE_SIZE), 1))
+const activeDayRoutePageCount = computed(() => Math.max(Math.ceil(routesForActiveDay.value.length / ROUTE_TABLE_PAGE_SIZE), 1))
+const pagedActiveDayTimeline = computed(() => {
+  const start = activeDayTimelinePage.value * ROUTE_TIMELINE_PAGE_SIZE
+  return activeDayTimeline.value.slice(start, start + ROUTE_TIMELINE_PAGE_SIZE)
+})
+const pagedRoutesForActiveDay = computed(() => {
+  const start = activeDayRoutePage.value * ROUTE_TABLE_PAGE_SIZE
+  return routesForActiveDay.value.slice(start, start + ROUTE_TABLE_PAGE_SIZE)
+})
+
 watch(
   () => props.travelPlan?.id,
   () => {
@@ -345,6 +360,29 @@ watch(
       return
     }
     draft.routeDate = value || props.travelPlan?.startDate || todayIso()
+  },
+)
+
+watch(activeDayDate, () => {
+  activeDayTimelinePage.value = 0
+  activeDayRoutePage.value = 0
+})
+
+watch(
+  () => activeDayTimeline.value.length,
+  () => {
+    if (activeDayTimelinePage.value >= activeDayTimelinePageCount.value) {
+      activeDayTimelinePage.value = Math.max(activeDayTimelinePageCount.value - 1, 0)
+    }
+  },
+)
+
+watch(
+  () => routesForActiveDay.value.length,
+  () => {
+    if (activeDayRoutePage.value >= activeDayRoutePageCount.value) {
+      activeDayRoutePage.value = Math.max(activeDayRoutePageCount.value - 1, 0)
+    }
   },
 )
 
@@ -1178,12 +1216,17 @@ function routeSummary(route) {
       </div>
 
       <div v-if="activeDayTimeline.length" class="travel-pending-grid">
-        <article v-for="item in activeDayTimeline" :key="item.id" class="travel-pending-card">
+        <article v-for="item in pagedActiveDayTimeline" :key="item.id" class="travel-pending-card">
           <strong>{{ timelineTypeLabel(item.type) }}: {{ item.title }}</strong>
           <small>{{ item.time ? formatTime(item.time) : '-' }}</small>
           <small>{{ item.summary }}</small>
           <small>{{ item.memo }}</small>
         </article>
+      </div>
+      <div v-if="activeDayTimeline.length > ROUTE_TIMELINE_PAGE_SIZE" class="panel__actions">
+        <button class="button button--ghost" type="button" :disabled="activeDayTimelinePage <= 0" @click="activeDayTimelinePage -= 1">이전</button>
+        <span>{{ activeDayTimelinePage + 1 }} / {{ activeDayTimelinePageCount }}</span>
+        <button class="button button--ghost" type="button" :disabled="activeDayTimelinePage + 1 >= activeDayTimelinePageCount" @click="activeDayTimelinePage += 1">다음</button>
       </div>
       <p v-else class="panel__empty">선택한 날짜에는 아직 기록된 일정이 없습니다.</p>
     </section>
@@ -1209,7 +1252,7 @@ function routeSummary(route) {
             </tr>
           </thead>
           <tbody>
-            <tr v-for="route in routesForActiveDay" :key="route.id">
+            <tr v-for="route in pagedRoutesForActiveDay" :key="route.id">
               <td>{{ formatDate(route.routeDate) }}</td>
               <td>{{ route.title }}</td>
               <td>{{ routeSummary(route) }}</td>
@@ -1225,6 +1268,11 @@ function routeSummary(route) {
             </tr>
           </tbody>
         </table>
+      </div>
+      <div v-if="routesForActiveDay.length > ROUTE_TABLE_PAGE_SIZE" class="panel__actions">
+        <button class="button button--ghost" type="button" :disabled="activeDayRoutePage <= 0" @click="activeDayRoutePage -= 1">이전</button>
+        <span>{{ activeDayRoutePage + 1 }} / {{ activeDayRoutePageCount }}</span>
+        <button class="button button--ghost" type="button" :disabled="activeDayRoutePage + 1 >= activeDayRoutePageCount" @click="activeDayRoutePage += 1">다음</button>
       </div>
     </section>
   </div>

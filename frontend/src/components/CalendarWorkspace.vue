@@ -31,6 +31,8 @@ const calendarHighlightModes = [
   { key: 'income', label: '수입만 보기' },
 ]
 
+const SELECTED_DAY_ENTRY_PAGE_SIZE = 10
+
 const aggregateWidgetKinds = [
   { value: 'NONE', label: '사용 안 함' },
   { value: 'TOTAL', label: '합계' },
@@ -177,6 +179,7 @@ const emit = defineEmits([
 const selectedDate = ref(props.anchorDate)
 const selectedDaySort = ref('ASC')
 const selectedDayEntryFilter = ref('ALL')
+const selectedDayEntryPage = ref(0)
 const calendarScalePreset = ref('default')
 const calendarWeekMode = ref('month')
 const calendarPreviousWeekOffset = ref(1)
@@ -289,6 +292,13 @@ const normalizedSelectedDateEntries = computed(() =>
     visibleMemo: stripImportedMemo(entry.memo),
   })),
 )
+const selectedDayEntryPageCount = computed(() =>
+  Math.max(Math.ceil(normalizedSelectedDateEntries.value.length / SELECTED_DAY_ENTRY_PAGE_SIZE), 1),
+)
+const pagedNormalizedSelectedDateEntries = computed(() => {
+  const start = selectedDayEntryPage.value * SELECTED_DAY_ENTRY_PAGE_SIZE
+  return normalizedSelectedDateEntries.value.slice(start, start + SELECTED_DAY_ENTRY_PAGE_SIZE)
+})
 
 const hasSelectedMemoColumn = computed(() => normalizedSelectedDateEntries.value.some((entry) => entry.visibleMemo))
 const selectedDateCountLabel = computed(() => `${normalizedSelectedDateEntries.value.length}건`)
@@ -321,7 +331,25 @@ watch(selectedDate, (value) => {
   if (!props.isEditingEntry) {
     props.entryForm.entryDate = value
   }
+  selectedDayEntryPage.value = 0
 })
+
+watch(selectedDaySort, () => {
+  selectedDayEntryPage.value = 0
+})
+
+watch(selectedDayEntryFilter, () => {
+  selectedDayEntryPage.value = 0
+})
+
+watch(
+  () => normalizedSelectedDateEntries.value.length,
+  () => {
+    if (selectedDayEntryPage.value >= selectedDayEntryPageCount.value) {
+      selectedDayEntryPage.value = Math.max(selectedDayEntryPageCount.value - 1, 0)
+    }
+  },
+)
 
 watch(calendarScalePreset, (value) => {
   if (typeof window !== 'undefined') {
@@ -1410,7 +1438,7 @@ defineExpose({
             </tr>
           </thead>
           <tbody>
-            <tr v-for="entry in normalizedSelectedDateEntries" :key="entry.id">
+            <tr v-for="entry in pagedNormalizedSelectedDateEntries" :key="entry.id">
               <td>{{ formatTime(entry.entryTime) }}</td>
               <td>
                 <span :class="['chip', entry.entryType === 'INCOME' ? 'chip--income' : 'chip--expense']">
@@ -1437,6 +1465,11 @@ defineExpose({
             </tr>
           </tbody>
         </table>
+      </div>
+      <div v-if="normalizedSelectedDateEntries.length > SELECTED_DAY_ENTRY_PAGE_SIZE" class="panel__actions">
+        <button class="button button--ghost" type="button" :disabled="selectedDayEntryPage <= 0" @click="selectedDayEntryPage -= 1">이전</button>
+        <span>{{ selectedDayEntryPage + 1 }} / {{ selectedDayEntryPageCount }}</span>
+        <button class="button button--ghost" type="button" :disabled="selectedDayEntryPage + 1 >= selectedDayEntryPageCount" @click="selectedDayEntryPage += 1">다음</button>
       </div>
     </section>
   </div>

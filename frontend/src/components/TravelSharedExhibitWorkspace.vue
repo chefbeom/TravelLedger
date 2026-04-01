@@ -1,5 +1,5 @@
 <script setup>
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { buildThumbnailUrl } from '../lib/mediaPreview'
 import { formatDate, formatDateTime } from '../lib/uiFormat'
 import TravelOverviewWorkspace from './TravelOverviewWorkspace.vue'
@@ -56,6 +56,21 @@ const photoCards = computed(() =>
     .sort((left, right) => String(right.uploadedAt || '').localeCompare(String(left.uploadedAt || ''))),
 )
 
+const EXHIBIT_PAGE_SIZE = 5
+const PHOTO_PAGE_SIZE = 10
+const exhibitPage = ref(0)
+const photoPage = ref(0)
+const exhibitPageCount = computed(() => Math.max(Math.ceil(props.exhibits.length / EXHIBIT_PAGE_SIZE), 1))
+const photoPageCount = computed(() => Math.max(Math.ceil(photoCards.value.length / PHOTO_PAGE_SIZE), 1))
+const pagedExhibits = computed(() => {
+  const start = exhibitPage.value * EXHIBIT_PAGE_SIZE
+  return props.exhibits.slice(start, start + EXHIBIT_PAGE_SIZE)
+})
+const pagedPhotoCards = computed(() => {
+  const start = photoPage.value * PHOTO_PAGE_SIZE
+  return photoCards.value.slice(start, start + PHOTO_PAGE_SIZE)
+})
+
 function statusLabel(status) {
   return statusLabels[status] || status || '미정'
 }
@@ -63,6 +78,36 @@ function statusLabel(status) {
 function isSelectedExhibit(exhibitId) {
   return String(props.selectedExhibitId || '') === String(exhibitId || '')
 }
+
+watch(
+  () => props.selectedExhibitId,
+  (value) => {
+    const targetIndex = props.exhibits.findIndex((item) => String(item.id) === String(value || ''))
+    if (targetIndex >= 0) {
+      exhibitPage.value = Math.floor(targetIndex / EXHIBIT_PAGE_SIZE)
+    }
+    photoPage.value = 0
+  },
+  { immediate: true },
+)
+
+watch(
+  () => props.exhibits.length,
+  () => {
+    if (exhibitPage.value >= exhibitPageCount.value) {
+      exhibitPage.value = Math.max(exhibitPageCount.value - 1, 0)
+    }
+  },
+)
+
+watch(
+  () => photoCards.value.length,
+  () => {
+    if (photoPage.value >= photoPageCount.value) {
+      photoPage.value = Math.max(photoPageCount.value - 1, 0)
+    }
+  },
+)
 </script>
 
 <template>
@@ -78,7 +123,7 @@ function isSelectedExhibit(exhibitId) {
 
       <div v-if="exhibits.length" class="travel-plan-picker-grid">
         <button
-          v-for="item in exhibits"
+          v-for="item in pagedExhibits"
           :key="item.id"
           class="travel-plan-picker-card"
           :class="{ 'travel-plan-picker-card--active': isSelectedExhibit(item.id) }"
@@ -89,6 +134,25 @@ function isSelectedExhibit(exhibitId) {
           <span>{{ item.destination || '목적지 미정' }}</span>
           <small>{{ formatDate(item.startDate) }} - {{ formatDate(item.endDate) }}</small>
           <small>{{ item.sharedByDisplayName }} ({{ item.sharedByLoginId }}) / {{ statusLabel(item.status) }}</small>
+        </button>
+      </div>
+      <div v-if="exhibits.length > EXHIBIT_PAGE_SIZE" class="panel__actions">
+        <button
+          class="button button--ghost"
+          type="button"
+          :disabled="exhibitPage <= 0"
+          @click="exhibitPage -= 1"
+        >
+          이전
+        </button>
+        <span>{{ exhibitPage + 1 }} / {{ exhibitPageCount }}</span>
+        <button
+          class="button button--ghost"
+          type="button"
+          :disabled="exhibitPage + 1 >= exhibitPageCount"
+          @click="exhibitPage += 1"
+        >
+          다음
         </button>
       </div>
       <p v-else class="panel__empty">공유받은 여행 전시가 아직 없습니다.</p>
@@ -123,7 +187,7 @@ function isSelectedExhibit(exhibitId) {
       </div>
 
       <div v-if="photoCards.length" class="travel-media-grid travel-media-grid--gallery">
-        <article v-for="item in photoCards" :key="item.id" class="travel-media-card">
+        <article v-for="item in pagedPhotoCards" :key="item.id" class="travel-media-card">
           <img v-if="item.contentUrl" :src="buildThumbnailUrl(item.contentUrl)" :alt="item.title" class="travel-media-thumb" />
           <div v-else class="travel-media-thumb travel-media-thumb--receipt">사진 없음</div>
           <div class="travel-media-copy">
@@ -140,6 +204,25 @@ function isSelectedExhibit(exhibitId) {
             <a v-if="item.contentUrl" class="button button--ghost" :href="item.contentUrl" target="_blank" rel="noreferrer">사진 보기</a>
           </div>
         </article>
+      </div>
+      <div v-if="photoCards.length > PHOTO_PAGE_SIZE" class="panel__actions">
+        <button
+          class="button button--ghost"
+          type="button"
+          :disabled="photoPage <= 0"
+          @click="photoPage -= 1"
+        >
+          이전
+        </button>
+        <span>{{ photoPage + 1 }} / {{ photoPageCount }}</span>
+        <button
+          class="button button--ghost"
+          type="button"
+          :disabled="photoPage + 1 >= photoPageCount"
+          @click="photoPage += 1"
+        >
+          다음
+        </button>
       </div>
       <p v-else class="panel__empty">공유된 사진이 아직 없습니다.</p>
     </section>

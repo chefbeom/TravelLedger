@@ -747,8 +747,8 @@ export function fetchTravelCategories() {
   return request('/travel/categories')
 }
 
-export function fetchTravelCommunityFeed() {
-  return request('/travel/community-feed')
+export function fetchTravelCommunityFeed(page = 0, size = 10) {
+  return request(buildUrl('/travel/community-feed', { page, size }).replace(API_BASE, ''))
 }
 
 export function shareTravelPlan(planId, payload) {
@@ -758,8 +758,8 @@ export function shareTravelPlan(planId, payload) {
   })
 }
 
-export function fetchTravelSharedExhibits() {
-  return request('/travel/shared-exhibits')
+export function fetchTravelSharedExhibits(page = 0, size = 5) {
+  return request(buildUrl('/travel/shared-exhibits', { page, size }).replace(API_BASE, ''))
 }
 
 export function fetchTravelSharedExhibit(shareId) {

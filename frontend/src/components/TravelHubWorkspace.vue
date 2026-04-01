@@ -157,6 +157,12 @@ const recordForm = reactive({
 const recordPhotoFiles = ref([])
 const recordPhotoCaption = ref('')
 const recordAutofillMessage = ref('사진을 고르면 메타데이터가 있을 때 날짜와 위치를 자동으로 채워줍니다.')
+const communityFeedPage = ref(0)
+const communityFeedPageCount = ref(1)
+const communityFeedTotal = ref(0)
+const sharedExhibitPage = ref(0)
+const sharedExhibitPageCount = ref(1)
+const sharedExhibitTotal = ref(0)
 
 const planStatusOptions = computed(() => travelCategories.value.planStatuses?.length ? travelCategories.value.planStatuses : fallbackCategories.planStatuses)
 const budgetCategoryOptions = computed(() => travelCategories.value.budgetCategories?.length ? travelCategories.value.budgetCategories : fallbackCategories.budgetCategories)
@@ -522,18 +528,30 @@ async function loadTravelCategoriesSafe() {
   }
 }
 
-async function loadTravelCommunityFeed() {
+async function loadTravelCommunityFeed(page = communityFeedPage.value) {
   try {
-    communityFeed.value = await fetchTravelCommunityFeed()
+    const response = await fetchTravelCommunityFeed(page, 10)
+    communityFeed.value = response.items ?? []
+    communityFeedPage.value = response.page ?? page ?? 0
+    communityFeedPageCount.value = Math.max(response.totalPages ?? 1, 1)
+    communityFeedTotal.value = response.totalElements ?? communityFeed.value.length
   } catch (error) {
+    communityFeed.value = []
+    communityFeedPage.value = 0
+    communityFeedPageCount.value = 1
+    communityFeedTotal.value = 0
     setFeedback('', error.message)
   }
 }
 
-async function loadSharedExhibits(preferredShareId = selectedSharedExhibitId.value) {
+async function loadSharedExhibits(preferredShareId = selectedSharedExhibitId.value, page = sharedExhibitPage.value) {
   try {
-    const exhibits = await fetchTravelSharedExhibits()
+    const response = await fetchTravelSharedExhibits(page, 5)
+    const exhibits = response.items ?? []
     sharedExhibitSummaries.value = exhibits
+    sharedExhibitPage.value = response.page ?? page ?? 0
+    sharedExhibitPageCount.value = Math.max(response.totalPages ?? 1, 1)
+    sharedExhibitTotal.value = response.totalElements ?? exhibits.length
 
     const requestedShareId = String(preferredShareId || '').trim()
     const nextShareId = exhibits.some((item) => String(item.id) === requestedShareId)
@@ -546,10 +564,21 @@ async function loadSharedExhibits(preferredShareId = selectedSharedExhibitId.val
     }
   } catch (error) {
     sharedExhibitSummaries.value = []
+    sharedExhibitPage.value = 0
+    sharedExhibitPageCount.value = 1
+    sharedExhibitTotal.value = 0
     selectedSharedExhibitId.value = ''
     selectedSharedExhibit.value = null
     setFeedback('', error.message)
   }
+}
+
+async function handleChangeCommunityFeedPage(page) {
+  await loadTravelCommunityFeed(page)
+}
+
+async function handleChangeSharedExhibitPage(page) {
+  await loadSharedExhibits('', page)
 }
 
 async function loadTravelRates() {
@@ -1198,8 +1227,8 @@ function openMemoryEditor(memoryId) {
         <section class="panel panel--map-fill"><div class="panel__header"><div><h2>사진첩 지도</h2><p>선택한 여행의 사진 기록이 위치별로 묶여 큰 지도에 표시됩니다.</p></div><span class="panel__badge">{{ photoAlbumPhotoCount }}장</span></div><TravelMapPanel :markers="photoAlbumMarkers" :selected-point="null" :enable-pick-location="false" :enable-draw-route="false" :view-key="travelPlan?.id || 'photo-album-map'" hint-title="사진 핀 보기" hint-text="여행 기록에 연결된 사진을 위치별로 묶어 보여줍니다." /></section>
         <section class="panel"><div class="panel__header"><div><h2>사진첩 카드</h2><p>여행 로그에서 올린 사진을 여기서 그대로 재사용하며, 카드에서 바로 원본 보기와 기록 편집이 가능합니다.</p></div></div><div v-if="photoAlbumCards.length" class="travel-media-grid travel-media-grid--gallery"><article v-for="item in pagedPhotoAlbumCards" :key="item.id" class="travel-media-card"><img v-if="item.heroPhotoUrl" :src="buildThumbnailUrl(item.heroPhotoUrl)" :alt="item.caption || item.title" class="travel-media-thumb" /><div v-else class="travel-media-thumb travel-media-thumb--receipt">사진 없음</div><div class="travel-media-copy"><div class="travel-media-tags"><span class="chip chip--neutral">{{ item.planName || '여행' }}</span><span class="chip chip--neutral">사진 {{ item.photoCount }}장</span></div><strong>{{ item.title }}</strong><small>{{ formatDateTime(item.memoryDate, item.memoryTime) }}</small><small>{{ item.locationLabel }}</small><small>{{ item.memo || '이 기록을 다시 열면 기존 사진이 남아 있는 상태에서 이어서 편집할 수 있습니다.' }}</small></div><div class="travel-media-actions"><button class="button button--primary" @click="openMemoryEditor(item.memoryId)">기록 편집</button><a v-if="item.heroPhotoUrl" class="button button--ghost" :href="item.heroPhotoUrl" target="_blank" rel="noreferrer">대표 사진 열기</a><button class="button button--danger" :disabled="!item.heroPhoto" @click="handleDeleteMedia(item.heroPhoto)">대표 사진 삭제</button></div></article></div><div v-if="photoAlbumCards.length > PHOTO_ALBUM_PAGE_SIZE" class="panel__actions"><button class="button button--ghost" type="button" :disabled="photoAlbumPage <= 0" @click="photoAlbumPage -= 1">이전</button><span>{{ photoAlbumPage + 1 }} / {{ photoAlbumPageCount }}</span><button class="button button--ghost" type="button" :disabled="photoAlbumPage + 1 >= photoAlbumPageCount" @click="photoAlbumPage += 1">다음</button></div><p v-else class="panel__empty">사진첩에 표시할 사진이 아직 없습니다.</p></section>
       </div>
-      <TravelSharedExhibitWorkspace v-else-if="albumTab === 'shared'" :exhibits="sharedExhibitSummaries" :selected-exhibit-id="selectedSharedExhibitId" :selected-exhibit="selectedSharedExhibit" :is-loading="isLoading" @select-exhibit="handleSelectSharedExhibit" />
-      <TravelCommunityWorkspace v-else :travel-plan="travelPlan" :community-feed="communityFeed" />
+      <TravelSharedExhibitWorkspace v-else-if="albumTab === 'shared'" :exhibits="sharedExhibitSummaries" :exhibit-page="sharedExhibitPage" :exhibit-page-count="sharedExhibitPageCount" :exhibit-total="sharedExhibitTotal" :selected-exhibit-id="selectedSharedExhibitId" :selected-exhibit="selectedSharedExhibit" :is-loading="isLoading" @select-exhibit="handleSelectSharedExhibit" @change-exhibit-page="handleChangeSharedExhibitPage" />
+      <TravelCommunityWorkspace v-else :travel-plan="travelPlan" :community-feed="communityFeed" :community-page="communityFeedPage" :community-page-count="communityFeedPageCount" :community-total="communityFeedTotal" @change-community-page="handleChangeCommunityFeedPage" />
     </template>
     </template>
   </div>

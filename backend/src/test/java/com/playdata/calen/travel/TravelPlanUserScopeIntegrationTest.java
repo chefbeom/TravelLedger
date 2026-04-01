@@ -152,11 +152,11 @@ class TravelPlanUserScopeIntegrationTest {
 
         MvcResult feedResult = mockMvc.perform(get("/api/travel/community-feed").session(hanaSession))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[0].heroPhotoUrl").isNotEmpty())
+                .andExpect(jsonPath("$.items[0].heroPhotoUrl").isNotEmpty())
                 .andReturn();
 
         JsonNode feed = objectMapper.readTree(feedResult.getResponse().getContentAsString());
-        String heroPhotoUrl = feed.get(0).get("heroPhotoUrl").asText();
+        String heroPhotoUrl = feed.get("items").get(0).get("heroPhotoUrl").asText();
         Matcher matcher = PUBLIC_MEDIA_URL_PATTERN.matcher(heroPhotoUrl);
         assertThat(matcher.matches()).isTrue();
 
@@ -269,9 +269,9 @@ class TravelPlanUserScopeIntegrationTest {
 
         mockMvc.perform(get("/api/travel/shared-exhibits").session(minsuSession))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[0].id").value(shareId))
-                .andExpect(jsonPath("$[0].planId").value(planId))
-                .andExpect(jsonPath("$[0].sharedByLoginId").value("hana"));
+                .andExpect(jsonPath("$.items[0].id").value(shareId))
+                .andExpect(jsonPath("$.items[0].planId").value(planId))
+                .andExpect(jsonPath("$.items[0].sharedByLoginId").value("hana"));
 
         MvcResult detailResult = mockMvc.perform(get("/api/travel/shared-exhibits/{shareId}", shareId).session(minsuSession))
                 .andExpect(status().isOk())

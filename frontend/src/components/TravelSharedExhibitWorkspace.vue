@@ -9,6 +9,18 @@ const props = defineProps({
     type: Array,
     default: () => [],
   },
+  exhibitPage: {
+    type: Number,
+    default: 0,
+  },
+  exhibitPageCount: {
+    type: Number,
+    default: 1,
+  },
+  exhibitTotal: {
+    type: Number,
+    default: 0,
+  },
   selectedExhibitId: {
     type: [String, Number],
     default: '',
@@ -23,7 +35,7 @@ const props = defineProps({
   },
 })
 
-const emit = defineEmits(['select-exhibit'])
+const emit = defineEmits(['select-exhibit', 'change-exhibit-page'])
 
 const statusLabels = {
   PLANNED: '예정 여행',
@@ -56,16 +68,9 @@ const photoCards = computed(() =>
     .sort((left, right) => String(right.uploadedAt || '').localeCompare(String(left.uploadedAt || ''))),
 )
 
-const EXHIBIT_PAGE_SIZE = 5
 const PHOTO_PAGE_SIZE = 10
-const exhibitPage = ref(0)
 const photoPage = ref(0)
-const exhibitPageCount = computed(() => Math.max(Math.ceil(props.exhibits.length / EXHIBIT_PAGE_SIZE), 1))
 const photoPageCount = computed(() => Math.max(Math.ceil(photoCards.value.length / PHOTO_PAGE_SIZE), 1))
-const pagedExhibits = computed(() => {
-  const start = exhibitPage.value * EXHIBIT_PAGE_SIZE
-  return props.exhibits.slice(start, start + EXHIBIT_PAGE_SIZE)
-})
 const pagedPhotoCards = computed(() => {
   const start = photoPage.value * PHOTO_PAGE_SIZE
   return photoCards.value.slice(start, start + PHOTO_PAGE_SIZE)
@@ -81,23 +86,10 @@ function isSelectedExhibit(exhibitId) {
 
 watch(
   () => props.selectedExhibitId,
-  (value) => {
-    const targetIndex = props.exhibits.findIndex((item) => String(item.id) === String(value || ''))
-    if (targetIndex >= 0) {
-      exhibitPage.value = Math.floor(targetIndex / EXHIBIT_PAGE_SIZE)
-    }
+  () => {
     photoPage.value = 0
   },
   { immediate: true },
-)
-
-watch(
-  () => props.exhibits.length,
-  () => {
-    if (exhibitPage.value >= exhibitPageCount.value) {
-      exhibitPage.value = Math.max(exhibitPageCount.value - 1, 0)
-    }
-  },
 )
 
 watch(
@@ -108,6 +100,10 @@ watch(
     }
   },
 )
+
+function goToExhibitPage(page) {
+  emit('change-exhibit-page', page)
+}
 </script>
 
 <template>
@@ -123,7 +119,7 @@ watch(
 
       <div v-if="exhibits.length" class="travel-plan-picker-grid">
         <button
-          v-for="item in pagedExhibits"
+          v-for="item in exhibits"
           :key="item.id"
           class="travel-plan-picker-card"
           :class="{ 'travel-plan-picker-card--active': isSelectedExhibit(item.id) }"
@@ -136,12 +132,12 @@ watch(
           <small>{{ item.sharedByDisplayName }} ({{ item.sharedByLoginId }}) / {{ statusLabel(item.status) }}</small>
         </button>
       </div>
-      <div v-if="exhibits.length > EXHIBIT_PAGE_SIZE" class="panel__actions">
+      <div v-if="exhibitPageCount > 1" class="panel__actions">
         <button
           class="button button--ghost"
           type="button"
           :disabled="exhibitPage <= 0"
-          @click="exhibitPage -= 1"
+          @click="goToExhibitPage(exhibitPage - 1)"
         >
           이전
         </button>
@@ -150,7 +146,7 @@ watch(
           class="button button--ghost"
           type="button"
           :disabled="exhibitPage + 1 >= exhibitPageCount"
-          @click="exhibitPage += 1"
+          @click="goToExhibitPage(exhibitPage + 1)"
         >
           다음
         </button>

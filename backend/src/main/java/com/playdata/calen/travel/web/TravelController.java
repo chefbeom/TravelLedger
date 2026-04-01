@@ -6,6 +6,7 @@ import com.playdata.calen.travel.domain.TravelMediaType;
 import com.playdata.calen.travel.dto.TravelBudgetItemRequest;
 import com.playdata.calen.travel.dto.TravelBudgetItemResponse;
 import com.playdata.calen.travel.dto.TravelCategoryCatalogResponse;
+import com.playdata.calen.travel.dto.TravelCommunityFeedPageResponse;
 import com.playdata.calen.travel.dto.TravelCommunityPostResponse;
 import com.playdata.calen.travel.dto.TravelExchangeRateResponse;
 import com.playdata.calen.travel.dto.TravelExpenseRecordRequest;
@@ -25,6 +26,7 @@ import com.playdata.calen.travel.dto.TravelPortfolioResponse;
 import com.playdata.calen.travel.dto.TravelRouteSegmentRequest;
 import com.playdata.calen.travel.dto.TravelRouteSegmentResponse;
 import com.playdata.calen.travel.dto.TravelSharedExhibitDetailResponse;
+import com.playdata.calen.travel.dto.TravelSharedExhibitPageResponse;
 import com.playdata.calen.travel.dto.TravelSharedExhibitSummaryResponse;
 import com.playdata.calen.travel.service.TravelService;
 import jakarta.validation.Valid;
@@ -80,15 +82,21 @@ public class TravelController {
     }
 
     @GetMapping("/community-feed")
-    public List<TravelCommunityPostResponse> getCommunityFeed(@AuthenticationPrincipal AppUserPrincipal currentUser) {
-        return travelService.getCommunityFeed(currentUser.userId());
+    public TravelCommunityFeedPageResponse getCommunityFeed(
+            @AuthenticationPrincipal AppUserPrincipal currentUser,
+            @RequestParam(name = "page", required = false) Integer page,
+            @RequestParam(name = "size", required = false) Integer size
+    ) {
+        return travelService.getCommunityFeed(currentUser.userId(), page, size);
     }
 
     @GetMapping("/shared-exhibits")
-    public List<TravelSharedExhibitSummaryResponse> getSharedExhibits(
-            @AuthenticationPrincipal AppUserPrincipal currentUser
+    public TravelSharedExhibitPageResponse getSharedExhibits(
+            @AuthenticationPrincipal AppUserPrincipal currentUser,
+            @RequestParam(name = "page", required = false) Integer page,
+            @RequestParam(name = "size", required = false) Integer size
     ) {
-        return travelService.getSharedExhibits(currentUser.userId());
+        return travelService.getSharedExhibits(currentUser.userId(), page, size);
     }
 
     @GetMapping("/shared-exhibits/{shareId}")

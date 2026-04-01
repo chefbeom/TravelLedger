@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref, watch } from 'vue'
+import { computed } from 'vue'
 import { buildThumbnailUrl } from '../lib/mediaPreview'
 import { formatDateTime } from '../lib/uiFormat'
 import TravelMapPanel from './TravelMapPanel.vue'
@@ -13,7 +13,21 @@ const props = defineProps({
     type: Array,
     default: () => [],
   },
+  communityPage: {
+    type: Number,
+    default: 0,
+  },
+  communityPageCount: {
+    type: Number,
+    default: 1,
+  },
+  communityTotal: {
+    type: Number,
+    default: 0,
+  },
 })
+
+const emit = defineEmits(['change-community-page'])
 
 const localSharedCount = computed(() => (props.travelPlan?.memoryRecords ?? []).filter((item) => item.sharedWithCommunity).length)
 const uniqueUsers = computed(() => new Set(props.communityFeed.map((item) => item.ownerDisplayName).filter(Boolean)).size)
@@ -53,22 +67,9 @@ const communityMarkers = computed(() =>
     })),
 )
 
-const COMMUNITY_PAGE_SIZE = 10
-const communityPage = ref(0)
-const communityPageCount = computed(() => Math.max(Math.ceil(props.communityFeed.length / COMMUNITY_PAGE_SIZE), 1))
-const pagedCommunityFeed = computed(() => {
-  const start = communityPage.value * COMMUNITY_PAGE_SIZE
-  return props.communityFeed.slice(start, start + COMMUNITY_PAGE_SIZE)
-})
-
-watch(
-  () => props.communityFeed.length,
-  () => {
-    if (communityPage.value >= communityPageCount.value) {
-      communityPage.value = Math.max(communityPageCount.value - 1, 0)
-    }
-  },
-)
+function goToCommunityPage(page) {
+  emit('change-community-page', page)
+}
 </script>
 
 <template>
@@ -128,7 +129,7 @@ watch(
       </div>
 
       <div v-if="communityFeed.length" class="travel-media-grid travel-media-grid--gallery">
-        <article v-for="item in pagedCommunityFeed" :key="item.memoryId" class="travel-media-card">
+        <article v-for="item in communityFeed" :key="item.memoryId" class="travel-media-card">
           <img v-if="item.heroPhotoUrl" :src="buildThumbnailUrl(item.heroPhotoUrl)" :alt="item.title" class="travel-media-thumb" />
           <div v-else class="travel-media-thumb travel-media-thumb--receipt">사진 없음</div>
           <div class="travel-media-copy">
@@ -143,12 +144,12 @@ watch(
           </div>
         </article>
       </div>
-      <div v-if="communityFeed.length > COMMUNITY_PAGE_SIZE" class="panel__actions">
+      <div v-if="communityPageCount > 1" class="panel__actions">
         <button
           class="button button--ghost"
           type="button"
           :disabled="communityPage <= 0"
-          @click="communityPage -= 1"
+          @click="goToCommunityPage(communityPage - 1)"
         >
           이전
         </button>
@@ -157,7 +158,7 @@ watch(
           class="button button--ghost"
           type="button"
           :disabled="communityPage + 1 >= communityPageCount"
-          @click="communityPage += 1"
+          @click="goToCommunityPage(communityPage + 1)"
         >
           다음
         </button>

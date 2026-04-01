@@ -22,6 +22,7 @@ import com.playdata.calen.travel.domain.TravelRouteTransportMode;
 import com.playdata.calen.travel.dto.TravelBudgetItemRequest;
 import com.playdata.calen.travel.dto.TravelBudgetItemResponse;
 import com.playdata.calen.travel.dto.TravelCategoryCatalogResponse;
+import com.playdata.calen.travel.dto.TravelCommunityFeedPageResponse;
 import com.playdata.calen.travel.dto.TravelCommunityPostResponse;
 import com.playdata.calen.travel.dto.TravelExchangeRateResponse;
 import com.playdata.calen.travel.dto.TravelExpenseRecordRequest;
@@ -43,6 +44,7 @@ import com.playdata.calen.travel.dto.TravelRoutePointResponse;
 import com.playdata.calen.travel.dto.TravelRouteSegmentRequest;
 import com.playdata.calen.travel.dto.TravelRouteSegmentResponse;
 import com.playdata.calen.travel.dto.TravelSharedExhibitDetailResponse;
+import com.playdata.calen.travel.dto.TravelSharedExhibitPageResponse;
 import com.playdata.calen.travel.dto.TravelSharedExhibitSummaryResponse;
 import com.playdata.calen.travel.repository.TravelBudgetItemRepository;
 import com.playdata.calen.travel.repository.TravelExpenseRecordRepository;
@@ -69,6 +71,8 @@ import javax.xml.parsers.DocumentBuilderFactory;
 import javax.sql.DataSource;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.Resource;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -84,6 +88,8 @@ public class TravelService {
     private static final BigDecimal ZERO_DISTANCE = BigDecimal.ZERO.setScale(3, RoundingMode.HALF_UP);
     private static final String KRW = "KRW";
     private static final String DEFAULT_TRAVEL_COLOR = "#3182F6";
+    private static final int DEFAULT_LIST_PAGE_SIZE = 10;
+    private static final int MAX_LIST_PAGE_SIZE = 20;
     private static final int MAX_STORED_ROUTE_POINTS = 900;
     private static final int DEFAULT_ROUTE_PATH_CHAR_BUDGET = 12000;
     private static final int MIN_ROUTE_PATH_CHAR_BUDGET = 220;
@@ -296,18 +302,32 @@ public class TravelService {
         );
     }
 
-    public List<TravelCommunityPostResponse> getCommunityFeed(Long userId) {
+    public TravelCommunityFeedPageResponse getCommunityFeed(Long userId, Integer page, Integer size) {
         appUserService.getRequiredUser(userId);
+        int normalizedPage = normalizePage(page);
+        int normalizedSize = normalizeSize(size);
 
-        List<TravelExpenseRecord> sharedMemories = travelExpenseRecordRepository
-                .findAllByRecordTypeAndSharedWithCommunityTrueOrderByExpenseDateDescIdDesc(TravelRecordType.MEMORY)
+        Page<TravelExpenseRecord> sharedMemoriesPage = travelExpenseRecordRepository
+                .findCommunityMemoryPage(
+                        TravelRecordType.MEMORY,
+                        TravelMediaType.PHOTO,
+                        PageRequest.of(normalizedPage, normalizedSize)
+                );
+
+        List<TravelExpenseRecord> sharedMemories = sharedMemoriesPage.getContent()
                 .stream()
                 .filter(this::isMemoryRecord)
                 .sorted(RECORD_ORDER)
                 .toList();
 
         if (sharedMemories.isEmpty()) {
-            return Collections.emptyList();
+            return new TravelCommunityFeedPageResponse(
+                    Collections.emptyList(),
+                    normalizedPage,
+                    normalizedSize,
+                    sharedMemoriesPage.getTotalElements(),
+                    sharedMemoriesPage.getTotalPages()
+            );
         }
 
         List<Long> recordIds = sharedMemories.stream().map(TravelExpenseRecord::getId).toList();
@@ -315,10 +335,18 @@ public class TravelService {
                 .filter(asset -> asset.getMediaType() == TravelMediaType.PHOTO)
                 .collect(Collectors.groupingBy(asset -> asset.getRecord().getId()));
 
-        return sharedMemories.stream()
+        List<TravelCommunityPostResponse> items = sharedMemories.stream()
                 .filter(record -> !photosByRecord.getOrDefault(record.getId(), Collections.emptyList()).isEmpty())
                 .map(record -> toCommunityPostResponse(record, photosByRecord.get(record.getId())))
                 .toList();
+
+        return new TravelCommunityFeedPageResponse(
+                items,
+                normalizedPage,
+                normalizedSize,
+                sharedMemoriesPage.getTotalElements(),
+                sharedMemoriesPage.getTotalPages()
+        );
     }
 
     public TravelPlanShareResponse shareCompletedPlan(Long userId, Long planId, String recipientLoginIdRaw) {
@@ -351,11 +379,24 @@ public class TravelService {
         return toTravelPlanShareResponse(share);
     }
 
-    public List<TravelSharedExhibitSummaryResponse> getSharedExhibits(Long userId) {
+    public TravelSharedExhibitPageResponse getSharedExhibits(Long userId, Integer page, Integer size) {
         appUserService.getRequiredUser(userId);
-        return travelPlanShareRepository.findAllByRecipientIdOrderByCreatedAtDescIdDesc(userId).stream()
+        int normalizedPage = normalizePage(page);
+        int normalizedSize = normalizeSize(size);
+        Page<TravelPlanShare> sharePage = travelPlanShareRepository.findAllByRecipientIdOrderByCreatedAtDescIdDesc(
+                userId,
+                PageRequest.of(normalizedPage, normalizedSize)
+        );
+        List<TravelSharedExhibitSummaryResponse> items = sharePage.getContent().stream()
                 .map(this::toSharedExhibitSummaryResponse)
                 .toList();
+        return new TravelSharedExhibitPageResponse(
+                items,
+                normalizedPage,
+                normalizedSize,
+                sharePage.getTotalElements(),
+                sharePage.getTotalPages()
+        );
     }
 
     public TravelSharedExhibitDetailResponse getSharedExhibit(Long userId, Long shareId) {
@@ -812,6 +853,17 @@ public class TravelService {
         return travelRouteSegmentRepository.findAllByPlanIdAndPlanOwnerIdOrderByRouteDateDescIdDesc(planId, userId).stream()
                 .sorted(ROUTE_ORDER)
                 .toList();
+    }
+
+    private int normalizePage(Integer page) {
+        return page == null ? 0 : Math.max(page, 0);
+    }
+
+    private int normalizeSize(Integer size) {
+        if (size == null) {
+            return DEFAULT_LIST_PAGE_SIZE;
+        }
+        return Math.max(1, Math.min(size, MAX_LIST_PAGE_SIZE));
     }
 
     private void applyPlanRequest(TravelPlan plan, TravelPlanRequest request) {

@@ -1275,6 +1275,11 @@ function routeSummary(route) {
           <textarea v-model="draft.memo" rows="3" placeholder="걷기 구간, 버스 환승, 택시 이동 이유 등을 적어두세요." />
         </label>
       </div>
+      <div class="entry-editor__actions">
+        <button class="button button--primary" :disabled="isSubmitting || draftPoints.length < 2 || !draft.title.trim()" @click="submitRoute">
+          {{ isSubmitting && activeSubmit === 'route' ? '저장 중...' : editingRouteId ? '경로 수정' : '경로 저장' }}
+        </button>
+      </div>
     </section>
 
     <section class="panel">

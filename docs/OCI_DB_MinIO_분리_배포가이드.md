@@ -49,6 +49,10 @@
   - `MINIO_PUBLIC_API`에 브라우저가 접근 가능한 주소 설정
   - `TRAVEL_PRESIGNED_UPLOAD_ENABLED=true`
 
+실제 `MinIO presigned URL` 구성 절차는 별도 가이드로 분리해 두었습니다.
+
+- [OCI_MinIO_presignedURL_설정가이드.md](C:/Users/kjs99/Desktop/calen/docs/OCI_MinIO_presignedURL_설정가이드.md)
+
 ## 3. 데이터 서버 준비
 
 데이터 서버에서 레포를 두고 아래처럼 환경파일을 만듭니다.

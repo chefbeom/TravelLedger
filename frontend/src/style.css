@@ -3372,6 +3372,45 @@ textarea {
   color: var(--text-soft);
 }
 
+.travel-overview-timeline-list {
+  display: grid;
+  gap: 10px;
+}
+
+.travel-overview-timeline-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.9);
+}
+
+.travel-overview-timeline-row__main {
+  min-width: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.travel-overview-timeline-row__main strong,
+.travel-overview-timeline-row__main small {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.travel-overview-timeline-row__meta {
+  flex-shrink: 0;
+  display: grid;
+  gap: 8px;
+  justify-items: end;
+}
+
+.travel-overview-timeline-pager {
+  margin-top: 4px;
+}
+
 .travel-overview-place-list {
   display: grid;
   gap: 12px;
@@ -3635,6 +3674,16 @@ textarea {
 
   .travel-overview-day-group__head {
     flex-direction: column;
+  }
+
+  .travel-overview-timeline-row {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .travel-overview-timeline-row__meta {
+    width: 100%;
+    justify-items: start;
   }
 }
 .travel-memory-map-panel .travel-map__canvas {
@@ -4862,6 +4911,7 @@ textarea {
 
 :root[data-theme='toss'] .travel-pending-card strong,
 :root[data-theme='toss'] .travel-overview-day-group__head h3,
+:root[data-theme='toss'] .travel-overview-timeline-row__main strong,
 :root[data-theme='toss'] .travel-overview-place-card strong {
   color: #f6f9ff;
 }
@@ -4873,6 +4923,8 @@ textarea {
 
 :root[data-theme='toss'] .travel-pending-card small,
 :root[data-theme='toss'] .travel-overview-day-group__head p,
+:root[data-theme='toss'] .travel-overview-timeline-row__main small,
+:root[data-theme='toss'] .travel-overview-timeline-row__meta small,
 :root[data-theme='toss'] .travel-overview-place-card small,
 :root[data-theme='toss'] .travel-media-tags,
 :root[data-theme='toss'] .travel-overview-place-list + .panel__empty {
@@ -4887,6 +4939,11 @@ textarea {
 
 :root[data-theme='toss'] .travel-overview-day-grid .travel-pending-card {
   background: linear-gradient(180deg, rgba(26, 33, 44, 0.98), rgba(20, 25, 34, 0.98));
+}
+
+:root[data-theme='toss'] .travel-overview-timeline-row {
+  background: linear-gradient(180deg, rgba(26, 33, 44, 0.98), rgba(20, 25, 34, 0.98));
+  border-color: #2d3645;
 }
 
 :root[data-theme='toss'] .travel-overview-day-grid .travel-pending-card strong,

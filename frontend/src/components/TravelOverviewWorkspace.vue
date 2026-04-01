@@ -13,7 +13,7 @@ const props = defineProps({
 const activeScope = ref('ALL')
 const TIMELINE_PAGE_SIZE = 5
 const PLACE_PAGE_SIZE = 5
-const timelinePage = ref(0)
+const timelineItemPages = ref({})
 const placePage = ref(0)
 
 function resolvePinPreset(category) {
@@ -242,13 +242,21 @@ const timelineGroups = computed(() => {
   }).filter((group) => group.date && (activeScope.value !== 'ALL' || group.items.length))
 })
 
-const timelinePageCount = computed(() =>
-  Math.max(1, Math.ceil(timelineGroups.value.length / TIMELINE_PAGE_SIZE)),
-)
-
 const pagedTimelineGroups = computed(() => {
-  const start = timelinePage.value * TIMELINE_PAGE_SIZE
-  return timelineGroups.value.slice(start, start + TIMELINE_PAGE_SIZE)
+  return timelineGroups.value.map((group) => {
+    const pageCount = Math.max(1, Math.ceil(group.items.length / TIMELINE_PAGE_SIZE))
+    const currentPage = Math.min(
+      Math.max(Number(timelineItemPages.value[group.date] ?? 0), 0),
+      pageCount - 1,
+    )
+    const start = currentPage * TIMELINE_PAGE_SIZE
+    return {
+      ...group,
+      page: currentPage,
+      pageCount,
+      pagedItems: group.items.slice(start, start + TIMELINE_PAGE_SIZE),
+    }
+  })
 })
 
 const placePageCount = computed(() =>
@@ -264,7 +272,7 @@ watch(
   () => props.travelPlan?.id,
   () => {
     activeScope.value = 'ALL'
-    timelinePage.value = 0
+    timelineItemPages.value = {}
     placePage.value = 0
   },
   { immediate: true },
@@ -283,17 +291,20 @@ watch(
 watch(
   () => activeScope.value,
   () => {
-    timelinePage.value = 0
+    timelineItemPages.value = {}
     placePage.value = 0
   },
 )
 
 watch(timelineGroups, (groups) => {
-  const maxPage = Math.max(0, Math.ceil(groups.length / TIMELINE_PAGE_SIZE) - 1)
-  if (timelinePage.value > maxPage) {
-    timelinePage.value = maxPage
-  }
-})
+  const nextPages = {}
+  groups.forEach((group) => {
+    const maxPage = Math.max(0, Math.ceil(group.items.length / TIMELINE_PAGE_SIZE) - 1)
+    const currentPage = Number(timelineItemPages.value[group.date] ?? 0)
+    nextPages[group.date] = Math.min(Math.max(currentPage, 0), maxPage)
+  })
+  timelineItemPages.value = nextPages
+}, { deep: true })
 
 watch(placeCards, (items) => {
   const maxPage = Math.max(0, Math.ceil(items.length / PLACE_PAGE_SIZE) - 1)
@@ -304,6 +315,18 @@ watch(placeCards, (items) => {
 
 function selectScope(scopeKey) {
   activeScope.value = scopeKey
+}
+
+function changeTimelineGroupPage(date, page) {
+  const target = timelineGroups.value.find((group) => group.date === date)
+  if (!target) {
+    return
+  }
+  const maxPage = Math.max(0, Math.ceil(target.items.length / TIMELINE_PAGE_SIZE) - 1)
+  timelineItemPages.value = {
+    ...timelineItemPages.value,
+    [date]: Math.min(Math.max(page, 0), maxPage),
+  }
 }
 
 function lineStyleLabel(style) {
@@ -469,38 +492,39 @@ function itemTypeLabel(type) {
             <span class="panel__badge">{{ group.items.length }}개 기록</span>
           </div>
 
-          <div v-if="group.items.length" class="travel-pending-grid">
-            <article v-for="item in group.items" :key="item.id" class="travel-pending-card">
-              <strong>{{ itemTypeLabel(item.type) }}: {{ item.title }}</strong>
-              <small>{{ item.time ? formatTime(item.time) : '-' }}</small>
-              <small>{{ item.summary }}</small>
-              <small>{{ item.memo }}</small>
-              <div class="travel-media-tags">
+          <div v-if="group.items.length" class="travel-overview-timeline-list">
+            <article v-for="item in group.pagedItems" :key="item.id" class="travel-overview-timeline-row">
+              <div class="travel-overview-timeline-row__main">
+                <strong>{{ item.title }}</strong>
+                <small>{{ item.summary }}</small>
+              </div>
+              <div class="travel-overview-timeline-row__meta">
                 <span class="chip chip--neutral">{{ item.chip }}</span>
+                <small>{{ item.time ? formatTime(item.time) : '-' }}</small>
               </div>
             </article>
           </div>
+          <div v-if="group.pageCount > 1" class="panel__actions travel-overview-timeline-pager">
+            <button
+              class="button button--ghost"
+              type="button"
+              :disabled="group.page <= 0"
+              @click="changeTimelineGroupPage(group.date, group.page - 1)"
+            >
+              이전
+            </button>
+            <span>{{ group.page + 1 }} / {{ group.pageCount }}</span>
+            <button
+              class="button button--ghost"
+              type="button"
+              :disabled="group.page + 1 >= group.pageCount"
+              @click="changeTimelineGroupPage(group.date, group.page + 1)"
+            >
+              다음
+            </button>
+          </div>
           <p v-else class="panel__empty">이 날짜에는 아직 작성된 장소나 경로가 없습니다.</p>
         </article>
-      </div>
-      <div v-if="timelineGroups.length > TIMELINE_PAGE_SIZE" class="panel__actions">
-        <button
-          class="button button--ghost"
-          type="button"
-          :disabled="timelinePage <= 0"
-          @click="timelinePage -= 1"
-        >
-          이전
-        </button>
-        <span>{{ timelinePage + 1 }} / {{ timelinePageCount }}</span>
-        <button
-          class="button button--ghost"
-          type="button"
-          :disabled="timelinePage + 1 >= timelinePageCount"
-          @click="timelinePage += 1"
-        >
-          다음
-        </button>
       </div>
       <p v-if="!timelineGroups.length" class="panel__empty">표시할 여행 기록이 아직 없습니다.</p>
     </section>

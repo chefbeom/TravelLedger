@@ -419,19 +419,6 @@ function itemTypeLabel(type) {
         </article>
       </div>
 
-      <div class="travel-day-tabs">
-        <button
-          v-for="option in scopeOptions"
-          :key="option.key"
-          class="travel-day-tabs__button"
-          :class="{ 'is-active': activeScope === option.key }"
-          type="button"
-          @click="selectScope(option.key)"
-        >
-          <strong>{{ option.label }}</strong>
-          <small>{{ option.subtitle }}</small>
-        </button>
-      </div>
     </section>
 
     <section class="panel panel--map-fill travel-overview-map-panel">
@@ -453,7 +440,18 @@ function itemTypeLabel(type) {
         initial-map-size="expanded"
         hint-title="여행 전체 보기"
         hint-text="전체를 선택하면 모든 날짜의 장소와 경로를 함께 보고, 일차 버튼을 누르면 해당 날짜만 따로 확인할 수 있습니다."
-      />
+      >
+        <template #toolbar>
+          <div class="travel-map__toolbar-group">
+            <span class="travel-map__toolbar-label">일차</span>
+            <select class="travel-map__toolbar-select" :value="activeScope" @change="selectScope($event.target.value)">
+              <option v-for="option in scopeOptions" :key="option.key" :value="option.key">
+                {{ option.label }} - {{ option.subtitle }}
+              </option>
+            </select>
+          </div>
+        </template>
+      </TravelMapPanel>
     </section>
 
     <section v-if="activeScope === 'ALL'" class="panel">

@@ -3512,6 +3512,25 @@ textarea {
   font-size: 0.84rem;
 }
 
+.travel-map__toolbar-select {
+  min-width: 180px;
+  max-width: min(240px, 100%);
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  border-radius: 999px;
+  padding: 6px 34px 6px 12px;
+  background: rgba(248, 250, 252, 0.92);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.84rem;
+  font-weight: 700;
+}
+
+.travel-map__toolbar-select:focus {
+  outline: none;
+  border-color: rgba(49, 130, 246, 0.52);
+  box-shadow: 0 0 0 3px rgba(49, 130, 246, 0.12);
+}
+
 .travel-map__search {
   flex: 1 1 360px;
   width: min(420px, 100%);
@@ -4848,6 +4867,17 @@ textarea {
   color: #7f899c;
 }
 
+:root[data-theme='toss'] .travel-map__toolbar-select {
+  background: rgba(16, 21, 30, 0.96);
+  border-color: rgba(78, 95, 125, 0.62);
+  color: #f3f7ff;
+}
+
+:root[data-theme='toss'] .travel-map__toolbar-select:focus {
+  border-color: rgba(79, 140, 255, 0.72);
+  box-shadow: 0 0 0 3px rgba(79, 140, 255, 0.18);
+}
+
 :root[data-theme='toss'] .travel-map__search-input {
   background: rgba(16, 21, 30, 0.96);
   border-color: rgba(78, 95, 125, 0.62);
@@ -5144,6 +5174,11 @@ textarea {
   .travel-map__toolbar-group {
     width: 100%;
     justify-content: flex-start;
+  }
+
+  .travel-map__toolbar-select {
+    width: 100%;
+    max-width: 100%;
   }
 
   .travel-map__hint {

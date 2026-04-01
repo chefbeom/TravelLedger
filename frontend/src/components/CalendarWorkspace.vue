@@ -740,7 +740,33 @@ function saveAggregateWidgetConfigs() {
 }
 
 function getAggregateRange(period) {
-  return resolveRange(selectedDate.value || props.anchorDate, period, props.anchorDate, props.anchorDate)
+  const anchorMonthPrefix = String(props.anchorDate || '').slice(0, 7)
+  const selectedMonthPrefix = String(selectedDate.value || '').slice(0, 7)
+  const baseDate = selectedMonthPrefix === anchorMonthPrefix
+    ? (selectedDate.value || props.anchorDate)
+    : props.anchorDate
+
+  const range = resolveRange(baseDate, period, props.anchorDate, props.anchorDate)
+
+  if (!anchorMonthPrefix) {
+    return range
+  }
+
+  const monthStart = `${anchorMonthPrefix}-01`
+  const monthEnd = resolveRange(props.anchorDate, 'MONTH', props.anchorDate, props.anchorDate).to
+
+  if (period !== 'WEEK' && period !== 'DAY') {
+    return range
+  }
+
+  const from = range.from < monthStart ? monthStart : range.from
+  const to = range.to > monthEnd ? monthEnd : range.to
+
+  return {
+    ...range,
+    from,
+    to,
+  }
 }
 
 function buildAggregateCard(config, index) {

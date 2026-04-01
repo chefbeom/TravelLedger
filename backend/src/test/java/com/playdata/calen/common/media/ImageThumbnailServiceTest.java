@@ -34,6 +34,17 @@ class ImageThumbnailServiceTest {
         assertThat(second.contentType()).isEqualTo("image/png");
     }
 
+    @Test
+    void shouldRotatePortraitOrientationForThumbnailSource() {
+        ImageThumbnailService service = new ImageThumbnailService(tempDir);
+        BufferedImage source = new BufferedImage(1600, 900, BufferedImage.TYPE_INT_RGB);
+
+        BufferedImage rotated = service.applyExifOrientation(source, 6);
+
+        assertThat(rotated.getWidth()).isEqualTo(900);
+        assertThat(rotated.getHeight()).isEqualTo(1600);
+    }
+
     private byte[] createPngBytes(int width, int height) throws IOException {
         BufferedImage image = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB);
         for (int y = 0; y < height; y++) {

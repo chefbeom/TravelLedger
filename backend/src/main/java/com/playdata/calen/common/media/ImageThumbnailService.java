@@ -1,8 +1,12 @@
 package com.playdata.calen.common.media;
 
+import com.drew.imaging.ImageMetadataReader;
+import com.drew.metadata.exif.ExifIFD0Directory;
+import java.awt.geom.AffineTransform;
 import java.awt.Graphics2D;
 import java.awt.RenderingHints;
 import java.awt.image.BufferedImage;
+import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -53,17 +57,20 @@ public class ImageThumbnailService {
         }
 
         try (InputStream inputStream = resource.getInputStream()) {
-            BufferedImage sourceImage = ImageIO.read(inputStream);
+            byte[] sourceBytes = inputStream.readAllBytes();
+            BufferedImage sourceImage = ImageIO.read(new ByteArrayInputStream(sourceBytes));
             if (sourceImage == null) {
                 return Optional.empty();
             }
 
-            if (sourceImage.getWidth() <= width) {
+            BufferedImage orientedImage = applyExifOrientation(sourceImage, resolveExifOrientation(sourceBytes));
+
+            if (orientedImage.getWidth() <= width) {
                 return Optional.empty();
             }
 
             int targetWidth = width;
-            int targetHeight = Math.max(1, (int) Math.round((double) sourceImage.getHeight() * targetWidth / sourceImage.getWidth()));
+            int targetHeight = Math.max(1, (int) Math.round((double) orientedImage.getHeight() * targetWidth / orientedImage.getWidth()));
             boolean keepAlpha = preservesAlpha(contentType);
 
             BufferedImage thumbnail = new BufferedImage(
@@ -77,7 +84,7 @@ public class ImageThumbnailService {
                 graphics.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
                 graphics.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
                 graphics.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-                graphics.drawImage(sourceImage, 0, 0, targetWidth, targetHeight, null);
+                graphics.drawImage(orientedImage, 0, 0, targetWidth, targetHeight, null);
             } finally {
                 graphics.dispose();
             }
@@ -109,6 +116,86 @@ public class ImageThumbnailService {
     private boolean preservesAlpha(String contentType) {
         String normalized = contentType.trim().toLowerCase();
         return normalized.contains("png") || normalized.contains("gif") || normalized.contains("webp");
+    }
+
+    int resolveExifOrientation(byte[] sourceBytes) {
+        if (sourceBytes == null || sourceBytes.length == 0) {
+            return 1;
+        }
+
+        try (ByteArrayInputStream inputStream = new ByteArrayInputStream(sourceBytes)) {
+            ExifIFD0Directory exifDirectory = ImageMetadataReader.readMetadata(inputStream)
+                    .getFirstDirectoryOfType(ExifIFD0Directory.class);
+            if (exifDirectory == null) {
+                return 1;
+            }
+
+            Integer orientation = exifDirectory.getInteger(ExifIFD0Directory.TAG_ORIENTATION);
+            return orientation == null ? 1 : orientation;
+        } catch (Exception exception) {
+            return 1;
+        }
+    }
+
+    BufferedImage applyExifOrientation(BufferedImage sourceImage, int orientation) {
+        if (sourceImage == null) {
+            return null;
+        }
+
+        int width = sourceImage.getWidth();
+        int height = sourceImage.getHeight();
+        AffineTransform transform = new AffineTransform();
+        int targetWidth = width;
+        int targetHeight = height;
+
+        switch (orientation) {
+            case 2 -> {
+                transform.scale(-1.0, 1.0);
+                transform.translate(-width, 0.0);
+            }
+            case 3 -> {
+                transform.translate(width, height);
+                transform.rotate(Math.PI);
+            }
+            case 4 -> {
+                transform.scale(1.0, -1.0);
+                transform.translate(0.0, -height);
+            }
+            case 6 -> {
+                targetWidth = height;
+                targetHeight = width;
+                transform.translate(height, 0.0);
+                transform.rotate(Math.PI / 2.0);
+            }
+            case 8 -> {
+                targetWidth = height;
+                targetHeight = width;
+                transform.translate(0.0, width);
+                transform.rotate(-Math.PI / 2.0);
+            }
+            default -> {
+                return sourceImage;
+            }
+        }
+
+        BufferedImage transformedImage = new BufferedImage(
+                targetWidth,
+                targetHeight,
+                sourceImage.getColorModel().hasAlpha() ? BufferedImage.TYPE_INT_ARGB : BufferedImage.TYPE_INT_RGB
+        );
+
+        Graphics2D graphics = transformedImage.createGraphics();
+        try {
+            graphics.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+            graphics.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
+            graphics.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+            graphics.transform(transform);
+            graphics.drawImage(sourceImage, 0, 0, null);
+        } finally {
+            graphics.dispose();
+        }
+
+        return transformedImage;
     }
 
     private ThumbnailDescriptor buildDescriptor(Resource resource, String contentType, int width) {

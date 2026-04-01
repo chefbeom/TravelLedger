@@ -210,6 +210,37 @@ function normalizePoint(pointLike) {
   }
 }
 
+function resolveInitialCenter() {
+  const selectedPoint = normalizePoint(props.selectedPoint)
+  if (selectedPoint) {
+    return [selectedPoint.latitude, selectedPoint.longitude]
+  }
+
+  const firstMarker = props.markers
+    .map((marker) => normalizePoint(marker))
+    .find(Boolean)
+  if (firstMarker) {
+    return [firstMarker.latitude, firstMarker.longitude]
+  }
+
+  const firstRoutePoint = props.routes
+    .flatMap((route) => route.points ?? [])
+    .map((point) => normalizePoint(point))
+    .find(Boolean)
+  if (firstRoutePoint) {
+    return [firstRoutePoint.latitude, firstRoutePoint.longitude]
+  }
+
+  const firstDraftPoint = props.draftPath
+    .map((point) => normalizePoint(point))
+    .find(Boolean)
+  if (firstDraftPoint) {
+    return [firstDraftPoint.latitude, firstDraftPoint.longitude]
+  }
+
+  return DEFAULT_CENTER
+}
+
 function thinLinePoints(points, maxPoints = 1200) {
   if (!Array.isArray(points) || points.length <= maxPoints) {
     return points
@@ -533,7 +564,7 @@ function fitToAll() {
   if (bounds.length) {
     mapInstance.fitBounds(bounds, { padding: [40, 40], maxZoom: 14 })
   } else {
-    mapInstance.setView(DEFAULT_CENTER, DEFAULT_ZOOM)
+    mapInstance.setView(resolveInitialCenter(), DEFAULT_ZOOM)
   }
 
   hasFittedInitialView = true
@@ -651,7 +682,7 @@ function renderMapLayers({ shouldFit = false } = {}) {
     if (shouldFit) {
       fitToAll()
     } else {
-      mapInstance.setView(DEFAULT_CENTER, DEFAULT_ZOOM)
+      mapInstance.setView(resolveInitialCenter(), DEFAULT_ZOOM)
       requestAnimationFrame(() => mapInstance?.invalidateSize(false))
     }
     return
@@ -705,7 +736,7 @@ onMounted(() => {
   mapInstance = L.map(mapElement.value, {
     zoomControl: true,
     scrollWheelZoom: true,
-  }).setView(DEFAULT_CENTER, DEFAULT_ZOOM)
+  }).setView(resolveInitialCenter(), DEFAULT_ZOOM)
 
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     attribution: '&copy; OpenStreetMap contributors',

@@ -6,6 +6,13 @@ import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.HexFormat;
 import java.util.Optional;
 import javax.imageio.ImageIO;
 import lombok.extern.slf4j.Slf4j;
@@ -19,6 +26,18 @@ public class ImageThumbnailService {
     private static final int DEFAULT_WIDTH = 480;
     private static final int MIN_WIDTH = 120;
     private static final int MAX_WIDTH = 1280;
+    private static final String CACHE_DIRECTORY_NAME = "calen-thumbnail-cache";
+    private static final HexFormat HEX_FORMAT = HexFormat.of();
+
+    private final Path cacheRoot;
+
+    public ImageThumbnailService() {
+        this(Path.of(System.getProperty("java.io.tmpdir"), CACHE_DIRECTORY_NAME));
+    }
+
+    ImageThumbnailService(Path cacheRoot) {
+        this.cacheRoot = cacheRoot;
+    }
 
     public Optional<ThumbnailContent> createThumbnail(Resource resource, String contentType, Integer requestedWidth) {
         if (resource == null || contentType == null || !contentType.startsWith("image/")) {
@@ -26,6 +45,12 @@ public class ImageThumbnailService {
         }
 
         int width = normalizeWidth(requestedWidth);
+        ThumbnailDescriptor descriptor = buildDescriptor(resource, contentType, width);
+
+        Optional<ThumbnailContent> cachedThumbnail = readFromCache(descriptor);
+        if (cachedThumbnail.isPresent()) {
+            return cachedThumbnail;
+        }
 
         try (InputStream inputStream = resource.getInputStream()) {
             BufferedImage sourceImage = ImageIO.read(inputStream);
@@ -65,7 +90,9 @@ public class ImageThumbnailService {
                 return Optional.empty();
             }
 
-            return Optional.of(new ThumbnailContent(outputStream.toByteArray(), outputContentType));
+            byte[] bytes = outputStream.toByteArray();
+            writeToCache(descriptor, bytes);
+            return Optional.of(new ThumbnailContent(bytes, outputContentType));
         } catch (IOException exception) {
             log.debug("Failed to create image thumbnail.", exception);
             return Optional.empty();
@@ -82,6 +109,70 @@ public class ImageThumbnailService {
     private boolean preservesAlpha(String contentType) {
         String normalized = contentType.trim().toLowerCase();
         return normalized.contains("png") || normalized.contains("gif") || normalized.contains("webp");
+    }
+
+    private ThumbnailDescriptor buildDescriptor(Resource resource, String contentType, int width) {
+        boolean keepAlpha = preservesAlpha(contentType);
+        String extension = keepAlpha ? "png" : "jpg";
+        String outputContentType = keepAlpha ? "image/png" : "image/jpeg";
+        String cacheKey = buildCacheKey(resource, contentType, width, extension);
+        return new ThumbnailDescriptor(cacheRoot.resolve(cacheKey + "." + extension), outputContentType);
+    }
+
+    private String buildCacheKey(Resource resource, String contentType, int width, String extension) {
+        String source = String.join("|",
+                resource.getDescription(),
+                contentType,
+                extension,
+                Integer.toString(width),
+                Long.toString(readMetadataSafely(resource::contentLength)),
+                Long.toString(readMetadataSafely(resource::lastModified))
+        );
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            return HEX_FORMAT.formatHex(digest.digest(source.getBytes(StandardCharsets.UTF_8)));
+        } catch (NoSuchAlgorithmException exception) {
+            throw new IllegalStateException("SHA-256 digest is unavailable.", exception);
+        }
+    }
+
+    private long readMetadataSafely(ResourceLongSupplier supplier) {
+        try {
+            return supplier.getAsLong();
+        } catch (IOException exception) {
+            return -1L;
+        }
+    }
+
+    private Optional<ThumbnailContent> readFromCache(ThumbnailDescriptor descriptor) {
+        try {
+            if (!Files.exists(descriptor.path()) || Files.size(descriptor.path()) == 0L) {
+                return Optional.empty();
+            }
+            return Optional.of(new ThumbnailContent(Files.readAllBytes(descriptor.path()), descriptor.contentType()));
+        } catch (IOException exception) {
+            log.debug("Failed to read cached thumbnail.", exception);
+            return Optional.empty();
+        }
+    }
+
+    private void writeToCache(ThumbnailDescriptor descriptor, byte[] bytes) {
+        try {
+            Files.createDirectories(cacheRoot);
+            Path temporaryFile = Files.createTempFile(cacheRoot, "thumbnail-", ".tmp");
+            Files.write(temporaryFile, bytes);
+            Files.move(temporaryFile, descriptor.path(), StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+        } catch (IOException exception) {
+            log.debug("Failed to cache thumbnail.", exception);
+        }
+    }
+
+    @FunctionalInterface
+    private interface ResourceLongSupplier {
+        long getAsLong() throws IOException;
+    }
+
+    private record ThumbnailDescriptor(Path path, String contentType) {
     }
 
     public record ThumbnailContent(byte[] bytes, String contentType) {

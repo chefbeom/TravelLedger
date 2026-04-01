@@ -63,6 +63,7 @@ const gpxSelectedFiles = ref([])
 const activeDayDate = ref('')
 const highlightedDraftIndex = ref(-1)
 const editingRouteId = ref(null)
+const selectedMemoryRouteSeedKeys = ref([])
 
 const routeSegments = computed(() => props.travelPlan?.routeSegments ?? [])
 const tripDays = computed(() => {
@@ -116,6 +117,30 @@ const orderedDayMemories = computed(() =>
   }),
 )
 
+const memoryRouteSeedEntries = computed(() =>
+  orderedDayMemories.value
+    .filter((item) => item.latitude !== null && item.latitude !== undefined && item.longitude !== null && item.longitude !== undefined)
+    .map((item, index) => ({
+      key: item.id != null
+        ? `memory-${item.id}`
+        : `memory-${activeDayDate.value || item.memoryDate || 'day'}-${index}-${Number(item.latitude).toFixed(7)}-${Number(item.longitude).toFixed(7)}`,
+      point: createDraftPoint(
+        {
+          latitude: Number(item.latitude),
+          longitude: Number(item.longitude),
+        },
+        {
+          pointType: 'MEMORY',
+          linkedMemoryId: item.id ?? null,
+          label: item.placeName || item.title || `기록 핀 ${index + 1}`,
+        },
+      ),
+      title: item.placeName || item.title || `기록 핀 ${index + 1}`,
+      summary: [item.memoryTime ? formatTime(item.memoryTime) : '', item.country, item.region, item.placeName]
+        .filter(Boolean)
+        .join(' / '),
+    })),
+)
 const memoryRouteSeedPoints = computed(() =>
   orderedDayMemories.value
     .filter((item) => item.latitude !== null && item.latitude !== undefined && item.longitude !== null && item.longitude !== undefined)
@@ -133,6 +158,13 @@ const memoryRouteSeedPoints = computed(() =>
       ),
     ),
 )
+
+const selectedMemoryRouteSeedPoints = computed(() =>
+  memoryRouteSeedEntries.value
+    .filter((entry) => selectedMemoryRouteSeedKeys.value.includes(entry.key))
+    .map((entry) => entry.point),
+)
+const selectedMemoryRouteSeedCount = computed(() => selectedMemoryRouteSeedPoints.value.length)
 
 const routeMapMarkers = computed(() =>
   orderedDayMemories.value
@@ -401,6 +433,21 @@ watch(activeDayDate, () => {
 })
 
 watch(
+  memoryRouteSeedEntries,
+  (entries) => {
+    const availableKeys = entries.map((entry) => entry.key)
+    if (!availableKeys.length) {
+      selectedMemoryRouteSeedKeys.value = []
+      return
+    }
+
+    const filteredKeys = selectedMemoryRouteSeedKeys.value.filter((key) => availableKeys.includes(key))
+    selectedMemoryRouteSeedKeys.value = filteredKeys.length ? filteredKeys : [...availableKeys]
+  },
+  { deep: true, immediate: true },
+)
+
+watch(
   () => activeDayTimeline.value.length,
   () => {
     if (activeDayTimelinePage.value >= activeDayTimelinePageCount.value) {
@@ -433,6 +480,24 @@ function selectTripDay(day) {
 function selectAllDays() {
   activeDayDate.value = ''
   highlightedDraftIndex.value = -1
+}
+
+function toggleMemoryRouteSeedSelection(key) {
+  if (!key) {
+    return
+  }
+
+  selectedMemoryRouteSeedKeys.value = selectedMemoryRouteSeedKeys.value.includes(key)
+    ? selectedMemoryRouteSeedKeys.value.filter((currentKey) => currentKey !== key)
+    : [...selectedMemoryRouteSeedKeys.value, key]
+}
+
+function selectAllMemoryRouteSeeds() {
+  selectedMemoryRouteSeedKeys.value = memoryRouteSeedEntries.value.map((entry) => entry.key)
+}
+
+function clearMemoryRouteSeedSelection() {
+  selectedMemoryRouteSeedKeys.value = []
 }
 
 function transportLabel(mode) {
@@ -669,6 +734,34 @@ function applyMemoryPinsToDraft() {
   }
 }
 
+function applySelectedMemoryPinsToDraft() {
+  if (selectedMemoryRouteSeedPoints.value.length < 2) {
+    return
+  }
+
+  draft.sourceType = 'MANUAL'
+  gpxFileNames.value = []
+  gpxSelectedFiles.value = []
+  setDraftPoints(mergeMemoryPinsWithStoredGpx(selectedMemoryRouteSeedPoints.value, activeDayStoredGpxRoutes.value), -1)
+
+  if (!draft.title.trim()) {
+    draft.title = `${activeDayLabel.value} 경로`
+  }
+
+  draft.startPlaceName = selectedMemoryRouteSeedPoints.value[0]?.label || draft.startPlaceName
+  draft.endPlaceName = selectedMemoryRouteSeedPoints.value[selectedMemoryRouteSeedPoints.value.length - 1]?.label || draft.endPlaceName
+  const mergedRouteDurationMinutes = activeDayStoredGpxRoutes.value.reduce((sum, route) => sum + safeNumber(route.durationMinutes), 0)
+  const mergedRouteStepCount = activeDayStoredGpxRoutes.value.reduce((sum, route) => sum + safeNumber(route.stepCount), 0)
+  if (mergedRouteDurationMinutes > 0) {
+    draft.durationMinutes = String(mergedRouteDurationMinutes)
+  }
+  if (mergedRouteStepCount > 0) {
+    draft.stepCount = String(mergedRouteStepCount)
+  }
+  if (!draft.lineColorHex) {
+    draft.lineColorHex = props.travelPlan?.colorHex || '#3182F6'
+  }
+}
 function formatCoordinate(point) {
   if (!point) {
     return '-'
@@ -1191,11 +1284,36 @@ function routeSummary(route) {
             <span v-if="isGpxMode" class="chip chip--neutral">표시 방식 선 그리기</span>
             <span v-if="gpxFileNames.length" class="chip chip--neutral">GPX {{ gpxFileNames.length }}개</span>
             <span v-if="gpxFileLabel" class="chip chip--neutral">{{ gpxFileLabel }}</span>
+            <span v-if="memoryRouteSeedEntries.length" class="chip chip--neutral">선택 핀 {{ selectedMemoryRouteSeedCount }}개</span>
+          </div>
+          <div v-if="memoryRouteSeedEntries.length" class="travel-route-seed-picker">
+            <div class="travel-route-seed-picker__header">
+              <strong>연결할 핀 선택</strong>
+              <span>{{ selectedMemoryRouteSeedCount }} / {{ memoryRouteSeedEntries.length }}</span>
+            </div>
+            <div class="travel-route-seed-picker__actions">
+              <button class="button button--ghost" type="button" :disabled="selectedMemoryRouteSeedCount === memoryRouteSeedEntries.length" @click="selectAllMemoryRouteSeeds">전체 선택</button>
+              <button class="button button--ghost" type="button" :disabled="!selectedMemoryRouteSeedCount" @click="clearMemoryRouteSeedSelection">전체 해제</button>
+            </div>
+            <div class="travel-route-seed-picker__list">
+              <label v-for="entry in memoryRouteSeedEntries" :key="entry.key" class="travel-route-seed-picker__item">
+                <input
+                  type="checkbox"
+                  :checked="selectedMemoryRouteSeedKeys.includes(entry.key)"
+                  @change="toggleMemoryRouteSeedSelection(entry.key)"
+                />
+                <div class="travel-route-seed-picker__copy">
+                  <strong>{{ entry.title }}</strong>
+                  <small>{{ entry.summary || '위치 정보 없음' }}</small>
+                </div>
+              </label>
+            </div>
           </div>
           <div class="entry-editor__actions">
             <button class="button button--ghost" type="button" :disabled="memoryRouteSeedPoints.length < 2" @click="applyMemoryPinsToDraft">기록 핀으로 경로 만들기</button>
             <button v-if="!hasGpxGeometry" class="button button--ghost" type="button" @click="removeLastPoint">마지막 제어점 삭제</button>
             <button class="button button--ghost" type="button" @click="resetDraft">{{ hasGpxGeometry ? 'GPX 경로 비우기' : '임시 경로 비우기' }}</button>
+            <button class="button button--ghost" type="button" :disabled="selectedMemoryRouteSeedCount < 2" @click="applySelectedMemoryPinsToDraft">선택 핀으로 경로 만들기</button>
             <button class="button button--primary" :disabled="isSubmitting || draftPoints.length < 2 || !draft.title.trim()" @click="submitRoute">
               {{ isSubmitting && activeSubmit === 'route' ? '저장 중...' : editingRouteId ? '경로 수정' : '경로 저장' }}
             </button>
@@ -1421,3 +1539,4 @@ function routeSummary(route) {
     <p class="panel__empty">먼저 여행을 만들거나 선택해 주세요.</p>
   </section>
 </template>
+

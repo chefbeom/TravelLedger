@@ -3478,6 +3478,75 @@ textarea {
   grid-column: 1 / -1;
 }
 
+.travel-route-seed-picker {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  border-radius: 18px;
+  background: rgba(49, 130, 246, 0.06);
+}
+
+.travel-route-seed-picker__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.travel-route-seed-picker__header strong {
+  margin: 0;
+}
+
+.travel-route-seed-picker__header span {
+  color: var(--text-soft);
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.travel-route-seed-picker__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.travel-route-seed-picker__list {
+  display: grid;
+  gap: 8px;
+  max-height: 240px;
+  overflow: auto;
+}
+
+.travel-route-seed-picker__item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 10px;
+  align-items: flex-start;
+  padding: 10px 12px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.9);
+}
+
+.travel-route-seed-picker__item input {
+  margin-top: 2px;
+}
+
+.travel-route-seed-picker__copy {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.travel-route-seed-picker__copy strong,
+.travel-route-seed-picker__copy small {
+  overflow-wrap: anywhere;
+}
+
+.travel-route-seed-picker__copy small {
+  color: var(--text-soft);
+}
+
 .travel-map__toolbar {
   width: 100%;
   max-width: none;

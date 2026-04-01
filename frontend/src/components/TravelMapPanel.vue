@@ -112,10 +112,12 @@ const emit = defineEmits([
   'map-size-change',
 ])
 
+const mapRootElement = ref(null)
 const mapElement = ref(null)
 const mapSize = ref(['compact', 'default', 'expanded'].includes(props.initialMapSize) ? props.initialMapSize : 'default')
 const viewportMode = ref('keep')
 const canFit = ref(false)
+const isFullscreen = ref(false)
 const searchQuery = ref('')
 const searchResults = ref([])
 const searchMessage = ref('')
@@ -129,6 +131,14 @@ let selectedLayer = null
 let searchLayer = null
 let hasFittedInitialView = false
 let searchAbortController = null
+
+function queueMapResize() {
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      mapInstance?.invalidateSize(false)
+    })
+  })
+}
 
 function escapeHtml(value) {
   return String(value ?? '')
@@ -732,7 +742,38 @@ function setMapSize(size) {
   }
 }
 
+function syncFullscreenState() {
+  isFullscreen.value = document.fullscreenElement === mapRootElement.value
+}
+
+async function toggleFullscreen() {
+  const element = mapRootElement.value
+  if (!element || typeof element.requestFullscreen !== 'function') {
+    return
+  }
+
+  try {
+    if (document.fullscreenElement === element) {
+      await document.exitFullscreen()
+    } else {
+      await element.requestFullscreen()
+    }
+  } catch (error) {
+    console.error('Failed to toggle map fullscreen.', error)
+  } finally {
+    syncFullscreenState()
+    queueMapResize()
+  }
+}
+
+function handleFullscreenChange() {
+  syncFullscreenState()
+  queueMapResize()
+}
+
 onMounted(() => {
+  document.addEventListener('fullscreenchange', handleFullscreenChange)
+
   mapInstance = L.map(mapElement.value, {
     zoomControl: true,
     scrollWheelZoom: true,
@@ -753,6 +794,8 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  document.removeEventListener('fullscreenchange', handleFullscreenChange)
+
   if (searchAbortController) {
     searchAbortController.abort()
     searchAbortController = null
@@ -818,7 +861,7 @@ watch(
 watch(mapSize, async () => {
   await nextTick()
   emit('map-size-change', mapSize.value)
-  requestAnimationFrame(() => mapInstance?.invalidateSize(false))
+  queueMapResize()
 })
 
 watch(viewportMode, (mode) => {
@@ -827,100 +870,103 @@ watch(viewportMode, (mode) => {
 </script>
 
 <template>
-  <div class="travel-map" :class="[`travel-map--${mapSize}`]">
+  <div ref="mapRootElement" class="travel-map" :class="[`travel-map--${mapSize}`, { 'travel-map--fullscreen': isFullscreen }]">
+    <div class="travel-map__toolbar" @click.stop>
+      <div class="travel-map__search">
+        <form class="travel-map__search-form" @submit.prevent="submitSearch">
+          <input
+            v-model="searchQuery"
+            class="travel-map__search-input"
+            type="search"
+            placeholder="장소 검색: 서울역, 오사카성, Tokyo Station"
+          />
+          <button class="travel-map__toolbar-button travel-map__search-button" type="submit" :disabled="searchStatus === 'loading'">
+            {{ searchStatus === 'loading' ? '검색 중...' : '검색' }}
+          </button>
+        </form>
+
+        <div v-if="searchMessage || searchResults.length" class="travel-map__search-results">
+          <p v-if="searchMessage" class="travel-map__search-message">{{ searchMessage }}</p>
+          <button
+            v-for="result in searchResults"
+            :key="result.id"
+            class="travel-map__search-result"
+            type="button"
+            @click="selectSearchResult(result)"
+          >
+            <strong>{{ result.title }}</strong>
+            <span>{{ result.displayName }}</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="travel-map__toolbar-group">
+        <span class="travel-map__toolbar-label">시야</span>
+        <button
+          class="travel-map__toolbar-button"
+          :class="{ 'is-active': viewportMode === 'keep' }"
+          type="button"
+          @click="setViewportMode('keep')"
+        >
+          고정
+        </button>
+        <button
+          class="travel-map__toolbar-button"
+          :class="{ 'is-active': viewportMode === 'follow' }"
+          type="button"
+          @click="setViewportMode('follow')"
+        >
+          따라가기
+        </button>
+      </div>
+
+      <div class="travel-map__toolbar-group">
+        <span class="travel-map__toolbar-label">크기</span>
+        <button
+          class="travel-map__toolbar-button"
+          :class="{ 'is-active': mapSize === 'compact' }"
+          type="button"
+          @click="setMapSize('compact')"
+        >
+          작게
+        </button>
+        <button
+          class="travel-map__toolbar-button"
+          :class="{ 'is-active': mapSize === 'default' }"
+          type="button"
+          @click="setMapSize('default')"
+        >
+          보통
+        </button>
+        <button
+          class="travel-map__toolbar-button"
+          :class="{ 'is-active': mapSize === 'expanded' }"
+          type="button"
+          @click="setMapSize('expanded')"
+        >
+          크게
+        </button>
+      </div>
+
+      <div class="travel-map__toolbar-group">
+        <button class="travel-map__toolbar-button" type="button" :disabled="!canFit" @click="fitToAll">전체 보기</button>
+        <button class="travel-map__toolbar-button" type="button" @click="toggleFullscreen">
+          {{ isFullscreen ? '전체 화면 종료' : '전체 화면' }}
+        </button>
+      </div>
+
+      <slot
+        name="toolbar"
+        :map-size="mapSize"
+        :viewport-mode="viewportMode"
+        :set-map-size="setMapSize"
+        :set-viewport-mode="setViewportMode"
+        :fit-to-all="fitToAll"
+      />
+    </div>
+
     <div class="travel-map__stage">
       <div ref="mapElement" class="travel-map__canvas" />
-
-      <div class="travel-map__toolbar" @click.stop>
-        <div class="travel-map__search">
-          <form class="travel-map__search-form" @submit.prevent="submitSearch">
-            <input
-              v-model="searchQuery"
-              class="travel-map__search-input"
-              type="search"
-              placeholder="장소 검색: 서울역, 오사카성, Tokyo Station"
-            />
-            <button class="travel-map__toolbar-button travel-map__search-button" type="submit" :disabled="searchStatus === 'loading'">
-              {{ searchStatus === 'loading' ? '검색 중...' : '검색' }}
-            </button>
-          </form>
-
-          <div v-if="searchMessage || searchResults.length" class="travel-map__search-results">
-            <p v-if="searchMessage" class="travel-map__search-message">{{ searchMessage }}</p>
-            <button
-              v-for="result in searchResults"
-              :key="result.id"
-              class="travel-map__search-result"
-              type="button"
-              @click="selectSearchResult(result)"
-            >
-              <strong>{{ result.title }}</strong>
-              <span>{{ result.displayName }}</span>
-            </button>
-          </div>
-        </div>
-
-        <div class="travel-map__toolbar-group">
-          <span class="travel-map__toolbar-label">시야</span>
-          <button
-            class="travel-map__toolbar-button"
-            :class="{ 'is-active': viewportMode === 'keep' }"
-            type="button"
-            @click="setViewportMode('keep')"
-          >
-            고정
-          </button>
-          <button
-            class="travel-map__toolbar-button"
-            :class="{ 'is-active': viewportMode === 'follow' }"
-            type="button"
-            @click="setViewportMode('follow')"
-          >
-            따라가기
-          </button>
-        </div>
-
-        <div class="travel-map__toolbar-group">
-          <span class="travel-map__toolbar-label">크기</span>
-          <button
-            class="travel-map__toolbar-button"
-            :class="{ 'is-active': mapSize === 'compact' }"
-            type="button"
-            @click="setMapSize('compact')"
-          >
-            작게
-          </button>
-          <button
-            class="travel-map__toolbar-button"
-            :class="{ 'is-active': mapSize === 'default' }"
-            type="button"
-            @click="setMapSize('default')"
-          >
-            보통
-          </button>
-          <button
-            class="travel-map__toolbar-button"
-            :class="{ 'is-active': mapSize === 'expanded' }"
-            type="button"
-            @click="setMapSize('expanded')"
-          >
-            크게
-          </button>
-        </div>
-
-        <div class="travel-map__toolbar-group">
-          <button class="travel-map__toolbar-button" type="button" :disabled="!canFit" @click="fitToAll">전체 보기</button>
-        </div>
-
-        <slot
-          name="toolbar"
-          :map-size="mapSize"
-          :viewport-mode="viewportMode"
-          :set-map-size="setMapSize"
-          :set-viewport-mode="setViewportMode"
-          :fit-to-all="fitToAll"
-        />
-      </div>
     </div>
 
     <div class="travel-map__hint">

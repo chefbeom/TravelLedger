@@ -306,13 +306,15 @@ const calendarLayoutStyle = computed(() => {
   const width = clamp(calendarCustomWidth.value, CALENDAR_CUSTOM_WIDTH_MIN, CALENDAR_CUSTOM_WIDTH_MAX)
   const height = clamp(calendarCustomHeight.value, CALENDAR_CUSTOM_HEIGHT_MIN, CALENDAR_CUSTOM_HEIGHT_MAX)
   const widthZoom = clamp(width / 860, 0.9, 1.18)
+  const heightZoom = clamp(height / DEFAULT_CALENDAR_CUSTOM_HEIGHT, 1, 1.25)
+  const scaledDayMinHeight = Math.round(146 * widthZoom * heightZoom)
 
   return {
     ...baseStyle,
     '--calendar-min-width': `${width}px`,
     '--calendar-gap': `${Math.round(10 * widthZoom)}px`,
     '--calendar-week-gap': `${Math.round(8 * widthZoom)}px`,
-    '--calendar-day-min-height': `${Math.round(146 * widthZoom)}px`,
+    '--calendar-day-min-height': `${scaledDayMinHeight}px`,
     '--calendar-day-padding': `${Math.round(12 * widthZoom)}px`,
     '--calendar-expense-total-size': `${Math.max(1, 1.18 * widthZoom).toFixed(2)}rem`,
     '--calendar-metric-size': `${Math.max(0.72, 0.8 * widthZoom).toFixed(2)}rem`,

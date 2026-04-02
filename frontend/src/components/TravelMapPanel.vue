@@ -57,6 +57,14 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
+  selectedMarkerId: {
+    type: [String, Number],
+    default: null,
+  },
+  preserveSelectedPopup: {
+    type: Boolean,
+    default: false,
+  },
   markerRadius: {
     type: Number,
     default: 8,
@@ -131,6 +139,8 @@ let selectedLayer = null
 let searchLayer = null
 let hasFittedInitialView = false
 let searchAbortController = null
+let activePopupMarkerId = null
+let activePopupOpen = false
 
 function queueMapResize() {
   requestAnimationFrame(() => {
@@ -151,6 +161,14 @@ function escapeHtml(value) {
 
 function normalizeColorHex(value, fallback = '#3182F6') {
   return /^#[0-9A-Fa-f]{6}$/.test(String(value || '').trim()) ? String(value).trim().toUpperCase() : fallback
+}
+
+function normalizeMarkerId(value) {
+  if (value === null || value === undefined || value === '') {
+    return null
+  }
+
+  return String(value)
 }
 
 function normalizeLineStyle(value) {
@@ -326,6 +344,14 @@ function createPopupContent(marker) {
     copy.appendChild(authorLine)
   }
 
+  if (marker.isDetailLoading) {
+    const loadingLine = document.createElement('span')
+    loadingLine.textContent = '?곸꽭 ?뺣낫瑜?遺덈윭?ㅻ뒗 以묒엯?덈떎.'
+    copy.appendChild(loadingLine)
+    root.appendChild(copy)
+    return root
+  }
+
   if (marker.photoCount || marker.receiptCount) {
     const metaLine = document.createElement('span')
     metaLine.textContent = marker.receiptCount
@@ -396,6 +422,8 @@ function createMarkerLayer(marker) {
     return null
   }
 
+  const markerId = normalizeMarkerId(marker.id)
+
   const layer = L.marker([point.latitude, point.longitude], {
     draggable: props.draggableMarkers,
     icon: buildMarkerIcon({
@@ -407,7 +435,24 @@ function createMarkerLayer(marker) {
   })
 
   layer.bindPopup(createPopupContent(marker))
-  layer.on('click', () => emit('select-marker', marker))
+  layer.on('click', () => {
+    if (props.preserveSelectedPopup && markerId) {
+      activePopupMarkerId = markerId
+      activePopupOpen = true
+    }
+    emit('select-marker', marker)
+  })
+  layer.on('popupopen', () => {
+    if (props.preserveSelectedPopup && markerId) {
+      activePopupMarkerId = markerId
+      activePopupOpen = true
+    }
+  })
+  layer.on('popupclose', () => {
+    if (props.preserveSelectedPopup && markerId === activePopupMarkerId) {
+      activePopupOpen = false
+    }
+  })
 
   if (props.draggableMarkers) {
     layer.on('dragend', (event) => {
@@ -589,6 +634,11 @@ function renderMapLayers({ shouldFit = false } = {}) {
     return
   }
 
+  let activeMarkerLayer = null
+  const selectedPopupId = props.preserveSelectedPopup
+    ? normalizeMarkerId(props.selectedMarkerId) || activePopupMarkerId
+    : null
+
   markersLayer.clearLayers()
   routesLayer.clearLayers()
   draftLayer.clearLayers()
@@ -598,6 +648,9 @@ function renderMapLayers({ shouldFit = false } = {}) {
     const layer = createMarkerLayer(marker)
     if (layer) {
       layer.addTo(markersLayer)
+      if (selectedPopupId && normalizeMarkerId(marker.id) === selectedPopupId) {
+        activeMarkerLayer = layer
+      }
     }
   })
 
@@ -704,6 +757,10 @@ function renderMapLayers({ shouldFit = false } = {}) {
   if (shouldFit) {
     fitToAll()
     return
+  }
+
+  if (props.preserveSelectedPopup && activePopupOpen && activeMarkerLayer) {
+    requestAnimationFrame(() => activeMarkerLayer.openPopup())
   }
 
   requestAnimationFrame(() => mapInstance?.invalidateSize(false))
@@ -827,6 +884,20 @@ watch(
     renderMapLayers()
   },
   { deep: true },
+)
+
+watch(
+  () => props.selectedMarkerId,
+  (value) => {
+    if (!props.preserveSelectedPopup) {
+      return
+    }
+
+    activePopupMarkerId = normalizeMarkerId(value)
+    if (!activePopupMarkerId) {
+      activePopupOpen = false
+    }
+  },
 )
 
 watch(

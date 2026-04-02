@@ -161,6 +161,7 @@ const allMarkers = computed(() =>
     return {
       ...item,
       ...detail,
+      isDetailLoading: isDetailLoading.value && String(item.id) === String(selectedMarkerId.value) && !detail,
       colorHex: item.planColorHex || '#3182F6',
       latitude: Number(item.latitude),
       longitude: Number(item.longitude),
@@ -274,6 +275,8 @@ onMounted(() => {
         initial-map-size="expanded"
         hint-title="내 지도 보기"
         hint-text="핀을 누르면 선택한 핀과 주변 핀의 자세한 정보를 추가로 불러와 아래에 보여줍니다."
+        :selected-marker-id="selectedMarkerId"
+        :preserve-selected-popup="true"
         @select-marker="handleSelectMarker"
       />
     </section>

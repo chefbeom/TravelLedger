@@ -10,7 +10,7 @@ const CALENDAR_CUSTOM_SIZE_KEY = 'calen-household-calendar-custom-size'
 const DEFAULT_CALENDAR_HIGHLIGHT_MODE = 'net'
 const CALENDAR_CUSTOM_WIDTH_MIN = 780
 const CALENDAR_CUSTOM_WIDTH_MAX = 1500
-const CALENDAR_CUSTOM_HEIGHT_MIN = 1200
+const CALENDAR_CUSTOM_HEIGHT_MIN = 800
 const CALENDAR_CUSTOM_HEIGHT_MAX = 1500
 const DEFAULT_CALENDAR_CUSTOM_WIDTH = 1200
 const DEFAULT_CALENDAR_CUSTOM_HEIGHT = 1200
@@ -306,11 +306,12 @@ const calendarLayoutStyle = computed(() => {
   const width = clamp(calendarCustomWidth.value, CALENDAR_CUSTOM_WIDTH_MIN, CALENDAR_CUSTOM_WIDTH_MAX)
   const height = clamp(calendarCustomHeight.value, CALENDAR_CUSTOM_HEIGHT_MIN, CALENDAR_CUSTOM_HEIGHT_MAX)
   const widthZoom = clamp(width / 860, 0.9, 1.18)
-  const heightZoom = clamp(height / DEFAULT_CALENDAR_CUSTOM_HEIGHT, 1, 1.25)
+  const heightZoom = clamp(height / DEFAULT_CALENDAR_CUSTOM_HEIGHT, 0.67, 1.25)
   const scaledDayMinHeight = Math.round(146 * widthZoom * heightZoom)
 
   return {
     ...baseStyle,
+    '--calendar-panel-width': `${width}px`,
     '--calendar-min-width': `${width}px`,
     '--calendar-gap': `${Math.round(10 * widthZoom)}px`,
     '--calendar-week-gap': `${Math.round(8 * widthZoom)}px`,
@@ -320,9 +321,8 @@ const calendarLayoutStyle = computed(() => {
     '--calendar-metric-size': `${Math.max(0.72, 0.8 * widthZoom).toFixed(2)}rem`,
     '--calendar-toolbar-gap': `${Math.round(18 * widthZoom)}px`,
     '--calendar-day-head-size': `${Math.max(0.78, 0.88 * widthZoom).toFixed(2)}rem`,
-    '--calendar-shell-width': `${width}px`,
-    '--calendar-shell-height': `${height}px`,
-    '--calendar-shell-overflow-y': 'auto',
+    '--calendar-shell-width': '100%',
+    '--calendar-shell-height': 'auto',
   }
 })
 

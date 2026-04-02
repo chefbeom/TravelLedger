@@ -4137,6 +4137,11 @@ textarea {
   --calendar-day-head-size: 0.88rem;
 }
 
+.household-calendar-panel {
+  width: var(--calendar-panel-width, 100%);
+  max-width: 100%;
+}
+
 .household-calendar-layout .calendar {
   gap: var(--calendar-gap);
   width: 100%;

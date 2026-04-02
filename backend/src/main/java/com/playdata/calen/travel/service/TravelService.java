@@ -5,6 +5,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.playdata.calen.account.domain.AppUser;
 import com.playdata.calen.account.service.AppUserService;
+import com.playdata.calen.common.cache.RedisCacheService;
 import com.playdata.calen.common.exception.BadRequestException;
 import com.playdata.calen.common.exception.NotFoundException;
 import com.playdata.calen.travel.domain.TravelBudgetItem;
@@ -59,6 +60,7 @@ import com.playdata.calen.travel.repository.TravelRouteSegmentRepository;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.io.InputStream;
+import java.time.Duration;
 import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -74,6 +76,7 @@ import javax.xml.XMLConstants;
 import javax.xml.parsers.DocumentBuilderFactory;
 import javax.sql.DataSource;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.Resource;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -98,10 +101,15 @@ public class TravelService {
     private static final int MY_MAP_NEARBY_MARKER_COUNT = 10;
     private static final int DEFAULT_ROUTE_PATH_CHAR_BUDGET = 12000;
     private static final int MIN_ROUTE_PATH_CHAR_BUDGET = 220;
+    private static final String PLANS_CACHE_KEY_PREFIX = "travel:plans:";
+    private static final String PORTFOLIO_CACHE_KEY_PREFIX = "travel:portfolio:";
+    private static final String MY_MAP_OVERVIEW_CACHE_KEY_PREFIX = "travel:mymap:overview:";
     private static final String ROUTE_PATH_FORMAT_POLYLINE6 = "POLYLINE6";
     private static final int ROUTE_PATH_PRECISION = 6;
     private static final String ROUTE_POINT_TYPE_ROUTE = "ROUTE";
     private static final String ROUTE_POINT_TYPE_MEMORY = "MEMORY";
+    private static final TypeReference<List<TravelPlanSummaryResponse>> TRAVEL_PLAN_SUMMARIES_TYPE = new TypeReference<>() {
+    };
     private static final List<String> DEFAULT_CURRENCIES = List.of("KRW", "USD", "JPY", "CNY", "EUR");
     private static final List<String> DEFAULT_BUDGET_CATEGORIES = List.of(
             "Flight",
@@ -146,8 +154,12 @@ public class TravelService {
     private final ExchangeRateService exchangeRateService;
     private final TravelMediaStorageService travelMediaStorageService;
     private final TravelPublicMediaTokenService travelPublicMediaTokenService;
+    private final RedisCacheService redisCacheService;
     private final ObjectMapper objectMapper;
     private final DataSource dataSource;
+
+    @Value("${app.travel.summary-cache-ttl-seconds:60}")
+    private long travelSummaryCacheTtlSeconds;
 
     private volatile Integer routePathCharBudget;
 
@@ -168,6 +180,11 @@ public class TravelService {
     public List<TravelPlanSummaryResponse> getPlans(Long userId) {
         appUserService.getRequiredUser(userId);
 
+        List<TravelPlanSummaryResponse> cachedPlans = redisCacheService.get(buildPlansCacheKey(userId), TRAVEL_PLAN_SUMMARIES_TYPE);
+        if (cachedPlans != null) {
+            return cachedPlans;
+        }
+
         List<TravelPlan> plans = travelPlanRepository.findAllByOwnerIdOrderByStartDateDescIdDesc(userId);
         Map<Long, List<TravelBudgetItem>> budgetItemsByPlan = travelBudgetItemRepository.findAllByPlanOwnerId(userId).stream()
                 .collect(Collectors.groupingBy(item -> item.getPlan().getId()));
@@ -183,7 +200,7 @@ public class TravelService {
         Map<Long, List<TravelRouteSegment>> routesByPlan = travelRouteSegmentRepository.findAllByPlanOwnerIdOrderByRouteDateDescIdDesc(userId).stream()
                 .collect(Collectors.groupingBy(item -> item.getPlan().getId()));
 
-        return plans.stream()
+        List<TravelPlanSummaryResponse> summaries = plans.stream()
                 .map(plan -> toPlanSummary(
                         plan,
                         budgetItemsByPlan.getOrDefault(plan.getId(), Collections.emptyList()),
@@ -193,6 +210,8 @@ public class TravelService {
                         routesByPlan.getOrDefault(plan.getId(), Collections.emptyList())
                 ))
                 .toList();
+        cacheTravelSummary(buildPlansCacheKey(userId), summaries);
+        return summaries;
     }
 
     public TravelPlanDetailResponse getPlan(Long userId, Long planId) {
@@ -208,6 +227,11 @@ public class TravelService {
 
     public TravelPortfolioResponse getPortfolio(Long userId) {
         appUserService.getRequiredUser(userId);
+
+        TravelPortfolioResponse cachedPortfolio = redisCacheService.get(buildPortfolioCacheKey(userId), TravelPortfolioResponse.class);
+        if (cachedPortfolio != null) {
+            return cachedPortfolio;
+        }
 
         List<TravelPlan> plans = travelPlanRepository.findAllByOwnerIdOrderByStartDateDescIdDesc(userId);
         List<TravelBudgetItem> budgetItems = travelBudgetItemRepository.findAllByPlanOwnerId(userId).stream()
@@ -251,7 +275,7 @@ public class TravelService {
                 ))
                 .toList();
 
-        return new TravelPortfolioResponse(
+        TravelPortfolioResponse response = new TravelPortfolioResponse(
                 "ALL",
                 "All trips",
                 "All trips",
@@ -275,10 +299,17 @@ public class TravelService {
                 mediaItems.stream().map(this::toMediaResponse).toList(),
                 routeSegments.stream().map(this::toRouteSegmentResponse).toList()
         );
+        cacheTravelSummary(buildPortfolioCacheKey(userId), response);
+        return response;
     }
 
     public TravelMyMapOverviewResponse getMyMapOverview(Long userId) {
         appUserService.getRequiredUser(userId);
+
+        TravelMyMapOverviewResponse cachedOverview = redisCacheService.get(buildMyMapOverviewCacheKey(userId), TravelMyMapOverviewResponse.class);
+        if (cachedOverview != null) {
+            return cachedOverview;
+        }
 
         List<TravelPlan> plans = travelPlanRepository.findAllByOwnerIdOrderByStartDateDescIdDesc(userId);
         List<TravelExpenseRecord> markers = travelExpenseRecordRepository.findAllByPlanOwnerIdAndRecordType(userId, TravelRecordType.MEMORY).stream()
@@ -289,7 +320,7 @@ public class TravelService {
                 .sorted(ROUTE_ORDER)
                 .toList();
 
-        return new TravelMyMapOverviewResponse(
+        TravelMyMapOverviewResponse response = new TravelMyMapOverviewResponse(
                 plans.size(),
                 markers.size(),
                 routeSegments.size(),
@@ -297,6 +328,8 @@ public class TravelService {
                 markers.stream().map(this::toMyMapMarkerSummaryResponse).toList(),
                 routeSegments.stream().map(this::toMyMapRouteResponse).toList()
         );
+        cacheTravelSummary(buildMyMapOverviewCacheKey(userId), response);
+        return response;
     }
 
     public TravelMyMapMarkerDetailBundleResponse getMyMapMarkerDetailBundle(Long userId, Long markerId) {
@@ -493,7 +526,7 @@ public class TravelService {
         plan.setOwner(appUserService.getRequiredUser(userId));
         applyPlanRequest(plan, request);
         TravelPlan savedPlan = travelPlanRepository.save(plan);
-        return toPlanSummary(
+        TravelPlanSummaryResponse response = toPlanSummary(
                 savedPlan,
                 Collections.emptyList(),
                 Collections.emptyList(),
@@ -501,13 +534,15 @@ public class TravelService {
                 Collections.emptyList(),
                 Collections.emptyList()
         );
+        invalidateTravelSummaryCaches(userId);
+        return response;
     }
 
     @Transactional
     public TravelPlanSummaryResponse updatePlan(Long userId, Long planId, TravelPlanRequest request) {
         TravelPlan plan = getRequiredPlan(userId, planId);
         applyPlanRequest(plan, request);
-        return toPlanSummary(
+        TravelPlanSummaryResponse response = toPlanSummary(
                 plan,
                 getPlanBudgetItems(userId, planId),
                 getPlanRecords(userId, planId),
@@ -515,6 +550,8 @@ public class TravelService {
                 getPlanMedia(userId, planId),
                 getPlanRoutes(userId, planId)
         );
+        invalidateTravelSummaryCaches(userId);
+        return response;
     }
 
     @Transactional
@@ -528,6 +565,7 @@ public class TravelService {
         travelBudgetItemRepository.deleteAllByPlanId(plan.getId());
         travelExpenseRecordRepository.deleteAllByPlanId(plan.getId());
         travelPlanRepository.delete(plan);
+        invalidateTravelSummaryCaches(userId);
     }
 
     @Transactional
@@ -536,7 +574,9 @@ public class TravelService {
         TravelBudgetItem budgetItem = new TravelBudgetItem();
         budgetItem.setPlan(plan);
         applyBudgetItemRequest(budgetItem, request);
-        return toBudgetItemResponse(travelBudgetItemRepository.save(budgetItem));
+        TravelBudgetItemResponse response = toBudgetItemResponse(travelBudgetItemRepository.save(budgetItem));
+        invalidateTravelSummaryCaches(userId);
+        return response;
     }
 
     @Transactional
@@ -544,7 +584,9 @@ public class TravelService {
         TravelBudgetItem budgetItem = travelBudgetItemRepository.findByIdAndPlanOwnerId(itemId, userId)
                 .orElseThrow(() -> new NotFoundException("Travel budget item not found."));
         applyBudgetItemRequest(budgetItem, request);
-        return toBudgetItemResponse(budgetItem);
+        TravelBudgetItemResponse response = toBudgetItemResponse(budgetItem);
+        invalidateTravelSummaryCaches(userId);
+        return response;
     }
 
     @Transactional
@@ -552,6 +594,7 @@ public class TravelService {
         TravelBudgetItem budgetItem = travelBudgetItemRepository.findByIdAndPlanOwnerId(itemId, userId)
                 .orElseThrow(() -> new NotFoundException("Travel budget item not found."));
         travelBudgetItemRepository.delete(budgetItem);
+        invalidateTravelSummaryCaches(userId);
     }
 
     @Transactional
@@ -560,20 +603,25 @@ public class TravelService {
         TravelExpenseRecord record = new TravelExpenseRecord();
         record.setPlan(plan);
         applyExpenseRecordRequest(record, request, TravelRecordType.LEDGER);
-        return toExpenseRecordResponse(travelExpenseRecordRepository.save(record));
+        TravelExpenseRecordResponse response = toExpenseRecordResponse(travelExpenseRecordRepository.save(record));
+        invalidateTravelSummaryCaches(userId);
+        return response;
     }
 
     @Transactional
     public TravelExpenseRecordResponse updateExpenseRecord(Long userId, Long recordId, TravelExpenseRecordRequest request) {
         TravelExpenseRecord record = getRequiredRecord(userId, recordId, TravelRecordType.LEDGER, "Travel ledger record not found.");
         applyExpenseRecordRequest(record, request, TravelRecordType.LEDGER);
-        return toExpenseRecordResponse(record);
+        TravelExpenseRecordResponse response = toExpenseRecordResponse(record);
+        invalidateTravelSummaryCaches(userId);
+        return response;
     }
 
     @Transactional
     public void deleteExpenseRecord(Long userId, Long recordId) {
         TravelExpenseRecord record = getRequiredRecord(userId, recordId, TravelRecordType.LEDGER, "Travel ledger record not found.");
         deleteRecord(record, userId);
+        invalidateTravelSummaryCaches(userId);
     }
 
     @Transactional
@@ -582,20 +630,25 @@ public class TravelService {
         TravelExpenseRecord record = new TravelExpenseRecord();
         record.setPlan(plan);
         applyMemoryRecordRequest(record, request);
-        return toMemoryRecordResponse(travelExpenseRecordRepository.save(record));
+        TravelMemoryRecordResponse response = toMemoryRecordResponse(travelExpenseRecordRepository.save(record));
+        invalidateTravelSummaryCaches(userId);
+        return response;
     }
 
     @Transactional
     public TravelMemoryRecordResponse updateMemoryRecord(Long userId, Long memoryId, TravelMemoryRecordRequest request) {
         TravelExpenseRecord record = getRequiredRecord(userId, memoryId, TravelRecordType.MEMORY, "Travel memory not found.");
         applyMemoryRecordRequest(record, request);
-        return toMemoryRecordResponse(record);
+        TravelMemoryRecordResponse response = toMemoryRecordResponse(record);
+        invalidateTravelSummaryCaches(userId);
+        return response;
     }
 
     @Transactional
     public void deleteMemoryRecord(Long userId, Long memoryId) {
         TravelExpenseRecord record = getRequiredRecord(userId, memoryId, TravelRecordType.MEMORY, "Travel memory not found.");
         deleteRecord(record, userId);
+        invalidateTravelSummaryCaches(userId);
     }
 
     @Transactional
@@ -604,7 +657,9 @@ public class TravelService {
         TravelRouteSegment routeSegment = new TravelRouteSegment();
         routeSegment.setPlan(plan);
         applyRouteSegmentRequest(routeSegment, request);
-        return toRouteSegmentResponse(travelRouteSegmentRepository.save(routeSegment));
+        TravelRouteSegmentResponse response = toRouteSegmentResponse(travelRouteSegmentRepository.save(routeSegment));
+        invalidateTravelSummaryCaches(userId);
+        return response;
     }
 
     @Transactional
@@ -612,7 +667,9 @@ public class TravelService {
         TravelRouteSegment routeSegment = travelRouteSegmentRepository.findByIdAndPlanOwnerId(routeId, userId)
                 .orElseThrow(() -> new NotFoundException("Travel route not found."));
         applyRouteSegmentRequest(routeSegment, request);
-        return toRouteSegmentResponse(routeSegment);
+        TravelRouteSegmentResponse response = toRouteSegmentResponse(routeSegment);
+        invalidateTravelSummaryCaches(userId);
+        return response;
     }
 
     @Transactional
@@ -643,7 +700,9 @@ public class TravelService {
 
         routeSegment.setSourceType(TravelRouteSourceType.GPX);
         routeSegment.setGpxFilesJson(serializeRouteGpxFiles(storedFiles));
-        return toRouteSegmentResponse(routeSegment);
+        TravelRouteSegmentResponse response = toRouteSegmentResponse(routeSegment);
+        invalidateTravelSummaryCaches(userId);
+        return response;
     }
 
     @Transactional
@@ -652,6 +711,7 @@ public class TravelService {
                 .orElseThrow(() -> new NotFoundException("Travel route not found."));
         deleteRouteGpxFilesQuietly(routeSegment);
         travelRouteSegmentRepository.delete(routeSegment);
+        invalidateTravelSummaryCaches(userId);
     }
 
     @Transactional
@@ -715,6 +775,7 @@ public class TravelService {
                 .orElseThrow(() -> new NotFoundException("Uploaded file not found."));
         travelMediaStorageService.deleteQuietly(mediaAsset.getStoragePath());
         travelMediaAssetRepository.delete(mediaAsset);
+        invalidateTravelSummaryCaches(userId);
     }
 
     public MediaDownload getMediaDownload(Long userId, Long mediaId) {
@@ -782,7 +843,7 @@ public class TravelService {
         TravelExpenseRecord record = getRequiredRecord(userId, recordId, recordType, resolveMissingRecordMessage(recordType));
         TravelMediaType resolvedMediaType = resolveMediaType(recordType, mediaType);
 
-        return files.stream()
+        List<TravelMediaResponse> responses = files.stream()
                 .filter(file -> file != null && !file.isEmpty())
                 .map(file -> {
                     TravelMediaStorageService.StoredTravelMedia storedFile = travelMediaStorageService.store(
@@ -795,6 +856,10 @@ public class TravelService {
                 })
                 .map(this::toMediaResponse)
                 .toList();
+        if (!responses.isEmpty()) {
+            invalidateTravelSummaryCaches(userId);
+        }
+        return responses;
     }
 
     private TravelMediaUploadPrepareResponse prepareMediaUploadInternal(
@@ -852,7 +917,7 @@ public class TravelService {
         TravelExpenseRecord record = getRequiredRecord(userId, recordId, recordType, resolveMissingRecordMessage(recordType));
         TravelMediaType resolvedMediaType = resolveMediaType(recordType, mediaType);
 
-        return request.files().stream()
+        List<TravelMediaResponse> responses = request.files().stream()
                 .map(file -> new TravelMediaStorageService.CompletedUpload(
                         file.objectKey(),
                         file.originalFileName(),
@@ -868,6 +933,45 @@ public class TravelService {
                 .map(storedFile -> saveMediaAsset(currentUser, record, resolvedMediaType, request.caption(), storedFile))
                 .map(this::toMediaResponse)
                 .toList();
+        if (!responses.isEmpty()) {
+            invalidateTravelSummaryCaches(userId);
+        }
+        return responses;
+    }
+
+    private void cacheTravelSummary(String cacheKey, Object response) {
+        Duration ttl = resolveTravelSummaryCacheTtl();
+        if (ttl.isZero() || ttl.isNegative()) {
+            return;
+        }
+        redisCacheService.set(cacheKey, response, ttl);
+    }
+
+    private void invalidateTravelSummaryCaches(Long userId) {
+        redisCacheService.delete(
+                buildPlansCacheKey(userId),
+                buildPortfolioCacheKey(userId),
+                buildMyMapOverviewCacheKey(userId)
+        );
+    }
+
+    private Duration resolveTravelSummaryCacheTtl() {
+        if (travelSummaryCacheTtlSeconds <= 0) {
+            return Duration.ZERO;
+        }
+        return Duration.ofSeconds(travelSummaryCacheTtlSeconds);
+    }
+
+    private String buildPlansCacheKey(Long userId) {
+        return PLANS_CACHE_KEY_PREFIX + userId;
+    }
+
+    private String buildPortfolioCacheKey(Long userId) {
+        return PORTFOLIO_CACHE_KEY_PREFIX + userId;
+    }
+
+    private String buildMyMapOverviewCacheKey(Long userId) {
+        return MY_MAP_OVERVIEW_CACHE_KEY_PREFIX + userId;
     }
 
     private TravelPlan getRequiredPlan(Long userId, Long planId) {

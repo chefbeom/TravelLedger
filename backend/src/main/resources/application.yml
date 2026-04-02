@@ -67,6 +67,7 @@ app:
     reverse-geocode-user-agent: ${TRAVEL_REVERSE_GEOCODE_USER_AGENT:TravelLedger/1.0 (+https://www.innoutdrive.space)}
     reverse-geocode-request-min-interval-ms: ${TRAVEL_REVERSE_GEOCODE_REQUEST_MIN_INTERVAL_MS:1200}
     reverse-geocode-cache-ttl-hours: ${TRAVEL_REVERSE_GEOCODE_CACHE_TTL_HOURS:24}
+    summary-cache-ttl-seconds: ${TRAVEL_SUMMARY_CACHE_TTL_SECONDS:60}
     media-storage-path: ${TRAVEL_MEDIA_STORAGE_PATH:${user.dir}/uploads/travel-media}
     media-object-prefix: ${TRAVEL_MEDIA_OBJECT_PREFIX:travel-media}
     presigned-upload-enabled: ${TRAVEL_PRESIGNED_UPLOAD_ENABLED:false}

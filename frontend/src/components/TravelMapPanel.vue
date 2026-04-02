@@ -434,7 +434,7 @@ function createMarkerLayer(marker) {
     }),
   })
 
-  layer.bindPopup(createPopupContent(marker))
+  layer.bindPopup(() => createPopupContent(marker))
   layer.on('click', () => {
     if (props.preserveSelectedPopup && markerId) {
       activePopupMarkerId = markerId

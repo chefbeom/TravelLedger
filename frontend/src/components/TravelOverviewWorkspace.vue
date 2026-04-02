@@ -150,6 +150,7 @@ const mapMarkers = computed(() =>
     .map((item) => {
       const preset = resolvePinPreset(item.category)
       const markerId = String(item.id)
+      const markerMediaItems = memoryMediaMap.value.get(markerId) || []
       const isSelectedMarker = String(selectedMarkerId.value || '') === markerId
       return {
         id: item.id,
@@ -164,9 +165,10 @@ const mapMarkers = computed(() =>
         title: item.title,
         visitedDate: item.memoryDate,
         visitedTime: item.memoryTime,
-        photoCount: memoryMediaMap.value.get(String(item.id))?.length || 0,
+        photoCount: markerMediaItems.length || 0,
         receiptCount: 0,
-        mediaItems: isSelectedMarker ? (memoryMediaMap.value.get(markerId) || []) : [],
+        photoUrl: markerMediaItems[0]?.contentUrl || '',
+        mediaItems: isSelectedMarker ? markerMediaItems : [],
         iconKey: preset.key,
         iconText: preset.iconText,
       }

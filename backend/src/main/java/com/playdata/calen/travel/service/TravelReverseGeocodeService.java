@@ -39,7 +39,7 @@ public class TravelReverseGeocodeService {
     @Value("${app.travel.reverse-geocode-request-min-interval-ms:1200}")
     private long reverseGeocodeRequestMinIntervalMs;
 
-    @Value("${app.travel.reverse-geocode-cache-ttl-hours:720}")
+    @Value("${app.travel.reverse-geocode-cache-ttl-hours:24}")
     private long reverseGeocodeCacheTtlHours;
 
     @Value("${app.redis.cache.host:}")

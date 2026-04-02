@@ -1,0 +1,33 @@
+name: ${COMPOSE_PROJECT_NAME:-calen-redis-state}
+
+services:
+  redis-state:
+    image: redis:7.4-alpine
+    restart: unless-stopped
+    environment:
+      TZ: ${TZ:-Asia/Seoul}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-change-me-state-password}
+      REDIS_MAXMEMORY: ${REDIS_MAXMEMORY:-256mb}
+      REDIS_MAXMEMORY_POLICY: ${REDIS_MAXMEMORY_POLICY:-noeviction}
+    command:
+      - /bin/sh
+      - -c
+      - >
+        exec redis-server /usr/local/etc/redis/redis.conf
+        --requirepass "$${REDIS_PASSWORD}"
+        --maxmemory "$${REDIS_MAXMEMORY}"
+        --maxmemory-policy "$${REDIS_MAXMEMORY_POLICY}"
+    ports:
+      - "${REDIS_BIND_HOST:-127.0.0.1}:${REDIS_BIND_PORT:-6379}:6379"
+    volumes:
+      - ./redis-state.conf:/usr/local/etc/redis/redis.conf:ro
+      - redis-state-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$${REDIS_PASSWORD}\" ping | grep PONG >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+volumes:
+  redis-state-data:

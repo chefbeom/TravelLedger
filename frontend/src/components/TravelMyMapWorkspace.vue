@@ -1,7 +1,6 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import { fetchTravelMyMapMarkerDetails, fetchTravelMyMapOverview } from '../lib/api'
-import { buildThumbnailUrl } from '../lib/mediaPreview'
 import { formatDateTime, safeNumber } from '../lib/uiFormat'
 import TravelMapPanel from './TravelMapPanel.vue'
 
@@ -14,6 +13,7 @@ const selectedMarkerId = ref(null)
 const selectedBundleIds = ref([])
 const markerDetailCache = ref(new Map())
 const markerBundleCache = ref(new Map())
+const detailSkeletonIds = ['detail-skeleton-1', 'detail-skeleton-2', 'detail-skeleton-3']
 
 function setError(message = '') {
   errorMessage.value = message
@@ -190,6 +190,8 @@ const selectedMarker = computed(() =>
   allMarkers.value.find((marker) => String(marker.id) === String(selectedMarkerId.value)) || null,
 )
 
+const hasSelectedMarkerPanel = computed(() => Boolean(selectedMarkerId.value || selectedMarker.value))
+
 const nearbyMarkers = computed(() => {
   if (!selectedMarkerId.value || !selectedBundleIds.value.length) {
     return []
@@ -283,32 +285,47 @@ onMounted(() => {
             <h2>선택한 핀 정보</h2>
             <p>지금 보고 싶은 핀의 정보만 따로 불러와서 빠르게 확인합니다.</p>
           </div>
-          <span class="panel__badge">{{ selectedMarker ? '불러옴' : '선택 대기' }}</span>
+          <span class="panel__badge">{{ hasSelectedMarkerPanel ? '불러옴' : '선택 대기' }}</span>
         </div>
 
-        <div v-if="selectedMarker" class="travel-overview-place-list">
+        <div v-if="hasSelectedMarkerPanel" class="travel-overview-place-list">
           <article class="travel-overview-place-card">
             <img
-              v-if="selectedMarker.mediaItems?.[0]?.contentUrl"
-              :src="buildThumbnailUrl(selectedMarker.mediaItems[0].contentUrl, 360)"
+              v-if="!isDetailLoading && selectedMarker?.mediaItems?.[0]?.contentUrl"
+              :src="selectedMarker.mediaItems[0].contentUrl"
               :alt="selectedMarker.title || selectedMarker.placeName || '대표 사진'"
               loading="eager"
               fetchpriority="high"
               decoding="async"
               class="travel-media-thumb"
             />
+            <div v-else-if="isDetailLoading" class="travel-media-thumb travel-skeleton-block" aria-hidden="true" />
             <div class="travel-media-tags">
+              <template v-if="isDetailLoading">
+                <span class="chip chip--neutral">불러오는 중</span>
+                <span class="chip chip--neutral">상세 정보</span>
+              </template>
+              <template v-else>
               <span class="chip chip--neutral">{{ selectedMarker.category || '장소' }}</span>
               <span class="chip chip--neutral">사진 {{ selectedMarker.photoCount || 0 }}장</span>
+              </template>
             </div>
-            <strong>{{ selectedMarker.title || selectedMarker.placeName || '제목 없는 핀' }}</strong>
+            <template v-if="isDetailLoading">
+              <span class="travel-skeleton-line travel-skeleton-line--lg" aria-hidden="true" />
+              <span class="travel-skeleton-line travel-skeleton-line--md" aria-hidden="true" />
+              <span class="travel-skeleton-line travel-skeleton-line--md" aria-hidden="true" />
+              <span class="travel-skeleton-line travel-skeleton-line--sm" aria-hidden="true" />
+              <span class="travel-skeleton-line travel-skeleton-line--sm" aria-hidden="true" />
+            </template>
+            <template v-else>
+              <strong>{{ selectedMarker.title || selectedMarker.placeName || '제목 없는 핀' }}</strong>
             <small>{{ selectedMarker.planName || '여행' }}</small>
             <small>{{ formatDateTime(selectedMarker.memoryDate, selectedMarker.memoryTime) }}</small>
             <small>{{ [selectedMarker.country, selectedMarker.region, selectedMarker.placeName].filter(Boolean).join(' / ') || '위치 미설정' }}</small>
             <small>{{ selectedMarker.memo || '메모 없음' }}</small>
+            </template>
           </article>
         </div>
-        <p v-else-if="isDetailLoading" class="panel__empty">핀 상세를 불러오는 중입니다...</p>
         <p v-else class="panel__empty">지도에서 보고 싶은 핀을 눌러 상세를 확인해주세요.</p>
       </section>
 
@@ -331,6 +348,16 @@ onMounted(() => {
             <small>{{ marker.planName || '여행' }}</small>
             <small>{{ formatDateTime(marker.memoryDate, marker.memoryTime) }}</small>
             <small>{{ [marker.country, marker.region, marker.placeName].filter(Boolean).join(' / ') || '위치 미설정' }}</small>
+          </article>
+        </div>
+        <div v-else-if="isDetailLoading" class="travel-overview-place-list">
+          <article v-for="id in detailSkeletonIds" :key="id" class="travel-overview-place-card">
+            <div class="travel-media-tags">
+              <span class="chip chip--neutral">불러오는 중</span>
+            </div>
+            <span class="travel-skeleton-line travel-skeleton-line--lg" aria-hidden="true" />
+            <span class="travel-skeleton-line travel-skeleton-line--md" aria-hidden="true" />
+            <span class="travel-skeleton-line travel-skeleton-line--sm" aria-hidden="true" />
           </article>
         </div>
         <p v-else class="panel__empty">핀을 누르면 근처 핀들이 여기에 같이 표시됩니다.</p>

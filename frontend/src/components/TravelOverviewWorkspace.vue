@@ -11,6 +11,7 @@ const props = defineProps({
 })
 
 const activeScope = ref('ALL')
+const selectedMarkerId = ref(null)
 const TIMELINE_PAGE_SIZE = 5
 const PLACE_PAGE_SIZE = 5
 const timelineItemPages = ref({})
@@ -148,6 +149,8 @@ const mapMarkers = computed(() =>
     .filter((item) => item.latitude !== null && item.latitude !== undefined && item.longitude !== null && item.longitude !== undefined)
     .map((item) => {
       const preset = resolvePinPreset(item.category)
+      const markerId = String(item.id)
+      const isSelectedMarker = String(selectedMarkerId.value || '') === markerId
       return {
         id: item.id,
         planId: item.planId,
@@ -163,7 +166,7 @@ const mapMarkers = computed(() =>
         visitedTime: item.memoryTime,
         photoCount: memoryMediaMap.value.get(String(item.id))?.length || 0,
         receiptCount: 0,
-        mediaItems: memoryMediaMap.value.get(String(item.id)) || [],
+        mediaItems: isSelectedMarker ? (memoryMediaMap.value.get(markerId) || []) : [],
         iconKey: preset.key,
         iconText: preset.iconText,
       }
@@ -296,6 +299,21 @@ watch(
   },
 )
 
+watch(
+  mapMarkers,
+  (markers) => {
+    if (!selectedMarkerId.value) {
+      return
+    }
+
+    const hasSelectedMarker = markers.some((marker) => String(marker.id) === String(selectedMarkerId.value))
+    if (!hasSelectedMarker) {
+      selectedMarkerId.value = null
+    }
+  },
+  { deep: true },
+)
+
 watch(timelineGroups, (groups) => {
   const nextPages = {}
   groups.forEach((group) => {
@@ -315,6 +333,10 @@ watch(placeCards, (items) => {
 
 function selectScope(scopeKey) {
   activeScope.value = scopeKey
+}
+
+function handleSelectMarker(marker) {
+  selectedMarkerId.value = marker?.id ?? null
 }
 
 function changeTimelineGroupPage(date, page) {
@@ -436,10 +458,13 @@ function itemTypeLabel(type) {
         :selected-point="null"
         :enable-pick-location="false"
         :enable-draw-route="false"
+        :selected-marker-id="selectedMarkerId"
+        :preserve-selected-popup="true"
         :view-key="`${travelPlan.id || 'overview'}-${activeScope}`"
         initial-map-size="expanded"
         hint-title="여행 전체 보기"
         hint-text="전체를 선택하면 모든 날짜의 장소와 경로를 함께 보고, 일차 버튼을 누르면 해당 날짜만 따로 확인할 수 있습니다."
+        @select-marker="handleSelectMarker"
       >
         <template #toolbar>
           <div class="travel-map__toolbar-group">

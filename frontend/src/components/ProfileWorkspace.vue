@@ -271,7 +271,7 @@ onMounted(() => {
           <strong>{{ currentUser.displayName }}</strong>
         </article>
         <article class="summary-card">
-          <span>권한</span>
+          <span>권한 표시</span>
           <strong>{{ currentUser.admin ? '관리자' : '일반 사용자' }}</strong>
         </article>
       </div>

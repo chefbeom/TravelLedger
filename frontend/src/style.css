@@ -2813,7 +2813,8 @@ textarea {
 .support-inquiry-row__body {
   display: grid;
   gap: 12px;
-  padding: 0 18px 18px;
+  margin-top: 8px;
+  padding: 8px 18px 18px;
   border-top: 1px solid var(--line);
 }
 

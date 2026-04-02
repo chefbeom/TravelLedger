@@ -65,6 +65,8 @@ const adminFeatureItem = {
 }
 
 const THEME_STORAGE_KEY = 'calen-theme-mode'
+const THEME_DEGREE_STORAGE_KEY = 'calen-theme-degree'
+const DEFAULT_TOSS_DEGREE = 100
 
 const routeMeta = {
   launcher: {
@@ -123,6 +125,9 @@ const inviteInfo = ref(null)
 const isInviteLoading = ref(false)
 const isCreatingInvite = ref(false)
 const themeMode = ref('default')
+const themeDegree = ref(DEFAULT_TOSS_DEGREE)
+const themeDegreePanelOpen = ref(false)
+const themeSwitcherRef = ref(null)
 
 const loginForm = reactive({
   loginId: '',
@@ -152,6 +157,7 @@ const isTossTheme = computed(() => themeMode.value === 'toss')
 const launcherItems = computed(() => (
   currentUser.value?.admin ? [...featureItems, adminFeatureItem] : featureItems
 ))
+const themeDegreeDisplay = computed(() => `${themeDegree.value}%`)
 
 let inviteRequestSequence = 0
 
@@ -207,6 +213,89 @@ function buildInviteUrl(token) {
   return `${window.location.origin}${path}#invite/${encodeURIComponent(token)}`
 }
 
+function clampThemeDegree(value) {
+  const numeric = Number(value)
+  if (!Number.isFinite(numeric)) {
+    return DEFAULT_TOSS_DEGREE
+  }
+
+  return Math.min(100, Math.max(0, Math.round(numeric)))
+}
+
+function mixChannel(start, end, ratio) {
+  return Math.round(start + (end - start) * ratio)
+}
+
+function mixHexColor(start, end, ratio) {
+  const normalizedStart = start.replace('#', '')
+  const normalizedEnd = end.replace('#', '')
+  const startRgb = [
+    parseInt(normalizedStart.slice(0, 2), 16),
+    parseInt(normalizedStart.slice(2, 4), 16),
+    parseInt(normalizedStart.slice(4, 6), 16),
+  ]
+  const endRgb = [
+    parseInt(normalizedEnd.slice(0, 2), 16),
+    parseInt(normalizedEnd.slice(2, 4), 16),
+    parseInt(normalizedEnd.slice(4, 6), 16),
+  ]
+  const mixed = startRgb.map((channel, index) => mixChannel(channel, endRgb[index], ratio))
+  return `rgb(${mixed[0]}, ${mixed[1]}, ${mixed[2]})`
+}
+
+function mixRgbaColor(start, end, ratio) {
+  const mixed = start.map((channel, index) => (
+    index === 3
+      ? channel + (end[index] - channel) * ratio
+      : mixChannel(channel, end[index], ratio)
+  ))
+
+  return `rgba(${mixed[0]}, ${mixed[1]}, ${mixed[2]}, ${mixed[3].toFixed(3)})`
+}
+
+function buildTossThemePalette(degree) {
+  const ratio = clampThemeDegree(degree) / 100
+
+  return {
+    '--toss-bg': mixHexColor('#202632', '#0e1117', ratio),
+    '--toss-surface': mixHexColor('#2a313e', '#151922', ratio),
+    '--toss-surface-panel-start': mixRgbaColor([43, 50, 63, 0.98], [24, 29, 38, 0.98], ratio),
+    '--toss-surface-panel-end': mixRgbaColor([33, 39, 50, 0.98], [18, 22, 30, 0.98], ratio),
+    '--toss-surface-elevated-start': mixHexColor('#2d3542', '#181d26', ratio),
+    '--toss-surface-elevated-end': mixHexColor('#232a36', '#121720', ratio),
+    '--toss-surface-soft': mixHexColor('#313948', '#1a202b', ratio),
+    '--toss-surface-soft-strong': mixHexColor('#3b4556', '#232b38', ratio),
+    '--toss-line': mixHexColor('#465164', '#2a3240', ratio),
+    '--toss-text-soft': mixHexColor('#ccd4e1', '#b0bacb', ratio),
+    '--toss-text-muted': mixHexColor('#a0abbe', '#7e8aa0', ratio),
+    '--toss-bg-glow': mixRgbaColor([79, 140, 255, 0.1], [79, 140, 255, 0.16], ratio),
+    '--toss-bg-gradient-mid': mixHexColor('#1f2632', '#10141c', ratio),
+    '--toss-bg-gradient-end': mixHexColor('#19202a', '#0c1016', ratio),
+    '--toss-theme-toggle-bg': mixRgbaColor([35, 42, 54, 0.9], [23, 28, 37, 0.92], ratio),
+    '--toss-theme-toggle-border': mixRgbaColor([112, 135, 179, 0.22], [79, 140, 255, 0.24], ratio),
+    '--toss-theme-toggle-text': mixHexColor('#eef4ff', '#dce7ff', ratio),
+    '--toss-calendar-size-toggle-bg': mixRgbaColor([39, 46, 59, 0.94], [24, 29, 38, 0.94], ratio),
+    '--toss-resize-panel-bg': mixRgbaColor([30, 36, 47, 0.96], [14, 20, 29, 0.96], ratio),
+  }
+}
+
+function applyThemeDegree(degree) {
+  const normalized = clampThemeDegree(degree)
+  themeDegree.value = normalized
+
+  if (typeof document !== 'undefined') {
+    const rootStyle = document.documentElement.style
+    const palette = buildTossThemePalette(normalized)
+    Object.entries(palette).forEach(([key, value]) => {
+      rootStyle.setProperty(key, value)
+    })
+  }
+
+  if (typeof window !== 'undefined') {
+    window.localStorage.setItem(THEME_DEGREE_STORAGE_KEY, String(normalized))
+  }
+}
+
 function applyTheme(mode) {
   const normalized = mode === 'toss' || mode === 'metal-dark' ? 'toss' : 'default'
   themeMode.value = normalized
@@ -214,8 +303,10 @@ function applyTheme(mode) {
   if (typeof document !== 'undefined') {
     if (normalized === 'toss') {
       document.documentElement.setAttribute('data-theme', 'toss')
+      applyThemeDegree(themeDegree.value)
     } else {
       document.documentElement.removeAttribute('data-theme')
+      themeDegreePanelOpen.value = false
     }
   }
 
@@ -226,6 +317,30 @@ function applyTheme(mode) {
 
 function toggleTheme() {
   applyTheme(isTossTheme.value ? 'default' : 'toss')
+}
+
+function toggleThemeDegreePanel() {
+  if (!isTossTheme.value) {
+    return
+  }
+
+  themeDegreePanelOpen.value = !themeDegreePanelOpen.value
+}
+
+function handleThemeDegreeInput(event) {
+  applyThemeDegree(event.target.value)
+}
+
+function handleDocumentPointerDown(event) {
+  if (!themeDegreePanelOpen.value) {
+    return
+  }
+
+  if (themeSwitcherRef.value?.contains(event.target)) {
+    return
+  }
+
+  themeDegreePanelOpen.value = false
 }
 
 function navigate(route) {
@@ -434,20 +549,59 @@ watch([currentUser, activeRoute], ([user, route]) => {
 
 onMounted(() => {
   if (typeof window !== 'undefined') {
+    themeDegree.value = clampThemeDegree(window.localStorage.getItem(THEME_DEGREE_STORAGE_KEY) ?? DEFAULT_TOSS_DEGREE)
     applyTheme(window.localStorage.getItem(THEME_STORAGE_KEY) || 'default')
   }
   window.addEventListener('hashchange', handleHashChange)
+  document.addEventListener('pointerdown', handleDocumentPointerDown)
   restoreSession()
 })
 
 onBeforeUnmount(() => {
   window.removeEventListener('hashchange', handleHashChange)
+  document.removeEventListener('pointerdown', handleDocumentPointerDown)
 })
 </script>
 
 <template>
   <div class="app-shell">
-    <button class="theme-toggle" type="button" @click="toggleTheme">
+    <div ref="themeSwitcherRef" class="theme-switcher">
+      <div class="theme-switcher__actions">
+        <button class="theme-toggle" type="button" @click="toggleTheme">
+          {{ isTossTheme ? '기본 테마' : '토스 테마' }}
+        </button>
+        <button
+          v-if="isTossTheme"
+          class="theme-toggle theme-toggle--degree"
+          type="button"
+          @click.stop="toggleThemeDegreePanel"
+        >
+          다크 degree {{ themeDegreeDisplay }}
+        </button>
+      </div>
+
+      <div v-if="isTossTheme && themeDegreePanelOpen" class="theme-degree-panel">
+        <div class="theme-degree-panel__header">
+          <strong>딥다크 강도</strong>
+          <span>{{ themeDegreeDisplay }}</span>
+        </div>
+        <input
+          class="theme-degree-panel__slider"
+          type="range"
+          min="0"
+          max="100"
+          step="1"
+          :value="themeDegree"
+          @input="handleThemeDegreeInput"
+        />
+        <div class="theme-degree-panel__labels">
+          <span>일반 다크</span>
+          <span>딥다크</span>
+        </div>
+      </div>
+    </div>
+
+    <button v-if="false" class="theme-toggle" type="button" @click="toggleTheme">
       {{ isTossTheme ? '기본 테마' : '토스 테마' }}
     </button>
 

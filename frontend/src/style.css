@@ -77,11 +77,23 @@ button {
   background-size: cover;
 }
 
-.theme-toggle {
+.theme-switcher {
   position: fixed;
   top: 18px;
   right: 18px;
   z-index: 80;
+  display: grid;
+  justify-items: end;
+  gap: 10px;
+}
+
+.theme-switcher__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.theme-toggle {
   border: 1px solid var(--line);
   border-radius: 999px;
   padding: 11px 16px;
@@ -90,6 +102,46 @@ button {
   font-weight: 800;
   backdrop-filter: blur(16px);
   box-shadow: var(--shadow);
+}
+
+.theme-toggle--degree {
+  padding-inline: 14px;
+}
+
+.theme-degree-panel {
+  width: min(280px, calc(100vw - 32px));
+  display: grid;
+  gap: 14px;
+  padding: 16px 18px;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(18px);
+}
+
+.theme-degree-panel__header,
+.theme-degree-panel__labels {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.theme-degree-panel__header strong {
+  font-size: 0.96rem;
+}
+
+.theme-degree-panel__header span,
+.theme-degree-panel__labels span {
+  color: var(--text-soft);
+  font-size: 0.88rem;
+  font-weight: 700;
+}
+
+.theme-degree-panel__slider {
+  width: 100%;
+  accent-color: var(--blue);
 }
 
 .app-layout {
@@ -3814,16 +3866,16 @@ textarea {
 
 :root[data-theme='toss'] {
   color-scheme: dark;
-  --bg: #0e1117;
-  --surface: #151922;
-  --surface-panel: linear-gradient(180deg, rgba(24, 29, 38, 0.98) 0%, rgba(18, 22, 30, 0.98) 100%);
-  --surface-elevated: linear-gradient(180deg, #181d26 0%, #121720 100%);
-  --surface-soft: #1a202b;
-  --surface-soft-strong: #232b38;
-  --line: #2a3240;
+  --bg: var(--toss-bg, #0e1117);
+  --surface: var(--toss-surface, #151922);
+  --surface-panel: linear-gradient(180deg, var(--toss-surface-panel-start, rgba(24, 29, 38, 0.98)) 0%, var(--toss-surface-panel-end, rgba(18, 22, 30, 0.98)) 100%);
+  --surface-elevated: linear-gradient(180deg, var(--toss-surface-elevated-start, #181d26) 0%, var(--toss-surface-elevated-end, #121720) 100%);
+  --surface-soft: var(--toss-surface-soft, #1a202b);
+  --surface-soft-strong: var(--toss-surface-soft-strong, #232b38);
+  --line: var(--toss-line, #2a3240);
   --text: #f3f5fa;
-  --text-soft: #b0bacb;
-  --text-muted: #7e8aa0;
+  --text-soft: var(--toss-text-soft, #b0bacb);
+  --text-muted: var(--toss-text-muted, #7e8aa0);
   --blue: #4f8cff;
   --blue-soft: rgba(79, 140, 255, 0.18);
   --income: #16c784;
@@ -3831,17 +3883,22 @@ textarea {
   --shadow: 0 24px 64px rgba(0, 0, 0, 0.42);
   --shadow-strong: 0 18px 36px rgba(0, 0, 0, 0.52);
   --bg-gradient:
-    radial-gradient(circle at top, rgba(79, 140, 255, 0.16), transparent 28%),
-    linear-gradient(180deg, #0e1117 0%, #10141c 48%, #0c1016 100%);
+    radial-gradient(circle at top, var(--toss-bg-glow, rgba(79, 140, 255, 0.16)), transparent 28%),
+    linear-gradient(180deg, var(--toss-bg, #0e1117) 0%, var(--toss-bg-gradient-mid, #10141c) 48%, var(--toss-bg-gradient-end, #0c1016) 100%);
   --interactive-contrast-bg: linear-gradient(180deg, #4f8cff 0%, #2f6df3 100%);
   --interactive-contrast-text: #ffffff;
-  --calendar-size-toggle-bg: rgba(24, 29, 38, 0.94);
+  --calendar-size-toggle-bg: var(--toss-calendar-size-toggle-bg, rgba(24, 29, 38, 0.94));
 }
 
 :root[data-theme='toss'] .theme-toggle {
-  background: rgba(23, 28, 37, 0.92);
-  border-color: rgba(79, 140, 255, 0.24);
-  color: #dce7ff;
+  background: var(--toss-theme-toggle-bg, rgba(23, 28, 37, 0.92));
+  border-color: var(--toss-theme-toggle-border, rgba(79, 140, 255, 0.24));
+  color: var(--toss-theme-toggle-text, #dce7ff);
+}
+
+:root[data-theme='toss'] .theme-degree-panel {
+  background: rgba(20, 25, 34, 0.96);
+  border-color: rgba(78, 95, 125, 0.44);
 }
 
 :root[data-theme='toss'] .sidebar,
@@ -3955,7 +4012,7 @@ textarea {
 }
 
 :root[data-theme='toss'] .calendar-resize-panel {
-  background: rgba(14, 20, 29, 0.96);
+  background: var(--toss-resize-panel-bg, rgba(14, 20, 29, 0.96));
   border-color: rgba(78, 95, 125, 0.42);
 }
 

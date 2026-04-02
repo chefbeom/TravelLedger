@@ -44,7 +44,6 @@ import { buildThumbnailUrl } from '../lib/mediaPreview'
 import TravelCommunityWorkspace from './TravelCommunityWorkspace.vue'
 import TravelMapPanel from './TravelMapPanel.vue'
 import TravelMemoryPanel from './TravelMemoryPanel.vue'
-import TravelMyMapWorkspace from './TravelMyMapWorkspace.vue'
 import TravelOverviewWorkspace from './TravelOverviewWorkspace.vue'
 import TravelRouteWorkspace from './TravelRouteWorkspace.vue'
 import TravelSharedExhibitWorkspace from './TravelSharedExhibitWorkspace.vue'
@@ -169,10 +168,7 @@ const planStatusOptions = computed(() => travelCategories.value.planStatuses?.le
 const budgetCategoryOptions = computed(() => travelCategories.value.budgetCategories?.length ? travelCategories.value.budgetCategories : fallbackCategories.budgetCategories)
 const expenseCategoryOptions = computed(() => travelCategories.value.expenseCategories?.length ? travelCategories.value.expenseCategories : fallbackCategories.expenseCategories)
 const memoryCategoryOptions = computed(() => travelCategories.value.memoryCategories?.length ? travelCategories.value.memoryCategories : fallbackCategories.memoryCategories)
-const isMyMapTab = computed(() => props.route === 'travel-log' && logTab.value === 'my-map')
-const requiresExplicitPlanSelection = computed(() =>
-  (props.route === 'travel-log' && !isMyMapTab.value) || props.route === 'photo-album'
-)
+const requiresExplicitPlanSelection = computed(() => props.route === 'travel-log' || props.route === 'photo-album')
 const isSharedExhibitTab = computed(() => props.route === 'photo-album' && albumTab.value === 'shared')
 const hasSharedExhibits = computed(() => sharedExhibitSummaries.value.length > 0)
 const showPlanGate = computed(() =>
@@ -183,9 +179,6 @@ const showPlanGate = computed(() =>
 )
 const canShareTravelPlan = computed(() => Boolean(travelPlan.value) && travelPlan.value.status === 'COMPLETED')
 const emptyTravelPlanMessage = computed(() => {
-  if (isMyMapTab.value) {
-    return '내 지도에서는 여행 선택 없이 지금까지 기록한 핀과 경로를 한 번에 볼 수 있습니다.'
-  }
   if (isSharedExhibitTab.value) {
     return '공유 전시 탭에서는 여행 선택 없이도 공유받은 전시를 볼 수 있습니다.'
   }
@@ -1018,15 +1011,6 @@ function openMemoryEditor(memoryId) {
     </section>
 
     <template v-if="showPlanGate">
-      <section v-if="route === 'travel-log'" class="panel">
-        <div class="scope-toggle">
-          <button class="button" :class="{ 'button--primary': logTab === 'overview' }" @click="logTab = 'overview'">여행 보기</button>
-          <button class="button" :class="{ 'button--primary': logTab === 'memories' }" @click="logTab = 'memories'">여행 기록</button>
-          <button class="button" :class="{ 'button--primary': logTab === 'routes' }" @click="logTab = 'routes'">이동 경로</button>
-          <button class="button" :class="{ 'button--primary': logTab === 'my-map' }" @click="logTab = 'my-map'">내 지도</button>
-        </div>
-      </section>
-
       <section v-if="travelPlans.length" class="panel">
         <div class="panel__header">
           <div>
@@ -1208,8 +1192,8 @@ function openMemoryEditor(memoryId) {
     </template>
 
     <template v-else-if="route === 'travel-log'">
-      <section class="panel"><div class="scope-toggle"><button class="button" :class="{ 'button--primary': logTab === 'overview' }" @click="logTab = 'overview'">여행 보기</button><button class="button" :class="{ 'button--primary': logTab === 'memories' }" @click="logTab = 'memories'">여행 기록</button><button class="button" :class="{ 'button--primary': logTab === 'routes' }" @click="logTab = 'routes'">이동 경로</button><button class="button" :class="{ 'button--primary': logTab === 'my-map' }" @click="logTab = 'my-map'">내 지도</button></div></section>
-      <section v-if="logTab !== 'my-map'" class="panel">
+      <section class="panel"><div class="scope-toggle"><button class="button" :class="{ 'button--primary': logTab === 'overview' }" @click="logTab = 'overview'">여행 보기</button><button class="button" :class="{ 'button--primary': logTab === 'memories' }" @click="logTab = 'memories'">여행 기록</button><button class="button" :class="{ 'button--primary': logTab === 'routes' }" @click="logTab = 'routes'">이동 경로</button></div></section>
+      <section class="panel">
         <div class="panel__header">
           <div>
             <h2>여행 전시 공유</h2>
@@ -1232,8 +1216,7 @@ function openMemoryEditor(memoryId) {
       </section>
       <TravelOverviewWorkspace v-if="logTab === 'overview'" :travel-plan="travelPlan" />
       <TravelMemoryPanel v-else-if="logTab === 'memories'" :travel-plan="travelPlan" :category-options="memoryCategoryOptions" :is-submitting="isSubmitting" :active-submit="activeSubmit" :refresh-key="memoryRefreshKey" :focus-request="memoryFocusRequest" @save-memory="handleSaveMemory" @delete-memory="handleDeleteMemory" @delete-media="handleDeleteMedia" />
-      <TravelRouteWorkspace v-else-if="logTab === 'routes'" :travel-plan="travelPlan" :is-submitting="isSubmitting" :active-submit="activeSubmit" :refresh-key="routeRefreshKey" @save-route="handleSaveRoute" @delete-route="handleDeleteRoute" />
-      <TravelMyMapWorkspace v-else :portfolio="travelPortfolio" />
+      <TravelRouteWorkspace v-else :travel-plan="travelPlan" :is-submitting="isSubmitting" :active-submit="activeSubmit" :refresh-key="routeRefreshKey" @save-route="handleSaveRoute" @delete-route="handleDeleteRoute" />
     </template>
 
     <template v-else-if="route === 'photo-album'">

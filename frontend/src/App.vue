@@ -8,6 +8,7 @@ import InviteAccessPanel from './components/InviteAccessPanel.vue'
 import PinPadInput from './components/PinPadInput.vue'
 import ProfileWorkspace from './components/ProfileWorkspace.vue'
 import TravelHubWorkspace from './components/TravelHubWorkspace.vue'
+import TravelMyMapWorkspace from './components/TravelMyMapWorkspace.vue'
 import {
   acceptInvite,
   createInvite,
@@ -48,11 +49,17 @@ const featureItems = [
     title: '가족 앨범',
     description: '초대된 가족 구성원과 카테고리별 사진과 영상을 공유합니다.',
   },
+  {
+    key: 'my-map',
+    number: '6',
+    title: '내 지도',
+    description: '지금까지 저장한 여행 장소 핀과 이동 경로를 한 장의 지도에서 확인합니다.',
+  },
 ]
 
 const adminFeatureItem = {
   key: 'admin',
-  number: 'A',
+  number: '7',
   title: '관리자',
   description: '로그인 로그, 차단 IP, 사용자 상태, 초대 현황을 관리합니다.',
 }
@@ -83,6 +90,10 @@ const routeMeta = {
   'family-album': {
     title: '가족 앨범',
     description: '초대된 구성원과 가족 카테고리, 앨범, 미디어를 공유합니다.',
+  },
+  'my-map': {
+    title: '내 지도',
+    description: '전체 여행의 핀과 경로를 지도로 모아 보고, 원하는 핀만 눌러 자세히 확인합니다.',
   },
   admin: {
     title: '관리자',
@@ -600,6 +611,7 @@ onBeforeUnmount(() => {
         <ProfileWorkspace v-else-if="activeRoute === 'profile'" :current-user="currentUser" />
         <HouseholdWorkspace v-else-if="activeRoute === 'household'" />
         <FamilyAlbumWorkspace v-else-if="activeRoute === 'family-album'" />
+        <TravelMyMapWorkspace v-else-if="activeRoute === 'my-map'" />
         <TravelHubWorkspace v-else :route="activeRoute" />
       </div>
     </template>

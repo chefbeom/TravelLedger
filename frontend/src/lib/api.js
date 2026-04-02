@@ -506,6 +506,14 @@ export function fetchTravelPortfolio() {
   return request('/travel/portfolio')
 }
 
+export function fetchTravelMyMapOverview() {
+  return request('/travel/my-map')
+}
+
+export function fetchTravelMyMapMarkerDetails(markerId) {
+  return request(`/travel/my-map/markers/${markerId}`)
+}
+
 export function createTravelPlan(payload) {
   return request('/travel/plans', {
     method: 'POST',

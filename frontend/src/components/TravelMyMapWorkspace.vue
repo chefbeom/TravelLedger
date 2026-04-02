@@ -1,16 +1,23 @@
 <script setup>
-import { computed, ref } from 'vue'
-import { safeNumber } from '../lib/uiFormat'
+import { computed, onMounted, ref } from 'vue'
+import { fetchTravelMyMapMarkerDetails, fetchTravelMyMapOverview } from '../lib/api'
+import { buildThumbnailUrl } from '../lib/mediaPreview'
+import { formatDateTime, safeNumber } from '../lib/uiFormat'
 import TravelMapPanel from './TravelMapPanel.vue'
 
-const props = defineProps({
-  portfolio: {
-    type: Object,
-    default: null,
-  },
-})
-
+const isLoading = ref(false)
+const isDetailLoading = ref(false)
+const errorMessage = ref('')
+const overview = ref(null)
 const displayMode = ref('ALL')
+const selectedMarkerId = ref(null)
+const selectedBundleIds = ref([])
+const markerDetailCache = ref(new Map())
+const markerBundleCache = ref(new Map())
+
+function setError(message = '') {
+  errorMessage.value = message
+}
 
 function resolvePinPreset(category) {
   const text = String(category || '').trim().toLowerCase()
@@ -26,26 +33,107 @@ function resolvePinPreset(category) {
   return { key: 'general', iconText: '📍' }
 }
 
-const memoryRecords = computed(() => props.portfolio?.memoryRecords ?? [])
-const routeSegments = computed(() => props.portfolio?.routeSegments ?? [])
-const mediaItems = computed(() => props.portfolio?.mediaItems ?? [])
+function transportLabel(mode) {
+  switch (String(mode || '').toUpperCase()) {
+    case 'BUS':
+      return '버스'
+    case 'TAXI':
+      return '택시'
+    case 'TRAIN':
+      return '기차'
+    case 'SUBWAY':
+      return '지하철'
+    case 'CAR':
+      return '자동차'
+    case 'FLIGHT':
+      return '항공'
+    case 'ETC':
+      return '기타'
+    default:
+      return '미정'
+  }
+}
 
-const memoryMediaMap = computed(() => {
-  const bucket = new Map()
+function sourceLabel(sourceType) {
+  return String(sourceType || '').toUpperCase() === 'GPX' ? 'GPX' : '직접 작성'
+}
 
-  mediaItems.value.forEach((item) => {
-    if (item.recordType !== 'MEMORY' || item.mediaType !== 'PHOTO') {
-      return
-    }
+function lineStyleLabel(style) {
+  switch (String(style || '').toUpperCase()) {
+    case 'DASHED':
+      return '점선'
+    case 'DOTTED':
+      return '도트'
+    case 'LONG_DASH':
+      return '긴 점선'
+    default:
+      return '실선'
+  }
+}
 
-    const key = String(item.recordId)
-    const current = bucket.get(key) ?? []
-    current.push(item)
-    bucket.set(key, current)
-  })
+function routeSummary(route) {
+  return [
+    transportLabel(route.transportMode),
+    route.distanceKm ? `${Number(route.distanceKm).toFixed(2)}km` : '',
+    route.durationMinutes ? `${route.durationMinutes}분` : '',
+    route.stepCount ? `${Number(route.stepCount).toLocaleString('ko-KR')}걸음` : '',
+    lineStyleLabel(route.lineStyle),
+    sourceLabel(route.sourceType),
+  ].filter(Boolean).join(' / ')
+}
 
-  return bucket
-})
+async function loadOverview() {
+  isLoading.value = true
+  setError('')
+
+  try {
+    overview.value = await fetchTravelMyMapOverview()
+  } catch (error) {
+    setError(error.message)
+  } finally {
+    isLoading.value = false
+  }
+}
+
+async function loadMarkerBundle(markerId) {
+  if (!markerId) {
+    return
+  }
+
+  const cachedBundleIds = markerBundleCache.value.get(String(markerId))
+  if (cachedBundleIds?.length) {
+    selectedBundleIds.value = cachedBundleIds
+    return
+  }
+
+  isDetailLoading.value = true
+  setError('')
+
+  try {
+    const bundle = await fetchTravelMyMapMarkerDetails(markerId)
+    const nextCache = new Map(markerDetailCache.value)
+
+    ;(bundle.markers ?? []).forEach((marker) => {
+      nextCache.set(String(marker.id), marker)
+    })
+
+    markerDetailCache.value = nextCache
+    const bundleIds = (bundle.markers ?? []).map((marker) => marker.id)
+    markerBundleCache.value = new Map(markerBundleCache.value).set(String(markerId), bundleIds)
+    selectedBundleIds.value = bundleIds
+  } catch (error) {
+    setError(error.message)
+  } finally {
+    isDetailLoading.value = false
+  }
+}
+
+function handleSelectMarker(marker) {
+  selectedMarkerId.value = marker?.id ?? null
+  if (marker?.id) {
+    loadMarkerBundle(marker.id)
+  }
+}
 
 const modeLabel = computed(() => {
   switch (displayMode.value) {
@@ -58,35 +146,37 @@ const modeLabel = computed(() => {
   }
 })
 
+const summary = computed(() => ({
+  includedPlanCount: overview.value?.includedPlanCount ?? 0,
+  markerCount: overview.value?.markerCount ?? 0,
+  routeCount: overview.value?.routeCount ?? 0,
+  totalDistanceKm: safeNumber(overview.value?.totalDistanceKm),
+}))
+
 const allMarkers = computed(() =>
-  memoryRecords.value
-    .filter((item) => item.latitude !== null && item.latitude !== undefined && item.longitude !== null && item.longitude !== undefined)
-    .map((item) => {
-      const preset = resolvePinPreset(item.category)
-      return {
-        id: item.id,
-        planId: item.planId,
-        planName: item.planName,
-        colorHex: item.planColorHex || '#3182F6',
-        latitude: Number(item.latitude),
-        longitude: Number(item.longitude),
-        country: item.country,
-        region: item.region,
-        placeName: item.placeName,
-        title: item.title,
-        visitedDate: item.memoryDate,
-        visitedTime: item.memoryTime,
-        photoCount: memoryMediaMap.value.get(String(item.id))?.length || 0,
-        receiptCount: 0,
-        mediaItems: memoryMediaMap.value.get(String(item.id)) || [],
-        iconKey: preset.key,
-        iconText: preset.iconText,
-      }
-    }),
+  (overview.value?.markers ?? []).map((item) => {
+    const detail = markerDetailCache.value.get(String(item.id))
+    const preset = resolvePinPreset(item.category)
+
+    return {
+      ...item,
+      ...detail,
+      colorHex: item.planColorHex || '#3182F6',
+      latitude: Number(item.latitude),
+      longitude: Number(item.longitude),
+      visitedDate: item.memoryDate,
+      visitedTime: item.memoryTime,
+      photoCount: detail?.photoCount || 0,
+      receiptCount: 0,
+      mediaItems: detail?.mediaItems || [],
+      iconKey: preset.key,
+      iconText: preset.iconText,
+    }
+  }),
 )
 
 const allRoutes = computed(() =>
-  routeSegments.value.map((route) => ({
+  (overview.value?.routes ?? []).map((route) => ({
     ...route,
     lineColorHex: route.lineColorHex || route.planColorHex || '#3182F6',
     lineStyle: route.lineStyle || 'SOLID',
@@ -96,17 +186,28 @@ const allRoutes = computed(() =>
 const visibleMarkers = computed(() => (displayMode.value === 'ROUTES' ? [] : allMarkers.value))
 const visibleRoutes = computed(() => (displayMode.value === 'PINS' ? [] : allRoutes.value))
 
-const summary = computed(() => ({
-  includedPlanCount: props.portfolio?.includedPlanCount ?? 0,
-  markerCount: allMarkers.value.length,
-  routeCount: allRoutes.value.length,
-  photoCount: mediaItems.value.filter((item) => item.recordType === 'MEMORY' && item.mediaType === 'PHOTO').length,
-  totalDistanceKm: safeNumber(props.portfolio?.totalDistanceKm),
-}))
+const selectedMarker = computed(() =>
+  allMarkers.value.find((marker) => String(marker.id) === String(selectedMarkerId.value)) || null,
+)
+
+const nearbyMarkers = computed(() => {
+  if (!selectedMarkerId.value || !selectedBundleIds.value.length) {
+    return []
+  }
+
+  return selectedBundleIds.value
+    .filter((id) => String(id) !== String(selectedMarkerId.value))
+    .map((id) => allMarkers.value.find((marker) => String(marker.id) === String(id)))
+    .filter(Boolean)
+})
+
+onMounted(() => {
+  loadOverview()
+})
 </script>
 
 <template>
-  <div v-if="portfolio" class="workspace-stack">
+  <div class="workspace-stack">
     <section class="panel">
       <div class="panel__header">
         <div>
@@ -120,22 +221,22 @@ const summary = computed(() => ({
         <article class="travel-stat-card">
           <span>포함 여행</span>
           <strong>{{ summary.includedPlanCount }}</strong>
-          <small>지금까지 저장한 여행 전체</small>
+          <small>내 지도에 포함된 전체 여행</small>
         </article>
         <article class="travel-stat-card">
           <span>등록된 핀</span>
           <strong>{{ summary.markerCount }}</strong>
-          <small>장소와 방문 기록 좌표</small>
+          <small>좌표가 저장된 장소 기록</small>
         </article>
         <article class="travel-stat-card">
           <span>등록된 경로</span>
           <strong>{{ summary.routeCount }}</strong>
-          <small>직접 그린 선과 GPX 경로</small>
+          <small>직접 작성과 GPX 경로 포함</small>
         </article>
         <article class="travel-stat-card">
           <span>누적 이동 거리</span>
           <strong>{{ summary.totalDistanceKm.toFixed(2) }}km</strong>
-          <small>사진 {{ summary.photoCount }}장 포함</small>
+          <small>전체 여행 기준 거리 합계</small>
         </article>
       </div>
     </section>
@@ -146,18 +247,22 @@ const summary = computed(() => ({
         <button class="button" :class="{ 'button--primary': displayMode === 'PINS' }" @click="displayMode = 'PINS'">핀만</button>
         <button class="button" :class="{ 'button--primary': displayMode === 'ROUTES' }" @click="displayMode = 'ROUTES'">경로만</button>
       </div>
+      <small class="field__hint">핀 상세는 지도를 눌렀을 때 그 핀과 주변 10개 정도만 추가로 불러옵니다.</small>
     </section>
 
     <section class="panel panel--map-fill travel-overview-map-panel">
       <div class="panel__header">
         <div>
           <h2>내 위치 지도</h2>
-          <p>선택한 보기 기준에 따라 핀만, 경로만, 또는 둘 다 겹쳐서 확인할 수 있습니다.</p>
+          <p>초기에는 요약 핀과 경로만 가볍게 불러오고, 핀을 누를 때만 해당 핀의 자세한 내용을 이어서 불러옵니다.</p>
         </div>
         <span class="panel__badge">핀 {{ visibleMarkers.length }}개 / 경로 {{ visibleRoutes.length }}개</span>
       </div>
 
+      <p v-if="errorMessage" class="panel__empty">{{ errorMessage }}</p>
+      <p v-else-if="isLoading" class="panel__empty">내 지도를 불러오는 중입니다...</p>
       <TravelMapPanel
+        v-else
         :markers="visibleMarkers"
         :routes="visibleRoutes"
         :selected-point="null"
@@ -166,12 +271,101 @@ const summary = computed(() => ({
         :view-key="`my-map-${displayMode}-${summary.markerCount}-${summary.routeCount}`"
         initial-map-size="expanded"
         hint-title="내 지도 보기"
-        hint-text="지금까지 저장한 위치와 경로를 한 화면에서 확인하고, 보기 기준에 따라 원하는 정보만 남길 수 있습니다."
+        hint-text="핀을 누르면 선택한 핀과 주변 핀의 자세한 정보를 추가로 불러와 아래에 보여줍니다."
+        @select-marker="handleSelectMarker"
       />
     </section>
-  </div>
 
-  <section v-else class="panel">
-    <p class="panel__empty">내 지도를 준비할 여행 데이터가 아직 없습니다.</p>
-  </section>
+    <div class="content-grid content-grid--travel">
+      <section class="panel">
+        <div class="panel__header">
+          <div>
+            <h2>선택한 핀 정보</h2>
+            <p>지금 보고 싶은 핀의 정보만 따로 불러와서 빠르게 확인합니다.</p>
+          </div>
+          <span class="panel__badge">{{ selectedMarker ? '불러옴' : '선택 대기' }}</span>
+        </div>
+
+        <div v-if="selectedMarker" class="travel-overview-place-list">
+          <article class="travel-overview-place-card">
+            <img
+              v-if="selectedMarker.mediaItems?.[0]?.contentUrl"
+              :src="buildThumbnailUrl(selectedMarker.mediaItems[0].contentUrl, 360)"
+              :alt="selectedMarker.title || selectedMarker.placeName || '대표 사진'"
+              class="travel-media-thumb"
+            />
+            <div class="travel-media-tags">
+              <span class="chip chip--neutral">{{ selectedMarker.category || '장소' }}</span>
+              <span class="chip chip--neutral">사진 {{ selectedMarker.photoCount || 0 }}장</span>
+            </div>
+            <strong>{{ selectedMarker.title || selectedMarker.placeName || '제목 없는 핀' }}</strong>
+            <small>{{ selectedMarker.planName || '여행' }}</small>
+            <small>{{ formatDateTime(selectedMarker.memoryDate, selectedMarker.memoryTime) }}</small>
+            <small>{{ [selectedMarker.country, selectedMarker.region, selectedMarker.placeName].filter(Boolean).join(' / ') || '위치 미설정' }}</small>
+            <small>{{ selectedMarker.memo || '메모 없음' }}</small>
+          </article>
+        </div>
+        <p v-else-if="isDetailLoading" class="panel__empty">핀 상세를 불러오는 중입니다...</p>
+        <p v-else class="panel__empty">지도에서 보고 싶은 핀을 눌러 상세를 확인해주세요.</p>
+      </section>
+
+      <section class="panel">
+        <div class="panel__header">
+          <div>
+            <h2>주변 핀 미리보기</h2>
+            <p>선택한 핀 근처의 기록도 함께 불러와서 이어서 확인할 수 있습니다.</p>
+          </div>
+          <span class="panel__badge">{{ nearbyMarkers.length }}개</span>
+        </div>
+
+        <div v-if="nearbyMarkers.length" class="travel-overview-place-list">
+          <article v-for="marker in nearbyMarkers" :key="marker.id" class="travel-overview-place-card">
+            <div class="travel-media-tags">
+              <span class="chip chip--neutral">{{ marker.category || '장소' }}</span>
+              <span class="chip chip--neutral">사진 {{ marker.photoCount || 0 }}장</span>
+            </div>
+            <strong>{{ marker.title || marker.placeName || '제목 없는 핀' }}</strong>
+            <small>{{ marker.planName || '여행' }}</small>
+            <small>{{ formatDateTime(marker.memoryDate, marker.memoryTime) }}</small>
+            <small>{{ [marker.country, marker.region, marker.placeName].filter(Boolean).join(' / ') || '위치 미설정' }}</small>
+          </article>
+        </div>
+        <p v-else class="panel__empty">핀을 누르면 근처 핀들이 여기에 같이 표시됩니다.</p>
+      </section>
+    </div>
+
+    <section class="panel">
+      <div class="panel__header">
+        <div>
+          <h2>전체 경로 목록</h2>
+          <p>경로는 처음부터 지도에 가볍게 보여주되, 목록에서는 제목과 거리 중심으로 한 번 더 정리해 둡니다.</p>
+        </div>
+        <span class="panel__badge">{{ allRoutes.length }}개 경로</span>
+      </div>
+
+      <div class="sheet-table-wrap">
+        <table class="sheet-table">
+          <thead>
+            <tr>
+              <th>여행</th>
+              <th>날짜</th>
+              <th>제목</th>
+              <th>요약</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="route in allRoutes" :key="route.id">
+              <td>{{ route.planName }}</td>
+              <td>{{ route.routeDate || '-' }}</td>
+              <td>{{ route.title || '이동 경로' }}</td>
+              <td>{{ routeSummary(route) }}</td>
+            </tr>
+            <tr v-if="!allRoutes.length">
+              <td colspan="4" class="sheet-table__empty">아직 저장된 경로가 없습니다.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </div>
 </template>

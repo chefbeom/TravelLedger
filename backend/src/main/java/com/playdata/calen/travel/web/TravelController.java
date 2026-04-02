@@ -15,6 +15,8 @@ import com.playdata.calen.travel.dto.TravelMediaResponse;
 import com.playdata.calen.travel.dto.TravelMediaUploadCompleteRequest;
 import com.playdata.calen.travel.dto.TravelMediaUploadPrepareRequest;
 import com.playdata.calen.travel.dto.TravelMediaUploadPrepareResponse;
+import com.playdata.calen.travel.dto.TravelMyMapMarkerDetailBundleResponse;
+import com.playdata.calen.travel.dto.TravelMyMapOverviewResponse;
 import com.playdata.calen.travel.dto.TravelMemoryRecordRequest;
 import com.playdata.calen.travel.dto.TravelMemoryRecordResponse;
 import com.playdata.calen.travel.dto.TravelPlanDetailResponse;
@@ -74,6 +76,19 @@ public class TravelController {
     @GetMapping("/portfolio")
     public TravelPortfolioResponse getPortfolio(@AuthenticationPrincipal AppUserPrincipal currentUser) {
         return travelService.getPortfolio(currentUser.userId());
+    }
+
+    @GetMapping("/my-map")
+    public TravelMyMapOverviewResponse getMyMapOverview(@AuthenticationPrincipal AppUserPrincipal currentUser) {
+        return travelService.getMyMapOverview(currentUser.userId());
+    }
+
+    @GetMapping("/my-map/markers/{markerId}")
+    public TravelMyMapMarkerDetailBundleResponse getMyMapMarkerDetails(
+            @AuthenticationPrincipal AppUserPrincipal currentUser,
+            @PathVariable Long markerId
+    ) {
+        return travelService.getMyMapMarkerDetailBundle(currentUser.userId(), markerId);
     }
 
     @GetMapping("/categories")

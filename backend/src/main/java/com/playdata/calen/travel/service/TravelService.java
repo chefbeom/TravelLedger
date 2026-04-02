@@ -32,6 +32,10 @@ import com.playdata.calen.travel.dto.TravelMediaUploadCompleteRequest;
 import com.playdata.calen.travel.dto.TravelMediaUploadPrepareRequest;
 import com.playdata.calen.travel.dto.TravelMediaUploadPrepareResponse;
 import com.playdata.calen.travel.dto.TravelMediaUploadTargetResponse;
+import com.playdata.calen.travel.dto.TravelMyMapMarkerDetailBundleResponse;
+import com.playdata.calen.travel.dto.TravelMyMapMarkerDetailResponse;
+import com.playdata.calen.travel.dto.TravelMyMapMarkerSummaryResponse;
+import com.playdata.calen.travel.dto.TravelMyMapOverviewResponse;
 import com.playdata.calen.travel.dto.TravelMemoryRecordRequest;
 import com.playdata.calen.travel.dto.TravelMemoryRecordResponse;
 import com.playdata.calen.travel.dto.TravelPlanDetailResponse;
@@ -91,6 +95,7 @@ public class TravelService {
     private static final int DEFAULT_LIST_PAGE_SIZE = 10;
     private static final int MAX_LIST_PAGE_SIZE = 20;
     private static final int MAX_STORED_ROUTE_POINTS = 900;
+    private static final int MY_MAP_NEARBY_MARKER_COUNT = 10;
     private static final int DEFAULT_ROUTE_PATH_CHAR_BUDGET = 12000;
     private static final int MIN_ROUTE_PATH_CHAR_BUDGET = 220;
     private static final String ROUTE_PATH_FORMAT_POLYLINE6 = "POLYLINE6";
@@ -269,6 +274,64 @@ public class TravelService {
                 memoryRecords.stream().map(this::toMemoryRecordResponse).toList(),
                 mediaItems.stream().map(this::toMediaResponse).toList(),
                 routeSegments.stream().map(this::toRouteSegmentResponse).toList()
+        );
+    }
+
+    public TravelMyMapOverviewResponse getMyMapOverview(Long userId) {
+        appUserService.getRequiredUser(userId);
+
+        List<TravelPlan> plans = travelPlanRepository.findAllByOwnerIdOrderByStartDateDescIdDesc(userId);
+        List<TravelExpenseRecord> markers = travelExpenseRecordRepository.findAllByPlanOwnerIdAndRecordType(userId, TravelRecordType.MEMORY).stream()
+                .filter(this::hasCoordinates)
+                .sorted(RECORD_ORDER)
+                .toList();
+        List<TravelRouteSegment> routeSegments = travelRouteSegmentRepository.findAllByPlanOwnerIdOrderByRouteDateDescIdDesc(userId).stream()
+                .sorted(ROUTE_ORDER)
+                .toList();
+
+        return new TravelMyMapOverviewResponse(
+                plans.size(),
+                markers.size(),
+                routeSegments.size(),
+                sumDistanceKm(routeSegments),
+                markers.stream().map(this::toMyMapMarkerSummaryResponse).toList(),
+                routeSegments.stream().map(this::toMyMapRouteResponse).toList()
+        );
+    }
+
+    public TravelMyMapMarkerDetailBundleResponse getMyMapMarkerDetailBundle(Long userId, Long markerId) {
+        appUserService.getRequiredUser(userId);
+
+        TravelExpenseRecord selectedRecord = travelExpenseRecordRepository.findByIdAndPlanOwnerIdAndRecordType(markerId, userId, TravelRecordType.MEMORY)
+                .orElseThrow(() -> new NotFoundException("Travel memory not found."));
+
+        if (!hasCoordinates(selectedRecord)) {
+            throw new BadRequestException("Location coordinates are required for map detail loading.");
+        }
+
+        List<TravelExpenseRecord> nearbyRecords = travelExpenseRecordRepository.findAllByPlanOwnerIdAndRecordType(userId, TravelRecordType.MEMORY).stream()
+                .filter(this::hasCoordinates)
+                .filter(record -> !record.getId().equals(selectedRecord.getId()))
+                .sorted(Comparator.comparingDouble(record -> calculateDistanceMeters(selectedRecord, record)))
+                .limit(MY_MAP_NEARBY_MARKER_COUNT)
+                .toList();
+
+        List<TravelExpenseRecord> bundleRecords = new ArrayList<>();
+        bundleRecords.add(selectedRecord);
+        bundleRecords.addAll(nearbyRecords);
+
+        List<Long> recordIds = bundleRecords.stream()
+                .map(TravelExpenseRecord::getId)
+                .toList();
+        Map<Long, List<TravelMediaAsset>> mediaByRecord = travelMediaAssetRepository.findAllByRecordIdInOrderByUploadedAtDescIdDesc(recordIds).stream()
+                .filter(asset -> asset.getMediaType() == TravelMediaType.PHOTO)
+                .collect(Collectors.groupingBy(asset -> asset.getRecord().getId()));
+
+        return new TravelMyMapMarkerDetailBundleResponse(
+                selectedRecord.getId(),
+                bundleRecords.stream()
+                        .map(record -> toMyMapMarkerDetailResponse(record, mediaByRecord.getOrDefault(record.getId(), Collections.emptyList())))
+                        .toList()
         );
     }
 
@@ -1051,6 +1114,79 @@ public class TravelService {
                 memoryRecords.stream().sorted(RECORD_ORDER).map(this::toMemoryRecordResponse).toList(),
                 mediaItems.stream().sorted(MEDIA_ORDER).map(item -> toMediaResponse(item, mediaContentUrlResolver.apply(item))).toList(),
                 routeSegments.stream().sorted(ROUTE_ORDER).map(this::toRouteSegmentResponse).toList()
+        );
+    }
+
+    private TravelMyMapMarkerSummaryResponse toMyMapMarkerSummaryResponse(TravelExpenseRecord record) {
+        return new TravelMyMapMarkerSummaryResponse(
+                record.getId(),
+                record.getPlan().getId(),
+                record.getPlan().getName(),
+                normalizeColorHex(record.getPlan().getColorHex()),
+                record.getExpenseDate(),
+                record.getExpenseTime(),
+                record.getCategory(),
+                record.getTitle(),
+                record.getCountry(),
+                record.getRegion(),
+                record.getPlaceName(),
+                record.getLatitude(),
+                record.getLongitude()
+        );
+    }
+
+    private TravelMyMapMarkerDetailResponse toMyMapMarkerDetailResponse(
+            TravelExpenseRecord record,
+            List<TravelMediaAsset> mediaItems
+    ) {
+        List<TravelMediaResponse> mediaResponses = mediaItems.stream()
+                .sorted(MEDIA_ORDER)
+                .map(this::toMediaResponse)
+                .toList();
+
+        return new TravelMyMapMarkerDetailResponse(
+                record.getId(),
+                record.getPlan().getId(),
+                record.getPlan().getName(),
+                normalizeColorHex(record.getPlan().getColorHex()),
+                record.getExpenseDate(),
+                record.getExpenseTime(),
+                record.getCategory(),
+                record.getTitle(),
+                record.getCountry(),
+                record.getRegion(),
+                record.getPlaceName(),
+                record.getLatitude(),
+                record.getLongitude(),
+                record.getSharedWithCommunity(),
+                record.getMemo(),
+                mediaResponses.size(),
+                mediaResponses
+        );
+    }
+
+    private TravelRouteSegmentResponse toMyMapRouteResponse(TravelRouteSegment routeSegment) {
+        return new TravelRouteSegmentResponse(
+                routeSegment.getId(),
+                routeSegment.getPlan().getId(),
+                routeSegment.getPlan().getName(),
+                normalizeColorHex(routeSegment.getPlan().getColorHex()),
+                routeSegment.getRouteDate(),
+                routeSegment.getTitle(),
+                routeSegment.getTransportMode(),
+                routeSegment.getDistanceKm() != null ? routeSegment.getDistanceKm().setScale(3, RoundingMode.HALF_UP) : ZERO_DISTANCE,
+                routeSegment.getDurationMinutes(),
+                routeSegment.getStepCount(),
+                routeSegment.getSourceType(),
+                routeSegment.getStartPlaceName(),
+                routeSegment.getEndPlaceName(),
+                normalizeColorHex(routeSegment.getLineColorHex()),
+                routeSegment.getLineStyle() != null ? routeSegment.getLineStyle() : TravelRouteLineStyle.SOLID,
+                deserializeRouteGpxFiles(routeSegment.getGpxFilesJson()).stream()
+                        .map(RouteGpxFile::originalFileName)
+                        .toList(),
+                routeSegment.getMemo(),
+                deserializeRoutePoints(routeSegment.getRoutePathJson())
         );
     }
 
@@ -1856,6 +1992,27 @@ public class TravelService {
 
     private boolean isMemoryRecord(TravelExpenseRecord record) {
         return record.getRecordType() == TravelRecordType.MEMORY;
+    }
+
+    private boolean hasCoordinates(TravelExpenseRecord record) {
+        return record.getLatitude() != null && record.getLongitude() != null;
+    }
+
+    private double calculateDistanceMeters(TravelExpenseRecord origin, TravelExpenseRecord target) {
+        double originLatitude = origin.getLatitude().doubleValue();
+        double originLongitude = origin.getLongitude().doubleValue();
+        double targetLatitude = target.getLatitude().doubleValue();
+        double targetLongitude = target.getLongitude().doubleValue();
+
+        double latitudeDistance = Math.toRadians(targetLatitude - originLatitude);
+        double longitudeDistance = Math.toRadians(targetLongitude - originLongitude);
+        double startLatitude = Math.toRadians(originLatitude);
+        double endLatitude = Math.toRadians(targetLatitude);
+
+        double haversine = Math.pow(Math.sin(latitudeDistance / 2), 2)
+                + Math.cos(startLatitude) * Math.cos(endLatitude) * Math.pow(Math.sin(longitudeDistance / 2), 2);
+        double angularDistance = 2 * Math.atan2(Math.sqrt(haversine), Math.sqrt(1 - haversine));
+        return 6371000d * angularDistance;
     }
 
     private String resolveMissingRecordMessage(TravelRecordType recordType) {

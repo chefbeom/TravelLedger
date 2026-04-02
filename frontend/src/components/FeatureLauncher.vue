@@ -19,7 +19,7 @@ const emit = defineEmits(['navigate'])
       <div class="panel__header">
         <div>
           <h2>{{ currentUser.displayName }}님, 사용할 기능을 선택해주세요.</h2>
-          <p>로그인 후에는 먼저 이 페이지가 열리고, 아래 1번부터 5번 중 하나를 골라 각 기능의 독립 페이지로 들어가는 구조입니다.</p>
+          <p>로그인한 뒤에는 아래 번호 중 하나를 골라 각 기능의 독립 페이지로 바로 들어가는 구조입니다.</p>
         </div>
         <span class="panel__badge">{{ items.length }}개 기능</span>
       </div>

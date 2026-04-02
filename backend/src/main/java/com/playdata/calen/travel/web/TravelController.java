@@ -43,6 +43,7 @@ import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.core.io.Resource;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -403,7 +404,8 @@ public class TravelController {
                         .body(preparedThumbnail.resource());
             }
 
-            return imageThumbnailService.createThumbnail(download.resource(), download.contentType(), width)
+            Resource originalResource = travelMediaStorageService.loadAsResource(download.storagePath());
+            return imageThumbnailService.createThumbnail(originalResource, download.contentType(), width)
                     .<ResponseEntity<?>>map(preview -> ResponseEntity.ok()
                             .contentType(MediaType.parseMediaType(preview.contentType()))
                             .header(HttpHeaders.CONTENT_DISPOSITION, disposition.toString())
@@ -414,14 +416,15 @@ public class TravelController {
                             .contentType(MediaType.parseMediaType(download.contentType()))
                             .header(HttpHeaders.CONTENT_DISPOSITION, disposition.toString())
                             .header("X-Content-Type-Options", "nosniff")
-                            .body(download.resource()));
+                            .body(originalResource));
         }
 
+        Resource originalResource = travelMediaStorageService.loadAsResource(download.storagePath());
         return ResponseEntity.ok()
                 .contentType(MediaType.parseMediaType(download.contentType()))
                 .header(HttpHeaders.CONTENT_DISPOSITION, disposition.toString())
                 .header("X-Content-Type-Options", "nosniff")
-                .body(download.resource());
+                .body(originalResource);
     }
 
     @GetMapping("/exchange-rates")

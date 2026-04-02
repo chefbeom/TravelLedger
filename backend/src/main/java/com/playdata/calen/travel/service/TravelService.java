@@ -781,8 +781,7 @@ public class TravelService {
     public MediaDownload getMediaDownload(Long userId, Long mediaId) {
         TravelMediaAsset mediaAsset = travelMediaAssetRepository.findByIdAndPlanOwnerId(mediaId, userId)
                 .orElseThrow(() -> new NotFoundException("Uploaded file not found."));
-        Resource resource = travelMediaStorageService.loadAsResource(mediaAsset.getStoragePath());
-        return new MediaDownload(resource, mediaAsset.getStoragePath(), mediaAsset.getContentType(), mediaAsset.getOriginalFileName());
+        return new MediaDownload(mediaAsset.getStoragePath(), mediaAsset.getContentType(), mediaAsset.getOriginalFileName());
     }
 
     public MediaDownload getSharedMediaDownload(Long mediaId, String token) {
@@ -795,8 +794,7 @@ public class TravelService {
         if (!isMemoryRecord(record) || !Boolean.TRUE.equals(record.getSharedWithCommunity()) || mediaAsset.getMediaType() != TravelMediaType.PHOTO) {
             throw new NotFoundException("Shared media not found.");
         }
-        Resource resource = travelMediaStorageService.loadAsResource(mediaAsset.getStoragePath());
-        return new MediaDownload(resource, mediaAsset.getStoragePath(), mediaAsset.getContentType(), mediaAsset.getOriginalFileName());
+        return new MediaDownload(mediaAsset.getStoragePath(), mediaAsset.getContentType(), mediaAsset.getOriginalFileName());
     }
 
     public MediaDownload getSharedExhibitMediaDownload(Long userId, Long shareId, Long mediaId) {
@@ -809,8 +807,7 @@ public class TravelService {
             throw new NotFoundException("Shared exhibit media not found.");
         }
 
-        Resource resource = travelMediaStorageService.loadAsResource(mediaAsset.getStoragePath());
-        return new MediaDownload(resource, mediaAsset.getStoragePath(), mediaAsset.getContentType(), mediaAsset.getOriginalFileName());
+        return new MediaDownload(mediaAsset.getStoragePath(), mediaAsset.getContentType(), mediaAsset.getOriginalFileName());
     }
 
     public List<TravelExchangeRateResponse> getExchangeRates(Long userId, String currencies) {
@@ -2131,6 +2128,6 @@ public class TravelService {
         return trimmed.isEmpty() ? null : trimmed;
     }
 
-    public record MediaDownload(Resource resource, String storagePath, String contentType, String fileName) {
+    public record MediaDownload(String storagePath, String contentType, String fileName) {
     }
 }

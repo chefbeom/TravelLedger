@@ -23,9 +23,12 @@ import org.springframework.web.client.RestClient;
 public class TravelReverseGeocodeService {
 
     private static final String CACHE_KEY_PREFIX = "geo:reverse:";
+    private static final long REDIS_RECONNECT_MIN_BACKOFF_MS = 30_000L;
+    private static final long REDIS_RECONNECT_MAX_BACKOFF_MS = 300_000L;
 
     private final ObjectMapper objectMapper;
     private final RestClient.Builder restClientBuilder;
+    private final Object redisMonitor = new Object();
 
     @Value("${app.travel.reverse-geocode-base-url}")
     private String reverseGeocodeBaseUrl;
@@ -59,6 +62,8 @@ public class TravelReverseGeocodeService {
     private StatefulRedisConnection<String, String> redisConnection;
     private RedisCommands<String, String> redisCommands;
     private long lastProviderRequestAt = 0L;
+    private long nextRedisReconnectAt = 0L;
+    private int redisReconnectFailures = 0;
 
     @PostConstruct
     void initialize() {
@@ -85,15 +90,12 @@ public class TravelReverseGeocodeService {
         }
 
         redisClient = RedisClient.create(redisUriBuilder.build());
-        redisConnection = redisClient.connect();
-        redisCommands = redisConnection.sync();
+        tryConnectRedis(false);
     }
 
     @PreDestroy
     void shutdown() {
-        if (redisConnection != null) {
-            redisConnection.close();
-        }
+        closeRedisConnection();
         if (redisClient != null) {
             redisClient.shutdown();
         }
@@ -112,32 +114,36 @@ public class TravelReverseGeocodeService {
     }
 
     private TravelReverseGeocodeResponse readCache(String cacheKey) {
-        if (redisCommands == null) {
+        RedisCommands<String, String> commands = ensureRedisCommands();
+        if (commands == null) {
             return null;
         }
 
         try {
-            String cachedValue = redisCommands.get(cacheKey);
+            String cachedValue = commands.get(cacheKey);
             if (!StringUtils.hasText(cachedValue)) {
                 return null;
             }
             return objectMapper.readValue(cachedValue, TravelReverseGeocodeResponse.class);
         } catch (Exception ignored) {
+            markRedisUnavailable();
             return null;
         }
     }
 
     private void writeCache(String cacheKey, TravelReverseGeocodeResponse response) {
-        if (redisCommands == null) {
+        RedisCommands<String, String> commands = ensureRedisCommands();
+        if (commands == null) {
             return;
         }
 
         try {
             long ttlSeconds = Math.max(60L, reverseGeocodeCacheTtlHours * 3600L);
-            redisCommands.setex(cacheKey, ttlSeconds, objectMapper.writeValueAsString(response));
+            commands.setex(cacheKey, ttlSeconds, objectMapper.writeValueAsString(response));
         } catch (JsonProcessingException ignored) {
             // Ignore cache serialization failures.
         } catch (Exception ignored) {
+            markRedisUnavailable();
             // Ignore cache write failures and keep the provider response.
         }
     }
@@ -196,6 +202,79 @@ public class TravelReverseGeocodeService {
             Thread.sleep(waitMs);
         }
         lastProviderRequestAt = System.currentTimeMillis();
+    }
+
+    private RedisCommands<String, String> ensureRedisCommands() {
+        synchronized (redisMonitor) {
+            if (redisCommands != null && redisConnection != null && redisConnection.isOpen()) {
+                return redisCommands;
+            }
+        }
+
+        tryConnectRedis(false);
+
+        synchronized (redisMonitor) {
+            if (redisCommands != null && redisConnection != null && redisConnection.isOpen()) {
+                return redisCommands;
+            }
+            return null;
+        }
+    }
+
+    private void tryConnectRedis(boolean force) {
+        if (redisClient == null) {
+            return;
+        }
+
+        long now = System.currentTimeMillis();
+        synchronized (redisMonitor) {
+            if (redisCommands != null && redisConnection != null && redisConnection.isOpen()) {
+                return;
+            }
+            if (!force && now < nextRedisReconnectAt) {
+                return;
+            }
+
+            closeRedisConnection();
+
+            try {
+                redisConnection = redisClient.connect();
+                redisCommands = redisConnection.sync();
+                redisReconnectFailures = 0;
+                nextRedisReconnectAt = 0L;
+            } catch (Exception ignored) {
+                redisCommands = null;
+                redisConnection = null;
+                redisReconnectFailures = Math.min(redisReconnectFailures + 1, 10);
+                long backoffMultiplier = 1L << Math.max(0, redisReconnectFailures - 1);
+                long backoff = Math.min(
+                        REDIS_RECONNECT_MIN_BACKOFF_MS * backoffMultiplier,
+                        REDIS_RECONNECT_MAX_BACKOFF_MS
+                );
+                nextRedisReconnectAt = now + backoff;
+            }
+        }
+    }
+
+    private void markRedisUnavailable() {
+        synchronized (redisMonitor) {
+            closeRedisConnection();
+            redisReconnectFailures = Math.min(redisReconnectFailures + 1, 10);
+            long backoffMultiplier = 1L << Math.max(0, redisReconnectFailures - 1);
+            long backoff = Math.min(
+                    REDIS_RECONNECT_MIN_BACKOFF_MS * backoffMultiplier,
+                    REDIS_RECONNECT_MAX_BACKOFF_MS
+            );
+            nextRedisReconnectAt = System.currentTimeMillis() + backoff;
+        }
+    }
+
+    private void closeRedisConnection() {
+        if (redisConnection != null) {
+            redisConnection.close();
+        }
+        redisConnection = null;
+        redisCommands = null;
     }
 
     private String buildCacheKey(double latitude, double longitude) {

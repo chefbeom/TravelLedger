@@ -39,6 +39,7 @@ import java.math.RoundingMode;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.FileTime;
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
@@ -47,13 +48,16 @@ import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.stream.Stream;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
 
 @Service
@@ -69,6 +73,9 @@ public class AdminDataManagementService {
     private static final String MINIO_BACKUP_CACHE_FILE = "minio-backup-manifest.json";
     private static final String LOCAL_MINIO_BACKUP_DIRECTORY = "minio-files";
     private static final long[] RCLONE_RETRY_DELAYS_MILLIS = {2_000L, 5_000L, 10_000L};
+    private static final String DATA_OPS_LOCK_KEY = "lock:data-ops";
+    private static final String DATA_OPS_LOCK_SEPARATOR = "|";
+    private static final Duration DATA_OPS_LOCK_TTL = Duration.ofHours(6);
 
     private final AppUserRepository appUserRepository;
     private final AccountInviteRepository accountInviteRepository;
@@ -95,6 +102,7 @@ public class AdminDataManagementService {
     private final ObjectMapper objectMapper;
     private final JdbcTemplate jdbcTemplate;
     private final RestoreMaintenanceService restoreMaintenanceService;
+    private RedisStateService redisStateService;
 
     @Value("${spring.datasource.url}")
     private String dataSourceUrl;
@@ -122,6 +130,11 @@ public class AdminDataManagementService {
 
     private final ReentrantLock operationLock = new ReentrantLock();
     private final AtomicReference<String> runningOperation = new AtomicReference<>(DEFAULT_OPERATION_LABEL);
+
+    @Autowired(required = false)
+    void setRedisStateService(RedisStateService redisStateService) {
+        this.redisStateService = redisStateService;
+    }
 
     public record PreparedBackupDownload(Path path, String fileName, long sizeBytes) {
     }
@@ -158,7 +171,7 @@ public class AdminDataManagementService {
                 minioStorage,
                 minioBackups,
                 minioBackupsError,
-                operationLock.isLocked(),
+                isOperationRunning(),
                 currentOperation()
         );
     }
@@ -893,6 +906,13 @@ public class AdminDataManagementService {
             throw new BadRequestException("다른 데이터 작업이 진행 중입니다. 잠시 후 다시 시도해 주세요.");
         }
 
+        String lockValue = encodeDistributedLockValue(UUID.randomUUID().toString(), operation);
+        Boolean distributedLockAcquired = tryAcquireDistributedLock(lockValue);
+        if (Boolean.FALSE.equals(distributedLockAcquired)) {
+            operationLock.unlock();
+            throw new BadRequestException("?ㅻⅨ ?곗씠???묒뾽??吏꾪뻾 以묒엯?덈떎. ?좎떆 ???ㅼ떆 ?쒕룄??二쇱꽭??");
+        }
+
         runningOperation.set(operation);
         try {
             return action.get();
@@ -902,13 +922,59 @@ public class AdminDataManagementService {
             throw new BadRequestException("데이터 작업을 처리하지 못했습니다.");
         } finally {
             runningOperation.set(DEFAULT_OPERATION_LABEL);
+            releaseDistributedLock(lockValue);
             operationLock.unlock();
         }
     }
 
     private String currentOperation() {
         String value = runningOperation.get();
-        return value == null || value.isBlank() ? DEFAULT_OPERATION_LABEL : value;
+        if (value != null && !value.isBlank() && !DEFAULT_OPERATION_LABEL.equals(value)) {
+            return value;
+        }
+
+        String distributedLockValue = redisStateService != null ? redisStateService.get(DATA_OPS_LOCK_KEY) : null;
+        if (!StringUtils.hasText(distributedLockValue)) {
+            return DEFAULT_OPERATION_LABEL;
+        }
+
+        String operation = decodeDistributedOperation(distributedLockValue);
+        return StringUtils.hasText(operation) ? operation : DEFAULT_OPERATION_LABEL;
+    }
+
+    private boolean isOperationRunning() {
+        if (operationLock.isLocked()) {
+            return true;
+        }
+
+        String distributedLockValue = redisStateService != null ? redisStateService.get(DATA_OPS_LOCK_KEY) : null;
+        return StringUtils.hasText(distributedLockValue);
+    }
+
+    private Boolean tryAcquireDistributedLock(String lockValue) {
+        if (redisStateService == null) {
+            return null;
+        }
+        return redisStateService.setIfAbsent(DATA_OPS_LOCK_KEY, lockValue, DATA_OPS_LOCK_TTL);
+    }
+
+    private void releaseDistributedLock(String lockValue) {
+        if (redisStateService == null) {
+            return;
+        }
+        redisStateService.compareAndDelete(DATA_OPS_LOCK_KEY, lockValue);
+    }
+
+    private String encodeDistributedLockValue(String token, String operation) {
+        return token + DATA_OPS_LOCK_SEPARATOR + operation;
+    }
+
+    private String decodeDistributedOperation(String lockValue) {
+        int separatorIndex = lockValue.indexOf(DATA_OPS_LOCK_SEPARATOR);
+        if (separatorIndex < 0 || separatorIndex == lockValue.length() - 1) {
+            return "";
+        }
+        return lockValue.substring(separatorIndex + 1);
     }
 
     private BigDecimal defaultAmount(BigDecimal value) {

@@ -77,6 +77,12 @@ app:
       password: ${REDIS_CACHE_PASSWORD:}
       database: ${REDIS_CACHE_DATABASE:0}
       ssl: ${REDIS_CACHE_SSL:false}
+    state:
+      host: ${REDIS_STATE_HOST:}
+      port: ${REDIS_STATE_PORT:6379}
+      password: ${REDIS_STATE_PASSWORD:}
+      database: ${REDIS_STATE_DATABASE:0}
+      ssl: ${REDIS_STATE_SSL:false}
   family:
     media-storage-path: ${FAMILY_MEDIA_STORAGE_PATH:${user.dir}/uploads/family-media}
     media-object-prefix: ${FAMILY_MEDIA_OBJECT_PREFIX:family-media}

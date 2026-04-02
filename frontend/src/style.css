@@ -4154,9 +4154,23 @@ textarea {
   gap: var(--calendar-week-gap);
 }
 
+.household-calendar-layout--custom-size .calendar__weeks {
+  height: var(--calendar-weeks-height);
+  grid-template-rows: repeat(var(--calendar-week-count), minmax(0, 1fr));
+}
+
+.household-calendar-layout--custom-size .calendar__week {
+  min-height: 0;
+}
+
 .household-calendar-layout .calendar__day {
   min-height: var(--calendar-day-min-height);
   padding: var(--calendar-day-padding);
+}
+
+.household-calendar-layout--custom-size .calendar__day {
+  height: 100%;
+  min-height: 0;
 }
 
 .household-calendar-layout .calendar__day-head {

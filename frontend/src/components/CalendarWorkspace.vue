@@ -306,16 +306,19 @@ const calendarLayoutStyle = computed(() => {
   const width = clamp(calendarCustomWidth.value, CALENDAR_CUSTOM_WIDTH_MIN, CALENDAR_CUSTOM_WIDTH_MAX)
   const height = clamp(calendarCustomHeight.value, CALENDAR_CUSTOM_HEIGHT_MIN, CALENDAR_CUSTOM_HEIGHT_MAX)
   const widthZoom = clamp(width / 860, 0.9, 1.18)
-  const heightZoom = clamp(height / DEFAULT_CALENDAR_CUSTOM_HEIGHT, 0.67, 1.25)
-  const scaledDayMinHeight = Math.round(146 * widthZoom * heightZoom)
+  const weekCount = Math.max(displayedCalendarWeeks.value.length, 1)
+  const effectiveWeekCount = calendarWeekMode.value === 'month' ? weekCount : Math.max(weekCount, 4)
+  const weekGap = Math.round(8 * widthZoom)
+  const rowHeight = Math.max(Math.round((height - (weekGap * Math.max(effectiveWeekCount - 1, 0))) / effectiveWeekCount), 0)
+  const weeksHeight = (rowHeight * weekCount) + (weekGap * Math.max(weekCount - 1, 0))
 
   return {
     ...baseStyle,
     '--calendar-panel-width': `${width}px`,
     '--calendar-min-width': `${width}px`,
     '--calendar-gap': `${Math.round(10 * widthZoom)}px`,
-    '--calendar-week-gap': `${Math.round(8 * widthZoom)}px`,
-    '--calendar-day-min-height': `${scaledDayMinHeight}px`,
+    '--calendar-week-gap': `${weekGap}px`,
+    '--calendar-day-min-height': `${rowHeight}px`,
     '--calendar-day-padding': `${Math.round(12 * widthZoom)}px`,
     '--calendar-expense-total-size': `${Math.max(1, 1.18 * widthZoom).toFixed(2)}rem`,
     '--calendar-metric-size': `${Math.max(0.72, 0.8 * widthZoom).toFixed(2)}rem`,
@@ -323,6 +326,8 @@ const calendarLayoutStyle = computed(() => {
     '--calendar-day-head-size': `${Math.max(0.78, 0.88 * widthZoom).toFixed(2)}rem`,
     '--calendar-shell-width': '100%',
     '--calendar-shell-height': 'auto',
+    '--calendar-week-count': `${weekCount}`,
+    '--calendar-weeks-height': `${weeksHeight}px`,
   }
 })
 
@@ -1309,6 +1314,7 @@ defineExpose({
         'panel household-calendar-panel household-calendar-layout',
         { 'household-calendar-layout--amount-only': isAmountOnlyCalendar },
         { 'household-calendar-layout--fit': isFitCalendar },
+        { 'household-calendar-layout--custom-size': isCalendarCustomSizeEnabled },
       ]"
       :style="calendarLayoutStyle"
     >

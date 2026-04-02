@@ -63,9 +63,20 @@ app:
   travel:
     exchange-rate-base-url: ${TRAVEL_EXCHANGE_RATE_BASE_URL:https://api.frankfurter.dev/v1}
     exchange-rate-cache-minutes: ${TRAVEL_EXCHANGE_RATE_CACHE_MINUTES:30}
+    reverse-geocode-base-url: ${TRAVEL_REVERSE_GEOCODE_BASE_URL:https://nominatim.openstreetmap.org/reverse}
+    reverse-geocode-user-agent: ${TRAVEL_REVERSE_GEOCODE_USER_AGENT:TravelLedger/1.0 (+https://www.innoutdrive.space)}
+    reverse-geocode-request-min-interval-ms: ${TRAVEL_REVERSE_GEOCODE_REQUEST_MIN_INTERVAL_MS:1200}
+    reverse-geocode-cache-ttl-hours: ${TRAVEL_REVERSE_GEOCODE_CACHE_TTL_HOURS:720}
     media-storage-path: ${TRAVEL_MEDIA_STORAGE_PATH:${user.dir}/uploads/travel-media}
     media-object-prefix: ${TRAVEL_MEDIA_OBJECT_PREFIX:travel-media}
     presigned-upload-enabled: ${TRAVEL_PRESIGNED_UPLOAD_ENABLED:false}
+  redis:
+    cache:
+      host: ${REDIS_CACHE_HOST:}
+      port: ${REDIS_CACHE_PORT:6379}
+      password: ${REDIS_CACHE_PASSWORD:}
+      database: ${REDIS_CACHE_DATABASE:0}
+      ssl: ${REDIS_CACHE_SSL:false}
   family:
     media-storage-path: ${FAMILY_MEDIA_STORAGE_PATH:${user.dir}/uploads/family-media}
     media-object-prefix: ${FAMILY_MEDIA_OBJECT_PREFIX:family-media}

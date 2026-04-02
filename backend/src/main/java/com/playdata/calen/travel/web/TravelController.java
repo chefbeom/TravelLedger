@@ -25,12 +25,14 @@ import com.playdata.calen.travel.dto.TravelPlanShareRequest;
 import com.playdata.calen.travel.dto.TravelPlanShareResponse;
 import com.playdata.calen.travel.dto.TravelPlanSummaryResponse;
 import com.playdata.calen.travel.dto.TravelPortfolioResponse;
+import com.playdata.calen.travel.dto.TravelReverseGeocodeResponse;
 import com.playdata.calen.travel.dto.TravelRouteSegmentRequest;
 import com.playdata.calen.travel.dto.TravelRouteSegmentResponse;
 import com.playdata.calen.travel.dto.TravelSharedExhibitDetailResponse;
 import com.playdata.calen.travel.dto.TravelSharedExhibitPageResponse;
 import com.playdata.calen.travel.dto.TravelSharedExhibitSummaryResponse;
 import com.playdata.calen.travel.service.TravelService;
+import com.playdata.calen.travel.service.TravelReverseGeocodeService;
 import jakarta.validation.Valid;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
@@ -58,6 +60,7 @@ import org.springframework.web.multipart.MultipartFile;
 public class TravelController {
 
     private final TravelService travelService;
+    private final TravelReverseGeocodeService travelReverseGeocodeService;
     private final ImageThumbnailService imageThumbnailService;
 
     @GetMapping("/plans")
@@ -89,6 +92,15 @@ public class TravelController {
             @PathVariable Long markerId
     ) {
         return travelService.getMyMapMarkerDetailBundle(currentUser.userId(), markerId);
+    }
+
+    @GetMapping("/geocode/reverse")
+    public TravelReverseGeocodeResponse reverseGeocode(
+            @AuthenticationPrincipal AppUserPrincipal currentUser,
+            @RequestParam("lat") double latitude,
+            @RequestParam("lon") double longitude
+    ) {
+        return travelReverseGeocodeService.reverseGeocode(latitude, longitude);
     }
 
     @GetMapping("/categories")

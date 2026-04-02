@@ -292,6 +292,9 @@ onMounted(() => {
               v-if="selectedMarker.mediaItems?.[0]?.contentUrl"
               :src="buildThumbnailUrl(selectedMarker.mediaItems[0].contentUrl, 360)"
               :alt="selectedMarker.title || selectedMarker.placeName || '대표 사진'"
+              loading="eager"
+              fetchpriority="high"
+              decoding="async"
               class="travel-media-thumb"
             />
             <div class="travel-media-tags">

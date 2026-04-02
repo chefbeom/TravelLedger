@@ -938,11 +938,19 @@ function submitMemory() {
 
       <div class="travel-media-grid travel-media-grid--gallery travel-media-grid--quick-open">
         <article
-          v-for="memory in pagedPhotoBackedMemories"
+          v-for="(memory, index) in pagedPhotoBackedMemories"
           :key="`photo-memory-${memory.id}`"
           class="travel-media-card travel-media-card--compact"
         >
-          <img v-if="memory.heroPhoto?.contentUrl" :src="buildThumbnailUrl(memory.heroPhoto.contentUrl)" :alt="memory.heroPhoto.originalFileName" class="travel-media-thumb" />
+          <img
+            v-if="memory.heroPhoto?.contentUrl"
+            :src="buildThumbnailUrl(memory.heroPhoto.contentUrl)"
+            :alt="memory.heroPhoto.originalFileName"
+            :loading="index < 2 ? 'eager' : 'lazy'"
+            :fetchpriority="index < 2 ? 'high' : 'auto'"
+            decoding="async"
+            class="travel-media-thumb"
+          />
           <div v-else class="travel-media-thumb travel-media-thumb--receipt">사진 없음</div>
           <div class="travel-media-copy">
             <div class="travel-media-tags">
@@ -1281,8 +1289,15 @@ function submitMemory() {
           </div>
 
           <div v-else-if="hasMultiPhotoDrafts" class="travel-batch-memory-list">
-            <article v-for="item in multiPhotoDrafts" :key="item.id" class="travel-batch-memory-card">
-              <img :src="item.previewUrl" :alt="item.fileName" class="travel-batch-memory-card__thumb" />
+            <article v-for="(item, index) in multiPhotoDrafts" :key="item.id" class="travel-batch-memory-card">
+              <img
+                :src="item.previewUrl"
+                :alt="item.fileName"
+                :loading="index < 4 ? 'eager' : 'lazy'"
+                :fetchpriority="index < 4 ? 'high' : 'auto'"
+                decoding="async"
+                class="travel-batch-memory-card__thumb"
+              />
               <div class="travel-batch-memory-card__meta">
                 <strong>{{ item.fileName }}</strong>
                 <small>{{ formatDateTime(item.memoryDate, item.memoryTime) }}</small>
@@ -1311,8 +1326,15 @@ function submitMemory() {
           </p>
 
           <div v-if="editingPhotos.length" class="travel-media-grid">
-            <article v-for="media in editingPhotos" :key="media.id" class="travel-media-card">
-              <img :src="buildThumbnailUrl(media.contentUrl)" :alt="media.originalFileName" class="travel-media-thumb" />
+            <article v-for="(media, index) in editingPhotos" :key="media.id" class="travel-media-card">
+              <img
+                :src="buildThumbnailUrl(media.contentUrl)"
+                :alt="media.originalFileName"
+                :loading="index < 2 ? 'eager' : 'lazy'"
+                :fetchpriority="index < 2 ? 'high' : 'auto'"
+                decoding="async"
+                class="travel-media-thumb"
+              />
               <div class="travel-media-copy">
                 <strong>{{ media.caption || media.originalFileName }}</strong>
                 <small>{{ [media.country, media.region, media.placeName].filter(Boolean).join(' / ') || '-' }}</small>

@@ -362,6 +362,8 @@ onMounted(() => {
                 v-if="inquiry.attachmentContentType?.startsWith('image/')"
                 :src="buildThumbnailUrl(inquiry.attachmentUrl)"
                 :alt="inquiry.attachmentFileName || inquiry.title"
+                loading="lazy"
+                decoding="async"
                 class="support-inquiry-preview"
               />
             </div>

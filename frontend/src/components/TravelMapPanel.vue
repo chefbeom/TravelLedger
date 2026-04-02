@@ -284,6 +284,9 @@ function createPopupContent(marker) {
     image.className = 'travel-map__popup-image'
     image.src = buildThumbnailUrl(heroPhoto, 360)
     image.alt = marker.title || marker.placeName || '사진'
+    image.loading = 'eager'
+    image.decoding = 'async'
+    image.fetchPriority = 'high'
     root.appendChild(image)
   }
 

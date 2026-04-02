@@ -183,8 +183,16 @@ function goToExhibitPage(page) {
       </div>
 
       <div v-if="photoCards.length" class="travel-media-grid travel-media-grid--gallery">
-        <article v-for="item in pagedPhotoCards" :key="item.id" class="travel-media-card">
-          <img v-if="item.contentUrl" :src="buildThumbnailUrl(item.contentUrl)" :alt="item.title" class="travel-media-thumb" />
+        <article v-for="(item, index) in pagedPhotoCards" :key="item.id" class="travel-media-card">
+          <img
+            v-if="item.contentUrl"
+            :src="buildThumbnailUrl(item.contentUrl)"
+            :alt="item.title"
+            :loading="index < 2 ? 'eager' : 'lazy'"
+            :fetchpriority="index < 2 ? 'high' : 'auto'"
+            decoding="async"
+            class="travel-media-thumb"
+          />
           <div v-else class="travel-media-thumb travel-media-thumb--receipt">사진 없음</div>
           <div class="travel-media-copy">
             <div class="travel-media-tags">

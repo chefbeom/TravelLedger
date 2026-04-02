@@ -129,8 +129,16 @@ function goToCommunityPage(page) {
       </div>
 
       <div v-if="communityFeed.length" class="travel-media-grid travel-media-grid--gallery">
-        <article v-for="item in communityFeed" :key="item.memoryId" class="travel-media-card">
-          <img v-if="item.heroPhotoUrl" :src="buildThumbnailUrl(item.heroPhotoUrl)" :alt="item.title" class="travel-media-thumb" />
+        <article v-for="(item, index) in communityFeed" :key="item.memoryId" class="travel-media-card">
+          <img
+            v-if="item.heroPhotoUrl"
+            :src="buildThumbnailUrl(item.heroPhotoUrl)"
+            :alt="item.title"
+            :loading="index < 2 ? 'eager' : 'lazy'"
+            :fetchpriority="index < 2 ? 'high' : 'auto'"
+            decoding="async"
+            class="travel-media-thumb"
+          />
           <div v-else class="travel-media-thumb travel-media-thumb--receipt">사진 없음</div>
           <div class="travel-media-copy">
             <div class="travel-media-tags">

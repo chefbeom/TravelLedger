@@ -554,8 +554,16 @@ onMounted(() => {
             <button class="button button--ghost" type="button" @click="clearAlbumViewer">앨범 보기 닫기</button>
           </div>
           <div class="family-media-grid family-media-grid--compact">
-            <article v-for="media in pagedSelectedAlbumMedia" :key="`album-${media.id}`" class="family-media-card family-media-card--album">
-              <img v-if="media.mediaType === 'PHOTO'" :src="buildThumbnailUrl(media.contentUrl)" :alt="media.originalFileName" class="family-media-card__preview" />
+            <article v-for="(media, index) in pagedSelectedAlbumMedia" :key="`album-${media.id}`" class="family-media-card family-media-card--album">
+              <img
+                v-if="media.mediaType === 'PHOTO'"
+                :src="buildThumbnailUrl(media.contentUrl)"
+                :alt="media.originalFileName"
+                :loading="index < 4 ? 'eager' : 'lazy'"
+                :fetchpriority="index < 4 ? 'high' : 'auto'"
+                decoding="async"
+                class="family-media-card__preview"
+              />
               <video v-else class="family-media-card__preview" controls preload="metadata" playsinline>
                 <source :src="media.contentUrl" :type="media.contentType" />
               </video>
@@ -574,7 +582,7 @@ onMounted(() => {
 
         <div v-if="categoryMediaItems.length" class="family-media-grid">
           <article
-            v-for="media in pagedCategoryMediaItems"
+            v-for="(media, index) in pagedCategoryMediaItems"
             :key="media.id"
             class="family-media-card"
             :class="{ 'family-media-card--selected': isSelectedMedia(media.id) }"
@@ -582,7 +590,15 @@ onMounted(() => {
             <button class="family-media-card__select" type="button" @click="toggleMediaSelection(media.id)">
               {{ isSelectedMedia(media.id) ? '선택됨' : '앨범에 담기' }}
             </button>
-            <img v-if="media.mediaType === 'PHOTO'" :src="buildThumbnailUrl(media.contentUrl)" :alt="media.originalFileName" class="family-media-card__preview" />
+            <img
+              v-if="media.mediaType === 'PHOTO'"
+              :src="buildThumbnailUrl(media.contentUrl)"
+              :alt="media.originalFileName"
+              :loading="index < 4 ? 'eager' : 'lazy'"
+              :fetchpriority="index < 4 ? 'high' : 'auto'"
+              decoding="async"
+              class="family-media-card__preview"
+            />
             <video v-else class="family-media-card__preview" controls preload="metadata" playsinline>
               <source :src="media.contentUrl" :type="media.contentType" />
             </video>

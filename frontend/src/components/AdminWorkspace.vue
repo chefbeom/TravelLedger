@@ -925,6 +925,9 @@ onMounted(initializeAdminWorkspace)
                 v-if="selectedSupportInquiry.attachmentContentType?.startsWith('image/')"
                 :src="buildThumbnailUrl(selectedSupportInquiry.attachmentUrl)"
                 :alt="selectedSupportInquiry.attachmentFileName || selectedSupportInquiry.title"
+                loading="eager"
+                fetchpriority="high"
+                decoding="async"
                 class="support-inquiry-preview"
               />
             </div>

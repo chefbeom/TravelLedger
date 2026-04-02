@@ -439,6 +439,7 @@ function createMarkerLayer(marker) {
     if (props.preserveSelectedPopup && markerId) {
       activePopupMarkerId = markerId
       activePopupOpen = true
+      layer.openPopup()
     }
     emit('select-marker', marker)
   })
@@ -894,9 +895,7 @@ watch(
     }
 
     activePopupMarkerId = normalizeMarkerId(value)
-    if (!activePopupMarkerId) {
-      activePopupOpen = false
-    }
+    activePopupOpen = Boolean(activePopupMarkerId)
   },
 )
 

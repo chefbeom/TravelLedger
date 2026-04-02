@@ -196,8 +196,11 @@ const isAggregateEditMode = ref(false)
 const quickEntryPanelRef = ref(null)
 const ledgerSheetRef = ref(null)
 const calendarShellRef = ref(null)
+const calendarContentRef = ref(null)
 const aggregateWidgetDraftConfigs = ref(createDefaultAggregateConfigs())
 const calendarShellWidth = ref(0)
+const calendarNaturalWidth = ref(860)
+const calendarNaturalHeight = ref(1000)
 const isCalendarResizePanelOpen = ref(false)
 const isCalendarCustomSizeEnabled = ref(false)
 const calendarCustomWidth = ref(DEFAULT_CALENDAR_CUSTOM_WIDTH)
@@ -305,43 +308,16 @@ const calendarLayoutStyle = computed(() => {
 
   const width = clamp(calendarCustomWidth.value, CALENDAR_CUSTOM_WIDTH_MIN, CALENDAR_CUSTOM_WIDTH_MAX)
   const height = clamp(calendarCustomHeight.value, CALENDAR_CUSTOM_HEIGHT_MIN, CALENDAR_CUSTOM_HEIGHT_MAX)
-  const widthZoom = clamp(width / 860, 0.9, 1.18)
-  const heightZoom = clamp(height / DEFAULT_CALENDAR_CUSTOM_HEIGHT, 0.67, 1.25)
-  const contentZoom = Math.min(widthZoom, heightZoom)
-  const weekCount = Math.max(displayedCalendarWeeks.value.length, 1)
-  const effectiveWeekCount = calendarWeekMode.value === 'month' ? weekCount : Math.max(weekCount, 4)
-  const weekGap = Math.max(4, Math.round(8 * contentZoom))
-  const rowHeight = Math.max(Math.round((height - (weekGap * Math.max(effectiveWeekCount - 1, 0))) / effectiveWeekCount), 0)
-  const weeksHeight = (rowHeight * weekCount) + (weekGap * Math.max(weekCount - 1, 0))
-  const dayGap = Math.max(6, Math.round(10 * contentZoom))
+  const naturalWidth = Math.max(calendarNaturalWidth.value, 860)
+  const naturalHeight = Math.max(calendarNaturalHeight.value, 1)
+  const scale = clamp(Math.min(width / naturalWidth, height / naturalHeight), 0.45, 1.6)
 
   return {
     ...baseStyle,
-    '--calendar-panel-width': `${width}px`,
-    '--calendar-min-width': `${width}px`,
-    '--calendar-gap': `${dayGap}px`,
-    '--calendar-week-gap': `${weekGap}px`,
-    '--calendar-day-min-height': `${rowHeight}px`,
-    '--calendar-day-padding': `${Math.max(8, Math.round(12 * contentZoom))}px`,
-    '--calendar-day-gap': `${dayGap}px`,
-    '--calendar-day-stamp-gap': `${Math.max(4, Math.round(6 * contentZoom))}px`,
-    '--calendar-expense-block-gap': `${Math.max(2, Math.round(4 * contentZoom))}px`,
-    '--calendar-expense-total-size': `${Math.max(0.94, 1.18 * contentZoom).toFixed(2)}rem`,
-    '--calendar-label-size': `${Math.max(0.68, 0.82 * contentZoom).toFixed(2)}rem`,
-    '--calendar-month-tag-size': `${Math.max(0.62, 0.74 * contentZoom).toFixed(2)}rem`,
-    '--calendar-month-tag-padding-y': `${Math.max(3, Math.round(4 * contentZoom))}px`,
-    '--calendar-month-tag-padding-x': `${Math.max(6, Math.round(8 * contentZoom))}px`,
-    '--calendar-metric-size': `${Math.max(0.62, 0.8 * contentZoom).toFixed(2)}rem`,
-    '--calendar-metrics-gap': `${Math.max(4, Math.round(8 * contentZoom))}px`,
-    '--calendar-metric-padding-y': `${Math.max(6, Math.round(8 * contentZoom))}px`,
-    '--calendar-metric-padding-x': `${Math.max(8, Math.round(10 * contentZoom))}px`,
-    '--calendar-bar-height': `${Math.max(5, Math.round(8 * contentZoom))}px`,
-    '--calendar-toolbar-gap': `${Math.round(18 * widthZoom)}px`,
-    '--calendar-day-head-size': `${Math.max(0.72, 0.88 * contentZoom).toFixed(2)}rem`,
-    '--calendar-shell-width': '100%',
-    '--calendar-shell-height': 'auto',
-    '--calendar-week-count': `${weekCount}`,
-    '--calendar-weeks-height': `${weeksHeight}px`,
+    '--calendar-frame-width': `${Math.round(naturalWidth * scale)}px`,
+    '--calendar-frame-height': `${Math.round(naturalHeight * scale)}px`,
+    '--calendar-content-width': `${naturalWidth}px`,
+    '--calendar-scale': scale.toFixed(4),
   }
 })
 
@@ -496,14 +472,21 @@ watch(isCalendarCollapsed, (value) => {
 
   nextTick(() => {
     updateCalendarShellWidth()
+    updateCalendarContentSize()
 
-    if (typeof ResizeObserver !== 'undefined' && calendarShellRef.value) {
+    if (typeof ResizeObserver !== 'undefined') {
       if (!calendarResizeObserver) {
         calendarResizeObserver = new ResizeObserver(() => {
           updateCalendarShellWidth()
+          updateCalendarContentSize()
         })
       }
-      calendarResizeObserver.observe(calendarShellRef.value)
+      if (calendarShellRef.value) {
+        calendarResizeObserver.observe(calendarShellRef.value)
+      }
+      if (calendarContentRef.value) {
+        calendarResizeObserver.observe(calendarContentRef.value)
+      }
     }
   })
 })
@@ -548,12 +531,19 @@ onMounted(() => {
 
   nextTick(() => {
     updateCalendarShellWidth()
+    updateCalendarContentSize()
 
-    if (typeof ResizeObserver !== 'undefined' && calendarShellRef.value) {
+    if (typeof ResizeObserver !== 'undefined') {
       calendarResizeObserver = new ResizeObserver(() => {
         updateCalendarShellWidth()
+        updateCalendarContentSize()
       })
-      calendarResizeObserver.observe(calendarShellRef.value)
+      if (calendarShellRef.value) {
+        calendarResizeObserver.observe(calendarShellRef.value)
+      }
+      if (calendarContentRef.value) {
+        calendarResizeObserver.observe(calendarContentRef.value)
+      }
     }
   })
 })
@@ -673,6 +663,15 @@ function updateCalendarShellWidth() {
   }
 
   calendarShellWidth.value = calendarShellRef.value.clientWidth || 0
+}
+
+function updateCalendarContentSize() {
+  if (!calendarContentRef.value) {
+    return
+  }
+
+  calendarNaturalWidth.value = calendarContentRef.value.offsetWidth || calendarContentRef.value.scrollWidth || 860
+  calendarNaturalHeight.value = calendarContentRef.value.offsetHeight || calendarContentRef.value.scrollHeight || 1000
 }
 
 function updateCalendarCustomWidth(value) {
@@ -1479,13 +1478,15 @@ defineExpose({
       </div>
 
       <div v-if="!isCalendarCollapsed" ref="calendarShellRef" class="calendar-shell">
-        <div class="calendar">
-          <div class="calendar__weekdays">
-            <span v-for="weekday in weekdayLabels" :key="weekday">{{ weekday }}</span>
-          </div>
+        <div class="calendar-scale-frame">
+          <div ref="calendarContentRef" class="calendar-scale-content">
+            <div class="calendar">
+              <div class="calendar__weekdays">
+                <span v-for="weekday in weekdayLabels" :key="weekday">{{ weekday }}</span>
+              </div>
 
-          <div class="calendar__weeks">
-            <div v-for="(week, weekIndex) in displayedCalendarWeeks" :key="`week-${weekIndex}`" class="calendar__week">
+              <div class="calendar__weeks">
+                <div v-for="(week, weekIndex) in displayedCalendarWeeks" :key="`week-${weekIndex}`" class="calendar__week">
               <article
                 v-for="day in week"
                 :key="day.date"
@@ -1537,6 +1538,8 @@ defineExpose({
                   <span :style="{ width: `${getCalendarBarRatio(day)}%` }" />
                 </div>
               </article>
+                </div>
+              </div>
             </div>
           </div>
         </div>

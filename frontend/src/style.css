@@ -4131,26 +4131,10 @@ textarea {
   --calendar-week-gap: 8px;
   --calendar-day-min-height: 146px;
   --calendar-day-padding: 12px;
-  --calendar-day-gap: 10px;
-  --calendar-day-stamp-gap: 6px;
-  --calendar-expense-block-gap: 4px;
   --calendar-expense-total-size: 1.18rem;
-  --calendar-label-size: 0.82rem;
-  --calendar-month-tag-size: 0.74rem;
-  --calendar-month-tag-padding-y: 4px;
-  --calendar-month-tag-padding-x: 8px;
   --calendar-metric-size: 0.8rem;
-  --calendar-metrics-gap: 8px;
-  --calendar-metric-padding-y: 8px;
-  --calendar-metric-padding-x: 10px;
-  --calendar-bar-height: 8px;
   --calendar-toolbar-gap: 18px;
   --calendar-day-head-size: 0.88rem;
-}
-
-.household-calendar-panel {
-  width: var(--calendar-panel-width, 100%);
-  max-width: 100%;
 }
 
 .household-calendar-layout .calendar {
@@ -4165,45 +4149,13 @@ textarea {
   gap: var(--calendar-week-gap);
 }
 
-.household-calendar-layout--custom-size .calendar__weeks {
-  height: var(--calendar-weeks-height);
-  grid-template-rows: repeat(var(--calendar-week-count), minmax(0, 1fr));
-}
-
-.household-calendar-layout--custom-size .calendar__week {
-  min-height: 0;
-}
-
 .household-calendar-layout .calendar__day {
-  gap: var(--calendar-day-gap);
   min-height: var(--calendar-day-min-height);
   padding: var(--calendar-day-padding);
 }
 
-.household-calendar-layout--custom-size .calendar__day {
-  height: 100%;
-  min-height: 0;
-}
-
 .household-calendar-layout .calendar__day-head {
   font-size: var(--calendar-day-head-size);
-}
-
-.household-calendar-layout .calendar__day-stamp {
-  gap: var(--calendar-day-stamp-gap);
-}
-
-.household-calendar-layout .calendar__month-tag {
-  padding: var(--calendar-month-tag-padding-y) var(--calendar-month-tag-padding-x);
-  font-size: var(--calendar-month-tag-size);
-}
-
-.household-calendar-layout .calendar__expense-block {
-  gap: var(--calendar-expense-block-gap);
-}
-
-.household-calendar-layout .calendar__label {
-  font-size: var(--calendar-label-size);
 }
 
 .household-calendar-layout--amount-only .calendar__day {
@@ -4234,15 +4186,6 @@ textarea {
 
 .household-calendar-layout .calendar__metric {
   font-size: var(--calendar-metric-size);
-  padding: var(--calendar-metric-padding-y) var(--calendar-metric-padding-x);
-}
-
-.household-calendar-layout .calendar__metrics {
-  gap: var(--calendar-metrics-gap);
-}
-
-.household-calendar-layout .calendar__bar {
-  height: var(--calendar-bar-height);
 }
 
 .household-calendar-panel .calendar-shell {
@@ -4250,6 +4193,22 @@ textarea {
   width: var(--calendar-shell-width, 100%);
   max-width: 100%;
   height: var(--calendar-shell-height, auto);
+}
+
+.calendar-scale-frame,
+.calendar-scale-content {
+  width: 100%;
+}
+
+.household-calendar-layout--custom-size .calendar-scale-frame {
+  width: var(--calendar-frame-width);
+  height: var(--calendar-frame-height);
+}
+
+.household-calendar-layout--custom-size .calendar-scale-content {
+  width: var(--calendar-content-width);
+  transform: scale(var(--calendar-scale));
+  transform-origin: top left;
 }
 
 .household-calendar-layout--fit .calendar-shell {

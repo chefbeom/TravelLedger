@@ -390,7 +390,7 @@ button {
 
 .calendar-shell {
   overflow-x: auto;
-  overflow-y: hidden;
+  overflow-y: var(--calendar-shell-overflow-y, hidden);
   padding-bottom: 6px;
 }
 
@@ -3953,6 +3953,11 @@ textarea {
   color: var(--text-soft);
 }
 
+:root[data-theme='toss'] .calendar-resize-panel {
+  background: rgba(14, 20, 29, 0.96);
+  border-color: rgba(78, 95, 125, 0.42);
+}
+
 :root[data-theme='toss'] .field input::placeholder,
 :root[data-theme='toss'] .stack-form input::placeholder {
   color: var(--text-muted);
@@ -4185,6 +4190,9 @@ textarea {
 
 .household-calendar-panel .calendar-shell {
   margin-top: var(--calendar-toolbar-gap);
+  width: var(--calendar-shell-width, 100%);
+  max-width: 100%;
+  height: var(--calendar-shell-height, auto);
 }
 
 .household-calendar-layout--fit .calendar-shell {
@@ -4219,10 +4227,18 @@ textarea {
   flex-wrap: wrap;
 }
 
+.calendar-size-toolbar__block--resize {
+  position: relative;
+}
+
 .calendar-size-toolbar__label {
   font-size: 0.85rem;
   font-weight: 800;
   color: var(--text-soft);
+}
+
+.calendar-size-toolbar__label--inline {
+  white-space: nowrap;
 }
 
 .calendar-size-toolbar__hint {
@@ -4268,6 +4284,52 @@ textarea {
   background: var(--interactive-contrast-bg);
   color: var(--interactive-contrast-text);
   box-shadow: var(--shadow-strong);
+}
+
+.calendar-size-toolbar__control {
+  min-height: 42px;
+}
+
+.calendar-resize-panel {
+  position: absolute;
+  top: calc(100% + 10px);
+  left: 0;
+  z-index: 3;
+  display: grid;
+  gap: 12px;
+  width: min(340px, calc(100vw - 40px));
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: var(--surface);
+  box-shadow: var(--shadow-strong);
+}
+
+.calendar-resize-panel__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.calendar-resize-panel__header strong {
+  font-size: 0.95rem;
+}
+
+.calendar-resize-panel__field {
+  display: grid;
+  gap: 8px;
+}
+
+.calendar-resize-panel__field span {
+  color: var(--text-soft);
+  font-size: 0.88rem;
+  font-weight: 700;
+}
+
+.calendar-resize-panel__field input[type='range'] {
+  width: 100%;
+  accent-color: var(--interactive-contrast-bg);
 }
 
 .household-ledger-grid {
@@ -4523,6 +4585,15 @@ textarea {
   .calendar-size-toolbar__block {
     width: 100%;
     justify-content: flex-start;
+  }
+
+  .calendar-size-toolbar__block--resize {
+    align-items: flex-start;
+  }
+
+  .calendar-resize-panel {
+    position: static;
+    width: 100%;
   }
 
   .household-calendar-layout--fit .calendar__metric {

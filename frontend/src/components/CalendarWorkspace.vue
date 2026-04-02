@@ -6,7 +6,14 @@ import { resolveRange, summarizeEntries } from '../lib/analytics'
 const CALENDAR_SCALE_KEY = 'calen-household-calendar-scale-preset'
 const CALENDAR_COLLAPSE_KEY = 'calen-household-calendar-collapsed'
 const CALENDAR_HIGHLIGHT_KEY = 'calen-household-calendar-highlight-mode'
+const CALENDAR_CUSTOM_SIZE_KEY = 'calen-household-calendar-custom-size'
 const DEFAULT_CALENDAR_HIGHLIGHT_MODE = 'net'
+const CALENDAR_CUSTOM_WIDTH_MIN = 780
+const CALENDAR_CUSTOM_WIDTH_MAX = 1500
+const CALENDAR_CUSTOM_HEIGHT_MIN = 1200
+const CALENDAR_CUSTOM_HEIGHT_MAX = 1500
+const DEFAULT_CALENDAR_CUSTOM_WIDTH = 1200
+const DEFAULT_CALENDAR_CUSTOM_HEIGHT = 1200
 
 const calendarScalePresets = [
   { key: 'compact', label: '좁게', value: 74 },
@@ -191,6 +198,10 @@ const ledgerSheetRef = ref(null)
 const calendarShellRef = ref(null)
 const aggregateWidgetDraftConfigs = ref(createDefaultAggregateConfigs())
 const calendarShellWidth = ref(0)
+const isCalendarResizePanelOpen = ref(false)
+const isCalendarCustomSizeEnabled = ref(false)
+const calendarCustomWidth = ref(DEFAULT_CALENDAR_CUSTOM_WIDTH)
+const calendarCustomHeight = ref(DEFAULT_CALENDAR_CUSTOM_HEIGHT)
 let calendarResizeObserver = null
 
 const maxDailyExpense = computed(() => {
@@ -286,6 +297,39 @@ const calendarViewStyle = computed(() => {
   }
 })
 
+const calendarLayoutStyle = computed(() => {
+  const baseStyle = { ...calendarViewStyle.value }
+  if (!isCalendarCustomSizeEnabled.value) {
+    return baseStyle
+  }
+
+  const width = clamp(calendarCustomWidth.value, CALENDAR_CUSTOM_WIDTH_MIN, CALENDAR_CUSTOM_WIDTH_MAX)
+  const height = clamp(calendarCustomHeight.value, CALENDAR_CUSTOM_HEIGHT_MIN, CALENDAR_CUSTOM_HEIGHT_MAX)
+  const widthZoom = clamp(width / 860, 0.9, 1.18)
+
+  return {
+    ...baseStyle,
+    '--calendar-min-width': `${width}px`,
+    '--calendar-gap': `${Math.round(10 * widthZoom)}px`,
+    '--calendar-week-gap': `${Math.round(8 * widthZoom)}px`,
+    '--calendar-day-min-height': `${Math.round(146 * widthZoom)}px`,
+    '--calendar-day-padding': `${Math.round(12 * widthZoom)}px`,
+    '--calendar-expense-total-size': `${Math.max(1, 1.18 * widthZoom).toFixed(2)}rem`,
+    '--calendar-metric-size': `${Math.max(0.72, 0.8 * widthZoom).toFixed(2)}rem`,
+    '--calendar-toolbar-gap': `${Math.round(18 * widthZoom)}px`,
+    '--calendar-day-head-size': `${Math.max(0.78, 0.88 * widthZoom).toFixed(2)}rem`,
+    '--calendar-shell-width': `${width}px`,
+    '--calendar-shell-height': `${height}px`,
+    '--calendar-shell-overflow-y': 'auto',
+  }
+})
+
+const calendarCustomSizeLabel = computed(() => (
+  isCalendarCustomSizeEnabled.value
+    ? `${calendarCustomWidth.value}px × ${calendarCustomHeight.value}px`
+    : '기본 크기 사용 중'
+))
+
 const normalizedSelectedDateEntries = computed(() =>
   selectedDateEntries.value.map((entry) => ({
     ...entry,
@@ -363,6 +407,21 @@ watch(calendarHighlightMode, (value) => {
   }
 })
 
+watch([calendarCustomWidth, calendarCustomHeight, isCalendarCustomSizeEnabled], () => {
+  if (typeof window === 'undefined') {
+    return
+  }
+
+  window.localStorage.setItem(
+    CALENDAR_CUSTOM_SIZE_KEY,
+    JSON.stringify({
+      enabled: isCalendarCustomSizeEnabled.value,
+      width: calendarCustomWidth.value,
+      height: calendarCustomHeight.value,
+    }),
+  )
+})
+
 watch([calendarWeekMode, displayedCalendarWeeks], () => {
   if (calendarWeekMode.value === 'month') {
     return
@@ -436,6 +495,7 @@ onMounted(() => {
   const savedScale = window.localStorage.getItem(CALENDAR_SCALE_KEY)
   const savedCollapsed = window.localStorage.getItem(CALENDAR_COLLAPSE_KEY)
   const savedHighlight = window.localStorage.getItem(CALENDAR_HIGHLIGHT_KEY)
+  const savedCustomSize = window.localStorage.getItem(CALENDAR_CUSTOM_SIZE_KEY)
 
   if (savedScale) {
     calendarScalePreset.value = normalizePresetKey(calendarDisplayModes, savedScale, 'default')
@@ -450,6 +510,19 @@ onMounted(() => {
 
   if (savedCollapsed) {
     isCalendarCollapsed.value = savedCollapsed === 'true'
+  }
+
+  if (savedCustomSize) {
+    try {
+      const parsed = JSON.parse(savedCustomSize)
+      calendarCustomWidth.value = clamp(Number(parsed?.width) || DEFAULT_CALENDAR_CUSTOM_WIDTH, CALENDAR_CUSTOM_WIDTH_MIN, CALENDAR_CUSTOM_WIDTH_MAX)
+      calendarCustomHeight.value = clamp(Number(parsed?.height) || DEFAULT_CALENDAR_CUSTOM_HEIGHT, CALENDAR_CUSTOM_HEIGHT_MIN, CALENDAR_CUSTOM_HEIGHT_MAX)
+      isCalendarCustomSizeEnabled.value = Boolean(parsed?.enabled)
+    } catch (_error) {
+      calendarCustomWidth.value = DEFAULT_CALENDAR_CUSTOM_WIDTH
+      calendarCustomHeight.value = DEFAULT_CALENDAR_CUSTOM_HEIGHT
+      isCalendarCustomSizeEnabled.value = false
+    }
   }
 
   nextTick(() => {
@@ -579,6 +652,22 @@ function updateCalendarShellWidth() {
   }
 
   calendarShellWidth.value = calendarShellRef.value.clientWidth || 0
+}
+
+function updateCalendarCustomWidth(value) {
+  calendarCustomWidth.value = clamp(Number(value) || DEFAULT_CALENDAR_CUSTOM_WIDTH, CALENDAR_CUSTOM_WIDTH_MIN, CALENDAR_CUSTOM_WIDTH_MAX)
+  isCalendarCustomSizeEnabled.value = true
+}
+
+function updateCalendarCustomHeight(value) {
+  calendarCustomHeight.value = clamp(Number(value) || DEFAULT_CALENDAR_CUSTOM_HEIGHT, CALENDAR_CUSTOM_HEIGHT_MIN, CALENDAR_CUSTOM_HEIGHT_MAX)
+  isCalendarCustomSizeEnabled.value = true
+}
+
+function resetCalendarCustomSize() {
+  calendarCustomWidth.value = DEFAULT_CALENDAR_CUSTOM_WIDTH
+  calendarCustomHeight.value = DEFAULT_CALENDAR_CUSTOM_HEIGHT
+  isCalendarCustomSizeEnabled.value = false
 }
 
 function getExpenseAmount(day) {
@@ -1219,7 +1308,7 @@ defineExpose({
         { 'household-calendar-layout--amount-only': isAmountOnlyCalendar },
         { 'household-calendar-layout--fit': isFitCalendar },
       ]"
-      :style="calendarViewStyle"
+      :style="calendarLayoutStyle"
     >
       <div class="panel__header">
         <div>
@@ -1262,6 +1351,40 @@ defineExpose({
       </div>
 
       <div v-if="!isCalendarCollapsed" class="calendar-size-toolbar">
+        <div class="calendar-size-toolbar__block calendar-size-toolbar__block--resize">
+          <button class="button button--ghost calendar-size-toolbar__control" type="button" @click="isCalendarResizePanelOpen = !isCalendarResizePanelOpen">
+            크기 조절
+          </button>
+          <span class="calendar-size-toolbar__label calendar-size-toolbar__label--inline">{{ calendarCustomSizeLabel }}</span>
+          <div v-if="isCalendarResizePanelOpen" class="calendar-resize-panel">
+            <div class="calendar-resize-panel__header">
+              <strong>달력 실제 크기</strong>
+              <button class="button button--ghost" type="button" @click="resetCalendarCustomSize">기본값</button>
+            </div>
+            <label class="calendar-resize-panel__field">
+              <span>가로 {{ calendarCustomWidth }}px</span>
+              <input
+                :value="calendarCustomWidth"
+                type="range"
+                :min="CALENDAR_CUSTOM_WIDTH_MIN"
+                :max="CALENDAR_CUSTOM_WIDTH_MAX"
+                step="10"
+                @input="updateCalendarCustomWidth($event.target.value)"
+              />
+            </label>
+            <label class="calendar-resize-panel__field">
+              <span>세로 {{ calendarCustomHeight }}px</span>
+              <input
+                :value="calendarCustomHeight"
+                type="range"
+                :min="CALENDAR_CUSTOM_HEIGHT_MIN"
+                :max="CALENDAR_CUSTOM_HEIGHT_MAX"
+                step="10"
+                @input="updateCalendarCustomHeight($event.target.value)"
+              />
+            </label>
+          </div>
+        </div>
         <div class="calendar-size-toolbar__block">
           <span class="calendar-size-toolbar__label">달력 크기</span>
           <div class="calendar-size-toggle">

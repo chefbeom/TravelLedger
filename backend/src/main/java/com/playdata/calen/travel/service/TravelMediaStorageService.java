@@ -1,6 +1,7 @@
 package com.playdata.calen.travel.service;
 
 import com.playdata.calen.common.config.MinioProperties;
+import com.playdata.calen.common.media.ImageThumbnailService;
 import com.playdata.calen.common.exception.BadRequestException;
 import io.minio.GetObjectArgs;
 import io.minio.GetPresignedObjectUrlArgs;
@@ -16,12 +17,12 @@ import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.nio.file.StandardCopyOption;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.ByteArrayResource;
@@ -32,10 +33,12 @@ import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
 
 @Service
+@Slf4j
 public class TravelMediaStorageService {
 
     private static final long MAX_FILE_SIZE = 10L * 1024 * 1024;
     private static final int HEADER_BYTES = 32;
+    private static final List<Integer> PREPARED_THUMBNAIL_WIDTHS = List.of(320, 480, 960);
     private static final Set<String> IMAGE_FILE_EXTENSIONS = Set.of(
             "jpg",
             "jpeg",
@@ -52,23 +55,27 @@ public class TravelMediaStorageService {
     private final MinioClient minioClient;
     private final MinioProperties minioProperties;
     private final boolean presignedUploadEnabled;
+    private final ImageThumbnailService imageThumbnailService;
 
     public TravelMediaStorageService(
             @Value("${app.travel.media-storage-path}") String mediaStoragePath,
             @Value("${app.travel.media-object-prefix:travel-media}") String mediaObjectPrefix,
             @Value("${app.travel.presigned-upload-enabled:false}") boolean presignedUploadEnabled,
             ObjectProvider<MinioClient> minioClientProvider,
-            MinioProperties minioProperties
+            MinioProperties minioProperties,
+            ImageThumbnailService imageThumbnailService
     ) {
         this.rootPath = Paths.get(mediaStoragePath).toAbsolutePath().normalize();
         this.mediaObjectPrefix = normalizeObjectPrefix(mediaObjectPrefix);
         this.presignedUploadEnabled = presignedUploadEnabled;
         this.minioClient = minioClientProvider.getIfAvailable();
         this.minioProperties = minioProperties;
+        this.imageThumbnailService = imageThumbnailService;
     }
 
     public StoredTravelMedia store(Long ownerId, Long planId, Long recordId, MultipartFile file) {
         String verifiedContentType = validateFile(file);
+        byte[] sourceBytes = readFileBytes(file);
 
         String originalFileName = file.getOriginalFilename() != null ? file.getOriginalFilename() : "upload";
         String safeFileName = sanitizeFileName(originalFileName);
@@ -78,13 +85,13 @@ public class TravelMediaStorageService {
         if (isMinioEnabled()) {
             String objectKey = buildMinioObjectKey(ownerId, planId, recordId, storedFileName);
             try {
-                return storeToMinio(file, originalFileName, storedFileName, objectKey, verifiedContentType);
+                return storeToMinio(sourceBytes, originalFileName, storedFileName, objectKey, verifiedContentType);
             } catch (BadRequestException exception) {
-                return storeToLocal(file, originalFileName, storedFileName, localStoragePath, verifiedContentType);
+                return storeToLocal(sourceBytes, originalFileName, storedFileName, localStoragePath, verifiedContentType);
             }
         }
 
-        return storeToLocal(file, originalFileName, storedFileName, localStoragePath, verifiedContentType);
+        return storeToLocal(sourceBytes, originalFileName, storedFileName, localStoragePath, verifiedContentType);
     }
 
     public StoredTravelMedia storeRouteGpx(Long ownerId, Long planId, Long routeId, MultipartFile file) {
@@ -94,17 +101,18 @@ public class TravelMediaStorageService {
         String safeFileName = sanitizeFileName(originalFileName);
         String storedFileName = UUID.randomUUID() + "-" + safeFileName;
         String localStoragePath = buildRouteLocalStoragePath(ownerId, planId, routeId, storedFileName);
+        byte[] sourceBytes = readFileBytes(file);
 
         if (isMinioEnabled()) {
             String objectKey = buildRouteMinioObjectKey(ownerId, planId, routeId, storedFileName);
             try {
-                return storeToMinio(file, originalFileName, storedFileName, objectKey, "application/gpx+xml");
+                return storeToMinio(sourceBytes, originalFileName, storedFileName, objectKey, "application/gpx+xml");
             } catch (BadRequestException exception) {
-                return storeToLocal(file, originalFileName, storedFileName, localStoragePath, "application/gpx+xml");
+                return storeToLocal(sourceBytes, originalFileName, storedFileName, localStoragePath, "application/gpx+xml");
             }
         }
 
-        return storeToLocal(file, originalFileName, storedFileName, localStoragePath, "application/gpx+xml");
+        return storeToLocal(sourceBytes, originalFileName, storedFileName, localStoragePath, "application/gpx+xml");
     }
 
     public boolean supportsPresignedUpload() {
@@ -166,6 +174,7 @@ public class TravelMediaStorageService {
             }
 
             validateStoredObjectSignature(upload.objectKey(), verifiedContentType);
+            prepareDerivedThumbnailsQuietly(upload.objectKey(), verifiedContentType);
 
             return new StoredTravelMedia(
                     upload.originalFileName(),
@@ -196,6 +205,23 @@ public class TravelMediaStorageService {
         return loadFromLocal(storagePath);
     }
 
+    public PreparedThumbnail loadPreparedThumbnail(String storagePath, String contentType, Integer requestedWidth) {
+        if (!StringUtils.hasText(storagePath) || !StringUtils.hasText(contentType) || !contentType.startsWith("image/")) {
+            return null;
+        }
+
+        String thumbnailPath = buildThumbnailStoragePath(
+                storagePath,
+                contentType,
+                selectPreparedThumbnailWidth(requestedWidth)
+        );
+        try {
+            return new PreparedThumbnail(loadAsResource(thumbnailPath), resolveThumbnailContentType(contentType));
+        } catch (BadRequestException ignored) {
+            return null;
+        }
+    }
+
     public void deleteQuietly(String storagePath) {
         if (!StringUtils.hasText(storagePath)) {
             return;
@@ -211,8 +237,18 @@ public class TravelMediaStorageService {
         deleteFromLocalQuietly(storagePath);
     }
 
+    public void deleteImageWithThumbnailsQuietly(String storagePath, String contentType) {
+        deleteQuietly(storagePath);
+
+        if (!StringUtils.hasText(storagePath) || !StringUtils.hasText(contentType) || !contentType.startsWith("image/")) {
+            return;
+        }
+
+        PREPARED_THUMBNAIL_WIDTHS.forEach(width -> deleteQuietly(buildThumbnailStoragePath(storagePath, contentType, width)));
+    }
+
     private StoredTravelMedia storeToLocal(
-            MultipartFile file,
+            byte[] sourceBytes,
             String originalFileName,
             String storedFileName,
             String localStoragePath,
@@ -223,35 +259,35 @@ public class TravelMediaStorageService {
 
         try {
             Files.createDirectories(targetPath.getParent());
-            try (InputStream inputStream = file.getInputStream()) {
-                Files.copy(inputStream, targetPath, StandardCopyOption.REPLACE_EXISTING);
-            }
+            Files.write(targetPath, sourceBytes);
         } catch (IOException exception) {
             throw new BadRequestException("Failed to store file.");
         }
+
+        prepareDerivedThumbnailsQuietly(localStoragePath, contentType, sourceBytes);
 
         return new StoredTravelMedia(
                 originalFileName,
                 storedFileName,
                 localStoragePath,
                 contentType,
-                file.getSize()
+                sourceBytes.length
         );
     }
 
     private StoredTravelMedia storeToMinio(
-            MultipartFile file,
+            byte[] sourceBytes,
             String originalFileName,
             String storedFileName,
             String objectKey,
             String contentType
     ) {
-        try (InputStream inputStream = file.getInputStream()) {
+        try (InputStream inputStream = new java.io.ByteArrayInputStream(sourceBytes)) {
             minioClient.putObject(
                     PutObjectArgs.builder()
                             .bucket(minioProperties.getBucket_cloud())
                             .object(objectKey)
-                            .stream(inputStream, file.getSize(), -1)
+                            .stream(inputStream, sourceBytes.length, -1)
                             .contentType(contentType)
                             .build()
             );
@@ -259,12 +295,14 @@ public class TravelMediaStorageService {
             throw new BadRequestException(buildStorageErrorMessage("Failed to store file."));
         }
 
+        prepareDerivedThumbnailsQuietly(objectKey, contentType, sourceBytes);
+
         return new StoredTravelMedia(
                 originalFileName,
                 storedFileName,
                 objectKey,
                 contentType,
-                file.getSize()
+                sourceBytes.length
         );
     }
 
@@ -357,8 +395,122 @@ public class TravelMediaStorageService {
         return sanitized.isBlank() ? "file" : sanitized.toLowerCase(Locale.ROOT);
     }
 
+    private byte[] readFileBytes(MultipartFile file) {
+        try {
+            return file.getBytes();
+        } catch (IOException exception) {
+            throw new BadRequestException("Failed to read the uploaded file.");
+        }
+    }
+
     private String normalizeContentType(String contentType) {
         return contentType == null ? "application/octet-stream" : contentType.trim().toLowerCase(Locale.ROOT);
+    }
+
+    private void prepareDerivedThumbnailsQuietly(String storagePath, String contentType) {
+        if (!StringUtils.hasText(storagePath) || !StringUtils.hasText(contentType) || !contentType.startsWith("image/") || !isMinioObject(storagePath) || !isMinioEnabled()) {
+            return;
+        }
+
+        try (InputStream inputStream = minioClient.getObject(
+                GetObjectArgs.builder()
+                        .bucket(minioProperties.getBucket_cloud())
+                        .object(storagePath)
+                        .build())) {
+            prepareDerivedThumbnailsQuietly(storagePath, contentType, inputStream.readAllBytes());
+        } catch (Exception exception) {
+            log.debug("Failed to prepare image thumbnails for {}", storagePath, exception);
+        }
+    }
+
+    private void prepareDerivedThumbnailsQuietly(String storagePath, String contentType, byte[] sourceBytes) {
+        if (!StringUtils.hasText(storagePath) || !StringUtils.hasText(contentType) || !contentType.startsWith("image/") || sourceBytes == null || sourceBytes.length == 0) {
+            return;
+        }
+
+        try {
+            List<ImageThumbnailService.PreparedThumbnailContent> thumbnails = imageThumbnailService.createPreparedThumbnails(
+                    sourceBytes,
+                    contentType,
+                    PREPARED_THUMBNAIL_WIDTHS
+            );
+
+            for (ImageThumbnailService.PreparedThumbnailContent thumbnail : thumbnails) {
+                String thumbnailPath = buildThumbnailStoragePath(storagePath, contentType, thumbnail.width());
+                if (isMinioObject(storagePath) && isMinioEnabled()) {
+                    storeThumbnailToMinio(thumbnailPath, thumbnail);
+                } else {
+                    storeThumbnailToLocal(thumbnailPath, thumbnail);
+                }
+            }
+        } catch (Exception exception) {
+            log.debug("Failed to persist prepared thumbnails for {}", storagePath, exception);
+        }
+    }
+
+    private void storeThumbnailToLocal(String storagePath, ImageThumbnailService.PreparedThumbnailContent thumbnail) throws IOException {
+        Path relativePath = Path.of(storagePath);
+        Path targetPath = rootPath.resolve(relativePath).normalize();
+        Files.createDirectories(targetPath.getParent());
+        Files.write(targetPath, thumbnail.bytes());
+    }
+
+    private void storeThumbnailToMinio(String storagePath, ImageThumbnailService.PreparedThumbnailContent thumbnail) throws Exception {
+        try (InputStream inputStream = new java.io.ByteArrayInputStream(thumbnail.bytes())) {
+            minioClient.putObject(
+                    PutObjectArgs.builder()
+                            .bucket(minioProperties.getBucket_cloud())
+                            .object(storagePath)
+                            .stream(inputStream, thumbnail.bytes().length, -1)
+                            .contentType(thumbnail.contentType())
+                            .build()
+            );
+        }
+    }
+
+    private int selectPreparedThumbnailWidth(Integer requestedWidth) {
+        int normalizedWidth = requestedWidth == null ? 480 : requestedWidth;
+        for (int candidateWidth : PREPARED_THUMBNAIL_WIDTHS) {
+            if (normalizedWidth <= candidateWidth) {
+                return candidateWidth;
+            }
+        }
+        return PREPARED_THUMBNAIL_WIDTHS.get(PREPARED_THUMBNAIL_WIDTHS.size() - 1);
+    }
+
+    private String buildThumbnailStoragePath(String storagePath, String contentType, int width) {
+        int separatorIndex = storagePath.lastIndexOf('/');
+        String directory = separatorIndex >= 0 ? storagePath.substring(0, separatorIndex) : "";
+        String fileName = separatorIndex >= 0 ? storagePath.substring(separatorIndex + 1) : storagePath;
+        String baseName = stripExtension(fileName);
+        String extension = resolveThumbnailFileExtension(contentType);
+        String thumbnailFileName = baseName + "." + extension;
+
+        if (directory.isEmpty()) {
+            return String.join("/", ".thumbs", String.valueOf(width), thumbnailFileName);
+        }
+        return String.join("/", directory, ".thumbs", String.valueOf(width), thumbnailFileName);
+    }
+
+    private String stripExtension(String fileName) {
+        int dotIndex = fileName.lastIndexOf('.');
+        if (dotIndex <= 0) {
+            return fileName;
+        }
+        return fileName.substring(0, dotIndex);
+    }
+
+    private String resolveThumbnailFileExtension(String contentType) {
+        return preservesAlpha(contentType) ? "png" : "jpg";
+    }
+
+    private String resolveThumbnailContentType(String contentType) {
+        return preservesAlpha(contentType) ? "image/png" : "image/jpeg";
+    }
+
+    private boolean preservesAlpha(String contentType) {
+        String normalized = normalizeContentType(contentType);
+        return "image/png".equals(normalized) || "image/gif".equals(normalized) || "image/webp".equals(normalized);
     }
 
     private PresignedUpload createPresignedUpload(Long ownerId, Long planId, Long recordId, UploadCandidate file) {
@@ -667,6 +819,12 @@ public class TravelMediaStorageService {
             String storagePath,
             String contentType,
             long fileSize
+    ) {
+    }
+
+    public record PreparedThumbnail(
+            Resource resource,
+            String contentType
     ) {
     }
 

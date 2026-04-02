@@ -3,6 +3,7 @@ import exifr from 'exifr'
 const DEFAULT_THUMBNAIL_WIDTH = 480
 const MIN_THUMBNAIL_WIDTH = 120
 const MAX_THUMBNAIL_WIDTH = 960
+const SUPPORTED_THUMBNAIL_WIDTHS = [320, 480, 960]
 
 function normalizeThumbnailWidth(width) {
   const numericWidth = Number(width)
@@ -10,6 +11,11 @@ function normalizeThumbnailWidth(width) {
     return DEFAULT_THUMBNAIL_WIDTH
   }
   return Math.min(MAX_THUMBNAIL_WIDTH, Math.max(MIN_THUMBNAIL_WIDTH, Math.round(numericWidth)))
+}
+
+function selectSupportedThumbnailWidth(width) {
+  const normalizedWidth = normalizeThumbnailWidth(width)
+  return SUPPORTED_THUMBNAIL_WIDTHS.find((candidate) => normalizedWidth <= candidate) || SUPPORTED_THUMBNAIL_WIDTHS[SUPPORTED_THUMBNAIL_WIDTHS.length - 1]
 }
 
 function readImageElement(objectUrl) {
@@ -108,7 +114,7 @@ export function buildThumbnailUrl(url, width = DEFAULT_THUMBNAIL_WIDTH) {
     return ''
   }
 
-  const thumbnailWidth = normalizeThumbnailWidth(width)
+  const thumbnailWidth = selectSupportedThumbnailWidth(width)
 
   try {
     const baseOrigin = typeof window !== 'undefined' ? window.location.origin : 'http://localhost'

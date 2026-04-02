@@ -31,6 +31,7 @@ import com.playdata.calen.travel.dto.TravelRouteSegmentResponse;
 import com.playdata.calen.travel.dto.TravelSharedExhibitDetailResponse;
 import com.playdata.calen.travel.dto.TravelSharedExhibitPageResponse;
 import com.playdata.calen.travel.dto.TravelSharedExhibitSummaryResponse;
+import com.playdata.calen.travel.service.TravelMediaStorageService;
 import com.playdata.calen.travel.service.TravelService;
 import com.playdata.calen.travel.service.TravelReverseGeocodeService;
 import jakarta.validation.Valid;
@@ -60,6 +61,7 @@ import org.springframework.web.multipart.MultipartFile;
 public class TravelController {
 
     private final TravelService travelService;
+    private final TravelMediaStorageService travelMediaStorageService;
     private final TravelReverseGeocodeService travelReverseGeocodeService;
     private final ImageThumbnailService imageThumbnailService;
 
@@ -387,6 +389,20 @@ public class TravelController {
                 : ContentDisposition.inline().filename(encodedFileName).build();
 
         if (thumbnail) {
+            TravelMediaStorageService.PreparedThumbnail preparedThumbnail = travelMediaStorageService.loadPreparedThumbnail(
+                    download.storagePath(),
+                    download.contentType(),
+                    width
+            );
+            if (preparedThumbnail != null) {
+                return ResponseEntity.ok()
+                        .contentType(MediaType.parseMediaType(preparedThumbnail.contentType()))
+                        .header(HttpHeaders.CONTENT_DISPOSITION, disposition.toString())
+                        .header("Cache-Control", "public, max-age=86400")
+                        .header("X-Content-Type-Options", "nosniff")
+                        .body(preparedThumbnail.resource());
+            }
+
             return imageThumbnailService.createThumbnail(download.resource(), download.contentType(), width)
                     .<ResponseEntity<?>>map(preview -> ResponseEntity.ok()
                             .contentType(MediaType.parseMediaType(preview.contentType()))

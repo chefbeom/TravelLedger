@@ -773,7 +773,7 @@ public class TravelService {
     public void deleteMedia(Long userId, Long mediaId) {
         TravelMediaAsset mediaAsset = travelMediaAssetRepository.findByIdAndPlanOwnerId(mediaId, userId)
                 .orElseThrow(() -> new NotFoundException("Uploaded file not found."));
-        travelMediaStorageService.deleteQuietly(mediaAsset.getStoragePath());
+        travelMediaStorageService.deleteImageWithThumbnailsQuietly(mediaAsset.getStoragePath(), mediaAsset.getContentType());
         travelMediaAssetRepository.delete(mediaAsset);
         invalidateTravelSummaryCaches(userId);
     }
@@ -782,7 +782,7 @@ public class TravelService {
         TravelMediaAsset mediaAsset = travelMediaAssetRepository.findByIdAndPlanOwnerId(mediaId, userId)
                 .orElseThrow(() -> new NotFoundException("Uploaded file not found."));
         Resource resource = travelMediaStorageService.loadAsResource(mediaAsset.getStoragePath());
-        return new MediaDownload(resource, mediaAsset.getContentType(), mediaAsset.getOriginalFileName());
+        return new MediaDownload(resource, mediaAsset.getStoragePath(), mediaAsset.getContentType(), mediaAsset.getOriginalFileName());
     }
 
     public MediaDownload getSharedMediaDownload(Long mediaId, String token) {
@@ -796,7 +796,7 @@ public class TravelService {
             throw new NotFoundException("Shared media not found.");
         }
         Resource resource = travelMediaStorageService.loadAsResource(mediaAsset.getStoragePath());
-        return new MediaDownload(resource, mediaAsset.getContentType(), mediaAsset.getOriginalFileName());
+        return new MediaDownload(resource, mediaAsset.getStoragePath(), mediaAsset.getContentType(), mediaAsset.getOriginalFileName());
     }
 
     public MediaDownload getSharedExhibitMediaDownload(Long userId, Long shareId, Long mediaId) {
@@ -810,7 +810,7 @@ public class TravelService {
         }
 
         Resource resource = travelMediaStorageService.loadAsResource(mediaAsset.getStoragePath());
-        return new MediaDownload(resource, mediaAsset.getContentType(), mediaAsset.getOriginalFileName());
+        return new MediaDownload(resource, mediaAsset.getStoragePath(), mediaAsset.getContentType(), mediaAsset.getOriginalFileName());
     }
 
     public List<TravelExchangeRateResponse> getExchangeRates(Long userId, String currencies) {
@@ -1523,7 +1523,7 @@ public class TravelService {
     }
 
     private void deleteMediaAssets(List<TravelMediaAsset> mediaAssets) {
-        mediaAssets.forEach(asset -> travelMediaStorageService.deleteQuietly(asset.getStoragePath()));
+        mediaAssets.forEach(asset -> travelMediaStorageService.deleteImageWithThumbnailsQuietly(asset.getStoragePath(), asset.getContentType()));
     }
 
     private void deleteRouteAssets(List<TravelRouteSegment> routeSegments) {
@@ -2131,6 +2131,6 @@ public class TravelService {
         return trimmed.isEmpty() ? null : trimmed;
     }
 
-    public record MediaDownload(Resource resource, String contentType, String fileName) {
+    public record MediaDownload(Resource resource, String storagePath, String contentType, String fileName) {
     }
 }

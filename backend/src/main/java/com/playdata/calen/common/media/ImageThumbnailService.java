@@ -17,6 +17,8 @@ import java.nio.file.StandardCopyOption;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
+import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Optional;
 import javax.imageio.ImageIO;
 import lombok.extern.slf4j.Slf4j;
@@ -58,51 +60,54 @@ public class ImageThumbnailService {
 
         try (InputStream inputStream = resource.getInputStream()) {
             byte[] sourceBytes = inputStream.readAllBytes();
-            BufferedImage sourceImage = ImageIO.read(new ByteArrayInputStream(sourceBytes));
-            if (sourceImage == null) {
+            Optional<PreparedThumbnailContent> generated = createPreparedThumbnails(sourceBytes, contentType, List.of(width)).stream()
+                    .findFirst();
+            if (generated.isEmpty()) {
                 return Optional.empty();
             }
 
-            BufferedImage orientedImage = applyExifOrientation(sourceImage, resolveExifOrientation(sourceBytes));
-
-            if (orientedImage.getWidth() <= width) {
-                return Optional.empty();
-            }
-
-            int targetWidth = width;
-            int targetHeight = Math.max(1, (int) Math.round((double) orientedImage.getHeight() * targetWidth / orientedImage.getWidth()));
-            boolean keepAlpha = preservesAlpha(contentType);
-
-            BufferedImage thumbnail = new BufferedImage(
-                    targetWidth,
-                    targetHeight,
-                    keepAlpha ? BufferedImage.TYPE_INT_ARGB : BufferedImage.TYPE_INT_RGB
-            );
-
-            Graphics2D graphics = thumbnail.createGraphics();
-            try {
-                graphics.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
-                graphics.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
-                graphics.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-                graphics.drawImage(orientedImage, 0, 0, targetWidth, targetHeight, null);
-            } finally {
-                graphics.dispose();
-            }
-
-            String outputFormat = keepAlpha ? "png" : "jpg";
-            String outputContentType = keepAlpha ? "image/png" : "image/jpeg";
-
-            ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
-            if (!ImageIO.write(thumbnail, outputFormat, outputStream)) {
-                return Optional.empty();
-            }
-
-            byte[] bytes = outputStream.toByteArray();
+            byte[] bytes = generated.get().bytes();
             writeToCache(descriptor, bytes);
-            return Optional.of(new ThumbnailContent(bytes, outputContentType));
+            return Optional.of(new ThumbnailContent(bytes, generated.get().contentType()));
         } catch (IOException exception) {
             log.debug("Failed to create image thumbnail.", exception);
             return Optional.empty();
+        }
+    }
+
+    public List<PreparedThumbnailContent> createPreparedThumbnails(byte[] sourceBytes, String contentType, List<Integer> requestedWidths) {
+        if (sourceBytes == null || sourceBytes.length == 0 || contentType == null || !contentType.startsWith("image/") || requestedWidths == null || requestedWidths.isEmpty()) {
+            return List.of();
+        }
+
+        try {
+            BufferedImage sourceImage = ImageIO.read(new ByteArrayInputStream(sourceBytes));
+            if (sourceImage == null) {
+                return List.of();
+            }
+
+            BufferedImage orientedImage = applyExifOrientation(sourceImage, resolveExifOrientation(sourceBytes));
+            if (orientedImage == null) {
+                return List.of();
+            }
+
+            boolean keepAlpha = preservesAlpha(contentType);
+            String outputFormat = keepAlpha ? "png" : "jpg";
+            String outputContentType = keepAlpha ? "image/png" : "image/jpeg";
+            String fileExtension = keepAlpha ? "png" : "jpg";
+            LinkedHashSet<Integer> normalizedWidths = requestedWidths.stream()
+                    .filter(width -> width != null)
+                    .map(this::normalizeWidth)
+                    .collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
+
+            return normalizedWidths.stream()
+                    .filter(width -> orientedImage.getWidth() > width)
+                    .map(width -> createPreparedThumbnail(orientedImage, width, keepAlpha, outputFormat, outputContentType, fileExtension))
+                    .flatMap(Optional::stream)
+                    .toList();
+        } catch (IOException exception) {
+            log.debug("Failed to create prepared thumbnails.", exception);
+            return List.of();
         }
     }
 
@@ -198,6 +203,43 @@ public class ImageThumbnailService {
         return transformedImage;
     }
 
+    private Optional<PreparedThumbnailContent> createPreparedThumbnail(
+            BufferedImage sourceImage,
+            int targetWidth,
+            boolean keepAlpha,
+            String outputFormat,
+            String outputContentType,
+            String fileExtension
+    ) {
+        int targetHeight = Math.max(1, (int) Math.round((double) sourceImage.getHeight() * targetWidth / sourceImage.getWidth()));
+        BufferedImage thumbnail = new BufferedImage(
+                targetWidth,
+                targetHeight,
+                keepAlpha ? BufferedImage.TYPE_INT_ARGB : BufferedImage.TYPE_INT_RGB
+        );
+
+        Graphics2D graphics = thumbnail.createGraphics();
+        try {
+            graphics.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+            graphics.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
+            graphics.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+            graphics.drawImage(sourceImage, 0, 0, targetWidth, targetHeight, null);
+        } finally {
+            graphics.dispose();
+        }
+
+        ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+        try {
+            if (!ImageIO.write(thumbnail, outputFormat, outputStream)) {
+                return Optional.empty();
+            }
+            return Optional.of(new PreparedThumbnailContent(targetWidth, outputStream.toByteArray(), outputContentType, fileExtension));
+        } catch (IOException exception) {
+            log.debug("Failed to write prepared thumbnail.", exception);
+            return Optional.empty();
+        }
+    }
+
     private ThumbnailDescriptor buildDescriptor(Resource resource, String contentType, int width) {
         boolean keepAlpha = preservesAlpha(contentType);
         String extension = keepAlpha ? "png" : "jpg";
@@ -263,5 +305,8 @@ public class ImageThumbnailService {
     }
 
     public record ThumbnailContent(byte[] bytes, String contentType) {
+    }
+
+    public record PreparedThumbnailContent(int width, byte[] bytes, String contentType, String fileExtension) {
     }
 }

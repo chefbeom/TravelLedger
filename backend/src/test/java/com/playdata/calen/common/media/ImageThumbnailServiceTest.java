@@ -9,6 +9,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Path;
+import java.util.List;
 import javax.imageio.ImageIO;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -43,6 +44,24 @@ class ImageThumbnailServiceTest {
 
         assertThat(rotated.getWidth()).isEqualTo(900);
         assertThat(rotated.getHeight()).isEqualTo(1600);
+    }
+
+    @Test
+    void shouldCreatePreparedThumbnailsForConfiguredWidths() throws IOException {
+        ImageThumbnailService service = new ImageThumbnailService(tempDir);
+
+        List<ImageThumbnailService.PreparedThumbnailContent> thumbnails = service.createPreparedThumbnails(
+                createPngBytes(1600, 900),
+                "image/png",
+                List.of(320, 480, 960)
+        );
+
+        assertThat(thumbnails).hasSize(3);
+        assertThat(thumbnails).extracting(ImageThumbnailService.PreparedThumbnailContent::width)
+                .containsExactly(320, 480, 960);
+        assertThat(thumbnails).extracting(ImageThumbnailService.PreparedThumbnailContent::contentType)
+                .containsOnly("image/png");
+        assertThat(thumbnails).allMatch(item -> item.bytes().length > 0);
     }
 
     private byte[] createPngBytes(int width, int height) throws IOException {

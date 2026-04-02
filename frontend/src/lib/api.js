@@ -628,12 +628,36 @@ async function uploadPresignedTravelMediaFile(target, file) {
   }
 }
 
+function uploadPresignedTravelMediaFileWithProgress(target, file) {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest()
+    xhr.open(target.method || 'PUT', target.uploadUrl, true)
+
+    if (file?.type) {
+      xhr.setRequestHeader('Content-Type', file.type)
+    }
+
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        resolve()
+        return
+      }
+
+      reject(new Error('파일 업로드 중 문제가 발생했습니다.'))
+    }
+    xhr.onerror = () => reject(new Error('파일 업로드 중 문제가 발생했습니다.'))
+    xhr.onabort = () => reject(new Error('파일 업로드가 취소되었습니다.'))
+    xhr.send(file)
+  })
+}
+
 async function uploadTravelMediaWithPresignedUrls({
   preparePath,
   completePath,
   mediaType,
   files,
   caption = '',
+  onProgress,
 }) {
   const selectedFiles = [...(files ?? [])].filter(Boolean)
   if (!selectedFiles.length) {
@@ -661,9 +685,27 @@ async function uploadTravelMediaWithPresignedUrls({
     return null
   }
 
+  onProgress?.({
+    phase: 'uploading',
+    current: 0,
+    total: prepared.uploads.length,
+  })
+
   for (let index = 0; index < prepared.uploads.length; index += 1) {
-    await uploadPresignedTravelMediaFile(prepared.uploads[index], selectedFiles[index])
+    await uploadPresignedTravelMediaFileWithProgress(prepared.uploads[index], selectedFiles[index])
+    onProgress?.({
+      phase: 'uploading',
+      current: index + 1,
+      total: prepared.uploads.length,
+      fileName: selectedFiles[index]?.name || prepared.uploads[index]?.originalFileName || '',
+    })
   }
+
+  onProgress?.({
+    phase: 'finalizing',
+    current: prepared.uploads.length,
+    total: prepared.uploads.length,
+  })
 
   return request(completePath, {
     method: 'POST',
@@ -688,6 +730,7 @@ async function uploadTravelMediaInternal({
   files,
   caption = '',
   includeMediaTypeInDirect = true,
+  onProgress,
 }) {
   const selectedFiles = [...(files ?? [])].filter(Boolean)
   if (!selectedFiles.length) {
@@ -702,6 +745,7 @@ async function uploadTravelMediaInternal({
         mediaType,
         files: selectedFiles,
         caption,
+        onProgress,
       })
 
       if (uploadedWithPresign) {
@@ -712,10 +756,21 @@ async function uploadTravelMediaInternal({
     }
   }
 
-  return uploadTravelMediaDirect(directPath, mediaType, selectedFiles, caption, includeMediaTypeInDirect)
+  onProgress?.({
+    phase: 'uploading',
+    current: 0,
+    total: selectedFiles.length,
+  })
+  const directResponse = await uploadTravelMediaDirect(directPath, mediaType, selectedFiles, caption, includeMediaTypeInDirect)
+  onProgress?.({
+    phase: 'finalizing',
+    current: selectedFiles.length,
+    total: selectedFiles.length,
+  })
+  return directResponse
 }
 
-export async function uploadTravelRecordMedia(recordId, mediaType, files, caption = '') {
+export async function uploadTravelRecordMedia(recordId, mediaType, files, caption = '', options = {}) {
   return uploadTravelMediaInternal({
     directPath: `/travel/records/${recordId}/media`,
     preparePath: `/travel/records/${recordId}/media/presign`,
@@ -724,10 +779,11 @@ export async function uploadTravelRecordMedia(recordId, mediaType, files, captio
     files,
     caption,
     includeMediaTypeInDirect: true,
+    onProgress: options.onProgress,
   })
 }
 
-export async function uploadTravelMemoryMedia(memoryId, files, caption = '') {
+export async function uploadTravelMemoryMedia(memoryId, files, caption = '', options = {}) {
   return uploadTravelMediaInternal({
     directPath: `/travel/memories/${memoryId}/media`,
     preparePath: `/travel/memories/${memoryId}/media/presign`,
@@ -736,6 +792,7 @@ export async function uploadTravelMemoryMedia(memoryId, files, caption = '') {
     files,
     caption,
     includeMediaTypeInDirect: false,
+    onProgress: options.onProgress,
   })
 }
 

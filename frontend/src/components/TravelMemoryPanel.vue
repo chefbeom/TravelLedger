@@ -5,6 +5,9 @@ import { extractPhotoMetadata, reverseGeocode } from '../lib/photoMetadata'
 import { formatDate, formatDateTime, toIsoDate, toNullableNumber, todayIso } from '../lib/uiFormat'
 import TravelMapPanel from './TravelMapPanel.vue'
 
+const ROUTE_LEAVE_GUARD_EVENT = 'calen-route-leave-guard'
+const DEFAULT_UPLOAD_LEAVE_WARNING = '페이지를 벗어나면 다시 처음부터 업로드 해야합니다.'
+
 const pinPresetOptions = [
   { key: 'general', label: '📍 기본 핀', category: '장소', iconText: '📍' },
   { key: 'lodging', label: '🏠 숙소', category: '숙소', iconText: '🏠' },
@@ -38,6 +41,10 @@ const props = defineProps({
     default: 0,
   },
   focusRequest: {
+    type: Object,
+    default: null,
+  },
+  uploadProgress: {
     type: Object,
     default: null,
   },
@@ -205,9 +212,66 @@ const pagedFilteredMemoryRecords = computed(() => {
 
 const multiPhotoLoading = ref(false)
 const multiPhotoLoadingCount = ref(0)
+const multiPhotoPreparationProgress = reactive({
+  active: false,
+  title: '사진의 정보를 추출중입니다.',
+  description: '선택한 사진의 메타데이터를 순서대로 확인하고 있습니다.',
+  current: 0,
+  total: 0,
+})
 const multiPhotoSkeletonItems = computed(() =>
   Array.from({ length: Math.max(1, multiPhotoLoadingCount.value) }, (_, index) => `multi-photo-skeleton-${index}`),
 )
+const activeOperationProgress = computed(() => {
+  if (multiPhotoPreparationProgress.active) {
+    return multiPhotoPreparationProgress
+  }
+
+  if (props.uploadProgress?.active) {
+    return props.uploadProgress
+  }
+
+  return null
+})
+const shouldBlockNavigation = computed(() => Boolean(activeOperationProgress.value?.active))
+
+function dispatchRouteLeaveGuard(active) {
+  if (typeof window === 'undefined') {
+    return
+  }
+
+  window.dispatchEvent(new CustomEvent(ROUTE_LEAVE_GUARD_EVENT, {
+    detail: {
+      active,
+      message: DEFAULT_UPLOAD_LEAVE_WARNING,
+    },
+  }))
+}
+
+function resetMultiPhotoPreparationProgress() {
+  multiPhotoPreparationProgress.active = false
+  multiPhotoPreparationProgress.title = '사진의 정보를 추출중입니다.'
+  multiPhotoPreparationProgress.description = '선택한 사진의 메타데이터를 순서대로 확인하고 있습니다.'
+  multiPhotoPreparationProgress.current = 0
+  multiPhotoPreparationProgress.total = 0
+}
+
+function startMultiPhotoPreparationProgress(total) {
+  multiPhotoPreparationProgress.active = total > 0
+  multiPhotoPreparationProgress.title = '사진의 정보를 추출중입니다.'
+  multiPhotoPreparationProgress.description = '선택한 사진의 메타데이터를 순서대로 확인하고 있습니다.'
+  multiPhotoPreparationProgress.current = 0
+  multiPhotoPreparationProgress.total = total
+}
+
+function updateMultiPhotoPreparationProgress(current, total, fileName = '') {
+  multiPhotoPreparationProgress.active = total > 0
+  multiPhotoPreparationProgress.current = current
+  multiPhotoPreparationProgress.total = total
+  multiPhotoPreparationProgress.description = fileName
+    ? `${fileName} 정보를 처리하고 있습니다.`
+    : '선택한 사진의 메타데이터를 순서대로 확인하고 있습니다.'
+}
 
 const photoBackedMemories = computed(() =>
   scopedMemoryRecords.value
@@ -365,6 +429,14 @@ watch(
   },
 )
 
+watch(
+  shouldBlockNavigation,
+  (active) => {
+    dispatchRouteLeaveGuard(active)
+  },
+  { immediate: true },
+)
+
 watch(sortedPhotoBackedMemories, (items) => {
   const maxPage = Math.max(0, Math.ceil(items.length / PHOTO_QUICK_OPEN_PAGE_SIZE) - 1)
   if (photoQuickOpenPage.value > maxPage) {
@@ -431,6 +503,7 @@ function resetMultiPhotoDrafts() {
   multiPhotoDrafts.value = []
   multiPhotoLoading.value = false
   multiPhotoLoadingCount.value = 0
+  resetMultiPhotoPreparationProgress()
 }
 
 function resetAutofillMessage() {
@@ -486,8 +559,10 @@ function buildMultiPhotoPayload(item) {
 
 async function buildMultiPhotoDrafts(files) {
   const drafts = []
+  const total = files.length
 
   for (const [index, file] of files.entries()) {
+    updateMultiPhotoPreparationProgress(index + 1, total, file.name)
     let metadata = null
     try {
       metadata = await extractPhotoMetadata(file)
@@ -621,6 +696,9 @@ function openBlankEditor() {
 }
 
 function closeEditor() {
+  if (shouldBlockNavigation.value) {
+    return
+  }
   resetForm()
   isEditorOpen.value = false
 }
@@ -681,6 +759,7 @@ async function handlePhotoSelection(event) {
     resetPendingFiles()
     multiPhotoLoading.value = false
     multiPhotoLoadingCount.value = 0
+    resetMultiPhotoPreparationProgress()
     return
   }
 
@@ -689,6 +768,7 @@ async function handlePhotoSelection(event) {
     photoCaption.value = ''
     multiPhotoLoading.value = true
     multiPhotoLoadingCount.value = files.length
+    startMultiPhotoPreparationProgress(files.length)
     autofillState.status = 'loading'
     autofillState.fileName = ''
     autofillState.message = `${files.length}장의 사진 정보를 불러오는 중입니다.`
@@ -711,6 +791,7 @@ async function handlePhotoSelection(event) {
     }
     multiPhotoLoading.value = false
     multiPhotoLoadingCount.value = 0
+    resetMultiPhotoPreparationProgress()
     return
   }
 
@@ -836,7 +917,7 @@ function handleSelectMarker(marker) {
 }
 
 function handleWindowKeydown(event) {
-  if (event.key === 'Escape' && isEditorOpen.value) {
+  if (event.key === 'Escape' && isEditorOpen.value && !shouldBlockNavigation.value) {
     closeEditor()
   }
 }
@@ -848,6 +929,7 @@ onMounted(() => {
 onBeforeUnmount(() => {
   pendingLookupToken += 1
   revokeMultiPhotoPreviews()
+  dispatchRouteLeaveGuard(false)
   window.removeEventListener('keydown', handleWindowKeydown)
 })
 
@@ -1353,6 +1435,15 @@ function submitMemory() {
             {{ isSubmitting && activeSubmit === 'memory' ? '저장 중...' : editingMemoryId ? '기록 수정' : '기록 저장' }}
           </button>
         </div>
+      </div>
+    </div>
+    <div v-if="activeOperationProgress" class="travel-progress-modal" role="status" aria-live="polite" aria-modal="true">
+      <div class="travel-progress-modal__dialog">
+        <div class="travel-progress-modal__spinner" aria-hidden="true" />
+        <strong>{{ activeOperationProgress.title }}</strong>
+        <p>{{ activeOperationProgress.description }}</p>
+        <div class="travel-progress-modal__count">[{{ activeOperationProgress.current || 0 }}/{{ activeOperationProgress.total || 0 }}]</div>
+        <small>페이지를 벗어나면 다시 처음부터 업로드 해야합니다.</small>
       </div>
     </div>
   </div>

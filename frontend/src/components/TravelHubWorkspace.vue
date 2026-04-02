@@ -114,6 +114,13 @@ const editingRecordId = ref(null)
 const memoryRefreshKey = ref(0)
 const routeRefreshKey = ref(0)
 const memoryFocusRequest = ref(null)
+const memoryUploadProgress = reactive({
+  active: false,
+  title: '사진을 업로드하는 중입니다.',
+  description: '선택한 사진을 저장소 서버로 업로드하고 있습니다.',
+  current: 0,
+  total: 0,
+})
 const sharedExhibitSummaries = ref([])
 const selectedSharedExhibitId = ref('')
 const selectedSharedExhibit = ref(null)
@@ -385,6 +392,34 @@ watch(albumTab, () => {
 function setFeedback(message = '', error = '') {
   feedback.value = message
   errorMessage.value = error
+}
+
+function resetMemoryUploadProgress() {
+  memoryUploadProgress.active = false
+  memoryUploadProgress.title = '사진을 업로드하는 중입니다.'
+  memoryUploadProgress.description = '선택한 사진을 저장소 서버로 업로드하고 있습니다.'
+  memoryUploadProgress.current = 0
+  memoryUploadProgress.total = 0
+}
+
+function startMemoryUploadProgress(total, description = '선택한 사진을 저장소 서버로 업로드하고 있습니다.') {
+  memoryUploadProgress.active = total > 0
+  memoryUploadProgress.title = '사진을 업로드하는 중입니다.'
+  memoryUploadProgress.description = description
+  memoryUploadProgress.current = 0
+  memoryUploadProgress.total = total
+}
+
+function updateMemoryUploadProgress({ current, total, description }) {
+  if (Number.isFinite(total)) {
+    memoryUploadProgress.total = total
+  }
+  if (Number.isFinite(current)) {
+    memoryUploadProgress.current = current
+  }
+  if (description) {
+    memoryUploadProgress.description = description
+  }
 }
 
 function planStatusLabel(status) {
@@ -871,9 +906,25 @@ async function handleSaveMemory(submission) {
   setFeedback()
   try {
     if (submission.batchItems?.length) {
-      for (const item of submission.batchItems) {
+      startMemoryUploadProgress(submission.batchItems.length, '선택한 사진을 순서대로 업로드하고 있습니다.')
+      for (const [index, item] of submission.batchItems.entries()) {
+        updateMemoryUploadProgress({
+          current: index + 1,
+          total: submission.batchItems.length,
+          description: `${index + 1} / ${submission.batchItems.length}번째 사진을 업로드하고 있습니다.`,
+        })
         const savedBatchMemory = await createTravelMemory(selectedPlanId.value, item.payload)
-        await uploadTravelMemoryMedia(savedBatchMemory.id, [item.file], '')
+        await uploadTravelMemoryMedia(savedBatchMemory.id, [item.file], '', {
+          onProgress: ({ phase }) => {
+            if (phase === 'finalizing') {
+              updateMemoryUploadProgress({
+                current: index + 1,
+                total: submission.batchItems.length,
+                description: `${index + 1} / ${submission.batchItems.length}번째 사진을 기록에 연결하고 있습니다.`,
+              })
+            }
+          },
+        })
       }
       await refreshTravelData(selectedPlanId.value, true)
       memoryRefreshKey.value += 1
@@ -889,12 +940,35 @@ async function handleSaveMemory(submission) {
       saved = await createTravelMemory(selectedPlanId.value, submission.payload)
       setFeedback('여행 기록을 저장했습니다.')
     }
-    if (submission.files?.length) await uploadTravelMemoryMedia(saved.id, submission.files, submission.caption || '')
+    if (submission.files?.length) {
+      startMemoryUploadProgress(submission.files.length)
+      await uploadTravelMemoryMedia(saved.id, submission.files, submission.caption || '', {
+        onProgress: ({ phase, current, total, fileName }) => {
+          if (phase === 'finalizing') {
+            updateMemoryUploadProgress({
+              current,
+              total,
+              description: '업로드한 사진을 기록에 연결하고 있습니다.',
+            })
+            return
+          }
+
+          updateMemoryUploadProgress({
+            current,
+            total,
+            description: fileName
+              ? `${fileName} 업로드를 진행하고 있습니다.`
+              : '선택한 사진을 저장소 서버로 업로드하고 있습니다.',
+          })
+        },
+      })
+    }
     await refreshTravelData(selectedPlanId.value, true)
     memoryRefreshKey.value += 1
   } catch (error) {
     setFeedback('', error.message)
   } finally {
+    resetMemoryUploadProgress()
     isSubmitting.value = false
     activeSubmit.value = ''
   }
@@ -1215,13 +1289,13 @@ function openMemoryEditor(memoryId) {
         <small class="field__hint">{{ canShareTravelPlan ? '공유된 전시는 상대방 계정의 여행 사진 > 공유 전시에서 수정 없이 감상됩니다.' : '여행 상태가 완료(COMPLETED)일 때만 공유할 수 있습니다.' }}</small>
       </section>
       <TravelOverviewWorkspace v-if="logTab === 'overview'" :travel-plan="travelPlan" />
-      <TravelMemoryPanel v-else-if="logTab === 'memories'" :travel-plan="travelPlan" :category-options="memoryCategoryOptions" :is-submitting="isSubmitting" :active-submit="activeSubmit" :refresh-key="memoryRefreshKey" :focus-request="memoryFocusRequest" @save-memory="handleSaveMemory" @delete-memory="handleDeleteMemory" @delete-media="handleDeleteMedia" />
+      <TravelMemoryPanel v-else-if="logTab === 'memories'" :travel-plan="travelPlan" :category-options="memoryCategoryOptions" :is-submitting="isSubmitting" :active-submit="activeSubmit" :refresh-key="memoryRefreshKey" :focus-request="memoryFocusRequest" :upload-progress="memoryUploadProgress" @save-memory="handleSaveMemory" @delete-memory="handleDeleteMemory" @delete-media="handleDeleteMedia" />
       <TravelRouteWorkspace v-else :travel-plan="travelPlan" :is-submitting="isSubmitting" :active-submit="activeSubmit" :refresh-key="routeRefreshKey" @save-route="handleSaveRoute" @delete-route="handleDeleteRoute" />
     </template>
 
     <template v-else-if="route === 'photo-album'">
       <section class="panel"><div class="scope-toggle"><button class="button" :class="{ 'button--primary': albumTab === 'upload' }" @click="albumTab = 'upload'">업로드와 기록</button><button class="button" :class="{ 'button--primary': albumTab === 'gallery' }" @click="albumTab = 'gallery'">지도 갤러리</button><button class="button" :class="{ 'button--primary': albumTab === 'shared' }" @click="albumTab = 'shared'">공유 전시</button><button class="button" :class="{ 'button--primary': albumTab === 'community' }" @click="albumTab = 'community'">커뮤니티 피드</button></div></section>
-      <TravelMemoryPanel v-if="albumTab === 'upload'" :travel-plan="travelPlan" :category-options="memoryCategoryOptions" :is-submitting="isSubmitting" :active-submit="activeSubmit" :refresh-key="memoryRefreshKey" :focus-request="memoryFocusRequest" @save-memory="handleSaveMemory" @delete-memory="handleDeleteMemory" @delete-media="handleDeleteMedia" />
+      <TravelMemoryPanel v-if="albumTab === 'upload'" :travel-plan="travelPlan" :category-options="memoryCategoryOptions" :is-submitting="isSubmitting" :active-submit="activeSubmit" :refresh-key="memoryRefreshKey" :focus-request="memoryFocusRequest" :upload-progress="memoryUploadProgress" @save-memory="handleSaveMemory" @delete-memory="handleDeleteMemory" @delete-media="handleDeleteMedia" />
       <div v-else-if="albumTab === 'gallery'" class="workspace-stack">
         <section class="panel"><div class="panel__header"><div><h2>사진 재사용 흐름</h2><p>갤러리 카드에서 바로 기록 편집을 누르면 업로드 화면이 열리고, 기존 사진은 그대로 유지된 채 새 사진과 메모만 이어서 추가할 수 있습니다.</p></div><span class="panel__badge">{{ photoAlbumCards.length }}개 기록</span></div></section>
         <section class="panel panel--map-fill"><div class="panel__header"><div><h2>사진첩 지도</h2><p>선택한 여행의 사진 기록이 위치별로 묶여 큰 지도에 표시됩니다.</p></div><span class="panel__badge">{{ photoAlbumPhotoCount }}장</span></div><TravelMapPanel :markers="photoAlbumMarkers" :selected-point="null" :enable-pick-location="false" :enable-draw-route="false" :view-key="travelPlan?.id || 'photo-album-map'" hint-title="사진 핀 보기" hint-text="여행 기록에 연결된 사진을 위치별로 묶어 보여줍니다." /></section>

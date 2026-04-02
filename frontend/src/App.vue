@@ -67,6 +67,8 @@ const adminFeatureItem = {
 const THEME_STORAGE_KEY = 'calen-theme-mode'
 const THEME_DEGREE_STORAGE_KEY = 'calen-theme-degree'
 const DEFAULT_TOSS_DEGREE = 100
+const ROUTE_LEAVE_GUARD_EVENT = 'calen-route-leave-guard'
+const DEFAULT_ROUTE_LEAVE_GUARD_MESSAGE = '페이지를 벗어나면 다시 처음부터 업로드 해야합니다.'
 
 const routeMeta = {
   launcher: {
@@ -128,6 +130,10 @@ const themeMode = ref('default')
 const themeDegree = ref(DEFAULT_TOSS_DEGREE)
 const themeDegreePanelOpen = ref(false)
 const themeSwitcherRef = ref(null)
+const routeLeaveGuard = reactive({
+  active: false,
+  message: DEFAULT_ROUTE_LEAVE_GUARD_MESSAGE,
+})
 
 const loginForm = reactive({
   loginId: '',
@@ -343,14 +349,55 @@ function handleDocumentPointerDown(event) {
   themeDegreePanelOpen.value = false
 }
 
+function buildCurrentHashRoute() {
+  if (activeRoute.value === 'invite' && inviteToken.value) {
+    return `invite/${encodeURIComponent(inviteToken.value)}`
+  }
+  return activeRoute.value || 'launcher'
+}
+
+function confirmRouteLeaveIfNeeded() {
+  if (!routeLeaveGuard.active || typeof window === 'undefined') {
+    return true
+  }
+
+  return window.confirm(routeLeaveGuard.message || DEFAULT_ROUTE_LEAVE_GUARD_MESSAGE)
+}
+
+function handleRouteLeaveGuardChange(event) {
+  routeLeaveGuard.active = Boolean(event?.detail?.active)
+  routeLeaveGuard.message = String(event?.detail?.message || DEFAULT_ROUTE_LEAVE_GUARD_MESSAGE)
+}
+
+function handleBeforeUnload(event) {
+  if (!routeLeaveGuard.active) {
+    return
+  }
+
+  event.preventDefault()
+  event.returnValue = ''
+}
+
 function navigate(route) {
   const nextRoute = routeMeta[route] ? route : 'launcher'
+  if (nextRoute !== activeRoute.value && !confirmRouteLeaveIfNeeded()) {
+    return
+  }
   activeRoute.value = nextRoute
   inviteToken.value = ''
   window.location.hash = nextRoute
 }
 
 function handleHashChange() {
+  const nextState = resolveRouteState(window.location.hash)
+  if (
+    (nextState.route !== activeRoute.value || nextState.token !== inviteToken.value)
+    && !confirmRouteLeaveIfNeeded()
+  ) {
+    window.location.hash = buildCurrentHashRoute()
+    return
+  }
+
   applyHashRoute(window.location.hash)
 }
 
@@ -553,12 +600,16 @@ onMounted(() => {
     applyTheme(window.localStorage.getItem(THEME_STORAGE_KEY) || 'default')
   }
   window.addEventListener('hashchange', handleHashChange)
+  window.addEventListener('beforeunload', handleBeforeUnload)
+  window.addEventListener(ROUTE_LEAVE_GUARD_EVENT, handleRouteLeaveGuardChange)
   document.addEventListener('pointerdown', handleDocumentPointerDown)
   restoreSession()
 })
 
 onBeforeUnmount(() => {
   window.removeEventListener('hashchange', handleHashChange)
+  window.removeEventListener('beforeunload', handleBeforeUnload)
+  window.removeEventListener(ROUTE_LEAVE_GUARD_EVENT, handleRouteLeaveGuardChange)
   document.removeEventListener('pointerdown', handleDocumentPointerDown)
 })
 </script>

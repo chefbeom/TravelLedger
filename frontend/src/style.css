@@ -3854,6 +3854,61 @@ textarea {
   margin-top: 20px;
 }
 
+.travel-progress-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 1300;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(15, 23, 42, 0.32);
+  backdrop-filter: blur(6px);
+}
+
+.travel-progress-modal__dialog {
+  width: min(360px, calc(100vw - 32px));
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  padding: 24px 22px;
+  border: 1px solid rgba(148, 163, 184, 0.26);
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 24px 48px rgba(15, 23, 42, 0.2);
+  text-align: center;
+}
+
+.travel-progress-modal__dialog strong {
+  font-size: 1rem;
+}
+
+.travel-progress-modal__dialog p,
+.travel-progress-modal__dialog small {
+  margin: 0;
+  color: var(--text-soft);
+}
+
+.travel-progress-modal__count {
+  font-size: 1.1rem;
+  font-weight: 800;
+  color: var(--text);
+}
+
+.travel-progress-modal__spinner {
+  width: 42px;
+  height: 42px;
+  border: 3px solid rgba(49, 130, 246, 0.16);
+  border-top-color: var(--interactive-contrast-bg);
+  border-radius: 50%;
+  animation: travel-progress-spin 0.9s linear infinite;
+}
+
+@keyframes travel-progress-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 @media (max-width: 900px) {
   .travel-memory-map-panel .travel-map__canvas {
     min-height: 620px;
@@ -3957,6 +4012,26 @@ textarea {
   background: linear-gradient(180deg, rgba(24, 29, 38, 0.99) 0%, rgba(17, 22, 31, 0.99) 100%);
   border-color: rgba(78, 95, 125, 0.56);
   box-shadow: 0 30px 60px rgba(0, 0, 0, 0.42);
+}
+
+:root[data-theme='toss'] .travel-progress-modal {
+  background: rgba(5, 8, 14, 0.56);
+}
+
+:root[data-theme='toss'] .travel-progress-modal__dialog {
+  background: linear-gradient(180deg, rgba(24, 29, 38, 0.99) 0%, rgba(17, 22, 31, 0.99) 100%);
+  border-color: rgba(78, 95, 125, 0.56);
+  box-shadow: 0 30px 60px rgba(0, 0, 0, 0.42);
+}
+
+:root[data-theme='toss'] .travel-progress-modal__dialog strong,
+:root[data-theme='toss'] .travel-progress-modal__count {
+  color: var(--text);
+}
+
+:root[data-theme='toss'] .travel-progress-modal__dialog p,
+:root[data-theme='toss'] .travel-progress-modal__dialog small {
+  color: var(--text-soft);
 }
 
 :root[data-theme='toss'] .travel-modal__header h2,

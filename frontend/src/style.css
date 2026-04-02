@@ -4131,8 +4131,19 @@ textarea {
   --calendar-week-gap: 8px;
   --calendar-day-min-height: 146px;
   --calendar-day-padding: 12px;
+  --calendar-day-gap: 10px;
+  --calendar-day-stamp-gap: 6px;
+  --calendar-expense-block-gap: 4px;
   --calendar-expense-total-size: 1.18rem;
+  --calendar-label-size: 0.82rem;
+  --calendar-month-tag-size: 0.74rem;
+  --calendar-month-tag-padding-y: 4px;
+  --calendar-month-tag-padding-x: 8px;
   --calendar-metric-size: 0.8rem;
+  --calendar-metrics-gap: 8px;
+  --calendar-metric-padding-y: 8px;
+  --calendar-metric-padding-x: 10px;
+  --calendar-bar-height: 8px;
   --calendar-toolbar-gap: 18px;
   --calendar-day-head-size: 0.88rem;
 }
@@ -4164,6 +4175,7 @@ textarea {
 }
 
 .household-calendar-layout .calendar__day {
+  gap: var(--calendar-day-gap);
   min-height: var(--calendar-day-min-height);
   padding: var(--calendar-day-padding);
 }
@@ -4175,6 +4187,23 @@ textarea {
 
 .household-calendar-layout .calendar__day-head {
   font-size: var(--calendar-day-head-size);
+}
+
+.household-calendar-layout .calendar__day-stamp {
+  gap: var(--calendar-day-stamp-gap);
+}
+
+.household-calendar-layout .calendar__month-tag {
+  padding: var(--calendar-month-tag-padding-y) var(--calendar-month-tag-padding-x);
+  font-size: var(--calendar-month-tag-size);
+}
+
+.household-calendar-layout .calendar__expense-block {
+  gap: var(--calendar-expense-block-gap);
+}
+
+.household-calendar-layout .calendar__label {
+  font-size: var(--calendar-label-size);
 }
 
 .household-calendar-layout--amount-only .calendar__day {
@@ -4205,6 +4234,15 @@ textarea {
 
 .household-calendar-layout .calendar__metric {
   font-size: var(--calendar-metric-size);
+  padding: var(--calendar-metric-padding-y) var(--calendar-metric-padding-x);
+}
+
+.household-calendar-layout .calendar__metrics {
+  gap: var(--calendar-metrics-gap);
+}
+
+.household-calendar-layout .calendar__bar {
+  height: var(--calendar-bar-height);
 }
 
 .household-calendar-panel .calendar-shell {

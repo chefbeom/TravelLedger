@@ -306,24 +306,38 @@ const calendarLayoutStyle = computed(() => {
   const width = clamp(calendarCustomWidth.value, CALENDAR_CUSTOM_WIDTH_MIN, CALENDAR_CUSTOM_WIDTH_MAX)
   const height = clamp(calendarCustomHeight.value, CALENDAR_CUSTOM_HEIGHT_MIN, CALENDAR_CUSTOM_HEIGHT_MAX)
   const widthZoom = clamp(width / 860, 0.9, 1.18)
+  const heightZoom = clamp(height / DEFAULT_CALENDAR_CUSTOM_HEIGHT, 0.67, 1.25)
+  const contentZoom = Math.min(widthZoom, heightZoom)
   const weekCount = Math.max(displayedCalendarWeeks.value.length, 1)
   const effectiveWeekCount = calendarWeekMode.value === 'month' ? weekCount : Math.max(weekCount, 4)
-  const weekGap = Math.round(8 * widthZoom)
+  const weekGap = Math.max(4, Math.round(8 * contentZoom))
   const rowHeight = Math.max(Math.round((height - (weekGap * Math.max(effectiveWeekCount - 1, 0))) / effectiveWeekCount), 0)
   const weeksHeight = (rowHeight * weekCount) + (weekGap * Math.max(weekCount - 1, 0))
+  const dayGap = Math.max(6, Math.round(10 * contentZoom))
 
   return {
     ...baseStyle,
     '--calendar-panel-width': `${width}px`,
     '--calendar-min-width': `${width}px`,
-    '--calendar-gap': `${Math.round(10 * widthZoom)}px`,
+    '--calendar-gap': `${dayGap}px`,
     '--calendar-week-gap': `${weekGap}px`,
     '--calendar-day-min-height': `${rowHeight}px`,
-    '--calendar-day-padding': `${Math.round(12 * widthZoom)}px`,
-    '--calendar-expense-total-size': `${Math.max(1, 1.18 * widthZoom).toFixed(2)}rem`,
-    '--calendar-metric-size': `${Math.max(0.72, 0.8 * widthZoom).toFixed(2)}rem`,
+    '--calendar-day-padding': `${Math.max(8, Math.round(12 * contentZoom))}px`,
+    '--calendar-day-gap': `${dayGap}px`,
+    '--calendar-day-stamp-gap': `${Math.max(4, Math.round(6 * contentZoom))}px`,
+    '--calendar-expense-block-gap': `${Math.max(2, Math.round(4 * contentZoom))}px`,
+    '--calendar-expense-total-size': `${Math.max(0.94, 1.18 * contentZoom).toFixed(2)}rem`,
+    '--calendar-label-size': `${Math.max(0.68, 0.82 * contentZoom).toFixed(2)}rem`,
+    '--calendar-month-tag-size': `${Math.max(0.62, 0.74 * contentZoom).toFixed(2)}rem`,
+    '--calendar-month-tag-padding-y': `${Math.max(3, Math.round(4 * contentZoom))}px`,
+    '--calendar-month-tag-padding-x': `${Math.max(6, Math.round(8 * contentZoom))}px`,
+    '--calendar-metric-size': `${Math.max(0.62, 0.8 * contentZoom).toFixed(2)}rem`,
+    '--calendar-metrics-gap': `${Math.max(4, Math.round(8 * contentZoom))}px`,
+    '--calendar-metric-padding-y': `${Math.max(6, Math.round(8 * contentZoom))}px`,
+    '--calendar-metric-padding-x': `${Math.max(8, Math.round(10 * contentZoom))}px`,
+    '--calendar-bar-height': `${Math.max(5, Math.round(8 * contentZoom))}px`,
     '--calendar-toolbar-gap': `${Math.round(18 * widthZoom)}px`,
-    '--calendar-day-head-size': `${Math.max(0.78, 0.88 * widthZoom).toFixed(2)}rem`,
+    '--calendar-day-head-size': `${Math.max(0.72, 0.88 * contentZoom).toFixed(2)}rem`,
     '--calendar-shell-width': '100%',
     '--calendar-shell-height': 'auto',
     '--calendar-week-count': `${weekCount}`,

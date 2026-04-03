@@ -3,10 +3,12 @@ package com.playdata.calen.drive.service;
 import com.playdata.calen.common.config.MinioProperties;
 import com.playdata.calen.common.exception.BadRequestException;
 import com.playdata.calen.drive.dto.DriveDtos;
+import io.minio.BucketExistsArgs;
 import io.minio.CopyObjectArgs;
 import io.minio.CopySource;
 import io.minio.GetObjectArgs;
 import io.minio.GetPresignedObjectUrlArgs;
+import io.minio.MakeBucketArgs;
 import io.minio.MinioClient;
 import io.minio.PutObjectArgs;
 import io.minio.RemoveObjectArgs;
@@ -21,12 +23,14 @@ import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class DriveStorageService {
 
     private final ObjectProvider<MinioClient> minioClientProvider;
@@ -221,6 +225,7 @@ public class DriveStorageService {
                             .build()
             ));
         } catch (Exception exception) {
+            log.error("Failed to generate drive download URL. bucket={}, objectKey={}", resolveBucket(), objectKey, exception);
             throw new BadRequestException("다운로드 링크를 만들지 못했습니다.");
         }
     }
@@ -257,6 +262,32 @@ public class DriveStorageService {
         if (!supportsStorage()) {
             throw new BadRequestException("클라우드 저장소 설정을 먼저 확인해 주세요.");
         }
+        ensureBucketAvailable();
+    }
+
+    private void ensureBucketAvailable() {
+        String bucket = resolveBucket();
+        try {
+            MinioClient client = minioClient();
+            boolean exists = client.bucketExists(
+                    BucketExistsArgs.builder()
+                            .bucket(bucket)
+                            .build()
+            );
+            if (!exists) {
+                client.makeBucket(
+                        MakeBucketArgs.builder()
+                                .bucket(bucket)
+                                .build()
+                );
+                log.info("Created missing drive bucket: {}", bucket);
+            }
+        } catch (BadRequestException exception) {
+            throw exception;
+        } catch (Exception exception) {
+            log.error("Failed to verify drive bucket {}", bucket, exception);
+            throw new BadRequestException("드라이브 저장소 연결을 확인해 주세요.");
+        }
     }
 
     private String generateUploadUrl(String objectKey) {
@@ -270,6 +301,7 @@ public class DriveStorageService {
                             .build()
             ));
         } catch (Exception exception) {
+            log.error("Failed to generate drive upload URL. bucket={}, objectKey={}", resolveBucket(), objectKey, exception);
             throw new BadRequestException("업로드 URL을 만들지 못했습니다.");
         }
     }

@@ -81,6 +81,12 @@ const featureItems = [
     title: '여행',
     description: '여행 설정, 여행 가계부, 여행 로그, 내 지도와 사진 기능을 한 워크스페이스에서 이어서 관리합니다.',
   },
+  {
+    key: 'drive',
+    number: '4',
+    title: 'CalenDrive',
+    description: 'Cloud drive, sharing, trash, and admin tools in one workspace.',
+  },
 ]
 
 const adminFeatureItem = {

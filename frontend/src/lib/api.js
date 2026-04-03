@@ -1,6 +1,7 @@
 const API_BASE = '/api'
 const CSRF_COOKIE_NAME = 'XSRF-TOKEN'
 const CSRF_HEADER_NAME = 'X-XSRF-TOKEN'
+const MAX_TRAVEL_MEDIA_FILE_SIZE = 10 * 1024 * 1024
 
 function getCookie(name) {
   return document.cookie
@@ -737,6 +738,14 @@ async function uploadTravelMediaInternal({
     return []
   }
 
+  const oversizedFile = selectedFiles.find((file) => Number(file?.size || 0) > MAX_TRAVEL_MEDIA_FILE_SIZE)
+  if (oversizedFile) {
+    const error = new Error('여행 사진은 10MB 이하 파일만 업로드할 수 있습니다.')
+    error.status = 400
+    error.code = 'travel-media-too-large'
+    throw error
+  }
+
   if (preparePath && completePath) {
     try {
       const uploadedWithPresign = await uploadTravelMediaWithPresignedUrls({
@@ -751,8 +760,12 @@ async function uploadTravelMediaInternal({
       if (uploadedWithPresign) {
         return uploadedWithPresign
       }
-    } catch {
-      // Fall back to the existing server upload flow when presigned upload is unavailable.
+    } catch (error) {
+      if (error?.status) {
+        throw error
+      }
+      // Fall back to the existing server upload flow only when presigned upload is
+      // unavailable due to a network/CORS issue and no HTTP response was received.
     }
   }
 

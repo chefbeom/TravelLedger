@@ -153,6 +153,145 @@ const routeMeta = {
   },
 }
 
+const correctedFeatureItems = [
+  {
+    key: 'household',
+    number: '1',
+    title: '가계부',
+    description: '가계부, 통계, 검색과 분류 관리까지 한 화면에서 바로 사용할 수 있습니다.',
+  },
+  {
+    key: 'travel',
+    number: '2',
+    title: '여행',
+    description: '여행 설정, 여행 가계부, 여행 로그, 내 지도와 사진 기능을 한 워크스페이스에서 관리합니다.',
+  },
+  {
+    key: 'drive',
+    number: '4',
+    title: 'CalenDrive',
+    description: '클라우드 드라이브, 공유, 최근 파일, 휴지통, 관리자 기능을 하나의 화면에서 사용합니다.',
+  },
+]
+
+const correctedAdminFeatureItem = {
+  key: 'admin',
+  number: '7',
+  title: '관리자',
+  description: '로그인 로그, 차단 IP, 사용자 상태, 초대 현황을 관리합니다.',
+}
+
+const correctedRouteMeta = {
+  ...routeMeta,
+  launcher: {
+    title: '기능 선택',
+    description: '다음으로 열고 싶은 기능 영역을 선택하세요.',
+  },
+  household: {
+    title: '가계부',
+    description: '가계부, 통계, 검색과 분류 관리까지 한 화면에서 바로 사용할 수 있습니다.',
+  },
+  travel: {
+    title: '여행',
+    description: '여행 설정, 여행 가계부, 여행 로그, 내 지도와 사진 기능을 한 워크스페이스에서 관리합니다.',
+  },
+  drive: {
+    title: 'CalenDrive',
+    description: '구글 드라이브형 파일 관리 구조를 Calen 안으로 옮겨, 업로드·공유·최근 파일·휴지통·관리 기능을 한 공간에서 사용합니다.',
+  },
+  admin: {
+    title: '관리자',
+    description: '로그인 로그, 차단 IP, 사용자 상태, 초대 현황을 관리합니다.',
+  },
+  profile: {
+    title: '내 프로필',
+    description: '계정 정보와 문의 내역, 관리자 답변을 한 곳에서 확인합니다.',
+  },
+  invite: {
+    title: '초대 링크 가입',
+    description: '새 계정은 1회용 초대 링크로만 만들 수 있습니다.',
+  },
+}
+
+const normalizedFeatureItems = [
+  {
+    key: 'household',
+    number: '1',
+    title: '가계부',
+    description: '가계부, 통계, 검색과 분류 관리까지 한 화면에서 바로 사용할 수 있습니다.',
+  },
+  {
+    key: 'travel',
+    number: '2',
+    title: '여행',
+    description: '여행 설정, 여행 가계부, 여행 로그, 내 지도와 사진 기능을 한 워크스페이스에서 관리합니다.',
+  },
+  {
+    key: 'drive',
+    number: '4',
+    title: 'CalenDrive',
+    description: '파일 업로드, 공유, 휴지통, 관리자 도구를 하나의 드라이브 화면에서 사용합니다.',
+  },
+]
+
+const normalizedAdminFeatureItem = {
+  key: 'admin',
+  number: '7',
+  title: '관리자',
+  description: '로그인 로그, 차단 IP, 사용자 상태, 초대 현황을 관리합니다.',
+}
+
+const normalizedRouteMeta = {
+  launcher: {
+    title: '기능 선택',
+    description: '다음으로 열고 싶은 기능 영역을 선택하세요.',
+  },
+  household: {
+    title: '가계부',
+    description: '월별 가계부, 통계, 검색과 분류 관리 기능을 한곳에서 확인합니다.',
+  },
+  travel: {
+    title: '여행',
+    description: '여행 설정, 여행 가계부, 여행 로그, 내 지도와 사진 기능을 한 워크스페이스에서 사용합니다.',
+  },
+  drive: {
+    title: 'CalenDrive',
+    description: '파일 업로드, 폴더 관리, 공유, 휴지통, 관리자 기능을 드라이브 화면에서 사용합니다.',
+  },
+  'travel-money': {
+    title: '여행 예산',
+    description: '여행 예산안과 실제 지출을 한곳에서 관리합니다.',
+  },
+  'travel-log': {
+    title: '여행 로그',
+    description: '여행 기록, 이동 경로, 장소, 업로드 파일을 확인합니다.',
+  },
+  'photo-album': {
+    title: '여행 사진',
+    description: '기록 기반으로 구성된 여행 사진 모아보기를 확인합니다.',
+  },
+  'family-album': {
+    title: '가족 앨범',
+    description: '가족 구성원과 함께 쓰는 사진 및 영상 앨범을 확인합니다.',
+  },
+  'my-map': {
+    title: '내 지도',
+    description: '전체 여행의 핀과 경로를 지도로 모아 보고, 원하는 핀만 눌러 자세히 확인합니다.',
+  },
+  admin: {
+    title: '관리자',
+    description: '로그인 로그, 차단 IP, 사용자 상태, 초대 현황을 관리합니다.',
+  },
+  profile: {
+    title: '내 프로필',
+    description: '계정 정보와 문의 내역, 관리자 여부를 한곳에서 확인합니다.',
+  },
+  invite: {
+    title: '초대 링크 만들기',
+    description: '새 계정은 1회용 초대 링크로만 만들 수 있습니다.',
+  },
+}
+
 const initialRouteState = resolveRouteState(window.location.hash)
 
 const authChecked = ref(false)
@@ -201,11 +340,11 @@ const inviteManager = reactive({
 const travelRouteKeys = new Set(['travel', 'travel-money', 'travel-log', 'photo-album', 'my-map'])
 const pageMeta = computed(() => {
   const routeKey = travelRouteKeys.has(activeRoute.value) ? 'travel' : activeRoute.value
-  return routeMeta[routeKey] || routeMeta.launcher
+  return normalizedRouteMeta[routeKey] || normalizedRouteMeta.launcher
 })
 const isTossTheme = computed(() => themeMode.value === 'toss')
 const launcherItems = computed(() => (
-  currentUser.value?.admin ? [...featureItems, adminFeatureItem] : featureItems
+  currentUser.value?.admin ? [...normalizedFeatureItems, normalizedAdminFeatureItem] : normalizedFeatureItems
 ))
 const themeDegreeDisplay = computed(() => `${themeDegree.value}%`)
 
@@ -228,7 +367,7 @@ function resolveRouteState(hash) {
   }
 
   return {
-    route: routeMeta[route] ? route : 'launcher',
+    route: normalizedRouteMeta[route] ? route : 'launcher',
     token: '',
   }
 }
@@ -430,7 +569,7 @@ function handleBeforeUnload(event) {
 }
 
 function navigate(route) {
-  const nextRoute = routeMeta[route] ? route : 'launcher'
+  const nextRoute = normalizedRouteMeta[route] ? route : 'launcher'
   if (nextRoute !== activeRoute.value && !confirmRouteLeaveIfNeeded()) {
     return
   }

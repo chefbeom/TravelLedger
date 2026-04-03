@@ -1,5 +1,5 @@
 <script setup>
-import { reactive, ref, watch } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import {
   changeProfilePassword,
   changeProfileSecondaryPin,
@@ -22,6 +22,14 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['close', 'updated'])
+
+const tabs = [
+  { id: 'profile', label: '기본 프로필', description: '이름과 프로필 사진', icon: '프' },
+  { id: 'security', label: '계정 보안', description: '비밀번호와 2차 PIN', icon: '보' },
+  { id: 'notif', label: '알림 설정', description: '마케팅과 보안 알림', icon: '알' },
+  { id: 'region', label: '언어·지역', description: '표시 언어와 지역 코드', icon: '지' },
+  { id: 'storage', label: '저장소 현황', description: '사용량과 계정 이력', icon: '용' },
+]
 
 const activeTab = ref('profile')
 const loading = ref(false)
@@ -56,6 +64,10 @@ const security = reactive({
   confirmPassword: '',
   newSecondaryPin: '',
   confirmSecondaryPin: '',
+})
+
+const resolvedRoleLabel = computed(() => {
+  return settings.role || (props.currentUser.admin ? 'ADMIN' : 'USER')
 })
 
 function formatBytes(bytes) {
@@ -117,7 +129,7 @@ async function handleSaveProfile() {
       securityNotification: settings.securityNotification,
     })
     Object.assign(settings, response || {})
-    setMessages('CalenDrive 설정을 저장했습니다.')
+    setMessages('CalenDrive 프로필 설정을 저장했습니다.')
     emit('updated', response)
   } catch (error) {
     setMessages('', error.message)
@@ -229,26 +241,14 @@ watch(
       <div class="travel-modal__header">
         <div>
           <h2>CalenDrive 프로필</h2>
-          <p>클라우드 드라이브 전용 프로필, 보안, 알림, 지역 설정을 여기에서 관리합니다.</p>
+          <p>원본 드라이브 프로젝트의 좌측 탭형 흐름을 유지하면서 현재 CalenDrive 계정 기능을 한 모달에 정리했습니다.</p>
         </div>
         <button class="button button--ghost" type="button" @click="emit('close')">닫기</button>
       </div>
 
       <div class="travel-modal__body drive-profile-modal__body">
-        <div class="scope-toggle scope-toggle--wrap">
-          <button class="button" :class="{ 'button--primary': activeTab === 'profile' }" @click="activeTab = 'profile'">기본 프로필</button>
-          <button class="button" :class="{ 'button--primary': activeTab === 'security' }" @click="activeTab = 'security'">계정 보안</button>
-          <button class="button" :class="{ 'button--primary': activeTab === 'notif' }" @click="activeTab = 'notif'">알림 설정</button>
-          <button class="button" :class="{ 'button--primary': activeTab === 'region' }" @click="activeTab = 'region'">언어·지역</button>
-          <button class="button" :class="{ 'button--primary': activeTab === 'storage' }" @click="activeTab = 'storage'">저장소 현황</button>
-        </div>
-
-        <div v-if="feedback" class="feedback feedback--success">{{ feedback }}</div>
-        <div v-if="errorMessage" class="feedback feedback--error">{{ errorMessage }}</div>
-        <p v-if="loading" class="panel__empty">CalenDrive 프로필을 불러오는 중입니다.</p>
-
-        <template v-else>
-          <section v-if="activeTab === 'profile'" class="panel panel--compact">
+        <div class="drive-profile-modal__shell">
+          <aside class="drive-profile-modal__sidebar">
             <div class="drive-profile-modal__hero">
               <img
                 :src="settings.profileImageUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(settings.displayName || currentUser.displayName)}&background=4f8cff&color=ffffff`"
@@ -258,120 +258,196 @@ watch(
               <div class="drive-profile-modal__hero-copy">
                 <strong>{{ settings.displayName || currentUser.displayName }}</strong>
                 <small>{{ settings.loginId || currentUser.loginId }}</small>
-                <small>{{ settings.role || (currentUser.admin ? 'ADMIN' : 'USER') }}</small>
-                <label class="button button--ghost drive-profile-modal__upload">
-                  이미지 변경
-                  <input type="file" accept="image/*" hidden :disabled="saving" @change="handleProfileImageChange" />
-                </label>
+                <small>{{ resolvedRoleLabel }}</small>
               </div>
             </div>
-            <div class="travel-form-grid">
-              <label class="field">
-                <span class="field__label">표시 이름</span>
-                <input v-model="settings.displayName" type="text" />
-              </label>
-              <label class="field">
-                <span class="field__label">로그인 ID</span>
-                <input :value="settings.loginId || currentUser.loginId" type="text" disabled />
-              </label>
-              <label class="field">
-                <span class="field__label">역할</span>
-                <input :value="settings.role || (currentUser.admin ? 'ADMIN' : 'USER')" type="text" disabled />
-              </label>
-              <label class="field">
-                <span class="field__label">계정 상태</span>
-                <input :value="settings.active ? '활성' : '비활성'" type="text" disabled />
-              </label>
-            </div>
-          </section>
 
-          <section v-else-if="activeTab === 'security'" class="panel panel--compact">
-            <div class="travel-form-grid">
-              <label class="field field--full">
-                <span class="field__label">현재 2차 비밀번호</span>
-                <input v-model="security.secondaryPin" type="password" inputmode="numeric" maxlength="8" placeholder="숫자 8자리" />
-              </label>
-              <label class="field">
-                <span class="field__label">새 비밀번호</span>
-                <input v-model="security.newPassword" type="password" placeholder="8자 이상" />
-              </label>
-              <label class="field">
-                <span class="field__label">새 비밀번호 확인</span>
-                <input v-model="security.confirmPassword" type="password" />
-              </label>
-              <label class="field">
-                <span class="field__label">새 2차 비밀번호</span>
-                <input v-model="security.newSecondaryPin" type="password" inputmode="numeric" maxlength="8" placeholder="숫자 8자리" />
-              </label>
-              <label class="field">
-                <span class="field__label">새 2차 비밀번호 확인</span>
-                <input v-model="security.confirmSecondaryPin" type="password" inputmode="numeric" maxlength="8" />
-              </label>
-            </div>
-            <div class="entry-editor__actions">
-              <button class="button button--ghost" type="button" :disabled="securitySaving" @click="resetSecurityForm">초기화</button>
-              <button class="button button--primary" type="button" :disabled="securitySaving" @click="handleChangePassword">
-                {{ securitySaving ? '처리 중..' : '비밀번호 변경' }}
+            <nav class="drive-profile-modal__nav">
+              <button
+                v-for="tab in tabs"
+                :key="tab.id"
+                class="drive-profile-modal__nav-item"
+                :class="{ 'drive-profile-modal__nav-item--active': activeTab === tab.id }"
+                type="button"
+                @click="activeTab = tab.id"
+              >
+                <span class="drive-profile-modal__nav-icon">{{ tab.icon }}</span>
+                <span class="drive-profile-modal__nav-copy">
+                  <strong>{{ tab.label }}</strong>
+                  <small>{{ tab.description }}</small>
+                </span>
               </button>
-              <button class="button button--primary" type="button" :disabled="securitySaving" @click="handleChangeSecondaryPin">
-                {{ securitySaving ? '처리 중..' : '2차 비밀번호 변경' }}
-              </button>
-            </div>
-          </section>
+            </nav>
+          </aside>
 
-          <section v-else-if="activeTab === 'notif'" class="panel panel--compact drive-profile-modal__stack">
-            <label class="checkbox-row">
-              <input v-model="settings.marketingOptIn" type="checkbox" />
-              <span>마케팅 정보 수신</span>
-            </label>
-            <label class="checkbox-row">
-              <input v-model="settings.emailNotification" type="checkbox" />
-              <span>이메일 알림 수신</span>
-            </label>
-            <label class="checkbox-row">
-              <input v-model="settings.securityNotification" type="checkbox" />
-              <span>보안 알림 수신</span>
-            </label>
-            <label class="checkbox-row">
-              <input v-model="settings.privateProfile" type="checkbox" />
-              <span>비공개 프로필 모드</span>
-            </label>
-          </section>
+          <div class="drive-profile-modal__content">
+            <div v-if="feedback" class="feedback feedback--success">{{ feedback }}</div>
+            <div v-if="errorMessage" class="feedback feedback--error">{{ errorMessage }}</div>
+            <p v-if="loading" class="panel__empty">CalenDrive 프로필을 불러오는 중입니다.</p>
 
-          <section v-else-if="activeTab === 'region'" class="panel panel--compact">
-            <div class="travel-form-grid">
-              <label class="field">
-                <span class="field__label">언어 코드</span>
-                <input v-model="settings.localeCode" type="text" maxlength="10" placeholder="KO" />
-              </label>
-              <label class="field">
-                <span class="field__label">지역 코드</span>
-                <input v-model="settings.regionCode" type="text" maxlength="10" placeholder="KR" />
-              </label>
-            </div>
-          </section>
+            <template v-else>
+              <section v-if="activeTab === 'profile'" class="panel panel--compact drive-profile-modal__section">
+                <div class="panel__header">
+                  <div>
+                    <h3>기본 프로필</h3>
+                    <p>표시 이름과 프로필 이미지를 정리하고, 로그인 계정 상태를 확인합니다.</p>
+                  </div>
+                </div>
 
-          <section v-else class="panel panel--compact">
-            <div class="summary-grid">
-              <article class="summary-card">
-                <span>사용 중 용량</span>
-                <strong>{{ formatBytes(settings.driveUsedBytes) }}</strong>
-              </article>
-              <article class="summary-card">
-                <span>보유 파일 수</span>
-                <strong>{{ settings.driveFileCount || 0 }}</strong>
-              </article>
-              <article class="summary-card">
-                <span>생성 시각</span>
-                <strong>{{ formatDateTime(settings.createdAt) }}</strong>
-              </article>
-              <article class="summary-card">
-                <span>최근 변경</span>
-                <strong>{{ formatDateTime(settings.updatedAt) }}</strong>
-              </article>
-            </div>
-          </section>
-        </template>
+                <div class="drive-profile-modal__profile-grid">
+                  <div class="drive-profile-modal__image-card">
+                    <img
+                      :src="settings.profileImageUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(settings.displayName || currentUser.displayName)}&background=4f8cff&color=ffffff`"
+                      :alt="settings.displayName || currentUser.displayName"
+                      class="drive-profile-modal__avatar drive-profile-modal__avatar--large"
+                    />
+                    <label class="button button--ghost drive-profile-modal__upload">
+                      프로필 이미지 변경
+                      <input type="file" accept="image/*" hidden :disabled="saving" @change="handleProfileImageChange" />
+                    </label>
+                  </div>
+
+                  <div class="travel-form-grid">
+                    <label class="field">
+                      <span class="field__label">표시 이름</span>
+                      <input v-model="settings.displayName" type="text" />
+                    </label>
+                    <label class="field">
+                      <span class="field__label">로그인 ID</span>
+                      <input :value="settings.loginId || currentUser.loginId" type="text" disabled />
+                    </label>
+                    <label class="field">
+                      <span class="field__label">권한</span>
+                      <input :value="resolvedRoleLabel" type="text" disabled />
+                    </label>
+                    <label class="field">
+                      <span class="field__label">계정 상태</span>
+                      <input :value="settings.active ? '활성' : '비활성'" type="text" disabled />
+                    </label>
+                  </div>
+                </div>
+              </section>
+
+              <section v-else-if="activeTab === 'security'" class="panel panel--compact drive-profile-modal__section">
+                <div class="panel__header">
+                  <div>
+                    <h3>계정 보안</h3>
+                    <p>현재 2차 PIN을 확인한 뒤 비밀번호와 2차 비밀번호를 각각 안전하게 갱신합니다.</p>
+                  </div>
+                </div>
+
+                <div class="travel-form-grid">
+                  <label class="field field--full">
+                    <span class="field__label">현재 2차 비밀번호</span>
+                    <input v-model="security.secondaryPin" type="password" inputmode="numeric" maxlength="8" placeholder="숫자 8자리" />
+                  </label>
+                  <label class="field">
+                    <span class="field__label">새 비밀번호</span>
+                    <input v-model="security.newPassword" type="password" placeholder="8자 이상" />
+                  </label>
+                  <label class="field">
+                    <span class="field__label">새 비밀번호 확인</span>
+                    <input v-model="security.confirmPassword" type="password" />
+                  </label>
+                  <label class="field">
+                    <span class="field__label">새 2차 비밀번호</span>
+                    <input v-model="security.newSecondaryPin" type="password" inputmode="numeric" maxlength="8" placeholder="숫자 8자리" />
+                  </label>
+                  <label class="field">
+                    <span class="field__label">새 2차 비밀번호 확인</span>
+                    <input v-model="security.confirmSecondaryPin" type="password" inputmode="numeric" maxlength="8" />
+                  </label>
+                </div>
+
+                <div class="entry-editor__actions">
+                  <button class="button button--ghost" type="button" :disabled="securitySaving" @click="resetSecurityForm">초기화</button>
+                  <button class="button button--primary" type="button" :disabled="securitySaving" @click="handleChangePassword">
+                    {{ securitySaving ? '처리 중' : '비밀번호 변경' }}
+                  </button>
+                  <button class="button button--primary" type="button" :disabled="securitySaving" @click="handleChangeSecondaryPin">
+                    {{ securitySaving ? '처리 중' : '2차 PIN 변경' }}
+                  </button>
+                </div>
+              </section>
+
+              <section v-else-if="activeTab === 'notif'" class="panel panel--compact drive-profile-modal__section">
+                <div class="panel__header">
+                  <div>
+                    <h3>알림 설정</h3>
+                    <p>현재 구현되어 있는 마케팅, 이메일, 보안 알림과 비공개 프로필 설정을 그대로 묶었습니다.</p>
+                  </div>
+                </div>
+
+                <div class="drive-profile-modal__stack">
+                  <label class="checkbox-row">
+                    <input v-model="settings.marketingOptIn" type="checkbox" />
+                    <span>마케팅 정보 수신</span>
+                  </label>
+                  <label class="checkbox-row">
+                    <input v-model="settings.emailNotification" type="checkbox" />
+                    <span>이메일 알림 수신</span>
+                  </label>
+                  <label class="checkbox-row">
+                    <input v-model="settings.securityNotification" type="checkbox" />
+                    <span>보안 알림 수신</span>
+                  </label>
+                  <label class="checkbox-row">
+                    <input v-model="settings.privateProfile" type="checkbox" />
+                    <span>비공개 프로필 모드</span>
+                  </label>
+                </div>
+              </section>
+
+              <section v-else-if="activeTab === 'region'" class="panel panel--compact drive-profile-modal__section">
+                <div class="panel__header">
+                  <div>
+                    <h3>언어 · 지역</h3>
+                    <p>드라이브 프로젝트의 지역 탭 감각을 유지하면서 현재 localeCode, regionCode 저장값을 그대로 다룹니다.</p>
+                  </div>
+                </div>
+
+                <div class="travel-form-grid">
+                  <label class="field">
+                    <span class="field__label">언어 코드</span>
+                    <input v-model="settings.localeCode" type="text" maxlength="10" placeholder="KO" />
+                  </label>
+                  <label class="field">
+                    <span class="field__label">지역 코드</span>
+                    <input v-model="settings.regionCode" type="text" maxlength="10" placeholder="KR" />
+                  </label>
+                </div>
+              </section>
+
+              <section v-else class="panel panel--compact drive-profile-modal__section">
+                <div class="panel__header">
+                  <div>
+                    <h3>저장소 현황</h3>
+                    <p>현재 사용자 기준 사용량, 파일 수, 생성 시각과 최근 변경 시각을 읽기 전용으로 보여줍니다.</p>
+                  </div>
+                </div>
+
+                <div class="summary-grid">
+                  <article class="summary-card">
+                    <span>사용 중인 용량</span>
+                    <strong>{{ formatBytes(settings.driveUsedBytes) }}</strong>
+                  </article>
+                  <article class="summary-card">
+                    <span>보유 파일 수</span>
+                    <strong>{{ settings.driveFileCount || 0 }}</strong>
+                  </article>
+                  <article class="summary-card">
+                    <span>생성 시각</span>
+                    <strong>{{ formatDateTime(settings.createdAt) }}</strong>
+                  </article>
+                  <article class="summary-card">
+                    <span>최근 변경</span>
+                    <strong>{{ formatDateTime(settings.updatedAt) }}</strong>
+                  </article>
+                </div>
+              </section>
+            </template>
+          </div>
+        </div>
       </div>
 
       <div class="travel-modal__footer">
@@ -383,7 +459,7 @@ watch(
           :disabled="saving || loading"
           @click="handleSaveProfile"
         >
-          {{ saving ? '저장 중..' : '설정 저장' }}
+          {{ saving ? '저장 중' : '설정 저장' }}
         </button>
       </div>
     </div>

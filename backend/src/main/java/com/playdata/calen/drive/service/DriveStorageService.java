@@ -230,11 +230,11 @@ public class DriveStorageService {
     }
 
     public String resolveBucket() {
-        String workspaceBucket = minioProperties.getBucket_work();
-        if (StringUtils.hasText(workspaceBucket)) {
-            return workspaceBucket;
+        String driveBucket = minioProperties.getBucket_cloud();
+        if (StringUtils.hasText(driveBucket)) {
+            return driveBucket;
         }
-        return minioProperties.getBucket_cloud();
+        return minioProperties.getBucket_work();
     }
 
     public boolean supportsStorage() {

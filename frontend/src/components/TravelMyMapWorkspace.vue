@@ -4,6 +4,13 @@ import { fetchTravelMyMapMarkerDetails, fetchTravelMyMapOverview } from '../lib/
 import { formatDateTime, safeNumber } from '../lib/uiFormat'
 import TravelMapPanel from './TravelMapPanel.vue'
 
+const props = defineProps({
+  active: {
+    type: Boolean,
+    default: true,
+  },
+})
+
 const isLoading = ref(false)
 const isDetailLoading = ref(false)
 const errorMessage = ref('')
@@ -268,6 +275,7 @@ onMounted(() => {
         v-else
         :markers="visibleMarkers"
         :routes="visibleRoutes"
+        :is-visible="props.active"
         :selected-point="null"
         :enable-pick-location="false"
         :enable-draw-route="false"

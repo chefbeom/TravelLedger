@@ -60,6 +60,12 @@ const legacyFeatureItems = [
     title: 'CalenDrive',
     description: '?뚯씪 ?낅줈?쒖? 怨듭쑀, ?댁??? 愿由ъ? ?꾨줈???ㅼ젙源뚯? 而щ씪?곗? ?쒕씪?대툕 湲곕뒫???꾩슜 ?뚰겕?ㅽ럹?댁뒪濡??ъ슜?⑸땲??',
   },
+  {
+    key: 'drive',
+    number: '4',
+    title: 'CalenDrive',
+    description: 'Cloud drive, sharing, trash, and admin tools in one workspace.',
+  },
 ]
 
 const featureItems = [

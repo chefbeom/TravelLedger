@@ -103,7 +103,7 @@ watch(
     </section>
 
     <div v-show="primaryTab === 'atlas' && atlasTab === 'map'" class="workspace-stack">
-      <TravelMyMapWorkspace />
+      <TravelMyMapWorkspace :active="primaryTab === 'atlas' && atlasTab === 'map'" />
     </div>
 
     <div v-show="isHubVisible" class="workspace-stack">

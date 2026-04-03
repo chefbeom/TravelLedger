@@ -1,7 +1,7 @@
 const API_BASE = '/api'
 const CSRF_COOKIE_NAME = 'XSRF-TOKEN'
 const CSRF_HEADER_NAME = 'X-XSRF-TOKEN'
-const MAX_TRAVEL_MEDIA_FILE_SIZE = 10 * 1024 * 1024
+const MAX_TRAVEL_MEDIA_FILE_SIZE = 15 * 1024 * 1024
 
 function getCookie(name) {
   return document.cookie
@@ -740,7 +740,7 @@ async function uploadTravelMediaInternal({
 
   const oversizedFile = selectedFiles.find((file) => Number(file?.size || 0) > MAX_TRAVEL_MEDIA_FILE_SIZE)
   if (oversizedFile) {
-    const error = new Error('여행 사진은 10MB 이하 파일만 업로드할 수 있습니다.')
+    const error = new Error('여행 사진은 15MB 이하 파일만 업로드할 수 있습니다.')
     error.status = 400
     error.code = 'travel-media-too-large'
     throw error

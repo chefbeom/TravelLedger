@@ -2,13 +2,12 @@
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import AdminWorkspace from './components/AdminWorkspace.vue'
 import FeatureLauncher from './components/FeatureLauncher.vue'
-import FamilyAlbumWorkspace from './components/FamilyAlbumWorkspace.vue'
 import HouseholdWorkspace from './components/HouseholdWorkspace.vue'
 import InviteAccessPanel from './components/InviteAccessPanel.vue'
 import PinPadInput from './components/PinPadInput.vue'
+import CalenDriveWorkspace from './components/CalenDriveWorkspace.vue'
 import ProfileWorkspace from './components/ProfileWorkspace.vue'
-import TravelHubWorkspace from './components/TravelHubWorkspace.vue'
-import TravelMyMapWorkspace from './components/TravelMyMapWorkspace.vue'
+import TravelWorkspace from './components/TravelWorkspace.vue'
 import {
   acceptInvite,
   createInvite,
@@ -18,7 +17,7 @@ import {
   logout as logoutRequest,
 } from './lib/api'
 
-const featureItems = [
+const legacyFeatureItems = [
   {
     key: 'household',
     number: '1',
@@ -55,6 +54,27 @@ const featureItems = [
     title: '내 지도',
     description: '지금까지 저장한 여행 장소 핀과 이동 경로를 한 장의 지도에서 확인합니다.',
   },
+  {
+    key: 'drive',
+    number: '4',
+    title: 'CalenDrive',
+    description: '?뚯씪 ?낅줈?쒖? 怨듭쑀, ?댁??? 愿由ъ? ?꾨줈???ㅼ젙源뚯? 而щ씪?곗? ?쒕씪?대툕 湲곕뒫???꾩슜 ?뚰겕?ㅽ럹?댁뒪濡??ъ슜?⑸땲??',
+  },
+]
+
+const featureItems = [
+  {
+    key: 'household',
+    number: '1',
+    title: '가계부',
+    description: '가계부, 통계, 검색과 분류 관리까지 한 화면에서 바로 사용할 수 있습니다.',
+  },
+  {
+    key: 'travel',
+    number: '2',
+    title: '여행',
+    description: '여행 설정, 여행 가계부, 여행 로그, 내 지도와 사진 기능을 한 워크스페이스에서 이어서 관리합니다.',
+  },
 ]
 
 const adminFeatureItem = {
@@ -78,6 +98,14 @@ const routeMeta = {
   household: {
     title: '가계부',
     description: '달력 가계부, 통계, 검색, 분류 관리 기능을 함께 확인합니다.',
+  },
+  travel: {
+    title: '여행',
+    description: '여행 설정, 여행 가계부, 여행 로그, 내 지도와 사진 기능을 하나의 여행 워크스페이스에서 사용합니다.',
+  },
+  drive: {
+    title: 'CalenDrive',
+    description: '?뚯씪 ?쒕씪?대툕, 怨듭쑀, ?댁??? 愿由?, ?꾨줈???ㅼ젙, 愿由ъ옄 湲곕뒫?꾩? 4踰??섏씠吏?먯꽌 ?듯빀?섏뿬 ?ъ슜?⑸땲??',
   },
   'travel-money': {
     title: '여행 예산',
@@ -158,7 +186,11 @@ const inviteManager = reactive({
   errorMessage: '',
 })
 
-const pageMeta = computed(() => routeMeta[activeRoute.value] || routeMeta.launcher)
+const travelRouteKeys = new Set(['travel', 'travel-money', 'travel-log', 'photo-album', 'my-map'])
+const pageMeta = computed(() => {
+  const routeKey = travelRouteKeys.has(activeRoute.value) ? 'travel' : activeRoute.value
+  return routeMeta[routeKey] || routeMeta.launcher
+})
 const isTossTheme = computed(() => themeMode.value === 'toss')
 const launcherItems = computed(() => (
   currentUser.value?.admin ? [...featureItems, adminFeatureItem] : featureItems
@@ -173,6 +205,13 @@ function resolveRouteState(hash) {
     return {
       route: 'invite',
       token: decodeURIComponent(route.slice('invite/'.length)).trim(),
+    }
+  }
+
+  if (route === 'family-album') {
+    return {
+      route: 'travel',
+      token: '',
     }
   }
 
@@ -815,9 +854,8 @@ onBeforeUnmount(() => {
         <AdminWorkspace v-else-if="activeRoute === 'admin'" :current-user="currentUser" />
         <ProfileWorkspace v-else-if="activeRoute === 'profile'" :current-user="currentUser" />
         <HouseholdWorkspace v-else-if="activeRoute === 'household'" />
-        <FamilyAlbumWorkspace v-else-if="activeRoute === 'family-album'" />
-        <TravelMyMapWorkspace v-else-if="activeRoute === 'my-map'" />
-        <TravelHubWorkspace v-else :route="activeRoute" />
+        <CalenDriveWorkspace v-else-if="activeRoute === 'drive'" :current-user="currentUser" />
+        <TravelWorkspace v-else-if="travelRouteKeys.has(activeRoute)" :route="activeRoute" />
       </div>
     </template>
   </div>

@@ -32,6 +32,9 @@ public record TravelMediaResponse(
         String region,
         String placeName,
         BigDecimal latitude,
-        BigDecimal longitude
+        BigDecimal longitude,
+        BigDecimal gpsLatitude,
+        BigDecimal gpsLongitude,
+        Boolean representativeOverride
 ) {
 }

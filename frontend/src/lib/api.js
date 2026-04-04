@@ -515,6 +515,17 @@ export function fetchTravelMyMapMarkerDetails(markerId) {
   return request(`/travel/my-map/markers/${markerId}`)
 }
 
+export function fetchTravelMyMapPhotoCluster(clusterId) {
+  return request(`/travel/my-map/photo-clusters/${clusterId}`)
+}
+
+export function updateTravelMyMapPhotoClusterRepresentative(clusterId, mediaId) {
+  return request(`/travel/my-map/photo-clusters/${clusterId}/representative`, {
+    method: 'PUT',
+    body: JSON.stringify({ mediaId }),
+  })
+}
+
 export function createTravelPlan(payload) {
   return request('/travel/plans', {
     method: 'POST',

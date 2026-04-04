@@ -40,6 +40,8 @@ class TravelServiceCacheTest {
         TravelPlanShareRepository travelPlanShareRepository = mock(TravelPlanShareRepository.class);
         ExchangeRateService exchangeRateService = mock(ExchangeRateService.class);
         TravelMediaStorageService travelMediaStorageService = mock(TravelMediaStorageService.class);
+        TravelPhotoGpsMetadataService travelPhotoGpsMetadataService = mock(TravelPhotoGpsMetadataService.class);
+        TravelPhotoClusterService travelPhotoClusterService = mock(TravelPhotoClusterService.class);
         TravelPublicMediaTokenService travelPublicMediaTokenService = mock(TravelPublicMediaTokenService.class);
         RedisCacheService redisCacheService = mock(RedisCacheService.class);
         DataSource dataSource = mock(DataSource.class);
@@ -54,6 +56,8 @@ class TravelServiceCacheTest {
                 travelPlanShareRepository,
                 exchangeRateService,
                 travelMediaStorageService,
+                travelPhotoGpsMetadataService,
+                travelPhotoClusterService,
                 travelPublicMediaTokenService,
                 redisCacheService,
                 new ObjectMapper(),
@@ -104,6 +108,8 @@ class TravelServiceCacheTest {
         TravelPlanShareRepository travelPlanShareRepository = mock(TravelPlanShareRepository.class);
         ExchangeRateService exchangeRateService = mock(ExchangeRateService.class);
         TravelMediaStorageService travelMediaStorageService = mock(TravelMediaStorageService.class);
+        TravelPhotoGpsMetadataService travelPhotoGpsMetadataService = mock(TravelPhotoGpsMetadataService.class);
+        TravelPhotoClusterService travelPhotoClusterService = mock(TravelPhotoClusterService.class);
         TravelPublicMediaTokenService travelPublicMediaTokenService = mock(TravelPublicMediaTokenService.class);
         RedisCacheService redisCacheService = mock(RedisCacheService.class);
         DataSource dataSource = mock(DataSource.class);
@@ -118,6 +124,8 @@ class TravelServiceCacheTest {
                 travelPlanShareRepository,
                 exchangeRateService,
                 travelMediaStorageService,
+                travelPhotoGpsMetadataService,
+                travelPhotoClusterService,
                 travelPublicMediaTokenService,
                 redisCacheService,
                 new ObjectMapper(),

@@ -16,7 +16,9 @@ import com.playdata.calen.travel.dto.TravelMediaUploadCompleteRequest;
 import com.playdata.calen.travel.dto.TravelMediaUploadPrepareRequest;
 import com.playdata.calen.travel.dto.TravelMediaUploadPrepareResponse;
 import com.playdata.calen.travel.dto.TravelMyMapMarkerDetailBundleResponse;
+import com.playdata.calen.travel.dto.TravelMyMapClusterRepresentativeRequest;
 import com.playdata.calen.travel.dto.TravelMyMapOverviewResponse;
+import com.playdata.calen.travel.dto.TravelMyMapPhotoClusterDetailResponse;
 import com.playdata.calen.travel.dto.TravelMemoryRecordRequest;
 import com.playdata.calen.travel.dto.TravelMemoryRecordResponse;
 import com.playdata.calen.travel.dto.TravelPlanDetailResponse;
@@ -95,6 +97,23 @@ public class TravelController {
             @PathVariable Long markerId
     ) {
         return travelService.getMyMapMarkerDetailBundle(currentUser.userId(), markerId);
+    }
+
+    @GetMapping("/my-map/photo-clusters/{clusterId}")
+    public TravelMyMapPhotoClusterDetailResponse getMyMapPhotoCluster(
+            @AuthenticationPrincipal AppUserPrincipal currentUser,
+            @PathVariable Long clusterId
+    ) {
+        return travelService.getMyMapPhotoClusterDetail(currentUser.userId(), clusterId);
+    }
+
+    @PutMapping("/my-map/photo-clusters/{clusterId}/representative")
+    public TravelMyMapPhotoClusterDetailResponse updateMyMapPhotoClusterRepresentative(
+            @AuthenticationPrincipal AppUserPrincipal currentUser,
+            @PathVariable Long clusterId,
+            @Valid @RequestBody TravelMyMapClusterRepresentativeRequest request
+    ) {
+        return travelService.updateMyMapPhotoClusterRepresentative(currentUser.userId(), clusterId, request.mediaId());
     }
 
     @GetMapping("/geocode/reverse")

@@ -62,6 +62,18 @@ public class TravelMediaAsset {
     @Column(length = 240)
     private String caption;
 
+    @Column(name = "gps_latitude", precision = 10, scale = 7)
+    private java.math.BigDecimal gpsLatitude;
+
+    @Column(name = "gps_longitude", precision = 10, scale = 7)
+    private java.math.BigDecimal gpsLongitude;
+
+    @Column(name = "representative_override", nullable = false)
+    private Boolean representativeOverride = false;
+
+    @Column(name = "gps_extracted_at")
+    private LocalDateTime gpsExtractedAt;
+
     @Column(nullable = false)
     private LocalDateTime uploadedAt = LocalDateTime.now();
 }

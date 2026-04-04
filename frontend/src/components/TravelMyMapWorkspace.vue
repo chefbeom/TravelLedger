@@ -1,8 +1,14 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
-import { fetchTravelMyMapMarkerDetails, fetchTravelMyMapOverview } from '../lib/api'
-import { formatDateTime, safeNumber } from '../lib/uiFormat'
-import TravelMapPanel from './TravelMapPanel.vue'
+import {
+  fetchTravelMyMapOverview,
+  fetchTravelMyMapPhotoCluster,
+  updateTravelMyMapPhotoClusterRepresentative,
+} from '../lib/api'
+import { buildThumbnailUrl } from '../lib/mediaPreview'
+import { formatDate, formatDateTime, safeNumber } from '../lib/uiFormat'
+import TravelMyMapClusterPanel from './TravelMyMapClusterPanel.vue'
+import TravelPhotoLightbox from './TravelPhotoLightbox.vue'
 
 const props = defineProps({
   active: {
@@ -13,103 +19,36 @@ const props = defineProps({
 
 const isLoading = ref(false)
 const isDetailLoading = ref(false)
+const isRepresentativeSaving = ref(false)
 const errorMessage = ref('')
 const overview = ref(null)
-const displayMode = ref('ALL')
-const selectedMarkerId = ref(null)
-const selectedBundleIds = ref([])
-const markerDetailCache = ref(new Map())
-const markerBundleCache = ref(new Map())
-const detailSkeletonIds = ['detail-skeleton-1', 'detail-skeleton-2', 'detail-skeleton-3']
+const selectedClusterSummary = ref(null)
+const selectedClusterDetail = ref(null)
+const selectedPhotoId = ref(null)
+const lightboxPhoto = ref(null)
+const representativeUpdatingId = ref(null)
 
 function setError(message = '') {
   errorMessage.value = message
 }
 
-function resolvePinPreset(category) {
-  const text = String(category || '').trim().toLowerCase()
-
-  if (!text) return { key: 'general', iconText: '📍' }
-  if (text.includes('숙소') || text.includes('호텔') || text.includes('hotel') || text.includes('hostel')) return { key: 'lodging', iconText: '🛏' }
-  if (text.includes('음식') || text.includes('식당') || text.includes('맛집') || text.includes('food') || text.includes('restaurant')) return { key: 'food', iconText: '🍴' }
-  if (text.includes('카페') || text.includes('coffee') || text.includes('cafe')) return { key: 'cafe', iconText: '☕' }
-  if (text.includes('박물관') || text.includes('전시') || text.includes('museum')) return { key: 'museum', iconText: '🏛' }
-  if (text.includes('관광') || text.includes('명소') || text.includes('landmark') || text.includes('sight')) return { key: 'sightseeing', iconText: '🗽' }
-  if (text.includes('쇼핑') || text.includes('shopping') || text.includes('mall')) return { key: 'shopping', iconText: '🛍' }
-  if (text.includes('이동') || text.includes('교통') || text.includes('transit') || text.includes('버스') || text.includes('지하철') || text.includes('택시')) return { key: 'transit', iconText: '🚆' }
-  return { key: 'general', iconText: '📍' }
-}
-
-function transportLabel(mode) {
-  switch (String(mode || '').toUpperCase()) {
-    case 'BUS':
-      return '버스'
-    case 'TAXI':
-      return '택시'
-    case 'TRAIN':
-      return '기차'
-    case 'SUBWAY':
-      return '지하철'
-    case 'CAR':
-      return '자동차'
-    case 'FLIGHT':
-      return '항공'
-    case 'ETC':
-      return '기타'
-    default:
-      return '미정'
-  }
-}
-
-function sourceLabel(sourceType) {
-  return String(sourceType || '').toUpperCase() === 'GPX' ? 'GPX' : '직접 작성'
-}
-
-function lineStyleLabel(style) {
-  switch (String(style || '').toUpperCase()) {
-    case 'DASHED':
-      return '점선'
-    case 'DOTTED':
-      return '도트'
-    case 'LONG_DASH':
-      return '긴 점선'
-    default:
-      return '실선'
-  }
-}
-
 function routeSummary(route) {
+  const distanceKm = safeNumber(route?.distanceKm)
+  const durationMinutes = safeNumber(route?.durationMinutes)
+  const stepCount = safeNumber(route?.stepCount)
+
   return [
-    transportLabel(route.transportMode),
-    route.distanceKm ? `${Number(route.distanceKm).toFixed(2)}km` : '',
-    route.durationMinutes ? `${route.durationMinutes}분` : '',
-    route.stepCount ? `${Number(route.stepCount).toLocaleString('ko-KR')}걸음` : '',
-    lineStyleLabel(route.lineStyle),
-    sourceLabel(route.sourceType),
+    route?.transportMode || '',
+    distanceKm ? `${distanceKm.toFixed(2)}km` : '',
+    durationMinutes ? `${durationMinutes}분` : '',
+    stepCount ? `${stepCount.toLocaleString('ko-KR')}걸음` : '',
   ].filter(Boolean).join(' / ')
 }
 
-async function loadOverview() {
-  isLoading.value = true
-  setError('')
-
-  try {
-    overview.value = await fetchTravelMyMapOverview()
-  } catch (error) {
-    setError(error.message)
-  } finally {
-    isLoading.value = false
-  }
-}
-
-async function loadMarkerBundle(markerId) {
-  if (!markerId) {
-    return
-  }
-
-  const cachedBundleIds = markerBundleCache.value.get(String(markerId))
-  if (cachedBundleIds?.length) {
-    selectedBundleIds.value = cachedBundleIds
+async function loadClusterDetail(clusterId) {
+  if (!clusterId) {
+    selectedClusterDetail.value = null
+    selectedPhotoId.value = null
     return
   }
 
@@ -117,102 +56,174 @@ async function loadMarkerBundle(markerId) {
   setError('')
 
   try {
-    const bundle = await fetchTravelMyMapMarkerDetails(markerId)
-    const nextCache = new Map(markerDetailCache.value)
+    const detail = await fetchTravelMyMapPhotoCluster(clusterId)
+    selectedClusterDetail.value = detail
 
-    ;(bundle.markers ?? []).forEach((marker) => {
-      nextCache.set(String(marker.id), marker)
-    })
-
-    markerDetailCache.value = nextCache
-    const bundleIds = (bundle.markers ?? []).map((marker) => marker.id)
-    markerBundleCache.value = new Map(markerBundleCache.value).set(String(markerId), bundleIds)
-    selectedBundleIds.value = bundleIds
+    const availablePhotos = detail?.photos ?? []
+    const hasSelectedPhoto = availablePhotos.some((photo) => String(photo.id) === String(selectedPhotoId.value))
+    if (!hasSelectedPhoto) {
+      selectedPhotoId.value = detail?.representativeMediaId ?? availablePhotos[0]?.id ?? null
+    }
   } catch (error) {
+    selectedClusterDetail.value = null
+    selectedPhotoId.value = null
     setError(error.message)
   } finally {
     isDetailLoading.value = false
   }
 }
 
-function handleSelectMarker(marker) {
-  selectedMarkerId.value = marker?.id ?? null
-  if (marker?.id) {
-    loadMarkerBundle(marker.id)
+async function loadOverview({ autoSelect = false, preferredClusterId = null, reloadDetail = false } = {}) {
+  isLoading.value = true
+  setError('')
+
+  try {
+    const nextOverview = await fetchTravelMyMapOverview()
+    overview.value = nextOverview
+
+    const clusters = nextOverview?.photoClusters ?? []
+    if (!clusters.length) {
+      selectedClusterSummary.value = null
+      selectedClusterDetail.value = null
+      selectedPhotoId.value = null
+      return
+    }
+
+    const targetClusterId = preferredClusterId ?? selectedClusterSummary.value?.id ?? null
+    let nextSelectedCluster = targetClusterId
+      ? clusters.find((cluster) => String(cluster.id) === String(targetClusterId))
+      : null
+
+    if (!nextSelectedCluster && autoSelect) {
+      nextSelectedCluster = clusters[0]
+    }
+
+    if (!nextSelectedCluster && selectedClusterSummary.value) {
+      selectedClusterSummary.value = null
+      selectedClusterDetail.value = null
+      selectedPhotoId.value = null
+      return
+    }
+
+    if (nextSelectedCluster) {
+      const clusterChanged = String(selectedClusterSummary.value?.id ?? '') !== String(nextSelectedCluster.id)
+      selectedClusterSummary.value = nextSelectedCluster
+      if (clusterChanged || reloadDetail) {
+        await loadClusterDetail(nextSelectedCluster.id)
+      }
+    }
+  } catch (error) {
+    setError(error.message)
+  } finally {
+    isLoading.value = false
   }
 }
 
-const modeLabel = computed(() => {
-  switch (displayMode.value) {
-    case 'PINS':
-      return '핀만 보기'
-    case 'ROUTES':
-      return '경로만 보기'
-    default:
-      return '핀 + 경로 보기'
+async function handleSelectCluster(cluster) {
+  if (!cluster?.id) {
+    return
   }
-})
+
+  selectedClusterSummary.value = cluster
+  await loadClusterDetail(cluster.id)
+}
+
+function handleSelectPhoto(photo) {
+  if (!photo?.id) {
+    return
+  }
+
+  if (String(selectedPhotoId.value) === String(photo.id)) {
+    lightboxPhoto.value = photo
+    return
+  }
+
+  selectedPhotoId.value = photo.id
+}
+
+async function handleUpdateRepresentative(photo) {
+  if (!selectedClusterSummary.value?.id || !photo?.id) {
+    return
+  }
+
+  isRepresentativeSaving.value = true
+  representativeUpdatingId.value = photo.id
+  setError('')
+
+  try {
+    const detail = await updateTravelMyMapPhotoClusterRepresentative(selectedClusterSummary.value.id, photo.id)
+    selectedClusterDetail.value = detail
+    selectedPhotoId.value = photo.id
+    await loadOverview({ preferredClusterId: detail.id, reloadDetail: false })
+  } catch (error) {
+    setError(error.message)
+  } finally {
+    isRepresentativeSaving.value = false
+    representativeUpdatingId.value = null
+  }
+}
 
 const summary = computed(() => ({
   includedPlanCount: overview.value?.includedPlanCount ?? 0,
   markerCount: overview.value?.markerCount ?? 0,
+  photoMarkerCount: overview.value?.photoMarkerCount ?? 0,
+  photoClusterCount: overview.value?.photoClusterCount ?? 0,
   routeCount: overview.value?.routeCount ?? 0,
   totalDistanceKm: safeNumber(overview.value?.totalDistanceKm),
 }))
 
-const allMarkers = computed(() =>
-  (overview.value?.markers ?? []).map((item) => {
-    const detail = markerDetailCache.value.get(String(item.id))
-    const preset = resolvePinPreset(item.category)
+const photoClusters = computed(() => overview.value?.photoClusters ?? [])
+const routes = computed(() => overview.value?.routes ?? [])
 
-    return {
-      ...item,
-      ...detail,
-      isDetailLoading: isDetailLoading.value && String(item.id) === String(selectedMarkerId.value) && !detail,
-      colorHex: item.planColorHex || '#3182F6',
-      latitude: Number(item.latitude),
-      longitude: Number(item.longitude),
-      visitedDate: item.memoryDate,
-      visitedTime: item.memoryTime,
-      photoCount: detail?.photoCount || 0,
-      receiptCount: 0,
-      mediaItems: detail?.mediaItems || [],
-      iconKey: preset.key,
-      iconText: preset.iconText,
-    }
-  }),
-)
-
-const allRoutes = computed(() =>
-  (overview.value?.routes ?? []).map((route) => ({
-    ...route,
-    lineColorHex: route.lineColorHex || route.planColorHex || '#3182F6',
-    lineStyle: route.lineStyle || 'SOLID',
-  })),
-)
-
-const visibleMarkers = computed(() => (displayMode.value === 'ROUTES' ? [] : allMarkers.value))
-const visibleRoutes = computed(() => (displayMode.value === 'PINS' ? [] : allRoutes.value))
-
-const selectedMarker = computed(() =>
-  allMarkers.value.find((marker) => String(marker.id) === String(selectedMarkerId.value)) || null,
-)
-
-const hasSelectedMarkerPanel = computed(() => Boolean(selectedMarkerId.value || selectedMarker.value))
-
-const nearbyMarkers = computed(() => {
-  if (!selectedMarkerId.value || !selectedBundleIds.value.length) {
+const selectedClusterPhotos = computed(() => {
+  const clusterDetail = selectedClusterDetail.value
+  if (!clusterDetail?.photos?.length) {
     return []
   }
 
-  return selectedBundleIds.value
-    .filter((id) => String(id) !== String(selectedMarkerId.value))
-    .map((id) => allMarkers.value.find((marker) => String(marker.id) === String(id)))
-    .filter(Boolean)
+  return [...clusterDetail.photos].sort((left, right) => {
+    const leftRepresentative = String(left.id) === String(clusterDetail.representativeMediaId) ? 0 : 1
+    const rightRepresentative = String(right.id) === String(clusterDetail.representativeMediaId) ? 0 : 1
+    if (leftRepresentative !== rightRepresentative) {
+      return leftRepresentative - rightRepresentative
+    }
+
+    const leftKey = `${left.expenseDate || ''} ${left.expenseTime || '99:99'} ${left.uploadedAt || ''} ${String(left.id).padStart(12, '0')}`
+    const rightKey = `${right.expenseDate || ''} ${right.expenseTime || '99:99'} ${right.uploadedAt || ''} ${String(right.id).padStart(12, '0')}`
+    return rightKey.localeCompare(leftKey)
+  })
 })
 
-onMounted(() => {
-  loadOverview()
+const selectedPhoto = computed(() => {
+  const photos = selectedClusterPhotos.value
+  if (!photos.length) {
+    return null
+  }
+
+  return photos.find((photo) => String(photo.id) === String(selectedPhotoId.value)) ?? photos[0]
+})
+
+const selectedClusterLocationLabel = computed(() => {
+  const source = selectedClusterSummary.value
+  return [source?.country, source?.region, source?.placeName].filter(Boolean).join(' / ') || '위치 정보 없음'
+})
+
+const selectedPhotoLocationLabel = computed(() => {
+  const source = selectedPhoto.value
+  return [source?.country, source?.region, source?.placeName].filter(Boolean).join(' / ') || '위치 정보 없음'
+})
+
+const selectedPhotoGpsLabel = computed(() => {
+  const latitude = selectedPhoto.value?.gpsLatitude
+  const longitude = selectedPhoto.value?.gpsLongitude
+  if (latitude == null || longitude == null) {
+    return ''
+  }
+  return `${Number(latitude).toFixed(6)}, ${Number(longitude).toFixed(6)}`
+})
+
+onMounted(async () => {
+  await loadOverview({ autoSelect: true, reloadDetail: true })
 })
 </script>
 
@@ -221,71 +232,54 @@ onMounted(() => {
     <section class="panel">
       <div class="panel__header">
         <div>
-          <h2>내 지도</h2>
-          <p>지금까지 여행에서 기록한 장소 핀과 이동 경로를 한 장의 지도에서 모아 봅니다.</p>
+          <h2>내 지도 사진 클러스터</h2>
+          <p>업로드된 사진의 GPS를 기준으로 가까운 사진을 묶고, 줌 단계에 따라 다시 정리해 지도 성능과 가독성을 함께 유지합니다.</p>
         </div>
-        <span class="panel__badge">{{ modeLabel }}</span>
+        <span class="panel__badge">클러스터 {{ summary.photoClusterCount }}개</span>
       </div>
 
       <div class="travel-summary-grid">
         <article class="travel-stat-card">
-          <span>포함 여행</span>
-          <strong>{{ summary.includedPlanCount }}</strong>
-          <small>내 지도에 포함된 전체 여행</small>
+          <span>사진 원본 핀</span>
+          <strong>{{ summary.photoMarkerCount }}</strong>
+          <small>서버 2m 기준으로 계산한 원본 사진 수</small>
         </article>
         <article class="travel-stat-card">
-          <span>등록된 핀</span>
+          <span>사진 클러스터</span>
+          <strong>{{ summary.photoClusterCount }}</strong>
+          <small>대표 사진 기준으로 지도에 표시되는 묶음</small>
+        </article>
+        <article class="travel-stat-card">
+          <span>기록 메모리</span>
           <strong>{{ summary.markerCount }}</strong>
-          <small>좌표가 저장된 장소 기록</small>
+          <small>여행 장소 기억과 연결된 지도 기록</small>
         </article>
         <article class="travel-stat-card">
-          <span>등록된 경로</span>
-          <strong>{{ summary.routeCount }}</strong>
-          <small>직접 작성과 GPX 경로 포함</small>
-        </article>
-        <article class="travel-stat-card">
-          <span>누적 이동 거리</span>
+          <span>경로 거리</span>
           <strong>{{ summary.totalDistanceKm.toFixed(2) }}km</strong>
-          <small>전체 여행 기준 거리 합계</small>
+          <small>현재 저장된 이동 경로 총합</small>
         </article>
       </div>
-    </section>
-
-    <section class="panel">
-      <div class="scope-toggle">
-        <button class="button" :class="{ 'button--primary': displayMode === 'ALL' }" @click="displayMode = 'ALL'">핀 + 경로</button>
-        <button class="button" :class="{ 'button--primary': displayMode === 'PINS' }" @click="displayMode = 'PINS'">핀만</button>
-        <button class="button" :class="{ 'button--primary': displayMode === 'ROUTES' }" @click="displayMode = 'ROUTES'">경로만</button>
-      </div>
-      <small class="field__hint">핀 상세는 지도를 눌렀을 때 그 핀과 주변 10개 정도만 추가로 불러옵니다.</small>
     </section>
 
     <section class="panel panel--map-fill travel-overview-map-panel">
       <div class="panel__header">
         <div>
-          <h2>내 위치 지도</h2>
-          <p>초기에는 요약 핀과 경로만 가볍게 불러오고, 핀을 누를 때만 해당 핀의 자세한 내용을 이어서 불러옵니다.</p>
+          <h2>사진 지도</h2>
+          <p>낮은 줌에서는 넓게 묶고, 확대하면 세분화합니다. 개별 핀을 누르면 포함 사진과 대표 사진 설정을 바로 확인할 수 있습니다.</p>
         </div>
-        <span class="panel__badge">핀 {{ visibleMarkers.length }}개 / 경로 {{ visibleRoutes.length }}개</span>
+        <span class="panel__badge">경로 {{ summary.routeCount }}개</span>
       </div>
 
       <p v-if="errorMessage" class="panel__empty">{{ errorMessage }}</p>
-      <p v-else-if="isLoading" class="panel__empty">내 지도를 불러오는 중입니다...</p>
-      <TravelMapPanel
+      <p v-else-if="isLoading" class="panel__empty">사진 클러스터 지도를 불러오는 중입니다...</p>
+      <TravelMyMapClusterPanel
         v-else
-        :markers="visibleMarkers"
-        :routes="visibleRoutes"
-        :is-visible="props.active"
-        :selected-point="null"
-        :enable-pick-location="false"
-        :enable-draw-route="false"
-        :view-key="`my-map-${displayMode}-${summary.markerCount}-${summary.routeCount}`"
-        initial-map-size="expanded"
-        hint-title="내 지도 보기"
-        hint-text="핀을 누르면 선택한 핀과 주변 핀의 자세한 정보를 추가로 불러와 아래에 보여줍니다."
-        :selected-marker-id="selectedMarkerId"
-        :preserve-selected-popup="true"
-        @select-marker="handleSelectMarker"
+        :photo-clusters="photoClusters"
+        :routes="routes"
+        :active="props.active"
+        :selected-cluster-id="selectedClusterSummary?.id ?? null"
+        @select-cluster="handleSelectCluster"
       />
     </section>
 
@@ -293,95 +287,161 @@ onMounted(() => {
       <section class="panel">
         <div class="panel__header">
           <div>
-            <h2>선택한 핀 정보</h2>
-            <p>지금 보고 싶은 핀의 정보만 따로 불러와서 빠르게 확인합니다.</p>
+            <h2>선택된 클러스터</h2>
+            <p>대표 사진, 포함 사진 수, 묶음 범위를 확인하고 대표 사진을 바꿀 수 있습니다.</p>
           </div>
-          <span class="panel__badge">{{ hasSelectedMarkerPanel ? '불러옴' : '선택 대기' }}</span>
+          <span class="panel__badge">
+            {{ selectedClusterDetail ? `${selectedClusterDetail.photoCount}장` : '선택 대기' }}
+          </span>
         </div>
 
-        <div v-if="hasSelectedMarkerPanel" class="travel-overview-place-list">
-          <article class="travel-overview-place-card">
+        <div v-if="selectedClusterSummary" class="travel-overview-place-list">
+          <article class="travel-overview-place-card travel-cluster-summary-card">
             <img
-              v-if="!isDetailLoading && selectedMarker?.mediaItems?.[0]?.contentUrl"
-              :src="selectedMarker.mediaItems[0].contentUrl"
-              :alt="selectedMarker.title || selectedMarker.placeName || '대표 사진'"
-              loading="eager"
-              fetchpriority="high"
-              decoding="async"
+              v-if="selectedClusterSummary.representativePhotoUrl"
+              :src="buildThumbnailUrl(selectedClusterSummary.representativePhotoUrl, 480)"
+              :alt="selectedClusterSummary.title || selectedClusterSummary.placeName || '대표 사진'"
               class="travel-media-thumb"
+              loading="eager"
+              decoding="async"
             />
-            <div v-else-if="isDetailLoading" class="travel-media-thumb travel-skeleton-block" aria-hidden="true" />
             <div class="travel-media-tags">
-              <template v-if="isDetailLoading">
-                <span class="chip chip--neutral">불러오는 중</span>
-                <span class="chip chip--neutral">상세 정보</span>
-              </template>
-              <template v-else>
-              <span class="chip chip--neutral">{{ selectedMarker.category || '장소' }}</span>
-              <span class="chip chip--neutral">사진 {{ selectedMarker.photoCount || 0 }}장</span>
-              </template>
+              <span class="chip chip--neutral">{{ selectedClusterSummary.category || '사진' }}</span>
+              <span class="chip chip--neutral">사진 {{ selectedClusterSummary.photoCount }}장</span>
+              <span class="chip chip--neutral">기록 {{ selectedClusterSummary.memoryCount }}건</span>
             </div>
-            <template v-if="isDetailLoading">
-              <span class="travel-skeleton-line travel-skeleton-line--lg" aria-hidden="true" />
-              <span class="travel-skeleton-line travel-skeleton-line--md" aria-hidden="true" />
-              <span class="travel-skeleton-line travel-skeleton-line--md" aria-hidden="true" />
-              <span class="travel-skeleton-line travel-skeleton-line--sm" aria-hidden="true" />
-              <span class="travel-skeleton-line travel-skeleton-line--sm" aria-hidden="true" />
-            </template>
-            <template v-else>
-              <strong>{{ selectedMarker.title || selectedMarker.placeName || '제목 없는 핀' }}</strong>
-            <small>{{ selectedMarker.planName || '여행' }}</small>
-            <small>{{ formatDateTime(selectedMarker.memoryDate, selectedMarker.memoryTime) }}</small>
-            <small>{{ [selectedMarker.country, selectedMarker.region, selectedMarker.placeName].filter(Boolean).join(' / ') || '위치 미설정' }}</small>
-            <small>{{ selectedMarker.memo || '메모 없음' }}</small>
-            </template>
+            <strong>{{ selectedClusterSummary.title || selectedClusterSummary.placeName || '대표 사진 클러스터' }}</strong>
+            <small>{{ selectedClusterLocationLabel }}</small>
+            <small>{{ formatDateTime(selectedClusterSummary.memoryDate, selectedClusterSummary.memoryTime) }}</small>
+            <small>최대 거리 {{ Number(selectedClusterSummary.maxDistanceMeters || 0).toFixed(1) }}m</small>
+            <small v-if="selectedClusterSummary.representativeOverride">사용자 지정 대표 사진이 적용되어 있습니다.</small>
           </article>
         </div>
-        <p v-else class="panel__empty">지도에서 보고 싶은 핀을 눌러 상세를 확인해주세요.</p>
+        <div v-if="isDetailLoading" class="panel__empty">클러스터 상세 사진을 불러오는 중입니다...</div>
+        <p v-else-if="!selectedClusterDetail" class="panel__empty">지도에서 사진 핀을 눌러 클러스터를 선택해 주세요.</p>
       </section>
 
       <section class="panel">
         <div class="panel__header">
           <div>
-            <h2>주변 핀 미리보기</h2>
-            <p>선택한 핀 근처의 기록도 함께 불러와서 이어서 확인할 수 있습니다.</p>
+            <h2>선택한 사진 정보</h2>
+            <p>사진을 한 번 누르면 정보가 바뀌고, 같은 사진을 다시 누르면 크게 볼 수 있습니다.</p>
           </div>
-          <span class="panel__badge">{{ nearbyMarkers.length }}개</span>
+          <span class="panel__badge">
+            {{ selectedPhoto ? `${selectedPhoto.originalFileName || '사진'} 선택됨` : '선택 대기' }}
+          </span>
         </div>
 
-        <div v-if="nearbyMarkers.length" class="travel-overview-place-list">
-          <article v-for="marker in nearbyMarkers" :key="marker.id" class="travel-overview-place-card">
+        <div v-if="selectedPhoto" class="travel-overview-place-list">
+          <article class="travel-overview-place-card travel-selected-photo-card">
+            <button class="travel-photo-preview-button" type="button" @click="lightboxPhoto = selectedPhoto">
+              <img
+                :src="buildThumbnailUrl(selectedPhoto.contentUrl, 960)"
+                :alt="selectedPhoto.originalFileName || '선택한 사진'"
+                class="travel-media-thumb"
+                loading="eager"
+                decoding="async"
+              />
+            </button>
             <div class="travel-media-tags">
-              <span class="chip chip--neutral">{{ marker.category || '장소' }}</span>
-              <span class="chip chip--neutral">사진 {{ marker.photoCount || 0 }}장</span>
+              <span class="chip chip--neutral" v-if="String(selectedPhoto.id) === String(selectedClusterDetail?.representativeMediaId)">대표 사진</span>
+              <span class="chip chip--neutral" v-if="selectedPhoto.representativeOverride">사용자 지정</span>
             </div>
-            <strong>{{ marker.title || marker.placeName || '제목 없는 핀' }}</strong>
-            <small>{{ marker.planName || '여행' }}</small>
-            <small>{{ formatDateTime(marker.memoryDate, marker.memoryTime) }}</small>
-            <small>{{ [marker.country, marker.region, marker.placeName].filter(Boolean).join(' / ') || '위치 미설정' }}</small>
+            <strong>{{ selectedPhoto.caption || selectedPhoto.originalFileName || '사진' }}</strong>
+            <small>{{ selectedPhotoLocationLabel }}</small>
+            <small>{{ formatDateTime(selectedPhoto.expenseDate, selectedPhoto.expenseTime) }}</small>
+            <small v-if="selectedPhotoGpsLabel">GPS {{ selectedPhotoGpsLabel }}</small>
+            <div class="travel-media-actions">
+              <button class="button button--ghost" type="button" @click="lightboxPhoto = selectedPhoto">크게 보기</button>
+              <button
+                class="button button--primary"
+                type="button"
+                :disabled="isRepresentativeSaving || String(selectedPhoto.id) === String(selectedClusterDetail?.representativeMediaId)"
+                @click="handleUpdateRepresentative(selectedPhoto)"
+              >
+                {{
+                  representativeUpdatingId === selectedPhoto.id
+                    ? '대표 사진 변경 중...'
+                    : String(selectedPhoto.id) === String(selectedClusterDetail?.representativeMediaId)
+                      ? '현재 대표 사진'
+                      : '대표 사진으로 지정'
+                }}
+              </button>
+            </div>
           </article>
         </div>
-        <div v-else-if="isDetailLoading" class="travel-overview-place-list">
-          <article v-for="id in detailSkeletonIds" :key="id" class="travel-overview-place-card">
-            <div class="travel-media-tags">
-              <span class="chip chip--neutral">불러오는 중</span>
-            </div>
-            <span class="travel-skeleton-line travel-skeleton-line--lg" aria-hidden="true" />
-            <span class="travel-skeleton-line travel-skeleton-line--md" aria-hidden="true" />
-            <span class="travel-skeleton-line travel-skeleton-line--sm" aria-hidden="true" />
-          </article>
-        </div>
-        <p v-else class="panel__empty">핀을 누르면 근처 핀들이 여기에 같이 표시됩니다.</p>
+        <p v-else class="panel__empty">아직 선택된 사진이 없습니다.</p>
       </section>
     </div>
 
     <section class="panel">
       <div class="panel__header">
         <div>
-          <h2>전체 경로 목록</h2>
-          <p>경로는 처음부터 지도에 가볍게 보여주되, 목록에서는 제목과 거리 중심으로 한 번 더 정리해 둡니다.</p>
+          <h2>클러스터 포함 사진</h2>
+          <p>같은 위치 묶음에 포함된 사진을 확인하고 대표 사진을 바꿀 수 있습니다.</p>
         </div>
-        <span class="panel__badge">{{ allRoutes.length }}개 경로</span>
+        <span class="panel__badge">
+          {{ selectedClusterPhotos.length ? `${selectedClusterPhotos.length}장` : '선택 대기' }}
+        </span>
+      </div>
+
+      <div v-if="selectedClusterPhotos.length" class="travel-media-grid travel-media-grid--gallery">
+        <article
+          v-for="(photo, index) in selectedClusterPhotos"
+          :key="photo.id"
+          class="travel-media-card"
+          :class="{ 'travel-media-card--selected': String(photo.id) === String(selectedPhotoId) }"
+        >
+          <button class="travel-photo-card-button" type="button" @click="handleSelectPhoto(photo)">
+            <img
+              :src="buildThumbnailUrl(photo.contentUrl, 480)"
+              :alt="photo.originalFileName || '여행 사진'"
+              class="travel-media-thumb"
+              :loading="index < 4 ? 'eager' : 'lazy'"
+              :fetchpriority="index < 4 ? 'high' : 'auto'"
+              decoding="async"
+            />
+          </button>
+          <div class="travel-media-tags">
+            <span class="chip chip--neutral" v-if="String(photo.id) === String(selectedClusterDetail?.representativeMediaId)">대표</span>
+            <span class="chip chip--neutral" v-if="photo.representativeOverride">사용자 지정</span>
+          </div>
+          <div class="travel-media-copy">
+            <strong>{{ photo.caption || photo.originalFileName || '사진' }}</strong>
+            <small>{{ formatDateTime(photo.expenseDate, photo.expenseTime) }}</small>
+            <small>{{ [photo.country, photo.region, photo.placeName].filter(Boolean).join(' / ') || '위치 정보 없음' }}</small>
+          </div>
+          <div class="travel-media-actions">
+            <button class="button button--ghost" type="button" @click="handleSelectPhoto(photo)">
+              {{ String(photo.id) === String(selectedPhotoId) ? '다시 눌러 크게 보기' : '정보 보기' }}
+            </button>
+            <button
+              class="button button--primary"
+              type="button"
+              :disabled="isRepresentativeSaving || String(photo.id) === String(selectedClusterDetail?.representativeMediaId)"
+              @click="handleUpdateRepresentative(photo)"
+            >
+              {{
+                representativeUpdatingId === photo.id
+                  ? '변경 중...'
+                  : String(photo.id) === String(selectedClusterDetail?.representativeMediaId)
+                    ? '대표 사진'
+                    : '대표 지정'
+              }}
+            </button>
+          </div>
+        </article>
+      </div>
+      <p v-else class="panel__empty">선택한 클러스터의 사진이 여기에 표시됩니다.</p>
+    </section>
+
+    <section class="panel">
+      <div class="panel__header">
+        <div>
+          <h2>전체 경로 목록</h2>
+          <p>사진 클러스터와 함께 저장된 이동 경로도 그대로 확인할 수 있습니다.</p>
+        </div>
+        <span class="panel__badge">{{ routes.length }}개 경로</span>
       </div>
 
       <div class="sheet-table-wrap">
@@ -395,18 +455,20 @@ onMounted(() => {
             </tr>
           </thead>
           <tbody>
-            <tr v-for="route in allRoutes" :key="route.id">
+            <tr v-for="route in routes" :key="route.id">
               <td>{{ route.planName }}</td>
-              <td>{{ route.routeDate || '-' }}</td>
+              <td>{{ formatDate(route.routeDate) }}</td>
               <td>{{ route.title || '이동 경로' }}</td>
-              <td>{{ routeSummary(route) }}</td>
+              <td>{{ routeSummary(route) || '-' }}</td>
             </tr>
-            <tr v-if="!allRoutes.length">
+            <tr v-if="!routes.length">
               <td colspan="4" class="sheet-table__empty">아직 저장된 경로가 없습니다.</td>
             </tr>
           </tbody>
         </table>
       </div>
     </section>
+
+    <TravelPhotoLightbox :photo="lightboxPhoto" @close="lightboxPhoto = null" />
   </div>
 </template>

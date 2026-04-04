@@ -12,6 +12,7 @@ public record TravelMyMapOverviewResponse(
         BigDecimal totalDistanceKm,
         List<TravelMyMapMarkerSummaryResponse> markers,
         List<TravelMyMapPhotoClusterSummaryResponse> photoClusters,
+        List<TravelMyMapPhotoPinResponse> photoPins,
         List<TravelRouteSegmentResponse> routes
 ) {
 }

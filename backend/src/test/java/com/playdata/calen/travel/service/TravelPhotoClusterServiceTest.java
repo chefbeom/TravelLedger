@@ -33,12 +33,12 @@ class TravelPhotoClusterServiceTest {
 
         List<TravelPhotoClusterService.PhotoPoint> points = List.of(
                 point(1L, baseLatitude, baseLongitude, false, LocalDateTime.of(2026, 4, 4, 10, 0)),
-                point(2L, baseLatitude + toLatitudeDegrees(2.0d), baseLongitude, false, LocalDateTime.of(2026, 4, 4, 10, 1)),
-                point(3L, baseLatitude + toLatitudeDegrees(4.0d), baseLongitude, false, LocalDateTime.of(2026, 4, 4, 10, 2)),
-                point(4L, baseLatitude + toLatitudeDegrees(6.0d), baseLongitude, false, LocalDateTime.of(2026, 4, 4, 10, 3)),
-                point(5L, baseLatitude + toLatitudeDegrees(8.0d), baseLongitude, false, LocalDateTime.of(2026, 4, 4, 10, 4)),
-                point(6L, baseLatitude + toLatitudeDegrees(10.0d), baseLongitude, false, LocalDateTime.of(2026, 4, 4, 10, 5)),
-                point(7L, baseLatitude + toLatitudeDegrees(12.0d), baseLongitude, false, LocalDateTime.of(2026, 4, 4, 10, 6))
+                point(2L, baseLatitude + toLatitudeDegrees(5.0d), baseLongitude, false, LocalDateTime.of(2026, 4, 4, 10, 1)),
+                point(3L, baseLatitude + toLatitudeDegrees(10.0d), baseLongitude, false, LocalDateTime.of(2026, 4, 4, 10, 2)),
+                point(4L, baseLatitude + toLatitudeDegrees(15.0d), baseLongitude, false, LocalDateTime.of(2026, 4, 4, 10, 3)),
+                point(5L, baseLatitude + toLatitudeDegrees(20.0d), baseLongitude, false, LocalDateTime.of(2026, 4, 4, 10, 4)),
+                point(6L, baseLatitude + toLatitudeDegrees(25.0d), baseLongitude, false, LocalDateTime.of(2026, 4, 4, 10, 5)),
+                point(7L, baseLatitude + toLatitudeDegrees(30.0d), baseLongitude, false, LocalDateTime.of(2026, 4, 4, 10, 6))
         );
 
         List<TravelPhotoClusterService.PhotoCluster> clusters = clusterService.cluster(points);
@@ -91,6 +91,22 @@ class TravelPhotoClusterServiceTest {
         assertThat(clusters).hasSize(1);
         assertThat(clusters.get(0).representative().mediaId()).isEqualTo(9L);
         assertThat(clusters.get(0).id()).isEqualTo(4L);
+    }
+
+    @Test
+    void clustersPhotosWithinFiveMetersIntoSingleCluster() {
+        double baseLatitude = 37.5665000d;
+        double baseLongitude = 126.9780000d;
+
+        List<TravelPhotoClusterService.PhotoPoint> points = List.of(
+                point(1L, baseLatitude, baseLongitude, false, LocalDateTime.of(2026, 4, 4, 10, 0)),
+                point(2L, baseLatitude + toLatitudeDegrees(3.5d), baseLongitude, false, LocalDateTime.of(2026, 4, 4, 10, 1))
+        );
+
+        List<TravelPhotoClusterService.PhotoCluster> clusters = clusterService.cluster(points);
+
+        assertThat(clusters).hasSize(1);
+        assertThat(clusters.get(0).photoCount()).isEqualTo(2);
     }
 
     private TravelPhotoClusterService.PhotoPoint point(

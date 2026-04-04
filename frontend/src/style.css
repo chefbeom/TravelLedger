@@ -3123,6 +3123,13 @@ textarea {
   transform: none;
 }
 
+.travel-map-mode-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 .travel-map__hint {
   display: flex;
   flex-wrap: wrap;

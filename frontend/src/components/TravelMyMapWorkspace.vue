@@ -27,6 +27,7 @@ const selectedClusterDetail = ref(null)
 const selectedPhotoId = ref(null)
 const lightboxPhoto = ref(null)
 const representativeUpdatingId = ref(null)
+const viewMode = ref('cluster')
 
 function setError(message = '') {
   errorMessage.value = message
@@ -45,7 +46,7 @@ function routeSummary(route) {
   ].filter(Boolean).join(' / ')
 }
 
-async function loadClusterDetail(clusterId) {
+async function loadClusterDetail(clusterId, preferredPhotoId = null) {
   if (!clusterId) {
     selectedClusterDetail.value = null
     selectedPhotoId.value = null
@@ -60,8 +61,12 @@ async function loadClusterDetail(clusterId) {
     selectedClusterDetail.value = detail
 
     const availablePhotos = detail?.photos ?? []
+    const preferredPhotoExists = preferredPhotoId != null
+      && availablePhotos.some((photo) => String(photo.id) === String(preferredPhotoId))
     const hasSelectedPhoto = availablePhotos.some((photo) => String(photo.id) === String(selectedPhotoId.value))
-    if (!hasSelectedPhoto) {
+    if (preferredPhotoExists) {
+      selectedPhotoId.value = preferredPhotoId
+    } else if (!hasSelectedPhoto) {
       selectedPhotoId.value = detail?.representativeMediaId ?? availablePhotos[0]?.id ?? null
     }
   } catch (error) {
@@ -128,6 +133,20 @@ async function handleSelectCluster(cluster) {
   await loadClusterDetail(cluster.id)
 }
 
+async function handleSelectPhotoPin(pin) {
+  if (!pin?.clusterId) {
+    return
+  }
+
+  selectedPhotoId.value = pin.mediaId ?? null
+  const matchingCluster = photoClusters.value.find((cluster) => String(cluster.id) === String(pin.clusterId))
+  if (matchingCluster) {
+    selectedClusterSummary.value = matchingCluster
+  }
+
+  await loadClusterDetail(pin.clusterId, pin.mediaId ?? null)
+}
+
 function handleSelectPhoto(photo) {
   if (!photo?.id) {
     return
@@ -173,6 +192,7 @@ const summary = computed(() => ({
 }))
 
 const photoClusters = computed(() => overview.value?.photoClusters ?? [])
+const photoPins = computed(() => overview.value?.photoPins ?? [])
 const routes = computed(() => overview.value?.routes ?? [])
 
 const selectedClusterPhotos = computed(() => {
@@ -242,7 +262,7 @@ onMounted(async () => {
         <article class="travel-stat-card">
           <span>사진 원본 핀</span>
           <strong>{{ summary.photoMarkerCount }}</strong>
-          <small>서버 2m 기준으로 계산한 원본 사진 수</small>
+          <small>서버 5m 기준으로 계산한 원본 사진 수</small>
         </article>
         <article class="travel-stat-card">
           <span>사진 클러스터</span>
@@ -266,9 +286,26 @@ onMounted(async () => {
       <div class="panel__header">
         <div>
           <h2>사진 지도</h2>
-          <p>낮은 줌에서는 넓게 묶고, 확대하면 세분화합니다. 개별 핀을 누르면 포함 사진과 대표 사진 설정을 바로 확인할 수 있습니다.</p>
+          <p>낮은 줌에서는 넓게 묶고, 확대하면 세분화합니다. 군집 보기와 핀 보기를 전환해 상황에 맞게 확인할 수 있습니다.</p>
         </div>
-        <span class="panel__badge">경로 {{ summary.routeCount }}개</span>
+        <div class="travel-map-mode-switch">
+          <button
+            class="travel-map__toolbar-button"
+            :class="{ 'is-active': viewMode === 'cluster' }"
+            type="button"
+            @click="viewMode = 'cluster'"
+          >
+            군집으로 보기
+          </button>
+          <button
+            class="travel-map__toolbar-button"
+            :class="{ 'is-active': viewMode === 'pin' }"
+            type="button"
+            @click="viewMode = 'pin'"
+          >
+            핀으로 보기
+          </button>
+        </div>
       </div>
 
       <p v-if="errorMessage" class="panel__empty">{{ errorMessage }}</p>
@@ -276,10 +313,14 @@ onMounted(async () => {
       <TravelMyMapClusterPanel
         v-else
         :photo-clusters="photoClusters"
+        :photo-pins="photoPins"
         :routes="routes"
         :active="props.active"
+        :display-mode="viewMode"
         :selected-cluster-id="selectedClusterSummary?.id ?? null"
+        :selected-photo-id="selectedPhotoId ?? null"
         @select-cluster="handleSelectCluster"
+        @select-photo-pin="handleSelectPhotoPin"
       />
     </section>
 

@@ -19,7 +19,7 @@ import org.springframework.stereotype.Service;
 @Slf4j
 public class TravelPhotoClusterService {
 
-    private static final double BASE_CLUSTER_DISTANCE_METERS = 2.0d;
+    private static final double BASE_CLUSTER_DISTANCE_METERS = 5.0d;
     private static final double MAX_CLUSTER_DISTANCE_FROM_CENTER_METERS = 10.0d;
     private static final Comparator<PhotoPoint> REPRESENTATIVE_OVERRIDE_ORDER = Comparator
             .comparing(PhotoPoint::uploadedAt, Comparator.nullsLast(Comparator.reverseOrder()))

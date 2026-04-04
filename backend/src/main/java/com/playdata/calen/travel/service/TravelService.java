@@ -41,6 +41,7 @@ import com.playdata.calen.travel.dto.TravelMyMapMarkerSummaryResponse;
 import com.playdata.calen.travel.dto.TravelMyMapOverviewResponse;
 import com.playdata.calen.travel.dto.TravelMyMapPhotoClusterDetailResponse;
 import com.playdata.calen.travel.dto.TravelMyMapPhotoClusterSummaryResponse;
+import com.playdata.calen.travel.dto.TravelMyMapPhotoPinResponse;
 import com.playdata.calen.travel.dto.TravelMemoryRecordRequest;
 import com.playdata.calen.travel.dto.TravelMemoryRecordResponse;
 import com.playdata.calen.travel.dto.TravelPlanDetailResponse;
@@ -342,6 +343,7 @@ public class TravelService {
                 sumDistanceKm(routeSegments),
                 markers.stream().map(this::toMyMapMarkerSummaryResponse).toList(),
                 photoClusterSnapshot.summaries(),
+                photoClusterSnapshot.pins(),
                 routeSegments.stream().map(this::toMyMapRouteResponse).toList()
         );
         cacheTravelSummary(buildMyMapOverviewCacheKey(userId), response);
@@ -1064,7 +1066,7 @@ public class TravelService {
         persistMyMapPhotoClusters(userId, photoClusters);
         TravelMyMapPhotoClusterSnapshot snapshot = loadStoredMyMapPhotoClusterSnapshot(userId);
         if (snapshot == null) {
-            snapshot = new TravelMyMapPhotoClusterSnapshot(0, 0, List.of(), List.of());
+            snapshot = new TravelMyMapPhotoClusterSnapshot(0, 0, List.of(), List.of(), List.of());
         }
         travelMyMapPhotoClusterSnapshotService.save(userId, snapshot);
         return snapshot;
@@ -1083,6 +1085,8 @@ public class TravelService {
                 .findAllByOwnerIdAndClusterIdInOrderByClusterIdAscSortOrderAsc(userId, clusterIds);
         Map<Long, List<TravelPhotoClusterMember>> membersByClusterId = storedMembers.stream()
                 .collect(Collectors.groupingBy(TravelPhotoClusterMember::getClusterId));
+        Map<Long, TravelPhotoCluster> clusterById = storedClusters.stream()
+                .collect(Collectors.toMap(TravelPhotoCluster::getId, Function.identity()));
         Map<Long, TravelMediaAsset> mediaAssetById = travelMediaAssetRepository.findAllById(
                         storedMembers.stream()
                                 .map(TravelPhotoClusterMember::getMediaId)
@@ -1101,6 +1105,14 @@ public class TravelService {
                         mediaAssetById
                 ))
                 .toList();
+        List<TravelMyMapPhotoPinResponse> pins = storedMembers.stream()
+                .map(member -> toStoredMyMapPhotoPinResponse(
+                        member,
+                        mediaAssetById.get(member.getMediaId()),
+                        clusterById.get(member.getClusterId())
+                ))
+                .filter(java.util.Objects::nonNull)
+                .toList();
 
         int photoMarkerCount = storedClusters.stream()
                 .map(TravelPhotoCluster::getPhotoCount)
@@ -1112,7 +1124,8 @@ public class TravelService {
                 photoMarkerCount,
                 storedClusters.size(),
                 summaries,
-                details
+                details,
+                pins
         );
     }
 
@@ -1651,6 +1664,39 @@ public class TravelService {
                 Boolean.TRUE.equals(cluster.getRepresentativeOverride()),
                 representativePhoto,
                 photos
+        );
+    }
+
+    private TravelMyMapPhotoPinResponse toStoredMyMapPhotoPinResponse(
+            TravelPhotoClusterMember member,
+            TravelMediaAsset mediaAsset,
+            TravelPhotoCluster cluster
+    ) {
+        if (member == null || mediaAsset == null || mediaAsset.getRecord() == null) {
+            return null;
+        }
+
+        TravelExpenseRecord record = mediaAsset.getRecord();
+
+        return new TravelMyMapPhotoPinResponse(
+                mediaAsset.getId(),
+                member.getClusterId(),
+                record.getId(),
+                record.getPlan().getId(),
+                record.getPlan().getName(),
+                normalizeColorHex(record.getPlan().getColorHex()),
+                record.getExpenseDate(),
+                record.getExpenseTime(),
+                record.getCategory(),
+                record.getTitle(),
+                record.getCountry(),
+                record.getRegion(),
+                record.getPlaceName(),
+                resolveClusterLatitude(mediaAsset, record),
+                resolveClusterLongitude(mediaAsset, record),
+                toMediaResponse(mediaAsset).contentUrl(),
+                cluster != null && cluster.getRepresentativeMediaId() != null && cluster.getRepresentativeMediaId().equals(mediaAsset.getId()),
+                Boolean.TRUE.equals(mediaAsset.getRepresentativeOverride())
         );
     }
 

@@ -14,6 +14,10 @@ const props = defineProps({
     type: Array,
     default: () => [],
   },
+  photoPins: {
+    type: Array,
+    default: () => [],
+  },
   routes: {
     type: Array,
     default: () => [],
@@ -26,9 +30,17 @@ const props = defineProps({
     type: [String, Number],
     default: null,
   },
+  selectedPhotoId: {
+    type: [String, Number],
+    default: null,
+  },
+  displayMode: {
+    type: String,
+    default: 'cluster',
+  },
 })
 
-const emit = defineEmits(['select-cluster'])
+const emit = defineEmits(['select-cluster', 'select-photo-pin'])
 
 const mapRootElement = ref(null)
 const mapElement = ref(null)
@@ -40,7 +52,7 @@ let markerLayer = null
 let routeLayer = null
 let hasFittedInitialView = false
 let renderedMarkers = new Map()
-let pendingPopupClusterId = null
+let pendingPopupMarkerKey = null
 
 function toRadians(degrees) {
   return degrees * (Math.PI / 180)
@@ -72,6 +84,24 @@ function normalizeCluster(cluster) {
     longitude,
     photoCount: Number(cluster?.photoCount || 0),
     memoryCount: Number(cluster?.memoryCount || 0),
+  }
+}
+
+function normalizePhotoPin(pin) {
+  const latitude = Number(pin?.latitude)
+  const longitude = Number(pin?.longitude)
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude) || pin?.mediaId == null) {
+    return null
+  }
+
+  return {
+    ...pin,
+    id: pin.mediaId,
+    latitude,
+    longitude,
+    photoCount: 1,
+    memoryCount: 1,
+    representativePhotoUrl: pin?.photoUrl || '',
   }
 }
 
@@ -240,6 +270,35 @@ function buildRenderClusters(clusters, zoom) {
   return grouped
 }
 
+function buildRenderPins(pins) {
+  return (pins ?? []).map(normalizePhotoPin).filter(Boolean).map((pin) => ({
+    id: `photo-${pin.mediaId}`,
+    markerKey: `photo-${pin.mediaId}`,
+    isAggregate: false,
+    isPhotoPin: true,
+    representative: pin,
+    members: [pin],
+    latitude: pin.latitude,
+    longitude: pin.longitude,
+    photoCount: 1,
+    bounds: [[pin.latitude, pin.longitude]],
+  }))
+}
+
+function resolveRenderableItems() {
+  if (props.displayMode === 'pin') {
+    return buildRenderPins(props.photoPins)
+  }
+
+  return buildRenderClusters(props.photoClusters, mapInstance?.getZoom()).map((aggregate) => ({
+    ...aggregate,
+    markerKey: aggregate?.isAggregate
+      ? `aggregate-${aggregate.id}`
+      : `cluster-${aggregate.representative.id}`,
+    isPhotoPin: false,
+  }))
+}
+
 function queueMapResize() {
   requestAnimationFrame(() => {
     requestAnimationFrame(() => {
@@ -251,8 +310,11 @@ function queueMapResize() {
 function collectBounds() {
   const points = []
 
-  ;(props.photoClusters ?? []).forEach((cluster) => {
-    const normalized = normalizeCluster(cluster)
+  const photoEntries = props.displayMode === 'pin' ? props.photoPins : props.photoClusters
+  const normalizer = props.displayMode === 'pin' ? normalizePhotoPin : normalizeCluster
+
+  ;(photoEntries ?? []).forEach((entry) => {
+    const normalized = normalizer(entry)
     if (normalized) {
       points.push([normalized.latitude, normalized.longitude])
     }
@@ -326,7 +388,9 @@ function createPopupContent(aggregate) {
   }
 
   const count = document.createElement('span')
-  count.textContent = `사진 ${aggregate?.photoCount || 0}장 / 기록 ${aggregate?.representative?.memoryCount || aggregate?.members?.length || 0}건`
+  count.textContent = aggregate?.isPhotoPin
+    ? '사진 1장'
+    : `사진 ${aggregate?.photoCount || 0}장 / 기록 ${aggregate?.representative?.memoryCount || aggregate?.members?.length || 0}건`
   copy.appendChild(count)
 
   root.appendChild(copy)
@@ -417,9 +481,11 @@ function renderClusters() {
   markerLayer.clearLayers()
   renderedMarkers = new Map()
 
-  const aggregates = buildRenderClusters(props.photoClusters, mapInstance.getZoom())
+  const aggregates = resolveRenderableItems()
   aggregates.forEach((aggregate) => {
-    const containsSelected = aggregate.members.some((member) => String(member.id) === String(props.selectedClusterId))
+    const containsSelected = aggregate.isPhotoPin
+      ? String(aggregate.representative.mediaId) === String(props.selectedPhotoId)
+      : aggregate.members.some((member) => String(member.id) === String(props.selectedClusterId))
     const marker = L.marker([aggregate.latitude, aggregate.longitude], {
       icon: buildClusterIcon(aggregate, containsSelected),
     })
@@ -427,9 +493,13 @@ function renderClusters() {
     if (!aggregate.isAggregate) {
       marker.bindPopup(() => createPopupContent(aggregate))
       marker.on('click', () => {
+        if (aggregate.isPhotoPin) {
+          emit('select-photo-pin', aggregate.representative)
+          return
+        }
         emit('select-cluster', aggregate.representative)
       })
-      renderedMarkers.set(String(aggregate.representative.id), marker)
+      renderedMarkers.set(String(aggregate.markerKey), marker)
     } else {
       marker.on('click', () => {
         focusAggregate(aggregate)
@@ -439,10 +509,10 @@ function renderClusters() {
     marker.addTo(markerLayer)
   })
 
-  const selectedMarker = renderedMarkers.get(String(pendingPopupClusterId ?? ''))
+  const selectedMarker = renderedMarkers.get(String(pendingPopupMarkerKey ?? ''))
   if (selectedMarker) {
     const popupTarget = selectedMarker
-    pendingPopupClusterId = null
+    pendingPopupMarkerKey = null
     requestAnimationFrame(() => popupTarget.openPopup())
   }
 }
@@ -461,9 +531,13 @@ function renderMap({ shouldFit = false } = {}) {
 }
 
 function resolveInitialCenter() {
-  const firstCluster = (props.photoClusters ?? []).map(normalizeCluster).find(Boolean)
-  if (firstCluster) {
-    return [firstCluster.latitude, firstCluster.longitude]
+  const firstPhotoEntry = (
+    props.displayMode === 'pin'
+      ? (props.photoPins ?? []).map(normalizePhotoPin)
+      : (props.photoClusters ?? []).map(normalizeCluster)
+  ).find(Boolean)
+  if (firstPhotoEntry) {
+    return [firstPhotoEntry.latitude, firstPhotoEntry.longitude]
   }
 
   const firstRoutePoint = (props.routes ?? [])
@@ -545,7 +619,7 @@ onBeforeUnmount(() => {
 })
 
 watch(
-  () => [props.photoClusters, props.routes],
+  () => [props.photoClusters, props.photoPins, props.routes, props.displayMode],
   () => {
     renderMap()
   },
@@ -553,16 +627,20 @@ watch(
 )
 
 watch(
-  () => props.selectedClusterId,
-  (value, previousValue) => {
-    const normalizedValue = String(value ?? '')
-    const normalizedPreviousValue = String(previousValue ?? '')
+  () => [props.displayMode, props.selectedClusterId, props.selectedPhotoId],
+  ([mode, clusterId, photoId], [previousMode, previousClusterId, previousPhotoId] = []) => {
+    const normalizedValue = mode === 'pin'
+      ? `photo-${String(photoId ?? '')}`
+      : `cluster-${String(clusterId ?? '')}`
+    const normalizedPreviousValue = previousMode === 'pin'
+      ? `photo-${String(previousPhotoId ?? '')}`
+      : `cluster-${String(previousClusterId ?? '')}`
 
-    if (!normalizedValue) {
-      pendingPopupClusterId = null
+    if (normalizedValue === 'photo-' || normalizedValue === 'cluster-') {
+      pendingPopupMarkerKey = null
       mapInstance?.closePopup()
     } else if (normalizedValue !== normalizedPreviousValue) {
-      pendingPopupClusterId = normalizedValue
+      pendingPopupMarkerKey = normalizedValue
     }
 
     renderClusters()
@@ -594,7 +672,9 @@ watch(
 
       <div class="travel-map__toolbar-group">
         <span class="travel-map__toolbar-label">클러스터 기준</span>
-        <small class="travel-cluster-map__legend">낮은 줌 500m / 중간 50m / 높은 줌 5m / 최대 줌 개별 사진</small>
+        <small class="travel-cluster-map__legend">
+          {{ props.displayMode === 'pin' ? '핀 보기: 저장된 개별 사진 핀 표시' : '군집 보기: 낮은 줌 500m / 중간 50m / 높은 줌 5m / 최대 줌 개별 사진' }}
+        </small>
       </div>
 
       <div class="travel-map__toolbar-group">

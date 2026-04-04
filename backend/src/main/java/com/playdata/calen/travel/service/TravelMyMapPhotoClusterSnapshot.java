@@ -3,6 +3,7 @@ package com.playdata.calen.travel.service;
 import com.playdata.calen.travel.dto.TravelMediaResponse;
 import com.playdata.calen.travel.dto.TravelMyMapPhotoClusterDetailResponse;
 import com.playdata.calen.travel.dto.TravelMyMapPhotoClusterSummaryResponse;
+import com.playdata.calen.travel.dto.TravelMyMapPhotoPinResponse;
 import java.util.List;
 import java.util.Optional;
 
@@ -10,7 +11,8 @@ public record TravelMyMapPhotoClusterSnapshot(
         int photoMarkerCount,
         int photoClusterCount,
         List<TravelMyMapPhotoClusterSummaryResponse> summaries,
-        List<TravelMyMapPhotoClusterDetailResponse> details
+        List<TravelMyMapPhotoClusterDetailResponse> details,
+        List<TravelMyMapPhotoPinResponse> pins
 ) {
 
     public Optional<TravelMyMapPhotoClusterDetailResponse> findDetail(Long clusterId) {

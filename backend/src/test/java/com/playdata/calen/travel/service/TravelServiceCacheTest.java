@@ -5,6 +5,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.playdata.calen.account.domain.AppUser;
 import com.playdata.calen.account.service.AppUserService;
 import com.playdata.calen.common.cache.RedisCacheService;
+import com.playdata.calen.travel.domain.TravelMediaAsset;
+import com.playdata.calen.travel.domain.TravelMediaType;
 import com.playdata.calen.travel.domain.TravelPlan;
 import com.playdata.calen.travel.dto.TravelPlanRequest;
 import com.playdata.calen.travel.dto.TravelPlanSummaryResponse;
@@ -18,8 +20,10 @@ import com.playdata.calen.travel.repository.TravelPlanShareRepository;
 import com.playdata.calen.travel.repository.TravelRouteSegmentRepository;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.Test;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
@@ -28,6 +32,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.times;
 
 class TravelServiceCacheTest {
 
@@ -174,5 +179,116 @@ class TravelServiceCacheTest {
                 "travel:portfolio:7",
                 "travel:mymap:overview:7"
         );
+    }
+
+    @Test
+    void cachesOwnedMediaDownloadMetadataForRepeatedThumbnailRequests() {
+        AppUserService appUserService = mock(AppUserService.class);
+        TravelPlanRepository travelPlanRepository = mock(TravelPlanRepository.class);
+        TravelBudgetItemRepository travelBudgetItemRepository = mock(TravelBudgetItemRepository.class);
+        TravelExpenseRecordRepository travelExpenseRecordRepository = mock(TravelExpenseRecordRepository.class);
+        TravelMediaAssetRepository travelMediaAssetRepository = mock(TravelMediaAssetRepository.class);
+        TravelPhotoClusterRepository travelPhotoClusterRepository = mock(TravelPhotoClusterRepository.class);
+        TravelPhotoClusterMemberRepository travelPhotoClusterMemberRepository = mock(TravelPhotoClusterMemberRepository.class);
+        TravelRouteSegmentRepository travelRouteSegmentRepository = mock(TravelRouteSegmentRepository.class);
+        TravelPlanShareRepository travelPlanShareRepository = mock(TravelPlanShareRepository.class);
+        ExchangeRateService exchangeRateService = mock(ExchangeRateService.class);
+        TravelMediaStorageService travelMediaStorageService = mock(TravelMediaStorageService.class);
+        TravelPhotoGpsMetadataService travelPhotoGpsMetadataService = mock(TravelPhotoGpsMetadataService.class);
+        TravelPhotoClusterService travelPhotoClusterService = mock(TravelPhotoClusterService.class);
+        TravelMyMapPhotoClusterSnapshotService travelMyMapPhotoClusterSnapshotService = mock(TravelMyMapPhotoClusterSnapshotService.class);
+        TravelPublicMediaTokenService travelPublicMediaTokenService = mock(TravelPublicMediaTokenService.class);
+        RedisCacheService redisCacheService = mock(RedisCacheService.class);
+        DataSource dataSource = mock(DataSource.class);
+
+        TravelService service = new TravelService(
+                appUserService,
+                travelPlanRepository,
+                travelBudgetItemRepository,
+                travelExpenseRecordRepository,
+                travelMediaAssetRepository,
+                travelPhotoClusterRepository,
+                travelPhotoClusterMemberRepository,
+                travelRouteSegmentRepository,
+                travelPlanShareRepository,
+                exchangeRateService,
+                travelMediaStorageService,
+                travelPhotoGpsMetadataService,
+                travelPhotoClusterService,
+                travelMyMapPhotoClusterSnapshotService,
+                travelPublicMediaTokenService,
+                redisCacheService,
+                new ObjectMapper(),
+                dataSource
+        );
+        ReflectionTestUtils.setField(service, "travelMediaDownloadCacheTtlSeconds", 300L);
+
+        TravelMediaAsset mediaAsset = mock(TravelMediaAsset.class);
+        when(mediaAsset.getStoragePath()).thenReturn("travel-media/7/photo.jpg");
+        when(mediaAsset.getContentType()).thenReturn("image/jpeg");
+        when(mediaAsset.getOriginalFileName()).thenReturn("photo.jpg");
+        when(travelMediaAssetRepository.findByIdAndPlanOwnerId(9L, 7L)).thenReturn(Optional.of(mediaAsset));
+
+        TravelService.MediaDownload firstDownload = service.getMediaDownload(7L, 9L);
+        TravelService.MediaDownload secondDownload = service.getMediaDownload(7L, 9L);
+
+        assertEquals(firstDownload, secondDownload);
+        verify(travelMediaAssetRepository, times(1)).findByIdAndPlanOwnerId(9L, 7L);
+    }
+
+    @Test
+    void evictsOwnedMediaDownloadCacheWhenMediaIsDeleted() {
+        AppUserService appUserService = mock(AppUserService.class);
+        TravelPlanRepository travelPlanRepository = mock(TravelPlanRepository.class);
+        TravelBudgetItemRepository travelBudgetItemRepository = mock(TravelBudgetItemRepository.class);
+        TravelExpenseRecordRepository travelExpenseRecordRepository = mock(TravelExpenseRecordRepository.class);
+        TravelMediaAssetRepository travelMediaAssetRepository = mock(TravelMediaAssetRepository.class);
+        TravelPhotoClusterRepository travelPhotoClusterRepository = mock(TravelPhotoClusterRepository.class);
+        TravelPhotoClusterMemberRepository travelPhotoClusterMemberRepository = mock(TravelPhotoClusterMemberRepository.class);
+        TravelRouteSegmentRepository travelRouteSegmentRepository = mock(TravelRouteSegmentRepository.class);
+        TravelPlanShareRepository travelPlanShareRepository = mock(TravelPlanShareRepository.class);
+        ExchangeRateService exchangeRateService = mock(ExchangeRateService.class);
+        TravelMediaStorageService travelMediaStorageService = mock(TravelMediaStorageService.class);
+        TravelPhotoGpsMetadataService travelPhotoGpsMetadataService = mock(TravelPhotoGpsMetadataService.class);
+        TravelPhotoClusterService travelPhotoClusterService = mock(TravelPhotoClusterService.class);
+        TravelMyMapPhotoClusterSnapshotService travelMyMapPhotoClusterSnapshotService = mock(TravelMyMapPhotoClusterSnapshotService.class);
+        TravelPublicMediaTokenService travelPublicMediaTokenService = mock(TravelPublicMediaTokenService.class);
+        RedisCacheService redisCacheService = mock(RedisCacheService.class);
+        DataSource dataSource = mock(DataSource.class);
+
+        TravelService service = new TravelService(
+                appUserService,
+                travelPlanRepository,
+                travelBudgetItemRepository,
+                travelExpenseRecordRepository,
+                travelMediaAssetRepository,
+                travelPhotoClusterRepository,
+                travelPhotoClusterMemberRepository,
+                travelRouteSegmentRepository,
+                travelPlanShareRepository,
+                exchangeRateService,
+                travelMediaStorageService,
+                travelPhotoGpsMetadataService,
+                travelPhotoClusterService,
+                travelMyMapPhotoClusterSnapshotService,
+                travelPublicMediaTokenService,
+                redisCacheService,
+                new ObjectMapper(),
+                dataSource
+        );
+        ReflectionTestUtils.setField(service, "travelMediaDownloadCacheTtlSeconds", 300L);
+
+        TravelMediaAsset mediaAsset = mock(TravelMediaAsset.class);
+        when(mediaAsset.getStoragePath()).thenReturn("travel-media/7/receipt.jpg");
+        when(mediaAsset.getContentType()).thenReturn("image/jpeg");
+        when(mediaAsset.getOriginalFileName()).thenReturn("receipt.jpg");
+        when(mediaAsset.getMediaType()).thenReturn(TravelMediaType.RECEIPT);
+        when(travelMediaAssetRepository.findByIdAndPlanOwnerId(9L, 7L)).thenReturn(Optional.of(mediaAsset));
+
+        service.getMediaDownload(7L, 9L);
+        service.deleteMedia(7L, 9L);
+        service.getMediaDownload(7L, 9L);
+
+        verify(travelMediaAssetRepository, times(3)).findByIdAndPlanOwnerId(9L, 7L);
     }
 }

@@ -77,6 +77,8 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import javax.xml.XMLConstants;
@@ -111,6 +113,7 @@ public class TravelService {
     private static final String PLANS_CACHE_KEY_PREFIX = "travel:plans:";
     private static final String PORTFOLIO_CACHE_KEY_PREFIX = "travel:portfolio:";
     private static final String MY_MAP_OVERVIEW_CACHE_KEY_PREFIX = "travel:mymap:overview:";
+    private static final long DEFAULT_MEDIA_DOWNLOAD_CACHE_TTL_SECONDS = 300L;
     private static final String ROUTE_PATH_FORMAT_POLYLINE6 = "POLYLINE6";
     private static final int ROUTE_PATH_PRECISION = 6;
     private static final String ROUTE_POINT_TYPE_ROUTE = "ROUTE";
@@ -173,7 +176,11 @@ public class TravelService {
     @Value("${app.travel.summary-cache-ttl-seconds:60}")
     private long travelSummaryCacheTtlSeconds;
 
+    @Value("${app.travel.media-download-cache-ttl-seconds:" + DEFAULT_MEDIA_DOWNLOAD_CACHE_TTL_SECONDS + "}")
+    private long travelMediaDownloadCacheTtlSeconds;
+
     private volatile Integer routePathCharBudget;
+    private final ConcurrentMap<OwnedMediaDownloadCacheKey, CachedMediaDownloadEntry> ownedMediaDownloadCache = new ConcurrentHashMap<>();
 
     private record RoutePathPayload(
             String format,
@@ -187,6 +194,21 @@ public class TravelService {
             String contentType,
             long fileSize
     ) {
+    }
+
+    private record OwnedMediaDownloadCacheKey(
+            Long userId,
+            Long mediaId
+    ) {
+    }
+
+    private record CachedMediaDownloadEntry(
+            MediaDownload download,
+            long expiresAtEpochMilli
+    ) {
+        private boolean isExpired(long now) {
+            return expiresAtEpochMilli > 0L && now >= expiresAtEpochMilli;
+        }
     }
 
     public List<TravelPlanSummaryResponse> getPlans(Long userId) {
@@ -860,6 +882,7 @@ public class TravelService {
         boolean affectsPhotoCluster = mediaAsset.getMediaType() == TravelMediaType.PHOTO && isMemoryRecord(mediaAsset.getRecord());
         travelMediaStorageService.deleteImageWithThumbnailsQuietly(mediaAsset.getStoragePath(), mediaAsset.getContentType());
         travelMediaAssetRepository.delete(mediaAsset);
+        invalidateOwnedMediaDownloadCache(userId, mediaId);
         invalidateTravelSummaryCaches(userId);
         if (affectsPhotoCluster) {
             refreshMyMapPhotoClusterSnapshot(userId);
@@ -867,9 +890,15 @@ public class TravelService {
     }
 
     public MediaDownload getMediaDownload(Long userId, Long mediaId) {
+        MediaDownload cachedDownload = getCachedOwnedMediaDownload(userId, mediaId);
+        if (cachedDownload != null) {
+            return cachedDownload;
+        }
         TravelMediaAsset mediaAsset = travelMediaAssetRepository.findByIdAndPlanOwnerId(mediaId, userId)
                 .orElseThrow(() -> new NotFoundException("Uploaded file not found."));
-        return new MediaDownload(mediaAsset.getStoragePath(), mediaAsset.getContentType(), mediaAsset.getOriginalFileName());
+        MediaDownload download = new MediaDownload(mediaAsset.getStoragePath(), mediaAsset.getContentType(), mediaAsset.getOriginalFileName());
+        cacheOwnedMediaDownload(userId, mediaId, download);
+        return download;
     }
 
     public MediaDownload getSharedMediaDownload(Long mediaId, String token) {
@@ -1245,6 +1274,39 @@ public class TravelService {
         redisCacheService.set(cacheKey, response, ttl);
     }
 
+    private MediaDownload getCachedOwnedMediaDownload(Long userId, Long mediaId) {
+        OwnedMediaDownloadCacheKey cacheKey = new OwnedMediaDownloadCacheKey(userId, mediaId);
+        CachedMediaDownloadEntry cachedEntry = ownedMediaDownloadCache.get(cacheKey);
+        if (cachedEntry == null) {
+            return null;
+        }
+
+        long now = System.currentTimeMillis();
+        if (cachedEntry.isExpired(now)) {
+            ownedMediaDownloadCache.remove(cacheKey, cachedEntry);
+            return null;
+        }
+
+        return cachedEntry.download();
+    }
+
+    private void cacheOwnedMediaDownload(Long userId, Long mediaId, MediaDownload download) {
+        Duration ttl = resolveMediaDownloadCacheTtl();
+        if (ttl.isZero() || ttl.isNegative()) {
+            return;
+        }
+
+        long expiresAtEpochMilli = System.currentTimeMillis() + ttl.toMillis();
+        ownedMediaDownloadCache.put(
+                new OwnedMediaDownloadCacheKey(userId, mediaId),
+                new CachedMediaDownloadEntry(download, expiresAtEpochMilli)
+        );
+    }
+
+    private void invalidateOwnedMediaDownloadCache(Long userId, Long mediaId) {
+        ownedMediaDownloadCache.remove(new OwnedMediaDownloadCacheKey(userId, mediaId));
+    }
+
     private void invalidateTravelSummaryCaches(Long userId) {
         redisCacheService.delete(
                 buildPlansCacheKey(userId),
@@ -1258,6 +1320,13 @@ public class TravelService {
             return Duration.ZERO;
         }
         return Duration.ofSeconds(travelSummaryCacheTtlSeconds);
+    }
+
+    private Duration resolveMediaDownloadCacheTtl() {
+        if (travelMediaDownloadCacheTtlSeconds <= 0) {
+            return Duration.ZERO;
+        }
+        return Duration.ofSeconds(travelMediaDownloadCacheTtlSeconds);
     }
 
     private String buildPlansCacheKey(Long userId) {

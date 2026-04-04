@@ -10,10 +10,10 @@ spring:
     open-in-view: false
     hibernate:
       ddl-auto: update
-    show-sql: true
+    show-sql: ${JPA_SHOW_SQL:false}
     properties:
       hibernate:
-        format_sql: true
+        format_sql: ${JPA_FORMAT_SQL:false}
   h2:
     console:
       enabled: ${H2_CONSOLE_ENABLED:false}
@@ -68,6 +68,7 @@ app:
     reverse-geocode-request-min-interval-ms: ${TRAVEL_REVERSE_GEOCODE_REQUEST_MIN_INTERVAL_MS:1200}
     reverse-geocode-cache-ttl-hours: ${TRAVEL_REVERSE_GEOCODE_CACHE_TTL_HOURS:24}
     summary-cache-ttl-seconds: ${TRAVEL_SUMMARY_CACHE_TTL_SECONDS:60}
+    media-download-cache-ttl-seconds: ${TRAVEL_MEDIA_DOWNLOAD_CACHE_TTL_SECONDS:300}
     media-storage-path: ${TRAVEL_MEDIA_STORAGE_PATH:${user.dir}/uploads/travel-media}
     media-object-prefix: ${TRAVEL_MEDIA_OBJECT_PREFIX:travel-media}
     presigned-upload-enabled: ${TRAVEL_PRESIGNED_UPLOAD_ENABLED:false}

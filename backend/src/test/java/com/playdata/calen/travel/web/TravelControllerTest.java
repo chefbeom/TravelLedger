@@ -20,7 +20,7 @@ import org.springframework.http.ResponseEntity;
 class TravelControllerTest {
 
     @Test
-    void shouldStreamOriginalMediaWhenPreparedThumbnailIsMissing() {
+    void shouldReturnThumbnailContentWhenPreparedThumbnailIsMissing() {
         TravelService travelService = mock(TravelService.class);
         TravelMediaStorageService travelMediaStorageService = mock(TravelMediaStorageService.class);
         TravelReverseGeocodeService travelReverseGeocodeService = mock(TravelReverseGeocodeService.class);
@@ -45,18 +45,16 @@ class TravelControllerTest {
         ByteArrayResource originalResource = new ByteArrayResource("image-bytes".getBytes(StandardCharsets.UTF_8));
 
         when(travelService.getMediaDownload(1L, 7L)).thenReturn(download);
-        when(travelMediaStorageService.loadPreparedThumbnail(download.storagePath(), download.contentType(), 480))
-                .thenReturn(null);
-        when(travelMediaStorageService.loadAsResource(download.storagePath())).thenReturn(originalResource);
+        when(travelMediaStorageService.loadThumbnail(download.storagePath(), download.contentType(), 480))
+                .thenReturn(new TravelMediaStorageService.PreparedThumbnail(originalResource, "image/jpeg"));
 
         ResponseEntity<?> response = controller.downloadMedia(currentUser, 7L, true, 480);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getHeaders().getContentType()).isEqualTo(MediaType.IMAGE_JPEG);
-        assertThat(response.getHeaders().getCacheControl()).isEqualTo("public, max-age=3600");
+        assertThat(response.getHeaders().getCacheControl()).isEqualTo("public, max-age=86400");
         assertThat(response.getBody()).isSameAs(originalResource);
         verify(travelService).getMediaDownload(1L, 7L);
-        verify(travelMediaStorageService).loadPreparedThumbnail(download.storagePath(), download.contentType(), 480);
-        verify(travelMediaStorageService).loadAsResource(download.storagePath());
+        verify(travelMediaStorageService).loadThumbnail(download.storagePath(), download.contentType(), 480);
     }
 }

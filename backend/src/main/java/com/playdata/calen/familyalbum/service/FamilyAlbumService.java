@@ -10,12 +10,14 @@ import com.playdata.calen.familyalbum.domain.FamilyAlbumItem;
 import com.playdata.calen.familyalbum.domain.FamilyCategory;
 import com.playdata.calen.familyalbum.domain.FamilyCategoryMember;
 import com.playdata.calen.familyalbum.domain.FamilyMediaAsset;
+import com.playdata.calen.familyalbum.domain.FamilyMediaType;
 import com.playdata.calen.familyalbum.dto.FamilyAlbumBootstrapResponse;
 import com.playdata.calen.familyalbum.dto.FamilyAlbumCreateRequest;
 import com.playdata.calen.familyalbum.dto.FamilyAlbumResponse;
 import com.playdata.calen.familyalbum.dto.FamilyCategoryCreateRequest;
 import com.playdata.calen.familyalbum.dto.FamilyCategoryMemberResponse;
 import com.playdata.calen.familyalbum.dto.FamilyCategoryResponse;
+import com.playdata.calen.familyalbum.dto.FamilyMediaPageResponse;
 import com.playdata.calen.familyalbum.dto.FamilyMediaResponse;
 import com.playdata.calen.familyalbum.dto.FamilyUserSearchResponse;
 import com.playdata.calen.familyalbum.repository.FamilyAlbumItemRepository;
@@ -36,6 +38,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.Resource;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -46,6 +49,9 @@ import org.springframework.web.multipart.MultipartFile;
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class FamilyAlbumService {
+
+    private static final int DEFAULT_MEDIA_PAGE_SIZE = 10;
+    private static final int MAX_MEDIA_PAGE_SIZE = 50;
 
     private final AppUserService appUserService;
     private final AppUserRepository appUserRepository;
@@ -64,25 +70,33 @@ public class FamilyAlbumService {
         List<FamilyCategoryMember> members = categoryIds.isEmpty()
                 ? Collections.emptyList()
                 : familyCategoryMemberRepository.findAllByCategoryIdInOrderByAddedAtAscIdAsc(categoryIds);
-        List<FamilyMediaAsset> mediaItems = categoryIds.isEmpty()
-                ? Collections.emptyList()
-                : familyMediaAssetRepository.findAllByCategoryIdIn(categoryIds).stream()
-                .sorted(mediaComparator())
-                .toList();
         List<FamilyAlbum> albums = categoryIds.isEmpty()
                 ? Collections.emptyList()
                 : familyAlbumRepository.findAllByCategoryIdInOrderByCreatedAtDescIdDesc(categoryIds);
         List<Long> albumIds = albums.stream().map(FamilyAlbum::getId).toList();
-        List<FamilyAlbumItem> albumItems = albumIds.isEmpty()
-                ? Collections.emptyList()
-                : familyAlbumItemRepository.findAllByAlbumIdInOrderByDisplayOrderAscIdAsc(albumIds);
 
         Map<Long, List<FamilyCategoryMember>> membersByCategory = members.stream()
                 .collect(Collectors.groupingBy(member -> member.getCategory().getId()));
-        Map<Long, Long> mediaCountByCategory = mediaItems.stream()
-                .collect(Collectors.groupingBy(asset -> asset.getCategory().getId(), Collectors.counting()));
-        Map<Long, List<FamilyAlbumItem>> albumItemsByAlbum = albumItems.stream()
-                .collect(Collectors.groupingBy(item -> item.getAlbum().getId()));
+        Map<Long, Long> mediaCountByCategory = categoryIds.isEmpty()
+                ? Collections.emptyMap()
+                : familyMediaAssetRepository.countAccessibleMediaByCategoryIds(categoryIds).stream()
+                .collect(Collectors.toMap(
+                        FamilyMediaAssetRepository.CategoryMediaCountView::getCategoryId,
+                        FamilyMediaAssetRepository.CategoryMediaCountView::getMediaCount
+                ));
+        Map<Long, Integer> itemCountByAlbumId = albumIds.isEmpty()
+                ? Collections.emptyMap()
+                : familyAlbumItemRepository.countByAlbumIds(albumIds).stream()
+                .collect(Collectors.toMap(
+                        FamilyAlbumItemRepository.AlbumItemCountView::getAlbumId,
+                        view -> Math.toIntExact(view.getItemCount())
+                ));
+        long totalPhotoCount = categoryIds.isEmpty()
+                ? 0L
+                : familyMediaAssetRepository.countByCategoryIdInAndMediaType(categoryIds, FamilyMediaType.PHOTO);
+        long totalVideoCount = categoryIds.isEmpty()
+                ? 0L
+                : familyMediaAssetRepository.countByCategoryIdInAndMediaType(categoryIds, FamilyMediaType.VIDEO);
 
         return new FamilyAlbumBootstrapResponse(
                 userId,
@@ -94,13 +108,52 @@ public class FamilyAlbumService {
                                 mediaCountByCategory.getOrDefault(category.getId(), 0L)
                         ))
                         .toList(),
-                mediaItems.stream().map(this::toMediaResponse).toList(),
+                totalPhotoCount,
+                totalVideoCount,
                 albums.stream()
-                        .map(album -> toAlbumResponse(
-                                album,
-                                albumItemsByAlbum.getOrDefault(album.getId(), Collections.emptyList())
-                        ))
+                        .map(album -> toAlbumResponse(album, itemCountByAlbumId.getOrDefault(album.getId(), 0)))
                         .toList()
+        );
+    }
+
+    public FamilyMediaPageResponse getCategoryMediaPage(Long userId, Long categoryId, Integer page, Integer size) {
+        getAccessibleCategory(userId, categoryId);
+
+        int normalizedPage = normalizePage(page);
+        int normalizedSize = normalizeSize(size);
+        Page<FamilyMediaAsset> mediaPage = familyMediaAssetRepository.findPageByCategoryId(
+                categoryId,
+                PageRequest.of(normalizedPage, normalizedSize)
+        );
+
+        return new FamilyMediaPageResponse(
+                mediaPage.getContent().stream().map(this::toMediaResponse).toList(),
+                mediaPage.getNumber(),
+                mediaPage.getSize(),
+                mediaPage.getTotalElements(),
+                mediaPage.getTotalPages()
+        );
+    }
+
+    public FamilyMediaPageResponse getAlbumMediaPage(Long userId, Long albumId, Integer page, Integer size) {
+        FamilyAlbum album = getAccessibleAlbum(userId, albumId);
+
+        int normalizedPage = normalizePage(page);
+        int normalizedSize = normalizeSize(size);
+        Page<FamilyAlbumItem> mediaPage = familyAlbumItemRepository.findAllByAlbumIdOrderByDisplayOrderAscIdAsc(
+                album.getId(),
+                PageRequest.of(normalizedPage, normalizedSize)
+        );
+
+        return new FamilyMediaPageResponse(
+                mediaPage.getContent().stream()
+                        .map(FamilyAlbumItem::getMedia)
+                        .map(this::toMediaResponse)
+                        .toList(),
+                mediaPage.getNumber(),
+                mediaPage.getSize(),
+                mediaPage.getTotalElements(),
+                mediaPage.getTotalPages()
         );
     }
 
@@ -230,7 +283,7 @@ public class FamilyAlbumService {
                 .toList();
 
         familyAlbumItemRepository.saveAll(items);
-        return toAlbumResponse(savedAlbum, items);
+        return toAlbumResponse(savedAlbum, items.size());
     }
 
     public MediaDownload getMediaDownload(Long userId, Long mediaId) {
@@ -238,6 +291,7 @@ public class FamilyAlbumService {
         FamilyMediaAsset media = getRequiredMedia(mediaId);
         verifyCategoryAccess(userId, media.getCategory());
         return new MediaDownload(
+                media.getStoragePath(),
                 familyMediaStorageService.loadAsResource(media.getStoragePath()),
                 media.getOriginalFileName(),
                 media.getContentType()
@@ -275,6 +329,13 @@ public class FamilyAlbumService {
         return category;
     }
 
+    private FamilyAlbum getAccessibleAlbum(Long userId, Long albumId) {
+        FamilyAlbum album = familyAlbumRepository.findById(albumId)
+                .orElseThrow(() -> new NotFoundException("?⑤쾾??李얠쓣 ???놁뒿?덈떎."));
+        verifyCategoryAccess(userId, album.getCategory());
+        return album;
+    }
+
     private void verifyCategoryAccess(Long userId, FamilyCategory category) {
         if (Objects.equals(category.getOwner().getId(), userId)) {
             return;
@@ -299,6 +360,17 @@ public class FamilyAlbumService {
 
     private LocalDateTime resolveMediaSortTime(FamilyMediaAsset asset) {
         return asset.getCapturedAt() != null ? asset.getCapturedAt() : asset.getUploadedAt();
+    }
+
+    private int normalizePage(Integer page) {
+        return page == null ? 0 : Math.max(page, 0);
+    }
+
+    private int normalizeSize(Integer size) {
+        if (size == null) {
+            return DEFAULT_MEDIA_PAGE_SIZE;
+        }
+        return Math.max(1, Math.min(size, MAX_MEDIA_PAGE_SIZE));
     }
 
     private String normalizeRequiredText(String value, String message, int maxLength) {
@@ -400,7 +472,7 @@ public class FamilyAlbumService {
         );
     }
 
-    private FamilyAlbumResponse toAlbumResponse(FamilyAlbum album, List<FamilyAlbumItem> items) {
+    private FamilyAlbumResponse toAlbumResponse(FamilyAlbum album, int itemCount) {
         return new FamilyAlbumResponse(
                 album.getId(),
                 album.getCategory().getId(),
@@ -410,12 +482,12 @@ public class FamilyAlbumService {
                 album.getTitle(),
                 album.getDescription(),
                 album.getCreatedAt(),
-                items.size(),
-                items.stream().map(item -> item.getMedia().getId()).toList()
+                itemCount
         );
     }
 
     public record MediaDownload(
+            String storagePath,
             Resource resource,
             String fileName,
             String contentType

@@ -6,7 +6,8 @@ public record FamilyAlbumBootstrapResponse(
         Long currentUserId,
         List<FamilyUserOptionResponse> users,
         List<FamilyCategoryResponse> categories,
-        List<FamilyMediaResponse> mediaItems,
+        long totalPhotoCount,
+        long totalVideoCount,
         List<FamilyAlbumResponse> albums
 ) {
 }

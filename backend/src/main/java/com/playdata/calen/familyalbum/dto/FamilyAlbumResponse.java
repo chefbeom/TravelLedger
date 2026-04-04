@@ -1,7 +1,6 @@
 package com.playdata.calen.familyalbum.dto;
 
 import java.time.LocalDateTime;
-import java.util.List;
 
 public record FamilyAlbumResponse(
         Long id,
@@ -12,7 +11,6 @@ public record FamilyAlbumResponse(
         String title,
         String description,
         LocalDateTime createdAt,
-        int itemCount,
-        List<Long> mediaIds
+        int itemCount
 ) {
 }

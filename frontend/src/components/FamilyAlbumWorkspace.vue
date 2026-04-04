@@ -1,9 +1,11 @@
 <script setup>
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import {
   createFamilyAlbum,
   createFamilyCategory,
   fetchFamilyAlbumBootstrap,
+  fetchFamilyAlbumMediaPage,
+  fetchFamilyCategoryMediaPage,
   searchFamilyUsers,
   uploadFamilyMedia,
 } from '../lib/api'
@@ -18,9 +20,35 @@ const timestampFormatter = new Intl.DateTimeFormat('ko-KR', {
 })
 
 const FAMILY_MEDIA_ACCEPT = '.jpg,.jpeg,.png,.webp,.gif,.bmp,.mp4,.m4v,.mov,.webm'
+const FAMILY_MEDIA_PAGE_SIZE = 10
+const FAMILY_ALBUM_PAGE_SIZE = 10
+
+function createEmptyMediaPage() {
+  return {
+    content: [],
+    page: 0,
+    size: FAMILY_MEDIA_PAGE_SIZE,
+    totalElements: 0,
+    totalPages: 1,
+  }
+}
+
+function applyMediaPage(target, response) {
+  target.content = response?.content ?? []
+  target.page = response?.page ?? 0
+  target.size = response?.size ?? FAMILY_MEDIA_PAGE_SIZE
+  target.totalElements = response?.totalElements ?? 0
+  target.totalPages = Math.max(response?.totalPages ?? 1, 1)
+}
+
+function resetMediaPage(target) {
+  applyMediaPage(target, createEmptyMediaPage())
+}
 const DEFAULT_MEMBER_SEARCH_MESSAGE = '이름이나 로그인 ID를 2글자 이상 입력해 검색하세요.'
 
 const isLoading = ref(false)
+const isCategoryMediaLoading = ref(false)
+const isAlbumMediaLoading = ref(false)
 const isCreatingCategory = ref(false)
 const isUploading = ref(false)
 const isCreatingAlbum = ref(false)
@@ -36,9 +64,13 @@ const selectedInvitees = ref([])
 const bootstrap = reactive({
   currentUserId: null,
   categories: [],
-  mediaItems: [],
   albums: [],
+  totalPhotoCount: 0,
+  totalVideoCount: 0,
 })
+
+const categoryMediaPageState = reactive(createEmptyMediaPage())
+const albumMediaPageState = reactive(createEmptyMediaPage())
 
 const selectedCategoryId = ref('')
 const selectedAlbumId = ref('')
@@ -59,18 +91,8 @@ const albumForm = reactive({
   description: '',
 })
 
-const mediaById = computed(() => new Map((bootstrap.mediaItems ?? []).map((item) => [String(item.id), item])))
-
 const selectedCategory = computed(() => {
   return (bootstrap.categories ?? []).find((category) => String(category.id) === String(selectedCategoryId.value)) ?? null
-})
-
-const categoryMediaItems = computed(() => {
-  if (!selectedCategoryId.value) {
-    return bootstrap.mediaItems ?? []
-  }
-
-  return (bootstrap.mediaItems ?? []).filter((item) => String(item.categoryId) === String(selectedCategoryId.value))
 })
 
 const selectedAlbum = computed(() => {
@@ -85,32 +107,15 @@ const categoryAlbums = computed(() => {
   return (bootstrap.albums ?? []).filter((album) => String(album.categoryId) === String(selectedCategoryId.value))
 })
 
-const selectedAlbumMedia = computed(() => {
-  if (!selectedAlbum.value) {
-    return []
-  }
+const categoryMediaItems = computed(() => categoryMediaPageState.content ?? [])
+const selectedAlbumMedia = computed(() => albumMediaPageState.content ?? [])
 
-  return (selectedAlbum.value.mediaIds ?? [])
-    .map((mediaId) => mediaById.value.get(String(mediaId)))
-    .filter(Boolean)
-})
-
-const FAMILY_MEDIA_PAGE_SIZE = 10
-const FAMILY_ALBUM_PAGE_SIZE = 10
-const categoryMediaPage = ref(0)
-const albumMediaPage = ref(0)
 const categoryAlbumPage = ref(0)
-const categoryMediaPageCount = computed(() => Math.max(Math.ceil(categoryMediaItems.value.length / FAMILY_MEDIA_PAGE_SIZE), 1))
-const albumMediaPageCount = computed(() => Math.max(Math.ceil(selectedAlbumMedia.value.length / FAMILY_MEDIA_PAGE_SIZE), 1))
+const categoryMediaPageCount = computed(() => Math.max(categoryMediaPageState.totalPages || 1, 1))
+const albumMediaPageCount = computed(() => Math.max(albumMediaPageState.totalPages || 1, 1))
 const categoryAlbumPageCount = computed(() => Math.max(Math.ceil(categoryAlbums.value.length / FAMILY_ALBUM_PAGE_SIZE), 1))
-const pagedCategoryMediaItems = computed(() => {
-  const start = categoryMediaPage.value * FAMILY_MEDIA_PAGE_SIZE
-  return categoryMediaItems.value.slice(start, start + FAMILY_MEDIA_PAGE_SIZE)
-})
-const pagedSelectedAlbumMedia = computed(() => {
-  const start = albumMediaPage.value * FAMILY_MEDIA_PAGE_SIZE
-  return selectedAlbumMedia.value.slice(start, start + FAMILY_MEDIA_PAGE_SIZE)
-})
+const pagedCategoryMediaItems = computed(() => categoryMediaItems.value)
+const pagedSelectedAlbumMedia = computed(() => selectedAlbumMedia.value)
 const pagedCategoryAlbums = computed(() => {
   const start = categoryAlbumPage.value * FAMILY_ALBUM_PAGE_SIZE
   return categoryAlbums.value.slice(start, start + FAMILY_ALBUM_PAGE_SIZE)
@@ -118,82 +123,42 @@ const pagedCategoryAlbums = computed(() => {
 
 const selectedMediaCount = computed(() => selectedMediaIds.value.length)
 const selectedInviteeCount = computed(() => selectedInvitees.value.length)
-const totalVideoCount = computed(() => (bootstrap.mediaItems ?? []).filter((item) => item.mediaType === 'VIDEO').length)
-const totalPhotoCount = computed(() => (bootstrap.mediaItems ?? []).filter((item) => item.mediaType === 'PHOTO').length)
-
-watch(
-  () => bootstrap.categories,
-  (categories) => {
-    if (!categories.length) {
-      selectedCategoryId.value = ''
-      return
-    }
-
-    const hasSelectedCategory = categories.some((category) => String(category.id) === String(selectedCategoryId.value))
-    if (!hasSelectedCategory) {
-      selectedCategoryId.value = String(categories[0].id)
-    }
-  },
-  { deep: true, immediate: true },
-)
-
-watch(
-  () => bootstrap.albums,
-  (albums) => {
-    if (!selectedAlbumId.value) {
-      return
-    }
-
-    const hasSelectedAlbum = albums.some((album) => String(album.id) === String(selectedAlbumId.value))
-    if (!hasSelectedAlbum) {
-      selectedAlbumId.value = ''
-    }
-  },
-  { deep: true },
-)
-
-watch(selectedCategoryId, () => {
-  const validIds = new Set(categoryMediaItems.value.map((item) => String(item.id)))
-  selectedMediaIds.value = selectedMediaIds.value.filter((mediaId) => validIds.has(String(mediaId)))
-  categoryMediaPage.value = 0
-  categoryAlbumPage.value = 0
-  albumMediaPage.value = 0
-})
-
-watch(selectedAlbumId, () => {
-  albumMediaPage.value = 0
-})
-
-watch(
-  () => categoryMediaItems.value.length,
-  () => {
-    if (categoryMediaPage.value >= categoryMediaPageCount.value) {
-      categoryMediaPage.value = Math.max(categoryMediaPageCount.value - 1, 0)
-    }
-  },
-)
-
-watch(
-  () => selectedAlbumMedia.value.length,
-  () => {
-    if (albumMediaPage.value >= albumMediaPageCount.value) {
-      albumMediaPage.value = Math.max(albumMediaPageCount.value - 1, 0)
-    }
-  },
-)
-
-watch(
-  () => categoryAlbums.value.length,
-  () => {
-    if (categoryAlbumPage.value >= categoryAlbumPageCount.value) {
-      categoryAlbumPage.value = Math.max(categoryAlbumPageCount.value - 1, 0)
-    }
-  },
-)
+const totalVideoCount = computed(() => bootstrap.totalVideoCount ?? 0)
+const totalPhotoCount = computed(() => bootstrap.totalPhotoCount ?? 0)
 
 function setFeedback(success = '', error = '') {
   successMessage.value = success
   errorMessage.value = error
+}
+
+async function loadCategoryMediaPage(page = 0, categoryId = selectedCategoryId.value) {
+  if (!categoryId) {
+    resetMediaPage(categoryMediaPageState)
+    return
+  }
+
+  isCategoryMediaLoading.value = true
+  try {
+    const response = await fetchFamilyCategoryMediaPage(Number(categoryId), page, FAMILY_MEDIA_PAGE_SIZE)
+    applyMediaPage(categoryMediaPageState, response)
+  } finally {
+    isCategoryMediaLoading.value = false
+  }
+}
+
+async function loadAlbumMediaPage(page = 0, albumId = selectedAlbumId.value) {
+  if (!albumId) {
+    resetMediaPage(albumMediaPageState)
+    return
+  }
+
+  isAlbumMediaLoading.value = true
+  try {
+    const response = await fetchFamilyAlbumMediaPage(Number(albumId), page, FAMILY_MEDIA_PAGE_SIZE)
+    applyMediaPage(albumMediaPageState, response)
+  } finally {
+    isAlbumMediaLoading.value = false
+  }
 }
 
 async function loadBootstrap(preferredCategoryId = selectedCategoryId.value, preferredAlbumId = selectedAlbumId.value) {
@@ -204,14 +169,28 @@ async function loadBootstrap(preferredCategoryId = selectedCategoryId.value, pre
     const response = await fetchFamilyAlbumBootstrap()
     bootstrap.currentUserId = response.currentUserId
     bootstrap.categories = response.categories ?? []
-    bootstrap.mediaItems = response.mediaItems ?? []
     bootstrap.albums = response.albums ?? []
+    bootstrap.totalPhotoCount = response.totalPhotoCount ?? 0
+    bootstrap.totalVideoCount = response.totalVideoCount ?? 0
 
     const categoryMatch = bootstrap.categories.find((category) => String(category.id) === String(preferredCategoryId))
-    selectedCategoryId.value = categoryMatch ? String(categoryMatch.id) : bootstrap.categories[0] ? String(bootstrap.categories[0].id) : ''
+    const nextCategoryId = categoryMatch ? String(categoryMatch.id) : bootstrap.categories[0] ? String(bootstrap.categories[0].id) : ''
+    selectedCategoryId.value = nextCategoryId
 
     const albumMatch = bootstrap.albums.find((album) => String(album.id) === String(preferredAlbumId))
-    selectedAlbumId.value = albumMatch ? String(albumMatch.id) : ''
+    const nextAlbumId = albumMatch && String(albumMatch.categoryId) === String(nextCategoryId)
+      ? String(albumMatch.id)
+      : ''
+    selectedAlbumId.value = nextAlbumId
+    selectedMediaIds.value = []
+    categoryAlbumPage.value = 0
+
+    await loadCategoryMediaPage(0, nextCategoryId)
+    if (nextAlbumId) {
+      await loadAlbumMediaPage(0, nextAlbumId)
+    } else {
+      resetMediaPage(albumMediaPageState)
+    }
   } catch (error) {
     setFeedback('', error.message)
   } finally {
@@ -281,6 +260,45 @@ function toggleMediaSelection(mediaId) {
 
 function clearAlbumViewer() {
   selectedAlbumId.value = ''
+  resetMediaPage(albumMediaPageState)
+}
+
+async function handleCategorySelection(categoryId = selectedCategoryId.value) {
+  selectedCategoryId.value = String(categoryId || '')
+  selectedMediaIds.value = []
+  categoryAlbumPage.value = 0
+
+  const activeAlbum = (bootstrap.albums ?? []).find((album) => String(album.id) === String(selectedAlbumId.value))
+  if (activeAlbum && String(activeAlbum.categoryId) !== String(selectedCategoryId.value)) {
+    clearAlbumViewer()
+  }
+
+  try {
+    await loadCategoryMediaPage(0, selectedCategoryId.value)
+    setFeedback()
+  } catch (error) {
+    setFeedback('', error.message)
+  }
+}
+
+async function goToCategoryMediaPage(page) {
+  const nextPage = Math.max(0, Math.min(page, categoryMediaPageCount.value - 1))
+  try {
+    await loadCategoryMediaPage(nextPage, selectedCategoryId.value)
+    setFeedback()
+  } catch (error) {
+    setFeedback('', error.message)
+  }
+}
+
+async function goToAlbumMediaPage(page) {
+  const nextPage = Math.max(0, Math.min(page, albumMediaPageCount.value - 1))
+  try {
+    await loadAlbumMediaPage(nextPage, selectedAlbumId.value)
+    setFeedback()
+  } catch (error) {
+    setFeedback('', error.message)
+  }
 }
 
 async function handleCreateCategory() {
@@ -298,7 +316,6 @@ async function handleCreateCategory() {
     categoryForm.description = ''
     resetMemberSearch()
     await loadBootstrap(created.id, '')
-    selectedCategoryId.value = String(created.id)
     setFeedback('가족 카테고리를 만들었습니다.')
   } catch (error) {
     setFeedback('', error.message)
@@ -351,7 +368,6 @@ async function handleCreateAlbum() {
     albumForm.description = ''
     selectedMediaIds.value = []
     await loadBootstrap(selectedCategoryId.value, created.id)
-    selectedAlbumId.value = String(created.id)
     setFeedback('선택한 파일로 앨범을 만들었습니다.')
   } catch (error) {
     setFeedback('', error.message)
@@ -360,8 +376,14 @@ async function handleCreateAlbum() {
   }
 }
 
-function openAlbum(albumId) {
+async function openAlbum(albumId) {
   selectedAlbumId.value = String(albumId)
+  try {
+    await loadAlbumMediaPage(0, selectedAlbumId.value)
+    setFeedback()
+  } catch (error) {
+    setFeedback('', error.message)
+  }
 }
 
 function isSelectedMedia(mediaId) {
@@ -434,7 +456,7 @@ onMounted(() => {
           type="button"
           class="family-category-card"
           :class="{ 'family-category-card--active': String(category.id) === String(selectedCategoryId) }"
-          @click="selectedCategoryId = String(category.id)"
+          @click="handleCategorySelection(String(category.id))"
         >
           <strong>{{ category.name }}</strong>
           <small>{{ category.ownerName }} 가족</small>
@@ -509,7 +531,7 @@ onMounted(() => {
         </div>
 
         <form class="stack-form" @submit.prevent="handleUploadMedia">
-          <select v-model="selectedCategoryId">
+          <select v-model="selectedCategoryId" @change="handleCategorySelection(selectedCategoryId)">
             <option value="" disabled>업로드할 가족 카테고리를 선택해 주세요</option>
             <option v-for="category in bootstrap.categories" :key="category.id" :value="String(category.id)">
               {{ category.name }}
@@ -542,7 +564,7 @@ onMounted(() => {
             <h2>공유 파일 라이브러리</h2>
             <p>현재 카테고리의 파일을 확인하고, 앨범에 담을 항목을 바로 선택할 수 있습니다.</p>
           </div>
-          <span class="panel__badge">{{ categoryMediaItems.length }}개 파일</span>
+          <span class="panel__badge">{{ categoryMediaPageState.totalElements }}개 파일</span>
         </div>
 
         <div v-if="selectedAlbum" class="family-album-focus">
@@ -573,10 +595,10 @@ onMounted(() => {
               </div>
             </article>
           </div>
-          <div v-if="selectedAlbumMedia.length > FAMILY_MEDIA_PAGE_SIZE" class="panel__actions">
-            <button class="button button--ghost" type="button" :disabled="albumMediaPage <= 0" @click="albumMediaPage -= 1">이전</button>
-            <span>{{ albumMediaPage + 1 }} / {{ albumMediaPageCount }}</span>
-            <button class="button button--ghost" type="button" :disabled="albumMediaPage + 1 >= albumMediaPageCount" @click="albumMediaPage += 1">다음</button>
+          <div v-if="albumMediaPageState.totalElements > FAMILY_MEDIA_PAGE_SIZE" class="panel__actions">
+            <button class="button button--ghost" type="button" :disabled="albumMediaPageState.page <= 0" @click="goToAlbumMediaPage(albumMediaPageState.page - 1)">이전</button>
+            <span>{{ albumMediaPageState.page + 1 }} / {{ albumMediaPageCount }}</span>
+            <button class="button button--ghost" type="button" :disabled="albumMediaPageState.page + 1 >= albumMediaPageCount" @click="goToAlbumMediaPage(albumMediaPageState.page + 1)">다음</button>
           </div>
         </div>
 
@@ -613,10 +635,10 @@ onMounted(() => {
             </div>
           </article>
         </div>
-        <div v-if="categoryMediaItems.length > FAMILY_MEDIA_PAGE_SIZE" class="panel__actions">
-          <button class="button button--ghost" type="button" :disabled="categoryMediaPage <= 0" @click="categoryMediaPage -= 1">이전</button>
-          <span>{{ categoryMediaPage + 1 }} / {{ categoryMediaPageCount }}</span>
-          <button class="button button--ghost" type="button" :disabled="categoryMediaPage + 1 >= categoryMediaPageCount" @click="categoryMediaPage += 1">다음</button>
+        <div v-if="categoryMediaPageState.totalElements > FAMILY_MEDIA_PAGE_SIZE" class="panel__actions">
+          <button class="button button--ghost" type="button" :disabled="categoryMediaPageState.page <= 0" @click="goToCategoryMediaPage(categoryMediaPageState.page - 1)">이전</button>
+          <span>{{ categoryMediaPageState.page + 1 }} / {{ categoryMediaPageCount }}</span>
+          <button class="button button--ghost" type="button" :disabled="categoryMediaPageState.page + 1 >= categoryMediaPageCount" @click="goToCategoryMediaPage(categoryMediaPageState.page + 1)">다음</button>
         </div>
         <p v-else-if="!isLoading" class="panel__empty">선택한 가족 카테고리에 아직 업로드된 파일이 없습니다.</p>
         <p v-else class="panel__empty">가족 사진첩을 불러오는 중입니다.</p>

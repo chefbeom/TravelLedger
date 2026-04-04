@@ -891,6 +891,14 @@ export function fetchFamilyAlbumBootstrap() {
   return request('/family-album/bootstrap')
 }
 
+export function fetchFamilyCategoryMediaPage(categoryId, page = 0, size = 10) {
+  return request(buildUrl(`/family-album/categories/${categoryId}/media`, { page, size }).replace(API_BASE, ''))
+}
+
+export function fetchFamilyAlbumMediaPage(albumId, page = 0, size = 10) {
+  return request(buildUrl(`/family-album/albums/${albumId}/media`, { page, size }).replace(API_BASE, ''))
+}
+
 export function searchFamilyUsers(query) {
   return request(buildUrl('/family-album/users/search', { q: query }).replace(API_BASE, ''))
 }

@@ -26,6 +26,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.AbstractResource;
+import org.springframework.core.io.ByteArrayResource;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.UrlResource;
 import org.springframework.stereotype.Service;
@@ -221,6 +222,20 @@ public class TravelMediaStorageService {
         } catch (BadRequestException ignored) {
             return null;
         }
+    }
+
+    public PreparedThumbnail loadThumbnail(String storagePath, String contentType, Integer requestedWidth) {
+        PreparedThumbnail preparedThumbnail = loadPreparedThumbnail(storagePath, contentType, requestedWidth);
+        if (preparedThumbnail != null) {
+            return preparedThumbnail;
+        }
+        if (!StringUtils.hasText(storagePath) || !StringUtils.hasText(contentType) || !contentType.startsWith("image/")) {
+            return null;
+        }
+
+        return imageThumbnailService.createThumbnail(loadAsResource(storagePath), contentType, requestedWidth)
+                .map(thumbnail -> new PreparedThumbnail(new ByteArrayResource(thumbnail.bytes()), thumbnail.contentType()))
+                .orElse(null);
     }
 
     public void deleteQuietly(String storagePath) {

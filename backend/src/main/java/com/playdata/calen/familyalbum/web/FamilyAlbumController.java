@@ -1,15 +1,16 @@
 package com.playdata.calen.familyalbum.web;
 
 import com.playdata.calen.account.security.AppUserPrincipal;
-import com.playdata.calen.common.media.ImageThumbnailService;
 import com.playdata.calen.familyalbum.dto.FamilyAlbumBootstrapResponse;
 import com.playdata.calen.familyalbum.dto.FamilyAlbumCreateRequest;
+import com.playdata.calen.familyalbum.dto.FamilyMediaPageResponse;
 import com.playdata.calen.familyalbum.dto.FamilyAlbumResponse;
 import com.playdata.calen.familyalbum.dto.FamilyCategoryCreateRequest;
 import com.playdata.calen.familyalbum.dto.FamilyCategoryResponse;
 import com.playdata.calen.familyalbum.dto.FamilyMediaResponse;
 import com.playdata.calen.familyalbum.dto.FamilyUserSearchResponse;
 import com.playdata.calen.familyalbum.service.FamilyAlbumService;
+import com.playdata.calen.familyalbum.service.FamilyMediaStorageService;
 import jakarta.validation.Valid;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
@@ -35,11 +36,31 @@ import org.springframework.web.multipart.MultipartFile;
 public class FamilyAlbumController {
 
     private final FamilyAlbumService familyAlbumService;
-    private final ImageThumbnailService imageThumbnailService;
+    private final FamilyMediaStorageService familyMediaStorageService;
 
     @GetMapping("/bootstrap")
     public FamilyAlbumBootstrapResponse getBootstrap(@AuthenticationPrincipal AppUserPrincipal currentUser) {
         return familyAlbumService.getBootstrap(currentUser.userId());
+    }
+
+    @GetMapping("/categories/{categoryId}/media")
+    public FamilyMediaPageResponse getCategoryMediaPage(
+            @AuthenticationPrincipal AppUserPrincipal currentUser,
+            @PathVariable Long categoryId,
+            @RequestParam(name = "page", required = false) Integer page,
+            @RequestParam(name = "size", required = false) Integer size
+    ) {
+        return familyAlbumService.getCategoryMediaPage(currentUser.userId(), categoryId, page, size);
+    }
+
+    @GetMapping("/albums/{albumId}/media")
+    public FamilyMediaPageResponse getAlbumMediaPage(
+            @AuthenticationPrincipal AppUserPrincipal currentUser,
+            @PathVariable Long albumId,
+            @RequestParam(name = "page", required = false) Integer page,
+            @RequestParam(name = "size", required = false) Integer size
+    ) {
+        return familyAlbumService.getAlbumMediaPage(currentUser.userId(), albumId, page, size);
     }
 
     @GetMapping("/users/search")
@@ -87,18 +108,20 @@ public class FamilyAlbumController {
         String encodedFileName = URLEncoder.encode(download.fileName(), StandardCharsets.UTF_8).replace("+", "%20");
 
         if (thumbnail) {
-            return imageThumbnailService.createThumbnail(download.resource(), download.contentType(), width)
-                    .<ResponseEntity<?>>map(preview -> ResponseEntity.ok()
-                            .contentType(MediaType.parseMediaType(preview.contentType()))
-                            .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.inline().filename(encodedFileName).build().toString())
-                            .header("Cache-Control", "public, max-age=3600")
-                            .header("X-Content-Type-Options", "nosniff")
-                            .body(preview.bytes()))
-                    .orElseGet(() -> ResponseEntity.ok()
-                            .contentType(MediaType.parseMediaType(download.contentType()))
-                            .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.inline().filename(encodedFileName).build().toString())
-                            .header("X-Content-Type-Options", "nosniff")
-                            .body(download.resource()));
+            FamilyMediaStorageService.ThumbnailContent thumbnailContent = familyMediaStorageService.loadThumbnail(
+                    download.storagePath(),
+                    download.contentType(),
+                    width
+            );
+            if (thumbnailContent == null) {
+                return ResponseEntity.notFound().build();
+            }
+            return ResponseEntity.ok()
+                    .contentType(MediaType.parseMediaType(thumbnailContent.contentType()))
+                    .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.inline().filename(encodedFileName).build().toString())
+                    .header("Cache-Control", "public, max-age=3600")
+                    .header("X-Content-Type-Options", "nosniff")
+                    .body(thumbnailContent.resource());
         }
 
         return ResponseEntity.ok()

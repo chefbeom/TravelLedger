@@ -2,11 +2,14 @@ package com.playdata.calen.familyalbum.service;
 
 import com.playdata.calen.common.config.MinioProperties;
 import com.playdata.calen.common.exception.BadRequestException;
+import com.playdata.calen.common.media.ImageThumbnailService;
 import com.playdata.calen.familyalbum.domain.FamilyMediaType;
 import io.minio.GetObjectArgs;
 import io.minio.MinioClient;
 import io.minio.PutObjectArgs;
 import io.minio.RemoveObjectArgs;
+import io.minio.StatObjectArgs;
+import io.minio.StatObjectResponse;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
@@ -18,6 +21,7 @@ import java.util.Locale;
 import java.util.UUID;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.io.AbstractResource;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.UrlResource;
@@ -35,17 +39,20 @@ public class FamilyMediaStorageService {
     private final String mediaObjectPrefix;
     private final MinioClient minioClient;
     private final MinioProperties minioProperties;
+    private final ImageThumbnailService imageThumbnailService;
 
     public FamilyMediaStorageService(
             @Value("${app.family.media-storage-path}") String mediaStoragePath,
             @Value("${app.family.media-object-prefix:family-media}") String mediaObjectPrefix,
             ObjectProvider<MinioClient> minioClientProvider,
-            MinioProperties minioProperties
+            MinioProperties minioProperties,
+            ImageThumbnailService imageThumbnailService
     ) {
         this.rootPath = Paths.get(mediaStoragePath).toAbsolutePath().normalize();
         this.mediaObjectPrefix = normalizeObjectPrefix(mediaObjectPrefix);
         this.minioClient = minioClientProvider.getIfAvailable();
         this.minioProperties = minioProperties;
+        this.imageThumbnailService = imageThumbnailService;
     }
 
     public StoredFamilyMedia store(Long ownerId, Long categoryId, MultipartFile file) {
@@ -81,6 +88,16 @@ public class FamilyMediaStorageService {
         }
 
         return loadFromLocal(storagePath);
+    }
+
+    public ThumbnailContent loadThumbnail(String storagePath, String contentType, Integer requestedWidth) {
+        if (!StringUtils.hasText(storagePath) || !StringUtils.hasText(contentType) || !contentType.startsWith("image/")) {
+            return null;
+        }
+
+        return imageThumbnailService.createThumbnail(loadAsResource(storagePath), contentType, requestedWidth)
+                .map(thumbnail -> new ThumbnailContent(new ByteArrayResource(thumbnail.bytes()), thumbnail.contentType()))
+                .orElse(null);
     }
 
     public void deleteQuietly(String storagePath) {
@@ -173,12 +190,14 @@ public class FamilyMediaStorageService {
     }
 
     private Resource loadFromMinio(String storagePath) {
-        try (InputStream inputStream = minioClient.getObject(
-                GetObjectArgs.builder()
-                        .bucket(minioProperties.getBucket_cloud())
-                        .object(storagePath)
-                        .build())) {
-            return new ByteArrayResource(inputStream.readAllBytes());
+        try {
+            StatObjectResponse stat = minioClient.statObject(
+                    StatObjectArgs.builder()
+                            .bucket(minioProperties.getBucket_cloud())
+                            .object(storagePath)
+                            .build()
+            );
+            return new MinioObjectResource(minioClient, minioProperties.getBucket_cloud(), storagePath, stat);
         } catch (Exception exception) {
             throw new BadRequestException("파일을 불러오지 못했습니다.");
         }
@@ -403,9 +422,73 @@ public class FamilyMediaStorageService {
     ) {
     }
 
+    public record ThumbnailContent(
+            Resource resource,
+            String contentType
+    ) {
+    }
+
     private record DetectedUpload(
             FamilyMediaType mediaType,
             String contentType
     ) {
+    }
+
+    private static final class MinioObjectResource extends AbstractResource {
+
+        private final MinioClient minioClient;
+        private final String bucket;
+        private final String objectKey;
+        private final long contentLength;
+        private final long lastModified;
+
+        private MinioObjectResource(
+                MinioClient minioClient,
+                String bucket,
+                String objectKey,
+                StatObjectResponse stat
+        ) {
+            this.minioClient = minioClient;
+            this.bucket = bucket;
+            this.objectKey = objectKey;
+            this.contentLength = stat.size();
+            this.lastModified = stat.lastModified() != null
+                    ? stat.lastModified().toInstant().toEpochMilli()
+                    : 0L;
+        }
+
+        @Override
+        public String getDescription() {
+            return "MinIO object [" + bucket + "/" + objectKey + "]";
+        }
+
+        @Override
+        public InputStream getInputStream() throws IOException {
+            try {
+                return minioClient.getObject(
+                        GetObjectArgs.builder()
+                                .bucket(bucket)
+                                .object(objectKey)
+                                .build()
+                );
+            } catch (Exception exception) {
+                throw new IOException("Failed to open MinIO object stream.", exception);
+            }
+        }
+
+        @Override
+        public String getFilename() {
+            return StringUtils.getFilename(objectKey);
+        }
+
+        @Override
+        public long contentLength() {
+            return contentLength;
+        }
+
+        @Override
+        public long lastModified() {
+            return lastModified;
+        }
     }
 }

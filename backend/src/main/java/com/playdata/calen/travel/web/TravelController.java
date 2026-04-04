@@ -407,29 +407,20 @@ public class TravelController {
                 : ContentDisposition.inline().filename(encodedFileName).build();
 
         if (thumbnail) {
-            TravelMediaStorageService.PreparedThumbnail preparedThumbnail = travelMediaStorageService.loadPreparedThumbnail(
+            TravelMediaStorageService.PreparedThumbnail preparedThumbnail = travelMediaStorageService.loadThumbnail(
                     download.storagePath(),
                     download.contentType(),
                     width
             );
-            if (preparedThumbnail != null) {
-                return ResponseEntity.ok()
-                        .contentType(MediaType.parseMediaType(preparedThumbnail.contentType()))
-                        .header(HttpHeaders.CONTENT_DISPOSITION, disposition.toString())
-                        .header("Cache-Control", "public, max-age=86400")
-                        .header("X-Content-Type-Options", "nosniff")
-                        .body(preparedThumbnail.resource());
+            if (preparedThumbnail == null) {
+                return ResponseEntity.notFound().build();
             }
-
-            Resource originalResource = travelMediaStorageService.loadAsResource(download.storagePath());
-            // Avoid generating thumbnails on demand here. Large legacy images can exhaust the heap
-            // under concurrent access, so we fall back to streaming the original asset instead.
             return ResponseEntity.ok()
-                    .contentType(MediaType.parseMediaType(download.contentType()))
+                    .contentType(MediaType.parseMediaType(preparedThumbnail.contentType()))
                     .header(HttpHeaders.CONTENT_DISPOSITION, disposition.toString())
-                    .header("Cache-Control", "public, max-age=3600")
+                    .header("Cache-Control", "public, max-age=86400")
                     .header("X-Content-Type-Options", "nosniff")
-                    .body(originalResource);
+                    .body(preparedThumbnail.resource());
         }
 
         Resource originalResource = travelMediaStorageService.loadAsResource(download.storagePath());

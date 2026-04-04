@@ -250,7 +250,7 @@ onMounted(async () => {
       <div class="panel__header">
         <div>
           <h2>내 지도 사진 클러스터</h2>
-          <p>업로드된 사진의 GPS를 기준으로 가까운 사진을 묶고, 줌 단계에 따라 다시 정리해 지도 성능과 가독성을 함께 유지합니다.</p>
+          <p>업로드된 사진의 GPS를 기준으로 계산된 군집을 고정해서 보여주고, 핀 보기에서는 기록 사진 썸네일을 바로 확인할 수 있습니다.</p>
         </div>
         <span class="panel__badge">클러스터 {{ summary.photoClusterCount }}개</span>
       </div>
@@ -283,7 +283,7 @@ onMounted(async () => {
       <div class="panel__header">
         <div>
           <h2>사진 지도</h2>
-          <p>낮은 줌에서는 넓게 묶고, 확대하면 세분화합니다. 군집 보기와 핀 보기를 전환해 상황에 맞게 확인할 수 있습니다.</p>
+          <p>확대와 축소를 반복해도 군집이 다시 생성되지 않습니다. 군집 보기와 핀 보기를 전환해 상황에 맞게 확인할 수 있습니다.</p>
         </div>
         <div class="travel-map-mode-switch">
           <button

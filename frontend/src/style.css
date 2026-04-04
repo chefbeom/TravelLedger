@@ -3223,6 +3223,57 @@ textarea {
   box-shadow: 0 0 0 4px rgba(17, 24, 39, 0.12), 0 12px 26px rgba(15, 23, 42, 0.26);
 }
 
+.travel-map__thumb-pin {
+  position: relative;
+  width: 50px;
+  height: 50px;
+  border-radius: 18px;
+  overflow: hidden;
+  background-color: var(--marker-color, #3182f6);
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: cover;
+  border: 3px solid rgba(255, 255, 255, 0.94);
+  box-shadow: 0 14px 28px rgba(15, 23, 42, 0.24);
+}
+
+.travel-map__thumb-pin::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.06) 0%, rgba(15, 23, 42, 0.34) 100%);
+}
+
+.travel-map__thumb-pin::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: -10px;
+  width: 16px;
+  height: 16px;
+  background: var(--marker-color, #3182f6);
+  border-radius: 0 0 8px 8px;
+  transform: translateX(-50%) rotate(45deg);
+  box-shadow: 6px 10px 18px rgba(15, 23, 42, 0.18);
+}
+
+.travel-map__thumb-pin span {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  font-size: 0.74rem;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+}
+
+.travel-map__thumb-pin.is-active {
+  border-color: var(--marker-color, #3182f6);
+  box-shadow: 0 0 0 4px rgba(49, 130, 246, 0.16), 0 14px 28px rgba(15, 23, 42, 0.28);
+}
+
 .travel-day-tabs {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));

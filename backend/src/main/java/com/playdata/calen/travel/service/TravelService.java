@@ -329,6 +329,18 @@ public class TravelService {
                 .filter(this::hasCoordinates)
                 .sorted(RECORD_ORDER)
                 .toList();
+        List<Long> markerRecordIds = markers.stream()
+                .map(TravelExpenseRecord::getId)
+                .toList();
+        Map<Long, String> markerPhotoUrls = markerRecordIds.isEmpty()
+                ? Map.of()
+                : travelMediaAssetRepository.findAllByRecordIdInOrderByUploadedAtDescIdDesc(markerRecordIds).stream()
+                        .filter(asset -> asset.getMediaType() == TravelMediaType.PHOTO)
+                        .collect(Collectors.toMap(
+                                asset -> asset.getRecord().getId(),
+                                asset -> "/api/travel/media/" + asset.getId() + "/content",
+                                (existing, ignored) -> existing
+                        ));
         TravelMyMapPhotoClusterSnapshot photoClusterSnapshot = getOrBuildMyMapPhotoClusterSnapshot(userId);
         List<TravelRouteSegment> routeSegments = travelRouteSegmentRepository.findAllByPlanOwnerIdOrderByRouteDateDescIdDesc(userId).stream()
                 .sorted(ROUTE_ORDER)
@@ -341,7 +353,7 @@ public class TravelService {
                 photoClusterSnapshot.photoClusterCount(),
                 routeSegments.size(),
                 sumDistanceKm(routeSegments),
-                markers.stream().map(this::toMyMapMarkerSummaryResponse).toList(),
+                markers.stream().map(record -> toMyMapMarkerSummaryResponse(record, markerPhotoUrls.get(record.getId()))).toList(),
                 photoClusterSnapshot.summaries(),
                 photoClusterSnapshot.pins(),
                 routeSegments.stream().map(this::toMyMapRouteResponse).toList()
@@ -1507,7 +1519,7 @@ public class TravelService {
         );
     }
 
-    private TravelMyMapMarkerSummaryResponse toMyMapMarkerSummaryResponse(TravelExpenseRecord record) {
+    private TravelMyMapMarkerSummaryResponse toMyMapMarkerSummaryResponse(TravelExpenseRecord record, String photoUrl) {
         return new TravelMyMapMarkerSummaryResponse(
                 record.getId(),
                 record.getPlan().getId(),
@@ -1520,6 +1532,7 @@ public class TravelService {
                 record.getCountry(),
                 record.getRegion(),
                 record.getPlaceName(),
+                photoUrl,
                 record.getLatitude(),
                 record.getLongitude()
         );

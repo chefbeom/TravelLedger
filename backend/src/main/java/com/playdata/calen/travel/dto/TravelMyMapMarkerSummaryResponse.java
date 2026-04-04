@@ -16,6 +16,7 @@ public record TravelMyMapMarkerSummaryResponse(
         String country,
         String region,
         String placeName,
+        String photoUrl,
         BigDecimal latitude,
         BigDecimal longitude
 ) {

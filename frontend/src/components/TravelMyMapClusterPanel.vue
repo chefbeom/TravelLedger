@@ -7,7 +7,6 @@ import { formatDate, formatTime } from '../lib/uiFormat'
 
 const DEFAULT_CENTER = [37.5547, 126.9706]
 const DEFAULT_ZOOM = 11
-const MAX_INDIVIDUAL_ZOOM = 18
 
 const props = defineProps({
   photoClusters: {
@@ -61,10 +60,6 @@ let routeLayer = null
 let hasFittedInitialView = false
 let renderedMarkers = new Map()
 let pendingPopupMarkerKey = null
-
-function toRadians(degrees) {
-  return degrees * (Math.PI / 180)
-}
 
 function normalizeColorHex(value, fallback = '#3182F6') {
   return /^#[0-9A-Fa-f]{6}$/.test(String(value || '').trim()) ? String(value).trim().toUpperCase() : fallback
@@ -127,6 +122,7 @@ function normalizeRecordMarker(marker) {
     longitude,
     photoCount: 0,
     memoryCount: 1,
+    photoUrl: marker?.photoUrl || '',
   }
 }
 
@@ -162,137 +158,19 @@ function buildPolylineOptions(colorHex, lineStyle) {
   }
 }
 
-function calculateDistanceMeters(leftLatitude, leftLongitude, rightLatitude, rightLongitude) {
-  const latitudeDistance = toRadians(rightLatitude - leftLatitude)
-  const longitudeDistance = toRadians(rightLongitude - leftLongitude)
-  const startLatitude = toRadians(leftLatitude)
-  const endLatitude = toRadians(rightLatitude)
-
-  const haversine = Math.pow(Math.sin(latitudeDistance / 2), 2)
-    + Math.cos(startLatitude) * Math.cos(endLatitude) * Math.pow(Math.sin(longitudeDistance / 2), 2)
-  const angularDistance = 2 * Math.atan2(Math.sqrt(haversine), Math.sqrt(1 - haversine))
-  return 6_371_000 * angularDistance
-}
-
-function resolveAggregationDistanceMeters(zoom) {
-  if (!Number.isFinite(zoom)) {
-    return 50
-  }
-  if (zoom >= MAX_INDIVIDUAL_ZOOM) {
-    return 0
-  }
-  if (zoom < 8) {
-    return 500
-  }
-  if (zoom <= 14) {
-    return 50
-  }
-  return 5
-}
-
-function chooseRepresentative(members, latitude, longitude) {
-  return [...members].sort((left, right) => {
-    const leftDistance = calculateDistanceMeters(left.latitude, left.longitude, latitude, longitude)
-    const rightDistance = calculateDistanceMeters(right.latitude, right.longitude, latitude, longitude)
-    if (leftDistance !== rightDistance) {
-      return leftDistance - rightDistance
-    }
-
-    if ((left.photoCount || 0) !== (right.photoCount || 0)) {
-      return (right.photoCount || 0) - (left.photoCount || 0)
-    }
-
-    const leftKey = `${left.memoryDate || ''} ${left.memoryTime || '99:99'} ${String(left.id).padStart(12, '0')}`
-    const rightKey = `${right.memoryDate || ''} ${right.memoryTime || '99:99'} ${String(right.id).padStart(12, '0')}`
-    return rightKey.localeCompare(leftKey)
-  })[0]
-}
-
-function buildRenderClusters(clusters, zoom) {
-  const normalizedClusters = (clusters ?? []).map(normalizeCluster).filter(Boolean)
-  if (normalizedClusters.length <= 1) {
-    return normalizedClusters.map((cluster) => ({
-      id: `single-${cluster.id}`,
-      isAggregate: false,
-      representative: cluster,
-      members: [cluster],
-      latitude: cluster.latitude,
-      longitude: cluster.longitude,
-      photoCount: cluster.photoCount,
-      bounds: [[cluster.latitude, cluster.longitude]],
-    }))
-  }
-
-  const thresholdMeters = resolveAggregationDistanceMeters(zoom)
-  if (thresholdMeters <= 0) {
-    return normalizedClusters.map((cluster) => ({
-      id: `single-${cluster.id}`,
-      isAggregate: false,
-      representative: cluster,
-      members: [cluster],
-      latitude: cluster.latitude,
-      longitude: cluster.longitude,
-      photoCount: cluster.photoCount,
-      bounds: [[cluster.latitude, cluster.longitude]],
-    }))
-  }
-
-  const visited = new Array(normalizedClusters.length).fill(false)
-  const grouped = []
-
-  for (let index = 0; index < normalizedClusters.length; index += 1) {
-    if (visited[index]) {
-      continue
-    }
-
-    const queue = [index]
-    visited[index] = true
-    const members = []
-
-    while (queue.length) {
-      const currentIndex = queue.shift()
-      const currentCluster = normalizedClusters[currentIndex]
-      members.push(currentCluster)
-
-      for (let candidateIndex = 0; candidateIndex < normalizedClusters.length; candidateIndex += 1) {
-        if (visited[candidateIndex]) {
-          continue
-        }
-
-        const candidateCluster = normalizedClusters[candidateIndex]
-        const distanceMeters = calculateDistanceMeters(
-          currentCluster.latitude,
-          currentCluster.longitude,
-          candidateCluster.latitude,
-          candidateCluster.longitude,
-        )
-
-        if (distanceMeters <= thresholdMeters) {
-          visited[candidateIndex] = true
-          queue.push(candidateIndex)
-        }
-      }
-    }
-
-    const latitude = members.reduce((sum, member) => sum + member.latitude, 0) / members.length
-    const longitude = members.reduce((sum, member) => sum + member.longitude, 0) / members.length
-    const representative = chooseRepresentative(members, latitude, longitude)
-    const photoCount = members.reduce((sum, member) => sum + Number(member.photoCount || 0), 0)
-    const isAggregate = members.length > 1
-
-    grouped.push({
-      id: isAggregate ? `aggregate-${members.map((member) => member.id).join('-')}` : `single-${representative.id}`,
-      isAggregate,
-      representative,
-      members,
-      latitude: isAggregate ? latitude : representative.latitude,
-      longitude: isAggregate ? longitude : representative.longitude,
-      photoCount,
-      bounds: members.map((member) => [member.latitude, member.longitude]),
-    })
-  }
-
-  return grouped
+function buildRenderClusters(clusters) {
+  return (clusters ?? []).map(normalizeCluster).filter(Boolean).map((cluster) => ({
+    id: `cluster-${cluster.id}`,
+    markerKey: `cluster-${cluster.id}`,
+    isAggregate: Number(cluster.photoCount || 0) > 1,
+    isPhotoPin: false,
+    isRecordPin: false,
+    representative: cluster,
+    latitude: cluster.latitude,
+    longitude: cluster.longitude,
+    photoCount: Number(cluster.photoCount || 0),
+    memoryCount: Number(cluster.memoryCount || 0),
+  }))
 }
 
 function buildRenderPins(pins) {
@@ -331,13 +209,7 @@ function resolveRenderableItems() {
     return buildRenderMarkers(props.markers)
   }
 
-  return buildRenderClusters(props.photoClusters, mapInstance?.getZoom()).map((aggregate) => ({
-    ...aggregate,
-    markerKey: aggregate?.isAggregate
-      ? `aggregate-${aggregate.id}`
-      : `cluster-${aggregate.representative.id}`,
-    isPhotoPin: false,
-  }))
+  return buildRenderClusters(props.photoClusters)
 }
 
 function queueMapResize() {
@@ -393,6 +265,16 @@ function createPopupContent(aggregate) {
     const root = document.createElement('div')
     root.className = 'travel-cluster-popup'
 
+    if (aggregate?.representative?.photoUrl) {
+      const image = document.createElement('img')
+      image.className = 'travel-cluster-popup__image'
+      image.src = buildThumbnailUrl(aggregate.representative.photoUrl, 320)
+      image.alt = aggregate?.representative?.title || aggregate?.representative?.placeName || '기록 사진'
+      image.loading = 'eager'
+      image.decoding = 'async'
+      root.appendChild(image)
+    }
+
     const copy = document.createElement('div')
     copy.className = 'travel-cluster-popup__copy'
 
@@ -419,7 +301,7 @@ function createPopupContent(aggregate) {
     }
 
     const count = document.createElement('span')
-    count.textContent = '기록 핀 1개'
+    count.textContent = '기록 1건'
     copy.appendChild(count)
 
     root.appendChild(copy)
@@ -468,7 +350,7 @@ function createPopupContent(aggregate) {
   const count = document.createElement('span')
   count.textContent = aggregate?.isPhotoPin
     ? '사진 1장'
-    : `사진 ${aggregate?.photoCount || 0}장 / 기록 ${aggregate?.representative?.memoryCount || aggregate?.members?.length || 0}건`
+    : `사진 ${aggregate?.photoCount || 0}장 / 기록 ${aggregate?.memoryCount || aggregate?.representative?.memoryCount || 0}건`
   copy.appendChild(count)
 
   root.appendChild(copy)
@@ -478,19 +360,20 @@ function createPopupContent(aggregate) {
 function buildRecordMarkerIcon(marker, active) {
   const colorHex = normalizeColorHex(marker?.planColorHex, '#3182F6')
   const label = escapeHtml(String(marker?.category || marker?.title || marker?.placeName || '핀').slice(0, 2))
+  const photoUrl = marker?.photoUrl ? buildThumbnailUrl(marker.photoUrl, 320) : ''
 
   return L.divIcon({
     className: 'travel-map__icon-root',
     html: `
       <div
-        class="travel-map__marker-icon travel-map__marker-icon--memory${active ? ' is-active' : ''}"
-        style="--marker-color:${colorHex}"
+        class="travel-map__thumb-pin travel-map__thumb-pin--memory${active ? ' is-active' : ''}"
+        style="--marker-color:${colorHex};${photoUrl ? `background-image:url('${escapeHtml(photoUrl)}')` : ''}"
       >
-        <span>${label}</span>
+        ${photoUrl ? '' : `<span>${label}</span>`}
       </div>
     `,
-    iconSize: [40, 52],
-    iconAnchor: [20, 50],
+    iconSize: [50, 62],
+    iconAnchor: [25, 58],
     popupAnchor: [0, -28],
   })
 }
@@ -505,7 +388,7 @@ function buildClusterIcon(aggregate, active) {
     : ''
   const markerSize = aggregate?.isAggregate ? 68 : 60
   const clusterCount = aggregate?.photoCount || 0
-  const memberCount = aggregate?.members?.length || 1
+  const memberCount = aggregate?.memoryCount || aggregate?.representative?.memoryCount || 1
   const colorHex = normalizeColorHex(aggregate?.representative?.planColorHex, '#3182F6')
 
   return L.divIcon({
@@ -557,24 +440,6 @@ function renderRoutes() {
   })
 }
 
-function focusAggregate(aggregate) {
-  if (!mapInstance || !aggregate?.isAggregate || !aggregate?.bounds?.length) {
-    return
-  }
-
-  mapInstance.closePopup()
-
-  if (aggregate.bounds.length === 1) {
-    mapInstance.setView(aggregate.bounds[0], Math.min((mapInstance.getZoom() || DEFAULT_ZOOM) + 2, MAX_INDIVIDUAL_ZOOM))
-    return
-  }
-
-  mapInstance.fitBounds(aggregate.bounds, {
-    padding: [60, 60],
-    maxZoom: Math.min((mapInstance.getZoom() || DEFAULT_ZOOM) + 3, MAX_INDIVIDUAL_ZOOM),
-  })
-}
-
 function renderClusters() {
   if (!mapInstance) {
     return
@@ -589,26 +454,20 @@ function renderClusters() {
       ? String(aggregate.representative.markerId) === String(props.selectedMarkerId)
       : aggregate.isPhotoPin
         ? String(aggregate.representative.mediaId) === String(props.selectedPhotoId)
-        : aggregate.members.some((member) => String(member.id) === String(props.selectedClusterId))
+        : String(aggregate.representative.id) === String(props.selectedClusterId)
     const marker = L.marker([aggregate.latitude, aggregate.longitude], {
       icon: buildClusterIcon(aggregate, containsSelected),
     })
 
-    if (!aggregate.isAggregate) {
-      marker.bindPopup(() => createPopupContent(aggregate))
-      marker.on('click', () => {
-        if (aggregate.isRecordPin) {
-          emit('select-marker', aggregate.representative)
-          return
-        }
-        emit('select-cluster', aggregate.representative)
-      })
-      renderedMarkers.set(String(aggregate.markerKey), marker)
-    } else {
-      marker.on('click', () => {
-        focusAggregate(aggregate)
-      })
-    }
+    marker.bindPopup(() => createPopupContent(aggregate))
+    marker.on('click', () => {
+      if (aggregate.isRecordPin) {
+        emit('select-marker', aggregate.representative)
+        return
+      }
+      emit('select-cluster', aggregate.representative)
+    })
+    renderedMarkers.set(String(aggregate.markerKey), marker)
 
     marker.addTo(markerLayer)
   })
@@ -685,7 +544,6 @@ async function toggleFullscreen() {
 
 function handleZoomEnd() {
   zoomLabel.value = mapInstance?.getZoom() ?? DEFAULT_ZOOM
-  renderClusters()
 }
 
 function handleFullscreenChange() {
@@ -777,7 +635,7 @@ watch(
       <div class="travel-map__toolbar-group">
         <span class="travel-map__toolbar-label">클러스터 기준</span>
         <small class="travel-cluster-map__legend">
-          {{ props.displayMode === 'pin' ? '핀 보기: 저장된 개별 사진 핀 표시' : '군집 보기: 낮은 줌 500m / 중간 50m / 높은 줌 5m / 최대 줌 개별 사진' }}
+          {{ props.displayMode === 'pin' ? '핀 보기: 기록 썸네일 핀 고정 표시' : '군집 보기: 서버에서 계산한 고정 군집 유지' }}
         </small>
       </div>
 
@@ -795,7 +653,7 @@ watch(
 
     <div class="travel-map__hint">
       <strong>클러스터 지도 사용법</strong>
-      <span>묶음 핀을 누르면 그 영역으로 확대되고, 개별 핀을 누르면 오른쪽 패널에서 포함 사진과 대표 사진 설정을 확인할 수 있습니다.</span>
+      <span>확대와 축소를 해도 군집은 다시 묶이거나 풀리지 않습니다. 군집 핀을 누르면 오른쪽 패널에서 포함 사진을, 핀 보기에서는 기록 썸네일 핀을 바로 확인할 수 있습니다.</span>
     </div>
   </div>
 </template>

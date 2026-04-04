@@ -40,6 +40,7 @@ let markerLayer = null
 let routeLayer = null
 let hasFittedInitialView = false
 let renderedMarkers = new Map()
+let pendingPopupClusterId = null
 
 function toRadians(degrees) {
   return degrees * (Math.PI / 180)
@@ -395,6 +396,8 @@ function focusAggregate(aggregate) {
     return
   }
 
+  mapInstance.closePopup()
+
   if (aggregate.bounds.length === 1) {
     mapInstance.setView(aggregate.bounds[0], Math.min((mapInstance.getZoom() || DEFAULT_ZOOM) + 2, MAX_INDIVIDUAL_ZOOM))
     return
@@ -436,9 +439,11 @@ function renderClusters() {
     marker.addTo(markerLayer)
   })
 
-  const selectedMarker = renderedMarkers.get(String(props.selectedClusterId ?? ''))
+  const selectedMarker = renderedMarkers.get(String(pendingPopupClusterId ?? ''))
   if (selectedMarker) {
-    requestAnimationFrame(() => selectedMarker.openPopup())
+    const popupTarget = selectedMarker
+    pendingPopupClusterId = null
+    requestAnimationFrame(() => popupTarget.openPopup())
   }
 }
 
@@ -549,9 +554,20 @@ watch(
 
 watch(
   () => props.selectedClusterId,
-  () => {
+  (value, previousValue) => {
+    const normalizedValue = String(value ?? '')
+    const normalizedPreviousValue = String(previousValue ?? '')
+
+    if (!normalizedValue) {
+      pendingPopupClusterId = null
+      mapInstance?.closePopup()
+    } else if (normalizedValue !== normalizedPreviousValue) {
+      pendingPopupClusterId = normalizedValue
+    }
+
     renderClusters()
   },
+  { immediate: true },
 )
 
 watch(

@@ -196,10 +196,8 @@ public class TravelPhotoClusterService {
         }
 
         return points.stream()
-                .min(Comparator
-                        .comparingDouble((PhotoPoint point) -> calculateDistanceMeters(point, metrics.centroidLatitude(), metrics.centroidLongitude()))
-                        .thenComparing(PhotoPoint::uploadedAt, Comparator.nullsLast(Comparator.reverseOrder()))
-                        .thenComparing(PhotoPoint::mediaId, Comparator.nullsLast(Comparator.reverseOrder())))
+                .sorted(CLUSTER_ORDER)
+                .findFirst()
                 .orElse(points.get(0));
     }
 

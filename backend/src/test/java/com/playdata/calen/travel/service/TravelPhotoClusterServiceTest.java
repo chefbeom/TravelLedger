@@ -63,6 +63,21 @@ class TravelPhotoClusterServiceTest {
         assertThat(clusters.get(0).representative().mediaId()).isEqualTo(2L);
     }
 
+    @Test
+    void usesFirstOrderedPhotoAsRepresentativeWhenNoOverrideExists() {
+        List<TravelPhotoClusterService.PhotoPoint> points = List.of(
+                point(1L, 37.5665000d, 126.9780000d, false, LocalDateTime.of(2026, 4, 4, 9, 0)),
+                point(2L, 37.5665003d, 126.9780002d, false, LocalDateTime.of(2026, 4, 4, 11, 0)),
+                point(3L, 37.5665005d, 126.9780004d, false, LocalDateTime.of(2026, 4, 4, 10, 0))
+        );
+
+        List<TravelPhotoClusterService.PhotoCluster> clusters = clusterService.cluster(points);
+
+        assertThat(clusters).hasSize(1);
+        assertThat(clusters.get(0).representative().mediaId()).isEqualTo(2L);
+        assertThat(clusters.get(0).members().get(0).mediaId()).isEqualTo(2L);
+    }
+
     private TravelPhotoClusterService.PhotoPoint point(
             Long mediaId,
             double latitude,

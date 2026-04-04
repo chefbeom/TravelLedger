@@ -105,6 +105,10 @@ const props = defineProps({
     type: Boolean,
     default: true,
   },
+  isVisible: {
+    type: Boolean,
+    default: true,
+  },
 })
 
 const emit = defineEmits([
@@ -919,6 +923,27 @@ watch(
     hasFittedInitialView = false
     await nextTick()
     renderMapLayers({ shouldFit: value })
+  },
+)
+
+watch(
+  () => props.isVisible,
+  async (value) => {
+    if (!value || !mapInstance) {
+      return
+    }
+
+    await nextTick()
+    queueMapResize()
+
+    requestAnimationFrame(() => {
+      if (props.autoFit && canFit.value) {
+        fitToAll()
+        return
+      }
+
+      mapInstance?.invalidateSize(false)
+    })
   },
 )
 

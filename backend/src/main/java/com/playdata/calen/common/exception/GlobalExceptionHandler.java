@@ -13,6 +13,8 @@ import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
+import org.springframework.web.multipart.MultipartException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 @RestControllerAdvice
@@ -57,6 +59,18 @@ public class GlobalExceptionHandler {
     public ResponseEntity<Map<String, Object>> handleConstraintViolation(ConstraintViolationException exception) {
         log.warn("Constraint violation: {}", exception.getMessage());
         return buildResponse(HttpStatus.BAD_REQUEST, "요청 값을 확인해 주세요.", null);
+    }
+
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    public ResponseEntity<Map<String, Object>> handleMaxUploadSize(MaxUploadSizeExceededException exception) {
+        log.warn("Upload exceeded max size: {}", exception.getMessage());
+        return buildResponse(HttpStatus.BAD_REQUEST, "업로드 가능한 최대 파일 크기를 초과했습니다.", null);
+    }
+
+    @ExceptionHandler(MultipartException.class)
+    public ResponseEntity<Map<String, Object>> handleMultipart(MultipartException exception) {
+        log.warn("Multipart request failed: {}", exception.getMessage());
+        return buildResponse(HttpStatus.BAD_REQUEST, "업로드 파일을 처리하지 못했습니다. 파일 크기와 형식을 확인해 주세요.", null);
     }
 
     @ExceptionHandler(TooManyRequestsException.class)

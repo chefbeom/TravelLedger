@@ -22,8 +22,8 @@ spring:
     time-zone: Asia/Seoul
   servlet:
     multipart:
-      max-file-size: 10MB
-      max-request-size: 40MB
+      max-file-size: 1GB
+      max-request-size: 1GB
 
 minio:
   endpoint: ${MINIO_API:}
@@ -95,4 +95,10 @@ app:
     backup-workdir: ${DATA_OPS_BACKUP_WORKDIR:/opt/calen-backup}
     backup-remote-name: ${DATA_OPS_BACKUP_REMOTE_NAME:db-backup}
     backup-remote-dir: ${DATA_OPS_BACKUP_REMOTE_DIR:calen-db-backups}
+    minio-backup-remote-dir: ${DATA_OPS_MINIO_BACKUP_REMOTE_DIR:calen-minio-backups}
     rclone-config-path: ${DATA_OPS_RCLONE_CONFIG_PATH:/app/.config/rclone/rclone.conf}
+    backup-zone: ${DATA_OPS_BACKUP_ZONE:Asia/Seoul}
+    db-backup-enabled: ${DATA_OPS_DB_BACKUP_ENABLED:false}
+    db-backup-cron: ${DATA_OPS_DB_BACKUP_CRON:0 0 0 * * *}
+    minio-backup-enabled: ${DATA_OPS_MINIO_BACKUP_ENABLED:false}
+    minio-backup-cron: ${DATA_OPS_MINIO_BACKUP_CRON:0 30 0 * * *}

@@ -25,7 +25,7 @@ import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.core.io.ByteArrayResource;
+import org.springframework.core.io.AbstractResource;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.UrlResource;
 import org.springframework.stereotype.Service;
@@ -324,12 +324,14 @@ public class TravelMediaStorageService {
     }
 
     private Resource loadFromMinio(String storagePath) {
-        try (InputStream inputStream = minioClient.getObject(
-                GetObjectArgs.builder()
-                        .bucket(minioProperties.getBucket_cloud())
-                        .object(storagePath)
-                        .build())) {
-            return new ByteArrayResource(inputStream.readAllBytes());
+        try {
+            StatObjectResponse stat = minioClient.statObject(
+                    StatObjectArgs.builder()
+                            .bucket(minioProperties.getBucket_cloud())
+                            .object(storagePath)
+                            .build()
+            );
+            return new MinioObjectResource(minioClient, minioProperties.getBucket_cloud(), storagePath, stat);
         } catch (Exception exception) {
             throw new BadRequestException(buildStorageErrorMessage("Failed to load file."));
         }
@@ -812,6 +814,64 @@ public class TravelMediaStorageService {
 
     private String buildStorageErrorMessage(String defaultMessage) {
         return defaultMessage;
+    }
+
+    private static final class MinioObjectResource extends AbstractResource {
+
+        private final MinioClient minioClient;
+        private final String bucket;
+        private final String objectKey;
+        private final long contentLength;
+        private final long lastModified;
+
+        private MinioObjectResource(
+                MinioClient minioClient,
+                String bucket,
+                String objectKey,
+                StatObjectResponse stat
+        ) {
+            this.minioClient = minioClient;
+            this.bucket = bucket;
+            this.objectKey = objectKey;
+            this.contentLength = stat.size();
+            this.lastModified = stat.lastModified() != null
+                    ? stat.lastModified().toInstant().toEpochMilli()
+                    : 0L;
+        }
+
+        @Override
+        public String getDescription() {
+            return "MinIO object [" + bucket + "/" + objectKey + "]";
+        }
+
+        @Override
+        public InputStream getInputStream() throws IOException {
+            try {
+                return minioClient.getObject(
+                        GetObjectArgs.builder()
+                                .bucket(bucket)
+                                .object(objectKey)
+                                .build()
+                );
+            } catch (Exception exception) {
+                throw new IOException("Failed to open MinIO object stream.", exception);
+            }
+        }
+
+        @Override
+        public String getFilename() {
+            return StringUtils.getFilename(objectKey);
+        }
+
+        @Override
+        public long contentLength() {
+            return contentLength;
+        }
+
+        @Override
+        public long lastModified() {
+            return lastModified;
+        }
     }
 
     public record StoredTravelMedia(

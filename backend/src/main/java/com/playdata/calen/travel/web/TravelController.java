@@ -1,7 +1,6 @@
 package com.playdata.calen.travel.web;
 
 import com.playdata.calen.account.security.AppUserPrincipal;
-import com.playdata.calen.common.media.ImageThumbnailService;
 import com.playdata.calen.travel.domain.TravelMediaType;
 import com.playdata.calen.travel.dto.TravelBudgetItemRequest;
 import com.playdata.calen.travel.dto.TravelBudgetItemResponse;
@@ -66,7 +65,6 @@ public class TravelController {
     private final TravelService travelService;
     private final TravelMediaStorageService travelMediaStorageService;
     private final TravelReverseGeocodeService travelReverseGeocodeService;
-    private final ImageThumbnailService imageThumbnailService;
 
     @GetMapping("/plans")
     public List<TravelPlanSummaryResponse> getPlans(@AuthenticationPrincipal AppUserPrincipal currentUser) {
@@ -424,18 +422,14 @@ public class TravelController {
             }
 
             Resource originalResource = travelMediaStorageService.loadAsResource(download.storagePath());
-            return imageThumbnailService.createThumbnail(originalResource, download.contentType(), width)
-                    .<ResponseEntity<?>>map(preview -> ResponseEntity.ok()
-                            .contentType(MediaType.parseMediaType(preview.contentType()))
-                            .header(HttpHeaders.CONTENT_DISPOSITION, disposition.toString())
-                            .header("Cache-Control", "public, max-age=3600")
-                            .header("X-Content-Type-Options", "nosniff")
-                            .body(preview.bytes()))
-                    .orElseGet(() -> ResponseEntity.ok()
-                            .contentType(MediaType.parseMediaType(download.contentType()))
-                            .header(HttpHeaders.CONTENT_DISPOSITION, disposition.toString())
-                            .header("X-Content-Type-Options", "nosniff")
-                            .body(originalResource));
+            // Avoid generating thumbnails on demand here. Large legacy images can exhaust the heap
+            // under concurrent access, so we fall back to streaming the original asset instead.
+            return ResponseEntity.ok()
+                    .contentType(MediaType.parseMediaType(download.contentType()))
+                    .header(HttpHeaders.CONTENT_DISPOSITION, disposition.toString())
+                    .header("Cache-Control", "public, max-age=3600")
+                    .header("X-Content-Type-Options", "nosniff")
+                    .body(originalResource);
         }
 
         Resource originalResource = travelMediaStorageService.loadAsResource(download.storagePath());

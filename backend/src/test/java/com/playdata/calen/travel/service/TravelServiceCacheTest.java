@@ -11,6 +11,8 @@ import com.playdata.calen.travel.dto.TravelPlanSummaryResponse;
 import com.playdata.calen.travel.repository.TravelBudgetItemRepository;
 import com.playdata.calen.travel.repository.TravelExpenseRecordRepository;
 import com.playdata.calen.travel.repository.TravelMediaAssetRepository;
+import com.playdata.calen.travel.repository.TravelPhotoClusterMemberRepository;
+import com.playdata.calen.travel.repository.TravelPhotoClusterRepository;
 import com.playdata.calen.travel.repository.TravelPlanRepository;
 import com.playdata.calen.travel.repository.TravelPlanShareRepository;
 import com.playdata.calen.travel.repository.TravelRouteSegmentRepository;
@@ -36,6 +38,8 @@ class TravelServiceCacheTest {
         TravelBudgetItemRepository travelBudgetItemRepository = mock(TravelBudgetItemRepository.class);
         TravelExpenseRecordRepository travelExpenseRecordRepository = mock(TravelExpenseRecordRepository.class);
         TravelMediaAssetRepository travelMediaAssetRepository = mock(TravelMediaAssetRepository.class);
+        TravelPhotoClusterRepository travelPhotoClusterRepository = mock(TravelPhotoClusterRepository.class);
+        TravelPhotoClusterMemberRepository travelPhotoClusterMemberRepository = mock(TravelPhotoClusterMemberRepository.class);
         TravelRouteSegmentRepository travelRouteSegmentRepository = mock(TravelRouteSegmentRepository.class);
         TravelPlanShareRepository travelPlanShareRepository = mock(TravelPlanShareRepository.class);
         ExchangeRateService exchangeRateService = mock(ExchangeRateService.class);
@@ -53,6 +57,8 @@ class TravelServiceCacheTest {
                 travelBudgetItemRepository,
                 travelExpenseRecordRepository,
                 travelMediaAssetRepository,
+                travelPhotoClusterRepository,
+                travelPhotoClusterMemberRepository,
                 travelRouteSegmentRepository,
                 travelPlanShareRepository,
                 exchangeRateService,
@@ -106,6 +112,8 @@ class TravelServiceCacheTest {
         TravelBudgetItemRepository travelBudgetItemRepository = mock(TravelBudgetItemRepository.class);
         TravelExpenseRecordRepository travelExpenseRecordRepository = mock(TravelExpenseRecordRepository.class);
         TravelMediaAssetRepository travelMediaAssetRepository = mock(TravelMediaAssetRepository.class);
+        TravelPhotoClusterRepository travelPhotoClusterRepository = mock(TravelPhotoClusterRepository.class);
+        TravelPhotoClusterMemberRepository travelPhotoClusterMemberRepository = mock(TravelPhotoClusterMemberRepository.class);
         TravelRouteSegmentRepository travelRouteSegmentRepository = mock(TravelRouteSegmentRepository.class);
         TravelPlanShareRepository travelPlanShareRepository = mock(TravelPlanShareRepository.class);
         ExchangeRateService exchangeRateService = mock(ExchangeRateService.class);
@@ -123,6 +131,8 @@ class TravelServiceCacheTest {
                 travelBudgetItemRepository,
                 travelExpenseRecordRepository,
                 travelMediaAssetRepository,
+                travelPhotoClusterRepository,
+                travelPhotoClusterMemberRepository,
                 travelRouteSegmentRepository,
                 travelPlanShareRepository,
                 exchangeRateService,

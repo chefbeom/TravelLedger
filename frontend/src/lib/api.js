@@ -1,7 +1,6 @@
 const API_BASE = '/api'
 const CSRF_COOKIE_NAME = 'XSRF-TOKEN'
 const CSRF_HEADER_NAME = 'X-XSRF-TOKEN'
-const MAX_TRAVEL_MEDIA_FILE_SIZE = 15 * 1024 * 1024
 
 function getCookie(name) {
   return document.cookie
@@ -738,14 +737,6 @@ async function uploadTravelMediaInternal({
     return []
   }
 
-  const oversizedFile = selectedFiles.find((file) => Number(file?.size || 0) > MAX_TRAVEL_MEDIA_FILE_SIZE)
-  if (oversizedFile) {
-    const error = new Error('여행 사진은 15MB 이하 파일만 업로드할 수 있습니다.')
-    error.status = 400
-    error.code = 'travel-media-too-large'
-    throw error
-  }
-
   if (preparePath && completePath) {
     try {
       const uploadedWithPresign = await uploadTravelMediaWithPresignedUrls({
@@ -760,12 +751,8 @@ async function uploadTravelMediaInternal({
       if (uploadedWithPresign) {
         return uploadedWithPresign
       }
-    } catch (error) {
-      if (error?.status) {
-        throw error
-      }
-      // Fall back to the existing server upload flow only when presigned upload is
-      // unavailable due to a network/CORS issue and no HTTP response was received.
+    } catch {
+      // Fall back to the existing server upload flow when presigned upload is unavailable.
     }
   }
 
@@ -911,225 +898,5 @@ export function createFamilyAlbum(payload) {
   return request('/family-album/albums', {
     method: 'POST',
     body: JSON.stringify(payload),
-  })
-}
-
-export function fetchDriveHomeSummary() {
-  return request('/file/home-summary')
-}
-
-export function fetchDrivePage(params = {}) {
-  return request(buildUrl('/file/list/page', params).replace(API_BASE, ''))
-}
-
-export function fetchDriveRecentFiles() {
-  return request('/file/recent')
-}
-
-export function fetchDriveTrashFiles() {
-  return request('/file/trash')
-}
-
-export function initializeDriveUpload(files, parentId = null) {
-  return request('/file/upload', {
-    method: 'POST',
-    body: JSON.stringify((files ?? []).map((file) => ({
-      fileOriginName: file.name,
-      fileFormat: file.name.includes('.') ? file.name.split('.').pop()?.toLowerCase() || '' : '',
-      fileSize: file.size ?? 0,
-      contentType: file.type || 'application/octet-stream',
-      parentId,
-      relativePath: file.webkitRelativePath || '',
-      lastModified: file.lastModified ?? null,
-    }))),
-  })
-}
-
-export function completeDriveUpload(payload) {
-  return request('/file/upload/complete', {
-    method: 'POST',
-    body: JSON.stringify(payload),
-  })
-}
-
-export function abortDriveUpload(payload) {
-  return request('/file/upload/abort', {
-    method: 'POST',
-    body: JSON.stringify(payload),
-  })
-}
-
-export function uploadDriveFileWithProgress(target, file, onProgress) {
-  return new Promise((resolve, reject) => {
-    const xhr = new XMLHttpRequest()
-    xhr.open('PUT', target.presignedUploadUrl, true)
-    if (file?.type) {
-      xhr.setRequestHeader('Content-Type', file.type)
-    }
-    xhr.upload.onprogress = (event) => {
-      if (!event.lengthComputable) {
-        return
-      }
-      onProgress?.({
-        loaded: event.loaded,
-        total: event.total,
-        percent: Math.round((event.loaded / event.total) * 100),
-      })
-    }
-    xhr.onload = () => {
-      if (xhr.status >= 200 && xhr.status < 300) {
-        resolve()
-        return
-      }
-      reject(new Error('파일 업로드 중 문제가 발생했습니다.'))
-    }
-    xhr.onerror = () => reject(new Error('파일 업로드 중 문제가 발생했습니다.'))
-    xhr.onabort = () => reject(new Error('파일 업로드가 취소되었습니다.'))
-    xhr.send(file)
-  })
-}
-
-export function createDriveFolder(payload) {
-  return request('/file/folder', {
-    method: 'POST',
-    body: JSON.stringify(payload),
-  })
-}
-
-export function renameDriveItem(fileId, fileName) {
-  return request(`/file/${fileId}/rename`, {
-    method: 'PATCH',
-    body: JSON.stringify({ fileName }),
-  })
-}
-
-export function moveDriveItemToTrash(fileId) {
-  return request(`/file/${fileId}/trash`, {
-    method: 'PATCH',
-  })
-}
-
-export function restoreDriveItem(fileId) {
-  return request(`/file/${fileId}/restore`, {
-    method: 'PATCH',
-  })
-}
-
-export function deleteDriveItem(fileId) {
-  return request(`/file/${fileId}`, {
-    method: 'DELETE',
-  })
-}
-
-export function clearDriveTrash() {
-  return request('/file/trash', {
-    method: 'DELETE',
-  })
-}
-
-export function moveDriveItem(fileId, targetParentId) {
-  return request(`/file/${fileId}/move`, {
-    method: 'PATCH',
-    body: JSON.stringify({ targetParentId }),
-  })
-}
-
-export function moveDriveItems(fileIds, targetParentId) {
-  return request('/file/move', {
-    method: 'PATCH',
-    body: JSON.stringify({ fileIds, targetParentId }),
-  })
-}
-
-export function restoreDriveItems(fileIds) {
-  return request('/file/restore', {
-    method: 'PATCH',
-    body: JSON.stringify({ fileIds }),
-  })
-}
-
-export function fetchDriveSharedReceived() {
-  return request('/file/share/shared/list')
-}
-
-export function fetchDriveSharedSent() {
-  return request('/file/share/sent/list')
-}
-
-export function searchDriveShareRecipients(query) {
-  return request(buildUrl('/file/share/search-users', { q: query }).replace(API_BASE, ''))
-}
-
-export function fetchDriveShareInfo(fileId) {
-  return request(`/file/share/${fileId}`)
-}
-
-export function shareDriveFiles(fileIds, recipientLoginId) {
-  return request('/file/share', {
-    method: 'POST',
-    body: JSON.stringify({ fileIds, recipientLoginId }),
-  })
-}
-
-export function cancelDriveShare(fileIds, recipientLoginId) {
-  return request('/file/share/cancel', {
-    method: 'POST',
-    body: JSON.stringify({ fileIds, recipientLoginId }),
-  })
-}
-
-export function cancelAllDriveShares(fileIds) {
-  return request('/file/share/cancel-all', {
-    method: 'POST',
-    body: JSON.stringify({ fileIds }),
-  })
-}
-
-export function saveSharedDriveFile(fileId, parentId = null) {
-  return request(`/file/share/shared/${fileId}/save`, {
-    method: 'POST',
-    body: JSON.stringify({ targetParentId: parentId }),
-  })
-}
-
-export function fetchDriveAdminDashboard() {
-  return request('/administrator/dashboard')
-}
-
-export function fetchDriveStorageAnalytics() {
-  return request('/administrator/storage-analytics')
-}
-
-export function updateDriveUserStatus(userId, active) {
-  return request(`/administrator/users/${userId}/status`, {
-    method: 'PATCH',
-    body: JSON.stringify({ active }),
-  })
-}
-
-export function updateDriveStorageCapacity(providerCapacityBytes) {
-  return request('/administrator/storage-capacity', {
-    method: 'PATCH',
-    body: JSON.stringify({ providerCapacityBytes }),
-  })
-}
-
-export function fetchDriveProfileSettings() {
-  return request('/feater/settings/me')
-}
-
-export function updateDriveProfileSettings(payload) {
-  return request('/feater/settings/me', {
-    method: 'PUT',
-    body: JSON.stringify(payload),
-  })
-}
-
-export function uploadDriveProfileImage(file) {
-  const formData = new FormData()
-  formData.append('image', file)
-  return request('/feater/settings/me/profile-image', {
-    method: 'POST',
-    body: formData,
   })
 }

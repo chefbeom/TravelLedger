@@ -2,12 +2,13 @@
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import AdminWorkspace from './components/AdminWorkspace.vue'
 import FeatureLauncher from './components/FeatureLauncher.vue'
+import FamilyAlbumWorkspace from './components/FamilyAlbumWorkspace.vue'
 import HouseholdWorkspace from './components/HouseholdWorkspace.vue'
 import InviteAccessPanel from './components/InviteAccessPanel.vue'
 import PinPadInput from './components/PinPadInput.vue'
-import CalenDriveWorkspace from './components/CalenDriveWorkspace.vue'
 import ProfileWorkspace from './components/ProfileWorkspace.vue'
-import TravelWorkspace from './components/TravelWorkspace.vue'
+import TravelHubWorkspace from './components/TravelHubWorkspace.vue'
+import TravelMyMapWorkspace from './components/TravelMyMapWorkspace.vue'
 import {
   acceptInvite,
   createInvite,
@@ -17,7 +18,7 @@ import {
   logout as logoutRequest,
 } from './lib/api'
 
-const legacyFeatureItems = [
+const featureItems = [
   {
     key: 'household',
     number: '1',
@@ -54,39 +55,6 @@ const legacyFeatureItems = [
     title: '내 지도',
     description: '지금까지 저장한 여행 장소 핀과 이동 경로를 한 장의 지도에서 확인합니다.',
   },
-  {
-    key: 'drive',
-    number: '4',
-    title: 'CalenDrive',
-    description: '?뚯씪 ?낅줈?쒖? 怨듭쑀, ?댁??? 愿由ъ? ?꾨줈???ㅼ젙源뚯? 而щ씪?곗? ?쒕씪?대툕 湲곕뒫???꾩슜 ?뚰겕?ㅽ럹?댁뒪濡??ъ슜?⑸땲??',
-  },
-  {
-    key: 'drive',
-    number: '4',
-    title: 'CalenDrive',
-    description: 'Cloud drive, sharing, trash, and admin tools in one workspace.',
-  },
-]
-
-const featureItems = [
-  {
-    key: 'household',
-    number: '1',
-    title: '가계부',
-    description: '가계부, 통계, 검색과 분류 관리까지 한 화면에서 바로 사용할 수 있습니다.',
-  },
-  {
-    key: 'travel',
-    number: '2',
-    title: '여행',
-    description: '여행 설정, 여행 가계부, 여행 로그, 내 지도와 사진 기능을 한 워크스페이스에서 이어서 관리합니다.',
-  },
-  {
-    key: 'drive',
-    number: '4',
-    title: 'CalenDrive',
-    description: 'Cloud drive, sharing, trash, and admin tools in one workspace.',
-  },
 ]
 
 const adminFeatureItem = {
@@ -110,14 +78,6 @@ const routeMeta = {
   household: {
     title: '가계부',
     description: '달력 가계부, 통계, 검색, 분류 관리 기능을 함께 확인합니다.',
-  },
-  travel: {
-    title: '여행',
-    description: '여행 설정, 여행 가계부, 여행 로그, 내 지도와 사진 기능을 하나의 여행 워크스페이스에서 사용합니다.',
-  },
-  drive: {
-    title: 'CalenDrive',
-    description: '?뚯씪 ?쒕씪?대툕, 怨듭쑀, ?댁??? 愿由?, ?꾨줈???ㅼ젙, 愿由ъ옄 湲곕뒫?꾩? 4踰??섏씠吏?먯꽌 ?듯빀?섏뿬 ?ъ슜?⑸땲??',
   },
   'travel-money': {
     title: '여행 예산',
@@ -149,145 +109,6 @@ const routeMeta = {
   },
   invite: {
     title: '초대 링크 가입',
-    description: '새 계정은 1회용 초대 링크로만 만들 수 있습니다.',
-  },
-}
-
-const correctedFeatureItems = [
-  {
-    key: 'household',
-    number: '1',
-    title: '가계부',
-    description: '가계부, 통계, 검색과 분류 관리까지 한 화면에서 바로 사용할 수 있습니다.',
-  },
-  {
-    key: 'travel',
-    number: '2',
-    title: '여행',
-    description: '여행 설정, 여행 가계부, 여행 로그, 내 지도와 사진 기능을 한 워크스페이스에서 관리합니다.',
-  },
-  {
-    key: 'drive',
-    number: '4',
-    title: 'CalenDrive',
-    description: '클라우드 드라이브, 공유, 최근 파일, 휴지통, 관리자 기능을 하나의 화면에서 사용합니다.',
-  },
-]
-
-const correctedAdminFeatureItem = {
-  key: 'admin',
-  number: '7',
-  title: '관리자',
-  description: '로그인 로그, 차단 IP, 사용자 상태, 초대 현황을 관리합니다.',
-}
-
-const correctedRouteMeta = {
-  ...routeMeta,
-  launcher: {
-    title: '기능 선택',
-    description: '다음으로 열고 싶은 기능 영역을 선택하세요.',
-  },
-  household: {
-    title: '가계부',
-    description: '가계부, 통계, 검색과 분류 관리까지 한 화면에서 바로 사용할 수 있습니다.',
-  },
-  travel: {
-    title: '여행',
-    description: '여행 설정, 여행 가계부, 여행 로그, 내 지도와 사진 기능을 한 워크스페이스에서 관리합니다.',
-  },
-  drive: {
-    title: 'CalenDrive',
-    description: '구글 드라이브형 파일 관리 구조를 Calen 안으로 옮겨, 업로드·공유·최근 파일·휴지통·관리 기능을 한 공간에서 사용합니다.',
-  },
-  admin: {
-    title: '관리자',
-    description: '로그인 로그, 차단 IP, 사용자 상태, 초대 현황을 관리합니다.',
-  },
-  profile: {
-    title: '내 프로필',
-    description: '계정 정보와 문의 내역, 관리자 답변을 한 곳에서 확인합니다.',
-  },
-  invite: {
-    title: '초대 링크 가입',
-    description: '새 계정은 1회용 초대 링크로만 만들 수 있습니다.',
-  },
-}
-
-const normalizedFeatureItems = [
-  {
-    key: 'household',
-    number: '1',
-    title: '가계부',
-    description: '가계부, 통계, 검색과 분류 관리까지 한 화면에서 바로 사용할 수 있습니다.',
-  },
-  {
-    key: 'travel',
-    number: '2',
-    title: '여행',
-    description: '여행 설정, 여행 가계부, 여행 로그, 내 지도와 사진 기능을 한 워크스페이스에서 관리합니다.',
-  },
-  {
-    key: 'drive',
-    number: '4',
-    title: 'CalenDrive',
-    description: '파일 업로드, 공유, 휴지통, 관리자 도구를 하나의 드라이브 화면에서 사용합니다.',
-  },
-]
-
-const normalizedAdminFeatureItem = {
-  key: 'admin',
-  number: '7',
-  title: '관리자',
-  description: '로그인 로그, 차단 IP, 사용자 상태, 초대 현황을 관리합니다.',
-}
-
-const normalizedRouteMeta = {
-  launcher: {
-    title: '기능 선택',
-    description: '다음으로 열고 싶은 기능 영역을 선택하세요.',
-  },
-  household: {
-    title: '가계부',
-    description: '월별 가계부, 통계, 검색과 분류 관리 기능을 한곳에서 확인합니다.',
-  },
-  travel: {
-    title: '여행',
-    description: '여행 설정, 여행 가계부, 여행 로그, 내 지도와 사진 기능을 한 워크스페이스에서 사용합니다.',
-  },
-  drive: {
-    title: 'CalenDrive',
-    description: '파일 업로드, 폴더 관리, 공유, 휴지통, 관리자 기능을 드라이브 화면에서 사용합니다.',
-  },
-  'travel-money': {
-    title: '여행 예산',
-    description: '여행 예산안과 실제 지출을 한곳에서 관리합니다.',
-  },
-  'travel-log': {
-    title: '여행 로그',
-    description: '여행 기록, 이동 경로, 장소, 업로드 파일을 확인합니다.',
-  },
-  'photo-album': {
-    title: '여행 사진',
-    description: '기록 기반으로 구성된 여행 사진 모아보기를 확인합니다.',
-  },
-  'family-album': {
-    title: '가족 앨범',
-    description: '가족 구성원과 함께 쓰는 사진 및 영상 앨범을 확인합니다.',
-  },
-  'my-map': {
-    title: '내 지도',
-    description: '전체 여행의 핀과 경로를 지도로 모아 보고, 원하는 핀만 눌러 자세히 확인합니다.',
-  },
-  admin: {
-    title: '관리자',
-    description: '로그인 로그, 차단 IP, 사용자 상태, 초대 현황을 관리합니다.',
-  },
-  profile: {
-    title: '내 프로필',
-    description: '계정 정보와 문의 내역, 관리자 여부를 한곳에서 확인합니다.',
-  },
-  invite: {
-    title: '초대 링크 만들기',
     description: '새 계정은 1회용 초대 링크로만 만들 수 있습니다.',
   },
 }
@@ -337,14 +158,10 @@ const inviteManager = reactive({
   errorMessage: '',
 })
 
-const travelRouteKeys = new Set(['travel', 'travel-money', 'travel-log', 'photo-album', 'my-map'])
-const pageMeta = computed(() => {
-  const routeKey = travelRouteKeys.has(activeRoute.value) ? 'travel' : activeRoute.value
-  return normalizedRouteMeta[routeKey] || normalizedRouteMeta.launcher
-})
+const pageMeta = computed(() => routeMeta[activeRoute.value] || routeMeta.launcher)
 const isTossTheme = computed(() => themeMode.value === 'toss')
 const launcherItems = computed(() => (
-  currentUser.value?.admin ? [...normalizedFeatureItems, normalizedAdminFeatureItem] : normalizedFeatureItems
+  currentUser.value?.admin ? [...featureItems, adminFeatureItem] : featureItems
 ))
 const themeDegreeDisplay = computed(() => `${themeDegree.value}%`)
 
@@ -359,15 +176,8 @@ function resolveRouteState(hash) {
     }
   }
 
-  if (route === 'family-album') {
-    return {
-      route: 'travel',
-      token: '',
-    }
-  }
-
   return {
-    route: normalizedRouteMeta[route] ? route : 'launcher',
+    route: routeMeta[route] ? route : 'launcher',
     token: '',
   }
 }
@@ -569,7 +379,7 @@ function handleBeforeUnload(event) {
 }
 
 function navigate(route) {
-  const nextRoute = normalizedRouteMeta[route] ? route : 'launcher'
+  const nextRoute = routeMeta[route] ? route : 'launcher'
   if (nextRoute !== activeRoute.value && !confirmRouteLeaveIfNeeded()) {
     return
   }
@@ -1005,8 +815,9 @@ onBeforeUnmount(() => {
         <AdminWorkspace v-else-if="activeRoute === 'admin'" :current-user="currentUser" />
         <ProfileWorkspace v-else-if="activeRoute === 'profile'" :current-user="currentUser" />
         <HouseholdWorkspace v-else-if="activeRoute === 'household'" />
-        <CalenDriveWorkspace v-else-if="activeRoute === 'drive'" :current-user="currentUser" />
-        <TravelWorkspace v-else-if="travelRouteKeys.has(activeRoute)" :route="activeRoute" />
+        <FamilyAlbumWorkspace v-else-if="activeRoute === 'family-album'" />
+        <TravelMyMapWorkspace v-else-if="activeRoute === 'my-map'" />
+        <TravelHubWorkspace v-else :route="activeRoute" />
       </div>
     </template>
   </div>

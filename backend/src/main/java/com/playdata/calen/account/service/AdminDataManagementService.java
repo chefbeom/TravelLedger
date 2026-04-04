@@ -566,14 +566,6 @@ public class AdminDataManagementService {
                 "--user=" + databaseUsername,
                 "--password=" + databasePassword,
                 "--default-character-set=utf8mb4",
-                "--single-transaction",
-                "--quick",
-                "--routines",
-                "--events",
-                "--triggers",
-                "--hex-blob",
-                "--no-tablespaces",
-                "--databases",
                 target.database()
         );
     }

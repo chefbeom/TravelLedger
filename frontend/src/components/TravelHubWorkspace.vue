@@ -53,17 +53,7 @@ const props = defineProps({
     type: String,
     required: true,
   },
-  integratedMode: {
-    type: Boolean,
-    default: false,
-  },
-  integratedPhotoMode: {
-    type: Boolean,
-    default: false,
-  },
 })
-
-const emit = defineEmits(['request-open-finance', 'request-open-log'])
 
 const fallbackCategories = {
   planStatuses: ['PLANNED', 'COMPLETED', 'SAMPLE'],
@@ -180,8 +170,6 @@ const communityFeedTotal = ref(0)
 const sharedExhibitPage = ref(0)
 const sharedExhibitPageCount = ref(1)
 const sharedExhibitTotal = ref(0)
-const selectedRecordDate = ref('')
-const photoAlbumGroupMode = ref('all')
 
 const planStatusOptions = computed(() => travelCategories.value.planStatuses?.length ? travelCategories.value.planStatuses : fallbackCategories.planStatuses)
 const budgetCategoryOptions = computed(() => travelCategories.value.budgetCategories?.length ? travelCategories.value.budgetCategories : fallbackCategories.budgetCategories)
@@ -190,21 +178,6 @@ const memoryCategoryOptions = computed(() => travelCategories.value.memoryCatego
 const requiresExplicitPlanSelection = computed(() => props.route === 'travel-log' || props.route === 'photo-album')
 const isSharedExhibitTab = computed(() => props.route === 'photo-album' && albumTab.value === 'shared')
 const hasSharedExhibits = computed(() => sharedExhibitSummaries.value.length > 0)
-const showAlbumUploadTab = computed(() => !props.integratedPhotoMode)
-const photoAlbumTabChoices = computed(() => (
-  props.integratedPhotoMode
-    ? [
-        { key: 'gallery', label: '사진첩' },
-        { key: 'shared', label: '공유 전시' },
-        { key: 'community', label: '커뮤니티' },
-      ]
-    : [
-        { key: 'upload', label: '업로드와 기록' },
-        { key: 'gallery', label: '지도 갤러리' },
-        { key: 'shared', label: '공유 전시' },
-        { key: 'community', label: '커뮤니티' },
-      ]
-))
 const showPlanGate = computed(() =>
   requiresExplicitPlanSelection.value
   && !travelPlan.value
@@ -224,43 +197,6 @@ const emptyTravelPlanMessage = computed(() => {
   }
   return '먼저 여행을 만들어야 예산, 이동 경로, 사진첩 기능을 이어서 사용할 수 있습니다.'
 })
-
-function parseIsoDate(value) {
-  const [year, month, day] = String(value || '').split('-').map((item) => Number(item))
-  if (!year || !month || !day) {
-    return null
-  }
-
-  return new Date(year, month - 1, day)
-}
-
-function formatTravelDayBadge(value, index) {
-  const parsed = parseIsoDate(value)
-  if (!parsed) {
-    return `${index + 1}일차`
-  }
-
-  return `${index + 1}일차 · ${parsed.getMonth() + 1}/${parsed.getDate()}`
-}
-
-function buildTravelDateRange(startDate, endDate) {
-  const start = parseIsoDate(startDate)
-  const end = parseIsoDate(endDate)
-  if (!start || !end || start > end) {
-    return []
-  }
-
-  const dates = []
-  const cursor = new Date(start)
-  while (cursor <= end && dates.length < 400) {
-    const year = cursor.getFullYear()
-    const month = String(cursor.getMonth() + 1).padStart(2, '0')
-    const day = String(cursor.getDate()).padStart(2, '0')
-    dates.push(`${year}-${month}-${day}`)
-    cursor.setDate(cursor.getDate() + 1)
-  }
-  return dates
-}
 
 function normalizeTravelRecordTime(value) {
   const normalized = String(value || '').trim()
@@ -338,56 +274,8 @@ const recordMediaCountMap = computed(() => {
   return bucket
 })
 
-const tripDateRange = computed(() => buildTravelDateRange(travelPlan.value?.startDate, travelPlan.value?.endDate))
-const recordSummaryByDate = computed(() => {
-  const bucket = new Map()
-  ;(travelPlan.value?.records ?? []).forEach((record) => {
-    const dateKey = String(record.expenseDate || '').trim()
-    if (!dateKey) {
-      return
-    }
-
-    const current = bucket.get(dateKey) ?? {
-      totalKrw: 0,
-      count: 0,
-      photoCount: 0,
-      currencies: new Set(),
-    }
-    current.totalKrw += safeNumber(record.amountKrw)
-    current.count += 1
-    current.photoCount += recordMediaCountMap.value.get(String(record.id))?.photos || 0
-    if (record.currencyCode) {
-      current.currencies.add(String(record.currencyCode).toUpperCase())
-    }
-    bucket.set(dateKey, current)
-  })
-  return bucket
-})
-
-const tripRecordDays = computed(() =>
-  tripDateRange.value.map((date, index) => {
-    const summary = recordSummaryByDate.value.get(date)
-    return {
-      date,
-      dayLabel: formatTravelDayBadge(date, index),
-      totalKrw: summary?.totalKrw || 0,
-      count: summary?.count || 0,
-      photoCount: summary?.photoCount || 0,
-      currencyLabel: [...(summary?.currencies ?? [])].join(', '),
-    }
-  }),
-)
-
-const filteredTravelRecords = computed(() => {
-  const records = travelPlan.value?.records ?? []
-  if (!selectedRecordDate.value) {
-    return records
-  }
-  return records.filter((record) => String(record.expenseDate || '') === selectedRecordDate.value)
-})
-
 const recordMarkers = computed(() =>
-  filteredTravelRecords.value
+  (travelPlan.value?.records ?? [])
     .filter((record) => record.latitude !== null && record.latitude !== undefined && record.longitude !== null && record.longitude !== undefined)
     .map((record) => ({
       id: record.id,
@@ -488,42 +376,6 @@ const photoAlbumMarkers = computed(() =>
   })),
 )
 
-const photoAlbumGroups = computed(() => {
-  const bucket = new Map()
-
-  photoAlbumCards.value.forEach((item) => {
-    let groupKey = 'all'
-    let label = '전체 보기'
-
-    switch (photoAlbumGroupMode.value) {
-      case 'time':
-        groupKey = item.memoryDate || 'unknown-date'
-        label = item.memoryDate ? `${formatDate(item.memoryDate)} 일정` : '날짜 미지정'
-        break
-      case 'country':
-        groupKey = item.country || 'unknown-country'
-        label = item.country || '국가 미지정'
-        break
-      case 'region':
-        groupKey = `${item.country || ''}__${item.region || 'unknown-region'}`
-        label = [item.country, item.region].filter(Boolean).join(' / ') || '지역 미지정'
-        break
-      case 'travel':
-        groupKey = item.planName || 'unknown-plan'
-        label = item.planName || '여행 미지정'
-        break
-      default:
-        break
-    }
-
-    const current = bucket.get(groupKey) ?? { key: groupKey, label, items: [] }
-    current.items.push(item)
-    bucket.set(groupKey, current)
-  })
-
-  return [...bucket.values()]
-})
-
 watch(
   () => photoAlbumCards.value.length,
   () => {
@@ -536,49 +388,6 @@ watch(
 watch(albumTab, () => {
   photoAlbumPage.value = 0
 })
-
-watch(
-  () => [travelPlan.value?.id, travelPlan.value?.startDate, travelPlan.value?.endDate],
-  () => {
-    const availableDates = tripRecordDays.value.map((item) => item.date)
-    if (!availableDates.length) {
-      selectedRecordDate.value = ''
-      return
-    }
-
-    if (availableDates.includes(selectedRecordDate.value)) {
-      return
-    }
-
-    const latestRecordedDate = [...recordSummaryByDate.value.keys()]
-      .filter((date) => availableDates.includes(date))
-      .sort((left, right) => left.localeCompare(right))
-      .at(-1)
-
-    selectedRecordDate.value = latestRecordedDate || availableDates[0]
-  },
-  { immediate: true },
-)
-
-watch(
-  () => [props.route, props.integratedPhotoMode],
-  ([route, integratedPhotoMode]) => {
-    if (route === 'photo-album' && integratedPhotoMode && albumTab.value === 'upload') {
-      albumTab.value = 'gallery'
-    }
-    if (route !== 'photo-album' && integratedPhotoMode && photoAlbumGroupMode.value !== 'all') {
-      photoAlbumGroupMode.value = 'all'
-    }
-  },
-  { immediate: true },
-)
-
-function handleSelectRecordDate(date) {
-  selectedRecordDate.value = String(date || '')
-  if (!editingRecordId.value && selectedRecordDate.value) {
-    recordForm.expenseDate = selectedRecordDate.value
-  }
-}
 
 function setFeedback(message = '', error = '') {
   feedback.value = message
@@ -673,7 +482,7 @@ function fillBudgetForm(item) {
 
 function resetRecordForm() {
   editingRecordId.value = null
-  recordForm.expenseDate = selectedRecordDate.value || travelPlan.value?.startDate || todayIso()
+  recordForm.expenseDate = travelPlan.value?.startDate || todayIso()
   recordForm.expenseTime = ''
   recordForm.category = expenseCategoryOptions.value[0] || '식비'
   recordForm.title = ''
@@ -875,17 +684,12 @@ async function handleSelectSharedExhibit(shareId) {
 watch(
   () => props.route,
   async (route, previousRoute) => {
-    if (!props.integratedMode && route !== previousRoute && (route === 'travel-log' || route === 'photo-album')) {
+    if (route !== previousRoute && (route === 'travel-log' || route === 'photo-album')) {
       selectedPlanId.value = ''
       travelPlan.value = null
       memoryFocusRequest.value = null
     }
-    const preferredPlanId = (
-      route === 'travel-money' || props.integratedMode
-        ? selectedPlanId.value
-        : ''
-    )
-    await refreshTravelData(preferredPlanId, route === 'photo-album')
+    await refreshTravelData(route === 'travel-money' ? selectedPlanId.value : '', route === 'photo-album')
   },
 )
 
@@ -923,13 +727,7 @@ async function handleShareTravelPlan() {
 function handleOpenTravelPlanner() {
   resetPlanForm()
   moneyTab.value = 'planner'
-  if (props.integratedMode) {
-    emit('request-open-finance')
-    return
-  }
-  if (!props.integratedMode) {
-    window.location.hash = 'travel-money'
-  }
+  window.location.hash = 'travel-money'
 }
 
 async function handleSubmitPlan() {
@@ -1238,15 +1036,11 @@ async function handleDeleteRoute(route) {
 function openMemoryEditor(memoryId) {
   if (!memoryId) return
   logTab.value = 'memories'
+  albumTab.value = 'upload'
   memoryFocusRequest.value = {
     id: String(memoryId),
     token: Date.now(),
   }
-  if (props.integratedPhotoMode) {
-    emit('request-open-log')
-    return
-  }
-  albumTab.value = 'upload'
 }
 </script>
 
@@ -1341,8 +1135,8 @@ function openMemoryEditor(memoryId) {
       <section class="panel">
         <div class="scope-toggle">
           <button class="button" :class="{ 'button--primary': moneyTab === 'planner' }" @click="moneyTab = 'planner'">여행 설정</button>
-          <button class="button" :class="{ 'button--primary': moneyTab === 'budget' }" @click="moneyTab = 'budget'">예약·예산</button>
-          <button class="button" :class="{ 'button--primary': moneyTab === 'records' }" @click="moneyTab = 'records'">여행 가계부</button>
+          <button class="button" :class="{ 'button--primary': moneyTab === 'budget' }" @click="moneyTab = 'budget'">예산안</button>
+          <button class="button" :class="{ 'button--primary': moneyTab === 'records' }" @click="moneyTab = 'records'">지출 장부</button>
           <button class="button" :class="{ 'button--primary': moneyTab === 'stats' }" @click="moneyTab = 'stats'">통계</button>
         </div>
       </section>
@@ -1414,44 +1208,6 @@ function openMemoryEditor(memoryId) {
           </div>
         </section>
       </div>      <div v-else-if="moneyTab === 'records'" class="workspace-stack">
-        <section class="panel">
-          <div class="panel__header">
-            <div>
-              <h2>여행 날짜 가계부</h2>
-              <p>월 달력 대신 선택한 여행 기간만큼 날짜를 펼쳐 두고, 이동 중에는 하루 단위로 바로 지출을 적을 수 있게 구성했습니다.</p>
-            </div>
-            <span class="panel__badge">{{ tripRecordDays.length }}일</span>
-          </div>
-          <div class="scope-toggle scope-toggle--wrap">
-            <button class="button" :class="{ 'button--primary': !selectedRecordDate }" @click="handleSelectRecordDate('')">전체 보기</button>
-            <button
-              v-for="day in tripRecordDays"
-              :key="day.date"
-              class="button"
-              :class="{ 'button--primary': selectedRecordDate === day.date }"
-              @click="handleSelectRecordDate(day.date)"
-            >
-              {{ day.dayLabel }}
-            </button>
-          </div>
-          <div v-if="tripRecordDays.length" class="travel-ledger-grid">
-            <button
-              v-for="day in tripRecordDays"
-              :key="`ledger-${day.date}`"
-              type="button"
-              class="travel-ledger-card"
-              :class="{ 'travel-ledger-card--active': selectedRecordDate === day.date }"
-              @click="handleSelectRecordDate(day.date)"
-            >
-              <small>{{ day.dayLabel }}</small>
-              <strong>{{ formatCurrency(day.totalKrw) }}</strong>
-              <span>지출 {{ day.count }}건</span>
-              <span>사진 {{ day.photoCount }}장</span>
-              <span>{{ day.currencyLabel || 'KRW 환산 기준' }}</span>
-            </button>
-          </div>
-          <p v-else class="panel__empty">선택한 여행의 기간 정보가 없어서 날짜형 장부를 만들 수 없습니다.</p>
-        </section>
         <div class="content-grid content-grid--travel content-grid--travel-records">
           <section class="panel">
             <div class="panel__header"><div><h2>{{ editingRecordId ? '지출 기록 수정' : '지출 기록 추가' }}</h2><p>언제 어디서 얼마를 썼는지와 사진, 위치를 함께 기록해 여행 지출 장부를 정리합니다.</p></div></div>
@@ -1492,8 +1248,8 @@ function openMemoryEditor(memoryId) {
             <table class="sheet-table">
               <thead><tr><th>날짜</th><th>분류</th><th>항목명</th><th>장소</th><th>원통화</th><th>KRW</th><th>사진</th><th>작업</th></tr></thead>
               <tbody>
-                <tr v-for="record in filteredTravelRecords" :key="record.id"><td>{{ formatDateTime(record.expenseDate, record.expenseTime) }}</td><td>{{ record.category }}</td><td>{{ record.title }}</td><td>{{ formatTravelLocationLabel(record) }}</td><td>{{ formatCurrencyByCode(record.amount, record.currencyCode) }}</td><td>{{ formatCurrency(record.amountKrw) }}</td><td><div class="travel-record-media-count"><strong>사진 {{ recordMediaCountMap.get(String(record.id))?.photos || 0 }}장</strong></div></td><td class="sheet-table__actions"><button class="button button--ghost" @click="fillRecordForm(record)">수정</button><button class="button button--danger" @click="handleDeleteRecord(record)">삭제</button></td></tr>
-                <tr v-if="!filteredTravelRecords.length"><td colspan="8" class="sheet-table__empty">{{ selectedRecordDate ? '선택한 날짜에는 지출 기록이 없습니다.' : '지출 기록이 아직 없습니다.' }}</td></tr>
+                <tr v-for="record in travelPlan?.records ?? []" :key="record.id"><td>{{ formatDateTime(record.expenseDate, record.expenseTime) }}</td><td>{{ record.category }}</td><td>{{ record.title }}</td><td>{{ formatTravelLocationLabel(record) }}</td><td>{{ formatCurrencyByCode(record.amount, record.currencyCode) }}</td><td>{{ formatCurrency(record.amountKrw) }}</td><td><div class="travel-record-media-count"><strong>사진 {{ recordMediaCountMap.get(String(record.id))?.photos || 0 }}장</strong></div></td><td class="sheet-table__actions"><button class="button button--ghost" @click="fillRecordForm(record)">수정</button><button class="button button--danger" @click="handleDeleteRecord(record)">삭제</button></td></tr>
+                <tr v-if="!(travelPlan?.records ?? []).length"><td colspan="8" class="sheet-table__empty">지출 기록이 아직 없습니다.</td></tr>
               </tbody>
             </table>
           </div>
@@ -1538,69 +1294,12 @@ function openMemoryEditor(memoryId) {
     </template>
 
     <template v-else-if="route === 'photo-album'">
-      <section class="panel">
-        <div class="scope-toggle scope-toggle--wrap">
-          <button
-            v-for="item in photoAlbumTabChoices"
-            :key="item.key"
-            class="button"
-            :class="{ 'button--primary': albumTab === item.key }"
-            @click="albumTab = item.key"
-          >
-            {{ item.label }}
-          </button>
-        </div>
-        <small v-if="integratedPhotoMode" class="field__hint">사진 업로드와 기록 편집은 여행 로그에서 하고, 여기서는 지도와 사진첩 중심으로 다시 모아 봅니다.</small>
-      </section>
-      <TravelMemoryPanel v-if="showAlbumUploadTab && albumTab === 'upload'" :travel-plan="travelPlan" :category-options="memoryCategoryOptions" :is-submitting="isSubmitting" :active-submit="activeSubmit" :refresh-key="memoryRefreshKey" :focus-request="memoryFocusRequest" :upload-progress="memoryUploadProgress" @save-memory="handleSaveMemory" @delete-memory="handleDeleteMemory" @delete-media="handleDeleteMedia" />
+      <section class="panel"><div class="scope-toggle"><button class="button" :class="{ 'button--primary': albumTab === 'upload' }" @click="albumTab = 'upload'">업로드와 기록</button><button class="button" :class="{ 'button--primary': albumTab === 'gallery' }" @click="albumTab = 'gallery'">지도 갤러리</button><button class="button" :class="{ 'button--primary': albumTab === 'shared' }" @click="albumTab = 'shared'">공유 전시</button><button class="button" :class="{ 'button--primary': albumTab === 'community' }" @click="albumTab = 'community'">커뮤니티 피드</button></div></section>
+      <TravelMemoryPanel v-if="albumTab === 'upload'" :travel-plan="travelPlan" :category-options="memoryCategoryOptions" :is-submitting="isSubmitting" :active-submit="activeSubmit" :refresh-key="memoryRefreshKey" :focus-request="memoryFocusRequest" :upload-progress="memoryUploadProgress" @save-memory="handleSaveMemory" @delete-memory="handleDeleteMemory" @delete-media="handleDeleteMedia" />
       <div v-else-if="albumTab === 'gallery'" class="workspace-stack">
         <section class="panel"><div class="panel__header"><div><h2>사진 재사용 흐름</h2><p>갤러리 카드에서 바로 기록 편집을 누르면 업로드 화면이 열리고, 기존 사진은 그대로 유지된 채 새 사진과 메모만 이어서 추가할 수 있습니다.</p></div><span class="panel__badge">{{ photoAlbumCards.length }}개 기록</span></div></section>
         <section class="panel panel--map-fill"><div class="panel__header"><div><h2>사진첩 지도</h2><p>선택한 여행의 사진 기록이 위치별로 묶여 큰 지도에 표시됩니다.</p></div><span class="panel__badge">{{ photoAlbumPhotoCount }}장</span></div><TravelMapPanel :markers="photoAlbumMarkers" :selected-point="null" :enable-pick-location="false" :enable-draw-route="false" :view-key="travelPlan?.id || 'photo-album-map'" hint-title="사진 핀 보기" hint-text="여행 기록에 연결된 사진을 위치별로 묶어 보여줍니다." /></section>
-        <section class="panel">
-          <div class="panel__header">
-            <div>
-              <h2>사진첩 카드</h2>
-              <p>여행 로그에서 올린 사진을 여행, 시간, 국가, 지역 기준으로 다시 묶어 보고 필요할 때만 여행 로그 편집으로 이동합니다.</p>
-            </div>
-          </div>
-          <div class="scope-toggle scope-toggle--wrap">
-            <button class="button" :class="{ 'button--primary': photoAlbumGroupMode === 'all' }" @click="photoAlbumGroupMode = 'all'">전체 보기</button>
-            <button class="button" :class="{ 'button--primary': photoAlbumGroupMode === 'travel' }" @click="photoAlbumGroupMode = 'travel'">여행별</button>
-            <button class="button" :class="{ 'button--primary': photoAlbumGroupMode === 'time' }" @click="photoAlbumGroupMode = 'time'">시간순</button>
-            <button class="button" :class="{ 'button--primary': photoAlbumGroupMode === 'country' }" @click="photoAlbumGroupMode = 'country'">국가별</button>
-            <button class="button" :class="{ 'button--primary': photoAlbumGroupMode === 'region' }" @click="photoAlbumGroupMode = 'region'">지역별</button>
-          </div>
-          <div v-if="photoAlbumCards.length" class="travel-photo-groups">
-            <section v-for="group in photoAlbumGroups" :key="group.key" class="travel-photo-group">
-              <div class="travel-photo-group__header">
-                <strong>{{ group.label }}</strong>
-                <small>{{ group.items.length }}개 기록 / 사진 {{ group.items.reduce((total, item) => total + item.photoCount, 0) }}장</small>
-              </div>
-              <div class="travel-media-grid travel-media-grid--gallery">
-                <article v-for="(item, index) in group.items" :key="item.id" class="travel-media-card">
-                  <img v-if="item.heroPhotoUrl" :src="buildThumbnailUrl(item.heroPhotoUrl)" :alt="item.caption || item.title" :loading="index < 2 ? 'eager' : 'lazy'" :fetchpriority="index < 2 ? 'high' : 'auto'" decoding="async" class="travel-media-thumb" />
-                  <div v-else class="travel-media-thumb travel-media-thumb--receipt">사진 없음</div>
-                  <div class="travel-media-copy">
-                    <div class="travel-media-tags">
-                      <span class="chip chip--neutral">{{ item.planName || '여행' }}</span>
-                      <span class="chip chip--neutral">사진 {{ item.photoCount }}장</span>
-                    </div>
-                    <strong>{{ item.title }}</strong>
-                    <small>{{ formatDateTime(item.memoryDate, item.memoryTime) }}</small>
-                    <small>{{ item.locationLabel }}</small>
-                    <small>{{ item.memo || '이 기록을 다시 열면 기존 사진이 남아 있는 상태에서 이어서 편집할 수 있습니다.' }}</small>
-                  </div>
-                  <div class="travel-media-actions">
-                    <button class="button button--primary" @click="openMemoryEditor(item.memoryId)">기록 편집</button>
-                    <a v-if="item.heroPhotoUrl" class="button button--ghost" :href="item.heroPhotoUrl" target="_blank" rel="noreferrer">대표 사진 열기</a>
-                    <button class="button button--danger" :disabled="!item.heroPhoto" @click="handleDeleteMedia(item.heroPhoto)">대표 사진 삭제</button>
-                  </div>
-                </article>
-              </div>
-            </section>
-          </div>
-          <p v-else class="panel__empty">사진첩에 표시할 사진이 아직 없습니다.</p>
-        </section>
+        <section class="panel"><div class="panel__header"><div><h2>사진첩 카드</h2><p>여행 로그에서 올린 사진을 여기서 그대로 재사용하며, 카드에서 바로 원본 보기와 기록 편집이 가능합니다.</p></div></div><div v-if="photoAlbumCards.length" class="travel-media-grid travel-media-grid--gallery"><article v-for="(item, index) in pagedPhotoAlbumCards" :key="item.id" class="travel-media-card"><img v-if="item.heroPhotoUrl" :src="buildThumbnailUrl(item.heroPhotoUrl)" :alt="item.caption || item.title" :loading="index < 2 ? 'eager' : 'lazy'" :fetchpriority="index < 2 ? 'high' : 'auto'" decoding="async" class="travel-media-thumb" /><div v-else class="travel-media-thumb travel-media-thumb--receipt">사진 없음</div><div class="travel-media-copy"><div class="travel-media-tags"><span class="chip chip--neutral">{{ item.planName || '여행' }}</span><span class="chip chip--neutral">사진 {{ item.photoCount }}장</span></div><strong>{{ item.title }}</strong><small>{{ formatDateTime(item.memoryDate, item.memoryTime) }}</small><small>{{ item.locationLabel }}</small><small>{{ item.memo || '이 기록을 다시 열면 기존 사진이 남아 있는 상태에서 이어서 편집할 수 있습니다.' }}</small></div><div class="travel-media-actions"><button class="button button--primary" @click="openMemoryEditor(item.memoryId)">기록 편집</button><a v-if="item.heroPhotoUrl" class="button button--ghost" :href="item.heroPhotoUrl" target="_blank" rel="noreferrer">대표 사진 열기</a><button class="button button--danger" :disabled="!item.heroPhoto" @click="handleDeleteMedia(item.heroPhoto)">대표 사진 삭제</button></div></article></div><div v-if="photoAlbumCards.length > PHOTO_ALBUM_PAGE_SIZE" class="panel__actions"><button class="button button--ghost" type="button" :disabled="photoAlbumPage <= 0" @click="photoAlbumPage -= 1">이전</button><span>{{ photoAlbumPage + 1 }} / {{ photoAlbumPageCount }}</span><button class="button button--ghost" type="button" :disabled="photoAlbumPage + 1 >= photoAlbumPageCount" @click="photoAlbumPage += 1">다음</button></div><p v-else class="panel__empty">사진첩에 표시할 사진이 아직 없습니다.</p></section>
       </div>
       <TravelSharedExhibitWorkspace v-else-if="albumTab === 'shared'" :exhibits="sharedExhibitSummaries" :exhibit-page="sharedExhibitPage" :exhibit-page-count="sharedExhibitPageCount" :exhibit-total="sharedExhibitTotal" :selected-exhibit-id="selectedSharedExhibitId" :selected-exhibit="selectedSharedExhibit" :is-loading="isLoading" @select-exhibit="handleSelectSharedExhibit" @change-exhibit-page="handleChangeSharedExhibitPage" />
       <TravelCommunityWorkspace v-else :travel-plan="travelPlan" :community-feed="communityFeed" :community-page="communityFeedPage" :community-page-count="communityFeedPageCount" :community-total="communityFeedTotal" @change-community-page="handleChangeCommunityFeedPage" />

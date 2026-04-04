@@ -36,8 +36,7 @@ import org.springframework.web.multipart.MultipartFile;
 @Slf4j
 public class TravelMediaStorageService {
 
-    private static final long MAX_TRAVEL_MEDIA_FILE_SIZE = 15L * 1024 * 1024;
-    private static final long MAX_GPX_FILE_SIZE = 10L * 1024 * 1024;
+    private static final long MAX_FILE_SIZE = 10L * 1024 * 1024;
     private static final int HEADER_BYTES = 32;
     private static final List<Integer> PREPARED_THUMBNAIL_WIDTHS = List.of(320, 480, 960);
     private static final Set<String> IMAGE_FILE_EXTENSIONS = Set.of(
@@ -381,7 +380,7 @@ public class TravelMediaStorageService {
         if (file.getSize() <= 0) {
             throw new BadRequestException("Select a GPX file to upload.");
         }
-        if (file.getSize() > MAX_GPX_FILE_SIZE) {
+        if (file.getSize() > MAX_FILE_SIZE) {
             throw new BadRequestException("GPX files up to 10MB are allowed.");
         }
 
@@ -607,8 +606,8 @@ public class TravelMediaStorageService {
         if (fileSize <= 0) {
             throw new BadRequestException("Select a file to upload.");
         }
-        if (fileSize > MAX_TRAVEL_MEDIA_FILE_SIZE) {
-            throw new BadRequestException("Photos and receipts up to 15MB are allowed.");
+        if (fileSize > MAX_FILE_SIZE) {
+            throw new BadRequestException("Files up to 10MB are allowed.");
         }
 
         return resolveAllowedContentType(originalFileName, contentType);

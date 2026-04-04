@@ -5,7 +5,7 @@ import {
   fetchTravelMyMapPhotoCluster,
   updateTravelMyMapPhotoClusterRepresentative,
 } from '../lib/api'
-import { buildThumbnailUrl } from '../lib/mediaPreview'
+import { buildThumbnailUrl, THUMBNAIL_VARIANTS } from '../lib/mediaPreview'
 import { formatDate, formatDateTime, safeNumber } from '../lib/uiFormat'
 import TravelMyMapClusterPanel from './TravelMyMapClusterPanel.vue'
 import TravelPhotoLightbox from './TravelPhotoLightbox.vue'
@@ -339,7 +339,7 @@ onMounted(async () => {
           <article class="travel-overview-place-card travel-cluster-summary-card">
             <img
               v-if="selectedClusterSummary.representativePhotoUrl"
-              :src="buildThumbnailUrl(selectedClusterSummary.representativePhotoUrl, 480)"
+              :src="buildThumbnailUrl(selectedClusterSummary.representativePhotoUrl, THUMBNAIL_VARIANTS.preview)"
               :alt="selectedClusterSummary.title || selectedClusterSummary.placeName || '대표 사진'"
               class="travel-media-thumb"
               loading="eager"
@@ -376,7 +376,7 @@ onMounted(async () => {
           <article class="travel-overview-place-card travel-selected-photo-card">
             <button class="travel-photo-preview-button" type="button" @click="lightboxPhoto = selectedPhoto">
               <img
-                :src="buildThumbnailUrl(selectedPhoto.contentUrl, 960)"
+                :src="buildThumbnailUrl(selectedPhoto.contentUrl, THUMBNAIL_VARIANTS.detail)"
                 :alt="selectedPhoto.originalFileName || '선택한 사진'"
                 class="travel-media-thumb"
                 loading="eager"
@@ -434,7 +434,7 @@ onMounted(async () => {
         >
           <button class="travel-photo-card-button" type="button" @click="handleSelectPhoto(photo)">
             <img
-              :src="buildThumbnailUrl(photo.contentUrl, 480)"
+              :src="buildThumbnailUrl(photo.contentUrl, THUMBNAIL_VARIANTS.preview)"
               :alt="photo.originalFileName || '여행 사진'"
               class="travel-media-thumb"
               :loading="index < 4 ? 'eager' : 'lazy'"

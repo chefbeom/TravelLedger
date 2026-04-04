@@ -1,12 +1,34 @@
 import exifr from 'exifr'
 
-const DEFAULT_THUMBNAIL_WIDTH = 480
-const MIN_THUMBNAIL_WIDTH = 120
-const MAX_THUMBNAIL_WIDTH = 960
-const SUPPORTED_THUMBNAIL_WIDTHS = [320, 480, 960]
+export const THUMBNAIL_VARIANTS = Object.freeze({
+  pin: 'pin',
+  mini: 'mini',
+  preview: 'preview',
+  detail: 'detail',
+})
 
-function normalizeThumbnailWidth(width) {
-  const numericWidth = Number(width)
+export const THUMBNAIL_WIDTHS = Object.freeze({
+  [THUMBNAIL_VARIANTS.pin]: 96,
+  [THUMBNAIL_VARIANTS.mini]: 240,
+  [THUMBNAIL_VARIANTS.preview]: 480,
+  [THUMBNAIL_VARIANTS.detail]: 960,
+})
+
+const DEFAULT_THUMBNAIL_WIDTH = THUMBNAIL_WIDTHS.preview
+const MIN_THUMBNAIL_WIDTH = THUMBNAIL_WIDTHS.pin
+const MAX_THUMBNAIL_WIDTH = THUMBNAIL_WIDTHS.detail
+const SUPPORTED_THUMBNAIL_WIDTHS = Object.freeze(Object.values(THUMBNAIL_WIDTHS))
+
+function resolveThumbnailWidth(widthOrVariant) {
+  const variantKey = String(widthOrVariant || '').trim().toLowerCase()
+  if (variantKey && THUMBNAIL_WIDTHS[variantKey]) {
+    return THUMBNAIL_WIDTHS[variantKey]
+  }
+  return widthOrVariant
+}
+
+function normalizeThumbnailWidth(widthOrVariant) {
+  const numericWidth = Number(resolveThumbnailWidth(widthOrVariant))
   if (!Number.isFinite(numericWidth)) {
     return DEFAULT_THUMBNAIL_WIDTH
   }
@@ -108,7 +130,7 @@ function drawOrientedPreview(context, image, orientation, targetWidth, targetHei
   context.restore()
 }
 
-export function buildThumbnailUrl(url, width = DEFAULT_THUMBNAIL_WIDTH) {
+export function buildThumbnailUrl(url, width = THUMBNAIL_VARIANTS.preview) {
   const normalizedUrl = String(url || '').trim()
   if (!normalizedUrl) {
     return ''

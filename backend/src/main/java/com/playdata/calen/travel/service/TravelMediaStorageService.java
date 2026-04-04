@@ -2,6 +2,7 @@ package com.playdata.calen.travel.service;
 
 import com.playdata.calen.common.config.MinioProperties;
 import com.playdata.calen.common.media.ImageThumbnailService;
+import com.playdata.calen.common.media.PreparedThumbnailProfile;
 import com.playdata.calen.common.exception.BadRequestException;
 import io.minio.GetObjectArgs;
 import io.minio.GetPresignedObjectUrlArgs;
@@ -26,7 +27,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.AbstractResource;
-import org.springframework.core.io.ByteArrayResource;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.UrlResource;
 import org.springframework.stereotype.Service;
@@ -40,7 +40,7 @@ public class TravelMediaStorageService {
     private static final long MAX_TRAVEL_MEDIA_FILE_SIZE = 15L * 1024 * 1024;
     private static final long MAX_GPX_FILE_SIZE = 10L * 1024 * 1024;
     private static final int HEADER_BYTES = 32;
-    private static final List<Integer> PREPARED_THUMBNAIL_WIDTHS = List.of(320, 480, 960);
+    private static final List<Integer> PREPARED_THUMBNAIL_WIDTHS = PreparedThumbnailProfile.defaultWidths();
     private static final Set<String> IMAGE_FILE_EXTENSIONS = Set.of(
             "jpg",
             "jpeg",
@@ -215,7 +215,7 @@ public class TravelMediaStorageService {
         String thumbnailPath = buildThumbnailStoragePath(
                 storagePath,
                 contentType,
-                selectPreparedThumbnailWidth(requestedWidth)
+                PreparedThumbnailProfile.selectWidth(requestedWidth)
         );
         try {
             return new PreparedThumbnail(loadAsResource(thumbnailPath), resolveThumbnailContentType(contentType));
@@ -233,9 +233,11 @@ public class TravelMediaStorageService {
             return null;
         }
 
-        return imageThumbnailService.createThumbnail(loadAsResource(storagePath), contentType, requestedWidth)
-                .map(thumbnail -> new PreparedThumbnail(new ByteArrayResource(thumbnail.bytes()), thumbnail.contentType()))
-                .orElse(null);
+        if (!prepareDerivedThumbnails(storagePath, contentType)) {
+            return null;
+        }
+
+        return loadPreparedThumbnail(storagePath, contentType, requestedWidth);
     }
 
     public void deleteQuietly(String storagePath) {
@@ -426,18 +428,20 @@ public class TravelMediaStorageService {
     }
 
     private void prepareDerivedThumbnailsQuietly(String storagePath, String contentType) {
-        if (!StringUtils.hasText(storagePath) || !StringUtils.hasText(contentType) || !contentType.startsWith("image/") || !isMinioObject(storagePath) || !isMinioEnabled()) {
-            return;
+        prepareDerivedThumbnails(storagePath, contentType);
+    }
+
+    private boolean prepareDerivedThumbnails(String storagePath, String contentType) {
+        if (!StringUtils.hasText(storagePath) || !StringUtils.hasText(contentType) || !contentType.startsWith("image/")) {
+            return false;
         }
 
-        try (InputStream inputStream = minioClient.getObject(
-                GetObjectArgs.builder()
-                        .bucket(minioProperties.getBucket_cloud())
-                        .object(storagePath)
-                        .build())) {
+        try (InputStream inputStream = loadAsResource(storagePath).getInputStream()) {
             prepareDerivedThumbnailsQuietly(storagePath, contentType, inputStream.readAllBytes());
+            return true;
         } catch (Exception exception) {
             log.debug("Failed to prepare image thumbnails for {}", storagePath, exception);
+            return false;
         }
     }
 
@@ -484,16 +488,6 @@ public class TravelMediaStorageService {
                             .build()
             );
         }
-    }
-
-    private int selectPreparedThumbnailWidth(Integer requestedWidth) {
-        int normalizedWidth = requestedWidth == null ? 480 : requestedWidth;
-        for (int candidateWidth : PREPARED_THUMBNAIL_WIDTHS) {
-            if (normalizedWidth <= candidateWidth) {
-                return candidateWidth;
-            }
-        }
-        return PREPARED_THUMBNAIL_WIDTHS.get(PREPARED_THUMBNAIL_WIDTHS.size() - 1);
     }
 
     private String buildThumbnailStoragePath(String storagePath, String contentType, int width) {

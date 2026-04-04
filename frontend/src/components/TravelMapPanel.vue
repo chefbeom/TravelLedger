@@ -2,7 +2,7 @@
 import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
-import { buildThumbnailUrl } from '../lib/mediaPreview'
+import { buildThumbnailUrl, THUMBNAIL_VARIANTS } from '../lib/mediaPreview'
 import { formatCurrency, formatCurrencyByCode, formatDate, formatTime } from '../lib/uiFormat'
 
 const DEFAULT_CENTER = [37.5547, 126.9706]
@@ -304,7 +304,7 @@ function createPopupContent(marker) {
   if (heroPhoto) {
     const image = document.createElement('img')
     image.className = 'travel-map__popup-image'
-    image.src = buildThumbnailUrl(heroPhoto, 360)
+    image.src = buildThumbnailUrl(heroPhoto, THUMBNAIL_VARIANTS.mini)
     image.alt = marker.title || marker.placeName || '사진'
     image.loading = 'eager'
     image.decoding = 'async'

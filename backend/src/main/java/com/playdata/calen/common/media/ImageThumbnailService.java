@@ -17,10 +17,15 @@ import java.nio.file.StandardCopyOption;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
+import java.util.Iterator;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;
 import javax.imageio.ImageIO;
+import javax.imageio.IIOImage;
+import javax.imageio.ImageWriteParam;
+import javax.imageio.ImageWriter;
+import javax.imageio.stream.ImageOutputStream;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Service;
@@ -29,8 +34,8 @@ import org.springframework.stereotype.Service;
 @Slf4j
 public class ImageThumbnailService {
 
-    private static final int DEFAULT_WIDTH = 480;
-    private static final int MIN_WIDTH = 120;
+    private static final int DEFAULT_WIDTH = PreparedThumbnailProfile.PREVIEW.width();
+    private static final int MIN_WIDTH = 64;
     private static final int MAX_WIDTH = 1280;
     private static final String CACHE_DIRECTORY_NAME = "calen-thumbnail-cache";
     private static final HexFormat HEX_FORMAT = HexFormat.of();
@@ -102,7 +107,15 @@ public class ImageThumbnailService {
 
             return normalizedWidths.stream()
                     .filter(width -> orientedImage.getWidth() > width)
-                    .map(width -> createPreparedThumbnail(orientedImage, width, keepAlpha, outputFormat, outputContentType, fileExtension))
+                    .map(width -> createPreparedThumbnail(
+                            orientedImage,
+                            width,
+                            keepAlpha,
+                            outputFormat,
+                            outputContentType,
+                            fileExtension,
+                            PreparedThumbnailProfile.jpegQualityForWidth(width)
+                    ))
                     .flatMap(Optional::stream)
                     .toList();
         } catch (IOException exception) {
@@ -209,7 +222,8 @@ public class ImageThumbnailService {
             boolean keepAlpha,
             String outputFormat,
             String outputContentType,
-            String fileExtension
+            String fileExtension,
+            float jpegQuality
     ) {
         int targetHeight = Math.max(1, (int) Math.round((double) sourceImage.getHeight() * targetWidth / sourceImage.getWidth()));
         BufferedImage thumbnail = new BufferedImage(
@@ -230,13 +244,48 @@ public class ImageThumbnailService {
 
         ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
         try {
-            if (!ImageIO.write(thumbnail, outputFormat, outputStream)) {
+            if (!writeThumbnail(thumbnail, keepAlpha, outputFormat, outputStream, jpegQuality)) {
                 return Optional.empty();
             }
             return Optional.of(new PreparedThumbnailContent(targetWidth, outputStream.toByteArray(), outputContentType, fileExtension));
         } catch (IOException exception) {
             log.debug("Failed to write prepared thumbnail.", exception);
             return Optional.empty();
+        }
+    }
+
+    private boolean writeThumbnail(
+            BufferedImage thumbnail,
+            boolean keepAlpha,
+            String outputFormat,
+            ByteArrayOutputStream outputStream,
+            float jpegQuality
+    ) throws IOException {
+        if (keepAlpha) {
+            return ImageIO.write(thumbnail, outputFormat, outputStream);
+        }
+        return writeJpeg(thumbnail, outputStream, jpegQuality);
+    }
+
+    private boolean writeJpeg(BufferedImage image, ByteArrayOutputStream outputStream, float jpegQuality) throws IOException {
+        Iterator<ImageWriter> writers = ImageIO.getImageWritersByFormatName("jpg");
+        ImageWriter writer = writers.hasNext() ? writers.next() : null;
+        if (writer == null) {
+            return false;
+        }
+
+        try (ImageOutputStream imageOutputStream = ImageIO.createImageOutputStream(outputStream)) {
+            writer.setOutput(imageOutputStream);
+            ImageWriteParam writeParam = writer.getDefaultWriteParam();
+            if (writeParam.canWriteCompressed()) {
+                writeParam.setCompressionMode(ImageWriteParam.MODE_EXPLICIT);
+                writeParam.setCompressionQuality(Math.max(0.1f, Math.min(jpegQuality, 1.0f)));
+            }
+            writer.write(null, new IIOImage(image, null, null), writeParam);
+            imageOutputStream.flush();
+            return true;
+        } finally {
+            writer.dispose();
         }
     }
 

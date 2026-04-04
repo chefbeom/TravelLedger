@@ -2,7 +2,7 @@
 import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
-import { buildThumbnailUrl } from '../lib/mediaPreview'
+import { buildThumbnailUrl, THUMBNAIL_VARIANTS } from '../lib/mediaPreview'
 import { formatDate, formatTime } from '../lib/uiFormat'
 
 const DEFAULT_CENTER = [37.5547, 126.9706]
@@ -268,7 +268,7 @@ function createPopupContent(aggregate) {
     if (aggregate?.representative?.photoUrl) {
       const image = document.createElement('img')
       image.className = 'travel-cluster-popup__image'
-      image.src = buildThumbnailUrl(aggregate.representative.photoUrl, 320)
+      image.src = buildThumbnailUrl(aggregate.representative.photoUrl, THUMBNAIL_VARIANTS.mini)
       image.alt = aggregate?.representative?.title || aggregate?.representative?.placeName || '기록 사진'
       image.loading = 'eager'
       image.decoding = 'async'
@@ -315,7 +315,7 @@ function createPopupContent(aggregate) {
   if (photoUrl) {
     const image = document.createElement('img')
     image.className = 'travel-cluster-popup__image'
-    image.src = buildThumbnailUrl(photoUrl, 360)
+    image.src = buildThumbnailUrl(photoUrl, THUMBNAIL_VARIANTS.mini)
     image.alt = aggregate?.representative?.title || aggregate?.representative?.placeName || '대표 사진'
     image.loading = 'eager'
     image.decoding = 'async'
@@ -360,7 +360,7 @@ function createPopupContent(aggregate) {
 function buildRecordMarkerIcon(marker, active) {
   const colorHex = normalizeColorHex(marker?.planColorHex, '#3182F6')
   const label = escapeHtml(String(marker?.category || marker?.title || marker?.placeName || '핀').slice(0, 2))
-  const photoUrl = marker?.photoUrl ? buildThumbnailUrl(marker.photoUrl, 320) : ''
+  const photoUrl = marker?.photoUrl ? buildThumbnailUrl(marker.photoUrl, THUMBNAIL_VARIANTS.pin) : ''
 
   return L.divIcon({
     className: 'travel-map__icon-root',
@@ -384,7 +384,7 @@ function buildClusterIcon(aggregate, active) {
   }
 
   const photoUrl = aggregate?.representative?.representativePhotoUrl
-    ? buildThumbnailUrl(aggregate.representative.representativePhotoUrl, 320)
+    ? buildThumbnailUrl(aggregate.representative.representativePhotoUrl, THUMBNAIL_VARIANTS.pin)
     : ''
   const markerSize = aggregate?.isAggregate ? 68 : 60
   const clusterCount = aggregate?.photoCount || 0

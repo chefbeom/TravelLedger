@@ -9,7 +9,7 @@ import {
   searchFamilyUsers,
   uploadFamilyMedia,
 } from '../lib/api'
-import { buildThumbnailUrl } from '../lib/mediaPreview'
+import { buildThumbnailUrl, THUMBNAIL_VARIANTS } from '../lib/mediaPreview'
 
 const timestampFormatter = new Intl.DateTimeFormat('ko-KR', {
   year: 'numeric',
@@ -579,7 +579,7 @@ onMounted(() => {
             <article v-for="(media, index) in pagedSelectedAlbumMedia" :key="`album-${media.id}`" class="family-media-card family-media-card--album">
               <img
                 v-if="media.mediaType === 'PHOTO'"
-                :src="buildThumbnailUrl(media.contentUrl)"
+                :src="buildThumbnailUrl(media.contentUrl, THUMBNAIL_VARIANTS.mini)"
                 :alt="media.originalFileName"
                 :loading="index < 4 ? 'eager' : 'lazy'"
                 :fetchpriority="index < 4 ? 'high' : 'auto'"
@@ -614,7 +614,7 @@ onMounted(() => {
             </button>
             <img
               v-if="media.mediaType === 'PHOTO'"
-              :src="buildThumbnailUrl(media.contentUrl)"
+              :src="buildThumbnailUrl(media.contentUrl, THUMBNAIL_VARIANTS.preview)"
               :alt="media.originalFileName"
               :loading="index < 4 ? 'eager' : 'lazy'"
               :fetchpriority="index < 4 ? 'high' : 'auto'"

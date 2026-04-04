@@ -3,6 +3,7 @@ package com.playdata.calen.familyalbum.service;
 import com.playdata.calen.common.config.MinioProperties;
 import com.playdata.calen.common.exception.BadRequestException;
 import com.playdata.calen.common.media.ImageThumbnailService;
+import com.playdata.calen.common.media.PreparedThumbnailProfile;
 import com.playdata.calen.familyalbum.domain.FamilyMediaType;
 import io.minio.GetObjectArgs;
 import io.minio.MinioClient;
@@ -17,12 +18,13 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.AbstractResource;
-import org.springframework.core.io.ByteArrayResource;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.UrlResource;
 import org.springframework.stereotype.Service;
@@ -30,10 +32,12 @@ import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
 
 @Service
+@Slf4j
 public class FamilyMediaStorageService {
 
     private static final long MAX_FILE_SIZE = 30L * 1024 * 1024;
     private static final int HEADER_BYTES = 32;
+    private static final List<Integer> PREPARED_THUMBNAIL_WIDTHS = PreparedThumbnailProfile.defaultWidths();
 
     private final Path rootPath;
     private final String mediaObjectPrefix;
@@ -57,6 +61,7 @@ public class FamilyMediaStorageService {
 
     public StoredFamilyMedia store(Long ownerId, Long categoryId, MultipartFile file) {
         DetectedUpload detectedUpload = validateFile(file);
+        byte[] imageSourceBytes = detectedUpload.mediaType() == FamilyMediaType.PHOTO ? readFileBytes(file) : null;
 
         String originalFileName = file.getOriginalFilename() != null ? file.getOriginalFilename() : "upload";
         String safeFileName = sanitizeFileName(originalFileName);
@@ -66,23 +71,23 @@ public class FamilyMediaStorageService {
         if (isMinioEnabled()) {
             String objectKey = buildMinioObjectKey(ownerId, categoryId, storedFileName);
             try {
-                return storeToMinio(file, originalFileName, storedFileName, objectKey, detectedUpload);
+                return storeToMinio(file, originalFileName, storedFileName, objectKey, detectedUpload, imageSourceBytes);
             } catch (BadRequestException exception) {
-                return storeToLocal(file, originalFileName, storedFileName, localStoragePath, detectedUpload);
+                return storeToLocal(file, originalFileName, storedFileName, localStoragePath, detectedUpload, imageSourceBytes);
             }
         }
 
-        return storeToLocal(file, originalFileName, storedFileName, localStoragePath, detectedUpload);
+        return storeToLocal(file, originalFileName, storedFileName, localStoragePath, detectedUpload, imageSourceBytes);
     }
 
     public Resource loadAsResource(String storagePath) {
         if (!StringUtils.hasText(storagePath)) {
-            throw new BadRequestException("파일 경로가 비어 있습니다.");
+            throw new BadRequestException("File path is empty.");
         }
 
         if (isMinioObject(storagePath)) {
             if (!isMinioEnabled()) {
-                throw new BadRequestException("MinIO가 설정되어 있지 않습니다.");
+                throw new BadRequestException("MinIO is not configured.");
             }
             return loadFromMinio(storagePath);
         }
@@ -90,14 +95,37 @@ public class FamilyMediaStorageService {
         return loadFromLocal(storagePath);
     }
 
-    public ThumbnailContent loadThumbnail(String storagePath, String contentType, Integer requestedWidth) {
+    public ThumbnailContent loadPreparedThumbnail(String storagePath, String contentType, Integer requestedWidth) {
         if (!StringUtils.hasText(storagePath) || !StringUtils.hasText(contentType) || !contentType.startsWith("image/")) {
             return null;
         }
 
-        return imageThumbnailService.createThumbnail(loadAsResource(storagePath), contentType, requestedWidth)
-                .map(thumbnail -> new ThumbnailContent(new ByteArrayResource(thumbnail.bytes()), thumbnail.contentType()))
-                .orElse(null);
+        String thumbnailPath = buildThumbnailStoragePath(
+                storagePath,
+                contentType,
+                PreparedThumbnailProfile.selectWidth(requestedWidth)
+        );
+        try {
+            return new ThumbnailContent(loadAsResource(thumbnailPath), resolveThumbnailContentType(contentType));
+        } catch (BadRequestException ignored) {
+            return null;
+        }
+    }
+
+    public ThumbnailContent loadThumbnail(String storagePath, String contentType, Integer requestedWidth) {
+        ThumbnailContent preparedThumbnail = loadPreparedThumbnail(storagePath, contentType, requestedWidth);
+        if (preparedThumbnail != null) {
+            return preparedThumbnail;
+        }
+        if (!StringUtils.hasText(storagePath) || !StringUtils.hasText(contentType) || !contentType.startsWith("image/")) {
+            return null;
+        }
+
+        if (!prepareDerivedThumbnails(storagePath, contentType)) {
+            return null;
+        }
+
+        return loadPreparedThumbnail(storagePath, contentType, requestedWidth);
     }
 
     public void deleteQuietly(String storagePath) {
@@ -115,23 +143,40 @@ public class FamilyMediaStorageService {
         deleteFromLocalQuietly(storagePath);
     }
 
+    public void deleteImageWithThumbnailsQuietly(String storagePath, String contentType) {
+        deleteQuietly(storagePath);
+
+        if (!StringUtils.hasText(storagePath) || !StringUtils.hasText(contentType) || !contentType.startsWith("image/")) {
+            return;
+        }
+
+        PREPARED_THUMBNAIL_WIDTHS.forEach(width -> deleteQuietly(buildThumbnailStoragePath(storagePath, contentType, width)));
+    }
+
     private StoredFamilyMedia storeToLocal(
             MultipartFile file,
             String originalFileName,
             String storedFileName,
             String localStoragePath,
-            DetectedUpload detectedUpload
+            DetectedUpload detectedUpload,
+            byte[] imageSourceBytes
     ) {
         Path targetPath = rootPath.resolve(Path.of(localStoragePath)).normalize();
 
         try {
             Files.createDirectories(targetPath.getParent());
-            try (InputStream inputStream = file.getInputStream()) {
-                Files.copy(inputStream, targetPath, StandardCopyOption.REPLACE_EXISTING);
+            if (imageSourceBytes != null) {
+                Files.write(targetPath, imageSourceBytes);
+            } else {
+                try (InputStream inputStream = file.getInputStream()) {
+                    Files.copy(inputStream, targetPath, StandardCopyOption.REPLACE_EXISTING);
+                }
             }
         } catch (IOException exception) {
-            throw new BadRequestException("파일을 저장하지 못했습니다.");
+            throw new BadRequestException("Failed to store file.");
         }
+
+        prepareDerivedThumbnailsQuietly(localStoragePath, detectedUpload.contentType(), imageSourceBytes);
 
         return new StoredFamilyMedia(
                 originalFileName,
@@ -148,9 +193,12 @@ public class FamilyMediaStorageService {
             String originalFileName,
             String storedFileName,
             String objectKey,
-            DetectedUpload detectedUpload
+            DetectedUpload detectedUpload,
+            byte[] imageSourceBytes
     ) {
-        try (InputStream inputStream = file.getInputStream()) {
+        try (InputStream inputStream = imageSourceBytes != null
+                ? new java.io.ByteArrayInputStream(imageSourceBytes)
+                : file.getInputStream()) {
             minioClient.putObject(
                     PutObjectArgs.builder()
                             .bucket(minioProperties.getBucket_cloud())
@@ -160,8 +208,10 @@ public class FamilyMediaStorageService {
                             .build()
             );
         } catch (Exception exception) {
-            throw new BadRequestException("파일을 저장하지 못했습니다.");
+            throw new BadRequestException("Failed to store file.");
         }
+
+        prepareDerivedThumbnailsQuietly(objectKey, detectedUpload.contentType(), imageSourceBytes);
 
         return new StoredFamilyMedia(
                 originalFileName,
@@ -177,15 +227,15 @@ public class FamilyMediaStorageService {
         try {
             Path filePath = rootPath.resolve(storagePath).normalize();
             if (!filePath.startsWith(rootPath)) {
-                throw new BadRequestException("잘못된 파일 경로입니다.");
+                throw new BadRequestException("Invalid file path.");
             }
             Resource resource = new UrlResource(filePath.toUri());
             if (!resource.exists() || !resource.isReadable()) {
-                throw new BadRequestException("파일을 찾을 수 없습니다.");
+                throw new BadRequestException("File not found.");
             }
             return resource;
         } catch (IOException exception) {
-            throw new BadRequestException("파일을 불러오지 못했습니다.");
+            throw new BadRequestException("Failed to load file.");
         }
     }
 
@@ -199,7 +249,7 @@ public class FamilyMediaStorageService {
             );
             return new MinioObjectResource(minioClient, minioProperties.getBucket_cloud(), storagePath, stat);
         } catch (Exception exception) {
-            throw new BadRequestException("파일을 불러오지 못했습니다.");
+            throw new BadRequestException("Failed to load file.");
         }
     }
 
@@ -229,16 +279,16 @@ public class FamilyMediaStorageService {
 
     private DetectedUpload validateFile(MultipartFile file) {
         if (file == null || file.isEmpty()) {
-            throw new BadRequestException("업로드할 파일을 선택해 주세요.");
+            throw new BadRequestException("Select a file to upload.");
         }
         if (!StringUtils.hasText(file.getOriginalFilename())) {
-            throw new BadRequestException("파일 이름은 필수입니다.");
+            throw new BadRequestException("File name is required.");
         }
         if (file.getSize() <= 0) {
-            throw new BadRequestException("업로드할 파일을 선택해 주세요.");
+            throw new BadRequestException("Select a file to upload.");
         }
         if (file.getSize() > MAX_FILE_SIZE) {
-            throw new BadRequestException("사진과 동영상은 30MB 이하만 업로드할 수 있습니다.");
+            throw new BadRequestException("Photos and videos up to 30MB are allowed.");
         }
 
         DetectedUpload detectedUpload = detectUpload(file.getContentType(), file.getOriginalFilename());
@@ -252,14 +302,14 @@ public class FamilyMediaStorageService {
         DetectedUpload inferredUpload = inferUploadByExtension(extension);
 
         if (inferredUpload == null) {
-            throw new BadRequestException("JPG, PNG, WEBP, GIF, BMP, MP4, M4V, MOV, WEBM 파일만 업로드할 수 있습니다.");
+            throw new BadRequestException("Only JPG, PNG, WEBP, GIF, BMP, MP4, M4V, MOV and WEBM files are allowed.");
         }
 
         if ("application/octet-stream".equals(normalizedContentType)) {
             return inferredUpload;
         }
         if (!inferredUpload.contentType().equals(normalizedContentType)) {
-            throw new BadRequestException("파일 확장자와 Content-Type이 일치해야 합니다.");
+            throw new BadRequestException("File extension and content type must match.");
         }
         return inferredUpload;
     }
@@ -282,10 +332,10 @@ public class FamilyMediaStorageService {
         try (InputStream inputStream = file.getInputStream()) {
             byte[] header = readHeader(inputStream);
             if (!matchesSignature(header, contentType)) {
-                throw new BadRequestException("업로드한 파일 내용이 파일 형식과 일치하지 않습니다.");
+                throw new BadRequestException("Uploaded file contents do not match the file type.");
             }
         } catch (IOException exception) {
-            throw new BadRequestException("업로드한 파일을 읽지 못했습니다.");
+            throw new BadRequestException("Failed to read the uploaded file.");
         }
     }
 
@@ -351,8 +401,114 @@ public class FamilyMediaStorageService {
         return sanitized.isBlank() ? "file" : sanitized.toLowerCase(Locale.ROOT);
     }
 
+    private byte[] readFileBytes(MultipartFile file) {
+        try {
+            return file.getBytes();
+        } catch (IOException exception) {
+            throw new BadRequestException("Failed to read the uploaded file.");
+        }
+    }
+
     private String normalizeContentType(String contentType) {
         return contentType == null ? "application/octet-stream" : contentType.trim().toLowerCase(Locale.ROOT);
+    }
+
+    private boolean prepareDerivedThumbnails(String storagePath, String contentType) {
+        if (!StringUtils.hasText(storagePath) || !StringUtils.hasText(contentType) || !contentType.startsWith("image/")) {
+            return false;
+        }
+
+        try (InputStream inputStream = loadAsResource(storagePath).getInputStream()) {
+            prepareDerivedThumbnailsQuietly(storagePath, contentType, inputStream.readAllBytes());
+            return true;
+        } catch (Exception exception) {
+            log.debug("Failed to prepare image thumbnails for {}", storagePath, exception);
+            return false;
+        }
+    }
+
+    private void prepareDerivedThumbnailsQuietly(String storagePath, String contentType, byte[] sourceBytes) {
+        if (!StringUtils.hasText(storagePath)
+                || !StringUtils.hasText(contentType)
+                || !contentType.startsWith("image/")
+                || sourceBytes == null
+                || sourceBytes.length == 0) {
+            return;
+        }
+
+        try {
+            List<ImageThumbnailService.PreparedThumbnailContent> thumbnails = imageThumbnailService.createPreparedThumbnails(
+                    sourceBytes,
+                    contentType,
+                    PREPARED_THUMBNAIL_WIDTHS
+            );
+
+            for (ImageThumbnailService.PreparedThumbnailContent thumbnail : thumbnails) {
+                String thumbnailPath = buildThumbnailStoragePath(storagePath, contentType, thumbnail.width());
+                if (isMinioObject(storagePath) && isMinioEnabled()) {
+                    storeThumbnailToMinio(thumbnailPath, thumbnail);
+                } else {
+                    storeThumbnailToLocal(thumbnailPath, thumbnail);
+                }
+            }
+        } catch (Exception exception) {
+            log.debug("Failed to persist prepared thumbnails for {}", storagePath, exception);
+        }
+    }
+
+    private void storeThumbnailToLocal(String storagePath, ImageThumbnailService.PreparedThumbnailContent thumbnail) throws IOException {
+        Path relativePath = Path.of(storagePath);
+        Path targetPath = rootPath.resolve(relativePath).normalize();
+        Files.createDirectories(targetPath.getParent());
+        Files.write(targetPath, thumbnail.bytes());
+    }
+
+    private void storeThumbnailToMinio(String storagePath, ImageThumbnailService.PreparedThumbnailContent thumbnail) throws Exception {
+        try (InputStream inputStream = new java.io.ByteArrayInputStream(thumbnail.bytes())) {
+            minioClient.putObject(
+                    PutObjectArgs.builder()
+                            .bucket(minioProperties.getBucket_cloud())
+                            .object(storagePath)
+                            .stream(inputStream, thumbnail.bytes().length, -1)
+                            .contentType(thumbnail.contentType())
+                            .build()
+            );
+        }
+    }
+
+    private String buildThumbnailStoragePath(String storagePath, String contentType, int width) {
+        int separatorIndex = storagePath.lastIndexOf('/');
+        String directory = separatorIndex >= 0 ? storagePath.substring(0, separatorIndex) : "";
+        String fileName = separatorIndex >= 0 ? storagePath.substring(separatorIndex + 1) : storagePath;
+        String baseName = stripExtension(fileName);
+        String extension = resolveThumbnailFileExtension(contentType);
+        String thumbnailFileName = baseName + "." + extension;
+
+        if (directory.isEmpty()) {
+            return String.join("/", ".thumbs", String.valueOf(width), thumbnailFileName);
+        }
+        return String.join("/", directory, ".thumbs", String.valueOf(width), thumbnailFileName);
+    }
+
+    private String stripExtension(String fileName) {
+        int dotIndex = fileName.lastIndexOf('.');
+        if (dotIndex <= 0) {
+            return fileName;
+        }
+        return fileName.substring(0, dotIndex);
+    }
+
+    private String resolveThumbnailFileExtension(String contentType) {
+        return preservesAlpha(contentType) ? "png" : "jpg";
+    }
+
+    private String resolveThumbnailContentType(String contentType) {
+        return preservesAlpha(contentType) ? "image/png" : "image/jpeg";
+    }
+
+    private boolean preservesAlpha(String contentType) {
+        String normalized = normalizeContentType(contentType);
+        return "image/png".equals(normalized) || "image/gif".equals(normalized) || "image/webp".equals(normalized);
     }
 
     private boolean isMinioEnabled() {

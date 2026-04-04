@@ -64,12 +64,15 @@ const memoryMediaItems = computed(() =>
   (props.travelPlan?.mediaItems ?? []).filter((item) => item.recordType === 'MEMORY' && item.mediaType === 'PHOTO'),
 )
 
-const memoryMediaMap = computed(() => {
+const memoryPhotoSummaryMap = computed(() => {
   const bucket = new Map()
   memoryMediaItems.value.forEach((media) => {
     const key = String(media.recordId)
-    const current = bucket.get(key) ?? []
-    current.push(media)
+    const current = bucket.get(key) ?? { count: 0, heroPhotoUrl: '' }
+    current.count += 1
+    if (!current.heroPhotoUrl) {
+      current.heroPhotoUrl = media.contentUrl || ''
+    }
     bucket.set(key, current)
   })
   return bucket
@@ -130,7 +133,7 @@ const filteredRoutes = computed(() =>
 
 const overviewStats = computed(() => {
   const placeCount = filteredMemories.value.filter((item) => item.placeName || item.region || item.country).length
-  const photoCount = filteredMemories.value.reduce((sum, item) => sum + (memoryMediaMap.value.get(String(item.id))?.length || 0), 0)
+  const photoCount = filteredMemories.value.reduce((sum, item) => sum + (memoryPhotoSummaryMap.value.get(String(item.id))?.count || 0), 0)
   const totalDistanceKm = filteredRoutes.value.reduce((sum, route) => sum + safeNumber(route.distanceKm), 0)
   const totalSteps = filteredRoutes.value.reduce((sum, route) => sum + safeNumber(route.stepCount), 0)
 
@@ -150,7 +153,7 @@ const mapMarkers = computed(() =>
     .map((item) => {
       const preset = resolvePinPreset(item.category)
       const markerId = String(item.id)
-      const markerMediaItems = memoryMediaMap.value.get(markerId) || []
+      const markerPhotoSummary = memoryPhotoSummaryMap.value.get(markerId)
       return {
         id: item.id,
         planId: item.planId,
@@ -164,10 +167,9 @@ const mapMarkers = computed(() =>
         title: item.title,
         visitedDate: item.memoryDate,
         visitedTime: item.memoryTime,
-        photoCount: markerMediaItems.length || 0,
+        photoCount: markerPhotoSummary?.count || 0,
         receiptCount: 0,
-        photoUrl: markerMediaItems[0]?.contentUrl || '',
-        mediaItems: markerMediaItems,
+        photoUrl: markerPhotoSummary?.heroPhotoUrl || '',
         iconKey: preset.key,
         iconText: preset.iconText,
       }
@@ -190,7 +192,7 @@ const dailySummaryCards = computed(() =>
       ...day,
       memoryCount: dayMemories.length,
       routeCount: dayRoutes.length,
-      photoCount: dayMemories.reduce((sum, item) => sum + (memoryMediaMap.value.get(String(item.id))?.length || 0), 0),
+      photoCount: dayMemories.reduce((sum, item) => sum + (memoryPhotoSummaryMap.value.get(String(item.id))?.count || 0), 0),
       totalDistanceKm: dayRoutes.reduce((sum, route) => sum + safeNumber(route.distanceKm), 0),
     }
   }),
@@ -199,7 +201,7 @@ const dailySummaryCards = computed(() =>
 const placeCards = computed(() =>
   filteredMemories.value.map((item) => ({
     ...item,
-    photoCount: memoryMediaMap.value.get(String(item.id))?.length || 0,
+    photoCount: memoryPhotoSummaryMap.value.get(String(item.id))?.count || 0,
     locationLabel: [item.country, item.region, item.placeName].filter(Boolean).join(' / ') || '위치 미설정',
   })),
 )

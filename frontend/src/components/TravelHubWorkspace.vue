@@ -324,15 +324,18 @@ const spendingLocations = computed(() => {
   return [...bucket.values()].sort((left, right) => right.totalKrw - left.totalKrw)
 })
 
-const recordMediaCountMap = computed(() => {
+const recordPhotoSummaryMap = computed(() => {
   const bucket = new Map()
   ;(travelPlan.value?.mediaItems ?? []).forEach((item) => {
     if (item.recordType === 'MEMORY' || item.mediaType !== 'PHOTO') {
       return
     }
     const key = String(item.recordId)
-    const current = bucket.get(key) ?? { photos: 0 }
+    const current = bucket.get(key) ?? { photos: 0, heroPhotoUrl: '' }
     current.photos += 1
+    if (!current.heroPhotoUrl) {
+      current.heroPhotoUrl = item.contentUrl || ''
+    }
     bucket.set(key, current)
   })
   return bucket
@@ -355,7 +358,7 @@ const recordSummaryByDate = computed(() => {
     }
     current.totalKrw += safeNumber(record.amountKrw)
     current.count += 1
-    current.photoCount += recordMediaCountMap.value.get(String(record.id))?.photos || 0
+    current.photoCount += recordPhotoSummaryMap.value.get(String(record.id))?.photos || 0
     if (record.currencyCode) {
       current.currencies.add(String(record.currencyCode).toUpperCase())
     }
@@ -389,7 +392,9 @@ const filteredTravelRecords = computed(() => {
 const recordMarkers = computed(() =>
   filteredTravelRecords.value
     .filter((record) => record.latitude !== null && record.latitude !== undefined && record.longitude !== null && record.longitude !== undefined)
-    .map((record) => ({
+    .map((record) => {
+      const photoSummary = recordPhotoSummaryMap.value.get(String(record.id))
+      return {
       id: record.id,
       planId: record.planId,
       planName: record.planName,
@@ -405,36 +410,48 @@ const recordMarkers = computed(() =>
       amountKrw: record.amountKrw,
       visitedDate: record.expenseDate,
       visitedTime: record.expenseTime,
-      photoCount: recordMediaCountMap.value.get(String(record.id))?.photos || 0,
+      photoCount: photoSummary?.photos || 0,
       receiptCount: 0,
-      mediaItems: (travelPlan.value?.mediaItems ?? []).filter((item) => String(item.recordId) === String(record.id)),
-    })),
+      photoUrl: photoSummary?.heroPhotoUrl || '',
+      }
+    }),
 )
 
 const memoryById = computed(() => new Map((travelPlan.value?.memoryRecords ?? []).map((item) => [String(item.id), item])))
-const memoryPhotoMap = computed(() => {
+const memoryPhotoSummaryMap = computed(() => {
   const bucket = new Map()
   ;(travelPlan.value?.mediaItems ?? []).forEach((item) => {
     if (item.recordType !== 'MEMORY' || item.mediaType !== 'PHOTO') {
       return
     }
     const key = String(item.recordId)
-    const current = bucket.get(key) ?? []
-    current.push(item)
+    const current = bucket.get(key) ?? {
+      count: 0,
+      heroPhoto: null,
+      heroPhotoUrl: '',
+      caption: '',
+      uploadedAt: '',
+    }
+    current.count += 1
+    if (!current.heroPhoto) {
+      current.heroPhoto = item
+      current.heroPhotoUrl = item.contentUrl || ''
+      current.caption = item.caption || item.originalFileName || ''
+      current.uploadedAt = item.uploadedAt || ''
+    }
     bucket.set(key, current)
   })
   return bucket
 })
-const photoAlbumPhotoCount = computed(() => [...memoryPhotoMap.value.values()].reduce((total, items) => total + items.length, 0))
+const photoAlbumPhotoCount = computed(() => [...memoryPhotoSummaryMap.value.values()].reduce((total, item) => total + item.count, 0))
 const PHOTO_ALBUM_PAGE_SIZE = 10
 const photoAlbumPage = ref(0)
 const photoAlbumCards = computed(() =>
-  [...memoryPhotoMap.value.entries()]
-    .map(([recordId, items]) => {
+  [...memoryPhotoSummaryMap.value.entries()]
+    .map(([recordId, photoSummary]) => {
       const memory = memoryById.value.get(recordId)
       if (!memory) return null
-      const photos = items.slice().sort((left, right) => String(right.uploadedAt || '').localeCompare(String(left.uploadedAt || '')))
-      const heroPhoto = photos[0]
+      const heroPhoto = photoSummary.heroPhoto
       return {
         id: `album-${recordId}`,
         memoryId: memory.id,
@@ -449,13 +466,12 @@ const photoAlbumCards = computed(() =>
         longitude: memory.longitude,
         memo: memory.memo,
         colorHex: memory.planColorHex || travelPlan.value?.colorHex || '#3182F6',
-        photoCount: photos.length,
+        photoCount: photoSummary.count,
         heroPhoto,
-        heroPhotoUrl: heroPhoto?.contentUrl || '',
-        caption: heroPhoto?.caption || heroPhoto?.originalFileName || '',
-        mediaItems: photos,
+        heroPhotoUrl: photoSummary.heroPhotoUrl,
+        caption: photoSummary.caption,
         locationLabel: [memory.country, memory.region, memory.placeName].filter(Boolean).join(' / ') || '위치 미설정',
-        sortKey: `${heroPhoto?.uploadedAt || ''} ${memory.memoryDate || ''} ${memory.memoryTime || '99:99'} ${String(memory.id).padStart(12, '0')}`,
+        sortKey: `${photoSummary.uploadedAt || ''} ${memory.memoryDate || ''} ${memory.memoryTime || '99:99'} ${String(memory.id).padStart(12, '0')}`,
       }
     })
     .filter(Boolean)
@@ -484,7 +500,7 @@ const photoAlbumMarkers = computed(() =>
       visitedTime: item.memoryTime,
       photoCount: item.photoCount,
       receiptCount: 0,
-      mediaItems: item.mediaItems,
+      photoUrl: item.heroPhotoUrl,
   })),
 )
 
@@ -1492,7 +1508,7 @@ function openMemoryEditor(memoryId) {
             <table class="sheet-table">
               <thead><tr><th>날짜</th><th>분류</th><th>항목명</th><th>장소</th><th>원통화</th><th>KRW</th><th>사진</th><th>작업</th></tr></thead>
               <tbody>
-                <tr v-for="record in filteredTravelRecords" :key="record.id"><td>{{ formatDateTime(record.expenseDate, record.expenseTime) }}</td><td>{{ record.category }}</td><td>{{ record.title }}</td><td>{{ formatTravelLocationLabel(record) }}</td><td>{{ formatCurrencyByCode(record.amount, record.currencyCode) }}</td><td>{{ formatCurrency(record.amountKrw) }}</td><td><div class="travel-record-media-count"><strong>사진 {{ recordMediaCountMap.get(String(record.id))?.photos || 0 }}장</strong></div></td><td class="sheet-table__actions"><button class="button button--ghost" @click="fillRecordForm(record)">수정</button><button class="button button--danger" @click="handleDeleteRecord(record)">삭제</button></td></tr>
+                <tr v-for="record in filteredTravelRecords" :key="record.id"><td>{{ formatDateTime(record.expenseDate, record.expenseTime) }}</td><td>{{ record.category }}</td><td>{{ record.title }}</td><td>{{ formatTravelLocationLabel(record) }}</td><td>{{ formatCurrencyByCode(record.amount, record.currencyCode) }}</td><td>{{ formatCurrency(record.amountKrw) }}</td><td><div class="travel-record-media-count"><strong>사진 {{ recordPhotoSummaryMap.get(String(record.id))?.photos || 0 }}장</strong></div></td><td class="sheet-table__actions"><button class="button button--ghost" @click="fillRecordForm(record)">수정</button><button class="button button--danger" @click="handleDeleteRecord(record)">삭제</button></td></tr>
                 <tr v-if="!filteredTravelRecords.length"><td colspan="8" class="sheet-table__empty">{{ selectedRecordDate ? '선택한 날짜에는 지출 기록이 없습니다.' : '지출 기록이 아직 없습니다.' }}</td></tr>
               </tbody>
             </table>

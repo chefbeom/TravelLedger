@@ -298,8 +298,7 @@ function createPopupContent(marker) {
   const root = document.createElement('div')
   root.className = 'travel-map__popup'
 
-  const mediaItems = Array.isArray(marker.mediaItems) ? marker.mediaItems : []
-  const heroPhoto = marker.photoUrl || mediaItems.find((item) => item.contentType?.startsWith('image/'))?.contentUrl || ''
+  const heroPhoto = marker.photoUrl || ''
 
   if (heroPhoto) {
     const image = document.createElement('img')
@@ -888,7 +887,6 @@ watch(
   () => {
     renderMapLayers()
   },
-  { deep: true },
 )
 
 watch(

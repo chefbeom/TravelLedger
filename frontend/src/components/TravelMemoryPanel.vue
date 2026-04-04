@@ -168,6 +168,29 @@ const memoryMediaMap = computed(() => {
   return bucket
 })
 
+const memoryPhotoSummaryMap = computed(() => {
+  const bucket = new Map()
+  memoryMediaItems.value.forEach((media) => {
+    const key = String(media.recordId)
+    const current = bucket.get(key) ?? {
+      count: 0,
+      heroPhotoUrl: '',
+      heroPhotoName: '',
+      heroPhotoUploadedAt: '',
+    }
+
+    current.count += 1
+    if (!current.heroPhotoUrl) {
+      current.heroPhotoUrl = media.contentUrl || ''
+      current.heroPhotoName = media.originalFileName || ''
+      current.heroPhotoUploadedAt = media.uploadedAt || ''
+    }
+
+    bucket.set(key, current)
+  })
+  return bucket
+})
+
 const countryOptions = computed(() => {
   const values = new Set(scopedMemoryRecords.value.map((item) => item.country).filter(Boolean))
   return [...values].sort((left, right) => left.localeCompare(right))
@@ -190,7 +213,7 @@ const filteredMemoryRecords = computed(() =>
     .filter((item) => !locationFilter.region || item.region === locationFilter.region)
     .map((item) => ({
       ...item,
-      photoCount: memoryMediaMap.value.get(String(item.id))?.length || 0,
+      photoCount: memoryPhotoSummaryMap.value.get(String(item.id))?.count || 0,
     }))
     .slice()
     .sort((left, right) => {
@@ -276,21 +299,19 @@ function updateMultiPhotoPreparationProgress(current, total, fileName = '') {
 const photoBackedMemories = computed(() =>
   scopedMemoryRecords.value
     .map((item) => {
-      const photos = (memoryMediaMap.value.get(String(item.id)) ?? [])
-        .slice()
-        .sort((left, right) => String(right.uploadedAt || '').localeCompare(String(left.uploadedAt || '')))
+      const photoSummary = memoryPhotoSummaryMap.value.get(String(item.id))
 
-      if (!photos.length) {
+      if (!photoSummary?.count || !photoSummary.heroPhotoUrl) {
         return null
       }
 
       return {
         ...item,
-        photoCount: photos.length,
-        photos,
-        heroPhoto: photos[0],
+        photoCount: photoSummary.count,
+        heroPhotoUrl: photoSummary.heroPhotoUrl,
+        heroPhotoName: photoSummary.heroPhotoName,
         locationLabel: [item.country, item.region, item.placeName].filter(Boolean).join(' / ') || '위치 미설정',
-        sortKey: `${item.memoryDate || ''} ${item.memoryTime || '99:99'} ${photos[0]?.uploadedAt || ''} ${String(item.id).padStart(12, '0')}`,
+        sortKey: `${item.memoryDate || ''} ${item.memoryTime || '99:99'} ${photoSummary.heroPhotoUploadedAt || ''} ${String(item.id).padStart(12, '0')}`,
       }
     })
     .filter(Boolean)
@@ -357,6 +378,7 @@ const mapMarkers = computed(() =>
     .filter((item) => item.latitude !== null && item.latitude !== undefined && item.longitude !== null && item.longitude !== undefined)
     .map((item) => {
       const preset = resolvePinPreset(item.category)
+      const photoSummary = memoryPhotoSummaryMap.value.get(String(item.id))
       return {
         id: item.id,
         planId: item.planId,
@@ -370,9 +392,9 @@ const mapMarkers = computed(() =>
         title: item.title,
         visitedDate: item.memoryDate,
         visitedTime: item.memoryTime,
-        photoCount: memoryMediaMap.value.get(String(item.id))?.length || 0,
+        photoCount: photoSummary?.count || 0,
         receiptCount: 0,
-        mediaItems: memoryMediaMap.value.get(String(item.id)) || [],
+        photoUrl: photoSummary?.heroPhotoUrl || '',
         iconKey: preset.key,
         iconText: preset.iconText,
       }
@@ -1025,9 +1047,9 @@ function submitMemory() {
           class="travel-media-card travel-media-card--compact"
         >
           <img
-            v-if="memory.heroPhoto?.contentUrl"
-            :src="buildThumbnailUrl(memory.heroPhoto.contentUrl)"
-            :alt="memory.heroPhoto.originalFileName"
+            v-if="memory.heroPhotoUrl"
+            :src="buildThumbnailUrl(memory.heroPhotoUrl)"
+            :alt="memory.heroPhotoName"
             :loading="index < 2 ? 'eager' : 'lazy'"
             :fetchpriority="index < 2 ? 'high' : 'auto'"
             decoding="async"
@@ -1046,7 +1068,7 @@ function submitMemory() {
           </div>
           <div class="travel-media-actions">
             <button class="button button--primary" @click="openMemoryForEdit(memory)">기록 편집</button>
-            <a v-if="memory.heroPhoto?.contentUrl" class="button button--ghost" :href="memory.heroPhoto.contentUrl" target="_blank" rel="noreferrer">대표 사진 보기</a>
+            <a v-if="memory.heroPhotoUrl" class="button button--ghost" :href="memory.heroPhotoUrl" target="_blank" rel="noreferrer">대표 사진 보기</a>
           </div>
         </article>
       </div>

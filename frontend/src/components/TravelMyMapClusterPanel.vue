@@ -585,7 +585,6 @@ watch(
   () => {
     renderMap()
   },
-  { deep: true },
 )
 
 watch(

@@ -10,6 +10,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -174,9 +175,14 @@ public class TravelPhotoClusterService {
                         .comparing((PhotoPoint point) -> !point.mediaId().equals(representative.mediaId()))
                         .thenComparing(CLUSTER_ORDER))
                 .toList();
+        Long stableClusterId = points.stream()
+                .map(PhotoPoint::mediaId)
+                .filter(Objects::nonNull)
+                .min(Long::compareTo)
+                .orElse(representative.mediaId());
 
         return new PhotoCluster(
-                representative.mediaId(),
+                stableClusterId,
                 representative,
                 orderedMembers,
                 BigDecimal.valueOf(metrics.centroidLatitude()).setScale(7, RoundingMode.HALF_UP),

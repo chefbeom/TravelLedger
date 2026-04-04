@@ -42,6 +42,7 @@ class TravelServiceCacheTest {
         TravelMediaStorageService travelMediaStorageService = mock(TravelMediaStorageService.class);
         TravelPhotoGpsMetadataService travelPhotoGpsMetadataService = mock(TravelPhotoGpsMetadataService.class);
         TravelPhotoClusterService travelPhotoClusterService = mock(TravelPhotoClusterService.class);
+        TravelMyMapPhotoClusterSnapshotService travelMyMapPhotoClusterSnapshotService = mock(TravelMyMapPhotoClusterSnapshotService.class);
         TravelPublicMediaTokenService travelPublicMediaTokenService = mock(TravelPublicMediaTokenService.class);
         RedisCacheService redisCacheService = mock(RedisCacheService.class);
         DataSource dataSource = mock(DataSource.class);
@@ -58,6 +59,7 @@ class TravelServiceCacheTest {
                 travelMediaStorageService,
                 travelPhotoGpsMetadataService,
                 travelPhotoClusterService,
+                travelMyMapPhotoClusterSnapshotService,
                 travelPublicMediaTokenService,
                 redisCacheService,
                 new ObjectMapper(),
@@ -110,6 +112,7 @@ class TravelServiceCacheTest {
         TravelMediaStorageService travelMediaStorageService = mock(TravelMediaStorageService.class);
         TravelPhotoGpsMetadataService travelPhotoGpsMetadataService = mock(TravelPhotoGpsMetadataService.class);
         TravelPhotoClusterService travelPhotoClusterService = mock(TravelPhotoClusterService.class);
+        TravelMyMapPhotoClusterSnapshotService travelMyMapPhotoClusterSnapshotService = mock(TravelMyMapPhotoClusterSnapshotService.class);
         TravelPublicMediaTokenService travelPublicMediaTokenService = mock(TravelPublicMediaTokenService.class);
         RedisCacheService redisCacheService = mock(RedisCacheService.class);
         DataSource dataSource = mock(DataSource.class);
@@ -126,6 +129,7 @@ class TravelServiceCacheTest {
                 travelMediaStorageService,
                 travelPhotoGpsMetadataService,
                 travelPhotoClusterService,
+                travelMyMapPhotoClusterSnapshotService,
                 travelPublicMediaTokenService,
                 redisCacheService,
                 new ObjectMapper(),

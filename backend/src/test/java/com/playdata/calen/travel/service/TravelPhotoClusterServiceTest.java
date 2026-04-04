@@ -78,6 +78,21 @@ class TravelPhotoClusterServiceTest {
         assertThat(clusters.get(0).members().get(0).mediaId()).isEqualTo(2L);
     }
 
+    @Test
+    void keepsClusterIdentifierStableWhenRepresentativeChanges() {
+        List<TravelPhotoClusterService.PhotoPoint> points = List.of(
+                point(4L, 37.5665000d, 126.9780000d, false, LocalDateTime.of(2026, 4, 4, 9, 0)),
+                point(9L, 37.5665003d, 126.9780002d, true, LocalDateTime.of(2026, 4, 4, 11, 0)),
+                point(12L, 37.5665005d, 126.9780004d, false, LocalDateTime.of(2026, 4, 4, 10, 0))
+        );
+
+        List<TravelPhotoClusterService.PhotoCluster> clusters = clusterService.cluster(points);
+
+        assertThat(clusters).hasSize(1);
+        assertThat(clusters.get(0).representative().mediaId()).isEqualTo(9L);
+        assertThat(clusters.get(0).id()).isEqualTo(4L);
+    }
+
     private TravelPhotoClusterService.PhotoPoint point(
             Long mediaId,
             double latitude,

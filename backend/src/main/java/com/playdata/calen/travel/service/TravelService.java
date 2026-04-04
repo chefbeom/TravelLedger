@@ -157,6 +157,7 @@ public class TravelService {
     private final TravelMediaStorageService travelMediaStorageService;
     private final TravelPhotoGpsMetadataService travelPhotoGpsMetadataService;
     private final TravelPhotoClusterService travelPhotoClusterService;
+    private final TravelMyMapPhotoClusterSnapshotService travelMyMapPhotoClusterSnapshotService;
     private final TravelPublicMediaTokenService travelPublicMediaTokenService;
     private final RedisCacheService redisCacheService;
     private final ObjectMapper objectMapper;
@@ -320,8 +321,7 @@ public class TravelService {
                 .filter(this::hasCoordinates)
                 .sorted(RECORD_ORDER)
                 .toList();
-        List<TravelMediaAsset> photoMediaItems = getMyMapPhotoMediaItems(userId);
-        List<TravelPhotoClusterService.PhotoCluster> photoClusters = buildMyMapPhotoClusters(photoMediaItems);
+        TravelMyMapPhotoClusterSnapshot photoClusterSnapshot = getOrBuildMyMapPhotoClusterSnapshot(userId);
         List<TravelRouteSegment> routeSegments = travelRouteSegmentRepository.findAllByPlanOwnerIdOrderByRouteDateDescIdDesc(userId).stream()
                 .sorted(ROUTE_ORDER)
                 .toList();
@@ -329,12 +329,12 @@ public class TravelService {
         TravelMyMapOverviewResponse response = new TravelMyMapOverviewResponse(
                 plans.size(),
                 markers.size(),
-                photoMediaItems.size(),
-                photoClusters.size(),
+                photoClusterSnapshot.photoMarkerCount(),
+                photoClusterSnapshot.photoClusterCount(),
                 routeSegments.size(),
                 sumDistanceKm(routeSegments),
                 markers.stream().map(this::toMyMapMarkerSummaryResponse).toList(),
-                photoClusters.stream().map(this::toMyMapPhotoClusterSummaryResponse).toList(),
+                photoClusterSnapshot.summaries(),
                 routeSegments.stream().map(this::toMyMapRouteResponse).toList()
         );
         cacheTravelSummary(buildMyMapOverviewCacheKey(userId), response);
@@ -380,44 +380,48 @@ public class TravelService {
     public TravelMyMapPhotoClusterDetailResponse getMyMapPhotoClusterDetail(Long userId, Long clusterId) {
         appUserService.getRequiredUser(userId);
 
-        TravelPhotoClusterService.PhotoCluster cluster = findRequiredMyMapPhotoCluster(userId, clusterId);
-        List<TravelMediaAsset> photoMediaItems = getMyMapPhotoMediaItems(userId);
-        Map<Long, TravelMediaAsset> mediaAssetById = photoMediaItems.stream()
-                .collect(Collectors.toMap(TravelMediaAsset::getId, Function.identity()));
-
-        return toMyMapPhotoClusterDetailResponse(cluster, mediaAssetById);
+        return getOrBuildMyMapPhotoClusterSnapshot(userId)
+                .findDetail(clusterId)
+                .orElseThrow(() -> new NotFoundException("Photo cluster not found."));
     }
 
     @Transactional
     public TravelMyMapPhotoClusterDetailResponse updateMyMapPhotoClusterRepresentative(Long userId, Long clusterId, Long mediaId) {
         appUserService.getRequiredUser(userId);
 
-        TravelPhotoClusterService.PhotoCluster cluster = findRequiredMyMapPhotoCluster(userId, clusterId);
-        if (!cluster.memberMediaIds().contains(mediaId)) {
+        TravelMyMapPhotoClusterDetailResponse cluster = getOrBuildMyMapPhotoClusterSnapshot(userId)
+                .findDetail(clusterId)
+                .orElseThrow(() -> new NotFoundException("Photo cluster not found."));
+        List<TravelMediaResponse> clusterPhotos = cluster.photos() == null ? List.of() : cluster.photos();
+        if (clusterPhotos.stream().noneMatch(photo -> photo.id() != null && photo.id().equals(mediaId))) {
             throw new BadRequestException("Selected photo is not part of this cluster.");
         }
 
-        List<TravelMediaAsset> photoMediaItems = getMyMapPhotoMediaItems(userId);
-        Map<Long, TravelMediaAsset> mediaAssetById = photoMediaItems.stream()
+        Map<Long, TravelMediaAsset> mediaAssetById = travelMediaAssetRepository.findAllById(
+                        clusterPhotos.stream()
+                                .map(TravelMediaResponse::id)
+                                .toList()
+                ).stream()
                 .collect(Collectors.toMap(TravelMediaAsset::getId, Function.identity()));
 
-        cluster.members().forEach(member -> {
-            TravelMediaAsset mediaAsset = mediaAssetById.get(member.mediaId());
+        clusterPhotos.forEach(photo -> {
+            TravelMediaAsset mediaAsset = mediaAssetById.get(photo.id());
             if (mediaAsset != null) {
-                mediaAsset.setRepresentativeOverride(member.mediaId().equals(mediaId));
+                mediaAsset.setRepresentativeOverride(photo.id().equals(mediaId));
             }
         });
 
         travelMediaAssetRepository.saveAll(
-                cluster.members().stream()
-                        .map(member -> mediaAssetById.get(member.mediaId()))
+                clusterPhotos.stream()
+                        .map(photo -> mediaAssetById.get(photo.id()))
                         .filter(java.util.Objects::nonNull)
                         .toList()
         );
         invalidateTravelSummaryCaches(userId);
-
-        TravelPhotoClusterService.PhotoCluster refreshedCluster = findRequiredMyMapPhotoCluster(userId, clusterId);
-        return toMyMapPhotoClusterDetailResponse(refreshedCluster, mediaAssetById);
+        TravelMyMapPhotoClusterSnapshot refreshedSnapshot = refreshMyMapPhotoClusterSnapshot(userId);
+        return refreshedSnapshot.findDetail(clusterId)
+                .or(() -> refreshedSnapshot.findDetailContainingMedia(mediaId))
+                .orElseThrow(() -> new NotFoundException("Photo cluster not found."));
     }
 
     public TravelCategoryCatalogResponse getCategoryCatalog(Long userId) {
@@ -587,6 +591,7 @@ public class TravelService {
                 Collections.emptyList()
         );
         invalidateTravelSummaryCaches(userId);
+        refreshMyMapPhotoClusterSnapshot(userId);
         return response;
     }
 
@@ -603,6 +608,7 @@ public class TravelService {
                 getPlanRoutes(userId, planId)
         );
         invalidateTravelSummaryCaches(userId);
+        refreshMyMapPhotoClusterSnapshot(userId);
         return response;
     }
 
@@ -618,6 +624,7 @@ public class TravelService {
         travelExpenseRecordRepository.deleteAllByPlanId(plan.getId());
         travelPlanRepository.delete(plan);
         invalidateTravelSummaryCaches(userId);
+        refreshMyMapPhotoClusterSnapshot(userId);
     }
 
     @Transactional
@@ -684,6 +691,7 @@ public class TravelService {
         applyMemoryRecordRequest(record, request);
         TravelMemoryRecordResponse response = toMemoryRecordResponse(travelExpenseRecordRepository.save(record));
         invalidateTravelSummaryCaches(userId);
+        refreshMyMapPhotoClusterSnapshot(userId);
         return response;
     }
 
@@ -693,6 +701,7 @@ public class TravelService {
         applyMemoryRecordRequest(record, request);
         TravelMemoryRecordResponse response = toMemoryRecordResponse(record);
         invalidateTravelSummaryCaches(userId);
+        refreshMyMapPhotoClusterSnapshot(userId);
         return response;
     }
 
@@ -701,6 +710,7 @@ public class TravelService {
         TravelExpenseRecord record = getRequiredRecord(userId, memoryId, TravelRecordType.MEMORY, "Travel memory not found.");
         deleteRecord(record, userId);
         invalidateTravelSummaryCaches(userId);
+        refreshMyMapPhotoClusterSnapshot(userId);
     }
 
     @Transactional
@@ -825,9 +835,13 @@ public class TravelService {
     public void deleteMedia(Long userId, Long mediaId) {
         TravelMediaAsset mediaAsset = travelMediaAssetRepository.findByIdAndPlanOwnerId(mediaId, userId)
                 .orElseThrow(() -> new NotFoundException("Uploaded file not found."));
+        boolean affectsPhotoCluster = mediaAsset.getMediaType() == TravelMediaType.PHOTO && isMemoryRecord(mediaAsset.getRecord());
         travelMediaStorageService.deleteImageWithThumbnailsQuietly(mediaAsset.getStoragePath(), mediaAsset.getContentType());
         travelMediaAssetRepository.delete(mediaAsset);
         invalidateTravelSummaryCaches(userId);
+        if (affectsPhotoCluster) {
+            refreshMyMapPhotoClusterSnapshot(userId);
+        }
     }
 
     public MediaDownload getMediaDownload(Long userId, Long mediaId) {
@@ -914,6 +928,9 @@ public class TravelService {
                 .toList();
         if (!responses.isEmpty()) {
             invalidateTravelSummaryCaches(userId);
+            if (recordType == TravelRecordType.MEMORY && resolvedMediaType == TravelMediaType.PHOTO) {
+                refreshMyMapPhotoClusterSnapshot(userId);
+            }
         }
         return responses;
     }
@@ -998,6 +1015,9 @@ public class TravelService {
                 .toList();
         if (!responses.isEmpty()) {
             invalidateTravelSummaryCaches(userId);
+            if (recordType == TravelRecordType.MEMORY && resolvedMediaType == TravelMediaType.PHOTO) {
+                refreshMyMapPhotoClusterSnapshot(userId);
+            }
         }
         return responses;
     }
@@ -1017,11 +1037,39 @@ public class TravelService {
         return travelPhotoClusterService.cluster(points);
     }
 
-    private TravelPhotoClusterService.PhotoCluster findRequiredMyMapPhotoCluster(Long userId, Long clusterId) {
-        return buildMyMapPhotoClusters(getMyMapPhotoMediaItems(userId)).stream()
-                .filter(cluster -> cluster.id().equals(clusterId))
-                .findFirst()
-                .orElseThrow(() -> new NotFoundException("Photo cluster not found."));
+    private TravelMyMapPhotoClusterSnapshot getOrBuildMyMapPhotoClusterSnapshot(Long userId) {
+        TravelMyMapPhotoClusterSnapshot snapshot = travelMyMapPhotoClusterSnapshotService.get(userId);
+        if (snapshot != null) {
+            return snapshot;
+        }
+        return refreshMyMapPhotoClusterSnapshot(userId);
+    }
+
+    private TravelMyMapPhotoClusterSnapshot refreshMyMapPhotoClusterSnapshot(Long userId) {
+        TravelMyMapPhotoClusterSnapshot snapshot = buildMyMapPhotoClusterSnapshot(userId);
+        travelMyMapPhotoClusterSnapshotService.save(userId, snapshot);
+        return snapshot;
+    }
+
+    private TravelMyMapPhotoClusterSnapshot buildMyMapPhotoClusterSnapshot(Long userId) {
+        List<TravelMediaAsset> photoMediaItems = getMyMapPhotoMediaItems(userId);
+        Map<Long, TravelMediaAsset> mediaAssetById = photoMediaItems.stream()
+                .collect(Collectors.toMap(TravelMediaAsset::getId, Function.identity()));
+        List<TravelPhotoClusterService.PhotoCluster> photoClusters = buildMyMapPhotoClusters(photoMediaItems);
+
+        List<TravelMyMapPhotoClusterDetailResponse> details = photoClusters.stream()
+                .map(cluster -> toMyMapPhotoClusterDetailResponse(cluster, mediaAssetById))
+                .toList();
+        List<TravelMyMapPhotoClusterSummaryResponse> summaries = photoClusters.stream()
+                .map(this::toMyMapPhotoClusterSummaryResponse)
+                .toList();
+
+        return new TravelMyMapPhotoClusterSnapshot(
+                photoMediaItems.size(),
+                photoClusters.size(),
+                summaries,
+                details
+        );
     }
 
     private TravelPhotoClusterService.PhotoPoint toPhotoClusterPoint(TravelMediaAsset mediaAsset) {

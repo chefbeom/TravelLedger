@@ -25,6 +25,7 @@ const overview = ref(null)
 const selectedClusterSummary = ref(null)
 const selectedClusterDetail = ref(null)
 const selectedPhotoId = ref(null)
+const selectedMarkerId = ref(null)
 const lightboxPhoto = ref(null)
 const representativeUpdatingId = ref(null)
 const viewMode = ref('cluster')
@@ -129,22 +130,17 @@ async function handleSelectCluster(cluster) {
     return
   }
 
+  selectedMarkerId.value = null
   selectedClusterSummary.value = cluster
   await loadClusterDetail(cluster.id)
 }
 
-async function handleSelectPhotoPin(pin) {
-  if (!pin?.clusterId) {
+function handleSelectMarker(marker) {
+  if (!marker?.id) {
     return
   }
 
-  selectedPhotoId.value = pin.mediaId ?? null
-  const matchingCluster = photoClusters.value.find((cluster) => String(cluster.id) === String(pin.clusterId))
-  if (matchingCluster) {
-    selectedClusterSummary.value = matchingCluster
-  }
-
-  await loadClusterDetail(pin.clusterId, pin.mediaId ?? null)
+  selectedMarkerId.value = marker.id
 }
 
 function handleSelectPhoto(photo) {
@@ -193,6 +189,7 @@ const summary = computed(() => ({
 
 const photoClusters = computed(() => overview.value?.photoClusters ?? [])
 const photoPins = computed(() => overview.value?.photoPins ?? [])
+const markers = computed(() => overview.value?.markers ?? [])
 const routes = computed(() => overview.value?.routes ?? [])
 
 const selectedClusterPhotos = computed(() => {
@@ -314,13 +311,15 @@ onMounted(async () => {
         v-else
         :photo-clusters="photoClusters"
         :photo-pins="photoPins"
+        :markers="markers"
         :routes="routes"
         :active="props.active"
         :display-mode="viewMode"
         :selected-cluster-id="selectedClusterSummary?.id ?? null"
         :selected-photo-id="selectedPhotoId ?? null"
+        :selected-marker-id="selectedMarkerId ?? null"
         @select-cluster="handleSelectCluster"
-        @select-photo-pin="handleSelectPhotoPin"
+        @select-marker="handleSelectMarker"
       />
     </section>
 

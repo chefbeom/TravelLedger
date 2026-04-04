@@ -18,6 +18,10 @@ const props = defineProps({
     type: Array,
     default: () => [],
   },
+  markers: {
+    type: Array,
+    default: () => [],
+  },
   routes: {
     type: Array,
     default: () => [],
@@ -34,13 +38,17 @@ const props = defineProps({
     type: [String, Number],
     default: null,
   },
+  selectedMarkerId: {
+    type: [String, Number],
+    default: null,
+  },
   displayMode: {
     type: String,
     default: 'cluster',
   },
 })
 
-const emit = defineEmits(['select-cluster', 'select-photo-pin'])
+const emit = defineEmits(['select-cluster', 'select-marker'])
 
 const mapRootElement = ref(null)
 const mapElement = ref(null)
@@ -102,6 +110,23 @@ function normalizePhotoPin(pin) {
     photoCount: 1,
     memoryCount: 1,
     representativePhotoUrl: pin?.photoUrl || '',
+  }
+}
+
+function normalizeRecordMarker(marker) {
+  const latitude = Number(marker?.latitude)
+  const longitude = Number(marker?.longitude)
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude) || marker?.id == null) {
+    return null
+  }
+
+  return {
+    ...marker,
+    markerId: marker.id,
+    latitude,
+    longitude,
+    photoCount: 0,
+    memoryCount: 1,
   }
 }
 
@@ -285,9 +310,25 @@ function buildRenderPins(pins) {
   }))
 }
 
+function buildRenderMarkers(markers) {
+  return (markers ?? []).map(normalizeRecordMarker).filter(Boolean).map((marker) => ({
+    id: `marker-${marker.markerId}`,
+    markerKey: `marker-${marker.markerId}`,
+    isAggregate: false,
+    isPhotoPin: false,
+    isRecordPin: true,
+    representative: marker,
+    members: [marker],
+    latitude: marker.latitude,
+    longitude: marker.longitude,
+    photoCount: 0,
+    bounds: [[marker.latitude, marker.longitude]],
+  }))
+}
+
 function resolveRenderableItems() {
   if (props.displayMode === 'pin') {
-    return buildRenderPins(props.photoPins)
+    return buildRenderMarkers(props.markers)
   }
 
   return buildRenderClusters(props.photoClusters, mapInstance?.getZoom()).map((aggregate) => ({
@@ -310,10 +351,10 @@ function queueMapResize() {
 function collectBounds() {
   const points = []
 
-  const photoEntries = props.displayMode === 'pin' ? props.photoPins : props.photoClusters
-  const normalizer = props.displayMode === 'pin' ? normalizePhotoPin : normalizeCluster
+  const entries = props.displayMode === 'pin' ? props.markers : props.photoClusters
+  const normalizer = props.displayMode === 'pin' ? normalizeRecordMarker : normalizeCluster
 
-  ;(photoEntries ?? []).forEach((entry) => {
+  ;(entries ?? []).forEach((entry) => {
     const normalized = normalizer(entry)
     if (normalized) {
       points.push([normalized.latitude, normalized.longitude])
@@ -348,6 +389,43 @@ function fitToAll() {
 }
 
 function createPopupContent(aggregate) {
+  if (aggregate?.isRecordPin) {
+    const root = document.createElement('div')
+    root.className = 'travel-cluster-popup'
+
+    const copy = document.createElement('div')
+    copy.className = 'travel-cluster-popup__copy'
+
+    const title = document.createElement('strong')
+    title.textContent = aggregate?.representative?.title || aggregate?.representative?.placeName || '기록 핀'
+    copy.appendChild(title)
+
+    const locationLabel = [aggregate?.representative?.country, aggregate?.representative?.region, aggregate?.representative?.placeName]
+      .filter(Boolean)
+      .join(' / ')
+    if (locationLabel) {
+      const location = document.createElement('span')
+      location.textContent = locationLabel
+      copy.appendChild(location)
+    }
+
+    const dateLabel = [formatDate(aggregate?.representative?.memoryDate), formatTime(aggregate?.representative?.memoryTime)]
+      .filter((value) => value && value !== '-')
+      .join(' ')
+    if (dateLabel) {
+      const date = document.createElement('span')
+      date.textContent = dateLabel
+      copy.appendChild(date)
+    }
+
+    const count = document.createElement('span')
+    count.textContent = '기록 핀 1개'
+    copy.appendChild(count)
+
+    root.appendChild(copy)
+    return root
+  }
+
   const root = document.createElement('div')
   root.className = 'travel-cluster-popup'
 
@@ -397,7 +475,31 @@ function createPopupContent(aggregate) {
   return root
 }
 
+function buildRecordMarkerIcon(marker, active) {
+  const colorHex = normalizeColorHex(marker?.planColorHex, '#3182F6')
+  const label = escapeHtml(String(marker?.category || marker?.title || marker?.placeName || '핀').slice(0, 2))
+
+  return L.divIcon({
+    className: 'travel-map__icon-root',
+    html: `
+      <div
+        class="travel-map__marker-icon travel-map__marker-icon--memory${active ? ' is-active' : ''}"
+        style="--marker-color:${colorHex}"
+      >
+        <span>${label}</span>
+      </div>
+    `,
+    iconSize: [40, 52],
+    iconAnchor: [20, 50],
+    popupAnchor: [0, -28],
+  })
+}
+
 function buildClusterIcon(aggregate, active) {
+  if (aggregate?.isRecordPin) {
+    return buildRecordMarkerIcon(aggregate?.representative, active)
+  }
+
   const photoUrl = aggregate?.representative?.representativePhotoUrl
     ? buildThumbnailUrl(aggregate.representative.representativePhotoUrl, 320)
     : ''
@@ -483,9 +585,11 @@ function renderClusters() {
 
   const aggregates = resolveRenderableItems()
   aggregates.forEach((aggregate) => {
-    const containsSelected = aggregate.isPhotoPin
-      ? String(aggregate.representative.mediaId) === String(props.selectedPhotoId)
-      : aggregate.members.some((member) => String(member.id) === String(props.selectedClusterId))
+    const containsSelected = aggregate.isRecordPin
+      ? String(aggregate.representative.markerId) === String(props.selectedMarkerId)
+      : aggregate.isPhotoPin
+        ? String(aggregate.representative.mediaId) === String(props.selectedPhotoId)
+        : aggregate.members.some((member) => String(member.id) === String(props.selectedClusterId))
     const marker = L.marker([aggregate.latitude, aggregate.longitude], {
       icon: buildClusterIcon(aggregate, containsSelected),
     })
@@ -493,8 +597,8 @@ function renderClusters() {
     if (!aggregate.isAggregate) {
       marker.bindPopup(() => createPopupContent(aggregate))
       marker.on('click', () => {
-        if (aggregate.isPhotoPin) {
-          emit('select-photo-pin', aggregate.representative)
+        if (aggregate.isRecordPin) {
+          emit('select-marker', aggregate.representative)
           return
         }
         emit('select-cluster', aggregate.representative)
@@ -533,7 +637,7 @@ function renderMap({ shouldFit = false } = {}) {
 function resolveInitialCenter() {
   const firstPhotoEntry = (
     props.displayMode === 'pin'
-      ? (props.photoPins ?? []).map(normalizePhotoPin)
+      ? (props.markers ?? []).map(normalizeRecordMarker)
       : (props.photoClusters ?? []).map(normalizeCluster)
   ).find(Boolean)
   if (firstPhotoEntry) {
@@ -619,7 +723,7 @@ onBeforeUnmount(() => {
 })
 
 watch(
-  () => [props.photoClusters, props.photoPins, props.routes, props.displayMode],
+  () => [props.photoClusters, props.markers, props.routes, props.displayMode],
   () => {
     renderMap()
   },
@@ -627,16 +731,16 @@ watch(
 )
 
 watch(
-  () => [props.displayMode, props.selectedClusterId, props.selectedPhotoId],
-  ([mode, clusterId, photoId], [previousMode, previousClusterId, previousPhotoId] = []) => {
+  () => [props.displayMode, props.selectedClusterId, props.selectedPhotoId, props.selectedMarkerId],
+  ([mode, clusterId, photoId, markerId], [previousMode, previousClusterId, previousPhotoId, previousMarkerId] = []) => {
     const normalizedValue = mode === 'pin'
-      ? `photo-${String(photoId ?? '')}`
+      ? `marker-${String(markerId ?? '')}`
       : `cluster-${String(clusterId ?? '')}`
     const normalizedPreviousValue = previousMode === 'pin'
-      ? `photo-${String(previousPhotoId ?? '')}`
+      ? `marker-${String(previousMarkerId ?? '')}`
       : `cluster-${String(previousClusterId ?? '')}`
 
-    if (normalizedValue === 'photo-' || normalizedValue === 'cluster-') {
+    if (normalizedValue === 'marker-' || normalizedValue === 'cluster-') {
       pendingPopupMarkerKey = null
       mapInstance?.closePopup()
     } else if (normalizedValue !== normalizedPreviousValue) {

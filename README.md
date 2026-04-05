@@ -236,6 +236,7 @@ cmd /c npm run build
 ## 문서
 
 - [Architecture](./docs/architecture.md)
+- [Household Development History](./docs/household_development_history.md)
 - [Travel Map Development History](./docs/travel_my_map_development_history.md)
 - [OCI DB + MinIO 분리 배포 가이드](./docs/OCI_DB_MinIO_분리_배포가이드.md)
 - [OCI MinIO presigned URL 설정 가이드](./docs/OCI_MinIO_presignedURL_설정가이드.md)
@@ -246,6 +247,7 @@ cmd /c npm run build
 
 ## Wiki
 
-GitHub Wiki에는 운영 중 발생한 여행 지도/썸네일/클러스터 문제와 최종 해결 기준을 별도 문서로 관리합니다.
+GitHub Wiki에는 운영 중 발생한 가계부/여행 지도 관련 문제와 최종 해결 기준을 별도 문서로 관리합니다.
 
+- Wiki page: `Household-Development-History`
 - Wiki page: `Travel-Map-Development-History`

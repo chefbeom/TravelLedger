@@ -528,19 +528,19 @@ function renderClusters() {
     marker.bindPopup(() => createPopupContent(aggregate))
     marker.on('click', () => {
       pendingPopupMarkerKey = aggregate.markerKey
-      requestAnimationFrame(() => marker.openPopup())
 
       if (aggregate.isPhotoPin) {
         emit('select-photo-pin', aggregate.representative)
-        return
-      }
-
-      if (aggregate.isRecordPin) {
+      } else if (aggregate.isRecordPin) {
         emit('select-marker', aggregate.representative)
-        return
+      } else {
+        emit('select-cluster', aggregate.representative)
       }
 
-      emit('select-cluster', aggregate.representative)
+      requestAnimationFrame(() => {
+        const popupTarget = renderedMarkers.get(String(aggregate.markerKey)) || marker
+        popupTarget?.openPopup()
+      })
     })
     renderedMarkers.set(String(aggregate.markerKey), marker)
 

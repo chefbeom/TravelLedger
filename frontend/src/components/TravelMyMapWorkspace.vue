@@ -188,8 +188,13 @@ async function handleSelectCluster(cluster) {
     return
   }
 
+  const clusterChanged = String(selectedClusterSummary.value?.id ?? '') !== String(cluster.id)
   selectedMarkerId.value = null
   selectedClusterSummary.value = cluster
+  if (clusterChanged) {
+    selectedClusterDetail.value = null
+    selectedPhotoId.value = null
+  }
   await loadClusterDetail(cluster.id)
 }
 
@@ -198,12 +203,17 @@ async function handleSelectPhotoPin(pin, options = {}) {
     return
   }
 
+  const clusterChanged = String(selectedClusterSummary.value?.id ?? '') !== String(pin.clusterId)
   const nextCluster = photoClusters.value.find((cluster) => String(cluster.id) === String(pin.clusterId))
   if (nextCluster) {
     selectedClusterSummary.value = nextCluster
   }
 
   selectedMarkerId.value = null
+  if (clusterChanged) {
+    selectedClusterDetail.value = null
+  }
+  selectedPhotoId.value = pin.mediaId ?? null
   await loadClusterDetail(pin.clusterId, pin.mediaId, {
     page: 0,
     append: false,
@@ -359,7 +369,6 @@ const shouldShowFullscreenInspector = computed(() =>
     && (
       selectedClusterSummary.value
       || selectedClusterDetail.value
-      || selectedPhoto.value
       || isDetailLoading.value
       || detailErrorMessage.value
     ),
@@ -484,29 +493,6 @@ onMounted(async () => {
     <section v-if="detailErrorMessage && !selectedClusterDetail" class="panel">
       <p class="panel__empty">{{ detailErrorMessage }}</p>
     </section>
-
-    <TravelMyMapInspectorPanels
-      v-if="!isMapFullscreen"
-      :summary="selectedClusterSummary"
-      :detail="selectedClusterDetail"
-      :selected-photo="selectedPhoto"
-      :selected-photo-id="selectedPhotoId"
-      :photos="selectedClusterPhotos"
-      :is-detail-loading="isDetailLoading"
-      :is-representative-saving="isRepresentativeSaving"
-      :representative-updating-id="representativeUpdatingId"
-      :is-loading-more="isClusterPhotosLoadingMore"
-      :can-load-more="selectedClusterDetail?.hasNext"
-      :loaded-photo-count="selectedClusterPhotos.length"
-      :total-photo-count="selectedClusterTotalPhotoCount"
-      :cluster-location-label="selectedClusterLocationLabel"
-      :selected-photo-location-label="selectedPhotoLocationLabel"
-      :selected-photo-gps-label="selectedPhotoGpsLabel"
-      @select-photo="handleSelectPhoto"
-      @open-photo="openPhotoLightbox"
-      @set-representative="handleUpdateRepresentative"
-      @load-more="handleLoadMoreClusterPhotos"
-    />
 
     <section class="panel">
       <div class="panel__header">

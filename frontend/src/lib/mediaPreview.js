@@ -14,6 +14,13 @@ export const THUMBNAIL_WIDTHS = Object.freeze({
   [THUMBNAIL_VARIANTS.detail]: 960,
 })
 
+export const THUMBNAIL_UPLOAD_SPECS = Object.freeze([
+  Object.freeze({ variant: THUMBNAIL_VARIANTS.pin, width: THUMBNAIL_WIDTHS.pin, quality: 0.72 }),
+  Object.freeze({ variant: THUMBNAIL_VARIANTS.mini, width: THUMBNAIL_WIDTHS.mini, quality: 0.78 }),
+  Object.freeze({ variant: THUMBNAIL_VARIANTS.preview, width: THUMBNAIL_WIDTHS.preview, quality: 0.82 }),
+  Object.freeze({ variant: THUMBNAIL_VARIANTS.detail, width: THUMBNAIL_WIDTHS.detail, quality: 0.86 }),
+])
+
 const DEFAULT_THUMBNAIL_WIDTH = THUMBNAIL_WIDTHS.preview
 const MIN_THUMBNAIL_WIDTH = THUMBNAIL_WIDTHS.pin
 const MAX_THUMBNAIL_WIDTH = THUMBNAIL_WIDTHS.detail
@@ -44,7 +51,7 @@ function readImageElement(objectUrl) {
   return new Promise((resolve, reject) => {
     const image = new Image()
     image.onload = () => resolve(image)
-    image.onerror = () => reject(new Error('이미지 미리보기를 불러오지 못했습니다.'))
+    image.onerror = () => reject(new Error('Failed to load image preview.'))
     image.src = objectUrl
   })
 }
@@ -55,6 +62,18 @@ function resolvePreviewSize(width, height, maxWidth, maxHeight) {
   }
 
   const scale = Math.min(maxWidth / width, maxHeight / height, 1)
+  return {
+    width: Math.max(1, Math.round(width * scale)),
+    height: Math.max(1, Math.round(height * scale)),
+  }
+}
+
+function resolveWidthBoundedSize(width, height, maxWidth) {
+  if (!width || !height) {
+    return { width: maxWidth, height: maxWidth }
+  }
+
+  const scale = Math.min(maxWidth / width, 1)
   return {
     width: Math.max(1, Math.round(width * scale)),
     height: Math.max(1, Math.round(height * scale)),
@@ -75,6 +94,21 @@ async function resolveImageOrientation(file) {
     return normalizeOrientation(await exifr.orientation(file))
   } catch {
     return 1
+  }
+}
+
+async function resolveImageGps(file) {
+  try {
+    const gps = await exifr.gps(file)
+    return {
+      latitude: normalizeCoordinate(gps?.latitude),
+      longitude: normalizeCoordinate(gps?.longitude),
+    }
+  } catch {
+    return {
+      latitude: null,
+      longitude: null,
+    }
   }
 }
 
@@ -130,6 +164,52 @@ function drawOrientedPreview(context, image, orientation, targetWidth, targetHei
   context.restore()
 }
 
+function normalizeCoordinate(value) {
+  const numericValue = Number(value)
+  if (!Number.isFinite(numericValue)) {
+    return null
+  }
+  return Number(numericValue.toFixed(7))
+}
+
+function preservesAlphaContentType(contentType) {
+  const normalized = String(contentType || '').trim().toLowerCase()
+  return normalized === 'image/png' || normalized === 'image/gif' || normalized === 'image/webp'
+}
+
+function resolvePreparedThumbnailContentType(contentType) {
+  return preservesAlphaContentType(contentType) ? 'image/png' : 'image/jpeg'
+}
+
+async function renderOrientedImageBlob(image, orientation, targetWidth, targetHeight, mimeType, quality) {
+  const canvas = document.createElement('canvas')
+  canvas.width = Math.max(1, Math.round(targetWidth))
+  canvas.height = Math.max(1, Math.round(targetHeight))
+
+  const context = canvas.getContext('2d')
+  if (!context) {
+    throw new Error('Failed to initialize image canvas.')
+  }
+
+  context.imageSmoothingEnabled = true
+  context.imageSmoothingQuality = 'high'
+  drawOrientedPreview(context, image, orientation, canvas.width, canvas.height)
+
+  const blob = await new Promise((resolve) => {
+    if (mimeType === 'image/jpeg') {
+      canvas.toBlob(resolve, mimeType, quality)
+      return
+    }
+    canvas.toBlob(resolve, mimeType)
+  })
+
+  if (!blob) {
+    throw new Error('Failed to create image thumbnail.')
+  }
+
+  return blob
+}
+
 export function buildThumbnailUrl(url, width = THUMBNAIL_VARIANTS.preview) {
   const normalizedUrl = String(url || '').trim()
   if (!normalizedUrl) {
@@ -150,6 +230,60 @@ export function buildThumbnailUrl(url, width = THUMBNAIL_VARIANTS.preview) {
     return parsed.toString()
   } catch {
     return normalizedUrl
+  }
+}
+
+export async function prepareClientImageUpload(file) {
+  if (!(file instanceof File) || !String(file.type || '').startsWith('image/')) {
+    return {
+      gpsLatitude: null,
+      gpsLongitude: null,
+      thumbnails: [],
+    }
+  }
+
+  const objectUrl = URL.createObjectURL(file)
+
+  try {
+    const [orientation, gps, image] = await Promise.all([
+      resolveImageOrientation(file),
+      resolveImageGps(file),
+      loadPreviewImage(file, objectUrl),
+    ])
+
+    const sourceWidth = image.width || image.naturalWidth
+    const sourceHeight = image.height || image.naturalHeight
+    const orientedWidth = isRotatedOrientation(orientation) ? sourceHeight : sourceWidth
+    const orientedHeight = isRotatedOrientation(orientation) ? sourceWidth : sourceHeight
+    const thumbnailContentType = resolvePreparedThumbnailContentType(file.type)
+
+    const thumbnails = []
+    for (const spec of THUMBNAIL_UPLOAD_SPECS) {
+      const thumbnailSize = resolveWidthBoundedSize(orientedWidth, orientedHeight, spec.width)
+      const blob = await renderOrientedImageBlob(
+        image,
+        orientation,
+        thumbnailSize.width,
+        thumbnailSize.height,
+        thumbnailContentType,
+        spec.quality,
+      )
+
+      thumbnails.push({
+        variant: spec.variant,
+        contentType: thumbnailContentType,
+        fileSize: blob.size,
+        blob,
+      })
+    }
+
+    return {
+      gpsLatitude: gps.latitude,
+      gpsLongitude: gps.longitude,
+      thumbnails,
+    }
+  } finally {
+    URL.revokeObjectURL(objectUrl)
   }
 }
 
@@ -176,26 +310,14 @@ export async function createLocalImagePreview(file, options = {}) {
       maxHeight,
     )
 
-    const canvas = document.createElement('canvas')
-    canvas.width = previewSize.width
-    canvas.height = previewSize.height
-
-    const context = canvas.getContext('2d')
-    if (!context) {
-      throw new Error('미리보기 캔버스를 초기화하지 못했습니다.')
-    }
-
-    context.imageSmoothingEnabled = true
-    context.imageSmoothingQuality = 'high'
-    drawOrientedPreview(context, image, orientation, previewSize.width, previewSize.height)
-
-    const previewBlob = await new Promise((resolve) => {
-      canvas.toBlob(resolve, 'image/jpeg', quality)
-    })
-
-    if (!previewBlob) {
-      throw new Error('미리보기 이미지를 생성하지 못했습니다.')
-    }
+    const previewBlob = await renderOrientedImageBlob(
+      image,
+      orientation,
+      previewSize.width,
+      previewSize.height,
+      'image/jpeg',
+      quality,
+    )
 
     URL.revokeObjectURL(originalPreviewUrl)
     return URL.createObjectURL(previewBlob)

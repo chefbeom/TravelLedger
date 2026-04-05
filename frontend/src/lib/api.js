@@ -1,3 +1,5 @@
+import { prepareClientImageUpload } from './mediaPreview'
+
 const API_BASE = '/api'
 const CSRF_COOKIE_NAME = 'XSRF-TOKEN'
 const CSRF_HEADER_NAME = 'X-XSRF-TOKEN'
@@ -50,6 +52,37 @@ function buildUrl(path, params = {}) {
 
   const queryString = search.toString()
   return `${API_BASE}${path}${queryString ? `?${queryString}` : ''}`
+}
+
+function inferContentTypeFromFileName(fileName) {
+  const normalizedName = String(fileName || '').trim().toLowerCase()
+  if (normalizedName.endsWith('.jpg') || normalizedName.endsWith('.jpeg')) {
+    return 'image/jpeg'
+  }
+  if (normalizedName.endsWith('.png')) {
+    return 'image/png'
+  }
+  if (normalizedName.endsWith('.webp')) {
+    return 'image/webp'
+  }
+  if (normalizedName.endsWith('.gif')) {
+    return 'image/gif'
+  }
+  if (normalizedName.endsWith('.bmp')) {
+    return 'image/bmp'
+  }
+  if (normalizedName.endsWith('.pdf')) {
+    return 'application/pdf'
+  }
+  return 'application/octet-stream'
+}
+
+function resolveUploadContentType(file) {
+  const declaredType = String(file?.type || '').trim().toLowerCase()
+  if (declaredType) {
+    return declaredType
+  }
+  return inferContentTypeFromFileName(file?.name)
 }
 
 async function request(path, options = {}) {
@@ -606,30 +639,12 @@ export function deleteTravelMemory(memoryId) {
   })
 }
 
-function uploadTravelMediaDirect(path, mediaType, files, caption = '', includeMediaType = true) {
-  const formData = new FormData()
-  if (includeMediaType) {
-    formData.append('mediaType', mediaType)
-  }
-  if (caption) {
-    formData.append('caption', caption)
-  }
-  ;(files ?? []).forEach((file) => {
-    formData.append('files', file)
-  })
-
-  return request(path, {
-    method: 'POST',
-    body: formData,
-  })
-}
-
 async function uploadPresignedTravelMediaFile(target, file) {
   const response = await fetch(target.uploadUrl, {
     method: target.method || 'PUT',
-    headers: file?.type
+    headers: (target?.contentType || file?.type)
       ? {
-          'Content-Type': file.type,
+          'Content-Type': target?.contentType || file?.type,
         }
       : {},
     body: file,
@@ -645,8 +660,8 @@ function uploadPresignedTravelMediaFileWithProgress(target, file) {
     const xhr = new XMLHttpRequest()
     xhr.open(target.method || 'PUT', target.uploadUrl, true)
 
-    if (file?.type) {
-      xhr.setRequestHeader('Content-Type', file.type)
+    if (target?.contentType || file?.type) {
+      xhr.setRequestHeader('Content-Type', target?.contentType || file?.type)
     }
 
     xhr.onload = () => {
@@ -663,6 +678,43 @@ function uploadPresignedTravelMediaFileWithProgress(target, file) {
   })
 }
 
+async function prepareTravelMediaUploadEntries(files, onProgress) {
+  const selectedFiles = [...(files ?? [])].filter(Boolean)
+  const preparedEntries = []
+
+  for (let index = 0; index < selectedFiles.length; index += 1) {
+    const file = selectedFiles[index]
+    const contentType = resolveUploadContentType(file)
+
+    onProgress?.({
+      phase: 'preparing',
+      current: index + 1,
+      total: selectedFiles.length,
+      fileName: file?.name || '',
+    })
+
+    const preparedImage = contentType.startsWith('image/')
+      ? await prepareClientImageUpload(new File([file], file.name, { type: contentType, lastModified: file.lastModified }))
+      : {
+          gpsLatitude: null,
+          gpsLongitude: null,
+          thumbnails: [],
+        }
+
+    preparedEntries.push({
+      originalFile: file,
+      originalFileName: file.name,
+      contentType,
+      fileSize: file.size,
+      gpsLatitude: preparedImage.gpsLatitude,
+      gpsLongitude: preparedImage.gpsLongitude,
+      thumbnails: preparedImage.thumbnails,
+    })
+  }
+
+  return preparedEntries
+}
+
 async function uploadTravelMediaWithPresignedUrls({
   preparePath,
   completePath,
@@ -676,15 +728,22 @@ async function uploadTravelMediaWithPresignedUrls({
     return []
   }
 
+  const preparedEntries = await prepareTravelMediaUploadEntries(selectedFiles, onProgress)
+
   const prepared = await request(preparePath, {
     method: 'POST',
     body: JSON.stringify({
       mediaType,
       caption,
-      files: selectedFiles.map((file) => ({
-        originalFileName: file.name,
-        contentType: file.type || 'application/octet-stream',
-        fileSize: file.size,
+      files: preparedEntries.map((entry) => ({
+        originalFileName: entry.originalFileName,
+        contentType: entry.contentType,
+        fileSize: entry.fileSize,
+        thumbnails: entry.thumbnails.map((thumbnail) => ({
+          variant: thumbnail.variant,
+          contentType: thumbnail.contentType,
+          fileSize: thumbnail.fileSize,
+        })),
       })),
     }),
   })
@@ -694,7 +753,7 @@ async function uploadTravelMediaWithPresignedUrls({
     !Array.isArray(prepared.uploads) ||
     prepared.uploads.length !== selectedFiles.length
   ) {
-    return null
+    throw new Error('Presigned travel media upload is unavailable.')
   }
 
   onProgress?.({
@@ -704,12 +763,28 @@ async function uploadTravelMediaWithPresignedUrls({
   })
 
   for (let index = 0; index < prepared.uploads.length; index += 1) {
-    await uploadPresignedTravelMediaFileWithProgress(prepared.uploads[index], selectedFiles[index])
+    const uploadTarget = prepared.uploads[index]
+    const preparedEntry = preparedEntries[index]
+    await uploadPresignedTravelMediaFileWithProgress(uploadTarget, preparedEntry.originalFile)
+
+    const thumbnailTargets = Array.isArray(uploadTarget?.thumbnails) ? uploadTarget.thumbnails : []
+    if (thumbnailTargets.length !== preparedEntry.thumbnails.length) {
+      throw new Error('Prepared thumbnail upload is incomplete.')
+    }
+
+    for (const thumbnailTarget of thumbnailTargets) {
+      const localThumbnail = preparedEntry.thumbnails.find((thumbnail) => thumbnail.variant === thumbnailTarget.variant)
+      if (!localThumbnail) {
+        throw new Error('Prepared thumbnail upload is incomplete.')
+      }
+      await uploadPresignedTravelMediaFile(thumbnailTarget, localThumbnail.blob)
+    }
+
     onProgress?.({
       phase: 'uploading',
       current: index + 1,
       total: prepared.uploads.length,
-      fileName: selectedFiles[index]?.name || prepared.uploads[index]?.originalFileName || '',
+      fileName: preparedEntry.originalFileName || uploadTarget?.originalFileName || '',
     })
   }
 
@@ -724,24 +799,30 @@ async function uploadTravelMediaWithPresignedUrls({
     body: JSON.stringify({
       mediaType,
       caption,
-      files: prepared.uploads.map((upload) => ({
+      files: prepared.uploads.map((upload, index) => ({
         objectKey: upload.objectKey,
         originalFileName: upload.originalFileName,
         contentType: upload.contentType,
         fileSize: upload.fileSize,
+        thumbnails: (Array.isArray(upload.thumbnails) ? upload.thumbnails : []).map((thumbnail) => ({
+          variant: thumbnail.variant,
+          objectKey: thumbnail.objectKey,
+          contentType: thumbnail.contentType,
+          fileSize: thumbnail.fileSize,
+        })),
+        gpsLatitude: preparedEntries[index]?.gpsLatitude,
+        gpsLongitude: preparedEntries[index]?.gpsLongitude,
       })),
     }),
   })
 }
 
 async function uploadTravelMediaInternal({
-  directPath,
   preparePath,
   completePath,
   mediaType,
   files,
   caption = '',
-  includeMediaTypeInDirect = true,
   onProgress,
 }) {
   const selectedFiles = [...(files ?? [])].filter(Boolean)
@@ -758,64 +839,37 @@ async function uploadTravelMediaInternal({
   }
 
   if (preparePath && completePath) {
-    try {
-      const uploadedWithPresign = await uploadTravelMediaWithPresignedUrls({
-        preparePath,
-        completePath,
-        mediaType,
-        files: selectedFiles,
-        caption,
-        onProgress,
-      })
-
-      if (uploadedWithPresign) {
-        return uploadedWithPresign
-      }
-    } catch (error) {
-      if (error?.status) {
-        throw error
-      }
-      // Fall back to the existing server upload flow only when presigned upload is
-      // unavailable due to a network/CORS issue and no HTTP response was received.
-    }
+    return uploadTravelMediaWithPresignedUrls({
+      preparePath,
+      completePath,
+      mediaType,
+      files: selectedFiles,
+      caption,
+      onProgress,
+    })
   }
 
-  onProgress?.({
-    phase: 'uploading',
-    current: 0,
-    total: selectedFiles.length,
-  })
-  const directResponse = await uploadTravelMediaDirect(directPath, mediaType, selectedFiles, caption, includeMediaTypeInDirect)
-  onProgress?.({
-    phase: 'finalizing',
-    current: selectedFiles.length,
-    total: selectedFiles.length,
-  })
-  return directResponse
+  throw new Error('Travel media uploads require presigned object storage.')
 }
 
 export async function uploadTravelRecordMedia(recordId, mediaType, files, caption = '', options = {}) {
   return uploadTravelMediaInternal({
-    directPath: `/travel/records/${recordId}/media`,
     preparePath: `/travel/records/${recordId}/media/presign`,
     completePath: `/travel/records/${recordId}/media/complete`,
     mediaType,
     files,
     caption,
-    includeMediaTypeInDirect: true,
     onProgress: options.onProgress,
   })
 }
 
 export async function uploadTravelMemoryMedia(memoryId, files, caption = '', options = {}) {
   return uploadTravelMediaInternal({
-    directPath: `/travel/memories/${memoryId}/media`,
     preparePath: `/travel/memories/${memoryId}/media/presign`,
     completePath: `/travel/memories/${memoryId}/media/complete`,
     mediaType: 'PHOTO',
     files,
     caption,
-    includeMediaTypeInDirect: false,
     onProgress: options.onProgress,
   })
 }

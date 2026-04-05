@@ -35,6 +35,7 @@ import com.playdata.calen.travel.dto.TravelMediaUploadCompleteRequest;
 import com.playdata.calen.travel.dto.TravelMediaUploadPrepareRequest;
 import com.playdata.calen.travel.dto.TravelMediaUploadPrepareResponse;
 import com.playdata.calen.travel.dto.TravelMediaUploadTargetResponse;
+import com.playdata.calen.travel.dto.TravelPreparedThumbnailUploadTargetResponse;
 import com.playdata.calen.travel.dto.TravelMyMapMarkerDetailBundleResponse;
 import com.playdata.calen.travel.dto.TravelMyMapMarkerDetailResponse;
 import com.playdata.calen.travel.dto.TravelMyMapMarkerSummaryResponse;
@@ -820,17 +821,6 @@ public class TravelService {
         invalidateTravelSummaryCaches(userId);
     }
 
-    @Transactional
-    public List<TravelMediaResponse> uploadRecordMedia(
-            Long userId,
-            Long recordId,
-            TravelMediaType mediaType,
-            String caption,
-            List<MultipartFile> files
-    ) {
-        return uploadRecordMediaInternal(userId, recordId, TravelRecordType.LEDGER, mediaType, caption, files);
-    }
-
     public TravelMediaUploadPrepareResponse prepareRecordMediaUpload(
             Long userId,
             Long recordId,
@@ -846,16 +836,6 @@ public class TravelService {
             TravelMediaUploadCompleteRequest request
     ) {
         return completeMediaUploadInternal(userId, recordId, TravelRecordType.LEDGER, request.mediaType(), request);
-    }
-
-    @Transactional
-    public List<TravelMediaResponse> uploadMemoryMedia(
-            Long userId,
-            Long memoryId,
-            String caption,
-            List<MultipartFile> files
-    ) {
-        return uploadRecordMediaInternal(userId, memoryId, TravelRecordType.MEMORY, TravelMediaType.PHOTO, caption, files);
     }
 
     public TravelMediaUploadPrepareResponse prepareMemoryMediaUpload(
@@ -941,51 +921,6 @@ public class TravelService {
         return exchangeRateService.getLatestRates(codes);
     }
 
-    private List<TravelMediaResponse> uploadRecordMediaInternal(
-            Long userId,
-            Long recordId,
-            TravelRecordType recordType,
-            TravelMediaType mediaType,
-            String caption,
-            List<MultipartFile> files
-    ) {
-        if (files == null || files.isEmpty()) {
-            throw new BadRequestException("Select a file to upload.");
-        }
-
-        AppUser currentUser = appUserService.getRequiredUser(userId);
-        TravelExpenseRecord record = getRequiredRecord(userId, recordId, recordType, resolveMissingRecordMessage(recordType));
-        TravelMediaType resolvedMediaType = resolveMediaType(recordType, mediaType);
-
-        List<TravelMediaResponse> responses = files.stream()
-                .filter(file -> file != null && !file.isEmpty())
-                .map(file -> {
-                    TravelMediaStorageService.StoredTravelMedia storedFile = travelMediaStorageService.store(
-                            userId,
-                            record.getPlan().getId(),
-                            record.getId(),
-                            file
-                    );
-                    return saveMediaAsset(
-                            currentUser,
-                            record,
-                            resolvedMediaType,
-                            caption,
-                            storedFile,
-                            travelPhotoGpsMetadataService.extract(file, storedFile.contentType())
-                    );
-                })
-                .map(this::toMediaResponse)
-                .toList();
-        if (!responses.isEmpty()) {
-            invalidateTravelSummaryCaches(userId);
-            if (recordType == TravelRecordType.MEMORY && resolvedMediaType == TravelMediaType.PHOTO) {
-                refreshMyMapPhotoClusterSnapshot(userId);
-            }
-        }
-        return responses;
-    }
-
     private TravelMediaUploadPrepareResponse prepareMediaUploadInternal(
             Long userId,
             Long recordId,
@@ -994,36 +929,53 @@ public class TravelService {
     ) {
         TravelExpenseRecord record = getRequiredRecord(userId, recordId, recordType, resolveMissingRecordMessage(recordType));
 
-        try {
-            List<TravelMediaStorageService.UploadCandidate> candidates = request.files().stream()
-                    .map(file -> new TravelMediaStorageService.UploadCandidate(
-                            file.originalFileName(),
-                            file.contentType(),
-                            file.fileSize()
-                    ))
-                    .toList();
-
-            List<TravelMediaUploadTargetResponse> uploads = travelMediaStorageService.preparePresignedUploads(
-                            userId,
-                            record.getPlan().getId(),
-                            record.getId(),
-                            candidates
-                    ).stream()
-                    .map(upload -> new TravelMediaUploadTargetResponse(
-                            upload.method(),
-                            upload.uploadUrl(),
-                            upload.objectKey(),
-                            upload.storedFileName(),
-                            upload.originalFileName(),
-                            upload.contentType(),
-                            upload.fileSize()
-                    ))
-                    .toList();
-
-            return new TravelMediaUploadPrepareResponse("PRESIGNED", uploads);
-        } catch (BadRequestException exception) {
-            return new TravelMediaUploadPrepareResponse("SERVER", Collections.emptyList());
+        if (!travelMediaStorageService.supportsPresignedUpload()) {
+            throw new BadRequestException("Travel media uploads require presigned object storage.");
         }
+
+        List<TravelMediaStorageService.UploadCandidate> candidates = request.files().stream()
+                .map(file -> new TravelMediaStorageService.UploadCandidate(
+                        file.originalFileName(),
+                        file.contentType(),
+                        file.fileSize(),
+                        (file.thumbnails() == null ? List.<com.playdata.calen.travel.dto.TravelPreparedThumbnailUploadRequest>of() : file.thumbnails()).stream()
+                                .map(thumbnail -> new TravelMediaStorageService.PreparedThumbnailUploadCandidate(
+                                        thumbnail.variant(),
+                                        thumbnail.contentType(),
+                                        thumbnail.fileSize()
+                                ))
+                                .toList()
+                ))
+                .toList();
+
+        List<TravelMediaUploadTargetResponse> uploads = travelMediaStorageService.preparePresignedUploads(
+                        userId,
+                        record.getPlan().getId(),
+                        record.getId(),
+                        candidates
+                ).stream()
+                .map(upload -> new TravelMediaUploadTargetResponse(
+                        upload.method(),
+                        upload.uploadUrl(),
+                        upload.objectKey(),
+                        upload.storedFileName(),
+                        upload.originalFileName(),
+                        upload.contentType(),
+                        upload.fileSize(),
+                        (upload.thumbnails() == null ? List.<TravelMediaStorageService.PresignedThumbnailUpload>of() : upload.thumbnails()).stream()
+                                .map(thumbnail -> new TravelPreparedThumbnailUploadTargetResponse(
+                                        thumbnail.variant(),
+                                        thumbnail.method(),
+                                        thumbnail.uploadUrl(),
+                                        thumbnail.objectKey(),
+                                        thumbnail.contentType(),
+                                        thumbnail.fileSize()
+                                ))
+                                .toList()
+                ))
+                .toList();
+
+        return new TravelMediaUploadPrepareResponse("PRESIGNED", uploads);
     }
 
     private List<TravelMediaResponse> completeMediaUploadInternal(
@@ -1042,26 +994,35 @@ public class TravelService {
         TravelMediaType resolvedMediaType = resolveMediaType(recordType, mediaType);
 
         List<TravelMediaResponse> responses = request.files().stream()
-                .map(file -> new TravelMediaStorageService.CompletedUpload(
-                        file.objectKey(),
-                        file.originalFileName(),
-                        file.contentType(),
-                        file.fileSize()
-                ))
-                .map(file -> travelMediaStorageService.completePresignedUpload(
-                        userId,
-                        record.getPlan().getId(),
-                        record.getId(),
-                        file
-                ))
-                .map(storedFile -> saveMediaAsset(
-                        currentUser,
-                        record,
-                        resolvedMediaType,
-                        request.caption(),
-                        storedFile,
-                        extractStoredPhotoGps(storedFile)
-                ))
+                .map(file -> {
+                    TravelMediaStorageService.StoredTravelMedia storedFile = travelMediaStorageService.completePresignedUpload(
+                            userId,
+                            record.getPlan().getId(),
+                            record.getId(),
+                            new TravelMediaStorageService.CompletedUpload(
+                                    file.objectKey(),
+                                    file.originalFileName(),
+                                    file.contentType(),
+                                    file.fileSize(),
+                                    (file.thumbnails() == null ? List.<com.playdata.calen.travel.dto.TravelPreparedThumbnailUploadCompleteRequest>of() : file.thumbnails()).stream()
+                                            .map(thumbnail -> new TravelMediaStorageService.CompletedPreparedThumbnailUpload(
+                                                    thumbnail.variant(),
+                                                    thumbnail.objectKey(),
+                                                    thumbnail.contentType(),
+                                                    thumbnail.fileSize()
+                                            ))
+                                            .toList()
+                            )
+                    );
+                    return saveMediaAsset(
+                            currentUser,
+                            record,
+                            resolvedMediaType,
+                            request.caption(),
+                            storedFile,
+                            toCompletedUploadPhotoGps(file)
+                    );
+                })
                 .map(this::toMediaResponse)
                 .toList();
         if (!responses.isEmpty()) {
@@ -2046,19 +2007,17 @@ public class TravelService {
         routeSegments.forEach(this::deleteRouteGpxFilesQuietly);
     }
 
-    private TravelPhotoGpsMetadataService.ExtractedPhotoGps extractStoredPhotoGps(TravelMediaStorageService.StoredTravelMedia storedFile) {
-        if (storedFile == null || storedFile.contentType() == null || !storedFile.contentType().startsWith("image/")) {
+    private TravelPhotoGpsMetadataService.ExtractedPhotoGps toCompletedUploadPhotoGps(
+            com.playdata.calen.travel.dto.TravelMediaUploadCompleteFileRequest file
+    ) {
+        if (file == null || file.gpsLatitude() == null || file.gpsLongitude() == null) {
             return null;
         }
 
-        try {
-            return travelPhotoGpsMetadataService.extract(
-                    travelMediaStorageService.loadAsResource(storedFile.storagePath()),
-                    storedFile.contentType()
-            );
-        } catch (RuntimeException exception) {
-            return null;
-        }
+        return new TravelPhotoGpsMetadataService.ExtractedPhotoGps(
+                file.gpsLatitude().setScale(7, RoundingMode.HALF_UP),
+                file.gpsLongitude().setScale(7, RoundingMode.HALF_UP)
+        );
     }
 
     private TravelMediaAsset saveMediaAsset(

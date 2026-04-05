@@ -126,7 +126,10 @@ public class TravelMediaStorageService {
             throw new BadRequestException("Select a file to upload.");
         }
 
-        files.forEach(file -> validateUploadCandidate(file.originalFileName(), file.contentType(), file.fileSize()));
+        files.forEach(file -> {
+            String verifiedContentType = validateUploadCandidate(file.originalFileName(), file.contentType(), file.fileSize());
+            validatePreparedThumbnailCandidates(file.thumbnails(), verifiedContentType);
+        });
     }
 
     public List<PresignedUpload> preparePresignedUploads(
@@ -162,21 +165,11 @@ public class TravelMediaStorageService {
                 upload.fileSize()
         );
         validateObjectKey(ownerId, planId, recordId, upload.objectKey());
+        validateCompletedPreparedThumbnailCandidates(upload.thumbnails(), verifiedContentType);
 
         try {
-            StatObjectResponse stat = minioClient.statObject(
-                    StatObjectArgs.builder()
-                            .bucket(minioProperties.getBucket_cloud())
-                            .object(upload.objectKey())
-                            .build()
-            );
-
-            if (stat.size() != upload.fileSize()) {
-                throw new BadRequestException("Uploaded file verification failed.");
-            }
-
-            validateStoredObjectSignature(upload.objectKey(), verifiedContentType);
-            prepareDerivedThumbnailsQuietly(upload.objectKey(), verifiedContentType);
+            StatObjectResponse stat = verifyUploadedObject(upload.objectKey(), upload.fileSize());
+            verifyPreparedThumbnailUploads(upload.objectKey(), verifiedContentType, upload.thumbnails());
 
             return new StoredTravelMedia(
                     upload.originalFileName(),
@@ -577,6 +570,7 @@ public class TravelMediaStorageService {
 
     private PresignedUpload createPresignedUpload(Long ownerId, Long planId, Long recordId, UploadCandidate file) {
         String verifiedContentType = validateUploadCandidate(file.originalFileName(), file.contentType(), file.fileSize());
+        validatePreparedThumbnailCandidates(file.thumbnails(), verifiedContentType);
         String safeFileName = sanitizeFileName(file.originalFileName());
         String storedFileName = UUID.randomUUID() + "-" + safeFileName;
         String objectKey = buildMinioObjectKey(ownerId, planId, recordId, storedFileName);
@@ -598,11 +592,53 @@ public class TravelMediaStorageService {
                     storedFileName,
                     file.originalFileName(),
                     verifiedContentType,
-                    file.fileSize()
+                    file.fileSize(),
+                    createPresignedThumbnailUploads(objectKey, verifiedContentType, file.thumbnails())
             );
         } catch (Exception exception) {
             throw new BadRequestException(buildStorageErrorMessage("Failed to generate upload URL."));
         }
+    }
+
+    private List<PresignedThumbnailUpload> createPresignedThumbnailUploads(
+            String originalObjectKey,
+            String originalContentType,
+            List<PreparedThumbnailUploadCandidate> thumbnails
+    ) {
+        if (!StringUtils.hasText(originalContentType) || !originalContentType.startsWith("image/")) {
+            return List.of();
+        }
+
+        List<PreparedThumbnailUploadCandidate> candidates = thumbnails == null ? List.of() : thumbnails;
+        return PreparedThumbnailProfile.defaultSpecs().stream()
+                .map(spec -> {
+                    PreparedThumbnailUploadCandidate candidate = candidates.stream()
+                            .filter(item -> spec.key().equals(item.variant()))
+                            .findFirst()
+                            .orElseThrow(() -> new BadRequestException("Prepared thumbnail upload is incomplete."));
+                    String objectKey = buildThumbnailStoragePath(originalObjectKey, originalContentType, spec.width());
+                    try {
+                        String uploadUrl = rewritePublicUploadUrl(minioClient.getPresignedObjectUrl(
+                                GetPresignedObjectUrlArgs.builder()
+                                        .method(Method.PUT)
+                                        .bucket(minioProperties.getBucket_cloud())
+                                        .object(objectKey)
+                                        .expiry(minioProperties.getPresignedUrlExpirySeconds())
+                                        .build()
+                        ));
+                        return new PresignedThumbnailUpload(
+                                spec.key(),
+                                "PUT",
+                                uploadUrl,
+                                objectKey,
+                                candidate.contentType(),
+                                candidate.fileSize()
+                        );
+                    } catch (Exception exception) {
+                        throw new BadRequestException(buildStorageErrorMessage("Failed to generate upload URL."));
+                    }
+                })
+                .toList();
     }
 
     private boolean isMinioEnabled() {
@@ -675,6 +711,54 @@ public class TravelMediaStorageService {
         return resolveAllowedContentType(originalFileName, contentType);
     }
 
+    private void validatePreparedThumbnailCandidates(
+            List<PreparedThumbnailUploadCandidate> thumbnails,
+            String originalContentType
+    ) {
+        List<PreparedThumbnailUploadCandidate> candidates = thumbnails == null ? List.of() : thumbnails;
+        if (!StringUtils.hasText(originalContentType) || !originalContentType.startsWith("image/")) {
+            if (!candidates.isEmpty()) {
+                throw new BadRequestException("Prepared thumbnails are only supported for image uploads.");
+            }
+            return;
+        }
+
+        if (candidates.size() != PreparedThumbnailProfile.defaultSpecs().size()) {
+            throw new BadRequestException("Prepared thumbnails for all image sizes are required.");
+        }
+
+        String expectedThumbnailContentType = resolveThumbnailContentType(originalContentType);
+        for (PreparedThumbnailProfile.PreparedThumbnailSpec spec : PreparedThumbnailProfile.defaultSpecs()) {
+            PreparedThumbnailUploadCandidate candidate = candidates.stream()
+                    .filter(item -> spec.key().equals(item.variant()))
+                    .findFirst()
+                    .orElseThrow(() -> new BadRequestException("Prepared thumbnail upload is incomplete."));
+
+            if (!expectedThumbnailContentType.equals(normalizeContentType(candidate.contentType()))) {
+                throw new BadRequestException("Prepared thumbnail content type is invalid.");
+            }
+            if (candidate.fileSize() <= 0) {
+                throw new BadRequestException("Prepared thumbnail file size is invalid.");
+            }
+        }
+    }
+
+    private void validateCompletedPreparedThumbnailCandidates(
+            List<CompletedPreparedThumbnailUpload> thumbnails,
+            String originalContentType
+    ) {
+        List<PreparedThumbnailUploadCandidate> candidates = thumbnails == null
+                ? List.of()
+                : thumbnails.stream()
+                        .map(thumbnail -> new PreparedThumbnailUploadCandidate(
+                                thumbnail.variant(),
+                                thumbnail.contentType(),
+                                thumbnail.fileSize()
+                        ))
+                        .toList();
+        validatePreparedThumbnailCandidates(candidates, originalContentType);
+    }
+
     private void validateObjectKey(Long ownerId, Long planId, Long recordId, String objectKey) {
         if (!StringUtils.hasText(objectKey)) {
             throw new BadRequestException("Object key is required.");
@@ -690,6 +774,46 @@ public class TravelMediaStorageService {
 
         if (!objectKey.startsWith(expectedPrefix)) {
             throw new BadRequestException("Invalid uploaded file path.");
+        }
+    }
+
+    private StatObjectResponse verifyUploadedObject(String objectKey, long expectedFileSize) throws Exception {
+        StatObjectResponse stat = minioClient.statObject(
+                StatObjectArgs.builder()
+                        .bucket(minioProperties.getBucket_cloud())
+                        .object(objectKey)
+                        .build()
+        );
+
+        if (stat.size() != expectedFileSize) {
+            throw new BadRequestException("Uploaded file verification failed.");
+        }
+        return stat;
+    }
+
+    private void verifyPreparedThumbnailUploads(
+            String originalObjectKey,
+            String originalContentType,
+            List<CompletedPreparedThumbnailUpload> thumbnails
+    ) throws Exception {
+        if (!StringUtils.hasText(originalContentType) || !originalContentType.startsWith("image/")) {
+            return;
+        }
+
+        List<CompletedPreparedThumbnailUpload> completedThumbnails = thumbnails == null ? List.of() : thumbnails;
+        for (PreparedThumbnailProfile.PreparedThumbnailSpec spec : PreparedThumbnailProfile.defaultSpecs()) {
+            CompletedPreparedThumbnailUpload completedThumbnail = completedThumbnails.stream()
+                    .filter(item -> spec.key().equals(item.variant()))
+                    .findFirst()
+                    .orElseThrow(() -> new BadRequestException("Prepared thumbnail upload is incomplete."));
+            String expectedObjectKey = buildThumbnailStoragePath(originalObjectKey, originalContentType, spec.width());
+            if (!expectedObjectKey.equals(completedThumbnail.objectKey())) {
+                throw new BadRequestException("Prepared thumbnail path is invalid.");
+            }
+            if (!resolveThumbnailContentType(originalContentType).equals(normalizeContentType(completedThumbnail.contentType()))) {
+                throw new BadRequestException("Prepared thumbnail content type is invalid.");
+            }
+            verifyUploadedObject(completedThumbnail.objectKey(), completedThumbnail.fileSize());
         }
     }
 
@@ -783,23 +907,6 @@ public class TravelMediaStorageService {
             }
         } catch (IOException exception) {
             throw new BadRequestException("Failed to read the uploaded file.");
-        }
-    }
-
-    private void validateStoredObjectSignature(String objectKey, String contentType) {
-        try (InputStream inputStream = minioClient.getObject(
-                GetObjectArgs.builder()
-                        .bucket(minioProperties.getBucket_cloud())
-                        .object(objectKey)
-                        .build())) {
-            byte[] header = readHeader(inputStream);
-            if (!matchesSignature(header, contentType)) {
-                throw new BadRequestException("Uploaded file contents do not match the file type.");
-            }
-        } catch (BadRequestException exception) {
-            throw exception;
-        } catch (Exception exception) {
-            throw new BadRequestException("Uploaded file verification failed.");
         }
     }
 
@@ -958,7 +1065,8 @@ public class TravelMediaStorageService {
     public record UploadCandidate(
             String originalFileName,
             String contentType,
-            long fileSize
+            long fileSize,
+            List<PreparedThumbnailUploadCandidate> thumbnails
     ) {
     }
 
@@ -966,7 +1074,8 @@ public class TravelMediaStorageService {
             String objectKey,
             String originalFileName,
             String contentType,
-            long fileSize
+            long fileSize,
+            List<CompletedPreparedThumbnailUpload> thumbnails
     ) {
     }
 
@@ -976,6 +1085,32 @@ public class TravelMediaStorageService {
             String objectKey,
             String storedFileName,
             String originalFileName,
+            String contentType,
+            long fileSize,
+            List<PresignedThumbnailUpload> thumbnails
+    ) {
+    }
+
+    public record PreparedThumbnailUploadCandidate(
+            String variant,
+            String contentType,
+            long fileSize
+    ) {
+    }
+
+    public record CompletedPreparedThumbnailUpload(
+            String variant,
+            String objectKey,
+            String contentType,
+            long fileSize
+    ) {
+    }
+
+    public record PresignedThumbnailUpload(
+            String variant,
+            String method,
+            String uploadUrl,
+            String objectKey,
             String contentType,
             long fileSize
     ) {

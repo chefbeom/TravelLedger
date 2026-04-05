@@ -4,13 +4,22 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.playdata.calen.account.domain.AppUser;
+import com.playdata.calen.account.repository.AppUserRepository;
+import com.playdata.calen.travel.domain.TravelExpenseRecord;
+import com.playdata.calen.travel.domain.TravelMediaAsset;
+import com.playdata.calen.travel.domain.TravelMediaType;
+import com.playdata.calen.travel.domain.TravelPlan;
+import com.playdata.calen.travel.repository.TravelExpenseRecordRepository;
+import com.playdata.calen.travel.repository.TravelMediaAssetRepository;
+import com.playdata.calen.travel.repository.TravelPlanRepository;
+import com.playdata.calen.travel.service.TravelMediaStorageService;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -52,6 +61,21 @@ class TravelPlanUserScopeIntegrationTest {
     @Autowired
     private ObjectMapper objectMapper;
 
+    @Autowired
+    private AppUserRepository appUserRepository;
+
+    @Autowired
+    private TravelPlanRepository travelPlanRepository;
+
+    @Autowired
+    private TravelExpenseRecordRepository travelExpenseRecordRepository;
+
+    @Autowired
+    private TravelMediaAssetRepository travelMediaAssetRepository;
+
+    @Autowired
+    private TravelMediaStorageService travelMediaStorageService;
+
     @Test
     void travelPlanCrudIsScopedPerUser() throws Exception {
         MockHttpSession hanaSession = loginAndGetSession("hana");
@@ -61,8 +85,8 @@ class TravelPlanUserScopeIntegrationTest {
         Long budgetItemId = createBudgetItem(hanaSession, planId, "Flight", "Round trip ticket", "450000", "KRW", "1");
         Long recordId = createExpenseRecord(hanaSession, planId, "Food", "Takoyaki", "1200", "JPY", "9.100000");
 
-        assertPresignFallsBackToServer(hanaSession, recordId);
-        uploadTravelMedia(hanaSession, recordId);
+        assertPresignRequiresObjectStorage(hanaSession, recordId);
+        seedTravelMediaAsset("hana", recordId, "takoyaki.jpg", "Takoyaki stand");
 
         mockMvc.perform(get("/api/travel/plans/{planId}", planId).session(minsuSession))
                 .andExpect(status().isNotFound());
@@ -128,7 +152,7 @@ class TravelPlanUserScopeIntegrationTest {
         Long planId = createTravelPlan(hanaSession, "Kyoto memory trip");
         Long memoryId = createMemoryRecord(hanaSession, planId, "Spot", "Fushimi Inari");
 
-        uploadTravelMemoryMedia(hanaSession, memoryId);
+        seedTravelMediaAsset("hana", memoryId, "fushimi.jpg", "Shrine gate");
 
         mockMvc.perform(delete("/api/travel/memories/{memoryId}", memoryId).with(csrf()).session(minsuSession))
                 .andExpect(status().isNotFound());
@@ -148,7 +172,7 @@ class TravelPlanUserScopeIntegrationTest {
 
         Long planId = createTravelPlan(hanaSession, "Community media trip", "COMPLETED");
         Long memoryId = createMemoryRecord(hanaSession, planId, "Spot", "Shared spot", true);
-        uploadTravelMemoryMedia(hanaSession, memoryId);
+        seedTravelMediaAsset("hana", memoryId, "shared-spot.jpg", "Shared spot");
 
         MvcResult feedResult = mockMvc.perform(get("/api/travel/community-feed").session(hanaSession))
                 .andExpect(status().isOk())
@@ -250,7 +274,7 @@ class TravelPlanUserScopeIntegrationTest {
 
         Long planId = createTravelPlan(hanaSession, "Shared Kyoto", "COMPLETED");
         Long memoryId = createMemoryRecord(hanaSession, planId, "Spot", "Arashiyama");
-        uploadTravelMemoryMedia(hanaSession, memoryId);
+        seedTravelMediaAsset("hana", memoryId, "arashiyama.jpg", "Arashiyama");
 
         Map<String, Object> sharePayload = new LinkedHashMap<>();
         sharePayload.put("loginId", "minsu");
@@ -450,7 +474,7 @@ class TravelPlanUserScopeIntegrationTest {
                 .andReturn());
     }
 
-    private void assertPresignFallsBackToServer(MockHttpSession session, Long recordId) throws Exception {
+    private void assertPresignRequiresObjectStorage(MockHttpSession session, Long recordId) throws Exception {
         Map<String, Object> file = new LinkedHashMap<>();
         file.put("originalFileName", "takoyaki.jpg");
         file.put("contentType", "image/jpeg");
@@ -466,46 +490,43 @@ class TravelPlanUserScopeIntegrationTest {
                         .session(session)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(payload)))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.uploadMode").value("SERVER"))
-                .andExpect(jsonPath("$.uploads.length()").value(0));
+                .andExpect(status().isBadRequest());
     }
 
-    private void uploadTravelMedia(MockHttpSession session, Long recordId) throws Exception {
+    private void seedTravelMediaAsset(String uploadedByLoginId, Long recordId, String fileName, String caption) {
+        TravelExpenseRecord record = travelExpenseRecordRepository.findById(recordId)
+                .orElseThrow(() -> new AssertionError("Travel record not found."));
+        TravelPlan plan = travelPlanRepository.findById(record.getPlan().getId())
+                .orElseThrow(() -> new AssertionError("Travel plan not found."));
+        AppUser uploadedBy = appUserRepository.findByLoginId(uploadedByLoginId)
+                .orElseThrow(() -> new AssertionError("Uploader not found."));
+
         MockMultipartFile file = new MockMultipartFile(
                 "files",
-                "takoyaki.jpg",
+                fileName,
                 "image/jpeg",
                 TEST_JPEG_BYTES
         );
 
-        mockMvc.perform(multipart("/api/travel/records/{recordId}/media", recordId)
-                        .file(file)
-                        .param("mediaType", "PHOTO")
-                        .param("caption", "Takoyaki stand")
-                        .with(csrf())
-                        .session(session))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$[0].mediaType").value("PHOTO"))
-                .andExpect(jsonPath("$[0].uploadedBy").isNotEmpty());
-    }
-
-    private void uploadTravelMemoryMedia(MockHttpSession session, Long memoryId) throws Exception {
-        MockMultipartFile file = new MockMultipartFile(
-                "files",
-                "fushimi.jpg",
-                "image/jpeg",
-                TEST_JPEG_BYTES
+        TravelMediaStorageService.StoredTravelMedia storedFile = travelMediaStorageService.store(
+                uploadedBy.getId(),
+                plan.getId(),
+                record.getId(),
+                file
         );
 
-        mockMvc.perform(multipart("/api/travel/memories/{memoryId}/media", memoryId)
-                        .file(file)
-                        .param("caption", "Shrine gate")
-                        .with(csrf())
-                        .session(session))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$[0].mediaType").value("PHOTO"))
-                .andExpect(jsonPath("$[0].recordType").value("MEMORY"));
+        TravelMediaAsset mediaAsset = new TravelMediaAsset();
+        mediaAsset.setPlan(plan);
+        mediaAsset.setRecord(record);
+        mediaAsset.setUploadedBy(uploadedBy);
+        mediaAsset.setMediaType(TravelMediaType.PHOTO);
+        mediaAsset.setOriginalFileName(storedFile.originalFileName());
+        mediaAsset.setStoredFileName(storedFile.storedFileName());
+        mediaAsset.setStoragePath(storedFile.storagePath());
+        mediaAsset.setContentType(storedFile.contentType());
+        mediaAsset.setFileSize(storedFile.fileSize());
+        mediaAsset.setCaption(caption);
+        travelMediaAssetRepository.save(mediaAsset);
     }
 
     private Long readId(MvcResult result) throws Exception {

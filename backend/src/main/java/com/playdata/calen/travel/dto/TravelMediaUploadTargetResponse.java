@@ -7,6 +7,7 @@ public record TravelMediaUploadTargetResponse(
         String storedFileName,
         String originalFileName,
         String contentType,
-        long fileSize
+        long fileSize,
+        java.util.List<TravelPreparedThumbnailUploadTargetResponse> thumbnails
 ) {
 }

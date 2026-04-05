@@ -301,17 +301,6 @@ public class TravelController {
         travelService.deleteMemoryRecord(currentUser.userId(), memoryId);
     }
 
-    @PostMapping("/records/{recordId}/media")
-    public List<TravelMediaResponse> uploadRecordMedia(
-            @AuthenticationPrincipal AppUserPrincipal currentUser,
-            @PathVariable Long recordId,
-            @RequestParam TravelMediaType mediaType,
-            @RequestParam(required = false) String caption,
-            @RequestParam("files") List<MultipartFile> files
-    ) {
-        return travelService.uploadRecordMedia(currentUser.userId(), recordId, mediaType, caption, files);
-    }
-
     @PostMapping("/records/{recordId}/media/presign")
     public TravelMediaUploadPrepareResponse prepareRecordMediaUpload(
             @AuthenticationPrincipal AppUserPrincipal currentUser,
@@ -328,16 +317,6 @@ public class TravelController {
             @Valid @RequestBody TravelMediaUploadCompleteRequest request
     ) {
         return travelService.completeRecordMediaUpload(currentUser.userId(), recordId, request);
-    }
-
-    @PostMapping("/memories/{memoryId}/media")
-    public List<TravelMediaResponse> uploadMemoryMedia(
-            @AuthenticationPrincipal AppUserPrincipal currentUser,
-            @PathVariable Long memoryId,
-            @RequestParam(required = false) String caption,
-            @RequestParam("files") List<MultipartFile> files
-    ) {
-        return travelService.uploadMemoryMedia(currentUser.userId(), memoryId, caption, files);
     }
 
     @PostMapping("/memories/{memoryId}/media/presign")

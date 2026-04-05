@@ -24,7 +24,8 @@ const isDetailLoading = ref(false)
 const isRepresentativeSaving = ref(false)
 const isClusterPhotosLoadingMore = ref(false)
 const isMapFullscreen = ref(false)
-const errorMessage = ref('')
+const overviewErrorMessage = ref('')
+const detailErrorMessage = ref('')
 const overview = ref(null)
 const selectedClusterSummary = ref(null)
 const selectedClusterDetail = ref(null)
@@ -34,8 +35,12 @@ const lightboxPhoto = ref(null)
 const representativeUpdatingId = ref(null)
 const viewMode = ref('cluster')
 
-function setError(message = '') {
-  errorMessage.value = message
+function setOverviewError(message = '') {
+  overviewErrorMessage.value = message
+}
+
+function setDetailError(message = '') {
+  detailErrorMessage.value = message
 }
 
 function routeSummary(route) {
@@ -99,7 +104,7 @@ async function loadClusterDetail(
   } else {
     isDetailLoading.value = true
   }
-  setError('')
+  setDetailError('')
 
   try {
     const detail = await fetchTravelMyMapPhotoCluster(clusterId, {
@@ -122,7 +127,7 @@ async function loadClusterDetail(
       selectedClusterDetail.value = null
       selectedPhotoId.value = null
     }
-    setError(error.message)
+    setDetailError(error.message)
   } finally {
     if (isLoadMore) {
       isClusterPhotosLoadingMore.value = false
@@ -134,7 +139,7 @@ async function loadClusterDetail(
 
 async function loadOverview({ autoSelect = false, preferredClusterId = null, reloadDetail = false } = {}) {
   isLoading.value = true
-  setError('')
+  setOverviewError('')
 
   try {
     const nextOverview = await fetchTravelMyMapOverview()
@@ -172,7 +177,7 @@ async function loadOverview({ autoSelect = false, preferredClusterId = null, rel
       }
     }
   } catch (error) {
-    setError(error.message)
+    setOverviewError(error.message)
   } finally {
     isLoading.value = false
   }
@@ -271,7 +276,7 @@ async function handleUpdateRepresentative(photo) {
 
   isRepresentativeSaving.value = true
   representativeUpdatingId.value = photo.id
-  setError('')
+  setDetailError('')
 
   try {
     const detail = await updateTravelMyMapPhotoClusterRepresentative(selectedClusterSummary.value.id, photo.id)
@@ -279,7 +284,7 @@ async function handleUpdateRepresentative(photo) {
     selectedPhotoId.value = photo.id
     await loadOverview({ preferredClusterId: detail.id, reloadDetail: false })
   } catch (error) {
-    setError(error.message)
+    setDetailError(error.message)
   } finally {
     isRepresentativeSaving.value = false
     representativeUpdatingId.value = null
@@ -406,7 +411,7 @@ onMounted(async () => {
         </div>
       </div>
 
-      <p v-if="errorMessage" class="panel__empty">{{ errorMessage }}</p>
+      <p v-if="overviewErrorMessage" class="panel__empty">{{ overviewErrorMessage }}</p>
       <p v-else-if="isLoading" class="panel__empty">사진 지도 데이터를 불러오는 중입니다...</p>
       <TravelMyMapClusterPanel
         v-else
@@ -451,6 +456,10 @@ onMounted(async () => {
           />
         </template>
       </TravelMyMapClusterPanel>
+    </section>
+
+    <section v-if="detailErrorMessage && !selectedClusterDetail" class="panel">
+      <p class="panel__empty">{{ detailErrorMessage }}</p>
     </section>
 
     <TravelMyMapInspectorPanels

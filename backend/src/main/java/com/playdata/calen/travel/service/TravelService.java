@@ -434,9 +434,7 @@ public class TravelService {
     ) {
         appUserService.getRequiredUser(userId);
 
-        TravelMyMapPhotoClusterDetailResponse cluster = getOrBuildMyMapPhotoClusterSnapshot(userId)
-                .findDetail(clusterId)
-                .orElseThrow(() -> new NotFoundException("Photo cluster not found."));
+        TravelMyMapPhotoClusterDetailResponse cluster = resolveMyMapPhotoClusterDetail(userId, clusterId);
         return toMyMapPhotoClusterPageResponse(cluster, page, size, focusMediaId);
     }
 
@@ -444,9 +442,7 @@ public class TravelService {
     public TravelMyMapPhotoClusterPageResponse updateMyMapPhotoClusterRepresentative(Long userId, Long clusterId, Long mediaId) {
         appUserService.getRequiredUser(userId);
 
-        TravelMyMapPhotoClusterDetailResponse cluster = getOrBuildMyMapPhotoClusterSnapshot(userId)
-                .findDetail(clusterId)
-                .orElseThrow(() -> new NotFoundException("Photo cluster not found."));
+        TravelMyMapPhotoClusterDetailResponse cluster = resolveMyMapPhotoClusterDetail(userId, clusterId);
         List<TravelMediaResponse> clusterPhotos = cluster.photos() == null ? List.of() : cluster.photos();
         if (clusterPhotos.stream().noneMatch(photo -> photo.id() != null && photo.id().equals(mediaId))) {
             throw new BadRequestException("Selected photo is not part of this cluster.");
@@ -483,6 +479,13 @@ public class TravelService {
                 DEFAULT_MY_MAP_CLUSTER_PHOTO_PAGE_SIZE,
                 mediaId
         );
+    }
+
+    private TravelMyMapPhotoClusterDetailResponse resolveMyMapPhotoClusterDetail(Long userId, Long clusterId) {
+        TravelMyMapPhotoClusterSnapshot snapshot = getOrBuildMyMapPhotoClusterSnapshot(userId);
+        return snapshot.findDetail(clusterId)
+                .or(() -> refreshMyMapPhotoClusterSnapshot(userId).findDetail(clusterId))
+                .orElseThrow(() -> new NotFoundException("Photo cluster not found."));
     }
 
     public TravelCategoryCatalogResponse getCategoryCatalog(Long userId) {

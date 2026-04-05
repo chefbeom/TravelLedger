@@ -36,10 +36,12 @@ import com.playdata.calen.travel.service.TravelMediaStorageService;
 import com.playdata.calen.travel.service.TravelService;
 import com.playdata.calen.travel.service.TravelReverseGeocodeService;
 import jakarta.validation.Valid;
-import java.net.URLEncoder;
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import lombok.extern.slf4j.Slf4j;
 import lombok.RequiredArgsConstructor;
+import org.springframework.core.io.ByteArrayResource;
 import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -60,6 +62,7 @@ import org.springframework.web.multipart.MultipartFile;
 @RestController
 @RequestMapping("/api/travel")
 @RequiredArgsConstructor
+@Slf4j
 public class TravelController {
 
     private final TravelService travelService;
@@ -380,26 +383,20 @@ public class TravelController {
     }
 
     private ResponseEntity<?> buildMediaResponse(TravelService.MediaDownload download, boolean thumbnail, Integer width) {
-        String encodedFileName = URLEncoder.encode(download.fileName(), StandardCharsets.UTF_8).replace("+", "%20");
-        ContentDisposition disposition = "application/pdf".equalsIgnoreCase(download.contentType())
-                ? ContentDisposition.attachment().filename(encodedFileName).build()
-                : ContentDisposition.inline().filename(encodedFileName).build();
+        ContentDisposition disposition = buildContentDisposition(download);
 
         if (thumbnail) {
-            TravelMediaStorageService.PreparedThumbnail preparedThumbnail = travelMediaStorageService.loadThumbnail(
-                    download.storagePath(),
-                    download.contentType(),
-                    width
-            );
-            if (preparedThumbnail == null) {
+            byte[] thumbnailBytes = loadThumbnailBytes(download, width);
+            if (thumbnailBytes == null) {
                 return ResponseEntity.notFound().build();
             }
             return ResponseEntity.ok()
-                    .contentType(MediaType.parseMediaType(preparedThumbnail.contentType()))
+                    .contentType(MediaType.parseMediaType(resolveThumbnailContentType(download.contentType())))
+                    .contentLength(thumbnailBytes.length)
                     .header(HttpHeaders.CONTENT_DISPOSITION, disposition.toString())
                     .header("Cache-Control", "public, max-age=86400")
                     .header("X-Content-Type-Options", "nosniff")
-                    .body(preparedThumbnail.resource());
+                    .body(new ByteArrayResource(thumbnailBytes));
         }
 
         Resource originalResource = travelMediaStorageService.loadAsResource(download.storagePath());
@@ -408,6 +405,39 @@ public class TravelController {
                 .header(HttpHeaders.CONTENT_DISPOSITION, disposition.toString())
                 .header("X-Content-Type-Options", "nosniff")
                 .body(originalResource);
+    }
+
+    private byte[] loadThumbnailBytes(TravelService.MediaDownload download, Integer width) {
+        try {
+            TravelMediaStorageService.PreparedThumbnail preparedThumbnail = travelMediaStorageService.loadThumbnail(
+                    download.storagePath(),
+                    download.contentType(),
+                    width
+            );
+            if (preparedThumbnail == null) {
+                return null;
+            }
+            try (var inputStream = preparedThumbnail.resource().getInputStream()) {
+                return inputStream.readAllBytes();
+            }
+        } catch (IOException | RuntimeException exception) {
+            log.warn("Failed to serve thumbnail for media path={}", download.storagePath(), exception);
+            return null;
+        }
+    }
+
+    private String resolveThumbnailContentType(String originalContentType) {
+        String normalized = String.valueOf(originalContentType).trim().toLowerCase();
+        return "image/png".equals(normalized) || "image/gif".equals(normalized) || "image/webp".equals(normalized)
+                ? "image/png"
+                : "image/jpeg";
+    }
+
+    private ContentDisposition buildContentDisposition(TravelService.MediaDownload download) {
+        String fileName = download.fileName() == null || download.fileName().isBlank() ? "media" : download.fileName();
+        return "application/pdf".equalsIgnoreCase(download.contentType())
+                ? ContentDisposition.attachment().filename(fileName, StandardCharsets.UTF_8).build()
+                : ContentDisposition.inline().filename(fileName, StandardCharsets.UTF_8).build();
     }
 
     @GetMapping("/exchange-rates")

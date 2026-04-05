@@ -53,7 +53,9 @@ class TravelControllerTest {
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getHeaders().getContentType()).isEqualTo(MediaType.IMAGE_JPEG);
         assertThat(response.getHeaders().getCacheControl()).isEqualTo("public, max-age=86400");
-        assertThat(response.getBody()).isSameAs(originalResource);
+        assertThat(response.getBody()).isInstanceOf(ByteArrayResource.class);
+        assertThat(((ByteArrayResource) response.getBody()).getByteArray())
+                .isEqualTo("image-bytes".getBytes(StandardCharsets.UTF_8));
         verify(travelService).getMediaDownload(1L, 7L);
         verify(travelMediaStorageService).loadThumbnail(download.storagePath(), download.contentType(), 480);
     }

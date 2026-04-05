@@ -11,6 +11,8 @@ import TravelMyMapInspectorPanels from './TravelMyMapInspectorPanels.vue'
 import TravelPhotoLightbox from './TravelPhotoLightbox.vue'
 
 const CLUSTER_PHOTO_PAGE_SIZE = 12
+const LIGHTBOX_SCOPE_GLOBAL = 'global'
+const LIGHTBOX_SCOPE_CLUSTER = 'cluster'
 
 const props = defineProps({
   active: {
@@ -32,6 +34,8 @@ const selectedClusterDetail = ref(null)
 const selectedPhotoId = ref(null)
 const selectedMarkerId = ref(null)
 const lightboxPhoto = ref(null)
+const lightboxPhotos = ref([])
+const lightboxScope = ref(LIGHTBOX_SCOPE_GLOBAL)
 const representativeUpdatingId = ref(null)
 const viewMode = ref('cluster')
 const detailRecoveryClusterId = ref(null)
@@ -66,6 +70,77 @@ function mergeClusterPhotos(existingPhotos = [], nextPhotos = []) {
     merged.set(String(photo.id), photo)
   })
   return Array.from(merged.values())
+}
+
+function mergeLightboxPhotos(...photoGroups) {
+  const merged = new Map()
+
+  photoGroups.flat().forEach((photo) => {
+    if (!photo?.id || !photo?.contentUrl) {
+      return
+    }
+
+    const key = String(photo.id)
+    merged.set(key, {
+      ...(merged.get(key) ?? {}),
+      ...photo,
+    })
+  })
+
+  return Array.from(merged.values())
+}
+
+function sortPhotosByTime(photos = []) {
+  return [...photos].sort((left, right) => {
+    const leftDateTime = `${left?.expenseDate ?? ''} ${left?.expenseTime ?? ''}`.trim()
+    const rightDateTime = `${right?.expenseDate ?? ''} ${right?.expenseTime ?? ''}`.trim()
+    const dateCompare = leftDateTime.localeCompare(rightDateTime)
+
+    if (dateCompare !== 0) {
+      return dateCompare
+    }
+
+    const leftUploadedAt = String(left?.uploadedAt ?? '')
+    const rightUploadedAt = String(right?.uploadedAt ?? '')
+    const uploadedAtCompare = leftUploadedAt.localeCompare(rightUploadedAt)
+
+    if (uploadedAtCompare !== 0) {
+      return uploadedAtCompare
+    }
+
+    return String(left?.id ?? '').localeCompare(String(right?.id ?? ''))
+  })
+}
+
+function normalizeGlobalLightboxPhoto(photoPin) {
+  if (!photoPin?.mediaId || !photoPin?.photoUrl) {
+    return null
+  }
+
+  return {
+    id: photoPin.mediaId,
+    clusterId: photoPin.clusterId,
+    recordId: photoPin.recordId,
+    planId: photoPin.planId,
+    planName: photoPin.planName,
+    planColorHex: photoPin.planColorHex,
+    originalFileName: photoPin.title || null,
+    caption: photoPin.title || null,
+    uploadedBy: null,
+    uploadedAt: null,
+    contentUrl: photoPin.photoUrl,
+    expenseDate: photoPin.memoryDate,
+    expenseTime: photoPin.memoryTime,
+    title: photoPin.title,
+    country: photoPin.country,
+    region: photoPin.region,
+    placeName: photoPin.placeName,
+    latitude: photoPin.latitude,
+    longitude: photoPin.longitude,
+    gpsLatitude: photoPin.latitude,
+    gpsLongitude: photoPin.longitude,
+    representativeOverride: photoPin.representativeOverride,
+  }
 }
 
 function applySelectedPhoto(detail, preferredPhotoId = null) {
@@ -226,7 +301,7 @@ async function handleSelectPhotoPin(pin, options = {}) {
   })
 
   if (options.openPreview) {
-    openPhotoLightbox(selectedPhoto.value || selectedClusterRepresentativePhoto.value)
+    openPhotoLightbox(selectedPhoto.value || selectedClusterRepresentativePhoto.value, { scope: LIGHTBOX_SCOPE_GLOBAL })
   }
 }
 
@@ -246,12 +321,32 @@ function handleSelectPhoto(photo) {
   selectedPhotoId.value = photo.id
 }
 
-function openPhotoLightbox(photo = selectedPhoto.value) {
+function openPhotoLightbox(photo = selectedPhoto.value, { scope = LIGHTBOX_SCOPE_GLOBAL } = {}) {
+  if (!photo?.contentUrl) {
+    return
+  }
+
+  lightboxScope.value = scope
+  lightboxPhotos.value = scope === LIGHTBOX_SCOPE_CLUSTER
+    ? sortPhotosByTime(mergeLightboxPhotos(selectedClusterPhotosInTimeOrder.value, [photo]))
+    : sortPhotosByTime(mergeLightboxPhotos(allMapPhotosInTimeOrder.value, [photo]))
+  lightboxPhoto.value = photo
+
+  if (scope === LIGHTBOX_SCOPE_CLUSTER && photo?.id) {
+    selectedPhotoId.value = photo.id
+  }
+}
+
+function handleSelectLightboxPhoto(photo) {
   if (!photo?.contentUrl) {
     return
   }
 
   lightboxPhoto.value = photo
+
+  if (lightboxScope.value === LIGHTBOX_SCOPE_CLUSTER && photo?.id) {
+    selectedPhotoId.value = photo.id
+  }
 }
 
 async function handlePreviewClusterFromMap(item) {
@@ -265,7 +360,7 @@ async function handlePreviewClusterFromMap(item) {
   }
 
   await handleSelectCluster(item)
-  openPhotoLightbox(selectedClusterRepresentativePhoto.value || selectedPhoto.value)
+  openPhotoLightbox(selectedClusterRepresentativePhoto.value || selectedPhoto.value, { scope: LIGHTBOX_SCOPE_GLOBAL })
 }
 
 async function handleLoadMoreClusterPhotos() {
@@ -339,25 +434,15 @@ const selectedClusterPhotos = computed(() => {
   return representativePhoto ? [representativePhoto] : []
 })
 const selectedClusterPhotosInTimeOrder = computed(() =>
-  [...selectedClusterPhotos.value].sort((left, right) => {
-    const leftDateTime = `${left?.expenseDate ?? ''} ${left?.expenseTime ?? ''}`.trim()
-    const rightDateTime = `${right?.expenseDate ?? ''} ${right?.expenseTime ?? ''}`.trim()
-    const dateCompare = leftDateTime.localeCompare(rightDateTime)
-
-    if (dateCompare !== 0) {
-      return dateCompare
-    }
-
-    const leftUploadedAt = String(left?.uploadedAt ?? '')
-    const rightUploadedAt = String(right?.uploadedAt ?? '')
-    const uploadedAtCompare = leftUploadedAt.localeCompare(rightUploadedAt)
-
-    if (uploadedAtCompare !== 0) {
-      return uploadedAtCompare
-    }
-
-    return String(left?.id ?? '').localeCompare(String(right?.id ?? ''))
-  }),
+  sortPhotosByTime(selectedClusterPhotos.value),
+)
+const allMapPhotosInTimeOrder = computed(() =>
+  sortPhotosByTime(
+    mergeLightboxPhotos(
+      photoPins.value.map(normalizeGlobalLightboxPhoto).filter(Boolean),
+      selectedClusterPhotos.value,
+    ),
+  ),
 )
 const selectedClusterRepresentativePhoto = computed(() =>
   selectedClusterPhotos.value.find((photo) => String(photo.id) === String(selectedClusterDetail.value?.representativeMediaId))
@@ -536,7 +621,7 @@ watch(
             :fullscreen="true"
             :closable="true"
             @select-photo="handleSelectPhoto"
-            @open-photo="openPhotoLightbox"
+            @open-photo="(photo) => openPhotoLightbox(photo, { scope: LIGHTBOX_SCOPE_CLUSTER })"
             @set-representative="handleUpdateRepresentative"
             @load-more="handleLoadMoreClusterPhotos"
             @clear="clearSelection"
@@ -544,10 +629,15 @@ watch(
           <TravelPhotoLightbox
             v-if="isFullscreen && lightboxPhoto"
             :photo="lightboxPhoto"
-            :photos="selectedClusterPhotosInTimeOrder"
+            :photos="lightboxPhotos"
             :current-photo-id="lightboxPhoto?.id ?? null"
+            :show-representative-action="lightboxScope === LIGHTBOX_SCOPE_CLUSTER"
+            :representative-media-id="selectedClusterDetail?.representativeMediaId ?? null"
+            :is-representative-saving="isRepresentativeSaving"
+            :representative-updating-id="representativeUpdatingId"
             @close="lightboxPhoto = null"
-            @select-photo="lightboxPhoto = $event"
+            @select-photo="handleSelectLightboxPhoto"
+            @set-representative="handleUpdateRepresentative"
           />
         </template>
       </TravelMyMapClusterPanel>
@@ -594,10 +684,15 @@ watch(
     <TravelPhotoLightbox
       v-if="!isMapFullscreen && lightboxPhoto"
       :photo="lightboxPhoto"
-      :photos="selectedClusterPhotosInTimeOrder"
+      :photos="lightboxPhotos"
       :current-photo-id="lightboxPhoto?.id ?? null"
+      :show-representative-action="lightboxScope === LIGHTBOX_SCOPE_CLUSTER"
+      :representative-media-id="selectedClusterDetail?.representativeMediaId ?? null"
+      :is-representative-saving="isRepresentativeSaving"
+      :representative-updating-id="representativeUpdatingId"
       @close="lightboxPhoto = null"
-      @select-photo="lightboxPhoto = $event"
+      @select-photo="handleSelectLightboxPhoto"
+      @set-representative="handleUpdateRepresentative"
     />
   </div>
 </template>

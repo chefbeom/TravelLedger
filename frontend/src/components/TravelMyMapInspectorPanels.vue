@@ -79,16 +79,8 @@ function isSelectedPhoto(photo) {
   return String(photo?.id ?? '') === String(props.selectedPhotoId ?? '')
 }
 
-function handleSelectPhoto(photo) {
-  emit('select-photo', photo)
-}
-
 function handleOpenPhoto(photo) {
   emit('open-photo', photo)
-}
-
-function handleSetRepresentative(photo) {
-  emit('set-representative', photo)
 }
 
 function handleLoadMore() {
@@ -165,7 +157,11 @@ function handleClear() {
                 class="travel-media-card travel-media-card--cluster-tile"
                 :class="{ 'travel-media-card--selected': isSelectedPhoto(photo) }"
               >
-                <button class="travel-photo-card-button" type="button" @click="handleSelectPhoto(photo)">
+                <button
+                  class="travel-photo-card-button travel-photo-card-button--cluster-tile"
+                  type="button"
+                  @click="handleOpenPhoto(photo)"
+                >
                   <img
                     :src="buildThumbnailUrl(photo.contentUrl, THUMBNAIL_VARIANTS.preview)"
                     :alt="photo.originalFileName || '여행 사진'"
@@ -175,32 +171,6 @@ function handleClear() {
                     decoding="async"
                   />
                 </button>
-                <div class="travel-media-tags travel-media-tags--cluster-tile">
-                  <span class="chip chip--neutral" v-if="String(photo.id) === String(detail.representativeMediaId)">대표</span>
-                  <span class="chip chip--neutral" v-if="isSelectedPhoto(photo)">선택됨</span>
-                  <span class="chip chip--neutral" v-if="photo.representativeOverride">사용자 지정</span>
-                </div>
-                <div class="travel-media-copy travel-media-copy--cluster-tile">
-                  <strong>{{ photo.caption || photo.originalFileName || '사진' }}</strong>
-                  <small>{{ formatDateTime(photo.expenseDate, photo.expenseTime) }}</small>
-                </div>
-                <div v-if="isSelectedPhoto(photo)" class="travel-media-actions travel-media-actions--cluster-tile">
-                  <button class="button button--ghost" type="button" @click="handleOpenPhoto(photo)">크게 보기</button>
-                  <button
-                    class="button button--primary"
-                    type="button"
-                    :disabled="isRepresentativeSaving || String(photo.id) === String(detail.representativeMediaId)"
-                    @click="handleSetRepresentative(photo)"
-                  >
-                    {{
-                      representativeUpdatingId === photo.id
-                        ? '변경 중...'
-                        : String(photo.id) === String(detail.representativeMediaId)
-                          ? '현재 대표 사진'
-                          : '대표 지정'
-                    }}
-                  </button>
-                </div>
               </article>
             </div>
           </div>
@@ -212,7 +182,7 @@ function handleClear() {
           </div>
         </div>
 
-        <p v-else class="panel__empty">선택한 클러스터의 사진이 여기에 표시됩니다.</p>
+        <p v-else class="panel__empty">선택된 클러스터의 사진이 여기에 표시됩니다.</p>
       </template>
 
       <p v-else class="panel__empty">지도에서 사진 클러스터를 눌러 선택해 주세요.</p>

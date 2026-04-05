@@ -6567,14 +6567,21 @@ textarea {
 }
 
 .travel-media-card--cluster-tile {
-  gap: 10px;
-  padding: 12px;
+  gap: 0;
+  padding: 8px;
   border-radius: 18px;
+  overflow: hidden;
+}
+
+.travel-photo-card-button--cluster-tile {
+  height: 100%;
 }
 
 .travel-media-thumb--cluster-tile {
   height: 110px;
+  width: 100%;
   border-radius: 14px;
+  object-fit: cover;
 }
 
 .travel-media-tags--cluster-tile {
@@ -6871,6 +6878,10 @@ textarea {
 .travel-lightbox__meta {
   display: grid;
   gap: 0.35rem;
+}
+
+.travel-lightbox__actions {
+  margin-top: 0.6rem;
 }
 
 .travel-lightbox__meta strong {

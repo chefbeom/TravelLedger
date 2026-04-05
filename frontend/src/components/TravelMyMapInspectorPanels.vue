@@ -75,6 +75,10 @@ const props = defineProps({
 
 const emit = defineEmits(['select-photo', 'open-photo', 'set-representative', 'load-more', 'clear'])
 
+function isSelectedPhoto(photo) {
+  return String(photo?.id ?? '') === String(props.selectedPhotoId ?? '')
+}
+
 function handleSelectPhoto(photo) {
   emit('select-photo', photo)
 }
@@ -153,51 +157,52 @@ function handleClear() {
             </small>
           </div>
 
-          <div class="travel-media-grid travel-media-grid--gallery">
-            <article
-              v-for="(photo, index) in photos"
-              :key="photo.id"
-              class="travel-media-card"
-              :class="{ 'travel-media-card--selected': String(photo.id) === String(selectedPhotoId) }"
-            >
-              <button class="travel-photo-card-button" type="button" @click="handleSelectPhoto(photo)">
-                <img
-                  :src="buildThumbnailUrl(photo.contentUrl, THUMBNAIL_VARIANTS.preview)"
-                  :alt="photo.originalFileName || '여행 사진'"
-                  class="travel-media-thumb"
-                  :loading="index < 4 ? 'eager' : 'lazy'"
-                  :fetchpriority="index < 4 ? 'high' : 'auto'"
-                  decoding="async"
-                />
-              </button>
-              <div class="travel-media-tags">
-                <span class="chip chip--neutral" v-if="String(photo.id) === String(detail.representativeMediaId)">대표</span>
-                <span class="chip chip--neutral" v-if="String(photo.id) === String(selectedPhotoId)">선택됨</span>
-                <span class="chip chip--neutral" v-if="photo.representativeOverride">사용자 지정</span>
-              </div>
-              <div class="travel-media-copy">
-                <strong>{{ photo.caption || photo.originalFileName || '사진' }}</strong>
-                <small>{{ [photo.country, photo.region, photo.placeName].filter(Boolean).join(' / ') || '위치 정보 없음' }}</small>
-                <small>{{ formatDateTime(photo.expenseDate, photo.expenseTime) }}</small>
-              </div>
-              <div class="travel-media-actions">
-                <button class="button button--ghost" type="button" @click="handleOpenPhoto(photo)">크게 보기</button>
-                <button
-                  class="button button--primary"
-                  type="button"
-                  :disabled="isRepresentativeSaving || String(photo.id) === String(detail.representativeMediaId)"
-                  @click="handleSetRepresentative(photo)"
-                >
-                  {{
-                    representativeUpdatingId === photo.id
-                      ? '변경 중...'
-                      : String(photo.id) === String(detail.representativeMediaId)
-                        ? '현재 대표 사진'
-                        : '대표 지정'
-                  }}
+          <div class="travel-map-inspector__cluster-grid-wrap">
+            <div class="travel-map-inspector__cluster-grid">
+              <article
+                v-for="(photo, index) in photos"
+                :key="photo.id"
+                class="travel-media-card travel-media-card--cluster-tile"
+                :class="{ 'travel-media-card--selected': isSelectedPhoto(photo) }"
+              >
+                <button class="travel-photo-card-button" type="button" @click="handleSelectPhoto(photo)">
+                  <img
+                    :src="buildThumbnailUrl(photo.contentUrl, THUMBNAIL_VARIANTS.preview)"
+                    :alt="photo.originalFileName || '여행 사진'"
+                    class="travel-media-thumb travel-media-thumb--cluster-tile"
+                    :loading="index < 4 ? 'eager' : 'lazy'"
+                    :fetchpriority="index < 4 ? 'high' : 'auto'"
+                    decoding="async"
+                  />
                 </button>
-              </div>
-            </article>
+                <div class="travel-media-tags travel-media-tags--cluster-tile">
+                  <span class="chip chip--neutral" v-if="String(photo.id) === String(detail.representativeMediaId)">대표</span>
+                  <span class="chip chip--neutral" v-if="isSelectedPhoto(photo)">선택됨</span>
+                  <span class="chip chip--neutral" v-if="photo.representativeOverride">사용자 지정</span>
+                </div>
+                <div class="travel-media-copy travel-media-copy--cluster-tile">
+                  <strong>{{ photo.caption || photo.originalFileName || '사진' }}</strong>
+                  <small>{{ formatDateTime(photo.expenseDate, photo.expenseTime) }}</small>
+                </div>
+                <div v-if="isSelectedPhoto(photo)" class="travel-media-actions travel-media-actions--cluster-tile">
+                  <button class="button button--ghost" type="button" @click="handleOpenPhoto(photo)">크게 보기</button>
+                  <button
+                    class="button button--primary"
+                    type="button"
+                    :disabled="isRepresentativeSaving || String(photo.id) === String(detail.representativeMediaId)"
+                    @click="handleSetRepresentative(photo)"
+                  >
+                    {{
+                      representativeUpdatingId === photo.id
+                        ? '변경 중...'
+                        : String(photo.id) === String(detail.representativeMediaId)
+                          ? '현재 대표 사진'
+                          : '대표 지정'
+                    }}
+                  </button>
+                </div>
+              </article>
+            </div>
           </div>
 
           <div v-if="canLoadMore" class="travel-map-inspector__load-more">

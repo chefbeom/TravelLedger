@@ -6511,9 +6511,11 @@ textarea {
 }
 
 .travel-map-inspector__gallery-body {
+  display: flex;
+  flex-direction: column;
   flex: 1;
   min-height: 0;
-  overflow: auto;
+  overflow: hidden;
   padding-right: 4px;
   padding-bottom: 6px;
 }
@@ -6545,6 +6547,58 @@ textarea {
   display: flex;
   justify-content: center;
   margin-top: 18px;
+  flex: 0 0 auto;
+}
+
+.travel-map-inspector__cluster-grid-wrap {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding-right: 2px;
+}
+
+.travel-map-inspector__cluster-grid {
+  display: grid;
+  grid-auto-flow: column;
+  grid-template-rows: repeat(2, minmax(0, 1fr));
+  grid-auto-columns: minmax(152px, 1fr);
+  gap: 12px;
+  align-content: start;
+}
+
+.travel-media-card--cluster-tile {
+  gap: 10px;
+  padding: 12px;
+  border-radius: 18px;
+}
+
+.travel-media-thumb--cluster-tile {
+  height: 110px;
+  border-radius: 14px;
+}
+
+.travel-media-tags--cluster-tile {
+  gap: 6px;
+}
+
+.travel-media-copy--cluster-tile {
+  gap: 4px;
+}
+
+.travel-media-copy--cluster-tile strong {
+  font-size: 0.95rem;
+  line-height: 1.35;
+}
+
+.travel-media-copy--cluster-tile small {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.travel-media-actions--cluster-tile {
+  gap: 8px;
 }
 
 .travel-map-inspector--fullscreen {
@@ -6587,22 +6641,20 @@ textarea {
 }
 
 .travel-map-inspector--fullscreen .travel-map-inspector__gallery-body {
-  overflow: auto;
   min-height: 0;
   padding-right: 4px;
 }
 
-.travel-map-inspector--fullscreen .travel-media-grid--gallery {
-  grid-template-columns: 1fr;
-  align-content: start;
+.travel-map-inspector--fullscreen .travel-map-inspector__cluster-grid-wrap {
+  overflow: auto;
 }
 
 .travel-map-inspector--fullscreen .travel-cluster-summary-card .travel-media-thumb {
   height: 180px;
 }
 
-.travel-map-inspector--fullscreen .travel-map-inspector__gallery-body .travel-media-thumb {
-  height: 116px;
+.travel-map-inspector--fullscreen .travel-media-thumb--cluster-tile {
+  height: 104px;
 }
 
 .travel-cluster-map__zoom {

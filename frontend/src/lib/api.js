@@ -549,7 +549,7 @@ export function fetchTravelMyMapMarkerDetails(markerId) {
 }
 
 export function fetchTravelMyMapPhotoCluster(clusterId, params = {}) {
-  return request(buildUrl(`/travel/my-map/photo-clusters/${clusterId}`, params))
+  return request(buildUrl(`/travel/my-map/photo-clusters/${clusterId}`, params).replace(API_BASE, ''))
 }
 
 export function updateTravelMyMapPhotoClusterRepresentative(clusterId, mediaId) {

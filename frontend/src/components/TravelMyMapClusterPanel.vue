@@ -679,20 +679,18 @@ watch(
 )
 
 watch(
-  () => [props.displayMode, props.selectedClusterId, props.selectedPhotoId, props.selectedMarkerId],
-  ([mode, clusterId, photoId, markerId], [previousMode, previousClusterId, previousPhotoId, previousMarkerId] = []) => {
-    const normalizedValue = mode === 'pin'
-      ? `photo-${String(photoId ?? '')}`
-      : `cluster-${String(clusterId ?? '')}`
-    const normalizedPreviousValue = previousMode === 'pin'
-      ? `photo-${String(previousPhotoId ?? '')}`
-      : `cluster-${String(previousClusterId ?? '')}`
-
-    if (normalizedValue === 'photo-' || normalizedValue === 'cluster-') {
+  () => [
+    props.displayMode,
+    props.displayMode === 'pin'
+      ? `photo-${String(props.selectedPhotoId ?? '')}`
+      : `cluster-${String(props.selectedClusterId ?? '')}`,
+  ],
+  ([mode, selectedKey], [previousMode, previousSelectedKey] = []) => {
+    if (selectedKey === 'photo-' || selectedKey === 'cluster-') {
       pendingPopupMarkerKey = null
       mapInstance?.closePopup()
-    } else if (normalizedValue !== normalizedPreviousValue) {
-      pendingPopupMarkerKey = normalizedValue
+    } else if (mode !== previousMode || selectedKey !== previousSelectedKey) {
+      pendingPopupMarkerKey = selectedKey
     }
 
     renderClusters()

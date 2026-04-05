@@ -520,6 +520,11 @@ watch(
             @load-more="handleLoadMoreClusterPhotos"
             @clear="clearSelection"
           />
+          <TravelPhotoLightbox
+            v-if="isFullscreen && lightboxPhoto"
+            :photo="lightboxPhoto"
+            @close="lightboxPhoto = null"
+          />
         </template>
       </TravelMyMapClusterPanel>
     </section>
@@ -562,6 +567,10 @@ watch(
       </div>
     </section>
 
-    <TravelPhotoLightbox :photo="lightboxPhoto" @close="lightboxPhoto = null" />
+    <TravelPhotoLightbox
+      v-if="!isMapFullscreen && lightboxPhoto"
+      :photo="lightboxPhoto"
+      @close="lightboxPhoto = null"
+    />
   </div>
 </template>

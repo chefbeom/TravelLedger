@@ -6515,6 +6515,7 @@ textarea {
   min-height: 0;
   overflow: auto;
   padding-right: 4px;
+  padding-bottom: 6px;
 }
 
 .travel-map-inspector__cluster-copy {
@@ -6559,6 +6560,9 @@ textarea {
 }
 
 .travel-map-inspector--fullscreen .panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
   background: rgba(15, 23, 42, 0.84);
   border-color: rgba(148, 163, 184, 0.18);
   box-shadow: 0 22px 40px rgba(15, 23, 42, 0.36);
@@ -6590,10 +6594,15 @@ textarea {
 
 .travel-map-inspector--fullscreen .travel-media-grid--gallery {
   grid-template-columns: 1fr;
+  align-content: start;
 }
 
-.travel-map-inspector--fullscreen .travel-media-thumb {
+.travel-map-inspector--fullscreen .travel-cluster-summary-card .travel-media-thumb {
   height: 180px;
+}
+
+.travel-map-inspector--fullscreen .travel-map-inspector__gallery-body .travel-media-thumb {
+  height: 116px;
 }
 
 .travel-cluster-map__zoom {

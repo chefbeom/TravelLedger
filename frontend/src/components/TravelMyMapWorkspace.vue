@@ -269,6 +269,14 @@ function handleMapFullscreenChange(nextValue) {
   isMapFullscreen.value = Boolean(nextValue)
 }
 
+function clearSelection() {
+  selectedClusterSummary.value = null
+  selectedClusterDetail.value = null
+  selectedPhotoId.value = null
+  selectedMarkerId.value = null
+  setDetailError('')
+}
+
 async function handleUpdateRepresentative(photo) {
   if (!selectedClusterSummary.value?.id || !photo?.id) {
     return
@@ -345,8 +353,21 @@ const selectedClusterTotalPhotoCount = computed(() =>
   Number(selectedClusterDetail.value?.totalPhotoCount ?? selectedClusterDetail.value?.photoCount ?? selectedClusterPhotos.value.length),
 )
 
+const shouldShowFullscreenInspector = computed(() =>
+  Boolean(
+    isMapFullscreen.value
+    && (
+      selectedClusterSummary.value
+      || selectedClusterDetail.value
+      || selectedPhoto.value
+      || isDetailLoading.value
+      || detailErrorMessage.value
+    ),
+  ),
+)
+
 onMounted(async () => {
-  await loadOverview({ autoSelect: true, reloadDetail: true })
+  await loadOverview({ autoSelect: false, reloadDetail: false })
 })
 </script>
 
@@ -432,7 +453,7 @@ onMounted(async () => {
       >
         <template #fullscreen-overlay="{ isFullscreen }">
           <TravelMyMapInspectorPanels
-            v-if="isFullscreen"
+            v-if="isFullscreen && shouldShowFullscreenInspector"
             :summary="selectedClusterSummary"
             :detail="selectedClusterDetail"
             :selected-photo="selectedPhoto"
@@ -449,10 +470,12 @@ onMounted(async () => {
             :selected-photo-location-label="selectedPhotoLocationLabel"
             :selected-photo-gps-label="selectedPhotoGpsLabel"
             :fullscreen="true"
+            :closable="true"
             @select-photo="handleSelectPhoto"
             @open-photo="openPhotoLightbox"
             @set-representative="handleUpdateRepresentative"
             @load-more="handleLoadMoreClusterPhotos"
+            @clear="clearSelection"
           />
         </template>
       </TravelMyMapClusterPanel>

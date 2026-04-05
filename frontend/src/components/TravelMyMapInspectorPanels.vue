@@ -67,9 +67,13 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
+  closable: {
+    type: Boolean,
+    default: false,
+  },
 })
 
-const emit = defineEmits(['select-photo', 'open-photo', 'set-representative', 'load-more'])
+const emit = defineEmits(['select-photo', 'open-photo', 'set-representative', 'load-more', 'clear'])
 
 function handleSelectPhoto(photo) {
   emit('select-photo', photo)
@@ -86,10 +90,18 @@ function handleSetRepresentative(photo) {
 function handleLoadMore() {
   emit('load-more')
 }
+
+function handleClear() {
+  emit('clear')
+}
 </script>
 
 <template>
   <div class="travel-map-inspector" :class="{ 'travel-map-inspector--fullscreen': fullscreen }">
+    <div v-if="closable" class="travel-map-inspector__dismiss">
+      <button class="button button--ghost" type="button" @click="handleClear">선택 닫기</button>
+    </div>
+
     <div class="travel-map-inspector__top">
       <section class="panel">
         <div class="panel__header">

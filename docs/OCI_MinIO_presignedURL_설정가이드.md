@@ -59,6 +59,7 @@ MinIO 자체에 바로 인증서를 붙이지 않고, 서브 서버 Nginx가 `44
 - `443 -> 127.0.0.1:9000` 프록시
 - presigned PUT 요청용 CORS 응답 처리
 - 큰 파일 업로드를 위해 `proxy_request_buffering off`
+- 여러 서비스 프론트 도메인을 origin allowlist로 관리
 
 ## 4. 서브 서버 방화벽 / OCI 보안 규칙
 
@@ -137,6 +138,13 @@ MINIO_ROOT_USER=minioadmin
 입니다.
 
 즉, 현재 프로젝트에 포함된 설정 예시는 **Nginx CORS 기준**입니다.
+
+현재 repo 기준 allowlist 예시는 아래 두 도메인입니다.
+
+- `https://www.innoutdrive.space`
+- `https://www.fileinnout.kro.kr`
+
+새 프로젝트를 붙일 때는 MinIO 사용자/버킷을 만드는 것과 별개로, shared MinIO public domain Nginx allowlist에도 새 frontend origin을 추가해야 합니다.
 
 ## 7. 점검 순서
 

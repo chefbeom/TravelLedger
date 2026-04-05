@@ -10,6 +10,10 @@ What the script creates:
 4. A MinIO user that uses the same login and password as the MariaDB user
 5. A MinIO bucket-scoped policy attached to that user
 
+What it does not create automatically:
+
+- public frontend domain CORS allow rules on the shared MinIO Nginx proxy
+
 File:
 
 - `/C:/Users/kjs99/Desktop/calen/deploy/oci/scripts/provision-project-tenant.sh`
@@ -92,6 +96,21 @@ MINIO_CLOUD_BUCKET=<bucket name>
 MINIO_API_INTERNAL_URL=<data server internal minio url>
 MINIO_PUBLIC_API=<public minio url>
 ```
+
+## CORS for a new frontend domain
+
+If the new project uploads directly to the shared MinIO public API, its frontend origin must also be added to the MinIO Nginx CORS allowlist.
+
+Current repo example:
+
+- [deploy/oci/nginx/minio.calenledger.kro.kr.conf](C:/Users/kjs99/Desktop/calen/deploy/oci/nginx/minio.calenledger.kro.kr.conf)
+
+The shared MinIO proxy currently allows:
+
+- `https://www.innoutdrive.space`
+- `https://www.fileinnout.kro.kr`
+
+When you attach another project, add its frontend HTTPS origin to the `map $http_origin $minio_cors_allow_origin` block and reload Nginx on the data server.
 
 ## Notes
 

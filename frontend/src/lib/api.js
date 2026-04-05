@@ -548,8 +548,8 @@ export function fetchTravelMyMapMarkerDetails(markerId) {
   return request(`/travel/my-map/markers/${markerId}`)
 }
 
-export function fetchTravelMyMapPhotoCluster(clusterId) {
-  return request(`/travel/my-map/photo-clusters/${clusterId}`)
+export function fetchTravelMyMapPhotoCluster(clusterId, params = {}) {
+  return request(buildUrl(`/travel/my-map/photo-clusters/${clusterId}`, params))
 }
 
 export function updateTravelMyMapPhotoClusterRepresentative(clusterId, mediaId) {

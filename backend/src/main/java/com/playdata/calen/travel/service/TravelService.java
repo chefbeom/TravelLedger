@@ -41,6 +41,7 @@ import com.playdata.calen.travel.dto.TravelMyMapMarkerDetailResponse;
 import com.playdata.calen.travel.dto.TravelMyMapMarkerSummaryResponse;
 import com.playdata.calen.travel.dto.TravelMyMapOverviewResponse;
 import com.playdata.calen.travel.dto.TravelMyMapPhotoClusterDetailResponse;
+import com.playdata.calen.travel.dto.TravelMyMapPhotoClusterPageResponse;
 import com.playdata.calen.travel.dto.TravelMyMapPhotoClusterSummaryResponse;
 import com.playdata.calen.travel.dto.TravelMyMapPhotoPinResponse;
 import com.playdata.calen.travel.dto.TravelMemoryRecordRequest;
@@ -107,6 +108,8 @@ public class TravelService {
     private static final String DEFAULT_TRAVEL_COLOR = "#3182F6";
     private static final int DEFAULT_LIST_PAGE_SIZE = 10;
     private static final int MAX_LIST_PAGE_SIZE = 20;
+    private static final int DEFAULT_MY_MAP_CLUSTER_PHOTO_PAGE_SIZE = 12;
+    private static final int MAX_MY_MAP_CLUSTER_PHOTO_PAGE_SIZE = 36;
     private static final int MAX_STORED_ROUTE_POINTS = 900;
     private static final int MY_MAP_NEARBY_MARKER_COUNT = 10;
     private static final int DEFAULT_ROUTE_PATH_CHAR_BUDGET = 12000;
@@ -422,16 +425,23 @@ public class TravelService {
     }
 
     @Transactional
-    public TravelMyMapPhotoClusterDetailResponse getMyMapPhotoClusterDetail(Long userId, Long clusterId) {
+    public TravelMyMapPhotoClusterPageResponse getMyMapPhotoClusterDetail(
+            Long userId,
+            Long clusterId,
+            Integer page,
+            Integer size,
+            Long focusMediaId
+    ) {
         appUserService.getRequiredUser(userId);
 
-        return getOrBuildMyMapPhotoClusterSnapshot(userId)
+        TravelMyMapPhotoClusterDetailResponse cluster = getOrBuildMyMapPhotoClusterSnapshot(userId)
                 .findDetail(clusterId)
                 .orElseThrow(() -> new NotFoundException("Photo cluster not found."));
+        return toMyMapPhotoClusterPageResponse(cluster, page, size, focusMediaId);
     }
 
     @Transactional
-    public TravelMyMapPhotoClusterDetailResponse updateMyMapPhotoClusterRepresentative(Long userId, Long clusterId, Long mediaId) {
+    public TravelMyMapPhotoClusterPageResponse updateMyMapPhotoClusterRepresentative(Long userId, Long clusterId, Long mediaId) {
         appUserService.getRequiredUser(userId);
 
         TravelMyMapPhotoClusterDetailResponse cluster = getOrBuildMyMapPhotoClusterSnapshot(userId)
@@ -464,9 +474,15 @@ public class TravelService {
         );
         invalidateTravelSummaryCaches(userId);
         TravelMyMapPhotoClusterSnapshot refreshedSnapshot = refreshMyMapPhotoClusterSnapshot(userId);
-        return refreshedSnapshot.findDetail(clusterId)
+        TravelMyMapPhotoClusterDetailResponse refreshedCluster = refreshedSnapshot.findDetail(clusterId)
                 .or(() -> refreshedSnapshot.findDetailContainingMedia(mediaId))
                 .orElseThrow(() -> new NotFoundException("Photo cluster not found."));
+        return toMyMapPhotoClusterPageResponse(
+                refreshedCluster,
+                0,
+                DEFAULT_MY_MAP_CLUSTER_PHOTO_PAGE_SIZE,
+                mediaId
+        );
     }
 
     public TravelCategoryCatalogResponse getCategoryCatalog(Long userId) {
@@ -1708,6 +1724,80 @@ public class TravelService {
                 representativePhoto,
                 photos
         );
+    }
+
+    private TravelMyMapPhotoClusterPageResponse toMyMapPhotoClusterPageResponse(
+            TravelMyMapPhotoClusterDetailResponse cluster,
+            Integer page,
+            Integer size,
+            Long focusMediaId
+    ) {
+        int normalizedPage = Math.max(page == null ? 0 : page, 0);
+        int normalizedSize = Math.min(
+                Math.max(size == null ? DEFAULT_MY_MAP_CLUSTER_PHOTO_PAGE_SIZE : size, 1),
+                MAX_MY_MAP_CLUSTER_PHOTO_PAGE_SIZE
+        );
+        List<TravelMediaResponse> sortedPhotos = sortMyMapClusterPhotos(
+                cluster,
+                normalizedPage == 0 ? focusMediaId : null
+        );
+        int totalPhotoCount = sortedPhotos.size();
+        int fromIndex = Math.min(normalizedPage * normalizedSize, totalPhotoCount);
+        int toIndex = Math.min(fromIndex + normalizedSize, totalPhotoCount);
+
+        return new TravelMyMapPhotoClusterPageResponse(
+                cluster.id(),
+                cluster.representativeMediaId(),
+                cluster.representativeRecordId(),
+                cluster.latitude(),
+                cluster.longitude(),
+                cluster.photoCount(),
+                cluster.memoryCount(),
+                cluster.maxDistanceMeters(),
+                cluster.representativeOverride(),
+                cluster.representativePhoto(),
+                sortedPhotos.subList(fromIndex, toIndex),
+                normalizedPage,
+                normalizedSize,
+                totalPhotoCount,
+                toIndex < totalPhotoCount
+        );
+    }
+
+    private List<TravelMediaResponse> sortMyMapClusterPhotos(
+            TravelMyMapPhotoClusterDetailResponse cluster,
+            Long focusMediaId
+    ) {
+        List<TravelMediaResponse> photos = cluster.photos() == null ? List.of() : cluster.photos();
+        if (photos.isEmpty()) {
+            return List.of();
+        }
+
+        Comparator<TravelMediaResponse> comparator = Comparator
+                .comparingInt((TravelMediaResponse photo) -> isFocusedClusterPhoto(photo, focusMediaId) ? 0 : 1)
+                .thenComparingInt(photo -> isRepresentativeClusterPhoto(photo, cluster.representativeMediaId()) ? 0 : 1)
+                .thenComparing(TravelMediaResponse::expenseDate, Comparator.nullsLast(Comparator.reverseOrder()))
+                .thenComparing(TravelMediaResponse::expenseTime, Comparator.nullsLast(Comparator.reverseOrder()))
+                .thenComparing(TravelMediaResponse::uploadedAt, Comparator.nullsLast(Comparator.reverseOrder()))
+                .thenComparing(TravelMediaResponse::id, Comparator.nullsLast(Comparator.reverseOrder()));
+
+        return photos.stream()
+                .sorted(comparator)
+                .toList();
+    }
+
+    private boolean isFocusedClusterPhoto(TravelMediaResponse photo, Long focusMediaId) {
+        return focusMediaId != null
+                && photo != null
+                && photo.id() != null
+                && photo.id().equals(focusMediaId);
+    }
+
+    private boolean isRepresentativeClusterPhoto(TravelMediaResponse photo, Long representativeMediaId) {
+        return representativeMediaId != null
+                && photo != null
+                && photo.id() != null
+                && photo.id().equals(representativeMediaId);
     }
 
     private TravelMyMapPhotoPinResponse toStoredMyMapPhotoPinResponse(

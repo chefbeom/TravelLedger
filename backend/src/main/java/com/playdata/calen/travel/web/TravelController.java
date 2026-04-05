@@ -17,7 +17,7 @@ import com.playdata.calen.travel.dto.TravelMediaUploadPrepareResponse;
 import com.playdata.calen.travel.dto.TravelMyMapMarkerDetailBundleResponse;
 import com.playdata.calen.travel.dto.TravelMyMapClusterRepresentativeRequest;
 import com.playdata.calen.travel.dto.TravelMyMapOverviewResponse;
-import com.playdata.calen.travel.dto.TravelMyMapPhotoClusterDetailResponse;
+import com.playdata.calen.travel.dto.TravelMyMapPhotoClusterPageResponse;
 import com.playdata.calen.travel.dto.TravelMemoryRecordRequest;
 import com.playdata.calen.travel.dto.TravelMemoryRecordResponse;
 import com.playdata.calen.travel.dto.TravelPlanDetailResponse;
@@ -101,15 +101,18 @@ public class TravelController {
     }
 
     @GetMapping("/my-map/photo-clusters/{clusterId}")
-    public TravelMyMapPhotoClusterDetailResponse getMyMapPhotoCluster(
+    public TravelMyMapPhotoClusterPageResponse getMyMapPhotoCluster(
             @AuthenticationPrincipal AppUserPrincipal currentUser,
-            @PathVariable Long clusterId
+            @PathVariable Long clusterId,
+            @RequestParam(name = "page", defaultValue = "0") Integer page,
+            @RequestParam(name = "size", defaultValue = "12") Integer size,
+            @RequestParam(name = "focusMediaId", required = false) Long focusMediaId
     ) {
-        return travelService.getMyMapPhotoClusterDetail(currentUser.userId(), clusterId);
+        return travelService.getMyMapPhotoClusterDetail(currentUser.userId(), clusterId, page, size, focusMediaId);
     }
 
     @PutMapping("/my-map/photo-clusters/{clusterId}/representative")
-    public TravelMyMapPhotoClusterDetailResponse updateMyMapPhotoClusterRepresentative(
+    public TravelMyMapPhotoClusterPageResponse updateMyMapPhotoClusterRepresentative(
             @AuthenticationPrincipal AppUserPrincipal currentUser,
             @PathVariable Long clusterId,
             @Valid @RequestBody TravelMyMapClusterRepresentativeRequest request

@@ -47,7 +47,7 @@ const props = defineProps({
   },
 })
 
-const emit = defineEmits(['select-cluster', 'select-marker'])
+const emit = defineEmits(['select-cluster', 'select-marker', 'select-photo-pin', 'preview-cluster', 'fullscreen-change'])
 
 const mapRootElement = ref(null)
 const mapElement = ref(null)
@@ -206,7 +206,7 @@ function buildRenderMarkers(markers) {
 
 function resolveRenderableItems() {
   if (props.displayMode === 'pin') {
-    return buildRenderMarkers(props.markers)
+    return buildRenderPins(props.photoPins)
   }
 
   return buildRenderClusters(props.photoClusters)
@@ -223,8 +223,8 @@ function queueMapResize() {
 function collectBounds() {
   const points = []
 
-  const entries = props.displayMode === 'pin' ? props.markers : props.photoClusters
-  const normalizer = props.displayMode === 'pin' ? normalizeRecordMarker : normalizeCluster
+  const entries = props.displayMode === 'pin' ? props.photoPins : props.photoClusters
+  const normalizer = props.displayMode === 'pin' ? normalizePhotoPin : normalizeCluster
 
   ;(entries ?? []).forEach((entry) => {
     const normalized = normalizer(entry)
@@ -261,6 +261,72 @@ function fitToAll() {
 }
 
 function createPopupContent(aggregate) {
+  if (aggregate?.isRecordPin) {
+    return createPopupContentLegacy(aggregate)
+  }
+
+  const root = document.createElement('button')
+  root.type = 'button'
+  root.className = 'travel-cluster-popup travel-cluster-popup--actionable'
+  root.addEventListener('click', (event) => {
+    event.preventDefault()
+    event.stopPropagation()
+    emit('preview-cluster', aggregate?.representative)
+  })
+  L.DomEvent.disableClickPropagation(root)
+
+  const photoUrl = aggregate?.representative?.representativePhotoUrl
+  if (photoUrl) {
+    const image = document.createElement('img')
+    image.className = 'travel-cluster-popup__image'
+    image.src = buildThumbnailUrl(photoUrl, THUMBNAIL_VARIANTS.mini)
+    image.alt = aggregate?.representative?.title || aggregate?.representative?.placeName || '대표 사진'
+    image.loading = 'eager'
+    image.decoding = 'async'
+    root.appendChild(image)
+  }
+
+  const copy = document.createElement('div')
+  copy.className = 'travel-cluster-popup__copy'
+
+  const title = document.createElement('strong')
+  title.textContent = aggregate?.representative?.title || aggregate?.representative?.placeName || '사진 클러스터'
+  copy.appendChild(title)
+
+  const locationLabel = [aggregate?.representative?.country, aggregate?.representative?.region, aggregate?.representative?.placeName]
+    .filter(Boolean)
+    .join(' / ')
+  if (locationLabel) {
+    const location = document.createElement('span')
+    location.textContent = locationLabel
+    copy.appendChild(location)
+  }
+
+  const dateLabel = [formatDate(aggregate?.representative?.memoryDate), formatTime(aggregate?.representative?.memoryTime)]
+    .filter((value) => value && value !== '-')
+    .join(' ')
+  if (dateLabel) {
+    const date = document.createElement('span')
+    date.textContent = dateLabel
+    copy.appendChild(date)
+  }
+
+  const count = document.createElement('span')
+  count.textContent = aggregate?.isPhotoPin
+    ? '사진 1장'
+    : `사진 ${aggregate?.photoCount || 0}장 / 기록 ${aggregate?.memoryCount || aggregate?.representative?.memoryCount || 0}건`
+  copy.appendChild(count)
+
+  const action = document.createElement('span')
+  action.className = 'travel-cluster-popup__action'
+  action.textContent = '팝업을 누르면 큰 사진을 바로 볼 수 있습니다.'
+  copy.appendChild(action)
+
+  root.appendChild(copy)
+  return root
+}
+
+function createPopupContentLegacy(aggregate) {
   if (aggregate?.isRecordPin) {
     const root = document.createElement('div')
     root.className = 'travel-cluster-popup'
@@ -461,10 +527,19 @@ function renderClusters() {
 
     marker.bindPopup(() => createPopupContent(aggregate))
     marker.on('click', () => {
+      pendingPopupMarkerKey = aggregate.markerKey
+      requestAnimationFrame(() => marker.openPopup())
+
+      if (aggregate.isPhotoPin) {
+        emit('select-photo-pin', aggregate.representative)
+        return
+      }
+
       if (aggregate.isRecordPin) {
         emit('select-marker', aggregate.representative)
         return
       }
+
       emit('select-cluster', aggregate.representative)
     })
     renderedMarkers.set(String(aggregate.markerKey), marker)
@@ -496,7 +571,7 @@ function renderMap({ shouldFit = false } = {}) {
 function resolveInitialCenter() {
   const firstPhotoEntry = (
     props.displayMode === 'pin'
-      ? (props.markers ?? []).map(normalizeRecordMarker)
+      ? (props.photoPins ?? []).map(normalizePhotoPin)
       : (props.photoClusters ?? []).map(normalizeCluster)
   ).find(Boolean)
   if (firstPhotoEntry) {
@@ -548,6 +623,7 @@ function handleZoomEnd() {
 
 function handleFullscreenChange() {
   syncFullscreenState()
+  emit('fullscreen-change', isFullscreen.value)
   queueMapResize()
 }
 
@@ -567,6 +643,7 @@ onMounted(() => {
   routeLayer = L.layerGroup().addTo(mapInstance)
   mapInstance.on('zoomend', handleZoomEnd)
   zoomLabel.value = mapInstance.getZoom()
+  emit('fullscreen-change', isFullscreen.value)
   renderMap({ shouldFit: true })
 })
 
@@ -581,7 +658,7 @@ onBeforeUnmount(() => {
 })
 
 watch(
-  () => [props.photoClusters, props.markers, props.routes, props.displayMode],
+  () => [props.photoClusters, props.photoPins, props.markers, props.routes, props.displayMode],
   () => {
     renderMap()
   },
@@ -591,13 +668,13 @@ watch(
   () => [props.displayMode, props.selectedClusterId, props.selectedPhotoId, props.selectedMarkerId],
   ([mode, clusterId, photoId, markerId], [previousMode, previousClusterId, previousPhotoId, previousMarkerId] = []) => {
     const normalizedValue = mode === 'pin'
-      ? `marker-${String(markerId ?? '')}`
+      ? `photo-${String(photoId ?? '')}`
       : `cluster-${String(clusterId ?? '')}`
     const normalizedPreviousValue = previousMode === 'pin'
-      ? `marker-${String(previousMarkerId ?? '')}`
+      ? `photo-${String(previousPhotoId ?? '')}`
       : `cluster-${String(previousClusterId ?? '')}`
 
-    if (normalizedValue === 'marker-' || normalizedValue === 'cluster-') {
+    if (normalizedValue === 'photo-' || normalizedValue === 'cluster-') {
       pendingPopupMarkerKey = null
       mapInstance?.closePopup()
     } else if (normalizedValue !== normalizedPreviousValue) {
@@ -648,6 +725,9 @@ watch(
 
     <div class="travel-map__stage">
       <div ref="mapElement" class="travel-map__canvas" />
+      <div v-if="isFullscreen" class="travel-map__overlay" @click.stop>
+        <slot name="fullscreen-overlay" :is-fullscreen="isFullscreen" />
+      </div>
     </div>
 
     <div class="travel-map__hint">

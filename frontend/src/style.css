@@ -6349,6 +6349,10 @@ textarea {
 }
 
 @media (max-width: 680px) {
+  .travel-map-inspector__gallery-body {
+    padding-right: 0;
+  }
+
   .travel-summary-grid,
   .travel-visit-grid,
   .travel-media-summary-grid,
@@ -6467,6 +6471,76 @@ textarea {
   height: 100%;
 }
 
+.travel-map__overlay {
+  position: absolute;
+  inset: 16px;
+  z-index: 420;
+  display: grid;
+  min-height: 0;
+  pointer-events: none;
+}
+
+.travel-map__overlay > * {
+  pointer-events: auto;
+}
+
+.travel-map-inspector {
+  display: grid;
+  gap: 18px;
+}
+
+.travel-map-inspector__top {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(360px, 0.9fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.travel-map-inspector__gallery {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.travel-map-inspector__gallery-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.travel-map-inspector__load-more {
+  display: flex;
+  justify-content: center;
+  margin-top: 18px;
+}
+
+.travel-map-inspector--fullscreen {
+  height: 100%;
+  align-content: start;
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.travel-map-inspector--fullscreen .panel {
+  background: rgba(15, 23, 42, 0.84);
+  border-color: rgba(148, 163, 184, 0.18);
+  box-shadow: 0 22px 40px rgba(15, 23, 42, 0.36);
+  backdrop-filter: blur(18px);
+}
+
+.travel-map-inspector--fullscreen .panel__header h2,
+.travel-map-inspector--fullscreen .travel-overview-place-card strong,
+.travel-map-inspector--fullscreen .travel-media-copy strong {
+  color: #f8fafc;
+}
+
+.travel-map-inspector--fullscreen .panel__header p,
+.travel-map-inspector--fullscreen .panel__empty,
+.travel-map-inspector--fullscreen .travel-overview-place-card small,
+.travel-map-inspector--fullscreen .travel-media-copy small {
+  color: #cbd5e1;
+}
+
 .travel-cluster-map__zoom {
   color: var(--color-text-primary);
   font-size: 0.95rem;
@@ -6482,6 +6556,15 @@ textarea {
   display: grid;
   gap: 0.75rem;
   min-width: 220px;
+}
+
+.travel-cluster-popup--actionable {
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
 }
 
 .travel-cluster-popup__image {
@@ -6504,6 +6587,12 @@ textarea {
 .travel-cluster-popup__copy span {
   color: var(--color-text-secondary);
   font-size: 0.78rem;
+}
+
+.travel-cluster-popup__action {
+  color: var(--blue);
+  font-size: 0.76rem;
+  font-weight: 700;
 }
 
 .travel-cluster-pin {
@@ -6646,6 +6735,14 @@ textarea {
 }
 
 @media (max-width: 960px) {
+  .travel-map__overlay {
+    inset: 12px;
+  }
+
+  .travel-map-inspector__top {
+    grid-template-columns: 1fr;
+  }
+
   .travel-cluster-map__legend {
     white-space: normal;
   }

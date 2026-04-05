@@ -4,6 +4,8 @@ const API_BASE = '/api'
 const CSRF_COOKIE_NAME = 'XSRF-TOKEN'
 const CSRF_HEADER_NAME = 'X-XSRF-TOKEN'
 const MAX_TRAVEL_MEDIA_FILE_SIZE = 15 * 1024 * 1024
+const TRAVEL_MEDIA_PREPARATION_CONCURRENCY = 2
+const TRAVEL_MEDIA_UPLOAD_CONCURRENCY = 3
 
 function getCookie(name) {
   return document.cookie
@@ -83,6 +85,50 @@ function resolveUploadContentType(file) {
     return declaredType
   }
   return inferContentTypeFromFileName(file?.name)
+}
+
+function normalizeConcurrencyLimit(value, fallback = 1) {
+  const numericValue = Number(value)
+  if (!Number.isFinite(numericValue) || numericValue < 1) {
+    return fallback
+  }
+  return Math.max(1, Math.floor(numericValue))
+}
+
+async function mapWithConcurrency(items, concurrency, worker) {
+  const normalizedItems = Array.isArray(items) ? items : []
+  if (!normalizedItems.length) {
+    return []
+  }
+
+  const results = new Array(normalizedItems.length)
+  const limit = Math.min(
+    normalizedItems.length,
+    normalizeConcurrencyLimit(concurrency, 1),
+  )
+  let nextIndex = 0
+  let abortedError = null
+
+  async function runWorker() {
+    while (!abortedError) {
+      const currentIndex = nextIndex
+      nextIndex += 1
+
+      if (currentIndex >= normalizedItems.length) {
+        return
+      }
+
+      try {
+        results[currentIndex] = await worker(normalizedItems[currentIndex], currentIndex)
+      } catch (error) {
+        abortedError = error
+        throw error
+      }
+    }
+  }
+
+  await Promise.all(Array.from({ length: limit }, () => runWorker()))
+  return results
 }
 
 async function request(path, options = {}) {
@@ -680,28 +726,32 @@ function uploadPresignedTravelMediaFileWithProgress(target, file) {
 
 async function prepareTravelMediaUploadEntries(files, onProgress) {
   const selectedFiles = [...(files ?? [])].filter(Boolean)
-  const preparedEntries = []
+  const preparedEntries = new Array(selectedFiles.length)
+  let preparedCount = 0
 
-  for (let index = 0; index < selectedFiles.length; index += 1) {
-    const file = selectedFiles[index]
+  onProgress?.({
+    phase: 'preparing',
+    current: 0,
+    total: selectedFiles.length,
+  })
+
+  await mapWithConcurrency(selectedFiles, TRAVEL_MEDIA_PREPARATION_CONCURRENCY, async (file, index) => {
     const contentType = resolveUploadContentType(file)
-
-    onProgress?.({
-      phase: 'preparing',
-      current: index + 1,
-      total: selectedFiles.length,
-      fileName: file?.name || '',
-    })
+    const normalizedFileType = String(file?.type || '').trim().toLowerCase()
+    const sourceFile =
+      normalizedFileType === contentType
+        ? file
+        : new File([file], file.name, { type: contentType, lastModified: file.lastModified })
 
     const preparedImage = contentType.startsWith('image/')
-      ? await prepareClientImageUpload(new File([file], file.name, { type: contentType, lastModified: file.lastModified }))
+      ? await prepareClientImageUpload(sourceFile)
       : {
           gpsLatitude: null,
           gpsLongitude: null,
           thumbnails: [],
         }
 
-    preparedEntries.push({
+    preparedEntries[index] = {
       originalFile: file,
       originalFileName: file.name,
       contentType,
@@ -709,10 +759,39 @@ async function prepareTravelMediaUploadEntries(files, onProgress) {
       gpsLatitude: preparedImage.gpsLatitude,
       gpsLongitude: preparedImage.gpsLongitude,
       thumbnails: preparedImage.thumbnails,
+    }
+
+    preparedCount += 1
+    onProgress?.({
+      phase: 'preparing',
+      current: preparedCount,
+      total: selectedFiles.length,
+      fileName: file?.name || '',
     })
-  }
+  })
 
   return preparedEntries
+}
+
+async function uploadPreparedTravelMediaEntry(uploadTarget, preparedEntry) {
+  if (!preparedEntry) {
+    throw new Error('Prepared travel media upload is incomplete.')
+  }
+
+  await uploadPresignedTravelMediaFileWithProgress(uploadTarget, preparedEntry.originalFile)
+
+  const thumbnailTargets = Array.isArray(uploadTarget?.thumbnails) ? uploadTarget.thumbnails : []
+  if (thumbnailTargets.length !== preparedEntry.thumbnails.length) {
+    throw new Error('Prepared thumbnail upload is incomplete.')
+  }
+
+  for (const thumbnailTarget of thumbnailTargets) {
+    const localThumbnail = preparedEntry.thumbnails.find((thumbnail) => thumbnail.variant === thumbnailTarget.variant)
+    if (!localThumbnail) {
+      throw new Error('Prepared thumbnail upload is incomplete.')
+    }
+    await uploadPresignedTravelMediaFile(thumbnailTarget, localThumbnail.blob)
+  }
 }
 
 async function uploadTravelMediaWithPresignedUrls({
@@ -762,31 +841,19 @@ async function uploadTravelMediaWithPresignedUrls({
     total: prepared.uploads.length,
   })
 
-  for (let index = 0; index < prepared.uploads.length; index += 1) {
-    const uploadTarget = prepared.uploads[index]
+  let uploadedCount = 0
+  await mapWithConcurrency(prepared.uploads, TRAVEL_MEDIA_UPLOAD_CONCURRENCY, async (uploadTarget, index) => {
     const preparedEntry = preparedEntries[index]
-    await uploadPresignedTravelMediaFileWithProgress(uploadTarget, preparedEntry.originalFile)
+    await uploadPreparedTravelMediaEntry(uploadTarget, preparedEntry)
 
-    const thumbnailTargets = Array.isArray(uploadTarget?.thumbnails) ? uploadTarget.thumbnails : []
-    if (thumbnailTargets.length !== preparedEntry.thumbnails.length) {
-      throw new Error('Prepared thumbnail upload is incomplete.')
-    }
-
-    for (const thumbnailTarget of thumbnailTargets) {
-      const localThumbnail = preparedEntry.thumbnails.find((thumbnail) => thumbnail.variant === thumbnailTarget.variant)
-      if (!localThumbnail) {
-        throw new Error('Prepared thumbnail upload is incomplete.')
-      }
-      await uploadPresignedTravelMediaFile(thumbnailTarget, localThumbnail.blob)
-    }
-
+    uploadedCount += 1
     onProgress?.({
       phase: 'uploading',
-      current: index + 1,
+      current: uploadedCount,
       total: prepared.uploads.length,
       fileName: preparedEntry.originalFileName || uploadTarget?.originalFileName || '',
     })
-  }
+  })
 
   onProgress?.({
     phase: 'finalizing',

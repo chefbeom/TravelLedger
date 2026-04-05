@@ -6821,6 +6821,7 @@ textarea {
 }
 
 .travel-lightbox__body {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -6835,6 +6836,36 @@ textarea {
   max-width: 100%;
   max-height: 72vh;
   object-fit: contain;
+}
+
+.travel-lightbox__nav {
+  position: absolute;
+  top: 50%;
+  z-index: 2;
+  width: 52px;
+  height: 52px;
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.78);
+  color: var(--color-text-primary);
+  font-size: 2rem;
+  line-height: 1;
+  transform: translateY(-50%);
+  backdrop-filter: blur(10px);
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+.travel-lightbox__nav:hover {
+  background: rgba(37, 99, 235, 0.82);
+  border-color: rgba(96, 165, 250, 0.72);
+}
+
+.travel-lightbox__nav--prev {
+  left: 18px;
+}
+
+.travel-lightbox__nav--next {
+  right: 18px;
 }
 
 .travel-lightbox__meta {
@@ -6869,5 +6900,19 @@ textarea {
 
   .travel-lightbox__body {
     min-height: 240px;
+  }
+
+  .travel-lightbox__nav {
+    width: 44px;
+    height: 44px;
+    font-size: 1.75rem;
+  }
+
+  .travel-lightbox__nav--prev {
+    left: 12px;
+  }
+
+  .travel-lightbox__nav--next {
+    right: 12px;
   }
 }

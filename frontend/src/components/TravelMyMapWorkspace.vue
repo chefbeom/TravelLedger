@@ -338,6 +338,27 @@ const selectedClusterPhotos = computed(() => {
   const representativePhoto = selectedClusterDetail.value?.representativePhoto
   return representativePhoto ? [representativePhoto] : []
 })
+const selectedClusterPhotosInTimeOrder = computed(() =>
+  [...selectedClusterPhotos.value].sort((left, right) => {
+    const leftDateTime = `${left?.expenseDate ?? ''} ${left?.expenseTime ?? ''}`.trim()
+    const rightDateTime = `${right?.expenseDate ?? ''} ${right?.expenseTime ?? ''}`.trim()
+    const dateCompare = leftDateTime.localeCompare(rightDateTime)
+
+    if (dateCompare !== 0) {
+      return dateCompare
+    }
+
+    const leftUploadedAt = String(left?.uploadedAt ?? '')
+    const rightUploadedAt = String(right?.uploadedAt ?? '')
+    const uploadedAtCompare = leftUploadedAt.localeCompare(rightUploadedAt)
+
+    if (uploadedAtCompare !== 0) {
+      return uploadedAtCompare
+    }
+
+    return String(left?.id ?? '').localeCompare(String(right?.id ?? ''))
+  }),
+)
 const selectedClusterRepresentativePhoto = computed(() =>
   selectedClusterPhotos.value.find((photo) => String(photo.id) === String(selectedClusterDetail.value?.representativeMediaId))
   ?? selectedClusterDetail.value?.representativePhoto
@@ -523,7 +544,10 @@ watch(
           <TravelPhotoLightbox
             v-if="isFullscreen && lightboxPhoto"
             :photo="lightboxPhoto"
+            :photos="selectedClusterPhotosInTimeOrder"
+            :current-photo-id="lightboxPhoto?.id ?? null"
             @close="lightboxPhoto = null"
+            @select-photo="lightboxPhoto = $event"
           />
         </template>
       </TravelMyMapClusterPanel>
@@ -570,7 +594,10 @@ watch(
     <TravelPhotoLightbox
       v-if="!isMapFullscreen && lightboxPhoto"
       :photo="lightboxPhoto"
+      :photos="selectedClusterPhotosInTimeOrder"
+      :current-photo-id="lightboxPhoto?.id ?? null"
       @close="lightboxPhoto = null"
+      @select-photo="lightboxPhoto = $event"
     />
   </div>
 </template>

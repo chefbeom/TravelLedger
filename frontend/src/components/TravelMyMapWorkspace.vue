@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import {
   fetchTravelMyMapOverview,
   fetchTravelMyMapPhotoCluster,
@@ -34,6 +34,7 @@ const selectedMarkerId = ref(null)
 const lightboxPhoto = ref(null)
 const representativeUpdatingId = ref(null)
 const viewMode = ref('cluster')
+const detailRecoveryClusterId = ref(null)
 
 function setOverviewError(message = '') {
   overviewErrorMessage.value = message
@@ -150,6 +151,7 @@ async function loadOverview({ autoSelect = false, preferredClusterId = null, rel
       selectedClusterSummary.value = null
       selectedClusterDetail.value = null
       selectedPhotoId.value = null
+      detailRecoveryClusterId.value = null
       return
     }
 
@@ -166,6 +168,7 @@ async function loadOverview({ autoSelect = false, preferredClusterId = null, rel
       selectedClusterSummary.value = null
       selectedClusterDetail.value = null
       selectedPhotoId.value = null
+      detailRecoveryClusterId.value = null
       return
     }
 
@@ -194,6 +197,7 @@ async function handleSelectCluster(cluster) {
   if (clusterChanged) {
     selectedClusterDetail.value = null
     selectedPhotoId.value = null
+    detailRecoveryClusterId.value = null
   }
   await loadClusterDetail(cluster.id)
 }
@@ -212,6 +216,7 @@ async function handleSelectPhotoPin(pin, options = {}) {
   selectedMarkerId.value = null
   if (clusterChanged) {
     selectedClusterDetail.value = null
+    detailRecoveryClusterId.value = null
   }
   selectedPhotoId.value = pin.mediaId ?? null
   await loadClusterDetail(pin.clusterId, pin.mediaId, {
@@ -284,6 +289,7 @@ function clearSelection() {
   selectedClusterDetail.value = null
   selectedPhotoId.value = null
   selectedMarkerId.value = null
+  detailRecoveryClusterId.value = null
   setDetailError('')
 }
 
@@ -323,7 +329,15 @@ const photoPins = computed(() => overview.value?.photoPins ?? [])
 const markers = computed(() => overview.value?.markers ?? [])
 const routes = computed(() => overview.value?.routes ?? [])
 
-const selectedClusterPhotos = computed(() => selectedClusterDetail.value?.photos ?? [])
+const selectedClusterPhotos = computed(() => {
+  const photos = selectedClusterDetail.value?.photos ?? []
+  if (photos.length) {
+    return photos
+  }
+
+  const representativePhoto = selectedClusterDetail.value?.representativePhoto
+  return representativePhoto ? [representativePhoto] : []
+})
 const selectedClusterRepresentativePhoto = computed(() =>
   selectedClusterPhotos.value.find((photo) => String(photo.id) === String(selectedClusterDetail.value?.representativeMediaId))
   ?? selectedClusterDetail.value?.representativePhoto
@@ -378,6 +392,26 @@ const shouldShowFullscreenInspector = computed(() =>
 onMounted(async () => {
   await loadOverview({ autoSelect: false, reloadDetail: false })
 })
+
+watch(
+  () => [selectedClusterSummary.value?.id, selectedClusterDetail.value?.id, isDetailLoading.value],
+  async ([summaryId, detailId, loading]) => {
+    if (!summaryId || loading) {
+      return
+    }
+
+    if (String(detailId ?? '') === String(summaryId)) {
+      return
+    }
+
+    if (String(detailRecoveryClusterId.value ?? '') === String(summaryId)) {
+      return
+    }
+
+    detailRecoveryClusterId.value = summaryId
+    await loadClusterDetail(summaryId, selectedPhotoId.value)
+  },
+)
 </script>
 
 <template>

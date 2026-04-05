@@ -240,6 +240,20 @@ public class TravelMediaStorageService {
         return loadPreparedThumbnail(storagePath, contentType, requestedWidth);
     }
 
+    public ThumbnailPreparationStatus ensurePreparedThumbnails(String storagePath, String contentType) {
+        if (!StringUtils.hasText(storagePath) || !StringUtils.hasText(contentType) || !contentType.startsWith("image/")) {
+            return ThumbnailPreparationStatus.SKIPPED;
+        }
+
+        if (hasAllPreparedThumbnails(storagePath, contentType)) {
+            return ThumbnailPreparationStatus.ALREADY_PRESENT;
+        }
+
+        return prepareDerivedThumbnails(storagePath, contentType)
+                ? ThumbnailPreparationStatus.CREATED
+                : ThumbnailPreparationStatus.FAILED;
+    }
+
     public void deleteQuietly(String storagePath) {
         if (!StringUtils.hasText(storagePath)) {
             return;
@@ -375,6 +389,42 @@ public class TravelMediaStorageService {
             );
         } catch (Exception ignored) {
             // Keep database cleanup resilient even if the object is already missing.
+        }
+    }
+
+    private boolean hasAllPreparedThumbnails(String storagePath, String contentType) {
+        return PREPARED_THUMBNAIL_WIDTHS.stream()
+                .allMatch(width -> preparedThumbnailExists(storagePath, contentType, width));
+    }
+
+    private boolean preparedThumbnailExists(String storagePath, String contentType, int width) {
+        String thumbnailPath = buildThumbnailStoragePath(storagePath, contentType, width);
+        if (isMinioObject(thumbnailPath)) {
+            return isMinioEnabled() && existsInMinio(thumbnailPath);
+        }
+        return existsInLocal(thumbnailPath);
+    }
+
+    private boolean existsInLocal(String storagePath) {
+        try {
+            Path filePath = rootPath.resolve(storagePath).normalize();
+            return filePath.startsWith(rootPath) && Files.exists(filePath);
+        } catch (Exception exception) {
+            return false;
+        }
+    }
+
+    private boolean existsInMinio(String storagePath) {
+        try {
+            minioClient.statObject(
+                    StatObjectArgs.builder()
+                            .bucket(minioProperties.getBucket_cloud())
+                            .object(storagePath)
+                            .build()
+            );
+            return true;
+        } catch (Exception exception) {
+            return false;
         }
     }
 
@@ -896,6 +946,13 @@ public class TravelMediaStorageService {
             Resource resource,
             String contentType
     ) {
+    }
+
+    public enum ThumbnailPreparationStatus {
+        CREATED,
+        ALREADY_PRESENT,
+        FAILED,
+        SKIPPED
     }
 
     public record UploadCandidate(

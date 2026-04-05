@@ -5,6 +5,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import com.playdata.calen.common.config.MinioProperties;
+import com.playdata.calen.common.media.PreparedThumbnailProfile;
 import io.minio.MinioClient;
 import java.awt.Color;
 import java.awt.image.BufferedImage;
@@ -70,6 +71,45 @@ class TravelMediaStorageServiceTest {
         assertThat(Files.exists(thumbnailDirectory)).isFalse();
     }
 
+    @Test
+    void ensurePreparedThumbnailsReportsAlreadyPresentWhenPreparedSetExists() throws Exception {
+        TravelMediaStorageService service = createLocalStorageService();
+
+        TravelMediaStorageService.StoredTravelMedia stored = service.store(
+                1L,
+                2L,
+                3L,
+                new MockMultipartFile("file", "sunrise.jpg", "image/jpeg", createJpegBytes(1600, 900))
+        );
+
+        TravelMediaStorageService.ThumbnailPreparationStatus status =
+                service.ensurePreparedThumbnails(stored.storagePath(), stored.contentType());
+
+        assertThat(status).isEqualTo(TravelMediaStorageService.ThumbnailPreparationStatus.ALREADY_PRESENT);
+    }
+
+    @Test
+    void ensurePreparedThumbnailsRecreatesMissingPreparedVariant() throws Exception {
+        TravelMediaStorageService service = createLocalStorageService();
+
+        TravelMediaStorageService.StoredTravelMedia stored = service.store(
+                1L,
+                2L,
+                3L,
+                new MockMultipartFile("file", "sunrise.jpg", "image/jpeg", createJpegBytes(1600, 900))
+        );
+
+        Path missingThumbnailPath = thumbnailPathFor(stored.storagePath(), stored.contentType(), PreparedThumbnailProfile.PIN.width());
+        Files.deleteIfExists(missingThumbnailPath);
+        assertThat(Files.exists(missingThumbnailPath)).isFalse();
+
+        TravelMediaStorageService.ThumbnailPreparationStatus status =
+                service.ensurePreparedThumbnails(stored.storagePath(), stored.contentType());
+
+        assertThat(status).isEqualTo(TravelMediaStorageService.ThumbnailPreparationStatus.CREATED);
+        assertThat(Files.exists(missingThumbnailPath)).isTrue();
+    }
+
     private TravelMediaStorageService createLocalStorageService() {
         @SuppressWarnings("unchecked")
         ObjectProvider<MinioClient> minioProvider = mock(ObjectProvider.class);
@@ -84,6 +124,21 @@ class TravelMediaStorageServiceTest {
         );
     }
 
+    private Path thumbnailPathFor(String storagePath, String contentType, int width) {
+        Path relativePath = Path.of(storagePath);
+        Path directory = relativePath.getParent();
+        String fileName = relativePath.getFileName().toString();
+        String baseName = fileName.substring(0, fileName.lastIndexOf('.'));
+        String extension = "image/png".equals(contentType) || "image/gif".equals(contentType) || "image/webp".equals(contentType)
+                ? "png"
+                : "jpg";
+
+        Path thumbnailRelativePath = directory == null
+                ? Path.of(".thumbs", String.valueOf(width), baseName + "." + extension)
+                : directory.resolve(".thumbs").resolve(String.valueOf(width)).resolve(baseName + "." + extension);
+        return tempDir.resolve(thumbnailRelativePath);
+    }
+
     private byte[] createPngBytes(int width, int height) throws Exception {
         BufferedImage image = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB);
         for (int y = 0; y < height; y += 1) {
@@ -94,6 +149,19 @@ class TravelMediaStorageServiceTest {
 
         ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
         ImageIO.write(image, "png", outputStream);
+        return outputStream.toByteArray();
+    }
+
+    private byte[] createJpegBytes(int width, int height) throws Exception {
+        BufferedImage image = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
+        for (int y = 0; y < height; y += 1) {
+            for (int x = 0; x < width; x += 1) {
+                image.setRGB(x, y, new Color((x * 255) / width, (y * 255) / height, 180).getRGB());
+            }
+        }
+
+        ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+        ImageIO.write(image, "jpg", outputStream);
         return outputStream.toByteArray();
     }
 }

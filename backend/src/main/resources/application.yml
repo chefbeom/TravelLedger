@@ -69,6 +69,11 @@ app:
     reverse-geocode-cache-ttl-hours: ${TRAVEL_REVERSE_GEOCODE_CACHE_TTL_HOURS:24}
     summary-cache-ttl-seconds: ${TRAVEL_SUMMARY_CACHE_TTL_SECONDS:60}
     media-download-cache-ttl-seconds: ${TRAVEL_MEDIA_DOWNLOAD_CACHE_TTL_SECONDS:300}
+    thumbnail-backfill-enabled: ${TRAVEL_THUMBNAIL_BACKFILL_ENABLED:true}
+    thumbnail-backfill-fixed-delay-ms: ${TRAVEL_THUMBNAIL_BACKFILL_FIXED_DELAY_MS:900000}
+    thumbnail-backfill-initial-delay-ms: ${TRAVEL_THUMBNAIL_BACKFILL_INITIAL_DELAY_MS:300000}
+    thumbnail-backfill-page-size: ${TRAVEL_THUMBNAIL_BACKFILL_PAGE_SIZE:25}
+    thumbnail-backfill-max-items-per-run: ${TRAVEL_THUMBNAIL_BACKFILL_MAX_ITEMS_PER_RUN:100}
     media-storage-path: ${TRAVEL_MEDIA_STORAGE_PATH:${user.dir}/uploads/travel-media}
     media-object-prefix: ${TRAVEL_MEDIA_OBJECT_PREFIX:travel-media}
     presigned-upload-enabled: ${TRAVEL_PRESIGNED_UPLOAD_ENABLED:false}

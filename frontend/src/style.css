@@ -6479,11 +6479,14 @@ textarea {
   justify-items: end;
   align-items: start;
   min-height: 0;
+  overflow: hidden;
   pointer-events: none;
 }
 
 .travel-map__overlay > * {
   pointer-events: auto;
+  min-height: 0;
+  max-height: 100%;
 }
 
 .travel-map-inspector {
@@ -6612,8 +6615,9 @@ textarea {
   justify-self: end;
   align-self: start;
   width: min(400px, calc(100vw - 40px));
-  height: calc(100dvh - 40px);
-  max-height: calc(100dvh - 40px);
+  min-height: 0;
+  height: 100%;
+  max-height: 100%;
   overflow: hidden;
   padding-right: 2px;
   align-content: start;

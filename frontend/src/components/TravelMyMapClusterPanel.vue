@@ -61,6 +61,26 @@ let hasFittedInitialView = false
 let renderedMarkers = new Map()
 let pendingPopupMarkerKey = null
 
+function scheduleMarkerPopup(markerKey, remainingAttempts = 4) {
+  const normalizedKey = String(markerKey ?? '')
+  if (!normalizedKey) {
+    return
+  }
+
+  requestAnimationFrame(() => {
+    const marker = renderedMarkers.get(normalizedKey)
+    if (marker && mapInstance?.hasLayer(marker)) {
+      pendingPopupMarkerKey = null
+      marker.openPopup()
+      return
+    }
+
+    if (remainingAttempts > 0) {
+      scheduleMarkerPopup(normalizedKey, remainingAttempts - 1)
+    }
+  })
+}
+
 function normalizeColorHex(value, fallback = '#3182F6') {
   return /^#[0-9A-Fa-f]{6}$/.test(String(value || '').trim()) ? String(value).trim().toUpperCase() : fallback
 }
@@ -537,21 +557,15 @@ function renderClusters() {
         emit('select-cluster', aggregate.representative)
       }
 
-      requestAnimationFrame(() => {
-        const popupTarget = renderedMarkers.get(String(aggregate.markerKey)) || marker
-        popupTarget?.openPopup()
-      })
+      scheduleMarkerPopup(aggregate.markerKey)
     })
     renderedMarkers.set(String(aggregate.markerKey), marker)
 
     marker.addTo(markerLayer)
   })
 
-  const selectedMarker = renderedMarkers.get(String(pendingPopupMarkerKey ?? ''))
-  if (selectedMarker) {
-    const popupTarget = selectedMarker
-    pendingPopupMarkerKey = null
-    requestAnimationFrame(() => popupTarget.openPopup())
+  if (pendingPopupMarkerKey) {
+    scheduleMarkerPopup(pendingPopupMarkerKey)
   }
 }
 

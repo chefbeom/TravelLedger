@@ -242,6 +242,55 @@ function normalizePoint(pointLike) {
   }
 }
 
+function trimLocationText(value) {
+  const normalized = String(value || '').trim()
+  return normalized || ''
+}
+
+function firstLocationText(...values) {
+  return values.map((value) => trimLocationText(value)).find(Boolean) || ''
+}
+
+function buildSearchLocationResult(item, query) {
+  const address = item?.address ?? {}
+  const title = firstLocationText(
+    item?.name,
+    String(item?.display_name || '').split(',')[0],
+    query,
+  )
+
+  return {
+    id: item.place_id,
+    title,
+    displayName: item.display_name || query,
+    latitude: Number(item.lat),
+    longitude: Number(item.lon),
+    country: firstLocationText(address.country),
+    region: firstLocationText(
+      address.state,
+      address.province,
+      address.region,
+      address.state_district,
+      address.city,
+      address.town,
+      address.village,
+      address.municipality,
+      address.county,
+      address.suburb,
+    ),
+    placeName: firstLocationText(
+      item?.name,
+      address.amenity,
+      address.attraction,
+      address.tourism,
+      address.shop,
+      address.building,
+      address.road,
+      title,
+    ),
+  }
+}
+
 function resolveInitialCenter() {
   const selectedPoint = normalizePoint(props.selectedPoint)
   if (selectedPoint) {
@@ -582,13 +631,9 @@ async function submitSearch() {
     }
 
     const payload = await response.json()
-    searchResults.value = (Array.isArray(payload) ? payload : []).map((item) => ({
-      id: item.place_id,
-      title: item.name || String(item.display_name || '').split(',')[0] || query,
-      displayName: item.display_name || query,
-      latitude: Number(item.lat),
-      longitude: Number(item.lon),
-    })).filter((item) => Number.isFinite(item.latitude) && Number.isFinite(item.longitude))
+    searchResults.value = (Array.isArray(payload) ? payload : [])
+      .map((item) => buildSearchLocationResult(item, query))
+      .filter((item) => Number.isFinite(item.latitude) && Number.isFinite(item.longitude))
 
     searchStatus.value = 'done'
     if (!searchResults.value.length) {
@@ -611,6 +656,31 @@ function selectSearchResult(result) {
   searchQuery.value = result.displayName
   searchResults.value = []
   searchStatus.value = 'idle'
+  searchMessage.value = '검색한 위치로 이동했습니다.'
+  focusSearchResult(result)
+}
+
+function selectSearchLocationResult(result) {
+  searchQuery.value = result.displayName
+  searchResults.value = []
+  searchStatus.value = 'idle'
+
+  if (props.enablePickLocation) {
+    clearSearchMarker()
+    mapInstance?.setView([result.latitude, result.longitude], Math.max(mapInstance?.getZoom?.() || DEFAULT_ZOOM, 15))
+    requestAnimationFrame(() => mapInstance?.invalidateSize(false))
+    searchMessage.value = '검색한 위치를 기록 위치로 선택했습니다.'
+    emit('pick-location', {
+      latitude: result.latitude,
+      longitude: result.longitude,
+      country: result.country || '',
+      region: result.region || '',
+      placeName: result.placeName || result.title || '',
+      displayName: result.displayName || '',
+    })
+    return
+  }
+
   searchMessage.value = '검색한 위치로 이동했습니다.'
   focusSearchResult(result)
 }
@@ -988,7 +1058,7 @@ watch(viewportMode, (mode) => {
             :key="result.id"
             class="travel-map__search-result"
             type="button"
-            @click="selectSearchResult(result)"
+            @click="selectSearchLocationResult(result)"
           >
             <strong>{{ result.title }}</strong>
             <span>{{ result.displayName }}</span>

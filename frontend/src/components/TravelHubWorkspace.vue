@@ -165,6 +165,8 @@ const recordForm = reactive({
   title: '',
   amount: '',
   currencyCode: 'JPY',
+  country: '',
+  region: '',
   placeName: '',
   latitude: '',
   longitude: '',
@@ -268,9 +270,12 @@ function normalizeTravelRecordTime(value) {
 }
 
 function formatTravelLocationLabel(record) {
-  const placeName = String(record?.placeName || '').trim()
-  if (placeName) {
-    return placeName
+  const locationLabel = [record?.country, record?.region, record?.placeName]
+    .map((value) => String(value || '').trim())
+    .filter(Boolean)
+    .join(' / ')
+  if (locationLabel) {
+    return locationLabel
   }
 
   const latitude = Number(record?.latitude)
@@ -695,6 +700,8 @@ function resetRecordForm() {
   recordForm.title = ''
   recordForm.amount = ''
   recordForm.currencyCode = travelPlan.value?.homeCurrency === 'KRW' ? 'JPY' : travelPlan.value?.homeCurrency || 'JPY'
+  recordForm.country = ''
+  recordForm.region = ''
   recordForm.placeName = ''
   recordForm.latitude = ''
   recordForm.longitude = ''
@@ -712,6 +719,8 @@ function fillRecordForm(record) {
   recordForm.title = record.title || ''
   recordForm.amount = String(record.amount || '')
   recordForm.currencyCode = record.currencyCode || 'KRW'
+  recordForm.country = record.country || ''
+  recordForm.region = record.region || ''
   recordForm.placeName = record.placeName || ''
   recordForm.latitude = record.latitude != null ? String(record.latitude) : ''
   recordForm.longitude = record.longitude != null ? String(record.longitude) : ''
@@ -753,13 +762,45 @@ function buildRecordPayload() {
     title: recordForm.title.trim(),
     amount: Number(recordForm.amount),
     currencyCode: String(recordForm.currencyCode || 'KRW').trim().toUpperCase(),
-    country: null,
-    region: null,
+    country: recordForm.country.trim() || null,
+    region: recordForm.region.trim() || null,
     placeName: recordForm.placeName.trim() || null,
     latitude: toNullableNumber(recordForm.latitude),
     longitude: toNullableNumber(recordForm.longitude),
     memo: recordForm.memo.trim() || null,
   }
+}
+
+function applyRecordPickedLocation(point) {
+  if (!point) {
+    return
+  }
+
+  recordForm.latitude = String(point.latitude)
+  recordForm.longitude = String(point.longitude)
+
+  const country = String(point.country || '').trim()
+  const region = String(point.region || '').trim()
+  const placeName = String(point.placeName || point.title || point.displayName || '').trim()
+
+  if (country) {
+    recordForm.country = country
+  }
+  if (region) {
+    recordForm.region = region
+  }
+  if (placeName) {
+    recordForm.placeName = placeName
+  }
+}
+
+function handleMoveSelectedRecordPoint(point) {
+  if (!point) {
+    return
+  }
+
+  recordForm.latitude = String(point.latitude)
+  recordForm.longitude = String(point.longitude)
 }
 
 async function loadTravelCategoriesSafe() {
@@ -1498,7 +1539,7 @@ function openMemoryEditor(memoryId) {
 
           <section class="panel panel--map-fill">
             <div class="panel__header"><div><h2>지출 지도</h2><p>지출이 발생한 도시와 장소를 핀으로 남겨 어디에서 돈을 많이 썼는지 빠르게 볼 수 있습니다.</p></div></div>
-            <TravelMapPanel :markers="recordMarkers" :selected-point="recordForm.latitude && recordForm.longitude ? { latitude: Number(recordForm.latitude), longitude: Number(recordForm.longitude) } : null" :enable-pick-location="true" :enable-draw-route="false" :draggable-selected-point="true" :view-key="travelPlan?.id || 'travel-record-map'" hint-title="지출 위치 찍기" hint-text="지도를 눌러 지출 위치를 저장하거나, 현재 선택 핀을 드래그해 세부 위치를 맞출 수 있습니다." @pick-location="(point) => { recordForm.latitude = String(point.latitude); recordForm.longitude = String(point.longitude) }" @move-selected-point="(point) => { recordForm.latitude = String(point.latitude); recordForm.longitude = String(point.longitude) }" />
+            <TravelMapPanel :markers="recordMarkers" :selected-point="recordForm.latitude && recordForm.longitude ? { latitude: Number(recordForm.latitude), longitude: Number(recordForm.longitude) } : null" :enable-pick-location="true" :enable-draw-route="false" :draggable-selected-point="true" :view-key="travelPlan?.id || 'travel-record-map'" hint-title="지출 위치 찍기" hint-text="지도를 눌러 지출 위치를 저장하거나, 현재 선택 핀을 드래그해 세부 위치를 맞출 수 있습니다." @pick-location="applyRecordPickedLocation" @move-selected-point="handleMoveSelectedRecordPoint" />
           </section>
         </div>
 

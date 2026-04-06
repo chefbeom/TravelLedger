@@ -121,6 +121,11 @@ autofillState.message = defaultAutofillMessage
 
 let pendingLookupToken = 0
 
+function trimLocationText(value) {
+  const normalized = String(value || '').trim()
+  return normalized || ''
+}
+
 const memoryRecords = computed(() => props.travelPlan?.memoryRecords ?? [])
 const memoryMediaItems = computed(() =>
   (props.travelPlan?.mediaItems ?? []).filter((item) => item.recordType === 'MEMORY' && item.mediaType === 'PHOTO'),
@@ -773,6 +778,47 @@ async function populatePendingLocation(point) {
   }
 }
 
+async function populateSelectedLocation(point) {
+  const searchCountry = trimLocationText(point?.country)
+  const searchRegion = trimLocationText(point?.region)
+  const searchPlaceName = trimLocationText(point?.placeName || point?.title || point?.displayName)
+
+  if (!searchCountry && !searchRegion && !searchPlaceName) {
+    await populatePendingLocation(point)
+    return
+  }
+
+  const currentToken = ++pendingLookupToken
+
+  pendingLocation.status = 'ready'
+  pendingLocation.country = searchCountry
+  pendingLocation.region = searchRegion
+  pendingLocation.placeName = searchPlaceName
+  pendingLocation.latitude = String(point.latitude)
+  pendingLocation.longitude = String(point.longitude)
+  pendingLocation.message = '검색한 위치 정보를 기록에 연결했습니다. 핀을 한 번 더 누르면 기록 입력 모달이 열립니다.'
+
+  if (searchCountry && searchRegion && searchPlaceName) {
+    return
+  }
+
+  try {
+    const location = await reverseGeocode(point.latitude, point.longitude)
+    if (currentToken !== pendingLookupToken) {
+      return
+    }
+
+    pendingLocation.status = 'ready'
+    pendingLocation.country = pendingLocation.country || location.country || ''
+    pendingLocation.region = pendingLocation.region || location.region || ''
+    pendingLocation.placeName = pendingLocation.placeName || location.placeName || ''
+  } catch {
+    if (currentToken !== pendingLookupToken) {
+      return
+    }
+  }
+}
+
 async function handlePhotoSelection(event) {
   const files = [...(event.target.files ?? [])]
   photoFiles.value = files
@@ -888,8 +934,11 @@ function handlePickLocation(point) {
   pendingPoint.value = {
     latitude: point.latitude,
     longitude: point.longitude,
+    country: trimLocationText(point.country),
+    region: trimLocationText(point.region),
+    placeName: trimLocationText(point.placeName || point.title || point.displayName),
   }
-  populatePendingLocation(point)
+  populateSelectedLocation(point)
 }
 
 function handleSelectSelectedPoint() {
@@ -914,8 +963,11 @@ function handleMoveSelectedPoint(point) {
   pendingPoint.value = {
     latitude: point.latitude,
     longitude: point.longitude,
+    country: trimLocationText(point.country),
+    region: trimLocationText(point.region),
+    placeName: trimLocationText(point.placeName || point.title || point.displayName),
   }
-  populatePendingLocation(point)
+  populateSelectedLocation(point)
 }
 
 function handleMoveMarker(payload) {

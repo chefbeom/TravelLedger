@@ -28,9 +28,7 @@ import {
   shareTravelPlan,
   uploadTravelMemoryMedia,
   uploadTravelRouteGpxFiles,
-  uploadTravelRecordMedia,
 } from '../lib/api'
-import { extractPhotoMetadata } from '../lib/photoMetadata'
 import {
   formatCurrency,
   formatCurrencyByCode,
@@ -173,9 +171,11 @@ const recordForm = reactive({
   memo: '',
 })
 
-const recordPhotoFiles = ref([])
-const recordPhotoCaption = ref('')
-const recordAutofillMessage = ref('사진을 고르면 메타데이터가 있을 때 날짜와 위치를 자동으로 채워줍니다.')
+const recordGpsEnabled = ref(true)
+const recordGpsLoading = ref(false)
+const recordGpsRequestToken = ref(0)
+const recordAutofillMessage = ref('현재 위치(GPS) 자동 기록이 켜져 있습니다. 새 지출 기록에서 현재 위치를 위도/경도에 채워줍니다.')
+const recordAutofillTone = ref('default')
 const communityFeedPage = ref(0)
 const communityFeedPageCount = ref(1)
 const communityFeedTotal = ref(0)
@@ -487,6 +487,10 @@ const pagedPhotoAlbumCards = computed(() => {
   const start = photoAlbumPage.value * PHOTO_ALBUM_PAGE_SIZE
   return photoAlbumCards.value.slice(start, start + PHOTO_ALBUM_PAGE_SIZE)
 })
+const recordAutofillMessageClass = computed(() => ({
+  'travel-autofill-note--filled': recordAutofillTone.value === 'filled',
+  'travel-autofill-note--manual': recordAutofillTone.value === 'manual',
+}))
 const photoAlbumMarkers = computed(() =>
   photoAlbumCards.value
     .filter((item) => item.latitude !== null && item.latitude !== undefined && item.longitude !== null && item.longitude !== undefined)
@@ -706,9 +710,7 @@ function resetRecordForm() {
   recordForm.latitude = ''
   recordForm.longitude = ''
   recordForm.memo = ''
-  recordPhotoFiles.value = []
-  recordPhotoCaption.value = ''
-  recordAutofillMessage.value = '사진을 고르면 메타데이터가 있을 때 날짜와 위치를 자동으로 채워줍니다.'
+  refreshRecordGpsAutofill({ overwrite: true })
 }
 
 function fillRecordForm(record) {
@@ -725,9 +727,14 @@ function fillRecordForm(record) {
   recordForm.latitude = record.latitude != null ? String(record.latitude) : ''
   recordForm.longitude = record.longitude != null ? String(record.longitude) : ''
   recordForm.memo = record.memo || ''
-  recordPhotoFiles.value = []
-  recordPhotoCaption.value = ''
-  recordAutofillMessage.value = '사진을 고르면 메타데이터가 있을 때 날짜와 위치를 자동으로 채워줍니다.'
+  cancelRecordGpsRequest()
+  if (recordGpsEnabled.value) {
+    recordAutofillMessage.value = '현재 위치(GPS) 자동 기록은 켜져 있지만, 수정 중에는 저장된 좌표를 그대로 유지합니다.'
+    recordAutofillTone.value = 'manual'
+  } else {
+    recordAutofillMessage.value = '현재 위치(GPS) 자동 기록이 꺼져 있습니다. 저장된 좌표를 직접 수정하거나 지도에서 다시 찍을 수 있습니다.'
+    recordAutofillTone.value = 'manual'
+  }
 }
 
 function buildPlanPayload() {
@@ -776,6 +783,7 @@ function applyRecordPickedLocation(point) {
     return
   }
 
+  cancelRecordGpsRequest()
   recordForm.latitude = String(point.latitude)
   recordForm.longitude = String(point.longitude)
 
@@ -792,6 +800,9 @@ function applyRecordPickedLocation(point) {
   if (placeName) {
     recordForm.placeName = placeName
   }
+
+  recordAutofillMessage.value = '지도에서 선택한 위치로 위도와 경도를 입력했습니다.'
+  recordAutofillTone.value = 'manual'
 }
 
 function handleMoveSelectedRecordPoint(point) {
@@ -799,8 +810,99 @@ function handleMoveSelectedRecordPoint(point) {
     return
   }
 
+  cancelRecordGpsRequest()
   recordForm.latitude = String(point.latitude)
   recordForm.longitude = String(point.longitude)
+  recordAutofillMessage.value = '지도에서 현재 선택 핀을 옮겨 위치를 조정했습니다.'
+  recordAutofillTone.value = 'manual'
+}
+
+function cancelRecordGpsRequest() {
+  recordGpsRequestToken.value += 1
+  recordGpsLoading.value = false
+}
+
+function refreshRecordGpsAutofill({ overwrite = false, force = false } = {}) {
+  if (!recordGpsEnabled.value) {
+    cancelRecordGpsRequest()
+    recordAutofillMessage.value = '현재 위치(GPS) 자동 기록이 꺼져 있습니다. 지도나 검색으로 위치를 직접 지정할 수 있습니다.'
+    recordAutofillTone.value = 'manual'
+    return
+  }
+
+  if (!selectedPlanId.value || editingRecordId.value) {
+    cancelRecordGpsRequest()
+    recordAutofillMessage.value = '현재 위치(GPS) 자동 기록이 켜져 있습니다. 새 지출 기록에서 현재 위치를 자동으로 채워줍니다.'
+    recordAutofillTone.value = 'default'
+    return
+  }
+
+  if (!force && !overwrite && String(recordForm.latitude || '').trim() && String(recordForm.longitude || '').trim()) {
+    return
+  }
+
+  if (typeof window === 'undefined' || !window.navigator?.geolocation) {
+    recordAutofillMessage.value = '이 브라우저에서는 현재 위치(GPS)를 사용할 수 없습니다. 지도나 검색으로 위치를 직접 지정해 주세요.'
+    recordAutofillTone.value = 'manual'
+    return
+  }
+
+  const requestToken = recordGpsRequestToken.value + 1
+  recordGpsRequestToken.value = requestToken
+  recordGpsLoading.value = true
+  recordAutofillMessage.value = '현재 위치(GPS)를 확인하고 있습니다.'
+  recordAutofillTone.value = 'default'
+
+  window.navigator.geolocation.getCurrentPosition(
+    (position) => {
+      if (recordGpsRequestToken.value !== requestToken) {
+        return
+      }
+      recordGpsLoading.value = false
+      recordForm.latitude = String(position.coords.latitude)
+      recordForm.longitude = String(position.coords.longitude)
+      recordAutofillMessage.value = '현재 위치(GPS)를 위도와 경도에 자동 입력했습니다. 필요하면 지도에서 다시 조정할 수 있습니다.'
+      recordAutofillTone.value = 'filled'
+    },
+    (error) => {
+      if (recordGpsRequestToken.value !== requestToken) {
+        return
+      }
+      recordGpsLoading.value = false
+      if (error?.code === error.PERMISSION_DENIED) {
+        recordAutofillMessage.value = '현재 위치(GPS) 권한이 없어 자동 입력하지 못했습니다. 위치를 직접 입력하거나 지도에서 선택해 주세요.'
+      } else if (error?.code === error.TIMEOUT) {
+        recordAutofillMessage.value = '현재 위치(GPS)를 가져오는 시간이 오래 걸렸습니다. 잠시 후 다시 시도하거나 지도에서 직접 지정해 주세요.'
+      } else {
+        recordAutofillMessage.value = '현재 위치(GPS)를 읽지 못했습니다. 위치를 직접 입력하거나 지도에서 선택해 주세요.'
+      }
+      recordAutofillTone.value = 'manual'
+    },
+    {
+      enableHighAccuracy: true,
+      timeout: 10000,
+      maximumAge: 60000,
+    },
+  )
+}
+
+function setRecordGpsEnabled(enabled) {
+  const normalized = Boolean(enabled)
+  if (recordGpsEnabled.value === normalized) {
+    if (normalized) {
+      refreshRecordGpsAutofill({ overwrite: true, force: true })
+    }
+    return
+  }
+
+  recordGpsEnabled.value = normalized
+  if (normalized) {
+    refreshRecordGpsAutofill({ overwrite: true, force: true })
+  } else {
+    cancelRecordGpsRequest()
+    recordAutofillMessage.value = '현재 위치(GPS) 자동 기록이 꺼져 있습니다. 지도나 검색으로 위치를 직접 지정할 수 있습니다.'
+    recordAutofillTone.value = 'manual'
+  }
 }
 
 async function loadTravelCategoriesSafe() {
@@ -946,6 +1048,16 @@ watch(
   },
 )
 
+watch(
+  () => [moneyTab.value, selectedPlanId.value, recordGpsEnabled.value, editingRecordId.value],
+  ([tab, planId, gpsEnabled, editingRecordId]) => {
+    if (tab !== 'records' || !planId || !gpsEnabled || editingRecordId) {
+      return
+    }
+    refreshRecordGpsAutofill()
+  },
+)
+
 onMounted(async () => {
   await refreshTravelData()
 })
@@ -1077,45 +1189,19 @@ async function handleDeleteBudgetItem(item) {
   }
 }
 
-async function handleRecordPhotoSelection(event) {
-  const files = [...(event.target.files ?? [])]
-  recordPhotoFiles.value = files
-  if (!files.length) {
-    recordAutofillMessage.value = '사진을 고르면 메타데이터가 있을 때 날짜와 위치를 자동으로 채워줍니다.'
-    return
-  }
-  try {
-    const metadata = await extractPhotoMetadata(files[0])
-    if (!metadata) {
-      recordAutofillMessage.value = '선택한 사진에서 읽을 수 있는 EXIF 정보를 찾지 못했습니다.'
-      return
-    }
-    if (metadata.date) recordForm.expenseDate = metadata.date
-    if (metadata.time) recordForm.expenseTime = metadata.time
-    if (metadata.placeName && !recordForm.placeName.trim()) recordForm.placeName = metadata.placeName
-    if (metadata.latitude !== null && metadata.latitude !== undefined) recordForm.latitude = String(metadata.latitude)
-    if (metadata.longitude !== null && metadata.longitude !== undefined) recordForm.longitude = String(metadata.longitude)
-    recordAutofillMessage.value = '첫 번째 사진의 메타데이터를 바탕으로 날짜와 위치를 자동 입력했습니다.'
-  } catch (error) {
-    recordAutofillMessage.value = error?.message || '사진 메타데이터를 읽지 못했습니다.'
-  }
-}
-
 async function handleSubmitRecord() {
   if (!selectedPlanId.value) return
   isSubmitting.value = true
   activeSubmit.value = 'record'
   setFeedback()
   try {
-    let savedRecord
     if (editingRecordId.value) {
-      savedRecord = await updateTravelRecord(editingRecordId.value, buildRecordPayload())
+      await updateTravelRecord(editingRecordId.value, buildRecordPayload())
       setFeedback('지출 장부를 수정했습니다.')
     } else {
-      savedRecord = await createTravelRecord(selectedPlanId.value, buildRecordPayload())
+      await createTravelRecord(selectedPlanId.value, buildRecordPayload())
       setFeedback('지출 장부를 추가했습니다.')
     }
-    if (recordPhotoFiles.value.length) await uploadTravelRecordMedia(savedRecord.id, 'PHOTO', recordPhotoFiles.value, recordPhotoCaption.value.trim())
     await refreshTravelData(selectedPlanId.value, props.route === 'photo-album')
     resetRecordForm()
   } catch (error) {
@@ -1503,7 +1589,6 @@ function openMemoryEditor(memoryId) {
               <small>{{ day.dayLabel }}</small>
               <strong>{{ formatCurrency(day.totalKrw) }}</strong>
               <span>지출 {{ day.count }}건</span>
-              <span>사진 {{ day.photoCount }}장</span>
               <span>{{ day.currencyLabel || 'KRW 환산 기준' }}</span>
             </button>
           </div>
@@ -1511,7 +1596,7 @@ function openMemoryEditor(memoryId) {
         </section>
         <div class="content-grid content-grid--travel content-grid--travel-records">
           <section class="panel">
-            <div class="panel__header"><div><h2>{{ editingRecordId ? '지출 기록 수정' : '지출 기록 추가' }}</h2><p>언제 어디서 얼마를 썼는지와 사진, 위치를 함께 기록해 여행 지출 장부를 정리합니다.</p></div></div>
+            <div class="panel__header"><div><h2>{{ editingRecordId ? '지출 기록 수정' : '지출 기록 추가' }}</h2><p>언제 어디서 얼마를 썼는지와 위치를 함께 기록해 여행 지출 장부를 정리합니다.</p></div></div>
             <div class="travel-form-grid">
               <label class="field"><span class="field__label">날짜</span><input v-model="recordForm.expenseDate" type="date" /></label>
               <label class="field"><span class="field__label">시간</span><input v-model="recordForm.expenseTime" type="time" /><small class="field__hint">비워두면 00:00으로 저장됩니다.</small></label>
@@ -1522,15 +1607,21 @@ function openMemoryEditor(memoryId) {
               <label class="field field--full"><span class="field__label">장소명</span><input v-model="recordForm.placeName" list="travel-place-options" type="text" placeholder="도톤보리" /></label>
               <label class="field"><span class="field__label">위도</span><input v-model="recordForm.latitude" type="number" step="0.0000001" /></label>
               <label class="field"><span class="field__label">경도</span><input v-model="recordForm.longitude" type="number" step="0.0000001" /></label>
+              <div class="field field--full">
+                <span class="field__label">현재 위치(GPS)</span>
+                <div class="scope-toggle">
+                  <button type="button" class="button" :class="{ 'button--primary': recordGpsEnabled }" @click="setRecordGpsEnabled(true)">
+                    {{ recordGpsLoading && recordGpsEnabled ? '위치 확인 중...' : '위치 켜짐' }}
+                  </button>
+                  <button type="button" class="button" :class="{ 'button--primary': !recordGpsEnabled }" @click="setRecordGpsEnabled(false)">위치 꺼짐</button>
+                </div>
+                <small class="field__hint">기본값은 켜짐이며, 새 지출 기록에서 현재 위치를 위도와 경도에 자동 입력합니다.</small>
+              </div>
               <label class="field field--full"><span class="field__label">메모</span><textarea v-model="recordForm.memo" rows="3" placeholder="쿠폰 사용 여부, 결제 메모, 지출 이유를 남겨두세요." /></label>
             </div>
             <datalist id="expense-category-options"><option v-for="option in expenseCategoryOptions" :key="option" :value="option" /></datalist>
             <datalist id="travel-place-options"><option v-for="option in travelCategories.places" :key="option" :value="option" /></datalist>
-            <div class="travel-form-grid travel-form-grid--compact">
-              <label class="field field--full"><span class="field__label">사진</span><input accept="image/*" multiple type="file" @change="handleRecordPhotoSelection" /></label>
-              <label class="field field--full"><span class="field__label">사진 설명</span><input v-model="recordPhotoCaption" type="text" placeholder="업로드할 사진에 붙일 설명" /></label>
-            </div>
-            <p class="travel-autofill-note">{{ recordAutofillMessage }}</p>
+            <p class="travel-autofill-note" :class="recordAutofillMessageClass">{{ recordAutofillMessage }}</p>
             <div class="entry-editor__actions">
               <button class="button button--ghost" @click="resetRecordForm">초기화</button>
               <button class="button button--primary" :disabled="isSubmitting || !travelPlan" @click="handleSubmitRecord">{{ isSubmitting && activeSubmit === 'record' ? '저장 중...' : editingRecordId ? '지출 기록 수정' : '지출 기록 추가' }}</button>
@@ -1544,13 +1635,13 @@ function openMemoryEditor(memoryId) {
         </div>
 
         <section class="panel">
-          <div class="panel__header"><div><h2>지출 장부 표</h2><p>금액, 분류, 장소와 사진 개수를 함께 정리해 이후 통계 화면에서 바로 집계할 수 있습니다.</p></div></div>
+          <div class="panel__header"><div><h2>지출 장부 표</h2><p>금액, 분류, 장소를 함께 정리해 이후 통계 화면에서 바로 집계할 수 있습니다.</p></div></div>
           <div class="sheet-table-wrap">
             <table class="sheet-table">
-              <thead><tr><th>날짜</th><th>분류</th><th>항목명</th><th>장소</th><th>원통화</th><th>KRW</th><th>사진</th><th>작업</th></tr></thead>
+              <thead><tr><th>날짜</th><th>분류</th><th>항목명</th><th>장소</th><th>원통화</th><th>KRW</th><th>작업</th></tr></thead>
               <tbody>
-                <tr v-for="record in filteredTravelRecords" :key="record.id"><td>{{ formatDateTime(record.expenseDate, record.expenseTime) }}</td><td>{{ record.category }}</td><td>{{ record.title }}</td><td>{{ formatTravelLocationLabel(record) }}</td><td>{{ formatCurrencyByCode(record.amount, record.currencyCode) }}</td><td>{{ formatCurrency(record.amountKrw) }}</td><td><div class="travel-record-media-count"><strong>사진 {{ recordPhotoSummaryMap.get(String(record.id))?.photos || 0 }}장</strong></div></td><td class="sheet-table__actions"><button class="button button--ghost" @click="fillRecordForm(record)">수정</button><button class="button button--danger" @click="handleDeleteRecord(record)">삭제</button></td></tr>
-                <tr v-if="!filteredTravelRecords.length"><td colspan="8" class="sheet-table__empty">{{ selectedRecordDate ? '선택한 날짜에는 지출 기록이 없습니다.' : '지출 기록이 아직 없습니다.' }}</td></tr>
+                <tr v-for="record in filteredTravelRecords" :key="record.id"><td>{{ formatDateTime(record.expenseDate, record.expenseTime) }}</td><td>{{ record.category }}</td><td>{{ record.title }}</td><td>{{ formatTravelLocationLabel(record) }}</td><td>{{ formatCurrencyByCode(record.amount, record.currencyCode) }}</td><td>{{ formatCurrency(record.amountKrw) }}</td><td class="sheet-table__actions"><button class="button button--ghost" @click="fillRecordForm(record)">수정</button><button class="button button--danger" @click="handleDeleteRecord(record)">삭제</button></td></tr>
+                <tr v-if="!filteredTravelRecords.length"><td colspan="7" class="sheet-table__empty">{{ selectedRecordDate ? '선택한 날짜에는 지출 기록이 없습니다.' : '지출 기록이 아직 없습니다.' }}</td></tr>
               </tbody>
             </table>
           </div>

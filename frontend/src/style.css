@@ -1350,6 +1350,15 @@ button {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+.travel-money-records,
+.travel-money-records > *,
+.travel-money-records__entry,
+.travel-money-records__entry > *,
+.travel-money-records .travel-form-grid,
+.travel-money-records .sheet-table-wrap {
+  min-width: 0;
+}
+
 .travel-color-field {
   display: flex;
   align-items: center;
@@ -6260,6 +6269,39 @@ textarea {
   .travel-media-grid--quick-open {
     grid-auto-columns: minmax(220px, 1fr);
   }
+
+  .travel-money-records__entry {
+    order: 1;
+  }
+
+  .travel-money-records__summary {
+    order: 2;
+  }
+
+  .travel-money-records__table {
+    order: 3;
+  }
+
+  .travel-money-records__summary .scope-toggle .button {
+    flex: 1 1 calc(50% - 6px);
+    min-width: 0;
+  }
+
+  .travel-ledger-grid {
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  }
+
+  .content-grid--travel-records .travel-map__canvas {
+    min-height: 420px;
+  }
+
+  .content-grid--travel-records .travel-map--compact .travel-map__canvas {
+    min-height: 340px;
+  }
+
+  .content-grid--travel-records .travel-map--expanded .travel-map__canvas {
+    min-height: 520px;
+  }
 }
 
 @media (max-width: 720px) {
@@ -6276,6 +6318,21 @@ textarea {
   .travel-record-media-count {
     gap: 2px;
   }
+
+  .travel-money-records__summary,
+  .travel-money-records__form,
+  .travel-money-records__map,
+  .travel-money-records__table {
+    overflow: hidden;
+  }
+
+  .travel-ledger-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .travel-ledger-card {
+    padding: 14px 16px;
+  }
 }
 
 @media (max-width: 560px) {
@@ -6291,6 +6348,16 @@ textarea {
   .travel-map__canvas,
   .travel-map--expanded .travel-map__canvas {
     min-height: 320px;
+  }
+
+  .travel-money-records__summary .scope-toggle .button {
+    flex-basis: 100%;
+  }
+
+  .content-grid--travel-records .travel-map__canvas,
+  .content-grid--travel-records .travel-map--compact .travel-map__canvas,
+  .content-grid--travel-records .travel-map--expanded .travel-map__canvas {
+    min-height: 300px;
   }
 }
 

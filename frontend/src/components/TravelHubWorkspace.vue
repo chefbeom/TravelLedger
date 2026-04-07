@@ -1614,8 +1614,8 @@ function openMemoryEditor(memoryId) {
             </table>
           </div>
         </section>
-      </div>      <div v-else-if="moneyTab === 'records'" class="workspace-stack">
-        <section class="panel">
+      </div>      <div v-else-if="moneyTab === 'records'" class="workspace-stack travel-money-records">
+        <section class="panel travel-money-records__summary">
           <div class="panel__header">
             <div>
               <h2>여행 날짜 가계부</h2>
@@ -1652,8 +1652,8 @@ function openMemoryEditor(memoryId) {
           </div>
           <p v-else class="panel__empty">선택한 여행의 기간 정보가 없어서 날짜형 장부를 만들 수 없습니다.</p>
         </section>
-        <div class="content-grid content-grid--travel content-grid--travel-records">
-          <section class="panel">
+        <div class="content-grid content-grid--travel content-grid--travel-records travel-money-records__entry">
+          <section class="panel travel-money-records__form">
             <div class="panel__header"><div><h2>{{ editingRecordId ? '지출 기록 수정' : '지출 기록 추가' }}</h2><p>언제 어디서 얼마를 썼는지와 위치를 함께 기록해 여행 지출 장부를 정리합니다.</p></div></div>
             <div class="travel-form-grid">
               <label class="field"><span class="field__label">날짜</span><input v-model="recordForm.expenseDate" type="date" /></label>
@@ -1686,13 +1686,13 @@ function openMemoryEditor(memoryId) {
             </div>
           </section>
 
-          <section class="panel panel--map-fill">
+          <section class="panel panel--map-fill travel-money-records__map">
             <div class="panel__header"><div><h2>지출 지도</h2><p>지출이 발생한 도시와 장소를 핀으로 남겨 어디에서 돈을 많이 썼는지 빠르게 볼 수 있습니다.</p></div></div>
             <TravelMapPanel :markers="recordMarkers" :selected-point="recordForm.latitude && recordForm.longitude ? { latitude: Number(recordForm.latitude), longitude: Number(recordForm.longitude) } : null" :enable-pick-location="true" :enable-draw-route="false" :draggable-selected-point="true" :view-key="travelPlan?.id || 'travel-record-map'" hint-title="지출 위치 찍기" hint-text="지도를 눌러 지출 위치를 저장하거나, 현재 선택 핀을 드래그해 세부 위치를 맞출 수 있습니다." @pick-location="applyRecordPickedLocation" @move-selected-point="handleMoveSelectedRecordPoint" />
           </section>
         </div>
 
-        <section class="panel">
+        <section class="panel travel-money-records__table">
           <div class="panel__header"><div><h2>지출 장부 표</h2><p>금액, 분류, 장소를 함께 정리해 이후 통계 화면에서 바로 집계할 수 있습니다.</p></div></div>
           <div class="sheet-table-wrap">
             <table class="sheet-table">

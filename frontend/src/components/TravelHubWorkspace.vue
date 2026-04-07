@@ -38,6 +38,7 @@ import {
   toNullableNumber,
   todayIso,
 } from '../lib/uiFormat'
+import { reverseGeocode } from '../lib/photoMetadata'
 import { buildThumbnailUrl } from '../lib/mediaPreview'
 import TravelCommunityWorkspace from './TravelCommunityWorkspace.vue'
 import TravelMapPanel from './TravelMapPanel.vue'
@@ -176,6 +177,7 @@ const recordAmountInput = ref('')
 const recordGpsEnabled = ref(true)
 const recordGpsLoading = ref(false)
 const recordGpsRequestToken = ref(0)
+const recordLocationAutofillToken = ref(0)
 const recordAutofillMessage = ref('현재 위치(GPS) 자동 기록이 켜져 있습니다. 새 지출 기록에서 현재 위치를 위도/경도에 채워줍니다.')
 const recordAutofillTone = ref('default')
 const communityFeedPage = ref(0)
@@ -754,6 +756,8 @@ function fillBudgetForm(item) {
 
 function resetRecordForm() {
   editingRecordId.value = null
+  cancelRecordGpsRequest()
+  cancelRecordLocationAutofill()
   recordForm.expenseDate = selectedRecordDate.value || travelPlan.value?.startDate || todayIso()
   recordForm.expenseTime = ''
   recordForm.category = expenseCategoryOptions.value[0] || '식비'
@@ -786,6 +790,7 @@ function fillRecordForm(record) {
   recordForm.longitude = record.longitude != null ? String(record.longitude) : ''
   recordForm.memo = record.memo || ''
   cancelRecordGpsRequest()
+  cancelRecordLocationAutofill()
   if (recordGpsEnabled.value) {
     recordAutofillMessage.value = '현재 위치(GPS) 자동 기록은 켜져 있지만, 수정 중에는 저장된 좌표를 그대로 유지합니다.'
     recordAutofillTone.value = 'manual'
@@ -842,6 +847,7 @@ function applyRecordPickedLocation(point) {
   }
 
   cancelRecordGpsRequest()
+  cancelRecordLocationAutofill()
   recordForm.latitude = String(point.latitude)
   recordForm.longitude = String(point.longitude)
 
@@ -858,6 +864,9 @@ function applyRecordPickedLocation(point) {
   if (placeName) {
     recordForm.placeName = placeName
   }
+  if (!placeName) {
+    autofillRecordPlaceNameFromCoordinates()
+  }
 
   recordAutofillMessage.value = '지도에서 선택한 위치로 위도와 경도를 입력했습니다.'
   recordAutofillTone.value = 'manual'
@@ -869,8 +878,12 @@ function handleMoveSelectedRecordPoint(point) {
   }
 
   cancelRecordGpsRequest()
+  cancelRecordLocationAutofill()
   recordForm.latitude = String(point.latitude)
   recordForm.longitude = String(point.longitude)
+  if (!String(recordForm.placeName || '').trim()) {
+    autofillRecordPlaceNameFromCoordinates()
+  }
   recordAutofillMessage.value = '지도에서 현재 선택 핀을 옮겨 위치를 조정했습니다.'
   recordAutofillTone.value = 'manual'
 }
@@ -880,9 +893,61 @@ function cancelRecordGpsRequest() {
   recordGpsLoading.value = false
 }
 
+function cancelRecordLocationAutofill() {
+  recordLocationAutofillToken.value += 1
+}
+
+async function autofillRecordPlaceNameFromCoordinates({ overwritePlaceName = false } = {}) {
+  const latitude = toNullableNumber(recordForm.latitude)
+  const longitude = toNullableNumber(recordForm.longitude)
+  if (latitude === null || longitude === null) {
+    return null
+  }
+
+  if (!overwritePlaceName && String(recordForm.placeName || '').trim()) {
+    return null
+  }
+
+  const requestToken = recordLocationAutofillToken.value + 1
+  recordLocationAutofillToken.value = requestToken
+
+  try {
+    const location = await reverseGeocode(latitude, longitude)
+    if (recordLocationAutofillToken.value !== requestToken) {
+      return null
+    }
+
+    const country = String(location?.country || '').trim()
+    const region = String(location?.region || '').trim()
+    const placeName = String(location?.placeName || '').trim()
+
+    if (!recordForm.country.trim() && country) {
+      recordForm.country = country
+    }
+    if (!recordForm.region.trim() && region) {
+      recordForm.region = region
+    }
+    if ((!recordForm.placeName.trim() || overwritePlaceName) && placeName) {
+      recordForm.placeName = placeName
+    }
+
+    return {
+      country,
+      region,
+      placeName,
+    }
+  } catch {
+    if (recordLocationAutofillToken.value !== requestToken) {
+      return null
+    }
+    return null
+  }
+}
+
 function refreshRecordGpsAutofill({ overwrite = false, force = false } = {}) {
   if (!recordGpsEnabled.value) {
     cancelRecordGpsRequest()
+    cancelRecordLocationAutofill()
     recordAutofillMessage.value = '현재 위치(GPS) 자동 기록이 꺼져 있습니다. 지도나 검색으로 위치를 직접 지정할 수 있습니다.'
     recordAutofillTone.value = 'manual'
     return
@@ -919,8 +984,15 @@ function refreshRecordGpsAutofill({ overwrite = false, force = false } = {}) {
       recordGpsLoading.value = false
       recordForm.latitude = String(position.coords.latitude)
       recordForm.longitude = String(position.coords.longitude)
-      recordAutofillMessage.value = '현재 위치(GPS)를 위도와 경도에 자동 입력했습니다. 필요하면 지도에서 다시 조정할 수 있습니다.'
-      recordAutofillTone.value = 'filled'
+      autofillRecordPlaceNameFromCoordinates().then((location) => {
+        if (recordGpsRequestToken.value !== requestToken) {
+          return
+        }
+        recordAutofillMessage.value = location?.placeName
+          ? `현재 위치(GPS)를 위도와 경도에 자동 입력했고, 장소명도 '${location.placeName}'로 채웠습니다.`
+          : '현재 위치(GPS)를 위도와 경도에 자동 입력했습니다. 필요하면 지도에서 다시 조정할 수 있습니다.'
+        recordAutofillTone.value = 'filled'
+      })
     },
     (error) => {
       if (recordGpsRequestToken.value !== requestToken) {
@@ -958,6 +1030,7 @@ function setRecordGpsEnabled(enabled) {
     refreshRecordGpsAutofill({ overwrite: true, force: true })
   } else {
     cancelRecordGpsRequest()
+    cancelRecordLocationAutofill()
     recordAutofillMessage.value = '현재 위치(GPS) 자동 기록이 꺼져 있습니다. 지도나 검색으로 위치를 직접 지정할 수 있습니다.'
     recordAutofillTone.value = 'manual'
   }
@@ -1253,6 +1326,9 @@ async function handleSubmitRecord() {
   activeSubmit.value = 'record'
   setFeedback()
   try {
+    if (!String(recordForm.placeName || '').trim()) {
+      await autofillRecordPlaceNameFromCoordinates()
+    }
     if (editingRecordId.value) {
       await updateTravelRecord(editingRecordId.value, buildRecordPayload())
       setFeedback('지출 장부를 수정했습니다.')
@@ -1268,7 +1344,9 @@ async function handleSubmitRecord() {
     isSubmitting.value = false
     activeSubmit.value = ''
   }
-}async function handleDeleteRecord(record) {
+}
+
+async function handleDeleteRecord(record) {
   isSubmitting.value = true
   activeSubmit.value = 'record-delete'
   setFeedback()
@@ -1655,7 +1733,7 @@ function openMemoryEditor(memoryId) {
         <div class="content-grid content-grid--travel content-grid--travel-records travel-money-records__entry">
           <section class="panel travel-money-records__form">
             <div class="panel__header"><div><h2>{{ editingRecordId ? '지출 기록 수정' : '지출 기록 추가' }}</h2><p>언제 어디서 얼마를 썼는지와 위치를 함께 기록해 여행 지출 장부를 정리합니다.</p></div></div>
-            <div class="travel-form-grid">
+            <div class="travel-form-grid travel-form-grid--record">
               <label class="field"><span class="field__label">날짜</span><input v-model="recordForm.expenseDate" type="date" /></label>
               <label class="field"><span class="field__label">시간</span><input v-model="recordForm.expenseTime" type="time" /><small class="field__hint">비워두면 00:00으로 저장됩니다.</small></label>
               <label class="field"><span class="field__label">분류</span><input v-model="recordForm.category" list="expense-category-options" type="text" /></label>

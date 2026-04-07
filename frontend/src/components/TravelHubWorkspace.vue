@@ -155,6 +155,7 @@ const budgetForm = reactive({
   currencyCode: 'KRW',
   memo: '',
 })
+const budgetAmountInput = ref('')
 
 const recordForm = reactive({
   expenseDate: todayIso(),
@@ -170,6 +171,7 @@ const recordForm = reactive({
   longitude: '',
   memo: '',
 })
+const recordAmountInput = ref('')
 
 const recordGpsEnabled = ref(true)
 const recordGpsLoading = ref(false)
@@ -267,6 +269,58 @@ function buildTravelDateRange(startDate, endDate) {
 function normalizeTravelRecordTime(value) {
   const normalized = String(value || '').trim()
   return normalized || '00:00'
+}
+
+function sanitizeTravelAmountInput(value, { allowDecimal = false } = {}) {
+  const source = String(value || '').replace(/,/g, '')
+  if (!allowDecimal) {
+    return source.replace(/[^0-9]/g, '')
+  }
+
+  const cleaned = source.replace(/[^0-9.]/g, '')
+  const dotIndex = cleaned.indexOf('.')
+  if (dotIndex < 0) {
+    return cleaned
+  }
+
+  const integerPart = cleaned.slice(0, dotIndex).replace(/\./g, '')
+  const decimalPart = cleaned.slice(dotIndex + 1).replace(/\./g, '')
+  return `${integerPart}.${decimalPart}`
+}
+
+function formatTravelAmountInput(value, { allowDecimal = false } = {}) {
+  const sanitized = sanitizeTravelAmountInput(value, { allowDecimal })
+  if (!sanitized) {
+    return ''
+  }
+
+  if (!allowDecimal) {
+    return Number(sanitized).toLocaleString('ko-KR')
+  }
+
+  const hasDot = sanitized.includes('.')
+  const [rawIntegerPart = '', rawDecimalPart = ''] = sanitized.split('.', 2)
+  const normalizedInteger = rawIntegerPart.replace(/^0+(?=\d)/, '') || '0'
+  const formattedInteger = Number(normalizedInteger).toLocaleString('ko-KR')
+
+  if (!hasDot) {
+    return formattedInteger
+  }
+
+  return `${formattedInteger}.${rawDecimalPart}`
+}
+
+function handleBudgetAmountInput(value) {
+  const sanitized = sanitizeTravelAmountInput(value)
+  budgetForm.amount = sanitized ? String(Number(sanitized)) : ''
+  budgetAmountInput.value = formatTravelAmountInput(sanitized)
+}
+
+function handleRecordAmountInput(value) {
+  const sanitized = sanitizeTravelAmountInput(value, { allowDecimal: true })
+  const normalized = sanitized === '.' ? '0.' : sanitized
+  recordForm.amount = normalized
+  recordAmountInput.value = formatTravelAmountInput(normalized, { allowDecimal: true })
 }
 
 function formatTravelLocationLabel(record) {
@@ -683,6 +737,7 @@ function resetBudgetForm() {
   budgetForm.category = budgetCategoryOptions.value[0] || '교통'
   budgetForm.title = ''
   budgetForm.amount = ''
+  budgetAmountInput.value = ''
   budgetForm.currencyCode = travelPlan.value?.homeCurrency || 'KRW'
   budgetForm.memo = ''
 }
@@ -692,6 +747,7 @@ function fillBudgetForm(item) {
   budgetForm.category = item.category || budgetCategoryOptions.value[0] || '교통'
   budgetForm.title = item.title || ''
   budgetForm.amount = String(item.amount || '')
+  budgetAmountInput.value = formatTravelAmountInput(budgetForm.amount)
   budgetForm.currencyCode = item.currencyCode || travelPlan.value?.homeCurrency || 'KRW'
   budgetForm.memo = item.memo || ''
 }
@@ -703,6 +759,7 @@ function resetRecordForm() {
   recordForm.category = expenseCategoryOptions.value[0] || '식비'
   recordForm.title = ''
   recordForm.amount = ''
+  recordAmountInput.value = ''
   recordForm.currencyCode = travelPlan.value?.homeCurrency === 'KRW' ? 'JPY' : travelPlan.value?.homeCurrency || 'JPY'
   recordForm.country = ''
   recordForm.region = ''
@@ -720,6 +777,7 @@ function fillRecordForm(record) {
   recordForm.category = record.category || expenseCategoryOptions.value[0] || '식비'
   recordForm.title = record.title || ''
   recordForm.amount = String(record.amount || '')
+  recordAmountInput.value = formatTravelAmountInput(recordForm.amount, { allowDecimal: true })
   recordForm.currencyCode = record.currencyCode || 'KRW'
   recordForm.country = record.country || ''
   recordForm.region = record.region || ''
@@ -1534,7 +1592,7 @@ function openMemoryEditor(memoryId) {
             <label class="field"><span class="field__label">분류</span><input v-model="budgetForm.category" list="budget-category-options" type="text" /></label>
             <label class="field"><span class="field__label">통화</span><input v-model="budgetForm.currencyCode" type="text" maxlength="3" /></label>
             <label class="field field--full"><span class="field__label">항목명</span><input v-model="budgetForm.title" type="text" placeholder="호텔, JR 패스, 현지 유심" /></label>
-            <label class="field"><span class="field__label">금액</span><input v-model="budgetForm.amount" type="number" min="0" step="1" /></label>
+            <label class="field"><span class="field__label">금액</span><input :value="budgetAmountInput" type="text" inputmode="numeric" placeholder="0" @input="handleBudgetAmountInput($event.target.value)" /></label>
             <label class="field field--full"><span class="field__label">메모</span><textarea v-model="budgetForm.memo" rows="3" placeholder="예산 항목에 대한 간단한 설명을 남겨두세요." /></label>
           </div>
           <datalist id="budget-category-options"><option v-for="option in budgetCategoryOptions" :key="option" :value="option" /></datalist>
@@ -1603,7 +1661,7 @@ function openMemoryEditor(memoryId) {
               <label class="field"><span class="field__label">분류</span><input v-model="recordForm.category" list="expense-category-options" type="text" /></label>
               <label class="field"><span class="field__label">통화</span><input v-model="recordForm.currencyCode" type="text" maxlength="3" /></label>
               <label class="field field--full"><span class="field__label">항목명</span><input v-model="recordForm.title" type="text" placeholder="도톤보리 점심, 지하철 충전, 기념품 구매" /></label>
-              <label class="field"><span class="field__label">금액</span><input v-model="recordForm.amount" type="number" min="0" step="0.01" /></label>
+              <label class="field"><span class="field__label">금액</span><input :value="recordAmountInput" type="text" inputmode="decimal" placeholder="0" @input="handleRecordAmountInput($event.target.value)" /></label>
               <label class="field field--full"><span class="field__label">장소명</span><input v-model="recordForm.placeName" list="travel-place-options" type="text" placeholder="도톤보리" /></label>
               <label class="field"><span class="field__label">위도</span><input v-model="recordForm.latitude" type="number" step="0.0000001" /></label>
               <label class="field"><span class="field__label">경도</span><input v-model="recordForm.longitude" type="number" step="0.0000001" /></label>

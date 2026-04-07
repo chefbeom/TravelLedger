@@ -1,7 +1,8 @@
-<script setup>
+﻿<script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { formatCompactNumber } from '../lib/format'
 import { resolveRange, summarizeEntries } from '../lib/analytics'
+import { useTableSelection } from '../lib/tableSelection'
 
 const CALENDAR_SCALE_KEY = 'calen-household-calendar-scale-preset'
 const CALENDAR_COLLAPSE_KEY = 'calen-household-calendar-collapsed'
@@ -340,6 +341,7 @@ const pagedNormalizedSelectedDateEntries = computed(() => {
   const start = selectedDayEntryPage.value * SELECTED_DAY_ENTRY_PAGE_SIZE
   return normalizedSelectedDateEntries.value.slice(start, start + SELECTED_DAY_ENTRY_PAGE_SIZE)
 })
+const selectedDayEntrySelection = useTableSelection(pagedNormalizedSelectedDateEntries)
 
 const hasSelectedMemoColumn = computed(() => normalizedSelectedDateEntries.value.some((entry) => entry.visibleMemo))
 const selectedDateCountLabel = computed(() => `${normalizedSelectedDateEntries.value.length}건`)
@@ -1575,6 +1577,15 @@ defineExpose({
         <table class="sheet-table">
           <thead>
             <tr>
+              <th class="sheet-table__select">
+                <input
+                  class="sheet-table__checkbox"
+                  type="checkbox"
+                  :checked="selectedDayEntrySelection.allVisibleSelected"
+                  :indeterminate.prop="selectedDayEntrySelection.someVisibleSelected"
+                  @change="selectedDayEntrySelection.toggleAllVisible()"
+                />
+              </th>
               <th>시간</th>
               <th>구분</th>
               <th>제목</th>
@@ -1587,6 +1598,14 @@ defineExpose({
           </thead>
           <tbody>
             <tr v-for="entry in pagedNormalizedSelectedDateEntries" :key="entry.id">
+              <td class="sheet-table__select">
+                <input
+                  class="sheet-table__checkbox"
+                  type="checkbox"
+                  :checked="selectedDayEntrySelection.isSelected(entry)"
+                  @change="selectedDayEntrySelection.toggleItem(entry)"
+                />
+              </td>
               <td>{{ formatTime(entry.entryTime) }}</td>
               <td>
                 <span :class="['chip', entry.entryType === 'INCOME' ? 'chip--income' : 'chip--expense']">
@@ -1609,7 +1628,7 @@ defineExpose({
               </td>
             </tr>
             <tr v-if="!normalizedSelectedDateEntries.length">
-              <td :colspan="hasSelectedMemoColumn ? 8 : 7" class="sheet-table__empty">선택한 날짜에는 거래가 없습니다.</td>
+              <td :colspan="hasSelectedMemoColumn ? 9 : 8" class="sheet-table__empty">선택한 날짜에는 거래가 없습니다.</td>
             </tr>
           </tbody>
         </table>

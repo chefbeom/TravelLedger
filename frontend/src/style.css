@@ -888,6 +888,20 @@ button {
   white-space: nowrap;
 }
 
+.sheet-table__select {
+  width: 1%;
+  padding: 12px 8px !important;
+  text-align: center !important;
+}
+
+.sheet-table__checkbox {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  accent-color: var(--accent);
+  vertical-align: middle;
+}
+
 .sheet-table__empty {
   text-align: center;
   color: var(--text-muted);

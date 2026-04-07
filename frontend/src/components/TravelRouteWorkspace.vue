@@ -1,5 +1,6 @@
-<script setup>
+﻿<script setup>
 import { computed, reactive, ref, watch } from 'vue'
+import { useTableSelection } from '../lib/tableSelection'
 import { formatDate, formatTime, safeNumber, todayIso, toIsoDate } from '../lib/uiFormat'
 import TravelMapPanel from './TravelMapPanel.vue'
 
@@ -354,6 +355,7 @@ const pagedRoutesForActiveDay = computed(() => {
   const start = activeDayRoutePage.value * ROUTE_TABLE_PAGE_SIZE
   return routesForActiveDay.value.slice(start, start + ROUTE_TABLE_PAGE_SIZE)
 })
+const routeTableSelection = useTableSelection(pagedRoutesForActiveDay)
 
 watch(
   () => props.travelPlan?.id,
@@ -1388,6 +1390,15 @@ function routeSummary(route) {
         <table class="sheet-table">
           <thead>
             <tr>
+              <th class="sheet-table__select">
+                <input
+                  class="sheet-table__checkbox"
+                  type="checkbox"
+                  :checked="routeTableSelection.allVisibleSelected"
+                  :indeterminate.prop="routeTableSelection.someVisibleSelected"
+                  @change="routeTableSelection.toggleAllVisible()"
+                />
+              </th>
               <th>날짜</th>
               <th>제목</th>
               <th>요약</th>
@@ -1398,6 +1409,14 @@ function routeSummary(route) {
           </thead>
           <tbody>
             <tr v-for="route in pagedRoutesForActiveDay" :key="route.id">
+              <td class="sheet-table__select">
+                <input
+                  class="sheet-table__checkbox"
+                  type="checkbox"
+                  :checked="routeTableSelection.isSelected(route)"
+                  @change="routeTableSelection.toggleItem(route)"
+                />
+              </td>
               <td>{{ formatDate(route.routeDate) }}</td>
               <td>{{ route.title }}</td>
               <td>{{ routeSummary(route) }}</td>
@@ -1409,7 +1428,7 @@ function routeSummary(route) {
               </td>
             </tr>
             <tr v-if="!routesForActiveDay.length">
-              <td colspan="6" class="sheet-table__empty">선택한 날짜에 저장된 이동 경로가 아직 없습니다.</td>
+              <td colspan="7" class="sheet-table__empty">선택한 날짜에 저장된 이동 경로가 아직 없습니다.</td>
             </tr>
           </tbody>
         </table>

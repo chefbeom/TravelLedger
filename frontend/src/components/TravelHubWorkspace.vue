@@ -1,4 +1,4 @@
-<script setup>
+﻿<script setup>
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import {
   createTravelBudgetItem,
@@ -40,6 +40,7 @@ import {
 } from '../lib/uiFormat'
 import { reverseGeocode } from '../lib/photoMetadata'
 import { buildThumbnailUrl } from '../lib/mediaPreview'
+import { useTableSelection } from '../lib/tableSelection'
 import TravelCommunityWorkspace from './TravelCommunityWorkspace.vue'
 import TravelMapPanel from './TravelMapPanel.vue'
 import TravelMemoryPanel from './TravelMemoryPanel.vue'
@@ -449,6 +450,9 @@ const filteredTravelRecords = computed(() => {
   }
   return records.filter((record) => String(record.expenseDate || '') === selectedRecordDate.value)
 })
+const planTableSelection = useTableSelection(computed(() => travelPlans.value))
+const budgetItemSelection = useTableSelection(computed(() => travelPlan.value?.budgetItems ?? []))
+const travelRecordSelection = useTableSelection(filteredTravelRecords)
 
 const recordMarkers = computed(() =>
   filteredTravelRecords.value
@@ -1651,12 +1655,12 @@ function openMemoryEditor(memoryId) {
           <div class="panel__header"><div><h2>여행 목록</h2><p>여행별로 목적지, 상태, 예산, 실제 사용 금액을 묶어서 비교할 수 있습니다.</p></div></div>
           <div class="sheet-table-wrap">
             <table class="sheet-table">
-              <thead><tr><th>이름</th><th>목적지</th><th>상태</th><th>예산안</th><th>실사용</th><th>여행 기간</th></tr></thead>
+              <thead><tr><th class="sheet-table__select"><input class="sheet-table__checkbox" type="checkbox" :checked="planTableSelection.allVisibleSelected" :indeterminate.prop="planTableSelection.someVisibleSelected" @change="planTableSelection.toggleAllVisible()" /></th><th>이름</th><th>목적지</th><th>상태</th><th>예산안</th><th>실사용</th><th>여행 기간</th></tr></thead>
               <tbody>
                 <tr v-for="plan in travelPlans" :key="plan.id" @click="handleSelectPlan(plan.id)">
-                  <td>{{ plan.name }}</td><td>{{ plan.destination || '-' }}</td><td>{{ planStatusLabel(plan.status) }}</td><td>{{ formatCurrency(plan.plannedTotalKrw) }}</td><td>{{ formatCurrency(plan.actualTotalKrw) }}</td><td>{{ formatDate(plan.startDate) }} - {{ formatDate(plan.endDate) }}</td>
+                  <td class="sheet-table__select" @click.stop><input class="sheet-table__checkbox" type="checkbox" :checked="planTableSelection.isSelected(plan)" @change="planTableSelection.toggleItem(plan)" /></td><td>{{ plan.name }}</td><td>{{ plan.destination || '-' }}</td><td>{{ planStatusLabel(plan.status) }}</td><td>{{ formatCurrency(plan.plannedTotalKrw) }}</td><td>{{ formatCurrency(plan.actualTotalKrw) }}</td><td>{{ formatDate(plan.startDate) }} - {{ formatDate(plan.endDate) }}</td>
                 </tr>
-                <tr v-if="!travelPlans.length"><td colspan="6" class="sheet-table__empty">등록된 여행이 아직 없습니다.</td></tr>
+                <tr v-if="!travelPlans.length"><td colspan="7" class="sheet-table__empty">등록된 여행이 아직 없습니다.</td></tr>
               </tbody>
             </table>
           </div>
@@ -1684,10 +1688,10 @@ function openMemoryEditor(memoryId) {
           <div class="panel__header"><div><h2>예산안 표</h2><p>각 예산 항목은 원래 통화와 KRW 환산 금액을 함께 보관해서 비교하기 쉽습니다.</p></div></div>
           <div class="sheet-table-wrap">
             <table class="sheet-table">
-              <thead><tr><th>분류</th><th>항목명</th><th>원통화</th><th>KRW</th><th>메모</th><th>작업</th></tr></thead>
+              <thead><tr><th class="sheet-table__select"><input class="sheet-table__checkbox" type="checkbox" :checked="budgetItemSelection.allVisibleSelected" :indeterminate.prop="budgetItemSelection.someVisibleSelected" @change="budgetItemSelection.toggleAllVisible()" /></th><th>분류</th><th>항목명</th><th>원통화</th><th>KRW</th><th>메모</th><th>작업</th></tr></thead>
               <tbody>
-                <tr v-for="item in travelPlan?.budgetItems ?? []" :key="item.id"><td>{{ item.category }}</td><td>{{ item.title }}</td><td>{{ formatCurrencyByCode(item.amount, item.currencyCode) }}</td><td>{{ formatCurrency(item.amountKrw) }}</td><td>{{ item.memo || '-' }}</td><td class="sheet-table__actions"><button class="button button--ghost" @click="fillBudgetForm(item)">수정</button><button class="button button--danger" @click="handleDeleteBudgetItem(item)">삭제</button></td></tr>
-                <tr v-if="!(travelPlan?.budgetItems ?? []).length"><td colspan="6" class="sheet-table__empty">예산 항목이 아직 없습니다.</td></tr>
+                <tr v-for="item in travelPlan?.budgetItems ?? []" :key="item.id"><td class="sheet-table__select"><input class="sheet-table__checkbox" type="checkbox" :checked="budgetItemSelection.isSelected(item)" @change="budgetItemSelection.toggleItem(item)" /></td><td>{{ item.category }}</td><td>{{ item.title }}</td><td>{{ formatCurrencyByCode(item.amount, item.currencyCode) }}</td><td>{{ formatCurrency(item.amountKrw) }}</td><td>{{ item.memo || '-' }}</td><td class="sheet-table__actions"><button class="button button--ghost" @click="fillBudgetForm(item)">수정</button><button class="button button--danger" @click="handleDeleteBudgetItem(item)">삭제</button></td></tr>
+                <tr v-if="!(travelPlan?.budgetItems ?? []).length"><td colspan="7" class="sheet-table__empty">예산 항목이 아직 없습니다.</td></tr>
               </tbody>
             </table>
           </div>
@@ -1774,10 +1778,10 @@ function openMemoryEditor(memoryId) {
           <div class="panel__header"><div><h2>지출 장부 표</h2><p>금액, 분류, 장소를 함께 정리해 이후 통계 화면에서 바로 집계할 수 있습니다.</p></div></div>
           <div class="sheet-table-wrap">
             <table class="sheet-table">
-              <thead><tr><th>날짜</th><th>분류</th><th>항목명</th><th>장소</th><th>원통화</th><th>KRW</th><th>작업</th></tr></thead>
+              <thead><tr><th class="sheet-table__select"><input class="sheet-table__checkbox" type="checkbox" :checked="travelRecordSelection.allVisibleSelected" :indeterminate.prop="travelRecordSelection.someVisibleSelected" @change="travelRecordSelection.toggleAllVisible()" /></th><th>날짜</th><th>분류</th><th>항목명</th><th>장소</th><th>원통화</th><th>KRW</th><th>작업</th></tr></thead>
               <tbody>
-                <tr v-for="record in filteredTravelRecords" :key="record.id"><td>{{ formatDateTime(record.expenseDate, record.expenseTime) }}</td><td>{{ record.category }}</td><td>{{ record.title }}</td><td>{{ formatTravelLocationLabel(record) }}</td><td>{{ formatCurrencyByCode(record.amount, record.currencyCode) }}</td><td>{{ formatCurrency(record.amountKrw) }}</td><td class="sheet-table__actions"><button class="button button--ghost" @click="fillRecordForm(record)">수정</button><button class="button button--danger" @click="handleDeleteRecord(record)">삭제</button></td></tr>
-                <tr v-if="!filteredTravelRecords.length"><td colspan="7" class="sheet-table__empty">{{ selectedRecordDate ? '선택한 날짜에는 지출 기록이 없습니다.' : '지출 기록이 아직 없습니다.' }}</td></tr>
+                <tr v-for="record in filteredTravelRecords" :key="record.id"><td class="sheet-table__select"><input class="sheet-table__checkbox" type="checkbox" :checked="travelRecordSelection.isSelected(record)" @change="travelRecordSelection.toggleItem(record)" /></td><td>{{ formatDateTime(record.expenseDate, record.expenseTime) }}</td><td>{{ record.category }}</td><td>{{ record.title }}</td><td>{{ formatTravelLocationLabel(record) }}</td><td>{{ formatCurrencyByCode(record.amount, record.currencyCode) }}</td><td>{{ formatCurrency(record.amountKrw) }}</td><td class="sheet-table__actions"><button class="button button--ghost" @click="fillRecordForm(record)">수정</button><button class="button button--danger" @click="handleDeleteRecord(record)">삭제</button></td></tr>
+                <tr v-if="!filteredTravelRecords.length"><td colspan="8" class="sheet-table__empty">{{ selectedRecordDate ? '선택한 날짜에는 지출 기록이 없습니다.' : '지출 기록이 아직 없습니다.' }}</td></tr>
               </tbody>
             </table>
           </div>

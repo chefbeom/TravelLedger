@@ -1,7 +1,8 @@
-<script setup>
+﻿<script setup>
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { buildThumbnailUrl, createLocalImagePreview } from '../lib/mediaPreview'
 import { extractPhotoMetadata, reverseGeocode } from '../lib/photoMetadata'
+import { useTableSelection } from '../lib/tableSelection'
 import { formatDate, formatDateTime, toIsoDate, toNullableNumber, todayIso } from '../lib/uiFormat'
 import TravelMapPanel from './TravelMapPanel.vue'
 
@@ -237,6 +238,7 @@ const pagedFilteredMemoryRecords = computed(() => {
   const start = memoryRecordPage.value * MEMORY_RECORD_PAGE_SIZE
   return filteredMemoryRecords.value.slice(start, start + MEMORY_RECORD_PAGE_SIZE)
 })
+const memoryRecordSelection = useTableSelection(pagedFilteredMemoryRecords)
 
 const multiPhotoLoading = ref(false)
 const multiPhotoLoadingCount = ref(0)
@@ -1258,6 +1260,15 @@ function submitMemory() {
         <table class="sheet-table">
           <thead>
             <tr>
+              <th class="sheet-table__select">
+                <input
+                  class="sheet-table__checkbox"
+                  type="checkbox"
+                  :checked="memoryRecordSelection.allVisibleSelected"
+                  :indeterminate.prop="memoryRecordSelection.someVisibleSelected"
+                  @change="memoryRecordSelection.toggleAllVisible()"
+                />
+              </th>
               <th>날짜</th>
               <th>분류</th>
               <th>제목</th>
@@ -1269,6 +1280,14 @@ function submitMemory() {
           </thead>
           <tbody>
             <tr v-for="memory in pagedFilteredMemoryRecords" :key="memory.id">
+              <td class="sheet-table__select">
+                <input
+                  class="sheet-table__checkbox"
+                  type="checkbox"
+                  :checked="memoryRecordSelection.isSelected(memory)"
+                  @change="memoryRecordSelection.toggleItem(memory)"
+                />
+              </td>
               <td>{{ formatDateTime(memory.memoryDate, memory.memoryTime) }}</td>
               <td>{{ memory.category }}</td>
               <td>{{ memory.title }}</td>
@@ -1281,7 +1300,7 @@ function submitMemory() {
               </td>
             </tr>
             <tr v-if="!filteredMemoryRecords.length">
-              <td colspan="7" class="sheet-table__empty">이 여행에 등록된 기록이 아직 없습니다.</td>
+              <td colspan="8" class="sheet-table__empty">이 여행에 등록된 기록이 아직 없습니다.</td>
             </tr>
           </tbody>
         </table>

@@ -1,10 +1,11 @@
-<script setup>
+﻿<script setup>
 import { computed } from 'vue'
 import BarChartCard from './BarChartCard.vue'
 import BreakdownList from './BreakdownList.vue'
 import ComparisonTable from './ComparisonTable.vue'
 import DonutChartCard from './DonutChartCard.vue'
 import SummaryCard from './SummaryCard.vue'
+import { useTableSelection } from '../lib/tableSelection'
 
 const chartPalette = ['#3182f6', '#12b886', '#f59f00', '#ff6b6b', '#7c5cff', '#00b8d9', '#fd7e14', '#5c7cfa']
 const emit = defineEmits([
@@ -123,6 +124,8 @@ const comparisonChartItems = computed(() =>
     color: chartPalette[index % chartPalette.length],
   })),
 )
+const searchResultSelection = useTableSelection(computed(() => props.searchResults))
+const trashResultSelection = useTableSelection(computed(() => props.trashResults))
 
 const expenseDonutItems = computed(() =>
   props.expenseBreakdown.slice(0, 6).map((item, index) => ({
@@ -372,6 +375,15 @@ const trashPageLabel = computed(() => Math.max(props.trashPageInfo.totalPages ??
           <table class="sheet-table stats-search-table">
             <thead>
               <tr>
+                <th class="sheet-table__select">
+                  <input
+                    class="sheet-table__checkbox"
+                    type="checkbox"
+                    :checked="searchResultSelection.allVisibleSelected"
+                    :indeterminate.prop="searchResultSelection.someVisibleSelected"
+                    @change="searchResultSelection.toggleAllVisible()"
+                  />
+                </th>
                 <th>날짜</th>
                 <th>시각</th>
                 <th>제목</th>
@@ -383,6 +395,14 @@ const trashPageLabel = computed(() => Math.max(props.trashPageInfo.totalPages ??
             </thead>
             <tbody>
               <tr v-for="entry in searchResults" :key="entry.id">
+                <td class="sheet-table__select">
+                  <input
+                    class="sheet-table__checkbox"
+                    type="checkbox"
+                    :checked="searchResultSelection.isSelected(entry)"
+                    @change="searchResultSelection.toggleItem(entry)"
+                  />
+                </td>
                 <td>{{ formatFullDate(entry.entryDate) }}</td>
                 <td>{{ formatTime(entry.entryTime) }}</td>
                 <td class="sheet-table__title">{{ entry.title }}</td>
@@ -399,7 +419,7 @@ const trashPageLabel = computed(() => Math.max(props.trashPageInfo.totalPages ??
                 </td>
               </tr>
               <tr v-if="!searchResults.length">
-                <td colspan="7" class="sheet-table__empty">조건에 맞는 거래가 없습니다.</td>
+                <td colspan="8" class="sheet-table__empty">조건에 맞는 거래가 없습니다.</td>
               </tr>
             </tbody>
           </table>
@@ -452,6 +472,15 @@ const trashPageLabel = computed(() => Math.max(props.trashPageInfo.totalPages ??
           <table class="sheet-table stats-search-table">
             <thead>
               <tr>
+                <th class="sheet-table__select">
+                  <input
+                    class="sheet-table__checkbox"
+                    type="checkbox"
+                    :checked="trashResultSelection.allVisibleSelected"
+                    :indeterminate.prop="trashResultSelection.someVisibleSelected"
+                    @change="trashResultSelection.toggleAllVisible()"
+                  />
+                </th>
                 <th>날짜</th>
                 <th>시각</th>
                 <th>제목</th>
@@ -463,6 +492,14 @@ const trashPageLabel = computed(() => Math.max(props.trashPageInfo.totalPages ??
             </thead>
             <tbody>
               <tr v-for="entry in trashResults" :key="entry.id">
+                <td class="sheet-table__select">
+                  <input
+                    class="sheet-table__checkbox"
+                    type="checkbox"
+                    :checked="trashResultSelection.isSelected(entry)"
+                    @change="trashResultSelection.toggleItem(entry)"
+                  />
+                </td>
                 <td>{{ formatFullDate(entry.entryDate) }}</td>
                 <td>{{ formatTime(entry.entryTime) }}</td>
                 <td class="sheet-table__title">{{ entry.title }}</td>
@@ -478,7 +515,7 @@ const trashPageLabel = computed(() => Math.max(props.trashPageInfo.totalPages ??
                 </td>
               </tr>
               <tr v-if="!trashResults.length">
-                <td colspan="7" class="sheet-table__empty">휴지통에 보관된 거래가 없습니다.</td>
+                <td colspan="8" class="sheet-table__empty">휴지통에 보관된 거래가 없습니다.</td>
               </tr>
             </tbody>
           </table>

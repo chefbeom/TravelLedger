@@ -1,5 +1,6 @@
 package com.playdata.calen.account.service;
 
+import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -19,6 +20,27 @@ public class DataOpsBackupScheduler {
     @Value("${app.data-ops.minio-backup-enabled:false}")
     private boolean minioBackupEnabled;
 
+    @Value("${app.data-ops.db-backup-cron:0 0 0 * * *}")
+    private String databaseBackupCron;
+
+    @Value("${app.data-ops.minio-backup-cron:0 30 0 * * *}")
+    private String minioBackupCron;
+
+    @Value("${app.data-ops.backup-zone:Asia/Seoul}")
+    private String backupZone;
+
+    @PostConstruct
+    void logSchedulerConfiguration() {
+        log.info(
+                "Data ops backup scheduler configured: dbBackupEnabled={}, dbBackupCron='{}', minioBackupEnabled={}, minioBackupCron='{}', zone='{}'",
+                databaseBackupEnabled,
+                databaseBackupCron,
+                minioBackupEnabled,
+                minioBackupCron,
+                backupZone
+        );
+    }
+
     @Scheduled(cron = "${app.data-ops.db-backup-cron:0 0 0 * * *}", zone = "${app.data-ops.backup-zone:Asia/Seoul}")
     public void runScheduledDatabaseBackup() {
         if (!databaseBackupEnabled) {
@@ -29,7 +51,7 @@ public class DataOpsBackupScheduler {
             adminDataManagementService.createManualBackup();
             log.info("Scheduled database backup completed successfully.");
         } catch (Exception exception) {
-            log.warn("Scheduled database backup failed: {}", exception.getMessage());
+            log.warn("Scheduled database backup failed.", exception);
         }
     }
 
@@ -43,7 +65,7 @@ public class DataOpsBackupScheduler {
             adminDataManagementService.createManualMinioBackup();
             log.info("Scheduled MinIO backup completed successfully.");
         } catch (Exception exception) {
-            log.warn("Scheduled MinIO backup failed: {}", exception.getMessage());
+            log.warn("Scheduled MinIO backup failed.", exception);
         }
     }
 }

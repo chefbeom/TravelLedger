@@ -924,11 +924,6 @@ onBeforeUnmount(() => {
 
     <template v-else-if="!currentUser">
       <section class="auth-shell">
-        <div class="auth-copy">
-          <span class="auth-copy__badge">로그인 후 사용</span>
-          <h1>로그인하면 가계부, 여행, 가족 앨범 기능을 바로 사용할 수 있습니다.</h1>
-          <p>공개 회원가입은 비활성화되어 있고, 새 계정은 기존 사용자가 만든 1회용 초대 링크로만 생성됩니다.</p>
-        </div>
 
         <div class="auth-grid">
           <article class="auth-card">

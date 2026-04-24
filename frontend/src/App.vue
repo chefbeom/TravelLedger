@@ -354,6 +354,18 @@ const isTossTheme = computed(() => themeMode.value === 'toss')
 const launcherItems = computed(() => (
   currentUser.value?.admin ? [...normalizedFeatureItems, normalizedAdminFeatureItem] : normalizedFeatureItems
 ))
+const headerNavItems = computed(() => {
+  const items = [
+    { key: 'launcher', label: '메인' },
+    { key: 'household', label: '가계부' },
+    { key: 'travel', label: '여행' },
+    { key: 'drive', label: '드라이브' },
+  ]
+  if (currentUser.value?.admin) {
+    items.push({ key: 'admin', label: '관리자' })
+  }
+  return items
+})
 const themeDegreeDisplay = computed(() => `${themeDegree.value}%`)
 
 let inviteRequestSequence = 0
@@ -584,6 +596,13 @@ function navigate(route) {
   activeRoute.value = nextRoute
   inviteToken.value = ''
   window.location.hash = nextRoute
+}
+
+function isHeaderNavActive(route) {
+  if (route === 'travel') {
+    return travelRouteKeys.has(activeRoute.value)
+  }
+  return activeRoute.value === route
 }
 
 function handleHashChange() {
@@ -981,13 +1000,24 @@ onBeforeUnmount(() => {
     <template v-else>
       <div class="main-shell main-shell--standalone">
         <header class="topbar">
-          <div>
+          <div class="topbar__copy">
             <p class="topbar__eyebrow">{{ pageMeta.title }}</p>
             <h1>{{ pageMeta.description }}</h1>
           </div>
+          <nav class="topbar__nav" aria-label="주요 기능">
+            <button
+              v-for="item in headerNavItems"
+              :key="item.key"
+              class="topbar__nav-button"
+              :class="{ 'topbar__nav-button--active': isHeaderNavActive(item.key) }"
+              type="button"
+              @click="navigate(item.key)"
+            >
+              {{ item.label }}
+            </button>
+          </nav>
           <div class="topbar__actions">
             <button v-if="activeRoute !== 'profile'" class="button button--ghost" @click="navigate('profile')">내 프로필</button>
-            <button v-if="activeRoute !== 'launcher'" class="button button--ghost" @click="navigate('launcher')">기능 선택으로</button>
             <button class="button button--ghost" @click="handleLogout">로그아웃</button>
           </div>
         </header>

@@ -254,6 +254,10 @@ button {
   gap: 18px;
 }
 
+.topbar__copy {
+  min-width: 0;
+}
+
 .topbar__eyebrow {
   margin: 0 0 8px;
   color: var(--blue);
@@ -269,6 +273,38 @@ button {
 
 .topbar__date {
   min-width: 220px;
+}
+
+.topbar__nav {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.topbar__nav-button {
+  min-height: 38px;
+  padding: 0 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-panel);
+  color: var(--text-soft);
+  font-size: 0.86rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.topbar__nav-button:hover {
+  border-color: rgba(111, 66, 193, 0.35);
+  color: var(--text);
+}
+
+.topbar__nav-button--active {
+  border-color: #6f42c1;
+  background: rgba(111, 66, 193, 0.1);
+  color: #4c1d95;
 }
 
 .panel,
@@ -3048,6 +3084,12 @@ textarea {
   }
 
   .topbar__actions {
+    width: 100%;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .topbar__nav {
     width: 100%;
     justify-content: flex-start;
     flex-wrap: wrap;

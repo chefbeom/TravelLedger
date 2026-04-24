@@ -17,7 +17,6 @@ import {
   findFirstAvailablePosition,
   getSpanBySize,
   normalizePaletteList,
-  normalizePaletteSize,
 } from '../features/palette/utils/paletteLayout'
 
 const props = defineProps({
@@ -33,49 +32,49 @@ const props = defineProps({
 
 const emit = defineEmits(['navigate'])
 
-const MAIN_DASHBOARD_STORAGE_VERSION = 'v2'
+const MAIN_DASHBOARD_STORAGE_VERSION = 'v3'
 const MAIN_DASHBOARD_SCOPE = 'main'
 const PAYMENT_SELECTION_STORAGE_VERSION = 'v1'
 
 const paletteTemplates = [
-  { id: 'household-summary', type: 'household-summary', label: '가계부 종합', defaultSize: '3x2', options: {} },
-  { id: 'household-week-expense', type: 'household-metric', label: '이번 주 사용금액', defaultSize: '1x1', options: { metric: 'weekExpense' } },
-  { id: 'household-week-income', type: 'household-metric', label: '이번 주 수입', defaultSize: '1x1', options: { metric: 'weekIncome' } },
-  { id: 'household-month-expense', type: 'household-metric', label: '이번 달 사용금액', defaultSize: '1x1', options: { metric: 'monthExpense' } },
-  { id: 'household-month-income', type: 'household-metric', label: '이번 달 수입', defaultSize: '1x1', options: { metric: 'monthIncome' } },
-  { id: 'household-payment', type: 'household-payment', label: '결제수단 사용금액', defaultSize: '2x2', options: {} },
-  { id: 'household-week-compare', type: 'household-compare', label: '이번 주/저번 주 비교', defaultSize: '3x2', options: { period: 'week' } },
-  { id: 'household-month-compare', type: 'household-compare', label: '이번 달/저번 달 비교', defaultSize: '3x2', options: { period: 'month' } },
-  { id: 'quick-entry', type: 'quick-entry', label: '빠른 금액 입력', defaultSize: '3x2', options: {} },
-  { id: 'travel-summary', type: 'travel-summary', label: '여행 요약', defaultSize: '3x2', options: {} },
-  { id: 'drive-summary', type: 'drive-summary', label: '드라이브 요약', defaultSize: '3x2', options: {} },
-  { id: 'feature-links', type: 'feature-links', label: '기능 바로가기', defaultSize: '3x2', options: {} },
+  { id: 'household-summary', type: 'household-summary', label: '가계부 종합', options: {} },
+  { id: 'household-week-expense', type: 'household-metric', label: '이번 주 사용금액', options: { metric: 'weekExpense' } },
+  { id: 'household-week-income', type: 'household-metric', label: '이번 주 수입', options: { metric: 'weekIncome' } },
+  { id: 'household-month-expense', type: 'household-metric', label: '이번 달 사용금액', options: { metric: 'monthExpense' } },
+  { id: 'household-month-income', type: 'household-metric', label: '이번 달 수입', options: { metric: 'monthIncome' } },
+  { id: 'household-payment', type: 'household-payment', label: '결제수단 사용금액', options: {} },
+  { id: 'household-week-compare', type: 'household-compare', label: '이번 주/저번 주 비교', options: { period: 'week' } },
+  { id: 'household-month-compare', type: 'household-compare', label: '이번 달/저번 달 비교', options: { period: 'month' } },
+  { id: 'quick-entry', type: 'quick-entry', label: '빠른 금액 입력', options: {} },
+  { id: 'travel-summary', type: 'travel-summary', label: '여행 요약', options: {} },
+  { id: 'drive-summary', type: 'drive-summary', label: '드라이브 요약', options: {} },
+  { id: 'feature-links', type: 'feature-links', label: '기능 바로가기', options: {} },
 ]
 
-const supportedSizesByType = {
-  'household-summary': ['2x2', '3x2', '3x3'],
-  'household-metric': ['1x1', '1x2', '2x2'],
-  'household-payment': ['2x2', '3x2'],
-  'household-compare': ['2x2', '3x2', '3x3'],
-  'quick-entry': ['2x2', '3x2', '3x3'],
-  'travel-summary': ['2x2', '3x2', '3x3'],
-  'drive-summary': ['2x2', '3x2', '3x3'],
-  'feature-links': ['2x2', '3x2', '3x3'],
+const fixedSizeByType = {
+  'household-summary': '3x2',
+  'household-metric': '2x2',
+  'household-payment': '3x2',
+  'household-compare': '3x2',
+  'quick-entry': '3x3',
+  'travel-summary': '3x2',
+  'drive-summary': '3x2',
+  'feature-links': '3x2',
 }
 
 const defaultPalettes = [
   { id: 'main-household-summary', type: 'household-summary', size: '3x2', position: { x: 0, y: 0 }, visible: true, options: {} },
-  { id: 'main-month-expense', type: 'household-metric', size: '1x1', position: { x: 3, y: 0 }, visible: true, options: { metric: 'monthExpense' } },
-  { id: 'main-month-income', type: 'household-metric', size: '1x1', position: { x: 4, y: 0 }, visible: true, options: { metric: 'monthIncome' } },
-  { id: 'main-week-expense', type: 'household-metric', size: '1x1', position: { x: 3, y: 1 }, visible: true, options: { metric: 'weekExpense' } },
-  { id: 'main-week-income', type: 'household-metric', size: '1x1', position: { x: 4, y: 1 }, visible: true, options: { metric: 'weekIncome' } },
-  { id: 'main-quick-entry', type: 'quick-entry', size: '3x2', position: { x: 5, y: 0 }, visible: true, options: {} },
-  { id: 'main-payment', type: 'household-payment', size: '2x2', position: { x: 0, y: 2 }, visible: true, options: {} },
-  { id: 'main-week-compare', type: 'household-compare', size: '3x2', position: { x: 2, y: 2 }, visible: true, options: { period: 'week' } },
-  { id: 'main-month-compare', type: 'household-compare', size: '3x2', position: { x: 5, y: 2 }, visible: true, options: { period: 'month' } },
-  { id: 'main-travel-summary', type: 'travel-summary', size: '3x2', position: { x: 0, y: 4 }, visible: true, options: {} },
-  { id: 'main-drive-summary', type: 'drive-summary', size: '3x2', position: { x: 3, y: 4 }, visible: true, options: {} },
-  { id: 'main-feature-links', type: 'feature-links', size: '3x2', position: { x: 6, y: 4 }, visible: true, options: {} },
+  { id: 'main-month-expense', type: 'household-metric', size: '2x2', position: { x: 3, y: 0 }, visible: true, options: { metric: 'monthExpense' } },
+  { id: 'main-month-income', type: 'household-metric', size: '2x2', position: { x: 5, y: 0 }, visible: true, options: { metric: 'monthIncome' } },
+  { id: 'main-week-expense', type: 'household-metric', size: '2x2', position: { x: 7, y: 0 }, visible: true, options: { metric: 'weekExpense' } },
+  { id: 'main-week-income', type: 'household-metric', size: '2x2', position: { x: 0, y: 2 }, visible: true, options: { metric: 'weekIncome' } },
+  { id: 'main-quick-entry', type: 'quick-entry', size: '3x3', position: { x: 2, y: 2 }, visible: true, options: {} },
+  { id: 'main-payment', type: 'household-payment', size: '3x2', position: { x: 5, y: 2 }, visible: true, options: {} },
+  { id: 'main-week-compare', type: 'household-compare', size: '3x2', position: { x: 0, y: 5 }, visible: true, options: { period: 'week' } },
+  { id: 'main-month-compare', type: 'household-compare', size: '3x2', position: { x: 3, y: 5 }, visible: true, options: { period: 'month' } },
+  { id: 'main-travel-summary', type: 'travel-summary', size: '3x2', position: { x: 6, y: 5 }, visible: true, options: {} },
+  { id: 'main-drive-summary', type: 'drive-summary', size: '3x2', position: { x: 0, y: 7 }, visible: true, options: {} },
+  { id: 'main-feature-links', type: 'feature-links', size: '3x2', position: { x: 3, y: 7 }, visible: true, options: {} },
 ]
 
 const metricDefinitions = {
@@ -243,23 +242,19 @@ function createPaletteId(templateId) {
   return `${templateId}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
 }
 
-function supportedSizesFor(palette) {
-  return supportedSizesByType[palette.type] ?? ['1x1', '1x2', '2x2', '3x2', '3x3']
-}
-
-function defaultSizeFor(type) {
-  return supportedSizesFor({ type })[0] ?? '2x2'
+function fixedSizeFor(palette) {
+  return fixedSizeByType[palette.type] ?? '3x2'
 }
 
 function normalizeMainPalettes(value) {
-  return normalizePaletteList(value).map((palette) => {
-    const supported = supportedSizesFor(palette)
-    const size = supported.includes(palette.size) ? palette.size : defaultSizeFor(palette.type)
-    return {
-      ...palette,
-      size,
-    }
-  })
+  const fixedSizePalettes = (value ?? []).map((palette) => ({
+    ...palette,
+    size: fixedSizeFor(palette),
+  }))
+  return normalizePaletteList(fixedSizePalettes).map((palette) => ({
+    ...palette,
+    size: fixedSizeFor(palette),
+  }))
 }
 
 function hydratePalettes() {
@@ -460,19 +455,6 @@ function applyLayoutPatches(patches) {
   persistPalettes()
 }
 
-function resizePalette(id, size) {
-  palettes.value = normalizeMainPalettes(palettes.value.map((palette) => {
-    if (String(palette.id) !== String(id)) return palette
-    const normalizedSize = normalizePaletteSize(size, palette.size)
-    const supported = supportedSizesFor(palette)
-    return {
-      ...palette,
-      size: supported.includes(normalizedSize) ? normalizedSize : supported[0],
-    }
-  }))
-  persistPalettes()
-}
-
 function hidePalette(id) {
   palettes.value = palettes.value.map((palette) => (
     String(palette.id) === String(id) ? { ...palette, visible: false } : palette
@@ -500,7 +482,7 @@ function removePalette(id) {
 
 function addPalette() {
   const template = paletteTemplates.find((item) => item.id === selectedTemplateId.value) ?? paletteTemplates[0]
-  const size = template.defaultSize
+  const size = fixedSizeFor(template)
   const nextPalette = {
     id: createPaletteId(template.id),
     type: template.type,
@@ -713,11 +695,6 @@ onBeforeUnmount(() => {
               <header class="main-palette__head">
                 <strong>{{ paletteTitle(palette) }}</strong>
                 <div v-if="isEditMode" class="main-palette__actions" data-no-drag="true">
-                  <select :value="palette.size" aria-label="팔레트 크기" @change="resizePalette(palette.id, $event.target.value)">
-                    <option v-for="size in supportedSizesFor(palette)" :key="size" :value="size">
-                      {{ size }}
-                    </option>
-                  </select>
                   <button type="button" @click="hidePalette(palette.id)">숨김</button>
                   <button type="button" @click="removePalette(palette.id)">삭제</button>
                 </div>
@@ -1048,7 +1025,6 @@ onBeforeUnmount(() => {
   gap: 4px;
 }
 
-.main-palette__actions select,
 .main-palette__actions button,
 .main-palette__payment select,
 .main-palette__quick-form input,

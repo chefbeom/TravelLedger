@@ -26,6 +26,16 @@
 
 ## 작업 기록
 
+### 2026-04-24 - Dark mode audit and dashboard palette fixes
+
+- User request: Check dark mode overall.
+- Request analysis: The app already applies dark mode through `data-theme='toss'`, CSS variables, and global dark overrides. The main risk was scoped dashboard CSS with hard-coded light backgrounds/text, because scoped component styles can stay white even when the root theme is dark.
+- Actions taken: Checked `codingconvention.md`, reviewed `App.vue` theme application, scanned global and scoped frontend styles for hard-coded light colors, inspected the main dashboard and household palette components, and kept unrelated local files out of scope.
+- Implementation: Added dark-mode scoped overrides for `MainDashboardWorkspace.vue`, the standalone shell/topbar in `style.css`, and the household palette dashboard components (`PaletteContainer`, `PaletteItem`, `DragDropGrid`, `KpiPalette`, `CalendarPalette`). The overrides preserve light-mode defaults and only activate under `data-theme='toss'`.
+- Verification: Ran `cmd /c npm run build` in `frontend` successfully. Verified no TypeScript SFC/script or `.ts`/`.tsx` files with `rg -n 'lang="ts"|lang=''ts''' frontend/src`, `Get-ChildItem -Path frontend/src -Recurse -Include *.ts,*.tsx`, and `rg --files frontend/src | rg '\.(ts|tsx)$'`. Ran `git diff --check -- frontend/src/components/MainDashboardWorkspace.vue frontend/src/features/palette/components/PaletteContainer.vue frontend/src/features/palette/components/PaletteItem.vue frontend/src/features/palette/components/DragDropGrid.vue frontend/src/features/palette/palettes/KpiPalette.vue frontend/src/features/palette/palettes/CalendarPalette.vue frontend/src/style.css` with no whitespace errors.
+- Result: The main dashboard, standalone topbar, and household palette dashboard now follow the dark Toss palette instead of keeping light reference surfaces.
+- Follow-up note: Browser screenshot QA with authenticated real data is still useful for lower-priority specialty states, but build/static checks passed.
+
 ### 2026-04-24 - Household calendar draggable layout
 
 - User request: Make the household calendar ledger layout adjustable like a dashboard, with panels that can be moved and resized by dragging a corner.

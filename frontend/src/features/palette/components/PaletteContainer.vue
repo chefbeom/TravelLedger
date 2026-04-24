@@ -333,6 +333,57 @@ onBeforeUnmount(() => {
   font-size: 0.76rem;
 }
 
+:global(:root[data-theme='toss']) .palette-dashboard {
+  background: rgba(12, 16, 23, 0.88);
+  border-color: rgba(78, 95, 125, 0.44);
+}
+
+:global(:root[data-theme='toss']) .palette-dashboard__loading,
+:global(:root[data-theme='toss']) .palette-dashboard__tools {
+  background: rgba(18, 23, 31, 0.98);
+  border-color: rgba(78, 95, 125, 0.48);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.34);
+  color: var(--text-soft, #aeb8cb);
+}
+
+:global(:root[data-theme='toss']) .palette-dashboard__tools-head strong,
+:global(:root[data-theme='toss']) .palette-dashboard__preset-info strong {
+  color: var(--text, #f3f7ff);
+}
+
+:global(:root[data-theme='toss']) .palette-dashboard__field span,
+:global(:root[data-theme='toss']) .palette-dashboard__hidden > span {
+  color: #b9c5ff;
+}
+
+:global(:root[data-theme='toss']) .palette-dashboard__field select,
+:global(:root[data-theme='toss']) .palette-dashboard__secondary,
+:global(:root[data-theme='toss']) .palette-dashboard__hidden button,
+:global(:root[data-theme='toss']) .palette-dashboard__tools-head button,
+:global(:root[data-theme='toss']) .palette-dashboard__preset-info {
+  background: rgba(27, 33, 44, 0.96);
+  border-color: rgba(78, 95, 125, 0.46);
+  color: var(--text, #f3f7ff);
+}
+
+:global(:root[data-theme='toss']) .palette-dashboard__preset-info span,
+:global(:root[data-theme='toss']) .palette-dashboard__hidden small {
+  color: var(--text-soft, #aeb8cb);
+}
+
+:global(:root[data-theme='toss']) .palette-dashboard__primary,
+:global(:root[data-theme='toss']) .palette-dashboard__floating-button {
+  background: #b9ef35;
+  border-color: transparent;
+  color: #10111f;
+}
+
+:global(:root[data-theme='toss']) .palette-dashboard__floating-button.is-active,
+:global(:root[data-theme='toss']) .palette-dashboard__floating-button:hover {
+  background: #b9c5ff;
+  color: #10111f;
+}
+
 @media (max-width: 720px) {
   .palette-dashboard {
     padding: 8px;

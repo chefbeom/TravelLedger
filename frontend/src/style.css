@@ -4453,6 +4453,46 @@ textarea {
   border-color: rgba(79, 140, 255, 0.24);
 }
 
+:root[data-theme='toss'] .main-shell--standalone {
+  background: rgba(12, 16, 23, 0.88);
+  border: 1px solid rgba(78, 95, 125, 0.44);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.38);
+}
+
+:root[data-theme='toss'] .main-shell--standalone .topbar {
+  background: rgba(18, 23, 31, 0.98);
+  border: 1px solid rgba(78, 95, 125, 0.48);
+}
+
+:root[data-theme='toss'] .main-shell--standalone .topbar h1 {
+  color: var(--text);
+}
+
+:root[data-theme='toss'] .main-shell--standalone .topbar__eyebrow {
+  color: #b9c5ff;
+}
+
+:root[data-theme='toss'] .main-shell--standalone .topbar__date {
+  color: var(--text-soft);
+}
+
+:root[data-theme='toss'] .main-shell--standalone .topbar__nav-button {
+  background: rgba(27, 33, 44, 0.96);
+  border: 1px solid rgba(78, 95, 125, 0.46);
+  color: var(--text-soft);
+}
+
+:root[data-theme='toss'] .main-shell--standalone .topbar__nav-button:hover {
+  background: rgba(79, 140, 255, 0.14);
+  color: var(--text);
+}
+
+:root[data-theme='toss'] .main-shell--standalone .topbar__nav-button--active {
+  background: rgba(125, 142, 255, 0.38);
+  border-color: rgba(185, 197, 255, 0.36);
+  color: var(--text);
+}
+
 :root[data-theme='toss'] .calendar-size-toolbar__button,
 :root[data-theme='toss'] .calendar-size-toolbar__choice,
 :root[data-theme='toss'] .calendar-size-toolbar__control {

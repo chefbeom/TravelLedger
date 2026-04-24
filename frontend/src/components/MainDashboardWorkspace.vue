@@ -2006,6 +2006,159 @@ onBeforeUnmount(() => {
   background: #f3f3f4;
 }
 
+:global(:root[data-theme='toss']) .main-dashboard {
+  --dash-bg: rgba(12, 16, 23, 0.88);
+  --dash-card: linear-gradient(180deg, rgba(24, 29, 38, 0.98), rgba(18, 23, 31, 0.98));
+  --dash-ink: #f3f7ff;
+  --dash-muted: #aeb8cb;
+  --dash-line: rgba(78, 95, 125, 0.54);
+  --dash-lime: #b9ef35;
+  --dash-lime-soft: rgba(185, 239, 53, 0.16);
+  --dash-lavender: rgba(125, 142, 255, 0.38);
+  --dash-lavender-soft: rgba(125, 142, 255, 0.18);
+  background: var(--dash-bg);
+  border: 1px solid rgba(78, 95, 125, 0.44);
+}
+
+:global(:root[data-theme='toss']) .main-dashboard__header,
+:global(:root[data-theme='toss']) .main-dashboard__tools {
+  background: rgba(18, 23, 31, 0.98);
+  border: 1px solid rgba(78, 95, 125, 0.48);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.34);
+}
+
+:global(:root[data-theme='toss']) .main-dashboard__palette-zone {
+  background: transparent;
+}
+
+:global(:root[data-theme='toss']) .main-dashboard__eyebrow,
+:global(:root[data-theme='toss']) .main-palette__head strong,
+:global(:root[data-theme='toss']) .main-dashboard__field span,
+:global(:root[data-theme='toss']) .main-dashboard__hidden > span,
+:global(:root[data-theme='toss']) .main-palette__feature-link span {
+  color: #b9c5ff;
+}
+
+:global(:root[data-theme='toss']) .main-dashboard__header h2,
+:global(:root[data-theme='toss']) .main-palette__metric strong,
+:global(:root[data-theme='toss']) .main-palette__single-metric strong,
+:global(:root[data-theme='toss']) .main-palette__feature-link strong,
+:global(:root[data-theme='toss']) .main-palette__quick-action strong,
+:global(:root[data-theme='toss']) .main-palette__recent-file strong,
+:global(:root[data-theme='toss']) .main-palette__list-row strong,
+:global(:root[data-theme='toss']) .main-palette__photo-empty strong,
+:global(:root[data-theme='toss']) .main-palette--photo-frame .main-palette__head strong,
+:global(:root[data-theme='toss']) .main-palette--drive-capacity .main-palette__head strong {
+  color: var(--dash-ink);
+}
+
+:global(:root[data-theme='toss']) .main-dashboard__header p,
+:global(:root[data-theme='toss']) .main-palette__metric span,
+:global(:root[data-theme='toss']) .main-palette__single-metric span,
+:global(:root[data-theme='toss']) .main-palette__single-metric small,
+:global(:root[data-theme='toss']) .main-palette__compare-label span,
+:global(:root[data-theme='toss']) .main-palette__compare-row small,
+:global(:root[data-theme='toss']) .main-palette__quick-action span,
+:global(:root[data-theme='toss']) .main-palette__recent-file small,
+:global(:root[data-theme='toss']) .main-palette__list-row span,
+:global(:root[data-theme='toss']) .main-palette__photo-empty,
+:global(:root[data-theme='toss']) .main-palette__empty,
+:global(:root[data-theme='toss']) .main-dashboard__hidden small {
+  color: var(--dash-muted);
+}
+
+:global(:root[data-theme='toss']) .main-palette {
+  background: var(--dash-card);
+  border: 1px solid rgba(78, 95, 125, 0.42);
+  box-shadow: 0 18px 34px rgba(0, 0, 0, 0.26);
+}
+
+:global(:root[data-theme='toss']) .main-palette__head,
+:global(:root[data-theme='toss']) .main-palette__list-row,
+:global(:root[data-theme='toss']) .main-palette__recent-file {
+  border-color: rgba(78, 95, 125, 0.36);
+}
+
+:global(:root[data-theme='toss']) .main-palette__actions button,
+:global(:root[data-theme='toss']) .main-palette__payment select,
+:global(:root[data-theme='toss']) .main-palette__quick-form input,
+:global(:root[data-theme='toss']) .main-palette__quick-form select,
+:global(:root[data-theme='toss']) .main-palette__quick-buttons button,
+:global(:root[data-theme='toss']) .main-dashboard__tools-head button,
+:global(:root[data-theme='toss']) .main-dashboard__tools button,
+:global(:root[data-theme='toss']) .main-dashboard__field select,
+:global(:root[data-theme='toss']) .main-dashboard__secondary,
+:global(:root[data-theme='toss']) .main-dashboard__hidden button,
+:global(:root[data-theme='toss']) .main-palette__inline-action {
+  background: rgba(27, 33, 44, 0.96);
+  border: 1px solid rgba(78, 95, 125, 0.46);
+  color: var(--dash-ink);
+}
+
+:global(:root[data-theme='toss']) .main-palette__quick-buttons button:hover,
+:global(:root[data-theme='toss']) .main-palette__feature-link:hover,
+:global(:root[data-theme='toss']) .main-palette__quick-action:hover,
+:global(:root[data-theme='toss']) .main-palette__inline-action:hover,
+:global(:root[data-theme='toss']) .main-dashboard__hidden button:hover {
+  background: var(--dash-lime-soft);
+  border-color: rgba(185, 239, 53, 0.32);
+}
+
+:global(:root[data-theme='toss']) .main-palette__metric,
+:global(:root[data-theme='toss']) .main-palette__single-metric,
+:global(:root[data-theme='toss']) .main-palette__feature-link,
+:global(:root[data-theme='toss']) .main-palette__quick-action,
+:global(:root[data-theme='toss']) .main-palette__photo-empty {
+  background: rgba(27, 33, 44, 0.88);
+  border: 1px solid rgba(78, 95, 125, 0.36);
+}
+
+:global(:root[data-theme='toss']) .main-palette--household-summary .main-palette__metric:first-child,
+:global(:root[data-theme='toss']) .main-palette--monthExpense .main-palette__single-metric,
+:global(:root[data-theme='toss']) .main-palette--weekExpense .main-palette__single-metric {
+  background: linear-gradient(180deg, rgba(185, 239, 53, 0.86), rgba(152, 210, 42, 0.82));
+}
+
+:global(:root[data-theme='toss']) .main-palette--monthIncome .main-palette__single-metric,
+:global(:root[data-theme='toss']) .main-palette--weekIncome .main-palette__single-metric,
+:global(:root[data-theme='toss']) .main-palette--travel-summary .main-palette__metric:first-child,
+:global(:root[data-theme='toss']) .main-palette--drive-summary .main-palette__metric:first-child,
+:global(:root[data-theme='toss']) .main-palette--photo-frame,
+:global(:root[data-theme='toss']) .main-palette--drive-capacity {
+  background: linear-gradient(180deg, rgba(125, 142, 255, 0.42), rgba(87, 100, 190, 0.36));
+}
+
+:global(:root[data-theme='toss']) .main-palette__bar,
+:global(:root[data-theme='toss']) .main-palette__capacity-track {
+  background: rgba(78, 95, 125, 0.34);
+}
+
+:global(:root[data-theme='toss']) .main-palette__photo-strip img,
+:global(:root[data-theme='toss']) .main-palette__recent-file img,
+:global(:root[data-theme='toss']) .main-palette__file-icon {
+  background: rgba(27, 33, 44, 0.96);
+  border: 1px solid rgba(78, 95, 125, 0.42);
+  color: var(--dash-muted);
+}
+
+:global(:root[data-theme='toss']) .main-dashboard__primary,
+:global(:root[data-theme='toss']) .main-dashboard__floating-button {
+  background: var(--dash-lime);
+  border-color: transparent;
+  color: #10111f;
+}
+
+:global(:root[data-theme='toss']) .main-dashboard__floating-button.is-active,
+:global(:root[data-theme='toss']) .main-dashboard__floating-button:hover {
+  background: #b9c5ff;
+  color: #10111f;
+}
+
+:global(:root[data-theme='toss']) .main-dashboard__grid-guide span {
+  background: rgba(185, 197, 255, 0.08);
+  border-color: rgba(185, 197, 255, 0.22);
+}
+
 /* Data-density hardening for real dashboard payloads. */
 .main-palette__body > * {
   min-width: 0;

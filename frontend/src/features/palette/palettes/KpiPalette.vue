@@ -223,4 +223,38 @@ const canShowBars = computed(() => ['3x2', '3x3'].includes(props.config.size))
 .kpi-palette--1x1 .kpi-palette__metric strong {
   font-size: clamp(0.98rem, 1.6vw, 1.2rem);
 }
+
+:global(:root[data-theme='toss']) .kpi-palette__head span {
+  color: #b9c5ff;
+}
+
+:global(:root[data-theme='toss']) .kpi-palette__head strong,
+:global(:root[data-theme='toss']) .kpi-palette__metric strong,
+:global(:root[data-theme='toss']) .is-neutral {
+  color: var(--text, #f3f7ff);
+}
+
+:global(:root[data-theme='toss']) .kpi-palette__metric small,
+:global(:root[data-theme='toss']) .kpi-palette__row span,
+:global(:root[data-theme='toss']) .kpi-palette__bar-label span {
+  color: var(--text-soft, #aeb8cb);
+}
+
+:global(:root[data-theme='toss']) .kpi-palette__row {
+  border-top-color: rgba(78, 95, 125, 0.36);
+}
+
+:global(:root[data-theme='toss']) .kpi-palette__bar-track {
+  background: rgba(78, 95, 125, 0.34);
+}
+
+:global(:root[data-theme='toss']) .kpi-palette__metric--positive strong,
+:global(:root[data-theme='toss']) .is-positive {
+  color: #5ee6a8;
+}
+
+:global(:root[data-theme='toss']) .kpi-palette__metric--negative strong,
+:global(:root[data-theme='toss']) .is-negative {
+  color: #ff9b9b;
+}
 </style>

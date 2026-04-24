@@ -216,4 +216,48 @@ function dayTone(day) {
   left: 2px;
   width: 9px;
 }
+
+:global(:root[data-theme='toss']) .calendar-palette__head span {
+  color: #b9c5ff;
+}
+
+:global(:root[data-theme='toss']) .calendar-palette__head strong,
+:global(:root[data-theme='toss']) .calendar-palette__count {
+  color: var(--text, #f3f7ff);
+}
+
+:global(:root[data-theme='toss']) .calendar-palette__weekday,
+:global(:root[data-theme='toss']) .calendar-palette__day.is-muted {
+  color: var(--text-soft, #aeb8cb);
+}
+
+:global(:root[data-theme='toss']) .calendar-palette__day {
+  background: rgba(27, 33, 44, 0.88);
+  border-color: rgba(78, 95, 125, 0.36);
+}
+
+:global(:root[data-theme='toss']) .calendar-palette__day.is-muted {
+  background: rgba(18, 23, 31, 0.86);
+}
+
+:global(:root[data-theme='toss']) .calendar-palette__number {
+  color: var(--text, #f3f7ff);
+}
+
+:global(:root[data-theme='toss']) .calendar-palette__count {
+  background: rgba(18, 23, 31, 0.96);
+  border-color: rgba(78, 95, 125, 0.46);
+}
+
+:global(:root[data-theme='toss']) .calendar-palette__day.is-positive .calendar-palette__marker {
+  background: #5ee6a8;
+}
+
+:global(:root[data-theme='toss']) .calendar-palette__day.is-negative .calendar-palette__marker {
+  background: #ff9b9b;
+}
+
+:global(:root[data-theme='toss']) .calendar-palette__day.is-neutral .calendar-palette__marker {
+  background: #b9c5ff;
+}
 </style>

@@ -125,6 +125,37 @@ function handleResize(event) {
   padding: 8px;
 }
 
+:global(:root[data-theme='toss']) .palette-item {
+  background: linear-gradient(180deg, rgba(24, 29, 38, 0.98), rgba(18, 23, 31, 0.98));
+  border-color: rgba(78, 95, 125, 0.42);
+  box-shadow: 0 18px 34px rgba(0, 0, 0, 0.26);
+  color: var(--text, #f3f7ff);
+}
+
+:global(:root[data-theme='toss']) .palette-item--editing {
+  outline-color: rgba(185, 197, 255, 0.34);
+}
+
+:global(:root[data-theme='toss']) .palette-item__toolbar {
+  border-bottom-color: rgba(78, 95, 125, 0.36);
+}
+
+:global(:root[data-theme='toss']) .palette-item__toolbar strong {
+  color: var(--text, #f3f7ff);
+}
+
+:global(:root[data-theme='toss']) .palette-item__actions select,
+:global(:root[data-theme='toss']) .palette-item__actions button {
+  background: rgba(27, 33, 44, 0.96);
+  border-color: rgba(78, 95, 125, 0.46);
+  color: var(--text, #f3f7ff);
+}
+
+:global(:root[data-theme='toss']) .palette-item__actions button:hover,
+:global(:root[data-theme='toss']) .palette-item__actions select:focus {
+  border-color: rgba(185, 239, 53, 0.42);
+}
+
 @media (max-width: 720px) {
   .palette-item__actions {
     gap: 3px;

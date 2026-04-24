@@ -293,4 +293,14 @@ watch(layoutKey, () => {
   border: 1px dashed rgba(111, 66, 193, 0.45);
   inset: var(--palette-grid-margin, 4px);
 }
+
+:global(:root[data-theme='toss']) .palette-grid-guide span {
+  background: rgba(185, 197, 255, 0.08);
+  border-color: rgba(185, 197, 255, 0.22);
+}
+
+:global(:root[data-theme='toss']) :deep(.grid-stack-placeholder > .placeholder-content) {
+  background: rgba(185, 239, 53, 0.12);
+  border-color: rgba(185, 239, 53, 0.46);
+}
 </style>

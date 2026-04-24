@@ -15,6 +15,8 @@ const CALENDAR_AGGREGATE_PANEL_ENABLED_KEY = 'calen-household-calendar-aggregate
 const CALENDAR_PANEL_LAYOUT_STORAGE_KEY = 'calen-household-calendar-panel-layout:v1'
 const CALENDAR_PANEL_LAYOUT_SCOPE = 'household-calendar'
 const CALENDAR_PANEL_LAYOUT_VERSION = 1
+const CALENDAR_VIEW_PREFERENCE_SCOPE = 'household-calendar-view'
+const CALENDAR_VIEW_PREFERENCE_VERSION = 1
 const DEFAULT_CALENDAR_HIGHLIGHT_MODE = 'net'
 const CALENDAR_CUSTOM_WIDTH_MIN = 780
 const CALENDAR_CUSTOM_WIDTH_MAX = 1500
@@ -273,6 +275,11 @@ let layoutRemoteHydrationSequence = 0
 let layoutRemoteSaveTimer = 0
 let pendingLayoutRemotePayload = null
 let layoutChangedDuringRemoteHydration = false
+let viewPreferenceRemoteHydrationSequence = 0
+let viewPreferenceRemoteSaveTimer = 0
+let pendingViewPreferenceRemotePayload = null
+let viewPreferenceChangedDuringRemoteHydration = false
+let isApplyingCalendarViewPreferences = false
 
 const maxDailyExpense = computed(() => {
   const expenses = props.calendarWeeks.flat().map((day) => Number(day.summary?.expense ?? 0))
@@ -481,23 +488,11 @@ watch(
   },
 )
 
-watch(calendarScalePreset, (value) => {
-  if (typeof window !== 'undefined') {
-    window.localStorage.setItem(CALENDAR_SCALE_KEY, value)
-  }
-})
+watch(calendarScalePreset, persistCalendarViewPreferences)
 
-watch(calendarHighlightMode, (value) => {
-  if (typeof window !== 'undefined') {
-    window.localStorage.setItem(CALENDAR_HIGHLIGHT_KEY, value)
-  }
-})
+watch(calendarHighlightMode, persistCalendarViewPreferences)
 
-watch(isAggregatePanelEnabled, (value) => {
-  if (typeof window !== 'undefined') {
-    window.localStorage.setItem(CALENDAR_AGGREGATE_PANEL_ENABLED_KEY, value ? 'true' : 'false')
-  }
-})
+watch(isAggregatePanelEnabled, persistCalendarViewPreferences)
 
 watch(calendarPanelLayoutKey, () => {
   queueLayoutGridRebuild()
@@ -512,20 +507,7 @@ watch(isLayoutEditMode, (value) => {
   layoutGrid.enableResize(value)
 })
 
-watch([calendarCustomWidth, calendarCustomHeight, isCalendarCustomSizeEnabled], () => {
-  if (typeof window === 'undefined') {
-    return
-  }
-
-  window.localStorage.setItem(
-    CALENDAR_CUSTOM_SIZE_KEY,
-    JSON.stringify({
-      enabled: isCalendarCustomSizeEnabled.value,
-      width: calendarCustomWidth.value,
-      height: calendarCustomHeight.value,
-    }),
-  )
-})
+watch([calendarCustomWidth, calendarCustomHeight, isCalendarCustomSizeEnabled], persistCalendarViewPreferences)
 
 watch([calendarWeekMode, displayedCalendarWeeks], () => {
   if (calendarWeekMode.value === 'month') {
@@ -567,9 +549,7 @@ watch(
 )
 
 watch(isCalendarCollapsed, (value) => {
-  if (typeof window !== 'undefined') {
-    window.localStorage.setItem(CALENDAR_COLLAPSE_KEY, value ? 'true' : 'false')
-  }
+  persistCalendarViewPreferences()
 
   if (value) {
     if (calendarResizeObserver) {
@@ -605,44 +585,8 @@ onMounted(() => {
   }
 
   hydrateCalendarPanelLayout()
-
-  const savedScale = window.localStorage.getItem(CALENDAR_SCALE_KEY)
-  const savedCollapsed = window.localStorage.getItem(CALENDAR_COLLAPSE_KEY)
-  const savedHighlight = window.localStorage.getItem(CALENDAR_HIGHLIGHT_KEY)
-  const savedCustomSize = window.localStorage.getItem(CALENDAR_CUSTOM_SIZE_KEY)
-  const savedAggregatePanelEnabled = window.localStorage.getItem(CALENDAR_AGGREGATE_PANEL_ENABLED_KEY)
-
-  if (savedScale) {
-    calendarScalePreset.value = normalizePresetKey(calendarDisplayModes, savedScale, 'default')
-  }
-
-  if (savedHighlight && calendarHighlightModes.some((item) => item.key === savedHighlight)) {
-    calendarHighlightMode.value = savedHighlight
-  } else {
-    calendarHighlightMode.value = DEFAULT_CALENDAR_HIGHLIGHT_MODE
-    window.localStorage.setItem(CALENDAR_HIGHLIGHT_KEY, DEFAULT_CALENDAR_HIGHLIGHT_MODE)
-  }
-
-  if (savedCollapsed) {
-    isCalendarCollapsed.value = savedCollapsed === 'true'
-  }
-
-  if (savedAggregatePanelEnabled) {
-    isAggregatePanelEnabled.value = savedAggregatePanelEnabled !== 'false'
-  }
-
-  if (savedCustomSize) {
-    try {
-      const parsed = JSON.parse(savedCustomSize)
-      calendarCustomWidth.value = clamp(Number(parsed?.width) || DEFAULT_CALENDAR_CUSTOM_WIDTH, CALENDAR_CUSTOM_WIDTH_MIN, CALENDAR_CUSTOM_WIDTH_MAX)
-      calendarCustomHeight.value = clamp(Number(parsed?.height) || DEFAULT_CALENDAR_CUSTOM_HEIGHT, CALENDAR_CUSTOM_HEIGHT_MIN, CALENDAR_CUSTOM_HEIGHT_MAX)
-      isCalendarCustomSizeEnabled.value = Boolean(parsed?.enabled)
-    } catch (_error) {
-      calendarCustomWidth.value = DEFAULT_CALENDAR_CUSTOM_WIDTH
-      calendarCustomHeight.value = DEFAULT_CALENDAR_CUSTOM_HEIGHT
-      isCalendarCustomSizeEnabled.value = false
-    }
-  }
+  const viewPreferenceSequence = hydrateCalendarViewPreferencesFromLocal()
+  hydrateRemoteCalendarViewPreferences(viewPreferenceSequence, calendarViewPreferencePayload())
 
   nextTick(() => {
     initLayoutGrid()
@@ -679,6 +623,7 @@ onBeforeUnmount(() => {
     window.clearTimeout(layoutGridRebuildTimer)
   }
   saveCalendarPanelLayoutRemoteNow()
+  saveCalendarViewPreferencesRemoteNow()
   layoutGridResizeObserver?.disconnect()
   destroyLayoutGrid()
 
@@ -821,6 +766,194 @@ function resetCalendarCustomSize() {
   calendarCustomWidth.value = DEFAULT_CALENDAR_CUSTOM_WIDTH
   calendarCustomHeight.value = DEFAULT_CALENDAR_CUSTOM_HEIGHT
   isCalendarCustomSizeEnabled.value = false
+}
+
+function calendarViewPreferencePayload() {
+  return {
+    scalePreset: calendarScalePreset.value,
+    highlightMode: calendarHighlightMode.value,
+    collapsed: isCalendarCollapsed.value,
+    aggregatePanelEnabled: isAggregatePanelEnabled.value,
+    customSize: {
+      enabled: isCalendarCustomSizeEnabled.value,
+      width: calendarCustomWidth.value,
+      height: calendarCustomHeight.value,
+    },
+  }
+}
+
+function normalizeCalendarViewPreferences(payload) {
+  if (!payload || typeof payload !== 'object') {
+    return null
+  }
+
+  const rawCustomSize = payload.customSize ?? {}
+  const highlightMode = calendarHighlightModes.some((item) => item.key === payload.highlightMode)
+    ? payload.highlightMode
+    : DEFAULT_CALENDAR_HIGHLIGHT_MODE
+
+  return {
+    scalePreset: normalizePresetKey(calendarDisplayModes, payload.scalePreset, 'default'),
+    highlightMode,
+    collapsed: Boolean(payload.collapsed),
+    aggregatePanelEnabled: payload.aggregatePanelEnabled !== false,
+    customSize: {
+      enabled: Boolean(rawCustomSize.enabled),
+      width: clamp(Number(rawCustomSize.width) || DEFAULT_CALENDAR_CUSTOM_WIDTH, CALENDAR_CUSTOM_WIDTH_MIN, CALENDAR_CUSTOM_WIDTH_MAX),
+      height: clamp(Number(rawCustomSize.height) || DEFAULT_CALENDAR_CUSTOM_HEIGHT, CALENDAR_CUSTOM_HEIGHT_MIN, CALENDAR_CUSTOM_HEIGHT_MAX),
+    },
+  }
+}
+
+function applyCalendarViewPreferences(preferences) {
+  if (!preferences) {
+    return
+  }
+
+  calendarScalePreset.value = preferences.scalePreset
+  calendarHighlightMode.value = preferences.highlightMode
+  isCalendarCollapsed.value = preferences.collapsed
+  isAggregatePanelEnabled.value = preferences.aggregatePanelEnabled
+  calendarCustomWidth.value = preferences.customSize.width
+  calendarCustomHeight.value = preferences.customSize.height
+  isCalendarCustomSizeEnabled.value = preferences.customSize.enabled
+}
+
+function persistCalendarViewPreferencesLocal() {
+  if (typeof window === 'undefined') {
+    return
+  }
+
+  window.localStorage.setItem(CALENDAR_SCALE_KEY, calendarScalePreset.value)
+  window.localStorage.setItem(CALENDAR_HIGHLIGHT_KEY, calendarHighlightMode.value)
+  window.localStorage.setItem(CALENDAR_COLLAPSE_KEY, isCalendarCollapsed.value ? 'true' : 'false')
+  window.localStorage.setItem(CALENDAR_AGGREGATE_PANEL_ENABLED_KEY, isAggregatePanelEnabled.value ? 'true' : 'false')
+  window.localStorage.setItem(
+    CALENDAR_CUSTOM_SIZE_KEY,
+    JSON.stringify({
+      enabled: isCalendarCustomSizeEnabled.value,
+      width: calendarCustomWidth.value,
+      height: calendarCustomHeight.value,
+    }),
+  )
+}
+
+function scheduleCalendarViewPreferencesRemotePersist(payload = calendarViewPreferencePayload()) {
+  if (typeof window === 'undefined') {
+    return
+  }
+
+  if (viewPreferenceRemoteSaveTimer) {
+    window.clearTimeout(viewPreferenceRemoteSaveTimer)
+  }
+
+  pendingViewPreferenceRemotePayload = clone(payload)
+  viewPreferenceRemoteSaveTimer = window.setTimeout(() => {
+    saveCalendarViewPreferencesRemoteNow()
+  }, REMOTE_LAYOUT_SAVE_DELAY_MS)
+}
+
+function saveCalendarViewPreferencesRemoteNow(payload = pendingViewPreferenceRemotePayload) {
+  if (typeof window === 'undefined' || !payload) {
+    return Promise.resolve()
+  }
+
+  if (viewPreferenceRemoteSaveTimer) {
+    window.clearTimeout(viewPreferenceRemoteSaveTimer)
+    viewPreferenceRemoteSaveTimer = 0
+  }
+
+  const nextPayload = clone(payload)
+  pendingViewPreferenceRemotePayload = null
+  return saveLayoutSetting(CALENDAR_VIEW_PREFERENCE_SCOPE, nextPayload, CALENDAR_VIEW_PREFERENCE_VERSION).catch(() => {
+    // Local display preferences remain available if the backend is temporarily unavailable.
+  })
+}
+
+function persistCalendarViewPreferences() {
+  persistCalendarViewPreferencesLocal()
+  if (isApplyingCalendarViewPreferences) {
+    return
+  }
+
+  viewPreferenceChangedDuringRemoteHydration = true
+  scheduleCalendarViewPreferencesRemotePersist(calendarViewPreferencePayload())
+}
+
+function hydrateCalendarViewPreferencesFromLocal() {
+  viewPreferenceRemoteHydrationSequence += 1
+  viewPreferenceChangedDuringRemoteHydration = false
+  isApplyingCalendarViewPreferences = true
+
+  const savedScale = window.localStorage.getItem(CALENDAR_SCALE_KEY)
+  const savedCollapsed = window.localStorage.getItem(CALENDAR_COLLAPSE_KEY)
+  const savedHighlight = window.localStorage.getItem(CALENDAR_HIGHLIGHT_KEY)
+  const savedCustomSize = window.localStorage.getItem(CALENDAR_CUSTOM_SIZE_KEY)
+  const savedAggregatePanelEnabled = window.localStorage.getItem(CALENDAR_AGGREGATE_PANEL_ENABLED_KEY)
+
+  if (savedScale) {
+    calendarScalePreset.value = normalizePresetKey(calendarDisplayModes, savedScale, 'default')
+  }
+
+  if (savedHighlight && calendarHighlightModes.some((item) => item.key === savedHighlight)) {
+    calendarHighlightMode.value = savedHighlight
+  } else {
+    calendarHighlightMode.value = DEFAULT_CALENDAR_HIGHLIGHT_MODE
+  }
+
+  if (savedCollapsed) {
+    isCalendarCollapsed.value = savedCollapsed === 'true'
+  }
+
+  if (savedAggregatePanelEnabled) {
+    isAggregatePanelEnabled.value = savedAggregatePanelEnabled !== 'false'
+  }
+
+  if (savedCustomSize) {
+    try {
+      const parsed = JSON.parse(savedCustomSize)
+      calendarCustomWidth.value = clamp(Number(parsed?.width) || DEFAULT_CALENDAR_CUSTOM_WIDTH, CALENDAR_CUSTOM_WIDTH_MIN, CALENDAR_CUSTOM_WIDTH_MAX)
+      calendarCustomHeight.value = clamp(Number(parsed?.height) || DEFAULT_CALENDAR_CUSTOM_HEIGHT, CALENDAR_CUSTOM_HEIGHT_MIN, CALENDAR_CUSTOM_HEIGHT_MAX)
+      isCalendarCustomSizeEnabled.value = Boolean(parsed?.enabled)
+    } catch (_error) {
+      calendarCustomWidth.value = DEFAULT_CALENDAR_CUSTOM_WIDTH
+      calendarCustomHeight.value = DEFAULT_CALENDAR_CUSTOM_HEIGHT
+      isCalendarCustomSizeEnabled.value = false
+    }
+  }
+
+  persistCalendarViewPreferencesLocal()
+  nextTick(() => {
+    isApplyingCalendarViewPreferences = false
+  })
+
+  return viewPreferenceRemoteHydrationSequence
+}
+
+async function hydrateRemoteCalendarViewPreferences(sequence, fallbackPayload) {
+  try {
+    const response = await fetchLayoutSetting(CALENDAR_VIEW_PREFERENCE_SCOPE)
+    if (sequence !== viewPreferenceRemoteHydrationSequence || viewPreferenceChangedDuringRemoteHydration) {
+      return
+    }
+
+    const preferences = normalizeCalendarViewPreferences(response?.payload)
+    if (preferences) {
+      isApplyingCalendarViewPreferences = true
+      applyCalendarViewPreferences(preferences)
+      persistCalendarViewPreferencesLocal()
+      nextTick(() => {
+        isApplyingCalendarViewPreferences = false
+      })
+      return
+    }
+
+    if (fallbackPayload) {
+      await saveLayoutSetting(CALENDAR_VIEW_PREFERENCE_SCOPE, fallbackPayload, CALENDAR_VIEW_PREFERENCE_VERSION)
+    }
+  } catch {
+    // Remote display preferences should not block the calendar workspace.
+  }
 }
 
 function createDefaultCalendarPanelLayout() {

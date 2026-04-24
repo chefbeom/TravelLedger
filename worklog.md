@@ -26,6 +26,16 @@
 
 ## 작업 기록
 
+### 2026-04-25 - Persist household calendar size preferences to database
+
+- User request: Confirm whether size changes are saved after layout DB persistence work.
+- Request analysis: The draggable panel layout size (`w/h`) was already included in the DB layout payload, but the calendar display size controls (`달력 크기`, custom width/height, collapsed/display preferences) still lived only in browser localStorage, so they did not follow the user to another computer.
+- Actions taken: Checked `codingconvention.md`, reviewed `CalendarWorkspace.vue` layout resize persistence, localStorage-only calendar size settings, and the existing account layout setting API.
+- Implementation: Added a `household-calendar-view` layout setting scope for calendar display preferences. The calendar now saves and restores scale preset, custom size enabled/width/height, collapsed state, highlight mode, and aggregate panel visibility through the database while keeping localStorage as a fallback cache.
+- Verification: Ran `cmd /c npm run build` in `frontend` successfully. Verified no TypeScript SFC/script or `.ts`/`.tsx` files with `rg -n 'lang="ts"|lang=''ts''' frontend/src`, `Get-ChildItem -Path frontend/src -Recurse -Include *.ts,*.tsx`, and `rg --files frontend/src | rg '\.(ts|tsx)$'`. Ran `git diff --check -- frontend/src/components/CalendarWorkspace.vue` with no whitespace errors.
+- Result: Calendar size/display changes now sync through the DB for the same authenticated user across different computers.
+- Follow-up note: Backend must be reachable for cross-device sync; if it is not, the current browser still keeps the settings locally.
+
 ### 2026-04-25 - Flush household layout edits to database
 
 - User request: Household layout edits should remain applied when signing in from another computer.

@@ -102,14 +102,6 @@ const DEFAULT_TOSS_DEGREE = 100
 const ROUTE_LEAVE_GUARD_EVENT = 'calen-route-leave-guard'
 const DEFAULT_ROUTE_LEAVE_GUARD_MESSAGE = '페이지를 벗어나면 다시 처음부터 업로드 해야합니다.'
 
-const AUTH_GUARD_BYPASS_ENABLED = true
-const AUTH_GUARD_BYPASS_USER = Object.freeze({
-  id: 'local-auth-bypass',
-  loginId: 'local-preview',
-  displayName: '로컬 미리보기',
-  admin: false,
-})
-
 const routeMeta = {
   launcher: {
     title: '기능 선택',
@@ -618,19 +610,10 @@ function handleHashChange() {
   applyHashRoute(window.location.hash)
 }
 
-function createAuthBypassUser() {
-  return { ...AUTH_GUARD_BYPASS_USER }
-}
-
 async function restoreSession() {
   try {
     currentUser.value = await fetchCurrentUser()
   } catch (error) {
-    if (AUTH_GUARD_BYPASS_ENABLED) {
-      currentUser.value = createAuthBypassUser()
-      setFeedback()
-      return
-    }
     currentUser.value = null
     if (error.status !== 401) {
       setFeedback('', error.message)
@@ -794,13 +777,13 @@ async function handleLogout() {
     // Keep the UI consistent even when the logout request fails.
   }
 
-  currentUser.value = AUTH_GUARD_BYPASS_ENABLED ? createAuthBypassUser() : null
+  currentUser.value = null
   loginForm.password = ''
   loginForm.secondaryPin = ''
   inviteForm.password = ''
   inviteForm.secondaryPin = ''
   navigate('launcher')
-  setFeedback(AUTH_GUARD_BYPASS_ENABLED ? '로그인 가드를 임시 해제한 상태입니다.' : '로그아웃했습니다.')
+  setFeedback('로그아웃했습니다.')
 }
 
 watch([activeRoute, inviteToken], ([route, token]) => {

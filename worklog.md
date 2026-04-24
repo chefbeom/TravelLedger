@@ -26,6 +26,16 @@
 
 ## 작업 기록
 
+### 2026-04-24 - Restore frontend auth guard
+
+- User request: Remove `AUTH_GUARD_BYPASS_ENABLED` and restore the existing login/authentication flow.
+- Request analysis: The temporary auth guard bypass lived in `frontend/src/App.vue`, where failed `fetchCurrentUser()` calls created a local preview user and logout returned to the bypass user instead of a logged-out state.
+- Actions taken: Checked `codingconvention.md`, searched the frontend for bypass symbols, reviewed the session restore and logout flow, and confirmed unrelated local files are outside this task.
+- Implementation: Removed the bypass flag, local preview user, and `createAuthBypassUser()`. `restoreSession()` now returns to `currentUser = null` on unauthenticated sessions and only shows non-401 errors. `handleLogout()` now always clears `currentUser` and shows the normal logout message.
+- Verification: Verified no `AUTH_GUARD_BYPASS_ENABLED`, `AUTH_GUARD_BYPASS_USER`, `createAuthBypassUser`, `local-auth-bypass`, or local preview bypass references remain with `rg`. Ran `cmd /c npm run build` in `frontend` successfully. Verified no TypeScript SFC/script or `.ts`/`.tsx` files with `rg -n 'lang="ts"|lang=''ts''' frontend/src` and `rg --files frontend/src | rg '\.(ts|tsx)$'`. Ran `git diff --check -- frontend/src/App.vue worklog.md` with no whitespace errors.
+- Result: The app now requires the normal backend-authenticated login flow again instead of entering via the temporary local bypass.
+- Follow-up note: Since backend authentication is restored, a disconnected backend will show the login/unauthenticated state instead of opening the dashboard.
+
 ### 2026-04-24 - Main dashboard initial load optimization
 
 - User request: The dashboard takes too long to load after refresh.

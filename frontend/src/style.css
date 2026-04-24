@@ -2819,8 +2819,59 @@ textarea {
 }
 
 .main-shell--standalone {
-  max-width: 1480px;
-  margin: 0 auto;
+  max-width: 1720px;
+  margin: 28px auto;
+  padding: 20px;
+  border-radius: 26px;
+  background: #eeeeef;
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.08);
+}
+
+.main-shell--standalone .topbar {
+  align-items: center;
+  padding: 14px 18px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.96);
+}
+
+.main-shell--standalone .topbar__eyebrow {
+  margin-bottom: 4px;
+  color: #6d72ba;
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.main-shell--standalone .topbar h1 {
+  color: #10111f;
+  font-size: clamp(1.2rem, 1.9vw, 1.55rem);
+  letter-spacing: 0;
+}
+
+.main-shell--standalone .topbar__nav {
+  flex: 0 1 auto;
+  justify-content: flex-end;
+}
+
+.main-shell--standalone .topbar__nav-button {
+  min-height: 40px;
+  border: 0;
+  border-radius: 9px;
+  background: #f3f3f4;
+  color: #686d78;
+}
+
+.main-shell--standalone .topbar__nav-button:hover {
+  background: #efffba;
+  color: #10111f;
+}
+
+.main-shell--standalone .topbar__nav-button--active {
+  background: #c5ccff;
+  color: #10111f;
+}
+
+.main-shell--standalone .button {
+  border-radius: 9px;
 }
 
 .topbar__actions {

@@ -804,7 +804,14 @@ onBeforeUnmount(() => {
           :gs-h="gridAttrs(palette).h"
         >
           <div class="grid-stack-item-content">
-            <article class="main-palette" :class="{ 'main-palette--editing': isEditMode }">
+            <article
+              class="main-palette"
+              :class="[
+                { 'main-palette--editing': isEditMode },
+                `main-palette--${palette.type}`,
+                palette.options?.metric ? `main-palette--${palette.options.metric}` : '',
+              ]"
+            >
               <header class="main-palette__head">
                 <strong>{{ paletteTitle(palette) }}</strong>
                 <div v-if="isEditMode" class="main-palette__actions" data-no-drag="true">
@@ -1664,6 +1671,245 @@ onBeforeUnmount(() => {
 .main-dashboard__hidden small {
   color: #9ca3af;
   font-size: 0.76rem;
+}
+
+/* Light dashboard reference skin: visual-only overrides. */
+.main-dashboard {
+  --dash-bg: #eeeeef;
+  --dash-card: #ffffff;
+  --dash-ink: #10111f;
+  --dash-muted: #727682;
+  --dash-line: rgba(16, 17, 31, 0.08);
+  --dash-lime: #d7ff43;
+  --dash-lime-soft: #efffba;
+  --dash-lavender: #c5ccff;
+  --dash-lavender-soft: #eef0ff;
+  --dash-card-radius: 14px;
+  background: var(--dash-bg);
+  border-radius: 24px;
+  gap: 18px;
+  padding: 18px;
+}
+
+.main-dashboard__header {
+  background: rgba(255, 255, 255, 0.96);
+  border: 0;
+  border-radius: 16px;
+  box-shadow: none;
+  min-height: 72px;
+  padding: 16px 20px;
+}
+
+.main-dashboard__eyebrow,
+.main-palette__head strong,
+.main-dashboard__field span,
+.main-dashboard__hidden > span {
+  color: #6d72ba;
+}
+
+.main-dashboard__header h2 {
+  color: var(--dash-ink);
+  font-size: 1.32rem;
+  letter-spacing: 0;
+  margin: 2px 0 4px;
+}
+
+.main-dashboard__header p {
+  color: var(--dash-muted);
+}
+
+.main-dashboard__palette-zone {
+  background: transparent;
+  border: 0;
+  padding: 0;
+}
+
+.main-dashboard__grid-guide {
+  inset: 0;
+}
+
+.main-dashboard__grid-guide span {
+  background: rgba(197, 204, 255, 0.16);
+  border-color: rgba(109, 114, 186, 0.2);
+}
+
+:deep(.grid-stack-item-content) {
+  inset: 5px;
+}
+
+.main-palette {
+  background: var(--dash-card);
+  border: 0;
+  border-radius: var(--dash-card-radius);
+  box-shadow: none;
+}
+
+.main-palette--editing {
+  outline: 1px dashed rgba(109, 114, 186, 0.38);
+}
+
+.main-palette__head {
+  border-bottom: 0;
+  min-height: 42px;
+  padding: 12px 16px 4px;
+}
+
+.main-palette__body {
+  padding: 10px 16px 16px;
+}
+
+.main-palette__actions button,
+.main-palette__payment select,
+.main-palette__quick-form input,
+.main-palette__quick-form select,
+.main-palette__quick-buttons button,
+.main-dashboard__tools-head button,
+.main-dashboard__tools button,
+.main-dashboard__field select {
+  background: #f3f3f4;
+  border: 0;
+  border-radius: 8px;
+  color: var(--dash-ink);
+}
+
+.main-palette__quick-buttons button:hover,
+.main-palette__feature-link:hover,
+.main-palette__quick-action:hover,
+.main-palette__inline-action:hover {
+  background: var(--dash-lime-soft);
+}
+
+.main-palette__metric,
+.main-palette__single-metric,
+.main-palette__feature-link,
+.main-palette__quick-action,
+.main-palette__photo-empty {
+  background: #f5f5f6;
+  border: 0;
+  border-radius: 10px;
+}
+
+.main-palette--household-summary .main-palette__metric:first-child,
+.main-palette--monthExpense .main-palette__single-metric,
+.main-palette--weekExpense .main-palette__single-metric {
+  background: var(--dash-lime);
+}
+
+.main-palette--monthIncome .main-palette__single-metric,
+.main-palette--weekIncome .main-palette__single-metric,
+.main-palette--travel-summary .main-palette__metric:first-child,
+.main-palette--drive-summary .main-palette__metric:first-child {
+  background: var(--dash-lavender);
+}
+
+.main-palette--photo-frame,
+.main-palette--drive-capacity {
+  background: var(--dash-lavender);
+}
+
+.main-palette--photo-frame .main-palette__head strong,
+.main-palette--drive-capacity .main-palette__head strong {
+  color: var(--dash-ink);
+}
+
+.main-palette__metric span,
+.main-palette__single-metric span,
+.main-palette__compare-label span,
+.main-palette__compare-row small,
+.main-palette__quick-action span,
+.main-palette__recent-file small {
+  color: var(--dash-muted);
+}
+
+.main-palette__metric strong,
+.main-palette__single-metric strong,
+.main-palette__feature-link strong,
+.main-palette__quick-action strong,
+.main-palette__recent-file strong,
+.main-palette__list-row strong {
+  color: var(--dash-ink);
+}
+
+.main-palette__metric.is-positive strong,
+.main-palette__single-metric.is-positive strong,
+.is-positive,
+.main-palette__metric.is-negative strong,
+.main-palette__single-metric.is-negative strong,
+.is-negative {
+  color: var(--dash-ink);
+}
+
+.main-palette__list-row,
+.main-palette__recent-file {
+  border-top-color: rgba(16, 17, 31, 0.08);
+}
+
+.main-palette__bar,
+.main-palette__capacity-track {
+  background: rgba(16, 17, 31, 0.07);
+  border-radius: 999px;
+}
+
+.main-palette__bar span,
+.main-palette__capacity-track span {
+  background: var(--dash-lime);
+  border-radius: inherit;
+}
+
+.main-palette__photo-hero,
+.main-palette__photo-strip img,
+.main-palette__recent-file img,
+.main-palette__file-icon {
+  border: 0;
+  border-radius: 10px;
+}
+
+.main-palette__photo-hero span,
+.main-palette__photo-hero strong {
+  background: rgba(16, 17, 31, 0.72);
+  border-radius: 6px;
+}
+
+.main-palette__inline-action {
+  background: rgba(255, 255, 255, 0.62);
+  border: 0;
+  border-radius: 8px;
+}
+
+.main-palette__feature-link span {
+  color: #6d72ba;
+}
+
+.main-dashboard__floating-button {
+  background: var(--dash-lime);
+  border: 0;
+  border-radius: 10px;
+  box-shadow: 0 14px 28px rgba(16, 17, 31, 0.18);
+  color: var(--dash-ink);
+}
+
+.main-dashboard__floating-button.is-active,
+.main-dashboard__floating-button:hover {
+  background: var(--dash-lavender);
+  color: var(--dash-ink);
+}
+
+.main-dashboard__tools {
+  background: rgba(255, 255, 255, 0.98);
+  border: 0;
+  border-radius: 16px;
+  box-shadow: 0 18px 40px rgba(16, 17, 31, 0.16);
+}
+
+.main-dashboard__primary {
+  background: var(--dash-lime);
+  border-color: transparent;
+  color: var(--dash-ink);
+}
+
+.main-dashboard__secondary,
+.main-dashboard__hidden button {
+  background: #f3f3f4;
 }
 
 @media (max-width: 720px) {

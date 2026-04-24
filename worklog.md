@@ -26,6 +26,16 @@
 
 ## 작업 기록
 
+### 2026-04-24 - Main dashboard reference design skin
+
+- User request: Apply only the design style from the attached Figma reference image.
+- Request analysis: Keep existing main dashboard palette data, API reads, GridStack layout, navigation, and user storage behavior unchanged, and apply only the visual language from the reference: light gray app canvas, white cards, lime/lavender accents, compact rounded panels, and a soft top navigation bar.
+- Actions taken: Checked `codingconvention.md`, reviewed `MainDashboardWorkspace.vue` and `style.css`, and confirmed unrelated dirty files are outside this work.
+- Implementation: Added palette type/metric CSS hooks to `MainDashboardWorkspace.vue` and layered visual-only CSS overrides for the reference-style dashboard surface, cards, metric panels, charts, floating settings button, and tools panel. Updated `main-shell--standalone` and top navigation styling in `style.css` to match the same light dashboard frame.
+- Verification: Ran `cmd /c npm run build` in `frontend` successfully. Verified no TypeScript SFC/script or `.ts`/`.tsx` files with `rg -n 'lang="ts"|lang=''ts''' frontend/src` and `Get-ChildItem -Path frontend/src -Recurse -Include *.ts,*.tsx`. Ran `git diff --check -- frontend/src/components/MainDashboardWorkspace.vue frontend/src/style.css` with no whitespace errors.
+- Result: The main dashboard keeps its current functionality while adopting the attached reference's light HR-dashboard visual tone.
+- Follow-up note: A browser pass with real connected user data can tune exact visual balance if needed.
+
 ### 2026-04-24 - 메인 팔레트 확장 기능 추가
 
 - 사용자 명령: 팔레트 기능은 더 확장적이어야 하며, 사진을 불러와 액자처럼 표시하거나 드라이브 용량 확인, 최근 저장 파일, 빠른 접근 단축기능처럼 동작할 수 있어야 한다는 요청.

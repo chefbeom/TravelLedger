@@ -2,7 +2,6 @@
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import AdminWorkspace from './components/AdminWorkspace.vue'
 import HouseholdWorkspace from './components/HouseholdWorkspace.vue'
-import InviteAccessPanel from './components/InviteAccessPanel.vue'
 import MainDashboardWorkspace from './components/MainDashboardWorkspace.vue'
 import PinPadInput from './components/PinPadInput.vue'
 import CalenDriveWorkspace from './components/CalenDriveWorkspace.vue'
@@ -10,7 +9,6 @@ import ProfileWorkspace from './components/ProfileWorkspace.vue'
 import TravelWorkspace from './components/TravelWorkspace.vue'
 import {
   acceptInvite,
-  createInvite,
   fetchCurrentUser,
   fetchInvite,
   login,
@@ -304,7 +302,6 @@ const activeRoute = ref(initialRouteState.route)
 const inviteToken = ref(initialRouteState.token)
 const inviteInfo = ref(null)
 const isInviteLoading = ref(false)
-const isCreatingInvite = ref(false)
 const themeMode = ref('default')
 const themeDegree = ref(DEFAULT_TOSS_DEGREE)
 const themeDegreePanelOpen = ref(false)
@@ -327,14 +324,6 @@ const inviteForm = reactive({
   password: '',
   secondaryPin: '',
   rememberDevice: true,
-})
-
-const inviteManager = reactive({
-  expiresInHours: 72,
-  generatedLink: '',
-  generatedExpiresAt: '',
-  feedbackMessage: '',
-  errorMessage: '',
 })
 
 const travelRouteKeys = new Set(['travel', 'travel-money', 'travel-log', 'photo-album', 'my-map'])
@@ -405,20 +394,10 @@ function setFeedback(message = '', error = '') {
   errorMessage.value = error
 }
 
-function clearInviteManagerFeedback() {
-  inviteManager.feedbackMessage = ''
-  inviteManager.errorMessage = ''
-}
-
 function applyHashRoute(hash) {
   const routeState = resolveRouteState(hash)
   activeRoute.value = routeState.route
   inviteToken.value = routeState.token
-}
-
-function buildInviteUrl(token) {
-  const path = window.location.pathname || '/'
-  return `${window.location.origin}${path}#invite/${encodeURIComponent(token)}`
 }
 
 function clampThemeDegree(value) {
@@ -723,53 +702,6 @@ async function handleAcceptInvite() {
   }
 }
 
-async function handleCreateInvite() {
-  isCreatingInvite.value = true
-  clearInviteManagerFeedback()
-
-  try {
-    const response = await createInvite({
-      expiresInHours: inviteManager.expiresInHours,
-    })
-
-    inviteManager.generatedLink = buildInviteUrl(response.token)
-    inviteManager.generatedExpiresAt = response.expiresAt
-    inviteManager.feedbackMessage = '1회용 초대 링크를 만들었습니다. 복사해서 전달해주세요.'
-  } catch (error) {
-    inviteManager.errorMessage = error.message
-  } finally {
-    isCreatingInvite.value = false
-  }
-}
-
-async function copyInviteLink() {
-  if (!inviteManager.generatedLink) {
-    return
-  }
-
-  clearInviteManagerFeedback()
-
-  try {
-    if (navigator.clipboard?.writeText) {
-      await navigator.clipboard.writeText(inviteManager.generatedLink)
-    } else {
-      const element = document.createElement('textarea')
-      element.value = inviteManager.generatedLink
-      element.setAttribute('readonly', 'readonly')
-      element.style.position = 'absolute'
-      element.style.left = '-9999px'
-      document.body.appendChild(element)
-      element.select()
-      document.execCommand('copy')
-      element.remove()
-    }
-
-    inviteManager.feedbackMessage = '초대 링크를 클립보드에 복사했습니다.'
-  } catch {
-    inviteManager.errorMessage = '브라우저에서 자동 복사를 지원하지 않아 직접 복사해야 합니다.'
-  }
-}
-
 async function handleLogout() {
   try {
     await logoutRequest()
@@ -1013,18 +945,6 @@ onBeforeUnmount(() => {
             :current-user="currentUser"
             :items="launcherItems"
             @navigate="navigate"
-          />
-          <InviteAccessPanel
-            v-if="currentUser?.admin"
-            :expires-in-hours="inviteManager.expiresInHours"
-            :generated-link="inviteManager.generatedLink"
-            :generated-expires-at="inviteManager.generatedExpiresAt"
-            :is-creating="isCreatingInvite"
-            :feedback-message="inviteManager.feedbackMessage"
-            :error-message="inviteManager.errorMessage"
-            @change-expiry="inviteManager.expiresInHours = $event"
-            @create-invite="handleCreateInvite"
-            @copy-invite="copyInviteLink"
           />
         </div>
         <AdminWorkspace v-else-if="activeRoute === 'admin'" :current-user="currentUser" />

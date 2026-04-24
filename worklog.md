@@ -26,6 +26,16 @@
 
 ## 작업 기록
 
+### 2026-04-24 - Move invite link creation to admin workspace
+
+- User request: Move the invite-link creation currently at the bottom of the dashboard into an admin-only dashboard/admin feature.
+- Request analysis: `InviteAccessPanel` was rendered under the main launcher dashboard for admins. Although hidden from non-admin users, the responsibility belonged in the admin workspace, which already has route/admin checks and additional admin access verification.
+- Actions taken: Checked `codingconvention.md`, searched `App.vue`, `AdminWorkspace.vue`, and `InviteAccessPanel.vue` for invite-link state, handlers, and rendering locations. Confirmed unrelated local files are outside this task.
+- Implementation: Removed `InviteAccessPanel`, invite creation state, and invite create/copy handlers from `App.vue`. Added `InviteAccessPanel` to `AdminWorkspace.vue` after admin access verification, moved invite creation/copy state and handlers into the admin workspace, and refreshed the admin dashboard after creating an invite so recent invite data can update.
+- Verification: Verified invite creation references now live in `AdminWorkspace.vue` instead of `App.vue`. Ran `cmd /c npm run build` in `frontend` successfully. Verified no TypeScript SFC/script or `.ts`/`.tsx` files with `rg -n 'lang="ts"|lang=''ts''' frontend/src` and `rg --files frontend/src | rg '\.(ts|tsx)$'`. Ran `git diff --check -- frontend/src/App.vue frontend/src/components/AdminWorkspace.vue worklog.md` with no whitespace errors.
+- Result: The main dashboard no longer shows the invite-link panel. Invite creation is now part of the administrator workspace and only available through the admin feature path after admin verification.
+- Follow-up note: Backend authorization for `createInvite` remains unchanged; this change tightens the frontend placement and access surface.
+
 ### 2026-04-24 - Push auth guard restoration and dashboard load optimization
 
 - User request: Push the current work.

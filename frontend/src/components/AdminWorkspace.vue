@@ -1,10 +1,12 @@
 <script setup>
 import { computed, onMounted, reactive } from 'vue'
+import InviteAccessPanel from './InviteAccessPanel.vue'
 import { buildThumbnailUrl } from '../lib/mediaPreview'
 import {
   archiveAdminSupportInquiry,
   createAdminDataBackup,
   createAdminMinioBackup,
+  createInvite,
   downloadAdminDataBackup,
   deleteAdminSupportInquiry,
   fetchAdminAccessStatus,
@@ -66,6 +68,14 @@ const state = reactive({
   supportPages: { inbox: 0, archive: 0 },
   selectedSupportInquiryId: null,
   supportReplyContent: '',
+  creatingInvite: false,
+  inviteManager: {
+    expiresInHours: 72,
+    generatedLink: '',
+    generatedExpiresAt: '',
+    feedbackMessage: '',
+    errorMessage: '',
+  },
 })
 
 const summaryCards = [
@@ -173,6 +183,16 @@ function setSupportTab(tab) {
 function selectSupportInquiry(inquiry) {
   state.selectedSupportInquiryId = inquiry?.id ?? null
   state.supportReplyContent = inquiry?.replyContent ?? ''
+}
+
+function clearInviteManagerFeedback() {
+  state.inviteManager.feedbackMessage = ''
+  state.inviteManager.errorMessage = ''
+}
+
+function buildInviteUrl(token) {
+  const path = window.location.pathname || '/'
+  return `${window.location.origin}${path}#invite/${encodeURIComponent(token)}`
 }
 
 function handleAdminAccessRequired(error) {
@@ -308,6 +328,56 @@ async function handleUnlockIp(ip) {
     }
   } finally {
     state.unlockingIp = ''
+  }
+}
+
+async function handleCreateInvite() {
+  state.creatingInvite = true
+  clearInviteManagerFeedback()
+
+  try {
+    const response = await createInvite({
+      expiresInHours: state.inviteManager.expiresInHours,
+    })
+
+    state.inviteManager.generatedLink = buildInviteUrl(response.token)
+    state.inviteManager.generatedExpiresAt = response.expiresAt
+    state.inviteManager.feedbackMessage = '1회용 초대 링크를 만들었습니다. 복사해서 전달해주세요.'
+    await loadDashboard()
+  } catch (error) {
+    if (!handleAdminAccessRequired(error)) {
+      state.inviteManager.errorMessage = error.message
+    }
+  } finally {
+    state.creatingInvite = false
+  }
+}
+
+async function copyInviteLink() {
+  if (!state.inviteManager.generatedLink) {
+    return
+  }
+
+  clearInviteManagerFeedback()
+
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(state.inviteManager.generatedLink)
+    } else {
+      const element = document.createElement('textarea')
+      element.value = state.inviteManager.generatedLink
+      element.setAttribute('readonly', 'readonly')
+      element.style.position = 'absolute'
+      element.style.left = '-9999px'
+      document.body.appendChild(element)
+      element.select()
+      document.execCommand('copy')
+      element.remove()
+    }
+
+    state.inviteManager.feedbackMessage = '초대 링크를 클립보드에 복사했습니다.'
+  } catch {
+    state.inviteManager.errorMessage = '브라우저에서 자동 복사를 지원하지 않아 직접 복사해야 합니다.'
   }
 }
 
@@ -810,6 +880,18 @@ onMounted(initializeAdminWorkspace)
           <strong>{{ state.summary?.[card.key] ?? 0 }}</strong>
         </article>
       </section>
+
+      <InviteAccessPanel
+        :expires-in-hours="state.inviteManager.expiresInHours"
+        :generated-link="state.inviteManager.generatedLink"
+        :generated-expires-at="state.inviteManager.generatedExpiresAt"
+        :is-creating="state.creatingInvite"
+        :feedback-message="state.inviteManager.feedbackMessage"
+        :error-message="state.inviteManager.errorMessage"
+        @change-expiry="state.inviteManager.expiresInHours = $event"
+        @create-invite="handleCreateInvite"
+        @copy-invite="copyInviteLink"
+      />
 
       <section class="panel">
         <div class="panel__header">

@@ -26,6 +26,16 @@
 
 ## 작업 기록
 
+### 2026-04-25 - Move calendar layout controls into calendar header
+
+- User request: Move the calendar layout status/control area (`달력 배치`, `고정됨`) into the upper calendar section shown in the reference image.
+- Request analysis: The layout controls were rendered as a separate toolbar above the GridStack board, while the requested position is inside the calendar panel header near the month badge and collapse control. The change should only move the UI controls and keep GridStack layout logic, DB persistence, calendar navigation, and transaction behavior unchanged.
+- Actions taken: Checked `codingconvention.md`, reviewed `CalendarWorkspace.vue` and related layout CSS, and confirmed existing unrelated local files were outside this task.
+- Implementation: Removed the standalone layout toolbar from the calendar workspace top and inserted a compact inline `household-calendar-layout-toolbar` inside the calendar panel header actions. Added `data-no-drag="true"` to the inline controls so they do not trigger panel dragging in layout edit mode, and added responsive CSS so the controls stay usable on desktop and mobile widths.
+- Verification: Ran `cmd /c npm run build` in `frontend` successfully. Verified no TypeScript SFC/script or `.ts`/`.tsx` files with `rg -n 'lang="ts"|lang=''ts''' frontend/src`, `Get-ChildItem -Path frontend/src -Recurse -Include *.ts,*.tsx`, and `rg --files frontend/src | rg '\.(ts|tsx)$'`.
+- Result: The `달력 배치 / 고정됨` controls now live in the calendar header area instead of as a separate toolbar above the grid.
+- Follow-up note: Browser visual QA with an authenticated session would be useful to confirm the exact spacing against the screenshot.
+
 ### 2026-04-24 - Persist dashboard grid layouts in DB
 
 - User request: Use the DB for the configured grid layouts so the same layout continues on other computers.

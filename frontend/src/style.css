@@ -4797,7 +4797,7 @@ textarea {
   box-shadow: var(--shadow);
 }
 
-.household-calendar-layout-toolbar > div:first-child {
+.household-calendar-layout-toolbar__status {
   display: grid;
   gap: 4px;
   min-width: 0;
@@ -4818,6 +4818,36 @@ textarea {
   flex-wrap: wrap;
   justify-content: flex-end;
   gap: 10px;
+}
+
+.household-calendar-layout-toolbar--inline {
+  align-items: center;
+  border-radius: 16px;
+  box-shadow: none;
+  gap: 12px;
+  padding: 8px 10px;
+}
+
+.household-calendar-layout-toolbar--inline .household-calendar-layout-toolbar__status {
+  gap: 2px;
+}
+
+.household-calendar-layout-toolbar--inline strong {
+  font-size: 0.82rem;
+}
+
+.household-calendar-layout-toolbar--inline span {
+  font-size: 0.76rem;
+}
+
+.household-calendar-layout-toolbar--inline .household-calendar-layout-toolbar__actions {
+  gap: 6px;
+}
+
+.household-calendar-layout-toolbar--inline .button {
+  min-height: 34px;
+  padding-inline: 12px;
+  white-space: nowrap;
 }
 
 .household-calendar-layout-board {
@@ -5143,6 +5173,11 @@ textarea {
     flex-direction: column;
   }
 
+  .household-calendar-layout-toolbar--inline {
+    align-items: center;
+    flex-direction: row;
+  }
+
   .household-calendar-layout-toolbar__actions {
     justify-content: flex-start;
   }
@@ -5164,6 +5199,20 @@ textarea {
   .household-sheet-header {
     width: 100%;
     justify-content: flex-start;
+  }
+
+  .household-calendar-layout-toolbar--inline {
+    align-items: flex-start;
+    flex-direction: column;
+    width: 100%;
+  }
+
+  .household-calendar-layout-toolbar--inline .household-calendar-layout-toolbar__actions {
+    width: 100%;
+  }
+
+  .household-calendar-layout-toolbar--inline .button {
+    flex: 1 1 120px;
   }
 
   .household-entry-panel {

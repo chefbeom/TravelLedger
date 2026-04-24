@@ -1430,21 +1430,6 @@ defineExpose({
 
 <template>
   <div class="workspace-stack household-calendar-workspace" @keydown.capture="handleWorkspaceKeydown">
-    <div class="household-calendar-layout-toolbar">
-      <div>
-        <strong>달력 배치</strong>
-        <span>{{ isLayoutEditMode ? '편집 중' : '고정됨' }}</span>
-      </div>
-      <div class="household-calendar-layout-toolbar__actions">
-        <button type="button" class="button button--secondary" @click="resetCalendarPanelLayout">
-          기본 배치
-        </button>
-        <button type="button" class="button button--primary" @click="toggleLayoutEditMode">
-          {{ isLayoutEditMode ? '배치 완료' : '배치 편집' }}
-        </button>
-      </div>
-    </div>
-
     <section
       class="household-calendar-layout-board"
       :class="{ 'household-calendar-layout-board--editing': isLayoutEditMode }"
@@ -1783,6 +1768,20 @@ defineExpose({
           <button class="button button--secondary" type="button" @click="toggleCalendarCollapsed">
             {{ isCalendarCollapsed ? '달력 펼치기' : '달력 접기' }}
           </button>
+          <div class="household-calendar-layout-toolbar household-calendar-layout-toolbar--inline" data-no-drag="true">
+            <div class="household-calendar-layout-toolbar__status">
+              <strong>달력 배치</strong>
+              <span>{{ isLayoutEditMode ? '편집 중' : '고정됨' }}</span>
+            </div>
+            <div class="household-calendar-layout-toolbar__actions">
+              <button type="button" class="button button--secondary" @click="resetCalendarPanelLayout">
+                기본 배치
+              </button>
+              <button type="button" class="button button--primary" @click="toggleLayoutEditMode">
+                {{ isLayoutEditMode ? '배치 완료' : '배치 편집' }}
+              </button>
+            </div>
+          </div>
         </div>
       </div>
 

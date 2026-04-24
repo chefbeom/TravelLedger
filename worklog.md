@@ -26,6 +26,16 @@
 
 ## 작업 기록
 
+### 2026-04-24 - Push auth guard restoration and dashboard load optimization
+
+- User request: Push the current work.
+- Request analysis: `main` was ahead of `origin/main` by two commits: `a3a8dbb Optimize main dashboard initial load` and `2521292 Restore frontend auth guard`. Unrelated local dirty/untracked files were present and intentionally excluded.
+- Actions taken: Checked `codingconvention.md`, reviewed branch status and unpushed commit list, and prepared this push log before publishing.
+- Implementation: Prepared a push package containing the dashboard initial load optimization, auth guard restoration, and this push log entry.
+- Verification: `git status --short --branch` showed `main...origin/main [ahead 2]` before this log entry. Push verification was performed after `git push origin main`.
+- Result: Push log recorded before publishing the current work.
+- Follow-up note: No unrelated local files are included in the push package.
+
 ### 2026-04-24 - Restore frontend auth guard
 
 - User request: Remove `AUTH_GUARD_BYPASS_ENABLED` and restore the existing login/authentication flow.

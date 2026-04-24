@@ -7245,7 +7245,7 @@ textarea {
   background-repeat: no-repeat;
   background-size: cover;
   border: 3px solid rgba(255, 255, 255, 0.92);
-  box-shadow: 0 20px 40px rgba(15, 23, 42, 0.28);
+  box-shadow: 0 3px 8px rgba(15, 23, 42, 0.12);
 }
 
 .travel-cluster-pin::before {
@@ -7265,7 +7265,7 @@ textarea {
   background: var(--cluster-color, #3182F6);
   border-radius: 0 0 8px 8px;
   transform: translateX(-50%) rotate(45deg);
-  box-shadow: 6px 10px 18px rgba(15, 23, 42, 0.2);
+  box-shadow: none;
 }
 
 .travel-cluster-pin.is-aggregate {
@@ -7276,7 +7276,7 @@ textarea {
 
 .travel-cluster-pin.is-active {
   border-color: var(--cluster-color, #3182F6);
-  box-shadow: 0 0 0 4px rgba(49, 130, 246, 0.18), 0 20px 40px rgba(15, 23, 42, 0.32);
+  box-shadow: 0 0 0 4px rgba(49, 130, 246, 0.18), 0 3px 8px rgba(15, 23, 42, 0.14);
 }
 
 .travel-cluster-pin__count,

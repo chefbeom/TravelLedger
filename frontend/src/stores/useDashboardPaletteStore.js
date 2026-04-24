@@ -9,7 +9,16 @@ import {
   normalizePaletteList,
   normalizePaletteSize,
 } from '../features/palette/utils/paletteLayout'
-import { buildPaletteStorageKey, loadPaletteState, savePaletteState } from '../features/palette/utils/paletteStorage'
+import {
+  buildPaletteLayoutScope,
+  buildPaletteStorageKey,
+  loadPaletteState,
+  savePaletteState,
+} from '../features/palette/utils/paletteStorage'
+import { fetchLayoutSetting, saveLayoutSetting } from '../lib/api'
+
+const PALETTE_LAYOUT_VERSION = 7
+const REMOTE_SAVE_DELAY_MS = 800
 
 function clonePresets(value) {
   return JSON.parse(JSON.stringify(value))
@@ -25,6 +34,10 @@ export const useDashboardPaletteStore = defineStore('dashboardPalette', () => {
   const isEditMode = ref(false)
   const hydrated = ref(false)
   const storageKey = ref('')
+  const layoutScope = ref('')
+  let remoteHydrationSequence = 0
+  let remoteSaveTimer = 0
+  let changedDuringRemoteHydration = false
 
   const currentPreset = computed(() =>
     presets.value.find((preset) => Number(preset.id) === Number(currentPresetId.value))
@@ -36,11 +49,79 @@ export const useDashboardPaletteStore = defineStore('dashboardPalette', () => {
   const hiddenPaletteIds = computed(() => hiddenPalettes.value.map((palette) => palette.id))
   const availableTemplates = computed(() => paletteTemplates)
 
-  function persist() {
-    savePaletteState(storageKey.value, {
+  function snapshotState() {
+    return {
       currentPresetId: currentPresetId.value,
-      presets: presets.value,
+      presets: clonePresets(presets.value),
+    }
+  }
+
+  function applyState(state) {
+    if (!state || !Array.isArray(state.presets)) {
+      return false
+    }
+
+    currentPresetId.value = [1, 2, 3].includes(Number(state.currentPresetId))
+      ? Number(state.currentPresetId)
+      : 3
+    presets.value = state.presets.map((preset) => ({
+      ...preset,
+      palettes: normalizePaletteList(preset.palettes ?? []),
+    }))
+    return true
+  }
+
+  function persistLocal(state = snapshotState()) {
+    savePaletteState(storageKey.value, {
+      currentPresetId: state.currentPresetId,
+      presets: state.presets,
     })
+  }
+
+  function scheduleRemotePersist(state = snapshotState()) {
+    if (!layoutScope.value || typeof window === 'undefined') {
+      return
+    }
+
+    if (remoteSaveTimer) {
+      window.clearTimeout(remoteSaveTimer)
+    }
+
+    const targetScope = layoutScope.value
+    const payload = JSON.parse(JSON.stringify(state))
+    remoteSaveTimer = window.setTimeout(() => {
+      saveLayoutSetting(targetScope, payload, PALETTE_LAYOUT_VERSION).catch(() => {
+        // Local cache remains the fallback if the backend is temporarily unavailable.
+      })
+      remoteSaveTimer = 0
+    }, REMOTE_SAVE_DELAY_MS)
+  }
+
+  function persist() {
+    changedDuringRemoteHydration = true
+    const state = snapshotState()
+    persistLocal(state)
+    scheduleRemotePersist(state)
+  }
+
+  async function hydrateRemote(sequence, fallbackState) {
+    try {
+      const response = await fetchLayoutSetting(layoutScope.value)
+      if (sequence !== remoteHydrationSequence || changedDuringRemoteHydration) {
+        return
+      }
+
+      if (applyState(response?.payload)) {
+        persistLocal()
+        return
+      }
+
+      if (fallbackState) {
+        await saveLayoutSetting(layoutScope.value, fallbackState, PALETTE_LAYOUT_VERSION)
+      }
+    } catch {
+      // A failed remote read should not block dashboard rendering.
+    }
   }
 
   function replacePresetPalettes(presetId, nextPalettes) {
@@ -53,23 +134,22 @@ export const useDashboardPaletteStore = defineStore('dashboardPalette', () => {
 
   function hydrate({ userId, scope = 'household' } = {}) {
     const nextStorageKey = buildPaletteStorageKey(userId, scope)
+    const nextLayoutScope = buildPaletteLayoutScope(scope)
     if (hydrated.value && storageKey.value === nextStorageKey) {
       return
     }
 
     storageKey.value = nextStorageKey
+    layoutScope.value = nextLayoutScope
+    remoteHydrationSequence += 1
+    changedDuringRemoteHydration = false
     const restored = loadPaletteState(storageKey.value)
-    if (restored) {
-      currentPresetId.value = [1, 2, 3].includes(Number(restored.currentPresetId))
-        ? Number(restored.currentPresetId)
-        : 3
-      presets.value = restored.presets.map((preset) => ({
-        ...preset,
-        palettes: normalizePaletteList(preset.palettes ?? []),
-      }))
+    if (applyState(restored)) {
+      hydrateRemote(remoteHydrationSequence, snapshotState())
     } else {
       currentPresetId.value = 3
       presets.value = createDefaultPalettePresets()
+      hydrateRemote(remoteHydrationSequence, null)
     }
     isEditMode.value = false
     hydrated.value = true
@@ -86,7 +166,6 @@ export const useDashboardPaletteStore = defineStore('dashboardPalette', () => {
 
   function toggleEditMode() {
     isEditMode.value = !isEditMode.value
-    persist()
   }
 
   function movePalette(id, position) {

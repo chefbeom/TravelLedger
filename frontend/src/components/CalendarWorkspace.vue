@@ -5,6 +5,7 @@ import 'gridstack/dist/gridstack.min.css'
 import { formatCompactNumber } from '../lib/format'
 import { resolveRange, summarizeEntries } from '../lib/analytics'
 import { useTableSelection } from '../lib/tableSelection'
+import { fetchLayoutSetting, saveLayoutSetting } from '../lib/api'
 
 const CALENDAR_SCALE_KEY = 'calen-household-calendar-scale-preset'
 const CALENDAR_COLLAPSE_KEY = 'calen-household-calendar-collapsed'
@@ -12,6 +13,8 @@ const CALENDAR_HIGHLIGHT_KEY = 'calen-household-calendar-highlight-mode'
 const CALENDAR_CUSTOM_SIZE_KEY = 'calen-household-calendar-custom-size'
 const CALENDAR_AGGREGATE_PANEL_ENABLED_KEY = 'calen-household-calendar-aggregate-panel-enabled'
 const CALENDAR_PANEL_LAYOUT_STORAGE_KEY = 'calen-household-calendar-panel-layout:v1'
+const CALENDAR_PANEL_LAYOUT_SCOPE = 'household-calendar'
+const CALENDAR_PANEL_LAYOUT_VERSION = 1
 const DEFAULT_CALENDAR_HIGHLIGHT_MODE = 'net'
 const CALENDAR_CUSTOM_WIDTH_MIN = 780
 const CALENDAR_CUSTOM_WIDTH_MAX = 1500
@@ -22,6 +25,7 @@ const DEFAULT_CALENDAR_CUSTOM_HEIGHT = 1200
 const CALENDAR_LAYOUT_GRID_COLUMNS = 9
 const CALENDAR_LAYOUT_GRID_MARGIN = 4
 const CALENDAR_LAYOUT_GRID_GAP = CALENDAR_LAYOUT_GRID_MARGIN * 2
+const REMOTE_LAYOUT_SAVE_DELAY_MS = 800
 
 const calendarScalePresets = [
   { key: 'compact', label: '좁게', value: 74 },
@@ -106,6 +110,10 @@ const calendarPanelDefinitions = [
 ]
 
 const props = defineProps({
+  currentUser: {
+    type: Object,
+    default: null,
+  },
   quickStats: {
     type: Array,
     default: () => [],
@@ -261,6 +269,9 @@ let calendarResizeObserver = null
 let layoutGrid = null
 let layoutGridResizeObserver = null
 let layoutGridRebuildTimer = 0
+let layoutRemoteHydrationSequence = 0
+let layoutRemoteSaveTimer = 0
+let layoutChangedDuringRemoteHydration = false
 
 const maxDailyExpense = computed(() => {
   const expenses = props.calendarWeeks.flat().map((day) => Number(day.summary?.expense ?? 0))
@@ -396,6 +407,8 @@ const pagedNormalizedSelectedDateEntries = computed(() => {
   return normalizedSelectedDateEntries.value.slice(start, start + SELECTED_DAY_ENTRY_PAGE_SIZE)
 })
 const selectedDayEntrySelection = useTableSelection(pagedNormalizedSelectedDateEntries)
+const userStorageId = computed(() => props.currentUser?.id || props.currentUser?.loginId || 'anonymous')
+const calendarPanelLayoutStorageKey = computed(() => `${CALENDAR_PANEL_LAYOUT_STORAGE_KEY}:${userStorageId.value}`)
 
 const hasSelectedMemoColumn = computed(() => normalizedSelectedDateEntries.value.some((entry) => entry.visibleMemo))
 const selectedDateCountLabel = computed(() => `${normalizedSelectedDateEntries.value.length}건`)
@@ -664,6 +677,9 @@ onBeforeUnmount(() => {
   if (layoutGridRebuildTimer) {
     window.clearTimeout(layoutGridRebuildTimer)
   }
+  if (layoutRemoteSaveTimer) {
+    window.clearTimeout(layoutRemoteSaveTimer)
+  }
   layoutGridResizeObserver?.disconnect()
   destroyLayoutGrid()
 
@@ -815,6 +831,10 @@ function createDefaultCalendarPanelLayout() {
   }))
 }
 
+function clone(value) {
+  return JSON.parse(JSON.stringify(value))
+}
+
 function normalizeCalendarPanelLayout(layouts) {
   const source = new Map((layouts ?? []).map((item) => [String(item.id), item]))
 
@@ -834,27 +854,81 @@ function normalizeCalendarPanelLayout(layouts) {
 }
 
 function hydrateCalendarPanelLayout() {
+  layoutRemoteHydrationSequence += 1
+  layoutChangedDuringRemoteHydration = false
   if (typeof window === 'undefined') {
     calendarPanelLayout.value = createDefaultCalendarPanelLayout()
     return
   }
 
-  const savedLayout = window.localStorage.getItem(CALENDAR_PANEL_LAYOUT_STORAGE_KEY)
+  const savedLayout = window.localStorage.getItem(calendarPanelLayoutStorageKey.value)
+    || window.localStorage.getItem(CALENDAR_PANEL_LAYOUT_STORAGE_KEY)
   if (!savedLayout) {
     calendarPanelLayout.value = createDefaultCalendarPanelLayout()
+    hydrateRemoteCalendarPanelLayout(layoutRemoteHydrationSequence, null)
     return
   }
 
   try {
     calendarPanelLayout.value = normalizeCalendarPanelLayout(JSON.parse(savedLayout))
+    persistCalendarPanelLayoutLocal()
+    hydrateRemoteCalendarPanelLayout(layoutRemoteHydrationSequence, clone(calendarPanelLayout.value))
   } catch (_error) {
     calendarPanelLayout.value = createDefaultCalendarPanelLayout()
+    hydrateRemoteCalendarPanelLayout(layoutRemoteHydrationSequence, null)
   }
 }
 
-function persistCalendarPanelLayout() {
+function persistCalendarPanelLayoutLocal() {
   if (typeof window !== 'undefined') {
-    window.localStorage.setItem(CALENDAR_PANEL_LAYOUT_STORAGE_KEY, JSON.stringify(calendarPanelLayout.value))
+    window.localStorage.setItem(calendarPanelLayoutStorageKey.value, JSON.stringify(calendarPanelLayout.value))
+  }
+}
+
+function scheduleCalendarPanelLayoutRemotePersist(payload = clone(calendarPanelLayout.value)) {
+  if (typeof window === 'undefined') {
+    return
+  }
+
+  if (layoutRemoteSaveTimer) {
+    window.clearTimeout(layoutRemoteSaveTimer)
+  }
+
+  const nextPayload = clone(payload)
+  layoutRemoteSaveTimer = window.setTimeout(() => {
+    saveLayoutSetting(CALENDAR_PANEL_LAYOUT_SCOPE, nextPayload, CALENDAR_PANEL_LAYOUT_VERSION).catch(() => {
+      // Local cache keeps the user's layout if the backend is temporarily unavailable.
+    })
+    layoutRemoteSaveTimer = 0
+  }, REMOTE_LAYOUT_SAVE_DELAY_MS)
+}
+
+function persistCalendarPanelLayout() {
+  layoutChangedDuringRemoteHydration = true
+  const payload = clone(calendarPanelLayout.value)
+  persistCalendarPanelLayoutLocal()
+  scheduleCalendarPanelLayoutRemotePersist(payload)
+}
+
+async function hydrateRemoteCalendarPanelLayout(sequence, fallbackLayout) {
+  try {
+    const response = await fetchLayoutSetting(CALENDAR_PANEL_LAYOUT_SCOPE)
+    if (sequence !== layoutRemoteHydrationSequence || layoutChangedDuringRemoteHydration) {
+      return
+    }
+
+    if (Array.isArray(response?.payload)) {
+      calendarPanelLayout.value = normalizeCalendarPanelLayout(response.payload)
+      persistCalendarPanelLayoutLocal()
+      refreshCalendarMeasurements()
+      return
+    }
+
+    if (fallbackLayout) {
+      await saveLayoutSetting(CALENDAR_PANEL_LAYOUT_SCOPE, fallbackLayout, CALENDAR_PANEL_LAYOUT_VERSION)
+    }
+  } catch {
+    // Remote layout sync should not block the calendar workspace.
   }
 }
 

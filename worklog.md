@@ -26,6 +26,16 @@
 
 ## 작업 기록
 
+### 2026-04-24 - Persist dashboard grid layouts in DB
+
+- User request: Use the DB for the configured grid layouts so the same layout continues on other computers.
+- Request analysis: The current grid layouts were stored only in browser `localStorage`, so layouts were tied to one browser/device. The safest change was to add a user-scoped layout settings API and keep `localStorage` as a fast cache/fallback without changing dashboard, calendar, transaction, or palette domain logic.
+- Actions taken: Checked `codingconvention.md`, reviewed the Spring Boot account preference pattern, inspected the main dashboard, household palette store, and household calendar GridStack persistence points, and kept unrelated local changes out of scope.
+- Implementation: Added `user_layout_settings` JPA storage with `GET/PUT /api/account/preferences/layout-settings/{scope}`. Connected DB sync for scopes `main-dashboard`, `household-dashboard`, and `household-calendar`. Existing local layouts are read first for fast paint and migrated to DB when no remote payload exists; later drag/add/hide/reset changes are saved locally and debounced to DB.
+- Verification: Ran `cmd /c npm run build` in `frontend` successfully. Ran `.\gradlew.bat classes` in `backend` successfully. Verified no TypeScript SFC/script or `.ts`/`.tsx` files with `rg -n 'lang="ts"|lang=''ts''' frontend/src`, `Get-ChildItem -Path frontend/src -Recurse -Include *.ts,*.tsx`, and `rg --files frontend/src | rg '\.(ts|tsx)$'`. Ran `git diff --check` on the changed backend/frontend files with no whitespace errors.
+- Result: Main dashboard, household dashboard palettes, and household calendar panel layouts now persist per authenticated user in the DB and can follow the user across devices.
+- Follow-up note: Existing unrelated local files remain untouched and are not part of this work.
+
 ### 2026-04-24 - Dark mode audit and dashboard palette fixes
 
 - User request: Check dark mode overall.

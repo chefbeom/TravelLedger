@@ -4,6 +4,10 @@ export function buildPaletteStorageKey(userId, scope = 'household') {
   return `calen-dashboard-palettes:v7:${userId || 'anonymous'}:${scope}`
 }
 
+export function buildPaletteLayoutScope(scope = 'household') {
+  return scope === 'household' ? 'household-dashboard' : `${scope}-dashboard`
+}
+
 export function loadPaletteState(storageKey) {
   if (!storageKey || typeof window === 'undefined') {
     return null

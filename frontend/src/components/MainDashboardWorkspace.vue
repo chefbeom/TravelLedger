@@ -9,8 +9,10 @@ import {
   fetchDashboard,
   fetchDriveHomeSummary,
   fetchDriveRecentFiles,
+  fetchLayoutSetting,
   fetchPaymentMethods,
   fetchTravelPortfolio,
+  saveLayoutSetting,
 } from '../lib/api'
 import { DASHBOARD_GRID_COLUMNS } from '../features/palette/types'
 import {
@@ -35,10 +37,13 @@ const emit = defineEmits(['navigate'])
 
 const MAIN_DASHBOARD_STORAGE_VERSION = 'v6'
 const MAIN_DASHBOARD_SCOPE = 'main'
+const MAIN_DASHBOARD_LAYOUT_SCOPE = 'main-dashboard'
+const MAIN_DASHBOARD_LAYOUT_VERSION = 6
 const PAYMENT_SELECTION_STORAGE_VERSION = 'v1'
 const SUMMARY_CACHE_STORAGE_VERSION = 'v1'
 const MAIN_DASHBOARD_GRID_MARGIN = 4
 const MAIN_DASHBOARD_GRID_GAP = MAIN_DASHBOARD_GRID_MARGIN * 2
+const REMOTE_LAYOUT_SAVE_DELAY_MS = 800
 
 const paletteTemplates = [
   { id: 'household-summary', type: 'household-summary', label: '가계부 종합', options: {} },
@@ -161,6 +166,9 @@ let resizeObserver = null
 let dragStartLayout = new Map()
 let rebuildTimer = 0
 let summaryLoadSequence = 0
+let paletteRemoteHydrationSequence = 0
+let paletteRemoteSaveTimer = 0
+let paletteChangedDuringRemoteHydration = false
 
 const userStorageId = computed(() => props.currentUser?.id || props.currentUser?.loginId || 'anonymous')
 const storageKey = computed(() => `calen-main-dashboard-palettes:${MAIN_DASHBOARD_STORAGE_VERSION}:${userStorageId.value}:${MAIN_DASHBOARD_SCOPE}`)
@@ -385,7 +393,22 @@ function normalizeMainPalettes(value) {
   }))
 }
 
+function applyPalettePayload(payload) {
+  if (!payload || !Array.isArray(payload.palettes)) {
+    return false
+  }
+
+  palettes.value = normalizeMainPalettes(payload.palettes)
+  return true
+}
+
+function palettePayload() {
+  return { palettes: clone(palettes.value) }
+}
+
 function hydratePalettes() {
+  paletteRemoteHydrationSequence += 1
+  paletteChangedDuringRemoteHydration = false
   if (typeof window === 'undefined') {
     palettes.value = normalizeMainPalettes(clone(defaultPalettes))
     return
@@ -395,18 +418,63 @@ function hydratePalettes() {
     const raw = window.localStorage.getItem(storageKey.value)
     if (!raw) {
       palettes.value = normalizeMainPalettes(clone(defaultPalettes))
+      hydrateRemotePalettes(paletteRemoteHydrationSequence, null)
       return
     }
     const parsed = JSON.parse(raw)
     palettes.value = normalizeMainPalettes(Array.isArray(parsed?.palettes) ? parsed.palettes : defaultPalettes)
+    hydrateRemotePalettes(paletteRemoteHydrationSequence, palettePayload())
   } catch {
     palettes.value = normalizeMainPalettes(clone(defaultPalettes))
+    hydrateRemotePalettes(paletteRemoteHydrationSequence, null)
   }
 }
 
-function persistPalettes() {
+function persistPalettesLocal() {
   if (typeof window === 'undefined') return
   window.localStorage.setItem(storageKey.value, JSON.stringify({ palettes: palettes.value }))
+}
+
+function schedulePaletteRemotePersist(payload = palettePayload()) {
+  if (typeof window === 'undefined') return
+  if (paletteRemoteSaveTimer) {
+    window.clearTimeout(paletteRemoteSaveTimer)
+  }
+
+  const nextPayload = clone(payload)
+  paletteRemoteSaveTimer = window.setTimeout(() => {
+    saveLayoutSetting(MAIN_DASHBOARD_LAYOUT_SCOPE, nextPayload, MAIN_DASHBOARD_LAYOUT_VERSION).catch(() => {
+      // Local cache keeps the user's layout if the backend is temporarily unavailable.
+    })
+    paletteRemoteSaveTimer = 0
+  }, REMOTE_LAYOUT_SAVE_DELAY_MS)
+}
+
+function persistPalettes() {
+  paletteChangedDuringRemoteHydration = true
+  const payload = palettePayload()
+  persistPalettesLocal()
+  schedulePaletteRemotePersist(payload)
+}
+
+async function hydrateRemotePalettes(sequence, fallbackPayload) {
+  try {
+    const response = await fetchLayoutSetting(MAIN_DASHBOARD_LAYOUT_SCOPE)
+    if (sequence !== paletteRemoteHydrationSequence || paletteChangedDuringRemoteHydration) {
+      return
+    }
+
+    if (applyPalettePayload(response?.payload)) {
+      persistPalettesLocal()
+      return
+    }
+
+    if (fallbackPayload) {
+      await saveLayoutSetting(MAIN_DASHBOARD_LAYOUT_SCOPE, fallbackPayload, MAIN_DASHBOARD_LAYOUT_VERSION)
+    }
+  } catch {
+    // Remote layout sync is progressive; the cached layout is still usable.
+  }
 }
 
 function hydratePaymentSelection() {
@@ -843,6 +911,9 @@ onBeforeUnmount(() => {
   summaryLoadSequence += 1
   if (rebuildTimer) {
     window.clearTimeout(rebuildTimer)
+  }
+  if (paletteRemoteSaveTimer) {
+    window.clearTimeout(paletteRemoteSaveTimer)
   }
   resizeObserver?.disconnect()
   destroyGrid()

@@ -546,6 +546,17 @@ export function saveHouseholdAggregatePreferences(widgets) {
   })
 }
 
+export function fetchLayoutSetting(scope) {
+  return request(`/account/preferences/layout-settings/${encodeURIComponent(scope)}`)
+}
+
+export function saveLayoutSetting(scope, payload, version = 1) {
+  return request(`/account/preferences/layout-settings/${encodeURIComponent(scope)}`, {
+    method: 'PUT',
+    body: JSON.stringify({ version, payload }),
+  })
+}
+
 export function createPaymentMethod(payload) {
   return request('/payment-methods', {
     method: 'POST',

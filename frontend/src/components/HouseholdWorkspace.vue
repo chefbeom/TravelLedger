@@ -1400,6 +1400,7 @@ async function deactivatePayment(paymentId) {
     <CalendarWorkspace
       ref="calendarWorkspaceRef"
       v-else-if="householdTab === 'calendar'"
+      :current-user="props.currentUser"
       :quick-stats="quickStats"
       :month-label="monthLabel"
       :anchor-date="calendarAnchorDate"

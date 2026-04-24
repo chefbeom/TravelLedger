@@ -52,6 +52,14 @@ import CalendarWorkspace from './CalendarWorkspace.vue'
 import LedgerImportWorkspace from './LedgerImportWorkspace.vue'
 import ManagementWorkspace from './ManagementWorkspace.vue'
 import StatisticsWorkspace from './StatisticsWorkspace.vue'
+import PaletteContainer from '../features/palette/components/PaletteContainer.vue'
+
+const props = defineProps({
+  currentUser: {
+    type: Object,
+    default: null,
+  },
+})
 
 const compareUnitLabels = {
   DAY: '일간',
@@ -79,7 +87,7 @@ const activeSubmit = ref('')
 const feedback = ref('')
 const errorMessage = ref('')
 const undoableEntryAction = ref(null)
-const householdTab = ref('calendar')
+const householdTab = ref('dashboard')
 const householdAnchorDate = ref(today)
 const calendarAnchorDate = householdAnchorDate
 const calendarReady = ref(false)
@@ -1333,6 +1341,7 @@ async function deactivatePayment(paymentId) {
       </div>
 
       <div class="scope-toggle scope-toggle--wrap">
+        <button class="button" :class="{ 'button--primary': householdTab === 'dashboard' }" @click="householdTab = 'dashboard'">대시보드</button>
         <button class="button" :class="{ 'button--primary': householdTab === 'calendar' }" @click="householdTab = 'calendar'">달력 가계부</button>
         <button class="button" :class="{ 'button--primary': householdTab === 'stats-overview' }" @click="householdTab = 'stats-overview'">통계 요약</button>
         <button class="button" :class="{ 'button--primary': householdTab === 'stats-search' }" @click="householdTab = 'stats-search'">검색</button>
@@ -1377,9 +1386,20 @@ async function deactivatePayment(paymentId) {
       </div>
     </section>
 
+    <PaletteContainer
+      v-if="householdTab === 'dashboard'"
+      :current-user="props.currentUser"
+      :dashboard="dashboard"
+      :calendar-weeks="calendarWeeks"
+      :month-label="monthLabel"
+      :anchor-date="calendarAnchorDate"
+      :entries="sortedMonthEntries"
+      :is-loading="isLoading"
+    />
+
     <CalendarWorkspace
       ref="calendarWorkspaceRef"
-      v-if="householdTab === 'calendar'"
+      v-else-if="householdTab === 'calendar'"
       :quick-stats="quickStats"
       :month-label="monthLabel"
       :anchor-date="calendarAnchorDate"

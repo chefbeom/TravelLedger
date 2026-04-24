@@ -26,6 +26,16 @@
 
 ## 작업 기록
 
+### 2026-04-24 - 가계부 팔레트 대시보드 및 통합 대시보드 개편
+
+- 사용자 명령: 기존 가계부/여행/드라이브 기능 로직과 API를 변경하지 않고, 가계부 첫 화면을 팔레트 기반 대시보드로 개편하고 로그인 후 기능 선택 화면을 전체 종합 대시보드로 교체하라는 요청.
+- 요청 분석: 백엔드와 기존 도메인 로직은 유지하고, 프론트 진입 화면과 디자인 계층만 추가해야 하는 작업으로 해석했습니다. TypeScript 도입 금지, 사용자별 localStorage 저장, GridStack 9열 팔레트 편집, 기존 가계부 탭 유지, 작업 후 검증 및 커밋 조건을 적용했습니다.
+- 실행 내용: `codingconvention.md`와 기존 `HouseholdWorkspace`, `App.vue`, API 호출 구조를 확인했습니다. `pinia`, `gridstack` 의존성을 추가하고, Pinia를 앱에 연결했습니다.
+- 구현 내용: `frontend/src/features/palette` 아래 팔레트 컨테이너, GridStack 그리드, 팔레트 공통 셸, KPI/월달력 팔레트, 레지스트리, 레이아웃/스토리지 유틸을 추가했습니다. `frontend/src/stores/useDashboardPaletteStore.js`에 프리셋, 편집 모드, 추가/숨김/복구/삭제/크기 변경/레이아웃 저장 액션을 구현했습니다. `HouseholdWorkspace` 기본 탭을 `dashboard`로 바꾸고 기존 달력/통계/검색/휴지통/인사이트/비교/입출력/분류관리 탭은 유지했습니다. `MainDashboardWorkspace`를 추가해 가계부/여행/드라이브 요약과 기존 기능 이동 동작을 읽기 전용으로 연결했습니다.
+- 검증 기록: `frontend`에서 `cmd /c npm run build`를 실행해 Vite 프로덕션 빌드 통과를 확인했습니다. `rg`와 `Get-ChildItem`으로 신규 `.ts`, `.tsx`, `lang="ts"`가 없는지 확인했습니다. `git diff --check`는 공백 오류 없이 통과했고, CRLF 변환 경고만 표시됐습니다. Vite 빌드에서 기존 규모성 JS 청크 경고가 있었고, `npm install` 후 npm audit 기준 high 취약점 2건 경고가 표시됐습니다.
+- 결과: 가계부 팔레트 대시보드와 전체 종합 대시보드가 프론트에 추가됐고, 기존 기능 접근 경로는 유지했습니다.
+- 후속 메모: 브라우저에서 실제 드래그/스왑 상호작용은 로그인 세션과 API 데이터가 있는 환경에서 추가 확인하는 것이 좋습니다. 이번 커밋에는 기존에 있던 `deploy/oci/scripts/provision-project-tenant.sh` 변경과 미추적 외부 폴더는 포함하지 않습니다.
+
 ### 2026-04-24 - 프론트 로그인 화면 문구 제거 커밋 및 푸시
 
 - 사용자 명령: 현재 프론트를 수정했으니 푸시해달라는 요청.

@@ -1,9 +1,9 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import AdminWorkspace from './components/AdminWorkspace.vue'
-import FeatureLauncher from './components/FeatureLauncher.vue'
 import HouseholdWorkspace from './components/HouseholdWorkspace.vue'
 import InviteAccessPanel from './components/InviteAccessPanel.vue'
+import MainDashboardWorkspace from './components/MainDashboardWorkspace.vue'
 import PinPadInput from './components/PinPadInput.vue'
 import CalenDriveWorkspace from './components/CalenDriveWorkspace.vue'
 import ProfileWorkspace from './components/ProfileWorkspace.vue'
@@ -979,7 +979,7 @@ onBeforeUnmount(() => {
         <div v-if="errorMessage" class="feedback feedback--error">{{ errorMessage }}</div>
 
         <div v-if="activeRoute === 'launcher'" class="workspace-stack">
-          <FeatureLauncher
+          <MainDashboardWorkspace
             :current-user="currentUser"
             :items="launcherItems"
             @navigate="navigate"
@@ -999,7 +999,7 @@ onBeforeUnmount(() => {
         </div>
         <AdminWorkspace v-else-if="activeRoute === 'admin'" :current-user="currentUser" />
         <ProfileWorkspace v-else-if="activeRoute === 'profile'" :current-user="currentUser" />
-        <HouseholdWorkspace v-else-if="activeRoute === 'household'" />
+        <HouseholdWorkspace v-else-if="activeRoute === 'household'" :current-user="currentUser" />
         <CalenDriveWorkspace v-else-if="activeRoute === 'drive'" :current-user="currentUser" />
         <TravelWorkspace v-else-if="travelRouteKeys.has(activeRoute)" :route="activeRoute" />
       </div>

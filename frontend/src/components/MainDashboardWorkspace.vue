@@ -8,6 +8,7 @@ import {
   fetchCompare,
   fetchDashboard,
   fetchDriveHomeSummary,
+  fetchDriveRecentFiles,
   fetchPaymentMethods,
   fetchTravelPortfolio,
 } from '../lib/api'
@@ -32,7 +33,7 @@ const props = defineProps({
 
 const emit = defineEmits(['navigate'])
 
-const MAIN_DASHBOARD_STORAGE_VERSION = 'v3'
+const MAIN_DASHBOARD_STORAGE_VERSION = 'v4'
 const MAIN_DASHBOARD_SCOPE = 'main'
 const PAYMENT_SELECTION_STORAGE_VERSION = 'v1'
 
@@ -48,6 +49,10 @@ const paletteTemplates = [
   { id: 'quick-entry', type: 'quick-entry', label: '빠른 금액 입력', options: {} },
   { id: 'travel-summary', type: 'travel-summary', label: '여행 요약', options: {} },
   { id: 'drive-summary', type: 'drive-summary', label: '드라이브 요약', options: {} },
+  { id: 'photo-frame', type: 'photo-frame', label: '사진 액자', options: {} },
+  { id: 'drive-capacity', type: 'drive-capacity', label: '드라이브 용량', options: {} },
+  { id: 'drive-recent-files', type: 'drive-recent-files', label: '최근 저장 파일', options: {} },
+  { id: 'quick-actions', type: 'quick-actions', label: '빠른 단축 기능', options: {} },
   { id: 'feature-links', type: 'feature-links', label: '기능 바로가기', options: {} },
 ]
 
@@ -59,6 +64,10 @@ const fixedSizeByType = {
   'quick-entry': '3x3',
   'travel-summary': '3x2',
   'drive-summary': '3x2',
+  'photo-frame': '3x3',
+  'drive-capacity': '3x2',
+  'drive-recent-files': '3x2',
+  'quick-actions': '3x2',
   'feature-links': '3x2',
 }
 
@@ -74,7 +83,11 @@ const defaultPalettes = [
   { id: 'main-month-compare', type: 'household-compare', size: '3x2', position: { x: 3, y: 5 }, visible: true, options: { period: 'month' } },
   { id: 'main-travel-summary', type: 'travel-summary', size: '3x2', position: { x: 6, y: 5 }, visible: true, options: {} },
   { id: 'main-drive-summary', type: 'drive-summary', size: '3x2', position: { x: 0, y: 7 }, visible: true, options: {} },
-  { id: 'main-feature-links', type: 'feature-links', size: '3x2', position: { x: 3, y: 7 }, visible: true, options: {} },
+  { id: 'main-photo-frame', type: 'photo-frame', size: '3x3', position: { x: 3, y: 7 }, visible: true, options: {} },
+  { id: 'main-drive-capacity', type: 'drive-capacity', size: '3x2', position: { x: 6, y: 7 }, visible: true, options: {} },
+  { id: 'main-drive-recent-files', type: 'drive-recent-files', size: '3x2', position: { x: 0, y: 9 }, visible: true, options: {} },
+  { id: 'main-quick-actions', type: 'quick-actions', size: '3x2', position: { x: 6, y: 9 }, visible: true, options: {} },
+  { id: 'main-feature-links', type: 'feature-links', size: '3x2', position: { x: 3, y: 10 }, visible: true, options: {} },
 ]
 
 const metricDefinitions = {
@@ -114,6 +127,7 @@ const feedbackMessage = ref('')
 const householdDashboard = ref(null)
 const travelPortfolio = ref(null)
 const driveSummary = ref(null)
+const driveRecentFileItems = ref([])
 const weekCompareRows = ref([])
 const monthCompareRows = ref([])
 const categories = ref([])
@@ -206,7 +220,38 @@ const travelSummary = computed(() => {
   }
 })
 const recentTravelPlans = computed(() => travelPlans.value.slice(0, 3))
-const recentDriveFiles = computed(() => (driveSummary.value?.recentFiles ?? []).slice(0, 3))
+const allRecentDriveFiles = computed(() => (
+  driveRecentFileItems.value.length
+    ? driveRecentFileItems.value
+    : (driveSummary.value?.recentFiles ?? [])
+))
+const recentDriveFiles = computed(() => allRecentDriveFiles.value.slice(0, 5))
+const driveCapacity = computed(() => {
+  const usedBytes = Number(driveSummary.value?.usedBytes ?? driveSummary.value?.driveUsedBytes ?? 0)
+  const totalBytes = Number(
+    driveSummary.value?.capacityBytes
+      ?? driveSummary.value?.totalCapacityBytes
+      ?? driveSummary.value?.storageCapacityBytes
+      ?? driveSummary.value?.providerCapacityBytes
+      ?? 0,
+  )
+  return {
+    usedBytes,
+    totalBytes,
+    percent: totalBytes > 0 ? Math.min(100, Math.round((usedBytes / totalBytes) * 100)) : 0,
+  }
+})
+const photoFrameItems = computed(() => [
+  ...collectDrivePhotoItems(allRecentDriveFiles.value),
+  ...collectTravelPhotoItems(),
+].slice(0, 6))
+const heroPhoto = computed(() => photoFrameItems.value[0] ?? null)
+const quickActionItems = computed(() => [
+  { key: 'household', label: '가계부 입력', meta: '달력/대시보드', route: 'household' },
+  { key: 'travel', label: '여행 기록', meta: '예산/사진/지도', route: 'travel' },
+  { key: 'drive', label: '파일 저장', meta: '드라이브 열기', route: 'drive' },
+  { key: 'launcher', label: '메인으로', meta: '종합 보기', route: 'launcher' },
+])
 
 function todayIso() {
   const now = new Date()
@@ -236,6 +281,71 @@ function formatBytes(bytes) {
   const units = ['B', 'KB', 'MB', 'GB', 'TB']
   const index = Math.min(Math.floor(Math.log(value) / Math.log(1024)), units.length - 1)
   return `${(value / (1024 ** index)).toFixed(index === 0 ? 0 : 1)} ${units[index]}`
+}
+
+function fileName(item) {
+  return item?.fileOriginName || item?.originalFileName || item?.name || item?.title || '파일'
+}
+
+function fileExtension(item) {
+  const explicit = String(item?.fileFormat || item?.extension || '').toLowerCase()
+  if (explicit) return explicit
+  const name = fileName(item)
+  return name.includes('.') ? name.split('.').pop().toLowerCase() : ''
+}
+
+function isImageFile(item) {
+  const extension = fileExtension(item)
+  const contentType = String(item?.contentType || item?.mimeType || '').toLowerCase()
+  return contentType.startsWith('image/') || ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg'].includes(extension)
+}
+
+function buildDriveThumbnailPath(item) {
+  if (!item) return ''
+  if (item.thumbnailUrl) return item.thumbnailUrl
+  if (item.contentUrl) return item.contentUrl
+  if (item.id == null) return ''
+  return `/api/file/${item.id}/thumbnail`
+}
+
+function buildDriveOpenPath(item) {
+  if (!item) return ''
+  if (item.downloadUrl) return item.downloadUrl
+  if (item.contentUrl) return item.contentUrl
+  if (item.id == null) return ''
+  return `/api/file/${item.id}/download`
+}
+
+function collectDrivePhotoItems(items) {
+  return (items ?? [])
+    .filter((item) => isImageFile(item))
+    .map((item) => ({
+      id: `drive-${item.id ?? fileName(item)}`,
+      title: fileName(item),
+      source: '드라이브',
+      imageUrl: buildDriveThumbnailPath(item),
+      openUrl: buildDriveOpenPath(item),
+    }))
+    .filter((item) => item.imageUrl)
+}
+
+function collectTravelPhotoItems() {
+  const photos = []
+  ;(travelPortfolio.value?.plans ?? []).forEach((plan) => {
+    ;(plan.mediaItems ?? []).forEach((item) => {
+      const imageUrl = item.contentUrl || item.thumbnailUrl || item.mediaUrl || item.imageUrl || ''
+      if (item.mediaType && item.mediaType !== 'PHOTO') return
+      if (!imageUrl) return
+      photos.push({
+        id: `travel-${item.id ?? imageUrl}`,
+        title: item.caption || item.originalFileName || plan.name || '여행 사진',
+        source: plan.name || '여행',
+        imageUrl,
+        openUrl: imageUrl,
+      })
+    })
+  })
+  return photos
 }
 
 function createPaletteId(templateId) {
@@ -583,6 +693,7 @@ async function loadSummaries() {
     householdResult,
     travelResult,
     driveResult,
+    driveRecentResult,
     weekCompareResult,
     monthCompareResult,
     categoriesResult,
@@ -591,6 +702,7 @@ async function loadSummaries() {
     fetchDashboard(anchorDate),
     fetchTravelPortfolio(),
     fetchDriveHomeSummary(),
+    fetchDriveRecentFiles(),
     fetchCompare(anchorDate, 'WEEK', 2),
     fetchCompare(anchorDate, 'MONTH', 2),
     fetchCategories(),
@@ -600,6 +712,7 @@ async function loadSummaries() {
   if (householdResult.status === 'fulfilled') householdDashboard.value = householdResult.value
   if (travelResult.status === 'fulfilled') travelPortfolio.value = travelResult.value
   if (driveResult.status === 'fulfilled') driveSummary.value = driveResult.value
+  if (driveRecentResult.status === 'fulfilled') driveRecentFileItems.value = driveRecentResult.value ?? []
   if (weekCompareResult.status === 'fulfilled') weekCompareRows.value = weekCompareResult.value ?? []
   if (monthCompareResult.status === 'fulfilled') monthCompareRows.value = monthCompareResult.value ?? []
   if (categoriesResult.status === 'fulfilled') categories.value = categoriesResult.value ?? []
@@ -607,7 +720,7 @@ async function loadSummaries() {
 
   syncQuickEntryDefaults()
 
-  const failed = [householdResult, travelResult, driveResult, weekCompareResult, monthCompareResult].filter((result) => result.status === 'rejected')
+  const failed = [householdResult, travelResult, driveResult, driveRecentResult, weekCompareResult, monthCompareResult].filter((result) => result.status === 'rejected')
   if (failed.length) {
     errorMessage.value = '일부 요약 정보를 불러오지 못했습니다. 백엔드 연결 후 자동으로 채워집니다.'
   }
@@ -821,6 +934,90 @@ onBeforeUnmount(() => {
                       <span>{{ file.fileOriginName || file.name || '-' }}</span>
                       <strong>{{ formatBytes(file.fileSize) }}</strong>
                     </div>
+                  </div>
+                </template>
+
+                <template v-else-if="palette.type === 'photo-frame'">
+                  <div class="main-palette__photo-frame">
+                    <a
+                      v-if="heroPhoto"
+                      class="main-palette__photo-hero"
+                      :href="heroPhoto.openUrl || heroPhoto.imageUrl"
+                      target="_blank"
+                      rel="noreferrer"
+                      data-no-drag="true"
+                    >
+                      <img :src="heroPhoto.imageUrl" :alt="heroPhoto.title" loading="lazy" decoding="async" />
+                      <span>{{ heroPhoto.source }}</span>
+                      <strong>{{ heroPhoto.title }}</strong>
+                    </a>
+                    <div v-else class="main-palette__photo-empty">
+                      <strong>표시할 사진이 없습니다.</strong>
+                      <span>드라이브나 여행 기록에 사진을 업로드하면 액자처럼 표시됩니다.</span>
+                    </div>
+                    <div v-if="photoFrameItems.length > 1" class="main-palette__photo-strip">
+                      <img
+                        v-for="photo in photoFrameItems.slice(1, 5)"
+                        :key="photo.id"
+                        :src="photo.imageUrl"
+                        :alt="photo.title"
+                        loading="lazy"
+                        decoding="async"
+                      />
+                    </div>
+                  </div>
+                </template>
+
+                <template v-else-if="palette.type === 'drive-capacity'">
+                  <div class="main-palette__capacity">
+                    <div class="main-palette__single-metric">
+                      <span>사용 중인 용량</span>
+                      <strong>{{ formatBytes(driveCapacity.usedBytes) }}</strong>
+                      <small v-if="driveCapacity.totalBytes">{{ formatBytes(driveCapacity.totalBytes) }} 중 {{ driveCapacity.percent }}%</small>
+                      <small v-else>전체 용량 정보는 드라이브 설정에서 확인합니다.</small>
+                    </div>
+                    <div class="main-palette__capacity-track">
+                      <span :style="{ width: `${driveCapacity.totalBytes ? driveCapacity.percent : 18}%` }"></span>
+                    </div>
+                    <button class="main-palette__inline-action" type="button" data-no-drag="true" @click="emit('navigate', 'drive')">
+                      드라이브 열기
+                    </button>
+                  </div>
+                </template>
+
+                <template v-else-if="palette.type === 'drive-recent-files'">
+                  <div class="main-palette__recent-files">
+                    <a
+                      v-for="file in recentDriveFiles"
+                      :key="file.id"
+                      class="main-palette__recent-file"
+                      :href="buildDriveOpenPath(file)"
+                      target="_blank"
+                      rel="noreferrer"
+                      data-no-drag="true"
+                    >
+                      <img v-if="isImageFile(file)" :src="buildDriveThumbnailPath(file)" :alt="fileName(file)" loading="lazy" decoding="async" />
+                      <span v-else class="main-palette__file-icon">{{ fileExtension(file).toUpperCase() || 'FILE' }}</span>
+                      <strong>{{ fileName(file) }}</strong>
+                      <small>{{ formatBytes(file.fileSize) }}</small>
+                    </a>
+                    <p v-if="!recentDriveFiles.length" class="main-palette__empty">최근 저장한 파일이 없습니다.</p>
+                  </div>
+                </template>
+
+                <template v-else-if="palette.type === 'quick-actions'">
+                  <div class="main-palette__quick-actions">
+                    <button
+                      v-for="action in quickActionItems"
+                      :key="action.key"
+                      type="button"
+                      class="main-palette__quick-action"
+                      data-no-drag="true"
+                      @click="emit('navigate', action.route)"
+                    >
+                      <strong>{{ action.label }}</strong>
+                      <span>{{ action.meta }}</span>
+                    </button>
                   </div>
                 </template>
 
@@ -1199,6 +1396,181 @@ onBeforeUnmount(() => {
 .main-palette__feature-link strong {
   color: #111827;
   font-size: 0.86rem;
+}
+
+.main-palette__photo-frame {
+  display: grid;
+  gap: 8px;
+  grid-template-rows: minmax(0, 1fr) auto;
+  height: 100%;
+  min-height: 0;
+}
+
+.main-palette__photo-hero {
+  background: #111827;
+  color: #ffffff;
+  display: block;
+  min-height: 0;
+  overflow: hidden;
+  position: relative;
+  text-decoration: none;
+}
+
+.main-palette__photo-hero img {
+  display: block;
+  height: 100%;
+  object-fit: cover;
+  width: 100%;
+}
+
+.main-palette__photo-hero span,
+.main-palette__photo-hero strong {
+  background: rgba(17, 24, 39, 0.72);
+  left: 8px;
+  max-width: calc(100% - 16px);
+  overflow: hidden;
+  padding: 3px 6px;
+  position: absolute;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.main-palette__photo-hero span {
+  bottom: 34px;
+  font-size: 0.68rem;
+}
+
+.main-palette__photo-hero strong {
+  bottom: 8px;
+  font-size: 0.78rem;
+}
+
+.main-palette__photo-strip {
+  display: grid;
+  gap: 6px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  min-height: 44px;
+}
+
+.main-palette__photo-strip img {
+  aspect-ratio: 1;
+  border: 1px solid #e5e7eb;
+  object-fit: cover;
+  width: 100%;
+}
+
+.main-palette__photo-empty {
+  align-content: center;
+  background: #f8fafc;
+  border: 1px dashed #d1d5db;
+  color: #6b7280;
+  display: grid;
+  gap: 6px;
+  height: 100%;
+  padding: 12px;
+  text-align: center;
+}
+
+.main-palette__photo-empty strong {
+  color: #111827;
+  font-size: 0.9rem;
+}
+
+.main-palette__capacity {
+  display: grid;
+  gap: 10px;
+}
+
+.main-palette__capacity-track {
+  background: #edf0f4;
+  height: 9px;
+  overflow: hidden;
+}
+
+.main-palette__capacity-track span {
+  background: #6f42c1;
+  display: block;
+  height: 100%;
+}
+
+.main-palette__inline-action {
+  background: #f8fafc;
+  border: 1px solid #d1d5db;
+  color: #374151;
+  font-size: 0.78rem;
+  font-weight: 800;
+  min-height: 32px;
+}
+
+.main-palette__recent-files {
+  display: grid;
+  gap: 7px;
+  min-height: 0;
+}
+
+.main-palette__recent-file {
+  align-items: center;
+  border-top: 1px solid #edf0f4;
+  color: #374151;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: 36px minmax(0, 1fr) auto;
+  min-width: 0;
+  padding-top: 7px;
+  text-decoration: none;
+}
+
+.main-palette__recent-file img,
+.main-palette__file-icon {
+  aspect-ratio: 1;
+  background: #f3f4f6;
+  border: 1px solid #e5e7eb;
+  display: grid;
+  font-size: 0.58rem;
+  font-weight: 900;
+  object-fit: cover;
+  place-items: center;
+  width: 36px;
+}
+
+.main-palette__recent-file strong {
+  color: #111827;
+  font-size: 0.78rem;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.main-palette__recent-file small {
+  color: #6b7280;
+  font-size: 0.72rem;
+}
+
+.main-palette__quick-actions {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.main-palette__quick-action {
+  background: #f8fafc;
+  border: 1px solid #e5e7eb;
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 10px;
+  text-align: left;
+}
+
+.main-palette__quick-action strong {
+  color: #111827;
+  font-size: 0.84rem;
+}
+
+.main-palette__quick-action span {
+  color: #6b7280;
+  font-size: 0.7rem;
 }
 
 .main-palette__empty {

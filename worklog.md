@@ -26,6 +26,16 @@
 
 ## 작업 기록
 
+### 2026-04-25 - Extract calendar controls above layout grid
+
+- User request: Correct the previous change: extract the calendar top control area shown in the screenshot and pull it above the layout grid.
+- Request analysis: The prior implementation moved `달력 배치 / 고정됨` into the calendar panel header, but the intended layout was the reverse: the whole calendar header/control area should be separated from the draggable GridStack calendar panel. The calendar panel should keep showing the actual calendar body, while layout controls remain above it.
+- Actions taken: Checked `codingconvention.md`, reviewed the current `CalendarWorkspace.vue` structure, and confirmed only calendar layout UI files needed changes.
+- Implementation: Added a separate `household-calendar-control-panel` above the GridStack board containing the month header, month/year steppers, calendar size, week mode, display mode, collapse control, and layout controls. Removed those controls from the GridStack calendar panel so that panel now contains the calendar body/collapsed note only. Added a small edit-mode-only calendar drag bar and updated GridStack's drag handle selector so the calendar panel can still be moved after the header was extracted.
+- Verification: Ran `cmd /c npm run build` in `frontend` successfully. Verified no TypeScript SFC/script or `.ts`/`.tsx` files with `rg -n 'lang="ts"|lang=''ts''' frontend/src`, `Get-ChildItem -Path frontend/src -Recurse -Include *.ts,*.tsx`, and `rg --files frontend/src | rg '\.(ts|tsx)$'`. Ran `git diff --check -- frontend/src/components/CalendarWorkspace.vue frontend/src/style.css` with no whitespace errors.
+- Result: The screenshot's calendar top control area now appears as a separate section above the draggable calendar layout grid, and the draggable calendar panel remains movable in edit mode.
+- Follow-up note: Browser visual QA with an authenticated session would be useful to fine-tune spacing against the screenshot.
+
 ### 2026-04-25 - Move calendar layout controls into calendar header
 
 - User request: Move the calendar layout status/control area (`달력 배치`, `고정됨`) into the upper calendar section shown in the reference image.

@@ -1018,7 +1018,7 @@ function initLayoutGrid() {
     draggable: {
       appendTo: 'body',
       cancel: 'button,a,input,select,textarea,[data-no-drag="true"]',
-      handle: '.panel__header',
+      handle: '.panel__header, .household-calendar-panel-dragbar',
       scroll: false,
     },
     resizable: {
@@ -1431,6 +1431,176 @@ defineExpose({
 <template>
   <div class="workspace-stack household-calendar-workspace" @keydown.capture="handleWorkspaceKeydown">
     <section
+      :class="[
+        'panel household-calendar-control-panel household-calendar-layout',
+        { 'household-calendar-layout--amount-only': isAmountOnlyCalendar },
+        { 'household-calendar-layout--fit': isFitCalendar },
+        { 'household-calendar-layout--custom-size': isCalendarCustomSizeEnabled },
+      ]"
+      :style="calendarLayoutStyle"
+    >
+      <div class="panel__header household-calendar-control-panel__header">
+        <div>
+          <h2>{{ monthLabel }}</h2>
+          <p>달력을 넓게 보고 날짜를 누르면 바로 아래 거래 시트로 이동해 해당 날짜 거래를 바로 확인할 수 있습니다.</p>
+        </div>
+        <div class="household-calendar-header-actions">
+          <span class="panel__badge">{{ anchorDate.slice(0, 7) }}</span>
+          <button class="button button--secondary" type="button" @click="toggleCalendarCollapsed">
+            {{ isCalendarCollapsed ? '달력 펼치기' : '달력 접기' }}
+          </button>
+          <div class="household-calendar-layout-toolbar household-calendar-layout-toolbar--inline" data-no-drag="true">
+            <div class="household-calendar-layout-toolbar__status">
+              <strong>달력 배치</strong>
+              <span>{{ isLayoutEditMode ? '편집 중' : '고정됨' }}</span>
+            </div>
+            <div class="household-calendar-layout-toolbar__actions">
+              <button type="button" class="button button--secondary" @click="resetCalendarPanelLayout">
+                기본 배치
+              </button>
+              <button type="button" class="button button--primary" @click="toggleLayoutEditMode">
+                {{ isLayoutEditMode ? '배치 완료' : '배치 편집' }}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div v-if="!isCalendarCollapsed" class="calendar-toolbar">
+        <div class="calendar-stepper">
+          <span class="calendar-stepper__label">연도</span>
+          <div class="calendar-stepper__controls">
+            <button type="button" class="calendar-stepper__arrow" aria-label="이전 연도" @click="shiftAnchorYear(-1)">&lt;</button>
+            <label class="field calendar-stepper__field">
+              <select :value="calendarYear" @change="handleChangeYear">
+                <option v-for="year in yearOptions" :key="year" :value="year">{{ year }}년</option>
+              </select>
+            </label>
+            <button type="button" class="calendar-stepper__arrow" aria-label="다음 연도" @click="shiftAnchorYear(1)">&gt;</button>
+          </div>
+        </div>
+        <div class="calendar-stepper">
+          <span class="calendar-stepper__label">월</span>
+          <div class="calendar-stepper__controls">
+            <button type="button" class="calendar-stepper__arrow" aria-label="이전 월" @click="shiftAnchorMonth(-1)">&lt;</button>
+            <label class="field calendar-stepper__field">
+              <select :value="calendarMonth" @change="handleChangeMonth">
+                <option v-for="month in 12" :key="month" :value="month">{{ month }}월</option>
+              </select>
+            </label>
+            <button type="button" class="calendar-stepper__arrow" aria-label="다음 월" @click="shiftAnchorMonth(1)">&gt;</button>
+          </div>
+        </div>
+      </div>
+
+      <div v-if="!isCalendarCollapsed" class="calendar-size-toolbar">
+        <div class="calendar-size-toolbar__block calendar-size-toolbar__block--resize">
+          <button class="button button--ghost calendar-size-toolbar__control" type="button" @click="isCalendarResizePanelOpen = !isCalendarResizePanelOpen">
+            크기 조절
+          </button>
+          <span class="calendar-size-toolbar__label calendar-size-toolbar__label--inline">{{ calendarCustomSizeLabel }}</span>
+          <div v-if="isCalendarResizePanelOpen" class="calendar-resize-panel">
+            <div class="calendar-resize-panel__header">
+              <strong>달력 실제 크기</strong>
+              <button class="button button--ghost" type="button" @click="resetCalendarCustomSize">기본값</button>
+            </div>
+            <label class="calendar-resize-panel__field">
+              <span>가로 {{ calendarCustomWidth }}px</span>
+              <input
+                :value="calendarCustomWidth"
+                type="range"
+                :min="CALENDAR_CUSTOM_WIDTH_MIN"
+                :max="CALENDAR_CUSTOM_WIDTH_MAX"
+                step="10"
+                @input="updateCalendarCustomWidth($event.target.value)"
+              />
+            </label>
+            <label class="calendar-resize-panel__field">
+              <span>세로 {{ calendarCustomHeight }}px</span>
+              <input
+                :value="calendarCustomHeight"
+                type="range"
+                :min="CALENDAR_CUSTOM_HEIGHT_MIN"
+                :max="CALENDAR_CUSTOM_HEIGHT_MAX"
+                step="10"
+                @input="updateCalendarCustomHeight($event.target.value)"
+              />
+            </label>
+          </div>
+        </div>
+        <div class="calendar-size-toolbar__block">
+          <span class="calendar-size-toolbar__label">달력 크기</span>
+          <div class="calendar-size-toggle">
+            <button
+              v-for="preset in calendarDisplayModes"
+              :key="preset.key"
+              type="button"
+              class="calendar-size-toggle__button"
+              :class="{ 'is-active': calendarScalePreset === preset.key }"
+              @click="calendarScalePreset = preset.key"
+            >
+              {{ preset.label }}
+            </button>
+          </div>
+        </div>
+        <div class="calendar-size-toolbar__block">
+          <span class="calendar-size-toolbar__label">주차 보기</span>
+          <div class="calendar-size-toggle">
+            <button
+              v-for="mode in calendarWeekModes"
+              :key="mode.key"
+              type="button"
+              class="calendar-size-toggle__button"
+              :class="{ 'is-active': calendarWeekMode === mode.key }"
+              @click="calendarWeekMode = mode.key"
+            >
+              {{ mode.label }}
+            </button>
+          </div>
+          <div
+            class="calendar-size-toggle"
+            :class="{ 'calendar-size-toggle--inactive': calendarWeekMode !== 'previous' }"
+            aria-hidden="true"
+          >
+            <button
+              v-for="offset in [1, 2]"
+              :key="offset"
+              type="button"
+              class="calendar-size-toggle__button"
+              :class="{ 'is-active': calendarPreviousWeekOffset === offset }"
+              :disabled="calendarWeekMode !== 'previous'"
+              @click="calendarPreviousWeekOffset = offset"
+            >
+              {{ offset }}주 전
+            </button>
+          </div>
+        </div>
+        <div class="calendar-size-toolbar__block">
+          <span class="calendar-size-toolbar__label">표시 기준</span>
+          <div class="calendar-size-toggle">
+            <button
+              v-for="mode in calendarHighlightModes"
+              :key="mode.key"
+              type="button"
+              class="calendar-size-toggle__button"
+              :class="{ 'is-active': calendarHighlightMode === mode.key }"
+              @click="calendarHighlightMode = mode.key"
+            >
+              {{ mode.label }}
+            </button>
+          </div>
+        </div>
+        <strong class="calendar-size-toolbar__hint">
+          현재 {{ calendarDisplayModes.find((item) => item.key === calendarScalePreset)?.label }}
+          <template v-if="calendarWeekMode !== 'month'">
+            · {{ calendarWeekModes.find((item) => item.key === calendarWeekMode)?.label }}
+            <template v-if="calendarWeekMode === 'previous'"> (이번 주 포함 {{ calendarPreviousWeekOffset + 1 }}주)</template>
+          </template>
+        </strong>
+      </div>
+    </section>
+
+    <section
       class="household-calendar-layout-board"
       :class="{ 'household-calendar-layout-board--editing': isLayoutEditMode }"
       :style="calendarLayoutGridStyle"
@@ -1751,173 +1921,16 @@ defineExpose({
               <template v-else-if="panel.id === 'calendar'">
                 <section
       :class="[
-        'panel household-calendar-panel household-calendar-layout',
+        'panel household-calendar-panel household-calendar-layout household-calendar-panel--content-only',
         { 'household-calendar-layout--amount-only': isAmountOnlyCalendar },
         { 'household-calendar-layout--fit': isFitCalendar },
         { 'household-calendar-layout--custom-size': isCalendarCustomSizeEnabled },
       ]"
       :style="calendarLayoutStyle"
     >
-      <div class="panel__header">
-        <div>
-          <h2>{{ monthLabel }}</h2>
-          <p>달력을 넓게 보고 날짜를 누르면 바로 아래 거래 시트로 이동해 해당 날짜 거래를 바로 확인할 수 있습니다.</p>
-        </div>
-        <div class="household-calendar-header-actions">
-          <span class="panel__badge">{{ anchorDate.slice(0, 7) }}</span>
-          <button class="button button--secondary" type="button" @click="toggleCalendarCollapsed">
-            {{ isCalendarCollapsed ? '달력 펼치기' : '달력 접기' }}
-          </button>
-          <div class="household-calendar-layout-toolbar household-calendar-layout-toolbar--inline" data-no-drag="true">
-            <div class="household-calendar-layout-toolbar__status">
-              <strong>달력 배치</strong>
-              <span>{{ isLayoutEditMode ? '편집 중' : '고정됨' }}</span>
-            </div>
-            <div class="household-calendar-layout-toolbar__actions">
-              <button type="button" class="button button--secondary" @click="resetCalendarPanelLayout">
-                기본 배치
-              </button>
-              <button type="button" class="button button--primary" @click="toggleLayoutEditMode">
-                {{ isLayoutEditMode ? '배치 완료' : '배치 편집' }}
-              </button>
-            </div>
-          </div>
-        </div>
+      <div v-if="isLayoutEditMode" class="household-calendar-panel-dragbar">
+        달력 영역
       </div>
-
-      <div v-if="!isCalendarCollapsed" class="calendar-toolbar">
-        <div class="calendar-stepper">
-          <span class="calendar-stepper__label">연도</span>
-          <div class="calendar-stepper__controls">
-            <button type="button" class="calendar-stepper__arrow" aria-label="이전 연도" @click="shiftAnchorYear(-1)">&lt;</button>
-            <label class="field calendar-stepper__field">
-              <select :value="calendarYear" @change="handleChangeYear">
-                <option v-for="year in yearOptions" :key="year" :value="year">{{ year }}년</option>
-              </select>
-            </label>
-            <button type="button" class="calendar-stepper__arrow" aria-label="다음 연도" @click="shiftAnchorYear(1)">&gt;</button>
-          </div>
-        </div>
-        <div class="calendar-stepper">
-          <span class="calendar-stepper__label">월</span>
-          <div class="calendar-stepper__controls">
-            <button type="button" class="calendar-stepper__arrow" aria-label="이전 월" @click="shiftAnchorMonth(-1)">&lt;</button>
-            <label class="field calendar-stepper__field">
-              <select :value="calendarMonth" @change="handleChangeMonth">
-                <option v-for="month in 12" :key="month" :value="month">{{ month }}월</option>
-              </select>
-            </label>
-            <button type="button" class="calendar-stepper__arrow" aria-label="다음 월" @click="shiftAnchorMonth(1)">&gt;</button>
-          </div>
-        </div>
-      </div>
-
-      <div v-if="!isCalendarCollapsed" class="calendar-size-toolbar">
-        <div class="calendar-size-toolbar__block calendar-size-toolbar__block--resize">
-          <button class="button button--ghost calendar-size-toolbar__control" type="button" @click="isCalendarResizePanelOpen = !isCalendarResizePanelOpen">
-            크기 조절
-          </button>
-          <span class="calendar-size-toolbar__label calendar-size-toolbar__label--inline">{{ calendarCustomSizeLabel }}</span>
-          <div v-if="isCalendarResizePanelOpen" class="calendar-resize-panel">
-            <div class="calendar-resize-panel__header">
-              <strong>달력 실제 크기</strong>
-              <button class="button button--ghost" type="button" @click="resetCalendarCustomSize">기본값</button>
-            </div>
-            <label class="calendar-resize-panel__field">
-              <span>가로 {{ calendarCustomWidth }}px</span>
-              <input
-                :value="calendarCustomWidth"
-                type="range"
-                :min="CALENDAR_CUSTOM_WIDTH_MIN"
-                :max="CALENDAR_CUSTOM_WIDTH_MAX"
-                step="10"
-                @input="updateCalendarCustomWidth($event.target.value)"
-              />
-            </label>
-            <label class="calendar-resize-panel__field">
-              <span>세로 {{ calendarCustomHeight }}px</span>
-              <input
-                :value="calendarCustomHeight"
-                type="range"
-                :min="CALENDAR_CUSTOM_HEIGHT_MIN"
-                :max="CALENDAR_CUSTOM_HEIGHT_MAX"
-                step="10"
-                @input="updateCalendarCustomHeight($event.target.value)"
-              />
-            </label>
-          </div>
-        </div>
-        <div class="calendar-size-toolbar__block">
-          <span class="calendar-size-toolbar__label">달력 크기</span>
-          <div class="calendar-size-toggle">
-            <button
-              v-for="preset in calendarDisplayModes"
-              :key="preset.key"
-              type="button"
-              class="calendar-size-toggle__button"
-              :class="{ 'is-active': calendarScalePreset === preset.key }"
-              @click="calendarScalePreset = preset.key"
-            >
-              {{ preset.label }}
-            </button>
-          </div>
-        </div>
-        <div class="calendar-size-toolbar__block">
-          <span class="calendar-size-toolbar__label">주차 보기</span>
-          <div class="calendar-size-toggle">
-            <button
-              v-for="mode in calendarWeekModes"
-              :key="mode.key"
-              type="button"
-              class="calendar-size-toggle__button"
-              :class="{ 'is-active': calendarWeekMode === mode.key }"
-              @click="calendarWeekMode = mode.key"
-            >
-              {{ mode.label }}
-            </button>
-          </div>
-          <div
-            class="calendar-size-toggle"
-            :class="{ 'calendar-size-toggle--inactive': calendarWeekMode !== 'previous' }"
-            aria-hidden="true"
-          >
-            <button
-              v-for="offset in [1, 2]"
-              :key="offset"
-              type="button"
-              class="calendar-size-toggle__button"
-              :class="{ 'is-active': calendarPreviousWeekOffset === offset }"
-              :disabled="calendarWeekMode !== 'previous'"
-              @click="calendarPreviousWeekOffset = offset"
-            >
-              {{ offset }}주 전
-            </button>
-          </div>
-        </div>
-        <div class="calendar-size-toolbar__block">
-          <span class="calendar-size-toolbar__label">표시 기준</span>
-          <div class="calendar-size-toggle">
-            <button
-              v-for="mode in calendarHighlightModes"
-              :key="mode.key"
-              type="button"
-              class="calendar-size-toggle__button"
-              :class="{ 'is-active': calendarHighlightMode === mode.key }"
-              @click="calendarHighlightMode = mode.key"
-            >
-              {{ mode.label }}
-            </button>
-          </div>
-        </div>
-        <strong class="calendar-size-toolbar__hint">
-          현재 {{ calendarDisplayModes.find((item) => item.key === calendarScalePreset)?.label }}
-          <template v-if="calendarWeekMode !== 'month'">
-            · {{ calendarWeekModes.find((item) => item.key === calendarWeekMode)?.label }}
-            <template v-if="calendarWeekMode === 'previous'"> (이번 주 포함 {{ calendarPreviousWeekOffset + 1 }}주)</template>
-          </template>
-        </strong>
-      </div>
-
       <div v-if="!isCalendarCollapsed" ref="calendarShellRef" class="calendar-shell">
         <div class="calendar-scale-frame">
           <div ref="calendarContentRef" class="calendar-scale-content">

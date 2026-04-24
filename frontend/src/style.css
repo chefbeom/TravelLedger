@@ -4784,6 +4784,14 @@ textarea {
   min-width: 0;
 }
 
+.household-calendar-control-panel {
+  margin: 0;
+}
+
+.household-calendar-control-panel .calendar-size-toolbar {
+  margin-bottom: 0;
+}
+
 .household-calendar-layout-toolbar {
   display: flex;
   align-items: center;
@@ -4916,6 +4924,29 @@ textarea {
 
 .household-calendar-layout-panel-shell--editing .panel__header {
   cursor: grab;
+}
+
+.household-calendar-panel--content-only .calendar-shell {
+  margin-top: 0;
+}
+
+.household-calendar-panel-dragbar {
+  align-items: center;
+  border: 1px dashed rgba(111, 66, 193, 0.28);
+  border-radius: 14px;
+  color: var(--text-soft);
+  cursor: grab;
+  display: flex;
+  font-size: 0.82rem;
+  font-weight: 800;
+  justify-content: center;
+  margin-bottom: 10px;
+  min-height: 34px;
+  background: rgba(111, 66, 193, 0.06);
+}
+
+.household-calendar-panel-dragbar:active {
+  cursor: grabbing;
 }
 
 .household-calendar-layout-board .ui-resizable-se {

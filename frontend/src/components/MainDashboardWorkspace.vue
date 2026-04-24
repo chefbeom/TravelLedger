@@ -36,6 +36,7 @@ const emit = defineEmits(['navigate'])
 const MAIN_DASHBOARD_STORAGE_VERSION = 'v6'
 const MAIN_DASHBOARD_SCOPE = 'main'
 const PAYMENT_SELECTION_STORAGE_VERSION = 'v1'
+const SUMMARY_CACHE_STORAGE_VERSION = 'v1'
 const MAIN_DASHBOARD_GRID_MARGIN = 4
 const MAIN_DASHBOARD_GRID_GAP = MAIN_DASHBOARD_GRID_MARGIN * 2
 
@@ -159,10 +160,12 @@ let grid = null
 let resizeObserver = null
 let dragStartLayout = new Map()
 let rebuildTimer = 0
+let summaryLoadSequence = 0
 
 const userStorageId = computed(() => props.currentUser?.id || props.currentUser?.loginId || 'anonymous')
 const storageKey = computed(() => `calen-main-dashboard-palettes:${MAIN_DASHBOARD_STORAGE_VERSION}:${userStorageId.value}:${MAIN_DASHBOARD_SCOPE}`)
 const paymentSelectionStorageKey = computed(() => `calen-main-dashboard-payment:${PAYMENT_SELECTION_STORAGE_VERSION}:${userStorageId.value}`)
+const summaryCacheStorageKey = computed(() => `calen-main-dashboard-summary:${SUMMARY_CACHE_STORAGE_VERSION}:${userStorageId.value}`)
 const visiblePalettes = computed(() => palettes.value.filter((palette) => palette.visible !== false))
 const hiddenPalettes = computed(() => palettes.value.filter((palette) => palette.visible === false))
 const layoutKey = computed(() =>
@@ -414,6 +417,45 @@ function hydratePaymentSelection() {
 function persistPaymentSelection() {
   if (typeof window === 'undefined') return
   window.localStorage.setItem(paymentSelectionStorageKey.value, selectedPaymentMethodId.value)
+}
+
+function hydrateSummaryCache() {
+  if (typeof window === 'undefined') return
+  try {
+    const raw = window.sessionStorage.getItem(summaryCacheStorageKey.value)
+    if (!raw) return
+    const cache = JSON.parse(raw)
+    householdDashboard.value = cache.householdDashboard ?? null
+    travelPortfolio.value = cache.travelPortfolio ?? null
+    driveSummary.value = cache.driveSummary ?? null
+    driveRecentFileItems.value = cache.driveRecentFileItems ?? []
+    weekCompareRows.value = cache.weekCompareRows ?? []
+    monthCompareRows.value = cache.monthCompareRows ?? []
+    categories.value = cache.categories ?? []
+    paymentMethods.value = cache.paymentMethods ?? []
+    syncQuickEntryDefaults()
+  } catch {
+    // Cache is an optional paint-speed hint; failed reads fall back to fresh API data.
+  }
+}
+
+function persistSummaryCache() {
+  if (typeof window === 'undefined') return
+  try {
+    window.sessionStorage.setItem(summaryCacheStorageKey.value, JSON.stringify({
+      savedAt: Date.now(),
+      householdDashboard: householdDashboard.value,
+      travelPortfolio: travelPortfolio.value,
+      driveSummary: driveSummary.value,
+      driveRecentFileItems: driveRecentFileItems.value,
+      weekCompareRows: weekCompareRows.value,
+      monthCompareRows: monthCompareRows.value,
+      categories: categories.value,
+      paymentMethods: paymentMethods.value,
+    }))
+  } catch {
+    // Fresh API data still renders when session storage is unavailable.
+  }
 }
 
 function paletteTitle(palette) {
@@ -704,46 +746,64 @@ async function submitQuickEntry() {
   }
 }
 
+async function settleSummaryRequest(loadId, requestPromise, applyValue) {
+  try {
+    const value = await requestPromise
+    if (loadId === summaryLoadSequence) {
+      applyValue(value)
+      persistSummaryCache()
+    }
+    return { status: 'fulfilled', value }
+  } catch (error) {
+    return { status: 'rejected', reason: error }
+  }
+}
+
 async function loadSummaries() {
+  const loadId = summaryLoadSequence + 1
+  summaryLoadSequence = loadId
   loading.value = true
   errorMessage.value = ''
   const anchorDate = todayIso()
-  const [
-    householdResult,
-    travelResult,
-    driveResult,
-    driveRecentResult,
-    weekCompareResult,
-    monthCompareResult,
-    categoriesResult,
-    paymentMethodsResult,
-  ] = await Promise.allSettled([
-    fetchDashboard(anchorDate),
-    fetchTravelPortfolio(),
-    fetchDriveHomeSummary(),
-    fetchDriveRecentFiles(),
-    fetchCompare(anchorDate, 'WEEK', 2),
-    fetchCompare(anchorDate, 'MONTH', 2),
-    fetchCategories(),
-    fetchPaymentMethods(),
+  const results = await Promise.all([
+    settleSummaryRequest(loadId, fetchDashboard(anchorDate), (value) => {
+      householdDashboard.value = value
+    }),
+    settleSummaryRequest(loadId, fetchTravelPortfolio(), (value) => {
+      travelPortfolio.value = value
+    }),
+    settleSummaryRequest(loadId, fetchDriveHomeSummary(), (value) => {
+      driveSummary.value = value
+    }),
+    settleSummaryRequest(loadId, fetchDriveRecentFiles(), (value) => {
+      driveRecentFileItems.value = value ?? []
+    }),
+    settleSummaryRequest(loadId, fetchCompare(anchorDate, 'WEEK', 2), (value) => {
+      weekCompareRows.value = value ?? []
+    }),
+    settleSummaryRequest(loadId, fetchCompare(anchorDate, 'MONTH', 2), (value) => {
+      monthCompareRows.value = value ?? []
+    }),
+    settleSummaryRequest(loadId, fetchCategories(), (value) => {
+      categories.value = value ?? []
+      syncQuickEntryDefaults()
+    }),
+    settleSummaryRequest(loadId, fetchPaymentMethods(), (value) => {
+      paymentMethods.value = value ?? []
+      syncQuickEntryDefaults()
+    }),
   ])
 
-  if (householdResult.status === 'fulfilled') householdDashboard.value = householdResult.value
-  if (travelResult.status === 'fulfilled') travelPortfolio.value = travelResult.value
-  if (driveResult.status === 'fulfilled') driveSummary.value = driveResult.value
-  if (driveRecentResult.status === 'fulfilled') driveRecentFileItems.value = driveRecentResult.value ?? []
-  if (weekCompareResult.status === 'fulfilled') weekCompareRows.value = weekCompareResult.value ?? []
-  if (monthCompareResult.status === 'fulfilled') monthCompareRows.value = monthCompareResult.value ?? []
-  if (categoriesResult.status === 'fulfilled') categories.value = categoriesResult.value ?? []
-  if (paymentMethodsResult.status === 'fulfilled') paymentMethods.value = paymentMethodsResult.value ?? []
+  if (loadId === summaryLoadSequence) {
+    syncQuickEntryDefaults()
 
-  syncQuickEntryDefaults()
-
-  const failed = [householdResult, travelResult, driveResult, driveRecentResult, weekCompareResult, monthCompareResult].filter((result) => result.status === 'rejected')
-  if (failed.length) {
-    errorMessage.value = '일부 요약 정보를 불러오지 못했습니다. 백엔드 연결 후 자동으로 채워집니다.'
+    const failed = results.slice(0, 6).filter((result) => result.status === 'rejected')
+    if (failed.length) {
+      errorMessage.value = '일부 요약 정보를 불러오지 못했습니다. 백엔드 연결 후 자동으로 채워집니다.'
+    }
+    loading.value = false
   }
-  loading.value = false
+  return results
 }
 
 watch(
@@ -751,6 +811,7 @@ watch(
   () => {
     hydratePalettes()
     hydratePaymentSelection()
+    hydrateSummaryCache()
   },
   { immediate: true },
 )
@@ -768,17 +829,18 @@ watch(isEditMode, (value) => {
 
 onMounted(async () => {
   document.addEventListener('pointerdown', closeToolsOnOutsidePointer)
-  await loadSummaries()
   await nextTick()
   initGrid()
   resizeObserver = new ResizeObserver(updateCellHeight)
   if (gridElement.value?.parentElement) {
     resizeObserver.observe(gridElement.value.parentElement)
   }
+  loadSummaries()
 })
 
 onBeforeUnmount(() => {
   document.removeEventListener('pointerdown', closeToolsOnOutsidePointer)
+  summaryLoadSequence += 1
   if (rebuildTimer) {
     window.clearTimeout(rebuildTimer)
   }

@@ -26,6 +26,16 @@
 
 ## 작업 기록
 
+### 2026-04-24 - Main dashboard initial load optimization
+
+- User request: The dashboard takes too long to load after refresh.
+- Request analysis: The dashboard API calls were already started in parallel, but the component waited for all summary requests to settle before applying any data and before initializing GridStack. A single slow endpoint could delay the whole dashboard paint.
+- Actions taken: Checked `codingconvention.md`, reviewed `MainDashboardWorkspace.vue` loading flow, API calls, mount sequence, and current git status.
+- Implementation: Added per-user session summary cache so a refreshed tab can paint the last dashboard data immediately. Changed summary loading to apply each API result as soon as it resolves, while ignoring stale responses from older loads. Moved GridStack initialization ahead of network loading so palette layout renders immediately and data fills progressively.
+- Verification: Ran `cmd /c npm run build` in `frontend` successfully. Verified no TypeScript SFC/script or `.ts`/`.tsx` files with `rg -n 'lang="ts"|lang=''ts''' frontend/src` and `rg --files frontend/src | rg '\.(ts|tsx)$'`. Ran `git diff --check -- frontend/src/components/MainDashboardWorkspace.vue worklog.md` with no whitespace errors.
+- Result: Dashboard refresh no longer waits for every summary endpoint before rendering the palette grid. Cached data appears first when available, then fresh household/travel/drive/compare/control data updates incrementally.
+- Follow-up note: Backend endpoint latency can still affect when each individual number becomes fresh, but the first dashboard view should appear much sooner.
+
 ### 2026-04-24 - Push current dashboard work
 
 - User request: Push the work completed so far and record a log summarizing the work through this push.

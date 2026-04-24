@@ -1,6 +1,24 @@
 <script setup>
-import { computed, onMounted, ref } from 'vue'
-import { fetchDashboard, fetchDriveHomeSummary, fetchTravelPortfolio } from '../lib/api'
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { GridStack } from 'gridstack'
+import 'gridstack/dist/gridstack.min.css'
+import {
+  createEntry,
+  fetchCategories,
+  fetchCompare,
+  fetchDashboard,
+  fetchDriveHomeSummary,
+  fetchPaymentMethods,
+  fetchTravelPortfolio,
+} from '../lib/api'
+import { DASHBOARD_GRID_COLUMNS } from '../features/palette/types'
+import {
+  applyLayoutPatchesToPalettes,
+  findFirstAvailablePosition,
+  getSpanBySize,
+  normalizePaletteList,
+  normalizePaletteSize,
+} from '../features/palette/utils/paletteLayout'
 
 const props = defineProps({
   currentUser: {
@@ -15,26 +33,73 @@ const props = defineProps({
 
 const emit = defineEmits(['navigate'])
 
-const loading = ref(false)
-const errorMessage = ref('')
-const householdDashboard = ref(null)
-const travelPortfolio = ref(null)
-const driveSummary = ref(null)
+const MAIN_DASHBOARD_STORAGE_VERSION = 'v2'
+const MAIN_DASHBOARD_SCOPE = 'main'
+const PAYMENT_SELECTION_STORAGE_VERSION = 'v1'
+
+const paletteTemplates = [
+  { id: 'household-summary', type: 'household-summary', label: '가계부 종합', defaultSize: '3x2', options: {} },
+  { id: 'household-week-expense', type: 'household-metric', label: '이번 주 사용금액', defaultSize: '1x1', options: { metric: 'weekExpense' } },
+  { id: 'household-week-income', type: 'household-metric', label: '이번 주 수입', defaultSize: '1x1', options: { metric: 'weekIncome' } },
+  { id: 'household-month-expense', type: 'household-metric', label: '이번 달 사용금액', defaultSize: '1x1', options: { metric: 'monthExpense' } },
+  { id: 'household-month-income', type: 'household-metric', label: '이번 달 수입', defaultSize: '1x1', options: { metric: 'monthIncome' } },
+  { id: 'household-payment', type: 'household-payment', label: '결제수단 사용금액', defaultSize: '2x2', options: {} },
+  { id: 'household-week-compare', type: 'household-compare', label: '이번 주/저번 주 비교', defaultSize: '3x2', options: { period: 'week' } },
+  { id: 'household-month-compare', type: 'household-compare', label: '이번 달/저번 달 비교', defaultSize: '3x2', options: { period: 'month' } },
+  { id: 'quick-entry', type: 'quick-entry', label: '빠른 금액 입력', defaultSize: '3x2', options: {} },
+  { id: 'travel-summary', type: 'travel-summary', label: '여행 요약', defaultSize: '3x2', options: {} },
+  { id: 'drive-summary', type: 'drive-summary', label: '드라이브 요약', defaultSize: '3x2', options: {} },
+  { id: 'feature-links', type: 'feature-links', label: '기능 바로가기', defaultSize: '3x2', options: {} },
+]
+
+const supportedSizesByType = {
+  'household-summary': ['2x2', '3x2', '3x3'],
+  'household-metric': ['1x1', '1x2', '2x2'],
+  'household-payment': ['2x2', '3x2'],
+  'household-compare': ['2x2', '3x2', '3x3'],
+  'quick-entry': ['2x2', '3x2', '3x3'],
+  'travel-summary': ['2x2', '3x2', '3x3'],
+  'drive-summary': ['2x2', '3x2', '3x3'],
+  'feature-links': ['2x2', '3x2', '3x3'],
+}
+
+const defaultPalettes = [
+  { id: 'main-household-summary', type: 'household-summary', size: '3x2', position: { x: 0, y: 0 }, visible: true, options: {} },
+  { id: 'main-month-expense', type: 'household-metric', size: '1x1', position: { x: 3, y: 0 }, visible: true, options: { metric: 'monthExpense' } },
+  { id: 'main-month-income', type: 'household-metric', size: '1x1', position: { x: 4, y: 0 }, visible: true, options: { metric: 'monthIncome' } },
+  { id: 'main-week-expense', type: 'household-metric', size: '1x1', position: { x: 3, y: 1 }, visible: true, options: { metric: 'weekExpense' } },
+  { id: 'main-week-income', type: 'household-metric', size: '1x1', position: { x: 4, y: 1 }, visible: true, options: { metric: 'weekIncome' } },
+  { id: 'main-quick-entry', type: 'quick-entry', size: '3x2', position: { x: 5, y: 0 }, visible: true, options: {} },
+  { id: 'main-payment', type: 'household-payment', size: '2x2', position: { x: 0, y: 2 }, visible: true, options: {} },
+  { id: 'main-week-compare', type: 'household-compare', size: '3x2', position: { x: 2, y: 2 }, visible: true, options: { period: 'week' } },
+  { id: 'main-month-compare', type: 'household-compare', size: '3x2', position: { x: 5, y: 2 }, visible: true, options: { period: 'month' } },
+  { id: 'main-travel-summary', type: 'travel-summary', size: '3x2', position: { x: 0, y: 4 }, visible: true, options: {} },
+  { id: 'main-drive-summary', type: 'drive-summary', size: '3x2', position: { x: 3, y: 4 }, visible: true, options: {} },
+  { id: 'main-feature-links', type: 'feature-links', size: '3x2', position: { x: 6, y: 4 }, visible: true, options: {} },
+]
+
+const metricDefinitions = {
+  weekExpense: { statKey: 'week', field: 'expense', label: '이번 주 사용금액', tone: 'negative' },
+  weekIncome: { statKey: 'week', field: 'income', label: '이번 주 수입', tone: 'positive' },
+  monthExpense: { statKey: 'month', field: 'expense', label: '이번 달 사용금액', tone: 'negative' },
+  monthIncome: { statKey: 'month', field: 'income', label: '이번 달 수입', tone: 'positive' },
+  monthBalance: { statKey: 'month', field: 'balance', label: '이번 달 순액', tone: 'balance' },
+}
 
 const featureCopy = {
   household: {
     title: '가계부',
-    description: '월별 흐름, 최근 거래, 통계 화면으로 바로 이동합니다.',
+    description: '월별 흐름, 최근 거래, 통계 화면으로 이동합니다.',
     badge: 'Finance',
   },
   travel: {
     title: '여행',
-    description: '여행 예산, 기록, 지도와 사진을 한 공간에서 이어서 관리합니다.',
+    description: '여행 예산, 기록, 지도와 사진을 이어서 관리합니다.',
     badge: 'Travel',
   },
   drive: {
     title: '드라이브',
-    description: '파일, 폴더, 공유, 휴지통 상태를 확인하고 클라우드 공간으로 이동합니다.',
+    description: '파일, 폴더, 공유, 휴지통 상태를 확인합니다.',
     badge: 'Cloud',
   },
   admin: {
@@ -44,10 +109,114 @@ const featureCopy = {
   },
 }
 
+const loading = ref(false)
+const errorMessage = ref('')
+const feedbackMessage = ref('')
+const householdDashboard = ref(null)
+const travelPortfolio = ref(null)
+const driveSummary = ref(null)
+const weekCompareRows = ref([])
+const monthCompareRows = ref([])
+const categories = ref([])
+const paymentMethods = ref([])
+const palettes = ref([])
+const isEditMode = ref(false)
+const toolsOpen = ref(false)
+const selectedTemplateId = ref('household-month-expense')
+const selectedPaymentMethodId = ref('')
+const quickSubmitting = ref(false)
+const gridElement = ref(null)
+const toolsPanelRef = ref(null)
+const toolsButtonRef = ref(null)
+const cellHeight = ref(92)
+
+const quickEntry = reactive({
+  entryDate: todayIso(),
+  entryType: 'EXPENSE',
+  title: '',
+  amount: '',
+  categoryGroupId: '',
+  categoryDetailId: '',
+  paymentMethodId: '',
+})
+
+let grid = null
+let resizeObserver = null
+let dragStartLayout = new Map()
+let rebuildTimer = 0
+
+const userStorageId = computed(() => props.currentUser?.id || props.currentUser?.loginId || 'anonymous')
+const storageKey = computed(() => `calen-main-dashboard-palettes:${MAIN_DASHBOARD_STORAGE_VERSION}:${userStorageId.value}:${MAIN_DASHBOARD_SCOPE}`)
+const paymentSelectionStorageKey = computed(() => `calen-main-dashboard-payment:${PAYMENT_SELECTION_STORAGE_VERSION}:${userStorageId.value}`)
+const visiblePalettes = computed(() => palettes.value.filter((palette) => palette.visible !== false))
+const hiddenPalettes = computed(() => palettes.value.filter((palette) => palette.visible === false))
+const layoutKey = computed(() =>
+  visiblePalettes.value
+    .map((palette) => `${palette.id}:${palette.position?.x ?? 0}:${palette.position?.y ?? 0}:${palette.size}:${palette.visible}`)
+    .join('|'),
+)
+const featureItems = computed(() => props.items.map((item) => ({
+  ...item,
+  ...(featureCopy[item.key] ?? {}),
+})))
+const quickGroups = computed(() => categories.value.filter((group) => group.entryType === quickEntry.entryType))
+const quickDetails = computed(() => {
+  const group = categories.value.find((item) => String(item.id) === String(quickEntry.categoryGroupId))
+  return group?.details ?? []
+})
+const paymentOptions = computed(() => {
+  const fromBreakdown = (householdDashboard.value?.paymentBreakdown ?? [])
+    .map((item) => ({
+      id: item.paymentMethodId,
+      name: item.paymentMethodName,
+      kind: item.kind,
+    }))
+    .filter((item) => item.id != null)
+  const fromMethods = paymentMethods.value
+    .map((item) => ({
+      id: item.id,
+      name: item.name,
+      kind: item.kind,
+    }))
+    .filter((item) => item.id != null)
+  const merged = new Map()
+  ;[...fromBreakdown, ...fromMethods].forEach((item) => {
+    merged.set(String(item.id), item)
+  })
+  return Array.from(merged.values())
+})
+const selectedPaymentSummary = computed(() => {
+  const breakdown = householdDashboard.value?.paymentBreakdown ?? []
+  if (!breakdown.length) {
+    return null
+  }
+  const selected = selectedPaymentMethodId.value
+    ? breakdown.find((item) => String(item.paymentMethodId) === String(selectedPaymentMethodId.value))
+    : null
+  return selected ?? breakdown.slice().sort((left, right) => Number(right.totalAmount ?? 0) - Number(left.totalAmount ?? 0))[0]
+})
+const travelPlans = computed(() => travelPortfolio.value?.plans ?? [])
+const travelSummary = computed(() => {
+  const plans = travelPlans.value
+  return {
+    planCount: plans.length,
+    plannedTotal: plans.reduce((sum, plan) => sum + Number(plan.plannedTotalKrw ?? plan.totalBudgetKrw ?? 0), 0),
+    actualTotal: plans.reduce((sum, plan) => sum + Number(plan.actualTotalKrw ?? plan.totalExpenseKrw ?? 0), 0),
+    recordCount: plans.reduce((sum, plan) => sum + Number(plan.recordCount ?? plan.memoryRecordCount ?? 0), 0),
+    mediaCount: plans.reduce((sum, plan) => sum + Number(plan.mediaItemCount ?? 0), 0),
+  }
+})
+const recentTravelPlans = computed(() => travelPlans.value.slice(0, 3))
+const recentDriveFiles = computed(() => (driveSummary.value?.recentFiles ?? []).slice(0, 3))
+
 function todayIso() {
   const now = new Date()
   const offset = now.getTimezoneOffset() * 60000
   return new Date(now.getTime() - offset).toISOString().slice(0, 10)
+}
+
+function clone(value) {
+  return JSON.parse(JSON.stringify(value))
 }
 
 function formatCurrency(value) {
@@ -64,192 +233,697 @@ function formatNumber(value) {
 
 function formatBytes(bytes) {
   const value = Number(bytes || 0)
-  if (!value) {
-    return '0 B'
-  }
+  if (!value) return '0 B'
   const units = ['B', 'KB', 'MB', 'GB', 'TB']
   const index = Math.min(Math.floor(Math.log(value) / Math.log(1024)), units.length - 1)
   return `${(value / (1024 ** index)).toFixed(index === 0 ? 0 : 1)} ${units[index]}`
 }
 
-function monthOverview() {
-  return (householdDashboard.value?.quickStats ?? []).find((item) => item.key === 'month')?.overview ?? {}
+function createPaletteId(templateId) {
+  return `${templateId}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
 }
 
-const householdCards = computed(() => {
-  const overview = monthOverview()
+function supportedSizesFor(palette) {
+  return supportedSizesByType[palette.type] ?? ['1x1', '1x2', '2x2', '3x2', '3x3']
+}
+
+function defaultSizeFor(type) {
+  return supportedSizesFor({ type })[0] ?? '2x2'
+}
+
+function normalizeMainPalettes(value) {
+  return normalizePaletteList(value).map((palette) => {
+    const supported = supportedSizesFor(palette)
+    const size = supported.includes(palette.size) ? palette.size : defaultSizeFor(palette.type)
+    return {
+      ...palette,
+      size,
+    }
+  })
+}
+
+function hydratePalettes() {
+  if (typeof window === 'undefined') {
+    palettes.value = normalizeMainPalettes(clone(defaultPalettes))
+    return
+  }
+
+  try {
+    const raw = window.localStorage.getItem(storageKey.value)
+    if (!raw) {
+      palettes.value = normalizeMainPalettes(clone(defaultPalettes))
+      return
+    }
+    const parsed = JSON.parse(raw)
+    palettes.value = normalizeMainPalettes(Array.isArray(parsed?.palettes) ? parsed.palettes : defaultPalettes)
+  } catch {
+    palettes.value = normalizeMainPalettes(clone(defaultPalettes))
+  }
+}
+
+function persistPalettes() {
+  if (typeof window === 'undefined') return
+  window.localStorage.setItem(storageKey.value, JSON.stringify({ palettes: palettes.value }))
+}
+
+function hydratePaymentSelection() {
+  if (typeof window === 'undefined') return
+  selectedPaymentMethodId.value = window.localStorage.getItem(paymentSelectionStorageKey.value) || ''
+}
+
+function persistPaymentSelection() {
+  if (typeof window === 'undefined') return
+  window.localStorage.setItem(paymentSelectionStorageKey.value, selectedPaymentMethodId.value)
+}
+
+function paletteTitle(palette) {
+  const template = paletteTemplates.find((item) =>
+    item.type === palette.type
+    && JSON.stringify(item.options ?? {}) === JSON.stringify(palette.options ?? {}),
+  )
+  if (template) return template.label
+  if (palette.type === 'household-metric') return metricDefinitions[palette.options?.metric]?.label || '가계부 지표'
+  if (palette.type === 'household-compare') return palette.options?.period === 'month' ? '이번 달/저번 달 비교' : '이번 주/저번 주 비교'
+  return paletteTemplates.find((item) => item.type === palette.type)?.label || '팔레트'
+}
+
+function gridAttrs(palette) {
+  const span = getSpanBySize(palette.size)
+  return {
+    x: palette.position?.x ?? 0,
+    y: palette.position?.y ?? 0,
+    w: span.w,
+    h: span.h,
+  }
+}
+
+function quickStat(key) {
+  return (householdDashboard.value?.quickStats ?? []).find((item) => item.key === key)?.overview ?? {}
+}
+
+function householdMetric(palette) {
+  const definition = metricDefinitions[palette.options?.metric] ?? metricDefinitions.monthExpense
+  const overview = quickStat(definition.statKey)
+  const rawValue = Number(overview[definition.field] ?? 0)
+  const tone = definition.tone === 'balance'
+    ? (rawValue >= 0 ? 'positive' : 'negative')
+    : definition.tone
+  return {
+    label: definition.label,
+    value: formatCurrency(rawValue),
+    meta: `${formatNumber(overview.entryCount ?? 0)}건`,
+    tone,
+  }
+}
+
+function monthOverviewRows() {
+  const overview = quickStat('month')
+  const balance = Number(overview.balance ?? 0)
   return [
-    { label: '이번 달 순액', value: formatCurrency(overview.balance), tone: Number(overview.balance ?? 0) >= 0 ? 'positive' : 'negative' },
     { label: '수입', value: formatCurrency(overview.income), tone: 'positive' },
     { label: '지출', value: formatCurrency(overview.expense), tone: 'negative' },
+    { label: '순액', value: formatCurrency(balance), tone: balance >= 0 ? 'positive' : 'negative' },
     { label: '거래', value: `${formatNumber(overview.entryCount)}건`, tone: 'neutral' },
   ]
-})
+}
 
-const recentHouseholdEntries = computed(() => (householdDashboard.value?.recentEntries ?? []).slice(0, 4))
+function compareRowsFor(palette) {
+  return palette.options?.period === 'month' ? monthCompareRows.value : weekCompareRows.value
+}
 
-const travelPlans = computed(() => travelPortfolio.value?.plans ?? [])
-const travelSummary = computed(() => {
-  const plans = travelPlans.value
-  const plannedTotal = plans.reduce((sum, plan) => sum + Number(plan.plannedTotalKrw ?? plan.totalBudgetKrw ?? 0), 0)
-  const actualTotal = plans.reduce((sum, plan) => sum + Number(plan.actualTotalKrw ?? plan.totalExpenseKrw ?? 0), 0)
-  const recordCount = plans.reduce((sum, plan) => sum + Number(plan.recordCount ?? plan.memoryRecordCount ?? 0), 0)
-  const mediaCount = plans.reduce((sum, plan) => sum + Number(plan.mediaItemCount ?? 0), 0)
-  return {
-    planCount: plans.length,
-    plannedTotal,
-    actualTotal,
-    recordCount,
-    mediaCount,
+function compareMax(rows) {
+  return Math.max(
+    ...rows.map((row) => Number(row.expense ?? 0)),
+    ...rows.map((row) => Number(row.income ?? 0)),
+    1,
+  )
+}
+
+function updateCellHeight() {
+  const width = gridElement.value?.parentElement?.clientWidth || gridElement.value?.clientWidth || 0
+  if (!width || !grid) return
+  const rawCellWidth = (width - ((DASHBOARD_GRID_COLUMNS - 1) * 8)) / DASHBOARD_GRID_COLUMNS
+  const nextHeight = Math.round(Math.max(76, Math.min(132, rawCellWidth * 0.82)))
+  cellHeight.value = nextHeight
+  grid.cellHeight(nextHeight)
+}
+
+function readGridSnapshot() {
+  if (!grid) return []
+  return (grid.engine?.nodes ?? []).map((node) => ({
+    id: node.el?.getAttribute('gs-id') || node.el?.getAttribute('data-palette-id'),
+    position: { x: node.x, y: node.y },
+    size: `${node.w}x${node.h}`,
+  })).filter((patch) => patch.id)
+}
+
+function handleDragStart(event, element) {
+  dragStartLayout = new Map(visiblePalettes.value.map((palette) => [String(palette.id), {
+    id: String(palette.id),
+    size: palette.size,
+    position: { ...(palette.position ?? { x: 0, y: 0 }) },
+  }]))
+  element?.classList.add('is-main-palette-dragging')
+}
+
+function handleDragStop(event, element) {
+  element?.classList.remove('is-main-palette-dragging')
+  const movedId = element?.getAttribute('gs-id') || element?.getAttribute('data-palette-id')
+  const node = element?.gridstackNode
+  const before = dragStartLayout.get(String(movedId))
+
+  if (movedId && node && before) {
+    const swapTarget = [...dragStartLayout.values()].find((item) =>
+      item.id !== String(movedId)
+      && item.size === before.size
+      && item.position.x === node.x
+      && item.position.y === node.y,
+    )
+
+    if (swapTarget) {
+      applyLayoutPatches([
+        { id: movedId, position: swapTarget.position, size: before.size },
+        { id: swapTarget.id, position: before.position, size: swapTarget.size },
+      ])
+      return
+    }
   }
-})
 
-const recentTravelPlans = computed(() => travelPlans.value.slice(0, 4))
+  applyLayoutPatches(readGridSnapshot())
+}
 
-const driveCards = computed(() => [
-  { label: '전체 항목', value: `${formatNumber(driveSummary.value?.driveItemCount)}개`, meta: `파일 ${formatNumber(driveSummary.value?.fileCount)}개 · 폴더 ${formatNumber(driveSummary.value?.folderCount)}개` },
-  { label: '사용 용량', value: formatBytes(driveSummary.value?.usedBytes), meta: `휴지통 ${formatNumber(driveSummary.value?.trashCount)}개` },
-  { label: '공유', value: `${formatNumber(driveSummary.value?.sharedCount)}건`, meta: '현재 공유된 파일' },
-])
+function destroyGrid() {
+  if (!grid) return
+  grid.off('dragstart')
+  grid.off('dragstop')
+  grid.destroy(false)
+  grid = null
+}
 
-const recentDriveFiles = computed(() => (driveSummary.value?.recentFiles ?? []).slice(0, 4))
+function initGrid() {
+  if (!gridElement.value) return
+  destroyGrid()
+  grid = GridStack.init({
+    column: DASHBOARD_GRID_COLUMNS,
+    margin: 4,
+    cellHeight: cellHeight.value,
+    disableResize: true,
+    float: false,
+    animate: true,
+    draggable: {
+      appendTo: 'body',
+      cancel: 'button,a,input,select,textarea,[data-no-drag="true"]',
+      handle: '.main-palette',
+      scroll: false,
+    },
+  }, gridElement.value)
+  grid.enableMove(isEditMode.value)
+  grid.enableResize(false)
+  grid.on('dragstart', handleDragStart)
+  grid.on('dragstop', handleDragStop)
+  updateCellHeight()
+}
 
-const featureItems = computed(() => props.items.map((item) => ({
-  ...item,
-  ...(featureCopy[item.key] ?? {}),
-})))
+function queueGridRebuild() {
+  if (rebuildTimer) {
+    window.clearTimeout(rebuildTimer)
+  }
+  rebuildTimer = window.setTimeout(async () => {
+    await nextTick()
+    initGrid()
+    rebuildTimer = 0
+  }, 0)
+}
+
+function applyLayoutPatches(patches) {
+  palettes.value = normalizeMainPalettes(applyLayoutPatchesToPalettes(palettes.value, patches))
+  persistPalettes()
+}
+
+function resizePalette(id, size) {
+  palettes.value = normalizeMainPalettes(palettes.value.map((palette) => {
+    if (String(palette.id) !== String(id)) return palette
+    const normalizedSize = normalizePaletteSize(size, palette.size)
+    const supported = supportedSizesFor(palette)
+    return {
+      ...palette,
+      size: supported.includes(normalizedSize) ? normalizedSize : supported[0],
+    }
+  }))
+  persistPalettes()
+}
+
+function hidePalette(id) {
+  palettes.value = palettes.value.map((palette) => (
+    String(palette.id) === String(id) ? { ...palette, visible: false } : palette
+  ))
+  persistPalettes()
+}
+
+function restorePalette(id) {
+  const visible = visiblePalettes.value
+  palettes.value = normalizeMainPalettes(palettes.value.map((palette) => {
+    if (String(palette.id) !== String(id)) return palette
+    return {
+      ...palette,
+      visible: true,
+      position: findFirstAvailablePosition(visible, palette.size),
+    }
+  }))
+  persistPalettes()
+}
+
+function removePalette(id) {
+  palettes.value = palettes.value.filter((palette) => String(palette.id) !== String(id))
+  persistPalettes()
+}
+
+function addPalette() {
+  const template = paletteTemplates.find((item) => item.id === selectedTemplateId.value) ?? paletteTemplates[0]
+  const size = template.defaultSize
+  const nextPalette = {
+    id: createPaletteId(template.id),
+    type: template.type,
+    size,
+    position: findFirstAvailablePosition(visiblePalettes.value, size),
+    visible: true,
+    options: { ...(template.options ?? {}) },
+  }
+  palettes.value = normalizeMainPalettes([...palettes.value, nextPalette])
+  persistPalettes()
+}
+
+function resetPalettes() {
+  if (!window.confirm('메인 대시보드 팔레트 배치를 초기화할까요?')) return
+  palettes.value = normalizeMainPalettes(clone(defaultPalettes))
+  persistPalettes()
+}
+
+function toggleEditMode() {
+  isEditMode.value = !isEditMode.value
+  if (grid) {
+    grid.enableMove(isEditMode.value)
+    grid.enableResize(false)
+  }
+}
+
+function closeToolsOnOutsidePointer(event) {
+  if (!toolsOpen.value) return
+  if (toolsPanelRef.value?.contains(event.target) || toolsButtonRef.value?.contains(event.target)) return
+  toolsOpen.value = false
+}
+
+function syncQuickEntryDefaults() {
+  if (!quickGroups.value.some((group) => String(group.id) === String(quickEntry.categoryGroupId))) {
+    quickEntry.categoryGroupId = quickGroups.value[0] ? String(quickGroups.value[0].id) : ''
+  }
+  if (!quickDetails.value.some((detail) => String(detail.id) === String(quickEntry.categoryDetailId))) {
+    quickEntry.categoryDetailId = quickDetails.value[0] ? String(quickDetails.value[0].id) : ''
+  }
+  if (!paymentMethods.value.some((method) => String(method.id) === String(quickEntry.paymentMethodId))) {
+    quickEntry.paymentMethodId = paymentMethods.value[0] ? String(paymentMethods.value[0].id) : ''
+  }
+}
+
+function fillQuickAmount(value) {
+  quickEntry.amount = String(Number(value || 0))
+}
+
+function addQuickAmount(value) {
+  quickEntry.amount = String(Number(quickEntry.amount || 0) + Number(value || 0))
+}
+
+async function submitQuickEntry() {
+  const amount = Number(quickEntry.amount || 0)
+  if (!amount || amount <= 0) {
+    feedbackMessage.value = ''
+    errorMessage.value = '금액을 입력해주세요.'
+    return
+  }
+  syncQuickEntryDefaults()
+  if (!quickEntry.categoryGroupId || !quickEntry.paymentMethodId) {
+    feedbackMessage.value = ''
+    errorMessage.value = '카테고리와 결제수단 정보가 필요합니다.'
+    return
+  }
+
+  quickSubmitting.value = true
+  feedbackMessage.value = ''
+  errorMessage.value = ''
+  try {
+    await createEntry({
+      entryDate: quickEntry.entryDate || todayIso(),
+      entryTime: '00:00',
+      title: quickEntry.title.trim() || '빠른 입력',
+      memo: null,
+      amount,
+      entryType: quickEntry.entryType,
+      categoryGroupId: Number(quickEntry.categoryGroupId),
+      categoryDetailId: quickEntry.categoryDetailId ? Number(quickEntry.categoryDetailId) : null,
+      paymentMethodId: Number(quickEntry.paymentMethodId),
+    })
+    quickEntry.title = ''
+    quickEntry.amount = ''
+    feedbackMessage.value = '빠른 금액 입력을 저장했습니다.'
+    await loadSummaries()
+  } catch (error) {
+    errorMessage.value = error.message
+  } finally {
+    quickSubmitting.value = false
+  }
+}
 
 async function loadSummaries() {
   loading.value = true
   errorMessage.value = ''
-  const [householdResult, travelResult, driveResult] = await Promise.allSettled([
-    fetchDashboard(todayIso()),
+  const anchorDate = todayIso()
+  const [
+    householdResult,
+    travelResult,
+    driveResult,
+    weekCompareResult,
+    monthCompareResult,
+    categoriesResult,
+    paymentMethodsResult,
+  ] = await Promise.allSettled([
+    fetchDashboard(anchorDate),
     fetchTravelPortfolio(),
     fetchDriveHomeSummary(),
+    fetchCompare(anchorDate, 'WEEK', 2),
+    fetchCompare(anchorDate, 'MONTH', 2),
+    fetchCategories(),
+    fetchPaymentMethods(),
   ])
 
-  if (householdResult.status === 'fulfilled') {
-    householdDashboard.value = householdResult.value
-  }
-  if (travelResult.status === 'fulfilled') {
-    travelPortfolio.value = travelResult.value
-  }
-  if (driveResult.status === 'fulfilled') {
-    driveSummary.value = driveResult.value
-  }
+  if (householdResult.status === 'fulfilled') householdDashboard.value = householdResult.value
+  if (travelResult.status === 'fulfilled') travelPortfolio.value = travelResult.value
+  if (driveResult.status === 'fulfilled') driveSummary.value = driveResult.value
+  if (weekCompareResult.status === 'fulfilled') weekCompareRows.value = weekCompareResult.value ?? []
+  if (monthCompareResult.status === 'fulfilled') monthCompareRows.value = monthCompareResult.value ?? []
+  if (categoriesResult.status === 'fulfilled') categories.value = categoriesResult.value ?? []
+  if (paymentMethodsResult.status === 'fulfilled') paymentMethods.value = paymentMethodsResult.value ?? []
 
-  const failed = [householdResult, travelResult, driveResult].filter((result) => result.status === 'rejected')
+  syncQuickEntryDefaults()
+
+  const failed = [householdResult, travelResult, driveResult, weekCompareResult, monthCompareResult].filter((result) => result.status === 'rejected')
   if (failed.length) {
-    errorMessage.value = '일부 요약 정보를 불러오지 못했습니다. 각 기능 화면에서는 기존 기능을 그대로 사용할 수 있습니다.'
+    errorMessage.value = '일부 요약 정보를 불러오지 못했습니다. 백엔드 연결 후 자동으로 채워집니다.'
   }
   loading.value = false
 }
 
-onMounted(loadSummaries)
+watch(
+  userStorageId,
+  () => {
+    hydratePalettes()
+    hydratePaymentSelection()
+  },
+  { immediate: true },
+)
+
+watch(selectedPaymentMethodId, persistPaymentSelection)
+watch(() => quickEntry.entryType, syncQuickEntryDefaults)
+watch(() => quickEntry.categoryGroupId, syncQuickEntryDefaults)
+watch(layoutKey, queueGridRebuild)
+watch(isEditMode, (value) => {
+  if (grid) {
+    grid.enableMove(value)
+    grid.enableResize(false)
+  }
+})
+
+onMounted(async () => {
+  document.addEventListener('pointerdown', closeToolsOnOutsidePointer)
+  await loadSummaries()
+  await nextTick()
+  initGrid()
+  resizeObserver = new ResizeObserver(updateCellHeight)
+  if (gridElement.value?.parentElement) {
+    resizeObserver.observe(gridElement.value.parentElement)
+  }
+})
+
+onBeforeUnmount(() => {
+  document.removeEventListener('pointerdown', closeToolsOnOutsidePointer)
+  if (rebuildTimer) {
+    window.clearTimeout(rebuildTimer)
+  }
+  resizeObserver?.disconnect()
+  destroyGrid()
+})
 </script>
 
 <template>
   <div class="main-dashboard">
     <section class="main-dashboard__header">
       <div>
-        <span class="main-dashboard__eyebrow">통합 대시보드</span>
-        <h2>{{ currentUser.displayName }}님의 오늘 흐름</h2>
-        <p>가계부, 여행, 드라이브의 핵심 상태를 한 화면에서 확인합니다.</p>
+        <span class="main-dashboard__eyebrow">메인 대시보드</span>
+        <h2>{{ currentUser.displayName }}님의 종합 정보판</h2>
+        <p>가계부, 여행, 드라이브 팔레트를 원하는 조합으로 배치합니다.</p>
       </div>
-      <button class="button button--secondary" type="button" :disabled="loading" @click="loadSummaries">
-        {{ loading ? '갱신 중' : '새로고침' }}
-      </button>
+      <div class="main-dashboard__header-actions">
+        <button class="button button--secondary" type="button" :disabled="loading" @click="loadSummaries">
+          {{ loading ? '갱신 중' : '새로고침' }}
+        </button>
+      </div>
     </section>
 
+    <div v-if="feedbackMessage" class="feedback feedback--success">{{ feedbackMessage }}</div>
     <div v-if="errorMessage" class="feedback feedback--error">{{ errorMessage }}</div>
 
-    <section class="main-dashboard__summary-grid">
-      <article class="main-dashboard__section main-dashboard__section--wide">
-        <div class="main-dashboard__section-head">
-          <span>가계부</span>
-          <button class="button button--ghost" type="button" @click="emit('navigate', 'household')">이동</button>
-        </div>
-        <div class="main-dashboard__metric-grid">
-          <div v-for="card in householdCards" :key="card.label" class="main-dashboard__metric" :class="`is-${card.tone}`">
-            <span>{{ card.label }}</span>
-            <strong>{{ card.value }}</strong>
-          </div>
-        </div>
-        <div class="main-dashboard__list">
-          <div v-for="entry in recentHouseholdEntries" :key="entry.id" class="main-dashboard__list-row">
-            <span>{{ entry.title || '-' }}</span>
-            <strong :class="entry.entryType === 'INCOME' ? 'is-positive' : 'is-negative'">{{ formatCurrency(entry.amount) }}</strong>
-          </div>
-          <p v-if="!recentHouseholdEntries.length" class="main-dashboard__empty">최근 거래가 없습니다.</p>
-        </div>
-      </article>
+    <section class="main-dashboard__palette-zone" :class="{ 'is-editing': isEditMode }">
+      <div v-if="isEditMode" class="main-dashboard__grid-guide" aria-hidden="true">
+        <span v-for="index in DASHBOARD_GRID_COLUMNS" :key="index"></span>
+      </div>
 
-      <article class="main-dashboard__section">
-        <div class="main-dashboard__section-head">
-          <span>여행</span>
-          <button class="button button--ghost" type="button" @click="emit('navigate', 'travel')">이동</button>
-        </div>
-        <div class="main-dashboard__travel-kpis">
-          <div><span>여행</span><strong>{{ formatNumber(travelSummary.planCount) }}</strong></div>
-          <div><span>기록</span><strong>{{ formatNumber(travelSummary.recordCount) }}</strong></div>
-          <div><span>미디어</span><strong>{{ formatNumber(travelSummary.mediaCount) }}</strong></div>
-        </div>
-        <div class="main-dashboard__split-row">
-          <span>예산</span>
-          <strong>{{ formatCurrency(travelSummary.plannedTotal) }}</strong>
-        </div>
-        <div class="main-dashboard__split-row">
-          <span>사용</span>
-          <strong>{{ formatCurrency(travelSummary.actualTotal) }}</strong>
-        </div>
-        <div class="main-dashboard__list">
-          <div v-for="plan in recentTravelPlans" :key="plan.id" class="main-dashboard__list-row">
-            <span>{{ plan.name || plan.destination || '-' }}</span>
-            <strong>{{ plan.status || 'PLANNED' }}</strong>
-          </div>
-          <p v-if="!recentTravelPlans.length" class="main-dashboard__empty">등록된 여행이 없습니다.</p>
-        </div>
-      </article>
+      <div ref="gridElement" class="grid-stack main-dashboard__grid">
+        <div
+          v-for="palette in visiblePalettes"
+          :key="palette.id"
+          class="grid-stack-item"
+          :gs-id="palette.id"
+          :data-palette-id="palette.id"
+          :gs-x="gridAttrs(palette).x"
+          :gs-y="gridAttrs(palette).y"
+          :gs-w="gridAttrs(palette).w"
+          :gs-h="gridAttrs(palette).h"
+        >
+          <div class="grid-stack-item-content">
+            <article class="main-palette" :class="{ 'main-palette--editing': isEditMode }">
+              <header class="main-palette__head">
+                <strong>{{ paletteTitle(palette) }}</strong>
+                <div v-if="isEditMode" class="main-palette__actions" data-no-drag="true">
+                  <select :value="palette.size" aria-label="팔레트 크기" @change="resizePalette(palette.id, $event.target.value)">
+                    <option v-for="size in supportedSizesFor(palette)" :key="size" :value="size">
+                      {{ size }}
+                    </option>
+                  </select>
+                  <button type="button" @click="hidePalette(palette.id)">숨김</button>
+                  <button type="button" @click="removePalette(palette.id)">삭제</button>
+                </div>
+              </header>
 
-      <article class="main-dashboard__section">
-        <div class="main-dashboard__section-head">
-          <span>드라이브</span>
-          <button class="button button--ghost" type="button" @click="emit('navigate', 'drive')">이동</button>
-        </div>
-        <div class="main-dashboard__drive-grid">
-          <div v-for="card in driveCards" :key="card.label" class="main-dashboard__drive-card">
-            <span>{{ card.label }}</span>
-            <strong>{{ card.value }}</strong>
-            <small>{{ card.meta }}</small>
+              <div class="main-palette__body">
+                <template v-if="palette.type === 'household-summary'">
+                  <div class="main-palette__metric-grid">
+                    <div v-for="row in monthOverviewRows()" :key="row.label" class="main-palette__metric" :class="`is-${row.tone}`">
+                      <span>{{ row.label }}</span>
+                      <strong>{{ row.value }}</strong>
+                    </div>
+                  </div>
+                </template>
+
+                <template v-else-if="palette.type === 'household-metric'">
+                  <div class="main-palette__single-metric" :class="`is-${householdMetric(palette).tone}`">
+                    <span>{{ householdMetric(palette).label }}</span>
+                    <strong>{{ householdMetric(palette).value }}</strong>
+                    <small>{{ householdMetric(palette).meta }}</small>
+                  </div>
+                </template>
+
+                <template v-else-if="palette.type === 'household-payment'">
+                  <div class="main-palette__payment" data-no-drag="true">
+                    <select v-model="selectedPaymentMethodId" aria-label="결제수단 선택">
+                      <option value="">가장 많이 사용한 결제수단</option>
+                      <option v-for="method in paymentOptions" :key="method.id" :value="String(method.id)">
+                        {{ method.name }}{{ method.kind ? ` (${method.kind})` : '' }}
+                      </option>
+                    </select>
+                    <div class="main-palette__single-metric is-negative">
+                      <span>{{ selectedPaymentSummary?.paymentMethodName || '결제수단' }}</span>
+                      <strong>{{ formatCurrency(selectedPaymentSummary?.totalAmount) }}</strong>
+                      <small>{{ formatNumber(selectedPaymentSummary?.entryCount) }}건</small>
+                    </div>
+                  </div>
+                </template>
+
+                <template v-else-if="palette.type === 'household-compare'">
+                  <div class="main-palette__compare">
+                    <div
+                      v-for="row in compareRowsFor(palette).slice(-2)"
+                      :key="row.label"
+                      class="main-palette__compare-row"
+                    >
+                      <div class="main-palette__compare-label">
+                        <span>{{ row.label }}</span>
+                        <strong>{{ formatCurrency(row.expense) }}</strong>
+                      </div>
+                      <div class="main-palette__bar">
+                        <span class="is-negative" :style="{ width: `${Math.max(4, Math.round((Number(row.expense || 0) / compareMax(compareRowsFor(palette))) * 100))}%` }"></span>
+                      </div>
+                      <small>수입 {{ formatCurrency(row.income) }}</small>
+                    </div>
+                    <p v-if="!compareRowsFor(palette).length" class="main-palette__empty">비교 데이터가 없습니다.</p>
+                  </div>
+                </template>
+
+                <template v-else-if="palette.type === 'quick-entry'">
+                  <form class="main-palette__quick-form" data-no-drag="true" @submit.prevent="submitQuickEntry">
+                    <div class="main-palette__quick-row">
+                      <select v-model="quickEntry.entryType" aria-label="거래 유형">
+                        <option value="EXPENSE">지출</option>
+                        <option value="INCOME">수입</option>
+                      </select>
+                      <input v-model="quickEntry.entryDate" type="date" aria-label="거래일" />
+                    </div>
+                    <input v-model="quickEntry.title" type="text" placeholder="내용" />
+                    <input v-model="quickEntry.amount" type="number" min="0" step="100" placeholder="금액" />
+                    <div class="main-palette__quick-buttons">
+                      <button type="button" @click="fillQuickAmount(10000)">1만</button>
+                      <button type="button" @click="addQuickAmount(10000)">+1만</button>
+                      <button type="button" @click="addQuickAmount(50000)">+5만</button>
+                    </div>
+                    <div class="main-palette__quick-row">
+                      <select v-model="quickEntry.categoryGroupId" aria-label="카테고리 그룹">
+                        <option v-for="group in quickGroups" :key="group.id" :value="String(group.id)">
+                          {{ group.name }}
+                        </option>
+                      </select>
+                      <select v-model="quickEntry.categoryDetailId" aria-label="상세 카테고리">
+                        <option value="">상세 없음</option>
+                        <option v-for="detail in quickDetails" :key="detail.id" :value="String(detail.id)">
+                          {{ detail.name }}
+                        </option>
+                      </select>
+                    </div>
+                    <select v-model="quickEntry.paymentMethodId" aria-label="결제수단">
+                      <option v-for="method in paymentMethods" :key="method.id" :value="String(method.id)">
+                        {{ method.name }}
+                      </option>
+                    </select>
+                    <button class="button button--primary" type="submit" :disabled="quickSubmitting">
+                      {{ quickSubmitting ? '저장 중' : '저장' }}
+                    </button>
+                  </form>
+                </template>
+
+                <template v-else-if="palette.type === 'travel-summary'">
+                  <div class="main-palette__metric-grid">
+                    <div class="main-palette__metric"><span>여행</span><strong>{{ formatNumber(travelSummary.planCount) }}</strong></div>
+                    <div class="main-palette__metric"><span>기록</span><strong>{{ formatNumber(travelSummary.recordCount) }}</strong></div>
+                    <div class="main-palette__metric"><span>미디어</span><strong>{{ formatNumber(travelSummary.mediaCount) }}</strong></div>
+                    <div class="main-palette__metric is-negative"><span>사용</span><strong>{{ formatCurrency(travelSummary.actualTotal) }}</strong></div>
+                  </div>
+                  <div class="main-palette__list">
+                    <div v-for="plan in recentTravelPlans" :key="plan.id" class="main-palette__list-row">
+                      <span>{{ plan.name || plan.destination || '-' }}</span>
+                      <strong>{{ plan.status || 'PLANNED' }}</strong>
+                    </div>
+                  </div>
+                </template>
+
+                <template v-else-if="palette.type === 'drive-summary'">
+                  <div class="main-palette__metric-grid">
+                    <div class="main-palette__metric"><span>전체 항목</span><strong>{{ formatNumber(driveSummary?.driveItemCount) }}</strong></div>
+                    <div class="main-palette__metric"><span>파일</span><strong>{{ formatNumber(driveSummary?.fileCount) }}</strong></div>
+                    <div class="main-palette__metric"><span>공유</span><strong>{{ formatNumber(driveSummary?.sharedCount) }}</strong></div>
+                    <div class="main-palette__metric"><span>용량</span><strong>{{ formatBytes(driveSummary?.usedBytes) }}</strong></div>
+                  </div>
+                  <div class="main-palette__list">
+                    <div v-for="file in recentDriveFiles" :key="file.id" class="main-palette__list-row">
+                      <span>{{ file.fileOriginName || file.name || '-' }}</span>
+                      <strong>{{ formatBytes(file.fileSize) }}</strong>
+                    </div>
+                  </div>
+                </template>
+
+                <template v-else-if="palette.type === 'feature-links'">
+                  <div class="main-palette__feature-links">
+                    <button
+                      v-for="item in featureItems"
+                      :key="item.key"
+                      type="button"
+                      class="main-palette__feature-link"
+                      data-no-drag="true"
+                      @click="emit('navigate', item.key)"
+                    >
+                      <span>{{ item.badge }}</span>
+                      <strong>{{ item.title }}</strong>
+                    </button>
+                  </div>
+                </template>
+              </div>
+            </article>
           </div>
         </div>
-        <div class="main-dashboard__list">
-          <div v-for="file in recentDriveFiles" :key="file.id" class="main-dashboard__list-row">
-            <span>{{ file.fileOriginName || file.name || '-' }}</span>
-            <strong>{{ formatBytes(file.fileSize) }}</strong>
-          </div>
-          <p v-if="!recentDriveFiles.length" class="main-dashboard__empty">최근 파일이 없습니다.</p>
-        </div>
-      </article>
+      </div>
     </section>
 
-    <section class="main-dashboard__features">
-      <article v-for="item in featureItems" :key="item.key" class="main-dashboard__feature">
-        <span>{{ item.badge }}</span>
-        <strong>{{ item.title }}</strong>
-        <p>{{ item.description }}</p>
-        <button class="button button--primary" type="button" @click="emit('navigate', item.key)">
-          열기
-        </button>
-      </article>
-    </section>
+    <button
+      ref="toolsButtonRef"
+      class="main-dashboard__floating-button"
+      type="button"
+      :class="{ 'is-active': toolsOpen || isEditMode }"
+      @click="toolsOpen = !toolsOpen"
+    >
+      설정
+    </button>
+
+    <aside v-if="toolsOpen" ref="toolsPanelRef" class="main-dashboard__tools" data-no-drag="true">
+      <div class="main-dashboard__tools-head">
+        <strong>메인 팔레트</strong>
+        <button type="button" @click="toolsOpen = false">닫기</button>
+      </div>
+
+      <button v-if="!isEditMode" class="main-dashboard__primary" type="button" @click="toggleEditMode">
+        편집 시작
+      </button>
+
+      <template v-else>
+        <label class="main-dashboard__field">
+          <span>팔레트 추가</span>
+          <select v-model="selectedTemplateId">
+            <option v-for="template in paletteTemplates" :key="template.id" :value="template.id">
+              {{ template.label }}
+            </option>
+          </select>
+        </label>
+        <button class="main-dashboard__secondary" type="button" @click="addPalette">추가</button>
+
+        <div class="main-dashboard__hidden">
+          <span>숨긴 팔레트</span>
+          <button
+            v-for="palette in hiddenPalettes"
+            :key="palette.id"
+            type="button"
+            @click="restorePalette(palette.id)"
+          >
+            {{ paletteTitle(palette) }}
+          </button>
+          <small v-if="!hiddenPalettes.length">숨긴 팔레트가 없습니다.</small>
+        </div>
+
+        <button class="main-dashboard__secondary" type="button" @click="resetPalettes">초기화</button>
+        <button class="main-dashboard__primary" type="button" @click="toggleEditMode">편집 완료</button>
+      </template>
+    </aside>
   </div>
 </template>
 
 <style scoped>
 .main-dashboard {
   display: grid;
-  gap: 18px;
+  gap: 14px;
   min-width: 0;
 }
 
@@ -260,12 +934,14 @@ onMounted(loadSummaries)
   display: flex;
   gap: 16px;
   justify-content: space-between;
+  min-width: 0;
   padding: 18px;
 }
 
 .main-dashboard__eyebrow,
-.main-dashboard__section-head span,
-.main-dashboard__feature > span {
+.main-palette__head strong,
+.main-dashboard__field span,
+.main-dashboard__hidden > span {
   color: #6f42c1;
   font-size: 0.74rem;
   font-weight: 800;
@@ -273,55 +949,140 @@ onMounted(loadSummaries)
 
 .main-dashboard__header h2 {
   color: #111827;
-  font-size: 1.4rem;
+  font-size: 1.35rem;
   line-height: 1.2;
   margin: 4px 0 6px;
 }
 
-.main-dashboard__header p,
-.main-dashboard__empty,
-.main-dashboard__feature p {
+.main-dashboard__header p {
   color: #6b7280;
   font-size: 0.86rem;
   margin: 0;
 }
 
-.main-dashboard__summary-grid {
-  display: grid;
-  gap: 14px;
-  grid-template-columns: minmax(0, 1.2fr) minmax(280px, 0.9fr);
+.main-dashboard__palette-zone {
+  background: #f4f5f7;
+  border: 1px solid #d9dde5;
+  min-width: 0;
+  overflow-x: hidden;
+  padding: 12px;
+  position: relative;
 }
 
-.main-dashboard__section {
+.main-dashboard__grid {
+  min-width: 100%;
+  overflow: visible;
+  width: 100%;
+}
+
+.main-dashboard__grid-guide {
+  bottom: 12px;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(9, minmax(0, 1fr));
+  left: 12px;
+  pointer-events: none;
+  position: absolute;
+  right: 12px;
+  top: 12px;
+  z-index: 0;
+}
+
+.main-dashboard__grid-guide span {
+  background: rgba(111, 66, 193, 0.045);
+  border: 1px dashed rgba(111, 66, 193, 0.18);
+}
+
+:deep(.grid-stack-item) {
+  z-index: 1;
+}
+
+:deep(.grid-stack-item-content) {
+  inset: 4px;
+  overflow: hidden;
+}
+
+.main-palette {
   background: #ffffff;
   border: 1px solid #d9dde5;
-  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.04);
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.05);
   display: grid;
-  gap: 12px;
+  grid-template-rows: auto minmax(0, 1fr);
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.main-palette--editing {
+  cursor: grab;
+  outline: 1px dashed rgba(111, 66, 193, 0.35);
+}
+
+:deep(.grid-stack-item.is-main-palette-dragging .main-palette) {
+  cursor: grabbing;
+  opacity: 0.92;
+}
+
+.main-palette__head {
+  align-items: center;
+  border-bottom: 1px solid #edf0f4;
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+  min-height: 32px;
   min-width: 0;
-  padding: 14px;
+  padding: 6px 8px;
 }
 
-.main-dashboard__section--wide {
-  grid-row: span 2;
+.main-palette__head strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.main-dashboard__section-head {
+.main-palette__actions {
   align-items: center;
   display: flex;
-  justify-content: space-between;
+  flex: 0 0 auto;
+  gap: 4px;
 }
 
-.main-dashboard__metric-grid,
-.main-dashboard__drive-grid {
+.main-palette__actions select,
+.main-palette__actions button,
+.main-palette__payment select,
+.main-palette__quick-form input,
+.main-palette__quick-form select,
+.main-palette__quick-buttons button {
+  background: #f8fafc;
+  border: 1px solid #d1d5db;
+  color: #374151;
+  font-size: 0.72rem;
+  min-height: 28px;
+  padding: 0 7px;
+}
+
+.main-palette__actions button {
+  max-width: 46px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.main-palette__body {
+  min-height: 0;
+  overflow: hidden;
+  padding: 9px;
+}
+
+.main-palette__metric-grid {
   display: grid;
   gap: 8px;
   grid-template-columns: repeat(2, minmax(0, 1fr));
+  height: 100%;
 }
 
-.main-dashboard__metric,
-.main-dashboard__drive-card,
-.main-dashboard__travel-kpis > div {
+.main-palette__metric,
+.main-palette__single-metric {
   background: #f8fafc;
   border: 1px solid #e5e7eb;
   display: grid;
@@ -330,56 +1091,102 @@ onMounted(loadSummaries)
   padding: 10px;
 }
 
-.main-dashboard__metric span,
-.main-dashboard__drive-card span,
-.main-dashboard__travel-kpis span,
-.main-dashboard__split-row span {
-  color: #6b7280;
-  font-size: 0.74rem;
+.main-palette__single-metric {
+  align-content: center;
+  height: 100%;
 }
 
-.main-dashboard__metric strong,
-.main-dashboard__drive-card strong,
-.main-dashboard__travel-kpis strong {
+.main-palette__metric span,
+.main-palette__single-metric span,
+.main-palette__compare-label span,
+.main-palette__compare-row small {
+  color: #6b7280;
+  font-size: 0.72rem;
+}
+
+.main-palette__metric strong,
+.main-palette__single-metric strong {
   color: #111827;
   font-size: 1rem;
   overflow-wrap: anywhere;
 }
 
-.main-dashboard__metric.is-positive strong,
+.main-palette__single-metric strong {
+  font-size: clamp(1.1rem, 2vw, 1.65rem);
+}
+
+.main-palette__metric.is-positive strong,
+.main-palette__single-metric.is-positive strong,
 .is-positive {
   color: #047857;
 }
 
-.main-dashboard__metric.is-negative strong,
+.main-palette__metric.is-negative strong,
+.main-palette__single-metric.is-negative strong,
 .is-negative {
   color: #b91c1c;
 }
 
-.main-dashboard__travel-kpis {
+.main-palette__payment,
+.main-palette__compare,
+.main-palette__quick-form,
+.main-palette__list,
+.main-palette__feature-links {
   display: grid;
   gap: 8px;
+  min-height: 0;
+}
+
+.main-palette__payment select,
+.main-palette__quick-form input,
+.main-palette__quick-form select {
+  width: 100%;
+}
+
+.main-palette__compare-row {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.main-palette__compare-label,
+.main-palette__list-row {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+  min-width: 0;
+}
+
+.main-palette__bar {
+  background: #edf0f4;
+  height: 7px;
+  overflow: hidden;
+}
+
+.main-palette__bar span {
+  background: #dc2626;
+  display: block;
+  height: 100%;
+}
+
+.main-palette__quick-row,
+.main-palette__quick-buttons {
+  display: grid;
+  gap: 6px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.main-palette__quick-buttons {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
-.main-dashboard__split-row,
-.main-dashboard__list-row {
-  align-items: center;
+.main-palette__list-row {
   border-top: 1px solid #edf0f4;
-  display: flex;
-  gap: 10px;
-  justify-content: space-between;
-  min-width: 0;
-  padding-top: 8px;
+  padding-top: 7px;
 }
 
-.main-dashboard__list {
-  display: grid;
-  gap: 8px;
-  min-width: 0;
-}
-
-.main-dashboard__list-row span {
+.main-palette__list-row span {
   color: #374151;
   min-width: 0;
   overflow: hidden;
@@ -387,54 +1194,128 @@ onMounted(loadSummaries)
   white-space: nowrap;
 }
 
-.main-dashboard__list-row strong,
-.main-dashboard__split-row strong {
+.main-palette__list-row strong {
   color: #111827;
   flex: 0 0 auto;
-  font-size: 0.82rem;
+  font-size: 0.78rem;
 }
 
-.main-dashboard__drive-card small {
-  color: #6b7280;
-  font-size: 0.72rem;
+.main-palette__feature-links {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.main-palette__feature-link {
+  background: #f8fafc;
+  border: 1px solid #e5e7eb;
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 10px;
+  text-align: left;
+}
+
+.main-palette__feature-link span {
+  color: #6f42c1;
+  font-size: 0.68rem;
+  font-weight: 800;
+}
+
+.main-palette__feature-link strong {
+  color: #111827;
+  font-size: 0.86rem;
+}
+
+.main-palette__empty {
+  color: #9ca3af;
+  font-size: 0.78rem;
+  margin: 0;
+}
+
+.main-dashboard__floating-button {
+  background: #3f2a78;
+  border: 1px solid #3f2a78;
+  box-shadow: 0 8px 18px rgba(31, 41, 55, 0.16);
+  color: #ffffff;
+  font-size: 0.78rem;
+  font-weight: 800;
+  min-height: 36px;
+  padding: 0 12px;
+  position: fixed;
+  right: 18px;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 40;
+}
+
+.main-dashboard__floating-button.is-active,
+.main-dashboard__floating-button:hover {
+  background: #5f3dc4;
+}
+
+.main-dashboard__tools {
+  background: #ffffff;
+  border: 1px solid #cfd5df;
+  box-shadow: 0 14px 32px rgba(15, 23, 42, 0.18);
+  display: grid;
+  gap: 12px;
+  max-width: calc(100vw - 36px);
+  padding: 14px;
+  position: fixed;
+  right: 18px;
+  top: calc(50% + 46px);
+  width: 290px;
+  z-index: 41;
+}
+
+.main-dashboard__tools-head {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+}
+
+.main-dashboard__tools-head button,
+.main-dashboard__tools button,
+.main-dashboard__field select {
+  border: 1px solid #d1d5db;
+  font-size: 0.8rem;
+  min-height: 32px;
+  padding: 0 9px;
+}
+
+.main-dashboard__field,
+.main-dashboard__hidden {
+  display: grid;
+  gap: 6px;
+}
+
+.main-dashboard__field select {
+  background: #ffffff;
+  width: 100%;
+}
+
+.main-dashboard__primary {
+  background: #3f2a78;
+  border-color: #3f2a78;
+  color: #ffffff;
+  font-weight: 800;
+}
+
+.main-dashboard__secondary {
+  background: #f8fafc;
+  color: #374151;
+}
+
+.main-dashboard__hidden button {
+  background: #f8fafc;
+  color: #374151;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.main-dashboard__features {
-  display: grid;
-  gap: 12px;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-}
-
-.main-dashboard__feature {
-  background: #ffffff;
-  border: 1px solid #d9dde5;
-  display: grid;
-  gap: 8px;
-  min-width: 0;
-  padding: 14px;
-}
-
-.main-dashboard__feature strong {
-  color: #111827;
-  font-size: 1rem;
-}
-
-.main-dashboard__feature p {
-  min-height: 44px;
-}
-
-@media (max-width: 1080px) {
-  .main-dashboard__summary-grid,
-  .main-dashboard__features {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .main-dashboard__section--wide {
-    grid-row: span 1;
-  }
+.main-dashboard__hidden small {
+  color: #9ca3af;
+  font-size: 0.76rem;
 }
 
 @media (max-width: 720px) {
@@ -443,11 +1324,27 @@ onMounted(loadSummaries)
     display: grid;
   }
 
-  .main-dashboard__summary-grid,
-  .main-dashboard__features,
-  .main-dashboard__metric-grid,
-  .main-dashboard__drive-grid {
+  .main-dashboard__palette-zone {
+    padding: 8px;
+  }
+
+  .main-dashboard__grid-guide {
+    left: 8px;
+    right: 8px;
+  }
+
+  .main-palette__metric-grid,
+  .main-palette__feature-links {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .main-dashboard__floating-button {
+    right: 12px;
+  }
+
+  .main-dashboard__tools {
+    right: 12px;
+    width: min(290px, calc(100vw - 24px));
   }
 }
 </style>

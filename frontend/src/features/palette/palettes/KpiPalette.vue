@@ -54,7 +54,7 @@ const canShowBars = computed(() => ['3x2', '3x3'].includes(props.config.size))
 <style scoped>
 .kpi-palette {
   display: grid;
-  gap: 8px;
+  gap: 10px;
   height: 100%;
   min-height: 0;
   overflow: hidden;
@@ -68,13 +68,13 @@ const canShowBars = computed(() => ['3x2', '3x3'].includes(props.config.size))
 
 .kpi-palette__head span {
   color: #6f42c1;
-  font-size: 0.7rem;
+  font-size: 0.76rem;
   font-weight: 800;
 }
 
 .kpi-palette__head strong {
   color: #1f2937;
-  font-size: 0.9rem;
+  font-size: 0.98rem;
   line-height: 1.2;
   min-width: 0;
   overflow: hidden;
@@ -95,7 +95,7 @@ const canShowBars = computed(() => ['3x2', '3x3'].includes(props.config.size))
   color: #111827;
   display: block;
   font-variant-numeric: tabular-nums;
-  font-size: clamp(1.15rem, 2.2vw, 2rem);
+  font-size: clamp(1.24rem, 2.2vw, 2.08rem);
   letter-spacing: 0;
   line-height: 1.16;
   min-width: 0;
@@ -107,7 +107,7 @@ const canShowBars = computed(() => ['3x2', '3x3'].includes(props.config.size))
 
 .kpi-palette__metric small {
   color: #6b7280;
-  font-size: 0.75rem;
+  font-size: 0.82rem;
   line-height: 1.25;
   min-width: 0;
   overflow: hidden;
@@ -149,7 +149,7 @@ const canShowBars = computed(() => ['3x2', '3x3'].includes(props.config.size))
 .kpi-palette__row span,
 .kpi-palette__bar-label span {
   color: #6b7280;
-  font-size: 0.72rem;
+  font-size: 0.78rem;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -159,7 +159,7 @@ const canShowBars = computed(() => ['3x2', '3x3'].includes(props.config.size))
 .kpi-palette__row strong,
 .kpi-palette__bar-label strong {
   font-variant-numeric: tabular-nums;
-  font-size: 0.78rem;
+  font-size: 0.84rem;
   line-height: 1.2;
   min-width: 0;
   overflow: hidden;

@@ -57,7 +57,7 @@ function updateCellHeight() {
     return
   }
   const rawCellWidth = (width - ((DASHBOARD_GRID_COLUMNS - 1) * 8)) / DASHBOARD_GRID_COLUMNS
-  const nextHeight = Math.round(Math.max(76, Math.min(132, rawCellWidth * 0.82)))
+  const nextHeight = Math.round(Math.max(96, Math.min(156, rawCellWidth * 0.92)))
   cellHeight.value = nextHeight
   grid.cellHeight(nextHeight)
 }

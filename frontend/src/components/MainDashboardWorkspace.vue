@@ -33,7 +33,7 @@ const props = defineProps({
 
 const emit = defineEmits(['navigate'])
 
-const MAIN_DASHBOARD_STORAGE_VERSION = 'v4'
+const MAIN_DASHBOARD_STORAGE_VERSION = 'v5'
 const MAIN_DASHBOARD_SCOPE = 'main'
 const PAYMENT_SELECTION_STORAGE_VERSION = 'v1'
 
@@ -468,7 +468,7 @@ function updateCellHeight() {
   const width = gridElement.value?.parentElement?.clientWidth || gridElement.value?.clientWidth || 0
   if (!width || !grid) return
   const rawCellWidth = (width - ((DASHBOARD_GRID_COLUMNS - 1) * 8)) / DASHBOARD_GRID_COLUMNS
-  const nextHeight = Math.round(Math.max(76, Math.min(132, rawCellWidth * 0.82)))
+  const nextHeight = Math.round(Math.max(112, Math.min(168, rawCellWidth * 0.96)))
   cellHeight.value = nextHeight
   grid.cellHeight(nextHeight)
 }
@@ -1124,7 +1124,7 @@ onBeforeUnmount(() => {
 .main-dashboard__field span,
 .main-dashboard__hidden > span {
   color: #6f42c1;
-  font-size: 0.74rem;
+  font-size: 0.8rem;
   font-weight: 800;
 }
 
@@ -1237,9 +1237,9 @@ onBeforeUnmount(() => {
   background: #f8fafc;
   border: 1px solid #d1d5db;
   color: #374151;
-  font-size: 0.72rem;
-  min-height: 28px;
-  padding: 0 7px;
+  font-size: 0.84rem;
+  min-height: 36px;
+  padding: 0 10px;
 }
 
 .main-palette__actions button {
@@ -1251,7 +1251,7 @@ onBeforeUnmount(() => {
 .main-palette__body {
   min-height: 0;
   overflow: hidden;
-  padding: 9px;
+  padding: 12px;
 }
 
 .main-palette__metric-grid {
@@ -1281,7 +1281,7 @@ onBeforeUnmount(() => {
 .main-palette__compare-label span,
 .main-palette__compare-row small {
   color: #6b7280;
-  font-size: 0.72rem;
+  font-size: 0.78rem;
 }
 
 .main-palette__metric strong,
@@ -1289,7 +1289,7 @@ onBeforeUnmount(() => {
   color: #111827;
   display: block;
   font-variant-numeric: tabular-nums;
-  font-size: 1rem;
+  font-size: 1.08rem;
   letter-spacing: 0;
   line-height: 1.18;
   min-width: 0;
@@ -1299,7 +1299,7 @@ onBeforeUnmount(() => {
 }
 
 .main-palette__single-metric strong {
-  font-size: clamp(1.05rem, 1.7vw, 1.48rem);
+  font-size: clamp(1.16rem, 1.9vw, 1.68rem);
 }
 
 .main-palette__metric.is-positive strong,
@@ -1360,7 +1360,7 @@ onBeforeUnmount(() => {
 .main-palette__quick-row,
 .main-palette__quick-buttons {
   display: grid;
-  gap: 6px;
+  gap: 8px;
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
@@ -1757,12 +1757,12 @@ onBeforeUnmount(() => {
 
 .main-palette__head {
   border-bottom: 0;
-  min-height: 42px;
-  padding: 12px 16px 4px;
+  min-height: 48px;
+  padding: 14px 16px 6px;
 }
 
 .main-palette__body {
-  padding: 10px 16px 16px;
+  padding: 12px 16px 18px;
 }
 
 .main-palette__actions button,
@@ -1794,6 +1794,11 @@ onBeforeUnmount(() => {
   background: #f5f5f6;
   border: 0;
   border-radius: 10px;
+}
+
+.main-palette__metric,
+.main-palette__single-metric {
+  padding: 14px;
 }
 
 .main-palette--household-summary .main-palette__metric:first-child,
@@ -1950,6 +1955,10 @@ onBeforeUnmount(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.main-palette__single-metric small {
+  font-size: 0.82rem;
 }
 
 .main-palette__metric strong,

@@ -26,6 +26,16 @@
 
 ## 작업 기록
 
+### 2026-04-24 - Palette scale and readability rebalance
+
+- User request: Palette sizes are still too small and problematic. Analyze thoroughly, create a plan, execute it, and run verification/inspection.
+- Request analysis: The issue was structural rather than a single palette bug. Main GridStack cell height used `cellWidth * 0.82` with a 132px cap, which made every palette physically short on a 9-column dashboard. Form controls also used small `0.72rem` text and 28px height, so even enlarged palettes looked cramped. Existing localStorage layouts could continue to restore the older cramped dashboard.
+- Actions taken: Checked `codingconvention.md`, reviewed main dashboard palette sizing, shared household palette grid sizing, typography rules, and storage key versioning. Planned the fix before editing: increase grid unit height, enlarge text/control sizes, bump the main dashboard storage version, then validate.
+- Implementation: Raised main dashboard GridStack cell height to a 112-168px range using `cellWidth * 0.96`; raised the shared household palette grid to a 96-156px range using `cellWidth * 0.92`. Bumped the main dashboard palette storage version from `v4` to `v5` so stale cramped layouts do not persist. Increased main palette title/label/value/control sizes, input/button heights, card padding, quick-form gaps, and shared KPI palette typography.
+- Verification: Ran `cmd /c npm run build` in `frontend` successfully. Verified no TypeScript SFC/script or `.ts`/`.tsx` files with `rg -n 'lang="ts"|lang=''ts''' frontend/src` and `Get-ChildItem -Path frontend/src -Recurse -Include *.ts,*.tsx`. Ran `git diff --check -- frontend/src/components/MainDashboardWorkspace.vue frontend/src/features/palette/components/DragDropGrid.vue frontend/src/features/palette/palettes/KpiPalette.vue` with no whitespace errors.
+- Result: Palettes now have larger physical grid cells, readable form controls, stronger KPI typography, and a refreshed default storage key so the new sizing actually applies on reload.
+- Follow-up note: Because the storage key changed, the main dashboard layout resets once to the new default sizing; this is intentional to remove older cramped localStorage state.
+
 ### 2026-04-24 - Palette numeric text rendering fix
 
 - User request: The attached dashboard screenshot shows palette text and sizing problems; analyze and fix the issue so palettes do not break or look crushed.

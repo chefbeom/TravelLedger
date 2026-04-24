@@ -235,3 +235,11 @@
 - 검증 기록: `rg --files`로 기존 파일 목록을 확인했고, `git status --short`로 작업 트리 상태를 확인했습니다. 문서 추가 후 `Get-Content codingconvention.md`, `Get-Content worklog.md`로 생성 여부와 내용을 다시 확인했습니다.
 - 결과: 문서 기반 작업 절차가 추가되었습니다.
 - 후속 메모: 앞으로 코드 변경 작업 전 `codingconvention.md`를 확인하고, 작업 완료 후 `worklog.md`에 기록합니다.
+### 2026-04-24 - Household calendar aggregate toggle and side-by-side layout
+
+- User request: In the household calendar ledger, allow the user-configured aggregate panel to be turned on/off, and place the calendar and quick transaction input next to each other.
+- Request analysis: The existing calendar screen already had aggregate preference loading/saving through `fetchHouseholdAggregatePreferences` and `saveHouseholdAggregatePreferences`, plus the quick entry form and calendar in the same Vue component. The safest change was to keep the API/data contract intact and add only a local display toggle and CSS layout areas.
+- Actions taken: Checked `codingconvention.md`, reviewed `CalendarWorkspace.vue`, the aggregate preference flow, quick entry form bindings, calendar sizing state, and the related global styles in `style.css`.
+- Implementation: Added a persisted localStorage display toggle for the user aggregate panel. Turning the panel off hides aggregate cards/settings while preserving the saved aggregate configuration, and turning it on restores the same configured cards. Updated the calendar workspace grid so the calendar is visually placed on the left and the quick transaction/aggregate column on the right on desktop, with the transaction sheet spanning below. Added responsive stacking for narrower screens and compact quick-entry sizing in the side column.
+- Verification: Ran `cmd /c npm run build` in `frontend` successfully. Verified no TypeScript SFC/script or `.ts`/`.tsx` files with `rg -n 'lang="ts"|lang=''ts''' frontend/src`, `Get-ChildItem -Path frontend/src -Recurse -Include *.ts,*.tsx`, and `rg --files frontend/src | rg '\.(ts|tsx)$'`. Ran `git diff --check -- frontend/src/components/CalendarWorkspace.vue frontend/src/style.css` with no whitespace errors.
+- Result: The household calendar view now has a user-controlled aggregate on/off switch and a desktop layout where the calendar and quick transaction input sit side by side without changing transaction entry, calendar selection, aggregate saving, or backend logic.

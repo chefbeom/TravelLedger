@@ -4738,6 +4738,88 @@ textarea {
   margin-inline: -20px;
 }
 
+.household-calendar-workspace {
+  grid-template-columns: minmax(0, 1.42fr) minmax(360px, 0.58fr);
+  gap: 20px;
+  align-items: start;
+  width: calc(100% + 40px);
+  margin-inline: -20px;
+}
+
+.household-calendar-workspace > .household-calendar-panel {
+  grid-column: 1;
+  grid-row: 1;
+  min-width: 0;
+}
+
+.household-calendar-workspace > .household-entry-summary-grid {
+  grid-column: 2;
+  grid-row: 1;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 20px;
+  width: 100%;
+  margin-inline: 0;
+}
+
+.household-calendar-workspace > .household-sheet-panel {
+  grid-column: 1 / -1;
+  grid-row: 2;
+  margin-top: 0;
+}
+
+.household-calendar-workspace > .household-entry-summary-grid .panel__header {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.household-calendar-workspace > .household-entry-summary-grid .household-entry-panel__date-badge {
+  align-self: flex-start;
+}
+
+.household-calendar-workspace > .household-entry-summary-grid .entry-editor {
+  gap: 12px;
+}
+
+.household-calendar-workspace > .household-entry-summary-grid .entry-editor__amount,
+.household-calendar-workspace > .household-entry-summary-grid .entry-editor__fields {
+  padding: 14px;
+  border-radius: 18px;
+}
+
+.household-calendar-workspace > .household-entry-summary-grid .entry-editor__fields,
+.household-calendar-workspace > .household-entry-summary-grid .entry-editor__category-grid {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.household-calendar-workspace > .household-entry-summary-grid .amount-input {
+  min-height: 66px;
+  padding-inline: 14px;
+}
+
+.household-calendar-workspace > .household-entry-summary-grid .amount-input span {
+  font-size: 1.18rem;
+}
+
+.household-calendar-workspace > .household-entry-summary-grid .amount-input input {
+  min-height: 54px;
+  font-size: clamp(1.35rem, 2.2vw, 1.85rem);
+}
+
+.household-calendar-workspace > .household-entry-summary-grid .amount-shortcuts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.household-calendar-workspace > .household-entry-summary-grid .amount-shortcuts__button {
+  width: 100%;
+  min-width: 0;
+  padding-inline: 10px;
+}
+
+.household-calendar-workspace > .household-entry-summary-grid .entry-editor__actions .button {
+  flex: 1 1 140px;
+}
+
 .household-entry-summary-grid {
   display: grid;
   grid-template-columns: minmax(420px, 1.08fr) minmax(320px, 0.92fr);
@@ -4773,6 +4855,16 @@ textarea {
   justify-content: flex-end;
   gap: 10px;
   flex-wrap: wrap;
+}
+
+.household-aggregate-toggle {
+  min-height: 40px;
+}
+
+.household-aggregate-toggle[aria-pressed='true'] {
+  border-color: rgba(49, 130, 246, 0.28);
+  background: rgba(49, 130, 246, 0.08);
+  color: var(--blue);
 }
 
 .household-aggregate-grid {
@@ -4847,6 +4939,11 @@ textarea {
   color: var(--text-soft);
 }
 
+.household-aggregate-empty--off .button {
+  justify-self: start;
+  margin-top: 6px;
+}
+
 .household-sheet-panel {
   min-width: 0;
   margin-top: 20px;
@@ -4900,11 +4997,35 @@ textarea {
   color: var(--text-soft);
 }
 
+@media (max-width: 1180px) {
+  .household-calendar-workspace {
+    grid-template-columns: minmax(0, 1fr);
+    width: 100%;
+    margin-inline: 0;
+  }
+
+  .household-calendar-workspace > .household-calendar-panel {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .household-calendar-workspace > .household-entry-summary-grid {
+    grid-column: 1;
+    grid-row: 2;
+  }
+
+  .household-calendar-workspace > .household-sheet-panel {
+    grid-column: 1;
+    grid-row: 3;
+  }
+}
+
 @media (max-width: 720px) {
   .calendar-toolbar {
     grid-template-columns: 1fr;
   }
 
+  .household-calendar-workspace,
   .household-entry-summary-grid,
   .household-ledger-grid {
     width: 100%;

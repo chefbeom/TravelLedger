@@ -8,6 +8,7 @@ const CALENDAR_SCALE_KEY = 'calen-household-calendar-scale-preset'
 const CALENDAR_COLLAPSE_KEY = 'calen-household-calendar-collapsed'
 const CALENDAR_HIGHLIGHT_KEY = 'calen-household-calendar-highlight-mode'
 const CALENDAR_CUSTOM_SIZE_KEY = 'calen-household-calendar-custom-size'
+const CALENDAR_AGGREGATE_PANEL_ENABLED_KEY = 'calen-household-calendar-aggregate-panel-enabled'
 const DEFAULT_CALENDAR_HIGHLIGHT_MODE = 'net'
 const CALENDAR_CUSTOM_WIDTH_MIN = 780
 const CALENDAR_CUSTOM_WIDTH_MAX = 1500
@@ -194,6 +195,7 @@ const calendarPreviousWeekOffset = ref(1)
 const calendarHighlightMode = ref(DEFAULT_CALENDAR_HIGHLIGHT_MODE)
 const isCalendarCollapsed = ref(false)
 const isAggregateEditMode = ref(false)
+const isAggregatePanelEnabled = ref(true)
 const quickEntryPanelRef = ref(null)
 const ledgerSheetRef = ref(null)
 const calendarShellRef = ref(null)
@@ -406,6 +408,12 @@ watch(calendarHighlightMode, (value) => {
   }
 })
 
+watch(isAggregatePanelEnabled, (value) => {
+  if (typeof window !== 'undefined') {
+    window.localStorage.setItem(CALENDAR_AGGREGATE_PANEL_ENABLED_KEY, value ? 'true' : 'false')
+  }
+})
+
 watch([calendarCustomWidth, calendarCustomHeight, isCalendarCustomSizeEnabled], () => {
   if (typeof window === 'undefined') {
     return
@@ -502,6 +510,7 @@ onMounted(() => {
   const savedCollapsed = window.localStorage.getItem(CALENDAR_COLLAPSE_KEY)
   const savedHighlight = window.localStorage.getItem(CALENDAR_HIGHLIGHT_KEY)
   const savedCustomSize = window.localStorage.getItem(CALENDAR_CUSTOM_SIZE_KEY)
+  const savedAggregatePanelEnabled = window.localStorage.getItem(CALENDAR_AGGREGATE_PANEL_ENABLED_KEY)
 
   if (savedScale) {
     calendarScalePreset.value = normalizePresetKey(calendarDisplayModes, savedScale, 'default')
@@ -516,6 +525,10 @@ onMounted(() => {
 
   if (savedCollapsed) {
     isCalendarCollapsed.value = savedCollapsed === 'true'
+  }
+
+  if (savedAggregatePanelEnabled) {
+    isAggregatePanelEnabled.value = savedAggregatePanelEnabled !== 'false'
   }
 
   if (savedCustomSize) {
@@ -878,6 +891,14 @@ function saveAggregateWidgetConfigs() {
   isAggregateEditMode.value = false
 }
 
+function toggleAggregatePanelEnabled() {
+  isAggregatePanelEnabled.value = !isAggregatePanelEnabled.value
+
+  if (!isAggregatePanelEnabled.value && isAggregateEditMode.value) {
+    cancelAggregateEdit()
+  }
+}
+
 function getAggregateRange(period) {
   const anchorMonthPrefix = String(props.anchorDate || '').slice(0, 7)
   const selectedMonthPrefix = String(selectedDate.value || '').slice(0, 7)
@@ -1053,7 +1074,7 @@ defineExpose({
 </script>
 
 <template>
-  <div class="workspace-stack" @keydown.capture="handleWorkspaceKeydown">
+  <div class="workspace-stack household-calendar-workspace" @keydown.capture="handleWorkspaceKeydown">
     <div class="household-entry-summary-grid">
       <section ref="quickEntryPanelRef" class="panel household-entry-panel">
         <div class="panel__header">
@@ -1226,8 +1247,16 @@ defineExpose({
             <p>한 줄에 하나씩 집계 결과만 배치하고, 필요할 때만 수정 버튼으로 표시 항목을 바꿀 수 있습니다.</p>
           </div>
           <div class="household-aggregate-header__actions">
-            <span v-if="aggregateSettingsReady" class="panel__badge">{{ aggregateCards.length }}칸</span>
-            <template v-if="isAggregateEditMode">
+            <button
+              type="button"
+              class="button button--ghost household-aggregate-toggle"
+              :aria-pressed="isAggregatePanelEnabled"
+              @click="toggleAggregatePanelEnabled"
+            >
+              {{ isAggregatePanelEnabled ? '집계 끄기' : '집계 켜기' }}
+            </button>
+            <span v-if="isAggregatePanelEnabled && aggregateSettingsReady" class="panel__badge">{{ aggregateCards.length }}칸</span>
+            <template v-if="isAggregatePanelEnabled && isAggregateEditMode">
               <button
                 type="button"
                 class="button button--primary"
@@ -1246,7 +1275,7 @@ defineExpose({
               </button>
             </template>
             <button
-              v-else
+              v-else-if="isAggregatePanelEnabled"
               type="button"
               class="button button--secondary"
               :disabled="!aggregateSettingsReady"
@@ -1256,7 +1285,12 @@ defineExpose({
             </button>
           </div>
         </div>
-        <div v-if="!aggregateSettingsReady" class="household-aggregate-empty">
+        <div v-if="!isAggregatePanelEnabled" class="household-aggregate-empty household-aggregate-empty--off">
+          <strong>사용자 설정 집계가 꺼져 있습니다.</strong>
+          <span>저장된 집계 구성은 유지되며, 다시 켜면 같은 항목을 바로 볼 수 있습니다.</span>
+          <button type="button" class="button button--secondary" @click="toggleAggregatePanelEnabled">집계 켜기</button>
+        </div>
+        <div v-else-if="!aggregateSettingsReady" class="household-aggregate-empty">
           <strong>집계 설정을 불러오는 중입니다.</strong>
           <span>저장된 카드 구성을 불러온 뒤 현재 달력 데이터로 집계를 보여줍니다.</span>
         </div>

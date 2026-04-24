@@ -33,7 +33,7 @@ const props = defineProps({
 
 const emit = defineEmits(['navigate'])
 
-const MAIN_DASHBOARD_STORAGE_VERSION = 'v5'
+const MAIN_DASHBOARD_STORAGE_VERSION = 'v6'
 const MAIN_DASHBOARD_SCOPE = 'main'
 const PAYMENT_SELECTION_STORAGE_VERSION = 'v1'
 
@@ -61,12 +61,12 @@ const fixedSizeByType = {
   'household-metric': '2x2',
   'household-payment': '3x2',
   'household-compare': '3x2',
-  'quick-entry': '3x4',
-  'travel-summary': '3x3',
-  'drive-summary': '3x3',
+  'quick-entry': '3x3',
+  'travel-summary': '3x2',
+  'drive-summary': '3x2',
   'photo-frame': '3x3',
   'drive-capacity': '3x2',
-  'drive-recent-files': '3x3',
+  'drive-recent-files': '3x2',
   'quick-actions': '3x2',
   'feature-links': '3x2',
 }
@@ -77,17 +77,17 @@ const defaultPalettes = [
   { id: 'main-month-income', type: 'household-metric', size: '2x2', position: { x: 5, y: 0 }, visible: true, options: { metric: 'monthIncome' } },
   { id: 'main-week-expense', type: 'household-metric', size: '2x2', position: { x: 7, y: 0 }, visible: true, options: { metric: 'weekExpense' } },
   { id: 'main-week-income', type: 'household-metric', size: '2x2', position: { x: 0, y: 2 }, visible: true, options: { metric: 'weekIncome' } },
-  { id: 'main-quick-entry', type: 'quick-entry', size: '3x4', position: { x: 2, y: 2 }, visible: true, options: {} },
+  { id: 'main-quick-entry', type: 'quick-entry', size: '3x3', position: { x: 2, y: 2 }, visible: true, options: {} },
   { id: 'main-payment', type: 'household-payment', size: '3x2', position: { x: 5, y: 2 }, visible: true, options: {} },
-  { id: 'main-week-compare', type: 'household-compare', size: '3x2', position: { x: 0, y: 6 }, visible: true, options: { period: 'week' } },
-  { id: 'main-month-compare', type: 'household-compare', size: '3x2', position: { x: 3, y: 6 }, visible: true, options: { period: 'month' } },
-  { id: 'main-travel-summary', type: 'travel-summary', size: '3x3', position: { x: 6, y: 6 }, visible: true, options: {} },
-  { id: 'main-drive-summary', type: 'drive-summary', size: '3x3', position: { x: 0, y: 8 }, visible: true, options: {} },
-  { id: 'main-photo-frame', type: 'photo-frame', size: '3x3', position: { x: 3, y: 8 }, visible: true, options: {} },
-  { id: 'main-drive-capacity', type: 'drive-capacity', size: '3x2', position: { x: 6, y: 9 }, visible: true, options: {} },
-  { id: 'main-drive-recent-files', type: 'drive-recent-files', size: '3x3', position: { x: 0, y: 11 }, visible: true, options: {} },
-  { id: 'main-feature-links', type: 'feature-links', size: '3x2', position: { x: 3, y: 11 }, visible: true, options: {} },
-  { id: 'main-quick-actions', type: 'quick-actions', size: '3x2', position: { x: 6, y: 11 }, visible: true, options: {} },
+  { id: 'main-week-compare', type: 'household-compare', size: '3x2', position: { x: 0, y: 5 }, visible: true, options: { period: 'week' } },
+  { id: 'main-month-compare', type: 'household-compare', size: '3x2', position: { x: 3, y: 5 }, visible: true, options: { period: 'month' } },
+  { id: 'main-travel-summary', type: 'travel-summary', size: '3x2', position: { x: 6, y: 5 }, visible: true, options: {} },
+  { id: 'main-drive-summary', type: 'drive-summary', size: '3x2', position: { x: 0, y: 7 }, visible: true, options: {} },
+  { id: 'main-drive-recent-files', type: 'drive-recent-files', size: '3x2', position: { x: 3, y: 7 }, visible: true, options: {} },
+  { id: 'main-drive-capacity', type: 'drive-capacity', size: '3x2', position: { x: 6, y: 7 }, visible: true, options: {} },
+  { id: 'main-photo-frame', type: 'photo-frame', size: '3x3', position: { x: 0, y: 9 }, visible: true, options: {} },
+  { id: 'main-feature-links', type: 'feature-links', size: '3x2', position: { x: 3, y: 9 }, visible: true, options: {} },
+  { id: 'main-quick-actions', type: 'quick-actions', size: '3x2', position: { x: 6, y: 9 }, visible: true, options: {} },
 ]
 
 const metricDefinitions = {
@@ -820,7 +820,15 @@ onBeforeUnmount(() => {
                 </div>
               </header>
 
-              <div class="main-palette__body">
+              <div
+                class="main-palette__body"
+                :class="{
+                  'main-palette__body--has-list': (
+                    (palette.type === 'travel-summary' && recentTravelPlans.length)
+                    || (palette.type === 'drive-summary' && recentDriveFiles.length)
+                  ),
+                }"
+              >
                 <template v-if="palette.type === 'household-summary'">
                   <div class="main-palette__metric-grid">
                     <div v-for="row in monthOverviewRows()" :key="row.label" class="main-palette__metric" :class="`is-${row.tone}`">
@@ -921,7 +929,7 @@ onBeforeUnmount(() => {
                     <div class="main-palette__metric"><span>미디어</span><strong>{{ formatNumber(travelSummary.mediaCount) }}</strong></div>
                     <div class="main-palette__metric is-negative"><span>사용</span><strong>{{ formatCurrency(travelSummary.actualTotal) }}</strong></div>
                   </div>
-                  <div class="main-palette__list">
+                  <div v-if="recentTravelPlans.length" class="main-palette__list">
                     <div v-for="plan in recentTravelPlans" :key="plan.id" class="main-palette__list-row">
                       <span>{{ plan.name || plan.destination || '-' }}</span>
                       <strong>{{ plan.status || 'PLANNED' }}</strong>
@@ -936,7 +944,7 @@ onBeforeUnmount(() => {
                     <div class="main-palette__metric"><span>공유</span><strong>{{ formatNumber(driveSummary?.sharedCount) }}</strong></div>
                     <div class="main-palette__metric"><span>용량</span><strong>{{ formatBytes(driveSummary?.usedBytes) }}</strong></div>
                   </div>
-                  <div class="main-palette__list">
+                  <div v-if="recentDriveFiles.length" class="main-palette__list">
                     <div v-for="file in recentDriveFiles" :key="file.id" class="main-palette__list-row">
                       <span>{{ file.fileOriginName || file.name || '-' }}</span>
                       <strong>{{ formatBytes(file.fileSize) }}</strong>
@@ -1977,7 +1985,12 @@ onBeforeUnmount(() => {
 .main-palette--drive-summary .main-palette__body {
   display: grid;
   gap: 8px;
-  grid-template-rows: minmax(0, 1fr) minmax(0, 118px);
+  grid-template-rows: minmax(0, 1fr);
+}
+
+.main-palette--travel-summary .main-palette__body--has-list,
+.main-palette--drive-summary .main-palette__body--has-list {
+  grid-template-rows: minmax(0, 1fr) minmax(0, 72px);
 }
 
 .main-palette--travel-summary .main-palette__metric-grid,

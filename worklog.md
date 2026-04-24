@@ -26,6 +26,16 @@
 
 ## 작업 기록
 
+### 2026-04-24 - Main dashboard palette size review
+
+- User request: Review the sizes of drive summary, travel summary, quick amount entry, and related palettes based on the attached screenshot.
+- Request analysis: The previous readability fix made the grid cells taller, but some palettes still kept larger fixed spans and reserved empty recent-item areas. As a result, travel summary, drive summary, recent saved files, and quick entry could look oversized with large blank space when real data was sparse.
+- Actions taken: Checked `codingconvention.md`, inspected the main dashboard palette size registry, default layout positions, quick-entry form density, and travel/drive summary body layout.
+- Implementation: Bumped the main dashboard storage version to `v6`, reduced quick entry from `3x4` to `3x3`, reduced travel summary, drive summary, and recent saved files from `3x3` to `3x2`, and rebalanced default positions. Travel and drive summary palettes now render the recent list area only when actual recent records exist, and list space is capped to a compact 72px when present.
+- Verification: Ran `cmd /c npm run build` in `frontend` successfully. Verified no TypeScript SFC/script or `.ts`/`.tsx` files with `rg -n 'lang="ts"|lang=''ts''' frontend/src`, `rg --files frontend/src | rg '\.(ts|tsx)$'`, and `Get-ChildItem -Path frontend/src -Recurse -Include *.ts,*.tsx`. Ran `git diff --check -- frontend/src/components/MainDashboardWorkspace.vue worklog.md` with no whitespace errors.
+- Result: The reviewed palettes now better match their information density: quick entry has enough room for the full form without the previous extra row, and travel/drive summary cards no longer reserve blank list space when there are no recent items.
+- Follow-up note: Because the main dashboard storage version changed, the main dashboard layout resets once to apply the new fixed sizes instead of restoring the oversized localStorage layout.
+
 ### 2026-04-24 - Palette scale and readability rebalance
 
 - User request: Palette sizes are still too small and problematic. Analyze thoroughly, create a plan, execute it, and run verification/inspection.

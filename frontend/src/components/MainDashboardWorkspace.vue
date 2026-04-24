@@ -36,6 +36,8 @@ const emit = defineEmits(['navigate'])
 const MAIN_DASHBOARD_STORAGE_VERSION = 'v6'
 const MAIN_DASHBOARD_SCOPE = 'main'
 const PAYMENT_SELECTION_STORAGE_VERSION = 'v1'
+const MAIN_DASHBOARD_GRID_MARGIN = 4
+const MAIN_DASHBOARD_GRID_GAP = MAIN_DASHBOARD_GRID_MARGIN * 2
 
 const paletteTemplates = [
   { id: 'household-summary', type: 'household-summary', label: '가계부 종합', options: {} },
@@ -168,6 +170,19 @@ const layoutKey = computed(() =>
     .map((palette) => `${palette.id}:${palette.position?.x ?? 0}:${palette.position?.y ?? 0}:${palette.size}:${palette.visible}`)
     .join('|'),
 )
+const guideRowCount = computed(() => Math.max(
+  1,
+  ...visiblePalettes.value.map((palette) => {
+    const span = getSpanBySize(palette.size)
+    return (palette.position?.y ?? 0) + span.h
+  }),
+))
+const guideCellCount = computed(() => DASHBOARD_GRID_COLUMNS * guideRowCount.value)
+const mainDashboardGridStyle = computed(() => ({
+  '--main-dashboard-cell-height': `${cellHeight.value}px`,
+  '--main-dashboard-grid-gap': `${MAIN_DASHBOARD_GRID_GAP}px`,
+  '--main-dashboard-grid-margin': `${MAIN_DASHBOARD_GRID_MARGIN}px`,
+}))
 const featureItems = computed(() => props.items.map((item) => ({
   ...item,
   ...(featureCopy[item.key] ?? {}),
@@ -465,9 +480,13 @@ function compareMax(rows) {
 }
 
 function updateCellHeight() {
-  const width = gridElement.value?.parentElement?.clientWidth || gridElement.value?.clientWidth || 0
+  const width = gridElement.value?.clientWidth || gridElement.value?.parentElement?.clientWidth || 0
   if (!width || !grid) return
-  const rawCellWidth = (width - ((DASHBOARD_GRID_COLUMNS - 1) * 8)) / DASHBOARD_GRID_COLUMNS
+  const rawCellWidth = (
+    width
+    - (MAIN_DASHBOARD_GRID_MARGIN * 2)
+    - ((DASHBOARD_GRID_COLUMNS - 1) * MAIN_DASHBOARD_GRID_GAP)
+  ) / DASHBOARD_GRID_COLUMNS
   const nextHeight = Math.round(Math.max(112, Math.min(168, rawCellWidth * 0.96)))
   cellHeight.value = nextHeight
   grid.cellHeight(nextHeight)
@@ -530,7 +549,7 @@ function initGrid() {
   destroyGrid()
   grid = GridStack.init({
     column: DASHBOARD_GRID_COLUMNS,
-    margin: 4,
+    margin: MAIN_DASHBOARD_GRID_MARGIN,
     cellHeight: cellHeight.value,
     disableResize: true,
     float: false,
@@ -770,25 +789,17 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="main-dashboard">
-    <section class="main-dashboard__header">
-      <div>
-        <span class="main-dashboard__eyebrow">메인 대시보드</span>
-        <h2>{{ currentUser.displayName }}님의 종합 정보판</h2>
-        <p>가계부, 여행, 드라이브 팔레트를 원하는 조합으로 배치합니다.</p>
-      </div>
-      <div class="main-dashboard__header-actions">
-        <button class="button button--secondary" type="button" :disabled="loading" @click="loadSummaries">
-          {{ loading ? '갱신 중' : '새로고침' }}
-        </button>
-      </div>
-    </section>
 
     <div v-if="feedbackMessage" class="feedback feedback--success">{{ feedbackMessage }}</div>
     <div v-if="errorMessage" class="feedback feedback--error">{{ errorMessage }}</div>
 
-    <section class="main-dashboard__palette-zone" :class="{ 'is-editing': isEditMode }">
+    <section
+      class="main-dashboard__palette-zone"
+      :class="{ 'is-editing': isEditMode }"
+      :style="mainDashboardGridStyle"
+    >
       <div v-if="isEditMode" class="main-dashboard__grid-guide" aria-hidden="true">
-        <span v-for="index in DASHBOARD_GRID_COLUMNS" :key="index"></span>
+        <span v-for="index in guideCellCount" :key="index"></span>
       </div>
 
       <div ref="gridElement" class="grid-stack main-dashboard__grid">
@@ -1165,21 +1176,23 @@ onBeforeUnmount(() => {
 }
 
 .main-dashboard__grid-guide {
-  bottom: 12px;
   display: grid;
-  gap: 8px;
+  gap: var(--main-dashboard-grid-gap, 8px);
+  grid-auto-rows: calc(var(--main-dashboard-cell-height, 112px) - var(--main-dashboard-grid-gap, 8px));
   grid-template-columns: repeat(9, minmax(0, 1fr));
-  left: 12px;
+  left: var(--main-dashboard-grid-margin, 4px);
   pointer-events: none;
   position: absolute;
-  right: 12px;
-  top: 12px;
+  right: var(--main-dashboard-grid-margin, 4px);
+  top: var(--main-dashboard-grid-margin, 4px);
   z-index: 0;
 }
 
 .main-dashboard__grid-guide span {
   background: rgba(111, 66, 193, 0.045);
   border: 1px dashed rgba(111, 66, 193, 0.18);
+  box-sizing: border-box;
+  min-width: 0;
 }
 
 :deep(.grid-stack-item) {
@@ -1187,7 +1200,7 @@ onBeforeUnmount(() => {
 }
 
 :deep(.grid-stack-item-content) {
-  inset: 4px;
+  inset: var(--main-dashboard-grid-margin, 4px);
   overflow: hidden;
 }
 
@@ -1739,17 +1752,13 @@ onBeforeUnmount(() => {
   padding: 0;
 }
 
-.main-dashboard__grid-guide {
-  inset: 0;
-}
-
 .main-dashboard__grid-guide span {
   background: rgba(197, 204, 255, 0.16);
   border-color: rgba(109, 114, 186, 0.2);
 }
 
 :deep(.grid-stack-item-content) {
-  inset: 5px;
+  inset: var(--main-dashboard-grid-margin, 4px);
 }
 
 .main-palette {
@@ -2109,8 +2118,8 @@ onBeforeUnmount(() => {
   }
 
   .main-dashboard__grid-guide {
-    left: 8px;
-    right: 8px;
+    left: calc(8px + var(--main-dashboard-grid-margin, 4px));
+    right: calc(8px + var(--main-dashboard-grid-margin, 4px));
   }
 
   .main-palette__feature-links {

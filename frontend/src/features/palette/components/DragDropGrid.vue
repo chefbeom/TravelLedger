@@ -24,6 +24,9 @@ const props = defineProps({
 
 const emit = defineEmits(['apply-layout-patches', 'resize-palette', 'hide-palette', 'remove-palette'])
 
+const PALETTE_GRID_MARGIN = 4
+const PALETTE_GRID_GAP = PALETTE_GRID_MARGIN * 2
+
 const gridElement = ref(null)
 const cellHeight = ref(92)
 const palettesRef = toRef(props, 'palettes')
@@ -34,6 +37,19 @@ const layoutKey = computed(() =>
     .map((palette) => `${palette.id}:${palette.position?.x ?? 0}:${palette.position?.y ?? 0}:${palette.size}:${palette.visible}`)
     .join('|'),
 )
+const guideRowCount = computed(() => Math.max(
+  1,
+  ...props.palettes.map((palette) => {
+    const span = getSpanBySize(palette.size)
+    return (palette.position?.y ?? 0) + span.h
+  }),
+))
+const guideCellCount = computed(() => DASHBOARD_GRID_COLUMNS * guideRowCount.value)
+const gridShellStyle = computed(() => ({
+  '--palette-cell-height': `${cellHeight.value}px`,
+  '--palette-grid-gap': `${PALETTE_GRID_GAP}px`,
+  '--palette-grid-margin': `${PALETTE_GRID_MARGIN}px`,
+}))
 
 let grid = null
 let resizeObserver = null
@@ -52,11 +68,15 @@ function gridAttrs(config) {
 }
 
 function updateCellHeight() {
-  const width = gridElement.value?.parentElement?.clientWidth || gridElement.value?.clientWidth || 0
+  const width = gridElement.value?.clientWidth || gridElement.value?.parentElement?.clientWidth || 0
   if (!width || !grid) {
     return
   }
-  const rawCellWidth = (width - ((DASHBOARD_GRID_COLUMNS - 1) * 8)) / DASHBOARD_GRID_COLUMNS
+  const rawCellWidth = (
+    width
+    - (PALETTE_GRID_MARGIN * 2)
+    - ((DASHBOARD_GRID_COLUMNS - 1) * PALETTE_GRID_GAP)
+  ) / DASHBOARD_GRID_COLUMNS
   const nextHeight = Math.round(Math.max(96, Math.min(156, rawCellWidth * 0.92)))
   cellHeight.value = nextHeight
   grid.cellHeight(nextHeight)
@@ -126,7 +146,7 @@ function initGrid() {
   destroyGrid()
   grid = GridStack.init({
     column: DASHBOARD_GRID_COLUMNS,
-    margin: 4,
+    margin: PALETTE_GRID_MARGIN,
     cellHeight: cellHeight.value,
     disableResize: true,
     float: false,
@@ -186,9 +206,9 @@ watch(layoutKey, () => {
 </script>
 
 <template>
-  <div class="palette-grid-shell" :class="{ 'palette-grid-shell--editing': editMode }" :style="{ '--palette-cell-height': `${cellHeight}px` }">
+  <div class="palette-grid-shell" :class="{ 'palette-grid-shell--editing': editMode }" :style="gridShellStyle">
     <div v-if="editMode" class="palette-grid-guide" aria-hidden="true">
-      <span v-for="index in DASHBOARD_GRID_COLUMNS" :key="index"></span>
+      <span v-for="index in guideCellCount" :key="index"></span>
     </div>
 
     <div ref="gridElement" class="grid-stack palette-grid">
@@ -235,21 +255,23 @@ watch(layoutKey, () => {
 }
 
 .palette-grid-guide {
-  bottom: 0;
   display: grid;
-  gap: 8px;
+  gap: var(--palette-grid-gap, 8px);
+  grid-auto-rows: calc(var(--palette-cell-height, 96px) - var(--palette-grid-gap, 8px));
   grid-template-columns: repeat(9, minmax(0, 1fr));
-  left: 0;
+  left: var(--palette-grid-margin, 4px);
   pointer-events: none;
   position: absolute;
-  right: 0;
-  top: 0;
+  right: var(--palette-grid-margin, 4px);
+  top: var(--palette-grid-margin, 4px);
   z-index: 0;
 }
 
 .palette-grid-guide span {
   background: rgba(111, 66, 193, 0.045);
   border: 1px dashed rgba(111, 66, 193, 0.18);
+  box-sizing: border-box;
+  min-width: 0;
 }
 
 :deep(.grid-stack-item) {
@@ -257,7 +279,7 @@ watch(layoutKey, () => {
 }
 
 :deep(.grid-stack-item-content) {
-  inset: 4px;
+  inset: var(--palette-grid-margin, 4px);
   overflow: hidden;
 }
 
@@ -269,6 +291,6 @@ watch(layoutKey, () => {
 :deep(.grid-stack-placeholder > .placeholder-content) {
   background: rgba(111, 66, 193, 0.08);
   border: 1px dashed rgba(111, 66, 193, 0.45);
-  inset: 4px;
+  inset: var(--palette-grid-margin, 4px);
 }
 </style>

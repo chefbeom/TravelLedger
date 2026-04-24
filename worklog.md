@@ -26,6 +26,16 @@
 
 ## 작업 기록
 
+### 2026-04-24 - Palette grid guide alignment
+
+- User request: Add/configure the horizontal grid as well because the visible grid and actual palette sizes feel mismatched, especially when multiple palettes stack.
+- Request analysis: The edit guide rendered only 9 vertical columns while GridStack uses both column width and row height. The guide also had CSS overrides that could make it wider than the actual GridStack area, and item content used inset values that were not fully tied to GridStack's margin.
+- Actions taken: Checked `codingconvention.md`, reviewed the main dashboard GridStack setup, the shared household palette `DragDropGrid`, guide rendering, margin/inset values, and responsive padding rules.
+- Implementation: Added explicit grid margin/gap constants, computed the visible guide row count from palette positions and spans, and rendered a full `9 columns x row count` cell guide in edit mode. The guide now uses the same cell height, row gap, column gap, and content inset as the GridStack item content. Cell height calculations now use the actual grid element width first so padding does not skew the sizing.
+- Verification: Ran `cmd /c npm run build` in `frontend` successfully. Verified no TypeScript SFC/script or `.ts`/`.tsx` files with `rg -n 'lang="ts"|lang=''ts''' frontend/src` and `rg --files frontend/src | rg '\.(ts|tsx)$'`. Ran `git diff --check -- frontend/src/components/MainDashboardWorkspace.vue frontend/src/features/palette/components/DragDropGrid.vue worklog.md` with no whitespace errors.
+- Result: Main dashboard and household dashboard edit grids now show horizontal and vertical cells that align with the real palette content area, reducing visual drift when palettes stack across multiple rows.
+- Follow-up note: Browser visual QA with connected sample data can still fine-tune the accent color/opacity of the guide, but the sizing math now follows GridStack's actual margin and cell measurements.
+
 ### 2026-04-24 - Main dashboard palette size review
 
 - User request: Review the sizes of drive summary, travel summary, quick amount entry, and related palettes based on the attached screenshot.

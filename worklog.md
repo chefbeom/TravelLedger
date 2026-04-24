@@ -26,6 +26,16 @@
 
 ## 작업 기록
 
+### 2026-04-24 - Main palette size rebalance
+
+- User request: The attached quick-entry palette screenshot shows the palette size breaking; inspect and fix other palettes too so they do not break or get crushed, changing palette sizes if needed.
+- Request analysis: The quick-entry form has seven vertical rows and cannot reliably fit inside the existing `3x3` height on narrower dashboard widths. Summary and recent-file palettes also had real-data risk because they combine KPI grids with lists.
+- Actions taken: Checked `codingconvention.md`, reviewed the palette size registry and GridStack span utility, and confirmed existing unrelated dirty files are outside this work.
+- Implementation: Added `3x4` as a supported palette span. Changed main quick-entry to `3x4`, travel summary and drive summary to `3x3`, and recent drive files to `3x3`. Rebalanced default positions to avoid overlap after the larger fixed sizes. Gave quick-entry an internal vertical overflow fallback and gave summary lists more reserved space.
+- Verification: Ran `cmd /c npm run build` in `frontend` successfully. Verified no TypeScript SFC/script or `.ts`/`.tsx` files with `rg -n 'lang="ts"|lang=''ts''' frontend/src` and `Get-ChildItem -Path frontend/src -Recurse -Include *.ts,*.tsx`. Ran `git diff --check -- frontend/src/components/MainDashboardWorkspace.vue frontend/src/features/palette/types.js frontend/src/features/palette/utils/paletteLayout.js` with no whitespace errors.
+- Result: Form-heavy and list-heavy palettes now get enough grid height instead of being forced into cramped cells, while stored layouts still normalize through the existing layout utility.
+- Follow-up note: Existing user localStorage layouts will be re-normalized at load with the new fixed sizes, so some palettes may shift to the next available empty area to prevent overlap.
+
 ### 2026-04-24 - Palette real-data layout hardening
 
 - User request: Inspect all current palettes and verify whether palette proportions, positions, and visual shape break when real data is rendered.

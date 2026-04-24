@@ -61,12 +61,12 @@ const fixedSizeByType = {
   'household-metric': '2x2',
   'household-payment': '3x2',
   'household-compare': '3x2',
-  'quick-entry': '3x3',
-  'travel-summary': '3x2',
-  'drive-summary': '3x2',
+  'quick-entry': '3x4',
+  'travel-summary': '3x3',
+  'drive-summary': '3x3',
   'photo-frame': '3x3',
   'drive-capacity': '3x2',
-  'drive-recent-files': '3x2',
+  'drive-recent-files': '3x3',
   'quick-actions': '3x2',
   'feature-links': '3x2',
 }
@@ -77,17 +77,17 @@ const defaultPalettes = [
   { id: 'main-month-income', type: 'household-metric', size: '2x2', position: { x: 5, y: 0 }, visible: true, options: { metric: 'monthIncome' } },
   { id: 'main-week-expense', type: 'household-metric', size: '2x2', position: { x: 7, y: 0 }, visible: true, options: { metric: 'weekExpense' } },
   { id: 'main-week-income', type: 'household-metric', size: '2x2', position: { x: 0, y: 2 }, visible: true, options: { metric: 'weekIncome' } },
-  { id: 'main-quick-entry', type: 'quick-entry', size: '3x3', position: { x: 2, y: 2 }, visible: true, options: {} },
+  { id: 'main-quick-entry', type: 'quick-entry', size: '3x4', position: { x: 2, y: 2 }, visible: true, options: {} },
   { id: 'main-payment', type: 'household-payment', size: '3x2', position: { x: 5, y: 2 }, visible: true, options: {} },
-  { id: 'main-week-compare', type: 'household-compare', size: '3x2', position: { x: 0, y: 5 }, visible: true, options: { period: 'week' } },
-  { id: 'main-month-compare', type: 'household-compare', size: '3x2', position: { x: 3, y: 5 }, visible: true, options: { period: 'month' } },
-  { id: 'main-travel-summary', type: 'travel-summary', size: '3x2', position: { x: 6, y: 5 }, visible: true, options: {} },
-  { id: 'main-drive-summary', type: 'drive-summary', size: '3x2', position: { x: 0, y: 7 }, visible: true, options: {} },
-  { id: 'main-photo-frame', type: 'photo-frame', size: '3x3', position: { x: 3, y: 7 }, visible: true, options: {} },
-  { id: 'main-drive-capacity', type: 'drive-capacity', size: '3x2', position: { x: 6, y: 7 }, visible: true, options: {} },
-  { id: 'main-drive-recent-files', type: 'drive-recent-files', size: '3x2', position: { x: 0, y: 9 }, visible: true, options: {} },
-  { id: 'main-quick-actions', type: 'quick-actions', size: '3x2', position: { x: 6, y: 9 }, visible: true, options: {} },
-  { id: 'main-feature-links', type: 'feature-links', size: '3x2', position: { x: 3, y: 10 }, visible: true, options: {} },
+  { id: 'main-week-compare', type: 'household-compare', size: '3x2', position: { x: 0, y: 6 }, visible: true, options: { period: 'week' } },
+  { id: 'main-month-compare', type: 'household-compare', size: '3x2', position: { x: 3, y: 6 }, visible: true, options: { period: 'month' } },
+  { id: 'main-travel-summary', type: 'travel-summary', size: '3x3', position: { x: 6, y: 6 }, visible: true, options: {} },
+  { id: 'main-drive-summary', type: 'drive-summary', size: '3x3', position: { x: 0, y: 8 }, visible: true, options: {} },
+  { id: 'main-photo-frame', type: 'photo-frame', size: '3x3', position: { x: 3, y: 8 }, visible: true, options: {} },
+  { id: 'main-drive-capacity', type: 'drive-capacity', size: '3x2', position: { x: 6, y: 9 }, visible: true, options: {} },
+  { id: 'main-drive-recent-files', type: 'drive-recent-files', size: '3x3', position: { x: 0, y: 11 }, visible: true, options: {} },
+  { id: 'main-feature-links', type: 'feature-links', size: '3x2', position: { x: 3, y: 11 }, visible: true, options: {} },
+  { id: 'main-quick-actions', type: 'quick-actions', size: '3x2', position: { x: 6, y: 11 }, visible: true, options: {} },
 ]
 
 const metricDefinitions = {
@@ -1954,7 +1954,7 @@ onBeforeUnmount(() => {
 .main-palette--drive-summary .main-palette__body {
   display: grid;
   gap: 8px;
-  grid-template-rows: minmax(0, 1fr) minmax(0, 76px);
+  grid-template-rows: minmax(0, 1fr) minmax(0, 118px);
 }
 
 .main-palette--travel-summary .main-palette__metric-grid,
@@ -2008,6 +2008,12 @@ onBeforeUnmount(() => {
 }
 
 .main-palette__recent-files {
+  overflow-y: auto;
+  padding-right: 2px;
+}
+
+.main-palette--quick-entry .main-palette__quick-form {
+  align-content: start;
   overflow-y: auto;
   padding-right: 2px;
 }

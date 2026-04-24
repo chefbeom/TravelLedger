@@ -1,9 +1,9 @@
 export const DASHBOARD_GRID_COLUMNS = 9
 
-export const PALETTE_SIZES = ['1x1', '1x2', '2x2', '3x2', '3x3']
+export const PALETTE_SIZES = ['1x1', '1x2', '2x2', '3x2', '3x3', '3x4']
 
 /**
- * @typedef {'1x1' | '1x2' | '2x2' | '3x2' | '3x3'} PaletteSize
+ * @typedef {'1x1' | '1x2' | '2x2' | '3x2' | '3x3' | '3x4'} PaletteSize
  */
 
 /**

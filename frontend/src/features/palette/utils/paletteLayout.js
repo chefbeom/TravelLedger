@@ -6,6 +6,7 @@ export const SIZE_SPANS = {
   '2x2': { w: 2, h: 2 },
   '3x2': { w: 3, h: 2 },
   '3x3': { w: 3, h: 3 },
+  '3x4': { w: 3, h: 4 },
 }
 
 const OLD_SIZE_MIGRATIONS = {

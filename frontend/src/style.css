@@ -4739,84 +4739,184 @@ textarea {
 }
 
 .household-calendar-workspace {
-  grid-template-columns: minmax(0, 1.42fr) minmax(360px, 0.58fr);
   gap: 20px;
-  align-items: start;
-  width: calc(100% + 40px);
-  margin-inline: -20px;
-}
-
-.household-calendar-workspace > .household-calendar-panel {
-  grid-column: 1;
-  grid-row: 1;
+  width: 100%;
   min-width: 0;
 }
 
-.household-calendar-workspace > .household-entry-summary-grid {
-  grid-column: 2;
-  grid-row: 1;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 20px;
+.household-calendar-layout-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  min-width: 0;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: var(--surface-panel);
+  box-shadow: var(--shadow);
+}
+
+.household-calendar-layout-toolbar > div:first-child {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.household-calendar-layout-toolbar strong {
+  font-size: 1rem;
+}
+
+.household-calendar-layout-toolbar span {
+  color: var(--text-soft);
+  font-size: 0.88rem;
+  font-weight: 700;
+}
+
+.household-calendar-layout-toolbar__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.household-calendar-layout-board {
+  position: relative;
+  min-width: 0;
+  overflow-x: hidden;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 24px;
+  background: var(--surface-soft);
+}
+
+.household-calendar-layout-grid {
+  min-width: 100%;
+  overflow: visible;
   width: 100%;
-  margin-inline: 0;
 }
 
-.household-calendar-workspace > .household-sheet-panel {
-  grid-column: 1 / -1;
-  grid-row: 2;
-  margin-top: 0;
+.household-calendar-layout-guide {
+  display: grid;
+  gap: var(--calendar-layout-grid-gap, 8px);
+  grid-auto-rows: calc(var(--calendar-layout-cell-height, 112px) - var(--calendar-layout-grid-gap, 8px));
+  grid-template-columns: repeat(9, minmax(0, 1fr));
+  left: calc(12px + var(--calendar-layout-grid-margin, 4px));
+  pointer-events: none;
+  position: absolute;
+  right: calc(12px + var(--calendar-layout-grid-margin, 4px));
+  top: calc(12px + var(--calendar-layout-grid-margin, 4px));
+  z-index: 0;
 }
 
-.household-calendar-workspace > .household-entry-summary-grid .panel__header {
+.household-calendar-layout-guide span {
+  background: rgba(111, 66, 193, 0.045);
+  border: 1px dashed rgba(111, 66, 193, 0.18);
+  box-sizing: border-box;
+  min-width: 0;
+}
+
+.household-calendar-layout-board .grid-stack-item {
+  z-index: 1;
+}
+
+.household-calendar-layout-board .grid-stack-item-content {
+  inset: var(--calendar-layout-grid-margin, 4px);
+  overflow: hidden;
+}
+
+.household-calendar-layout-panel-shell {
+  height: 100%;
+  min-height: 0;
+  min-width: 0;
+}
+
+.household-calendar-layout-panel-shell > .panel {
+  box-sizing: border-box;
+  height: 100%;
+  margin: 0;
+  min-height: 0;
+  overflow: auto;
+}
+
+.household-calendar-layout-panel-shell--editing > .panel {
+  outline: 1px dashed rgba(111, 66, 193, 0.4);
+  outline-offset: -3px;
+}
+
+.household-calendar-layout-panel-shell--editing .panel__header {
+  cursor: grab;
+}
+
+.household-calendar-layout-board .ui-resizable-se {
+  width: 18px;
+  height: 18px;
+  right: 8px;
+  bottom: 8px;
+  border-right: 3px solid rgba(111, 66, 193, 0.68);
+  border-bottom: 3px solid rgba(111, 66, 193, 0.68);
+}
+
+.household-calendar-layout-board:not(.household-calendar-layout-board--editing) .ui-resizable-handle {
+  display: none;
+}
+
+.household-calendar-layout-board--editing .grid-stack-item.ui-draggable-dragging .panel__header,
+.household-calendar-layout-board--editing .grid-stack-item.ui-resizable-resizing .panel__header {
+  cursor: grabbing;
+}
+
+.household-calendar-layout-item--quick-entry .panel__header,
+.household-calendar-layout-item--aggregate .panel__header {
   flex-direction: column;
   align-items: stretch;
 }
 
-.household-calendar-workspace > .household-entry-summary-grid .household-entry-panel__date-badge {
+.household-calendar-layout-item--quick-entry .household-entry-panel__date-badge {
   align-self: flex-start;
 }
 
-.household-calendar-workspace > .household-entry-summary-grid .entry-editor {
+.household-calendar-layout-item--quick-entry .entry-editor {
   gap: 12px;
 }
 
-.household-calendar-workspace > .household-entry-summary-grid .entry-editor__amount,
-.household-calendar-workspace > .household-entry-summary-grid .entry-editor__fields {
+.household-calendar-layout-item--quick-entry .entry-editor__amount,
+.household-calendar-layout-item--quick-entry .entry-editor__fields {
   padding: 14px;
   border-radius: 18px;
 }
 
-.household-calendar-workspace > .household-entry-summary-grid .entry-editor__fields,
-.household-calendar-workspace > .household-entry-summary-grid .entry-editor__category-grid {
+.household-calendar-layout-item--quick-entry .entry-editor__fields,
+.household-calendar-layout-item--quick-entry .entry-editor__category-grid {
   grid-template-columns: minmax(0, 1fr);
 }
 
-.household-calendar-workspace > .household-entry-summary-grid .amount-input {
+.household-calendar-layout-item--quick-entry .amount-input {
   min-height: 66px;
   padding-inline: 14px;
 }
 
-.household-calendar-workspace > .household-entry-summary-grid .amount-input span {
+.household-calendar-layout-item--quick-entry .amount-input span {
   font-size: 1.18rem;
 }
 
-.household-calendar-workspace > .household-entry-summary-grid .amount-input input {
+.household-calendar-layout-item--quick-entry .amount-input input {
   min-height: 54px;
   font-size: clamp(1.35rem, 2.2vw, 1.85rem);
 }
 
-.household-calendar-workspace > .household-entry-summary-grid .amount-shortcuts {
+.household-calendar-layout-item--quick-entry .amount-shortcuts {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
-.household-calendar-workspace > .household-entry-summary-grid .amount-shortcuts__button {
+.household-calendar-layout-item--quick-entry .amount-shortcuts__button {
   width: 100%;
   min-width: 0;
   padding-inline: 10px;
 }
 
-.household-calendar-workspace > .household-entry-summary-grid .entry-editor__actions .button {
+.household-calendar-layout-item--quick-entry .entry-editor__actions .button {
   flex: 1 1 140px;
 }
 
@@ -4998,25 +5098,13 @@ textarea {
 }
 
 @media (max-width: 1180px) {
-  .household-calendar-workspace {
-    grid-template-columns: minmax(0, 1fr);
-    width: 100%;
-    margin-inline: 0;
+  .household-calendar-layout-toolbar {
+    align-items: flex-start;
+    flex-direction: column;
   }
 
-  .household-calendar-workspace > .household-calendar-panel {
-    grid-column: 1;
-    grid-row: 1;
-  }
-
-  .household-calendar-workspace > .household-entry-summary-grid {
-    grid-column: 1;
-    grid-row: 2;
-  }
-
-  .household-calendar-workspace > .household-sheet-panel {
-    grid-column: 1;
-    grid-row: 3;
+  .household-calendar-layout-toolbar__actions {
+    justify-content: flex-start;
   }
 }
 

@@ -26,6 +26,15 @@
 
 ## 작업 기록
 
+### 2026-04-24 - Household calendar draggable layout
+
+- User request: Make the household calendar ledger layout adjustable like a dashboard, with panels that can be moved and resized by dragging a corner.
+- Request analysis: The calendar ledger already had four logical panels: calendar, quick transaction input, user aggregate settings, and selected-day transaction sheet. The safest implementation was to wrap these existing panels in a GridStack layout while keeping all transaction, calendar, aggregate, and API logic unchanged.
+- Actions taken: Checked `codingconvention.md`, reviewed the existing dashboard GridStack implementation, and inspected the current `CalendarWorkspace.vue` panel structure and styles.
+- Implementation: Added a 9-column GridStack layout to `CalendarWorkspace.vue` with persisted localStorage positions/sizes for the calendar, quick entry, aggregate, and sheet panels. Added layout edit mode, default layout reset, header-based dragging, bottom-right corner resizing, layout guide cells, per-panel min/max sizes, and calendar measurement refresh after moves/resizes. Updated `style.css` so each panel fills its grid cell, scrolls internally when resized smaller, and shows drag/resize affordances only in edit mode.
+- Verification: Ran `cmd /c npm run build` in `frontend` successfully. Verified no TypeScript SFC/script or `.ts`/`.tsx` files with `rg -n 'lang="ts"|lang=''ts''' frontend/src`, `Get-ChildItem -Path frontend/src -Recurse -Include *.ts,*.tsx`, and `rg --files frontend/src | rg '\.(ts|tsx)$'`. Ran `git diff --check -- frontend/src/components/CalendarWorkspace.vue frontend/src/style.css` with no whitespace errors.
+- Result: The household calendar ledger panels can now be repositioned and resized in edit mode without changing the underlying calendar selection, transaction entry, aggregate saving, or transaction sheet logic.
+
 ### 2026-04-24 - Move invite link creation to admin workspace
 
 - User request: Move the invite-link creation currently at the bottom of the dashboard into an admin-only dashboard/admin feature.

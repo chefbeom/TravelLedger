@@ -1,5 +1,7 @@
 ﻿<script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { GridStack } from 'gridstack'
+import 'gridstack/dist/gridstack.min.css'
 import { formatCompactNumber } from '../lib/format'
 import { resolveRange, summarizeEntries } from '../lib/analytics'
 import { useTableSelection } from '../lib/tableSelection'
@@ -9,6 +11,7 @@ const CALENDAR_COLLAPSE_KEY = 'calen-household-calendar-collapsed'
 const CALENDAR_HIGHLIGHT_KEY = 'calen-household-calendar-highlight-mode'
 const CALENDAR_CUSTOM_SIZE_KEY = 'calen-household-calendar-custom-size'
 const CALENDAR_AGGREGATE_PANEL_ENABLED_KEY = 'calen-household-calendar-aggregate-panel-enabled'
+const CALENDAR_PANEL_LAYOUT_STORAGE_KEY = 'calen-household-calendar-panel-layout:v1'
 const DEFAULT_CALENDAR_HIGHLIGHT_MODE = 'net'
 const CALENDAR_CUSTOM_WIDTH_MIN = 780
 const CALENDAR_CUSTOM_WIDTH_MAX = 1500
@@ -16,6 +19,9 @@ const CALENDAR_CUSTOM_HEIGHT_MIN = 800
 const CALENDAR_CUSTOM_HEIGHT_MAX = 1500
 const DEFAULT_CALENDAR_CUSTOM_WIDTH = 1200
 const DEFAULT_CALENDAR_CUSTOM_HEIGHT = 1200
+const CALENDAR_LAYOUT_GRID_COLUMNS = 9
+const CALENDAR_LAYOUT_GRID_MARGIN = 4
+const CALENDAR_LAYOUT_GRID_GAP = CALENDAR_LAYOUT_GRID_MARGIN * 2
 
 const calendarScalePresets = [
   { key: 'compact', label: '좁게', value: 74 },
@@ -58,6 +64,45 @@ const aggregateWidgetAmountTypes = [
   { value: 'NET', label: '전체' },
   { value: 'INCOME', label: '수입' },
   { value: 'EXPENSE', label: '지출' },
+]
+
+const calendarPanelDefinitions = [
+  {
+    id: 'calendar',
+    title: '달력',
+    defaultLayout: { x: 0, y: 0, w: 6, h: 6 },
+    minW: 4,
+    minH: 4,
+    maxW: 9,
+    maxH: 10,
+  },
+  {
+    id: 'quick-entry',
+    title: '빠른 거래 입력',
+    defaultLayout: { x: 6, y: 0, w: 3, h: 4 },
+    minW: 3,
+    minH: 3,
+    maxW: 5,
+    maxH: 8,
+  },
+  {
+    id: 'aggregate',
+    title: '사용자 설정 집계',
+    defaultLayout: { x: 6, y: 4, w: 3, h: 3 },
+    minW: 3,
+    minH: 2,
+    maxW: 5,
+    maxH: 6,
+  },
+  {
+    id: 'sheet',
+    title: '거래 시트',
+    defaultLayout: { x: 0, y: 7, w: 9, h: 4 },
+    minW: 4,
+    minH: 2,
+    maxW: 9,
+    maxH: 8,
+  },
 ]
 
 const props = defineProps({
@@ -196,10 +241,12 @@ const calendarHighlightMode = ref(DEFAULT_CALENDAR_HIGHLIGHT_MODE)
 const isCalendarCollapsed = ref(false)
 const isAggregateEditMode = ref(false)
 const isAggregatePanelEnabled = ref(true)
+const isLayoutEditMode = ref(false)
 const quickEntryPanelRef = ref(null)
 const ledgerSheetRef = ref(null)
 const calendarShellRef = ref(null)
 const calendarContentRef = ref(null)
+const layoutGridRef = ref(null)
 const aggregateWidgetDraftConfigs = ref(createDefaultAggregateConfigs())
 const calendarShellWidth = ref(0)
 const calendarNaturalWidth = ref(860)
@@ -208,7 +255,12 @@ const isCalendarResizePanelOpen = ref(false)
 const isCalendarCustomSizeEnabled = ref(false)
 const calendarCustomWidth = ref(DEFAULT_CALENDAR_CUSTOM_WIDTH)
 const calendarCustomHeight = ref(DEFAULT_CALENDAR_CUSTOM_HEIGHT)
+const layoutCellHeight = ref(112)
+const calendarPanelLayout = ref(createDefaultCalendarPanelLayout())
 let calendarResizeObserver = null
+let layoutGrid = null
+let layoutGridResizeObserver = null
+let layoutGridRebuildTimer = 0
 
 const maxDailyExpense = computed(() => {
   const expenses = props.calendarWeeks.flat().map((day) => Number(day.summary?.expense ?? 0))
@@ -360,6 +412,25 @@ const aggregateCards = computed(() => {
   const cards = normalizeAggregateConfigs(sourceConfigs).slice(0, 4).map((config, index) => buildAggregateCard(config, index))
   return isAggregateEditMode.value ? cards : cards.filter((card) => card.config.kind !== 'NONE')
 })
+const calendarLayoutPanels = computed(() => (
+  calendarPanelDefinitions.map((definition) => ({
+    ...definition,
+    ...calendarPanelLayout.value.find((item) => item.id === definition.id),
+  }))
+))
+const calendarPanelLayoutKey = computed(() => (
+  calendarLayoutPanels.value.map((panel) => `${panel.id}:${panel.x}:${panel.y}:${panel.w}:${panel.h}`).join('|')
+))
+const calendarLayoutGuideRowCount = computed(() => Math.max(
+  1,
+  ...calendarLayoutPanels.value.map((panel) => Number(panel.y ?? 0) + Number(panel.h ?? 1)),
+))
+const calendarLayoutGuideCellCount = computed(() => CALENDAR_LAYOUT_GRID_COLUMNS * calendarLayoutGuideRowCount.value)
+const calendarLayoutGridStyle = computed(() => ({
+  '--calendar-layout-cell-height': `${layoutCellHeight.value}px`,
+  '--calendar-layout-grid-gap': `${CALENDAR_LAYOUT_GRID_GAP}px`,
+  '--calendar-layout-grid-margin': `${CALENDAR_LAYOUT_GRID_MARGIN}px`,
+}))
 
 watch(
   () => props.anchorDate,
@@ -412,6 +483,19 @@ watch(isAggregatePanelEnabled, (value) => {
   if (typeof window !== 'undefined') {
     window.localStorage.setItem(CALENDAR_AGGREGATE_PANEL_ENABLED_KEY, value ? 'true' : 'false')
   }
+})
+
+watch(calendarPanelLayoutKey, () => {
+  queueLayoutGridRebuild()
+})
+
+watch(isLayoutEditMode, (value) => {
+  if (!layoutGrid) {
+    return
+  }
+
+  layoutGrid.enableMove(value)
+  layoutGrid.enableResize(value)
 })
 
 watch([calendarCustomWidth, calendarCustomHeight, isCalendarCustomSizeEnabled], () => {
@@ -506,6 +590,8 @@ onMounted(() => {
     return
   }
 
+  hydrateCalendarPanelLayout()
+
   const savedScale = window.localStorage.getItem(CALENDAR_SCALE_KEY)
   const savedCollapsed = window.localStorage.getItem(CALENDAR_COLLAPSE_KEY)
   const savedHighlight = window.localStorage.getItem(CALENDAR_HIGHLIGHT_KEY)
@@ -545,6 +631,17 @@ onMounted(() => {
   }
 
   nextTick(() => {
+    initLayoutGrid()
+    if (typeof ResizeObserver !== 'undefined') {
+      layoutGridResizeObserver = new ResizeObserver(() => {
+        updateLayoutCellHeight()
+        refreshCalendarMeasurements()
+      })
+      if (layoutGridRef.value?.parentElement) {
+        layoutGridResizeObserver.observe(layoutGridRef.value.parentElement)
+      }
+    }
+
     updateCalendarShellWidth()
     updateCalendarContentSize()
 
@@ -564,6 +661,12 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  if (layoutGridRebuildTimer) {
+    window.clearTimeout(layoutGridRebuildTimer)
+  }
+  layoutGridResizeObserver?.disconnect()
+  destroyLayoutGrid()
+
   if (calendarResizeObserver) {
     calendarResizeObserver.disconnect()
     calendarResizeObserver = null
@@ -703,6 +806,184 @@ function resetCalendarCustomSize() {
   calendarCustomWidth.value = DEFAULT_CALENDAR_CUSTOM_WIDTH
   calendarCustomHeight.value = DEFAULT_CALENDAR_CUSTOM_HEIGHT
   isCalendarCustomSizeEnabled.value = false
+}
+
+function createDefaultCalendarPanelLayout() {
+  return calendarPanelDefinitions.map((definition) => ({
+    id: definition.id,
+    ...definition.defaultLayout,
+  }))
+}
+
+function normalizeCalendarPanelLayout(layouts) {
+  const source = new Map((layouts ?? []).map((item) => [String(item.id), item]))
+
+  return calendarPanelDefinitions.map((definition) => {
+    const raw = source.get(definition.id) ?? definition.defaultLayout
+    const width = clamp(Number(raw.w) || definition.defaultLayout.w, definition.minW, definition.maxW)
+    const height = clamp(Number(raw.h) || definition.defaultLayout.h, definition.minH, definition.maxH)
+
+    return {
+      id: definition.id,
+      x: clamp(Number(raw.x) || 0, 0, CALENDAR_LAYOUT_GRID_COLUMNS - width),
+      y: Math.max(0, Number(raw.y) || 0),
+      w: width,
+      h: height,
+    }
+  })
+}
+
+function hydrateCalendarPanelLayout() {
+  if (typeof window === 'undefined') {
+    calendarPanelLayout.value = createDefaultCalendarPanelLayout()
+    return
+  }
+
+  const savedLayout = window.localStorage.getItem(CALENDAR_PANEL_LAYOUT_STORAGE_KEY)
+  if (!savedLayout) {
+    calendarPanelLayout.value = createDefaultCalendarPanelLayout()
+    return
+  }
+
+  try {
+    calendarPanelLayout.value = normalizeCalendarPanelLayout(JSON.parse(savedLayout))
+  } catch (_error) {
+    calendarPanelLayout.value = createDefaultCalendarPanelLayout()
+  }
+}
+
+function persistCalendarPanelLayout() {
+  if (typeof window !== 'undefined') {
+    window.localStorage.setItem(CALENDAR_PANEL_LAYOUT_STORAGE_KEY, JSON.stringify(calendarPanelLayout.value))
+  }
+}
+
+function resetCalendarPanelLayout() {
+  calendarPanelLayout.value = createDefaultCalendarPanelLayout()
+  persistCalendarPanelLayout()
+  refreshCalendarMeasurements()
+}
+
+function calendarPanelAttrs(panel) {
+  return {
+    x: panel.x,
+    y: panel.y,
+    w: panel.w,
+    h: panel.h,
+    minW: panel.minW,
+    minH: panel.minH,
+    maxW: panel.maxW,
+    maxH: panel.maxH,
+  }
+}
+
+function updateLayoutCellHeight() {
+  const width = layoutGridRef.value?.clientWidth || layoutGridRef.value?.parentElement?.clientWidth || 0
+  if (!width || !layoutGrid) {
+    return
+  }
+
+  const rawCellWidth = (
+    width
+    - (CALENDAR_LAYOUT_GRID_MARGIN * 2)
+    - ((CALENDAR_LAYOUT_GRID_COLUMNS - 1) * CALENDAR_LAYOUT_GRID_GAP)
+  ) / CALENDAR_LAYOUT_GRID_COLUMNS
+  const nextHeight = Math.round(Math.max(108, Math.min(148, rawCellWidth * 0.88)))
+  layoutCellHeight.value = nextHeight
+  layoutGrid.cellHeight(nextHeight)
+}
+
+function readLayoutGridSnapshot() {
+  if (!layoutGrid) {
+    return []
+  }
+
+  return (layoutGrid.engine?.nodes ?? []).map((node) => ({
+    id: node.el?.getAttribute('gs-id') || node.el?.getAttribute('data-calendar-panel-id'),
+    x: node.x,
+    y: node.y,
+    w: node.w,
+    h: node.h,
+  })).filter((item) => item.id)
+}
+
+function applyCalendarPanelLayout(snapshot) {
+  calendarPanelLayout.value = normalizeCalendarPanelLayout(snapshot)
+  persistCalendarPanelLayout()
+  refreshCalendarMeasurements()
+}
+
+function handleLayoutGridStop() {
+  applyCalendarPanelLayout(readLayoutGridSnapshot())
+}
+
+function destroyLayoutGrid() {
+  if (!layoutGrid) {
+    return
+  }
+
+  layoutGrid.off('dragstop')
+  layoutGrid.off('resizestop')
+  layoutGrid.destroy(false)
+  layoutGrid = null
+}
+
+function initLayoutGrid() {
+  if (!layoutGridRef.value) {
+    return
+  }
+
+  destroyLayoutGrid()
+  layoutGrid = GridStack.init({
+    column: CALENDAR_LAYOUT_GRID_COLUMNS,
+    margin: CALENDAR_LAYOUT_GRID_MARGIN,
+    cellHeight: layoutCellHeight.value,
+    disableResize: false,
+    float: false,
+    animate: true,
+    draggable: {
+      appendTo: 'body',
+      cancel: 'button,a,input,select,textarea,[data-no-drag="true"]',
+      handle: '.panel__header',
+      scroll: false,
+    },
+    resizable: {
+      handles: 'se',
+    },
+  }, layoutGridRef.value)
+  layoutGrid.enableMove(isLayoutEditMode.value)
+  layoutGrid.enableResize(isLayoutEditMode.value)
+  layoutGrid.on('dragstop', handleLayoutGridStop)
+  layoutGrid.on('resizestop', handleLayoutGridStop)
+  updateLayoutCellHeight()
+}
+
+function queueLayoutGridRebuild() {
+  if (typeof window === 'undefined') {
+    return
+  }
+
+  if (layoutGridRebuildTimer) {
+    window.clearTimeout(layoutGridRebuildTimer)
+  }
+
+  layoutGridRebuildTimer = window.setTimeout(async () => {
+    await nextTick()
+    initLayoutGrid()
+    refreshCalendarMeasurements()
+    layoutGridRebuildTimer = 0
+  }, 0)
+}
+
+function toggleLayoutEditMode() {
+  isLayoutEditMode.value = !isLayoutEditMode.value
+}
+
+function refreshCalendarMeasurements() {
+  nextTick(() => {
+    updateCalendarShellWidth()
+    updateCalendarContentSize()
+  })
 }
 
 function getExpenseAmount(day) {
@@ -1075,8 +1356,54 @@ defineExpose({
 
 <template>
   <div class="workspace-stack household-calendar-workspace" @keydown.capture="handleWorkspaceKeydown">
-    <div class="household-entry-summary-grid">
-      <section ref="quickEntryPanelRef" class="panel household-entry-panel">
+    <div class="household-calendar-layout-toolbar">
+      <div>
+        <strong>달력 배치</strong>
+        <span>{{ isLayoutEditMode ? '편집 중' : '고정됨' }}</span>
+      </div>
+      <div class="household-calendar-layout-toolbar__actions">
+        <button type="button" class="button button--secondary" @click="resetCalendarPanelLayout">
+          기본 배치
+        </button>
+        <button type="button" class="button button--primary" @click="toggleLayoutEditMode">
+          {{ isLayoutEditMode ? '배치 완료' : '배치 편집' }}
+        </button>
+      </div>
+    </div>
+
+    <section
+      class="household-calendar-layout-board"
+      :class="{ 'household-calendar-layout-board--editing': isLayoutEditMode }"
+      :style="calendarLayoutGridStyle"
+    >
+      <div v-if="isLayoutEditMode" class="household-calendar-layout-guide" aria-hidden="true">
+        <span v-for="index in calendarLayoutGuideCellCount" :key="index"></span>
+      </div>
+
+      <div ref="layoutGridRef" class="grid-stack household-calendar-layout-grid">
+        <div
+          v-for="panel in calendarLayoutPanels"
+          :key="panel.id"
+          class="grid-stack-item"
+          :class="`household-calendar-layout-item--${panel.id}`"
+          :gs-id="panel.id"
+          :data-calendar-panel-id="panel.id"
+          :gs-x="calendarPanelAttrs(panel).x"
+          :gs-y="calendarPanelAttrs(panel).y"
+          :gs-w="calendarPanelAttrs(panel).w"
+          :gs-h="calendarPanelAttrs(panel).h"
+          :gs-min-w="calendarPanelAttrs(panel).minW"
+          :gs-min-h="calendarPanelAttrs(panel).minH"
+          :gs-max-w="calendarPanelAttrs(panel).maxW"
+          :gs-max-h="calendarPanelAttrs(panel).maxH"
+        >
+          <div class="grid-stack-item-content">
+            <div
+              class="household-calendar-layout-panel-shell"
+              :class="{ 'household-calendar-layout-panel-shell--editing': isLayoutEditMode }"
+            >
+              <template v-if="panel.id === 'quick-entry'">
+                <section ref="quickEntryPanelRef" class="panel household-entry-panel">
         <div class="panel__header">
           <div>
             <h2>{{ isEditingEntry ? '거래 수정' : '빠른 거래 입력' }}</h2>
@@ -1240,7 +1567,10 @@ defineExpose({
         </div>
       </section>
 
-      <section class="panel household-quickstats-panel">
+              </template>
+
+              <template v-else-if="panel.id === 'aggregate'">
+                <section class="panel household-quickstats-panel">
         <div class="panel__header household-aggregate-header">
           <div>
             <h2>사용자 설정 집계</h2>
@@ -1356,9 +1686,11 @@ defineExpose({
           <span>우측 상단 수정 버튼에서 필요한 집계만 골라 등록하면 이 영역에 바로 나타납니다.</span>
         </div>
       </section>
-    </div>
 
-    <section
+              </template>
+
+              <template v-else-if="panel.id === 'calendar'">
+                <section
       :class="[
         'panel household-calendar-panel household-calendar-layout',
         { 'household-calendar-layout--amount-only': isAmountOnlyCalendar },
@@ -1587,7 +1919,10 @@ defineExpose({
       </div>
     </section>
 
-    <section ref="ledgerSheetRef" class="panel household-sheet-panel">
+              </template>
+
+              <template v-else-if="panel.id === 'sheet'">
+                <section ref="ledgerSheetRef" class="panel household-sheet-panel">
       <div class="panel__header">
         <div>
           <h2>{{ formatShortDate(selectedDate) }} 거래 시트</h2>
@@ -1671,6 +2006,12 @@ defineExpose({
         <button class="button button--ghost" type="button" :disabled="selectedDayEntryPage <= 0" @click="selectedDayEntryPage -= 1">이전</button>
         <span>{{ selectedDayEntryPage + 1 }} / {{ selectedDayEntryPageCount }}</span>
         <button class="button button--ghost" type="button" :disabled="selectedDayEntryPage + 1 >= selectedDayEntryPageCount" @click="selectedDayEntryPage += 1">다음</button>
+      </div>
+    </section>
+              </template>
+            </div>
+          </div>
+        </div>
       </div>
     </section>
   </div>

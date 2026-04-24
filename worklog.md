@@ -26,6 +26,16 @@
 
 ## 작업 기록
 
+### 2026-04-25 - Flush household layout edits to database
+
+- User request: Household layout edits should remain applied when signing in from another computer.
+- Request analysis: Layout persistence already used the database, but layout writes were debounced. If the user finished editing or left the page before the debounce completed, localStorage had the newest layout while the database still had the previous layout, so another device loaded stale data.
+- Actions taken: Checked `codingconvention.md`, reviewed the household calendar layout sync, the main dashboard layout sync, the household palette Pinia store, and the palette container lifecycle.
+- Implementation: Added pending remote payload tracking and immediate flush helpers for the household calendar layout, main dashboard palettes, and household palette dashboard store. Edit completion and component unmount now flush pending database saves instead of only clearing timers.
+- Verification: Ran `cmd /c npm run build` in `frontend` successfully. Verified no TypeScript SFC/script or `.ts`/`.tsx` files with `rg -n 'lang="ts"|lang=''ts''' frontend/src`, `Get-ChildItem -Path frontend/src -Recurse -Include *.ts,*.tsx`, and `rg --files frontend/src | rg '\.(ts|tsx)$'`.
+- Result: Recent layout edits are pushed to the database promptly, so the same authenticated user can load the latest household/dashboard arrangement on another computer.
+- Follow-up note: If the backend is unreachable, the local cache still preserves the layout on the current browser until the remote save can succeed.
+
 ### 2026-04-25 - Extract calendar controls above layout grid
 
 - User request: Correct the previous change: extract the calendar top control area shown in the screenshot and pull it above the layout grid.

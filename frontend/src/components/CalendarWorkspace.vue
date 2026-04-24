@@ -271,6 +271,7 @@ let layoutGridResizeObserver = null
 let layoutGridRebuildTimer = 0
 let layoutRemoteHydrationSequence = 0
 let layoutRemoteSaveTimer = 0
+let pendingLayoutRemotePayload = null
 let layoutChangedDuringRemoteHydration = false
 
 const maxDailyExpense = computed(() => {
@@ -677,9 +678,7 @@ onBeforeUnmount(() => {
   if (layoutGridRebuildTimer) {
     window.clearTimeout(layoutGridRebuildTimer)
   }
-  if (layoutRemoteSaveTimer) {
-    window.clearTimeout(layoutRemoteSaveTimer)
-  }
+  saveCalendarPanelLayoutRemoteNow()
   layoutGridResizeObserver?.disconnect()
   destroyLayoutGrid()
 
@@ -894,13 +893,27 @@ function scheduleCalendarPanelLayoutRemotePersist(payload = clone(calendarPanelL
     window.clearTimeout(layoutRemoteSaveTimer)
   }
 
-  const nextPayload = clone(payload)
+  pendingLayoutRemotePayload = clone(payload)
   layoutRemoteSaveTimer = window.setTimeout(() => {
-    saveLayoutSetting(CALENDAR_PANEL_LAYOUT_SCOPE, nextPayload, CALENDAR_PANEL_LAYOUT_VERSION).catch(() => {
-      // Local cache keeps the user's layout if the backend is temporarily unavailable.
-    })
-    layoutRemoteSaveTimer = 0
+    saveCalendarPanelLayoutRemoteNow()
   }, REMOTE_LAYOUT_SAVE_DELAY_MS)
+}
+
+function saveCalendarPanelLayoutRemoteNow(payload = pendingLayoutRemotePayload) {
+  if (typeof window === 'undefined' || !payload) {
+    return Promise.resolve()
+  }
+
+  if (layoutRemoteSaveTimer) {
+    window.clearTimeout(layoutRemoteSaveTimer)
+    layoutRemoteSaveTimer = 0
+  }
+
+  const nextPayload = clone(payload)
+  pendingLayoutRemotePayload = null
+  return saveLayoutSetting(CALENDAR_PANEL_LAYOUT_SCOPE, nextPayload, CALENDAR_PANEL_LAYOUT_VERSION).catch(() => {
+    // Local cache keeps the user's layout if the backend is temporarily unavailable.
+  })
 }
 
 function persistCalendarPanelLayout() {
@@ -1050,7 +1063,11 @@ function queueLayoutGridRebuild() {
 }
 
 function toggleLayoutEditMode() {
+  const isFinishingEdit = isLayoutEditMode.value
   isLayoutEditMode.value = !isLayoutEditMode.value
+  if (isFinishingEdit) {
+    saveCalendarPanelLayoutRemoteNow()
+  }
 }
 
 function refreshCalendarMeasurements() {

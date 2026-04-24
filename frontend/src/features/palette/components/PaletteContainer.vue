@@ -101,6 +101,7 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  store.flushRemotePersist()
   document.removeEventListener('pointerdown', closeToolsOnOutsidePointer)
 })
 </script>

@@ -168,6 +168,7 @@ let rebuildTimer = 0
 let summaryLoadSequence = 0
 let paletteRemoteHydrationSequence = 0
 let paletteRemoteSaveTimer = 0
+let pendingPaletteRemotePayload = null
 let paletteChangedDuringRemoteHydration = false
 
 const userStorageId = computed(() => props.currentUser?.id || props.currentUser?.loginId || 'anonymous')
@@ -441,13 +442,27 @@ function schedulePaletteRemotePersist(payload = palettePayload()) {
     window.clearTimeout(paletteRemoteSaveTimer)
   }
 
-  const nextPayload = clone(payload)
+  pendingPaletteRemotePayload = clone(payload)
   paletteRemoteSaveTimer = window.setTimeout(() => {
-    saveLayoutSetting(MAIN_DASHBOARD_LAYOUT_SCOPE, nextPayload, MAIN_DASHBOARD_LAYOUT_VERSION).catch(() => {
-      // Local cache keeps the user's layout if the backend is temporarily unavailable.
-    })
-    paletteRemoteSaveTimer = 0
+    savePaletteRemoteNow()
   }, REMOTE_LAYOUT_SAVE_DELAY_MS)
+}
+
+function savePaletteRemoteNow(payload = pendingPaletteRemotePayload) {
+  if (typeof window === 'undefined' || !payload) {
+    return Promise.resolve()
+  }
+
+  if (paletteRemoteSaveTimer) {
+    window.clearTimeout(paletteRemoteSaveTimer)
+    paletteRemoteSaveTimer = 0
+  }
+
+  const nextPayload = clone(payload)
+  pendingPaletteRemotePayload = null
+  return saveLayoutSetting(MAIN_DASHBOARD_LAYOUT_SCOPE, nextPayload, MAIN_DASHBOARD_LAYOUT_VERSION).catch(() => {
+    // Local cache keeps the user's layout if the backend is temporarily unavailable.
+  })
 }
 
 function persistPalettes() {
@@ -741,7 +756,11 @@ function resetPalettes() {
 }
 
 function toggleEditMode() {
+  const isFinishingEdit = isEditMode.value
   isEditMode.value = !isEditMode.value
+  if (isFinishingEdit) {
+    savePaletteRemoteNow()
+  }
   if (grid) {
     grid.enableMove(isEditMode.value)
     grid.enableResize(false)
@@ -912,9 +931,7 @@ onBeforeUnmount(() => {
   if (rebuildTimer) {
     window.clearTimeout(rebuildTimer)
   }
-  if (paletteRemoteSaveTimer) {
-    window.clearTimeout(paletteRemoteSaveTimer)
-  }
+  savePaletteRemoteNow()
   resizeObserver?.disconnect()
   destroyGrid()
 })

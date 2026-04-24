@@ -37,6 +37,8 @@ export const useDashboardPaletteStore = defineStore('dashboardPalette', () => {
   const layoutScope = ref('')
   let remoteHydrationSequence = 0
   let remoteSaveTimer = 0
+  let pendingRemoteState = null
+  let pendingRemoteScope = ''
   let changedDuringRemoteHydration = false
 
   const currentPreset = computed(() =>
@@ -87,14 +89,29 @@ export const useDashboardPaletteStore = defineStore('dashboardPalette', () => {
       window.clearTimeout(remoteSaveTimer)
     }
 
-    const targetScope = layoutScope.value
-    const payload = JSON.parse(JSON.stringify(state))
+    pendingRemoteScope = layoutScope.value
+    pendingRemoteState = clonePresets(state)
     remoteSaveTimer = window.setTimeout(() => {
-      saveLayoutSetting(targetScope, payload, PALETTE_LAYOUT_VERSION).catch(() => {
-        // Local cache remains the fallback if the backend is temporarily unavailable.
-      })
-      remoteSaveTimer = 0
+      saveRemoteNow()
     }, REMOTE_SAVE_DELAY_MS)
+  }
+
+  function saveRemoteNow(state = pendingRemoteState, scope = pendingRemoteScope || layoutScope.value) {
+    if (!scope || typeof window === 'undefined' || !state) {
+      return Promise.resolve()
+    }
+
+    if (remoteSaveTimer) {
+      window.clearTimeout(remoteSaveTimer)
+      remoteSaveTimer = 0
+    }
+
+    const payload = clonePresets(state)
+    pendingRemoteState = null
+    pendingRemoteScope = ''
+    return saveLayoutSetting(scope, payload, PALETTE_LAYOUT_VERSION).catch(() => {
+      // Local cache remains the fallback if the backend is temporarily unavailable.
+    })
   }
 
   function persist() {
@@ -139,6 +156,7 @@ export const useDashboardPaletteStore = defineStore('dashboardPalette', () => {
       return
     }
 
+    saveRemoteNow()
     storageKey.value = nextStorageKey
     layoutScope.value = nextLayoutScope
     remoteHydrationSequence += 1
@@ -165,7 +183,23 @@ export const useDashboardPaletteStore = defineStore('dashboardPalette', () => {
   }
 
   function toggleEditMode() {
+    const isFinishingEdit = isEditMode.value
     isEditMode.value = !isEditMode.value
+    if (isFinishingEdit) {
+      flushRemotePersist()
+    }
+  }
+
+  function flushRemotePersist({ force = false } = {}) {
+    if (!force && !pendingRemoteState) {
+      return Promise.resolve()
+    }
+
+    const state = force ? snapshotState() : pendingRemoteState
+    if (force) {
+      persistLocal(state)
+    }
+    return saveRemoteNow(state, force ? layoutScope.value : undefined)
   }
 
   function movePalette(id, position) {
@@ -293,6 +327,7 @@ export const useDashboardPaletteStore = defineStore('dashboardPalette', () => {
     availableTemplates,
     hydrate,
     persist,
+    flushRemotePersist,
     setPreset,
     toggleEditMode,
     movePalette,

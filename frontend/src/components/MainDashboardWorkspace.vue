@@ -1912,6 +1912,150 @@ onBeforeUnmount(() => {
   background: #f3f3f4;
 }
 
+/* Data-density hardening for real dashboard payloads. */
+.main-palette__body > * {
+  min-width: 0;
+}
+
+.main-palette__metric-grid {
+  grid-template-rows: repeat(2, minmax(0, 1fr));
+  min-height: 0;
+}
+
+.main-palette__metric,
+.main-palette__single-metric {
+  align-content: center;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.main-palette__metric span,
+.main-palette__single-metric span,
+.main-palette__single-metric small,
+.main-palette__compare-label span,
+.main-palette__compare-row small,
+.main-palette__quick-action span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.main-palette__metric strong,
+.main-palette__single-metric strong {
+  display: -webkit-box;
+  min-width: 0;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.main-palette--travel-summary .main-palette__body,
+.main-palette--drive-summary .main-palette__body {
+  display: grid;
+  gap: 8px;
+  grid-template-rows: minmax(0, 1fr) minmax(0, 76px);
+}
+
+.main-palette--travel-summary .main-palette__metric-grid,
+.main-palette--drive-summary .main-palette__metric-grid {
+  height: auto;
+}
+
+.main-palette__list {
+  max-height: 100%;
+  overflow: hidden;
+}
+
+.main-palette__payment {
+  grid-template-rows: auto minmax(0, 1fr);
+  height: 100%;
+  overflow: hidden;
+}
+
+.main-palette__payment .main-palette__single-metric,
+.main-palette__capacity .main-palette__single-metric {
+  height: auto;
+}
+
+.main-palette__capacity {
+  grid-template-rows: minmax(0, 1fr) auto auto;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.main-palette__quick-form,
+.main-palette__recent-files,
+.main-palette__quick-actions,
+.main-palette__feature-links {
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.main-palette__quick-form input,
+.main-palette__quick-form select,
+.main-palette__payment select,
+.main-palette__quick-buttons button {
+  min-width: 0;
+}
+
+.main-palette__quick-buttons button {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.main-palette__recent-files {
+  overflow-y: auto;
+  padding-right: 2px;
+}
+
+.main-palette__recent-file {
+  min-height: 40px;
+}
+
+.main-palette__recent-file small {
+  max-width: 64px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.main-palette__quick-actions,
+.main-palette__feature-links {
+  grid-auto-rows: minmax(0, 1fr);
+}
+
+.main-palette__quick-action,
+.main-palette__feature-link {
+  overflow: hidden;
+}
+
+.main-palette__quick-action strong,
+.main-palette__feature-link strong,
+.main-palette__feature-link span,
+.main-palette__photo-empty span,
+.main-palette__photo-empty strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.main-palette__quick-action strong,
+.main-palette__feature-link strong,
+.main-palette__feature-link span {
+  white-space: nowrap;
+}
+
+.main-palette__photo-empty span {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
 @media (max-width: 720px) {
   .main-dashboard__header {
     align-items: stretch;
@@ -1927,9 +2071,22 @@ onBeforeUnmount(() => {
     right: 8px;
   }
 
-  .main-palette__metric-grid,
   .main-palette__feature-links {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .main-palette__metric-grid {
+    gap: 6px;
+  }
+
+  .main-palette__metric,
+  .main-palette__single-metric {
+    padding: 8px;
+  }
+
+  .main-palette__metric strong,
+  .main-palette__single-metric strong {
+    font-size: 0.9rem;
   }
 
   .main-dashboard__floating-button {

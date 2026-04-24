@@ -26,6 +26,16 @@
 
 ## 작업 기록
 
+### 2026-04-24 - Palette real-data layout hardening
+
+- User request: Inspect all current palettes and verify whether palette proportions, positions, and visual shape break when real data is rendered.
+- Request analysis: The main risk was not API logic but dense UI payloads: long Korean labels, large currency values, long file/travel names, many recent files, and high calendar entry counts inside fixed GridStack cells.
+- Actions taken: Checked `codingconvention.md`, reviewed the main dashboard palettes and the household palette components (`PaletteItem`, `KpiPalette`, `CalendarPalette`, `DragDropGrid`), then inspected fixed sizes, grid rows, overflow rules, and mobile rules.
+- Implementation: Hardened main dashboard palette CSS so metric grids use fixed two-row tracks, long values clamp instead of pushing cards, travel/drive summary lists get bounded space, payment/capacity cards no longer overrun their own rows, recent files scroll vertically inside the palette, quick actions/feature links truncate safely, and mobile metric cards keep a stable two-column shape. Hardened household KPI and calendar palettes with overflow containment, line clamp, ellipsis, and bounded calendar count/marker widths.
+- Verification: Ran `cmd /c npm run build` in `frontend` successfully. Verified no TypeScript SFC/script or `.ts`/`.tsx` files with `rg -n 'lang="ts"|lang=''ts''' frontend/src` and `Get-ChildItem -Path frontend/src -Recurse -Include *.ts,*.tsx`. Ran `git diff --check -- frontend/src/components/MainDashboardWorkspace.vue frontend/src/features/palette/palettes/KpiPalette.vue frontend/src/features/palette/palettes/CalendarPalette.vue` with no whitespace errors.
+- Result: Real data should now be contained inside each palette without widening the page, breaking card ratios, or visually spilling out of fixed palette cells.
+- Follow-up note: A connected backend/browser pass with production-sized user data can still tune exact row counts, but the layout now has containment safeguards for overflow-heavy payloads.
+
 ### 2026-04-24 - Main dashboard reference design skin
 
 - User request: Apply only the design style from the attached Figma reference image.

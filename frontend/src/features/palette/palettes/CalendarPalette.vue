@@ -76,6 +76,7 @@ function dayTone(day) {
   grid-template-rows: auto minmax(0, 1fr);
   height: 100%;
   min-height: 0;
+  overflow: hidden;
 }
 
 .calendar-palette__head {
@@ -108,6 +109,7 @@ function dayTone(day) {
   grid-template-rows: auto repeat(6, minmax(0, 1fr));
   height: 100%;
   min-height: 0;
+  overflow: hidden;
 }
 
 .calendar-palette__weekday {
@@ -150,14 +152,19 @@ function dayTone(day) {
   justify-self: end;
   line-height: 1;
   min-width: 14px;
+  max-width: 100%;
+  overflow: hidden;
   padding: 1px 3px;
   text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .calendar-palette__marker {
   bottom: 3px;
   height: 3px;
   left: 4px;
+  max-width: calc(100% - 8px);
   position: absolute;
   width: 14px;
 }

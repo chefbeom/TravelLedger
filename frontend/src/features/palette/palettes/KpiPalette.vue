@@ -57,6 +57,7 @@ const canShowBars = computed(() => ['3x2', '3x3'].includes(props.config.size))
   gap: 8px;
   height: 100%;
   min-height: 0;
+  overflow: hidden;
 }
 
 .kpi-palette__head {
@@ -85,14 +86,21 @@ const canShowBars = computed(() => ['3x2', '3x3'].includes(props.config.size))
   align-self: center;
   display: grid;
   gap: 4px;
+  min-height: 0;
   min-width: 0;
+  overflow: hidden;
 }
 
 .kpi-palette__metric strong {
   color: #111827;
+  display: -webkit-box;
   font-size: clamp(1.15rem, 2.2vw, 2rem);
   line-height: 1.05;
+  min-width: 0;
+  overflow: hidden;
   overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
 .kpi-palette__metric small {
@@ -122,6 +130,7 @@ const canShowBars = computed(() => ['3x2', '3x3'].includes(props.config.size))
   display: grid;
   gap: 5px;
   min-height: 0;
+  overflow: hidden;
 }
 
 .kpi-palette__row {
@@ -138,11 +147,16 @@ const canShowBars = computed(() => ['3x2', '3x3'].includes(props.config.size))
 .kpi-palette__bar-label span {
   color: #6b7280;
   font-size: 0.72rem;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .kpi-palette__row strong,
 .kpi-palette__bar-label strong {
   font-size: 0.78rem;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -151,6 +165,8 @@ const canShowBars = computed(() => ['3x2', '3x3'].includes(props.config.size))
 .kpi-palette__bars {
   display: grid;
   gap: 7px;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .kpi-palette__bar {
@@ -161,7 +177,9 @@ const canShowBars = computed(() => ['3x2', '3x3'].includes(props.config.size))
 .kpi-palette__bar-label {
   align-items: center;
   display: flex;
+  gap: 8px;
   justify-content: space-between;
+  min-width: 0;
 }
 
 .kpi-palette__bar-track {

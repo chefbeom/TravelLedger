@@ -93,19 +93,22 @@ const canShowBars = computed(() => ['3x2', '3x3'].includes(props.config.size))
 
 .kpi-palette__metric strong {
   color: #111827;
-  display: -webkit-box;
+  display: block;
+  font-variant-numeric: tabular-nums;
   font-size: clamp(1.15rem, 2.2vw, 2rem);
-  line-height: 1.05;
+  letter-spacing: 0;
+  line-height: 1.16;
   min-width: 0;
   overflow: hidden;
   overflow-wrap: anywhere;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .kpi-palette__metric small {
   color: #6b7280;
   font-size: 0.75rem;
+  line-height: 1.25;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -155,7 +158,9 @@ const canShowBars = computed(() => ['3x2', '3x3'].includes(props.config.size))
 
 .kpi-palette__row strong,
 .kpi-palette__bar-label strong {
+  font-variant-numeric: tabular-nums;
   font-size: 0.78rem;
+  line-height: 1.2;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;

@@ -1287,12 +1287,19 @@ onBeforeUnmount(() => {
 .main-palette__metric strong,
 .main-palette__single-metric strong {
   color: #111827;
+  display: block;
+  font-variant-numeric: tabular-nums;
   font-size: 1rem;
-  overflow-wrap: anywhere;
+  letter-spacing: 0;
+  line-height: 1.18;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .main-palette__single-metric strong {
-  font-size: clamp(1.1rem, 2vw, 1.65rem);
+  font-size: clamp(1.05rem, 1.7vw, 1.48rem);
 }
 
 .main-palette__metric.is-positive strong,
@@ -1884,8 +1891,11 @@ onBeforeUnmount(() => {
   background: var(--dash-lime);
   border: 0;
   border-radius: 10px;
+  bottom: 24px;
   box-shadow: 0 14px 28px rgba(16, 17, 31, 0.18);
   color: var(--dash-ink);
+  top: auto;
+  transform: none;
 }
 
 .main-dashboard__floating-button.is-active,
@@ -1935,6 +1945,7 @@ onBeforeUnmount(() => {
 .main-palette__compare-label span,
 .main-palette__compare-row small,
 .main-palette__quick-action span {
+  line-height: 1.25;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1943,11 +1954,14 @@ onBeforeUnmount(() => {
 
 .main-palette__metric strong,
 .main-palette__single-metric strong {
-  display: -webkit-box;
+  display: block;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+  line-height: 1.18;
   min-width: 0;
   overflow: hidden;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .main-palette--travel-summary .main-palette__body,

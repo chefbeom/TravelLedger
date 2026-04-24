@@ -26,6 +26,16 @@
 
 ## 작업 기록
 
+### 2026-04-24 - Palette numeric text rendering fix
+
+- User request: The attached dashboard screenshot shows palette text and sizing problems; analyze and fix the issue so palettes do not break or look crushed.
+- Request analysis: The visible issue was caused by applying multi-line `-webkit-line-clamp` rules to numeric/currency values. Numeric values such as `₩0` and `0 B` should not be treated like paragraphs because line clamping can squeeze glyphs vertically and make the won sign look struck or clipped. The floating settings button was also overlapping a right-side palette.
+- Actions taken: Checked `codingconvention.md`, reviewed the main dashboard metric styles and the shared household KPI palette styles, and confirmed unrelated dirty files are outside this work.
+- Implementation: Changed main dashboard metric values and KPI palette values to single-line numeric rendering with tabular numerals, stable line-height, ellipsis overflow, and no multi-line clamp. Added stable line-height to labels/meta text. Moved the main dashboard floating settings button from the vertical center to the lower-right area so it does not cover palette content.
+- Verification: Ran `cmd /c npm run build` in `frontend` successfully. Verified no TypeScript SFC/script or `.ts`/`.tsx` files with `rg -n 'lang="ts"|lang=''ts''' frontend/src` and `Get-ChildItem -Path frontend/src -Recurse -Include *.ts,*.tsx`. Ran `git diff --check -- frontend/src/components/MainDashboardWorkspace.vue frontend/src/features/palette/palettes/KpiPalette.vue` with no whitespace errors.
+- Result: Currency and numeric values render as stable one-line figures instead of being vertically clipped or visually crushed, and the settings button no longer covers the middle-right palette.
+- Follow-up note: If a browser screenshot still shows cramped cards after localStorage restores an older layout, reset the main dashboard palette layout once so the newer fixed sizes are reapplied cleanly.
+
 ### 2026-04-24 - Main palette size rebalance
 
 - User request: The attached quick-entry palette screenshot shows the palette size breaking; inspect and fix other palettes too so they do not break or get crushed, changing palette sizes if needed.

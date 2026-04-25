@@ -1790,38 +1790,61 @@ defineExpose({
           </div>
 
           <div class="entry-editor__fields">
-            <label class="field">
-              <span class="field__label">날짜</span>
-              <input v-model="entryForm.entryDate" type="date" />
-            </label>
-
-            <label class="field household-time-field">
-              <span class="field__label">시간</span>
-              <label class="checkbox-row household-time-toggle">
-                <input
-                  :checked="isTimeEnabled"
-                  type="checkbox"
-                  @change="emit('update:timeEnabled', $event.target.checked)"
-                />
-                <span>시간 입력 사용</span>
+            <div class="entry-editor__field-row entry-editor__field-row--date-time">
+              <label class="field">
+                <span class="field__label">날짜</span>
+                <input v-model="entryForm.entryDate" type="date" />
               </label>
-              <input v-model="entryForm.entryTime" type="time" :disabled="!isTimeEnabled" />
-              <small class="field__hint">시간 입력을 끄면 자동으로 00:00으로 저장됩니다.</small>
-            </label>
+
+              <label class="field household-time-field">
+                <span class="field__label">시간</span>
+                <label class="checkbox-row household-time-toggle">
+                  <input
+                    :checked="isTimeEnabled"
+                    type="checkbox"
+                    @change="emit('update:timeEnabled', $event.target.checked)"
+                  />
+                  <span>시간 입력 사용</span>
+                </label>
+                <input v-model="entryForm.entryTime" type="time" :disabled="!isTimeEnabled" />
+                <small class="field__hint">시간 입력을 끄면 자동으로 00:00으로 저장됩니다.</small>
+              </label>
+            </div>
 
             <label class="field field--full">
               <span class="field__label">제목</span>
               <input v-model="entryForm.title" type="text" placeholder="예: 식사, 택시, 급여" />
             </label>
 
-            <label v-if="entryForm.entryType === 'EXPENSE'" class="field">
-  <span class="field__label">결제수단</span>
-  <select v-model="entryForm.paymentMethodId">
-    <option v-for="payment in paymentMethods" :key="payment.id" :value="String(payment.id)">
-      {{ payment.name }}
-    </option>
-  </select>
-</label>
+            <div v-if="entryForm.entryType === 'EXPENSE'" class="entry-editor__field-row entry-editor__field-row--classification">
+              <label class="field">
+                <span class="field__label">결제수단</span>
+                <select v-model="entryForm.paymentMethodId">
+                  <option v-for="payment in paymentMethods" :key="payment.id" :value="String(payment.id)">
+                    {{ payment.name }}
+                  </option>
+                </select>
+              </label>
+
+              <label class="field">
+                <span class="field__label">대분류</span>
+                <select v-model="entryForm.categoryGroupId">
+                  <option v-for="group in availableGroups" :key="group.id" :value="String(group.id)">
+                    {{ group.name }}
+                  </option>
+                </select>
+              </label>
+
+              <label class="field">
+                <span class="field__label">분류</span>
+                <select v-model="entryForm.categoryDetailId">
+                  <option value="">소분류 없음</option>
+                  <option v-for="detail in availableDetails" :key="detail.id" :value="String(detail.id)">
+                    {{ detail.name }}
+                  </option>
+                </select>
+              </label>
+            </div>
 
 <template v-if="entryForm.entryType === 'INCOME'">
   <div class="field field--full">
@@ -1840,26 +1863,6 @@ defineExpose({
       </select>
     </div>
   </div>
-</template>
-<template v-else>
-  <label class="field">
-    <span class="field__label">대분류</span>
-    <select v-model="entryForm.categoryGroupId">
-      <option v-for="group in availableGroups" :key="group.id" :value="String(group.id)">
-        {{ group.name }}
-      </option>
-    </select>
-  </label>
-
-  <label class="field">
-    <span class="field__label">분류</span>
-    <select v-model="entryForm.categoryDetailId">
-      <option value="">소분류 없음</option>
-      <option v-for="detail in availableDetails" :key="detail.id" :value="String(detail.id)">
-        {{ detail.name }}
-      </option>
-    </select>
-  </label>
 </template>
 
             <label class="field field--full">

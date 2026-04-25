@@ -762,6 +762,25 @@ button {
   gap: 14px;
 }
 
+.entry-editor__field-row {
+  display: grid;
+  grid-column: 1 / -1;
+  gap: 14px;
+  min-width: 0;
+}
+
+.entry-editor__field-row .field {
+  min-width: 0;
+}
+
+.entry-editor__field-row--date-time {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+
+.entry-editor__field-row--classification {
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr) minmax(0, 0.95fr);
+}
+
 .entry-editor__actions {
   display: flex;
   flex-wrap: wrap;
@@ -4965,6 +4984,18 @@ textarea {
 .household-calendar-layout-item--quick-entry .entry-editor__fields,
 .household-calendar-layout-item--quick-entry .entry-editor__category-grid {
   grid-template-columns: minmax(0, 1fr);
+}
+
+.household-calendar-layout-item--quick-entry .entry-editor__field-row {
+  gap: 12px;
+}
+
+.household-calendar-layout-item--quick-entry .entry-editor__field-row--date-time {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+
+.household-calendar-layout-item--quick-entry .entry-editor__field-row--classification {
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr) minmax(0, 0.95fr);
 }
 
 .household-calendar-layout-item--quick-entry .amount-input {

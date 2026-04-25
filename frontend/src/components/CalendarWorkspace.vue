@@ -275,6 +275,7 @@ let layoutRemoteHydrationSequence = 0
 let layoutRemoteSaveTimer = 0
 let pendingLayoutRemotePayload = null
 let layoutChangedDuringRemoteHydration = false
+let calendarPanelLayoutLocalSavedAt = 0
 let viewPreferenceRemoteHydrationSequence = 0
 let viewPreferenceRemoteSaveTimer = 0
 let pendingViewPreferenceRemotePayload = null
@@ -967,6 +968,35 @@ function clone(value) {
   return JSON.parse(JSON.stringify(value))
 }
 
+function parseStoredCalendarPanelLayout(raw) {
+  if (!raw) {
+    return null
+  }
+
+  const parsed = JSON.parse(raw)
+  if (Array.isArray(parsed)) {
+    return {
+      layout: parsed,
+      savedAt: 0,
+    }
+  }
+
+  if (Array.isArray(parsed?.layout)) {
+    const savedAt = Number(parsed.savedAt)
+    return {
+      layout: parsed.layout,
+      savedAt: Number.isFinite(savedAt) ? savedAt : 0,
+    }
+  }
+
+  return null
+}
+
+function parseRemoteUpdatedAt(value) {
+  const timestamp = Date.parse(value ?? '')
+  return Number.isFinite(timestamp) ? timestamp : 0
+}
+
 function normalizeCalendarPanelLayout(layouts) {
   const source = new Map((layouts ?? []).map((item) => [String(item.id), item]))
 
@@ -1002,18 +1032,31 @@ function hydrateCalendarPanelLayout() {
   }
 
   try {
-    calendarPanelLayout.value = normalizeCalendarPanelLayout(JSON.parse(savedLayout))
-    persistCalendarPanelLayoutLocal()
+    const restoredLayout = parseStoredCalendarPanelLayout(savedLayout)
+    if (!restoredLayout) {
+      throw new Error('Invalid calendar panel layout cache.')
+    }
+    calendarPanelLayout.value = normalizeCalendarPanelLayout(restoredLayout.layout)
+    calendarPanelLayoutLocalSavedAt = restoredLayout.savedAt
+    persistCalendarPanelLayoutLocal(restoredLayout.savedAt)
     hydrateRemoteCalendarPanelLayout(layoutRemoteHydrationSequence, clone(calendarPanelLayout.value))
   } catch (_error) {
     calendarPanelLayout.value = createDefaultCalendarPanelLayout()
+    calendarPanelLayoutLocalSavedAt = 0
     hydrateRemoteCalendarPanelLayout(layoutRemoteHydrationSequence, null)
   }
 }
 
-function persistCalendarPanelLayoutLocal() {
+function persistCalendarPanelLayoutLocal(savedAt = Date.now()) {
   if (typeof window !== 'undefined') {
-    window.localStorage.setItem(calendarPanelLayoutStorageKey.value, JSON.stringify(calendarPanelLayout.value))
+    calendarPanelLayoutLocalSavedAt = savedAt
+    window.localStorage.setItem(
+      calendarPanelLayoutStorageKey.value,
+      JSON.stringify({
+        savedAt,
+        layout: calendarPanelLayout.value,
+      }),
+    )
   }
 }
 
@@ -1049,10 +1092,14 @@ function saveCalendarPanelLayoutRemoteNow(payload = pendingLayoutRemotePayload) 
   })
 }
 
-function persistCalendarPanelLayout() {
+function persistCalendarPanelLayout({ immediate = false } = {}) {
   layoutChangedDuringRemoteHydration = true
   const payload = clone(calendarPanelLayout.value)
   persistCalendarPanelLayoutLocal()
+  if (immediate) {
+    saveCalendarPanelLayoutRemoteNow(payload)
+    return
+  }
   scheduleCalendarPanelLayoutRemotePersist(payload)
 }
 
@@ -1064,8 +1111,19 @@ async function hydrateRemoteCalendarPanelLayout(sequence, fallbackLayout) {
     }
 
     if (Array.isArray(response?.payload)) {
+      const remoteUpdatedAt = parseRemoteUpdatedAt(response.updatedAt)
+      if (
+        fallbackLayout
+        && calendarPanelLayoutLocalSavedAt > 0
+        && remoteUpdatedAt > 0
+        && calendarPanelLayoutLocalSavedAt > remoteUpdatedAt
+      ) {
+        await saveLayoutSetting(CALENDAR_PANEL_LAYOUT_SCOPE, fallbackLayout, CALENDAR_PANEL_LAYOUT_VERSION)
+        return
+      }
+
       calendarPanelLayout.value = normalizeCalendarPanelLayout(response.payload)
-      persistCalendarPanelLayoutLocal()
+      persistCalendarPanelLayoutLocal(remoteUpdatedAt || Date.now())
       refreshCalendarMeasurements()
       return
     }
@@ -1127,14 +1185,14 @@ function readLayoutGridSnapshot() {
   })).filter((item) => item.id)
 }
 
-function applyCalendarPanelLayout(snapshot) {
+function applyCalendarPanelLayout(snapshot, { immediate = false } = {}) {
   calendarPanelLayout.value = normalizeCalendarPanelLayout(snapshot)
-  persistCalendarPanelLayout()
+  persistCalendarPanelLayout({ immediate })
   refreshCalendarMeasurements()
 }
 
 function handleLayoutGridStop() {
-  applyCalendarPanelLayout(readLayoutGridSnapshot())
+  applyCalendarPanelLayout(readLayoutGridSnapshot(), { immediate: true })
 }
 
 function destroyLayoutGrid() {

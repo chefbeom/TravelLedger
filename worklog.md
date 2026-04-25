@@ -26,6 +26,16 @@
 
 ## 작업 기록
 
+### 2026-04-25 - Preserve resized household calendar panel dimensions
+
+- User request: In the household calendar ledger, resizing panels by dragging a corner does not survive refresh or another computer; only positions appear to be saved.
+- Request analysis: GridStack snapshots already included `w/h`, but the remote save was debounced and a fast refresh could let a stale DB payload overwrite the newer local resized dimensions. The old localStorage layout format also had no timestamp, so the app could not tell whether local `w/h` was newer than the DB response.
+- Actions taken: Checked `codingconvention.md`, traced `resizestop`/`dragstop`, local layout persistence, DB layout hydration, and the account layout setting API.
+- Implementation: Changed calendar layout localStorage to store `{ savedAt, layout }` while still reading the old array format. Drag/resize stops now save the latest `w/h` to the DB immediately. On hydration, if the local resized layout is newer than the DB response, the app keeps the local `w/h` and writes it back to the DB instead of being overwritten by stale remote data.
+- Verification: Ran `cmd /c npm run build` in `frontend` successfully. Verified no TypeScript SFC/script or `.ts`/`.tsx` files with `rg -n 'lang="ts"|lang=''ts''' frontend/src`, `Get-ChildItem -Path frontend/src -Recurse -Include *.ts,*.tsx`, and `rg --files frontend/src | rg '\.(ts|tsx)$'`. Ran `git diff --check -- frontend/src/components/CalendarWorkspace.vue` with no whitespace errors.
+- Result: Drag-resized calendar panel widths/heights are persisted with positions and should survive refreshes and cross-device loads for the same authenticated user.
+- Follow-up note: Existing old local array caches migrate automatically, but without a prior timestamp the DB remains the source of truth until the next resize is saved.
+
 ### 2026-04-25 - Persist household calendar size preferences to database
 
 - User request: Confirm whether size changes are saved after layout DB persistence work.

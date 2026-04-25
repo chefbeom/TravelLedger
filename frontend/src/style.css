@@ -2164,6 +2164,102 @@ button {
   justify-content: flex-start;
 }
 
+.travel-public-share-box {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-top: 16px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--surface-soft);
+}
+
+.travel-public-share-box > div {
+  display: grid;
+  gap: 4px;
+}
+
+.travel-public-share-box strong {
+  color: var(--text);
+}
+
+.travel-public-share-box small {
+  color: var(--text-soft);
+}
+
+.travel-public-trips {
+  min-width: 0;
+}
+
+.travel-public-trip-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 14px;
+  margin-top: 18px;
+}
+
+.travel-public-trip-card {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: var(--surface);
+  color: var(--text);
+  text-align: left;
+  box-shadow: var(--shadow);
+}
+
+.travel-public-trip-card--active {
+  border-color: rgba(49, 130, 246, 0.48);
+  box-shadow: 0 18px 40px rgba(49, 130, 246, 0.16);
+}
+
+.travel-public-trip-card img,
+.travel-public-trip-card__empty {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  border-radius: 16px;
+  background: var(--surface-soft);
+}
+
+.travel-public-trip-card img {
+  display: block;
+  object-fit: cover;
+}
+
+.travel-public-trip-card__empty {
+  display: grid;
+  place-items: center;
+  color: var(--text-soft);
+  font-weight: 800;
+}
+
+.travel-public-trip-card span,
+.travel-public-trip-card small {
+  overflow: hidden;
+  color: var(--text-soft);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.travel-public-trip-card span {
+  color: var(--blue);
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.travel-public-trip-card strong {
+  overflow: hidden;
+  color: var(--text);
+  font-size: 1rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .travel-memory-quick-open__controls {
   display: none;
 }
@@ -2897,6 +2993,15 @@ textarea {
   }
 
   .travel-my-photos__grid {
+    grid-template-columns: 1fr;
+  }
+
+  .travel-public-share-box {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .travel-public-trip-grid {
     grid-template-columns: 1fr;
   }
 

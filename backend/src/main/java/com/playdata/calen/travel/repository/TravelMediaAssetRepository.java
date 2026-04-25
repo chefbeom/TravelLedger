@@ -1,6 +1,7 @@
 package com.playdata.calen.travel.repository;
 
 import com.playdata.calen.travel.domain.TravelMediaAsset;
+import com.playdata.calen.travel.domain.TravelMediaType;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -13,6 +14,8 @@ public interface TravelMediaAssetRepository extends JpaRepository<TravelMediaAss
     List<TravelMediaAsset> findAllByPlanIdAndPlanOwnerIdOrderByUploadedAtDescIdDesc(Long planId, Long ownerId);
 
     List<TravelMediaAsset> findAllByPlanOwnerIdOrderByUploadedAtDescIdDesc(Long ownerId);
+
+    List<TravelMediaAsset> findAllByPlanPublicSharedTrueAndMediaTypeOrderByUploadedAtDescIdDesc(TravelMediaType mediaType);
 
     List<TravelMediaAsset> findAllByRecordIdAndPlanOwnerIdOrderByUploadedAtDescIdDesc(Long recordId, Long ownerId);
 

@@ -2,6 +2,7 @@ package com.playdata.calen.travel.dto;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 
 public record TravelPlanDetailResponse(
@@ -25,6 +26,8 @@ public record TravelPlanDetailResponse(
         BigDecimal totalDistanceKm,
         Integer totalDurationMinutes,
         Integer totalStepCount,
+        Boolean publicShared,
+        LocalDateTime publicSharedAt,
         List<TravelBudgetItemResponse> budgetItems,
         List<TravelExpenseRecordResponse> records,
         List<TravelMemoryRecordResponse> memoryRecords,

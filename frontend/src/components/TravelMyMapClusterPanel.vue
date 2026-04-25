@@ -579,6 +579,22 @@ function fitToAll() {
   mapInstance.fitBounds(bounds, { padding: [40, 40], maxZoom: 16 })
 }
 
+function resolveAggregateOwnerLabel(aggregate) {
+  const source = aggregate?.representative ?? aggregate
+  return source?.sharedByDisplayName || source?.ownerDisplayName || source?.uploadedBy || ''
+}
+
+function appendOwnerLabel(copy, aggregate) {
+  const ownerLabel = resolveAggregateOwnerLabel(aggregate)
+  if (!ownerLabel) {
+    return
+  }
+
+  const owner = document.createElement('span')
+  owner.textContent = `공유자 ${ownerLabel}`
+  copy.appendChild(owner)
+}
+
 function createPopupContent(aggregate) {
   if (aggregate?.isRecordPin) {
     return createPopupContentLegacy(aggregate)
@@ -611,6 +627,7 @@ function createPopupContent(aggregate) {
   const title = document.createElement('strong')
   title.textContent = aggregate?.representative?.title || aggregate?.representative?.placeName || '사진 클러스터'
   copy.appendChild(title)
+  appendOwnerLabel(copy, aggregate)
 
   const locationLabel = [aggregate?.representative?.country, aggregate?.representative?.region, aggregate?.representative?.placeName]
     .filter(Boolean)
@@ -666,6 +683,7 @@ function createPopupContentLegacy(aggregate) {
     const title = document.createElement('strong')
     title.textContent = aggregate?.representative?.title || aggregate?.representative?.placeName || '기록 핀'
     copy.appendChild(title)
+    appendOwnerLabel(copy, aggregate)
 
     const locationLabel = [aggregate?.representative?.country, aggregate?.representative?.region, aggregate?.representative?.placeName]
       .filter(Boolean)
@@ -713,6 +731,7 @@ function createPopupContentLegacy(aggregate) {
   const title = document.createElement('strong')
   title.textContent = aggregate?.representative?.title || aggregate?.representative?.placeName || '사진 클러스터'
   copy.appendChild(title)
+  appendOwnerLabel(copy, aggregate)
 
   const locationLabel = [aggregate?.representative?.country, aggregate?.representative?.region, aggregate?.representative?.placeName]
     .filter(Boolean)

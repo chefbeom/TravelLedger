@@ -20,6 +20,7 @@ import {
   fetchTravelPortfolio,
   fetchTravelSharedExhibit,
   fetchTravelSharedExhibits,
+  updateTravelPlanPublicShare,
   updateTravelBudgetItem,
   updateTravelMemory,
   updateTravelPlan,
@@ -1232,6 +1233,23 @@ async function handleShareTravelPlan() {
   }
 }
 
+async function handleTogglePublicShare(nextPublicShared) {
+  if (!selectedPlanId.value) return
+  isSubmitting.value = true
+  activeSubmit.value = 'public-share'
+  setFeedback()
+  try {
+    await updateTravelPlanPublicShare(selectedPlanId.value, Boolean(nextPublicShared))
+    await refreshTravelData(selectedPlanId.value, props.route === 'photo-album')
+    setFeedback(nextPublicShared ? '이 여행을 공개 여행 지도에 공개했습니다.' : '이 여행의 퍼블릭 공개를 해제했습니다.')
+  } catch (error) {
+    setFeedback('', error.message)
+  } finally {
+    isSubmitting.value = false
+    activeSubmit.value = ''
+  }
+}
+
 function handleOpenTravelPlanner() {
   resetPlanForm()
   moneyTab.value = 'planner'
@@ -1836,6 +1854,33 @@ async function openPortfolioMemoryEditor(payload) {
           </div>
         </div>
         <small class="field__hint">{{ canShareTravelPlan ? '공유된 전시는 상대방 계정의 여행 사진 > 공유 전시에서 수정 없이 감상됩니다.' : '여행 상태가 완료(COMPLETED)일 때만 공유할 수 있습니다.' }}</small>
+        <div class="travel-public-share-box">
+          <div>
+            <strong>퍼블릭 여행 공유</strong>
+            <small>
+              {{
+                travelPlan?.publicShared
+                  ? `공개 여행 지도에 표시 중${travelPlan.publicSharedAt ? ` · ${formatDateTime(travelPlan.publicSharedAt)}` : ''}`
+                  : '가입한 사용자가 공개 여행 지도에서 볼 수 있도록 여행 전체를 공개합니다.'
+              }}
+            </small>
+          </div>
+          <button
+            class="button"
+            :class="travelPlan?.publicShared ? 'button--danger' : 'button--primary'"
+            type="button"
+            :disabled="isSubmitting || !travelPlan"
+            @click="handleTogglePublicShare(!travelPlan?.publicShared)"
+          >
+            {{
+              isSubmitting && activeSubmit === 'public-share'
+                ? '변경 중...'
+                : travelPlan?.publicShared
+                  ? '공개 해제'
+                  : '퍼블릭 공개'
+            }}
+          </button>
+        </div>
       </section>
       <TravelOverviewWorkspace v-if="logTab === 'overview'" :travel-plan="travelPlan" />
       <TravelMemoryPanel v-else-if="logTab === 'memories'" :travel-plan="travelPlan" :category-options="memoryCategoryOptions" :is-submitting="isSubmitting" :active-submit="activeSubmit" :refresh-key="memoryRefreshKey" :focus-request="memoryFocusRequest" :upload-progress="memoryUploadProgress" @save-memory="handleSaveMemory" @delete-memory="handleDeleteMemory" @delete-media="handleDeleteMedia" />

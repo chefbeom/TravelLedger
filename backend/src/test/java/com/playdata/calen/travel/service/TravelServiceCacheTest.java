@@ -177,7 +177,8 @@ class TravelServiceCacheTest {
         verify(redisCacheService).delete(
                 "travel:plans:7",
                 "travel:portfolio:7",
-                "travel:mymap:overview:7"
+                "travel:mymap:overview:7",
+                "travel:public-trips:overview"
         );
     }
 

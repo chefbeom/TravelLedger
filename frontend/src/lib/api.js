@@ -609,6 +609,14 @@ export function fetchTravelMyMapPhotoCluster(clusterId, params = {}) {
   return request(buildUrl(`/travel/my-map/photo-clusters/${clusterId}`, params).replace(API_BASE, ''))
 }
 
+export function fetchTravelPublicTrips() {
+  return request('/travel/public-trips')
+}
+
+export function fetchTravelPublicTripPhotoCluster(clusterId, params = {}) {
+  return request(buildUrl(`/travel/public-trips/photo-clusters/${clusterId}`, params).replace(API_BASE, ''))
+}
+
 export function updateTravelMyMapPhotoClusterRepresentative(clusterId, mediaId) {
   return request(`/travel/my-map/photo-clusters/${clusterId}/representative`, {
     method: 'PUT',
@@ -627,6 +635,13 @@ export function updateTravelPlan(planId, payload) {
   return request(`/travel/plans/${planId}`, {
     method: 'PUT',
     body: JSON.stringify(payload),
+  })
+}
+
+export function updateTravelPlanPublicShare(planId, publicShared) {
+  return request(`/travel/plans/${planId}/public-share`, {
+    method: 'PUT',
+    body: JSON.stringify({ publicShared }),
   })
 }
 

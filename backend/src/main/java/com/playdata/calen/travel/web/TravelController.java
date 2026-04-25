@@ -21,11 +21,14 @@ import com.playdata.calen.travel.dto.TravelMyMapPhotoClusterPageResponse;
 import com.playdata.calen.travel.dto.TravelMemoryRecordRequest;
 import com.playdata.calen.travel.dto.TravelMemoryRecordResponse;
 import com.playdata.calen.travel.dto.TravelPlanDetailResponse;
+import com.playdata.calen.travel.dto.TravelPlanPublicShareRequest;
+import com.playdata.calen.travel.dto.TravelPlanPublicShareResponse;
 import com.playdata.calen.travel.dto.TravelPlanRequest;
 import com.playdata.calen.travel.dto.TravelPlanShareRequest;
 import com.playdata.calen.travel.dto.TravelPlanShareResponse;
 import com.playdata.calen.travel.dto.TravelPlanSummaryResponse;
 import com.playdata.calen.travel.dto.TravelPortfolioResponse;
+import com.playdata.calen.travel.dto.TravelPublicTripsOverviewResponse;
 import com.playdata.calen.travel.dto.TravelReverseGeocodeResponse;
 import com.playdata.calen.travel.dto.TravelRouteSegmentRequest;
 import com.playdata.calen.travel.dto.TravelRouteSegmentResponse;
@@ -143,6 +146,22 @@ public class TravelController {
         return travelService.getCommunityFeed(currentUser.userId(), page, size);
     }
 
+    @GetMapping("/public-trips")
+    public TravelPublicTripsOverviewResponse getPublicTrips(@AuthenticationPrincipal AppUserPrincipal currentUser) {
+        return travelService.getPublicTripsOverview(currentUser.userId());
+    }
+
+    @GetMapping("/public-trips/photo-clusters/{clusterId}")
+    public TravelMyMapPhotoClusterPageResponse getPublicTripPhotoCluster(
+            @AuthenticationPrincipal AppUserPrincipal currentUser,
+            @PathVariable Long clusterId,
+            @RequestParam(name = "page", defaultValue = "0") Integer page,
+            @RequestParam(name = "size", defaultValue = "12") Integer size,
+            @RequestParam(name = "focusMediaId", required = false) Long focusMediaId
+    ) {
+        return travelService.getPublicTripPhotoClusterDetail(currentUser.userId(), clusterId, page, size, focusMediaId);
+    }
+
     @GetMapping("/shared-exhibits")
     public TravelSharedExhibitPageResponse getSharedExhibits(
             @AuthenticationPrincipal AppUserPrincipal currentUser,
@@ -184,6 +203,15 @@ public class TravelController {
             @Valid @RequestBody TravelPlanShareRequest request
     ) {
         return travelService.shareCompletedPlan(currentUser.userId(), planId, request.loginId());
+    }
+
+    @PutMapping("/plans/{planId}/public-share")
+    public TravelPlanPublicShareResponse updatePlanPublicShare(
+            @AuthenticationPrincipal AppUserPrincipal currentUser,
+            @PathVariable Long planId,
+            @Valid @RequestBody TravelPlanPublicShareRequest request
+    ) {
+        return travelService.updatePlanPublicShare(currentUser.userId(), planId, request.publicShared());
     }
 
     @DeleteMapping("/plans/{planId}")

@@ -11,6 +11,8 @@ public interface TravelRouteSegmentRepository extends JpaRepository<TravelRouteS
 
     List<TravelRouteSegment> findAllByPlanOwnerIdOrderByRouteDateDescIdDesc(Long ownerId);
 
+    List<TravelRouteSegment> findAllByPlanPublicSharedTrueOrderByRouteDateDescIdDesc();
+
     Optional<TravelRouteSegment> findByIdAndPlanOwnerId(Long id, Long ownerId);
 
     void deleteAllByPlanId(Long planId);

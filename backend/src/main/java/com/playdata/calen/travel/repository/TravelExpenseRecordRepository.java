@@ -33,6 +33,8 @@ public interface TravelExpenseRecordRepository extends JpaRepository<TravelExpen
 
     List<TravelExpenseRecord> findAllByPlanOwnerIdAndRecordType(Long ownerId, TravelRecordType recordType);
 
+    List<TravelExpenseRecord> findAllByPlanPublicSharedTrueAndRecordType(TravelRecordType recordType);
+
     List<TravelExpenseRecord> findAllByRecordTypeAndSharedWithCommunityTrueOrderByExpenseDateDescIdDesc(TravelRecordType recordType);
 
     @Query(

@@ -126,6 +126,7 @@ function handleClear() {
             />
           </button>
           <div class="travel-media-tags">
+            <span v-if="summary.sharedByDisplayName" class="chip chip--neutral">공유자 {{ summary.sharedByDisplayName }}</span>
             <span class="chip chip--neutral">{{ summary.category || '사진' }}</span>
             <span class="chip chip--neutral">사진 {{ summary.photoCount }}장</span>
             <span class="chip chip--neutral">기록 {{ summary.memoryCount }}건</span>

@@ -13,6 +13,7 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -59,4 +60,8 @@ public class TravelPlan {
 
     @Column(length = 500)
     private String memo;
+
+    private Boolean publicShared = false;
+
+    private LocalDateTime publicSharedAt;
 }

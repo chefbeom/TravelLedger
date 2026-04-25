@@ -423,14 +423,10 @@ function buildViewportAggregates(items) {
   }
 
   const paddedBounds = getPaddedMapBounds()
-  const selectedItems = items.filter((item) => isSelectedAggregate(item))
-  const selectedMarkerKeys = new Set(selectedItems.map((item) => String(item.markerKey)))
-  const visibleItems = items.filter(
-    (item) => !selectedMarkerKeys.has(String(item.markerKey)) && isAggregateInBounds(item, paddedBounds),
-  )
+  const visibleItems = items.filter((item) => isAggregateInBounds(item, paddedBounds))
   const cellSize = resolveClientClusterCellSize()
   if (!cellSize) {
-    return [...visibleItems, ...selectedItems]
+    return visibleItems
   }
 
   const groups = new Map()
@@ -453,7 +449,7 @@ function buildViewportAggregates(items) {
     aggregates.push(buildClientCluster(group, key))
   })
 
-  return [...aggregates, ...selectedItems]
+  return aggregates
 }
 
 function focusClientCluster(aggregate) {
@@ -836,8 +832,13 @@ function renderClusters() {
   renderedMarkers = new Map()
 
   const aggregates = buildViewportAggregates(resolveRenderableItems())
+  let selectedMarkerKey = null
   aggregates.forEach((aggregate) => {
     const containsSelected = aggregateContainsSelection(aggregate)
+    if (containsSelected) {
+      selectedMarkerKey = aggregate.markerKey
+    }
+
     const marker = L.marker([aggregate.latitude, aggregate.longitude], {
       icon: buildClusterIcon(aggregate, containsSelected),
       bubblingMouseEvents: false,
@@ -862,7 +863,13 @@ function renderClusters() {
   })
 
   if (pendingPopupMarkerKey) {
-    scheduleMarkerPopup(pendingPopupMarkerKey)
+    const normalizedPendingKey = String(pendingPopupMarkerKey)
+    if (renderedMarkers.has(normalizedPendingKey)) {
+      scheduleMarkerPopup(normalizedPendingKey)
+    } else if (selectedMarkerKey) {
+      pendingPopupMarkerKey = selectedMarkerKey
+      scheduleMarkerPopup(selectedMarkerKey)
+    }
   }
 }
 

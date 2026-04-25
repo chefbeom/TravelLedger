@@ -8,7 +8,6 @@ import { useTableSelection } from '../lib/tableSelection'
 import { fetchLayoutSetting, saveLayoutSetting } from '../lib/api'
 
 const CALENDAR_SCALE_KEY = 'calen-household-calendar-scale-preset'
-const CALENDAR_COLLAPSE_KEY = 'calen-household-calendar-collapsed'
 const CALENDAR_HIGHLIGHT_KEY = 'calen-household-calendar-highlight-mode'
 const CALENDAR_CUSTOM_SIZE_KEY = 'calen-household-calendar-custom-size'
 const CALENDAR_AGGREGATE_PANEL_ENABLED_KEY = 'calen-household-calendar-aggregate-panel-enabled'
@@ -248,7 +247,6 @@ const calendarScalePreset = ref('default')
 const calendarWeekMode = ref('month')
 const calendarPreviousWeekOffset = ref(1)
 const calendarHighlightMode = ref(DEFAULT_CALENDAR_HIGHLIGHT_MODE)
-const isCalendarCollapsed = ref(false)
 const isAggregateEditMode = ref(false)
 const isAggregatePanelEnabled = ref(true)
 const isLayoutEditMode = ref(false)
@@ -549,37 +547,6 @@ watch(
   { deep: true, immediate: true },
 )
 
-watch(isCalendarCollapsed, (value) => {
-  persistCalendarViewPreferences()
-
-  if (value) {
-    if (calendarResizeObserver) {
-      calendarResizeObserver.disconnect()
-    }
-    return
-  }
-
-  nextTick(() => {
-    updateCalendarShellWidth()
-    updateCalendarContentSize()
-
-    if (typeof ResizeObserver !== 'undefined') {
-      if (!calendarResizeObserver) {
-        calendarResizeObserver = new ResizeObserver(() => {
-          updateCalendarShellWidth()
-          updateCalendarContentSize()
-        })
-      }
-      if (calendarShellRef.value) {
-        calendarResizeObserver.observe(calendarShellRef.value)
-      }
-      if (calendarContentRef.value) {
-        calendarResizeObserver.observe(calendarContentRef.value)
-      }
-    }
-  })
-})
-
 onMounted(() => {
   if (typeof window === 'undefined') {
     return
@@ -773,7 +740,6 @@ function calendarViewPreferencePayload() {
   return {
     scalePreset: calendarScalePreset.value,
     highlightMode: calendarHighlightMode.value,
-    collapsed: isCalendarCollapsed.value,
     aggregatePanelEnabled: isAggregatePanelEnabled.value,
     customSize: {
       enabled: isCalendarCustomSizeEnabled.value,
@@ -796,7 +762,6 @@ function normalizeCalendarViewPreferences(payload) {
   return {
     scalePreset: normalizePresetKey(calendarDisplayModes, payload.scalePreset, 'default'),
     highlightMode,
-    collapsed: Boolean(payload.collapsed),
     aggregatePanelEnabled: payload.aggregatePanelEnabled !== false,
     customSize: {
       enabled: Boolean(rawCustomSize.enabled),
@@ -813,7 +778,6 @@ function applyCalendarViewPreferences(preferences) {
 
   calendarScalePreset.value = preferences.scalePreset
   calendarHighlightMode.value = preferences.highlightMode
-  isCalendarCollapsed.value = preferences.collapsed
   isAggregatePanelEnabled.value = preferences.aggregatePanelEnabled
   calendarCustomWidth.value = preferences.customSize.width
   calendarCustomHeight.value = preferences.customSize.height
@@ -827,7 +791,6 @@ function persistCalendarViewPreferencesLocal() {
 
   window.localStorage.setItem(CALENDAR_SCALE_KEY, calendarScalePreset.value)
   window.localStorage.setItem(CALENDAR_HIGHLIGHT_KEY, calendarHighlightMode.value)
-  window.localStorage.setItem(CALENDAR_COLLAPSE_KEY, isCalendarCollapsed.value ? 'true' : 'false')
   window.localStorage.setItem(CALENDAR_AGGREGATE_PANEL_ENABLED_KEY, isAggregatePanelEnabled.value ? 'true' : 'false')
   window.localStorage.setItem(
     CALENDAR_CUSTOM_SIZE_KEY,
@@ -887,7 +850,6 @@ function hydrateCalendarViewPreferencesFromLocal() {
   isApplyingCalendarViewPreferences = true
 
   const savedScale = window.localStorage.getItem(CALENDAR_SCALE_KEY)
-  const savedCollapsed = window.localStorage.getItem(CALENDAR_COLLAPSE_KEY)
   const savedHighlight = window.localStorage.getItem(CALENDAR_HIGHLIGHT_KEY)
   const savedCustomSize = window.localStorage.getItem(CALENDAR_CUSTOM_SIZE_KEY)
   const savedAggregatePanelEnabled = window.localStorage.getItem(CALENDAR_AGGREGATE_PANEL_ENABLED_KEY)
@@ -900,10 +862,6 @@ function hydrateCalendarViewPreferencesFromLocal() {
     calendarHighlightMode.value = savedHighlight
   } else {
     calendarHighlightMode.value = DEFAULT_CALENDAR_HIGHLIGHT_MODE
-  }
-
-  if (savedCollapsed) {
-    isCalendarCollapsed.value = savedCollapsed === 'true'
   }
 
   if (savedAggregatePanelEnabled) {
@@ -1618,10 +1576,6 @@ function getMonthTag(day) {
   return ''
 }
 
-function toggleCalendarCollapsed() {
-  isCalendarCollapsed.value = !isCalendarCollapsed.value
-}
-
 function scrollToEntryEditor() {
   quickEntryPanelRef.value?.scrollIntoView({ behavior: 'smooth', block: 'start' })
 }
@@ -1654,9 +1608,6 @@ defineExpose({
         </div>
         <div class="household-calendar-header-actions">
           <span class="panel__badge">{{ anchorDate.slice(0, 7) }}</span>
-          <button class="button button--secondary" type="button" @click="toggleCalendarCollapsed">
-            {{ isCalendarCollapsed ? '달력 펼치기' : '달력 접기' }}
-          </button>
           <div class="household-calendar-layout-toolbar household-calendar-layout-toolbar--inline" data-no-drag="true">
             <div class="household-calendar-layout-toolbar__status">
               <strong>달력 배치</strong>
@@ -1674,7 +1625,7 @@ defineExpose({
         </div>
       </div>
 
-      <div v-if="!isCalendarCollapsed" class="calendar-toolbar">
+      <div class="calendar-toolbar">
         <div class="calendar-stepper">
           <span class="calendar-stepper__label">연도</span>
           <div class="calendar-stepper__controls">
@@ -1701,7 +1652,7 @@ defineExpose({
         </div>
       </div>
 
-      <div v-if="!isCalendarCollapsed" class="calendar-size-toolbar">
+      <div class="calendar-size-toolbar">
         <div class="calendar-size-toolbar__block calendar-size-toolbar__block--resize">
           <button class="button button--ghost calendar-size-toolbar__control" type="button" @click="isCalendarResizePanelOpen = !isCalendarResizePanelOpen">
             크기 조절
@@ -2139,7 +2090,7 @@ defineExpose({
       <div v-if="isLayoutEditMode" class="household-calendar-panel-dragbar">
         달력 영역
       </div>
-      <div v-if="!isCalendarCollapsed" ref="calendarShellRef" class="calendar-shell">
+      <div ref="calendarShellRef" class="calendar-shell">
         <div class="calendar-scale-frame">
           <div ref="calendarContentRef" class="calendar-scale-content">
             <div class="calendar">
@@ -2207,10 +2158,6 @@ defineExpose({
         </div>
       </div>
 
-      <div v-else class="household-calendar-collapsed-note">
-        <strong>{{ formatShortDate(selectedDate) }}</strong>
-        <span>달력을 접어 두었습니다. 다시 펼치면 날짜별 흐름을 바로 확인할 수 있습니다.</span>
-      </div>
     </section>
 
               </template>

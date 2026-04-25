@@ -4503,7 +4503,6 @@ textarea {
 
 :root[data-theme='toss'] .calendar-stepper__arrow,
 :root[data-theme='toss'] .household-aggregate-card,
-:root[data-theme='toss'] .household-calendar-collapsed-note,
 :root[data-theme='toss'] .chip--neutral,
 :root[data-theme='toss'] .support-inquiry-card {
   background: #1b212c;
@@ -5178,24 +5177,6 @@ textarea {
   justify-content: flex-start;
   gap: 8px;
   min-height: auto;
-}
-
-.household-calendar-collapsed-note {
-  display: grid;
-  gap: 6px;
-  margin-top: 8px;
-  padding: 18px 20px;
-  border: 1px dashed var(--line);
-  border-radius: 18px;
-  background: var(--surface-soft);
-}
-
-.household-calendar-collapsed-note strong {
-  font-size: 1rem;
-}
-
-.household-calendar-collapsed-note span {
-  color: var(--text-soft);
 }
 
 @media (max-width: 1180px) {

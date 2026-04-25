@@ -26,6 +26,16 @@
 
 ## 작업 기록
 
+### 2026-04-25 - Remove household calendar collapse control
+
+- User request: Remove the calendar collapse/expand button feature from the household calendar ledger.
+- Request analysis: The button was tied to `isCalendarCollapsed`, a local/remote calendar view preference field, conditional toolbar/calendar rendering, and a collapsed note style. Removing only the button would leave a hidden state path that could still collapse the calendar if old saved preferences were restored.
+- Actions taken: Checked `codingconvention.md`, searched all collapse-related references in `CalendarWorkspace.vue` and `style.css`, and confirmed no other components use the household calendar collapsed note class.
+- Implementation: Removed the collapse state, toggle function, saved preference field, localStorage key usage, conditional collapsed rendering, and the unused collapsed-note CSS. The calendar toolbar, size controls, and calendar body now always render.
+- Verification: Ran `cmd /c npm run build` in `frontend` successfully. Verified no TypeScript SFC/script or `.ts`/`.tsx` files with `rg -n 'lang="ts"|lang=''ts''' frontend/src`, `Get-ChildItem -Path frontend/src -Recurse -Include *.ts,*.tsx`, and `rg --files frontend/src | rg '\.(ts|tsx)$'`. Verified household calendar collapse references are removed with `rg -n "household-calendar-collapsed-note|isCalendarCollapsed|toggleCalendarCollapsed|CALENDAR_COLLAPSE_KEY|달력 접기|달력 펼치기" frontend/src/components/CalendarWorkspace.vue frontend/src/style.css`.
+- Result: The household calendar can no longer be collapsed from the UI or restored into a collapsed state from saved preferences.
+- Follow-up note: Existing old collapsed preference values are ignored by the frontend after this change.
+
 ### 2026-04-25 - Preserve resized household calendar panel dimensions
 
 - User request: In the household calendar ledger, resizing panels by dragging a corner does not survive refresh or another computer; only positions appear to be saved.

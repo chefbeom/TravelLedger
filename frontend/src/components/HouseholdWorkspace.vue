@@ -1434,7 +1434,7 @@ async function deactivatePayment(paymentId) {
       @add-amount="addAmount"
       @submit-entry="submitEntry"
       @undo-entry-action="undoLastEntryAction"
-      @edit-entry="fillEntryFormAndScroll"
+      @edit-entry="fillEntryForm"
       @delete-entry="removeEntry"
       @apply-entry-suggestion="applyEntrySuggestion"
       @change-anchor-month="handleChangeCalendarMonth"

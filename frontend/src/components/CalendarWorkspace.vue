@@ -429,6 +429,7 @@ watch(selectedDate, (value) => {
     props.entryForm.entryDate = value
   }
   selectedDayEntryPage.value = 0
+  selectedDayEntrySelection.clearSelection()
 })
 
 watch(selectedDaySort, () => {
@@ -1503,6 +1504,12 @@ async function scrollToEntryEditor() {
   focusEntryEditorControl()
 }
 
+async function handleSheetEditEntry(entry) {
+  emit('edit-entry', entry)
+  await nextTick()
+  await scrollToEntryEditor()
+}
+
 function setSelectedDate(value) {
   selectedDate.value = value
 }
@@ -2120,7 +2127,7 @@ defineExpose({
               </td>
               <td v-if="hasSelectedMemoColumn" class="sheet-table__memo">{{ entry.visibleMemo || '-' }}</td>
               <td class="sheet-table__actions">
-                <button type="button" class="button button--ghost" @click="emit('edit-entry', entry)">수정</button>
+                <button type="button" class="button button--ghost" @click="handleSheetEditEntry(entry)">수정</button>
                 <button type="button" class="button button--danger" @click="emit('delete-entry', entry)">삭제</button>
               </td>
             </tr>

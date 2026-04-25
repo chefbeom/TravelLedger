@@ -399,7 +399,7 @@ const calendarLayoutPanels = computed(() => (
   calendarPanelDefinitions.map((definition) => ({
     ...definition,
     ...calendarPanelLayout.value.find((item) => item.id === definition.id),
-  }))
+  })).filter((panel) => panel.id !== 'aggregate' || isAggregatePanelEnabled.value)
 ))
 const calendarPanelLayoutKey = computed(() => (
   calendarLayoutPanels.value.map((panel) => `${panel.id}:${panel.x}:${panel.y}:${panel.w}:${panel.h}`).join('|')
@@ -455,7 +455,11 @@ watch(calendarScalePreset, persistCalendarViewPreferences)
 
 watch(calendarHighlightMode, persistCalendarViewPreferences)
 
-watch(isAggregatePanelEnabled, persistCalendarViewPreferences)
+watch(isAggregatePanelEnabled, () => {
+  persistCalendarViewPreferences()
+  queueLayoutGridRebuild()
+  refreshCalendarMeasurements()
+})
 
 watch(calendarPanelLayoutKey, () => {
   queueLayoutGridRebuild()
@@ -1040,7 +1044,9 @@ function readLayoutGridSnapshot() {
 }
 
 function applyCalendarPanelLayout(snapshot, { immediate = false } = {}) {
-  calendarPanelLayout.value = normalizeCalendarPanelLayout(snapshot)
+  const snapshotById = new Map((snapshot ?? []).map((item) => [String(item.id), item]))
+  const mergedLayout = calendarPanelLayout.value.map((current) => snapshotById.get(String(current.id)) ?? current)
+  calendarPanelLayout.value = normalizeCalendarPanelLayout(mergedLayout)
   persistCalendarPanelLayout({ immediate })
   refreshCalendarMeasurements()
 }
@@ -1578,6 +1584,9 @@ defineExpose({
               <span>{{ isLayoutEditMode ? '편집 중' : '고정됨' }}</span>
             </div>
             <div class="household-calendar-layout-toolbar__actions">
+              <button type="button" class="button button--secondary" @click="toggleAggregatePanelEnabled">
+                {{ isAggregatePanelEnabled ? '집계 숨기기' : '집계 보이기' }}
+              </button>
               <button type="button" class="button button--secondary" @click="resetCalendarPanelLayout">
                 기본 배치
               </button>
@@ -1910,7 +1919,7 @@ defineExpose({
               :aria-pressed="isAggregatePanelEnabled"
               @click="toggleAggregatePanelEnabled"
             >
-              {{ isAggregatePanelEnabled ? '집계 끄기' : '집계 켜기' }}
+              {{ isAggregatePanelEnabled ? '집계 숨기기' : '집계 보이기' }}
             </button>
             <span v-if="isAggregatePanelEnabled && aggregateSettingsReady" class="panel__badge">{{ aggregateCards.length }}칸</span>
             <template v-if="isAggregatePanelEnabled && isAggregateEditMode">
@@ -1945,7 +1954,7 @@ defineExpose({
         <div v-if="!isAggregatePanelEnabled" class="household-aggregate-empty household-aggregate-empty--off">
           <strong>사용자 설정 집계가 꺼져 있습니다.</strong>
           <span>저장된 집계 구성은 유지되며, 다시 켜면 같은 항목을 바로 볼 수 있습니다.</span>
-          <button type="button" class="button button--secondary" @click="toggleAggregatePanelEnabled">집계 켜기</button>
+          <button type="button" class="button button--secondary" @click="toggleAggregatePanelEnabled">집계 보이기</button>
         </div>
         <div v-else-if="!aggregateSettingsReady" class="household-aggregate-empty">
           <strong>집계 설정을 불러오는 중입니다.</strong>

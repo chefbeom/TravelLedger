@@ -4647,7 +4647,10 @@ textarea {
 }
 
 .household-calendar-layout .calendar {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
   gap: var(--calendar-gap);
+  height: 100%;
   width: 100%;
   min-width: var(--calendar-min-width);
 }
@@ -4707,6 +4710,131 @@ textarea {
 .calendar-scale-frame,
 .calendar-scale-content {
   width: 100%;
+}
+
+.household-calendar-panel--content-only {
+  container-type: size;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.household-calendar-panel--content-only .calendar-shell {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  padding-bottom: 0;
+}
+
+.household-calendar-panel--content-only .calendar-scale-frame,
+.household-calendar-panel--content-only .calendar-scale-content,
+.household-calendar-panel--content-only .calendar__weeks {
+  height: 100%;
+  min-height: 0;
+}
+
+.household-calendar-panel--content-only .calendar {
+  min-width: 0;
+}
+
+.household-calendar-panel--content-only .calendar__weeks {
+  grid-auto-rows: minmax(0, 1fr);
+}
+
+.household-calendar-panel--content-only .calendar__week {
+  min-height: 0;
+}
+
+.household-calendar-panel--content-only .calendar__day {
+  align-content: stretch;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  min-height: 0;
+}
+
+.household-calendar-panel--content-only .calendar__metrics {
+  min-height: 0;
+  overflow: hidden;
+}
+
+@container (max-height: 620px), (max-width: 680px) {
+  .household-calendar-panel--content-only {
+    --calendar-gap: 8px;
+    --calendar-week-gap: 6px;
+    --calendar-day-padding: 9px;
+    --calendar-expense-total-size: 1rem;
+    --calendar-metric-size: 0.72rem;
+    --calendar-day-head-size: 0.8rem;
+    --calendar-toolbar-gap: 10px;
+  }
+
+  .household-calendar-panel--content-only .calendar__day {
+    gap: 6px;
+    border-radius: 14px;
+  }
+
+  .household-calendar-panel--content-only .calendar__metric {
+    gap: 5px;
+    padding: 5px 7px;
+    border-radius: 10px;
+  }
+}
+
+@container (max-height: 520px), (max-width: 560px) {
+  .household-calendar-panel--content-only {
+    --calendar-gap: 6px;
+    --calendar-week-gap: 5px;
+    --calendar-day-padding: 7px;
+    --calendar-expense-total-size: 0.9rem;
+    --calendar-metric-size: 0.68rem;
+    --calendar-day-head-size: 0.74rem;
+  }
+
+  .household-calendar-panel--content-only .calendar__weekdays {
+    font-size: 0.78rem;
+  }
+
+  .household-calendar-panel--content-only .calendar__label {
+    display: none;
+  }
+
+  .household-calendar-panel--content-only .calendar__metric {
+    grid-template-columns: 1fr;
+    gap: 2px;
+    padding: 4px 6px;
+  }
+
+  .household-calendar-panel--content-only .calendar__metric strong {
+    text-align: left;
+  }
+
+  .household-calendar-panel--content-only .calendar__bar {
+    height: 6px;
+  }
+}
+
+@container (max-height: 430px), (max-width: 460px) {
+  .household-calendar-panel--content-only {
+    --calendar-week-gap: 4px;
+    --calendar-day-padding: 6px;
+    --calendar-expense-total-size: 0.84rem;
+    --calendar-day-head-size: 0.7rem;
+  }
+
+  .household-calendar-panel--content-only .calendar__metrics {
+    display: none;
+  }
+
+  .household-calendar-panel--content-only .calendar__day {
+    grid-template-rows: auto auto auto;
+  }
+}
+
+@container (max-height: 330px) {
+  .household-calendar-panel--content-only .calendar__expense-block,
+  .household-calendar-panel--content-only .calendar__bar {
+    display: none;
+  }
 }
 
 .household-calendar-layout--fit .calendar-shell {
@@ -4892,7 +5020,7 @@ textarea {
 .household-calendar-layout-board {
   position: relative;
   min-width: 0;
-  overflow-x: hidden;
+  overflow: hidden;
   padding: 12px;
   border: 1px solid var(--line);
   border-radius: 24px;
@@ -4939,6 +5067,7 @@ textarea {
 }
 
 .household-calendar-layout-panel-shell {
+  container-type: size;
   height: 100%;
   min-height: 0;
   min-width: 0;
@@ -4949,7 +5078,7 @@ textarea {
   height: 100%;
   margin: 0;
   min-height: 0;
-  overflow: auto;
+  overflow: hidden;
 }
 
 .household-calendar-layout-panel-shell--editing > .panel {

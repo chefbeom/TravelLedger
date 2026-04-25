@@ -2,6 +2,7 @@
   font-family: 'Pretendard', 'Segoe UI', 'Apple SD Gothic Neo', sans-serif;
   line-height: 1.5;
   font-weight: 400;
+  color-scheme: light;
   color: #191f28;
   background: #f3f5f8;
   font-synthesis: none;
@@ -28,6 +29,19 @@
   --interactive-contrast-bg: #111827;
   --interactive-contrast-text: #ffffff;
   --calendar-size-toggle-bg: rgba(248, 250, 252, 0.94);
+  --grid-guide-bg: rgba(111, 66, 193, 0.045);
+  --grid-guide-border: rgba(111, 66, 193, 0.18);
+  --map-canvas-bg: linear-gradient(180deg, #eef3f8 0%, #e8eef5 100%);
+  --map-canvas-border: rgba(148, 163, 184, 0.36);
+  --map-tile-filter: saturate(0.78) contrast(0.94) brightness(1.03);
+  --map-toolbar-bg: rgba(255, 255, 255, 0.9);
+  --map-toolbar-border: rgba(148, 163, 184, 0.34);
+  --map-toolbar-shadow: 0 16px 30px rgba(15, 23, 42, 0.12);
+  --map-control-bg: rgba(248, 250, 252, 0.94);
+  --map-control-border: rgba(148, 163, 184, 0.36);
+  --map-control-text: #253044;
+  --map-hint-bg: linear-gradient(135deg, rgba(49, 130, 246, 0.1), rgba(18, 184, 134, 0.08));
+  --map-hint-border: rgba(49, 130, 246, 0.14);
 }
 
 * {
@@ -1763,8 +1777,9 @@ button {
 .travel-map__canvas {
   min-height: 720px;
   height: 100%;
-  border: 1px solid var(--line);
+  border: 1px solid var(--map-canvas-border);
   border-radius: 24px;
+  background: var(--map-canvas-bg);
   overflow: hidden;
   box-shadow: var(--shadow);
 }
@@ -1776,7 +1791,8 @@ button {
   align-items: center;
   padding: 14px 18px;
   border-radius: 18px;
-  background: linear-gradient(135deg, rgba(49, 130, 246, 0.1), rgba(18, 184, 134, 0.08));
+  border: 1px solid var(--map-hint-border);
+  background: var(--map-hint-bg);
 }
 
 .travel-map__hint strong {
@@ -3191,10 +3207,34 @@ textarea {
 .travel-map__canvas {
   min-height: 620px;
   height: 100%;
-  border: 1px solid var(--line);
+  border: 1px solid var(--map-canvas-border);
   border-radius: 24px;
+  background: var(--map-canvas-bg);
   overflow: hidden;
   box-shadow: var(--shadow);
+}
+
+.travel-map__canvas.leaflet-container {
+  background: var(--map-canvas-bg);
+  color: var(--text);
+}
+
+.travel-map__canvas .leaflet-tile-pane {
+  filter: var(--map-tile-filter);
+  transition: filter 0.18s ease;
+}
+
+.travel-map__canvas .leaflet-control,
+.travel-map__canvas .leaflet-control-attribution,
+.travel-map__canvas .leaflet-bar a,
+.travel-map__canvas .leaflet-bar a:hover {
+  background: var(--map-control-bg);
+  border-color: var(--map-control-border);
+  color: var(--map-control-text);
+}
+
+.travel-map__canvas .leaflet-control-attribution a {
+  color: var(--blue);
 }
 
 .travel-map--compact .travel-map__canvas {
@@ -3220,10 +3260,10 @@ textarea {
   align-items: center;
   gap: 8px;
   padding: 10px 12px;
-  border: 1px solid rgba(148, 163, 184, 0.3);
+  border: 1px solid var(--map-toolbar-border);
   border-radius: 18px;
-  background: rgba(255, 255, 255, 0.92);
-  box-shadow: 0 16px 30px rgba(15, 23, 42, 0.12);
+  background: var(--map-toolbar-bg);
+  box-shadow: var(--map-toolbar-shadow);
   backdrop-filter: blur(18px);
 }
 
@@ -3238,11 +3278,11 @@ textarea {
 }
 
 .travel-map__toolbar-button {
-  border: 1px solid rgba(148, 163, 184, 0.35);
+  border: 1px solid var(--map-control-border);
   border-radius: 999px;
   padding: 8px 12px;
-  background: rgba(248, 250, 252, 0.92);
-  color: var(--text);
+  background: var(--map-control-bg);
+  color: var(--map-control-text);
   font: inherit;
   font-size: 0.9rem;
   font-weight: 700;
@@ -3281,7 +3321,8 @@ textarea {
   align-items: center;
   padding: 14px 18px;
   border-radius: 18px;
-  background: linear-gradient(135deg, rgba(49, 130, 246, 0.1), rgba(18, 184, 134, 0.08));
+  border: 1px solid var(--map-hint-border);
+  background: var(--map-hint-bg);
 }
 
 .travel-map__hint strong {
@@ -3833,8 +3874,9 @@ textarea {
   gap: 6px;
   padding: 6px 8px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.78);
-  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.12);
+  border-color: var(--map-toolbar-border);
+  background: var(--map-toolbar-bg);
+  box-shadow: var(--map-toolbar-shadow);
 }
 
 .travel-map__toolbar-group--wrap {
@@ -3855,11 +3897,11 @@ textarea {
 .travel-map__toolbar-select {
   min-width: 180px;
   max-width: min(240px, 100%);
-  border: 1px solid rgba(148, 163, 184, 0.35);
+  border: 1px solid var(--map-control-border);
   border-radius: 999px;
   padding: 6px 34px 6px 12px;
-  background: rgba(248, 250, 252, 0.92);
-  color: var(--text);
+  background: var(--map-control-bg);
+  color: var(--map-control-text);
   font: inherit;
   font-size: 0.84rem;
   font-weight: 700;
@@ -3885,21 +3927,21 @@ textarea {
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 8px;
   padding: 8px;
-  border: 1px solid rgba(148, 163, 184, 0.28);
+  border: 1px solid var(--map-toolbar-border);
   border-radius: 18px;
-  background: rgba(255, 255, 255, 0.84);
-  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.12);
+  background: var(--map-toolbar-bg);
+  box-shadow: var(--map-toolbar-shadow);
   backdrop-filter: blur(18px);
 }
 
 .travel-map__search-input {
   width: 100%;
   min-width: 0;
-  border: 1px solid rgba(148, 163, 184, 0.3);
+  border: 1px solid var(--map-control-border);
   border-radius: 14px;
   padding: 10px 12px;
-  background: rgba(248, 250, 252, 0.9);
-  color: var(--text);
+  background: var(--map-control-bg);
+  color: var(--map-control-text);
   font: inherit;
 }
 
@@ -3919,10 +3961,10 @@ textarea {
   max-height: 260px;
   overflow: auto;
   padding: 8px;
-  border: 1px solid rgba(148, 163, 184, 0.28);
+  border: 1px solid var(--map-toolbar-border);
   border-radius: 18px;
-  background: rgba(255, 255, 255, 0.92);
-  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.16);
+  background: var(--map-toolbar-bg);
+  box-shadow: var(--map-toolbar-shadow);
   backdrop-filter: blur(18px);
 }
 
@@ -3938,10 +3980,10 @@ textarea {
   gap: 4px;
   text-align: left;
   padding: 10px 12px;
-  border: 1px solid rgba(148, 163, 184, 0.2);
+  border: 1px solid var(--map-control-border);
   border-radius: 14px;
-  background: rgba(248, 250, 252, 0.92);
-  color: var(--text);
+  background: var(--map-control-bg);
+  color: var(--map-control-text);
   font: inherit;
   cursor: pointer;
 }
@@ -4230,6 +4272,19 @@ textarea {
   --interactive-contrast-bg: linear-gradient(180deg, #4f8cff 0%, #2f6df3 100%);
   --interactive-contrast-text: #ffffff;
   --calendar-size-toggle-bg: var(--toss-calendar-size-toggle-bg, rgba(24, 29, 38, 0.94));
+  --grid-guide-bg: rgba(185, 197, 255, 0.08);
+  --grid-guide-border: rgba(185, 197, 255, 0.22);
+  --map-canvas-bg: linear-gradient(180deg, #111823 0%, #0d131d 100%);
+  --map-canvas-border: rgba(78, 95, 125, 0.56);
+  --map-tile-filter: invert(0.92) hue-rotate(180deg) saturate(0.72) brightness(0.82) contrast(1.04);
+  --map-toolbar-bg: rgba(16, 21, 30, 0.92);
+  --map-toolbar-border: rgba(78, 95, 125, 0.56);
+  --map-toolbar-shadow: 0 18px 42px rgba(0, 0, 0, 0.38);
+  --map-control-bg: rgba(24, 30, 40, 0.96);
+  --map-control-border: rgba(78, 95, 125, 0.62);
+  --map-control-text: #edf3ff;
+  --map-hint-bg: linear-gradient(135deg, rgba(34, 64, 122, 0.48), rgba(16, 53, 79, 0.42));
+  --map-hint-border: rgba(79, 140, 255, 0.22);
 }
 
 :root[data-theme='toss'] .theme-toggle {
@@ -4864,8 +4919,8 @@ textarea {
 }
 
 .household-calendar-layout-guide span {
-  background: rgba(111, 66, 193, 0.045);
-  border: 1px dashed rgba(111, 66, 193, 0.18);
+  background: var(--grid-guide-bg);
+  border: 1px dashed var(--grid-guide-border);
   box-sizing: border-box;
   min-width: 0;
 }
@@ -6425,13 +6480,24 @@ textarea {
   }
 }
 
+:root[data-theme='toss'] .household-calendar-layout-board,
+:root[data-theme='toss'] .household-calendar-layout-panel-shell > .panel,
+:root[data-theme='toss'] .entry-editor__amount,
+:root[data-theme='toss'] .entry-editor__fields,
 :root[data-theme='toss'] .household-aggregate-card,
 :root[data-theme='toss'] .household-aggregate-empty,
 :root[data-theme='toss'] .household-sheet-table-wrap,
 :root[data-theme='toss'] .household-sheet-panel .sheet-table th,
-:root[data-theme='toss'] .household-sheet-panel .sheet-table td {
-  background: #1b212c !important;
-  border-color: #2d3645;
+:root[data-theme='toss'] .household-sheet-panel .sheet-table td,
+:root[data-theme='toss'] .drive-dashboard__card,
+:root[data-theme='toss'] .drive-dashboard__controls,
+:root[data-theme='toss'] .drive-selection-bar,
+:root[data-theme='toss'] .drive-file-card,
+:root[data-theme='toss'] .family-category-card,
+:root[data-theme='toss'] .family-album-focus {
+  background: var(--surface-soft) !important;
+  border-color: var(--line);
+  color: var(--text);
 }
 
 :root[data-theme='toss'] .household-sheet-panel .sheet-table th,
@@ -6444,6 +6510,12 @@ textarea {
 :root[data-theme='toss'] .household-aggregate-card__meta span,
 :root[data-theme='toss'] .household-aggregate-card__eyebrow {
   color: var(--text) !important;
+}
+
+:root[data-theme='toss'] .family-category-card--active,
+:root[data-theme='toss'] .family-album-focus {
+  background: linear-gradient(180deg, rgba(79, 140, 255, 0.14), rgba(24, 29, 38, 0.96)) !important;
+  border-color: rgba(79, 140, 255, 0.32);
 }
 
 :root[data-theme='toss'] .household-aggregate-card__copy small,
@@ -6472,9 +6544,9 @@ textarea {
 :root[data-theme='toss'] .travel-map__toolbar-group,
 :root[data-theme='toss'] .travel-map__search-form,
 :root[data-theme='toss'] .travel-map__search-results {
-  background: rgba(14, 18, 25, 0.92);
-  border-color: rgba(78, 95, 125, 0.56);
-  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.38);
+  background: var(--map-toolbar-bg);
+  border-color: var(--map-toolbar-border);
+  box-shadow: var(--map-toolbar-shadow);
 }
 
 :root[data-theme='toss'] .travel-map__toolbar-label,
@@ -6488,9 +6560,9 @@ textarea {
 
 :root[data-theme='toss'] .travel-map__toolbar-button,
 :root[data-theme='toss'] .travel-map__slider-button {
-  background: rgba(24, 30, 40, 0.96);
-  border-color: rgba(78, 95, 125, 0.62);
-  color: #edf3ff;
+  background: var(--map-control-bg);
+  border-color: var(--map-control-border);
+  color: var(--map-control-text);
 }
 
 :root[data-theme='toss'] .travel-map__toolbar-button:hover,
@@ -6511,9 +6583,9 @@ textarea {
 }
 
 :root[data-theme='toss'] .travel-map__toolbar-select {
-  background: rgba(16, 21, 30, 0.96);
-  border-color: rgba(78, 95, 125, 0.62);
-  color: #f3f7ff;
+  background: var(--map-control-bg);
+  border-color: var(--map-control-border);
+  color: var(--map-control-text);
 }
 
 :root[data-theme='toss'] .travel-map__toolbar-select:focus {
@@ -6522,9 +6594,9 @@ textarea {
 }
 
 :root[data-theme='toss'] .travel-map__search-input {
-  background: rgba(16, 21, 30, 0.96);
-  border-color: rgba(78, 95, 125, 0.62);
-  color: #f3f7ff;
+  background: var(--map-control-bg);
+  border-color: var(--map-control-border);
+  color: var(--map-control-text);
 }
 
 :root[data-theme='toss'] .travel-map__search-input::placeholder {
@@ -6537,9 +6609,9 @@ textarea {
 }
 
 :root[data-theme='toss'] .travel-map__search-result {
-  background: rgba(21, 27, 37, 0.94);
-  border-color: rgba(78, 95, 125, 0.42);
-  color: #edf3ff;
+  background: var(--map-control-bg);
+  border-color: var(--map-control-border);
+  color: var(--map-control-text);
 }
 
 :root[data-theme='toss'] .travel-map__search-result strong,
@@ -6549,8 +6621,8 @@ textarea {
 }
 
 :root[data-theme='toss'] .travel-map__hint {
-  background: linear-gradient(135deg, rgba(34, 64, 122, 0.48), rgba(16, 53, 79, 0.42));
-  border: 1px solid rgba(79, 140, 255, 0.22);
+  background: var(--map-hint-bg);
+  border: 1px solid var(--map-hint-border);
 }
 
 :root[data-theme='toss'] .travel-pending-card,

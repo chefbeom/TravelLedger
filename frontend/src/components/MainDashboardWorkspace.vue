@@ -1339,8 +1339,8 @@ onBeforeUnmount(() => {
 }
 
 .main-dashboard__grid-guide span {
-  background: rgba(111, 66, 193, 0.045);
-  border: 1px dashed rgba(111, 66, 193, 0.18);
+  background: var(--grid-guide-bg);
+  border: 1px dashed var(--grid-guide-border);
   box-sizing: border-box;
   min-width: 0;
 }
@@ -2204,7 +2204,8 @@ onBeforeUnmount(() => {
 :global(:root[data-theme='toss']) .main-palette--household-summary .main-palette__metric:first-child,
 :global(:root[data-theme='toss']) .main-palette--monthExpense .main-palette__single-metric,
 :global(:root[data-theme='toss']) .main-palette--weekExpense .main-palette__single-metric {
-  background: linear-gradient(180deg, rgba(185, 239, 53, 0.86), rgba(152, 210, 42, 0.82));
+  background: linear-gradient(180deg, rgba(185, 239, 53, 0.18), rgba(24, 29, 38, 0.94));
+  border-color: rgba(185, 239, 53, 0.28);
 }
 
 :global(:root[data-theme='toss']) .main-palette--monthIncome .main-palette__single-metric,
@@ -2213,7 +2214,8 @@ onBeforeUnmount(() => {
 :global(:root[data-theme='toss']) .main-palette--drive-summary .main-palette__metric:first-child,
 :global(:root[data-theme='toss']) .main-palette--photo-frame,
 :global(:root[data-theme='toss']) .main-palette--drive-capacity {
-  background: linear-gradient(180deg, rgba(125, 142, 255, 0.42), rgba(87, 100, 190, 0.36));
+  background: linear-gradient(180deg, rgba(125, 142, 255, 0.24), rgba(20, 25, 34, 0.96));
+  border-color: rgba(125, 142, 255, 0.28);
 }
 
 :global(:root[data-theme='toss']) .main-palette__bar,
@@ -2243,8 +2245,8 @@ onBeforeUnmount(() => {
 }
 
 :global(:root[data-theme='toss']) .main-dashboard__grid-guide span {
-  background: rgba(185, 197, 255, 0.08);
-  border-color: rgba(185, 197, 255, 0.22);
+  background: var(--grid-guide-bg);
+  border-color: var(--grid-guide-border);
 }
 
 /* Data-density hardening for real dashboard payloads. */

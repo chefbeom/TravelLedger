@@ -26,6 +26,16 @@
 
 ## 작업 기록
 
+### 2026-04-25 - Remove household calendar manual size control
+
+- User request: Remove the `크기 조절` button from the household calendar toolbar.
+- Request analysis: The button controlled a manual width/height resize panel. Removing only the button would leave previously saved custom size settings active with no way to reset them, so the connected custom size state, persistence fields, template, and CSS needed to be removed together.
+- Actions taken: Checked `codingconvention.md`, searched all custom calendar size references in `CalendarWorkspace.vue` and `style.css`, and confirmed the remaining `달력 크기` preset toggle is separate from the manual resize panel.
+- Implementation: Removed the manual size button, resize panel, range inputs, custom width/height refs, custom size persistence payload fields, localStorage reads/writes, custom-size layout class, scaling variables, and related CSS.
+- Verification: Ran `cmd /c npm run build` in `frontend` successfully. Verified no TypeScript SFC/script or `.ts`/`.tsx` files with `rg -n 'lang="ts"|lang=''ts''' frontend/src`, `Get-ChildItem -Path frontend/src -Recurse -Include *.ts,*.tsx`, and `rg --files frontend/src | rg '\.(ts|tsx)$'`. Verified manual size references are removed with `rg -n "isCalendarResizePanelOpen|calendarCustom|CALENDAR_CUSTOM|customSize|household-calendar-layout--custom-size|calendar-resize-panel|크기 조절|기본값|calendarCustomSizeLabel|updateCalendarCustom|resetCalendarCustomSize|calendarContentRef|calendarNatural" frontend/src/components/CalendarWorkspace.vue frontend/src/style.css`.
+- Result: The household calendar no longer exposes or applies the manual custom width/height resize feature.
+- Follow-up note: Previously saved `customSize` data in DB/localStorage is ignored by the frontend after this change.
+
 ### 2026-04-25 - Remove household calendar collapse control
 
 - User request: Remove the calendar collapse/expand button feature from the household calendar ledger.

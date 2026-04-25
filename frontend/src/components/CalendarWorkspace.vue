@@ -9,7 +9,6 @@ import { fetchLayoutSetting, saveLayoutSetting } from '../lib/api'
 
 const CALENDAR_SCALE_KEY = 'calen-household-calendar-scale-preset'
 const CALENDAR_HIGHLIGHT_KEY = 'calen-household-calendar-highlight-mode'
-const CALENDAR_CUSTOM_SIZE_KEY = 'calen-household-calendar-custom-size'
 const CALENDAR_AGGREGATE_PANEL_ENABLED_KEY = 'calen-household-calendar-aggregate-panel-enabled'
 const CALENDAR_PANEL_LAYOUT_STORAGE_KEY = 'calen-household-calendar-panel-layout:v1'
 const CALENDAR_PANEL_LAYOUT_SCOPE = 'household-calendar'
@@ -17,12 +16,6 @@ const CALENDAR_PANEL_LAYOUT_VERSION = 1
 const CALENDAR_VIEW_PREFERENCE_SCOPE = 'household-calendar-view'
 const CALENDAR_VIEW_PREFERENCE_VERSION = 1
 const DEFAULT_CALENDAR_HIGHLIGHT_MODE = 'net'
-const CALENDAR_CUSTOM_WIDTH_MIN = 780
-const CALENDAR_CUSTOM_WIDTH_MAX = 1500
-const CALENDAR_CUSTOM_HEIGHT_MIN = 800
-const CALENDAR_CUSTOM_HEIGHT_MAX = 1500
-const DEFAULT_CALENDAR_CUSTOM_WIDTH = 1200
-const DEFAULT_CALENDAR_CUSTOM_HEIGHT = 1200
 const CALENDAR_LAYOUT_GRID_COLUMNS = 9
 const CALENDAR_LAYOUT_GRID_MARGIN = 4
 const CALENDAR_LAYOUT_GRID_GAP = CALENDAR_LAYOUT_GRID_MARGIN * 2
@@ -253,16 +246,9 @@ const isLayoutEditMode = ref(false)
 const quickEntryPanelRef = ref(null)
 const ledgerSheetRef = ref(null)
 const calendarShellRef = ref(null)
-const calendarContentRef = ref(null)
 const layoutGridRef = ref(null)
 const aggregateWidgetDraftConfigs = ref(createDefaultAggregateConfigs())
 const calendarShellWidth = ref(0)
-const calendarNaturalWidth = ref(860)
-const calendarNaturalHeight = ref(1000)
-const isCalendarResizePanelOpen = ref(false)
-const isCalendarCustomSizeEnabled = ref(false)
-const calendarCustomWidth = ref(DEFAULT_CALENDAR_CUSTOM_WIDTH)
-const calendarCustomHeight = ref(DEFAULT_CALENDAR_CUSTOM_HEIGHT)
 const layoutCellHeight = ref(112)
 const calendarPanelLayout = ref(createDefaultCalendarPanelLayout())
 let calendarResizeObserver = null
@@ -373,32 +359,7 @@ const calendarViewStyle = computed(() => {
   }
 })
 
-const calendarLayoutStyle = computed(() => {
-  const baseStyle = { ...calendarViewStyle.value }
-  if (!isCalendarCustomSizeEnabled.value) {
-    return baseStyle
-  }
-
-  const width = clamp(calendarCustomWidth.value, CALENDAR_CUSTOM_WIDTH_MIN, CALENDAR_CUSTOM_WIDTH_MAX)
-  const height = clamp(calendarCustomHeight.value, CALENDAR_CUSTOM_HEIGHT_MIN, CALENDAR_CUSTOM_HEIGHT_MAX)
-  const naturalWidth = Math.max(calendarNaturalWidth.value, 860)
-  const naturalHeight = Math.max(calendarNaturalHeight.value, 1)
-  const scale = clamp(Math.min(width / naturalWidth, height / naturalHeight), 0.45, 1.6)
-
-  return {
-    ...baseStyle,
-    '--calendar-frame-width': `${Math.round(naturalWidth * scale)}px`,
-    '--calendar-frame-height': `${Math.round(naturalHeight * scale)}px`,
-    '--calendar-content-width': `${naturalWidth}px`,
-    '--calendar-scale': scale.toFixed(4),
-  }
-})
-
-const calendarCustomSizeLabel = computed(() => (
-  isCalendarCustomSizeEnabled.value
-    ? `${calendarCustomWidth.value}px × ${calendarCustomHeight.value}px`
-    : '기본 크기 사용 중'
-))
+const calendarLayoutStyle = computed(() => calendarViewStyle.value)
 
 const normalizedSelectedDateEntries = computed(() =>
   selectedDateEntries.value.map((entry) => ({
@@ -506,8 +467,6 @@ watch(isLayoutEditMode, (value) => {
   layoutGrid.enableResize(value)
 })
 
-watch([calendarCustomWidth, calendarCustomHeight, isCalendarCustomSizeEnabled], persistCalendarViewPreferences)
-
 watch([calendarWeekMode, displayedCalendarWeeks], () => {
   if (calendarWeekMode.value === 'month') {
     return
@@ -569,18 +528,13 @@ onMounted(() => {
     }
 
     updateCalendarShellWidth()
-    updateCalendarContentSize()
 
     if (typeof ResizeObserver !== 'undefined') {
       calendarResizeObserver = new ResizeObserver(() => {
         updateCalendarShellWidth()
-        updateCalendarContentSize()
       })
       if (calendarShellRef.value) {
         calendarResizeObserver.observe(calendarShellRef.value)
-      }
-      if (calendarContentRef.value) {
-        calendarResizeObserver.observe(calendarContentRef.value)
       }
     }
   })
@@ -711,41 +665,11 @@ function updateCalendarShellWidth() {
   calendarShellWidth.value = calendarShellRef.value.clientWidth || 0
 }
 
-function updateCalendarContentSize() {
-  if (!calendarContentRef.value) {
-    return
-  }
-
-  calendarNaturalWidth.value = calendarContentRef.value.offsetWidth || calendarContentRef.value.scrollWidth || 860
-  calendarNaturalHeight.value = calendarContentRef.value.offsetHeight || calendarContentRef.value.scrollHeight || 1000
-}
-
-function updateCalendarCustomWidth(value) {
-  calendarCustomWidth.value = clamp(Number(value) || DEFAULT_CALENDAR_CUSTOM_WIDTH, CALENDAR_CUSTOM_WIDTH_MIN, CALENDAR_CUSTOM_WIDTH_MAX)
-  isCalendarCustomSizeEnabled.value = true
-}
-
-function updateCalendarCustomHeight(value) {
-  calendarCustomHeight.value = clamp(Number(value) || DEFAULT_CALENDAR_CUSTOM_HEIGHT, CALENDAR_CUSTOM_HEIGHT_MIN, CALENDAR_CUSTOM_HEIGHT_MAX)
-  isCalendarCustomSizeEnabled.value = true
-}
-
-function resetCalendarCustomSize() {
-  calendarCustomWidth.value = DEFAULT_CALENDAR_CUSTOM_WIDTH
-  calendarCustomHeight.value = DEFAULT_CALENDAR_CUSTOM_HEIGHT
-  isCalendarCustomSizeEnabled.value = false
-}
-
 function calendarViewPreferencePayload() {
   return {
     scalePreset: calendarScalePreset.value,
     highlightMode: calendarHighlightMode.value,
     aggregatePanelEnabled: isAggregatePanelEnabled.value,
-    customSize: {
-      enabled: isCalendarCustomSizeEnabled.value,
-      width: calendarCustomWidth.value,
-      height: calendarCustomHeight.value,
-    },
   }
 }
 
@@ -754,7 +678,6 @@ function normalizeCalendarViewPreferences(payload) {
     return null
   }
 
-  const rawCustomSize = payload.customSize ?? {}
   const highlightMode = calendarHighlightModes.some((item) => item.key === payload.highlightMode)
     ? payload.highlightMode
     : DEFAULT_CALENDAR_HIGHLIGHT_MODE
@@ -763,11 +686,6 @@ function normalizeCalendarViewPreferences(payload) {
     scalePreset: normalizePresetKey(calendarDisplayModes, payload.scalePreset, 'default'),
     highlightMode,
     aggregatePanelEnabled: payload.aggregatePanelEnabled !== false,
-    customSize: {
-      enabled: Boolean(rawCustomSize.enabled),
-      width: clamp(Number(rawCustomSize.width) || DEFAULT_CALENDAR_CUSTOM_WIDTH, CALENDAR_CUSTOM_WIDTH_MIN, CALENDAR_CUSTOM_WIDTH_MAX),
-      height: clamp(Number(rawCustomSize.height) || DEFAULT_CALENDAR_CUSTOM_HEIGHT, CALENDAR_CUSTOM_HEIGHT_MIN, CALENDAR_CUSTOM_HEIGHT_MAX),
-    },
   }
 }
 
@@ -779,9 +697,6 @@ function applyCalendarViewPreferences(preferences) {
   calendarScalePreset.value = preferences.scalePreset
   calendarHighlightMode.value = preferences.highlightMode
   isAggregatePanelEnabled.value = preferences.aggregatePanelEnabled
-  calendarCustomWidth.value = preferences.customSize.width
-  calendarCustomHeight.value = preferences.customSize.height
-  isCalendarCustomSizeEnabled.value = preferences.customSize.enabled
 }
 
 function persistCalendarViewPreferencesLocal() {
@@ -792,14 +707,6 @@ function persistCalendarViewPreferencesLocal() {
   window.localStorage.setItem(CALENDAR_SCALE_KEY, calendarScalePreset.value)
   window.localStorage.setItem(CALENDAR_HIGHLIGHT_KEY, calendarHighlightMode.value)
   window.localStorage.setItem(CALENDAR_AGGREGATE_PANEL_ENABLED_KEY, isAggregatePanelEnabled.value ? 'true' : 'false')
-  window.localStorage.setItem(
-    CALENDAR_CUSTOM_SIZE_KEY,
-    JSON.stringify({
-      enabled: isCalendarCustomSizeEnabled.value,
-      width: calendarCustomWidth.value,
-      height: calendarCustomHeight.value,
-    }),
-  )
 }
 
 function scheduleCalendarViewPreferencesRemotePersist(payload = calendarViewPreferencePayload()) {
@@ -851,7 +758,6 @@ function hydrateCalendarViewPreferencesFromLocal() {
 
   const savedScale = window.localStorage.getItem(CALENDAR_SCALE_KEY)
   const savedHighlight = window.localStorage.getItem(CALENDAR_HIGHLIGHT_KEY)
-  const savedCustomSize = window.localStorage.getItem(CALENDAR_CUSTOM_SIZE_KEY)
   const savedAggregatePanelEnabled = window.localStorage.getItem(CALENDAR_AGGREGATE_PANEL_ENABLED_KEY)
 
   if (savedScale) {
@@ -866,19 +772,6 @@ function hydrateCalendarViewPreferencesFromLocal() {
 
   if (savedAggregatePanelEnabled) {
     isAggregatePanelEnabled.value = savedAggregatePanelEnabled !== 'false'
-  }
-
-  if (savedCustomSize) {
-    try {
-      const parsed = JSON.parse(savedCustomSize)
-      calendarCustomWidth.value = clamp(Number(parsed?.width) || DEFAULT_CALENDAR_CUSTOM_WIDTH, CALENDAR_CUSTOM_WIDTH_MIN, CALENDAR_CUSTOM_WIDTH_MAX)
-      calendarCustomHeight.value = clamp(Number(parsed?.height) || DEFAULT_CALENDAR_CUSTOM_HEIGHT, CALENDAR_CUSTOM_HEIGHT_MIN, CALENDAR_CUSTOM_HEIGHT_MAX)
-      isCalendarCustomSizeEnabled.value = Boolean(parsed?.enabled)
-    } catch (_error) {
-      calendarCustomWidth.value = DEFAULT_CALENDAR_CUSTOM_WIDTH
-      calendarCustomHeight.value = DEFAULT_CALENDAR_CUSTOM_HEIGHT
-      isCalendarCustomSizeEnabled.value = false
-    }
   }
 
   persistCalendarViewPreferencesLocal()
@@ -1597,7 +1490,6 @@ defineExpose({
         'panel household-calendar-control-panel household-calendar-layout',
         { 'household-calendar-layout--amount-only': isAmountOnlyCalendar },
         { 'household-calendar-layout--fit': isFitCalendar },
-        { 'household-calendar-layout--custom-size': isCalendarCustomSizeEnabled },
       ]"
       :style="calendarLayoutStyle"
     >
@@ -1653,40 +1545,6 @@ defineExpose({
       </div>
 
       <div class="calendar-size-toolbar">
-        <div class="calendar-size-toolbar__block calendar-size-toolbar__block--resize">
-          <button class="button button--ghost calendar-size-toolbar__control" type="button" @click="isCalendarResizePanelOpen = !isCalendarResizePanelOpen">
-            크기 조절
-          </button>
-          <span class="calendar-size-toolbar__label calendar-size-toolbar__label--inline">{{ calendarCustomSizeLabel }}</span>
-          <div v-if="isCalendarResizePanelOpen" class="calendar-resize-panel">
-            <div class="calendar-resize-panel__header">
-              <strong>달력 실제 크기</strong>
-              <button class="button button--ghost" type="button" @click="resetCalendarCustomSize">기본값</button>
-            </div>
-            <label class="calendar-resize-panel__field">
-              <span>가로 {{ calendarCustomWidth }}px</span>
-              <input
-                :value="calendarCustomWidth"
-                type="range"
-                :min="CALENDAR_CUSTOM_WIDTH_MIN"
-                :max="CALENDAR_CUSTOM_WIDTH_MAX"
-                step="10"
-                @input="updateCalendarCustomWidth($event.target.value)"
-              />
-            </label>
-            <label class="calendar-resize-panel__field">
-              <span>세로 {{ calendarCustomHeight }}px</span>
-              <input
-                :value="calendarCustomHeight"
-                type="range"
-                :min="CALENDAR_CUSTOM_HEIGHT_MIN"
-                :max="CALENDAR_CUSTOM_HEIGHT_MAX"
-                step="10"
-                @input="updateCalendarCustomHeight($event.target.value)"
-              />
-            </label>
-          </div>
-        </div>
         <div class="calendar-size-toolbar__block">
           <span class="calendar-size-toolbar__label">달력 크기</span>
           <div class="calendar-size-toggle">
@@ -2083,7 +1941,6 @@ defineExpose({
         'panel household-calendar-panel household-calendar-layout household-calendar-panel--content-only',
         { 'household-calendar-layout--amount-only': isAmountOnlyCalendar },
         { 'household-calendar-layout--fit': isFitCalendar },
-        { 'household-calendar-layout--custom-size': isCalendarCustomSizeEnabled },
       ]"
       :style="calendarLayoutStyle"
     >
@@ -2092,7 +1949,7 @@ defineExpose({
       </div>
       <div ref="calendarShellRef" class="calendar-shell">
         <div class="calendar-scale-frame">
-          <div ref="calendarContentRef" class="calendar-scale-content">
+          <div class="calendar-scale-content">
             <div class="calendar">
               <div class="calendar__weekdays">
                 <span v-for="weekday in weekdayLabels" :key="weekday">{{ weekday }}</span>

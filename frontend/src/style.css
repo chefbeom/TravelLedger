@@ -2030,6 +2030,140 @@ button {
   gap: 8px;
 }
 
+.travel-my-photos {
+  min-width: 0;
+}
+
+.travel-my-photos__hero {
+  overflow: hidden;
+}
+
+.travel-my-photos__filters {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(150px, 1fr));
+  gap: 14px;
+  margin-top: 18px;
+}
+
+.travel-my-photos__search {
+  grid-column: span 2;
+}
+
+.travel-my-photos__filter-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 14px;
+  color: var(--text-soft);
+}
+
+.travel-my-photos__timeline {
+  display: grid;
+  gap: 24px;
+  margin-top: 18px;
+}
+
+.travel-my-photos__date-group {
+  display: grid;
+  gap: 14px;
+}
+
+.travel-my-photos__date-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--line);
+}
+
+.travel-my-photos__date-header strong {
+  color: var(--text);
+  font-size: 1.05rem;
+}
+
+.travel-my-photos__date-header small {
+  color: var(--text-soft);
+  font-weight: 700;
+}
+
+.travel-my-photos__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 14px;
+  min-width: 0;
+}
+
+.travel-my-photos__card {
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.travel-my-photos__thumb-button {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 16px;
+  background: var(--surface-soft);
+  cursor: pointer;
+  overflow: hidden;
+}
+
+.travel-my-photos__thumb-button:focus-visible {
+  outline: 2px solid rgba(49, 130, 246, 0.85);
+  outline-offset: 3px;
+}
+
+.travel-my-photos__thumb-button img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  transform: scale(1);
+  transition: transform 0.18s ease, filter 0.18s ease;
+}
+
+.travel-my-photos__thumb-button:hover img {
+  transform: scale(1.03);
+  filter: saturate(1.04);
+}
+
+.travel-my-photos__card-copy {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.travel-my-photos__card-copy strong {
+  overflow: hidden;
+  color: var(--text);
+  font-size: 1rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.travel-my-photos__card-copy small {
+  overflow: hidden;
+  color: var(--text-soft);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.travel-my-photos__card-actions {
+  display: flex;
+  justify-content: flex-start;
+}
+
 .travel-memory-quick-open__controls {
   display: none;
 }
@@ -2690,6 +2824,10 @@ textarea {
 }
 
 @media (max-width: 1280px) {
+  .travel-my-photos__filters {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
   .summary-grid,
   .insight-grid,
   .travel-summary-grid,
@@ -2717,6 +2855,10 @@ textarea {
 }
 
 @media (max-width: 1080px) {
+  .travel-my-photos__filters {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .app-layout {
     grid-template-columns: 1fr;
   }
@@ -2743,6 +2885,21 @@ textarea {
 }
 
 @media (max-width: 720px) {
+  .travel-my-photos__filters,
+  .travel-my-photos__search {
+    grid-template-columns: 1fr;
+    grid-column: auto;
+  }
+
+  .travel-my-photos__filter-footer {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .travel-my-photos__grid {
+    grid-template-columns: 1fr;
+  }
+
   .main-shell {
     padding: 18px;
   }

@@ -44,6 +44,7 @@ import { useTableSelection } from '../lib/tableSelection'
 import TravelCommunityWorkspace from './TravelCommunityWorkspace.vue'
 import TravelMapPanel from './TravelMapPanel.vue'
 import TravelMemoryPanel from './TravelMemoryPanel.vue'
+import TravelMyPhotosWorkspace from './TravelMyPhotosWorkspace.vue'
 import TravelOverviewWorkspace from './TravelOverviewWorkspace.vue'
 import TravelRouteWorkspace from './TravelRouteWorkspace.vue'
 import TravelSharedExhibitWorkspace from './TravelSharedExhibitWorkspace.vue'
@@ -196,17 +197,20 @@ const expenseCategoryOptions = computed(() => travelCategories.value.expenseCate
 const memoryCategoryOptions = computed(() => travelCategories.value.memoryCategories?.length ? travelCategories.value.memoryCategories : fallbackCategories.memoryCategories)
 const requiresExplicitPlanSelection = computed(() => props.route === 'travel-log' || props.route === 'photo-album')
 const isSharedExhibitTab = computed(() => props.route === 'photo-album' && albumTab.value === 'shared')
+const isMyPhotosTab = computed(() => props.route === 'photo-album' && albumTab.value === 'my-photos')
 const hasSharedExhibits = computed(() => sharedExhibitSummaries.value.length > 0)
 const showAlbumUploadTab = computed(() => !props.integratedPhotoMode)
 const photoAlbumTabChoices = computed(() => (
   props.integratedPhotoMode
     ? [
+        { key: 'my-photos', label: '내 사진' },
         { key: 'gallery', label: '사진첩' },
         { key: 'shared', label: '공유 전시' },
         { key: 'community', label: '커뮤니티' },
       ]
     : [
         { key: 'upload', label: '업로드와 기록' },
+        { key: 'my-photos', label: '내 사진' },
         { key: 'gallery', label: '지도 갤러리' },
         { key: 'shared', label: '공유 전시' },
         { key: 'community', label: '커뮤니티' },
@@ -216,10 +220,14 @@ const showPlanGate = computed(() =>
   requiresExplicitPlanSelection.value
   && !travelPlan.value
   && !isSharedExhibitTab.value
+  && !isMyPhotosTab.value
   && !(props.route === 'photo-album' && hasSharedExhibits.value)
 )
 const canShareTravelPlan = computed(() => Boolean(travelPlan.value) && travelPlan.value.status === 'COMPLETED')
 const emptyTravelPlanMessage = computed(() => {
+  if (isMyPhotosTab.value) {
+    return '내 사진 탭에서는 여행을 선택하지 않아도 지금까지 업로드한 사진을 전체 기준으로 볼 수 있습니다.'
+  }
   if (isSharedExhibitTab.value) {
     return '공유 전시 탭에서는 여행 선택 없이도 공유받은 전시를 볼 수 있습니다.'
   }
@@ -649,7 +657,7 @@ watch(
   () => [props.route, props.integratedPhotoMode],
   ([route, integratedPhotoMode]) => {
     if (route === 'photo-album' && integratedPhotoMode && albumTab.value === 'upload') {
-      albumTab.value = 'gallery'
+      albumTab.value = 'my-photos'
     }
     if (route !== 'photo-album' && integratedPhotoMode && photoAlbumGroupMode.value !== 'all') {
       photoAlbumGroupMode.value = 'all'
@@ -1531,6 +1539,15 @@ function openMemoryEditor(memoryId) {
   }
   albumTab.value = 'upload'
 }
+
+async function openPortfolioMemoryEditor(payload) {
+  const planId = String(payload?.planId || '')
+  if (planId && planId !== String(selectedPlanId.value || '')) {
+    selectedPlanId.value = planId
+    await refreshTravelData(planId, props.route === 'photo-album')
+  }
+  openMemoryEditor(payload?.memoryId)
+}
 </script>
 
 <template>
@@ -1841,6 +1858,7 @@ function openMemoryEditor(memoryId) {
         <small v-if="integratedPhotoMode" class="field__hint">사진 업로드와 기록 편집은 여행 로그에서 하고, 여기서는 지도와 사진첩 중심으로 다시 모아 봅니다.</small>
       </section>
       <TravelMemoryPanel v-if="showAlbumUploadTab && albumTab === 'upload'" :travel-plan="travelPlan" :category-options="memoryCategoryOptions" :is-submitting="isSubmitting" :active-submit="activeSubmit" :refresh-key="memoryRefreshKey" :focus-request="memoryFocusRequest" :upload-progress="memoryUploadProgress" @save-memory="handleSaveMemory" @delete-memory="handleDeleteMemory" @delete-media="handleDeleteMedia" />
+      <TravelMyPhotosWorkspace v-else-if="albumTab === 'my-photos'" :portfolio="travelPortfolio" :plans="travelPlans" :is-loading="isLoading" @open-memory-editor="openPortfolioMemoryEditor" />
       <div v-else-if="albumTab === 'gallery'" class="workspace-stack">
         <section class="panel"><div class="panel__header"><div><h2>사진 재사용 흐름</h2><p>갤러리 카드에서 바로 기록 편집을 누르면 업로드 화면이 열리고, 기존 사진은 그대로 유지된 채 새 사진과 메모만 이어서 추가할 수 있습니다.</p></div><span class="panel__badge">{{ photoAlbumCards.length }}개 기록</span></div></section>
         <section class="panel panel--map-fill"><div class="panel__header"><div><h2>사진첩 지도</h2><p>선택한 여행의 사진 기록이 위치별로 묶여 큰 지도에 표시됩니다.</p></div><span class="panel__badge">{{ photoAlbumPhotoCount }}장</span></div><TravelMapPanel :markers="photoAlbumMarkers" :selected-point="null" :enable-pick-location="false" :enable-draw-route="false" :view-key="travelPlan?.id || 'photo-album-map'" hint-title="사진 핀 보기" hint-text="여행 기록에 연결된 사진을 위치별로 묶어 보여줍니다." /></section>

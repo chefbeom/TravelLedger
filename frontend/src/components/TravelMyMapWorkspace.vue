@@ -599,6 +599,7 @@ watch(
         @select-photo-pin="handleSelectPhotoPin"
         @preview-cluster="handlePreviewClusterFromMap"
         @fullscreen-change="handleMapFullscreenChange"
+        @clear-selection="clearSelection"
       >
         <template #fullscreen-overlay="{ isFullscreen }">
           <TravelMyMapInspectorPanels

@@ -51,7 +51,14 @@ const props = defineProps({
   },
 })
 
-const emit = defineEmits(['select-cluster', 'select-marker', 'select-photo-pin', 'preview-cluster', 'fullscreen-change'])
+const emit = defineEmits([
+  'select-cluster',
+  'select-marker',
+  'select-photo-pin',
+  'preview-cluster',
+  'fullscreen-change',
+  'clear-selection',
+])
 
 const mapRootElement = ref(null)
 const mapElement = ref(null)
@@ -322,12 +329,62 @@ function resolveClientClusterCellSize() {
 }
 
 function pickRepresentativePhotoUrl(items) {
-  const entry = items.find((item) => item?.representative?.representativePhotoUrl || item?.representative?.photoUrl)
+  const entry = findEarliestPhotoItem(items)
   return entry?.representative?.representativePhotoUrl || entry?.representative?.photoUrl || ''
 }
 
+function resolveAggregateDateTime(item) {
+  const source = item?.representative ?? item
+  const capturedAt = [
+    source?.memoryDate ?? source?.expenseDate,
+    source?.memoryTime ?? source?.expenseTime,
+  ].filter((value) => value != null && value !== '').join(' ')
+  const uploadedAt = String(source?.uploadedAt ?? '')
+  const stableId = String(source?.id ?? source?.mediaId ?? item?.id ?? item?.markerKey ?? '')
+
+  return {
+    hasTime: Boolean(capturedAt || uploadedAt),
+    value: [capturedAt, uploadedAt, stableId].filter(Boolean).join(' '),
+  }
+}
+
+function compareAggregateDateTime(left, right) {
+  const leftValue = resolveAggregateDateTime(left)
+  const rightValue = resolveAggregateDateTime(right)
+  if (leftValue.hasTime !== rightValue.hasTime) {
+    return leftValue.hasTime ? -1 : 1
+  }
+
+  const compared = leftValue.value.localeCompare(rightValue.value)
+  if (compared !== 0) {
+    return compared
+  }
+
+  return String(left?.markerKey ?? left?.id ?? '').localeCompare(String(right?.markerKey ?? right?.id ?? ''))
+}
+
+function findEarliestPhotoItem(items) {
+  const withPhoto = (items ?? []).filter((item) => item?.representative?.representativePhotoUrl || item?.representative?.photoUrl)
+  return [...(withPhoto.length ? withPhoto : (items ?? []))].sort(compareAggregateDateTime)[0] ?? null
+}
+
+function selectRepresentativeAggregate(aggregate) {
+  const target = aggregate?.representativeItem ?? aggregate
+  if (!target?.representative) {
+    return
+  }
+
+  if (target.isPhotoPin) {
+    emit('select-photo-pin', target.representative)
+  } else if (target.isRecordPin) {
+    emit('select-marker', target.representative)
+  } else {
+    emit('select-cluster', target.representative)
+  }
+}
+
 function buildClientCluster(items, cellKey) {
-  const firstItem = items[0]
+  const firstItem = findEarliestPhotoItem(items) ?? items[0]
   const latitude = items.reduce((sum, item) => sum + Number(item.latitude || 0), 0) / items.length
   const longitude = items.reduce((sum, item) => sum + Number(item.longitude || 0), 0) / items.length
   const photoCount = items.reduce((sum, item) => sum + Number(item.photoCount || 0), 0)
@@ -345,9 +402,9 @@ function buildClientCluster(items, cellKey) {
     isClientCluster: true,
     isPhotoPin: false,
     isRecordPin: false,
+    representativeItem: firstItem,
     representative: {
       ...(firstItem?.representative ?? {}),
-      id: markerKey,
       representativePhotoUrl: pickRepresentativePhotoUrl(items),
       planColorHex: firstItem?.representative?.planColorHex,
     },
@@ -752,6 +809,13 @@ function renderRoutes() {
     const polyline = L.polyline(points, {
       ...buildPolylineOptions(route.lineColorHex || route.planColorHex || '#3182F6', route.lineStyle),
       ...(routeRenderer ? { renderer: routeRenderer } : {}),
+      bubblingMouseEvents: false,
+    })
+
+    polyline.on('click', (event) => {
+      if (event?.originalEvent) {
+        L.DomEvent.stopPropagation(event.originalEvent)
+      }
     })
 
     if (route.title) {
@@ -776,28 +840,20 @@ function renderClusters() {
     const containsSelected = aggregateContainsSelection(aggregate)
     const marker = L.marker([aggregate.latitude, aggregate.longitude], {
       icon: buildClusterIcon(aggregate, containsSelected),
+      bubblingMouseEvents: false,
     })
 
-    if (!aggregate.isClientCluster) {
-      marker.bindPopup(() => createPopupContent(aggregate))
-    }
+    marker.bindPopup(() => createPopupContent(aggregate))
 
-    marker.on('click', () => {
-      if (aggregate.isClientCluster) {
-        focusClientCluster(aggregate)
-        return
+    marker.on('click', (event) => {
+      if (event?.originalEvent) {
+        L.DomEvent.stopPropagation(event.originalEvent)
       }
 
       pendingPopupMarkerKey = aggregate.markerKey
 
-      if (aggregate.isPhotoPin) {
-        emit('select-photo-pin', aggregate.representative)
-      } else if (aggregate.isRecordPin) {
-        emit('select-marker', aggregate.representative)
-      } else {
-        emit('select-cluster', aggregate.representative)
-      }
-
+      selectRepresentativeAggregate(aggregate)
+      marker.openPopup()
       scheduleMarkerPopup(aggregate.markerKey)
     })
     renderedMarkers.set(String(aggregate.markerKey), marker)
@@ -888,6 +944,12 @@ function handleZoomEnd() {
   handleViewportEnd()
 }
 
+function handleMapBackgroundClick() {
+  pendingPopupMarkerKey = null
+  mapInstance?.closePopup()
+  emit('clear-selection')
+}
+
 function handleFullscreenChange() {
   syncFullscreenState()
   emit('fullscreen-change', isFullscreen.value)
@@ -915,6 +977,7 @@ onMounted(() => {
   mapInstance.on('movestart zoomstart', handleViewportStart)
   mapInstance.on('moveend', handleViewportEnd)
   mapInstance.on('zoomend', handleZoomEnd)
+  mapInstance.on('click', handleMapBackgroundClick)
   zoomLabel.value = mapInstance.getZoom()
   emit('fullscreen-change', isFullscreen.value)
   renderMap({ shouldFit: true })
@@ -928,6 +991,7 @@ onBeforeUnmount(() => {
     mapInstance.off('movestart zoomstart', handleViewportStart)
     mapInstance.off('moveend', handleViewportEnd)
     mapInstance.off('zoomend', handleZoomEnd)
+    mapInstance.off('click', handleMapBackgroundClick)
     mapInstance.remove()
     mapInstance = null
   }

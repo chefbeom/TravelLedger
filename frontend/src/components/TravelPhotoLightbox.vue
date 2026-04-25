@@ -116,26 +116,33 @@ function handleSetRepresentative() {
 
 function handleKeydown(event) {
   if (event.key === 'Escape') {
+    event.preventDefault()
+    event.stopPropagation()
+    event.stopImmediatePropagation?.()
     emit('close')
     return
   }
 
   if (event.key === 'ArrowLeft') {
+    event.preventDefault()
+    event.stopPropagation()
     selectPreviousPhoto()
     return
   }
 
   if (event.key === 'ArrowRight') {
+    event.preventDefault()
+    event.stopPropagation()
     selectNextPhoto()
   }
 }
 
 onMounted(() => {
-  window.addEventListener('keydown', handleKeydown)
+  window.addEventListener('keydown', handleKeydown, { capture: true })
 })
 
 onBeforeUnmount(() => {
-  window.removeEventListener('keydown', handleKeydown)
+  window.removeEventListener('keydown', handleKeydown, { capture: true })
 })
 </script>
 

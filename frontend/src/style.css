@@ -7210,8 +7210,7 @@ textarea {
 }
 
 .travel-cluster-pin.is-client-cluster {
-  background-image: none !important;
-  background: linear-gradient(135deg, var(--cluster-color, #3182F6), #111827);
+  background-color: var(--cluster-color, #3182F6);
 }
 
 .travel-map--moving .travel-cluster-pin {

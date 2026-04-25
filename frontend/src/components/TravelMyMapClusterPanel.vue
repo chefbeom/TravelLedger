@@ -75,14 +75,20 @@ let renderedMarkers = new Map()
 let pendingPopupMarkerKey = null
 let mapRenderFrame = 0
 let mapRenderTimer = 0
+let popupOpenSequence = 0
+let suppressNextMapBackgroundClick = false
 
-function scheduleMarkerPopup(markerKey, remainingAttempts = 4) {
+function scheduleMarkerPopup(markerKey, remainingAttempts = 6, sequence = popupOpenSequence) {
   const normalizedKey = String(markerKey ?? '')
   if (!normalizedKey) {
     return
   }
 
   requestAnimationFrame(() => {
+    if (sequence !== popupOpenSequence) {
+      return
+    }
+
     const marker = renderedMarkers.get(normalizedKey)
     if (marker && mapInstance?.hasLayer(marker)) {
       pendingPopupMarkerKey = null
@@ -94,6 +100,28 @@ function scheduleMarkerPopup(markerKey, remainingAttempts = 4) {
       scheduleMarkerPopup(normalizedKey, remainingAttempts - 1)
     }
   })
+}
+
+function requestMarkerPopup(markerKey) {
+  const normalizedKey = String(markerKey ?? '')
+  if (!normalizedKey) {
+    return
+  }
+
+  pendingPopupMarkerKey = normalizedKey
+  popupOpenSequence += 1
+}
+
+function clearPendingPopupRequest() {
+  pendingPopupMarkerKey = null
+  popupOpenSequence += 1
+}
+
+function suppressMapBackgroundClickOnce() {
+  suppressNextMapBackgroundClick = true
+  setTimeout(() => {
+    suppressNextMapBackgroundClick = false
+  }, 0)
 }
 
 function normalizeColorHex(value, fallback = '#3182F6') {
@@ -457,7 +485,7 @@ function focusClientCluster(aggregate) {
     return
   }
 
-  pendingPopupMarkerKey = null
+  clearPendingPopupRequest()
   mapInstance.closePopup()
 
   const bounds = collectAggregateBounds(aggregate)
@@ -849,13 +877,13 @@ function renderClusters() {
     marker.on('click', (event) => {
       if (event?.originalEvent) {
         L.DomEvent.stopPropagation(event.originalEvent)
+        L.DomEvent.preventDefault(event.originalEvent)
       }
 
-      pendingPopupMarkerKey = aggregate.markerKey
-
+      suppressMapBackgroundClickOnce()
+      requestMarkerPopup(aggregate.markerKey)
       selectRepresentativeAggregate(aggregate)
-      marker.openPopup()
-      scheduleMarkerPopup(aggregate.markerKey)
+      scheduleRenderClusters(0)
     })
     renderedMarkers.set(String(aggregate.markerKey), marker)
 
@@ -865,10 +893,10 @@ function renderClusters() {
   if (pendingPopupMarkerKey) {
     const normalizedPendingKey = String(pendingPopupMarkerKey)
     if (renderedMarkers.has(normalizedPendingKey)) {
-      scheduleMarkerPopup(normalizedPendingKey)
+      scheduleMarkerPopup(normalizedPendingKey, 6, popupOpenSequence)
     } else if (selectedMarkerKey) {
       pendingPopupMarkerKey = selectedMarkerKey
-      scheduleMarkerPopup(selectedMarkerKey)
+      scheduleMarkerPopup(selectedMarkerKey, 6, popupOpenSequence)
     }
   }
 }
@@ -952,7 +980,12 @@ function handleZoomEnd() {
 }
 
 function handleMapBackgroundClick() {
-  pendingPopupMarkerKey = null
+  if (suppressNextMapBackgroundClick) {
+    suppressNextMapBackgroundClick = false
+    return
+  }
+
+  clearPendingPopupRequest()
   mapInstance?.closePopup()
   emit('clear-selection')
 }
@@ -1022,7 +1055,7 @@ watch(
   ],
   ([mode, selectedKey], [previousMode, previousSelectedKey] = []) => {
     if (selectedKey === 'photo-' || selectedKey === 'cluster-') {
-      pendingPopupMarkerKey = null
+      clearPendingPopupRequest()
       mapInstance?.closePopup()
     } else if (mode !== previousMode || selectedKey !== previousSelectedKey) {
       pendingPopupMarkerKey = selectedKey

@@ -1443,6 +1443,35 @@ function shiftAnchorMonth(offset) {
   updateAnchorMonth(nextDate.getFullYear(), nextDate.getMonth() + 1)
 }
 
+function waitForLayoutFrame() {
+  return new Promise((resolve) => {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(resolve)
+    })
+  })
+}
+
+async function scrollToPanelElement(element) {
+  if (!element) {
+    return
+  }
+
+  await nextTick()
+  await waitForLayoutFrame()
+  element.scrollIntoView({ behavior: 'smooth', block: 'start' })
+}
+
+function focusEntryEditorControl() {
+  const target = quickEntryPanelRef.value?.querySelector(
+    '.amount-input input, input[type="text"], input[type="date"], input[type="time"], select',
+  )
+
+  if (target && typeof target.focus === 'function') {
+    target.focus({ preventScroll: true })
+    target.select?.()
+  }
+}
+
 async function handleSelectDay(day) {
   selectedDate.value = day.date
 
@@ -1454,8 +1483,7 @@ async function handleSelectDay(day) {
     emit('change-anchor-month', day.date)
   }
 
-  await nextTick()
-  ledgerSheetRef.value?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  await scrollToPanelElement(ledgerSheetRef.value)
 }
 
 function formatPaymentMethodForSheet(entry) {
@@ -1469,8 +1497,10 @@ function getMonthTag(day) {
   return ''
 }
 
-function scrollToEntryEditor() {
-  quickEntryPanelRef.value?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+async function scrollToEntryEditor() {
+  await scrollToPanelElement(quickEntryPanelRef.value)
+  await waitForLayoutFrame()
+  focusEntryEditorControl()
 }
 
 function setSelectedDate(value) {

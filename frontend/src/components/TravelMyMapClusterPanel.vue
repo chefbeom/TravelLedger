@@ -7,6 +7,10 @@ import { formatDate, formatTime } from '../lib/uiFormat'
 
 const DEFAULT_CENTER = [37.5547, 126.9706]
 const DEFAULT_ZOOM = 11
+const VIEWPORT_PADDING_RATIO = 0.35
+const VIEWPORT_RENDER_DEBOUNCE_MS = 80
+const CLIENT_CLUSTER_MIN_SIZE = 2
+const CLIENT_CLUSTER_MAX_ZOOM = 17
 
 const props = defineProps({
   photoClusters: {
@@ -52,14 +56,18 @@ const emit = defineEmits(['select-cluster', 'select-marker', 'select-photo-pin',
 const mapRootElement = ref(null)
 const mapElement = ref(null)
 const isFullscreen = ref(false)
+const isMapMoving = ref(false)
 const zoomLabel = ref(DEFAULT_ZOOM)
 
 let mapInstance = null
 let markerLayer = null
 let routeLayer = null
+let routeRenderer = null
 let hasFittedInitialView = false
 let renderedMarkers = new Map()
 let pendingPopupMarkerKey = null
+let mapRenderFrame = 0
+let mapRenderTimer = 0
 
 function scheduleMarkerPopup(markerKey, remainingAttempts = 4) {
   const normalizedKey = String(markerKey ?? '')
@@ -230,6 +238,216 @@ function resolveRenderableItems() {
   }
 
   return buildRenderClusters(props.photoClusters)
+}
+
+function isSelectedAggregate(aggregate) {
+  if (aggregate?.isClientCluster) {
+    return false
+  }
+
+  if (aggregate?.isRecordPin) {
+    return String(aggregate.representative?.markerId) === String(props.selectedMarkerId)
+  }
+
+  if (aggregate?.isPhotoPin) {
+    return String(aggregate.representative?.mediaId) === String(props.selectedPhotoId)
+  }
+
+  return String(aggregate?.representative?.id) === String(props.selectedClusterId)
+}
+
+function aggregateContainsSelection(aggregate) {
+  if (!aggregate?.isClientCluster) {
+    return isSelectedAggregate(aggregate)
+  }
+
+  return (aggregate.members ?? []).some((member) => aggregateContainsSelection(member))
+}
+
+function collectAggregateBounds(aggregate) {
+  if (Array.isArray(aggregate?.bounds) && aggregate.bounds.length) {
+    return aggregate.bounds
+  }
+
+  const latitude = Number(aggregate?.latitude)
+  const longitude = Number(aggregate?.longitude)
+  if (Number.isFinite(latitude) && Number.isFinite(longitude)) {
+    return [[latitude, longitude]]
+  }
+
+  return []
+}
+
+function getPaddedMapBounds() {
+  if (!mapInstance) {
+    return null
+  }
+
+  try {
+    return mapInstance.getBounds().pad(VIEWPORT_PADDING_RATIO)
+  } catch {
+    return null
+  }
+}
+
+function isAggregateInBounds(aggregate, bounds) {
+  if (!bounds) {
+    return true
+  }
+
+  const latitude = Number(aggregate?.latitude)
+  const longitude = Number(aggregate?.longitude)
+  return Number.isFinite(latitude) && Number.isFinite(longitude) && bounds.contains([latitude, longitude])
+}
+
+function resolveClientClusterCellSize() {
+  const zoom = mapInstance?.getZoom() ?? DEFAULT_ZOOM
+  if (zoom >= CLIENT_CLUSTER_MAX_ZOOM) {
+    return 0
+  }
+
+  if (props.displayMode === 'pin') {
+    if (zoom <= 9) return 128
+    if (zoom <= 11) return 112
+    if (zoom <= 13) return 96
+    if (zoom <= 15) return 72
+    return 56
+  }
+
+  if (zoom <= 9) return 112
+  if (zoom <= 11) return 96
+  if (zoom <= 13) return 76
+  if (zoom <= 15) return 60
+  return 0
+}
+
+function pickRepresentativePhotoUrl(items) {
+  const entry = items.find((item) => item?.representative?.representativePhotoUrl || item?.representative?.photoUrl)
+  return entry?.representative?.representativePhotoUrl || entry?.representative?.photoUrl || ''
+}
+
+function buildClientCluster(items, cellKey) {
+  const firstItem = items[0]
+  const latitude = items.reduce((sum, item) => sum + Number(item.latitude || 0), 0) / items.length
+  const longitude = items.reduce((sum, item) => sum + Number(item.longitude || 0), 0) / items.length
+  const photoCount = items.reduce((sum, item) => sum + Number(item.photoCount || 0), 0)
+  const memoryCount = items.reduce(
+    (sum, item) => sum + Number(item.memoryCount || item.representative?.memoryCount || (item.isPhotoPin ? 1 : 0)),
+    0,
+  )
+  const bounds = items.flatMap((item) => collectAggregateBounds(item))
+  const markerKey = `viewport-${props.displayMode}-${Math.round(mapInstance?.getZoom() ?? DEFAULT_ZOOM)}-${cellKey}`
+
+  return {
+    id: markerKey,
+    markerKey,
+    isAggregate: true,
+    isClientCluster: true,
+    isPhotoPin: false,
+    isRecordPin: false,
+    representative: {
+      ...(firstItem?.representative ?? {}),
+      id: markerKey,
+      representativePhotoUrl: pickRepresentativePhotoUrl(items),
+      planColorHex: firstItem?.representative?.planColorHex,
+    },
+    members: items,
+    latitude,
+    longitude,
+    photoCount,
+    memoryCount,
+    bounds,
+  }
+}
+
+function buildViewportAggregates(items) {
+  if (!mapInstance || !items.length) {
+    return items
+  }
+
+  const paddedBounds = getPaddedMapBounds()
+  const selectedItems = items.filter((item) => isSelectedAggregate(item))
+  const selectedMarkerKeys = new Set(selectedItems.map((item) => String(item.markerKey)))
+  const visibleItems = items.filter(
+    (item) => !selectedMarkerKeys.has(String(item.markerKey)) && isAggregateInBounds(item, paddedBounds),
+  )
+  const cellSize = resolveClientClusterCellSize()
+  if (!cellSize) {
+    return [...visibleItems, ...selectedItems]
+  }
+
+  const groups = new Map()
+
+  visibleItems.forEach((item) => {
+    const point = mapInstance.latLngToLayerPoint([item.latitude, item.longitude])
+    const key = `${Math.floor(point.x / cellSize)}:${Math.floor(point.y / cellSize)}`
+    const group = groups.get(key) ?? []
+    group.push(item)
+    groups.set(key, group)
+  })
+
+  const aggregates = []
+  groups.forEach((group, key) => {
+    if (group.length < CLIENT_CLUSTER_MIN_SIZE) {
+      aggregates.push(...group)
+      return
+    }
+
+    aggregates.push(buildClientCluster(group, key))
+  })
+
+  return [...aggregates, ...selectedItems]
+}
+
+function focusClientCluster(aggregate) {
+  if (!mapInstance) {
+    return
+  }
+
+  pendingPopupMarkerKey = null
+  mapInstance.closePopup()
+
+  const bounds = collectAggregateBounds(aggregate)
+  if (bounds.length > 1) {
+    const nextZoom = Math.min((mapInstance.getZoom() ?? DEFAULT_ZOOM) + 3, 18)
+    mapInstance.fitBounds(bounds, { padding: [48, 48], maxZoom: nextZoom })
+    return
+  }
+
+  mapInstance.setView([aggregate.latitude, aggregate.longitude], Math.min((mapInstance.getZoom() ?? DEFAULT_ZOOM) + 2, 18))
+}
+
+function cancelScheduledClusterRender() {
+  if (mapRenderTimer) {
+    clearTimeout(mapRenderTimer)
+    mapRenderTimer = 0
+  }
+
+  if (mapRenderFrame) {
+    cancelAnimationFrame(mapRenderFrame)
+    mapRenderFrame = 0
+  }
+}
+
+function scheduleRenderClusters(delay = VIEWPORT_RENDER_DEBOUNCE_MS) {
+  if (!mapInstance) {
+    return
+  }
+
+  if (mapRenderTimer) {
+    clearTimeout(mapRenderTimer)
+  }
+
+  mapRenderTimer = setTimeout(() => {
+    mapRenderTimer = 0
+    if (mapRenderFrame) {
+      cancelAnimationFrame(mapRenderFrame)
+    }
+    mapRenderFrame = requestAnimationFrame(() => {
+      mapRenderFrame = 0
+      renderClusters()
+    })
+  }, delay)
 }
 
 function queueMapResize() {
@@ -464,6 +682,20 @@ function buildRecordMarkerIcon(marker, active) {
   })
 }
 
+function formatCompactCount(value) {
+  const count = Number(value || 0)
+  if (!Number.isFinite(count)) {
+    return '0'
+  }
+  if (count >= 10000) {
+    return `${Math.round(count / 1000)}k`
+  }
+  if (count >= 1000) {
+    return `${Math.round(count / 100) / 10}k`
+  }
+  return String(count)
+}
+
 function buildClusterIcon(aggregate, active) {
   if (aggregate?.isRecordPin) {
     return buildRecordMarkerIcon(aggregate?.representative, active)
@@ -481,11 +713,11 @@ function buildClusterIcon(aggregate, active) {
     className: 'travel-map__icon-root',
     html: `
       <div
-        class="travel-cluster-pin${aggregate?.isAggregate ? ' is-aggregate' : ''}${active ? ' is-active' : ''}"
+        class="travel-cluster-pin${aggregate?.isAggregate ? ' is-aggregate' : ''}${aggregate?.isClientCluster ? ' is-client-cluster' : ''}${active ? ' is-active' : ''}"
         style="--cluster-color:${colorHex};${photoUrl ? `background-image:url('${escapeHtml(photoUrl)}')` : ''}"
       >
-        <span class="travel-cluster-pin__count">${clusterCount}</span>
-        ${aggregate?.isAggregate ? `<small class="travel-cluster-pin__group">${memberCount}</small>` : ''}
+        <span class="travel-cluster-pin__count">${formatCompactCount(clusterCount)}</span>
+        ${aggregate?.isAggregate ? `<small class="travel-cluster-pin__group">${formatCompactCount(memberCount)}</small>` : ''}
       </div>
     `,
     iconSize: [markerSize, markerSize],
@@ -495,6 +727,10 @@ function buildClusterIcon(aggregate, active) {
 }
 
 function renderRoutes() {
+  if (!routeLayer) {
+    return
+  }
+
   routeLayer.clearLayers()
 
   ;(props.routes ?? []).forEach((route) => {
@@ -513,10 +749,10 @@ function renderRoutes() {
       return
     }
 
-    const polyline = L.polyline(
-      points,
-      buildPolylineOptions(route.lineColorHex || route.planColorHex || '#3182F6', route.lineStyle),
-    )
+    const polyline = L.polyline(points, {
+      ...buildPolylineOptions(route.lineColorHex || route.planColorHex || '#3182F6', route.lineStyle),
+      ...(routeRenderer ? { renderer: routeRenderer } : {}),
+    })
 
     if (route.title) {
       polyline.bindTooltip(route.title)
@@ -527,26 +763,31 @@ function renderRoutes() {
 }
 
 function renderClusters() {
-  if (!mapInstance) {
+  if (!mapInstance || !markerLayer) {
     return
   }
 
+  cancelScheduledClusterRender()
   markerLayer.clearLayers()
   renderedMarkers = new Map()
 
-  const aggregates = resolveRenderableItems()
+  const aggregates = buildViewportAggregates(resolveRenderableItems())
   aggregates.forEach((aggregate) => {
-    const containsSelected = aggregate.isRecordPin
-      ? String(aggregate.representative.markerId) === String(props.selectedMarkerId)
-      : aggregate.isPhotoPin
-        ? String(aggregate.representative.mediaId) === String(props.selectedPhotoId)
-        : String(aggregate.representative.id) === String(props.selectedClusterId)
+    const containsSelected = aggregateContainsSelection(aggregate)
     const marker = L.marker([aggregate.latitude, aggregate.longitude], {
       icon: buildClusterIcon(aggregate, containsSelected),
     })
 
-    marker.bindPopup(() => createPopupContent(aggregate))
+    if (!aggregate.isClientCluster) {
+      marker.bindPopup(() => createPopupContent(aggregate))
+    }
+
     marker.on('click', () => {
+      if (aggregate.isClientCluster) {
+        focusClientCluster(aggregate)
+        return
+      }
+
       pendingPopupMarkerKey = aggregate.markerKey
 
       if (aggregate.isPhotoPin) {
@@ -571,14 +812,15 @@ function renderClusters() {
 
 function renderMap({ shouldFit = false } = {}) {
   renderRoutes()
-  renderClusters()
 
   if (!hasFittedInitialView || shouldFit) {
     hasFittedInitialView = true
     fitToAll()
+    scheduleRenderClusters(0)
     return
   }
 
+  renderClusters()
   requestAnimationFrame(() => mapInstance?.invalidateSize(false))
 }
 
@@ -631,8 +873,19 @@ async function toggleFullscreen() {
   }
 }
 
-function handleZoomEnd() {
+function handleViewportStart() {
+  isMapMoving.value = true
+  cancelScheduledClusterRender()
+}
+
+function handleViewportEnd() {
+  isMapMoving.value = false
   zoomLabel.value = mapInstance?.getZoom() ?? DEFAULT_ZOOM
+  scheduleRenderClusters(0)
+}
+
+function handleZoomEnd() {
+  handleViewportEnd()
 }
 
 function handleFullscreenChange() {
@@ -647,6 +900,9 @@ onMounted(() => {
   mapInstance = L.map(mapElement.value, {
     zoomControl: true,
     scrollWheelZoom: true,
+    preferCanvas: true,
+    markerZoomAnimation: false,
+    fadeAnimation: false,
   }).setView(resolveInitialCenter(), DEFAULT_ZOOM)
 
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -655,6 +911,9 @@ onMounted(() => {
 
   markerLayer = L.layerGroup().addTo(mapInstance)
   routeLayer = L.layerGroup().addTo(mapInstance)
+  routeRenderer = L.canvas({ padding: 0.5 })
+  mapInstance.on('movestart zoomstart', handleViewportStart)
+  mapInstance.on('moveend', handleViewportEnd)
   mapInstance.on('zoomend', handleZoomEnd)
   zoomLabel.value = mapInstance.getZoom()
   emit('fullscreen-change', isFullscreen.value)
@@ -665,10 +924,15 @@ onBeforeUnmount(() => {
   document.removeEventListener('fullscreenchange', handleFullscreenChange)
 
   if (mapInstance) {
+    cancelScheduledClusterRender()
+    mapInstance.off('movestart zoomstart', handleViewportStart)
+    mapInstance.off('moveend', handleViewportEnd)
     mapInstance.off('zoomend', handleZoomEnd)
     mapInstance.remove()
     mapInstance = null
   }
+
+  routeRenderer = null
 })
 
 watch(
@@ -693,7 +957,7 @@ watch(
       pendingPopupMarkerKey = selectedKey
     }
 
-    renderClusters()
+    scheduleRenderClusters(0)
   },
   { immediate: true },
 )
@@ -708,12 +972,17 @@ watch(
     await nextTick()
     queueMapResize()
     requestAnimationFrame(() => mapInstance?.invalidateSize(false))
+    scheduleRenderClusters(0)
   },
 )
 </script>
 
 <template>
-  <div ref="mapRootElement" class="travel-map" :class="{ 'travel-map--fullscreen': isFullscreen }">
+  <div
+    ref="mapRootElement"
+    class="travel-map"
+    :class="{ 'travel-map--fullscreen': isFullscreen, 'travel-map--moving': isMapMoving }"
+  >
     <div class="travel-map__toolbar" @click.stop>
       <div class="travel-map__toolbar-group">
         <span class="travel-map__toolbar-label">줌 단계</span>

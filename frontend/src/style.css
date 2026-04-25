@@ -3278,6 +3278,14 @@ textarea {
   border: 0;
 }
 
+.travel-map .leaflet-marker-pane {
+  will-change: transform;
+}
+
+.travel-map--moving .leaflet-marker-icon {
+  transition: none !important;
+}
+
 .travel-map__marker-icon {
   position: relative;
   display: grid;
@@ -3397,6 +3405,18 @@ textarea {
 .travel-map__thumb-pin.is-active {
   border-color: var(--marker-color, #3182f6);
   box-shadow: 0 0 0 4px rgba(49, 130, 246, 0.16), 0 14px 28px rgba(15, 23, 42, 0.28);
+}
+
+.travel-map--moving .travel-map__thumb-pin {
+  box-shadow: none;
+}
+
+.travel-map--moving .travel-map__thumb-pin::before {
+  opacity: 0.35;
+}
+
+.travel-map--moving .travel-map__thumb-pin::after {
+  box-shadow: none;
 }
 
 .travel-day-tabs {
@@ -7187,6 +7207,23 @@ textarea {
 .travel-cluster-pin.is-active {
   border-color: var(--cluster-color, #3182F6);
   box-shadow: 0 0 0 4px rgba(49, 130, 246, 0.18), 0 3px 8px rgba(15, 23, 42, 0.14);
+}
+
+.travel-cluster-pin.is-client-cluster {
+  background-image: none !important;
+  background: linear-gradient(135deg, var(--cluster-color, #3182F6), #111827);
+}
+
+.travel-map--moving .travel-cluster-pin {
+  box-shadow: none;
+}
+
+.travel-map--moving .travel-cluster-pin::before {
+  opacity: 0.32;
+}
+
+.travel-map--moving .travel-cluster-pin::after {
+  box-shadow: none;
 }
 
 .travel-cluster-pin__count,

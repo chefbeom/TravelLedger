@@ -7346,8 +7346,7 @@ textarea {
   box-shadow: none;
 }
 
-.travel-cluster-pin__count,
-.travel-cluster-pin__group {
+.travel-cluster-pin__count {
   position: absolute;
   z-index: 1;
   display: inline-flex;
@@ -7367,16 +7366,6 @@ textarea {
   padding: 0 0.45rem;
   border-radius: 999px;
   font-size: 0.78rem;
-}
-
-.travel-cluster-pin__group {
-  left: 6px;
-  top: 6px;
-  min-width: 22px;
-  height: 22px;
-  padding: 0 0.35rem;
-  border-radius: 999px;
-  font-size: 0.68rem;
 }
 
 .travel-cluster-summary-card,

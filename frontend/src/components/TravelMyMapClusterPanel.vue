@@ -787,7 +787,6 @@ function buildClusterIcon(aggregate, active) {
     : ''
   const markerSize = aggregate?.isAggregate ? 68 : 60
   const clusterCount = aggregate?.photoCount || 0
-  const memberCount = aggregate?.memoryCount || aggregate?.representative?.memoryCount || 1
   const colorHex = normalizeColorHex(aggregate?.representative?.planColorHex, '#3182F6')
 
   return L.divIcon({
@@ -798,7 +797,6 @@ function buildClusterIcon(aggregate, active) {
         style="--cluster-color:${colorHex};${photoUrl ? `background-image:url('${escapeHtml(photoUrl)}')` : ''}"
       >
         <span class="travel-cluster-pin__count">${formatCompactCount(clusterCount)}</span>
-        ${aggregate?.isAggregate ? `<small class="travel-cluster-pin__group">${formatCompactCount(memberCount)}</small>` : ''}
       </div>
     `,
     iconSize: [markerSize, markerSize],

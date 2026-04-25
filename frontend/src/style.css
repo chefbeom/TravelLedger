@@ -4855,6 +4855,10 @@ textarea {
   z-index: 1;
 }
 
+.household-calendar-layout-board .grid-stack-item:focus {
+  outline: none;
+}
+
 .household-calendar-layout-board .grid-stack-item-content {
   inset: var(--calendar-layout-grid-margin, 4px);
   overflow: hidden;
@@ -4932,6 +4936,20 @@ textarea {
 
 .household-calendar-layout-item--quick-entry .household-entry-panel__date-badge {
   align-self: flex-start;
+}
+
+.household-entry-panel__heading h2 {
+  margin: 0;
+  font-size: clamp(1.08rem, 1.45vw, 1.32rem);
+  line-height: 1.25;
+}
+
+.household-calendar-layout-item--quick-entry .household-entry-panel__date-badge,
+.household-entry-panel__date-badge {
+  border-radius: 14px;
+  padding: 7px 12px;
+  font-size: 0.84rem;
+  line-height: 1.15;
 }
 
 .household-calendar-layout-item--quick-entry .entry-editor {

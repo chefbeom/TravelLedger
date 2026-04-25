@@ -245,6 +245,8 @@ const isAggregatePanelEnabled = ref(true)
 const isLayoutEditMode = ref(false)
 const quickEntryPanelRef = ref(null)
 const ledgerSheetRef = ref(null)
+const quickEntryScrollTargetRef = ref(null)
+const ledgerSheetScrollTargetRef = ref(null)
 const calendarShellRef = ref(null)
 const layoutGridRef = ref(null)
 const aggregateWidgetDraftConfigs = ref(createDefaultAggregateConfigs())
@@ -1459,7 +1461,16 @@ async function scrollToPanelElement(element) {
 
   await nextTick()
   await waitForLayoutFrame()
-  element.scrollIntoView({ behavior: 'smooth', block: 'start' })
+
+  const targetTop = element.getBoundingClientRect().top + window.scrollY - 18
+  window.scrollTo({
+    top: Math.max(0, targetTop),
+    behavior: 'smooth',
+  })
+
+  if (typeof element.focus === 'function') {
+    element.focus({ preventScroll: true })
+  }
 }
 
 function focusEntryEditorControl() {
@@ -1484,7 +1495,7 @@ async function handleSelectDay(day) {
     emit('change-anchor-month', day.date)
   }
 
-  await scrollToPanelElement(ledgerSheetRef.value)
+  await scrollToPanelElement(ledgerSheetScrollTargetRef.value || ledgerSheetRef.value)
 }
 
 function formatPaymentMethodForSheet(entry) {
@@ -1499,7 +1510,7 @@ function getMonthTag(day) {
 }
 
 async function scrollToEntryEditor() {
-  await scrollToPanelElement(quickEntryPanelRef.value)
+  await scrollToPanelElement(quickEntryScrollTargetRef.value || quickEntryPanelRef.value)
   await waitForLayoutFrame()
   focusEntryEditorControl()
 }
@@ -1512,6 +1523,30 @@ async function handleSheetEditEntry(entry) {
 
 function setSelectedDate(value) {
   selectedDate.value = value
+}
+
+function setCalendarPanelScrollTarget(panelId, element) {
+  if (panelId === 'quick-entry') {
+    quickEntryScrollTargetRef.value = element
+    return
+  }
+
+  if (panelId === 'sheet') {
+    ledgerSheetScrollTargetRef.value = element
+  }
+}
+
+function formatIsoDate(value) {
+  if (typeof value !== 'string') {
+    return ''
+  }
+
+  const [year, month, day] = value.split('-')
+  if (!year || !month || !day) {
+    return value
+  }
+
+  return `${year}-${month}-${day}`
 }
 
 defineExpose({
@@ -1679,6 +1714,13 @@ defineExpose({
           :gs-min-h="calendarPanelAttrs(panel).minH"
           :gs-max-w="calendarPanelAttrs(panel).maxW"
           :gs-max-h="calendarPanelAttrs(panel).maxH"
+          :id="panel.id === 'quick-entry'
+            ? 'household-calendar-entry-editor-target'
+            : panel.id === 'sheet'
+              ? 'household-calendar-transaction-sheet-target'
+              : null"
+          :ref="(element) => setCalendarPanelScrollTarget(panel.id, element)"
+          tabindex="-1"
         >
           <div class="grid-stack-item-content">
             <div
@@ -1688,11 +1730,10 @@ defineExpose({
               <template v-if="panel.id === 'quick-entry'">
                 <section ref="quickEntryPanelRef" class="panel household-entry-panel">
         <div class="panel__header">
-          <div>
+          <div class="household-entry-panel__heading">
             <h2>{{ isEditingEntry ? '거래 수정' : '빠른 거래 입력' }}</h2>
-            <p>날짜를 고른 뒤 금액과 분류를 먼저 입력하고, 시간은 필요할 때만 켜서 빠르게 기록할 수 있습니다.</p>
           </div>
-          <span class="panel__badge household-entry-panel__date-badge">{{ formatShortDate(entryForm.entryDate) }}</span>
+          <span class="panel__badge household-entry-panel__date-badge">{{ formatIsoDate(entryForm.entryDate) }}</span>
         </div>
 
         <div class="entry-editor">

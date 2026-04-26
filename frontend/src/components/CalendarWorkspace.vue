@@ -44,8 +44,12 @@ const calendarHighlightModes = [
   { key: 'income', label: '수입만 보기' },
 ]
 
-const timeHourOptions = Array.from({ length: 24 }, (_, index) => String(index).padStart(2, '0'))
-const timeMinuteOptions = Array.from({ length: 60 }, (_, index) => String(index).padStart(2, '0'))
+const timeValueOptions = Array.from({ length: 24 * 60 }, (_, index) => {
+  const hour = Math.floor(index / 60)
+  const minute = index % 60
+  return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`
+})
+const timePresetListId = 'household-time-presets'
 const SELECTED_DAY_ENTRY_PAGE_SIZE = 10
 
 const aggregateWidgetKinds = [
@@ -255,6 +259,7 @@ const aggregateWidgetDraftConfigs = ref(createDefaultAggregateConfigs())
 const calendarShellWidth = ref(0)
 const layoutCellHeight = ref(112)
 const calendarPanelLayout = ref(createDefaultCalendarPanelLayout())
+const entryTimeText = ref('00:00')
 let calendarResizeObserver = null
 let layoutGrid = null
 let layoutGridResizeObserver = null
@@ -286,22 +291,58 @@ function parseEntryTimeParts(value) {
   }
 }
 
-function updateEntryTimePart(part, value) {
-  const current = parseEntryTimeParts(props.entryForm.entryTime)
-  const nextHour = part === 'hour' ? clampTimePart(value, 23) : current.hour
-  const nextMinute = part === 'minute' ? clampTimePart(value, 59) : current.minute
-  props.entryForm.entryTime = `${nextHour}:${nextMinute}`
+function formatEntryTimeValue(value) {
+  const parts = parseEntryTimeParts(value)
+  return `${parts.hour}:${parts.minute}`
 }
 
-const entryTimeHour = computed({
-  get: () => parseEntryTimeParts(props.entryForm.entryTime).hour,
-  set: (value) => updateEntryTimePart('hour', value),
-})
+function normalizeCompleteEntryTimeInput(value) {
+  const raw = String(value || '').trim()
+  const colonMatch = /^(\d{1,2}):(\d{2})$/.exec(raw)
+  if (colonMatch) {
+    return `${clampTimePart(colonMatch[1], 23)}:${clampTimePart(colonMatch[2], 59)}`
+  }
 
-const entryTimeMinute = computed({
-  get: () => parseEntryTimeParts(props.entryForm.entryTime).minute,
-  set: (value) => updateEntryTimePart('minute', value),
-})
+  const compactMatch = /^(\d{2})(\d{2})$/.exec(raw.replace(/\D/g, ''))
+  if (compactMatch) {
+    return `${clampTimePart(compactMatch[1], 23)}:${clampTimePart(compactMatch[2], 59)}`
+  }
+
+  return ''
+}
+
+function normalizeLooseEntryTimeInput(value) {
+  const raw = String(value || '').trim()
+  const colonMatch = /^(\d{1,2})(?::(\d{1,2}))?$/.exec(raw)
+  if (colonMatch) {
+    return `${clampTimePart(colonMatch[1], 23)}:${clampTimePart(colonMatch[2] ?? '00', 59)}`
+  }
+
+  const compact = raw.replace(/\D/g, '')
+  if (compact.length === 3) {
+    return `${clampTimePart(compact.slice(0, 1), 23)}:${clampTimePart(compact.slice(1), 59)}`
+  }
+  if (compact.length === 4) {
+    return `${clampTimePart(compact.slice(0, 2), 23)}:${clampTimePart(compact.slice(2), 59)}`
+  }
+
+  return formatEntryTimeValue(props.entryForm.entryTime)
+}
+
+function handleEntryTimeTextInput(event) {
+  const value = event.target.value
+  entryTimeText.value = value
+  const normalized = normalizeCompleteEntryTimeInput(value)
+  if (normalized) {
+    props.entryForm.entryTime = normalized
+  }
+}
+
+function commitEntryTimeText() {
+  const normalized = normalizeLooseEntryTimeInput(entryTimeText.value)
+  props.entryForm.entryTime = normalized
+  entryTimeText.value = normalized
+}
 
 const maxDailyExpense = computed(() => {
   const expenses = props.calendarWeeks.flat().map((day) => Number(day.summary?.expense ?? 0))
@@ -456,6 +497,17 @@ watch(
     const currentMonthKey = value.slice(0, 7)
     if (!selectedDate.value || !selectedDate.value.startsWith(currentMonthKey)) {
       selectedDate.value = value
+    }
+  },
+  { immediate: true },
+)
+
+watch(
+  () => props.entryForm.entryTime,
+  (value) => {
+    const nextValue = formatEntryTimeValue(value)
+    if (entryTimeText.value !== nextValue) {
+      entryTimeText.value = nextValue
     }
   },
   { immediate: true },
@@ -1850,13 +1902,26 @@ defineExpose({
                   />
                   <span>시간 입력 사용</span>
                 </label>
-                <div class="household-time-selectors" data-no-drag="true">
-                  <select v-model="entryTimeHour" :disabled="!isTimeEnabled" aria-label="시">
-                    <option v-for="hour in timeHourOptions" :key="hour" :value="hour">{{ hour }}시</option>
-                  </select>
-                  <select v-model="entryTimeMinute" :disabled="!isTimeEnabled" aria-label="분">
-                    <option v-for="minute in timeMinuteOptions" :key="minute" :value="minute">{{ minute }}분</option>
-                  </select>
+                <div class="household-time-selectors household-time-selectors--text" data-no-drag="true">
+                  <input
+                    v-model="entryTimeText"
+                    :disabled="!isTimeEnabled"
+                    :list="timePresetListId"
+                    aria-label="시간"
+                    autocomplete="off"
+                    inputmode="numeric"
+                    maxlength="5"
+                    pattern="([01][0-9]|2[0-3]):[0-5][0-9]"
+                    placeholder="15:34"
+                    type="text"
+                    @blur="commitEntryTimeText"
+                    @change="commitEntryTimeText"
+                    @input="handleEntryTimeTextInput"
+                    @keydown.enter.prevent="commitEntryTimeText"
+                  />
+                  <datalist :id="timePresetListId">
+                    <option v-for="time in timeValueOptions" :key="time" :value="time" />
+                  </datalist>
                 </div>
                 <small class="field__hint">24시간제로 저장되며, 시간 입력을 끄면 00:00으로 저장됩니다.</small>
               </label>

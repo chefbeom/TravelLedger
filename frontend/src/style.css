@@ -6992,8 +6992,17 @@ textarea {
   min-width: 0;
 }
 
+.household-time-selectors--text {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .household-time-selectors select {
   min-width: 0;
+}
+
+.household-time-selectors input {
+  min-width: 0;
+  width: 100%;
 }
 
 @media (max-width: 1180px) {

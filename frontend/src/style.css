@@ -2265,7 +2265,7 @@ button {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(300px, 0.42fr);
   gap: 18px;
-  align-items: stretch;
+  align-items: start;
 }
 
 .travel-my-photos__modal-photo-frame {
@@ -2273,17 +2273,21 @@ button {
   display: grid;
   place-items: center;
   min-width: 0;
-  aspect-ratio: 1 / 1;
+  min-height: 260px;
+  max-height: min(72vh, 760px);
   overflow: hidden;
   border: 1px solid rgba(148, 163, 184, 0.24);
   border-radius: 22px;
   background: #0f172a;
+  padding: 12px;
 }
 
 .travel-my-photos__modal-photo-frame img {
   display: block;
-  width: 100%;
-  height: 100%;
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: min(68vh, 720px);
   object-fit: contain;
   image-orientation: from-image;
 }

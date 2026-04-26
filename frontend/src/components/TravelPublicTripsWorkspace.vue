@@ -722,6 +722,28 @@ const selectedPhotoGpsLabel = computed(() => {
   return `${Number(latitude).toFixed(6)}, ${Number(longitude).toFixed(6)}`
 })
 
+const selectedClusterTitle = computed(() =>
+  selectedClusterSummary.value?.title
+    || selectedPhoto.value?.title
+    || selectedClusterSummary.value?.placeName
+    || selectedClusterSummary.value?.planName
+    || '공개 여행 스팟',
+)
+
+const selectedClusterCoverUrl = computed(() =>
+  selectedClusterRepresentativePhoto.value?.contentUrl
+    || selectedClusterSummary.value?.representativePhotoUrl
+    || '',
+)
+
+const selectedClusterContributor = computed(() =>
+  resolveContributorLabel(selectedClusterSummary.value || selectedPhoto.value),
+)
+
+const selectedClusterPlan = computed(() =>
+  planById.value.get(getPlanKey(selectedClusterSummary.value?.planId)) ?? null,
+)
+
 const featuredPlans = computed(() => visiblePlans.value.slice(0, 9))
 
 watch(
@@ -756,157 +778,130 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="workspace-stack travel-public-trips">
-    <section class="travel-public-hero">
-      <div class="travel-public-hero__copy">
-        <span class="travel-public-eyebrow">Travel community atlas</span>
-        <h2>공개 여행 커뮤니티</h2>
-        <p>다른 사용자가 공개한 여행 기록을 지도, 사진, 경로, 작성자 기준으로 둘러봅니다.</p>
-        <div class="travel-public-hero__actions">
-          <button class="button button--primary" type="button" :disabled="isLoading" @click="loadOverview({ reloadDetail: true })">
-            {{ isLoading ? '불러오는 중' : '최신 공개 여행 보기' }}
-          </button>
-          <button class="button button--ghost" type="button" :disabled="!hasActiveFilters" @click="clearCommunityFilters">
-            필터 초기화
-          </button>
-        </div>
-      </div>
+  <div class="travel-public-app">
+    <aside class="travel-public-rail" aria-label="공개 여행 탐색">
+      <button class="travel-public-rail__logo" type="button" title="공개 여행 홈" @click="clearCommunityFilters">
+        <span>TL</span>
+      </button>
+      <button class="travel-public-rail__button is-active" type="button" title="홈" @click="clearCommunityFilters">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11.5 12 4l8 7.5V20a1 1 0 0 1-1 1h-4.5v-6h-5v6H5a1 1 0 0 1-1-1z" /></svg>
+      </button>
+      <button class="travel-public-rail__button" type="button" title="전체 지도" @click="clearPlanFilter">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 6 5-2 6 2 5-2v14l-5 2-6-2-5 2zM9 4v14M15 6v14" /></svg>
+      </button>
+      <button
+        class="travel-public-rail__button"
+        :class="{ 'is-active': photoOnly }"
+        type="button"
+        title="사진 있는 여행"
+        @click="photoOnly = !photoOnly"
+      >
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 4h12a1 1 0 0 1 1 1v16l-7-4-7 4V5a1 1 0 0 1 1-1z" /></svg>
+      </button>
+    </aside>
 
-      <div class="travel-public-hero__stats">
-        <article>
-          <span>공개 여행</span>
-          <strong>{{ communityStats.publicPlanCount }}</strong>
-          <small>등록된 퍼블릭 여행</small>
-        </article>
-        <article>
-          <span>사진</span>
-          <strong>{{ communityStats.photoCount }}</strong>
-          <small>{{ summary.photoClusterCount }}개 위치 묶음</small>
-        </article>
-        <article>
-          <span>공유자</span>
-          <strong>{{ communityStats.contributorCount }}</strong>
-          <small>{{ communityStats.regionCount }}개 지역</small>
-        </article>
-      </div>
+    <main class="travel-public-canvas">
+      <form class="travel-public-top-search" @submit.prevent>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m21 21-4.2-4.2M10.8 18a7.2 7.2 0 1 1 0-14.4 7.2 7.2 0 0 1 0 14.4z" /></svg>
+        <input v-model="searchQuery" type="search" placeholder="검색" aria-label="공개 여행 검색" />
+        <button v-if="searchQuery" type="button" @click="searchQuery = ''">지우기</button>
+      </form>
 
-      <aside class="travel-public-hero__updates">
-        <div class="travel-public-section-title">
-          <span>Recently shared</span>
-          <strong>최근 공개</strong>
-        </div>
-        <button
-          v-for="plan in recentPlans"
-          :key="`recent-${plan.planId}`"
-          class="travel-public-update"
-          type="button"
-          @click="selectPlan(plan)"
-        >
-          <img
-            v-if="resolvePlanCover(plan)"
-            :src="buildThumbnailUrl(resolvePlanCover(plan), THUMBNAIL_VARIANTS.preview)"
-            :alt="plan.planName"
-            loading="lazy"
-            decoding="async"
-          />
-          <span v-else class="travel-public-update__empty">사진 없음</span>
-          <span>
-            <strong>{{ plan.planName }}</strong>
-            <small>{{ resolveContributorLabel(plan) }} · {{ resolvePlanLocation(plan) }}</small>
-          </span>
-        </button>
-        <p v-if="!recentPlans.length" class="panel__empty">아직 공개된 여행이 없습니다.</p>
-      </aside>
-    </section>
+      <div v-if="overviewErrorMessage" class="feedback feedback--error">{{ overviewErrorMessage }}</div>
+      <div v-if="detailErrorMessage" class="feedback feedback--error">{{ detailErrorMessage }}</div>
 
-    <div v-if="overviewErrorMessage" class="feedback feedback--error">{{ overviewErrorMessage }}</div>
-    <div v-if="detailErrorMessage" class="feedback feedback--error">{{ detailErrorMessage }}</div>
-
-    <section class="panel travel-public-controls">
-      <div class="panel__header">
-        <div>
-          <h2>커뮤니티 탐색</h2>
-          <p>여행명, 지역, 공유자, 사진 유무로 공개 여행을 좁혀봅니다.</p>
-        </div>
-        <span class="panel__badge">{{ visibleSummary.planCount }}개 표시</span>
-      </div>
-
-      <div class="travel-public-controls__grid">
-        <label class="field travel-public-search">
-          <span>검색</span>
-          <input
-            v-model="searchQuery"
-            class="field__input"
-            type="search"
-            placeholder="여행명, 도시, 장소, 공유자"
-          />
-        </label>
-        <label class="field">
-          <span>지역</span>
-          <select v-model="selectedRegionKey" class="field__input">
-            <option value="all">전체 지역</option>
-            <option v-for="region in regionOptions" :key="region.key" :value="region.key">
-              {{ region.label }} ({{ region.count }})
-            </option>
-          </select>
-        </label>
-        <label class="field">
-          <span>공유자</span>
-          <select v-model="selectedContributorKey" class="field__input">
-            <option value="all">전체 공유자</option>
-            <option v-for="contributor in contributorOptions" :key="contributor.key" :value="contributor.key">
-              {{ contributor.label }} ({{ contributor.count }})
-            </option>
-          </select>
-        </label>
-        <label class="field">
-          <span>정렬</span>
-          <select v-model="sortMode" class="field__input">
-            <option v-for="option in sortOptions" :key="option.value" :value="option.value">
-              {{ option.label }}
-            </option>
-          </select>
-        </label>
-        <label class="travel-public-toggle">
-          <input v-model="photoOnly" type="checkbox" />
-          <span>사진 있는 여행만</span>
-        </label>
-      </div>
-
-      <div v-if="activePlanFilterId !== 'all'" class="travel-public-active-filter">
-        <span>선택 여행만 표시 중</span>
-        <button class="button button--ghost" type="button" @click="clearPlanFilter">전체 지도 보기</button>
-      </div>
-    </section>
-
-    <div class="travel-public-community-layout">
-      <section class="panel panel--map-fill travel-public-map-panel">
-        <div class="panel__header">
-          <div>
-            <h2>공개 여행 지도</h2>
-            <p>필터 결과에 맞는 사진 클러스터와 여행 경로가 지도에 표시됩니다.</p>
-          </div>
-          <span class="panel__badge">{{ visibleSummary.clusterCount }}개 묶음 · {{ visibleSummary.routeCount }}개 경로</span>
+      <section class="travel-public-map-card">
+        <div class="travel-public-map-card__stats">
+          <span>{{ visibleSummary.planCount }} 여행</span>
+          <span>{{ visibleSummary.clusterCount }} 스팟</span>
+          <span>{{ visibleSummary.photoCount }} 사진</span>
+          <span>{{ visibleSummary.routeCount }} 경로</span>
         </div>
 
-        <TravelMyMapClusterPanel
-          :photo-clusters="visiblePhotoClusters"
-          :photo-pins="visiblePhotoPins"
-          :markers="[]"
-          :routes="visibleRoutes"
-          :active="active"
-          :selected-cluster-id="selectedClusterSummary?.id ?? null"
-          :selected-photo-id="selectedPhotoId"
-          display-mode="cluster"
-          @select-cluster="handleSelectCluster"
-          @select-photo-pin="handleSelectPhotoPin"
-          @preview-cluster="handlePreviewClusterFromMap"
-          @fullscreen-change="handleMapFullscreenChange"
-          @clear-selection="clearSelection"
-        >
-          <template #fullscreen-overlay="{ isFullscreen }">
+        <div class="travel-public-map-stage">
+          <TravelMyMapClusterPanel
+            :photo-clusters="visiblePhotoClusters"
+            :photo-pins="visiblePhotoPins"
+            :markers="[]"
+            :routes="visibleRoutes"
+            :active="active"
+            :selected-cluster-id="selectedClusterSummary?.id ?? null"
+            :selected-photo-id="selectedPhotoId"
+            display-mode="cluster"
+            @select-cluster="handleSelectCluster"
+            @select-photo-pin="handleSelectPhotoPin"
+            @preview-cluster="handlePreviewClusterFromMap"
+            @fullscreen-change="handleMapFullscreenChange"
+            @clear-selection="clearSelection"
+          >
+            <template #fullscreen-overlay="{ isFullscreen }">
+              <TravelMyMapInspectorPanels
+                v-if="selectedClusterSummary || selectedClusterDetail || isDetailLoading"
+                :summary="selectedClusterSummary"
+                :detail="selectedClusterDetail"
+                :selected-photo="selectedPhoto"
+                :selected-photo-id="selectedPhotoId"
+                :photos="selectedClusterPhotos"
+                :is-detail-loading="isDetailLoading"
+                :is-representative-saving="false"
+                :is-loading-more="isClusterPhotosLoadingMore"
+                :can-load-more="Boolean(selectedClusterDetail?.hasNext)"
+                :total-photo-count="selectedClusterDetail?.totalPhotoCount ?? selectedClusterPhotos.length"
+                :loaded-photo-count="selectedClusterPhotos.length"
+                :cluster-location-label="selectedClusterLocationLabel"
+                :selected-photo-location-label="selectedPhotoLocationLabel"
+                :selected-photo-gps-label="selectedPhotoGpsLabel"
+                :fullscreen="true"
+                :closable="true"
+                @select-photo="handleSelectPhoto"
+                @open-photo="(photo) => openPhotoLightbox(photo, { scope: LIGHTBOX_SCOPE_CLUSTER })"
+                @load-more="handleLoadMoreClusterPhotos"
+                @clear="clearSelection"
+              />
+              <TravelPhotoLightbox
+                v-if="isFullscreen && lightboxPhoto"
+                :photo="lightboxPhoto"
+                :photos="lightboxPhotos"
+                :current-photo-id="lightboxPhoto?.id ?? null"
+                @close="lightboxPhoto = null"
+                @select-photo="handleSelectLightboxPhoto"
+              />
+            </template>
+          </TravelMyMapClusterPanel>
+
+          <aside v-if="selectedClusterSummary || selectedClusterDetail || isDetailLoading" class="travel-public-map-drawer">
+            <button class="travel-public-map-drawer__close" type="button" @click="clearSelection">‹</button>
+            <img
+              v-if="selectedClusterCoverUrl"
+              class="travel-public-map-drawer__cover"
+              :src="buildThumbnailUrl(selectedClusterCoverUrl, THUMBNAIL_VARIANTS.preview)"
+              :alt="selectedClusterTitle"
+              loading="lazy"
+              decoding="async"
+            />
+            <div v-else class="travel-public-map-drawer__cover travel-public-map-drawer__cover--empty">사진 없음</div>
+            <div class="travel-public-map-drawer__copy">
+              <strong>{{ selectedClusterTitle }}</strong>
+              <span>{{ selectedClusterLocationLabel }}</span>
+              <small>{{ selectedClusterContributor }} · {{ selectedClusterSummary?.planName || selectedClusterPlan?.planName || '공개 여행' }}</small>
+            </div>
+            <div class="travel-public-map-drawer__actions">
+              <button type="button" @click="openPhotoLightbox(selectedPhoto, { scope: LIGHTBOX_SCOPE_CLUSTER })">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 3 6 6 .9-4.5 4.3 1.1 6.1L12 17.3l-5.6 3 1.1-6.1L3 9.9 9 9z" /></svg>
+              </button>
+              <button v-if="selectedClusterPlan" type="button" @click="selectPlan(selectedClusterPlan)">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4h10v16H7zM10 8h4M10 12h4M10 16h4" /></svg>
+              </button>
+              <button type="button" @click="selectedContributorKey = resolveContributorKey(selectedClusterSummary)">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zm-7 9a7 7 0 0 1 14 0" /></svg>
+              </button>
+              <button type="button" @click="openPhotoLightbox(selectedPhoto || selectedClusterRepresentativePhoto, { scope: LIGHTBOX_SCOPE_CLUSTER })">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h16M12 4v16" /></svg>
+              </button>
+            </div>
+
             <TravelMyMapInspectorPanels
-              v-if="selectedClusterSummary || selectedClusterDetail || isDetailLoading"
+              class="travel-public-map-drawer__inspector"
               :summary="selectedClusterSummary"
               :detail="selectedClusterDetail"
               :selected-photo="selectedPhoto"
@@ -921,30 +916,110 @@ onMounted(() => {
               :cluster-location-label="selectedClusterLocationLabel"
               :selected-photo-location-label="selectedPhotoLocationLabel"
               :selected-photo-gps-label="selectedPhotoGpsLabel"
-              :fullscreen="true"
-              :closable="true"
               @select-photo="handleSelectPhoto"
               @open-photo="(photo) => openPhotoLightbox(photo, { scope: LIGHTBOX_SCOPE_CLUSTER })"
               @load-more="handleLoadMoreClusterPhotos"
-              @clear="clearSelection"
             />
-            <TravelPhotoLightbox
-              v-if="isFullscreen && lightboxPhoto"
-              :photo="lightboxPhoto"
-              :photos="lightboxPhotos"
-              :current-photo-id="lightboxPhoto?.id ?? null"
-              @close="lightboxPhoto = null"
-              @select-photo="handleSelectLightboxPhoto"
-            />
-          </template>
-        </TravelMyMapClusterPanel>
+          </aside>
+        </div>
       </section>
 
-      <aside class="travel-public-sidebar">
-        <section class="panel travel-public-side-panel">
-          <div class="travel-public-section-title">
-            <span>Most popular</span>
-            <strong>인기 여행</strong>
+      <section class="travel-public-filter-dock">
+        <select v-model="selectedRegionKey" aria-label="지역 필터">
+          <option value="all">전체 지역</option>
+          <option v-for="region in regionOptions" :key="region.key" :value="region.key">
+            {{ region.label }} ({{ region.count }})
+          </option>
+        </select>
+        <select v-model="selectedContributorKey" aria-label="공유자 필터">
+          <option value="all">전체 공유자</option>
+          <option v-for="contributor in contributorOptions" :key="contributor.key" :value="contributor.key">
+            {{ contributor.label }} ({{ contributor.count }})
+          </option>
+        </select>
+        <select v-model="sortMode" aria-label="정렬">
+          <option v-for="option in sortOptions" :key="option.value" :value="option.value">
+            {{ option.label }}
+          </option>
+        </select>
+        <label>
+          <input v-model="photoOnly" type="checkbox" />
+          <span>사진 있는 여행</span>
+        </label>
+        <button v-if="hasActiveFilters" type="button" @click="clearCommunityFilters">초기화</button>
+      </section>
+
+      <section class="travel-public-shelf">
+        <div class="travel-public-shelf__head">
+          <h2>최근 업데이트</h2>
+          <span>›</span>
+        </div>
+        <div v-if="spotlightClusters.length" class="travel-public-shelf__scroll">
+          <button
+            v-for="cluster in spotlightClusters"
+            :key="`spot-${cluster.id}`"
+            class="travel-public-poster"
+            type="button"
+            @click="handleSelectCluster(cluster)"
+          >
+            <img
+              v-if="cluster.representativePhotoUrl"
+              :src="buildThumbnailUrl(cluster.representativePhotoUrl, THUMBNAIL_VARIANTS.preview)"
+              :alt="cluster.title || cluster.placeName || cluster.planName"
+              loading="lazy"
+              decoding="async"
+            />
+            <span v-else>사진 없음</span>
+            <strong>{{ cluster.title || cluster.placeName || cluster.planName }}</strong>
+            <small>{{ resolveContributorLabel(cluster) }}</small>
+          </button>
+        </div>
+        <p v-else class="travel-public-empty">조건에 맞는 공개 스팟이 없습니다.</p>
+      </section>
+
+      <section class="travel-public-catalog">
+        <div class="travel-public-catalog__main">
+          <div class="travel-public-shelf__head">
+            <h2>공개 여행 목록</h2>
+            <span>{{ visiblePlans.length }} / {{ publicPlans.length }}</span>
+          </div>
+          <div v-if="featuredPlans.length" class="travel-public-trip-grid">
+            <button
+              v-for="plan in featuredPlans"
+              :key="plan.planId"
+              class="travel-public-trip-card"
+              :class="{ 'travel-public-trip-card--active': String(selectedPlanId || '') === String(plan.planId) }"
+              type="button"
+              @click="selectPlan(plan)"
+            >
+              <img
+                v-if="resolvePlanCover(plan)"
+                :src="buildThumbnailUrl(resolvePlanCover(plan), THUMBNAIL_VARIANTS.preview)"
+                :alt="plan.planName"
+                loading="lazy"
+                decoding="async"
+              />
+              <div v-else class="travel-public-trip-card__empty">사진 없음</div>
+              <div class="travel-public-trip-card__body">
+                <span>{{ resolveContributorLabel(plan) }}</span>
+                <strong>{{ plan.planName }}</strong>
+                <small>{{ resolvePlanLocation(plan) }}</small>
+                <small>{{ formatDate(plan.startDate) }} - {{ formatDate(plan.endDate) }}</small>
+              </div>
+              <div class="travel-public-trip-card__stats">
+                <small>사진 {{ plan.mediaItemCount }}장</small>
+                <small>기록 {{ plan.memoryRecordCount }}건</small>
+                <small>경로 {{ plan.routeSegmentCount }}개</small>
+              </div>
+            </button>
+          </div>
+          <p v-else-if="isLoading" class="travel-public-empty">공개 여행을 불러오는 중입니다.</p>
+          <p v-else class="travel-public-empty">조건에 맞는 공개 여행이 없습니다.</p>
+        </div>
+
+        <aside class="travel-public-popular">
+          <div class="travel-public-shelf__head">
+            <h2>인기 여행</h2>
           </div>
           <button
             v-for="plan in popularPlans"
@@ -958,173 +1033,17 @@ onMounted(() => {
             <strong>{{ plan.planName }}</strong>
             <small>{{ resolvePlanLocation(plan) }}</small>
           </button>
-          <p v-if="!popularPlans.length" class="panel__empty">인기 여행을 계산할 공개 데이터가 없습니다.</p>
-        </section>
+        </aside>
+      </section>
 
-        <section class="panel travel-public-side-panel">
-          <div class="travel-public-section-title">
-            <span>Explore areas</span>
-            <strong>지역으로 보기</strong>
-          </div>
-          <div class="travel-public-chip-list">
-            <button
-              class="chip chip--neutral"
-              :class="{ 'travel-public-chip--active': selectedRegionKey === 'all' }"
-              type="button"
-              @click="selectedRegionKey = 'all'"
-            >
-              전체
-            </button>
-            <button
-              v-for="region in regionOptions.slice(0, 8)"
-              :key="`chip-${region.key}`"
-              class="chip chip--neutral"
-              :class="{ 'travel-public-chip--active': selectedRegionKey === region.key }"
-              type="button"
-              @click="selectedRegionKey = region.key"
-            >
-              {{ region.label }} {{ region.count }}
-            </button>
-          </div>
-        </section>
-      </aside>
-    </div>
-
-    <section v-if="selectedClusterSummary || selectedClusterDetail || isDetailLoading" class="panel">
-      <TravelMyMapInspectorPanels
-        :summary="selectedClusterSummary"
-        :detail="selectedClusterDetail"
-        :selected-photo="selectedPhoto"
-        :selected-photo-id="selectedPhotoId"
-        :photos="selectedClusterPhotos"
-        :is-detail-loading="isDetailLoading"
-        :is-representative-saving="false"
-        :is-loading-more="isClusterPhotosLoadingMore"
-        :can-load-more="Boolean(selectedClusterDetail?.hasNext)"
-        :total-photo-count="selectedClusterDetail?.totalPhotoCount ?? selectedClusterPhotos.length"
-        :loaded-photo-count="selectedClusterPhotos.length"
-        :cluster-location-label="selectedClusterLocationLabel"
-        :selected-photo-location-label="selectedPhotoLocationLabel"
-        :selected-photo-gps-label="selectedPhotoGpsLabel"
-        @select-photo="handleSelectPhoto"
-        @open-photo="(photo) => openPhotoLightbox(photo, { scope: LIGHTBOX_SCOPE_CLUSTER })"
-        @load-more="handleLoadMoreClusterPhotos"
+      <TravelPhotoLightbox
+        v-if="!isMapFullscreen && lightboxPhoto"
+        :photo="lightboxPhoto"
+        :photos="lightboxPhotos"
+        :current-photo-id="lightboxPhoto?.id ?? null"
+        @close="lightboxPhoto = null"
+        @select-photo="handleSelectLightboxPhoto"
       />
-    </section>
-
-    <section class="panel travel-public-spotlight-panel">
-      <div class="panel__header">
-        <div>
-          <h2>최근 포토 스팟</h2>
-          <p>공개된 사진 위치를 여행 공유 커뮤니티 피드처럼 빠르게 살펴봅니다.</p>
-        </div>
-        <span class="panel__badge">{{ spotlightClusters.length }}개</span>
-      </div>
-
-      <div v-if="spotlightClusters.length" class="travel-public-spot-grid">
-        <button
-          v-for="cluster in spotlightClusters"
-          :key="`spot-${cluster.id}`"
-          class="travel-public-spot-card"
-          type="button"
-          @click="handleSelectCluster(cluster)"
-        >
-          <img
-            v-if="cluster.representativePhotoUrl"
-            :src="buildThumbnailUrl(cluster.representativePhotoUrl, THUMBNAIL_VARIANTS.preview)"
-            :alt="cluster.title || cluster.placeName || cluster.planName"
-            loading="lazy"
-            decoding="async"
-          />
-          <span v-else class="travel-public-spot-card__empty">사진 없음</span>
-          <span class="travel-public-spot-card__meta">{{ resolveContributorLabel(cluster) }}</span>
-          <strong>{{ cluster.title || cluster.placeName || cluster.planName }}</strong>
-          <small>{{ [cluster.country, cluster.region, cluster.placeName].filter(Boolean).join(' / ') || '위치 미설정' }}</small>
-          <small>{{ cluster.photoCount }}장 · {{ formatDate(cluster.memoryDate) }}</small>
-        </button>
-      </div>
-      <p v-else class="panel__empty">조건에 맞는 포토 스팟이 없습니다.</p>
-    </section>
-
-    <section class="panel">
-      <div class="panel__header">
-        <div>
-          <h2>공개 여행 목록</h2>
-          <p>공유자, 대표 사진, 여행 기간, 기록 수를 기준으로 공개 여행을 선택합니다.</p>
-        </div>
-        <span class="panel__badge">{{ visiblePlans.length }} / {{ publicPlans.length }}개</span>
-      </div>
-
-      <div v-if="featuredPlans.length" class="travel-public-trip-grid">
-        <button
-          v-for="plan in featuredPlans"
-          :key="plan.planId"
-          class="travel-public-trip-card"
-          :class="{ 'travel-public-trip-card--active': String(selectedPlanId || '') === String(plan.planId) }"
-          type="button"
-          @click="selectPlan(plan)"
-        >
-          <img
-            v-if="resolvePlanCover(plan)"
-            :src="buildThumbnailUrl(resolvePlanCover(plan), THUMBNAIL_VARIANTS.preview)"
-            :alt="plan.planName"
-            loading="lazy"
-            decoding="async"
-          />
-          <div v-else class="travel-public-trip-card__empty">사진 없음</div>
-          <div class="travel-public-trip-card__body">
-            <span>{{ resolveContributorLabel(plan) }}</span>
-            <strong>{{ plan.planName }}</strong>
-            <small>{{ resolvePlanLocation(plan) }}</small>
-            <small>{{ formatDate(plan.startDate) }} - {{ formatDate(plan.endDate) }}</small>
-          </div>
-          <div class="travel-public-trip-card__stats">
-            <small>사진 {{ plan.mediaItemCount }}장</small>
-            <small>기록 {{ plan.memoryRecordCount }}건</small>
-            <small>경로 {{ plan.routeSegmentCount }}개</small>
-          </div>
-        </button>
-      </div>
-      <p v-else-if="isLoading" class="panel__empty">공개 여행을 불러오는 중입니다.</p>
-      <p v-else class="panel__empty">조건에 맞는 공개 여행이 없습니다.</p>
-    </section>
-
-    <section class="panel travel-public-photo-strip-panel">
-      <div class="panel__header">
-        <div>
-          <h2>공개 사진 타임라인</h2>
-          <p>현재 조건에 맞는 공개 사진을 썸네일로 먼저 보고, 선택 시 원본 보기로 들어갑니다.</p>
-        </div>
-        <span class="panel__badge">{{ visiblePhotoPins.length }}장</span>
-      </div>
-
-      <div v-if="recentPhotoPins.length" class="travel-public-photo-strip">
-        <button
-          v-for="pin in recentPhotoPins"
-          :key="`photo-${pin.mediaId}`"
-          class="travel-public-photo-tile"
-          type="button"
-          @click="handleSelectPhotoPin(pin, { openPreview: true })"
-        >
-          <img
-            :src="buildThumbnailUrl(pin.photoUrl, THUMBNAIL_VARIANTS.preview)"
-            :alt="pin.title || pin.planName"
-            loading="lazy"
-            decoding="async"
-          />
-          <span>{{ pin.placeName || pin.region || pin.country || pin.planName }}</span>
-        </button>
-      </div>
-      <p v-else class="panel__empty">표시할 공개 사진이 없습니다.</p>
-    </section>
-
-    <TravelPhotoLightbox
-      v-if="!isMapFullscreen && lightboxPhoto"
-      :photo="lightboxPhoto"
-      :photos="lightboxPhotos"
-      :current-photo-id="lightboxPhoto?.id ?? null"
-      @close="lightboxPhoto = null"
-      @select-photo="handleSelectLightboxPhoto"
-    />
+    </main>
   </div>
 </template>

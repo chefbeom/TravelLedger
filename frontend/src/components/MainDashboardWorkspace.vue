@@ -15,12 +15,6 @@ import {
   saveLayoutSetting,
 } from '../lib/api'
 import { DASHBOARD_GRID_COLUMNS } from '../features/palette/types'
-import {
-  applyLayoutPatchesToPalettes,
-  findFirstAvailablePosition,
-  getSpanBySize,
-  normalizePaletteList,
-} from '../features/palette/utils/paletteLayout'
 
 const props = defineProps({
   currentUser: {
@@ -64,7 +58,7 @@ const paletteTemplates = [
   { id: 'feature-links', type: 'feature-links', label: '기능 바로가기', options: {} },
 ]
 
-const fixedSizeByType = {
+const defaultSizeByType = {
   'household-summary': '3x2',
   'household-metric': '2x2',
   'household-payment': '3x2',
@@ -78,6 +72,39 @@ const fixedSizeByType = {
   'quick-actions': '3x2',
   'feature-links': '3x2',
 }
+
+const minSpanByType = {
+  'household-summary': { w: 3, h: 2 },
+  'household-metric': { w: 2, h: 1 },
+  'household-payment': { w: 3, h: 2 },
+  'household-compare': { w: 3, h: 2 },
+  'quick-entry': { w: 3, h: 3 },
+  'travel-summary': { w: 3, h: 2 },
+  'drive-summary': { w: 3, h: 2 },
+  'photo-frame': { w: 3, h: 2 },
+  'drive-capacity': { w: 3, h: 2 },
+  'drive-recent-files': { w: 3, h: 2 },
+  'quick-actions': { w: 2, h: 2 },
+  'feature-links': { w: 2, h: 2 },
+}
+
+const maxSpanByType = {
+  'household-summary': { w: 6, h: 4 },
+  'household-metric': { w: 4, h: 3 },
+  'household-payment': { w: 5, h: 4 },
+  'household-compare': { w: 5, h: 4 },
+  'quick-entry': { w: 5, h: 5 },
+  'travel-summary': { w: 5, h: 4 },
+  'drive-summary': { w: 5, h: 4 },
+  'photo-frame': { w: 6, h: 5 },
+  'drive-capacity': { w: 5, h: 4 },
+  'drive-recent-files': { w: 5, h: 4 },
+  'quick-actions': { w: 4, h: 4 },
+  'feature-links': { w: 4, h: 4 },
+}
+
+const fallbackMinSpan = { w: 2, h: 2 }
+const fallbackMaxSpan = { w: 6, h: 5 }
 
 const defaultPalettes = [
   { id: 'main-household-summary', type: 'household-summary', size: '3x2', position: { x: 0, y: 0 }, visible: true, options: {} },
@@ -185,7 +212,7 @@ const layoutKey = computed(() =>
 const guideRowCount = computed(() => Math.max(
   1,
   ...visiblePalettes.value.map((palette) => {
-    const span = getSpanBySize(palette.size)
+    const span = mainSpanForPalette(palette)
     return (palette.position?.y ?? 0) + span.h
   }),
 ))
@@ -379,18 +406,144 @@ function createPaletteId(templateId) {
   return `${templateId}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
 }
 
-function fixedSizeFor(palette) {
-  return fixedSizeByType[palette.type] ?? '3x2'
+function defaultSizeFor(palette) {
+  return defaultSizeByType[palette?.type] ?? '3x2'
+}
+
+function parseSizeSpan(size, fallback = '3x2') {
+  const match = /^(\d+)x(\d+)$/.exec(String(size || '').trim())
+  if (match) {
+    return {
+      w: Number(match[1]),
+      h: Number(match[2]),
+    }
+  }
+
+  const fallbackMatch = /^(\d+)x(\d+)$/.exec(String(fallback || '3x2').trim())
+  return {
+    w: Number(fallbackMatch?.[1] ?? 3),
+    h: Number(fallbackMatch?.[2] ?? 2),
+  }
+}
+
+function spanToSize(span) {
+  return `${span.w}x${span.h}`
+}
+
+function spanBoundsForType(type) {
+  const min = minSpanByType[type] ?? fallbackMinSpan
+  const max = maxSpanByType[type] ?? fallbackMaxSpan
+  return {
+    min,
+    max: {
+      w: Math.min(DASHBOARD_GRID_COLUMNS, Math.max(min.w, max.w)),
+      h: Math.max(min.h, max.h),
+    },
+  }
+}
+
+function clampSpanForType(span, type) {
+  const bounds = spanBoundsForType(type)
+  const rawW = Number(span?.w)
+  const rawH = Number(span?.h)
+  return {
+    w: Math.min(Math.max(Number.isFinite(rawW) ? Math.round(rawW) : bounds.min.w, bounds.min.w), bounds.max.w),
+    h: Math.min(Math.max(Number.isFinite(rawH) ? Math.round(rawH) : bounds.min.h, bounds.min.h), bounds.max.h),
+  }
+}
+
+function mainSpanForPalette(palette) {
+  return clampSpanForType(parseSizeSpan(palette?.size, defaultSizeFor(palette)), palette?.type)
+}
+
+function clampMainPosition(position, size, type) {
+  const span = clampSpanForType(parseSizeSpan(size, defaultSizeByType[type] ?? '3x2'), type)
+  const rawX = Number(position?.x ?? 0)
+  const rawY = Number(position?.y ?? 0)
+  return {
+    x: Math.min(Math.max(Number.isFinite(rawX) ? Math.floor(rawX) : 0, 0), Math.max(DASHBOARD_GRID_COLUMNS - span.w, 0)),
+    y: Math.max(Number.isFinite(rawY) ? Math.floor(rawY) : 0, 0),
+  }
+}
+
+function cloneMainPaletteConfig(palette) {
+  const type = String(palette?.type || 'household-summary')
+  const span = clampSpanForType(parseSizeSpan(palette?.size, defaultSizeByType[type] ?? '3x2'), type)
+  const size = spanToSize(span)
+  return {
+    id: String(palette?.id),
+    type,
+    size,
+    position: clampMainPosition(palette?.position, size, type),
+    visible: palette?.visible !== false,
+    options: { ...(palette?.options ?? {}) },
+  }
+}
+
+function mainPalettesOverlap(left, right) {
+  const leftSpan = mainSpanForPalette(left)
+  const rightSpan = mainSpanForPalette(right)
+  return !(
+    left.position.x + leftSpan.w <= right.position.x
+    || right.position.x + rightSpan.w <= left.position.x
+    || left.position.y + leftSpan.h <= right.position.y
+    || right.position.y + rightSpan.h <= left.position.y
+  )
+}
+
+function isMainAreaFree(palettesToCheck, position, size, type, excludeId = '') {
+  const candidate = {
+    id: excludeId || '__candidate__',
+    type,
+    size,
+    position: clampMainPosition(position, size, type),
+  }
+  return palettesToCheck
+    .filter((palette) => palette.visible !== false && String(palette.id) !== String(excludeId))
+    .every((palette) => !mainPalettesOverlap(candidate, palette))
+}
+
+function findFirstAvailableMainPosition(palettesToCheck, size, type) {
+  const span = clampSpanForType(parseSizeSpan(size, defaultSizeByType[type] ?? '3x2'), type)
+  const normalizedSize = spanToSize(span)
+  for (let y = 0; y < 200; y += 1) {
+    for (let x = 0; x <= Math.max(DASHBOARD_GRID_COLUMNS - span.w, 0); x += 1) {
+      const position = { x, y }
+      if (isMainAreaFree(palettesToCheck, position, normalizedSize, type)) {
+        return position
+      }
+    }
+  }
+  return { x: 0, y: 0 }
 }
 
 function normalizeMainPalettes(value) {
-  const fixedSizePalettes = (value ?? []).map((palette) => ({
-    ...palette,
-    size: fixedSizeFor(palette),
-  }))
-  return normalizePaletteList(fixedSizePalettes).map((palette) => ({
-    ...palette,
-    size: fixedSizeFor(palette),
+  const visible = []
+  return (value ?? []).map((palette) => {
+    const next = cloneMainPaletteConfig(palette)
+    if (next.visible !== false) {
+      next.position = clampMainPosition(next.position, next.size, next.type)
+      if (!isMainAreaFree(visible, next.position, next.size, next.type, next.id)) {
+        next.position = findFirstAvailableMainPosition(visible, next.size, next.type)
+      }
+      visible.push(next)
+    }
+    return next
+  })
+}
+
+function applyMainLayoutPatches(paletteList, patches) {
+  const patchMap = new Map((patches ?? []).map((patch) => [String(patch.id), patch]))
+  return normalizeMainPalettes((paletteList ?? []).map((palette) => {
+    const patch = patchMap.get(String(palette.id))
+    if (!patch) return palette
+    const span = clampSpanForType(parseSizeSpan(patch.size ?? palette.size, defaultSizeFor(palette)), palette.type)
+    const size = spanToSize(span)
+    return {
+      ...palette,
+      size,
+      position: clampMainPosition(patch.position ?? palette.position, size, palette.type),
+    }
   }))
 }
 
@@ -553,13 +706,60 @@ function paletteTitle(palette) {
 }
 
 function gridAttrs(palette) {
-  const span = getSpanBySize(palette.size)
+  const span = mainSpanForPalette(palette)
   return {
     x: palette.position?.x ?? 0,
     y: palette.position?.y ?? 0,
     w: span.w,
     h: span.h,
   }
+}
+
+function resizeAttrs(palette) {
+  const bounds = spanBoundsForType(palette?.type)
+  return {
+    minW: bounds.min.w,
+    minH: bounds.min.h,
+    maxW: bounds.max.w,
+    maxH: bounds.max.h,
+  }
+}
+
+function paletteSizeClasses(palette) {
+  const span = mainSpanForPalette(palette)
+  return [
+    `main-palette--w-${span.w}`,
+    `main-palette--h-${span.h}`,
+    {
+      'main-palette--compact': span.w <= 2 || span.h <= 2,
+      'main-palette--wide': span.w >= 4,
+      'main-palette--tall': span.h >= 4,
+      'main-palette--roomy': span.w >= 4 && span.h >= 3,
+    },
+  ]
+}
+
+function paletteListLimit(palette) {
+  const span = mainSpanForPalette(palette)
+  return Math.max(1, Math.min(6, span.h + (span.w >= 4 ? 1 : 0) - 1))
+}
+
+function recentTravelPlansFor(palette) {
+  return recentTravelPlans.value.slice(0, paletteListLimit(palette))
+}
+
+function recentDriveFilesFor(palette) {
+  return recentDriveFiles.value.slice(0, Math.min(5, paletteListLimit(palette) + 1))
+}
+
+function compareRowsVisibleFor(palette) {
+  return compareRowsFor(palette).slice(-Math.min(4, paletteListLimit(palette)))
+}
+
+function photoStripItemsFor(palette) {
+  const span = mainSpanForPalette(palette)
+  const count = span.w >= 5 ? 6 : span.w >= 4 ? 5 : 4
+  return photoFrameItems.value.slice(1, count)
 }
 
 function quickStat(key) {
@@ -661,10 +861,21 @@ function handleDragStop(event, element) {
   applyLayoutPatches(readGridSnapshot())
 }
 
+function handleResizeStart(event, element) {
+  element?.classList.add('is-main-palette-resizing')
+}
+
+function handleResizeStop(event, element) {
+  element?.classList.remove('is-main-palette-resizing')
+  applyLayoutPatches(readGridSnapshot())
+}
+
 function destroyGrid() {
   if (!grid) return
   grid.off('dragstart')
   grid.off('dragstop')
+  grid.off('resizestart')
+  grid.off('resizestop')
   grid.destroy(false)
   grid = null
 }
@@ -676,7 +887,7 @@ function initGrid() {
     column: DASHBOARD_GRID_COLUMNS,
     margin: MAIN_DASHBOARD_GRID_MARGIN,
     cellHeight: cellHeight.value,
-    disableResize: true,
+    disableResize: !isEditMode.value,
     float: false,
     animate: true,
     draggable: {
@@ -685,11 +896,17 @@ function initGrid() {
       handle: '.main-palette',
       scroll: false,
     },
+    resizable: {
+      autoHide: false,
+      handles: 'se',
+    },
   }, gridElement.value)
   grid.enableMove(isEditMode.value)
-  grid.enableResize(false)
+  grid.enableResize(isEditMode.value)
   grid.on('dragstart', handleDragStart)
   grid.on('dragstop', handleDragStop)
+  grid.on('resizestart', handleResizeStart)
+  grid.on('resizestop', handleResizeStop)
   updateCellHeight()
 }
 
@@ -705,7 +922,7 @@ function queueGridRebuild() {
 }
 
 function applyLayoutPatches(patches) {
-  palettes.value = normalizeMainPalettes(applyLayoutPatchesToPalettes(palettes.value, patches))
+  palettes.value = applyMainLayoutPatches(palettes.value, patches)
   persistPalettes()
 }
 
@@ -723,7 +940,7 @@ function restorePalette(id) {
     return {
       ...palette,
       visible: true,
-      position: findFirstAvailablePosition(visible, palette.size),
+      position: findFirstAvailableMainPosition(visible, palette.size, palette.type),
     }
   }))
   persistPalettes()
@@ -736,12 +953,12 @@ function removePalette(id) {
 
 function addPalette() {
   const template = paletteTemplates.find((item) => item.id === selectedTemplateId.value) ?? paletteTemplates[0]
-  const size = fixedSizeFor(template)
+  const size = defaultSizeFor(template)
   const nextPalette = {
     id: createPaletteId(template.id),
     type: template.type,
     size,
-    position: findFirstAvailablePosition(visiblePalettes.value, size),
+    position: findFirstAvailableMainPosition(visiblePalettes.value, size, template.type),
     visible: true,
     options: { ...(template.options ?? {}) },
   }
@@ -763,7 +980,7 @@ function toggleEditMode() {
   }
   if (grid) {
     grid.enableMove(isEditMode.value)
-    grid.enableResize(false)
+    grid.enableResize(isEditMode.value)
   }
 }
 
@@ -910,7 +1127,7 @@ watch(layoutKey, queueGridRebuild)
 watch(isEditMode, (value) => {
   if (grid) {
     grid.enableMove(value)
-    grid.enableResize(false)
+    grid.enableResize(value)
   }
 })
 
@@ -963,6 +1180,10 @@ onBeforeUnmount(() => {
           :gs-y="gridAttrs(palette).y"
           :gs-w="gridAttrs(palette).w"
           :gs-h="gridAttrs(palette).h"
+          :gs-min-w="resizeAttrs(palette).minW"
+          :gs-min-h="resizeAttrs(palette).minH"
+          :gs-max-w="resizeAttrs(palette).maxW"
+          :gs-max-h="resizeAttrs(palette).maxH"
         >
           <div class="grid-stack-item-content">
             <article
@@ -971,6 +1192,7 @@ onBeforeUnmount(() => {
                 { 'main-palette--editing': isEditMode },
                 `main-palette--${palette.type}`,
                 palette.options?.metric ? `main-palette--${palette.options.metric}` : '',
+                paletteSizeClasses(palette),
               ]"
             >
               <header class="main-palette__head">
@@ -985,8 +1207,8 @@ onBeforeUnmount(() => {
                 class="main-palette__body"
                 :class="{
                   'main-palette__body--has-list': (
-                    (palette.type === 'travel-summary' && recentTravelPlans.length)
-                    || (palette.type === 'drive-summary' && recentDriveFiles.length)
+                    (palette.type === 'travel-summary' && recentTravelPlansFor(palette).length)
+                    || (palette.type === 'drive-summary' && recentDriveFilesFor(palette).length)
                   ),
                 }"
               >
@@ -1026,7 +1248,7 @@ onBeforeUnmount(() => {
                 <template v-else-if="palette.type === 'household-compare'">
                   <div class="main-palette__compare">
                     <div
-                      v-for="row in compareRowsFor(palette).slice(-2)"
+                      v-for="row in compareRowsVisibleFor(palette)"
                       :key="row.label"
                       class="main-palette__compare-row"
                     >
@@ -1090,8 +1312,8 @@ onBeforeUnmount(() => {
                     <div class="main-palette__metric"><span>미디어</span><strong>{{ formatNumber(travelSummary.mediaCount) }}</strong></div>
                     <div class="main-palette__metric is-negative"><span>사용</span><strong>{{ formatCurrency(travelSummary.actualTotal) }}</strong></div>
                   </div>
-                  <div v-if="recentTravelPlans.length" class="main-palette__list">
-                    <div v-for="plan in recentTravelPlans" :key="plan.id" class="main-palette__list-row">
+                  <div v-if="recentTravelPlansFor(palette).length" class="main-palette__list">
+                    <div v-for="plan in recentTravelPlansFor(palette)" :key="plan.id" class="main-palette__list-row">
                       <span>{{ plan.name || plan.destination || '-' }}</span>
                       <strong>{{ plan.status || 'PLANNED' }}</strong>
                     </div>
@@ -1105,8 +1327,8 @@ onBeforeUnmount(() => {
                     <div class="main-palette__metric"><span>공유</span><strong>{{ formatNumber(driveSummary?.sharedCount) }}</strong></div>
                     <div class="main-palette__metric"><span>용량</span><strong>{{ formatBytes(driveSummary?.usedBytes) }}</strong></div>
                   </div>
-                  <div v-if="recentDriveFiles.length" class="main-palette__list">
-                    <div v-for="file in recentDriveFiles" :key="file.id" class="main-palette__list-row">
+                  <div v-if="recentDriveFilesFor(palette).length" class="main-palette__list">
+                    <div v-for="file in recentDriveFilesFor(palette)" :key="file.id" class="main-palette__list-row">
                       <span>{{ file.fileOriginName || file.name || '-' }}</span>
                       <strong>{{ formatBytes(file.fileSize) }}</strong>
                     </div>
@@ -1133,7 +1355,7 @@ onBeforeUnmount(() => {
                     </div>
                     <div v-if="photoFrameItems.length > 1" class="main-palette__photo-strip">
                       <img
-                        v-for="photo in photoFrameItems.slice(1, 5)"
+                        v-for="photo in photoStripItemsFor(palette)"
                         :key="photo.id"
                         :src="photo.imageUrl"
                         :alt="photo.title"
@@ -1164,7 +1386,7 @@ onBeforeUnmount(() => {
                 <template v-else-if="palette.type === 'drive-recent-files'">
                   <div class="main-palette__recent-files">
                     <a
-                      v-for="file in recentDriveFiles"
+                      v-for="file in recentDriveFilesFor(palette)"
                       :key="file.id"
                       class="main-palette__recent-file"
                       :href="buildDriveOpenPath(file)"
@@ -1177,7 +1399,7 @@ onBeforeUnmount(() => {
                       <strong>{{ fileName(file) }}</strong>
                       <small>{{ formatBytes(file.fileSize) }}</small>
                     </a>
-                    <p v-if="!recentDriveFiles.length" class="main-palette__empty">최근 저장한 파일이 없습니다.</p>
+                    <p v-if="!recentDriveFilesFor(palette).length" class="main-palette__empty">최근 저장한 파일이 없습니다.</p>
                   </div>
                 </template>
 
@@ -1373,6 +1595,28 @@ onBeforeUnmount(() => {
 :deep(.grid-stack-item.is-main-palette-dragging .main-palette) {
   cursor: grabbing;
   opacity: 0.92;
+}
+
+:deep(.grid-stack-item.is-main-palette-resizing .main-palette) {
+  cursor: nwse-resize;
+  opacity: 0.96;
+  outline: 1px solid rgba(109, 114, 186, 0.5);
+}
+
+.main-dashboard__palette-zone:not(.is-editing) :deep(.ui-resizable-handle) {
+  display: none !important;
+}
+
+.main-dashboard__palette-zone.is-editing :deep(.ui-resizable-se) {
+  background: rgba(109, 114, 186, 0.86);
+  border: 2px solid #ffffff;
+  bottom: 8px;
+  box-shadow: 0 2px 8px rgba(16, 17, 31, 0.18);
+  cursor: nwse-resize;
+  height: 14px;
+  right: 8px;
+  width: 14px;
+  z-index: 4;
 }
 
 .main-palette__head {
@@ -2410,6 +2654,81 @@ onBeforeUnmount(() => {
   display: -webkit-box;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
+}
+
+.main-palette--compact .main-palette__head {
+  min-height: 36px;
+  padding: 8px 10px 4px;
+}
+
+.main-palette--compact .main-palette__body {
+  padding: 8px 10px 10px;
+}
+
+.main-palette--compact .main-palette__metric-grid {
+  gap: 6px;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.main-palette--compact .main-palette__metric,
+.main-palette--compact .main-palette__single-metric,
+.main-palette--compact .main-palette__feature-link,
+.main-palette--compact .main-palette__quick-action {
+  gap: 3px;
+  padding: 8px;
+}
+
+.main-palette--compact .main-palette__metric strong,
+.main-palette--compact .main-palette__single-metric strong {
+  font-size: 0.96rem;
+}
+
+.main-palette--h-1 .main-palette__head {
+  min-height: 30px;
+  padding: 6px 10px 2px;
+}
+
+.main-palette--h-1 .main-palette__body {
+  padding: 6px 10px 8px;
+}
+
+.main-palette--w-2 .main-palette__quick-actions,
+.main-palette--w-2 .main-palette__feature-links {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.main-palette--wide .main-palette__metric-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.main-palette--wide.main-palette--household-payment .main-palette__payment,
+.main-palette--wide.main-palette--drive-capacity .main-palette__capacity {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.main-palette--wide.main-palette--household-payment .main-palette__payment select,
+.main-palette--wide.main-palette--drive-capacity .main-palette__capacity-track,
+.main-palette--wide.main-palette--drive-capacity .main-palette__inline-action {
+  grid-column: 1 / -1;
+}
+
+.main-palette--tall .main-palette__photo-strip {
+  min-height: 58px;
+}
+
+.main-palette--roomy .main-palette__recent-files {
+  gap: 8px;
+}
+
+.main-palette--roomy.main-palette--travel-summary .main-palette__body--has-list,
+.main-palette--roomy.main-palette--drive-summary .main-palette__body--has-list {
+  grid-template-rows: minmax(0, 1fr) minmax(0, 104px);
+}
+
+.main-palette--tall.main-palette--travel-summary .main-palette__body--has-list,
+.main-palette--tall.main-palette--drive-summary .main-palette__body--has-list {
+  grid-template-rows: minmax(0, 1fr) minmax(0, 128px);
 }
 
 @media (max-width: 720px) {

@@ -1,9 +1,8 @@
 <script setup>
-import { computed, nextTick, reactive, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { buildThumbnailUrl, THUMBNAIL_VARIANTS } from '../lib/mediaPreview'
 import { formatDate, formatDateTime } from '../lib/uiFormat'
 import TravelMiniLocationMap from './TravelMiniLocationMap.vue'
-import TravelPhotoLightbox from './TravelPhotoLightbox.vue'
 
 const props = defineProps({
   portfolio: {
@@ -32,8 +31,6 @@ const filters = reactive({
 })
 
 const selectedPhoto = ref(null)
-const lightboxPhoto = ref(null)
-const detailPanelRef = ref(null)
 const failedDetailImageIds = ref(new Set())
 
 const planNameById = computed(() => {
@@ -206,6 +203,27 @@ const activeFilterCount = computed(() =>
 
 const photoCountLabel = computed(() => `${filteredPhotos.value.length} / ${allPhotos.value.length}장`)
 
+const selectedPhotoIndex = computed(() => {
+  if (!selectedPhoto.value?.id) {
+    return -1
+  }
+  return filteredPhotos.value.findIndex((item) => String(item.id) === String(selectedPhoto.value.id))
+})
+
+const previousPhoto = computed(() => {
+  if (selectedPhotoIndex.value <= 0) {
+    return null
+  }
+  return filteredPhotos.value[selectedPhotoIndex.value - 1] ?? null
+})
+
+const nextPhoto = computed(() => {
+  if (selectedPhotoIndex.value < 0 || selectedPhotoIndex.value >= filteredPhotos.value.length - 1) {
+    return null
+  }
+  return filteredPhotos.value[selectedPhotoIndex.value + 1] ?? null
+})
+
 function thumbnailUrl(photo) {
   return buildThumbnailUrl(photo.contentUrl, THUMBNAIL_VARIANTS.preview)
 }
@@ -233,37 +251,30 @@ function handleDetailImageError(photo) {
   failedDetailImageIds.value = nextFailedIds
 }
 
-async function scrollSelectedPhotoIntoView() {
-  await nextTick()
-  detailPanelRef.value?.scrollIntoView({
-    behavior: 'smooth',
-    block: 'start',
-  })
-}
-
-async function openPhoto(photo) {
+function openPhoto(photo) {
   if (!photo?.contentUrl) return
   selectedPhoto.value = photo
-  await scrollSelectedPhotoIntoView()
 }
 
 function closePhoto() {
   selectedPhoto.value = null
 }
 
-function openLightbox(photo = selectedPhoto.value) {
-  if (!photo?.contentUrl) return
-  lightboxPhoto.value = photo
-}
-
-function closeLightbox() {
-  lightboxPhoto.value = null
-}
-
 function selectPhoto(photo) {
   if (!photo?.contentUrl) return
-  lightboxPhoto.value = photo
   selectedPhoto.value = photo
+}
+
+function selectPreviousPhoto() {
+  if (previousPhoto.value) {
+    selectPhoto(previousPhoto.value)
+  }
+}
+
+function selectNextPhoto() {
+  if (nextPhoto.value) {
+    selectPhoto(nextPhoto.value)
+  }
 }
 
 function clearFilters() {
@@ -280,7 +291,40 @@ function requestOpenMemoryEditor(photo) {
     memoryId: photo.recordId,
     planId: photo.planId,
   })
+  closePhoto()
 }
+
+function handleModalKeydown(event) {
+  if (!selectedPhoto.value) {
+    return
+  }
+
+  if (event.key === 'Escape') {
+    event.preventDefault()
+    event.stopPropagation()
+    closePhoto()
+    return
+  }
+
+  if (event.key === 'ArrowLeft') {
+    event.preventDefault()
+    selectPreviousPhoto()
+    return
+  }
+
+  if (event.key === 'ArrowRight') {
+    event.preventDefault()
+    selectNextPhoto()
+  }
+}
+
+onMounted(() => {
+  window.addEventListener('keydown', handleModalKeydown, { capture: true })
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', handleModalKeydown, { capture: true })
+})
 
 watch(
   () => filters.planId,
@@ -311,9 +355,6 @@ watch(
   () => {
     if (selectedPhoto.value && !filteredPhotos.value.some((item) => String(item.id) === String(selectedPhoto.value.id))) {
       selectedPhoto.value = null
-    }
-    if (lightboxPhoto.value && !filteredPhotos.value.some((item) => String(item.id) === String(lightboxPhoto.value.id))) {
-      lightboxPhoto.value = null
     }
   },
 )
@@ -387,55 +428,6 @@ watch(
         <span class="panel__badge">{{ groupedPhotos.length }}개 날짜</span>
       </div>
 
-      <section v-if="selectedPhoto" ref="detailPanelRef" class="travel-my-photos__detail-panel">
-        <div class="panel__header">
-          <div>
-            <h2>사진 상세</h2>
-            <p>선택한 사진의 위치와 기록 정보를 확인합니다.</p>
-          </div>
-          <button class="button button--ghost" type="button" @click="closePhoto">닫기</button>
-        </div>
-
-        <div class="travel-my-photos__detail">
-          <button class="travel-my-photos__detail-image-button" type="button" @click="openLightbox(selectedPhoto)">
-            <img
-              :src="detailImageUrl(selectedPhoto)"
-              :alt="selectedPhoto.displayTitle"
-              loading="eager"
-              decoding="async"
-              @error="handleDetailImageError(selectedPhoto)"
-            />
-          </button>
-
-          <aside class="travel-my-photos__detail-info">
-            <div class="travel-my-photos__detail-copy">
-              <span>{{ selectedPhoto.displayPlanName }}</span>
-              <strong>{{ selectedPhoto.displayTitle }}</strong>
-              <small>{{ formatDateTime(selectedPhoto.displayDate, selectedPhoto.displayTime) || '날짜 미지정' }}</small>
-              <small>{{ selectedPhoto.locationLabel }}</small>
-            </div>
-
-            <TravelMiniLocationMap
-              :latitude="selectedPhoto.mapLatitude"
-              :longitude="selectedPhoto.mapLongitude"
-              :title="selectedPhoto.locationLabel"
-            />
-
-            <div class="travel-my-photos__detail-actions">
-              <button class="button button--primary" type="button" @click="openLightbox(selectedPhoto)">크게 보기</button>
-              <button
-                v-if="selectedPhoto.recordType === 'MEMORY' && selectedPhoto.recordId"
-                class="button button--ghost"
-                type="button"
-                @click="requestOpenMemoryEditor(selectedPhoto)"
-              >
-                기록으로 이동
-              </button>
-            </div>
-          </aside>
-        </div>
-      </section>
-
       <div v-if="groupedPhotos.length" class="travel-my-photos__timeline">
         <section v-for="group in groupedPhotos" :key="group.key" class="travel-my-photos__date-group">
           <div class="travel-my-photos__date-header">
@@ -468,13 +460,72 @@ watch(
       <p v-else class="panel__empty">조건에 맞는 여행 사진이 없습니다.</p>
     </section>
 
-    <TravelPhotoLightbox
-      v-if="lightboxPhoto"
-      :photo="lightboxPhoto"
-      :photos="filteredPhotos"
-      :current-photo-id="lightboxPhoto?.id ?? null"
-      @close="closeLightbox"
-      @select-photo="selectPhoto"
-    />
+    <div v-if="selectedPhoto" class="travel-modal travel-my-photos__modal-backdrop" @click.self="closePhoto">
+      <section class="travel-modal__dialog travel-my-photos__modal" role="dialog" aria-modal="true">
+        <div class="travel-modal__header">
+          <div>
+            <h2>사진 상세</h2>
+            <p>{{ formatDateTime(selectedPhoto.displayDate, selectedPhoto.displayTime) || '날짜 미지정' }}</p>
+          </div>
+          <button class="button button--ghost" type="button" @click="closePhoto">닫기</button>
+        </div>
+
+        <div class="travel-my-photos__modal-body">
+          <div class="travel-my-photos__modal-photo-frame">
+            <button
+              v-if="previousPhoto"
+              class="travel-lightbox__nav travel-lightbox__nav--prev"
+              type="button"
+              aria-label="이전 사진"
+              @click="selectPreviousPhoto"
+            >
+              <span aria-hidden="true">&lsaquo;</span>
+            </button>
+            <img
+              :src="detailImageUrl(selectedPhoto)"
+              :alt="selectedPhoto.displayTitle"
+              loading="eager"
+              decoding="async"
+              @error="handleDetailImageError(selectedPhoto)"
+            />
+            <button
+              v-if="nextPhoto"
+              class="travel-lightbox__nav travel-lightbox__nav--next"
+              type="button"
+              aria-label="다음 사진"
+              @click="selectNextPhoto"
+            >
+              <span aria-hidden="true">&rsaquo;</span>
+            </button>
+          </div>
+
+          <aside class="travel-my-photos__modal-info">
+            <div class="travel-my-photos__detail-copy">
+              <span>{{ selectedPhoto.displayPlanName }}</span>
+              <strong>{{ selectedPhoto.displayTitle }}</strong>
+              <small>{{ formatDateTime(selectedPhoto.displayDate, selectedPhoto.displayTime) || '날짜 미지정' }}</small>
+              <small>{{ selectedPhoto.locationLabel }}</small>
+            </div>
+
+            <TravelMiniLocationMap
+              :latitude="selectedPhoto.mapLatitude"
+              :longitude="selectedPhoto.mapLongitude"
+              :title="selectedPhoto.locationLabel"
+            />
+
+            <div class="travel-my-photos__detail-actions">
+              <button
+                v-if="selectedPhoto.recordType === 'MEMORY' && selectedPhoto.recordId"
+                class="button button--primary"
+                type="button"
+                @click="requestOpenMemoryEditor(selectedPhoto)"
+              >
+                기록으로 이동
+              </button>
+            </div>
+          </aside>
+        </div>
+      </section>
+    </div>
   </div>
 </template>

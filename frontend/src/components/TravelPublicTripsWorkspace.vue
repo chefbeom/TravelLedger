@@ -41,6 +41,7 @@ const selectedContributorKey = ref('all')
 const sortMode = ref('latest')
 const photoOnly = ref(false)
 const activePlanFilterId = ref('all')
+const publicMapMode = ref('cluster')
 
 const sortOptions = [
   { value: 'latest', label: '최근 공개순' },
@@ -359,6 +360,7 @@ function clearCommunityFilters() {
   selectedContributorKey.value = 'all'
   sortMode.value = 'latest'
   photoOnly.value = false
+  publicMapMode.value = 'cluster'
   clearPlanFilter()
   clearSelection()
 }
@@ -827,7 +829,7 @@ onMounted(() => {
             :active="active"
             :selected-cluster-id="selectedClusterSummary?.id ?? null"
             :selected-photo-id="selectedPhotoId"
-            display-mode="cluster"
+            :display-mode="publicMapMode"
             @select-cluster="handleSelectCluster"
             @select-photo-pin="handleSelectPhotoPin"
             @preview-cluster="handlePreviewClusterFromMap"
@@ -946,6 +948,22 @@ onMounted(() => {
           <input v-model="photoOnly" type="checkbox" />
           <span>사진 있는 여행</span>
         </label>
+        <div class="travel-public-view-switch" role="group" aria-label="지도 표시 방식">
+          <button
+            type="button"
+            :class="{ 'is-active': publicMapMode === 'cluster' }"
+            @click="publicMapMode = 'cluster'"
+          >
+            클러스터
+          </button>
+          <button
+            type="button"
+            :class="{ 'is-active': publicMapMode === 'pin' }"
+            @click="publicMapMode = 'pin'"
+          >
+            핀
+          </button>
+        </div>
         <button v-if="hasActiveFilters" type="button" @click="clearCommunityFilters">초기화</button>
       </section>
 

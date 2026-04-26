@@ -2,6 +2,7 @@
 import { computed, reactive, ref, watch } from 'vue'
 import { buildThumbnailUrl, THUMBNAIL_VARIANTS } from '../lib/mediaPreview'
 import { formatDate, formatDateTime } from '../lib/uiFormat'
+import TravelMiniLocationMap from './TravelMiniLocationMap.vue'
 import TravelPhotoLightbox from './TravelPhotoLightbox.vue'
 
 const props = defineProps({
@@ -31,6 +32,7 @@ const filters = reactive({
 })
 
 const selectedPhoto = ref(null)
+const lightboxPhoto = ref(null)
 
 const planNameById = computed(() => {
   const bucket = new Map()
@@ -98,6 +100,15 @@ function resolveLocationLabel(item) {
   return [item.country, item.region, item.placeName].filter(Boolean).join(' / ') || '위치 미지정'
 }
 
+function resolveCoordinate(item, primaryKey, fallbackKey) {
+  const primary = Number(item?.[primaryKey])
+  if (Number.isFinite(primary)) {
+    return primary
+  }
+  const fallback = Number(item?.[fallbackKey])
+  return Number.isFinite(fallback) ? fallback : null
+}
+
 function uniqueSortedOptions(items, accessor) {
   return [...new Set(items.map(accessor).map((value) => String(value || '').trim()).filter(Boolean))]
     .sort((left, right) => left.localeCompare(right, 'ko'))
@@ -117,6 +128,8 @@ const allPhotos = computed(() =>
       displayTitle: resolvePhotoTitle(item),
       displayPlanName: resolvePlanName(item),
       locationLabel: resolveLocationLabel(item),
+      mapLatitude: resolveCoordinate(item, 'latitude', 'gpsLatitude'),
+      mapLongitude: resolveCoordinate(item, 'longitude', 'gpsLongitude'),
       sortKey: [
         resolvePhotoDate(item) || '0000-00-00',
         resolvePhotoTime(item) || '00:00:00',
@@ -204,8 +217,18 @@ function closePhoto() {
   selectedPhoto.value = null
 }
 
+function openLightbox(photo = selectedPhoto.value) {
+  if (!photo?.contentUrl) return
+  lightboxPhoto.value = photo
+}
+
+function closeLightbox() {
+  lightboxPhoto.value = null
+}
+
 function selectPhoto(photo) {
   if (!photo?.contentUrl) return
+  lightboxPhoto.value = photo
   selectedPhoto.value = photo
 }
 
@@ -254,6 +277,9 @@ watch(
   () => {
     if (selectedPhoto.value && !filteredPhotos.value.some((item) => String(item.id) === String(selectedPhoto.value.id))) {
       selectedPhoto.value = null
+    }
+    if (lightboxPhoto.value && !filteredPhotos.value.some((item) => String(item.id) === String(lightboxPhoto.value.id))) {
+      lightboxPhoto.value = null
     }
   },
 )
@@ -322,7 +348,7 @@ watch(
       <div class="panel__header">
         <div>
           <h2>사진 타임라인</h2>
-          <p>목록에는 썸네일만 표시하고, 사진을 누를 때 원본 보기 창을 엽니다.</p>
+          <p>목록에는 사진만 표시하고, 선택한 사진의 세부 정보는 아래 상세 보기에서 확인합니다.</p>
         </div>
         <span class="panel__badge">{{ groupedPhotos.length }}개 날짜</span>
       </div>
@@ -335,7 +361,12 @@ watch(
           </div>
 
           <div class="travel-my-photos__grid">
-            <article v-for="(photo, index) in group.items" :key="photo.id" class="travel-my-photos__card">
+            <article
+              v-for="(photo, index) in group.items"
+              :key="photo.id"
+              class="travel-my-photos__card"
+              :class="{ 'travel-my-photos__card--selected': String(selectedPhoto?.id ?? '') === String(photo.id) }"
+            >
               <button class="travel-my-photos__thumb-button" type="button" @click="openPhoto(photo)">
                 <img
                   :src="thumbnailUrl(photo)"
@@ -345,18 +376,6 @@ watch(
                   decoding="async"
                 />
               </button>
-              <div class="travel-my-photos__card-copy">
-                <div class="travel-media-tags">
-                  <span class="chip chip--neutral">{{ photo.displayPlanName }}</span>
-                  <span class="chip chip--neutral">{{ photo.displayTime || '시간 없음' }}</span>
-                </div>
-                <strong>{{ photo.displayTitle }}</strong>
-                <small>{{ formatDateTime(photo.displayDate, photo.displayTime) }}</small>
-                <small>{{ photo.locationLabel }}</small>
-              </div>
-              <div v-if="photo.recordType === 'MEMORY' && photo.recordId" class="travel-my-photos__card-actions">
-                <button class="button button--ghost" type="button" @click="requestOpenMemoryEditor(photo)">기록으로 이동</button>
-              </div>
             </article>
           </div>
         </section>
@@ -366,12 +385,60 @@ watch(
       <p v-else class="panel__empty">조건에 맞는 여행 사진이 없습니다.</p>
     </section>
 
+    <section v-if="selectedPhoto" class="panel travel-my-photos__detail-panel">
+      <div class="panel__header">
+        <div>
+          <h2>사진 상세</h2>
+          <p>선택한 사진의 위치와 기록 정보를 확인합니다.</p>
+        </div>
+        <button class="button button--ghost" type="button" @click="closePhoto">닫기</button>
+      </div>
+
+      <div class="travel-my-photos__detail">
+        <button class="travel-my-photos__detail-image-button" type="button" @click="openLightbox(selectedPhoto)">
+          <img
+            :src="selectedPhoto.contentUrl"
+            :alt="selectedPhoto.displayTitle"
+            loading="eager"
+            decoding="async"
+          />
+        </button>
+
+        <aside class="travel-my-photos__detail-info">
+          <div class="travel-my-photos__detail-copy">
+            <span>{{ selectedPhoto.displayPlanName }}</span>
+            <strong>{{ selectedPhoto.displayTitle }}</strong>
+            <small>{{ formatDateTime(selectedPhoto.displayDate, selectedPhoto.displayTime) || '날짜 미지정' }}</small>
+            <small>{{ selectedPhoto.locationLabel }}</small>
+          </div>
+
+          <TravelMiniLocationMap
+            :latitude="selectedPhoto.mapLatitude"
+            :longitude="selectedPhoto.mapLongitude"
+            :title="selectedPhoto.locationLabel"
+          />
+
+          <div class="travel-my-photos__detail-actions">
+            <button class="button button--primary" type="button" @click="openLightbox(selectedPhoto)">크게 보기</button>
+            <button
+              v-if="selectedPhoto.recordType === 'MEMORY' && selectedPhoto.recordId"
+              class="button button--ghost"
+              type="button"
+              @click="requestOpenMemoryEditor(selectedPhoto)"
+            >
+              기록으로 이동
+            </button>
+          </div>
+        </aside>
+      </div>
+    </section>
+
     <TravelPhotoLightbox
-      v-if="selectedPhoto"
-      :photo="selectedPhoto"
+      v-if="lightboxPhoto"
+      :photo="lightboxPhoto"
       :photos="filteredPhotos"
-      :current-photo-id="selectedPhoto?.id ?? null"
-      @close="closePhoto"
+      :current-photo-id="lightboxPhoto?.id ?? null"
+      @close="closeLightbox"
       @select-photo="selectPhoto"
     />
   </div>

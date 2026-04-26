@@ -73,7 +73,7 @@ const canShowBars = computed(() => ['3x2', '3x3'].includes(props.config.size))
 }
 
 .kpi-palette__head strong {
-  color: #1f2937;
+  color: var(--text, #1f2937);
   font-size: 0.98rem;
   line-height: 1.2;
   min-width: 0;
@@ -92,7 +92,7 @@ const canShowBars = computed(() => ['3x2', '3x3'].includes(props.config.size))
 }
 
 .kpi-palette__metric strong {
-  color: #111827;
+  color: var(--text, #111827);
   display: block;
   font-variant-numeric: tabular-nums;
   font-size: clamp(1.24rem, 2.2vw, 2.08rem);
@@ -106,7 +106,7 @@ const canShowBars = computed(() => ['3x2', '3x3'].includes(props.config.size))
 }
 
 .kpi-palette__metric small {
-  color: #6b7280;
+  color: var(--text-soft, #6b7280);
   font-size: 0.82rem;
   line-height: 1.25;
   min-width: 0;
@@ -126,7 +126,7 @@ const canShowBars = computed(() => ['3x2', '3x3'].includes(props.config.size))
 }
 
 .is-neutral {
-  color: #374151;
+  color: var(--text-soft, #374151);
 }
 
 .kpi-palette__rows {
@@ -138,7 +138,7 @@ const canShowBars = computed(() => ['3x2', '3x3'].includes(props.config.size))
 
 .kpi-palette__row {
   align-items: center;
-  border-top: 1px solid #eef0f4;
+  border-top: 1px solid var(--calendar-section-border, #eef0f4);
   display: flex;
   gap: 8px;
   justify-content: space-between;
@@ -148,7 +148,7 @@ const canShowBars = computed(() => ['3x2', '3x3'].includes(props.config.size))
 
 .kpi-palette__row span,
 .kpi-palette__bar-label span {
-  color: #6b7280;
+  color: var(--text-soft, #6b7280);
   font-size: 0.78rem;
   min-width: 0;
   overflow: hidden;
@@ -188,7 +188,7 @@ const canShowBars = computed(() => ['3x2', '3x3'].includes(props.config.size))
 }
 
 .kpi-palette__bar-track {
-  background: #edf0f4;
+  background: var(--calendar-track-expense-bg, #edf0f4);
   height: 6px;
   overflow: hidden;
 }

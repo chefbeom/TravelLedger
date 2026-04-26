@@ -94,7 +94,7 @@ function dayTone(day) {
 }
 
 .calendar-palette__head strong {
-  color: #1f2937;
+  color: var(--text, #1f2937);
   font-size: 0.88rem;
   min-width: 0;
   overflow: hidden;
@@ -113,7 +113,7 @@ function dayTone(day) {
 }
 
 .calendar-palette__weekday {
-  color: #6b7280;
+  color: var(--text-soft, #6b7280);
   font-size: 0.65rem;
   font-weight: 800;
   line-height: 1;
@@ -121,8 +121,8 @@ function dayTone(day) {
 }
 
 .calendar-palette__day {
-  background: #f8fafc;
-  border: 1px solid #e5e7eb;
+  background: var(--calendar-day-bg, #f8fafc);
+  border: 1px solid var(--calendar-day-border, #e5e7eb);
   display: grid;
   min-height: 0;
   overflow: hidden;
@@ -131,12 +131,12 @@ function dayTone(day) {
 }
 
 .calendar-palette__day.is-muted {
-  background: #f3f4f6;
-  color: #9ca3af;
+  background: var(--field-bg-muted, #f3f4f6);
+  color: var(--text-muted, #9ca3af);
 }
 
 .calendar-palette__number {
-  color: #374151;
+  color: var(--text, #374151);
   font-size: 0.68rem;
   font-weight: 800;
   line-height: 1;
@@ -144,9 +144,9 @@ function dayTone(day) {
 
 .calendar-palette__count {
   align-self: end;
-  background: #ffffff;
-  border: 1px solid #d1d5db;
-  color: #111827;
+  background: var(--field-bg, #ffffff);
+  border: 1px solid var(--field-border, #d1d5db);
+  color: var(--text, #111827);
   font-size: 0.62rem;
   font-weight: 800;
   justify-self: end;
@@ -232,12 +232,12 @@ function dayTone(day) {
 }
 
 :global(:root[data-theme='toss']) .calendar-palette__day {
-  background: rgba(27, 33, 44, 0.88);
-  border-color: rgba(78, 95, 125, 0.36);
+  background: var(--calendar-day-bg, rgba(27, 33, 44, 0.88));
+  border-color: var(--calendar-day-border, rgba(78, 95, 125, 0.36));
 }
 
 :global(:root[data-theme='toss']) .calendar-palette__day.is-muted {
-  background: rgba(18, 23, 31, 0.86);
+  background: var(--field-bg-muted, rgba(18, 23, 31, 0.86));
 }
 
 :global(:root[data-theme='toss']) .calendar-palette__number {
@@ -245,8 +245,8 @@ function dayTone(day) {
 }
 
 :global(:root[data-theme='toss']) .calendar-palette__count {
-  background: rgba(18, 23, 31, 0.96);
-  border-color: rgba(78, 95, 125, 0.46);
+  background: var(--field-bg, rgba(18, 23, 31, 0.96));
+  border-color: var(--field-border, rgba(78, 95, 125, 0.46));
 }
 
 :global(:root[data-theme='toss']) .calendar-palette__day.is-positive .calendar-palette__marker {

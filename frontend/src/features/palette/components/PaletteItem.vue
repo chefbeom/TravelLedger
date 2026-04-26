@@ -56,10 +56,11 @@ function handleResize(event) {
 
 <style scoped>
 .palette-item {
-  background: #ffffff;
-  border: 1px solid #d9dde5;
+  background: var(--calendar-panel-bg, #ffffff);
+  border: 1px solid var(--calendar-panel-border, #d9dde5);
+  border-radius: 14px;
   box-shadow: 0 4px 12px rgba(15, 23, 42, 0.05);
-  color: #111827;
+  color: var(--text, #111827);
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   height: 100%;
@@ -78,7 +79,7 @@ function handleResize(event) {
 
 .palette-item__toolbar {
   align-items: center;
-  border-bottom: 1px solid #edf0f4;
+  border-bottom: 1px solid var(--calendar-section-border, #edf0f4);
   display: flex;
   gap: 8px;
   justify-content: space-between;
@@ -88,7 +89,7 @@ function handleResize(event) {
 }
 
 .palette-item__toolbar strong {
-  color: #1f2937;
+  color: var(--text, #1f2937);
   font-size: 0.78rem;
   min-width: 0;
   overflow: hidden;
@@ -105,9 +106,9 @@ function handleResize(event) {
 
 .palette-item__actions select,
 .palette-item__actions button {
-  background: #f8fafc;
-  border: 1px solid #d1d5db;
-  color: #374151;
+  background: var(--field-bg, #f8fafc);
+  border: 1px solid var(--field-border, #d1d5db);
+  color: var(--text-soft, #374151);
   font-size: 0.68rem;
   height: 24px;
   padding: 0 6px;
@@ -126,8 +127,8 @@ function handleResize(event) {
 }
 
 :global(:root[data-theme='toss']) .palette-item {
-  background: linear-gradient(180deg, rgba(24, 29, 38, 0.98), rgba(18, 23, 31, 0.98));
-  border-color: rgba(78, 95, 125, 0.42);
+  background: var(--calendar-panel-bg, linear-gradient(180deg, rgba(24, 29, 38, 0.98), rgba(18, 23, 31, 0.98)));
+  border-color: var(--calendar-panel-border, rgba(78, 95, 125, 0.42));
   box-shadow: 0 18px 34px rgba(0, 0, 0, 0.26);
   color: var(--text, #f3f7ff);
 }
@@ -137,7 +138,7 @@ function handleResize(event) {
 }
 
 :global(:root[data-theme='toss']) .palette-item__toolbar {
-  border-bottom-color: rgba(78, 95, 125, 0.36);
+  border-bottom-color: var(--calendar-section-border, rgba(78, 95, 125, 0.36));
 }
 
 :global(:root[data-theme='toss']) .palette-item__toolbar strong {
@@ -146,8 +147,8 @@ function handleResize(event) {
 
 :global(:root[data-theme='toss']) .palette-item__actions select,
 :global(:root[data-theme='toss']) .palette-item__actions button {
-  background: rgba(27, 33, 44, 0.96);
-  border-color: rgba(78, 95, 125, 0.46);
+  background: var(--field-bg, rgba(27, 33, 44, 0.96));
+  border-color: var(--field-border, rgba(78, 95, 125, 0.46));
   color: var(--text, #f3f7ff);
 }
 

@@ -42,6 +42,35 @@
   --map-control-text: #253044;
   --map-hint-bg: linear-gradient(135deg, rgba(49, 130, 246, 0.1), rgba(18, 184, 134, 0.08));
   --map-hint-border: rgba(49, 130, 246, 0.14);
+  --field-bg: #ffffff;
+  --field-bg-muted: #f7f9fc;
+  --field-border: #d8dee8;
+  --field-focus-border: rgba(49, 130, 246, 0.54);
+  --field-focus-shadow: 0 0 0 3px rgba(49, 130, 246, 0.12);
+  --control-bg: #eef3f8;
+  --control-bg-hover: #e6edf7;
+  --calendar-board-bg: #eef2f7;
+  --calendar-panel-bg: #ffffff;
+  --calendar-panel-border: #d8dee8;
+  --calendar-section-bg: #f7f9fc;
+  --calendar-section-border: #e1e7ef;
+  --calendar-day-bg: #f8fafc;
+  --calendar-day-border: rgba(148, 163, 184, 0.16);
+  --calendar-day-active-bg: linear-gradient(180deg, rgba(240, 68, 82, 0.045), #ffffff 88%);
+  --calendar-day-income-bg: linear-gradient(180deg, rgba(18, 184, 134, 0.06), #ffffff 88%);
+  --calendar-day-hover-bg: #f1f6ff;
+  --calendar-metric-bg: rgba(255, 255, 255, 0.9);
+  --calendar-track-expense-bg: rgba(240, 68, 82, 0.1);
+  --calendar-track-income-bg: rgba(18, 184, 134, 0.13);
+  --household-anchor-bg: linear-gradient(135deg, rgba(49, 130, 246, 0.08), rgba(255, 255, 255, 0.96));
+  --household-anchor-border: rgba(148, 163, 184, 0.2);
+  --entry-section-bg: #f3f6fa;
+  --entry-section-border: #dfe6ef;
+  --entry-toggle-bg: #e8edf5;
+  --entry-toggle-active-bg: #ffffff;
+  --entry-toggle-active-text: #191f28;
+  --amount-input-bg: linear-gradient(180deg, rgba(49, 130, 246, 0.08), rgba(255, 255, 255, 0.96));
+  --amount-input-border: rgba(49, 130, 246, 0.18);
 }
 
 * {
@@ -572,11 +601,11 @@ button {
   min-width: 0;
   padding: 14px;
   border-radius: 18px;
-  background: var(--surface-soft);
-  border: 1px solid transparent;
+  background: var(--calendar-day-bg);
+  border: 1px solid var(--calendar-day-border);
   cursor: pointer;
   overflow: hidden;
-  transition: border-color 0.16s ease, box-shadow 0.16s ease, transform 0.16s ease;
+  transition: background-color 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease, transform 0.16s ease;
 }
 
 .calendar__day:hover {
@@ -589,12 +618,12 @@ button {
 
 .calendar__day--active {
   border-color: rgba(240, 68, 82, 0.14);
-  background: linear-gradient(180deg, rgba(240, 68, 82, 0.04), rgba(255, 255, 255, 0.96));
+  background: var(--calendar-day-active-bg);
 }
 
 .calendar__day--income {
   border-color: rgba(18, 184, 134, 0.18);
-  background: linear-gradient(180deg, rgba(18, 184, 134, 0.06), rgba(255, 255, 255, 0.96));
+  background: var(--calendar-day-income-bg);
 }
 
 .calendar__day--selected {
@@ -670,7 +699,7 @@ button {
   min-width: 0;
   padding: 8px 10px;
   border-radius: 14px;
-  background: rgba(255, 255, 255, 0.75);
+  background: var(--calendar-metric-bg);
   font-size: 0.84rem;
 }
 
@@ -694,7 +723,7 @@ button {
   height: 8px;
   overflow: hidden;
   border-radius: 999px;
-  background: rgba(240, 68, 82, 0.08);
+  background: var(--calendar-track-expense-bg);
 }
 
 .calendar__bar span {
@@ -705,7 +734,7 @@ button {
 }
 
 .calendar__bar--income {
-  background: rgba(18, 184, 134, 0.12);
+  background: var(--calendar-track-income-bg);
 }
 
 .calendar__bar--income span {
@@ -760,8 +789,9 @@ button {
 .entry-editor__amount,
 .entry-editor__fields {
   padding: 18px;
+  border: 1px solid var(--entry-section-border);
   border-radius: 22px;
-  background: var(--surface-soft);
+  background: var(--entry-section-bg);
 }
 
 .entry-editor__fields {
@@ -824,8 +854,9 @@ button {
   display: inline-flex;
   gap: 8px;
   padding: 6px;
+  border: 1px solid var(--entry-section-border);
   border-radius: 16px;
-  background: #edf2f7;
+  background: var(--entry-toggle-bg);
 }
 
 .toggle-chip {
@@ -839,8 +870,8 @@ button {
 }
 
 .toggle-chip--active {
-  background: var(--surface);
-  color: var(--text);
+  background: var(--entry-toggle-active-bg);
+  color: var(--entry-toggle-active-text);
   box-shadow: 0 8px 18px rgba(15, 23, 42, 0.06);
 }
 
@@ -851,9 +882,9 @@ button {
   gap: 12px;
   min-height: 88px;
   padding: 0 18px;
-  border: 1px solid rgba(49, 130, 246, 0.16);
+  border: 1px solid var(--amount-input-border);
   border-radius: 20px;
-  background: linear-gradient(180deg, rgba(49, 130, 246, 0.08), rgba(255, 255, 255, 0.95));
+  background: var(--amount-input-bg);
 }
 
 .amount-input span {
@@ -1693,9 +1724,9 @@ button {
   gap: 16px;
   margin-bottom: 18px;
   padding: 16px 18px;
-  border: 1px solid rgba(148, 163, 184, 0.2);
+  border: 1px solid var(--household-anchor-border);
   border-radius: 20px;
-  background: linear-gradient(135deg, rgba(49, 130, 246, 0.08), rgba(255, 255, 255, 0.96));
+  background: var(--household-anchor-bg);
 }
 
 .household-anchor-toolbar__meta {
@@ -3895,10 +3926,18 @@ textarea {
   min-height: 48px;
   width: 100%;
   padding: 0 14px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--field-border);
   border-radius: 16px;
-  background: white;
+  background: var(--field-bg);
   color: var(--text);
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  border-color: var(--field-focus-border);
+  box-shadow: var(--field-focus-shadow);
+  outline: none;
 }
 
 textarea {
@@ -5826,6 +5865,35 @@ textarea {
   --map-control-text: #edf3ff;
   --map-hint-bg: linear-gradient(135deg, rgba(34, 64, 122, 0.48), rgba(16, 53, 79, 0.42));
   --map-hint-border: rgba(79, 140, 255, 0.22);
+  --field-bg: #111821;
+  --field-bg-muted: #151d28;
+  --field-border: rgba(92, 108, 135, 0.58);
+  --field-focus-border: rgba(79, 140, 255, 0.72);
+  --field-focus-shadow: 0 0 0 3px rgba(79, 140, 255, 0.2);
+  --control-bg: rgba(27, 35, 48, 0.98);
+  --control-bg-hover: rgba(35, 45, 61, 0.98);
+  --calendar-board-bg: rgba(14, 20, 30, 0.92);
+  --calendar-panel-bg: linear-gradient(180deg, rgba(41, 50, 67, 0.98), rgba(31, 40, 55, 0.98));
+  --calendar-panel-border: rgba(92, 108, 135, 0.54);
+  --calendar-section-bg: rgba(20, 27, 39, 0.96);
+  --calendar-section-border: rgba(92, 108, 135, 0.42);
+  --calendar-day-bg: rgba(54, 65, 84, 0.62);
+  --calendar-day-border: rgba(98, 116, 146, 0.24);
+  --calendar-day-active-bg: linear-gradient(180deg, rgba(255, 93, 115, 0.12), rgba(24, 29, 39, 0.96));
+  --calendar-day-income-bg: linear-gradient(180deg, rgba(52, 211, 153, 0.12), rgba(24, 29, 39, 0.96));
+  --calendar-day-hover-bg: rgba(79, 140, 255, 0.12);
+  --calendar-metric-bg: rgba(17, 24, 36, 0.62);
+  --calendar-track-expense-bg: rgba(255, 93, 115, 0.14);
+  --calendar-track-income-bg: rgba(52, 211, 153, 0.16);
+  --household-anchor-bg: linear-gradient(135deg, rgba(79, 140, 255, 0.12), rgba(25, 33, 46, 0.96));
+  --household-anchor-border: rgba(92, 108, 135, 0.42);
+  --entry-section-bg: rgba(26, 35, 49, 0.98);
+  --entry-section-border: rgba(92, 108, 135, 0.4);
+  --entry-toggle-bg: #101722;
+  --entry-toggle-active-bg: linear-gradient(180deg, #4f8cff 0%, #2f6df3 100%);
+  --entry-toggle-active-text: #ffffff;
+  --amount-input-bg: linear-gradient(180deg, rgba(15, 22, 32, 0.98), rgba(17, 24, 34, 0.98));
+  --amount-input-border: rgba(79, 140, 255, 0.38);
 }
 
 :root[data-theme='toss'] .theme-toggle {
@@ -5932,23 +6000,23 @@ textarea {
 
 :root[data-theme='toss'] .toggle-chip {
   color: var(--text-soft);
-  background: rgba(28, 34, 45, 0.96);
+  background: transparent;
   border-color: #2d3645;
 }
 
 :root[data-theme='toss'] .toggle-chip--active {
-  background: linear-gradient(180deg, #4f8cff 0%, #2f6df3 100%);
-  color: #ffffff;
+  background: var(--entry-toggle-active-bg);
+  color: var(--entry-toggle-active-text);
 }
 
 :root[data-theme='toss'] .entry-type-toggle {
-  background: #131924;
-  border: 1px solid #273245;
+  background: var(--entry-toggle-bg);
+  border: 1px solid var(--entry-section-border);
 }
 
 :root[data-theme='toss'] .amount-input {
-  border-color: rgba(79, 140, 255, 0.32);
-  background: linear-gradient(180deg, rgba(29, 35, 46, 0.98), rgba(21, 26, 35, 0.98));
+  border-color: var(--amount-input-border);
+  background: var(--amount-input-bg);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
 }
 
@@ -5981,8 +6049,8 @@ textarea {
 :root[data-theme='toss'] .field select,
 :root[data-theme='toss'] .stack-form input,
 :root[data-theme='toss'] .stack-form select {
-  background: #1b212c;
-  border-color: #2d3645;
+  background: var(--field-bg);
+  border-color: var(--field-border);
   color: var(--text);
 }
 
@@ -6057,23 +6125,23 @@ textarea {
 }
 
 :root[data-theme='toss'] .calendar__metric {
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--calendar-metric-bg);
 }
 
 :root[data-theme='toss'] .calendar__day--active {
   border-color: rgba(255, 93, 115, 0.18);
-  background: linear-gradient(180deg, rgba(255, 93, 115, 0.08), rgba(24, 29, 38, 0.96));
+  background: var(--calendar-day-active-bg);
 }
 
 :root[data-theme='toss'] .calendar__day--income {
   border-color: rgba(52, 211, 153, 0.18);
-  background: linear-gradient(180deg, rgba(52, 211, 153, 0.1), rgba(24, 29, 38, 0.96));
+  background: var(--calendar-day-income-bg);
 }
 
 :root[data-theme='toss'] .sheet-table tr:hover td,
 :root[data-theme='toss'] .calendar__day:hover,
 :root[data-theme='toss'] .sidebar__link:hover {
-  background: rgba(79, 140, 255, 0.08);
+  background: var(--calendar-day-hover-bg);
 }
 
 :root[data-theme='toss'] .sidebar__link--active,
@@ -6563,9 +6631,9 @@ textarea {
   min-width: 0;
   overflow: hidden;
   padding: 12px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--calendar-panel-border);
   border-radius: 24px;
-  background: var(--surface-soft);
+  background: var(--calendar-board-bg);
 }
 
 .household-calendar-layout-grid {
@@ -6620,6 +6688,8 @@ textarea {
   margin: 0;
   min-height: 0;
   overflow: hidden;
+  border-color: var(--calendar-panel-border);
+  background: var(--calendar-panel-bg);
 }
 
 .household-calendar-layout-panel-shell--editing > .panel {
@@ -8170,6 +8240,24 @@ textarea {
   color: var(--text);
 }
 
+:root[data-theme='toss'] .household-calendar-layout-board {
+  background: var(--calendar-board-bg) !important;
+  border-color: var(--calendar-panel-border);
+}
+
+:root[data-theme='toss'] .household-calendar-layout-panel-shell > .panel {
+  background: var(--calendar-panel-bg) !important;
+  border-color: var(--calendar-panel-border);
+}
+
+:root[data-theme='toss'] .entry-editor__amount,
+:root[data-theme='toss'] .entry-editor__fields,
+:root[data-theme='toss'] .household-aggregate-card,
+:root[data-theme='toss'] .household-aggregate-empty {
+  background: var(--entry-section-bg) !important;
+  border-color: var(--entry-section-border);
+}
+
 :root[data-theme='toss'] .household-sheet-panel .sheet-table th,
 :root[data-theme='toss'] .household-sheet-panel .sheet-table td,
 :root[data-theme='toss'] .household-sheet-panel .sheet-table__title,
@@ -8200,8 +8288,8 @@ textarea {
 :root[data-theme='toss'] .entry-suggestion-item,
 :root[data-theme='toss'] .household-sheet-header .button--secondary,
 :root[data-theme='toss'] .household-calendar-header-actions .button--secondary {
-  background: #171c25 !important;
-  border-color: #2d3645;
+  background: var(--field-bg) !important;
+  border-color: var(--field-border);
   color: var(--text) !important;
 }
 

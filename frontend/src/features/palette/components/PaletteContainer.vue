@@ -193,8 +193,9 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .palette-dashboard {
-  background: #f4f5f7;
-  border: 1px solid #d9dde5;
+  background: var(--calendar-board-bg, #eef2f7);
+  border: 1px solid var(--calendar-panel-border, #d8dee8);
+  border-radius: 20px;
   min-width: 0;
   overflow-x: hidden;
   padding: 12px;
@@ -202,9 +203,10 @@ onBeforeUnmount(() => {
 }
 
 .palette-dashboard__loading {
-  background: #ffffff;
-  border: 1px solid #d9dde5;
-  color: #6b7280;
+  background: var(--calendar-panel-bg, #ffffff);
+  border: 1px solid var(--calendar-panel-border, #d8dee8);
+  border-radius: 14px;
+  color: var(--text-soft, #6b7280);
   font-size: 0.86rem;
   margin-bottom: 10px;
   padding: 10px 12px;
@@ -232,8 +234,9 @@ onBeforeUnmount(() => {
 }
 
 .palette-dashboard__tools {
-  background: #ffffff;
-  border: 1px solid #cfd5df;
+  background: var(--calendar-panel-bg, #ffffff);
+  border: 1px solid var(--calendar-panel-border, #cfd5df);
+  border-radius: 16px;
   box-shadow: 0 14px 32px rgba(15, 23, 42, 0.18);
   display: grid;
   gap: 12px;
@@ -253,20 +256,20 @@ onBeforeUnmount(() => {
 }
 
 .palette-dashboard__tools-head strong {
-  color: #111827;
+  color: var(--text, #111827);
   font-size: 0.95rem;
 }
 
 .palette-dashboard__tools button,
 .palette-dashboard__field select {
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--field-border, #d1d5db);
   font-size: 0.8rem;
   min-height: 32px;
   padding: 0 9px;
 }
 
 .palette-dashboard__tools-head button {
-  background: #f8fafc;
+  background: var(--control-bg, #f8fafc);
 }
 
 .palette-dashboard__field {
@@ -282,25 +285,26 @@ onBeforeUnmount(() => {
 }
 
 .palette-dashboard__field select {
-  background: #ffffff;
+  background: var(--field-bg, #ffffff);
   width: 100%;
 }
 
 .palette-dashboard__preset-info {
-  background: #f8fafc;
-  border: 1px solid #e5e7eb;
+  background: var(--field-bg-muted, #f8fafc);
+  border: 1px solid var(--field-border, #e5e7eb);
+  border-radius: 12px;
   display: grid;
   gap: 4px;
   padding: 10px;
 }
 
 .palette-dashboard__preset-info span {
-  color: #6b7280;
+  color: var(--text-soft, #6b7280);
   font-size: 0.76rem;
 }
 
 .palette-dashboard__preset-info strong {
-  color: #111827;
+  color: var(--text, #111827);
   font-size: 0.92rem;
 }
 
@@ -312,8 +316,8 @@ onBeforeUnmount(() => {
 }
 
 .palette-dashboard__secondary {
-  background: #f8fafc;
-  color: #374151;
+  background: var(--control-bg, #f8fafc);
+  color: var(--text-soft, #374151);
 }
 
 .palette-dashboard__hidden {
@@ -322,8 +326,8 @@ onBeforeUnmount(() => {
 }
 
 .palette-dashboard__hidden button {
-  background: #f8fafc;
-  color: #374151;
+  background: var(--control-bg, #f8fafc);
+  color: var(--text-soft, #374151);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -335,14 +339,14 @@ onBeforeUnmount(() => {
 }
 
 :global(:root[data-theme='toss']) .palette-dashboard {
-  background: rgba(12, 16, 23, 0.88);
-  border-color: rgba(78, 95, 125, 0.44);
+  background: var(--calendar-board-bg, rgba(12, 16, 23, 0.88));
+  border-color: var(--calendar-panel-border, rgba(78, 95, 125, 0.44));
 }
 
 :global(:root[data-theme='toss']) .palette-dashboard__loading,
 :global(:root[data-theme='toss']) .palette-dashboard__tools {
-  background: rgba(18, 23, 31, 0.98);
-  border-color: rgba(78, 95, 125, 0.48);
+  background: var(--calendar-panel-bg, rgba(18, 23, 31, 0.98));
+  border-color: var(--calendar-panel-border, rgba(78, 95, 125, 0.48));
   box-shadow: 0 18px 40px rgba(0, 0, 0, 0.34);
   color: var(--text-soft, #aeb8cb);
 }
@@ -362,8 +366,8 @@ onBeforeUnmount(() => {
 :global(:root[data-theme='toss']) .palette-dashboard__hidden button,
 :global(:root[data-theme='toss']) .palette-dashboard__tools-head button,
 :global(:root[data-theme='toss']) .palette-dashboard__preset-info {
-  background: rgba(27, 33, 44, 0.96);
-  border-color: rgba(78, 95, 125, 0.46);
+  background: var(--field-bg, rgba(27, 33, 44, 0.96));
+  border-color: var(--field-border, rgba(78, 95, 125, 0.46));
   color: var(--text, #f3f7ff);
 }
 

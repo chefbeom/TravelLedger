@@ -1,5 +1,5 @@
 <script setup>
-import { computed, reactive, ref, watch } from 'vue'
+import { computed, nextTick, reactive, ref, watch } from 'vue'
 import { buildThumbnailUrl, THUMBNAIL_VARIANTS } from '../lib/mediaPreview'
 import { formatDate, formatDateTime } from '../lib/uiFormat'
 import TravelMiniLocationMap from './TravelMiniLocationMap.vue'
@@ -33,6 +33,8 @@ const filters = reactive({
 
 const selectedPhoto = ref(null)
 const lightboxPhoto = ref(null)
+const detailPanelRef = ref(null)
+const failedDetailImageIds = ref(new Set())
 
 const planNameById = computed(() => {
   const bucket = new Map()
@@ -208,9 +210,41 @@ function thumbnailUrl(photo) {
   return buildThumbnailUrl(photo.contentUrl, THUMBNAIL_VARIANTS.preview)
 }
 
-function openPhoto(photo) {
+function detailImageUrl(photo) {
+  const imageKey = String(photo?.id ?? photo?.contentUrl ?? '')
+  if (failedDetailImageIds.value.has(imageKey)) {
+    return photo.contentUrl
+  }
+  return buildThumbnailUrl(photo.contentUrl, THUMBNAIL_VARIANTS.detail)
+}
+
+function handleDetailImageError(photo) {
+  if (!photo?.contentUrl) {
+    return
+  }
+
+  const imageKey = String(photo.id ?? photo.contentUrl)
+  if (failedDetailImageIds.value.has(imageKey)) {
+    return
+  }
+
+  const nextFailedIds = new Set(failedDetailImageIds.value)
+  nextFailedIds.add(imageKey)
+  failedDetailImageIds.value = nextFailedIds
+}
+
+async function scrollSelectedPhotoIntoView() {
+  await nextTick()
+  detailPanelRef.value?.scrollIntoView({
+    behavior: 'smooth',
+    block: 'start',
+  })
+}
+
+async function openPhoto(photo) {
   if (!photo?.contentUrl) return
   selectedPhoto.value = photo
+  await scrollSelectedPhotoIntoView()
 }
 
 function closePhoto() {
@@ -353,6 +387,55 @@ watch(
         <span class="panel__badge">{{ groupedPhotos.length }}개 날짜</span>
       </div>
 
+      <section v-if="selectedPhoto" ref="detailPanelRef" class="travel-my-photos__detail-panel">
+        <div class="panel__header">
+          <div>
+            <h2>사진 상세</h2>
+            <p>선택한 사진의 위치와 기록 정보를 확인합니다.</p>
+          </div>
+          <button class="button button--ghost" type="button" @click="closePhoto">닫기</button>
+        </div>
+
+        <div class="travel-my-photos__detail">
+          <button class="travel-my-photos__detail-image-button" type="button" @click="openLightbox(selectedPhoto)">
+            <img
+              :src="detailImageUrl(selectedPhoto)"
+              :alt="selectedPhoto.displayTitle"
+              loading="eager"
+              decoding="async"
+              @error="handleDetailImageError(selectedPhoto)"
+            />
+          </button>
+
+          <aside class="travel-my-photos__detail-info">
+            <div class="travel-my-photos__detail-copy">
+              <span>{{ selectedPhoto.displayPlanName }}</span>
+              <strong>{{ selectedPhoto.displayTitle }}</strong>
+              <small>{{ formatDateTime(selectedPhoto.displayDate, selectedPhoto.displayTime) || '날짜 미지정' }}</small>
+              <small>{{ selectedPhoto.locationLabel }}</small>
+            </div>
+
+            <TravelMiniLocationMap
+              :latitude="selectedPhoto.mapLatitude"
+              :longitude="selectedPhoto.mapLongitude"
+              :title="selectedPhoto.locationLabel"
+            />
+
+            <div class="travel-my-photos__detail-actions">
+              <button class="button button--primary" type="button" @click="openLightbox(selectedPhoto)">크게 보기</button>
+              <button
+                v-if="selectedPhoto.recordType === 'MEMORY' && selectedPhoto.recordId"
+                class="button button--ghost"
+                type="button"
+                @click="requestOpenMemoryEditor(selectedPhoto)"
+              >
+                기록으로 이동
+              </button>
+            </div>
+          </aside>
+        </div>
+      </section>
+
       <div v-if="groupedPhotos.length" class="travel-my-photos__timeline">
         <section v-for="group in groupedPhotos" :key="group.key" class="travel-my-photos__date-group">
           <div class="travel-my-photos__date-header">
@@ -383,54 +466,6 @@ watch(
 
       <p v-else-if="isLoading" class="panel__empty">사진을 불러오는 중입니다.</p>
       <p v-else class="panel__empty">조건에 맞는 여행 사진이 없습니다.</p>
-    </section>
-
-    <section v-if="selectedPhoto" class="panel travel-my-photos__detail-panel">
-      <div class="panel__header">
-        <div>
-          <h2>사진 상세</h2>
-          <p>선택한 사진의 위치와 기록 정보를 확인합니다.</p>
-        </div>
-        <button class="button button--ghost" type="button" @click="closePhoto">닫기</button>
-      </div>
-
-      <div class="travel-my-photos__detail">
-        <button class="travel-my-photos__detail-image-button" type="button" @click="openLightbox(selectedPhoto)">
-          <img
-            :src="selectedPhoto.contentUrl"
-            :alt="selectedPhoto.displayTitle"
-            loading="eager"
-            decoding="async"
-          />
-        </button>
-
-        <aside class="travel-my-photos__detail-info">
-          <div class="travel-my-photos__detail-copy">
-            <span>{{ selectedPhoto.displayPlanName }}</span>
-            <strong>{{ selectedPhoto.displayTitle }}</strong>
-            <small>{{ formatDateTime(selectedPhoto.displayDate, selectedPhoto.displayTime) || '날짜 미지정' }}</small>
-            <small>{{ selectedPhoto.locationLabel }}</small>
-          </div>
-
-          <TravelMiniLocationMap
-            :latitude="selectedPhoto.mapLatitude"
-            :longitude="selectedPhoto.mapLongitude"
-            :title="selectedPhoto.locationLabel"
-          />
-
-          <div class="travel-my-photos__detail-actions">
-            <button class="button button--primary" type="button" @click="openLightbox(selectedPhoto)">크게 보기</button>
-            <button
-              v-if="selectedPhoto.recordType === 'MEMORY' && selectedPhoto.recordId"
-              class="button button--ghost"
-              type="button"
-              @click="requestOpenMemoryEditor(selectedPhoto)"
-            >
-              기록으로 이동
-            </button>
-          </div>
-        </aside>
-      </div>
     </section>
 
     <TravelPhotoLightbox

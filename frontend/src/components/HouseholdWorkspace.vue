@@ -330,24 +330,100 @@ const entrySuggestions = computed(() => {
   return suggestions.slice(0, 6)
 })
 
+function sortEntriesByRecent(left, right) {
+  const leftKey = `${left.entryDate || ''}${left.entryTime || ''}${String(left.id ?? '').padStart(10, '0')}`
+  const rightKey = `${right.entryDate || ''}${right.entryTime || ''}${String(right.id ?? '').padStart(10, '0')}`
+  return rightKey.localeCompare(leftKey)
+}
+
+function getRecentEntryCandidates() {
+  const seen = new Set()
+  return [
+    ...(dashboard.value.recentEntries ?? []),
+    ...monthEntries.value,
+    ...statsEntries.value,
+  ]
+    .filter((entry) => entry?.entryDate)
+    .filter((entry) => {
+      const key = entry.id != null
+        ? `id:${entry.id}`
+        : `${entry.entryType}:${entry.entryDate}:${entry.entryTime}:${entry.title}:${entry.amount}`
+      if (seen.has(key)) {
+        return false
+      }
+      seen.add(key)
+      return true
+    })
+    .sort(sortEntriesByRecent)
+}
+
+function getLatestEntryForType(entryType) {
+  return getRecentEntryCandidates().find((entry) => entry.entryType === entryType) ?? null
+}
+
+function getGroupsForType(entryType) {
+  return categories.value.filter((group) => group.entryType === entryType)
+}
+
+function getDetailsForGroupId(groupId, entryType = entryForm.entryType) {
+  const group = getGroupsForType(entryType).find((item) => String(item.id) === String(groupId))
+  return group?.details ?? []
+}
+
+function resolveDefaultGroupId(entryType, latestEntry) {
+  const groups = getGroupsForType(entryType)
+  const latestGroupId = latestEntry?.categoryGroupId != null ? String(latestEntry.categoryGroupId) : ''
+  if (latestGroupId && groups.some((item) => String(item.id) === latestGroupId)) {
+    return latestGroupId
+  }
+  return groups[0] ? String(groups[0].id) : ''
+}
+
+function resolveDefaultDetailId(groupId, latestEntry) {
+  const details = getDetailsForGroupId(groupId)
+  const latestMatchesGroup = latestEntry && String(latestEntry.categoryGroupId ?? '') === String(groupId)
+  const latestDetailId = latestMatchesGroup && latestEntry.categoryDetailId != null
+    ? String(latestEntry.categoryDetailId)
+    : ''
+
+  if (latestMatchesGroup) {
+    return latestDetailId && details.some((item) => String(item.id) === latestDetailId)
+      ? latestDetailId
+      : ''
+  }
+
+  return details[0] ? String(details[0].id) : ''
+}
+
+function resolveDefaultPaymentMethodId(latestEntry) {
+  const latestPaymentMethodId = latestEntry?.paymentMethodId != null ? String(latestEntry.paymentMethodId) : ''
+  if (latestPaymentMethodId && paymentMethods.value.some((item) => String(item.id) === latestPaymentMethodId)) {
+    return latestPaymentMethodId
+  }
+  return paymentMethods.value[0] ? String(paymentMethods.value[0].id) : ''
+}
+
+function isEntryFormEmptyForDefaults() {
+  return !entryForm.title.trim()
+    && !entryForm.memo.trim()
+    && !entryForm.amount
+    && !amountInput.value
+}
+
 watch(
   () => entryForm.entryType,
   () => {
-    if (!availableGroups.value.some((item) => String(item.id) === String(entryForm.categoryGroupId))) {
-      entryForm.categoryGroupId = availableGroups.value[0] ? String(availableGroups.value[0].id) : ''
-    }
-    if (!availableDetails.value.some((item) => String(item.id) === String(entryForm.categoryDetailId))) {
-      entryForm.categoryDetailId = availableDetails.value[0] ? String(availableDetails.value[0].id) : ''
-    }
+    syncEntryDefaults({
+      preferLatest: true,
+      force: !isEditingEntry.value && isEntryFormEmptyForDefaults(),
+    })
   },
 )
 
 watch(
   () => entryForm.categoryGroupId,
   () => {
-    if (!availableDetails.value.some((item) => String(item.id) === String(entryForm.categoryDetailId))) {
-      entryForm.categoryDetailId = availableDetails.value[0] ? String(availableDetails.value[0].id) : ''
-    }
+    syncEntryDefaults({ preferLatest: true, force: false })
   },
 )
 
@@ -560,16 +636,30 @@ function sanitizeAmountInput(value) {
   return String(value || '').replace(/[^0-9]/g, '')
 }
 
-function syncEntryDefaults() {
-  if (!availableGroups.value.some((item) => String(item.id) === String(entryForm.categoryGroupId))) {
-    entryForm.categoryGroupId = availableGroups.value[0] ? String(availableGroups.value[0].id) : ''
+function syncEntryDefaults({ preferLatest = true, force = false } = {}) {
+  const entryType = entryForm.entryType || 'EXPENSE'
+  const latestEntry = preferLatest ? getLatestEntryForType(entryType) : null
+  const groups = getGroupsForType(entryType)
+  const currentGroupValid = groups.some((item) => String(item.id) === String(entryForm.categoryGroupId))
+
+  if (force || !currentGroupValid) {
+    entryForm.categoryGroupId = resolveDefaultGroupId(entryType, latestEntry)
   }
-  if (!availableDetails.value.some((item) => String(item.id) === String(entryForm.categoryDetailId))) {
-    entryForm.categoryDetailId = availableDetails.value[0] ? String(availableDetails.value[0].id) : ''
+
+  const details = getDetailsForGroupId(entryForm.categoryGroupId, entryType)
+  const currentDetailValid = entryForm.categoryDetailId
+    ? details.some((item) => String(item.id) === String(entryForm.categoryDetailId))
+    : details.length === 0
+
+  if (force || !currentDetailValid) {
+    entryForm.categoryDetailId = resolveDefaultDetailId(entryForm.categoryGroupId, latestEntry)
   }
-  if (!paymentMethods.value.some((item) => String(item.id) === String(entryForm.paymentMethodId))) {
-    entryForm.paymentMethodId = paymentMethods.value[0] ? String(paymentMethods.value[0].id) : ''
+
+  const currentPaymentMethodValid = paymentMethods.value.some((item) => String(item.id) === String(entryForm.paymentMethodId))
+  if (force || !currentPaymentMethodValid) {
+    entryForm.paymentMethodId = resolveDefaultPaymentMethodId(latestEntry)
   }
+
   if (!detailForm.groupId && categories.value[0]) {
     detailForm.groupId = String(categories.value[0].id)
   }
@@ -770,9 +860,12 @@ function resetEntryForm() {
   entryForm.memo = ''
   entryForm.amount = ''
   entryForm.entryType = 'EXPENSE'
+  entryForm.categoryGroupId = ''
+  entryForm.categoryDetailId = ''
+  entryForm.paymentMethodId = ''
   amountInput.value = ''
   isEntryTimeEnabled.value = false
-  syncEntryDefaults()
+  syncEntryDefaults({ preferLatest: true, force: true })
 }
 
 function fillEntryForm(entry) {

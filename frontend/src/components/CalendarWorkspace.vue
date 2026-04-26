@@ -44,6 +44,8 @@ const calendarHighlightModes = [
   { key: 'income', label: '수입만 보기' },
 ]
 
+const timeHourOptions = Array.from({ length: 24 }, (_, index) => String(index).padStart(2, '0'))
+const timeMinuteOptions = Array.from({ length: 60 }, (_, index) => String(index).padStart(2, '0'))
 const SELECTED_DAY_ENTRY_PAGE_SIZE = 10
 
 const aggregateWidgetKinds = [
@@ -267,6 +269,39 @@ let viewPreferenceRemoteSaveTimer = 0
 let pendingViewPreferenceRemotePayload = null
 let viewPreferenceChangedDuringRemoteHydration = false
 let isApplyingCalendarViewPreferences = false
+
+function clampTimePart(value, max) {
+  const numeric = Number(value)
+  if (!Number.isFinite(numeric)) {
+    return '00'
+  }
+  return String(Math.max(0, Math.min(max, numeric))).padStart(2, '0')
+}
+
+function parseEntryTimeParts(value) {
+  const [hour = '00', minute = '00'] = String(value || '00:00').split(':')
+  return {
+    hour: clampTimePart(hour, 23),
+    minute: clampTimePart(minute, 59),
+  }
+}
+
+function updateEntryTimePart(part, value) {
+  const current = parseEntryTimeParts(props.entryForm.entryTime)
+  const nextHour = part === 'hour' ? clampTimePart(value, 23) : current.hour
+  const nextMinute = part === 'minute' ? clampTimePart(value, 59) : current.minute
+  props.entryForm.entryTime = `${nextHour}:${nextMinute}`
+}
+
+const entryTimeHour = computed({
+  get: () => parseEntryTimeParts(props.entryForm.entryTime).hour,
+  set: (value) => updateEntryTimePart('hour', value),
+})
+
+const entryTimeMinute = computed({
+  get: () => parseEntryTimeParts(props.entryForm.entryTime).minute,
+  set: (value) => updateEntryTimePart('minute', value),
+})
 
 const maxDailyExpense = computed(() => {
   const expenses = props.calendarWeeks.flat().map((day) => Number(day.summary?.expense ?? 0))
@@ -1815,8 +1850,15 @@ defineExpose({
                   />
                   <span>시간 입력 사용</span>
                 </label>
-                <input v-model="entryForm.entryTime" type="time" :disabled="!isTimeEnabled" />
-                <small class="field__hint">시간 입력을 끄면 자동으로 00:00으로 저장됩니다.</small>
+                <div class="household-time-selectors" data-no-drag="true">
+                  <select v-model="entryTimeHour" :disabled="!isTimeEnabled" aria-label="시">
+                    <option v-for="hour in timeHourOptions" :key="hour" :value="hour">{{ hour }}시</option>
+                  </select>
+                  <select v-model="entryTimeMinute" :disabled="!isTimeEnabled" aria-label="분">
+                    <option v-for="minute in timeMinuteOptions" :key="minute" :value="minute">{{ minute }}분</option>
+                  </select>
+                </div>
+                <small class="field__hint">24시간제로 저장되며, 시간 입력을 끄면 00:00으로 저장됩니다.</small>
               </label>
             </div>
 

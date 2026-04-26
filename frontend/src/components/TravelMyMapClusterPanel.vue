@@ -11,6 +11,7 @@ const VIEWPORT_PADDING_RATIO = 0.35
 const VIEWPORT_RENDER_DEBOUNCE_MS = 80
 const CLIENT_CLUSTER_MIN_SIZE = 2
 const CLIENT_CLUSTER_MAX_ZOOM = 17
+const SMOOTH_ZOOM_DURATION = 0.45
 
 const props = defineProps({
   photoClusters: {
@@ -341,14 +342,6 @@ function resolveClientClusterCellSize() {
     return 0
   }
 
-  if (props.displayMode === 'pin') {
-    if (zoom <= 9) return 128
-    if (zoom <= 11) return 112
-    if (zoom <= 13) return 96
-    if (zoom <= 15) return 72
-    return 56
-  }
-
   if (zoom <= 9) return 112
   if (zoom <= 11) return 96
   if (zoom <= 13) return 76
@@ -452,6 +445,10 @@ function buildViewportAggregates(items) {
 
   const paddedBounds = getPaddedMapBounds()
   const visibleItems = items.filter((item) => isAggregateInBounds(item, paddedBounds))
+  if (props.displayMode === 'pin') {
+    return visibleItems
+  }
+
   const cellSize = resolveClientClusterCellSize()
   if (!cellSize) {
     return visibleItems
@@ -491,11 +488,25 @@ function focusClientCluster(aggregate) {
   const bounds = collectAggregateBounds(aggregate)
   if (bounds.length > 1) {
     const nextZoom = Math.min((mapInstance.getZoom() ?? DEFAULT_ZOOM) + 3, 18)
-    mapInstance.fitBounds(bounds, { padding: [48, 48], maxZoom: nextZoom })
+    mapInstance.fitBounds(bounds, {
+      padding: [48, 48],
+      maxZoom: nextZoom,
+      animate: true,
+      duration: SMOOTH_ZOOM_DURATION,
+      easeLinearity: 0.2,
+    })
     return
   }
 
-  mapInstance.setView([aggregate.latitude, aggregate.longitude], Math.min((mapInstance.getZoom() ?? DEFAULT_ZOOM) + 2, 18))
+  mapInstance.setView(
+    [aggregate.latitude, aggregate.longitude],
+    Math.min((mapInstance.getZoom() ?? DEFAULT_ZOOM) + 2, 18),
+    {
+      animate: true,
+      duration: SMOOTH_ZOOM_DURATION,
+      easeLinearity: 0.2,
+    },
+  )
 }
 
 function cancelScheduledClusterRender() {
@@ -565,18 +576,28 @@ function collectBounds() {
   return points
 }
 
-function fitToAll() {
+function fitToAll({ animate = true } = {}) {
   if (!mapInstance) {
     return
   }
 
   const bounds = collectBounds()
   if (!bounds.length) {
-    mapInstance.setView(DEFAULT_CENTER, DEFAULT_ZOOM)
+    mapInstance.setView(DEFAULT_CENTER, DEFAULT_ZOOM, {
+      animate,
+      duration: SMOOTH_ZOOM_DURATION,
+      easeLinearity: 0.2,
+    })
     return
   }
 
-  mapInstance.fitBounds(bounds, { padding: [40, 40], maxZoom: 16 })
+  mapInstance.fitBounds(bounds, {
+    padding: [40, 40],
+    maxZoom: 16,
+    animate,
+    duration: SMOOTH_ZOOM_DURATION,
+    easeLinearity: 0.2,
+  })
 }
 
 function resolveAggregateOwnerLabel(aggregate) {
@@ -923,7 +944,7 @@ function renderMap({ shouldFit = false } = {}) {
 
   if (!hasFittedInitialView || shouldFit) {
     hasFittedInitialView = true
-    fitToAll()
+    fitToAll({ animate: !shouldFit })
     scheduleRenderClusters(0)
     return
   }
@@ -1020,12 +1041,22 @@ onMounted(() => {
     zoomControl: true,
     scrollWheelZoom: true,
     preferCanvas: true,
-    markerZoomAnimation: false,
-    fadeAnimation: false,
+    zoomAnimation: true,
+    markerZoomAnimation: true,
+    fadeAnimation: true,
+    zoomSnap: 0.5,
+    zoomDelta: 0.5,
+    wheelPxPerZoomLevel: 96,
+    wheelDebounceTime: 28,
+    easeLinearity: 0.2,
   }).setView(resolveInitialCenter(), DEFAULT_ZOOM)
 
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     attribution: '&copy; OpenStreetMap contributors',
+    updateWhenZooming: false,
+    updateWhenIdle: true,
+    keepBuffer: 3,
+    detectRetina: true,
   }).addTo(mapInstance)
 
   markerLayer = L.layerGroup().addTo(mapInstance)
@@ -1113,7 +1144,7 @@ watch(
       <div class="travel-map__toolbar-group">
         <span class="travel-map__toolbar-label">클러스터 기준</span>
         <small class="travel-cluster-map__legend">
-          {{ props.displayMode === 'pin' ? '핀 보기: 기록 썸네일 핀 고정 표시' : '군집 보기: 서버에서 계산한 고정 군집 유지' }}
+          {{ props.displayMode === 'pin' ? '핀 보기: 현재 화면 안의 개별 사진 핀 표시' : '군집 보기: 서버에서 계산한 고정 군집 유지' }}
         </small>
       </div>
 

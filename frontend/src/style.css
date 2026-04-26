@@ -4714,7 +4714,8 @@ textarea {
 }
 
 .travel-map--moving .leaflet-marker-icon {
-  transition: none !important;
+  pointer-events: none;
+  will-change: transform;
 }
 
 .travel-map__marker-icon {

@@ -31,7 +31,6 @@ const filters = reactive({
 })
 
 const selectedPhoto = ref(null)
-const failedDetailImageIds = ref(new Set())
 
 const planNameById = computed(() => {
   const bucket = new Map()
@@ -226,29 +225,6 @@ const nextPhoto = computed(() => {
 
 function thumbnailUrl(photo) {
   return buildThumbnailUrl(photo.contentUrl, THUMBNAIL_VARIANTS.preview)
-}
-
-function detailImageUrl(photo) {
-  const imageKey = String(photo?.id ?? photo?.contentUrl ?? '')
-  if (failedDetailImageIds.value.has(imageKey)) {
-    return photo.contentUrl
-  }
-  return buildThumbnailUrl(photo.contentUrl, THUMBNAIL_VARIANTS.detail)
-}
-
-function handleDetailImageError(photo) {
-  if (!photo?.contentUrl) {
-    return
-  }
-
-  const imageKey = String(photo.id ?? photo.contentUrl)
-  if (failedDetailImageIds.value.has(imageKey)) {
-    return
-  }
-
-  const nextFailedIds = new Set(failedDetailImageIds.value)
-  nextFailedIds.add(imageKey)
-  failedDetailImageIds.value = nextFailedIds
 }
 
 function openPhoto(photo) {
@@ -482,11 +458,10 @@ watch(
               <span aria-hidden="true">&lsaquo;</span>
             </button>
             <img
-              :src="detailImageUrl(selectedPhoto)"
+              :src="selectedPhoto.contentUrl"
               :alt="selectedPhoto.displayTitle"
               loading="eager"
               decoding="async"
-              @error="handleDetailImageError(selectedPhoto)"
             />
             <button
               v-if="nextPhoto"

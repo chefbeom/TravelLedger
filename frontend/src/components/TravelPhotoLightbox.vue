@@ -1,6 +1,5 @@
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
-import { buildThumbnailUrl, THUMBNAIL_VARIANTS } from '../lib/mediaPreview'
+import { computed, onBeforeUnmount, onMounted } from 'vue'
 import { formatDateTime } from '../lib/uiFormat'
 
 const props = defineProps({
@@ -35,7 +34,6 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['close', 'select-photo', 'set-representative'])
-const failedDetailImageIds = ref(new Set())
 
 const DEFAULT_TITLE = '\uC0AC\uC9C4 \uBCF4\uAE30'
 const CLOSE_LABEL = '\uB2EB\uAE30'
@@ -58,19 +56,6 @@ const activePhoto = computed(() => {
   }
 
   return props.photos.find((item) => String(item?.id) === String(props.currentPhotoId)) ?? props.photo
-})
-
-const activePhotoImageUrl = computed(() => {
-  if (!activePhoto.value?.contentUrl) {
-    return ''
-  }
-
-  const imageKey = String(activePhoto.value.id ?? activePhoto.value.contentUrl)
-  if (failedDetailImageIds.value.has(imageKey)) {
-    return activePhoto.value.contentUrl
-  }
-
-  return buildThumbnailUrl(activePhoto.value.contentUrl, THUMBNAIL_VARIANTS.detail)
 })
 
 const locationLabel = computed(() =>
@@ -129,21 +114,6 @@ function handleSetRepresentative() {
   emit('set-representative', activePhoto.value)
 }
 
-function handleImageError() {
-  if (!activePhoto.value?.contentUrl) {
-    return
-  }
-
-  const imageKey = String(activePhoto.value.id ?? activePhoto.value.contentUrl)
-  if (failedDetailImageIds.value.has(imageKey)) {
-    return
-  }
-
-  const nextFailedIds = new Set(failedDetailImageIds.value)
-  nextFailedIds.add(imageKey)
-  failedDetailImageIds.value = nextFailedIds
-}
-
 function handleKeydown(event) {
   if (event.key === 'Escape') {
     event.preventDefault()
@@ -199,9 +169,8 @@ onBeforeUnmount(() => {
         </button>
         <img
           class="travel-lightbox__image"
-          :src="activePhotoImageUrl"
+          :src="activePhoto.contentUrl"
           :alt="activePhoto.title || activePhoto.originalFileName || 'travel photo'"
-          @error="handleImageError"
         />
         <button
           v-if="nextPhoto"

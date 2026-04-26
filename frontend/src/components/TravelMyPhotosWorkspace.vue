@@ -1,6 +1,5 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
-import { buildThumbnailUrl, THUMBNAIL_VARIANTS } from '../lib/mediaPreview'
 import { formatDate, formatDateTime } from '../lib/uiFormat'
 import TravelMiniLocationMap from './TravelMiniLocationMap.vue'
 
@@ -224,7 +223,7 @@ const nextPhoto = computed(() => {
 })
 
 function thumbnailUrl(photo) {
-  return buildThumbnailUrl(photo.contentUrl, THUMBNAIL_VARIANTS.preview)
+  return photo.contentUrl
 }
 
 function openPhoto(photo) {

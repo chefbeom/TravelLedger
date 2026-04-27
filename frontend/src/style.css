@@ -831,6 +831,159 @@ button {
   gap: 10px;
 }
 
+.receipt-ocr-panel {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 14px;
+  padding: 14px;
+  border: 1px solid var(--entry-section-border);
+  border-radius: 18px;
+  background: var(--entry-section-bg);
+  min-width: 0;
+}
+
+.receipt-ocr-panel__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+}
+
+.receipt-ocr-panel__header > div:first-child {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.receipt-ocr-panel__header strong {
+  color: var(--text);
+  font-size: 0.98rem;
+  line-height: 1.25;
+}
+
+.receipt-ocr-panel__header span,
+.receipt-ocr-panel__message,
+.receipt-ocr-result__summary small,
+.receipt-ocr-result__meta span,
+.receipt-ocr-result__items span {
+  color: var(--text-soft);
+  font-size: 0.82rem;
+}
+
+.receipt-ocr-panel__actions,
+.receipt-ocr-result__actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.receipt-ocr-panel__file {
+  display: none;
+}
+
+.receipt-ocr-panel__message {
+  margin: 0;
+}
+
+.receipt-ocr-panel__message--error {
+  color: var(--expense);
+  font-weight: 700;
+}
+
+.receipt-ocr-result {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.receipt-ocr-result__summary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 4px 12px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--field-border);
+  border-radius: 14px;
+  background: var(--field-bg);
+}
+
+.receipt-ocr-result__summary span,
+.receipt-ocr-result__summary strong,
+.receipt-ocr-result__summary small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.receipt-ocr-result__summary strong {
+  color: var(--text);
+  font-size: 1.08rem;
+  line-height: 1.2;
+}
+
+.receipt-ocr-result__summary small {
+  grid-column: 1 / -1;
+}
+
+.receipt-ocr-result__meta,
+.receipt-ocr-result__items,
+.receipt-ocr-result__warnings {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+
+.receipt-ocr-result__meta span,
+.receipt-ocr-result__items span,
+.receipt-ocr-result__warnings span {
+  min-width: 0;
+  max-width: 100%;
+  padding: 5px 8px;
+  border-radius: 10px;
+  background: var(--field-bg-muted);
+  border: 1px solid var(--field-border);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.receipt-ocr-result__warnings span {
+  color: var(--expense);
+  border-color: rgba(240, 68, 82, 0.28);
+  background: rgba(240, 68, 82, 0.08);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.receipt-ocr-result__raw {
+  min-width: min(240px, 100%);
+  color: var(--text-soft);
+  font-size: 0.82rem;
+}
+
+.receipt-ocr-result__raw summary {
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.receipt-ocr-result__raw pre {
+  max-height: 120px;
+  margin: 8px 0 0;
+  padding: 10px;
+  overflow: auto;
+  border: 1px solid var(--field-border);
+  border-radius: 12px;
+  background: var(--field-bg);
+  color: var(--text);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 .field {
   display: grid;
   gap: 8px;
@@ -6774,6 +6927,30 @@ textarea {
   gap: 12px;
 }
 
+.household-calendar-layout-item--quick-entry .receipt-ocr-panel {
+  margin-bottom: 12px;
+  padding: 12px;
+  border-radius: 16px;
+}
+
+.household-calendar-layout-item--quick-entry .receipt-ocr-panel__header {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.household-calendar-layout-item--quick-entry .receipt-ocr-panel__actions .button {
+  flex: 1 1 110px;
+  min-width: 0;
+}
+
+.household-calendar-layout-item--quick-entry .receipt-ocr-result__summary {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.household-calendar-layout-item--quick-entry .receipt-ocr-result__actions .button {
+  flex: 1 1 140px;
+}
+
 .household-calendar-layout-item--quick-entry .entry-editor__amount,
 .household-calendar-layout-item--quick-entry .entry-editor__fields {
   padding: 14px;
@@ -8248,6 +8425,7 @@ textarea {
 :root[data-theme='toss'] .household-calendar-layout-panel-shell > .panel,
 :root[data-theme='toss'] .entry-editor__amount,
 :root[data-theme='toss'] .entry-editor__fields,
+:root[data-theme='toss'] .receipt-ocr-panel,
 :root[data-theme='toss'] .household-aggregate-card,
 :root[data-theme='toss'] .household-aggregate-empty,
 :root[data-theme='toss'] .household-sheet-table-wrap,
@@ -8276,6 +8454,7 @@ textarea {
 
 :root[data-theme='toss'] .entry-editor__amount,
 :root[data-theme='toss'] .entry-editor__fields,
+:root[data-theme='toss'] .receipt-ocr-panel,
 :root[data-theme='toss'] .household-aggregate-card,
 :root[data-theme='toss'] .household-aggregate-empty {
   background: var(--entry-section-bg) !important;

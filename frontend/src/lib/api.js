@@ -505,6 +505,16 @@ export function restoreEntry(id) {
   })
 }
 
+export function analyzeLedgerReceipt(file) {
+  const formData = new FormData()
+  formData.append('file', file)
+
+  return request('/ledger/ocr/analyze', {
+    method: 'POST',
+    body: formData,
+  })
+}
+
 export function fetchCategories(entryType) {
   return request(buildUrl('/categories', { entryType }).replace(API_BASE, ''))
 }

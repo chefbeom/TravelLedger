@@ -83,11 +83,11 @@ const calendarPanelDefinitions = [
   {
     id: 'quick-entry',
     title: '빠른 거래 입력',
-    defaultLayout: { x: 6, y: 0, w: 3, h: 4 },
+    defaultLayout: { x: 6, y: 0, w: 3, h: 6 },
     minW: 3,
-    minH: 3,
+    minH: 5,
     maxW: 5,
-    maxH: 8,
+    maxH: 10,
   },
   {
     id: 'aggregate',
@@ -206,6 +206,10 @@ const props = defineProps({
     type: Array,
     default: () => [],
   },
+  receiptOcr: {
+    type: Object,
+    default: () => ({}),
+  },
   formatAmountShortcut: {
     type: Function,
     required: true,
@@ -229,6 +233,9 @@ const emit = defineEmits([
   'update:timeEnabled',
   'fill-amount',
   'add-amount',
+  'analyze-receipt',
+  'apply-receipt-suggestion',
+  'clear-receipt-analysis',
   'submit-entry',
   'undo-entry-action',
   'edit-entry',
@@ -255,6 +262,7 @@ const quickEntryScrollTargetRef = ref(null)
 const ledgerSheetScrollTargetRef = ref(null)
 const calendarShellRef = ref(null)
 const layoutGridRef = ref(null)
+const receiptFileInputRef = ref(null)
 const aggregateWidgetDraftConfigs = ref(createDefaultAggregateConfigs())
 const calendarShellWidth = ref(0)
 const layoutCellHeight = ref(112)
@@ -342,6 +350,48 @@ function commitEntryTimeText() {
   const normalized = normalizeLooseEntryTimeInput(entryTimeText.value)
   props.entryForm.entryTime = normalized
   entryTimeText.value = normalized
+}
+
+function openReceiptFilePicker() {
+  receiptFileInputRef.value?.click()
+}
+
+function handleReceiptFileChange(event) {
+  const file = event.target.files?.[0]
+  if (file) {
+    emit('analyze-receipt', file)
+  }
+  event.target.value = ''
+}
+
+function applyReceiptSuggestion() {
+  if (receiptSuggestion.value) {
+    emit('apply-receipt-suggestion', receiptSuggestion.value)
+  }
+}
+
+function formatReceiptConfidence(value) {
+  const numericValue = Number(value)
+  if (!Number.isFinite(numericValue)) {
+    return '확신도 확인 중'
+  }
+  return `확신도 ${Math.round(Math.max(0, Math.min(1, numericValue)) * 100)}%`
+}
+
+function formatReceiptSuggestionAmount(suggestion) {
+  if (!suggestion || suggestion.amount === null || suggestion.amount === undefined || suggestion.amount === '') {
+    return '금액 확인 필요'
+  }
+  return props.formatCurrency(Number(suggestion.amount || 0))
+}
+
+function formatReceiptSuggestionDateTime(suggestion) {
+  if (!suggestion) {
+    return ''
+  }
+  return [suggestion.entryDate, suggestion.entryTime && suggestion.entryTime !== '00:00' ? suggestion.entryTime : null]
+    .filter(Boolean)
+    .join(' ')
 }
 
 const maxDailyExpense = computed(() => {
@@ -465,6 +515,14 @@ const formattedAmountInput = computed(() => {
 
   return formatCompactNumber(props.amountInput)
 })
+const receiptSuggestion = computed(() => props.receiptOcr?.suggestedEntry ?? null)
+const receiptWarnings = computed(() => (
+  Array.isArray(props.receiptOcr?.warnings) ? props.receiptOcr.warnings : []
+))
+const receiptLineItems = computed(() => (
+  Array.isArray(props.receiptOcr?.lineItems) ? props.receiptOcr.lineItems : []
+))
+const hasReceiptAnalysis = computed(() => Boolean(receiptSuggestion.value || props.receiptOcr?.rawText || props.receiptOcr?.error))
 
 const aggregateCards = computed(() => {
   const sourceConfigs = isAggregateEditMode.value ? aggregateWidgetDraftConfigs.value : props.aggregateWidgetConfigs
@@ -1831,6 +1889,81 @@ defineExpose({
           </div>
           <span class="panel__badge household-entry-panel__date-badge">{{ formatIsoDate(entryForm.entryDate) }}</span>
         </div>
+
+        <section class="receipt-ocr-panel" data-no-drag="true">
+          <div class="receipt-ocr-panel__header">
+            <div>
+              <strong>영수증 자동입력</strong>
+              <span>사진을 분석해서 아래 입력칸에 적용합니다.</span>
+            </div>
+            <div class="receipt-ocr-panel__actions">
+              <input
+                ref="receiptFileInputRef"
+                class="receipt-ocr-panel__file"
+                type="file"
+                accept="image/*"
+                @change="handleReceiptFileChange"
+              />
+              <button
+                type="button"
+                class="button button--secondary"
+                :disabled="receiptOcr?.isAnalyzing"
+                @click="openReceiptFilePicker"
+              >
+                {{ receiptOcr?.isAnalyzing ? '분석 중...' : '사진 선택' }}
+              </button>
+              <button
+                v-if="hasReceiptAnalysis"
+                type="button"
+                class="button button--ghost"
+                :disabled="receiptOcr?.isAnalyzing"
+                @click="emit('clear-receipt-analysis')"
+              >
+                지우기
+              </button>
+            </div>
+          </div>
+
+          <p v-if="receiptOcr?.error" class="receipt-ocr-panel__message receipt-ocr-panel__message--error">
+            {{ receiptOcr.error }}
+          </p>
+          <p v-else-if="receiptOcr?.isAnalyzing" class="receipt-ocr-panel__message">
+            OCR 서버에서 이미지를 분석하고 있습니다.
+          </p>
+          <div v-else-if="receiptSuggestion" class="receipt-ocr-result">
+            <div class="receipt-ocr-result__summary">
+              <span>{{ receiptOcr.fileName || '분석된 이미지' }}</span>
+              <strong>{{ formatReceiptSuggestionAmount(receiptSuggestion) }}</strong>
+              <small>{{ formatReceiptSuggestionDateTime(receiptSuggestion) || '날짜 확인 필요' }}</small>
+            </div>
+            <div class="receipt-ocr-result__meta">
+              <span>{{ receiptSuggestion.title || receiptOcr.vendor || '제목 확인 필요' }}</span>
+              <span>{{ receiptSuggestion.paymentMethodName || receiptOcr.paymentMethodText || '결제수단 미매칭' }}</span>
+              <span>{{ receiptSuggestion.categoryGroupName || receiptOcr.categoryText || '분류 미매칭' }}</span>
+              <span>{{ formatReceiptConfidence(receiptOcr.confidence) }}</span>
+            </div>
+            <div v-if="receiptWarnings.length" class="receipt-ocr-result__warnings">
+              <span v-for="warning in receiptWarnings" :key="warning">{{ warning }}</span>
+            </div>
+            <div v-if="receiptLineItems.length" class="receipt-ocr-result__items">
+              <span v-for="item in receiptLineItems.slice(0, 3)" :key="`${item.itemName}-${item.price}`">
+                {{ item.itemName }}<template v-if="item.price"> · {{ formatCurrency(item.price) }}</template>
+              </span>
+            </div>
+            <div class="receipt-ocr-result__actions">
+              <button type="button" class="button button--primary" @click="applyReceiptSuggestion">
+                입력칸에 적용
+              </button>
+              <details v-if="receiptOcr.rawText" class="receipt-ocr-result__raw">
+                <summary>OCR 원문</summary>
+                <pre>{{ receiptOcr.rawText }}</pre>
+              </details>
+            </div>
+          </div>
+          <p v-else class="receipt-ocr-panel__message">
+            이미지는 저장하지 않고 분석 결과만 미리보기로 보여줍니다.
+          </p>
+        </section>
 
         <div class="entry-editor">
           <div class="entry-editor__amount">

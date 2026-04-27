@@ -1,6 +1,7 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import {
+  analyzeLedgerReceipt,
   createCategoryDetail,
   createCategoryGroup,
   createEntry,
@@ -148,6 +149,20 @@ const editingEntryId = ref(null)
 const amountInput = ref('')
 const isEntryTimeEnabled = ref(false)
 const calendarWorkspaceRef = ref(null)
+const receiptOcr = reactive({
+  isAnalyzing: false,
+  error: '',
+  fileName: '',
+  rawText: '',
+  suggestedEntry: null,
+  lineItems: [],
+  warnings: [],
+  confidence: null,
+  vendor: '',
+  paymentMethodText: '',
+  categoryText: '',
+  timing: null,
+})
 let feedbackTimerId = null
 let searchRequestTimerId = null
 
@@ -907,6 +922,89 @@ function applyEntrySuggestion(suggestion) {
   syncEntryDefaults()
 }
 
+function clearReceiptOcr() {
+  receiptOcr.isAnalyzing = false
+  receiptOcr.error = ''
+  receiptOcr.fileName = ''
+  receiptOcr.rawText = ''
+  receiptOcr.suggestedEntry = null
+  receiptOcr.lineItems = []
+  receiptOcr.warnings = []
+  receiptOcr.confidence = null
+  receiptOcr.vendor = ''
+  receiptOcr.paymentMethodText = ''
+  receiptOcr.categoryText = ''
+  receiptOcr.timing = null
+}
+
+async function analyzeReceiptImage(file) {
+  if (!file) {
+    return
+  }
+
+  receiptOcr.isAnalyzing = true
+  receiptOcr.error = ''
+  receiptOcr.fileName = file.name || 'receipt-image'
+  receiptOcr.rawText = ''
+  receiptOcr.suggestedEntry = null
+  receiptOcr.lineItems = []
+  receiptOcr.warnings = []
+  receiptOcr.confidence = null
+  receiptOcr.vendor = ''
+  receiptOcr.paymentMethodText = ''
+  receiptOcr.categoryText = ''
+  receiptOcr.timing = null
+  setFeedback()
+
+  try {
+    const result = await analyzeLedgerReceipt(file)
+    receiptOcr.rawText = result?.rawText || ''
+    receiptOcr.suggestedEntry = result?.suggestedEntry || null
+    receiptOcr.lineItems = Array.isArray(result?.lineItems) ? result.lineItems : []
+    receiptOcr.warnings = Array.isArray(result?.warnings) ? result.warnings : []
+    receiptOcr.confidence = result?.confidence ?? null
+    receiptOcr.vendor = result?.vendor || ''
+    receiptOcr.paymentMethodText = result?.paymentMethodText || ''
+    receiptOcr.categoryText = result?.categoryText || ''
+    receiptOcr.timing = result?.timing || null
+    setFeedback('영수증 분석이 완료됐습니다. 결과를 확인한 뒤 입력칸에 적용해 주세요.')
+  } catch (error) {
+    receiptOcr.error = error.message
+    setFeedback('', error.message)
+  } finally {
+    receiptOcr.isAnalyzing = false
+  }
+}
+
+async function applyReceiptOcrSuggestion(suggestion = receiptOcr.suggestedEntry) {
+  if (!suggestion) {
+    return
+  }
+
+  editingEntryId.value = null
+  entryForm.entryDate = suggestion.entryDate || entryForm.entryDate
+  entryForm.entryTime = suggestion.entryTime || '00:00'
+  entryForm.title = suggestion.title || entryForm.title
+  entryForm.memo = suggestion.memo || entryForm.memo
+  entryForm.entryType = suggestion.entryType || 'EXPENSE'
+
+  if (suggestion.amount !== null && suggestion.amount !== undefined && suggestion.amount !== '') {
+    const nextAmount = String(Number(suggestion.amount || 0))
+    amountInput.value = nextAmount
+    entryForm.amount = nextAmount
+  }
+
+  entryForm.categoryGroupId = suggestion.categoryGroupId != null ? String(suggestion.categoryGroupId) : entryForm.categoryGroupId
+  entryForm.categoryDetailId = suggestion.categoryDetailId != null ? String(suggestion.categoryDetailId) : entryForm.categoryDetailId
+  entryForm.paymentMethodId = suggestion.paymentMethodId != null ? String(suggestion.paymentMethodId) : entryForm.paymentMethodId
+  isEntryTimeEnabled.value = Boolean(suggestion.entryTime && suggestion.entryTime !== '00:00')
+  syncEntryDefaults({ preferLatest: true, force: false })
+
+  await nextTick()
+  calendarWorkspaceRef.value?.scrollToEntryEditor?.()
+  setFeedback('영수증 분석 결과를 빠른 거래 입력칸에 적용했습니다. 저장 전 금액과 분류를 확인해 주세요.')
+}
+
 function buildEntryPayload() {
   return {
     entryDate: entryForm.entryDate,
@@ -1515,6 +1613,7 @@ async function deactivatePayment(paymentId) {
       :amount-preview="amountPreview"
       :is-time-enabled="isEntryTimeEnabled"
       :quick-amount-buttons="quickAmountButtons"
+      :receipt-ocr="receiptOcr"
       :format-amount-shortcut="formatAmountShortcut"
       :format-currency="formatCurrency"
       :format-short-date="formatShortDate"
@@ -1525,6 +1624,9 @@ async function deactivatePayment(paymentId) {
       @update:time-enabled="updateTimeEnabled"
       @fill-amount="fillAmount"
       @add-amount="addAmount"
+      @analyze-receipt="analyzeReceiptImage"
+      @apply-receipt-suggestion="applyReceiptOcrSuggestion"
+      @clear-receipt-analysis="clearReceiptOcr"
       @submit-entry="submitEntry"
       @undo-entry-action="undoLastEntryAction"
       @edit-entry="fillEntryForm"

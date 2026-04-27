@@ -78,6 +78,13 @@ TravelLedger는 가계부, 여행 기록, 여행 사진 지도, 드라이브형 
 - Jenkins
 - rclone 기반 외부 백업
 
+### OCR / AI
+
+- `PaddleOCR/`는 가계부 영수증/결제내역 이미지 분석을 위한 별도 사설 OCR 서비스입니다.
+- 브라우저는 OCR 서버를 직접 호출하지 않고, 백엔드가 `POST /api/ledger/ocr/analyze`로 프록시 호출합니다.
+- OCR 서버는 `X-OCR-API-Key`를 요구하며, 필요하면 내부에서 Gemma 호환 LLM을 호출해 OCR 원문을 거래 입력값으로 구조화합니다.
+- 실제 영수증 이미지, OCR 로그, Python 가상환경, 모델 캐시, 샘플 이미지는 Git에 올리지 않습니다.
+
 ## 프로젝트 구조
 
 ```text
@@ -85,6 +92,7 @@ TravelLedger는 가계부, 여행 기록, 여행 사진 지도, 드라이브형 
 ├─ backend/                         # Spring Boot 백엔드
 ├─ frontend/                        # Vue 3 프론트엔드
 ├─ deploy/oci/                      # OCI/Nginx/Redis 운영 구성
+├─ PaddleOCR/                       # 사설 OCR + LLM 분석 서비스
 ├─ docs/                            # 운영 및 기능 문서
 ├─ docker-compose.yml               # 로컬 통합 실행
 ├─ docker-compose.oci.app.yml       # OCI 앱 서버 실행

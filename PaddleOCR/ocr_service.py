@@ -357,6 +357,19 @@ def normalize_amount(value):
     return amount if amount > 0 else None
 
 
+def normalize_entry_amount(value):
+    if value is None:
+        return None
+    if isinstance(value, (int, float)):
+        amount = abs(int(value))
+        return amount if amount > 0 else None
+    amount = parse_signed_amount(value)
+    if amount is not None:
+        amount = abs(amount)
+        return amount if amount > 0 else None
+    return normalize_amount(value)
+
+
 def parse_signed_amount(value):
     if value is None:
         return None
@@ -981,6 +994,255 @@ def build_receipt_heuristic(receipt):
     }
 
 
+def parse_payment_capture_amount(text):
+    match = re.search(r"([+-]?)\s*([0-9][0-9,]*)\s*원", clean_ocr_text(text))
+    if not match:
+        return None
+    amount = int(re.sub(r"[^0-9]", "", match.group(2)))
+    if amount <= 0:
+        return None
+    entry_type = "EXPENSE" if match.group(1) == "-" else "INCOME"
+    return {"amount": amount, "entryType": entry_type, "signedAmount": -amount if entry_type == "EXPENSE" else amount}
+
+
+def parse_korean_month_day(text, default_year=None):
+    match = re.search(r"(\d{1,2})\s*월\s*(\d{1,2})\s*일", clean_ocr_text(text))
+    if not match:
+        return None
+    year = int(default_year or date.today().year)
+    try:
+        return date(year, int(match.group(1)), int(match.group(2))).isoformat()
+    except ValueError:
+        return None
+
+
+def extract_capture_month(lines):
+    for line in lines:
+        match = re.fullmatch(r"\s*(\d{1,2})\s*월\s*", str(line or ""))
+        if match:
+            month = int(match.group(1))
+            if 1 <= month <= 12:
+                return month
+    return None
+
+
+def is_capture_noise_text(text):
+    compact = clean_ocr_text(text)
+    if not compact:
+        return True
+    if compact in {"W", "Q", "검색"}:
+        return True
+    if re.fullmatch(r"[일월화수목금토]", compact):
+        return True
+    if re.fullmatch(r"\d{1,2}", compact) or re.fullmatch(r"\d{1,2}\s*월", compact):
+        return True
+    if re.fullmatch(r"[+-]\s*\d{1,3}(?:,\d{3})*", compact):
+        return True
+    return False
+
+
+def normalize_capture_memo(text):
+    memo = clean_ocr_text(text)
+    memo = memo.replace("｜", "|").replace("→", " -> ")
+    memo = re.sub(r"\b([A-Z]{3,})I([A-Z][a-z]+\.com)\b", r"\1 | \2", memo)
+    memo = re.sub(r"\s*\|\s*", " | ", memo)
+    memo = re.sub(r"\s*->\s*", " -> ", memo)
+    memo = re.sub(r"\s+", " ", memo).strip()
+    return memo
+
+
+def normalize_capture_title(memo):
+    normalized = normalize_capture_memo(memo)
+    if not normalized:
+        return "거래내역"
+    title = re.split(r"\s*(?:\||->)\s*", normalized, maxsplit=1)[0].strip()
+    title = re.sub(r"^([A-Z]{2,})([A-Z][A-Za-z]+\.com)$", r"\1", title)
+    title = re.sub(r"\s+", " ", title).strip()
+    return title[:80] or "거래내역"
+
+
+def build_capture_calendar_summaries(blocks, month, first_transaction_y):
+    if not month:
+        return []
+    day_blocks = []
+    for block in blocks:
+        text = clean_ocr_text(block_text(block))
+        if not re.fullmatch(r"\d{1,2}", text):
+            continue
+        day = int(text)
+        if not 1 <= day <= 31:
+            continue
+        if block.get("y1", 0) < 350 or block.get("y1", 0) >= first_transaction_y:
+            continue
+        day_blocks.append((day, block))
+
+    summaries = []
+    for day, day_block in day_blocks:
+        income = 0
+        expense = 0
+        for amount_block in blocks:
+            text = clean_ocr_text(block_text(amount_block))
+            if not re.fullmatch(r"[+-]\s*\d{1,3}(?:,\d{3})*", text):
+                continue
+            if not day_block.get("y2", 0) <= amount_block.get("cy", 0) <= first_transaction_y:
+                continue
+            if abs(amount_block.get("cx", 0) - day_block.get("cx", 0)) > 90:
+                continue
+            signed_amount = parse_signed_amount(text)
+            if signed_amount is None:
+                continue
+            if signed_amount >= 0:
+                income += signed_amount
+            else:
+                expense += abs(signed_amount)
+        if income or expense:
+            summaries.append({"day": day, "month": month, "income": income, "expense": expense})
+    return summaries
+
+
+def infer_capture_prefix_date(blocks, lines, prefix_entries, first_transaction_y):
+    if not prefix_entries:
+        return None
+    month = extract_capture_month(lines)
+    if not month:
+        return None
+    income = sum(entry.get("amount") or 0 for entry in prefix_entries if entry.get("entryType") == "INCOME")
+    expense = sum(entry.get("amount") or 0 for entry in prefix_entries if entry.get("entryType") == "EXPENSE")
+    if not income and not expense:
+        return None
+
+    summaries = build_capture_calendar_summaries(blocks, month, first_transaction_y)
+    exact_matches = [
+        summary for summary in summaries if summary["income"] == income and summary["expense"] == expense
+    ]
+    candidates = exact_matches or sorted(
+        summaries,
+        key=lambda summary: abs(summary["income"] - income) + abs(summary["expense"] - expense),
+    )[:1]
+    if not candidates:
+        return None
+    selected = candidates[0]
+    try:
+        return date(date.today().year, selected["month"], selected["day"]).isoformat()
+    except ValueError:
+        return None
+
+
+def make_capture_entry(amount_info, memo, entry_date):
+    normalized_memo = normalize_capture_memo(memo)
+    title = normalize_capture_title(normalized_memo)
+    return {
+        "entryDate": entry_date,
+        "entryTime": None,
+        "entryType": amount_info["entryType"],
+        "title": title,
+        "memo": normalized_memo or title,
+        "amount": amount_info["amount"],
+        "vendor": title,
+        "paymentMethodText": None,
+        "categoryGroupName": None,
+        "categoryDetailName": None,
+        "categoryText": None,
+        "lineItems": [],
+        "confidence": 0.72 if normalized_memo else 0.58,
+        "warnings": [],
+    }
+
+
+def format_payment_capture_structured_text(capture):
+    lines = ["거래내역 캡처"]
+    previous_date = None
+    for entry in capture.get("entries") or []:
+        entry_date = entry.get("entryDate")
+        if entry_date and entry_date != previous_date:
+            lines.append("")
+            lines.append(entry_date)
+            previous_date = entry_date
+        sign = "-" if entry.get("entryType") == "EXPENSE" else "+"
+        amount = format_amount(entry.get("amount"))
+        memo = entry.get("memo") or entry.get("title") or "거래내역"
+        lines.append(f"{sign}{amount}원 {memo}")
+    return "\n".join(lines).strip()
+
+
+def parse_payment_capture_layout(blocks, lines):
+    rows = group_blocks_into_rows(blocks)
+    amount_row_indexes = [
+        index for index, row in enumerate(rows) if parse_payment_capture_amount(row.get("text"))
+    ]
+    if len(amount_row_indexes) < 2:
+        return None
+
+    entries = []
+    prefix_indexes = []
+    current_date = None
+    first_transaction_y = rows[amount_row_indexes[0]].get("cy", 999999)
+    for index, row in enumerate(rows):
+        row_text = clean_ocr_text(row.get("text"))
+        parsed_date = parse_korean_month_day(row_text)
+        if parsed_date:
+            current_date = parsed_date
+            continue
+
+        amount_info = parse_payment_capture_amount(row_text)
+        if not amount_info:
+            continue
+
+        memo_parts = []
+        for next_row in rows[index + 1 :]:
+            next_text = clean_ocr_text(next_row.get("text"))
+            if next_row.get("cy", 0) - row.get("cy", 0) > 180 and memo_parts:
+                break
+            if parse_korean_month_day(next_text) or parse_payment_capture_amount(next_text):
+                break
+            if is_capture_noise_text(next_text):
+                continue
+            if re.search(r"[가-힣A-Za-z]", next_text):
+                memo_parts.append(next_text)
+            if next_row.get("cy", 0) - row.get("cy", 0) > 150:
+                break
+
+        entry = make_capture_entry(amount_info, " ".join(memo_parts), current_date)
+        if not current_date:
+            prefix_indexes.append(len(entries))
+        entries.append(entry)
+
+    if len(entries) < 2:
+        return None
+
+    prefix_entries = [entries[index] for index in prefix_indexes]
+    inferred_date = infer_capture_prefix_date(blocks, lines, prefix_entries, first_transaction_y)
+    if inferred_date:
+        for index in prefix_indexes:
+            entries[index]["entryDate"] = inferred_date
+
+    capture = {"entries": entries, "entryCount": len(entries)}
+    capture["structuredText"] = format_payment_capture_structured_text(capture)
+    return capture
+
+
+def build_payment_capture_heuristic(capture):
+    entries = capture.get("entries") if isinstance(capture, dict) else None
+    if entries:
+        return dict(entries[0])
+    return {
+        "entryDate": None,
+        "entryTime": None,
+        "entryType": "EXPENSE",
+        "title": "거래내역",
+        "memo": None,
+        "amount": None,
+        "vendor": None,
+        "paymentMethodText": None,
+        "categoryGroupName": None,
+        "categoryDetailName": None,
+        "categoryText": None,
+        "lineItems": [],
+        "confidence": 0.2,
+        "warnings": ["payment_capture_entries_not_found"],
+    }
+
+
 def parse_vendor(lines):
     ignored = {"합계", "총액", "승인", "카드", "일시", "금액", "부가세", "거래"}
     for line in lines[:8]:
@@ -1162,7 +1424,7 @@ def merge_single_entry(heuristic, entry_result, llm_warning=None):
                 parsed[key] = value
     if llm_warning:
         warnings.append(llm_warning)
-    parsed["amount"] = normalize_amount(parsed.get("amount"))
+    parsed["amount"] = normalize_entry_amount(parsed.get("amount"))
     parsed["entryType"] = normalize_entry_type(parsed.get("entryType"))
     parsed["warnings"] = sorted(set(str(item) for item in warnings if item))
     return parsed
@@ -1188,6 +1450,19 @@ def merge_parsed_entries(heuristic, llm_result, llm_warning):
         merge_single_entry(heuristic if index == 0 else {}, entry, llm_warning if index == 0 else None)
         for index, entry in enumerate(entries)
     ]
+
+
+def merge_payment_capture_entries(capture, llm_result, llm_warning):
+    base_entries = capture.get("entries") if isinstance(capture, dict) else []
+    if not base_entries:
+        return merge_parsed_entries(build_payment_capture_heuristic(capture), llm_result, llm_warning)
+
+    llm_entries = extract_llm_entries(llm_result)
+    merged_entries = []
+    for index, base_entry in enumerate(base_entries):
+        llm_entry = llm_entries[index] if index < len(llm_entries) else None
+        merged_entries.append(merge_single_entry(base_entry, llm_entry, llm_warning if index == 0 else None))
+    return merged_entries
 
 
 async def require_api_key(x_ocr_api_key: str = Header(default="")):
@@ -1233,17 +1508,45 @@ async def analyze(
         ocr_ms = int((time.perf_counter() - ocr_started_at) * 1000)
 
         raw_ocr_text = "\n".join(lines)
-        receipt = parse_receipt_layout(blocks, lines)
-        raw_text = receipt.get("structuredText") if receipt else raw_ocr_text
-        heuristic = heuristic_parse(lines, receipt)
-        llm_started_at = time.perf_counter()
-        llm_result, llm_warning = parse_with_llm(raw_text, document_type)
-        llm_ms = int((time.perf_counter() - llm_started_at) * 1000)
-        parsed_entries = merge_parsed_entries(heuristic, llm_result, llm_warning)
-        parsed = parsed_entries[0] if parsed_entries else merge_single_entry(heuristic, None, llm_warning)
-        detected_document_type = normalize_document_type(
-            llm_result.get("documentType") if isinstance(llm_result, dict) else document_type
+        payment_capture = parse_payment_capture_layout(blocks, lines)
+        receipt = None if document_type == "PAYMENT_CAPTURE" else parse_receipt_layout(blocks, lines)
+        use_payment_capture = (
+            document_type == "PAYMENT_CAPTURE"
+            or (
+                document_type == "AUTO"
+                and payment_capture
+                and len(payment_capture.get("entries") or []) >= 2
+                and (
+                    not receipt
+                    or re.search(r"검색|→|->|계좌|네이버|토스|\d{1,2}\s*월\s*\d{1,2}\s*일", raw_ocr_text)
+                )
+            )
         )
+
+        if use_payment_capture and payment_capture:
+            raw_text = payment_capture.get("structuredText") or raw_ocr_text
+            heuristic = build_payment_capture_heuristic(payment_capture)
+        else:
+            raw_text = receipt.get("structuredText") if receipt else raw_ocr_text
+            heuristic = heuristic_parse(lines, receipt)
+
+        llm_started_at = time.perf_counter()
+        llm_document_type = "PAYMENT_CAPTURE" if use_payment_capture else document_type
+        llm_result, llm_warning = parse_with_llm(raw_text, llm_document_type)
+        llm_ms = int((time.perf_counter() - llm_started_at) * 1000)
+        if use_payment_capture and payment_capture:
+            parsed_entries = merge_payment_capture_entries(payment_capture, llm_result, llm_warning)
+        else:
+            parsed_entries = merge_parsed_entries(heuristic, llm_result, llm_warning)
+        parsed = parsed_entries[0] if parsed_entries else merge_single_entry(heuristic, None, llm_warning)
+        if use_payment_capture:
+            detected_document_type = "PAYMENT_CAPTURE"
+        elif receipt:
+            detected_document_type = "RECEIPT"
+        else:
+            detected_document_type = normalize_document_type(
+                llm_result.get("documentType") if isinstance(llm_result, dict) else document_type
+            )
 
         return {
             "ok": True,
@@ -1259,6 +1562,7 @@ async def analyze(
                 for block in blocks
             ],
             "receipt": receipt,
+            "paymentCapture": payment_capture,
             "parsed": parsed,
             "parsedEntries": parsed_entries,
             "timing": {

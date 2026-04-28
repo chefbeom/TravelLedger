@@ -1995,7 +1995,6 @@ defineExpose({
           <div class="receipt-ocr-panel__header">
             <div>
               <strong>거래 이미지 자동입력</strong>
-              <span>영수증이나 거래내역 캡처를 모달에서 분석하고 검토합니다.</span>
             </div>
             <div class="receipt-ocr-panel__actions">
               <button

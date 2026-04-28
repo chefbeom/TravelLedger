@@ -13,6 +13,7 @@ from pathlib import Path
 import requests
 import uvicorn
 from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, UploadFile, status
+from PIL import Image, ImageOps
 
 
 class Settings:
@@ -29,12 +30,29 @@ class Settings:
         self.llm_api_key = os.getenv("LLM_API_KEY", "").strip()
         self.llm_model = os.getenv("LLM_MODEL", "gemma:2b")
         self.llm_timeout_seconds = float(os.getenv("LLM_TIMEOUT_SECONDS", "30"))
+        self.rotation_mode = os.getenv("OCR_ROTATION_MODE", "auto").strip().lower()
+        self.original_accept_score = float(os.getenv("OCR_ORIGINAL_ACCEPT_SCORE", "180"))
 
 
 settings = Settings()
 app = FastAPI(title="Calen OCR Analysis Service", version="1.0.0")
 ocr_instance = None
 ocr_lock = threading.Lock()
+
+RECEIPT_KEYWORDS = (
+    "\uacb0\uc81c",
+    "\uc2e0\uc6a9\uce74\ub4dc",
+    "\uccb4\ud06c\uce74\ub4dc",
+    "\uce74\ub4dc",
+    "\uc601\uc218\uc99d",
+    "\uc2b9\uc778",
+    "\ud569\uacc4",
+    "\ucd1d\uc561",
+    "\uacfc\uc138",
+    "\ubd80\uac00\uc138",
+    "\ud310\ub9e4",
+    "\uc0ac\uc5c5\uc790",
+)
 
 
 def iter_texts(result):
@@ -103,7 +121,7 @@ def load_ocr():
         return ocr_instance
 
 
-def predict_texts(image_path):
+def run_ocr(image_path):
     ocr = load_ocr()
     with ocr_lock:
         with warnings.catch_warnings():
@@ -113,6 +131,112 @@ def predict_texts(image_path):
             else:
                 result = ocr.ocr(str(image_path), cls=False)
     return [text.strip() for text in iter_texts(result) if str(text).strip()]
+
+
+def get_rotation_degrees(image_path):
+    if settings.rotation_mode in {"off", "none", "false", "0"}:
+        return [0]
+    if settings.rotation_mode == "all":
+        return [0, 90, 180, 270]
+
+    try:
+        with Image.open(image_path) as image:
+            width, height = ImageOps.exif_transpose(image).size
+    except OSError:
+        return [0]
+
+    if width > height * 1.08:
+        return [0, 90, 270, 180]
+    return [0, 180, 90, 270]
+
+
+def save_rotation_candidate(source_path, temp_dir, degrees):
+    with Image.open(source_path) as image:
+        normalized = ImageOps.exif_transpose(image)
+        if degrees:
+            normalized = normalized.rotate(degrees, expand=True)
+        if normalized.mode not in {"RGB", "L"}:
+            normalized = normalized.convert("RGB")
+        candidate_path = temp_dir / f"ocr-rotation-{degrees}.png"
+        normalized.save(candidate_path)
+        return candidate_path
+
+
+def get_ocr_quality(lines):
+    raw_text = "\n".join(lines)
+    return {
+        "raw_text_length": len(raw_text),
+        "hangul_count": len(re.findall(r"[\uac00-\ud7a3]", raw_text)),
+        "amount_count": len(re.findall(r"(?:\d{1,3}(?:,\d{3})+|\b\d{4,}\b)", raw_text)),
+        "date_count": len(re.findall(r"20\d{2}[.\-/\s]?\d{1,2}[.\-/\s]?\d{1,2}", raw_text)),
+        "time_count": len(re.findall(r"\b(?:[01]?\d|2[0-3]):[0-5]\d(?::[0-5]\d)?\b", raw_text)),
+        "keyword_count": sum(raw_text.count(keyword) for keyword in RECEIPT_KEYWORDS),
+        "noise_count": len(re.findall(r"[_\[\]{}<>|`~]", raw_text)),
+        "latin_fragment_count": len(re.findall(r"[A-Za-z]{2,}", raw_text)),
+        "meaningful_line_count": sum(1 for line in lines if len(line.strip()) >= 2),
+    }
+
+
+def score_ocr_lines(lines):
+    raw_text = "\n".join(lines)
+    if not raw_text.strip():
+        return -1000
+
+    quality = get_ocr_quality(lines)
+
+    return (
+        quality["keyword_count"] * 25
+        + min(quality["amount_count"], 14) * 8
+        + min(quality["date_count"], 3) * 18
+        + min(quality["time_count"], 4) * 12
+        + min(quality["hangul_count"], 320) * 0.25
+        + min(quality["meaningful_line_count"], 60) * 1.25
+        - min(quality["noise_count"], 120) * 0.7
+        - min(quality["latin_fragment_count"], 30) * 1.5
+    )
+
+
+def should_accept_original(lines, score):
+    quality = get_ocr_quality(lines)
+    if not lines or score < settings.original_accept_score:
+        return False
+
+    has_transaction_shape = (
+        quality["amount_count"] >= 1
+        and (quality["keyword_count"] >= 2 or quality["date_count"] + quality["time_count"] >= 1)
+    )
+    noise_ratio = quality["noise_count"] / max(quality["raw_text_length"], 1)
+    too_many_noise_marks = quality["noise_count"] > 12 and noise_ratio > 0.05
+    too_many_latin_fragments = quality["latin_fragment_count"] > max(8, quality["meaningful_line_count"])
+
+    return has_transaction_shape and not too_many_noise_marks and not too_many_latin_fragments
+
+
+def predict_texts(image_path):
+    best_lines = []
+    best_rotation = 0
+    best_score = -1000
+
+    with tempfile.TemporaryDirectory(prefix="calen-ocr-rotation-") as temp_name:
+        temp_dir = Path(temp_name)
+        rotation_degrees = get_rotation_degrees(image_path)
+        for index, degrees in enumerate(rotation_degrees):
+            candidate_path = save_rotation_candidate(image_path, temp_dir, degrees)
+            lines = run_ocr(candidate_path)
+            score = score_ocr_lines(lines)
+            if score > best_score:
+                best_lines = lines
+                best_rotation = degrees
+                best_score = score
+            if (
+                settings.rotation_mode == "auto"
+                and index == 0
+                and degrees == 0
+                and should_accept_original(lines, score)
+            ):
+                break
+
+    return best_lines, best_rotation
 
 
 def normalize_amount(value):
@@ -403,7 +527,7 @@ async def analyze(
             temp_path = Path(temp_file.name)
 
         ocr_started_at = time.perf_counter()
-        lines = predict_texts(temp_path)
+        lines, selected_rotation = predict_texts(temp_path)
         ocr_ms = int((time.perf_counter() - ocr_started_at) * 1000)
 
         raw_text = "\n".join(lines)
@@ -427,6 +551,7 @@ async def analyze(
                 "ocrMs": ocr_ms,
                 "llmMs": llm_ms,
                 "totalMs": int((time.perf_counter() - started_at) * 1000),
+                "ocrRotationDegrees": selected_rotation,
             },
         }
     finally:

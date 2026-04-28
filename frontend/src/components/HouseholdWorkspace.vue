@@ -536,6 +536,7 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   window.removeEventListener('pointerdown', handleGlobalPointerDown)
+  receiptOcr.items.forEach(revokeReceiptOcrItemPreview)
   if (feedbackTimerId) {
     window.clearTimeout(feedbackTimerId)
   }
@@ -927,7 +928,15 @@ function applyEntrySuggestion(suggestion) {
   syncEntryDefaults()
 }
 
+function revokeReceiptOcrItemPreview(item) {
+  if (item?.previewUrl) {
+    URL.revokeObjectURL(item.previewUrl)
+    item.previewUrl = ''
+  }
+}
+
 function clearReceiptOcr() {
+  receiptOcr.items.forEach(revokeReceiptOcrItemPreview)
   receiptOcr.isAnalyzing = false
   receiptOcr.pendingCount = 0
   receiptOcr.error = ''
@@ -986,6 +995,7 @@ function createReceiptOcrItem(file, documentType) {
   return {
     id: `ocr-${Date.now()}-${receiptOcrItemSequence}`,
     fileName: file.name || `transaction-image-${receiptOcrItemSequence}`,
+    previewUrl: URL.createObjectURL(file),
     documentType,
     status: 'analyzing',
     error: '',
@@ -1007,7 +1017,9 @@ function syncReceiptOcrBusyState() {
 }
 
 function removeReceiptOcrItem(itemId) {
-  receiptOcr.items = receiptOcr.items.filter((item) => item.id !== itemId)
+  const item = receiptOcr.items.find((candidate) => candidate.id === itemId)
+  revokeReceiptOcrItemPreview(item)
+  receiptOcr.items = receiptOcr.items.filter((candidate) => candidate.id !== itemId)
   syncReceiptOcrBusyState()
 }
 
@@ -1159,9 +1171,15 @@ async function applyReceiptOcrSuggestion(suggestion = receiptOcr.suggestedEntry)
     entryForm.amount = nextAmount
   }
 
-  entryForm.categoryGroupId = suggestion.categoryGroupId != null ? String(suggestion.categoryGroupId) : entryForm.categoryGroupId
-  entryForm.categoryDetailId = suggestion.categoryDetailId != null ? String(suggestion.categoryDetailId) : entryForm.categoryDetailId
-  entryForm.paymentMethodId = suggestion.paymentMethodId != null ? String(suggestion.paymentMethodId) : entryForm.paymentMethodId
+  if (suggestion.categoryGroupId) {
+    entryForm.categoryGroupId = String(suggestion.categoryGroupId)
+  }
+  if (suggestion.categoryDetailId) {
+    entryForm.categoryDetailId = String(suggestion.categoryDetailId)
+  }
+  if (suggestion.paymentMethodId) {
+    entryForm.paymentMethodId = String(suggestion.paymentMethodId)
+  }
   isEntryTimeEnabled.value = Boolean(suggestion.entryTime && suggestion.entryTime !== '00:00')
   syncEntryDefaults({ preferLatest: true, force: false })
 

@@ -2,21 +2,14 @@ package com.playdata.calen.ledger.ocr;
 
 import com.playdata.calen.account.service.AppUserService;
 import com.playdata.calen.common.exception.BadRequestException;
-import com.playdata.calen.ledger.domain.CategoryDetail;
-import com.playdata.calen.ledger.domain.CategoryGroup;
 import com.playdata.calen.ledger.domain.EntryType;
-import com.playdata.calen.ledger.domain.PaymentMethod;
 import com.playdata.calen.ledger.dto.LedgerOcrAnalyzeResponse;
 import com.playdata.calen.ledger.dto.LedgerOcrEntrySuggestionResponse;
 import com.playdata.calen.ledger.dto.LedgerOcrLineItemResponse;
 import com.playdata.calen.ledger.ocr.LedgerOcrRemoteClient.RemoteAnalyzeResponse;
 import com.playdata.calen.ledger.ocr.LedgerOcrRemoteClient.RemoteLineItem;
 import com.playdata.calen.ledger.ocr.LedgerOcrRemoteClient.RemoteParsedResult;
-import com.playdata.calen.ledger.repository.CategoryDetailRepository;
-import com.playdata.calen.ledger.repository.CategoryGroupRepository;
-import com.playdata.calen.ledger.repository.PaymentMethodRepository;
 import java.math.BigDecimal;
-import java.text.Normalizer;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.ArrayList;
@@ -37,9 +30,6 @@ public class LedgerOcrService {
     private final AppUserService appUserService;
     private final LedgerOcrProperties properties;
     private final LedgerOcrRemoteClient remoteClient;
-    private final CategoryGroupRepository categoryGroupRepository;
-    private final CategoryDetailRepository categoryDetailRepository;
-    private final PaymentMethodRepository paymentMethodRepository;
 
     public LedgerOcrAnalyzeResponse analyze(Long userId, MultipartFile file, String documentType) {
         appUserService.getRequiredUser(userId);
@@ -54,12 +44,10 @@ public class LedgerOcrService {
                 ? EntryType.INCOME
                 : EntryType.EXPENSE;
 
-        MatchedCategory category = matchCategory(userId, entryType, parsed);
-        PaymentMethod paymentMethod = matchPaymentMethod(userId, parsed);
         List<LedgerOcrLineItemResponse> lineItems = mapLineItems(parsed);
-        LedgerOcrEntrySuggestionResponse suggestion = buildSuggestion(parsed, entryType, category, paymentMethod, lineItems);
+        LedgerOcrEntrySuggestionResponse suggestion = buildSuggestion(parsed, entryType, lineItems);
         List<LedgerOcrEntrySuggestionResponse> suggestions = parsedEntries.stream()
-                .map((entry) -> buildSuggestionForParsedEntry(userId, entry))
+                .map(this::buildSuggestionForParsedEntry)
                 .toList();
         if (suggestions.isEmpty() && suggestion != null) {
             suggestions = List.of(suggestion);
@@ -74,8 +62,8 @@ public class LedgerOcrService {
                 parsed != null ? parsed.confidence() : null,
                 parsed != null && parsed.warnings() != null ? parsed.warnings() : List.of(),
                 parsed != null ? limit(parsed.vendor(), MAX_TEXT_LENGTH) : null,
-                parsed != null ? limit(parsed.paymentMethodText(), MAX_TEXT_LENGTH) : null,
-                parsed != null ? limit(firstNonBlank(parsed.categoryText(), parsed.categoryGroupName(), parsed.categoryDetailName()), MAX_TEXT_LENGTH) : null,
+                null,
+                null,
                 remoteResponse.timing() == null ? java.util.Map.of() : remoteResponse.timing()
         );
     }
@@ -103,13 +91,11 @@ public class LedgerOcrService {
         return List.of();
     }
 
-    private LedgerOcrEntrySuggestionResponse buildSuggestionForParsedEntry(Long userId, RemoteParsedResult parsed) {
+    private LedgerOcrEntrySuggestionResponse buildSuggestionForParsedEntry(RemoteParsedResult parsed) {
         EntryType entryType = parsed != null && parsed.entryType() == EntryType.INCOME
                 ? EntryType.INCOME
                 : EntryType.EXPENSE;
-        MatchedCategory category = matchCategory(userId, entryType, parsed);
-        PaymentMethod paymentMethod = matchPaymentMethod(userId, parsed);
-        return buildSuggestion(parsed, entryType, category, paymentMethod, mapLineItems(parsed));
+        return buildSuggestion(parsed, entryType, mapLineItems(parsed));
     }
 
     private void validateReady() {
@@ -138,8 +124,6 @@ public class LedgerOcrService {
     private LedgerOcrEntrySuggestionResponse buildSuggestion(
             RemoteParsedResult parsed,
             EntryType entryType,
-            MatchedCategory category,
-            PaymentMethod paymentMethod,
             List<LedgerOcrLineItemResponse> lineItems
     ) {
         LocalDate entryDate = parsed != null && parsed.entryDate() != null ? parsed.entryDate() : LocalDate.now();
@@ -162,12 +146,12 @@ public class LedgerOcrService {
                 memo,
                 amount,
                 entryType,
-                category.group() != null ? category.group().getId() : null,
-                category.group() != null ? category.group().getName() : null,
-                category.detail() != null ? category.detail().getId() : null,
-                category.detail() != null ? category.detail().getName() : null,
-                paymentMethod != null ? paymentMethod.getId() : null,
-                paymentMethod != null ? paymentMethod.getName() : null
+                null,
+                null,
+                null,
+                null,
+                null,
+                null
         );
     }
 
@@ -177,10 +161,6 @@ public class LedgerOcrService {
         }
 
         List<String> parts = new ArrayList<>();
-        addIfPresent(parts, parsed.memo());
-        if (isPresent(parsed.vendor()) && parts.stream().noneMatch((item) -> item.contains(parsed.vendor()))) {
-            parts.add("Store: " + parsed.vendor());
-        }
         if (!lineItems.isEmpty()) {
             String itemSummary = lineItems.stream()
                     .limit(5)
@@ -190,8 +170,9 @@ public class LedgerOcrService {
                     .stream()
                     .reduce((left, right) -> left + ", " + right)
                     .orElse("");
-            addIfPresent(parts, "Items: " + itemSummary);
+            addIfPresent(parts, itemSummary);
         }
+        addIfPresent(parts, parsed.memo());
         return parts.isEmpty() ? null : String.join(" / ", parts);
     }
 
@@ -220,80 +201,6 @@ public class LedgerOcrService {
         );
     }
 
-    private MatchedCategory matchCategory(Long userId, EntryType entryType, RemoteParsedResult parsed) {
-        if (parsed == null) {
-            return new MatchedCategory(null, null);
-        }
-
-        List<String> candidates = nonBlankCandidates(
-                parsed.categoryDetailName(),
-                parsed.categoryGroupName(),
-                parsed.categoryText()
-        );
-        List<CategoryGroup> groups = categoryGroupRepository.findAllByOwnerIdAndEntryTypeAndActiveTrueOrderByDisplayOrderAscIdAsc(userId, entryType);
-
-        for (CategoryGroup group : groups) {
-            List<CategoryDetail> details = categoryDetailRepository.findAllByGroupIdOrderByDisplayOrderAscIdAsc(group.getId());
-            for (CategoryDetail detail : details) {
-                if (matchesAny(detail.getName(), candidates)) {
-                    return new MatchedCategory(group, detail);
-                }
-            }
-        }
-
-        for (CategoryGroup group : groups) {
-            if (matchesAny(group.getName(), candidates)) {
-                return new MatchedCategory(group, null);
-            }
-        }
-
-        return new MatchedCategory(null, null);
-    }
-
-    private PaymentMethod matchPaymentMethod(Long userId, RemoteParsedResult parsed) {
-        if (parsed == null || parsed.entryType() == EntryType.INCOME) {
-            return null;
-        }
-        List<String> candidates = nonBlankCandidates(parsed.paymentMethodText());
-        return paymentMethodRepository.findAllByOwnerIdAndActiveTrueOrderByDisplayOrderAscIdAsc(userId).stream()
-                .filter((paymentMethod) -> matchesAny(paymentMethod.getName(), candidates))
-                .findFirst()
-                .orElse(null);
-    }
-
-    private List<String> nonBlankCandidates(String... values) {
-        List<String> candidates = new ArrayList<>();
-        for (String value : values) {
-            if (isPresent(value)) {
-                candidates.add(value);
-            }
-        }
-        return candidates;
-    }
-
-    private boolean matchesAny(String value, List<String> candidates) {
-        String normalizedValue = normalizeMatchText(value);
-        if (normalizedValue.length() < 2) {
-            return false;
-        }
-        return candidates.stream()
-                .map(this::normalizeMatchText)
-                .filter((candidate) -> candidate.length() >= 2)
-                .anyMatch((candidate) -> normalizedValue.equals(candidate)
-                        || normalizedValue.contains(candidate)
-                        || candidate.contains(normalizedValue));
-    }
-
-    private String normalizeMatchText(String value) {
-        if (value == null) {
-            return "";
-        }
-        String normalized = Normalizer.normalize(value, Normalizer.Form.NFKC)
-                .toLowerCase(Locale.ROOT)
-                .replaceAll("[\\s\\-_/().\\[\\]]+", "");
-        return normalized.trim();
-    }
-
     private String firstNonBlank(String... values) {
         for (String value : values) {
             if (isPresent(value)) {
@@ -315,6 +222,4 @@ public class LedgerOcrService {
         return trimmed.length() <= maxLength ? trimmed : trimmed.substring(0, maxLength);
     }
 
-    private record MatchedCategory(CategoryGroup group, CategoryDetail detail) {
-    }
 }

@@ -415,6 +415,34 @@ function getReceiptDocumentLabel(documentType) {
   return receiptDocumentTypes.find((item) => item.value === documentType)?.label || '자동 감지'
 }
 
+function formatReceiptOcrTiming(timing) {
+  if (!timing || typeof timing !== 'object') {
+    return ''
+  }
+  const parts = []
+  if (Number.isFinite(Number(timing.ocrMs))) {
+    parts.push(`OCR ${Math.round(Number(timing.ocrMs) / 1000)}초`)
+  }
+  if (Number.isFinite(Number(timing.llmMs))) {
+    parts.push(`AI ${Math.round(Number(timing.llmMs) / 1000)}초`)
+  }
+  if (Number.isFinite(Number(timing.ocrRotationDegrees)) && Number(timing.ocrRotationDegrees) !== 0) {
+    parts.push(`${timing.ocrRotationDegrees}도 보정`)
+  }
+  return parts.join(' · ')
+}
+
+function formatReceiptLineItemSummary(lineItems) {
+  if (!Array.isArray(lineItems) || !lineItems.length) {
+    return ''
+  }
+  return lineItems
+    .map((item) => item?.itemName)
+    .filter(Boolean)
+    .slice(0, 8)
+    .join(', ')
+}
+
 function getReceiptReviewGroups(entryType) {
   const source = props.categoryGroups.length ? props.categoryGroups : props.availableGroups
   return source.filter((group) => !entryType || group.entryType === entryType)
@@ -2620,127 +2648,115 @@ defineExpose({
               </div>
             </div>
 
-            <p v-if="item.status === 'analyzing'" class="receipt-ocr-review-card__message">
-              OCR과 AI 분석을 진행하고 있습니다.
-            </p>
-            <p v-else-if="item.error" class="receipt-ocr-review-card__message receipt-ocr-review-card__message--error">
-              {{ item.error }}
-            </p>
-            <div v-else class="receipt-ocr-review-card__entries">
-              <section
-                v-for="(entry, entryIndex) in item.suggestedEntries"
-                :key="`${item.id}-${entryIndex}`"
-                class="receipt-ocr-review-entry"
-              >
-                <div class="receipt-ocr-review-entry__title">
-                  <span>제안 {{ entryIndex + 1 }}</span>
-                  <button type="button" class="button button--secondary" @click="applyReceiptSuggestion(entry)">
-                    입력칸에 적용
-                  </button>
+            <div class="receipt-ocr-review-card__body">
+              <aside class="receipt-ocr-review-card__preview">
+                <img v-if="item.previewUrl" :src="item.previewUrl" :alt="item.fileName" />
+                <div v-else class="receipt-ocr-review-card__preview-empty">이미지 없음</div>
+                <div class="receipt-ocr-review-card__steps">
+                  <span class="is-complete">이미지 업로드</span>
+                  <span :class="{ 'is-complete': item.rawText, 'is-active': item.status === 'analyzing' }">OCR 글자 추출</span>
+                  <span :class="{ 'is-complete': item.status === 'done', 'is-active': item.status === 'analyzing' }">AI 항목 분석</span>
                 </div>
+              </aside>
 
-                <div class="receipt-ocr-review-entry__grid">
-                  <label class="field">
-                    <span class="field__label">구분</span>
-                    <select
-                      :value="entry.entryType"
-                      @change="updateReceiptReviewEntry(item.id, entryIndex, 'entryType', $event.target.value)"
+              <div class="receipt-ocr-review-card__analysis">
+                <p v-if="item.status === 'analyzing'" class="receipt-ocr-review-card__message">
+                  OCR 서버에서 글자를 추출하고 AI가 거래 항목을 분석하고 있습니다.
+                </p>
+                <p v-else-if="item.error" class="receipt-ocr-review-card__message receipt-ocr-review-card__message--error">
+                  {{ item.error }}
+                </p>
+                <div v-else class="receipt-ocr-review-card__columns">
+                  <section class="receipt-ocr-text-panel">
+                    <div class="receipt-ocr-text-panel__header">
+                      <strong>OCR 추출 글자</strong>
+                      <span>{{ formatReceiptOcrTiming(item.timing) }}</span>
+                    </div>
+                    <pre>{{ item.rawText || '추출된 글자가 없습니다.' }}</pre>
+                  </section>
+
+                  <section class="receipt-ocr-review-card__entries">
+                    <div v-if="formatReceiptLineItemSummary(item.lineItems)" class="receipt-ocr-line-items">
+                      <strong>구매 품목</strong>
+                      <span>{{ formatReceiptLineItemSummary(item.lineItems) }}</span>
+                    </div>
+
+                    <section
+                      v-for="(entry, entryIndex) in item.suggestedEntries"
+                      :key="`${item.id}-${entryIndex}`"
+                      class="receipt-ocr-review-entry"
                     >
-                      <option value="EXPENSE">지출</option>
-                      <option value="INCOME">수입</option>
-                    </select>
-                  </label>
-                  <label class="field">
-                    <span class="field__label">날짜</span>
-                    <input
-                      :value="entry.entryDate"
-                      type="date"
-                      @input="updateReceiptReviewEntry(item.id, entryIndex, 'entryDate', $event.target.value)"
-                    />
-                  </label>
-                  <label class="field">
-                    <span class="field__label">시간</span>
-                    <input
-                      :value="entry.entryTime"
-                      type="text"
-                      inputmode="numeric"
-                      placeholder="15:34"
-                      @input="updateReceiptReviewEntry(item.id, entryIndex, 'entryTime', $event.target.value)"
-                    />
-                  </label>
-                  <label class="field">
-                    <span class="field__label">금액</span>
-                    <input
-                      :value="entry.amount"
-                      type="number"
-                      min="0"
-                      step="100"
-                      @input="updateReceiptReviewEntry(item.id, entryIndex, 'amount', $event.target.value)"
-                    />
-                  </label>
-                  <label class="field">
-                    <span class="field__label">내용</span>
-                    <input
-                      :value="entry.title"
-                      type="text"
-                      @input="updateReceiptReviewEntry(item.id, entryIndex, 'title', $event.target.value)"
-                    />
-                  </label>
-                  <label class="field">
-                    <span class="field__label">결제수단</span>
-                    <select
-                      :value="entry.paymentMethodId"
-                      :disabled="entry.entryType === 'INCOME'"
-                      @change="updateReceiptReviewEntry(item.id, entryIndex, 'paymentMethodId', $event.target.value)"
-                    >
-                      <option value="">선택 안 함</option>
-                      <option v-for="method in paymentMethods" :key="method.id" :value="String(method.id)">
-                        {{ method.name }}
-                      </option>
-                    </select>
-                  </label>
-                  <label class="field">
-                    <span class="field__label">대분류</span>
-                    <select
-                      :value="entry.categoryGroupId"
-                      @change="updateReceiptReviewEntry(item.id, entryIndex, 'categoryGroupId', $event.target.value)"
-                    >
-                      <option value="">선택 안 함</option>
-                      <option v-for="group in getReceiptReviewGroups(entry.entryType)" :key="group.id" :value="String(group.id)">
-                        {{ group.name }}
-                      </option>
-                    </select>
-                  </label>
-                  <label class="field">
-                    <span class="field__label">분류</span>
-                    <select
-                      :value="entry.categoryDetailId"
-                      @change="updateReceiptReviewEntry(item.id, entryIndex, 'categoryDetailId', $event.target.value)"
-                    >
-                      <option value="">선택 안 함</option>
-                      <option v-for="detail in getReceiptReviewDetails(entry)" :key="detail.id" :value="String(detail.id)">
-                        {{ detail.name }}
-                      </option>
-                    </select>
-                  </label>
-                  <label class="field field--full">
-                    <span class="field__label">메모</span>
-                    <textarea
-                      :value="entry.memo"
-                      rows="2"
-                      @input="updateReceiptReviewEntry(item.id, entryIndex, 'memo', $event.target.value)"
-                    ></textarea>
-                  </label>
+                      <div class="receipt-ocr-review-entry__title">
+                        <span>빠른 거래 입력 {{ entryIndex + 1 }}</span>
+                        <button type="button" class="button button--secondary" @click="applyReceiptSuggestion(entry)">
+                          입력칸에 적용
+                        </button>
+                      </div>
+
+                      <div class="receipt-ocr-review-entry__grid">
+                        <label class="field">
+                          <span class="field__label">구분</span>
+                          <select
+                            :value="entry.entryType"
+                            @change="updateReceiptReviewEntry(item.id, entryIndex, 'entryType', $event.target.value)"
+                          >
+                            <option value="EXPENSE">지출</option>
+                            <option value="INCOME">수입</option>
+                          </select>
+                        </label>
+                        <label class="field">
+                          <span class="field__label">날짜</span>
+                          <input
+                            :value="entry.entryDate"
+                            type="date"
+                            @input="updateReceiptReviewEntry(item.id, entryIndex, 'entryDate', $event.target.value)"
+                          />
+                        </label>
+                        <label class="field">
+                          <span class="field__label">시간</span>
+                          <input
+                            :value="entry.entryTime"
+                            type="text"
+                            inputmode="numeric"
+                            placeholder="15:34"
+                            @input="updateReceiptReviewEntry(item.id, entryIndex, 'entryTime', $event.target.value)"
+                          />
+                        </label>
+                        <label class="field">
+                          <span class="field__label">금액</span>
+                          <input
+                            :value="entry.amount"
+                            type="number"
+                            min="0"
+                            step="100"
+                            @input="updateReceiptReviewEntry(item.id, entryIndex, 'amount', $event.target.value)"
+                          />
+                        </label>
+                        <label class="field field--full">
+                          <span class="field__label">제목</span>
+                          <input
+                            :value="entry.title"
+                            type="text"
+                            @input="updateReceiptReviewEntry(item.id, entryIndex, 'title', $event.target.value)"
+                          />
+                        </label>
+                        <label class="field field--full">
+                          <span class="field__label">메모</span>
+                          <textarea
+                            :value="entry.memo"
+                            rows="3"
+                            @input="updateReceiptReviewEntry(item.id, entryIndex, 'memo', $event.target.value)"
+                          ></textarea>
+                        </label>
+                      </div>
+                    </section>
+
+                    <div v-if="item.warnings?.length" class="receipt-ocr-result__warnings">
+                      <span v-for="warning in item.warnings" :key="warning">{{ warning }}</span>
+                    </div>
+                  </section>
                 </div>
-              </section>
-
-              <div v-if="item.warnings?.length" class="receipt-ocr-result__warnings">
-                <span v-for="warning in item.warnings" :key="warning">{{ warning }}</span>
               </div>
-              <details v-if="item.rawText" class="receipt-ocr-result__raw">
-                <summary>OCR 원문</summary>
-                <pre>{{ item.rawText }}</pre>
-              </details>
             </div>
           </article>
         </div>

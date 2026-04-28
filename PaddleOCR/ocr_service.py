@@ -455,22 +455,23 @@ def parse_date(raw_text):
     current_year = date.today().year
     patterns = [
         r"(20\d{2})[.\-/\s년]+(\d{1,2})[.\-/\s월]+(\d{1,2})",
+        r"(\d{2})[.\-/\s년]+(\d{1,2})[.\-/\s월]+(\d{1,2})",
         r"(20\d{2})(\d{2})(\d{2})",
         r"(\d{1,2})[.\-/\s월]+(\d{1,2})",
     ]
     for pattern in patterns:
-        match = re.search(pattern, raw_text)
-        if not match:
-            continue
-        if len(match.groups()) == 3:
-            year, month, day = match.groups()
-        else:
-            year = current_year
-            month, day = match.groups()
-        try:
-            return date(int(year), int(month), int(day)).isoformat()
-        except ValueError:
-            continue
+        for match in re.finditer(pattern, raw_text):
+            if len(match.groups()) == 3:
+                year, month, day = match.groups()
+                if len(year) == 2:
+                    year = f"20{year}"
+            else:
+                year = current_year
+                month, day = match.groups()
+            try:
+                return date(int(year), int(month), int(day)).isoformat()
+            except ValueError:
+                continue
     return None
 
 
@@ -538,7 +539,10 @@ def find_store_name(blocks):
             continue
         if not re.search(r"[가-힣]", text):
             continue
-        if "주문서" in text or re.search(r"주문번호|결제|주소|사업자", text):
+        if "주문서" in text or re.search(
+            r"주문번호|영수증|결제|주소|사업자|대표|전화|주\s*소|상가|호실|카\s*드|체크|포인트|교환|환불|취소|지참|포장|가격|가능|불가|인증|시스템|이내|\d{1,2}월|\d{1,2}일",
+            text,
+        ):
             continue
         candidates.append(block)
     if not candidates:
@@ -551,13 +555,85 @@ def is_price_text(text):
     return re.fullmatch(r"-?\d{1,3}(?:,\d{3})*|-?\d+", clean_ocr_text(text)) is not None
 
 
+def is_probable_amount(value):
+    amount = parse_signed_amount(value)
+    if amount is None:
+        return False
+    return -1_000_000 <= amount <= 1_000_000
+
+
+def is_item_price_text(text):
+    amount = parse_signed_amount(text)
+    if amount is None:
+        return False
+    return amount == 0 or amount < 0 or amount >= 100
+
+
+def is_identifier_like(text):
+    compact = re.sub(r"[^0-9A-Za-z*]", "", str(text or ""))
+    digit_count = len(re.findall(r"\d", compact))
+    if "*" in compact and digit_count >= 4:
+        return True
+    if digit_count >= 8 and not re.search(r",", str(text or "")):
+        return True
+    return False
+
+
+def is_excluded_item_line(text):
+    compact = clean_ocr_text(text)
+    if not compact:
+        return True
+    excluded_patterns = (
+        r"주문서|주문번호|영수증|거래일시|결제일시|사업자번호|대표자?|주소|주\s*소|전화번호",
+        r"교환/환불|환불|취소|가능|불가|문의|멤버십|다이소몰|고객명|포인트|카\s*드|체크카드|승인|과세|부\s*가\s*세",
+        r"합계|판매|금액|단가|수량|상품명|포장|가격|전자|결제카드|인증기업|시스템|POS|Take[- ]?Out",
+    )
+    if any(re.search(pattern, compact, re.IGNORECASE) for pattern in excluded_patterns):
+        return True
+    if is_identifier_like(compact):
+        return True
+    if is_price_text(compact):
+        return True
+    if len(compact) <= 1:
+        return True
+    return False
+
+
+def clean_item_candidate_name(text):
+    cleaned = clean_ocr_text(text)
+    cleaned = re.sub(r"\[[0-9]{4,}\]", " ", cleaned)
+    cleaned = re.sub(r"\b[0-9]{6,}\b", " ", cleaned)
+    cleaned = re.sub(r"\s+", " ", cleaned).strip()
+    return cleaned
+
+
+def is_valid_item_name(text):
+    cleaned = clean_item_candidate_name(text)
+    if not cleaned or is_excluded_item_line(cleaned):
+        return False
+    hangul_count = len(re.findall(r"[가-힣]", cleaned))
+    latin_count = len(re.findall(r"[A-Za-z]", cleaned))
+    bracket_noise = len(re.findall(r"[\[\]{}]", cleaned))
+    if hangul_count == 0 and latin_count < 2:
+        return False
+    if bracket_noise and hangul_count < 2:
+        return False
+    if len(re.sub(r"[^가-힣A-Za-z0-9]", "", cleaned)) < 2:
+        return False
+    return True
+
+
 def build_receipt_items(blocks):
     if not blocks:
         return []
 
     max_x = max((block.get("x2", 0) for block in blocks), default=0)
-    takeout_block = find_block(blocks, r"Take[- ]?Out", min_score=0.7)
-    start_y = takeout_block.get("cy", 0) if takeout_block else 0
+    start_block = (
+        find_block(blocks, r"Take[- ]?Out", min_score=0.7)
+        or find_block(blocks, r"상품명", min_score=0.7)
+        or find_block(blocks, r"\d{4}[.\-/]\d{1,2}[.\-/]\d{1,2}|\d{2}[.\-/]\d{1,2}[.\-/]\d{1,2}", min_score=0.7)
+    )
+    start_y = start_block.get("cy", 0) if start_block else 0
     price_x_threshold = max_x * 0.73 if max_x else 0
     name_x_threshold = max_x * 0.68 if max_x else 99999
 
@@ -569,14 +645,14 @@ def build_receipt_items(blocks):
             continue
         if block_score(block) < 0.85:
             continue
-        if is_price_text(text) and block.get("x1", 0) >= price_x_threshold:
+        if is_price_text(text) and is_item_price_text(text) and block.get("x1", 0) >= price_x_threshold:
             price_blocks.append(block)
             continue
         if block.get("x1", 0) >= name_x_threshold:
             continue
         if not re.search(r"[가-힣A-Za-z]", text):
             continue
-        if re.search(r"Take[- ]?Out|고객요청|일회용품", text):
+        if not is_valid_item_name(text) or re.search(r"Take[- ]?Out|고객요청|일회용품", text):
             continue
         name_blocks.append(block)
 
@@ -594,7 +670,7 @@ def build_receipt_items(blocks):
         _, price_index, price_block = min(candidate_prices, key=lambda item: item[0])
         used_prices.add(price_index)
 
-        raw_name = clean_ocr_text(block_text(name_block))
+        raw_name = clean_item_candidate_name(block_text(name_block))
         item_name = normalize_item_name(raw_name)
         display_name = normalize_receipt_display_name(raw_name)
         price = parse_signed_amount(block_text(price_block))
@@ -610,6 +686,158 @@ def build_receipt_items(blocks):
             }
         )
     return items
+
+
+def group_blocks_into_rows(blocks):
+    sorted_blocks = sorted(
+        [block for block in blocks if block.get("box")],
+        key=lambda block: (block.get("cy", 0), block.get("x1", 0)),
+    )
+    rows = []
+    for block in sorted_blocks:
+        placed = False
+        for row in rows:
+            row_height = max(row.get("height", 0), block.get("height", 0), 1)
+            if abs(block.get("cy", 0) - row["cy"]) <= row_height * 0.7:
+                row["blocks"].append(block)
+                row["cy"] = sum(item.get("cy", 0) for item in row["blocks"]) / len(row["blocks"])
+                row["height"] = max(row["height"], block.get("height", 0))
+                placed = True
+                break
+        if not placed:
+            rows.append({"cy": block.get("cy", 0), "height": block.get("height", 0), "blocks": [block]})
+
+    for row in rows:
+        row["blocks"].sort(key=lambda block: block.get("x1", 0))
+        row["text"] = " ".join(clean_ocr_text(block_text(block)) for block in row["blocks"])
+    return rows
+
+
+def dedupe_items(items):
+    deduped = []
+    seen = set()
+    for item in items:
+        key = (item.get("name"), item.get("price"))
+        if not item.get("name") or key in seen:
+            continue
+        seen.add(key)
+        deduped.append(item)
+    return deduped
+
+
+def build_receipt_items_from_rows(blocks):
+    rows = group_blocks_into_rows(blocks)
+    start_block = (
+        find_block(blocks, r"Take[- ]?Out", min_score=0.7)
+        or find_block(blocks, r"상품명", min_score=0.7)
+        or find_block(blocks, r"\d{4}[.\-/]\d{1,2}[.\-/]\d{1,2}|\d{2}[.\-/]\d{1,2}[.\-/]\d{1,2}", min_score=0.7)
+    )
+    start_y = start_block.get("cy", 0) if start_block else 0
+    items = []
+    for row in rows:
+        if row.get("cy", 0) <= start_y:
+            continue
+        row_blocks = row["blocks"]
+        price_candidates = []
+        name_parts = []
+        for block in row_blocks:
+            text = clean_ocr_text(block_text(block))
+            if is_price_text(text) and is_item_price_text(text) and block.get("x1", 0) > 900:
+                price_candidates.append((block.get("x1", 0), parse_signed_amount(text)))
+            elif is_valid_item_name(text):
+                name_parts.append(clean_item_candidate_name(text))
+        if not name_parts or not price_candidates:
+            continue
+        price_candidates.sort(key=lambda item: item[0])
+        price = price_candidates[-1][1]
+        raw_name = clean_item_candidate_name(" ".join(name_parts))
+        item_name = normalize_item_name(raw_name)
+        if not is_valid_item_name(item_name):
+            continue
+        items.append(
+            {
+                "name": item_name,
+                "displayName": normalize_receipt_display_name(raw_name),
+                "quantity": 1,
+                "price": price,
+            }
+        )
+    return dedupe_items(items)
+
+
+def merge_receipt_items(primary_items, fallback_items):
+    if len(fallback_items) > len(primary_items):
+        primary_items, fallback_items = fallback_items, primary_items
+    result = list(primary_items)
+    seen_names = {item.get("name") for item in result}
+    for item in fallback_items:
+        if item.get("name") not in seen_names:
+            result.append(item)
+            seen_names.add(item.get("name"))
+    return dedupe_items(result)
+
+
+def get_line_amounts(line):
+    amounts = []
+    for match in re.finditer(r"-?\d{1,3}(?:,\d{3})+|-?\d{3,6}", str(line or "")):
+        value = match.group(0)
+        if is_probable_amount(value) and not is_identifier_like(value):
+            amounts.append(parse_signed_amount(value))
+    return amounts
+
+
+def extract_total_amount(blocks, lines, items):
+    label_priority = (
+        (r"승인금액|결제금액|받을금액|합계금액|판매\s*합계|판매합계", 100),
+        (r"합계", 70),
+    )
+    excluded_context = re.compile(r"과세|부\s*가\s*세|포인트|잔액|승인번호|사업자|전화|문의|카드번호|바코드")
+    candidates = []
+
+    for index, line in enumerate(lines):
+        window = " ".join(lines[max(0, index - 2) : min(len(lines), index + 3)])
+        for pattern, priority in label_priority:
+            if not re.search(pattern, window):
+                continue
+            if excluded_context.search(window) and priority < 100:
+                continue
+            for amount in get_line_amounts(line):
+                candidates.append((priority + 5, amount))
+            for nearby_line in lines[index + 1 : min(len(lines), index + 5)]:
+                for amount in get_line_amounts(nearby_line):
+                    candidates.append((priority, amount))
+
+    amount_blocks = [
+        block
+        for block in blocks
+        if is_price_text(block_text(block)) and is_probable_amount(block_text(block)) and not is_identifier_like(block_text(block))
+    ]
+    label_blocks = [
+        block
+        for block in blocks
+        if re.search(r"승인금액|결제금액|받을금액|합계금액|판매|합계", block_text(block))
+    ]
+    for label in label_blocks:
+        label_text = block_text(label)
+        priority = 100 if re.search(r"승인금액|결제금액|받을금액|합계금액|판매", label_text) else 70
+        if re.search(r"과세|부\s*가\s*세|포인트|승인번호", label_text):
+            continue
+        for amount_block in amount_blocks:
+            y_distance = abs(amount_block.get("cy", 0) - label.get("cy", 0))
+            x_is_right = amount_block.get("cx", 0) >= label.get("cx", 0)
+            if y_distance <= max(label.get("height", 0), amount_block.get("height", 0), 1) * 1.5 and x_is_right:
+                candidates.append((priority + 10, parse_signed_amount(block_text(amount_block))))
+            elif 0 < amount_block.get("cy", 0) - label.get("cy", 0) <= 260 and x_is_right:
+                candidates.append((priority, parse_signed_amount(block_text(amount_block))))
+
+    if candidates:
+        candidates = [(priority, amount) for priority, amount in candidates if amount is not None and amount > 0]
+        if candidates:
+            candidates.sort(key=lambda item: (item[0], item[1]), reverse=True)
+            return candidates[0][1]
+
+    item_total = sum(item["price"] for item in items if isinstance(item.get("price"), int))
+    return item_total if item_total > 0 else parse_amount("\n".join(lines))
 
 
 def format_receipt_structured_text(receipt):
@@ -659,24 +887,40 @@ def format_receipt_structured_text(receipt):
 def parse_receipt_layout(blocks, lines):
     raw_text = "\n".join(lines)
     compact_text = clean_ocr_text(raw_text)
-    if not re.search(r"주문번호|결제일시|사업자번호|Take[- ]?Out", compact_text):
+    if not re.search(
+        r"주문번호|결제일시|거래일시|사업자번호|합계금액|승인금액|판매\s*합계|상품명|카드/간편결제|Take[- ]?Out",
+        compact_text,
+    ):
         return None
 
     date_value = parse_date(compact_text)
     time_value = parse_time(compact_text)
     display_time_value = parse_full_time(compact_text) or time_value
-    pos_code = find_text(compact_text, r"\((P[O0]S[^)]*)\)")
-    store_address = find_text(compact_text, r"매장주소[:：]?\s*(.+?)(?:\s+사업자번호|$)")
+    pos_code = (
+        find_text(compact_text, r"\((P[O0]S[^)]*)\)")
+        or find_text(compact_text, r"영수증[:：]?\s*(P[O0]S\s*[0-9\-]+)")
+        or find_text(compact_text, r"\[?(P[O0]S\s*[0-9]+)\]?")
+    )
+    store_address = (
+        find_text(compact_text, r"매장주소[:：]?\s*(.+?)(?:\s+사업자번호|$)")
+        or find_text(compact_text, r"주\s*소[:：]?\s*(.+?)(?:\s+전화번호|\s+거래일시|\s+pos|$)")
+    )
     business_number = find_text(compact_text, r"사업자번호[:：]?\s*([0-9]{3}-[0-9]{2}-[0-9]{5})")
-    representative = find_text(compact_text, r"대표[:：]?\s*([가-힣A-Za-z]+)")
-    store_phone = find_text(compact_text, r"매장\s*[:：]\s*([0-9]{2,4}-[0-9]{3,4}-[0-9]{4})")
+    representative = find_text(compact_text, r"대표자?[:：]?\s*([가-힣A-Za-z]+)")
+    store_phone = (
+        find_text(compact_text, r"매장\s*[:：]\s*([0-9]{2,4}-[0-9]{3,4}-[0-9]{4})")
+        or find_text(compact_text, r"전화번호[:：]?\s*([0-9\-]{8,14})")
+    )
     center_match = re.search(
         r"고객센터문의\s*[:：]?\s*([0-9]{2,4}-[0-9]{3,4}-[0-9]{4})\s*\(?([0-9:~\-]+)?\)?",
         compact_text,
     )
     customer_center_phone = clean_ocr_text(center_match.group(1)) if center_match else None
     customer_center_hours = clean_ocr_text(center_match.group(2)) if center_match and center_match.group(2) else None
-    items = build_receipt_items(blocks)
+    coordinate_items = build_receipt_items(blocks)
+    row_items = build_receipt_items_from_rows(blocks)
+    items = merge_receipt_items(coordinate_items, row_items)
+    total_amount = extract_total_amount(blocks, lines, items)
 
     receipt = {
         "order_number": find_nearby_order_number(blocks),
@@ -697,9 +941,11 @@ def parse_receipt_layout(blocks, lines):
         "items": items,
     }
     receipt["structuredText"] = format_receipt_structured_text(receipt)
-    receipt["totalAmount"] = sum(item["price"] for item in items if isinstance(item.get("price"), int)) or None
+    receipt["totalAmount"] = total_amount
 
-    has_core_fields = receipt.get("datetime") and (receipt.get("items") or receipt.get("business_number"))
+    has_core_fields = (receipt.get("datetime") or receipt.get("business_number")) and (
+        receipt.get("items") or receipt.get("totalAmount") or receipt.get("business_number")
+    )
     return receipt if has_core_fields else None
 
 

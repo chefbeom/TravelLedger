@@ -85,6 +85,190 @@ TravelLedger는 가계부, 여행 기록, 여행 사진 지도, 드라이브형 
 - OCR 서버는 `X-OCR-API-Key`를 요구하며, 필요하면 내부에서 Gemma 호환 LLM을 호출해 OCR 원문을 거래 입력값으로 구조화합니다.
 - 실제 영수증 이미지, OCR 로그, Python 가상환경, 모델 캐시, 샘플 이미지는 Git에 올리지 않습니다.
 
+#### OCR / LLM 처리 흐름
+
+OCR 기능은 운영 앱 서버와 분리된 사설 Windows PC에서 실행하는 구조입니다. OCR PC는 외부 브라우저에 직접 노출하지 않고, 백엔드만 사설 네트워크 주소로 호출합니다.
+
+```text
+Frontend OCR Modal
+  └─ 이미지 업로드, 문서 타입 선택(RECEIPT / PAYMENT_CAPTURE)
+      ↓
+Backend
+  └─ POST /api/ledger/ocr/analyze
+      - 로그인 사용자만 호출
+      - 파일 크기/이미지 타입 검증
+      - OCR 서버 API 키를 서버 내부에서만 첨부
+      ↓
+Private OCR Server (PaddleOCR/FastAPI)
+  └─ POST /analyze
+      - PaddleOCR로 텍스트와 좌표 추출
+      - 영수증/거래내역 캡처별 deterministic parser 적용
+      - 필요 시 Ollama/Gemma LLM으로 OCR 원문 보정
+      - LLM 응답을 ledger-ocr-v1 스키마로 정규화
+      ↓
+Backend
+  └─ 기존 빠른 거래 입력 DTO에 맞는 suggestedEntry/suggestedEntries 생성
+      ↓
+Frontend
+  └─ 사용자가 미리보기에서 검토/수정 후 기존 거래 등록 버튼으로 저장
+```
+
+자동 저장은 하지 않습니다. OCR/AI 결과는 항상 사용자가 검토한 뒤 기존 가계부 저장 흐름으로 확정합니다.
+
+#### 문서 타입
+
+| 타입 | 용도 | 결과 |
+| --- | --- | --- |
+| `RECEIPT` | 영수증, 카드 매출전표처럼 한 장이 한 거래인 이미지 | `entries` 1건 중심 |
+| `PAYMENT_CAPTURE` | 앱 거래내역 캡처처럼 한 장에 여러 수입/지출 행이 있는 이미지 | 보이는 거래 행마다 `entries` 여러 건 |
+| `AUTO` | 서버가 영수증/거래내역 캡처 형태를 추정 | 상황에 따라 1건 또는 여러 건 |
+
+프론트는 OCR 모달에서 사용자가 `영수증` 또는 `거래내역 캡처`를 선택하도록 하고, 백엔드는 이 값을 OCR 서버의 `documentType`으로 전달합니다.
+
+#### OCR 서버 API
+
+OCR 서버는 FastAPI 기반이며 브라우저 공개 API가 아닙니다.
+
+| Method | Path | 설명 |
+| --- | --- | --- |
+| `GET` | `/health` | 서버 상태와 LLM provider 확인 |
+| `POST` | `/analyze` | multipart 이미지 분석 |
+
+`POST /analyze` 요청:
+
+- Header: `X-OCR-API-Key: <secret>`
+- Form field: `file=<image>`
+- Form field: `documentType=RECEIPT|PAYMENT_CAPTURE|AUTO`
+
+대표 응답 형태:
+
+```json
+{
+  "ok": true,
+  "documentType": "RECEIPT",
+  "rawText": "정리된 OCR/영수증 텍스트",
+  "rawOcrText": "PaddleOCR 원문 텍스트",
+  "parsed": {
+    "entryDate": "2026-04-26",
+    "entryTime": "18:33",
+    "entryType": "EXPENSE",
+    "title": "상호 또는 거래명",
+    "memo": "품목 또는 거래 설명",
+    "amount": 8000,
+    "vendor": "상호",
+    "paymentMethodText": null,
+    "categoryGroupName": null,
+    "categoryDetailName": null,
+    "categoryText": null,
+    "lineItems": [
+      {
+        "itemName": "품목명",
+        "quantity": 1,
+        "unit": null,
+        "price": 3000
+      }
+    ],
+    "confidence": 0.78,
+    "warnings": []
+  },
+  "parsedEntries": []
+}
+```
+
+LLM 결과는 신뢰하지 않고 서버에서 `ledger-ocr-v1` 계약으로 재정규화합니다.
+
+규칙:
+
+- 금액은 항상 양수 `amount`로 내려보냅니다.
+- 수입/지출 방향은 `entryType` (`INCOME`, `EXPENSE`)으로 표현합니다.
+- 날짜는 `YYYY-MM-DD`, 시간은 `HH:mm`입니다.
+- 결제수단, 대분류, 분류는 OCR/AI가 임의 확정하지 않으며 `null`로 유지합니다.
+- 카드번호 전체값, 실제 이미지, OCR 원문 로그는 운영 로그나 Git에 남기지 않습니다.
+- `parsedEntries`가 여러 건이면 백엔드는 이를 `suggestedEntries`로 매핑하고, 첫 항목을 호환용 `suggestedEntry`로 함께 제공합니다.
+
+#### Windows OCR 서버 설치와 실행
+
+Windows OCR PC에서는 Python/Paddle 버전 차이를 줄이기 위해 설치 스크립트를 사용합니다.
+
+```powershell
+cd <repo>\PaddleOCR
+powershell -NoProfile -ExecutionPolicy Bypass -File .\install_windows_ocr.ps1 -Recreate
+```
+
+API 키를 초기 템플릿에 함께 넣고 싶으면:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\install_windows_ocr.ps1 -Recreate -ApiKey "<same-value-as-backend>"
+```
+
+스크립트 역할:
+
+- 64-bit Python 3.10 또는 3.11 확인
+- 깨진 `ocr_env`를 `-Recreate` 옵션으로 재생성
+- `PaddleOCR/requirements.txt` 설치
+- `paddlepaddle`, `paddleocr`, `fastapi`, `uvicorn`, `Pillow` 버전 확인
+- `ocr.env.ps1` 템플릿 생성
+
+`ocr.env.ps1` 예시:
+
+```powershell
+$env:OCR_API_KEY="<same-value-as-backend>"
+$env:OCR_HOST="<ocr-private-host>"
+$env:OCR_PORT="8765"
+
+$env:OCR_LANG="korean"
+$env:OCR_ROTATION_MODE="off"
+$env:OCR_DEVICE="cpu"
+$env:OCR_CPU_THREADS="4"
+
+$env:PADDLE_OCR_BASE_DIR="C:\calen\paddleocr_models"
+$env:PADDLEOCR_BASE_DIR="C:\calen\paddleocr_models"
+$env:USERPROFILE="C:\calen\paddle_home"
+$env:HOME="C:\calen\paddle_home"
+
+$env:LLM_PROVIDER="ollama"
+$env:LLM_BASE_URL="http://127.0.0.1:11434"
+$env:LLM_MODEL="gemma2:2b"
+$env:LLM_TIMEOUT_SECONDS="90"
+```
+
+OCR 서버 실행:
+
+```powershell
+cd <repo>\PaddleOCR
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force
+.\ocr_env\Scripts\Activate.ps1
+. .\ocr.env.ps1
+python .\ocr_service.py
+```
+
+상태 확인:
+
+```powershell
+curl http://<ocr-private-host>:8765/health
+```
+
+응답 예시:
+
+```json
+{
+  "ok": true,
+  "ocrLoaded": false,
+  "llmProvider": "ollama"
+}
+```
+
+`ocrLoaded`는 첫 이미지 분석 요청 전에는 `false`일 수 있습니다. 첫 분석 요청에서 PaddleOCR 모델이 로드됩니다.
+
+#### OCR 서버 운영 주의사항
+
+- OCR 서버는 공인망에 직접 노출하지 않습니다.
+- 앱 백엔드만 사설망, VPN, Tailscale 등 제한된 경로로 접근하게 합니다.
+- `OCR_API_KEY`와 백엔드의 `LEDGER_OCR_API_KEY`는 같은 값이어야 합니다.
+- `ocr.env.ps1`, `ocr_env/`, `.paddleocr/`, `.paddlex/`, 로그, 테스트 영수증 이미지는 Git에 올리지 않습니다.
+- PaddleOCR 모델 캐시가 깨지면 `C:\calen\paddleocr_models`, `C:\calen\paddle_home` 같은 한글 없는 경로를 사용합니다.
+- 서버 재시작이 필요하면 기존 `python ocr_service.py` 창에서 `Ctrl+C` 후 다시 실행합니다.
+
 ## 프로젝트 구조
 
 ```text
@@ -157,6 +341,21 @@ Jenkins는 GitHub `main` 브랜치 변경을 기준으로 앱 서버의 `backend
 
 민감정보 보호를 위해 README에는 실제 Jenkins URL, 서버 IP, SSH 키 파일명, 운영 계정명, 도메인, 비밀번호를 기록하지 않습니다. Jenkins Job에서는 Jenkins Credentials 또는 Jenkins 서버 내부 보호 경로의 키를 사용하고, GitHub에는 `.env`, SSH private key, 실제 서버 주소를 커밋하지 않습니다.
 
+### CI/CD 책임 범위
+
+| 영역 | Jenkins 앱 배포 Job에서 처리 | 별도 운영 |
+| --- | --- | --- |
+| Git checkout | 예 | 아니오 |
+| 앱 서버 코드 갱신 | 예 | 아니오 |
+| Backend/Frontend 이미지 빌드 | 예 | 아니오 |
+| Backend/Frontend 컨테이너 재기동 | 예 | 아니오 |
+| MariaDB/MinIO 데이터 초기화 | 아니오 | 예 |
+| Redis Cache/State 재기동 | 아니오 | 예 |
+| OCR Windows 서버 배포 | 아니오 | 예 |
+| rclone 외부 백업 | 아니오 | 예 |
+
+OCR 서버는 앱 서버 Docker Compose에 포함하지 않습니다. OCR PC는 별도 Windows 프로세스로 운영하며, OCR 코드 변경 시 OCR PC에서 `git pull` 후 `python ocr_service.py`를 재실행합니다.
+
 ### 흐름
 
 1. GitHub `main` 브랜치에 변경 사항을 push합니다.
@@ -169,6 +368,20 @@ Jenkins는 GitHub `main` 브랜치 변경을 기준으로 앱 서버의 `backend
 8. `docker compose ps`로 상태를 확인합니다.
 
 데이터 서버, Redis 서버, MinIO 데이터 볼륨은 일반 앱 배포마다 재생성하지 않습니다.
+
+### Jenkins Job 변수
+
+실제 값은 Jenkins Credentials, Jenkins 전용 환경변수, 또는 서버 내부 보호 경로에서만 관리합니다.
+
+| 변수 | 설명 | 예시 |
+| --- | --- | --- |
+| `JENKINS_SSH_KEY_PATH` | Jenkins 서버에만 존재하는 SSH private key 경로 | `/var/lib/jenkins/<key-file>` |
+| `DEPLOY_USER` | 앱 서버 SSH 사용자 | `<deploy-user>` |
+| `DEPLOY_HOST` | 앱 서버 사설 또는 공인 접근 주소 | `<deploy-host>` |
+| `APP_DIR` | 앱 서버의 repository 경로 | `/home/<deploy-user>/calen` |
+| `BRANCH` | 배포 브랜치 | `main` |
+| `ENV_FILE` | 앱 서버 환경변수 파일 | `.env.oci.app` |
+| `COMPOSE_FILE` | 앱 서버 Compose 파일 | `docker-compose.oci.app.yml` |
 
 ### Jenkins Execute shell 예시
 
@@ -211,6 +424,8 @@ REMOTE_SCRIPT
 - 앱 배포 Job은 앱 서버 Compose만 갱신합니다. 데이터 서버와 Redis는 별도 운영 절차로 관리합니다.
 - Jenkins는 필요할 때만 외부 접근을 열고, 계정/권한/CSRF/crumb/방화벽 설정을 유지합니다.
 - 실제 운영 값은 Jenkins Credentials, 서버의 `.env.oci.*`, 보안 저장소에서만 관리합니다.
+- 앱 서버 디스크가 부족하면 Docker/Gradle 캐시 때문에 빌드가 실패할 수 있습니다. 운영자는 이미지/빌드 캐시/로그 정리 정책을 별도로 유지합니다.
+- Jenkins Job이 성공해도 OCR 서버 코드는 자동 재시작되지 않습니다. OCR 변경사항은 OCR PC에서 별도 pull/restart가 필요합니다.
 
 ## 환경변수와 민감정보 정책
 

@@ -7417,7 +7417,24 @@ textarea {
 }
 
 .household-sheet-table-wrap {
+  --household-sheet-head-height: 50px;
+  --household-sheet-row-height: 54px;
   max-height: 640px;
+}
+
+.household-sheet-table-wrap--scroll {
+  max-height: calc(var(--household-sheet-head-height) + (var(--household-sheet-row-height) * 5) + 2px);
+  overflow-y: auto;
+}
+
+.household-sheet-table-wrap--scroll .sheet-table th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
+.household-sheet-table-wrap--scroll .sheet-table td {
+  height: var(--household-sheet-row-height);
 }
 
 .household-time-field {

@@ -56,7 +56,8 @@ const timeValueOptions = Array.from({ length: 24 * 60 }, (_, index) => {
   return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`
 })
 const timePresetListId = 'household-time-presets'
-const SELECTED_DAY_ENTRY_PAGE_SIZE = 10
+const SELECTED_DAY_ENTRY_PAGE_SIZE = 1000
+const SELECTED_DAY_VISIBLE_ROWS = 5
 
 const aggregateWidgetKinds = [
   { value: 'NONE', label: '사용 안 함' },
@@ -2469,7 +2470,10 @@ defineExpose({
         </div>
       </div>
 
-      <div class="sheet-table-wrap household-sheet-table-wrap">
+      <div
+        class="sheet-table-wrap household-sheet-table-wrap"
+        :class="{ 'household-sheet-table-wrap--scroll': normalizedSelectedDateEntries.length > SELECTED_DAY_VISIBLE_ROWS }"
+      >
         <table class="sheet-table">
           <thead>
             <tr>

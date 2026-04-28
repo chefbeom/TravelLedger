@@ -83,7 +83,7 @@ app:
       base-url: ${LEDGER_OCR_BASE_URL:}
       api-key: ${LEDGER_OCR_API_KEY:}
       connect-timeout: ${LEDGER_OCR_CONNECT_TIMEOUT:3s}
-      read-timeout: ${LEDGER_OCR_READ_TIMEOUT:45s}
+      read-timeout: ${LEDGER_OCR_READ_TIMEOUT:90s}
       max-file-size: ${LEDGER_OCR_MAX_FILE_SIZE:10MB}
   redis:
     cache:

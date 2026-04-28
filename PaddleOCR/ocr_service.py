@@ -81,15 +81,25 @@ def load_ocr():
             warnings.simplefilter("ignore")
             from paddleocr import PaddleOCR
 
-            ocr_instance = PaddleOCR(
-                lang=settings.lang,
-                device=settings.device,
-                enable_mkldnn=settings.device == "cpu",
-                cpu_threads=settings.cpu_threads,
-                use_doc_orientation_classify=False,
-                use_doc_unwarping=False,
-                use_textline_orientation=False,
-            )
+            try:
+                ocr_instance = PaddleOCR(
+                    lang=settings.lang,
+                    device=settings.device,
+                    enable_mkldnn=settings.device == "cpu",
+                    cpu_threads=settings.cpu_threads,
+                    use_doc_orientation_classify=False,
+                    use_doc_unwarping=False,
+                    use_textline_orientation=False,
+                )
+            except (TypeError, ValueError):
+                ocr_instance = PaddleOCR(
+                    lang=settings.lang,
+                    use_gpu=settings.device != "cpu",
+                    enable_mkldnn=settings.device == "cpu",
+                    cpu_threads=settings.cpu_threads,
+                    use_angle_cls=False,
+                    show_log=False,
+                )
         return ocr_instance
 
 
@@ -98,7 +108,10 @@ def predict_texts(image_path):
     with ocr_lock:
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
-            result = ocr.predict(str(image_path))
+            if hasattr(ocr, "predict"):
+                result = ocr.predict(str(image_path))
+            else:
+                result = ocr.ocr(str(image_path), cls=False)
     return [text.strip() for text in iter_texts(result) if str(text).strip()]
 
 

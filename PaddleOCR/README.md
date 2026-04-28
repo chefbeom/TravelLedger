@@ -36,12 +36,12 @@ Gemma or another local model, expose it through one of these supported APIs:
 # OpenAI-compatible chat completions
 export LLM_PROVIDER="openai"
 export LLM_BASE_URL="http://127.0.0.1:11434/v1"
-export LLM_MODEL="gemma:2b"
+export LLM_MODEL="gemma2:2b"
 
 # Ollama chat API
 export LLM_PROVIDER="ollama"
 export LLM_BASE_URL="http://127.0.0.1:11434"
-export LLM_MODEL="gemma:2b"
+export LLM_MODEL="gemma2:2b"
 ```
 
 Do not expose this service directly to browsers or the public internet.

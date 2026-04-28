@@ -13,6 +13,17 @@ user to review and save the entry manually.
 
 ## Run
 
+On Windows, prefer the setup script because PaddleOCR and PaddlePaddle are
+sensitive to Python versions. Use 64-bit Python 3.10 or 3.11.
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\install_windows_ocr.ps1 -Recreate
+```
+
+The script creates `ocr_env`, installs `requirements.txt`, and creates a local
+`ocr.env.ps1` template when it does not already exist. Fill `OCR_API_KEY` with
+the same value configured in the Calen backend.
+
 ```bash
 python -m venv ocr_env
 source ocr_env/bin/activate

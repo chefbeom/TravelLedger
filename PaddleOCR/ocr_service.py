@@ -1312,9 +1312,219 @@ def normalize_document_type(value):
 
 def normalize_entry_type(value):
     normalized = str(value or "").strip().upper()
-    if normalized in {"INCOME", "수입", "DEPOSIT"}:
+    if normalized in {"INCOME", "수입", "입금", "수익", "DEPOSIT", "CREDIT", "PLUS", "+"}:
         return "INCOME"
     return "EXPENSE"
+
+
+def infer_entry_type_from_amount(value):
+    text = clean_ocr_text(value)
+    if text.startswith("+"):
+        return "INCOME"
+    if text.startswith("-"):
+        return "EXPENSE"
+    return None
+
+
+def normalize_schema_string(value, max_length=None):
+    if value is None:
+        return None
+    text = clean_ocr_text(value)
+    if not text:
+        return None
+    return text[:max_length] if max_length else text
+
+
+def normalize_schema_date(value):
+    if value is None:
+        return None
+    if isinstance(value, date):
+        return value.isoformat()
+    text = clean_ocr_text(value)
+    if not text:
+        return None
+    if re.fullmatch(r"20\d{2}-\d{2}-\d{2}", text):
+        try:
+            year, month, day = text.split("-")
+            return date(int(year), int(month), int(day)).isoformat()
+        except ValueError:
+            return None
+    return parse_date(text)
+
+
+def normalize_schema_time(value):
+    if value is None:
+        return None
+    text = clean_ocr_text(value)
+    if not text:
+        return None
+    return parse_time(text)
+
+
+def normalize_schema_number(value):
+    if value is None or value == "":
+        return None
+    if isinstance(value, (int, float)):
+        return value
+    text = clean_ocr_text(value)
+    if not text:
+        return None
+    try:
+        return float(text) if "." in text else int(re.sub(r"[^0-9-]", "", text))
+    except ValueError:
+        return None
+
+
+def normalize_schema_confidence(value):
+    number = normalize_schema_number(value)
+    if number is None:
+        return None
+    return max(0, min(float(number), 1))
+
+
+def normalize_schema_warnings(value):
+    if value is None:
+        return []
+    if isinstance(value, list):
+        warnings = value
+    else:
+        warnings = [value]
+    result = []
+    seen = set()
+    for item in warnings:
+        warning = normalize_schema_string(item, 80)
+        if warning and warning not in seen:
+            seen.add(warning)
+            result.append(warning)
+    return result
+
+
+def normalize_schema_line_item(item):
+    if isinstance(item, str):
+        item_name = normalize_schema_string(item, 160)
+        if not item_name:
+            return None
+        return {"itemName": item_name, "quantity": None, "unit": None, "price": None}
+    if not isinstance(item, dict):
+        return None
+    item_name = normalize_schema_string(
+        item.get("itemName") or item.get("name") or item.get("productName") or item.get("title"),
+        160,
+    )
+    if not item_name:
+        return None
+    quantity = normalize_schema_number(item.get("quantity") or item.get("count") or item.get("qty"))
+    price = normalize_entry_amount(item.get("price") or item.get("amount") or item.get("total"))
+    return {
+        "itemName": item_name,
+        "quantity": quantity,
+        "unit": normalize_schema_string(item.get("unit"), 30),
+        "price": price,
+    }
+
+
+def normalize_schema_entry(entry):
+    if not isinstance(entry, dict):
+        return None
+    raw_line_items = (
+        entry.get("lineItems")
+        or entry.get("items")
+        or entry.get("products")
+        or entry.get("purchasedItems")
+        or []
+    )
+    line_items = [
+        normalized_item
+        for normalized_item in (normalize_schema_line_item(item) for item in raw_line_items)
+        if normalized_item
+    ]
+    title = normalize_schema_string(
+        entry.get("title")
+        or entry.get("vendor")
+        or entry.get("merchant")
+        or entry.get("storeName")
+        or entry.get("store")
+        or (line_items[0]["itemName"] if line_items else None),
+        120,
+    )
+    memo = normalize_schema_string(entry.get("memo") or entry.get("description") or entry.get("note"), 800)
+    vendor = normalize_schema_string(entry.get("vendor") or title, 120)
+    raw_amount = entry.get("amount") or entry.get("totalAmount") or entry.get("total")
+    amount = normalize_entry_amount(raw_amount)
+    raw_entry_type = entry.get("entryType") or entry.get("type") or entry.get("direction")
+    entry_type = normalize_entry_type(raw_entry_type or infer_entry_type_from_amount(raw_amount))
+    warnings = normalize_schema_warnings(entry.get("warnings"))
+    if amount is None:
+        warnings.append("amount_not_found")
+
+    return {
+        "entryDate": normalize_schema_date(entry.get("entryDate") or entry.get("date") or entry.get("transactionDate")),
+        "entryTime": normalize_schema_time(entry.get("entryTime") or entry.get("time") or entry.get("transactionTime")),
+        "entryType": entry_type,
+        "title": title or "거래내역",
+        "memo": memo,
+        "amount": amount,
+        "vendor": vendor,
+        "paymentMethodText": None,
+        "categoryGroupName": None,
+        "categoryDetailName": None,
+        "categoryText": None,
+        "lineItems": line_items,
+        "confidence": normalize_schema_confidence(entry.get("confidence")),
+        "warnings": sorted(set(warnings)),
+    }
+
+
+def normalize_llm_schema(parsed, document_type):
+    if not isinstance(parsed, dict):
+        return None
+
+    normalized_document_type = normalize_document_type(parsed.get("documentType") or document_type)
+    raw_entries = None
+    for key in ("entries", "transactions", "parsedEntries", "suggestedEntries"):
+        if isinstance(parsed.get(key), list):
+            raw_entries = parsed.get(key)
+            break
+    if raw_entries is None:
+        raw_entries = [parsed]
+
+    entries = [
+        normalized_entry
+        for normalized_entry in (normalize_schema_entry(entry) for entry in raw_entries)
+        if normalized_entry
+    ]
+    result = {
+        "schemaVersion": "ledger-ocr-v1",
+        "documentType": normalized_document_type,
+        "entries": entries,
+    }
+    if entries:
+        result.update(entries[0])
+    return result
+
+
+LEDGER_OCR_JSON_SCHEMA = {
+    "schemaVersion": "ledger-ocr-v1",
+    "documentType": "RECEIPT|PAYMENT_CAPTURE",
+    "entries": [
+        {
+            "entryDate": "YYYY-MM-DD|null",
+            "entryTime": "HH:mm|null",
+            "entryType": "EXPENSE|INCOME",
+            "title": "merchant or transaction title",
+            "memo": "item names or transaction description",
+            "amount": "positive number|null",
+            "vendor": "merchant or null",
+            "paymentMethodText": None,
+            "categoryGroupName": None,
+            "categoryDetailName": None,
+            "categoryText": None,
+            "lineItems": [{"itemName": "name", "quantity": 1, "unit": None, "price": "positive number|null"}],
+            "confidence": "0..1",
+            "warnings": [],
+        }
+    ],
+}
 
 
 def build_llm_prompt(raw_text, document_type):
@@ -1335,19 +1545,18 @@ def build_llm_prompt(raw_text, document_type):
     return (
         "You parse Korean transaction image OCR text into strict JSON for a household ledger. "
         f"Document type hint: {document_type}. {document_guidance} "
-        "Return only JSON with these top-level keys: documentType AUTO|RECEIPT|PAYMENT_CAPTURE, "
-        "entries array. Extract only transaction date, time, title/store name, total amount, and purchased item names. "
-        "Each entry must have: entryDate YYYY-MM-DD or null, entryTime HH:mm or null, "
-        "entryType EXPENSE or INCOME, title, memo, amount number or null, vendor, paymentMethodText, "
-        "categoryGroupName, categoryDetailName, categoryText, lineItems array of "
-        "{itemName, quantity, unit, price}, confidence 0..1, warnings array. "
+        "Return JSON only, with exactly this canonical schema shape: "
+        f"{json.dumps(LEDGER_OCR_JSON_SCHEMA, ensure_ascii=False)}. "
+        "Use schemaVersion ledger-ocr-v1. Extract only transaction date, time, title/store name, "
+        "total amount, and purchased item names. Each amount must be a positive number; use entryType "
+        "EXPENSE or INCOME for direction instead of negative amounts. "
         "When the OCR text is already arranged like a receipt, preserve that reading order and keep item prices "
         "paired with the item on the same visual row. "
         "Do not extract payment method or ledger categories; always set paymentMethodText, categoryGroupName, "
         "categoryDetailName, and categoryText to null. "
         "Use title for the merchant/store or transaction title. Use memo only for purchased item names, "
         "joined in reading order when there are multiple items. Put the same purchased items into lineItems. "
-        "For backward compatibility also include the first entry fields at the top level. "
+        "For payment captures, split every visible transaction into one entries item. "
         "Use paid totals, not subtotals. Do not invent category IDs.\n\nOCR text:\n"
         f"{raw_text[:6000]}"
     )
@@ -1407,7 +1616,9 @@ def parse_with_llm(raw_text, document_type):
             content = call_openai_compatible(raw_text, document_type)
         parsed = extract_json_object(content)
         if isinstance(parsed, dict):
-            return parsed, None
+            normalized = normalize_llm_schema(parsed, document_type)
+            if normalized:
+                return normalized, None
         return None, "llm_invalid_json"
     except requests.RequestException:
         return None, "llm_request_failed"

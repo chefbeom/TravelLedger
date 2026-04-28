@@ -1818,10 +1818,6 @@ defineExpose({
       :style="calendarLayoutStyle"
     >
       <div class="panel__header household-calendar-control-panel__header">
-        <div>
-          <h2>{{ monthLabel }}</h2>
-          <p>달력을 넓게 보고 날짜를 누르면 바로 아래 거래 시트로 이동해 해당 날짜 거래를 바로 확인할 수 있습니다.</p>
-        </div>
         <div class="household-calendar-header-actions">
           <span class="panel__badge">{{ anchorDate.slice(0, 7) }}</span>
           <div class="household-calendar-layout-toolbar household-calendar-layout-toolbar--inline" data-no-drag="true">

@@ -246,7 +246,7 @@ const normalizedRouteMeta = {
   },
   household: {
     title: '가계부',
-    description: '월별 가계부, 통계, 검색과 분류 관리 기능을 한곳에서 확인합니다.',
+    description: '',
   },
   travel: {
     title: '여행',

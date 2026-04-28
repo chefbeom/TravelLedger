@@ -21,16 +21,15 @@ pip install -r requirements.txt
 export OCR_API_KEY="change-this-long-random-key"
 export OCR_HOST="127.0.0.1"
 export OCR_PORT="8765"
-export OCR_ROTATION_MODE="auto"
+export OCR_ROTATION_MODE="off"
 python ocr_service.py
 ```
 
 For a private OCR machine, bind `OCR_HOST` to a private LAN address and allow only
 the Calen backend host through the firewall.
-`OCR_ROTATION_MODE=auto` reads the original image first. If that result already
-looks usable, the service keeps it as-is; otherwise it tries rotated receipt
-candidates and chooses the most receipt-like OCR result. Use `off` only if OCR
-latency matters more than rotated photo quality.
+`OCR_ROTATION_MODE=off` keeps the image direction exactly as uploaded by the
+client. `all` is kept only as a diagnostic mode for manually comparing 0/90/180/270
+degree OCR candidates.
 
 ## Optional LLM parsing
 

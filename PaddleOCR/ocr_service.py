@@ -30,7 +30,7 @@ class Settings:
         self.llm_api_key = os.getenv("LLM_API_KEY", "").strip()
         self.llm_model = os.getenv("LLM_MODEL", "gemma:2b")
         self.llm_timeout_seconds = float(os.getenv("LLM_TIMEOUT_SECONDS", "30"))
-        self.rotation_mode = os.getenv("OCR_ROTATION_MODE", "auto").strip().lower()
+        self.rotation_mode = os.getenv("OCR_ROTATION_MODE", "off").strip().lower()
         self.original_accept_score = float(os.getenv("OCR_ORIGINAL_ACCEPT_SCORE", "180"))
 
 
@@ -134,20 +134,9 @@ def run_ocr(image_path):
 
 
 def get_rotation_degrees(image_path):
-    if settings.rotation_mode in {"off", "none", "false", "0"}:
-        return [0]
     if settings.rotation_mode == "all":
         return [0, 90, 180, 270]
-
-    try:
-        with Image.open(image_path) as image:
-            width, height = ImageOps.exif_transpose(image).size
-    except OSError:
-        return [0]
-
-    if width > height * 1.08:
-        return [0, 90, 270, 180]
-    return [0, 180, 90, 270]
+    return [0]
 
 
 def save_rotation_candidate(source_path, temp_dir, degrees):

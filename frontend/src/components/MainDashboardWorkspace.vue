@@ -2102,10 +2102,19 @@ onBeforeUnmount(() => {
   --dash-ink: #10111f;
   --dash-muted: #727682;
   --dash-line: rgba(16, 17, 31, 0.08);
+  --dash-strong-line: rgba(16, 17, 31, 0.12);
+  --dash-panel: rgba(255, 255, 255, 0.96);
+  --dash-control-bg: #f3f3f4;
+  --dash-control-hover: #efffba;
+  --dash-tile-bg: #f5f5f6;
+  --dash-track-bg: rgba(16, 17, 31, 0.07);
   --dash-lime: #d7ff43;
   --dash-lime-soft: #efffba;
   --dash-lavender: #c5ccff;
   --dash-lavender-soft: #eef0ff;
+  --dash-positive: #047857;
+  --dash-negative: #b91c1c;
+  --dash-popover-shadow: 0 18px 40px rgba(16, 17, 31, 0.16);
   --dash-card-radius: 14px;
   background: var(--dash-bg);
   border-radius: 24px;
@@ -2114,7 +2123,7 @@ onBeforeUnmount(() => {
 }
 
 .main-dashboard__header {
-  background: rgba(255, 255, 255, 0.96);
+  background: var(--dash-panel);
   border: 0;
   border-radius: 16px;
   box-shadow: none;
@@ -2184,7 +2193,7 @@ onBeforeUnmount(() => {
 .main-dashboard__tools-head button,
 .main-dashboard__tools button,
 .main-dashboard__field select {
-  background: #f3f3f4;
+  background: var(--dash-control-bg);
   border: 0;
   border-radius: 8px;
   color: var(--dash-ink);
@@ -2194,7 +2203,7 @@ onBeforeUnmount(() => {
 .main-palette__feature-link:hover,
 .main-palette__quick-action:hover,
 .main-palette__inline-action:hover {
-  background: var(--dash-lime-soft);
+  background: var(--dash-control-hover);
 }
 
 .main-palette__metric,
@@ -2202,7 +2211,7 @@ onBeforeUnmount(() => {
 .main-palette__feature-link,
 .main-palette__quick-action,
 .main-palette__photo-empty {
-  background: #f5f5f6;
+  background: var(--dash-tile-bg);
   border: 0;
   border-radius: 10px;
 }
@@ -2264,12 +2273,12 @@ onBeforeUnmount(() => {
 
 .main-palette__list-row,
 .main-palette__recent-file {
-  border-top-color: rgba(16, 17, 31, 0.08);
+  border-top-color: var(--dash-line);
 }
 
 .main-palette__bar,
 .main-palette__capacity-track {
-  background: rgba(16, 17, 31, 0.07);
+  background: var(--dash-track-bg);
   border-radius: 999px;
 }
 
@@ -2294,7 +2303,7 @@ onBeforeUnmount(() => {
 }
 
 .main-palette__inline-action {
-  background: rgba(255, 255, 255, 0.62);
+  background: var(--dash-control-bg);
   border: 0;
   border-radius: 8px;
 }
@@ -2321,10 +2330,10 @@ onBeforeUnmount(() => {
 }
 
 .main-dashboard__tools {
-  background: rgba(255, 255, 255, 0.98);
+  background: var(--dash-panel);
   border: 0;
   border-radius: 16px;
-  box-shadow: 0 18px 40px rgba(16, 17, 31, 0.16);
+  box-shadow: var(--dash-popover-shadow);
 }
 
 .main-dashboard__primary {
@@ -2335,7 +2344,7 @@ onBeforeUnmount(() => {
 
 .main-dashboard__secondary,
 .main-dashboard__hidden button {
-  background: #f3f3f4;
+  background: var(--dash-control-bg);
 }
 
 :global(:root[data-theme='toss']) .main-dashboard {
@@ -2344,19 +2353,29 @@ onBeforeUnmount(() => {
   --dash-ink: #f3f7ff;
   --dash-muted: #aeb8cb;
   --dash-line: rgba(78, 95, 125, 0.54);
+  --dash-strong-line: rgba(92, 108, 135, 0.64);
+  --dash-panel: rgba(18, 23, 31, 0.98);
+  --dash-control-bg: rgba(27, 33, 44, 0.96);
+  --dash-control-hover: rgba(39, 49, 65, 0.98);
+  --dash-tile-bg: rgba(27, 33, 44, 0.88);
+  --dash-track-bg: rgba(78, 95, 125, 0.34);
   --dash-lime: #b9ef35;
   --dash-lime-soft: rgba(185, 239, 53, 0.16);
   --dash-lavender: rgba(125, 142, 255, 0.38);
   --dash-lavender-soft: rgba(125, 142, 255, 0.18);
+  --dash-positive: #3ddc97;
+  --dash-negative: #ff7a8a;
+  --dash-popover-shadow: 0 18px 40px rgba(0, 0, 0, 0.34);
   background: var(--dash-bg);
   border: 1px solid rgba(78, 95, 125, 0.44);
+  color: var(--dash-ink);
 }
 
 :global(:root[data-theme='toss']) .main-dashboard__header,
 :global(:root[data-theme='toss']) .main-dashboard__tools {
-  background: rgba(18, 23, 31, 0.98);
+  background: var(--dash-panel);
   border: 1px solid rgba(78, 95, 125, 0.48);
-  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.34);
+  box-shadow: var(--dash-popover-shadow);
 }
 
 :global(:root[data-theme='toss']) .main-dashboard__palette-zone {
@@ -2408,7 +2427,7 @@ onBeforeUnmount(() => {
 :global(:root[data-theme='toss']) .main-palette__head,
 :global(:root[data-theme='toss']) .main-palette__list-row,
 :global(:root[data-theme='toss']) .main-palette__recent-file {
-  border-color: rgba(78, 95, 125, 0.36);
+  border-color: var(--dash-strong-line);
 }
 
 :global(:root[data-theme='toss']) .main-palette__actions button,
@@ -2422,7 +2441,7 @@ onBeforeUnmount(() => {
 :global(:root[data-theme='toss']) .main-dashboard__secondary,
 :global(:root[data-theme='toss']) .main-dashboard__hidden button,
 :global(:root[data-theme='toss']) .main-palette__inline-action {
-  background: rgba(27, 33, 44, 0.96);
+  background: var(--dash-control-bg);
   border: 1px solid rgba(78, 95, 125, 0.46);
   color: var(--dash-ink);
 }
@@ -2432,7 +2451,7 @@ onBeforeUnmount(() => {
 :global(:root[data-theme='toss']) .main-palette__quick-action:hover,
 :global(:root[data-theme='toss']) .main-palette__inline-action:hover,
 :global(:root[data-theme='toss']) .main-dashboard__hidden button:hover {
-  background: var(--dash-lime-soft);
+  background: var(--dash-control-hover);
   border-color: rgba(185, 239, 53, 0.32);
 }
 
@@ -2441,7 +2460,7 @@ onBeforeUnmount(() => {
 :global(:root[data-theme='toss']) .main-palette__feature-link,
 :global(:root[data-theme='toss']) .main-palette__quick-action,
 :global(:root[data-theme='toss']) .main-palette__photo-empty {
-  background: rgba(27, 33, 44, 0.88);
+  background: var(--dash-tile-bg);
   border: 1px solid rgba(78, 95, 125, 0.36);
 }
 
@@ -2464,7 +2483,7 @@ onBeforeUnmount(() => {
 
 :global(:root[data-theme='toss']) .main-palette__bar,
 :global(:root[data-theme='toss']) .main-palette__capacity-track {
-  background: rgba(78, 95, 125, 0.34);
+  background: var(--dash-track-bg);
 }
 
 :global(:root[data-theme='toss']) .main-palette__photo-strip img,
@@ -2473,6 +2492,29 @@ onBeforeUnmount(() => {
   background: rgba(27, 33, 44, 0.96);
   border: 1px solid rgba(78, 95, 125, 0.42);
   color: var(--dash-muted);
+}
+
+:global(:root[data-theme='toss']) .main-palette__quick-form input::placeholder {
+  color: #7f899c;
+}
+
+:global(:root[data-theme='toss']) .main-dashboard select option,
+:global(:root[data-theme='toss']) .main-dashboard input,
+:global(:root[data-theme='toss']) .main-dashboard select,
+:global(:root[data-theme='toss']) .main-dashboard button {
+  color-scheme: dark;
+}
+
+:global(:root[data-theme='toss']) .main-palette__metric.is-positive strong,
+:global(:root[data-theme='toss']) .main-palette__single-metric.is-positive strong,
+:global(:root[data-theme='toss']) .main-dashboard .is-positive {
+  color: var(--dash-positive);
+}
+
+:global(:root[data-theme='toss']) .main-palette__metric.is-negative strong,
+:global(:root[data-theme='toss']) .main-palette__single-metric.is-negative strong,
+:global(:root[data-theme='toss']) .main-dashboard .is-negative {
+  color: var(--dash-negative);
 }
 
 :global(:root[data-theme='toss']) .main-dashboard__primary,

@@ -44,6 +44,12 @@ const calendarHighlightModes = [
   { key: 'income', label: '수입만 보기' },
 ]
 
+const receiptDocumentTypes = [
+  { value: 'AUTO', label: '자동 감지' },
+  { value: 'RECEIPT', label: '영수증' },
+  { value: 'PAYMENT_CAPTURE', label: '거래내역 캡처' },
+]
+
 const timeValueOptions = Array.from({ length: 24 * 60 }, (_, index) => {
   const hour = Math.floor(index / 60)
   const minute = index % 60
@@ -166,6 +172,10 @@ const props = defineProps({
     type: Array,
     default: () => [],
   },
+  categoryGroups: {
+    type: Array,
+    default: () => [],
+  },
   availableDetails: {
     type: Array,
     default: () => [],
@@ -233,7 +243,12 @@ const emit = defineEmits([
   'update:timeEnabled',
   'fill-amount',
   'add-amount',
+  'open-receipt-ocr',
+  'close-receipt-ocr',
+  'set-receipt-document-type',
   'analyze-receipt',
+  'update-receipt-review-entry',
+  'remove-receipt-analysis',
   'apply-receipt-suggestion',
   'clear-receipt-analysis',
   'submit-entry',
@@ -263,6 +278,7 @@ const ledgerSheetScrollTargetRef = ref(null)
 const calendarShellRef = ref(null)
 const layoutGridRef = ref(null)
 const receiptFileInputRef = ref(null)
+const selectedReceiptDocumentType = ref('AUTO')
 const aggregateWidgetDraftConfigs = ref(createDefaultAggregateConfigs())
 const calendarShellWidth = ref(0)
 const layoutCellHeight = ref(112)
@@ -357,17 +373,55 @@ function openReceiptFilePicker() {
 }
 
 function handleReceiptFileChange(event) {
-  const file = event.target.files?.[0]
-  if (file) {
-    emit('analyze-receipt', file)
+  const files = Array.from(event.target.files || [])
+  if (files.length) {
+    emit('analyze-receipt', {
+      files,
+      documentType: selectedReceiptDocumentType.value,
+    })
   }
   event.target.value = ''
 }
 
-function applyReceiptSuggestion() {
-  if (receiptSuggestion.value) {
-    emit('apply-receipt-suggestion', receiptSuggestion.value)
+function openReceiptOcrModal() {
+  emit('open-receipt-ocr')
+}
+
+function closeReceiptOcrModal() {
+  emit('close-receipt-ocr')
+}
+
+function updateReceiptDocumentType(value) {
+  selectedReceiptDocumentType.value = value
+  emit('set-receipt-document-type', value)
+}
+
+function applyReceiptSuggestion(suggestion = receiptSuggestion.value) {
+  if (suggestion) {
+    emit('apply-receipt-suggestion', suggestion)
   }
+}
+
+function updateReceiptReviewEntry(itemId, entryIndex, field, value) {
+  emit('update-receipt-review-entry', { itemId, entryIndex, field, value })
+}
+
+function removeReceiptAnalysis(itemId) {
+  emit('remove-receipt-analysis', itemId)
+}
+
+function getReceiptDocumentLabel(documentType) {
+  return receiptDocumentTypes.find((item) => item.value === documentType)?.label || '자동 감지'
+}
+
+function getReceiptReviewGroups(entryType) {
+  const source = props.categoryGroups.length ? props.categoryGroups : props.availableGroups
+  return source.filter((group) => !entryType || group.entryType === entryType)
+}
+
+function getReceiptReviewDetails(entry) {
+  const group = getReceiptReviewGroups(entry.entryType).find((item) => String(item.id) === String(entry.categoryGroupId))
+  return group?.details ?? []
 }
 
 function formatReceiptConfidence(value) {
@@ -522,7 +576,17 @@ const receiptWarnings = computed(() => (
 const receiptLineItems = computed(() => (
   Array.isArray(props.receiptOcr?.lineItems) ? props.receiptOcr.lineItems : []
 ))
-const hasReceiptAnalysis = computed(() => Boolean(receiptSuggestion.value || props.receiptOcr?.rawText || props.receiptOcr?.error))
+const receiptReviewItems = computed(() => (
+  Array.isArray(props.receiptOcr?.items) ? props.receiptOcr.items : []
+))
+const receiptPendingCount = computed(() => receiptReviewItems.value.filter((item) => item.status === 'analyzing').length)
+const receiptTotalSuggestionCount = computed(() => receiptReviewItems.value.reduce(
+  (total, item) => total + (Array.isArray(item.suggestedEntries) ? item.suggestedEntries.length : 0),
+  0,
+))
+const hasReceiptAnalysis = computed(() => Boolean(
+  receiptReviewItems.value.length || receiptSuggestion.value || props.receiptOcr?.rawText || props.receiptOcr?.error,
+))
 
 const aggregateCards = computed(() => {
   const sourceConfigs = isAggregateEditMode.value ? aggregateWidgetDraftConfigs.value : props.aggregateWidgetConfigs
@@ -567,6 +631,14 @@ watch(
     if (entryTimeText.value !== nextValue) {
       entryTimeText.value = nextValue
     }
+  },
+  { immediate: true },
+)
+
+watch(
+  () => props.receiptOcr?.documentType,
+  (value) => {
+    selectedReceiptDocumentType.value = value || 'AUTO'
   },
   { immediate: true },
 )
@@ -1890,7 +1962,34 @@ defineExpose({
           <span class="panel__badge household-entry-panel__date-badge">{{ formatIsoDate(entryForm.entryDate) }}</span>
         </div>
 
-        <section class="receipt-ocr-panel" data-no-drag="true">
+        <section class="receipt-ocr-panel receipt-ocr-panel--launcher" data-no-drag="true">
+          <div class="receipt-ocr-panel__header">
+            <div>
+              <strong>거래 이미지 자동입력</strong>
+              <span>영수증이나 거래내역 캡처를 모달에서 분석하고 검토합니다.</span>
+            </div>
+            <div class="receipt-ocr-panel__actions">
+              <button
+                type="button"
+                class="button button--secondary"
+                @click="openReceiptOcrModal"
+              >
+                분석 모달 열기
+              </button>
+            </div>
+          </div>
+          <p v-if="receiptOcr?.isAnalyzing" class="receipt-ocr-panel__message">
+            {{ receiptPendingCount }}개 이미지 분석 중 · 완료된 결과는 모달에서 바로 수정할 수 있습니다.
+          </p>
+          <p v-else-if="receiptTotalSuggestionCount" class="receipt-ocr-panel__message">
+            검토 가능한 거래 제안 {{ receiptTotalSuggestionCount }}건이 있습니다.
+          </p>
+          <p v-else class="receipt-ocr-panel__message">
+            자동 저장하지 않고 빠른 거래 입력칸에 적용하기 전 검토 단계를 거칩니다.
+          </p>
+        </section>
+
+        <section v-if="false" class="receipt-ocr-panel" data-no-drag="true">
           <div class="receipt-ocr-panel__header">
             <div>
               <strong>영수증 자동입력</strong>
@@ -2442,6 +2541,207 @@ defineExpose({
         </div>
       </div>
     </section>
+
+    <div
+      v-if="receiptOcr?.isOpen"
+      class="receipt-ocr-modal"
+      data-no-drag="true"
+      @click.self="closeReceiptOcrModal"
+    >
+      <section class="receipt-ocr-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="receipt-ocr-modal-title">
+        <header class="receipt-ocr-modal__header">
+          <div>
+            <p class="receipt-ocr-modal__eyebrow">거래 이미지 자동입력</p>
+            <h2 id="receipt-ocr-modal-title">이미지 분석 및 검토</h2>
+            <span>영수증은 한 건, 거래내역 캡처는 여러 건의 거래 제안을 만들 수 있습니다.</span>
+          </div>
+          <button type="button" class="button button--ghost" @click="closeReceiptOcrModal">닫기</button>
+        </header>
+
+        <div class="receipt-ocr-modal__toolbar">
+          <div class="receipt-ocr-modal__type-group" role="group" aria-label="이미지 유형">
+            <button
+              v-for="option in receiptDocumentTypes"
+              :key="option.value"
+              type="button"
+              :class="['receipt-ocr-modal__type-button', { 'is-active': selectedReceiptDocumentType === option.value }]"
+              @click="updateReceiptDocumentType(option.value)"
+            >
+              {{ option.label }}
+            </button>
+          </div>
+          <div class="receipt-ocr-modal__upload">
+            <input
+              ref="receiptFileInputRef"
+              class="receipt-ocr-panel__file"
+              type="file"
+              accept="image/*"
+              multiple
+              @change="handleReceiptFileChange"
+            />
+            <button
+              type="button"
+              class="button button--primary"
+              @click="openReceiptFilePicker"
+            >
+              사진 추가
+            </button>
+          </div>
+        </div>
+
+        <div v-if="receiptOcr?.isAnalyzing" class="receipt-ocr-modal__progress">
+          <span></span>
+          {{ receiptPendingCount }}개 이미지 분석 중입니다. 완료된 결과는 아래에서 바로 수정할 수 있습니다.
+        </div>
+        <p v-else-if="!receiptReviewItems.length" class="receipt-ocr-modal__empty">
+          영수증 또는 거래내역 캡처 이미지를 추가하면 이곳에서 검토할 수 있습니다.
+        </p>
+
+        <div v-if="receiptReviewItems.length" class="receipt-ocr-modal__list">
+          <article
+            v-for="item in receiptReviewItems"
+            :key="item.id"
+            :class="['receipt-ocr-review-card', `receipt-ocr-review-card--${item.status}`]"
+          >
+            <div class="receipt-ocr-review-card__header">
+              <div>
+                <strong>{{ item.fileName }}</strong>
+                <span>{{ getReceiptDocumentLabel(item.documentType) }}</span>
+              </div>
+              <div class="receipt-ocr-review-card__actions">
+                <span v-if="item.status === 'analyzing'" class="receipt-ocr-review-card__status">분석 중</span>
+                <span v-else-if="item.status === 'error'" class="receipt-ocr-review-card__status receipt-ocr-review-card__status--error">실패</span>
+                <span v-else class="receipt-ocr-review-card__status">완료 {{ item.suggestedEntries.length }}건</span>
+                <button type="button" class="button button--ghost" @click="removeReceiptAnalysis(item.id)">제거</button>
+              </div>
+            </div>
+
+            <p v-if="item.status === 'analyzing'" class="receipt-ocr-review-card__message">
+              OCR과 AI 분석을 진행하고 있습니다.
+            </p>
+            <p v-else-if="item.error" class="receipt-ocr-review-card__message receipt-ocr-review-card__message--error">
+              {{ item.error }}
+            </p>
+            <div v-else class="receipt-ocr-review-card__entries">
+              <section
+                v-for="(entry, entryIndex) in item.suggestedEntries"
+                :key="`${item.id}-${entryIndex}`"
+                class="receipt-ocr-review-entry"
+              >
+                <div class="receipt-ocr-review-entry__title">
+                  <span>제안 {{ entryIndex + 1 }}</span>
+                  <button type="button" class="button button--secondary" @click="applyReceiptSuggestion(entry)">
+                    입력칸에 적용
+                  </button>
+                </div>
+
+                <div class="receipt-ocr-review-entry__grid">
+                  <label class="field">
+                    <span class="field__label">구분</span>
+                    <select
+                      :value="entry.entryType"
+                      @change="updateReceiptReviewEntry(item.id, entryIndex, 'entryType', $event.target.value)"
+                    >
+                      <option value="EXPENSE">지출</option>
+                      <option value="INCOME">수입</option>
+                    </select>
+                  </label>
+                  <label class="field">
+                    <span class="field__label">날짜</span>
+                    <input
+                      :value="entry.entryDate"
+                      type="date"
+                      @input="updateReceiptReviewEntry(item.id, entryIndex, 'entryDate', $event.target.value)"
+                    />
+                  </label>
+                  <label class="field">
+                    <span class="field__label">시간</span>
+                    <input
+                      :value="entry.entryTime"
+                      type="text"
+                      inputmode="numeric"
+                      placeholder="15:34"
+                      @input="updateReceiptReviewEntry(item.id, entryIndex, 'entryTime', $event.target.value)"
+                    />
+                  </label>
+                  <label class="field">
+                    <span class="field__label">금액</span>
+                    <input
+                      :value="entry.amount"
+                      type="number"
+                      min="0"
+                      step="100"
+                      @input="updateReceiptReviewEntry(item.id, entryIndex, 'amount', $event.target.value)"
+                    />
+                  </label>
+                  <label class="field">
+                    <span class="field__label">내용</span>
+                    <input
+                      :value="entry.title"
+                      type="text"
+                      @input="updateReceiptReviewEntry(item.id, entryIndex, 'title', $event.target.value)"
+                    />
+                  </label>
+                  <label class="field">
+                    <span class="field__label">결제수단</span>
+                    <select
+                      :value="entry.paymentMethodId"
+                      :disabled="entry.entryType === 'INCOME'"
+                      @change="updateReceiptReviewEntry(item.id, entryIndex, 'paymentMethodId', $event.target.value)"
+                    >
+                      <option value="">선택 안 함</option>
+                      <option v-for="method in paymentMethods" :key="method.id" :value="String(method.id)">
+                        {{ method.name }}
+                      </option>
+                    </select>
+                  </label>
+                  <label class="field">
+                    <span class="field__label">대분류</span>
+                    <select
+                      :value="entry.categoryGroupId"
+                      @change="updateReceiptReviewEntry(item.id, entryIndex, 'categoryGroupId', $event.target.value)"
+                    >
+                      <option value="">선택 안 함</option>
+                      <option v-for="group in getReceiptReviewGroups(entry.entryType)" :key="group.id" :value="String(group.id)">
+                        {{ group.name }}
+                      </option>
+                    </select>
+                  </label>
+                  <label class="field">
+                    <span class="field__label">분류</span>
+                    <select
+                      :value="entry.categoryDetailId"
+                      @change="updateReceiptReviewEntry(item.id, entryIndex, 'categoryDetailId', $event.target.value)"
+                    >
+                      <option value="">선택 안 함</option>
+                      <option v-for="detail in getReceiptReviewDetails(entry)" :key="detail.id" :value="String(detail.id)">
+                        {{ detail.name }}
+                      </option>
+                    </select>
+                  </label>
+                  <label class="field field--full">
+                    <span class="field__label">메모</span>
+                    <textarea
+                      :value="entry.memo"
+                      rows="2"
+                      @input="updateReceiptReviewEntry(item.id, entryIndex, 'memo', $event.target.value)"
+                    ></textarea>
+                  </label>
+                </div>
+              </section>
+
+              <div v-if="item.warnings?.length" class="receipt-ocr-result__warnings">
+                <span v-for="warning in item.warnings" :key="warning">{{ warning }}</span>
+              </div>
+              <details v-if="item.rawText" class="receipt-ocr-result__raw">
+                <summary>OCR 원문</summary>
+                <pre>{{ item.rawText }}</pre>
+              </details>
+            </div>
+          </article>
+        </div>
+      </section>
+    </div>
   </div>
 </template>
 

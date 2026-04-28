@@ -4,8 +4,10 @@ import java.util.List;
 import java.util.Map;
 
 public record LedgerOcrAnalyzeResponse(
+        String documentType,
         String rawText,
         LedgerOcrEntrySuggestionResponse suggestedEntry,
+        List<LedgerOcrEntrySuggestionResponse> suggestedEntries,
         List<LedgerOcrLineItemResponse> lineItems,
         Double confidence,
         List<String> warnings,

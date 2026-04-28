@@ -12,7 +12,7 @@ from pathlib import Path
 
 import requests
 import uvicorn
-from fastapi import Depends, FastAPI, File, Header, HTTPException, UploadFile, status
+from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, UploadFile, status
 
 
 class Settings:
@@ -209,19 +209,50 @@ def extract_json_object(text):
         return None
 
 
-def build_llm_prompt(raw_text):
+def normalize_document_type(value):
+    normalized = str(value or "AUTO").strip().upper().replace("-", "_")
+    if normalized in {"RECEIPT", "PAYMENT_CAPTURE", "AUTO"}:
+        return normalized
+    return "AUTO"
+
+
+def normalize_entry_type(value):
+    normalized = str(value or "").strip().upper()
+    if normalized in {"INCOME", "수입", "DEPOSIT"}:
+        return "INCOME"
+    return "EXPENSE"
+
+
+def build_llm_prompt(raw_text, document_type):
+    document_guidance = {
+        "RECEIPT": (
+            "The image is a receipt for one transaction. "
+            "Prefer the final paid total and return one entry."
+        ),
+        "PAYMENT_CAPTURE": (
+            "The image is a payment history capture. It may contain multiple transactions. "
+            "Split every visible transaction into the entries array."
+        ),
+        "AUTO": (
+            "Detect whether this is a one-transaction receipt or a payment history capture. "
+            "If multiple transactions are visible, split them into the entries array."
+        ),
+    }.get(document_type, "")
     return (
-        "You parse Korean receipt OCR text into strict JSON for a household ledger. "
-        "Return only JSON with these keys: entryDate YYYY-MM-DD or null, "
-        "entryTime HH:mm or null, entryType EXPENSE, title, memo, amount number or null, "
-        "vendor, paymentMethodText, categoryGroupName, categoryDetailName, categoryText, "
-        "lineItems array of {itemName, quantity, unit, price}, confidence 0..1, warnings array. "
-        "Use the final paid total as amount. Do not invent category IDs.\n\nOCR text:\n"
+        "You parse Korean transaction image OCR text into strict JSON for a household ledger. "
+        f"Document type hint: {document_type}. {document_guidance} "
+        "Return only JSON with these top-level keys: documentType AUTO|RECEIPT|PAYMENT_CAPTURE, "
+        "entries array. Each entry must have: entryDate YYYY-MM-DD or null, entryTime HH:mm or null, "
+        "entryType EXPENSE or INCOME, title, memo, amount number or null, vendor, paymentMethodText, "
+        "categoryGroupName, categoryDetailName, categoryText, lineItems array of "
+        "{itemName, quantity, unit, price}, confidence 0..1, warnings array. "
+        "For backward compatibility also include the first entry fields at the top level. "
+        "Use paid totals, not subtotals. Do not invent category IDs.\n\nOCR text:\n"
         f"{raw_text[:6000]}"
     )
 
 
-def call_openai_compatible(raw_text):
+def call_openai_compatible(raw_text, document_type):
     url = f"{settings.llm_base_url}/chat/completions"
     if not settings.llm_base_url.endswith("/v1"):
         url = f"{settings.llm_base_url}/v1/chat/completions"
@@ -237,7 +268,7 @@ def call_openai_compatible(raw_text):
             "temperature": 0,
             "messages": [
                 {"role": "system", "content": "Return valid JSON only."},
-                {"role": "user", "content": build_llm_prompt(raw_text)},
+                {"role": "user", "content": build_llm_prompt(raw_text, document_type)},
             ],
         },
     )
@@ -246,7 +277,7 @@ def call_openai_compatible(raw_text):
     return data["choices"][0]["message"]["content"]
 
 
-def call_ollama(raw_text):
+def call_ollama(raw_text, document_type):
     response = requests.post(
         f"{settings.llm_base_url}/api/chat",
         timeout=settings.llm_timeout_seconds,
@@ -256,7 +287,7 @@ def call_ollama(raw_text):
             "format": "json",
             "messages": [
                 {"role": "system", "content": "Return valid JSON only."},
-                {"role": "user", "content": build_llm_prompt(raw_text)},
+                {"role": "user", "content": build_llm_prompt(raw_text, document_type)},
             ],
         },
     )
@@ -265,14 +296,14 @@ def call_ollama(raw_text):
     return data.get("message", {}).get("content", "")
 
 
-def parse_with_llm(raw_text):
+def parse_with_llm(raw_text, document_type):
     if settings.llm_provider not in {"openai", "ollama"} or not settings.llm_base_url:
         return None, None
     try:
         if settings.llm_provider == "ollama":
-            content = call_ollama(raw_text)
+            content = call_ollama(raw_text, document_type)
         else:
-            content = call_openai_compatible(raw_text)
+            content = call_openai_compatible(raw_text, document_type)
         parsed = extract_json_object(content)
         if isinstance(parsed, dict):
             return parsed, None
@@ -283,19 +314,41 @@ def parse_with_llm(raw_text):
         return None, "llm_response_unexpected"
 
 
-def merge_parsed(heuristic, llm_result, llm_warning):
+def merge_single_entry(heuristic, entry_result, llm_warning=None):
     parsed = dict(heuristic)
     warnings = list(parsed.get("warnings") or [])
-    if isinstance(llm_result, dict):
-        for key, value in llm_result.items():
+    if isinstance(entry_result, dict):
+        for key, value in entry_result.items():
             if value not in (None, "", []):
                 parsed[key] = value
     if llm_warning:
         warnings.append(llm_warning)
     parsed["amount"] = normalize_amount(parsed.get("amount"))
-    parsed["entryType"] = "EXPENSE"
+    parsed["entryType"] = normalize_entry_type(parsed.get("entryType"))
     parsed["warnings"] = sorted(set(str(item) for item in warnings if item))
     return parsed
+
+
+def extract_llm_entries(llm_result):
+    if not isinstance(llm_result, dict):
+        return []
+
+    for key in ("entries", "transactions", "parsedEntries", "suggestedEntries"):
+        entries = llm_result.get(key)
+        if isinstance(entries, list):
+            return [entry for entry in entries if isinstance(entry, dict)]
+
+    return [llm_result]
+
+
+def merge_parsed_entries(heuristic, llm_result, llm_warning):
+    entries = extract_llm_entries(llm_result)
+    if not entries:
+        return [merge_single_entry(heuristic, None, llm_warning)]
+    return [
+        merge_single_entry(heuristic if index == 0 else {}, entry, llm_warning if index == 0 else None)
+        for index, entry in enumerate(entries)
+    ]
 
 
 async def require_api_key(x_ocr_api_key: str = Header(default="")):
@@ -313,8 +366,13 @@ def health():
 
 
 @app.post("/analyze")
-async def analyze(file: UploadFile = File(...), _: None = Depends(require_api_key)):
+async def analyze(
+    file: UploadFile = File(...),
+    documentType: str = Form("AUTO"),
+    _: None = Depends(require_api_key),
+):
     started_at = time.perf_counter()
+    document_type = normalize_document_type(documentType)
     content = await file.read(settings.max_upload_bytes + 1)
     if not content:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Image file is empty.")
@@ -338,14 +396,20 @@ async def analyze(file: UploadFile = File(...), _: None = Depends(require_api_ke
         raw_text = "\n".join(lines)
         heuristic = heuristic_parse(lines)
         llm_started_at = time.perf_counter()
-        llm_result, llm_warning = parse_with_llm(raw_text)
+        llm_result, llm_warning = parse_with_llm(raw_text, document_type)
         llm_ms = int((time.perf_counter() - llm_started_at) * 1000)
-        parsed = merge_parsed(heuristic, llm_result, llm_warning)
+        parsed_entries = merge_parsed_entries(heuristic, llm_result, llm_warning)
+        parsed = parsed_entries[0] if parsed_entries else merge_single_entry(heuristic, None, llm_warning)
+        detected_document_type = normalize_document_type(
+            llm_result.get("documentType") if isinstance(llm_result, dict) else document_type
+        )
 
         return {
             "ok": True,
+            "documentType": detected_document_type,
             "rawText": raw_text,
             "parsed": parsed,
+            "parsedEntries": parsed_entries,
             "timing": {
                 "ocrMs": ocr_ms,
                 "llmMs": llm_ms,

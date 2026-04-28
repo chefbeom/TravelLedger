@@ -41,13 +41,15 @@ public class LedgerOcrService {
     private final CategoryDetailRepository categoryDetailRepository;
     private final PaymentMethodRepository paymentMethodRepository;
 
-    public LedgerOcrAnalyzeResponse analyze(Long userId, MultipartFile file) {
+    public LedgerOcrAnalyzeResponse analyze(Long userId, MultipartFile file, String documentType) {
         appUserService.getRequiredUser(userId);
         validateReady();
         validateFile(file);
 
-        RemoteAnalyzeResponse remoteResponse = remoteClient.analyze(file);
-        RemoteParsedResult parsed = remoteResponse.parsed();
+        String normalizedDocumentType = normalizeDocumentType(documentType);
+        RemoteAnalyzeResponse remoteResponse = remoteClient.analyze(file, normalizedDocumentType);
+        List<RemoteParsedResult> parsedEntries = resolveParsedEntries(remoteResponse);
+        RemoteParsedResult parsed = parsedEntries.isEmpty() ? remoteResponse.parsed() : parsedEntries.get(0);
         EntryType entryType = parsed != null && parsed.entryType() == EntryType.INCOME
                 ? EntryType.INCOME
                 : EntryType.EXPENSE;
@@ -56,10 +58,18 @@ public class LedgerOcrService {
         PaymentMethod paymentMethod = matchPaymentMethod(userId, parsed);
         List<LedgerOcrLineItemResponse> lineItems = mapLineItems(parsed);
         LedgerOcrEntrySuggestionResponse suggestion = buildSuggestion(parsed, entryType, category, paymentMethod, lineItems);
+        List<LedgerOcrEntrySuggestionResponse> suggestions = parsedEntries.stream()
+                .map((entry) -> buildSuggestionForParsedEntry(userId, entry))
+                .toList();
+        if (suggestions.isEmpty() && suggestion != null) {
+            suggestions = List.of(suggestion);
+        }
 
         return new LedgerOcrAnalyzeResponse(
+                firstNonBlank(remoteResponse.documentType(), normalizedDocumentType),
                 remoteResponse.rawText() == null ? "" : remoteResponse.rawText(),
                 suggestion,
+                suggestions,
                 lineItems,
                 parsed != null ? parsed.confidence() : null,
                 parsed != null && parsed.warnings() != null ? parsed.warnings() : List.of(),
@@ -68,6 +78,38 @@ public class LedgerOcrService {
                 parsed != null ? limit(firstNonBlank(parsed.categoryText(), parsed.categoryGroupName(), parsed.categoryDetailName()), MAX_TEXT_LENGTH) : null,
                 remoteResponse.timing() == null ? java.util.Map.of() : remoteResponse.timing()
         );
+    }
+
+    private String normalizeDocumentType(String documentType) {
+        if (documentType == null || documentType.isBlank()) {
+            return "AUTO";
+        }
+        String normalized = documentType.trim().toUpperCase(Locale.ROOT).replace('-', '_');
+        return switch (normalized) {
+            case "RECEIPT", "PAYMENT_CAPTURE", "AUTO" -> normalized;
+            default -> "AUTO";
+        };
+    }
+
+    private List<RemoteParsedResult> resolveParsedEntries(RemoteAnalyzeResponse remoteResponse) {
+        if (remoteResponse.parsedEntries() != null && !remoteResponse.parsedEntries().isEmpty()) {
+            return remoteResponse.parsedEntries().stream()
+                    .filter(Objects::nonNull)
+                    .toList();
+        }
+        if (remoteResponse.parsed() != null) {
+            return List.of(remoteResponse.parsed());
+        }
+        return List.of();
+    }
+
+    private LedgerOcrEntrySuggestionResponse buildSuggestionForParsedEntry(Long userId, RemoteParsedResult parsed) {
+        EntryType entryType = parsed != null && parsed.entryType() == EntryType.INCOME
+                ? EntryType.INCOME
+                : EntryType.EXPENSE;
+        MatchedCategory category = matchCategory(userId, entryType, parsed);
+        PaymentMethod paymentMethod = matchPaymentMethod(userId, parsed);
+        return buildSuggestion(parsed, entryType, category, paymentMethod, mapLineItems(parsed));
     }
 
     private void validateReady() {

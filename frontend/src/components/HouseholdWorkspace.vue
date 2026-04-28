@@ -150,8 +150,12 @@ const amountInput = ref('')
 const isEntryTimeEnabled = ref(false)
 const calendarWorkspaceRef = ref(null)
 const receiptOcr = reactive({
+  isOpen: false,
+  documentType: 'AUTO',
   isAnalyzing: false,
+  pendingCount: 0,
   error: '',
+  items: [],
   fileName: '',
   rawText: '',
   suggestedEntry: null,
@@ -165,6 +169,7 @@ const receiptOcr = reactive({
 })
 let feedbackTimerId = null
 let searchRequestTimerId = null
+let receiptOcrItemSequence = 0
 
 const entryForm = reactive({
   entryDate: today,
@@ -924,7 +929,9 @@ function applyEntrySuggestion(suggestion) {
 
 function clearReceiptOcr() {
   receiptOcr.isAnalyzing = false
+  receiptOcr.pendingCount = 0
   receiptOcr.error = ''
+  receiptOcr.items = []
   receiptOcr.fileName = ''
   receiptOcr.rawText = ''
   receiptOcr.suggestedEntry = null
@@ -937,10 +944,168 @@ function clearReceiptOcr() {
   receiptOcr.timing = null
 }
 
-async function analyzeReceiptImage(file) {
-  if (!file) {
+function openReceiptOcrModal() {
+  receiptOcr.isOpen = true
+}
+
+function closeReceiptOcrModal() {
+  receiptOcr.isOpen = false
+}
+
+function normalizeOcrDocumentType(documentType) {
+  const normalized = String(documentType || 'AUTO').trim().toUpperCase().replace('-', '_')
+  return ['AUTO', 'RECEIPT', 'PAYMENT_CAPTURE'].includes(normalized) ? normalized : 'AUTO'
+}
+
+function setReceiptOcrDocumentType(documentType) {
+  receiptOcr.documentType = normalizeOcrDocumentType(documentType)
+}
+
+function normalizeOcrSuggestion(suggestion = {}) {
+  const entryType = suggestion.entryType === 'INCOME' ? 'INCOME' : 'EXPENSE'
+  return {
+    entryDate: suggestion.entryDate || calendarAnchorDate.value,
+    entryTime: suggestion.entryTime || '00:00',
+    title: suggestion.title || '',
+    memo: suggestion.memo || '',
+    amount: suggestion.amount !== null && suggestion.amount !== undefined && suggestion.amount !== ''
+      ? String(Number(suggestion.amount || 0))
+      : '',
+    entryType,
+    categoryGroupId: suggestion.categoryGroupId != null ? String(suggestion.categoryGroupId) : '',
+    categoryGroupName: suggestion.categoryGroupName || '',
+    categoryDetailId: suggestion.categoryDetailId != null ? String(suggestion.categoryDetailId) : '',
+    categoryDetailName: suggestion.categoryDetailName || '',
+    paymentMethodId: suggestion.paymentMethodId != null ? String(suggestion.paymentMethodId) : '',
+    paymentMethodName: suggestion.paymentMethodName || '',
+  }
+}
+
+function createReceiptOcrItem(file, documentType) {
+  receiptOcrItemSequence += 1
+  return {
+    id: `ocr-${Date.now()}-${receiptOcrItemSequence}`,
+    fileName: file.name || `transaction-image-${receiptOcrItemSequence}`,
+    documentType,
+    status: 'analyzing',
+    error: '',
+    rawText: '',
+    suggestedEntries: [],
+    lineItems: [],
+    warnings: [],
+    confidence: null,
+    vendor: '',
+    paymentMethodText: '',
+    categoryText: '',
+    timing: null,
+  }
+}
+
+function syncReceiptOcrBusyState() {
+  receiptOcr.pendingCount = receiptOcr.items.filter((item) => item.status === 'analyzing').length
+  receiptOcr.isAnalyzing = receiptOcr.pendingCount > 0
+}
+
+function removeReceiptOcrItem(itemId) {
+  receiptOcr.items = receiptOcr.items.filter((item) => item.id !== itemId)
+  syncReceiptOcrBusyState()
+}
+
+function updateReceiptOcrReviewEntry({ itemId, entryIndex, field, value }) {
+  const item = receiptOcr.items.find((candidate) => candidate.id === itemId)
+  const entry = item?.suggestedEntries?.[entryIndex]
+  if (!entry || !field) {
     return
   }
+
+  entry[field] = value
+
+  if (field === 'entryType') {
+    entry.entryType = value === 'INCOME' ? 'INCOME' : 'EXPENSE'
+    const groups = getGroupsForType(entry.entryType)
+    if (!groups.some((group) => String(group.id) === String(entry.categoryGroupId))) {
+      entry.categoryGroupId = groups[0] ? String(groups[0].id) : ''
+    }
+    const details = getDetailsForGroupId(entry.categoryGroupId, entry.entryType)
+    entry.categoryDetailId = details[0] ? String(details[0].id) : ''
+    if (entry.entryType === 'INCOME') {
+      entry.paymentMethodId = ''
+    } else if (!paymentMethods.value.some((method) => String(method.id) === String(entry.paymentMethodId))) {
+      entry.paymentMethodId = paymentMethods.value[0] ? String(paymentMethods.value[0].id) : ''
+    }
+  }
+
+  if (field === 'categoryGroupId') {
+    const details = getDetailsForGroupId(value, entry.entryType)
+    entry.categoryDetailId = details[0] ? String(details[0].id) : ''
+  }
+}
+
+function updateLegacyReceiptOcrFields(result, firstSuggestion, fileName) {
+  receiptOcr.error = ''
+  receiptOcr.fileName = fileName || ''
+  receiptOcr.rawText = result?.rawText || ''
+  receiptOcr.suggestedEntry = firstSuggestion || null
+  receiptOcr.lineItems = Array.isArray(result?.lineItems) ? result.lineItems : []
+  receiptOcr.warnings = Array.isArray(result?.warnings) ? result.warnings : []
+  receiptOcr.confidence = result?.confidence ?? null
+  receiptOcr.vendor = result?.vendor || ''
+  receiptOcr.paymentMethodText = result?.paymentMethodText || ''
+  receiptOcr.categoryText = result?.categoryText || ''
+  receiptOcr.timing = result?.timing || null
+}
+
+async function analyzeReceiptFile(file, documentType) {
+  const item = createReceiptOcrItem(file, documentType)
+  receiptOcr.items.unshift(item)
+  syncReceiptOcrBusyState()
+
+  try {
+    const result = await analyzeLedgerReceipt(file, { documentType })
+    const suggestions = Array.isArray(result?.suggestedEntries) && result.suggestedEntries.length
+      ? result.suggestedEntries
+      : [result?.suggestedEntry].filter(Boolean)
+    item.status = 'done'
+    item.rawText = result?.rawText || ''
+    item.suggestedEntries = suggestions.map(normalizeOcrSuggestion)
+    item.lineItems = Array.isArray(result?.lineItems) ? result.lineItems : []
+    item.warnings = Array.isArray(result?.warnings) ? result.warnings : []
+    item.confidence = result?.confidence ?? null
+    item.vendor = result?.vendor || ''
+    item.paymentMethodText = result?.paymentMethodText || ''
+    item.categoryText = result?.categoryText || ''
+    item.timing = result?.timing || null
+    updateLegacyReceiptOcrFields(result, item.suggestedEntries[0] || null, item.fileName)
+    setFeedback('거래 이미지 분석이 완료됐습니다. 완료된 항목을 검토한 뒤 입력칸에 적용해 주세요.')
+  } catch (error) {
+    item.status = 'error'
+    item.error = error.message
+    receiptOcr.error = error.message
+    setFeedback('', error.message)
+  } finally {
+    syncReceiptOcrBusyState()
+  }
+}
+
+async function analyzeReceiptImage(payload) {
+  const files = Array.isArray(payload?.files)
+    ? payload.files
+    : payload instanceof File
+      ? [payload]
+      : []
+  if (!files.length) {
+    return
+  }
+
+  const documentType = normalizeOcrDocumentType(payload?.documentType || receiptOcr.documentType)
+  receiptOcr.documentType = documentType
+  receiptOcr.isOpen = true
+  receiptOcr.error = ''
+  setFeedback()
+  files.forEach((file) => {
+    analyzeReceiptFile(file, documentType)
+  })
+  return
 
   receiptOcr.isAnalyzing = true
   receiptOcr.error = ''
@@ -1603,6 +1768,7 @@ async function deactivatePayment(paymentId) {
       :is-submitting="isSubmitting"
       :active-submit="activeSubmit"
       :available-groups="availableGroups"
+      :category-groups="categories"
       :available-details="availableDetails"
       :payment-methods="paymentMethods"
       :entry-suggestions="entrySuggestions"
@@ -1620,11 +1786,16 @@ async function deactivatePayment(paymentId) {
       :format-time="formatTime"
       :can-undo-last-entry-action="canUndoLastEntryAction"
       :undo-entry-action-label="undoEntryActionLabel"
+      @open-receipt-ocr="openReceiptOcrModal"
+      @close-receipt-ocr="closeReceiptOcrModal"
+      @set-receipt-document-type="setReceiptOcrDocumentType"
       @update:amount-input="handleAmountInput"
       @update:time-enabled="updateTimeEnabled"
       @fill-amount="fillAmount"
       @add-amount="addAmount"
       @analyze-receipt="analyzeReceiptImage"
+      @update-receipt-review-entry="updateReceiptOcrReviewEntry"
+      @remove-receipt-analysis="removeReceiptOcrItem"
       @apply-receipt-suggestion="applyReceiptOcrSuggestion"
       @clear-receipt-analysis="clearReceiptOcr"
       @submit-entry="submitEntry"

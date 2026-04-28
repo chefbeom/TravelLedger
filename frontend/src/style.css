@@ -883,6 +883,10 @@ button {
   display: none;
 }
 
+.receipt-ocr-panel--launcher {
+  margin-bottom: 16px;
+}
+
 .receipt-ocr-panel__message {
   margin: 0;
 }
@@ -982,6 +986,270 @@ button {
   color: var(--text);
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+.receipt-ocr-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(15, 23, 42, 0.54);
+  backdrop-filter: blur(10px);
+}
+
+.receipt-ocr-modal__dialog {
+  display: grid;
+  grid-template-rows: auto auto auto minmax(0, 1fr);
+  gap: 16px;
+  width: min(1120px, 100%);
+  max-height: min(860px, calc(100vh - 48px));
+  padding: 22px;
+  border: 1px solid var(--entry-section-border);
+  border-radius: 22px;
+  background: var(--panel-bg);
+  color: var(--text);
+  box-shadow: 0 24px 80px rgba(15, 23, 42, 0.28);
+  overflow: hidden;
+}
+
+.receipt-ocr-modal__header,
+.receipt-ocr-modal__toolbar,
+.receipt-ocr-review-card__header,
+.receipt-ocr-review-entry__title {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  min-width: 0;
+}
+
+.receipt-ocr-modal__header h2 {
+  margin: 0;
+  font-size: clamp(1.15rem, 2vw, 1.55rem);
+  line-height: 1.25;
+}
+
+.receipt-ocr-modal__header span,
+.receipt-ocr-modal__empty,
+.receipt-ocr-review-card__header span,
+.receipt-ocr-review-card__message {
+  color: var(--text-soft);
+  font-size: 0.9rem;
+}
+
+.receipt-ocr-modal__eyebrow {
+  margin: 0 0 4px;
+  color: var(--brand);
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0;
+}
+
+.receipt-ocr-modal__toolbar {
+  align-items: center;
+  padding: 12px;
+  border: 1px solid var(--entry-section-border);
+  border-radius: 16px;
+  background: var(--entry-section-bg);
+}
+
+.receipt-ocr-modal__type-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+}
+
+.receipt-ocr-modal__type-button {
+  min-height: 38px;
+  padding: 0 13px;
+  border: 1px solid var(--field-border);
+  border-radius: 12px;
+  background: var(--field-bg);
+  color: var(--text-soft);
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.receipt-ocr-modal__type-button.is-active {
+  border-color: rgba(49, 126, 242, 0.55);
+  background: rgba(49, 126, 242, 0.12);
+  color: var(--brand);
+}
+
+.receipt-ocr-modal__upload {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.receipt-ocr-modal__progress {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 1px solid rgba(49, 126, 242, 0.28);
+  border-radius: 14px;
+  background: rgba(49, 126, 242, 0.1);
+  color: var(--brand);
+  font-size: 0.9rem;
+  font-weight: 800;
+}
+
+.receipt-ocr-modal__progress span {
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(49, 126, 242, 0.22);
+  border-top-color: var(--brand);
+  border-radius: 50%;
+  animation: receipt-ocr-spin 0.75s linear infinite;
+}
+
+@keyframes receipt-ocr-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.receipt-ocr-modal__empty {
+  margin: 0;
+  padding: 18px;
+  border: 1px dashed var(--field-border);
+  border-radius: 16px;
+  background: var(--field-bg-muted);
+  text-align: center;
+}
+
+.receipt-ocr-modal__list {
+  display: grid;
+  gap: 14px;
+  min-height: 0;
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.receipt-ocr-review-card {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid var(--entry-section-border);
+  border-radius: 18px;
+  background: var(--entry-section-bg);
+}
+
+.receipt-ocr-review-card__header strong {
+  display: block;
+  max-width: min(520px, 100%);
+  overflow: hidden;
+  color: var(--text);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.receipt-ocr-review-card__actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.receipt-ocr-review-card__status {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: var(--field-bg);
+  color: var(--text-soft);
+  font-size: 0.8rem;
+  font-weight: 800;
+}
+
+.receipt-ocr-review-card__status--error,
+.receipt-ocr-review-card__message--error {
+  color: var(--expense);
+}
+
+.receipt-ocr-review-card__entries {
+  display: grid;
+  gap: 12px;
+}
+
+.receipt-ocr-review-entry {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--field-border);
+  border-radius: 16px;
+  background: var(--field-bg);
+}
+
+.receipt-ocr-review-entry__title span {
+  color: var(--brand);
+  font-size: 0.82rem;
+  font-weight: 900;
+}
+
+.receipt-ocr-review-entry__grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  min-width: 0;
+}
+
+.receipt-ocr-review-entry input,
+.receipt-ocr-review-entry select,
+.receipt-ocr-review-entry textarea {
+  width: 100%;
+  min-width: 0;
+  min-height: 42px;
+  border: 1px solid var(--field-border);
+  border-radius: 12px;
+  background: var(--input-bg, var(--field-bg-muted));
+  color: var(--text);
+  font: inherit;
+}
+
+.receipt-ocr-review-entry textarea {
+  min-height: 72px;
+  padding: 11px 12px;
+  resize: vertical;
+}
+
+@media (max-width: 900px) {
+  .receipt-ocr-modal {
+    padding: 12px;
+  }
+
+  .receipt-ocr-modal__dialog {
+    max-height: calc(100vh - 24px);
+    padding: 16px;
+  }
+
+  .receipt-ocr-modal__header,
+  .receipt-ocr-modal__toolbar,
+  .receipt-ocr-review-card__header,
+  .receipt-ocr-review-entry__title {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .receipt-ocr-review-entry__grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 560px) {
+  .receipt-ocr-review-entry__grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 .field {

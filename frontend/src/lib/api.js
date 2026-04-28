@@ -505,9 +505,12 @@ export function restoreEntry(id) {
   })
 }
 
-export function analyzeLedgerReceipt(file) {
+export function analyzeLedgerReceipt(file, options = {}) {
   const formData = new FormData()
   formData.append('file', file)
+  if (options.documentType) {
+    formData.append('documentType', options.documentType)
+  }
 
   return request('/ledger/ocr/analyze', {
     method: 'POST',

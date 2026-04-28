@@ -28,7 +28,7 @@ public class LedgerOcrRemoteClient {
 
     private final LedgerOcrProperties properties;
 
-    public RemoteAnalyzeResponse analyze(MultipartFile file) {
+    public RemoteAnalyzeResponse analyze(MultipartFile file, String documentType) {
         try {
             SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
             requestFactory.setConnectTimeout(properties.getConnectTimeout());
@@ -52,6 +52,7 @@ public class LedgerOcrRemoteClient {
             multipart.part("file", resource)
                     .filename(resource.getFilename())
                     .contentType(resolveMediaType(file));
+            multipart.part("documentType", documentType == null ? "AUTO" : documentType);
 
             RemoteAnalyzeResponse response = restClient.post()
                     .uri("/analyze")
@@ -89,8 +90,10 @@ public class LedgerOcrRemoteClient {
     public record RemoteAnalyzeResponse(
             boolean ok,
             String error,
+            String documentType,
             String rawText,
             RemoteParsedResult parsed,
+            List<RemoteParsedResult> parsedEntries,
             Map<String, Object> timing
     ) {
     }

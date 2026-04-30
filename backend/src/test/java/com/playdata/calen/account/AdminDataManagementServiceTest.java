@@ -236,6 +236,24 @@ class AdminDataManagementServiceTest {
     }
 
     @Test
+    void createManualBackupDeletesLocalBackupAfterSuccessfulUpload() throws Exception {
+        doAnswer(invocation -> {
+            Path outputFile = invocation.getArgument(1, Path.class);
+            Files.createDirectories(outputFile.getParent());
+            Files.writeString(outputFile, "backup");
+            return null;
+        }).when(commandRunner).runDumpToGzip(any(), any());
+
+        when(commandRunner.run(any())).thenReturn(new CommandResult(0, "", ""));
+
+        AdminBackupFileResponse response = service.createManualBackup();
+
+        Path createdBackup = tempDir.resolve("files").resolve(response.fileName());
+        assertThat(Files.exists(createdBackup)).isFalse();
+        assertThat(response.fileName()).endsWith(".sql.gz");
+    }
+
+    @Test
     void createBackupAndRestoreUseExpectedCommands() {
         when(commandRunner.run(any()))
                 .thenReturn(new CommandResult(0, "", ""))
@@ -290,6 +308,7 @@ class AdminDataManagementServiceTest {
 
         assertThat(response.fileName()).startsWith("calen-minio-");
         assertThat(response.fileName()).endsWith(".zip");
+        assertThat(Files.exists(tempDir.resolve("minio-files").resolve(response.fileName()))).isFalse();
         verify(minioBackupArchiveService).writeBackupArchive(argThat(path ->
                 path.toString().contains("minio-files")
                         && path.toString().endsWith(".zip")

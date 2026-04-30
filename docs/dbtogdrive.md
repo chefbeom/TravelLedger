@@ -205,6 +205,13 @@ grep -E '^(DB_NAME|DB_USER|DB_PASSWORD)=' .env
 nano /opt/calen-backup/backup-to-gdrive.sh
 ```
 
+레포에 포함된 복구용 스크립트를 그대로 설치해도 됩니다.
+
+```bash
+cd /home/ubuntu/calen
+install -m 750 deploy/oci/scripts/backup-to-gdrive.sh /opt/calen-backup/backup-to-gdrive.sh
+```
+
 아래 내용을 그대로 넣습니다.
 
 ```bash
@@ -231,7 +238,8 @@ docker exec calen-mariadb-1 sh -c "mariadb-dump -u\"$DB_USER\" -p\"$DB_PASSWORD\
 
 rclone --config "$RCLONE_CONFIG" copyto "$FILE_PATH" "${REMOTE_NAME}:${REMOTE_DIR}/$FILE_NAME"
 
-find "$BACKUP_DIR" -type f -name 'calen-*.sql.gz' -mtime +7 -delete
+rm -f "$FILE_PATH"
+find "$BACKUP_DIR" -type f -name 'calen-*.sql.gz' -mtime +1 -delete
 ```
 
 ### 꼭 확인할 값
@@ -302,8 +310,9 @@ chmod +x /opt/calen-backup/backup-to-gdrive.sh
 
 정상이라면:
 
-- `/opt/calen-backup/files` 아래에 `.sql.gz` 파일 생성
+- `/opt/calen-backup/files` 아래에 `.sql.gz` 파일 임시 생성
 - Google Drive의 `calen-db-backups` 폴더에 같은 파일 업로드
+- 업로드 성공 후 로컬 `.sql.gz` 파일 삭제
 
 로컬 확인:
 
@@ -413,5 +422,4 @@ rclone config show
 
 - OCI 서버가 망가져도 Drive에 오프사이트 백업이 남고
 - DB 실수 삭제/손상 시 특정 시점으로 복구할 수 있으며
-- 로컬에도 최근 7일 백업 파일이 남아 추가 확인이 가능합니다
-
+- 업로드 성공 후 로컬 백업 파일을 삭제해 서버 디스크가 누적 백업으로 가득 차는 일을 줄일 수 있습니다

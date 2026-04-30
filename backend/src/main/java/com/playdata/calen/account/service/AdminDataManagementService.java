@@ -185,9 +185,11 @@ public class AdminDataManagementService {
 
             commandRunner.runDumpToGzip(buildDumpCommand(target), outputFile);
             long sizeBytes = fileSize(outputFile);
+            boolean uploaded = false;
 
             try {
                 uploadBackup(outputFile, outputFile.getFileName().toString());
+                uploaded = true;
             } catch (BadRequestException exception) {
                 if (!isDriveQuotaFallbackMessage(exception.getMessage())) {
                     throw exception;
@@ -200,6 +202,7 @@ public class AdminDataManagementService {
                     DISPLAY_DATE_TIME_FORMATTER.format(LocalDateTime.now(KST))
             );
             updateBackupCache(response);
+            deleteLocalFileAfterSuccessfulUpload(outputFile, uploaded);
             return response;
         });
     }
@@ -212,9 +215,11 @@ public class AdminDataManagementService {
 
             minioBackupArchiveService.writeBackupArchive(outputFile);
             long sizeBytes = fileSize(outputFile);
+            boolean uploaded = false;
 
             try {
                 uploadMinioBackup(outputFile, outputFile.getFileName().toString());
+                uploaded = true;
             } catch (BadRequestException exception) {
                 if (!isDriveQuotaFallbackMessage(exception.getMessage())) {
                     throw exception;
@@ -227,6 +232,7 @@ public class AdminDataManagementService {
                     DISPLAY_DATE_TIME_FORMATTER.format(LocalDateTime.now(KST))
             );
             updateMinioBackupCache(response);
+            deleteLocalFileAfterSuccessfulUpload(outputFile, uploaded);
             return response;
         });
     }
@@ -544,6 +550,17 @@ public class AdminDataManagementService {
                 localFile.toString(),
                 minioRemoteDirectory() + "/" + fileName
         ), "Google Drive MinIO 백업 업로드에 실패했습니다.");
+    }
+
+    private void deleteLocalFileAfterSuccessfulUpload(Path localFile, boolean uploaded) {
+        if (!uploaded) {
+            return;
+        }
+        try {
+            Files.deleteIfExists(localFile);
+        } catch (IOException ignored) {
+            // Cleanup failure should not invalidate an already uploaded backup.
+        }
     }
 
     private void downloadBackup(String fileName, Path localFile) {

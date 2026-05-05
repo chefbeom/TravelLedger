@@ -259,6 +259,7 @@ const emit = defineEmits([
   'edit-entry',
   'delete-entry',
   'apply-entry-suggestion',
+  'apply-title-suggestion',
   'change-anchor-month',
   'save-aggregate-widget-configs',
 ])
@@ -2291,10 +2292,36 @@ defineExpose({
               </label>
             </div>
 
-            <label class="field field--full">
+            <div class="field field--full entry-title-field">
               <span class="field__label">제목</span>
-              <input v-model="entryForm.title" type="text" placeholder="예: 식사, 택시, 급여" />
-            </label>
+              <input
+                v-model="entryForm.title"
+                aria-label="거래 제목"
+                autocomplete="off"
+                type="text"
+                placeholder="예: 식사, 택시, 급여"
+              />
+              <div
+                v-if="entrySuggestions.length"
+                class="entry-title-suggestions"
+                data-no-drag="true"
+                role="listbox"
+                aria-label="과거 거래 제목 제안"
+              >
+                <button
+                  v-for="suggestion in entrySuggestions"
+                  :key="`${suggestion.entryType}-${suggestion.id}-${suggestion.title}`"
+                  type="button"
+                  class="entry-title-suggestion"
+                  role="option"
+                  @mousedown.prevent
+                  @click="emit('apply-title-suggestion', suggestion)"
+                >
+                  <strong>{{ suggestion.title }}</strong>
+                  <small>{{ suggestion.categoryLabel }} · {{ suggestion.paymentMethodName }}</small>
+                </button>
+              </div>
+            </div>
 
             <div v-if="entryForm.entryType === 'EXPENSE'" class="entry-editor__field-row entry-editor__field-row--classification">
               <label class="field">

@@ -149,6 +149,7 @@ const editingEntryId = ref(null)
 const amountInput = ref('')
 const isEntryTimeEnabled = ref(false)
 const calendarWorkspaceRef = ref(null)
+const titleSuggestionSearchResults = ref([])
 const receiptOcr = reactive({
   isOpen: false,
   documentType: 'AUTO',
@@ -169,6 +170,8 @@ const receiptOcr = reactive({
 })
 let feedbackTimerId = null
 let searchRequestTimerId = null
+let titleSuggestionSearchTimerId = null
+let titleSuggestionSearchRequestId = 0
 let receiptOcrItemSequence = 0
 
 const entryForm = reactive({
@@ -290,12 +293,35 @@ const trashPageInfo = computed(() => trashPageState.value)
 const isEditingEntry = computed(() => editingEntryId.value !== null)
 const dataActionMenuRef = ref(null)
 const dataActionMenuOpen = ref(false)
+
+function normalizeTitleSuggestionText(value) {
+  return String(value || '')
+    .toLowerCase()
+    .replace(/\s*[:：]\s*/g, ':')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function getTitleSuggestionSearchKeyword(value) {
+  const text = String(value || '').trim()
+  if (!text) {
+    return ''
+  }
+
+  const colonIndex = text.search(/[:：]/)
+  if (colonIndex > 0) {
+    return text.slice(0, colonIndex).trim()
+  }
+  return text
+}
+
 const entrySuggestions = computed(() => {
-  const keyword = entryForm.title.trim().toLowerCase()
+  const keyword = normalizeTitleSuggestionText(entryForm.title)
   if (!keyword) {
     return []
   }
   const baseEntries = [
+    ...titleSuggestionSearchResults.value,
     ...(dashboard.value.recentEntries ?? []),
     ...monthEntries.value,
     ...statsEntries.value,
@@ -307,24 +333,14 @@ const entrySuggestions = computed(() => {
     .filter((entry) => entry.entryType === entryForm.entryType)
     .sort((left, right) => `${right.entryDate}${right.entryTime || ''}${String(right.id).padStart(10, '0')}`.localeCompare(`${left.entryDate}${left.entryTime || ''}${String(left.id).padStart(10, '0')}`))
     .forEach((entry) => {
-      const target = [entry.title, entry.memo, entry.categoryGroupName, entry.categoryDetailName, entry.paymentMethodName]
-        .filter(Boolean)
-        .join(' ')
-        .toLowerCase()
+      const title = String(entry.title || '').trim()
+      const normalizedTitle = normalizeTitleSuggestionText(title)
 
-      if (keyword && !target.includes(keyword)) {
+      if (!normalizedTitle || !normalizedTitle.includes(keyword)) {
         return
       }
 
-      const signature = [
-        entry.entryType,
-        entry.title || '',
-        entry.memo || '',
-        entry.amount || 0,
-        entry.categoryGroupId || '',
-        entry.categoryDetailId || '',
-        entry.paymentMethodId || '',
-      ].join('|')
+      const signature = `${entry.entryType}:${normalizedTitle}`
 
       if (seen.has(signature)) {
         return
@@ -335,7 +351,7 @@ const entrySuggestions = computed(() => {
         id: entry.id,
         entryDate: entry.entryDate,
         entryTime: entry.entryTime || '00:00',
-        title: entry.title || '',
+        title,
         memo: entry.memo || '',
         amount: Number(entry.amount || 0),
         entryType: entry.entryType,
@@ -347,7 +363,7 @@ const entrySuggestions = computed(() => {
       })
     })
 
-  return suggestions.slice(0, 6)
+  return suggestions.slice(0, 4)
 })
 
 function sortEntriesByRecent(left, right) {
@@ -447,6 +463,13 @@ watch(
   },
 )
 
+watch(
+  () => [entryForm.title, entryForm.entryType, entryDateRange.value.earliestDate, entryDateRange.value.latestDate],
+  () => {
+    queueTitleSuggestionSearch()
+  },
+)
+
 watch(calendarAnchorDate, async () => {
   if (calendarReady.value) {
     await loadCalendarData()
@@ -542,6 +565,9 @@ onBeforeUnmount(() => {
   }
   if (searchRequestTimerId) {
     window.clearTimeout(searchRequestTimerId)
+  }
+  if (titleSuggestionSearchTimerId) {
+    window.clearTimeout(titleSuggestionSearchTimerId)
   }
 })
 
@@ -779,6 +805,53 @@ function queueSearchResultsReload() {
   }, 200)
 }
 
+function clearTitleSuggestionSearch() {
+  titleSuggestionSearchRequestId += 1
+  titleSuggestionSearchResults.value = []
+  if (titleSuggestionSearchTimerId) {
+    window.clearTimeout(titleSuggestionSearchTimerId)
+    titleSuggestionSearchTimerId = null
+  }
+}
+
+function queueTitleSuggestionSearch() {
+  if (titleSuggestionSearchTimerId) {
+    window.clearTimeout(titleSuggestionSearchTimerId)
+  }
+
+  const keyword = normalizeTitleSuggestionText(entryForm.title)
+  if (keyword.length < 2 || !entryDateRange.value.earliestDate || !entryDateRange.value.latestDate) {
+    clearTitleSuggestionSearch()
+    return
+  }
+
+  titleSuggestionSearchTimerId = window.setTimeout(() => {
+    titleSuggestionSearchTimerId = null
+    loadTitleSuggestionSearch().catch(() => {
+      titleSuggestionSearchResults.value = []
+    })
+  }, 250)
+}
+
+async function loadTitleSuggestionSearch() {
+  const requestId = titleSuggestionSearchRequestId + 1
+  titleSuggestionSearchRequestId = requestId
+  const response = await fetchEntrySearchPage({
+    from: entryDateRange.value.earliestDate,
+    to: entryDateRange.value.latestDate,
+    keyword: getTitleSuggestionSearchKeyword(entryForm.title),
+    entryType: entryForm.entryType,
+    sortBy: 'DATE_DESC',
+    page: 0,
+    size: 20,
+  })
+
+  if (requestId !== titleSuggestionSearchRequestId) {
+    return
+  }
+  titleSuggestionSearchResults.value = Array.isArray(response?.content) ? response.content : []
+}
+
 async function loadSearchResults(page = 0) {
   const range = statsRange.value
   const response = await fetchEntrySearchPage({
@@ -926,6 +999,12 @@ function applyEntrySuggestion(suggestion) {
   }
 
   syncEntryDefaults()
+}
+
+function applyEntryTitleSuggestion(suggestion) {
+  if (suggestion?.title) {
+    entryForm.title = suggestion.title
+  }
 }
 
 function revokeReceiptOcrItemPreview(item) {
@@ -1821,6 +1900,7 @@ async function deactivatePayment(paymentId) {
       @edit-entry="fillEntryForm"
       @delete-entry="removeEntry"
       @apply-entry-suggestion="applyEntrySuggestion"
+      @apply-title-suggestion="applyEntryTitleSuggestion"
       @change-anchor-month="handleChangeCalendarMonth"
       @save-aggregate-widget-configs="updateAggregatePreferences"
     />

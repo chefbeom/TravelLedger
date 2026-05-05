@@ -706,9 +706,10 @@ button {
   display: grid;
   gap: 8px;
   align-content: start;
-  align-self: start;
+  align-self: stretch;
   grid-auto-rows: max-content;
   min-width: 0;
+  width: 100%;
 }
 
 .calendar__metric {
@@ -722,6 +723,7 @@ button {
   background: var(--calendar-metric-bg);
   font-size: 0.84rem;
   align-content: center;
+  width: 100%;
 }
 
 .calendar__metric span {

@@ -121,13 +121,17 @@ export function buildCalendarWeeks(summaryItems, anchorValue) {
 
   const end = new Date(lastDay)
   end.setDate(end.getDate() + (6 - end.getDay()))
+  const visibleWeekCount = Math.floor((end.getTime() - start.getTime()) / (7 * 24 * 60 * 60 * 1000)) + 1
+  if (visibleWeekCount <= 4) {
+    start.setDate(start.getDate() - 7)
+  }
 
   const summaryMap = new Map(summaryItems.map((item) => [item.date, item]))
   const weeks = []
   const cursor = new Date(start)
   const startIso = toIsoDate(start)
 
-  while (cursor <= end) {
+  for (let weekIndex = 0; weekIndex < 6; weekIndex += 1) {
     const week = []
     for (let index = 0; index < 7; index += 1) {
       const iso = toIsoDate(cursor)

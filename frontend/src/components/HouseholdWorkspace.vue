@@ -873,9 +873,9 @@ async function loadPastComparisons() {
   )
 }
 
-function resetEntryForm() {
+function resetEntryForm({ entryDate = calendarAnchorDate.value } = {}) {
   editingEntryId.value = null
-  entryForm.entryDate = calendarAnchorDate.value
+  entryForm.entryDate = entryDate || calendarAnchorDate.value
   entryForm.entryTime = '00:00'
   entryForm.title = ''
   entryForm.memo = ''
@@ -1426,7 +1426,7 @@ async function submitEntry() {
       setFeedback('가계부 내역을 등록했습니다.')
     }
     await refreshLedgerViews()
-    resetEntryForm()
+    resetEntryForm({ entryDate: submittedSnapshot.entryDate })
   } catch (error) {
     setFeedback('', error.message)
   } finally {

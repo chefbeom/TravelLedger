@@ -16,7 +16,7 @@ const monthFormatter = new Intl.DateTimeFormat('ko-KR', {
   month: 'long',
 })
 
-const weekdayLabels = ['월', '화', '수', '목', '금', '토', '일']
+const weekdayLabels = ['일', '월', '화', '수', '목', '금', '토']
 const weekdayFullLabels = ['일요일', '월요일', '화요일', '수요일', '목요일', '금요일', '토요일']
 
 function getCurrencyFormatter(currency = 'KRW', maximumFractionDigits = currency === 'KRW' ? 0 : 2) {
@@ -117,12 +117,10 @@ export function buildCalendarWeeks(summaryItems, anchorValue) {
   const firstDay = new Date(anchor.getFullYear(), targetMonth, 1)
   const lastDay = new Date(anchor.getFullYear(), targetMonth + 1, 0)
   const start = new Date(firstDay)
-  const firstWeekday = start.getDay() === 0 ? 7 : start.getDay()
-  start.setDate(start.getDate() - (firstWeekday - 1))
+  start.setDate(start.getDate() - start.getDay())
 
   const end = new Date(lastDay)
-  const lastWeekday = end.getDay() === 0 ? 7 : end.getDay()
-  end.setDate(end.getDate() + (7 - lastWeekday))
+  end.setDate(end.getDate() + (6 - end.getDay()))
 
   const summaryMap = new Map(summaryItems.map((item) => [item.date, item]))
   const weeks = []

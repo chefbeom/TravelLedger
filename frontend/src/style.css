@@ -667,26 +667,38 @@ button {
 }
 
 .calendar__expense-block {
-  display: grid;
+  display: flex;
+  align-items: baseline;
   gap: 4px;
+  flex-wrap: nowrap;
   min-width: 0;
 }
 
 .calendar__label {
+  flex: 0 0 auto;
   color: var(--text-muted);
   font-size: 0.82rem;
   font-weight: 700;
+  white-space: nowrap;
+}
+
+.calendar__label::after {
+  content: ' :';
 }
 
 .calendar__expense-total {
   display: block;
+  min-width: 0;
   max-width: 100%;
   font-size: 1.45rem;
   font-weight: 800;
   letter-spacing: -0.04em;
   line-height: 1.15;
   color: var(--text);
-  overflow-wrap: anywhere;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  overflow-wrap: normal;
+  white-space: nowrap;
   word-break: keep-all;
 }
 

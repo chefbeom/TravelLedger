@@ -645,8 +645,13 @@ button {
 }
 
 .calendar__day-stamp {
-  display: grid;
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: nowrap;
   gap: 6px;
+  min-width: 0;
+  max-width: 100%;
+  white-space: nowrap;
 }
 
 .calendar__month-tag {

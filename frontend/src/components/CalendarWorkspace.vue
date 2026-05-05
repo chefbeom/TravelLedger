@@ -1698,6 +1698,43 @@ function shiftAnchorMonth(offset) {
   updateAnchorMonth(nextDate.getFullYear(), nextDate.getMonth() + 1)
 }
 
+function parseIsoDate(value) {
+  const parts = String(value || '').split('-').map((part) => Number(part))
+  if (parts.length !== 3 || parts.some((part) => !Number.isFinite(part))) {
+    return null
+  }
+
+  const [year, month, day] = parts
+  const date = new Date(year, month - 1, day)
+  if (
+    date.getFullYear() !== year ||
+    date.getMonth() !== month - 1 ||
+    date.getDate() !== day
+  ) {
+    return null
+  }
+
+  return date
+}
+
+function shiftEntryDate(offset) {
+  const baseDate =
+    parseIsoDate(props.entryForm.entryDate) ||
+    parseIsoDate(selectedDate.value) ||
+    parseIsoDate(props.anchorDate) ||
+    new Date()
+
+  baseDate.setDate(baseDate.getDate() + Number(offset || 0))
+  const nextDate = getLocalIsoDate(baseDate)
+
+  props.entryForm.entryDate = nextDate
+  selectedDate.value = nextDate
+
+  if (nextDate.slice(0, 7) !== String(props.anchorDate || '').slice(0, 7)) {
+    emit('change-anchor-month', nextDate)
+  }
+}
+
 function waitForLayoutFrame() {
   return new Promise((resolve) => {
     requestAnimationFrame(() => {
@@ -2143,9 +2180,27 @@ defineExpose({
 
           <div class="entry-editor__fields">
             <div class="entry-editor__field-row entry-editor__field-row--date-time">
-              <label class="field">
+              <label class="field entry-date-field">
                 <span class="field__label">날짜</span>
-                <input v-model="entryForm.entryDate" type="date" />
+                <div class="entry-date-control" data-no-drag="true">
+                  <button
+                    type="button"
+                    class="entry-date-control__step"
+                    aria-label="전날"
+                    @click="shiftEntryDate(-1)"
+                  >
+                    &lt;
+                  </button>
+                  <input v-model="entryForm.entryDate" type="date" />
+                  <button
+                    type="button"
+                    class="entry-date-control__step"
+                    aria-label="다음날"
+                    @click="shiftEntryDate(1)"
+                  >
+                    &gt;
+                  </button>
+                </div>
               </label>
 
               <label class="field household-time-field">
@@ -2497,7 +2552,18 @@ defineExpose({
         class="sheet-table-wrap household-sheet-table-wrap"
         :class="{ 'household-sheet-table-wrap--scroll': normalizedSelectedDateEntries.length > SELECTED_DAY_VISIBLE_ROWS }"
       >
-        <table class="sheet-table">
+        <table class="sheet-table household-sheet-table">
+          <colgroup>
+            <col class="household-sheet-col household-sheet-col--select" />
+            <col class="household-sheet-col household-sheet-col--time" />
+            <col class="household-sheet-col household-sheet-col--type" />
+            <col class="household-sheet-col household-sheet-col--title" />
+            <col class="household-sheet-col household-sheet-col--category" />
+            <col class="household-sheet-col household-sheet-col--payment" />
+            <col class="household-sheet-col household-sheet-col--amount" />
+            <col v-if="hasSelectedMemoColumn" class="household-sheet-col household-sheet-col--memo" />
+            <col class="household-sheet-col household-sheet-col--actions" />
+          </colgroup>
           <thead>
             <tr>
               <th class="sheet-table__select">
@@ -2546,8 +2612,10 @@ defineExpose({
               </td>
               <td v-if="hasSelectedMemoColumn" class="sheet-table__memo">{{ entry.visibleMemo || '-' }}</td>
               <td class="sheet-table__actions">
-                <button type="button" class="button button--ghost" @click="handleSheetEditEntry(entry)">수정</button>
-                <button type="button" class="button button--danger" @click="emit('delete-entry', entry)">삭제</button>
+                <div class="sheet-table__actions-inner">
+                  <button type="button" class="button button--ghost" @click="handleSheetEditEntry(entry)">수정</button>
+                  <button type="button" class="button button--danger" @click="emit('delete-entry', entry)">삭제</button>
+                </div>
               </td>
             </tr>
             <tr v-if="!normalizedSelectedDateEntries.length">

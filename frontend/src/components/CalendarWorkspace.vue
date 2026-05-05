@@ -20,6 +20,8 @@ const CALENDAR_LAYOUT_GRID_COLUMNS = 9
 const CALENDAR_LAYOUT_GRID_MARGIN = 4
 const CALENDAR_LAYOUT_GRID_GAP = CALENDAR_LAYOUT_GRID_MARGIN * 2
 const REMOTE_LAYOUT_SAVE_DELAY_MS = 800
+const CALENDAR_DAY_LONG_PRESS_MS = 520
+const CALENDAR_DAY_CLICK_SUPPRESS_MS = 450
 
 const calendarScalePresets = [
   { key: 'compact', label: '좁게', value: 74 },
@@ -299,6 +301,8 @@ let viewPreferenceRemoteSaveTimer = 0
 let pendingViewPreferenceRemotePayload = null
 let viewPreferenceChangedDuringRemoteHydration = false
 let isApplyingCalendarViewPreferences = false
+let calendarDayLongPressTimer = 0
+let calendarDayClickSuppressUntil = 0
 
 function clampTimePart(value, max) {
   const numeric = Number(value)
@@ -806,6 +810,8 @@ onBeforeUnmount(() => {
     calendarResizeObserver.disconnect()
     calendarResizeObserver = null
   }
+
+  clearCalendarDayLongPress()
 })
 
 function isEditableTarget(target) {
@@ -1773,7 +1779,7 @@ function focusEntryEditorControl() {
   }
 }
 
-async function handleSelectDay(day) {
+function selectCalendarDay(day) {
   selectedDate.value = day.date
 
   if (!props.isEditingEntry) {
@@ -1783,8 +1789,55 @@ async function handleSelectDay(day) {
   if (!day.inCurrentMonth) {
     emit('change-anchor-month', day.date)
   }
+}
 
+function handleSelectDay(day) {
+  selectCalendarDay(day)
+}
+
+async function handleSelectDayAndScroll(day) {
+  selectCalendarDay(day)
   await scrollToPanelElement(ledgerSheetScrollTargetRef.value || ledgerSheetRef.value)
+}
+
+function clearCalendarDayLongPress() {
+  if (!calendarDayLongPressTimer || typeof window === 'undefined') {
+    calendarDayLongPressTimer = 0
+    return
+  }
+
+  window.clearTimeout(calendarDayLongPressTimer)
+  calendarDayLongPressTimer = 0
+}
+
+function suppressNextCalendarDayClick() {
+  calendarDayClickSuppressUntil = Date.now() + CALENDAR_DAY_CLICK_SUPPRESS_MS
+}
+
+function handleCalendarDayPressStart(day, event) {
+  if (typeof window === 'undefined') {
+    return
+  }
+
+  if (event?.button != null && event.button !== 0) {
+    return
+  }
+
+  clearCalendarDayLongPress()
+  calendarDayLongPressTimer = window.setTimeout(() => {
+    calendarDayLongPressTimer = 0
+    suppressNextCalendarDayClick()
+    handleSelectDayAndScroll(day)
+  }, CALENDAR_DAY_LONG_PRESS_MS)
+}
+
+function handleCalendarDayClick(day) {
+  if (Date.now() < calendarDayClickSuppressUntil) {
+    calendarDayClickSuppressUntil = 0
+    return
+  }
+
+  handleSelectDay(day)
 }
 
 function formatPaymentMethodForSheet(entry) {
@@ -2479,8 +2532,14 @@ defineExpose({
                 ]"
                 role="button"
                 tabindex="0"
-                @click="handleSelectDay(day)"
-                @keydown.enter.prevent="handleSelectDay(day)"
+                @click="handleCalendarDayClick(day)"
+                @dblclick.prevent="handleSelectDayAndScroll(day)"
+                @pointerdown="handleCalendarDayPressStart(day, $event)"
+                @pointerup="clearCalendarDayLongPress"
+                @pointerleave="clearCalendarDayLongPress"
+                @pointercancel="clearCalendarDayLongPress"
+                @contextmenu.prevent
+                @keydown.enter.prevent="handleSelectDayAndScroll(day)"
               >
                 <div class="calendar__day-head">
                   <div class="calendar__day-stamp">

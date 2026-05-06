@@ -7615,11 +7615,15 @@ textarea {
 
 .household-aggregate-header {
   align-items: center;
+  flex-direction: row;
   gap: 12px;
   flex-wrap: nowrap;
+  justify-content: space-between;
+  width: 100%;
 }
 
 .household-aggregate-header > div:first-child {
+  flex: 1 1 auto;
   min-width: 0;
 }
 

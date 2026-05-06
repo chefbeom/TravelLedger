@@ -7595,6 +7595,7 @@ textarea {
   min-width: 0;
   display: grid;
   align-content: start;
+  container: household-aggregate / inline-size;
   overflow: hidden;
 }
 
@@ -7622,13 +7623,15 @@ textarea {
 
 .household-aggregate-grid {
   display: grid;
-  grid-template-columns: 1fr;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr));
+  align-items: stretch;
   gap: 14px;
 }
 
 .household-aggregate-card {
   display: grid;
   gap: 12px;
+  align-content: start;
   min-height: 0;
   width: 100%;
   padding: 16px;
@@ -7639,7 +7642,7 @@ textarea {
 
 .household-aggregate-card__controls {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 112px), 1fr));
   gap: 10px;
 }
 
@@ -7650,7 +7653,7 @@ textarea {
 .household-aggregate-card__copy {
   display: grid;
   gap: 6px;
-  margin-top: auto;
+  min-width: 0;
 }
 
 .household-aggregate-card__eyebrow {
@@ -7671,8 +7674,18 @@ textarea {
 }
 
 .household-aggregate-card__meta {
-  display: grid;
-  gap: 6px;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  min-width: 0;
+}
+
+.household-aggregate-card__meta span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .household-aggregate-empty {
@@ -7695,6 +7708,18 @@ textarea {
 .household-aggregate-empty--off .button {
   justify-self: start;
   margin-top: 6px;
+}
+
+@container household-aggregate (min-width: 620px) {
+  .household-aggregate-card:not(:has(.household-aggregate-card__controls)) {
+    grid-template-columns: minmax(0, 1fr) minmax(112px, auto);
+    align-items: end;
+  }
+
+  .household-aggregate-card:not(:has(.household-aggregate-card__controls)) .household-aggregate-card__meta {
+    justify-content: flex-end;
+    text-align: right;
+  }
 }
 
 .household-sheet-panel {

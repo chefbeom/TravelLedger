@@ -7608,12 +7608,15 @@ textarea {
   align-items: center;
   justify-content: flex-end;
   gap: 10px;
-  flex-wrap: wrap;
+  flex: 0 0 auto;
+  flex-wrap: nowrap;
+  margin-left: auto;
 }
 
 .household-aggregate-header {
   align-items: center;
   gap: 12px;
+  flex-wrap: nowrap;
 }
 
 .household-aggregate-header > div:first-child {

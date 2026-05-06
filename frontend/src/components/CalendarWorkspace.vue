@@ -11,9 +11,9 @@ const CALENDAR_SCALE_KEY = 'calen-household-calendar-scale-preset'
 const CALENDAR_HIGHLIGHT_KEY = 'calen-household-calendar-highlight-mode'
 const CALENDAR_AGGREGATE_PANEL_ENABLED_KEY = 'calen-household-calendar-aggregate-panel-enabled'
 const CALENDAR_RECEIPT_OCR_PANEL_ENABLED_KEY = 'calen-household-calendar-receipt-ocr-panel-enabled'
-const CALENDAR_PANEL_LAYOUT_STORAGE_KEY = 'calen-household-calendar-panel-layout:v1'
+const CALENDAR_PANEL_LAYOUT_STORAGE_KEY = 'calen-household-calendar-panel-layout:v2'
 const CALENDAR_PANEL_LAYOUT_SCOPE = 'household-calendar'
-const CALENDAR_PANEL_LAYOUT_VERSION = 1
+const CALENDAR_PANEL_LAYOUT_VERSION = 2
 const CALENDAR_VIEW_PREFERENCE_SCOPE = 'household-calendar-view'
 const CALENDAR_VIEW_PREFERENCE_VERSION = 1
 const DEFAULT_CALENDAR_HIGHLIGHT_MODE = 'net'
@@ -84,7 +84,7 @@ const calendarPanelDefinitions = [
   {
     id: 'calendar',
     title: '달력',
-    defaultLayout: { x: 0, y: 0, w: 6, h: 6 },
+    defaultLayout: { x: 0, y: 2, w: 6, h: 6 },
     minW: 4,
     minH: 4,
     maxW: 9,
@@ -93,7 +93,7 @@ const calendarPanelDefinitions = [
   {
     id: 'quick-entry',
     title: '빠른 거래 입력',
-    defaultLayout: { x: 6, y: 0, w: 3, h: 6 },
+    defaultLayout: { x: 6, y: 2, w: 3, h: 6 },
     minW: 3,
     minH: 5,
     maxW: 5,
@@ -102,16 +102,16 @@ const calendarPanelDefinitions = [
   {
     id: 'aggregate',
     title: '사용자 설정 집계',
-    defaultLayout: { x: 6, y: 4, w: 3, h: 3 },
-    minW: 3,
+    defaultLayout: { x: 0, y: 0, w: 9, h: 2 },
+    minW: 4,
     minH: 2,
-    maxW: 5,
+    maxW: 9,
     maxH: 6,
   },
   {
     id: 'sheet',
     title: '거래 시트',
-    defaultLayout: { x: 0, y: 7, w: 9, h: 4 },
+    defaultLayout: { x: 0, y: 8, w: 9, h: 4 },
     minW: 4,
     minH: 2,
     maxW: 9,
@@ -1237,6 +1237,13 @@ async function hydrateRemoteCalendarPanelLayout(sequence, fallbackLayout) {
     }
 
     if (Array.isArray(response?.payload)) {
+      const remoteVersion = Number(response.version ?? 1) || 1
+      if (remoteVersion < CALENDAR_PANEL_LAYOUT_VERSION) {
+        const nextLayout = fallbackLayout ?? clone(calendarPanelLayout.value)
+        await saveLayoutSetting(CALENDAR_PANEL_LAYOUT_SCOPE, nextLayout, CALENDAR_PANEL_LAYOUT_VERSION)
+        return
+      }
+
       const remoteUpdatedAt = parseRemoteUpdatedAt(response.updatedAt)
       if (
         fallbackLayout

@@ -363,7 +363,7 @@ const entrySuggestions = computed(() => {
       })
     })
 
-  return suggestions.slice(0, 4)
+  return suggestions.slice(0, 10)
 })
 
 function sortEntriesByRecent(left, right) {
@@ -1002,9 +1002,30 @@ function applyEntrySuggestion(suggestion) {
 }
 
 function applyEntryTitleSuggestion(suggestion) {
-  if (suggestion?.title) {
+  if (!suggestion) {
+    return
+  }
+
+  if (suggestion.title) {
     entryForm.title = suggestion.title
   }
+  if (suggestion.memo) {
+    entryForm.memo = suggestion.memo
+  }
+
+  if (suggestion.categoryGroupId) {
+    entryForm.categoryGroupId = String(suggestion.categoryGroupId)
+  }
+  if (suggestion.categoryDetailId) {
+    entryForm.categoryDetailId = String(suggestion.categoryDetailId)
+  } else if (suggestion.categoryGroupId) {
+    entryForm.categoryDetailId = ''
+  }
+  if (suggestion.paymentMethodId) {
+    entryForm.paymentMethodId = String(suggestion.paymentMethodId)
+  }
+
+  syncEntryDefaults({ preferLatest: false, force: false })
 }
 
 function revokeReceiptOcrItemPreview(item) {

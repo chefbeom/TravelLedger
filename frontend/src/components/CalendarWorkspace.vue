@@ -10,6 +10,7 @@ import { fetchLayoutSetting, saveLayoutSetting } from '../lib/api'
 const CALENDAR_SCALE_KEY = 'calen-household-calendar-scale-preset'
 const CALENDAR_HIGHLIGHT_KEY = 'calen-household-calendar-highlight-mode'
 const CALENDAR_AGGREGATE_PANEL_ENABLED_KEY = 'calen-household-calendar-aggregate-panel-enabled'
+const CALENDAR_RECEIPT_OCR_PANEL_ENABLED_KEY = 'calen-household-calendar-receipt-ocr-panel-enabled'
 const CALENDAR_PANEL_LAYOUT_STORAGE_KEY = 'calen-household-calendar-panel-layout:v1'
 const CALENDAR_PANEL_LAYOUT_SCOPE = 'household-calendar'
 const CALENDAR_PANEL_LAYOUT_VERSION = 1
@@ -274,6 +275,7 @@ const calendarPreviousWeekOffset = ref(1)
 const calendarHighlightMode = ref(DEFAULT_CALENDAR_HIGHLIGHT_MODE)
 const isAggregateEditMode = ref(false)
 const isAggregatePanelEnabled = ref(true)
+const isReceiptOcrPanelEnabled = ref(true)
 const isLayoutEditMode = ref(false)
 const quickEntryPanelRef = ref(null)
 const ledgerSheetRef = ref(null)
@@ -712,6 +714,11 @@ watch(isAggregatePanelEnabled, () => {
   refreshCalendarMeasurements()
 })
 
+watch(isReceiptOcrPanelEnabled, () => {
+  persistCalendarViewPreferences()
+  refreshCalendarMeasurements()
+})
+
 watch(calendarPanelLayoutKey, () => {
   queueLayoutGridRebuild()
 })
@@ -930,6 +937,7 @@ function calendarViewPreferencePayload() {
     scalePreset: calendarScalePreset.value,
     highlightMode: calendarHighlightMode.value,
     aggregatePanelEnabled: isAggregatePanelEnabled.value,
+    receiptOcrPanelEnabled: isReceiptOcrPanelEnabled.value,
   }
 }
 
@@ -946,6 +954,7 @@ function normalizeCalendarViewPreferences(payload) {
     scalePreset: normalizePresetKey(calendarDisplayModes, payload.scalePreset, 'default'),
     highlightMode,
     aggregatePanelEnabled: payload.aggregatePanelEnabled !== false,
+    receiptOcrPanelEnabled: payload.receiptOcrPanelEnabled !== false,
   }
 }
 
@@ -957,6 +966,7 @@ function applyCalendarViewPreferences(preferences) {
   calendarScalePreset.value = preferences.scalePreset
   calendarHighlightMode.value = preferences.highlightMode
   isAggregatePanelEnabled.value = preferences.aggregatePanelEnabled
+  isReceiptOcrPanelEnabled.value = preferences.receiptOcrPanelEnabled
 }
 
 function persistCalendarViewPreferencesLocal() {
@@ -967,6 +977,7 @@ function persistCalendarViewPreferencesLocal() {
   window.localStorage.setItem(CALENDAR_SCALE_KEY, calendarScalePreset.value)
   window.localStorage.setItem(CALENDAR_HIGHLIGHT_KEY, calendarHighlightMode.value)
   window.localStorage.setItem(CALENDAR_AGGREGATE_PANEL_ENABLED_KEY, isAggregatePanelEnabled.value ? 'true' : 'false')
+  window.localStorage.setItem(CALENDAR_RECEIPT_OCR_PANEL_ENABLED_KEY, isReceiptOcrPanelEnabled.value ? 'true' : 'false')
 }
 
 function scheduleCalendarViewPreferencesRemotePersist(payload = calendarViewPreferencePayload()) {
@@ -1019,6 +1030,7 @@ function hydrateCalendarViewPreferencesFromLocal() {
   const savedScale = window.localStorage.getItem(CALENDAR_SCALE_KEY)
   const savedHighlight = window.localStorage.getItem(CALENDAR_HIGHLIGHT_KEY)
   const savedAggregatePanelEnabled = window.localStorage.getItem(CALENDAR_AGGREGATE_PANEL_ENABLED_KEY)
+  const savedReceiptOcrPanelEnabled = window.localStorage.getItem(CALENDAR_RECEIPT_OCR_PANEL_ENABLED_KEY)
 
   if (savedScale) {
     calendarScalePreset.value = normalizePresetKey(calendarDisplayModes, savedScale, 'default')
@@ -1032,6 +1044,9 @@ function hydrateCalendarViewPreferencesFromLocal() {
 
   if (savedAggregatePanelEnabled) {
     isAggregatePanelEnabled.value = savedAggregatePanelEnabled !== 'false'
+  }
+  if (savedReceiptOcrPanelEnabled) {
+    isReceiptOcrPanelEnabled.value = savedReceiptOcrPanelEnabled !== 'false'
   }
 
   persistCalendarViewPreferencesLocal()
@@ -1371,6 +1386,13 @@ function toggleLayoutEditMode() {
   isLayoutEditMode.value = !isLayoutEditMode.value
   if (isFinishingEdit) {
     saveCalendarPanelLayoutRemoteNow()
+  }
+}
+
+function toggleReceiptOcrPanelEnabled() {
+  isReceiptOcrPanelEnabled.value = !isReceiptOcrPanelEnabled.value
+  if (!isReceiptOcrPanelEnabled.value) {
+    emit('close-receipt-ocr')
   }
 }
 
@@ -1905,6 +1927,7 @@ defineExpose({
         'panel household-calendar-control-panel household-calendar-layout',
         { 'household-calendar-layout--amount-only': isAmountOnlyCalendar },
         { 'household-calendar-layout--fit': isFitCalendar },
+        { 'household-calendar-layout--week-view': calendarWeekMode !== 'month' },
       ]"
       :style="calendarLayoutStyle"
     >
@@ -1919,6 +1942,9 @@ defineExpose({
             <div class="household-calendar-layout-toolbar__actions">
               <button type="button" class="button button--secondary" @click="toggleAggregatePanelEnabled">
                 {{ isAggregatePanelEnabled ? '집계 숨기기' : '집계 보이기' }}
+              </button>
+              <button v-if="isLayoutEditMode" type="button" class="button button--secondary" @click="toggleReceiptOcrPanelEnabled">
+                {{ isReceiptOcrPanelEnabled ? '자동입력 숨기기' : '자동입력 보이기' }}
               </button>
               <button type="button" class="button button--secondary" @click="resetCalendarPanelLayout">
                 기본 배치
@@ -2078,7 +2104,7 @@ defineExpose({
           <span class="panel__badge household-entry-panel__date-badge">{{ formatIsoDate(entryForm.entryDate) }}</span>
         </div>
 
-        <section class="receipt-ocr-panel receipt-ocr-panel--launcher" data-no-drag="true">
+        <section v-if="isReceiptOcrPanelEnabled" class="receipt-ocr-panel receipt-ocr-panel--launcher" data-no-drag="true">
           <div class="receipt-ocr-panel__header">
             <div>
               <strong>거래 이미지 자동입력</strong>
@@ -2529,6 +2555,7 @@ defineExpose({
         'panel household-calendar-panel household-calendar-layout household-calendar-panel--content-only',
         { 'household-calendar-layout--amount-only': isAmountOnlyCalendar },
         { 'household-calendar-layout--fit': isFitCalendar },
+        { 'household-calendar-layout--week-view': calendarWeekMode !== 'month' },
       ]"
       :style="calendarLayoutStyle"
     >

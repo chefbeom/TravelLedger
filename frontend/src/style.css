@@ -1581,7 +1581,7 @@ button {
   z-index: 30;
   display: grid;
   gap: 6px;
-  max-height: 236px;
+  max-height: calc((52px * 5) + (6px * 4) + 16px);
   padding: 8px;
   overflow-y: auto;
   border: 1px solid var(--line);
@@ -1598,7 +1598,7 @@ button {
   display: grid;
   gap: 3px;
   width: 100%;
-  min-height: 0;
+  min-height: 52px;
   padding: 10px 12px;
   border: 1px solid transparent;
   border-radius: 12px;
@@ -7056,6 +7056,24 @@ textarea {
   flex-direction: column;
   align-content: start;
   min-height: 0;
+}
+
+.household-calendar-layout--week-view.household-calendar-panel--content-only .calendar-shell {
+  flex: 0 0 auto;
+}
+
+.household-calendar-layout--week-view.household-calendar-panel--content-only .calendar-scale-frame,
+.household-calendar-layout--week-view.household-calendar-panel--content-only .calendar-scale-content,
+.household-calendar-layout--week-view.household-calendar-panel--content-only .calendar__weeks {
+  height: auto;
+}
+
+.household-calendar-layout--week-view.household-calendar-panel--content-only .calendar__weeks {
+  grid-auto-rows: auto;
+}
+
+.household-calendar-layout--week-view.household-calendar-panel--content-only .calendar__day {
+  min-height: var(--calendar-day-min-height);
 }
 
 .household-calendar-panel--content-only .calendar__metrics {

@@ -2434,17 +2434,8 @@ defineExpose({
         <div class="panel__header household-aggregate-header">
           <div>
             <h2>사용자 설정 집계</h2>
-            <p>한 줄에 하나씩 집계 결과만 배치하고, 필요할 때만 수정 버튼으로 표시 항목을 바꿀 수 있습니다.</p>
           </div>
           <div class="household-aggregate-header__actions">
-            <button
-              type="button"
-              class="button button--ghost household-aggregate-toggle"
-              :aria-pressed="isAggregatePanelEnabled"
-              @click="toggleAggregatePanelEnabled"
-            >
-              {{ isAggregatePanelEnabled ? '집계 숨기기' : '집계 보이기' }}
-            </button>
             <span v-if="isAggregatePanelEnabled && aggregateSettingsReady" class="panel__badge">{{ aggregateCards.length }}칸</span>
             <template v-if="isAggregatePanelEnabled && isAggregateEditMode">
               <button

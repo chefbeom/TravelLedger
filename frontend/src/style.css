@@ -7611,6 +7611,19 @@ textarea {
   flex-wrap: wrap;
 }
 
+.household-aggregate-header {
+  align-items: center;
+  gap: 12px;
+}
+
+.household-aggregate-header > div:first-child {
+  min-width: 0;
+}
+
+.household-aggregate-header h2 {
+  white-space: nowrap;
+}
+
 .household-aggregate-toggle {
   min-height: 40px;
 }

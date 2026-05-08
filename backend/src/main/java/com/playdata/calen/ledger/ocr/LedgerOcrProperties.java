@@ -11,6 +11,7 @@ public class LedgerOcrProperties {
 
     private boolean enabled = false;
     private String baseUrl = "";
+    private String workflowUrl = "";
     private String apiKey = "";
     private Duration connectTimeout = Duration.ofSeconds(3);
     private Duration readTimeout = Duration.ofSeconds(45);
@@ -30,6 +31,14 @@ public class LedgerOcrProperties {
 
     public void setBaseUrl(String baseUrl) {
         this.baseUrl = baseUrl;
+    }
+
+    public String getWorkflowUrl() {
+        return workflowUrl;
+    }
+
+    public void setWorkflowUrl(String workflowUrl) {
+        this.workflowUrl = workflowUrl;
     }
 
     public String getApiKey() {
@@ -65,8 +74,15 @@ public class LedgerOcrProperties {
     }
 
     public boolean isConfigured() {
-        return enabled
-                && baseUrl != null
+        return enabled && (isWorkflowConfigured() || isDirectServerConfigured());
+    }
+
+    public boolean isWorkflowConfigured() {
+        return workflowUrl != null && !workflowUrl.isBlank();
+    }
+
+    public boolean isDirectServerConfigured() {
+        return baseUrl != null
                 && !baseUrl.isBlank()
                 && apiKey != null
                 && !apiKey.isBlank();

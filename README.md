@@ -125,6 +125,19 @@ Frontend
 
 프론트는 OCR 모달에서 사용자가 `영수증` 또는 `거래내역 캡처`를 선택하도록 하고, 백엔드는 이 값을 OCR 서버의 `documentType`으로 전달합니다.
 
+#### n8n OCR/Gemma workflow 연동
+
+`LEDGER_OCR_WORKFLOW_URL`을 설정하면 백엔드는 기존 OCR 서버 `/analyze` 직접 호출 대신 n8n webhook을 호출합니다.
+
+```env
+LEDGER_OCR_ENABLED=true
+LEDGER_OCR_WORKFLOW_URL=http://localhost:5678/webhook/ocr-gemma-json
+```
+
+요청은 기존 프론트 흐름과 동일하게 `POST /api/ledger/ocr/analyze`로 들어오며, 백엔드는 multipart field `file`과 `documentType`을 n8n으로 전달합니다. n8n은 PaddleOCR `/extract-text`와 Docker Ollama/Gemma를 호출한 뒤 `ledger-ocr-v1` JSON을 반환합니다.
+
+`LEDGER_OCR_WORKFLOW_URL`이 비어 있으면 기존처럼 `LEDGER_OCR_BASE_URL` + `LEDGER_OCR_API_KEY`로 사설 OCR 서버의 `/analyze`를 직접 호출합니다. 운영에서는 n8n URL, OCR API 키, n8n 암호화 키 같은 민감값을 문서나 Git에 올리지 않습니다.
+
 #### OCR 서버 API
 
 OCR 서버는 FastAPI 기반이며 브라우저 공개 API가 아닙니다.

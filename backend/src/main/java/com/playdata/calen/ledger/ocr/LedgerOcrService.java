@@ -128,8 +128,10 @@ public class LedgerOcrService {
     ) {
         LocalDate entryDate = parsed != null && parsed.entryDate() != null ? parsed.entryDate() : LocalDate.now();
         LocalTime entryTime = parsed != null && parsed.entryTime() != null ? parsed.entryTime() : LocalTime.MIDNIGHT;
-        BigDecimal amount = parsed != null && parsed.amount() != null && parsed.amount().compareTo(BigDecimal.ZERO) > 0
-                ? parsed.amount()
+        BigDecimal amount = parsed != null
+                && parsed.amount() != null
+                && parsed.amount().abs().compareTo(BigDecimal.ZERO) > 0
+                ? parsed.amount().abs()
                 : null;
         String title = limit(firstNonBlank(
                 parsed != null ? parsed.title() : null,

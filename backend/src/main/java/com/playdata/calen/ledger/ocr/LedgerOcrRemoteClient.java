@@ -1,5 +1,6 @@
 package com.playdata.calen.ledger.ocr;
 
+import com.fasterxml.jackson.annotation.JsonAlias;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.playdata.calen.common.exception.BadRequestException;
@@ -25,6 +26,7 @@ import org.springframework.web.multipart.MultipartFile;
 public class LedgerOcrRemoteClient {
 
     private static final String OCR_API_KEY_HEADER = "X-OCR-API-Key";
+    private static final String DIRECT_ANALYZE_PATH = "/analyze";
 
     private final LedgerOcrProperties properties;
 
@@ -34,10 +36,13 @@ public class LedgerOcrRemoteClient {
             requestFactory.setConnectTimeout(properties.getConnectTimeout());
             requestFactory.setReadTimeout(properties.getReadTimeout());
 
-            RestClient restClient = RestClient.builder()
-                    .baseUrl(properties.getBaseUrl())
-                    .requestFactory(requestFactory)
-                    .build();
+            boolean useWorkflow = properties.isWorkflowConfigured();
+            RestClient.Builder restClientBuilder = RestClient.builder()
+                    .requestFactory(requestFactory);
+            if (!useWorkflow) {
+                restClientBuilder.baseUrl(properties.getBaseUrl());
+            }
+            RestClient restClient = restClientBuilder.build();
 
             ByteArrayResource resource = new ByteArrayResource(file.getBytes()) {
                 @Override
@@ -54,11 +59,14 @@ public class LedgerOcrRemoteClient {
                     .contentType(resolveMediaType(file));
             multipart.part("documentType", documentType == null ? "AUTO" : documentType);
 
-            RemoteAnalyzeResponse response = restClient.post()
-                    .uri("/analyze")
-                    .header(OCR_API_KEY_HEADER, properties.getApiKey())
-                    .contentType(MediaType.MULTIPART_FORM_DATA)
-                    .body(multipart.build())
+            RestClient.RequestBodySpec request = restClient.post()
+                    .uri(useWorkflow ? properties.getWorkflowUrl() : DIRECT_ANALYZE_PATH)
+                    .contentType(MediaType.MULTIPART_FORM_DATA);
+            if (hasText(properties.getApiKey())) {
+                request.header(OCR_API_KEY_HEADER, properties.getApiKey());
+            }
+
+            RemoteAnalyzeResponse response = request.body(multipart.build())
                     .retrieve()
                     .body(RemoteAnalyzeResponse.class);
 
@@ -86,14 +94,21 @@ public class LedgerOcrRemoteClient {
         }
     }
 
+    private boolean hasText(String value) {
+        return value != null && !value.isBlank();
+    }
+
     @JsonIgnoreProperties(ignoreUnknown = true)
     public record RemoteAnalyzeResponse(
             boolean ok,
             String error,
             String documentType,
             String rawText,
+            @JsonAlias("firstEntry")
             RemoteParsedResult parsed,
+            @JsonAlias("entries")
             List<RemoteParsedResult> parsedEntries,
+            @JsonAlias("ocrTiming")
             Map<String, Object> timing
     ) {
     }

@@ -115,18 +115,25 @@ public class LedgerOcrRemoteClient {
 
     @JsonIgnoreProperties(ignoreUnknown = true)
     public record RemoteParsedResult(
+            @JsonAlias("date")
             LocalDate entryDate,
+            @JsonAlias("time")
             @JsonFormat(pattern = "HH:mm")
             LocalTime entryTime,
+            @JsonAlias("type")
             EntryType entryType,
+            @JsonAlias({"transactionTitle", "storeName", "store"})
             String title,
             String memo,
+            @JsonAlias({"totalAmount", "price"})
             BigDecimal amount,
+            @JsonAlias({"storeName", "store"})
             String vendor,
             String paymentMethodText,
             String categoryGroupName,
             String categoryDetailName,
             String categoryText,
+            @JsonAlias("items")
             List<RemoteLineItem> lineItems,
             Double confidence,
             List<String> warnings
@@ -135,6 +142,7 @@ public class LedgerOcrRemoteClient {
 
     @JsonIgnoreProperties(ignoreUnknown = true)
     public record RemoteLineItem(
+            @JsonAlias({"name", "title"})
             String itemName,
             BigDecimal quantity,
             String unit,

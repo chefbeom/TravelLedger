@@ -138,6 +138,15 @@ LEDGER_OCR_WORKFLOW_URL=http://localhost:5678/webhook/ocr-gemma-json
 
 `LEDGER_OCR_WORKFLOW_URL`이 비어 있으면 기존처럼 `LEDGER_OCR_BASE_URL` + `LEDGER_OCR_API_KEY`로 사설 OCR 서버의 `/analyze`를 직접 호출합니다. 운영에서는 n8n URL, OCR API 키, n8n 암호화 키 같은 민감값을 문서나 Git에 올리지 않습니다.
 
+1060 OCR PC에서 n8n과 Docker Ollama Gemma4를 운영하는 경우 앱 서버 환경변수는 다음 형태로 둡니다.
+
+```env
+LEDGER_OCR_ENABLED=true
+LEDGER_OCR_WORKFLOW_URL=http://<ocr-1060-private-host>:5678/webhook/ocr-gemma-json
+```
+
+이때 1060 PC의 n8n 컨테이너는 OCR 서비스 `http://host.docker.internal:8765/extract-text`와 Docker Ollama `http://ollama:11434`에 접근할 수 있어야 합니다. 앱 서버는 OCR 서버를 직접 호출하지 않고 n8n webhook만 호출합니다.
+
 #### OCR 서버 API
 
 OCR 서버는 FastAPI 기반이며 브라우저 공개 API가 아닙니다.

@@ -1,7 +1,6 @@
 <script setup>
 import { computed, ref } from 'vue'
 import { commitLedgerExcelImport, previewLedgerExcelImport } from '../lib/api'
-import { formatCurrency, formatShortDate } from '../lib/format'
 
 const emit = defineEmits(['imported'])
 
@@ -15,6 +14,65 @@ const errorMessage = ref('')
 
 const selectedCount = computed(() => previewRows.value.filter((row) => row.selected).length)
 const readyCount = computed(() => previewRows.value.filter((row) => row.ready).length)
+
+function normalizeAmountValue(value) {
+  const normalized = String(value ?? '').replace(/,/g, '').trim()
+  if (!normalized) {
+    return ''
+  }
+  const amount = Number(normalized)
+  return Number.isFinite(amount) ? String(amount) : normalized
+}
+
+function validatePreviewRow(row) {
+  const issues = []
+  const amount = Number(normalizeAmountValue(row.amount))
+
+  if (!row.entryDate) {
+    issues.push('거래일 필요')
+  }
+  if (!String(row.title || '').trim()) {
+    issues.push('내용 필요')
+  }
+  if (!Number.isFinite(amount) || amount <= 0) {
+    issues.push('금액 필요')
+  }
+  if (!['EXPENSE', 'INCOME'].includes(row.entryType)) {
+    issues.push('구분 필요')
+  }
+
+  return issues
+}
+
+function refreshPreviewRow(row) {
+  row.amount = normalizeAmountValue(row.amount)
+  row.title = String(row.title || '').trimStart()
+  row.entryType = ['EXPENSE', 'INCOME'].includes(row.entryType) ? row.entryType : 'EXPENSE'
+  row.issues = validatePreviewRow(row)
+  row.ready = row.issues.length === 0
+  if (!row.ready) {
+    row.selected = false
+  }
+}
+
+function toEditablePreviewRow(row) {
+  const editableRow = {
+    ...row,
+    entryDate: row.entryDate || '',
+    entryTime: row.entryTime || '',
+    title: row.title || '',
+    memo: row.memo || '',
+    amount: normalizeAmountValue(row.amount),
+    entryType: row.entryType || 'EXPENSE',
+    paymentMethodName: row.paymentMethodName || '',
+    categoryGroupName: row.categoryGroupName || '',
+    categoryDetailName: row.categoryDetailName || '',
+    selected: Boolean(row.ready),
+  }
+  refreshPreviewRow(editableRow)
+  editableRow.selected = Boolean(editableRow.ready && row.ready !== false)
+  return editableRow
+}
 
 function resetMessages() {
   feedback.value = ''
@@ -46,10 +104,7 @@ async function handlePreview() {
   try {
     const response = await previewLedgerExcelImport(selectedFile.value)
     preview.value = response
-    previewRows.value = (response.rows ?? []).map((row) => ({
-      ...row,
-      selected: Boolean(row.ready),
-    }))
+    previewRows.value = (response.rows ?? []).map(toEditablePreviewRow)
     feedback.value = `엑셀에서 ${response.readyRowCount}개 거래를 가져올 준비가 됐습니다.`
   } catch (error) {
     errorMessage.value = error.message
@@ -59,6 +114,7 @@ async function handlePreview() {
 }
 
 async function handleImport() {
+  previewRows.value.forEach(refreshPreviewRow)
   const rows = previewRows.value
     .filter((row) => row.selected && row.ready)
     .map((row) => ({
@@ -66,13 +122,13 @@ async function handleImport() {
       sourceSheetName: row.sourceSheetName || null,
       entryDate: row.entryDate,
       entryTime: row.entryTime || null,
-      title: row.title,
-      memo: row.memo || null,
-      amount: row.amount,
+      title: String(row.title || '').trim(),
+      memo: String(row.memo || '').trim() || null,
+      amount: Number(normalizeAmountValue(row.amount)),
       entryType: row.entryType,
-      paymentMethodName: row.paymentMethodName || null,
-      categoryGroupName: row.categoryGroupName || null,
-      categoryDetailName: row.categoryDetailName || null,
+      paymentMethodName: String(row.paymentMethodName || '').trim() || null,
+      categoryGroupName: String(row.categoryGroupName || '').trim() || null,
+      categoryDetailName: String(row.categoryDetailName || '').trim() || null,
       sourceRowNumber: row.sourceRowNumber || null,
     }))
 
@@ -139,34 +195,109 @@ async function handleImport() {
     </div>
 
     <div v-if="previewRows.length" class="sheet-table-wrap">
-      <table class="sheet-table ledger-import-table">
+      <table class="sheet-table ledger-import-table ledger-import-table--editable">
         <thead>
           <tr>
             <th>선택</th>
             <th>원본 행</th>
-            <th>월 시트</th>
+            <th>시트</th>
             <th>거래일</th>
+            <th>시각</th>
+            <th>구분</th>
             <th>내용</th>
             <th>금액</th>
             <th>결제수단</th>
             <th>대분류</th>
             <th>소분류</th>
+            <th>메모</th>
             <th>상태</th>
           </tr>
         </thead>
         <tbody>
-          <tr v-for="row in previewRows" :key="`${row.previewIndex}-${row.sourceRowNumber}`" :class="{ 'is-disabled': !row.ready }">
+          <tr v-for="row in previewRows" :key="`editable-${row.previewIndex}-${row.sourceRowNumber}`" :class="{ 'is-disabled': !row.ready }">
             <td>
               <input v-model="row.selected" type="checkbox" :disabled="!row.ready || isImporting" />
             </td>
             <td>{{ row.sourceRowNumber || '-' }}</td>
             <td>{{ row.sourceSheetName || '-' }}</td>
-            <td>{{ row.entryDate ? formatShortDate(row.entryDate) : '-' }}</td>
-            <td class="sheet-table__title">{{ row.title || '-' }}</td>
-            <td>{{ row.amount ? formatCurrency(row.amount) : '-' }}</td>
-            <td>{{ row.paymentMethodName || '-' }}</td>
-            <td>{{ row.categoryGroupName || '-' }}</td>
-            <td>{{ row.categoryDetailName || '-' }}</td>
+            <td>
+              <input
+                v-model="row.entryDate"
+                class="sheet-table__input ledger-import-table__date"
+                type="date"
+                :disabled="isImporting"
+                @change="refreshPreviewRow(row)"
+              />
+            </td>
+            <td>
+              <input
+                v-model="row.entryTime"
+                class="sheet-table__input ledger-import-table__time"
+                type="time"
+                :disabled="isImporting"
+              />
+            </td>
+            <td>
+              <select
+                v-model="row.entryType"
+                class="sheet-table__select-input ledger-import-table__type"
+                :disabled="isImporting"
+                @change="refreshPreviewRow(row)"
+              >
+                <option value="EXPENSE">지출</option>
+                <option value="INCOME">수입</option>
+              </select>
+            </td>
+            <td class="sheet-table__title">
+              <input
+                v-model="row.title"
+                class="sheet-table__input ledger-import-table__title"
+                type="text"
+                :disabled="isImporting"
+                @input="refreshPreviewRow(row)"
+              />
+            </td>
+            <td>
+              <input
+                v-model="row.amount"
+                class="sheet-table__input ledger-import-table__amount"
+                inputmode="decimal"
+                :disabled="isImporting"
+                @change="refreshPreviewRow(row)"
+              />
+            </td>
+            <td>
+              <input
+                v-model="row.paymentMethodName"
+                class="sheet-table__input ledger-import-table__payment"
+                type="text"
+                :disabled="isImporting"
+              />
+            </td>
+            <td>
+              <input
+                v-model="row.categoryGroupName"
+                class="sheet-table__input ledger-import-table__category"
+                type="text"
+                :disabled="isImporting"
+              />
+            </td>
+            <td>
+              <input
+                v-model="row.categoryDetailName"
+                class="sheet-table__input ledger-import-table__category"
+                type="text"
+                :disabled="isImporting"
+              />
+            </td>
+            <td>
+              <input
+                v-model="row.memo"
+                class="sheet-table__input ledger-import-table__memo"
+                type="text"
+                :disabled="isImporting"
+              />
+            </td>
             <td>
               <span v-if="row.ready" class="chip chip--neutral">준비 완료</span>
               <span v-else class="chip chip--warning">{{ row.issues?.join(', ') || '확인 필요' }}</span>

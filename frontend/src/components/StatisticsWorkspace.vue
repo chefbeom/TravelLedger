@@ -1,5 +1,5 @@
 ﻿<script setup>
-import { computed } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import BarChartCard from './BarChartCard.vue'
 import BreakdownList from './BreakdownList.vue'
 import ComparisonTable from './ComparisonTable.vue'
@@ -11,7 +11,8 @@ const chartPalette = ['#3182f6', '#12b886', '#f59f00', '#ff6b6b', '#7c5cff', '#0
 const emit = defineEmits([
   'change-search-page',
   'change-trash-page',
-  'edit-search-entry',
+  'move-search-entry',
+  'save-search-entry',
   'delete-search-entry',
   'restore-trash-entry',
   'empty-trash',
@@ -126,6 +127,18 @@ const comparisonChartItems = computed(() =>
 )
 const searchResultSelection = useTableSelection(computed(() => props.searchResults))
 const trashResultSelection = useTableSelection(computed(() => props.trashResults))
+const editingSearchEntryId = ref(null)
+const searchEditDraft = reactive({
+  entryDate: '',
+  entryTime: '00:00',
+  title: '',
+  memo: '',
+  amount: '',
+  entryType: 'EXPENSE',
+  categoryGroupId: '',
+  categoryDetailId: '',
+  paymentMethodId: '',
+})
 
 const expenseDonutItems = computed(() =>
   props.expenseBreakdown.slice(0, 6).map((item, index) => ({
@@ -179,6 +192,130 @@ const monthOfYearChartItems = computed(() =>
 
 const searchPageLabel = computed(() => Math.max(props.searchPageInfo.totalPages ?? 0, 1))
 const trashPageLabel = computed(() => Math.max(props.trashPageInfo.totalPages ?? 0, 1))
+const searchEditGroupOptions = computed(() =>
+  props.categories.filter((group) => group.entryType === searchEditDraft.entryType),
+)
+const searchEditDetailOptions = computed(() => {
+  const group = searchEditGroupOptions.value.find((item) => String(item.id) === String(searchEditDraft.categoryGroupId))
+  return group?.details ?? []
+})
+const searchEditErrors = computed(() => validateSearchEditDraft())
+
+function normalizeAmountInput(value) {
+  const normalized = String(value ?? '').replace(/,/g, '').trim()
+  if (!normalized) {
+    return ''
+  }
+  const amount = Number(normalized)
+  return Number.isFinite(amount) ? String(amount) : normalized
+}
+
+function selectFirstSearchEditDetail() {
+  const firstDetail = searchEditDetailOptions.value[0]
+  searchEditDraft.categoryDetailId = firstDetail ? String(firstDetail.id) : ''
+}
+
+function selectFirstSearchEditGroup() {
+  const firstGroup = searchEditGroupOptions.value[0]
+  searchEditDraft.categoryGroupId = firstGroup ? String(firstGroup.id) : ''
+  selectFirstSearchEditDetail()
+}
+
+function validateSearchEditDraft() {
+  const errors = []
+  const amount = Number(normalizeAmountInput(searchEditDraft.amount))
+
+  if (!searchEditDraft.entryDate) {
+    errors.push('날짜')
+  }
+  if (!String(searchEditDraft.title || '').trim()) {
+    errors.push('제목')
+  }
+  if (!Number.isFinite(amount) || amount <= 0) {
+    errors.push('금액')
+  }
+  if (!searchEditDraft.categoryGroupId) {
+    errors.push('대분류')
+  }
+  if (!searchEditDraft.paymentMethodId) {
+    errors.push('결제수단')
+  }
+
+  return errors
+}
+
+function startSearchEntryEdit(entry) {
+  editingSearchEntryId.value = entry.id
+  searchEditDraft.entryDate = entry.entryDate || ''
+  searchEditDraft.entryTime = entry.entryTime || '00:00'
+  searchEditDraft.title = entry.title || ''
+  searchEditDraft.memo = entry.memo || ''
+  searchEditDraft.amount = normalizeAmountInput(entry.amount)
+  searchEditDraft.entryType = entry.entryType === 'INCOME' ? 'INCOME' : 'EXPENSE'
+  searchEditDraft.categoryGroupId = entry.categoryGroupId != null ? String(entry.categoryGroupId) : ''
+  searchEditDraft.categoryDetailId = entry.categoryDetailId != null ? String(entry.categoryDetailId) : ''
+  searchEditDraft.paymentMethodId = entry.paymentMethodId != null ? String(entry.paymentMethodId) : ''
+
+  if (!searchEditGroupOptions.value.some((group) => String(group.id) === String(searchEditDraft.categoryGroupId))) {
+    selectFirstSearchEditGroup()
+  } else if (
+    searchEditDraft.categoryDetailId
+    && !searchEditDetailOptions.value.some((detail) => String(detail.id) === String(searchEditDraft.categoryDetailId))
+  ) {
+    searchEditDraft.categoryDetailId = ''
+  }
+}
+
+function cancelSearchEntryEdit() {
+  editingSearchEntryId.value = null
+}
+
+function handleSearchEditEntryTypeChange() {
+  selectFirstSearchEditGroup()
+}
+
+function handleSearchEditGroupChange() {
+  selectFirstSearchEditDetail()
+}
+
+function submitSearchEntryEdit(entry) {
+  searchEditDraft.amount = normalizeAmountInput(searchEditDraft.amount)
+  if (searchEditErrors.value.length) {
+    return
+  }
+
+  emit('save-search-entry', {
+    entry,
+    payload: {
+      entryDate: searchEditDraft.entryDate,
+      entryTime: searchEditDraft.entryTime || '00:00',
+      title: searchEditDraft.title.trim(),
+      memo: searchEditDraft.memo.trim() || null,
+      amount: Number(searchEditDraft.amount || 0),
+      entryType: searchEditDraft.entryType,
+      categoryGroupId: Number(searchEditDraft.categoryGroupId),
+      categoryDetailId: searchEditDraft.categoryDetailId ? Number(searchEditDraft.categoryDetailId) : null,
+      paymentMethodId: Number(searchEditDraft.paymentMethodId),
+    },
+  })
+  cancelSearchEntryEdit()
+}
+
+watch(
+  () => props.route,
+  () => {
+    cancelSearchEntryEdit()
+  },
+)
+
+watch(
+  () => props.searchResults.map((entry) => entry.id).join(','),
+  () => {
+    if (editingSearchEntryId.value && !props.searchResults.some((entry) => entry.id === editingSearchEntryId.value)) {
+      cancelSearchEntryEdit()
+    }
+  },
+)
 </script>
 
 <template>
@@ -394,7 +531,7 @@ const trashPageLabel = computed(() => Math.max(props.trashPageInfo.totalPages ??
               </tr>
             </thead>
             <tbody>
-              <tr v-for="entry in searchResults" :key="entry.id">
+              <tr v-for="entry in searchResults" :key="entry.id" :class="{ 'sheet-table__row--editing': editingSearchEntryId === entry.id }">
                 <td class="sheet-table__select">
                   <input
                     class="sheet-table__checkbox"
@@ -403,19 +540,86 @@ const trashPageLabel = computed(() => Math.max(props.trashPageInfo.totalPages ??
                     @change="searchResultSelection.toggleItem(entry)"
                   />
                 </td>
-                <td>{{ formatFullDate(entry.entryDate) }}</td>
-                <td>{{ formatTime(entry.entryTime) }}</td>
-                <td class="sheet-table__title">{{ entry.title }}</td>
-                <td class="sheet-table__category">{{ entry.categoryGroupName }}<template v-if="entry.categoryDetailName"> / {{ entry.categoryDetailName }}</template></td>
-                <td class="sheet-table__textwrap">{{ entry.paymentMethodName }}</td>
-                <td :class="entry.entryType === 'INCOME' ? 'is-income' : 'is-expense'">
-                  {{ formatCurrency(entry.amount) }}
-                </td>
+                <template v-if="editingSearchEntryId === entry.id">
+                  <td>
+                    <input v-model="searchEditDraft.entryDate" class="sheet-table__input stats-search-edit__date" type="date" />
+                  </td>
+                  <td>
+                    <input v-model="searchEditDraft.entryTime" class="sheet-table__input stats-search-edit__time" type="time" />
+                  </td>
+                  <td class="sheet-table__title">
+                    <input v-model="searchEditDraft.title" class="sheet-table__input stats-search-edit__title" type="text" />
+                    <input v-model="searchEditDraft.memo" class="sheet-table__input stats-search-edit__memo" type="text" placeholder="메모" />
+                  </td>
+                  <td class="sheet-table__category">
+                    <div class="stats-search-edit__stack">
+                      <select v-model="searchEditDraft.entryType" class="sheet-table__select-input" @change="handleSearchEditEntryTypeChange">
+                        <option value="EXPENSE">지출</option>
+                        <option value="INCOME">수입</option>
+                      </select>
+                      <select v-model="searchEditDraft.categoryGroupId" class="sheet-table__select-input" @change="handleSearchEditGroupChange">
+                        <option value="">대분류 선택</option>
+                        <option v-for="group in searchEditGroupOptions" :key="group.id" :value="String(group.id)">
+                          {{ group.name }}
+                        </option>
+                      </select>
+                      <select v-model="searchEditDraft.categoryDetailId" class="sheet-table__select-input">
+                        <option value="">소분류 없음</option>
+                        <option v-for="detail in searchEditDetailOptions" :key="detail.id" :value="String(detail.id)">
+                          {{ detail.name }}
+                        </option>
+                      </select>
+                    </div>
+                  </td>
+                  <td class="sheet-table__textwrap">
+                    <select v-model="searchEditDraft.paymentMethodId" class="sheet-table__select-input stats-search-edit__payment">
+                      <option value="">결제수단 선택</option>
+                      <option v-for="payment in paymentMethods" :key="payment.id" :value="String(payment.id)">
+                        {{ payment.name }}
+                      </option>
+                    </select>
+                  </td>
+                  <td>
+                    <input
+                      v-model="searchEditDraft.amount"
+                      class="sheet-table__input stats-search-edit__amount"
+                      inputmode="decimal"
+                      @change="searchEditDraft.amount = normalizeAmountInput(searchEditDraft.amount)"
+                    />
+                  </td>
+                </template>
+                <template v-else>
+                  <td>{{ formatFullDate(entry.entryDate) }}</td>
+                  <td>{{ formatTime(entry.entryTime) }}</td>
+                  <td class="sheet-table__title">{{ entry.title }}</td>
+                  <td class="sheet-table__category">{{ entry.categoryGroupName }}<template v-if="entry.categoryDetailName"> / {{ entry.categoryDetailName }}</template></td>
+                  <td class="sheet-table__textwrap">{{ entry.paymentMethodName }}</td>
+                  <td :class="entry.entryType === 'INCOME' ? 'is-income' : 'is-expense'">
+                    {{ formatCurrency(entry.amount) }}
+                  </td>
+                </template>
                 <td>
                   <div class="sheet-table__actions">
-                    <button type="button" class="button button--ghost" @click="emit('edit-search-entry', entry)">수정</button>
+                    <template v-if="editingSearchEntryId === entry.id">
+                      <button
+                        type="button"
+                        class="button button--primary"
+                        :disabled="searchEditErrors.length > 0"
+                        @click="submitSearchEntryEdit(entry)"
+                      >
+                        저장
+                      </button>
+                      <button type="button" class="button button--ghost" @click="cancelSearchEntryEdit">취소</button>
+                    </template>
+                    <template v-else>
+                      <button type="button" class="button button--ghost" @click="startSearchEntryEdit(entry)">수정</button>
+                      <button type="button" class="button button--ghost" @click="emit('move-search-entry', entry)">이동</button>
+                    </template>
                     <button type="button" class="button button--ghost" @click="emit('delete-search-entry', entry)">삭제</button>
                   </div>
+                  <p v-if="editingSearchEntryId === entry.id && searchEditErrors.length" class="stats-search-edit__hint">
+                    {{ searchEditErrors.join(', ') }} 값을 확인해 주세요.
+                  </p>
                 </td>
               </tr>
               <tr v-if="!searchResults.length">

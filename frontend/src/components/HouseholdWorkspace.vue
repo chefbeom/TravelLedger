@@ -1567,12 +1567,42 @@ async function undoLastEntryAction() {
   }
 }
 
-async function editEntryFromSearch(entry) {
+async function moveEntryFromSearch(entry) {
   householdTab.value = 'calendar'
   calendarAnchorDate.value = entry.entryDate
   await nextTick()
   calendarWorkspaceRef.value?.setSelectedDate?.(entry.entryDate)
   await fillEntryFormAndScroll(entry)
+}
+
+async function saveEntryFromSearch({ entry, payload }) {
+  if (!entry?.id || !payload) {
+    return
+  }
+
+  isSubmitting.value = true
+  activeSubmit.value = 'search-entry-update'
+  setFeedback()
+  try {
+    const rollbackPayload = buildEntryPayloadFromEntry(entry)
+    const rollbackSnapshot = buildEntryFormSnapshotFromEntry(entry)
+    await updateEntry(entry.id, payload)
+    undoableEntryAction.value = rollbackPayload
+      ? {
+          type: 'update',
+          entryId: entry.id,
+          rollbackPayload,
+          rollbackSnapshot,
+        }
+      : null
+    await refreshLedgerViews()
+    setFeedback('검색 결과에서 가계부 내역을 수정했습니다.')
+  } catch (error) {
+    setFeedback('', error.message)
+  } finally {
+    isSubmitting.value = false
+    activeSubmit.value = ''
+  }
 }
 
 async function deleteEntryFromSearch(entry) {
@@ -1954,7 +1984,8 @@ async function deactivatePayment(paymentId) {
       :format-time="formatTime"
       @change-search-page="loadSearchResults"
       @change-trash-page="loadTrashResults"
-      @edit-search-entry="editEntryFromSearch"
+      @move-search-entry="moveEntryFromSearch"
+      @save-search-entry="saveEntryFromSearch"
       @delete-search-entry="deleteEntryFromSearch"
       @restore-trash-entry="restoreEntryFromTrash"
       @empty-trash="emptyTrash"

@@ -3792,6 +3792,15 @@ button {
   height: 100%;
   min-height: 100%;
   border-radius: inherit;
+  background: #dce8ef;
+}
+
+.travel-public-map-stage .travel-map__canvas.leaflet-container {
+  background: #dce8ef;
+}
+
+.travel-public-map-stage .travel-map__canvas .leaflet-tile-pane {
+  filter: none;
 }
 
 .travel-public-map-stage .travel-map__toolbar {

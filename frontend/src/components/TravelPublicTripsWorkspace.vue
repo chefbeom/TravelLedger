@@ -931,6 +931,7 @@ onMounted(() => {
             :selected-cluster-id="selectedClusterSummary?.id ?? null"
             :selected-photo-id="selectedPhotoId"
             :display-mode="publicMapMode"
+            tile-provider="publicLight"
             @select-cluster="handleSelectCluster"
             @select-photo-pin="handleSelectPhotoPin"
             @preview-cluster="handlePreviewClusterFromMap"

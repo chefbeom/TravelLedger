@@ -12,6 +12,20 @@ const VIEWPORT_RENDER_DEBOUNCE_MS = 80
 const CLIENT_CLUSTER_MIN_SIZE = 2
 const CLIENT_CLUSTER_MAX_ZOOM = 17
 const SMOOTH_ZOOM_DURATION = 0.45
+const TILE_PROVIDERS = {
+  osm: {
+    url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+    attribution: '&copy; OpenStreetMap contributors',
+    subdomains: ['a', 'b', 'c'],
+    detectRetina: true,
+  },
+  publicLight: {
+    url: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
+    attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
+    subdomains: ['a', 'b', 'c', 'd'],
+    detectRetina: true,
+  },
+}
 
 const props = defineProps({
   photoClusters: {
@@ -50,6 +64,10 @@ const props = defineProps({
     type: String,
     default: 'cluster',
   },
+  tileProvider: {
+    type: String,
+    default: 'osm',
+  },
 })
 
 const emit = defineEmits([
@@ -71,6 +89,7 @@ let mapInstance = null
 let markerLayer = null
 let routeLayer = null
 let routeRenderer = null
+let tileLayer = null
 let hasFittedInitialView = false
 let hasFittedDataView = false
 let renderedMarkers = new Map()
@@ -547,8 +566,13 @@ function queueMapResize() {
   requestAnimationFrame(() => {
     requestAnimationFrame(() => {
       mapInstance?.invalidateSize(false)
+      scheduleRenderClusters(0)
     })
   })
+}
+
+function resolveTileProvider() {
+  return TILE_PROVIDERS[props.tileProvider] ?? TILE_PROVIDERS.osm
 }
 
 function collectBounds() {
@@ -948,6 +972,7 @@ function renderMap({ shouldFit = false } = {}) {
     hasFittedInitialView = true
     hasFittedDataView = hasDataBounds || hasFittedDataView
     fitToAll({ animate: !shouldFit })
+    queueMapResize()
     scheduleRenderClusters(0)
     return
   }
@@ -1054,12 +1079,14 @@ onMounted(() => {
     easeLinearity: 0.2,
   }).setView(resolveInitialCenter(), DEFAULT_ZOOM)
 
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    attribution: '&copy; OpenStreetMap contributors',
+  const provider = resolveTileProvider()
+  tileLayer = L.tileLayer(provider.url, {
+    attribution: provider.attribution,
+    subdomains: provider.subdomains,
     updateWhenZooming: false,
     updateWhenIdle: true,
     keepBuffer: 3,
-    detectRetina: true,
+    detectRetina: provider.detectRetina,
   }).addTo(mapInstance)
 
   markerLayer = L.layerGroup().addTo(mapInstance)
@@ -1072,6 +1099,7 @@ onMounted(() => {
   zoomLabel.value = mapInstance.getZoom()
   emit('fullscreen-change', isFullscreen.value)
   renderMap({ shouldFit: true })
+  mapInstance.whenReady(() => queueMapResize())
 })
 
 onBeforeUnmount(() => {
@@ -1087,6 +1115,7 @@ onBeforeUnmount(() => {
     mapInstance = null
   }
 
+  tileLayer = null
   routeRenderer = null
 })
 

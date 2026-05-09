@@ -563,12 +563,16 @@ function scheduleRenderClusters(delay = VIEWPORT_RENDER_DEBOUNCE_MS) {
 }
 
 function queueMapResize() {
+  const resize = () => {
+    mapInstance?.invalidateSize(false)
+    scheduleRenderClusters(0)
+  }
+
   requestAnimationFrame(() => {
-    requestAnimationFrame(() => {
-      mapInstance?.invalidateSize(false)
-      scheduleRenderClusters(0)
-    })
+    requestAnimationFrame(resize)
   })
+  setTimeout(resize, 120)
+  setTimeout(resize, 360)
 }
 
 function resolveTileProvider() {
@@ -1165,7 +1169,11 @@ watch(
   <div
     ref="mapRootElement"
     class="travel-map"
-    :class="{ 'travel-map--fullscreen': isFullscreen, 'travel-map--moving': isMapMoving }"
+    :class="{
+      'travel-map--fullscreen': isFullscreen,
+      'travel-map--moving': isMapMoving,
+      'travel-map--public': props.tileProvider === 'publicLight',
+    }"
   >
     <div class="travel-map__toolbar" @click.stop>
       <div class="travel-map__toolbar-group">

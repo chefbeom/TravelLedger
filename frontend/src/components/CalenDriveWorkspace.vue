@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import CalenDriveProfileModal from './CalenDriveProfileModal.vue'
 import {
   abortDriveUpload,
@@ -68,6 +68,13 @@ const dragDepth = ref(0)
 
 const previewDialog = reactive({
   open: false,
+  item: null,
+})
+
+const contextMenu = reactive({
+  open: false,
+  x: 0,
+  y: 0,
   item: null,
 })
 
@@ -579,6 +586,33 @@ function selectItemFromPointer(item, event) {
   selectOnlyItem(item)
 }
 
+function openContextMenu(item, event) {
+  if (!item) {
+    return
+  }
+  selectOnlyItem(item)
+  const width = 236
+  const height = 340
+  contextMenu.x = Math.min(event?.clientX || 0, Math.max(12, window.innerWidth - width - 12))
+  contextMenu.y = Math.min(event?.clientY || 0, Math.max(12, window.innerHeight - height - 12))
+  contextMenu.item = item
+  contextMenu.open = true
+}
+
+function closeContextMenu() {
+  contextMenu.open = false
+  contextMenu.item = null
+}
+
+async function runContextAction(action) {
+  const item = contextMenu.item
+  closeContextMenu()
+  if (!item || typeof action !== 'function') {
+    return
+  }
+  await action(item)
+}
+
 function toggleDetailsPanel() {
   detailsPanelOpen.value = !detailsPanelOpen.value
 }
@@ -609,9 +643,43 @@ async function handleDriveDrop(event) {
   await handleFilesSelected({ target: { files, value: '' } })
 }
 
+async function handleDriveKeyboard(event) {
+  if (previewDialog.open && event.key === 'Escape') {
+    closePreviewDialog()
+    return
+  }
+  if (contextMenu.open && event.key === 'Escape') {
+    closeContextMenu()
+    return
+  }
+  if (!canShowBrowser.value || !selectedItems.value.length) {
+    return
+  }
+  if (event.key === 'Escape') {
+    clearSelection()
+    return
+  }
+  if (event.key === 'Enter' && primarySelectedItem.value) {
+    event.preventDefault()
+    openBrowserItem(primarySelectedItem.value)
+    return
+  }
+  if (event.key === 'Delete' || event.key === 'Backspace') {
+    event.preventDefault()
+    if (activeTab.value === 'trash') {
+      await deleteSelectedPermanently()
+      return
+    }
+    if (activeTab.value !== 'shared') {
+      await moveSelectedToTrash()
+    }
+  }
+}
+
 function clearSelection() {
   selectedIds.value = []
   moveTargetId.value = ''
+  closeContextMenu()
 }
 
 function toggleSelection(item) {
@@ -1253,7 +1321,14 @@ watch(
 )
 
 onMounted(() => {
+  document.addEventListener('click', closeContextMenu)
+  window.addEventListener('keydown', handleDriveKeyboard)
   loadActiveTab()
+})
+
+onBeforeUnmount(() => {
+  document.removeEventListener('click', closeContextMenu)
+  window.removeEventListener('keydown', handleDriveKeyboard)
 })
 </script>
 
@@ -1502,6 +1577,41 @@ onMounted(() => {
               <span>선택한 파일이 현재 폴더에 저장됩니다.</span>
             </div>
 
+            <div
+              v-if="contextMenu.open && contextMenu.item"
+              class="drive-context-menu"
+              :style="{ left: `${contextMenu.x}px`, top: `${contextMenu.y}px` }"
+              @click.stop
+              @contextmenu.prevent
+            >
+              <button type="button" @click="runContextAction(openBrowserItem)">열기</button>
+              <button v-if="canPreviewItem(contextMenu.item)" type="button" @click="runContextAction(openPreviewDialog)">미리보기</button>
+              <button
+                v-if="activeTab !== 'trash' && activeTab !== 'shared' && !isFolder(contextMenu.item)"
+                type="button"
+                @click="runContextAction((item) => openShareDialog([item]))"
+              >
+                공유
+              </button>
+              <button
+                v-if="activeTab !== 'trash' && activeTab !== 'shared'"
+                type="button"
+                @click="runContextAction(promptRename)"
+              >
+                이름 변경
+              </button>
+              <button
+                v-if="activeTab !== 'trash' && activeTab !== 'shared'"
+                type="button"
+                @click="runContextAction(moveItemToTrash)"
+              >
+                휴지통으로 이동
+              </button>
+              <button v-if="activeTab === 'trash'" type="button" @click="runContextAction(restoreTrashItem)">복구</button>
+              <button v-if="activeTab === 'trash'" type="button" @click="runContextAction(deleteItemPermanently)">완전 삭제</button>
+              <button v-if="activeTab === 'shared'" type="button" @click="runContextAction(handleSaveSharedFile)">내 드라이브에 저장</button>
+            </div>
+
             <div class="drive-browser-layout" :class="{ 'drive-browser-layout--details-closed': !detailsPanelOpen }">
               <div class="drive-browser-content">
             <div v-if="canShowSelectionBar" class="drive-selection-bar">
@@ -1554,6 +1664,7 @@ onMounted(() => {
                     :class="{ 'drive-table__row--selected': selectedIds.includes(getSelectableId(item)) }"
                     @click="selectItemFromPointer(item, $event)"
                     @dblclick="openBrowserItem(item)"
+                    @contextmenu.prevent="openContextMenu(item, $event)"
                   >
                     <td>
                       <input :checked="selectedIds.includes(getSelectableId(item))" type="checkbox" @click.stop @change="toggleSelection(item)" />
@@ -1613,6 +1724,7 @@ onMounted(() => {
                 :aria-selected="selectedIds.includes(getSelectableId(item))"
                 @click="selectItemFromPointer(item, $event)"
                 @dblclick="openBrowserItem(item)"
+                @contextmenu.prevent="openContextMenu(item, $event)"
               >
                 <label class="drive-file-card__checkbox" @click.stop>
                   <input :checked="selectedIds.includes(getSelectableId(item))" type="checkbox" @change="toggleSelection(item)" />

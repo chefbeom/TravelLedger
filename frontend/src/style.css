@@ -9572,6 +9572,41 @@ textarea {
   color: var(--text-soft);
 }
 
+.drive-context-menu {
+  position: fixed;
+  z-index: 60;
+  display: grid;
+  gap: 4px;
+  width: min(236px, calc(100vw - 24px));
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--surface);
+  box-shadow: 0 24px 70px rgba(15, 23, 42, 0.2);
+}
+
+.drive-context-menu button {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  width: 100%;
+  min-height: 38px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text);
+  font-weight: 800;
+  text-align: left;
+  cursor: pointer;
+}
+
+.drive-context-menu button:hover,
+.drive-context-menu button:focus-visible {
+  background: var(--surface-soft);
+  outline: none;
+}
+
 .drive-selection-bar {
   display: flex;
   align-items: center;
@@ -9939,6 +9974,7 @@ textarea {
 :root[data-theme='toss'] .drive-dashboard__controls,
 :root[data-theme='toss'] .drive-selection-bar,
 :root[data-theme='toss'] .drive-browser-actions,
+:root[data-theme='toss'] .drive-context-menu,
 :root[data-theme='toss'] .drive-details-panel,
 :root[data-theme='toss'] .drive-details-panel__preview,
 :root[data-theme='toss'] .drive-file-card,

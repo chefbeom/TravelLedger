@@ -63,6 +63,13 @@ const feedback = ref('')
 const errorMessage = ref('')
 const selectedIds = ref([])
 const moveTargetId = ref('')
+const detailsPanelOpen = ref(true)
+const dragDepth = ref(0)
+
+const previewDialog = reactive({
+  open: false,
+  item: null,
+})
 
 const homeSummary = ref(null)
 const drivePage = ref(createEmptyDrivePage())
@@ -192,6 +199,39 @@ const allCurrentSelected = computed(() => {
 })
 
 const selectedShareableItems = computed(() => selectedItems.value.filter((item) => !isFolder(item)))
+
+const primarySelectedItem = computed(() => selectedItems.value.length === 1 ? selectedItems.value[0] : null)
+
+const selectedTotalBytes = computed(() => {
+  return selectedItems.value.reduce((sum, item) => sum + Number(item.fileSize || 0), 0)
+})
+
+const canUploadInCurrentLocation = computed(() => activeTab.value === 'drive')
+
+const isDriveDropActive = computed(() => canUploadInCurrentLocation.value && dragDepth.value > 0)
+
+const detailRows = computed(() => {
+  if (selectedItems.value.length > 1) {
+    return [
+      { label: '선택 항목', value: `${selectedItems.value.length}개` },
+      { label: '총 용량', value: formatBytes(selectedTotalBytes.value) },
+      { label: '현재 위치', value: normalizedCurrentLocationLabel.value },
+    ]
+  }
+
+  const item = primarySelectedItem.value
+  if (!item) {
+    return []
+  }
+
+  return [
+    { label: '유형', value: itemTypeLabel(item) },
+    { label: '용량', value: isFolder(item) ? '-' : formatBytes(item.fileSize) },
+    { label: '소유자', value: itemOwnerLabel(item) },
+    { label: '수정', value: formatTimestamp(item.deletedAt || item.lastModifyDate || item.uploadDate || item.sharedAt) },
+    { label: '위치', value: normalizedCurrentLocationLabel.value },
+  ]
+})
 
 const moveDestinationOptions = computed(() => {
   if (activeTab.value !== 'drive' && activeTab.value !== 'recent') {
@@ -469,6 +509,104 @@ function itemTypeLabel(item) {
     return '폴더'
   }
   return String(item.fileFormat || '파일').toUpperCase()
+}
+
+function isSharedBrowserItem(item) {
+  return activeTab.value === 'shared' && sharedTab.value === 'received' && item?.fileId
+}
+
+function itemDownloadPath(item) {
+  return isSharedBrowserItem(item) ? buildSharedDownloadPath(item) : buildOwnedDownloadPath(item)
+}
+
+function itemThumbnailPath(item) {
+  return isSharedBrowserItem(item) ? buildSharedThumbnailPath(item) : buildOwnedThumbnailPath(item)
+}
+
+function itemOwnerLabel(item) {
+  return item?.ownerDisplayName || item?.ownerLoginId || '내 드라이브'
+}
+
+function canPreviewItem(item) {
+  return !isFolder(item) && (isImageFile(item) || isVideoFile(item))
+}
+
+function openPreviewDialog(item) {
+  if (!canPreviewItem(item)) {
+    openBrowserItem(item)
+    return
+  }
+  previewDialog.item = item
+  previewDialog.open = true
+}
+
+function closePreviewDialog() {
+  previewDialog.open = false
+  previewDialog.item = null
+}
+
+function openBrowserItem(item) {
+  if (!item) {
+    return
+  }
+  if (isFolder(item)) {
+    openFolder(item)
+    return
+  }
+  if (canPreviewItem(item)) {
+    openPreviewDialog(item)
+    return
+  }
+  window.open(itemDownloadPath(item), '_blank', 'noopener')
+}
+
+function openItemInNewWindow(item) {
+  if (!item || isFolder(item)) {
+    return
+  }
+  window.open(itemDownloadPath(item), '_blank', 'noopener')
+}
+
+function selectOnlyItem(item) {
+  selectedIds.value = [getSelectableId(item)]
+}
+
+function selectItemFromPointer(item, event) {
+  if (event?.ctrlKey || event?.metaKey) {
+    toggleSelection(item)
+    return
+  }
+  selectOnlyItem(item)
+}
+
+function toggleDetailsPanel() {
+  detailsPanelOpen.value = !detailsPanelOpen.value
+}
+
+function handleDriveDragEnter() {
+  if (!canUploadInCurrentLocation.value) {
+    return
+  }
+  dragDepth.value += 1
+}
+
+function handleDriveDragLeave() {
+  if (!canUploadInCurrentLocation.value) {
+    return
+  }
+  dragDepth.value = Math.max(0, dragDepth.value - 1)
+}
+
+async function handleDriveDrop(event) {
+  dragDepth.value = 0
+  if (!canUploadInCurrentLocation.value) {
+    return
+  }
+  const files = Array.from(event?.dataTransfer?.files || [])
+  if (!files.length) {
+    return
+  }
+  await handleFilesSelected({ target: { files, value: '' } })
 }
 
 function clearSelection() {
@@ -1285,7 +1423,7 @@ onMounted(() => {
                 v-for="item in homeRecentFiles"
                 :key="item.id"
                 class="drive-file-card"
-                @click="openOwnedItem(item)"
+                @click="openBrowserItem(item)"
               >
                 <div class="drive-file-card__check-space"></div>
                 <img
@@ -1311,7 +1449,14 @@ onMounted(() => {
         </section>
 
         <section v-else-if="canShowBrowser" class="workspace-stack">
-          <section class="panel">
+          <section
+            class="panel drive-browser-panel"
+            :class="{ 'drive-browser-panel--drop-active': isDriveDropActive }"
+            @dragenter.prevent="handleDriveDragEnter"
+            @dragover.prevent
+            @dragleave.prevent="handleDriveDragLeave"
+            @drop.prevent="handleDriveDrop"
+          >
             <div class="panel__header">
               <div>
                 <h3 v-if="activeTab === 'drive'">내 드라이브</h3>
@@ -1341,6 +1486,24 @@ onMounted(() => {
               </div>
             </div>
 
+            <div class="drive-browser-actions">
+              <div>
+                <strong>{{ selectedIds.length ? selectedIds.length + '개 선택' : normalizedCurrentLocationLabel }}</strong>
+                <small v-if="activeTab === 'drive'">파일을 끌어다 놓으면 현재 폴더에 업로드됩니다.</small>
+                <small v-else>선택한 파일의 상세와 작업을 오른쪽에서 확인합니다.</small>
+              </div>
+              <button class="button button--ghost" type="button" @click="toggleDetailsPanel">
+                {{ detailsPanelOpen ? '상세 닫기' : '상세 보기' }}
+              </button>
+            </div>
+
+            <div v-if="isDriveDropActive" class="drive-drop-overlay">
+              <strong>여기에 놓아 업로드</strong>
+              <span>선택한 파일이 현재 폴더에 저장됩니다.</span>
+            </div>
+
+            <div class="drive-browser-layout" :class="{ 'drive-browser-layout--details-closed': !detailsPanelOpen }">
+              <div class="drive-browser-content">
             <div v-if="canShowSelectionBar" class="drive-selection-bar">
               <label class="checkbox-row drive-selection-bar__toggle">
                 <input :checked="allCurrentSelected" type="checkbox" @change="toggleSelectAllCurrent" />
@@ -1384,15 +1547,22 @@ onMounted(() => {
                   </tr>
                 </thead>
                 <tbody>
-                  <tr v-for="item in browserItems" :key="getSelectableId(item)">
+                  <tr
+                    v-for="item in browserItems"
+                    :key="getSelectableId(item)"
+                    class="drive-table__row"
+                    :class="{ 'drive-table__row--selected': selectedIds.includes(getSelectableId(item)) }"
+                    @click="selectItemFromPointer(item, $event)"
+                    @dblclick="openBrowserItem(item)"
+                  >
                     <td>
-                      <input :checked="selectedIds.includes(getSelectableId(item))" type="checkbox" @change="toggleSelection(item)" />
+                      <input :checked="selectedIds.includes(getSelectableId(item))" type="checkbox" @click.stop @change="toggleSelection(item)" />
                     </td>
                     <td class="drive-table__name">
                       <button
                         class="drive-table__item"
                         type="button"
-                        @click="activeTab === 'shared' ? openSharedItem(item) : openOwnedItem(item)"
+                        @click.stop="openBrowserItem(item)"
                       >
                         <img
                           v-if="itemPreviewType(item) === 'image'"
@@ -1416,8 +1586,8 @@ onMounted(() => {
                     <td>{{ isFolder(item) ? '-' : formatBytes(item.fileSize) }}</td>
                     <td>{{ formatTimestamp(item.deletedAt || item.lastModifyDate || item.uploadDate || item.sharedAt) }}</td>
                     <td>
-                      <div class="sheet-table__actions">
-                        <button class="button button--ghost" type="button" @click="activeTab === 'shared' ? openSharedItem(item) : openOwnedItem(item)">열기</button>
+                      <div class="sheet-table__actions" @click.stop>
+                        <button class="button button--ghost" type="button" @click="openBrowserItem(item)">열기</button>
                         <button v-if="activeTab !== 'trash' && activeTab !== 'shared'" class="button button--ghost" type="button" @click="promptRename(item)">이름 변경</button>
                         <button v-if="activeTab !== 'trash' && activeTab !== 'shared' && !isFolder(item)" class="button button--ghost" type="button" @click="openShareDialog([item])">공유</button>
                         <button v-if="activeTab !== 'trash' && activeTab !== 'shared'" class="button button--ghost" type="button" @click="moveItemToTrash(item)">휴지통</button>
@@ -1439,7 +1609,10 @@ onMounted(() => {
                 v-for="item in browserItems"
                 :key="getSelectableId(item)"
                 class="drive-file-card"
-                @click="activeTab === 'shared' ? openSharedItem(item) : openOwnedItem(item)"
+                :class="{ 'drive-file-card--selected': selectedIds.includes(getSelectableId(item)) }"
+                :aria-selected="selectedIds.includes(getSelectableId(item))"
+                @click="selectItemFromPointer(item, $event)"
+                @dblclick="openBrowserItem(item)"
               >
                 <label class="drive-file-card__checkbox" @click.stop>
                   <input :checked="selectedIds.includes(getSelectableId(item))" type="checkbox" @change="toggleSelection(item)" />
@@ -1461,7 +1634,7 @@ onMounted(() => {
                   <small>{{ formatTimestamp(item.deletedAt || item.lastModifyDate || item.uploadDate || item.sharedAt) }}</small>
                 </div>
                 <div class="drive-file-card__actions" @click.stop>
-                  <button class="button button--ghost" type="button" @click="activeTab === 'shared' ? openSharedItem(item) : openOwnedItem(item)">열기</button>
+                  <button class="button button--ghost" type="button" @click="openBrowserItem(item)">열기</button>
                   <button v-if="activeTab !== 'trash' && activeTab !== 'shared' && !isFolder(item)" class="button button--ghost" type="button" @click="openShareDialog([item])">공유</button>
                   <button v-if="activeTab !== 'trash' && activeTab !== 'shared'" class="button button--ghost" type="button" @click="moveItemToTrash(item)">휴지통</button>
                   <button v-if="activeTab === 'trash'" class="button button--ghost" type="button" @click="restoreTrashItem(item)">복구</button>
@@ -1476,6 +1649,67 @@ onMounted(() => {
               <button class="button button--ghost" type="button" :disabled="pageFilters.page <= 0" @click="pageFilters.page -= 1">이전</button>
               <span>{{ drivePage.currentPage + 1 }} / {{ drivePage.totalPage }}</span>
               <button class="button button--ghost" type="button" :disabled="drivePage.currentPage >= drivePage.totalPage - 1" @click="pageFilters.page += 1">다음</button>
+            </div>
+              </div>
+
+              <aside v-if="detailsPanelOpen" class="drive-details-panel">
+                <div class="drive-details-panel__head">
+                  <div>
+                    <span>상세</span>
+                    <strong>{{ selectedItems.length > 1 ? selectedItems.length + '개 항목' : (primarySelectedItem?.fileOriginName || '항목 선택') }}</strong>
+                  </div>
+                  <button class="button button--ghost" type="button" @click="toggleDetailsPanel">닫기</button>
+                </div>
+
+                <template v-if="selectedItems.length > 1">
+                  <div class="drive-details-panel__preview drive-details-panel__preview--stack">
+                    {{ selectedItems.length }}
+                  </div>
+                  <dl class="drive-details-panel__meta">
+                    <template v-for="row in detailRows" :key="row.label">
+                      <dt>{{ row.label }}</dt>
+                      <dd>{{ row.value }}</dd>
+                    </template>
+                  </dl>
+                </template>
+
+                <template v-else-if="primarySelectedItem">
+                  <img
+                    v-if="itemPreviewType(primarySelectedItem) === 'image'"
+                    class="drive-details-panel__preview"
+                    :src="itemThumbnailPath(primarySelectedItem)"
+                    :alt="primarySelectedItem.fileOriginName"
+                    loading="lazy"
+                    decoding="async"
+                  />
+                  <div v-else class="drive-details-panel__preview drive-details-panel__preview--placeholder">
+                    {{ itemPreviewType(primarySelectedItem) === 'folder' ? '폴더' : itemTypeLabel(primarySelectedItem) }}
+                  </div>
+
+                  <dl class="drive-details-panel__meta">
+                    <template v-for="row in detailRows" :key="row.label">
+                      <dt>{{ row.label }}</dt>
+                      <dd>{{ row.value }}</dd>
+                    </template>
+                  </dl>
+
+                  <div class="drive-details-panel__actions">
+                    <button class="button button--primary" type="button" @click="openBrowserItem(primarySelectedItem)">열기</button>
+                    <button v-if="canPreviewItem(primarySelectedItem)" class="button button--ghost" type="button" @click="openPreviewDialog(primarySelectedItem)">미리보기</button>
+                    <button v-if="activeTab !== 'trash' && activeTab !== 'shared' && !isFolder(primarySelectedItem)" class="button button--ghost" type="button" @click="openShareDialog([primarySelectedItem])">공유</button>
+                    <button v-if="activeTab !== 'trash' && activeTab !== 'shared'" class="button button--ghost" type="button" @click="promptRename(primarySelectedItem)">이름 변경</button>
+                    <button v-if="activeTab !== 'trash' && activeTab !== 'shared'" class="button button--ghost" type="button" @click="moveItemToTrash(primarySelectedItem)">휴지통</button>
+                    <button v-if="activeTab === 'trash'" class="button button--ghost" type="button" @click="restoreTrashItem(primarySelectedItem)">복구</button>
+                    <button v-if="activeTab === 'trash'" class="button button--ghost" type="button" @click="deleteItemPermanently(primarySelectedItem)">완전 삭제</button>
+                    <button v-if="activeTab === 'shared'" class="button button--ghost" type="button" @click="handleSaveSharedFile(primarySelectedItem)">내 드라이브에 저장</button>
+                  </div>
+                </template>
+
+                <div v-else class="drive-details-panel__empty">
+                  <strong>파일을 선택하세요</strong>
+                  <span>목록에서 항목을 선택하면 미리보기, 위치, 용량과 빠른 작업이 표시됩니다.</span>
+                </div>
+              </aside>
             </div>
           </section>
         </section>
@@ -1617,6 +1851,34 @@ onMounted(() => {
             </div>
           </section>
         </section>
+
+        <div v-if="previewDialog.open && previewDialog.item" class="travel-modal drive-preview-modal" @click.self="closePreviewDialog">
+          <div class="travel-modal__dialog drive-preview-modal__dialog">
+            <div class="travel-modal__header">
+              <div>
+                <h2>{{ previewDialog.item.fileOriginName }}</h2>
+                <p>{{ itemTypeLabel(previewDialog.item) }} · {{ formatBytes(previewDialog.item.fileSize) }}</p>
+              </div>
+              <div class="drive-preview-modal__actions">
+                <button class="button button--ghost" type="button" @click="openItemInNewWindow(previewDialog.item)">새 창</button>
+                <button class="button button--ghost" type="button" @click="closePreviewDialog">닫기</button>
+              </div>
+            </div>
+            <div class="travel-modal__body drive-preview-modal__body">
+              <img
+                v-if="itemPreviewType(previewDialog.item) === 'image'"
+                :src="itemDownloadPath(previewDialog.item)"
+                :alt="previewDialog.item.fileOriginName"
+              />
+              <video
+                v-else-if="itemPreviewType(previewDialog.item) === 'video'"
+                :src="itemDownloadPath(previewDialog.item)"
+                controls
+                playsinline
+              ></video>
+            </div>
+          </div>
+        </div>
 
         <div v-if="uploadProgress.open" class="travel-modal" @click.self>
           <div class="travel-modal__dialog drive-progress-modal">

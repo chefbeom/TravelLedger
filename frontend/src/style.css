@@ -9495,12 +9495,89 @@ textarea {
   gap: 8px;
 }
 
-.drive-selection-bar {
+.drive-browser-panel {
+  position: relative;
+  overflow: hidden;
+}
+
+.drive-browser-actions {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 14px;
   margin-top: 18px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--surface-soft);
+}
+
+.drive-browser-actions > div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.drive-browser-actions strong,
+.drive-browser-actions small {
+  overflow-wrap: anywhere;
+}
+
+.drive-browser-actions small {
+  color: var(--text-soft);
+}
+
+.drive-browser-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 340px);
+  gap: 18px;
+  align-items: start;
+  margin-top: 18px;
+}
+
+.drive-browser-layout--details-closed {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.drive-browser-content {
+  min-width: 0;
+}
+
+.drive-browser-panel--drop-active {
+  border-color: rgba(49, 130, 246, 0.48);
+}
+
+.drive-drop-overlay {
+  position: absolute;
+  inset: 84px 18px 18px;
+  z-index: 20;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 8px;
+  border: 2px dashed rgba(49, 130, 246, 0.7);
+  border-radius: 26px;
+  background: color-mix(in srgb, var(--surface) 76%, rgba(49, 130, 246, 0.16));
+  color: var(--text);
+  text-align: center;
+  pointer-events: none;
+  box-shadow: var(--shadow);
+}
+
+.drive-drop-overlay strong {
+  font-size: clamp(1.2rem, 2vw, 1.8rem);
+}
+
+.drive-drop-overlay span {
+  color: var(--text-soft);
+}
+
+.drive-selection-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-top: 0;
   padding: 16px 18px;
   border: 1px solid var(--line);
   border-radius: 18px;
@@ -9550,6 +9627,27 @@ textarea {
   border-radius: 24px;
   background: var(--surface);
   box-shadow: var(--shadow);
+  cursor: pointer;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+}
+
+.drive-file-card:hover,
+.drive-file-card--selected {
+  border-color: rgba(49, 130, 246, 0.5);
+  box-shadow: 0 18px 42px rgba(37, 99, 235, 0.14);
+}
+
+.drive-file-card--selected {
+  outline: 2px solid rgba(49, 130, 246, 0.28);
+  outline-offset: -4px;
+}
+
+.drive-table__row {
+  cursor: pointer;
+}
+
+.drive-table__row--selected td {
+  background: color-mix(in srgb, var(--surface-soft) 72%, rgba(49, 130, 246, 0.16));
 }
 
 .drive-file-card__check-space,
@@ -9605,6 +9703,143 @@ textarea {
   grid-column: 1 / -1;
 }
 
+.drive-details-panel {
+  position: sticky;
+  top: 18px;
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 24px;
+  background: var(--surface-soft);
+  box-shadow: var(--shadow);
+}
+
+.drive-details-panel__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.drive-details-panel__head > div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.drive-details-panel__head span {
+  color: var(--text-soft);
+  font-size: 0.82rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.drive-details-panel__head strong {
+  overflow-wrap: anywhere;
+}
+
+.drive-details-panel__preview {
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--surface);
+  object-fit: cover;
+}
+
+.drive-details-panel__preview--placeholder,
+.drive-details-panel__preview--stack {
+  display: grid;
+  place-items: center;
+  color: var(--text-soft);
+  font-weight: 900;
+}
+
+.drive-details-panel__preview--stack {
+  color: var(--blue);
+  font-size: 2.2rem;
+}
+
+.drive-details-panel__meta {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+}
+
+.drive-details-panel__meta div,
+.drive-details-panel__meta dt,
+.drive-details-panel__meta dd {
+  min-width: 0;
+}
+
+.drive-details-panel__meta dt {
+  color: var(--text-soft);
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.drive-details-panel__meta dd {
+  margin: 2px 0 0;
+  overflow-wrap: anywhere;
+  color: var(--text);
+  font-weight: 700;
+}
+
+.drive-details-panel__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.drive-details-panel__actions .button {
+  flex: 1 1 auto;
+}
+
+.drive-details-panel__empty {
+  display: grid;
+  place-items: center;
+  min-height: 220px;
+  gap: 8px;
+  padding: 24px;
+  border: 1px dashed var(--line);
+  border-radius: 18px;
+  color: var(--text-soft);
+  text-align: center;
+}
+
+.drive-details-panel__empty strong {
+  color: var(--text);
+}
+
+.drive-preview-modal__dialog {
+  width: min(94vw, 1120px);
+}
+
+.drive-preview-modal__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.drive-preview-modal__body {
+  display: grid;
+  place-items: center;
+  min-height: min(70vh, 760px);
+  background: #0b1020;
+}
+
+.drive-preview-modal__body img,
+.drive-preview-modal__body video {
+  display: block;
+  max-width: 100%;
+  max-height: 72vh;
+  border-radius: 16px;
+  object-fit: contain;
+}
+
 .drive-pagination {
   display: flex;
   align-items: center;
@@ -9639,13 +9874,18 @@ textarea {
   .drive-layout,
   .drive-profile-modal__shell,
   .drive-dashboard,
-  .drive-profile-modal__profile-grid {
+  .drive-profile-modal__profile-grid,
+  .drive-browser-layout {
     grid-template-columns: 1fr;
   }
 
   .drive-sidebar {
     position: static;
     min-height: auto;
+  }
+
+  .drive-details-panel {
+    position: static;
   }
 }
 
@@ -9669,6 +9909,7 @@ textarea {
 
   .drive-topbar,
   .drive-selection-bar,
+  .drive-browser-actions,
   .drive-dashboard__summary,
   .drive-topbar__search,
   .drive-topbar__actions,
@@ -9697,6 +9938,9 @@ textarea {
 :root[data-theme='toss'] .drive-dashboard__card,
 :root[data-theme='toss'] .drive-dashboard__controls,
 :root[data-theme='toss'] .drive-selection-bar,
+:root[data-theme='toss'] .drive-browser-actions,
+:root[data-theme='toss'] .drive-details-panel,
+:root[data-theme='toss'] .drive-details-panel__preview,
 :root[data-theme='toss'] .drive-file-card,
 :root[data-theme='toss'] .family-category-card,
 :root[data-theme='toss'] .family-album-focus {

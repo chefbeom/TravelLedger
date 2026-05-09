@@ -630,12 +630,6 @@ const communityStats = computed(() => ({
   photoCount: summary.value.photoMarkerCount,
 }))
 
-const recentPlans = computed(() =>
-  [...publicPlans.value]
-    .sort((left, right) => String(right?.publicSharedAt ?? '').localeCompare(String(left?.publicSharedAt ?? '')))
-    .slice(0, 4),
-)
-
 const popularPlans = computed(() =>
   [...publicPlans.value]
     .sort((left, right) => getPlanScore(right) - getPlanScore(left))
@@ -657,6 +651,72 @@ const recentPhotoPins = computed(() =>
     )
     .slice(0, 10),
 )
+
+const selectedPlan = computed(() =>
+  selectedPlanId.value == null || selectedPlanId.value === ''
+    ? null
+    : planById.value.get(getPlanKey(selectedPlanId.value)) ?? null,
+)
+
+const activeStoryPlan = computed(() => selectedPlan.value ?? visiblePlans.value[0] ?? null)
+
+const activeStoryClusters = computed(() => {
+  const plan = activeStoryPlan.value
+  if (!plan) {
+    return spotlightClusters.value
+  }
+  return (clustersByPlanId.value.get(getPlanKey(plan.planId)) ?? [])
+    .filter((cluster) => visibleClusterIds.value.has(String(cluster.id)))
+    .slice(0, 6)
+})
+
+const activeStoryPhotoPins = computed(() => {
+  const plan = activeStoryPlan.value
+  if (!plan) {
+    return recentPhotoPins.value
+  }
+  return visiblePhotoPins.value
+    .filter((pin) => getPlanKey(pin.planId) === getPlanKey(plan.planId))
+    .slice(0, 8)
+})
+
+const activeStoryMeta = computed(() => {
+  const plan = activeStoryPlan.value
+  if (!plan) {
+    return [
+      { label: '공개 여행', value: visibleSummary.value.planCount },
+      { label: '사진', value: visibleSummary.value.photoCount },
+      { label: '경로', value: visibleSummary.value.routeCount },
+    ]
+  }
+
+  return [
+    { label: '사진', value: safeNumber(plan.mediaItemCount) },
+    { label: '기록', value: safeNumber(plan.memoryRecordCount) },
+    { label: '경로', value: safeNumber(plan.routeSegmentCount) },
+  ]
+})
+
+const atlasHighlights = computed(() => [
+  {
+    label: '여행자',
+    value: communityStats.value.contributorCount,
+    caption: '공개한 사용자',
+  },
+  {
+    label: '지역',
+    value: communityStats.value.regionCount,
+    caption: '지도에 표시된 권역',
+  },
+  {
+    label: '사진',
+    value: visibleSummary.value.photoCount,
+    caption: '탐색 가능한 공개 사진',
+  },
+])
+
+const topRegionOptions = computed(() => regionOptions.value.slice(0, 6))
+const visibleCatalogPlans = computed(() => visiblePlans.value.slice(0, 18))
 
 const hasActiveFilters = computed(() =>
   Boolean(normalizeText(searchQuery.value))
@@ -746,7 +806,43 @@ const selectedClusterPlan = computed(() =>
   planById.value.get(getPlanKey(selectedClusterSummary.value?.planId)) ?? null,
 )
 
-const featuredPlans = computed(() => visiblePlans.value.slice(0, 9))
+function formatDistanceKm(value) {
+  const distance = safeNumber(value)
+  if (distance <= 0) {
+    return '0km'
+  }
+  if (distance >= 100) {
+    return `${Math.round(distance).toLocaleString('ko-KR')}km`
+  }
+  return `${(Math.round(distance * 10) / 10).toLocaleString('ko-KR')}km`
+}
+
+function selectActiveStoryPlan() {
+  if (activeStoryPlan.value) {
+    selectPlan(activeStoryPlan.value)
+  }
+}
+
+function selectPlanContributor(plan) {
+  if (!plan) {
+    return
+  }
+  selectedContributorKey.value = resolveContributorKey(plan)
+}
+
+function selectRegion(region) {
+  if (!region?.key) {
+    return
+  }
+  selectedRegionKey.value = region.key
+}
+
+function selectPhotoPinFromStrip(pin) {
+  if (!pin) {
+    return
+  }
+  handleSelectPhotoPin(pin)
+}
 
 watch(
   () => [
@@ -813,6 +909,11 @@ onMounted(() => {
       <div v-if="detailErrorMessage" class="feedback feedback--error">{{ detailErrorMessage }}</div>
 
       <section class="travel-public-map-card">
+        <div class="travel-public-map-card__intro">
+          <span>PUBLIC ATLAS</span>
+          <strong>여행자들이 공개한 사진 지도</strong>
+          <small>지도에서 스팟을 고르고, 작성자와 지역 필터로 이어지는 공개 여행 커뮤니티입니다.</small>
+        </div>
         <div class="travel-public-map-card__stats">
           <span>{{ visibleSummary.planCount }} 여행</span>
           <span>{{ visibleSummary.clusterCount }} 스팟</span>
@@ -967,6 +1068,98 @@ onMounted(() => {
         <button v-if="hasActiveFilters" type="button" @click="clearCommunityFilters">초기화</button>
       </section>
 
+      <section class="travel-public-storyline">
+        <article class="travel-public-story-panel travel-public-story-panel--lead">
+          <div class="travel-public-story-panel__head">
+            <span>{{ activeStoryPlan ? '선택한 공개 여행' : '공개 여행' }}</span>
+            <strong>{{ activeStoryPlan?.planName || '공개된 여행을 기다리는 중입니다' }}</strong>
+          </div>
+          <p>
+            {{
+              activeStoryPlan
+                ? resolvePlanLocation(activeStoryPlan)
+                : '여행 로그를 퍼블릭으로 공개하면 이 지도와 커뮤니티 목록에 표시됩니다.'
+            }}
+          </p>
+          <div class="travel-public-story-kpis">
+            <div v-for="item in activeStoryMeta" :key="item.label">
+              <span>{{ item.label }}</span>
+              <strong>{{ item.value.toLocaleString('ko-KR') }}</strong>
+            </div>
+            <div>
+              <span>거리</span>
+              <strong>{{ formatDistanceKm(activeStoryPlan?.totalDistanceKm ?? visibleSummary.distanceKm) }}</strong>
+            </div>
+          </div>
+          <div v-if="activeStoryClusters.length" class="travel-public-story-spots">
+            <button
+              v-for="cluster in activeStoryClusters"
+              :key="`story-spot-${cluster.id}`"
+              type="button"
+              @click="handleSelectCluster(cluster)"
+            >
+              <span>{{ cluster.placeName || cluster.region || cluster.country || '스팟' }}</span>
+              <small>{{ cluster.photoCount }}장 · {{ resolveContributorLabel(cluster) }}</small>
+            </button>
+          </div>
+          <div class="travel-public-story-actions">
+            <button type="button" :disabled="!activeStoryPlan" @click="selectActiveStoryPlan">지도에서 보기</button>
+            <button type="button" :disabled="!activeStoryPlan" @click="selectPlanContributor(activeStoryPlan)">작성자 여행</button>
+          </div>
+        </article>
+
+        <article class="travel-public-story-panel">
+          <div class="travel-public-story-panel__head">
+            <span>커뮤니티 커버리지</span>
+            <strong>사람, 지역, 사진</strong>
+          </div>
+          <div class="travel-public-highlight-grid">
+            <div v-for="item in atlasHighlights" :key="item.label">
+              <span>{{ item.label }}</span>
+              <strong>{{ item.value.toLocaleString('ko-KR') }}</strong>
+              <small>{{ item.caption }}</small>
+            </div>
+          </div>
+          <div v-if="topRegionOptions.length" class="travel-public-region-tags">
+            <button
+              v-for="region in topRegionOptions"
+              :key="region.key"
+              type="button"
+              :class="{ 'is-active': selectedRegionKey === region.key }"
+              @click="selectRegion(region)"
+            >
+              {{ region.label }}
+              <span>{{ region.count }}</span>
+            </button>
+          </div>
+          <p v-else class="travel-public-story-empty">공개된 지역 데이터가 아직 없습니다.</p>
+        </article>
+
+        <article class="travel-public-story-panel travel-public-story-panel--photos">
+          <div class="travel-public-story-panel__head">
+            <span>최근 사진</span>
+            <strong>{{ activeStoryPlan ? activeStoryPlan.planName : '전체 공개 사진' }}</strong>
+          </div>
+          <div v-if="activeStoryPhotoPins.length" class="travel-public-mini-photo-grid">
+            <button
+              v-for="pin in activeStoryPhotoPins"
+              :key="`story-photo-${pin.mediaId}`"
+              type="button"
+              @click="selectPhotoPinFromStrip(pin)"
+            >
+              <img
+                :src="buildThumbnailUrl(pin.photoUrl, THUMBNAIL_VARIANTS.preview)"
+                :alt="pin.title || pin.placeName || pin.planName"
+                loading="lazy"
+                decoding="async"
+              />
+              <span>{{ pin.placeName || pin.region || pin.planName }}</span>
+            </button>
+          </div>
+          <p v-else class="travel-public-story-empty">표시할 공개 사진이 없습니다.</p>
+        </article>
+      </section>
+
       <section class="travel-public-shelf">
         <div class="travel-public-shelf__head">
           <h2>최근 업데이트</h2>
@@ -1001,9 +1194,9 @@ onMounted(() => {
             <h2>공개 여행 목록</h2>
             <span>{{ visiblePlans.length }} / {{ publicPlans.length }}</span>
           </div>
-          <div v-if="featuredPlans.length" class="travel-public-trip-grid">
+          <div v-if="visibleCatalogPlans.length" class="travel-public-trip-grid">
             <button
-              v-for="plan in featuredPlans"
+              v-for="plan in visibleCatalogPlans"
               :key="plan.planId"
               class="travel-public-trip-card"
               :class="{ 'travel-public-trip-card--active': String(selectedPlanId || '') === String(plan.planId) }"

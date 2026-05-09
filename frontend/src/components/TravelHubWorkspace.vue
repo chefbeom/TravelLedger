@@ -65,7 +65,7 @@ const props = defineProps({
   },
 })
 
-const emit = defineEmits(['request-open-finance', 'request-open-log'])
+const emit = defineEmits(['request-open-finance', 'request-open-log', 'request-open-public-trips'])
 
 const fallbackCategories = {
   planStatuses: ['PLANNED', 'COMPLETED', 'SAMPLE'],
@@ -1250,6 +1250,14 @@ async function handleTogglePublicShare(nextPublicShared) {
   }
 }
 
+function handleOpenPublicTrips() {
+  if (props.integratedMode) {
+    emit('request-open-public-trips')
+    return
+  }
+  window.location.hash = 'public-trips'
+}
+
 function handleOpenTravelPlanner() {
   resetPlanForm()
   moneyTab.value = 'planner'
@@ -1865,21 +1873,31 @@ async function openPortfolioMemoryEditor(payload) {
               }}
             </small>
           </div>
-          <button
-            class="button"
-            :class="travelPlan?.publicShared ? 'button--danger' : 'button--primary'"
-            type="button"
-            :disabled="isSubmitting || !travelPlan"
-            @click="handleTogglePublicShare(!travelPlan?.publicShared)"
-          >
-            {{
-              isSubmitting && activeSubmit === 'public-share'
-                ? '변경 중...'
-                : travelPlan?.publicShared
-                  ? '공개 해제'
-                  : '퍼블릭 공개'
-            }}
-          </button>
+          <div class="travel-public-share-box__actions">
+            <button
+              v-if="travelPlan?.publicShared"
+              class="button button--secondary"
+              type="button"
+              @click="handleOpenPublicTrips"
+            >
+              공개 지도에서 보기
+            </button>
+            <button
+              class="button"
+              :class="travelPlan?.publicShared ? 'button--danger' : 'button--primary'"
+              type="button"
+              :disabled="isSubmitting || !travelPlan"
+              @click="handleTogglePublicShare(!travelPlan?.publicShared)"
+            >
+              {{
+                isSubmitting && activeSubmit === 'public-share'
+                  ? '변경 중...'
+                  : travelPlan?.publicShared
+                    ? '공개 해제'
+                    : '퍼블릭 공개'
+              }}
+            </button>
+          </div>
         </div>
       </section>
       <TravelOverviewWorkspace v-if="logTab === 'overview'" :travel-plan="travelPlan" />

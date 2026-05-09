@@ -3033,6 +3033,13 @@ button {
   color: var(--text-soft);
 }
 
+.travel-public-share-box__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
 .travel-public-trips {
   min-width: 0;
   --travel-public-lime: #d6ff35;

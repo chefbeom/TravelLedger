@@ -69,6 +69,10 @@ function handleRequestOpenFinance() {
   openFinance()
 }
 
+function handleRequestOpenPublicTrips() {
+  openAtlas('public')
+}
+
 const isHubVisible = computed(() => !(primaryTab.value === 'atlas' && (atlasTab.value === 'map' || atlasTab.value === 'public')))
 const isIntegratedPhotoMode = computed(() => primaryTab.value === 'atlas' && atlasTab.value === 'album')
 
@@ -123,6 +127,7 @@ watch(
         :integrated-photo-mode="isIntegratedPhotoMode"
         @request-open-finance="handleRequestOpenFinance"
         @request-open-log="handleRequestOpenLog"
+        @request-open-public-trips="handleRequestOpenPublicTrips"
       />
     </div>
   </div>

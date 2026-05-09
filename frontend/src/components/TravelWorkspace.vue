@@ -31,8 +31,7 @@ function applyRouteState(route) {
       atlasTab.value = 'map'
       break
     case 'public-trips':
-      primaryTab.value = 'atlas'
-      atlasTab.value = 'public'
+      primaryTab.value = 'share'
       break
     case 'travel-money':
     case 'travel':
@@ -61,6 +60,10 @@ function openAtlas(tab = 'map') {
   }
 }
 
+function openShare() {
+  primaryTab.value = 'share'
+}
+
 function handleRequestOpenLog() {
   openLog()
 }
@@ -70,10 +73,10 @@ function handleRequestOpenFinance() {
 }
 
 function handleRequestOpenPublicTrips() {
-  openAtlas('public')
+  openShare()
 }
 
-const isHubVisible = computed(() => !(primaryTab.value === 'atlas' && (atlasTab.value === 'map' || atlasTab.value === 'public')))
+const isHubVisible = computed(() => primaryTab.value !== 'share' && !(primaryTab.value === 'atlas' && atlasTab.value === 'map'))
 const isIntegratedPhotoMode = computed(() => primaryTab.value === 'atlas' && atlasTab.value === 'album')
 
 watch(
@@ -99,25 +102,25 @@ watch(
         <button class="button" :class="{ 'button--primary': primaryTab === 'finance' }" @click="openFinance">여행 가계부</button>
         <button class="button" :class="{ 'button--primary': primaryTab === 'log' }" @click="openLog">여행 로그</button>
         <button class="button" :class="{ 'button--primary': primaryTab === 'atlas' }" @click="openAtlas(atlasTab)">지도·사진</button>
+        <button class="button" :class="{ 'button--primary': primaryTab === 'share' }" @click="openShare">여행 공유</button>
       </div>
-      <small class="field__hint">여행 설정은 가계부에서, 완성된 여행 로그와 사진 지도는 지도·사진 영역에서 확인합니다.</small>
+      <small class="field__hint">여행 설정은 가계부에서, 내 사진 지도는 지도·사진에서, 공개된 여행은 여행 공유에서 확인합니다.</small>
     </section>
 
     <section v-if="primaryTab === 'atlas'" class="panel">
       <div class="scope-toggle scope-toggle--wrap">
         <button class="button" :class="{ 'button--primary': atlasTab === 'map' }" @click="openAtlas('map')">내 지도</button>
         <button class="button" :class="{ 'button--primary': atlasTab === 'album' }" @click="openAtlas('album')">사진첩·전시</button>
-        <button class="button" :class="{ 'button--primary': atlasTab === 'public' }" @click="openAtlas('public')">공개 여행</button>
       </div>
-      <small class="field__hint">내 여행 사진은 개인 지도에서 보고, 퍼블릭으로 공개된 여행은 공개 여행 지도에서 둘러볼 수 있습니다.</small>
+      <small class="field__hint">내 여행 사진은 개인 지도와 사진첩에서 관리하고, 퍼블릭 공개 여행은 상단의 여행 공유 기능에서 둘러볼 수 있습니다.</small>
     </section>
 
     <div v-show="primaryTab === 'atlas' && atlasTab === 'map'" class="workspace-stack">
       <TravelMyMapWorkspace :active="primaryTab === 'atlas' && atlasTab === 'map'" />
     </div>
 
-    <div v-show="primaryTab === 'atlas' && atlasTab === 'public'" class="workspace-stack">
-      <TravelPublicTripsWorkspace :active="primaryTab === 'atlas' && atlasTab === 'public'" />
+    <div v-if="primaryTab === 'share'" class="workspace-stack">
+      <TravelPublicTripsWorkspace :active="primaryTab === 'share'" />
     </div>
 
     <div v-show="isHubVisible" class="workspace-stack">

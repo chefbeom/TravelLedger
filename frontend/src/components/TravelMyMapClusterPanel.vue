@@ -72,6 +72,7 @@ let markerLayer = null
 let routeLayer = null
 let routeRenderer = null
 let hasFittedInitialView = false
+let hasFittedDataView = false
 let renderedMarkers = new Map()
 let pendingPopupMarkerKey = null
 let mapRenderFrame = 0
@@ -942,8 +943,10 @@ function renderClusters() {
 function renderMap({ shouldFit = false } = {}) {
   renderRoutes()
 
-  if (!hasFittedInitialView || shouldFit) {
+  const hasDataBounds = collectBounds().length > 0
+  if (!hasFittedInitialView || shouldFit || (hasDataBounds && !hasFittedDataView)) {
     hasFittedInitialView = true
+    hasFittedDataView = hasDataBounds || hasFittedDataView
     fitToAll({ animate: !shouldFit })
     scheduleRenderClusters(0)
     return

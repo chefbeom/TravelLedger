@@ -22,6 +22,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDate;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import net.lingala.zip4j.ZipFile;
 import net.lingala.zip4j.model.FileHeader;
@@ -33,6 +34,7 @@ import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
+import org.springframework.transaction.annotation.Transactional;
 
 @SpringBootTest(properties = {
         "app.seed.enabled=true",
@@ -216,6 +218,53 @@ class LedgerEntryUserScopeIntegrationTest {
         LedgerEntry createdEntry = ledgerEntryRepository.findById(createdEntryId).orElseThrow();
         Long storedPaymentMethodId = createdEntry.getPaymentMethod().getId();
         assertThat(paymentMethodRepository.findById(storedPaymentMethodId).orElseThrow().getName()).isEqualTo("-");
+    }
+
+    @Test
+    @Transactional
+    void excelImportCommitNormalizesLongClassificationNames() throws Exception {
+        MockHttpSession hanaSession = loginAndGetSession("hana", false);
+        AppUser hana = appUserRepository.findByLoginId("hana").orElseThrow();
+        LocalDate importDate = LocalDate.of(2040, 1, 2);
+
+        Map<String, Object> row = new LinkedHashMap<>();
+        row.put("selected", true);
+        row.put("sourceSheetName", "long-values");
+        row.put("entryDate", importDate.toString());
+        row.put("entryTime", null);
+        row.put("title", "long import row");
+        row.put("memo", "created by import test");
+        row.put("amount", "1234");
+        row.put("entryType", "EXPENSE");
+        row.put("paymentMethodName", "payment-method-name-".repeat(8));
+        row.put("categoryGroupName", "category-group-name-".repeat(8));
+        row.put("categoryDetailName", "category-detail-name-".repeat(8));
+        row.put("sourceRowNumber", 7);
+
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("rows", List.of(row));
+
+        mockMvc.perform(post("/api/entries/imports/excel/commit")
+                        .with(csrf())
+                        .session(hanaSession)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(payload)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.importedCount").value(1));
+
+        LedgerEntry imported = ledgerEntryRepository.findAllByOwnerIdAndDeletedAtIsNullAndEntryDateBetweenOrderByEntryDateAscIdAsc(
+                        hana.getId(),
+                        importDate,
+                        importDate
+                ).stream()
+                .filter(entry -> entry.getTitle().equals("long import row"))
+                .findFirst()
+                .orElseThrow();
+
+        assertThat(imported.getPaymentMethod().getName()).hasSizeLessThanOrEqualTo(80);
+        assertThat(imported.getCategoryGroup().getName()).hasSizeLessThanOrEqualTo(80);
+        assertThat(imported.getCategoryDetail()).isNotNull();
+        assertThat(imported.getCategoryDetail().getName()).hasSizeLessThanOrEqualTo(80);
     }
 
     private MockHttpSession loginAndGetSession(String loginId, boolean rememberDevice) throws Exception {

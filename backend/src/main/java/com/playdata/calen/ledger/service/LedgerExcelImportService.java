@@ -65,6 +65,7 @@ public class LedgerExcelImportService {
     private static final int MONTH_AMOUNT_COLUMN = 13;
     private static final int MONTH_PAYMENT_COLUMN = 14;
     private static final int MONTH_CATEGORY_COLUMN = 15;
+    private static final int CLASSIFICATION_NAME_MAX_LENGTH = 80;
     private static final List<DateTimeFormatter> DATE_FORMATTERS = List.of(
             DateTimeFormatter.ISO_LOCAL_DATE,
             DateTimeFormatter.ofPattern("yyyy-M-d"),
@@ -72,6 +73,8 @@ public class LedgerExcelImportService {
             DateTimeFormatter.ofPattern("yyyy.M.d"),
             DateTimeFormatter.ofPattern("yyyyMMdd")
     );
+    private static final String DEFAULT_CATEGORY_GROUP_NAME = "미분류";
+    private static final String DEFAULT_PAYMENT_METHOD_NAME = "기타";
     private static final String DEFAULT_IMPORTED_TITLE = "작성하지 않음";
 
     private final AppUserService appUserService;
@@ -114,8 +117,10 @@ public class LedgerExcelImportService {
             }
 
             String resolvedTitle = defaultIfBlank(row.title(), DEFAULT_IMPORTED_TITLE);
+            LedgerEntryTextSanitizer.SanitizedLedgerText sanitizedText =
+                    LedgerEntryTextSanitizer.sanitize(resolvedTitle, buildImportedMemo(row));
 
-            if (ledgerEntryRepository.existsByOwnerIdAndDeletedAtIsNullAndEntryDateAndTitleAndAmount(userId, row.entryDate(), resolvedTitle.trim(), row.amount())) {
+            if (ledgerEntryRepository.existsByOwnerIdAndDeletedAtIsNullAndEntryDateAndTitleAndAmount(userId, row.entryDate(), sanitizedText.title(), row.amount())) {
                 skippedCount++;
                 warnings.add(buildWarning(row, "Skipped as a likely duplicate."));
                 continue;
@@ -124,8 +129,6 @@ public class LedgerExcelImportService {
             CategoryGroup group = resolveOrCreateCategoryGroup(owner, row, createdGroupNames);
             CategoryDetail detail = resolveOrCreateCategoryDetail(group, row, createdDetailNames);
             PaymentMethod paymentMethod = resolveOrCreatePaymentMethod(owner, row, createdPaymentNames);
-            LedgerEntryTextSanitizer.SanitizedLedgerText sanitizedText =
-                    LedgerEntryTextSanitizer.sanitize(resolvedTitle, buildImportedMemo(row));
 
             LedgerEntry entry = new LedgerEntry();
             entry.setOwner(owner);
@@ -653,7 +656,7 @@ public class LedgerExcelImportService {
     }
 
     private CategoryGroup resolveOrCreateCategoryGroup(AppUser owner, LedgerExcelImportRowRequest row, Set<String> createdGroupNames) {
-        String name = defaultIfBlank(row.categoryGroupName(), "미분류");
+        String name = normalizeImportName(row.categoryGroupName(), DEFAULT_CATEGORY_GROUP_NAME);
         return categoryGroupRepository.findByOwnerIdAndEntryTypeAndNameIgnoreCase(owner.getId(), row.entryType(), name)
                 .orElseGet(() -> {
                     CategoryGroup group = new CategoryGroup();
@@ -668,7 +671,7 @@ public class LedgerExcelImportService {
     }
 
     private CategoryDetail resolveOrCreateCategoryDetail(CategoryGroup group, LedgerExcelImportRowRequest row, Set<String> createdDetailNames) {
-        String detailName = blankToNull(row.categoryDetailName());
+        String detailName = normalizeOptionalImportName(row.categoryDetailName());
         if (detailName == null) {
             return null;
         }
@@ -686,7 +689,7 @@ public class LedgerExcelImportService {
     }
 
     private PaymentMethod resolveOrCreatePaymentMethod(AppUser owner, LedgerExcelImportRowRequest row, Set<String> createdPaymentNames) {
-        String name = defaultIfBlank(row.paymentMethodName(), "기타");
+        String name = normalizeImportName(row.paymentMethodName(), DEFAULT_PAYMENT_METHOD_NAME);
         return paymentMethodRepository.findByOwnerIdAndNameIgnoreCase(owner.getId(), name)
                 .orElseGet(() -> {
                     PaymentMethod paymentMethod = new PaymentMethod();
@@ -799,6 +802,25 @@ public class LedgerExcelImportService {
 
     private String defaultIfBlank(String value, String fallback) {
         return Objects.requireNonNullElse(blankToNull(value), fallback);
+    }
+
+    private String normalizeImportName(String value, String fallback) {
+        return truncateImportName(defaultIfBlank(value, fallback));
+    }
+
+    private String normalizeOptionalImportName(String value) {
+        return Optional.ofNullable(blankToNull(value))
+                .map(this::truncateImportName)
+                .filter(name -> !name.isBlank())
+                .orElse(null);
+    }
+
+    private String truncateImportName(String value) {
+        String normalized = value.replaceAll("\\R+", " ").trim();
+        if (normalized.length() <= CLASSIFICATION_NAME_MAX_LENGTH) {
+            return normalized;
+        }
+        return normalized.substring(0, CLASSIFICATION_NAME_MAX_LENGTH).trim();
     }
 
     private String blankToNull(String value) {

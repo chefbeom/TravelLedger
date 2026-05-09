@@ -5,6 +5,7 @@ import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.Map;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -60,6 +61,12 @@ public class GlobalExceptionHandler {
     public ResponseEntity<Map<String, Object>> handleConstraintViolation(ConstraintViolationException exception) {
         log.warn("Constraint violation: {}", exception.getMessage());
         return buildResponse(HttpStatus.BAD_REQUEST, "요청 값을 확인해 주세요.", null);
+    }
+
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<Map<String, Object>> handleDataIntegrity(DataIntegrityViolationException exception) {
+        log.warn("Data integrity violation: {}", exception.getMessage());
+        return buildResponse(HttpStatus.BAD_REQUEST, "저장 가능한 길이와 형식으로 입력값을 확인해 주세요.", null);
     }
 
     @ExceptionHandler(MaxUploadSizeExceededException.class)

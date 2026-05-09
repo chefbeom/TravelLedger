@@ -18,6 +18,8 @@ import com.playdata.calen.travel.repository.TravelPhotoClusterRepository;
 import com.playdata.calen.travel.repository.TravelPlanRepository;
 import com.playdata.calen.travel.repository.TravelPlanShareRepository;
 import com.playdata.calen.travel.repository.TravelRouteSegmentRepository;
+import com.playdata.calen.travel.repository.TravelShareGroupMemberRepository;
+import com.playdata.calen.travel.repository.TravelShareGroupRepository;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
@@ -47,6 +49,8 @@ class TravelServiceCacheTest {
         TravelPhotoClusterMemberRepository travelPhotoClusterMemberRepository = mock(TravelPhotoClusterMemberRepository.class);
         TravelRouteSegmentRepository travelRouteSegmentRepository = mock(TravelRouteSegmentRepository.class);
         TravelPlanShareRepository travelPlanShareRepository = mock(TravelPlanShareRepository.class);
+        TravelShareGroupRepository travelShareGroupRepository = mock(TravelShareGroupRepository.class);
+        TravelShareGroupMemberRepository travelShareGroupMemberRepository = mock(TravelShareGroupMemberRepository.class);
         ExchangeRateService exchangeRateService = mock(ExchangeRateService.class);
         TravelMediaStorageService travelMediaStorageService = mock(TravelMediaStorageService.class);
         TravelPhotoGpsMetadataService travelPhotoGpsMetadataService = mock(TravelPhotoGpsMetadataService.class);
@@ -66,6 +70,8 @@ class TravelServiceCacheTest {
                 travelPhotoClusterMemberRepository,
                 travelRouteSegmentRepository,
                 travelPlanShareRepository,
+                travelShareGroupRepository,
+                travelShareGroupMemberRepository,
                 exchangeRateService,
                 travelMediaStorageService,
                 travelPhotoGpsMetadataService,
@@ -121,6 +127,8 @@ class TravelServiceCacheTest {
         TravelPhotoClusterMemberRepository travelPhotoClusterMemberRepository = mock(TravelPhotoClusterMemberRepository.class);
         TravelRouteSegmentRepository travelRouteSegmentRepository = mock(TravelRouteSegmentRepository.class);
         TravelPlanShareRepository travelPlanShareRepository = mock(TravelPlanShareRepository.class);
+        TravelShareGroupRepository travelShareGroupRepository = mock(TravelShareGroupRepository.class);
+        TravelShareGroupMemberRepository travelShareGroupMemberRepository = mock(TravelShareGroupMemberRepository.class);
         ExchangeRateService exchangeRateService = mock(ExchangeRateService.class);
         TravelMediaStorageService travelMediaStorageService = mock(TravelMediaStorageService.class);
         TravelPhotoGpsMetadataService travelPhotoGpsMetadataService = mock(TravelPhotoGpsMetadataService.class);
@@ -140,6 +148,8 @@ class TravelServiceCacheTest {
                 travelPhotoClusterMemberRepository,
                 travelRouteSegmentRepository,
                 travelPlanShareRepository,
+                travelShareGroupRepository,
+                travelShareGroupMemberRepository,
                 exchangeRateService,
                 travelMediaStorageService,
                 travelPhotoGpsMetadataService,
@@ -193,6 +203,8 @@ class TravelServiceCacheTest {
         TravelPhotoClusterMemberRepository travelPhotoClusterMemberRepository = mock(TravelPhotoClusterMemberRepository.class);
         TravelRouteSegmentRepository travelRouteSegmentRepository = mock(TravelRouteSegmentRepository.class);
         TravelPlanShareRepository travelPlanShareRepository = mock(TravelPlanShareRepository.class);
+        TravelShareGroupRepository travelShareGroupRepository = mock(TravelShareGroupRepository.class);
+        TravelShareGroupMemberRepository travelShareGroupMemberRepository = mock(TravelShareGroupMemberRepository.class);
         ExchangeRateService exchangeRateService = mock(ExchangeRateService.class);
         TravelMediaStorageService travelMediaStorageService = mock(TravelMediaStorageService.class);
         TravelPhotoGpsMetadataService travelPhotoGpsMetadataService = mock(TravelPhotoGpsMetadataService.class);
@@ -212,6 +224,8 @@ class TravelServiceCacheTest {
                 travelPhotoClusterMemberRepository,
                 travelRouteSegmentRepository,
                 travelPlanShareRepository,
+                travelShareGroupRepository,
+                travelShareGroupMemberRepository,
                 exchangeRateService,
                 travelMediaStorageService,
                 travelPhotoGpsMetadataService,
@@ -248,6 +262,8 @@ class TravelServiceCacheTest {
         TravelPhotoClusterMemberRepository travelPhotoClusterMemberRepository = mock(TravelPhotoClusterMemberRepository.class);
         TravelRouteSegmentRepository travelRouteSegmentRepository = mock(TravelRouteSegmentRepository.class);
         TravelPlanShareRepository travelPlanShareRepository = mock(TravelPlanShareRepository.class);
+        TravelShareGroupRepository travelShareGroupRepository = mock(TravelShareGroupRepository.class);
+        TravelShareGroupMemberRepository travelShareGroupMemberRepository = mock(TravelShareGroupMemberRepository.class);
         ExchangeRateService exchangeRateService = mock(ExchangeRateService.class);
         TravelMediaStorageService travelMediaStorageService = mock(TravelMediaStorageService.class);
         TravelPhotoGpsMetadataService travelPhotoGpsMetadataService = mock(TravelPhotoGpsMetadataService.class);
@@ -267,6 +283,8 @@ class TravelServiceCacheTest {
                 travelPhotoClusterMemberRepository,
                 travelRouteSegmentRepository,
                 travelPlanShareRepository,
+                travelShareGroupRepository,
+                travelShareGroupMemberRepository,
                 exchangeRateService,
                 travelMediaStorageService,
                 travelPhotoGpsMetadataService,

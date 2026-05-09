@@ -15,5 +15,7 @@ public interface CategoryGroupRepository extends JpaRepository<CategoryGroup, Lo
 
     java.util.Optional<CategoryGroup> findByOwnerIdAndEntryTypeAndNameIgnoreCase(Long ownerId, EntryType entryType, String name);
 
+    java.util.Optional<CategoryGroup> findFirstByOwnerIdAndEntryTypeAndNameIgnoreCaseOrderByIdAsc(Long ownerId, EntryType entryType, String name);
+
     java.util.Optional<CategoryGroup> findByIdAndOwnerId(Long id, Long ownerId);
 }

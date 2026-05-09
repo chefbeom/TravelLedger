@@ -13,7 +13,14 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.playdata.calen.account.domain.AppUser;
 import com.playdata.calen.account.repository.AppUserRepository;
+import com.playdata.calen.ledger.domain.CategoryDetail;
+import com.playdata.calen.ledger.domain.CategoryGroup;
+import com.playdata.calen.ledger.domain.EntryType;
 import com.playdata.calen.ledger.domain.LedgerEntry;
+import com.playdata.calen.ledger.domain.PaymentMethod;
+import com.playdata.calen.ledger.domain.PaymentMethodKind;
+import com.playdata.calen.ledger.repository.CategoryDetailRepository;
+import com.playdata.calen.ledger.repository.CategoryGroupRepository;
 import com.playdata.calen.ledger.repository.LedgerEntryRepository;
 import com.playdata.calen.ledger.repository.PaymentMethodRepository;
 import jakarta.servlet.http.Cookie;
@@ -57,6 +64,12 @@ class LedgerEntryUserScopeIntegrationTest {
 
     @Autowired
     private LedgerEntryRepository ledgerEntryRepository;
+
+    @Autowired
+    private CategoryGroupRepository categoryGroupRepository;
+
+    @Autowired
+    private CategoryDetailRepository categoryDetailRepository;
 
     @Autowired
     private PaymentMethodRepository paymentMethodRepository;
@@ -265,6 +278,99 @@ class LedgerEntryUserScopeIntegrationTest {
         assertThat(imported.getCategoryGroup().getName()).hasSizeLessThanOrEqualTo(80);
         assertThat(imported.getCategoryDetail()).isNotNull();
         assertThat(imported.getCategoryDetail().getName()).hasSizeLessThanOrEqualTo(80);
+    }
+
+    @Test
+    @Transactional
+    void excelImportCommitReusesFirstDuplicatePaymentAndCategoryName() throws Exception {
+        MockHttpSession hanaSession = loginAndGetSession("hana", false);
+        AppUser hana = appUserRepository.findByLoginId("hana").orElseThrow();
+        LocalDate importDate = LocalDate.of(2040, 2, 4);
+
+        CategoryGroup firstFoodGroup = new CategoryGroup();
+        firstFoodGroup.setOwner(hana);
+        firstFoodGroup.setName("중복식비-2040");
+        firstFoodGroup.setEntryType(EntryType.EXPENSE);
+        firstFoodGroup.setDisplayOrder(0);
+        firstFoodGroup.setActive(true);
+        categoryGroupRepository.save(firstFoodGroup);
+
+        CategoryGroup duplicateFoodGroup = new CategoryGroup();
+        duplicateFoodGroup.setOwner(hana);
+        duplicateFoodGroup.setName("중복식비-2040");
+        duplicateFoodGroup.setEntryType(EntryType.EXPENSE);
+        duplicateFoodGroup.setDisplayOrder(1);
+        duplicateFoodGroup.setActive(true);
+        categoryGroupRepository.save(duplicateFoodGroup);
+
+        CategoryDetail firstLunchDetail = new CategoryDetail();
+        firstLunchDetail.setGroup(firstFoodGroup);
+        firstLunchDetail.setName("중복점심-2040");
+        firstLunchDetail.setDisplayOrder(0);
+        firstLunchDetail.setActive(true);
+        categoryDetailRepository.save(firstLunchDetail);
+
+        CategoryDetail duplicateLunchDetail = new CategoryDetail();
+        duplicateLunchDetail.setGroup(firstFoodGroup);
+        duplicateLunchDetail.setName("중복점심-2040");
+        duplicateLunchDetail.setDisplayOrder(1);
+        duplicateLunchDetail.setActive(true);
+        categoryDetailRepository.save(duplicateLunchDetail);
+
+        PaymentMethod firstLotteCard = new PaymentMethod();
+        firstLotteCard.setOwner(hana);
+        firstLotteCard.setName("중복롯데카드-2040");
+        firstLotteCard.setKind(PaymentMethodKind.CARD);
+        firstLotteCard.setDisplayOrder(0);
+        firstLotteCard.setActive(true);
+        paymentMethodRepository.save(firstLotteCard);
+
+        PaymentMethod duplicateLotteCard = new PaymentMethod();
+        duplicateLotteCard.setOwner(hana);
+        duplicateLotteCard.setName("중복롯데카드-2040");
+        duplicateLotteCard.setKind(PaymentMethodKind.CARD);
+        duplicateLotteCard.setDisplayOrder(1);
+        duplicateLotteCard.setActive(true);
+        paymentMethodRepository.save(duplicateLotteCard);
+
+        Map<String, Object> row = new LinkedHashMap<>();
+        row.put("selected", true);
+        row.put("sourceSheetName", "6월");
+        row.put("entryDate", importDate.toString());
+        row.put("entryTime", null);
+        row.put("title", "플래에서(머리115000+헤어제품15000) 현대아울렛에서 미선이랑 점심식사");
+        row.put("memo", null);
+        row.put("amount", "20000");
+        row.put("entryType", "EXPENSE");
+        row.put("paymentMethodName", "중복롯데카드-2040");
+        row.put("categoryGroupName", "중복식비-2040");
+        row.put("categoryDetailName", "중복점심-2040");
+        row.put("sourceRowNumber", 17);
+
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("rows", List.of(row));
+
+        mockMvc.perform(post("/api/entries/imports/excel/commit")
+                        .with(csrf())
+                        .session(hanaSession)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(payload)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.importedCount").value(1));
+
+        LedgerEntry imported = ledgerEntryRepository.findAllByOwnerIdAndDeletedAtIsNullAndEntryDateBetweenOrderByEntryDateAscIdAsc(
+                        hana.getId(),
+                        importDate,
+                        importDate
+                ).stream()
+                .filter(entry -> entry.getTitle().startsWith("플래에서"))
+                .findFirst()
+                .orElseThrow();
+
+        assertThat(imported.getCategoryGroup().getId()).isEqualTo(firstFoodGroup.getId());
+        assertThat(imported.getCategoryDetail()).isNotNull();
+        assertThat(imported.getCategoryDetail().getId()).isEqualTo(firstLunchDetail.getId());
+        assertThat(imported.getPaymentMethod().getId()).isEqualTo(firstLotteCard.getId());
     }
 
     private MockHttpSession loginAndGetSession(String loginId, boolean rememberDevice) throws Exception {

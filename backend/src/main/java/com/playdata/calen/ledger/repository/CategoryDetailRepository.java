@@ -11,5 +11,7 @@ public interface CategoryDetailRepository extends JpaRepository<CategoryDetail, 
 
     Optional<CategoryDetail> findByGroupIdAndNameIgnoreCase(Long groupId, String name);
 
+    Optional<CategoryDetail> findFirstByGroupIdAndNameIgnoreCaseOrderByIdAsc(Long groupId, String name);
+
     Optional<CategoryDetail> findByIdAndGroupOwnerId(Long id, Long ownerId);
 }

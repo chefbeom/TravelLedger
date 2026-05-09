@@ -657,7 +657,7 @@ public class LedgerExcelImportService {
 
     private CategoryGroup resolveOrCreateCategoryGroup(AppUser owner, LedgerExcelImportRowRequest row, Set<String> createdGroupNames) {
         String name = normalizeImportName(row.categoryGroupName(), DEFAULT_CATEGORY_GROUP_NAME);
-        return categoryGroupRepository.findByOwnerIdAndEntryTypeAndNameIgnoreCase(owner.getId(), row.entryType(), name)
+        return categoryGroupRepository.findFirstByOwnerIdAndEntryTypeAndNameIgnoreCaseOrderByIdAsc(owner.getId(), row.entryType(), name)
                 .orElseGet(() -> {
                     CategoryGroup group = new CategoryGroup();
                     group.setOwner(owner);
@@ -676,7 +676,7 @@ public class LedgerExcelImportService {
             return null;
         }
 
-        return categoryDetailRepository.findByGroupIdAndNameIgnoreCase(group.getId(), detailName)
+        return categoryDetailRepository.findFirstByGroupIdAndNameIgnoreCaseOrderByIdAsc(group.getId(), detailName)
                 .orElseGet(() -> {
                     CategoryDetail detail = new CategoryDetail();
                     detail.setGroup(group);
@@ -690,7 +690,7 @@ public class LedgerExcelImportService {
 
     private PaymentMethod resolveOrCreatePaymentMethod(AppUser owner, LedgerExcelImportRowRequest row, Set<String> createdPaymentNames) {
         String name = normalizeImportName(row.paymentMethodName(), DEFAULT_PAYMENT_METHOD_NAME);
-        return paymentMethodRepository.findByOwnerIdAndNameIgnoreCase(owner.getId(), name)
+        return paymentMethodRepository.findFirstByOwnerIdAndNameIgnoreCaseOrderByIdAsc(owner.getId(), name)
                 .orElseGet(() -> {
                     PaymentMethod paymentMethod = new PaymentMethod();
                     paymentMethod.setOwner(owner);

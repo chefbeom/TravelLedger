@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import {
   fetchTravelPublicTripPhotoCluster,
   fetchTravelPublicTrips,
@@ -13,6 +13,7 @@ import TravelPhotoLightbox from './TravelPhotoLightbox.vue'
 const CLUSTER_PHOTO_PAGE_SIZE = 12
 const LIGHTBOX_SCOPE_GLOBAL = 'global'
 const LIGHTBOX_SCOPE_CLUSTER = 'cluster'
+const BOOKMARK_STORAGE_KEY = 'travelledger-public-trip-bookmarks:v1'
 
 const props = defineProps({
   active: {
@@ -36,12 +37,19 @@ const lightboxPhoto = ref(null)
 const lightboxPhotos = ref([])
 const lightboxScope = ref(LIGHTBOX_SCOPE_GLOBAL)
 const searchQuery = ref('')
+const searchInputRef = ref(null)
+const mapSectionRef = ref(null)
+const catalogSectionRef = ref(null)
 const selectedRegionKey = ref('all')
 const selectedContributorKey = ref('all')
 const sortMode = ref('latest')
 const photoOnly = ref(false)
+const bookmarksOnly = ref(false)
+const bookmarkedPlanIds = ref([])
 const activePlanFilterId = ref('all')
 const publicMapMode = ref('cluster')
+const mapFitRequestKey = ref(0)
+const selectedRailMode = ref('home')
 
 const sortOptions = [
   { value: 'latest', label: '최근 공개순' },
@@ -340,6 +348,65 @@ function handleMapFullscreenChange(nextValue) {
   isMapFullscreen.value = Boolean(nextValue)
 }
 
+function scrollToSection(sectionRef) {
+  nextTick(() => {
+    sectionRef.value?.scrollIntoView({
+      behavior: 'smooth',
+      block: 'start',
+    })
+  })
+}
+
+function requestMapFit() {
+  mapFitRequestKey.value += 1
+}
+
+function focusSearch() {
+  nextTick(() => {
+    searchInputRef.value?.focus()
+  })
+}
+
+function loadBookmarkedPlans() {
+  if (typeof window === 'undefined') {
+    return
+  }
+
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(BOOKMARK_STORAGE_KEY) || '[]')
+    bookmarkedPlanIds.value = Array.isArray(parsed)
+      ? parsed.map((value) => String(value)).filter(Boolean)
+      : []
+  } catch {
+    bookmarkedPlanIds.value = []
+  }
+}
+
+function persistBookmarkedPlans() {
+  if (typeof window === 'undefined') {
+    return
+  }
+
+  window.localStorage.setItem(BOOKMARK_STORAGE_KEY, JSON.stringify(bookmarkedPlanIds.value))
+}
+
+function isPlanBookmarked(planOrId) {
+  const key = getPlanKey(typeof planOrId === 'object' ? planOrId?.planId : planOrId)
+  return Boolean(key) && bookmarkedPlanIds.value.includes(key)
+}
+
+function togglePlanBookmark(planOrId) {
+  const key = getPlanKey(typeof planOrId === 'object' ? planOrId?.planId : planOrId)
+  if (!key) {
+    return
+  }
+
+  bookmarkedPlanIds.value = isPlanBookmarked(key)
+    ? bookmarkedPlanIds.value.filter((id) => id !== key)
+    : [...bookmarkedPlanIds.value, key]
+  persistBookmarkedPlans()
+}
+
 function selectPlan(plan) {
   selectedPlanId.value = plan?.planId ?? null
   activePlanFilterId.value = plan?.planId == null ? 'all' : String(plan.planId)
@@ -360,9 +427,55 @@ function clearCommunityFilters() {
   selectedContributorKey.value = 'all'
   sortMode.value = 'latest'
   photoOnly.value = false
+  bookmarksOnly.value = false
   publicMapMode.value = 'cluster'
+  selectedRailMode.value = 'home'
   clearPlanFilter()
   clearSelection()
+}
+
+function goPublicHome() {
+  clearCommunityFilters()
+  scrollToSection(mapSectionRef)
+  requestMapFit()
+}
+
+function showWholeMap() {
+  clearCommunityFilters()
+  selectedRailMode.value = 'map'
+  scrollToSection(mapSectionRef)
+  requestMapFit()
+}
+
+function toggleBookmarksOnly() {
+  bookmarksOnly.value = !bookmarksOnly.value
+  selectedRailMode.value = bookmarksOnly.value ? 'bookmarks' : 'map'
+  if (bookmarksOnly.value) {
+    clearPlanFilter()
+    clearSelection()
+    scrollToSection(catalogSectionRef)
+  } else {
+    scrollToSection(mapSectionRef)
+  }
+  requestMapFit()
+}
+
+function handleSearchSubmit() {
+  if (!normalizeText(searchQuery.value)) {
+    focusSearch()
+    return
+  }
+
+  clearPlanFilter()
+  selectedRailMode.value = 'map'
+  scrollToSection(mapSectionRef)
+  requestMapFit()
+}
+
+function clearSearch() {
+  searchQuery.value = ''
+  focusSearch()
+  requestMapFit()
 }
 
 function normalizeText(value) {
@@ -466,6 +579,10 @@ function comparePlans(left, right) {
 
 function matchesControlsForPlan(plan) {
   if (activePlanFilterId.value !== 'all' && getPlanKey(plan?.planId) !== String(activePlanFilterId.value)) {
+    return false
+  }
+
+  if (bookmarksOnly.value && !isPlanBookmarked(plan)) {
     return false
   }
 
@@ -717,6 +834,22 @@ const atlasHighlights = computed(() => [
 
 const topRegionOptions = computed(() => regionOptions.value.slice(0, 6))
 const visibleCatalogPlans = computed(() => visiblePlans.value.slice(0, 18))
+const bookmarkedPlanCount = computed(() =>
+  publicPlans.value.filter((plan) => isPlanBookmarked(plan)).length,
+)
+
+const activeRailMode = computed(() => {
+  if (bookmarksOnly.value) {
+    return 'bookmarks'
+  }
+  if (selectedRailMode.value === 'map') {
+    return 'map'
+  }
+  if (hasActiveFilters.value) {
+    return 'map'
+  }
+  return 'home'
+})
 
 const hasActiveFilters = computed(() =>
   Boolean(normalizeText(searchQuery.value))
@@ -724,6 +857,7 @@ const hasActiveFilters = computed(() =>
     || selectedContributorKey.value !== 'all'
     || sortMode.value !== 'latest'
     || photoOnly.value
+    || bookmarksOnly.value
     || activePlanFilterId.value !== 'all',
 )
 
@@ -850,6 +984,7 @@ watch(
     selectedRegionKey.value,
     selectedContributorKey.value,
     photoOnly.value,
+    bookmarksOnly.value,
     activePlanFilterId.value,
   ].join('|'),
   () => {
@@ -869,6 +1004,7 @@ watch(
 )
 
 onMounted(() => {
+  loadBookmarkedPlans()
   if (props.active) {
     loadOverview()
   }
@@ -878,37 +1014,52 @@ onMounted(() => {
 <template>
   <div class="travel-public-app">
     <aside class="travel-public-rail" aria-label="공개 여행 탐색">
-      <button class="travel-public-rail__logo" type="button" title="공개 여행 홈" @click="clearCommunityFilters">
+      <button class="travel-public-rail__logo" type="button" title="공개 여행 홈" @click="goPublicHome">
         <span>TL</span>
       </button>
-      <button class="travel-public-rail__button is-active" type="button" title="홈" @click="clearCommunityFilters">
+      <button
+        class="travel-public-rail__button"
+        :class="{ 'is-active': activeRailMode === 'home' }"
+        type="button"
+        title="홈"
+        @click="goPublicHome"
+      >
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11.5 12 4l8 7.5V20a1 1 0 0 1-1 1h-4.5v-6h-5v6H5a1 1 0 0 1-1-1z" /></svg>
       </button>
-      <button class="travel-public-rail__button" type="button" title="전체 지도" @click="clearPlanFilter">
+      <button
+        class="travel-public-rail__button"
+        :class="{ 'is-active': activeRailMode === 'map' }"
+        type="button"
+        title="전체 지도"
+        @click="showWholeMap"
+      >
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 6 5-2 6 2 5-2v14l-5 2-6-2-5 2zM9 4v14M15 6v14" /></svg>
       </button>
       <button
         class="travel-public-rail__button"
-        :class="{ 'is-active': photoOnly }"
+        :class="{ 'is-active': activeRailMode === 'bookmarks' }"
         type="button"
-        title="사진 있는 여행"
-        @click="photoOnly = !photoOnly"
+        title="북마크 여행"
+        @click="toggleBookmarksOnly"
       >
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 4h12a1 1 0 0 1 1 1v16l-7-4-7 4V5a1 1 0 0 1 1-1z" /></svg>
+        <span v-if="bookmarkedPlanCount" class="travel-public-rail__badge">{{ bookmarkedPlanCount }}</span>
       </button>
     </aside>
 
     <main class="travel-public-canvas">
-      <form class="travel-public-top-search" @submit.prevent>
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m21 21-4.2-4.2M10.8 18a7.2 7.2 0 1 1 0-14.4 7.2 7.2 0 0 1 0 14.4z" /></svg>
-        <input v-model="searchQuery" type="search" placeholder="검색" aria-label="공개 여행 검색" />
-        <button v-if="searchQuery" type="button" @click="searchQuery = ''">지우기</button>
+      <form class="travel-public-top-search" @submit.prevent="handleSearchSubmit">
+        <button class="travel-public-top-search__submit" type="submit" title="검색">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m21 21-4.2-4.2M10.8 18a7.2 7.2 0 1 1 0-14.4 7.2 7.2 0 0 1 0 14.4z" /></svg>
+        </button>
+        <input ref="searchInputRef" v-model="searchQuery" type="search" placeholder="검색" aria-label="공개 여행 검색" />
+        <button v-if="searchQuery" type="button" @click="clearSearch">지우기</button>
       </form>
 
       <div v-if="overviewErrorMessage" class="feedback feedback--error">{{ overviewErrorMessage }}</div>
       <div v-if="detailErrorMessage" class="feedback feedback--error">{{ detailErrorMessage }}</div>
 
-      <section class="travel-public-map-card">
+      <section ref="mapSectionRef" class="travel-public-map-card">
         <div class="travel-public-map-card__intro">
           <span>PUBLIC ATLAS</span>
           <strong>여행자들이 공개한 사진 지도</strong>
@@ -931,6 +1082,7 @@ onMounted(() => {
             :selected-cluster-id="selectedClusterSummary?.id ?? null"
             :selected-photo-id="selectedPhotoId"
             :display-mode="publicMapMode"
+            :fit-request-key="mapFitRequestKey"
             tile-provider="publicLight"
             @select-cluster="handleSelectCluster"
             @select-photo-pin="handleSelectPhotoPin"
@@ -995,6 +1147,15 @@ onMounted(() => {
               </button>
               <button v-if="selectedClusterPlan" type="button" @click="selectPlan(selectedClusterPlan)">
                 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4h10v16H7zM10 8h4M10 12h4M10 16h4" /></svg>
+              </button>
+              <button
+                v-if="selectedClusterPlan"
+                type="button"
+                :class="{ 'is-active': isPlanBookmarked(selectedClusterPlan) }"
+                :title="isPlanBookmarked(selectedClusterPlan) ? '북마크 해제' : '북마크 저장'"
+                @click="togglePlanBookmark(selectedClusterPlan)"
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 4h12a1 1 0 0 1 1 1v16l-7-4-7 4V5a1 1 0 0 1 1-1z" /></svg>
               </button>
               <button type="button" @click="selectedContributorKey = resolveContributorKey(selectedClusterSummary)">
                 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zm-7 9a7 7 0 0 1 14 0" /></svg>
@@ -1106,6 +1267,9 @@ onMounted(() => {
           <div class="travel-public-story-actions">
             <button type="button" :disabled="!activeStoryPlan" @click="selectActiveStoryPlan">지도에서 보기</button>
             <button type="button" :disabled="!activeStoryPlan" @click="selectPlanContributor(activeStoryPlan)">작성자 여행</button>
+            <button type="button" :disabled="!activeStoryPlan" @click="togglePlanBookmark(activeStoryPlan)">
+              {{ activeStoryPlan && isPlanBookmarked(activeStoryPlan) ? '북마크 해제' : '북마크 저장' }}
+            </button>
           </div>
         </article>
 
@@ -1189,7 +1353,7 @@ onMounted(() => {
         <p v-else class="travel-public-empty">조건에 맞는 공개 스팟이 없습니다.</p>
       </section>
 
-      <section class="travel-public-catalog">
+      <section ref="catalogSectionRef" class="travel-public-catalog">
         <div class="travel-public-catalog__main">
           <div class="travel-public-shelf__head">
             <h2>공개 여행 목록</h2>
@@ -1217,6 +1381,7 @@ onMounted(() => {
                 <strong>{{ plan.planName }}</strong>
                 <small>{{ resolvePlanLocation(plan) }}</small>
                 <small>{{ formatDate(plan.startDate) }} - {{ formatDate(plan.endDate) }}</small>
+                <small v-if="isPlanBookmarked(plan)">북마크 저장됨</small>
               </div>
               <div class="travel-public-trip-card__stats">
                 <small>사진 {{ plan.mediaItemCount }}장</small>

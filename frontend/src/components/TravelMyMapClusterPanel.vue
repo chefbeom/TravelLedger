@@ -68,6 +68,10 @@ const props = defineProps({
     type: String,
     default: 'osm',
   },
+  fitRequestKey: {
+    type: [Number, String],
+    default: 0,
+  },
 })
 
 const emit = defineEmits([
@@ -1161,6 +1165,18 @@ watch(
     queueMapResize()
     requestAnimationFrame(() => mapInstance?.invalidateSize(false))
     scheduleRenderClusters(0)
+  },
+)
+
+watch(
+  () => props.fitRequestKey,
+  () => {
+    if (!mapInstance) {
+      return
+    }
+
+    fitToAll({ animate: true })
+    queueMapResize()
   },
 )
 </script>

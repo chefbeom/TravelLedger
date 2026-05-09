@@ -3620,6 +3620,7 @@ button {
 }
 
 .travel-public-rail__button {
+  position: relative;
   width: 48px;
   height: 48px;
   border-radius: 18px;
@@ -3643,6 +3644,24 @@ button {
   background: rgba(255, 255, 255, 0.08);
   opacity: 1;
   transform: translateY(-1px);
+}
+
+.travel-public-rail__badge {
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+  display: grid;
+  min-width: 18px;
+  height: 18px;
+  place-items: center;
+  padding: 0 5px;
+  border: 2px solid #020202;
+  border-radius: 999px;
+  background: #d6ff35;
+  color: #101828;
+  font-size: 0.68rem;
+  font-weight: 950;
+  line-height: 1;
 }
 
 .travel-public-canvas {
@@ -3680,6 +3699,16 @@ button {
   stroke-linecap: round;
 }
 
+.travel-public-top-search__submit {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  margin: 0;
+  padding: 0;
+  cursor: pointer;
+}
+
 .travel-public-top-search input {
   min-width: 0;
   border: 0;
@@ -3699,6 +3728,7 @@ button {
   background: transparent;
   color: rgba(255, 255, 255, 0.78);
   font-weight: 800;
+  cursor: pointer;
 }
 
 .travel-public-map-card {
@@ -3946,7 +3976,7 @@ button {
 
 .travel-public-map-drawer__actions {
   display: grid;
-  grid-template-columns: repeat(4, 58px);
+  grid-template-columns: repeat(auto-fit, minmax(48px, 52px));
   justify-content: space-between;
   gap: 16px;
   padding: 10px 20px 22px;
@@ -3962,6 +3992,12 @@ button {
   background: rgba(255, 255, 255, 0.08);
   color: #fff;
   cursor: pointer;
+}
+
+.travel-public-map-drawer__actions button.is-active {
+  border-color: rgba(214, 255, 53, 0.9);
+  background: rgba(214, 255, 53, 0.18);
+  color: #d6ff35;
 }
 
 .travel-public-map-drawer__actions svg {

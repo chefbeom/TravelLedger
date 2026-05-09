@@ -8,6 +8,7 @@ import SummaryCard from './SummaryCard.vue'
 import { useTableSelection } from '../lib/tableSelection'
 
 const chartPalette = ['#3182f6', '#12b886', '#f59f00', '#ff6b6b', '#7c5cff', '#00b8d9', '#fd7e14', '#5c7cfa']
+const SEARCH_OTHER_FILTER_VALUE = '__OTHER__'
 const emit = defineEmits([
   'change-search-page',
   'change-trash-page',
@@ -192,6 +193,17 @@ const monthOfYearChartItems = computed(() =>
 
 const searchPageLabel = computed(() => Math.max(props.searchPageInfo.totalPages ?? 0, 1))
 const trashPageLabel = computed(() => Math.max(props.trashPageInfo.totalPages ?? 0, 1))
+const searchCategoryGroupOptions = computed(() =>
+  props.categories.filter((group) => !props.searchForm.entryType || group.entryType === props.searchForm.entryType),
+)
+const searchCategoryDetailOptions = computed(() => {
+  if (props.searchForm.categoryGroupId && props.searchForm.categoryGroupId !== SEARCH_OTHER_FILTER_VALUE) {
+    const selectedGroup = props.categories.find((group) => String(group.id) === String(props.searchForm.categoryGroupId))
+    return selectedGroup?.details ?? []
+  }
+
+  return searchCategoryGroupOptions.value.flatMap((group) => group.details ?? [])
+})
 const searchEditGroupOptions = computed(() =>
   props.categories.filter((group) => group.entryType === searchEditDraft.entryType),
 )
@@ -208,6 +220,39 @@ function normalizeAmountInput(value) {
   }
   const amount = Number(normalized)
   return Number.isFinite(amount) ? String(amount) : normalized
+}
+
+function resetSearchDetailFilterIfInvalid() {
+  const detailId = props.searchForm.categoryDetailId
+  if (!detailId || detailId === SEARCH_OTHER_FILTER_VALUE) {
+    return
+  }
+
+  const isValid = searchCategoryDetailOptions.value.some((detail) => String(detail.id) === String(detailId))
+  if (!isValid) {
+    props.searchForm.categoryDetailId = ''
+  }
+}
+
+function formatSearchDetailFilterLabel(detail) {
+  const group = props.categories.find((item) => String(item.id) === String(detail.groupId))
+  return group ? `${group.name} / ${detail.name}` : detail.name
+}
+
+function handleSearchEntryTypeFilterChange() {
+  const groupId = props.searchForm.categoryGroupId
+  if (
+    groupId
+    && groupId !== SEARCH_OTHER_FILTER_VALUE
+    && !searchCategoryGroupOptions.value.some((group) => String(group.id) === String(groupId))
+  ) {
+    props.searchForm.categoryGroupId = ''
+  }
+  resetSearchDetailFilterIfInvalid()
+}
+
+function handleSearchCategoryGroupFilterChange() {
+  resetSearchDetailFilterIfInvalid()
 }
 
 function selectFirstSearchEditDetail() {
@@ -445,7 +490,7 @@ watch(
 
           <label class="field">
             <span class="field__label">구분</span>
-            <select v-model="searchForm.entryType">
+            <select v-model="searchForm.entryType" @change="handleSearchEntryTypeFilterChange">
               <option value="">전체</option>
               <option value="EXPENSE">지출</option>
               <option value="INCOME">수입</option>
@@ -456,6 +501,7 @@ watch(
             <span class="field__label">결제수단</span>
             <select v-model="searchForm.paymentMethodId">
               <option value="">전체</option>
+              <option :value="SEARCH_OTHER_FILTER_VALUE">기타(현재 목록 제외)</option>
               <option v-for="payment in paymentMethods" :key="payment.id" :value="String(payment.id)">
                 {{ payment.name }}
               </option>
@@ -464,10 +510,22 @@ watch(
 
           <label class="field">
             <span class="field__label">대분류</span>
-            <select v-model="searchForm.categoryGroupId">
+            <select v-model="searchForm.categoryGroupId" @change="handleSearchCategoryGroupFilterChange">
               <option value="">전체</option>
-              <option v-for="group in categories" :key="group.id" :value="String(group.id)">
+              <option :value="SEARCH_OTHER_FILTER_VALUE">기타(현재 목록 제외)</option>
+              <option v-for="group in searchCategoryGroupOptions" :key="group.id" :value="String(group.id)">
                 {{ group.entryType === 'INCOME' ? '수입' : '지출' }} / {{ group.name }}
+              </option>
+            </select>
+          </label>
+
+          <label class="field">
+            <span class="field__label">소분류</span>
+            <select v-model="searchForm.categoryDetailId">
+              <option value="">전체</option>
+              <option :value="SEARCH_OTHER_FILTER_VALUE">기타(현재 목록 제외)</option>
+              <option v-for="detail in searchCategoryDetailOptions" :key="detail.id" :value="String(detail.id)">
+                {{ formatSearchDetailFilterLabel(detail) }}
               </option>
             </select>
           </label>

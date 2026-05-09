@@ -53,8 +53,18 @@ public interface LedgerEntryRepository extends JpaRepository<LedgerEntry, Long> 
                             or lower(paymentMethod.name) like concat('%', :keyword, '%')
                       )
                       and (:entryType is null or entry.entryType = :entryType)
-                      and (:paymentMethodId is null or paymentMethod.id = :paymentMethodId)
-                      and (:categoryGroupId is null or categoryGroup.id = :categoryGroupId)
+                      and (
+                            (:paymentMethodOther = true and paymentMethod.active = false)
+                            or (:paymentMethodOther = false and (:paymentMethodId is null or paymentMethod.id = :paymentMethodId))
+                      )
+                      and (
+                            (:categoryGroupOther = true and categoryGroup.active = false)
+                            or (:categoryGroupOther = false and (:categoryGroupId is null or categoryGroup.id = :categoryGroupId))
+                      )
+                      and (
+                            (:categoryDetailOther = true and (categoryDetail is null or categoryDetail.active = false))
+                            or (:categoryDetailOther = false and (:categoryDetailId is null or categoryDetail.id = :categoryDetailId))
+                      )
                       and (:minAmount is null or entry.amount >= :minAmount)
                       and (:maxAmount is null or entry.amount <= :maxAmount)
                     """,
@@ -76,8 +86,18 @@ public interface LedgerEntryRepository extends JpaRepository<LedgerEntry, Long> 
                             or lower(paymentMethod.name) like concat('%', :keyword, '%')
                       )
                       and (:entryType is null or entry.entryType = :entryType)
-                      and (:paymentMethodId is null or paymentMethod.id = :paymentMethodId)
-                      and (:categoryGroupId is null or categoryGroup.id = :categoryGroupId)
+                      and (
+                            (:paymentMethodOther = true and paymentMethod.active = false)
+                            or (:paymentMethodOther = false and (:paymentMethodId is null or paymentMethod.id = :paymentMethodId))
+                      )
+                      and (
+                            (:categoryGroupOther = true and categoryGroup.active = false)
+                            or (:categoryGroupOther = false and (:categoryGroupId is null or categoryGroup.id = :categoryGroupId))
+                      )
+                      and (
+                            (:categoryDetailOther = true and (categoryDetail is null or categoryDetail.active = false))
+                            or (:categoryDetailOther = false and (:categoryDetailId is null or categoryDetail.id = :categoryDetailId))
+                      )
                       and (:minAmount is null or entry.amount >= :minAmount)
                       and (:maxAmount is null or entry.amount <= :maxAmount)
                     """
@@ -90,6 +110,10 @@ public interface LedgerEntryRepository extends JpaRepository<LedgerEntry, Long> 
             @Param("entryType") com.playdata.calen.ledger.domain.EntryType entryType,
             @Param("paymentMethodId") Long paymentMethodId,
             @Param("categoryGroupId") Long categoryGroupId,
+            @Param("categoryDetailId") Long categoryDetailId,
+            @Param("paymentMethodOther") boolean paymentMethodOther,
+            @Param("categoryGroupOther") boolean categoryGroupOther,
+            @Param("categoryDetailOther") boolean categoryDetailOther,
             @Param("minAmount") java.math.BigDecimal minAmount,
             @Param("maxAmount") java.math.BigDecimal maxAmount,
             Pageable pageable
@@ -113,8 +137,18 @@ public interface LedgerEntryRepository extends JpaRepository<LedgerEntry, Long> 
                     or lower(paymentMethod.name) like concat('%', :keyword, '%')
               )
               and (:entryTypeFilter is null or entry.entryType = :entryTypeFilter)
-              and (:paymentMethodId is null or paymentMethod.id = :paymentMethodId)
-              and (:categoryGroupId is null or categoryGroup.id = :categoryGroupId)
+              and (
+                    (:paymentMethodOther = true and paymentMethod.active = false)
+                    or (:paymentMethodOther = false and (:paymentMethodId is null or paymentMethod.id = :paymentMethodId))
+              )
+              and (
+                    (:categoryGroupOther = true and categoryGroup.active = false)
+                    or (:categoryGroupOther = false and (:categoryGroupId is null or categoryGroup.id = :categoryGroupId))
+              )
+              and (
+                    (:categoryDetailOther = true and (categoryDetail is null or categoryDetail.active = false))
+                    or (:categoryDetailOther = false and (:categoryDetailId is null or categoryDetail.id = :categoryDetailId))
+              )
               and (:minAmount is null or entry.amount >= :minAmount)
               and (:maxAmount is null or entry.amount <= :maxAmount)
               and entry.entryType = :entryTypeToSum
@@ -127,6 +161,10 @@ public interface LedgerEntryRepository extends JpaRepository<LedgerEntry, Long> 
             @Param("entryTypeFilter") com.playdata.calen.ledger.domain.EntryType entryTypeFilter,
             @Param("paymentMethodId") Long paymentMethodId,
             @Param("categoryGroupId") Long categoryGroupId,
+            @Param("categoryDetailId") Long categoryDetailId,
+            @Param("paymentMethodOther") boolean paymentMethodOther,
+            @Param("categoryGroupOther") boolean categoryGroupOther,
+            @Param("categoryDetailOther") boolean categoryDetailOther,
             @Param("minAmount") java.math.BigDecimal minAmount,
             @Param("maxAmount") java.math.BigDecimal maxAmount,
             @Param("entryTypeToSum") com.playdata.calen.ledger.domain.EntryType entryTypeToSum

@@ -73,6 +73,7 @@ const compareUnitLabels = {
 const today = toIsoDate(new Date())
 const quickAmountButtons = [10000, 30000, 50000, 100000]
 const SEARCH_PAGE_SIZE = 100
+const SEARCH_OTHER_FILTER_VALUE = '__OTHER__'
 const csvExportOptions = [
   { value: 'ALL', label: '전체 데이터' },
   { value: 'LAST_6_MONTHS', label: '최근 6개월' },
@@ -200,6 +201,7 @@ const searchForm = reactive({
   entryType: '',
   paymentMethodId: '',
   categoryGroupId: '',
+  categoryDetailId: '',
   minAmount: '',
   maxAmount: '',
   sortBy: 'DATE_DESC',
@@ -527,6 +529,7 @@ watch(
     searchForm.entryType,
     searchForm.paymentMethodId,
     searchForm.categoryGroupId,
+    searchForm.categoryDetailId,
     searchForm.minAmount,
     searchForm.maxAmount,
     searchForm.sortBy,
@@ -854,13 +857,20 @@ async function loadTitleSuggestionSearch() {
 
 async function loadSearchResults(page = 0) {
   const range = statsRange.value
+  const paymentMethodOther = searchForm.paymentMethodId === SEARCH_OTHER_FILTER_VALUE
+  const categoryGroupOther = searchForm.categoryGroupId === SEARCH_OTHER_FILTER_VALUE
+  const categoryDetailOther = searchForm.categoryDetailId === SEARCH_OTHER_FILTER_VALUE
   const response = await fetchEntrySearchPage({
     from: range.from,
     to: range.to,
     keyword: searchForm.keyword,
     entryType: searchForm.entryType,
-    paymentMethodId: searchForm.paymentMethodId,
-    categoryGroupId: searchForm.categoryGroupId,
+    paymentMethodId: paymentMethodOther ? '' : searchForm.paymentMethodId,
+    categoryGroupId: categoryGroupOther ? '' : searchForm.categoryGroupId,
+    categoryDetailId: categoryDetailOther ? '' : searchForm.categoryDetailId,
+    paymentMethodOther: paymentMethodOther ? true : '',
+    categoryGroupOther: categoryGroupOther ? true : '',
+    categoryDetailOther: categoryDetailOther ? true : '',
     minAmount: searchForm.minAmount,
     maxAmount: searchForm.maxAmount,
     sortBy: searchForm.sortBy,

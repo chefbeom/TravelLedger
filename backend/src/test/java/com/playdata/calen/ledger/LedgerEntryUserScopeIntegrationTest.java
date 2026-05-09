@@ -373,6 +373,108 @@ class LedgerEntryUserScopeIntegrationTest {
         assertThat(imported.getPaymentMethod().getId()).isEqualTo(firstLotteCard.getId());
     }
 
+    @Test
+    @Transactional
+    void searchEntriesCanFilterOtherInactiveClassifications() throws Exception {
+        MockHttpSession hanaSession = loginAndGetSession("hana", false);
+        AppUser hana = appUserRepository.findByLoginId("hana").orElseThrow();
+        LocalDate searchDate = LocalDate.of(2041, 3, 15);
+
+        PaymentMethod activePayment = savePaymentMethod(hana, "active-card-2041", true);
+        PaymentMethod inactivePayment = savePaymentMethod(hana, "inactive-card-2041", false);
+        CategoryGroup activeGroup = saveCategoryGroup(hana, "active-group-2041", true);
+        CategoryGroup inactiveGroup = saveCategoryGroup(hana, "inactive-group-2041", false);
+        CategoryDetail activeDetail = saveCategoryDetail(activeGroup, "active-detail-2041", true);
+        CategoryDetail inactiveDetail = saveCategoryDetail(activeGroup, "inactive-detail-2041", false);
+
+        saveLedgerEntry(hana, searchDate, "normal active row", activePayment, activeGroup, activeDetail);
+        saveLedgerEntry(hana, searchDate, "other payment row", inactivePayment, activeGroup, activeDetail);
+        saveLedgerEntry(hana, searchDate, "other group row", activePayment, inactiveGroup, null);
+        saveLedgerEntry(hana, searchDate, "other detail row", activePayment, activeGroup, inactiveDetail);
+        saveLedgerEntry(hana, searchDate, "empty detail row", activePayment, activeGroup, null);
+
+        mockMvc.perform(get("/api/entries/search")
+                        .session(hanaSession)
+                        .param("from", searchDate.toString())
+                        .param("to", searchDate.toString())
+                        .param("paymentMethodOther", "true"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.summary.count").value(1))
+                .andExpect(jsonPath("$.content[0].title").value("other payment row"));
+
+        mockMvc.perform(get("/api/entries/search")
+                        .session(hanaSession)
+                        .param("from", searchDate.toString())
+                        .param("to", searchDate.toString())
+                        .param("categoryGroupOther", "true"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.summary.count").value(1))
+                .andExpect(jsonPath("$.content[0].title").value("other group row"));
+
+        mockMvc.perform(get("/api/entries/search")
+                        .session(hanaSession)
+                        .param("from", searchDate.toString())
+                        .param("to", searchDate.toString())
+                        .param("categoryDetailOther", "true")
+                        .param("sortBy", "DATE_ASC"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.summary.count").value(3))
+                .andExpect(jsonPath("$.content[*].title", org.hamcrest.Matchers.containsInAnyOrder(
+                        "other group row",
+                        "other detail row",
+                        "empty detail row"
+                )));
+    }
+
+    private PaymentMethod savePaymentMethod(AppUser owner, String name, boolean active) {
+        PaymentMethod paymentMethod = new PaymentMethod();
+        paymentMethod.setOwner(owner);
+        paymentMethod.setName(name);
+        paymentMethod.setKind(PaymentMethodKind.CARD);
+        paymentMethod.setDisplayOrder(0);
+        paymentMethod.setActive(active);
+        return paymentMethodRepository.save(paymentMethod);
+    }
+
+    private CategoryGroup saveCategoryGroup(AppUser owner, String name, boolean active) {
+        CategoryGroup group = new CategoryGroup();
+        group.setOwner(owner);
+        group.setName(name);
+        group.setEntryType(EntryType.EXPENSE);
+        group.setDisplayOrder(0);
+        group.setActive(active);
+        return categoryGroupRepository.save(group);
+    }
+
+    private CategoryDetail saveCategoryDetail(CategoryGroup group, String name, boolean active) {
+        CategoryDetail detail = new CategoryDetail();
+        detail.setGroup(group);
+        detail.setName(name);
+        detail.setDisplayOrder(0);
+        detail.setActive(active);
+        return categoryDetailRepository.save(detail);
+    }
+
+    private LedgerEntry saveLedgerEntry(
+            AppUser owner,
+            LocalDate entryDate,
+            String title,
+            PaymentMethod paymentMethod,
+            CategoryGroup categoryGroup,
+            CategoryDetail categoryDetail
+    ) {
+        LedgerEntry entry = new LedgerEntry();
+        entry.setOwner(owner);
+        entry.setEntryDate(entryDate);
+        entry.setTitle(title);
+        entry.setAmount(new java.math.BigDecimal("1000"));
+        entry.setEntryType(EntryType.EXPENSE);
+        entry.setPaymentMethod(paymentMethod);
+        entry.setCategoryGroup(categoryGroup);
+        entry.setCategoryDetail(categoryDetail);
+        return ledgerEntryRepository.save(entry);
+    }
+
     private MockHttpSession loginAndGetSession(String loginId, boolean rememberDevice) throws Exception {
         MvcResult result = login(loginId, rememberDevice);
         MockHttpSession session = (MockHttpSession) result.getRequest().getSession(false);

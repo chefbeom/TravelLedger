@@ -509,6 +509,12 @@ function resolveContributorKey(source) {
   return normalizeKey(resolveContributorLabel(source))
 }
 
+function formatShareVisibilityLabel(source) {
+  return source?.shareVisibility === 'RESTRICTED' || source?.viewerShareId
+    ? '나에게 공유됨'
+    : '전체 공개'
+}
+
 function resolvePlanLocation(plan) {
   const clusters = clustersByPlanId.value.get(getPlanKey(plan?.planId)) ?? []
   const primaryCluster = clusters.find((cluster) => cluster.country || cluster.region || cluster.placeName)
@@ -1062,8 +1068,8 @@ onMounted(() => {
       <section ref="mapSectionRef" class="travel-public-map-card">
         <div class="travel-public-map-card__intro">
           <span>PUBLIC ATLAS</span>
-          <strong>여행자들이 공개한 사진 지도</strong>
-          <small>지도에서 스팟을 고르고, 작성자와 지역 필터로 이어지는 공개 여행 커뮤니티입니다.</small>
+          <strong>공개·공유 여행 사진 지도</strong>
+          <small>전체 공개 여행과 나에게 공유된 여행을 같은 지도에서 탐색합니다.</small>
         </div>
         <div class="travel-public-map-card__stats">
           <span>{{ visibleSummary.planCount }} 여행</span>
@@ -1139,7 +1145,7 @@ onMounted(() => {
             <div class="travel-public-map-drawer__copy">
               <strong>{{ selectedClusterTitle }}</strong>
               <span>{{ selectedClusterLocationLabel }}</span>
-              <small>{{ selectedClusterContributor }} · {{ selectedClusterSummary?.planName || selectedClusterPlan?.planName || '공개 여행' }}</small>
+              <small>{{ formatShareVisibilityLabel(selectedClusterSummary) }} · {{ selectedClusterContributor }} · {{ selectedClusterSummary?.planName || selectedClusterPlan?.planName || '여행' }}</small>
             </div>
             <div class="travel-public-map-drawer__actions">
               <button type="button" @click="openPhotoLightbox(selectedPhoto, { scope: LIGHTBOX_SCOPE_CLUSTER })">
@@ -1233,14 +1239,14 @@ onMounted(() => {
       <section class="travel-public-storyline">
         <article class="travel-public-story-panel travel-public-story-panel--lead">
           <div class="travel-public-story-panel__head">
-            <span>{{ activeStoryPlan ? '선택한 공개 여행' : '공개 여행' }}</span>
+            <span>{{ activeStoryPlan ? formatShareVisibilityLabel(activeStoryPlan) : '여행 공유' }}</span>
             <strong>{{ activeStoryPlan?.planName || '공개된 여행을 기다리는 중입니다' }}</strong>
           </div>
           <p>
             {{
               activeStoryPlan
                 ? resolvePlanLocation(activeStoryPlan)
-                : '여행 로그를 퍼블릭으로 공개하면 이 지도와 커뮤니티 목록에 표시됩니다.'
+                : '여행을 전체 공개하거나 특정 사용자·그룹에게 공유하면 이 지도에서 확인할 수 있습니다.'
             }}
           </p>
           <div class="travel-public-story-kpis">
@@ -1303,7 +1309,7 @@ onMounted(() => {
         <article class="travel-public-story-panel travel-public-story-panel--photos">
           <div class="travel-public-story-panel__head">
             <span>최근 사진</span>
-            <strong>{{ activeStoryPlan ? activeStoryPlan.planName : '전체 공개 사진' }}</strong>
+            <strong>{{ activeStoryPlan ? activeStoryPlan.planName : '공유된 사진' }}</strong>
           </div>
           <div v-if="activeStoryPhotoPins.length" class="travel-public-mini-photo-grid">
             <button
@@ -1356,7 +1362,7 @@ onMounted(() => {
       <section ref="catalogSectionRef" class="travel-public-catalog">
         <div class="travel-public-catalog__main">
           <div class="travel-public-shelf__head">
-            <h2>공개 여행 목록</h2>
+            <h2>공유 여행 목록</h2>
             <span>{{ visiblePlans.length }} / {{ publicPlans.length }}</span>
           </div>
           <div v-if="visibleCatalogPlans.length" class="travel-public-trip-grid">
@@ -1379,6 +1385,7 @@ onMounted(() => {
               <div class="travel-public-trip-card__body">
                 <span>{{ resolveContributorLabel(plan) }}</span>
                 <strong>{{ plan.planName }}</strong>
+                <small>{{ formatShareVisibilityLabel(plan) }}</small>
                 <small>{{ resolvePlanLocation(plan) }}</small>
                 <small>{{ formatDate(plan.startDate) }} - {{ formatDate(plan.endDate) }}</small>
                 <small v-if="isPlanBookmarked(plan)">북마크 저장됨</small>

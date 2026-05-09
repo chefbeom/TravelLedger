@@ -15,7 +15,11 @@ public interface TravelPlanShareRepository extends JpaRepository<TravelPlanShare
 
     Page<TravelPlanShare> findAllByRecipientIdOrderByCreatedAtDescIdDesc(Long recipientId, Pageable pageable);
 
+    List<TravelPlanShare> findAllByPlanIdAndSharedByIdOrderByCreatedAtDescIdDesc(Long planId, Long sharedById);
+
     Optional<TravelPlanShare> findByIdAndRecipientId(Long id, Long recipientId);
+
+    Optional<TravelPlanShare> findByIdAndPlanIdAndSharedById(Long id, Long planId, Long sharedById);
 
     void deleteAllByPlanId(Long planId);
 }

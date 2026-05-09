@@ -3,6 +3,7 @@ package com.playdata.calen.travel.repository;
 import com.playdata.calen.travel.domain.TravelExpenseRecord;
 import com.playdata.calen.travel.domain.TravelMediaType;
 import com.playdata.calen.travel.domain.TravelRecordType;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.math.BigDecimal;
@@ -34,6 +35,8 @@ public interface TravelExpenseRecordRepository extends JpaRepository<TravelExpen
     List<TravelExpenseRecord> findAllByPlanOwnerIdAndRecordType(Long ownerId, TravelRecordType recordType);
 
     List<TravelExpenseRecord> findAllByPlanPublicSharedTrueAndRecordType(TravelRecordType recordType);
+
+    List<TravelExpenseRecord> findAllByPlanIdInAndRecordType(Collection<Long> planIds, TravelRecordType recordType);
 
     List<TravelExpenseRecord> findAllByRecordTypeAndSharedWithCommunityTrueOrderByExpenseDateDescIdDesc(TravelRecordType recordType);
 

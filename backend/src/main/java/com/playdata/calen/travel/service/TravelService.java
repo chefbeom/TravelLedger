@@ -22,6 +22,8 @@ import com.playdata.calen.travel.domain.TravelRouteLineStyle;
 import com.playdata.calen.travel.domain.TravelRouteSegment;
 import com.playdata.calen.travel.domain.TravelRouteSourceType;
 import com.playdata.calen.travel.domain.TravelRouteTransportMode;
+import com.playdata.calen.travel.domain.TravelShareGroup;
+import com.playdata.calen.travel.domain.TravelShareGroupMember;
 import com.playdata.calen.travel.dto.TravelBudgetItemRequest;
 import com.playdata.calen.travel.dto.TravelBudgetItemResponse;
 import com.playdata.calen.travel.dto.TravelCategoryCatalogResponse;
@@ -60,6 +62,9 @@ import com.playdata.calen.travel.dto.TravelRoutePointRequest;
 import com.playdata.calen.travel.dto.TravelRoutePointResponse;
 import com.playdata.calen.travel.dto.TravelRouteSegmentRequest;
 import com.playdata.calen.travel.dto.TravelRouteSegmentResponse;
+import com.playdata.calen.travel.dto.TravelShareGroupRequest;
+import com.playdata.calen.travel.dto.TravelShareGroupResponse;
+import com.playdata.calen.travel.dto.TravelShareRecipientResponse;
 import com.playdata.calen.travel.dto.TravelSharedExhibitDetailResponse;
 import com.playdata.calen.travel.dto.TravelSharedExhibitPageResponse;
 import com.playdata.calen.travel.dto.TravelSharedExhibitSummaryResponse;
@@ -71,6 +76,8 @@ import com.playdata.calen.travel.repository.TravelPhotoClusterRepository;
 import com.playdata.calen.travel.repository.TravelPlanRepository;
 import com.playdata.calen.travel.repository.TravelPlanShareRepository;
 import com.playdata.calen.travel.repository.TravelRouteSegmentRepository;
+import com.playdata.calen.travel.repository.TravelShareGroupMemberRepository;
+import com.playdata.calen.travel.repository.TravelShareGroupRepository;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.io.InputStream;
@@ -81,6 +88,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -124,6 +132,8 @@ public class TravelService {
     private static final String PORTFOLIO_CACHE_KEY_PREFIX = "travel:portfolio:";
     private static final String MY_MAP_OVERVIEW_CACHE_KEY_PREFIX = "travel:mymap:overview:";
     private static final String PUBLIC_TRIPS_OVERVIEW_CACHE_KEY = "travel:public-trips:overview";
+    private static final String SHARE_VISIBILITY_PUBLIC = "PUBLIC";
+    private static final String SHARE_VISIBILITY_RESTRICTED = "RESTRICTED";
     private static final long DEFAULT_MEDIA_DOWNLOAD_CACHE_TTL_SECONDS = 300L;
     private static final String ROUTE_PATH_FORMAT_POLYLINE6 = "POLYLINE6";
     private static final int ROUTE_PATH_PRECISION = 6;
@@ -174,6 +184,8 @@ public class TravelService {
     private final TravelPhotoClusterMemberRepository travelPhotoClusterMemberRepository;
     private final TravelRouteSegmentRepository travelRouteSegmentRepository;
     private final TravelPlanShareRepository travelPlanShareRepository;
+    private final TravelShareGroupRepository travelShareGroupRepository;
+    private final TravelShareGroupMemberRepository travelShareGroupMemberRepository;
     private final ExchangeRateService exchangeRateService;
     private final TravelMediaStorageService travelMediaStorageService;
     private final TravelPhotoGpsMetadataService travelPhotoGpsMetadataService;
@@ -220,6 +232,12 @@ public class TravelService {
         private boolean isExpired(long now) {
             return expiresAtEpochMilli > 0L && now >= expiresAtEpochMilli;
         }
+    }
+
+    private record PublicAtlasPlanAccess(
+            TravelPlan plan,
+            TravelPlanShare share
+    ) {
     }
 
     public List<TravelPlanSummaryResponse> getPlans(Long userId) {
@@ -575,23 +593,35 @@ public class TravelService {
     public TravelPublicTripsOverviewResponse getPublicTripsOverview(Long userId) {
         appUserService.getRequiredUser(userId);
 
-        TravelPublicTripsOverviewResponse cachedOverview = redisCacheService.get(
-                PUBLIC_TRIPS_OVERVIEW_CACHE_KEY,
-                TravelPublicTripsOverviewResponse.class
-        );
-        if (cachedOverview != null) {
-            return cachedOverview;
+        List<PublicAtlasPlanAccess> planAccesses = getPublicAtlasPlanAccesses(userId);
+        List<Long> planIds = planAccesses.stream()
+                .map(access -> access.plan().getId())
+                .toList();
+        if (planIds.isEmpty()) {
+            return new TravelPublicTripsOverviewResponse(
+                    0,
+                    0,
+                    0,
+                    0,
+                    ZERO_DISTANCE,
+                    Collections.emptyList(),
+                    Collections.emptyList(),
+                    Collections.emptyList(),
+                    Collections.emptyList()
+            );
         }
 
-        List<TravelPlan> publicPlans = travelPlanRepository.findAllByPublicSharedTrueOrderByPublicSharedAtDescStartDateDescIdDesc();
+        Map<Long, TravelPlanShare> viewerShareByPlanId = buildViewerShareByPlanId(planAccesses);
+        Function<TravelMediaAsset, String> mediaUrlResolver = asset -> buildPublicAtlasMediaUrl(asset, viewerShareByPlanId);
+        List<TravelPlan> visiblePlans = planAccesses.stream().map(PublicAtlasPlanAccess::plan).toList();
         List<TravelExpenseRecord> publicMemoryRecords = travelExpenseRecordRepository
-                .findAllByPlanPublicSharedTrueAndRecordType(TravelRecordType.MEMORY)
+                .findAllByPlanIdInAndRecordType(planIds, TravelRecordType.MEMORY)
                 .stream()
                 .sorted(RECORD_ORDER)
                 .toList();
-        List<TravelMediaAsset> publicPhotoMediaItems = getPublicTripPhotoMediaItems();
+        List<TravelMediaAsset> publicPhotoMediaItems = getPublicTripPhotoMediaItems(planIds);
         List<TravelRouteSegment> publicRouteSegments = travelRouteSegmentRepository
-                .findAllByPlanPublicSharedTrueOrderByRouteDateDescIdDesc()
+                .findAllByPlanIdInOrderByRouteDateDescIdDesc(planIds)
                 .stream()
                 .sorted(ROUTE_ORDER)
                 .toList();
@@ -606,28 +636,29 @@ public class TravelService {
                 .collect(Collectors.groupingBy(route -> route.getPlan().getId()));
 
         TravelPublicTripsOverviewResponse response = new TravelPublicTripsOverviewResponse(
-                publicPlans.size(),
+                visiblePlans.size(),
                 publicPhotoMediaItems.size(),
                 photoClusters.size(),
                 publicRouteSegments.size(),
                 sumDistanceKm(publicRouteSegments),
-                publicPlans.stream()
+                planAccesses.stream()
                         .map(plan -> toPublicTripSummaryResponse(
-                                plan,
-                                memoryRecordsByPlan.getOrDefault(plan.getId(), Collections.emptyList()),
-                                mediaItemsByPlan.getOrDefault(plan.getId(), Collections.emptyList()),
-                                routesByPlan.getOrDefault(plan.getId(), Collections.emptyList())
+                                plan.plan(),
+                                memoryRecordsByPlan.getOrDefault(plan.plan().getId(), Collections.emptyList()),
+                                mediaItemsByPlan.getOrDefault(plan.plan().getId(), Collections.emptyList()),
+                                routesByPlan.getOrDefault(plan.plan().getId(), Collections.emptyList()),
+                                mediaUrlResolver,
+                                plan.share()
                         ))
                         .toList(),
                 photoClusters.stream()
-                        .map(cluster -> toPublicPhotoClusterSummaryResponse(cluster, mediaAssetById))
+                        .map(cluster -> toPublicPhotoClusterSummaryResponse(cluster, mediaAssetById, mediaUrlResolver, viewerShareByPlanId))
                         .toList(),
                 photoClusters.stream()
-                        .flatMap(cluster -> toPublicPhotoPins(cluster, mediaAssetById).stream())
+                        .flatMap(cluster -> toPublicPhotoPins(cluster, mediaAssetById, mediaUrlResolver, viewerShareByPlanId).stream())
                         .toList(),
                 publicRouteSegments.stream().map(this::toRouteSegmentResponse).toList()
         );
-        cacheTravelSummary(PUBLIC_TRIPS_OVERVIEW_CACHE_KEY, response);
         return response;
     }
 
@@ -639,10 +670,11 @@ public class TravelService {
             Long focusMediaId
     ) {
         appUserService.getRequiredUser(userId);
-        TravelMyMapPhotoClusterDetailResponse cluster = resolvePublicTripPhotoClusterDetail(clusterId);
+        TravelMyMapPhotoClusterDetailResponse cluster = resolvePublicTripPhotoClusterDetail(userId, clusterId);
         return toMyMapPhotoClusterPageResponse(cluster, page, size, focusMediaId);
     }
 
+    @Transactional
     public TravelPlanShareResponse shareCompletedPlan(Long userId, Long planId, String recipientLoginIdRaw) {
         AppUser sharer = appUserService.getRequiredUser(userId);
         TravelPlan plan = getRequiredPlan(userId, planId);
@@ -670,7 +702,99 @@ public class TravelService {
                     return travelPlanShareRepository.save(created);
                 });
 
+        invalidatePublicTravelCache();
         return toTravelPlanShareResponse(share);
+    }
+
+    public List<TravelPlanShareResponse> getPlanShares(Long userId, Long planId) {
+        getRequiredPlan(userId, planId);
+        return travelPlanShareRepository.findAllByPlanIdAndSharedByIdOrderByCreatedAtDescIdDesc(planId, userId).stream()
+                .map(this::toTravelPlanShareResponse)
+                .toList();
+    }
+
+    @Transactional
+    public void cancelPlanShare(Long userId, Long planId, Long shareId) {
+        getRequiredPlan(userId, planId);
+        TravelPlanShare share = travelPlanShareRepository.findByIdAndPlanIdAndSharedById(shareId, planId, userId)
+                .orElseThrow(() -> new NotFoundException("공유 내역을 찾을 수 없습니다."));
+        travelPlanShareRepository.delete(share);
+        invalidatePublicTravelCache();
+    }
+
+    public List<TravelShareRecipientResponse> searchShareRecipients(Long userId, String query) {
+        appUserService.getRequiredUser(userId);
+        return appUserService.searchActiveUsersForSharing(userId, query, 10).stream()
+                .map(user -> new TravelShareRecipientResponse(
+                        user.getId(),
+                        user.getLoginId(),
+                        user.getDisplayName()
+                ))
+                .toList();
+    }
+
+    public List<TravelShareGroupResponse> getShareGroups(Long userId) {
+        appUserService.getRequiredUser(userId);
+        Map<Long, List<TravelShareGroupMember>> membersByGroupId = travelShareGroupMemberRepository
+                .findAllByGroupOwnerIdOrderByGroupIdAscIdAsc(userId)
+                .stream()
+                .collect(Collectors.groupingBy(member -> member.getGroup().getId()));
+
+        return travelShareGroupRepository.findAllByOwnerIdOrderByUpdatedAtDescIdDesc(userId).stream()
+                .map(group -> toTravelShareGroupResponse(group, membersByGroupId.getOrDefault(group.getId(), List.of())))
+                .toList();
+    }
+
+    @Transactional
+    public TravelShareGroupResponse saveShareGroup(Long userId, TravelShareGroupRequest request) {
+        AppUser owner = appUserService.getRequiredUser(userId);
+        String groupName = trimToNull(request.name());
+        if (groupName == null) {
+            throw new BadRequestException("공유 그룹 이름을 입력해주세요.");
+        }
+
+        List<AppUser> recipients = resolveShareGroupRecipients(owner, request.recipientLoginIds());
+        if (recipients.isEmpty()) {
+            throw new BadRequestException("공유 그룹에 포함할 사용자를 선택해주세요.");
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+        TravelShareGroup group = travelShareGroupRepository.findByOwnerIdAndNameIgnoreCase(owner.getId(), groupName)
+                .orElseGet(() -> {
+                    TravelShareGroup created = new TravelShareGroup();
+                    created.setOwner(owner);
+                    created.setCreatedAt(now);
+                    return created;
+                });
+        group.setName(groupName);
+        group.setUpdatedAt(now);
+        TravelShareGroup savedGroup = travelShareGroupRepository.save(group);
+
+        if (savedGroup.getId() != null) {
+            travelShareGroupMemberRepository.deleteAllByGroupId(savedGroup.getId());
+            travelShareGroupMemberRepository.flush();
+        }
+
+        List<TravelShareGroupMember> members = recipients.stream()
+                .map(recipient -> {
+                    TravelShareGroupMember member = new TravelShareGroupMember();
+                    member.setGroup(savedGroup);
+                    member.setMember(recipient);
+                    member.setCreatedAt(now);
+                    return member;
+                })
+                .toList();
+        List<TravelShareGroupMember> savedMembers = travelShareGroupMemberRepository.saveAll(members);
+        return toTravelShareGroupResponse(savedGroup, savedMembers);
+    }
+
+    @Transactional
+    public void deleteShareGroup(Long userId, Long groupId) {
+        appUserService.getRequiredUser(userId);
+        TravelShareGroup group = travelShareGroupRepository.findByIdAndOwnerId(groupId, userId)
+                .orElseThrow(() -> new NotFoundException("공유 그룹을 찾을 수 없습니다."));
+        travelShareGroupMemberRepository.deleteAllByGroupId(group.getId());
+        travelShareGroupRepository.delete(group);
     }
 
     @Transactional
@@ -1160,9 +1284,36 @@ public class TravelService {
                 .toList();
     }
 
-    private List<TravelMediaAsset> getPublicTripPhotoMediaItems() {
-        return travelMediaAssetRepository.findAllByPlanPublicSharedTrueAndMediaTypeOrderByUploadedAtDescIdDesc(TravelMediaType.PHOTO).stream()
-                .filter(asset -> Boolean.TRUE.equals(asset.getPlan().getPublicShared()))
+    private List<PublicAtlasPlanAccess> getPublicAtlasPlanAccesses(Long userId) {
+        Map<Long, PublicAtlasPlanAccess> accessByPlanId = new LinkedHashMap<>();
+
+        travelPlanRepository.findAllByPublicSharedTrueOrderByPublicSharedAtDescStartDateDescIdDesc()
+                .forEach(plan -> accessByPlanId.put(plan.getId(), new PublicAtlasPlanAccess(plan, null)));
+        travelPlanShareRepository.findAllByRecipientIdOrderByCreatedAtDescIdDesc(userId)
+                .forEach(share -> accessByPlanId.putIfAbsent(
+                        share.getPlan().getId(),
+                        new PublicAtlasPlanAccess(share.getPlan(), share)
+                ));
+
+        return List.copyOf(accessByPlanId.values());
+    }
+
+    private Map<Long, TravelPlanShare> buildViewerShareByPlanId(List<PublicAtlasPlanAccess> accesses) {
+        return accesses.stream()
+                .filter(access -> access.share() != null)
+                .collect(Collectors.toMap(
+                        access -> access.plan().getId(),
+                        PublicAtlasPlanAccess::share,
+                        (left, right) -> left
+                ));
+    }
+
+    private List<TravelMediaAsset> getPublicTripPhotoMediaItems(Collection<Long> planIds) {
+        if (planIds == null || planIds.isEmpty()) {
+            return List.of();
+        }
+
+        return travelMediaAssetRepository.findAllByPlanIdInAndMediaTypeOrderByUploadedAtDescIdDesc(planIds, TravelMediaType.PHOTO).stream()
                 .filter(asset -> isMemoryRecord(asset.getRecord()))
                 .filter(this::hasClusterCoordinates)
                 .toList();
@@ -1175,13 +1326,19 @@ public class TravelService {
         return travelPhotoClusterService.cluster(points);
     }
 
-    private TravelMyMapPhotoClusterDetailResponse resolvePublicTripPhotoClusterDetail(Long clusterId) {
-        Map<Long, TravelMediaAsset> mediaAssetById = getPublicTripPhotoMediaItems().stream()
+    private TravelMyMapPhotoClusterDetailResponse resolvePublicTripPhotoClusterDetail(Long userId, Long clusterId) {
+        List<PublicAtlasPlanAccess> planAccesses = getPublicAtlasPlanAccesses(userId);
+        Map<Long, TravelPlanShare> viewerShareByPlanId = buildViewerShareByPlanId(planAccesses);
+        Function<TravelMediaAsset, String> mediaUrlResolver = asset -> buildPublicAtlasMediaUrl(asset, viewerShareByPlanId);
+        List<Long> planIds = planAccesses.stream()
+                .map(access -> access.plan().getId())
+                .toList();
+        Map<Long, TravelMediaAsset> mediaAssetById = getPublicTripPhotoMediaItems(planIds).stream()
                 .collect(Collectors.toMap(TravelMediaAsset::getId, Function.identity()));
         return buildMyMapPhotoClusters(new ArrayList<>(mediaAssetById.values())).stream()
                 .filter(cluster -> cluster.id() != null && cluster.id().equals(clusterId))
                 .findFirst()
-                .map(cluster -> toPublicPhotoClusterDetailResponse(cluster, mediaAssetById))
+                .map(cluster -> toPublicPhotoClusterDetailResponse(cluster, mediaAssetById, mediaUrlResolver))
                 .orElseThrow(() -> new NotFoundException("Public travel photo cluster not found."));
     }
 
@@ -1798,13 +1955,14 @@ public class TravelService {
             TravelPlan plan,
             List<TravelExpenseRecord> memoryRecords,
             List<TravelMediaAsset> mediaItems,
-            List<TravelRouteSegment> routeSegments
+            List<TravelRouteSegment> routeSegments,
+            Function<TravelMediaAsset, String> mediaUrlResolver,
+            TravelPlanShare viewerShare
     ) {
         String representativePhotoUrl = mediaItems.stream()
                 .sorted(MEDIA_ORDER)
-                .map(TravelMediaAsset::getId)
                 .findFirst()
-                .map(this::buildPublicMediaUrl)
+                .map(mediaUrlResolver)
                 .orElse("");
 
         return new TravelPublicTripSummaryResponse(
@@ -1817,23 +1975,28 @@ public class TravelService {
                 normalizeColorHex(plan.getColorHex()),
                 plan.getOwner().getLoginId(),
                 plan.getOwner().getDisplayName(),
-                plan.getPublicSharedAt(),
+                resolvePublicSharedAt(plan, viewerShare),
                 memoryRecords.size(),
                 mediaItems.size(),
                 routeSegments.size(),
                 sumDistanceKm(routeSegments),
-                representativePhotoUrl
+                representativePhotoUrl,
+                resolveShareVisibility(plan, viewerShare),
+                viewerShare != null ? viewerShare.getId() : null
         );
     }
 
     private TravelPublicPhotoClusterSummaryResponse toPublicPhotoClusterSummaryResponse(
             TravelPhotoClusterService.PhotoCluster cluster,
-            Map<Long, TravelMediaAsset> mediaAssetById
+            Map<Long, TravelMediaAsset> mediaAssetById,
+            Function<TravelMediaAsset, String> mediaUrlResolver,
+            Map<Long, TravelPlanShare> viewerShareByPlanId
     ) {
         TravelPhotoClusterService.PhotoPoint representative = cluster.representative();
         TravelMediaAsset representativeAsset = mediaAssetById.get(representative.mediaId());
         TravelPlan plan = representativeAsset != null ? representativeAsset.getPlan() : null;
         AppUser owner = plan != null ? plan.getOwner() : null;
+        TravelPlanShare viewerShare = plan != null ? viewerShareByPlanId.get(plan.getId()) : null;
 
         return new TravelPublicPhotoClusterSummaryResponse(
                 cluster.id(),
@@ -1855,19 +2018,29 @@ public class TravelService {
                 cluster.memoryCount(),
                 cluster.maxDistanceMeters(),
                 representative.representativeOverride(),
-                buildPublicMediaUrl(representative.mediaId()),
+                representativeAsset != null ? mediaUrlResolver.apply(representativeAsset) : "",
                 owner != null ? owner.getLoginId() : "",
                 owner != null ? owner.getDisplayName() : "",
-                plan != null ? plan.getPublicSharedAt() : null
+                resolvePublicSharedAt(plan, viewerShare),
+                resolveShareVisibility(plan, viewerShare),
+                viewerShare != null ? viewerShare.getId() : null
         );
     }
 
     private List<TravelPublicPhotoPinResponse> toPublicPhotoPins(
             TravelPhotoClusterService.PhotoCluster cluster,
-            Map<Long, TravelMediaAsset> mediaAssetById
+            Map<Long, TravelMediaAsset> mediaAssetById,
+            Function<TravelMediaAsset, String> mediaUrlResolver,
+            Map<Long, TravelPlanShare> viewerShareByPlanId
     ) {
         return (cluster.members() == null ? List.<TravelPhotoClusterService.PhotoPoint>of() : cluster.members()).stream()
-                .map(member -> toPublicPhotoPinResponse(member, cluster, mediaAssetById.get(member.mediaId())))
+                .map(member -> toPublicPhotoPinResponse(
+                        member,
+                        cluster,
+                        mediaAssetById.get(member.mediaId()),
+                        mediaUrlResolver,
+                        viewerShareByPlanId
+                ))
                 .filter(java.util.Objects::nonNull)
                 .toList();
     }
@@ -1875,7 +2048,9 @@ public class TravelService {
     private TravelPublicPhotoPinResponse toPublicPhotoPinResponse(
             TravelPhotoClusterService.PhotoPoint member,
             TravelPhotoClusterService.PhotoCluster cluster,
-            TravelMediaAsset mediaAsset
+            TravelMediaAsset mediaAsset,
+            Function<TravelMediaAsset, String> mediaUrlResolver,
+            Map<Long, TravelPlanShare> viewerShareByPlanId
     ) {
         if (member == null || mediaAsset == null) {
             return null;
@@ -1883,6 +2058,7 @@ public class TravelService {
 
         TravelPlan plan = mediaAsset.getPlan();
         AppUser owner = plan.getOwner();
+        TravelPlanShare viewerShare = viewerShareByPlanId.get(plan.getId());
         return new TravelPublicPhotoPinResponse(
                 member.mediaId(),
                 cluster.id(),
@@ -1899,27 +2075,30 @@ public class TravelService {
                 member.placeName(),
                 member.latitude(),
                 member.longitude(),
-                buildPublicMediaUrl(member.mediaId()),
+                mediaUrlResolver.apply(mediaAsset),
                 member.mediaId().equals(cluster.representative().mediaId()),
                 member.representativeOverride(),
                 owner.getLoginId(),
                 owner.getDisplayName(),
-                plan.getPublicSharedAt()
+                resolvePublicSharedAt(plan, viewerShare),
+                resolveShareVisibility(plan, viewerShare),
+                viewerShare != null ? viewerShare.getId() : null
         );
     }
 
     private TravelMyMapPhotoClusterDetailResponse toPublicPhotoClusterDetailResponse(
             TravelPhotoClusterService.PhotoCluster cluster,
-            Map<Long, TravelMediaAsset> mediaAssetById
+            Map<Long, TravelMediaAsset> mediaAssetById,
+            Function<TravelMediaAsset, String> mediaUrlResolver
     ) {
         TravelMediaAsset representativeAsset = mediaAssetById.get(cluster.representative().mediaId());
         TravelMediaResponse representativePhoto = representativeAsset != null
-                ? toMediaResponse(representativeAsset, buildPublicMediaUrl(representativeAsset.getId()))
+                ? toMediaResponse(representativeAsset, mediaUrlResolver.apply(representativeAsset))
                 : null;
         List<TravelMediaResponse> photos = cluster.members().stream()
                 .map(member -> mediaAssetById.get(member.mediaId()))
                 .filter(java.util.Objects::nonNull)
-                .map(asset -> toMediaResponse(asset, buildPublicMediaUrl(asset.getId())))
+                .map(asset -> toMediaResponse(asset, mediaUrlResolver.apply(asset)))
                 .toList();
 
         return new TravelMyMapPhotoClusterDetailResponse(
@@ -2247,6 +2426,35 @@ public class TravelService {
         return "/api/travel/public/media/" + mediaId + "/content?token=" + travelPublicMediaTokenService.issueToken(mediaId);
     }
 
+    private String buildPublicAtlasMediaUrl(TravelMediaAsset mediaAsset, Map<Long, TravelPlanShare> viewerShareByPlanId) {
+        TravelPlan plan = mediaAsset.getPlan();
+        if (Boolean.TRUE.equals(plan.getPublicShared())) {
+            return buildPublicMediaUrl(mediaAsset.getId());
+        }
+
+        TravelPlanShare viewerShare = viewerShareByPlanId.get(plan.getId());
+        if (viewerShare == null) {
+            throw new NotFoundException("Shared media not found.");
+        }
+        return "/api/travel/shared-exhibits/" + viewerShare.getId() + "/media/" + mediaAsset.getId() + "/content";
+    }
+
+    private LocalDateTime resolvePublicSharedAt(TravelPlan plan, TravelPlanShare viewerShare) {
+        if (plan == null) {
+            return null;
+        }
+        if (Boolean.TRUE.equals(plan.getPublicShared())) {
+            return plan.getPublicSharedAt();
+        }
+        return viewerShare != null ? viewerShare.getCreatedAt() : null;
+    }
+
+    private String resolveShareVisibility(TravelPlan plan, TravelPlanShare viewerShare) {
+        return plan != null && Boolean.TRUE.equals(plan.getPublicShared())
+                ? SHARE_VISIBILITY_PUBLIC
+                : (viewerShare != null ? SHARE_VISIBILITY_RESTRICTED : SHARE_VISIBILITY_PUBLIC);
+    }
+
     private TravelMediaResponse toMediaResponse(TravelMediaAsset mediaAsset) {
         return toMediaResponse(mediaAsset, "/api/travel/media/" + mediaAsset.getId() + "/content");
     }
@@ -2306,6 +2514,51 @@ public class TravelService {
                 share.getRecipient().getLoginId(),
                 share.getRecipient().getDisplayName(),
                 share.getCreatedAt()
+        );
+    }
+
+    private List<AppUser> resolveShareGroupRecipients(AppUser owner, List<String> recipientLoginIds) {
+        if (recipientLoginIds == null || recipientLoginIds.isEmpty()) {
+            return List.of();
+        }
+
+        Map<String, AppUser> recipientsByLoginId = new LinkedHashMap<>();
+        for (String rawLoginId : recipientLoginIds) {
+            String loginId = trimToNull(rawLoginId);
+            if (loginId == null) {
+                continue;
+            }
+            AppUser recipient = appUserService.findActiveUserByLoginId(loginId)
+                    .orElseThrow(() -> new NotFoundException("공유 그룹 사용자를 찾을 수 없습니다: " + loginId));
+            if (recipient.getId().equals(owner.getId())) {
+                throw new BadRequestException("자기 자신은 공유 그룹에 넣을 수 없습니다.");
+            }
+            recipientsByLoginId.putIfAbsent(recipient.getLoginId(), recipient);
+        }
+        return List.copyOf(recipientsByLoginId.values());
+    }
+
+    private TravelShareGroupResponse toTravelShareGroupResponse(
+            TravelShareGroup group,
+            List<TravelShareGroupMember> members
+    ) {
+        return new TravelShareGroupResponse(
+                group.getId(),
+                group.getName(),
+                members.stream()
+                        .map(TravelShareGroupMember::getMember)
+                        .map(this::toTravelShareRecipientResponse)
+                        .toList(),
+                group.getCreatedAt(),
+                group.getUpdatedAt()
+        );
+    }
+
+    private TravelShareRecipientResponse toTravelShareRecipientResponse(AppUser user) {
+        return new TravelShareRecipientResponse(
+                user.getId(),
+                user.getLoginId(),
+                user.getDisplayName()
         );
     }
 

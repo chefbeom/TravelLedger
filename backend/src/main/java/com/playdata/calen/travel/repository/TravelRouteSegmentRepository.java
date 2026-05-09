@@ -1,6 +1,7 @@
 package com.playdata.calen.travel.repository;
 
 import com.playdata.calen.travel.domain.TravelRouteSegment;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -12,6 +13,8 @@ public interface TravelRouteSegmentRepository extends JpaRepository<TravelRouteS
     List<TravelRouteSegment> findAllByPlanOwnerIdOrderByRouteDateDescIdDesc(Long ownerId);
 
     List<TravelRouteSegment> findAllByPlanPublicSharedTrueOrderByRouteDateDescIdDesc();
+
+    List<TravelRouteSegment> findAllByPlanIdInOrderByRouteDateDescIdDesc(Collection<Long> planIds);
 
     Optional<TravelRouteSegment> findByIdAndPlanOwnerId(Long id, Long ownerId);
 

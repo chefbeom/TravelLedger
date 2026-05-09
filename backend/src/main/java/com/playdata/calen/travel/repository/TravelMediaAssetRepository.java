@@ -17,6 +17,8 @@ public interface TravelMediaAssetRepository extends JpaRepository<TravelMediaAss
 
     List<TravelMediaAsset> findAllByPlanPublicSharedTrueAndMediaTypeOrderByUploadedAtDescIdDesc(TravelMediaType mediaType);
 
+    List<TravelMediaAsset> findAllByPlanIdInAndMediaTypeOrderByUploadedAtDescIdDesc(Collection<Long> planIds, TravelMediaType mediaType);
+
     List<TravelMediaAsset> findAllByRecordIdAndPlanOwnerIdOrderByUploadedAtDescIdDesc(Long recordId, Long ownerId);
 
     List<TravelMediaAsset> findAllByRecordIdInOrderByUploadedAtDescIdDesc(Collection<Long> recordIds);

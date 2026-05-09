@@ -658,6 +658,37 @@ export function updateTravelPlanPublicShare(planId, publicShared) {
   })
 }
 
+export function fetchTravelPlanShares(planId) {
+  return request(`/travel/plans/${planId}/shares`)
+}
+
+export function cancelTravelPlanShare(planId, shareId) {
+  return request(`/travel/plans/${planId}/shares/${shareId}`, {
+    method: 'DELETE',
+  })
+}
+
+export function searchTravelShareRecipients(query) {
+  return request(buildUrl('/travel/share-recipients', { q: query }).replace(API_BASE, ''))
+}
+
+export function fetchTravelShareGroups() {
+  return request('/travel/share-groups')
+}
+
+export function saveTravelShareGroup(payload) {
+  return request('/travel/share-groups', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+}
+
+export function deleteTravelShareGroup(groupId) {
+  return request(`/travel/share-groups/${groupId}`, {
+    method: 'DELETE',
+  })
+}
+
 export function deleteTravelPlan(planId) {
   return request(`/travel/plans/${planId}`, {
     method: 'DELETE',

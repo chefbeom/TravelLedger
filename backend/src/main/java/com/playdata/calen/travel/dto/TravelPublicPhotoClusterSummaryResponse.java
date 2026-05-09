@@ -28,6 +28,8 @@ public record TravelPublicPhotoClusterSummaryResponse(
         String representativePhotoUrl,
         String sharedByLoginId,
         String sharedByDisplayName,
-        LocalDateTime publicSharedAt
+        LocalDateTime publicSharedAt,
+        String shareVisibility,
+        Long viewerShareId
 ) {
 }

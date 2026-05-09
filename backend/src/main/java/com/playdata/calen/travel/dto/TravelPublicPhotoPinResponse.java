@@ -26,6 +26,8 @@ public record TravelPublicPhotoPinResponse(
         boolean representativeOverride,
         String sharedByLoginId,
         String sharedByDisplayName,
-        LocalDateTime publicSharedAt
+        LocalDateTime publicSharedAt,
+        String shareVisibility,
+        Long viewerShareId
 ) {
 }

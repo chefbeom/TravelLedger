@@ -7,8 +7,10 @@ import com.playdata.calen.account.repository.AppUserRepository;
 import com.playdata.calen.account.security.SecondaryPinMismatchException;
 import com.playdata.calen.common.exception.BadRequestException;
 import com.playdata.calen.common.exception.NotFoundException;
+import java.util.List;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -32,6 +34,20 @@ public class AppUserService {
     public Optional<AppUser> findActiveUserByLoginId(String loginId) {
         return appUserRepository.findByLoginId(loginId)
                 .filter(AppUser::isActive);
+    }
+
+    public List<AppUser> searchActiveUsersForSharing(Long currentUserId, String query, int limit) {
+        String normalizedQuery = query != null ? query.trim() : "";
+        if (!StringUtils.hasText(normalizedQuery)) {
+            return List.of();
+        }
+
+        int normalizedLimit = Math.max(1, Math.min(limit, 20));
+        return appUserRepository.searchActiveUsersForInvitation(
+                currentUserId,
+                normalizedQuery,
+                PageRequest.of(0, normalizedLimit)
+        );
     }
 
     @Transactional

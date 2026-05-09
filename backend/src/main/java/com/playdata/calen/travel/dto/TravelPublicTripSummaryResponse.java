@@ -19,6 +19,8 @@ public record TravelPublicTripSummaryResponse(
         int mediaItemCount,
         int routeSegmentCount,
         BigDecimal totalDistanceKm,
-        String representativePhotoUrl
+        String representativePhotoUrl,
+        String shareVisibility,
+        Long viewerShareId
 ) {
 }

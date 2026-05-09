@@ -16,16 +16,22 @@ import {
   fetchTravelCommunityFeed,
   fetchTravelExchangeRates,
   fetchTravelPlan,
+  fetchTravelPlanShares,
   fetchTravelPlans,
   fetchTravelPortfolio,
   fetchTravelSharedExhibit,
   fetchTravelSharedExhibits,
+  deleteTravelShareGroup,
+  cancelTravelPlanShare,
+  fetchTravelShareGroups,
   updateTravelPlanPublicShare,
   updateTravelBudgetItem,
   updateTravelMemory,
   updateTravelPlan,
   updateTravelRecord,
   updateTravelRoute,
+  searchTravelShareRecipients,
+  saveTravelShareGroup,
   shareTravelPlan,
   uploadTravelMemoryMedia,
   uploadTravelRouteGpxFiles,
@@ -138,7 +144,14 @@ const selectedSharedExhibitId = ref('')
 const selectedSharedExhibit = ref(null)
 const shareForm = reactive({
   recipientLoginId: '',
+  recipientSearchQuery: '',
+  searchResults: [],
+  selectedRecipients: [],
+  groupName: '',
+  selectedGroupName: '',
 })
+const travelPlanShares = ref([])
+const shareGroups = ref([])
 
 const planForm = reactive({
   name: '',
@@ -225,6 +238,33 @@ const showPlanGate = computed(() =>
   && !(props.route === 'photo-album' && hasSharedExhibits.value)
 )
 const canShareTravelPlan = computed(() => Boolean(travelPlan.value) && travelPlan.value.status === 'COMPLETED')
+const selectedShareGroup = computed(() =>
+  shareGroups.value.find((group) => group.name === shareForm.selectedGroupName) || null,
+)
+const selectedShareTargets = computed(() => {
+  const targets = new Map()
+  shareForm.selectedRecipients.forEach((recipient) => {
+    if (recipient?.loginId) {
+      targets.set(recipient.loginId, recipient)
+    }
+  })
+  ;(selectedShareGroup.value?.recipients ?? []).forEach((recipient) => {
+    if (recipient?.loginId) {
+      targets.set(recipient.loginId, recipient)
+    }
+  })
+  const typedLoginId = shareForm.recipientLoginId.trim()
+  if (typedLoginId) {
+    targets.set(typedLoginId, {
+      loginId: typedLoginId,
+      displayName: typedLoginId,
+    })
+  }
+  return [...targets.values()]
+})
+const canShareToSelectedTargets = computed(() =>
+  canShareTravelPlan.value && selectedShareTargets.value.length > 0,
+)
 const emptyTravelPlanMessage = computed(() => {
   if (isMyPhotosTab.value) {
     return '내 사진 탭에서는 여행을 선택하지 않아도 지금까지 업로드한 사진을 전체 기준으로 볼 수 있습니다.'
@@ -677,6 +717,94 @@ function handleSelectRecordDate(date) {
 function setFeedback(message = '', error = '') {
   feedback.value = message
   errorMessage.value = error
+}
+
+function normalizeShareRecipient(recipient) {
+  const loginId = String(recipient?.loginId || recipient?.recipientLoginId || '').trim()
+  if (!loginId) {
+    return null
+  }
+  return {
+    userId: recipient?.userId ?? recipient?.recipientUserId ?? null,
+    loginId,
+    displayName: String(recipient?.displayName || recipient?.recipientDisplayName || loginId).trim(),
+  }
+}
+
+async function loadTravelShareGroups() {
+  try {
+    const groups = await fetchTravelShareGroups()
+    shareGroups.value = Array.isArray(groups)
+      ? groups
+          .map((group) => ({
+            id: group?.id ?? null,
+            name: String(group?.name || '').trim(),
+            recipients: Array.isArray(group?.recipients)
+              ? group.recipients.map(normalizeShareRecipient).filter(Boolean)
+              : [],
+          }))
+          .filter((group) => group.id && group.name && group.recipients.length)
+      : []
+  } catch {
+    shareGroups.value = []
+  }
+}
+
+function addShareRecipient(recipient) {
+  const normalized = normalizeShareRecipient(recipient)
+  if (!normalized) {
+    return
+  }
+
+  if (!shareForm.selectedRecipients.some((item) => item.loginId === normalized.loginId)) {
+    shareForm.selectedRecipients.push(normalized)
+  }
+  shareForm.recipientLoginId = ''
+}
+
+function removeShareRecipient(loginId) {
+  shareForm.selectedRecipients = shareForm.selectedRecipients.filter((item) => item.loginId !== loginId)
+}
+
+async function saveCurrentShareGroup() {
+  const groupName = shareForm.groupName.trim()
+  if (!groupName || !shareForm.selectedRecipients.length) {
+    setFeedback('', '그룹 이름과 그룹에 넣을 사용자를 선택해주세요.')
+    return
+  }
+
+  try {
+    const savedGroup = await saveTravelShareGroup({
+      name: groupName,
+      recipientLoginIds: shareForm.selectedRecipients
+        .map((recipient) => normalizeShareRecipient(recipient)?.loginId)
+        .filter(Boolean),
+    })
+    await loadTravelShareGroups()
+    shareForm.groupName = ''
+    shareForm.selectedGroupName = savedGroup?.name || groupName
+    setFeedback(`'${savedGroup?.name || groupName}' 공유 그룹을 저장했습니다.`)
+  } catch (error) {
+    setFeedback('', error.message)
+  }
+}
+
+async function deleteShareGroup(groupName) {
+  const group = shareGroups.value.find((item) => item.name === groupName)
+  if (!group?.id) {
+    return
+  }
+
+  try {
+    await deleteTravelShareGroup(group.id)
+    shareGroups.value = shareGroups.value.filter((item) => item.id !== group.id)
+    if (shareForm.selectedGroupName === groupName) {
+      shareForm.selectedGroupName = ''
+    }
+    setFeedback(`'${groupName}' 공유 그룹을 삭제했습니다.`)
+  } catch (error) {
+    setFeedback('', error.message)
+  }
 }
 
 function resetMemoryUploadProgress() {
@@ -1138,6 +1266,7 @@ async function refreshTravelData(preferredPlanId = selectedPlanId.value, include
 
     selectedPlanId.value = nextPlanId
     travelPlan.value = selectedPlanId.value ? await fetchTravelPlan(selectedPlanId.value) : null
+    await loadTravelPlanShares(selectedPlanId.value)
     travelPortfolio.value = await fetchTravelPortfolio()
     await loadTravelRates()
     if (includeCommunity) await loadTravelCommunityFeed()
@@ -1203,6 +1332,7 @@ watch(
 )
 
 onMounted(async () => {
+  await loadTravelShareGroups()
   await refreshTravelData()
 })
 
@@ -1215,21 +1345,73 @@ async function handleSelectPlan(planId) {
 }
 
 async function handleShareTravelPlan() {
-  if (!selectedPlanId.value || !shareForm.recipientLoginId.trim()) return
+  if (!selectedPlanId.value || !canShareToSelectedTargets.value) return
   isSubmitting.value = true
   activeSubmit.value = 'share-plan'
   setFeedback()
   try {
-    const response = await shareTravelPlan(selectedPlanId.value, {
-      loginId: shareForm.recipientLoginId.trim(),
-    })
+    const responses = []
+    for (const recipient of selectedShareTargets.value) {
+      responses.push(await shareTravelPlan(selectedPlanId.value, {
+        loginId: recipient.loginId,
+      }))
+    }
     shareForm.recipientLoginId = ''
-    setFeedback(`${response.recipientDisplayName} (${response.recipientLoginId}) 님에게 여행 전시를 공유했습니다.`)
+    shareForm.selectedRecipients = []
+    shareForm.selectedGroupName = ''
+    await loadTravelPlanShares(selectedPlanId.value)
+    setFeedback(`${responses.length}명에게 여행 전시를 공유했습니다. 공유받은 사람의 여행 공유 지도에도 표시됩니다.`)
   } catch (error) {
     setFeedback('', error.message)
   } finally {
     isSubmitting.value = false
     activeSubmit.value = ''
+  }
+}
+
+async function handleCancelPlanShare(share) {
+  if (!selectedPlanId.value || !share?.id) return
+  isSubmitting.value = true
+  activeSubmit.value = `share-cancel-${share.id}`
+  setFeedback()
+  try {
+    await cancelTravelPlanShare(selectedPlanId.value, share.id)
+    await loadTravelPlanShares(selectedPlanId.value)
+    setFeedback(`${share.recipientDisplayName || share.recipientLoginId} 님 공유를 해제했습니다.`)
+  } catch (error) {
+    setFeedback('', error.message)
+  } finally {
+    isSubmitting.value = false
+    activeSubmit.value = ''
+  }
+}
+
+async function loadTravelPlanShares(planId = selectedPlanId.value) {
+  const normalizedPlanId = String(planId || '').trim()
+  if (!normalizedPlanId) {
+    travelPlanShares.value = []
+    return
+  }
+
+  try {
+    travelPlanShares.value = await fetchTravelPlanShares(normalizedPlanId)
+  } catch {
+    travelPlanShares.value = []
+  }
+}
+
+async function searchTravelRecipients() {
+  const query = shareForm.recipientSearchQuery.trim()
+  if (!query) {
+    shareForm.searchResults = []
+    return
+  }
+
+  try {
+    shareForm.searchResults = await searchTravelShareRecipients(query)
+  } catch (error) {
+    shareForm.searchResults = []
+    setFeedback('', error.message)
   }
 }
 
@@ -1845,59 +2027,150 @@ async function openPortfolioMemoryEditor(payload) {
       <section class="panel">
         <div class="panel__header">
           <div>
-            <h2>여행 전시 공유</h2>
-            <p>완성된 여행 로그만 다른 사용자에게 아이디 기준으로 공유할 수 있습니다. 공유받은 사람은 여행 사진 탭에서 읽기 전용 전시 페이지로 확인합니다.</p>
+            <h2>여행 공유 범위</h2>
+            <p>전체 공개로 커뮤니티 지도에 올리거나, 선택한 사람과 그룹에게만 여행 지도와 사진을 공유합니다.</p>
           </div>
           <span class="panel__badge">{{ canShareTravelPlan ? '공유 가능' : '완성 후 공유' }}</span>
         </div>
-        <div class="travel-toolbar">
-          <label class="field travel-toolbar__select">
-            <span class="field__label">공유 받을 아이디</span>
-            <input v-model="shareForm.recipientLoginId" type="text" placeholder="예: minsu" />
-          </label>
-          <div class="travel-toolbar__actions">
-            <button class="button button--primary" :disabled="isSubmitting || !canShareTravelPlan || !shareForm.recipientLoginId.trim()" @click="handleShareTravelPlan">
-              {{ isSubmitting && activeSubmit === 'share-plan' ? '공유 중...' : '전시 공유' }}
+        <div class="travel-share-scope-grid">
+          <article class="travel-share-scope-card">
+            <div class="travel-share-scope-card__head">
+              <div>
+                <strong>선택 공유</strong>
+                <small>아이디 검색으로 사람을 고르거나 저장한 그룹을 선택합니다.</small>
+              </div>
+              <span>{{ selectedShareTargets.length }}명 선택</span>
+            </div>
+            <div class="travel-share-search">
+              <label class="field">
+                <span class="field__label">사용자 검색</span>
+                <input
+                  v-model="shareForm.recipientSearchQuery"
+                  type="search"
+                  placeholder="이름 또는 아이디"
+                  @keyup.enter="searchTravelRecipients"
+                />
+              </label>
+              <button class="button button--ghost" type="button" @click="searchTravelRecipients">검색</button>
+            </div>
+            <div v-if="shareForm.searchResults.length" class="travel-share-recipient-results">
+              <button
+                v-for="candidate in shareForm.searchResults"
+                :key="candidate.loginId"
+                type="button"
+                @click="addShareRecipient(candidate)"
+              >
+                <strong>{{ candidate.displayName }}</strong>
+                <small>{{ candidate.loginId }}</small>
+              </button>
+            </div>
+            <label class="field">
+              <span class="field__label">직접 아이디 추가</span>
+              <input v-model="shareForm.recipientLoginId" type="text" placeholder="예: minsu" />
+            </label>
+            <div v-if="shareForm.selectedRecipients.length" class="travel-share-chip-list">
+              <button
+                v-for="recipient in shareForm.selectedRecipients"
+                :key="recipient.loginId"
+                class="chip chip--neutral"
+                type="button"
+                @click="removeShareRecipient(recipient.loginId)"
+              >
+                {{ recipient.displayName }} · {{ recipient.loginId }} ×
+              </button>
+            </div>
+            <div class="travel-share-group-row">
+              <label class="field">
+                <span class="field__label">그룹 이름</span>
+                <input v-model="shareForm.groupName" type="text" placeholder="예: 가족, 여행친구" />
+              </label>
+              <button class="button button--secondary" type="button" @click="saveCurrentShareGroup">그룹 저장</button>
+            </div>
+            <div v-if="shareGroups.length" class="travel-share-group-list">
+              <button
+                v-for="group in shareGroups"
+                :key="group.name"
+                class="button"
+                :class="{ 'button--primary': shareForm.selectedGroupName === group.name }"
+                type="button"
+                @click="shareForm.selectedGroupName = shareForm.selectedGroupName === group.name ? '' : group.name"
+              >
+                {{ group.name }} · {{ group.recipients.length }}명
+              </button>
+              <button
+                v-if="selectedShareGroup"
+                class="button button--ghost"
+                type="button"
+                @click="deleteShareGroup(selectedShareGroup.name)"
+              >
+                선택 그룹 삭제
+              </button>
+            </div>
+            <button
+              class="button button--primary"
+              type="button"
+              :disabled="isSubmitting || !canShareToSelectedTargets"
+              @click="handleShareTravelPlan"
+            >
+              {{ isSubmitting && activeSubmit === 'share-plan' ? '공유 중...' : '선택 대상에게 공유' }}
             </button>
-          </div>
+          </article>
+
+          <article class="travel-share-scope-card">
+            <div class="travel-share-scope-card__head">
+              <div>
+                <strong>전체 공개</strong>
+                <small>
+                  {{
+                    travelPlan?.publicShared
+                      ? `전체 공개 중${travelPlan.publicSharedAt ? ` · ${formatDateTime(travelPlan.publicSharedAt)}` : ''}`
+                      : '가입한 사용자가 공개 여행 지도에서 볼 수 있도록 공개합니다.'
+                  }}
+                </small>
+              </div>
+              <span>{{ travelPlan?.publicShared ? 'PUBLIC' : 'PRIVATE' }}</span>
+            </div>
+            <div class="travel-public-share-box__actions">
+              <button
+                v-if="travelPlan?.publicShared"
+                class="button button--secondary"
+                type="button"
+                @click="handleOpenPublicTrips"
+              >
+                공개 지도에서 보기
+              </button>
+              <button
+                class="button"
+                :class="travelPlan?.publicShared ? 'button--danger' : 'button--primary'"
+                type="button"
+                :disabled="isSubmitting || !travelPlan"
+                @click="handleTogglePublicShare(!travelPlan?.publicShared)"
+              >
+                {{
+                  isSubmitting && activeSubmit === 'public-share'
+                    ? '변경 중...'
+                    : travelPlan?.publicShared
+                      ? '전체 공개 해제'
+                      : '전체 공개'
+                }}
+              </button>
+            </div>
+          </article>
         </div>
-        <small class="field__hint">{{ canShareTravelPlan ? '공유된 전시는 상대방 계정의 여행 사진 > 공유 전시에서 수정 없이 감상됩니다.' : '여행 상태가 완료(COMPLETED)일 때만 공유할 수 있습니다.' }}</small>
-        <div class="travel-public-share-box">
-          <div>
-            <strong>퍼블릭 여행 공유</strong>
-            <small>
-              {{
-                travelPlan?.publicShared
-                  ? `공개 여행 지도에 표시 중${travelPlan.publicSharedAt ? ` · ${formatDateTime(travelPlan.publicSharedAt)}` : ''}`
-                  : '가입한 사용자가 공개 여행 지도에서 볼 수 있도록 여행 전체를 공개합니다.'
-              }}
-            </small>
-          </div>
-          <div class="travel-public-share-box__actions">
+        <div v-if="travelPlanShares.length" class="travel-share-current-list">
+          <strong>현재 선택 공유 대상</strong>
+          <article v-for="share in travelPlanShares" :key="share.id" class="travel-share-current-item">
+            <span>{{ share.recipientDisplayName }} · {{ share.recipientLoginId }}</span>
+            <small>{{ formatDateTime(share.sharedAt) }}</small>
             <button
-              v-if="travelPlan?.publicShared"
-              class="button button--secondary"
+              class="button button--ghost"
               type="button"
-              @click="handleOpenPublicTrips"
+              :disabled="isSubmitting"
+              @click="handleCancelPlanShare(share)"
             >
-              공개 지도에서 보기
+              {{ activeSubmit === `share-cancel-${share.id}` ? '해제 중' : '공유 해제' }}
             </button>
-            <button
-              class="button"
-              :class="travelPlan?.publicShared ? 'button--danger' : 'button--primary'"
-              type="button"
-              :disabled="isSubmitting || !travelPlan"
-              @click="handleTogglePublicShare(!travelPlan?.publicShared)"
-            >
-              {{
-                isSubmitting && activeSubmit === 'public-share'
-                  ? '변경 중...'
-                  : travelPlan?.publicShared
-                    ? '공개 해제'
-                    : '퍼블릭 공개'
-              }}
-            </button>
-          </div>
+          </article>
         </div>
       </section>
       <TravelOverviewWorkspace v-if="logTab === 'overview'" :travel-plan="travelPlan" />

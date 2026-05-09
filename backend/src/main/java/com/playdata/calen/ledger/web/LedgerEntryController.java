@@ -4,6 +4,8 @@ import com.playdata.calen.account.security.AppUserPrincipal;
 import com.playdata.calen.account.security.SecondaryPinSessionSupport;
 import com.playdata.calen.common.exception.BadRequestException;
 import com.playdata.calen.ledger.dto.LedgerCsvExportRequest;
+import com.playdata.calen.ledger.dto.LedgerEntryBulkUpdateRequest;
+import com.playdata.calen.ledger.dto.LedgerEntryBulkUpdateResponse;
 import com.playdata.calen.ledger.dto.LedgerEntryDateRangeResponse;
 import com.playdata.calen.ledger.dto.LedgerEntryPageResponse;
 import com.playdata.calen.ledger.dto.LedgerEntryRequest;
@@ -27,6 +29,7 @@ import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -144,6 +147,14 @@ public class LedgerEntryController {
             @Valid @RequestBody LedgerEntryRequest request
     ) {
         return ledgerEntryService.create(currentUser.userId(), request);
+    }
+
+    @PatchMapping("/bulk")
+    public LedgerEntryBulkUpdateResponse bulkUpdateEntries(
+            @AuthenticationPrincipal AppUserPrincipal currentUser,
+            @Valid @RequestBody LedgerEntryBulkUpdateRequest request
+    ) {
+        return ledgerEntryService.bulkUpdate(currentUser.userId(), request);
     }
 
     @PutMapping("/{id}")

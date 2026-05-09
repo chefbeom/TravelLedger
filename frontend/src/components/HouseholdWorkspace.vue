@@ -2,6 +2,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import {
   analyzeLedgerReceipt,
+  bulkUpdateEntries,
   createCategoryDetail,
   createCategoryGroup,
   createEntry,
@@ -1615,6 +1616,35 @@ async function saveEntryFromSearch({ entry, payload }) {
   }
 }
 
+async function bulkUpdateSearchEntries(payload) {
+  const entryIds = Array.isArray(payload?.entryIds) ? payload.entryIds : []
+  if (!entryIds.length) {
+    setFeedback('', '일괄 변경할 거래를 선택해 주세요.')
+    return
+  }
+  if (!payload.categoryGroupId && !payload.paymentMethodId) {
+    setFeedback('', '변경할 대분류나 결제수단을 선택해 주세요.')
+    return
+  }
+  if (!window.confirm(`선택한 ${entryIds.length}건의 거래를 일괄 변경할까요?`)) {
+    return
+  }
+
+  isSubmitting.value = true
+  activeSubmit.value = 'search-bulk-update'
+  setFeedback()
+  try {
+    const response = await bulkUpdateEntries(payload)
+    await refreshLedgerViews()
+    setFeedback(`선택한 ${response.updatedCount ?? entryIds.length}건의 거래를 일괄 변경했습니다.`)
+  } catch (error) {
+    setFeedback('', error.message)
+  } finally {
+    isSubmitting.value = false
+    activeSubmit.value = ''
+  }
+}
+
 async function deleteEntryFromSearch(entry) {
   if (!window.confirm(`'${entry.title}' 내역을 휴지통으로 이동할까요?`)) {
     return
@@ -1996,6 +2026,7 @@ async function deactivatePayment(paymentId) {
       @change-trash-page="loadTrashResults"
       @move-search-entry="moveEntryFromSearch"
       @save-search-entry="saveEntryFromSearch"
+      @bulk-update-search-entries="bulkUpdateSearchEntries"
       @delete-search-entry="deleteEntryFromSearch"
       @restore-trash-entry="restoreEntryFromTrash"
       @empty-trash="emptyTrash"

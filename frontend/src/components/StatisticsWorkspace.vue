@@ -14,6 +14,7 @@ const emit = defineEmits([
   'change-trash-page',
   'move-search-entry',
   'save-search-entry',
+  'bulk-update-search-entries',
   'delete-search-entry',
   'restore-trash-entry',
   'empty-trash',
@@ -140,6 +141,11 @@ const searchEditDraft = reactive({
   categoryDetailId: '',
   paymentMethodId: '',
 })
+const searchBulkDraft = reactive({
+  categoryGroupId: '',
+  categoryDetailId: '',
+  paymentMethodId: '',
+})
 
 const expenseDonutItems = computed(() =>
   props.expenseBreakdown.slice(0, 6).map((item, index) => ({
@@ -212,6 +218,17 @@ const searchEditDetailOptions = computed(() => {
   return group?.details ?? []
 })
 const searchEditErrors = computed(() => validateSearchEditDraft())
+const selectedSearchCount = computed(() => searchResultSelection.selectedIds.value.length)
+const searchBulkGroupOptions = computed(() => props.categories)
+const selectedSearchBulkGroup = computed(() =>
+  searchBulkGroupOptions.value.find((group) => String(group.id) === String(searchBulkDraft.categoryGroupId)) ?? null,
+)
+const searchBulkDetailOptions = computed(() => selectedSearchBulkGroup.value?.details ?? [])
+const searchBulkPaymentDisabled = computed(() => selectedSearchBulkGroup.value?.entryType === 'INCOME')
+const canSubmitSearchBulkUpdate = computed(() =>
+  selectedSearchCount.value > 0
+  && Boolean(searchBulkDraft.categoryGroupId || searchBulkDraft.paymentMethodId),
+)
 
 function normalizeAmountInput(value) {
   const normalized = String(value ?? '').replace(/,/g, '').trim()
@@ -253,6 +270,32 @@ function handleSearchEntryTypeFilterChange() {
 
 function handleSearchCategoryGroupFilterChange() {
   resetSearchDetailFilterIfInvalid()
+}
+
+function handleSearchBulkGroupChange() {
+  const detailId = searchBulkDraft.categoryDetailId
+  if (detailId && !searchBulkDetailOptions.value.some((detail) => String(detail.id) === String(detailId))) {
+    searchBulkDraft.categoryDetailId = ''
+  }
+  if (searchBulkPaymentDisabled.value) {
+    searchBulkDraft.paymentMethodId = ''
+  }
+}
+
+function submitSearchBulkUpdate() {
+  if (!canSubmitSearchBulkUpdate.value) {
+    return
+  }
+
+  emit('bulk-update-search-entries', {
+    entryIds: searchResultSelection.selectedIds.value.map((id) => Number(id)),
+    categoryGroupId: searchBulkDraft.categoryGroupId ? Number(searchBulkDraft.categoryGroupId) : null,
+    categoryDetailId: searchBulkDraft.categoryGroupId && searchBulkDraft.categoryDetailId
+      ? Number(searchBulkDraft.categoryDetailId)
+      : null,
+    paymentMethodId: searchBulkDraft.paymentMethodId ? Number(searchBulkDraft.paymentMethodId) : null,
+  })
+  searchResultSelection.clearSelection()
 }
 
 function selectFirstSearchEditDetail() {
@@ -350,6 +393,7 @@ watch(
   () => props.route,
   () => {
     cancelSearchEntryEdit()
+    searchResultSelection.clearSelection()
   },
 )
 
@@ -563,6 +607,58 @@ watch(
           <div>
             <strong class="is-expense">{{ formatCurrency(searchSummary.expense) }}</strong>
             <span>지출 합계</span>
+          </div>
+        </div>
+
+        <div class="search-bulk-toolbar">
+          <div class="search-bulk-toolbar__status">
+            <strong>{{ selectedSearchCount }}건 선택</strong>
+            <span>일괄 변경</span>
+          </div>
+          <label class="field search-bulk-toolbar__field">
+            <span class="field__label">대분류</span>
+            <select v-model="searchBulkDraft.categoryGroupId" @change="handleSearchBulkGroupChange">
+              <option value="">유지</option>
+              <option v-for="group in searchBulkGroupOptions" :key="group.id" :value="String(group.id)">
+                {{ group.entryType === 'INCOME' ? '수입' : '지출' }} / {{ group.name }}
+              </option>
+            </select>
+          </label>
+          <label class="field search-bulk-toolbar__field">
+            <span class="field__label">소분류</span>
+            <select v-model="searchBulkDraft.categoryDetailId" :disabled="!searchBulkDraft.categoryGroupId">
+              <option value="">없음</option>
+              <option v-for="detail in searchBulkDetailOptions" :key="detail.id" :value="String(detail.id)">
+                {{ detail.name }}
+              </option>
+            </select>
+          </label>
+          <label class="field search-bulk-toolbar__field">
+            <span class="field__label">결제수단</span>
+            <select v-model="searchBulkDraft.paymentMethodId" :disabled="searchBulkPaymentDisabled">
+              <option value="">{{ searchBulkPaymentDisabled ? '수입은 자동 -' : '유지' }}</option>
+              <option v-for="payment in paymentMethods" :key="payment.id" :value="String(payment.id)">
+                {{ payment.name }}
+              </option>
+            </select>
+          </label>
+          <div class="search-bulk-toolbar__actions">
+            <button
+              class="button button--primary"
+              type="button"
+              :disabled="!canSubmitSearchBulkUpdate"
+              @click="submitSearchBulkUpdate"
+            >
+              적용
+            </button>
+            <button
+              class="button button--ghost"
+              type="button"
+              :disabled="!selectedSearchCount"
+              @click="searchResultSelection.clearSelection()"
+            >
+              선택 해제
+            </button>
           </div>
         </div>
 

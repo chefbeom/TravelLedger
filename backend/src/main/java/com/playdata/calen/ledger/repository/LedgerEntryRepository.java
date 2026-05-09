@@ -2,6 +2,7 @@ package com.playdata.calen.ledger.repository;
 
 import com.playdata.calen.ledger.domain.LedgerEntry;
 import java.time.LocalDate;
+import java.util.Collection;
 import java.util.List;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -31,6 +32,8 @@ public interface LedgerEntryRepository extends JpaRepository<LedgerEntry, Long> 
     java.util.Optional<LedgerEntry> findByIdAndOwnerIdAndDeletedAtIsNull(Long id, Long ownerId);
 
     java.util.Optional<LedgerEntry> findByIdAndOwnerIdAndDeletedAtIsNotNull(Long id, Long ownerId);
+
+    List<LedgerEntry> findAllByOwnerIdAndDeletedAtIsNullAndIdIn(Long ownerId, Collection<Long> ids);
 
     Page<LedgerEntry> findAllByOwnerIdAndDeletedAtIsNotNullOrderByDeletedAtDescEntryDateDescIdDesc(Long ownerId, Pageable pageable);
 

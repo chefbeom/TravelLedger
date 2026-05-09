@@ -10,6 +10,8 @@ import com.playdata.calen.ledger.domain.EntryType;
 import com.playdata.calen.ledger.domain.LedgerEntry;
 import com.playdata.calen.ledger.domain.PaymentMethod;
 import com.playdata.calen.ledger.domain.PaymentMethodKind;
+import com.playdata.calen.ledger.dto.LedgerEntryBulkUpdateRequest;
+import com.playdata.calen.ledger.dto.LedgerEntryBulkUpdateResponse;
 import com.playdata.calen.ledger.dto.LedgerEntryDateRangeResponse;
 import com.playdata.calen.ledger.dto.LedgerEntryPageResponse;
 import com.playdata.calen.ledger.dto.LedgerEntrySearchPageResponse;
@@ -28,7 +30,9 @@ import java.nio.file.Path;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.YearMonth;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import net.lingala.zip4j.ZipFile;
 import net.lingala.zip4j.model.ZipParameters;
@@ -246,6 +250,65 @@ public class LedgerEntryService {
                 .orElseThrow(() -> new NotFoundException("거래를 찾을 수 없습니다."));
         applyRequest(userId, ledgerEntry, request);
         return toResponse(ledgerEntry);
+    }
+
+    @Transactional
+    public LedgerEntryBulkUpdateResponse bulkUpdate(Long userId, LedgerEntryBulkUpdateRequest request) {
+        appUserService.getRequiredUser(userId);
+        Set<Long> targetIds = new LinkedHashSet<>(request.entryIds());
+        if (targetIds.isEmpty()) {
+            throw new BadRequestException("변경할 거래를 선택해 주세요.");
+        }
+        if (request.categoryGroupId() == null && request.paymentMethodId() == null) {
+            throw new BadRequestException("변경할 대분류나 결제수단을 선택해 주세요.");
+        }
+        if (request.categoryGroupId() == null && request.categoryDetailId() != null) {
+            throw new BadRequestException("소분류를 변경하려면 대분류도 함께 선택해 주세요.");
+        }
+
+        List<LedgerEntry> entries = ledgerEntryRepository.findAllByOwnerIdAndDeletedAtIsNullAndIdIn(userId, targetIds);
+        if (entries.size() != targetIds.size()) {
+            throw new NotFoundException("선택한 거래 중 변경할 수 없는 거래가 있습니다.");
+        }
+
+        CategoryGroup targetGroup = null;
+        CategoryDetail targetDetail = null;
+        if (request.categoryGroupId() != null) {
+            targetGroup = categoryGroupRepository.findByIdAndOwnerId(request.categoryGroupId(), userId)
+                    .orElseThrow(() -> new NotFoundException("대분류를 찾을 수 없습니다."));
+
+            if (request.categoryDetailId() != null) {
+                targetDetail = categoryDetailRepository.findByIdAndGroupOwnerId(request.categoryDetailId(), userId)
+                        .orElseThrow(() -> new NotFoundException("소분류를 찾을 수 없습니다."));
+                if (!targetDetail.getGroup().getId().equals(targetGroup.getId())) {
+                    throw new BadRequestException("소분류가 선택한 대분류에 속하지 않습니다.");
+                }
+            }
+        }
+
+        PaymentMethod targetPaymentMethod = null;
+        if (request.paymentMethodId() != null) {
+            targetPaymentMethod = paymentMethodRepository.findByIdAndOwnerId(request.paymentMethodId(), userId)
+                    .orElseThrow(() -> new NotFoundException("결제수단을 찾을 수 없습니다."));
+        }
+
+        for (LedgerEntry entry : entries) {
+            EntryType finalEntryType = targetGroup != null ? targetGroup.getEntryType() : entry.getEntryType();
+            entry.setEntryType(finalEntryType);
+
+            if (targetGroup != null) {
+                entry.setCategoryGroup(targetGroup);
+                entry.setCategoryDetail(targetDetail);
+            }
+
+            if (finalEntryType == EntryType.INCOME) {
+                entry.setPaymentMethod(resolvePaymentMethod(userId, EntryType.INCOME, null));
+            } else if (targetPaymentMethod != null) {
+                entry.setPaymentMethod(targetPaymentMethod);
+            }
+        }
+
+        return new LedgerEntryBulkUpdateResponse(entries.size());
     }
 
     @Transactional

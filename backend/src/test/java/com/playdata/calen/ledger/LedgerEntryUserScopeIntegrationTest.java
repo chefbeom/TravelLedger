@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
@@ -371,6 +372,53 @@ class LedgerEntryUserScopeIntegrationTest {
         assertThat(imported.getCategoryDetail()).isNotNull();
         assertThat(imported.getCategoryDetail().getId()).isEqualTo(firstLunchDetail.getId());
         assertThat(imported.getPaymentMethod().getId()).isEqualTo(firstLotteCard.getId());
+    }
+
+    @Test
+    @Transactional
+    void bulkUpdateEntriesChangesOnlySelectedSearchRows() throws Exception {
+        MockHttpSession hanaSession = loginAndGetSession("hana", false);
+        AppUser hana = appUserRepository.findByLoginId("hana").orElseThrow();
+        LocalDate entryDate = LocalDate.of(2041, 4, 9);
+
+        PaymentMethod originalPayment = savePaymentMethod(hana, "bulk-original-card-2041", true);
+        PaymentMethod targetPayment = savePaymentMethod(hana, "bulk-target-card-2041", true);
+        CategoryGroup originalGroup = saveCategoryGroup(hana, "bulk-original-group-2041", true);
+        CategoryGroup targetGroup = saveCategoryGroup(hana, "bulk-target-group-2041", true);
+        CategoryDetail originalDetail = saveCategoryDetail(originalGroup, "bulk-original-detail-2041", true);
+        CategoryDetail targetDetail = saveCategoryDetail(targetGroup, "bulk-target-detail-2041", true);
+
+        LedgerEntry firstSelected = saveLedgerEntry(hana, entryDate, "bulk selected one", originalPayment, originalGroup, originalDetail);
+        LedgerEntry secondSelected = saveLedgerEntry(hana, entryDate, "bulk selected two", originalPayment, originalGroup, originalDetail);
+        LedgerEntry notSelected = saveLedgerEntry(hana, entryDate, "bulk not selected", originalPayment, originalGroup, originalDetail);
+
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("entryIds", List.of(firstSelected.getId(), secondSelected.getId()));
+        payload.put("categoryGroupId", targetGroup.getId());
+        payload.put("categoryDetailId", targetDetail.getId());
+        payload.put("paymentMethodId", targetPayment.getId());
+
+        mockMvc.perform(patch("/api/entries/bulk")
+                        .with(csrf())
+                        .session(hanaSession)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(payload)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.updatedCount").value(2));
+
+        LedgerEntry updatedFirst = ledgerEntryRepository.findById(firstSelected.getId()).orElseThrow();
+        LedgerEntry updatedSecond = ledgerEntryRepository.findById(secondSelected.getId()).orElseThrow();
+        LedgerEntry untouched = ledgerEntryRepository.findById(notSelected.getId()).orElseThrow();
+
+        assertThat(updatedFirst.getCategoryGroup().getId()).isEqualTo(targetGroup.getId());
+        assertThat(updatedFirst.getCategoryDetail().getId()).isEqualTo(targetDetail.getId());
+        assertThat(updatedFirst.getPaymentMethod().getId()).isEqualTo(targetPayment.getId());
+        assertThat(updatedSecond.getCategoryGroup().getId()).isEqualTo(targetGroup.getId());
+        assertThat(updatedSecond.getCategoryDetail().getId()).isEqualTo(targetDetail.getId());
+        assertThat(updatedSecond.getPaymentMethod().getId()).isEqualTo(targetPayment.getId());
+        assertThat(untouched.getCategoryGroup().getId()).isEqualTo(originalGroup.getId());
+        assertThat(untouched.getCategoryDetail().getId()).isEqualTo(originalDetail.getId());
+        assertThat(untouched.getPaymentMethod().getId()).isEqualTo(originalPayment.getId());
     }
 
     @Test

@@ -1880,6 +1880,45 @@ button {
   background: var(--surface-soft);
 }
 
+.search-bulk-toolbar {
+  display: grid;
+  grid-template-columns: minmax(150px, 0.7fr) repeat(3, minmax(160px, 1fr)) auto;
+  gap: 12px;
+  align-items: end;
+  margin: 0 0 18px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--surface-soft);
+}
+
+.search-bulk-toolbar__status {
+  display: grid;
+  gap: 4px;
+  align-self: center;
+}
+
+.search-bulk-toolbar__status strong {
+  font-size: 1rem;
+}
+
+.search-bulk-toolbar__status span {
+  color: var(--text-soft);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.search-bulk-toolbar__field {
+  min-width: 0;
+}
+
+.search-bulk-toolbar__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
 .chart-grid {
   display: grid;
   gap: 18px;
@@ -5532,6 +5571,7 @@ textarea {
   }
 
   .search-grid,
+  .search-bulk-toolbar,
   .stats-toolbar__fields,
   .manager-grid,
   .travel-form-grid,
@@ -5689,6 +5729,7 @@ textarea {
   .search-summary,
   .compare-cards,
   .search-grid,
+  .search-bulk-toolbar,
   .stats-toolbar__fields,
   .manager-grid,
   .travel-form-grid,

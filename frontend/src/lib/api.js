@@ -492,6 +492,13 @@ export function updateEntry(id, payload) {
   })
 }
 
+export function bulkUpdateEntries(payload) {
+  return request('/entries/bulk', {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  })
+}
+
 export function deleteEntry(id, { permanent = false } = {}) {
   const suffix = permanent ? '?permanent=true' : ''
   return request(`/entries/${id}${suffix}`, {

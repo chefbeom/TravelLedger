@@ -663,6 +663,54 @@ class LedgerEntryUserScopeIntegrationTest {
 
     @Test
     @Transactional
+    void expenseEntrySearchEditCanChangeTitleCategoryPaymentAndAmount() throws Exception {
+        MockHttpSession hanaSession = loginAndGetSession("hana", false);
+        AppUser hana = appUserRepository.findByLoginId("hana").orElseThrow();
+        LocalDate entryDate = LocalDate.of(2041, 5, 16);
+
+        PaymentMethod originalPayment = savePaymentMethod(hana, "search-edit-original-card-2041", true);
+        PaymentMethod updatedPayment = savePaymentMethod(hana, "search-edit-family-card-2041", true);
+        CategoryGroup originalGroup = saveCategoryGroup(hana, "search-edit-original-group-2041", true, EntryType.EXPENSE);
+        CategoryGroup foodGroup = saveCategoryGroup(hana, "search-edit-food-group-2041", true, EntryType.EXPENSE);
+        CategoryDetail originalDetail = saveCategoryDetail(originalGroup, "search-edit-original-detail-2041", true);
+        CategoryDetail convenienceDetail = saveCategoryDetail(foodGroup, "search-edit-convenience-detail-2041", true);
+        LedgerEntry entry = saveLedgerEntry(hana, entryDate, "search edit original", originalPayment, originalGroup, originalDetail);
+
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("entryDate", "2041-05-16");
+        payload.put("entryTime", "09:04");
+        payload.put("title", "편의점 : 얼음컵, 비타민123");
+        payload.put("memo", "");
+        payload.put("amount", "3280");
+        payload.put("entryType", "EXPENSE");
+        payload.put("categoryGroupId", foodGroup.getId());
+        payload.put("categoryDetailId", convenienceDetail.getId());
+        payload.put("paymentMethodId", updatedPayment.getId());
+
+        mockMvc.perform(put("/api/entries/{id}", entry.getId())
+                        .with(csrf())
+                        .session(hanaSession)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(payload)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.title").value("편의점 : 얼음컵, 비타민123"))
+                .andExpect(jsonPath("$.entryTime").value("09:04"))
+                .andExpect(jsonPath("$.amount").value(3280))
+                .andExpect(jsonPath("$.categoryGroupId").value(foodGroup.getId()))
+                .andExpect(jsonPath("$.categoryDetailId").value(convenienceDetail.getId()))
+                .andExpect(jsonPath("$.paymentMethodId").value(updatedPayment.getId()));
+
+        mockMvc.perform(get("/api/entries/history")
+                        .session(hanaSession)
+                        .param("page", "0")
+                        .param("size", "1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].action").value("UPDATE"))
+                .andExpect(jsonPath("$.content[0].entryCount").value(1));
+    }
+
+    @Test
+    @Transactional
     void searchEntriesCanFilterOtherInactiveClassifications() throws Exception {
         MockHttpSession hanaSession = loginAndGetSession("hana", false);
         AppUser hana = appUserRepository.findByLoginId("hana").orElseThrow();

@@ -48,10 +48,10 @@ public class LedgerEntryChangeHistory {
     private String summary;
 
     @Lob
-    @Column(nullable = false)
+    @Column(nullable = false, columnDefinition = "LONGTEXT")
     private String beforeSnapshotJson;
 
     @Lob
-    @Column(nullable = false)
+    @Column(nullable = false, columnDefinition = "LONGTEXT")
     private String afterSnapshotJson;
 }

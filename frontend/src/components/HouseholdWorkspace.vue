@@ -998,6 +998,13 @@ async function loadLedgerChangeHistories(page = 0) {
   }
 }
 
+async function refreshOpenLedgerChangeHistory() {
+  if (!ledgerChangeHistory.isOpen) {
+    return
+  }
+  await loadLedgerChangeHistories(0)
+}
+
 async function openLedgerChangeHistoryModal() {
   ledgerChangeHistory.isOpen = true
   await loadLedgerChangeHistories(0)
@@ -1668,6 +1675,7 @@ async function submitEntry() {
       setFeedback('가계부 내역을 등록했습니다.')
     }
     await refreshLedgerViews()
+    await refreshOpenLedgerChangeHistory()
     resetEntryForm({ entryDate: submittedSnapshot.entryDate })
   } catch (error) {
     setFeedback('', error.message)
@@ -1694,6 +1702,7 @@ async function undoLastEntryAction() {
       await deleteEntry(action.entryId, { permanent: true })
     }
     await refreshLedgerViews()
+    await refreshOpenLedgerChangeHistory()
     restoreSubmittedEntryAction(action)
     undoableEntryAction.value = null
     setFeedback(action.type === 'update'
@@ -1738,6 +1747,7 @@ async function saveEntryFromSearch({ entry, payload }) {
         }
       : null
     await refreshLedgerViews()
+    await refreshOpenLedgerChangeHistory()
     setFeedback('검색 결과에서 가계부 내역을 수정했습니다.')
   } catch (error) {
     setFeedback('', error.message)
@@ -1767,6 +1777,7 @@ async function bulkUpdateSearchEntries(payload) {
   try {
     const response = await bulkUpdateEntries(payload)
     await refreshLedgerViews()
+    await refreshOpenLedgerChangeHistory()
     setFeedback(`선택한 ${response.updatedCount ?? entryIds.length}건의 거래를 일괄 변경했습니다.`)
   } catch (error) {
     setFeedback('', error.message)

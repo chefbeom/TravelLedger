@@ -493,6 +493,79 @@ class LedgerEntryUserScopeIntegrationTest {
 
     @Test
     @Transactional
+    void entryChangeHistoryRecordsEachSequentialSingleEdit() throws Exception {
+        MockHttpSession hanaSession = loginAndGetSession("hana", false);
+        AppUser hana = appUserRepository.findByLoginId("hana").orElseThrow();
+        LocalDate entryDate = LocalDate.of(2041, 5, 12);
+
+        PaymentMethod payment = savePaymentMethod(hana, "history-sequential-card-2041", true);
+        CategoryGroup group = saveCategoryGroup(hana, "history-sequential-group-2041", true);
+        CategoryDetail detail = saveCategoryDetail(group, "history-sequential-detail-2041", true);
+        LedgerEntry entry = saveLedgerEntry(hana, entryDate, "history sequential original", payment, group, detail);
+
+        Map<String, Object> firstPayload = new LinkedHashMap<>();
+        firstPayload.put("entryDate", entryDate.toString());
+        firstPayload.put("entryTime", "09:10");
+        firstPayload.put("title", "history sequential first edit");
+        firstPayload.put("memo", "first single edit");
+        firstPayload.put("amount", "1100");
+        firstPayload.put("entryType", "EXPENSE");
+        firstPayload.put("categoryGroupId", group.getId());
+        firstPayload.put("categoryDetailId", detail.getId());
+        firstPayload.put("paymentMethodId", payment.getId());
+
+        Map<String, Object> secondPayload = new LinkedHashMap<>(firstPayload);
+        secondPayload.put("entryTime", "10:20");
+        secondPayload.put("title", "history sequential second edit");
+        secondPayload.put("memo", "second single edit");
+        secondPayload.put("amount", "2200");
+
+        mockMvc.perform(put("/api/entries/{id}", entry.getId())
+                        .with(csrf())
+                        .session(hanaSession)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(firstPayload)))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(put("/api/entries/{id}", entry.getId())
+                        .with(csrf())
+                        .session(hanaSession)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(secondPayload)))
+                .andExpect(status().isOk());
+
+        MvcResult historyResult = mockMvc.perform(get("/api/entries/history")
+                        .session(hanaSession)
+                        .param("page", "0")
+                        .param("size", "10"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].action").value("UPDATE"))
+                .andExpect(jsonPath("$.content[0].entryCount").value(1))
+                .andExpect(jsonPath("$.content[1].action").value("UPDATE"))
+                .andExpect(jsonPath("$.content[1].entryCount").value(1))
+                .andReturn();
+
+        var content = objectMapper.readTree(historyResult.getResponse().getContentAsString()).get("content");
+        Long latestHistoryId = content.get(0).get("id").asLong();
+        Long previousHistoryId = content.get(1).get("id").asLong();
+
+        assertThat(latestHistoryId).isNotEqualTo(previousHistoryId);
+
+        mockMvc.perform(get("/api/entries/history/{historyId}", latestHistoryId)
+                        .session(hanaSession))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.changes[0].entryId").value(entry.getId()))
+                .andExpect(jsonPath("$.changes[0].afterTitle").value("history sequential second edit"));
+
+        mockMvc.perform(get("/api/entries/history/{historyId}", previousHistoryId)
+                        .session(hanaSession))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.changes[0].entryId").value(entry.getId()))
+                .andExpect(jsonPath("$.changes[0].afterTitle").value("history sequential first edit"));
+    }
+
+    @Test
+    @Transactional
     void searchEntriesCanFilterOtherInactiveClassifications() throws Exception {
         MockHttpSession hanaSession = loginAndGetSession("hana", false);
         AppUser hana = appUserRepository.findByLoginId("hana").orElseThrow();

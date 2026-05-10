@@ -630,6 +630,39 @@ class LedgerEntryUserScopeIntegrationTest {
 
     @Test
     @Transactional
+    void expenseEntryUpdateAcceptsTimeWithSecondsFromSearchRows() throws Exception {
+        MockHttpSession hanaSession = loginAndGetSession("hana", false);
+        AppUser hana = appUserRepository.findByLoginId("hana").orElseThrow();
+        LocalDate entryDate = LocalDate.of(2041, 5, 15);
+
+        PaymentMethod payment = savePaymentMethod(hana, "expense-update-time-card-2041", true);
+        CategoryGroup group = saveCategoryGroup(hana, "expense-update-time-group-2041", true, EntryType.EXPENSE);
+        CategoryDetail detail = saveCategoryDetail(group, "expense-update-time-detail-2041", true);
+        LedgerEntry entry = saveLedgerEntry(hana, entryDate, "expense update time original", payment, group, detail);
+
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("entryDate", entryDate.toString());
+        payload.put("entryTime", "19:00:00");
+        payload.put("title", "expense update accepts seconds");
+        payload.put("memo", "");
+        payload.put("amount", "31000");
+        payload.put("entryType", "EXPENSE");
+        payload.put("categoryGroupId", group.getId());
+        payload.put("categoryDetailId", detail.getId());
+        payload.put("paymentMethodId", payment.getId());
+
+        mockMvc.perform(put("/api/entries/{id}", entry.getId())
+                        .with(csrf())
+                        .session(hanaSession)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(payload)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.title").value("expense update accepts seconds"))
+                .andExpect(jsonPath("$.entryTime").value("19:00"));
+    }
+
+    @Test
+    @Transactional
     void searchEntriesCanFilterOtherInactiveClassifications() throws Exception {
         MockHttpSession hanaSession = loginAndGetSession("hana", false);
         AppUser hana = appUserRepository.findByLoginId("hana").orElseThrow();

@@ -245,6 +245,17 @@ function toOptionalNumber(value) {
   return text ? Number(text) : null
 }
 
+function normalizeSearchEditTimePayload(value) {
+  const text = String(value ?? '').trim()
+  const match = text.match(/^(\d{1,2}):(\d{1,2})/)
+  if (!match) {
+    return '00:00'
+  }
+  const hour = Math.min(Math.max(Number(match[1]), 0), 23)
+  const minute = Math.min(Math.max(Number(match[2]), 0), 59)
+  return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`
+}
+
 function resolveSearchEditPaymentMethodPayload() {
   return searchEditDraft.entryType === 'INCOME'
     ? null
@@ -351,7 +362,7 @@ function validateSearchEditDraft() {
 function startSearchEntryEdit(entry) {
   editingSearchEntryId.value = entry.id
   searchEditDraft.entryDate = entry.entryDate || ''
-  searchEditDraft.entryTime = entry.entryTime || '00:00'
+  searchEditDraft.entryTime = normalizeSearchEditTimePayload(entry.entryTime)
   searchEditDraft.title = entry.title || ''
   searchEditDraft.memo = entry.memo || ''
   searchEditDraft.amount = normalizeAmountInput(entry.amount)
@@ -399,7 +410,7 @@ function submitSearchEntryEdit(entry) {
     entry,
     payload: {
       entryDate: searchEditDraft.entryDate,
-      entryTime: searchEditDraft.entryTime || '00:00',
+      entryTime: normalizeSearchEditTimePayload(searchEditDraft.entryTime),
       title: searchEditDraft.title.trim(),
       memo: searchEditDraft.memo.trim() || null,
       amount: Number(searchEditDraft.amount || 0),

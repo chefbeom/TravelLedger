@@ -370,7 +370,7 @@ const entrySuggestions = computed(() => {
       suggestions.push({
         id: entry.id,
         entryDate: entry.entryDate,
-        entryTime: entry.entryTime || '00:00',
+        entryTime: normalizeEntryTimePayload(entry.entryTime),
         title,
         memo: entry.memo || '',
         amount: Number(entry.amount || 0),
@@ -613,7 +613,7 @@ function setFeedback(message = '', error = '') {
 function buildEntryFormSnapshot() {
   return {
     entryDate: entryForm.entryDate,
-    entryTime: entryForm.entryTime || '00:00',
+    entryTime: normalizeEntryTimePayload(entryForm.entryTime),
     title: entryForm.title,
     memo: entryForm.memo,
     amount: entryForm.amount,
@@ -633,7 +633,7 @@ function buildEntryFormSnapshotFromEntry(entry) {
 
   return {
     entryDate: entry.entryDate,
-    entryTime: entry.entryTime || '00:00',
+    entryTime: normalizeEntryTimePayload(entry.entryTime),
     title: entry.title || '',
     memo: entry.memo || '',
     amount: String(Number(entry.amount || 0)),
@@ -642,7 +642,7 @@ function buildEntryFormSnapshotFromEntry(entry) {
     categoryGroupId: entry.categoryGroupId != null ? String(entry.categoryGroupId) : '',
     categoryDetailId: entry.categoryDetailId != null ? String(entry.categoryDetailId) : '',
     paymentMethodId: entry.paymentMethodId != null ? String(entry.paymentMethodId) : '',
-    isTimeEnabled: Boolean(entry.entryTime && entry.entryTime !== '00:00'),
+    isTimeEnabled: hasEntryTimeValue(entry.entryTime),
   }
 }
 
@@ -689,7 +689,7 @@ function buildEntryPayloadFromEntry(entry) {
 
   return {
     entryDate: entry.entryDate,
-    entryTime: entry.entryTime || '00:00',
+    entryTime: normalizeEntryTimePayload(entry.entryTime),
     title: entry.title || '',
     memo: entry.memo || null,
     amount: Number(entry.amount || 0),
@@ -703,6 +703,22 @@ function buildEntryPayloadFromEntry(entry) {
 function toOptionalNumber(value) {
   const text = String(value ?? '').trim()
   return text ? Number(text) : null
+}
+
+function normalizeEntryTimePayload(value) {
+  const text = String(value ?? '').trim()
+  const match = text.match(/^(\d{1,2}):(\d{1,2})/)
+  if (!match) {
+    return '00:00'
+  }
+  const hour = Math.min(Math.max(Number(match[1]), 0), 23)
+  const minute = Math.min(Math.max(Number(match[2]), 0), 59)
+  return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`
+}
+
+function hasEntryTimeValue(value) {
+  const normalized = normalizeEntryTimePayload(value)
+  return Boolean(normalized && normalized !== '00:00')
 }
 
 function resolveEntryPaymentMethodPayload(entryType, paymentMethodId) {
@@ -1127,7 +1143,7 @@ function resetEntryForm({ entryDate = calendarAnchorDate.value } = {}) {
 function fillEntryForm(entry) {
   editingEntryId.value = entry.id
   entryForm.entryDate = entry.entryDate
-  entryForm.entryTime = entry.entryTime || '00:00'
+  entryForm.entryTime = normalizeEntryTimePayload(entry.entryTime)
   entryForm.title = entry.title || ''
   entryForm.memo = entry.memo || ''
   entryForm.amount = String(Number(entry.amount || 0))
@@ -1136,7 +1152,7 @@ function fillEntryForm(entry) {
   entryForm.categoryDetailId = entry.categoryDetailId != null ? String(entry.categoryDetailId) : ''
   entryForm.paymentMethodId = entry.entryType === 'INCOME' ? '' : String(entry.paymentMethodId)
   amountInput.value = String(Number(entry.amount || 0))
-  isEntryTimeEnabled.value = Boolean(entry.entryTime && entry.entryTime !== '00:00')
+  isEntryTimeEnabled.value = hasEntryTimeValue(entry.entryTime)
 }
 
 async function fillEntryFormAndScroll(entry) {
@@ -1157,7 +1173,7 @@ function applyEntrySuggestion(suggestion) {
   entryForm.paymentMethodId = suggestion.paymentMethodId || ''
 
   if (isEntryTimeEnabled.value) {
-    entryForm.entryTime = suggestion.entryTime || '00:00'
+    entryForm.entryTime = normalizeEntryTimePayload(suggestion.entryTime)
   }
 
   syncEntryDefaults()
@@ -1236,7 +1252,7 @@ function normalizeOcrSuggestion(suggestion = {}) {
   const entryType = suggestion.entryType === 'INCOME' ? 'INCOME' : 'EXPENSE'
   return {
     entryDate: suggestion.entryDate || calendarAnchorDate.value,
-    entryTime: suggestion.entryTime || '00:00',
+    entryTime: normalizeEntryTimePayload(suggestion.entryTime),
     title: suggestion.title || '',
     memo: suggestion.memo || '',
     amount: suggestion.amount !== null && suggestion.amount !== undefined && suggestion.amount !== ''
@@ -1422,7 +1438,7 @@ async function applyReceiptOcrSuggestion(suggestion = receiptOcr.suggestedEntry)
 
   editingEntryId.value = null
   entryForm.entryDate = suggestion.entryDate || entryForm.entryDate
-  entryForm.entryTime = suggestion.entryTime || '00:00'
+  entryForm.entryTime = normalizeEntryTimePayload(suggestion.entryTime)
   entryForm.title = suggestion.title || entryForm.title
   entryForm.memo = suggestion.memo || entryForm.memo
   entryForm.entryType = suggestion.entryType || 'EXPENSE'
@@ -1442,7 +1458,7 @@ async function applyReceiptOcrSuggestion(suggestion = receiptOcr.suggestedEntry)
   if (suggestion.paymentMethodId) {
     entryForm.paymentMethodId = String(suggestion.paymentMethodId)
   }
-  isEntryTimeEnabled.value = Boolean(suggestion.entryTime && suggestion.entryTime !== '00:00')
+  isEntryTimeEnabled.value = hasEntryTimeValue(suggestion.entryTime)
   syncEntryDefaults({ preferLatest: true, force: false })
 
   await nextTick()
@@ -1453,7 +1469,7 @@ async function applyReceiptOcrSuggestion(suggestion = receiptOcr.suggestedEntry)
 function buildEntryPayload() {
   return {
     entryDate: entryForm.entryDate,
-    entryTime: isEntryTimeEnabled.value ? (entryForm.entryTime || '00:00') : '00:00',
+    entryTime: isEntryTimeEnabled.value ? normalizeEntryTimePayload(entryForm.entryTime) : '00:00',
     title: entryForm.title.trim(),
     memo: entryForm.memo.trim() || null,
     amount: Number(entryForm.amount || 0),

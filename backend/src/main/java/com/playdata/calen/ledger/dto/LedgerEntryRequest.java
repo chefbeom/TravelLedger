@@ -1,6 +1,5 @@
 package com.playdata.calen.ledger.dto;
 
-import com.fasterxml.jackson.annotation.JsonFormat;
 import com.playdata.calen.ledger.domain.EntryType;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotBlank;
@@ -12,7 +11,6 @@ import java.time.LocalTime;
 public record LedgerEntryRequest(
         @NotNull(message = "거래일은 필수입니다.")
         LocalDate entryDate,
-        @JsonFormat(pattern = "HH:mm")
         LocalTime entryTime,
         @NotBlank(message = "제목은 필수입니다.")
         String title,

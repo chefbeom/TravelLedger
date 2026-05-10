@@ -18,10 +18,12 @@ import com.playdata.calen.ledger.domain.CategoryDetail;
 import com.playdata.calen.ledger.domain.CategoryGroup;
 import com.playdata.calen.ledger.domain.EntryType;
 import com.playdata.calen.ledger.domain.LedgerEntry;
+import com.playdata.calen.ledger.domain.LedgerEntryChangeHistory;
 import com.playdata.calen.ledger.domain.PaymentMethod;
 import com.playdata.calen.ledger.domain.PaymentMethodKind;
 import com.playdata.calen.ledger.repository.CategoryDetailRepository;
 import com.playdata.calen.ledger.repository.CategoryGroupRepository;
+import com.playdata.calen.ledger.repository.LedgerEntryChangeHistoryRepository;
 import com.playdata.calen.ledger.repository.LedgerEntryRepository;
 import com.playdata.calen.ledger.repository.PaymentMethodRepository;
 import jakarta.servlet.http.Cookie;
@@ -65,6 +67,9 @@ class LedgerEntryUserScopeIntegrationTest {
 
     @Autowired
     private LedgerEntryRepository ledgerEntryRepository;
+
+    @Autowired
+    private LedgerEntryChangeHistoryRepository ledgerEntryChangeHistoryRepository;
 
     @Autowired
     private CategoryGroupRepository categoryGroupRepository;
@@ -470,6 +475,13 @@ class LedgerEntryUserScopeIntegrationTest {
                 .get(0)
                 .get("id")
                 .asLong();
+        LedgerEntryChangeHistory storedHistory = ledgerEntryChangeHistoryRepository.findById(historyId).orElseThrow();
+        assertThat(storedHistory.getBeforeSnapshotJson()).isEqualTo("[]");
+        assertThat(storedHistory.getAfterSnapshotJson()).isEqualTo("[]");
+        assertThat(storedHistory.getChangesJson())
+                .contains("\"key\":\"title\"")
+                .contains("\"beforeRaw\":\"history original title\"")
+                .contains("\"afterRaw\":\"history updated title\"");
 
         mockMvc.perform(get("/api/entries/history/{historyId}", historyId)
                         .session(hanaSession))

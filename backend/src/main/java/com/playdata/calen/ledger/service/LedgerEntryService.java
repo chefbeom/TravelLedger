@@ -40,6 +40,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.time.YearMonth;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -78,6 +79,16 @@ public class LedgerEntryService {
     private static final int MAX_SEARCH_PAGE_SIZE = 100;
     private static final int MAX_TRASH_PAGE_SIZE = 100;
     private static final int MAX_HISTORY_PAGE_SIZE = 50;
+    private static final String EMPTY_HISTORY_SNAPSHOT_JSON = "[]";
+    private static final String FIELD_ENTRY_DATE = "entryDate";
+    private static final String FIELD_ENTRY_TIME = "entryTime";
+    private static final String FIELD_TITLE = "title";
+    private static final String FIELD_MEMO = "memo";
+    private static final String FIELD_AMOUNT = "amount";
+    private static final String FIELD_ENTRY_TYPE = "entryType";
+    private static final String FIELD_CATEGORY_GROUP = "categoryGroup";
+    private static final String FIELD_CATEGORY_DETAIL = "categoryDetail";
+    private static final String FIELD_PAYMENT_METHOD = "paymentMethod";
 
     public List<LedgerEntryResponse> getEntries(Long userId, LocalDate from, LocalDate to) {
         appUserService.getRequiredUser(userId);
@@ -286,6 +297,10 @@ public class LedgerEntryService {
         AppUser owner = appUserService.getRequiredUser(userId);
         LedgerEntryChangeHistory history = ledgerEntryChangeHistoryRepository.findByIdAndOwnerId(historyId, userId)
                 .orElseThrow(() -> new NotFoundException("변경 이력을 찾을 수 없습니다."));
+        if (hasPatchHistory(history)) {
+            return restorePatchChangeHistory(userId, owner, history);
+        }
+
         List<LedgerEntrySnapshot> targetSnapshots = readSnapshots(history.getBeforeSnapshotJson());
         if (targetSnapshots.isEmpty()) {
             throw new BadRequestException("복구할 변경 이력이 비어 있습니다.");
@@ -475,14 +490,20 @@ public class LedgerEntryService {
             return null;
         }
 
+        List<LedgerEntryChangePatch> patches = buildChangePatches(changedBeforeSnapshots, changedAfterSnapshots);
+        if (patches.isEmpty()) {
+            return null;
+        }
+
         LedgerEntryChangeHistory history = new LedgerEntryChangeHistory();
         history.setOwner(owner);
         history.setAction(action);
         history.setCreatedAt(LocalDateTime.now());
-        history.setEntryCount(changedBeforeSnapshots.size());
+        history.setEntryCount(patches.size());
         history.setSummary(summary);
-        history.setBeforeSnapshotJson(writeSnapshots(changedBeforeSnapshots));
-        history.setAfterSnapshotJson(writeSnapshots(changedAfterSnapshots));
+        history.setBeforeSnapshotJson(EMPTY_HISTORY_SNAPSHOT_JSON);
+        history.setAfterSnapshotJson(EMPTY_HISTORY_SNAPSHOT_JSON);
+        history.setChangesJson(writePatches(patches));
         return ledgerEntryChangeHistoryRepository.save(history);
     }
 
@@ -498,6 +519,21 @@ public class LedgerEntryService {
     }
 
     private LedgerEntryChangeHistoryDetailResponse toChangeHistoryDetail(LedgerEntryChangeHistory history) {
+        if (hasPatchHistory(history)) {
+            List<LedgerEntryChangeItemResponse> changes = readPatches(history.getChangesJson()).stream()
+                    .map(this::toPatchChangeItemResponse)
+                    .toList();
+            return new LedgerEntryChangeHistoryDetailResponse(
+                    history.getId(),
+                    history.getCreatedAt(),
+                    history.getAction().name(),
+                    toActionLabel(history.getAction()),
+                    history.getEntryCount(),
+                    history.getSummary(),
+                    changes
+            );
+        }
+
         List<LedgerEntrySnapshot> beforeSnapshots = readSnapshots(history.getBeforeSnapshotJson());
         Map<Long, LedgerEntrySnapshot> afterById = readSnapshots(history.getAfterSnapshotJson()).stream()
                 .collect(Collectors.toMap(LedgerEntrySnapshot::id, snapshot -> snapshot, (left, right) -> right, LinkedHashMap::new));
@@ -572,29 +608,183 @@ public class LedgerEntryService {
         entry.setDeletedAt(snapshot.deletedAt());
     }
 
+    private LedgerEntryChangeHistoryDetailResponse restorePatchChangeHistory(Long userId, AppUser owner, LedgerEntryChangeHistory history) {
+        List<LedgerEntryChangePatch> patches = readPatches(history.getChangesJson());
+        if (patches.isEmpty()) {
+            throw new BadRequestException("복구할 변경 이력이 비어 있습니다.");
+        }
+
+        Set<Long> targetIds = patches.stream()
+                .map(LedgerEntryChangePatch::entryId)
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+        Map<Long, LedgerEntry> entriesById = ledgerEntryRepository.findAllByOwnerIdAndIdIn(userId, targetIds).stream()
+                .collect(Collectors.toMap(LedgerEntry::getId, entry -> entry));
+        if (entriesById.size() != targetIds.size()) {
+            throw new NotFoundException("복구할 거래 중 찾을 수 없는 거래가 있습니다.");
+        }
+
+        List<LedgerEntrySnapshot> beforeRestoreSnapshots = patches.stream()
+                .map(patch -> toSnapshot(entriesById.get(patch.entryId())))
+                .toList();
+        for (LedgerEntryChangePatch patch : patches) {
+            LedgerEntry entry = entriesById.get(patch.entryId());
+            LedgerEntrySnapshot targetSnapshot = applyPatchToSnapshot(toSnapshot(entry), patch, true);
+            applySnapshot(userId, entry, targetSnapshot);
+        }
+        List<LedgerEntrySnapshot> afterRestoreSnapshots = patches.stream()
+                .map(patch -> toSnapshot(entriesById.get(patch.entryId())))
+                .toList();
+
+        LedgerEntryChangeHistory restoreHistory = recordChangeHistory(
+                owner,
+                LedgerEntryChangeAction.RESTORE,
+                beforeRestoreSnapshots,
+                afterRestoreSnapshots,
+                "이력 #" + history.getId() + " 변경 전 상태로 복구"
+        );
+        return toChangeHistoryDetail(restoreHistory != null ? restoreHistory : history);
+    }
+
+    private LedgerEntrySnapshot applyPatchToSnapshot(LedgerEntrySnapshot base, LedgerEntryChangePatch patch, boolean useBeforeValue) {
+        LocalDate entryDate = base.entryDate();
+        LocalTime entryTime = base.entryTime();
+        String title = base.title();
+        String memo = base.memo();
+        BigDecimal amount = base.amount();
+        EntryType entryType = base.entryType();
+        Long categoryGroupId = base.categoryGroupId();
+        String categoryGroupName = base.categoryGroupName();
+        Long categoryDetailId = base.categoryDetailId();
+        String categoryDetailName = base.categoryDetailName();
+        Long paymentMethodId = base.paymentMethodId();
+        String paymentMethodName = base.paymentMethodName();
+
+        for (LedgerEntryChangeFieldPatch field : patch.fields()) {
+            String rawValue = useBeforeValue ? field.beforeRaw() : field.afterRaw();
+            String displayValue = useBeforeValue ? field.beforeValue() : field.afterValue();
+            switch (field.key()) {
+                case FIELD_ENTRY_DATE -> entryDate = LocalDate.parse(rawValue);
+                case FIELD_ENTRY_TIME -> entryTime = parseNullableTime(rawValue);
+                case FIELD_TITLE -> title = rawValue;
+                case FIELD_MEMO -> memo = rawValue;
+                case FIELD_AMOUNT -> amount = new BigDecimal(rawValue);
+                case FIELD_ENTRY_TYPE -> entryType = EntryType.valueOf(rawValue);
+                case FIELD_CATEGORY_GROUP -> {
+                    categoryGroupId = parseNullableLong(rawValue);
+                    categoryGroupName = displayValue;
+                }
+                case FIELD_CATEGORY_DETAIL -> {
+                    categoryDetailId = parseNullableLong(rawValue);
+                    categoryDetailName = displayValue;
+                }
+                case FIELD_PAYMENT_METHOD -> {
+                    paymentMethodId = parseNullableLong(rawValue);
+                    paymentMethodName = displayValue;
+                }
+                default -> {
+                    // Older clients may ignore unknown fields. Restore keeps the current value for them.
+                }
+            }
+        }
+
+        return new LedgerEntrySnapshot(
+                base.id(),
+                entryDate,
+                entryTime,
+                title,
+                memo,
+                amount,
+                entryType,
+                categoryGroupId,
+                categoryGroupName,
+                categoryDetailId,
+                categoryDetailName,
+                paymentMethodId,
+                paymentMethodName,
+                base.deletedAt()
+        );
+    }
+
     private List<LedgerEntryChangeFieldResponse> describeSnapshotChanges(LedgerEntrySnapshot beforeSnapshot, LedgerEntrySnapshot afterSnapshot) {
-        List<LedgerEntryChangeFieldResponse> fields = new ArrayList<>();
-        addChange(fields, "날짜", beforeSnapshot.entryDate(), afterSnapshot.entryDate());
-        addChange(fields, "시간", beforeSnapshot.entryTime(), afterSnapshot.entryTime());
-        addChange(fields, "제목", beforeSnapshot.title(), afterSnapshot.title());
-        addChange(fields, "메모", beforeSnapshot.memo(), afterSnapshot.memo());
-        addChange(fields, "금액", formatAmount(beforeSnapshot.amount()), formatAmount(afterSnapshot.amount()));
-        addChange(fields, "구분", toEntryTypeLabel(beforeSnapshot.entryType()), toEntryTypeLabel(afterSnapshot.entryType()));
-        addChange(fields, "대분류", beforeSnapshot.categoryGroupName(), afterSnapshot.categoryGroupName());
-        addChange(fields, "소분류", beforeSnapshot.categoryDetailName(), afterSnapshot.categoryDetailName());
-        addChange(fields, "결제수단", beforeSnapshot.paymentMethodName(), afterSnapshot.paymentMethodName());
-        return fields;
+        return buildSnapshotFieldPatches(beforeSnapshot, afterSnapshot).stream()
+                .map(this::toFieldResponse)
+                .toList();
     }
 
     private boolean hasSnapshotChanges(LedgerEntrySnapshot beforeSnapshot, LedgerEntrySnapshot afterSnapshot) {
-        return !describeSnapshotChanges(beforeSnapshot, afterSnapshot).isEmpty();
+        return !buildSnapshotFieldPatches(beforeSnapshot, afterSnapshot).isEmpty();
     }
 
-    private void addChange(List<LedgerEntryChangeFieldResponse> fields, String field, Object beforeValue, Object afterValue) {
-        if (Objects.equals(beforeValue, afterValue)) {
+    private List<LedgerEntryChangePatch> buildChangePatches(List<LedgerEntrySnapshot> beforeSnapshots, List<LedgerEntrySnapshot> afterSnapshots) {
+        Map<Long, LedgerEntrySnapshot> afterById = afterSnapshots.stream()
+                .collect(Collectors.toMap(LedgerEntrySnapshot::id, snapshot -> snapshot, (left, right) -> right, LinkedHashMap::new));
+        List<LedgerEntryChangePatch> patches = new ArrayList<>();
+        for (LedgerEntrySnapshot beforeSnapshot : beforeSnapshots) {
+            LedgerEntrySnapshot afterSnapshot = afterById.get(beforeSnapshot.id());
+            if (afterSnapshot == null) {
+                continue;
+            }
+            List<LedgerEntryChangeFieldPatch> fields = buildSnapshotFieldPatches(beforeSnapshot, afterSnapshot);
+            if (!fields.isEmpty()) {
+                patches.add(new LedgerEntryChangePatch(
+                        beforeSnapshot.id(),
+                        beforeSnapshot.title(),
+                        afterSnapshot.title(),
+                        fields
+                ));
+            }
+        }
+        return patches;
+    }
+
+    private List<LedgerEntryChangeFieldPatch> buildSnapshotFieldPatches(LedgerEntrySnapshot beforeSnapshot, LedgerEntrySnapshot afterSnapshot) {
+        List<LedgerEntryChangeFieldPatch> fields = new ArrayList<>();
+        addPatch(fields, FIELD_ENTRY_DATE, "날짜", beforeSnapshot.entryDate(), afterSnapshot.entryDate(), toRawValue(beforeSnapshot.entryDate()), toRawValue(afterSnapshot.entryDate()));
+        addPatch(fields, FIELD_ENTRY_TIME, "시간", beforeSnapshot.entryTime(), afterSnapshot.entryTime(), toRawValue(beforeSnapshot.entryTime()), toRawValue(afterSnapshot.entryTime()));
+        addPatch(fields, FIELD_TITLE, "제목", beforeSnapshot.title(), afterSnapshot.title(), beforeSnapshot.title(), afterSnapshot.title());
+        addPatch(fields, FIELD_MEMO, "메모", beforeSnapshot.memo(), afterSnapshot.memo(), beforeSnapshot.memo(), afterSnapshot.memo());
+        addPatch(fields, FIELD_AMOUNT, "금액", formatAmount(beforeSnapshot.amount()), formatAmount(afterSnapshot.amount()), formatAmount(beforeSnapshot.amount()), formatAmount(afterSnapshot.amount()));
+        addPatch(fields, FIELD_ENTRY_TYPE, "구분", toEntryTypeLabel(beforeSnapshot.entryType()), toEntryTypeLabel(afterSnapshot.entryType()), toRawValue(beforeSnapshot.entryType()), toRawValue(afterSnapshot.entryType()));
+        addPatch(fields, FIELD_CATEGORY_GROUP, "대분류", beforeSnapshot.categoryGroupName(), afterSnapshot.categoryGroupName(), toRawValue(beforeSnapshot.categoryGroupId()), toRawValue(afterSnapshot.categoryGroupId()));
+        addPatch(fields, FIELD_CATEGORY_DETAIL, "소분류", beforeSnapshot.categoryDetailName(), afterSnapshot.categoryDetailName(), toRawValue(beforeSnapshot.categoryDetailId()), toRawValue(afterSnapshot.categoryDetailId()));
+        addPatch(fields, FIELD_PAYMENT_METHOD, "결제수단", beforeSnapshot.paymentMethodName(), afterSnapshot.paymentMethodName(), toRawValue(beforeSnapshot.paymentMethodId()), toRawValue(afterSnapshot.paymentMethodId()));
+        return fields;
+    }
+
+    private void addPatch(List<LedgerEntryChangeFieldPatch> fields, String key, String field, Object beforeValue, Object afterValue, String beforeRaw, String afterRaw) {
+        if (Objects.equals(beforeRaw, afterRaw)) {
             return;
         }
-        fields.add(new LedgerEntryChangeFieldResponse(field, formatNullableValue(beforeValue), formatNullableValue(afterValue)));
+        fields.add(new LedgerEntryChangeFieldPatch(
+                key,
+                field,
+                formatNullableValue(beforeValue),
+                formatNullableValue(afterValue),
+                beforeRaw,
+                afterRaw
+        ));
+    }
+
+    private LedgerEntryChangeItemResponse toPatchChangeItemResponse(LedgerEntryChangePatch patch) {
+        return new LedgerEntryChangeItemResponse(
+                patch.entryId(),
+                patch.beforeTitle(),
+                patch.afterTitle(),
+                patch.fields().stream()
+                        .map(this::toFieldResponse)
+                        .toList()
+        );
+    }
+
+    private LedgerEntryChangeFieldResponse toFieldResponse(LedgerEntryChangeFieldPatch field) {
+        return new LedgerEntryChangeFieldResponse(field.field(), field.beforeValue(), field.afterValue());
+    }
+
+    private boolean hasPatchHistory(LedgerEntryChangeHistory history) {
+        String changesJson = history.getChangesJson();
+        return changesJson != null
+                && !changesJson.isBlank()
+                && !EMPTY_HISTORY_SNAPSHOT_JSON.equals(changesJson.trim());
     }
 
     private String buildUpdateSummary(LedgerEntrySnapshot beforeSnapshot, LedgerEntrySnapshot afterSnapshot) {
@@ -624,6 +814,23 @@ public class LedgerEntryService {
         }
     }
 
+    private String writePatches(List<LedgerEntryChangePatch> patches) {
+        try {
+            return objectMapper.writeValueAsString(patches);
+        } catch (JsonProcessingException exception) {
+            throw new IllegalStateException("거래 변경 이력을 저장할 수 없습니다.", exception);
+        }
+    }
+
+    private List<LedgerEntryChangePatch> readPatches(String patchesJson) {
+        try {
+            return objectMapper.readValue(patchesJson, new TypeReference<List<LedgerEntryChangePatch>>() {
+            });
+        } catch (JsonProcessingException exception) {
+            throw new IllegalStateException("거래 변경 이력을 읽을 수 없습니다.", exception);
+        }
+    }
+
     private String toActionLabel(LedgerEntryChangeAction action) {
         return switch (action) {
             case UPDATE -> "단건 수정";
@@ -644,6 +851,33 @@ public class LedgerEntryService {
             return null;
         }
         return amount.stripTrailingZeros().toPlainString();
+    }
+
+    private String toRawValue(Object value) {
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof BigDecimal decimal) {
+            return formatAmount(decimal);
+        }
+        if (value instanceof EntryType entryType) {
+            return entryType.name();
+        }
+        return String.valueOf(value);
+    }
+
+    private Long parseNullableLong(String rawValue) {
+        if (rawValue == null || rawValue.isBlank()) {
+            return null;
+        }
+        return Long.valueOf(rawValue);
+    }
+
+    private LocalTime parseNullableTime(String rawValue) {
+        if (rawValue == null || rawValue.isBlank()) {
+            return null;
+        }
+        return LocalTime.parse(rawValue);
     }
 
     private String formatNullableValue(Object value) {
@@ -797,7 +1031,7 @@ public class LedgerEntryService {
     private record LedgerEntrySnapshot(
             Long id,
             LocalDate entryDate,
-            java.time.LocalTime entryTime,
+            LocalTime entryTime,
             String title,
             String memo,
             BigDecimal amount,
@@ -809,6 +1043,24 @@ public class LedgerEntryService {
             Long paymentMethodId,
             String paymentMethodName,
             LocalDateTime deletedAt
+    ) {
+    }
+
+    private record LedgerEntryChangePatch(
+            Long entryId,
+            String beforeTitle,
+            String afterTitle,
+            List<LedgerEntryChangeFieldPatch> fields
+    ) {
+    }
+
+    private record LedgerEntryChangeFieldPatch(
+            String key,
+            String field,
+            String beforeValue,
+            String afterValue,
+            String beforeRaw,
+            String afterRaw
     ) {
     }
 

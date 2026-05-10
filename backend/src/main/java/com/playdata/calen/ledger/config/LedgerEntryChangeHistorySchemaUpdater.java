@@ -35,6 +35,10 @@ public class LedgerEntryChangeHistorySchemaUpdater implements ApplicationRunner 
             executeQuietly("ALTER TABLE ledger_entry_change_histories MODIFY COLUMN summary VARCHAR(500) NOT NULL");
             executeQuietly("ALTER TABLE ledger_entry_change_histories MODIFY COLUMN before_snapshot_json LONGTEXT NOT NULL");
             executeQuietly("ALTER TABLE ledger_entry_change_histories MODIFY COLUMN after_snapshot_json LONGTEXT NOT NULL");
+            if (!hasColumn(connection, "changes_json")) {
+                executeQuietly("ALTER TABLE ledger_entry_change_histories ADD COLUMN changes_json LONGTEXT NULL");
+            }
+            executeQuietly("ALTER TABLE ledger_entry_change_histories MODIFY COLUMN changes_json LONGTEXT NULL");
         } catch (SQLException exception) {
             log.warn("Failed to verify ledger entry change history schema: {}", exception.getMessage());
         }
@@ -57,6 +61,18 @@ public class LedgerEntryChangeHistorySchemaUpdater implements ApplicationRunner 
         }
         try (ResultSet tables = metaData.getTables(connection.getCatalog(), null, "LEDGER_ENTRY_CHANGE_HISTORIES", null)) {
             return tables.next();
+        }
+    }
+
+    private boolean hasColumn(Connection connection, String columnName) throws SQLException {
+        DatabaseMetaData metaData = connection.getMetaData();
+        try (ResultSet columns = metaData.getColumns(connection.getCatalog(), null, "ledger_entry_change_histories", columnName)) {
+            if (columns.next()) {
+                return true;
+            }
+        }
+        try (ResultSet columns = metaData.getColumns(connection.getCatalog(), null, "LEDGER_ENTRY_CHANGE_HISTORIES", columnName.toUpperCase())) {
+            return columns.next();
         }
     }
 }

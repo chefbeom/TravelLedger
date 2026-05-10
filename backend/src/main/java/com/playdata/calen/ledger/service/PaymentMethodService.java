@@ -2,6 +2,7 @@ package com.playdata.calen.ledger.service;
 
 import com.playdata.calen.account.domain.AppUser;
 import com.playdata.calen.account.service.AppUserService;
+import com.playdata.calen.common.exception.BadRequestException;
 import com.playdata.calen.common.exception.NotFoundException;
 import com.playdata.calen.ledger.domain.PaymentMethod;
 import com.playdata.calen.ledger.dto.PaymentMethodRequest;
@@ -30,9 +31,13 @@ public class PaymentMethodService {
     @Transactional
     public PaymentMethodResponse create(Long userId, PaymentMethodRequest request) {
         AppUser owner = appUserService.getRequiredUser(userId);
+        String name = normalizeName(request.name());
+        if (paymentMethodRepository.findFirstByOwnerIdAndNameIgnoreCaseOrderByIdAsc(owner.getId(), name).isPresent()) {
+            throw new BadRequestException("이미 있는 결제수단입니다.");
+        }
         PaymentMethod paymentMethod = new PaymentMethod();
         paymentMethod.setOwner(owner);
-        paymentMethod.setName(request.name());
+        paymentMethod.setName(name);
         paymentMethod.setKind(request.kind());
         paymentMethod.setDisplayOrder(request.displayOrder() == null ? 0 : request.displayOrder());
         paymentMethod.setActive(true);
@@ -54,5 +59,9 @@ public class PaymentMethodService {
                 paymentMethod.getDisplayOrder(),
                 paymentMethod.isActive()
         );
+    }
+
+    private String normalizeName(String name) {
+        return name == null ? "" : name.trim();
     }
 }

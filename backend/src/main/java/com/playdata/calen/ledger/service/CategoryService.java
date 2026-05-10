@@ -2,6 +2,7 @@ package com.playdata.calen.ledger.service;
 
 import com.playdata.calen.account.domain.AppUser;
 import com.playdata.calen.account.service.AppUserService;
+import com.playdata.calen.common.exception.BadRequestException;
 import com.playdata.calen.common.exception.NotFoundException;
 import com.playdata.calen.ledger.domain.CategoryDetail;
 import com.playdata.calen.ledger.domain.CategoryGroup;
@@ -41,9 +42,13 @@ public class CategoryService {
     @Transactional
     public CategoryGroupResponse createGroup(Long userId, CategoryGroupRequest request) {
         AppUser owner = appUserService.getRequiredUser(userId);
+        String name = normalizeName(request.name());
+        if (categoryGroupRepository.findFirstByOwnerIdAndEntryTypeAndNameIgnoreCaseOrderByIdAsc(owner.getId(), request.entryType(), name).isPresent()) {
+            throw new BadRequestException("이미 있는 분류입니다.");
+        }
         CategoryGroup group = new CategoryGroup();
         group.setOwner(owner);
-        group.setName(request.name());
+        group.setName(name);
         group.setEntryType(request.entryType());
         group.setDisplayOrder(request.displayOrder() == null ? 0 : request.displayOrder());
         group.setActive(true);
@@ -55,9 +60,13 @@ public class CategoryService {
         CategoryGroup group = categoryGroupRepository.findByIdAndOwnerId(request.groupId(), userId)
                 .orElseThrow(() -> new NotFoundException("대분류를 찾을 수 없습니다."));
 
+        String name = normalizeName(request.name());
+        if (categoryDetailRepository.findFirstByGroupIdAndNameIgnoreCaseOrderByIdAsc(group.getId(), name).isPresent()) {
+            throw new BadRequestException("이미 있는 분류입니다.");
+        }
         CategoryDetail detail = new CategoryDetail();
         detail.setGroup(group);
-        detail.setName(request.name());
+        detail.setName(name);
         detail.setDisplayOrder(request.displayOrder() == null ? 0 : request.displayOrder());
         detail.setActive(true);
         return toDetailResponse(categoryDetailRepository.save(detail));
@@ -103,5 +112,9 @@ public class CategoryService {
                 detail.getDisplayOrder(),
                 detail.isActive()
         );
+    }
+
+    private String normalizeName(String name) {
+        return name == null ? "" : name.trim();
     }
 }

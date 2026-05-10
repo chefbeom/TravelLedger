@@ -544,6 +544,75 @@ class LedgerEntryUserScopeIntegrationTest {
                 )));
     }
 
+    @Test
+    @Transactional
+    void managementRejectsDuplicateClassificationNames() throws Exception {
+        MockHttpSession hanaSession = loginAndGetSession("hana", false);
+
+        Map<String, Object> groupPayload = new LinkedHashMap<>();
+        groupPayload.put("name", "duplicate-management-group-2042");
+        groupPayload.put("entryType", "EXPENSE");
+        groupPayload.put("displayOrder", 0);
+
+        MvcResult groupResult = mockMvc.perform(post("/api/categories/groups")
+                        .with(csrf())
+                        .session(hanaSession)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(groupPayload)))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        Long groupId = objectMapper.readTree(groupResult.getResponse().getContentAsString()).get("id").asLong();
+
+        mockMvc.perform(post("/api/categories/groups")
+                        .with(csrf())
+                        .session(hanaSession)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(groupPayload)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("이미 있는 분류입니다."));
+
+        Map<String, Object> detailPayload = new LinkedHashMap<>();
+        detailPayload.put("groupId", groupId);
+        detailPayload.put("name", "duplicate-management-detail-2042");
+        detailPayload.put("displayOrder", 0);
+
+        mockMvc.perform(post("/api/categories/details")
+                        .with(csrf())
+                        .session(hanaSession)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(detailPayload)))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(post("/api/categories/details")
+                        .with(csrf())
+                        .session(hanaSession)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(detailPayload)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("이미 있는 분류입니다."));
+
+        Map<String, Object> paymentPayload = new LinkedHashMap<>();
+        paymentPayload.put("name", "duplicate-management-payment-2042");
+        paymentPayload.put("kind", "CARD");
+        paymentPayload.put("displayOrder", 0);
+
+        mockMvc.perform(post("/api/payment-methods")
+                        .with(csrf())
+                        .session(hanaSession)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(paymentPayload)))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(post("/api/payment-methods")
+                        .with(csrf())
+                        .session(hanaSession)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(paymentPayload)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("이미 있는 결제수단입니다."));
+    }
+
     private PaymentMethod savePaymentMethod(AppUser owner, String name, boolean active) {
         PaymentMethod paymentMethod = new PaymentMethod();
         paymentMethod.setOwner(owner);

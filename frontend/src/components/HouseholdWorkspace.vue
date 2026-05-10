@@ -1867,15 +1867,42 @@ async function removeEntry(entry) {
   }
 }
 
+function normalizeManagementName(value) {
+  return String(value || '').trim().toLowerCase()
+}
+
+function hasDuplicateGroupName(name, entryType) {
+  const normalizedName = normalizeManagementName(name)
+  return categories.value.some((group) =>
+    group.entryType === entryType && normalizeManagementName(group.name) === normalizedName,
+  )
+}
+
+function hasDuplicateDetailName(name, groupId) {
+  const group = categories.value.find((item) => String(item.id) === String(groupId))
+  const normalizedName = normalizeManagementName(name)
+  return Boolean(group?.details?.some((detail) => normalizeManagementName(detail.name) === normalizedName))
+}
+
+function hasDuplicatePaymentMethodName(name) {
+  const normalizedName = normalizeManagementName(name)
+  return paymentMethods.value.some((payment) => normalizeManagementName(payment.name) === normalizedName)
+}
+
 async function createGroup() {
-  if (!groupForm.name.trim()) return
+  const name = groupForm.name.trim()
+  if (!name) return
+  if (hasDuplicateGroupName(name, groupForm.entryType)) {
+    setFeedback('', '이미 있는 분류입니다.')
+    return
+  }
   isSubmitting.value = true
   activeSubmit.value = 'group'
   setFeedback()
   try {
     await createCategoryGroup({
       entryType: groupForm.entryType,
-      name: groupForm.name.trim(),
+      name,
       displayOrder: Number(groupForm.displayOrder || 0),
     })
     groupForm.name = ''
@@ -1891,14 +1918,19 @@ async function createGroup() {
 }
 
 async function createDetail() {
-  if (!detailForm.groupId || !detailForm.name.trim()) return
+  const name = detailForm.name.trim()
+  if (!detailForm.groupId || !name) return
+  if (hasDuplicateDetailName(name, detailForm.groupId)) {
+    setFeedback('', '이미 있는 분류입니다.')
+    return
+  }
   isSubmitting.value = true
   activeSubmit.value = 'detail'
   setFeedback()
   try {
     await createCategoryDetail({
       groupId: Number(detailForm.groupId),
-      name: detailForm.name.trim(),
+      name,
       displayOrder: Number(detailForm.displayOrder || 0),
     })
     detailForm.name = ''
@@ -1914,14 +1946,19 @@ async function createDetail() {
 }
 
 async function createPayment() {
-  if (!paymentForm.name.trim()) return
+  const name = paymentForm.name.trim()
+  if (!name) return
+  if (hasDuplicatePaymentMethodName(name)) {
+    setFeedback('', '이미 있는 결제수단입니다.')
+    return
+  }
   isSubmitting.value = true
   activeSubmit.value = 'payment'
   setFeedback()
   try {
     await createPaymentMethod({
       kind: paymentForm.kind,
-      name: paymentForm.name.trim(),
+      name,
       displayOrder: Number(paymentForm.displayOrder || 0),
     })
     paymentForm.name = ''

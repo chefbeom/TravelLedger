@@ -6,6 +6,8 @@ import com.playdata.calen.common.exception.BadRequestException;
 import com.playdata.calen.ledger.dto.LedgerCsvExportRequest;
 import com.playdata.calen.ledger.dto.LedgerEntryBulkUpdateRequest;
 import com.playdata.calen.ledger.dto.LedgerEntryBulkUpdateResponse;
+import com.playdata.calen.ledger.dto.LedgerEntryChangeHistoryDetailResponse;
+import com.playdata.calen.ledger.dto.LedgerEntryChangeHistoryPageResponse;
 import com.playdata.calen.ledger.dto.LedgerEntryDateRangeResponse;
 import com.playdata.calen.ledger.dto.LedgerEntryPageResponse;
 import com.playdata.calen.ledger.dto.LedgerEntryRequest;
@@ -99,6 +101,31 @@ public class LedgerEntryController {
             @AuthenticationPrincipal AppUserPrincipal currentUser
     ) {
         return ledgerEntryService.getEntryDateRange(currentUser.userId());
+    }
+
+    @GetMapping("/history")
+    public LedgerEntryChangeHistoryPageResponse getChangeHistories(
+            @AuthenticationPrincipal AppUserPrincipal currentUser,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size
+    ) {
+        return ledgerEntryService.getChangeHistories(currentUser.userId(), page, size);
+    }
+
+    @GetMapping("/history/{historyId}")
+    public LedgerEntryChangeHistoryDetailResponse getChangeHistory(
+            @AuthenticationPrincipal AppUserPrincipal currentUser,
+            @PathVariable Long historyId
+    ) {
+        return ledgerEntryService.getChangeHistory(currentUser.userId(), historyId);
+    }
+
+    @PostMapping("/history/{historyId}/restore")
+    public LedgerEntryChangeHistoryDetailResponse restoreChangeHistory(
+            @AuthenticationPrincipal AppUserPrincipal currentUser,
+            @PathVariable Long historyId
+    ) {
+        return ledgerEntryService.restoreChangeHistory(currentUser.userId(), historyId);
     }
 
     @GetMapping("/trash")

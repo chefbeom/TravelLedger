@@ -423,6 +423,76 @@ class LedgerEntryUserScopeIntegrationTest {
 
     @Test
     @Transactional
+    void entryChangeHistoryCanRestorePreviousSearchEdit() throws Exception {
+        MockHttpSession hanaSession = loginAndGetSession("hana", false);
+        AppUser hana = appUserRepository.findByLoginId("hana").orElseThrow();
+        LocalDate entryDate = LocalDate.of(2041, 5, 10);
+
+        PaymentMethod originalPayment = savePaymentMethod(hana, "history-original-card-2041", true);
+        PaymentMethod updatedPayment = savePaymentMethod(hana, "history-updated-card-2041", true);
+        CategoryGroup originalGroup = saveCategoryGroup(hana, "history-original-group-2041", true);
+        CategoryGroup updatedGroup = saveCategoryGroup(hana, "history-updated-group-2041", true);
+        CategoryDetail originalDetail = saveCategoryDetail(originalGroup, "history-original-detail-2041", true);
+        CategoryDetail updatedDetail = saveCategoryDetail(updatedGroup, "history-updated-detail-2041", true);
+
+        LedgerEntry entry = saveLedgerEntry(hana, entryDate, "history original title", originalPayment, originalGroup, originalDetail);
+
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("entryDate", entryDate.plusDays(1).toString());
+        payload.put("entryTime", "13:20");
+        payload.put("title", "history updated title");
+        payload.put("memo", "history updated memo");
+        payload.put("amount", "2500");
+        payload.put("entryType", "EXPENSE");
+        payload.put("categoryGroupId", updatedGroup.getId());
+        payload.put("categoryDetailId", updatedDetail.getId());
+        payload.put("paymentMethodId", updatedPayment.getId());
+
+        mockMvc.perform(put("/api/entries/{id}", entry.getId())
+                        .with(csrf())
+                        .session(hanaSession)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(payload)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.title").value("history updated title"));
+
+        MvcResult historyResult = mockMvc.perform(get("/api/entries/history")
+                        .session(hanaSession)
+                        .param("page", "0")
+                        .param("size", "10"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].action").value("UPDATE"))
+                .andExpect(jsonPath("$.content[0].entryCount").value(1))
+                .andReturn();
+
+        Long historyId = objectMapper.readTree(historyResult.getResponse().getContentAsString())
+                .get("content")
+                .get(0)
+                .get("id")
+                .asLong();
+
+        mockMvc.perform(get("/api/entries/history/{historyId}", historyId)
+                        .session(hanaSession))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.changes[0].entryId").value(entry.getId()))
+                .andExpect(jsonPath("$.changes[0].fields[*].field", org.hamcrest.Matchers.hasItems("제목", "금액", "대분류", "결제수단")));
+
+        mockMvc.perform(post("/api/entries/history/{historyId}/restore", historyId)
+                        .with(csrf())
+                        .session(hanaSession))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.action").value("RESTORE"));
+
+        LedgerEntry restored = ledgerEntryRepository.findById(entry.getId()).orElseThrow();
+        assertThat(restored.getEntryDate()).isEqualTo(entryDate);
+        assertThat(restored.getTitle()).isEqualTo("history original title");
+        assertThat(restored.getCategoryGroup().getId()).isEqualTo(originalGroup.getId());
+        assertThat(restored.getCategoryDetail().getId()).isEqualTo(originalDetail.getId());
+        assertThat(restored.getPaymentMethod().getId()).isEqualTo(originalPayment.getId());
+    }
+
+    @Test
+    @Transactional
     void searchEntriesCanFilterOtherInactiveClassifications() throws Exception {
         MockHttpSession hanaSession = loginAndGetSession("hana", false);
         AppUser hana = appUserRepository.findByLoginId("hana").orElseThrow();

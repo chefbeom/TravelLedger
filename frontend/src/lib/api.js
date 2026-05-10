@@ -499,6 +499,20 @@ export function bulkUpdateEntries(payload) {
   })
 }
 
+export function fetchLedgerEntryHistories(params = {}) {
+  return request(buildUrl('/entries/history', params).replace(API_BASE, ''))
+}
+
+export function fetchLedgerEntryHistory(historyId) {
+  return request(`/entries/history/${historyId}`)
+}
+
+export function restoreLedgerEntryHistory(historyId) {
+  return request(`/entries/history/${historyId}/restore`, {
+    method: 'POST',
+  })
+}
+
 export function deleteEntry(id, { permanent = false } = {}) {
   const suffix = permanent ? '?permanent=true' : ''
   return request(`/entries/${id}${suffix}`, {

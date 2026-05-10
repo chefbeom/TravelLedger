@@ -19,6 +19,8 @@ import {
   fetchDashboard,
   fetchDeletedEntryPage,
   fetchEntryDateRange,
+  fetchLedgerEntryHistories,
+  fetchLedgerEntryHistory,
   fetchEntrySearchPage,
   fetchEntries,
   fetchHouseholdAggregatePreferences,
@@ -26,6 +28,7 @@ import {
   fetchPaymentBreakdown,
   fetchPaymentMethods,
   restoreEntry,
+  restoreLedgerEntryHistory,
   saveHouseholdAggregatePreferences,
   updateEntry,
 } from '../lib/api'
@@ -170,6 +173,19 @@ const receiptOcr = reactive({
   categoryText: '',
   timing: null,
 })
+const ledgerChangeHistory = reactive({
+  isOpen: false,
+  isLoading: false,
+  isDetailLoading: false,
+  isRestoring: false,
+  error: '',
+  content: [],
+  page: 0,
+  size: 20,
+  totalElements: 0,
+  totalPages: 0,
+  selected: null,
+})
 let feedbackTimerId = null
 let searchRequestTimerId = null
 let titleSuggestionSearchTimerId = null
@@ -296,6 +312,7 @@ const trashPageInfo = computed(() => trashPageState.value)
 const isEditingEntry = computed(() => editingEntryId.value !== null)
 const dataActionMenuRef = ref(null)
 const dataActionMenuOpen = ref(false)
+const ledgerChangeHistoryPageLabel = computed(() => Math.max(ledgerChangeHistory.totalPages || 0, 1))
 
 function normalizeTitleSuggestionText(value) {
   return String(value || '')
@@ -916,6 +933,120 @@ async function loadTrashResults(page = 0) {
     size: response.size ?? SEARCH_PAGE_SIZE,
     totalElements: response.totalElements ?? 0,
     totalPages: response.totalPages ?? 0,
+  }
+}
+
+function scrollHouseholdToTop() {
+  window.scrollTo({ top: 0, behavior: 'smooth' })
+}
+
+function scrollHouseholdToBottom() {
+  const target = Math.max(document.documentElement.scrollHeight, document.body.scrollHeight)
+  window.scrollTo({ top: target, behavior: 'smooth' })
+}
+
+function formatLedgerChangeDate(value) {
+  if (!value) {
+    return '-'
+  }
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) {
+    return value
+  }
+  return new Intl.DateTimeFormat('ko-KR', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(date)
+}
+
+function formatLedgerChangeFieldValue(value) {
+  const text = String(value ?? '').trim()
+  return text || '-'
+}
+
+async function loadLedgerChangeHistories(page = 0) {
+  ledgerChangeHistory.isLoading = true
+  ledgerChangeHistory.error = ''
+  try {
+    const response = await fetchLedgerEntryHistories({
+      page,
+      size: ledgerChangeHistory.size,
+    })
+    ledgerChangeHistory.content = response?.content ?? []
+    ledgerChangeHistory.page = response?.page ?? 0
+    ledgerChangeHistory.size = response?.size ?? ledgerChangeHistory.size
+    ledgerChangeHistory.totalElements = response?.totalElements ?? 0
+    ledgerChangeHistory.totalPages = response?.totalPages ?? 0
+
+    const selectedId = ledgerChangeHistory.selected?.id
+    const stillSelected = selectedId
+      ? ledgerChangeHistory.content.some((item) => item.id === selectedId)
+      : false
+    if (!stillSelected) {
+      ledgerChangeHistory.selected = null
+      if (ledgerChangeHistory.content[0]) {
+        await selectLedgerChangeHistory(ledgerChangeHistory.content[0])
+      }
+    }
+  } catch (error) {
+    ledgerChangeHistory.error = error.message
+  } finally {
+    ledgerChangeHistory.isLoading = false
+  }
+}
+
+async function openLedgerChangeHistoryModal() {
+  ledgerChangeHistory.isOpen = true
+  await loadLedgerChangeHistories(0)
+}
+
+function closeLedgerChangeHistoryModal() {
+  ledgerChangeHistory.isOpen = false
+}
+
+async function selectLedgerChangeHistory(history) {
+  if (!history?.id) {
+    ledgerChangeHistory.selected = null
+    return
+  }
+  ledgerChangeHistory.isDetailLoading = true
+  ledgerChangeHistory.error = ''
+  try {
+    ledgerChangeHistory.selected = await fetchLedgerEntryHistory(history.id)
+  } catch (error) {
+    ledgerChangeHistory.error = error.message
+  } finally {
+    ledgerChangeHistory.isDetailLoading = false
+  }
+}
+
+async function restoreLedgerChangeHistoryPoint(history) {
+  const historyId = history?.id ?? ledgerChangeHistory.selected?.id
+  if (!historyId) {
+    return
+  }
+  if (!window.confirm('선택한 변경 이력의 변경 전 상태로 거래를 복구할까요? 현재 상태도 새 복구 이력으로 저장됩니다.')) {
+    return
+  }
+
+  ledgerChangeHistory.isRestoring = true
+  ledgerChangeHistory.error = ''
+  try {
+    const restoredHistory = await restoreLedgerEntryHistory(historyId)
+    await refreshLedgerViews()
+    await loadLedgerChangeHistories(0)
+    if (restoredHistory?.id) {
+      await selectLedgerChangeHistory(restoredHistory)
+    }
+    setFeedback('선택한 변경 이력 기준으로 거래를 복구했습니다.')
+  } catch (error) {
+    ledgerChangeHistory.error = error.message
+    setFeedback('', error.message)
+  } finally {
+    ledgerChangeHistory.isRestoring = false
   }
 }
 
@@ -2053,5 +2184,104 @@ async function deactivatePayment(paymentId) {
       @deactivate-detail="deactivateDetail"
       @deactivate-payment="deactivatePayment"
     />
+
+    <div class="household-floating-tools" aria-label="가계부 빠른 이동">
+      <button class="household-floating-tools__button" type="button" title="맨 위로 가기" @click="scrollHouseholdToTop">
+        위
+      </button>
+      <button class="household-floating-tools__button" type="button" title="맨 아래로 가기" @click="scrollHouseholdToBottom">
+        아래
+      </button>
+      <button class="household-floating-tools__button household-floating-tools__button--accent" type="button" title="수정 이력 확인하기" @click="openLedgerChangeHistoryModal">
+        이력
+      </button>
+    </div>
+
+    <div v-if="ledgerChangeHistory.isOpen" class="travel-modal ledger-history-modal" @click.self="closeLedgerChangeHistoryModal">
+      <section class="travel-modal__dialog ledger-history-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="ledger-history-title">
+        <div class="travel-modal__header ledger-history-modal__header">
+          <div>
+            <span class="ledger-history-modal__eyebrow">CHANGE HISTORY</span>
+            <h2 id="ledger-history-title">수정 이력 확인</h2>
+            <p>검색 화면과 일괄 변경에서 수정된 거래를 확인하고 변경 전 상태로 복구할 수 있습니다.</p>
+          </div>
+          <button class="button button--ghost" type="button" @click="closeLedgerChangeHistoryModal">닫기</button>
+        </div>
+
+        <div v-if="ledgerChangeHistory.error" class="feedback feedback--error">{{ ledgerChangeHistory.error }}</div>
+
+        <div class="ledger-history-modal__body">
+          <aside class="ledger-history-list" aria-label="수정 이력 목록">
+            <div class="ledger-history-list__toolbar">
+              <strong>{{ ledgerChangeHistory.totalElements }}건</strong>
+              <span>{{ ledgerChangeHistory.page + 1 }} / {{ ledgerChangeHistoryPageLabel }}</span>
+            </div>
+
+            <div v-if="ledgerChangeHistory.isLoading" class="ledger-history-empty">수정 이력을 불러오는 중입니다.</div>
+            <div v-else-if="!ledgerChangeHistory.content.length" class="ledger-history-empty">아직 저장된 수정 이력이 없습니다.</div>
+            <template v-else>
+              <button
+                v-for="history in ledgerChangeHistory.content"
+                :key="history.id"
+                :class="['ledger-history-list__item', { 'is-active': ledgerChangeHistory.selected?.id === history.id }]"
+                type="button"
+                @click="selectLedgerChangeHistory(history)"
+              >
+                <span class="ledger-history-list__meta">
+                  <strong>{{ history.actionLabel }}</strong>
+                  <small>{{ formatLedgerChangeDate(history.createdAt) }}</small>
+                </span>
+                <span class="ledger-history-list__summary">{{ history.summary }}</span>
+                <span class="ledger-history-list__count">{{ history.entryCount }}건</span>
+              </button>
+            </template>
+
+            <div class="ledger-history-list__pager">
+              <button class="button button--ghost" type="button" :disabled="ledgerChangeHistory.page <= 0 || ledgerChangeHistory.isLoading" @click="loadLedgerChangeHistories(ledgerChangeHistory.page - 1)">
+                이전
+              </button>
+              <button class="button button--ghost" type="button" :disabled="ledgerChangeHistory.page + 1 >= ledgerChangeHistoryPageLabel || ledgerChangeHistory.isLoading" @click="loadLedgerChangeHistories(ledgerChangeHistory.page + 1)">
+                다음
+              </button>
+            </div>
+          </aside>
+
+          <section class="ledger-history-detail" aria-label="수정 이력 상세">
+            <div v-if="ledgerChangeHistory.isDetailLoading" class="ledger-history-empty">상세 변경 내용을 불러오는 중입니다.</div>
+            <div v-else-if="!ledgerChangeHistory.selected" class="ledger-history-empty">왼쪽에서 확인할 이력을 선택하세요.</div>
+            <template v-else>
+              <div class="ledger-history-detail__header">
+                <div>
+                  <strong>{{ ledgerChangeHistory.selected.summary }}</strong>
+                  <span>{{ formatLedgerChangeDate(ledgerChangeHistory.selected.createdAt) }} · {{ ledgerChangeHistory.selected.entryCount }}건</span>
+                </div>
+                <button class="button button--primary" type="button" :disabled="ledgerChangeHistory.isRestoring" @click="restoreLedgerChangeHistoryPoint(ledgerChangeHistory.selected)">
+                  {{ ledgerChangeHistory.isRestoring ? '복구 중...' : '이 변경 전으로 돌아가기' }}
+                </button>
+              </div>
+
+              <div class="ledger-history-detail__changes">
+                <article v-for="change in ledgerChangeHistory.selected.changes" :key="change.entryId" class="ledger-history-change-card">
+                  <div class="ledger-history-change-card__title">
+                    <strong>{{ change.afterTitle || change.beforeTitle }}</strong>
+                    <small>#{{ change.entryId }}</small>
+                  </div>
+                  <dl>
+                    <div v-for="field in change.fields" :key="`${change.entryId}-${field.field}`">
+                      <dt>{{ field.field }}</dt>
+                      <dd>
+                        <span>{{ formatLedgerChangeFieldValue(field.beforeValue) }}</span>
+                        <strong>→</strong>
+                        <span>{{ formatLedgerChangeFieldValue(field.afterValue) }}</span>
+                      </dd>
+                    </div>
+                  </dl>
+                </article>
+              </div>
+            </template>
+          </section>
+        </div>
+      </section>
+    </div>
   </div>
 </template>

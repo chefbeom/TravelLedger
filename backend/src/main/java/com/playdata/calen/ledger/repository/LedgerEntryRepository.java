@@ -35,6 +35,8 @@ public interface LedgerEntryRepository extends JpaRepository<LedgerEntry, Long> 
 
     List<LedgerEntry> findAllByOwnerIdAndDeletedAtIsNullAndIdIn(Long ownerId, Collection<Long> ids);
 
+    List<LedgerEntry> findAllByOwnerIdAndIdIn(Long ownerId, Collection<Long> ids);
+
     Page<LedgerEntry> findAllByOwnerIdAndDeletedAtIsNotNullOrderByDeletedAtDescEntryDateDescIdDesc(Long ownerId, Pageable pageable);
 
     @Query(

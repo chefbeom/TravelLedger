@@ -217,6 +217,7 @@ const searchEditDetailOptions = computed(() => {
   const group = searchEditGroupOptions.value.find((item) => String(item.id) === String(searchEditDraft.categoryGroupId))
   return group?.details ?? []
 })
+const searchEditPaymentDisabled = computed(() => searchEditDraft.entryType === 'INCOME')
 const searchEditErrors = computed(() => validateSearchEditDraft())
 const selectedSearchCount = computed(() => searchResultSelection.selectedIds.value.length)
 const searchBulkGroupOptions = computed(() => props.categories)
@@ -237,6 +238,21 @@ function normalizeAmountInput(value) {
   }
   const amount = Number(normalized)
   return Number.isFinite(amount) ? String(amount) : normalized
+}
+
+function toOptionalNumber(value) {
+  const text = String(value ?? '').trim()
+  return text ? Number(text) : null
+}
+
+function resolveSearchEditPaymentMethodPayload() {
+  return searchEditDraft.entryType === 'INCOME'
+    ? null
+    : toOptionalNumber(searchEditDraft.paymentMethodId)
+}
+
+function selectFirstSearchEditPaymentMethod() {
+  searchEditDraft.paymentMethodId = props.paymentMethods[0] ? String(props.paymentMethods[0].id) : ''
 }
 
 function resetSearchDetailFilterIfInvalid() {
@@ -325,7 +341,7 @@ function validateSearchEditDraft() {
   if (!searchEditDraft.categoryGroupId) {
     errors.push('대분류')
   }
-  if (!searchEditDraft.paymentMethodId) {
+  if (!searchEditPaymentDisabled.value && !searchEditDraft.paymentMethodId) {
     errors.push('결제수단')
   }
 
@@ -342,7 +358,9 @@ function startSearchEntryEdit(entry) {
   searchEditDraft.entryType = entry.entryType === 'INCOME' ? 'INCOME' : 'EXPENSE'
   searchEditDraft.categoryGroupId = entry.categoryGroupId != null ? String(entry.categoryGroupId) : ''
   searchEditDraft.categoryDetailId = entry.categoryDetailId != null ? String(entry.categoryDetailId) : ''
-  searchEditDraft.paymentMethodId = entry.paymentMethodId != null ? String(entry.paymentMethodId) : ''
+  searchEditDraft.paymentMethodId = searchEditDraft.entryType === 'INCOME'
+    ? ''
+    : (entry.paymentMethodId != null ? String(entry.paymentMethodId) : '')
 
   if (!searchEditGroupOptions.value.some((group) => String(group.id) === String(searchEditDraft.categoryGroupId))) {
     selectFirstSearchEditGroup()
@@ -360,6 +378,11 @@ function cancelSearchEntryEdit() {
 
 function handleSearchEditEntryTypeChange() {
   selectFirstSearchEditGroup()
+  if (searchEditPaymentDisabled.value) {
+    searchEditDraft.paymentMethodId = ''
+  } else {
+    selectFirstSearchEditPaymentMethod()
+  }
 }
 
 function handleSearchEditGroupChange() {
@@ -383,7 +406,7 @@ function submitSearchEntryEdit(entry) {
       entryType: searchEditDraft.entryType,
       categoryGroupId: Number(searchEditDraft.categoryGroupId),
       categoryDetailId: searchEditDraft.categoryDetailId ? Number(searchEditDraft.categoryDetailId) : null,
-      paymentMethodId: Number(searchEditDraft.paymentMethodId),
+      paymentMethodId: resolveSearchEditPaymentMethodPayload(),
     },
   })
   cancelSearchEntryEdit()
@@ -726,8 +749,8 @@ watch(
                     </div>
                   </td>
                   <td class="sheet-table__textwrap">
-                    <select v-model="searchEditDraft.paymentMethodId" class="sheet-table__select-input stats-search-edit__payment">
-                      <option value="">결제수단 선택</option>
+                    <select v-model="searchEditDraft.paymentMethodId" class="sheet-table__select-input stats-search-edit__payment" :disabled="searchEditPaymentDisabled">
+                      <option value="">{{ searchEditPaymentDisabled ? '수입은 자동 -' : '결제수단 선택' }}</option>
                       <option v-for="payment in paymentMethods" :key="payment.id" :value="String(payment.id)">
                         {{ payment.name }}
                       </option>

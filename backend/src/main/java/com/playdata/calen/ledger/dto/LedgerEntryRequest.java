@@ -25,7 +25,6 @@ public record LedgerEntryRequest(
         @NotNull(message = "대분류는 필수입니다.")
         Long categoryGroupId,
         Long categoryDetailId,
-        @NotNull(message = "결제수단은 필수입니다.")
         Long paymentMethodId
 ) {
 }

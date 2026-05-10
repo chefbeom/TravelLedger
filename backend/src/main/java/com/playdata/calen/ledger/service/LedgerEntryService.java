@@ -689,14 +689,11 @@ public class LedgerEntryService {
     private void applyRequest(Long userId, LedgerEntry ledgerEntry, LedgerEntryRequest request) {
         CategoryGroup group = categoryGroupRepository.findByIdAndOwnerId(request.categoryGroupId(), userId)
                 .orElseThrow(() -> new NotFoundException("대분류를 찾을 수 없습니다."));
-        PaymentMethod paymentMethod = paymentMethodRepository.findByIdAndOwnerId(request.paymentMethodId(), userId)
-                .orElseThrow(() -> new NotFoundException("결제수단을 찾을 수 없습니다."));
-
         if (!group.getEntryType().equals(request.entryType())) {
             throw new BadRequestException("대분류의 수입/지출 구분이 거래 타입과 일치하지 않습니다.");
         }
 
-        paymentMethod = resolvePaymentMethod(userId, request.entryType(), request.paymentMethodId());
+        PaymentMethod paymentMethod = resolvePaymentMethod(userId, request.entryType(), request.paymentMethodId());
 
         CategoryDetail detail = null;
         if (request.categoryDetailId() != null) {
@@ -726,8 +723,12 @@ public class LedgerEntryService {
                     .orElseGet(() -> createIncomePaymentMethod(userId));
         }
 
+        if (paymentMethodId == null) {
+            throw new BadRequestException("결제수단을 선택해 주세요.");
+        }
+
         return paymentMethodRepository.findByIdAndOwnerId(paymentMethodId, userId)
-                .orElseThrow(() -> new NotFoundException("寃곗젣?섎떒??李얠쓣 ???놁뒿?덈떎."));
+                .orElseThrow(() -> new NotFoundException("결제수단을 찾을 수 없습니다."));
     }
 
     private PaymentMethod createIncomePaymentMethod(Long userId) {

@@ -696,8 +696,17 @@ function buildEntryPayloadFromEntry(entry) {
     entryType: entry.entryType,
     categoryGroupId: Number(entry.categoryGroupId),
     categoryDetailId: entry.categoryDetailId != null ? Number(entry.categoryDetailId) : null,
-    paymentMethodId: Number(entry.paymentMethodId),
+    paymentMethodId: resolveEntryPaymentMethodPayload(entry.entryType, entry.paymentMethodId),
   }
+}
+
+function toOptionalNumber(value) {
+  const text = String(value ?? '').trim()
+  return text ? Number(text) : null
+}
+
+function resolveEntryPaymentMethodPayload(entryType, paymentMethodId) {
+  return entryType === 'INCOME' ? null : toOptionalNumber(paymentMethodId)
 }
 
 function sanitizeAmountInput(value) {
@@ -723,9 +732,13 @@ function syncEntryDefaults({ preferLatest = true, force = false } = {}) {
     entryForm.categoryDetailId = resolveDefaultDetailId(entryForm.categoryGroupId, latestEntry)
   }
 
-  const currentPaymentMethodValid = paymentMethods.value.some((item) => String(item.id) === String(entryForm.paymentMethodId))
-  if (force || !currentPaymentMethodValid) {
-    entryForm.paymentMethodId = resolveDefaultPaymentMethodId(latestEntry)
+  if (entryType === 'INCOME') {
+    entryForm.paymentMethodId = ''
+  } else {
+    const currentPaymentMethodValid = paymentMethods.value.some((item) => String(item.id) === String(entryForm.paymentMethodId))
+    if (force || !currentPaymentMethodValid) {
+      entryForm.paymentMethodId = resolveDefaultPaymentMethodId(latestEntry)
+    }
   }
 
   if (!detailForm.groupId && categories.value[0]) {
@@ -1121,7 +1134,7 @@ function fillEntryForm(entry) {
   entryForm.entryType = entry.entryType
   entryForm.categoryGroupId = String(entry.categoryGroupId)
   entryForm.categoryDetailId = entry.categoryDetailId != null ? String(entry.categoryDetailId) : ''
-  entryForm.paymentMethodId = String(entry.paymentMethodId)
+  entryForm.paymentMethodId = entry.entryType === 'INCOME' ? '' : String(entry.paymentMethodId)
   amountInput.value = String(Number(entry.amount || 0))
   isEntryTimeEnabled.value = Boolean(entry.entryTime && entry.entryTime !== '00:00')
 }
@@ -1447,7 +1460,7 @@ function buildEntryPayload() {
     entryType: entryForm.entryType,
     categoryGroupId: Number(entryForm.categoryGroupId),
     categoryDetailId: entryForm.categoryDetailId ? Number(entryForm.categoryDetailId) : null,
-    paymentMethodId: Number(entryForm.paymentMethodId),
+    paymentMethodId: resolveEntryPaymentMethodPayload(entryForm.entryType, entryForm.paymentMethodId),
   }
 }
 

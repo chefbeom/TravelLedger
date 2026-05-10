@@ -566,6 +566,70 @@ class LedgerEntryUserScopeIntegrationTest {
 
     @Test
     @Transactional
+    void incomeEntryUpdateAllowsBlankPaymentMethod() throws Exception {
+        MockHttpSession hanaSession = loginAndGetSession("hana", false);
+        AppUser hana = appUserRepository.findByLoginId("hana").orElseThrow();
+        LocalDate entryDate = LocalDate.of(2041, 5, 13);
+
+        PaymentMethod originalPayment = savePaymentMethod(hana, "income-update-original-payment-2041", false);
+        CategoryGroup incomeGroup = saveCategoryGroup(hana, "income-update-group-2041", true, EntryType.INCOME);
+        CategoryDetail incomeDetail = saveCategoryDetail(incomeGroup, "income-update-detail-2041", true);
+        LedgerEntry entry = saveLedgerEntry(hana, entryDate, "income update original", originalPayment, incomeGroup, incomeDetail);
+
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("entryDate", entryDate.toString());
+        payload.put("entryTime", "00:00");
+        payload.put("title", "income update without payment");
+        payload.put("memo", null);
+        payload.put("amount", "3300");
+        payload.put("entryType", "INCOME");
+        payload.put("categoryGroupId", incomeGroup.getId());
+        payload.put("categoryDetailId", incomeDetail.getId());
+        payload.put("paymentMethodId", null);
+
+        mockMvc.perform(put("/api/entries/{id}", entry.getId())
+                        .with(csrf())
+                        .session(hanaSession)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(payload)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.entryType").value("INCOME"))
+                .andExpect(jsonPath("$.paymentMethodName").value("-"));
+    }
+
+    @Test
+    @Transactional
+    void expenseEntryUpdateRequiresPaymentMethod() throws Exception {
+        MockHttpSession hanaSession = loginAndGetSession("hana", false);
+        AppUser hana = appUserRepository.findByLoginId("hana").orElseThrow();
+        LocalDate entryDate = LocalDate.of(2041, 5, 14);
+
+        PaymentMethod originalPayment = savePaymentMethod(hana, "expense-update-original-payment-2041", true);
+        CategoryGroup expenseGroup = saveCategoryGroup(hana, "expense-update-group-2041", true, EntryType.EXPENSE);
+        CategoryDetail expenseDetail = saveCategoryDetail(expenseGroup, "expense-update-detail-2041", true);
+        LedgerEntry entry = saveLedgerEntry(hana, entryDate, "expense update original", originalPayment, expenseGroup, expenseDetail);
+
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("entryDate", entryDate.toString());
+        payload.put("entryTime", "00:00");
+        payload.put("title", "expense update without payment");
+        payload.put("memo", null);
+        payload.put("amount", "3300");
+        payload.put("entryType", "EXPENSE");
+        payload.put("categoryGroupId", expenseGroup.getId());
+        payload.put("categoryDetailId", expenseDetail.getId());
+        payload.put("paymentMethodId", null);
+
+        mockMvc.perform(put("/api/entries/{id}", entry.getId())
+                        .with(csrf())
+                        .session(hanaSession)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(payload)))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    @Transactional
     void searchEntriesCanFilterOtherInactiveClassifications() throws Exception {
         MockHttpSession hanaSession = loginAndGetSession("hana", false);
         AppUser hana = appUserRepository.findByLoginId("hana").orElseThrow();
@@ -697,10 +761,14 @@ class LedgerEntryUserScopeIntegrationTest {
     }
 
     private CategoryGroup saveCategoryGroup(AppUser owner, String name, boolean active) {
+        return saveCategoryGroup(owner, name, active, EntryType.EXPENSE);
+    }
+
+    private CategoryGroup saveCategoryGroup(AppUser owner, String name, boolean active, EntryType entryType) {
         CategoryGroup group = new CategoryGroup();
         group.setOwner(owner);
         group.setName(name);
-        group.setEntryType(EntryType.EXPENSE);
+        group.setEntryType(entryType);
         group.setDisplayOrder(0);
         group.setActive(active);
         return categoryGroupRepository.save(group);
@@ -728,7 +796,7 @@ class LedgerEntryUserScopeIntegrationTest {
         entry.setEntryDate(entryDate);
         entry.setTitle(title);
         entry.setAmount(new java.math.BigDecimal("1000"));
-        entry.setEntryType(EntryType.EXPENSE);
+        entry.setEntryType(categoryGroup.getEntryType());
         entry.setPaymentMethod(paymentMethod);
         entry.setCategoryGroup(categoryGroup);
         entry.setCategoryDetail(categoryDetail);

@@ -1,500 +1,205 @@
 # TravelLedger (Calen)
 
-TravelLedger는 가계부, 여행 기록, 여행 사진 지도, 드라이브형 파일 관리, 관리자 운영 기능을 하나로 묶은 개인 생활 기록 플랫폼입니다.
+TravelLedger는 가계부, 여행 기록, 여행 사진 지도, 파일 드라이브를 한 서비스 안에서 관리하는 개인 생활 기록 플랫폼입니다. 현재 기준 문서 갱신일은 2026-05-28입니다.
 
-현재 프로젝트는 `Calen`이라는 내부 애플리케이션 이름을 함께 사용합니다.
+## 현재 구성
 
-## 주요 기능
+### 주요 기능
 
-### 메인 대시보드
-
-- 가계부, 여행, 드라이브 상태를 한 화면에서 요약합니다.
-- 팔레트 기반 대시보드로 각 위젯의 위치와 크기를 조정할 수 있습니다.
-- 팔레트 배치는 사용자별로 저장되어 다른 기기에서도 이어서 사용할 수 있습니다.
-- 빠른 거래 입력, 사진 액자, 드라이브 용량, 최근 파일, 여행 요약 같은 단축 위젯을 제공합니다.
-
-### 가계부
-
-- 달력 기반 거래 입력, 수정, 삭제, 조회를 지원합니다.
-- 빠른 입력에서 금액 단축 버튼, 24시간제 시간 입력, 최근 분류/결제수단 기본값을 지원합니다.
-- 달력, 빠른 입력, 사용자 설정 집계, 거래 시트 패널의 배치를 드래그와 리사이즈로 조정할 수 있습니다.
-- 통계, 검색, 휴지통, 인사이트, 비교, 데이터 입출력, 분류 관리를 제공합니다.
-- CSV 내보내기와 엑셀 가져오기 흐름을 유지합니다.
-
-### 여행
-
-- 여행 계획, 예산, 지출, 기록, 사진, 경로, GPX 기반 여행 데이터를 관리합니다.
-- 여행 사진은 업로드 시 준비된 썸네일을 생성하고, 지도에서는 클러스터 또는 핀 형태로 볼 수 있습니다.
-- 내 사진 탭에서 업로드한 사진을 시간순, 여행별, 지역별로 필터링해 볼 수 있습니다.
-- 여행 공유 기능을 통해 공개 여행 기록을 커뮤니티형 지도와 목록으로 탐색할 수 있습니다.
-- 지도 렌더링은 클러스터링과 viewport 중심 렌더링을 사용해 많은 사진 노드에서도 프론트엔드 부하를 줄입니다.
-
-### 드라이브
-
-- 파일과 폴더를 드라이브처럼 관리합니다.
-- 최근 저장 파일, 용량, 공유 상태를 대시보드에서 빠르게 확인할 수 있습니다.
-- 이미지 파일은 썸네일과 원본 열람 흐름을 분리합니다.
-
-### 관리자
-
-- 관리자 전용 대시보드에서 초대 링크, 데이터 백업, 복구, 운영 상태 확인 기능을 제공합니다.
-- 일반 사용자 화면과 관리자 기능을 분리합니다.
+| 영역 | 현재 기능 |
+| --- | --- |
+| 메인 대시보드 | 가계부, 여행, 드라이브 요약을 카드/팔레트 형태로 표시합니다. 사용자별 배치와 표시 항목을 저장하고 다크/라이트 모드를 지원합니다. |
+| 가계부 | 월 달력 기반 입력, 빠른 거래 입력, 검색, 통계, 비교, 인사이트, 분류 관리, 엑셀 가져오기/내보내기, 변경 이력 복구를 제공합니다. |
+| 가계부 OCR | 영수증 또는 거래내역 캡처 이미지를 업로드해 OCR/AI 분석 결과를 검토한 뒤 기존 거래 입력 폼에 적용할 수 있습니다. 자동 저장은 하지 않습니다. |
+| 여행 | 여행 계획, 예산/지출, 기억, 미디어, 경로, 사진 지도를 관리합니다. 사진 지도는 클러스터와 뷰포트 렌더링을 사용합니다. |
+| 여행 공유 | 공개 여행 지도와 제한 공유 그룹을 제공합니다. 공개/그룹 공유는 기존 개인 여행 기능과 분리되어 동작합니다. |
+| 내 사진 | 업로드한 여행 사진을 썸네일 기반 앨범으로 보고, 클릭 시 원본 비율 상세 모달과 위치 정보를 확인합니다. |
+| CalenDrive | 구글 드라이브처럼 파일/폴더 탐색, 업로드, 다운로드, 공유, 받은 파일 저장, 휴지통, 썸네일, 프로필 이미지를 관리합니다. |
+| 관리자 | 초대 링크, 운영 패널, 백업/복구 관련 진입점을 관리자 영역으로 분리했습니다. |
 
 ## 기술 스택
 
 ### Frontend
 
-- Vue 3
-- JavaScript
+- Vue 3 + JavaScript
 - Vite
 - Pinia
 - GridStack
 - Leaflet
 - exifr
+- CSS scoped style
+
+TypeScript는 사용하지 않습니다. 신규 Vue SFC도 `<script setup>` JavaScript 기준으로 작성합니다.
 
 ### Backend
 
 - Java 17
-- Spring Boot 3
-- Spring MVC
+- Spring Boot 3.5
 - Spring Security
 - Spring Data JPA
-- Actuator
-
-### Data / Storage
-
 - MariaDB
+- Redis/Lettuce
 - MinIO
-- Redis Cache
-- Redis State
-- 로컬 파일 fallback 업로드 경로
-
-### Infra
-
-- Docker
-- Docker Compose
-- Nginx
-- OCI
-- Jenkins
-- rclone 기반 외부 백업
+- Apache POI
+- zip4j
 
 ### OCR / AI
 
-- `PaddleOCR/`는 가계부 영수증/결제내역 이미지 분석을 위한 별도 사설 OCR 서비스입니다.
-- 브라우저는 OCR 서버를 직접 호출하지 않고, 백엔드가 `POST /api/ledger/ocr/analyze`로 프록시 호출합니다.
-- OCR 서버는 `X-OCR-API-Key`를 요구하며, 필요하면 내부에서 Gemma 호환 LLM을 호출해 OCR 원문을 거래 입력값으로 구조화합니다.
-- 실제 영수증 이미지, OCR 로그, Python 가상환경, 모델 캐시, 샘플 이미지는 Git에 올리지 않습니다.
+- 별도 Windows 1060 PC에서 OCR/AI 분석 서버 운영
+- FastAPI 기반 OCR 서버
+- PaddleOCR
+- Ollama Gemma 계열 모델 또는 n8n 워크플로 연동
+- 브라우저는 OCR PC를 직접 호출하지 않고 Backend의 `/api/ledger/ocr/analyze`를 통해 프록시 호출합니다.
 
-#### OCR / LLM 처리 흐름
+### Infra
 
-OCR 기능은 운영 앱 서버와 분리된 사설 Windows PC에서 실행하는 구조입니다. OCR PC는 외부 브라우저에 직접 노출하지 않고, 백엔드만 사설 네트워크 주소로 호출합니다.
-
-```text
-Frontend OCR Modal
-  └─ 이미지 업로드, 문서 타입 선택(RECEIPT / PAYMENT_CAPTURE)
-      ↓
-Backend
-  └─ POST /api/ledger/ocr/analyze
-      - 로그인 사용자만 호출
-      - 파일 크기/이미지 타입 검증
-      - OCR 서버 API 키를 서버 내부에서만 첨부
-      ↓
-Private OCR Server (PaddleOCR/FastAPI)
-  └─ POST /analyze
-      - PaddleOCR로 텍스트와 좌표 추출
-      - 영수증/거래내역 캡처별 deterministic parser 적용
-      - 필요 시 Ollama/Gemma LLM으로 OCR 원문 보정
-      - LLM 응답을 ledger-ocr-v1 스키마로 정규화
-      ↓
-Backend
-  └─ 기존 빠른 거래 입력 DTO에 맞는 suggestedEntry/suggestedEntries 생성
-      ↓
-Frontend
-  └─ 사용자가 미리보기에서 검토/수정 후 기존 거래 등록 버튼으로 저장
-```
-
-자동 저장은 하지 않습니다. OCR/AI 결과는 항상 사용자가 검토한 뒤 기존 가계부 저장 흐름으로 확정합니다.
-
-#### 문서 타입
-
-| 타입 | 용도 | 결과 |
-| --- | --- | --- |
-| `RECEIPT` | 영수증, 카드 매출전표처럼 한 장이 한 거래인 이미지 | `entries` 1건 중심 |
-| `PAYMENT_CAPTURE` | 앱 거래내역 캡처처럼 한 장에 여러 수입/지출 행이 있는 이미지 | 보이는 거래 행마다 `entries` 여러 건 |
-| `AUTO` | 서버가 영수증/거래내역 캡처 형태를 추정 | 상황에 따라 1건 또는 여러 건 |
-
-프론트는 OCR 모달에서 사용자가 `영수증` 또는 `거래내역 캡처`를 선택하도록 하고, 백엔드는 이 값을 OCR 서버의 `documentType`으로 전달합니다.
-
-#### n8n OCR/Gemma workflow 연동
-
-`LEDGER_OCR_WORKFLOW_URL`을 설정하면 백엔드는 기존 OCR 서버 `/analyze` 직접 호출 대신 n8n webhook을 호출합니다.
-
-```env
-LEDGER_OCR_ENABLED=true
-LEDGER_OCR_WORKFLOW_URL=http://localhost:5678/webhook/ocr-gemma-json
-```
-
-요청은 기존 프론트 흐름과 동일하게 `POST /api/ledger/ocr/analyze`로 들어오며, 백엔드는 multipart field `file`과 `documentType`을 n8n으로 전달합니다. n8n은 PaddleOCR `/extract-text`와 Docker Ollama/Gemma를 호출한 뒤 `ledger-ocr-v1` JSON을 반환합니다.
-
-`LEDGER_OCR_WORKFLOW_URL`이 비어 있으면 기존처럼 `LEDGER_OCR_BASE_URL` + `LEDGER_OCR_API_KEY`로 사설 OCR 서버의 `/analyze`를 직접 호출합니다. 운영에서는 n8n URL, OCR API 키, n8n 암호화 키 같은 민감값을 문서나 Git에 올리지 않습니다.
-
-1060 OCR PC에서 n8n과 Docker Ollama Gemma4를 운영하는 경우 앱 서버 환경변수는 다음 형태로 둡니다.
-
-```env
-LEDGER_OCR_ENABLED=true
-LEDGER_OCR_WORKFLOW_URL=http://<ocr-1060-private-host>:5678/webhook/ocr-gemma-json
-```
-
-이때 1060 PC의 n8n 컨테이너는 OCR 서비스 `http://host.docker.internal:8765/extract-text`와 Docker Ollama `http://ollama:11434`에 접근할 수 있어야 합니다. 앱 서버는 OCR 서버를 직접 호출하지 않고 n8n webhook만 호출합니다.
-
-#### OCR 서버 API
-
-OCR 서버는 FastAPI 기반이며 브라우저 공개 API가 아닙니다.
-
-| Method | Path | 설명 |
-| --- | --- | --- |
-| `GET` | `/health` | 서버 상태와 LLM provider 확인 |
-| `POST` | `/analyze` | multipart 이미지 분석 |
-
-`POST /analyze` 요청:
-
-- Header: `X-OCR-API-Key: <secret>`
-- Form field: `file=<image>`
-- Form field: `documentType=RECEIPT|PAYMENT_CAPTURE|AUTO`
-
-대표 응답 형태:
-
-```json
-{
-  "ok": true,
-  "documentType": "RECEIPT",
-  "rawText": "정리된 OCR/영수증 텍스트",
-  "rawOcrText": "PaddleOCR 원문 텍스트",
-  "parsed": {
-    "entryDate": "2026-04-26",
-    "entryTime": "18:33",
-    "entryType": "EXPENSE",
-    "title": "상호 또는 거래명",
-    "memo": "품목 또는 거래 설명",
-    "amount": 8000,
-    "vendor": "상호",
-    "paymentMethodText": null,
-    "categoryGroupName": null,
-    "categoryDetailName": null,
-    "categoryText": null,
-    "lineItems": [
-      {
-        "itemName": "품목명",
-        "quantity": 1,
-        "unit": null,
-        "price": 3000
-      }
-    ],
-    "confidence": 0.78,
-    "warnings": []
-  },
-  "parsedEntries": []
-}
-```
-
-LLM 결과는 신뢰하지 않고 서버에서 `ledger-ocr-v1` 계약으로 재정규화합니다.
-
-규칙:
-
-- 금액은 항상 양수 `amount`로 내려보냅니다.
-- 수입/지출 방향은 `entryType` (`INCOME`, `EXPENSE`)으로 표현합니다.
-- 날짜는 `YYYY-MM-DD`, 시간은 `HH:mm`입니다.
-- 결제수단, 대분류, 분류는 OCR/AI가 임의 확정하지 않으며 `null`로 유지합니다.
-- 카드번호 전체값, 실제 이미지, OCR 원문 로그는 운영 로그나 Git에 남기지 않습니다.
-- `parsedEntries`가 여러 건이면 백엔드는 이를 `suggestedEntries`로 매핑하고, 첫 항목을 호환용 `suggestedEntry`로 함께 제공합니다.
-
-#### Windows OCR 서버 설치와 실행
-
-Windows OCR PC에서는 Python/Paddle 버전 차이를 줄이기 위해 설치 스크립트를 사용합니다.
-
-```powershell
-cd <repo>\PaddleOCR
-powershell -NoProfile -ExecutionPolicy Bypass -File .\install_windows_ocr.ps1 -Recreate
-```
-
-API 키를 초기 템플릿에 함께 넣고 싶으면:
-
-```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\install_windows_ocr.ps1 -Recreate -ApiKey "<same-value-as-backend>"
-```
-
-스크립트 역할:
-
-- 64-bit Python 3.10 또는 3.11 확인
-- 깨진 `ocr_env`를 `-Recreate` 옵션으로 재생성
-- `PaddleOCR/requirements.txt` 설치
-- `paddlepaddle`, `paddleocr`, `fastapi`, `uvicorn`, `Pillow` 버전 확인
-- `ocr.env.ps1` 템플릿 생성
-
-`ocr.env.ps1` 예시:
-
-```powershell
-$env:OCR_API_KEY="<same-value-as-backend>"
-$env:OCR_HOST="<ocr-private-host>"
-$env:OCR_PORT="8765"
-
-$env:OCR_LANG="korean"
-$env:OCR_ROTATION_MODE="off"
-$env:OCR_DEVICE="cpu"
-$env:OCR_CPU_THREADS="4"
-
-$env:PADDLE_OCR_BASE_DIR="C:\calen\paddleocr_models"
-$env:PADDLEOCR_BASE_DIR="C:\calen\paddleocr_models"
-$env:USERPROFILE="C:\calen\paddle_home"
-$env:HOME="C:\calen\paddle_home"
-
-$env:LLM_PROVIDER="ollama"
-$env:LLM_BASE_URL="http://127.0.0.1:11434"
-$env:LLM_MODEL="gemma2:2b"
-$env:LLM_TIMEOUT_SECONDS="90"
-```
-
-OCR 서버 실행:
-
-```powershell
-cd <repo>\PaddleOCR
-Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force
-.\ocr_env\Scripts\Activate.ps1
-. .\ocr.env.ps1
-python .\ocr_service.py
-```
-
-상태 확인:
-
-```powershell
-curl http://<ocr-private-host>:8765/health
-```
-
-응답 예시:
-
-```json
-{
-  "ok": true,
-  "ocrLoaded": false,
-  "llmProvider": "ollama"
-}
-```
-
-`ocrLoaded`는 첫 이미지 분석 요청 전에는 `false`일 수 있습니다. 첫 분석 요청에서 PaddleOCR 모델이 로드됩니다.
-
-#### OCR 서버 운영 주의사항
-
-- OCR 서버는 공인망에 직접 노출하지 않습니다.
-- 앱 백엔드만 사설망, VPN, Tailscale 등 제한된 경로로 접근하게 합니다.
-- `OCR_API_KEY`와 백엔드의 `LEDGER_OCR_API_KEY`는 같은 값이어야 합니다.
-- `ocr.env.ps1`, `ocr_env/`, `.paddleocr/`, `.paddlex/`, 로그, 테스트 영수증 이미지는 Git에 올리지 않습니다.
-- PaddleOCR 모델 캐시가 깨지면 `C:\calen\paddleocr_models`, `C:\calen\paddle_home` 같은 한글 없는 경로를 사용합니다.
-- 서버 재시작이 필요하면 기존 `python ocr_service.py` 창에서 `Ctrl+C` 후 다시 실행합니다.
+- Docker / Docker Compose
+- OCI 앱 서버와 데이터 서버 분리
+- Nginx HTTPS reverse proxy
+- Jenkins 기반 GitHub push 배포
+- rclone 기반 Google Drive 백업
 
 ## 프로젝트 구조
 
 ```text
-.
-├─ backend/                         # Spring Boot 백엔드
-├─ frontend/                        # Vue 3 프론트엔드
-├─ deploy/oci/                      # OCI/Nginx/Redis 운영 구성
-├─ PaddleOCR/                       # 사설 OCR + LLM 분석 서비스
-├─ docs/                            # 운영 및 기능 문서
-├─ docker-compose.yml               # 로컬 통합 실행
-├─ docker-compose.oci.app.yml       # OCI 앱 서버 실행
-├─ docker-compose.oci.data.yml      # OCI 데이터 서버 실행
-├─ .env.example                     # 로컬 실행 환경변수 예시
-├─ .env.oci.app.example             # OCI 앱 서버 환경변수 예시
-└─ .env.oci.data.example            # OCI 데이터 서버 환경변수 예시
+backend/
+  src/main/java/...      Spring Boot API, 도메인, 보안, 저장소
+frontend/
+  src/                   Vue 3 프론트엔드
+PaddleOCR/
+  ocr_service.py         OCR/AI 분석 FastAPI 서비스
+  requirements.txt       OCR 서버 의존성
+  install_windows_ocr.ps1
+deploy/
+  oci/scripts/           OCI 운영/백업/프로비저닝 스크립트
+docs/
+  *.md                   운영, 배포, 백업, 개발 이력 문서
+docker-compose*.yml      로컬/OCI Compose 구성
 ```
 
-## 배포 구조
-
-### 로컬 통합 실행
-
-로컬 개발 환경에서는 하나의 Docker Compose로 데이터베이스, 스토리지, 백엔드, 프론트엔드를 함께 실행합니다.
-
-```powershell
-Copy-Item .env.example .env
-docker compose up -d --build
-```
-
-### OCI 분리 배포
-
-운영 환경은 역할별로 분리된 Compose 구성을 기준으로 합니다.
-
-| 영역 | 주요 구성 | Compose 파일 |
-| --- | --- | --- |
-| 앱 서버 | backend, frontend | `docker-compose.oci.app.yml` |
-| 데이터 서버 | MariaDB, MinIO, minio-init | `docker-compose.oci.data.yml` |
-| Redis Cache | 조회/요약 캐시 | `deploy/oci/redis/docker-compose.redis.cache.yml` |
-| Redis State | 세션성 상태/락/운영 상태 | `deploy/oci/redis/docker-compose.redis.state.yml` |
-| Reverse Proxy | Nginx, TLS, public routing | `deploy/oci/nginx/` |
-
-앱 서버 실행:
-
-```bash
-docker compose --env-file .env.oci.app -f docker-compose.oci.app.yml up -d --build backend frontend
-```
-
-데이터 서버 실행:
-
-```bash
-docker compose --env-file .env.oci.data -f docker-compose.oci.data.yml up -d
-```
-
-Redis Cache 실행:
-
-```bash
-cd deploy/oci/redis
-docker compose --env-file .env.redis.cache -f docker-compose.redis.cache.yml up -d
-```
-
-Redis State 실행:
-
-```bash
-cd deploy/oci/redis
-docker compose --env-file .env.redis.state -f docker-compose.redis.state.yml up -d
-```
-
-## Jenkins 배포 구조
-
-Jenkins는 GitHub `main` 브랜치 변경을 기준으로 앱 서버의 `backend`와 `frontend` 컨테이너를 다시 빌드하고 재기동하는 역할을 합니다.
-
-민감정보 보호를 위해 README에는 실제 Jenkins URL, 서버 IP, SSH 키 파일명, 운영 계정명, 도메인, 비밀번호를 기록하지 않습니다. Jenkins Job에서는 Jenkins Credentials 또는 Jenkins 서버 내부 보호 경로의 키를 사용하고, GitHub에는 `.env`, SSH private key, 실제 서버 주소를 커밋하지 않습니다.
-
-### CI/CD 책임 범위
-
-| 영역 | Jenkins 앱 배포 Job에서 처리 | 별도 운영 |
-| --- | --- | --- |
-| Git checkout | 예 | 아니오 |
-| 앱 서버 코드 갱신 | 예 | 아니오 |
-| Backend/Frontend 이미지 빌드 | 예 | 아니오 |
-| Backend/Frontend 컨테이너 재기동 | 예 | 아니오 |
-| MariaDB/MinIO 데이터 초기화 | 아니오 | 예 |
-| Redis Cache/State 재기동 | 아니오 | 예 |
-| OCR Windows 서버 배포 | 아니오 | 예 |
-| rclone 외부 백업 | 아니오 | 예 |
-
-OCR 서버는 앱 서버 Docker Compose에 포함하지 않습니다. OCR PC는 별도 Windows 프로세스로 운영하며, OCR 코드 변경 시 OCR PC에서 `git pull` 후 `python ocr_service.py`를 재실행합니다.
-
-### 흐름
-
-1. GitHub `main` 브랜치에 변경 사항을 push합니다.
-2. Jenkins Job이 webhook 또는 수동 빌드로 실행됩니다.
-3. Jenkins workspace에서 repository를 checkout합니다.
-4. Jenkins가 SSH로 앱 서버에 접속합니다.
-5. 앱 서버의 배포 디렉터리에서 `git fetch`와 `git reset --hard origin/main`을 수행합니다.
-6. `docker-compose.oci.app.yml` 설정을 검증합니다.
-7. `backend`, `frontend`만 `up -d --build`로 재빌드 및 재기동합니다.
-8. `docker compose ps`로 상태를 확인합니다.
-
-데이터 서버, Redis 서버, MinIO 데이터 볼륨은 일반 앱 배포마다 재생성하지 않습니다.
-
-### Jenkins Job 변수
-
-실제 값은 Jenkins Credentials, Jenkins 전용 환경변수, 또는 서버 내부 보호 경로에서만 관리합니다.
-
-| 변수 | 설명 | 예시 |
-| --- | --- | --- |
-| `JENKINS_SSH_KEY_PATH` | Jenkins 서버에만 존재하는 SSH private key 경로 | `/var/lib/jenkins/<key-file>` |
-| `DEPLOY_USER` | 앱 서버 SSH 사용자 | `<deploy-user>` |
-| `DEPLOY_HOST` | 앱 서버 사설 또는 공인 접근 주소 | `<deploy-host>` |
-| `APP_DIR` | 앱 서버의 repository 경로 | `/home/<deploy-user>/calen` |
-| `BRANCH` | 배포 브랜치 | `main` |
-| `ENV_FILE` | 앱 서버 환경변수 파일 | `.env.oci.app` |
-| `COMPOSE_FILE` | 앱 서버 Compose 파일 | `docker-compose.oci.app.yml` |
-
-### Jenkins Execute shell 예시
-
-아래 스크립트는 값이 노출되지 않도록 전부 환경변수 또는 자리표시자로 작성되어 있습니다. 실제 Jenkins Job에서는 Jenkins Credentials Binding 또는 Jenkins 전용 보호 경로를 사용하세요.
-
-```bash
-#!/usr/bin/env bash
-set -euo pipefail
-
-SSH_KEY="${JENKINS_SSH_KEY_PATH:?JENKINS_SSH_KEY_PATH is required}"
-REMOTE="${DEPLOY_USER:?DEPLOY_USER is required}@${DEPLOY_HOST:?DEPLOY_HOST is required}"
-APP_DIR="${APP_DIR:-/home/<deploy-user>/calen}"
-BRANCH="${BRANCH:-main}"
-ENV_FILE="${ENV_FILE:-.env.oci.app}"
-COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.oci.app.yml}"
-
-ssh -i "${SSH_KEY}" \
-  -o StrictHostKeyChecking=accept-new \
-  "${REMOTE}" \
-  "APP_DIR='${APP_DIR}' BRANCH='${BRANCH}' ENV_FILE='${ENV_FILE}' COMPOSE_FILE='${COMPOSE_FILE}' bash -se" <<'REMOTE_SCRIPT'
-set -euo pipefail
-
-cd "${APP_DIR}"
-
-git fetch origin "${BRANCH}"
-git reset --hard "origin/${BRANCH}"
-
-docker compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" config --quiet
-docker compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" up -d --build backend frontend
-docker compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" ps
-REMOTE_SCRIPT
-```
-
-### Jenkins 운영 체크리스트
-
-- SSH private key는 GitHub에 올리지 않습니다.
-- Jenkins Job 로그에 비밀번호, 토큰, private key 경로가 찍히지 않도록 `set -x`를 사용하지 않습니다.
-- 배포 서버의 `APP_DIR`은 SSH 접속 사용자에게 접근 권한이 있어야 합니다.
-- SSH 접속 사용자가 Docker를 실행할 수 있어야 합니다. 일반적으로 `docker` 그룹 권한 또는 제한된 sudo 정책을 사용합니다.
-- 앱 배포 Job은 앱 서버 Compose만 갱신합니다. 데이터 서버와 Redis는 별도 운영 절차로 관리합니다.
-- Jenkins는 필요할 때만 외부 접근을 열고, 계정/권한/CSRF/crumb/방화벽 설정을 유지합니다.
-- 실제 운영 값은 Jenkins Credentials, 서버의 `.env.oci.*`, 보안 저장소에서만 관리합니다.
-- 앱 서버 디스크가 부족하면 Docker/Gradle 캐시 때문에 빌드가 실패할 수 있습니다. 운영자는 이미지/빌드 캐시/로그 정리 정책을 별도로 유지합니다.
-- Jenkins Job이 성공해도 OCR 서버 코드는 자동 재시작되지 않습니다. OCR 변경사항은 OCR PC에서 별도 pull/restart가 필요합니다.
-
-## 환경변수와 민감정보 정책
-
-- 실제 `.env`, `.env.oci.app`, `.env.oci.data`, Redis env, SSH key, rclone 설정 파일은 Git에 올리지 않습니다.
-- 저장소에는 `.example` 파일만 커밋합니다.
-- README, docs, issue, commit message에는 실제 IP, 포트포워딩 정보, private key 파일명, 비밀번호, JWT key, MinIO secret, DB password를 적지 않습니다.
-- 기본값에 `change-me-*`가 들어간 설정은 운영 전에 반드시 교체합니다.
-- 현재 저장소 추적 대상은 예시 파일 기준입니다. 실제 `.env`는 `.gitignore`로 제외되어야 합니다.
-
-## 개발 명령
+## 로컬 개발
 
 ### Frontend
 
-```powershell
+```bash
 cd frontend
-cmd /c npm install
-cmd /c npm run build
+npm install
+npm run dev
+npm run build
 ```
 
 ### Backend
 
+```bash
+cd backend
+./gradlew test
+./gradlew bootWar
+```
+
+Windows PowerShell에서는 다음처럼 실행할 수 있습니다.
+
 ```powershell
 cd backend
 .\gradlew.bat test
+.\gradlew.bat bootWar
 ```
 
-## 검증 기준
+### Docker Compose
 
-- 프론트엔드 변경 후 `frontend`에서 `cmd /c npm run build`를 실행합니다.
-- 백엔드 변경 후 Gradle test 또는 최소 `classes`/`bootJar` 검증을 수행합니다.
-- 배포 전 `docker compose config --quiet`로 Compose 설정을 검증합니다.
-- Vue SFC는 `<script setup>`과 JavaScript를 사용합니다. TypeScript 파일 또는 `lang="ts"`를 추가하지 않습니다.
+```bash
+docker compose up -d --build
+```
 
-## 관련 문서
+운영용 Compose는 `docker-compose.oci.app.yml`, `docker-compose.oci.data.yml`을 기준으로 분리되어 있습니다.
 
-- [Architecture](./docs/architecture.md)
-- [Household Development History](./docs/household_development_history.md)
-- [Security Patch History](./docs/security_patch_history.md)
-- [Travel Map Development History](./docs/travel_my_map_development_history.md)
-- [OCI Project Tenant Provisioning Guide](./docs/OCI_Project_Tenant_Provisioning_Guide.md)
-- [Google Drive DB 백업 가이드](./docs/dbtogdrive.md)
-- [Google Drive 복구 가이드](./docs/db_restore_from_gdrive.md)
+## 운영 구조
 
-## Wiki
+### 앱 서버
 
-GitHub Wiki에는 운영 중 발견한 가계부, 여행 지도, 보안 패치 관련 상세 이력을 별도 문서로 관리합니다.
+앱 서버는 Backend와 Frontend 컨테이너를 실행합니다. Jenkins 배포는 GitHub main 브랜치 push 이후 앱 서버에서 최신 커밋을 가져와 Backend/Frontend를 다시 빌드하고 재기동하는 방식입니다.
 
-- `Household-Development-History`
-- `Security-Patch-History`
-- `Travel-Map-Development-History`
+흐름:
+
+```text
+GitHub push
+  -> Jenkins checkout
+  -> SSH to app server
+  -> git fetch/reset
+  -> docker compose config
+  -> docker compose up -d --build backend frontend
+```
+
+### 데이터 서버
+
+데이터 서버는 MariaDB, MinIO, Redis 같은 상태 저장 서비스를 담당합니다. 앱 서버와 데이터 서버는 운영 환경변수로 연결합니다.
+
+### Redis
+
+Redis는 캐시/상태 용도로 사용합니다. 장애가 서비스 전체 장애로 번지지 않도록 애플리케이션 레벨에서 가능한 범위의 graceful degradation을 유지합니다. 운영에서는 단일 Redis 또는 캐시/상태 분리 Redis 중 현재 인프라 기준에 맞춰 환경변수로 연결합니다.
+
+### 백업
+
+`deploy/oci/scripts/backup-to-gdrive.sh`는 DB/MinIO 백업을 생성하고 Google Drive 업로드 후 로컬 임시 백업 파일을 정리하는 방향으로 운영합니다. 서버 디스크가 백업 파일 누적으로 가득 차지 않도록 백업 산출물 정리를 반드시 확인합니다.
+
+## OCR 운영
+
+가계부 OCR은 기본 가계부 기능과 분리되어 있습니다. OCR 서버가 꺼져 있어도 일반 가계부 입력, 수정, 삭제, 검색, 통계, 엑셀 가져오기 기능은 계속 사용할 수 있어야 합니다.
+
+Backend 설정 예시:
+
+```env
+LEDGER_OCR_ENABLED=true
+LEDGER_OCR_BASE_URL=http://<ocr-private-host>:8765
+LEDGER_OCR_WORKFLOW_URL=http://<n8n-private-host>:5678/webhook/<workflow>
+LEDGER_OCR_API_KEY=<set-in-server-env>
+LEDGER_OCR_CONNECT_TIMEOUT=5s
+LEDGER_OCR_READ_TIMEOUT=180s
+LEDGER_OCR_MAX_FILE_SIZE=10485760
+```
+
+민감값은 Git에 올리지 않습니다. 실제 URL, API Key, SSH Key, DB 비밀번호, MinIO Key, OCR 테스트 영수증 이미지는 환경변수 또는 서버 로컬 파일로만 관리합니다.
+
+OCR 흐름:
+
+```text
+사용자 이미지 업로드
+  -> Backend 인증 확인
+  -> OCR/AI 서버 또는 n8n 워크플로 호출
+  -> OCR 텍스트와 정형 분석 결과 반환
+  -> Frontend 미리보기/수정
+  -> 사용자가 거래 등록 버튼으로 최종 저장
+```
+
+지원 문서 유형:
+
+- `RECEIPT`: 영수증, 한 장에서 한 거래 제안
+- `PAYMENT_CAPTURE`: 거래내역 캡처, 한 장에서 여러 거래 후보
+- `AUTO`: 서버가 가능한 범위에서 자동 판단
+
+## 가계부 변경 이력
+
+가계부 검색/수정/일괄 변경은 변경 이력에 기록됩니다. 이력은 전체 스냅샷 대신 변경된 필드 중심의 패치 형태로 저장해 저장 공간 증가를 줄입니다. 복구 시에는 현재 시점도 이력으로 남긴 뒤 선택한 이력 기준으로 되돌릴 수 있습니다.
+
+## 보안 주의
+
+다음 파일과 값은 커밋하지 않습니다.
+
+- `.env`, `.env.*`
+- SSH private key
+- DB/Redis/MinIO/OCR API Key
+- 실제 영수증, 카드 내역, 개인 사진 원본 테스트 파일
+- OCR 가상환경과 모델 캐시
+- 운영 로그와 백업 산출물
+
+관련 제외 대상은 `.gitignore`와 각 서비스별 운영 문서를 함께 확인합니다.
+
+## 참고 문서
+
+- [Architecture](docs/architecture.md)
+- [Windows 1060 OCR Tailscale Setup Guide](docs/Windows_1060_OCR_Tailscale_Setup_Guide.md)
+- [DB Restore From Google Drive](docs/db_restore_from_gdrive.md)
+- [DB To Google Drive Backup](docs/dbtogdrive.md)
+- [OCI Project Tenant Provisioning Guide](docs/OCI_Project_Tenant_Provisioning_Guide.md)
+- [Household Development History](docs/household_development_history.md)
+- [Travel Map Development History](docs/travel_my_map_development_history.md)
+- [Security Patch History](docs/security_patch_history.md)

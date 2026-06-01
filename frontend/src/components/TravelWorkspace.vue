@@ -125,6 +125,56 @@ const travelRecordFocusStats = computed(() => {
   ]
 })
 
+const travelRecentActivities = computed(() => {
+  const portfolio = travelPortfolio.value || {}
+  const memoryRecords = Array.isArray(portfolio.memoryRecords) ? portfolio.memoryRecords : []
+  const mediaItems = Array.isArray(portfolio.mediaItems) ? portfolio.mediaItems : []
+  const routeSegments = Array.isArray(portfolio.routeSegments) ? portfolio.routeSegments : []
+
+  return [
+    ...memoryRecords.map((record) => ({
+      id: `memory-${record.id}`,
+      mode: 'memories',
+      kind: 'PLACE',
+      label: '장소',
+      title: record.placeName || record.title || '장소 기록',
+      meta: joinActivityMeta([record.planName, record.region, record.country]),
+      dateLabel: formatActivityDate(record.memoryDate, record.memoryTime),
+      timestamp: toActivityTimestamp(record.memoryDate, record.memoryTime),
+      shared: Boolean(record.sharedWithCommunity),
+      previewUrl: '',
+    })),
+    ...routeSegments.map((route) => ({
+      id: `route-${route.id}`,
+      mode: 'routes',
+      kind: 'GPX',
+      label: 'GPX',
+      title: route.title || buildRouteTitle(route),
+      meta: joinActivityMeta([route.planName, buildRouteMetric(route)]),
+      dateLabel: formatActivityDate(route.routeDate),
+      timestamp: toActivityTimestamp(route.routeDate),
+      shared: false,
+      previewUrl: '',
+    })),
+    ...mediaItems
+      .filter((media) => String(media.mediaType || '').toUpperCase() === 'PHOTO')
+      .map((media) => ({
+        id: `photo-${media.id}`,
+        mode: 'photos',
+        kind: 'PHOTO',
+        label: '사진',
+        title: media.caption || media.title || media.originalFileName || '여행 사진',
+        meta: joinActivityMeta([media.planName, media.placeName, media.region]),
+        dateLabel: formatActivityDate(media.expenseDate || media.uploadedAt),
+        timestamp: toActivityTimestamp(media.expenseDate || media.uploadedAt),
+        shared: false,
+        previewUrl: media.contentUrl || '',
+      })),
+  ]
+    .sort((left, right) => right.timestamp - left.timestamp)
+    .slice(0, 6)
+})
+
 const travelSummaryText = computed(() => {
   const summary = travelRecordSummary.value
   return `여행 ${summary.plans}개 · 장소 기록 ${summary.memories}건 · 사진 ${summary.photos}장 · GPX ${summary.routes}개`
@@ -143,6 +193,58 @@ function uniqueRecordValues(records, key) {
         .filter(Boolean),
     ),
   ]
+}
+
+function joinActivityMeta(parts) {
+  return parts.map((part) => String(part || '').trim()).filter(Boolean).join(' · ')
+}
+
+function toActivityTimestamp(dateValue, timeValue = '') {
+  const rawDate = String(dateValue || '').trim()
+  if (!rawDate) {
+    return 0
+  }
+
+  const datePart = rawDate.includes('T') ? rawDate : rawDate.slice(0, 10)
+  const rawTime = String(timeValue || '').trim()
+  const timePart = rawDate.includes('T') ? '' : `T${rawTime || '00:00:00'}`
+  const parsed = new Date(`${datePart}${timePart}`).getTime()
+  return Number.isFinite(parsed) ? parsed : 0
+}
+
+function formatActivityDate(dateValue, timeValue = '') {
+  const timestamp = toActivityTimestamp(dateValue, timeValue)
+  if (!timestamp) {
+    return '날짜 없음'
+  }
+
+  return new Intl.DateTimeFormat('ko-KR', {
+    month: 'short',
+    day: 'numeric',
+    hour: timeValue ? '2-digit' : undefined,
+    minute: timeValue ? '2-digit' : undefined,
+  }).format(new Date(timestamp))
+}
+
+function buildRouteMetric(route) {
+  const metrics = []
+  const distanceKm = Number(route?.distanceKm || 0)
+  const durationMinutes = Number(route?.durationMinutes || 0)
+  const stepCount = Number(route?.stepCount || 0)
+  if (distanceKm > 0) {
+    metrics.push(`${distanceKm.toLocaleString('ko-KR', { maximumFractionDigits: 1 })}km`)
+  }
+  if (durationMinutes > 0) {
+    metrics.push(`${durationMinutes.toLocaleString('ko-KR')}분`)
+  }
+  if (stepCount > 0) {
+    metrics.push(`${stepCount.toLocaleString('ko-KR')}걸음`)
+  }
+  return metrics.join(' · ')
+}
+
+function buildRouteTitle(route) {
+  return joinActivityMeta([route?.startPlaceName, route?.endPlaceName]) || '이동 경로'
 }
 
 function getModeMetric(modeKey) {
@@ -373,6 +475,47 @@ onMounted(loadTravelSummary)
           <span>{{ stat.label }}</span>
           <strong>{{ travelSummaryLoading ? '-' : stat.value.toLocaleString('ko-KR') }}</strong>
         </article>
+      </div>
+    </section>
+
+    <section class="panel travel-record-timeline">
+      <div class="panel__header">
+        <div>
+          <span class="panel__eyebrow">LATEST</span>
+          <h2>최근 기록</h2>
+        </div>
+        <span class="panel__badge">{{ travelRecentActivities.length }}개</span>
+      </div>
+      <div v-if="travelRecentActivities.length" class="travel-record-timeline__grid">
+        <button
+          v-for="activity in travelRecentActivities"
+          :key="activity.id"
+          class="travel-record-timeline__item"
+          :class="`travel-record-timeline__item--${activity.kind.toLowerCase()}`"
+          type="button"
+          @click="openMode(activity.mode)"
+        >
+          <span class="travel-record-timeline__thumb">
+            <img v-if="activity.previewUrl" :src="activity.previewUrl" :alt="activity.title" loading="lazy" />
+            <span v-else>{{ activity.label }}</span>
+          </span>
+          <span class="travel-record-timeline__copy">
+            <span class="travel-record-timeline__meta">
+              <strong>{{ activity.label }}</strong>
+              <small>{{ activity.dateLabel }}</small>
+            </span>
+            <b>{{ activity.title }}</b>
+            <small>{{ activity.meta || '기록 정보 없음' }}</small>
+            <em v-if="activity.shared">공유됨</em>
+          </span>
+        </button>
+      </div>
+      <div v-else class="travel-record-timeline__empty">
+        <strong>아직 표시할 최근 기록이 없습니다.</strong>
+        <div class="travel-record-timeline__empty-actions">
+          <button class="button button--primary" type="button" @click="openMemories">장소 기록하기</button>
+          <button class="button button--ghost" type="button" @click="openRoutes">GPX 경로 추가</button>
+        </div>
       </div>
     </section>
 

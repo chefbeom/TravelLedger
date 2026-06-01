@@ -50,12 +50,6 @@ const travelModes = [
     meta: '공개/선택 공유',
     badge: 'SHARE',
   },
-  {
-    key: 'finance',
-    label: '여행 가계부',
-    meta: '가계부 연계 관리',
-    badge: 'LEDGER',
-  },
 ]
 
 function applyRouteState(route) {
@@ -201,6 +195,21 @@ watch(
           <strong>{{ mode.label }}</strong>
           <small>{{ mode.meta }}</small>
         </button>
+      </div>
+      <div class="travel-record-switcher__finance-link">
+        <div>
+          <span>HOUSEHOLD LINK</span>
+          <strong>여행 가계부는 가계부에서 이어서 관리합니다</strong>
+          <small>여행 화면은 지도, 장소 방문, GPX, 사진 기록에 집중하고 지출 데이터는 가계부 검색/통계/수정 이력과 함께 사용합니다.</small>
+        </div>
+        <div class="travel-record-switcher__finance-actions">
+          <button class="button button--primary" type="button" @click="emit('open-household-travel-ledger')">
+            가계부에서 열기
+          </button>
+          <button class="button button--ghost" type="button" @click="openFinance">
+            기존 예산 보기
+          </button>
+        </div>
       </div>
     </section>
 

@@ -2276,7 +2276,7 @@ button {
 
 .travel-record-switcher__grid {
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 10px;
 }
 
@@ -2325,6 +2325,49 @@ button {
 
 .travel-record-switcher__card small {
   color: var(--text-soft);
+}
+
+.travel-record-switcher__finance-link {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-top: 14px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--surface) 86%, var(--accent) 14%);
+}
+
+.travel-record-switcher__finance-link > div:first-child {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.travel-record-switcher__finance-link span {
+  color: var(--accent);
+  font-size: 0.72rem;
+  font-weight: 900;
+  letter-spacing: 0;
+}
+
+.travel-record-switcher__finance-link strong,
+.travel-record-switcher__finance-link small {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.travel-record-switcher__finance-link small {
+  color: var(--text-soft);
+  line-height: 1.45;
+}
+
+.travel-record-switcher__finance-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 8px;
 }
 
 .travel-finance-bridge {
@@ -2377,6 +2420,12 @@ button {
   .travel-record-switcher__card {
     min-height: 84px;
     padding: 14px;
+  }
+
+  .travel-record-switcher__finance-link,
+  .travel-record-switcher__finance-actions {
+    align-items: stretch;
+    flex-direction: column;
   }
 }
 

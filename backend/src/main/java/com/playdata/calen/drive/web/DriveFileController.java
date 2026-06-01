@@ -2,6 +2,7 @@ package com.playdata.calen.drive.web;
 
 import com.playdata.calen.account.security.AppUserPrincipal;
 import com.playdata.calen.drive.dto.DriveDtos;
+import com.playdata.calen.drive.service.DriveDownloadLinkService;
 import com.playdata.calen.drive.service.DriveService;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
@@ -31,6 +32,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class DriveFileController {
 
     private final DriveService driveService;
+    private final DriveDownloadLinkService driveDownloadLinkService;
 
     @GetMapping("/list")
     public List<DriveDtos.FileItemResponse> list(@AuthenticationPrincipal AppUserPrincipal currentUser) {
@@ -76,6 +78,20 @@ public class DriveFileController {
         return DriveDtos.DownloadUrlResponse.builder()
                 .downloadUrl(driveService.getDownloadUrl(currentUser.userId(), fileId))
                 .build();
+    }
+
+    @PostMapping("/{fileId}/download-links")
+    public DriveDtos.DownloadLinkResponse createDownloadLink(
+            @AuthenticationPrincipal AppUserPrincipal currentUser,
+            @PathVariable Long fileId,
+            @RequestBody DriveDtos.DownloadLinkCreateRequest request
+    ) {
+        return driveDownloadLinkService.createLink(currentUser.userId(), fileId, request);
+    }
+
+    @GetMapping("/public-download/{token}")
+    public ResponseEntity<byte[]> publicDownload(@PathVariable String token) {
+        return buildDownloadResponse(driveDownloadLinkService.downloadByToken(token));
     }
 
     @GetMapping("/{fileId}/thumbnail")

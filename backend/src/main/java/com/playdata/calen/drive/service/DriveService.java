@@ -8,6 +8,7 @@ import com.playdata.calen.common.media.ImageThumbnailService;
 import com.playdata.calen.drive.domain.DriveItem;
 import com.playdata.calen.drive.domain.DriveItemType;
 import com.playdata.calen.drive.dto.DriveDtos;
+import com.playdata.calen.drive.repository.DriveDownloadLinkRepository;
 import com.playdata.calen.drive.repository.DriveItemRepository;
 import com.playdata.calen.drive.repository.DriveShareRepository;
 import java.time.LocalDateTime;
@@ -28,6 +29,7 @@ public class DriveService {
 
     private final DriveItemRepository driveItemRepository;
     private final DriveShareRepository driveShareRepository;
+    private final DriveDownloadLinkRepository driveDownloadLinkRepository;
     private final AppUserRepository appUserRepository;
     private final DriveStorageService driveStorageService;
     private final ImageThumbnailService imageThumbnailService;
@@ -35,12 +37,14 @@ public class DriveService {
     public DriveService(
             DriveItemRepository driveItemRepository,
             DriveShareRepository driveShareRepository,
+            DriveDownloadLinkRepository driveDownloadLinkRepository,
             AppUserRepository appUserRepository,
             DriveStorageService driveStorageService,
             ImageThumbnailService imageThumbnailService
     ) {
         this.driveItemRepository = driveItemRepository;
         this.driveShareRepository = driveShareRepository;
+        this.driveDownloadLinkRepository = driveDownloadLinkRepository;
         this.appUserRepository = appUserRepository;
         this.driveStorageService = driveStorageService;
         this.imageThumbnailService = imageThumbnailService;
@@ -171,6 +175,7 @@ public class DriveService {
         DriveItem item = getOwnedItem(userId, fileId);
         ensureUnlockedTree(item);
         List<DriveItem> descendants = collectDescendants(item);
+        deleteDownloadLinks(descendants);
         descendants.stream().filter(DriveItem::isFile).map(DriveItem::getStoragePath).forEach(driveStorageService::deleteObject);
         driveItemRepository.deleteAll(descendants);
         return DriveDtos.ActionResponse.builder().action("delete").affectedCount(descendants.size()).build();
@@ -186,6 +191,7 @@ public class DriveService {
                 targets.addAll(collectDescendants(item));
             }
         }
+        deleteDownloadLinks(targets);
         targets.stream().filter(DriveItem::isFile).map(DriveItem::getStoragePath).forEach(driveStorageService::deleteObject);
         driveItemRepository.deleteAll(targets);
         return DriveDtos.ActionResponse.builder().action("clear-trash").affectedCount(targets.size()).build();
@@ -449,6 +455,16 @@ public class DriveService {
                 .toList();
     }
 
+    private void deleteDownloadLinks(List<DriveItem> items) {
+        List<Long> itemIds = items.stream()
+                .map(DriveItem::getId)
+                .filter(Objects::nonNull)
+                .toList();
+        if (!itemIds.isEmpty()) {
+            driveDownloadLinkRepository.deleteAllByItem_IdIn(itemIds);
+        }
+    }
+
     private ThumbnailPayload buildThumbnailPayload(DriveItem item, Integer width) {
         String contentType = resolveContentType(item.getExtension());
         if (!contentType.startsWith("image/")) {
@@ -472,7 +488,7 @@ public class DriveService {
                 ));
     }
 
-    private String resolveContentType(String extension) {
+    public String resolveContentType(String extension) {
         String normalized = extension == null ? "" : extension.trim().toLowerCase(Locale.ROOT);
         return switch (normalized) {
             case "jpg", "jpeg" -> MediaType.IMAGE_JPEG_VALUE;

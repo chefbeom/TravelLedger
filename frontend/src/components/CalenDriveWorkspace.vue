@@ -7,6 +7,7 @@ import {
   cancelDriveShare,
   clearDriveTrash,
   completeDriveUpload,
+  createDriveDownloadLink,
   createDriveFolder,
   deleteDriveItem,
   fetchDriveAdminDashboard,
@@ -117,6 +118,10 @@ const shareDialog = reactive({
   selectedRecipientLoginId: '',
   loading: false,
   saving: false,
+  linkSaving: false,
+  linkExpiresInMinutes: 60,
+  linkMaxDownloads: 10,
+  generatedDownloadLink: null,
 })
 
 const adminCapacityForm = reactive({
@@ -1194,6 +1199,10 @@ async function openShareDialog(targets) {
   shareDialog.selectedRecipientLoginId = ''
   shareDialog.loading = true
   shareDialog.saving = false
+  shareDialog.linkSaving = false
+  shareDialog.linkExpiresInMinutes = 60
+  shareDialog.linkMaxDownloads = 10
+  shareDialog.generatedDownloadLink = null
   setMessages()
 
   try {
@@ -1216,6 +1225,10 @@ function closeShareDialog() {
   shareDialog.selectedRecipientLoginId = ''
   shareDialog.loading = false
   shareDialog.saving = false
+  shareDialog.linkSaving = false
+  shareDialog.linkExpiresInMinutes = 60
+  shareDialog.linkMaxDownloads = 10
+  shareDialog.generatedDownloadLink = null
 }
 
 async function searchRecipients() {
@@ -1259,6 +1272,56 @@ async function submitShare() {
     setMessages('', error.message)
   } finally {
     shareDialog.saving = false
+  }
+}
+
+function resolvePublicDownloadUrl(path) {
+  if (!path) {
+    return ''
+  }
+  try {
+    return new URL(path, window.location.origin).href
+  } catch (error) {
+    return path
+  }
+}
+
+async function createPublicDownloadLink() {
+  const target = shareDialog.targets[0]
+  if (!target?.id) {
+    setMessages('', '다운로드 링크를 만들 파일을 먼저 선택해 주세요.')
+    return
+  }
+
+  shareDialog.linkSaving = true
+  try {
+    const response = await createDriveDownloadLink(target.id, {
+      expiresInMinutes: Number(shareDialog.linkExpiresInMinutes || 60),
+      maxDownloads: Number(shareDialog.linkMaxDownloads || 10),
+    })
+    shareDialog.generatedDownloadLink = {
+      ...response,
+      downloadUrl: resolvePublicDownloadUrl(response.downloadUrl),
+    }
+    setMessages('다운로드 링크를 만들었습니다.')
+  } catch (error) {
+    setMessages('', error.message)
+  } finally {
+    shareDialog.linkSaving = false
+  }
+}
+
+async function copyPublicDownloadLink() {
+  const url = shareDialog.generatedDownloadLink?.downloadUrl
+  if (!url) {
+    return
+  }
+
+  try {
+    await navigator.clipboard.writeText(url)
+    setMessages('다운로드 링크를 복사했습니다.')
+  } catch (error) {
+    window.prompt('다운로드 링크를 복사해 주세요.', url)
   }
 }
 
@@ -2134,6 +2197,52 @@ onBeforeUnmount(() => {
                   <button class="button button--primary" type="button" :disabled="shareDialog.saving" @click="submitShare">
                     {{ shareDialog.saving ? '공유 중' : '선택한 사용자에게 공유' }}
                   </button>
+                </div>
+              </section>
+
+              <section v-if="shareDialog.targets.length === 1" class="panel panel--compact">
+                <div class="panel__header">
+                  <div>
+                    <h3>다운로드 링크</h3>
+                    <p>만료 시간과 다운로드 횟수를 정해 외부에 전달할 수 있는 링크를 만듭니다.</p>
+                  </div>
+                </div>
+                <div class="drive-toolbar__filters">
+                  <label class="field">
+                    <span class="field__label">유효 시간</span>
+                    <select v-model.number="shareDialog.linkExpiresInMinutes">
+                      <option :value="30">30분</option>
+                      <option :value="60">1시간</option>
+                      <option :value="360">6시간</option>
+                      <option :value="1440">1일</option>
+                      <option :value="10080">7일</option>
+                      <option :value="43200">30일</option>
+                    </select>
+                  </label>
+                  <label class="field">
+                    <span class="field__label">다운로드 횟수</span>
+                    <input v-model.number="shareDialog.linkMaxDownloads" class="drive-input" type="number" min="1" max="1000" />
+                  </label>
+                </div>
+                <div class="entry-editor__actions">
+                  <button class="button button--primary" type="button" :disabled="shareDialog.linkSaving" @click="createPublicDownloadLink">
+                    {{ shareDialog.linkSaving ? '링크 생성 중' : '링크 생성' }}
+                  </button>
+                  <button
+                    v-if="shareDialog.generatedDownloadLink?.downloadUrl"
+                    class="button button--ghost"
+                    type="button"
+                    @click="copyPublicDownloadLink"
+                  >
+                    링크 복사
+                  </button>
+                </div>
+                <div v-if="shareDialog.generatedDownloadLink?.downloadUrl" class="drive-generated-link">
+                  <input class="drive-input" type="text" readonly :value="shareDialog.generatedDownloadLink.downloadUrl" />
+                  <small>
+                    {{ shareDialog.generatedDownloadLink.maxDownloads }}회까지,
+                    {{ formatTimestamp(shareDialog.generatedDownloadLink.expiresAt) }}까지 사용 가능합니다.
+                  </small>
                 </div>
               </section>
 

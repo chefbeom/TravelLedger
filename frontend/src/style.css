@@ -9712,6 +9712,20 @@ textarea {
   gap: 10px;
 }
 
+.drive-generated-link {
+  display: grid;
+  gap: 8px;
+}
+
+.drive-generated-link .drive-input {
+  width: 100%;
+  min-width: 0;
+}
+
+.drive-generated-link small {
+  color: var(--text-soft);
+}
+
 .drive-share-search-result,
 .drive-share-recipient,
 .drive-share-group {

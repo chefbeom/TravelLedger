@@ -75,6 +75,7 @@ public class SecurityConfig {
                             "/api/auth/logout",
                             "/api/invites/*",
                             "/api/invites/accept",
+                            "/api/file/public-download/*",
                             "/actuator/health",
                             "/actuator/health/**",
                             "/error"

@@ -1306,6 +1306,13 @@ export function fetchDriveShareInfo(fileId) {
   return request(`/file/share/${fileId}`)
 }
 
+export function createDriveDownloadLink(fileId, payload) {
+  return request(`/file/${fileId}/download-links`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+}
+
 export function shareDriveFiles(fileIds, recipientLoginId) {
   return request('/file/share', {
     method: 'POST',

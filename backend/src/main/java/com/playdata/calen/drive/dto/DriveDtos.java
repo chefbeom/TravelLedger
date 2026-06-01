@@ -192,6 +192,23 @@ public final class DriveDtos {
     }
 
     @Builder
+    public record DownloadLinkCreateRequest(
+            Integer expiresInMinutes,
+            Integer maxDownloads
+    ) {
+    }
+
+    @Builder
+    public record DownloadLinkResponse(
+            String downloadUrl,
+            LocalDateTime createdAt,
+            LocalDateTime expiresAt,
+            Integer maxDownloads,
+            Integer downloadCount
+    ) {
+    }
+
+    @Builder
     public record ShareRequest(
             List<Long> fileIds,
             String recipientLoginId

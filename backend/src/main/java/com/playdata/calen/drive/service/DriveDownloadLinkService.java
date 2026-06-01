@@ -80,7 +80,7 @@ public class DriveDownloadLinkService {
 
         LocalDateTime now = LocalDateTime.now();
         DriveItem item = link.getItem();
-        if (link.isExpired(now) || link.isDownloadLimitReached() || item == null || !item.isFile() || item.isTrashed()) {
+        if (link.getRevokedAt() != null || link.isExpired(now) || link.isDownloadLimitReached() || item == null || !item.isFile() || item.isTrashed()) {
             throw new BadRequestException("Download link is expired or no longer available.");
         }
 
@@ -105,7 +105,7 @@ public class DriveDownloadLinkService {
                 .maxDownloads(link.getMaxDownloads())
                 .downloadCount(link.getDownloadCount())
                 .revokedAt(link.getRevokedAt())
-                .available(!link.isExpired(now) && !link.isDownloadLimitReached())
+                .available(link.getRevokedAt() == null && !link.isExpired(now) && !link.isDownloadLimitReached())
                 .build();
     }
 

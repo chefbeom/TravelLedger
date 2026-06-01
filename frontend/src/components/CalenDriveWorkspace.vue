@@ -857,12 +857,124 @@ function handleDriveDragLeave() {
   dragDepth.value = Math.max(0, dragDepth.value - 1)
 }
 
+function normalizeDriveUploadRelativePath(value) {
+  return String(value || '')
+    .replace(/\\/g, '/')
+    .replace(/^\/+/, '')
+    .split('/')
+    .filter(Boolean)
+    .join('/')
+}
+
+function getDriveUploadRelativePath(file) {
+  return normalizeDriveUploadRelativePath(file?.driveRelativePath || file?.webkitRelativePath || '')
+}
+
+function attachDriveUploadRelativePath(file, relativePath) {
+  const normalizedPath = normalizeDriveUploadRelativePath(relativePath)
+  if (!file || !normalizedPath || getDriveUploadRelativePath(file)) {
+    return file
+  }
+
+  try {
+    Object.defineProperty(file, 'driveRelativePath', {
+      value: normalizedPath,
+      configurable: true,
+    })
+  } catch {
+    try {
+      file.driveRelativePath = normalizedPath
+    } catch {
+      if (typeof File === 'function') {
+        const clonedFile = new File([file], file.name, {
+          type: file.type,
+          lastModified: file.lastModified,
+        })
+        try {
+          Object.defineProperty(clonedFile, 'driveRelativePath', {
+            value: normalizedPath,
+            configurable: true,
+          })
+        } catch {
+          // The upload can still continue as a normal flat file if the path cannot be attached.
+        }
+        return clonedFile
+      }
+    }
+  }
+
+  return file
+}
+
+function readDroppedFileEntry(entry, relativePath) {
+  return new Promise((resolve, reject) => {
+    entry.file(
+      (file) => resolve(attachDriveUploadRelativePath(file, relativePath || file.name)),
+      reject,
+    )
+  })
+}
+
+function readDroppedDirectoryEntries(entry) {
+  return new Promise((resolve, reject) => {
+    const reader = entry.createReader()
+    const entries = []
+
+    function readBatch() {
+      reader.readEntries(
+        (batch) => {
+          if (!batch.length) {
+            resolve(entries)
+            return
+          }
+          entries.push(...batch)
+          readBatch()
+        },
+        reject,
+      )
+    }
+
+    readBatch()
+  })
+}
+
+async function collectDroppedEntryFiles(entry, parentPath = '') {
+  const entryPath = normalizeDriveUploadRelativePath(`${parentPath}${entry?.name || ''}`)
+  if (!entry || !entryPath) {
+    return []
+  }
+  if (entry.isFile) {
+    return [await readDroppedFileEntry(entry, entryPath)]
+  }
+  if (!entry.isDirectory) {
+    return []
+  }
+
+  const children = await readDroppedDirectoryEntries(entry)
+  const nestedFiles = await Promise.all(children.map((child) => collectDroppedEntryFiles(child, `${entryPath}/`)))
+  return nestedFiles.flat()
+}
+
+async function collectDroppedDriveFiles(dataTransfer) {
+  const items = Array.from(dataTransfer?.items || [])
+  const entries = items
+    .map((item) => (typeof item.webkitGetAsEntry === 'function' ? item.webkitGetAsEntry() : null))
+    .filter(Boolean)
+
+  if (!entries.length) {
+    return Array.from(dataTransfer?.files || [])
+  }
+
+  const groups = await Promise.all(entries.map((entry) => collectDroppedEntryFiles(entry)))
+  return groups.flat().filter(Boolean)
+}
+
 async function handleDriveDrop(event) {
   dragDepth.value = 0
   if (!canUploadInCurrentLocation.value) {
     return
   }
-  const files = Array.from(event?.dataTransfer?.files || [])
+  const files = await collectDroppedDriveFiles(event?.dataTransfer)
   if (!files.length) {
     return
   }
@@ -1555,8 +1667,13 @@ async function handleFilesSelected(event) {
     return
   }
 
+  const hasFolderPaths = files.some((file) => getDriveUploadRelativePath(file).includes('/'))
   let activeUploadMeta = null
   uploadProgress.open = true
+  uploadProgress.title = hasFolderPaths ? '폴더를 업로드하는 중입니다.' : '파일을 업로드하는 중입니다.'
+  uploadProgress.description = hasFolderPaths
+    ? '폴더 구조를 유지하며 CalenDrive 저장소로 전송하고 있습니다.'
+    : '선택한 파일을 CalenDrive 저장소로 전송하고 있습니다.'
   uploadProgress.current = 0
   uploadProgress.total = files.length
   uploadProgress.percent = 0
@@ -1575,7 +1692,7 @@ async function handleFilesSelected(event) {
       activeUploadMeta = target
       uploadProgress.current = index + 1
       uploadProgress.percent = 0
-      uploadProgress.fileName = file.name
+      uploadProgress.fileName = getDriveUploadRelativePath(file) || file.name
 
       await uploadDriveFileWithProgress(target, file, (progress) => {
         uploadProgress.percent = progress.percent ?? 0
@@ -1588,12 +1705,12 @@ async function handleFilesSelected(event) {
         finalObjectKey: target.finalObjectKey,
         chunkObjectKeys: [],
         parentId: target.parentId ?? pageFilters.parentId,
-        relativePath: target.relativePath || file.webkitRelativePath || '',
+        relativePath: target.relativePath || getDriveUploadRelativePath(file),
         lastModified: target.lastModified ?? file.lastModified ?? null,
       })
     }
 
-    setMessages(`${files.length}개 파일을 업로드했습니다.`)
+    setMessages(hasFolderPaths ? `${files.length}개 파일을 폴더 구조와 함께 업로드했습니다.` : `${files.length}개 파일을 업로드했습니다.`)
     activeTab.value = 'drive'
     await Promise.all([loadDrivePage(), loadHomeSummary(), loadRecentFiles()])
   } catch (error) {
@@ -1610,6 +1727,8 @@ async function handleFilesSelected(event) {
     setMessages('', error.message)
   } finally {
     uploadProgress.open = false
+    uploadProgress.title = '파일을 업로드하는 중입니다.'
+    uploadProgress.description = '선택한 파일을 CalenDrive 저장소로 전송하고 있습니다.'
     uploadProgress.percent = 0
     uploadProgress.fileName = ''
     event.target.value = ''
@@ -2297,7 +2416,7 @@ onBeforeUnmount(() => {
 
             <div v-if="isDriveDropActive" class="drive-drop-overlay">
               <strong>여기에 놓아 업로드</strong>
-              <span>선택한 파일이 현재 폴더에 저장됩니다.</span>
+              <span>파일과 폴더 구조가 현재 위치에 저장됩니다.</span>
             </div>
 
             <div

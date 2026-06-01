@@ -1178,7 +1178,7 @@ export function initializeDriveUpload(files, parentId = null) {
       fileSize: file.size ?? 0,
       contentType: file.type || 'application/octet-stream',
       parentId,
-      relativePath: file.webkitRelativePath || '',
+      relativePath: file.driveRelativePath || file.webkitRelativePath || '',
       lastModified: file.lastModified ?? null,
     }))),
   })

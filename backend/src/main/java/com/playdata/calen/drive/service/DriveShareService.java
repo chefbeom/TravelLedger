@@ -160,6 +160,7 @@ public class DriveShareService {
         int affected = 0;
         for (Long fileId : normalizeFileIds(fileIds)) {
             DriveItem item = driveService.getOwnedFile(userId, fileId);
+            driveService.ensureUnlocked(item);
             if (driveShareRepository.findByItem_IdAndRecipient_Id(item.getId(), recipient.getId()).isPresent()) {
                 driveShareRepository.deleteByItem_IdAndRecipient_Id(item.getId(), recipient.getId());
                 item.setSharedFile(driveShareRepository.countByItem_Id(item.getId()) > 0);
@@ -178,6 +179,7 @@ public class DriveShareService {
         int affected = 0;
         for (Long fileId : normalizeFileIds(fileIds)) {
             DriveItem item = driveService.getOwnedFile(userId, fileId);
+            driveService.ensureUnlocked(item);
             List<DriveShare> shares = driveShareRepository.findAllByItem_Id(item.getId());
             if (!shares.isEmpty()) {
                 affected += shares.size();

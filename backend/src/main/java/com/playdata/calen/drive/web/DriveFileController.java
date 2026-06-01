@@ -52,6 +52,11 @@ public class DriveFileController {
         return driveService.getHomeSummary(currentUser.userId());
     }
 
+    @GetMapping("/folders")
+    public List<DriveDtos.FolderDestinationResponse> getFolders(@AuthenticationPrincipal AppUserPrincipal currentUser) {
+        return driveService.listFolderDestinations(currentUser.userId());
+    }
+
     @GetMapping("/recent")
     public List<DriveDtos.FileItemResponse> getRecent(@AuthenticationPrincipal AppUserPrincipal currentUser) {
         return driveService.getRecentFiles(currentUser.userId());

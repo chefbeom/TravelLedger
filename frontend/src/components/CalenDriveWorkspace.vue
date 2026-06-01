@@ -11,6 +11,7 @@ import {
   createDriveFolder,
   deleteDriveItem,
   fetchDriveAdminDashboard,
+  fetchDriveFolderDestinations,
   fetchDriveHomeSummary,
   fetchDriveDownloadLinks,
   fetchDrivePage,
@@ -80,6 +81,15 @@ const contextMenu = reactive({
   x: 0,
   y: 0,
   item: null,
+})
+
+const moveDialog = reactive({
+  open: false,
+  targets: [],
+  folders: [],
+  targetParentId: '',
+  loading: false,
+  saving: false,
 })
 
 const homeSummary = ref(null)
@@ -432,6 +442,60 @@ const normalizedShareDialogTitle = computed(() => {
   return `${shareDialog.targets.length}개 항목`
 })
 
+const moveDialogTitle = computed(() => {
+  if (moveDialog.targets.length === 1) {
+    return moveDialog.targets[0]?.fileOriginName || '선택한 항목'
+  }
+  return `${moveDialog.targets.length}개 항목`
+})
+
+const moveDialogBlockedFolderIds = computed(() => {
+  const blocked = new Set(
+    moveDialog.targets
+      .filter((item) => isFolder(item))
+      .map((item) => String(item.id)),
+  )
+  let changed = true
+  while (changed) {
+    changed = false
+    for (const folder of moveDialog.folders) {
+      const folderId = String(folder.id)
+      const parentId = folder.parentId == null ? '' : String(folder.parentId)
+      if (!blocked.has(folderId) && parentId && blocked.has(parentId)) {
+        blocked.add(folderId)
+        changed = true
+      }
+    }
+  }
+  return blocked
+})
+
+const moveDialogDestinationOptions = computed(() => [
+  {
+    value: '',
+    label: '내 드라이브',
+    path: '최상위 위치',
+    disabled: false,
+  },
+  ...moveDialog.folders.map((folder) => ({
+    value: String(folder.id),
+    label: folder.fileOriginName,
+    path: folder.path || folder.fileOriginName,
+    disabled: moveDialogBlockedFolderIds.value.has(String(folder.id)) || Boolean(folder.lockedFile),
+  })),
+])
+
+const selectedMoveDialogDestination = computed(() =>
+  moveDialogDestinationOptions.value.find((option) => option.value === moveDialog.targetParentId),
+)
+
+const canConfirmMoveDialog = computed(() =>
+  Boolean(selectedMoveDialogDestination.value)
+    && !selectedMoveDialogDestination.value.disabled
+    && !moveDialog.loading
+    && !moveDialog.saving,
+)
+
 function setMessages(message = '', error = '') {
   feedback.value = message
   errorMessage.value = error
@@ -674,6 +738,10 @@ async function handleDriveDrop(event) {
 }
 
 async function handleDriveKeyboard(event) {
+  if (moveDialog.open && event.key === 'Escape') {
+    closeMoveDialog()
+    return
+  }
   if (previewDialog.open && event.key === 'Escape') {
     closePreviewDialog()
     return
@@ -1132,6 +1200,68 @@ async function moveSelectedItemsToFolder() {
     clearSelection()
   } catch (error) {
     setMessages('', error.message)
+  }
+}
+
+async function openMoveDialog(targets = selectedItems.value) {
+  const nextTargets = (targets || []).filter((item) => item && canModifyOwnedItem(item))
+  if (!nextTargets.length) {
+    setMessages('', '이동할 수 있는 항목을 먼저 선택해 주세요.')
+    return
+  }
+
+  moveDialog.open = true
+  moveDialog.targets = nextTargets
+  moveDialog.targetParentId = ''
+  moveDialog.loading = true
+  moveDialog.saving = false
+  setMessages()
+
+  try {
+    moveDialog.folders = await fetchDriveFolderDestinations()
+  } catch (error) {
+    setMessages('', error.message)
+    closeMoveDialog()
+  } finally {
+    moveDialog.loading = false
+  }
+}
+
+function closeMoveDialog() {
+  moveDialog.open = false
+  moveDialog.targets = []
+  moveDialog.folders = []
+  moveDialog.targetParentId = ''
+  moveDialog.loading = false
+  moveDialog.saving = false
+}
+
+async function confirmMoveDialog() {
+  const selectedOption = moveDialogDestinationOptions.value.find((option) => option.value === moveDialog.targetParentId)
+  if (!selectedOption || selectedOption.disabled) {
+    setMessages('', '이동할 수 없는 위치입니다.')
+    return
+  }
+
+  const fileIds = moveDialog.targets.map((item) => item.id).filter(Boolean)
+  if (!fileIds.length) {
+    setMessages('', '이동할 항목이 없습니다.')
+    return
+  }
+
+  moveDialog.saving = true
+  try {
+    const movedCount = fileIds.length
+    const targetParentId = moveDialog.targetParentId === '' ? null : Number(moveDialog.targetParentId)
+    await moveDriveItems(fileIds, targetParentId)
+    closeMoveDialog()
+    clearSelection()
+    setMessages(`${movedCount}개 항목을 이동했습니다.`)
+    await Promise.all([loadDrivePage(), loadHomeSummary(), loadRecentFiles()])
+  } catch (error) {
+    setMessages('', error.message)
+  } finally {
+    moveDialog.saving = false
   }
 }
 
@@ -1818,6 +1948,13 @@ onBeforeUnmount(() => {
               <button
                 v-if="canModifyOwnedItem(contextMenu.item)"
                 type="button"
+                @click="runContextAction((item) => openMoveDialog([item]))"
+              >
+                위치 이동
+              </button>
+              <button
+                v-if="canModifyOwnedItem(contextMenu.item)"
+                type="button"
                 @click="runContextAction(moveItemToTrash)"
               >
                 휴지통으로 이동
@@ -1845,6 +1982,7 @@ onBeforeUnmount(() => {
                     </option>
                   </select>
                   <button class="button button--ghost" type="button" :disabled="!canMoveSelectedItems" @click="moveSelectedItemsToFolder">이동</button>
+                  <button class="button button--ghost" type="button" :disabled="!canMoveSelectedItems" @click="openMoveDialog(selectedItems)">위치 선택</button>
                   <button class="button button--ghost" type="button" :disabled="!selectedShareableItems.length" @click="openShareDialog(selectedShareableItems)">공유</button>
                   <button class="button button--ghost" type="button" :disabled="!canMoveSelectedItems" @click="moveSelectedToTrash">휴지통</button>
                 </template>
@@ -1919,6 +2057,7 @@ onBeforeUnmount(() => {
                         <button v-if="canModifyOwnedItem(item)" class="button button--ghost" type="button" @click="promptRename(item)">이름 변경</button>
                         <button v-if="canToggleLock(item)" class="button button--ghost" type="button" @click="toggleItemLock(item)">{{ isLockedItem(item) ? '잠금 해제' : '잠금' }}</button>
                         <button v-if="canShareItem(item)" class="button button--ghost" type="button" @click="openShareDialog([item])">공유</button>
+                        <button v-if="canModifyOwnedItem(item)" class="button button--ghost" type="button" @click="openMoveDialog([item])">이동</button>
                         <button v-if="canModifyOwnedItem(item)" class="button button--ghost" type="button" @click="moveItemToTrash(item)">휴지통</button>
                         <button v-if="activeTab === 'trash'" class="button button--ghost" type="button" @click="restoreTrashItem(item)">복구</button>
                         <button v-if="activeTab === 'trash' && !isLockedItem(item)" class="button button--ghost" type="button" @click="deleteItemPermanently(item)">완전 삭제</button>
@@ -1968,6 +2107,7 @@ onBeforeUnmount(() => {
                   <button class="button button--ghost" type="button" @click="openBrowserItem(item)">열기</button>
                   <button v-if="canShareItem(item)" class="button button--ghost" type="button" @click="openShareDialog([item])">공유</button>
                   <button v-if="canToggleLock(item)" class="button button--ghost" type="button" @click="toggleItemLock(item)">{{ isLockedItem(item) ? '잠금 해제' : '잠금' }}</button>
+                  <button v-if="canModifyOwnedItem(item)" class="button button--ghost" type="button" @click="openMoveDialog([item])">이동</button>
                   <button v-if="canModifyOwnedItem(item)" class="button button--ghost" type="button" @click="moveItemToTrash(item)">휴지통</button>
                   <button v-if="activeTab === 'trash'" class="button button--ghost" type="button" @click="restoreTrashItem(item)">복구</button>
                   <button v-if="activeTab === 'trash' && !isLockedItem(item)" class="button button--ghost" type="button" @click="deleteItemPermanently(item)">삭제</button>
@@ -2031,6 +2171,7 @@ onBeforeUnmount(() => {
                     <button v-if="canShareItem(primarySelectedItem)" class="button button--ghost" type="button" @click="openShareDialog([primarySelectedItem])">공유</button>
                     <button v-if="canToggleLock(primarySelectedItem)" class="button button--ghost" type="button" @click="toggleItemLock(primarySelectedItem)">{{ isLockedItem(primarySelectedItem) ? '잠금 해제' : '잠금' }}</button>
                     <button v-if="canModifyOwnedItem(primarySelectedItem)" class="button button--ghost" type="button" @click="promptRename(primarySelectedItem)">이름 변경</button>
+                    <button v-if="canModifyOwnedItem(primarySelectedItem)" class="button button--ghost" type="button" @click="openMoveDialog([primarySelectedItem])">위치 이동</button>
                     <button v-if="canModifyOwnedItem(primarySelectedItem)" class="button button--ghost" type="button" @click="moveItemToTrash(primarySelectedItem)">휴지통</button>
                     <button v-if="activeTab === 'trash'" class="button button--ghost" type="button" @click="restoreTrashItem(primarySelectedItem)">복구</button>
                     <button v-if="activeTab === 'trash' && !isLockedItem(primarySelectedItem)" class="button button--ghost" type="button" @click="deleteItemPermanently(primarySelectedItem)">완전 삭제</button>
@@ -2228,6 +2369,66 @@ onBeforeUnmount(() => {
                 <span :style="{ width: `${uploadProgress.percent}%` }"></span>
               </div>
               <small>{{ uploadProgress.percent }}%</small>
+            </div>
+          </div>
+        </div>
+
+        <div v-if="moveDialog.open" class="travel-modal" @click.self="closeMoveDialog">
+          <div class="travel-modal__dialog drive-move-modal">
+            <div class="travel-modal__header">
+              <div>
+                <h2>위치 이동</h2>
+                <p>{{ moveDialogTitle }}을 이동할 폴더를 선택합니다.</p>
+              </div>
+              <button class="button button--ghost" type="button" @click="closeMoveDialog">닫기</button>
+            </div>
+            <div class="travel-modal__body drive-move-modal__body">
+              <section class="panel panel--compact">
+                <div class="panel__header">
+                  <div>
+                    <h3>이동 대상</h3>
+                    <p>잠긴 폴더와 선택한 폴더의 하위 위치는 이동 대상으로 사용할 수 없습니다.</p>
+                  </div>
+                </div>
+                <div v-if="moveDialog.loading" class="panel__empty">폴더 목록을 불러오는 중입니다.</div>
+                <div v-else class="drive-move-destination-list">
+                  <button
+                    v-for="option in moveDialogDestinationOptions"
+                    :key="`move-dest-${option.value || 'root'}`"
+                    class="drive-move-destination"
+                    :class="{ 'drive-move-destination--active': moveDialog.targetParentId === option.value }"
+                    type="button"
+                    :disabled="option.disabled"
+                    @click="moveDialog.targetParentId = option.value"
+                  >
+                    <span class="drive-move-destination__icon">{{ option.value ? 'DIR' : 'ROOT' }}</span>
+                    <span class="drive-move-destination__copy">
+                      <strong>{{ option.label }}</strong>
+                      <small>{{ option.path }}{{ option.disabled ? ' · 이동 불가' : '' }}</small>
+                    </span>
+                  </button>
+                </div>
+              </section>
+
+              <section class="panel panel--compact">
+                <div class="panel__header">
+                  <div>
+                    <h3>선택 항목</h3>
+                    <p>{{ moveDialog.targets.length }}개 항목이 선택되어 있습니다.</p>
+                  </div>
+                </div>
+                <div class="drive-move-target-list">
+                  <span v-for="item in moveDialog.targets" :key="item.id">
+                    {{ item.fileOriginName }}
+                  </span>
+                </div>
+                <div class="entry-editor__actions">
+                  <button class="button button--ghost" type="button" @click="closeMoveDialog">취소</button>
+                  <button class="button button--primary" type="button" :disabled="!canConfirmMoveDialog" @click="confirmMoveDialog">
+                    {{ moveDialog.saving ? '이동 중' : '선택 위치로 이동' }}
+                  </button>
+                </div>
+              </section>
             </div>
           </div>
         </div>

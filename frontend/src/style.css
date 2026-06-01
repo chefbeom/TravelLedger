@@ -9823,14 +9823,102 @@ textarea {
 }
 
 .drive-share-modal,
+.drive-move-modal,
 .drive-profile-modal {
   width: min(880px, calc(100vw - 32px));
 }
 
 .drive-share-modal__body,
+.drive-move-modal__body,
 .drive-profile-modal__body {
   display: grid;
   gap: 16px;
+}
+
+.drive-move-modal__body {
+  grid-template-columns: minmax(0, 1.35fr) minmax(260px, 0.65fr);
+  align-items: start;
+}
+
+.drive-move-destination-list {
+  display: grid;
+  gap: 8px;
+  max-height: min(52vh, 520px);
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.drive-move-destination {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-width: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface-soft);
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.drive-move-destination:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+
+.drive-move-destination:not(:disabled):hover,
+.drive-move-destination--active {
+  border-color: rgba(49, 130, 246, 0.45);
+  background: rgba(49, 130, 246, 0.08);
+}
+
+.drive-move-destination__icon {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--blue);
+  font-size: 0.74rem;
+  font-weight: 900;
+}
+
+.drive-move-destination__copy {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.drive-move-destination__copy strong,
+.drive-move-destination__copy small,
+.drive-move-target-list span {
+  overflow-wrap: anywhere;
+}
+
+.drive-move-destination__copy small {
+  color: var(--text-soft);
+}
+
+.drive-move-target-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.drive-move-target-list span {
+  display: inline-flex;
+  min-height: 34px;
+  align-items: center;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface-soft);
+  color: var(--text-soft);
+  font-weight: 800;
 }
 
 .drive-profile-modal {
@@ -10746,8 +10834,13 @@ textarea {
   }
 
   .drive-share-modal,
+  .drive-move-modal,
   .drive-profile-modal {
     width: min(100vw - 20px, 880px);
+  }
+
+  .drive-move-modal__body {
+    grid-template-columns: 1fr;
   }
 
   .drive-topbar,
@@ -10786,6 +10879,8 @@ textarea {
 :root[data-theme='toss'] .drive-details-panel,
 :root[data-theme='toss'] .drive-details-panel__preview,
 :root[data-theme='toss'] .drive-file-card,
+:root[data-theme='toss'] .drive-move-destination,
+:root[data-theme='toss'] .drive-move-target-list span,
 :root[data-theme='toss'] .family-category-card,
 :root[data-theme='toss'] .family-album-focus {
   background: var(--surface-soft) !important;

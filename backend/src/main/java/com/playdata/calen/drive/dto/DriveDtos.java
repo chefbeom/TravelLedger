@@ -162,6 +162,16 @@ public final class DriveDtos {
     }
 
     @Builder
+    public record FolderDestinationResponse(
+            Long id,
+            String fileOriginName,
+            Long parentId,
+            String path,
+            Boolean lockedFile
+    ) {
+    }
+
+    @Builder
     public record FileListPageResponse(
             List<FileItemResponse> fileList,
             List<FileBreadcrumbResponse> breadcrumbs,

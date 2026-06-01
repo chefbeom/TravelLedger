@@ -67,6 +67,22 @@ public class DriveService {
                 .toList();
     }
 
+    public List<DriveDtos.FolderDestinationResponse> listFolderDestinations(Long userId) {
+        AppUser owner = getOwner(userId);
+        return driveItemRepository.findAllByOwner_Id(owner.getId()).stream()
+                .filter(DriveItem::isFolder)
+                .filter(item -> !item.isTrashed())
+                .sorted(Comparator.comparing(this::buildFolderPath, String.CASE_INSENSITIVE_ORDER))
+                .map(folder -> DriveDtos.FolderDestinationResponse.builder()
+                        .id(folder.getId())
+                        .fileOriginName(folder.getOriginalName())
+                        .parentId(folder.getParent() != null ? folder.getParent().getId() : null)
+                        .path(buildFolderPath(folder))
+                        .lockedFile(folder.isLockedFile())
+                        .build())
+                .toList();
+    }
+
     public DriveDtos.FileListPageResponse listPage(Long userId, DriveDtos.ListPageRequest request) {
         AppUser owner = getOwner(userId);
         List<DriveItem> allItems = driveItemRepository.findAllByOwner_Id(owner.getId());
@@ -202,6 +218,7 @@ public class DriveService {
         DriveItem item = getOwnedItem(userId, fileId);
         ensureUnlockedTree(item);
         DriveItem targetParent = resolveParentFolder(userId, targetParentId);
+        ensureUnlocked(targetParent);
         ensureNotDescendant(item, targetParent);
         item.setParent(targetParent);
         return DriveDtos.ActionResponse.builder().action("move").affectedCount(1).build();
@@ -451,6 +468,16 @@ public class DriveService {
             cursor = cursor.getParent();
         }
         return breadcrumbs;
+    }
+
+    private String buildFolderPath(DriveItem folder) {
+        List<String> names = new ArrayList<>();
+        DriveItem cursor = folder;
+        while (cursor != null) {
+            names.add(0, cursor.getOriginalName());
+            cursor = cursor.getParent();
+        }
+        return String.join(" / ", names);
     }
 
     private DriveItem resolveParentFolder(Long ownerId, Long parentId) {

@@ -1161,6 +1161,10 @@ export function fetchDriveRecentFiles() {
   return request('/file/recent')
 }
 
+export function fetchDriveFolderDestinations() {
+  return request('/file/folders')
+}
+
 export function fetchDriveTrashFiles() {
   return request('/file/trash')
 }

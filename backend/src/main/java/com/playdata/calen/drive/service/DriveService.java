@@ -63,6 +63,7 @@ public class DriveService {
         return driveItemRepository.findAllByOwner_IdOrderByLastModifiedAtDesc(getOwner(userId).getId()).stream()
                 .filter(item -> !item.isTrashed())
                 .filter(item -> item.getParent() == null)
+                .sorted(resolveComparator("recent"))
                 .map(this::toItemResponse)
                 .toList();
     }
@@ -450,14 +451,25 @@ public class DriveService {
     }
 
     private Comparator<DriveItem> resolveComparator(String sortOption) {
+        Comparator<DriveItem> folderFirst = Comparator.comparingInt(item -> item.isFolder() ? 0 : 1);
+        Comparator<DriveItem> nameAsc = Comparator.comparing(
+                item -> item.getOriginalName() == null ? "" : item.getOriginalName(),
+                String.CASE_INSENSITIVE_ORDER
+        );
         if (!StringUtils.hasText(sortOption)) {
-            return Comparator.comparing(DriveItem::getItemType).thenComparing(DriveItem::getOriginalName, String.CASE_INSENSITIVE_ORDER);
+            return folderFirst.thenComparing(nameAsc);
         }
         return switch (sortOption.trim().toLowerCase(Locale.ROOT)) {
-            case "recent" -> Comparator.comparing(DriveItem::getLastModifiedAt).reversed();
-            case "oldest" -> Comparator.comparing(DriveItem::getUploadedAt);
-            case "size" -> Comparator.comparingLong(DriveItem::getFileSize).reversed();
-            default -> Comparator.comparing(DriveItem::getItemType).thenComparing(DriveItem::getOriginalName, String.CASE_INSENSITIVE_ORDER);
+            case "recent" -> folderFirst
+                    .thenComparing(Comparator.comparing(DriveItem::getLastModifiedAt).reversed())
+                    .thenComparing(nameAsc);
+            case "oldest" -> folderFirst
+                    .thenComparing(DriveItem::getUploadedAt)
+                    .thenComparing(nameAsc);
+            case "size" -> folderFirst
+                    .thenComparing(Comparator.comparingLong(DriveItem::getFileSize).reversed())
+                    .thenComparing(nameAsc);
+            default -> folderFirst.thenComparing(nameAsc);
         };
     }
 

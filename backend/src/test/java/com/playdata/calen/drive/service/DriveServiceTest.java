@@ -1,10 +1,12 @@
 package com.playdata.calen.drive.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.when;
 
 import com.playdata.calen.account.domain.AppUser;
 import com.playdata.calen.account.repository.AppUserRepository;
+import com.playdata.calen.common.exception.BadRequestException;
 import com.playdata.calen.common.media.ImageThumbnailService;
 import com.playdata.calen.drive.domain.DriveItem;
 import com.playdata.calen.drive.domain.DriveItemType;
@@ -92,6 +94,44 @@ class DriveServiceTest {
         assertThat(response.fileList())
                 .extracting(DriveDtos.FileItemResponse::fileOriginName)
                 .containsExactly("Archive", "Zeta", "alpha.txt");
+    }
+
+    @Test
+    void renameRejectsFileInsideLockedFolder() {
+        AppUser owner = owner();
+        DriveItem lockedFolder = item(2L, owner, DriveItemType.FOLDER, "Private", 0L, 10);
+        lockedFolder.setLockedFile(true);
+        DriveItem file = item(3L, owner, DriveItemType.FILE, "note.txt", 100L, 20);
+        file.setParent(lockedFolder);
+
+        when(appUserRepository.findById(1L)).thenReturn(Optional.of(owner));
+        when(driveItemRepository.findByIdAndOwner_Id(3L, 1L)).thenReturn(Optional.of(file));
+
+        DriveService service = newService();
+
+        assertThatThrownBy(() -> service.renameItem(1L, 3L, "renamed.txt"))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessage("Locked drive items cannot be changed. Unlock the item first.");
+        assertThat(file.getOriginalName()).isEqualTo("note.txt");
+    }
+
+    @Test
+    void moveToTrashRejectsFileInsideLockedFolder() {
+        AppUser owner = owner();
+        DriveItem lockedFolder = item(2L, owner, DriveItemType.FOLDER, "Private", 0L, 10);
+        lockedFolder.setLockedFile(true);
+        DriveItem file = item(3L, owner, DriveItemType.FILE, "note.txt", 100L, 20);
+        file.setParent(lockedFolder);
+
+        when(appUserRepository.findById(1L)).thenReturn(Optional.of(owner));
+        when(driveItemRepository.findByIdAndOwner_Id(3L, 1L)).thenReturn(Optional.of(file));
+
+        DriveService service = newService();
+
+        assertThatThrownBy(() -> service.moveToTrash(1L, 3L))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessage("Locked drive items cannot be changed. Unlock the item first.");
+        assertThat(file.isTrashed()).isFalse();
     }
 
     private DriveService newService() {

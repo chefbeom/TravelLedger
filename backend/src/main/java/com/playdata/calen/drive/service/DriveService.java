@@ -519,12 +519,17 @@ public class DriveService {
     }
 
     public void ensureUnlocked(DriveItem item) {
-        if (item != null && item.isLockedFile()) {
-            throw new BadRequestException("Locked drive items cannot be changed. Unlock the item first.");
+        DriveItem cursor = item;
+        while (cursor != null) {
+            if (cursor.isLockedFile()) {
+                throw new BadRequestException("Locked drive items cannot be changed. Unlock the item first.");
+            }
+            cursor = cursor.getParent();
         }
     }
 
     public void ensureUnlockedTree(DriveItem item) {
+        ensureUnlocked(item);
         for (DriveItem candidate : collectDescendants(item)) {
             ensureUnlocked(candidate);
         }

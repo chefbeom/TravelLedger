@@ -1404,8 +1404,8 @@ async function startTravelLedgerEntry() {
   calendarWorkspaceRef.value?.scrollToEntryEditor?.()
 }
 
-async function openTravelLedgerSearch() {
-  searchForm.keyword = '여행'
+async function openTravelLedgerSearch(keyword = '여행') {
+  searchForm.keyword = String(keyword || '여행').trim() || '여행'
   searchForm.entryType = 'EXPENSE'
   searchForm.paymentMethodId = ''
   searchForm.categoryGroupId = ''

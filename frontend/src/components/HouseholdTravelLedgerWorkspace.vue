@@ -1,5 +1,5 @@
 <script setup>
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 
 const props = defineProps({
   entries: {
@@ -33,6 +33,7 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['start-travel-entry', 'open-travel-search', 'view-travel-entry-date', 'edit-travel-entry'])
+const travelKeywordFilter = ref('')
 
 const travelKeywords = [
   '여행',
@@ -63,18 +64,30 @@ const travelKeywords = [
   '베트남',
 ]
 
+function normalizeSearchText(value) {
+  return String(value || '').toLowerCase()
+}
+
+function getEntryCategoryLabel(entry) {
+  return entry.categoryDetailName
+    ? `${entry.categoryGroupName} / ${entry.categoryDetailName}`
+    : entry.categoryGroupName || '미분류'
+}
+
 const travelEntries = computed(() =>
   props.entries
     .filter((entry) => entry.entryType === 'EXPENSE')
     .filter((entry) => {
-      const searchableText = [
+      const searchableText = normalizeSearchText([
         entry.title,
         entry.memo,
         entry.categoryGroupName,
         entry.categoryDetailName,
         entry.paymentMethodName,
-      ].join(' ').toLowerCase()
-      return travelKeywords.some((keyword) => searchableText.includes(keyword.toLowerCase()))
+      ].join(' '))
+      const matchesTravelKeyword = travelKeywords.some((keyword) => searchableText.includes(normalizeSearchText(keyword)))
+      const filterText = normalizeSearchText(travelKeywordFilter.value)
+      return matchesTravelKeyword && (!filterText || searchableText.includes(filterText))
     })
     .sort((left, right) => `${right.entryDate} ${right.entryTime || ''}`.localeCompare(`${left.entryDate} ${left.entryTime || ''}`)),
 )
@@ -86,9 +99,7 @@ const totalExpense = computed(() =>
 const topCategoryRows = computed(() => {
   const buckets = new Map()
   travelEntries.value.forEach((entry) => {
-    const label = entry.categoryDetailName
-      ? `${entry.categoryGroupName} / ${entry.categoryDetailName}`
-      : entry.categoryGroupName || '미분류'
+    const label = getEntryCategoryLabel(entry)
     const current = buckets.get(label) || { label, amount: 0, count: 0 }
     current.amount += Number(entry.amount || 0)
     current.count += 1
@@ -140,6 +151,10 @@ const recentEntries = computed(() => travelEntries.value.slice(0, 12))
         <span class="field__label">조회 기준</span>
         <input v-model="statsControls.anchorDate" type="date" />
       </label>
+      <label class="field household-travel-ledger__date">
+        <span class="field__label">여행 검색어</span>
+        <input v-model="travelKeywordFilter" type="search" placeholder="여행지, 항공, 숙소" />
+      </label>
     </div>
 
     <div class="household-travel-ledger__summary">
@@ -162,7 +177,7 @@ const recentEntries = computed(() => travelEntries.value.slice(0, 12))
 
     <div class="entry-editor__actions household-travel-ledger__actions">
       <button class="button button--primary" type="button" @click="emit('start-travel-entry')">여행 지출 입력</button>
-      <button class="button button--ghost" type="button" @click="emit('open-travel-search')">검색에서 자세히 보기</button>
+      <button class="button button--ghost" type="button" @click="emit('open-travel-search', travelKeywordFilter || '여행')">검색에서 자세히 보기</button>
     </div>
 
     <div class="household-travel-ledger__content">
@@ -205,7 +220,7 @@ const recentEntries = computed(() => travelEntries.value.slice(0, 12))
               <tr v-for="entry in recentEntries" :key="entry.id">
                 <td>{{ formatShortDate(entry.entryDate) }} {{ formatTime(entry.entryTime) }}</td>
                 <td>{{ entry.title }}</td>
-                <td>{{ entry.categoryDetailName ? `${entry.categoryGroupName} / ${entry.categoryDetailName}` : entry.categoryGroupName }}</td>
+                <td>{{ getEntryCategoryLabel(entry) }}</td>
                 <td class="is-expense">{{ formatCurrency(entry.amount) }}</td>
                 <td>
                   <div class="household-travel-ledger__entry-actions">

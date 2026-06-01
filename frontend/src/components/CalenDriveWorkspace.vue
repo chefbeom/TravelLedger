@@ -68,6 +68,9 @@ const feedback = ref('')
 const errorMessage = ref('')
 const selectedIds = ref([])
 const moveTargetId = ref('')
+const moveDestinationFolders = ref([])
+const moveDestinationLoading = ref(false)
+const moveDestinationsHydrated = ref(false)
 const detailsPanelOpen = ref(true)
 const dragDepth = ref(0)
 
@@ -284,36 +287,45 @@ const detailRows = computed(() => {
   ]
 })
 
+function buildBlockedFolderIds(targets, folders) {
+  const blocked = new Set(
+    (targets || [])
+      .filter((item) => isFolder(item))
+      .map((item) => String(item.id)),
+  )
+  let changed = true
+  while (changed) {
+    changed = false
+    for (const folder of folders || []) {
+      const folderId = String(folder.id)
+      const parentId = folder.parentId == null ? '' : String(folder.parentId)
+      if (!blocked.has(folderId) && parentId && blocked.has(parentId)) {
+        blocked.add(folderId)
+        changed = true
+      }
+    }
+  }
+  return blocked
+}
+
+const moveDestinationBlockedFolderIds = computed(() =>
+  buildBlockedFolderIds(selectedItems.value, moveDestinationFolders.value),
+)
+
 const moveDestinationOptions = computed(() => {
   if (activeTab.value !== 'drive' && activeTab.value !== 'recent') {
     return []
   }
 
-  const options = new Map()
-  options.set('', { value: '', label: '홈' })
-
-  for (const crumb of breadcrumbs.value) {
-    options.set(String(crumb.id ?? ''), {
-      value: String(crumb.id ?? ''),
-      label: crumb.fileOriginName || '상위 폴더',
-    })
-  }
-
-  for (const item of driveFiles.value) {
-    if (!isFolder(item)) {
-      continue
-    }
-    const itemId = getSelectableId(item)
-    if (selectedIds.value.includes(itemId)) {
-      continue
-    }
-    options.set(String(item.id), {
-      value: String(item.id),
-      label: item.fileOriginName,
-    })
-  }
-
-  return Array.from(options.values())
+  return [
+    { value: '', label: '내 드라이브', path: '최상위 위치', disabled: false },
+    ...moveDestinationFolders.value.map((folder) => ({
+      value: String(folder.id),
+      label: folder.path || folder.fileOriginName,
+      path: folder.path || folder.fileOriginName,
+      disabled: moveDestinationBlockedFolderIds.value.has(String(folder.id)) || Boolean(folder.lockedFile),
+    })),
+  ]
 })
 
 const driveSummaryCards = computed(() => {
@@ -476,26 +488,7 @@ const sharedSaveDialogTitle = computed(() => {
   return `${sharedSaveDialog.targets.length}개 공유 파일`
 })
 
-const moveDialogBlockedFolderIds = computed(() => {
-  const blocked = new Set(
-    moveDialog.targets
-      .filter((item) => isFolder(item))
-      .map((item) => String(item.id)),
-  )
-  let changed = true
-  while (changed) {
-    changed = false
-    for (const folder of moveDialog.folders) {
-      const folderId = String(folder.id)
-      const parentId = folder.parentId == null ? '' : String(folder.parentId)
-      if (!blocked.has(folderId) && parentId && blocked.has(parentId)) {
-        blocked.add(folderId)
-        changed = true
-      }
-    }
-  }
-  return blocked
-})
+const moveDialogBlockedFolderIds = computed(() => buildBlockedFolderIds(moveDialog.targets, moveDialog.folders))
 
 const moveDialogDestinationOptions = computed(() => [
   {
@@ -935,6 +928,27 @@ async function loadTrashFiles() {
   trashFiles.value = await fetchDriveTrashFiles()
 }
 
+function invalidateMoveDestinations() {
+  moveDestinationFolders.value = []
+  moveDestinationsHydrated.value = false
+}
+
+async function ensureMoveDestinationsLoaded() {
+  if (moveDestinationLoading.value || moveDestinationsHydrated.value) {
+    return
+  }
+
+  moveDestinationLoading.value = true
+  try {
+    moveDestinationFolders.value = await fetchDriveFolderDestinations()
+    moveDestinationsHydrated.value = true
+  } catch (error) {
+    setMessages('', error.message)
+  } finally {
+    moveDestinationLoading.value = false
+  }
+}
+
 async function loadSharedData() {
   const [received, sent] = await Promise.all([
     fetchDriveSharedReceived(),
@@ -1145,6 +1159,7 @@ async function confirmFolderDialog() {
     activeTab.value = 'drive'
     pageFilters.parentId = targetParentId
     pageFilters.page = 0
+    invalidateMoveDestinations()
     await Promise.all([loadDrivePage(), loadHomeSummary(), loadRecentFiles()])
   } catch (error) {
     setMessages('', error.message)
@@ -1166,6 +1181,9 @@ async function promptRename(item) {
   try {
     await renameDriveItem(item.id, nextName)
     setMessages('이름을 변경했습니다.')
+    if (isFolder(item)) {
+      invalidateMoveDestinations()
+    }
     await refreshVisibleData()
   } catch (error) {
     setMessages('', error.message)
@@ -1200,6 +1218,9 @@ async function moveItemToTrash(item) {
   try {
     await moveDriveItemToTrash(item.id)
     setMessages('휴지통으로 이동했습니다.')
+    if (isFolder(item)) {
+      invalidateMoveDestinations()
+    }
     await Promise.all([loadDrivePage(), loadHomeSummary(), loadRecentFiles(), loadTrashFiles()])
     clearSelection()
   } catch (error) {
@@ -1222,6 +1243,9 @@ async function moveSelectedToTrash() {
   try {
     await Promise.all(selectedItems.value.map((item) => moveDriveItemToTrash(item.id)))
     setMessages('선택한 항목을 휴지통으로 이동했습니다.')
+    if (selectedItems.value.some((item) => isFolder(item))) {
+      invalidateMoveDestinations()
+    }
     await Promise.all([loadDrivePage(), loadHomeSummary(), loadRecentFiles(), loadTrashFiles()])
     clearSelection()
   } catch (error) {
@@ -1233,6 +1257,9 @@ async function restoreTrashItem(item) {
   try {
     await restoreDriveItem(item.id)
     setMessages('휴지통에서 복구했습니다.')
+    if (isFolder(item)) {
+      invalidateMoveDestinations()
+    }
     await Promise.all([loadTrashFiles(), loadDrivePage(), loadHomeSummary()])
     clearSelection()
   } catch (error) {
@@ -1248,6 +1275,9 @@ async function restoreSelectedFromTrash() {
   try {
     await restoreDriveItems(selectedItems.value.map((item) => item.id))
     setMessages('선택한 휴지통 항목을 복구했습니다.')
+    if (selectedItems.value.some((item) => isFolder(item))) {
+      invalidateMoveDestinations()
+    }
     await Promise.all([loadTrashFiles(), loadDrivePage(), loadHomeSummary()])
     clearSelection()
   } catch (error) {
@@ -1267,6 +1297,9 @@ async function deleteItemPermanently(item) {
   try {
     await deleteDriveItem(item.id)
     setMessages('항목을 완전히 삭제했습니다.')
+    if (isFolder(item)) {
+      invalidateMoveDestinations()
+    }
     await Promise.all([loadTrashFiles(), loadDrivePage(), loadHomeSummary()])
     clearSelection()
   } catch (error) {
@@ -1289,6 +1322,9 @@ async function deleteSelectedPermanently() {
   try {
     await Promise.all(selectedItems.value.map((item) => deleteDriveItem(item.id)))
     setMessages('선택한 항목을 완전히 삭제했습니다.')
+    if (selectedItems.value.some((item) => isFolder(item))) {
+      invalidateMoveDestinations()
+    }
     await Promise.all([loadTrashFiles(), loadDrivePage(), loadHomeSummary()])
     clearSelection()
   } catch (error) {
@@ -1308,6 +1344,7 @@ async function handleClearTrash() {
   try {
     await clearDriveTrash()
     setMessages('휴지통을 비웠습니다.')
+    invalidateMoveDestinations()
     await Promise.all([loadTrashFiles(), loadDrivePage(), loadHomeSummary()])
     clearSelection()
   } catch (error) {
@@ -1326,10 +1363,18 @@ async function moveSelectedItemsToFolder() {
     return
   }
 
+  await ensureMoveDestinationsLoaded()
+  const selectedOption = moveDestinationOptions.value.find((option) => option.value === moveTargetId.value)
+  if (!selectedOption || selectedOption.disabled) {
+    setMessages('', '이동할 수 없는 위치입니다.')
+    return
+  }
+
   const targetParentId = moveTargetId.value === '' ? null : Number(moveTargetId.value)
   try {
     await moveDriveItems(selectedItems.value.map((item) => item.id), targetParentId)
     setMessages('선택한 항목을 이동했습니다.')
+    invalidateMoveDestinations()
     await Promise.all([loadDrivePage(), loadHomeSummary()])
     clearSelection()
   } catch (error) {
@@ -1391,6 +1436,7 @@ async function confirmMoveDialog() {
     closeMoveDialog()
     clearSelection()
     setMessages(`${movedCount}개 항목을 이동했습니다.`)
+    invalidateMoveDestinations()
     await Promise.all([loadDrivePage(), loadHomeSummary(), loadRecentFiles()])
   } catch (error) {
     setMessages('', error.message)
@@ -2157,9 +2203,19 @@ onBeforeUnmount(() => {
                 <span class="drive-selection-bar__hint">선택 {{ selectedIds.length }}개</span>
                 <span v-if="hasSelectedLockedItems" class="drive-lock-badge">잠긴 항목 포함</span>
                 <template v-if="activeTab === 'drive' || activeTab === 'recent'">
-                  <select v-model="moveTargetId" class="drive-selection-bar__select">
-                    <option value="">홈으로 이동</option>
-                    <option v-for="option in moveDestinationOptions" :key="`dest-${option.value}`" :value="option.value">
+                  <select
+                    v-model="moveTargetId"
+                    class="drive-selection-bar__select"
+                    @click="ensureMoveDestinationsLoaded"
+                    @focus="ensureMoveDestinationsLoaded"
+                  >
+                    <option v-if="moveDestinationLoading" disabled value="">폴더를 불러오는 중...</option>
+                    <option
+                      v-for="option in moveDestinationOptions"
+                      :key="`dest-${option.value}`"
+                      :disabled="option.disabled"
+                      :value="option.value"
+                    >
                       {{ option.label }}
                     </option>
                   </select>

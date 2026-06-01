@@ -449,6 +449,69 @@ const spendingLocations = computed(() => {
   return [...bucket.values()].sort((left, right) => right.totalKrw - left.totalKrw)
 })
 
+const travelSummaryCards = computed(() => {
+  const plan = travelPlan.value
+  if (!plan) {
+    return []
+  }
+
+  if (props.route === 'travel-money') {
+    return [
+      {
+        key: 'planned-total',
+        label: '예산안',
+        value: formatCurrency(plan.plannedTotalKrw),
+        meta: `${plan.budgetItemCount || 0}개 항목`,
+      },
+      {
+        key: 'actual-total',
+        label: '실사용 금액',
+        value: formatCurrency(plan.actualTotalKrw),
+        meta: `${plan.recordCount || 0}개 지출 기록`,
+      },
+      {
+        key: 'money-records',
+        label: '장소 기록',
+        value: `${plan.recordCount || 0}건`,
+        meta: '위치가 있는 지출 기록 기준',
+      },
+      {
+        key: 'money-distance',
+        label: '이동량',
+        value: `${Number(plan.totalDistanceKm || 0).toFixed(2)} km`,
+        meta: `${plan.totalDurationMinutes || 0}분 / ${Number(plan.totalStepCount || 0).toLocaleString('ko-KR')}걸음`,
+      },
+    ]
+  }
+
+  return [
+    {
+      key: 'memories',
+      label: '장소 방문 기록',
+      value: `${plan.memoryRecordCount || 0}건`,
+      meta: '여행 메모와 방문지 기록',
+    },
+    {
+      key: 'photos',
+      label: '사진',
+      value: `${plan.mediaItemCount || 0}장`,
+      meta: '업로드한 여행 사진',
+    },
+    {
+      key: 'routes',
+      label: 'GPX / 이동 경로',
+      value: `${plan.routeSegmentCount || 0}개`,
+      meta: '직접 그린 경로와 GPX 기록',
+    },
+    {
+      key: 'distance',
+      label: '총 이동량',
+      value: `${Number(plan.totalDistanceKm || 0).toFixed(2)} km`,
+      meta: `${plan.totalDurationMinutes || 0}분 / ${Number(plan.totalStepCount || 0).toLocaleString('ko-KR')}걸음`,
+    },
+  ]
+})
+
 const recordPhotoSummaryMap = computed(() => {
   const bucket = new Map()
   ;(travelPlan.value?.mediaItems ?? []).forEach((item) => {
@@ -1866,10 +1929,11 @@ async function openPortfolioMemoryEditor(payload) {
 
     <template v-else>
     <section v-if="travelPlan" class="travel-summary-grid">
-      <article class="travel-stat-card"><span>예산안</span><strong>{{ formatCurrency(travelPlan.plannedTotalKrw) }}</strong><small>{{ travelPlan.budgetItemCount }}개 항목</small></article>
-      <article class="travel-stat-card"><span>실사용 금액</span><strong>{{ formatCurrency(travelPlan.actualTotalKrw) }}</strong><small>{{ travelPlan.recordCount }}개 지출 기록</small></article>
-      <article class="travel-stat-card"><span>기록 + 미디어</span><strong>{{ travelPlan.memoryRecordCount }} / {{ travelPlan.mediaItemCount }}</strong><small>여행 기록 / 업로드 파일</small></article>
-      <article class="travel-stat-card"><span>총 이동량</span><strong>{{ Number(travelPlan.totalDistanceKm || 0).toFixed(2) }} km</strong><small>{{ travelPlan.totalDurationMinutes || 0 }}분 / {{ Number(travelPlan.totalStepCount || 0).toLocaleString('ko-KR') }}걸음</small></article>
+      <article v-for="card in travelSummaryCards" :key="card.key" class="travel-stat-card">
+        <span>{{ card.label }}</span>
+        <strong>{{ card.value }}</strong>
+        <small>{{ card.meta }}</small>
+      </article>
     </section>
 
     <template v-if="route === 'travel-money'">

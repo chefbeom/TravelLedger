@@ -205,7 +205,12 @@ watch(
     </section>
 
     <div v-show="primaryTab === 'map'" class="workspace-stack">
-      <TravelMyMapWorkspace :active="primaryTab === 'map'" />
+      <TravelMyMapWorkspace
+        :active="primaryTab === 'map'"
+        @open-memories="openMemories"
+        @open-routes="openRoutes"
+        @open-photos="openPhotos"
+      />
     </div>
 
     <div v-if="primaryTab === 'share'" class="workspace-stack">

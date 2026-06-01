@@ -21,6 +21,8 @@ const props = defineProps({
   },
 })
 
+const emit = defineEmits(['open-memories', 'open-routes', 'open-photos'])
+
 const isLoading = ref(false)
 const isDetailLoading = ref(false)
 const isRepresentativeSaving = ref(false)
@@ -523,19 +525,24 @@ watch(
 <template>
   <div class="workspace-stack">
     <section class="panel">
-      <div class="panel__header">
+      <div class="panel__header travel-my-map-header">
         <div>
-          <h2>내 지도 사진 클러스터</h2>
-          <p>업로드한 사진의 GPS를 기준으로 고정된 클러스터와 핀을 확인하고, 큰 사진 보기까지 바로 이어서 조작할 수 있습니다.</p>
+          <span class="panel__eyebrow">TRAVEL ATLAS</span>
+          <h2>내 여행 지도</h2>
+          <p>업로드한 사진의 GPS, 장소 방문 기록, GPX 이동 경로를 한 지도에서 확인합니다.</p>
         </div>
-        <span class="panel__badge">클러스터 {{ summary.photoClusterCount }}개</span>
+        <div class="travel-my-map-header__actions">
+          <button class="button button--primary" type="button" @click="emit('open-memories')">장소 기록 추가</button>
+          <button class="button button--secondary" type="button" @click="emit('open-routes')">GPX 경로 추가</button>
+          <button class="button button--ghost" type="button" @click="emit('open-photos')">사진첩 열기</button>
+        </div>
       </div>
 
       <div class="travel-summary-grid">
         <article class="travel-stat-card">
-          <span>사진 마커 수</span>
+          <span>사진 핀</span>
           <strong>{{ summary.photoMarkerCount }}</strong>
-          <small>서버에서 계산한 전체 사진 위치 개수</small>
+          <small>서버에서 계산된 전체 사진 위치 개수</small>
         </article>
         <article class="travel-stat-card">
           <span>사진 클러스터</span>
@@ -543,14 +550,14 @@ watch(
           <small>같은 위치 묶음을 지도에 고정 표시합니다.</small>
         </article>
         <article class="travel-stat-card">
-          <span>기록 메모리</span>
+          <span>장소 기록</span>
           <strong>{{ summary.markerCount }}</strong>
-          <small>여행 기억과 연결된 메모리 기록입니다.</small>
+          <small>여행 기억과 연결된 방문 장소 기록</small>
         </article>
         <article class="travel-stat-card">
           <span>경로 거리</span>
           <strong>{{ summary.totalDistanceKm.toFixed(2) }}km</strong>
-          <small>현재 저장된 전체 이동 경로의 합계입니다.</small>
+          <small>저장된 전체 이동 경로의 합계</small>
         </article>
       </div>
     </section>
@@ -559,7 +566,7 @@ watch(
       <div class="panel__header">
         <div>
           <h2>사진 지도</h2>
-          <p>클러스터와 사진 핀은 한 번만 눌러도 정보가 갱신되고, 팝업을 누르면 큰 사진을 바로 열 수 있습니다.</p>
+          <p>클러스터는 한 번만 눌러도 세부 사진이 열리고, 사진을 누르면 원본 보기로 이어집니다.</p>
         </div>
         <div class="travel-map-mode-switch">
           <button
@@ -649,12 +656,15 @@ watch(
     </section>
 
     <section class="panel">
-      <div class="panel__header">
+      <div class="panel__header travel-my-map-header">
         <div>
-          <h2>전체 경로 목록</h2>
-          <p>사진 클러스터와 함께 저장된 이동 경로를 그대로 확인할 수 있습니다.</p>
+          <h2>전체 GPX 경로 목록</h2>
+          <p>사진 클러스터와 함께 저장된 이동 경로를 확인하고, 필요하면 GPX 기록 화면에서 새 경로를 추가합니다.</p>
         </div>
-        <span class="panel__badge">{{ routes.length }}개 경로</span>
+        <div class="travel-my-map-header__actions">
+          <span class="panel__badge">{{ routes.length }}개 경로</span>
+          <button class="button button--secondary" type="button" @click="emit('open-routes')">경로 관리</button>
+        </div>
       </div>
 
       <div class="sheet-table-wrap">

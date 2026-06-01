@@ -2254,6 +2254,18 @@ button {
   gap: 16px;
 }
 
+.travel-my-map-header {
+  align-items: flex-start;
+}
+
+.travel-my-map-header__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
 .travel-unified-shell {
   gap: 18px;
 }
@@ -5886,6 +5898,19 @@ textarea {
 }
 
 @media (max-width: 720px) {
+  .travel-my-map-header {
+    flex-direction: column;
+  }
+
+  .travel-my-map-header__actions {
+    justify-content: stretch;
+    width: 100%;
+  }
+
+  .travel-my-map-header__actions .button {
+    flex: 1 1 150px;
+  }
+
   .household-travel-ledger__summary,
   .household-travel-ledger__content {
     grid-template-columns: 1fr;

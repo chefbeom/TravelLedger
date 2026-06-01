@@ -220,6 +220,14 @@ const props = defineProps({
     type: Array,
     default: () => [],
   },
+  foreignCurrencyOptions: {
+    type: Array,
+    default: () => [],
+  },
+  foreignExchangeState: {
+    type: Object,
+    default: () => ({}),
+  },
   receiptOcr: {
     type: Object,
     default: () => ({}),
@@ -229,6 +237,10 @@ const props = defineProps({
     required: true,
   },
   formatCurrency: {
+    type: Function,
+    required: true,
+  },
+  formatCurrencyByCode: {
     type: Function,
     required: true,
   },
@@ -268,6 +280,7 @@ const emit = defineEmits([
 const selectedDate = ref(props.anchorDate)
 const selectedDaySort = ref('ASC')
 const selectedDayEntryFilter = ref('ALL')
+const selectedDayAmountMode = ref('KRW')
 const selectedDayEntryPage = ref(0)
 const calendarScalePreset = ref('default')
 const calendarWeekMode = ref('month')
@@ -597,6 +610,9 @@ const userStorageId = computed(() => props.currentUser?.id || props.currentUser?
 const calendarPanelLayoutStorageKey = computed(() => `${CALENDAR_PANEL_LAYOUT_STORAGE_KEY}:${userStorageId.value}`)
 
 const hasSelectedMemoColumn = computed(() => normalizedSelectedDateEntries.value.some((entry) => entry.visibleMemo))
+const hasSelectedForeignEntries = computed(() =>
+  normalizedSelectedDateEntries.value.some((entry) => Boolean(entry.foreignCurrencyCode && entry.foreignAmount != null)),
+)
 const selectedDateCountLabel = computed(() => `${normalizedSelectedDateEntries.value.length}건`)
 const formattedAmountInput = computed(() => {
   if (!props.amountInput) {
@@ -605,6 +621,9 @@ const formattedAmountInput = computed(() => {
 
   return formatCompactNumber(props.amountInput)
 })
+const isForeignCurrencyMode = computed(() => props.entryForm.currencyMode === 'FOREIGN')
+const foreignAmountInput = computed(() => String(props.entryForm.foreignAmount || ''))
+const foreignKrwPreview = computed(() => Number(props.entryForm.amount || 0))
 const receiptSuggestion = computed(() => props.receiptOcr?.suggestedEntry ?? null)
 const receiptWarnings = computed(() => (
   Array.isArray(props.receiptOcr?.warnings) ? props.receiptOcr.warnings : []
@@ -1874,6 +1893,42 @@ function formatPaymentMethodForSheet(entry) {
   return entry.entryType === 'INCOME' ? '-' : entry.paymentMethodName
 }
 
+function hasForeignEntry(entry) {
+  return Boolean(entry?.foreignCurrencyCode && entry.foreignAmount !== null && entry.foreignAmount !== undefined)
+}
+
+function formatForeignEntryAmount(entry) {
+  if (!hasForeignEntry(entry)) {
+    return ''
+  }
+  return props.formatCurrencyByCode(Number(entry.foreignAmount || 0), entry.foreignCurrencyCode)
+}
+
+function formatSheetAmountMain(entry) {
+  if (selectedDayAmountMode.value === 'FOREIGN' && hasForeignEntry(entry)) {
+    return formatForeignEntryAmount(entry)
+  }
+  return props.formatCurrency(entry.amount)
+}
+
+function formatSheetAmountSub(entry) {
+  if (!hasForeignEntry(entry)) {
+    return ''
+  }
+  if (selectedDayAmountMode.value === 'FOREIGN') {
+    return props.formatCurrency(entry.amount)
+  }
+  return formatForeignEntryAmount(entry)
+}
+
+function handleForeignAmountInput(value) {
+  const text = String(value ?? '').replace(/[^\d.]/g, '')
+  const parts = text.split('.')
+  props.entryForm.foreignAmount = parts.length <= 1
+    ? parts[0]
+    : `${parts[0]}.${parts.slice(1).join('').slice(0, 4)}`
+}
+
 function getMonthTag(day) {
   if (day.showMonthTag) {
     return `${day.monthNumber}월`
@@ -2132,9 +2187,6 @@ defineExpose({
           <p v-else-if="receiptTotalSuggestionCount" class="receipt-ocr-panel__message">
             검토 가능한 거래 제안 {{ receiptTotalSuggestionCount }}건이 있습니다.
           </p>
-          <p v-else class="receipt-ocr-panel__message">
-            자동 저장하지 않고 빠른 거래 입력칸에 적용하기 전 검토 단계를 거칩니다.
-          </p>
         </section>
 
         <section v-if="false" class="receipt-ocr-panel" data-no-drag="true">
@@ -2231,37 +2283,88 @@ defineExpose({
               </button>
             </div>
 
-            <label class="field field--amount">
-              <span class="field__label">금액</span>
-              <div class="amount-input">
-                <span>₩</span>
-                <input
-                  :value="formattedAmountInput"
-                  type="text"
-                  inputmode="numeric"
-                  placeholder="예: 48,000"
-                  @input="emit('update:amountInput', $event.target.value)"
-                />
-              </div>
-              <small class="field__hint">현재 입력 금액 {{ formatCurrency(amountPreview) }}</small>
-            </label>
-
-            <div class="amount-shortcuts">
+            <div class="entry-currency-toggle" role="group" aria-label="통화 입력 방식">
               <button
-                v-for="value in quickAmountButtons"
-                :key="value"
                 type="button"
-                class="button button--secondary amount-shortcuts__button"
-                @click="emit('fill-amount', value)"
+                :class="['toggle-chip', { 'toggle-chip--active': entryForm.currencyMode !== 'FOREIGN' }]"
+                @click="entryForm.currencyMode = 'KRW'"
               >
-                {{ formatAmountShortcut(value) }}
+                원화
               </button>
-              <button type="button" class="button button--secondary amount-shortcuts__button" @click="emit('add-amount', 5000)">
-                +5천
+              <button
+                type="button"
+                :class="['toggle-chip', { 'toggle-chip--active': entryForm.currencyMode === 'FOREIGN' }]"
+                @click="entryForm.currencyMode = 'FOREIGN'"
+              >
+                외화
               </button>
-              <button type="button" class="button button--secondary amount-shortcuts__button" @click="emit('add-amount', 10000)">
-                +1만
-              </button>
+            </div>
+
+            <template v-if="!isForeignCurrencyMode">
+              <label class="field field--amount">
+                <span class="field__label">금액</span>
+                <div class="amount-input">
+                  <span>₩</span>
+                  <input
+                    :value="formattedAmountInput"
+                    type="text"
+                    inputmode="numeric"
+                    placeholder="예: 48,000"
+                    @input="emit('update:amountInput', $event.target.value)"
+                  />
+                </div>
+                <small class="field__hint">현재 입력 금액 {{ formatCurrency(amountPreview) }}</small>
+              </label>
+
+              <div class="amount-shortcuts">
+                <button
+                  v-for="value in quickAmountButtons"
+                  :key="value"
+                  type="button"
+                  class="button button--secondary amount-shortcuts__button"
+                  @click="emit('fill-amount', value)"
+                >
+                  {{ formatAmountShortcut(value) }}
+                </button>
+                <button type="button" class="button button--secondary amount-shortcuts__button" @click="emit('add-amount', 5000)">
+                  +5천
+                </button>
+                <button type="button" class="button button--secondary amount-shortcuts__button" @click="emit('add-amount', 10000)">
+                  +1만
+                </button>
+              </div>
+            </template>
+
+            <div v-else class="foreign-amount-panel">
+              <div class="foreign-amount-panel__row">
+                <label class="field">
+                  <span class="field__label">통화</span>
+                  <select v-model="entryForm.foreignCurrencyCode">
+                    <option v-for="currency in foreignCurrencyOptions" :key="currency" :value="currency">
+                      {{ currency }}
+                    </option>
+                  </select>
+                </label>
+                <label class="field field--amount">
+                  <span class="field__label">외화 금액</span>
+                  <input
+                    :value="foreignAmountInput"
+                    type="text"
+                    inputmode="decimal"
+                    placeholder="예: 180"
+                    @input="handleForeignAmountInput($event.target.value)"
+                  />
+                </label>
+              </div>
+              <div class="foreign-amount-panel__preview">
+                <strong>{{ formatCurrency(foreignKrwPreview) }}</strong>
+                <span v-if="foreignExchangeState.isLoading">환율 확인 중</span>
+                <span v-else-if="foreignExchangeState.error">{{ foreignExchangeState.error }}</span>
+                <span v-else>
+                  1 {{ entryForm.foreignCurrencyCode }} = {{ formatCurrency(Number(entryForm.exchangeRateToKrw || 0)) }}
+                  <template v-if="entryForm.exchangeRateDate"> · {{ entryForm.exchangeRateDate }}</template>
+                </span>
+              </div>
             </div>
           </div>
 
@@ -2647,6 +2750,10 @@ defineExpose({
         </div>
         <div class="household-sheet-header">
           <span class="panel__badge">{{ selectedDateCountLabel }}</span>
+          <div v-if="hasSelectedForeignEntries" class="scope-toggle">
+            <button type="button" class="button" :class="{ 'button--primary': selectedDayAmountMode === 'KRW' }" @click="selectedDayAmountMode = 'KRW'">원화</button>
+            <button type="button" class="button" :class="{ 'button--primary': selectedDayAmountMode === 'FOREIGN' }" @click="selectedDayAmountMode = 'FOREIGN'">외화</button>
+          </div>
           <div class="scope-toggle">
             <button type="button" class="button" :class="{ 'button--primary': selectedDayEntryFilter === 'ALL' }" @click="selectedDayEntryFilter = 'ALL'">전체</button>
             <button type="button" class="button" :class="{ 'button--primary': selectedDayEntryFilter === 'INCOME' }" @click="selectedDayEntryFilter = 'INCOME'">수입</button>
@@ -2719,7 +2826,8 @@ defineExpose({
               </td>
               <td>{{ formatPaymentMethodForSheet(entry) }}</td>
               <td :class="['sheet-table__amount', entry.entryType === 'INCOME' ? 'is-income' : 'is-expense']">
-                {{ formatCurrency(entry.amount) }}
+                <span class="sheet-table__amount-main">{{ formatSheetAmountMain(entry) }}</span>
+                <small v-if="formatSheetAmountSub(entry)" class="sheet-table__amount-sub">{{ formatSheetAmountSub(entry) }}</small>
               </td>
               <td v-if="hasSelectedMemoColumn" class="sheet-table__memo">{{ entry.visibleMemo || '-' }}</td>
               <td class="sheet-table__actions">

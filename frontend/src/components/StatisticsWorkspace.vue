@@ -136,6 +136,9 @@ const searchEditDraft = reactive({
   title: '',
   memo: '',
   amount: '',
+  foreignCurrencyCode: null,
+  foreignAmount: null,
+  exchangeRateToKrw: null,
   entryType: 'EXPENSE',
   categoryGroupId: '',
   categoryDetailId: '',
@@ -366,6 +369,9 @@ function startSearchEntryEdit(entry) {
   searchEditDraft.title = entry.title || ''
   searchEditDraft.memo = entry.memo || ''
   searchEditDraft.amount = normalizeAmountInput(entry.amount)
+  searchEditDraft.foreignCurrencyCode = entry.foreignCurrencyCode || null
+  searchEditDraft.foreignAmount = entry.foreignAmount ?? null
+  searchEditDraft.exchangeRateToKrw = entry.exchangeRateToKrw ?? null
   searchEditDraft.entryType = entry.entryType === 'INCOME' ? 'INCOME' : 'EXPENSE'
   searchEditDraft.categoryGroupId = entry.categoryGroupId != null ? String(entry.categoryGroupId) : ''
   searchEditDraft.categoryDetailId = entry.categoryDetailId != null ? String(entry.categoryDetailId) : ''
@@ -414,6 +420,9 @@ function submitSearchEntryEdit(entry) {
       title: searchEditDraft.title.trim(),
       memo: searchEditDraft.memo.trim() || null,
       amount: Number(searchEditDraft.amount || 0),
+      foreignCurrencyCode: searchEditDraft.foreignCurrencyCode,
+      foreignAmount: searchEditDraft.foreignAmount,
+      exchangeRateToKrw: searchEditDraft.exchangeRateToKrw,
       entryType: searchEditDraft.entryType,
       categoryGroupId: Number(searchEditDraft.categoryGroupId),
       categoryDetailId: searchEditDraft.categoryDetailId ? Number(searchEditDraft.categoryDetailId) : null,

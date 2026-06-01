@@ -9,18 +9,21 @@ import java.time.LocalDate;
 import java.time.LocalTime;
 
 public record LedgerEntryRequest(
-        @NotNull(message = "거래일은 필수입니다.")
+        @NotNull(message = "Entry date is required.")
         LocalDate entryDate,
         LocalTime entryTime,
-        @NotBlank(message = "제목은 필수입니다.")
+        @NotBlank(message = "Title is required.")
         String title,
         String memo,
-        @NotNull(message = "금액은 필수입니다.")
-        @DecimalMin(value = "0.01", message = "금액은 0보다 커야 합니다.")
+        @NotNull(message = "Amount is required.")
+        @DecimalMin(value = "0.01", message = "Amount must be greater than 0.")
         BigDecimal amount,
-        @NotNull(message = "수입/지출 구분은 필수입니다.")
+        String foreignCurrencyCode,
+        BigDecimal foreignAmount,
+        BigDecimal exchangeRateToKrw,
+        @NotNull(message = "Entry type is required.")
         EntryType entryType,
-        @NotNull(message = "대분류는 필수입니다.")
+        @NotNull(message = "Category group is required.")
         Long categoryGroupId,
         Long categoryDetailId,
         Long paymentMethodId

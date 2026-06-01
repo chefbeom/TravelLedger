@@ -42,20 +42,34 @@ public class ExchangeRateService {
     }
 
     public BigDecimal getRequiredRateToKrw(String currencyCode) {
-        TravelExchangeRateResponse response = getLatestRateToKrw(currencyCode);
+        return getRequiredRateToKrw(currencyCode, null);
+    }
+
+    public BigDecimal getRequiredRateToKrw(String currencyCode, LocalDate rateDate) {
+        return getRequiredRateQuoteToKrw(currencyCode, rateDate).rateToKrw();
+    }
+
+    public TravelExchangeRateResponse getRequiredRateQuoteToKrw(String currencyCode, LocalDate rateDate) {
+        TravelExchangeRateResponse response = getRateToKrw(currencyCode, rateDate);
         if (!response.available() || response.rateToKrw() == null) {
-            throw new BadRequestException(currencyCode + " 환율을 가져오지 못했습니다. 잠시 후 다시 시도해 주세요.");
+            throw new BadRequestException(currencyCode + " exchange rate is unavailable. Please try again later.");
         }
-        return response.rateToKrw();
+        return response;
     }
 
     public TravelExchangeRateResponse getLatestRateToKrw(String currencyCode) {
-        String normalizedCurrency = currencyCode == null ? KRW : currencyCode.trim().toUpperCase();
+        return getRateToKrw(currencyCode, null);
+    }
+
+    public TravelExchangeRateResponse getRateToKrw(String currencyCode, LocalDate rateDate) {
+        String normalizedCurrency = normalizeCurrencyCode(currencyCode);
+        LocalDate resolvedRateDate = normalizeRateDate(rateDate);
         if (KRW.equals(normalizedCurrency)) {
-            return new TravelExchangeRateResponse(KRW, BigDecimal.ONE, LocalDate.now(), true, PROVIDER);
+            return new TravelExchangeRateResponse(KRW, BigDecimal.ONE, resolvedRateDate, true, PROVIDER);
         }
 
-        CachedRate cachedRate = cache.get(normalizedCurrency);
+        String cacheKey = normalizedCurrency + ":" + resolvedRateDate;
+        CachedRate cachedRate = cache.get(cacheKey);
         if (cachedRate != null && cachedRate.expiresAt().isAfter(Instant.now())) {
             return cachedRate.response();
         }
@@ -63,7 +77,7 @@ public class ExchangeRateService {
         try {
             ExchangeRateApiResponse response = restClient.get()
                     .uri(uriBuilder -> uriBuilder
-                            .path("/latest")
+                            .path(rateDate == null ? "/latest" : "/" + resolvedRateDate)
                             .queryParam("base", normalizedCurrency)
                             .queryParam("symbols", KRW)
                             .build())
@@ -78,16 +92,29 @@ public class ExchangeRateService {
             TravelExchangeRateResponse quote = new TravelExchangeRateResponse(
                     normalizedCurrency,
                     rateToKrw,
-                    response.date() != null ? response.date() : LocalDate.now(),
+                    response.date() != null ? response.date() : resolvedRateDate,
                     true,
                     PROVIDER
             );
-            cache.put(normalizedCurrency, new CachedRate(quote, Instant.now().plus(cacheDuration)));
+            cache.put(cacheKey, new CachedRate(quote, Instant.now().plus(cacheDuration)));
             return quote;
         } catch (Exception exception) {
             log.warn("Failed to fetch exchange rate for {}", normalizedCurrency, exception);
             return fallback(normalizedCurrency, cachedRate);
         }
+    }
+
+    private String normalizeCurrencyCode(String currencyCode) {
+        String normalized = currencyCode == null ? KRW : currencyCode.trim().toUpperCase();
+        return normalized.isBlank() ? KRW : normalized;
+    }
+
+    private LocalDate normalizeRateDate(LocalDate rateDate) {
+        LocalDate today = LocalDate.now();
+        if (rateDate == null || rateDate.isAfter(today)) {
+            return today;
+        }
+        return rateDate;
     }
 
     private TravelExchangeRateResponse fallback(String currencyCode, CachedRate cachedRate) {

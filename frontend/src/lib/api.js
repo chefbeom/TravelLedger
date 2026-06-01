@@ -397,6 +397,10 @@ export function fetchEntryDateRange() {
   return request('/entries/date-range')
 }
 
+export function fetchLedgerExchangeRate(currencyCode, entryDate) {
+  return request(buildUrl('/entries/exchange-rate', { currencyCode, entryDate }).replace(API_BASE, ''))
+}
+
 export function fetchDeletedEntryPage(params = {}) {
   return request(buildUrl('/entries/trash', params).replace(API_BASE, ''))
 }

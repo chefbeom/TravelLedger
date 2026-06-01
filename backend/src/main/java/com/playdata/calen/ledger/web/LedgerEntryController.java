@@ -13,6 +13,7 @@ import com.playdata.calen.ledger.dto.LedgerEntryPageResponse;
 import com.playdata.calen.ledger.dto.LedgerEntryRequest;
 import com.playdata.calen.ledger.dto.LedgerEntryResponse;
 import com.playdata.calen.ledger.dto.LedgerEntrySearchPageResponse;
+import com.playdata.calen.ledger.dto.LedgerExchangeRateResponse;
 import com.playdata.calen.ledger.domain.EntryType;
 import com.playdata.calen.ledger.service.LedgerEntryService;
 import jakarta.validation.Valid;
@@ -101,6 +102,15 @@ public class LedgerEntryController {
             @AuthenticationPrincipal AppUserPrincipal currentUser
     ) {
         return ledgerEntryService.getEntryDateRange(currentUser.userId());
+    }
+
+    @GetMapping("/exchange-rate")
+    public LedgerExchangeRateResponse getExchangeRate(
+            @AuthenticationPrincipal AppUserPrincipal currentUser,
+            @RequestParam String currencyCode,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate entryDate
+    ) {
+        return ledgerEntryService.getExchangeRate(currentUser.userId(), currencyCode, entryDate);
     }
 
     @GetMapping("/history")

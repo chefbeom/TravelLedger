@@ -51,6 +51,21 @@ public class LedgerEntry {
     @Column(nullable = false, precision = 15, scale = 2)
     private BigDecimal amount;
 
+    @Column(name = "foreign_currency_code", length = 3)
+    private String foreignCurrencyCode;
+
+    @Column(name = "foreign_amount", precision = 18, scale = 4)
+    private BigDecimal foreignAmount;
+
+    @Column(name = "exchange_rate_to_krw", precision = 18, scale = 6)
+    private BigDecimal exchangeRateToKrw;
+
+    @Column(name = "exchange_rate_date")
+    private LocalDate exchangeRateDate;
+
+    @Column(name = "exchange_rate_provider", length = 40)
+    private String exchangeRateProvider;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     private EntryType entryType;

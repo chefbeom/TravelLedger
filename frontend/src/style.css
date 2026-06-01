@@ -1535,6 +1535,42 @@ button {
   margin-top: 12px;
 }
 
+.entry-currency-toggle {
+  display: inline-flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.foreign-amount-panel {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.foreign-amount-panel__row {
+  display: grid;
+  grid-template-columns: minmax(96px, 0.42fr) minmax(0, 1fr);
+  gap: 10px;
+}
+
+.foreign-amount-panel__preview {
+  display: grid;
+  gap: 4px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface-soft);
+}
+
+.foreign-amount-panel__preview strong {
+  font-size: 1.08rem;
+}
+
+.foreign-amount-panel__preview span {
+  color: var(--text-soft);
+  font-size: 0.82rem;
+}
+
 .entry-suggestion-list {
   display: grid;
   gap: 8px;
@@ -1804,6 +1840,21 @@ button {
 .sheet-table__title,
 .sheet-table__amount {
   font-weight: 700;
+}
+
+.sheet-table__amount {
+  display: grid;
+  gap: 2px;
+}
+
+.sheet-table__amount-main {
+  font-weight: 800;
+}
+
+.sheet-table__amount-sub {
+  color: var(--text-soft);
+  font-size: 0.75rem;
+  font-weight: 600;
 }
 
 .sheet-table__title {
@@ -8506,6 +8557,10 @@ textarea {
   width: 100%;
   min-width: 0;
   padding-inline: 10px;
+}
+
+.household-calendar-layout-item--quick-entry .foreign-amount-panel__row {
+  grid-template-columns: minmax(86px, 0.42fr) minmax(0, 1fr);
 }
 
 .household-calendar-layout-item--quick-entry .entry-editor__actions .button {

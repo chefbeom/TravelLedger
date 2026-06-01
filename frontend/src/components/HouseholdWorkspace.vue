@@ -21,6 +21,7 @@ import {
   fetchEntryDateRange,
   fetchLedgerEntryHistories,
   fetchLedgerEntryHistory,
+  fetchLedgerExchangeRate,
   fetchEntrySearchPage,
   fetchEntries,
   fetchHouseholdAggregatePreferences,
@@ -35,6 +36,7 @@ import {
 import {
   buildCalendarWeeks,
   formatCurrency,
+  formatCurrencyByCode,
   formatFullDate,
   formatDateRange,
   formatMonthLabel,
@@ -76,6 +78,7 @@ const compareUnitLabels = {
 
 const today = toIsoDate(new Date())
 const quickAmountButtons = [10000, 30000, 50000, 100000]
+const foreignCurrencyOptions = ['USD', 'JPY', 'EUR', 'CNY', 'GBP', 'AUD', 'CAD', 'HKD', 'SGD', 'THB', 'PHP', 'VND', 'TWD']
 const SEARCH_PAGE_SIZE = 100
 const SEARCH_OTHER_FILTER_VALUE = '__OTHER__'
 const csvExportOptions = [
@@ -186,11 +189,19 @@ const ledgerChangeHistory = reactive({
   totalPages: 0,
   selected: null,
 })
+const foreignExchangeState = reactive({
+  isLoading: false,
+  error: '',
+  rateToKrw: null,
+  rateDate: '',
+  provider: '',
+})
 let feedbackTimerId = null
 let searchRequestTimerId = null
 let titleSuggestionSearchTimerId = null
 let titleSuggestionSearchRequestId = 0
 let receiptOcrItemSequence = 0
+let foreignExchangeRequestId = 0
 
 const entryForm = reactive({
   entryDate: today,
@@ -198,6 +209,12 @@ const entryForm = reactive({
   title: '',
   memo: '',
   amount: '',
+  currencyMode: 'KRW',
+  foreignCurrencyCode: 'USD',
+  foreignAmount: '',
+  exchangeRateToKrw: '',
+  exchangeRateDate: '',
+  exchangeRateProvider: '',
   entryType: 'EXPENSE',
   categoryGroupId: '',
   categoryDetailId: '',
@@ -257,6 +274,7 @@ const availableDetails = computed(() => {
   return group?.details ?? []
 })
 const amountPreview = computed(() => Number(entryForm.amount || 0))
+const isForeignCurrencyMode = computed(() => entryForm.currencyMode === 'FOREIGN')
 const canUndoLastEntryAction = computed(() => Boolean(undoableEntryAction.value?.entryId))
 const undoEntryActionLabel = computed(() => (
   undoableEntryAction.value?.type === 'update'
@@ -484,6 +502,24 @@ watch(
 )
 
 watch(
+  () => [entryForm.currencyMode, entryForm.foreignCurrencyCode, entryForm.entryDate],
+  () => {
+    if (entryForm.currencyMode !== 'FOREIGN') {
+      clearForeignExchangeFields()
+      return
+    }
+    queueForeignExchangeRateLoad()
+  },
+)
+
+watch(
+  () => [entryForm.currencyMode, entryForm.foreignAmount, entryForm.exchangeRateToKrw],
+  () => {
+    syncForeignKrwAmount()
+  },
+)
+
+watch(
   () => [entryForm.title, entryForm.entryType, entryDateRange.value.earliestDate, entryDateRange.value.latestDate],
   () => {
     queueTitleSuggestionSearch()
@@ -610,6 +646,123 @@ function setFeedback(message = '', error = '') {
   }
 }
 
+function normalizeForeignCurrencyCode(value) {
+  return String(value || '').trim().toUpperCase()
+}
+
+function normalizeDecimalInput(value) {
+  const text = String(value ?? '').replace(/[^\d.]/g, '')
+  const parts = text.split('.')
+  if (parts.length <= 1) {
+    return parts[0] || ''
+  }
+  return `${parts[0]}.${parts.slice(1).join('').slice(0, 4)}`
+}
+
+function clearForeignExchangeFields() {
+  foreignExchangeState.isLoading = false
+  foreignExchangeState.error = ''
+  foreignExchangeState.rateToKrw = null
+  foreignExchangeState.rateDate = ''
+  foreignExchangeState.provider = ''
+  entryForm.foreignAmount = ''
+  entryForm.exchangeRateToKrw = ''
+  entryForm.exchangeRateDate = ''
+  entryForm.exchangeRateProvider = ''
+}
+
+function applyExchangeQuote(quote) {
+  const rate = Number(quote?.rateToKrw || 0)
+  if (!quote?.available || !Number.isFinite(rate) || rate <= 0) {
+    foreignExchangeState.rateToKrw = null
+    foreignExchangeState.rateDate = ''
+    foreignExchangeState.provider = ''
+    entryForm.exchangeRateToKrw = ''
+    entryForm.exchangeRateDate = ''
+    entryForm.exchangeRateProvider = ''
+    foreignExchangeState.error = '환율 정보를 불러오지 못했습니다.'
+    return
+  }
+
+  foreignExchangeState.rateToKrw = rate
+  foreignExchangeState.rateDate = quote.rateDate || entryForm.entryDate
+  foreignExchangeState.provider = quote.provider || ''
+  entryForm.exchangeRateToKrw = String(rate)
+  entryForm.exchangeRateDate = foreignExchangeState.rateDate
+  entryForm.exchangeRateProvider = foreignExchangeState.provider
+  foreignExchangeState.error = ''
+  syncForeignKrwAmount()
+}
+
+async function queueForeignExchangeRateLoad() {
+  const currencyCode = normalizeForeignCurrencyCode(entryForm.foreignCurrencyCode)
+  const requestId = ++foreignExchangeRequestId
+  if (!currencyCode || currencyCode === 'KRW') {
+    clearForeignExchangeFields()
+    return
+  }
+
+  foreignExchangeState.isLoading = true
+  foreignExchangeState.error = ''
+  try {
+    const quote = await fetchLedgerExchangeRate(currencyCode, entryForm.entryDate)
+    if (requestId !== foreignExchangeRequestId || entryForm.currencyMode !== 'FOREIGN') {
+      return
+    }
+    applyExchangeQuote(quote)
+  } catch (error) {
+    if (requestId !== foreignExchangeRequestId) {
+      return
+    }
+    foreignExchangeState.error = error.message || '환율 정보를 불러오지 못했습니다.'
+    entryForm.exchangeRateToKrw = ''
+    entryForm.exchangeRateDate = ''
+    entryForm.exchangeRateProvider = ''
+  } finally {
+    if (requestId === foreignExchangeRequestId) {
+      foreignExchangeState.isLoading = false
+    }
+  }
+}
+
+function syncForeignKrwAmount() {
+  if (entryForm.currencyMode !== 'FOREIGN') {
+    return
+  }
+  const foreignAmount = Number(entryForm.foreignAmount || 0)
+  const rate = Number(entryForm.exchangeRateToKrw || 0)
+  if (!Number.isFinite(foreignAmount) || foreignAmount <= 0 || !Number.isFinite(rate) || rate <= 0) {
+    entryForm.amount = ''
+    amountInput.value = ''
+    return
+  }
+
+  const nextAmount = String(Math.round(foreignAmount * rate))
+  entryForm.amount = nextAmount
+  amountInput.value = nextAmount
+}
+
+function hydrateForeignFieldsFromEntry(entry) {
+  const currencyCode = normalizeForeignCurrencyCode(entry?.foreignCurrencyCode)
+  if (currencyCode && currencyCode !== 'KRW') {
+    entryForm.currencyMode = 'FOREIGN'
+    entryForm.foreignCurrencyCode = currencyCode
+    entryForm.foreignAmount = entry.foreignAmount != null ? String(Number(entry.foreignAmount)) : ''
+    entryForm.exchangeRateToKrw = entry.exchangeRateToKrw != null ? String(Number(entry.exchangeRateToKrw)) : ''
+    entryForm.exchangeRateDate = entry.exchangeRateDate || ''
+    entryForm.exchangeRateProvider = entry.exchangeRateProvider || ''
+    foreignExchangeState.rateToKrw = Number(entry.exchangeRateToKrw || 0) || null
+    foreignExchangeState.rateDate = entry.exchangeRateDate || ''
+    foreignExchangeState.provider = entry.exchangeRateProvider || ''
+    foreignExchangeState.error = ''
+    return
+  }
+
+  entryForm.currencyMode = 'KRW'
+  entryForm.foreignCurrencyCode = 'USD'
+  clearForeignExchangeFields()
+}
+
 function buildEntryFormSnapshot() {
   return {
     entryDate: entryForm.entryDate,
@@ -617,6 +770,12 @@ function buildEntryFormSnapshot() {
     title: entryForm.title,
     memo: entryForm.memo,
     amount: entryForm.amount,
+    currencyMode: entryForm.currencyMode,
+    foreignCurrencyCode: entryForm.foreignCurrencyCode,
+    foreignAmount: entryForm.foreignAmount,
+    exchangeRateToKrw: entryForm.exchangeRateToKrw,
+    exchangeRateDate: entryForm.exchangeRateDate,
+    exchangeRateProvider: entryForm.exchangeRateProvider,
     entryType: entryForm.entryType,
     categoryGroupId: entryForm.categoryGroupId,
     categoryDetailId: entryForm.categoryDetailId,
@@ -638,6 +797,12 @@ function buildEntryFormSnapshotFromEntry(entry) {
     memo: entry.memo || '',
     amount: String(Number(entry.amount || 0)),
     amountInput: String(Number(entry.amount || 0)),
+    currencyMode: entry.foreignCurrencyCode ? 'FOREIGN' : 'KRW',
+    foreignCurrencyCode: entry.foreignCurrencyCode || 'USD',
+    foreignAmount: entry.foreignAmount != null ? String(Number(entry.foreignAmount)) : '',
+    exchangeRateToKrw: entry.exchangeRateToKrw != null ? String(Number(entry.exchangeRateToKrw)) : '',
+    exchangeRateDate: entry.exchangeRateDate || '',
+    exchangeRateProvider: entry.exchangeRateProvider || '',
     entryType: entry.entryType || 'EXPENSE',
     categoryGroupId: entry.categoryGroupId != null ? String(entry.categoryGroupId) : '',
     categoryDetailId: entry.categoryDetailId != null ? String(entry.categoryDetailId) : '',
@@ -657,6 +822,12 @@ function restoreEntryFormSnapshot(snapshot) {
   entryForm.title = snapshot.title || ''
   entryForm.memo = snapshot.memo || ''
   entryForm.amount = snapshot.amount || ''
+  entryForm.currencyMode = snapshot.currencyMode || 'KRW'
+  entryForm.foreignCurrencyCode = snapshot.foreignCurrencyCode || 'USD'
+  entryForm.foreignAmount = snapshot.foreignAmount || ''
+  entryForm.exchangeRateToKrw = snapshot.exchangeRateToKrw || ''
+  entryForm.exchangeRateDate = snapshot.exchangeRateDate || ''
+  entryForm.exchangeRateProvider = snapshot.exchangeRateProvider || ''
   entryForm.entryType = snapshot.entryType || 'EXPENSE'
   entryForm.categoryGroupId = snapshot.categoryGroupId || ''
   entryForm.categoryDetailId = snapshot.categoryDetailId || ''
@@ -693,6 +864,9 @@ function buildEntryPayloadFromEntry(entry) {
     title: entry.title || '',
     memo: entry.memo || null,
     amount: Number(entry.amount || 0),
+    foreignCurrencyCode: entry.foreignCurrencyCode || null,
+    foreignAmount: entry.foreignAmount != null ? Number(entry.foreignAmount) : null,
+    exchangeRateToKrw: entry.exchangeRateToKrw != null ? Number(entry.exchangeRateToKrw) : null,
     entryType: entry.entryType,
     categoryGroupId: Number(entry.categoryGroupId),
     categoryDetailId: entry.categoryDetailId != null ? Number(entry.categoryDetailId) : null,
@@ -1131,11 +1305,22 @@ function resetEntryForm({ entryDate = calendarAnchorDate.value } = {}) {
   entryForm.title = ''
   entryForm.memo = ''
   entryForm.amount = ''
+  entryForm.currencyMode = 'KRW'
+  entryForm.foreignCurrencyCode = 'USD'
+  entryForm.foreignAmount = ''
+  entryForm.exchangeRateToKrw = ''
+  entryForm.exchangeRateDate = ''
+  entryForm.exchangeRateProvider = ''
   entryForm.entryType = 'EXPENSE'
   entryForm.categoryGroupId = ''
   entryForm.categoryDetailId = ''
   entryForm.paymentMethodId = ''
   amountInput.value = ''
+  foreignExchangeState.isLoading = false
+  foreignExchangeState.error = ''
+  foreignExchangeState.rateToKrw = null
+  foreignExchangeState.rateDate = ''
+  foreignExchangeState.provider = ''
   isEntryTimeEnabled.value = false
   syncEntryDefaults({ preferLatest: true, force: true })
 }
@@ -1147,6 +1332,7 @@ function fillEntryForm(entry) {
   entryForm.title = entry.title || ''
   entryForm.memo = entry.memo || ''
   entryForm.amount = String(Number(entry.amount || 0))
+  hydrateForeignFieldsFromEntry(entry)
   entryForm.entryType = entry.entryType
   entryForm.categoryGroupId = String(entry.categoryGroupId)
   entryForm.categoryDetailId = entry.categoryDetailId != null ? String(entry.categoryDetailId) : ''
@@ -1166,6 +1352,8 @@ function applyEntrySuggestion(suggestion) {
   entryForm.title = suggestion.title || ''
   entryForm.memo = suggestion.memo || ''
   entryForm.amount = String(Number(suggestion.amount || 0))
+  entryForm.currencyMode = 'KRW'
+  clearForeignExchangeFields()
   entryForm.entryType = suggestion.entryType || entryForm.entryType
   amountInput.value = String(Number(suggestion.amount || 0))
   entryForm.categoryGroupId = suggestion.categoryGroupId || ''
@@ -1442,6 +1630,8 @@ async function applyReceiptOcrSuggestion(suggestion = receiptOcr.suggestedEntry)
   entryForm.title = suggestion.title || entryForm.title
   entryForm.memo = suggestion.memo || entryForm.memo
   entryForm.entryType = suggestion.entryType || 'EXPENSE'
+  entryForm.currencyMode = 'KRW'
+  clearForeignExchangeFields()
 
   if (suggestion.amount !== null && suggestion.amount !== undefined && suggestion.amount !== '') {
     const nextAmount = String(Number(suggestion.amount || 0))
@@ -1467,7 +1657,7 @@ async function applyReceiptOcrSuggestion(suggestion = receiptOcr.suggestedEntry)
 }
 
 function buildEntryPayload() {
-  return {
+  const payload = {
     entryDate: entryForm.entryDate,
     entryTime: isEntryTimeEnabled.value ? normalizeEntryTimePayload(entryForm.entryTime) : '00:00',
     title: entryForm.title.trim(),
@@ -1478,20 +1668,38 @@ function buildEntryPayload() {
     categoryDetailId: entryForm.categoryDetailId ? Number(entryForm.categoryDetailId) : null,
     paymentMethodId: resolveEntryPaymentMethodPayload(entryForm.entryType, entryForm.paymentMethodId),
   }
+  if (entryForm.currencyMode === 'FOREIGN') {
+    payload.foreignCurrencyCode = normalizeForeignCurrencyCode(entryForm.foreignCurrencyCode)
+    payload.foreignAmount = Number(entryForm.foreignAmount || 0)
+    payload.exchangeRateToKrw = Number(entryForm.exchangeRateToKrw || 0)
+  } else {
+    payload.foreignCurrencyCode = null
+    payload.foreignAmount = null
+    payload.exchangeRateToKrw = null
+  }
+  return payload
 }
 
 function handleAmountInput(value) {
   const digits = sanitizeAmountInput(value)
   amountInput.value = digits
   entryForm.amount = digits ? String(Number(digits)) : ''
+  if (entryForm.currencyMode === 'FOREIGN') {
+    entryForm.currencyMode = 'KRW'
+    clearForeignExchangeFields()
+  }
 }
 
 function fillAmount(value) {
+  entryForm.currencyMode = 'KRW'
+  clearForeignExchangeFields()
   amountInput.value = String(Number(value || 0))
   entryForm.amount = amountInput.value
 }
 
 function addAmount(value) {
+  entryForm.currencyMode = 'KRW'
+  clearForeignExchangeFields()
   const nextValue = amountPreview.value + Number(value || 0)
   amountInput.value = String(nextValue)
   entryForm.amount = String(nextValue)
@@ -1676,6 +1884,15 @@ async function submitEntry() {
   activeSubmit.value = 'entry'
   setFeedback()
   try {
+    if (entryForm.currencyMode === 'FOREIGN') {
+      syncForeignKrwAmount()
+      if (!entryForm.foreignAmount || Number(entryForm.foreignAmount) <= 0) {
+        throw new Error('외화 금액을 입력해 주세요.')
+      }
+      if (!entryForm.exchangeRateToKrw || Number(entryForm.exchangeRateToKrw) <= 0) {
+        throw new Error('환율 정보를 불러온 뒤 저장해 주세요.')
+      }
+    }
     const submittedSnapshot = buildEntryFormSnapshot()
     const submittedPayload = buildEntryPayload()
     if (editingEntryId.value) {
@@ -2175,9 +2392,12 @@ async function deactivatePayment(paymentId) {
       :amount-preview="amountPreview"
       :is-time-enabled="isEntryTimeEnabled"
       :quick-amount-buttons="quickAmountButtons"
+      :foreign-currency-options="foreignCurrencyOptions"
+      :foreign-exchange-state="foreignExchangeState"
       :receipt-ocr="receiptOcr"
       :format-amount-shortcut="formatAmountShortcut"
       :format-currency="formatCurrency"
+      :format-currency-by-code="formatCurrencyByCode"
       :format-short-date="formatShortDate"
       :format-time="formatTime"
       :can-undo-last-entry-action="canUndoLastEntryAction"

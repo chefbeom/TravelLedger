@@ -23,6 +23,7 @@ import com.playdata.calen.ledger.dto.LedgerEntryChangeHistoryPageResponse;
 import com.playdata.calen.ledger.dto.LedgerEntryChangeHistorySummaryResponse;
 import com.playdata.calen.ledger.dto.LedgerEntryChangeItemResponse;
 import com.playdata.calen.ledger.dto.LedgerEntryDateRangeResponse;
+import com.playdata.calen.ledger.dto.LedgerExchangeRateResponse;
 import com.playdata.calen.ledger.dto.LedgerEntryPageResponse;
 import com.playdata.calen.ledger.dto.LedgerEntrySearchPageResponse;
 import com.playdata.calen.ledger.dto.LedgerEntrySearchSummaryResponse;
@@ -33,8 +34,11 @@ import com.playdata.calen.ledger.repository.CategoryGroupRepository;
 import com.playdata.calen.ledger.repository.LedgerEntryChangeHistoryRepository;
 import com.playdata.calen.ledger.repository.LedgerEntryRepository;
 import com.playdata.calen.ledger.repository.PaymentMethodRepository;
+import com.playdata.calen.travel.dto.TravelExchangeRateResponse;
+import com.playdata.calen.travel.service.ExchangeRateService;
 import java.io.ByteArrayInputStream;
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -46,6 +50,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -73,6 +78,7 @@ public class LedgerEntryService {
     private final CategoryGroupRepository categoryGroupRepository;
     private final CategoryDetailRepository categoryDetailRepository;
     private final PaymentMethodRepository paymentMethodRepository;
+    private final ExchangeRateService exchangeRateService;
     private final ObjectMapper objectMapper;
 
     private static final String INCOME_PAYMENT_METHOD_NAME = "-";
@@ -80,11 +86,20 @@ public class LedgerEntryService {
     private static final int MAX_TRASH_PAGE_SIZE = 100;
     private static final int MAX_HISTORY_PAGE_SIZE = 50;
     private static final String EMPTY_HISTORY_SNAPSHOT_JSON = "[]";
+    private static final int KRW_AMOUNT_SCALE = 0;
+    private static final int FOREIGN_AMOUNT_SCALE = 4;
+    private static final int EXCHANGE_RATE_SCALE = 6;
+    private static final String KRW_CURRENCY_CODE = "KRW";
     private static final String FIELD_ENTRY_DATE = "entryDate";
     private static final String FIELD_ENTRY_TIME = "entryTime";
     private static final String FIELD_TITLE = "title";
     private static final String FIELD_MEMO = "memo";
     private static final String FIELD_AMOUNT = "amount";
+    private static final String FIELD_FOREIGN_CURRENCY = "foreignCurrency";
+    private static final String FIELD_FOREIGN_AMOUNT = "foreignAmount";
+    private static final String FIELD_EXCHANGE_RATE = "exchangeRate";
+    private static final String FIELD_EXCHANGE_RATE_DATE = "exchangeRateDate";
+    private static final String FIELD_EXCHANGE_RATE_PROVIDER = "exchangeRateProvider";
     private static final String FIELD_ENTRY_TYPE = "entryType";
     private static final String FIELD_CATEGORY_GROUP = "categoryGroup";
     private static final String FIELD_CATEGORY_DETAIL = "categoryDetail";
@@ -263,6 +278,18 @@ public class LedgerEntryService {
                 .map(LedgerEntry::getEntryDate)
                 .orElse(null);
         return new LedgerEntryDateRangeResponse(earliestDate, latestDate);
+    }
+
+    public LedgerExchangeRateResponse getExchangeRate(Long userId, String currencyCode, LocalDate entryDate) {
+        appUserService.getRequiredUser(userId);
+        TravelExchangeRateResponse quote = exchangeRateService.getRateToKrw(currencyCode, entryDate);
+        return new LedgerExchangeRateResponse(
+                quote.currencyCode(),
+                quote.rateToKrw(),
+                quote.fetchedDate(),
+                quote.available(),
+                quote.provider()
+        );
     }
 
     public LedgerEntryChangeHistoryPageResponse getChangeHistories(Long userId, int page, int size) {
@@ -571,6 +598,11 @@ public class LedgerEntryService {
                 entry.getTitle(),
                 entry.getMemo(),
                 entry.getAmount(),
+                entry.getForeignCurrencyCode(),
+                entry.getForeignAmount(),
+                entry.getExchangeRateToKrw(),
+                entry.getExchangeRateDate(),
+                entry.getExchangeRateProvider(),
                 entry.getEntryType(),
                 entry.getCategoryGroup().getId(),
                 entry.getCategoryGroup().getName(),
@@ -601,6 +633,11 @@ public class LedgerEntryService {
         entry.setTitle(snapshot.title());
         entry.setMemo(snapshot.memo());
         entry.setAmount(snapshot.amount());
+        entry.setForeignCurrencyCode(snapshot.foreignCurrencyCode());
+        entry.setForeignAmount(snapshot.foreignAmount());
+        entry.setExchangeRateToKrw(snapshot.exchangeRateToKrw());
+        entry.setExchangeRateDate(snapshot.exchangeRateDate());
+        entry.setExchangeRateProvider(snapshot.exchangeRateProvider());
         entry.setEntryType(snapshot.entryType());
         entry.setCategoryGroup(group);
         entry.setCategoryDetail(detail);
@@ -651,6 +688,11 @@ public class LedgerEntryService {
         String title = base.title();
         String memo = base.memo();
         BigDecimal amount = base.amount();
+        String foreignCurrencyCode = base.foreignCurrencyCode();
+        BigDecimal foreignAmount = base.foreignAmount();
+        BigDecimal exchangeRateToKrw = base.exchangeRateToKrw();
+        LocalDate exchangeRateDate = base.exchangeRateDate();
+        String exchangeRateProvider = base.exchangeRateProvider();
         EntryType entryType = base.entryType();
         Long categoryGroupId = base.categoryGroupId();
         String categoryGroupName = base.categoryGroupName();
@@ -668,6 +710,11 @@ public class LedgerEntryService {
                 case FIELD_TITLE -> title = rawValue;
                 case FIELD_MEMO -> memo = rawValue;
                 case FIELD_AMOUNT -> amount = new BigDecimal(rawValue);
+                case FIELD_FOREIGN_CURRENCY -> foreignCurrencyCode = rawValue;
+                case FIELD_FOREIGN_AMOUNT -> foreignAmount = parseNullableBigDecimal(rawValue);
+                case FIELD_EXCHANGE_RATE -> exchangeRateToKrw = parseNullableBigDecimal(rawValue);
+                case FIELD_EXCHANGE_RATE_DATE -> exchangeRateDate = parseNullableDate(rawValue);
+                case FIELD_EXCHANGE_RATE_PROVIDER -> exchangeRateProvider = rawValue;
                 case FIELD_ENTRY_TYPE -> entryType = EntryType.valueOf(rawValue);
                 case FIELD_CATEGORY_GROUP -> {
                     categoryGroupId = parseNullableLong(rawValue);
@@ -694,6 +741,11 @@ public class LedgerEntryService {
                 title,
                 memo,
                 amount,
+                foreignCurrencyCode,
+                foreignAmount,
+                exchangeRateToKrw,
+                exchangeRateDate,
+                exchangeRateProvider,
                 entryType,
                 categoryGroupId,
                 categoryGroupName,
@@ -748,6 +800,11 @@ public class LedgerEntryService {
         addPatch(fields, FIELD_CATEGORY_GROUP, "대분류", beforeSnapshot.categoryGroupName(), afterSnapshot.categoryGroupName(), toRawValue(beforeSnapshot.categoryGroupId()), toRawValue(afterSnapshot.categoryGroupId()));
         addPatch(fields, FIELD_CATEGORY_DETAIL, "소분류", beforeSnapshot.categoryDetailName(), afterSnapshot.categoryDetailName(), toRawValue(beforeSnapshot.categoryDetailId()), toRawValue(afterSnapshot.categoryDetailId()));
         addPatch(fields, FIELD_PAYMENT_METHOD, "결제수단", beforeSnapshot.paymentMethodName(), afterSnapshot.paymentMethodName(), toRawValue(beforeSnapshot.paymentMethodId()), toRawValue(afterSnapshot.paymentMethodId()));
+        addPatch(fields, FIELD_FOREIGN_CURRENCY, "외화 통화", beforeSnapshot.foreignCurrencyCode(), afterSnapshot.foreignCurrencyCode(), beforeSnapshot.foreignCurrencyCode(), afterSnapshot.foreignCurrencyCode());
+        addPatch(fields, FIELD_FOREIGN_AMOUNT, "외화 금액", formatAmount(beforeSnapshot.foreignAmount()), formatAmount(afterSnapshot.foreignAmount()), formatAmount(beforeSnapshot.foreignAmount()), formatAmount(afterSnapshot.foreignAmount()));
+        addPatch(fields, FIELD_EXCHANGE_RATE, "환율", formatAmount(beforeSnapshot.exchangeRateToKrw()), formatAmount(afterSnapshot.exchangeRateToKrw()), formatAmount(beforeSnapshot.exchangeRateToKrw()), formatAmount(afterSnapshot.exchangeRateToKrw()));
+        addPatch(fields, FIELD_EXCHANGE_RATE_DATE, "환율 기준일", beforeSnapshot.exchangeRateDate(), afterSnapshot.exchangeRateDate(), toRawValue(beforeSnapshot.exchangeRateDate()), toRawValue(afterSnapshot.exchangeRateDate()));
+        addPatch(fields, FIELD_EXCHANGE_RATE_PROVIDER, "환율 제공자", beforeSnapshot.exchangeRateProvider(), afterSnapshot.exchangeRateProvider(), beforeSnapshot.exchangeRateProvider(), afterSnapshot.exchangeRateProvider());
         return fields;
     }
 
@@ -873,6 +930,20 @@ public class LedgerEntryService {
         return Long.valueOf(rawValue);
     }
 
+    private BigDecimal parseNullableBigDecimal(String rawValue) {
+        if (rawValue == null || rawValue.isBlank()) {
+            return null;
+        }
+        return new BigDecimal(rawValue);
+    }
+
+    private LocalDate parseNullableDate(String rawValue) {
+        if (rawValue == null || rawValue.isBlank()) {
+            return null;
+        }
+        return LocalDate.parse(rawValue);
+    }
+
     private LocalTime parseNullableTime(String rawValue) {
         if (rawValue == null || rawValue.isBlank()) {
             return null;
@@ -909,6 +980,11 @@ public class LedgerEntryService {
                 entry.getTitle(),
                 LedgerEntryTextSanitizer.stripImportedMemo(entry.getMemo()),
                 entry.getAmount(),
+                entry.getForeignCurrencyCode(),
+                entry.getForeignAmount(),
+                entry.getExchangeRateToKrw(),
+                entry.getExchangeRateDate(),
+                entry.getExchangeRateProvider(),
                 entry.getEntryType(),
                 entry.getCategoryGroup().getId(),
                 entry.getCategoryGroup().getName(),
@@ -939,16 +1015,75 @@ public class LedgerEntryService {
         }
 
         LedgerEntryTextSanitizer.SanitizedLedgerText sanitizedText = LedgerEntryTextSanitizer.sanitize(request.title(), request.memo());
+        ForeignExchangeValues exchangeValues = resolveForeignExchange(request);
 
         ledgerEntry.setEntryDate(request.entryDate());
         ledgerEntry.setEntryTime(request.entryTime());
         ledgerEntry.setTitle(sanitizedText.title());
         ledgerEntry.setMemo(sanitizedText.memo());
-        ledgerEntry.setAmount(request.amount());
+        ledgerEntry.setAmount(exchangeValues.krwAmount());
+        ledgerEntry.setForeignCurrencyCode(exchangeValues.currencyCode());
+        ledgerEntry.setForeignAmount(exchangeValues.foreignAmount());
+        ledgerEntry.setExchangeRateToKrw(exchangeValues.rateToKrw());
+        ledgerEntry.setExchangeRateDate(exchangeValues.rateDate());
+        ledgerEntry.setExchangeRateProvider(exchangeValues.provider());
         ledgerEntry.setEntryType(request.entryType());
         ledgerEntry.setCategoryGroup(group);
         ledgerEntry.setCategoryDetail(detail);
         ledgerEntry.setPaymentMethod(paymentMethod);
+    }
+
+    private ForeignExchangeValues resolveForeignExchange(LedgerEntryRequest request) {
+        String currencyCode = normalizeForeignCurrencyCode(request.foreignCurrencyCode());
+        if (currencyCode == null || KRW_CURRENCY_CODE.equals(currencyCode)) {
+            return new ForeignExchangeValues(
+                    request.amount(),
+                    null,
+                    null,
+                    null,
+                    null,
+                    null
+            );
+        }
+
+        BigDecimal foreignAmount = request.foreignAmount();
+        if (foreignAmount == null || foreignAmount.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new BadRequestException("Foreign amount must be greater than 0.");
+        }
+
+        BigDecimal rateToKrw = request.exchangeRateToKrw();
+        LocalDate rateDate = request.entryDate();
+        String provider = "Provided";
+        if (rateToKrw == null || rateToKrw.compareTo(BigDecimal.ZERO) <= 0) {
+            TravelExchangeRateResponse quote = exchangeRateService.getRequiredRateQuoteToKrw(currencyCode, request.entryDate());
+            rateToKrw = quote.rateToKrw();
+            rateDate = quote.fetchedDate() != null ? quote.fetchedDate() : request.entryDate();
+            provider = quote.provider();
+        }
+
+        BigDecimal normalizedRate = rateToKrw.setScale(EXCHANGE_RATE_SCALE, RoundingMode.HALF_UP);
+        BigDecimal normalizedForeignAmount = foreignAmount.setScale(FOREIGN_AMOUNT_SCALE, RoundingMode.HALF_UP);
+        BigDecimal krwAmount = normalizedForeignAmount.multiply(normalizedRate).setScale(KRW_AMOUNT_SCALE, RoundingMode.HALF_UP);
+
+        return new ForeignExchangeValues(
+                krwAmount,
+                currencyCode,
+                normalizedForeignAmount,
+                normalizedRate,
+                rateDate,
+                provider
+        );
+    }
+
+    private String normalizeForeignCurrencyCode(String currencyCode) {
+        if (currencyCode == null || currencyCode.isBlank()) {
+            return null;
+        }
+        String normalized = currencyCode.trim().toUpperCase(Locale.ROOT);
+        if (!normalized.matches("[A-Z]{3}")) {
+            throw new BadRequestException("Currency code must be a 3-letter ISO code.");
+        }
+        return normalized;
     }
 
     private PaymentMethod resolvePaymentMethod(Long userId, EntryType entryType, Long paymentMethodId) {
@@ -1035,6 +1170,11 @@ public class LedgerEntryService {
             String title,
             String memo,
             BigDecimal amount,
+            String foreignCurrencyCode,
+            BigDecimal foreignAmount,
+            BigDecimal exchangeRateToKrw,
+            LocalDate exchangeRateDate,
+            String exchangeRateProvider,
             EntryType entryType,
             Long categoryGroupId,
             String categoryGroupName,
@@ -1043,6 +1183,16 @@ public class LedgerEntryService {
             Long paymentMethodId,
             String paymentMethodName,
             LocalDateTime deletedAt
+    ) {
+    }
+
+    private record ForeignExchangeValues(
+            BigDecimal krwAmount,
+            String currencyCode,
+            BigDecimal foreignAmount,
+            BigDecimal rateToKrw,
+            LocalDate rateDate,
+            String provider
     ) {
     }
 

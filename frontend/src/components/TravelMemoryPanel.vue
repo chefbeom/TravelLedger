@@ -19,6 +19,8 @@ const pinPresetOptions = [
   { key: 'shopping', label: '🛍 쇼핑', category: '쇼핑', iconText: '🛍' },
   { key: 'transit', label: '🚌 교통', category: '이동', iconText: '🚌' },
 ]
+const quickMemoryPresetKeys = new Set(['general', 'sightseeing', 'food', 'lodging', 'transit'])
+const quickMemoryPresets = pinPresetOptions.filter((preset) => quickMemoryPresetKeys.has(preset.key))
 
 const props = defineProps({
   travelPlan: {
@@ -539,8 +541,6 @@ function resetAutofillMessage() {
   autofillState.status = 'idle'
   autofillState.fileName = ''
   autofillState.message = defaultAutofillMessage
-  return
-  autofillState.message = '?ъ쭊??怨좊Ⅴ硫?EXIF ?뺣낫媛 ?덉쓣 ???좎쭨, ?쒓컙, GPS 醫뚰몴瑜??먮룞?쇰줈 梨꾩썙以띾땲??'
 }
 
 function extractDraftTitleSeed(fileName) {
@@ -574,7 +574,7 @@ function buildMultiPhotoPayload(item) {
   return {
     memoryDate: item.memoryDate || form.memoryDate,
     memoryTime: item.memoryTime || null,
-    category: (form.category || queuedCategory.value || '?μ냼').trim(),
+    category: (form.category || queuedCategory.value || '장소').trim(),
     title: resolveMultiPhotoTitle(item),
     country: item.country || null,
     region: item.region || null,
@@ -743,6 +743,11 @@ function applyPinPreset(preset) {
   if (isEditorOpen.value) {
     form.category = preset.category
   }
+}
+
+function startMemoryWithPreset(preset) {
+  applyPinPreset(preset)
+  openBlankEditor()
 }
 
 async function populatePendingLocation(point) {
@@ -1136,6 +1141,15 @@ function submitMemory() {
         </div>
         <div class="topbar__actions">
           <span class="panel__badge">{{ mapMarkers.length }}개 핀</span>
+          <button
+            v-for="preset in quickMemoryPresets"
+            :key="`quick-memory-${preset.key}`"
+            class="button button--ghost"
+            type="button"
+            @click="startMemoryWithPreset(preset)"
+          >
+            {{ preset.category }}
+          </button>
           <button class="button button--primary" type="button" @click="openBlankEditor()">새 기록</button>
         </div>
       </div>

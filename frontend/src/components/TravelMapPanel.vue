@@ -398,7 +398,7 @@ function createPopupContent(marker) {
 
   if (marker.isDetailLoading) {
     const loadingLine = document.createElement('span')
-    loadingLine.textContent = '?곸꽭 ?뺣낫瑜?遺덈윭?ㅻ뒗 以묒엯?덈떎.'
+    loadingLine.textContent = '상세 정보를 불러오는 중입니다.'
     copy.appendChild(loadingLine)
     root.appendChild(copy)
     return root

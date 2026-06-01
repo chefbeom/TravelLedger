@@ -1942,6 +1942,10 @@ async function scrollToEntryEditor() {
   focusEntryEditorControl()
 }
 
+async function scrollToLedgerSheet() {
+  await scrollToPanelElement(ledgerSheetScrollTargetRef.value || ledgerSheetRef.value)
+}
+
 async function handleSheetEditEntry(entry) {
   emit('edit-entry', entry)
   await nextTick()
@@ -1977,6 +1981,7 @@ function formatIsoDate(value) {
 }
 
 defineExpose({
+  scrollToLedgerSheet,
   scrollToEntryEditor,
   setSelectedDate,
 })

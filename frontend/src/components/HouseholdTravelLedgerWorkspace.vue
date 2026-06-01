@@ -32,7 +32,7 @@ const props = defineProps({
   },
 })
 
-const emit = defineEmits(['start-travel-entry', 'open-travel-search'])
+const emit = defineEmits(['start-travel-entry', 'open-travel-search', 'view-travel-entry-date', 'edit-travel-entry'])
 
 const travelKeywords = [
   '여행',
@@ -198,6 +198,7 @@ const recentEntries = computed(() => travelEntries.value.slice(0, 12))
                 <th>제목</th>
                 <th>분류</th>
                 <th>금액</th>
+                <th>작업</th>
               </tr>
             </thead>
             <tbody>
@@ -206,6 +207,16 @@ const recentEntries = computed(() => travelEntries.value.slice(0, 12))
                 <td>{{ entry.title }}</td>
                 <td>{{ entry.categoryDetailName ? `${entry.categoryGroupName} / ${entry.categoryDetailName}` : entry.categoryGroupName }}</td>
                 <td class="is-expense">{{ formatCurrency(entry.amount) }}</td>
+                <td>
+                  <div class="household-travel-ledger__entry-actions">
+                    <button class="button button--ghost" type="button" @click="emit('view-travel-entry-date', entry)">
+                      이동
+                    </button>
+                    <button class="button button--secondary" type="button" @click="emit('edit-travel-entry', entry)">
+                      수정
+                    </button>
+                  </div>
+                </td>
               </tr>
             </tbody>
           </table>

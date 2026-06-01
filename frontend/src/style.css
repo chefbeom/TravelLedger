@@ -2942,6 +2942,19 @@ button {
   font-weight: 800;
 }
 
+.household-travel-ledger__entry-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: flex-end;
+  white-space: nowrap;
+}
+
+.household-travel-ledger__entry-actions .button {
+  min-height: 34px;
+  padding: 8px 12px;
+}
+
 .scope-toggle--filters {
   margin-top: 14px;
 }

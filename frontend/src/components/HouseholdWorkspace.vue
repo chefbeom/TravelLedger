@@ -1420,6 +1420,22 @@ async function openTravelLedgerSearch() {
   }
 }
 
+async function viewTravelLedgerEntryDate(entry) {
+  householdTab.value = 'calendar'
+  calendarAnchorDate.value = entry.entryDate
+  await nextTick()
+  calendarWorkspaceRef.value?.setSelectedDate?.(entry.entryDate)
+  await calendarWorkspaceRef.value?.scrollToLedgerSheet?.()
+}
+
+async function editTravelLedgerEntry(entry) {
+  householdTab.value = 'calendar'
+  calendarAnchorDate.value = entry.entryDate
+  await nextTick()
+  calendarWorkspaceRef.value?.setSelectedDate?.(entry.entryDate)
+  await fillEntryFormAndScroll(entry)
+}
+
 function applyEntrySuggestion(suggestion) {
   editingEntryId.value = null
   entryForm.title = suggestion.title || ''
@@ -2509,6 +2525,8 @@ async function deactivatePayment(paymentId) {
       :format-time="formatTime"
       @start-travel-entry="startTravelLedgerEntry"
       @open-travel-search="openTravelLedgerSearch"
+      @view-travel-entry-date="viewTravelLedgerEntryDate"
+      @edit-travel-entry="editTravelLedgerEntry"
     />
 
     <StatisticsWorkspace

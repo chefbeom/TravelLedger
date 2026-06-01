@@ -743,6 +743,17 @@ onMounted(loadTravelSummary)
     </div>
 
     <div v-if="primaryTab === 'share'" class="workspace-stack">
+      <TravelHubWorkspace
+        route="travel-log"
+        :integrated-mode="true"
+        initial-log-tab="overview"
+        :external-memory-focus-request="hubPlaceFocusRequest"
+        :external-photo-focus-request="hubPhotoFocusRequest"
+        :external-route-focus-request="hubRouteFocusRequest"
+        @request-open-finance="handleRequestOpenFinance"
+        @request-open-log="handleRequestOpenLog"
+        @request-open-public-trips="handleRequestOpenPublicTrips"
+      />
       <TravelPublicTripsWorkspace :active="primaryTab === 'share'" />
     </div>
 

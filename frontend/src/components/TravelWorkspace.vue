@@ -11,10 +11,13 @@ const props = defineProps({
   },
 })
 
+const emit = defineEmits(['open-household-travel-ledger'])
+
 const primaryTab = ref('map')
 const hubRoute = ref('travel-log')
 const hubInitialLogTab = ref('overview')
 const hubInitialMoneyTab = ref('records')
+const financeLegacyOpen = ref(false)
 
 const travelModes = [
   {
@@ -26,7 +29,7 @@ const travelModes = [
   {
     key: 'memories',
     label: '장소 기록',
-    meta: '방문지와 사진 업로드',
+    meta: '방문지와 메모',
     badge: 'VISIT',
   },
   {
@@ -38,7 +41,7 @@ const travelModes = [
   {
     key: 'photos',
     label: '내 사진',
-    meta: '썸네일 사진첩',
+    meta: '업로드 사진첩',
     badge: 'PHOTO',
   },
   {
@@ -50,12 +53,13 @@ const travelModes = [
   {
     key: 'finance',
     label: '여행 가계부',
-    meta: '예산과 지출 보조 관리',
+    meta: '가계부 연계 관리',
     badge: 'LEDGER',
   },
 ]
 
 function applyRouteState(route) {
+  financeLegacyOpen.value = false
   switch (route) {
     case 'travel-log':
       primaryTab.value = 'memories'
@@ -92,6 +96,7 @@ function openFinance() {
   primaryTab.value = 'finance'
   hubRoute.value = 'travel-money'
   hubInitialMoneyTab.value = 'records'
+  financeLegacyOpen.value = false
 }
 
 function openMemories() {
@@ -157,7 +162,11 @@ function handleRequestOpenPublicTrips() {
   openShare()
 }
 
-const isHubVisible = computed(() => primaryTab.value !== 'share' && primaryTab.value !== 'map')
+const isHubVisible = computed(() =>
+  primaryTab.value !== 'share'
+  && primaryTab.value !== 'map'
+  && (primaryTab.value !== 'finance' || financeLegacyOpen.value)
+)
 const isIntegratedPhotoMode = computed(() => primaryTab.value === 'photos')
 
 watch(
@@ -175,7 +184,7 @@ watch(
       <div class="panel__header">
         <div>
           <h2>여행 기록</h2>
-          <p>지도, 방문 기록, GPX 경로, 사진첩을 중심으로 여행을 정리합니다.</p>
+          <p>지도, 방문 장소, GPX 경로, 사진첩을 중심으로 여행을 정리합니다.</p>
         </div>
         <span class="panel__badge">Record first</span>
       </div>
@@ -202,6 +211,35 @@ watch(
     <div v-if="primaryTab === 'share'" class="workspace-stack">
       <TravelPublicTripsWorkspace :active="primaryTab === 'share'" />
     </div>
+
+    <section v-if="primaryTab === 'finance' && !financeLegacyOpen" class="panel travel-finance-bridge">
+      <div class="panel__header">
+        <div>
+          <span class="panel__eyebrow">HOUSEHOLD LINK</span>
+          <h2>여행 가계부는 가계부에서 관리합니다</h2>
+          <p>여행 지출은 일반 가계부 데이터와 함께 저장하고, 여행 키워드와 분류를 기준으로 따로 모아 봅니다.</p>
+        </div>
+        <span class="panel__badge">연계형</span>
+      </div>
+      <div class="travel-finance-bridge__body">
+        <article>
+          <strong>새 여행 지출 입력</strong>
+          <span>가계부의 거래 입력 폼을 그대로 사용해서 여행 지출을 기록합니다.</span>
+        </article>
+        <article>
+          <strong>기존 거래와 함께 집계</strong>
+          <span>가계부 검색, 통계, 수정 이력과 같은 기존 기능을 그대로 사용할 수 있습니다.</span>
+        </article>
+        <article>
+          <strong>기존 여행 예산 화면 유지</strong>
+          <span>필요할 때만 기존 여행 예산/지출 보조 화면을 열 수 있습니다.</span>
+        </article>
+      </div>
+      <div class="entry-editor__actions">
+        <button class="button button--primary" type="button" @click="emit('open-household-travel-ledger')">가계부에서 여행 가계부 열기</button>
+        <button class="button button--ghost" type="button" @click="financeLegacyOpen = true">기존 여행 예산/지출 보기</button>
+      </div>
+    </section>
 
     <div v-show="isHubVisible" class="workspace-stack">
       <TravelHubWorkspace

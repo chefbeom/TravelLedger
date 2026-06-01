@@ -300,6 +300,7 @@ const successMessage = ref('')
 const errorMessage = ref('')
 const activeRoute = ref(initialRouteState.route)
 const inviteToken = ref(initialRouteState.token)
+const householdInitialTab = ref('')
 const inviteInfo = ref(null)
 const isInviteLoading = ref(false)
 const themeMode = ref('default')
@@ -566,14 +567,19 @@ function handleBeforeUnload(event) {
   event.returnValue = ''
 }
 
-function navigate(route) {
+function navigate(route, options = {}) {
   const nextRoute = normalizedRouteMeta[route] ? route : 'launcher'
   if (nextRoute !== activeRoute.value && !confirmRouteLeaveIfNeeded()) {
     return
   }
+  householdInitialTab.value = nextRoute === 'household' ? (options.householdTab || '') : ''
   activeRoute.value = nextRoute
   inviteToken.value = ''
   window.location.hash = nextRoute
+}
+
+function navigateHouseholdTravelLedger() {
+  navigate('household', { householdTab: 'travel-ledger' })
 }
 
 function isHeaderNavActive(route) {
@@ -956,9 +962,17 @@ onBeforeUnmount(() => {
         </div>
         <AdminWorkspace v-else-if="activeRoute === 'admin'" :current-user="currentUser" />
         <ProfileWorkspace v-else-if="activeRoute === 'profile'" :current-user="currentUser" />
-        <HouseholdWorkspace v-else-if="activeRoute === 'household'" :current-user="currentUser" />
+        <HouseholdWorkspace
+          v-else-if="activeRoute === 'household'"
+          :current-user="currentUser"
+          :initial-tab="householdInitialTab"
+        />
         <CalenDriveWorkspace v-else-if="activeRoute === 'drive'" :current-user="currentUser" />
-        <TravelWorkspace v-else-if="travelRouteKeys.has(activeRoute)" :route="activeRoute" />
+        <TravelWorkspace
+          v-else-if="travelRouteKeys.has(activeRoute)"
+          :route="activeRoute"
+          @open-household-travel-ledger="navigateHouseholdTravelLedger"
+        />
       </div>
     </template>
   </div>

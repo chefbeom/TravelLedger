@@ -386,6 +386,15 @@ button {
   color: var(--text-soft);
 }
 
+.panel__eyebrow {
+  display: inline-block;
+  margin-bottom: 6px;
+  color: var(--accent);
+  font-size: 0.74rem;
+  font-weight: 900;
+  letter-spacing: 0;
+}
+
 .panel__badge {
   display: inline-flex;
   align-items: center;
@@ -2306,9 +2315,45 @@ button {
   color: var(--text-soft);
 }
 
+.travel-finance-bridge {
+  display: grid;
+  gap: 18px;
+}
+
+.travel-finance-bridge__body {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.travel-finance-bridge__body article {
+  display: grid;
+  gap: 6px;
+  min-height: 112px;
+  align-content: center;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--surface);
+}
+
+.travel-finance-bridge__body strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.travel-finance-bridge__body span {
+  color: var(--text-soft);
+  line-height: 1.5;
+}
+
 @media (max-width: 1120px) {
   .travel-record-switcher__grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .travel-finance-bridge__body {
+    grid-template-columns: 1fr;
   }
 }
 
@@ -2736,6 +2781,104 @@ button {
 .household-data-actions__divider {
   height: 1px;
   background: rgba(148, 163, 184, 0.18);
+}
+
+.household-travel-ledger {
+  display: grid;
+  gap: 18px;
+}
+
+.household-travel-ledger__header {
+  align-items: flex-start;
+}
+
+.household-travel-ledger__toolbar {
+  display: flex;
+  gap: 12px;
+  align-items: flex-end;
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+
+.household-travel-ledger__date {
+  min-width: min(220px, 100%);
+}
+
+.household-travel-ledger__summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.household-travel-ledger__summary-card {
+  display: grid;
+  gap: 8px;
+  min-height: 120px;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--surface);
+}
+
+.household-travel-ledger__summary-card span,
+.household-travel-ledger__summary-card small {
+  color: var(--text-soft);
+}
+
+.household-travel-ledger__summary-card strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: clamp(1.1rem, 2vw, 1.8rem);
+}
+
+.household-travel-ledger__actions {
+  margin-top: 0;
+}
+
+.household-travel-ledger__content {
+  display: grid;
+  grid-template-columns: minmax(260px, 0.8fr) minmax(0, 1.2fr);
+  gap: 14px;
+}
+
+.household-travel-ledger__panel {
+  min-width: 0;
+}
+
+.household-travel-ledger__rows {
+  display: grid;
+  gap: 10px;
+}
+
+.household-travel-ledger__row {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface-strong);
+}
+
+.household-travel-ledger__row div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.household-travel-ledger__row strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.household-travel-ledger__row small {
+  color: var(--text-soft);
+}
+
+.household-travel-ledger__row span {
+  white-space: nowrap;
+  font-weight: 800;
 }
 
 .scope-toggle--filters {
@@ -5699,6 +5842,8 @@ textarea {
   .search-bulk-toolbar,
   .stats-toolbar__fields,
   .manager-grid,
+  .household-travel-ledger__summary,
+  .household-travel-ledger__content,
   .travel-form-grid,
   .travel-location-filter {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -5741,6 +5886,11 @@ textarea {
 }
 
 @media (max-width: 720px) {
+  .household-travel-ledger__summary,
+  .household-travel-ledger__content {
+    grid-template-columns: 1fr;
+  }
+
   .travel-my-photos__filters,
   .travel-my-photos__search {
     grid-template-columns: 1fr;

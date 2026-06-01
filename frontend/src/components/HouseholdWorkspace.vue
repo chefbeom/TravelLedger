@@ -56,6 +56,7 @@ import {
   shiftRange,
 } from '../lib/analytics'
 import CalendarWorkspace from './CalendarWorkspace.vue'
+import HouseholdTravelLedgerWorkspace from './HouseholdTravelLedgerWorkspace.vue'
 import LedgerImportWorkspace from './LedgerImportWorkspace.vue'
 import ManagementWorkspace from './ManagementWorkspace.vue'
 import StatisticsWorkspace from './StatisticsWorkspace.vue'
@@ -65,6 +66,10 @@ const props = defineProps({
   currentUser: {
     type: Object,
     default: null,
+  },
+  initialTab: {
+    type: String,
+    default: '',
   },
 })
 
@@ -563,7 +568,7 @@ watch(
       return
     }
 
-    if (value.startsWith('stats-') && value !== 'stats-trash') {
+    if ((value.startsWith('stats-') && value !== 'stats-trash') || value === 'travel-ledger') {
       await loadStatisticsData()
     }
     if (value === 'stats-search') {
@@ -572,6 +577,16 @@ watch(
       await loadTrashResults(0)
     }
   },
+)
+
+watch(
+  () => props.initialTab,
+  (value) => {
+    if (value === 'travel-ledger') {
+      householdTab.value = 'travel-ledger'
+    }
+  },
+  { immediate: true },
 )
 
 watch(
@@ -996,7 +1011,7 @@ async function loadCalendarData() {
 
 async function loadStatisticsData() {
   const range = statsRange.value
-  const shouldLoadInsightEntries = householdTab.value === 'stats-insights'
+  const shouldLoadInsightEntries = householdTab.value === 'stats-insights' || householdTab.value === 'travel-ledger'
   const [overview, categoryItems, paymentItems, compareItems, entryItems] = await Promise.all([
     fetchOverview(range.from, range.to),
     fetchCategoryBreakdown(range.from, range.to, 'EXPENSE'),
@@ -1345,6 +1360,64 @@ async function fillEntryFormAndScroll(entry) {
   fillEntryForm(entry)
   await nextTick()
   calendarWorkspaceRef.value?.scrollToEntryEditor?.()
+}
+
+function normalizeCategorySearchText(value) {
+  return String(value || '').replace(/\s+/g, '').toLowerCase()
+}
+
+function findExpenseCategoryGroupByKeywords(keywords) {
+  const groups = categories.value.filter((group) => group.entryType === 'EXPENSE')
+  return groups.find((group) => {
+    const name = normalizeCategorySearchText(group.name)
+    return keywords.some((keyword) => name.includes(normalizeCategorySearchText(keyword)))
+  }) || groups[0] || null
+}
+
+function findCategoryDetailByKeywords(groupId, keywords) {
+  const group = categories.value.find((item) => String(item.id) === String(groupId))
+  if (!group?.details?.length) {
+    return null
+  }
+  return group.details.find((detail) => {
+    const name = normalizeCategorySearchText(detail.name)
+    return keywords.some((keyword) => name.includes(normalizeCategorySearchText(keyword)))
+  }) || group.details[0] || null
+}
+
+async function startTravelLedgerEntry() {
+  householdTab.value = 'calendar'
+  resetEntryForm({ entryDate: statsControls.anchorDate || householdAnchorDate.value || today })
+  entryForm.entryType = 'EXPENSE'
+  entryForm.title = '여행 : '
+  entryForm.memo = '여행 가계부'
+
+  const travelGroup = findExpenseCategoryGroupByKeywords(['여행', '교통', '숙박', '문화', '생활'])
+  if (travelGroup?.id) {
+    entryForm.categoryGroupId = String(travelGroup.id)
+    const travelDetail = findCategoryDetailByKeywords(travelGroup.id, ['여행', '숙소', '교통', '항공', '식비', '입장', '기타'])
+    entryForm.categoryDetailId = travelDetail?.id ? String(travelDetail.id) : ''
+  }
+
+  syncEntryDefaults({ preferLatest: false, force: false })
+  await nextTick()
+  calendarWorkspaceRef.value?.scrollToEntryEditor?.()
+}
+
+async function openTravelLedgerSearch() {
+  searchForm.keyword = '여행'
+  searchForm.entryType = 'EXPENSE'
+  searchForm.paymentMethodId = ''
+  searchForm.categoryGroupId = ''
+  searchForm.categoryDetailId = ''
+  searchForm.minAmount = ''
+  searchForm.maxAmount = ''
+  searchForm.sortBy = 'DATE_DESC'
+  householdTab.value = 'stats-search'
+  await nextTick()
+  if (statsReady.value) {
+    await loadSearchResults(0)
+  }
 }
 
 function applyEntrySuggestion(suggestion) {
@@ -2312,6 +2385,7 @@ async function deactivatePayment(paymentId) {
       <div class="scope-toggle scope-toggle--wrap">
         <button class="button" :class="{ 'button--primary': householdTab === 'dashboard' }" @click="householdTab = 'dashboard'">대시보드</button>
         <button class="button" :class="{ 'button--primary': householdTab === 'calendar' }" @click="householdTab = 'calendar'">달력 가계부</button>
+        <button class="button" :class="{ 'button--primary': householdTab === 'travel-ledger' }" @click="householdTab = 'travel-ledger'">여행 가계부</button>
         <button class="button" :class="{ 'button--primary': householdTab === 'stats-overview' }" @click="householdTab = 'stats-overview'">통계 요약</button>
         <button class="button" :class="{ 'button--primary': householdTab === 'stats-search' }" @click="householdTab = 'stats-search'">검색</button>
         <button class="button" :class="{ 'button--primary': householdTab === 'stats-trash' }" @click="householdTab = 'stats-trash'">휴지통</button>
@@ -2422,6 +2496,19 @@ async function deactivatePayment(paymentId) {
       @apply-title-suggestion="applyEntryTitleSuggestion"
       @change-anchor-month="handleChangeCalendarMonth"
       @save-aggregate-widget-configs="updateAggregatePreferences"
+    />
+
+    <HouseholdTravelLedgerWorkspace
+      v-else-if="householdTab === 'travel-ledger'"
+      :entries="statsEntries"
+      :stats-controls="statsControls"
+      :preset-options="presetOptions"
+      :stats-range-label="statsRangeLabel"
+      :format-currency="formatCurrency"
+      :format-short-date="formatShortDate"
+      :format-time="formatTime"
+      @start-travel-entry="startTravelLedgerEntry"
+      @open-travel-search="openTravelLedgerSearch"
     />
 
     <StatisticsWorkspace

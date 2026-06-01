@@ -186,7 +186,7 @@ watch(
           <h2>여행 기록</h2>
           <p>지도, 방문 장소, GPX 경로, 사진첩을 중심으로 여행을 정리합니다.</p>
         </div>
-        <span class="panel__badge">Record first</span>
+        <span class="panel__badge">기록 중심</span>
       </div>
       <div class="travel-record-switcher__grid">
         <button
@@ -224,7 +224,7 @@ watch(
           <h2>여행 가계부는 가계부에서 관리합니다</h2>
           <p>여행 지출은 일반 가계부 데이터와 함께 저장하고, 여행 키워드와 분류를 기준으로 따로 모아 봅니다.</p>
         </div>
-        <span class="panel__badge">연계형</span>
+        <span class="panel__badge">연계됨</span>
       </div>
       <div class="travel-finance-bridge__body">
         <article>
@@ -241,8 +241,12 @@ watch(
         </article>
       </div>
       <div class="entry-editor__actions">
-        <button class="button button--primary" type="button" @click="emit('open-household-travel-ledger')">가계부에서 여행 가계부 열기</button>
-        <button class="button button--ghost" type="button" @click="financeLegacyOpen = true">기존 여행 예산/지출 보기</button>
+        <button class="button button--primary" type="button" @click="emit('open-household-travel-ledger')">
+          가계부에서 여행 가계부 열기
+        </button>
+        <button class="button button--ghost" type="button" @click="financeLegacyOpen = true">
+          기존 여행 예산/지출 보기
+        </button>
       </div>
     </section>
 

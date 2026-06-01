@@ -22,6 +22,7 @@ const financeLegacyOpen = ref(false)
 const travelPortfolio = ref(null)
 const travelSummaryLoading = ref(false)
 const travelSummaryError = ref('')
+const hubPlaceFocusRequest = ref(null)
 
 const travelModes = [
   {
@@ -203,8 +204,12 @@ const travelVisitedPlaces = computed(() => {
       places.set(key, {
         key,
         placeName: place.placeName || place.region || place.country,
+        rawPlaceName: place.placeName,
+        country: place.country,
+        region: place.region,
         regionLabel: joinActivityMeta([place.country, place.region]),
         planNames: new Set(),
+        planIds: new Set(),
         memoryCount: 0,
         ledgerCount: 0,
         photoCount: 0,
@@ -220,6 +225,7 @@ const travelVisitedPlaces = computed(() => {
     if (!row) return
     row.memoryCount += 1
     row.planNames.add(record.planName)
+    if (record.planId) row.planIds.add(record.planId)
     row.latestTimestamp = Math.max(row.latestTimestamp, toActivityTimestamp(record.memoryDate, record.memoryTime))
   })
 
@@ -228,6 +234,7 @@ const travelVisitedPlaces = computed(() => {
     if (!row) return
     row.ledgerCount += 1
     row.planNames.add(record.planName)
+    if (record.planId) row.planIds.add(record.planId)
     row.latestTimestamp = Math.max(row.latestTimestamp, toActivityTimestamp(record.expenseDate, record.expenseTime))
   })
 
@@ -238,6 +245,7 @@ const travelVisitedPlaces = computed(() => {
       if (!row) return
       row.photoCount += 1
       row.planNames.add(media.planName)
+      if (media.planId) row.planIds.add(media.planId)
       row.latestTimestamp = Math.max(row.latestTimestamp, toActivityTimestamp(media.expenseDate || media.uploadedAt))
   })
 
@@ -251,6 +259,7 @@ const travelVisitedPlaces = computed(() => {
       if (!row) return
       row.routeCount += 1
       row.planNames.add(endpoint.planName)
+      if (route.planId) row.planIds.add(route.planId)
       row.latestTimestamp = Math.max(row.latestTimestamp, toActivityTimestamp(route.routeDate))
     })
   })
@@ -259,6 +268,7 @@ const travelVisitedPlaces = computed(() => {
     .map((row) => ({
       ...row,
       planLabel: [...row.planNames].filter(Boolean).slice(0, 2).join(' · ') || '여행 미지정',
+      planId: [...row.planIds][0] || '',
       totalCount: row.memoryCount + row.ledgerCount + row.photoCount + row.routeCount,
       visitCount: row.memoryCount + row.ledgerCount,
     }))
@@ -418,10 +428,32 @@ function openFinance() {
   financeLegacyOpen.value = false
 }
 
-function openMemories() {
+function openMemories(clearPlaceFocus = true) {
   primaryTab.value = 'memories'
   hubRoute.value = 'travel-log'
   hubInitialLogTab.value = 'memories'
+  if (clearPlaceFocus) {
+    hubPlaceFocusRequest.value = {
+      type: 'place',
+      token: Date.now(),
+      planId: '',
+      country: '',
+      region: '',
+      placeName: '',
+    }
+  }
+}
+
+function openPlace(place) {
+  openMemories(false)
+  hubPlaceFocusRequest.value = {
+    type: 'place',
+    token: Date.now(),
+    planId: place?.planId || '',
+    country: place?.country || '',
+    region: place?.region || '',
+    placeName: place?.rawPlaceName || place?.placeName || '',
+  }
 }
 
 function openRoutes() {
@@ -592,7 +624,7 @@ onMounted(loadTravelSummary)
           :key="place.key"
           class="travel-place-index__card"
           type="button"
-          @click="openMemories"
+          @click="openPlace(place)"
         >
           <span>{{ place.regionLabel || '지역 미지정' }}</span>
           <strong>{{ place.placeName }}</strong>
@@ -702,6 +734,7 @@ onMounted(loadTravelSummary)
         :integrated-photo-mode="isIntegratedPhotoMode"
         :initial-log-tab="hubInitialLogTab"
         :initial-money-tab="hubInitialMoneyTab"
+        :external-memory-focus-request="hubPlaceFocusRequest"
         @request-open-finance="handleRequestOpenFinance"
         @request-open-log="handleRequestOpenLog"
         @request-open-public-trips="handleRequestOpenPublicTrips"

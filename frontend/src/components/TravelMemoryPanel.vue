@@ -103,6 +103,7 @@ const pendingPoint = ref(null)
 const locationFilter = reactive({
   country: '',
   region: '',
+  placeName: '',
 })
 const pendingLocation = reactive({
   status: 'idle',
@@ -215,10 +216,24 @@ const regionOptions = computed(() => {
   return [...values].sort((left, right) => left.localeCompare(right))
 })
 
+const placeNameOptions = computed(() => {
+  const selectedCountry = String(locationFilter.country || '').trim()
+  const selectedRegion = String(locationFilter.region || '').trim()
+  const values = new Set(
+    scopedMemoryRecords.value
+      .filter((item) => !selectedCountry || item.country === selectedCountry)
+      .filter((item) => !selectedRegion || item.region === selectedRegion)
+      .map((item) => item.placeName)
+      .filter(Boolean),
+  )
+  return [...values].sort((left, right) => left.localeCompare(right))
+})
+
 const filteredMemoryRecords = computed(() =>
   scopedMemoryRecords.value
     .filter((item) => !locationFilter.country || item.country === locationFilter.country)
     .filter((item) => !locationFilter.region || item.region === locationFilter.region)
+    .filter((item) => !locationFilter.placeName || item.placeName === locationFilter.placeName)
     .map((item) => ({
       ...item,
       photoCount: memoryPhotoSummaryMap.value.get(String(item.id))?.count || 0,
@@ -440,7 +455,7 @@ watch(
 )
 
 watch(
-  () => [activeDayDate.value, locationFilter.country, locationFilter.region],
+  () => [activeDayDate.value, locationFilter.country, locationFilter.region, locationFilter.placeName],
   () => {
     memoryRecordPage.value = 0
   },
@@ -488,6 +503,11 @@ watch(
 watch(
   () => props.focusRequest?.token,
   () => {
+    if (props.focusRequest?.type === 'place') {
+      applyPlaceFocusRequest(props.focusRequest)
+      return
+    }
+
     const targetId = props.focusRequest?.id
     if (!targetId) {
       return
@@ -501,11 +521,28 @@ watch(
   { immediate: true },
 )
 
+function applyPlaceFocusRequest(request = {}) {
+  activeDayDate.value = ''
+  locationFilter.country = String(request.country || '').trim()
+  locationFilter.region = String(request.region || '').trim()
+  locationFilter.placeName = String(request.placeName || '').trim()
+  memoryRecordPage.value = 0
+}
+
 watch(
   () => locationFilter.country,
   () => {
     if (!regionOptions.value.includes(locationFilter.region)) {
       locationFilter.region = ''
+    }
+  },
+)
+
+watch(
+  () => [locationFilter.country, locationFilter.region],
+  () => {
+    if (placeNameOptions.value.length && locationFilter.placeName && !placeNameOptions.value.includes(locationFilter.placeName)) {
+      locationFilter.placeName = ''
     }
   },
 )
@@ -1266,6 +1303,13 @@ function submitMemory() {
           <select v-model="locationFilter.region">
             <option value="">전체 지역</option>
             <option v-for="option in regionOptions" :key="option" :value="option">{{ option }}</option>
+          </select>
+        </label>
+        <label class="field">
+          <span class="field__label">장소 필터</span>
+          <select v-model="locationFilter.placeName">
+            <option value="">전체 장소</option>
+            <option v-for="option in placeNameOptions" :key="option" :value="option">{{ option }}</option>
           </select>
         </label>
       </div>

@@ -77,6 +77,10 @@ const props = defineProps({
     type: String,
     default: 'planner',
   },
+  externalMemoryFocusRequest: {
+    type: Object,
+    default: null,
+  },
 })
 
 const emit = defineEmits(['request-open-finance', 'request-open-log', 'request-open-public-trips'])
@@ -140,6 +144,7 @@ const editingRecordId = ref(null)
 const memoryRefreshKey = ref(0)
 const routeRefreshKey = ref(0)
 const memoryFocusRequest = ref(null)
+const appliedExternalMemoryFocusToken = ref('')
 const memoryUploadProgress = reactive({
   active: false,
   title: '사진을 업로드하는 중입니다.',
@@ -1442,6 +1447,14 @@ watch(
 )
 
 watch(
+  () => [props.externalMemoryFocusRequest?.token, travelPlans.value.length],
+  async () => {
+    await applyExternalMemoryFocusRequest(props.externalMemoryFocusRequest)
+  },
+  { immediate: true },
+)
+
+watch(
   () => [moneyTab.value, selectedPlanId.value, recordGpsEnabled.value, editingRecordId.value],
   ([tab, planId, gpsEnabled, editingRecordId]) => {
     if (tab !== 'records' || !planId || !gpsEnabled || editingRecordId) {
@@ -1462,6 +1475,38 @@ async function handleSelectPlan(planId) {
   await refreshTravelData(selectedPlanId.value, props.route === 'photo-album')
   resetBudgetForm()
   resetRecordForm()
+}
+
+async function applyExternalMemoryFocusRequest(request) {
+  const token = String(request?.token || '')
+  if (!token || token === appliedExternalMemoryFocusToken.value) {
+    return
+  }
+
+  const targetPlanId = String(request?.planId || '').trim()
+  if (targetPlanId) {
+    if (!travelPlans.value.length) {
+      return
+    }
+    if (!travelPlans.value.some((item) => String(item.id) === targetPlanId)) {
+      return
+    }
+    if (String(selectedPlanId.value || '') !== targetPlanId) {
+      selectedPlanId.value = targetPlanId
+      await refreshTravelData(targetPlanId, props.route === 'photo-album')
+    }
+  }
+
+  logTab.value = 'memories'
+  if (props.route === 'photo-album') {
+    albumTab.value = 'upload'
+  }
+  memoryFocusRequest.value = {
+    ...request,
+    type: request?.type || 'place',
+    token,
+  }
+  appliedExternalMemoryFocusToken.value = token
 }
 
 async function handleShareTravelPlan() {

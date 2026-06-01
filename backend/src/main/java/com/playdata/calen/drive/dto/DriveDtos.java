@@ -92,6 +92,12 @@ public final class DriveDtos {
     }
 
     @Builder
+    public record LockRequest(
+            Boolean locked
+    ) {
+    }
+
+    @Builder
     public record MoveRequest(
             Long targetParentId
     ) {

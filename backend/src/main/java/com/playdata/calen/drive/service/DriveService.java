@@ -154,7 +154,9 @@ public class DriveService {
 
     @Transactional
     public DriveDtos.ActionResponse moveToTrash(Long userId, Long fileId) {
-        markRecursivelyTrashed(getOwnedItem(userId, fileId));
+        DriveItem item = getOwnedItem(userId, fileId);
+        ensureUnlockedTree(item);
+        markRecursivelyTrashed(item);
         return DriveDtos.ActionResponse.builder().action("trash").affectedCount(1).build();
     }
 
@@ -167,6 +169,7 @@ public class DriveService {
     @Transactional
     public DriveDtos.ActionResponse deletePermanently(Long userId, Long fileId) {
         DriveItem item = getOwnedItem(userId, fileId);
+        ensureUnlockedTree(item);
         List<DriveItem> descendants = collectDescendants(item);
         descendants.stream().filter(DriveItem::isFile).map(DriveItem::getStoragePath).forEach(driveStorageService::deleteObject);
         driveItemRepository.deleteAll(descendants);
@@ -178,6 +181,7 @@ public class DriveService {
         List<DriveItem> trashItems = driveItemRepository.findAllByOwner_IdAndTrashedTrueOrderByDeletedAtDesc(getOwner(userId).getId());
         List<DriveItem> targets = new ArrayList<>();
         for (DriveItem item : trashItems) {
+            ensureUnlockedTree(item);
             if (targets.stream().noneMatch(existing -> Objects.equals(existing.getId(), item.getId()))) {
                 targets.addAll(collectDescendants(item));
             }
@@ -190,6 +194,7 @@ public class DriveService {
     @Transactional
     public DriveDtos.ActionResponse moveToFolder(Long userId, Long fileId, Long targetParentId) {
         DriveItem item = getOwnedItem(userId, fileId);
+        ensureUnlockedTree(item);
         DriveItem targetParent = resolveParentFolder(userId, targetParentId);
         ensureNotDescendant(item, targetParent);
         item.setParent(targetParent);
@@ -199,10 +204,21 @@ public class DriveService {
     @Transactional
     public DriveDtos.FileItemResponse renameItem(Long userId, Long fileId, String nextName) {
         DriveItem item = getOwnedItem(userId, fileId);
+        ensureUnlocked(item);
         if (!StringUtils.hasText(nextName)) {
             throw new BadRequestException("이름을 입력해 주세요.");
         }
         item.setOriginalName(nextName.trim());
+        return toItemResponse(item);
+    }
+
+    @Transactional
+    public DriveDtos.FileItemResponse setItemLocked(Long userId, Long fileId, boolean locked) {
+        DriveItem item = getOwnedItem(userId, fileId);
+        if (item.isTrashed()) {
+            throw new BadRequestException("Items in trash cannot be locked or unlocked.");
+        }
+        item.setLockedFile(locked);
         return toItemResponse(item);
     }
 
@@ -392,6 +408,18 @@ public class DriveService {
                 throw new BadRequestException("자기 자신 또는 하위 폴더로 이동할 수 없습니다.");
             }
             cursor = cursor.getParent();
+        }
+    }
+
+    public void ensureUnlocked(DriveItem item) {
+        if (item != null && item.isLockedFile()) {
+            throw new BadRequestException("Locked drive items cannot be changed. Unlock the item first.");
+        }
+    }
+
+    public void ensureUnlockedTree(DriveItem item) {
+        for (DriveItem candidate : collectDescendants(item)) {
+            ensureUnlocked(candidate);
         }
     }
 

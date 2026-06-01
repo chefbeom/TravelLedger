@@ -131,6 +131,8 @@ public class DriveShareService {
                 throw new BadRequestException("휴지통에 있는 파일은 공유할 수 없습니다.");
             }
 
+            driveService.ensureUnlocked(item);
+
             if (driveShareRepository.findByItem_IdAndRecipient_Id(item.getId(), recipient.getId()).isPresent()) {
                 continue;
             }

@@ -29,6 +29,7 @@ import {
   searchDriveShareRecipients,
   shareDriveFiles,
   updateDriveStorageCapacity,
+  updateDriveItemLock,
   updateDriveUserStatus,
   uploadDriveFileWithProgress,
 } from '../lib/api'
@@ -205,7 +206,11 @@ const allCurrentSelected = computed(() => {
     && selectableItems.value.every((item) => selectedIds.value.includes(getSelectableId(item)))
 })
 
-const selectedShareableItems = computed(() => selectedItems.value.filter((item) => !isFolder(item)))
+const selectedShareableItems = computed(() => selectedItems.value.filter((item) => canShareItem(item)))
+
+const canMoveSelectedItems = computed(() => selectedItems.value.length > 0 && selectedItems.value.every((item) => canModifyOwnedItem(item)))
+
+const hasSelectedLockedItems = computed(() => selectedItems.value.some((item) => isLockedItem(item)))
 
 const primarySelectedItem = computed(() => selectedItems.value.length === 1 ? selectedItems.value[0] : null)
 
@@ -463,6 +468,22 @@ function resolveNodeType(item) {
 
 function isFolder(item) {
   return resolveNodeType(item) === 'FOLDER'
+}
+
+function isLockedItem(item) {
+  return Boolean(item?.lockedFile)
+}
+
+function canModifyOwnedItem(item) {
+  return activeTab.value !== 'trash' && activeTab.value !== 'shared' && !isLockedItem(item)
+}
+
+function canShareItem(item) {
+  return canModifyOwnedItem(item) && !isFolder(item)
+}
+
+function canToggleLock(item) {
+  return activeTab.value !== 'trash' && activeTab.value !== 'shared' && Boolean(item?.id)
 }
 
 function isImageFile(item) {
@@ -904,6 +925,10 @@ async function promptCreateFolder() {
 }
 
 async function promptRename(item) {
+  if (!canModifyOwnedItem(item)) {
+    setMessages('', '잠긴 항목은 이름을 바꿀 수 없습니다. 먼저 잠금을 해제해 주세요.')
+    return
+  }
   const nextName = window.prompt('새 이름을 입력해주세요.', item.fileOriginName)
   if (!nextName || nextName === item.fileOriginName) {
     return
@@ -918,7 +943,27 @@ async function promptRename(item) {
   }
 }
 
+async function toggleItemLock(item) {
+  if (!canToggleLock(item)) {
+    return
+  }
+
+  const nextLocked = !isLockedItem(item)
+  try {
+    await updateDriveItemLock(item.id, nextLocked)
+    setMessages(nextLocked ? '항목을 잠갔습니다.' : '항목 잠금을 해제했습니다.')
+    await refreshVisibleData()
+    selectedIds.value = [String(item.id)]
+  } catch (error) {
+    setMessages('', error.message)
+  }
+}
+
 async function moveItemToTrash(item) {
+  if (!canModifyOwnedItem(item)) {
+    setMessages('', '잠긴 항목은 휴지통으로 이동할 수 없습니다. 먼저 잠금을 해제해 주세요.')
+    return
+  }
   if (!window.confirm(`"${item.fileOriginName}" 항목을 휴지통으로 이동할까요?`)) {
     return
   }
@@ -935,6 +980,10 @@ async function moveItemToTrash(item) {
 
 async function moveSelectedToTrash() {
   if (!selectedItems.value.length) {
+    return
+  }
+  if (!canMoveSelectedItems.value) {
+    setMessages('', '선택 항목에 잠긴 항목이 있습니다. 잠금을 해제한 뒤 이동해 주세요.')
     return
   }
   if (!window.confirm(`선택한 ${selectedItems.value.length}개 항목을 휴지통으로 이동할까요?`)) {
@@ -978,6 +1027,10 @@ async function restoreSelectedFromTrash() {
 }
 
 async function deleteItemPermanently(item) {
+  if (isLockedItem(item)) {
+    setMessages('', '잠긴 항목은 영구 삭제할 수 없습니다. 먼저 잠금을 해제해 주세요.')
+    return
+  }
   if (!window.confirm(`"${item.fileOriginName}" 항목을 완전히 삭제할까요?`)) {
     return
   }
@@ -996,6 +1049,10 @@ async function deleteSelectedPermanently() {
   if (!selectedItems.value.length) {
     return
   }
+  if (hasSelectedLockedItems.value) {
+    setMessages('', '선택 항목에 잠긴 항목이 있습니다. 잠금을 해제한 뒤 삭제해 주세요.')
+    return
+  }
   if (!window.confirm(`선택한 ${selectedItems.value.length}개 항목을 완전히 삭제할까요?`)) {
     return
   }
@@ -1011,6 +1068,10 @@ async function deleteSelectedPermanently() {
 }
 
 async function handleClearTrash() {
+  if (trashFiles.value.some((item) => isLockedItem(item))) {
+    setMessages('', '휴지통에 잠긴 항목이 있습니다. 잠금을 해제한 뒤 비워 주세요.')
+    return
+  }
   if (!window.confirm('휴지통의 모든 항목을 완전히 삭제할까요?')) {
     return
   }
@@ -1028,6 +1089,11 @@ async function handleClearTrash() {
 async function moveSelectedItemsToFolder() {
   if (!selectedItems.value.length) {
     setMessages('', '이동할 항목을 먼저 선택해주세요.')
+    return
+  }
+
+  if (!canMoveSelectedItems.value) {
+    setMessages('', '선택 항목에 잠긴 항목이 있습니다. 잠금을 해제한 뒤 이동해 주세요.')
     return
   }
 
@@ -1110,8 +1176,12 @@ async function handleFilesSelected(event) {
 }
 
 async function openShareDialog(targets) {
-  const normalizedTargets = (targets || []).filter((item) => item && !isFolder(item))
+  const normalizedTargets = (targets || []).filter((item) => item && canShareItem(item))
   if (!normalizedTargets.length) {
+    if ((targets || []).some((item) => isLockedItem(item))) {
+      setMessages('', '잠긴 파일은 공유할 수 없습니다. 먼저 잠금을 해제해 주세요.')
+      return
+    }
     setMessages('', '공유할 파일을 먼저 선택해주세요.')
     return
   }
@@ -1514,6 +1584,7 @@ onBeforeUnmount(() => {
                 </div>
                 <div class="drive-file-card__body">
                   <strong>{{ item.fileOriginName }}</strong>
+                  <span v-if="isLockedItem(item)" class="drive-lock-badge">잠금</span>
                   <small>{{ formatBytes(item.fileSize) }}</small>
                   <small>{{ formatTimestamp(item.lastModifyDate || item.uploadDate) }}</small>
                 </div>
@@ -1587,28 +1658,35 @@ onBeforeUnmount(() => {
               <button type="button" @click="runContextAction(openBrowserItem)">열기</button>
               <button v-if="canPreviewItem(contextMenu.item)" type="button" @click="runContextAction(openPreviewDialog)">미리보기</button>
               <button
-                v-if="activeTab !== 'trash' && activeTab !== 'shared' && !isFolder(contextMenu.item)"
+                v-if="canShareItem(contextMenu.item)"
                 type="button"
                 @click="runContextAction((item) => openShareDialog([item]))"
               >
                 공유
               </button>
               <button
-                v-if="activeTab !== 'trash' && activeTab !== 'shared'"
+                v-if="canToggleLock(contextMenu.item)"
+                type="button"
+                @click="runContextAction(toggleItemLock)"
+              >
+                {{ isLockedItem(contextMenu.item) ? '잠금 해제' : '잠금' }}
+              </button>
+              <button
+                v-if="canModifyOwnedItem(contextMenu.item)"
                 type="button"
                 @click="runContextAction(promptRename)"
               >
                 이름 변경
               </button>
               <button
-                v-if="activeTab !== 'trash' && activeTab !== 'shared'"
+                v-if="canModifyOwnedItem(contextMenu.item)"
                 type="button"
                 @click="runContextAction(moveItemToTrash)"
               >
                 휴지통으로 이동
               </button>
               <button v-if="activeTab === 'trash'" type="button" @click="runContextAction(restoreTrashItem)">복구</button>
-              <button v-if="activeTab === 'trash'" type="button" @click="runContextAction(deleteItemPermanently)">완전 삭제</button>
+              <button v-if="activeTab === 'trash' && !isLockedItem(contextMenu.item)" type="button" @click="runContextAction(deleteItemPermanently)">완전 삭제</button>
               <button v-if="activeTab === 'shared'" type="button" @click="runContextAction(handleSaveSharedFile)">내 드라이브에 저장</button>
             </div>
 
@@ -1621,6 +1699,7 @@ onBeforeUnmount(() => {
               </label>
               <div class="drive-selection-bar__actions">
                 <span class="drive-selection-bar__hint">선택 {{ selectedIds.length }}개</span>
+                <span v-if="hasSelectedLockedItems" class="drive-lock-badge">잠긴 항목 포함</span>
                 <template v-if="activeTab === 'drive' || activeTab === 'recent'">
                   <select v-model="moveTargetId" class="drive-selection-bar__select">
                     <option value="">홈으로 이동</option>
@@ -1628,13 +1707,13 @@ onBeforeUnmount(() => {
                       {{ option.label }}
                     </option>
                   </select>
-                  <button class="button button--ghost" type="button" :disabled="!selectedIds.length" @click="moveSelectedItemsToFolder">이동</button>
+                  <button class="button button--ghost" type="button" :disabled="!canMoveSelectedItems" @click="moveSelectedItemsToFolder">이동</button>
                   <button class="button button--ghost" type="button" :disabled="!selectedShareableItems.length" @click="openShareDialog(selectedShareableItems)">공유</button>
-                  <button class="button button--ghost" type="button" :disabled="!selectedIds.length" @click="moveSelectedToTrash">휴지통</button>
+                  <button class="button button--ghost" type="button" :disabled="!canMoveSelectedItems" @click="moveSelectedToTrash">휴지통</button>
                 </template>
                 <template v-else-if="activeTab === 'trash'">
                   <button class="button button--ghost" type="button" :disabled="!selectedIds.length" @click="restoreSelectedFromTrash">복구</button>
-                  <button class="button button--ghost" type="button" :disabled="!selectedIds.length" @click="deleteSelectedPermanently">완전 삭제</button>
+                  <button class="button button--ghost" type="button" :disabled="!selectedIds.length || hasSelectedLockedItems" @click="deleteSelectedPermanently">완전 삭제</button>
                   <button class="button button--ghost" type="button" @click="handleClearTrash">휴지통 비우기</button>
                 </template>
                 <template v-else>
@@ -1688,6 +1767,7 @@ onBeforeUnmount(() => {
                         </span>
                         <span>
                           <strong>{{ item.fileOriginName }}</strong>
+                          <span v-if="isLockedItem(item)" class="drive-lock-badge">잠금</span>
                           <small>{{ item.ownerDisplayName || item.ownerLoginId || '내 드라이브' }}</small>
                         </span>
                       </button>
@@ -1699,11 +1779,12 @@ onBeforeUnmount(() => {
                     <td>
                       <div class="sheet-table__actions" @click.stop>
                         <button class="button button--ghost" type="button" @click="openBrowserItem(item)">열기</button>
-                        <button v-if="activeTab !== 'trash' && activeTab !== 'shared'" class="button button--ghost" type="button" @click="promptRename(item)">이름 변경</button>
-                        <button v-if="activeTab !== 'trash' && activeTab !== 'shared' && !isFolder(item)" class="button button--ghost" type="button" @click="openShareDialog([item])">공유</button>
-                        <button v-if="activeTab !== 'trash' && activeTab !== 'shared'" class="button button--ghost" type="button" @click="moveItemToTrash(item)">휴지통</button>
+                        <button v-if="canModifyOwnedItem(item)" class="button button--ghost" type="button" @click="promptRename(item)">이름 변경</button>
+                        <button v-if="canToggleLock(item)" class="button button--ghost" type="button" @click="toggleItemLock(item)">{{ isLockedItem(item) ? '잠금 해제' : '잠금' }}</button>
+                        <button v-if="canShareItem(item)" class="button button--ghost" type="button" @click="openShareDialog([item])">공유</button>
+                        <button v-if="canModifyOwnedItem(item)" class="button button--ghost" type="button" @click="moveItemToTrash(item)">휴지통</button>
                         <button v-if="activeTab === 'trash'" class="button button--ghost" type="button" @click="restoreTrashItem(item)">복구</button>
-                        <button v-if="activeTab === 'trash'" class="button button--ghost" type="button" @click="deleteItemPermanently(item)">완전 삭제</button>
+                        <button v-if="activeTab === 'trash' && !isLockedItem(item)" class="button button--ghost" type="button" @click="deleteItemPermanently(item)">완전 삭제</button>
                         <button v-if="activeTab === 'shared'" class="button button--ghost" type="button" @click="handleSaveSharedFile(item)">내 드라이브 저장</button>
                       </div>
                     </td>
@@ -1720,7 +1801,7 @@ onBeforeUnmount(() => {
                 v-for="item in browserItems"
                 :key="getSelectableId(item)"
                 class="drive-file-card"
-                :class="{ 'drive-file-card--selected': selectedIds.includes(getSelectableId(item)) }"
+                :class="{ 'drive-file-card--selected': selectedIds.includes(getSelectableId(item)), 'drive-file-card--locked': isLockedItem(item) }"
                 :aria-selected="selectedIds.includes(getSelectableId(item))"
                 @click="selectItemFromPointer(item, $event)"
                 @dblclick="openBrowserItem(item)"
@@ -1742,15 +1823,17 @@ onBeforeUnmount(() => {
                 </div>
                 <div class="drive-file-card__body">
                   <strong>{{ item.fileOriginName }}</strong>
+                  <span v-if="isLockedItem(item)" class="drive-lock-badge">잠금</span>
                   <small>{{ isFolder(item) ? '폴더' : formatBytes(item.fileSize) }}</small>
                   <small>{{ formatTimestamp(item.deletedAt || item.lastModifyDate || item.uploadDate || item.sharedAt) }}</small>
                 </div>
                 <div class="drive-file-card__actions" @click.stop>
                   <button class="button button--ghost" type="button" @click="openBrowserItem(item)">열기</button>
-                  <button v-if="activeTab !== 'trash' && activeTab !== 'shared' && !isFolder(item)" class="button button--ghost" type="button" @click="openShareDialog([item])">공유</button>
-                  <button v-if="activeTab !== 'trash' && activeTab !== 'shared'" class="button button--ghost" type="button" @click="moveItemToTrash(item)">휴지통</button>
+                  <button v-if="canShareItem(item)" class="button button--ghost" type="button" @click="openShareDialog([item])">공유</button>
+                  <button v-if="canToggleLock(item)" class="button button--ghost" type="button" @click="toggleItemLock(item)">{{ isLockedItem(item) ? '잠금 해제' : '잠금' }}</button>
+                  <button v-if="canModifyOwnedItem(item)" class="button button--ghost" type="button" @click="moveItemToTrash(item)">휴지통</button>
                   <button v-if="activeTab === 'trash'" class="button button--ghost" type="button" @click="restoreTrashItem(item)">복구</button>
-                  <button v-if="activeTab === 'trash'" class="button button--ghost" type="button" @click="deleteItemPermanently(item)">삭제</button>
+                  <button v-if="activeTab === 'trash' && !isLockedItem(item)" class="button button--ghost" type="button" @click="deleteItemPermanently(item)">삭제</button>
                   <button v-if="activeTab === 'shared'" class="button button--ghost" type="button" @click="handleSaveSharedFile(item)">저장</button>
                 </div>
               </article>
@@ -1808,11 +1891,12 @@ onBeforeUnmount(() => {
                   <div class="drive-details-panel__actions">
                     <button class="button button--primary" type="button" @click="openBrowserItem(primarySelectedItem)">열기</button>
                     <button v-if="canPreviewItem(primarySelectedItem)" class="button button--ghost" type="button" @click="openPreviewDialog(primarySelectedItem)">미리보기</button>
-                    <button v-if="activeTab !== 'trash' && activeTab !== 'shared' && !isFolder(primarySelectedItem)" class="button button--ghost" type="button" @click="openShareDialog([primarySelectedItem])">공유</button>
-                    <button v-if="activeTab !== 'trash' && activeTab !== 'shared'" class="button button--ghost" type="button" @click="promptRename(primarySelectedItem)">이름 변경</button>
-                    <button v-if="activeTab !== 'trash' && activeTab !== 'shared'" class="button button--ghost" type="button" @click="moveItemToTrash(primarySelectedItem)">휴지통</button>
+                    <button v-if="canShareItem(primarySelectedItem)" class="button button--ghost" type="button" @click="openShareDialog([primarySelectedItem])">공유</button>
+                    <button v-if="canToggleLock(primarySelectedItem)" class="button button--ghost" type="button" @click="toggleItemLock(primarySelectedItem)">{{ isLockedItem(primarySelectedItem) ? '잠금 해제' : '잠금' }}</button>
+                    <button v-if="canModifyOwnedItem(primarySelectedItem)" class="button button--ghost" type="button" @click="promptRename(primarySelectedItem)">이름 변경</button>
+                    <button v-if="canModifyOwnedItem(primarySelectedItem)" class="button button--ghost" type="button" @click="moveItemToTrash(primarySelectedItem)">휴지통</button>
                     <button v-if="activeTab === 'trash'" class="button button--ghost" type="button" @click="restoreTrashItem(primarySelectedItem)">복구</button>
-                    <button v-if="activeTab === 'trash'" class="button button--ghost" type="button" @click="deleteItemPermanently(primarySelectedItem)">완전 삭제</button>
+                    <button v-if="activeTab === 'trash' && !isLockedItem(primarySelectedItem)" class="button button--ghost" type="button" @click="deleteItemPermanently(primarySelectedItem)">완전 삭제</button>
                     <button v-if="activeTab === 'shared'" class="button button--ghost" type="button" @click="handleSaveSharedFile(primarySelectedItem)">내 드라이브에 저장</button>
                   </div>
                 </template>

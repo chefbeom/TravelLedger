@@ -1238,6 +1238,13 @@ export function renameDriveItem(fileId, fileName) {
   })
 }
 
+export function updateDriveItemLock(fileId, locked) {
+  return request(`/file/${fileId}/lock`, {
+    method: 'PATCH',
+    body: JSON.stringify({ locked }),
+  })
+}
+
 export function moveDriveItemToTrash(fileId) {
   return request(`/file/${fileId}/trash`, {
     method: 'PATCH',

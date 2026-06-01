@@ -142,6 +142,15 @@ public class DriveFileController {
         return driveService.renameItem(currentUser.userId(), fileId, request != null ? request.fileName() : null);
     }
 
+    @PatchMapping("/{fileId}/lock")
+    public DriveDtos.FileItemResponse updateLock(
+            @AuthenticationPrincipal AppUserPrincipal currentUser,
+            @PathVariable Long fileId,
+            @RequestBody DriveDtos.LockRequest request
+    ) {
+        return driveService.setItemLocked(currentUser.userId(), fileId, request != null && Boolean.TRUE.equals(request.locked()));
+    }
+
     @PatchMapping("/move")
     public DriveDtos.ActionResponse moveBatch(
             @AuthenticationPrincipal AppUserPrincipal currentUser,

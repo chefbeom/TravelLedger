@@ -622,7 +622,7 @@ function openContextMenu(item, event) {
   }
   selectOnlyItem(item)
   const width = 236
-  const height = 340
+  const height = 380
   contextMenu.x = Math.min(event?.clientX || 0, Math.max(12, window.innerWidth - width - 12))
   contextMenu.y = Math.min(event?.clientY || 0, Math.max(12, window.innerHeight - height - 12))
   contextMenu.item = item
@@ -914,23 +914,41 @@ function openSharedItem(item) {
   window.open(buildSharedDownloadPath(item), '_blank', 'noopener')
 }
 
-async function promptCreateFolder() {
+async function createFolderAt(parentId, successMessage = '폴더를 만들었습니다.') {
   const folderName = window.prompt('새 폴더 이름을 입력해주세요.', '새 폴더')
   if (!folderName) {
     return
   }
 
   try {
+    const targetParentId = parentId ?? null
     await createDriveFolder({
       folderName,
-      parentId: activeTab.value === 'drive' ? pageFilters.parentId : null,
+      parentId: targetParentId,
     })
-    setMessages('폴더를 만들었습니다.')
+    setMessages(successMessage)
     activeTab.value = 'drive'
+    pageFilters.parentId = targetParentId
+    pageFilters.page = 0
     await Promise.all([loadDrivePage(), loadHomeSummary()])
   } catch (error) {
     setMessages('', error.message)
   }
+}
+
+async function promptCreateFolder() {
+  await createFolderAt(activeTab.value === 'drive' ? pageFilters.parentId : null)
+}
+
+async function promptCreateFolderInside(item) {
+  if (!isFolder(item)) {
+    return
+  }
+  if (!canModifyOwnedItem(item)) {
+    setMessages('', '잠긴 폴더에는 새 폴더를 만들 수 없습니다. 먼저 잠금을 해제해 주세요.')
+    return
+  }
+  await createFolderAt(item.id, `"${item.fileOriginName}" 안에 폴더를 만들었습니다.`)
 }
 
 async function promptRename(item) {
@@ -1782,6 +1800,13 @@ onBeforeUnmount(() => {
                 @click="runContextAction(toggleItemLock)"
               >
                 {{ isLockedItem(contextMenu.item) ? '잠금 해제' : '잠금' }}
+              </button>
+              <button
+                v-if="isFolder(contextMenu.item) && canModifyOwnedItem(contextMenu.item)"
+                type="button"
+                @click="runContextAction(promptCreateFolderInside)"
+              >
+                하위 폴더 만들기
               </button>
               <button
                 v-if="canModifyOwnedItem(contextMenu.item)"

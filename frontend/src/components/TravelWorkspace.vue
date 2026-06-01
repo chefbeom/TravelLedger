@@ -617,7 +617,7 @@ onMounted(loadTravelSummary)
         <div>
           <span>HOUSEHOLD LINK</span>
           <strong>여행 가계부는 가계부에서 이어서 관리합니다</strong>
-          <small>여행 화면은 지도, 장소 방문, GPX, 사진 기록에 집중하고 지출 데이터는 가계부 검색/통계/수정 이력과 함께 사용합니다.</small>
+          <small>여행 화면은 지도, 장소 방문, GPX, 사진 기록에 집중하고 여행 수입·지출은 가계부 검색/통계/수정 이력과 함께 사용합니다.</small>
         </div>
         <div class="travel-record-switcher__finance-actions">
           <button class="button button--primary" type="button" @click="emit('open-household-travel-ledger')">
@@ -751,14 +751,14 @@ onMounted(loadTravelSummary)
         <div>
           <span class="panel__eyebrow">HOUSEHOLD LINK</span>
           <h2>여행 가계부는 가계부에서 관리합니다</h2>
-          <p>여행 지출은 일반 가계부 데이터와 함께 저장하고, 여행 대시보드의 분류를 기준으로 따로 모아 봅니다.</p>
+          <p>여행 수입과 지출은 일반 가계부 데이터와 함께 저장하고, 여행 가계부 화면에서 따로 모아 봅니다.</p>
         </div>
         <span class="panel__badge">연계됨</span>
       </div>
       <div class="travel-finance-bridge__body">
         <article>
-          <strong>새 여행 지출 입력</strong>
-          <span>가계부의 거래 입력 흐름을 그대로 사용해서 여행 지출을 기록합니다.</span>
+          <strong>새 여행 거래 입력</strong>
+          <span>가계부의 거래 입력 흐름을 그대로 사용해서 여행 수입과 지출을 기록합니다.</span>
         </article>
         <article>
           <strong>기존 거래와 함께 집계</strong>

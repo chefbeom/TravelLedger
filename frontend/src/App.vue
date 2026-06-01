@@ -257,8 +257,8 @@ const normalizedRouteMeta = {
     description: '파일 업로드, 폴더 관리, 공유, 휴지통, 관리자 기능을 드라이브 화면에서 사용합니다.',
   },
   'travel-money': {
-    title: '여행 예산',
-    description: '여행 예산안과 실제 지출을 한곳에서 관리합니다.',
+    title: '여행 가계부',
+    description: '여행 수입·지출은 가계부의 여행 전용 화면에서 관리하고, 기존 예산 화면은 필요할 때만 엽니다.',
   },
   'travel-log': {
     title: '여행 로그',

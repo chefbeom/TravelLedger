@@ -81,6 +81,10 @@ const props = defineProps({
     type: Object,
     default: null,
   },
+  externalPhotoFocusRequest: {
+    type: Object,
+    default: null,
+  },
 })
 
 const emit = defineEmits(['request-open-finance', 'request-open-log', 'request-open-public-trips'])
@@ -1455,6 +1459,16 @@ watch(
 )
 
 watch(
+  () => props.externalPhotoFocusRequest?.token,
+  (token) => {
+    if (token && props.route === 'photo-album') {
+      albumTab.value = 'my-photos'
+    }
+  },
+  { immediate: true },
+)
+
+watch(
   () => [moneyTab.value, selectedPlanId.value, recordGpsEnabled.value, editingRecordId.value],
   ([tab, planId, gpsEnabled, editingRecordId]) => {
     if (tab !== 'records' || !planId || !gpsEnabled || editingRecordId) {
@@ -2360,7 +2374,7 @@ async function openPortfolioMemoryEditor(payload) {
         <small v-if="integratedPhotoMode" class="field__hint">사진 업로드와 기록 편집은 여행 로그에서 하고, 여기서는 지도와 사진첩 중심으로 다시 모아 봅니다.</small>
       </section>
       <TravelMemoryPanel v-if="showAlbumUploadTab && albumTab === 'upload'" :travel-plan="travelPlan" :category-options="memoryCategoryOptions" :is-submitting="isSubmitting" :active-submit="activeSubmit" :refresh-key="memoryRefreshKey" :focus-request="memoryFocusRequest" :upload-progress="memoryUploadProgress" @save-memory="handleSaveMemory" @delete-memory="handleDeleteMemory" @delete-media="handleDeleteMedia" />
-      <TravelMyPhotosWorkspace v-else-if="albumTab === 'my-photos'" :portfolio="travelPortfolio" :plans="travelPlans" :is-loading="isLoading" @open-memory-editor="openPortfolioMemoryEditor" />
+      <TravelMyPhotosWorkspace v-else-if="albumTab === 'my-photos'" :portfolio="travelPortfolio" :plans="travelPlans" :is-loading="isLoading" :focus-request="externalPhotoFocusRequest" @open-memory-editor="openPortfolioMemoryEditor" />
       <div v-else-if="albumTab === 'gallery'" class="workspace-stack">
         <section class="panel"><div class="panel__header"><div><h2>사진 재사용 흐름</h2><p>갤러리 카드에서 바로 기록 편집을 누르면 업로드 화면이 열리고, 기존 사진은 그대로 유지된 채 새 사진과 메모만 이어서 추가할 수 있습니다.</p></div><span class="panel__badge">{{ photoAlbumCards.length }}개 기록</span></div></section>
         <section class="panel panel--map-fill"><div class="panel__header"><div><h2>사진첩 지도</h2><p>선택한 여행의 사진 기록이 위치별로 묶여 큰 지도에 표시됩니다.</p></div><span class="panel__badge">{{ photoAlbumPhotoCount }}장</span></div><TravelMapPanel :markers="photoAlbumMarkers" :selected-point="null" :enable-pick-location="false" :enable-draw-route="false" :view-key="travelPlan?.id || 'photo-album-map'" hint-title="사진 핀 보기" hint-text="여행 기록에 연결된 사진을 위치별로 묶어 보여줍니다." /></section>

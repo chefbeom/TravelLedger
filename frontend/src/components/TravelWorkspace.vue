@@ -23,6 +23,7 @@ const travelPortfolio = ref(null)
 const travelSummaryLoading = ref(false)
 const travelSummaryError = ref('')
 const hubPlaceFocusRequest = ref(null)
+const hubPhotoFocusRequest = ref(null)
 
 const travelModes = [
   {
@@ -175,6 +176,10 @@ const travelRecentActivities = computed(() => {
         timestamp: toActivityTimestamp(media.expenseDate || media.uploadedAt),
         shared: false,
         previewUrl: media.contentUrl || '',
+        planId: media.planId || '',
+        country: media.country || '',
+        region: media.region || '',
+        placeName: media.placeName || '',
       })),
   ]
     .sort((left, right) => right.timestamp - left.timestamp)
@@ -473,9 +478,19 @@ function openMap() {
   hubInitialLogTab.value = 'overview'
 }
 
-function openPhotos() {
+function openPhotos(focusRequest = null) {
   primaryTab.value = 'photos'
   hubRoute.value = 'photo-album'
+  if (focusRequest) {
+    hubPhotoFocusRequest.value = {
+      type: 'photo',
+      token: Date.now(),
+      planId: focusRequest.planId || '',
+      country: focusRequest.country || '',
+      region: focusRequest.region || '',
+      placeName: focusRequest.placeName || '',
+    }
+  }
 }
 
 function openShare() {
@@ -509,6 +524,11 @@ function openMode(mode) {
 function openActivity(activity) {
   if (activity?.kind === 'PLACE') {
     openPlace(activity)
+    return
+  }
+
+  if (activity?.kind === 'PHOTO') {
+    openPhotos(activity)
     return
   }
 
@@ -749,6 +769,7 @@ onMounted(loadTravelSummary)
         :initial-log-tab="hubInitialLogTab"
         :initial-money-tab="hubInitialMoneyTab"
         :external-memory-focus-request="hubPlaceFocusRequest"
+        :external-photo-focus-request="hubPhotoFocusRequest"
         @request-open-finance="handleRequestOpenFinance"
         @request-open-log="handleRequestOpenLog"
         @request-open-public-trips="handleRequestOpenPublicTrips"

@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { buildThumbnailUrl, THUMBNAIL_VARIANTS } from '../lib/mediaPreview'
 import { formatDate, formatDateTime } from '../lib/uiFormat'
 import TravelMiniLocationMap from './TravelMiniLocationMap.vue'
@@ -17,6 +17,10 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
+  focusRequest: {
+    type: Object,
+    default: null,
+  },
 })
 
 const emit = defineEmits(['open-memory-editor'])
@@ -31,6 +35,7 @@ const filters = reactive({
 })
 
 const selectedPhoto = ref(null)
+const appliedFocusToken = ref('')
 
 const planNameById = computed(() => {
   const bucket = new Map()
@@ -261,6 +266,28 @@ function clearFilters() {
   filters.search = ''
 }
 
+function normalizeFocusValue(value) {
+  return String(value || '').trim()
+}
+
+async function applyPhotoFocusRequest(request) {
+  const token = String(request?.token || '')
+  if (!token || token === appliedFocusToken.value) {
+    return
+  }
+
+  filters.planId = normalizeFocusValue(request.planId)
+  await nextTick()
+  filters.country = normalizeFocusValue(request.country)
+  await nextTick()
+  filters.region = normalizeFocusValue(request.region)
+  await nextTick()
+  filters.placeName = normalizeFocusValue(request.placeName)
+  filters.search = ''
+  selectedPhoto.value = null
+  appliedFocusToken.value = token
+}
+
 function requestOpenMemoryEditor(photo) {
   if (!photo?.recordId || photo.recordType !== 'MEMORY') return
   emit('open-memory-editor', {
@@ -333,6 +360,14 @@ watch(
       selectedPhoto.value = null
     }
   },
+)
+
+watch(
+  () => [props.focusRequest?.token, allPhotos.value.length],
+  async () => {
+    await applyPhotoFocusRequest(props.focusRequest)
+  },
+  { immediate: true },
 )
 </script>
 

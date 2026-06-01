@@ -10,6 +10,7 @@ import {
   createDriveDownloadLink,
   createDriveFolder,
   deleteDriveItem,
+  downloadDriveItems,
   fetchDriveAdminDashboard,
   fetchDriveFolderDestinations,
   fetchDriveHomeSummary,
@@ -255,6 +256,8 @@ const allCurrentSelected = computed(() => {
 const selectedShareableItems = computed(() => selectedItems.value.filter((item) => canShareItem(item)))
 
 const canMoveSelectedItems = computed(() => selectedItems.value.length > 0 && selectedItems.value.every((item) => canModifyOwnedItem(item)))
+
+const canDownloadSelectedItems = computed(() => selectedItems.value.length > 0 && selectedItems.value.every((item) => canDownloadOwnedItem(item)))
 
 const hasSelectedLockedItems = computed(() => selectedItems.value.some((item) => isLockedItem(item)))
 
@@ -690,6 +693,10 @@ function canModifyOwnedItem(item) {
 
 function canShareItem(item) {
   return canModifyOwnedItem(item) && !isFolder(item)
+}
+
+function canDownloadOwnedItem(item) {
+  return (activeTab.value === 'drive' || activeTab.value === 'recent') && Boolean(item?.id)
 }
 
 function canOpenItemLocation(item) {
@@ -1680,6 +1687,19 @@ async function moveSelectedToTrash() {
     }
     await Promise.all([loadDrivePage(), loadHomeSummary(), loadRecentFiles(), loadTrashFiles()])
     clearSelection()
+  } catch (error) {
+    setMessages('', error.message)
+  }
+}
+
+async function downloadSelectedItems() {
+  if (!canDownloadSelectedItems.value) {
+    return
+  }
+
+  try {
+    await downloadDriveItems(selectedItems.value.map((item) => item.id))
+    setMessages('선택 항목 다운로드를 시작했습니다.')
   } catch (error) {
     setMessages('', error.message)
   }
@@ -2748,6 +2768,7 @@ onBeforeUnmount(() => {
                       {{ option.label }}
                     </option>
                   </select>
+                  <button class="button button--ghost" type="button" :disabled="!canDownloadSelectedItems" @click="downloadSelectedItems">다운로드</button>
                   <button class="button button--ghost" type="button" :disabled="!canMoveSelectedItems" @click="moveSelectedItemsToFolder">이동</button>
                   <button class="button button--ghost" type="button" :disabled="!canMoveSelectedItems" @click="openMoveDialog(selectedItems)">위치 선택</button>
                   <button class="button button--ghost" type="button" :disabled="!selectedShareableItems.length" @click="openShareDialog(selectedShareableItems)">공유</button>

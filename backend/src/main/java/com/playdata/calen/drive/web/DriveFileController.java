@@ -115,6 +115,17 @@ public class DriveFileController {
         return buildDownloadResponse(driveDownloadLinkService.downloadByToken(token));
     }
 
+    @PostMapping("/download")
+    public ResponseEntity<byte[]> downloadBatch(
+            @AuthenticationPrincipal AppUserPrincipal currentUser,
+            @RequestBody DriveDtos.DownloadBatchRequest request
+    ) {
+        return buildDownloadResponse(driveService.downloadItemsAsZip(
+                currentUser.userId(),
+                request != null ? request.fileIds() : null
+        ));
+    }
+
     @GetMapping("/{fileId}/thumbnail")
     public ResponseEntity<byte[]> getThumbnail(
             @AuthenticationPrincipal AppUserPrincipal currentUser,

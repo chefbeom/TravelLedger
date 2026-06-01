@@ -1300,6 +1300,13 @@ export function restoreDriveItems(fileIds) {
   })
 }
 
+export function downloadDriveItems(fileIds) {
+  return downloadFile('/file/download', 'calendrive-selection.zip', {
+    method: 'POST',
+    body: JSON.stringify({ fileIds }),
+  })
+}
+
 export function fetchDriveSharedReceived() {
   return request('/file/share/shared/list')
 }

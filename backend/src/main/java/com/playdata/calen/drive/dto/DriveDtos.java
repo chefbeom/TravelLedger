@@ -117,6 +117,12 @@ public final class DriveDtos {
     }
 
     @Builder
+    public record DownloadBatchRequest(
+            List<Long> fileIds
+    ) {
+    }
+
+    @Builder
     public record ListPageRequest(
             Long parentId,
             Integer page,

@@ -11,13 +11,20 @@ import com.playdata.calen.drive.dto.DriveDtos;
 import com.playdata.calen.drive.repository.DriveDownloadLinkRepository;
 import com.playdata.calen.drive.repository.DriveItemRepository;
 import com.playdata.calen.drive.repository.DriveShareRepository;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
+import java.util.Set;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -282,6 +289,41 @@ public class DriveService {
         return new DriveFilePayload(bytes, resolveContentType(item.getExtension()), item.getOriginalName(), item.getFileSize());
     }
 
+    @Transactional
+    public DriveFilePayload downloadItemsAsZip(Long userId, List<Long> fileIds) {
+        if (fileIds == null || fileIds.isEmpty()) {
+            throw new BadRequestException("Select at least one drive item to download.");
+        }
+
+        AppUser owner = getOwner(userId);
+        List<DriveItem> roots = fileIds.stream()
+                .filter(Objects::nonNull)
+                .distinct()
+                .map(fileId -> driveItemRepository.findByIdAndOwner_Id(fileId, owner.getId())
+                        .orElseThrow(() -> new NotFoundException("Drive item not found.")))
+                .toList();
+
+        List<ZipSource> zipSources = new ArrayList<>();
+        Set<Long> includedFileIds = new HashSet<>();
+        for (DriveItem root : roots) {
+            if (root.isTrashed()) {
+                throw new BadRequestException("Items in trash cannot be downloaded as a selection.");
+            }
+            collectZipSources(root, root, includedFileIds, zipSources);
+        }
+        if (zipSources.isEmpty()) {
+            throw new BadRequestException("The selected folders do not contain downloadable files.");
+        }
+
+        byte[] zipBytes = buildZipBytes(zipSources);
+        return new DriveFilePayload(
+                zipBytes,
+                "application/zip",
+                buildZipFileName(roots),
+                zipBytes.length
+        );
+    }
+
     public String getDownloadUrl(Long userId, Long fileId) {
         return driveStorageService.generateDownloadUrl(getOwnedFile(userId, fileId).getStoragePath());
     }
@@ -338,6 +380,8 @@ public class DriveService {
     public record DriveFilePayload(byte[] bytes, String contentType, String fileName, long contentLength) {}
 
     public record ThumbnailPayload(byte[] bytes, String contentType, String eTag, long lastModifiedEpochMillis) {}
+
+    private record ZipSource(DriveItem item, String entryName) {}
 
     private DriveDtos.UploadCompleteResponse saveUploadedItem(AppUser owner, DriveDtos.UploadCompleteRequest request, DriveDtos.UploadCompleteResponse completed) {
         DriveItem item = new DriveItem();
@@ -561,6 +605,96 @@ public class DriveService {
             items.addAll(collectDescendants(child));
         }
         return items;
+    }
+
+    private void collectZipSources(
+            DriveItem root,
+            DriveItem current,
+            Set<Long> includedFileIds,
+            List<ZipSource> zipSources
+    ) {
+        if (current.isTrashed()) {
+            return;
+        }
+        if (current.isFile() && includedFileIds.add(current.getId())) {
+            zipSources.add(new ZipSource(current, buildZipEntryName(root, current, zipSources)));
+            return;
+        }
+        for (DriveItem child : childrenOf(current)) {
+            collectZipSources(root, child, includedFileIds, zipSources);
+        }
+    }
+
+    private byte[] buildZipBytes(List<ZipSource> zipSources) {
+        ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+        try (ZipOutputStream zip = new ZipOutputStream(buffer, StandardCharsets.UTF_8)) {
+            for (ZipSource source : zipSources) {
+                ZipEntry entry = new ZipEntry(source.entryName());
+                zip.putNextEntry(entry);
+                zip.write(driveStorageService.loadObjectBytes(source.item().getStoragePath()));
+                zip.closeEntry();
+                source.item().setLastAccessedAt(LocalDateTime.now());
+            }
+        } catch (IOException exception) {
+            throw new BadRequestException("Failed to create a download archive.");
+        }
+        return buffer.toByteArray();
+    }
+
+    private String buildZipEntryName(DriveItem root, DriveItem file, List<ZipSource> existingSources) {
+        List<String> segments = new ArrayList<>();
+        DriveItem cursor = file;
+        while (cursor != null) {
+            segments.add(0, sanitizeZipSegment(cursor.getOriginalName(), cursor.getId()));
+            if (Objects.equals(cursor.getId(), root.getId())) {
+                break;
+            }
+            cursor = cursor.getParent();
+        }
+        String candidate = String.join("/", segments);
+        Set<String> usedNames = existingSources.stream()
+                .map(ZipSource::entryName)
+                .collect(java.util.stream.Collectors.toSet());
+        return uniqueZipEntryName(candidate, usedNames);
+    }
+
+    private String uniqueZipEntryName(String candidate, Set<String> usedNames) {
+        String normalized = StringUtils.hasText(candidate) ? candidate : "download";
+        if (usedNames.add(normalized)) {
+            return normalized;
+        }
+
+        int slashIndex = normalized.lastIndexOf('/');
+        int dotIndex = normalized.lastIndexOf('.');
+        boolean hasExtension = dotIndex > slashIndex;
+        String prefix = hasExtension ? normalized.substring(0, dotIndex) : normalized;
+        String suffix = hasExtension ? normalized.substring(dotIndex) : "";
+        int copyIndex = 2;
+        String nextName;
+        do {
+            nextName = prefix + " (" + copyIndex + ")" + suffix;
+            copyIndex += 1;
+        } while (!usedNames.add(nextName));
+        return nextName;
+    }
+
+    private String buildZipFileName(List<DriveItem> roots) {
+        if (roots.size() == 1) {
+            return sanitizeZipSegment(roots.get(0).getOriginalName(), roots.get(0).getId()) + ".zip";
+        }
+        return "calendrive-selection.zip";
+    }
+
+    private String sanitizeZipSegment(String value, Long fallbackId) {
+        String sanitized = value == null ? "" : value
+                .replace('\\', '_')
+                .replace('/', '_')
+                .replaceAll("\\p{Cntrl}+", "_")
+                .trim();
+        if (!StringUtils.hasText(sanitized) || ".".equals(sanitized) || "..".equals(sanitized)) {
+            return "item-" + (fallbackId != null ? fallbackId : "download");
+        }
+        return sanitized;
     }
 
     private List<DriveItem> childrenOf(DriveItem item) {

@@ -14,9 +14,14 @@ import com.playdata.calen.drive.dto.DriveDtos;
 import com.playdata.calen.drive.repository.DriveDownloadLinkRepository;
 import com.playdata.calen.drive.repository.DriveItemRepository;
 import com.playdata.calen.drive.repository.DriveShareRepository;
+import java.io.ByteArrayInputStream;
+import java.nio.charset.StandardCharsets;
+import java.util.LinkedHashMap;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.zip.ZipInputStream;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -162,6 +167,32 @@ class DriveServiceTest {
         assertThat(file.isTrashed()).isFalse();
     }
 
+    @Test
+    void downloadItemsAsZipKeepsFolderPaths() throws Exception {
+        AppUser owner = owner();
+        DriveItem folder = item(2L, owner, DriveItemType.FOLDER, "Trips", 0L, 10);
+        DriveItem nestedFile = item(3L, owner, DriveItemType.FILE, "tokyo.txt", 100L, 20);
+        nestedFile.setParent(folder);
+        DriveItem rootFile = item(4L, owner, DriveItemType.FILE, "root.txt", 50L, 30);
+
+        when(appUserRepository.findById(1L)).thenReturn(Optional.of(owner));
+        when(driveItemRepository.findByIdAndOwner_Id(2L, 1L)).thenReturn(Optional.of(folder));
+        when(driveItemRepository.findByIdAndOwner_Id(4L, 1L)).thenReturn(Optional.of(rootFile));
+        when(driveItemRepository.findAllByOwner_Id(1L)).thenReturn(List.of(folder, nestedFile, rootFile));
+        when(driveStorageService.loadObjectBytes("drive/tokyo.txt")).thenReturn("nested".getBytes(StandardCharsets.UTF_8));
+        when(driveStorageService.loadObjectBytes("drive/root.txt")).thenReturn("root".getBytes(StandardCharsets.UTF_8));
+
+        DriveService service = newService();
+
+        DriveService.DriveFilePayload payload = service.downloadItemsAsZip(1L, List.of(2L, 4L));
+
+        assertThat(payload.contentType()).isEqualTo("application/zip");
+        assertThat(payload.fileName()).isEqualTo("calendrive-selection.zip");
+        assertThat(readZipEntries(payload.bytes()))
+                .containsEntry("Trips/tokyo.txt", "nested")
+                .containsEntry("root.txt", "root");
+    }
+
     private DriveService newService() {
         return new DriveService(
                 driveItemRepository,
@@ -196,5 +227,17 @@ class DriveServiceTest {
         item.setUploadedAt(baseTime.plusMinutes(modifiedOffsetMinutes));
         item.setLastModifiedAt(baseTime.plusMinutes(modifiedOffsetMinutes));
         return item;
+    }
+
+    private Map<String, String> readZipEntries(byte[] bytes) throws Exception {
+        Map<String, String> entries = new LinkedHashMap<>();
+        try (ZipInputStream zip = new ZipInputStream(new ByteArrayInputStream(bytes), StandardCharsets.UTF_8)) {
+            java.util.zip.ZipEntry entry;
+            while ((entry = zip.getNextEntry()) != null) {
+                entries.put(entry.getName(), new String(zip.readAllBytes(), StandardCharsets.UTF_8));
+                zip.closeEntry();
+            }
+        }
+        return entries;
     }
 }

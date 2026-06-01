@@ -63,6 +63,7 @@ public class DriveDownloadLinkService {
     public DriveDtos.DownloadLinkResponse revokeLink(Long userId, Long linkId) {
         DriveDownloadLink link = driveDownloadLinkRepository.findByIdAndOwner_Id(linkId, userId)
                 .orElseThrow(() -> new NotFoundException("Download link was not found."));
+        driveService.ensureUnlocked(link.getItem());
         if (link.getRevokedAt() == null) {
             link.setRevokedAt(LocalDateTime.now());
         }

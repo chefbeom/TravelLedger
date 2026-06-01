@@ -2,6 +2,7 @@ package com.playdata.calen.drive.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -60,6 +61,24 @@ class DriveDownloadLinkServiceTest {
 
         assertThat(response.revokedAt()).isNotNull();
         assertThat(response.available()).isFalse();
+    }
+
+    @Test
+    void revokeLinkRejectsLockedFileWithoutRevokingLink() {
+        DriveDownloadLink link = activeLink();
+        doThrow(new BadRequestException("Locked drive items cannot be changed. Unlock the item first."))
+                .when(driveService)
+                .ensureUnlocked(link.getItem());
+
+        when(driveDownloadLinkRepository.findByIdAndOwner_Id(7L, 1L)).thenReturn(Optional.of(link));
+
+        DriveDownloadLinkService service = newService();
+
+        assertThatThrownBy(() -> service.revokeLink(1L, 7L))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessage("Locked drive items cannot be changed. Unlock the item first.");
+
+        assertThat(link.getRevokedAt()).isNull();
     }
 
     private DriveDownloadLinkService newService() {

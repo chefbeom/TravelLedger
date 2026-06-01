@@ -2393,6 +2393,96 @@ button {
   gap: 8px;
 }
 
+.travel-record-action-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 0.34fr);
+  gap: 16px;
+  align-items: stretch;
+}
+
+.travel-record-action-panel__main {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+
+.travel-record-action-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.travel-record-action-card {
+  display: grid;
+  gap: 6px;
+  min-height: 110px;
+  align-content: center;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--surface);
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.travel-record-action-card:hover {
+  border-color: rgba(49, 130, 246, 0.34);
+  background: var(--surface-soft);
+}
+
+.travel-record-action-card--active {
+  border-color: rgba(49, 130, 246, 0.5);
+  background: linear-gradient(180deg, rgba(49, 130, 246, 0.14), rgba(49, 130, 246, 0.05));
+}
+
+.travel-record-action-card span {
+  color: var(--accent);
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+
+.travel-record-action-card strong,
+.travel-record-action-card small {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.travel-record-action-card small {
+  color: var(--text-soft);
+  font-weight: 800;
+}
+
+.travel-record-action-panel__stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  align-content: stretch;
+}
+
+.travel-record-action-panel__stats article {
+  display: grid;
+  gap: 6px;
+  align-content: center;
+  min-height: 90px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--surface-soft);
+}
+
+.travel-record-action-panel__stats span {
+  color: var(--text-soft);
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.travel-record-action-panel__stats strong {
+  color: var(--text);
+  font-size: 1.5rem;
+  line-height: 1;
+}
+
 .travel-finance-bridge {
   display: grid;
   gap: 18px;
@@ -2430,6 +2520,14 @@ button {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
+  .travel-record-action-panel {
+    grid-template-columns: 1fr;
+  }
+
+  .travel-record-action-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .travel-finance-bridge__body {
     grid-template-columns: 1fr;
   }
@@ -2443,6 +2541,16 @@ button {
   .travel-record-switcher__card {
     min-height: 84px;
     padding: 14px;
+  }
+
+  .travel-record-action-grid,
+  .travel-record-action-panel__stats {
+    grid-template-columns: 1fr;
+  }
+
+  .travel-record-action-card,
+  .travel-record-action-panel__stats article {
+    min-height: auto;
   }
 
   .travel-record-switcher__finance-link,

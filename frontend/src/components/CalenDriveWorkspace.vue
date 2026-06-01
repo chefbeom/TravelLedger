@@ -730,7 +730,7 @@ function isVideoFile(item) {
 }
 
 function buildOwnedDownloadPath(item) {
-  return item?.downloadUrl || `/api/file/${item.id}/download`
+  return item?.id ? `/api/file/${item.id}/download` : ''
 }
 
 function buildOwnedThumbnailPath(item) {
@@ -738,7 +738,7 @@ function buildOwnedThumbnailPath(item) {
 }
 
 function buildSharedDownloadPath(item) {
-  return item?.downloadUrl || `/api/file/share/shared/${item.fileId}/download`
+  return item?.fileId ? `/api/file/share/shared/${item.fileId}/download` : ''
 }
 
 function buildSharedThumbnailPath(item) {

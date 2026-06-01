@@ -2598,13 +2598,27 @@ onBeforeUnmount(() => {
               </div>
               <div class="drive-toolbar__actions" v-if="activeTab === 'drive'">
                 <div class="drive-breadcrumbs">
-                  <button class="button button--ghost" type="button" @click="navigateToBreadcrumb(null)">홈</button>
+                  <button
+                    class="button button--ghost"
+                    :class="{ 'drive-breadcrumbs__item--drop-target': isDriveRootMoveDropTarget() }"
+                    type="button"
+                    @click="navigateToBreadcrumb(null)"
+                    @dragover="handleDriveRootDragOver"
+                    @dragleave="handleDriveRootDragLeave"
+                    @drop="handleDriveRootDrop"
+                  >
+                    홈
+                  </button>
                   <button
                     v-for="crumb in breadcrumbs"
                     :key="crumb.id"
                     class="button button--ghost"
+                    :class="{ 'drive-breadcrumbs__item--drop-target': isDriveMoveDropTarget(crumb) }"
                     type="button"
                     @click="navigateToBreadcrumb(crumb.id)"
+                    @dragover="handleDriveFolderDragOver(crumb, $event)"
+                    @dragleave="handleDriveFolderDragLeave(crumb, $event)"
+                    @drop="handleDriveFolderDrop(crumb, $event)"
                   >
                     {{ crumb.fileOriginName }}
                   </button>

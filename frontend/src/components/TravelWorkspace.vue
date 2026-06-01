@@ -1,5 +1,6 @@
 <script setup>
-import { computed, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
+import { fetchTravelPortfolio } from '../lib/api'
 import TravelHubWorkspace from './TravelHubWorkspace.vue'
 import TravelMyMapWorkspace from './TravelMyMapWorkspace.vue'
 import TravelPublicTripsWorkspace from './TravelPublicTripsWorkspace.vue'
@@ -18,12 +19,15 @@ const hubRoute = ref('travel-log')
 const hubInitialLogTab = ref('overview')
 const hubInitialMoneyTab = ref('records')
 const financeLegacyOpen = ref(false)
+const travelPortfolio = ref(null)
+const travelSummaryLoading = ref(false)
+const travelSummaryError = ref('')
 
 const travelModes = [
   {
     key: 'map',
     label: '기록 지도',
-    meta: '사진과 이동 경로',
+    meta: '사진, 방문 장소, 이동 경로',
     badge: 'MAP',
   },
   {
@@ -51,6 +55,62 @@ const travelModes = [
     badge: 'SHARE',
   },
 ]
+
+const travelRecordSummary = computed(() => {
+  const portfolio = travelPortfolio.value || {}
+  const plans = Array.isArray(portfolio.plans) ? portfolio.plans : []
+  const memoryRecords = Array.isArray(portfolio.memoryRecords) ? portfolio.memoryRecords : []
+  const routeSegments = Array.isArray(portfolio.routeSegments) ? portfolio.routeSegments : []
+  const mediaItems = Array.isArray(portfolio.mediaItems) ? portfolio.mediaItems : []
+
+  return {
+    plans: readCount(portfolio.includedPlanCount, plans.length),
+    memories: readCount(portfolio.memoryRecordCount, memoryRecords.length),
+    photos: readCount(portfolio.mediaItemCount, mediaItems.length),
+    routes: readCount(portfolio.routeSegmentCount, routeSegments.length),
+    shared: memoryRecords.filter((record) => Boolean(record.sharedWithCommunity)).length,
+  }
+})
+
+const travelSummaryText = computed(() => {
+  const summary = travelRecordSummary.value
+  return `여행 ${summary.plans}개 · 장소 기록 ${summary.memories}건 · 사진 ${summary.photos}장 · GPX ${summary.routes}개`
+})
+
+function readCount(value, fallback = 0) {
+  const numericValue = Number(value)
+  return Number.isFinite(numericValue) && numericValue >= 0 ? numericValue : fallback
+}
+
+function getModeMetric(modeKey) {
+  const summary = travelRecordSummary.value
+  switch (modeKey) {
+    case 'map':
+      return `여행 ${summary.plans}개`
+    case 'memories':
+      return `기록 ${summary.memories}건`
+    case 'routes':
+      return `경로 ${summary.routes}개`
+    case 'photos':
+      return `사진 ${summary.photos}장`
+    case 'share':
+      return `공유 ${summary.shared}건`
+    default:
+      return ''
+  }
+}
+
+async function loadTravelSummary() {
+  travelSummaryLoading.value = true
+  travelSummaryError.value = ''
+  try {
+    travelPortfolio.value = await fetchTravelPortfolio()
+  } catch (error) {
+    travelSummaryError.value = error.message || '여행 요약을 불러오지 못했습니다.'
+  } finally {
+    travelSummaryLoading.value = false
+  }
+}
 
 function applyRouteState(route) {
   financeLegacyOpen.value = false
@@ -170,6 +230,8 @@ watch(
   },
   { immediate: true },
 )
+
+onMounted(loadTravelSummary)
 </script>
 
 <template>
@@ -194,7 +256,13 @@ watch(
           <span>{{ mode.badge }}</span>
           <strong>{{ mode.label }}</strong>
           <small>{{ mode.meta }}</small>
+          <em>{{ travelSummaryLoading ? '불러오는 중' : getModeMetric(mode.key) }}</em>
         </button>
+      </div>
+      <div class="travel-record-switcher__summary">
+        <span v-if="travelSummaryLoading">여행 기록 요약을 불러오는 중입니다.</span>
+        <span v-else-if="travelSummaryError">{{ travelSummaryError }}</span>
+        <span v-else>{{ travelSummaryText }}</span>
       </div>
       <div class="travel-record-switcher__finance-link">
         <div>
@@ -231,14 +299,14 @@ watch(
         <div>
           <span class="panel__eyebrow">HOUSEHOLD LINK</span>
           <h2>여행 가계부는 가계부에서 관리합니다</h2>
-          <p>여행 지출은 일반 가계부 데이터와 함께 저장하고, 여행 키워드와 분류를 기준으로 따로 모아 봅니다.</p>
+          <p>여행 지출은 일반 가계부 데이터와 함께 저장하고, 여행 대시보드의 분류를 기준으로 따로 모아 봅니다.</p>
         </div>
         <span class="panel__badge">연계됨</span>
       </div>
       <div class="travel-finance-bridge__body">
         <article>
           <strong>새 여행 지출 입력</strong>
-          <span>가계부의 거래 입력 폼을 그대로 사용해서 여행 지출을 기록합니다.</span>
+          <span>가계부의 거래 입력 흐름을 그대로 사용해서 여행 지출을 기록합니다.</span>
         </article>
         <article>
           <strong>기존 거래와 함께 집계</strong>

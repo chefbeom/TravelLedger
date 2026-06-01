@@ -2327,6 +2327,29 @@ button {
   color: var(--text-soft);
 }
 
+.travel-record-switcher__card em {
+  width: fit-content;
+  max-width: 100%;
+  padding: 4px 8px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--surface-muted) 78%, var(--accent) 22%);
+  color: var(--accent-strong);
+  font-size: 0.78rem;
+  font-style: normal;
+  font-weight: 900;
+  overflow-wrap: anywhere;
+}
+
+.travel-record-switcher__summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+  color: var(--text-soft);
+  font-size: 0.9rem;
+  font-weight: 800;
+}
+
 .travel-record-switcher__finance-link {
   display: flex;
   align-items: center;

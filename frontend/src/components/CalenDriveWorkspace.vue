@@ -74,6 +74,8 @@ const moveDestinationsHydrated = ref(false)
 const folderTreeExpandedIds = ref([])
 const detailsPanelOpen = ref(true)
 const dragDepth = ref(0)
+const driveDraggedItems = ref([])
+const driveMoveDropTargetId = ref('')
 
 const previewDialog = reactive({
   open: false,
@@ -263,7 +265,9 @@ const selectedTotalBytes = computed(() => {
 
 const canUploadInCurrentLocation = computed(() => activeTab.value === 'drive')
 
-const isDriveDropActive = computed(() => canUploadInCurrentLocation.value && dragDepth.value > 0)
+const isDriveItemDragging = computed(() => driveDraggedItems.value.length > 0)
+
+const isDriveDropActive = computed(() => canUploadInCurrentLocation.value && dragDepth.value > 0 && !isDriveItemDragging.value)
 
 const detailRows = computed(() => {
   if (selectedItems.value.length > 1) {
@@ -691,6 +695,14 @@ function canToggleLock(item) {
   return activeTab.value !== 'trash' && activeTab.value !== 'shared' && Boolean(item?.id)
 }
 
+function canDragDriveItem(item) {
+  return (activeTab.value === 'drive' || activeTab.value === 'recent') && canModifyOwnedItem(item)
+}
+
+function canUseAsMoveDropTarget(item) {
+  return (activeTab.value === 'drive' || activeTab.value === 'recent') && isFolder(item) && canModifyOwnedItem(item)
+}
+
 function isImageFile(item) {
   const extension = String(item?.fileFormat || '').toLowerCase()
   return ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg'].includes(extension)
@@ -844,14 +856,14 @@ function toggleDetailsPanel() {
 }
 
 function handleDriveDragEnter() {
-  if (!canUploadInCurrentLocation.value) {
+  if (isDriveItemDragging.value || !canUploadInCurrentLocation.value) {
     return
   }
   dragDepth.value += 1
 }
 
 function handleDriveDragLeave() {
-  if (!canUploadInCurrentLocation.value) {
+  if (isDriveItemDragging.value || !canUploadInCurrentLocation.value) {
     return
   }
   dragDepth.value = Math.max(0, dragDepth.value - 1)
@@ -971,6 +983,9 @@ async function collectDroppedDriveFiles(dataTransfer) {
 
 async function handleDriveDrop(event) {
   dragDepth.value = 0
+  if (isDriveItemDragging.value) {
+    return
+  }
   if (!canUploadInCurrentLocation.value) {
     return
   }
@@ -979,6 +994,117 @@ async function handleDriveDrop(event) {
     return
   }
   await handleFilesSelected({ target: { files, value: '' } })
+}
+
+function resetDriveMoveDrag() {
+  driveDraggedItems.value = []
+  driveMoveDropTargetId.value = ''
+}
+
+function getDriveDragItemIds() {
+  return driveDraggedItems.value.map((item) => String(item.id)).filter(Boolean)
+}
+
+function canDropDriveItemsToFolder(target) {
+  if (!driveDraggedItems.value.length || !canUseAsMoveDropTarget(target)) {
+    return false
+  }
+
+  const targetId = String(target.id)
+  const draggedIds = getDriveDragItemIds()
+  if (!targetId || draggedIds.includes(targetId)) {
+    return false
+  }
+
+  const blockedFolderIds = buildBlockedFolderIds(driveDraggedItems.value, moveDestinationFolders.value)
+  return !blockedFolderIds.has(targetId)
+}
+
+function isDriveMoveDropTarget(item) {
+  return driveMoveDropTargetId.value === String(item?.id || '')
+}
+
+function handleDriveItemDragStart(item, event) {
+  if (!canDragDriveItem(item)) {
+    event.preventDefault()
+    return
+  }
+
+  const itemId = getSelectableId(item)
+  if (!selectedIds.value.includes(itemId)) {
+    selectedIds.value = [itemId]
+  }
+
+  const draggingItems = selectedIds.value.includes(itemId)
+    ? selectedItems.value.filter((selectedItem) => canDragDriveItem(selectedItem))
+    : [item]
+
+  if (!draggingItems.length) {
+    event.preventDefault()
+    return
+  }
+
+  driveDraggedItems.value = draggingItems
+  driveMoveDropTargetId.value = ''
+  dragDepth.value = 0
+  ensureMoveDestinationsLoaded()
+
+  if (event.dataTransfer) {
+    event.dataTransfer.effectAllowed = 'move'
+    event.dataTransfer.setData('application/x-calen-drive-items', getDriveDragItemIds().join(','))
+    event.dataTransfer.setData('text/plain', draggingItems.map((dragItem) => dragItem.fileOriginName).join(', '))
+  }
+}
+
+function handleDriveItemDragEnd() {
+  resetDriveMoveDrag()
+}
+
+function handleDriveFolderDragOver(item, event) {
+  if (!canDropDriveItemsToFolder(item)) {
+    return
+  }
+  event.preventDefault()
+  event.stopPropagation()
+  if (event.dataTransfer) {
+    event.dataTransfer.dropEffect = 'move'
+  }
+  driveMoveDropTargetId.value = String(item.id)
+}
+
+function handleDriveFolderDragLeave(item, event) {
+  if (event.currentTarget?.contains?.(event.relatedTarget)) {
+    return
+  }
+  if (isDriveMoveDropTarget(item)) {
+    driveMoveDropTargetId.value = ''
+  }
+}
+
+async function handleDriveFolderDrop(item, event) {
+  if (!canDropDriveItemsToFolder(item)) {
+    return
+  }
+
+  event.preventDefault()
+  event.stopPropagation()
+
+  const movingItems = [...driveDraggedItems.value]
+  const movingIds = movingItems.map((movingItem) => movingItem.id).filter(Boolean)
+  resetDriveMoveDrag()
+  if (!movingIds.length) {
+    return
+  }
+
+  try {
+    await moveDriveItems(movingIds, Number(item.id))
+    setMessages(`${movingIds.length}개 항목을 "${item.fileOriginName}" 폴더로 이동했습니다.`)
+    invalidateMoveDestinations()
+    await Promise.all([loadDrivePage(), loadHomeSummary(), loadRecentFiles()])
+    clearSelection()
+  } catch (error) {
+    setMessages('', error.message)
+  }
 }
 
 async function handleDriveKeyboard(event) {
@@ -2536,10 +2662,20 @@ onBeforeUnmount(() => {
                     v-for="item in browserItems"
                     :key="getSelectableId(item)"
                     class="drive-table__row"
-                    :class="{ 'drive-table__row--selected': selectedIds.includes(getSelectableId(item)) }"
+                    :class="{
+                      'drive-table__row--selected': selectedIds.includes(getSelectableId(item)),
+                      'drive-table__row--draggable': canDragDriveItem(item),
+                      'drive-table__row--drop-target': isDriveMoveDropTarget(item),
+                    }"
+                    :draggable="canDragDriveItem(item)"
                     @click="selectItemFromPointer(item, $event)"
                     @dblclick="openBrowserItem(item)"
                     @contextmenu.prevent="openContextMenu(item, $event)"
+                    @dragstart="handleDriveItemDragStart(item, $event)"
+                    @dragend="handleDriveItemDragEnd"
+                    @dragover="handleDriveFolderDragOver(item, $event)"
+                    @dragleave="handleDriveFolderDragLeave(item, $event)"
+                    @drop="handleDriveFolderDrop(item, $event)"
                   >
                     <td>
                       <input :checked="selectedIds.includes(getSelectableId(item))" type="checkbox" @click.stop @change="toggleSelection(item)" />
@@ -2598,11 +2734,22 @@ onBeforeUnmount(() => {
                 v-for="item in browserItems"
                 :key="getSelectableId(item)"
                 class="drive-file-card"
-                :class="{ 'drive-file-card--selected': selectedIds.includes(getSelectableId(item)), 'drive-file-card--locked': isLockedItem(item) }"
+                :class="{
+                  'drive-file-card--selected': selectedIds.includes(getSelectableId(item)),
+                  'drive-file-card--locked': isLockedItem(item),
+                  'drive-file-card--draggable': canDragDriveItem(item),
+                  'drive-file-card--drop-target': isDriveMoveDropTarget(item),
+                }"
                 :aria-selected="selectedIds.includes(getSelectableId(item))"
+                :draggable="canDragDriveItem(item)"
                 @click="selectItemFromPointer(item, $event)"
                 @dblclick="openBrowserItem(item)"
                 @contextmenu.prevent="openContextMenu(item, $event)"
+                @dragstart="handleDriveItemDragStart(item, $event)"
+                @dragend="handleDriveItemDragEnd"
+                @dragover="handleDriveFolderDragOver(item, $event)"
+                @dragleave="handleDriveFolderDragLeave(item, $event)"
+                @drop="handleDriveFolderDrop(item, $event)"
               >
                 <label class="drive-file-card__checkbox" @click.stop>
                   <input :checked="selectedIds.includes(getSelectableId(item))" type="checkbox" @change="toggleSelection(item)" />

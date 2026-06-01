@@ -85,6 +85,10 @@ const props = defineProps({
     type: Object,
     default: null,
   },
+  externalRouteFocusRequest: {
+    type: Object,
+    default: null,
+  },
 })
 
 const emit = defineEmits(['request-open-finance', 'request-open-log', 'request-open-public-trips'])
@@ -1469,6 +1473,14 @@ watch(
 )
 
 watch(
+  () => [props.externalRouteFocusRequest?.token, travelPlans.value.length],
+  async () => {
+    await applyExternalRouteFocusRequest(props.externalRouteFocusRequest)
+  },
+  { immediate: true },
+)
+
+watch(
   () => [moneyTab.value, selectedPlanId.value, recordGpsEnabled.value, editingRecordId.value],
   ([tab, planId, gpsEnabled, editingRecordId]) => {
     if (tab !== 'records' || !planId || !gpsEnabled || editingRecordId) {
@@ -1521,6 +1533,29 @@ async function applyExternalMemoryFocusRequest(request) {
     token,
   }
   appliedExternalMemoryFocusToken.value = token
+}
+
+async function applyExternalRouteFocusRequest(request) {
+  const token = String(request?.token || '')
+  if (!token) {
+    return
+  }
+
+  const targetPlanId = String(request?.planId || '').trim()
+  if (targetPlanId) {
+    if (!travelPlans.value.length) {
+      return
+    }
+    if (!travelPlans.value.some((item) => String(item.id) === targetPlanId)) {
+      return
+    }
+    if (String(selectedPlanId.value || '') !== targetPlanId) {
+      selectedPlanId.value = targetPlanId
+      await refreshTravelData(targetPlanId, false)
+    }
+  }
+
+  logTab.value = 'routes'
 }
 
 async function handleShareTravelPlan() {
@@ -2355,7 +2390,7 @@ async function openPortfolioMemoryEditor(payload) {
       </section>
       <TravelOverviewWorkspace v-if="logTab === 'overview'" :travel-plan="travelPlan" />
       <TravelMemoryPanel v-else-if="logTab === 'memories'" :travel-plan="travelPlan" :category-options="memoryCategoryOptions" :is-submitting="isSubmitting" :active-submit="activeSubmit" :refresh-key="memoryRefreshKey" :focus-request="memoryFocusRequest" :upload-progress="memoryUploadProgress" @save-memory="handleSaveMemory" @delete-memory="handleDeleteMemory" @delete-media="handleDeleteMedia" />
-      <TravelRouteWorkspace v-else :travel-plan="travelPlan" :is-submitting="isSubmitting" :active-submit="activeSubmit" :refresh-key="routeRefreshKey" @save-route="handleSaveRoute" @delete-route="handleDeleteRoute" />
+      <TravelRouteWorkspace v-else :travel-plan="travelPlan" :is-submitting="isSubmitting" :active-submit="activeSubmit" :refresh-key="routeRefreshKey" :focus-request="externalRouteFocusRequest" @save-route="handleSaveRoute" @delete-route="handleDeleteRoute" />
     </template>
 
     <template v-else-if="route === 'photo-album'">

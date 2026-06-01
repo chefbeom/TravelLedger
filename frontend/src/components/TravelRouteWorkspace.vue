@@ -1,5 +1,5 @@
 ﻿<script setup>
-import { computed, reactive, ref, watch } from 'vue'
+import { computed, nextTick, reactive, ref, watch } from 'vue'
 import { useTableSelection } from '../lib/tableSelection'
 import { formatDate, formatTime, safeNumber, todayIso, toIsoDate } from '../lib/uiFormat'
 import TravelMapPanel from './TravelMapPanel.vue'
@@ -20,6 +20,10 @@ const props = defineProps({
   refreshKey: {
     type: Number,
     default: 0,
+  },
+  focusRequest: {
+    type: Object,
+    default: null,
   },
 })
 
@@ -64,6 +68,8 @@ const gpxSelectedFiles = ref([])
 const activeDayDate = ref('')
 const highlightedDraftIndex = ref(-1)
 const editingRouteId = ref(null)
+const focusedRouteId = ref('')
+const appliedRouteFocusToken = ref('')
 
 const routeSegments = computed(() => props.travelPlan?.routeSegments ?? [])
 const tripDays = computed(() => {
@@ -420,21 +426,78 @@ watch(
   },
 )
 
+watch(
+  () => [props.focusRequest?.token, props.travelPlan?.id, routeSegments.value.length],
+  async () => {
+    await applyRouteFocusRequest(props.focusRequest)
+  },
+  { immediate: true },
+)
+
 function initializeDaySelection() {
   activeDayDate.value = tripDays.value[0]?.date || props.travelPlan?.startDate || todayIso()
   draft.routeDate = activeDayDate.value
   highlightedDraftIndex.value = -1
+  focusedRouteId.value = ''
 }
 
 function selectTripDay(day) {
   activeDayDate.value = day.date
   draft.routeDate = day.date
   highlightedDraftIndex.value = -1
+  focusedRouteId.value = ''
 }
 
 function selectAllDays() {
   activeDayDate.value = ''
   highlightedDraftIndex.value = -1
+  focusedRouteId.value = ''
+}
+
+function normalizeRouteFocusValue(value) {
+  return String(value || '').trim()
+}
+
+function isFocusedRoute(route) {
+  return focusedRouteId.value && String(route?.id || '') === focusedRouteId.value
+}
+
+async function applyRouteFocusRequest(request) {
+  const token = normalizeRouteFocusValue(request?.token)
+  if (!token || token === appliedRouteFocusToken.value) {
+    return
+  }
+
+  const targetRouteId = normalizeRouteFocusValue(request?.routeId)
+  let targetRouteDate = normalizeRouteFocusValue(request?.routeDate)
+  const targetRoute = targetRouteId
+    ? routeSegments.value.find((route) => String(route.id || '') === targetRouteId)
+    : null
+
+  if (targetRouteId && !targetRoute && !targetRouteDate) {
+    return
+  }
+
+  if (!targetRouteDate && targetRoute?.routeDate) {
+    targetRouteDate = targetRoute.routeDate
+  }
+
+  if (targetRouteDate) {
+    activeDayDate.value = targetRouteDate
+    draft.routeDate = targetRouteDate
+  }
+
+  await nextTick()
+
+  if (targetRouteId) {
+    const routeIndex = routesForActiveDay.value.findIndex((route) => String(route.id || '') === targetRouteId)
+    if (routeIndex >= 0) {
+      activeDayRoutePage.value = Math.floor(routeIndex / ROUTE_TABLE_PAGE_SIZE)
+      focusedRouteId.value = targetRouteId
+    }
+  }
+
+  appliedRouteFocusToken.value = token
 }
 
 function transportLabel(mode) {
@@ -1408,7 +1471,11 @@ function routeSummary(route) {
             </tr>
           </thead>
           <tbody>
-            <tr v-for="route in pagedRoutesForActiveDay" :key="route.id">
+            <tr
+              v-for="route in pagedRoutesForActiveDay"
+              :key="route.id"
+              :class="{ 'sheet-table__row--focused': isFocusedRoute(route) }"
+            >
               <td class="sheet-table__select">
                 <input
                   class="sheet-table__checkbox"

@@ -24,6 +24,7 @@ const travelSummaryLoading = ref(false)
 const travelSummaryError = ref('')
 const hubPlaceFocusRequest = ref(null)
 const hubPhotoFocusRequest = ref(null)
+const hubRouteFocusRequest = ref(null)
 
 const travelModes = [
   {
@@ -162,6 +163,9 @@ const travelRecentActivities = computed(() => {
       timestamp: toActivityTimestamp(route.routeDate),
       shared: false,
       previewUrl: '',
+      routeId: route.id || '',
+      planId: route.planId || '',
+      routeDate: route.routeDate || '',
     })),
     ...mediaItems
       .filter((media) => String(media.mediaType || '').toUpperCase() === 'PHOTO')
@@ -466,10 +470,19 @@ function openPlace(place) {
   }
 }
 
-function openRoutes() {
+function openRoutes(focusRequest = null) {
   primaryTab.value = 'routes'
   hubRoute.value = 'travel-log'
   hubInitialLogTab.value = 'routes'
+  if (focusRequest) {
+    hubRouteFocusRequest.value = {
+      type: 'route',
+      token: Date.now(),
+      routeId: focusRequest.routeId || focusRequest.id || '',
+      planId: focusRequest.planId || '',
+      routeDate: focusRequest.routeDate || '',
+    }
+  }
 }
 
 function openMap() {
@@ -529,6 +542,11 @@ function openActivity(activity) {
 
   if (activity?.kind === 'PHOTO') {
     openPhotos(activity)
+    return
+  }
+
+  if (activity?.kind === 'GPX') {
+    openRoutes(activity)
     return
   }
 
@@ -770,6 +788,7 @@ onMounted(loadTravelSummary)
         :initial-money-tab="hubInitialMoneyTab"
         :external-memory-focus-request="hubPlaceFocusRequest"
         :external-photo-focus-request="hubPhotoFocusRequest"
+        :external-route-focus-request="hubRouteFocusRequest"
         @request-open-finance="handleRequestOpenFinance"
         @request-open-log="handleRequestOpenLog"
         @request-open-public-trips="handleRequestOpenPublicTrips"

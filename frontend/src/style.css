@@ -3124,9 +3124,47 @@ button {
   min-width: min(220px, 100%);
 }
 
+.household-travel-ledger__types {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.household-travel-ledger__type {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.household-travel-ledger__type:hover,
+.household-travel-ledger__type--active {
+  border-color: rgba(49, 130, 246, 0.4);
+  background: var(--surface-soft);
+}
+
+.household-travel-ledger__type--active {
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.household-travel-ledger__type span,
+.household-travel-ledger__type small {
+  color: var(--text-soft);
+}
+
+.household-travel-ledger__type strong {
+  font-size: 1rem;
+}
+
 .household-travel-ledger__summary {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 12px;
 }
 
@@ -3165,6 +3203,10 @@ button {
   min-width: 0;
 }
 
+.household-travel-ledger__panel--wide {
+  grid-column: 1 / -1;
+}
+
 .household-travel-ledger__rows {
   display: grid;
   gap: 10px;
@@ -3199,6 +3241,49 @@ button {
 .household-travel-ledger__row span {
   white-space: nowrap;
   font-weight: 800;
+}
+
+.household-travel-ledger__flow-row {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface-strong);
+}
+
+.household-travel-ledger__flow-row div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+}
+
+.household-travel-ledger__flow-row strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.household-travel-ledger__flow-row small {
+  color: var(--text-soft);
+  white-space: nowrap;
+}
+
+.household-travel-ledger__flow-track {
+  display: block;
+  width: 100%;
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.16);
+}
+
+.household-travel-ledger__flow-track i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--accent), var(--income));
 }
 
 .household-travel-ledger__entry-actions {
@@ -6175,6 +6260,7 @@ textarea {
   .search-bulk-toolbar,
   .stats-toolbar__fields,
   .manager-grid,
+  .household-travel-ledger__types,
   .household-travel-ledger__summary,
   .household-travel-ledger__content,
   .travel-form-grid,
@@ -6233,6 +6319,7 @@ textarea {
   }
 
   .household-travel-ledger__summary,
+  .household-travel-ledger__types,
   .household-travel-ledger__content {
     grid-template-columns: 1fr;
   }

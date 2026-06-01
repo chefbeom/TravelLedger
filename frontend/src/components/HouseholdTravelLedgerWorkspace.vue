@@ -34,6 +34,7 @@ const props = defineProps({
 
 const emit = defineEmits(['start-travel-entry', 'open-travel-search', 'view-travel-entry-date', 'edit-travel-entry'])
 const travelKeywordFilter = ref('')
+const activeTravelType = ref('all')
 
 const travelKeywords = [
   '여행',
@@ -64,8 +65,33 @@ const travelKeywords = [
   '베트남',
 ]
 
+const travelTypeOptions = [
+  { key: 'all', label: '전체', keywords: [] },
+  { key: 'transport', label: '이동', keywords: ['항공', '비행', '공항', '교통', '기차', '버스', '택시', '렌터카', '주유', '톨게이트'] },
+  { key: 'lodging', label: '숙소', keywords: ['숙소', '호텔', '게스트하우스', '리조트', '민박', '에어비앤비'] },
+  { key: 'food', label: '식비', keywords: ['식비', '식사', '맛집', '카페', '음식', '밥', '편의점'] },
+  { key: 'activity', label: '관광', keywords: ['입장권', '관광', '투어', '체험', '박물관', '전시', '공연'] },
+  { key: 'shopping', label: '쇼핑', keywords: ['쇼핑', '기념품', '선물', '면세', '마트'] },
+  { key: 'cash', label: '환전', keywords: ['환전', '현금', '외화', 'atm'] },
+  { key: 'other', label: '기타', keywords: [] },
+]
+
 function normalizeSearchText(value) {
   return String(value || '').toLowerCase()
+}
+
+function getEntrySearchText(entry) {
+  return normalizeSearchText([
+    entry.title,
+    entry.memo,
+    entry.categoryGroupName,
+    entry.categoryDetailName,
+    entry.paymentMethodName,
+  ].join(' '))
+}
+
+function matchesKeywordSet(searchableText, keywords) {
+  return keywords.some((keyword) => searchableText.includes(normalizeSearchText(keyword)))
 }
 
 function getEntryCategoryLabel(entry) {
@@ -74,26 +100,75 @@ function getEntryCategoryLabel(entry) {
     : entry.categoryGroupName || '미분류'
 }
 
-const travelEntries = computed(() =>
+function getTravelTypeForEntry(entry) {
+  const searchableText = getEntrySearchText(entry)
+  const matchedType = travelTypeOptions.find((option) =>
+    option.key !== 'all'
+    && option.key !== 'other'
+    && matchesKeywordSet(searchableText, option.keywords),
+  )
+  return matchedType?.key || 'other'
+}
+
+function formatMonthLabel(monthKey) {
+  const [year, month] = String(monthKey || '').split('-')
+  if (!year || !month) {
+    return '날짜 없음'
+  }
+  return `${Number(year)}년 ${Number(month)}월`
+}
+
+const baseTravelEntries = computed(() =>
   props.entries
     .filter((entry) => entry.entryType === 'EXPENSE')
     .filter((entry) => {
-      const searchableText = normalizeSearchText([
-        entry.title,
-        entry.memo,
-        entry.categoryGroupName,
-        entry.categoryDetailName,
-        entry.paymentMethodName,
-      ].join(' '))
-      const matchesTravelKeyword = travelKeywords.some((keyword) => searchableText.includes(normalizeSearchText(keyword)))
+      const searchableText = getEntrySearchText(entry)
+      const matchesTravelKeyword = matchesKeywordSet(searchableText, travelKeywords)
       const filterText = normalizeSearchText(travelKeywordFilter.value)
       return matchesTravelKeyword && (!filterText || searchableText.includes(filterText))
     })
     .sort((left, right) => `${right.entryDate} ${right.entryTime || ''}`.localeCompare(`${left.entryDate} ${left.entryTime || ''}`)),
 )
 
+const travelEntries = computed(() => {
+  if (activeTravelType.value === 'all') {
+    return baseTravelEntries.value
+  }
+  if (activeTravelType.value === 'other') {
+    return baseTravelEntries.value.filter((entry) => getTravelTypeForEntry(entry) === 'other')
+  }
+  return baseTravelEntries.value.filter((entry) => getTravelTypeForEntry(entry) === activeTravelType.value)
+})
+
+const travelTypeStats = computed(() => {
+  const stats = new Map(travelTypeOptions.map((option) => [option.key, { ...option, count: 0, amount: 0 }]))
+  baseTravelEntries.value.forEach((entry) => {
+    const amount = Number(entry.amount || 0)
+    const typeKey = getTravelTypeForEntry(entry)
+    const typeStat = stats.get(typeKey) || stats.get('other')
+    typeStat.count += 1
+    typeStat.amount += amount
+    const allStat = stats.get('all')
+    allStat.count += 1
+    allStat.amount += amount
+  })
+  return travelTypeOptions.map((option) => stats.get(option.key))
+})
+
+const activeTravelTypeOption = computed(() =>
+  travelTypeOptions.find((option) => option.key === activeTravelType.value) || travelTypeOptions[0],
+)
+
+const travelSearchKeyword = computed(() =>
+  String(travelKeywordFilter.value || activeTravelTypeOption.value.keywords?.[0] || '여행').trim(),
+)
+
 const totalExpense = computed(() =>
   travelEntries.value.reduce((sum, entry) => sum + Number(entry.amount || 0), 0),
+)
+
+const averageExpense = computed(() =>
+  travelEntries.value.length ? Math.round(totalExpense.value / travelEntries.value.length) : 0,
 )
 
 const topCategoryRows = computed(() => {
@@ -121,6 +196,23 @@ const topPaymentRows = computed(() => {
 })
 
 const recentEntries = computed(() => travelEntries.value.slice(0, 12))
+
+const monthFlowRows = computed(() => {
+  const buckets = new Map()
+  travelEntries.value.forEach((entry) => {
+    const monthKey = String(entry.entryDate || '').slice(0, 7) || 'unknown'
+    const current = buckets.get(monthKey) || { monthKey, label: formatMonthLabel(monthKey), amount: 0, count: 0 }
+    current.amount += Number(entry.amount || 0)
+    current.count += 1
+    buckets.set(monthKey, current)
+  })
+  const rows = [...buckets.values()].sort((left, right) => right.monthKey.localeCompare(left.monthKey)).slice(0, 6)
+  const maxAmount = Math.max(...rows.map((row) => row.amount), 1)
+  return rows.map((row) => ({
+    ...row,
+    percent: Math.max(6, Math.round((row.amount / maxAmount) * 100)),
+  }))
+})
 </script>
 
 <template>
@@ -157,6 +249,21 @@ const recentEntries = computed(() => travelEntries.value.slice(0, 12))
       </label>
     </div>
 
+    <div class="household-travel-ledger__types" aria-label="여행 지출 유형 필터">
+      <button
+        v-for="type in travelTypeStats"
+        :key="type.key"
+        class="household-travel-ledger__type"
+        :class="{ 'household-travel-ledger__type--active': activeTravelType === type.key }"
+        type="button"
+        @click="activeTravelType = type.key"
+      >
+        <span>{{ type.label }}</span>
+        <strong>{{ type.count }}건</strong>
+        <small>{{ formatCurrency(type.amount) }}</small>
+      </button>
+    </div>
+
     <div class="household-travel-ledger__summary">
       <article class="household-travel-ledger__summary-card">
         <span>여행 지출</span>
@@ -173,11 +280,16 @@ const recentEntries = computed(() => travelEntries.value.slice(0, 12))
         <strong>{{ topPaymentRows[0]?.label || '데이터 없음' }}</strong>
         <small>{{ topPaymentRows[0] ? formatCurrency(topPaymentRows[0].amount) : '여행 지출을 입력해 보세요.' }}</small>
       </article>
+      <article class="household-travel-ledger__summary-card">
+        <span>평균 지출</span>
+        <strong>{{ formatCurrency(averageExpense) }}</strong>
+        <small>{{ activeTravelType === 'all' ? '전체 여행 지출 기준' : '선택한 유형 기준' }}</small>
+      </article>
     </div>
 
     <div class="entry-editor__actions household-travel-ledger__actions">
       <button class="button button--primary" type="button" @click="emit('start-travel-entry')">여행 지출 입력</button>
-      <button class="button button--ghost" type="button" @click="emit('open-travel-search', travelKeywordFilter || '여행')">검색에서 자세히 보기</button>
+      <button class="button button--ghost" type="button" @click="emit('open-travel-search', travelSearchKeyword)">검색에서 자세히 보기</button>
     </div>
 
     <div class="household-travel-ledger__content">
@@ -200,6 +312,26 @@ const recentEntries = computed(() => travelEntries.value.slice(0, 12))
       </section>
 
       <section class="panel panel--compact household-travel-ledger__panel">
+        <div class="panel__header">
+          <div>
+            <h3>월별 여행 지출 흐름</h3>
+          </div>
+        </div>
+        <div v-if="monthFlowRows.length" class="household-travel-ledger__rows">
+          <div v-for="row in monthFlowRows" :key="row.monthKey" class="household-travel-ledger__flow-row">
+            <div>
+              <strong>{{ row.label }}</strong>
+              <small>{{ row.count }}건 · {{ formatCurrency(row.amount) }}</small>
+            </div>
+            <span class="household-travel-ledger__flow-track">
+              <i :style="{ width: `${row.percent}%` }"></i>
+            </span>
+          </div>
+        </div>
+        <p v-else class="panel__empty">선택한 조건에 해당하는 월별 지출이 없습니다.</p>
+      </section>
+
+      <section class="panel panel--compact household-travel-ledger__panel household-travel-ledger__panel--wide">
         <div class="panel__header">
           <div>
             <h3>최근 여행 지출</h3>

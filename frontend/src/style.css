@@ -9837,20 +9837,44 @@ textarea {
 
 .drive-share-modal,
 .drive-move-modal,
+.drive-folder-modal,
 .drive-profile-modal {
   width: min(880px, calc(100vw - 32px));
 }
 
 .drive-share-modal__body,
 .drive-move-modal__body,
+.drive-folder-modal__body,
 .drive-profile-modal__body {
   display: grid;
   gap: 16px;
 }
 
-.drive-move-modal__body {
+.drive-move-modal__body,
+.drive-folder-modal__body {
   grid-template-columns: minmax(0, 1.35fr) minmax(260px, 0.65fr);
   align-items: start;
+}
+
+.drive-folder-modal__preview {
+  display: grid;
+  gap: 5px;
+  margin-top: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface-soft);
+}
+
+.drive-folder-modal__preview span {
+  color: var(--text-soft);
+  font-size: 0.84rem;
+  font-weight: 800;
+}
+
+.drive-folder-modal__preview strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .drive-move-destination-list {
@@ -10848,11 +10872,13 @@ textarea {
 
   .drive-share-modal,
   .drive-move-modal,
+  .drive-folder-modal,
   .drive-profile-modal {
     width: min(100vw - 20px, 880px);
   }
 
-  .drive-move-modal__body {
+  .drive-move-modal__body,
+  .drive-folder-modal__body {
     grid-template-columns: 1fr;
   }
 

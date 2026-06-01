@@ -92,6 +92,17 @@ const moveDialog = reactive({
   saving: false,
 })
 
+const folderDialog = reactive({
+  open: false,
+  title: '새 폴더 만들기',
+  folderName: '',
+  folders: [],
+  targetParentId: '',
+  loading: false,
+  saving: false,
+  successMessage: '폴더를 만들었습니다.',
+})
+
 const homeSummary = ref(null)
 const drivePage = ref(createEmptyDrivePage())
 const recentFiles = ref([])
@@ -496,6 +507,33 @@ const canConfirmMoveDialog = computed(() =>
     && !moveDialog.saving,
 )
 
+const folderDialogDestinationOptions = computed(() => [
+  {
+    value: '',
+    label: '내 드라이브',
+    path: '최상위 위치',
+    disabled: false,
+  },
+  ...folderDialog.folders.map((folder) => ({
+    value: String(folder.id),
+    label: folder.fileOriginName,
+    path: folder.path || folder.fileOriginName,
+    disabled: Boolean(folder.lockedFile),
+  })),
+])
+
+const selectedFolderDialogDestination = computed(() =>
+  folderDialogDestinationOptions.value.find((option) => option.value === folderDialog.targetParentId),
+)
+
+const canConfirmFolderDialog = computed(() =>
+  Boolean(folderDialog.folderName.trim())
+    && Boolean(selectedFolderDialogDestination.value)
+    && !selectedFolderDialogDestination.value.disabled
+    && !folderDialog.loading
+    && !folderDialog.saving,
+)
+
 function setMessages(message = '', error = '') {
   feedback.value = message
   errorMessage.value = error
@@ -738,6 +776,10 @@ async function handleDriveDrop(event) {
 }
 
 async function handleDriveKeyboard(event) {
+  if (folderDialog.open && event.key === 'Escape') {
+    closeFolderDialog()
+    return
+  }
   if (moveDialog.open && event.key === 'Escape') {
     closeMoveDialog()
     return
@@ -982,30 +1024,8 @@ function openSharedItem(item) {
   window.open(buildSharedDownloadPath(item), '_blank', 'noopener')
 }
 
-async function createFolderAt(parentId, successMessage = '폴더를 만들었습니다.') {
-  const folderName = window.prompt('새 폴더 이름을 입력해주세요.', '새 폴더')
-  if (!folderName) {
-    return
-  }
-
-  try {
-    const targetParentId = parentId ?? null
-    await createDriveFolder({
-      folderName,
-      parentId: targetParentId,
-    })
-    setMessages(successMessage)
-    activeTab.value = 'drive'
-    pageFilters.parentId = targetParentId
-    pageFilters.page = 0
-    await Promise.all([loadDrivePage(), loadHomeSummary()])
-  } catch (error) {
-    setMessages('', error.message)
-  }
-}
-
 async function promptCreateFolder() {
-  await createFolderAt(activeTab.value === 'drive' ? pageFilters.parentId : null)
+  await openFolderDialog(activeTab.value === 'drive' ? pageFilters.parentId : null)
 }
 
 async function promptCreateFolderInside(item) {
@@ -1016,7 +1036,74 @@ async function promptCreateFolderInside(item) {
     setMessages('', '잠긴 폴더에는 새 폴더를 만들 수 없습니다. 먼저 잠금을 해제해 주세요.')
     return
   }
-  await createFolderAt(item.id, `"${item.fileOriginName}" 안에 폴더를 만들었습니다.`)
+  await openFolderDialog(item.id, {
+    title: `"${item.fileOriginName}" 안에 폴더 만들기`,
+    successMessage: `"${item.fileOriginName}" 안에 폴더를 만들었습니다.`,
+  })
+}
+
+async function openFolderDialog(parentId = null, options = {}) {
+  folderDialog.open = true
+  folderDialog.title = options.title || '새 폴더 만들기'
+  folderDialog.folderName = ''
+  folderDialog.folders = []
+  folderDialog.targetParentId = parentId == null ? '' : String(parentId)
+  folderDialog.loading = true
+  folderDialog.saving = false
+  folderDialog.successMessage = options.successMessage || '폴더를 만들었습니다.'
+  setMessages()
+
+  try {
+    folderDialog.folders = await fetchDriveFolderDestinations()
+    const selected = folderDialogDestinationOptions.value.find((option) => option.value === folderDialog.targetParentId)
+    if (!selected || selected.disabled) {
+      folderDialog.targetParentId = ''
+    }
+  } catch (error) {
+    setMessages('', error.message)
+    closeFolderDialog()
+  } finally {
+    folderDialog.loading = false
+  }
+}
+
+function closeFolderDialog() {
+  folderDialog.open = false
+  folderDialog.title = '새 폴더 만들기'
+  folderDialog.folderName = ''
+  folderDialog.folders = []
+  folderDialog.targetParentId = ''
+  folderDialog.loading = false
+  folderDialog.saving = false
+  folderDialog.successMessage = '폴더를 만들었습니다.'
+}
+
+async function confirmFolderDialog() {
+  if (!canConfirmFolderDialog.value) {
+    setMessages('', selectedFolderDialogDestination.value?.disabled ? '잠긴 폴더에는 새 폴더를 만들 수 없습니다.' : '폴더 이름과 위치를 확인해 주세요.')
+    return
+  }
+
+  const targetParentId = folderDialog.targetParentId === '' ? null : Number(folderDialog.targetParentId)
+  const successMessage = folderDialog.successMessage
+  folderDialog.saving = true
+
+  try {
+    await createDriveFolder({
+      folderName: folderDialog.folderName.trim(),
+      parentId: targetParentId,
+    })
+    closeFolderDialog()
+    setMessages(successMessage)
+    activeTab.value = 'drive'
+    pageFilters.parentId = targetParentId
+    pageFilters.page = 0
+    await Promise.all([loadDrivePage(), loadHomeSummary(), loadRecentFiles()])
+  } catch (error) {
+    setMessages('', error.message)
+  } finally {
+    folderDialog.saving = false
+  }
 }
 
 async function promptRename(item) {
@@ -2369,6 +2456,76 @@ onBeforeUnmount(() => {
                 <span :style="{ width: `${uploadProgress.percent}%` }"></span>
               </div>
               <small>{{ uploadProgress.percent }}%</small>
+            </div>
+          </div>
+        </div>
+
+        <div v-if="folderDialog.open" class="travel-modal" @click.self="closeFolderDialog">
+          <div class="travel-modal__dialog drive-folder-modal">
+            <div class="travel-modal__header">
+              <div>
+                <h2>{{ folderDialog.title }}</h2>
+                <p>폴더 이름과 저장할 위치를 선택합니다.</p>
+              </div>
+              <button class="button button--ghost" type="button" @click="closeFolderDialog">닫기</button>
+            </div>
+            <div class="travel-modal__body drive-folder-modal__body">
+              <section class="panel panel--compact">
+                <div class="panel__header">
+                  <div>
+                    <h3>폴더 정보</h3>
+                    <p>선택한 위치에 새 폴더가 만들어지고 바로 해당 위치로 이동합니다.</p>
+                  </div>
+                </div>
+                <label class="field">
+                  <span class="field__label">폴더 이름</span>
+                  <input
+                    v-model="folderDialog.folderName"
+                    class="drive-input"
+                    type="text"
+                    maxlength="255"
+                    placeholder="예: 2026 일본 여행"
+                    @keyup.enter="confirmFolderDialog"
+                  />
+                </label>
+                <div class="drive-folder-modal__preview">
+                  <span>생성 위치</span>
+                  <strong>{{ selectedFolderDialogDestination?.path || '내 드라이브' }}</strong>
+                </div>
+              </section>
+
+              <section class="panel panel--compact">
+                <div class="panel__header">
+                  <div>
+                    <h3>위치 선택</h3>
+                    <p>잠긴 폴더에는 새 폴더를 만들 수 없습니다.</p>
+                  </div>
+                </div>
+                <div v-if="folderDialog.loading" class="panel__empty">폴더 목록을 불러오는 중입니다.</div>
+                <div v-else class="drive-move-destination-list">
+                  <button
+                    v-for="option in folderDialogDestinationOptions"
+                    :key="`folder-dest-${option.value || 'root'}`"
+                    class="drive-move-destination"
+                    :class="{ 'drive-move-destination--active': folderDialog.targetParentId === option.value }"
+                    type="button"
+                    :disabled="option.disabled"
+                    @click="folderDialog.targetParentId = option.value"
+                  >
+                    <span class="drive-move-destination__icon">{{ option.value ? 'DIR' : 'ROOT' }}</span>
+                    <span class="drive-move-destination__copy">
+                      <strong>{{ option.label }}</strong>
+                      <small>{{ option.path }}{{ option.disabled ? ' · 잠김' : '' }}</small>
+                    </span>
+                  </button>
+                </div>
+                <div class="entry-editor__actions">
+                  <button class="button button--ghost" type="button" @click="closeFolderDialog">취소</button>
+                  <button class="button button--primary" type="button" :disabled="!canConfirmFolderDialog" @click="confirmFolderDialog">
+                    {{ folderDialog.saving ? '생성 중' : '폴더 만들기' }}
+                  </button>
+                </div>
+              </section>
             </div>
           </div>
         </div>

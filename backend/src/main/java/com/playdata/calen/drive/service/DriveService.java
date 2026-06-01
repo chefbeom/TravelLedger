@@ -161,8 +161,10 @@ public class DriveService {
         }
 
         DriveItem folder = new DriveItem();
+        DriveItem parent = resolveParentFolder(owner.getId(), request.parentId());
+        ensureUnlocked(parent);
         folder.setOwner(owner);
-        folder.setParent(resolveParentFolder(owner.getId(), request.parentId()));
+        folder.setParent(parent);
         folder.setItemType(DriveItemType.FOLDER);
         folder.setOriginalName(request.folderName().trim());
         folder.setExtension("");
@@ -349,8 +351,10 @@ public class DriveService {
 
     private DriveItem resolveUploadParentFolder(AppUser owner, DriveDtos.UploadCompleteRequest request) {
         DriveItem parent = resolveParentFolder(owner.getId(), request.parentId());
+        ensureUnlocked(parent);
         for (String folderName : extractRelativeFolderSegments(request.relativePath())) {
             parent = findOrCreateUploadFolder(owner, parent, folderName);
+            ensureUnlocked(parent);
         }
         return parent;
     }
@@ -381,6 +385,7 @@ public class DriveService {
     }
 
     private DriveItem findOrCreateUploadFolder(AppUser owner, DriveItem parent, String folderName) {
+        ensureUnlocked(parent);
         Long parentId = parent != null ? parent.getId() : null;
         return driveItemRepository.findAllByOwner_Id(owner.getId()).stream()
                 .filter(DriveItem::isFolder)

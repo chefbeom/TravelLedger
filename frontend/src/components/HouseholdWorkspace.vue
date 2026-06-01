@@ -1366,8 +1366,8 @@ function normalizeCategorySearchText(value) {
   return String(value || '').replace(/\s+/g, '').toLowerCase()
 }
 
-function findExpenseCategoryGroupByKeywords(keywords) {
-  const groups = categories.value.filter((group) => group.entryType === 'EXPENSE')
+function findCategoryGroupByKeywords(entryType, keywords) {
+  const groups = categories.value.filter((group) => group.entryType === entryType)
   return groups.find((group) => {
     const name = normalizeCategorySearchText(group.name)
     return keywords.some((keyword) => name.includes(normalizeCategorySearchText(keyword)))
@@ -1385,17 +1385,23 @@ function findCategoryDetailByKeywords(groupId, keywords) {
   }) || group.details[0] || null
 }
 
-async function startTravelLedgerEntry() {
+async function startTravelLedgerEntry(entryType = 'EXPENSE') {
+  const normalizedEntryType = entryType === 'INCOME' ? 'INCOME' : 'EXPENSE'
   householdTab.value = 'calendar'
   resetEntryForm({ entryDate: statsControls.anchorDate || householdAnchorDate.value || today })
-  entryForm.entryType = 'EXPENSE'
-  entryForm.title = '여행 : '
+  entryForm.entryType = normalizedEntryType
+  entryForm.title = normalizedEntryType === 'INCOME' ? '여행 수입 : ' : '여행 : '
   entryForm.memo = '여행 가계부'
 
-  const travelGroup = findExpenseCategoryGroupByKeywords(['여행', '교통', '숙박', '문화', '생활'])
+  const travelGroup = normalizedEntryType === 'INCOME'
+    ? findCategoryGroupByKeywords('INCOME', ['여행', '정산', '환급', '수입', '외화'])
+    : findCategoryGroupByKeywords('EXPENSE', ['여행', '교통', '숙박', '문화', '생활'])
   if (travelGroup?.id) {
     entryForm.categoryGroupId = String(travelGroup.id)
-    const travelDetail = findCategoryDetailByKeywords(travelGroup.id, ['여행', '숙소', '교통', '항공', '식비', '입장', '기타'])
+    const travelDetailKeywords = normalizedEntryType === 'INCOME'
+      ? ['여행', '정산', '환급', '수입', '기타']
+      : ['여행', '숙소', '교통', '항공', '식비', '입장', '기타']
+    const travelDetail = findCategoryDetailByKeywords(travelGroup.id, travelDetailKeywords)
     entryForm.categoryDetailId = travelDetail?.id ? String(travelDetail.id) : ''
   }
 
@@ -1404,9 +1410,11 @@ async function startTravelLedgerEntry() {
   calendarWorkspaceRef.value?.scrollToEntryEditor?.()
 }
 
-async function openTravelLedgerSearch(keyword = '여행') {
+async function openTravelLedgerSearch(payload = '여행') {
+  const keyword = typeof payload === 'object' && payload !== null ? payload.keyword : payload
+  const entryType = typeof payload === 'object' && payload !== null ? payload.entryType : ''
   searchForm.keyword = String(keyword || '여행').trim() || '여행'
-  searchForm.entryType = 'EXPENSE'
+  searchForm.entryType = entryType === 'INCOME' || entryType === 'EXPENSE' ? entryType : ''
   searchForm.paymentMethodId = ''
   searchForm.categoryGroupId = ''
   searchForm.categoryDetailId = ''

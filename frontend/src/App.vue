@@ -25,8 +25,8 @@ const legacyFeatureItems = [
   {
     key: 'travel-money',
     number: '2',
-    title: '여행 예산',
-    description: '여행 계획, 예산안, 실제 지출과 요약 통계를 함께 관리합니다.',
+    title: '여행 돈 장부',
+    description: '필요할 때만 여행 예산안과 지출 기록을 보조 화면에서 관리합니다.',
   },
   {
     key: 'travel-log',
@@ -77,7 +77,7 @@ const featureItems = [
     key: 'travel',
     number: '2',
     title: '여행',
-    description: '여행 설정, 여행 가계부, 여행 로그, 내 지도와 사진 기능을 한 워크스페이스에서 이어서 관리합니다.',
+    description: '지도 기록, 장소 방문, GPX 경로와 여행 사진을 한 워크스페이스에서 이어서 관리합니다.',
   },
   {
     key: 'drive',
@@ -111,7 +111,7 @@ const routeMeta = {
   },
   travel: {
     title: '여행',
-    description: '여행 설정, 여행 가계부, 여행 로그, 내 지도와 사진 기능을 하나의 여행 워크스페이스에서 사용합니다.',
+    description: '지도 기록, 장소 방문, GPX 경로와 여행 사진을 하나의 여행 워크스페이스에서 사용합니다.',
   },
   drive: {
     title: 'CalenDrive',
@@ -162,7 +162,7 @@ const correctedFeatureItems = [
     key: 'travel',
     number: '2',
     title: '여행',
-    description: '여행 설정, 여행 가계부, 여행 로그, 내 지도와 사진 기능을 한 워크스페이스에서 관리합니다.',
+    description: '지도 기록, 장소 방문, GPX 경로와 여행 사진을 한 워크스페이스에서 관리합니다.',
   },
   {
     key: 'drive',
@@ -191,7 +191,7 @@ const correctedRouteMeta = {
   },
   travel: {
     title: '여행',
-    description: '여행 설정, 여행 가계부, 여행 로그, 내 지도와 사진 기능을 한 워크스페이스에서 관리합니다.',
+    description: '지도 기록, 장소 방문, GPX 경로와 여행 사진을 한 워크스페이스에서 관리합니다.',
   },
   drive: {
     title: 'CalenDrive',
@@ -222,7 +222,7 @@ const normalizedFeatureItems = [
     key: 'travel',
     number: '2',
     title: '여행',
-    description: '여행 설정, 여행 가계부, 여행 로그, 내 지도와 사진 기능을 한 워크스페이스에서 관리합니다.',
+    description: '지도 기록, 장소 방문, GPX 경로와 여행 사진을 한 워크스페이스에서 관리합니다.',
   },
   {
     key: 'drive',
@@ -250,7 +250,7 @@ const normalizedRouteMeta = {
   },
   travel: {
     title: '여행',
-    description: '여행 설정, 여행 가계부, 여행 로그, 내 지도와 사진 기능을 한 워크스페이스에서 사용합니다.',
+    description: '지도 기록, 장소 방문, GPX 경로와 여행 사진을 한 워크스페이스에서 사용합니다.',
   },
   drive: {
     title: 'CalenDrive',

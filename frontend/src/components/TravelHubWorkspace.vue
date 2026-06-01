@@ -295,6 +295,36 @@ const emptyTravelPlanMessage = computed(() => {
   return '먼저 여행을 만들어야 예산, 이동 경로, 사진첩 기능을 이어서 사용할 수 있습니다.'
 })
 
+function formatTravelPlanActivityMeta(plan) {
+  if (!plan) {
+    return ''
+  }
+
+  if (props.route === 'travel-money') {
+    return `${planStatusLabel(plan.status)} / ${formatCurrency(plan.actualTotalKrw)}`
+  }
+
+  const memoryCount = Number(plan.memoryRecordCount || 0)
+  const photoCount = Number(plan.mediaItemCount || 0)
+  const routeCount = Number(plan.routeSegmentCount || 0)
+  return `${planStatusLabel(plan.status)} / 기록 ${memoryCount}건 · 사진 ${photoCount}장 · 경로 ${routeCount}개`
+}
+
+function formatTravelPlanBannerMeta(plan) {
+  if (!plan) {
+    return ''
+  }
+
+  if (props.route === 'travel-money') {
+    return `${planStatusLabel(plan.status)} / ${plan.headCount || 1}명 / ${plan.homeCurrency || 'KRW'}`
+  }
+
+  const memoryCount = Number(plan.memoryRecordCount || 0)
+  const photoCount = Number(plan.mediaItemCount || 0)
+  const routeCount = Number(plan.routeSegmentCount || 0)
+  return `${planStatusLabel(plan.status)} / ${plan.headCount || 1}명 / 기록 ${memoryCount}건 · 사진 ${photoCount}장 · 경로 ${routeCount}개`
+}
+
 function parseIsoDate(value) {
   const [year, month, day] = String(value || '').split('-').map((item) => Number(item))
   if (!year || !month || !day) {
@@ -1883,7 +1913,7 @@ async function openPortfolioMemoryEditor(payload) {
       <div v-if="travelPlan" class="travel-plan-banner" :style="{ '--travel-plan-color': travelPlan.colorHex || '#3182F6' }">
         <strong>{{ travelPlan.destination || '목적지 미정' }}</strong>
         <span>{{ travelPlan.startDate }} - {{ travelPlan.endDate }}</span>
-        <small>{{ planStatusLabel(travelPlan.status) }} / {{ travelPlan.headCount }}명 / {{ travelPlan.homeCurrency }}</small>
+        <small>{{ formatTravelPlanBannerMeta(travelPlan) }}</small>
       </div>
       <p v-else class="panel__empty">{{ emptyTravelPlanMessage }}</p>
     </section>
@@ -1908,7 +1938,7 @@ async function openPortfolioMemoryEditor(payload) {
             <strong>{{ plan.name }}</strong>
             <span>{{ plan.destination || '목적지 미정' }}</span>
             <small>{{ formatDate(plan.startDate) }} - {{ formatDate(plan.endDate) }}</small>
-            <small>{{ planStatusLabel(plan.status) }} / {{ formatCurrency(plan.actualTotalKrw) }}</small>
+            <small>{{ formatTravelPlanActivityMeta(plan) }}</small>
           </button>
         </div>
       </section>

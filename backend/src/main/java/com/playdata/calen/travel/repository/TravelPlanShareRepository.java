@@ -1,6 +1,7 @@
 package com.playdata.calen.travel.repository;
 
 import com.playdata.calen.travel.domain.TravelPlanShare;
+import com.playdata.calen.travel.domain.TravelPlanStatus;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.domain.Page;
@@ -14,6 +15,17 @@ public interface TravelPlanShareRepository extends JpaRepository<TravelPlanShare
     List<TravelPlanShare> findAllByRecipientIdOrderByCreatedAtDescIdDesc(Long recipientId);
 
     Page<TravelPlanShare> findAllByRecipientIdOrderByCreatedAtDescIdDesc(Long recipientId, Pageable pageable);
+
+    List<TravelPlanShare> findAllByRecipientIdAndPlan_StatusOrderByCreatedAtDescIdDesc(
+            Long recipientId,
+            TravelPlanStatus status
+    );
+
+    Page<TravelPlanShare> findAllByRecipientIdAndPlan_StatusOrderByCreatedAtDescIdDesc(
+            Long recipientId,
+            TravelPlanStatus status,
+            Pageable pageable
+    );
 
     List<TravelPlanShare> findAllByPlanIdAndSharedByIdOrderByCreatedAtDescIdDesc(Long planId, Long sharedById);
 

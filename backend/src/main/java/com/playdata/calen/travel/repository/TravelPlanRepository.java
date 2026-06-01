@@ -14,5 +14,7 @@ public interface TravelPlanRepository extends JpaRepository<TravelPlan, Long> {
 
     List<TravelPlan> findAllByPublicSharedTrueOrderByPublicSharedAtDescStartDateDescIdDesc();
 
+    List<TravelPlan> findAllByPublicSharedTrueAndStatusOrderByPublicSharedAtDescStartDateDescIdDesc(TravelPlanStatus status);
+
     Optional<TravelPlan> findByIdAndOwnerId(Long id, Long ownerId);
 }

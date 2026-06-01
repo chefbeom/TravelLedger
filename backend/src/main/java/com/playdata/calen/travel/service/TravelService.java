@@ -801,6 +801,9 @@ public class TravelService {
     public TravelPlanPublicShareResponse updatePlanPublicShare(Long userId, Long planId, Boolean publicShared) {
         TravelPlan plan = getRequiredPlan(userId, planId);
         boolean nextPublicShared = Boolean.TRUE.equals(publicShared);
+        if (nextPublicShared) {
+            ensureCompletedPlan(plan);
+        }
 
         plan.setPublicShared(nextPublicShared);
         plan.setPublicSharedAt(nextPublicShared ? LocalDateTime.now() : null);
@@ -818,8 +821,9 @@ public class TravelService {
         appUserService.getRequiredUser(userId);
         int normalizedPage = normalizePage(page);
         int normalizedSize = normalizeSize(size);
-        Page<TravelPlanShare> sharePage = travelPlanShareRepository.findAllByRecipientIdOrderByCreatedAtDescIdDesc(
+        Page<TravelPlanShare> sharePage = travelPlanShareRepository.findAllByRecipientIdAndPlan_StatusOrderByCreatedAtDescIdDesc(
                 userId,
+                TravelPlanStatus.COMPLETED,
                 PageRequest.of(normalizedPage, normalizedSize)
         );
         List<TravelSharedExhibitSummaryResponse> items = sharePage.getContent().stream()
@@ -838,6 +842,9 @@ public class TravelService {
         appUserService.getRequiredUser(userId);
         TravelPlanShare share = getRequiredShare(userId, shareId);
         TravelPlan plan = share.getPlan();
+        if (!isCompletedPlan(plan)) {
+            throw new NotFoundException("Shared travel exhibit was not found.");
+        }
         Long ownerId = plan.getOwner().getId();
 
         TravelPlanDetailResponse detail = toPlanDetail(
@@ -1129,7 +1136,7 @@ public class TravelService {
         boolean canReadPublicMedia = isMemoryRecord(record)
                 && mediaAsset.getMediaType() == TravelMediaType.PHOTO
                 && (Boolean.TRUE.equals(record.getSharedWithCommunity())
-                || Boolean.TRUE.equals(mediaAsset.getPlan().getPublicShared()));
+                || (Boolean.TRUE.equals(mediaAsset.getPlan().getPublicShared()) && isCompletedPlan(mediaAsset.getPlan())));
         if (!canReadPublicMedia) {
             throw new NotFoundException("Shared media not found.");
         }
@@ -1139,6 +1146,9 @@ public class TravelService {
     public MediaDownload getSharedExhibitMediaDownload(Long userId, Long shareId, Long mediaId) {
         appUserService.getRequiredUser(userId);
         TravelPlanShare share = getRequiredShare(userId, shareId);
+        if (!isCompletedPlan(share.getPlan())) {
+            throw new NotFoundException("Shared exhibit media not found.");
+        }
         TravelMediaAsset mediaAsset = travelMediaAssetRepository.findById(mediaId)
                 .orElseThrow(() -> new NotFoundException("Shared exhibit media not found."));
 
@@ -1287,9 +1297,9 @@ public class TravelService {
     private List<PublicAtlasPlanAccess> getPublicAtlasPlanAccesses(Long userId) {
         Map<Long, PublicAtlasPlanAccess> accessByPlanId = new LinkedHashMap<>();
 
-        travelPlanRepository.findAllByPublicSharedTrueOrderByPublicSharedAtDescStartDateDescIdDesc()
+        travelPlanRepository.findAllByPublicSharedTrueAndStatusOrderByPublicSharedAtDescStartDateDescIdDesc(TravelPlanStatus.COMPLETED)
                 .forEach(plan -> accessByPlanId.put(plan.getId(), new PublicAtlasPlanAccess(plan, null)));
-        travelPlanShareRepository.findAllByRecipientIdOrderByCreatedAtDescIdDesc(userId)
+        travelPlanShareRepository.findAllByRecipientIdAndPlan_StatusOrderByCreatedAtDescIdDesc(userId, TravelPlanStatus.COMPLETED)
                 .forEach(share -> accessByPlanId.putIfAbsent(
                         share.getPlan().getId(),
                         new PublicAtlasPlanAccess(share.getPlan(), share)
@@ -2504,6 +2514,10 @@ public class TravelService {
         if (resolvePlanStatus(plan.getStatus()) != TravelPlanStatus.COMPLETED) {
             throw new BadRequestException("완성된 여행만 다른 사용자에게 공유할 수 있습니다.");
         }
+    }
+
+    private boolean isCompletedPlan(TravelPlan plan) {
+        return plan != null && resolvePlanStatus(plan.getStatus()) == TravelPlanStatus.COMPLETED;
     }
 
     private TravelPlanShareResponse toTravelPlanShareResponse(TravelPlanShare share) {

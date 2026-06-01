@@ -9975,6 +9975,13 @@ textarea {
   color: var(--text-soft);
 }
 
+.drive-download-link-item__actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 8px;
+}
+
 .drive-share-search-result,
 .drive-share-recipient,
 .drive-share-group {
@@ -10727,7 +10734,9 @@ textarea {
   .drive-shell__hero,
   .drive-profile-modal__hero,
   .drive-share-recipient,
-  .drive-share-search-result {
+  .drive-share-search-result,
+  .drive-download-link-item,
+  .drive-download-link-item__actions {
     align-items: flex-start;
     flex-direction: column;
   }

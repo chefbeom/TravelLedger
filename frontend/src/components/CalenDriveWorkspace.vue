@@ -1374,8 +1374,8 @@ async function revokePublicDownloadLink(link) {
   }
 }
 
-async function copyPublicDownloadLink() {
-  const url = shareDialog.generatedDownloadLink?.downloadUrl
+async function copyPublicDownloadLink(link = shareDialog.generatedDownloadLink) {
+  const url = link?.downloadUrl
   if (!url) {
     return
   }
@@ -2328,14 +2328,24 @@ onBeforeUnmount(() => {
                         {{ formatTimestamp(link.expiresAt) }}까지
                       </small>
                     </div>
-                    <button
-                      class="button button--ghost"
-                      type="button"
-                      :disabled="!link.available || shareDialog.revokingLinkId === link.id"
-                      @click="revokePublicDownloadLink(link)"
-                    >
-                      {{ shareDialog.revokingLinkId === link.id ? '회수 중' : '링크 회수' }}
-                    </button>
+                    <div class="drive-download-link-item__actions">
+                      <button
+                        class="button button--ghost"
+                        type="button"
+                        :disabled="!link.available || !link.downloadUrl"
+                        @click="copyPublicDownloadLink(link)"
+                      >
+                        링크 복사
+                      </button>
+                      <button
+                        class="button button--ghost"
+                        type="button"
+                        :disabled="!link.available || shareDialog.revokingLinkId === link.id"
+                        @click="revokePublicDownloadLink(link)"
+                      >
+                        {{ shareDialog.revokingLinkId === link.id ? '회수 중' : '링크 회수' }}
+                      </button>
+                    </div>
                   </article>
                 </div>
               </section>

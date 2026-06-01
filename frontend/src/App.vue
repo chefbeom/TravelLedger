@@ -326,7 +326,7 @@ const inviteForm = reactive({
   rememberDevice: true,
 })
 
-const travelRouteKeys = new Set(['travel', 'travel-money', 'travel-log', 'photo-album', 'my-map'])
+const travelRouteKeys = new Set(['travel', 'travel-money', 'travel-log', 'photo-album', 'my-map', 'public-trips'])
 const pageMeta = computed(() => {
   const routeKey = travelRouteKeys.has(activeRoute.value) ? 'travel' : activeRoute.value
   return normalizedRouteMeta[routeKey] || normalizedRouteMeta.launcher
@@ -363,6 +363,13 @@ function resolveRouteState(hash) {
   if (route === 'family-album') {
     return {
       route: 'travel',
+      token: '',
+    }
+  }
+
+  if (route === 'public-trips') {
+    return {
+      route: 'public-trips',
       token: '',
     }
   }

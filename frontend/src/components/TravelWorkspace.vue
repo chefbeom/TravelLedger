@@ -11,33 +11,79 @@ const props = defineProps({
   },
 })
 
-const primaryTab = ref('finance')
-const atlasTab = ref('map')
-const hubRoute = ref('travel-money')
+const primaryTab = ref('map')
+const hubRoute = ref('travel-log')
+const hubInitialLogTab = ref('overview')
+const hubInitialMoneyTab = ref('records')
+
+const travelModes = [
+  {
+    key: 'map',
+    label: '기록 지도',
+    meta: '사진과 이동 경로',
+    badge: 'MAP',
+  },
+  {
+    key: 'memories',
+    label: '장소 기록',
+    meta: '방문지와 사진 업로드',
+    badge: 'VISIT',
+  },
+  {
+    key: 'routes',
+    label: 'GPX 경로',
+    meta: '이동 기록 정리',
+    badge: 'GPX',
+  },
+  {
+    key: 'photos',
+    label: '내 사진',
+    meta: '썸네일 사진첩',
+    badge: 'PHOTO',
+  },
+  {
+    key: 'share',
+    label: '여행 공유',
+    meta: '공개/선택 공유',
+    badge: 'SHARE',
+  },
+  {
+    key: 'finance',
+    label: '여행 가계부',
+    meta: '예산과 지출 보조 관리',
+    badge: 'LEDGER',
+  },
+]
 
 function applyRouteState(route) {
   switch (route) {
     case 'travel-log':
-      primaryTab.value = 'log'
+      primaryTab.value = 'memories'
       hubRoute.value = 'travel-log'
+      hubInitialLogTab.value = 'memories'
       break
     case 'photo-album':
-      primaryTab.value = 'atlas'
-      atlasTab.value = 'album'
+      primaryTab.value = 'photos'
       hubRoute.value = 'photo-album'
       break
     case 'my-map':
-      primaryTab.value = 'atlas'
-      atlasTab.value = 'map'
+    case 'travel':
+      primaryTab.value = 'map'
+      hubRoute.value = 'travel-log'
+      hubInitialLogTab.value = 'overview'
       break
     case 'public-trips':
       primaryTab.value = 'share'
       break
     case 'travel-money':
-    case 'travel':
-    default:
       primaryTab.value = 'finance'
       hubRoute.value = 'travel-money'
+      hubInitialMoneyTab.value = 'records'
+      break
+    default:
+      primaryTab.value = 'map'
+      hubRoute.value = 'travel-log'
+      hubInitialLogTab.value = 'overview'
       break
   }
 }
@@ -45,27 +91,62 @@ function applyRouteState(route) {
 function openFinance() {
   primaryTab.value = 'finance'
   hubRoute.value = 'travel-money'
+  hubInitialMoneyTab.value = 'records'
 }
 
-function openLog() {
-  primaryTab.value = 'log'
+function openMemories() {
+  primaryTab.value = 'memories'
   hubRoute.value = 'travel-log'
+  hubInitialLogTab.value = 'memories'
 }
 
-function openAtlas(tab = 'map') {
-  primaryTab.value = 'atlas'
-  atlasTab.value = tab
-  if (tab === 'album') {
-    hubRoute.value = 'photo-album'
-  }
+function openRoutes() {
+  primaryTab.value = 'routes'
+  hubRoute.value = 'travel-log'
+  hubInitialLogTab.value = 'routes'
+}
+
+function openMap() {
+  primaryTab.value = 'map'
+  hubRoute.value = 'travel-log'
+  hubInitialLogTab.value = 'overview'
+}
+
+function openPhotos() {
+  primaryTab.value = 'photos'
+  hubRoute.value = 'photo-album'
 }
 
 function openShare() {
   primaryTab.value = 'share'
 }
 
+function openMode(mode) {
+  switch (mode) {
+    case 'finance':
+      openFinance()
+      break
+    case 'memories':
+      openMemories()
+      break
+    case 'routes':
+      openRoutes()
+      break
+    case 'photos':
+      openPhotos()
+      break
+    case 'share':
+      openShare()
+      break
+    case 'map':
+    default:
+      openMap()
+      break
+  }
+}
+
 function handleRequestOpenLog() {
-  openLog()
+  openMemories()
 }
 
 function handleRequestOpenFinance() {
@@ -76,8 +157,8 @@ function handleRequestOpenPublicTrips() {
   openShare()
 }
 
-const isHubVisible = computed(() => primaryTab.value !== 'share' && !(primaryTab.value === 'atlas' && atlasTab.value === 'map'))
-const isIntegratedPhotoMode = computed(() => primaryTab.value === 'atlas' && atlasTab.value === 'album')
+const isHubVisible = computed(() => primaryTab.value !== 'share' && primaryTab.value !== 'map')
+const isIntegratedPhotoMode = computed(() => primaryTab.value === 'photos')
 
 watch(
   () => props.route,
@@ -90,33 +171,32 @@ watch(
 
 <template>
   <div class="workspace-stack travel-unified-shell">
-    <section class="panel">
+    <section class="panel travel-record-switcher">
       <div class="panel__header">
         <div>
-          <h2>여행 기능 통합</h2>
-          <p>여행 가계부, 여행 로그, 지도와 사진 기능을 한 흐름에서 사용할 수 있도록 정리했습니다.</p>
+          <h2>여행 기록</h2>
+          <p>지도, 방문 기록, GPX 경로, 사진첩을 중심으로 여행을 정리합니다.</p>
         </div>
-        <span class="panel__badge">여행 워크스페이스</span>
+        <span class="panel__badge">Record first</span>
       </div>
-      <div class="scope-toggle scope-toggle--wrap">
-        <button class="button" :class="{ 'button--primary': primaryTab === 'finance' }" @click="openFinance">여행 가계부</button>
-        <button class="button" :class="{ 'button--primary': primaryTab === 'log' }" @click="openLog">여행 로그</button>
-        <button class="button" :class="{ 'button--primary': primaryTab === 'atlas' }" @click="openAtlas(atlasTab)">지도·사진</button>
-        <button class="button" :class="{ 'button--primary': primaryTab === 'share' }" @click="openShare">여행 공유</button>
+      <div class="travel-record-switcher__grid">
+        <button
+          v-for="mode in travelModes"
+          :key="mode.key"
+          class="travel-record-switcher__card"
+          :class="{ 'travel-record-switcher__card--active': primaryTab === mode.key }"
+          type="button"
+          @click="openMode(mode.key)"
+        >
+          <span>{{ mode.badge }}</span>
+          <strong>{{ mode.label }}</strong>
+          <small>{{ mode.meta }}</small>
+        </button>
       </div>
-      <small class="field__hint">여행 설정은 가계부에서, 내 사진 지도는 지도·사진에서, 공개된 여행은 여행 공유에서 확인합니다.</small>
     </section>
 
-    <section v-if="primaryTab === 'atlas'" class="panel">
-      <div class="scope-toggle scope-toggle--wrap">
-        <button class="button" :class="{ 'button--primary': atlasTab === 'map' }" @click="openAtlas('map')">내 지도</button>
-        <button class="button" :class="{ 'button--primary': atlasTab === 'album' }" @click="openAtlas('album')">사진첩·전시</button>
-      </div>
-      <small class="field__hint">내 여행 사진은 개인 지도와 사진첩에서 관리하고, 퍼블릭 공개 여행은 상단의 여행 공유 기능에서 둘러볼 수 있습니다.</small>
-    </section>
-
-    <div v-show="primaryTab === 'atlas' && atlasTab === 'map'" class="workspace-stack">
-      <TravelMyMapWorkspace :active="primaryTab === 'atlas' && atlasTab === 'map'" />
+    <div v-show="primaryTab === 'map'" class="workspace-stack">
+      <TravelMyMapWorkspace :active="primaryTab === 'map'" />
     </div>
 
     <div v-if="primaryTab === 'share'" class="workspace-stack">
@@ -128,6 +208,8 @@ watch(
         :route="hubRoute"
         :integrated-mode="true"
         :integrated-photo-mode="isIntegratedPhotoMode"
+        :initial-log-tab="hubInitialLogTab"
+        :initial-money-tab="hubInitialMoneyTab"
         @request-open-finance="handleRequestOpenFinance"
         @request-open-log="handleRequestOpenLog"
         @request-open-public-trips="handleRequestOpenPublicTrips"

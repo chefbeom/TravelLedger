@@ -69,6 +69,14 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
+  initialLogTab: {
+    type: String,
+    default: 'overview',
+  },
+  initialMoneyTab: {
+    type: String,
+    default: 'planner',
+  },
 })
 
 const emit = defineEmits(['request-open-finance', 'request-open-log', 'request-open-public-trips'])
@@ -204,6 +212,9 @@ const sharedExhibitPageCount = ref(1)
 const sharedExhibitTotal = ref(0)
 const selectedRecordDate = ref('')
 const photoAlbumGroupMode = ref('all')
+
+const allowedLogTabs = new Set(['overview', 'memories', 'routes'])
+const allowedMoneyTabs = new Set(['planner', 'budget', 'records', 'stats'])
 
 const planStatusOptions = computed(() => travelCategories.value.planStatuses?.length ? travelCategories.value.planStatuses : fallbackCategories.planStatuses)
 const budgetCategoryOptions = computed(() => travelCategories.value.budgetCategories?.length ? travelCategories.value.budgetCategories : fallbackCategories.budgetCategories)
@@ -702,6 +713,19 @@ watch(
     }
     if (route !== 'photo-album' && integratedPhotoMode && photoAlbumGroupMode.value !== 'all') {
       photoAlbumGroupMode.value = 'all'
+    }
+  },
+  { immediate: true },
+)
+
+watch(
+  () => [props.route, props.initialLogTab, props.initialMoneyTab],
+  ([route, initialLogTab, initialMoneyTab]) => {
+    if (route === 'travel-log' && allowedLogTabs.has(initialLogTab)) {
+      logTab.value = initialLogTab
+    }
+    if (route === 'travel-money' && allowedMoneyTabs.has(initialMoneyTab)) {
+      moneyTab.value = initialMoneyTab
     }
   },
   { immediate: true },

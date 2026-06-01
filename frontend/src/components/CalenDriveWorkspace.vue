@@ -92,6 +92,15 @@ const moveDialog = reactive({
   saving: false,
 })
 
+const sharedSaveDialog = reactive({
+  open: false,
+  targets: [],
+  folders: [],
+  targetParentId: '',
+  loading: false,
+  saving: false,
+})
+
 const folderDialog = reactive({
   open: false,
   title: '새 폴더 만들기',
@@ -460,6 +469,13 @@ const moveDialogTitle = computed(() => {
   return `${moveDialog.targets.length}개 항목`
 })
 
+const sharedSaveDialogTitle = computed(() => {
+  if (sharedSaveDialog.targets.length === 1) {
+    return sharedSaveDialog.targets[0]?.fileOriginName || '공유 파일'
+  }
+  return `${sharedSaveDialog.targets.length}개 공유 파일`
+})
+
 const moveDialogBlockedFolderIds = computed(() => {
   const blocked = new Set(
     moveDialog.targets
@@ -505,6 +521,33 @@ const canConfirmMoveDialog = computed(() =>
     && !selectedMoveDialogDestination.value.disabled
     && !moveDialog.loading
     && !moveDialog.saving,
+)
+
+const sharedSaveDestinationOptions = computed(() => [
+  {
+    value: '',
+    label: '내 드라이브',
+    path: '최상위 위치',
+    disabled: false,
+  },
+  ...sharedSaveDialog.folders.map((folder) => ({
+    value: String(folder.id),
+    label: folder.fileOriginName,
+    path: folder.path || folder.fileOriginName,
+    disabled: Boolean(folder.lockedFile),
+  })),
+])
+
+const selectedSharedSaveDestination = computed(() =>
+  sharedSaveDestinationOptions.value.find((option) => option.value === sharedSaveDialog.targetParentId),
+)
+
+const canConfirmSharedSaveDialog = computed(() =>
+  Boolean(sharedSaveDialog.targets.length)
+    && Boolean(selectedSharedSaveDestination.value)
+    && !selectedSharedSaveDestination.value.disabled
+    && !sharedSaveDialog.loading
+    && !sharedSaveDialog.saving,
 )
 
 const folderDialogDestinationOptions = computed(() => [
@@ -778,6 +821,10 @@ async function handleDriveDrop(event) {
 async function handleDriveKeyboard(event) {
   if (folderDialog.open && event.key === 'Escape') {
     closeFolderDialog()
+    return
+  }
+  if (sharedSaveDialog.open && event.key === 'Escape') {
+    closeSharedSaveDialog()
     return
   }
   if (moveDialog.open && event.key === 'Escape') {
@@ -1643,28 +1690,76 @@ async function cancelAllSharesForFile(item) {
 }
 
 async function handleSaveSharedFile(item) {
-  try {
-    await saveSharedDriveFile(item.fileId, pageFilters.parentId)
-    setMessages('공유 파일을 내 드라이브로 저장했습니다.')
-    await Promise.all([loadSharedData(), loadDrivePage(), loadHomeSummary()])
-    clearSelection()
-  } catch (error) {
-    setMessages('', error.message)
-  }
+  await openSharedSaveDialog(item ? [item] : [])
 }
 
 async function saveSelectedSharedFiles() {
-  if (!selectedItems.value.length) {
+  await openSharedSaveDialog(selectedItems.value)
+}
+
+async function openSharedSaveDialog(targets = []) {
+  const nextTargets = (targets || []).filter((item) => item?.fileId)
+  if (!nextTargets.length) {
+    setMessages('', '내 드라이브에 저장할 공유 파일을 선택해 주세요.')
     return
   }
 
+  sharedSaveDialog.open = true
+  sharedSaveDialog.targets = nextTargets
+  sharedSaveDialog.folders = []
+  sharedSaveDialog.targetParentId = ''
+  sharedSaveDialog.loading = true
+  sharedSaveDialog.saving = false
+  setMessages()
+
   try {
-    await Promise.all(selectedItems.value.map((item) => saveSharedDriveFile(item.fileId, pageFilters.parentId)))
-    setMessages('선택한 공유 파일을 내 드라이브로 저장했습니다.')
-    await Promise.all([loadSharedData(), loadDrivePage(), loadHomeSummary()])
-    clearSelection()
+    sharedSaveDialog.folders = await fetchDriveFolderDestinations()
   } catch (error) {
     setMessages('', error.message)
+    closeSharedSaveDialog()
+  } finally {
+    sharedSaveDialog.loading = false
+  }
+}
+
+function closeSharedSaveDialog() {
+  sharedSaveDialog.open = false
+  sharedSaveDialog.targets = []
+  sharedSaveDialog.folders = []
+  sharedSaveDialog.targetParentId = ''
+  sharedSaveDialog.loading = false
+  sharedSaveDialog.saving = false
+}
+
+async function confirmSharedSaveDialog() {
+  const selectedOption = sharedSaveDestinationOptions.value.find((option) => option.value === sharedSaveDialog.targetParentId)
+  if (!selectedOption || selectedOption.disabled) {
+    setMessages('', selectedOption?.disabled ? '잠긴 폴더에는 공유 파일을 저장할 수 없습니다.' : '저장 위치를 확인해 주세요.')
+    return
+  }
+
+  const targetFileIds = sharedSaveDialog.targets.map((item) => item.fileId).filter(Boolean)
+  if (!targetFileIds.length) {
+    setMessages('', '저장할 공유 파일이 없습니다.')
+    return
+  }
+
+  sharedSaveDialog.saving = true
+  try {
+    const saveCount = targetFileIds.length
+    const targetParentId = sharedSaveDialog.targetParentId === '' ? null : Number(sharedSaveDialog.targetParentId)
+    await Promise.all(targetFileIds.map((fileId) => saveSharedDriveFile(fileId, targetParentId)))
+    closeSharedSaveDialog()
+    activeTab.value = 'drive'
+    pageFilters.parentId = targetParentId
+    pageFilters.page = 0
+    clearSelection()
+    setMessages(saveCount === 1 ? '공유 파일을 내 드라이브로 저장했습니다.' : `${saveCount}개 공유 파일을 내 드라이브로 저장했습니다.`)
+    await Promise.all([loadSharedData(), loadDrivePage(), loadHomeSummary(), loadRecentFiles()])
+  } catch (error) {
+    setMessages('', error.message)
+  } finally {
+    sharedSaveDialog.saving = false
   }
 }
 
@@ -2583,6 +2678,70 @@ onBeforeUnmount(() => {
                   <button class="button button--ghost" type="button" @click="closeMoveDialog">취소</button>
                   <button class="button button--primary" type="button" :disabled="!canConfirmMoveDialog" @click="confirmMoveDialog">
                     {{ moveDialog.saving ? '이동 중' : '선택 위치로 이동' }}
+                  </button>
+                </div>
+              </section>
+            </div>
+          </div>
+        </div>
+
+        <div v-if="sharedSaveDialog.open" class="travel-modal" @click.self="closeSharedSaveDialog">
+          <div class="travel-modal__dialog drive-shared-save-modal">
+            <div class="travel-modal__header">
+              <div>
+                <h2>내 드라이브에 저장</h2>
+                <p>{{ sharedSaveDialogTitle }}을 저장할 위치를 선택합니다.</p>
+              </div>
+              <button class="button button--ghost" type="button" @click="closeSharedSaveDialog">닫기</button>
+            </div>
+            <div class="travel-modal__body drive-shared-save-modal__body">
+              <section class="panel panel--compact">
+                <div class="panel__header">
+                  <div>
+                    <h3>저장 위치</h3>
+                    <p>잠긴 폴더에는 공유 파일을 저장할 수 없습니다.</p>
+                  </div>
+                </div>
+                <div v-if="sharedSaveDialog.loading" class="panel__empty">폴더 목록을 불러오는 중입니다.</div>
+                <div v-else class="drive-move-destination-list">
+                  <button
+                    v-for="option in sharedSaveDestinationOptions"
+                    :key="`shared-save-dest-${option.value || 'root'}`"
+                    class="drive-move-destination"
+                    :class="{ 'drive-move-destination--active': sharedSaveDialog.targetParentId === option.value }"
+                    type="button"
+                    :disabled="option.disabled"
+                    @click="sharedSaveDialog.targetParentId = option.value"
+                  >
+                    <span class="drive-move-destination__icon">{{ option.value ? 'DIR' : 'ROOT' }}</span>
+                    <span class="drive-move-destination__copy">
+                      <strong>{{ option.label }}</strong>
+                      <small>{{ option.path }}{{ option.disabled ? ' · 저장 불가' : '' }}</small>
+                    </span>
+                  </button>
+                </div>
+              </section>
+
+              <section class="panel panel--compact">
+                <div class="panel__header">
+                  <div>
+                    <h3>선택 파일</h3>
+                    <p>{{ sharedSaveDialog.targets.length }}개 공유 파일이 선택되어 있습니다.</p>
+                  </div>
+                </div>
+                <div class="drive-shared-save-target-list">
+                  <span v-for="item in sharedSaveDialog.targets" :key="item.id">
+                    {{ item.fileOriginName }}
+                  </span>
+                </div>
+                <div class="drive-folder-modal__preview">
+                  <span>저장 위치</span>
+                  <strong>{{ selectedSharedSaveDestination?.path || '내 드라이브' }}</strong>
+                </div>
+                <div class="entry-editor__actions">
+                  <button class="button button--ghost" type="button" @click="closeSharedSaveDialog">취소</button>
+                  <button class="button button--primary" type="button" :disabled="!canConfirmSharedSaveDialog" @click="confirmSharedSaveDialog">
+                    {{ sharedSaveDialog.saving ? '저장 중' : '선택 위치에 저장' }}
                   </button>
                 </div>
               </section>

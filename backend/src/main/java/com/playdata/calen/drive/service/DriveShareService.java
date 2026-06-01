@@ -309,6 +309,7 @@ public class DriveShareService {
         if (!parent.isFolder()) {
             throw new BadRequestException("폴더만 상위 위치로 선택할 수 있습니다.");
         }
+        driveService.ensureUnlocked(parent);
         return parent;
     }
 

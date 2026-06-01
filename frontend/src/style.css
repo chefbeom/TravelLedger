@@ -9838,6 +9838,7 @@ textarea {
 .drive-share-modal,
 .drive-move-modal,
 .drive-folder-modal,
+.drive-shared-save-modal,
 .drive-profile-modal {
   width: min(880px, calc(100vw - 32px));
 }
@@ -9845,13 +9846,15 @@ textarea {
 .drive-share-modal__body,
 .drive-move-modal__body,
 .drive-folder-modal__body,
+.drive-shared-save-modal__body,
 .drive-profile-modal__body {
   display: grid;
   gap: 16px;
 }
 
 .drive-move-modal__body,
-.drive-folder-modal__body {
+.drive-folder-modal__body,
+.drive-shared-save-modal__body {
   grid-template-columns: minmax(0, 1.35fr) minmax(260px, 0.65fr);
   align-items: start;
 }
@@ -9932,7 +9935,8 @@ textarea {
 
 .drive-move-destination__copy strong,
 .drive-move-destination__copy small,
-.drive-move-target-list span {
+.drive-move-target-list span,
+.drive-shared-save-target-list span {
   overflow-wrap: anywhere;
 }
 
@@ -9946,7 +9950,16 @@ textarea {
   gap: 8px;
 }
 
-.drive-move-target-list span {
+.drive-shared-save-target-list {
+  display: grid;
+  gap: 8px;
+  max-height: 220px;
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.drive-move-target-list span,
+.drive-shared-save-target-list span {
   display: inline-flex;
   min-height: 34px;
   align-items: center;
@@ -10873,12 +10886,14 @@ textarea {
   .drive-share-modal,
   .drive-move-modal,
   .drive-folder-modal,
+  .drive-shared-save-modal,
   .drive-profile-modal {
     width: min(100vw - 20px, 880px);
   }
 
   .drive-move-modal__body,
-  .drive-folder-modal__body {
+  .drive-folder-modal__body,
+  .drive-shared-save-modal__body {
     grid-template-columns: 1fr;
   }
 
@@ -10920,6 +10935,7 @@ textarea {
 :root[data-theme='toss'] .drive-file-card,
 :root[data-theme='toss'] .drive-move-destination,
 :root[data-theme='toss'] .drive-move-target-list span,
+:root[data-theme='toss'] .drive-shared-save-target-list span,
 :root[data-theme='toss'] .family-category-card,
 :root[data-theme='toss'] .family-album-focus {
   background: var(--surface-soft) !important;

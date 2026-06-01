@@ -1313,6 +1313,16 @@ export function createDriveDownloadLink(fileId, payload) {
   })
 }
 
+export function fetchDriveDownloadLinks(fileId) {
+  return request(`/file/${fileId}/download-links`)
+}
+
+export function revokeDriveDownloadLink(linkId) {
+  return request(`/file/download-links/${linkId}`, {
+    method: 'DELETE',
+  })
+}
+
 export function shareDriveFiles(fileIds, recipientLoginId) {
   return request('/file/share', {
     method: 'POST',

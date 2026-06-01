@@ -89,6 +89,22 @@ public class DriveFileController {
         return driveDownloadLinkService.createLink(currentUser.userId(), fileId, request);
     }
 
+    @GetMapping("/{fileId}/download-links")
+    public List<DriveDtos.DownloadLinkResponse> listDownloadLinks(
+            @AuthenticationPrincipal AppUserPrincipal currentUser,
+            @PathVariable Long fileId
+    ) {
+        return driveDownloadLinkService.listLinks(currentUser.userId(), fileId);
+    }
+
+    @DeleteMapping("/download-links/{linkId}")
+    public DriveDtos.DownloadLinkResponse revokeDownloadLink(
+            @AuthenticationPrincipal AppUserPrincipal currentUser,
+            @PathVariable Long linkId
+    ) {
+        return driveDownloadLinkService.revokeLink(currentUser.userId(), linkId);
+    }
+
     @GetMapping("/public-download/{token}")
     public ResponseEntity<byte[]> publicDownload(@PathVariable String token) {
         return buildDownloadResponse(driveDownloadLinkService.downloadByToken(token));

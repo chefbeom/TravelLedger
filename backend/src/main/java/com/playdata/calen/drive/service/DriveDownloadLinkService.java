@@ -9,6 +9,7 @@ import com.playdata.calen.drive.repository.DriveDownloadLinkRepository;
 import java.security.SecureRandom;
 import java.time.LocalDateTime;
 import java.util.Base64;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -51,6 +52,23 @@ public class DriveDownloadLinkService {
         return toResponse(driveDownloadLinkRepository.save(link));
     }
 
+    public List<DriveDtos.DownloadLinkResponse> listLinks(Long userId, Long fileId) {
+        DriveItem item = driveService.getOwnedFile(userId, fileId);
+        return driveDownloadLinkRepository.findAllByItem_IdAndOwner_IdOrderByCreatedAtDesc(item.getId(), userId).stream()
+                .map(this::toResponse)
+                .toList();
+    }
+
+    @Transactional
+    public DriveDtos.DownloadLinkResponse revokeLink(Long userId, Long linkId) {
+        DriveDownloadLink link = driveDownloadLinkRepository.findByIdAndOwner_Id(linkId, userId)
+                .orElseThrow(() -> new NotFoundException("Download link was not found."));
+        if (link.getRevokedAt() == null) {
+            link.setRevokedAt(LocalDateTime.now());
+        }
+        return toResponse(link);
+    }
+
     @Transactional
     public DriveService.DriveFilePayload downloadByToken(String token) {
         if (token == null || token.isBlank()) {
@@ -78,12 +96,16 @@ public class DriveDownloadLinkService {
     }
 
     private DriveDtos.DownloadLinkResponse toResponse(DriveDownloadLink link) {
+        LocalDateTime now = LocalDateTime.now();
         return DriveDtos.DownloadLinkResponse.builder()
+                .id(link.getId())
                 .downloadUrl("/api/file/public-download/" + link.getToken())
                 .createdAt(link.getCreatedAt())
                 .expiresAt(link.getExpiresAt())
                 .maxDownloads(link.getMaxDownloads())
                 .downloadCount(link.getDownloadCount())
+                .revokedAt(link.getRevokedAt())
+                .available(!link.isExpired(now) && !link.isDownloadLimitReached())
                 .build();
     }
 

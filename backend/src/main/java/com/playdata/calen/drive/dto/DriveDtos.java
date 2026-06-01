@@ -200,11 +200,14 @@ public final class DriveDtos {
 
     @Builder
     public record DownloadLinkResponse(
+            Long id,
             String downloadUrl,
             LocalDateTime createdAt,
             LocalDateTime expiresAt,
             Integer maxDownloads,
-            Integer downloadCount
+            Integer downloadCount,
+            LocalDateTime revokedAt,
+            Boolean available
     ) {
     }
 

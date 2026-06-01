@@ -9726,6 +9726,31 @@ textarea {
   color: var(--text-soft);
 }
 
+.drive-download-link-list {
+  display: grid;
+  gap: 10px;
+}
+
+.drive-download-link-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--surface-soft);
+}
+
+.drive-download-link-item strong,
+.drive-download-link-item small {
+  display: block;
+}
+
+.drive-download-link-item small {
+  color: var(--text-soft);
+}
+
 .drive-share-search-result,
 .drive-share-recipient,
 .drive-share-group {

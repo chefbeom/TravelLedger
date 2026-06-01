@@ -12,6 +12,7 @@ import {
   deleteDriveItem,
   fetchDriveAdminDashboard,
   fetchDriveHomeSummary,
+  fetchDriveDownloadLinks,
   fetchDrivePage,
   fetchDriveProfileSettings,
   fetchDriveRecentFiles,
@@ -26,6 +27,7 @@ import {
   renameDriveItem,
   restoreDriveItem,
   restoreDriveItems,
+  revokeDriveDownloadLink,
   saveSharedDriveFile,
   searchDriveShareRecipients,
   shareDriveFiles,
@@ -113,6 +115,7 @@ const shareDialog = reactive({
   open: false,
   targets: [],
   existingRecipients: [],
+  downloadLinks: [],
   searchQuery: '',
   searchResults: [],
   selectedRecipientLoginId: '',
@@ -122,6 +125,7 @@ const shareDialog = reactive({
   linkExpiresInMinutes: 60,
   linkMaxDownloads: 10,
   generatedDownloadLink: null,
+  revokingLinkId: null,
 })
 
 const adminCapacityForm = reactive({
@@ -1194,6 +1198,7 @@ async function openShareDialog(targets) {
   shareDialog.open = true
   shareDialog.targets = normalizedTargets
   shareDialog.existingRecipients = []
+  shareDialog.downloadLinks = []
   shareDialog.searchQuery = ''
   shareDialog.searchResults = []
   shareDialog.selectedRecipientLoginId = ''
@@ -1203,11 +1208,17 @@ async function openShareDialog(targets) {
   shareDialog.linkExpiresInMinutes = 60
   shareDialog.linkMaxDownloads = 10
   shareDialog.generatedDownloadLink = null
+  shareDialog.revokingLinkId = null
   setMessages()
 
   try {
     if (normalizedTargets.length === 1) {
-      shareDialog.existingRecipients = await fetchDriveShareInfo(normalizedTargets[0].id)
+      const [recipients, downloadLinks] = await Promise.all([
+        fetchDriveShareInfo(normalizedTargets[0].id),
+        fetchDriveDownloadLinks(normalizedTargets[0].id),
+      ])
+      shareDialog.existingRecipients = recipients
+      shareDialog.downloadLinks = downloadLinks.map(normalizeDownloadLink)
     }
   } catch (error) {
     setMessages('', error.message)
@@ -1220,6 +1231,7 @@ function closeShareDialog() {
   shareDialog.open = false
   shareDialog.targets = []
   shareDialog.existingRecipients = []
+  shareDialog.downloadLinks = []
   shareDialog.searchQuery = ''
   shareDialog.searchResults = []
   shareDialog.selectedRecipientLoginId = ''
@@ -1229,6 +1241,7 @@ function closeShareDialog() {
   shareDialog.linkExpiresInMinutes = 60
   shareDialog.linkMaxDownloads = 10
   shareDialog.generatedDownloadLink = null
+  shareDialog.revokingLinkId = null
 }
 
 async function searchRecipients() {
@@ -1286,6 +1299,13 @@ function resolvePublicDownloadUrl(path) {
   }
 }
 
+function normalizeDownloadLink(link) {
+  return {
+    ...link,
+    downloadUrl: resolvePublicDownloadUrl(link?.downloadUrl),
+  }
+}
+
 async function createPublicDownloadLink() {
   const target = shareDialog.targets[0]
   if (!target?.id) {
@@ -1299,15 +1319,40 @@ async function createPublicDownloadLink() {
       expiresInMinutes: Number(shareDialog.linkExpiresInMinutes || 60),
       maxDownloads: Number(shareDialog.linkMaxDownloads || 10),
     })
-    shareDialog.generatedDownloadLink = {
-      ...response,
-      downloadUrl: resolvePublicDownloadUrl(response.downloadUrl),
-    }
+    const normalized = normalizeDownloadLink(response)
+    shareDialog.generatedDownloadLink = normalized
+    shareDialog.downloadLinks = [
+      normalized,
+      ...shareDialog.downloadLinks.filter((link) => link.id !== normalized.id),
+    ]
     setMessages('다운로드 링크를 만들었습니다.')
   } catch (error) {
     setMessages('', error.message)
   } finally {
     shareDialog.linkSaving = false
+  }
+}
+
+async function revokePublicDownloadLink(link) {
+  if (!link?.id || shareDialog.revokingLinkId) {
+    return
+  }
+
+  shareDialog.revokingLinkId = link.id
+  try {
+    const response = await revokeDriveDownloadLink(link.id)
+    const normalized = normalizeDownloadLink(response)
+    shareDialog.downloadLinks = shareDialog.downloadLinks.map((candidate) =>
+      candidate.id === normalized.id ? normalized : candidate,
+    )
+    if (shareDialog.generatedDownloadLink?.id === normalized.id) {
+      shareDialog.generatedDownloadLink = normalized
+    }
+    setMessages('다운로드 링크를 비활성화했습니다.')
+  } catch (error) {
+    setMessages('', error.message)
+  } finally {
+    shareDialog.revokingLinkId = null
   }
 }
 
@@ -2229,7 +2274,7 @@ onBeforeUnmount(() => {
                     {{ shareDialog.linkSaving ? '링크 생성 중' : '링크 생성' }}
                   </button>
                   <button
-                    v-if="shareDialog.generatedDownloadLink?.downloadUrl"
+                    v-if="shareDialog.generatedDownloadLink?.downloadUrl && shareDialog.generatedDownloadLink.available"
                     class="button button--ghost"
                     type="button"
                     @click="copyPublicDownloadLink"
@@ -2240,9 +2285,29 @@ onBeforeUnmount(() => {
                 <div v-if="shareDialog.generatedDownloadLink?.downloadUrl" class="drive-generated-link">
                   <input class="drive-input" type="text" readonly :value="shareDialog.generatedDownloadLink.downloadUrl" />
                   <small>
+                    {{ shareDialog.generatedDownloadLink.available ? '사용 가능' : '사용 불가' }} ·
                     {{ shareDialog.generatedDownloadLink.maxDownloads }}회까지,
                     {{ formatTimestamp(shareDialog.generatedDownloadLink.expiresAt) }}까지 사용 가능합니다.
                   </small>
+                </div>
+                <div v-if="shareDialog.downloadLinks.length" class="drive-download-link-list">
+                  <article v-for="link in shareDialog.downloadLinks" :key="link.id" class="drive-download-link-item">
+                    <div>
+                      <strong>{{ link.available ? '사용 가능' : '사용 불가' }}</strong>
+                      <small>
+                        {{ link.downloadCount }} / {{ link.maxDownloads }}회 ·
+                        {{ formatTimestamp(link.expiresAt) }}까지
+                      </small>
+                    </div>
+                    <button
+                      class="button button--ghost"
+                      type="button"
+                      :disabled="!link.available || shareDialog.revokingLinkId === link.id"
+                      @click="revokePublicDownloadLink(link)"
+                    >
+                      {{ shareDialog.revokingLinkId === link.id ? '회수 중' : '링크 회수' }}
+                    </button>
+                  </article>
                 </div>
               </section>
 

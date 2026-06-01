@@ -71,6 +71,7 @@ const moveTargetId = ref('')
 const moveDestinationFolders = ref([])
 const moveDestinationLoading = ref(false)
 const moveDestinationsHydrated = ref(false)
+const folderTreeExpandedIds = ref([])
 const detailsPanelOpen = ref(true)
 const dragDepth = ref(0)
 
@@ -327,6 +328,63 @@ const moveDestinationOptions = computed(() => {
     })),
   ]
 })
+
+const folderTreeChildrenByParent = computed(() => {
+  const childrenByParent = new Map()
+  for (const folder of moveDestinationFolders.value) {
+    const parentKey = folder.parentId == null ? '' : String(folder.parentId)
+    const current = childrenByParent.get(parentKey) || []
+    current.push(folder)
+    childrenByParent.set(parentKey, current)
+  }
+
+  for (const children of childrenByParent.values()) {
+    children.sort((left, right) =>
+      String(left.fileOriginName || '').localeCompare(String(right.fileOriginName || ''), 'ko-KR'),
+    )
+  }
+
+  return childrenByParent
+})
+
+const folderTreeVisibleNodes = computed(() => {
+  const expandedIds = new Set(folderTreeExpandedIds.value)
+  const visited = new Set()
+
+  function visit(parentId = '', depth = 0) {
+    const children = folderTreeChildrenByParent.value.get(parentId) || []
+    const nodes = []
+
+    for (const folder of children) {
+      const folderId = String(folder.id)
+      if (visited.has(folderId)) {
+        continue
+      }
+      visited.add(folderId)
+
+      const childFolders = folderTreeChildrenByParent.value.get(folderId) || []
+      const expanded = expandedIds.has(folderId)
+      nodes.push({
+        ...folder,
+        id: folderId,
+        depth,
+        expanded,
+        hasChildren: childFolders.length > 0,
+        active: activeTab.value === 'drive' && String(pageFilters.parentId ?? '') === folderId,
+      })
+
+      if (expanded) {
+        nodes.push(...visit(folderId, depth + 1))
+      }
+    }
+
+    return nodes
+  }
+
+  return visit('', 0)
+})
+
+const isDriveRootActive = computed(() => activeTab.value === 'drive' && pageFilters.parentId == null)
 
 const driveSummaryCards = computed(() => {
   const totalVisible = browserItems.value.length
@@ -929,12 +987,12 @@ async function loadTrashFiles() {
 }
 
 function invalidateMoveDestinations() {
-  moveDestinationFolders.value = []
   moveDestinationsHydrated.value = false
+  reloadMoveDestinations()
 }
 
-async function ensureMoveDestinationsLoaded() {
-  if (moveDestinationLoading.value || moveDestinationsHydrated.value) {
+async function reloadMoveDestinations() {
+  if (moveDestinationLoading.value) {
     return
   }
 
@@ -947,6 +1005,14 @@ async function ensureMoveDestinationsLoaded() {
   } finally {
     moveDestinationLoading.value = false
   }
+}
+
+async function ensureMoveDestinationsLoaded() {
+  if (moveDestinationLoading.value || moveDestinationsHydrated.value) {
+    return
+  }
+
+  await reloadMoveDestinations()
 }
 
 async function loadSharedData() {
@@ -1067,6 +1133,32 @@ function openFolder(item) {
   activeTab.value = 'drive'
 }
 
+function openFolderTreeRoot() {
+  pageFilters.parentId = null
+  pageFilters.page = 0
+  activeTab.value = 'drive'
+}
+
+function openFolderTreeNode(node) {
+  pageFilters.parentId = Number(node.id)
+  pageFilters.page = 0
+  activeTab.value = 'drive'
+}
+
+function toggleFolderTreeNode(node) {
+  if (!node?.hasChildren) {
+    return
+  }
+
+  const folderId = String(node.id)
+  if (folderTreeExpandedIds.value.includes(folderId)) {
+    folderTreeExpandedIds.value = folderTreeExpandedIds.value.filter((id) => id !== folderId)
+    return
+  }
+
+  folderTreeExpandedIds.value = [...folderTreeExpandedIds.value, folderId]
+}
+
 function navigateToBreadcrumb(crumbId) {
   pageFilters.parentId = crumbId ?? null
   pageFilters.page = 0
@@ -1100,6 +1192,18 @@ async function promptCreateFolderInside(item) {
   await openFolderDialog(item.id, {
     title: `"${item.fileOriginName}" 안에 폴더 만들기`,
     successMessage: `"${item.fileOriginName}" 안에 폴더를 만들었습니다.`,
+  })
+}
+
+async function promptCreateFolderFromTree(node) {
+  if (!node?.id || node.lockedFile) {
+    setMessages('', '잠긴 폴더에는 새 폴더를 만들 수 없습니다. 먼저 잠금을 해제해 주세요.')
+    return
+  }
+
+  await openFolderDialog(Number(node.id), {
+    title: `"${node.fileOriginName}" 안에 폴더 만들기`,
+    successMessage: `"${node.fileOriginName}" 안에 폴더를 만들었습니다.`,
   })
 }
 
@@ -1878,6 +1982,7 @@ onMounted(() => {
   document.addEventListener('click', closeContextMenu)
   window.addEventListener('keydown', handleDriveKeyboard)
   loadActiveTab()
+  ensureMoveDestinationsLoaded()
 })
 
 onBeforeUnmount(() => {
@@ -1927,6 +2032,65 @@ onBeforeUnmount(() => {
           </span>
         </button>
       </nav>
+
+      <section v-if="!sidebarCollapsed" class="drive-sidebar__folders">
+        <div class="drive-sidebar__folders-head">
+          <strong>폴더</strong>
+          <button class="drive-sidebar__folders-refresh" type="button" :disabled="moveDestinationLoading" @click="reloadMoveDestinations">
+            {{ moveDestinationLoading ? '갱신 중' : '새로고침' }}
+          </button>
+        </div>
+        <div class="drive-folder-tree">
+          <div class="drive-folder-tree__row" :class="{ 'drive-folder-tree__row--active': isDriveRootActive }">
+            <span class="drive-folder-tree__spacer"></span>
+            <button class="drive-folder-tree__name" type="button" @click="openFolderTreeRoot">
+              <span class="drive-folder-tree__icon">드</span>
+              <span>내 드라이브</span>
+            </button>
+            <button class="drive-folder-tree__action" type="button" title="루트에 폴더 만들기" @click="openFolderDialog(null)">
+              +
+            </button>
+          </div>
+
+          <p v-if="moveDestinationLoading && !folderTreeVisibleNodes.length" class="drive-folder-tree__empty">
+            폴더를 불러오고 있습니다.
+          </p>
+          <p v-else-if="!folderTreeVisibleNodes.length" class="drive-folder-tree__empty">
+            아직 만든 폴더가 없습니다.
+          </p>
+
+          <div
+            v-for="node in folderTreeVisibleNodes"
+            :key="`folder-tree-${node.id}`"
+            class="drive-folder-tree__row"
+            :class="{ 'drive-folder-tree__row--active': node.active, 'drive-folder-tree__row--locked': node.lockedFile }"
+            :style="{ paddingLeft: `${Math.min(node.depth, 5) * 12}px` }"
+          >
+            <button
+              class="drive-folder-tree__toggle"
+              type="button"
+              :disabled="!node.hasChildren"
+              :aria-label="node.expanded ? '폴더 접기' : '폴더 펼치기'"
+              @click="toggleFolderTreeNode(node)"
+            >
+              {{ node.hasChildren ? (node.expanded ? '⌄' : '›') : '' }}
+            </button>
+            <button class="drive-folder-tree__name" type="button" @click="openFolderTreeNode(node)">
+              <span class="drive-folder-tree__icon">폴</span>
+              <span>{{ node.fileOriginName }}</span>
+            </button>
+            <button
+              class="drive-folder-tree__action"
+              type="button"
+              :disabled="node.lockedFile"
+              title="하위 폴더 만들기"
+              @click="promptCreateFolderFromTree(node)"
+            >
+              +
+            </button>
+          </div>
+        </div>
+      </section>
 
       <div v-if="!sidebarCollapsed" class="drive-sidebar__storage">
         <div class="drive-sidebar__storage-head">

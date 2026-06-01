@@ -10327,6 +10327,133 @@ textarea {
   color: var(--text-soft);
 }
 
+.drive-sidebar__folders {
+  display: grid;
+  gap: 10px;
+  min-height: 0;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: color-mix(in srgb, var(--surface-soft) 78%, transparent);
+}
+
+.drive-sidebar__folders-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.drive-sidebar__folders-refresh {
+  border: 0;
+  background: transparent;
+  color: var(--blue);
+  font-size: 0.78rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.drive-sidebar__folders-refresh:disabled {
+  color: var(--text-soft);
+  cursor: progress;
+}
+
+.drive-folder-tree {
+  display: grid;
+  gap: 4px;
+  max-height: 280px;
+  overflow: auto;
+  padding-right: 2px;
+}
+
+.drive-folder-tree__row {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr) 24px;
+  align-items: center;
+  gap: 4px;
+  min-height: 36px;
+  border-radius: 12px;
+  color: var(--text);
+}
+
+.drive-folder-tree__row:hover {
+  background: var(--surface-soft-strong);
+}
+
+.drive-folder-tree__row--active {
+  background: rgba(49, 130, 246, 0.13);
+  color: var(--blue);
+}
+
+.drive-folder-tree__row--locked {
+  opacity: 0.68;
+}
+
+.drive-folder-tree__toggle,
+.drive-folder-tree__name,
+.drive-folder-tree__action {
+  border: 0;
+  background: transparent;
+  color: inherit;
+}
+
+.drive-folder-tree__toggle,
+.drive-folder-tree__spacer,
+.drive-folder-tree__action {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 28px;
+  border-radius: 8px;
+  font-weight: 800;
+}
+
+.drive-folder-tree__toggle:not(:disabled):hover,
+.drive-folder-tree__action:not(:disabled):hover {
+  background: var(--surface);
+}
+
+.drive-folder-tree__toggle:disabled,
+.drive-folder-tree__action:disabled {
+  opacity: 0.38;
+}
+
+.drive-folder-tree__name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 7px 0;
+  text-align: left;
+  font-weight: 750;
+}
+
+.drive-folder-tree__name span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.drive-folder-tree__icon {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--blue);
+  font-size: 0.7rem;
+  font-weight: 900;
+}
+
+.drive-folder-tree__empty {
+  margin: 0;
+  padding: 10px 4px;
+  color: var(--text-soft);
+  font-size: 0.82rem;
+}
+
 .drive-sidebar__storage {
   margin-top: auto;
   display: grid;

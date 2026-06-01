@@ -36,7 +36,9 @@ class LedgerCsvFormatterTest {
                 "카페",
                 12L,
                 "신한카드",
-                PaymentMethodKind.CARD
+                PaymentMethodKind.CARD,
+                null,
+                null
         );
 
         byte[] csv = LedgerCsvFormatter.format(List.of(entry));

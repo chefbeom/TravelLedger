@@ -104,6 +104,8 @@ public class LedgerEntryService {
     private static final String FIELD_CATEGORY_GROUP = "categoryGroup";
     private static final String FIELD_CATEGORY_DETAIL = "categoryDetail";
     private static final String FIELD_PAYMENT_METHOD = "paymentMethod";
+    private static final String FIELD_TRAVEL_PLAN_ID = "travelPlanId";
+    private static final String FIELD_TRAVEL_RECORD_ID = "travelRecordId";
 
     public List<LedgerEntryResponse> getEntries(Long userId, LocalDate from, LocalDate to) {
         appUserService.getRequiredUser(userId);
@@ -610,6 +612,8 @@ public class LedgerEntryService {
                 entry.getCategoryDetail() != null ? entry.getCategoryDetail().getName() : null,
                 entry.getPaymentMethod().getId(),
                 entry.getPaymentMethod().getName(),
+                entry.getTravelPlanId(),
+                entry.getTravelRecordId(),
                 entry.getDeletedAt()
         );
     }
@@ -642,6 +646,8 @@ public class LedgerEntryService {
         entry.setCategoryGroup(group);
         entry.setCategoryDetail(detail);
         entry.setPaymentMethod(paymentMethod);
+        entry.setTravelPlanId(snapshot.travelPlanId());
+        entry.setTravelRecordId(snapshot.travelRecordId());
         entry.setDeletedAt(snapshot.deletedAt());
     }
 
@@ -700,6 +706,8 @@ public class LedgerEntryService {
         String categoryDetailName = base.categoryDetailName();
         Long paymentMethodId = base.paymentMethodId();
         String paymentMethodName = base.paymentMethodName();
+        Long travelPlanId = base.travelPlanId();
+        Long travelRecordId = base.travelRecordId();
 
         for (LedgerEntryChangeFieldPatch field : patch.fields()) {
             String rawValue = useBeforeValue ? field.beforeRaw() : field.afterRaw();
@@ -728,6 +736,8 @@ public class LedgerEntryService {
                     paymentMethodId = parseNullableLong(rawValue);
                     paymentMethodName = displayValue;
                 }
+                case FIELD_TRAVEL_PLAN_ID -> travelPlanId = parseNullableLong(rawValue);
+                case FIELD_TRAVEL_RECORD_ID -> travelRecordId = parseNullableLong(rawValue);
                 default -> {
                     // Older clients may ignore unknown fields. Restore keeps the current value for them.
                 }
@@ -753,6 +763,8 @@ public class LedgerEntryService {
                 categoryDetailName,
                 paymentMethodId,
                 paymentMethodName,
+                travelPlanId,
+                travelRecordId,
                 base.deletedAt()
         );
     }
@@ -800,6 +812,8 @@ public class LedgerEntryService {
         addPatch(fields, FIELD_CATEGORY_GROUP, "대분류", beforeSnapshot.categoryGroupName(), afterSnapshot.categoryGroupName(), toRawValue(beforeSnapshot.categoryGroupId()), toRawValue(afterSnapshot.categoryGroupId()));
         addPatch(fields, FIELD_CATEGORY_DETAIL, "소분류", beforeSnapshot.categoryDetailName(), afterSnapshot.categoryDetailName(), toRawValue(beforeSnapshot.categoryDetailId()), toRawValue(afterSnapshot.categoryDetailId()));
         addPatch(fields, FIELD_PAYMENT_METHOD, "결제수단", beforeSnapshot.paymentMethodName(), afterSnapshot.paymentMethodName(), toRawValue(beforeSnapshot.paymentMethodId()), toRawValue(afterSnapshot.paymentMethodId()));
+        addPatch(fields, FIELD_TRAVEL_PLAN_ID, "Travel plan", beforeSnapshot.travelPlanId(), afterSnapshot.travelPlanId(), toRawValue(beforeSnapshot.travelPlanId()), toRawValue(afterSnapshot.travelPlanId()));
+        addPatch(fields, FIELD_TRAVEL_RECORD_ID, "Travel record", beforeSnapshot.travelRecordId(), afterSnapshot.travelRecordId(), toRawValue(beforeSnapshot.travelRecordId()), toRawValue(afterSnapshot.travelRecordId()));
         addPatch(fields, FIELD_FOREIGN_CURRENCY, "외화 통화", beforeSnapshot.foreignCurrencyCode(), afterSnapshot.foreignCurrencyCode(), beforeSnapshot.foreignCurrencyCode(), afterSnapshot.foreignCurrencyCode());
         addPatch(fields, FIELD_FOREIGN_AMOUNT, "외화 금액", formatAmount(beforeSnapshot.foreignAmount()), formatAmount(afterSnapshot.foreignAmount()), formatAmount(beforeSnapshot.foreignAmount()), formatAmount(afterSnapshot.foreignAmount()));
         addPatch(fields, FIELD_EXCHANGE_RATE, "환율", formatAmount(beforeSnapshot.exchangeRateToKrw()), formatAmount(afterSnapshot.exchangeRateToKrw()), formatAmount(beforeSnapshot.exchangeRateToKrw()), formatAmount(afterSnapshot.exchangeRateToKrw()));
@@ -992,7 +1006,9 @@ public class LedgerEntryService {
                 entry.getCategoryDetail() != null ? entry.getCategoryDetail().getName() : null,
                 entry.getPaymentMethod().getId(),
                 paymentMethodName,
-                paymentMethodKind
+                paymentMethodKind,
+                entry.getTravelPlanId(),
+                entry.getTravelRecordId()
         );
     }
 
@@ -1031,6 +1047,8 @@ public class LedgerEntryService {
         ledgerEntry.setCategoryGroup(group);
         ledgerEntry.setCategoryDetail(detail);
         ledgerEntry.setPaymentMethod(paymentMethod);
+        ledgerEntry.setTravelPlanId(request.travelPlanId());
+        ledgerEntry.setTravelRecordId(request.travelRecordId());
     }
 
     private ForeignExchangeValues resolveForeignExchange(LedgerEntryRequest request) {
@@ -1182,6 +1200,8 @@ public class LedgerEntryService {
             String categoryDetailName,
             Long paymentMethodId,
             String paymentMethodName,
+            Long travelPlanId,
+            Long travelRecordId,
             LocalDateTime deletedAt
     ) {
     }

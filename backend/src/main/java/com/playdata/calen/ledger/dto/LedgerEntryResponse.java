@@ -27,6 +27,8 @@ public record LedgerEntryResponse(
         String categoryDetailName,
         Long paymentMethodId,
         String paymentMethodName,
-        PaymentMethodKind paymentMethodKind
+        PaymentMethodKind paymentMethodKind,
+        Long travelPlanId,
+        Long travelRecordId
 ) {
 }

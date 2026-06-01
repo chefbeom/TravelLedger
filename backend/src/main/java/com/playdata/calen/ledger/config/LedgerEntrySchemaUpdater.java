@@ -37,6 +37,8 @@ public class LedgerEntrySchemaUpdater implements ApplicationRunner {
             addColumnIfMissing(connection, "exchange_rate_to_krw", "ALTER TABLE ledger_entries ADD COLUMN exchange_rate_to_krw DECIMAL(18, 6) NULL");
             addColumnIfMissing(connection, "exchange_rate_date", "ALTER TABLE ledger_entries ADD COLUMN exchange_rate_date DATE NULL");
             addColumnIfMissing(connection, "exchange_rate_provider", "ALTER TABLE ledger_entries ADD COLUMN exchange_rate_provider VARCHAR(40) NULL");
+            addColumnIfMissing(connection, "travel_plan_id", "ALTER TABLE ledger_entries ADD COLUMN travel_plan_id BIGINT NULL");
+            addColumnIfMissing(connection, "travel_record_id", "ALTER TABLE ledger_entries ADD COLUMN travel_record_id BIGINT NULL");
         } catch (SQLException exception) {
             log.warn("Failed to verify ledger entry schema: {}", exception.getMessage());
         }

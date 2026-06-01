@@ -578,6 +578,77 @@ class LedgerEntryUserScopeIntegrationTest {
 
     @Test
     @Transactional
+    void ledgerEntryCanCarryTravelSourceAndRestoreIt() throws Exception {
+        MockHttpSession hanaSession = loginAndGetSession("hana", false);
+        AppUser hana = appUserRepository.findByLoginId("hana").orElseThrow();
+        LocalDate entryDate = LocalDate.of(2041, 6, 1);
+
+        PaymentMethod payment = savePaymentMethod(hana, "travel-linked-card-2041", true);
+        CategoryGroup group = saveCategoryGroup(hana, "travel-linked-group-2041", true, EntryType.EXPENSE);
+        CategoryDetail detail = saveCategoryDetail(group, "travel-linked-detail-2041", true);
+        LedgerEntry entry = saveLedgerEntry(hana, entryDate, "travel linked original", payment, group, detail);
+
+        Map<String, Object> firstPayload = new LinkedHashMap<>();
+        firstPayload.put("entryDate", entryDate.toString());
+        firstPayload.put("entryTime", "10:15");
+        firstPayload.put("title", "travel linked first");
+        firstPayload.put("memo", "from travel plan");
+        firstPayload.put("amount", "12000");
+        firstPayload.put("entryType", "EXPENSE");
+        firstPayload.put("categoryGroupId", group.getId());
+        firstPayload.put("categoryDetailId", detail.getId());
+        firstPayload.put("paymentMethodId", payment.getId());
+        firstPayload.put("travelPlanId", 701L);
+        firstPayload.put("travelRecordId", 1701L);
+
+        mockMvc.perform(put("/api/entries/{id}", entry.getId())
+                        .with(csrf())
+                        .session(hanaSession)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(firstPayload)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.travelPlanId").value(701))
+                .andExpect(jsonPath("$.travelRecordId").value(1701));
+
+        Map<String, Object> secondPayload = new LinkedHashMap<>(firstPayload);
+        secondPayload.put("title", "travel linked second");
+        secondPayload.put("travelPlanId", 702L);
+        secondPayload.put("travelRecordId", 1702L);
+
+        mockMvc.perform(put("/api/entries/{id}", entry.getId())
+                        .with(csrf())
+                        .session(hanaSession)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(secondPayload)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.travelPlanId").value(702))
+                .andExpect(jsonPath("$.travelRecordId").value(1702));
+
+        MvcResult historyResult = mockMvc.perform(get("/api/entries/history")
+                        .session(hanaSession)
+                        .param("page", "0")
+                        .param("size", "1"))
+                .andExpect(status().isOk())
+                .andReturn();
+        Long historyId = objectMapper.readTree(historyResult.getResponse().getContentAsString())
+                .get("content")
+                .get(0)
+                .get("id")
+                .asLong();
+
+        mockMvc.perform(post("/api/entries/history/{historyId}/restore", historyId)
+                        .with(csrf())
+                        .session(hanaSession))
+                .andExpect(status().isOk());
+
+        LedgerEntry restored = ledgerEntryRepository.findById(entry.getId()).orElseThrow();
+        assertThat(restored.getTitle()).isEqualTo("travel linked first");
+        assertThat(restored.getTravelPlanId()).isEqualTo(701L);
+        assertThat(restored.getTravelRecordId()).isEqualTo(1701L);
+    }
+
+    @Test
+    @Transactional
     void incomeEntryUpdateAllowsBlankPaymentMethod() throws Exception {
         MockHttpSession hanaSession = loginAndGetSession("hana", false);
         AppUser hana = appUserRepository.findByLoginId("hana").orElseThrow();

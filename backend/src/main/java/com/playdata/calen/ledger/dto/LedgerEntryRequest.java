@@ -26,6 +26,8 @@ public record LedgerEntryRequest(
         @NotNull(message = "Category group is required.")
         Long categoryGroupId,
         Long categoryDetailId,
-        Long paymentMethodId
+        Long paymentMethodId,
+        Long travelPlanId,
+        Long travelRecordId
 ) {
 }

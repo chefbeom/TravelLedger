@@ -97,6 +97,10 @@ function getEntrySearchText(entry) {
   ].join(' '))
 }
 
+function isTravelLinkedEntry(entry) {
+  return Boolean(entry?.travelPlanId || entry?.travelRecordId)
+}
+
 function matchesKeywordSet(searchableText, keywords) {
   return keywords.some((keyword) => searchableText.includes(normalizeSearchText(keyword)))
 }
@@ -131,7 +135,8 @@ const baseTravelEntries = computed(() =>
       const searchableText = getEntrySearchText(entry)
       const matchesTravelKeyword = matchesKeywordSet(searchableText, travelKeywords)
       const filterText = normalizeSearchText(travelKeywordFilter.value)
-      return matchesTravelKeyword && (!filterText || searchableText.includes(filterText))
+      return (matchesTravelKeyword || isTravelLinkedEntry(entry))
+        && (!filterText || searchableText.includes(filterText))
     })
     .sort((left, right) => `${right.entryDate} ${right.entryTime || ''}`.localeCompare(`${left.entryDate} ${left.entryTime || ''}`)),
 )

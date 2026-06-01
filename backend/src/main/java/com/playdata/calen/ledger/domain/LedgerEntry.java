@@ -82,6 +82,12 @@ public class LedgerEntry {
     @JoinColumn(name = "payment_method_id", nullable = false)
     private PaymentMethod paymentMethod;
 
+    @Column(name = "travel_plan_id")
+    private Long travelPlanId;
+
+    @Column(name = "travel_record_id")
+    private Long travelRecordId;
+
     @Column(name = "deleted_at")
     private LocalDateTime deletedAt;
 }

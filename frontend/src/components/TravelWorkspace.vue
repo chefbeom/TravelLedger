@@ -175,6 +175,102 @@ const travelRecentActivities = computed(() => {
     .slice(0, 6)
 })
 
+const travelVisitedPlaces = computed(() => {
+  const portfolio = travelPortfolio.value || {}
+  const memoryRecords = Array.isArray(portfolio.memoryRecords) ? portfolio.memoryRecords : []
+  const records = Array.isArray(portfolio.records) ? portfolio.records : []
+  const mediaItems = Array.isArray(portfolio.mediaItems) ? portfolio.mediaItems : []
+  const routeSegments = Array.isArray(portfolio.routeSegments) ? portfolio.routeSegments : []
+  const places = new Map()
+
+  function readPlace(source = {}) {
+    const placeName = normalizeLocationPart(source.placeName)
+    const region = normalizeLocationPart(source.region)
+    const country = normalizeLocationPart(source.country)
+    if (!placeName && !region && !country) {
+      return null
+    }
+    return { placeName, region, country }
+  }
+
+  function ensurePlace(source = {}) {
+    const place = readPlace(source)
+    if (!place) {
+      return null
+    }
+    const key = [place.country, place.region, place.placeName || place.region || place.country].join('__')
+    if (!places.has(key)) {
+      places.set(key, {
+        key,
+        placeName: place.placeName || place.region || place.country,
+        regionLabel: joinActivityMeta([place.country, place.region]),
+        planNames: new Set(),
+        memoryCount: 0,
+        ledgerCount: 0,
+        photoCount: 0,
+        routeCount: 0,
+        latestTimestamp: 0,
+      })
+    }
+    return places.get(key)
+  }
+
+  memoryRecords.forEach((record) => {
+    const row = ensurePlace(record)
+    if (!row) return
+    row.memoryCount += 1
+    row.planNames.add(record.planName)
+    row.latestTimestamp = Math.max(row.latestTimestamp, toActivityTimestamp(record.memoryDate, record.memoryTime))
+  })
+
+  records.forEach((record) => {
+    const row = ensurePlace(record)
+    if (!row) return
+    row.ledgerCount += 1
+    row.planNames.add(record.planName)
+    row.latestTimestamp = Math.max(row.latestTimestamp, toActivityTimestamp(record.expenseDate, record.expenseTime))
+  })
+
+  mediaItems
+    .filter((media) => String(media.mediaType || '').toUpperCase() === 'PHOTO')
+    .forEach((media) => {
+      const row = ensurePlace(media)
+      if (!row) return
+      row.photoCount += 1
+      row.planNames.add(media.planName)
+      row.latestTimestamp = Math.max(row.latestTimestamp, toActivityTimestamp(media.expenseDate || media.uploadedAt))
+  })
+
+  routeSegments.forEach((route) => {
+    const routeEndpoints = [
+      { placeName: route.startPlaceName, planName: route.planName },
+      { placeName: route.endPlaceName, planName: route.planName },
+    ]
+    routeEndpoints.forEach((endpoint) => {
+      const row = ensurePlace(endpoint)
+      if (!row) return
+      row.routeCount += 1
+      row.planNames.add(endpoint.planName)
+      row.latestTimestamp = Math.max(row.latestTimestamp, toActivityTimestamp(route.routeDate))
+    })
+  })
+
+  return [...places.values()]
+    .map((row) => ({
+      ...row,
+      planLabel: [...row.planNames].filter(Boolean).slice(0, 2).join(' · ') || '여행 미지정',
+      totalCount: row.memoryCount + row.ledgerCount + row.photoCount + row.routeCount,
+      visitCount: row.memoryCount + row.ledgerCount,
+    }))
+    .sort((left, right) => {
+      if (right.latestTimestamp !== left.latestTimestamp) {
+        return right.latestTimestamp - left.latestTimestamp
+      }
+      return right.totalCount - left.totalCount
+    })
+    .slice(0, 8)
+})
+
 const travelSummaryText = computed(() => {
   const summary = travelRecordSummary.value
   return `여행 ${summary.plans}개 · 장소 기록 ${summary.memories}건 · 사진 ${summary.photos}장 · GPX ${summary.routes}개`
@@ -193,6 +289,10 @@ function uniqueRecordValues(records, key) {
         .filter(Boolean),
     ),
   ]
+}
+
+function normalizeLocationPart(value) {
+  return String(value || '').trim()
 }
 
 function joinActivityMeta(parts) {
@@ -475,6 +575,36 @@ onMounted(loadTravelSummary)
           <span>{{ stat.label }}</span>
           <strong>{{ travelSummaryLoading ? '-' : stat.value.toLocaleString('ko-KR') }}</strong>
         </article>
+      </div>
+    </section>
+
+    <section class="panel travel-place-index">
+      <div class="panel__header">
+        <div>
+          <span class="panel__eyebrow">PLACE INDEX</span>
+          <h2>방문 장소 정리</h2>
+        </div>
+        <span class="panel__badge">{{ travelVisitedPlaces.length }}곳</span>
+      </div>
+      <div v-if="travelVisitedPlaces.length" class="travel-place-index__grid">
+        <button
+          v-for="place in travelVisitedPlaces"
+          :key="place.key"
+          class="travel-place-index__card"
+          type="button"
+          @click="openMemories"
+        >
+          <span>{{ place.regionLabel || '지역 미지정' }}</span>
+          <strong>{{ place.placeName }}</strong>
+          <small>{{ place.planLabel }}</small>
+          <em>
+            방문 {{ place.visitCount }} · 사진 {{ place.photoCount }} · 경로 {{ place.routeCount }}
+          </em>
+        </button>
+      </div>
+      <div v-else class="travel-place-index__empty">
+        <strong>아직 정리할 방문 장소가 없습니다.</strong>
+        <button class="button button--primary" type="button" @click="openMemories">장소 기록하기</button>
       </div>
     </section>
 

@@ -144,6 +144,11 @@ const travelRecentActivities = computed(() => {
       timestamp: toActivityTimestamp(record.memoryDate, record.memoryTime),
       shared: Boolean(record.sharedWithCommunity),
       previewUrl: '',
+      planId: record.planId || '',
+      country: record.country || '',
+      region: record.region || '',
+      placeName: record.placeName || '',
+      rawPlaceName: record.placeName || '',
     })),
     ...routeSegments.map((route) => ({
       id: `route-${route.id}`,
@@ -501,6 +506,15 @@ function openMode(mode) {
   }
 }
 
+function openActivity(activity) {
+  if (activity?.kind === 'PLACE') {
+    openPlace(activity)
+    return
+  }
+
+  openMode(activity?.mode)
+}
+
 function handleRequestOpenLog() {
   openMemories()
 }
@@ -655,7 +669,7 @@ onMounted(loadTravelSummary)
           class="travel-record-timeline__item"
           :class="`travel-record-timeline__item--${activity.kind.toLowerCase()}`"
           type="button"
-          @click="openMode(activity.mode)"
+          @click="openActivity(activity)"
         >
           <span class="travel-record-timeline__thumb">
             <img v-if="activity.previewUrl" :src="activity.previewUrl" :alt="activity.title" loading="lazy" />

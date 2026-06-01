@@ -220,7 +220,10 @@ const planStatusOptions = computed(() => travelCategories.value.planStatuses?.le
 const budgetCategoryOptions = computed(() => travelCategories.value.budgetCategories?.length ? travelCategories.value.budgetCategories : fallbackCategories.budgetCategories)
 const expenseCategoryOptions = computed(() => travelCategories.value.expenseCategories?.length ? travelCategories.value.expenseCategories : fallbackCategories.expenseCategories)
 const memoryCategoryOptions = computed(() => travelCategories.value.memoryCategories?.length ? travelCategories.value.memoryCategories : fallbackCategories.memoryCategories)
-const requiresExplicitPlanSelection = computed(() => props.route === 'travel-log' || props.route === 'photo-album')
+const requiresExplicitPlanSelection = computed(() =>
+  (props.route === 'travel-log' || props.route === 'photo-album')
+  && (!props.integratedMode || !travelPlans.value.length)
+)
 const isSharedExhibitTab = computed(() => props.route === 'photo-album' && albumTab.value === 'shared')
 const isMyPhotosTab = computed(() => props.route === 'photo-album' && albumTab.value === 'my-photos')
 const hasSharedExhibits = computed(() => sharedExhibitSummaries.value.length > 0)

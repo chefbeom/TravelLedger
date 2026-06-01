@@ -57,6 +57,7 @@ public class DriveShareService {
     public List<DriveDtos.SharedFileResponse> getReceivedShares(Long userId) {
         return driveShareRepository.findAllByRecipient_IdOrderByCreatedAtDesc(userId).stream()
                 .filter(share -> share.getItem() != null && share.getItem().isFile())
+                .filter(share -> !share.getItem().isTrashed())
                 .map(this::toSharedFileResponse)
                 .toList();
     }
@@ -64,6 +65,7 @@ public class DriveShareService {
     public List<DriveDtos.SentShareGroupResponse> getSentShares(Long userId) {
         Map<Long, List<DriveShare>> grouped = driveShareRepository.findAllByOwner_IdOrderByCreatedAtDesc(userId).stream()
                 .filter(share -> share.getItem() != null && share.getItem().isFile())
+                .filter(share -> !share.getItem().isTrashed())
                 .collect(Collectors.groupingBy(
                         share -> share.getItem().getId(),
                         LinkedHashMap::new,
@@ -203,6 +205,10 @@ public class DriveShareService {
             throw new BadRequestException("파일만 내 드라이브로 저장할 수 있습니다.");
         }
 
+        if (sourceItem.isTrashed()) {
+            throw new BadRequestException("Shared file is no longer available.");
+        }
+
         DriveItem parent = resolveOwnedFolder(userId, parentId);
         String targetObjectKey = "drive/" + userId + "/" + sourceItem.getStoredName();
         if (Objects.equals(sourceItem.getOwner().getId(), userId)) {
@@ -263,10 +269,14 @@ public class DriveShareService {
     private DriveItem getSharedFile(Long userId, Long fileId) {
         DriveShare share = driveShareRepository.findByItem_IdAndRecipient_Id(fileId, userId)
                 .orElseThrow(() -> new NotFoundException("공유된 파일을 찾지 못했습니다."));
-        if (!share.getItem().isFile()) {
+        DriveItem item = share.getItem();
+        if (item == null || !item.isFile()) {
             throw new BadRequestException("파일만 사용할 수 있습니다.");
         }
-        return share.getItem();
+        if (item.isTrashed()) {
+            throw new BadRequestException("Shared file is no longer available.");
+        }
+        return item;
     }
 
     private void refreshSharedFlags(Long userId, List<Long> fileIds) {

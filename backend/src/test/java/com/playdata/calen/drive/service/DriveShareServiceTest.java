@@ -1,5 +1,6 @@
 package com.playdata.calen.drive.service;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
@@ -83,6 +84,57 @@ class DriveShareServiceTest {
         verify(driveShareRepository, never()).deleteAll(org.mockito.ArgumentMatchers.<List<DriveShare>>any());
     }
 
+    @Test
+    void receivedSharesDoNotIncludeTrashedSharedFiles() {
+        DriveShare activeShare = share(file(7L), user(1L, "owner"), user(2L, "friend"));
+        DriveItem trashedFile = file(8L);
+        trashedFile.markTrashed();
+        DriveShare trashedShare = share(trashedFile, user(1L, "owner"), user(2L, "friend"));
+
+        when(driveShareRepository.findAllByRecipient_IdOrderByCreatedAtDesc(2L))
+                .thenReturn(List.of(trashedShare, activeShare));
+
+        DriveShareService service = newService();
+
+        assertThat(service.getReceivedShares(2L))
+                .extracting(response -> response.fileId())
+                .containsExactly(7L);
+    }
+
+    @Test
+    void downloadSharedFileRejectsTrashedSourceWithoutLoadingObject() {
+        DriveItem trashedFile = file(7L);
+        trashedFile.markTrashed();
+        DriveShare share = share(trashedFile, user(1L, "owner"), user(2L, "friend"));
+
+        when(driveShareRepository.findByItem_IdAndRecipient_Id(7L, 2L)).thenReturn(Optional.of(share));
+
+        DriveShareService service = newService();
+
+        assertThatThrownBy(() -> service.downloadSharedFile(2L, 7L))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessage("Shared file is no longer available.");
+
+        verify(driveStorageService, never()).loadObjectBytes("drive/locked.txt");
+    }
+
+    @Test
+    void saveSharedFileRejectsTrashedSourceWithoutCopyingObject() {
+        DriveItem trashedFile = file(7L);
+        trashedFile.markTrashed();
+        DriveShare share = share(trashedFile, user(1L, "owner"), user(2L, "friend"));
+
+        when(driveShareRepository.findByItem_IdAndRecipient_Id(7L, 2L)).thenReturn(Optional.of(share));
+
+        DriveShareService service = newService();
+
+        assertThatThrownBy(() -> service.saveSharedFileToDrive(2L, 7L, null))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessage("Shared file is no longer available.");
+
+        verify(driveStorageService, never()).copyObject("drive/locked.txt", "drive/2/locked.txt");
+    }
+
     private DriveShareService newService() {
         return new DriveShareService(
                 driveShareRepository,
@@ -101,6 +153,15 @@ class DriveShareServiceTest {
         user.setDisplayName(loginId);
         user.setActive(true);
         return user;
+    }
+
+    private DriveShare share(DriveItem item, AppUser owner, AppUser recipient) {
+        item.setOwner(owner);
+        DriveShare share = new DriveShare();
+        share.setItem(item);
+        share.setOwner(owner);
+        share.setRecipient(recipient);
+        return share;
     }
 
     private DriveItem file(Long id) {

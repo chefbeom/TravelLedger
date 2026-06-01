@@ -692,6 +692,10 @@ function canShareItem(item) {
   return canModifyOwnedItem(item) && !isFolder(item)
 }
 
+function canOpenItemLocation(item) {
+  return activeTab.value === 'drive' && Boolean(pageFilters.searchQuery) && Boolean(item)
+}
+
 function canToggleLock(item) {
   return activeTab.value !== 'trash' && activeTab.value !== 'shared' && Boolean(item?.id)
 }
@@ -1454,6 +1458,19 @@ function openFolderTreeNode(node) {
   pageFilters.parentId = Number(node.id)
   pageFilters.page = 0
   activeTab.value = 'drive'
+}
+
+function openItemLocation(item) {
+  if (!canOpenItemLocation(item)) {
+    return
+  }
+  pageFilters.parentId = item.parentId ?? null
+  pageFilters.page = 0
+  pageFilters.searchQuery = ''
+  topSearch.value = ''
+  activeTab.value = 'drive'
+  selectedIds.value = item?.id ? [String(item.id)] : []
+  setMessages(`"${item.fileOriginName}" 위치로 이동했습니다.`)
 }
 
 function toggleFolderTreeNode(node) {
@@ -2815,6 +2832,7 @@ onBeforeUnmount(() => {
                     <td>
                       <div class="sheet-table__actions" @click.stop>
                         <button class="button button--ghost" type="button" @click="openBrowserItem(item)">열기</button>
+                        <button v-if="canOpenItemLocation(item)" class="button button--ghost" type="button" @click="openItemLocation(item)">위치 열기</button>
                         <button v-if="canModifyOwnedItem(item)" class="button button--ghost" type="button" @click="promptRename(item)">이름 변경</button>
                         <button v-if="canToggleLock(item)" class="button button--ghost" type="button" @click="toggleItemLock(item)">{{ isLockedItem(item) ? '잠금 해제' : '잠금' }}</button>
                         <button v-if="canShareItem(item)" class="button button--ghost" type="button" @click="openShareDialog([item])">공유</button>
@@ -2878,6 +2896,7 @@ onBeforeUnmount(() => {
                 </div>
                 <div class="drive-file-card__actions" @click.stop>
                   <button class="button button--ghost" type="button" @click="openBrowserItem(item)">열기</button>
+                  <button v-if="canOpenItemLocation(item)" class="button button--ghost" type="button" @click="openItemLocation(item)">위치 열기</button>
                   <button v-if="canShareItem(item)" class="button button--ghost" type="button" @click="openShareDialog([item])">공유</button>
                   <button v-if="canToggleLock(item)" class="button button--ghost" type="button" @click="toggleItemLock(item)">{{ isLockedItem(item) ? '잠금 해제' : '잠금' }}</button>
                   <button v-if="canModifyOwnedItem(item)" class="button button--ghost" type="button" @click="openMoveDialog([item])">이동</button>
@@ -2940,6 +2959,7 @@ onBeforeUnmount(() => {
 
                   <div class="drive-details-panel__actions">
                     <button class="button button--primary" type="button" @click="openBrowserItem(primarySelectedItem)">열기</button>
+                    <button v-if="canOpenItemLocation(primarySelectedItem)" class="button button--ghost" type="button" @click="openItemLocation(primarySelectedItem)">위치 열기</button>
                     <button v-if="canPreviewItem(primarySelectedItem)" class="button button--ghost" type="button" @click="openPreviewDialog(primarySelectedItem)">미리보기</button>
                     <button v-if="canShareItem(primarySelectedItem)" class="button button--ghost" type="button" @click="openShareDialog([primarySelectedItem])">공유</button>
                     <button v-if="canToggleLock(primarySelectedItem)" class="button button--ghost" type="button" @click="toggleItemLock(primarySelectedItem)">{{ isLockedItem(primarySelectedItem) ? '잠금 해제' : '잠금' }}</button>

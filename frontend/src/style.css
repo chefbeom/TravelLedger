@@ -10220,6 +10220,11 @@ textarea {
   color: var(--text-soft);
 }
 
+.drive-location-hint {
+  color: var(--accent-strong);
+  font-weight: 700;
+}
+
 .drive-table__thumb {
   width: 52px;
   height: 52px;

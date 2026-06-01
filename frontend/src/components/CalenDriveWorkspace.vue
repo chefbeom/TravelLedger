@@ -289,7 +289,7 @@ const detailRows = computed(() => {
     { label: '용량', value: isFolder(item) ? '-' : formatBytes(item.fileSize) },
     { label: '소유자', value: itemOwnerLabel(item) },
     { label: '수정', value: formatTimestamp(item.deletedAt || item.lastModifyDate || item.uploadDate || item.sharedAt) },
-    { label: '위치', value: normalizedCurrentLocationLabel.value },
+    { label: '위치', value: item.folderPath || normalizedCurrentLocationLabel.value },
   ]
 })
 
@@ -1413,6 +1413,7 @@ function selectTab(tab) {
 function applySearch() {
   pageFilters.page = 0
   pageFilters.searchQuery = topSearch.value.trim()
+  pageFilters.parentId = null
   if (activeTab.value !== 'drive') {
     activeTab.value = 'drive'
     return
@@ -2803,6 +2804,7 @@ onBeforeUnmount(() => {
                           <strong>{{ item.fileOriginName }}</strong>
                           <span v-if="isLockedItem(item)" class="drive-lock-badge">잠금</span>
                           <small>{{ item.ownerDisplayName || item.ownerLoginId || '내 드라이브' }}</small>
+                          <small v-if="pageFilters.searchQuery && item.folderPath" class="drive-location-hint">위치: {{ item.folderPath }}</small>
                         </span>
                       </button>
                     </td>
@@ -2871,6 +2873,7 @@ onBeforeUnmount(() => {
                   <strong>{{ item.fileOriginName }}</strong>
                   <span v-if="isLockedItem(item)" class="drive-lock-badge">잠금</span>
                   <small>{{ isFolder(item) ? '폴더' : formatBytes(item.fileSize) }}</small>
+                  <small v-if="pageFilters.searchQuery && item.folderPath" class="drive-location-hint">위치: {{ item.folderPath }}</small>
                   <small>{{ formatTimestamp(item.deletedAt || item.lastModifyDate || item.uploadDate || item.sharedAt) }}</small>
                 </div>
                 <div class="drive-file-card__actions" @click.stop>

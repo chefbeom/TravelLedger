@@ -149,6 +149,7 @@ public final class DriveDtos {
             Integer presignedUrlExpiresIn,
             String ownerLoginId,
             String ownerDisplayName,
+            String folderPath,
             Long shareCount
     ) {
     }

@@ -94,9 +94,10 @@ public class DriveService {
         String extensionFilter = request != null ? request.extensionFilter() : null;
         String statusFilter = request != null ? request.statusFilter() : null;
         String sortOption = request != null ? request.sortOption() : null;
+        boolean hasSearchQuery = StringUtils.hasText(searchQuery);
 
         List<DriveItem> filteredItems = allItems.stream()
-                .filter(item -> matchParent(item, parentId))
+                .filter(item -> hasSearchQuery || matchParent(item, parentId))
                 .filter(item -> matchSearch(item, searchQuery))
                 .filter(item -> matchExtension(item, extensionFilter))
                 .filter(item -> matchStatus(item, statusFilter))
@@ -109,7 +110,7 @@ public class DriveService {
 
         return DriveDtos.FileListPageResponse.builder()
                 .fileList(pagedItems.stream().map(this::toItemResponse).toList())
-                .breadcrumbs(buildBreadcrumbs(resolveParentFolder(owner.getId(), parentId)))
+                .breadcrumbs(hasSearchQuery ? List.of() : buildBreadcrumbs(resolveParentFolder(owner.getId(), parentId)))
                 .availableExtensions(allItems.stream()
                         .filter(DriveItem::isFile)
                         .map(DriveItem::getExtension)
@@ -329,6 +330,7 @@ public class DriveService {
                 .presignedUrlExpiresIn(6000)
                 .ownerLoginId(item.getOwner().getLoginId())
                 .ownerDisplayName(item.getOwner().getDisplayName())
+                .folderPath(buildParentFolderPath(item))
                 .shareCount(driveShareRepository.countByItem_Id(item.getId()))
                 .build();
     }
@@ -495,6 +497,13 @@ public class DriveService {
             cursor = cursor.getParent();
         }
         return String.join(" / ", names);
+    }
+
+    private String buildParentFolderPath(DriveItem item) {
+        if (item == null || item.getParent() == null) {
+            return "내 드라이브";
+        }
+        return "내 드라이브 / " + buildFolderPath(item.getParent());
     }
 
     private DriveItem resolveParentFolder(Long ownerId, Long parentId) {

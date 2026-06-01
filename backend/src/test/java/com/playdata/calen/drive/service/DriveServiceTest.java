@@ -97,6 +97,34 @@ class DriveServiceTest {
     }
 
     @Test
+    void listPageSearchesAcrossDriveAndReturnsFolderPath() {
+        AppUser owner = owner();
+        DriveItem tripsFolder = item(2L, owner, DriveItemType.FOLDER, "Trips", 0L, 10);
+        DriveItem nestedFile = item(3L, owner, DriveItemType.FILE, "tokyo-ticket.pdf", 100L, 20);
+        nestedFile.setParent(tripsFolder);
+
+        when(appUserRepository.findById(1L)).thenReturn(Optional.of(owner));
+        when(driveItemRepository.findAllByOwner_Id(1L)).thenReturn(List.of(tripsFolder, nestedFile));
+
+        DriveService service = newService();
+
+        DriveDtos.FileListPageResponse response = service.listPage(
+                1L,
+                DriveDtos.ListPageRequest.builder()
+                        .page(0)
+                        .size(20)
+                        .searchQuery("ticket")
+                        .build()
+        );
+
+        assertThat(response.breadcrumbs()).isEmpty();
+        assertThat(response.fileList())
+                .extracting(DriveDtos.FileItemResponse::fileOriginName)
+                .containsExactly("tokyo-ticket.pdf");
+        assertThat(response.fileList().get(0).folderPath()).isEqualTo("내 드라이브 / Trips");
+    }
+
+    @Test
     void renameRejectsFileInsideLockedFolder() {
         AppUser owner = owner();
         DriveItem lockedFolder = item(2L, owner, DriveItemType.FOLDER, "Private", 0L, 10);

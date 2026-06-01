@@ -76,6 +76,7 @@ const detailsPanelOpen = ref(true)
 const dragDepth = ref(0)
 const driveDraggedItems = ref([])
 const driveMoveDropTargetId = ref('')
+const DRIVE_ROOT_DROP_TARGET_ID = '__drive-root__'
 
 const previewDialog = reactive({
   open: false,
@@ -699,8 +700,23 @@ function canDragDriveItem(item) {
   return (activeTab.value === 'drive' || activeTab.value === 'recent') && canModifyOwnedItem(item)
 }
 
+function isFolderDestinationNode(item) {
+  return Boolean(item?.id) && (
+    Object.prototype.hasOwnProperty.call(item, 'parentId')
+    || Object.prototype.hasOwnProperty.call(item, 'hasChildren')
+    || Object.prototype.hasOwnProperty.call(item, 'depth')
+  )
+}
+
+function canUseMoveDropTargets() {
+  return activeTab.value === 'drive' || activeTab.value === 'recent'
+}
+
 function canUseAsMoveDropTarget(item) {
-  return (activeTab.value === 'drive' || activeTab.value === 'recent') && isFolder(item) && canModifyOwnedItem(item)
+  return canUseMoveDropTargets()
+    && Boolean(item?.id)
+    && (isFolder(item) || isFolderDestinationNode(item))
+    && !isLockedItem(item)
 }
 
 function isImageFile(item) {
@@ -1024,6 +1040,16 @@ function isDriveMoveDropTarget(item) {
   return driveMoveDropTargetId.value === String(item?.id || '')
 }
 
+function canDropDriveItemsToRoot() {
+  return driveDraggedItems.value.length > 0
+    && canUseMoveDropTargets()
+    && driveDraggedItems.value.every((item) => canDragDriveItem(item))
+}
+
+function isDriveRootMoveDropTarget() {
+  return driveMoveDropTargetId.value === DRIVE_ROOT_DROP_TARGET_ID
+}
+
 function handleDriveItemDragStart(item, event) {
   if (!canDragDriveItem(item)) {
     event.preventDefault()
@@ -1078,6 +1104,52 @@ function handleDriveFolderDragLeave(item, event) {
   }
   if (isDriveMoveDropTarget(item)) {
     driveMoveDropTargetId.value = ''
+  }
+}
+
+function handleDriveRootDragOver(event) {
+  if (!canDropDriveItemsToRoot()) {
+    return
+  }
+  event.preventDefault()
+  event.stopPropagation()
+  if (event.dataTransfer) {
+    event.dataTransfer.dropEffect = 'move'
+  }
+  driveMoveDropTargetId.value = DRIVE_ROOT_DROP_TARGET_ID
+}
+
+function handleDriveRootDragLeave(event) {
+  if (event.currentTarget?.contains?.(event.relatedTarget)) {
+    return
+  }
+  if (isDriveRootMoveDropTarget()) {
+    driveMoveDropTargetId.value = ''
+  }
+}
+
+async function handleDriveRootDrop(event) {
+  if (!canDropDriveItemsToRoot()) {
+    return
+  }
+
+  event.preventDefault()
+  event.stopPropagation()
+
+  const movingIds = driveDraggedItems.value.map((movingItem) => movingItem.id).filter(Boolean)
+  resetDriveMoveDrag()
+  if (!movingIds.length) {
+    return
+  }
+
+  try {
+    await moveDriveItems(movingIds, null)
+    setMessages(`${movingIds.length}개 항목을 내 드라이브로 이동했습니다.`)
+    invalidateMoveDestinations()
+    await Promise.all([loadDrivePage(), loadHomeSummary(), loadRecentFiles()])
+    clearSelection()
+  } catch (error) {
+    setMessages('', error.message)
   }
 }
 
@@ -2286,7 +2358,16 @@ onBeforeUnmount(() => {
           </button>
         </div>
         <div class="drive-folder-tree">
-          <div class="drive-folder-tree__row" :class="{ 'drive-folder-tree__row--active': isDriveRootActive }">
+          <div
+            class="drive-folder-tree__row"
+            :class="{
+              'drive-folder-tree__row--active': isDriveRootActive,
+              'drive-folder-tree__row--drop-target': isDriveRootMoveDropTarget(),
+            }"
+            @dragover="handleDriveRootDragOver"
+            @dragleave="handleDriveRootDragLeave"
+            @drop="handleDriveRootDrop"
+          >
             <span class="drive-folder-tree__spacer"></span>
             <button class="drive-folder-tree__name" type="button" @click="openFolderTreeRoot">
               <span class="drive-folder-tree__icon">드</span>
@@ -2308,8 +2389,15 @@ onBeforeUnmount(() => {
             v-for="node in folderTreeVisibleNodes"
             :key="`folder-tree-${node.id}`"
             class="drive-folder-tree__row"
-            :class="{ 'drive-folder-tree__row--active': node.active, 'drive-folder-tree__row--locked': node.lockedFile }"
+            :class="{
+              'drive-folder-tree__row--active': node.active,
+              'drive-folder-tree__row--locked': node.lockedFile,
+              'drive-folder-tree__row--drop-target': isDriveMoveDropTarget(node),
+            }"
             :style="{ paddingLeft: `${Math.min(node.depth, 5) * 12}px` }"
+            @dragover="handleDriveFolderDragOver(node, $event)"
+            @dragleave="handleDriveFolderDragLeave(node, $event)"
+            @drop="handleDriveFolderDrop(node, $event)"
           >
             <button
               class="drive-folder-tree__toggle"

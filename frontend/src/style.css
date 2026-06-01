@@ -10787,6 +10787,12 @@ textarea {
   color: var(--blue);
 }
 
+.drive-folder-tree__row--drop-target {
+  background: color-mix(in srgb, var(--surface-soft) 56%, rgba(49, 130, 246, 0.24));
+  color: var(--blue);
+  box-shadow: inset 0 0 0 2px rgba(49, 130, 246, 0.36);
+}
+
 .drive-folder-tree__row--locked {
   opacity: 0.68;
 }
@@ -10847,6 +10853,11 @@ textarea {
   color: var(--blue);
   font-size: 0.7rem;
   font-weight: 900;
+}
+
+.drive-folder-tree__row--drop-target .drive-folder-tree__icon {
+  background: var(--accent);
+  color: #fff;
 }
 
 .drive-folder-tree__empty {

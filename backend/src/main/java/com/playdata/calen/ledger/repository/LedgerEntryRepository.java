@@ -33,6 +33,8 @@ public interface LedgerEntryRepository extends JpaRepository<LedgerEntry, Long> 
 
     java.util.Optional<LedgerEntry> findByIdAndOwnerIdAndDeletedAtIsNotNull(Long id, Long ownerId);
 
+    java.util.Optional<LedgerEntry> findByOwnerIdAndTravelRecordIdAndDeletedAtIsNull(Long ownerId, Long travelRecordId);
+
     List<LedgerEntry> findAllByOwnerIdAndDeletedAtIsNullAndIdIn(Long ownerId, Collection<Long> ids);
 
     List<LedgerEntry> findAllByOwnerIdAndIdIn(Long ownerId, Collection<Long> ids);

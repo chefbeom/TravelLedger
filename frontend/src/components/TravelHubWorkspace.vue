@@ -30,6 +30,7 @@ import {
   updateTravelPlan,
   updateTravelRecord,
   updateTravelRoute,
+  reflectTravelRecordToLedger,
   searchTravelShareRecipients,
   saveTravelShareGroup,
   shareTravelPlan,
@@ -149,6 +150,7 @@ const albumTab = ref('upload')
 const planFormMode = ref('create')
 const editingBudgetItemId = ref(null)
 const editingRecordId = ref(null)
+const reflectingRecordId = ref(null)
 const memoryRefreshKey = ref(0)
 const routeRefreshKey = ref(0)
 const memoryFocusRequest = ref(null)
@@ -1797,6 +1799,20 @@ async function handleDeleteRecord(record) {
   }
 }
 
+async function handleReflectRecordToLedger(record) {
+  if (!record?.id || reflectingRecordId.value) return
+  reflectingRecordId.value = record.id
+  setFeedback()
+  try {
+    await reflectTravelRecordToLedger(record.id)
+    setFeedback('여행 지출을 가계부에 반영했습니다.')
+  } catch (error) {
+    setFeedback('', error.message)
+  } finally {
+    reflectingRecordId.value = null
+  }
+}
+
 async function handleDeleteMedia(media) {
   if (!media?.id) return
   isSubmitting.value = true
@@ -2220,7 +2236,24 @@ async function openPortfolioMemoryEditor(payload) {
             <table class="sheet-table">
               <thead><tr><th class="sheet-table__select"><input class="sheet-table__checkbox" type="checkbox" :checked="travelRecordSelection.allVisibleSelected" :indeterminate.prop="travelRecordSelection.someVisibleSelected" @change="travelRecordSelection.toggleAllVisible()" /></th><th>날짜</th><th>분류</th><th>항목명</th><th>장소</th><th>원통화</th><th>KRW</th><th>작업</th></tr></thead>
               <tbody>
-                <tr v-for="record in filteredTravelRecords" :key="record.id"><td class="sheet-table__select"><input class="sheet-table__checkbox" type="checkbox" :checked="travelRecordSelection.isSelected(record)" @change="travelRecordSelection.toggleItem(record)" /></td><td>{{ formatDateTime(record.expenseDate, record.expenseTime) }}</td><td>{{ record.category }}</td><td>{{ record.title }}</td><td>{{ formatTravelLocationLabel(record) }}</td><td>{{ formatCurrencyByCode(record.amount, record.currencyCode) }}</td><td>{{ formatCurrency(record.amountKrw) }}</td><td class="sheet-table__actions"><button class="button button--ghost" @click="fillRecordForm(record)">수정</button><button class="button button--danger" @click="handleDeleteRecord(record)">삭제</button></td></tr>
+                <tr v-for="record in filteredTravelRecords" :key="record.id">
+                  <td class="sheet-table__select">
+                    <input class="sheet-table__checkbox" type="checkbox" :checked="travelRecordSelection.isSelected(record)" @change="travelRecordSelection.toggleItem(record)" />
+                  </td>
+                  <td>{{ formatDateTime(record.expenseDate, record.expenseTime) }}</td>
+                  <td>{{ record.category }}</td>
+                  <td>{{ record.title }}</td>
+                  <td>{{ formatTravelLocationLabel(record) }}</td>
+                  <td>{{ formatCurrencyByCode(record.amount, record.currencyCode) }}</td>
+                  <td>{{ formatCurrency(record.amountKrw) }}</td>
+                  <td class="sheet-table__actions">
+                    <button class="button button--secondary" :disabled="reflectingRecordId === record.id" @click="handleReflectRecordToLedger(record)">
+                      {{ reflectingRecordId === record.id ? '반영 중...' : '가계부 반영' }}
+                    </button>
+                    <button class="button button--ghost" @click="fillRecordForm(record)">수정</button>
+                    <button class="button button--danger" @click="handleDeleteRecord(record)">삭제</button>
+                  </td>
+                </tr>
                 <tr v-if="!filteredTravelRecords.length"><td colspan="8" class="sheet-table__empty">{{ selectedRecordDate ? '선택한 날짜에는 지출 기록이 없습니다.' : '지출 기록이 아직 없습니다.' }}</td></tr>
               </tbody>
             </table>

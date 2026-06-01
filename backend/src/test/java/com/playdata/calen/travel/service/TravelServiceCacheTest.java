@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.playdata.calen.account.domain.AppUser;
 import com.playdata.calen.account.service.AppUserService;
 import com.playdata.calen.common.cache.RedisCacheService;
+import com.playdata.calen.ledger.service.LedgerTravelBridgeService;
 import com.playdata.calen.travel.domain.TravelMediaAsset;
 import com.playdata.calen.travel.domain.TravelMediaType;
 import com.playdata.calen.travel.domain.TravelPlan;
@@ -58,6 +59,7 @@ class TravelServiceCacheTest {
         TravelMyMapPhotoClusterSnapshotService travelMyMapPhotoClusterSnapshotService = mock(TravelMyMapPhotoClusterSnapshotService.class);
         TravelPublicMediaTokenService travelPublicMediaTokenService = mock(TravelPublicMediaTokenService.class);
         RedisCacheService redisCacheService = mock(RedisCacheService.class);
+        LedgerTravelBridgeService ledgerTravelBridgeService = mock(LedgerTravelBridgeService.class);
         DataSource dataSource = mock(DataSource.class);
 
         TravelService service = new TravelService(
@@ -79,6 +81,7 @@ class TravelServiceCacheTest {
                 travelMyMapPhotoClusterSnapshotService,
                 travelPublicMediaTokenService,
                 redisCacheService,
+                ledgerTravelBridgeService,
                 new ObjectMapper(),
                 dataSource
         );
@@ -136,6 +139,7 @@ class TravelServiceCacheTest {
         TravelMyMapPhotoClusterSnapshotService travelMyMapPhotoClusterSnapshotService = mock(TravelMyMapPhotoClusterSnapshotService.class);
         TravelPublicMediaTokenService travelPublicMediaTokenService = mock(TravelPublicMediaTokenService.class);
         RedisCacheService redisCacheService = mock(RedisCacheService.class);
+        LedgerTravelBridgeService ledgerTravelBridgeService = mock(LedgerTravelBridgeService.class);
         DataSource dataSource = mock(DataSource.class);
 
         TravelService service = new TravelService(
@@ -157,6 +161,7 @@ class TravelServiceCacheTest {
                 travelMyMapPhotoClusterSnapshotService,
                 travelPublicMediaTokenService,
                 redisCacheService,
+                ledgerTravelBridgeService,
                 new ObjectMapper(),
                 dataSource
         );
@@ -212,6 +217,7 @@ class TravelServiceCacheTest {
         TravelMyMapPhotoClusterSnapshotService travelMyMapPhotoClusterSnapshotService = mock(TravelMyMapPhotoClusterSnapshotService.class);
         TravelPublicMediaTokenService travelPublicMediaTokenService = mock(TravelPublicMediaTokenService.class);
         RedisCacheService redisCacheService = mock(RedisCacheService.class);
+        LedgerTravelBridgeService ledgerTravelBridgeService = mock(LedgerTravelBridgeService.class);
         DataSource dataSource = mock(DataSource.class);
 
         TravelService service = new TravelService(
@@ -233,6 +239,7 @@ class TravelServiceCacheTest {
                 travelMyMapPhotoClusterSnapshotService,
                 travelPublicMediaTokenService,
                 redisCacheService,
+                ledgerTravelBridgeService,
                 new ObjectMapper(),
                 dataSource
         );
@@ -271,6 +278,7 @@ class TravelServiceCacheTest {
         TravelMyMapPhotoClusterSnapshotService travelMyMapPhotoClusterSnapshotService = mock(TravelMyMapPhotoClusterSnapshotService.class);
         TravelPublicMediaTokenService travelPublicMediaTokenService = mock(TravelPublicMediaTokenService.class);
         RedisCacheService redisCacheService = mock(RedisCacheService.class);
+        LedgerTravelBridgeService ledgerTravelBridgeService = mock(LedgerTravelBridgeService.class);
         DataSource dataSource = mock(DataSource.class);
 
         TravelService service = new TravelService(
@@ -292,6 +300,7 @@ class TravelServiceCacheTest {
                 travelMyMapPhotoClusterSnapshotService,
                 travelPublicMediaTokenService,
                 redisCacheService,
+                ledgerTravelBridgeService,
                 new ObjectMapper(),
                 dataSource
         );

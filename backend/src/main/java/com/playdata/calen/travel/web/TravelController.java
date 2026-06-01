@@ -1,6 +1,7 @@
 package com.playdata.calen.travel.web;
 
 import com.playdata.calen.account.security.AppUserPrincipal;
+import com.playdata.calen.ledger.dto.LedgerEntryResponse;
 import com.playdata.calen.travel.domain.TravelMediaType;
 import com.playdata.calen.travel.dto.TravelBudgetItemRequest;
 import com.playdata.calen.travel.dto.TravelBudgetItemResponse;
@@ -356,6 +357,14 @@ public class TravelController {
             @PathVariable Long recordId
     ) {
         travelService.deleteExpenseRecord(currentUser.userId(), recordId);
+    }
+
+    @PostMapping("/records/{recordId}/ledger-entry")
+    public LedgerEntryResponse reflectExpenseRecordToLedger(
+            @AuthenticationPrincipal AppUserPrincipal currentUser,
+            @PathVariable Long recordId
+    ) {
+        return travelService.reflectExpenseRecordToLedger(currentUser.userId(), recordId);
     }
 
     @PostMapping("/plans/{planId}/memories")

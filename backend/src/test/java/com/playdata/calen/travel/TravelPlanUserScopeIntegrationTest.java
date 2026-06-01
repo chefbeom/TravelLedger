@@ -12,6 +12,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.playdata.calen.account.domain.AppUser;
 import com.playdata.calen.account.repository.AppUserRepository;
+import com.playdata.calen.ledger.repository.LedgerEntryRepository;
 import com.playdata.calen.travel.domain.TravelExpenseRecord;
 import com.playdata.calen.travel.domain.TravelMediaAsset;
 import com.playdata.calen.travel.domain.TravelMediaType;
@@ -75,6 +76,9 @@ class TravelPlanUserScopeIntegrationTest {
 
     @Autowired
     private TravelMediaStorageService travelMediaStorageService;
+
+    @Autowired
+    private LedgerEntryRepository ledgerEntryRepository;
 
     @Test
     void travelPlanCrudIsScopedPerUser() throws Exception {
@@ -142,6 +146,48 @@ class TravelPlanUserScopeIntegrationTest {
 
         mockMvc.perform(get("/api/travel/plans/{planId}", planId).session(hanaSession))
                 .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void travelExpenseRecordCanBeReflectedIntoHouseholdLedger() throws Exception {
+        MockHttpSession hanaSession = loginAndGetSession("hana");
+        MockHttpSession minsuSession = loginAndGetSession("minsu");
+        AppUser hana = appUserRepository.findByLoginId("hana").orElseThrow();
+
+        Long planId = createTravelPlan(hanaSession, "Ledger bridge trip");
+        Long recordId = createExpenseRecord(hanaSession, planId, "Food", "Bridge meal", "1200", "JPY", "9.100000");
+
+        MvcResult firstResult = mockMvc.perform(post("/api/travel/records/{recordId}/ledger-entry", recordId)
+                        .with(csrf())
+                        .session(hanaSession))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.entryType").value("EXPENSE"))
+                .andExpect(jsonPath("$.amount").value(10920))
+                .andExpect(jsonPath("$.foreignCurrencyCode").value("JPY"))
+                .andExpect(jsonPath("$.travelPlanId").value(planId))
+                .andExpect(jsonPath("$.travelRecordId").value(recordId))
+                .andReturn();
+        Long ledgerEntryId = readId(firstResult);
+
+        mockMvc.perform(post("/api/travel/records/{recordId}/ledger-entry", recordId)
+                        .with(csrf())
+                        .session(hanaSession))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(ledgerEntryId));
+
+        mockMvc.perform(post("/api/travel/records/{recordId}/ledger-entry", recordId)
+                        .with(csrf())
+                        .session(minsuSession))
+                .andExpect(status().isNotFound());
+
+        assertThat(ledgerEntryRepository.findByOwnerIdAndTravelRecordIdAndDeletedAtIsNull(hana.getId(), recordId))
+                .isPresent()
+                .get()
+                .satisfies(entry -> {
+                    assertThat(entry.getTravelPlanId()).isEqualTo(planId);
+                    assertThat(entry.getTravelRecordId()).isEqualTo(recordId);
+                    assertThat(entry.getTitle()).contains("Bridge meal");
+                });
     }
 
     @Test

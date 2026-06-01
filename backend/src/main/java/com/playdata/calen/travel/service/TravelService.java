@@ -8,6 +8,8 @@ import com.playdata.calen.account.service.AppUserService;
 import com.playdata.calen.common.cache.RedisCacheService;
 import com.playdata.calen.common.exception.BadRequestException;
 import com.playdata.calen.common.exception.NotFoundException;
+import com.playdata.calen.ledger.dto.LedgerEntryResponse;
+import com.playdata.calen.ledger.service.LedgerTravelBridgeService;
 import com.playdata.calen.travel.domain.TravelBudgetItem;
 import com.playdata.calen.travel.domain.TravelExpenseRecord;
 import com.playdata.calen.travel.domain.TravelMediaAsset;
@@ -193,6 +195,7 @@ public class TravelService {
     private final TravelMyMapPhotoClusterSnapshotService travelMyMapPhotoClusterSnapshotService;
     private final TravelPublicMediaTokenService travelPublicMediaTokenService;
     private final RedisCacheService redisCacheService;
+    private final LedgerTravelBridgeService ledgerTravelBridgeService;
     private final ObjectMapper objectMapper;
     private final DataSource dataSource;
 
@@ -971,6 +974,12 @@ public class TravelService {
         TravelExpenseRecord record = getRequiredRecord(userId, recordId, TravelRecordType.LEDGER, "Travel ledger record not found.");
         deleteRecord(record, userId);
         invalidateTravelSummaryCaches(userId);
+    }
+
+    @Transactional
+    public LedgerEntryResponse reflectExpenseRecordToLedger(Long userId, Long recordId) {
+        TravelExpenseRecord record = getRequiredRecord(userId, recordId, TravelRecordType.LEDGER, "Travel ledger record not found.");
+        return ledgerTravelBridgeService.upsertExpenseRecord(userId, record);
     }
 
     @Transactional

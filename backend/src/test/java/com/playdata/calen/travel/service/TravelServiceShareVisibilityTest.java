@@ -6,6 +6,7 @@ import com.playdata.calen.account.service.AppUserService;
 import com.playdata.calen.common.cache.RedisCacheService;
 import com.playdata.calen.common.exception.BadRequestException;
 import com.playdata.calen.common.exception.NotFoundException;
+import com.playdata.calen.ledger.service.LedgerTravelBridgeService;
 import com.playdata.calen.travel.domain.TravelPlan;
 import com.playdata.calen.travel.domain.TravelPlanShare;
 import com.playdata.calen.travel.domain.TravelPlanStatus;
@@ -66,6 +67,7 @@ class TravelServiceShareVisibilityTest {
         TravelMyMapPhotoClusterSnapshotService travelMyMapPhotoClusterSnapshotService = mock(TravelMyMapPhotoClusterSnapshotService.class);
         TravelPublicMediaTokenService travelPublicMediaTokenService = mock(TravelPublicMediaTokenService.class);
         RedisCacheService redisCacheService = mock(RedisCacheService.class);
+        LedgerTravelBridgeService ledgerTravelBridgeService = mock(LedgerTravelBridgeService.class);
         DataSource dataSource = mock(DataSource.class);
 
         service = new TravelService(
@@ -87,6 +89,7 @@ class TravelServiceShareVisibilityTest {
                 travelMyMapPhotoClusterSnapshotService,
                 travelPublicMediaTokenService,
                 redisCacheService,
+                ledgerTravelBridgeService,
                 new ObjectMapper(),
                 dataSource
         );

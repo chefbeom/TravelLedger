@@ -1528,6 +1528,10 @@ onBeforeUnmount(() => {
           업로드
           <input type="file" multiple @change="handleFilesSelected" />
         </label>
+        <label class="button button--ghost drive-upload-button">
+          폴더 업로드
+          <input type="file" multiple webkitdirectory directory @change="handleFilesSelected" />
+        </label>
         <button class="button button--ghost" type="button" @click="promptCreateFolder">폴더 만들기</button>
       </div>
 

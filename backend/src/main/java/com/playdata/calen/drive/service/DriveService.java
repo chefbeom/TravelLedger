@@ -320,7 +320,7 @@ public class DriveService {
     private DriveDtos.UploadCompleteResponse saveUploadedItem(AppUser owner, DriveDtos.UploadCompleteRequest request, DriveDtos.UploadCompleteResponse completed) {
         DriveItem item = new DriveItem();
         item.setOwner(owner);
-        item.setParent(resolveParentFolder(owner.getId(), request.parentId()));
+        item.setParent(resolveUploadParentFolder(owner, request));
         item.setItemType(DriveItemType.FILE);
         item.setOriginalName(completed.fileOriginName());
         item.setExtension(completed.fileFormat());
@@ -328,6 +328,63 @@ public class DriveService {
         item.setStoragePath(completed.finalObjectKey());
         item.setFileSize(driveStorageService.resolveObjectSize(completed.finalObjectKey()));
         return toCompleteResponse(driveItemRepository.save(item));
+    }
+
+    private DriveItem resolveUploadParentFolder(AppUser owner, DriveDtos.UploadCompleteRequest request) {
+        DriveItem parent = resolveParentFolder(owner.getId(), request.parentId());
+        for (String folderName : extractRelativeFolderSegments(request.relativePath())) {
+            parent = findOrCreateUploadFolder(owner, parent, folderName);
+        }
+        return parent;
+    }
+
+    private List<String> extractRelativeFolderSegments(String relativePath) {
+        if (!StringUtils.hasText(relativePath)) {
+            return List.of();
+        }
+
+        String normalizedPath = relativePath.replace('\\', '/').trim();
+        int lastSeparatorIndex = normalizedPath.lastIndexOf('/');
+        if (lastSeparatorIndex <= 0) {
+            return List.of();
+        }
+
+        List<String> segments = new ArrayList<>();
+        for (String rawSegment : normalizedPath.substring(0, lastSeparatorIndex).split("/")) {
+            String segment = rawSegment.trim();
+            if (!StringUtils.hasText(segment) || ".".equals(segment)) {
+                continue;
+            }
+            if ("..".equals(segment) || segment.length() > 255) {
+                throw new BadRequestException("Invalid folder name in upload path.");
+            }
+            segments.add(segment);
+        }
+        return segments;
+    }
+
+    private DriveItem findOrCreateUploadFolder(AppUser owner, DriveItem parent, String folderName) {
+        Long parentId = parent != null ? parent.getId() : null;
+        return driveItemRepository.findAllByOwner_Id(owner.getId()).stream()
+                .filter(DriveItem::isFolder)
+                .filter(item -> !item.isTrashed())
+                .filter(item -> Objects.equals(item.getParent() != null ? item.getParent().getId() : null, parentId))
+                .filter(item -> item.getOriginalName().equalsIgnoreCase(folderName))
+                .findFirst()
+                .orElseGet(() -> createUploadFolder(owner, parent, folderName));
+    }
+
+    private DriveItem createUploadFolder(AppUser owner, DriveItem parent, String folderName) {
+        DriveItem folder = new DriveItem();
+        folder.setOwner(owner);
+        folder.setParent(parent);
+        folder.setItemType(DriveItemType.FOLDER);
+        folder.setOriginalName(folderName);
+        folder.setExtension("");
+        folder.setStoredName(folderName);
+        folder.setStoragePath(null);
+        folder.setFileSize(0L);
+        return driveItemRepository.save(folder);
     }
 
     private DriveDtos.UploadCompleteResponse toCompleteResponse(DriveItem item) {

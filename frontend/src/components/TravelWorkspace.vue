@@ -656,9 +656,8 @@ onMounted(loadTravelSummary)
 
     <div v-if="primaryTab === 'share'" class="workspace-stack">
       <TravelHubWorkspace
-        route="travel-log"
+        route="travel-share"
         :integrated-mode="true"
-        initial-log-tab="overview"
         :external-memory-focus-request="hubPlaceFocusRequest"
         :external-photo-focus-request="hubPhotoFocusRequest"
         :external-route-focus-request="hubRouteFocusRequest"

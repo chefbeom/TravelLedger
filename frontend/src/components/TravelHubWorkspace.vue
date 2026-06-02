@@ -122,10 +122,15 @@ const workspaceMeta = computed(() => {
         title: '여행 로그',
         description: '날짜별 메모와 GPX 경로를 기록하고, 전체 또는 일차별 여행 보기를 함께 확인합니다.',
       }
+    case 'travel-share':
+      return {
+        title: '여행 공유',
+        description: '선택한 여행을 사람, 그룹, 전체 공개 범위로 나누어 공유합니다.',
+      }
     default:
       return {
         title: '사진첩',
-        description: '여행 로그에서 올린 사진을 다시 쓰고, 지도 갤러리와 커뮤니티 피드를 함께 확인합니다.',
+        description: '여행 로그에서 올린 사진을 다시 보고, 지도 갤러리와 공유받은 전시를 확인합니다.',
       }
   }
 })
@@ -236,10 +241,10 @@ const budgetCategoryOptions = computed(() => travelCategories.value.budgetCatego
 const expenseCategoryOptions = computed(() => travelCategories.value.expenseCategories?.length ? travelCategories.value.expenseCategories : fallbackCategories.expenseCategories)
 const memoryCategoryOptions = computed(() => travelCategories.value.memoryCategories?.length ? travelCategories.value.memoryCategories : fallbackCategories.memoryCategories)
 const requiresExplicitPlanSelection = computed(() =>
-  (props.route === 'travel-log' || props.route === 'photo-album')
+  (props.route === 'travel-log' || props.route === 'photo-album' || props.route === 'travel-share')
   && (!props.integratedMode || !travelPlans.value.length)
 )
-const isSharedExhibitTab = computed(() => props.route === 'photo-album' && albumTab.value === 'shared')
+const isSharedExhibitTab = computed(() => props.route === 'travel-share' || (props.route === 'photo-album' && albumTab.value === 'shared'))
 const isMyPhotosTab = computed(() => props.route === 'photo-album' && albumTab.value === 'my-photos')
 const hasSharedExhibits = computed(() => sharedExhibitSummaries.value.length > 0)
 const showAlbumUploadTab = computed(() => !props.integratedPhotoMode)
@@ -248,8 +253,6 @@ const photoAlbumTabChoices = computed(() => (
     ? [
         { key: 'my-photos', label: '내 사진' },
         { key: 'gallery', label: '사진첩' },
-        { key: 'shared', label: '공유 전시' },
-        { key: 'community', label: '커뮤니티' },
       ]
     : [
         { key: 'upload', label: '업로드와 기록' },
@@ -294,6 +297,7 @@ const selectedShareTargets = computed(() => {
 const canShareToSelectedTargets = computed(() =>
   canShareTravelPlan.value && selectedShareTargets.value.length > 0,
 )
+const shouldLoadSharedExhibits = computed(() => props.route === 'photo-album' || props.route === 'travel-share')
 const emptyTravelPlanMessage = computed(() => {
   if (isMyPhotosTab.value) {
     return '내 사진 탭에서는 여행을 선택하지 않아도 지금까지 업로드한 사진을 전체 기준으로 볼 수 있습니다.'
@@ -819,7 +823,8 @@ watch(
 watch(
   () => [props.route, props.integratedPhotoMode],
   ([route, integratedPhotoMode]) => {
-    if (route === 'photo-album' && integratedPhotoMode && albumTab.value === 'upload') {
+    const allowedTabs = photoAlbumTabChoices.value.map((item) => item.key)
+    if (route === 'photo-album' && integratedPhotoMode && !allowedTabs.includes(albumTab.value)) {
       albumTab.value = 'my-photos'
     }
     if (route !== 'photo-album' && integratedPhotoMode && photoAlbumGroupMode.value !== 'all') {
@@ -1405,7 +1410,7 @@ async function refreshTravelData(preferredPlanId = selectedPlanId.value, include
     travelPortfolio.value = await fetchTravelPortfolio()
     await loadTravelRates()
     if (includeCommunity) await loadTravelCommunityFeed()
-    if (props.route === 'photo-album') await loadSharedExhibits(selectedSharedExhibitId.value)
+    if (shouldLoadSharedExhibits.value) await loadSharedExhibits(selectedSharedExhibitId.value)
     if (!travelPlan.value) {
       resetPlanForm()
       resetBudgetForm()
@@ -1442,7 +1447,7 @@ async function handleSelectSharedExhibit(shareId) {
 watch(
   () => props.route,
   async (route, previousRoute) => {
-    if (!props.integratedMode && route !== previousRoute && (route === 'travel-log' || route === 'photo-album')) {
+    if (!props.integratedMode && route !== previousRoute && (route === 'travel-log' || route === 'photo-album' || route === 'travel-share')) {
       selectedPlanId.value = ''
       travelPlan.value = null
       memoryFocusRequest.value = null
@@ -2014,9 +2019,9 @@ async function openPortfolioMemoryEditor(payload) {
         </label>
 
         <div class="travel-toolbar__actions">
-          <button class="button button--ghost" :disabled="isLoading" @click="refreshTravelData(selectedPlanId, route === 'photo-album')">새로고침</button>
-          <button class="button button--secondary" @click="route === 'travel-money' ? resetPlanForm() : handleOpenTravelPlanner()">{{ route === 'travel-money' ? '새 여행' : '여행 만들기' }}</button>
-          <button class="button button--ghost" :disabled="!travelPlan" @click="fillPlanForm(travelPlan)">여행 수정</button>
+          <button class="button button--ghost" type="button" :disabled="isLoading" @click="refreshTravelData(selectedPlanId, route === 'photo-album')">여행 목록 새로고침</button>
+          <button class="button button--secondary" type="button" @click="route === 'travel-money' ? resetPlanForm() : handleOpenTravelPlanner()">{{ route === 'travel-money' ? '새 여행 만들기' : '새 여행 만들기 화면 열기' }}</button>
+          <button class="button button--ghost" type="button" :disabled="!travelPlan" @click="fillPlanForm(travelPlan)">선택 여행 수정</button>
         </div>
       </div>
 
@@ -2270,18 +2275,11 @@ async function openPortfolioMemoryEditor(payload) {
       </div>
     </template>
 
-    <template v-else-if="route === 'travel-log'">
-      <section v-if="!integratedMode" class="panel">
-        <div class="scope-toggle">
-          <button class="button" :class="{ 'button--primary': logTab === 'overview' }" @click="logTab = 'overview'">여행 보기</button>
-          <button class="button" :class="{ 'button--primary': logTab === 'memories' }" @click="logTab = 'memories'">여행 기록</button>
-          <button class="button" :class="{ 'button--primary': logTab === 'routes' }" @click="logTab = 'routes'">이동 경로</button>
-        </div>
-      </section>
+    <template v-else-if="route === 'travel-share'">
       <section class="panel">
         <div class="panel__header">
           <div>
-            <h2>여행 공유 범위</h2>
+            <h2>여행 공유 범위 설정</h2>
             <p>전체 공개로 커뮤니티 지도에 올리거나, 선택한 사람과 그룹에게만 여행 지도와 사진을 공유합니다.</p>
           </div>
           <span class="panel__badge">{{ canShareTravelPlan ? '공유 가능' : '완성 후 공유' }}</span>
@@ -2425,6 +2423,38 @@ async function openPortfolioMemoryEditor(payload) {
               {{ activeSubmit === `share-cancel-${share.id}` ? '해제 중' : '공유 해제' }}
             </button>
           </article>
+        </div>
+      </section>
+      <TravelSharedExhibitWorkspace
+        v-if="sharedExhibitSummaries.length"
+        :exhibits="sharedExhibitSummaries"
+        :exhibit-page="sharedExhibitPage"
+        :exhibit-page-count="sharedExhibitPageCount"
+        :exhibit-total="sharedExhibitTotal"
+        :selected-exhibit-id="selectedSharedExhibitId"
+        :selected-exhibit="selectedSharedExhibit"
+        :is-loading="isLoading"
+        @select-exhibit="handleSelectSharedExhibit"
+        @change-exhibit-page="handleChangeSharedExhibitPage"
+      />
+      <section v-else class="panel">
+        <div class="panel__header">
+          <div>
+            <h2>공유받은 여행</h2>
+            <p>다른 사용자가 나에게 공유한 여행은 이 영역에 표시됩니다.</p>
+          </div>
+          <span class="panel__badge">0개</span>
+        </div>
+        <p class="panel__empty">아직 공유받은 여행이 없습니다.</p>
+      </section>
+    </template>
+
+    <template v-else-if="route === 'travel-log'">
+      <section v-if="!integratedMode" class="panel">
+        <div class="scope-toggle">
+          <button class="button" :class="{ 'button--primary': logTab === 'overview' }" @click="logTab = 'overview'">여행 보기</button>
+          <button class="button" :class="{ 'button--primary': logTab === 'memories' }" @click="logTab = 'memories'">여행 기록</button>
+          <button class="button" :class="{ 'button--primary': logTab === 'routes' }" @click="logTab = 'routes'">이동 경로</button>
         </div>
       </section>
       <TravelOverviewWorkspace v-if="logTab === 'overview'" :travel-plan="travelPlan" />

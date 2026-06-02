@@ -29,6 +29,7 @@ import {
   fetchTravelPlans,
   fetchOverview,
   fetchPaymentBreakdown,
+  linkLedgerEntryToTravelRecord,
   fetchPaymentMethods,
   restoreEntry,
   restoreLedgerEntryHistory,
@@ -170,6 +171,7 @@ const selectedHouseholdTravelPlanId = ref('')
 const householdTravelPlanError = ref('')
 const isHouseholdTravelPlanLoading = ref(false)
 const isHouseholdTravelPlanSubmitting = ref(false)
+const linkingTravelEntryId = ref('')
 const receiptOcr = reactive({
   isOpen: false,
   documentType: 'AUTO',
@@ -1093,6 +1095,59 @@ async function createHouseholdTravelPlan() {
     householdTravelPlanError.value = error.message || '여행을 만들지 못했습니다.'
   } finally {
     isHouseholdTravelPlanSubmitting.value = false
+  }
+}
+
+function patchEntryTravelLink(entryId, planId, recordId) {
+  const patchEntry = (entry) => {
+    if (!entry || String(entry.id) !== String(entryId)) {
+      return entry
+    }
+    return {
+      ...entry,
+      travelPlanId: planId,
+      travelRecordId: recordId,
+    }
+  }
+
+  monthEntries.value = monthEntries.value.map(patchEntry)
+  statsEntries.value = statsEntries.value.map(patchEntry)
+  dashboard.value = {
+    ...dashboard.value,
+    recentEntries: (dashboard.value.recentEntries ?? []).map(patchEntry),
+  }
+  searchPageState.value = {
+    ...searchPageState.value,
+    content: (searchPageState.value.content ?? []).map(patchEntry),
+  }
+}
+
+async function linkTravelLedgerEntry(entry) {
+  const selectedPlan = selectedHouseholdTravelPlan.value
+  const planId = selectedPlan?.id || entry?.travelPlanId
+  if (!entry?.id || !planId) {
+    setFeedback('', '연결할 여행과 거래를 선택해주세요.')
+    return
+  }
+  if (entry.entryType !== 'EXPENSE') {
+    setFeedback('', '여행 기록에는 지출 거래만 연결할 수 있습니다.')
+    return
+  }
+  if (selectedPlan?.startDate && selectedPlan?.endDate && !isDateInSelectedTravelPlan(entry.entryDate)) {
+    setFeedback('', '선택한 여행 기간 안의 거래만 여행 기록으로 연결할 수 있습니다.')
+    return
+  }
+
+  linkingTravelEntryId.value = String(entry.id)
+  setFeedback()
+  try {
+    const record = await linkLedgerEntryToTravelRecord(planId, entry.id)
+    patchEntryTravelLink(entry.id, record.planId, record.id)
+    setFeedback('가계부 거래를 여행 기록에 연결했습니다. 여행 기능에서 위치와 사진을 이어서 설정할 수 있습니다.')
+  } catch (error) {
+    setFeedback('', error.message)
+  } finally {
+    linkingTravelEntryId.value = ''
   }
 }
 
@@ -2690,6 +2745,7 @@ async function deactivatePayment(paymentId) {
       :travel-plan-loading="isHouseholdTravelPlanLoading"
       :travel-plan-submitting="isHouseholdTravelPlanSubmitting"
       :travel-plan-error="householdTravelPlanError"
+      :linking-travel-entry-id="linkingTravelEntryId"
       @select-travel-plan="selectHouseholdTravelPlan"
       @create-travel-plan="createHouseholdTravelPlan"
       @reset-travel-plan-form="resetHouseholdTravelPlanForm"
@@ -2697,6 +2753,7 @@ async function deactivatePayment(paymentId) {
       @open-travel-search="openTravelLedgerSearch"
       @view-travel-entry-date="viewTravelLedgerEntryDate"
       @edit-travel-entry="editTravelLedgerEntry"
+      @link-travel-entry="linkTravelLedgerEntry"
     />
 
     <StatisticsWorkspace

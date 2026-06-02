@@ -12,7 +12,12 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.playdata.calen.account.domain.AppUser;
 import com.playdata.calen.account.repository.AppUserRepository;
+import com.playdata.calen.ledger.domain.CategoryGroup;
+import com.playdata.calen.ledger.domain.EntryType;
+import com.playdata.calen.ledger.domain.PaymentMethod;
+import com.playdata.calen.ledger.repository.CategoryGroupRepository;
 import com.playdata.calen.ledger.repository.LedgerEntryRepository;
+import com.playdata.calen.ledger.repository.PaymentMethodRepository;
 import com.playdata.calen.travel.domain.TravelExpenseRecord;
 import com.playdata.calen.travel.domain.TravelMediaAsset;
 import com.playdata.calen.travel.domain.TravelMediaType;
@@ -79,6 +84,12 @@ class TravelPlanUserScopeIntegrationTest {
 
     @Autowired
     private LedgerEntryRepository ledgerEntryRepository;
+
+    @Autowired
+    private CategoryGroupRepository categoryGroupRepository;
+
+    @Autowired
+    private PaymentMethodRepository paymentMethodRepository;
 
     @Test
     void travelPlanCrudIsScopedPerUser() throws Exception {
@@ -188,6 +199,41 @@ class TravelPlanUserScopeIntegrationTest {
                     assertThat(entry.getTravelRecordId()).isEqualTo(recordId);
                     assertThat(entry.getTitle()).contains("Bridge meal");
                 });
+    }
+
+    @Test
+    void householdLedgerEntryCanBeReflectedIntoTravelRecord() throws Exception {
+        MockHttpSession hanaSession = loginAndGetSession("hana");
+        AppUser hana = appUserRepository.findByLoginId("hana").orElseThrow();
+
+        Long planId = createTravelPlan(hanaSession, "Household bridge trip");
+        Long ledgerEntryId = createHouseholdExpenseEntry(hanaSession, hana.getId(), "2026-05-04", "Linked taxi", "33000");
+
+        MvcResult linkResult = mockMvc.perform(post("/api/travel/plans/{planId}/ledger-entries/{entryId}/record", planId, ledgerEntryId)
+                        .with(csrf())
+                        .session(hanaSession))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.planId").value(planId))
+                .andExpect(jsonPath("$.recordType").value("LEDGER"))
+                .andExpect(jsonPath("$.expenseDate").value("2026-05-04"))
+                .andExpect(jsonPath("$.title").value("Linked taxi"))
+                .andExpect(jsonPath("$.currencyCode").value("KRW"))
+                .andExpect(jsonPath("$.amountKrw").value(33000))
+                .andReturn();
+        Long recordId = readId(linkResult);
+
+        assertThat(ledgerEntryRepository.findByIdAndOwnerIdAndDeletedAtIsNull(ledgerEntryId, hana.getId()))
+                .isPresent()
+                .get()
+                .satisfies(entry -> {
+                    assertThat(entry.getTravelPlanId()).isEqualTo(planId);
+                    assertThat(entry.getTravelRecordId()).isEqualTo(recordId);
+                });
+
+        mockMvc.perform(get("/api/travel/plans/{planId}", planId).session(hanaSession))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.records[0].id").value(recordId))
+                .andExpect(jsonPath("$.records[0].title").value("Linked taxi"));
     }
 
     @Test
@@ -474,6 +520,44 @@ class TravelPlanUserScopeIntegrationTest {
         payload.put("memo", "Actual spend");
 
         return readId(mockMvc.perform(post("/api/travel/plans/{planId}/records", planId)
+                        .with(csrf())
+                        .session(session)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(payload)))
+                .andExpect(status().isOk())
+                .andReturn());
+    }
+
+    private Long createHouseholdExpenseEntry(
+            MockHttpSession session,
+            Long ownerId,
+            String entryDate,
+            String title,
+            String amount
+    ) throws Exception {
+        CategoryGroup group = categoryGroupRepository.findAllByOwnerIdAndEntryTypeAndActiveTrueOrderByDisplayOrderAscIdAsc(ownerId, EntryType.EXPENSE)
+                .stream()
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("Expense category group not found."));
+        PaymentMethod paymentMethod = paymentMethodRepository.findAllByOwnerIdAndActiveTrueOrderByDisplayOrderAscIdAsc(ownerId)
+                .stream()
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("Payment method not found."));
+
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("entryDate", entryDate);
+        payload.put("entryTime", "09:15");
+        payload.put("title", title);
+        payload.put("memo", "Household travel bridge");
+        payload.put("amount", amount);
+        payload.put("entryType", "EXPENSE");
+        payload.put("categoryGroupId", group.getId());
+        payload.put("categoryDetailId", null);
+        payload.put("paymentMethodId", paymentMethod.getId());
+        payload.put("travelPlanId", null);
+        payload.put("travelRecordId", null);
+
+        return readId(mockMvc.perform(post("/api/entries")
                         .with(csrf())
                         .session(session)
                         .contentType(MediaType.APPLICATION_JSON)

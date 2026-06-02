@@ -367,6 +367,15 @@ public class TravelController {
         return travelService.reflectExpenseRecordToLedger(currentUser.userId(), recordId);
     }
 
+    @PostMapping("/plans/{planId}/ledger-entries/{entryId}/record")
+    public TravelExpenseRecordResponse reflectLedgerEntryToTravelRecord(
+            @AuthenticationPrincipal AppUserPrincipal currentUser,
+            @PathVariable Long planId,
+            @PathVariable Long entryId
+    ) {
+        return travelService.reflectLedgerEntryToTravelRecord(currentUser.userId(), planId, entryId);
+    }
+
     @PostMapping("/plans/{planId}/memories")
     public TravelMemoryRecordResponse createMemoryRecord(
             @AuthenticationPrincipal AppUserPrincipal currentUser,

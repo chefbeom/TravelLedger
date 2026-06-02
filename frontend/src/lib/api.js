@@ -767,6 +767,12 @@ export function reflectTravelRecordToLedger(recordId) {
   })
 }
 
+export function linkLedgerEntryToTravelRecord(planId, entryId) {
+  return request(`/travel/plans/${planId}/ledger-entries/${entryId}/record`, {
+    method: 'POST',
+  })
+}
+
 export function updateTravelMemory(memoryId, payload) {
   return request(`/travel/memories/${memoryId}`, {
     method: 'PUT',

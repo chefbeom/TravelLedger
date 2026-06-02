@@ -983,6 +983,16 @@ public class TravelService {
     }
 
     @Transactional
+    public TravelExpenseRecordResponse reflectLedgerEntryToTravelRecord(Long userId, Long planId, Long entryId) {
+        TravelPlan plan = getRequiredPlan(userId, planId);
+        TravelExpenseRecord record = ledgerTravelBridgeService.upsertLedgerEntry(userId, plan, entryId);
+        TravelExpenseRecordResponse response = toExpenseRecordResponse(record);
+        invalidateTravelSummaryCaches(userId);
+        refreshMyMapPhotoClusterSnapshot(userId);
+        return response;
+    }
+
+    @Transactional
     public TravelMemoryRecordResponse createMemoryRecord(Long userId, Long planId, TravelMemoryRecordRequest request) {
         TravelPlan plan = getRequiredPlan(userId, planId);
         TravelExpenseRecord record = new TravelExpenseRecord();

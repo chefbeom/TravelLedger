@@ -54,6 +54,10 @@ const props = defineProps({
     type: String,
     default: '',
   },
+  linkingTravelEntryId: {
+    type: String,
+    default: '',
+  },
 })
 
 const emit = defineEmits([
@@ -64,6 +68,7 @@ const emit = defineEmits([
   'open-travel-search',
   'view-travel-entry-date',
   'edit-travel-entry',
+  'link-travel-entry',
 ])
 const travelKeywordFilter = ref('')
 const activeTravelType = ref('all')
@@ -131,6 +136,12 @@ function getEntrySearchText(entry) {
 
 function isTravelLinkedEntry(entry) {
   return Boolean(entry?.travelPlanId || entry?.travelRecordId)
+}
+
+function canLinkTravelRecord(entry) {
+  return Boolean(selectedTravelPlan.value)
+    && entry?.entryType === 'EXPENSE'
+    && !entry?.travelRecordId
 }
 
 function matchesKeywordSet(searchableText, keywords) {
@@ -639,6 +650,18 @@ function openTravelSearch() {
                 <td :class="entry.entryType === 'INCOME' ? 'is-income' : 'is-expense'">{{ formatCurrency(entry.amount) }}</td>
                 <td>
                   <div class="household-travel-ledger__entry-actions">
+                    <button
+                      v-if="canLinkTravelRecord(entry)"
+                      class="button button--primary"
+                      type="button"
+                      :disabled="String(linkingTravelEntryId) === String(entry.id)"
+                      @click="emit('link-travel-entry', entry)"
+                    >
+                      {{ String(linkingTravelEntryId) === String(entry.id) ? '연결 중' : '여행 기록 연결' }}
+                    </button>
+                    <span v-else-if="entry.travelRecordId" class="household-travel-ledger__link-badge">
+                      여행 기록 연결됨
+                    </span>
                     <button class="button button--ghost" type="button" @click="emit('view-travel-entry-date', entry)">
                       이동
                     </button>

@@ -7,6 +7,7 @@ import {
   createCategoryGroup,
   createEntry,
   createPaymentMethod,
+  createTravelPlan,
   deactivateCategoryDetail,
   deactivateCategoryGroup,
   deactivatePaymentMethod,
@@ -25,6 +26,7 @@ import {
   fetchEntrySearchPage,
   fetchEntries,
   fetchHouseholdAggregatePreferences,
+  fetchTravelPlans,
   fetchOverview,
   fetchPaymentBreakdown,
   fetchPaymentMethods,
@@ -163,6 +165,11 @@ const amountInput = ref('')
 const isEntryTimeEnabled = ref(false)
 const calendarWorkspaceRef = ref(null)
 const titleSuggestionSearchResults = ref([])
+const householdTravelPlans = ref([])
+const selectedHouseholdTravelPlanId = ref('')
+const householdTravelPlanError = ref('')
+const isHouseholdTravelPlanLoading = ref(false)
+const isHouseholdTravelPlanSubmitting = ref(false)
 const receiptOcr = reactive({
   isOpen: false,
   documentType: 'AUTO',
@@ -224,6 +231,20 @@ const entryForm = reactive({
   categoryGroupId: '',
   categoryDetailId: '',
   paymentMethodId: '',
+  travelPlanId: '',
+  travelRecordId: '',
+})
+
+const householdTravelPlanForm = reactive({
+  name: '',
+  destination: '',
+  startDate: today,
+  endDate: today,
+  homeCurrency: 'KRW',
+  headCount: 1,
+  status: 'PLANNED',
+  colorHex: '#3182F6',
+  memo: '',
 })
 
 const statsControls = reactive({
@@ -278,6 +299,9 @@ const availableDetails = computed(() => {
   const group = categories.value.find((item) => String(item.id) === String(entryForm.categoryGroupId))
   return group?.details ?? []
 })
+const selectedHouseholdTravelPlan = computed(() =>
+  householdTravelPlans.value.find((plan) => String(plan.id) === String(selectedHouseholdTravelPlanId.value)) || null,
+)
 const amountPreview = computed(() => Number(entryForm.amount || 0))
 const isForeignCurrencyMode = computed(() => entryForm.currencyMode === 'FOREIGN')
 const canUndoLastEntryAction = computed(() => Boolean(undoableEntryAction.value?.entryId))
@@ -571,6 +595,9 @@ watch(
     if ((value.startsWith('stats-') && value !== 'stats-trash') || value === 'travel-ledger') {
       await loadStatisticsData()
     }
+    if (value === 'travel-ledger' && !householdTravelPlans.value.length && !isHouseholdTravelPlanLoading.value) {
+      await loadHouseholdTravelPlans()
+    }
     if (value === 'stats-search') {
       await loadSearchResults(0)
     } else if (value === 'stats-trash') {
@@ -618,7 +645,9 @@ onMounted(async () => {
     await loadMetadata()
     await loadEntryDateRange()
     await Promise.all([loadCalendarData(), loadStatisticsData(), loadAggregatePreferences()])
+    loadHouseholdTravelPlans()
     resetEntryForm()
+    resetHouseholdTravelPlanForm()
     calendarReady.value = true
     statsReady.value = true
   } catch (error) {
@@ -795,6 +824,8 @@ function buildEntryFormSnapshot() {
     categoryGroupId: entryForm.categoryGroupId,
     categoryDetailId: entryForm.categoryDetailId,
     paymentMethodId: entryForm.paymentMethodId,
+    travelPlanId: entryForm.travelPlanId,
+    travelRecordId: entryForm.travelRecordId,
     amountInput: amountInput.value,
     isTimeEnabled: isEntryTimeEnabled.value,
   }
@@ -822,6 +853,8 @@ function buildEntryFormSnapshotFromEntry(entry) {
     categoryGroupId: entry.categoryGroupId != null ? String(entry.categoryGroupId) : '',
     categoryDetailId: entry.categoryDetailId != null ? String(entry.categoryDetailId) : '',
     paymentMethodId: entry.paymentMethodId != null ? String(entry.paymentMethodId) : '',
+    travelPlanId: entry.travelPlanId != null ? String(entry.travelPlanId) : '',
+    travelRecordId: entry.travelRecordId != null ? String(entry.travelRecordId) : '',
     isTimeEnabled: hasEntryTimeValue(entry.entryTime),
   }
 }
@@ -847,6 +880,8 @@ function restoreEntryFormSnapshot(snapshot) {
   entryForm.categoryGroupId = snapshot.categoryGroupId || ''
   entryForm.categoryDetailId = snapshot.categoryDetailId || ''
   entryForm.paymentMethodId = snapshot.paymentMethodId || ''
+  entryForm.travelPlanId = snapshot.travelPlanId || ''
+  entryForm.travelRecordId = snapshot.travelRecordId || ''
   amountInput.value = snapshot.amountInput || ''
   isEntryTimeEnabled.value = Boolean(snapshot.isTimeEnabled)
   syncEntryDefaults()
@@ -886,6 +921,8 @@ function buildEntryPayloadFromEntry(entry) {
     categoryGroupId: Number(entry.categoryGroupId),
     categoryDetailId: entry.categoryDetailId != null ? Number(entry.categoryDetailId) : null,
     paymentMethodId: resolveEntryPaymentMethodPayload(entry.entryType, entry.paymentMethodId),
+    travelPlanId: entry.travelPlanId != null ? Number(entry.travelPlanId) : null,
+    travelRecordId: entry.travelRecordId != null ? Number(entry.travelRecordId) : null,
   }
 }
 
@@ -956,6 +993,107 @@ async function loadMetadata() {
   categories.value = groupItems
   paymentMethods.value = paymentItems
   syncEntryDefaults()
+}
+
+async function loadHouseholdTravelPlans() {
+  isHouseholdTravelPlanLoading.value = true
+  householdTravelPlanError.value = ''
+  try {
+    householdTravelPlans.value = await fetchTravelPlans()
+    if (
+      selectedHouseholdTravelPlanId.value
+      && !householdTravelPlans.value.some((plan) => String(plan.id) === String(selectedHouseholdTravelPlanId.value))
+    ) {
+      selectedHouseholdTravelPlanId.value = ''
+    }
+  } catch (error) {
+    householdTravelPlanError.value = error.message || '여행 목록을 불러오지 못했습니다.'
+  } finally {
+    isHouseholdTravelPlanLoading.value = false
+  }
+}
+
+function resetHouseholdTravelPlanForm() {
+  householdTravelPlanForm.name = ''
+  householdTravelPlanForm.destination = ''
+  householdTravelPlanForm.startDate = statsControls.anchorDate || householdAnchorDate.value || today
+  householdTravelPlanForm.endDate = householdTravelPlanForm.startDate
+  householdTravelPlanForm.homeCurrency = 'KRW'
+  householdTravelPlanForm.headCount = 1
+  householdTravelPlanForm.status = 'PLANNED'
+  householdTravelPlanForm.colorHex = '#3182F6'
+  householdTravelPlanForm.memo = ''
+}
+
+function isDateInSelectedTravelPlan(dateValue) {
+  const plan = selectedHouseholdTravelPlan.value
+  if (!plan?.startDate || !plan?.endDate || !dateValue) {
+    return false
+  }
+  return String(dateValue) >= String(plan.startDate) && String(dateValue) <= String(plan.endDate)
+}
+
+function resolveSelectedTravelEntryDate() {
+  const plan = selectedHouseholdTravelPlan.value
+  if (!plan) {
+    return statsControls.anchorDate || householdAnchorDate.value || today
+  }
+  const anchor = statsControls.anchorDate || householdAnchorDate.value || plan.startDate
+  return isDateInSelectedTravelPlan(anchor) ? anchor : plan.startDate
+}
+
+async function selectHouseholdTravelPlan(planId) {
+  selectedHouseholdTravelPlanId.value = String(planId || '')
+  const plan = selectedHouseholdTravelPlan.value
+  if (!plan?.startDate || !plan?.endDate) {
+    return
+  }
+  statsControls.preset = 'CUSTOM'
+  statsControls.customFrom = plan.startDate
+  statsControls.customTo = plan.endDate
+  statsControls.anchorDate = plan.startDate
+  householdAnchorDate.value = plan.startDate
+  if (statsReady.value && householdTab.value === 'travel-ledger') {
+    await loadStatisticsData()
+  }
+}
+
+async function createHouseholdTravelPlan() {
+  const name = String(householdTravelPlanForm.name || '').trim()
+  const startDate = householdTravelPlanForm.startDate
+  const endDate = householdTravelPlanForm.endDate
+  if (!name) {
+    householdTravelPlanError.value = '여행 이름을 입력해 주세요.'
+    return
+  }
+  if (!startDate || !endDate || startDate > endDate) {
+    householdTravelPlanError.value = '여행 시작일과 종료일을 올바르게 입력해 주세요.'
+    return
+  }
+
+  isHouseholdTravelPlanSubmitting.value = true
+  householdTravelPlanError.value = ''
+  try {
+    const created = await createTravelPlan({
+      name,
+      destination: String(householdTravelPlanForm.destination || '').trim(),
+      startDate,
+      endDate,
+      homeCurrency: String(householdTravelPlanForm.homeCurrency || 'KRW').trim().toUpperCase() || 'KRW',
+      headCount: Number(householdTravelPlanForm.headCount || 1),
+      status: householdTravelPlanForm.status || 'PLANNED',
+      colorHex: householdTravelPlanForm.colorHex || '#3182F6',
+      memo: String(householdTravelPlanForm.memo || '').trim(),
+    })
+    await loadHouseholdTravelPlans()
+    resetHouseholdTravelPlanForm()
+    await selectHouseholdTravelPlan(created?.id)
+    setFeedback('여행을 만들고 여행 가계부 조회 기간에 연결했습니다.')
+  } catch (error) {
+    householdTravelPlanError.value = error.message || '여행을 만들지 못했습니다.'
+  } finally {
+    isHouseholdTravelPlanSubmitting.value = false
+  }
 }
 
 async function loadAggregatePreferences() {
@@ -1330,6 +1468,8 @@ function resetEntryForm({ entryDate = calendarAnchorDate.value } = {}) {
   entryForm.categoryGroupId = ''
   entryForm.categoryDetailId = ''
   entryForm.paymentMethodId = ''
+  entryForm.travelPlanId = ''
+  entryForm.travelRecordId = ''
   amountInput.value = ''
   foreignExchangeState.isLoading = false
   foreignExchangeState.error = ''
@@ -1352,6 +1492,8 @@ function fillEntryForm(entry) {
   entryForm.categoryGroupId = String(entry.categoryGroupId)
   entryForm.categoryDetailId = entry.categoryDetailId != null ? String(entry.categoryDetailId) : ''
   entryForm.paymentMethodId = entry.entryType === 'INCOME' ? '' : String(entry.paymentMethodId)
+  entryForm.travelPlanId = entry.travelPlanId != null ? String(entry.travelPlanId) : ''
+  entryForm.travelRecordId = entry.travelRecordId != null ? String(entry.travelRecordId) : ''
   amountInput.value = String(Number(entry.amount || 0))
   isEntryTimeEnabled.value = hasEntryTimeValue(entry.entryTime)
 }
@@ -1387,11 +1529,16 @@ function findCategoryDetailByKeywords(groupId, keywords) {
 
 async function startTravelLedgerEntry(entryType = 'EXPENSE') {
   const normalizedEntryType = entryType === 'INCOME' ? 'INCOME' : 'EXPENSE'
+  const selectedPlan = selectedHouseholdTravelPlan.value
+  const entryDate = resolveSelectedTravelEntryDate()
   householdTab.value = 'calendar'
-  resetEntryForm({ entryDate: statsControls.anchorDate || householdAnchorDate.value || today })
+  resetEntryForm({ entryDate })
   entryForm.entryType = normalizedEntryType
   entryForm.title = normalizedEntryType === 'INCOME' ? '여행 수입 : ' : '여행 : '
-  entryForm.memo = '여행 가계부'
+  entryForm.memo = selectedPlan?.name ? `여행 가계부 · ${selectedPlan.name}` : '여행 가계부'
+  entryForm.travelPlanId = selectedPlan?.id ? String(selectedPlan.id) : ''
+  entryForm.travelRecordId = ''
+  calendarAnchorDate.value = entryDate
 
   const travelGroup = normalizedEntryType === 'INCOME'
     ? findCategoryGroupByKeywords('INCOME', ['여행', '정산', '환급', '수입', '외화'])
@@ -1764,6 +1911,8 @@ function buildEntryPayload() {
     categoryGroupId: Number(entryForm.categoryGroupId),
     categoryDetailId: entryForm.categoryDetailId ? Number(entryForm.categoryDetailId) : null,
     paymentMethodId: resolveEntryPaymentMethodPayload(entryForm.entryType, entryForm.paymentMethodId),
+    travelPlanId: entryForm.travelPlanId ? Number(entryForm.travelPlanId) : null,
+    travelRecordId: entryForm.travelRecordId ? Number(entryForm.travelRecordId) : null,
   }
   if (entryForm.currencyMode === 'FOREIGN') {
     payload.foreignCurrencyCode = normalizeForeignCurrencyCode(entryForm.foreignCurrencyCode)
@@ -2531,6 +2680,15 @@ async function deactivatePayment(paymentId) {
       :format-currency="formatCurrency"
       :format-short-date="formatShortDate"
       :format-time="formatTime"
+      :travel-plans="householdTravelPlans"
+      :selected-travel-plan-id="selectedHouseholdTravelPlanId"
+      :travel-plan-form="householdTravelPlanForm"
+      :travel-plan-loading="isHouseholdTravelPlanLoading"
+      :travel-plan-submitting="isHouseholdTravelPlanSubmitting"
+      :travel-plan-error="householdTravelPlanError"
+      @select-travel-plan="selectHouseholdTravelPlan"
+      @create-travel-plan="createHouseholdTravelPlan"
+      @reset-travel-plan-form="resetHouseholdTravelPlanForm"
       @start-travel-entry="startTravelLedgerEntry"
       @open-travel-search="openTravelLedgerSearch"
       @view-travel-entry-date="viewTravelLedgerEntryDate"

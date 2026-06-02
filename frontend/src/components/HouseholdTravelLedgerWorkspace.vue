@@ -30,9 +30,41 @@ const props = defineProps({
     type: Function,
     required: true,
   },
+  travelPlans: {
+    type: Array,
+    default: () => [],
+  },
+  selectedTravelPlanId: {
+    type: String,
+    default: '',
+  },
+  travelPlanForm: {
+    type: Object,
+    default: () => ({}),
+  },
+  travelPlanLoading: {
+    type: Boolean,
+    default: false,
+  },
+  travelPlanSubmitting: {
+    type: Boolean,
+    default: false,
+  },
+  travelPlanError: {
+    type: String,
+    default: '',
+  },
 })
 
-const emit = defineEmits(['start-travel-entry', 'open-travel-search', 'view-travel-entry-date', 'edit-travel-entry'])
+const emit = defineEmits([
+  'select-travel-plan',
+  'create-travel-plan',
+  'reset-travel-plan-form',
+  'start-travel-entry',
+  'open-travel-search',
+  'view-travel-entry-date',
+  'edit-travel-entry',
+])
 const travelKeywordFilter = ref('')
 const activeTravelType = ref('all')
 const activeEntryType = ref('all')
@@ -188,6 +220,16 @@ const travelTypeStats = computed(() => {
 const activeTravelTypeOption = computed(() =>
   travelTypeOptions.find((option) => option.key === activeTravelType.value) || travelTypeOptions[0],
 )
+const selectedTravelPlan = computed(() =>
+  props.travelPlans.find((plan) => String(plan.id) === String(props.selectedTravelPlanId)) || null,
+)
+const selectedTravelPlanRangeLabel = computed(() => {
+  const plan = selectedTravelPlan.value
+  if (!plan?.startDate || !plan?.endDate) {
+    return '여행 기간 미설정'
+  }
+  return `${plan.startDate} - ${plan.endDate}`
+})
 
 const travelSearchKeyword = computed(() =>
   String(travelKeywordFilter.value || activeTravelTypeOption.value.keywords?.[0] || '여행').trim(),
@@ -298,6 +340,68 @@ function openTravelSearch() {
       </div>
       <span class="panel__badge">{{ statsRangeLabel }}</span>
     </div>
+
+    <section class="household-travel-ledger__connection">
+      <div class="household-travel-ledger__connection-main">
+        <label class="field">
+          <span class="field__label">여행 연결</span>
+          <select
+            :value="selectedTravelPlanId"
+            :disabled="travelPlanLoading"
+            @change="emit('select-travel-plan', $event.target.value)"
+          >
+            <option value="">연결하지 않고 보기</option>
+            <option v-for="plan in travelPlans" :key="plan.id" :value="String(plan.id)">
+              {{ plan.name }} / {{ plan.destination || '목적지 미정' }} / {{ plan.startDate }} - {{ plan.endDate }}
+            </option>
+          </select>
+        </label>
+        <div class="household-travel-ledger__connection-copy">
+          <strong>{{ selectedTravelPlan ? selectedTravelPlan.name : '여행 미연결' }}</strong>
+          <span>
+            {{
+              selectedTravelPlan
+                ? `${selectedTravelPlanRangeLabel} 기간으로 조회하고 새 거래에는 여행 연결값을 함께 저장합니다.`
+                : '기존 가계부 데이터를 유지하면서 여행 키워드와 연결 거래를 모아 봅니다.'
+            }}
+          </span>
+        </div>
+      </div>
+
+      <div class="household-travel-ledger__plan-form">
+        <label class="field">
+          <span class="field__label">새 여행 이름</span>
+          <input v-model="travelPlanForm.name" type="text" placeholder="가을 일본 여행" />
+        </label>
+        <label class="field">
+          <span class="field__label">목적지</span>
+          <input v-model="travelPlanForm.destination" type="text" placeholder="오사카, 교토" />
+        </label>
+        <label class="field">
+          <span class="field__label">시작일</span>
+          <input v-model="travelPlanForm.startDate" type="date" />
+        </label>
+        <label class="field">
+          <span class="field__label">종료일</span>
+          <input v-model="travelPlanForm.endDate" type="date" />
+        </label>
+        <label class="field">
+          <span class="field__label">통화</span>
+          <input v-model="travelPlanForm.homeCurrency" type="text" maxlength="3" />
+        </label>
+        <label class="field">
+          <span class="field__label">인원</span>
+          <input v-model="travelPlanForm.headCount" type="number" min="1" step="1" />
+        </label>
+        <div class="entry-editor__actions household-travel-ledger__plan-actions">
+          <button class="button button--ghost" type="button" @click="emit('reset-travel-plan-form')">초기화</button>
+          <button class="button button--secondary" type="button" :disabled="travelPlanSubmitting" @click="emit('create-travel-plan')">
+            {{ travelPlanSubmitting ? '여행 생성 중...' : '가계부에서 여행 생성' }}
+          </button>
+        </div>
+      </div>
+      <p v-if="travelPlanError" class="feedback feedback--error household-travel-ledger__connection-error">{{ travelPlanError }}</p>
+    </section>
 
     <div class="household-travel-ledger__toolbar">
       <div class="scope-toggle scope-toggle--wrap">

@@ -32,57 +32,35 @@ const travelModes = [
     label: '기록 지도',
     meta: '사진, 방문 장소, 이동 경로',
     badge: 'MAP',
+    actionLabel: '지도 열기',
   },
   {
     key: 'memories',
     label: '장소 기록',
     meta: '방문지와 메모',
     badge: 'VISIT',
+    actionLabel: '기록 작성',
   },
   {
     key: 'routes',
     label: 'GPX 경로',
     meta: '이동 기록 정리',
     badge: 'GPX',
+    actionLabel: '경로 관리',
   },
   {
     key: 'photos',
     label: '내 사진',
     meta: '업로드 사진첩',
     badge: 'PHOTO',
+    actionLabel: '사진 보기',
   },
   {
     key: 'share',
     label: '여행 공유',
     meta: '공개/선택 공유',
     badge: 'SHARE',
-  },
-]
-
-const travelRecordActions = [
-  {
-    key: 'memories',
-    label: '장소 방문 기록',
-    meta: '방문지, 메모, 좌표',
-    action: '기록하기',
-  },
-  {
-    key: 'routes',
-    label: 'GPX 경로 정리',
-    meta: '이동 경로, 구간',
-    action: '경로 보기',
-  },
-  {
-    key: 'photos',
-    label: '사진첩 정리',
-    meta: '시간순, 장소별 사진',
-    action: '사진 보기',
-  },
-  {
-    key: 'share',
-    label: '여행 공유',
-    meta: '공개/선택 공유 지도',
-    action: '공유 보기',
+    actionLabel: '공유 관리',
   },
 ]
 
@@ -100,32 +78,6 @@ const travelRecordSummary = computed(() => {
     routes: readCount(portfolio.routeSegmentCount, routeSegments.length),
     shared: memoryRecords.filter((record) => Boolean(record.sharedWithCommunity)).length,
   }
-})
-
-const travelRecordFocusStats = computed(() => {
-  const portfolio = travelPortfolio.value || {}
-  const memoryRecords = Array.isArray(portfolio.memoryRecords) ? portfolio.memoryRecords : []
-  const records = Array.isArray(portfolio.records) ? portfolio.records : []
-  const taggedRecords = [...memoryRecords, ...records]
-
-  return [
-    {
-      label: '방문 지역',
-      value: uniqueRecordValues(taggedRecords, 'region').length,
-    },
-    {
-      label: '방문 장소',
-      value: uniqueRecordValues(taggedRecords, 'placeName').length,
-    },
-    {
-      label: '사진',
-      value: travelRecordSummary.value.photos,
-    },
-    {
-      label: 'GPX',
-      value: travelRecordSummary.value.routes,
-    },
-  ]
 })
 
 const travelRecentActivities = computed(() => {
@@ -303,16 +255,6 @@ const travelSummaryText = computed(() => {
 function readCount(value, fallback = 0) {
   const numericValue = Number(value)
   return Number.isFinite(numericValue) && numericValue >= 0 ? numericValue : fallback
-}
-
-function uniqueRecordValues(records, key) {
-  return [
-    ...new Set(
-      (records || [])
-        .map((record) => String(record?.[key] || '').trim())
-        .filter(Boolean),
-    ),
-  ]
 }
 
 function normalizeLocationPart(value) {
@@ -600,12 +542,14 @@ onMounted(loadTravelSummary)
           class="travel-record-switcher__card"
           :class="{ 'travel-record-switcher__card--active': primaryTab === mode.key }"
           type="button"
+          :aria-label="`${mode.label}: ${mode.meta}`"
           @click="openMode(mode.key)"
         >
           <span>{{ mode.badge }}</span>
           <strong>{{ mode.label }}</strong>
           <small>{{ mode.meta }}</small>
           <em>{{ travelSummaryLoading ? '불러오는 중' : getModeMetric(mode.key) }}</em>
+          <b class="travel-record-switcher__action">{{ mode.actionLabel }}</b>
         </button>
       </div>
       <div class="travel-record-switcher__summary">
@@ -627,38 +571,6 @@ onMounted(loadTravelSummary)
             기존 예산 보기
           </button>
         </div>
-      </div>
-    </section>
-
-    <section class="panel travel-record-action-panel">
-      <div class="travel-record-action-panel__main">
-        <div class="panel__header">
-          <div>
-            <span class="panel__eyebrow">RECORD HUB</span>
-            <h2>기록 작업</h2>
-          </div>
-          <span class="panel__badge">지도 중심</span>
-        </div>
-        <div class="travel-record-action-grid">
-          <button
-            v-for="action in travelRecordActions"
-            :key="action.key"
-            class="travel-record-action-card"
-            :class="{ 'travel-record-action-card--active': primaryTab === action.key }"
-            type="button"
-            @click="openMode(action.key)"
-          >
-            <span>{{ action.meta }}</span>
-            <strong>{{ action.label }}</strong>
-            <small>{{ action.action }}</small>
-          </button>
-        </div>
-      </div>
-      <div class="travel-record-action-panel__stats">
-        <article v-for="stat in travelRecordFocusStats" :key="stat.label">
-          <span>{{ stat.label }}</span>
-          <strong>{{ travelSummaryLoading ? '-' : stat.value.toLocaleString('ko-KR') }}</strong>
-        </article>
       </div>
     </section>
 

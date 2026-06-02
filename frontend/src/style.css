@@ -2287,7 +2287,7 @@ button {
 
 .travel-record-switcher__card {
   display: grid;
-  min-height: 92px;
+  min-height: 116px;
   gap: 6px;
   align-content: center;
   padding: 16px;
@@ -2332,17 +2332,30 @@ button {
   color: var(--text-soft);
 }
 
-.travel-record-switcher__card em {
+.travel-record-switcher__card em,
+.travel-record-switcher__action {
   width: fit-content;
   max-width: 100%;
   padding: 4px 8px;
   border-radius: 8px;
+  overflow-wrap: anywhere;
+}
+
+.travel-record-switcher__card em {
   background: color-mix(in srgb, var(--surface-muted) 78%, var(--accent) 22%);
   color: var(--accent-strong);
   font-size: 0.78rem;
   font-style: normal;
   font-weight: 900;
-  overflow-wrap: anywhere;
+}
+
+.travel-record-switcher__action {
+  border: 1px solid var(--line);
+  background: var(--surface-soft);
+  color: var(--text);
+  font-size: 0.78rem;
+  font-weight: 900;
+  line-height: 1.25;
 }
 
 .travel-record-switcher__summary {
@@ -2396,96 +2409,6 @@ button {
   flex: 0 0 auto;
   align-items: center;
   gap: 8px;
-}
-
-.travel-record-action-panel {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(260px, 0.34fr);
-  gap: 16px;
-  align-items: stretch;
-}
-
-.travel-record-action-panel__main {
-  display: grid;
-  gap: 14px;
-  min-width: 0;
-}
-
-.travel-record-action-grid {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 10px;
-}
-
-.travel-record-action-card {
-  display: grid;
-  gap: 6px;
-  min-height: 110px;
-  align-content: center;
-  padding: 16px;
-  border: 1px solid var(--line);
-  border-radius: 16px;
-  background: var(--surface);
-  color: var(--text);
-  text-align: left;
-  cursor: pointer;
-}
-
-.travel-record-action-card:hover {
-  border-color: rgba(49, 130, 246, 0.34);
-  background: var(--surface-soft);
-}
-
-.travel-record-action-card--active {
-  border-color: rgba(49, 130, 246, 0.5);
-  background: linear-gradient(180deg, rgba(49, 130, 246, 0.14), rgba(49, 130, 246, 0.05));
-}
-
-.travel-record-action-card span {
-  color: var(--accent);
-  font-size: 0.78rem;
-  font-weight: 900;
-}
-
-.travel-record-action-card strong,
-.travel-record-action-card small {
-  min-width: 0;
-  overflow-wrap: anywhere;
-}
-
-.travel-record-action-card small {
-  color: var(--text-soft);
-  font-weight: 800;
-}
-
-.travel-record-action-panel__stats {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
-  align-content: stretch;
-}
-
-.travel-record-action-panel__stats article {
-  display: grid;
-  gap: 6px;
-  align-content: center;
-  min-height: 90px;
-  padding: 16px;
-  border: 1px solid var(--line);
-  border-radius: 16px;
-  background: var(--surface-soft);
-}
-
-.travel-record-action-panel__stats span {
-  color: var(--text-soft);
-  font-size: 0.82rem;
-  font-weight: 800;
-}
-
-.travel-record-action-panel__stats strong {
-  color: var(--text);
-  font-size: 1.5rem;
-  line-height: 1;
 }
 
 .travel-place-index {
@@ -2707,14 +2630,6 @@ button {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
-  .travel-record-action-panel {
-    grid-template-columns: 1fr;
-  }
-
-  .travel-record-action-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
   .travel-record-timeline__grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -2736,16 +2651,6 @@ button {
   .travel-record-switcher__card {
     min-height: 84px;
     padding: 14px;
-  }
-
-  .travel-record-action-grid,
-  .travel-record-action-panel__stats {
-    grid-template-columns: 1fr;
-  }
-
-  .travel-record-action-card,
-  .travel-record-action-panel__stats article {
-    min-height: auto;
   }
 
   .travel-record-timeline__grid {
@@ -3194,6 +3099,59 @@ button {
 
 .household-travel-ledger__header {
   align-items: flex-start;
+}
+
+.household-travel-ledger__connection {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--surface-soft);
+}
+
+.household-travel-ledger__connection-main {
+  display: grid;
+  grid-template-columns: minmax(220px, 0.42fr) minmax(0, 1fr);
+  gap: 12px;
+  align-items: end;
+}
+
+.household-travel-ledger__connection-copy {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+}
+
+.household-travel-ledger__connection-copy strong,
+.household-travel-ledger__connection-copy span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.household-travel-ledger__connection-copy span {
+  color: var(--text-soft);
+  line-height: 1.45;
+}
+
+.household-travel-ledger__plan-form {
+  display: grid;
+  grid-template-columns: minmax(160px, 1.1fr) minmax(160px, 1fr) repeat(4, minmax(120px, 0.7fr));
+  gap: 10px;
+  align-items: end;
+}
+
+.household-travel-ledger__plan-actions {
+  grid-column: span 2;
+  margin: 0;
+}
+
+.household-travel-ledger__connection-error {
+  margin: 0;
 }
 
 .household-travel-ledger__toolbar {
@@ -6344,6 +6302,8 @@ textarea {
   .search-bulk-toolbar,
   .stats-toolbar__fields,
   .manager-grid,
+  .household-travel-ledger__connection-main,
+  .household-travel-ledger__plan-form,
   .household-travel-ledger__types,
   .household-travel-ledger__summary,
   .household-travel-ledger__content,
@@ -6404,8 +6364,14 @@ textarea {
 
   .household-travel-ledger__summary,
   .household-travel-ledger__types,
+  .household-travel-ledger__connection-main,
+  .household-travel-ledger__plan-form,
   .household-travel-ledger__content {
     grid-template-columns: 1fr;
+  }
+
+  .household-travel-ledger__plan-actions {
+    grid-column: auto;
   }
 
   .travel-my-photos__filters,

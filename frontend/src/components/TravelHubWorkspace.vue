@@ -2271,7 +2271,13 @@ async function openPortfolioMemoryEditor(payload) {
     </template>
 
     <template v-else-if="route === 'travel-log'">
-      <section class="panel"><div class="scope-toggle"><button class="button" :class="{ 'button--primary': logTab === 'overview' }" @click="logTab = 'overview'">여행 보기</button><button class="button" :class="{ 'button--primary': logTab === 'memories' }" @click="logTab = 'memories'">여행 기록</button><button class="button" :class="{ 'button--primary': logTab === 'routes' }" @click="logTab = 'routes'">이동 경로</button></div></section>
+      <section v-if="!integratedMode" class="panel">
+        <div class="scope-toggle">
+          <button class="button" :class="{ 'button--primary': logTab === 'overview' }" @click="logTab = 'overview'">여행 보기</button>
+          <button class="button" :class="{ 'button--primary': logTab === 'memories' }" @click="logTab = 'memories'">여행 기록</button>
+          <button class="button" :class="{ 'button--primary': logTab === 'routes' }" @click="logTab = 'routes'">이동 경로</button>
+        </div>
+      </section>
       <section class="panel">
         <div class="panel__header">
           <div>

@@ -237,6 +237,23 @@ class TravelPlanUserScopeIntegrationTest {
     }
 
     @Test
+    void newHouseholdTravelLedgerEntryMustStayWithinTravelDates() throws Exception {
+        MockHttpSession hanaSession = loginAndGetSession("hana");
+        AppUser hana = appUserRepository.findByLoginId("hana").orElseThrow();
+
+        Long planId = createTravelPlan(hanaSession, "Date limited trip");
+        Map<String, Object> payload = buildHouseholdExpenseEntryPayload(hana.getId(), "2026-05-10", "Outside range", "1000");
+        payload.put("travelPlanId", planId);
+
+        mockMvc.perform(post("/api/entries")
+                        .with(csrf())
+                        .session(hanaSession)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(payload)))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
     void travelMemoryCrudIsScopedPerUser() throws Exception {
         MockHttpSession hanaSession = loginAndGetSession("hana");
         MockHttpSession minsuSession = loginAndGetSession("minsu");
@@ -535,6 +552,23 @@ class TravelPlanUserScopeIntegrationTest {
             String title,
             String amount
     ) throws Exception {
+        Map<String, Object> payload = buildHouseholdExpenseEntryPayload(ownerId, entryDate, title, amount);
+
+        return readId(mockMvc.perform(post("/api/entries")
+                        .with(csrf())
+                        .session(session)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(payload)))
+                .andExpect(status().isOk())
+                .andReturn());
+    }
+
+    private Map<String, Object> buildHouseholdExpenseEntryPayload(
+            Long ownerId,
+            String entryDate,
+            String title,
+            String amount
+    ) {
         CategoryGroup group = categoryGroupRepository.findAllByOwnerIdAndEntryTypeAndActiveTrueOrderByDisplayOrderAscIdAsc(ownerId, EntryType.EXPENSE)
                 .stream()
                 .findFirst()
@@ -556,14 +590,7 @@ class TravelPlanUserScopeIntegrationTest {
         payload.put("paymentMethodId", paymentMethod.getId());
         payload.put("travelPlanId", null);
         payload.put("travelRecordId", null);
-
-        return readId(mockMvc.perform(post("/api/entries")
-                        .with(csrf())
-                        .session(session)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(payload)))
-                .andExpect(status().isOk())
-                .andReturn());
+        return payload;
     }
 
     private Long createMemoryRecord(

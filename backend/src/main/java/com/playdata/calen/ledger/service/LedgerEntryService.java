@@ -35,6 +35,7 @@ import com.playdata.calen.ledger.repository.LedgerEntryChangeHistoryRepository;
 import com.playdata.calen.ledger.repository.LedgerEntryRepository;
 import com.playdata.calen.ledger.repository.PaymentMethodRepository;
 import com.playdata.calen.travel.dto.TravelExchangeRateResponse;
+import com.playdata.calen.travel.repository.TravelPlanRepository;
 import com.playdata.calen.travel.service.ExchangeRateService;
 import java.io.ByteArrayInputStream;
 import java.math.BigDecimal;
@@ -78,6 +79,7 @@ public class LedgerEntryService {
     private final CategoryGroupRepository categoryGroupRepository;
     private final CategoryDetailRepository categoryDetailRepository;
     private final PaymentMethodRepository paymentMethodRepository;
+    private final TravelPlanRepository travelPlanRepository;
     private final ExchangeRateService exchangeRateService;
     private final ObjectMapper objectMapper;
 
@@ -1032,6 +1034,7 @@ public class LedgerEntryService {
 
         LedgerEntryTextSanitizer.SanitizedLedgerText sanitizedText = LedgerEntryTextSanitizer.sanitize(request.title(), request.memo());
         ForeignExchangeValues exchangeValues = resolveForeignExchange(request);
+        validateNewTravelLedgerDate(userId, request);
 
         ledgerEntry.setEntryDate(request.entryDate());
         ledgerEntry.setEntryTime(request.entryTime());
@@ -1049,6 +1052,20 @@ public class LedgerEntryService {
         ledgerEntry.setPaymentMethod(paymentMethod);
         ledgerEntry.setTravelPlanId(request.travelPlanId());
         ledgerEntry.setTravelRecordId(request.travelRecordId());
+    }
+
+    private void validateNewTravelLedgerDate(Long userId, LedgerEntryRequest request) {
+        if (request.travelPlanId() == null || request.travelRecordId() != null) {
+            return;
+        }
+        travelPlanRepository.findByIdAndOwnerId(request.travelPlanId(), userId)
+                .ifPresentOrElse(plan -> {
+                    if (request.entryDate().isBefore(plan.getStartDate()) || request.entryDate().isAfter(plan.getEndDate())) {
+                        throw new BadRequestException("Travel ledger entries must stay within the selected travel period.");
+                    }
+                }, () -> {
+                    throw new BadRequestException("Travel plan not found.");
+                });
     }
 
     private ForeignExchangeValues resolveForeignExchange(LedgerEntryRequest request) {

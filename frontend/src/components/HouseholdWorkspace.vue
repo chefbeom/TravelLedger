@@ -304,6 +304,19 @@ const availableDetails = computed(() => {
 const selectedHouseholdTravelPlan = computed(() =>
   householdTravelPlans.value.find((plan) => String(plan.id) === String(selectedHouseholdTravelPlanId.value)) || null,
 )
+const entryTravelPlanDateLimit = computed(() => {
+  if (!entryForm.travelPlanId) {
+    return { min: '', max: '' }
+  }
+  const plan = householdTravelPlans.value.find((item) => String(item.id) === String(entryForm.travelPlanId))
+  if (!plan?.startDate || !plan?.endDate) {
+    return { min: '', max: '' }
+  }
+  return {
+    min: plan.startDate,
+    max: plan.endDate,
+  }
+})
 const amountPreview = computed(() => Number(entryForm.amount || 0))
 const isForeignCurrencyMode = computed(() => entryForm.currencyMode === 'FOREIGN')
 const canUndoLastEntryAction = computed(() => Boolean(undoableEntryAction.value?.entryId))
@@ -1148,6 +1161,19 @@ async function linkTravelLedgerEntry(entry) {
     setFeedback('', error.message)
   } finally {
     linkingTravelEntryId.value = ''
+  }
+}
+
+function validateEntryTravelDate() {
+  if (!entryForm.travelPlanId) {
+    return
+  }
+  const plan = householdTravelPlans.value.find((item) => String(item.id) === String(entryForm.travelPlanId))
+  if (!plan?.startDate || !plan?.endDate) {
+    return
+  }
+  if (String(entryForm.entryDate) < String(plan.startDate) || String(entryForm.entryDate) > String(plan.endDate)) {
+    throw new Error(`여행 가계부 거래는 ${plan.startDate} - ${plan.endDate} 기간 안에서만 입력할 수 있습니다.`)
   }
 }
 
@@ -2189,6 +2215,7 @@ async function submitEntry() {
   activeSubmit.value = 'entry'
   setFeedback()
   try {
+    validateEntryTravelDate()
     if (entryForm.currencyMode === 'FOREIGN') {
       syncForeignKrwAmount()
       if (!entryForm.foreignAmount || Number(entryForm.foreignAmount) <= 0) {
@@ -2683,6 +2710,7 @@ async function deactivatePayment(paymentId) {
       :calendar-weeks="calendarWeeks"
       :entries="sortedMonthEntries"
       :entry-form="entryForm"
+      :entry-date-limit="entryTravelPlanDateLimit"
       :is-editing-entry="isEditingEntry"
       :is-submitting="isSubmitting"
       :active-submit="activeSubmit"

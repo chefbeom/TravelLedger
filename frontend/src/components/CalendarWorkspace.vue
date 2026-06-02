@@ -152,6 +152,10 @@ const props = defineProps({
     type: Object,
     required: true,
   },
+  entryDateLimit: {
+    type: Object,
+    default: () => ({ min: '', max: '' }),
+  },
   isEditingEntry: {
     type: Boolean,
     default: false,
@@ -667,13 +671,30 @@ const calendarLayoutGridStyle = computed(() => ({
   '--calendar-layout-grid-gap': `${CALENDAR_LAYOUT_GRID_GAP}px`,
   '--calendar-layout-grid-margin': `${CALENDAR_LAYOUT_GRID_MARGIN}px`,
 }))
+const entryDateMin = computed(() => props.entryDateLimit?.min || '')
+const entryDateMax = computed(() => props.entryDateLimit?.max || '')
+
+function clampEntryDate(value) {
+  const date = String(value || '')
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    return date
+  }
+  if (entryDateMin.value && date < entryDateMin.value) {
+    return entryDateMin.value
+  }
+  if (entryDateMax.value && date > entryDateMax.value) {
+    return entryDateMax.value
+  }
+  return date
+}
 
 watch(
   () => props.anchorDate,
   (value) => {
-    const currentMonthKey = value.slice(0, 7)
+    const nextDate = clampEntryDate(value)
+    const currentMonthKey = nextDate.slice(0, 7)
     if (!selectedDate.value || !selectedDate.value.startsWith(currentMonthKey)) {
-      selectedDate.value = value
+      selectedDate.value = nextDate
     }
   },
   { immediate: true },
@@ -699,12 +720,43 @@ watch(
 )
 
 watch(selectedDate, (value) => {
+  const nextDate = clampEntryDate(value)
+  if (nextDate && nextDate !== value) {
+    selectedDate.value = nextDate
+    return
+  }
   if (!props.isEditingEntry) {
-    props.entryForm.entryDate = value
+    props.entryForm.entryDate = nextDate
   }
   selectedDayEntryPage.value = 0
   selectedDayEntrySelection.clearSelection()
 })
+
+watch(
+  () => props.entryForm.entryDate,
+  (value) => {
+    const nextDate = clampEntryDate(value)
+    if (nextDate && nextDate !== value) {
+      props.entryForm.entryDate = nextDate
+      return
+    }
+    if (nextDate && selectedDate.value !== nextDate) {
+      selectedDate.value = nextDate
+    }
+  },
+)
+
+watch(
+  () => [entryDateMin.value, entryDateMax.value],
+  () => {
+    const nextDate = clampEntryDate(props.entryForm.entryDate || selectedDate.value || props.anchorDate)
+    if (!nextDate) {
+      return
+    }
+    props.entryForm.entryDate = nextDate
+    selectedDate.value = nextDate
+  },
+)
 
 watch(selectedDaySort, () => {
   selectedDayEntryPage.value = 0
@@ -1780,7 +1832,7 @@ function shiftEntryDate(offset) {
     new Date()
 
   baseDate.setDate(baseDate.getDate() + Number(offset || 0))
-  const nextDate = getLocalIsoDate(baseDate)
+  const nextDate = clampEntryDate(getLocalIsoDate(baseDate))
 
   props.entryForm.entryDate = nextDate
   selectedDate.value = nextDate
@@ -1829,14 +1881,15 @@ function focusEntryEditorControl() {
 }
 
 function selectCalendarDay(day) {
-  selectedDate.value = day.date
+  const nextDate = clampEntryDate(day.date)
+  selectedDate.value = nextDate
 
   if (!props.isEditingEntry) {
-    props.entryForm.entryDate = day.date
+    props.entryForm.entryDate = nextDate
   }
 
-  if (!day.inCurrentMonth) {
-    emit('change-anchor-month', day.date)
+  if (nextDate.slice(0, 7) !== String(props.anchorDate || '').slice(0, 7)) {
+    emit('change-anchor-month', nextDate)
   }
 }
 
@@ -2386,7 +2439,7 @@ defineExpose({
                   >
                     &lt;
                   </button>
-                  <input v-model="entryForm.entryDate" type="date" />
+                  <input v-model="entryForm.entryDate" type="date" :min="entryDateMin" :max="entryDateMax" />
                   <button
                     type="button"
                     class="entry-date-control__step"

@@ -76,6 +76,8 @@ const props = defineProps({
   },
 })
 
+const emit = defineEmits(['open-travel-record-location'])
+
 const compareUnitLabels = {
   DAY: '일간',
   WEEK: '주간',
@@ -1162,6 +1164,19 @@ async function linkTravelLedgerEntry(entry) {
   } finally {
     linkingTravelEntryId.value = ''
   }
+}
+
+function openTravelRecordLocation(entry) {
+  const travelPlanId = entry?.travelPlanId || selectedHouseholdTravelPlan.value?.id
+  const travelRecordId = entry?.travelRecordId
+  if (!travelPlanId || !travelRecordId) {
+    setFeedback('', '먼저 여행 기록에 연결된 지출을 선택해주세요.')
+    return
+  }
+  emit('open-travel-record-location', {
+    travelPlanId,
+    travelRecordId,
+  })
 }
 
 function validateEntryTravelDate() {
@@ -2782,6 +2797,7 @@ async function deactivatePayment(paymentId) {
       @view-travel-entry-date="viewTravelLedgerEntryDate"
       @edit-travel-entry="editTravelLedgerEntry"
       @link-travel-entry="linkTravelLedgerEntry"
+      @open-travel-record-location="openTravelRecordLocation"
     />
 
     <StatisticsWorkspace

@@ -3404,10 +3404,10 @@ button {
 
 .household-travel-ledger__entry-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   align-items: center;
   justify-content: flex-end;
-  white-space: nowrap;
 }
 
 .household-travel-ledger__entry-actions .button {

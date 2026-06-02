@@ -86,6 +86,10 @@ const props = defineProps({
     type: Object,
     default: null,
   },
+  externalRecordFocusRequest: {
+    type: Object,
+    default: null,
+  },
   externalRouteFocusRequest: {
     type: Object,
     default: null,
@@ -160,6 +164,7 @@ const memoryRefreshKey = ref(0)
 const routeRefreshKey = ref(0)
 const memoryFocusRequest = ref(null)
 const appliedExternalMemoryFocusToken = ref('')
+const appliedExternalRecordFocusToken = ref('')
 const memoryUploadProgress = reactive({
   active: false,
   title: '사진을 업로드하는 중입니다.',
@@ -1480,6 +1485,14 @@ watch(
 )
 
 watch(
+  () => [props.externalRecordFocusRequest?.token, travelPlans.value.length],
+  async () => {
+    await applyExternalRecordFocusRequest(props.externalRecordFocusRequest)
+  },
+  { immediate: true },
+)
+
+watch(
   () => [props.externalRouteFocusRequest?.token, travelPlans.value.length],
   async () => {
     await applyExternalRouteFocusRequest(props.externalRouteFocusRequest)
@@ -1540,6 +1553,46 @@ async function applyExternalMemoryFocusRequest(request) {
     token,
   }
   appliedExternalMemoryFocusToken.value = token
+}
+
+async function applyExternalRecordFocusRequest(request) {
+  const token = String(request?.token || '')
+  if (!token || token === appliedExternalRecordFocusToken.value) {
+    return
+  }
+
+  const targetPlanId = String(request?.planId || request?.travelPlanId || '').trim()
+  const targetRecordId = String(request?.recordId || request?.travelRecordId || '').trim()
+  if (!targetPlanId || !targetRecordId) {
+    appliedExternalRecordFocusToken.value = token
+    return
+  }
+  if (!travelPlans.value.length) {
+    return
+  }
+  if (!travelPlans.value.some((item) => String(item.id) === targetPlanId)) {
+    appliedExternalRecordFocusToken.value = token
+    setFeedback('', '연결된 여행을 찾지 못했습니다.')
+    return
+  }
+
+  if (String(selectedPlanId.value || '') !== targetPlanId || !travelPlan.value) {
+    selectedPlanId.value = targetPlanId
+    await refreshTravelData(targetPlanId, false)
+  }
+
+  moneyTab.value = 'records'
+  const targetRecord = (travelPlan.value?.records ?? []).find((record) => String(record.id) === targetRecordId)
+  if (!targetRecord) {
+    appliedExternalRecordFocusToken.value = token
+    setFeedback('', '연결된 여행 지출 기록을 찾지 못했습니다.')
+    return
+  }
+
+  selectedRecordDate.value = targetRecord.expenseDate || ''
+  fillRecordForm(targetRecord)
+  appliedExternalRecordFocusToken.value = token
+  setFeedback('연결된 가계부 지출을 여행 위치 설정 화면으로 열었습니다. 지도에서 위치를 찍거나 GPS 좌표를 저장할 수 있습니다.')
 }
 
 async function applyExternalRouteFocusRequest(request) {

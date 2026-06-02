@@ -69,6 +69,7 @@ const emit = defineEmits([
   'view-travel-entry-date',
   'edit-travel-entry',
   'link-travel-entry',
+  'open-travel-record-location',
 ])
 const travelKeywordFilter = ref('')
 const activeTravelType = ref('all')
@@ -662,6 +663,14 @@ function openTravelSearch() {
                     <span v-else-if="entry.travelRecordId" class="household-travel-ledger__link-badge">
                       여행 기록 연결됨
                     </span>
+                    <button
+                      v-if="entry.travelRecordId"
+                      class="button button--secondary"
+                      type="button"
+                      @click="emit('open-travel-record-location', entry)"
+                    >
+                      위치 설정
+                    </button>
                     <button class="button button--ghost" type="button" @click="emit('view-travel-entry-date', entry)">
                       이동
                     </button>

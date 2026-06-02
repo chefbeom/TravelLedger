@@ -10,6 +10,10 @@ const props = defineProps({
     type: String,
     default: 'travel',
   },
+  recordFocusRequest: {
+    type: Object,
+    default: null,
+  },
 })
 
 const emit = defineEmits(['open-household-travel-ledger'])
@@ -708,6 +712,7 @@ onMounted(loadTravelSummary)
         :integrated-photo-mode="isIntegratedPhotoMode"
         :initial-log-tab="hubInitialLogTab"
         :initial-money-tab="hubInitialMoneyTab"
+        :external-record-focus-request="recordFocusRequest"
         :external-memory-focus-request="hubPlaceFocusRequest"
         :external-photo-focus-request="hubPhotoFocusRequest"
         :external-route-focus-request="hubRouteFocusRequest"

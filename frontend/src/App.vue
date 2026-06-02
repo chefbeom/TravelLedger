@@ -301,6 +301,7 @@ const errorMessage = ref('')
 const activeRoute = ref(initialRouteState.route)
 const inviteToken = ref(initialRouteState.token)
 const householdInitialTab = ref('')
+const travelRecordFocusRequest = ref(null)
 const inviteInfo = ref(null)
 const isInviteLoading = ref(false)
 const themeMode = ref('default')
@@ -580,6 +581,19 @@ function navigate(route, options = {}) {
 
 function navigateHouseholdTravelLedger() {
   navigate('household', { householdTab: 'travel-ledger' })
+}
+
+function navigateTravelRecordLocation(payload = {}) {
+  const planId = String(payload?.travelPlanId || payload?.planId || '').trim()
+  const recordId = String(payload?.travelRecordId || payload?.recordId || '').trim()
+  if (planId && recordId) {
+    travelRecordFocusRequest.value = {
+      planId,
+      recordId,
+      token: Date.now(),
+    }
+  }
+  navigate('travel-money')
 }
 
 function isHeaderNavActive(route) {
@@ -966,11 +980,13 @@ onBeforeUnmount(() => {
           v-else-if="activeRoute === 'household'"
           :current-user="currentUser"
           :initial-tab="householdInitialTab"
+          @open-travel-record-location="navigateTravelRecordLocation"
         />
         <CalenDriveWorkspace v-else-if="activeRoute === 'drive'" :current-user="currentUser" />
         <TravelWorkspace
           v-else-if="travelRouteKeys.has(activeRoute)"
           :route="activeRoute"
+          :record-focus-request="travelRecordFocusRequest"
           @open-household-travel-ledger="navigateHouseholdTravelLedger"
         />
       </div>

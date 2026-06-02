@@ -596,6 +596,13 @@ function navigateTravelRecordLocation(payload = {}) {
   navigate('travel-money')
 }
 
+function clearTravelRecordFocusRequest(payload = {}) {
+  const token = String(payload?.token || '')
+  if (!token || token === String(travelRecordFocusRequest.value?.token || '')) {
+    travelRecordFocusRequest.value = null
+  }
+}
+
 function isHeaderNavActive(route) {
   if (route === 'travel') {
     return travelRouteKeys.has(activeRoute.value)
@@ -988,6 +995,7 @@ onBeforeUnmount(() => {
           :route="activeRoute"
           :record-focus-request="travelRecordFocusRequest"
           @open-household-travel-ledger="navigateHouseholdTravelLedger"
+          @record-focus-consumed="clearTravelRecordFocusRequest"
         />
       </div>
     </template>

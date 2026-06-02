@@ -16,7 +16,7 @@ const props = defineProps({
   },
 })
 
-const emit = defineEmits(['open-household-travel-ledger'])
+const emit = defineEmits(['open-household-travel-ledger', 'record-focus-consumed'])
 
 const primaryTab = ref('map')
 const hubRoute = ref('travel-log')
@@ -29,6 +29,7 @@ const travelSummaryError = ref('')
 const hubPlaceFocusRequest = ref(null)
 const hubPhotoFocusRequest = ref(null)
 const hubRouteFocusRequest = ref(null)
+const appliedRecordFocusToken = ref('')
 
 const travelModes = [
   {
@@ -388,6 +389,13 @@ function openFinance() {
   financeLegacyOpen.value = false
 }
 
+function openFinanceEditor() {
+  primaryTab.value = 'finance'
+  hubRoute.value = 'travel-money'
+  hubInitialMoneyTab.value = 'records'
+  financeLegacyOpen.value = true
+}
+
 function openMemories(clearPlaceFocus = true) {
   primaryTab.value = 'memories'
   hubRoute.value = 'travel-log'
@@ -522,6 +530,19 @@ watch(
   () => props.route,
   (route) => {
     applyRouteState(route)
+  },
+  { immediate: true },
+)
+
+watch(
+  () => props.recordFocusRequest?.token,
+  (token) => {
+    const normalizedToken = String(token || '')
+    if (!normalizedToken || normalizedToken === appliedRecordFocusToken.value) {
+      return
+    }
+    appliedRecordFocusToken.value = normalizedToken
+    openFinanceEditor()
   },
   { immediate: true },
 )
@@ -719,6 +740,7 @@ onMounted(loadTravelSummary)
         @request-open-finance="handleRequestOpenFinance"
         @request-open-log="handleRequestOpenLog"
         @request-open-public-trips="handleRequestOpenPublicTrips"
+        @record-focus-consumed="emit('record-focus-consumed', $event)"
       />
     </div>
   </div>

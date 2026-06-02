@@ -96,7 +96,7 @@ const props = defineProps({
   },
 })
 
-const emit = defineEmits(['request-open-finance', 'request-open-log', 'request-open-public-trips'])
+const emit = defineEmits(['request-open-finance', 'request-open-log', 'request-open-public-trips', 'record-focus-consumed'])
 
 const fallbackCategories = {
   planStatuses: ['PLANNED', 'COMPLETED', 'SAMPLE'],
@@ -1565,6 +1565,7 @@ async function applyExternalRecordFocusRequest(request) {
   const targetRecordId = String(request?.recordId || request?.travelRecordId || '').trim()
   if (!targetPlanId || !targetRecordId) {
     appliedExternalRecordFocusToken.value = token
+    emit('record-focus-consumed', { token })
     return
   }
   if (!travelPlans.value.length) {
@@ -1573,6 +1574,7 @@ async function applyExternalRecordFocusRequest(request) {
   if (!travelPlans.value.some((item) => String(item.id) === targetPlanId)) {
     appliedExternalRecordFocusToken.value = token
     setFeedback('', '연결된 여행을 찾지 못했습니다.')
+    emit('record-focus-consumed', { token })
     return
   }
 
@@ -1586,6 +1588,7 @@ async function applyExternalRecordFocusRequest(request) {
   if (!targetRecord) {
     appliedExternalRecordFocusToken.value = token
     setFeedback('', '연결된 여행 지출 기록을 찾지 못했습니다.')
+    emit('record-focus-consumed', { token })
     return
   }
 
@@ -1593,6 +1596,7 @@ async function applyExternalRecordFocusRequest(request) {
   fillRecordForm(targetRecord)
   appliedExternalRecordFocusToken.value = token
   setFeedback('연결된 가계부 지출을 여행 위치 설정 화면으로 열었습니다. 지도에서 위치를 찍거나 GPS 좌표를 저장할 수 있습니다.')
+  emit('record-focus-consumed', { token })
 }
 
 async function applyExternalRouteFocusRequest(request) {

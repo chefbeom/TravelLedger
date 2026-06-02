@@ -161,6 +161,51 @@ function formatMonthLabel(monthKey) {
   return `${Number(year)}년 ${Number(month)}월`
 }
 
+function parseLocalIsoDate(value) {
+  const [year, month, day] = String(value || '').split('-').map((item) => Number(item))
+  if (!year || !month || !day) {
+    return null
+  }
+  return new Date(year, month - 1, day)
+}
+
+function toLocalIsoDate(value) {
+  const year = value.getFullYear()
+  const month = String(value.getMonth() + 1).padStart(2, '0')
+  const day = String(value.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+function formatTravelPlanDayLabel(date) {
+  const parsed = parseLocalIsoDate(date)
+  if (!parsed) {
+    return date
+  }
+  return `${parsed.getMonth() + 1}/${parsed.getDate()}`
+}
+
+function buildTravelPlanDays(startDate, endDate, countsByDate) {
+  const start = parseLocalIsoDate(startDate)
+  const end = parseLocalIsoDate(endDate)
+  if (!start || !end || start > end) {
+    return []
+  }
+
+  const days = []
+  const cursor = new Date(start)
+  while (cursor <= end && days.length < 400) {
+    const date = toLocalIsoDate(cursor)
+    days.push({
+      date,
+      dayLabel: `${days.length + 1}일차`,
+      dateLabel: formatTravelPlanDayLabel(date),
+      count: countsByDate.get(date) || 0,
+    })
+    cursor.setDate(cursor.getDate() + 1)
+  }
+  return days
+}
+
 const baseTravelEntries = computed(() =>
   props.entries
     .filter((entry) => {
@@ -185,6 +230,18 @@ const travelEntries = computed(() => {
     return filteredByEntryType.filter((entry) => getTravelTypeForEntry(entry) === 'other')
   }
   return filteredByEntryType.filter((entry) => getTravelTypeForEntry(entry) === activeTravelType.value)
+})
+
+const travelEntryCountByDate = computed(() => {
+  const counts = new Map()
+  travelEntries.value.forEach((entry) => {
+    const date = String(entry.entryDate || '').slice(0, 10)
+    if (!date) {
+      return
+    }
+    counts.set(date, (counts.get(date) || 0) + 1)
+  })
+  return counts
 })
 
 const travelTypeStats = computed(() => {
@@ -229,6 +286,13 @@ const selectedTravelPlanRangeLabel = computed(() => {
     return '여행 기간 미설정'
   }
   return `${plan.startDate} - ${plan.endDate}`
+})
+const selectedTravelPlanDays = computed(() => {
+  const plan = selectedTravelPlan.value
+  if (!plan?.startDate || !plan?.endDate) {
+    return []
+  }
+  return buildTravelPlanDays(plan.startDate, plan.endDate, travelEntryCountByDate.value)
 })
 
 const travelSearchKeyword = computed(() =>
@@ -401,6 +465,29 @@ function openTravelSearch() {
         </div>
       </div>
       <p v-if="travelPlanError" class="feedback feedback--error household-travel-ledger__connection-error">{{ travelPlanError }}</p>
+    </section>
+
+    <section v-if="selectedTravelPlanDays.length" class="household-travel-ledger__date-board">
+      <div class="household-travel-ledger__date-board-header">
+        <div>
+          <strong>여행 기간 날짜 입력</strong>
+          <span>{{ selectedTravelPlanRangeLabel }} 안에서 날짜를 고르면 해당 날짜로 지출 입력을 시작합니다.</span>
+        </div>
+        <small>{{ selectedTravelPlanDays.length }}일</small>
+      </div>
+      <div class="household-travel-ledger__date-grid">
+        <button
+          v-for="day in selectedTravelPlanDays"
+          :key="day.date"
+          class="household-travel-ledger__date-card"
+          type="button"
+          @click="emit('start-travel-entry', { entryType: 'EXPENSE', entryDate: day.date })"
+        >
+          <span>{{ day.dayLabel }}</span>
+          <strong>{{ day.dateLabel }}</strong>
+          <small>{{ day.count }}건</small>
+        </button>
+      </div>
     </section>
 
     <div class="household-travel-ledger__toolbar">

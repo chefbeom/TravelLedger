@@ -3154,6 +3154,80 @@ button {
   margin: 0;
 }
 
+.household-travel-ledger__date-board {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--surface);
+}
+
+.household-travel-ledger__date-board-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.household-travel-ledger__date-board-header div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.household-travel-ledger__date-board-header span {
+  color: var(--text-soft);
+  line-height: 1.45;
+}
+
+.household-travel-ledger__date-board-header small {
+  padding: 5px 9px;
+  border-radius: 999px;
+  background: var(--surface-soft);
+  color: var(--accent);
+  font-weight: 900;
+}
+
+.household-travel-ledger__date-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(86px, 1fr));
+  gap: 8px;
+  max-height: 260px;
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.household-travel-ledger__date-card {
+  display: grid;
+  gap: 4px;
+  min-height: 78px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface-soft);
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.household-travel-ledger__date-card:hover {
+  border-color: rgba(49, 130, 246, 0.42);
+  background: color-mix(in srgb, var(--surface-soft) 78%, var(--accent) 22%);
+}
+
+.household-travel-ledger__date-card span,
+.household-travel-ledger__date-card small {
+  color: var(--text-soft);
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.household-travel-ledger__date-card strong {
+  font-size: 1rem;
+}
+
 .household-travel-ledger__toolbar {
   display: flex;
   gap: 12px;

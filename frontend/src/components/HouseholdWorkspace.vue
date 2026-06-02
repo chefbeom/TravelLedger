@@ -1527,10 +1527,14 @@ function findCategoryDetailByKeywords(groupId, keywords) {
   }) || group.details[0] || null
 }
 
-async function startTravelLedgerEntry(entryType = 'EXPENSE') {
-  const normalizedEntryType = entryType === 'INCOME' ? 'INCOME' : 'EXPENSE'
+async function startTravelLedgerEntry(payload = 'EXPENSE') {
+  const requestedEntryType = typeof payload === 'object' && payload !== null ? payload.entryType : payload
+  const requestedEntryDate = typeof payload === 'object' && payload !== null ? payload.entryDate : ''
+  const normalizedEntryType = requestedEntryType === 'INCOME' ? 'INCOME' : 'EXPENSE'
   const selectedPlan = selectedHouseholdTravelPlan.value
-  const entryDate = resolveSelectedTravelEntryDate()
+  const entryDate = selectedPlan
+    ? (isDateInSelectedTravelPlan(requestedEntryDate) ? requestedEntryDate : resolveSelectedTravelEntryDate())
+    : (requestedEntryDate || resolveSelectedTravelEntryDate())
   householdTab.value = 'calendar'
   resetEntryForm({ entryDate })
   entryForm.entryType = normalizedEntryType

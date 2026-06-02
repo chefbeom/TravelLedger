@@ -2884,8 +2884,10 @@ defineExpose({
               </td>
               <td>{{ formatPaymentMethodForSheet(entry) }}</td>
               <td :class="['sheet-table__amount', entry.entryType === 'INCOME' ? 'is-income' : 'is-expense']">
-                <span class="sheet-table__amount-main">{{ formatSheetAmountMain(entry) }}</span>
-                <small v-if="formatSheetAmountSub(entry)" class="sheet-table__amount-sub">{{ formatSheetAmountSub(entry) }}</small>
+                <span class="sheet-table__amount-stack">
+                  <span class="sheet-table__amount-main">{{ formatSheetAmountMain(entry) }}</span>
+                  <small v-if="formatSheetAmountSub(entry)" class="sheet-table__amount-sub">{{ formatSheetAmountSub(entry) }}</small>
+                </span>
               </td>
               <td v-if="hasSelectedMemoColumn" class="sheet-table__memo">{{ entry.visibleMemo || '-' }}</td>
               <td class="sheet-table__actions">

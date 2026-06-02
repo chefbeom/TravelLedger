@@ -1861,6 +1861,17 @@ button {
   min-width: 0;
 }
 
+.sheet-table__amount-stack {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: center;
+  max-width: 100%;
+  min-width: 0;
+  line-height: 1.25;
+  vertical-align: middle;
+}
+
 .sheet-table__amount-main {
   display: block;
   max-width: 100%;

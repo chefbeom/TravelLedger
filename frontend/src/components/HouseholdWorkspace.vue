@@ -211,6 +211,7 @@ const foreignExchangeState = reactive({
   rateToKrw: null,
   rateDate: '',
   provider: '',
+  basisDateTime: '',
 })
 let feedbackTimerId = null
 let searchRequestTimerId = null
@@ -548,7 +549,7 @@ watch(
 )
 
 watch(
-  () => [entryForm.currencyMode, entryForm.foreignCurrencyCode, entryForm.entryDate],
+  () => [entryForm.currencyMode, entryForm.foreignCurrencyCode, entryForm.entryDate, entryForm.entryTime, isEntryTimeEnabled.value],
   () => {
     if (entryForm.currencyMode !== 'FOREIGN') {
       clearForeignExchangeFields()
@@ -726,10 +727,22 @@ function clearForeignExchangeFields() {
   foreignExchangeState.rateToKrw = null
   foreignExchangeState.rateDate = ''
   foreignExchangeState.provider = ''
+  foreignExchangeState.basisDateTime = ''
   entryForm.foreignAmount = ''
   entryForm.exchangeRateToKrw = ''
   entryForm.exchangeRateDate = ''
   entryForm.exchangeRateProvider = ''
+}
+
+function buildForeignExchangeDateTime() {
+  const entryDate = String(entryForm.entryDate || '').trim()
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(entryDate)) {
+    return ''
+  }
+  const entryTime = isEntryTimeEnabled.value
+    ? normalizeEntryTimePayload(entryForm.entryTime)
+    : '00:00'
+  return `${entryDate}T${entryTime || '00:00'}`
 }
 
 function applyExchangeQuote(quote) {
@@ -738,6 +751,7 @@ function applyExchangeQuote(quote) {
     foreignExchangeState.rateToKrw = null
     foreignExchangeState.rateDate = ''
     foreignExchangeState.provider = ''
+    foreignExchangeState.basisDateTime = ''
     entryForm.exchangeRateToKrw = ''
     entryForm.exchangeRateDate = ''
     entryForm.exchangeRateProvider = ''
@@ -748,6 +762,7 @@ function applyExchangeQuote(quote) {
   foreignExchangeState.rateToKrw = rate
   foreignExchangeState.rateDate = quote.rateDate || entryForm.entryDate
   foreignExchangeState.provider = quote.provider || ''
+  foreignExchangeState.basisDateTime = buildForeignExchangeDateTime()
   entryForm.exchangeRateToKrw = String(rate)
   entryForm.exchangeRateDate = foreignExchangeState.rateDate
   entryForm.exchangeRateProvider = foreignExchangeState.provider
@@ -757,6 +772,7 @@ function applyExchangeQuote(quote) {
 
 async function queueForeignExchangeRateLoad() {
   const currencyCode = normalizeForeignCurrencyCode(entryForm.foreignCurrencyCode)
+  const entryDateTime = buildForeignExchangeDateTime()
   const requestId = ++foreignExchangeRequestId
   if (!currencyCode || currencyCode === 'KRW') {
     clearForeignExchangeFields()
@@ -765,8 +781,9 @@ async function queueForeignExchangeRateLoad() {
 
   foreignExchangeState.isLoading = true
   foreignExchangeState.error = ''
+  foreignExchangeState.basisDateTime = entryDateTime
   try {
-    const quote = await fetchLedgerExchangeRate(currencyCode, entryForm.entryDate)
+    const quote = await fetchLedgerExchangeRate(currencyCode, entryForm.entryDate, entryDateTime)
     if (requestId !== foreignExchangeRequestId || entryForm.currencyMode !== 'FOREIGN') {
       return
     }
@@ -779,6 +796,7 @@ async function queueForeignExchangeRateLoad() {
     entryForm.exchangeRateToKrw = ''
     entryForm.exchangeRateDate = ''
     entryForm.exchangeRateProvider = ''
+    foreignExchangeState.basisDateTime = ''
   } finally {
     if (requestId === foreignExchangeRequestId) {
       foreignExchangeState.isLoading = false
@@ -815,6 +833,9 @@ function hydrateForeignFieldsFromEntry(entry) {
     foreignExchangeState.rateToKrw = Number(entry.exchangeRateToKrw || 0) || null
     foreignExchangeState.rateDate = entry.exchangeRateDate || ''
     foreignExchangeState.provider = entry.exchangeRateProvider || ''
+    foreignExchangeState.basisDateTime = entry.entryDate
+      ? `${entry.entryDate}T${normalizeEntryTimePayload(entry.entryTime)}`
+      : ''
     foreignExchangeState.error = ''
     return
   }

@@ -21,6 +21,7 @@ import java.math.BigDecimal;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import jakarta.servlet.http.HttpServletRequest;
@@ -108,9 +109,10 @@ public class LedgerEntryController {
     public LedgerExchangeRateResponse getExchangeRate(
             @AuthenticationPrincipal AppUserPrincipal currentUser,
             @RequestParam String currencyCode,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate entryDate
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate entryDate,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime entryDateTime
     ) {
-        return ledgerEntryService.getExchangeRate(currentUser.userId(), currencyCode, entryDate);
+        return ledgerEntryService.getExchangeRate(currentUser.userId(), currencyCode, entryDate, entryDateTime);
     }
 
     @GetMapping("/history")

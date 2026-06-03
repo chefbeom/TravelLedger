@@ -284,9 +284,10 @@ public class LedgerEntryService {
         return new LedgerEntryDateRangeResponse(earliestDate, latestDate);
     }
 
-    public LedgerExchangeRateResponse getExchangeRate(Long userId, String currencyCode, LocalDate entryDate) {
+    public LedgerExchangeRateResponse getExchangeRate(Long userId, String currencyCode, LocalDate entryDate, LocalDateTime entryDateTime) {
         appUserService.getRequiredUser(userId);
-        TravelExchangeRateResponse quote = exchangeRateService.getRateToKrw(currencyCode, entryDate);
+        LocalDate rateDate = resolveExchangeRateDate(entryDate, entryDateTime);
+        TravelExchangeRateResponse quote = exchangeRateService.getRateToKrw(currencyCode, rateDate);
         return new LedgerExchangeRateResponse(
                 quote.currencyCode(),
                 quote.rateToKrw(),
@@ -294,6 +295,13 @@ public class LedgerEntryService {
                 quote.available(),
                 quote.provider()
         );
+    }
+
+    private LocalDate resolveExchangeRateDate(LocalDate entryDate, LocalDateTime entryDateTime) {
+        if (entryDateTime != null) {
+            return entryDateTime.toLocalDate();
+        }
+        return entryDate;
     }
 
     public LedgerEntryChangeHistoryPageResponse getChangeHistories(Long userId, int page, int size) {
@@ -1090,7 +1098,7 @@ public class LedgerEntryService {
         LocalDate rateDate = request.entryDate();
         String provider = "Provided";
         if (rateToKrw == null || rateToKrw.compareTo(BigDecimal.ZERO) <= 0) {
-            TravelExchangeRateResponse quote = exchangeRateService.getRequiredRateQuoteToKrw(currencyCode, request.entryDate());
+            TravelExchangeRateResponse quote = exchangeRateService.getRequiredRateQuoteToKrw(currencyCode, resolveExchangeRateDate(request.entryDate(), request.entryTime()));
             rateToKrw = quote.rateToKrw();
             rateDate = quote.fetchedDate() != null ? quote.fetchedDate() : request.entryDate();
             provider = quote.provider();
@@ -1108,6 +1116,13 @@ public class LedgerEntryService {
                 rateDate,
                 provider
         );
+    }
+
+    private LocalDate resolveExchangeRateDate(LocalDate entryDate, LocalTime entryTime) {
+        if (entryDate == null) {
+            return null;
+        }
+        return resolveExchangeRateDate(entryDate, LocalDateTime.of(entryDate, entryTime != null ? entryTime : LocalTime.MIDNIGHT));
     }
 
     private String normalizeForeignCurrencyCode(String currencyCode) {

@@ -360,6 +360,15 @@ function normalizeCompleteEntryTimeInput(value) {
   return ''
 }
 
+function formatForeignExchangeBasisDateTime(value) {
+  const text = String(value || '').trim()
+  const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/.exec(text)
+  if (!match) {
+    return ''
+  }
+  return `${match[1]}-${match[2]}-${match[3]} ${match[4]}:${match[5]}`
+}
+
 function normalizeLooseEntryTimeInput(value) {
   const raw = String(value || '').trim()
   const colonMatch = /^(\d{1,2})(?::(\d{1,2}))?$/.exec(raw)
@@ -2433,6 +2442,9 @@ defineExpose({
                   1 {{ entryForm.foreignCurrencyCode }} = {{ formatCurrency(Number(entryForm.exchangeRateToKrw || 0)) }}
                   <template v-if="entryForm.exchangeRateDate"> · {{ entryForm.exchangeRateDate }}</template>
                 </span>
+                <small v-if="formatForeignExchangeBasisDateTime(foreignExchangeState.basisDateTime)">
+                  입력 시각 기준 {{ formatForeignExchangeBasisDateTime(foreignExchangeState.basisDateTime) }}
+                </small>
               </div>
             </div>
           </div>

@@ -1604,6 +1604,12 @@ button {
   font-size: 0.82rem;
 }
 
+.foreign-amount-panel__preview small {
+  color: var(--text-soft);
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
 .entry-suggestion-list {
   display: grid;
   gap: 8px;

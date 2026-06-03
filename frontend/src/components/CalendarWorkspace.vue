@@ -1842,6 +1842,17 @@ function shiftEntryDate(offset) {
   }
 }
 
+function setEntryDateToToday() {
+  const nextDate = clampEntryDate(getLocalIsoDate(new Date()))
+
+  props.entryForm.entryDate = nextDate
+  selectedDate.value = nextDate
+
+  if (nextDate.slice(0, 7) !== String(props.anchorDate || '').slice(0, 7)) {
+    emit('change-anchor-month', nextDate)
+  }
+}
+
 function waitForLayoutFrame() {
   return new Promise((resolve) => {
     requestAnimationFrame(() => {
@@ -2428,8 +2439,18 @@ defineExpose({
 
           <div class="entry-editor__fields">
             <div class="entry-editor__field-row entry-editor__field-row--date-time">
-              <label class="field entry-date-field">
-                <span class="field__label">날짜</span>
+              <div class="field entry-date-field">
+                <div class="field__label entry-date-field__label">
+                  <span>날짜</span>
+                  <button
+                    type="button"
+                    class="entry-date-field__today"
+                    data-no-drag="true"
+                    @click="setEntryDateToToday"
+                  >
+                    오늘
+                  </button>
+                </div>
                 <div class="entry-date-control" data-no-drag="true">
                   <button
                     type="button"
@@ -2449,7 +2470,7 @@ defineExpose({
                     &gt;
                   </button>
                 </div>
-              </label>
+              </div>
 
               <label class="field household-time-field">
                 <span class="field__label">시간</span>

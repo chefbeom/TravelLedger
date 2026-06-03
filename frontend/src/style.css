@@ -853,6 +853,30 @@ button {
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
 }
 
+.entry-date-field__label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.entry-date-field__today {
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 900;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.entry-date-field__today:hover {
+  color: var(--accent-strong);
+}
+
 .entry-date-control {
   display: grid;
   grid-template-columns: 28px minmax(0, 1fr) 28px;

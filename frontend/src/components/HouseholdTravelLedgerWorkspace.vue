@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, nextTick, ref } from 'vue'
 
 const props = defineProps({
   entries: {
@@ -74,6 +74,7 @@ const emit = defineEmits([
 const travelKeywordFilter = ref('')
 const activeTravelType = ref('all')
 const selectedTravelDate = ref('')
+const selectedTravelSheetRef = ref(null)
 
 const travelKeywords = [
   '여행',
@@ -388,6 +389,30 @@ const topCategoryRows = computed(() => {
 
 const recentEntries = computed(() => travelEntries.value.slice(0, 12))
 
+const selectedTravelDateEntries = computed(() => {
+  if (!selectedTravelDate.value) {
+    return []
+  }
+  return travelEntries.value
+    .filter((entry) => String(entry.entryDate || '').slice(0, 10) === selectedTravelDate.value)
+    .sort((left, right) => `${left.entryDate} ${left.entryTime || ''}`.localeCompare(`${right.entryDate} ${right.entryTime || ''}`))
+})
+
+const selectedTravelDateTotal = computed(() =>
+  selectedTravelDateEntries.value.reduce((sum, entry) => sum + Number(entry.amount || 0), 0),
+)
+
+const selectedTravelDateTitle = computed(() => {
+  if (!selectedTravelDate.value) {
+    return '선택 날짜 여행 거래'
+  }
+  const parsed = parseLocalIsoDate(selectedTravelDate.value)
+  if (!parsed) {
+    return `${selectedTravelDate.value} 여행 거래`
+  }
+  return `${parsed.getMonth() + 1}월 ${parsed.getDate()}일 여행 거래`
+})
+
 const monthFlowRows = computed(() => {
   const buckets = new Map()
   travelEntries.value.forEach((entry) => {
@@ -414,12 +439,17 @@ function openTravelSearch() {
   })
 }
 
-function handleTravelCalendarDayClick(day) {
+async function handleTravelCalendarDayClick(day) {
   if (!day?.inTravelRange) {
     return
   }
   selectedTravelDate.value = day.date
-  emit('start-travel-entry', { entryType: 'EXPENSE', entryDate: day.date })
+  await nextTick()
+  selectedTravelSheetRef.value?.scrollIntoView?.({ behavior: 'smooth', block: 'start' })
+}
+
+function startTravelEntryFromSelectedDate() {
+  emit('start-travel-entry', { entryType: 'EXPENSE', entryDate: selectedTravelDate.value || '' })
 }
 </script>
 
@@ -534,6 +564,71 @@ function handleTravelCalendarDayClick(day) {
       </div>
     </section>
 
+    <section
+      v-if="selectedTravelDate"
+      ref="selectedTravelSheetRef"
+      class="panel panel--compact household-travel-ledger__panel household-travel-ledger__panel--wide household-travel-ledger__date-sheet"
+    >
+      <div class="panel__header">
+        <div>
+          <h3>{{ selectedTravelDateTitle }}</h3>
+          <p>여행 가계부 안에서 선택한 날짜의 여행 지출만 확인합니다.</p>
+        </div>
+        <div class="household-travel-ledger__date-sheet-summary">
+          <span>{{ selectedTravelDateEntries.length }}건</span>
+          <strong class="is-expense">{{ formatCurrency(selectedTravelDateTotal) }}</strong>
+        </div>
+      </div>
+      <div v-if="selectedTravelDateEntries.length" class="sheet-table-wrap household-travel-ledger__date-sheet-table">
+        <table class="sheet-table">
+          <thead>
+            <tr>
+              <th>시간</th>
+              <th>제목</th>
+              <th>분류</th>
+              <th>결제수단</th>
+              <th>금액</th>
+              <th>작업</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="entry in selectedTravelDateEntries" :key="entry.id">
+              <td>{{ formatTime(entry.entryTime) }}</td>
+              <td>{{ entry.title }}</td>
+              <td>{{ getEntryCategoryLabel(entry) }}</td>
+              <td>{{ entry.paymentMethodName || '-' }}</td>
+              <td class="is-expense">{{ formatCurrency(entry.amount) }}</td>
+              <td>
+                <div class="household-travel-ledger__entry-actions">
+                  <button
+                    v-if="canLinkTravelRecord(entry)"
+                    class="button button--primary"
+                    type="button"
+                    :disabled="String(linkingTravelEntryId) === String(entry.id)"
+                    @click="emit('link-travel-entry', entry)"
+                  >
+                    {{ String(linkingTravelEntryId) === String(entry.id) ? '연결 중' : '여행 기록 연결' }}
+                  </button>
+                  <button
+                    v-if="entry.travelRecordId"
+                    class="button button--secondary"
+                    type="button"
+                    @click="emit('open-travel-record-location', entry)"
+                  >
+                    위치 설정
+                  </button>
+                  <button class="button button--secondary" type="button" @click="emit('edit-travel-entry', entry)">
+                    수정
+                  </button>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p v-else class="panel__empty">선택한 날짜에 표시할 여행 지출 내역이 없습니다.</p>
+    </section>
+
     <div class="household-travel-ledger__toolbar">
       <div class="scope-toggle scope-toggle--wrap">
         <button
@@ -596,7 +691,7 @@ function handleTravelCalendarDayClick(day) {
     </div>
 
     <div class="entry-editor__actions household-travel-ledger__actions">
-      <button class="button button--primary" type="button" @click="emit('start-travel-entry', 'EXPENSE')">여행 지출 입력</button>
+      <button class="button button--primary" type="button" @click="startTravelEntryFromSelectedDate">여행 지출 입력</button>
       <button class="button button--ghost" type="button" @click="openTravelSearch">검색에서 자세히 보기</button>
     </div>
 

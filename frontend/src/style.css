@@ -3402,6 +3402,31 @@ button {
   grid-column: 1 / -1;
 }
 
+.household-travel-ledger__date-sheet {
+  scroll-margin-top: 18px;
+}
+
+.household-travel-ledger__date-sheet-summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface-soft);
+  white-space: nowrap;
+}
+
+.household-travel-ledger__date-sheet-summary span {
+  color: var(--text-soft);
+  font-weight: 900;
+}
+
+.household-travel-ledger__date-sheet-table {
+  max-height: 420px;
+}
+
 .household-travel-ledger__rows {
   display: grid;
   gap: 10px;

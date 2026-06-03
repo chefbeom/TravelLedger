@@ -89,6 +89,7 @@ const compareUnitLabels = {
 const today = toIsoDate(new Date())
 const quickAmountButtons = [10000, 30000, 50000, 100000]
 const foreignCurrencyOptions = ['USD', 'JPY', 'EUR', 'CNY', 'GBP', 'AUD', 'CAD', 'HKD', 'SGD', 'THB', 'PHP', 'VND', 'TWD']
+const FOREIGN_EXCHANGE_DEBOUNCE_MS = 180
 const SEARCH_PAGE_SIZE = 100
 const SEARCH_OTHER_FILTER_VALUE = '__OTHER__'
 const csvExportOptions = [
@@ -218,7 +219,10 @@ let searchRequestTimerId = null
 let titleSuggestionSearchTimerId = null
 let titleSuggestionSearchRequestId = 0
 let receiptOcrItemSequence = 0
+let foreignExchangeTimerId = null
 let foreignExchangeRequestId = 0
+let foreignExchangeLoadedKey = ''
+let foreignExchangePendingKey = ''
 
 const entryForm = reactive({
   entryDate: today,
@@ -358,6 +362,34 @@ const comparisonAnchorDate = computed(() => {
 })
 const csvExportRange = computed(() => resolveCsvExportRange(csvExportControls.preset))
 const csvExportLabel = computed(() => csvExportRange.value.label)
+
+function shouldLoadStatisticsForTab(tab = householdTab.value) {
+  return tab === 'travel-ledger'
+    || tab === 'stats-overview'
+    || tab === 'stats-insights'
+    || tab === 'stats-compare'
+}
+
+function shouldLoadOverviewForTab(tab = householdTab.value) {
+  return tab === 'stats-overview'
+}
+
+function shouldLoadBreakdownsForTab(tab = householdTab.value) {
+  return tab === 'stats-overview'
+}
+
+function shouldLoadComparisonRowsForTab(tab = householdTab.value) {
+  return tab === 'stats-overview'
+}
+
+function shouldLoadStatisticsEntriesForTab(tab = householdTab.value) {
+  return tab === 'stats-insights' || tab === 'travel-ledger'
+}
+
+function shouldLoadPastComparisonsForTab(tab = householdTab.value) {
+  return tab === 'stats-compare'
+}
+
 const sortedMonthEntries = computed(() =>
   monthEntries.value
     .slice()
@@ -597,7 +629,7 @@ watch(
 watch(
   () => [statsControls.anchorDate, statsControls.preset, statsControls.customFrom, statsControls.customTo, statsControls.compareUnit, statsControls.comparePeriods],
   async () => {
-    if (statsReady.value) {
+    if (statsReady.value && shouldLoadStatisticsForTab()) {
       await loadStatisticsData()
     }
   },
@@ -610,7 +642,7 @@ watch(
       return
     }
 
-    if ((value.startsWith('stats-') && value !== 'stats-trash') || value === 'travel-ledger') {
+    if (shouldLoadStatisticsForTab(value)) {
       await loadStatisticsData()
     }
     if (value === 'travel-ledger' && !householdTravelPlans.value.length && !isHouseholdTravelPlanLoading.value) {
@@ -662,7 +694,10 @@ onMounted(async () => {
   try {
     await loadMetadata()
     await loadEntryDateRange()
-    await Promise.all([loadCalendarData(), loadStatisticsData(), loadAggregatePreferences()])
+    await Promise.all([loadCalendarData(), loadAggregatePreferences()])
+    if (shouldLoadStatisticsForTab()) {
+      await loadStatisticsData()
+    }
     loadHouseholdTravelPlans()
     resetEntryForm()
     resetHouseholdTravelPlanForm()
@@ -687,6 +722,9 @@ onBeforeUnmount(() => {
   }
   if (titleSuggestionSearchTimerId) {
     window.clearTimeout(titleSuggestionSearchTimerId)
+  }
+  if (foreignExchangeTimerId) {
+    window.clearTimeout(foreignExchangeTimerId)
   }
 })
 
@@ -722,6 +760,13 @@ function normalizeDecimalInput(value) {
 }
 
 function clearForeignExchangeFields() {
+  if (foreignExchangeTimerId) {
+    window.clearTimeout(foreignExchangeTimerId)
+    foreignExchangeTimerId = null
+  }
+  foreignExchangePendingKey = ''
+  foreignExchangeLoadedKey = ''
+  foreignExchangeRequestId += 1
   foreignExchangeState.isLoading = false
   foreignExchangeState.error = ''
   foreignExchangeState.rateToKrw = null
@@ -743,6 +788,16 @@ function buildForeignExchangeDateTime() {
     ? normalizeEntryTimePayload(entryForm.entryTime)
     : '00:00'
   return `${entryDate}T${entryTime || '00:00'}`
+}
+
+function buildForeignExchangeRequestKey(currencyCode, entryDateTime) {
+  return `${normalizeForeignCurrencyCode(currencyCode)}|${entryDateTime || buildForeignExchangeDateTime()}`
+}
+
+function hasLoadedForeignExchangeQuote(requestKey) {
+  return foreignExchangeLoadedKey === requestKey
+    && Number.isFinite(Number(foreignExchangeState.rateToKrw))
+    && Number(foreignExchangeState.rateToKrw) > 0
 }
 
 function applyExchangeQuote(quote) {
@@ -770,12 +825,22 @@ function applyExchangeQuote(quote) {
   syncForeignKrwAmount()
 }
 
-async function queueForeignExchangeRateLoad() {
+async function loadForeignExchangeRate({ force = false } = {}) {
   const currencyCode = normalizeForeignCurrencyCode(entryForm.foreignCurrencyCode)
   const entryDateTime = buildForeignExchangeDateTime()
+  const requestKey = buildForeignExchangeRequestKey(currencyCode, entryDateTime)
   const requestId = ++foreignExchangeRequestId
   if (!currencyCode || currencyCode === 'KRW') {
     clearForeignExchangeFields()
+    return
+  }
+  if (!entryDateTime) {
+    foreignExchangeState.error = ''
+    foreignExchangeState.basisDateTime = ''
+    return
+  }
+  if (!force && hasLoadedForeignExchangeQuote(requestKey)) {
+    foreignExchangeState.basisDateTime = entryDateTime
     return
   }
 
@@ -788,10 +853,12 @@ async function queueForeignExchangeRateLoad() {
       return
     }
     applyExchangeQuote(quote)
+    foreignExchangeLoadedKey = Number(foreignExchangeState.rateToKrw) > 0 ? requestKey : ''
   } catch (error) {
     if (requestId !== foreignExchangeRequestId) {
       return
     }
+    foreignExchangeLoadedKey = ''
     foreignExchangeState.error = error.message || '환율 정보를 불러오지 못했습니다.'
     entryForm.exchangeRateToKrw = ''
     entryForm.exchangeRateDate = ''
@@ -802,6 +869,58 @@ async function queueForeignExchangeRateLoad() {
       foreignExchangeState.isLoading = false
     }
   }
+}
+
+function queueForeignExchangeRateLoad({ immediate = false } = {}) {
+  const currencyCode = normalizeForeignCurrencyCode(entryForm.foreignCurrencyCode)
+  const entryDateTime = buildForeignExchangeDateTime()
+  const requestKey = buildForeignExchangeRequestKey(currencyCode, entryDateTime)
+
+  if (!currencyCode || currencyCode === 'KRW') {
+    clearForeignExchangeFields()
+    return
+  }
+
+  if (!entryDateTime) {
+    return
+  }
+
+  if (hasLoadedForeignExchangeQuote(requestKey)) {
+    foreignExchangeState.basisDateTime = entryDateTime
+    return
+  }
+
+  if (foreignExchangeTimerId) {
+    window.clearTimeout(foreignExchangeTimerId)
+    foreignExchangeTimerId = null
+  }
+
+  foreignExchangePendingKey = requestKey
+  foreignExchangeState.error = ''
+  foreignExchangeState.basisDateTime = entryDateTime
+
+  if (immediate) {
+    return loadForeignExchangeRate()
+  }
+
+  foreignExchangeTimerId = window.setTimeout(() => {
+    foreignExchangeTimerId = null
+    if (foreignExchangePendingKey !== requestKey) {
+      return
+    }
+    loadForeignExchangeRate().catch((error) => {
+      foreignExchangeState.error = error.message || '환율 정보를 불러오지 못했습니다.'
+    })
+  }, FOREIGN_EXCHANGE_DEBOUNCE_MS)
+}
+
+async function ensureForeignExchangeRateLoaded() {
+  if (foreignExchangeTimerId) {
+    window.clearTimeout(foreignExchangeTimerId)
+    foreignExchangeTimerId = null
+  }
+  foreignExchangePendingKey = ''
+  await loadForeignExchangeRate()
 }
 
 function syncForeignKrwAmount() {
@@ -833,8 +952,12 @@ function hydrateForeignFieldsFromEntry(entry) {
     foreignExchangeState.rateToKrw = Number(entry.exchangeRateToKrw || 0) || null
     foreignExchangeState.rateDate = entry.exchangeRateDate || ''
     foreignExchangeState.provider = entry.exchangeRateProvider || ''
-    foreignExchangeState.basisDateTime = entry.entryDate
+    const hydratedDateTime = entry.entryDate
       ? `${entry.entryDate}T${normalizeEntryTimePayload(entry.entryTime)}`
+      : ''
+    foreignExchangeState.basisDateTime = hydratedDateTime
+    foreignExchangeLoadedKey = Number(entry.exchangeRateToKrw || 0) > 0 && hydratedDateTime
+      ? buildForeignExchangeRequestKey(currencyCode, hydratedDateTime)
       : ''
     foreignExchangeState.error = ''
     return
@@ -1264,23 +1387,40 @@ async function loadCalendarData() {
   monthEntries.value = entryItems
 }
 
-async function loadStatisticsData() {
+async function loadStatisticsData({ route = householdTab.value } = {}) {
+  if (!shouldLoadStatisticsForTab(route)) {
+    return
+  }
+
   const range = statsRange.value
-  const shouldLoadInsightEntries = householdTab.value === 'stats-insights' || householdTab.value === 'travel-ledger'
+  const shouldLoadOverview = shouldLoadOverviewForTab(route)
+  const shouldLoadBreakdowns = shouldLoadBreakdownsForTab(route)
+  const shouldLoadComparisonRows = shouldLoadComparisonRowsForTab(route)
+  const shouldLoadInsightEntries = shouldLoadStatisticsEntriesForTab(route)
   const [overview, categoryItems, paymentItems, compareItems, entryItems] = await Promise.all([
-    fetchOverview(range.from, range.to),
-    fetchCategoryBreakdown(range.from, range.to, 'EXPENSE'),
-    fetchPaymentBreakdown(range.from, range.to),
-    fetchCompare(comparisonAnchorDate.value, statsControls.compareUnit, statsControls.comparePeriods),
+    shouldLoadOverview ? fetchOverview(range.from, range.to) : Promise.resolve(null),
+    shouldLoadBreakdowns ? fetchCategoryBreakdown(range.from, range.to, 'EXPENSE') : Promise.resolve(null),
+    shouldLoadBreakdowns ? fetchPaymentBreakdown(range.from, range.to) : Promise.resolve(null),
+    shouldLoadComparisonRows ? fetchCompare(comparisonAnchorDate.value, statsControls.compareUnit, statsControls.comparePeriods) : Promise.resolve(null),
     shouldLoadInsightEntries ? fetchEntries(range.from, range.to) : Promise.resolve([]),
   ])
 
-  statsOverview.value = overview
-  expenseBreakdown.value = categoryItems
-  paymentBreakdown.value = paymentItems
-  comparisonRows.value = compareItems
-  statsEntries.value = entryItems
-  await loadPastComparisons()
+  if (shouldLoadOverview) {
+    statsOverview.value = overview
+  }
+  if (shouldLoadBreakdowns) {
+    expenseBreakdown.value = categoryItems
+    paymentBreakdown.value = paymentItems
+  }
+  if (shouldLoadComparisonRows) {
+    comparisonRows.value = compareItems
+  }
+  if (shouldLoadInsightEntries) {
+    statsEntries.value = entryItems
+  }
+  if (shouldLoadPastComparisonsForTab(route)) {
+    await loadPastComparisons()
+  }
 }
 
 function queueSearchResultsReload() {
@@ -2182,9 +2322,13 @@ function resolveCsvExportRange(preset) {
   }
 }
 
-async function refreshLedgerViews() {
+async function refreshLedgerViews({ forceStatistics = false } = {}) {
   await loadEntryDateRange()
-  await Promise.all([loadCalendarData(), loadStatisticsData()])
+  const tasks = [loadCalendarData()]
+  if (forceStatistics || shouldLoadStatisticsForTab()) {
+    tasks.push(loadStatisticsData())
+  }
+  await Promise.all(tasks)
   if (householdTab.value === 'stats-search') {
     await loadSearchResults(searchPageState.value.page ?? 0)
   } else if (householdTab.value === 'stats-trash') {
@@ -2253,6 +2397,7 @@ async function submitEntry() {
   try {
     validateEntryTravelDate()
     if (entryForm.currencyMode === 'FOREIGN') {
+      await ensureForeignExchangeRateLoaded()
       syncForeignKrwAmount()
       if (!entryForm.foreignAmount || Number(entryForm.foreignAmount) <= 0) {
         throw new Error('외화 금액을 입력해 주세요.')

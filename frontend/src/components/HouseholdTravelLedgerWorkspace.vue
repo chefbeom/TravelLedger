@@ -73,7 +73,7 @@ const emit = defineEmits([
 ])
 const travelKeywordFilter = ref('')
 const activeTravelType = ref('all')
-const activeEntryType = ref('all')
+const selectedTravelDate = ref('')
 
 const travelKeywords = [
   '여행',
@@ -115,11 +115,7 @@ const travelTypeOptions = [
   { key: 'other', label: '기타', keywords: [] },
 ]
 
-const entryTypeOptions = [
-  { key: 'all', label: '전체' },
-  { key: 'EXPENSE', label: '지출' },
-  { key: 'INCOME', label: '수입' },
-]
+const travelCalendarWeekdays = ['일', '월', '화', '수', '목', '금', '토']
 
 function normalizeSearchText(value) {
   return String(value || '').toLowerCase()
@@ -196,7 +192,7 @@ function formatTravelPlanDayLabel(date) {
   return `${parsed.getMonth() + 1}/${parsed.getDate()}`
 }
 
-function buildTravelPlanDays(startDate, endDate, countsByDate) {
+function buildTravelPlanDays(startDate, endDate, countsByDate, expenseByDate) {
   const start = parseLocalIsoDate(startDate)
   const end = parseLocalIsoDate(endDate)
   if (!start || !end || start > end) {
@@ -212,15 +208,64 @@ function buildTravelPlanDays(startDate, endDate, countsByDate) {
       dayLabel: `${days.length + 1}일차`,
       dateLabel: formatTravelPlanDayLabel(date),
       count: countsByDate.get(date) || 0,
+      expense: expenseByDate.get(date) || 0,
     })
     cursor.setDate(cursor.getDate() + 1)
   }
   return days
 }
 
+function buildTravelPlanCalendarWeeks(startDate, endDate, countsByDate, expenseByDate) {
+  const start = parseLocalIsoDate(startDate)
+  const end = parseLocalIsoDate(endDate)
+  if (!start || !end || start > end) {
+    return []
+  }
+
+  const calendarStart = new Date(start)
+  calendarStart.setDate(calendarStart.getDate() - calendarStart.getDay())
+  const calendarEnd = new Date(end)
+  calendarEnd.setDate(calendarEnd.getDate() + (6 - calendarEnd.getDay()))
+
+  const weeks = []
+  let currentWeek = []
+  let travelDayIndex = 0
+  const cursor = new Date(calendarStart)
+
+  while (cursor <= calendarEnd && weeks.length < 60) {
+    const date = toLocalIsoDate(cursor)
+    const inTravelRange = cursor >= start && cursor <= end
+    if (inTravelRange) {
+      travelDayIndex += 1
+    }
+    currentWeek.push({
+      date,
+      dayNumber: cursor.getDate(),
+      monthNumber: cursor.getMonth() + 1,
+      inTravelRange,
+      dayLabel: inTravelRange ? `${travelDayIndex}일차` : '',
+      dateLabel: formatTravelPlanDayLabel(date),
+      count: countsByDate.get(date) || 0,
+      expense: expenseByDate.get(date) || 0,
+    })
+
+    if (currentWeek.length === 7) {
+      weeks.push(currentWeek)
+      currentWeek = []
+    }
+
+    cursor.setDate(cursor.getDate() + 1)
+  }
+
+  return weeks
+}
+
 const baseTravelEntries = computed(() =>
   props.entries
     .filter((entry) => {
+      if (entry.entryType === 'INCOME') {
+        return false
+      }
       const searchableText = getEntrySearchText(entry)
       const matchesTravelKeyword = matchesKeywordSet(searchableText, travelKeywords)
       const filterText = normalizeSearchText(travelKeywordFilter.value)
@@ -231,17 +276,13 @@ const baseTravelEntries = computed(() =>
 )
 
 const travelEntries = computed(() => {
-  const filteredByEntryType = activeEntryType.value === 'all'
-    ? baseTravelEntries.value
-    : baseTravelEntries.value.filter((entry) => entry.entryType === activeEntryType.value)
-
   if (activeTravelType.value === 'all') {
-    return filteredByEntryType
+    return baseTravelEntries.value
   }
   if (activeTravelType.value === 'other') {
-    return filteredByEntryType.filter((entry) => getTravelTypeForEntry(entry) === 'other')
+    return baseTravelEntries.value.filter((entry) => getTravelTypeForEntry(entry) === 'other')
   }
-  return filteredByEntryType.filter((entry) => getTravelTypeForEntry(entry) === activeTravelType.value)
+  return baseTravelEntries.value.filter((entry) => getTravelTypeForEntry(entry) === activeTravelType.value)
 })
 
 const travelEntryCountByDate = computed(() => {
@@ -256,32 +297,32 @@ const travelEntryCountByDate = computed(() => {
   return counts
 })
 
+const travelExpenseByDate = computed(() => {
+  const totals = new Map()
+  travelEntries.value.forEach((entry) => {
+    const date = String(entry.entryDate || '').slice(0, 10)
+    if (!date) {
+      return
+    }
+    totals.set(date, (totals.get(date) || 0) + Number(entry.amount || 0))
+  })
+  return totals
+})
+
 const travelTypeStats = computed(() => {
-  const stats = new Map(travelTypeOptions.map((option) => [option.key, { ...option, count: 0, income: 0, expense: 0, net: 0 }]))
-  const source = activeEntryType.value === 'all'
-    ? baseTravelEntries.value
-    : baseTravelEntries.value.filter((entry) => entry.entryType === activeEntryType.value)
+  const stats = new Map(travelTypeOptions.map((option) => [option.key, { ...option, count: 0, expense: 0 }]))
+  const source = baseTravelEntries.value
 
   source.forEach((entry) => {
     const amount = Number(entry.amount || 0)
     const typeKey = getTravelTypeForEntry(entry)
     const typeStat = stats.get(typeKey) || stats.get('other')
     typeStat.count += 1
-    if (entry.entryType === 'INCOME') {
-      typeStat.income += amount
-    } else {
-      typeStat.expense += amount
-    }
-    typeStat.net = typeStat.income - typeStat.expense
+    typeStat.expense += amount
 
     const allStat = stats.get('all')
     allStat.count += 1
-    if (entry.entryType === 'INCOME') {
-      allStat.income += amount
-    } else {
-      allStat.expense += amount
-    }
-    allStat.net = allStat.income - allStat.expense
+    allStat.expense += amount
   })
   return travelTypeOptions.map((option) => stats.get(option.key))
 })
@@ -304,56 +345,44 @@ const selectedTravelPlanDays = computed(() => {
   if (!plan?.startDate || !plan?.endDate) {
     return []
   }
-  return buildTravelPlanDays(plan.startDate, plan.endDate, travelEntryCountByDate.value)
+  return buildTravelPlanDays(plan.startDate, plan.endDate, travelEntryCountByDate.value, travelExpenseByDate.value)
+})
+
+const selectedTravelPlanCalendarWeeks = computed(() => {
+  const plan = selectedTravelPlan.value
+  if (!plan?.startDate || !plan?.endDate) {
+    return []
+  }
+  return buildTravelPlanCalendarWeeks(plan.startDate, plan.endDate, travelEntryCountByDate.value, travelExpenseByDate.value)
 })
 
 const travelSearchKeyword = computed(() =>
   String(travelKeywordFilter.value || activeTravelTypeOption.value.keywords?.[0] || '여행').trim(),
 )
 
-const totalIncome = computed(() =>
-  travelEntries.value
-    .filter((entry) => entry.entryType === 'INCOME')
-    .reduce((sum, entry) => sum + Number(entry.amount || 0), 0),
-)
-
 const totalExpense = computed(() =>
   travelEntries.value
-    .filter((entry) => entry.entryType !== 'INCOME')
     .reduce((sum, entry) => sum + Number(entry.amount || 0), 0),
 )
 
-const incomeCount = computed(() =>
-  travelEntries.value.filter((entry) => entry.entryType === 'INCOME').length,
-)
-
-const expenseCount = computed(() =>
-  travelEntries.value.filter((entry) => entry.entryType !== 'INCOME').length,
-)
-
-const netAmount = computed(() => totalIncome.value - totalExpense.value)
+const expenseCount = computed(() => travelEntries.value.length)
 
 const averageAmount = computed(() =>
-  travelEntries.value.length ? Math.round((totalIncome.value + totalExpense.value) / travelEntries.value.length) : 0,
+  travelEntries.value.length ? Math.round(totalExpense.value / travelEntries.value.length) : 0,
 )
 
 const topCategoryRows = computed(() => {
   const buckets = new Map()
   travelEntries.value.forEach((entry) => {
     const label = getEntryCategoryLabel(entry)
-    const current = buckets.get(label) || { label, income: 0, expense: 0, net: 0, count: 0 }
+    const current = buckets.get(label) || { label, expense: 0, count: 0 }
     const amount = Number(entry.amount || 0)
-    if (entry.entryType === 'INCOME') {
-      current.income += amount
-    } else {
-      current.expense += amount
-    }
-    current.net = current.income - current.expense
+    current.expense += amount
     current.count += 1
     buckets.set(label, current)
   })
   return [...buckets.values()]
-    .sort((left, right) => (right.income + right.expense) - (left.income + left.expense))
+    .sort((left, right) => right.expense - left.expense)
     .slice(0, 5)
 })
 
@@ -363,46 +392,34 @@ const monthFlowRows = computed(() => {
   const buckets = new Map()
   travelEntries.value.forEach((entry) => {
     const monthKey = String(entry.entryDate || '').slice(0, 7) || 'unknown'
-    const current = buckets.get(monthKey) || { monthKey, label: formatMonthLabel(monthKey), income: 0, expense: 0, net: 0, count: 0 }
+    const current = buckets.get(monthKey) || { monthKey, label: formatMonthLabel(monthKey), expense: 0, count: 0 }
     const amount = Number(entry.amount || 0)
-    if (entry.entryType === 'INCOME') {
-      current.income += amount
-    } else {
-      current.expense += amount
-    }
-    current.net = current.income - current.expense
+    current.expense += amount
     current.count += 1
     buckets.set(monthKey, current)
   })
   const rows = [...buckets.values()].sort((left, right) => right.monthKey.localeCompare(left.monthKey)).slice(0, 6)
-  const maxAmount = Math.max(...rows.map((row) => row.income + row.expense), 1)
+  const maxAmount = Math.max(...rows.map((row) => row.expense), 1)
   return rows.map((row) => ({
     ...row,
-    amount: row.income + row.expense,
-    percent: Math.max(6, Math.round(((row.income + row.expense) / maxAmount) * 100)),
+    amount: row.expense,
+    percent: Math.max(6, Math.round((row.expense / maxAmount) * 100)),
   }))
 })
-
-function formatNetCurrency(value) {
-  const amount = Number(value || 0)
-  if (amount > 0) {
-    return `+${props.formatCurrency(amount)}`
-  }
-  if (amount < 0) {
-    return `-${props.formatCurrency(Math.abs(amount))}`
-  }
-  return props.formatCurrency(0)
-}
-
-function getEntryTypeLabel(entry) {
-  return entry.entryType === 'INCOME' ? '수입' : '지출'
-}
 
 function openTravelSearch() {
   emit('open-travel-search', {
     keyword: travelSearchKeyword.value,
-    entryType: activeEntryType.value === 'all' ? '' : activeEntryType.value,
+    entryType: 'EXPENSE',
   })
+}
+
+function handleTravelCalendarDayClick(day) {
+  if (!day?.inTravelRange) {
+    return
+  }
+  selectedTravelDate.value = day.date
+  emit('start-travel-entry', { entryType: 'EXPENSE', entryDate: day.date })
 }
 </script>
 
@@ -412,7 +429,7 @@ function openTravelSearch() {
       <div>
         <span class="panel__eyebrow">TRAVEL LEDGER</span>
         <h2>여행 가계부</h2>
-        <p>여행 관련 수입과 지출을 일반 가계부 데이터 안에서 따로 모아 보고, 새 여행 거래도 같은 입력 흐름으로 기록합니다.</p>
+        <p>여행 기간의 지출을 일반 가계부 데이터 안에서 따로 모아 보고, 새 여행 지출도 같은 입력 흐름으로 기록합니다.</p>
       </div>
       <span class="panel__badge">{{ statsRangeLabel }}</span>
     </div>
@@ -479,26 +496,41 @@ function openTravelSearch() {
       <p v-if="travelPlanError" class="feedback feedback--error household-travel-ledger__connection-error">{{ travelPlanError }}</p>
     </section>
 
-    <section v-if="selectedTravelPlanDays.length" class="household-travel-ledger__date-board">
+    <section v-if="selectedTravelPlanCalendarWeeks.length" class="household-travel-ledger__date-board">
       <div class="household-travel-ledger__date-board-header">
         <div>
-          <strong>여행 기간 날짜 입력</strong>
-          <span>{{ selectedTravelPlanRangeLabel }} 안에서 날짜를 고르면 해당 날짜로 지출 입력을 시작합니다.</span>
+          <strong>여행 기간 달력</strong>
+          <span>{{ selectedTravelPlanRangeLabel }} 기준으로 여행 날짜만 선택할 수 있습니다.</span>
         </div>
         <small>{{ selectedTravelPlanDays.length }}일</small>
       </div>
-      <div class="household-travel-ledger__date-grid">
-        <button
-          v-for="day in selectedTravelPlanDays"
-          :key="day.date"
-          class="household-travel-ledger__date-card"
-          type="button"
-          @click="emit('start-travel-entry', { entryType: 'EXPENSE', entryDate: day.date })"
-        >
-          <span>{{ day.dayLabel }}</span>
-          <strong>{{ day.dateLabel }}</strong>
-          <small>{{ day.count }}건</small>
-        </button>
+      <div class="household-travel-ledger__calendar">
+        <div class="household-travel-ledger__weekdays" aria-hidden="true">
+          <span v-for="weekday in travelCalendarWeekdays" :key="weekday">{{ weekday }}</span>
+        </div>
+        <div class="household-travel-ledger__weeks">
+          <div v-for="(week, weekIndex) in selectedTravelPlanCalendarWeeks" :key="weekIndex" class="household-travel-ledger__week">
+            <button
+              v-for="day in week"
+              :key="day.date"
+              class="household-travel-ledger__date-card"
+              :class="{
+                'household-travel-ledger__date-card--muted': !day.inTravelRange,
+                'household-travel-ledger__date-card--active': selectedTravelDate === day.date,
+              }"
+              type="button"
+              :disabled="!day.inTravelRange"
+              @click="handleTravelCalendarDayClick(day)"
+            >
+              <span class="household-travel-ledger__date-card-head">
+                <span>{{ day.monthNumber }}월 {{ day.dayNumber }}</span>
+                <small>{{ day.count }}건</small>
+              </span>
+              <strong>{{ day.inTravelRange ? day.dayLabel : '-' }}</strong>
+              <span class="household-travel-ledger__date-card-amount">{{ formatCurrency(day.expense) }}</span>
+            </button>
+          </div>
+        </div>
       </div>
     </section>
 
@@ -511,18 +543,6 @@ function openTravelSearch() {
           :class="{ 'button--primary': statsControls.preset === option.value }"
           type="button"
           @click="statsControls.preset = option.value"
-        >
-          {{ option.label }}
-        </button>
-      </div>
-      <div class="scope-toggle scope-toggle--wrap" aria-label="여행 거래 구분 필터">
-        <button
-          v-for="option in entryTypeOptions"
-          :key="option.key"
-          class="button"
-          :class="{ 'button--primary': activeEntryType === option.key }"
-          type="button"
-          @click="activeEntryType = option.key"
         >
           {{ option.label }}
         </button>
@@ -548,28 +568,28 @@ function openTravelSearch() {
       >
         <span>{{ type.label }}</span>
         <strong>{{ type.count }}건</strong>
-        <small>{{ formatNetCurrency(type.net) }}</small>
+        <small>{{ formatCurrency(type.expense) }}</small>
       </button>
     </div>
 
     <div class="household-travel-ledger__summary">
       <article class="household-travel-ledger__summary-card">
-        <span>여행 순액</span>
-        <strong :class="netAmount >= 0 ? 'is-income' : 'is-expense'">{{ formatNetCurrency(netAmount) }}</strong>
+        <span>여행 지출 합계</span>
+        <strong class="is-expense">{{ formatCurrency(totalExpense) }}</strong>
         <small>{{ travelEntries.length }}건</small>
       </article>
       <article class="household-travel-ledger__summary-card">
-        <span>여행 지출</span>
-        <strong class="is-expense">{{ formatCurrency(totalExpense) }}</strong>
+        <span>지출 건수</span>
+        <strong>{{ expenseCount }}건</strong>
+        <small>여행 지출 기준</small>
+      </article>
+      <article class="household-travel-ledger__summary-card">
+        <span>여행 일수</span>
+        <strong>{{ selectedTravelPlanDays.length }}일</strong>
         <small>{{ expenseCount }}건</small>
       </article>
       <article class="household-travel-ledger__summary-card">
-        <span>여행 수입</span>
-        <strong class="is-income">{{ formatCurrency(totalIncome) }}</strong>
-        <small>{{ incomeCount }}건</small>
-      </article>
-      <article class="household-travel-ledger__summary-card">
-        <span>평균 거래</span>
+        <span>평균 지출</span>
         <strong>{{ formatCurrency(averageAmount) }}</strong>
         <small>{{ activeTravelType === 'all' ? '전체 여행 거래 기준' : '선택한 유형 기준' }}</small>
       </article>
@@ -577,7 +597,6 @@ function openTravelSearch() {
 
     <div class="entry-editor__actions household-travel-ledger__actions">
       <button class="button button--primary" type="button" @click="emit('start-travel-entry', 'EXPENSE')">여행 지출 입력</button>
-      <button class="button button--secondary" type="button" @click="emit('start-travel-entry', 'INCOME')">여행 수입 입력</button>
       <button class="button button--ghost" type="button" @click="openTravelSearch">검색에서 자세히 보기</button>
     </div>
 
@@ -592,9 +611,9 @@ function openTravelSearch() {
           <div v-for="row in topCategoryRows" :key="row.label" class="household-travel-ledger__row">
             <div>
               <strong>{{ row.label }}</strong>
-              <small>{{ row.count }}건 · 수입 {{ formatCurrency(row.income) }} · 지출 {{ formatCurrency(row.expense) }}</small>
+              <small>{{ row.count }}건 · 지출 {{ formatCurrency(row.expense) }}</small>
             </div>
-            <span :class="row.net >= 0 ? 'is-income' : 'is-expense'">{{ formatNetCurrency(row.net) }}</span>
+            <span class="is-expense">{{ formatCurrency(row.expense) }}</span>
           </div>
         </div>
         <p v-else class="panel__empty">여행 관련 거래가 아직 없습니다.</p>
@@ -610,7 +629,7 @@ function openTravelSearch() {
           <div v-for="row in monthFlowRows" :key="row.monthKey" class="household-travel-ledger__flow-row">
             <div>
               <strong>{{ row.label }}</strong>
-              <small>{{ row.count }}건 · 순액 {{ formatNetCurrency(row.net) }}</small>
+              <small>{{ row.count }}건 · 지출 {{ formatCurrency(row.expense) }}</small>
             </div>
             <span class="household-travel-ledger__flow-track">
               <i :style="{ width: `${row.percent}%` }"></i>
@@ -631,7 +650,6 @@ function openTravelSearch() {
             <thead>
               <tr>
                 <th>날짜</th>
-                <th>구분</th>
                 <th>제목</th>
                 <th>분류</th>
                 <th>금액</th>
@@ -641,14 +659,9 @@ function openTravelSearch() {
             <tbody>
               <tr v-for="entry in recentEntries" :key="entry.id">
                 <td>{{ formatShortDate(entry.entryDate) }} {{ formatTime(entry.entryTime) }}</td>
-                <td>
-                  <span :class="['chip', entry.entryType === 'INCOME' ? 'chip--income' : 'chip--expense']">
-                    {{ getEntryTypeLabel(entry) }}
-                  </span>
-                </td>
                 <td>{{ entry.title }}</td>
                 <td>{{ getEntryCategoryLabel(entry) }}</td>
-                <td :class="entry.entryType === 'INCOME' ? 'is-income' : 'is-expense'">{{ formatCurrency(entry.amount) }}</td>
+                <td class="is-expense">{{ formatCurrency(entry.amount) }}</td>
                 <td>
                   <div class="household-travel-ledger__entry-actions">
                     <button

@@ -3212,19 +3212,39 @@ button {
   font-weight: 900;
 }
 
-.household-travel-ledger__date-grid {
+.household-travel-ledger__calendar {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(86px, 1fr));
   gap: 8px;
-  max-height: 260px;
-  overflow: auto;
-  padding-right: 4px;
+  min-width: 0;
+}
+
+.household-travel-ledger__weekdays,
+.household-travel-ledger__week {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 8px;
+  min-width: 0;
+}
+
+.household-travel-ledger__weekdays span {
+  color: var(--text-soft);
+  font-size: 0.82rem;
+  font-weight: 900;
+  text-align: center;
+}
+
+.household-travel-ledger__weeks {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
 }
 
 .household-travel-ledger__date-card {
   display: grid;
-  gap: 4px;
-  min-height: 78px;
+  align-content: start;
+  gap: 8px;
+  min-width: 0;
+  min-height: 118px;
   padding: 10px;
   border: 1px solid var(--line);
   border-radius: 12px;
@@ -3239,8 +3259,34 @@ button {
   background: color-mix(in srgb, var(--surface-soft) 78%, var(--accent) 22%);
 }
 
-.household-travel-ledger__date-card span,
-.household-travel-ledger__date-card small {
+.household-travel-ledger__date-card:disabled {
+  cursor: default;
+}
+
+.household-travel-ledger__date-card--muted {
+  opacity: 0.42;
+}
+
+.household-travel-ledger__date-card--muted:hover {
+  border-color: var(--line);
+  background: var(--surface-soft);
+}
+
+.household-travel-ledger__date-card--active {
+  border-color: rgba(49, 130, 246, 0.72);
+  box-shadow: inset 0 0 0 1px rgba(49, 130, 246, 0.36);
+}
+
+.household-travel-ledger__date-card-head {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+  min-width: 0;
+}
+
+.household-travel-ledger__date-card-head span,
+.household-travel-ledger__date-card-head small {
   color: var(--text-soft);
   font-size: 0.78rem;
   font-weight: 800;
@@ -3248,6 +3294,17 @@ button {
 
 .household-travel-ledger__date-card strong {
   font-size: 1rem;
+}
+
+.household-travel-ledger__date-card-amount {
+  align-self: end;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--expense);
+  font-size: 0.9rem;
+  font-weight: 900;
 }
 
 .household-travel-ledger__toolbar {
@@ -6481,6 +6538,26 @@ textarea {
 
   .household-travel-ledger__plan-actions {
     grid-column: auto;
+  }
+
+  .household-travel-ledger__weekdays,
+  .household-travel-ledger__week {
+    gap: 4px;
+  }
+
+  .household-travel-ledger__date-card {
+    min-height: 92px;
+    padding: 7px;
+  }
+
+  .household-travel-ledger__date-card-head {
+    display: grid;
+    gap: 2px;
+  }
+
+  .household-travel-ledger__date-card strong,
+  .household-travel-ledger__date-card-amount {
+    font-size: 0.75rem;
   }
 
   .travel-my-photos__filters,

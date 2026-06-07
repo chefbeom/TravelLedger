@@ -1,5 +1,5 @@
 <script setup>
-import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { computed, defineAsyncComponent, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import {
   analyzeLedgerReceipt,
   bulkUpdateEntries,
@@ -58,12 +58,13 @@ import {
   resolveRange,
   shiftRange,
 } from '../lib/analytics'
-import CalendarWorkspace from './CalendarWorkspace.vue'
-import HouseholdTravelLedgerWorkspace from './HouseholdTravelLedgerWorkspace.vue'
-import LedgerImportWorkspace from './LedgerImportWorkspace.vue'
-import ManagementWorkspace from './ManagementWorkspace.vue'
-import StatisticsWorkspace from './StatisticsWorkspace.vue'
 import PaletteContainer from '../features/palette/components/PaletteContainer.vue'
+
+const CalendarWorkspace = defineAsyncComponent(() => import('./CalendarWorkspace.vue'))
+const HouseholdTravelLedgerWorkspace = defineAsyncComponent(() => import('./HouseholdTravelLedgerWorkspace.vue'))
+const LedgerImportWorkspace = defineAsyncComponent(() => import('./LedgerImportWorkspace.vue'))
+const ManagementWorkspace = defineAsyncComponent(() => import('./ManagementWorkspace.vue'))
+const StatisticsWorkspace = defineAsyncComponent(() => import('./StatisticsWorkspace.vue'))
 
 const props = defineProps({
   currentUser: {

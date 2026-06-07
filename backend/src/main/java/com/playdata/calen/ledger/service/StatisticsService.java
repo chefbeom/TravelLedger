@@ -1,9 +1,9 @@
 package com.playdata.calen.ledger.service;
 
 import com.playdata.calen.common.exception.BadRequestException;
+import com.playdata.calen.account.service.AppUserService;
 import com.playdata.calen.ledger.domain.ComparisonUnit;
 import com.playdata.calen.ledger.domain.EntryType;
-import com.playdata.calen.ledger.domain.LedgerEntry;
 import com.playdata.calen.ledger.dto.CalendarSummaryItemResponse;
 import com.playdata.calen.ledger.dto.CategoryBreakdownItemResponse;
 import com.playdata.calen.ledger.dto.DashboardCardResponse;
@@ -11,6 +11,7 @@ import com.playdata.calen.ledger.dto.DashboardResponse;
 import com.playdata.calen.ledger.dto.OverviewResponse;
 import com.playdata.calen.ledger.dto.PaymentBreakdownItemResponse;
 import com.playdata.calen.ledger.dto.PeriodComparisonItemResponse;
+import com.playdata.calen.ledger.repository.LedgerEntryRepository;
 import java.math.BigDecimal;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
@@ -18,10 +19,7 @@ import java.time.YearMonth;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.TemporalAdjusters;
 import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -33,106 +31,111 @@ public class StatisticsService {
 
     private static final BigDecimal ZERO = BigDecimal.ZERO;
 
+    private final AppUserService appUserService;
     private final LedgerEntryService ledgerEntryService;
+    private final LedgerEntryRepository ledgerEntryRepository;
 
     public OverviewResponse getOverview(Long userId, LocalDate from, LocalDate to) {
-        List<LedgerEntry> entries = ledgerEntryService.loadRawEntries(userId, from, to);
-        return buildOverview(from, to, entries);
+        appUserService.getRequiredUser(userId);
+        validateRange(from, to);
+        LedgerEntryRepository.LedgerAmountAggregate aggregate = ledgerEntryRepository.aggregateAmountsByOwnerIdAndDateRange(
+                userId,
+                from,
+                to,
+                EntryType.INCOME,
+                EntryType.EXPENSE
+        );
+        return buildOverview(from, to, aggregate);
     }
 
     public List<CalendarSummaryItemResponse> getCalendar(Long userId, LocalDate from, LocalDate to) {
+        appUserService.getRequiredUser(userId);
         validateRange(from, to);
-        List<LedgerEntry> entries = ledgerEntryService.loadRawEntries(userId, from, to);
-        Map<LocalDate, List<LedgerEntry>> grouped = new LinkedHashMap<>();
+        List<LedgerEntryRepository.DailyAmountAggregate> dailyAmounts = ledgerEntryRepository.aggregateDailyAmountsByOwnerIdAndDateRange(
+                userId,
+                from,
+                to,
+                EntryType.INCOME,
+                EntryType.EXPENSE
+        );
+
+        List<CalendarSummaryItemResponse> responses = new ArrayList<>();
+        int rowIndex = 0;
         LocalDate cursor = from;
         while (!cursor.isAfter(to)) {
-            grouped.put(cursor, new ArrayList<>());
+            LedgerEntryRepository.DailyAmountAggregate dailyAmount = null;
+            if (rowIndex < dailyAmounts.size() && dailyAmounts.get(rowIndex).getEntryDate().equals(cursor)) {
+                dailyAmount = dailyAmounts.get(rowIndex);
+                rowIndex += 1;
+            }
+
+            BigDecimal income = dailyAmount == null ? ZERO : nullToZero(dailyAmount.getIncome());
+            BigDecimal expense = dailyAmount == null ? ZERO : nullToZero(dailyAmount.getExpense());
+            long count = dailyAmount == null ? 0 : dailyAmount.getEntryCount();
+            responses.add(new CalendarSummaryItemResponse(
+                    cursor,
+                    income,
+                    expense,
+                    income.subtract(expense),
+                    count
+            ));
             cursor = cursor.plusDays(1);
         }
-        entries.forEach(entry -> grouped.computeIfAbsent(entry.getEntryDate(), ignored -> new ArrayList<>()).add(entry));
-
-        return grouped.entrySet().stream()
-                .map(entry -> {
-                    BigDecimal income = sumByType(entry.getValue(), EntryType.INCOME);
-                    BigDecimal expense = sumByType(entry.getValue(), EntryType.EXPENSE);
-                    return new CalendarSummaryItemResponse(
-                            entry.getKey(),
-                            income,
-                            expense,
-                            income.subtract(expense),
-                            entry.getValue().size()
-                    );
-                })
-                .toList();
+        return responses;
     }
 
     public List<CategoryBreakdownItemResponse> getCategoryBreakdown(Long userId, LocalDate from, LocalDate to, EntryType entryType) {
+        appUserService.getRequiredUser(userId);
         validateRange(from, to);
-        List<LedgerEntry> entries = ledgerEntryService.loadRawEntries(userId, from, to).stream()
-                .filter(entry -> entryType == null || entry.getEntryType() == entryType)
-                .toList();
-
-        Map<String, List<LedgerEntry>> grouped = new LinkedHashMap<>();
-        for (LedgerEntry entry : entries) {
-            String detailName = entry.getCategoryDetail() != null ? entry.getCategoryDetail().getName() : "미분류";
-            String key = entry.getCategoryGroup().getName() + "::" + detailName;
-            grouped.computeIfAbsent(key, ignored -> new ArrayList<>()).add(entry);
-        }
-
-        return grouped.values().stream()
-                .map(group -> new CategoryBreakdownItemResponse(
-                        group.get(0).getCategoryGroup().getName(),
-                        group.get(0).getCategoryDetail() != null ? group.get(0).getCategoryDetail().getName() : "미분류",
-                        group.stream().map(LedgerEntry::getAmount).reduce(ZERO, BigDecimal::add),
-                        group.size()
+        return ledgerEntryRepository.aggregateCategoryBreakdownByOwnerIdAndDateRange(userId, from, to, entryType).stream()
+                .map(row -> new CategoryBreakdownItemResponse(
+                        row.getGroupName(),
+                        row.getDetailName(),
+                        nullToZero(row.getTotalAmount()),
+                        row.getEntryCount()
                 ))
-                .sorted(Comparator.comparing(CategoryBreakdownItemResponse::totalAmount).reversed())
                 .toList();
     }
 
     public List<PaymentBreakdownItemResponse> getPaymentBreakdown(Long userId, LocalDate from, LocalDate to) {
+        appUserService.getRequiredUser(userId);
         validateRange(from, to);
-        List<LedgerEntry> entries = ledgerEntryService.loadRawEntries(userId, from, to);
-
-        Map<Long, List<LedgerEntry>> grouped = new LinkedHashMap<>();
-        for (LedgerEntry entry : entries) {
-            grouped.computeIfAbsent(entry.getPaymentMethod().getId(), ignored -> new ArrayList<>()).add(entry);
-        }
-
-        return grouped.values().stream()
-                .map(group -> new PaymentBreakdownItemResponse(
-                        group.get(0).getPaymentMethod().getName(),
-                        group.get(0).getPaymentMethod().getKind(),
-                        group.stream().map(LedgerEntry::getAmount).reduce(ZERO, BigDecimal::add),
-                        group.size()
+        return ledgerEntryRepository.aggregatePaymentBreakdownByOwnerIdAndDateRange(userId, from, to).stream()
+                .map(row -> new PaymentBreakdownItemResponse(
+                        row.getPaymentMethodName(),
+                        row.getKind(),
+                        nullToZero(row.getTotalAmount()),
+                        row.getEntryCount()
                 ))
-                .sorted(Comparator.comparing(PaymentBreakdownItemResponse::totalAmount).reversed())
                 .toList();
     }
 
     public List<PeriodComparisonItemResponse> compare(Long userId, LocalDate anchorDate, ComparisonUnit unit, int periods) {
+        appUserService.getRequiredUser(userId);
         if (periods < 1 || periods > 24) {
-            throw new BadRequestException("periods는 1 이상 24 이하로 입력해 주세요.");
+            throw new BadRequestException("periods must be between 1 and 24.");
         }
 
         LocalDate anchor = anchorDate == null ? LocalDate.now() : anchorDate;
         List<PeriodWindow> windows = buildWindows(anchor, unit, periods);
-        List<LedgerEntry> entries = ledgerEntryService.loadRawEntries(userId, windows.get(0).startDate(), windows.get(windows.size() - 1).endDate());
+        List<LedgerEntryRepository.DailyAmountAggregate> dailyAmounts = ledgerEntryRepository.aggregateDailyAmountsByOwnerIdAndDateRange(
+                userId,
+                windows.get(0).startDate(),
+                windows.get(windows.size() - 1).endDate(),
+                EntryType.INCOME,
+                EntryType.EXPENSE
+        );
 
         return windows.stream()
                 .map(window -> {
-                    List<LedgerEntry> periodEntries = entries.stream()
-                            .filter(entry -> !entry.getEntryDate().isBefore(window.startDate()) && !entry.getEntryDate().isAfter(window.endDate()))
-                            .toList();
-                    BigDecimal income = sumByType(periodEntries, EntryType.INCOME);
-                    BigDecimal expense = sumByType(periodEntries, EntryType.EXPENSE);
+                    PeriodTotals totals = sumDailyAmounts(dailyAmounts, window.startDate(), window.endDate());
                     return new PeriodComparisonItemResponse(
                             window.label(),
                             window.startDate(),
                             window.endDate(),
-                            income,
-                            expense,
-                            income.subtract(expense)
+                            totals.income(),
+                            totals.expense(),
+                            totals.income().subtract(totals.expense())
                     );
                 })
                 .toList();
@@ -165,33 +168,47 @@ public class StatisticsService {
         );
     }
 
-    private OverviewResponse buildOverview(LocalDate from, LocalDate to, List<LedgerEntry> entries) {
-        BigDecimal income = sumByType(entries, EntryType.INCOME);
-        BigDecimal expense = sumByType(entries, EntryType.EXPENSE);
-
+    private OverviewResponse buildOverview(LocalDate from, LocalDate to, LedgerEntryRepository.LedgerAmountAggregate aggregate) {
+        BigDecimal income = aggregate == null ? ZERO : nullToZero(aggregate.getIncome());
+        BigDecimal expense = aggregate == null ? ZERO : nullToZero(aggregate.getExpense());
+        long entryCount = aggregate == null ? 0 : aggregate.getEntryCount();
         return new OverviewResponse(
                 from,
                 to,
                 income,
                 expense,
                 income.subtract(expense),
-                entries.size()
+                entryCount
         );
     }
 
-    private BigDecimal sumByType(List<LedgerEntry> entries, EntryType type) {
-        return entries.stream()
-                .filter(entry -> entry.getEntryType() == type)
-                .map(LedgerEntry::getAmount)
-                .reduce(ZERO, BigDecimal::add);
+    private PeriodTotals sumDailyAmounts(
+            List<LedgerEntryRepository.DailyAmountAggregate> dailyAmounts,
+            LocalDate from,
+            LocalDate to
+    ) {
+        BigDecimal income = ZERO;
+        BigDecimal expense = ZERO;
+        for (LedgerEntryRepository.DailyAmountAggregate row : dailyAmounts) {
+            if (row.getEntryDate().isBefore(from) || row.getEntryDate().isAfter(to)) {
+                continue;
+            }
+            income = income.add(nullToZero(row.getIncome()));
+            expense = expense.add(nullToZero(row.getExpense()));
+        }
+        return new PeriodTotals(income, expense);
+    }
+
+    private BigDecimal nullToZero(BigDecimal value) {
+        return value == null ? ZERO : value;
     }
 
     private void validateRange(LocalDate from, LocalDate to) {
         if (from == null || to == null) {
-            throw new BadRequestException("from, to 날짜를 함께 전달해 주세요.");
+            throw new BadRequestException("from and to are required.");
         }
         if (from.isAfter(to)) {
-            throw new BadRequestException("from 날짜는 to 날짜보다 앞서야 합니다.");
+            throw new BadRequestException("from must be before or equal to to.");
         }
     }
 
@@ -233,5 +250,8 @@ public class StatisticsService {
     }
 
     private record PeriodWindow(LocalDate startDate, LocalDate endDate, String label) {
+    }
+
+    private record PeriodTotals(BigDecimal income, BigDecimal expense) {
     }
 }

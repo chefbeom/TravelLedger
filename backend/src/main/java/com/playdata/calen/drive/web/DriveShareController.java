@@ -4,14 +4,14 @@ import com.playdata.calen.account.security.AppUserPrincipal;
 import com.playdata.calen.drive.dto.DriveDtos;
 import com.playdata.calen.drive.service.DriveService;
 import com.playdata.calen.drive.service.DriveShareService;
-import java.nio.charset.StandardCharsets;
+import java.net.URI;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.CacheControl;
-import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -106,11 +106,11 @@ public class DriveShareController {
     }
 
     @GetMapping("/shared/{fileId}/download")
-    public ResponseEntity<byte[]> downloadSharedFile(
+    public ResponseEntity<Void> downloadSharedFile(
             @AuthenticationPrincipal AppUserPrincipal currentUser,
             @PathVariable Long fileId
     ) {
-        return buildDownloadResponse(driveShareService.downloadSharedFile(currentUser.userId(), fileId));
+        return redirectTo(driveShareService.getSharedFileDownloadUrl(currentUser.userId(), fileId));
     }
 
     @GetMapping("/shared/{fileId}/download-link")
@@ -132,18 +132,10 @@ public class DriveShareController {
         return buildThumbnailResponse(driveShareService.loadSharedThumbnail(currentUser.userId(), fileId, 320), ifNoneMatch);
     }
 
-    private ResponseEntity<byte[]> buildDownloadResponse(DriveService.DriveFilePayload payload) {
-        return ResponseEntity.ok()
-                .header(
-                        HttpHeaders.CONTENT_DISPOSITION,
-                        ContentDisposition.attachment()
-                                .filename(payload.fileName(), StandardCharsets.UTF_8)
-                                .build()
-                                .toString()
-                )
-                .contentLength(payload.contentLength())
-                .contentType(resolveMediaType(payload.contentType()))
-                .body(payload.bytes());
+    private ResponseEntity<Void> redirectTo(String downloadUrl) {
+        return ResponseEntity.status(HttpStatus.FOUND)
+                .location(URI.create(downloadUrl))
+                .build();
     }
 
     private ResponseEntity<byte[]> buildThumbnailResponse(
@@ -169,17 +161,6 @@ public class DriveShareController {
                 .lastModified(payload.lastModifiedEpochMillis())
                 .contentType(MediaType.parseMediaType(payload.contentType()))
                 .body(payload.bytes());
-    }
-
-    private MediaType resolveMediaType(String contentType) {
-        if (contentType == null || contentType.isBlank()) {
-            return MediaType.APPLICATION_OCTET_STREAM;
-        }
-        try {
-            return MediaType.parseMediaType(contentType);
-        } catch (Exception ignored) {
-            return MediaType.APPLICATION_OCTET_STREAM;
-        }
     }
 
     private boolean matchesEtag(String ifNoneMatch, String eTag) {

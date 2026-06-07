@@ -1,12 +1,6 @@
 <script setup>
-import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
-import AdminWorkspace from './components/AdminWorkspace.vue'
-import HouseholdWorkspace from './components/HouseholdWorkspace.vue'
-import MainDashboardWorkspace from './components/MainDashboardWorkspace.vue'
+import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import PinPadInput from './components/PinPadInput.vue'
-import CalenDriveWorkspace from './components/CalenDriveWorkspace.vue'
-import ProfileWorkspace from './components/ProfileWorkspace.vue'
-import TravelWorkspace from './components/TravelWorkspace.vue'
 import {
   acceptInvite,
   fetchCurrentUser,
@@ -14,6 +8,13 @@ import {
   login,
   logout as logoutRequest,
 } from './lib/api'
+
+const AdminWorkspace = defineAsyncComponent(() => import('./components/AdminWorkspace.vue'))
+const HouseholdWorkspace = defineAsyncComponent(() => import('./components/HouseholdWorkspace.vue'))
+const MainDashboardWorkspace = defineAsyncComponent(() => import('./components/MainDashboardWorkspace.vue'))
+const CalenDriveWorkspace = defineAsyncComponent(() => import('./components/CalenDriveWorkspace.vue'))
+const ProfileWorkspace = defineAsyncComponent(() => import('./components/ProfileWorkspace.vue'))
+const TravelWorkspace = defineAsyncComponent(() => import('./components/TravelWorkspace.vue'))
 
 const legacyFeatureItems = [
   {

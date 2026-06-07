@@ -324,8 +324,15 @@ public class DriveService {
         );
     }
 
+    @Transactional
     public String getDownloadUrl(Long userId, Long fileId) {
-        return driveStorageService.generateDownloadUrl(getOwnedFile(userId, fileId).getStoragePath());
+        DriveItem item = getOwnedFile(userId, fileId);
+        item.setLastAccessedAt(LocalDateTime.now());
+        return driveStorageService.generateDownloadUrl(
+                item.getStoragePath(),
+                item.getOriginalName(),
+                resolveContentType(item.getExtension())
+        );
     }
 
     public ThumbnailPayload loadOwnedThumbnail(Long userId, Long fileId, Integer width) {
@@ -367,7 +374,7 @@ public class DriveService {
                 .deletedAt(item.getDeletedAt())
                 .uploadDate(item.getUploadedAt())
                 .lastModifyDate(item.getLastModifiedAt())
-                .downloadUrl(item.isFile() && StringUtils.hasText(item.getStoragePath()) ? "/api/file/" + item.getId() + "/download-link" : null)
+                .downloadUrl(item.isFile() && StringUtils.hasText(item.getStoragePath()) ? "/api/file/" + item.getId() + "/download" : null)
                 .thumbnailUrl(item.isFile() ? "/api/file/" + item.getId() + "/thumbnail" : null)
                 .presignedUrlExpiresIn(6000)
                 .ownerLoginId(item.getOwner().getLoginId())

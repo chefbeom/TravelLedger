@@ -72,6 +72,27 @@ public class DriveDownloadLinkService {
 
     @Transactional
     public DriveService.DriveFilePayload downloadByToken(String token) {
+        DriveItem item = resolveAvailableDownloadLink(token).getItem();
+        byte[] bytes = driveStorageService.loadObjectBytes(item.getStoragePath());
+        return new DriveService.DriveFilePayload(
+                bytes,
+                driveService.resolveContentType(item.getExtension()),
+                item.getOriginalName(),
+                item.getFileSize()
+        );
+    }
+
+    @Transactional
+    public String resolveDownloadUrlByToken(String token) {
+        DriveItem item = resolveAvailableDownloadLink(token).getItem();
+        return driveStorageService.generateDownloadUrl(
+                item.getStoragePath(),
+                item.getOriginalName(),
+                driveService.resolveContentType(item.getExtension())
+        );
+    }
+
+    private DriveDownloadLink resolveAvailableDownloadLink(String token) {
         if (token == null || token.isBlank()) {
             throw new NotFoundException("Download link was not found.");
         }
@@ -87,13 +108,7 @@ public class DriveDownloadLinkService {
 
         link.setDownloadCount(link.getDownloadCount() + 1);
         item.setLastAccessedAt(now);
-        byte[] bytes = driveStorageService.loadObjectBytes(item.getStoragePath());
-        return new DriveService.DriveFilePayload(
-                bytes,
-                driveService.resolveContentType(item.getExtension()),
-                item.getOriginalName(),
-                item.getFileSize()
-        );
+        return link;
     }
 
     private DriveDtos.DownloadLinkResponse toResponse(DriveDownloadLink link) {

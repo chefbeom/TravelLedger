@@ -1,6 +1,8 @@
 package com.playdata.calen.ledger.repository;
 
 import com.playdata.calen.ledger.domain.LedgerEntry;
+import com.playdata.calen.ledger.domain.PaymentMethodKind;
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.Collection;
 import java.util.List;
@@ -53,11 +55,11 @@ public interface LedgerEntryRepository extends JpaRepository<LedgerEntry, Long> 
                       and entry.entryDate between :from and :to
                       and (
                             :keyword is null
-                            or lower(entry.title) like concat('%', :keyword, '%')
-                            or lower(coalesce(entry.memo, '')) like concat('%', :keyword, '%')
-                            or lower(categoryGroup.name) like concat('%', :keyword, '%')
-                            or lower(coalesce(categoryDetail.name, '')) like concat('%', :keyword, '%')
-                            or lower(paymentMethod.name) like concat('%', :keyword, '%')
+                            or entry.title like concat(:keyword, '%')
+                            or entry.memo like concat(:keyword, '%')
+                            or categoryGroup.name like concat(:keyword, '%')
+                            or categoryDetail.name like concat(:keyword, '%')
+                            or paymentMethod.name like concat(:keyword, '%')
                       )
                       and (:entryType is null or entry.entryType = :entryType)
                       and (
@@ -86,11 +88,11 @@ public interface LedgerEntryRepository extends JpaRepository<LedgerEntry, Long> 
                       and entry.entryDate between :from and :to
                       and (
                             :keyword is null
-                            or lower(entry.title) like concat('%', :keyword, '%')
-                            or lower(coalesce(entry.memo, '')) like concat('%', :keyword, '%')
-                            or lower(categoryGroup.name) like concat('%', :keyword, '%')
-                            or lower(coalesce(categoryDetail.name, '')) like concat('%', :keyword, '%')
-                            or lower(paymentMethod.name) like concat('%', :keyword, '%')
+                            or entry.title like concat(:keyword, '%')
+                            or entry.memo like concat(:keyword, '%')
+                            or categoryGroup.name like concat(:keyword, '%')
+                            or categoryDetail.name like concat(:keyword, '%')
+                            or paymentMethod.name like concat(:keyword, '%')
                       )
                       and (:entryType is null or entry.entryType = :entryType)
                       and (
@@ -127,7 +129,10 @@ public interface LedgerEntryRepository extends JpaRepository<LedgerEntry, Long> 
     );
 
     @Query("""
-            select coalesce(sum(entry.amount), 0)
+            select
+                coalesce(sum(case when entry.entryType = :incomeType then entry.amount else 0 end), 0) as income,
+                coalesce(sum(case when entry.entryType = :expenseType then entry.amount else 0 end), 0) as expense,
+                count(entry) as entryCount
             from LedgerEntry entry
             join entry.categoryGroup categoryGroup
             left join entry.categoryDetail categoryDetail
@@ -137,11 +142,11 @@ public interface LedgerEntryRepository extends JpaRepository<LedgerEntry, Long> 
               and entry.entryDate between :from and :to
               and (
                     :keyword is null
-                    or lower(entry.title) like concat('%', :keyword, '%')
-                    or lower(coalesce(entry.memo, '')) like concat('%', :keyword, '%')
-                    or lower(categoryGroup.name) like concat('%', :keyword, '%')
-                    or lower(coalesce(categoryDetail.name, '')) like concat('%', :keyword, '%')
-                    or lower(paymentMethod.name) like concat('%', :keyword, '%')
+                    or entry.title like concat(:keyword, '%')
+                    or entry.memo like concat(:keyword, '%')
+                    or categoryGroup.name like concat(:keyword, '%')
+                    or categoryDetail.name like concat(:keyword, '%')
+                    or paymentMethod.name like concat(:keyword, '%')
               )
               and (:entryTypeFilter is null or entry.entryType = :entryTypeFilter)
               and (
@@ -158,9 +163,8 @@ public interface LedgerEntryRepository extends JpaRepository<LedgerEntry, Long> 
               )
               and (:minAmount is null or entry.amount >= :minAmount)
               and (:maxAmount is null or entry.amount <= :maxAmount)
-              and entry.entryType = :entryTypeToSum
             """)
-    java.math.BigDecimal sumAmountByOwnerIdAndFilters(
+    SearchSummaryAggregate summarizeAmountsByOwnerIdAndFilters(
             @Param("userId") Long userId,
             @Param("from") LocalDate from,
             @Param("to") LocalDate to,
@@ -172,9 +176,92 @@ public interface LedgerEntryRepository extends JpaRepository<LedgerEntry, Long> 
             @Param("paymentMethodOther") boolean paymentMethodOther,
             @Param("categoryGroupOther") boolean categoryGroupOther,
             @Param("categoryDetailOther") boolean categoryDetailOther,
-            @Param("minAmount") java.math.BigDecimal minAmount,
-            @Param("maxAmount") java.math.BigDecimal maxAmount,
-            @Param("entryTypeToSum") com.playdata.calen.ledger.domain.EntryType entryTypeToSum
+            @Param("minAmount") BigDecimal minAmount,
+            @Param("maxAmount") BigDecimal maxAmount,
+            @Param("incomeType") com.playdata.calen.ledger.domain.EntryType incomeType,
+            @Param("expenseType") com.playdata.calen.ledger.domain.EntryType expenseType
+    );
+
+    @Query("""
+            select
+                coalesce(sum(case when entry.entryType = :incomeType then entry.amount else 0 end), 0) as income,
+                coalesce(sum(case when entry.entryType = :expenseType then entry.amount else 0 end), 0) as expense,
+                count(entry) as entryCount
+            from LedgerEntry entry
+            where entry.owner.id = :userId
+              and entry.deletedAt is null
+              and entry.entryDate between :from and :to
+            """)
+    LedgerAmountAggregate aggregateAmountsByOwnerIdAndDateRange(
+            @Param("userId") Long userId,
+            @Param("from") LocalDate from,
+            @Param("to") LocalDate to,
+            @Param("incomeType") com.playdata.calen.ledger.domain.EntryType incomeType,
+            @Param("expenseType") com.playdata.calen.ledger.domain.EntryType expenseType
+    );
+
+    @Query("""
+            select
+                entry.entryDate as entryDate,
+                coalesce(sum(case when entry.entryType = :incomeType then entry.amount else 0 end), 0) as income,
+                coalesce(sum(case when entry.entryType = :expenseType then entry.amount else 0 end), 0) as expense,
+                count(entry) as entryCount
+            from LedgerEntry entry
+            where entry.owner.id = :userId
+              and entry.deletedAt is null
+              and entry.entryDate between :from and :to
+            group by entry.entryDate
+            order by entry.entryDate asc
+            """)
+    List<DailyAmountAggregate> aggregateDailyAmountsByOwnerIdAndDateRange(
+            @Param("userId") Long userId,
+            @Param("from") LocalDate from,
+            @Param("to") LocalDate to,
+            @Param("incomeType") com.playdata.calen.ledger.domain.EntryType incomeType,
+            @Param("expenseType") com.playdata.calen.ledger.domain.EntryType expenseType
+    );
+
+    @Query("""
+            select
+                categoryGroup.name as groupName,
+                coalesce(categoryDetail.name, '미분류') as detailName,
+                coalesce(sum(entry.amount), 0) as totalAmount,
+                count(entry) as entryCount
+            from LedgerEntry entry
+            join entry.categoryGroup categoryGroup
+            left join entry.categoryDetail categoryDetail
+            where entry.owner.id = :userId
+              and entry.deletedAt is null
+              and entry.entryDate between :from and :to
+              and (:entryType is null or entry.entryType = :entryType)
+            group by categoryGroup.name, categoryDetail.name
+            order by sum(entry.amount) desc
+            """)
+    List<CategoryBreakdownAggregate> aggregateCategoryBreakdownByOwnerIdAndDateRange(
+            @Param("userId") Long userId,
+            @Param("from") LocalDate from,
+            @Param("to") LocalDate to,
+            @Param("entryType") com.playdata.calen.ledger.domain.EntryType entryType
+    );
+
+    @Query("""
+            select
+                paymentMethod.name as paymentMethodName,
+                paymentMethod.kind as kind,
+                coalesce(sum(entry.amount), 0) as totalAmount,
+                count(entry) as entryCount
+            from LedgerEntry entry
+            join entry.paymentMethod paymentMethod
+            where entry.owner.id = :userId
+              and entry.deletedAt is null
+              and entry.entryDate between :from and :to
+            group by paymentMethod.id, paymentMethod.name, paymentMethod.kind
+            order by sum(entry.amount) desc
+            """)
+    List<PaymentBreakdownAggregate> aggregatePaymentBreakdownByOwnerIdAndDateRange(
+            @Param("userId") Long userId,
+            @Param("from") LocalDate from,
+            @Param("to") LocalDate to
     );
 
     @Query("""
@@ -194,4 +281,50 @@ public interface LedgerEntryRepository extends JpaRepository<LedgerEntry, Long> 
               and entry.deletedAt is not null
             """)
     int deleteAllDeletedByOwnerId(@Param("userId") Long userId);
+
+    interface SearchSummaryAggregate {
+        BigDecimal getIncome();
+
+        BigDecimal getExpense();
+
+        long getEntryCount();
+    }
+
+    interface LedgerAmountAggregate {
+        BigDecimal getIncome();
+
+        BigDecimal getExpense();
+
+        long getEntryCount();
+    }
+
+    interface DailyAmountAggregate {
+        LocalDate getEntryDate();
+
+        BigDecimal getIncome();
+
+        BigDecimal getExpense();
+
+        long getEntryCount();
+    }
+
+    interface CategoryBreakdownAggregate {
+        String getGroupName();
+
+        String getDetailName();
+
+        BigDecimal getTotalAmount();
+
+        long getEntryCount();
+    }
+
+    interface PaymentBreakdownAggregate {
+        String getPaymentMethodName();
+
+        PaymentMethodKind getKind();
+
+        BigDecimal getTotalAmount();
+
+        long getEntryCount();
+    }
 }

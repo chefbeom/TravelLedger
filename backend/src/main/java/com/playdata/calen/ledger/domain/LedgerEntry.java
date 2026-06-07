@@ -10,6 +10,7 @@ import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
@@ -22,7 +23,14 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 @Entity
-@Table(name = "ledger_entries")
+@Table(name = "ledger_entries", indexes = {
+        @Index(name = "idx_ledger_entries_owner_deleted_date_id", columnList = "owner_id, deleted_at, entry_date, id"),
+        @Index(name = "idx_ledger_entries_owner_deleted_type_date", columnList = "owner_id, deleted_at, entry_type, entry_date"),
+        @Index(name = "idx_ledger_entries_owner_title", columnList = "owner_id, title"),
+        @Index(name = "idx_ledger_entries_owner_memo", columnList = "owner_id, memo"),
+        @Index(name = "idx_ledger_entries_owner_category_date", columnList = "owner_id, category_group_id, category_detail_id, entry_date"),
+        @Index(name = "idx_ledger_entries_owner_payment_date", columnList = "owner_id, payment_method_id, entry_date")
+})
 @Getter
 @Setter
 @NoArgsConstructor

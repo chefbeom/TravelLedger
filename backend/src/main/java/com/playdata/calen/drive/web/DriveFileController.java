@@ -4,6 +4,7 @@ import com.playdata.calen.account.security.AppUserPrincipal;
 import com.playdata.calen.drive.dto.DriveDtos;
 import com.playdata.calen.drive.service.DriveDownloadLinkService;
 import com.playdata.calen.drive.service.DriveService;
+import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Arrays;
@@ -12,6 +13,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.CacheControl;
 import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -68,11 +70,11 @@ public class DriveFileController {
     }
 
     @GetMapping("/{fileId}/download")
-    public ResponseEntity<byte[]> download(
+    public ResponseEntity<Void> download(
             @AuthenticationPrincipal AppUserPrincipal currentUser,
             @PathVariable Long fileId
     ) {
-        return buildDownloadResponse(driveService.downloadFile(currentUser.userId(), fileId));
+        return redirectTo(driveService.getDownloadUrl(currentUser.userId(), fileId));
     }
 
     @GetMapping("/{fileId}/download-link")
@@ -111,8 +113,8 @@ public class DriveFileController {
     }
 
     @GetMapping("/public-download/{token}")
-    public ResponseEntity<byte[]> publicDownload(@PathVariable String token) {
-        return buildDownloadResponse(driveDownloadLinkService.downloadByToken(token));
+    public ResponseEntity<Void> publicDownload(@PathVariable String token) {
+        return redirectTo(driveDownloadLinkService.resolveDownloadUrlByToken(token));
     }
 
     @PostMapping("/download")
@@ -231,6 +233,12 @@ public class DriveFileController {
                 .contentLength(payload.contentLength())
                 .contentType(resolveMediaType(payload.contentType()))
                 .body(payload.bytes());
+    }
+
+    private ResponseEntity<Void> redirectTo(String downloadUrl) {
+        return ResponseEntity.status(HttpStatus.FOUND)
+                .location(URI.create(downloadUrl))
+                .build();
     }
 
     private ResponseEntity<byte[]> buildThumbnailResponse(

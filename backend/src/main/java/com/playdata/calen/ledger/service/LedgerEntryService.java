@@ -179,7 +179,7 @@ public class LedgerEntryService {
                 PageRequest.of(safePage, safeSize, resolveSearchSort(sortBy))
         );
 
-        BigDecimal income = ledgerEntryRepository.sumAmountByOwnerIdAndFilters(
+        LedgerEntryRepository.SearchSummaryAggregate summaryAggregate = ledgerEntryRepository.summarizeAmountsByOwnerIdAndFilters(
                 userId,
                 range.from(),
                 range.to(),
@@ -193,29 +193,16 @@ public class LedgerEntryService {
                 categoryDetailOther,
                 minAmount,
                 maxAmount,
-                EntryType.INCOME
-        );
-        BigDecimal expense = ledgerEntryRepository.sumAmountByOwnerIdAndFilters(
-                userId,
-                range.from(),
-                range.to(),
-                normalizedKeyword,
-                entryType,
-                paymentMethodId,
-                categoryGroupId,
-                categoryDetailId,
-                paymentMethodOther,
-                categoryGroupOther,
-                categoryDetailOther,
-                minAmount,
-                maxAmount,
+                EntryType.INCOME,
                 EntryType.EXPENSE
         );
+        BigDecimal income = summaryAggregate == null ? BigDecimal.ZERO : nullToZero(summaryAggregate.getIncome());
+        BigDecimal expense = summaryAggregate == null ? BigDecimal.ZERO : nullToZero(summaryAggregate.getExpense());
         LedgerEntrySearchSummaryResponse summary = new LedgerEntrySearchSummaryResponse(
-                income == null ? BigDecimal.ZERO : income,
-                expense == null ? BigDecimal.ZERO : expense,
-                (income == null ? BigDecimal.ZERO : income).subtract(expense == null ? BigDecimal.ZERO : expense),
-                resultPage.getTotalElements()
+                income,
+                expense,
+                income.subtract(expense),
+                summaryAggregate == null ? 0 : summaryAggregate.getEntryCount()
         );
 
         return new LedgerEntrySearchPageResponse(
@@ -1179,8 +1166,14 @@ public class LedgerEntryService {
         if (keyword == null) {
             return null;
         }
-        String trimmedKeyword = keyword.trim().toLowerCase();
+        String trimmedKeyword = keyword.trim()
+                .replace("%", "")
+                .replace("_", "");
         return trimmedKeyword.isBlank() ? null : trimmedKeyword;
+    }
+
+    private BigDecimal nullToZero(BigDecimal value) {
+        return value == null ? BigDecimal.ZERO : value;
     }
 
     private Sort resolveSearchSort(String sortBy) {

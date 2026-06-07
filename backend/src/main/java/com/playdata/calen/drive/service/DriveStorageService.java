@@ -18,9 +18,13 @@ import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -230,6 +234,25 @@ public class DriveStorageService {
         }
     }
 
+    public String generateDownloadUrl(String objectKey, String fileName, String contentType) {
+        ensureStorageConfigured();
+        Map<String, String> extraQueryParams = buildDownloadResponseQueryParams(fileName, contentType);
+        try {
+            GetPresignedObjectUrlArgs.Builder argsBuilder = GetPresignedObjectUrlArgs.builder()
+                    .method(Method.GET)
+                    .bucket(resolveBucket())
+                    .object(objectKey)
+                    .expiry(minioProperties.getPresignedUrlExpirySeconds());
+            if (!extraQueryParams.isEmpty()) {
+                argsBuilder.extraQueryParams(extraQueryParams);
+            }
+            return rewritePublicUrl(minioClient().getPresignedObjectUrl(argsBuilder.build()));
+        } catch (Exception exception) {
+            log.error("Failed to generate drive download URL. bucket={}, objectKey={}", resolveBucket(), objectKey, exception);
+            throw new BadRequestException("Could not create a download link.");
+        }
+    }
+
     public String buildProfileImageObjectKey(Long userId) {
         return "drive-profile/" + userId + "/profile.png";
     }
@@ -304,6 +327,32 @@ public class DriveStorageService {
             log.error("Failed to generate drive upload URL. bucket={}, objectKey={}", resolveBucket(), objectKey, exception);
             throw new BadRequestException("업로드 URL을 만들지 못했습니다.");
         }
+    }
+
+    private Map<String, String> buildDownloadResponseQueryParams(String fileName, String contentType) {
+        Map<String, String> queryParams = new LinkedHashMap<>();
+        if (StringUtils.hasText(fileName)) {
+            queryParams.put("response-content-disposition", buildAttachmentDisposition(fileName.trim()));
+        }
+        if (StringUtils.hasText(contentType)) {
+            queryParams.put("response-content-type", contentType.trim());
+        }
+        return queryParams;
+    }
+
+    private String buildAttachmentDisposition(String fileName) {
+        String asciiName = fileName
+                .replace('\\', '_')
+                .replace('/', '_')
+                .replace('"', '\'')
+                .replaceAll("\\p{Cntrl}+", "_")
+                .replaceAll("[^\\x20-\\x7E]", "_")
+                .trim();
+        if (!StringUtils.hasText(asciiName)) {
+            asciiName = "download";
+        }
+        String encodedName = URLEncoder.encode(fileName, StandardCharsets.UTF_8).replace("+", "%20");
+        return "attachment; filename=\"" + asciiName + "\"; filename*=UTF-8''" + encodedName;
     }
 
     private String rewritePublicUrl(String sourceUrl) {

@@ -241,8 +241,15 @@ public class DriveShareService {
         );
     }
 
+    @Transactional
     public String getSharedFileDownloadUrl(Long userId, Long fileId) {
-        return driveStorageService.generateDownloadUrl(getSharedFile(userId, fileId).getStoragePath());
+        DriveItem item = getSharedFile(userId, fileId);
+        item.setLastAccessedAt(LocalDateTime.now());
+        return driveStorageService.generateDownloadUrl(
+                item.getStoragePath(),
+                item.getOriginalName(),
+                resolveContentType(item.getExtension())
+        );
     }
 
     public DriveService.ThumbnailPayload loadSharedThumbnail(Long userId, Long fileId, Integer width) {
@@ -297,7 +304,7 @@ public class DriveShareService {
                 .ownerLoginId(share.getOwner().getLoginId())
                 .ownerDisplayName(share.getOwner().getDisplayName())
                 .sharedAt(share.getCreatedAt())
-                .downloadUrl("/api/file/share/shared/" + item.getId() + "/download-link")
+                .downloadUrl("/api/file/share/shared/" + item.getId() + "/download")
                 .thumbnailUrl("/api/file/share/shared/" + item.getId() + "/thumbnail")
                 .build();
     }

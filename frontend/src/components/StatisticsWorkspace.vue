@@ -136,6 +136,7 @@ const comparisonChartItems = computed(() =>
 const searchResultSelection = useTableSelection(computed(() => props.searchResults))
 const trashResultSelection = useTableSelection(computed(() => props.trashResults))
 const editingSearchEntryId = ref(null)
+const isSearchBulkToolbarVisible = ref(false)
 const searchEditDraft = reactive({
   entryDate: '',
   entryTime: '00:00',
@@ -332,6 +333,14 @@ function submitSearchBulkUpdate() {
     paymentMethodId: searchBulkDraft.paymentMethodId ? Number(searchBulkDraft.paymentMethodId) : null,
   })
   searchResultSelection.clearSelection()
+  isSearchBulkToolbarVisible.value = false
+}
+
+function toggleSearchBulkToolbar() {
+  isSearchBulkToolbarVisible.value = !isSearchBulkToolbarVisible.value
+  if (!isSearchBulkToolbarVisible.value) {
+    searchResultSelection.clearSelection()
+  }
 }
 
 function selectFirstSearchEditDetail() {
@@ -442,6 +451,7 @@ watch(
   () => props.route,
   () => {
     cancelSearchEntryEdit()
+    isSearchBulkToolbarVisible.value = false
     searchResultSelection.clearSelection()
   },
 )
@@ -572,20 +582,36 @@ watch(
             <h2>검색</h2>
             <p>제목, 금액, 결제방법, 대분류 조건을 조합해서 거래를 찾습니다.</p>
           </div>
-          <span class="panel__badge">{{ searchPageInfo.totalElements }}건</span>
+          <div class="search-header-actions">
+            <button
+              class="button button--ghost search-bulk-toggle"
+              type="button"
+              :class="{ 'search-bulk-toggle--active': isSearchBulkToolbarVisible }"
+              @click="toggleSearchBulkToolbar"
+            >
+              {{ isSearchBulkToolbarVisible ? '일괄 수정 닫기' : '일괄 수정하기' }}
+            </button>
+            <span class="panel__badge">{{ searchPageInfo.totalElements }}건</span>
+          </div>
         </div>
 
         <div class="search-grid">
-          <label class="field field--full">
-            <span class="field__label">키워드</span>
-            <input
-              :value="searchKeywordDraft"
-              type="text"
-              placeholder="제목, 메모, 카테고리, 결제수단 검색"
-              @input="emit('update-search-keyword-draft', $event.target.value)"
-              @keydown.enter.prevent="emit('submit-search')"
-            />
-          </label>
+          <div class="field field--full search-keyword-field">
+            <label class="field__label" for="stats-search-keyword">키워드</label>
+            <div class="search-keyword-field__control">
+              <input
+                id="stats-search-keyword"
+                :value="searchKeywordDraft"
+                type="text"
+                placeholder="제목, 메모, 카테고리, 결제수단 검색"
+                @input="emit('update-search-keyword-draft', $event.target.value)"
+                @keydown.enter.prevent="emit('submit-search')"
+              />
+              <button class="button button--primary search-keyword-field__button" type="button" @click="emit('submit-search')">
+                검색
+              </button>
+            </div>
+          </div>
 
           <label class="field">
             <span class="field__label">구분</span>
@@ -631,7 +657,12 @@ watch(
 
           <label class="field">
             <span class="field__label">최소 금액</span>
-            <input v-model="searchForm.minAmount" type="number" min="0" placeholder="0" />
+            <input
+              v-model="searchForm.minAmount"
+              type="number"
+              min="0"
+              placeholder="0"
+            />
           </label>
 
           <label class="field">
@@ -648,10 +679,6 @@ watch(
               <option value="AMOUNT_ASC">금액 작은순</option>
             </select>
           </label>
-
-          <div class="search-grid__actions">
-            <button class="button button--primary" type="button" @click="emit('submit-search')">검색하기</button>
-          </div>
         </div>
 
         <div class="search-summary">
@@ -669,7 +696,7 @@ watch(
           </div>
         </div>
 
-        <div class="search-bulk-toolbar">
+        <div v-if="isSearchBulkToolbarVisible" class="search-bulk-toolbar">
           <div class="search-bulk-toolbar__status">
             <strong>{{ selectedSearchCount }}건 선택</strong>
             <span>일괄 변경</span>
@@ -725,7 +752,7 @@ watch(
           <table class="sheet-table stats-search-table">
             <thead>
               <tr>
-                <th class="sheet-table__select">
+                <th v-if="isSearchBulkToolbarVisible" class="sheet-table__select">
                   <input
                     class="sheet-table__checkbox"
                     type="checkbox"
@@ -745,7 +772,7 @@ watch(
             </thead>
             <tbody>
               <tr v-for="entry in searchResults" :key="entry.id" :class="{ 'sheet-table__row--editing': editingSearchEntryId === entry.id }">
-                <td class="sheet-table__select">
+                <td v-if="isSearchBulkToolbarVisible" class="sheet-table__select">
                   <input
                     class="sheet-table__checkbox"
                     type="checkbox"
@@ -804,7 +831,12 @@ watch(
                 <template v-else>
                   <td>{{ formatFullDate(entry.entryDate) }}</td>
                   <td>{{ formatTime(entry.entryTime) }}</td>
-                  <td class="sheet-table__title">{{ entry.title }}</td>
+                  <td class="sheet-table__title">
+                    <div class="stats-search-title-cell">
+                      <strong>{{ entry.title }}</strong>
+                      <span v-if="entry.memo" class="stats-search-title-cell__memo">{{ entry.memo }}</span>
+                    </div>
+                  </td>
                   <td class="sheet-table__category">{{ entry.categoryGroupName }}<template v-if="entry.categoryDetailName"> / {{ entry.categoryDetailName }}</template></td>
                   <td class="sheet-table__textwrap">{{ entry.paymentMethodName }}</td>
                   <td :class="entry.entryType === 'INCOME' ? 'is-income' : 'is-expense'">
@@ -836,7 +868,7 @@ watch(
                 </td>
               </tr>
               <tr v-if="!searchResults.length">
-                <td colspan="8" class="sheet-table__empty">조건에 맞는 거래가 없습니다.</td>
+                <td :colspan="isSearchBulkToolbarVisible ? 8 : 7" class="sheet-table__empty">조건에 맞는 거래가 없습니다.</td>
               </tr>
             </tbody>
           </table>

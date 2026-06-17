@@ -847,6 +847,38 @@ class LedgerEntryUserScopeIntegrationTest {
 
     @Test
     @Transactional
+    void searchEntriesCanFindKeywordInsideTitle() throws Exception {
+        MockHttpSession hanaSession = loginAndGetSession("hana", false);
+        AppUser hana = appUserRepository.findByLoginId("hana").orElseThrow();
+        LocalDate searchDate = LocalDate.of(2041, 6, 18);
+
+        PaymentMethod payment = savePaymentMethod(hana, "keyword-card-2041", true);
+        CategoryGroup group = saveCategoryGroup(hana, "keyword-group-2041", true);
+        CategoryDetail detail = saveCategoryDetail(group, "keyword-detail-2041", true);
+        String keyword = "\uD0B5\uC628";
+        String prefixTitle = "\uD0B5\uC628\uD5E4\uC5B4 \uBA64\uBC84\uC2ED \uACE8\uB4DC \uAD6C\uB9E4";
+        String infixTitle = "\uD5E4\uC5B4 - \uD0B5\uC628\uD5E4\uC5B4 \uD68C\uC6D0\uAD8C";
+
+        saveLedgerEntry(hana, searchDate, prefixTitle, payment, group, detail);
+        saveLedgerEntry(hana, searchDate, infixTitle, payment, group, detail);
+        saveLedgerEntry(hana, searchDate, "\uD5E4\uC5B4 \uCEE4\uD2B8", payment, group, detail);
+
+        mockMvc.perform(get("/api/entries/search")
+                        .session(hanaSession)
+                        .param("from", searchDate.toString())
+                        .param("to", searchDate.toString())
+                        .param("keyword", keyword)
+                        .param("sortBy", "DATE_ASC"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.summary.count").value(2))
+                .andExpect(jsonPath("$.content[*].title", org.hamcrest.Matchers.containsInAnyOrder(
+                        prefixTitle,
+                        infixTitle
+                )));
+    }
+
+    @Test
+    @Transactional
     void managementRejectsDuplicateClassificationNames() throws Exception {
         MockHttpSession hanaSession = loginAndGetSession("hana", false);
 

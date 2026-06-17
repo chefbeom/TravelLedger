@@ -18,6 +18,8 @@ const emit = defineEmits([
   'delete-search-entry',
   'restore-trash-entry',
   'empty-trash',
+  'update-search-keyword-draft',
+  'submit-search',
 ])
 
 const props = defineProps({
@@ -32,6 +34,10 @@ const props = defineProps({
   searchForm: {
     type: Object,
     required: true,
+  },
+  searchKeywordDraft: {
+    type: String,
+    default: '',
   },
   presetOptions: {
     type: Array,
@@ -572,7 +578,13 @@ watch(
         <div class="search-grid">
           <label class="field field--full">
             <span class="field__label">키워드</span>
-            <input v-model="searchForm.keyword" type="text" placeholder="제목, 메모, 카테고리, 결제수단 검색" />
+            <input
+              :value="searchKeywordDraft"
+              type="text"
+              placeholder="제목, 메모, 카테고리, 결제수단 검색"
+              @input="emit('update-search-keyword-draft', $event.target.value)"
+              @keydown.enter.prevent="emit('submit-search')"
+            />
           </label>
 
           <label class="field">
@@ -636,6 +648,10 @@ watch(
               <option value="AMOUNT_ASC">금액 작은순</option>
             </select>
           </label>
+
+          <div class="search-grid__actions">
+            <button class="button button--primary" type="button" @click="emit('submit-search')">검색하기</button>
+          </div>
         </div>
 
         <div class="search-summary">

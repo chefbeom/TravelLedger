@@ -276,6 +276,7 @@ const searchForm = reactive({
   maxAmount: '',
   sortBy: 'DATE_DESC',
 })
+const searchKeywordDraft = ref('')
 
 const csvExportControls = reactive({
   preset: 'ALL',
@@ -672,7 +673,6 @@ watch(
     householdTab.value,
     statsRange.value.from,
     statsRange.value.to,
-    searchForm.keyword,
     searchForm.entryType,
     searchForm.paymentMethodId,
     searchForm.categoryGroupId,
@@ -1440,6 +1440,21 @@ function queueSearchResultsReload() {
   }, 200)
 }
 
+function updateSearchKeywordDraft(value) {
+  searchKeywordDraft.value = String(value ?? '')
+}
+
+async function submitSearch() {
+  if (searchRequestTimerId) {
+    window.clearTimeout(searchRequestTimerId)
+    searchRequestTimerId = null
+  }
+  const normalizedKeyword = searchKeywordDraft.value.trim()
+  searchKeywordDraft.value = normalizedKeyword
+  searchForm.keyword = normalizedKeyword
+  await loadSearchResults(0)
+}
+
 function clearTitleSuggestionSearch() {
   titleSuggestionSearchRequestId += 1
   titleSuggestionSearchResults.value = []
@@ -1822,7 +1837,9 @@ async function startTravelLedgerEntry(payload = 'EXPENSE') {
 async function openTravelLedgerSearch(payload = '여행') {
   const keyword = typeof payload === 'object' && payload !== null ? payload.keyword : payload
   const entryType = typeof payload === 'object' && payload !== null ? payload.entryType : ''
-  searchForm.keyword = String(keyword || '여행').trim() || '여행'
+  const normalizedKeyword = String(keyword || '여행').trim() || '여행'
+  searchKeywordDraft.value = normalizedKeyword
+  searchForm.keyword = normalizedKeyword
   searchForm.entryType = entryType === 'INCOME' || entryType === 'EXPENSE' ? entryType : ''
   searchForm.paymentMethodId = ''
   searchForm.categoryGroupId = ''
@@ -2972,6 +2989,7 @@ async function deactivatePayment(paymentId) {
       :route="householdTab"
       :stats-controls="statsControls"
       :search-form="searchForm"
+      :search-keyword-draft="searchKeywordDraft"
       :preset-options="presetOptions"
       :stats-cards="statsCards"
       :stats-range-label="statsRangeLabel"
@@ -2993,6 +3011,8 @@ async function deactivatePayment(paymentId) {
       :format-full-date="formatFullDate"
       :format-date-range="formatDateRange"
       :format-time="formatTime"
+      @update-search-keyword-draft="updateSearchKeywordDraft"
+      @submit-search="submitSearch"
       @change-search-page="loadSearchResults"
       @change-trash-page="loadTrashResults"
       @move-search-entry="moveEntryFromSearch"

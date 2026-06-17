@@ -55,11 +55,11 @@ public interface LedgerEntryRepository extends JpaRepository<LedgerEntry, Long> 
                       and entry.entryDate between :from and :to
                       and (
                             :keyword is null
-                            or entry.title like concat(:keyword, '%')
-                            or entry.memo like concat(:keyword, '%')
-                            or categoryGroup.name like concat(:keyword, '%')
-                            or categoryDetail.name like concat(:keyword, '%')
-                            or paymentMethod.name like concat(:keyword, '%')
+                            or entry.title like concat('%', :keyword, '%')
+                            or entry.memo like concat('%', :keyword, '%')
+                            or categoryGroup.name like concat('%', :keyword, '%')
+                            or categoryDetail.name like concat('%', :keyword, '%')
+                            or paymentMethod.name like concat('%', :keyword, '%')
                       )
                       and (:entryType is null or entry.entryType = :entryType)
                       and (
@@ -88,11 +88,11 @@ public interface LedgerEntryRepository extends JpaRepository<LedgerEntry, Long> 
                       and entry.entryDate between :from and :to
                       and (
                             :keyword is null
-                            or entry.title like concat(:keyword, '%')
-                            or entry.memo like concat(:keyword, '%')
-                            or categoryGroup.name like concat(:keyword, '%')
-                            or categoryDetail.name like concat(:keyword, '%')
-                            or paymentMethod.name like concat(:keyword, '%')
+                            or entry.title like concat('%', :keyword, '%')
+                            or entry.memo like concat('%', :keyword, '%')
+                            or categoryGroup.name like concat('%', :keyword, '%')
+                            or categoryDetail.name like concat('%', :keyword, '%')
+                            or paymentMethod.name like concat('%', :keyword, '%')
                       )
                       and (:entryType is null or entry.entryType = :entryType)
                       and (
@@ -142,11 +142,11 @@ public interface LedgerEntryRepository extends JpaRepository<LedgerEntry, Long> 
               and entry.entryDate between :from and :to
               and (
                     :keyword is null
-                    or entry.title like concat(:keyword, '%')
-                    or entry.memo like concat(:keyword, '%')
-                    or categoryGroup.name like concat(:keyword, '%')
-                    or categoryDetail.name like concat(:keyword, '%')
-                    or paymentMethod.name like concat(:keyword, '%')
+                    or entry.title like concat('%', :keyword, '%')
+                    or entry.memo like concat('%', :keyword, '%')
+                    or categoryGroup.name like concat('%', :keyword, '%')
+                    or categoryDetail.name like concat('%', :keyword, '%')
+                    or paymentMethod.name like concat('%', :keyword, '%')
               )
               and (:entryTypeFilter is null or entry.entryType = :entryTypeFilter)
               and (

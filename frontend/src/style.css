@@ -1983,6 +1983,16 @@ button {
   gap: 14px;
 }
 
+.search-grid__actions {
+  display: flex;
+  align-items: end;
+}
+
+.search-grid__actions .button {
+  width: 100%;
+  min-height: 44px;
+}
+
 .search-summary {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

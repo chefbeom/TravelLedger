@@ -12898,3 +12898,700 @@ textarea {
     right: 12px;
   }
 }
+
+/* Travel design refresh */
+.travel-unified-shell,
+.travel-public-app {
+  --travel-ocean: #00796b;
+  --travel-ocean-strong: #005f55;
+  --travel-ocean-deep: #073d3a;
+  --travel-mint: #d8f4ec;
+  --travel-mint-soft: #edf8f4;
+  --travel-lime: #e3f39b;
+  --travel-lime-soft: #f3fad2;
+  --travel-coral: #e96d5b;
+  --travel-coral-soft: #ffe4dd;
+  --travel-sky: #d7edf7;
+  --travel-ink: #10201f;
+  --travel-muted: #647471;
+  --travel-line: rgba(0, 121, 107, 0.16);
+  --travel-strong-line: rgba(0, 121, 107, 0.28);
+  --travel-card: rgba(255, 255, 255, 0.96);
+  --travel-card-solid: #ffffff;
+  --travel-card-soft: #f4faf7;
+  --travel-control: #eef7f4;
+  --travel-control-hover: #e4f1ed;
+  --travel-shadow: 0 18px 46px rgba(11, 51, 47, 0.1);
+  --travel-shadow-strong: 0 22px 56px rgba(5, 64, 58, 0.18);
+  --blue: var(--travel-ocean);
+  --blue-soft: rgba(0, 121, 107, 0.1);
+  --accent: var(--travel-ocean);
+  --accent-strong: var(--travel-ocean-strong);
+  --income: #0aa37f;
+  --field-bg: #ffffff;
+  --field-bg-muted: #f4faf7;
+  --field-border: rgba(0, 121, 107, 0.18);
+  --field-focus-border: rgba(0, 121, 107, 0.56);
+  --field-focus-shadow: 0 0 0 3px rgba(0, 121, 107, 0.12);
+  --map-canvas-bg: linear-gradient(180deg, #edf7f3 0%, #e4f0ec 100%);
+  --map-canvas-border: rgba(0, 121, 107, 0.22);
+  --map-tile-filter: saturate(0.82) contrast(0.94) brightness(1.03);
+  --map-toolbar-bg: rgba(255, 255, 255, 0.9);
+  --map-toolbar-border: rgba(0, 121, 107, 0.2);
+  --map-toolbar-shadow: 0 16px 34px rgba(6, 57, 53, 0.14);
+  --map-control-bg: rgba(244, 250, 247, 0.94);
+  --map-control-border: rgba(0, 121, 107, 0.18);
+  --map-control-text: var(--travel-ink);
+  --map-hint-bg: linear-gradient(135deg, rgba(0, 121, 107, 0.1), rgba(227, 243, 155, 0.22));
+  --map-hint-border: rgba(0, 121, 107, 0.16);
+  color: var(--travel-ink);
+}
+
+.travel-unified-shell {
+  gap: 20px;
+}
+
+.travel-unified-shell > .panel,
+.travel-unified-shell .panel,
+.travel-public-share-box,
+.travel-share-scope-card,
+.travel-share-current-list,
+.travel-finance-bridge__body article,
+.travel-route-focus-card,
+.travel-overview-day-group,
+.travel-overview-place-card,
+.travel-plan-card,
+.travel-plan-picker-card,
+.travel-ledger-card,
+.travel-stat-card,
+.travel-media-card,
+.travel-my-photos__card,
+.travel-my-photos__detail-copy,
+.travel-inline-media,
+.travel-pending-card,
+.travel-visit-card,
+.travel-rate-card,
+.travel-exchange-card,
+.travel-memory-pending,
+.travel-memory-pending__grid div,
+.travel-batch-memory-card {
+  border-color: var(--travel-line);
+  background: var(--travel-card);
+  box-shadow: var(--travel-shadow);
+}
+
+.travel-unified-shell .panel__header h2,
+.travel-unified-shell .panel__header h3,
+.travel-unified-shell .panel__header p,
+.travel-unified-shell .panel__empty,
+.travel-unified-shell .travel-media-copy strong,
+.travel-unified-shell .travel-overview-timeline-row__main strong,
+.travel-unified-shell .travel-route-focus-card__header h3,
+.travel-unified-shell .travel-memory-pending__header strong,
+.travel-unified-shell .travel-memory-pending__grid strong,
+.travel-unified-shell .travel-map__hint strong {
+  color: var(--travel-ink);
+}
+
+.travel-unified-shell .panel__header p,
+.travel-unified-shell .panel__empty,
+.travel-unified-shell .travel-media-copy small,
+.travel-unified-shell .travel-overview-timeline-row__main small,
+.travel-unified-shell .travel-overview-timeline-row__meta small,
+.travel-unified-shell .travel-route-focus-card__header p,
+.travel-unified-shell .travel-memory-pending__header p,
+.travel-unified-shell .travel-memory-pending__grid span,
+.travel-unified-shell .travel-memory-pending__caption,
+.travel-unified-shell .travel-map__hint span {
+  color: var(--travel-muted);
+}
+
+.travel-unified-shell .panel__badge,
+.travel-unified-shell .chip--neutral {
+  border: 1px solid var(--travel-line);
+  background: var(--travel-mint-soft);
+  color: var(--travel-ocean-strong);
+}
+
+.travel-record-switcher {
+  border-color: var(--travel-strong-line);
+  background:
+    linear-gradient(135deg, rgba(216, 244, 236, 0.78), rgba(243, 250, 210, 0.42) 44%, rgba(255, 228, 221, 0.34)),
+    var(--travel-card-solid);
+  box-shadow: var(--travel-shadow-strong);
+}
+
+.travel-record-switcher__grid {
+  gap: 12px;
+}
+
+.travel-record-switcher__card {
+  min-height: 122px;
+  border-color: var(--travel-line);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.86);
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.9);
+}
+
+.travel-record-switcher__card:hover {
+  border-color: var(--travel-strong-line);
+  box-shadow: 0 16px 34px rgba(6, 57, 53, 0.12);
+}
+
+.travel-record-switcher__card--active {
+  border-color: rgba(0, 121, 107, 0.52);
+  background: linear-gradient(180deg, rgba(0, 121, 107, 0.14), rgba(216, 244, 236, 0.48));
+  box-shadow: inset 0 0 0 1px rgba(0, 121, 107, 0.18), 0 18px 38px rgba(0, 121, 107, 0.14);
+}
+
+.travel-record-switcher__card span {
+  background: var(--travel-ocean);
+  color: #ffffff;
+}
+
+.travel-record-switcher__card em {
+  background: var(--travel-lime-soft);
+  color: var(--travel-ocean-deep);
+}
+
+.travel-record-switcher__action {
+  border-color: var(--travel-line);
+  background: var(--travel-control);
+  color: var(--travel-ocean-strong);
+}
+
+.travel-record-switcher__summary {
+  color: var(--travel-muted);
+}
+
+.travel-record-switcher__finance-link,
+.travel-split-result {
+  border-color: var(--travel-line);
+  background:
+    linear-gradient(135deg, rgba(0, 121, 107, 0.08), rgba(227, 243, 155, 0.3)),
+    var(--travel-card-solid);
+  box-shadow: inset 4px 0 0 var(--travel-ocean);
+}
+
+.travel-record-switcher__finance-link span,
+.travel-public-share-box strong,
+.travel-share-scope-card__head > span,
+.travel-my-photos__detail-copy span,
+.travel-public-trip-card__body span {
+  color: var(--travel-ocean);
+}
+
+.travel-unified-shell .button--primary,
+.travel-public-app .button--primary {
+  border-color: transparent;
+  background: var(--travel-ocean);
+  color: #ffffff;
+  box-shadow: 0 12px 28px rgba(0, 121, 107, 0.18);
+}
+
+.travel-unified-shell .button--primary:hover,
+.travel-public-app .button--primary:hover {
+  background: var(--travel-ocean-strong);
+}
+
+.travel-unified-shell .button--secondary,
+.travel-unified-shell .button--ghost,
+.travel-public-app .button--secondary,
+.travel-public-app .button--ghost {
+  border-color: var(--travel-line);
+  background: var(--travel-control);
+  color: var(--travel-ink);
+}
+
+.travel-unified-shell .button--ghost,
+.travel-public-app .button--ghost {
+  background: rgba(255, 255, 255, 0.62);
+}
+
+.travel-unified-shell input,
+.travel-unified-shell select,
+.travel-unified-shell textarea,
+.travel-public-app input,
+.travel-public-app select,
+.travel-public-app textarea {
+  border-color: var(--field-border);
+  background: var(--field-bg);
+  color: var(--travel-ink);
+}
+
+.travel-plan-banner {
+  border: 1px solid var(--travel-line);
+  background:
+    linear-gradient(135deg, rgba(0, 121, 107, 0.1), rgba(216, 244, 236, 0.76)),
+    var(--travel-card-solid);
+  box-shadow: inset 4px 0 0 var(--travel-plan-color, var(--travel-ocean)), var(--travel-shadow);
+}
+
+.travel-plan-card,
+.travel-plan-picker-card,
+.travel-ledger-card,
+.travel-stat-card,
+.travel-visit-card,
+.travel-media-summary-card,
+.travel-media-card,
+.travel-my-photos__card {
+  border-radius: 18px;
+}
+
+.travel-plan-card__placeholder {
+  background: linear-gradient(135deg, var(--travel-mint), var(--travel-lime-soft));
+  color: var(--travel-ocean-deep);
+}
+
+.travel-plan-picker-card:hover,
+.travel-ledger-card:hover,
+.travel-my-photos__card:hover,
+.travel-public-trip-card:hover,
+.travel-public-rank:hover {
+  border-color: var(--travel-strong-line);
+  box-shadow: var(--travel-shadow-strong);
+}
+
+.travel-plan-picker-card--active,
+.travel-ledger-card--active,
+.travel-my-photos__card--selected,
+.travel-media-card--selected {
+  border-color: rgba(0, 121, 107, 0.48);
+  background: linear-gradient(180deg, rgba(0, 121, 107, 0.1), rgba(255, 255, 255, 0.94));
+  box-shadow: 0 18px 40px rgba(0, 121, 107, 0.16);
+}
+
+.travel-stat-card strong,
+.travel-media-summary-card strong,
+.travel-exchange-card strong,
+.travel-split-result strong,
+.travel-ledger-card strong {
+  color: var(--travel-ocean-deep);
+}
+
+.travel-autofill-note,
+.travel-map-note {
+  border: 1px solid var(--travel-line);
+  background: rgba(216, 244, 236, 0.68);
+  color: var(--travel-ocean-deep);
+}
+
+.travel-autofill-note--filled {
+  background: rgba(10, 163, 127, 0.12);
+  color: #08745d;
+}
+
+.travel-autofill-note--manual {
+  background: rgba(233, 109, 91, 0.14);
+  color: #a94434;
+}
+
+.travel-color-chip {
+  box-shadow: inset 0 0 0 2px #ffffff, 0 8px 18px rgba(6, 57, 53, 0.12);
+}
+
+.travel-place-legend__item,
+.travel-rate-card,
+.travel-inline-media,
+.travel-pending-card,
+.travel-overview-day-grid .travel-pending-card,
+.travel-overview-timeline-row,
+.travel-route-focus-card,
+.travel-memory-pending,
+.travel-memory-pending__grid div {
+  border-color: var(--travel-line);
+  background: var(--travel-card-soft);
+}
+
+.travel-overview-timeline-row {
+  box-shadow: none;
+}
+
+.travel-route-focus-grid .travel-pending-card:nth-child(2n),
+.travel-finance-bridge__body article:nth-child(2n),
+.travel-media-summary-card:nth-child(2n) {
+  background: var(--travel-mint-soft);
+}
+
+.travel-route-focus-grid .travel-pending-card:nth-child(3n),
+.travel-finance-bridge__body article:nth-child(3n),
+.travel-media-summary-card:nth-child(3n) {
+  background: var(--travel-lime-soft);
+}
+
+.travel-map__canvas,
+.travel-mini-location-map {
+  border-color: var(--map-canvas-border);
+  background: var(--map-canvas-bg);
+  box-shadow: var(--travel-shadow);
+}
+
+.travel-map__canvas .leaflet-tile-pane {
+  filter: var(--map-tile-filter);
+}
+
+.travel-map__toolbar-group,
+.travel-map__search-form,
+.travel-map__search-results {
+  border-color: var(--map-toolbar-border);
+  background: var(--map-toolbar-bg);
+  box-shadow: var(--map-toolbar-shadow);
+}
+
+.travel-map__toolbar-button,
+.travel-map__slider-button,
+.travel-map__toolbar-select,
+.travel-map__search-input,
+.travel-map__search-result {
+  border-color: var(--map-control-border);
+  background: var(--map-control-bg);
+  color: var(--map-control-text);
+}
+
+.travel-map__toolbar-button:hover,
+.travel-map__search-result:hover,
+.travel-map__slider-button:hover {
+  border-color: var(--travel-strong-line);
+  background: var(--travel-control-hover);
+}
+
+.travel-map__toolbar-button.is-active {
+  border-color: transparent;
+  background: var(--travel-ocean);
+  color: #ffffff;
+}
+
+.travel-map__toolbar-select:focus,
+.travel-map__search-input:focus {
+  border-color: var(--field-focus-border);
+  box-shadow: var(--field-focus-shadow);
+}
+
+.travel-map__marker-icon span,
+.travel-map__marker-icon::after,
+.travel-map__thumb-pin,
+.travel-map__thumb-pin::after,
+.travel-cluster-pin::after,
+.travel-cluster-pin.is-client-cluster {
+  background-color: var(--marker-color, var(--travel-ocean));
+}
+
+.travel-map__thumb-pin.is-active,
+.travel-cluster-pin.is-active {
+  border-color: var(--marker-color, var(--travel-ocean));
+  box-shadow: 0 0 0 4px rgba(0, 121, 107, 0.18), 0 14px 28px rgba(6, 57, 53, 0.28);
+}
+
+.travel-cluster-popup__action,
+.travel-lightbox__nav:hover {
+  color: var(--travel-ocean);
+}
+
+.travel-lightbox__nav:hover {
+  border-color: rgba(0, 121, 107, 0.72);
+  background: rgba(0, 121, 107, 0.82);
+  color: #ffffff;
+}
+
+.travel-share-scope-card__head > span {
+  border-color: var(--travel-line);
+  background: var(--travel-mint-soft);
+}
+
+.travel-share-recipient-results button,
+.travel-share-current-item {
+  border-color: var(--travel-line);
+  background: var(--travel-card-solid);
+}
+
+.travel-share-recipient-results button:hover {
+  border-color: var(--travel-strong-line);
+  background: var(--travel-mint-soft);
+}
+
+.travel-public-trips {
+  --travel-public-lime: var(--travel-lime);
+  --travel-public-blue: var(--travel-mint);
+  --travel-public-ink: var(--travel-ink);
+}
+
+.travel-public-hero,
+.travel-public-controls,
+.travel-public-side-panel,
+.travel-public-map-panel,
+.travel-public-spotlight-panel,
+.travel-public-photo-strip-panel {
+  border-color: var(--travel-line);
+  background:
+    linear-gradient(135deg, rgba(216, 244, 236, 0.82), rgba(243, 250, 210, 0.5) 42%, rgba(255, 228, 221, 0.34)),
+    var(--travel-card-solid);
+  box-shadow: var(--travel-shadow);
+}
+
+.travel-public-hero__stats article,
+.travel-public-hero__updates,
+.travel-public-update,
+.travel-public-rank,
+.travel-public-trip-card,
+.travel-public-trip-card__stats small,
+.travel-public-toggle,
+.travel-public-active-filter {
+  border-color: var(--travel-line);
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.travel-public-active-filter,
+.travel-public-rank--active,
+.travel-public-trip-card--active {
+  border-color: rgba(0, 121, 107, 0.48);
+  box-shadow: 0 16px 34px rgba(0, 121, 107, 0.14);
+}
+
+.travel-public-rank span,
+.travel-public-spot-card__meta {
+  background: var(--travel-lime);
+  color: var(--travel-ink);
+}
+
+.travel-public-chip--active {
+  background: var(--travel-ocean);
+  color: #ffffff;
+}
+
+.travel-public-app {
+  --travel-public-lime: var(--travel-lime);
+  --travel-public-blue: var(--travel-mint);
+  --travel-public-ink: var(--travel-ink);
+  border-color: rgba(120, 201, 192, 0.18);
+  background:
+    radial-gradient(circle at 18% 8%, rgba(120, 201, 192, 0.18), transparent 34%),
+    linear-gradient(180deg, #081716 0%, #101d22 100%);
+  color: #f7fbf9;
+}
+
+.travel-public-rail,
+.travel-public-canvas {
+  background: transparent;
+}
+
+.travel-public-rail {
+  border-right: 1px solid rgba(120, 201, 192, 0.12);
+}
+
+.travel-public-rail__logo {
+  background: var(--travel-ocean);
+  color: #ffffff;
+  box-shadow: 0 12px 26px rgba(0, 121, 107, 0.34);
+}
+
+.travel-public-rail__button.is-active,
+.travel-public-rail__button:hover,
+.travel-public-story-panel,
+.travel-public-filter-dock select,
+.travel-public-filter-dock label,
+.travel-public-filter-dock button,
+.travel-public-view-switch,
+.travel-public-app .travel-public-trip-card,
+.travel-public-app .travel-public-rank,
+.travel-public-empty {
+  border-color: rgba(120, 201, 192, 0.18);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.travel-public-app input,
+.travel-public-app select,
+.travel-public-app textarea {
+  border-color: rgba(120, 201, 192, 0.22);
+  background: rgba(255, 255, 255, 0.08);
+  color: #f7fbf9;
+}
+
+.travel-public-app input::placeholder,
+.travel-public-app textarea::placeholder {
+  color: rgba(247, 251, 249, 0.62);
+}
+
+.travel-public-app option {
+  color: #111827;
+}
+
+.travel-public-app .button--secondary,
+.travel-public-app .button--ghost {
+  border-color: rgba(120, 201, 192, 0.22);
+  background: rgba(255, 255, 255, 0.08);
+  color: #f7fbf9;
+}
+
+.travel-public-top-search input {
+  border: 0;
+  background: transparent;
+  color: #ffffff;
+}
+
+.travel-public-top-search button {
+  color: rgba(247, 251, 249, 0.78);
+}
+
+.travel-public-top-search,
+.travel-public-map-card__intro,
+.travel-public-map-card__stats span,
+.travel-public-map-stage .travel-map__toolbar,
+.travel-public-map-drawer {
+  border-color: rgba(120, 201, 192, 0.22);
+  background: rgba(8, 23, 22, 0.82);
+}
+
+.travel-public-map-stage {
+  border-radius: 18px;
+  background: #0b1817;
+}
+
+.travel-public-map-card__intro span,
+.travel-public-story-panel__head span {
+  color: var(--travel-lime);
+}
+
+.travel-public-map-drawer {
+  background: rgba(15, 30, 31, 0.92);
+}
+
+.travel-public-map-drawer__close,
+.travel-public-map-drawer__actions button,
+.travel-public-story-actions button,
+.travel-public-region-tags button {
+  border-color: rgba(120, 201, 192, 0.22);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.travel-public-map-drawer__actions button.is-active,
+.travel-public-story-actions button:first-child,
+.travel-public-region-tags button.is-active {
+  border-color: rgba(227, 243, 155, 0.7);
+  background: var(--travel-lime);
+  color: var(--travel-ink);
+}
+
+.travel-public-story-panel--lead {
+  background:
+    linear-gradient(135deg, rgba(227, 243, 155, 0.16), rgba(120, 201, 192, 0.14) 48%, rgba(255, 255, 255, 0.08)),
+    rgba(255, 255, 255, 0.08);
+}
+
+.travel-public-story-kpis div,
+.travel-public-highlight-grid div,
+.travel-public-story-spots button,
+.travel-public-story-empty {
+  border: 1px solid rgba(120, 201, 192, 0.12);
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.travel-public-poster {
+  border-radius: 16px;
+  background: #122422;
+}
+
+.travel-public-app .travel-public-trip-card__stats small {
+  background: rgba(216, 244, 236, 0.08);
+}
+
+:root[data-theme='toss'] .travel-unified-shell,
+:root[data-theme='toss'] .travel-public-app {
+  --travel-ocean: #78c9c0;
+  --travel-ocean-strong: #9adbd4;
+  --travel-ocean-deep: #d7fbf5;
+  --travel-mint: rgba(120, 201, 192, 0.16);
+  --travel-mint-soft: rgba(120, 201, 192, 0.1);
+  --travel-lime: #c1d887;
+  --travel-lime-soft: rgba(193, 216, 135, 0.12);
+  --travel-coral: #df8f86;
+  --travel-coral-soft: rgba(223, 143, 134, 0.13);
+  --travel-sky: rgba(125, 178, 196, 0.14);
+  --travel-ink: #edf8f6;
+  --travel-muted: #b3c4c0;
+  --travel-line: rgba(120, 201, 192, 0.18);
+  --travel-strong-line: rgba(120, 201, 192, 0.32);
+  --travel-card: rgba(27, 35, 45, 0.95);
+  --travel-card-solid: #1b232d;
+  --travel-card-soft: rgba(33, 42, 53, 0.94);
+  --travel-control: rgba(38, 49, 61, 0.96);
+  --travel-control-hover: rgba(45, 59, 72, 0.98);
+  --travel-shadow: 0 18px 46px rgba(0, 0, 0, 0.2);
+  --travel-shadow-strong: 0 22px 56px rgba(0, 0, 0, 0.32);
+  --field-bg: #121922;
+  --field-bg-muted: #17202a;
+  --field-border: rgba(120, 201, 192, 0.22);
+  --field-focus-border: rgba(120, 201, 192, 0.66);
+  --field-focus-shadow: 0 0 0 3px rgba(120, 201, 192, 0.14);
+  --map-canvas-bg: linear-gradient(180deg, #18232c 0%, #131c25 100%);
+  --map-canvas-border: rgba(120, 201, 192, 0.2);
+  --map-tile-filter: saturate(0.72) contrast(0.9) brightness(0.76);
+  --map-toolbar-bg: rgba(25, 33, 43, 0.9);
+  --map-toolbar-border: rgba(120, 201, 192, 0.18);
+  --map-toolbar-shadow: 0 18px 36px rgba(0, 0, 0, 0.3);
+  --map-control-bg: rgba(33, 43, 55, 0.96);
+  --map-control-border: rgba(120, 201, 192, 0.2);
+  --map-control-text: #edf8f6;
+  --map-hint-bg: linear-gradient(135deg, rgba(120, 201, 192, 0.12), rgba(193, 216, 135, 0.1));
+  --map-hint-border: rgba(120, 201, 192, 0.18);
+  color: var(--travel-ink);
+}
+
+:root[data-theme='toss'] .travel-record-switcher,
+:root[data-theme='toss'] .travel-public-hero,
+:root[data-theme='toss'] .travel-public-controls,
+:root[data-theme='toss'] .travel-public-side-panel,
+:root[data-theme='toss'] .travel-public-map-panel,
+:root[data-theme='toss'] .travel-public-spotlight-panel,
+:root[data-theme='toss'] .travel-public-photo-strip-panel {
+  background:
+    linear-gradient(135deg, rgba(120, 201, 192, 0.12), rgba(193, 216, 135, 0.07) 48%, rgba(223, 143, 134, 0.08)),
+    var(--travel-card-solid);
+}
+
+:root[data-theme='toss'] .travel-record-switcher__card,
+:root[data-theme='toss'] .travel-public-hero__stats article,
+:root[data-theme='toss'] .travel-public-hero__updates,
+:root[data-theme='toss'] .travel-public-update,
+:root[data-theme='toss'] .travel-public-rank,
+:root[data-theme='toss'] .travel-public-trip-card,
+:root[data-theme='toss'] .travel-public-trip-card__stats small,
+:root[data-theme='toss'] .travel-public-toggle,
+:root[data-theme='toss'] .travel-public-active-filter,
+:root[data-theme='toss'] .travel-share-recipient-results button,
+:root[data-theme='toss'] .travel-share-current-item {
+  border-color: var(--travel-line);
+  background: var(--travel-card-soft);
+}
+
+:root[data-theme='toss'] .travel-record-switcher__card--active,
+:root[data-theme='toss'] .travel-plan-picker-card--active,
+:root[data-theme='toss'] .travel-ledger-card--active,
+:root[data-theme='toss'] .travel-my-photos__card--selected,
+:root[data-theme='toss'] .travel-media-card--selected {
+  background: linear-gradient(180deg, rgba(120, 201, 192, 0.14), rgba(27, 35, 45, 0.95));
+}
+
+:root[data-theme='toss'] .travel-record-switcher__finance-link,
+:root[data-theme='toss'] .travel-split-result,
+:root[data-theme='toss'] .travel-plan-banner {
+  background:
+    linear-gradient(135deg, rgba(120, 201, 192, 0.12), rgba(193, 216, 135, 0.1)),
+    var(--travel-card-solid);
+}
+
+:root[data-theme='toss'] .travel-unified-shell .button--ghost,
+:root[data-theme='toss'] .travel-public-app .button--ghost {
+  background: rgba(33, 43, 55, 0.82);
+}
+
+:root[data-theme='toss'] .travel-my-photos__detail-image-button img,
+:root[data-theme='toss'] .travel-my-photos__modal-photo-frame,
+:root[data-theme='toss'] .travel-lightbox__body {
+  background: #0c1118;
+}
+
+@media (max-width: 640px) {
+  .travel-record-switcher__card {
+    min-height: 96px;
+  }
+}

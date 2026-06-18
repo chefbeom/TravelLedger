@@ -306,6 +306,67 @@ const quickActionItems = computed(() => [
   { key: 'drive', label: '파일 저장', meta: '드라이브 열기', route: 'drive' },
   { key: 'launcher', label: '메인으로', meta: '종합 보기', route: 'launcher' },
 ])
+const dashboardUserName = computed(() =>
+  props.currentUser?.nickname
+  || props.currentUser?.displayName
+  || props.currentUser?.name
+  || props.currentUser?.loginId
+  || '나',
+)
+const dashboardDateLabel = computed(() => new Intl.DateTimeFormat('ko-KR', {
+  month: 'long',
+  day: 'numeric',
+  weekday: 'long',
+}).format(new Date()))
+const dashboardOverviewCards = computed(() => {
+  const month = quickStat('month')
+  const week = quickStat('week')
+  const monthBalance = Number(month.balance ?? 0)
+  const travel = travelSummary.value
+  const drive = driveCapacity.value
+  return [
+    {
+      key: 'month-balance',
+      eyebrow: 'HOUSEHOLD',
+      label: '이번 달 현금흐름',
+      value: formatCurrency(monthBalance),
+      meta: `수입 ${formatCurrency(month.income)} · 지출 ${formatCurrency(month.expense)}`,
+      tone: monthBalance >= 0 ? 'positive' : 'negative',
+    },
+    {
+      key: 'week-expense',
+      eyebrow: 'WEEK',
+      label: '이번 주 지출',
+      value: formatCurrency(week.expense),
+      meta: `${formatNumber(week.entryCount)}건 기록`,
+      tone: 'negative',
+    },
+    {
+      key: 'travel-actual',
+      eyebrow: 'TRAVEL',
+      label: '여행 사용',
+      value: formatCurrency(travel.actualTotal),
+      meta: `여행 ${formatNumber(travel.planCount)}개 · 기록 ${formatNumber(travel.recordCount)}건`,
+      tone: 'teal',
+    },
+    {
+      key: 'drive-capacity',
+      eyebrow: 'DRIVE',
+      label: '드라이브 저장',
+      value: formatBytes(drive.usedBytes),
+      meta: drive.totalBytes
+        ? `${drive.percent}% 사용 · 최근 파일 ${formatNumber(recentDriveFiles.value.length)}개`
+        : `최근 파일 ${formatNumber(recentDriveFiles.value.length)}개`,
+      tone: 'mint',
+    },
+  ]
+})
+const dashboardSignalItems = computed(() => [
+  { key: 'sync', label: '데이터', value: loading.value ? '불러오는 중' : '동기화됨' },
+  { key: 'quick', label: '빠른 입력', value: quickGroups.value.length ? '준비됨' : '분류 필요' },
+  { key: 'photo', label: '사진 액자', value: heroPhoto.value ? '활성' : '대기' },
+  { key: 'layout', label: '팔레트', value: `${formatNumber(visiblePalettes.value.length)}개 표시` },
+])
 
 function todayIso() {
   const now = new Date()
@@ -1156,6 +1217,44 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="main-dashboard">
+    <section class="main-dashboard__overview" aria-label="메인 종합 현황">
+      <div class="main-dashboard__overview-main">
+        <div>
+          <span class="main-dashboard__eyebrow">TRAVELLEDGER CONTROL</span>
+          <h2>{{ dashboardUserName }}님의 종합 대시보드</h2>
+          <p>가계부, 여행, 드라이브 흐름을 한 화면에서 훑어보고 바로 다음 작업으로 이동합니다.</p>
+        </div>
+        <div class="main-dashboard__signals" aria-label="대시보드 상태">
+          <span
+            v-for="item in dashboardSignalItems"
+            :key="item.key"
+            class="main-dashboard__signal"
+          >
+            <small>{{ item.label }}</small>
+            <strong>{{ item.value }}</strong>
+          </span>
+        </div>
+      </div>
+
+      <div class="main-dashboard__overview-side">
+        <span>{{ dashboardDateLabel }}</span>
+        <strong>{{ loading ? '요약 동기화 중' : '오늘의 종합' }}</strong>
+      </div>
+
+      <div class="main-dashboard__overview-cards">
+        <article
+          v-for="card in dashboardOverviewCards"
+          :key="card.key"
+          class="main-dashboard__overview-card"
+          :class="`is-${card.tone}`"
+        >
+          <span>{{ card.eyebrow }}</span>
+          <strong>{{ card.value }}</strong>
+          <small>{{ card.label }}</small>
+          <p>{{ card.meta }}</p>
+        </article>
+      </div>
+    </section>
 
     <div v-if="feedbackMessage" class="feedback feedback--success">{{ feedbackMessage }}</div>
     <div v-if="errorMessage" class="feedback feedback--error">{{ errorMessage }}</div>
@@ -1497,6 +1596,141 @@ onBeforeUnmount(() => {
   display: grid;
   gap: 14px;
   min-width: 0;
+}
+
+.main-dashboard__overview {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 210px;
+  gap: 14px;
+  min-width: 0;
+}
+
+.main-dashboard__overview-main,
+.main-dashboard__overview-side,
+.main-dashboard__overview-card {
+  min-width: 0;
+}
+
+.main-dashboard__overview-main {
+  display: grid;
+  gap: 18px;
+  grid-template-columns: minmax(0, 1fr) minmax(220px, 0.6fr);
+  align-items: center;
+  padding: 22px;
+}
+
+.main-dashboard__overview-main h2 {
+  margin: 4px 0 8px;
+  font-size: 1.65rem;
+  line-height: 1.18;
+  letter-spacing: 0;
+}
+
+.main-dashboard__overview-main p {
+  max-width: 660px;
+  margin: 0;
+  line-height: 1.55;
+}
+
+.main-dashboard__signals {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.main-dashboard__signal {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 10px 12px;
+}
+
+.main-dashboard__signal small,
+.main-dashboard__signal strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.main-dashboard__signal small {
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.main-dashboard__signal strong {
+  font-size: 0.9rem;
+}
+
+.main-dashboard__overview-side {
+  display: grid;
+  align-content: space-between;
+  gap: 14px;
+  min-height: 100%;
+  padding: 18px;
+}
+
+.main-dashboard__overview-side span,
+.main-dashboard__overview-side strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.main-dashboard__overview-side span {
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.main-dashboard__overview-side strong {
+  font-size: 1.28rem;
+  line-height: 1.2;
+}
+
+.main-dashboard__overview-cards {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+  min-width: 0;
+}
+
+.main-dashboard__overview-card {
+  display: grid;
+  gap: 7px;
+  min-height: 134px;
+  padding: 18px;
+}
+
+.main-dashboard__overview-card span,
+.main-dashboard__overview-card strong,
+.main-dashboard__overview-card small,
+.main-dashboard__overview-card p {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.main-dashboard__overview-card span {
+  font-size: 0.72rem;
+  font-weight: 900;
+}
+
+.main-dashboard__overview-card strong {
+  font-size: clamp(1.28rem, 2.4vw, 2rem);
+  letter-spacing: 0;
+  line-height: 1.08;
+}
+
+.main-dashboard__overview-card small {
+  font-size: 0.84rem;
+  font-weight: 800;
+}
+
+.main-dashboard__overview-card p {
+  margin: 0;
+  font-size: 0.78rem;
+  font-weight: 700;
 }
 
 .main-dashboard__header {
@@ -2097,29 +2331,116 @@ onBeforeUnmount(() => {
 
 /* Light dashboard reference skin: visual-only overrides. */
 .main-dashboard {
-  --dash-bg: #eeeeef;
+  --dash-bg: #eef2ef;
   --dash-card: #ffffff;
-  --dash-ink: #10111f;
-  --dash-muted: #727682;
-  --dash-line: rgba(16, 17, 31, 0.08);
-  --dash-strong-line: rgba(16, 17, 31, 0.12);
+  --dash-ink: #10201f;
+  --dash-muted: #667775;
+  --dash-line: rgba(0, 105, 96, 0.1);
+  --dash-strong-line: rgba(0, 105, 96, 0.18);
   --dash-panel: rgba(255, 255, 255, 0.96);
-  --dash-control-bg: #f3f3f4;
-  --dash-control-hover: #efffba;
-  --dash-tile-bg: #f5f5f6;
-  --dash-track-bg: rgba(16, 17, 31, 0.07);
-  --dash-lime: #d7ff43;
-  --dash-lime-soft: #efffba;
-  --dash-lavender: #c5ccff;
-  --dash-lavender-soft: #eef0ff;
-  --dash-positive: #047857;
-  --dash-negative: #b91c1c;
-  --dash-popover-shadow: 0 18px 40px rgba(16, 17, 31, 0.16);
-  --dash-card-radius: 14px;
+  --dash-control-bg: #f4f8f6;
+  --dash-control-hover: #d7ff35;
+  --dash-tile-bg: #f6faf8;
+  --dash-track-bg: rgba(0, 105, 96, 0.1);
+  --dash-teal: #006960;
+  --dash-teal-strong: #00534d;
+  --dash-teal-soft: #d7f3ed;
+  --dash-mint: #67ded1;
+  --dash-mint-soft: #dff8f4;
+  --dash-lime: #d7ff35;
+  --dash-lime-soft: #f1ffbe;
+  --dash-amber: #f7c956;
+  --dash-amber-soft: #fff4c7;
+  --dash-coral: #ff765f;
+  --dash-coral-soft: #ffe2dc;
+  --dash-positive: #006960;
+  --dash-negative: #c7513f;
+  --dash-popover-shadow: 0 18px 40px rgba(0, 83, 77, 0.14);
+  --dash-card-radius: 18px;
   background: var(--dash-bg);
-  border-radius: 24px;
+  border-radius: 28px;
   gap: 18px;
   padding: 18px;
+}
+
+.main-dashboard__overview-main,
+.main-dashboard__overview-card {
+  background: var(--dash-card);
+  border: 0;
+  border-radius: 24px;
+  box-shadow: 0 18px 46px rgba(0, 83, 77, 0.08);
+}
+
+.main-dashboard__overview-main h2 {
+  color: var(--dash-ink);
+}
+
+.main-dashboard__overview-main p {
+  color: var(--dash-muted);
+}
+
+.main-dashboard__signals {
+  color: var(--dash-ink);
+}
+
+.main-dashboard__signal {
+  background: var(--dash-tile-bg);
+  border-radius: 14px;
+}
+
+.main-dashboard__signal small {
+  color: var(--dash-teal);
+}
+
+.main-dashboard__overview-side {
+  background: var(--dash-teal);
+  border-radius: 24px;
+  color: #ffffff;
+  box-shadow: 0 18px 46px rgba(0, 83, 77, 0.14);
+}
+
+.main-dashboard__overview-side span {
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.main-dashboard__overview-card {
+  color: var(--dash-ink);
+}
+
+.main-dashboard__overview-card span {
+  color: var(--dash-teal);
+}
+
+.main-dashboard__overview-card p,
+.main-dashboard__overview-card small {
+  color: var(--dash-muted);
+}
+
+.main-dashboard__overview-card.is-teal {
+  background: var(--dash-teal);
+  color: #ffffff;
+}
+
+.main-dashboard__overview-card.is-mint {
+  background: var(--dash-mint-soft);
+}
+
+.main-dashboard__overview-card.is-positive {
+  background: var(--dash-lime-soft);
+}
+
+.main-dashboard__overview-card.is-negative {
+  background: var(--dash-coral-soft);
+}
+
+.main-dashboard__overview-card.is-teal span,
+.main-dashboard__overview-card.is-teal p,
+.main-dashboard__overview-card.is-teal small {
+  color: rgba(255, 255, 255, 0.76);
+}
+
+.main-dashboard__overview-card.is-teal strong {
+  color: #ffffff;
 }
 
 .main-dashboard__header {
@@ -2135,7 +2456,7 @@ onBeforeUnmount(() => {
 .main-palette__head strong,
 .main-dashboard__field span,
 .main-dashboard__hidden > span {
-  color: #6d72ba;
+  color: var(--dash-teal);
 }
 
 .main-dashboard__header h2 {
@@ -2156,8 +2477,8 @@ onBeforeUnmount(() => {
 }
 
 .main-dashboard__grid-guide span {
-  background: rgba(197, 204, 255, 0.16);
-  border-color: rgba(109, 114, 186, 0.2);
+  background: rgba(103, 222, 209, 0.16);
+  border-color: rgba(0, 105, 96, 0.2);
 }
 
 :deep(.grid-stack-item-content) {
@@ -2224,19 +2545,19 @@ onBeforeUnmount(() => {
 .main-palette--household-summary .main-palette__metric:first-child,
 .main-palette--monthExpense .main-palette__single-metric,
 .main-palette--weekExpense .main-palette__single-metric {
-  background: var(--dash-lime);
+  background: var(--dash-lime-soft);
 }
 
 .main-palette--monthIncome .main-palette__single-metric,
 .main-palette--weekIncome .main-palette__single-metric,
 .main-palette--travel-summary .main-palette__metric:first-child,
 .main-palette--drive-summary .main-palette__metric:first-child {
-  background: var(--dash-lavender);
+  background: var(--dash-mint-soft);
 }
 
 .main-palette--photo-frame,
 .main-palette--drive-capacity {
-  background: var(--dash-lavender);
+  background: var(--dash-teal-soft);
 }
 
 .main-palette--photo-frame .main-palette__head strong,
@@ -2284,7 +2605,7 @@ onBeforeUnmount(() => {
 
 .main-palette__bar span,
 .main-palette__capacity-track span {
-  background: var(--dash-lime);
+  background: var(--dash-teal);
   border-radius: inherit;
 }
 
@@ -2309,23 +2630,23 @@ onBeforeUnmount(() => {
 }
 
 .main-palette__feature-link span {
-  color: #6d72ba;
+  color: var(--dash-teal);
 }
 
 .main-dashboard__floating-button {
-  background: var(--dash-lime);
+  background: var(--dash-teal);
   border: 0;
   border-radius: 10px;
   bottom: 24px;
-  box-shadow: 0 14px 28px rgba(16, 17, 31, 0.18);
-  color: var(--dash-ink);
+  box-shadow: 0 14px 28px rgba(0, 83, 77, 0.22);
+  color: #ffffff;
   top: auto;
   transform: none;
 }
 
 .main-dashboard__floating-button.is-active,
 .main-dashboard__floating-button:hover {
-  background: var(--dash-lavender);
+  background: var(--dash-lime);
   color: var(--dash-ink);
 }
 
@@ -2337,9 +2658,9 @@ onBeforeUnmount(() => {
 }
 
 .main-dashboard__primary {
-  background: var(--dash-lime);
+  background: var(--dash-teal);
   border-color: transparent;
-  color: var(--dash-ink);
+  color: #ffffff;
 }
 
 .main-dashboard__secondary,
@@ -2359,10 +2680,19 @@ onBeforeUnmount(() => {
   --dash-control-hover: rgba(39, 49, 65, 0.98);
   --dash-tile-bg: rgba(27, 33, 44, 0.88);
   --dash-track-bg: rgba(78, 95, 125, 0.34);
+  --dash-teal: #2dd4bf;
+  --dash-teal-strong: #14b8a6;
+  --dash-teal-soft: rgba(45, 212, 191, 0.16);
+  --dash-mint: #67ded1;
+  --dash-mint-soft: rgba(103, 222, 209, 0.14);
   --dash-lime: #b9ef35;
   --dash-lime-soft: rgba(185, 239, 53, 0.16);
   --dash-lavender: rgba(125, 142, 255, 0.38);
   --dash-lavender-soft: rgba(125, 142, 255, 0.18);
+  --dash-amber: #f7c956;
+  --dash-amber-soft: rgba(247, 201, 86, 0.16);
+  --dash-coral: #ff8a78;
+  --dash-coral-soft: rgba(255, 118, 95, 0.16);
   --dash-positive: #3ddc97;
   --dash-negative: #ff7a8a;
   --dash-popover-shadow: 0 18px 40px rgba(0, 0, 0, 0.34);
@@ -2372,10 +2702,26 @@ onBeforeUnmount(() => {
 }
 
 :global(:root[data-theme='toss']) .main-dashboard__header,
+:global(:root[data-theme='toss']) .main-dashboard__overview-main,
+:global(:root[data-theme='toss']) .main-dashboard__overview-card,
 :global(:root[data-theme='toss']) .main-dashboard__tools {
   background: var(--dash-panel);
   border: 1px solid rgba(78, 95, 125, 0.48);
   box-shadow: var(--dash-popover-shadow);
+}
+
+:global(:root[data-theme='toss']) .main-dashboard__overview-side,
+:global(:root[data-theme='toss']) .main-dashboard__overview-card.is-teal {
+  background: linear-gradient(180deg, rgba(20, 184, 166, 0.32), rgba(18, 23, 31, 0.98));
+  border: 1px solid rgba(45, 212, 191, 0.28);
+}
+
+:global(:root[data-theme='toss']) .main-dashboard__signal,
+:global(:root[data-theme='toss']) .main-dashboard__overview-card.is-mint,
+:global(:root[data-theme='toss']) .main-dashboard__overview-card.is-positive,
+:global(:root[data-theme='toss']) .main-dashboard__overview-card.is-negative {
+  background: var(--dash-tile-bg);
+  border: 1px solid rgba(78, 95, 125, 0.36);
 }
 
 :global(:root[data-theme='toss']) .main-dashboard__palette-zone {
@@ -2774,6 +3120,23 @@ onBeforeUnmount(() => {
 }
 
 @media (max-width: 720px) {
+  .main-dashboard__overview {
+    grid-template-columns: 1fr;
+  }
+
+  .main-dashboard__overview-main {
+    grid-template-columns: 1fr;
+    padding: 18px;
+  }
+
+  .main-dashboard__overview-cards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .main-dashboard__overview-side {
+    min-height: 120px;
+  }
+
   .main-dashboard__header {
     align-items: stretch;
     display: grid;
@@ -2813,6 +3176,17 @@ onBeforeUnmount(() => {
   .main-dashboard__tools {
     right: 12px;
     width: min(290px, calc(100vw - 24px));
+  }
+}
+
+@media (max-width: 520px) {
+  .main-dashboard__signals,
+  .main-dashboard__overview-cards {
+    grid-template-columns: 1fr;
+  }
+
+  .main-dashboard__overview-card {
+    min-height: 116px;
   }
 }
 </style>

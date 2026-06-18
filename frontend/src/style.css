@@ -1677,7 +1677,7 @@ button {
   z-index: 30;
   display: grid;
   gap: 6px;
-  max-height: calc((52px * 5) + (6px * 4) + 16px);
+  max-height: calc((64px * 5) + (6px * 4) + 16px);
   padding: 8px;
   overflow-y: auto;
   border: 1px solid var(--line);
@@ -1694,13 +1694,35 @@ button {
   display: grid;
   gap: 3px;
   width: 100%;
-  min-height: 52px;
+  min-height: 64px;
   padding: 10px 12px;
   border: 1px solid transparent;
   border-radius: 12px;
   background: var(--surface-soft);
   color: var(--text);
   text-align: left;
+}
+
+.entry-title-suggestion__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+}
+
+.entry-title-suggestion__head strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.entry-title-suggestion__head time {
+  flex: 0 0 auto;
+  color: var(--text-soft);
+  font-size: 0.78rem;
+  font-weight: 800;
 }
 
 .entry-title-suggestion:hover,

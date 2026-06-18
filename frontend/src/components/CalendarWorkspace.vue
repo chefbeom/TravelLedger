@@ -2574,7 +2574,12 @@ defineExpose({
                   @mousedown.prevent
                   @click="emit('apply-title-suggestion', suggestion)"
                 >
-                  <strong>{{ suggestion.title }}</strong>
+                  <span class="entry-title-suggestion__head">
+                    <strong>{{ suggestion.title }}</strong>
+                    <time v-if="suggestion.entryDate" :datetime="suggestion.entryDate">
+                      {{ formatShortDate(suggestion.entryDate) }}<template v-if="suggestion.entryTime && suggestion.entryTime !== '00:00'"> {{ formatTime(suggestion.entryTime) }}</template>
+                    </time>
+                  </span>
                   <small>{{ suggestion.categoryLabel }} · {{ suggestion.paymentMethodName }}</small>
                 </button>
               </div>

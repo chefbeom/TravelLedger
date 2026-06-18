@@ -689,8 +689,6 @@ const memoryPhotoSummaryMap = computed(() => {
   return bucket
 })
 const photoAlbumPhotoCount = computed(() => [...memoryPhotoSummaryMap.value.values()].reduce((total, item) => total + item.count, 0))
-const PHOTO_ALBUM_PAGE_SIZE = 10
-const photoAlbumPage = ref(0)
 const photoAlbumCards = computed(() =>
   [...memoryPhotoSummaryMap.value.entries()]
     .map(([recordId, photoSummary]) => {
@@ -722,11 +720,6 @@ const photoAlbumCards = computed(() =>
     .filter(Boolean)
     .sort((left, right) => right.sortKey.localeCompare(left.sortKey)),
 )
-const photoAlbumPageCount = computed(() => Math.max(Math.ceil(photoAlbumCards.value.length / PHOTO_ALBUM_PAGE_SIZE), 1))
-const pagedPhotoAlbumCards = computed(() => {
-  const start = photoAlbumPage.value * PHOTO_ALBUM_PAGE_SIZE
-  return photoAlbumCards.value.slice(start, start + PHOTO_ALBUM_PAGE_SIZE)
-})
 const recordAutofillMessageClass = computed(() => ({
   'travel-autofill-note--filled': recordAutofillTone.value === 'filled',
   'travel-autofill-note--manual': recordAutofillTone.value === 'manual',
@@ -787,19 +780,6 @@ const photoAlbumGroups = computed(() => {
   })
 
   return [...bucket.values()]
-})
-
-watch(
-  () => photoAlbumCards.value.length,
-  () => {
-    if (photoAlbumPage.value >= photoAlbumPageCount.value) {
-      photoAlbumPage.value = Math.max(photoAlbumPageCount.value - 1, 0)
-    }
-  },
-)
-
-watch(albumTab, () => {
-  photoAlbumPage.value = 0
 })
 
 watch(
@@ -2537,7 +2517,6 @@ async function openPortfolioMemoryEditor(payload) {
       <TravelMemoryPanel v-if="showAlbumUploadTab && albumTab === 'upload'" :travel-plan="travelPlan" :category-options="memoryCategoryOptions" :is-submitting="isSubmitting" :active-submit="activeSubmit" :refresh-key="memoryRefreshKey" :focus-request="memoryFocusRequest" :upload-progress="memoryUploadProgress" @save-memory="handleSaveMemory" @delete-memory="handleDeleteMemory" @delete-media="handleDeleteMedia" />
       <TravelMyPhotosWorkspace v-else-if="albumTab === 'my-photos'" :portfolio="travelPortfolio" :plans="travelPlans" :is-loading="isLoading" :focus-request="externalPhotoFocusRequest" @open-memory-editor="openPortfolioMemoryEditor" />
       <div v-else-if="albumTab === 'gallery'" class="workspace-stack">
-        <section class="panel"><div class="panel__header"><div><h2>사진 재사용 흐름</h2><p>갤러리 카드에서 바로 기록 편집을 누르면 업로드 화면이 열리고, 기존 사진은 그대로 유지된 채 새 사진과 메모만 이어서 추가할 수 있습니다.</p></div><span class="panel__badge">{{ photoAlbumCards.length }}개 기록</span></div></section>
         <section class="panel panel--map-fill"><div class="panel__header"><div><h2>사진첩 지도</h2><p>선택한 여행의 사진 기록이 위치별로 묶여 큰 지도에 표시됩니다.</p></div><span class="panel__badge">{{ photoAlbumPhotoCount }}장</span></div><TravelMapPanel :markers="photoAlbumMarkers" :selected-point="null" :enable-pick-location="false" :enable-draw-route="false" :view-key="travelPlan?.id || 'photo-album-map'" hint-title="사진 핀 보기" hint-text="여행 기록에 연결된 사진을 위치별로 묶어 보여줍니다." /></section>
         <section class="panel">
           <div class="panel__header">
@@ -2571,7 +2550,7 @@ async function openPortfolioMemoryEditor(payload) {
                     <strong>{{ item.title }}</strong>
                     <small>{{ formatDateTime(item.memoryDate, item.memoryTime) }}</small>
                     <small>{{ item.locationLabel }}</small>
-                    <small>{{ item.memo || '이 기록을 다시 열면 기존 사진이 남아 있는 상태에서 이어서 편집할 수 있습니다.' }}</small>
+                    <small>{{ item.memo || '메모 없음' }}</small>
                   </div>
                   <div class="travel-media-actions">
                     <button class="button button--primary" @click="openMemoryEditor(item.memoryId)">기록 편집</button>

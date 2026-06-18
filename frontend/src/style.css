@@ -2554,188 +2554,6 @@ button {
   gap: 8px;
 }
 
-.travel-place-index {
-  display: grid;
-  gap: 14px;
-}
-
-.travel-place-index__grid {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 10px;
-}
-
-.travel-place-index__card {
-  display: grid;
-  min-width: 0;
-  min-height: 128px;
-  gap: 7px;
-  align-content: center;
-  padding: 16px;
-  border: 1px solid var(--line);
-  border-radius: 16px;
-  background: var(--surface);
-  color: var(--text);
-  text-align: left;
-  cursor: pointer;
-}
-
-.travel-place-index__card:hover {
-  border-color: rgba(49, 130, 246, 0.34);
-  background: var(--surface-soft);
-}
-
-.travel-place-index__card span {
-  color: var(--accent);
-  font-size: 0.76rem;
-  font-weight: 900;
-}
-
-.travel-place-index__card strong,
-.travel-place-index__card small,
-.travel-place-index__card em {
-  min-width: 0;
-  overflow-wrap: anywhere;
-}
-
-.travel-place-index__card small {
-  color: var(--text-soft);
-}
-
-.travel-place-index__card em {
-  width: fit-content;
-  padding: 4px 8px;
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--surface-muted) 82%, var(--income) 18%);
-  color: var(--income);
-  font-size: 0.76rem;
-  font-style: normal;
-  font-weight: 900;
-}
-
-.travel-place-index__empty {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 16px;
-  border: 1px dashed var(--line);
-  border-radius: 16px;
-  background: var(--surface-soft);
-}
-
-.travel-record-timeline {
-  display: grid;
-  gap: 14px;
-}
-
-.travel-record-timeline__grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
-}
-
-.travel-record-timeline__item {
-  display: grid;
-  grid-template-columns: 72px minmax(0, 1fr);
-  gap: 12px;
-  min-width: 0;
-  min-height: 108px;
-  padding: 12px;
-  border: 1px solid var(--line);
-  border-radius: 16px;
-  background: var(--surface);
-  color: var(--text);
-  text-align: left;
-  cursor: pointer;
-}
-
-.travel-record-timeline__item:hover {
-  border-color: rgba(49, 130, 246, 0.34);
-  background: var(--surface-soft);
-}
-
-.travel-record-timeline__thumb {
-  display: grid;
-  place-items: center;
-  width: 72px;
-  height: 84px;
-  overflow: hidden;
-  border-radius: 14px;
-  background: linear-gradient(135deg, rgba(49, 130, 246, 0.14), rgba(18, 184, 134, 0.12));
-  color: var(--accent);
-  font-size: 0.78rem;
-  font-weight: 900;
-}
-
-.travel-record-timeline__thumb img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.travel-record-timeline__copy {
-  display: grid;
-  gap: 5px;
-  min-width: 0;
-  align-content: center;
-}
-
-.travel-record-timeline__meta {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  min-width: 0;
-}
-
-.travel-record-timeline__meta strong {
-  color: var(--accent);
-  font-size: 0.76rem;
-}
-
-.travel-record-timeline__meta small,
-.travel-record-timeline__copy small {
-  color: var(--text-soft);
-}
-
-.travel-record-timeline__copy b {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.travel-record-timeline__copy em {
-  width: fit-content;
-  padding: 3px 7px;
-  border-radius: 8px;
-  background: rgba(18, 184, 134, 0.12);
-  color: var(--income);
-  font-size: 0.72rem;
-  font-style: normal;
-  font-weight: 900;
-}
-
-.travel-record-timeline__empty {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 16px;
-  border: 1px dashed var(--line);
-  border-radius: 16px;
-  background: var(--surface-soft);
-}
-
-.travel-record-timeline__empty-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
 .travel-finance-bridge {
   display: grid;
   gap: 18px;
@@ -2773,14 +2591,6 @@ button {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
-  .travel-record-timeline__grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .travel-place-index__grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
   .travel-finance-bridge__body {
     grid-template-columns: 1fr;
   }
@@ -2794,23 +2604,6 @@ button {
   .travel-record-switcher__card {
     min-height: 84px;
     padding: 14px;
-  }
-
-  .travel-record-timeline__grid {
-    grid-template-columns: 1fr;
-  }
-
-  .travel-place-index__grid {
-    grid-template-columns: 1fr;
-  }
-
-  .travel-record-timeline__item {
-    grid-template-columns: 62px minmax(0, 1fr);
-  }
-
-  .travel-record-timeline__thumb {
-    width: 62px;
-    height: 74px;
   }
 
   .travel-record-switcher__finance-link,
@@ -3832,15 +3625,6 @@ button {
 
 .travel-media-grid--gallery {
   grid-template-columns: repeat(3, minmax(0, 1fr));
-}
-
-.travel-media-grid--quick-open {
-  grid-auto-flow: column;
-  grid-auto-columns: minmax(220px, 1fr);
-  gap: 12px;
-  overflow-x: auto;
-  overflow-y: hidden;
-  align-items: stretch;
 }
 
 .travel-media-card {
@@ -5923,10 +5707,6 @@ button {
   .travel-public-shelf__scroll {
     grid-auto-columns: minmax(210px, 82vw);
   }
-}
-
-.travel-memory-quick-open__controls {
-  display: none;
 }
 
 .travel-batch-toggle {
@@ -12140,10 +11920,6 @@ textarea {
     min-height: 760px;
   }
 
-  .travel-media-grid--quick-open {
-    grid-auto-columns: minmax(220px, 1fr);
-  }
-
   .travel-money-records__entry {
     order: 1;
   }
@@ -12250,10 +12026,6 @@ textarea {
 
   .travel-media-grid--gallery {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .travel-media-grid--quick-open {
-    grid-auto-columns: minmax(220px, 1fr);
   }
 
   .travel-batch-memory-card {

@@ -320,46 +320,6 @@ function updateMultiPhotoPreparationProgress(current, total, fileName = '') {
     : '선택한 사진의 메타데이터를 순서대로 확인하고 있습니다.'
 }
 
-const photoBackedMemories = computed(() =>
-  scopedMemoryRecords.value
-    .map((item) => {
-      const photoSummary = memoryPhotoSummaryMap.value.get(String(item.id))
-
-      if (!photoSummary?.count || !photoSummary.heroPhotoUrl) {
-        return null
-      }
-
-      return {
-        ...item,
-        photoCount: photoSummary.count,
-        heroPhotoUrl: photoSummary.heroPhotoUrl,
-        heroPhotoName: photoSummary.heroPhotoName,
-        locationLabel: [item.country, item.region, item.placeName].filter(Boolean).join(' / ') || '위치 미설정',
-        sortKey: `${item.memoryDate || ''} ${item.memoryTime || '99:99'} ${photoSummary.heroPhotoUploadedAt || ''} ${String(item.id).padStart(12, '0')}`,
-      }
-    })
-    .filter(Boolean)
-    .sort((left, right) => right.sortKey.localeCompare(left.sortKey)),
-)
-
-const photoQuickOpenSort = ref('desc')
-const photoQuickOpenPage = ref(0)
-const PHOTO_QUICK_OPEN_PAGE_SIZE = 5
-const sortedPhotoBackedMemories = computed(() => {
-  const items = photoBackedMemories.value.slice()
-  if (photoQuickOpenSort.value === 'asc') {
-    items.reverse()
-  }
-  return items
-})
-const photoQuickOpenPageCount = computed(() =>
-  Math.max(1, Math.ceil(sortedPhotoBackedMemories.value.length / PHOTO_QUICK_OPEN_PAGE_SIZE)),
-)
-const pagedPhotoBackedMemories = computed(() => {
-  const start = photoQuickOpenPage.value * PHOTO_QUICK_OPEN_PAGE_SIZE
-  return sortedPhotoBackedMemories.value.slice(start, start + PHOTO_QUICK_OPEN_PAGE_SIZE)
-})
-
 const isMultiPhotoMode = computed(() => multiPhotoUploadEnabled.value && !editingMemoryId.value)
 const hasMultiPhotoDrafts = computed(() => isMultiPhotoMode.value && multiPhotoDrafts.value.length > 0)
 
@@ -469,26 +429,12 @@ watch(filteredMemoryRecords, (items) => {
 })
 
 watch(
-  () => [photoQuickOpenSort.value, scopedMemoryRecords.value.length],
-  () => {
-    photoQuickOpenPage.value = 0
-  },
-)
-
-watch(
   shouldBlockNavigation,
   (active) => {
     dispatchRouteLeaveGuard(active)
   },
   { immediate: true },
 )
-
-watch(sortedPhotoBackedMemories, (items) => {
-  const maxPage = Math.max(0, Math.ceil(items.length / PHOTO_QUICK_OPEN_PAGE_SIZE) - 1)
-  if (photoQuickOpenPage.value > maxPage) {
-    photoQuickOpenPage.value = maxPage
-  }
-})
 
 watch(
   tripDays,
@@ -1087,89 +1033,6 @@ function submitMemory() {
 
 <template>
   <div v-if="travelPlan" class="workspace-stack">
-    <section v-if="photoBackedMemories.length" class="panel">
-      <div class="panel__header">
-        <div>
-          <h2>사진 재사용 빠른 열기</h2>
-          <p>이미 사진이 달린 기록을 다시 열어 기존 사진은 유지한 채 메모와 새 사진만 이어서 추가할 수 있습니다.</p>
-        </div>
-        <span class="panel__badge">{{ photoBackedMemories.length }}개 기록</span>
-      </div>
-
-      <div class="travel-memory-quick-open__controls">
-        <div class="scope-toggle">
-          <button
-            class="button button--ghost"
-            :class="{ 'is-active': photoQuickOpenSort === 'desc' }"
-            type="button"
-            @click="photoQuickOpenSort = 'desc'"
-          >
-            최신순
-          </button>
-          <button
-            class="button button--ghost"
-            :class="{ 'is-active': photoQuickOpenSort === 'asc' }"
-            type="button"
-            @click="photoQuickOpenSort = 'asc'"
-          >
-            오래된순
-          </button>
-        </div>
-        <div v-if="photoQuickOpenPageCount > 1" class="panel__actions">
-          <button
-            class="button button--ghost"
-            type="button"
-            :disabled="photoQuickOpenPage <= 0"
-            @click="photoQuickOpenPage -= 1"
-          >
-            이전
-          </button>
-          <span>{{ photoQuickOpenPage + 1 }} / {{ photoQuickOpenPageCount }}</span>
-          <button
-            class="button button--ghost"
-            type="button"
-            :disabled="photoQuickOpenPage + 1 >= photoQuickOpenPageCount"
-            @click="photoQuickOpenPage += 1"
-          >
-            다음
-          </button>
-        </div>
-      </div>
-
-      <div class="travel-media-grid travel-media-grid--gallery travel-media-grid--quick-open">
-        <article
-          v-for="(memory, index) in pagedPhotoBackedMemories"
-          :key="`photo-memory-${memory.id}`"
-          class="travel-media-card travel-media-card--compact"
-        >
-          <img
-            v-if="memory.heroPhotoUrl"
-            :src="buildThumbnailUrl(memory.heroPhotoUrl)"
-            :alt="memory.heroPhotoName"
-            :loading="index < 2 ? 'eager' : 'lazy'"
-            :fetchpriority="index < 2 ? 'high' : 'auto'"
-            decoding="async"
-            class="travel-media-thumb"
-          />
-          <div v-else class="travel-media-thumb travel-media-thumb--receipt">사진 없음</div>
-          <div class="travel-media-copy">
-            <div class="travel-media-tags">
-              <span class="chip chip--neutral">{{ memory.category || '기록' }}</span>
-              <span class="chip chip--neutral">사진 {{ memory.photoCount }}장</span>
-            </div>
-            <strong>{{ memory.title || memory.placeName || '제목 없는 기록' }}</strong>
-            <small>{{ formatDateTime(memory.memoryDate, memory.memoryTime) }}</small>
-            <small>{{ memory.locationLabel }}</small>
-            <small>{{ memory.memo || '기존 사진은 유지하고 새 사진과 메모만 이어서 추가할 수 있습니다.' }}</small>
-          </div>
-          <div class="travel-media-actions">
-            <button class="button button--primary" @click="openMemoryForEdit(memory)">기록 편집</button>
-            <a v-if="memory.heroPhotoUrl" class="button button--ghost" :href="memory.heroPhotoUrl" target="_blank" rel="noreferrer">대표 사진 보기</a>
-          </div>
-        </article>
-      </div>
-    </section>
-
     <section class="panel panel--map-fill travel-memory-map-panel">
       <div class="panel__header">
         <div>

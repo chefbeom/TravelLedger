@@ -1,6 +1,8 @@
 package com.playdata.calen.ledger.web;
 
 import com.playdata.calen.account.security.AppUserPrincipal;
+import com.playdata.calen.ledger.dto.LedgerClassificationDeleteRequest;
+import com.playdata.calen.ledger.dto.LedgerClassificationUsageResponse;
 import com.playdata.calen.ledger.dto.PaymentMethodRequest;
 import com.playdata.calen.ledger.dto.PaymentMethodResponse;
 import com.playdata.calen.ledger.service.PaymentMethodService;
@@ -49,5 +51,19 @@ public class PaymentMethodController {
     @PatchMapping("/{id}/activate")
     public PaymentMethodResponse activate(@AuthenticationPrincipal AppUserPrincipal currentUser, @PathVariable Long id) {
         return paymentMethodService.activate(currentUser.userId(), id);
+    }
+
+    @GetMapping("/{id}/usage")
+    public LedgerClassificationUsageResponse getUsage(@AuthenticationPrincipal AppUserPrincipal currentUser, @PathVariable Long id) {
+        return paymentMethodService.getUsage(currentUser.userId(), id);
+    }
+
+    @PostMapping("/{id}/delete")
+    public void delete(
+            @AuthenticationPrincipal AppUserPrincipal currentUser,
+            @PathVariable Long id,
+            @RequestBody(required = false) LedgerClassificationDeleteRequest request
+    ) {
+        paymentMethodService.delete(currentUser.userId(), id, request);
     }
 }

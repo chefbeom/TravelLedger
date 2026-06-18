@@ -11,6 +11,9 @@ import {
   createEntry,
   createPaymentMethod,
   createTravelPlan,
+  deleteCategoryDetailPermanently,
+  deleteCategoryGroupPermanently,
+  deletePaymentMethodPermanently,
   deactivateCategoryDetail,
   deactivateCategoryGroup,
   deactivatePaymentMethod,
@@ -19,6 +22,8 @@ import {
   emptyDeletedEntries,
   fetchCategories,
   fetchCategoryBreakdown,
+  fetchCategoryDetailUsage,
+  fetchCategoryGroupUsage,
   fetchCompare,
   fetchDashboard,
   fetchDeletedEntryPage,
@@ -32,6 +37,7 @@ import {
   fetchTravelPlans,
   fetchOverview,
   fetchPaymentBreakdown,
+  fetchPaymentMethodUsage,
   linkLedgerEntryToTravelRecord,
   fetchPaymentMethods,
   restoreEntry,
@@ -307,6 +313,19 @@ const paymentForm = reactive({
   displayOrder: 0,
 })
 
+const classificationDeleteModal = reactive({
+  isOpen: false,
+  isLoading: false,
+  isSubmitting: false,
+  type: '',
+  target: null,
+  usage: null,
+  error: '',
+  replacementCategoryGroupId: '',
+  replacementCategoryDetailId: '',
+  replacementPaymentMethodId: '',
+})
+
 const presetOptions = getPresetOptions()
 const weekdayLabels = getWeekdayLabels()
 
@@ -314,6 +333,60 @@ const availableGroups = computed(() => categories.value.filter((group) => group.
 const availableDetails = computed(() => {
   const group = categories.value.find((item) => String(item.id) === String(entryForm.categoryGroupId))
   return group?.details ?? []
+})
+const classificationDeleteTypeLabel = computed(() => {
+  const labels = {
+    group: '대분류',
+    detail: '소분류',
+    payment: '결제수단',
+  }
+  return labels[classificationDeleteModal.type] || '분류'
+})
+const classificationDeleteTargetLabel = computed(() => {
+  const target = classificationDeleteModal.target
+  if (!target) {
+    return ''
+  }
+  if (classificationDeleteModal.type === 'detail') {
+    return `${target.groupName || '-'} / ${target.name}`
+  }
+  if (classificationDeleteModal.type === 'group') {
+    return `${target.entryType === 'INCOME' ? '수입' : '지출'} / ${target.name}`
+  }
+  return target.name || ''
+})
+const classificationDeleteReplacementGroups = computed(() => {
+  const target = classificationDeleteModal.target
+  if (!target || !['group'].includes(classificationDeleteModal.type)) {
+    return []
+  }
+  return categories.value.filter((group) =>
+    group.entryType === target.entryType && String(group.id) !== String(target.id),
+  )
+})
+const classificationDeleteReplacementDetails = computed(() => {
+  const target = classificationDeleteModal.target
+  if (!target) {
+    return []
+  }
+  if (classificationDeleteModal.type === 'group') {
+    const group = categories.value.find((item) =>
+      String(item.id) === String(classificationDeleteModal.replacementCategoryGroupId),
+    )
+    return group?.details ?? []
+  }
+  if (classificationDeleteModal.type === 'detail') {
+    const group = categories.value.find((item) => String(item.id) === String(target.groupId))
+    return (group?.details ?? []).filter((detail) => String(detail.id) !== String(target.id))
+  }
+  return []
+})
+const classificationDeleteReplacementPayments = computed(() => {
+  if (classificationDeleteModal.type !== 'payment') {
+    return []
+  }
+  const targetId = classificationDeleteModal.target?.id
+  return paymentMethods.value.filter((payment) => String(payment.id) !== String(targetId))
 })
 const selectedHouseholdTravelPlan = computed(() =>
   householdTravelPlans.value.find((plan) => String(plan.id) === String(selectedHouseholdTravelPlanId.value)) || null,
@@ -584,6 +657,13 @@ watch(
   () => entryForm.categoryGroupId,
   () => {
     syncEntryDefaults({ preferLatest: true, force: false })
+  },
+)
+
+watch(
+  () => classificationDeleteModal.replacementCategoryGroupId,
+  () => {
+    classificationDeleteModal.replacementCategoryDetailId = ''
   },
 )
 
@@ -2692,6 +2772,118 @@ function hasDuplicatePaymentMethodName(name) {
   return source.some((payment) => normalizeManagementName(payment.name) === normalizedName)
 }
 
+function resetClassificationDeleteModal() {
+  classificationDeleteModal.isOpen = false
+  classificationDeleteModal.isLoading = false
+  classificationDeleteModal.isSubmitting = false
+  classificationDeleteModal.type = ''
+  classificationDeleteModal.target = null
+  classificationDeleteModal.usage = null
+  classificationDeleteModal.error = ''
+  classificationDeleteModal.replacementCategoryGroupId = ''
+  classificationDeleteModal.replacementCategoryDetailId = ''
+  classificationDeleteModal.replacementPaymentMethodId = ''
+}
+
+async function openClassificationDeleteModal(type, target) {
+  resetClassificationDeleteModal()
+  classificationDeleteModal.isOpen = true
+  classificationDeleteModal.isLoading = true
+  classificationDeleteModal.type = type
+  classificationDeleteModal.target = target
+
+  try {
+    if (type === 'group') {
+      classificationDeleteModal.usage = await fetchCategoryGroupUsage(target.id)
+    } else if (type === 'detail') {
+      classificationDeleteModal.usage = await fetchCategoryDetailUsage(target.id)
+    } else if (type === 'payment') {
+      classificationDeleteModal.usage = await fetchPaymentMethodUsage(target.id)
+    }
+  } catch (error) {
+    classificationDeleteModal.error = error.message || '연관 데이터를 불러오지 못했습니다.'
+  } finally {
+    classificationDeleteModal.isLoading = false
+  }
+}
+
+function openGroupDelete(group) {
+  openClassificationDeleteModal('group', {
+    id: group.id,
+    name: group.name,
+    entryType: group.entryType,
+  })
+}
+
+function openDetailDelete(payload) {
+  const detail = payload?.detail
+  const group = payload?.group
+  if (!detail || !group) {
+    return
+  }
+  openClassificationDeleteModal('detail', {
+    id: detail.id,
+    name: detail.name,
+    groupId: group.id,
+    groupName: group.name,
+    entryType: group.entryType,
+  })
+}
+
+function openPaymentDelete(payment) {
+  openClassificationDeleteModal('payment', {
+    id: payment.id,
+    name: payment.name,
+  })
+}
+
+function buildClassificationDeletePayload() {
+  if (classificationDeleteModal.type === 'group') {
+    return {
+      replacementCategoryGroupId: toOptionalNumber(classificationDeleteModal.replacementCategoryGroupId),
+      replacementCategoryDetailId: toOptionalNumber(classificationDeleteModal.replacementCategoryDetailId),
+    }
+  }
+  if (classificationDeleteModal.type === 'detail') {
+    return {
+      replacementCategoryDetailId: toOptionalNumber(classificationDeleteModal.replacementCategoryDetailId),
+    }
+  }
+  if (classificationDeleteModal.type === 'payment') {
+    return {
+      replacementPaymentMethodId: toOptionalNumber(classificationDeleteModal.replacementPaymentMethodId),
+    }
+  }
+  return {}
+}
+
+async function confirmClassificationDelete() {
+  if (!classificationDeleteModal.target || classificationDeleteModal.isSubmitting) {
+    return
+  }
+
+  classificationDeleteModal.isSubmitting = true
+  classificationDeleteModal.error = ''
+  setFeedback()
+  try {
+    const payload = buildClassificationDeletePayload()
+    if (classificationDeleteModal.type === 'group') {
+      await deleteCategoryGroupPermanently(classificationDeleteModal.target.id, payload)
+    } else if (classificationDeleteModal.type === 'detail') {
+      await deleteCategoryDetailPermanently(classificationDeleteModal.target.id, payload)
+    } else if (classificationDeleteModal.type === 'payment') {
+      await deletePaymentMethodPermanently(classificationDeleteModal.target.id, payload)
+    }
+    resetClassificationDeleteModal()
+    await Promise.all([loadMetadata(), refreshLedgerViews(), loadAggregatePreferences()])
+    setFeedback('분류 태그를 삭제하고 연결된 거래를 정리했습니다.')
+  } catch (error) {
+    classificationDeleteModal.error = error.message || '분류 태그를 삭제하지 못했습니다.'
+  } finally {
+    classificationDeleteModal.isSubmitting = false
+  }
+}
+
 async function createGroup() {
   const name = groupForm.name.trim()
   if (!name) return
@@ -3111,7 +3303,131 @@ async function activatePayment(paymentId) {
       @activate-group="activateGroup"
       @activate-detail="activateDetail"
       @activate-payment="activatePayment"
+      @delete-group="openGroupDelete"
+      @delete-detail="openDetailDelete"
+      @delete-payment="openPaymentDelete"
     />
+
+    <div
+      v-if="classificationDeleteModal.isOpen"
+      class="travel-modal classification-delete-modal"
+      @click.self="resetClassificationDeleteModal"
+    >
+      <section class="travel-modal__dialog classification-delete-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="classification-delete-title">
+        <div class="travel-modal__header">
+          <div>
+            <h2 id="classification-delete-title">{{ classificationDeleteTypeLabel }} 삭제</h2>
+            <p>{{ classificationDeleteTargetLabel }} 태그를 삭제하기 전에 연결된 거래를 확인합니다.</p>
+          </div>
+          <button class="button button--ghost" type="button" :disabled="classificationDeleteModal.isSubmitting" @click="resetClassificationDeleteModal">
+            닫기
+          </button>
+        </div>
+
+        <div v-if="classificationDeleteModal.error" class="feedback feedback--error">{{ classificationDeleteModal.error }}</div>
+
+        <div class="travel-modal__body">
+          <div v-if="classificationDeleteModal.isLoading" class="classification-delete-modal__empty">
+            연관 데이터를 불러오는 중입니다.
+          </div>
+
+          <template v-else>
+            <div class="classification-delete-modal__summary">
+              <strong>{{ classificationDeleteModal.usage?.totalCount ?? 0 }}건 연결</strong>
+              <span>
+                {{ classificationDeleteModal.usage?.totalCount ? '삭제하면 아래 거래가 대체 분류로 이동합니다.' : '연결된 거래가 없어 바로 삭제할 수 있습니다.' }}
+              </span>
+            </div>
+
+            <div v-if="classificationDeleteModal.usage?.entries?.length" class="classification-delete-modal__list">
+              <article
+                v-for="entry in classificationDeleteModal.usage.entries"
+                :key="entry.id"
+                class="classification-delete-modal__entry"
+              >
+                <div>
+                  <strong>{{ entry.title }}</strong>
+                  <span>
+                    {{ formatShortDate(entry.entryDate) }}
+                    <template v-if="entry.entryTime"> {{ entry.entryTime }}</template>
+                    · {{ entry.entryType === 'INCOME' ? '수입' : '지출' }}
+                    <template v-if="entry.deleted"> · 휴지통</template>
+                  </span>
+                </div>
+                <div>
+                  <strong>{{ formatCurrency(entry.amount) }}</strong>
+                  <span>{{ entry.categoryGroupName }} / {{ entry.categoryDetailName || '미분류' }} · {{ entry.paymentMethodName }}</span>
+                </div>
+              </article>
+              <p v-if="classificationDeleteModal.usage?.hasMore" class="classification-delete-modal__hint">
+                최근 거래 {{ classificationDeleteModal.usage.entries.length }}건만 표시합니다.
+              </p>
+            </div>
+
+            <div class="classification-delete-modal__replacement">
+              <template v-if="classificationDeleteModal.type === 'group'">
+                <label class="field">
+                  <span class="field__label">대체 대분류</span>
+                  <select v-model="classificationDeleteModal.replacementCategoryGroupId">
+                    <option value="">미분류로 처리</option>
+                    <option v-for="group in classificationDeleteReplacementGroups" :key="group.id" :value="String(group.id)">
+                      {{ group.entryType === 'INCOME' ? '수입' : '지출' }} / {{ group.name }}
+                    </option>
+                  </select>
+                </label>
+                <label class="field">
+                  <span class="field__label">대체 소분류</span>
+                  <select v-model="classificationDeleteModal.replacementCategoryDetailId" :disabled="!classificationDeleteModal.replacementCategoryGroupId">
+                    <option value="">소분류 없음</option>
+                    <option v-for="detail in classificationDeleteReplacementDetails" :key="detail.id" :value="String(detail.id)">
+                      {{ detail.name }}
+                    </option>
+                  </select>
+                </label>
+              </template>
+
+              <template v-else-if="classificationDeleteModal.type === 'detail'">
+                <label class="field">
+                  <span class="field__label">대체 소분류</span>
+                  <select v-model="classificationDeleteModal.replacementCategoryDetailId">
+                    <option value="">소분류 없음</option>
+                    <option v-for="detail in classificationDeleteReplacementDetails" :key="detail.id" :value="String(detail.id)">
+                      {{ detail.name }}
+                    </option>
+                  </select>
+                </label>
+              </template>
+
+              <template v-else-if="classificationDeleteModal.type === 'payment'">
+                <label class="field">
+                  <span class="field__label">대체 결제수단</span>
+                  <select v-model="classificationDeleteModal.replacementPaymentMethodId">
+                    <option value="">미분류로 처리</option>
+                    <option v-for="payment in classificationDeleteReplacementPayments" :key="payment.id" :value="String(payment.id)">
+                      {{ payment.name }}
+                    </option>
+                  </select>
+                </label>
+              </template>
+            </div>
+          </template>
+        </div>
+
+        <div class="travel-modal__footer">
+          <button class="button button--ghost" type="button" :disabled="classificationDeleteModal.isSubmitting" @click="resetClassificationDeleteModal">
+            취소
+          </button>
+          <button
+            class="button button--danger"
+            type="button"
+            :disabled="classificationDeleteModal.isLoading || classificationDeleteModal.isSubmitting"
+            @click="confirmClassificationDelete"
+          >
+            {{ classificationDeleteModal.isSubmitting ? '삭제 중...' : '그래도 삭제' }}
+          </button>
+        </div>
+      </section>
+    </div>
 
     <div class="household-floating-tools" aria-label="가계부 빠른 이동">
       <button class="household-floating-tools__button" type="button" title="맨 위로 가기" @click="scrollHouseholdToTop">

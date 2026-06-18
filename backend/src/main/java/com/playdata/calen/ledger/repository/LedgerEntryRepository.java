@@ -41,6 +41,24 @@ public interface LedgerEntryRepository extends JpaRepository<LedgerEntry, Long> 
 
     List<LedgerEntry> findAllByOwnerIdAndIdIn(Long ownerId, Collection<Long> ids);
 
+    List<LedgerEntry> findAllByOwnerIdAndCategoryGroupId(Long ownerId, Long categoryGroupId);
+
+    List<LedgerEntry> findAllByOwnerIdAndCategoryDetailId(Long ownerId, Long categoryDetailId);
+
+    List<LedgerEntry> findAllByOwnerIdAndPaymentMethodId(Long ownerId, Long paymentMethodId);
+
+    long countByOwnerIdAndCategoryGroupId(Long ownerId, Long categoryGroupId);
+
+    long countByOwnerIdAndCategoryDetailId(Long ownerId, Long categoryDetailId);
+
+    long countByOwnerIdAndPaymentMethodId(Long ownerId, Long paymentMethodId);
+
+    Page<LedgerEntry> findAllByOwnerIdAndCategoryGroupIdOrderByEntryDateDescIdDesc(Long ownerId, Long categoryGroupId, Pageable pageable);
+
+    Page<LedgerEntry> findAllByOwnerIdAndCategoryDetailIdOrderByEntryDateDescIdDesc(Long ownerId, Long categoryDetailId, Pageable pageable);
+
+    Page<LedgerEntry> findAllByOwnerIdAndPaymentMethodIdOrderByEntryDateDescIdDesc(Long ownerId, Long paymentMethodId, Pageable pageable);
+
     Page<LedgerEntry> findAllByOwnerIdAndDeletedAtIsNotNullOrderByDeletedAtDescEntryDateDescIdDesc(Long ownerId, Pageable pageable);
 
     @Query(

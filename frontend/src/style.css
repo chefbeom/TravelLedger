@@ -5982,6 +5982,20 @@ button {
   gap: 12px;
 }
 
+.catalog__actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.catalog__actions .button {
+  min-height: 40px;
+  padding: 0 14px;
+  border-radius: 12px;
+}
+
 .catalog__title {
   display: inline-flex;
   align-items: center;
@@ -6011,8 +6025,9 @@ button {
   max-width: 100%;
 }
 
-.catalog-chip--actionable {
-  cursor: pointer;
+.catalog-chip--editable {
+  justify-content: flex-start;
+  flex-wrap: wrap;
 }
 
 .catalog-chip--inactive {
@@ -6022,12 +6037,24 @@ button {
 }
 
 .catalog-chip__action {
+  min-height: 0;
   padding: 2px 7px;
+  border: 0;
   border-radius: 999px;
   background: rgba(49, 130, 246, 0.14);
   color: var(--blue);
   font-size: 12px;
   font-weight: 800;
+}
+
+.catalog-chip__action--danger {
+  background: rgba(240, 68, 82, 0.12);
+  color: var(--expense);
+}
+
+.catalog-chip__action:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
 .catalog__empty {
@@ -8071,6 +8098,76 @@ textarea {
   margin-top: 20px;
 }
 
+.classification-delete-modal__dialog {
+  width: min(920px, 100%);
+}
+
+.classification-delete-modal__summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--surface-soft);
+}
+
+.classification-delete-modal__summary span,
+.classification-delete-modal__hint,
+.classification-delete-modal__empty {
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.classification-delete-modal__list {
+  display: grid;
+  gap: 8px;
+  max-height: 300px;
+  overflow: auto;
+}
+
+.classification-delete-modal__entry {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(220px, 0.8fr);
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface-elevated);
+}
+
+.classification-delete-modal__entry > div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.classification-delete-modal__entry strong,
+.classification-delete-modal__entry span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.classification-delete-modal__entry span {
+  color: var(--muted);
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.classification-delete-modal__replacement {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  padding-top: 2px;
+}
+
+.classification-delete-modal__replacement .field:only-child {
+  grid-column: 1 / -1;
+}
+
 .household-floating-tools {
   position: fixed;
   right: 22px;
@@ -8532,6 +8629,10 @@ textarea {
 }
 
 :root[data-theme='toss'] .travel-modal__body .field__hint,
+:root[data-theme='toss'] .classification-delete-modal__summary span,
+:root[data-theme='toss'] .classification-delete-modal__entry span,
+:root[data-theme='toss'] .classification-delete-modal__hint,
+:root[data-theme='toss'] .classification-delete-modal__empty,
 :root[data-theme='toss'] .travel-modal__body .travel-media-copy small {
   color: var(--text-soft);
 }
@@ -8789,6 +8890,20 @@ textarea {
 
   .travel-modal__header {
     flex-direction: column;
+  }
+
+  .classification-delete-modal__summary,
+  .classification-delete-modal__entry {
+    grid-template-columns: 1fr;
+  }
+
+  .classification-delete-modal__summary {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .classification-delete-modal__replacement {
+    grid-template-columns: 1fr;
   }
 
   .household-floating-tools {

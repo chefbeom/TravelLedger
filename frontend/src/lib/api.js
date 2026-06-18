@@ -572,12 +572,34 @@ export function activateCategoryGroup(id) {
   return request(`/categories/groups/${id}/activate`, { method: 'PATCH' })
 }
 
+export function fetchCategoryGroupUsage(id) {
+  return request(`/categories/groups/${id}/usage`)
+}
+
+export function deleteCategoryGroupPermanently(id, payload = {}) {
+  return request(`/categories/groups/${id}/delete`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+}
+
 export function deactivateCategoryDetail(id) {
   return request(`/categories/details/${id}`, { method: 'DELETE' })
 }
 
 export function activateCategoryDetail(id) {
   return request(`/categories/details/${id}/activate`, { method: 'PATCH' })
+}
+
+export function fetchCategoryDetailUsage(id) {
+  return request(`/categories/details/${id}/usage`)
+}
+
+export function deleteCategoryDetailPermanently(id, payload = {}) {
+  return request(`/categories/details/${id}/delete`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
 }
 
 export function fetchPaymentMethods(options = {}) {
@@ -621,6 +643,17 @@ export function deactivatePaymentMethod(id) {
 
 export function activatePaymentMethod(id) {
   return request(`/payment-methods/${id}/activate`, { method: 'PATCH' })
+}
+
+export function fetchPaymentMethodUsage(id) {
+  return request(`/payment-methods/${id}/usage`)
+}
+
+export function deletePaymentMethodPermanently(id, payload = {}) {
+  return request(`/payment-methods/${id}/delete`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
 }
 
 export async function previewLedgerExcelImport(file) {

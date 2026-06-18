@@ -50,6 +50,9 @@ const emit = defineEmits([
   'activate-group',
   'activate-detail',
   'activate-payment',
+  'delete-group',
+  'delete-detail',
+  'delete-payment',
 ])
 
 const isEditMode = ref(false)
@@ -175,31 +178,52 @@ function emitPaymentToggle(payment) {
             {{ entryTypeLabel(group.entryType) }} / {{ group.name }}
             <span v-if="!isActive(group)" class="catalog__status">숨김</span>
           </strong>
-          <button
-            v-if="isEditMode"
-            class="button button--ghost"
-            type="button"
-            :disabled="isSubmitting"
-            @click="emitGroupToggle(group)"
-          >
-            {{ isActive(group) ? '비활성화' : '복구' }}
-          </button>
+          <div v-if="isEditMode" class="catalog__actions">
+            <button
+              class="button button--ghost"
+              type="button"
+              :disabled="isSubmitting"
+              @click="emitGroupToggle(group)"
+            >
+              {{ isActive(group) ? '비활성화' : '복구' }}
+            </button>
+            <button
+              class="button button--danger"
+              type="button"
+              :disabled="isSubmitting"
+              @click="emit('delete-group', group)"
+            >
+              삭제
+            </button>
+          </div>
         </div>
         <div class="catalog__chips">
           <template v-if="group.details?.length">
             <template v-if="isEditMode">
-              <button
+              <span
                 v-for="detail in group.details"
                 :key="detail.id"
-                class="chip chip--neutral catalog-chip catalog-chip--actionable"
+                class="chip chip--neutral catalog-chip catalog-chip--editable"
                 :class="{ 'catalog-chip--inactive': !isActive(detail) }"
-                type="button"
-                :disabled="isSubmitting"
-                @click="emitDetailToggle(detail)"
               >
                 <span>{{ detail.name }}</span>
-                <span class="catalog-chip__action">{{ isActive(detail) ? '숨김' : '복구' }}</span>
-              </button>
+                <button
+                  class="catalog-chip__action"
+                  type="button"
+                  :disabled="isSubmitting"
+                  @click="emitDetailToggle(detail)"
+                >
+                  {{ isActive(detail) ? '숨김' : '복구' }}
+                </button>
+                <button
+                  class="catalog-chip__action catalog-chip__action--danger"
+                  type="button"
+                  :disabled="isSubmitting"
+                  @click="emit('delete-detail', { detail, group })"
+                >
+                  삭제
+                </button>
+              </span>
             </template>
             <template v-else>
               <span
@@ -225,18 +249,30 @@ function emitPaymentToggle(payment) {
         <div class="catalog__chips">
           <template v-if="catalogPaymentMethods.length">
             <template v-if="isEditMode">
-              <button
+              <span
                 v-for="payment in catalogPaymentMethods"
                 :key="payment.id"
-                class="chip chip--neutral catalog-chip catalog-chip--actionable"
+                class="chip chip--neutral catalog-chip catalog-chip--editable"
                 :class="{ 'catalog-chip--inactive': !isActive(payment) }"
-                type="button"
-                :disabled="isSubmitting"
-                @click="emitPaymentToggle(payment)"
               >
                 <span>{{ payment.name }} / {{ paymentKindLabel(payment.kind) }}</span>
-                <span class="catalog-chip__action">{{ isActive(payment) ? '숨김' : '복구' }}</span>
-              </button>
+                <button
+                  class="catalog-chip__action"
+                  type="button"
+                  :disabled="isSubmitting"
+                  @click="emitPaymentToggle(payment)"
+                >
+                  {{ isActive(payment) ? '숨김' : '복구' }}
+                </button>
+                <button
+                  class="catalog-chip__action catalog-chip__action--danger"
+                  type="button"
+                  :disabled="isSubmitting"
+                  @click="emit('delete-payment', payment)"
+                >
+                  삭제
+                </button>
+              </span>
             </template>
             <template v-else>
               <span

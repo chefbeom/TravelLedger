@@ -6,6 +6,8 @@ import com.playdata.calen.ledger.dto.CategoryDetailRequest;
 import com.playdata.calen.ledger.dto.CategoryDetailResponse;
 import com.playdata.calen.ledger.dto.CategoryGroupRequest;
 import com.playdata.calen.ledger.dto.CategoryGroupResponse;
+import com.playdata.calen.ledger.dto.LedgerClassificationDeleteRequest;
+import com.playdata.calen.ledger.dto.LedgerClassificationUsageResponse;
 import com.playdata.calen.ledger.service.CategoryService;
 import jakarta.validation.Valid;
 import java.util.List;
@@ -63,6 +65,20 @@ public class CategoryController {
         return categoryService.activateGroup(currentUser.userId(), id);
     }
 
+    @GetMapping("/groups/{id}/usage")
+    public LedgerClassificationUsageResponse getGroupUsage(@AuthenticationPrincipal AppUserPrincipal currentUser, @PathVariable Long id) {
+        return categoryService.getGroupUsage(currentUser.userId(), id);
+    }
+
+    @PostMapping("/groups/{id}/delete")
+    public void deleteGroup(
+            @AuthenticationPrincipal AppUserPrincipal currentUser,
+            @PathVariable Long id,
+            @RequestBody(required = false) LedgerClassificationDeleteRequest request
+    ) {
+        categoryService.deleteGroup(currentUser.userId(), id, request);
+    }
+
     @DeleteMapping("/details/{id}")
     public void deactivateDetail(@AuthenticationPrincipal AppUserPrincipal currentUser, @PathVariable Long id) {
         categoryService.deactivateDetail(currentUser.userId(), id);
@@ -71,5 +87,19 @@ public class CategoryController {
     @PatchMapping("/details/{id}/activate")
     public CategoryDetailResponse activateDetail(@AuthenticationPrincipal AppUserPrincipal currentUser, @PathVariable Long id) {
         return categoryService.activateDetail(currentUser.userId(), id);
+    }
+
+    @GetMapping("/details/{id}/usage")
+    public LedgerClassificationUsageResponse getDetailUsage(@AuthenticationPrincipal AppUserPrincipal currentUser, @PathVariable Long id) {
+        return categoryService.getDetailUsage(currentUser.userId(), id);
+    }
+
+    @PostMapping("/details/{id}/delete")
+    public void deleteDetail(
+            @AuthenticationPrincipal AppUserPrincipal currentUser,
+            @PathVariable Long id,
+            @RequestBody(required = false) LedgerClassificationDeleteRequest request
+    ) {
+        categoryService.deleteDetail(currentUser.userId(), id, request);
     }
 }

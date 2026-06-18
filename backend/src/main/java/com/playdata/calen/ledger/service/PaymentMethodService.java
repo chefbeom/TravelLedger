@@ -8,6 +8,7 @@ import com.playdata.calen.ledger.domain.PaymentMethod;
 import com.playdata.calen.ledger.dto.PaymentMethodRequest;
 import com.playdata.calen.ledger.dto.PaymentMethodResponse;
 import com.playdata.calen.ledger.repository.PaymentMethodRepository;
+import java.util.Comparator;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -22,8 +23,19 @@ public class PaymentMethodService {
     private final PaymentMethodRepository paymentMethodRepository;
 
     public List<PaymentMethodResponse> getPaymentMethods(Long userId) {
+        return getPaymentMethods(userId, false);
+    }
+
+    public List<PaymentMethodResponse> getPaymentMethods(Long userId, boolean includeInactive) {
         AppUser owner = appUserService.getRequiredUser(userId);
-        return paymentMethodRepository.findAllByOwnerIdAndActiveTrueOrderByDisplayOrderAscIdAsc(owner.getId()).stream()
+        List<PaymentMethod> paymentMethods = includeInactive
+                ? paymentMethodRepository.findAllByOwnerIdOrderByDisplayOrderAscIdAsc(owner.getId())
+                : paymentMethodRepository.findAllByOwnerIdAndActiveTrueOrderByDisplayOrderAscIdAsc(owner.getId());
+
+        return paymentMethods.stream()
+                .sorted(Comparator.comparing(PaymentMethod::isActive).reversed()
+                        .thenComparing(PaymentMethod::getDisplayOrder)
+                        .thenComparing(PaymentMethod::getId))
                 .map(this::toResponse)
                 .toList();
     }
@@ -49,6 +61,14 @@ public class PaymentMethodService {
         PaymentMethod paymentMethod = paymentMethodRepository.findByIdAndOwnerId(id, userId)
                 .orElseThrow(() -> new NotFoundException("결제수단을 찾을 수 없습니다."));
         paymentMethod.setActive(false);
+    }
+
+    @Transactional
+    public PaymentMethodResponse activate(Long userId, Long id) {
+        PaymentMethod paymentMethod = paymentMethodRepository.findByIdAndOwnerId(id, userId)
+                .orElseThrow(() -> new NotFoundException("결제수단을 찾을 수 없습니다."));
+        paymentMethod.setActive(true);
+        return toResponse(paymentMethod);
     }
 
     private PaymentMethodResponse toResponse(PaymentMethod paymentMethod) {

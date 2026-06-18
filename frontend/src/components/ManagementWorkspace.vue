@@ -1,10 +1,20 @@
 <script setup>
-defineProps({
+import { computed, ref } from 'vue'
+
+const props = defineProps({
   categories: {
     type: Array,
     default: () => [],
   },
   paymentMethods: {
+    type: Array,
+    default: () => [],
+  },
+  managementCategories: {
+    type: Array,
+    default: () => [],
+  },
+  managementPaymentMethods: {
     type: Array,
     default: () => [],
   },
@@ -37,7 +47,57 @@ const emit = defineEmits([
   'deactivate-group',
   'deactivate-detail',
   'deactivate-payment',
+  'activate-group',
+  'activate-detail',
+  'activate-payment',
 ])
+
+const isEditMode = ref(false)
+
+const catalogCategories = computed(() => (
+  isEditMode.value ? props.managementCategories : props.categories
+))
+
+const catalogPaymentMethods = computed(() => (
+  isEditMode.value ? props.managementPaymentMethods : props.paymentMethods
+))
+
+const editModeLabel = computed(() => (isEditMode.value ? '수정 끝내기' : '분류 수정하기'))
+
+function isActive(item) {
+  return item?.active !== false
+}
+
+function entryTypeLabel(entryType) {
+  return entryType === 'INCOME' ? '수입' : '지출'
+}
+
+function paymentKindLabel(kind) {
+  const labels = {
+    CARD: '카드',
+    CASH: '현금',
+    POINT: '포인트',
+    TRANSFER: '계좌이체',
+    OTHER: '기타',
+  }
+  return labels[kind] || kind
+}
+
+function toggleEditMode() {
+  isEditMode.value = !isEditMode.value
+}
+
+function emitGroupToggle(group) {
+  emit(isActive(group) ? 'deactivate-group' : 'activate-group', group.id)
+}
+
+function emitDetailToggle(detail) {
+  emit(isActive(detail) ? 'deactivate-detail' : 'activate-detail', detail.id)
+}
+
+function emitPaymentToggle(payment) {
+  emit(isActive(payment) ? 'deactivate-payment' : 'activate-payment', payment.id)
+}
 </script>
 
 <template>
@@ -47,6 +107,9 @@ const emit = defineEmits([
         <h2>분류 관리</h2>
         <p>수입/지출 카테고리와 결제수단을 계정별로 정리합니다.</p>
       </div>
+      <button class="button button--ghost management-edit-toggle" type="button" @click="toggleEditMode">
+        {{ editModeLabel }}
+      </button>
     </div>
 
     <div class="manager-grid">
@@ -70,7 +133,7 @@ const emit = defineEmits([
         <div class="stack-form">
           <select v-model="detailForm.groupId">
             <option v-for="group in categories" :key="group.id" :value="String(group.id)">
-              {{ group.entryType === 'INCOME' ? '수입' : '지출' }} / {{ group.name }}
+              {{ entryTypeLabel(group.entryType) }} / {{ group.name }}
             </option>
           </select>
           <input v-model="detailForm.name" type="text" placeholder="예: 군것질" />
@@ -101,36 +164,91 @@ const emit = defineEmits([
     </div>
 
     <div class="catalog">
-      <article v-for="group in categories" :key="group.id" class="catalog__group">
+      <article
+        v-for="group in catalogCategories"
+        :key="group.id"
+        class="catalog__group"
+        :class="{ 'catalog__group--inactive': !isActive(group) }"
+      >
         <div class="catalog__head">
-          <strong>{{ group.entryType === 'INCOME' ? '수입' : '지출' }} / {{ group.name }}</strong>
-          <button class="button button--ghost" @click="emit('deactivate-group', group.id)">비활성화</button>
+          <strong class="catalog__title">
+            {{ entryTypeLabel(group.entryType) }} / {{ group.name }}
+            <span v-if="!isActive(group)" class="catalog__status">숨김</span>
+          </strong>
+          <button
+            v-if="isEditMode"
+            class="button button--ghost"
+            type="button"
+            :disabled="isSubmitting"
+            @click="emitGroupToggle(group)"
+          >
+            {{ isActive(group) ? '비활성화' : '복구' }}
+          </button>
         </div>
         <div class="catalog__chips">
-          <button
-            v-for="detail in group.details"
-            :key="detail.id"
-            class="chip chip--neutral"
-            @click="emit('deactivate-detail', detail.id)"
-          >
-            {{ detail.name }}
-          </button>
+          <template v-if="group.details?.length">
+            <template v-if="isEditMode">
+              <button
+                v-for="detail in group.details"
+                :key="detail.id"
+                class="chip chip--neutral catalog-chip catalog-chip--actionable"
+                :class="{ 'catalog-chip--inactive': !isActive(detail) }"
+                type="button"
+                :disabled="isSubmitting"
+                @click="emitDetailToggle(detail)"
+              >
+                <span>{{ detail.name }}</span>
+                <span class="catalog-chip__action">{{ isActive(detail) ? '숨김' : '복구' }}</span>
+              </button>
+            </template>
+            <template v-else>
+              <span
+                v-for="detail in group.details"
+                :key="detail.id"
+                class="chip chip--neutral catalog-chip"
+              >
+                {{ detail.name }}
+              </span>
+            </template>
+          </template>
+          <span v-else class="catalog__empty">소분류 없음</span>
         </div>
       </article>
 
-      <article class="catalog__group">
+      <article
+        class="catalog__group"
+        :class="{ 'catalog__group--inactive': isEditMode && !catalogPaymentMethods.some(isActive) }"
+      >
         <div class="catalog__head">
           <strong>결제수단</strong>
         </div>
         <div class="catalog__chips">
-          <button
-            v-for="payment in paymentMethods"
-            :key="payment.id"
-            class="chip chip--neutral"
-            @click="emit('deactivate-payment', payment.id)"
-          >
-            {{ payment.name }} / {{ payment.kind }}
-          </button>
+          <template v-if="catalogPaymentMethods.length">
+            <template v-if="isEditMode">
+              <button
+                v-for="payment in catalogPaymentMethods"
+                :key="payment.id"
+                class="chip chip--neutral catalog-chip catalog-chip--actionable"
+                :class="{ 'catalog-chip--inactive': !isActive(payment) }"
+                type="button"
+                :disabled="isSubmitting"
+                @click="emitPaymentToggle(payment)"
+              >
+                <span>{{ payment.name }} / {{ paymentKindLabel(payment.kind) }}</span>
+                <span class="catalog-chip__action">{{ isActive(payment) ? '숨김' : '복구' }}</span>
+              </button>
+            </template>
+            <template v-else>
+              <span
+                v-for="payment in catalogPaymentMethods"
+                :key="payment.id"
+                class="chip chip--neutral catalog-chip"
+              >
+                {{ payment.name }} / {{ paymentKindLabel(payment.kind) }}
+              </span>
+            </template>
+          </template>
+          <span v-else class="catalog__empty">결제수단 없음</span>
         </div>
       </article>
     </div>

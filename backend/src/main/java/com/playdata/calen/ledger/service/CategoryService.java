@@ -29,13 +29,27 @@ public class CategoryService {
     private final CategoryDetailRepository categoryDetailRepository;
 
     public List<CategoryGroupResponse> getCategories(Long userId, EntryType entryType) {
+        return getCategories(userId, entryType, false);
+    }
+
+    public List<CategoryGroupResponse> getCategories(Long userId, EntryType entryType, boolean includeInactive) {
         AppUser owner = appUserService.getRequiredUser(userId);
-        List<CategoryGroup> groups = entryType == null
-                ? categoryGroupRepository.findAllByOwnerIdAndActiveTrueOrderByDisplayOrderAscIdAsc(owner.getId())
-                : categoryGroupRepository.findAllByOwnerIdAndEntryTypeAndActiveTrueOrderByDisplayOrderAscIdAsc(owner.getId(), entryType);
+        List<CategoryGroup> groups;
+        if (includeInactive) {
+            groups = entryType == null
+                    ? categoryGroupRepository.findAllByOwnerIdOrderByDisplayOrderAscIdAsc(owner.getId())
+                    : categoryGroupRepository.findAllByOwnerIdAndEntryTypeOrderByDisplayOrderAscIdAsc(owner.getId(), entryType);
+        } else {
+            groups = entryType == null
+                    ? categoryGroupRepository.findAllByOwnerIdAndActiveTrueOrderByDisplayOrderAscIdAsc(owner.getId())
+                    : categoryGroupRepository.findAllByOwnerIdAndEntryTypeAndActiveTrueOrderByDisplayOrderAscIdAsc(owner.getId(), entryType);
+        }
 
         return groups.stream()
-                .map(this::toGroupResponse)
+                .sorted(Comparator.comparing(CategoryGroup::isActive).reversed()
+                        .thenComparing(CategoryGroup::getDisplayOrder)
+                        .thenComparing(CategoryGroup::getId))
+                .map(group -> toGroupResponse(group, includeInactive))
                 .toList();
     }
 
@@ -81,16 +95,40 @@ public class CategoryService {
     }
 
     @Transactional
+    public CategoryGroupResponse activateGroup(Long userId, Long id) {
+        CategoryGroup group = categoryGroupRepository.findByIdAndOwnerId(id, userId)
+                .orElseThrow(() -> new NotFoundException("대분류를 찾을 수 없습니다."));
+        group.setActive(true);
+        group.getDetails().forEach(detail -> detail.setActive(true));
+        return toGroupResponse(group, true);
+    }
+
+    @Transactional
     public void deactivateDetail(Long userId, Long id) {
         CategoryDetail detail = categoryDetailRepository.findByIdAndGroupOwnerId(id, userId)
                 .orElseThrow(() -> new NotFoundException("소분류를 찾을 수 없습니다."));
         detail.setActive(false);
     }
 
+    @Transactional
+    public CategoryDetailResponse activateDetail(Long userId, Long id) {
+        CategoryDetail detail = categoryDetailRepository.findByIdAndGroupOwnerId(id, userId)
+                .orElseThrow(() -> new NotFoundException("소분류를 찾을 수 없습니다."));
+        detail.getGroup().setActive(true);
+        detail.setActive(true);
+        return toDetailResponse(detail);
+    }
+
     private CategoryGroupResponse toGroupResponse(CategoryGroup group) {
+        return toGroupResponse(group, false);
+    }
+
+    private CategoryGroupResponse toGroupResponse(CategoryGroup group, boolean includeInactive) {
         List<CategoryDetailResponse> details = group.getDetails().stream()
-                .filter(CategoryDetail::isActive)
-                .sorted(Comparator.comparing(CategoryDetail::getDisplayOrder).thenComparing(CategoryDetail::getId))
+                .filter(detail -> includeInactive || detail.isActive())
+                .sorted(Comparator.comparing(CategoryDetail::isActive).reversed()
+                        .thenComparing(CategoryDetail::getDisplayOrder)
+                        .thenComparing(CategoryDetail::getId))
                 .map(this::toDetailResponse)
                 .toList();
 

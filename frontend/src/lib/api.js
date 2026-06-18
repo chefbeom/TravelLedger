@@ -543,8 +543,11 @@ export function analyzeLedgerReceipt(file, options = {}) {
   })
 }
 
-export function fetchCategories(entryType) {
-  return request(buildUrl('/categories', { entryType }).replace(API_BASE, ''))
+export function fetchCategories(entryType, options = {}) {
+  return request(buildUrl('/categories', {
+    entryType,
+    includeInactive: options.includeInactive ? true : '',
+  }).replace(API_BASE, ''))
 }
 
 export function createCategoryGroup(payload) {
@@ -565,12 +568,22 @@ export function deactivateCategoryGroup(id) {
   return request(`/categories/groups/${id}`, { method: 'DELETE' })
 }
 
+export function activateCategoryGroup(id) {
+  return request(`/categories/groups/${id}/activate`, { method: 'PATCH' })
+}
+
 export function deactivateCategoryDetail(id) {
   return request(`/categories/details/${id}`, { method: 'DELETE' })
 }
 
-export function fetchPaymentMethods() {
-  return request('/payment-methods')
+export function activateCategoryDetail(id) {
+  return request(`/categories/details/${id}/activate`, { method: 'PATCH' })
+}
+
+export function fetchPaymentMethods(options = {}) {
+  return request(buildUrl('/payment-methods', {
+    includeInactive: options.includeInactive ? true : '',
+  }).replace(API_BASE, ''))
 }
 
 export function fetchHouseholdAggregatePreferences() {
@@ -604,6 +617,10 @@ export function createPaymentMethod(payload) {
 
 export function deactivatePaymentMethod(id) {
   return request(`/payment-methods/${id}`, { method: 'DELETE' })
+}
+
+export function activatePaymentMethod(id) {
+  return request(`/payment-methods/${id}/activate`, { method: 'PATCH' })
 }
 
 export async function previewLedgerExcelImport(file) {

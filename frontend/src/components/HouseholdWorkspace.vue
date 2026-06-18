@@ -1,6 +1,9 @@
 <script setup>
 import { computed, defineAsyncComponent, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import {
+  activateCategoryDetail,
+  activateCategoryGroup,
+  activatePaymentMethod,
   analyzeLedgerReceipt,
   bulkUpdateEntries,
   createCategoryDetail,
@@ -159,6 +162,8 @@ const trashPageState = ref({
 })
 const categories = ref([])
 const paymentMethods = ref([])
+const managementCategories = ref([])
+const managementPaymentMethods = ref([])
 const entryDateRange = ref({
   earliestDate: null,
   latestDate: null,
@@ -1151,9 +1156,16 @@ function syncEntryDefaults({ preferLatest = true, force = false } = {}) {
 }
 
 async function loadMetadata() {
-  const [groupItems, paymentItems] = await Promise.all([fetchCategories(), fetchPaymentMethods()])
+  const [groupItems, paymentItems, managementGroupItems, managementPaymentItems] = await Promise.all([
+    fetchCategories(),
+    fetchPaymentMethods(),
+    fetchCategories(undefined, { includeInactive: true }),
+    fetchPaymentMethods({ includeInactive: true }),
+  ])
   categories.value = groupItems
   paymentMethods.value = paymentItems
+  managementCategories.value = managementGroupItems
+  managementPaymentMethods.value = managementPaymentItems
   syncEntryDefaults()
 }
 
@@ -2661,27 +2673,30 @@ function normalizeManagementName(value) {
 
 function hasDuplicateGroupName(name, entryType) {
   const normalizedName = normalizeManagementName(name)
-  return categories.value.some((group) =>
+  const source = managementCategories.value.length ? managementCategories.value : categories.value
+  return source.some((group) =>
     group.entryType === entryType && normalizeManagementName(group.name) === normalizedName,
   )
 }
 
 function hasDuplicateDetailName(name, groupId) {
-  const group = categories.value.find((item) => String(item.id) === String(groupId))
+  const source = managementCategories.value.length ? managementCategories.value : categories.value
+  const group = source.find((item) => String(item.id) === String(groupId))
   const normalizedName = normalizeManagementName(name)
   return Boolean(group?.details?.some((detail) => normalizeManagementName(detail.name) === normalizedName))
 }
 
 function hasDuplicatePaymentMethodName(name) {
   const normalizedName = normalizeManagementName(name)
-  return paymentMethods.value.some((payment) => normalizeManagementName(payment.name) === normalizedName)
+  const source = managementPaymentMethods.value.length ? managementPaymentMethods.value : paymentMethods.value
+  return source.some((payment) => normalizeManagementName(payment.name) === normalizedName)
 }
 
 async function createGroup() {
   const name = groupForm.name.trim()
   if (!name) return
   if (hasDuplicateGroupName(name, groupForm.entryType)) {
-    setFeedback('', '이미 있는 분류입니다.')
+    setFeedback('', '이미 있는 분류입니다. 숨겨진 분류는 분류 수정하기에서 복구하세요.')
     return
   }
   isSubmitting.value = true
@@ -2709,7 +2724,7 @@ async function createDetail() {
   const name = detailForm.name.trim()
   if (!detailForm.groupId || !name) return
   if (hasDuplicateDetailName(name, detailForm.groupId)) {
-    setFeedback('', '이미 있는 분류입니다.')
+    setFeedback('', '이미 있는 분류입니다. 숨겨진 분류는 분류 수정하기에서 복구하세요.')
     return
   }
   isSubmitting.value = true
@@ -2737,7 +2752,7 @@ async function createPayment() {
   const name = paymentForm.name.trim()
   if (!name) return
   if (hasDuplicatePaymentMethodName(name)) {
-    setFeedback('', '이미 있는 결제수단입니다.')
+    setFeedback('', '이미 있는 결제수단입니다. 숨겨진 결제수단은 분류 수정하기에서 복구하세요.')
     return
   }
   isSubmitting.value = true
@@ -2777,6 +2792,22 @@ async function deactivateGroup(groupId) {
   }
 }
 
+async function activateGroup(groupId) {
+  isSubmitting.value = true
+  activeSubmit.value = 'group'
+  setFeedback()
+  try {
+    await activateCategoryGroup(groupId)
+    await Promise.all([loadMetadata(), refreshLedgerViews()])
+    setFeedback('카테고리 그룹을 복구했습니다.')
+  } catch (error) {
+    setFeedback('', error.message)
+  } finally {
+    isSubmitting.value = false
+    activeSubmit.value = ''
+  }
+}
+
 async function deactivateDetail(detailId) {
   isSubmitting.value = true
   activeSubmit.value = 'detail'
@@ -2793,6 +2824,22 @@ async function deactivateDetail(detailId) {
   }
 }
 
+async function activateDetail(detailId) {
+  isSubmitting.value = true
+  activeSubmit.value = 'detail'
+  setFeedback()
+  try {
+    await activateCategoryDetail(detailId)
+    await Promise.all([loadMetadata(), refreshLedgerViews()])
+    setFeedback('세부 카테고리를 복구했습니다.')
+  } catch (error) {
+    setFeedback('', error.message)
+  } finally {
+    isSubmitting.value = false
+    activeSubmit.value = ''
+  }
+}
+
 async function deactivatePayment(paymentId) {
   isSubmitting.value = true
   activeSubmit.value = 'payment'
@@ -2801,6 +2848,22 @@ async function deactivatePayment(paymentId) {
     await deactivatePaymentMethod(paymentId)
     await Promise.all([loadMetadata(), refreshLedgerViews(), loadAggregatePreferences()])
     setFeedback('결제수단을 비활성화했습니다.')
+  } catch (error) {
+    setFeedback('', error.message)
+  } finally {
+    isSubmitting.value = false
+    activeSubmit.value = ''
+  }
+}
+
+async function activatePayment(paymentId) {
+  isSubmitting.value = true
+  activeSubmit.value = 'payment'
+  setFeedback()
+  try {
+    await activatePaymentMethod(paymentId)
+    await Promise.all([loadMetadata(), refreshLedgerViews(), loadAggregatePreferences()])
+    setFeedback('결제수단을 복구했습니다.')
   } catch (error) {
     setFeedback('', error.message)
   } finally {
@@ -3032,6 +3095,8 @@ async function deactivatePayment(paymentId) {
       v-else
       :categories="categories"
       :payment-methods="paymentMethods"
+      :management-categories="managementCategories"
+      :management-payment-methods="managementPaymentMethods"
       :group-form="groupForm"
       :detail-form="detailForm"
       :payment-form="paymentForm"
@@ -3043,6 +3108,9 @@ async function deactivatePayment(paymentId) {
       @deactivate-group="deactivateGroup"
       @deactivate-detail="deactivateDetail"
       @deactivate-payment="deactivatePayment"
+      @activate-group="activateGroup"
+      @activate-detail="activateDetail"
+      @activate-payment="activatePayment"
     />
 
     <div class="household-floating-tools" aria-label="가계부 빠른 이동">

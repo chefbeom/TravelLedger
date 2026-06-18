@@ -10,6 +10,8 @@ public interface PaymentMethodRepository extends JpaRepository<PaymentMethod, Lo
 
     List<PaymentMethod> findAllByOwnerIdAndActiveTrueOrderByDisplayOrderAscIdAsc(Long ownerId);
 
+    List<PaymentMethod> findAllByOwnerIdOrderByDisplayOrderAscIdAsc(Long ownerId);
+
     java.util.Optional<PaymentMethod> findByOwnerIdAndNameIgnoreCase(Long ownerId, String name);
 
     java.util.Optional<PaymentMethod> findFirstByOwnerIdAndNameIgnoreCaseOrderByIdAsc(Long ownerId, String name);

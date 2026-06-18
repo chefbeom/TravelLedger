@@ -867,8 +867,9 @@ onMounted(() => {
         updateLayoutCellHeight()
         refreshCalendarMeasurements()
       })
-      if (layoutGridRef.value?.parentElement) {
-        layoutGridResizeObserver.observe(layoutGridRef.value.parentElement)
+      const layoutGridElement = resolveElementRef(layoutGridRef.value)
+      if (layoutGridElement?.parentElement) {
+        layoutGridResizeObserver.observe(layoutGridElement.parentElement)
       }
     }
 
@@ -878,8 +879,9 @@ onMounted(() => {
       calendarResizeObserver = new ResizeObserver(() => {
         updateCalendarShellWidth()
       })
-      if (calendarShellRef.value) {
-        calendarResizeObserver.observe(calendarShellRef.value)
+      const calendarShellElement = resolveElementRef(calendarShellRef.value)
+      if (calendarShellElement) {
+        calendarResizeObserver.observe(calendarShellElement)
       }
     }
   })
@@ -969,6 +971,22 @@ function getLocalIsoDate(date) {
   return `${year}-${month}-${day}`
 }
 
+function resolveElementRef(value) {
+  if (Array.isArray(value)) {
+    return value.map(resolveElementRef).find(Boolean) || null
+  }
+
+  if (typeof Element !== 'undefined' && value instanceof Element) {
+    return value
+  }
+
+  if (typeof Element !== 'undefined' && value?.$el instanceof Element) {
+    return value.$el
+  }
+
+  return null
+}
+
 function getCalendarDisplayMetrics(mode, width) {
   if (mode === 'fit') {
     const viewportWidth = typeof window !== 'undefined' ? window.innerWidth : 1280
@@ -1005,11 +1023,12 @@ function getCalendarDisplayMetrics(mode, width) {
 }
 
 function updateCalendarShellWidth() {
-  if (!calendarShellRef.value) {
+  const calendarShellElement = resolveElementRef(calendarShellRef.value)
+  if (!calendarShellElement) {
     return
   }
 
-  calendarShellWidth.value = calendarShellRef.value.clientWidth || 0
+  calendarShellWidth.value = calendarShellElement.clientWidth || 0
 }
 
 function calendarViewPreferencePayload() {
@@ -1369,7 +1388,8 @@ function calendarPanelAttrs(panel) {
 }
 
 function updateLayoutCellHeight() {
-  const width = layoutGridRef.value?.clientWidth || layoutGridRef.value?.parentElement?.clientWidth || 0
+  const layoutGridElement = resolveElementRef(layoutGridRef.value)
+  const width = layoutGridElement?.clientWidth || layoutGridElement?.parentElement?.clientWidth || 0
   if (!width || !layoutGrid) {
     return
   }
@@ -1422,7 +1442,8 @@ function destroyLayoutGrid() {
 }
 
 function initLayoutGrid() {
-  if (!layoutGridRef.value) {
+  const layoutGridElement = resolveElementRef(layoutGridRef.value)
+  if (!layoutGridElement) {
     return
   }
 
@@ -1443,7 +1464,7 @@ function initLayoutGrid() {
     resizable: {
       handles: 'se',
     },
-  }, layoutGridRef.value)
+  }, layoutGridElement)
   layoutGrid.enableMove(isLayoutEditMode.value)
   layoutGrid.enableResize(isLayoutEditMode.value)
   layoutGrid.on('dragstop', handleLayoutGridStop)
@@ -1488,6 +1509,13 @@ function refreshCalendarMeasurements() {
     updateCalendarShellWidth()
     updateCalendarContentSize()
   })
+}
+
+function updateCalendarContentSize() {
+  updateLayoutCellHeight()
+  if (layoutGrid) {
+    layoutGrid.cellHeight(layoutCellHeight.value)
+  }
 }
 
 function getExpenseAmount(day) {
@@ -1871,26 +1899,28 @@ function waitForLayoutFrame() {
 }
 
 async function scrollToPanelElement(element) {
-  if (!element) {
+  const targetElement = resolveElementRef(element)
+  if (!targetElement) {
     return
   }
 
   await nextTick()
   await waitForLayoutFrame()
 
-  const targetTop = element.getBoundingClientRect().top + window.scrollY - 18
+  const targetTop = targetElement.getBoundingClientRect().top + window.scrollY - 18
   window.scrollTo({
     top: Math.max(0, targetTop),
     behavior: 'smooth',
   })
 
-  if (typeof element.focus === 'function') {
-    element.focus({ preventScroll: true })
+  if (typeof targetElement.focus === 'function') {
+    targetElement.focus({ preventScroll: true })
   }
 }
 
 function focusEntryEditorControl() {
-  const target = quickEntryPanelRef.value?.querySelector(
+  const quickEntryPanelElement = resolveElementRef(quickEntryPanelRef.value)
+  const target = quickEntryPanelElement?.querySelector(
     '.amount-input input, input[type="text"], input[type="date"], input[type="time"], select',
   )
 

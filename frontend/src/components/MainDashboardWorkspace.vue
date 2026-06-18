@@ -306,18 +306,6 @@ const quickActionItems = computed(() => [
   { key: 'drive', label: '파일 저장', meta: '드라이브 열기', route: 'drive' },
   { key: 'launcher', label: '메인으로', meta: '종합 보기', route: 'launcher' },
 ])
-const dashboardUserName = computed(() =>
-  props.currentUser?.nickname
-  || props.currentUser?.displayName
-  || props.currentUser?.name
-  || props.currentUser?.loginId
-  || '나',
-)
-const dashboardDateLabel = computed(() => new Intl.DateTimeFormat('ko-KR', {
-  month: 'long',
-  day: 'numeric',
-  weekday: 'long',
-}).format(new Date()))
 const dashboardOverviewCards = computed(() => {
   const month = quickStat('month')
   const week = quickStat('week')
@@ -361,12 +349,6 @@ const dashboardOverviewCards = computed(() => {
     },
   ]
 })
-const dashboardSignalItems = computed(() => [
-  { key: 'sync', label: '데이터', value: loading.value ? '불러오는 중' : '동기화됨' },
-  { key: 'quick', label: '빠른 입력', value: quickGroups.value.length ? '준비됨' : '분류 필요' },
-  { key: 'photo', label: '사진 액자', value: heroPhoto.value ? '활성' : '대기' },
-  { key: 'layout', label: '팔레트', value: `${formatNumber(visiblePalettes.value.length)}개 표시` },
-])
 
 function todayIso() {
   const now = new Date()
@@ -1218,29 +1200,6 @@ onBeforeUnmount(() => {
 <template>
   <div class="main-dashboard">
     <section class="main-dashboard__overview" aria-label="메인 종합 현황">
-      <div class="main-dashboard__overview-main">
-        <div>
-          <span class="main-dashboard__eyebrow">TRAVELLEDGER CONTROL</span>
-          <h2>{{ dashboardUserName }}님의 종합 대시보드</h2>
-          <p>가계부, 여행, 드라이브 흐름을 한 화면에서 훑어보고 바로 다음 작업으로 이동합니다.</p>
-        </div>
-        <div class="main-dashboard__signals" aria-label="대시보드 상태">
-          <span
-            v-for="item in dashboardSignalItems"
-            :key="item.key"
-            class="main-dashboard__signal"
-          >
-            <small>{{ item.label }}</small>
-            <strong>{{ item.value }}</strong>
-          </span>
-        </div>
-      </div>
-
-      <div class="main-dashboard__overview-side">
-        <span>{{ dashboardDateLabel }}</span>
-        <strong>{{ loading ? '요약 동기화 중' : '오늘의 종합' }}</strong>
-      </div>
-
       <div class="main-dashboard__overview-cards">
         <article
           v-for="card in dashboardOverviewCards"
@@ -1600,94 +1559,15 @@ onBeforeUnmount(() => {
 
 .main-dashboard__overview {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 210px;
   gap: 14px;
   min-width: 0;
 }
 
-.main-dashboard__overview-main,
-.main-dashboard__overview-side,
 .main-dashboard__overview-card {
   min-width: 0;
 }
 
-.main-dashboard__overview-main {
-  display: grid;
-  gap: 18px;
-  grid-template-columns: minmax(0, 1fr) minmax(220px, 0.6fr);
-  align-items: center;
-  padding: 22px;
-}
-
-.main-dashboard__overview-main h2 {
-  margin: 4px 0 8px;
-  font-size: 1.65rem;
-  line-height: 1.18;
-  letter-spacing: 0;
-}
-
-.main-dashboard__overview-main p {
-  max-width: 660px;
-  margin: 0;
-  line-height: 1.55;
-}
-
-.main-dashboard__signals {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
-}
-
-.main-dashboard__signal {
-  display: grid;
-  gap: 4px;
-  min-width: 0;
-  padding: 10px 12px;
-}
-
-.main-dashboard__signal small,
-.main-dashboard__signal strong {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.main-dashboard__signal small {
-  font-size: 0.72rem;
-  font-weight: 800;
-}
-
-.main-dashboard__signal strong {
-  font-size: 0.9rem;
-}
-
-.main-dashboard__overview-side {
-  display: grid;
-  align-content: space-between;
-  gap: 14px;
-  min-height: 100%;
-  padding: 18px;
-}
-
-.main-dashboard__overview-side span,
-.main-dashboard__overview-side strong {
-  min-width: 0;
-  overflow-wrap: anywhere;
-}
-
-.main-dashboard__overview-side span {
-  font-size: 0.82rem;
-  font-weight: 800;
-}
-
-.main-dashboard__overview-side strong {
-  font-size: 1.28rem;
-  line-height: 1.2;
-}
-
 .main-dashboard__overview-cards {
-  grid-column: 1 / -1;
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 14px;
@@ -2363,44 +2243,11 @@ onBeforeUnmount(() => {
   padding: 18px;
 }
 
-.main-dashboard__overview-main,
 .main-dashboard__overview-card {
   background: var(--dash-card);
   border: 0;
   border-radius: 24px;
   box-shadow: 0 18px 46px rgba(0, 83, 77, 0.08);
-}
-
-.main-dashboard__overview-main h2 {
-  color: var(--dash-ink);
-}
-
-.main-dashboard__overview-main p {
-  color: var(--dash-muted);
-}
-
-.main-dashboard__signals {
-  color: var(--dash-ink);
-}
-
-.main-dashboard__signal {
-  background: var(--dash-tile-bg);
-  border-radius: 14px;
-}
-
-.main-dashboard__signal small {
-  color: var(--dash-teal);
-}
-
-.main-dashboard__overview-side {
-  background: var(--dash-teal);
-  border-radius: 24px;
-  color: #ffffff;
-  box-shadow: 0 18px 46px rgba(0, 83, 77, 0.14);
-}
-
-.main-dashboard__overview-side span {
-  color: rgba(255, 255, 255, 0.72);
 }
 
 .main-dashboard__overview-card {
@@ -2702,7 +2549,6 @@ onBeforeUnmount(() => {
 }
 
 :global(html[data-theme='toss'] .main-dashboard__header),
-:global(html[data-theme='toss'] .main-dashboard__overview-main),
 :global(html[data-theme='toss'] .main-dashboard__overview-card),
 :global(html[data-theme='toss'] .main-dashboard__tools ){
   background: var(--dash-panel);
@@ -2710,13 +2556,11 @@ onBeforeUnmount(() => {
   box-shadow: var(--dash-popover-shadow);
 }
 
-:global(html[data-theme='toss'] .main-dashboard__overview-side),
 :global(html[data-theme='toss'] .main-dashboard__overview-card.is-teal ){
   background: linear-gradient(180deg, rgba(42, 113, 107, 0.58), rgba(24, 31, 42, 0.98));
   border: 1px solid rgba(120, 201, 192, 0.24);
 }
 
-:global(html[data-theme='toss'] .main-dashboard__signal),
 :global(html[data-theme='toss'] .main-dashboard__overview-card.is-mint),
 :global(html[data-theme='toss'] .main-dashboard__overview-card.is-positive),
 :global(html[data-theme='toss'] .main-dashboard__overview-card.is-negative ){
@@ -2741,7 +2585,6 @@ onBeforeUnmount(() => {
 }
 
 :global(html[data-theme='toss'] .main-dashboard__eyebrow),
-:global(html[data-theme='toss'] .main-dashboard__signal small),
 :global(html[data-theme='toss'] .main-dashboard__overview-card span),
 :global(html[data-theme='toss'] .main-palette__head strong),
 :global(html[data-theme='toss'] .main-dashboard__field span),
@@ -2751,7 +2594,6 @@ onBeforeUnmount(() => {
 }
 
 :global(html[data-theme='toss'] .main-dashboard__header h2),
-:global(html[data-theme='toss'] .main-dashboard__overview-main h2),
 :global(html[data-theme='toss'] .main-dashboard__overview-card strong),
 :global(html[data-theme='toss'] .main-palette__metric strong),
 :global(html[data-theme='toss'] .main-palette__single-metric strong),
@@ -2766,7 +2608,6 @@ onBeforeUnmount(() => {
 }
 
 :global(html[data-theme='toss'] .main-dashboard__header p),
-:global(html[data-theme='toss'] .main-dashboard__overview-main p),
 :global(html[data-theme='toss'] .main-dashboard__overview-card p),
 :global(html[data-theme='toss'] .main-dashboard__overview-card small),
 :global(html[data-theme='toss'] .main-palette__metric span),
@@ -2785,13 +2626,11 @@ onBeforeUnmount(() => {
 
 :global(html[data-theme='toss'] .main-dashboard__overview-card.is-teal span),
 :global(html[data-theme='toss'] .main-dashboard__overview-card.is-teal p),
-:global(html[data-theme='toss'] .main-dashboard__overview-card.is-teal small),
-:global(html[data-theme='toss'] .main-dashboard__overview-side span ){
+:global(html[data-theme='toss'] .main-dashboard__overview-card.is-teal small ){
   color: rgba(237, 243, 248, 0.74);
 }
 
-:global(html[data-theme='toss'] .main-dashboard__overview-card.is-teal strong),
-:global(html[data-theme='toss'] .main-dashboard__overview-side strong ){
+:global(html[data-theme='toss'] .main-dashboard__overview-card.is-teal strong ){
   color: #f6fbff;
 }
 
@@ -3162,17 +3001,8 @@ onBeforeUnmount(() => {
     grid-template-columns: 1fr;
   }
 
-  .main-dashboard__overview-main {
-    grid-template-columns: 1fr;
-    padding: 18px;
-  }
-
   .main-dashboard__overview-cards {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .main-dashboard__overview-side {
-    min-height: 120px;
   }
 
   .main-dashboard__header {
@@ -3218,7 +3048,6 @@ onBeforeUnmount(() => {
 }
 
 @media (max-width: 520px) {
-  .main-dashboard__signals,
   .main-dashboard__overview-cards {
     grid-template-columns: 1fr;
   }

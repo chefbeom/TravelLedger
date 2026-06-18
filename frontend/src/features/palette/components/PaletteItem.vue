@@ -56,11 +56,11 @@ function handleResize(event) {
 
 <style scoped>
 .palette-item {
-  background: var(--calendar-panel-bg, #ffffff);
-  border: 1px solid var(--calendar-panel-border, #d9dde5);
-  border-radius: 14px;
-  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.05);
-  color: var(--text, #111827);
+  background: var(--household-dash-card, #ffffff);
+  border: 1px solid var(--household-dash-line, #d9dde5);
+  border-radius: 18px;
+  box-shadow: var(--household-dash-shadow, 0 18px 46px rgba(0, 83, 77, 0.08));
+  color: var(--household-dash-ink, #111827);
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   height: 100%;
@@ -70,7 +70,7 @@ function handleResize(event) {
 
 .palette-item--editing {
   cursor: grab;
-  outline: 1px dashed rgba(111, 66, 193, 0.35);
+  outline: 1px dashed rgba(0, 105, 96, 0.38);
 }
 
 .palette-item--editing:active {
@@ -79,7 +79,7 @@ function handleResize(event) {
 
 .palette-item__toolbar {
   align-items: center;
-  border-bottom: 1px solid var(--calendar-section-border, #edf0f4);
+  border-bottom: 1px solid var(--household-dash-line, #edf0f4);
   display: flex;
   gap: 8px;
   justify-content: space-between;
@@ -89,7 +89,7 @@ function handleResize(event) {
 }
 
 .palette-item__toolbar strong {
-  color: var(--text, #1f2937);
+  color: var(--household-dash-ink, #1f2937);
   font-size: 0.78rem;
   min-width: 0;
   overflow: hidden;
@@ -106,9 +106,10 @@ function handleResize(event) {
 
 .palette-item__actions select,
 .palette-item__actions button {
-  background: var(--field-bg, #f8fafc);
-  border: 1px solid var(--field-border, #d1d5db);
-  color: var(--text-soft, #374151);
+  background: var(--household-dash-control, #f8fafc);
+  border: 1px solid var(--household-dash-line, #d1d5db);
+  border-radius: 8px;
+  color: var(--household-dash-ink, #374151);
   font-size: 0.68rem;
   height: 24px;
   padding: 0 6px;
@@ -116,7 +117,7 @@ function handleResize(event) {
 
 .palette-item__actions button:hover,
 .palette-item__actions select:focus {
-  border-color: #6f42c1;
+  border-color: var(--household-dash-teal, #006960);
   outline: none;
 }
 
@@ -126,35 +127,35 @@ function handleResize(event) {
   padding: 8px;
 }
 
-:global(:root[data-theme='toss']) .palette-item {
-  background: var(--calendar-panel-bg, linear-gradient(180deg, rgba(24, 29, 38, 0.98), rgba(18, 23, 31, 0.98)));
-  border-color: var(--calendar-panel-border, rgba(78, 95, 125, 0.42));
-  box-shadow: 0 18px 34px rgba(0, 0, 0, 0.26);
-  color: var(--text, #f3f7ff);
+:global(html[data-theme='toss'] .palette-item) {
+  background: var(--household-dash-card, linear-gradient(180deg, rgba(31, 38, 50, 0.97), rgba(24, 31, 42, 0.97)));
+  border-color: var(--household-dash-line, rgba(91, 107, 129, 0.34));
+  box-shadow: var(--household-dash-shadow, 0 18px 34px rgba(0, 0, 0, 0.24));
+  color: var(--household-dash-ink, #edf3f8);
 }
 
-:global(:root[data-theme='toss']) .palette-item--editing {
-  outline-color: rgba(185, 197, 255, 0.34);
+:global(html[data-theme='toss'] .palette-item--editing) {
+  outline-color: rgba(120, 201, 192, 0.3);
 }
 
-:global(:root[data-theme='toss']) .palette-item__toolbar {
-  border-bottom-color: var(--calendar-section-border, rgba(78, 95, 125, 0.36));
+:global(html[data-theme='toss'] .palette-item__toolbar) {
+  border-bottom-color: var(--household-dash-line, rgba(91, 107, 129, 0.32));
 }
 
-:global(:root[data-theme='toss']) .palette-item__toolbar strong {
-  color: var(--text, #f3f7ff);
+:global(html[data-theme='toss'] .palette-item__toolbar strong) {
+  color: var(--household-dash-ink, #edf3f8);
 }
 
-:global(:root[data-theme='toss']) .palette-item__actions select,
-:global(:root[data-theme='toss']) .palette-item__actions button {
-  background: var(--field-bg, rgba(27, 33, 44, 0.96));
-  border-color: var(--field-border, rgba(78, 95, 125, 0.46));
-  color: var(--text, #f3f7ff);
+:global(html[data-theme='toss'] .palette-item__actions select),
+:global(html[data-theme='toss'] .palette-item__actions button) {
+  background: var(--household-dash-control, rgba(33, 41, 54, 0.94));
+  border-color: var(--household-dash-line, rgba(91, 107, 129, 0.36));
+  color: var(--household-dash-ink, #edf3f8);
 }
 
-:global(:root[data-theme='toss']) .palette-item__actions button:hover,
-:global(:root[data-theme='toss']) .palette-item__actions select:focus {
-  border-color: rgba(185, 239, 53, 0.42);
+:global(html[data-theme='toss'] .palette-item__actions button:hover),
+:global(html[data-theme='toss'] .palette-item__actions select:focus) {
+  border-color: rgba(120, 201, 192, 0.3);
 }
 
 @media (max-width: 720px) {

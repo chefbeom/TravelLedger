@@ -289,18 +289,14 @@ watch(layoutKey, () => {
 }
 
 :deep(.grid-stack-placeholder > .placeholder-content) {
-  background: rgba(111, 66, 193, 0.08);
-  border: 1px dashed rgba(111, 66, 193, 0.45);
+  background: rgba(103, 222, 209, 0.16);
+  border: 1px dashed rgba(0, 105, 96, 0.28);
   inset: var(--palette-grid-margin, 4px);
 }
 
-:global(:root[data-theme='toss']) .palette-grid-guide span {
+:global(html[data-theme='toss'] .palette-grid-guide span) {
   background: var(--grid-guide-bg);
   border-color: var(--grid-guide-border);
 }
 
-:global(:root[data-theme='toss']) :deep(.grid-stack-placeholder > .placeholder-content) {
-  background: var(--grid-guide-bg);
-  border-color: var(--grid-guide-border);
-}
 </style>

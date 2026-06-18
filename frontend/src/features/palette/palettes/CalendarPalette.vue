@@ -88,13 +88,13 @@ function dayTone(day) {
 }
 
 .calendar-palette__head span {
-  color: #6f42c1;
+  color: var(--household-dash-teal, #006960);
   font-size: 0.7rem;
   font-weight: 800;
 }
 
 .calendar-palette__head strong {
-  color: var(--text, #1f2937);
+  color: var(--household-dash-ink, #1f2937);
   font-size: 0.88rem;
   min-width: 0;
   overflow: hidden;
@@ -113,7 +113,7 @@ function dayTone(day) {
 }
 
 .calendar-palette__weekday {
-  color: var(--text-soft, #6b7280);
+  color: var(--household-dash-muted, #6b7280);
   font-size: 0.65rem;
   font-weight: 800;
   line-height: 1;
@@ -121,8 +121,9 @@ function dayTone(day) {
 }
 
 .calendar-palette__day {
-  background: var(--calendar-day-bg, #f8fafc);
-  border: 1px solid var(--calendar-day-border, #e5e7eb);
+  background: var(--household-dash-tile, #f8fafc);
+  border: 1px solid var(--household-dash-line, #e5e7eb);
+  border-radius: 8px;
   display: grid;
   min-height: 0;
   overflow: hidden;
@@ -131,12 +132,12 @@ function dayTone(day) {
 }
 
 .calendar-palette__day.is-muted {
-  background: var(--field-bg-muted, #f3f4f6);
+  background: var(--household-dash-control, #f3f4f6);
   color: var(--text-muted, #9ca3af);
 }
 
 .calendar-palette__number {
-  color: var(--text, #374151);
+  color: var(--household-dash-ink, #374151);
   font-size: 0.68rem;
   font-weight: 800;
   line-height: 1;
@@ -144,9 +145,10 @@ function dayTone(day) {
 
 .calendar-palette__count {
   align-self: end;
-  background: var(--field-bg, #ffffff);
-  border: 1px solid var(--field-border, #d1d5db);
-  color: var(--text, #111827);
+  background: var(--household-dash-card, #ffffff);
+  border: 1px solid var(--household-dash-line, #d1d5db);
+  border-radius: 999px;
+  color: var(--household-dash-ink, #111827);
   font-size: 0.62rem;
   font-weight: 800;
   justify-self: end;
@@ -162,6 +164,7 @@ function dayTone(day) {
 
 .calendar-palette__marker {
   bottom: 3px;
+  border-radius: 999px;
   height: 3px;
   left: 4px;
   max-width: calc(100% - 8px);
@@ -170,15 +173,15 @@ function dayTone(day) {
 }
 
 .calendar-palette__day.is-positive .calendar-palette__marker {
-  background: #059669;
+  background: var(--household-dash-teal, #006960);
 }
 
 .calendar-palette__day.is-negative .calendar-palette__marker {
-  background: #dc2626;
+  background: var(--household-dash-coral, #ff765f);
 }
 
 .calendar-palette__day.is-neutral .calendar-palette__marker {
-  background: #6b7280;
+  background: var(--household-dash-mint, #67ded1);
 }
 
 .calendar-palette--1x2 {
@@ -217,47 +220,47 @@ function dayTone(day) {
   width: 9px;
 }
 
-:global(:root[data-theme='toss']) .calendar-palette__head span {
-  color: #b9c5ff;
+:global(html[data-theme='toss'] .calendar-palette__head span) {
+  color: var(--household-dash-teal, #78c9c0);
 }
 
-:global(:root[data-theme='toss']) .calendar-palette__head strong,
-:global(:root[data-theme='toss']) .calendar-palette__count {
-  color: var(--text, #f3f7ff);
+:global(html[data-theme='toss'] .calendar-palette__head strong),
+:global(html[data-theme='toss'] .calendar-palette__count) {
+  color: var(--household-dash-ink, #edf3f8);
 }
 
-:global(:root[data-theme='toss']) .calendar-palette__weekday,
-:global(:root[data-theme='toss']) .calendar-palette__day.is-muted {
-  color: var(--text-soft, #aeb8cb);
+:global(html[data-theme='toss'] .calendar-palette__weekday),
+:global(html[data-theme='toss'] .calendar-palette__day.is-muted) {
+  color: var(--household-dash-muted, #a3b0bf);
 }
 
-:global(:root[data-theme='toss']) .calendar-palette__day {
-  background: var(--calendar-day-bg, rgba(27, 33, 44, 0.88));
-  border-color: var(--calendar-day-border, rgba(78, 95, 125, 0.36));
+:global(html[data-theme='toss'] .calendar-palette__day) {
+  background: var(--household-dash-tile, rgba(34, 42, 55, 0.8));
+  border-color: var(--household-dash-line, rgba(91, 107, 129, 0.32));
 }
 
-:global(:root[data-theme='toss']) .calendar-palette__day.is-muted {
-  background: var(--field-bg-muted, rgba(18, 23, 31, 0.86));
+:global(html[data-theme='toss'] .calendar-palette__day.is-muted) {
+  background: var(--household-dash-control, rgba(33, 41, 54, 0.94));
 }
 
-:global(:root[data-theme='toss']) .calendar-palette__number {
-  color: var(--text, #f3f7ff);
+:global(html[data-theme='toss'] .calendar-palette__number) {
+  color: var(--household-dash-ink, #edf3f8);
 }
 
-:global(:root[data-theme='toss']) .calendar-palette__count {
-  background: var(--field-bg, rgba(18, 23, 31, 0.96));
-  border-color: var(--field-border, rgba(78, 95, 125, 0.46));
+:global(html[data-theme='toss'] .calendar-palette__count) {
+  background: var(--household-dash-card, rgba(24, 31, 42, 0.97));
+  border-color: var(--household-dash-line, rgba(91, 107, 129, 0.32));
 }
 
-:global(:root[data-theme='toss']) .calendar-palette__day.is-positive .calendar-palette__marker {
-  background: #5ee6a8;
+:global(html[data-theme='toss'] .calendar-palette__day.is-positive .calendar-palette__marker) {
+  background: var(--household-dash-positive, #b5d98a);
 }
 
-:global(:root[data-theme='toss']) .calendar-palette__day.is-negative .calendar-palette__marker {
-  background: #ff9b9b;
+:global(html[data-theme='toss'] .calendar-palette__day.is-negative .calendar-palette__marker) {
+  background: var(--household-dash-negative, #e39a91);
 }
 
-:global(:root[data-theme='toss']) .calendar-palette__day.is-neutral .calendar-palette__marker {
-  background: #b9c5ff;
+:global(html[data-theme='toss'] .calendar-palette__day.is-neutral .calendar-palette__marker) {
+  background: var(--household-dash-teal, #78c9c0);
 }
 </style>

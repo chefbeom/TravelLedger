@@ -193,29 +193,70 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .palette-dashboard {
-  background: var(--calendar-board-bg, #eef2f7);
-  border: 1px solid var(--calendar-panel-border, #d8dee8);
-  border-radius: 20px;
+  --household-dash-bg: #eef2ef;
+  --household-dash-card: #ffffff;
+  --household-dash-ink: #10201f;
+  --household-dash-muted: #667775;
+  --household-dash-line: rgba(0, 105, 96, 0.14);
+  --household-dash-strong-line: rgba(0, 105, 96, 0.22);
+  --household-dash-panel: rgba(255, 255, 255, 0.96);
+  --household-dash-control: #f4f8f6;
+  --household-dash-control-hover: #d7ff35;
+  --household-dash-tile: #f6faf8;
+  --household-dash-track: rgba(0, 105, 96, 0.1);
+  --household-dash-teal: #006960;
+  --household-dash-teal-strong: #00534d;
+  --household-dash-teal-soft: #d7f3ed;
+  --household-dash-mint: #67ded1;
+  --household-dash-mint-soft: #dff8f4;
+  --household-dash-lime: #d7ff35;
+  --household-dash-lime-soft: #f1ffbe;
+  --household-dash-coral: #ff765f;
+  --household-dash-coral-soft: #ffe2dc;
+  --household-dash-positive: #006960;
+  --household-dash-negative: #c7513f;
+  --household-dash-shadow: 0 18px 46px rgba(0, 83, 77, 0.08);
+  --calendar-board-bg: var(--household-dash-bg);
+  --calendar-panel-bg: var(--household-dash-card);
+  --calendar-panel-border: var(--household-dash-line);
+  --calendar-section-border: var(--household-dash-line);
+  --calendar-day-bg: var(--household-dash-tile);
+  --calendar-day-border: var(--household-dash-line);
+  --calendar-track-expense-bg: var(--household-dash-track);
+  --field-bg: var(--household-dash-control);
+  --field-bg-muted: var(--household-dash-tile);
+  --field-border: var(--household-dash-line);
+  --control-bg: var(--household-dash-control);
+  --control-bg-hover: var(--household-dash-control-hover);
+  --text: var(--household-dash-ink);
+  --text-soft: var(--household-dash-muted);
+  --text-muted: #8a9996;
+  --grid-guide-bg: rgba(103, 222, 209, 0.16);
+  --grid-guide-border: rgba(0, 105, 96, 0.2);
+  background: var(--household-dash-bg);
+  border: 0;
+  border-radius: 28px;
   min-width: 0;
   overflow-x: hidden;
-  padding: 12px;
+  padding: 18px;
   position: relative;
 }
 
 .palette-dashboard__loading {
-  background: var(--calendar-panel-bg, #ffffff);
-  border: 1px solid var(--calendar-panel-border, #d8dee8);
-  border-radius: 14px;
-  color: var(--text-soft, #6b7280);
+  background: var(--household-dash-panel);
+  border: 1px solid var(--household-dash-line);
+  border-radius: 16px;
+  color: var(--household-dash-muted);
   font-size: 0.86rem;
-  margin-bottom: 10px;
+  margin-bottom: 14px;
   padding: 10px 12px;
 }
 
 .palette-dashboard__floating-button {
-  background: #3f2a78;
-  border: 1px solid #3f2a78;
-  box-shadow: 0 8px 18px rgba(31, 41, 55, 0.16);
+  background: var(--household-dash-teal);
+  border: 0;
+  border-radius: 10px;
+  box-shadow: 0 14px 28px rgba(0, 83, 77, 0.22);
   color: #ffffff;
   font-size: 0.78rem;
   font-weight: 800;
@@ -230,14 +271,15 @@ onBeforeUnmount(() => {
 
 .palette-dashboard__floating-button.is-active,
 .palette-dashboard__floating-button:hover {
-  background: #5f3dc4;
+  background: var(--household-dash-lime);
+  color: var(--household-dash-ink);
 }
 
 .palette-dashboard__tools {
-  background: var(--calendar-panel-bg, #ffffff);
-  border: 1px solid var(--calendar-panel-border, #cfd5df);
+  background: var(--household-dash-panel);
+  border: 1px solid var(--household-dash-line);
   border-radius: 16px;
-  box-shadow: 0 14px 32px rgba(15, 23, 42, 0.18);
+  box-shadow: 0 18px 40px rgba(0, 83, 77, 0.14);
   display: grid;
   gap: 12px;
   max-width: calc(100vw - 36px);
@@ -256,20 +298,21 @@ onBeforeUnmount(() => {
 }
 
 .palette-dashboard__tools-head strong {
-  color: var(--text, #111827);
+  color: var(--household-dash-ink);
   font-size: 0.95rem;
 }
 
 .palette-dashboard__tools button,
 .palette-dashboard__field select {
-  border: 1px solid var(--field-border, #d1d5db);
+  border: 1px solid var(--household-dash-line);
   font-size: 0.8rem;
   min-height: 32px;
   padding: 0 9px;
 }
 
 .palette-dashboard__tools-head button {
-  background: var(--control-bg, #f8fafc);
+  background: var(--household-dash-control);
+  color: var(--household-dash-ink);
 }
 
 .palette-dashboard__field {
@@ -279,19 +322,20 @@ onBeforeUnmount(() => {
 
 .palette-dashboard__field span,
 .palette-dashboard__hidden > span {
-  color: #6f42c1;
+  color: var(--household-dash-teal);
   font-size: 0.72rem;
   font-weight: 800;
 }
 
 .palette-dashboard__field select {
-  background: var(--field-bg, #ffffff);
+  background: var(--household-dash-control);
+  color: var(--household-dash-ink);
   width: 100%;
 }
 
 .palette-dashboard__preset-info {
-  background: var(--field-bg-muted, #f8fafc);
-  border: 1px solid var(--field-border, #e5e7eb);
+  background: var(--household-dash-tile);
+  border: 1px solid var(--household-dash-line);
   border-radius: 12px;
   display: grid;
   gap: 4px;
@@ -299,25 +343,25 @@ onBeforeUnmount(() => {
 }
 
 .palette-dashboard__preset-info span {
-  color: var(--text-soft, #6b7280);
+  color: var(--household-dash-muted);
   font-size: 0.76rem;
 }
 
 .palette-dashboard__preset-info strong {
-  color: var(--text, #111827);
+  color: var(--household-dash-ink);
   font-size: 0.92rem;
 }
 
 .palette-dashboard__primary {
-  background: #3f2a78;
-  border-color: #3f2a78;
+  background: var(--household-dash-teal);
+  border-color: transparent;
   color: #ffffff;
   font-weight: 800;
 }
 
 .palette-dashboard__secondary {
-  background: var(--control-bg, #f8fafc);
-  color: var(--text-soft, #374151);
+  background: var(--household-dash-control);
+  color: var(--household-dash-ink);
 }
 
 .palette-dashboard__hidden {
@@ -326,67 +370,93 @@ onBeforeUnmount(() => {
 }
 
 .palette-dashboard__hidden button {
-  background: var(--control-bg, #f8fafc);
-  color: var(--text-soft, #374151);
+  background: var(--household-dash-control);
+  color: var(--household-dash-ink);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .palette-dashboard__hidden small {
-  color: #9ca3af;
+  color: var(--household-dash-muted);
   font-size: 0.76rem;
 }
 
-:global(:root[data-theme='toss']) .palette-dashboard {
-  background: var(--calendar-board-bg, rgba(12, 16, 23, 0.88));
-  border-color: var(--calendar-panel-border, rgba(78, 95, 125, 0.44));
+:global(html[data-theme='toss'] .palette-dashboard) {
+  --household-dash-bg: linear-gradient(180deg, rgba(18, 24, 33, 0.94), rgba(14, 19, 27, 0.96));
+  --household-dash-card: linear-gradient(180deg, rgba(31, 38, 50, 0.97), rgba(24, 31, 42, 0.97));
+  --household-dash-ink: #edf3f8;
+  --household-dash-muted: #a3b0bf;
+  --household-dash-line: rgba(94, 109, 132, 0.32);
+  --household-dash-strong-line: rgba(110, 126, 150, 0.44);
+  --household-dash-panel: linear-gradient(180deg, rgba(30, 37, 49, 0.98), rgba(23, 30, 41, 0.98));
+  --household-dash-control: rgba(33, 41, 54, 0.94);
+  --household-dash-control-hover: rgba(43, 52, 67, 0.96);
+  --household-dash-tile: rgba(34, 42, 55, 0.8);
+  --household-dash-track: rgba(96, 112, 136, 0.24);
+  --household-dash-teal: #78c9c0;
+  --household-dash-teal-strong: #4da69d;
+  --household-dash-teal-soft: rgba(86, 154, 147, 0.16);
+  --household-dash-mint: #9ed8d2;
+  --household-dash-mint-soft: rgba(105, 176, 168, 0.14);
+  --household-dash-lime: #c1d887;
+  --household-dash-lime-soft: rgba(193, 216, 135, 0.13);
+  --household-dash-coral: #df8f86;
+  --household-dash-coral-soft: rgba(223, 143, 134, 0.13);
+  --household-dash-positive: #b5d98a;
+  --household-dash-negative: #e39a91;
+  --household-dash-shadow: 0 18px 34px rgba(0, 0, 0, 0.24);
+  --grid-guide-bg: rgba(120, 201, 192, 0.08);
+  --grid-guide-border: rgba(120, 201, 192, 0.18);
+  background: var(--household-dash-bg);
+  border: 1px solid rgba(91, 107, 129, 0.36);
+  color: var(--household-dash-ink);
 }
 
-:global(:root[data-theme='toss']) .palette-dashboard__loading,
-:global(:root[data-theme='toss']) .palette-dashboard__tools {
-  background: var(--calendar-panel-bg, rgba(18, 23, 31, 0.98));
-  border-color: var(--calendar-panel-border, rgba(78, 95, 125, 0.48));
-  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.34);
-  color: var(--text-soft, #aeb8cb);
+:global(html[data-theme='toss'] .palette-dashboard__loading),
+:global(html[data-theme='toss'] .palette-dashboard__tools) {
+  background: var(--household-dash-panel);
+  border-color: var(--household-dash-line);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.3);
+  color: var(--household-dash-muted);
 }
 
-:global(:root[data-theme='toss']) .palette-dashboard__tools-head strong,
-:global(:root[data-theme='toss']) .palette-dashboard__preset-info strong {
-  color: var(--text, #f3f7ff);
+:global(html[data-theme='toss'] .palette-dashboard__tools-head strong),
+:global(html[data-theme='toss'] .palette-dashboard__preset-info strong) {
+  color: var(--household-dash-ink);
 }
 
-:global(:root[data-theme='toss']) .palette-dashboard__field span,
-:global(:root[data-theme='toss']) .palette-dashboard__hidden > span {
-  color: #b9c5ff;
+:global(html[data-theme='toss'] .palette-dashboard__field span),
+:global(html[data-theme='toss'] .palette-dashboard__hidden > span) {
+  color: var(--household-dash-teal);
 }
 
-:global(:root[data-theme='toss']) .palette-dashboard__field select,
-:global(:root[data-theme='toss']) .palette-dashboard__secondary,
-:global(:root[data-theme='toss']) .palette-dashboard__hidden button,
-:global(:root[data-theme='toss']) .palette-dashboard__tools-head button,
-:global(:root[data-theme='toss']) .palette-dashboard__preset-info {
-  background: var(--field-bg, rgba(27, 33, 44, 0.96));
-  border-color: var(--field-border, rgba(78, 95, 125, 0.46));
-  color: var(--text, #f3f7ff);
+:global(html[data-theme='toss'] .palette-dashboard__field select),
+:global(html[data-theme='toss'] .palette-dashboard__secondary),
+:global(html[data-theme='toss'] .palette-dashboard__hidden button),
+:global(html[data-theme='toss'] .palette-dashboard__tools-head button),
+:global(html[data-theme='toss'] .palette-dashboard__preset-info) {
+  background: var(--household-dash-control);
+  border-color: var(--household-dash-line);
+  color: var(--household-dash-ink);
 }
 
-:global(:root[data-theme='toss']) .palette-dashboard__preset-info span,
-:global(:root[data-theme='toss']) .palette-dashboard__hidden small {
-  color: var(--text-soft, #aeb8cb);
+:global(html[data-theme='toss'] .palette-dashboard__preset-info span),
+:global(html[data-theme='toss'] .palette-dashboard__hidden small) {
+  color: var(--household-dash-muted);
 }
 
-:global(:root[data-theme='toss']) .palette-dashboard__primary,
-:global(:root[data-theme='toss']) .palette-dashboard__floating-button {
-  background: #b9ef35;
-  border-color: transparent;
-  color: #10111f;
+:global(html[data-theme='toss'] .palette-dashboard__primary),
+:global(html[data-theme='toss'] .palette-dashboard__floating-button) {
+  background: linear-gradient(180deg, var(--household-dash-teal-strong), #367d77);
+  border-color: rgba(120, 201, 192, 0.2);
+  color: #ffffff;
 }
 
-:global(:root[data-theme='toss']) .palette-dashboard__floating-button.is-active,
-:global(:root[data-theme='toss']) .palette-dashboard__floating-button:hover {
-  background: #b9c5ff;
-  color: #10111f;
+:global(html[data-theme='toss'] .palette-dashboard__floating-button.is-active),
+:global(html[data-theme='toss'] .palette-dashboard__floating-button:hover) {
+  background: linear-gradient(180deg, #93c9c2, #5fa9a1);
+  color: #101820;
 }
 
 @media (max-width: 720px) {

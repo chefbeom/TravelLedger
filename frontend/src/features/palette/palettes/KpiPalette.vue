@@ -67,13 +67,13 @@ const canShowBars = computed(() => ['3x2', '3x3'].includes(props.config.size))
 }
 
 .kpi-palette__head span {
-  color: #6f42c1;
+  color: var(--household-dash-teal, #006960);
   font-size: 0.76rem;
   font-weight: 800;
 }
 
 .kpi-palette__head strong {
-  color: var(--text, #1f2937);
+  color: var(--household-dash-ink, #1f2937);
   font-size: 0.98rem;
   line-height: 1.2;
   min-width: 0;
@@ -84,15 +84,19 @@ const canShowBars = computed(() => ['3x2', '3x3'].includes(props.config.size))
 
 .kpi-palette__metric {
   align-self: center;
+  background: var(--household-dash-tile, #f6faf8);
+  border: 1px solid var(--household-dash-line, rgba(0, 105, 96, 0.14));
+  border-radius: 14px;
   display: grid;
   gap: 4px;
   min-height: 0;
   min-width: 0;
   overflow: hidden;
+  padding: 12px;
 }
 
 .kpi-palette__metric strong {
-  color: var(--text, #111827);
+  color: var(--household-dash-ink, #111827);
   display: block;
   font-variant-numeric: tabular-nums;
   font-size: clamp(1.24rem, 2.2vw, 2.08rem);
@@ -106,7 +110,7 @@ const canShowBars = computed(() => ['3x2', '3x3'].includes(props.config.size))
 }
 
 .kpi-palette__metric small {
-  color: var(--text-soft, #6b7280);
+  color: var(--household-dash-muted, #6b7280);
   font-size: 0.82rem;
   line-height: 1.25;
   min-width: 0;
@@ -117,16 +121,16 @@ const canShowBars = computed(() => ['3x2', '3x3'].includes(props.config.size))
 
 .kpi-palette__metric--positive strong,
 .is-positive {
-  color: #047857;
+  color: var(--household-dash-positive, #006960);
 }
 
 .kpi-palette__metric--negative strong,
 .is-negative {
-  color: #b91c1c;
+  color: var(--household-dash-negative, #c7513f);
 }
 
 .is-neutral {
-  color: var(--text-soft, #374151);
+  color: var(--household-dash-muted, #374151);
 }
 
 .kpi-palette__rows {
@@ -138,7 +142,7 @@ const canShowBars = computed(() => ['3x2', '3x3'].includes(props.config.size))
 
 .kpi-palette__row {
   align-items: center;
-  border-top: 1px solid var(--calendar-section-border, #eef0f4);
+  border-top: 1px solid var(--household-dash-line, #eef0f4);
   display: flex;
   gap: 8px;
   justify-content: space-between;
@@ -148,7 +152,7 @@ const canShowBars = computed(() => ['3x2', '3x3'].includes(props.config.size))
 
 .kpi-palette__row span,
 .kpi-palette__bar-label span {
-  color: var(--text-soft, #6b7280);
+  color: var(--household-dash-muted, #6b7280);
   font-size: 0.78rem;
   min-width: 0;
   overflow: hidden;
@@ -188,23 +192,35 @@ const canShowBars = computed(() => ['3x2', '3x3'].includes(props.config.size))
 }
 
 .kpi-palette__bar-track {
-  background: var(--calendar-track-expense-bg, #edf0f4);
+  background: rgba(0, 105, 96, 0.1);
+  border-radius: 999px;
   height: 6px;
   overflow: hidden;
 }
 
 .kpi-palette__bar-track span {
-  background: #6b7280;
+  background: var(--household-dash-teal, #006960);
+  border-radius: inherit;
   display: block;
   height: 100%;
 }
 
 .kpi-palette__bar-track .is-positive {
-  background: #059669;
+  background: var(--household-dash-teal, #006960);
 }
 
 .kpi-palette__bar-track .is-negative {
-  background: #dc2626;
+  background: var(--household-dash-coral, #ff765f);
+}
+
+.kpi-palette__metric--positive {
+  background: var(--household-dash-lime-soft, #f1ffbe);
+  border-color: rgba(0, 105, 96, 0.12);
+}
+
+.kpi-palette__metric--negative {
+  background: var(--household-dash-coral-soft, #ffe2dc);
+  border-color: rgba(199, 81, 63, 0.14);
 }
 
 .kpi-palette--1x1 {
@@ -224,37 +240,43 @@ const canShowBars = computed(() => ['3x2', '3x3'].includes(props.config.size))
   font-size: clamp(0.98rem, 1.6vw, 1.2rem);
 }
 
-:global(:root[data-theme='toss']) .kpi-palette__head span {
-  color: #b9c5ff;
+:global(html[data-theme='toss'] .kpi-palette__head span) {
+  color: var(--household-dash-teal, #78c9c0);
 }
 
-:global(:root[data-theme='toss']) .kpi-palette__head strong,
-:global(:root[data-theme='toss']) .kpi-palette__metric strong,
-:global(:root[data-theme='toss']) .is-neutral {
-  color: var(--text, #f3f7ff);
+:global(html[data-theme='toss'] .kpi-palette__head strong),
+:global(html[data-theme='toss'] .kpi-palette__metric strong),
+:global(html[data-theme='toss'] .is-neutral) {
+  color: var(--household-dash-ink, #edf3f8);
 }
 
-:global(:root[data-theme='toss']) .kpi-palette__metric small,
-:global(:root[data-theme='toss']) .kpi-palette__row span,
-:global(:root[data-theme='toss']) .kpi-palette__bar-label span {
-  color: var(--text-soft, #aeb8cb);
+:global(html[data-theme='toss'] .kpi-palette__metric small),
+:global(html[data-theme='toss'] .kpi-palette__row span),
+:global(html[data-theme='toss'] .kpi-palette__bar-label span) {
+  color: var(--household-dash-muted, #a3b0bf);
 }
 
-:global(:root[data-theme='toss']) .kpi-palette__row {
-  border-top-color: rgba(78, 95, 125, 0.36);
+:global(html[data-theme='toss'] .kpi-palette__row) {
+  border-top-color: var(--household-dash-line, rgba(91, 107, 129, 0.32));
 }
 
-:global(:root[data-theme='toss']) .kpi-palette__bar-track {
-  background: rgba(78, 95, 125, 0.34);
+:global(html[data-theme='toss'] .kpi-palette__bar-track) {
+  background: var(--household-dash-track, rgba(96, 112, 136, 0.24));
 }
 
-:global(:root[data-theme='toss']) .kpi-palette__metric--positive strong,
-:global(:root[data-theme='toss']) .is-positive {
-  color: #5ee6a8;
+:global(html[data-theme='toss'] .kpi-palette__metric--positive),
+:global(html[data-theme='toss'] .kpi-palette__metric--negative) {
+  background: var(--household-dash-tile, rgba(34, 42, 55, 0.8));
+  border-color: var(--household-dash-line, rgba(91, 107, 129, 0.32));
 }
 
-:global(:root[data-theme='toss']) .kpi-palette__metric--negative strong,
-:global(:root[data-theme='toss']) .is-negative {
-  color: #ff9b9b;
+:global(html[data-theme='toss'] .kpi-palette__metric--positive strong),
+:global(html[data-theme='toss'] .is-positive) {
+  color: var(--household-dash-positive, #b5d98a);
+}
+
+:global(html[data-theme='toss'] .kpi-palette__metric--negative strong),
+:global(html[data-theme='toss'] .is-negative) {
+  color: var(--household-dash-negative, #e39a91);
 }
 </style>

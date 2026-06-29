@@ -1,5 +1,6 @@
-const CACHE_NAME = 'travelledger-shell-v1'
-const APP_SHELL = ['/', '/index.html', '/manifest.webmanifest', '/Ledger.png']
+const CACHE_NAME = 'travelledger-shell-v2'
+const APP_SHELL = ['/', '/index.html', '/offline.html', '/manifest.webmanifest', '/Ledger.png']
+const NAVIGATION_FALLBACK = '/offline.html'
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
@@ -31,21 +32,23 @@ self.addEventListener('fetch', (event) => {
   }
 
   if (request.mode === 'navigate') {
-    event.respondWith(networkFirst(request, '/'))
+    event.respondWith(networkFirstNavigation(request))
     return
   }
 
   event.respondWith(cacheFirst(request))
 })
 
-async function networkFirst(request, fallbackUrl) {
+async function networkFirstNavigation(request) {
   const cache = await caches.open(CACHE_NAME)
   try {
     const response = await fetch(request)
-    cache.put(request, response.clone())
+    if (response.ok) {
+      cache.put(request, response.clone())
+    }
     return response
   } catch (error) {
-    return (await cache.match(request)) || cache.match(fallbackUrl)
+    return (await cache.match(request)) || cache.match('/') || cache.match(NAVIGATION_FALLBACK)
   }
 }
 

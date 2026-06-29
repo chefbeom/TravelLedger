@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#1f6f5b" />
+    <title>TravelLedger Offline</title>
+    <style>
+      :root {
+        color: #16213a;
+        background: #f7f1e3;
+        font-family: Georgia, 'Times New Roman', serif;
+      }
+      body {
+        min-height: 100vh;
+        margin: 0;
+        display: grid;
+        place-items: center;
+        padding: 1.5rem;
+        background:
+          radial-gradient(circle at 18% 12%, rgba(31, 111, 91, 0.18), transparent 28%),
+          linear-gradient(135deg, #f7f1e3, #fffaf0 58%, #edf7f2);
+      }
+      main {
+        max-width: 34rem;
+        border: 1px solid rgba(22, 31, 58, 0.12);
+        border-radius: 1.5rem;
+        padding: 2rem;
+        background: rgba(255, 255, 255, 0.86);
+        box-shadow: 0 24px 70px rgba(31, 67, 74, 0.14);
+      }
+      h1 {
+        margin: 0 0 0.8rem;
+        font-size: clamp(2rem, 8vw, 3.4rem);
+        line-height: 0.95;
+      }
+      p {
+        margin: 0 0 1.25rem;
+        color: #4f5b73;
+        line-height: 1.7;
+      }
+      a {
+        display: inline-flex;
+        border-radius: 999px;
+        padding: 0.8rem 1.15rem;
+        background: #1f6f5b;
+        color: white;
+        font-weight: 800;
+        text-decoration: none;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Offline mode</h1>
+      <p>TravelLedger is installed, but this page needs a network connection for fresh ledger, drive, travel, and AI data.</p>
+      <p>Reconnect and return to the app. Already cached shell files will open faster next time.</p>
+      <a href="/">Retry TravelLedger</a>
+    </main>
+  </body>
+</html>

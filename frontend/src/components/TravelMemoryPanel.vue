@@ -1,4 +1,4 @@
-﻿<script setup>
+<script setup>
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { buildThumbnailUrl, createLocalImagePreview } from '../lib/mediaPreview'
 import { extractPhotoMetadata, reverseGeocode } from '../lib/photoMetadata'
@@ -1357,7 +1357,7 @@ function submitMemory() {
             </label>
             <label class="field field--full">
               <span class="field__label">사진 업로드</span>
-              <input accept="image/*" multiple type="file" @change="handlePhotoSelection" />
+              <input accept="image/*" capture="environment" multiple type="file" @change="handlePhotoSelection" />
             </label>
             <label v-if="!isMultiPhotoMode" class="field field--full">
               <span class="field__label">사진 설명</span>

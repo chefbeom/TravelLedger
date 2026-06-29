@@ -542,6 +542,7 @@ onMounted(() => {
             :key="uploadInputKey"
             type="file"
             :accept="FAMILY_MEDIA_ACCEPT"
+            capture="environment"
             multiple
             @change="handlePickFiles"
           />

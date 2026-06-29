@@ -303,7 +303,7 @@ watch(
                     />
                     <label class="button button--ghost drive-profile-modal__upload">
                       프로필 이미지 변경
-                      <input type="file" accept="image/*" hidden :disabled="saving" @change="handleProfileImageChange" />
+                      <input type="file" accept="image/*" capture="environment" hidden :disabled="saving" @change="handleProfileImageChange" />
                     </label>
                   </div>
 

@@ -1,57 +1,31 @@
 # PWA and Mobile Capture Baseline
 
-Updated: 2026-06-30
+This slice makes the frontend more usable as an installable mobile workspace without changing server-side upload trust boundaries.
 
-This document records the first PWA/mobile capture slice for TravelLedger. The goal is to make the app installable and safer to open on mobile before adding richer offline drafts and camera-first upload screens.
+## Installed app shell
 
-## Implemented Baseline
+- `frontend/index.html` declares the manifest, theme color, Apple mobile app metadata, and a readable `TravelLedger` page title.
+- `frontend/public/manifest.webmanifest` defines standalone display, icon metadata, shortcuts, and mobile-oriented categories.
+- `frontend/src/registerServiceWorker.js` registers `/sw.js` only in production builds.
+- `frontend/public/sw.js` caches only the app shell and static same-origin GET assets. It deliberately skips `/api/*` and non-GET requests so private ledger, drive, travel, OCR, and AI responses are not stored by the service worker.
+- `frontend/public/offline.html` provides a safe navigation fallback when the app shell is installed but the network is unavailable.
 
-| Area | Current behavior |
+## Mobile camera upload hints
+
+The following image upload inputs now include `capture="environment"` so supported mobile browsers can open the rear camera directly:
+
+- Calendar/ledger image capture flows in `CalendarWorkspace.vue`.
+- Family album media uploads in `FamilyAlbumWorkspace.vue`.
+- Travel memory photo uploads in `TravelMemoryPanel.vue`.
+- CalenDrive profile image upload in `CalenDriveProfileModal.vue`.
+
+These are client-side hints only. The backend MIME, extension, size, OCR, thumbnail, and privacy checks remain the authority.
+
+## Remaining backlog
+
+| Area | Next step |
 | --- | --- |
-| Web app manifest | `frontend/public/manifest.webmanifest` declares standalone display, theme color, app name, icon, start URL, and shortcuts. |
-| Service worker | `frontend/public/sw.js` caches only app-shell assets and same-origin static GET assets. |
-| API privacy | `/api/*` requests are intentionally excluded from service-worker caching. |
-| Registration | `frontend/src/registerServiceWorker.js` registers the service worker only in production builds. |
-| Install metadata | `frontend/index.html` includes manifest, theme color, and Apple mobile web app metadata. |
-
-## Mobile Capture Rules
-
-| Rule | Reason |
-| --- | --- |
-| Use camera-friendly file inputs for receipt, travel photo, and family album upload flows. | Mobile users should be able to capture directly instead of browsing the file system. |
-| Keep captured files in browser memory or IndexedDB drafts only after explicit user action. | Receipts and family photos are sensitive personal data. |
-| Do not cache API responses, signed URLs, AI analysis payloads, or file blobs in the service worker. | Prevents stale private data from being exposed through browser cache. |
-| Show offline state before allowing upload submission. | Uploads, OCR, AI, and presigned completion require network connectivity. |
-| Keep offline drafts user-clearable. | Users need a privacy escape hatch for captured but unsent files. |
-
-## Test Evidence
-
-| Evidence | Coverage |
-| --- | --- |
-| scripts/verify-pwa-mobile-baseline.ps1 | Verifies manifest installability fields, index PWA metadata, production-only service-worker registration, and service-worker API-cache exclusion snippets. |
-| GitHub Actions pwa-mobile-baseline job | Runs the PWA/mobile baseline verifier as part of the release gate. |
-
-## Next Implementation Queue
-
-| Order | Slice | Acceptance evidence |
-| --- | --- | --- |
-| 1 | Add a shared mobile capture component for OCR receipts, travel media, and family album uploads. | Inputs expose camera capture affordance and clear file type labels on mobile. |
-| 2 | Add an offline network banner and disable upload submit while offline. | Offline state is visible without relying on browser errors. |
-| 3 | Add encrypted or clearable IndexedDB drafts for forms without binary blobs first. | User can recover and clear text metadata drafts. |
-| 4 | Add binary draft support only after retention and privacy controls are defined. | Drafted files can be listed, retried, and deleted by the user. |
-| 5 | Keep mobile PWA smoke checks in CI and release checklist. | Installability metadata, service-worker registration, and API-cache exclusion are checked by `scripts/verify-pwa-mobile-baseline.ps1`; manual production-build smoke still confirms browser install prompt behavior. |
-
-## Manual Smoke Checklist
-
-1. Build and serve the production frontend.
-2. Confirm browser install prompt or installability metadata is available.
-3. Confirm `sw.js` is registered in production only.
-4. Open the app once, then reload while offline and confirm the shell loads.
-5. Confirm authenticated API calls are not served from service-worker cache.
-6. Confirm upload flows show clear file type labels before adding camera capture support.
-
-## Known Limits
-
-- This slice does not yet add offline form drafts.
-- This slice does not yet alter OCR/travel/family upload components.
-- The current `Ledger.png` asset is reused as the PWA icon; a dedicated maskable icon set should replace it later.
+| Offline temporary upload queue | Store selected upload intents in IndexedDB with explicit user retry, size limits, and encryption/privacy review. |
+| Install prompt UX | Add a small non-blocking install prompt that respects browser support and user dismissal. |
+| Mobile capture choice | Add separate `Take photo` and `Choose from library` buttons where `capture` is too aggressive for album workflows. |
+| E2E coverage | Add mobile viewport smoke tests for install shell, OCR capture, travel photo upload, and family album upload. |

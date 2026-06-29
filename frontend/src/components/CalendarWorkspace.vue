@@ -1,4 +1,4 @@
-﻿<script setup>
+<script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { GridStack } from 'gridstack'
 import 'gridstack/dist/gridstack.min.css'
@@ -2308,7 +2308,7 @@ defineExpose({
                 ref="receiptFileInputRef"
                 class="receipt-ocr-panel__file"
                 type="file"
-                accept="image/*"
+                accept="image/*" capture="environment"
                 @change="handleReceiptFileChange"
               />
               <button
@@ -3017,7 +3017,7 @@ defineExpose({
               ref="receiptFileInputRef"
               class="receipt-ocr-panel__file"
               type="file"
-              accept="image/*"
+              accept="image/*" capture="environment"
               multiple
               @change="handleReceiptFileChange"
             />

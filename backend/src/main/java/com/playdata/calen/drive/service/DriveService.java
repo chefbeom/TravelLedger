@@ -60,10 +60,21 @@ public class DriveService {
     @Transactional
     public DriveDtos.UploadCompleteResponse completeUpload(Long userId, DriveDtos.UploadCompleteRequest request) {
         AppUser owner = getOwner(userId);
+        ensureUploadObjectKeyOwnedBy(owner.getId(), request);
         DriveDtos.UploadCompleteResponse completed = driveStorageService.completeUpload(request);
         return driveItemRepository.findByOwner_IdAndStoragePath(owner.getId(), completed.finalObjectKey())
                 .map(this::toCompleteResponse)
                 .orElseGet(() -> saveUploadedItem(owner, request, completed));
+    }
+
+    private void ensureUploadObjectKeyOwnedBy(Long ownerId, DriveDtos.UploadCompleteRequest request) {
+        if (request == null || !StringUtils.hasText(request.finalObjectKey())) {
+            return;
+        }
+        String expectedPrefix = "drive/" + ownerId + "/";
+        if (!request.finalObjectKey().startsWith(expectedPrefix)) {
+            throw new BadRequestException("Upload object key is outside the current user drive scope.");
+        }
     }
 
     public List<DriveDtos.FileItemResponse> list(Long userId) {

@@ -65,7 +65,7 @@ Current explicit public routes from `SecurityConfig`:
 | P0 | travel public media token fails for invalid media/token pair | `TravelPublicMediaTokenService` |
 | P1 | OCR rejects too-large file and non-image file | `LedgerOcrService` |
 | P1 | AI status never exposes API keys | `LedgerAiAnalysisController` |
-| P1 | presigned upload completion rejects object key outside expected owner/record scope | `TravelMediaStorageService` |
+| P1 | presigned upload completion rejects object key outside expected owner/record scope | `DriveService`, `TravelMediaStorageService` |
 | P1 | admin backup/restore actions produce audit events | `AdminDataManagementService` |
 | P2 | malformed image upload cannot create trusted thumbnail/media record | travel/family/profile upload services |
 

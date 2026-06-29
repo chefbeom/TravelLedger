@@ -2,6 +2,8 @@ package com.playdata.calen.drive.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.playdata.calen.account.domain.AppUser;
@@ -47,6 +49,27 @@ class DriveServiceTest {
 
     @Mock
     private ImageThumbnailService imageThumbnailService;
+
+    @Test
+    void completeUploadRejectsObjectKeyOutsideOwnerScopeBeforeStorageLookup() {
+        AppUser owner = owner();
+        DriveDtos.UploadCompleteRequest request = DriveDtos.UploadCompleteRequest.builder()
+                .fileOriginName("foreign.txt")
+                .fileFormat("txt")
+                .fileSize(12L)
+                .finalObjectKey("drive/2/foreign.txt")
+                .build();
+
+        when(appUserRepository.findById(1L)).thenReturn(Optional.of(owner));
+
+        DriveService service = newService();
+
+        assertThatThrownBy(() -> service.completeUpload(1L, request))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessage("Upload object key is outside the current user drive scope.");
+
+        verify(driveStorageService, never()).completeUpload(request);
+    }
 
     @Test
     void listPageKeepsFoldersBeforeFilesWhenSortedByRecent() {

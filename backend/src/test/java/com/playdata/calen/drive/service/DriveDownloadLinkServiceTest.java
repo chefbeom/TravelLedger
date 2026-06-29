@@ -104,6 +104,7 @@ class DriveDownloadLinkServiceTest {
 
         assertThat(link.getDownloadCount()).isZero();
         verify(driveStorageService, never()).loadObjectBytes(anyString());
+        verify(driveDownloadLinkAccessLogService).record(eq(7L), eq(11L), eq(1L), eq("public-token"), eq("expired"), isNull());
     }
 
     @Test
@@ -121,6 +122,7 @@ class DriveDownloadLinkServiceTest {
 
         assertThat(link.getDownloadCount()).isZero();
         verify(driveStorageService, never()).loadObjectBytes(anyString());
+        verify(driveDownloadLinkAccessLogService).record(eq(7L), eq(11L), eq(1L), eq("public-token"), eq("invalid_item"), isNull());
     }
 
     @Test
@@ -140,6 +142,7 @@ class DriveDownloadLinkServiceTest {
         assertThat(link.getLastAccessedAt()).isNull();
         assertThat(link.getItem().getLastAccessedAt()).isNull();
         verify(driveStorageService, never()).loadObjectBytes(anyString());
+        verify(driveDownloadLinkAccessLogService).record(eq(7L), eq(11L), eq(1L), eq("public-token"), eq("invalid_item"), isNull());
     }
 
     @Test
@@ -189,6 +192,7 @@ class DriveDownloadLinkServiceTest {
 
         assertThat(link.getDownloadCount()).isZero();
         verify(driveStorageService, never()).loadObjectBytes(anyString());
+        verify(driveDownloadLinkAccessLogService).record(eq(7L), eq(11L), eq(1L), eq("public-token"), eq("trashed"), isNull());
     }
 
     @Test
@@ -206,6 +210,7 @@ class DriveDownloadLinkServiceTest {
 
         assertThat(link.getDownloadCount()).isEqualTo(3);
         verify(driveStorageService, never()).loadObjectBytes(anyString());
+        verify(driveDownloadLinkAccessLogService).record(eq(7L), eq(11L), eq(1L), eq("public-token"), eq("limit_reached"), isNull());
     }
 
     @Test

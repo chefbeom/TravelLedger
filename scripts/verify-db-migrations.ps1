@@ -45,6 +45,34 @@ if (-not (Test-Path -LiteralPath $baseline)) {
     $findings.Add("Missing baseline marker migration: $baseline") | Out-Null
 }
 
+$strategyPath = 'docs/db_migration_strategy.md'
+if (-not (Test-Path -LiteralPath $strategyPath)) {
+    $findings.Add("Missing DB migration strategy document: $strategyPath") | Out-Null
+} else {
+    $strategyContent = Get-Content -LiteralPath $strategyPath -Raw
+    $inventoryMatch = [regex]::Match($strategyContent, '(?s)## Current Migration Inventory(?<section>.*?)## Legacy Schema Updater Inventory')
+    $evidenceMatch = [regex]::Match($strategyContent, '(?s)## Migration Operational Evidence(?<section>.*?)## Operating Rules')
+
+    if (-not $inventoryMatch.Success) {
+        $findings.Add('DB migration strategy is missing the Current Migration Inventory section before Legacy Schema Updater Inventory.') | Out-Null
+    }
+    if (-not $evidenceMatch.Success) {
+        $findings.Add('DB migration strategy is missing the Migration Operational Evidence section before Operating Rules.') | Out-Null
+    }
+
+    $tick = [char]96
+    foreach ($path in $trackedMigrations) {
+        $fileName = [System.IO.Path]::GetFileName($path)
+        $token = "$tick$fileName$tick"
+        if ($inventoryMatch.Success -and -not $inventoryMatch.Groups['section'].Value.Contains($token)) {
+            $findings.Add("DB migration strategy inventory missing tracked migration: $fileName") | Out-Null
+        }
+        if ($evidenceMatch.Success -and -not $evidenceMatch.Groups['section'].Value.Contains("| $token |")) {
+            $findings.Add("DB migration strategy operational evidence missing tracked migration: $fileName") | Out-Null
+        }
+    }
+}
+
 $expectedLegacySchemaUpdaters = @(
     'backend/src/main/java/com/playdata/calen/ledger/config/LedgerAiAnalysisSchemaUpdater.java',
     'backend/src/main/java/com/playdata/calen/ledger/config/LedgerEntrySchemaUpdater.java',

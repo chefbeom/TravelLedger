@@ -72,6 +72,35 @@ class LedgerTransactionAnomalyServiceTest {
     }
 
     @Test
+    void findAnomaliesFlagsRepeatedSameAmountTitleAcrossMonths() {
+        stubUser();
+        LocalDate from = LocalDate.of(2026, 1, 1);
+        LocalDate to = LocalDate.of(2026, 3, 31);
+        List<LedgerEntry> entries = List.of(
+                entry(1L, LocalDate.of(2026, 1, 5), "Streaming Plan", "9900", EntryType.EXPENSE),
+                entry(2L, LocalDate.of(2026, 2, 5), " streaming  plan ", "9900.00", EntryType.EXPENSE),
+                entry(3L, LocalDate.of(2026, 3, 5), "STREAMING PLAN", "9900.0", EntryType.EXPENSE),
+                entry(4L, LocalDate.of(2026, 3, 6), "Coffee", "4500", EntryType.EXPENSE),
+                entry(5L, LocalDate.of(2026, 1, 7), "Streaming Plan", "9900", EntryType.INCOME)
+        );
+        when(ledgerEntryRepository.findAllByOwnerIdAndDeletedAtIsNullAndEntryDateBetweenOrderByEntryDateAscIdAsc(USER_ID, from, to))
+                .thenReturn(entries);
+
+        var response = service.findAnomalies(USER_ID, from, to, 50);
+
+        assertThat(response.totalGroups()).isEqualTo(1);
+        var group = response.content().get(0);
+        assertThat(group.type()).isEqualTo("REPEATED_SAME_AMOUNT_TITLE");
+        assertThat(group.severity()).isEqualTo("medium");
+        assertThat(group.reason()).contains("multiple months");
+        assertThat(group.entryCount()).isEqualTo(3);
+        assertThat(group.anomalyKey()).contains("repeated-payment", "9900", "streaming plan");
+        assertThat(group.entries()).extracting("id").containsExactly(1L, 2L, 3L);
+        assertThat(group.entries()).allSatisfy(entry -> assertThat(entry.entryType()).isEqualTo(EntryType.EXPENSE));
+        verify(ledgerEntryRepository).findAllByOwnerIdAndDeletedAtIsNullAndEntryDateBetweenOrderByEntryDateAscIdAsc(USER_ID, from, to);
+    }
+
+    @Test
     void findAnomaliesFlagsUnusuallyLargeExpenseAgainstMedianExpense() {
         stubUser();
         List<LedgerEntry> entries = List.of(

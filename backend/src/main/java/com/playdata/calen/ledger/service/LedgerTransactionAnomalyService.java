@@ -14,12 +14,15 @@ import com.playdata.calen.ledger.repository.LedgerEntryRepository;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.YearMonth;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -32,6 +35,7 @@ public class LedgerTransactionAnomalyService {
     private static final int DEFAULT_LIMIT = 50;
     private static final int MAX_LIMIT = 200;
     private static final int MAX_RANGE_DAYS = 366;
+    private static final int MIN_REPEATED_PAYMENT_MONTHS = 3;
     private static final int MIN_UNUSUAL_EXPENSE_BASELINE_COUNT = 5;
     private static final BigDecimal UNUSUAL_EXPENSE_MULTIPLIER = BigDecimal.valueOf(3);
     private static final BigDecimal HIGH_UNUSUAL_EXPENSE_MULTIPLIER = BigDecimal.valueOf(5);
@@ -54,6 +58,7 @@ public class LedgerTransactionAnomalyService {
 
         List<LedgerTransactionAnomalyGroupResponse> groups = new ArrayList<>();
         groups.addAll(detectSameDaySameAmountDuplicates(entries));
+        groups.addAll(detectRepeatedSameAmountExpenses(entries));
         groups.addAll(detectUnusuallyLargeExpenses(entries));
         groups = groups.stream()
                 .sorted(this::compareGroups)
@@ -99,6 +104,31 @@ public class LedgerTransactionAnomalyService {
                 .toList();
     }
 
+    private List<LedgerTransactionAnomalyGroupResponse> detectRepeatedSameAmountExpenses(List<LedgerEntry> entries) {
+        Map<String, List<LedgerEntry>> grouped = new LinkedHashMap<>();
+        for (LedgerEntry entry : entries) {
+            if (entry.getEntryType() != EntryType.EXPENSE || entry.getAmount() == null || entry.getEntryDate() == null) {
+                continue;
+            }
+            String normalizedTitle = normalizeTitle(entry.getTitle());
+            if (normalizedTitle.isBlank()) {
+                continue;
+            }
+            String key = String.join(
+                    "|",
+                    "repeated-payment",
+                    normalizeAmount(expenseAmount(entry)),
+                    normalizedTitle
+            );
+            grouped.computeIfAbsent(key, ignored -> new ArrayList<>()).add(entry);
+        }
+
+        return grouped.entrySet().stream()
+                .filter(entry -> distinctMonthCount(entry.getValue()) >= MIN_REPEATED_PAYMENT_MONTHS)
+                .map(entry -> toRepeatedSameAmountGroup(entry.getKey(), entry.getValue()))
+                .toList();
+    }
+
     private List<LedgerTransactionAnomalyGroupResponse> detectUnusuallyLargeExpenses(List<LedgerEntry> entries) {
         List<LedgerEntry> expenses = entries.stream()
                 .filter(entry -> entry.getEntryType() == EntryType.EXPENSE)
@@ -127,17 +157,24 @@ public class LedgerTransactionAnomalyService {
     }
 
     private LedgerTransactionAnomalyGroupResponse toDuplicateGroup(String anomalyKey, List<LedgerEntry> entries) {
-        List<LedgerTransactionAnomalyEntryResponse> responseEntries = entries.stream()
-                .sorted(Comparator
-                        .comparing(LedgerEntry::getEntryDate)
-                        .thenComparing(entry -> entry.getEntryTime() == null ? java.time.LocalTime.MIN : entry.getEntryTime())
-                        .thenComparing(LedgerEntry::getId))
-                .map(this::toEntryResponse)
-                .toList();
+        List<LedgerTransactionAnomalyEntryResponse> responseEntries = sortedEntryResponses(entries);
         return new LedgerTransactionAnomalyGroupResponse(
                 "DUPLICATE_SAME_DAY_AMOUNT_TITLE",
                 responseEntries.size() >= 3 ? "high" : "medium",
                 "Same-day expense entries have the same amount and a similar title.",
+                anomalyKey,
+                responseEntries.size(),
+                responseEntries
+        );
+    }
+
+    private LedgerTransactionAnomalyGroupResponse toRepeatedSameAmountGroup(String anomalyKey, List<LedgerEntry> entries) {
+        List<LedgerTransactionAnomalyEntryResponse> responseEntries = sortedEntryResponses(entries);
+        int monthCount = distinctMonthCount(entries);
+        return new LedgerTransactionAnomalyGroupResponse(
+                "REPEATED_SAME_AMOUNT_TITLE",
+                responseEntries.size() >= 6 || monthCount >= 6 ? "high" : "medium",
+                "Expense entries repeat with the same amount and a similar title across multiple months.",
                 anomalyKey,
                 responseEntries.size(),
                 responseEntries
@@ -166,6 +203,16 @@ public class LedgerTransactionAnomalyService {
                 1,
                 List.of(toEntryResponse(entry))
         );
+    }
+
+    private List<LedgerTransactionAnomalyEntryResponse> sortedEntryResponses(List<LedgerEntry> entries) {
+        return entries.stream()
+                .sorted(Comparator
+                        .comparing(LedgerEntry::getEntryDate)
+                        .thenComparing(entry -> entry.getEntryTime() == null ? java.time.LocalTime.MIN : entry.getEntryTime())
+                        .thenComparing(LedgerEntry::getId))
+                .map(this::toEntryResponse)
+                .toList();
     }
 
     private LedgerTransactionAnomalyEntryResponse toEntryResponse(LedgerEntry entry) {
@@ -227,6 +274,14 @@ public class LedgerTransactionAnomalyService {
                 .sorted()
                 .toList();
         return amounts.get(amounts.size() / 2);
+    }
+
+    private int distinctMonthCount(List<LedgerEntry> entries) {
+        Set<YearMonth> months = entries.stream()
+                .filter(entry -> entry.getEntryDate() != null)
+                .map(entry -> YearMonth.from(entry.getEntryDate()))
+                .collect(Collectors.toSet());
+        return months.size();
     }
 
     private BigDecimal expenseAmount(LedgerEntry entry) {

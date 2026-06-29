@@ -67,6 +67,22 @@ class DriveAdminSecurityIntegrationTest {
                         .content(objectMapper.writeValueAsString(Map.of("providerCapacityBytes", 1_000_000L))))
                 .andExpect(status().isForbidden());
 
+        mockMvc.perform(patch("/api/administrator/storage-capacity")
+                        .with(user(admin))
+                        .session(verifiedSession(admin.userId()))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of("providerCapacityBytes", 2_000_000L))))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(patch("/api/administrator/storage-capacity")
+                        .with(user(admin))
+                        .with(csrf())
+                        .session(verifiedSession(admin.userId()))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of("providerCapacityBytes", 2_000_000L))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.providerCapacityBytes").value(2_000_000L));
+
         mockMvc.perform(get("/api/administrator/dashboard")
                         .with(user(admin))
                         .session(verifiedSession(admin.userId())))

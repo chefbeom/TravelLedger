@@ -1,6 +1,6 @@
 # Project Improvement Roadmap
 
-Updated: 2026-06-29
+Updated: 2026-06-30
 
 This roadmap turns the current improvement analysis into an implementation queue. It is intentionally practical: each item names the value, first implementation slice, and verification evidence.
 
@@ -26,7 +26,7 @@ This roadmap turns the current improvement analysis into an implementation queue
 
 | Workstream | Why it matters | First slice | Evidence of done |
 | --- | --- | --- | --- |
-| Service decomposition | `LedgerAiAnalysisService` and `TravelService` carry many responsibilities. | Extract AI payload builder, report merger, and response validator. | Smaller classes with focused unit tests. |
+| Service decomposition | `LedgerAiAnalysisService` is 1255 lines and `TravelService` is 3278 lines, so risky behavior is hard to isolate. | Use `docs/service_decomposition_plan.md` to extract pure AI payload/report/plan collaborators first, then travel media/map/share collaborators. | Each extraction leaves controller DTOs stable and adds focused tests for owner scope, AI safety, cache invalidation, and side effects. |
 | DB migration management | `*SchemaUpdater` classes are convenient but weak for production rollback/audit. | Flyway is wired behind `DB_MIGRATION_ENABLED`; AI history provider tracking uses a versioned migration; CI now checks migration naming, duplicate versions, and baseline marker presence. | New schema change has a versioned migration, passes migration discipline check, and has repeatable local/staging startup evidence. |
 | Observability/alerts | Prometheus/Grafana exists, but alerting is the next operational jump. | Prometheus alert rules cover AI/OCR failures, external workflow latency, backup failures/staleness, Redis availability, MinIO capacity, DB pool pressure, backend SLOs, public-link abuse, JVM heap, and host disk; CI now verifies alert documentation and rule structure. | Alert changes pass `scripts/verify-prometheus-alerts.ps1`, and new runtime metrics still need scrape/unit evidence. |
 | Backup reliability | Backups exist, but restore confidence matters more than backup creation. | Use `docs/backup_restore_rehearsal_runbook.md` to record restore evidence and encryption readiness. | Documented restore rehearsal with artifact name, smoke counts, cleanup, and timestamp. |
@@ -54,7 +54,7 @@ This roadmap turns the current improvement analysis into an implementation queue
 2. Add AI response validator and provider client tests.
 3. Add upload validation matrix and tests per upload family.
 4. Add metrics/alerts for AI/OCR/backup/Redis failures.
-5. Extract `LedgerAiAnalysisService` into smaller collaborators.
+5. Follow `docs/service_decomposition_plan.md` to extract `LedgerAiAnalysisService` and `TravelService` collaborators in low-risk slices.
 6. Introduce migration tooling for new schema changes.
 7. Build AI ledger coach fields on top of the hardened AI contract.
 8. Add notification center so AI/backup/share events become visible.
@@ -67,6 +67,7 @@ This roadmap turns the current improvement analysis into an implementation queue
 | `docs/ledger_ai_safety_hardening.md` | AI provider safety, failure handling, and hardening backlog. |
 | `docs/project_improvement_roadmap.md` | Prioritized roadmap for improvements and new features. |
 | `docs/db_migration_strategy.md` | Flyway transition plan, current migration inventory, CI migration discipline, and schema updater retirement queue. |
+| `docs/service_decomposition_plan.md` | Ledger AI and Travel service extraction order, guardrails, test boundaries, and exit criteria. |
 | `docs/accessibility_mobile_checklist.md` | WCAG 2.2 and mobile UX checklist for priority screens. |
 | `docs/backup_restore_rehearsal_runbook.md` | Restore rehearsal evidence, encryption readiness, and failure-handling checklist. |
 | `docs/privacy_control_panel.md` | Backend privacy controls, safety rules, response contract, and next privacy actions. |

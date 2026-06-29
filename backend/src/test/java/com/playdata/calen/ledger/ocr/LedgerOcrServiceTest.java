@@ -88,6 +88,39 @@ class LedgerOcrServiceTest {
         verifyNoInteractions(remoteClient);
     }
 
+    @Test
+    void analyzeRejectsMismatchedImageMimeAndExtensionBeforeRemoteCall() {
+        stubUser();
+        MockMultipartFile file = new MockMultipartFile(
+                "file",
+                "receipt.jpg",
+                "image/png",
+                new byte[] {(byte) 0xFF, (byte) 0xD8, (byte) 0xFF}
+        );
+
+        assertThatThrownBy(() -> service.analyze(USER_ID, file, "RECEIPT"))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessage("Only image files can be analyzed.");
+
+        verifyNoInteractions(remoteClient);
+    }
+
+    @Test
+    void analyzeRejectsFakeImageBytesBeforeRemoteCall() {
+        stubUser();
+        MockMultipartFile file = new MockMultipartFile(
+                "file",
+                "receipt.png",
+                "image/png",
+                new byte[] {'n', 'o', 't'}
+        );
+
+        assertThatThrownBy(() -> service.analyze(USER_ID, file, "RECEIPT"))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessage("Only image files can be analyzed.");
+
+        verifyNoInteractions(remoteClient);
+    }
     private void stubUser() {
         AppUser user = new AppUser();
         user.setId(USER_ID);

@@ -12,6 +12,8 @@ import com.playdata.calen.ledger.ocr.LedgerOcrRemoteClient.RemoteParsedResult;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
+import java.io.IOException;
+import java.io.InputStream;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -30,6 +32,7 @@ public class LedgerOcrService {
 
     private static final int MAX_TEXT_LENGTH = 500;
     private static final List<String> ALLOWED_IMAGE_EXTENSIONS = List.of(".jpg", ".jpeg", ".png", ".webp", ".bmp");
+    private static final byte[] PNG_SIGNATURE = new byte[] {(byte) 0x89, 'P', 'N', 'G', '\r', '\n', 0x1A, '\n'};
 
     private final AppUserService appUserService;
     private final LedgerOcrProperties properties;
@@ -165,15 +168,83 @@ public class LedgerOcrService {
             throw new BadRequestException("Receipt image exceeds the OCR upload size limit.");
         }
 
-        String contentType = file.getContentType();
+        String contentType = normalizeContentType(file.getContentType());
         String fileName = file.getOriginalFilename() == null ? "" : file.getOriginalFilename().toLowerCase(Locale.ROOT);
-        boolean imageContentType = contentType != null && contentType.toLowerCase(Locale.ROOT).startsWith("image/");
-        boolean imageExtension = ALLOWED_IMAGE_EXTENSIONS.stream().anyMatch(fileName::endsWith);
-        if (!imageContentType || !imageExtension) {
+        String extension = resolveImageExtension(fileName);
+        if (extension.isBlank()
+                || !isAllowedImageContentType(extension, contentType)
+                || !hasAllowedImageSignature(extension, file)) {
             throw new BadRequestException("Only image files can be analyzed.");
         }
     }
 
+    private String normalizeContentType(String contentType) {
+        if (contentType == null || contentType.isBlank()) {
+            return "";
+        }
+        return contentType.toLowerCase(Locale.ROOT).split(";", 2)[0].trim();
+    }
+
+    private String resolveImageExtension(String fileName) {
+        return ALLOWED_IMAGE_EXTENSIONS.stream()
+                .filter(fileName::endsWith)
+                .findFirst()
+                .orElse("");
+    }
+
+    private boolean isAllowedImageContentType(String extension, String contentType) {
+        return switch (extension) {
+            case ".jpg", ".jpeg" -> contentType.equals("image/jpeg")
+                    || contentType.equals("image/jpg")
+                    || contentType.equals("image/pjpeg");
+            case ".png" -> contentType.equals("image/png");
+            case ".webp" -> contentType.equals("image/webp");
+            case ".bmp" -> contentType.equals("image/bmp") || contentType.equals("image/x-ms-bmp");
+            default -> false;
+        };
+    }
+
+    private boolean hasAllowedImageSignature(String extension, MultipartFile file) {
+        byte[] header = readImageHeader(file);
+        return switch (extension) {
+            case ".jpg", ".jpeg" -> header.length >= 3
+                    && (header[0] & 0xFF) == 0xFF
+                    && (header[1] & 0xFF) == 0xD8
+                    && (header[2] & 0xFF) == 0xFF;
+            case ".png" -> startsWith(header, PNG_SIGNATURE);
+            case ".webp" -> header.length >= 12
+                    && header[0] == 'R'
+                    && header[1] == 'I'
+                    && header[2] == 'F'
+                    && header[3] == 'F'
+                    && header[8] == 'W'
+                    && header[9] == 'E'
+                    && header[10] == 'B'
+                    && header[11] == 'P';
+            case ".bmp" -> header.length >= 2 && header[0] == 'B' && header[1] == 'M';
+            default -> false;
+        };
+    }
+
+    private byte[] readImageHeader(MultipartFile file) {
+        try (InputStream inputStream = file.getInputStream()) {
+            return inputStream.readNBytes(12);
+        } catch (IOException exception) {
+            throw new BadRequestException("Only image files can be analyzed.");
+        }
+    }
+
+    private boolean startsWith(byte[] header, byte[] signature) {
+        if (header.length < signature.length) {
+            return false;
+        }
+        for (int i = 0; i < signature.length; i++) {
+            if (header[i] != signature[i]) {
+                return false;
+            }
+        }
+        return true;
+    }
     private LedgerOcrEntrySuggestionResponse buildSuggestion(
             RemoteParsedResult parsed,
             EntryType entryType,

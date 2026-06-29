@@ -27,7 +27,7 @@ This checklist maps the current TravelLedger security surface to a practical bas
 | AUTH-03 | Remember-me tokens must be persistent, random, scoped, and revocable. | Persistent token repository exists; cookie name is `CALEN_REMEMBER_ME`. | Add explicit cookie security review: `Secure`, `SameSite`, domain/path, expiration, logout deletion. | Integration test: login with remember, logout removes token/cookie, old token cannot re-authenticate. |
 | AUTH-04 | Repeated login failures must be throttled and audited. | `LoginAttemptService` and login audit code exist. | Document thresholds and lockout semantics. Ensure admin reset exists and is audited. | Tests for failed login threshold, blocked IP state, admin unblock path. |
 | AUTH-05 | Passwords and secondary PINs must be hashed using an adaptive password hashing function. | `BCryptPasswordEncoder` is configured. | Keep raw credentials out of logs and DTO responses. | Unit tests or JSON assertions that profile/admin responses never expose password/PIN hashes. |
-| ACCESS-01 | Admin APIs require admin role and recent secondary verification. | `AdminController` calls `adminPageAccessService.requireVerified`; `AdminAccessController` exists. | Verify every admin-like route, including `/api/administrator`, has equivalent checks. | Add tests for normal user receiving `403` on admin/drive admin/data-management routes. |
+| ACCESS-01 | Admin APIs require admin role and recent secondary verification. | `AdminController` and `DriveAdminController` call `adminPageAccessService.requireVerified`; admin services still enforce admin role. | Keep every new admin-like route behind both admin role and recent secondary verification. | `AdminDashboardIntegrationTest` covers `/api/admin`; `DriveAdminSecurityIntegrationTest` covers `/api/administrator` denial before verification. |
 | ACCESS-02 | Object access must be owner-scoped by authenticated user ID. | Services usually accept `currentUser.userId()`. | Audit drive, travel, family, ledger repository queries for owner/user predicates. | Repository/service tests for cross-user object access denial. |
 | ACCESS-03 | Shared resources must enforce explicit share grant or valid token. | Drive shared routes and travel public media token service exist. | Add expiry/revocation/access log strategy for public links. | Tests for expired/revoked/invalid token and deleted/trashed source object. |
 | FILE-01 | Upload size limits must be defined per feature. | Spring multipart max is 1GB; OCR has `LEDGER_OCR_MAX_FILE_SIZE`; support attachments are limited to 5MB; travel storage validates several flows. | Define remaining per-feature limits for drive, travel media, family album, OCR. | Tests for too-large file rejection per upload endpoint. |
@@ -59,7 +59,7 @@ Current explicit public routes from `SecurityConfig`:
 | Priority | Test | Target |
 | --- | --- | --- |
 | P0 | unauthenticated user cannot call admin dashboard/data-management/restore | `AdminController` |
-| P0 | non-admin user cannot call `/api/administrator/**` | `DriveAdminController` |
+| P0 | keep `/api/administrator/**` covered for unauthenticated, non-admin, and unverified-admin denial | `DriveAdminController`, `DriveAdminSecurityIntegrationTest` |
 | P0 | missing CSRF rejects profile/password/admin mutation requests | `SecurityConfig` + controllers |
 | P0 | public download token fails when token is invalid, item trashed, or link revoked/expired | `DriveDownloadLinkService` |
 | P0 | travel public media token fails for invalid media/token pair | `TravelPublicMediaTokenService` |

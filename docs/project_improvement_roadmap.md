@@ -28,7 +28,7 @@ This roadmap turns the current improvement analysis into an implementation queue
 | Workstream | Why it matters | First slice | Evidence of done |
 | --- | --- | --- | --- |
 | Service decomposition | LedgerAiAnalysisService is 1230 lines and TravelService is 3278 lines, so risky behavior is hard to isolate. | LedgerAiOutputContract now owns provider output contract text; use docs/service_decomposition_plan.md to extract remaining pure AI payload/report/plan collaborators next, then travel media/map/share collaborators. | Each extraction leaves controller DTOs stable and adds focused tests for owner scope, AI safety, cache invalidation, and side effects. |
-| DB migration management | `*SchemaUpdater` classes are convenient but weak for production rollback/audit. | Flyway is wired behind `DB_MIGRATION_ENABLED`; AI history provider tracking uses a versioned migration; CI now checks migration naming, duplicate versions, and baseline marker presence. | New schema change has a versioned migration, passes migration discipline check, and has repeatable local/staging startup evidence. |
+| DB migration management | `*SchemaUpdater` classes are convenient but weak for production rollback/audit. | Flyway is wired behind `DB_MIGRATION_ENABLED`; `docs/db_migration_strategy.md` now freezes new startup DDL, inventories six temporary legacy updater exceptions, and `scripts/verify-db-migrations.ps1` rejects unexpected `ApplicationRunner`/`CommandLineRunner` DDL. | New schema change has a versioned migration, updated inventory/evidence rows, no new startup schema mutation, and repeatable local/staging startup evidence. |
 | Observability/alerts | Prometheus/Grafana exists, but alerting is the next operational jump. | Prometheus alert rules cover AI/OCR failures, external workflow latency, backup failures/staleness, Redis availability, MinIO capacity, DB pool pressure, backend SLOs, public-link abuse, JVM heap, and host disk; CI now verifies alert documentation and rule structure. | Alert changes pass `scripts/verify-prometheus-alerts.ps1`, and new runtime metrics still need scrape/unit evidence. |
 | Backup reliability | Backups exist, but restore confidence matters more than backup creation. | `deploy/oci/scripts/backup-to-gdrive.sh` now supports optional `age`/`gpg` encryption before upload and uploads `.sha256` sidecars; `docs/backup_restore_rehearsal_runbook.md` and restore docs require checksum, decrypt, smoke-count, cleanup, and exception evidence. | Documented restore rehearsal includes artifact name, checksum result, encryption/decrypt result, smoke counts, cleanup, timestamp, and plaintext exception owner/expiry when needed. |
 | Accessibility/mobile UX | Drag widgets, maps, drive, modals, and PIN/auth screens have keyboard and touch risks. | `docs/accessibility_mobile_checklist.md` is now backed by `scripts/verify-accessibility-mobile-checklist.ps1`, which gates WCAG 2.2 traceability, priority-screen risk rows, release evidence fields, PIN/share frontend anchors, and CI release-gate wiring. | Priority screens have keyboard, focus, target-size, drag-alternative, status/error-state, reduced-motion, and 360x640 mobile evidence. |
@@ -57,7 +57,7 @@ This roadmap turns the current improvement analysis into an implementation queue
 3. Keep `docs/file_upload_security_contract.md` current while adding per-feature max-size tests and malformed-image upload tests.
 4. Add metrics/alerts for AI/OCR/backup/Redis failures.
 5. Follow `docs/service_decomposition_plan.md` to extract `LedgerAiAnalysisService` and `TravelService` collaborators in low-risk slices.
-6. Introduce migration tooling for new schema changes.
+6. Retire the next legacy `*SchemaUpdater` by adding a versioned migration, evidence row, and staging Flyway startup proof.
 7. Build AI ledger coach fields on top of the hardened AI contract.
 8. Add notification center so AI/backup/share events become visible.
 9. Convert `docs/e2e_smoke_checklist.md` P0 flows into browser automation.
@@ -98,8 +98,9 @@ This roadmap turns the current improvement analysis into an implementation queue
 | `scripts/verify-household-budget-goals-contract.ps1` | Fails CI if household budget/shared-goal contracts lose owner/member scope, explicit mutation boundaries, export/notification safety, implementation anchors, or release-gate wiring. |
 | `scripts/verify-notification-center-contract.ps1` | Fails CI if notification center loses owner scope, redaction, bounded metadata, relative target links, frontend/API anchors, roadmap coverage, or release-gate wiring. |
 | `scripts/verify-data-portability-contract.ps1` | Fails CI if data portability loses secondary-PIN protection, owner scope, safe manifest/secret exclusion, implementation anchors, roadmap coverage, or release-gate wiring. |
-| `scripts/verify-db-migrations.ps1` | Fails CI on malformed migration names, duplicate versions, or missing baseline marker. |
+| `scripts/verify-db-migrations.ps1` | Fails CI on malformed migration names, duplicate versions, missing baseline marker, undocumented migration/evidence rows, unexpected legacy `*SchemaUpdater` files, or new startup DDL runners. |
 | `scripts/verify-prometheus-alerts.ps1` | Fails CI when alert rules are malformed, undocumented, or not loaded by Prometheus. |
+
 
 
 

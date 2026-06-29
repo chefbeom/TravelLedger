@@ -1,4 +1,4 @@
-# DB Migration Strategy
+﻿# DB Migration Strategy
 
 Updated: 2026-06-30
 
@@ -8,7 +8,7 @@ Updated: 2026-06-30
 - Flyway is disabled by default with `DB_MIGRATION_ENABLED=false` while legacy startup updaters still exist.
 - Hibernate `ddl-auto: update` remains in place during the transition so existing local and compose workflows keep working.
 - `backend/src/main/resources/db/migration` contains a baseline marker plus versioned migrations for access logs, notifications, classification rules, AI history provider metadata, drive file versions, drive share permissions, and direct-share access log indexes.
-- `scripts/verify-db-migrations.ps1` and the CI `migration-discipline` job check migration naming, duplicate versions, baseline marker presence, migration inventory documentation, operational evidence notes, and the expected legacy `*SchemaUpdater` inventory.
+- `scripts/verify-db-migrations.ps1` and the CI `migration-discipline` job check migration naming, duplicate versions, baseline marker presence, migration inventory documentation, operational evidence notes, the expected legacy `*SchemaUpdater` inventory, and unexpected startup DDL runners.
 
 ## Current Migration Inventory
 
@@ -34,6 +34,21 @@ Updated: 2026-06-30
 | 5 | `TravelPhotoClusterSchemaUpdater` | Capture map/photo clustering tables and member indexes. |
 | 6 | `TravelRouteSchemaUpdater` | Capture route/GPX fields and indexes. |
 
+
+## Startup DDL Freeze
+
+No new `ApplicationRunner` or `CommandLineRunner` may execute `CREATE TABLE`, `ALTER TABLE`, `DROP TABLE`, `CREATE INDEX`, or `ALTER INDEX`. New schema changes must be Flyway migrations only. The existing startup DDL classes below are temporary legacy exceptions and are allowed only while their matching migration evidence is prepared.
+
+| Legacy exception | Allowed reason | Retirement evidence required |
+| --- | --- | --- |
+| `backend/src/main/java/com/playdata/calen/ledger/config/LedgerAiAnalysisSchemaUpdater.java` | Existing AI history table/index bootstrap. | Migration covers full AI history table/columns/indexes and AI history save/list/delete rehearsal evidence is recorded. |
+| `backend/src/main/java/com/playdata/calen/ledger/config/LedgerEntrySchemaUpdater.java` | Existing ledger entry currency, travel-link, category, payment, and search indexes. | Migration covers ledger entry/category/payment columns and indexes plus ledger create/search/import smoke evidence. |
+| `backend/src/main/java/com/playdata/calen/ledger/config/LedgerEntryChangeHistorySchemaUpdater.java` | Existing ledger change-history JSON/text shape. | Migration covers change-history columns and restore-history smoke evidence. |
+| `backend/src/main/java/com/playdata/calen/travel/config/TravelMediaAssetSchemaUpdater.java` | Existing travel media GPS/representative columns and indexes. | Migration covers travel media metadata columns/indexes plus upload/map smoke evidence. |
+| `backend/src/main/java/com/playdata/calen/travel/config/TravelPhotoClusterSchemaUpdater.java` | Existing travel photo cluster tables and membership indexes. | Migration covers cluster/member tables and map cluster smoke evidence. |
+| `backend/src/main/java/com/playdata/calen/travel/config/TravelRouteSchemaUpdater.java` | Existing route path, style, and GPX fields. | Migration covers route segment columns and route/GPX smoke evidence. |
+
+Retire one legacy updater at a time. Removing one requires: a versioned migration, updated inventory/evidence rows, a backup/restore rollback note, staging startup evidence with Flyway enabled, and deletion of the class from both this table and `scripts/verify-db-migrations.ps1`.
 ## Migration Operational Evidence
 
 | Migration | Rehearsal scope | Rollback or restore note | Legacy updater impact |
@@ -51,9 +66,9 @@ Updated: 2026-06-30
 
 | Rule | Reason |
 | --- | --- |
-| Add every new schema change as a `VYYYYMMDD_NNN__description.sql` migration. | Gives rollback/audit evidence and makes deploys reproducible. |
+| Add every new schema change as a `VYYYYMMDD_NNN__description.sql` migration. | Gives rollback/audit evidence, makes deploys reproducible, and avoids startup-time schema mutation. |
 | Update the Current Migration Inventory and Migration Operational Evidence tables for every tracked migration. | Keeps review and CI focused on deploy rehearsal, rollback, and legacy updater impact instead of filename checks only. |
-| Run `scripts/verify-db-migrations.ps1` before merging schema work. | Catches duplicate versions, filename drift, missing baseline marker, undocumented migrations, missing operational evidence, and unexpected legacy startup schema updaters before CI. |
+| Run `scripts/verify-db-migrations.ps1` before merging schema work. | Catches duplicate versions, filename drift, missing baseline marker, undocumented migrations, missing operational evidence, unexpected legacy startup schema updaters, and new `ApplicationRunner`/`CommandLineRunner` DDL before CI. |
 | Do not edit a migration after it has run outside a local throwaway DB. | Flyway checksums should remain stable between environments. |
 | Keep Flyway disabled in production until a staging rehearsal passes. | Avoids surprising startup failures while legacy schema is still updater-managed. |
 | Convert one schema area at a time and remove the matching `*SchemaUpdater` only after migration evidence exists. | Reduces risk while replacing startup mutation logic. |
@@ -75,7 +90,7 @@ A release that adds or changes schema should include:
 
 - A new versioned migration under `backend/src/main/resources/db/migration`.
 - Updated Current Migration Inventory and Migration Operational Evidence rows.
-- A passing `scripts/verify-db-migrations.ps1` result or CI `migration-discipline` job, including the legacy updater inventory check.
+- A passing `scripts/verify-db-migrations.ps1` result or CI `migration-discipline` job, including the legacy updater inventory and startup DDL freeze checks.
 - A note explaining whether an existing `*SchemaUpdater` was retained, reduced, or removed.
 - A rollback note for data-preserving rollback or restore-from-backup rollback.
 - A staging startup check with Flyway enabled before production promotion.
@@ -86,3 +101,4 @@ A release that adds or changes schema should include:
 - `V20260629_006__drive_share_permissions.sql` adds explicit direct-share permission levels.
 - `V20260629_007__drive_direct_share_access_log_index.sql` adds direct-share access-log lookup indexes.
 - The legacy `*SchemaUpdater` inventory is unchanged; these are explicit Flyway-managed schema areas.
+- Startup DDL freeze is now enforced: new schema mutation runners must be rejected unless they retire one documented legacy exception with migration evidence.

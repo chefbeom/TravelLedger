@@ -1,4 +1,4 @@
-Set-StrictMode -Version Latest
+﻿Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $migrationRoot = 'backend/src/main/resources/db/migration'
@@ -60,6 +60,17 @@ if (-not (Test-Path -LiteralPath $strategyPath)) {
         $findings.Add('DB migration strategy is missing the Migration Operational Evidence section before Operating Rules.') | Out-Null
     }
 
+    foreach ($snippet in @(
+        '## Startup DDL Freeze',
+        'No new `ApplicationRunner` or `CommandLineRunner` may execute `CREATE TABLE`, `ALTER TABLE`, `DROP TABLE`, `CREATE INDEX`, or `ALTER INDEX`.',
+        'New schema changes must be Flyway migrations only.',
+        'Retire one legacy updater at a time'
+    )) {
+        if (-not $strategyContent.Contains($snippet)) {
+            $findings.Add("DB migration strategy missing startup DDL freeze snippet: $snippet") | Out-Null
+        }
+    }
+
     $tick = [char]96
     foreach ($path in $trackedMigrations) {
         $fileName = [System.IO.Path]::GetFileName($path)
@@ -101,6 +112,17 @@ foreach ($path in $expectedLegacySchemaUpdaters) {
 foreach ($path in $currentLegacySchemaUpdaters) {
     if (-not $expectedLegacySchemaUpdaterSet.ContainsKey($path)) {
         $findings.Add("Unexpected legacy SchemaUpdater found; add a Flyway migration plan instead of startup schema mutation, or document the temporary exception: $path") | Out-Null
+    }
+}
+
+$startupDdlPattern = [regex]'(?is)\b(ApplicationRunner|CommandLineRunner)\b.*\b(CREATE\s+TABLE|ALTER\s+TABLE|DROP\s+TABLE|CREATE\s+INDEX|ALTER\s+INDEX)\b'
+if (Test-Path -LiteralPath $sourceRoot) {
+    Get-ChildItem -LiteralPath $sourceRoot -Recurse -File -Filter '*.java' | ForEach-Object {
+        $relativePath = [System.IO.Path]::GetRelativePath($repoRoot, $_.FullName) -replace '\\', '/'
+        $source = Get-Content -LiteralPath $_.FullName -Raw
+        if ($startupDdlPattern.IsMatch($source) -and -not $expectedLegacySchemaUpdaterSet.ContainsKey($relativePath)) {
+            $findings.Add("Unexpected startup DDL runner found; add a Flyway migration instead of ApplicationRunner/CommandLineRunner schema mutation: $relativePath") | Out-Null
+        }
     }
 }
 

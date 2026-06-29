@@ -131,7 +131,7 @@ public class LedgerAiAnalysisService {
             LedgerAiAnalysisHistory failedHistory = baseHistory(owner, plan);
             failedHistory.setStatus(LedgerAiAnalysisStatus.FAILED);
             failedHistory.setSummary("AI ???곗뒩泳?????됰Ŋ????????곌숯");
-            failedHistory.setErrorMessage(limitText(exception.getMessage(), 1000));
+            failedHistory.setErrorMessage(sanitizeProviderErrorMessage(exception.getMessage()));
             failedHistory.setRequestPayloadJson(writeJson(payload));
             historyRepository.save(failedHistory);
             throw exception;

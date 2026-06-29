@@ -41,7 +41,7 @@ sequenceDiagram
 | AI-INV-04 | Invalid or non-JSON provider output must fail closed. | LM Studio client extracts JSON and throws on parse failure. | Unit tests for markdown-only, empty, invalid JSON, and missing content responses. |
 | AI-INV-05 | Failed AI requests must be recorded without rolling back the failure history. | `analyze` uses `@Transactional(noRollbackFor = RuntimeException.class)`. | Test: provider failure stores `FAILED` history with limited error message. |
 | AI-INV-06 | LLM output must be treated as advice, not verified facts. | UI labels it as AI analysis; backend output contract requires advisory-only recommendations. | UI copy and provider-contract tests should avoid automatic action wording. |
-| AI-INV-07 | Raw sensitive tokens/keys must not appear in history payload/result. | Payload contains ledger statistics and entries, not provider credentials. | Secret scan/grep gate for key-like env values in stored request/result serialization tests. |
+| AI-INV-07 | Raw sensitive tokens/keys must not appear in history payload/result/error fields. | Payload contains ledger statistics and entries, not provider credentials; failed history redacts configured provider URLs, API key headers, and API keys from stored error messages. | `LedgerAiAnalysisServiceTest.analyzeStoresFailedHistoryWithoutLeakingProviderSecrets` plus secret scan/grep gate for key-like env values in stored request/result serialization tests. |
 
 ## Threat Checklist
 
@@ -111,7 +111,7 @@ Minimum acceptance rule for provider responses:
 | LM Studio response validation | `LedgerAiLmStudioClient` resolves `APP_LEDGER_AI_MODEL=auto` through `/api/v1/models`, extracts assistant JSON, and passes parsed responses through the shared validator without leaking provider URL/API key values in model-list failures. | `LedgerAiLmStudioClientTest`, `LedgerAiRemoteResponseValidatorTest`, `LedgerAiAnalysisServiceTest` |
 | n8n response validation | `LedgerAiN8nClient` passes webhook responses through the shared validator. | `LedgerAiRemoteResponseValidatorTest`, `LedgerAiAnalysisServiceTest` |
 | Provider observability | `LedgerAiLmStudioClient` and `LedgerAiN8nClient` register `calen.external.workflow.requests` and `calen.external.workflow.request` with workflow/status tags. | Pending targeted metric assertions. |
-| Provider payload minimization | `LedgerAiAnalysisService` keeps full server-side statistics but sends truncated title/memo fields, capped expense entry arrays, and `payloadMinimization` overflow counts to LM Studio/n8n. | `LedgerAiAnalysisServiceTest` |
+| Provider payload minimization and failure redaction | `LedgerAiAnalysisService` keeps full server-side statistics but sends truncated title/memo fields, capped expense entry arrays, includes `payloadMinimization` overflow counts, and redacts configured provider URLs/API keys from failed history error messages. | `LedgerAiAnalysisServiceTest` |
 | Duplicate suppression | `LedgerAiAnalysisService` reuses a readable completed result created within 5 minutes for the same owner, provider, model, mode, period, and comparison range. | `LedgerAiAnalysisServiceTest` |
 | Provider-aware history | `ledger_ai_analysis_histories.provider` is added through Flyway migration `V20260629_004__ledger_ai_history_provider.sql`. | Migration reviewed; test gate pending. |
 | Provider URL allowlist | `LedgerAiAnalysisProperties` can reject LM Studio/n8n URLs whose host is not in `APP_LEDGER_AI_ALLOWED_PROVIDER_HOSTS` when enforcement is enabled. | `LedgerAiAnalysisPropertiesTest` |

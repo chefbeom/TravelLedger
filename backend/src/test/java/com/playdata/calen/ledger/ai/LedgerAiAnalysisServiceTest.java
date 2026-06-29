@@ -292,6 +292,41 @@ class LedgerAiAnalysisServiceTest {
         assertThat(failedHistory.getRequestPayloadJson()).contains("Lunch");
     }
 
+    @Test
+    void analyzeStoresFailedHistoryWithoutLeakingProviderSecrets() {
+        properties.setWorkflowUrl("https://n8n.example.internal/webhook/travelledger-secret");
+        properties.setApiKey("n8n-secret-token");
+        properties.setApiKeyHeader("X-Sensitive-N8n-Api-Key");
+        properties.setLmStudioBaseUrl("http://lmstudio.example.internal:1234/v1");
+        properties.setLmStudioApiKey("lmstudio-secret-token");
+        stubUser();
+        stubNoReusableHistory();
+        stubMonthlyDataset();
+        when(remoteClient.analyze(any())).thenThrow(new BadRequestException(
+                "POST https://n8n.example.internal/webhook/travelledger-secret failed with "
+                        + "X-Sensitive-N8n-Api-Key n8n-secret-token lmstudio-secret-token "
+                        + "http://lmstudio.example.internal:1234/v1"
+        ));
+        when(historyRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        assertThatThrownBy(() -> service.analyze(USER_ID, monthlyRequest()))
+                .isInstanceOf(BadRequestException.class);
+
+        ArgumentCaptor<LedgerAiAnalysisHistory> historyCaptor = ArgumentCaptor.forClass(LedgerAiAnalysisHistory.class);
+        verify(historyRepository).save(historyCaptor.capture());
+        LedgerAiAnalysisHistory failedHistory = historyCaptor.getValue();
+        assertThat(failedHistory.getStatus()).isEqualTo(LedgerAiAnalysisStatus.FAILED);
+        assertThat(failedHistory.getErrorMessage())
+                .contains("POST")
+                .contains("failed")
+                .contains("[redacted]")
+                .doesNotContain("https://n8n.example.internal")
+                .doesNotContain("webhook/travelledger-secret")
+                .doesNotContain("X-Sensitive-N8n-Api-Key")
+                .doesNotContain("n8n-secret-token")
+                .doesNotContain("lmstudio-secret-token")
+                .doesNotContain("http://lmstudio.example.internal:1234/v1");
+    }
     private void stubUser() {
         AppUser user = new AppUser();
         user.setId(USER_ID);

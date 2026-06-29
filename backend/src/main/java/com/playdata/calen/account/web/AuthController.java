@@ -27,6 +27,7 @@ import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.web.authentication.rememberme.PersistentTokenBasedRememberMeServices;
+import org.springframework.security.web.authentication.rememberme.PersistentTokenRepository;
 import org.springframework.security.web.context.SecurityContextRepository;
 import org.springframework.security.web.csrf.CsrfToken;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -47,6 +48,7 @@ public class AuthController {
     private final AuthenticationManager authenticationManager;
     private final SecurityContextRepository securityContextRepository;
     private final PersistentTokenBasedRememberMeServices rememberMeServices;
+    private final PersistentTokenRepository persistentTokenRepository;
     private final SecondaryPinSessionSupport secondaryPinSessionSupport;
 
     @GetMapping("/csrf")
@@ -96,7 +98,7 @@ public class AuthController {
                     clientIp,
                     userAgent,
                     LoginAuditStatus.BAD_SECONDARY_PIN,
-                    "로그인 정보가 올바르지 않습니다.",
+                    "濡쒓렇???뺣낫媛 ?щ컮瑜댁? ?딆뒿?덈떎.",
                     user
             );
             throw exception;
@@ -107,7 +109,7 @@ public class AuthController {
                     clientIp,
                     userAgent,
                     LoginAuditStatus.BAD_CREDENTIALS,
-                    "로그인 정보가 올바르지 않습니다.",
+                    "濡쒓렇???뺣낫媛 ?щ컮瑜댁? ?딆뒿?덈떎.",
                     null
             );
             throw exception;
@@ -119,7 +121,7 @@ public class AuthController {
                 clientIp,
                 userAgent,
                 LoginAuditStatus.SUCCESS,
-                "로그인 성공",
+                "濡쒓렇???깃났",
                 authenticatedUser
         );
         signIn(authentication, request.rememberDevice(), httpRequest, httpResponse);
@@ -167,13 +169,16 @@ public class AuthController {
     @PutMapping("/profile/password")
     public ResponseEntity<Void> updateProfilePassword(
             @Valid @RequestBody ProfilePasswordChangeRequest request,
-            Authentication authentication
+            Authentication authentication,
+            HttpServletRequest httpRequest,
+            HttpServletResponse httpResponse
     ) {
         appUserService.updatePassword(
                 requireAuthenticatedUserId(authentication),
                 request.secondaryPin(),
                 request.newPassword()
         );
+        revokeRememberMeTokens(authentication, httpRequest, httpResponse);
         return ResponseEntity.noContent().build();
     }
 
@@ -181,7 +186,8 @@ public class AuthController {
     public ResponseEntity<Void> updateProfileSecondaryPin(
             @Valid @RequestBody ProfileSecondaryPinChangeRequest request,
             Authentication authentication,
-            HttpServletRequest httpRequest
+            HttpServletRequest httpRequest,
+            HttpServletResponse httpResponse
     ) {
         String updatedSecondaryPin = appUserService.updateSecondaryPin(
                 requireAuthenticatedUserId(authentication),
@@ -189,6 +195,7 @@ public class AuthController {
                 request.newSecondaryPin()
         );
         secondaryPinSessionSupport.storeVerifiedSecondaryPin(httpRequest, updatedSecondaryPin);
+        revokeRememberMeTokens(authentication, httpRequest, httpResponse);
         return ResponseEntity.noContent().build();
     }
 
@@ -202,7 +209,7 @@ public class AuthController {
         if (!(authentication != null
                 && authentication.isAuthenticated()
                 && authentication.getPrincipal() instanceof AppUserPrincipal principal)) {
-            throw new org.springframework.security.authentication.InsufficientAuthenticationException("로그인이 필요합니다.");
+            throw new org.springframework.security.authentication.InsufficientAuthenticationException("濡쒓렇?몄씠 ?꾩슂?⑸땲??");
         }
         return principal.userId();
     }
@@ -231,6 +238,17 @@ public class AuthController {
         } else {
             rememberMeServices.logout(httpRequest, httpResponse, authentication);
         }
+    }
+
+    private void revokeRememberMeTokens(
+            Authentication authentication,
+            HttpServletRequest httpRequest,
+            HttpServletResponse httpResponse
+    ) {
+        if (authentication != null && authentication.getPrincipal() instanceof AppUserPrincipal principal) {
+            persistentTokenRepository.removeUserTokens(principal.loginId());
+        }
+        rememberMeServices.logout(httpRequest, httpResponse, authentication);
     }
 
     private void clearAuthentication(

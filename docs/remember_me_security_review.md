@@ -15,7 +15,7 @@ This review captures the current remember-me implementation and the remaining ha
 | Validity | `app.security.remember-me-token-validity-seconds`, default `2592000` seconds. |
 | Login behavior | `AuthController.signIn` calls `rememberMeServices.loginSuccess` only when `rememberDevice=true`; otherwise it calls `rememberMeServices.logout`. |
 | Logout behavior | `AuthController.clearAuthentication` calls `rememberMeServices.logout`, clears the security context, and invalidates the HTTP session. |
-| Existing test evidence | `LedgerEntryUserScopeIntegrationTest.rememberMeRestoresUserWithoutSession` proves a remember-me cookie can restore `/api/auth/me` without a session; `logoutRevokesRememberMeCookie` proves logout clears the cookie and old cookie reuse is unauthorized; `rememberMeAutoLoginRotatesTokenAndRejectsPreviousCookie` proves remember-me auto-login rotates the token and rejects the previous cookie; `loginWithoutRememberDeviceDoesNotIssueReusableRememberMeCookie` proves non-opt-in login does not create a reusable remember-me cookie. |
+| Existing test evidence | `LedgerEntryUserScopeIntegrationTest.rememberMeRestoresUserWithoutSession` proves a remember-me cookie can restore `/api/auth/me` without a session; `logoutRevokesRememberMeCookie` proves logout clears the cookie and old cookie reuse is unauthorized; `rememberMeAutoLoginRotatesTokenAndRejectsPreviousCookie` proves remember-me auto-login rotates the token and rejects the previous cookie; `loginWithoutRememberDeviceDoesNotIssueReusableRememberMeCookie` proves non-opt-in login does not create a reusable remember-me cookie; `ProfileCredentialIntegrationTest.passwordChangeRevokesRememberMeTokens` and `secondaryPinChangeRevokesRememberMeTokens` prove profile credential changes clear the cookie and reject the old token. |
 
 ## Security Invariants
 
@@ -26,7 +26,7 @@ This review captures the current remember-me implementation and the remaining ha
 | RM-03 | Cookie attributes are production-safe. | Long-lived cookies need `HttpOnly`, `Secure`, path/domain, expiry, and SameSite review. | Cookie name/validity are explicit; add environment review for `Secure` and SameSite behavior behind HTTPS/proxy. |
 | RM-04 | Persistent tokens are random and rotated by Spring Security. | Reduces replay window and token prediction risk. | `LedgerEntryUserScopeIntegrationTest.rememberMeAutoLoginRotatesTokenAndRejectsPreviousCookie` covers token value rotation and previous-cookie rejection after auto-login. |
 | RM-05 | Token storage does not expose plaintext credentials. | DB compromise should not reveal passwords or secondary PINs. | `persistent_logins` stores series/token only; no password/PIN fields. |
-| RM-06 | Account deactivation or password/PIN reset should revoke old remember-me sessions. | Credential/account changes should cut off old devices. | Gap: define revocation policy and tests for password/PIN change and admin user deactivation. |
+| RM-06 | Account deactivation or password/PIN reset should revoke old remember-me sessions. | Credential/account changes should cut off old devices. | Password and secondary PIN changes call persistent token removal and are covered by `ProfileCredentialIntegrationTest`; admin user deactivation remains the open revocation gap. |
 
 ## Cookie Attribute Review
 
@@ -46,8 +46,8 @@ This review captures the current remember-me implementation and the remaining ha
 | P0 | Keep login with `rememberDevice=false` non-restore covered. | `loginWithoutRememberDeviceDoesNotIssueReusableRememberMeCookie` expects new unauthenticated requests to remain `401` and any clearing cookie to be unusable. |
 | P0 | Keep login with `rememberDevice=true`, logout with CSRF, then reuse old remember-me cookie covered. | `logoutRevokesRememberMeCookie` expects logout cookie clearing and old-cookie `401`. |
 | P0 | Keep remember-me auto-login token rotation covered. | `rememberMeAutoLoginRotatesTokenAndRejectsPreviousCookie` expects a new cookie value and old-cookie `401`. |
-| P1 | Password change revokes remember-me tokens for the account. | Old remember-me cookie fails after password change. |
-| P1 | Secondary PIN change revokes remember-me tokens for the account. | Old remember-me cookie fails after PIN change. |
+| P1 | Keep password-change remember-me revocation covered. | `passwordChangeRevokesRememberMeTokens` expects cookie clearing and old-cookie `401` after password change. |
+| P1 | Keep secondary-PIN-change remember-me revocation covered. | `secondaryPinChangeRevokesRememberMeTokens` expects cookie clearing and old-cookie `401` after PIN change. |
 | P1 | Admin deactivates user. | Old remember-me cookie fails for inactive account. |
 | P1 | Cookie attribute assertions. | Cookie is HttpOnly, production-secure, scoped, expires as expected, and SameSite policy is documented. |
 

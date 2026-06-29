@@ -11,10 +11,13 @@ import com.playdata.calen.ledger.dto.LedgerTransactionAnomalyEntryResponse;
 import com.playdata.calen.ledger.dto.LedgerTransactionAnomalyGroupResponse;
 import com.playdata.calen.ledger.dto.LedgerTransactionAnomalyResponse;
 import com.playdata.calen.ledger.repository.LedgerEntryRepository;
+import com.playdata.calen.travel.domain.TravelPlan;
+import com.playdata.calen.travel.repository.TravelPlanRepository;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.YearMonth;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -22,6 +25,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -36,6 +40,7 @@ public class LedgerTransactionAnomalyService {
     private static final int MAX_LIMIT = 200;
     private static final int MAX_RANGE_DAYS = 366;
     private static final int MIN_REPEATED_PAYMENT_MONTHS = 3;
+    private static final int HIGH_TRAVEL_OUT_OF_RANGE_DAYS = 7;
     private static final int MIN_UNUSUAL_EXPENSE_BASELINE_COUNT = 5;
     private static final BigDecimal UNUSUAL_EXPENSE_MULTIPLIER = BigDecimal.valueOf(3);
     private static final BigDecimal HIGH_UNUSUAL_EXPENSE_MULTIPLIER = BigDecimal.valueOf(5);
@@ -43,6 +48,7 @@ public class LedgerTransactionAnomalyService {
 
     private final AppUserService appUserService;
     private final LedgerEntryRepository ledgerEntryRepository;
+    private final TravelPlanRepository travelPlanRepository;
 
     public LedgerTransactionAnomalyResponse findAnomalies(Long userId, LocalDate from, LocalDate to, Integer limit) {
         appUserService.getRequiredUser(userId);
@@ -55,10 +61,12 @@ public class LedgerTransactionAnomalyService {
                         range.from(),
                         range.to()
                 );
+        Map<Long, TravelPlan> ownerTravelPlans = ownerTravelPlansById(userId);
 
         List<LedgerTransactionAnomalyGroupResponse> groups = new ArrayList<>();
         groups.addAll(detectSameDaySameAmountDuplicates(entries));
         groups.addAll(detectRepeatedSameAmountExpenses(entries));
+        groups.addAll(detectTravelOutOfRangeExpenses(entries, ownerTravelPlans));
         groups.addAll(detectUnusuallyLargeExpenses(entries));
         groups = groups.stream()
                 .sorted(this::compareGroups)
@@ -129,6 +137,24 @@ public class LedgerTransactionAnomalyService {
                 .toList();
     }
 
+    private List<LedgerTransactionAnomalyGroupResponse> detectTravelOutOfRangeExpenses(
+            List<LedgerEntry> entries,
+            Map<Long, TravelPlan> ownerTravelPlans
+    ) {
+        if (ownerTravelPlans.isEmpty()) {
+            return List.of();
+        }
+        return entries.stream()
+                .filter(entry -> entry.getEntryType() == EntryType.EXPENSE)
+                .filter(entry -> entry.getEntryDate() != null)
+                .filter(entry -> entry.getTravelPlanId() != null)
+                .filter(entry -> isOutsideTravelRange(entry, ownerTravelPlans.get(entry.getTravelPlanId())))
+                .sorted(Comparator
+                        .comparing(LedgerEntry::getEntryDate, Comparator.reverseOrder())
+                        .thenComparing(LedgerEntry::getId))
+                .map(entry -> toTravelOutOfRangeGroup(entry, ownerTravelPlans.get(entry.getTravelPlanId())))
+                .toList();
+    }
     private List<LedgerTransactionAnomalyGroupResponse> detectUnusuallyLargeExpenses(List<LedgerEntry> entries) {
         List<LedgerEntry> expenses = entries.stream()
                 .filter(entry -> entry.getEntryType() == EntryType.EXPENSE)
@@ -181,6 +207,25 @@ public class LedgerTransactionAnomalyService {
         );
     }
 
+    private LedgerTransactionAnomalyGroupResponse toTravelOutOfRangeGroup(LedgerEntry entry, TravelPlan plan) {
+        int daysOutside = daysOutsideRange(entry.getEntryDate(), plan);
+        return new LedgerTransactionAnomalyGroupResponse(
+                "TRAVEL_OUT_OF_RANGE_EXPENSE",
+                daysOutside > HIGH_TRAVEL_OUT_OF_RANGE_DAYS ? "high" : "medium",
+                "Travel-linked expense date falls outside the linked travel plan date range.",
+                String.join(
+                        "|",
+                        "travel-out-of-range",
+                        String.valueOf(plan.getId()),
+                        plan.getStartDate().toString(),
+                        plan.getEndDate().toString(),
+                        entry.getEntryDate().toString(),
+                        String.valueOf(entry.getId())
+                ),
+                1,
+                List.of(toEntryResponse(entry))
+        );
+    }
     private LedgerTransactionAnomalyGroupResponse toUnusuallyLargeExpenseGroup(
             LedgerEntry entry,
             BigDecimal median,
@@ -276,6 +321,33 @@ public class LedgerTransactionAnomalyService {
         return amounts.get(amounts.size() / 2);
     }
 
+    private Map<Long, TravelPlan> ownerTravelPlansById(Long userId) {
+        List<TravelPlan> travelPlans = travelPlanRepository.findAllByOwnerIdOrderByStartDateDescIdDesc(userId);
+        if (travelPlans == null || travelPlans.isEmpty()) {
+            return Map.of();
+        }
+        return travelPlans.stream()
+                .filter(plan -> plan.getId() != null)
+                .filter(plan -> plan.getStartDate() != null)
+                .filter(plan -> plan.getEndDate() != null)
+                .collect(Collectors.toMap(
+                        TravelPlan::getId,
+                        Function.identity(),
+                        (left, right) -> left
+                ));
+    }
+
+    private boolean isOutsideTravelRange(LedgerEntry entry, TravelPlan plan) {
+        return plan != null
+                && (entry.getEntryDate().isBefore(plan.getStartDate()) || entry.getEntryDate().isAfter(plan.getEndDate()));
+    }
+
+    private int daysOutsideRange(LocalDate entryDate, TravelPlan plan) {
+        if (entryDate.isBefore(plan.getStartDate())) {
+            return Math.toIntExact(ChronoUnit.DAYS.between(entryDate, plan.getStartDate()));
+        }
+        return Math.toIntExact(ChronoUnit.DAYS.between(plan.getEndDate(), entryDate));
+    }
     private int distinctMonthCount(List<LedgerEntry> entries) {
         Set<YearMonth> months = entries.stream()
                 .filter(entry -> entry.getEntryDate() != null)

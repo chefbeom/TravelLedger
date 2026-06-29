@@ -12,6 +12,8 @@ import com.playdata.calen.common.exception.BadRequestException;
 import com.playdata.calen.ledger.domain.EntryType;
 import com.playdata.calen.ledger.domain.LedgerEntry;
 import com.playdata.calen.ledger.repository.LedgerEntryRepository;
+import com.playdata.calen.travel.domain.TravelPlan;
+import com.playdata.calen.travel.repository.TravelPlanRepository;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -36,11 +38,14 @@ class LedgerTransactionAnomalyServiceTest {
     @Mock
     private LedgerEntryRepository ledgerEntryRepository;
 
+    @Mock
+    private TravelPlanRepository travelPlanRepository;
+
     private LedgerTransactionAnomalyService service;
 
     @BeforeEach
     void setUp() {
-        service = new LedgerTransactionAnomalyService(appUserService, ledgerEntryRepository);
+        service = new LedgerTransactionAnomalyService(appUserService, ledgerEntryRepository, travelPlanRepository);
     }
 
     @Test
@@ -98,6 +103,36 @@ class LedgerTransactionAnomalyServiceTest {
         assertThat(group.entries()).extracting("id").containsExactly(1L, 2L, 3L);
         assertThat(group.entries()).allSatisfy(entry -> assertThat(entry.entryType()).isEqualTo(EntryType.EXPENSE));
         verify(ledgerEntryRepository).findAllByOwnerIdAndDeletedAtIsNullAndEntryDateBetweenOrderByEntryDateAscIdAsc(USER_ID, from, to);
+    }
+
+
+    @Test
+    void findAnomaliesFlagsTravelLinkedExpenseOutsideOwnedPlanDateRange() {
+        stubUser();
+        TravelPlan plan = travelPlan(30L, LocalDate.of(2026, 6, 10), LocalDate.of(2026, 6, 15));
+        LedgerEntry beforeTrip = entry(1L, LocalDate.of(2026, 6, 1), "Airport hotel", "120000", EntryType.EXPENSE);
+        beforeTrip.setTravelPlanId(30L);
+        LedgerEntry duringTrip = entry(2L, LocalDate.of(2026, 6, 12), "Museum", "20000", EntryType.EXPENSE);
+        duringTrip.setTravelPlanId(30L);
+        LedgerEntry unknownPlan = entry(3L, LocalDate.of(2026, 6, 20), "Unknown plan", "30000", EntryType.EXPENSE);
+        unknownPlan.setTravelPlanId(99L);
+        LedgerEntry income = entry(4L, LocalDate.of(2026, 6, 20), "Refund", "30000", EntryType.INCOME);
+        income.setTravelPlanId(30L);
+        when(ledgerEntryRepository.findAllByOwnerIdAndDeletedAtIsNullAndEntryDateBetweenOrderByEntryDateAscIdAsc(USER_ID, FROM, TO))
+                .thenReturn(List.of(beforeTrip, duringTrip, unknownPlan, income));
+        when(travelPlanRepository.findAllByOwnerIdOrderByStartDateDescIdDesc(USER_ID)).thenReturn(List.of(plan));
+
+        var response = service.findAnomalies(USER_ID, FROM, TO, 50);
+
+        assertThat(response.totalGroups()).isEqualTo(1);
+        var group = response.content().get(0);
+        assertThat(group.type()).isEqualTo("TRAVEL_OUT_OF_RANGE_EXPENSE");
+        assertThat(group.severity()).isEqualTo("high");
+        assertThat(group.reason()).contains("travel plan date range");
+        assertThat(group.anomalyKey()).contains("travel-out-of-range", "30", "2026-06-10", "2026-06-15", "2026-06-01");
+        assertThat(group.entries()).extracting("id").containsExactly(1L);
+        assertThat(group.entries()).allSatisfy(entry -> assertThat(entry.travelPlanId()).isEqualTo(30L));
+        verify(travelPlanRepository).findAllByOwnerIdOrderByStartDateDescIdDesc(USER_ID);
     }
 
     @Test
@@ -163,6 +198,7 @@ class LedgerTransactionAnomalyServiceTest {
 
         verify(ledgerEntryRepository, never()).findAllByOwnerIdAndDeletedAtIsNullOrderByEntryDateAscIdAsc(USER_ID);
         verify(ledgerEntryRepository, never()).findAllByOwnerIdAndDeletedAtIsNullAndEntryDateBetweenOrderByEntryDateAscIdAsc(USER_ID, from, to);
+        verify(travelPlanRepository, never()).findAllByOwnerIdOrderByStartDateDescIdDesc(USER_ID);
     }
 
     private void stubUser() {
@@ -183,5 +219,12 @@ class LedgerTransactionAnomalyServiceTest {
         entry.setAmount(new BigDecimal(amount));
         entry.setEntryType(entryType);
         return entry;
+    }
+    private TravelPlan travelPlan(Long id, LocalDate startDate, LocalDate endDate) {
+        TravelPlan plan = new TravelPlan();
+        plan.setId(id);
+        plan.setStartDate(startDate);
+        plan.setEndDate(endDate);
+        return plan;
     }
 }

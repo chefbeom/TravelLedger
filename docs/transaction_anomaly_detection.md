@@ -1,6 +1,6 @@
 # Transaction Anomaly Detection
 
-Updated: 2026-06-29
+Updated: 2026-06-30
 
 This document records the first deterministic transaction anomaly detection slice. The initial backend API is read-only and does not use AI, so it can flag obvious duplicate candidates without mutating ledger data.
 
@@ -49,10 +49,17 @@ Normalization:
 | Travel out-of-context spend | Expense linked to travel category outside active trip date range. |
 | Imported duplicate candidates | Compare newly imported Excel/OCR rows against existing entries before save. |
 
+## Test Evidence
+
+| Evidence | Coverage |
+| --- | --- |
+| `LedgerTransactionAnomalyServiceTest.findAnomaliesGroupsSameDaySameAmountNormalizedTitleExpensesOnly` | Verifies same-day same-amount normalized-title expense duplicates are grouped, while income entries and different dates do not join the group. |
+| `LedgerTransactionAnomalyServiceTest.findAnomaliesCapsReturnedGroupsWithoutChangingTotalGroups` | Verifies `limit` is capped at 200 and does not change the full `totalGroups` count. |
+| `LedgerTransactionAnomalyServiceTest.findAnomaliesRejectsRangeLongerThan366DaysBeforeReadingEntries` | Verifies wide date ranges fail before reading ledger entries. |
 ## Test Backlog
 
-- Same-day same-amount same-title expenses are grouped.
+- Keep same-day same-amount normalized-title duplicate grouping coverage current as detectors expand.
 - Different users never see each other's anomaly candidates.
-- Deleted and income entries are ignored.
-- Range longer than 366 days is rejected.
-- `limit` is capped and does not affect `totalGroups`.
+- Keep repository owner/deleted scope and expense-only grouping coverage current.
+- Keep range validation coverage current before adding broader historical detectors.
+- Keep limit cap coverage current so UI pagination cannot hide total candidate count.

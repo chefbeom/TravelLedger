@@ -13,7 +13,7 @@ $trackedServices = @(
     @{
         Name = 'LedgerAiAnalysisService'
         Path = 'backend/src/main/java/com/playdata/calen/ledger/ai/LedgerAiAnalysisService.java'
-        MaxLines = 1159
+        MaxLines = 1144
         RequiredSections = @('## Ledger AI Extraction Queue', '### Ledger AI Exit Criteria')
     },
     @{
@@ -105,6 +105,7 @@ $requiredBoundarySnippets = @(
     'LedgerAiAnalysisMetrics',
     'LedgerAiAnalysisNotifications',
     'LedgerAiAnalysisJsonCodec',
+    'LedgerAiAnalysisTextSanitizer',
     'LedgerAiAnalysisPayloadBuilder',
     'LedgerAiAnalysisReportMerger',
     'LedgerAiAnalysisPlanResolver',

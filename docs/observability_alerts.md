@@ -51,6 +51,27 @@ Prometheus sends firing and resolved alerts to Alertmanager at `alertmanager:909
 
 `scripts/verify-prometheus-alerts.ps1` treats this table as the minimum coverage contract. Removing or renaming one of these alerts should be a deliberate release decision with a replacement alert and updated operator action.
 
+## Alert runbook contract
+
+Every checked-in alert must include a `runbook_url` annotation that points to this document. Alert text and linked runbooks are allowed to describe systems, metrics, and bounded status labels only; they must not include request bodies, user identifiers, filenames, prompts, provider responses, public tokens, presigned URLs, API keys, webhook URLs, or raw exception payloads.
+
+| First step | Required evidence | Escalate when |
+| --- | --- | --- |
+| Confirm scope in Prometheus and Alertmanager. | Alert name, severity, service, feature, firing duration, affected target, and latest value. | A `critical` alert fires for more than one evaluation interval or multiple services fire together. |
+| Check the closest owned system first. | Backend logs for app alerts, provider/workflow execution logs for AI/OCR/n8n alerts, backup logs for data-ops alerts, node metrics for disk/host alerts. | The closest system is healthy but the alert keeps firing. |
+| Preserve user safety boundaries while debugging. | Screenshots or notes redact secrets, user IDs, filenames, prompts, provider responses, public tokens, presigned URLs, and raw EXIF/GPS data. | Any diagnostic evidence would require sensitive data exposure. |
+| Record the outcome. | Incident note links alert name, time window, root cause, mitigation, and follow-up issue/PR. | A workaround remains active or alert thresholds had to be changed. |
+
+Runbook expectations by alert family:
+
+| Alert family | Start here | Safe remediation direction |
+| --- | --- | --- |
+| Backend SLO and availability | Recent deploys, backend logs, `/actuator/health`, DB/Redis reachability, and error-budget burn. | Roll back unsafe deploys, shed expensive calls, or scale backend only after dependency health is clear. |
+| DB pool pressure | Slow query logs, Hikari pending/timeout metrics, connection leak candidates, and traffic spikes. | Fix query/leak cause before increasing pool size; resizing without root cause can move failure to MariaDB. |
+| AI/OCR/n8n/external workflow | Provider health, timeout budget, workflow executions, schema-validation failures, and retry/duplicate-suppression behavior. | Keep results advisory-only; disable provider or workflow integration before allowing duplicate or unsafe writes. |
+| Backup and retention | Backup job logs, latest artifact/checksum, encryption/decrypt evidence, and retention cleanup logs. | Run the restore rehearsal checklist before declaring backup recovery healthy. |
+| Redis, MinIO, and host capacity | Redis connection metrics, bucket usage/capacity, lifecycle cleanup, disk usage by mount, and upload growth. | Prefer cleanup/lifecycle/capacity fixes before reducing retention or disabling safety checks. |
+| Public-link abuse | Access-log status mix, token expiry/revocation settings, rate-limit evidence, and owner-scoped audit logs. | Revoke affected links and preserve token fingerprints only; never log raw public tokens. |
 ## Alertmanager routing baseline
 
 | Route | Receiver | Repeat interval | Intended channel |
@@ -63,7 +84,7 @@ Before production use, replace the no-op `ops-critical` and `ops-warning` receiv
 
 ## Verification gate
 
-`scripts/verify-prometheus-alerts.ps1` checks that Prometheus loads `/etc/prometheus/rules/*.yml`, forwards alerts to `alertmanager:9093`, the monitoring compose stack runs Alertmanager, Alertmanager has critical/warning routes, every alert has an expression, duration, bounded severity, summary, and description, every alert name is documented here, and the Required alert coverage contract remains present. The GitHub Actions `observability-alerts` job runs this gate on push and pull request.
+`scripts/verify-prometheus-alerts.ps1` checks that Prometheus loads `/etc/prometheus/rules/*.yml`, forwards alerts to `alertmanager:9093`, the monitoring compose stack runs Alertmanager, Alertmanager has critical/warning routes, every alert has an expression, duration, bounded severity, summary, description, and `runbook_url`, every alert name is documented here, and the Required alert coverage contract plus runbook contract remain present. The GitHub Actions `observability-alerts` job runs this gate on push and pull request.
 
 ## Implemented application metrics
 
@@ -102,5 +123,5 @@ Implementation notes:
 - Keep `MINIO_STORAGE_CAPACITY_BYTES` set to a positive value in production to enable usage-ratio alerts.
 - Keep labels bounded and operational. Avoid user-controlled or high-cardinality values.
 - Record status values such as `success`, `failure`, `timeout`, `invalid`, `expired`, `revoked`, and `limit_reached`.
-- Alert annotations should describe operational action, not expose private request data.
+- Alert annotations should describe operational action, include `runbook_url`, and not expose private request data.
 - Keep Alertmanager receiver secrets out of Git; use deployment-specific mounted config for real notification channels.

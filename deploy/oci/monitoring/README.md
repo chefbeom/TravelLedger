@@ -76,7 +76,9 @@ deploy/oci/monitoring/alertmanager/alertmanager.yml
 
 Use a deployment-specific mounted config or secret manager for Slack, webhook, email, or incident-management credentials. Do not commit webhook URLs or API keys.
 
-The default rules cover backend availability, HTTP 5xx ratio, p95 latency, Hikari pool pressure, JVM heap pressure, node_exporter availability, AI/OCR and n8n/external workflow failures, backup failures/staleness, Redis availability, MinIO storage usage, and host disk capacity. See `docs/observability_alerts.md` for the full rule list and the metric contract.
+The default rules cover backend availability, HTTP 5xx ratio, p95 latency, Hikari pool pressure, JVM heap pressure, node_exporter availability, AI/OCR and n8n/external workflow failures, backup failures/staleness, Redis availability, MinIO storage usage, and host disk capacity. See `docs/observability_alerts.md` for the full rule list, runbook contract, and metric contract.
+
+Each alert rule must include `runbook_url: docs/observability_alerts.md#alert-runbook-contract` so operators can start from a shared triage checklist before changing thresholds or disabling integrations.
 
 After editing rules or Alertmanager routes, restart or reload the monitoring stack:
 

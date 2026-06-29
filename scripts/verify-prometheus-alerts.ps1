@@ -49,7 +49,7 @@ if ($findings.Count -eq 0) {
     }
 
     $document = Get-Content -LiteralPath $observabilityDocPath -Raw
-    foreach ($snippet in @('Alertmanager routing baseline', 'Required alert coverage contract', 'alertmanager:9093', 'ops-critical', 'ops-warning')) {
+    foreach ($snippet in @('Alertmanager routing baseline', 'Required alert coverage contract', 'Alert runbook contract', 'runbook_url', 'alertmanager:9093', 'ops-critical', 'ops-warning')) {
         if (-not $document.Contains($snippet)) {
             $findings.Add("Observability doc missing Alertmanager or coverage snippet: $snippet") | Out-Null
         }
@@ -138,6 +138,9 @@ if ($findings.Count -eq 0) {
             }
             if ($block -notmatch '(?m)^\s*description:\s*\S+') {
                 $findings.Add("${name}: missing description annotation") | Out-Null
+            }
+            if ($block -notmatch '(?m)^\s*runbook_url:\s*docs/observability_alerts\.md#alert-runbook-contract\s*$') {
+                $findings.Add("${name}: missing runbook_url annotation") | Out-Null
             }
             if (-not $document.Contains($name)) {
                 $findings.Add("${name}: alert is not documented in $observabilityDocPath") | Out-Null

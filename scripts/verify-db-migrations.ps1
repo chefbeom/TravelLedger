@@ -130,6 +130,46 @@ foreach ($entry in $requiredMigrationSnippets.GetEnumerator()) {
     }
 }
 
+$retirementEvidencePath = 'docs/db_migration_retirement_evidence.md'
+if (-not (Test-Path -LiteralPath $retirementEvidencePath)) {
+    $findings.Add("Missing DB migration retirement evidence document: $retirementEvidencePath") | Out-Null
+} else {
+    $retirementEvidence = Get-Content -LiteralPath $retirementEvidencePath -Raw
+    foreach ($snippet in @(
+        '# DB Migration Retirement Evidence',
+        'Evidence fields required before retirement',
+        'Staging Flyway startup proof',
+        'Flyway history proof',
+        'Smoke evidence',
+        'Rollback/restore evidence',
+        'Code removal evidence',
+        'All six legacy updaters have Flyway overlap, but none are marked `Ready` here.'
+    )) {
+        if (-not $retirementEvidence.Contains($snippet)) {
+            $findings.Add("DB migration retirement evidence missing snippet: $snippet") | Out-Null
+        }
+    }
+
+    $requiredRetirementRows = @{
+        'LedgerAiAnalysisSchemaUpdater' = @('V20260629_004__ledger_ai_history_provider.sql', 'V20260630_013__ledger_ai_analysis_history_base.sql', 'AI history save, list, detail, delete')
+        'LedgerEntrySchemaUpdater' = @('V20260630_012__ledger_entry_operational_fields.sql', 'Ledger create, search, Excel/OCR import')
+        'LedgerEntryChangeHistorySchemaUpdater' = @('V20260630_009__ledger_entry_change_history_fields.sql', 'Entry edit/delete change-history list/detail')
+        'TravelMediaAssetSchemaUpdater' = @('V20260630_010__travel_media_asset_metadata_fields.sql', 'Travel photo upload, GPS extraction')
+        'TravelPhotoClusterSchemaUpdater' = @('V20260630_011__travel_photo_cluster_tables.sql', 'Map photo cluster rebuild')
+        'TravelRouteSchemaUpdater' = @('V20260630_008__travel_route_segment_fields.sql', 'Travel route create/edit')
+    }
+    foreach ($entry in $requiredRetirementRows.GetEnumerator()) {
+        if (-not $retirementEvidence.Contains("Pending | ``$($entry.Key)``")) {
+            $findings.Add("DB migration retirement evidence missing pending row for: $($entry.Key)") | Out-Null
+        }
+        foreach ($snippet in $entry.Value) {
+            if (-not $retirementEvidence.Contains($snippet)) {
+                $findings.Add("DB migration retirement evidence missing $($entry.Key) snippet: $snippet") | Out-Null
+            }
+        }
+    }
+}
+
 $strategyPath = 'docs/db_migration_strategy.md'
 if (-not (Test-Path -LiteralPath $strategyPath)) {
     $findings.Add("Missing DB migration strategy document: $strategyPath") | Out-Null
@@ -149,7 +189,8 @@ if (-not (Test-Path -LiteralPath $strategyPath)) {
         '## Startup DDL Freeze',
         'No new `ApplicationRunner` or `CommandLineRunner` may execute `CREATE TABLE`, `ALTER TABLE`, `DROP TABLE`, `CREATE INDEX`, or `ALTER INDEX`.',
         'New schema changes must be Flyway migrations only.',
-        'Retire one legacy updater at a time'
+        'Retire one legacy updater at a time',
+        'docs/db_migration_retirement_evidence.md'
     )) {
         if (-not $strategyContent.Contains($snippet)) {
             $findings.Add("DB migration strategy missing startup DDL freeze snippet: $snippet") | Out-Null

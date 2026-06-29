@@ -8,7 +8,7 @@ Updated: 2026-06-30
 - Flyway is disabled by default with `DB_MIGRATION_ENABLED=false` while legacy startup updaters still exist.
 - Hibernate `ddl-auto: update` remains in place during the transition so existing local and compose workflows keep working.
 - `backend/src/main/resources/db/migration` contains a baseline marker plus versioned migrations for access logs, notifications, classification rules, AI history provider metadata, drive file versions, drive share permissions, direct-share access log indexes, travel route segment fields, ledger entry change-history fields, travel media asset metadata fields, travel photo cluster tables, ledger entry operational fields/indexes, and AI analysis history base table/indexes.
-- `scripts/verify-db-migrations.ps1` and the CI `migration-discipline` job check migration naming, duplicate versions, baseline marker presence, migration inventory documentation, operational evidence notes, the expected legacy `*SchemaUpdater` inventory, and unexpected startup DDL runners.
+- `scripts/verify-db-migrations.ps1` and the CI `migration-discipline` job check migration naming, duplicate versions, baseline marker presence, migration inventory documentation, operational evidence notes, the expected legacy `*SchemaUpdater` inventory, retirement evidence ledger coverage, and unexpected startup DDL runners.
 
 ## Current Migration Inventory
 
@@ -54,7 +54,7 @@ No new `ApplicationRunner` or `CommandLineRunner` may execute `CREATE TABLE`, `A
 | `backend/src/main/java/com/playdata/calen/travel/config/TravelPhotoClusterSchemaUpdater.java` | Existing travel photo cluster tables and membership indexes. | `V20260630_011__travel_photo_cluster_tables.sql` now covers the schema; deletion still requires staging Flyway startup proof and map cluster smoke evidence. |
 | `backend/src/main/java/com/playdata/calen/travel/config/TravelRouteSchemaUpdater.java` | Existing route path, style, and GPX fields. | `V20260630_008__travel_route_segment_fields.sql` now covers the schema; deletion still requires staging Flyway startup proof and route/GPX smoke evidence. |
 
-Retire one legacy updater at a time. Removing one requires: a versioned migration, updated inventory/evidence rows, a backup/restore rollback note, staging startup evidence with Flyway enabled, and deletion of the class from both this table and `scripts/verify-db-migrations.ps1`.
+Retire one legacy updater at a time. Removing one requires: a versioned migration, updated inventory/evidence rows, a backup/restore rollback note, staging startup evidence with Flyway enabled, a `Ready` row in `docs/db_migration_retirement_evidence.md`, and deletion of the class from both this table and `scripts/verify-db-migrations.ps1`.
 ## Migration Operational Evidence
 
 | Migration | Rehearsal scope | Rollback or restore note | Legacy updater impact |
@@ -83,7 +83,7 @@ Retire one legacy updater at a time. Removing one requires: a versioned migratio
 | Run `scripts/verify-db-migrations.ps1` before merging schema work. | Catches duplicate versions, filename drift, missing baseline marker, undocumented migrations, missing operational evidence, unexpected legacy startup schema updaters, and new `ApplicationRunner`/`CommandLineRunner` DDL before CI. |
 | Do not edit a migration after it has run outside a local throwaway DB. | Flyway checksums should remain stable between environments. |
 | Keep Flyway disabled in production until a staging rehearsal passes. | Avoids surprising startup failures while legacy schema is still updater-managed. |
-| Convert one schema area at a time and remove the matching `*SchemaUpdater` only after migration evidence exists. | Reduces risk while replacing startup mutation logic. |
+| Convert one schema area at a time and remove the matching `*SchemaUpdater` only after migration evidence exists in `docs/db_migration_retirement_evidence.md`. | Reduces risk while replacing startup mutation logic and prevents Flyway-overlap work from being mistaken for deletion readiness. |
 | Include a rollback note for every migration. | Production data rollback often means restore/replay rather than SQL down migrations. |
 
 ## Enablement Steps
@@ -106,6 +106,7 @@ A release that adds or changes schema should include:
 - A note explaining whether an existing `*SchemaUpdater` was retained, reduced, or removed.
 - A rollback note for data-preserving rollback or restore-from-backup rollback.
 - A staging startup check with Flyway enabled before production promotion.
+- A completed `docs/db_migration_retirement_evidence.md` row before deleting any legacy `*SchemaUpdater`.
 
 ## Latest schema slices
 
@@ -119,5 +120,5 @@ A release that adds or changes schema should include:
 - `V20260630_012__ledger_entry_operational_fields.sql` moves ledger entry foreign-currency/travel-link fields and ledger/category/payment indexes into Flyway.
 - `V20260629_004__ledger_ai_history_provider.sql` is now fresh-db safe and bootstraps the AI history table before adding provider compatibility/indexes.
 - `V20260630_013__ledger_ai_analysis_history_base.sql` keeps Ledger AI analysis history table, provider compatibility, and owner/range/mode/provider indexes explicit in Flyway.
-- All six legacy `*SchemaUpdater` classes now have Flyway overlap but remain documented temporary exceptions until staging Flyway startup, provider ordering, and smoke evidence allow deletion.
+- All six legacy `*SchemaUpdater` classes now have Flyway overlap but remain documented temporary exceptions until staging Flyway startup, provider ordering, smoke evidence, and `docs/db_migration_retirement_evidence.md` rows allow deletion.
 - Startup DDL freeze is now enforced: new schema mutation runners must be rejected unless they retire one documented legacy exception with migration evidence.

@@ -8,8 +8,17 @@ This plan keeps the next refactors small and reversible. The goal is not to spli
 
 | Service | Current size | Main risk |
 | --- | ---: | --- |
-| `LedgerAiAnalysisService` | 1258 lines | AI payload creation, provider orchestration, duplicate suppression, history persistence, report mapping, metrics, and notification side effects live in one transaction boundary. |
-| `TravelService` | 3278 lines | Plans, sharing, map snapshots, media upload completion, route/GPX handling, expense reflection, cache invalidation, public atlas reads, and exchange rates are mixed in one service. |
+| `LedgerAiAnalysisService` | 1175 lines | AI payload creation, provider orchestration, duplicate suppression, history persistence, report mapping, metrics, and notification side effects live in one transaction boundary. |
+| `TravelService` | 2940 lines | Plans, sharing, map snapshots, media upload completion, route/GPX handling, expense reflection, cache invalidation, public atlas reads, and exchange rates are mixed in one service. |
+
+## CI Line Budget
+
+| Service | Current baseline | CI budget | Policy |
+| --- | ---: | ---: | --- |
+| `LedgerAiAnalysisService` | 1175 lines | 1200 lines | Growth past the budget must extract payload, provider-call, report, history, or notification behavior before raising the limit. |
+| `TravelService` | 2940 lines | 3000 lines | Growth past the budget must split media, map, share, route, exchange-rate, or ledger-bridge behavior before raising the limit. |
+
+The budget is intentionally close to the current baseline so service decomposition behaves as a ratchet: new feature work should reduce or isolate responsibilities instead of adding more code to the large orchestrators.
 
 ## Refactor Guardrails
 
@@ -68,7 +77,7 @@ This plan keeps the next refactors small and reversible. The goal is not to spli
 
 ## Plan Sync Gate
 
-scripts/verify-service-decomposition-plan.ps1 checks that the Current Baseline line counts match the tracked service files and that the guardrails, extraction queues, exit criteria, and refactor review checklist stay present. The CI service-decomposition-plan job runs this gate so large-service drift is visible before refactor work merges.
+scripts/verify-service-decomposition-plan.ps1 checks that the Current Baseline and CI Line Budget rows match the tracked service files, that tracked services stay below the ratchet budget, and that the guardrails, extraction queues, exit criteria, and refactor review checklist stay present. The CI service-decomposition-plan job runs this gate so large-service drift is visible before refactor work merges.
 
 ## Refactor Review Checklist
 

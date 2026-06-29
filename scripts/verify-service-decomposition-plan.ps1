@@ -10,8 +10,18 @@ $content = Get-Content -LiteralPath $planPath -Raw
 $findings = [System.Collections.Generic.List[string]]::new()
 
 $trackedServices = @(
-    @{ Name = 'LedgerAiAnalysisService'; Path = 'backend/src/main/java/com/playdata/calen/ledger/ai/LedgerAiAnalysisService.java'; RequiredSections = @('## Ledger AI Extraction Queue', '### Ledger AI Exit Criteria') },
-    @{ Name = 'TravelService'; Path = 'backend/src/main/java/com/playdata/calen/travel/service/TravelService.java'; RequiredSections = @('## Travel Service Extraction Queue', '### Travel Exit Criteria') }
+    @{
+        Name = 'LedgerAiAnalysisService'
+        Path = 'backend/src/main/java/com/playdata/calen/ledger/ai/LedgerAiAnalysisService.java'
+        MaxLines = 1200
+        RequiredSections = @('## Ledger AI Extraction Queue', '### Ledger AI Exit Criteria')
+    },
+    @{
+        Name = 'TravelService'
+        Path = 'backend/src/main/java/com/playdata/calen/travel/service/TravelService.java'
+        MaxLines = 3000
+        RequiredSections = @('## Travel Service Extraction Queue', '### Travel Exit Criteria')
+    }
 )
 
 foreach ($service in $trackedServices) {
@@ -23,6 +33,11 @@ foreach ($service in $trackedServices) {
     }
 
     $actualLines = (Get-Content -LiteralPath $path).Count
+    $maxLines = [int]$service.MaxLines
+    if ($actualLines -gt $maxLines) {
+        $findings.Add("Tracked service exceeds decomposition line budget: $name actual=$actualLines max=$maxLines") | Out-Null
+    }
+
     $escapedName = [regex]::Escape($name)
     $pattern = [regex]("\| ``" + $escapedName + "`` \| (?<lines>\d+) lines \|")
     $match = $pattern.Match($content)
@@ -32,6 +47,21 @@ foreach ($service in $trackedServices) {
         $documentedLines = [int]$match.Groups['lines'].Value
         if ($documentedLines -ne $actualLines) {
             $findings.Add("Service decomposition plan line count for $name is stale: documented=$documentedLines actual=$actualLines") | Out-Null
+        }
+    }
+
+    $budgetPattern = [regex]("\| ``" + $escapedName + "`` \| (?<baseline>\d+) lines \| (?<budget>\d+) lines \|")
+    $budgetMatch = $budgetPattern.Match($content)
+    if (-not $budgetMatch.Success) {
+        $findings.Add("Service decomposition plan is missing CI Line Budget row for $name.") | Out-Null
+    } else {
+        $documentedBaseline = [int]$budgetMatch.Groups['baseline'].Value
+        $documentedBudget = [int]$budgetMatch.Groups['budget'].Value
+        if ($documentedBaseline -ne $actualLines) {
+            $findings.Add("Service decomposition CI budget baseline for $name is stale: documented=$documentedBaseline actual=$actualLines") | Out-Null
+        }
+        if ($documentedBudget -ne $maxLines) {
+            $findings.Add("Service decomposition CI budget max for $name is stale: documented=$documentedBudget expected=$maxLines") | Out-Null
         }
     }
 

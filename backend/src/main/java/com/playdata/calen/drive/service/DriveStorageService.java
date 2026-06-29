@@ -37,32 +37,58 @@ import org.springframework.util.StringUtils;
 @Slf4j
 public class DriveStorageService {
 
+    private static final Map<String, List<String>> EXTENSION_CONTENT_TYPES = Map.ofEntries(
+            Map.entry("jpg", List.of("image/jpeg", "image/jpg", "image/pjpeg")),
+            Map.entry("jpeg", List.of("image/jpeg", "image/jpg", "image/pjpeg")),
+            Map.entry("png", List.of("image/png")),
+            Map.entry("gif", List.of("image/gif")),
+            Map.entry("webp", List.of("image/webp")),
+            Map.entry("bmp", List.of("image/bmp", "image/x-ms-bmp")),
+            Map.entry("pdf", List.of("application/pdf")),
+            Map.entry("txt", List.of("text/plain")),
+            Map.entry("csv", List.of("text/csv", "application/csv", "text/plain")),
+            Map.entry("json", List.of("application/json", "text/json", "text/plain")),
+            Map.entry("zip", List.of("application/zip", "application/x-zip-compressed")),
+            Map.entry("xlsx", List.of("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")),
+            Map.entry("xls", List.of("application/vnd.ms-excel")),
+            Map.entry("docx", List.of("application/vnd.openxmlformats-officedocument.wordprocessingml.document")),
+            Map.entry("doc", List.of("application/msword")),
+            Map.entry("pptx", List.of("application/vnd.openxmlformats-officedocument.presentationml.presentation")),
+            Map.entry("ppt", List.of("application/vnd.ms-powerpoint")),
+            Map.entry("mp4", List.of("video/mp4")),
+            Map.entry("mov", List.of("video/quicktime")),
+            Map.entry("mp3", List.of("audio/mpeg")),
+            Map.entry("wav", List.of("audio/wav", "audio/x-wav"))
+    );
+    private static final List<String> GENERIC_CONTENT_TYPES = List.of("application/octet-stream", "binary/octet-stream");
+
     private final ObjectProvider<MinioClient> minioClientProvider;
     private final MinioProperties minioProperties;
 
     public List<DriveDtos.UploadChunkResponse> initUpload(Long ownerId, List<DriveDtos.UploadInitRequest> requests) {
-        ensureStorageConfigured();
         if (ownerId == null || ownerId <= 0 || requests == null || requests.isEmpty()) {
             throw new BadRequestException("업로드할 파일 정보를 확인해 주세요.");
         }
 
+        List<PreparedUploadRequest> preparedRequests = requests.stream()
+                .map(this::prepareUploadRequest)
+                .toList();
+        ensureStorageConfigured();
+
         List<DriveDtos.UploadChunkResponse> responses = new ArrayList<>();
-        for (DriveDtos.UploadInitRequest request : requests) {
-            String originName = normalizeOriginName(request.fileOriginName());
-            String extension = normalizeExtension(request.fileFormat(), originName);
-            String storedName = buildStoredName(extension);
+        for (PreparedUploadRequest preparedRequest : preparedRequests) {
+            String storedName = buildStoredName(preparedRequest.extension());
             String objectKey = "drive/" + ownerId + "/" + storedName;
-            String contentType = normalizeContentType(request.contentType());
 
             responses.add(DriveDtos.UploadChunkResponse.builder()
-                    .fileOriginName(originName)
+                    .fileOriginName(preparedRequest.originName())
                     .fileSaveName(storedName)
-                    .fileFormat(extension)
-                    .fileSize(Math.max(0L, request.fileSize() == null ? 0L : request.fileSize()))
-                    .contentType(contentType)
-                    .parentId(request.parentId())
-                    .relativePath(request.relativePath())
-                    .lastModified(request.lastModified())
+                    .fileFormat(preparedRequest.extension())
+                    .fileSize(Math.max(0L, preparedRequest.request().fileSize() == null ? 0L : preparedRequest.request().fileSize()))
+                    .contentType(preparedRequest.contentType())
+                    .parentId(preparedRequest.request().parentId())
+                    .relativePath(preparedRequest.request().relativePath())
+                    .lastModified(preparedRequest.request().lastModified())
                     .presignedUploadUrl(generateUploadUrl(objectKey))
                     .presignedUrlExpiresIn(minioProperties.getPresignedUrlExpirySeconds())
                     .objectKey(objectKey)
@@ -75,7 +101,6 @@ public class DriveStorageService {
         }
         return responses;
     }
-
     public DriveDtos.UploadCompleteResponse completeUpload(DriveDtos.UploadCompleteRequest request) {
         ensureStorageConfigured();
         if (request == null || !StringUtils.hasText(request.finalObjectKey())) {
@@ -352,7 +377,7 @@ public class DriveStorageService {
             asciiName = "download";
         }
         String encodedName = URLEncoder.encode(fileName, StandardCharsets.UTF_8).replace("+", "%20");
-        return "attachment; filename=\"" + asciiName + "\"; filename*=UTF-8''" + encodedName;
+        return "attachment; filename="" + asciiName + ""; filename*=UTF-8''" + encodedName;
     }
 
     private String rewritePublicUrl(String sourceUrl) {
@@ -395,7 +420,7 @@ public class DriveStorageService {
         if (!StringUtils.hasText(normalized)) {
             throw new BadRequestException("파일 이름을 확인해 주세요.");
         }
-        if (normalized.length() > 255 || normalized.contains("..") || normalized.contains("/") || normalized.contains("\\")) {
+        if (normalized.length() > 255 || normalized.contains("..") || normalized.contains("/") || normalized.contains("\")) {
             throw new BadRequestException("허용되지 않는 파일 이름입니다.");
         }
         return normalized;
@@ -413,10 +438,33 @@ public class DriveStorageService {
         return "bin";
     }
 
-    private String normalizeContentType(String contentType) {
-        return StringUtils.hasText(contentType) ? contentType.trim() : "application/octet-stream";
+    private PreparedUploadRequest prepareUploadRequest(DriveDtos.UploadInitRequest request) {
+        if (request == null) {
+            throw new BadRequestException("업로드할 파일 정보를 확인해 주세요.");
+        }
+        String originName = normalizeOriginName(request.fileOriginName());
+        String extension = normalizeExtension(request.fileFormat(), originName);
+        String contentType = normalizeContentType(request.contentType());
+        validateContentTypeMatchesExtension(extension, contentType);
+        return new PreparedUploadRequest(request, originName, extension, contentType);
     }
 
+    private String normalizeContentType(String contentType) {
+        if (!StringUtils.hasText(contentType)) {
+            return "application/octet-stream";
+        }
+        return contentType.trim().toLowerCase(Locale.ROOT).split(";", 2)[0].trim();
+    }
+
+    private void validateContentTypeMatchesExtension(String extension, String contentType) {
+        if (!StringUtils.hasText(extension) || !StringUtils.hasText(contentType) || GENERIC_CONTENT_TYPES.contains(contentType)) {
+            return;
+        }
+        List<String> allowedContentTypes = EXTENSION_CONTENT_TYPES.get(extension.toLowerCase(Locale.ROOT));
+        if (allowedContentTypes != null && !allowedContentTypes.contains(contentType)) {
+            throw new BadRequestException("File extension and content type do not match.");
+        }
+    }
     private String buildStoredName(String extension) {
         String safeExtension = StringUtils.hasText(extension) ? extension : "bin";
         return UUID.randomUUID() + "." + safeExtension;
@@ -425,5 +473,13 @@ public class DriveStorageService {
     private String extractStoredName(String objectKey) {
         int separatorIndex = objectKey.lastIndexOf('/');
         return separatorIndex >= 0 ? objectKey.substring(separatorIndex + 1) : objectKey;
+    }
+
+    private record PreparedUploadRequest(
+            DriveDtos.UploadInitRequest request,
+            String originName,
+            String extension,
+            String contentType
+    ) {
     }
 }

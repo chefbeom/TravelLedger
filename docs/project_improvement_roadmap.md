@@ -32,6 +32,7 @@ This roadmap turns the current improvement analysis into an implementation queue
 | Backup reliability | Backups exist, but restore confidence matters more than backup creation. | Use `docs/backup_restore_rehearsal_runbook.md` to record restore evidence and encryption readiness. | Documented restore rehearsal with artifact name, smoke counts, cleanup, and timestamp. |
 | Accessibility/mobile UX | Drag widgets, maps, drive, modals, and PIN/auth screens have keyboard and touch risks. | Use `docs/accessibility_mobile_checklist.md` as the WCAG 2.2 release checklist. | Priority screens have keyboard, focus, target-size, and error-state evidence. |
 | CI gates | Manual checks are easy to skip. | Run backend test, frontend build, reusable PowerShell secret scan, and config sync in GitHub Actions. | Push/PR triggers automated backend, frontend, config, and high-risk secret gates. |
+| E2E smoke coverage | Core user flows need browser-level evidence beyond backend unit/integration tests. | Use `docs/e2e_smoke_checklist.md` for login, ledger entry, Excel import, OCR confirm-save, drive share, admin backup, travel upload, AI analysis, and notifications. | P0 smoke evidence is attached before releases that change those flows; later automation can reuse the same acceptance criteria. |
 
 ## P2: Product Expansion
 
@@ -58,6 +59,7 @@ This roadmap turns the current improvement analysis into an implementation queue
 6. Introduce migration tooling for new schema changes.
 7. Build AI ledger coach fields on top of the hardened AI contract.
 8. Add notification center so AI/backup/share events become visible.
+9. Convert `docs/e2e_smoke_checklist.md` P0 flows into browser automation.
 
 ## Current Documentation Set
 
@@ -69,6 +71,7 @@ This roadmap turns the current improvement analysis into an implementation queue
 | `docs/db_migration_strategy.md` | Flyway transition plan, current migration inventory, CI migration discipline, and schema updater retirement queue. |
 | `docs/service_decomposition_plan.md` | Ledger AI and Travel service extraction order, guardrails, test boundaries, and exit criteria. |
 | `docs/accessibility_mobile_checklist.md` | WCAG 2.2 and mobile UX checklist for priority screens. |
+| `docs/e2e_smoke_checklist.md` | Core browser smoke flows, shared test data, acceptance criteria, and automation conversion notes. |
 | `docs/backup_restore_rehearsal_runbook.md` | Restore rehearsal evidence, encryption readiness, and failure-handling checklist. |
 | `docs/privacy_control_panel.md` | Backend privacy controls, safety rules, response contract, and next privacy actions. |
 | `docs/pwa_mobile_capture.md` | PWA installability, service-worker cache policy, and mobile capture implementation queue. |

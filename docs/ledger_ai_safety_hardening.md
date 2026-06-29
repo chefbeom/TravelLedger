@@ -108,7 +108,7 @@ Minimum acceptance rule for provider responses:
 | Control | Implementation | Test evidence |
 | --- | --- | --- |
 | Shared provider response validation | `LedgerAiRemoteResponseValidator` rejects null responses, `ok=false`, and successful responses with no usable summary/report/list/forecast/habit content. | `LedgerAiRemoteResponseValidatorTest` |
-| LM Studio response validation | `LedgerAiLmStudioClient` extracts assistant JSON and passes parsed responses through the shared validator. | `LedgerAiRemoteResponseValidatorTest`, `LedgerAiAnalysisServiceTest` |
+| LM Studio response validation | `LedgerAiLmStudioClient` resolves `APP_LEDGER_AI_MODEL=auto` through `/api/v1/models`, extracts assistant JSON, and passes parsed responses through the shared validator without leaking provider URL/API key values in model-list failures. | `LedgerAiLmStudioClientTest`, `LedgerAiRemoteResponseValidatorTest`, `LedgerAiAnalysisServiceTest` |
 | n8n response validation | `LedgerAiN8nClient` passes webhook responses through the shared validator. | `LedgerAiRemoteResponseValidatorTest`, `LedgerAiAnalysisServiceTest` |
 | Provider observability | `LedgerAiLmStudioClient` and `LedgerAiN8nClient` register `calen.external.workflow.requests` and `calen.external.workflow.request` with workflow/status tags. | Pending targeted metric assertions. |
 | Provider payload minimization | `LedgerAiAnalysisService` keeps full server-side statistics but sends truncated title/memo fields, capped expense entry arrays, and `payloadMinimization` overflow counts to LM Studio/n8n. | `LedgerAiAnalysisServiceTest` |
@@ -122,7 +122,7 @@ Minimum acceptance rule for provider responses:
 
 | Priority | Work item | File candidates | Verification |
 | --- | --- | --- | --- |
-| P0 | Keep response shape validator enforced as providers evolve. | `LedgerAiRemoteResponseValidator`, provider clients | Tests for empty schema object, missing report/summary, and provider failure. |
+| P0 | Keep response shape validator and LM Studio model auto-resolution enforced as providers evolve. | `LedgerAiRemoteResponseValidator`, provider clients | Tests for empty schema object, missing report/summary, provider failure, OpenAI-like chat content extraction, and `/api/v1/models` model selection. |
 | P0 | Keep malicious memo/title prompt-injection and excessive-agency coverage. | `LedgerAiAnalysisServiceTest`, `LedgerAiAnalysisService.outputContract` | Captured payload preserves hostile-looking text as data; output contract says ledger text is untrusted user data, output is advisory only, and ledger changes require explicit user confirmation. |
 | P0 | Ensure status endpoint never exposes provider URLs/API keys. | `LedgerAiAnalysisStatusResponse`, `LedgerAiAnalysisServiceTest` | JSON assertion excludes workflow URL, LM Studio base URL, and all API key values; only boolean configured flags are exposed. |
 | P1 | Add configurable redaction profiles. | `LedgerAiAnalysisService`, provider payload DTO | Sensitive title/memo fields can be masked more aggressively for production profiles. |

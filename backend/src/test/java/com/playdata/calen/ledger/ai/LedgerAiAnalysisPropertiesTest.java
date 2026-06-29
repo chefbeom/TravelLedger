@@ -1,4 +1,4 @@
-﻿package com.playdata.calen.ledger.ai;
+package com.playdata.calen.ledger.ai;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -6,6 +6,31 @@ import org.junit.jupiter.api.Test;
 
 class LedgerAiAnalysisPropertiesTest {
 
+    @Test
+    void autoLmStudioModelKeepsProviderConfigured() {
+        LedgerAiAnalysisProperties properties = new LedgerAiAnalysisProperties();
+        properties.setEnabled(true);
+        properties.setModel("auto");
+
+        assertThat(properties.isLmStudioModelAuto()).isTrue();
+        assertThat(properties.normalizedLmStudioModel()).isEmpty();
+        assertThat(properties.isLmStudioConfigured()).isTrue();
+        assertThat(properties.isConfigured()).isTrue();
+        assertThat(properties.statusMessage()).contains("/api/v1/models");
+    }
+
+    @Test
+    void normalizesLmStudioEndpointPaths() {
+        LedgerAiAnalysisProperties properties = new LedgerAiAnalysisProperties();
+        properties.setLmStudioModelsPath("api/v1/models");
+        properties.setLmStudioChatPath("api/v1/chat");
+        properties.setModel(" qwen2.5 ");
+
+        assertThat(properties.normalizedLmStudioModelsPath()).isEqualTo("/api/v1/models");
+        assertThat(properties.normalizedLmStudioChatPath()).isEqualTo("/api/v1/chat");
+        assertThat(properties.isLmStudioModelAuto()).isFalse();
+        assertThat(properties.normalizedLmStudioModel()).isEqualTo("qwen2.5");
+    }
     @Test
     void allowsAnyProviderHostWhenAllowlistIsNotEnforced() {
         LedgerAiAnalysisProperties properties = new LedgerAiAnalysisProperties();

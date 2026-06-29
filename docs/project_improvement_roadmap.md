@@ -20,7 +20,7 @@ This roadmap turns the current improvement analysis into an implementation queue
 | AI safety | Ledger AI sends sensitive spending data to LM Studio or n8n and stores results. | Provider response validation, LM Studio prompt hardening, shared advice-only output contract, external workflow metrics, provider payload minimization, 5-minute duplicate suppression, provider URL allowlist controls, status-secret redaction tests, allowlist/duplicate-suppression/payload contract tests, and `docs/ai_provider_safety_contract.md` plus CI gate are in place; next add client idempotency keys. | Provider failures store failed history; invalid JSON/schema is rejected, provider failure/latency can be alerted, provider-facing entry data is capped/truncated, quick retries reuse completed results, AI status hides secrets/URLs, providers are told not to claim ledger mutations, and production can restrict AI provider hosts. |
 | Admin/share authorization tests | Admin APIs and public links are high-impact. | Drive public download links, direct share permissions/access logs, Travel public media tokens, shared exhibits, and privacy revocation are now mapped in `docs/public_share_authorization_contract.md`; next add frontend owner access-log view and Travel public media expiry/rotation. | CI gates reject drift in invalid public token handling, raw-token-free logs, owner-only log reads, `VIEW` download denial, Travel media token-pair checks, and current-user revocation scope. |
 | Upload validation | Drive/travel/family/support/OCR upload paths have different risk profiles. | OCR, Drive, travel, family, and support upload validation anchors are now mapped in `docs/file_upload_security_contract.md`; next define remaining per-feature max sizes and shared policy helpers. | CI gates reject drift in upload validation, presigned object-key scope, fake image handling, and thumbnail fail-closed evidence. |
-| Configuration sync | `.env.example`, `application.yml`, compose files can drift. | Run `scripts/verify-env-sync.ps1` in CI to compare Spring env placeholders with `.env.example` and `.env.oci.app.example`. | CI fails on missing, duplicate, malformed, or unallowlisted env names. |
+| Configuration sync | `.env.example`, `.env.oci.app.example`, `application.yml`, compose files can drift. | `docs/env_configuration_contract.md` now defines required DB, auth/session, MinIO, OCR/AI, Redis, travel media, and backup variable groups; `scripts/verify-env-sync.ps1` also checks LM Studio `/api/v1/chat` and `/api/v1/models`, provider allowlist defaults, placeholder secret values, and OCI production-safety toggles. | CI fails on missing, duplicate, malformed, unallowlisted, unsafe placeholder, stale contract, or unsafe provider endpoint names. |
 
 ## P1: Operations and Maintainability
 
@@ -69,6 +69,7 @@ This roadmap turns the current improvement analysis into an implementation queue
 | `docs/remember_me_security_review.md` | Remember-me cookie, persistent token, logout, rotation, and revocation review. |
 | `docs/ledger_ai_safety_hardening.md` | AI provider safety, failure handling, and hardening backlog. |
 | `docs/ai_provider_safety_contract.md` | Release contract for LM Studio/n8n provider safety, response validation, prompt-injection rejection, payload minimization, duplicate suppression, and secret redaction. |
+| `docs/env_configuration_contract.md` | Runtime configuration contract for `.env.example`, `.env.oci.app.example`, `application.yml`, LM Studio/n8n provider endpoints, secret placeholders, and production-safety toggles. |
 | `docs/project_improvement_roadmap.md` | Prioritized roadmap for improvements and new features. |
 | `docs/db_migration_strategy.md` | Flyway transition plan, current migration inventory, CI migration discipline, and schema updater retirement queue. |
 | `docs/service_decomposition_plan.md` | Ledger AI and Travel service extraction order, guardrails, test boundaries, and exit criteria. |
@@ -89,7 +90,7 @@ This roadmap turns the current improvement analysis into an implementation queue
 | Automation | Purpose |
 | --- | --- |
 | `.github/workflows/ci.yml` | Runs reusable secret scan, config sync, backend tests, and frontend build on push/PR. |
-| `scripts/verify-env-sync.ps1` | Fails when Spring env placeholders drift from checked env examples or compose-only allowlist. |
+| `scripts/verify-env-sync.ps1` | Fails when Spring env placeholders drift from checked env examples, required operational groups, `docs/env_configuration_contract.md`, secret placeholder rules, LM Studio endpoint defaults, production AI allowlist defaults, or compose-only allowlist. |
 | `scripts/scan-secrets.ps1` | Fails CI on high-risk token patterns or non-placeholder sensitive env assignments. |
 | `scripts/verify-ledger-anomaly-contract.ps1` | Fails CI if transaction anomaly detection loses read-only owner scope, bounded range/limit rules, detector evidence, security checklist coverage, or release-gate wiring. |
 | `scripts/verify-travel-story-export-contract.ps1` | Fails CI if travel story/export loses owner/shared/public visibility rules, media-token safety, secret exclusion, roadmap coverage, or release-gate wiring. |
@@ -98,5 +99,6 @@ This roadmap turns the current improvement analysis into an implementation queue
 | `scripts/verify-data-portability-contract.ps1` | Fails CI if data portability loses secondary-PIN protection, owner scope, safe manifest/secret exclusion, implementation anchors, roadmap coverage, or release-gate wiring. |
 | `scripts/verify-db-migrations.ps1` | Fails CI on malformed migration names, duplicate versions, or missing baseline marker. |
 | `scripts/verify-prometheus-alerts.ps1` | Fails CI when alert rules are malformed, undocumented, or not loaded by Prometheus. |
+
 
 

@@ -20,7 +20,7 @@ This roadmap turns the current improvement analysis into an implementation queue
 | AI safety | Ledger AI sends sensitive spending data to LM Studio or n8n and stores results. | Provider response validation, LM Studio prompt hardening, shared advice-only output contract, external workflow metrics, provider payload minimization, 5-minute duplicate suppression, provider URL allowlist controls, status-secret redaction tests, and allowlist/duplicate-suppression/payload contract tests are in place; next add client idempotency keys. | Provider failures store failed history; invalid JSON/schema is rejected, provider failure/latency can be alerted, provider-facing entry data is capped/truncated, quick retries reuse completed results, AI status hides secrets/URLs, providers are told not to claim ledger mutations, and production can restrict AI provider hosts. |
 | Admin/share authorization tests | Admin APIs and public links are high-impact. | Drive public download link tests cover invalid/revoked access logging and raw-token-free log storage; travel public media token tests cover invalid token/media/secret pairs; profile credential tests cover missing-CSRF denial for PIN verification/password/PIN changes; account and drive admin mutation tests now cover role, recent verification, and CSRF enforcement. | Normal users receive `403`; invalid public/share tokens are rejected; public link attempts write owner-scoped fingerprint logs; verified admins and profile credential mutations need CSRF. |
 | Upload validation | Drive/travel/family/support/OCR upload paths have different risk profiles. | OCR now rejects oversized files, MIME/extension mismatches, and fake image signatures before remote calls; next define the remaining per-feature max size and MIME rules. | OCR oversized/spoofed uploads are rejected by tests; remaining upload families need the same matrix. |
-| Configuration sync | `.env.example`, `application.yml`, compose files can drift. | Run `scripts/verify-env-sync.ps1` in CI to compare Spring env placeholders with `.env.example`. | CI fails on missing, duplicate, malformed, or unallowlisted env names. |
+| Configuration sync | `.env.example`, `application.yml`, compose files can drift. | Run `scripts/verify-env-sync.ps1` in CI to compare Spring env placeholders with `.env.example` and `.env.oci.app.example`. | CI fails on missing, duplicate, malformed, or unallowlisted env names. |
 
 ## P1: Operations and Maintainability
 
@@ -85,7 +85,7 @@ This roadmap turns the current improvement analysis into an implementation queue
 | Automation | Purpose |
 | --- | --- |
 | `.github/workflows/ci.yml` | Runs reusable secret scan, config sync, backend tests, and frontend build on push/PR. |
-| `scripts/verify-env-sync.ps1` | Fails when Spring env placeholders drift from `.env.example` or compose-only allowlist. |
+| `scripts/verify-env-sync.ps1` | Fails when Spring env placeholders drift from checked env examples or compose-only allowlist. |
 | `scripts/scan-secrets.ps1` | Fails CI on high-risk token patterns or non-placeholder sensitive env assignments. |
 | `scripts/verify-db-migrations.ps1` | Fails CI on malformed migration names, duplicate versions, or missing baseline marker. |
 | `scripts/verify-prometheus-alerts.ps1` | Fails CI when alert rules are malformed, undocumented, or not loaded by Prometheus. |

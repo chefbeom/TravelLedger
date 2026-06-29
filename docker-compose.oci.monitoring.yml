@@ -1,7 +1,23 @@
 services:
+  alertmanager:
+    image: ${ALERTMANAGER_IMAGE:-prom/alertmanager:latest}
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/alertmanager/alertmanager.yml
+      - --storage.path=/alertmanager
+    ports:
+      - "${ALERTMANAGER_BIND_HOST:-127.0.0.1}:${ALERTMANAGER_PORT:-9093}:9093"
+    volumes:
+      - ./deploy/oci/monitoring/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - alertmanager-data:/alertmanager
+    networks:
+      - calen-app
+
   prometheus:
     image: ${PROMETHEUS_IMAGE:-prom/prometheus:latest}
     restart: unless-stopped
+    depends_on:
+      - alertmanager
     command:
       - --config.file=/etc/prometheus/prometheus.yml
       - --storage.tsdb.path=/prometheus
@@ -39,5 +55,6 @@ services:
       - calen-app
 
 volumes:
+  alertmanager-data:
   prometheus-data:
   grafana-data:

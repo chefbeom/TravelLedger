@@ -3,6 +3,8 @@ $ErrorActionPreference = 'Stop'
 
 $rulesDir = 'deploy/oci/monitoring/prometheus/rules'
 $prometheusConfigPath = 'deploy/oci/monitoring/prometheus/prometheus.yml'
+$alertmanagerConfigPath = 'deploy/oci/monitoring/alertmanager/alertmanager.yml'
+$monitoringComposePath = 'docker-compose.oci.monitoring.yml'
 $observabilityDocPath = 'docs/observability_alerts.md'
 
 $findings = [System.Collections.Generic.List[string]]::new()
@@ -13,6 +15,12 @@ if (-not (Test-Path -LiteralPath $rulesDir)) {
 if (-not (Test-Path -LiteralPath $prometheusConfigPath)) {
     $findings.Add("Missing Prometheus config: $prometheusConfigPath") | Out-Null
 }
+if (-not (Test-Path -LiteralPath $alertmanagerConfigPath)) {
+    $findings.Add("Missing Alertmanager config: $alertmanagerConfigPath") | Out-Null
+}
+if (-not (Test-Path -LiteralPath $monitoringComposePath)) {
+    $findings.Add("Missing monitoring compose file: $monitoringComposePath") | Out-Null
+}
 if (-not (Test-Path -LiteralPath $observabilityDocPath)) {
     $findings.Add("Missing observability alert document: $observabilityDocPath") | Out-Null
 }
@@ -22,8 +30,31 @@ if ($findings.Count -eq 0) {
     if ($prometheusConfig -notmatch '(?m)^\s*-\s*/etc/prometheus/rules/\*\.yml\s*$') {
         $findings.Add('Prometheus config must load /etc/prometheus/rules/*.yml') | Out-Null
     }
+    if ($prometheusConfig -notmatch '(?s)alerting:\s*.*alertmanagers:\s*.*alertmanager:9093') {
+        $findings.Add('Prometheus config must forward alerts to alertmanager:9093') | Out-Null
+    }
+
+    $monitoringCompose = Get-Content -LiteralPath $monitoringComposePath -Raw
+    foreach ($snippet in @('alertmanager:', 'prom/alertmanager', '9093:9093', './deploy/oci/monitoring/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro')) {
+        if (-not $monitoringCompose.Contains($snippet)) {
+            $findings.Add("Monitoring compose missing Alertmanager snippet: $snippet") | Out-Null
+        }
+    }
+
+    $alertmanagerConfig = Get-Content -LiteralPath $alertmanagerConfigPath -Raw
+    foreach ($snippet in @('receiver: ops-null', 'receiver: ops-critical', 'receiver: ops-warning', 'severity="critical"', 'severity="warning"', 'inhibit_rules:')) {
+        if (-not $alertmanagerConfig.Contains($snippet)) {
+            $findings.Add("Alertmanager config missing routing snippet: $snippet") | Out-Null
+        }
+    }
 
     $document = Get-Content -LiteralPath $observabilityDocPath -Raw
+    foreach ($snippet in @('Alertmanager routing baseline', 'alertmanager:9093', 'ops-critical', 'ops-warning')) {
+        if (-not $document.Contains($snippet)) {
+            $findings.Add("Observability doc missing Alertmanager snippet: $snippet") | Out-Null
+        }
+    }
+
     $alertNames = @{}
     $ruleFiles = @(Get-ChildItem -LiteralPath $rulesDir -Filter '*.yml' -File)
     if ($ruleFiles.Count -eq 0) {

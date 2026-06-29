@@ -6,6 +6,8 @@ This project exposes Spring Actuator Prometheus metrics. The OCI monitoring stac
 deploy/oci/monitoring/prometheus/rules/*.yml
 ```
 
+Prometheus sends firing and resolved alerts to Alertmanager at `alertmanager:9093`. The checked-in Alertmanager baseline groups alerts by `alertname`, `service`, and `feature`, routes `critical` and `warning` severities separately, and uses no-op receivers until production notification channels are attached.
+
 ## Active Prometheus alerts
 
 | Alert | Signal | Severity | Why it matters |
@@ -31,11 +33,19 @@ deploy/oci/monitoring/prometheus/rules/*.yml
 | CalenExternalWorkflowSlowP95 | external workflow/client p95 above 30s for 10m | warning | n8n/OCR external calls are approaching user-visible timeout territory. |
 | CalenHostDiskNearlyFull | filesystem free space below 10% for 10m | critical | Uploads, backups, logs, and database files may fail. |
 
-Prometheus evaluates these rules even before Alertmanager is introduced. Route them through Grafana alerting or add Alertmanager when notification channels are ready.
+## Alertmanager routing baseline
+
+| Route | Receiver | Repeat interval | Intended channel |
+| --- | --- | --- | --- |
+| `severity="critical"` | `ops-critical` | 1h | Pager/urgent chat after production channel is configured. |
+| `severity="warning"` | `ops-warning` | 4h | Team chat or issue queue after production channel is configured. |
+| fallback | `ops-null` | 4h | Safe default for development and unclassified alerts. |
+
+Before production use, replace the no-op `ops-critical` and `ops-warning` receivers in `deploy/oci/monitoring/alertmanager/alertmanager.yml` with approved Slack, webhook, email, or incident-management integrations. Do not put API keys or webhook secrets directly in Git; mount a generated local config or inject secrets through the deployment secret manager.
 
 ## Verification gate
 
-`scripts/verify-prometheus-alerts.ps1` checks that Prometheus loads `/etc/prometheus/rules/*.yml`, every alert has an expression, duration, bounded severity, summary, and description, and every alert name is documented here. The GitHub Actions `observability-alerts` job runs this gate on push and pull request.
+`scripts/verify-prometheus-alerts.ps1` checks that Prometheus loads `/etc/prometheus/rules/*.yml`, forwards alerts to `alertmanager:9093`, the monitoring compose stack runs Alertmanager, Alertmanager has critical/warning routes, every alert has an expression, duration, bounded severity, summary, and description, and every alert name is documented here. The GitHub Actions `observability-alerts` job runs this gate on push and pull request.
 
 ## Implemented application metrics
 
@@ -74,3 +84,4 @@ Implementation notes:
 - Keep labels bounded and operational. Avoid user-controlled or high-cardinality values.
 - Record status values such as `success`, `failure`, `timeout`, `invalid`, `expired`, `revoked`, and `limit_reached`.
 - Alert annotations should describe operational action, not expose private request data.
+- Keep Alertmanager receiver secrets out of Git; use deployment-specific mounted config for real notification channels.

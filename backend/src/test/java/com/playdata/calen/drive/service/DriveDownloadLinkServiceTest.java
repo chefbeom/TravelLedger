@@ -3,6 +3,8 @@ package com.playdata.calen.drive.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -34,6 +36,9 @@ class DriveDownloadLinkServiceTest {
     @Mock
     private DriveStorageService driveStorageService;
 
+    @Mock
+    private DriveDownloadLinkAccessLogService driveDownloadLinkAccessLogService;
+
     @Test
     void downloadByTokenRecordsLinkAccessTimeWhenAvailable() {
         DriveDownloadLink link = activeLink();
@@ -48,6 +53,7 @@ class DriveDownloadLinkServiceTest {
         assertThat(link.getDownloadCount()).isEqualTo(1);
         assertThat(link.getLastAccessedAt()).isNotNull();
         assertThat(link.getItem().getLastAccessedAt()).isNotNull();
+        verify(driveDownloadLinkAccessLogService).record(eq(7L), eq(11L), eq(1L), eq("public-token"), eq("success"), isNull());
     }
 
     @Test
@@ -60,6 +66,7 @@ class DriveDownloadLinkServiceTest {
 
         verify(driveDownloadLinkRepository, never()).findByToken(anyString());
         verify(driveStorageService, never()).loadObjectBytes(anyString());
+        verify(driveDownloadLinkAccessLogService).record(isNull(), isNull(), isNull(), eq("  "), eq("invalid"), isNull());
     }
 
     @Test
@@ -130,6 +137,7 @@ class DriveDownloadLinkServiceTest {
 
         assertThat(link.getDownloadCount()).isZero();
         verify(driveStorageService, never()).loadObjectBytes("drive/file.txt");
+        verify(driveDownloadLinkAccessLogService).record(eq(7L), eq(11L), eq(1L), eq("public-token"), eq("revoked"), isNull());
     }
 
     @Test
@@ -143,6 +151,7 @@ class DriveDownloadLinkServiceTest {
                 .hasMessage("Download link was not found.");
 
         verify(driveStorageService, never()).loadObjectBytes(anyString());
+        verify(driveDownloadLinkAccessLogService).record(isNull(), isNull(), isNull(), eq("missing-token"), eq("invalid"), isNull());
     }
 
     @Test
@@ -215,7 +224,8 @@ class DriveDownloadLinkServiceTest {
         return new DriveDownloadLinkService(
                 driveDownloadLinkRepository,
                 driveService,
-                driveStorageService
+                driveStorageService,
+                driveDownloadLinkAccessLogService
         );
     }
 
@@ -224,6 +234,7 @@ class DriveDownloadLinkServiceTest {
         owner.setId(1L);
 
         DriveItem item = new DriveItem();
+        item.setId(11L);
         item.setOwner(owner);
         item.setItemType(DriveItemType.FILE);
         item.setOriginalName("file.txt");

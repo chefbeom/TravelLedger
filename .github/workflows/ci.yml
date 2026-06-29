@@ -1,4 +1,4 @@
-name: CI
+﻿name: CI
 
 on:
   push:
@@ -128,6 +128,16 @@ jobs:
       - name: Verify PWA installability and API-cache safety baseline
         shell: pwsh
         run: ./scripts/verify-pwa-mobile-baseline.ps1
+  ai-provider-safety-contract:
+    name: AI provider safety contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Verify AI provider safety contract
+        shell: pwsh
+        run: ./scripts/verify-ai-provider-safety-contract.ps1
   ledger-ai-coach-contract:
     name: Ledger AI coach contract
     runs-on: ubuntu-latest

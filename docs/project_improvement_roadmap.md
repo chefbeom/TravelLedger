@@ -1,4 +1,4 @@
-# Project Improvement Roadmap
+﻿# Project Improvement Roadmap
 
 Updated: 2026-06-30
 
@@ -17,7 +17,7 @@ This roadmap turns the current improvement analysis into an implementation queue
 | Workstream | Why it matters | First slice | Evidence of done |
 | --- | --- | --- | --- |
 | Security baseline | Auth, remember-me, CSRF, admin, sharing, upload, presigned URLs, and AI keys are mixed across domains. | Use `docs/security_baseline_checklist.md` plus `docs/remember_me_security_review.md` as release checklist, add P0 tests, and keep presigned object-key scope tests current. | Security-focused backend tests cover admin/share/presigned guardrails when run; remember-me restore is covered and logout/revocation tests are queued; public allowlist is reviewed. |
-| AI safety | Ledger AI sends sensitive spending data to LM Studio or n8n and stores results. | Provider response validation, LM Studio prompt hardening, shared advice-only output contract, external workflow metrics, provider payload minimization, 5-minute duplicate suppression, provider URL allowlist controls, status-secret redaction tests, and allowlist/duplicate-suppression/payload contract tests are in place; next add client idempotency keys. | Provider failures store failed history; invalid JSON/schema is rejected, provider failure/latency can be alerted, provider-facing entry data is capped/truncated, quick retries reuse completed results, AI status hides secrets/URLs, providers are told not to claim ledger mutations, and production can restrict AI provider hosts. |
+| AI safety | Ledger AI sends sensitive spending data to LM Studio or n8n and stores results. | Provider response validation, LM Studio prompt hardening, shared advice-only output contract, external workflow metrics, provider payload minimization, 5-minute duplicate suppression, provider URL allowlist controls, status-secret redaction tests, allowlist/duplicate-suppression/payload contract tests, and `docs/ai_provider_safety_contract.md` plus CI gate are in place; next add client idempotency keys. | Provider failures store failed history; invalid JSON/schema is rejected, provider failure/latency can be alerted, provider-facing entry data is capped/truncated, quick retries reuse completed results, AI status hides secrets/URLs, providers are told not to claim ledger mutations, and production can restrict AI provider hosts. |
 | Admin/share authorization tests | Admin APIs and public links are high-impact. | Drive public download links, direct share permissions/access logs, Travel public media tokens, shared exhibits, and privacy revocation are now mapped in `docs/public_share_authorization_contract.md`; next add frontend owner access-log view and Travel public media expiry/rotation. | CI gates reject drift in invalid public token handling, raw-token-free logs, owner-only log reads, `VIEW` download denial, Travel media token-pair checks, and current-user revocation scope. |
 | Upload validation | Drive/travel/family/support/OCR upload paths have different risk profiles. | OCR, Drive, travel, family, and support upload validation anchors are now mapped in `docs/file_upload_security_contract.md`; next define remaining per-feature max sizes and shared policy helpers. | CI gates reject drift in upload validation, presigned object-key scope, fake image handling, and thumbnail fail-closed evidence. |
 | Configuration sync | `.env.example`, `application.yml`, compose files can drift. | Run `scripts/verify-env-sync.ps1` in CI to compare Spring env placeholders with `.env.example` and `.env.oci.app.example`. | CI fails on missing, duplicate, malformed, or unallowlisted env names. |
@@ -68,6 +68,7 @@ This roadmap turns the current improvement analysis into an implementation queue
 | `docs/security_baseline_checklist.md` | Security checklist and immediate tests. |
 | `docs/remember_me_security_review.md` | Remember-me cookie, persistent token, logout, rotation, and revocation review. |
 | `docs/ledger_ai_safety_hardening.md` | AI provider safety, failure handling, and hardening backlog. |
+| `docs/ai_provider_safety_contract.md` | Release contract for LM Studio/n8n provider safety, response validation, prompt-injection rejection, payload minimization, duplicate suppression, and secret redaction. |
 | `docs/project_improvement_roadmap.md` | Prioritized roadmap for improvements and new features. |
 | `docs/db_migration_strategy.md` | Flyway transition plan, current migration inventory, CI migration discipline, and schema updater retirement queue. |
 | `docs/service_decomposition_plan.md` | Ledger AI and Travel service extraction order, guardrails, test boundaries, and exit criteria. |
@@ -97,3 +98,4 @@ This roadmap turns the current improvement analysis into an implementation queue
 | `scripts/verify-data-portability-contract.ps1` | Fails CI if data portability loses secondary-PIN protection, owner scope, safe manifest/secret exclusion, implementation anchors, roadmap coverage, or release-gate wiring. |
 | `scripts/verify-db-migrations.ps1` | Fails CI on malformed migration names, duplicate versions, or missing baseline marker. |
 | `scripts/verify-prometheus-alerts.ps1` | Fails CI when alert rules are malformed, undocumented, or not loaded by Prometheus. |
+

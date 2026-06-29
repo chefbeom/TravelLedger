@@ -15,6 +15,7 @@ jobs:
   secret-scan:
     name: Secret scan
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -27,33 +28,40 @@ jobs:
   config-sync:
     name: Config sync
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Checkout
         uses: actions/checkout@v4
       - name: Verify env example matches Spring config
         shell: pwsh
         run: ./scripts/verify-env-sync.ps1
+
   migration-discipline:
     name: DB migration discipline
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Checkout
         uses: actions/checkout@v4
       - name: Verify migration naming and versions
         shell: pwsh
         run: ./scripts/verify-db-migrations.ps1
+
   observability-alerts:
     name: Observability alert rules
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Checkout
         uses: actions/checkout@v4
       - name: Verify Prometheus alert rules are documented and loadable
         shell: pwsh
         run: ./scripts/verify-prometheus-alerts.ps1
+
   backend-test:
     name: Backend tests
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     defaults:
       run:
         working-directory: backend
@@ -74,6 +82,7 @@ jobs:
   frontend-build:
     name: Frontend build
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     defaults:
       run:
         working-directory: frontend
@@ -90,3 +99,41 @@ jobs:
         run: npm ci
       - name: Build
         run: npm run build
+
+  release-gate:
+    name: Release gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs:
+      - secret-scan
+      - config-sync
+      - migration-discipline
+      - observability-alerts
+      - backend-test
+      - frontend-build
+    if: always()
+    steps:
+      - name: Verify required CI checks
+        shell: bash
+        run: |
+          declare -A results=(
+            [secret-scan]="${{ needs.secret-scan.result }}"
+            [config-sync]="${{ needs.config-sync.result }}"
+            [migration-discipline]="${{ needs.migration-discipline.result }}"
+            [observability-alerts]="${{ needs.observability-alerts.result }}"
+            [backend-test]="${{ needs.backend-test.result }}"
+            [frontend-build]="${{ needs.frontend-build.result }}"
+          )
+
+          failed=0
+          for check in "${!results[@]}"; do
+            echo "$check: ${results[$check]}"
+            if [ "${results[$check]}" != "success" ]; then
+              echo "::error::$check did not pass"
+              failed=1
+            fi
+          done
+
+          if [ "$failed" -ne 0 ]; then
+            exit 1
+          fi

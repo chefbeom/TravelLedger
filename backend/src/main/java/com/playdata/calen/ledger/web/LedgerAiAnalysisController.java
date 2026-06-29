@@ -4,6 +4,7 @@ import com.playdata.calen.account.security.AppUserPrincipal;
 import com.playdata.calen.ledger.ai.LedgerAiAnalysisService;
 import com.playdata.calen.ledger.domain.LedgerAiAnalysisMode;
 import com.playdata.calen.ledger.domain.LedgerAiAnalysisPeriod;
+import com.playdata.calen.ledger.dto.LedgerAiAnalysisHistoryDeleteResponse;
 import com.playdata.calen.ledger.dto.LedgerAiAnalysisHistoryDetailResponse;
 import com.playdata.calen.ledger.dto.LedgerAiAnalysisHistoryPageResponse;
 import com.playdata.calen.ledger.dto.LedgerAiAnalysisRequest;
@@ -13,6 +14,7 @@ import jakarta.validation.Valid;
 import java.time.LocalDate;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -62,6 +64,21 @@ public class LedgerAiAnalysisController {
             @PathVariable Long historyId
     ) {
         return ledgerAiAnalysisService.getHistory(currentUser.userId(), historyId);
+    }
+
+    @DeleteMapping("/history/{historyId}")
+    public LedgerAiAnalysisHistoryDeleteResponse deleteHistory(
+            @AuthenticationPrincipal AppUserPrincipal currentUser,
+            @PathVariable Long historyId
+    ) {
+        return ledgerAiAnalysisService.deleteHistory(currentUser.userId(), historyId);
+    }
+
+    @DeleteMapping("/history")
+    public LedgerAiAnalysisHistoryDeleteResponse deleteHistories(
+            @AuthenticationPrincipal AppUserPrincipal currentUser
+    ) {
+        return ledgerAiAnalysisService.deleteHistories(currentUser.userId());
     }
 
     @PostMapping("/history/{historyId}/rerun")

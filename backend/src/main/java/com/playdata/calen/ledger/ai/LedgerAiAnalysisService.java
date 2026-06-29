@@ -14,6 +14,7 @@ import com.playdata.calen.ledger.domain.LedgerAiAnalysisPeriod;
 import com.playdata.calen.ledger.domain.LedgerAiAnalysisStatus;
 import com.playdata.calen.ledger.domain.LedgerAiComparisonPreset;
 import com.playdata.calen.ledger.dto.CategoryBreakdownItemResponse;
+import com.playdata.calen.ledger.dto.LedgerAiAnalysisHistoryDeleteResponse;
 import com.playdata.calen.ledger.dto.LedgerAiAnalysisHistoryDetailResponse;
 import com.playdata.calen.ledger.dto.LedgerAiAnalysisHistoryPageResponse;
 import com.playdata.calen.ledger.dto.LedgerAiAnalysisHistorySummaryResponse;
@@ -225,6 +226,21 @@ public class LedgerAiAnalysisService {
         return new LedgerAiAnalysisHistoryDetailResponse(toSummary(history), result);
     }
 
+    @Transactional
+    public LedgerAiAnalysisHistoryDeleteResponse deleteHistory(Long userId, Long historyId) {
+        appUserService.getRequiredUser(userId);
+        int deletedCount = historyRepository.deleteByIdAndOwnerId(historyId, userId);
+        if (deletedCount == 0) {
+            throw new NotFoundException("AI analysis history was not found.");
+        }
+        return new LedgerAiAnalysisHistoryDeleteResponse(deletedCount);
+    }
+
+    @Transactional
+    public LedgerAiAnalysisHistoryDeleteResponse deleteHistories(Long userId) {
+        appUserService.getRequiredUser(userId);
+        return new LedgerAiAnalysisHistoryDeleteResponse(historyRepository.deleteAllByOwnerId(userId));
+    }
     @Transactional(noRollbackFor = RuntimeException.class)
     public LedgerAiAnalysisResponse rerun(Long userId, Long historyId) {
         LedgerAiAnalysisHistory history = historyRepository.findByIdAndOwnerId(historyId, userId)

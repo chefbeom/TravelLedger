@@ -9,6 +9,8 @@ This document records the backend slice for user-facing privacy controls. The UI
 | Control | Endpoint | Behavior |
 | --- | --- | --- |
 | Delete my AI analysis history | `DELETE /api/privacy/ai-analysis-history` | Permanently deletes ledger AI analysis history rows owned by the current user. |
+| Delete one AI analysis history item | `DELETE /api/statistics/ai-analysis/history/{historyId}` | Permanently deletes one AI analysis history row only when it belongs to the current user. |
+| Delete all AI analysis history from AI screen | `DELETE /api/statistics/ai-analysis/history` | Permanently deletes all ledger AI analysis history rows owned by the current user from the AI history UI context. |
 | Revoke my public drive links | `DELETE /api/privacy/public-download-links` | Sets `revokedAt` on all active public download links owned by the current user. |
 | Revoke my travel public media shares | `DELETE /api/privacy/travel-public-media-shares` | Disables public sharing on the current user's travel plans and community-shared travel memory records so existing stateless media tokens no longer pass visibility checks. |
 | Cleanup sensitive derived data | `POST /api/privacy/cleanup` | Runs AI-history deletion, public drive-link revocation, travel public-media share revocation, and photo location metadata removal in one authenticated request. |
@@ -48,6 +50,9 @@ This document records the backend slice for user-facing privacy controls. The UI
 | PrivacyManagementServiceTest.removePhotoLocationMetadataScopesGpsCleanupToCurrentOwner | Verifies photo location metadata cleanup only calls the owner-scoped travel media GPS metadata update. |
 | `PrivacyManagementServiceTest.cleanupSensitiveDataDeletesAiHistoryAndRevokesOnlyCurrentOwnerShares` | Verifies combined cleanup deletes only the authenticated user AI history and revokes only that user's public drive/travel share surfaces. |
 | `PrivacyControllerIntegrationTest.aiAnalysisHistoryDeletionRequiresAuthenticationAndCsrf` | Verifies AI analysis history deletion rejects unauthenticated requests and authenticated unsafe requests without CSRF. |
+| `LedgerAiAnalysisServiceTest.deleteHistoryDeletesOnlyCurrentOwnerHistory` | Verifies single AI history deletion uses the authenticated owner ID in the delete query. |
+| `LedgerAiAnalysisServiceTest.deleteHistoryReturnsNotFoundWhenHistoryIsNotOwnedByCurrentUser` | Verifies cross-owner or missing AI history rows are reported as not found. |
+| `LedgerAiAnalysisServiceTest.deleteHistoriesDeletesOnlyCurrentOwnerRows` | Verifies bulk AI history deletion from the AI screen stays owner-scoped. |
 | `PrivacyControllerIntegrationTest.publicDownloadLinkRevocationRequiresAuthenticationAndCsrf` | Verifies public-link revocation rejects unauthenticated requests and authenticated unsafe requests without CSRF. |
 | PrivacyControllerIntegrationTest.travelPublicMediaShareRevocationRequiresAuthenticationAndCsrf | Verifies travel public media share revocation rejects unauthenticated requests and authenticated unsafe requests without CSRF. |
 | PrivacyControllerIntegrationTest.photoLocationMetadataRemovalRequiresAuthenticationAndCsrf | Verifies photo location metadata removal rejects unauthenticated requests and authenticated unsafe requests without CSRF. |

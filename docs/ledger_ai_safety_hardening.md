@@ -129,7 +129,7 @@ Minimum acceptance rule for provider responses:
 | P1 | Add configurable redaction profiles. | `LedgerAiAnalysisService`, provider payload DTO | Sensitive title/memo fields can be masked more aggressively for production profiles. |
 | P1 | Add explicit client idempotency keys. | `LedgerAiAnalysisService`, history repository, frontend API caller | Parallel retries with the same client key coalesce even before the first request completes. |
 | P1 | Add provider allowlist tests. | `LedgerAiAnalysisProperties`, provider clients | Blocked LM Studio/n8n hosts fail closed without exposing URL/API key values. |
-| P2 | Add manual "Delete AI history" and retention policy. | AI history controller/service | User can delete own AI history; admin retention job documented. |
+| P2 | Add retention policy for old AI history. | AI history service/scheduler | User-triggered single/all history deletion exists; admin retention job remains to be documented and implemented. |
 | P2 | Keep frontend disclaimer and confidence language visible. | `StatisticsWorkspace.vue` | AI result notice says the analysis is advisory and ledger changes require separate user confirmation/save. |
 
 ## Operational Runbook
@@ -193,3 +193,13 @@ A change to ledger AI code is not release-ready until:
 - Claims that ledger transactions, expenses, or income entries were already created, updated, deleted, saved, categorized, or reclassified.
 
 These checks keep AI output in the "advice/analysis" lane and fail closed before unsafe provider text is stored as an accepted analysis result.
+## AI History Deletion Controls
+
+The AI history UI can now remove user-owned history without going through the broader privacy cleanup flow:
+
+```http
+DELETE /api/statistics/ai-analysis/history/{historyId}
+DELETE /api/statistics/ai-analysis/history
+```
+
+Both paths use owner-scoped repository methods. A single-row delete returns `404 Not Found` when the row does not belong to the current user or no longer exists, avoiding cross-user existence disclosure.

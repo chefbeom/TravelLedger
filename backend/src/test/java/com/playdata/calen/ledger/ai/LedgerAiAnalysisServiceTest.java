@@ -17,6 +17,7 @@ import com.playdata.calen.account.domain.AppUser;
 import com.playdata.calen.account.service.AppUserService;
 import com.playdata.calen.account.service.UserNotificationService;
 import com.playdata.calen.common.exception.BadRequestException;
+import com.playdata.calen.common.exception.NotFoundException;
 import com.playdata.calen.ledger.domain.EntryType;
 import com.playdata.calen.ledger.domain.LedgerAiAnalysisHistory;
 import com.playdata.calen.ledger.domain.LedgerAiAnalysisMode;
@@ -129,6 +130,38 @@ class LedgerAiAnalysisServiceTest {
                 .doesNotContain("n8n-secret-token")
                 .doesNotContain("X-Sensitive-N8n-Api-Key")
                 .doesNotContain("lmstudio-secret-token");
+    }
+
+    @Test
+    void deleteHistoryDeletesOnlyCurrentOwnerHistory() {
+        stubUser();
+        when(historyRepository.deleteByIdAndOwnerId(88L, USER_ID)).thenReturn(1);
+
+        var response = service.deleteHistory(USER_ID, 88L);
+
+        assertThat(response.deletedCount()).isEqualTo(1);
+        verify(historyRepository).deleteByIdAndOwnerId(88L, USER_ID);
+    }
+
+    @Test
+    void deleteHistoryReturnsNotFoundWhenHistoryIsNotOwnedByCurrentUser() {
+        stubUser();
+        when(historyRepository.deleteByIdAndOwnerId(88L, USER_ID)).thenReturn(0);
+
+        assertThatThrownBy(() -> service.deleteHistory(USER_ID, 88L))
+                .isInstanceOf(NotFoundException.class)
+                .hasMessage("AI analysis history was not found.");
+    }
+
+    @Test
+    void deleteHistoriesDeletesOnlyCurrentOwnerRows() {
+        stubUser();
+        when(historyRepository.deleteAllByOwnerId(USER_ID)).thenReturn(3);
+
+        var response = service.deleteHistories(USER_ID);
+
+        assertThat(response.deletedCount()).isEqualTo(3);
+        verify(historyRepository).deleteAllByOwnerId(USER_ID);
     }
 
     @Test

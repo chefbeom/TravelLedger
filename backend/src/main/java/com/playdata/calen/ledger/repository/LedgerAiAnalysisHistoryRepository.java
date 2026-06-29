@@ -66,6 +66,10 @@ public interface LedgerAiAnalysisHistoryRepository extends JpaRepository<LedgerA
 
     long countByOwnerId(Long ownerId);
 
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("delete from LedgerAiAnalysisHistory history where history.id = :id and history.owner.id = :ownerId")
+    int deleteByIdAndOwnerId(@Param("id") Long id, @Param("ownerId") Long ownerId);
+
     Optional<LedgerAiAnalysisHistory> findTop1ByOwnerIdAndStatusAndModeAndPeriodTypeAndFromDateAndToDateAndCompareFromDateAndCompareToDateOrderByCreatedAtDescIdDesc(
             Long ownerId,
             LedgerAiAnalysisStatus status,

@@ -1,5 +1,6 @@
 package com.playdata.calen.ledger.ocr;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -7,12 +8,14 @@ import static org.mockito.Mockito.when;
 import com.playdata.calen.account.domain.AppUser;
 import com.playdata.calen.account.service.AppUserService;
 import com.playdata.calen.common.exception.BadRequestException;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.util.unit.DataSize;
 
 @ExtendWith(MockitoExtension.class)
@@ -119,6 +122,29 @@ class LedgerOcrServiceTest {
                 .isInstanceOf(BadRequestException.class)
                 .hasMessage("Only image files can be analyzed.");
 
+        verifyNoInteractions(remoteClient);
+    }
+    @Test
+    void analyzeRecordsInvalidFileMetricWhenUploadValidationFails() {
+        stubUser();
+        SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
+        ReflectionTestUtils.setField(service, "meterRegistry", meterRegistry);
+        MockMultipartFile file = new MockMultipartFile(
+                "file",
+                "receipt.txt",
+                "image/png",
+                new byte[] {1, 2, 3}
+        );
+
+        assertThatThrownBy(() -> service.analyze(USER_ID, file, "RECEIPT"))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessage("Only image files can be analyzed.");
+
+        assertThat(meterRegistry.get("calen.ledger.ocr.requests")
+                .tag("status", "failure")
+                .tag("reason", "invalid_file")
+                .counter()
+                .count()).isEqualTo(1.0);
         verifyNoInteractions(remoteClient);
     }
     private void stubUser() {

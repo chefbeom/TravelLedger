@@ -63,7 +63,7 @@ Current explicit public routes from `SecurityConfig`:
 | P0 | missing CSRF rejects profile verification/password/PIN/admin mutation requests | `SecurityConfig`, `ProfileCredentialIntegrationTest`, `AdminDashboardIntegrationTest` |
 | P0 | public download token fails when token is blank/invalid, item is non-file/trashed/missing storage path, or link is revoked/expired/over limit, and successful direct/presigned URL downloads write owner-scoped access logs without raw token storage | `DriveDownloadLinkServiceTest`, `DriveDownloadLinkAccessLogServiceTest` |
 | P0 | travel public media token accepts only the issued media/token pair and rejects null, blank, tampered, wrong-media, or wrong-secret tokens | `TravelPublicMediaTokenServiceTest` |
-| P1 | OCR rejects too-large files, MIME/extension mismatches, and fake image signatures before remote OCR calls | `LedgerOcrService`, `LedgerOcrServiceTest` |
+| P1 | OCR rejects too-large files, MIME/extension mismatches, and fake image signatures before remote OCR calls, and invalid upload failures emit bounded `invalid_file` metrics | `LedgerOcrService`, `LedgerOcrServiceTest` |
 | P1 | AI status never exposes API keys, API-key headers, or provider URLs | `LedgerAiAnalysisServiceTest.statusDoesNotExposeProviderUrlsOrApiKeys`, `LedgerAiAnalysisStatusResponse` |
 | P1 | presigned upload completion rejects object key outside expected owner/record scope before MinIO stat | `TravelMediaStorageServiceTest`, `TravelMediaStorageService` |
 | P1 | admin backup/restore/user activation/blocked-IP and drive-admin mutation actions produce audit events | `AdminController`, `DriveAdminController`, `LoginAuditLogServiceTest`, `DriveAdminSecurityIntegrationTest` |

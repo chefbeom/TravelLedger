@@ -109,6 +109,10 @@ app:
       read-timeout: ${APP_LEDGER_AI_READ_TIMEOUT:120s}
       enforce-provider-url-allowlist: ${APP_LEDGER_AI_ENFORCE_PROVIDER_URL_ALLOWLIST:false}
       allowed-provider-hosts: "${APP_LEDGER_AI_ALLOWED_PROVIDER_HOSTS:localhost,127.0.0.1,::1,172.18.240.1}"
+      history-retention-enabled: ${APP_LEDGER_AI_HISTORY_RETENTION_ENABLED:false}
+      history-retention-days: ${APP_LEDGER_AI_HISTORY_RETENTION_DAYS:180}
+      history-retention-cron: ${APP_LEDGER_AI_HISTORY_RETENTION_CRON:0 15 3 * * *}
+      history-retention-zone: ${APP_LEDGER_AI_HISTORY_RETENTION_ZONE:Asia/Seoul}
   redis:
     cache:
       host: ${REDIS_CACHE_HOST:}

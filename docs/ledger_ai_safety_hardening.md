@@ -116,6 +116,7 @@ Minimum acceptance rule for provider responses:
 | Duplicate suppression | `LedgerAiAnalysisService` reuses a readable completed result created within 5 minutes for the same owner, provider, model, mode, period, and comparison range. | `LedgerAiAnalysisServiceTest` |
 | Provider-aware history | `ledger_ai_analysis_histories.provider` is added through Flyway migration `V20260629_004__ledger_ai_history_provider.sql`. | Migration reviewed; test gate pending. |
 | Provider URL allowlist | `LedgerAiAnalysisProperties` can reject LM Studio/n8n URLs whose host is not in `APP_LEDGER_AI_ALLOWED_PROVIDER_HOSTS` when enforcement is enabled. | `LedgerAiAnalysisPropertiesTest` |
+| AI history retention cleanup | `LedgerAiAnalysisHistoryRetentionService` can delete histories older than `APP_LEDGER_AI_HISTORY_RETENTION_DAYS` on an opt-in schedule. | `LedgerAiAnalysisHistoryRetentionServiceTest` |
 | Prompt boundary for LM Studio | LM Studio system prompt marks ledger text, OCR text, category names, and user-entered text as untrusted data, not instructions. | Pending prompt-injection regression assertions. |
 | Advice-only provider contract | Shared provider payload contract says output is advisory analysis only, must not claim ledger entries were changed, and must require explicit user confirmation before any ledger data change. | `LedgerAiAnalysisServiceTest.analyzeKeepsPromptInjectionLikeLedgerTextAsData` |
 
@@ -129,7 +130,7 @@ Minimum acceptance rule for provider responses:
 | P1 | Add configurable redaction profiles. | `LedgerAiAnalysisService`, provider payload DTO | Sensitive title/memo fields can be masked more aggressively for production profiles. |
 | P1 | Add explicit client idempotency keys. | `LedgerAiAnalysisService`, history repository, frontend API caller | Parallel retries with the same client key coalesce even before the first request completes. |
 | P1 | Add provider allowlist tests. | `LedgerAiAnalysisProperties`, provider clients | Blocked LM Studio/n8n hosts fail closed without exposing URL/API key values. |
-| P2 | Add retention policy for old AI history. | AI history service/scheduler | User-triggered single/all history deletion exists; admin retention job remains to be documented and implemented. |
+| P2 | Add admin-facing retention reporting for old AI history. | AI history service/scheduler/admin UI | User-triggered deletion and opt-in scheduled retention cleanup exist; admin reporting remains. |
 | P2 | Keep frontend disclaimer and confidence language visible. | `StatisticsWorkspace.vue` | AI result notice says the analysis is advisory and ledger changes require separate user confirmation/save. |
 
 ## Operational Runbook
@@ -203,3 +204,15 @@ DELETE /api/statistics/ai-analysis/history
 ```
 
 Both paths use owner-scoped repository methods. A single-row delete returns `404 Not Found` when the row does not belong to the current user or no longer exists, avoiding cross-user existence disclosure.
+## AI History Retention Controls
+
+Stored AI analysis history can be cleaned up automatically when an operator enables the opt-in scheduler:
+
+```env
+APP_LEDGER_AI_HISTORY_RETENTION_ENABLED=false
+APP_LEDGER_AI_HISTORY_RETENTION_DAYS=180
+APP_LEDGER_AI_HISTORY_RETENTION_CRON=0 15 3 * * *
+APP_LEDGER_AI_HISTORY_RETENTION_ZONE=Asia/Seoul
+```
+
+The default is disabled to avoid surprise data loss. When enabled, the backend deletes `ledger_ai_analysis_histories` rows whose `createdAt` timestamp is older than the configured retention window. Retention days are clamped to at least one day.

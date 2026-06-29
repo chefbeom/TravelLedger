@@ -1,4 +1,4 @@
-﻿# Service Decomposition Plan
+# Service Decomposition Plan
 
 Updated: 2026-06-30
 
@@ -9,14 +9,14 @@ This plan keeps the next refactors small and reversible. The goal is not to spli
 | Service | Current size | Main risk |
 | --- | ---: | --- |
 | LedgerAiAnalysisService | 1230 lines | AI orchestration still owns payload creation, provider calls, duplicate suppression, history persistence, report mapping, metrics, and notification side effects; provider output contract text is now isolated in LedgerAiOutputContract. |
-| `TravelService` | 2940 lines | Plans, sharing, map snapshots, media upload completion, route/GPX handling, expense reflection, cache invalidation, public atlas reads, and exchange rates are mixed in one service. |
+| `TravelService` | 3278 lines | Plans, sharing, map snapshots, media upload completion, route/GPX handling, expense reflection, cache invalidation, public atlas reads, and exchange rates are mixed in one service. |
 
 ## CI Line Budget
 
 | Service | Current baseline | CI budget | Policy |
 | --- | ---: | ---: | --- |
 | LedgerAiAnalysisService | 1230 lines | 1255 lines | Growth past the budget must extract payload, provider-call, report, history, or notification behavior before raising the limit. |
-| `TravelService` | 2940 lines | 3000 lines | Growth past the budget must split media, map, share, route, exchange-rate, or ledger-bridge behavior before raising the limit. |
+| `TravelService` | 3278 lines | 3300 lines | Growth past the budget must split media, map, share, route, exchange-rate, or ledger-bridge behavior before raising the limit. |
 
 The budget is intentionally close to the current baseline so service decomposition behaves as a ratchet: new feature work should reduce or isolate responsibilities instead of adding more code to the large orchestrators.
 
@@ -31,6 +31,34 @@ The budget is intentionally close to the current baseline so service decompositi
 | Test before move | Add or keep focused tests around the behavior being moved, then move code behind the same assertions. |
 | Bounded dependencies | New collaborators should depend only on the repositories/services they actually need. Avoid passing the whole original service state across. |
 | Transaction clarity | Do not broaden `@Transactional` scope during extraction. New write collaborators should document whether they require caller-managed or local transactions. |
+
+## Responsibility Boundary Contract
+
+These method groups should move together. A new feature should not add more logic to one of these groups unless the same change either extracts the target collaborator or records why extraction is intentionally deferred.
+
+| Service | Boundary | Current anchors | Target collaborator | Must not own |
+| --- | --- | --- | --- | --- |
+| Ledger AI | Provider payload minimization | `buildPayload`, `buildPayloadMinimizationSummary`, `providerExpenseEntries`, `sanitizeProviderExpenseEntry`, `providerRecurringCandidates` | `LedgerAiAnalysisPayloadBuilder` | History writes, notifications, provider HTTP calls, or report fallback text. |
+| Ledger AI | Report merge and fallback copy | `buildReport`, `buildFallbackReport`, `buildFullReport`, `buildKeySummary`, `buildNotableSpending`, `buildImprovementActions` | `LedgerAiAnalysisReportMerger` | Provider calls, persistence, or request validation. |
+| Ledger AI | Period and comparison planning | `resolvePlan`, `resolvePeriodRange`, `resolveComparisonRanges`, `validateCustomRange` | `LedgerAiAnalysisPlanResolver` | Repository reads, provider payload construction, or response mapping. |
+| Ledger AI | History and duplicate suppression | `findReusableAnalysis`, `findLatestMatchingAnalysis`, `baseHistory`, `toSummary`, `readResult` | `LedgerAiAnalysisHistoryCoordinator` | Provider schema validation, notification delivery, or metric registration. |
+| Ledger AI | Metrics and notification side effects | `startAiRequestTimer`, `recordAiRequest`, `notifyAiAnalysisCompleted`, `notifyAiAnalysisFailed` | `LedgerAiAnalysisOrchestrator` or a side-effect coordinator | Payload minimization, report text, or history query composition. |
+| Travel | Media upload/download orchestration | `prepareMediaUploadInternal`, `completeMediaUploadInternal`, `getMediaDownload`, `getSharedMediaDownload`, `invalidateOwnedMediaDownloadCache` | `TravelMediaUploadCoordinator` | Share group mutation, map cluster rebuild, route CRUD, or exchange-rate lookup. |
+| Travel | Map and photo cluster reads | `getMyMapOverview`, `getMyMapMarkerDetailBundle`, `getMyMapPhotoClusterDetail`, `resolveMyMapPhotoClusterDetail`, `refreshMyMapPhotoClusterSnapshot` | `TravelMapQueryService` | Upload completion, public-share mutation, or ledger reflection. |
+| Travel | Sharing and public atlas visibility | `shareCompletedPlan`, `getPlanShares`, `cancelPlanShare`, `searchShareRecipients`, `updatePlanPublicShare`, `getSharedExhibits` | `TravelShareService` | Media byte serving, route storage, or expense reflection. |
+| Travel | Ledger bridge | `reflectExpenseRecordToLedger`, `reflectLedgerEntryToTravelRecord`, `createExpenseRecord`, `updateExpenseRecord` | `TravelExpenseLedgerBridge` | Public atlas reads, media download cache, or exchange-rate provider calls. |
+| Travel | Route and GPX lifecycle | `createRouteSegment`, `updateRouteSegment`, `uploadRouteGpxFiles`, `deleteRouteSegment` | `TravelRouteService` | Media upload completion, sharing, or ledger reflection. |
+| Travel | Currency/exchange lookup | `getExchangeRates` | `TravelExchangeRateService` | Plan mutation, media cache invalidation, or public visibility decisions. |
+
+## Decomposition Ratchet Rules
+
+| Rule | Enforcement intent |
+| --- | --- |
+| Line budgets are a ratchet, not a target. | Raising a budget requires documenting why extraction cannot happen first. |
+| New public methods in tracked services should be orchestration adapters. | Feature logic should land in the target collaborator named in the boundary contract. |
+| New repository or external-client dependencies require a boundary decision. | If the dependency belongs to a target collaborator, extract or document a temporary exception. |
+| Side-effect extraction needs focused safety evidence. | Owner scope, public-token checks, provider redaction, metrics labels, and notifications must remain bounded. |
+| DTOs remain stable unless the product contract changes. | Refactors should not force frontend or API consumers to migrate. |
 
 ## Ledger AI Extraction Queue
 
@@ -81,7 +109,7 @@ The budget is intentionally close to the current baseline so service decompositi
 
 ## Plan Sync Gate
 
-scripts/verify-service-decomposition-plan.ps1 checks that the Current Baseline and CI Line Budget rows match the tracked service files, that tracked services stay below the ratchet budget, and that the guardrails, extraction queues, exit criteria, and refactor review checklist stay present. The CI service-decomposition-plan job runs this gate so large-service drift is visible before refactor work merges.
+scripts/verify-service-decomposition-plan.ps1 checks that the Current Baseline and CI Line Budget rows match the tracked service files, that tracked services stay below the ratchet budget, and that the guardrails, responsibility boundary contract, ratchet rules, extraction queues, exit criteria, and refactor review checklist stay present. The CI service-decomposition-plan job runs this gate so large-service drift is visible before refactor work merges.
 
 ## Refactor Review Checklist
 

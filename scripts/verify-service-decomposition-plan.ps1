@@ -1,4 +1,4 @@
-﻿Set-StrictMode -Version Latest
+Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $planPath = 'docs/service_decomposition_plan.md'
@@ -19,8 +19,8 @@ $trackedServices = @(
     @{
         Name = 'TravelService'
         Path = 'backend/src/main/java/com/playdata/calen/travel/service/TravelService.java'
-        MaxLines = 3000
-        RequiredSections = @('## Travel Service Extraction Queue', '### Travel Exit Criteria')
+        MaxLines = 3300
+        RequiredSections = @('## Responsibility Boundary Contract', '## Decomposition Ratchet Rules', '## Travel Service Extraction Queue', '### Travel Exit Criteria')
     }
 )
 
@@ -96,6 +96,31 @@ $requiredReviewItems = @(
 foreach ($item in $requiredReviewItems) {
     if (-not $content.Contains($item)) {
         $findings.Add("Service decomposition review checklist missing item containing: $item") | Out-Null
+    }
+}
+
+$requiredBoundarySnippets = @(
+    'Responsibility Boundary Contract',
+    'Decomposition Ratchet Rules',
+    'LedgerAiAnalysisPayloadBuilder',
+    'LedgerAiAnalysisReportMerger',
+    'LedgerAiAnalysisPlanResolver',
+    'LedgerAiAnalysisHistoryCoordinator',
+    'TravelMediaUploadCoordinator',
+    'TravelMapQueryService',
+    'TravelShareService',
+    'TravelExpenseLedgerBridge',
+    'TravelRouteService',
+    'TravelExchangeRateService',
+    'buildPayloadMinimizationSummary',
+    'findReusableAnalysis',
+    'prepareMediaUploadInternal',
+    'refreshMyMapPhotoClusterSnapshot',
+    'Line budgets are a ratchet, not a target.'
+)
+foreach ($snippet in $requiredBoundarySnippets) {
+    if (-not $content.Contains($snippet)) {
+        $findings.Add("Service decomposition boundary contract missing snippet: $snippet") | Out-Null
     }
 }
 

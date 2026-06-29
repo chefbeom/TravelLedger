@@ -98,7 +98,7 @@ public class AuthController {
                     clientIp,
                     userAgent,
                     LoginAuditStatus.BAD_SECONDARY_PIN,
-                    "濡쒓렇???뺣낫媛 ?щ컮瑜댁? ?딆뒿?덈떎.",
+                    "\uB85C\uADF8\uC778 \uC815\uBCF4\uAC00 \uC62C\uBC14\uB974\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4.",
                     user
             );
             throw exception;
@@ -109,7 +109,7 @@ public class AuthController {
                     clientIp,
                     userAgent,
                     LoginAuditStatus.BAD_CREDENTIALS,
-                    "濡쒓렇???뺣낫媛 ?щ컮瑜댁? ?딆뒿?덈떎.",
+                    "\uB85C\uADF8\uC778 \uC815\uBCF4\uAC00 \uC62C\uBC14\uB974\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4.",
                     null
             );
             throw exception;
@@ -121,7 +121,7 @@ public class AuthController {
                 clientIp,
                 userAgent,
                 LoginAuditStatus.SUCCESS,
-                "濡쒓렇???깃났",
+                "\uB85C\uADF8\uC778 \uC131\uACF5",
                 authenticatedUser
         );
         signIn(authentication, request.rememberDevice(), httpRequest, httpResponse);
@@ -209,7 +209,7 @@ public class AuthController {
         if (!(authentication != null
                 && authentication.isAuthenticated()
                 && authentication.getPrincipal() instanceof AppUserPrincipal principal)) {
-            throw new org.springframework.security.authentication.InsufficientAuthenticationException("濡쒓렇?몄씠 ?꾩슂?⑸땲??");
+            throw new org.springframework.security.authentication.InsufficientAuthenticationException("\uB85C\uADF8\uC778\uC774 \uD544\uC694\uD569\uB2C8\uB2E4.");
         }
         return principal.userId();
     }

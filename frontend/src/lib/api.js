@@ -149,7 +149,7 @@ async function request(path, options = {}) {
   })
 
   if (!response.ok) {
-    let message = '?붿껌??泥섎━?섎뒗 以?臾몄젣媛 諛쒖깮?덉뒿?덈떎.'
+    let message = '?遺욧퍕??筌ｌ꼶???롫뮉 餓??얜챷?ｅ첎? 獄쏆뮇源??됰뮸??덈뼄.'
     let details = null
 
     try {
@@ -233,7 +233,7 @@ export async function downloadAdminDataBackup() {
   })
 
   if (!response.ok) {
-    let message = '?붿껌??泥섎━?섎뒗 以?臾몄젣媛 諛쒖깮?덉뒿?덈떎.'
+    let message = '?遺욧퍕??筌ｌ꼶???롫뮉 餓??얜챷?ｅ첎? 獄쏆뮇源??됰뮸??덈뼄.'
 
     try {
       const body = await response.json()
@@ -470,7 +470,7 @@ async function downloadFile(path, fallbackFileName, options = {}) {
   })
 
   if (!response.ok) {
-    let message = '?붿껌??泥섎━?섎뒗 以?臾몄젣媛 諛쒖깮?덉뒿?덈떎.'
+    let message = '?遺욧퍕??筌ｌ꼶???롫뮉 餓??얜챷?ｅ첎? 獄쏆뮇源??됰뮸??덈뼄.'
 
     try {
       const body = await response.json()
@@ -885,7 +885,7 @@ async function uploadPresignedTravelMediaFile(target, file) {
   })
 
   if (!response.ok) {
-    throw new Error('?뚯씪 ?낅줈??以?臾몄젣媛 諛쒖깮?덉뒿?덈떎.')
+    throw new Error('???뵬 ??낆쨮??餓??얜챷?ｅ첎? 獄쏆뮇源??됰뮸??덈뼄.')
   }
 }
 
@@ -904,10 +904,10 @@ function uploadPresignedTravelMediaFileWithProgress(target, file) {
         return
       }
 
-      reject(new Error('?뚯씪 ?낅줈??以?臾몄젣媛 諛쒖깮?덉뒿?덈떎.'))
+      reject(new Error('???뵬 ??낆쨮??餓??얜챷?ｅ첎? 獄쏆뮇源??됰뮸??덈뼄.'))
     }
-    xhr.onerror = () => reject(new Error('?뚯씪 ?낅줈??以?臾몄젣媛 諛쒖깮?덉뒿?덈떎.'))
-    xhr.onabort = () => reject(new Error('?뚯씪 ?낅줈?쒓? 痍⑥냼?섏뿀?듬땲??'))
+    xhr.onerror = () => reject(new Error('???뵬 ??낆쨮??餓??얜챷?ｅ첎? 獄쏆뮇源??됰뮸??덈뼄.'))
+    xhr.onabort = () => reject(new Error('???뵬 ??낆쨮??? ?띯뫁???뤿???щ빍??'))
     xhr.send(file)
   })
 }
@@ -1087,7 +1087,7 @@ async function uploadTravelMediaInternal({
 
   const oversizedFile = selectedFiles.find((file) => Number(file?.size || 0) > MAX_TRAVEL_MEDIA_FILE_SIZE)
   if (oversizedFile) {
-    const error = new Error('?ы뻾 ?ъ쭊? 15MB ?댄븯 ?뚯씪留??낅줈?쒗븷 ???덉뒿?덈떎.')
+    const error = new Error('??六???彛?? 15MB ??꾨릭 ???뵬筌???낆쨮??쀫막 ????됰뮸??덈뼄.')
     error.status = 400
     error.code = 'travel-media-too-large'
     throw error
@@ -1313,10 +1313,10 @@ export function uploadDriveFileWithProgress(target, file, onProgress) {
         resolve()
         return
       }
-      reject(new Error('?뚯씪 ?낅줈??以?臾몄젣媛 諛쒖깮?덉뒿?덈떎.'))
+      reject(new Error('???뵬 ??낆쨮??餓??얜챷?ｅ첎? 獄쏆뮇源??됰뮸??덈뼄.'))
     }
-    xhr.onerror = () => reject(new Error('?뚯씪 ?낅줈??以?臾몄젣媛 諛쒖깮?덉뒿?덈떎.'))
-    xhr.onabort = () => reject(new Error('?뚯씪 ?낅줈?쒓? 痍⑥냼?섏뿀?듬땲??'))
+    xhr.onerror = () => reject(new Error('???뵬 ??낆쨮??餓??얜챷?ｅ첎? 獄쏆뮇源??됰뮸??덈뼄.'))
+    xhr.onabort = () => reject(new Error('???뵬 ??낆쨮??? ?띯뫁???뤿???щ빍??'))
     xhr.send(file)
   })
 }
@@ -1511,5 +1511,47 @@ export function markNotificationRead(notificationId) {
 export function markAllNotificationsRead() {
   return request('/notifications/read-all', {
     method: 'PATCH',
+  })
+}
+export function deletePrivacyAiAnalysisHistory() {
+  return request('/privacy/ai-analysis-history', {
+    method: 'DELETE',
+  })
+}
+
+export function revokePrivacyPublicDownloadLinks() {
+  return request('/privacy/public-download-links', {
+    method: 'DELETE',
+  })
+}
+
+export function revokePrivacyTravelPublicMediaShares() {
+  return request('/privacy/travel-public-media-shares', {
+    method: 'DELETE',
+  })
+}
+
+export function cleanupPrivacySensitiveData() {
+  return request('/privacy/cleanup', {
+    method: 'POST',
+  })
+}
+
+export function downloadPrivacyDataExport({ from, to } = {}) {
+  const payload = {}
+  if (from) {
+    payload.from = from
+  }
+  if (to) {
+    payload.to = to
+  }
+
+  const fallbackFileName = from && to
+    ? `calen-data-export-${from}_to_${to}.zip`
+    : 'calen-data-export.zip'
+
+  return downloadFile('/privacy/data-export', fallbackFileName, {
+    method: 'POST',
+    body: JSON.stringify(payload),
   })
 }

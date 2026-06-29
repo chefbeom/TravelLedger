@@ -60,7 +60,7 @@ This document records the backend slice for user-facing privacy controls. The UI
 | --- | --- |
 | Remove photo GPS metadata | Add owner-scoped EXIF/location stripping for travel/family media. |
 | Include binary photos/files in export | Needs size limits, async job progress, archive encryption, and retry/resume handling. |
-| Add frontend privacy panel | Show destructive action confirmations and counts returned from backend. |
+| Extend frontend privacy panel with async large-archive export status | Current profile UI covers destructive confirmations, returned counts, and PIN-protected ledger archive download; large photo/file archive export still needs background job progress. |
 | Add audit events for privacy destructive actions | Store safe event names and counts without raw file names, tokens, or export contents. |
 
 ## UI Contract Notes

@@ -80,4 +80,5 @@ Before promoting a build that changes auth, admin, sharing, upload, OCR, AI, or 
 4. Run `scripts/verify-db-migrations.ps1` when schema files change.
 5. Confirm public routes are still intentionally listed in this document.
 6. Run `scripts/verify-prometheus-alerts.ps1` when alert rules or observability docs change.
-7. Confirm operational dashboards or alerts cover the changed failure mode.
+7. Run `scripts/verify-e2e-smoke-checklist.ps1` and attach P0 browser smoke evidence for changed frontend-critical flows.
+8. Confirm operational dashboards or alerts cover the changed failure mode.

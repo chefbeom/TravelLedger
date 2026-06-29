@@ -104,6 +104,7 @@ class LedgerAiAnalysisServiceTest {
                 new LedgerAiAnalysisMetrics(properties, meterRegistryProvider),
                 new LedgerAiAnalysisJsonCodec(objectMapper),
                 new LedgerAiAnalysisTextSanitizer(),
+                new LedgerAiAnalysisPayloadBuilder(new LedgerAiAnalysisTextSanitizer()),
                 new LedgerAiAnalysisNotifications(userNotificationService)
         );
     }

@@ -58,8 +58,6 @@ public class LedgerAiAnalysisService {
     private static final int TOP_EXPENSE_LIMIT = 20;
     private static final int PROVIDER_EXPENSE_ENTRY_LIMIT = 200;
     private static final int PROVIDER_COMPARISON_ENTRY_LIMIT = 120;
-    private static final int PROVIDER_TEXT_LIMIT = 80;
-    private static final int PROVIDER_MEMO_LIMIT = 160;
     private static final int MAX_HISTORY_PAGE_SIZE = 50;
     private static final long MAX_CUSTOM_RANGE_DAYS = 366;
     private static final Duration DUPLICATE_SUPPRESSION_WINDOW = Duration.ofMinutes(5);
@@ -73,6 +71,7 @@ public class LedgerAiAnalysisService {
     private final LedgerAiAnalysisMetrics aiMetrics;
     private final LedgerAiAnalysisJsonCodec aiJsonCodec;
     private final LedgerAiAnalysisTextSanitizer aiText;
+    private final LedgerAiAnalysisPayloadBuilder aiPayloadBuilder;
     private final LedgerAiAnalysisNotifications aiNotifications;
 
     public LedgerAiAnalysisStatusResponse getStatus() {
@@ -307,10 +306,10 @@ public class LedgerAiAnalysisService {
     }
 
     private LedgerAiN8nPayload buildPayload(AnalysisPlan plan, AnalysisDataset dataset) {
-        List<ExpenseEntryPayload> providerExpenseEntries = providerExpenseEntries(dataset.expenseEntries(), PROVIDER_EXPENSE_ENTRY_LIMIT);
-        List<ExpenseEntryPayload> providerTopExpenses = providerExpenseEntries(dataset.topExpenses(), TOP_EXPENSE_LIMIT);
-        List<ExpenseEntryPayload> providerComparisonExpenseEntries = providerExpenseEntries(dataset.comparisonExpenseEntries(), PROVIDER_COMPARISON_ENTRY_LIMIT);
-        List<RecurringExpenseCandidatePayload> providerRecurringCandidates = providerRecurringCandidates(buildRecurringExpenseCandidates(dataset.expenseEntries()));
+        List<ExpenseEntryPayload> providerExpenseEntries = aiPayloadBuilder.providerExpenseEntries(dataset.expenseEntries(), PROVIDER_EXPENSE_ENTRY_LIMIT);
+        List<ExpenseEntryPayload> providerTopExpenses = aiPayloadBuilder.providerExpenseEntries(dataset.topExpenses(), TOP_EXPENSE_LIMIT);
+        List<ExpenseEntryPayload> providerComparisonExpenseEntries = aiPayloadBuilder.providerExpenseEntries(dataset.comparisonExpenseEntries(), PROVIDER_COMPARISON_ENTRY_LIMIT);
+        List<RecurringExpenseCandidatePayload> providerRecurringCandidates = aiPayloadBuilder.providerRecurringCandidates(buildRecurringExpenseCandidates(dataset.expenseEntries()));
 
         return new LedgerAiN8nPayload(
                 "travelledger.ledger-ai-analysis.v2",
@@ -335,64 +334,9 @@ public class LedgerAiAnalysisService {
                 dataset.comparisonCategoryBreakdown(),
                 dataset.comparisonPaymentBreakdown(),
                 providerComparisonExpenseEntries,
-                buildPayloadMinimizationSummary(dataset, providerExpenseEntries, providerComparisonExpenseEntries),
+                aiPayloadBuilder.buildPayloadMinimizationSummary(dataset.expenseEntries().size(), dataset.comparisonExpenseEntries().size(), providerExpenseEntries, providerComparisonExpenseEntries),
                 LedgerAiOutputContract.text()
         );
-    }
-
-    private PayloadMinimizationSummary buildPayloadMinimizationSummary(
-            AnalysisDataset dataset,
-            List<ExpenseEntryPayload> providerExpenseEntries,
-            List<ExpenseEntryPayload> providerComparisonExpenseEntries
-    ) {
-        int expenseTotal = dataset.expenseEntries().size();
-        int comparisonTotal = dataset.comparisonExpenseEntries().size();
-        return new PayloadMinimizationSummary(
-                expenseTotal,
-                providerExpenseEntries.size(),
-                Math.max(0, expenseTotal - providerExpenseEntries.size()),
-                comparisonTotal,
-                providerComparisonExpenseEntries.size(),
-                Math.max(0, comparisonTotal - providerComparisonExpenseEntries.size()),
-                PROVIDER_TEXT_LIMIT,
-                PROVIDER_MEMO_LIMIT
-        );
-    }
-
-    private List<ExpenseEntryPayload> providerExpenseEntries(List<ExpenseEntryPayload> entries, int limit) {
-        return entries.stream()
-                .limit(limit)
-                .map(this::sanitizeProviderExpenseEntry)
-                .toList();
-    }
-
-    private ExpenseEntryPayload sanitizeProviderExpenseEntry(ExpenseEntryPayload entry) {
-        return new ExpenseEntryPayload(
-                entry.entryDate(),
-                aiText.limitText(entry.title(), PROVIDER_TEXT_LIMIT),
-                aiText.limitText(entry.memo(), PROVIDER_MEMO_LIMIT),
-                entry.amount(),
-                aiText.limitText(entry.categoryGroupName(), PROVIDER_TEXT_LIMIT),
-                aiText.limitText(entry.categoryDetailName(), PROVIDER_TEXT_LIMIT),
-                aiText.limitText(entry.paymentMethodName(), PROVIDER_TEXT_LIMIT)
-        );
-    }
-
-    private List<RecurringExpenseCandidatePayload> providerRecurringCandidates(List<RecurringExpenseCandidatePayload> candidates) {
-        return candidates.stream()
-                .map(candidate -> new RecurringExpenseCandidatePayload(
-                        aiText.limitText(candidate.title(), PROVIDER_TEXT_LIMIT),
-                        aiText.limitText(candidate.categoryGroupName(), PROVIDER_TEXT_LIMIT),
-                        aiText.limitText(candidate.categoryDetailName(), PROVIDER_TEXT_LIMIT),
-                        aiText.limitText(candidate.paymentMethodName(), PROVIDER_TEXT_LIMIT),
-                        candidate.occurrenceCount(),
-                        candidate.totalAmount(),
-                        candidate.averageAmount(),
-                        candidate.firstDate(),
-                        candidate.lastDate(),
-                        candidate.dates()
-                ))
-                .toList();
     }
 
     private LedgerAiAnalysisResponse buildResponse(Long historyId, AnalysisPlan plan, AnalysisDataset dataset, LedgerAiRemoteResponse remote) {

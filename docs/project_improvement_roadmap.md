@@ -46,7 +46,7 @@ This roadmap turns the current improvement analysis into an implementation queue
 | Family budget/shared goals | Makes Household area more distinct. | Shared monthly budget and goal progress widget. | Household dashboard shows goal/budget status. |
 | Notification center | Connects disconnected events. | Store/read notifications for AI done, budget warning, backup failure, shared file. | Header badge and notification list work across events. |
 | Data portability | Builds trust for personal data platform. | User export archive for ledger CSV and metadata JSON. | User can request/download own export. |
-| Privacy control panel | Gives users control over sensitive records. | Revoke all share links, delete AI history, strip photo GPS metadata. | User-facing privacy page performs each action with confirmation. |
+| Privacy control panel | Gives users control over sensitive records. | Backend slice now supports AI history deletion and public drive link revocation; next add GPS stripping and export UI. | Authenticated user can clean up own derived AI data and revoke own public links with returned counts. |
 
 ## Suggested Execution Order
 
@@ -67,6 +67,9 @@ This roadmap turns the current improvement analysis into an implementation queue
 | `docs/ledger_ai_safety_hardening.md` | AI provider safety, failure handling, and hardening backlog. |
 | `docs/project_improvement_roadmap.md` | Prioritized roadmap for improvements and new features. |
 | `docs/db_migration_strategy.md` | Flyway transition plan and schema updater retirement queue. |
+| `docs/accessibility_mobile_checklist.md` | WCAG 2.2 and mobile UX checklist for priority screens. |
+| `docs/backup_restore_rehearsal_runbook.md` | Restore rehearsal evidence, encryption readiness, and failure-handling checklist. |
+| `docs/privacy_control_panel.md` | Backend privacy controls, safety rules, response contract, and next privacy actions. |
 ## Current Automation Set
 
 | Automation | Purpose |

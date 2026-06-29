@@ -72,6 +72,35 @@ class LedgerTransactionAnomalyServiceTest {
     }
 
     @Test
+    void findAnomaliesFlagsUnusuallyLargeExpenseAgainstMedianExpense() {
+        stubUser();
+        List<LedgerEntry> entries = List.of(
+                entry(1L, LocalDate.of(2026, 6, 1), "Coffee", "1000", EntryType.EXPENSE),
+                entry(2L, LocalDate.of(2026, 6, 2), "Snack", "1200", EntryType.EXPENSE),
+                entry(3L, LocalDate.of(2026, 6, 3), "Lunch", "1500", EntryType.EXPENSE),
+                entry(4L, LocalDate.of(2026, 6, 4), "Bus", "1800", EntryType.EXPENSE),
+                entry(5L, LocalDate.of(2026, 6, 5), "Dinner", "2000", EntryType.EXPENSE),
+                entry(6L, LocalDate.of(2026, 6, 6), "Camera", "90000", EntryType.EXPENSE),
+                entry(7L, LocalDate.of(2026, 6, 7), "Salary", "500000", EntryType.INCOME)
+        );
+        when(ledgerEntryRepository.findAllByOwnerIdAndDeletedAtIsNullAndEntryDateBetweenOrderByEntryDateAscIdAsc(USER_ID, FROM, TO))
+                .thenReturn(entries);
+
+        var response = service.findAnomalies(USER_ID, FROM, TO, 50);
+
+        assertThat(response.totalGroups()).isEqualTo(1);
+        var group = response.content().get(0);
+        assertThat(group.type()).isEqualTo("UNUSUALLY_LARGE_EXPENSE");
+        assertThat(group.severity()).isEqualTo("high");
+        assertThat(group.reason()).contains("median expense");
+        assertThat(group.entryCount()).isEqualTo(1);
+        assertThat(group.anomalyKey()).contains("large-expense", "median");
+        assertThat(group.entries()).extracting("id").containsExactly(6L);
+        assertThat(group.entries()).allSatisfy(entry -> assertThat(entry.entryType()).isEqualTo(EntryType.EXPENSE));
+        verify(ledgerEntryRepository).findAllByOwnerIdAndDeletedAtIsNullAndEntryDateBetweenOrderByEntryDateAscIdAsc(USER_ID, FROM, TO);
+    }
+
+    @Test
     void findAnomaliesCapsReturnedGroupsWithoutChangingTotalGroups() {
         stubUser();
         List<LedgerEntry> entries = new ArrayList<>();

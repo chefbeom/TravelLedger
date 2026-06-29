@@ -32,6 +32,10 @@ public class LedgerTransactionAnomalyService {
     private static final int DEFAULT_LIMIT = 50;
     private static final int MAX_LIMIT = 200;
     private static final int MAX_RANGE_DAYS = 366;
+    private static final int MIN_UNUSUAL_EXPENSE_BASELINE_COUNT = 5;
+    private static final BigDecimal UNUSUAL_EXPENSE_MULTIPLIER = BigDecimal.valueOf(3);
+    private static final BigDecimal HIGH_UNUSUAL_EXPENSE_MULTIPLIER = BigDecimal.valueOf(5);
+    private static final BigDecimal MIN_UNUSUAL_EXPENSE_AMOUNT = BigDecimal.valueOf(50_000);
 
     private final AppUserService appUserService;
     private final LedgerEntryRepository ledgerEntryRepository;
@@ -48,7 +52,12 @@ public class LedgerTransactionAnomalyService {
                         range.to()
                 );
 
-        List<LedgerTransactionAnomalyGroupResponse> groups = detectSameDaySameAmountDuplicates(entries);
+        List<LedgerTransactionAnomalyGroupResponse> groups = new ArrayList<>();
+        groups.addAll(detectSameDaySameAmountDuplicates(entries));
+        groups.addAll(detectUnusuallyLargeExpenses(entries));
+        groups = groups.stream()
+                .sorted(this::compareGroups)
+                .toList();
         int totalGroups = groups.size();
         List<LedgerTransactionAnomalyGroupResponse> limitedGroups = groups.stream()
                 .limit(normalizedLimit)
@@ -87,10 +96,33 @@ public class LedgerTransactionAnomalyService {
         return grouped.entrySet().stream()
                 .filter(entry -> entry.getValue().size() >= 2)
                 .map(entry -> toDuplicateGroup(entry.getKey(), entry.getValue()))
+                .toList();
+    }
+
+    private List<LedgerTransactionAnomalyGroupResponse> detectUnusuallyLargeExpenses(List<LedgerEntry> entries) {
+        List<LedgerEntry> expenses = entries.stream()
+                .filter(entry -> entry.getEntryType() == EntryType.EXPENSE)
+                .filter(entry -> entry.getEntryDate() != null)
+                .filter(entry -> expenseAmount(entry).compareTo(BigDecimal.ZERO) > 0)
+                .toList();
+        if (expenses.size() < MIN_UNUSUAL_EXPENSE_BASELINE_COUNT) {
+            return List.of();
+        }
+
+        BigDecimal median = medianExpenseAmount(expenses);
+        if (median.compareTo(BigDecimal.ZERO) <= 0) {
+            return List.of();
+        }
+        BigDecimal threshold = median.multiply(UNUSUAL_EXPENSE_MULTIPLIER).max(MIN_UNUSUAL_EXPENSE_AMOUNT);
+        BigDecimal highThreshold = median.multiply(HIGH_UNUSUAL_EXPENSE_MULTIPLIER).max(MIN_UNUSUAL_EXPENSE_AMOUNT);
+
+        return expenses.stream()
+                .filter(entry -> expenseAmount(entry).compareTo(threshold) >= 0)
                 .sorted(Comparator
-                        .comparing(LedgerTransactionAnomalyGroupResponse::entryCount).reversed()
-                        .thenComparing(group -> group.entries().get(0).entryDate(), Comparator.reverseOrder())
-                        .thenComparing(LedgerTransactionAnomalyGroupResponse::anomalyKey))
+                        .comparing(this::expenseAmount, Comparator.reverseOrder())
+                        .thenComparing(LedgerEntry::getEntryDate, Comparator.reverseOrder())
+                        .thenComparing(LedgerEntry::getId))
+                .map(entry -> toUnusuallyLargeExpenseGroup(entry, median, highThreshold))
                 .toList();
     }
 
@@ -109,6 +141,30 @@ public class LedgerTransactionAnomalyService {
                 anomalyKey,
                 responseEntries.size(),
                 responseEntries
+        );
+    }
+
+    private LedgerTransactionAnomalyGroupResponse toUnusuallyLargeExpenseGroup(
+            LedgerEntry entry,
+            BigDecimal median,
+            BigDecimal highThreshold
+    ) {
+        BigDecimal amount = expenseAmount(entry);
+        return new LedgerTransactionAnomalyGroupResponse(
+                "UNUSUALLY_LARGE_EXPENSE",
+                amount.compareTo(highThreshold) >= 0 ? "high" : "medium",
+                "Expense amount is unusually high compared with the user's median expense in the selected range.",
+                String.join(
+                        "|",
+                        "large-expense",
+                        entry.getEntryDate().toString(),
+                        String.valueOf(entry.getId()),
+                        normalizeAmount(amount),
+                        "median",
+                        normalizeAmount(median)
+                ),
+                1,
+                List.of(toEntryResponse(entry))
         );
     }
 
@@ -132,6 +188,49 @@ public class LedgerTransactionAnomalyService {
                 entry.getTravelPlanId(),
                 entry.getTravelRecordId()
         );
+    }
+
+    private int compareGroups(LedgerTransactionAnomalyGroupResponse left, LedgerTransactionAnomalyGroupResponse right) {
+        int severity = Integer.compare(severityRank(left.severity()), severityRank(right.severity()));
+        if (severity != 0) {
+            return severity;
+        }
+        int date = firstEntryDate(right).compareTo(firstEntryDate(left));
+        if (date != 0) {
+            return date;
+        }
+        int count = Integer.compare(right.entryCount(), left.entryCount());
+        if (count != 0) {
+            return count;
+        }
+        return left.anomalyKey().compareTo(right.anomalyKey());
+    }
+
+    private int severityRank(String severity) {
+        return switch (severity == null ? "" : severity.toLowerCase(Locale.ROOT)) {
+            case "high" -> 0;
+            case "medium" -> 1;
+            default -> 2;
+        };
+    }
+
+    private LocalDate firstEntryDate(LedgerTransactionAnomalyGroupResponse group) {
+        if (group.entries() == null || group.entries().isEmpty() || group.entries().get(0).entryDate() == null) {
+            return LocalDate.MIN;
+        }
+        return group.entries().get(0).entryDate();
+    }
+
+    private BigDecimal medianExpenseAmount(List<LedgerEntry> expenses) {
+        List<BigDecimal> amounts = expenses.stream()
+                .map(this::expenseAmount)
+                .sorted()
+                .toList();
+        return amounts.get(amounts.size() / 2);
+    }
+
+    private BigDecimal expenseAmount(LedgerEntry entry) {
+        return entry.getAmount() == null ? BigDecimal.ZERO : entry.getAmount().abs();
     }
 
     private DateRange normalizeRange(LocalDate from, LocalDate to) {

@@ -1,4 +1,4 @@
-package com.playdata.calen.ledger.ai;
+﻿package com.playdata.calen.ledger.ai;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -38,6 +38,7 @@ public class LedgerAiLmStudioClient {
                     .baseUrl(properties.getLmStudioBaseUrl())
                     .requestFactory(requestFactory)
                     .build();
+            String model = resolveModel(restClient);
 
             RestClient.RequestBodySpec request = restClient.post()
                     .uri(properties.normalizedLmStudioChatPath())
@@ -48,7 +49,7 @@ public class LedgerAiLmStudioClient {
                 request.header("Authorization", "Bearer " + properties.getLmStudioApiKey());
             }
 
-            String responseBody = request.body(buildChatRequest(payload))
+            String responseBody = request.body(buildChatRequest(payload, model))
                     .retrieve()
                     .body(String.class);
 
@@ -71,10 +72,10 @@ public class LedgerAiLmStudioClient {
         }
     }
 
-    private ObjectNode buildChatRequest(Object payload) throws JsonProcessingException {
+    private ObjectNode buildChatRequest(Object payload, String model) throws JsonProcessingException {
         String payloadJson = objectMapper.writeValueAsString(payload);
         ObjectNode root = objectMapper.createObjectNode();
-        root.put("model", properties.getModel());
+        root.put("model", model);
         root.put("temperature", properties.getTemperature());
         root.put("max_tokens", properties.getMaxTokens());
         root.put("stream", false);
@@ -87,6 +88,85 @@ public class LedgerAiLmStudioClient {
                 .put("role", "user")
                 .put("content", "Analyze this TravelLedger payload and return exactly the JSON object requested by outputContract. Do not change ledger data and do not suggest that changes were applied.\n\n" + payloadJson);
         return root;
+    }
+
+    private String resolveModel(RestClient restClient) {
+        String configuredModel = properties.normalizedLmStudioModel();
+        if (hasText(configuredModel)) {
+            return configuredModel;
+        }
+
+        RestClient.RequestHeadersSpec<?> request = restClient.get()
+                .uri(properties.normalizedLmStudioModelsPath())
+                .accept(MediaType.APPLICATION_JSON);
+        if (hasText(properties.getLmStudioApiKey())) {
+            request = request.header("Authorization", "Bearer " + properties.getLmStudioApiKey());
+        }
+
+        String responseBody = request.retrieve().body(String.class);
+        return extractFirstModelId(responseBody);
+    }
+
+    private String extractFirstModelId(String responseBody) {
+        if (!hasText(responseBody)) {
+            throw new BadRequestException("LM Studio 모델 목록이 비어 있습니다. LM Studio에서 모델을 먼저 로드하세요.");
+        }
+        try {
+            JsonNode root = objectMapper.readTree(responseBody);
+            String directModel = modelIdFrom(root);
+            if (hasText(directModel)) {
+                return directModel;
+            }
+
+            String dataModel = firstModelIdFromArray(root.path("data"));
+            if (hasText(dataModel)) {
+                return dataModel;
+            }
+
+            String modelsModel = firstModelIdFromArray(root.path("models"));
+            if (hasText(modelsModel)) {
+                return modelsModel;
+            }
+
+            String rootArrayModel = firstModelIdFromArray(root);
+            if (hasText(rootArrayModel)) {
+                return rootArrayModel;
+            }
+        } catch (JsonProcessingException exception) {
+            throw new BadRequestException("LM Studio 모델 목록을 JSON으로 해석하지 못했습니다.");
+        }
+
+        throw new BadRequestException("LM Studio에 로드된 모델을 찾지 못했습니다. LM Studio에서 모델을 로드한 뒤 다시 시도하세요.");
+    }
+
+    private String firstModelIdFromArray(JsonNode node) {
+        if (!node.isArray()) {
+            return "";
+        }
+        for (JsonNode item : node) {
+            String modelId = modelIdFrom(item);
+            if (hasText(modelId)) {
+                return modelId;
+            }
+        }
+        return "";
+    }
+
+    private String modelIdFrom(JsonNode node) {
+        if (node == null || node.isMissingNode() || node.isNull()) {
+            return "";
+        }
+        if (node.isTextual()) {
+            return node.asText("");
+        }
+        String[] fields = {"id", "model", "name", "path"};
+        for (String field : fields) {
+            String value = node.path(field).asText("");
+            if (hasText(value)) {
+                return value;
+            }
+        }
+        return "";
     }
 
     private String extractAssistantContent(String responseBody) throws JsonProcessingException {

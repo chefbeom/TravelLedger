@@ -1,4 +1,4 @@
-# Ledger AI Safety Hardening Plan
+﻿# Ledger AI Safety Hardening Plan
 
 Updated: 2026-06-30
 
@@ -6,7 +6,7 @@ This document defines the safety baseline for the ledger AI analysis feature. It
 
 | Provider | Code path | External dependency |
 | --- | --- | --- |
-| `lmstudio` | `LedgerAiLmStudioClient` | LM Studio local server, default `http://172.18.240.1:1234/api/v1/chat` |
+| `lmstudio` | `LedgerAiLmStudioClient` | LM Studio local server, default `http://172.18.240.1:1234/api/v1/chat`; `APP_LEDGER_AI_MODEL=auto` resolves the first model from `/api/v1/models`. |
 | `n8n` | `LedgerAiN8nClient` | n8n webhook workflow |
 
 The baseline is inspired by OWASP Top 10 for LLM Applications 2025. The goal is to keep AI output useful without allowing it to mutate ledger data, leak secrets, or silently accept invalid model output.
@@ -181,3 +181,4 @@ A change to ledger AI code is not release-ready until:
 4. AI history stores both success and failure cases with bounded error text.
 5. Frontend copy does not imply that AI automatically changes ledger data.
 6. README and `.env.example` match `application.yml` configuration names.
+

@@ -1,4 +1,4 @@
-spring:
+﻿spring:
   application:
     name: calen-backend
   datasource:
@@ -99,7 +99,7 @@ app:
       workflow-url: ${APP_LEDGER_AI_WORKFLOW_URL:}
       api-key: ${APP_LEDGER_AI_API_KEY:}
       api-key-header: ${APP_LEDGER_AI_API_KEY_HEADER:X-TravelLedger-AI-Key}
-      model: ${APP_LEDGER_AI_MODEL:gemma4:e12b}
+      model: ${APP_LEDGER_AI_MODEL:auto}
       lm-studio-base-url: ${APP_LEDGER_AI_LMSTUDIO_BASE_URL:http://172.18.240.1:1234}
       lm-studio-chat-path: ${APP_LEDGER_AI_LMSTUDIO_CHAT_PATH:/api/v1/chat}
       lm-studio-api-key: ${APP_LEDGER_AI_LMSTUDIO_API_KEY:}
@@ -140,3 +140,4 @@ app:
     db-backup-cron: ${DATA_OPS_DB_BACKUP_CRON:0 0 0 * * *}
     minio-backup-enabled: ${DATA_OPS_MINIO_BACKUP_ENABLED:false}
     minio-backup-cron: ${DATA_OPS_MINIO_BACKUP_CRON:0 30 0 * * *}
+

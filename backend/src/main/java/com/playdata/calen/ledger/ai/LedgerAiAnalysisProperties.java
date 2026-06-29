@@ -16,8 +16,9 @@ public class LedgerAiAnalysisProperties {
     private String workflowUrl = "";
     private String apiKey = "";
     private String apiKeyHeader = "X-TravelLedger-AI-Key";
-    private String model = "gemma4:e12b";
+    private String model = "auto";
     private String lmStudioBaseUrl = "http://172.18.240.1:1234";
+    private String lmStudioModelsPath = "/api/v1/models";
     private String lmStudioChatPath = "/api/v1/chat";
     private String lmStudioApiKey = "";
     private double temperature = 0.2;
@@ -85,6 +86,21 @@ public class LedgerAiAnalysisProperties {
 
     public void setLmStudioBaseUrl(String lmStudioBaseUrl) {
         this.lmStudioBaseUrl = lmStudioBaseUrl;
+    }
+
+    public String getLmStudioModelsPath() {
+        return lmStudioModelsPath;
+    }
+
+    public void setLmStudioModelsPath(String lmStudioModelsPath) {
+        this.lmStudioModelsPath = lmStudioModelsPath;
+    }
+
+    public String normalizedLmStudioModelsPath() {
+        if (lmStudioModelsPath == null || lmStudioModelsPath.isBlank()) {
+            return "/api/v1/models";
+        }
+        return lmStudioModelsPath.startsWith("/") ? lmStudioModelsPath : "/" + lmStudioModelsPath;
     }
 
     public String getLmStudioChatPath() {
@@ -167,7 +183,15 @@ public class LedgerAiAnalysisProperties {
     }
 
     public boolean isLmStudioConfigured() {
-        return hasText(lmStudioBaseUrl) && hasText(model) && isProviderUrlAllowed(lmStudioBaseUrl);
+        return hasText(lmStudioBaseUrl) && isProviderUrlAllowed(lmStudioBaseUrl);
+    }
+
+    public boolean isLmStudioModelAuto() {
+        return !hasText(model) || "auto".equalsIgnoreCase(model.trim());
+    }
+
+    public String normalizedLmStudioModel() {
+        return isLmStudioModelAuto() ? "" : model.trim();
     }
 
     public boolean isConfigured() {
@@ -185,11 +209,14 @@ public class LedgerAiAnalysisProperties {
             return "AI 분석 기능이 비활성화되어 있습니다. APP_LEDGER_AI_ENABLED=true로 설정하세요.";
         }
         if (provider() == LedgerAiProvider.LMSTUDIO) {
-            if (!hasText(lmStudioBaseUrl) || !hasText(model)) {
-                return "LM Studio 연결 정보가 부족합니다. APP_LEDGER_AI_LMSTUDIO_BASE_URL과 APP_LEDGER_AI_MODEL을 설정하세요.";
+            if (!hasText(lmStudioBaseUrl)) {
+                return "LM Studio 연결 정보가 부족합니다. APP_LEDGER_AI_LMSTUDIO_BASE_URL을 설정하세요.";
             }
             if (!isProviderUrlAllowed(lmStudioBaseUrl)) {
                 return "LM Studio 호스트가 AI provider allowlist에 없습니다. APP_LEDGER_AI_ALLOWED_PROVIDER_HOSTS를 확인하세요.";
+            }
+            if (isLmStudioModelAuto()) {
+                return "LM Studio AI 분석 준비가 완료되었습니다. 모델은 /api/v1/models에서 자동 선택됩니다.";
             }
             return "LM Studio AI 분석 준비가 완료되었습니다.";
         }

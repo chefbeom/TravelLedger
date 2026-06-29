@@ -1,4 +1,4 @@
-﻿name: CI
+name: CI
 
 on:
   push:
@@ -208,6 +208,16 @@ jobs:
       - name: Verify notification center contract
         shell: pwsh
         run: ./scripts/verify-notification-center-contract.ps1
+  drive-file-versioning-contract:
+    name: Drive file versioning contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Verify Drive file versioning contract
+        shell: pwsh
+        run: ./scripts/verify-drive-file-versioning-contract.ps1
   data-portability-contract:
     name: Data portability contract
     runs-on: ubuntu-latest
@@ -332,6 +342,7 @@ jobs:
       - travel-story-export-contract
       - household-budget-goals-contract
       - notification-center-contract
+      - drive-file-versioning-contract
       - data-portability-contract
       - pwa-mobile-baseline
       - service-decomposition-plan
@@ -360,7 +371,7 @@ jobs:
             [ledger-anomaly-contract]="${{ needs['ledger-anomaly-contract'].result }}"
             [travel-story-export-contract]="${{ needs['travel-story-export-contract'].result }}"
             [household-budget-goals-contract]="${{ needs['household-budget-goals-contract'].result }}"
-            [notification-center-contract]="${{ needs['notification-center-contract'].result }}"
+            [notification-center-contract]="${{ needs['notification-center-contract'].result }}"`n            [drive-file-versioning-contract]="${{ needs['drive-file-versioning-contract'].result }}"
             [data-portability-contract]="${{ needs['data-portability-contract'].result }}"
             [pwa-mobile-baseline]="${{ needs['pwa-mobile-baseline'].result }}"
             [accessibility-mobile-checklist]="${{ needs['accessibility-mobile-checklist'].result }}"

@@ -704,6 +704,15 @@ export function commitLedgerExcelImport(rows) {
   })
 }
 
+export function fetchDriveFileVersions(fileId) {
+  return request(`/file/${fileId}/versions`)
+}
+
+export function restoreDriveFileVersion(fileId, versionId) {
+  return request(`/file/${fileId}/versions/${versionId}/restore`, {
+    method: 'PATCH',
+  })
+}
 export function fetchTravelPlans() {
   return request('/travel/plans')
 }

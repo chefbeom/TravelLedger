@@ -16,6 +16,7 @@ import {
   fetchDriveHomeSummary,
   fetchDriveDownloadLinks,
   fetchDrivePage,
+  fetchDriveFileVersions,
   fetchDriveProfileSettings,
   fetchDriveRecentFiles,
   fetchDriveShareInfo,
@@ -28,6 +29,7 @@ import {
   moveDriveItems,
   renameDriveItem,
   restoreDriveItem,
+  restoreDriveFileVersion,
   restoreDriveItems,
   revokeDriveDownloadLink,
   saveSharedDriveFile,
@@ -166,6 +168,15 @@ const shareDialog = reactive({
   revokingLinkId: null,
 })
 
+const versionDrawer = reactive({
+  open: false,
+  item: null,
+  versions: [],
+  loading: false,
+  restoringId: null,
+  errorMessage: '',
+  successMessage: '',
+})
 const adminCapacityForm = reactive({
   providerCapacityGb: '100',
 })
@@ -262,6 +273,8 @@ const canDownloadSelectedItems = computed(() => selectedItems.value.length > 0 &
 const hasSelectedLockedItems = computed(() => selectedItems.value.some((item) => isLockedItem(item)))
 
 const primarySelectedItem = computed(() => selectedItems.value.length === 1 ? selectedItems.value[0] : null)
+
+const selectedVersionableItem = computed(() => canOpenVersionDrawer(primarySelectedItem.value) ? primarySelectedItem.value : null)
 
 const selectedTotalBytes = computed(() => {
   return selectedItems.value.reduce((sum, item) => sum + Number(item.fileSize || 0), 0)
@@ -697,6 +710,10 @@ function canShareItem(item) {
 
 function canDownloadOwnedItem(item) {
   return (activeTab.value === 'drive' || activeTab.value === 'recent') && Boolean(item?.id)
+}
+
+function canOpenVersionDrawer(item) {
+  return canDownloadOwnedItem(item) && !isFolder(item)
 }
 
 function canOpenItemLocation(item) {
@@ -2333,6 +2350,86 @@ watch(
   },
 )
 
+function resetVersionDrawerMessages() {
+  versionDrawer.errorMessage = ''
+  versionDrawer.successMessage = ''
+}
+
+function closeDriveVersionDrawer() {
+  if (versionDrawer.loading || versionDrawer.restoringId) {
+    return
+  }
+  versionDrawer.open = false
+  versionDrawer.item = null
+  versionDrawer.versions = []
+  resetVersionDrawerMessages()
+}
+
+async function openDriveVersionDrawer(item) {
+  if (!canOpenVersionDrawer(item)) {
+    return
+  }
+  versionDrawer.open = true
+  versionDrawer.item = item
+  versionDrawer.versions = []
+  resetVersionDrawerMessages()
+  await loadDriveVersions(item)
+}
+
+async function loadDriveVersions(item = versionDrawer.item) {
+  if (!item?.id) {
+    return
+  }
+  versionDrawer.loading = true
+  versionDrawer.errorMessage = ''
+
+  try {
+    const response = await fetchDriveFileVersions(item.id)
+    versionDrawer.versions = Array.isArray(response) ? response : []
+  } catch (error) {
+    versionDrawer.errorMessage = error.message
+    versionDrawer.versions = []
+  } finally {
+    versionDrawer.loading = false
+  }
+}
+
+async function restoreDriveVersion(version) {
+  if (!versionDrawer.item?.id || !version?.id || versionDrawer.restoringId) {
+    return
+  }
+
+  const confirmed = window.confirm(`Restore version ${version.versionNumber || version.id} for ${versionDrawer.item.fileOriginName || 'this file'}?`)
+  if (!confirmed) {
+    return
+  }
+
+  resetVersionDrawerMessages()
+  versionDrawer.restoringId = version.id
+
+  try {
+    const restored = await restoreDriveFileVersion(versionDrawer.item.id, version.id)
+    versionDrawer.item = restored || versionDrawer.item
+    versionDrawer.successMessage = 'Selected file version restored. A RESTORE version entry was recorded.'
+    setMessages('Selected file version restored.', '')
+    await loadDriveVersions(versionDrawer.item)
+  } catch (error) {
+    versionDrawer.errorMessage = error.message
+  } finally {
+    versionDrawer.restoringId = null
+  }
+}
+
+function formatVersionSource(source) {
+  const normalized = String(source || '').toUpperCase()
+  if (normalized === 'RESTORE') {
+    return 'Restore'
+  }
+  if (normalized === 'UPLOAD') {
+    return 'Upload'
+  }
+  return source || '-'
+}
 onMounted(() => {
   document.addEventListener('click', closeContextMenu)
   window.addEventListener('keydown', handleDriveKeyboard)
@@ -2773,15 +2870,180 @@ onBeforeUnmount(() => {
                   <button class="button button--ghost" type="button" :disabled="!canMoveSelectedItems" @click="openMoveDialog(selectedItems)">위치 선택</button>
                   <button class="button button--ghost" type="button" :disabled="!selectedShareableItems.length" @click="openShareDialog(selectedShareableItems)">공유</button>
                   <button class="button button--ghost" type="button" :disabled="!canMoveSelectedItems" @click="moveSelectedToTrash">휴지통</button>
-                </template>
+                
+    <div v-if="selectedVersionableItem" class="drive-version-launcher" data-testid="drive-version-launcher">
+      <div>
+        <strong>File version history</strong>
+        <p>Review upload/restore versions for the selected owned file.</p>
+      </div>
+      <button class="button button--ghost" type="button" data-testid="drive-version-open" @click="openDriveVersionDrawer(selectedVersionableItem)">
+        View versions
+      </button>
+    </div>
+
+    <div v-if="versionDrawer.open" class="drive-version-overlay" data-testid="drive-version-overlay" @click.self="closeDriveVersionDrawer">
+      <aside class="drive-version-drawer" data-testid="drive-version-drawer" role="dialog" aria-modal="true" aria-labelledby="drive-version-title">
+        <header class="drive-version-drawer__header">
+          <div>
+            <p class="eyebrow">CalenDrive versions</p>
+            <h2 id="drive-version-title">{{ versionDrawer.item?.fileOriginName || 'File versions' }}</h2>
+            <p>Restore keeps ownership checks on the backend and records a new RESTORE version entry.</p>
+          </div>
+          <button class="button button--ghost" type="button" :disabled="versionDrawer.loading || Boolean(versionDrawer.restoringId)" @click="closeDriveVersionDrawer">
+            Close
+          </button>
+        </header>
+
+        <div v-if="versionDrawer.successMessage" class="feedback feedback--success" data-testid="drive-version-success" aria-live="polite">
+          {{ versionDrawer.successMessage }}
+        </div>
+        <div v-if="versionDrawer.errorMessage" class="feedback feedback--error" data-testid="drive-version-error" aria-live="assertive">
+          {{ versionDrawer.errorMessage }}
+        </div>
+
+        <div v-if="versionDrawer.loading" class="drive-version-empty" data-testid="drive-version-loading">Loading versions...</div>
+        <div v-else-if="!versionDrawer.versions.length" class="drive-version-empty" data-testid="drive-version-empty">
+          No version records are available for this file yet.
+        </div>
+        <div v-else class="drive-version-list" data-testid="drive-version-list">
+          <article v-for="version in versionDrawer.versions" :key="version.id" class="drive-version-card" :data-testid="`drive-version-row-${version.id}`">
+            <div>
+              <strong>Version {{ version.versionNumber }}</strong>
+              <p>{{ version.fileOriginName }} · {{ formatBytes(version.fileSize) }}</p>
+              <small>{{ formatVersionSource(version.source) }} · {{ version.contentType || '-' }} · {{ formatTimestamp(version.createdAt) }}</small>
+            </div>
+            <button
+              class="button button--primary"
+              type="button"
+              :disabled="Boolean(versionDrawer.restoringId)"
+              :data-testid="`drive-version-restore-${version.id}`"
+              @click="restoreDriveVersion(version)"
+            >
+              {{ versionDrawer.restoringId === version.id ? 'Restoring...' : 'Restore' }}
+            </button>
+          </article>
+        </div>
+      </aside>
+    </div>
+</template>
                 <template v-else-if="activeTab === 'trash'">
                   <button class="button button--ghost" type="button" :disabled="!selectedIds.length" @click="restoreSelectedFromTrash">복구</button>
                   <button class="button button--ghost" type="button" :disabled="!selectedIds.length || hasSelectedLockedItems" @click="deleteSelectedPermanently">완전 삭제</button>
                   <button class="button button--ghost" type="button" @click="handleClearTrash">휴지통 비우기</button>
-                </template>
+                
+    <div v-if="selectedVersionableItem" class="drive-version-launcher" data-testid="drive-version-launcher">
+      <div>
+        <strong>File version history</strong>
+        <p>Review upload/restore versions for the selected owned file.</p>
+      </div>
+      <button class="button button--ghost" type="button" data-testid="drive-version-open" @click="openDriveVersionDrawer(selectedVersionableItem)">
+        View versions
+      </button>
+    </div>
+
+    <div v-if="versionDrawer.open" class="drive-version-overlay" data-testid="drive-version-overlay" @click.self="closeDriveVersionDrawer">
+      <aside class="drive-version-drawer" data-testid="drive-version-drawer" role="dialog" aria-modal="true" aria-labelledby="drive-version-title">
+        <header class="drive-version-drawer__header">
+          <div>
+            <p class="eyebrow">CalenDrive versions</p>
+            <h2 id="drive-version-title">{{ versionDrawer.item?.fileOriginName || 'File versions' }}</h2>
+            <p>Restore keeps ownership checks on the backend and records a new RESTORE version entry.</p>
+          </div>
+          <button class="button button--ghost" type="button" :disabled="versionDrawer.loading || Boolean(versionDrawer.restoringId)" @click="closeDriveVersionDrawer">
+            Close
+          </button>
+        </header>
+
+        <div v-if="versionDrawer.successMessage" class="feedback feedback--success" data-testid="drive-version-success" aria-live="polite">
+          {{ versionDrawer.successMessage }}
+        </div>
+        <div v-if="versionDrawer.errorMessage" class="feedback feedback--error" data-testid="drive-version-error" aria-live="assertive">
+          {{ versionDrawer.errorMessage }}
+        </div>
+
+        <div v-if="versionDrawer.loading" class="drive-version-empty" data-testid="drive-version-loading">Loading versions...</div>
+        <div v-else-if="!versionDrawer.versions.length" class="drive-version-empty" data-testid="drive-version-empty">
+          No version records are available for this file yet.
+        </div>
+        <div v-else class="drive-version-list" data-testid="drive-version-list">
+          <article v-for="version in versionDrawer.versions" :key="version.id" class="drive-version-card" :data-testid="`drive-version-row-${version.id}`">
+            <div>
+              <strong>Version {{ version.versionNumber }}</strong>
+              <p>{{ version.fileOriginName }} · {{ formatBytes(version.fileSize) }}</p>
+              <small>{{ formatVersionSource(version.source) }} · {{ version.contentType || '-' }} · {{ formatTimestamp(version.createdAt) }}</small>
+            </div>
+            <button
+              class="button button--primary"
+              type="button"
+              :disabled="Boolean(versionDrawer.restoringId)"
+              :data-testid="`drive-version-restore-${version.id}`"
+              @click="restoreDriveVersion(version)"
+            >
+              {{ versionDrawer.restoringId === version.id ? 'Restoring...' : 'Restore' }}
+            </button>
+          </article>
+        </div>
+      </aside>
+    </div>
+</template>
                 <template v-else>
                   <button class="button button--ghost" type="button" :disabled="!selectedIds.length" @click="saveSelectedSharedFiles">내 드라이브에 저장</button>
-                </template>
+                
+    <div v-if="selectedVersionableItem" class="drive-version-launcher" data-testid="drive-version-launcher">
+      <div>
+        <strong>File version history</strong>
+        <p>Review upload/restore versions for the selected owned file.</p>
+      </div>
+      <button class="button button--ghost" type="button" data-testid="drive-version-open" @click="openDriveVersionDrawer(selectedVersionableItem)">
+        View versions
+      </button>
+    </div>
+
+    <div v-if="versionDrawer.open" class="drive-version-overlay" data-testid="drive-version-overlay" @click.self="closeDriveVersionDrawer">
+      <aside class="drive-version-drawer" data-testid="drive-version-drawer" role="dialog" aria-modal="true" aria-labelledby="drive-version-title">
+        <header class="drive-version-drawer__header">
+          <div>
+            <p class="eyebrow">CalenDrive versions</p>
+            <h2 id="drive-version-title">{{ versionDrawer.item?.fileOriginName || 'File versions' }}</h2>
+            <p>Restore keeps ownership checks on the backend and records a new RESTORE version entry.</p>
+          </div>
+          <button class="button button--ghost" type="button" :disabled="versionDrawer.loading || Boolean(versionDrawer.restoringId)" @click="closeDriveVersionDrawer">
+            Close
+          </button>
+        </header>
+
+        <div v-if="versionDrawer.successMessage" class="feedback feedback--success" data-testid="drive-version-success" aria-live="polite">
+          {{ versionDrawer.successMessage }}
+        </div>
+        <div v-if="versionDrawer.errorMessage" class="feedback feedback--error" data-testid="drive-version-error" aria-live="assertive">
+          {{ versionDrawer.errorMessage }}
+        </div>
+
+        <div v-if="versionDrawer.loading" class="drive-version-empty" data-testid="drive-version-loading">Loading versions...</div>
+        <div v-else-if="!versionDrawer.versions.length" class="drive-version-empty" data-testid="drive-version-empty">
+          No version records are available for this file yet.
+        </div>
+        <div v-else class="drive-version-list" data-testid="drive-version-list">
+          <article v-for="version in versionDrawer.versions" :key="version.id" class="drive-version-card" :data-testid="`drive-version-row-${version.id}`">
+            <div>
+              <strong>Version {{ version.versionNumber }}</strong>
+              <p>{{ version.fileOriginName }} · {{ formatBytes(version.fileSize) }}</p>
+              <small>{{ formatVersionSource(version.source) }} · {{ version.contentType || '-' }} · {{ formatTimestamp(version.createdAt) }}</small>
+            </div>
+            <button
+              class="button button--primary"
+              type="button"
+              :disabled="Boolean(versionDrawer.restoringId)"
+              :data-testid="`drive-version-restore-${version.id}`"
+              @click="restoreDriveVersion(version)"
+            >
+              {{ versionDrawer.restoringId === version.id ? 'Restoring...' : 'Restore' }}
+            </button>
+          </article>
+        </div>
+      </aside>
+    </div>
+</template>
               </div>
             </div>
 
@@ -2954,9 +3216,119 @@ onBeforeUnmount(() => {
                     <template v-for="row in detailRows" :key="row.label">
                       <dt>{{ row.label }}</dt>
                       <dd>{{ row.value }}</dd>
-                    </template>
+                    
+    <div v-if="selectedVersionableItem" class="drive-version-launcher" data-testid="drive-version-launcher">
+      <div>
+        <strong>File version history</strong>
+        <p>Review upload/restore versions for the selected owned file.</p>
+      </div>
+      <button class="button button--ghost" type="button" data-testid="drive-version-open" @click="openDriveVersionDrawer(selectedVersionableItem)">
+        View versions
+      </button>
+    </div>
+
+    <div v-if="versionDrawer.open" class="drive-version-overlay" data-testid="drive-version-overlay" @click.self="closeDriveVersionDrawer">
+      <aside class="drive-version-drawer" data-testid="drive-version-drawer" role="dialog" aria-modal="true" aria-labelledby="drive-version-title">
+        <header class="drive-version-drawer__header">
+          <div>
+            <p class="eyebrow">CalenDrive versions</p>
+            <h2 id="drive-version-title">{{ versionDrawer.item?.fileOriginName || 'File versions' }}</h2>
+            <p>Restore keeps ownership checks on the backend and records a new RESTORE version entry.</p>
+          </div>
+          <button class="button button--ghost" type="button" :disabled="versionDrawer.loading || Boolean(versionDrawer.restoringId)" @click="closeDriveVersionDrawer">
+            Close
+          </button>
+        </header>
+
+        <div v-if="versionDrawer.successMessage" class="feedback feedback--success" data-testid="drive-version-success" aria-live="polite">
+          {{ versionDrawer.successMessage }}
+        </div>
+        <div v-if="versionDrawer.errorMessage" class="feedback feedback--error" data-testid="drive-version-error" aria-live="assertive">
+          {{ versionDrawer.errorMessage }}
+        </div>
+
+        <div v-if="versionDrawer.loading" class="drive-version-empty" data-testid="drive-version-loading">Loading versions...</div>
+        <div v-else-if="!versionDrawer.versions.length" class="drive-version-empty" data-testid="drive-version-empty">
+          No version records are available for this file yet.
+        </div>
+        <div v-else class="drive-version-list" data-testid="drive-version-list">
+          <article v-for="version in versionDrawer.versions" :key="version.id" class="drive-version-card" :data-testid="`drive-version-row-${version.id}`">
+            <div>
+              <strong>Version {{ version.versionNumber }}</strong>
+              <p>{{ version.fileOriginName }} · {{ formatBytes(version.fileSize) }}</p>
+              <small>{{ formatVersionSource(version.source) }} · {{ version.contentType || '-' }} · {{ formatTimestamp(version.createdAt) }}</small>
+            </div>
+            <button
+              class="button button--primary"
+              type="button"
+              :disabled="Boolean(versionDrawer.restoringId)"
+              :data-testid="`drive-version-restore-${version.id}`"
+              @click="restoreDriveVersion(version)"
+            >
+              {{ versionDrawer.restoringId === version.id ? 'Restoring...' : 'Restore' }}
+            </button>
+          </article>
+        </div>
+      </aside>
+    </div>
+</template>
                   </dl>
-                </template>
+                
+    <div v-if="selectedVersionableItem" class="drive-version-launcher" data-testid="drive-version-launcher">
+      <div>
+        <strong>File version history</strong>
+        <p>Review upload/restore versions for the selected owned file.</p>
+      </div>
+      <button class="button button--ghost" type="button" data-testid="drive-version-open" @click="openDriveVersionDrawer(selectedVersionableItem)">
+        View versions
+      </button>
+    </div>
+
+    <div v-if="versionDrawer.open" class="drive-version-overlay" data-testid="drive-version-overlay" @click.self="closeDriveVersionDrawer">
+      <aside class="drive-version-drawer" data-testid="drive-version-drawer" role="dialog" aria-modal="true" aria-labelledby="drive-version-title">
+        <header class="drive-version-drawer__header">
+          <div>
+            <p class="eyebrow">CalenDrive versions</p>
+            <h2 id="drive-version-title">{{ versionDrawer.item?.fileOriginName || 'File versions' }}</h2>
+            <p>Restore keeps ownership checks on the backend and records a new RESTORE version entry.</p>
+          </div>
+          <button class="button button--ghost" type="button" :disabled="versionDrawer.loading || Boolean(versionDrawer.restoringId)" @click="closeDriveVersionDrawer">
+            Close
+          </button>
+        </header>
+
+        <div v-if="versionDrawer.successMessage" class="feedback feedback--success" data-testid="drive-version-success" aria-live="polite">
+          {{ versionDrawer.successMessage }}
+        </div>
+        <div v-if="versionDrawer.errorMessage" class="feedback feedback--error" data-testid="drive-version-error" aria-live="assertive">
+          {{ versionDrawer.errorMessage }}
+        </div>
+
+        <div v-if="versionDrawer.loading" class="drive-version-empty" data-testid="drive-version-loading">Loading versions...</div>
+        <div v-else-if="!versionDrawer.versions.length" class="drive-version-empty" data-testid="drive-version-empty">
+          No version records are available for this file yet.
+        </div>
+        <div v-else class="drive-version-list" data-testid="drive-version-list">
+          <article v-for="version in versionDrawer.versions" :key="version.id" class="drive-version-card" :data-testid="`drive-version-row-${version.id}`">
+            <div>
+              <strong>Version {{ version.versionNumber }}</strong>
+              <p>{{ version.fileOriginName }} · {{ formatBytes(version.fileSize) }}</p>
+              <small>{{ formatVersionSource(version.source) }} · {{ version.contentType || '-' }} · {{ formatTimestamp(version.createdAt) }}</small>
+            </div>
+            <button
+              class="button button--primary"
+              type="button"
+              :disabled="Boolean(versionDrawer.restoringId)"
+              :data-testid="`drive-version-restore-${version.id}`"
+              @click="restoreDriveVersion(version)"
+            >
+              {{ versionDrawer.restoringId === version.id ? 'Restoring...' : 'Restore' }}
+            </button>
+          </article>
+        </div>
+      </aside>
+    </div>
+</template>
 
                 <template v-else-if="primarySelectedItem">
                   <img
@@ -2975,7 +3347,62 @@ onBeforeUnmount(() => {
                     <template v-for="row in detailRows" :key="row.label">
                       <dt>{{ row.label }}</dt>
                       <dd>{{ row.value }}</dd>
-                    </template>
+                    
+    <div v-if="selectedVersionableItem" class="drive-version-launcher" data-testid="drive-version-launcher">
+      <div>
+        <strong>File version history</strong>
+        <p>Review upload/restore versions for the selected owned file.</p>
+      </div>
+      <button class="button button--ghost" type="button" data-testid="drive-version-open" @click="openDriveVersionDrawer(selectedVersionableItem)">
+        View versions
+      </button>
+    </div>
+
+    <div v-if="versionDrawer.open" class="drive-version-overlay" data-testid="drive-version-overlay" @click.self="closeDriveVersionDrawer">
+      <aside class="drive-version-drawer" data-testid="drive-version-drawer" role="dialog" aria-modal="true" aria-labelledby="drive-version-title">
+        <header class="drive-version-drawer__header">
+          <div>
+            <p class="eyebrow">CalenDrive versions</p>
+            <h2 id="drive-version-title">{{ versionDrawer.item?.fileOriginName || 'File versions' }}</h2>
+            <p>Restore keeps ownership checks on the backend and records a new RESTORE version entry.</p>
+          </div>
+          <button class="button button--ghost" type="button" :disabled="versionDrawer.loading || Boolean(versionDrawer.restoringId)" @click="closeDriveVersionDrawer">
+            Close
+          </button>
+        </header>
+
+        <div v-if="versionDrawer.successMessage" class="feedback feedback--success" data-testid="drive-version-success" aria-live="polite">
+          {{ versionDrawer.successMessage }}
+        </div>
+        <div v-if="versionDrawer.errorMessage" class="feedback feedback--error" data-testid="drive-version-error" aria-live="assertive">
+          {{ versionDrawer.errorMessage }}
+        </div>
+
+        <div v-if="versionDrawer.loading" class="drive-version-empty" data-testid="drive-version-loading">Loading versions...</div>
+        <div v-else-if="!versionDrawer.versions.length" class="drive-version-empty" data-testid="drive-version-empty">
+          No version records are available for this file yet.
+        </div>
+        <div v-else class="drive-version-list" data-testid="drive-version-list">
+          <article v-for="version in versionDrawer.versions" :key="version.id" class="drive-version-card" :data-testid="`drive-version-row-${version.id}`">
+            <div>
+              <strong>Version {{ version.versionNumber }}</strong>
+              <p>{{ version.fileOriginName }} · {{ formatBytes(version.fileSize) }}</p>
+              <small>{{ formatVersionSource(version.source) }} · {{ version.contentType || '-' }} · {{ formatTimestamp(version.createdAt) }}</small>
+            </div>
+            <button
+              class="button button--primary"
+              type="button"
+              :disabled="Boolean(versionDrawer.restoringId)"
+              :data-testid="`drive-version-restore-${version.id}`"
+              @click="restoreDriveVersion(version)"
+            >
+              {{ versionDrawer.restoringId === version.id ? 'Restoring...' : 'Restore' }}
+            </button>
+          </article>
+        </div>
+      </aside>
+    </div>
+</template>
                   </dl>
 
                   <div class="drive-details-panel__actions">
@@ -2991,7 +3418,62 @@ onBeforeUnmount(() => {
                     <button v-if="activeTab === 'trash' && !isLockedItem(primarySelectedItem)" class="button button--ghost" type="button" @click="deleteItemPermanently(primarySelectedItem)">완전 삭제</button>
                     <button v-if="activeTab === 'shared'" class="button button--ghost" type="button" @click="handleSaveSharedFile(primarySelectedItem)">내 드라이브에 저장</button>
                   </div>
-                </template>
+                
+    <div v-if="selectedVersionableItem" class="drive-version-launcher" data-testid="drive-version-launcher">
+      <div>
+        <strong>File version history</strong>
+        <p>Review upload/restore versions for the selected owned file.</p>
+      </div>
+      <button class="button button--ghost" type="button" data-testid="drive-version-open" @click="openDriveVersionDrawer(selectedVersionableItem)">
+        View versions
+      </button>
+    </div>
+
+    <div v-if="versionDrawer.open" class="drive-version-overlay" data-testid="drive-version-overlay" @click.self="closeDriveVersionDrawer">
+      <aside class="drive-version-drawer" data-testid="drive-version-drawer" role="dialog" aria-modal="true" aria-labelledby="drive-version-title">
+        <header class="drive-version-drawer__header">
+          <div>
+            <p class="eyebrow">CalenDrive versions</p>
+            <h2 id="drive-version-title">{{ versionDrawer.item?.fileOriginName || 'File versions' }}</h2>
+            <p>Restore keeps ownership checks on the backend and records a new RESTORE version entry.</p>
+          </div>
+          <button class="button button--ghost" type="button" :disabled="versionDrawer.loading || Boolean(versionDrawer.restoringId)" @click="closeDriveVersionDrawer">
+            Close
+          </button>
+        </header>
+
+        <div v-if="versionDrawer.successMessage" class="feedback feedback--success" data-testid="drive-version-success" aria-live="polite">
+          {{ versionDrawer.successMessage }}
+        </div>
+        <div v-if="versionDrawer.errorMessage" class="feedback feedback--error" data-testid="drive-version-error" aria-live="assertive">
+          {{ versionDrawer.errorMessage }}
+        </div>
+
+        <div v-if="versionDrawer.loading" class="drive-version-empty" data-testid="drive-version-loading">Loading versions...</div>
+        <div v-else-if="!versionDrawer.versions.length" class="drive-version-empty" data-testid="drive-version-empty">
+          No version records are available for this file yet.
+        </div>
+        <div v-else class="drive-version-list" data-testid="drive-version-list">
+          <article v-for="version in versionDrawer.versions" :key="version.id" class="drive-version-card" :data-testid="`drive-version-row-${version.id}`">
+            <div>
+              <strong>Version {{ version.versionNumber }}</strong>
+              <p>{{ version.fileOriginName }} · {{ formatBytes(version.fileSize) }}</p>
+              <small>{{ formatVersionSource(version.source) }} · {{ version.contentType || '-' }} · {{ formatTimestamp(version.createdAt) }}</small>
+            </div>
+            <button
+              class="button button--primary"
+              type="button"
+              :disabled="Boolean(versionDrawer.restoringId)"
+              :data-testid="`drive-version-restore-${version.id}`"
+              @click="restoreDriveVersion(version)"
+            >
+              {{ versionDrawer.restoringId === version.id ? 'Restoring...' : 'Restore' }}
+            </button>
+          </article>
+        </div>
+      </aside>
+    </div>
+</template>
 
                 <div v-else class="drive-details-panel__empty">
                   <strong>파일을 선택하세요</strong>
@@ -3528,7 +4010,117 @@ onBeforeUnmount(() => {
           @close="profileModalOpen = false"
           @updated="handleProfileUpdated"
         />
-      </template>
+      
+    <div v-if="selectedVersionableItem" class="drive-version-launcher" data-testid="drive-version-launcher">
+      <div>
+        <strong>File version history</strong>
+        <p>Review upload/restore versions for the selected owned file.</p>
+      </div>
+      <button class="button button--ghost" type="button" data-testid="drive-version-open" @click="openDriveVersionDrawer(selectedVersionableItem)">
+        View versions
+      </button>
+    </div>
+
+    <div v-if="versionDrawer.open" class="drive-version-overlay" data-testid="drive-version-overlay" @click.self="closeDriveVersionDrawer">
+      <aside class="drive-version-drawer" data-testid="drive-version-drawer" role="dialog" aria-modal="true" aria-labelledby="drive-version-title">
+        <header class="drive-version-drawer__header">
+          <div>
+            <p class="eyebrow">CalenDrive versions</p>
+            <h2 id="drive-version-title">{{ versionDrawer.item?.fileOriginName || 'File versions' }}</h2>
+            <p>Restore keeps ownership checks on the backend and records a new RESTORE version entry.</p>
+          </div>
+          <button class="button button--ghost" type="button" :disabled="versionDrawer.loading || Boolean(versionDrawer.restoringId)" @click="closeDriveVersionDrawer">
+            Close
+          </button>
+        </header>
+
+        <div v-if="versionDrawer.successMessage" class="feedback feedback--success" data-testid="drive-version-success" aria-live="polite">
+          {{ versionDrawer.successMessage }}
+        </div>
+        <div v-if="versionDrawer.errorMessage" class="feedback feedback--error" data-testid="drive-version-error" aria-live="assertive">
+          {{ versionDrawer.errorMessage }}
+        </div>
+
+        <div v-if="versionDrawer.loading" class="drive-version-empty" data-testid="drive-version-loading">Loading versions...</div>
+        <div v-else-if="!versionDrawer.versions.length" class="drive-version-empty" data-testid="drive-version-empty">
+          No version records are available for this file yet.
+        </div>
+        <div v-else class="drive-version-list" data-testid="drive-version-list">
+          <article v-for="version in versionDrawer.versions" :key="version.id" class="drive-version-card" :data-testid="`drive-version-row-${version.id}`">
+            <div>
+              <strong>Version {{ version.versionNumber }}</strong>
+              <p>{{ version.fileOriginName }} · {{ formatBytes(version.fileSize) }}</p>
+              <small>{{ formatVersionSource(version.source) }} · {{ version.contentType || '-' }} · {{ formatTimestamp(version.createdAt) }}</small>
+            </div>
+            <button
+              class="button button--primary"
+              type="button"
+              :disabled="Boolean(versionDrawer.restoringId)"
+              :data-testid="`drive-version-restore-${version.id}`"
+              @click="restoreDriveVersion(version)"
+            >
+              {{ versionDrawer.restoringId === version.id ? 'Restoring...' : 'Restore' }}
+            </button>
+          </article>
+        </div>
+      </aside>
+    </div>
+</template>
     </div>
   </div>
+
+    <div v-if="selectedVersionableItem" class="drive-version-launcher" data-testid="drive-version-launcher">
+      <div>
+        <strong>File version history</strong>
+        <p>Review upload/restore versions for the selected owned file.</p>
+      </div>
+      <button class="button button--ghost" type="button" data-testid="drive-version-open" @click="openDriveVersionDrawer(selectedVersionableItem)">
+        View versions
+      </button>
+    </div>
+
+    <div v-if="versionDrawer.open" class="drive-version-overlay" data-testid="drive-version-overlay" @click.self="closeDriveVersionDrawer">
+      <aside class="drive-version-drawer" data-testid="drive-version-drawer" role="dialog" aria-modal="true" aria-labelledby="drive-version-title">
+        <header class="drive-version-drawer__header">
+          <div>
+            <p class="eyebrow">CalenDrive versions</p>
+            <h2 id="drive-version-title">{{ versionDrawer.item?.fileOriginName || 'File versions' }}</h2>
+            <p>Restore keeps ownership checks on the backend and records a new RESTORE version entry.</p>
+          </div>
+          <button class="button button--ghost" type="button" :disabled="versionDrawer.loading || Boolean(versionDrawer.restoringId)" @click="closeDriveVersionDrawer">
+            Close
+          </button>
+        </header>
+
+        <div v-if="versionDrawer.successMessage" class="feedback feedback--success" data-testid="drive-version-success" aria-live="polite">
+          {{ versionDrawer.successMessage }}
+        </div>
+        <div v-if="versionDrawer.errorMessage" class="feedback feedback--error" data-testid="drive-version-error" aria-live="assertive">
+          {{ versionDrawer.errorMessage }}
+        </div>
+
+        <div v-if="versionDrawer.loading" class="drive-version-empty" data-testid="drive-version-loading">Loading versions...</div>
+        <div v-else-if="!versionDrawer.versions.length" class="drive-version-empty" data-testid="drive-version-empty">
+          No version records are available for this file yet.
+        </div>
+        <div v-else class="drive-version-list" data-testid="drive-version-list">
+          <article v-for="version in versionDrawer.versions" :key="version.id" class="drive-version-card" :data-testid="`drive-version-row-${version.id}`">
+            <div>
+              <strong>Version {{ version.versionNumber }}</strong>
+              <p>{{ version.fileOriginName }} · {{ formatBytes(version.fileSize) }}</p>
+              <small>{{ formatVersionSource(version.source) }} · {{ version.contentType || '-' }} · {{ formatTimestamp(version.createdAt) }}</small>
+            </div>
+            <button
+              class="button button--primary"
+              type="button"
+              :disabled="Boolean(versionDrawer.restoringId)"
+              :data-testid="`drive-version-restore-${version.id}`"
+              @click="restoreDriveVersion(version)"
+            >
+              {{ versionDrawer.restoringId === version.id ? 'Restoring...' : 'Restore' }}
+            </button>
+          </article>
+        </div>
+      </aside>
+    </div>
 </template>

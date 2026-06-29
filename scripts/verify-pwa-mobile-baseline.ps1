@@ -1,10 +1,12 @@
-Set-StrictMode -Version Latest
+﻿Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $manifestPath = 'frontend/public/manifest.webmanifest'
 $serviceWorkerPath = 'frontend/public/sw.js'
 $indexPath = 'frontend/index.html'
 $registrationPath = 'frontend/src/registerServiceWorker.js'
+$accessibilityChecklistPath = 'docs/accessibility_mobile_checklist.md'
+ = 'docs/accessibility_mobile_checklist.md'
 $findings = [System.Collections.Generic.List[string]]::new()
 
 foreach ($path in @($manifestPath, $serviceWorkerPath, $indexPath, $registrationPath, $accessibilityChecklistPath)) {
@@ -110,3 +112,4 @@ if ($findings.Count -gt 0) {
 }
 
 Write-Host 'PWA/mobile baseline check passed.'
+

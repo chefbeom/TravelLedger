@@ -1,4 +1,4 @@
-# Accessibility and Mobile UX Checklist
+﻿# Accessibility and Mobile UX Checklist
 
 Updated: 2026-06-30
 
@@ -73,6 +73,27 @@ This checklist turns the accessibility/mobile UX improvement track into reviewab
 | Login and invite PIN keypad | PinPadInput.vue exposes the keypad as a labelled group, gives digit/clear/delete buttons accessible names, and announces PIN entry progress without exposing digits. |
 | Profile and CalenDrive security PIN forms | PIN inputs use numeric input mode, numeric pattern hints, max length, and autocomplete hints so mobile keyboards and password managers behave predictably. |
 
+
+## Release Evidence Template
+
+Copy this block into the release note, pull request, or issue when a priority screen changes.
+
+```text
+Commit SHA:
+Screen or flow:
+Priority: P0 | P1 | P2
+Desktop browser/version:
+Mobile viewport/device: 360x640 | other
+Keyboard-only result:
+Focus visible/not-obscured result:
+Drag alternative result:
+Touch target review:
+Error/status message review:
+Reduced-motion review:
+Screen-reader or DOM status evidence:
+Known gaps and follow-up issue:
+Release decision: pass | conditional | fail
+```
 ## Implementation Queue
 
 | Order | Change | Reason |
@@ -83,6 +104,18 @@ This checklist turns the accessibility/mobile UX improvement track into reviewab
 | 4 | Add accessible upload status components for Drive/OCR/media flows. | Makes long-running operations understandable. |
 | 5 | Add automated accessibility smoke checks for login, dashboard, drive share, and OCR review. | Prevents regressions after the manual baseline is fixed. |
 
+
+## CI Gate
+
+`scripts/verify-accessibility-mobile-checklist.ps1` keeps this checklist, the known frontend evidence anchors, the project roadmap, and the GitHub Actions release gate aligned. The verifier is intentionally text-based so it can run without a browser while the team is still building automated accessibility smoke tests.
+
+The CI gate fails when:
+
+- WCAG 2.2 traceability rows or priority-screen risk rows disappear.
+- The release evidence template loses keyboard, focus, touch target, drag alternative, status/error, reduced-motion, or mobile viewport fields.
+- `PinPadInput.vue` loses labelled keypad, live progress, clear/delete labels, or button semantics.
+- security PIN forms lose numeric mobile input hints.
+- CI release gate wiring no longer includes the accessibility/mobile checklist job.
 ## Release Gate
 
 A release touching priority screens should include:

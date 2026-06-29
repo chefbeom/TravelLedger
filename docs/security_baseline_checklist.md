@@ -18,6 +18,7 @@ This checklist maps the current TravelLedger security surface to a practical bas
 | OCR/AI API keys | `LedgerOcrRemoteClient`, `LedgerAiN8nClient`, `LedgerAiLmStudioClient` | key leakage, SSRF-like backend calls, sensitive data exposure |
 | Runtime configuration | `.env.example`, `.env.oci.app.example`, `application.yml`, compose env | drifted secrets, disabled controls, wrong provider URL, long-lived presigned URLs |
 | Observability/audit | admin login audit, backup services, Actuator/Prometheus | missing forensic trail, undetected failure |
+| Accessibility/mobile UX | login/PIN, admin dialogs, dashboard drag, drive/share/upload, maps, AI/OCR review | keyboard trap, pointer-only flow, obscured focus, inaccessible status/error state |
 
 ## Baseline Rules
 
@@ -49,6 +50,7 @@ This checklist maps the current TravelLedger security surface to a practical bas
 | NOTIFY-01 | Notification center producers and read-state APIs must be owner-scoped, bounded, and free of operational secrets, signed URLs, raw prompts, provider responses, backup credentials, public tokens, raw GPS/EXIF, and non-visible member details. | `docs/notification_center.md` maps current notification storage, redaction, producer, frontend, and queued budget/travel/household/privacy producer boundaries. | Keep notification links relative, metadata redacted before persistence, and future producers limited to IDs/counts/status labels. | `UserNotificationServiceTest`, `NotificationCenterWorkspace.vue`, and `scripts/verify-notification-center-contract.ps1`. |
 | PORTABILITY-01 | Data portability exports/imports must be authenticated, CSRF-protected for unsafe methods, secondary-PIN protected for archives, owner-scoped, and free of operational secrets, storage paths, signed URLs, presigned URLs, raw GPS coordinates, AI prompts/provider responses, backup credentials, public tokens, and non-visible member data. | `docs/data_portability.md` maps the current ledger CSV plus safe manifest archive and future async binary archive boundary. | Keep binary photo/file archives async, bounded, encrypted, expiring, and separately rehearsed; standard CSV/Excel import/export must preserve owner scope and manifest redaction. | `DataPortabilityExportServiceTest`, `PrivacyControllerIntegrationTest`, and `scripts/verify-data-portability-contract.ps1`. |
 | AUDIT-01 | High-risk admin actions must be audited. | Login audit exists and records `ADMIN_ACTION` detail for backup, restore, user activation, blocked-IP clear actions, and Drive admin storage/user mutations; backup/restore audit details now strip directory segments before logging; `docs/admin_audit_log_contract.md` lists the required action codes and safe-detail policy. | Keep the same audit pattern for future destructive operations and update the contract for every new admin-like mutation. | `LoginAuditLogServiceTest`, `AdminControllerAuditDetailTest`, `DriveAdminSecurityIntegrationTest`, and `scripts/verify-admin-audit-contract.ps1` assert audit event creation, safe backup base-file details, safe drive-admin detail values, and CI coverage. |
+| UX-01 | Priority frontend flows must preserve WCAG 2.2 keyboard, visible/not-obscured focus, non-drag alternatives, 44x44 mobile target guidance, accessible authentication, and text status/error evidence. | `docs/accessibility_mobile_checklist.md` maps priority screens and current PIN/share anchors; `scripts/verify-accessibility-mobile-checklist.ps1` is wired to CI. | Add automated browser accessibility smoke tests for login, dashboard, drive share, and OCR review after the manual baseline is stable. | `PinPadInput.vue`, `CalenDriveProfileModal.vue`, `InviteAccessPanel.vue`, and `scripts/verify-accessibility-mobile-checklist.ps1`. |
 | OBS-01 | Security-relevant failures should emit metrics/alerts. | Actuator/Prometheus exposed; Prometheus rules cover backend availability, 5xx/latency, AI/OCR, external workflows, backup, Redis, MinIO, DB pool, public-link abuse, JVM heap, and host disk. | Keep alert labels bounded and add rules when new security-relevant failure modes are introduced. | `scripts/verify-prometheus-alerts.ps1` plus Prometheus scrape or unit tests for new meter registration. |
 
 ## Public Route Allowlist Review
@@ -105,11 +107,13 @@ Before promoting a build that changes auth, admin, sharing, upload, OCR, AI, or 
 4. Run `scripts/verify-db-migrations.ps1` when schema files change.
 5. Confirm public routes are still intentionally listed in this document.
 6. Run `scripts/verify-prometheus-alerts.ps1` when alert rules or observability docs change.
-7. Run `scripts/verify-e2e-smoke-checklist.ps1` and attach P0 browser smoke evidence for changed frontend-critical flows.
-8. Confirm operational dashboards or alerts cover the changed failure mode.
+7. Run `scripts/verify-accessibility-mobile-checklist.ps1` and attach keyboard/focus/touch-target/mobile evidence for changed priority screens.
+8. Run `scripts/verify-e2e-smoke-checklist.ps1` and attach P0 browser smoke evidence for changed frontend-critical flows.
+9. Confirm operational dashboards or alerts cover the changed failure mode.
 
 ## CI Security Gate
 
 The `backend-security-tests` GitHub Actions job intentionally duplicates a focused subset of `backend-test` so security-critical regressions are visible by name in branch protection and release review. Keep this list updated whenever a new P0 security test is added for authentication, admin APIs, sharing/public tokens, upload validation, OCR, AI, or privacy controls.
+
 
 

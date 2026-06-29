@@ -53,7 +53,7 @@ sequenceDiagram
 | Excessive agency | Model suggests deleting/editing transactions. | AI endpoint does not mutate ledger entries; LM Studio user prompt says not to imply changes were applied. | Add UI disclaimer and controller test that no ledger save/update is called. |
 | Model denial/timeout | LM Studio/n8n is down or slow. | Configurable connect/read timeout, failure history, and provider counter/timer metrics. | Wire alert rules to `calen.external.workflow.requests` and `calen.external.workflow.request`. |
 | Supply chain/workflow drift | n8n workflow changes output shape. | Backend has fallback report if remote report partially missing. | Add contract test using checked-in workflow sample response. |
-| SSRF-like backend call | Misconfigured provider URL points to internal metadata service. | `APP_LEDGER_AI_ENFORCE_PROVIDER_URL_ALLOWLIST=true` restricts LM Studio/n8n URL hosts to `APP_LEDGER_AI_ALLOWED_PROVIDER_HOSTS`. | Add regression tests for blocked host and allowed host cases. |
+| SSRF-like backend call | Misconfigured provider URL points to internal metadata service. | `APP_LEDGER_AI_ENFORCE_PROVIDER_URL_ALLOWLIST=true` restricts LM Studio/n8n URL hosts to `APP_LEDGER_AI_ALLOWED_PROVIDER_HOSTS`. | Keep blocked host, allowed host, invalid URL, and bracketed IPv6 tests. |
 | Cost/resource exhaustion | Large custom date range or too many expense rows. | Custom range capped at 366 days; provider-facing primary/comparison entry lists are capped and overflow counts are included in payloadMinimization. | Add duplicate suppression for repeated requests. |
 | Duplicate/retry confusion | Re-running analysis stores similar histories repeatedly. | Recent completed analyses are reused for the same user/range/provider/model within a short TTL. | Add explicit client idempotency keys if parallel requests become common. |
 | Observability gap | AI fails but no alert fires. | Failure history and provider metrics exist for LM Studio and n8n. | Add dashboard/alert panels for provider failure ratio and p95 latency. |
@@ -114,7 +114,7 @@ Minimum acceptance rule for provider responses:
 | Provider payload minimization | `LedgerAiAnalysisService` keeps full server-side statistics but sends truncated title/memo fields, capped expense entry arrays, and `payloadMinimization` overflow counts to LM Studio/n8n. | Pending payload contract assertions. |
 | Duplicate suppression | `LedgerAiAnalysisService` reuses a readable completed result created within 5 minutes for the same owner, provider, model, mode, period, and comparison range. | Pending repository/service regression assertions. |
 | Provider-aware history | `ledger_ai_analysis_histories.provider` is added through Flyway migration `V20260629_004__ledger_ai_history_provider.sql`. | Migration reviewed; test gate pending. |
-| Provider URL allowlist | `LedgerAiAnalysisProperties` can reject LM Studio/n8n URLs whose host is not in `APP_LEDGER_AI_ALLOWED_PROVIDER_HOSTS` when enforcement is enabled. | Pending property binding and blocked-host assertions. |
+| Provider URL allowlist | `LedgerAiAnalysisProperties` can reject LM Studio/n8n URLs whose host is not in `APP_LEDGER_AI_ALLOWED_PROVIDER_HOSTS` when enforcement is enabled. | `LedgerAiAnalysisPropertiesTest` |
 | Prompt boundary for LM Studio | LM Studio system prompt marks ledger text, OCR text, category names, and user-entered text as untrusted data, not instructions. | Pending prompt-injection regression assertions. |
 
 ## Hardening Backlog

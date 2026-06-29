@@ -23,6 +23,8 @@ public interface AppUserRepository extends JpaRepository<AppUser, Long> {
 
     List<AppUser> findAllByActiveTrueOrderByDisplayNameAscIdAsc();
 
+    List<AppUser> findAllByRoleAndActiveTrueOrderByIdAsc(AppUserRole role);
+
     Optional<AppUser> findByLoginId(String loginId);
 
     @Query("""

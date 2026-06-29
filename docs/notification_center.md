@@ -2,7 +2,7 @@
 
 Updated: 2026-06-30
 
-This document records the notification-center backend baseline and the first producer wiring. Storage, listing, unread counts, read handling, AI analysis events, OCR failure events, and shared-file events are now in place; backup, budget, and travel producers remain in the queue.
+This document records the notification-center backend baseline and the first producer wiring. Storage, listing, unread counts, read handling, AI analysis events, OCR failure events, scheduled backup failure events, and shared-file events are now in place; budget and travel producers remain in the queue.
 
 ## Implemented API
 
@@ -33,6 +33,7 @@ This document records the notification-center backend baseline and the first pro
 | API responses include `unreadCount`. | Header badge can render without a second count endpoint. |
 | Notification metadata must not contain API keys, signed URLs, raw prompts, or backup credentials. | Notifications are designed for UI convenience, not sensitive data storage. |
 | Notification creation redacts sensitive metadata fields, bearer tokens, and signed URL query parameters before persistence. | Producer mistakes should not turn the notification table into a secret store. |
+| Scheduled backup failure notifications go only to active admins and store bounded `backupType`/`status` metadata. | Operators need actionability without leaking backup paths, remote names, or credentials. |
 | Event producers should write short messages and link to the source page. | Keeps the center useful without duplicating feature data. |
 
 ## Implemented Producers
@@ -41,23 +42,23 @@ This document records the notification-center backend baseline and the first pro
 | --- | --- | --- |
 | Ledger AI analysis completed | `AI_ANALYSIS_DONE` | AI analysis history deep link. |
 | Ledger AI analysis failed | `AI_OR_OCR_FAILED` | AI analysis history/status deep link. |
+| Ledger OCR failed | `AI_OR_OCR_FAILED` | Receipt OCR retry surface. |
+| Scheduled database backup failed | `BACKUP_FAILED` | Admin data-management page. |
+| Scheduled MinIO backup failed | `BACKUP_FAILED` | Admin data-management page. |
 | CalenDrive file shared with user | `SHARED_FILE_RECEIVED` | CalenDrive shared-files view. |
 
 ## Event Producer Queue
 
 | Producer | Suggested type | Target |
 | --- | --- | --- |
-| AI analysis completed | `AI_ANALYSIS_DONE` | AI history detail page. |
-| AI/OCR failed | `AI_OR_OCR_FAILED` | AI/OCR status or retry page. |
 | Budget threshold exceeded | `BUDGET_WARNING` | Ledger dashboard. |
-| Backup failed or stale | `BACKUP_FAILED` | Admin data-management page. |
-| File shared with user | `SHARED_FILE_RECEIVED` | CalenDrive shared-files page. |
 | Travel date approaching | `TRAVEL_REMINDER` | Travel plan detail page. |
 
 ## Test Backlog
 
 - Service tests cover sensitive metadata redaction and owner-scoped single-notification read lookup.
 - OCR remote/config failures create bounded `AI_OR_OCR_FAILED` notifications without masking the original OCR error.
+- Scheduled backup failures create bounded `BACKUP_FAILED` notifications for active admins without leaking backup paths, remote names, or credentials.
 - Unauthenticated users cannot call `/api/notifications`.
 - User A cannot list or mark User B's notification as read.
 - `unreadCount` decreases after read/read-all operations.

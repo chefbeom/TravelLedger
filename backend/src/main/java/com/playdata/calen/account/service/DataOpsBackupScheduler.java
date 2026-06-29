@@ -1,6 +1,10 @@
 package com.playdata.calen.account.service;
 
+import com.playdata.calen.account.domain.AppUser;
+import com.playdata.calen.account.domain.AppUserRole;
+import com.playdata.calen.account.repository.AppUserRepository;
 import jakarta.annotation.PostConstruct;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -13,6 +17,8 @@ import org.springframework.stereotype.Service;
 public class DataOpsBackupScheduler {
 
     private final AdminDataManagementService adminDataManagementService;
+    private final AppUserRepository appUserRepository;
+    private final UserNotificationService userNotificationService;
 
     @Value("${app.data-ops.db-backup-enabled:false}")
     private boolean databaseBackupEnabled;
@@ -52,6 +58,7 @@ public class DataOpsBackupScheduler {
             log.info("Scheduled database backup completed successfully.");
         } catch (Exception exception) {
             log.warn("Scheduled database backup failed.", exception);
+            notifyBackupFailed("database");
         }
     }
 
@@ -66,6 +73,28 @@ public class DataOpsBackupScheduler {
             log.info("Scheduled MinIO backup completed successfully.");
         } catch (Exception exception) {
             log.warn("Scheduled MinIO backup failed.", exception);
+            notifyBackupFailed("minio");
+        }
+    }
+
+    private void notifyBackupFailed(String backupType) {
+        List<AppUser> admins = appUserRepository.findAllByRoleAndActiveTrueOrderByIdAsc(AppUserRole.ADMIN);
+        for (AppUser admin : admins) {
+            if (admin.getId() == null) {
+                continue;
+            }
+            try {
+                userNotificationService.createSystemNotification(
+                        admin.getId(),
+                        "BACKUP_FAILED",
+                        "Scheduled backup failed",
+                        "A scheduled " + backupType + " backup failed. Check data-management logs before the next release window.",
+                        "/admin?panel=data-management",
+                        "{\"backupType\":\"" + backupType + "\",\"status\":\"failure\"}"
+                );
+            } catch (RuntimeException notificationException) {
+                log.warn("Failed to create backup failure notification: backupType={}, adminId={}", backupType, admin.getId(), notificationException);
+            }
         }
     }
 }

@@ -78,6 +78,16 @@ jobs:
       - name: Verify high-risk admin action audit contract
         shell: pwsh
         run: ./scripts/verify-admin-audit-contract.ps1
+  privacy-control-contract:
+    name: Privacy control contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Verify user privacy control contract
+        shell: pwsh
+        run: ./scripts/verify-privacy-control-contract.ps1
   pwa-mobile-baseline:
     name: PWA mobile baseline
     runs-on: ubuntu-latest
@@ -192,6 +202,7 @@ jobs:
       - observability-alerts
       - backup-rehearsal-runbook
       - admin-audit-contract
+      - privacy-control-contract
       - pwa-mobile-baseline
       - service-decomposition-plan
       - backend-test
@@ -210,6 +221,7 @@ jobs:
             [observability-alerts]="${{ needs['observability-alerts'].result }}"
             [backup-rehearsal-runbook]="${{ needs['backup-rehearsal-runbook'].result }}"
             [admin-audit-contract]="${{ needs['admin-audit-contract'].result }}"
+            [privacy-control-contract]="${{ needs['privacy-control-contract'].result }}"
             [pwa-mobile-baseline]="${{ needs['pwa-mobile-baseline'].result }}"
             [service-decomposition-plan]="${{ needs['service-decomposition-plan'].result }}"
             [backend-test]="${{ needs['backend-test'].result }}"

@@ -65,11 +65,24 @@ This document records the backend slice for user-facing privacy controls. The UI
 
 | Item | Notes |
 | --- | --- |
-| Remove photo GPS metadata | Add owner-scoped EXIF/location stripping for travel/family media. |
+| Extend photo GPS metadata cleanup to family media | Travel media derived GPS metadata cleanup is implemented; family media GPS/EXIF cleanup remains a follow-up if family uploads start storing location metadata. |
 | Include binary photos/files in export | Needs size limits, async job progress, archive encryption, and retry/resume handling. |
 | Extend frontend privacy panel with async large-archive export status | Current profile UI covers destructive confirmations, returned counts, and PIN-protected ledger archive download; large photo/file archive export still needs background job progress. |
 | Add audit events for privacy destructive actions | Store safe event names and counts without raw file names, tokens, or export contents. |
 
+
+## Contract and CI Gate
+
+`scripts/verify-privacy-control-contract.ps1` checks that the privacy panel documentation, data portability documentation, controller endpoints, service owner-scoping snippets, export archive safety snippets, test evidence, security baseline, and GitHub Actions `privacy-control-contract` job stay aligned.
+
+The gate treats these controls as the minimum privacy contract:
+
+- AI analysis history deletion is authenticated, CSRF-protected, and owner-scoped.
+- Public drive link revocation is authenticated, CSRF-protected, owner-scoped, and revokes instead of deleting audit evidence.
+- Travel public media share revocation disables owner-scoped public surfaces that stateless media tokens depend on.
+- Photo location metadata cleanup clears derived GPS values through an owner-scoped repository method.
+- Combined cleanup runs AI-history deletion, drive link revocation, travel share revocation, and photo location cleanup in one authenticated request.
+- Data export requires a verified secondary PIN, creates a password-protected archive, includes ledger CSV plus safe manifests, and excludes operational secrets, object paths, signed URLs, prompts, provider responses, and raw coordinates.
 ## UI Contract Notes
 
 - Show destructive confirmation copy before delete/revoke/cleanup actions.

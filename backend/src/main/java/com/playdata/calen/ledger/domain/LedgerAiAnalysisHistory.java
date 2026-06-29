@@ -71,6 +71,9 @@ public class LedgerAiAnalysisHistory {
     @Column(nullable = false, length = 80)
     private String model;
 
+    @Column(nullable = false, length = 40)
+    private String provider = "unknown";
+
     @Column(nullable = false, length = 160)
     private String title;
 

@@ -55,7 +55,7 @@ sequenceDiagram
 | Supply chain/workflow drift | n8n workflow changes output shape. | Backend has fallback report if remote report partially missing. | Add contract test using checked-in workflow sample response. |
 | SSRF-like backend call | Misconfigured provider URL points to internal metadata service. | Provider URL comes from server env. | Restrict allowed hostnames/IP ranges for AI provider in production profile. |
 | Cost/resource exhaustion | Large custom date range or too many expense rows. | Custom range capped at 366 days; provider-facing primary/comparison entry lists are capped and overflow counts are included in payloadMinimization. | Add duplicate suppression for repeated requests. |
-| Duplicate/retry confusion | Re-running analysis stores similar histories repeatedly. | History search/latest/rerun exists. | Add idempotency key or duplicate suppression for same user/range/provider/model within short window. |
+| Duplicate/retry confusion | Re-running analysis stores similar histories repeatedly. | Recent completed analyses are reused for the same user/range/provider/model within a short TTL. | Add explicit client idempotency keys if parallel requests become common. |
 | Observability gap | AI fails but no alert fires. | Failure history and provider metrics exist for LM Studio and n8n. | Add dashboard/alert panels for provider failure ratio and p95 latency. |
 
 ## Provider Contract
@@ -112,6 +112,8 @@ Minimum acceptance rule for provider responses:
 | n8n response validation | `LedgerAiN8nClient` passes webhook responses through the shared validator. | `LedgerAiRemoteResponseValidatorTest`, `LedgerAiAnalysisServiceTest` |
 | Provider observability | `LedgerAiLmStudioClient` and `LedgerAiN8nClient` register `calen.external.workflow.requests` and `calen.external.workflow.request` with workflow/status tags. | Pending targeted metric assertions. |
 | Provider payload minimization | `LedgerAiAnalysisService` keeps full server-side statistics but sends truncated title/memo fields, capped expense entry arrays, and `payloadMinimization` overflow counts to LM Studio/n8n. | Pending payload contract assertions. |
+| Duplicate suppression | `LedgerAiAnalysisService` reuses a readable completed result created within 5 minutes for the same owner, provider, model, mode, period, and comparison range. | Pending repository/service regression assertions. |
+| Provider-aware history | `ledger_ai_analysis_histories.provider` is added through Flyway migration `V20260629_004__ledger_ai_history_provider.sql`. | Migration reviewed; test gate pending. |
 | Prompt boundary for LM Studio | LM Studio system prompt marks ledger text, OCR text, category names, and user-entered text as untrusted data, not instructions. | Pending prompt-injection regression assertions. |
 
 ## Hardening Backlog
@@ -122,7 +124,7 @@ Minimum acceptance rule for provider responses:
 | P0 | Keep malicious memo/title prompt-injection coverage. | `LedgerAiAnalysisServiceTest`, `LedgerAiAnalysisService.outputContract` | Captured payload preserves hostile-looking text as data and output contract says ledger text is untrusted user data, not instructions. |
 | P0 | Ensure status endpoint never exposes provider URLs/API keys. | `LedgerAiAnalysisStatusResponse`, `LedgerAiAnalysisServiceTest` | JSON assertion excludes workflow URL, LM Studio base URL, and all API key values; only boolean configured flags are exposed. |
 | P1 | Add configurable redaction profiles. | `LedgerAiAnalysisService`, provider payload DTO | Sensitive title/memo fields can be masked more aggressively for production profiles. |
-| P1 | Add duplicate suppression/idempotency. | `LedgerAiAnalysisService`, history repository | Same user/range/model/provider within short TTL reuses latest or marks rerun. |
+| P1 | Add explicit client idempotency keys. | `LedgerAiAnalysisService`, history repository, frontend API caller | Parallel retries with the same client key coalesce even before the first request completes. |
 | P1 | Add production provider URL allowlist. | `LedgerAiAnalysisProperties`, provider router | Reject link-local/metadata/private disallowed hosts when profile requires allowlist. |
 | P2 | Add manual "Delete AI history" and retention policy. | AI history controller/service | User can delete own AI history; admin retention job documented. |
 | P2 | Add frontend disclaimer and confidence language. | `StatisticsWorkspace.vue` | Visual text clearly says analysis is advisory. |

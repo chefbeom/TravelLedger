@@ -1,0 +1,210 @@
+import { expect, test } from '@playwright/test'
+
+const USER_ENV = ['E2E_USER_LOGIN_ID', 'E2E_USER_PASSWORD']
+const SECOND_USER_ENV = ['E2E_SECOND_USER_LOGIN_ID', 'E2E_SECOND_USER_PASSWORD']
+const ADMIN_ENV = ['E2E_ADMIN_LOGIN_ID', 'E2E_ADMIN_PASSWORD']
+
+const roleEnvPrefix = {
+  user: 'E2E_USER',
+  secondUser: 'E2E_SECOND_USER',
+  admin: 'E2E_ADMIN',
+}
+
+const p0Flows = [
+  {
+    name: 'Login and session',
+    route: '/',
+    role: 'user',
+    env: USER_ENV,
+    risk: 'Authentication, CSRF bootstrap, and session isolation.',
+  },
+  {
+    name: 'Ledger entry create/edit/delete',
+    route: '/#/household',
+    role: 'user',
+    env: [...USER_ENV, 'E2E_LEDGER_SMOKE_READY'],
+    mutating: true,
+    risk: 'Core ledger integrity and owner scoping.',
+  },
+  {
+    name: 'Excel import preview and confirm',
+    route: '/#/household',
+    role: 'user',
+    env: [...USER_ENV, 'E2E_EXCEL_IMPORT_SMOKE_READY'],
+    mutating: true,
+    risk: 'Bulk import correctness and file handling.',
+  },
+  {
+    name: 'OCR confirm-save',
+    route: '/#/household',
+    role: 'user',
+    env: [...USER_ENV, 'E2E_OCR_STUB_READY'],
+    mutating: true,
+    providerMode: 'stubbed',
+    risk: 'OCR safety and user-confirmed mutations.',
+  },
+  {
+    name: 'Travel photo upload',
+    route: '/#/travel',
+    role: 'user',
+    env: [...USER_ENV, 'E2E_TRAVEL_MEDIA_SMOKE_READY'],
+    mutating: true,
+    risk: 'Travel media upload and image failure isolation.',
+  },
+  {
+    name: 'CalenDrive share',
+    route: '/#/drive',
+    role: 'user',
+    env: [...USER_ENV, ...SECOND_USER_ENV, 'E2E_DRIVE_SHARE_SMOKE_READY'],
+    mutating: true,
+    risk: 'Drive ownership, share grants, and public link safety.',
+  },
+  {
+    name: 'Admin backup action',
+    route: '/#/admin',
+    role: 'admin',
+    env: [...ADMIN_ENV, 'E2E_ADMIN_BACKUP_SMOKE_READY'],
+    mutating: true,
+    risk: 'Admin authorization and destructive-operation guardrails.',
+  },
+  {
+    name: 'AI analysis advisory',
+    route: '/#/household',
+    role: 'user',
+    env: [...USER_ENV, 'E2E_AI_STUB_READY'],
+    providerMode: 'stubbed',
+    risk: 'AI advisory wording, failure handling, and no autonomous mutations.',
+  },
+  {
+    name: 'Notification center',
+    route: '/#/notifications',
+    role: 'user',
+    env: [...USER_ENV, 'E2E_NOTIFICATION_SMOKE_READY'],
+    risk: 'Owner-scoped notification visibility and unread/read-all behavior.',
+  },
+]
+
+function env(name) {
+  return (process.env[name] || '').trim()
+}
+
+function unique(values) {
+  return [...new Set(values)]
+}
+
+function requireEnv(names) {
+  const missing = unique(names).filter((name) => !env(name))
+  test.skip(
+    missing.length > 0,
+    `Missing E2E environment variables: ${missing.join(', ')}. See docs/e2e_smoke_checklist.md.`,
+  )
+}
+
+function requireFlag(name, expected = '1') {
+  const actual = env(name)
+  test.skip(
+    actual !== expected,
+    `${name}=${expected} is required for this smoke path; current value is ${actual || '<unset>'}.`,
+  )
+}
+
+function loginPayloadFor(role) {
+  const prefix = roleEnvPrefix[role]
+  const payload = {
+    loginId: env(`${prefix}_LOGIN_ID`),
+    password: env(`${prefix}_PASSWORD`),
+    rememberDevice: true,
+  }
+  const secondaryPin = env(`${prefix}_SECONDARY_PIN`)
+  if (secondaryPin) {
+    payload.secondaryPin = secondaryPin
+  }
+  return payload
+}
+
+async function signIn(page, role = 'user') {
+  const csrfResponse = await page.request.get('/api/auth/csrf')
+  expect(csrfResponse.ok(), 'CSRF bootstrap should succeed before login.').toBeTruthy()
+
+  const loginResponse = await page.request.post('/api/auth/login', {
+    data: loginPayloadFor(role),
+  })
+  expect(loginResponse.ok(), `${role} login should succeed.`).toBeTruthy()
+
+  const meResponse = await page.request.get('/api/auth/me')
+  expect(meResponse.ok(), `${role} session should be visible through /api/auth/me.`).toBeTruthy()
+}
+
+async function expectRenderedApp(page) {
+  const app = page.locator('#app')
+  await expect(app).toBeVisible()
+  await expect.poll(
+    async () => (await app.innerText()).trim().length,
+    { message: 'The Vue app shell should render visible text.' },
+  ).toBeGreaterThan(10)
+}
+
+test('P0 scenario inventory matches release checklist', () => {
+  expect(p0Flows.map((flow) => flow.name)).toEqual([
+    'Login and session',
+    'Ledger entry create/edit/delete',
+    'Excel import preview and confirm',
+    'OCR confirm-save',
+    'Travel photo upload',
+    'CalenDrive share',
+    'Admin backup action',
+    'AI analysis advisory',
+    'Notification center',
+  ])
+})
+
+test('public app shell loads without authenticated fixtures', async ({ page }) => {
+  const pageErrors = []
+  page.on('pageerror', (error) => pageErrors.push(error.message))
+
+  await page.goto('/')
+  await expectRenderedApp(page)
+
+  expect(pageErrors).toEqual([])
+})
+
+test('P0 Login and session smoke', async ({ page }) => {
+  requireEnv(USER_ENV)
+
+  await signIn(page, 'user')
+  await page.goto('/')
+  await expectRenderedApp(page)
+  await page.reload()
+  await expectRenderedApp(page)
+
+  const meAfterRefresh = await page.request.get('/api/auth/me')
+  expect(meAfterRefresh.ok(), 'Session should survive a page refresh.').toBeTruthy()
+
+  const logoutResponse = await page.request.post('/api/auth/logout')
+  expect(logoutResponse.ok(), 'Logout should succeed.').toBeTruthy()
+
+  const meAfterLogout = await page.request.get('/api/auth/me')
+  expect(meAfterLogout.ok(), 'Logged-out context must not expose the previous user.').toBeFalsy()
+})
+
+for (const flow of p0Flows.filter((candidate) => candidate.name !== 'Login and session')) {
+  test(`P0 ${flow.name} fixture gate and workspace checkpoint`, async ({ page }, testInfo) => {
+    requireEnv(flow.env)
+    if (flow.mutating) {
+      requireFlag('E2E_ALLOW_MUTATING_SMOKE')
+    }
+    if (flow.providerMode) {
+      requireFlag('E2E_PROVIDER_MODE', flow.providerMode)
+    }
+
+    testInfo.annotations.push({ type: 'flow-risk', description: flow.risk })
+    testInfo.annotations.push({
+      type: 'automation-stage',
+      description: 'Phase 1 verifies fixture gates, authenticated context, and target workspace rendering. Add feature-specific assertions before treating this as full release evidence.',
+    })
+
+    await signIn(page, flow.role)
+    await page.goto(flow.route)
+    await expectRenderedApp(page)
+  })
+}

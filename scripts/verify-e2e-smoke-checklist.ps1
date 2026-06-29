@@ -3,13 +3,15 @@ $ErrorActionPreference = 'Stop'
 
 $checklistPath = 'docs/e2e_smoke_checklist.md'
 $ciPath = '.github/workflows/ci.yml'
+$packagePath = 'frontend/package.json'
+$playwrightConfigPath = 'frontend/playwright.config.js'
+$playwrightSmokePath = 'frontend/e2e/smoke.spec.js'
 $findings = [System.Collections.Generic.List[string]]::new()
 
-if (-not (Test-Path -LiteralPath $checklistPath)) {
-    $findings.Add("Missing E2E smoke checklist: $checklistPath") | Out-Null
-}
-if (-not (Test-Path -LiteralPath $ciPath)) {
-    $findings.Add("Missing CI workflow: $ciPath") | Out-Null
+foreach ($path in @($checklistPath, $ciPath, $packagePath, $playwrightConfigPath, $playwrightSmokePath)) {
+    if (-not (Test-Path -LiteralPath $path)) {
+        $findings.Add("Missing E2E smoke artifact: $path") | Out-Null
+    }
 }
 
 if ($findings.Count -eq 0) {
@@ -18,6 +20,7 @@ if ($findings.Count -eq 0) {
         '# E2E smoke checklist',
         '## Shared setup',
         '## P0 smoke flows',
+        '## Playwright smoke skeleton',
         '## Automation readiness contract',
         '## Release evidence template',
         '## Automation conversion notes',
@@ -85,6 +88,76 @@ if ($findings.Count -eq 0) {
     foreach ($snippet in $requiredReadinessSnippets) {
         if (-not $checklist.Contains($snippet)) {
             $findings.Add("Checklist missing automation readiness snippet: $snippet") | Out-Null
+        }
+    }
+
+    $requiredPlaywrightDocSnippets = @(
+        'frontend/playwright.config.js',
+        'frontend/e2e/smoke.spec.js',
+        'npm run test:e2e:install',
+        'npm run test:e2e:smoke',
+        'E2E_BASE_URL',
+        'E2E_START_LOCAL_SERVER=0',
+        'E2E_USER_LOGIN_ID',
+        'E2E_SECOND_USER_LOGIN_ID',
+        'E2E_ADMIN_LOGIN_ID',
+        'E2E_ALLOW_MUTATING_SMOKE=1',
+        'E2E_PROVIDER_MODE=stubbed',
+        'workspace checkpoints alone are not enough for high-risk changes'
+    )
+    foreach ($snippet in $requiredPlaywrightDocSnippets) {
+        if (-not $checklist.Contains($snippet)) {
+            $findings.Add("Checklist missing Playwright skeleton snippet: $snippet") | Out-Null
+        }
+    }
+
+    $package = Get-Content -LiteralPath $packagePath -Raw | ConvertFrom-Json
+    $scriptNames = @($package.scripts.PSObject.Properties.Name)
+    foreach ($scriptName in @('test:e2e:install', 'test:e2e:smoke', 'test:e2e:smoke:headed')) {
+        if ($scriptNames -notcontains $scriptName) {
+            $findings.Add("frontend/package.json missing script: $scriptName") | Out-Null
+        }
+    }
+    if ($scriptNames -contains 'test:e2e:smoke') {
+        $smokeScript = $package.scripts.'test:e2e:smoke'
+        foreach ($snippet in @('@playwright/test', 'playwright test', 'playwright.config.js')) {
+            if (-not $smokeScript.Contains($snippet)) {
+                $findings.Add("test:e2e:smoke script missing snippet: $snippet") | Out-Null
+            }
+        }
+    }
+
+    $playwrightConfig = Get-Content -LiteralPath $playwrightConfigPath -Raw
+    foreach ($snippet in @('E2E_BASE_URL', 'PLAYWRIGHT_BASE_URL', '1440', '390', 'chromium-desktop', 'chromium-mobile', 'webServer', 'E2E_START_LOCAL_SERVER')) {
+        if (-not $playwrightConfig.Contains($snippet)) {
+            $findings.Add("Playwright config missing snippet: $snippet") | Out-Null
+        }
+    }
+
+    $playwrightSmoke = Get-Content -LiteralPath $playwrightSmokePath -Raw
+    foreach ($snippet in @(
+        "import { expect, test } from '@playwright/test'",
+        'P0 scenario inventory matches release checklist',
+        'public app shell loads without authenticated fixtures',
+        'P0 Login and session smoke',
+        'E2E_USER_LOGIN_ID',
+        'E2E_SECOND_USER_LOGIN_ID',
+        'E2E_ADMIN_LOGIN_ID',
+        'E2E_ALLOW_MUTATING_SMOKE',
+        'E2E_PROVIDER_MODE',
+        '/api/auth/csrf',
+        '/api/auth/login',
+        '/api/auth/me',
+        '/api/auth/logout',
+        'fixture gate and workspace checkpoint'
+    )) {
+        if (-not $playwrightSmoke.Contains($snippet)) {
+            $findings.Add("Playwright smoke spec missing snippet: $snippet") | Out-Null
+        }
+    }
+    foreach ($flow in $requiredFlows) {
+        if (-not $playwrightSmoke.Contains($flow)) {
+            $findings.Add("Playwright smoke spec missing P0 flow: $flow") | Out-Null
         }
     }
 

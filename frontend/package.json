@@ -6,7 +6,10 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test:e2e:install": "npm exec --yes --package @playwright/test -- playwright install chromium",
+    "test:e2e:smoke": "npm exec --yes --package @playwright/test -- playwright test --config playwright.config.js",
+    "test:e2e:smoke:headed": "npm exec --yes --package @playwright/test -- playwright test --config playwright.config.js --headed"
   },
   "dependencies": {
     "exifr": "^7.1.3",

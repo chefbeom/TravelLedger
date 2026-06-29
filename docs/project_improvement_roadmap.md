@@ -33,7 +33,7 @@ This roadmap turns the current improvement analysis into an implementation queue
 | Backup reliability | Backups exist, but restore confidence matters more than backup creation. | `deploy/oci/scripts/backup-to-gdrive.sh` now supports optional `age`/`gpg` encryption before upload and uploads `.sha256` sidecars; `docs/backup_restore_rehearsal_runbook.md` and restore docs require checksum, decrypt, smoke-count, cleanup, and exception evidence. | Documented restore rehearsal includes artifact name, checksum result, encryption/decrypt result, smoke counts, cleanup, timestamp, and plaintext exception owner/expiry when needed. |
 | Accessibility/mobile UX | Drag widgets, maps, drive, modals, and PIN/auth screens have keyboard and touch risks. | `docs/accessibility_mobile_checklist.md` is now backed by `scripts/verify-accessibility-mobile-checklist.ps1`, which gates WCAG 2.2 traceability, priority-screen risk rows, release evidence fields, PIN/share frontend anchors, and CI release-gate wiring. | Priority screens have keyboard, focus, target-size, drag-alternative, status/error-state, reduced-motion, and 360x640 mobile evidence. |
 | CI gates | Manual checks are easy to skip. | Run backend test, frontend build, reusable PowerShell secret scan, and config sync in GitHub Actions. | Push/PR triggers automated backend, frontend, config, and high-risk secret gates. |
-| E2E smoke coverage | Core user flows need browser-level evidence beyond backend unit/integration tests. | Use `docs/e2e_smoke_checklist.md` for login, ledger entry, Excel import, OCR confirm-save, drive share, admin backup, travel upload, AI analysis, and notifications. | P0 smoke evidence is attached before releases that change those flows; later automation can reuse the same acceptance criteria. |
+| E2E smoke coverage | Core user flows need browser-level evidence beyond backend unit/integration tests. | Use `docs/e2e_smoke_checklist.md` plus `frontend/e2e/smoke.spec.js` for login, ledger entry, Excel import, OCR confirm-save, drive share, admin backup, travel upload, AI analysis, and notifications. The first Playwright skeleton now covers session/route checkpoints and fixture-gated P0 flow placeholders. | P0 smoke evidence is attached before releases that change those flows; automated runs must show passing feature-specific assertions or approved skips. |
 
 ## P2: Product Expansion
 
@@ -60,7 +60,7 @@ This roadmap turns the current improvement analysis into an implementation queue
 6. Retire the next legacy `*SchemaUpdater` by adding a versioned migration, evidence row, and staging Flyway startup proof.
 7. Build AI ledger coach fields on top of the hardened AI contract.
 8. Add notification center so AI/backup/share events become visible.
-9. Convert `docs/e2e_smoke_checklist.md` P0 flows into browser automation.
+9. Complete fixture-backed Playwright automation for the P0 flows in `frontend/e2e/smoke.spec.js`.
 
 ## Current Documentation Set
 
@@ -75,7 +75,7 @@ This roadmap turns the current improvement analysis into an implementation queue
 | `docs/db_migration_strategy.md` | Flyway transition plan, current migration inventory, CI migration discipline, and schema updater retirement queue. |
 | `docs/service_decomposition_plan.md` | Ledger AI and Travel service extraction order, guardrails, test boundaries, and exit criteria. |
 | `docs/accessibility_mobile_checklist.md` | WCAG 2.2 and mobile UX checklist for priority screens. |
-| `docs/e2e_smoke_checklist.md` | Core browser smoke flows, shared test data, acceptance criteria, and automation conversion notes. |
+| `docs/e2e_smoke_checklist.md` | Core browser smoke flows, Playwright skeleton contract, shared test data, acceptance criteria, and automation conversion notes. |
 | `docs/backup_restore_rehearsal_runbook.md` | Restore rehearsal evidence, encryption readiness, and failure-handling checklist. |
 | `docs/privacy_control_panel.md` | Backend privacy controls, safety rules, response contract, and next privacy actions. |
 | `docs/pwa_mobile_capture.md` | PWA installability, service-worker cache policy, and mobile capture implementation queue. |

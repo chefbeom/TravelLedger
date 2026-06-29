@@ -2,17 +2,17 @@
 
 Updated: 2026-06-30
 
-This checklist defines the minimum browser-level evidence required before releases that change authentication, ledger, OCR/AI, travel, drive sharing, notifications, or admin backup behavior. It is intentionally tool-neutral so the same scenarios can be run manually now and converted to Playwright/Cypress later.
+This checklist defines the minimum browser-level evidence required before releases that change authentication, ledger, OCR/AI, travel, drive sharing, notifications, or admin backup behavior. It is paired with the first Playwright smoke skeleton at `frontend/e2e/smoke.spec.js`; the checklist remains the source of truth for acceptance criteria, fixture safety, and release evidence.
 
 ## Shared setup
 
 | Item | Requirement |
 | --- | --- |
-| Browser | Chromium or Chrome current stable. |
+| Browser | Chromium or Chrome current stable. The Playwright skeleton runs desktop Chromium and a mobile Chromium profile. |
 | Viewports | Desktop `1440x900` and mobile `390x844` for auth, ledger entry, OCR, drive share, and notification flows. |
 | Accounts | One normal user, one second normal user for sharing/cross-user checks, and one admin with secondary verification configured. |
 | Data reset | Use disposable test data. Do not run against production data unless the release manager explicitly approves a read-only smoke pass. |
-| Evidence | Attach date, tester, commit SHA, environment URL, pass/fail result, and screenshots or short screen recordings for failed steps. |
+| Evidence | Attach date, tester, commit SHA, environment URL, provider mode, pass/fail/skip result, and screenshots or short screen recordings for failed steps. |
 
 ## P0 smoke flows
 
@@ -27,6 +27,21 @@ This checklist defines the minimum browser-level evidence required before releas
 | Admin backup action | Admin must complete secondary verification before backup/restore/data-management actions. Non-admin and unverified admin users are denied. | Admin authorization, destructive-operation guardrails. |
 | AI analysis advisory | User can run or load AI analysis, sees advisory wording, and any suggested ledger change still requires a separate explicit user action. Provider failure shows bounded error UI. | AI safety, failure handling, no autonomous mutations. |
 | Notification center | User sees AI/share/backup/OCR notifications when produced, unread count changes after read/read-all, and another user's notifications are not visible. | Cross-feature awareness and owner-scoped notification access. |
+
+## Playwright smoke skeleton
+
+| Item | Current contract |
+| --- | --- |
+| Config | `frontend/playwright.config.js` defines desktop `1440x900` and mobile `390x844` Chromium projects. |
+| Spec | `frontend/e2e/smoke.spec.js` keeps the P0 flow inventory in code and verifies public shell rendering, login/session behavior, authenticated workspace routing, and fixture gates. |
+| Command | From `frontend`, run `npm run test:e2e:install` once for Chromium, then run `npm run test:e2e:smoke`. Use `npm run test:e2e:smoke:headed` for local debugging. |
+| Base URL | `E2E_BASE_URL` or `PLAYWRIGHT_BASE_URL`; default is `http://127.0.0.1:5173`. Set `E2E_START_LOCAL_SERVER=0` when targeting an already running deployed environment. |
+| User credentials | `E2E_USER_LOGIN_ID`, `E2E_USER_PASSWORD`, optional `E2E_USER_SECONDARY_PIN`. |
+| Second-user credentials | `E2E_SECOND_USER_LOGIN_ID`, `E2E_SECOND_USER_PASSWORD`, optional `E2E_SECOND_USER_SECONDARY_PIN` for CalenDrive sharing checks. |
+| Admin credentials | `E2E_ADMIN_LOGIN_ID`, `E2E_ADMIN_PASSWORD`, optional `E2E_ADMIN_SECONDARY_PIN` for admin route and backup guardrail checks. |
+| Mutation safety | Mutating/upload/share/admin paths require `E2E_ALLOW_MUTATING_SMOKE=1` plus the flow-specific fixture readiness flag before they run. |
+| Provider mode | OCR and AI paths require `E2E_PROVIDER_MODE=stubbed` with deterministic fixture flags such as `E2E_OCR_STUB_READY=1` and `E2E_AI_STUB_READY=1`. |
+| Current scope | Phase 1 automation is a smoke skeleton, not full release proof for every flow. A release can count it as evidence only when affected P0 flows pass with feature-specific assertions or have approved skips. |
 
 ## Automation readiness contract
 
@@ -75,20 +90,21 @@ Release decision:
 
 | Priority | Scenario | Automation notes |
 | --- | --- | --- |
-| P0 | Login and session | Seed disposable users through backend fixtures or API setup. Assert URL, user display name, logout, and unauthenticated redirect. |
-| P0 | Ledger entry create/edit/delete | Use stable selectors for entry form fields and calendar/statistics result rows. Assert owner-specific API responses through UI only where possible. |
-| P0 | OCR confirm-save | Stub OCR backend response for deterministic browser automation, then keep one optional live-provider smoke case outside required CI. |
-| P0 | CalenDrive share | Use two browser contexts for User A and User B; keep public-link token assertions in backend tests and UI status checks in E2E. |
-| P1 | Excel import | Store a tiny fixture spreadsheet in the E2E fixture folder once a browser runner is introduced. |
-| P1 | Admin backup action | Prefer mocked backup endpoint in automated UI tests; run real backup rehearsal through the backend runbook gate. |
-| P1 | Travel photo upload | Use a tiny valid JPEG and a malformed-image fixture. Verify no broken media record remains visible after invalid upload. |
-| P1 | AI analysis advisory | Stub provider result/failure responses. Assert advisory copy and absence of direct ledger mutation. |
-| P1 | Notification center | Seed notifications through API setup, then verify unread/read-all UI and owner isolation. |
+| P0 | Login and session | `frontend/e2e/smoke.spec.js` covers CSRF bootstrap, API login, refresh persistence, `/api/auth/me`, and logout. Add UI form assertions once login selectors are stabilized. |
+| P0 | Ledger entry create/edit/delete | Current Playwright checkpoint requires `E2E_LEDGER_SMOKE_READY=1` and `E2E_ALLOW_MUTATING_SMOKE=1`; next step is adding stable selectors for entry form fields and calendar/statistics result rows. |
+| P0 | OCR confirm-save | Current Playwright checkpoint requires `E2E_PROVIDER_MODE=stubbed`, `E2E_OCR_STUB_READY=1`, and `E2E_ALLOW_MUTATING_SMOKE=1`; next step is deterministic receipt fixture upload and explicit confirm-save assertions. |
+| P0 | CalenDrive share | Current Playwright checkpoint requires two users plus `E2E_DRIVE_SHARE_SMOKE_READY=1`; next step is two browser contexts for User A and User B with UI status checks for share/revoke/expired states. |
+| P1 | Excel import | Current Playwright checkpoint requires `E2E_EXCEL_IMPORT_SMOKE_READY=1`; store a tiny fixture spreadsheet in the E2E fixture folder before adding upload/confirm assertions. |
+| P1 | Admin backup action | Current Playwright checkpoint requires admin credentials, `E2E_ADMIN_BACKUP_SMOKE_READY=1`, and `E2E_ALLOW_MUTATING_SMOKE=1`; prefer mocked backup endpoint in automated UI tests and run real backup rehearsal through the backend runbook gate. |
+| P1 | Travel photo upload | Current Playwright checkpoint requires `E2E_TRAVEL_MEDIA_SMOKE_READY=1`; use a tiny valid JPEG and a malformed-image fixture, then verify no broken media record remains visible after invalid upload. |
+| P1 | AI analysis advisory | Current Playwright checkpoint requires `E2E_PROVIDER_MODE=stubbed` and `E2E_AI_STUB_READY=1`; next step is asserting advisory copy, provider failure UI, and absence of direct ledger mutation. |
+| P1 | Notification center | Current Playwright checkpoint requires `E2E_NOTIFICATION_SMOKE_READY=1`; next step is seeding notifications through API setup, then verifying unread/read-all UI and owner isolation. |
 
 ## Gate policy
 
 - Any release touching a P0 flow must attach the corresponding smoke evidence or a linked automated run.
 - Skips require an owner, reason, follow-up issue, and explicit release approver.
+- The Playwright smoke skeleton can be used as release evidence only for flows whose feature-specific assertions are implemented and passing; fixture-gated workspace checkpoints alone are not enough for high-risk changes.
 - Live AI/OCR provider checks are not required in CI, but stubbed success, timeout, and failure paths must be covered when E2E automation is introduced.
 - Automated runs must use disposable fixtures and must not log API keys, public-link tokens, presigned URLs, raw OCR images, raw AI prompts, or secondary PIN values.
-- The checklist must stay in sync with `scripts/verify-e2e-smoke-checklist.ps1` and the CI `frontend-e2e-smoke-checklist` job.
+- The checklist must stay in sync with `scripts/verify-e2e-smoke-checklist.ps1`, `frontend/playwright.config.js`, `frontend/e2e/smoke.spec.js`, and the CI `frontend-e2e-smoke-checklist` job.

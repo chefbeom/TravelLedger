@@ -20,6 +20,7 @@ public class MinioProperties {
     private String bucket_cloud;
     private String bucket_work;
     private int presignedUrlExpirySeconds = 600;
+    private long storageCapacityBytes = 0L;
 
     public String getEndpoint() {
         return sanitize(endpoint);

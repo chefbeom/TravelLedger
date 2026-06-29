@@ -140,6 +140,7 @@ groups:
         annotations:
           summary: Ledger OCR p95 latency is above 60 seconds
           description: Ledger OCR p95 request latency has stayed above 60 seconds for 10 minutes.
+
       - alert: CalenPublicDownloadLinkInvalidSpike
         expr: |
           sum(rate(calen_public_download_link_requests_total{job="calen-backend", status=~"invalid|revoked|expired|limit_reached|invalid_item|trashed"}[10m]))
@@ -191,6 +192,26 @@ groups:
         annotations:
           summary: Redis connection is unavailable
           description: Redis role {{ $labels.role }} has been unavailable from the backend for at least 5 minutes.
+
+  - name: calen.domain.minio
+    rules:
+      - alert: CalenMinioStorageHighUsage
+        expr: |
+          (
+            calen_minio_storage_used_bytes{job="calen-backend"}
+            /
+            clamp_min(calen_minio_storage_capacity_bytes{job="calen-backend"}, 1)
+          ) > 0.85
+          and on (instance, bucket)
+          calen_minio_storage_capacity_bytes{job="calen-backend"} > 0
+        for: 15m
+        labels:
+          severity: warning
+          service: calen-backend
+          feature: minio-storage
+        annotations:
+          summary: MinIO storage usage is above 85 percent
+          description: MinIO bucket {{ $labels.bucket }} has used more than 85 percent of configured capacity for 15 minutes.
 
   - name: calen.host.capacity
     rules:

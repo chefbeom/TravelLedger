@@ -33,6 +33,7 @@ minio:
   bucket_cloud: ${MINIO_CLOUD_BUCKET:budgetjourneybucket}
   bucket_work: ${MINIO_WORKSPACE_BUCKET:}
   presigned-url-expiry-seconds: ${MINIO_PRESIGNED_URL_EXPIRY_SECONDS:6000}
+  storage-capacity-bytes: ${MINIO_STORAGE_CAPACITY_BYTES:0}
 
 server:
   forward-headers-strategy: framework

@@ -8,6 +8,8 @@ import io.minio.ListObjectsArgs;
 import io.minio.MinioClient;
 import io.minio.Result;
 import io.minio.messages.Item;
+import io.micrometer.core.instrument.Gauge;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.UncheckedIOException;
@@ -16,8 +18,10 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.Objects;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Service;
 
@@ -29,6 +33,14 @@ public class MinioBackupArchiveService {
 
     private final MinioClient minioClient;
     private final MinioProperties minioProperties;
+    private final AtomicLong minioStorageUsedBytes = new AtomicLong(0L);
+    private final AtomicLong minioStorageCapacityBytes = new AtomicLong(0L);
+    private final AtomicLong minioStorageObjectCount = new AtomicLong(0L);
+
+    @Autowired(required = false)
+    private MeterRegistry meterRegistry;
+
+    private boolean minioStorageGaugesRegistered = false;
 
     public MinioBackupArchiveService(@Nullable MinioClient minioClient, MinioProperties minioProperties) {
         this.minioClient = minioClient;
@@ -37,6 +49,9 @@ public class MinioBackupArchiveService {
 
     public AdminMinioStorageSummaryResponse getSummary() {
         if (!isConfigured()) {
+            minioStorageUsedBytes.set(0L);
+            minioStorageCapacityBytes.set(0L);
+            minioStorageObjectCount.set(0L);
             return new AdminMinioStorageSummaryResponse(
                     false,
                     safeBucketName(),
@@ -46,8 +61,13 @@ public class MinioBackupArchiveService {
             );
         }
 
+        registerMinioStorageGauges();
+        minioStorageCapacityBytes.set(Math.max(minioProperties.getStorageCapacityBytes(), 0L));
+
         try {
             MinioObjectSummary summary = scanObjects();
+            minioStorageUsedBytes.set(summary.totalSizeBytes());
+            minioStorageObjectCount.set(summary.objectCount());
             return new AdminMinioStorageSummaryResponse(
                     true,
                     safeBucketName(),
@@ -126,6 +146,26 @@ public class MinioBackupArchiveService {
         } catch (IOException exception) {
             throw new UncheckedIOException(exception);
         }
+    }
+
+    private void registerMinioStorageGauges() {
+        if (meterRegistry == null || minioStorageGaugesRegistered) {
+            return;
+        }
+        String bucket = safeBucketName();
+        Gauge.builder("calen.minio.storage.used.bytes", minioStorageUsedBytes, AtomicLong::get)
+                .description("Scanned MinIO object storage usage in bytes")
+                .tag("bucket", bucket)
+                .register(meterRegistry);
+        Gauge.builder("calen.minio.storage.capacity.bytes", minioStorageCapacityBytes, AtomicLong::get)
+                .description("Configured MinIO object storage capacity in bytes")
+                .tag("bucket", bucket)
+                .register(meterRegistry);
+        Gauge.builder("calen.minio.storage.objects", minioStorageObjectCount, AtomicLong::get)
+                .description("Scanned MinIO object count")
+                .tag("bucket", bucket)
+                .register(meterRegistry);
+        minioStorageGaugesRegistered = true;
     }
 
     private MinioObjectSummary scanObjects() throws Exception {

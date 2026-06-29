@@ -1,7 +1,10 @@
 package com.playdata.calen.drive.domain;
 
 import com.playdata.calen.account.domain.AppUser;
+import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -38,10 +41,17 @@ public class DriveShare {
     @JoinColumn(name = "recipient_id", nullable = false)
     private AppUser recipient;
 
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 16)
+    private DriveSharePermission permission = DriveSharePermission.DOWNLOAD;
+
     private LocalDateTime createdAt;
 
     @PrePersist
     public void prePersist() {
+        if (permission == null) {
+            permission = DriveSharePermission.DOWNLOAD;
+        }
         if (createdAt == null) {
             createdAt = LocalDateTime.now();
         }

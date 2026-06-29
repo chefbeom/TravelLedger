@@ -2,6 +2,7 @@ package com.playdata.calen.drive.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -9,17 +10,21 @@ import static org.mockito.Mockito.when;
 
 import com.playdata.calen.account.domain.AppUser;
 import com.playdata.calen.account.repository.AppUserRepository;
+import com.playdata.calen.account.service.UserNotificationService;
 import com.playdata.calen.common.exception.BadRequestException;
 import com.playdata.calen.common.media.ImageThumbnailService;
 import com.playdata.calen.drive.domain.DriveItem;
 import com.playdata.calen.drive.domain.DriveItemType;
 import com.playdata.calen.drive.domain.DriveShare;
+import com.playdata.calen.drive.domain.DriveSharePermission;
+import com.playdata.calen.drive.dto.DriveDtos;
 import com.playdata.calen.drive.repository.DriveItemRepository;
 import com.playdata.calen.drive.repository.DriveShareRepository;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -43,6 +48,32 @@ class DriveShareServiceTest {
 
     @Mock
     private ImageThumbnailService imageThumbnailService;
+
+    @Mock
+    private UserNotificationService userNotificationService;
+
+    @Test
+    void shareFilesStoresRequestedViewPermission() {
+        AppUser owner = user(1L, "owner");
+        AppUser recipient = user(2L, "friend");
+        DriveItem sharedFile = file(7L);
+        sharedFile.setOwner(owner);
+
+        when(driveService.getOwner(1L)).thenReturn(owner);
+        when(appUserRepository.findByLoginId("friend")).thenReturn(Optional.of(recipient));
+        when(driveService.getOwnedFile(1L, 7L)).thenReturn(sharedFile);
+        when(driveShareRepository.findByItem_IdAndRecipient_Id(7L, 2L)).thenReturn(Optional.empty());
+        when(driveShareRepository.save(any(DriveShare.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        DriveShareService service = newService();
+
+        DriveDtos.ActionResponse response = service.shareFiles(1L, List.of(7L), "friend", "view");
+
+        ArgumentCaptor<DriveShare> shareCaptor = ArgumentCaptor.forClass(DriveShare.class);
+        verify(driveShareRepository).save(shareCaptor.capture());
+        assertThat(shareCaptor.getValue().getPermission()).isEqualTo(DriveSharePermission.VIEW);
+        assertThat(response.affectedCount()).isEqualTo(1);
+    }
 
     @Test
     void cancelShareRejectsLockedFileBeforeChangingRecipients() {
@@ -102,6 +133,23 @@ class DriveShareServiceTest {
     }
 
     @Test
+    void downloadSharedFileRejectsViewOnlyShareWithoutLoadingObject() {
+        DriveItem sharedFile = file(7L);
+        DriveShare share = share(sharedFile, user(1L, "owner"), user(2L, "friend"));
+        share.setPermission(DriveSharePermission.VIEW);
+
+        when(driveShareRepository.findByItem_IdAndRecipient_Id(7L, 2L)).thenReturn(Optional.of(share));
+
+        DriveShareService service = newService();
+
+        assertThatThrownBy(() -> service.downloadSharedFile(2L, 7L))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessage("Shared file permission does not allow download.");
+
+        verify(driveStorageService, never()).loadObjectBytes("drive/locked.txt");
+    }
+
+    @Test
     void downloadSharedFileRejectsTrashedSourceWithoutLoadingObject() {
         DriveItem trashedFile = file(7L);
         trashedFile.markTrashed();
@@ -142,7 +190,8 @@ class DriveShareServiceTest {
                 appUserRepository,
                 driveStorageService,
                 driveService,
-                imageThumbnailService
+                imageThumbnailService,
+                userNotificationService
         );
     }
 

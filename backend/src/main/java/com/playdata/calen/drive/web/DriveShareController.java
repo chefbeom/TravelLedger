@@ -65,7 +65,8 @@ public class DriveShareController {
         return driveShareService.shareFiles(
                 currentUser.userId(),
                 request != null ? request.fileIds() : null,
-                request != null ? request.recipientLoginId() : null
+                request != null ? request.recipientLoginId() : null,
+                request != null ? request.permission() : null
         );
     }
 

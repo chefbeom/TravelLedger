@@ -9,6 +9,7 @@ import com.playdata.calen.common.media.ImageThumbnailService;
 import com.playdata.calen.drive.domain.DriveItem;
 import com.playdata.calen.drive.domain.DriveItemType;
 import com.playdata.calen.drive.domain.DriveShare;
+import com.playdata.calen.drive.domain.DriveSharePermission;
 import com.playdata.calen.drive.dto.DriveDtos;
 import com.playdata.calen.drive.repository.DriveItemRepository;
 import com.playdata.calen.drive.repository.DriveShareRepository;
@@ -117,6 +118,7 @@ public class DriveShareService {
                         .recipientUserId(user.getId())
                         .recipientLoginId(user.getLoginId())
                         .recipientDisplayName(user.getDisplayName())
+                        .permission(null)
                         .createdAt(null)
                         .build())
                 .toList();
@@ -124,6 +126,11 @@ public class DriveShareService {
 
     @Transactional
     public DriveDtos.ActionResponse shareFiles(Long userId, List<Long> fileIds, String recipientLoginId) {
+        return shareFiles(userId, fileIds, recipientLoginId, null);
+    }
+
+    @Transactional
+    public DriveDtos.ActionResponse shareFiles(Long userId, List<Long> fileIds, String recipientLoginId, String permissionValue) {
         AppUser owner = driveService.getOwner(userId);
         AppUser recipient = appUserRepository.findByLoginId(safeLoginId(recipientLoginId))
                 .filter(AppUser::isActive)
@@ -134,6 +141,7 @@ public class DriveShareService {
         }
 
         List<Long> normalizedIds = normalizeFileIds(fileIds);
+        DriveSharePermission permission = normalizePermission(permissionValue);
         int affected = 0;
         for (Long fileId : normalizedIds) {
             DriveItem item = driveService.getOwnedFile(userId, fileId);
@@ -143,7 +151,12 @@ public class DriveShareService {
 
             driveService.ensureUnlocked(item);
 
-            if (driveShareRepository.findByItem_IdAndRecipient_Id(item.getId(), recipient.getId()).isPresent()) {
+            DriveShare existingShare = driveShareRepository.findByItem_IdAndRecipient_Id(item.getId(), recipient.getId()).orElse(null);
+            if (existingShare != null) {
+                if (effectivePermission(existingShare) != permission) {
+                    existingShare.setPermission(permission);
+                    affected += 1;
+                }
                 continue;
             }
 
@@ -151,6 +164,7 @@ public class DriveShareService {
             share.setItem(item);
             share.setOwner(owner);
             share.setRecipient(recipient);
+            share.setPermission(permission);
             share = driveShareRepository.save(share);
             item.setSharedFile(true);
             notifySharedFileReceived(owner, recipient, item, share);
@@ -232,6 +246,7 @@ public class DriveShareService {
             throw new BadRequestException("Shared file is no longer available.");
         }
 
+        ensureDownloadAllowed(share);
         DriveItem parent = resolveOwnedFolder(userId, parentId);
         String targetObjectKey = "drive/" + userId + "/" + sourceItem.getStoredName();
         if (Objects.equals(sourceItem.getOwner().getId(), userId)) {
@@ -253,7 +268,7 @@ public class DriveShareService {
     }
 
     public DriveService.DriveFilePayload downloadSharedFile(Long userId, Long fileId) {
-        DriveItem item = getSharedFile(userId, fileId);
+        DriveItem item = getDownloadableSharedFile(userId, fileId);
         byte[] bytes = driveStorageService.loadObjectBytes(item.getStoragePath());
         item.setLastAccessedAt(LocalDateTime.now());
         return new DriveService.DriveFilePayload(
@@ -266,7 +281,7 @@ public class DriveShareService {
 
     @Transactional
     public String getSharedFileDownloadUrl(Long userId, Long fileId) {
-        DriveItem item = getSharedFile(userId, fileId);
+        DriveItem item = getDownloadableSharedFile(userId, fileId);
         item.setLastAccessedAt(LocalDateTime.now());
         return driveStorageService.generateDownloadUrl(
                 item.getStoragePath(),
@@ -298,10 +313,22 @@ public class DriveShareService {
 
     private DriveItem getSharedFile(Long userId, Long fileId) {
         DriveShare share = driveShareRepository.findByItem_IdAndRecipient_Id(fileId, userId)
-                .orElseThrow(() -> new NotFoundException("공유된 파일을 찾지 못했습니다."));
+                .orElseThrow(() -> new NotFoundException("Shared file not found."));
+        return validateSharedFile(share);
+    }
+
+    private DriveItem getDownloadableSharedFile(Long userId, Long fileId) {
+        DriveShare share = driveShareRepository.findByItem_IdAndRecipient_Id(fileId, userId)
+                .orElseThrow(() -> new NotFoundException("Shared file not found."));
+        DriveItem item = validateSharedFile(share);
+        ensureDownloadAllowed(share);
+        return item;
+    }
+
+    private DriveItem validateSharedFile(DriveShare share) {
         DriveItem item = share.getItem();
         if (item == null || !item.isFile()) {
-            throw new BadRequestException("파일만 사용할 수 있습니다.");
+            throw new BadRequestException("Only shared files can be accessed.");
         }
         if (item.isTrashed()) {
             throw new BadRequestException("Shared file is no longer available.");
@@ -309,6 +336,11 @@ public class DriveShareService {
         return item;
     }
 
+    private void ensureDownloadAllowed(DriveShare share) {
+        if (!effectivePermission(share).canDownload()) {
+            throw new BadRequestException("Shared file permission does not allow download.");
+        }
+    }
     private void refreshSharedFlags(Long userId, List<Long> fileIds) {
         for (Long fileId : normalizeFileIds(fileIds)) {
             DriveItem item = driveService.getOwnedFile(userId, fileId);
@@ -326,6 +358,7 @@ public class DriveShareService {
                 .fileSize(item.getFileSize())
                 .ownerLoginId(share.getOwner().getLoginId())
                 .ownerDisplayName(share.getOwner().getDisplayName())
+                .permission(effectivePermission(share).name())
                 .sharedAt(share.getCreatedAt())
                 .downloadUrl("/api/file/share/shared/" + item.getId() + "/download")
                 .thumbnailUrl("/api/file/share/shared/" + item.getId() + "/thumbnail")
@@ -338,8 +371,24 @@ public class DriveShareService {
                 .recipientUserId(share.getRecipient().getId())
                 .recipientLoginId(share.getRecipient().getLoginId())
                 .recipientDisplayName(share.getRecipient().getDisplayName())
+                .permission(effectivePermission(share).name())
                 .createdAt(share.getCreatedAt())
                 .build();
+    }
+
+    private DriveSharePermission normalizePermission(String permissionValue) {
+        if (!StringUtils.hasText(permissionValue)) {
+            return DriveSharePermission.DOWNLOAD;
+        }
+        try {
+            return DriveSharePermission.valueOf(permissionValue.trim().toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException exception) {
+            throw new BadRequestException("Unsupported share permission. Use VIEW, DOWNLOAD, or EDIT.");
+        }
+    }
+
+    private DriveSharePermission effectivePermission(DriveShare share) {
+        return share.getPermission() == null ? DriveSharePermission.DOWNLOAD : share.getPermission();
     }
 
     private DriveItem resolveOwnedFolder(Long ownerId, Long parentId) {

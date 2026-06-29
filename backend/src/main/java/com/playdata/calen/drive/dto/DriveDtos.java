@@ -257,8 +257,12 @@ public final class DriveDtos {
     @Builder
     public record ShareRequest(
             List<Long> fileIds,
-            String recipientLoginId
+            String recipientLoginId,
+            String permission
     ) {
+        public ShareRequest(List<Long> fileIds, String recipientLoginId) {
+            this(fileIds, recipientLoginId, null);
+        }
     }
 
     @Builder
@@ -267,8 +271,18 @@ public final class DriveDtos {
             Long recipientUserId,
             String recipientLoginId,
             String recipientDisplayName,
+            String permission,
             LocalDateTime createdAt
     ) {
+        public ShareInfoResponse(
+                Long shareId,
+                Long recipientUserId,
+                String recipientLoginId,
+                String recipientDisplayName,
+                LocalDateTime createdAt
+        ) {
+            this(shareId, recipientUserId, recipientLoginId, recipientDisplayName, null, createdAt);
+        }
     }
 
     @Builder
@@ -280,10 +294,25 @@ public final class DriveDtos {
             Long fileSize,
             String ownerLoginId,
             String ownerDisplayName,
+            String permission,
             LocalDateTime sharedAt,
             String downloadUrl,
             String thumbnailUrl
     ) {
+        public SharedFileResponse(
+                Long id,
+                Long fileId,
+                String fileOriginName,
+                String fileFormat,
+                Long fileSize,
+                String ownerLoginId,
+                String ownerDisplayName,
+                LocalDateTime sharedAt,
+                String downloadUrl,
+                String thumbnailUrl
+        ) {
+            this(id, fileId, fileOriginName, fileFormat, fileSize, ownerLoginId, ownerDisplayName, null, sharedAt, downloadUrl, thumbnailUrl);
+        }
     }
 
     @Builder

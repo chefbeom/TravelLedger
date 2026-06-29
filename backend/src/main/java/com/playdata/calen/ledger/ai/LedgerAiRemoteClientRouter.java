@@ -1,0 +1,21 @@
+package com.playdata.calen.ledger.ai;
+
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Component;
+
+@Component
+@RequiredArgsConstructor
+public class LedgerAiRemoteClientRouter implements LedgerAiRemoteClient {
+
+    private final LedgerAiAnalysisProperties properties;
+    private final LedgerAiN8nClient n8nClient;
+    private final LedgerAiLmStudioClient lmStudioClient;
+
+    @Override
+    public LedgerAiRemoteResponse analyze(Object payload) {
+        if (properties.provider() == LedgerAiProvider.LMSTUDIO) {
+            return lmStudioClient.analyze(payload);
+        }
+        return n8nClient.analyze(payload);
+    }
+}

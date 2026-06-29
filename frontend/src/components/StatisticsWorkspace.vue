@@ -1208,14 +1208,14 @@ watch(
         <div class="panel__header">
           <div>
             <h2>AI 소비 분석</h2>
-            <p>선택한 가계부 기간을 n8n 워크플로우로 보내고, 반환된 분석 결과를 저장합니다.</p>
+            <p>선택한 가계부 기간을 설정된 AI provider로 보내고, 반환된 분석 결과를 저장합니다.</p>
           </div>
-          <span class="panel__badge">{{ aiAnalysisStatus?.model || 'gemma4:e12b' }}</span>
+          <span class="panel__badge">{{ aiAnalysisStatus?.provider || 'AI' }} · {{ aiAnalysisStatus?.model || 'gemma4:e12b' }}</span>
         </div>
 
         <div class="ai-analysis-status" :class="{ 'ai-analysis-status--ready': aiAnalysisStatus?.configured }">
           <strong>{{ aiAnalysisStatus?.configured ? '준비됨' : '설정 필요' }}</strong>
-          <span>{{ aiAnalysisStatus?.message || 'AI 분석 실행 전 n8n 워크플로우 설정을 확인해주세요.' }}</span>
+          <span>{{ aiAnalysisStatus?.message || 'AI 분석 실행 전 provider 설정을 확인해주세요.' }}</span>
         </div>
 
         <div class="ai-analysis-layout">

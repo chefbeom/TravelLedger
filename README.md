@@ -410,6 +410,22 @@ docker compose up -d --build
 | `LEDGER_OCR_READ_TIMEOUT` | 읽기 timeout | `90s` |
 | `LEDGER_OCR_MAX_FILE_SIZE` | OCR 업로드 최대 크기 | `10MB` |
 
+가계부 AI 분석은 `APP_LEDGER_AI_PROVIDER=lmstudio`일 때 LM Studio를 직접 호출하고, `n8n`일 때 기존 workflow webhook을 호출합니다.
+
+| 변수 | 설명 | 기본값 |
+| --- | --- | --- |
+| `APP_LEDGER_AI_ENABLED` | 가계부 AI 분석 활성화 | `false` |
+| `APP_LEDGER_AI_PROVIDER` | AI 공급자. `lmstudio` 또는 `n8n` | `n8n` |
+| `APP_LEDGER_AI_MODEL` | 사용할 모델 이름 | `gemma4:e12b` |
+| `APP_LEDGER_AI_LMSTUDIO_BASE_URL` | LM Studio 서버 주소 | `http://172.18.240.1:1234` |
+| `APP_LEDGER_AI_LMSTUDIO_CHAT_PATH` | LM Studio chat endpoint | `/api/v1/chat` |
+| `APP_LEDGER_AI_LMSTUDIO_API_KEY` | LM Studio API key가 필요한 경우 사용 | empty |
+| `APP_LEDGER_AI_TEMPERATURE` | 모델 응답 온도 | `0.2` |
+| `APP_LEDGER_AI_MAX_TOKENS` | 최대 응답 토큰 | `2048` |
+| `APP_LEDGER_AI_WORKFLOW_URL` | n8n provider용 webhook URL | empty |
+| `APP_LEDGER_AI_API_KEY` | n8n provider용 API key | empty |
+| `APP_LEDGER_AI_API_KEY_HEADER` | n8n API key header | `X-TravelLedger-AI-Key` |
+
 ### Redis
 
 | 변수 | 설명 |

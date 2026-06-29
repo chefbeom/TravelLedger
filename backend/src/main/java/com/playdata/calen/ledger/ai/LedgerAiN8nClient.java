@@ -1,10 +1,6 @@
 package com.playdata.calen.ledger.ai;
 
-import com.fasterxml.jackson.annotation.JsonAlias;
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.playdata.calen.common.exception.BadRequestException;
-import com.playdata.calen.ledger.dto.LedgerAiAnalysisReportResponse;
-import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
@@ -18,7 +14,7 @@ public class LedgerAiN8nClient {
 
     private final LedgerAiAnalysisProperties properties;
 
-    public RemoteAnalysisResponse analyze(Object payload) {
+    public LedgerAiRemoteResponse analyze(Object payload) {
         try {
             SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
             requestFactory.setConnectTimeout(properties.getConnectTimeout());
@@ -37,9 +33,9 @@ public class LedgerAiN8nClient {
                 request.header(properties.getApiKeyHeader(), properties.getApiKey());
             }
 
-            RemoteAnalysisResponse response = request.body(payload)
+            LedgerAiRemoteResponse response = request.body(payload)
                     .retrieve()
-                    .body(RemoteAnalysisResponse.class);
+                    .body(LedgerAiRemoteResponse.class);
 
             if (response == null) {
                 throw new BadRequestException("n8n AI 분석 워크플로우가 빈 응답을 반환했습니다.");
@@ -57,34 +53,5 @@ public class LedgerAiN8nClient {
 
     private boolean hasText(String value) {
         return value != null && !value.isBlank();
-    }
-
-    @JsonIgnoreProperties(ignoreUnknown = true)
-    public record RemoteAnalysisResponse(
-            Boolean ok,
-            String error,
-            String summary,
-            List<String> highlights,
-            List<String> warnings,
-            @JsonAlias({"risks", "riskSignals"})
-            List<String> risks,
-            List<String> recommendations,
-            @JsonAlias({"categoryInsights", "category_insights"})
-            List<String> categoryInsights,
-            @JsonAlias({"paymentInsights", "payment_insights"})
-            List<String> paymentInsights,
-            @JsonAlias({"trendInsights", "trend_insights"})
-            List<String> trendInsights,
-            @JsonAlias({"unusualSpendingInsights", "unusual_spending_insights", "anomalyInsights"})
-            List<String> unusualSpendingInsights,
-            @JsonAlias({"fixedCostInsights", "fixed_cost_insights", "subscriptionInsights"})
-            List<String> fixedCostInsights,
-            @JsonAlias({"nextPeriodForecast", "next_period_forecast", "forecast"})
-            String nextPeriodForecast,
-            @JsonAlias({"habitAssessment", "habit_assessment"})
-            String habitAssessment,
-            @JsonAlias({"report", "analysisReport", "spendingReport"})
-            LedgerAiAnalysisReportResponse report
-    ) {
     }
 }

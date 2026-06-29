@@ -59,7 +59,7 @@ class LedgerAiAnalysisServiceTest {
     private LedgerAiAnalysisHistoryRepository historyRepository;
 
     @Mock
-    private LedgerAiN8nClient n8nClient;
+    private LedgerAiRemoteClient remoteClient;
 
     private LedgerAiAnalysisService service;
 
@@ -76,7 +76,7 @@ class LedgerAiAnalysisServiceTest {
                 ledgerEntryRepository,
                 historyRepository,
                 properties,
-                n8nClient,
+                remoteClient,
                 new ObjectMapper().findAndRegisterModules()
         );
     }
@@ -85,7 +85,7 @@ class LedgerAiAnalysisServiceTest {
     void analyzeBuildsMonthlyPayloadAndStoresCompletedHistory() {
         stubUser();
         stubMonthlyDataset();
-        when(n8nClient.analyze(any())).thenReturn(remoteResponse());
+        when(remoteClient.analyze(any())).thenReturn(remoteResponse());
         when(historyRepository.save(any())).thenAnswer(invocation -> {
             LedgerAiAnalysisHistory history = invocation.getArgument(0);
             history.setId(44L);
@@ -116,7 +116,7 @@ class LedgerAiAnalysisServiceTest {
 
         ArgumentCaptor<LedgerAiAnalysisService.LedgerAiN8nPayload> payloadCaptor =
                 ArgumentCaptor.forClass(LedgerAiAnalysisService.LedgerAiN8nPayload.class);
-        verify(n8nClient).analyze(payloadCaptor.capture());
+        verify(remoteClient).analyze(payloadCaptor.capture());
         LedgerAiAnalysisService.LedgerAiN8nPayload payload = payloadCaptor.getValue();
         assertThat(payload.schemaVersion()).isEqualTo("travelledger.ledger-ai-analysis.v2");
         assertThat(payload.model()).isEqualTo("gemma4:e12b");
@@ -152,7 +152,7 @@ class LedgerAiAnalysisServiceTest {
     void analyzeStoresFailedHistoryWhenN8nRequestFails() {
         stubUser();
         stubMonthlyDataset();
-        when(n8nClient.analyze(any())).thenThrow(new BadRequestException("n8n 연결 실패"));
+        when(remoteClient.analyze(any())).thenThrow(new BadRequestException("n8n 연결 실패"));
         when(historyRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
         assertThatThrownBy(() -> service.analyze(USER_ID, new LedgerAiAnalysisRequest(
@@ -222,8 +222,8 @@ class LedgerAiAnalysisServiceTest {
         )).thenReturn(entries);
     }
 
-    private LedgerAiN8nClient.RemoteAnalysisResponse remoteResponse() {
-        return new LedgerAiN8nClient.RemoteAnalysisResponse(
+    private LedgerAiRemoteResponse remoteResponse() {
+        return new LedgerAiRemoteResponse(
                 true,
                 null,
                 "6월 지출은 식비 중심으로 증가했습니다.",

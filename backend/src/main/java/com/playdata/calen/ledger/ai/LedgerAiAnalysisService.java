@@ -63,15 +63,18 @@ public class LedgerAiAnalysisService {
     private final LedgerEntryRepository ledgerEntryRepository;
     private final LedgerAiAnalysisHistoryRepository historyRepository;
     private final LedgerAiAnalysisProperties properties;
-    private final LedgerAiN8nClient n8nClient;
+    private final LedgerAiRemoteClient remoteClient;
     private final ObjectMapper objectMapper;
 
     public LedgerAiAnalysisStatusResponse getStatus() {
         return new LedgerAiAnalysisStatusResponse(
                 properties.isEnabled(),
                 properties.isConfigured(),
+                properties.getProvider(),
                 properties.isWorkflowConfigured(),
                 properties.isApiKeyConfigured(),
+                properties.isLmStudioConfigured(),
+                properties.getLmStudioBaseUrl(),
                 properties.getModel(),
                 properties.statusMessage()
         );
@@ -89,7 +92,7 @@ public class LedgerAiAnalysisService {
         LedgerAiN8nPayload payload = buildPayload(plan, dataset);
 
         try {
-            LedgerAiN8nClient.RemoteAnalysisResponse remote = n8nClient.analyze(payload);
+            LedgerAiRemoteResponse remote = remoteClient.analyze(payload);
             LedgerAiAnalysisHistory history = baseHistory(owner, plan);
             history.setStatus(LedgerAiAnalysisStatus.COMPLETED);
             history.setSummary(safeText(remote.summary()));
@@ -280,7 +283,7 @@ public class LedgerAiAnalysisService {
         );
     }
 
-    private LedgerAiAnalysisResponse buildResponse(Long historyId, AnalysisPlan plan, AnalysisDataset dataset, LedgerAiN8nClient.RemoteAnalysisResponse remote) {
+    private LedgerAiAnalysisResponse buildResponse(Long historyId, AnalysisPlan plan, AnalysisDataset dataset, LedgerAiRemoteResponse remote) {
         DateRange primary = plan.primaryRange();
         DateRange comparison = plan.comparisonRange();
         LedgerAiAnalysisReportResponse report = buildReport(plan, dataset, remote);
@@ -523,7 +526,7 @@ public class LedgerAiAnalysisService {
     private String normalizeForRecurringKey(String value) {
         return safeText(value).trim().replaceAll("\\s+", " ").toLowerCase(Locale.ROOT);
     }
-    private LedgerAiAnalysisReportResponse buildReport(AnalysisPlan plan, AnalysisDataset dataset, LedgerAiN8nClient.RemoteAnalysisResponse remote) {
+    private LedgerAiAnalysisReportResponse buildReport(AnalysisPlan plan, AnalysisDataset dataset, LedgerAiRemoteResponse remote) {
         LedgerAiAnalysisReportResponse fallback = buildFallbackReport(plan, dataset);
         LedgerAiAnalysisReportResponse remoteReport = remote.report();
         return new LedgerAiAnalysisReportResponse(

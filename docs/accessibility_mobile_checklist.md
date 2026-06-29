@@ -1,4 +1,4 @@
-﻿# Accessibility and Mobile UX Checklist
+# Accessibility and Mobile UX Checklist
 
 Updated: 2026-06-30
 
@@ -36,7 +36,7 @@ This checklist turns the accessibility/mobile UX improvement track into reviewab
 | Login, PIN, session expiry | Submit, clear, delete, recovery, and retry work from keyboard. | Focus starts on the first useful field, errors are announced, and Focus returns to the trigger after session-expiry dialogs. | Numeric keyboard hints and 44x44 CSS px PIN/action targets. | PinPadInput.vue has labelled keypad controls and non-secret progress text. |
 | Admin dialogs and destructive actions | Confirm/cancel works without mouse and never depends on color alone. | Focus is trapped in the dialog, Escape/Cancel is available, and Focus returns to the trigger. | Destructive and cancel actions remain separated and touch-safe at 360x640. | Manual checklist required before admin release. |
 | Dashboard drag widgets | Reorder/reset layout is available through buttons, menus, or forms. | Focus order follows visual order after reorder and reset. | Drag handles do not become the only touch target. | Implementation queued. |
-| Drive/share/file upload | Select file, upload, revoke link, change permission, and copy link are reachable from keyboard. | Upload/share status is text-visible and focus moves to actionable recovery on failure. | Primary share/upload controls target 44x44 CSS px and fit at 360x640. | Security PIN forms already expose mobile input hints. |
+| Drive/share/file upload | Select file, upload, revoke link, change permission, and copy link are reachable from keyboard. | Upload/share status is text-visible and focus moves to actionable recovery on failure. | Primary share/upload controls target 44x44 CSS px and fit at 360x640. | Security PIN forms expose mobile input hints; InviteAccessPanel has labelled expiry controls, button types, generated-link live status, and alert/status feedback. |
 | Maps and travel media | Route, marker, cluster, and photo data has list/table alternatives. | Focus can leave map controls and return to the selected list item. | Map gestures are optional for core read/review flows. | Implementation queued. |
 | AI/OCR result review | Retry, delete history, inspect source entries, and accept/reject recommendations are keyboard reachable. | Long AI/OCR output has headings and status summaries before detail sections. | Generated reports do not require horizontal scrolling at 360x640. | Manual checklist required before AI/OCR release. |
 
@@ -71,7 +71,7 @@ This checklist turns the accessibility/mobile UX improvement track into reviewab
 | Area | Evidence |
 | --- | --- |
 | Login and invite PIN keypad | PinPadInput.vue exposes the keypad as a labelled group, gives digit/clear/delete buttons accessible names, and announces PIN entry progress without exposing digits. |
-| Profile and CalenDrive security PIN forms | PIN inputs use numeric input mode, numeric pattern hints, max length, and autocomplete hints so mobile keyboards and password managers behave predictably. |
+| Profile and CalenDrive security PIN forms | PIN inputs use numeric input mode, numeric pattern hints, max length, and autocomplete hints so mobile keyboards and password managers behave predictably. |`r`n| Invite access panel | InviteAccessPanel.vue exposes a labelled expiry select, explicit button types, generated-link live status, copy action label, and separate success/error feedback semantics. |
 
 
 ## Release Evidence Template

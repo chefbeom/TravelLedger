@@ -1,4 +1,4 @@
-﻿Set-StrictMode -Version Latest
+Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $checklistPath = 'docs/accessibility_mobile_checklist.md'
@@ -113,7 +113,7 @@ if ($findings.Count -eq 0) {
         Assert-Contains -Label 'CalenDriveProfileModal.vue mobile PIN anchor' -Content $profileModal -Needle $snippet
     }
 
-    foreach ($snippet in @('<label class="field">', '<select', '생성된 링크', '만료 시간:', '링크 복사')) {
+    foreach ($snippet in @('<label class="field">', '<select', 'aria-label="Invite link expiry"', 'Generated link', 'Expires at:', 'Copy link', 'role="status"', 'aria-live="polite"', 'role="alert"')) {
         Assert-Contains -Label 'InviteAccessPanel.vue share accessibility anchor' -Content $inviteAccessPanel -Needle $snippet
     }
 

@@ -8,11 +8,11 @@ const props = defineProps({
   },
   label: {
     type: String,
-    default: '2차 비밀번호',
+    default: 'Secondary PIN',
   },
   hint: {
     type: String,
-    default: '키보드 대신 아래 숫자를 눌러 8자리를 입력해주세요.',
+    default: 'Use the numeric keypad to enter 8 digits.',
   },
   disabled: {
     type: Boolean,
@@ -27,7 +27,9 @@ const props = defineProps({
 const emit = defineEmits(['update:modelValue'])
 
 const slots = computed(() => Array.from({ length: props.length }, (_, index) => props.modelValue[index] || ''))
-const progressLabel = computed(() => ${props.modelValue.length} of  PIN digits entered)
+const progressLabel = computed(() => `${props.modelValue.length} of ${props.length} PIN digits entered`)
+const digitDisabled = computed(() => props.disabled || props.modelValue.length >= props.length)
+const editDisabled = computed(() => props.disabled || !props.modelValue.length)
 
 const keypadRows = [
   ['1', '2', '3'],
@@ -36,21 +38,21 @@ const keypadRows = [
 ]
 
 function appendDigit(digit) {
-  if (props.disabled || props.modelValue.length >= props.length) {
+  if (digitDisabled.value) {
     return
   }
   emit('update:modelValue', `${props.modelValue}${digit}`)
 }
 
 function removeDigit() {
-  if (props.disabled || !props.modelValue.length) {
+  if (editDisabled.value) {
     return
   }
   emit('update:modelValue', props.modelValue.slice(0, -1))
 }
 
 function clearDigits() {
-  if (props.disabled || !props.modelValue.length) {
+  if (editDisabled.value) {
     return
   }
   emit('update:modelValue', '')
@@ -61,7 +63,7 @@ function clearDigits() {
   <div class="pin-pad" :class="{ 'pin-pad--disabled': disabled }" role="group" :aria-label="label">
     <div class="pin-pad__header">
       <span class="field__label">{{ label }}</span>
-      <span class="pin-pad__progress">{{ modelValue.length }}/{{ length }}자리</span>
+      <span class="pin-pad__progress">{{ modelValue.length }}/{{ length }} digits</span>
     </div>
 
     <div class="pin-pad__display" role="status" aria-live="polite" :aria-label="progressLabel" @keydown.prevent>
@@ -71,7 +73,7 @@ function clearDigits() {
         class="pin-pad__slot"
         :class="{ 'pin-pad__slot--filled': slot }"
       >
-        {{ slot ? '●' : '' }}
+        {{ slot ? '*' : '' }}
       </span>
     </div>
 
@@ -84,19 +86,19 @@ function clearDigits() {
           :key="digit"
           class="pin-pad__key"
           type="button"
-          :disabled="disabled"
+          :disabled="digitDisabled"
           :aria-label="`PIN digit ${digit}`"
           @click="appendDigit(digit)"
         >
           {{ digit }}
         </button>
       </template>
-      <button class="pin-pad__key pin-pad__key--ghost" type="button" :disabled="disabled" aria-label="Clear PIN digits" @click="clearDigits">
-        전체삭제
+      <button class="pin-pad__key pin-pad__key--ghost" type="button" :disabled="editDisabled" aria-label="Clear PIN digits" @click="clearDigits">
+        Clear
       </button>
-      <button class="pin-pad__key" type="button" :disabled="disabled" aria-label="PIN digit 0" @click="appendDigit('0')">0</button>
-      <button class="pin-pad__key pin-pad__key--ghost" type="button" :disabled="disabled" aria-label="Delete last PIN digit" @click="removeDigit">
-        지우기
+      <button class="pin-pad__key" type="button" :disabled="digitDisabled" aria-label="PIN digit 0" @click="appendDigit('0')">0</button>
+      <button class="pin-pad__key pin-pad__key--ghost" type="button" :disabled="editDisabled" aria-label="Delete last PIN digit" @click="removeDigit">
+        Delete
       </button>
     </div>
   </div>

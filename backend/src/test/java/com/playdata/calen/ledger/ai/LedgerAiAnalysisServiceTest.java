@@ -8,6 +8,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.playdata.calen.account.domain.AppUser;
 import com.playdata.calen.account.service.AppUserService;
@@ -20,6 +21,7 @@ import com.playdata.calen.ledger.domain.LedgerAiAnalysisStatus;
 import com.playdata.calen.ledger.domain.PaymentMethodKind;
 import com.playdata.calen.ledger.dto.CategoryBreakdownItemResponse;
 import com.playdata.calen.ledger.dto.LedgerAiAnalysisRequest;
+import com.playdata.calen.ledger.dto.LedgerAiAnalysisStatusResponse;
 import com.playdata.calen.ledger.dto.LedgerAiAnalysisReportResponse;
 import com.playdata.calen.ledger.dto.OverviewResponse;
 import com.playdata.calen.ledger.dto.PaymentBreakdownItemResponse;
@@ -61,11 +63,12 @@ class LedgerAiAnalysisServiceTest {
     @Mock
     private LedgerAiRemoteClient remoteClient;
 
+    private LedgerAiAnalysisProperties properties;
     private LedgerAiAnalysisService service;
 
     @BeforeEach
     void setUp() {
-        LedgerAiAnalysisProperties properties = new LedgerAiAnalysisProperties();
+        properties = new LedgerAiAnalysisProperties();
         properties.setEnabled(true);
         properties.setWorkflowUrl("http://127.0.0.1:5678/webhook/travelledger-ledger-ai");
         properties.setModel("gemma4:e12b");
@@ -79,6 +82,32 @@ class LedgerAiAnalysisServiceTest {
                 remoteClient,
                 new ObjectMapper().findAndRegisterModules()
         );
+    }
+
+    @Test
+    void statusDoesNotExposeProviderUrlsOrApiKeys() throws Exception {
+        properties.setProvider("lmstudio");
+        properties.setWorkflowUrl("https://n8n.example.internal/webhook/travelledger-secret");
+        properties.setApiKey("n8n-secret-token");
+        properties.setLmStudioBaseUrl("http://172.18.240.1:1234");
+        properties.setLmStudioApiKey("lmstudio-secret-token");
+
+        LedgerAiAnalysisStatusResponse status = service.getStatus();
+        String json = new ObjectMapper().writeValueAsString(status);
+        JsonNode node = new ObjectMapper().readTree(json);
+
+        assertThat(status.configured()).isTrue();
+        assertThat(status.apiKeyConfigured()).isTrue();
+        assertThat(status.lmStudioConfigured()).isTrue();
+        assertThat(node.has("workflowUrl")).isFalse();
+        assertThat(node.has("lmStudioBaseUrl")).isFalse();
+        assertThat(node.has("apiKey")).isFalse();
+        assertThat(node.has("lmStudioApiKey")).isFalse();
+        assertThat(json)
+                .doesNotContain("https://n8n.example.internal")
+                .doesNotContain("172.18.240.1")
+                .doesNotContain("n8n-secret-token")
+                .doesNotContain("lmstudio-secret-token");
     }
 
     @Test

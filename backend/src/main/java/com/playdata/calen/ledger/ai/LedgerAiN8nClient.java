@@ -15,6 +15,7 @@ public class LedgerAiN8nClient {
     private final LedgerAiAnalysisProperties properties;
 
     public LedgerAiRemoteResponse analyze(Object payload) {
+        Timer.Sample workflowTimer = startExternalWorkflowTimer();
         try {
             SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
             requestFactory.setConnectTimeout(properties.getConnectTimeout());
@@ -37,13 +38,41 @@ public class LedgerAiN8nClient {
                     .retrieve()
                     .body(LedgerAiRemoteResponse.class);
 
-            return LedgerAiRemoteResponseValidator.requireUsable(response, "n8n");
+            LedgerAiRemoteResponse validated = LedgerAiRemoteResponseValidator.requireUsable(response, "n8n");
+            recordExternalWorkflow(workflowTimer, "ledger-ai-n8n", "success");
+            return validated;
 
         } catch (RestClientException exception) {
-            throw new BadRequestException("n8n AI 분석 워크플로우에 연결할 수 없습니다. n8n 서버와 웹훅 설정을 확인하세요.");
+            recordExternalWorkflow(workflowTimer, "ledger-ai-n8n", "failure");
+            throw new BadRequestException("n8n AI 遺꾩꽍 ?뚰겕?뚮줈?곗뿉 ?곌껐?????놁뒿?덈떎. n8n ?쒕쾭? ?뱁썒 ?ㅼ젙???뺤씤?섏꽭??");
+        } catch (RuntimeException exception) {
+            recordExternalWorkflow(workflowTimer, "ledger-ai-n8n", "failure");
+            throw exception;
         }
     }
 
+    private Timer.Sample startExternalWorkflowTimer() {
+        return meterRegistry == null ? null : Timer.start(meterRegistry);
+    }
+
+    private void recordExternalWorkflow(Timer.Sample sample, String workflow, String status) {
+        if (meterRegistry == null) {
+            return;
+        }
+        Counter.builder("calen.external.workflow.requests")
+                .description("External workflow/client requests")
+                .tag("workflow", workflow)
+                .tag("status", status)
+                .register(meterRegistry)
+                .increment();
+        if (sample != null) {
+            sample.stop(Timer.builder("calen.external.workflow.request")
+                    .description("External workflow/client request duration")
+                    .tag("workflow", workflow)
+                    .tag("status", status)
+                    .register(meterRegistry));
+        }
+    }
     private boolean hasText(String value) {
         return value != null && !value.isBlank();
     }

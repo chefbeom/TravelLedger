@@ -154,6 +154,37 @@ groups:
           summary: Public download link invalid/unavailable attempts increased
           description: Public download link invalid, revoked, expired, limit-reached, invalid-item, or trashed-item attempts are above 3 per minute for 10 minutes.
 
+  - name: calen.domain.external_workflows
+    rules:
+      - alert: CalenExternalWorkflowHighFailureRate
+        expr: |
+          sum(rate(calen_external_workflow_requests_total{job="calen-backend", status="failure"}[10m]))
+          /
+          clamp_min(sum(rate(calen_external_workflow_requests_total{job="calen-backend"}[10m])), 0.001)
+          > 0.10
+        for: 10m
+        labels:
+          severity: warning
+          service: calen-backend
+          feature: external-workflow
+        annotations:
+          summary: External workflow/client failure rate is above 10 percent
+          description: External workflow/client requests have failed more than 10 percent of the time for 10 minutes.
+
+      - alert: CalenExternalWorkflowSlowP95
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum by (workflow, le) (rate(calen_external_workflow_request_seconds_bucket{job="calen-backend"}[10m]))
+          ) > 30
+        for: 10m
+        labels:
+          severity: warning
+          service: calen-backend
+          feature: external-workflow
+        annotations:
+          summary: External workflow/client p95 latency is above 30 seconds
+          description: External workflow/client {{ $labels.workflow }} p95 latency has stayed above 30 seconds for 10 minutes.
   - name: calen.domain.data_ops
     rules:
       - alert: CalenDataOpsBackupFailure

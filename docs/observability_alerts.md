@@ -25,6 +25,8 @@ deploy/oci/monitoring/prometheus/rules/*.yml
 | CalenDataOpsBackupStale | no recorded successful backup within 26h | warning | Scheduled backup may be disabled, stuck, or failing before completion. |
 | CalenRedisConnectionUnavailable | `calen_redis_connection_available == 0` for 5m | warning | Cache/state Redis is unavailable from the backend. |
 | CalenMinioStorageHighUsage | MinIO used/capacity above 85% for 15m | warning | Object storage is nearing configured capacity. |
+| CalenExternalWorkflowHighFailureRate | external workflow/client failure ratio above 10% for 10m | warning | n8n/OCR external calls are unreliable or unavailable. |
+| CalenExternalWorkflowSlowP95 | external workflow/client p95 above 30s for 10m | warning | n8n/OCR external calls are approaching user-visible timeout territory. |
 | CalenHostDiskNearlyFull | filesystem free space below 10% for 10m | critical | Uploads, backups, logs, and database files may fail. |
 
 Prometheus evaluates these rules even before Alertmanager is introduced. Route them through Grafana alerting or add Alertmanager when notification channels are ready.
@@ -44,17 +46,14 @@ Prometheus evaluates these rules even before Alertmanager is introduced. Route t
 | MinIO storage used bytes | `calen_minio_storage_used_bytes` | `calen.minio.storage.used.bytes` | `bucket` | `MinioBackupArchiveService` |
 | MinIO storage capacity bytes | `calen_minio_storage_capacity_bytes` | `calen.minio.storage.capacity.bytes` | `bucket` | `MinioBackupArchiveService` |
 | MinIO object count | `calen_minio_storage_objects` | `calen.minio.storage.objects` | `bucket` | `MinioBackupArchiveService` |
+| External workflow request count | `calen_external_workflow_requests_total` | `calen.external.workflow.requests` | `workflow`, `status` | `LedgerAiN8nClient`, `LedgerOcrRemoteClient` |
+| External workflow request duration | `calen_external_workflow_request_seconds_bucket` | `calen.external.workflow.request` | `workflow`, `status` | `LedgerAiN8nClient`, `LedgerOcrRemoteClient` |
 
 Status labels are intentionally bounded. They must not include user IDs, tokens, filenames, prompts, IP addresses, or provider error bodies.
 
 ## Remaining metric contract
 
-The following alerts are part of the operational target but still require application/exporter metrics.
-
-| Area | Proposed metric | Labels | Alert condition |
-| --- | --- | --- | --- |
-| n8n workflow client | `calen_external_workflow_request_seconds_bucket` | `workflow`, `status` | p95 above 30s or failures above 10% |
-
+No remaining metric contract from this alert pass is pending implementation.
 Implementation notes:
 
 - Keep `MINIO_STORAGE_CAPACITY_BYTES` set to a positive value in production to enable usage-ratio alerts.

@@ -5,6 +5,9 @@ import com.fasterxml.jackson.annotation.JsonFormat;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.playdata.calen.common.exception.BadRequestException;
 import com.playdata.calen.ledger.domain.EntryType;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -12,6 +15,7 @@ import java.time.LocalTime;
 import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.http.MediaType;
 import org.springframework.http.client.MultipartBodyBuilder;
@@ -30,13 +34,18 @@ public class LedgerOcrRemoteClient {
 
     private final LedgerOcrProperties properties;
 
+    @Autowired(required = false)
+    private MeterRegistry meterRegistry;
+
     public RemoteAnalyzeResponse analyze(MultipartFile file, String documentType) {
+        boolean useWorkflow = properties.isWorkflowConfigured();
+        String workflow = useWorkflow ? "ledger-ocr-workflow" : "ledger-ocr-direct";
+        Timer.Sample workflowTimer = startExternalWorkflowTimer();
         try {
             SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
             requestFactory.setConnectTimeout(properties.getConnectTimeout());
             requestFactory.setReadTimeout(properties.getReadTimeout());
 
-            boolean useWorkflow = properties.isWorkflowConfigured();
             RestClient.Builder restClientBuilder = RestClient.builder()
                     .requestFactory(requestFactory);
             if (!useWorkflow) {
@@ -76,12 +85,39 @@ public class LedgerOcrRemoteClient {
             if (!response.ok()) {
                 throw new BadRequestException("OCR analysis server rejected the image.");
             }
+            recordExternalWorkflow(workflowTimer, workflow, "success");
             return response;
+        } catch (BadRequestException exception) {
+            recordExternalWorkflow(workflowTimer, workflow, "failure");
+            throw exception;
         } catch (IOException | RestClientException exception) {
+            recordExternalWorkflow(workflowTimer, workflow, "failure");
             throw new BadRequestException("OCR analysis server is unavailable. Check the OCR service and network.");
         }
     }
 
+    private Timer.Sample startExternalWorkflowTimer() {
+        return meterRegistry == null ? null : Timer.start(meterRegistry);
+    }
+
+    private void recordExternalWorkflow(Timer.Sample sample, String workflow, String status) {
+        if (meterRegistry == null) {
+            return;
+        }
+        Counter.builder("calen.external.workflow.requests")
+                .description("External workflow/client requests")
+                .tag("workflow", workflow)
+                .tag("status", status)
+                .register(meterRegistry)
+                .increment();
+        if (sample != null) {
+            sample.stop(Timer.builder("calen.external.workflow.request")
+                    .description("External workflow/client request duration")
+                    .tag("workflow", workflow)
+                    .tag("status", status)
+                    .register(meterRegistry));
+        }
+    }
     private MediaType resolveMediaType(MultipartFile file) {
         String contentType = file.getContentType();
         if (contentType == null || contentType.isBlank()) {

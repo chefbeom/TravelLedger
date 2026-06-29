@@ -2,9 +2,28 @@ package com.playdata.calen.ledger.ai;
 
 import com.playdata.calen.common.exception.BadRequestException;
 import com.playdata.calen.ledger.dto.LedgerAiAnalysisReportResponse;
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.List;
+import java.util.regex.Pattern;
 
 public final class LedgerAiRemoteResponseValidator {
+
+    private static final Pattern SECRET_DISCLOSURE_PATTERN = Pattern.compile(
+            "(?i)(api[_-]?key|secret|token|authorization|bearer|password)\\s*[:=]\\s*[A-Za-z0-9._~+/=-]{8,}"
+    );
+    private static final Pattern PROMPT_INJECTION_ECHO_PATTERN = Pattern.compile(
+            "(?i)(ignore|disregard|override|bypass).{0,40}(previous|above|system|developer).{0,40}(instruction|prompt|message)"
+    );
+    private static final Pattern ENGLISH_MUTATION_CLAIM_PATTERN = Pattern.compile(
+            "(?i)(?:(created|updated|deleted|modified|saved|categorized|reclassified).{0,60}"
+                    + "(transaction|ledger entr(?:y|ies)|expense|income)"
+                    + "|(transaction|ledger entr(?:y|ies)|expense|income).{0,60}"
+                    + "(created|updated|deleted|modified|saved|categorized|reclassified))"
+    );
+    private static final Pattern KOREAN_MUTATION_CLAIM_PATTERN = Pattern.compile(
+            "(거래|가계부|지출|수입).{0,30}(생성|수정|삭제|저장|분류).{0,20}(했습니다|완료|반영)"
+    );
 
     private LedgerAiRemoteResponseValidator() {
     }
@@ -12,17 +31,84 @@ public final class LedgerAiRemoteResponseValidator {
     public static LedgerAiRemoteResponse requireUsable(LedgerAiRemoteResponse response, String providerName) {
         String provider = hasText(providerName) ? providerName : "AI provider";
         if (response == null) {
-            throw new BadRequestException(provider + " AI 분석 응답이 비어 있습니다.");
+            throw new BadRequestException(provider + " AI 遺꾩꽍 ?묐떟??鍮꾩뼱 ?덉뒿?덈떎.");
         }
         if (Boolean.FALSE.equals(response.ok())) {
             throw new BadRequestException(hasText(response.error())
                     ? response.error()
-                    : provider + " AI 분석 요청이 실패했습니다.");
+                    : provider + " AI 遺꾩꽍 ?붿껌???ㅽ뙣?덉뒿?덈떎.");
         }
         if (!hasUsableAnalysis(response)) {
-            throw new BadRequestException(provider + " AI 분석 응답에 사용할 수 있는 분석 내용이 없습니다.");
+            throw new BadRequestException(provider + " AI 遺꾩꽍 ?묐떟???ъ슜?????덈뒗 遺꾩꽍 ?댁슜???놁뒿?덈떎.");
         }
+        rejectUnsafeContent(response, provider);
         return response;
+    }
+
+    private static void rejectUnsafeContent(LedgerAiRemoteResponse response, String provider) {
+        for (String value : allTextValues(response)) {
+            if (!hasText(value)) {
+                continue;
+            }
+            if (SECRET_DISCLOSURE_PATTERN.matcher(value).find()) {
+                throw new BadRequestException(provider + " AI analysis response contained secret-like content.");
+            }
+            if (PROMPT_INJECTION_ECHO_PATTERN.matcher(value).find()) {
+                throw new BadRequestException(provider + " AI analysis response echoed prompt-injection instructions.");
+            }
+            if (ENGLISH_MUTATION_CLAIM_PATTERN.matcher(value).find()
+                    || KOREAN_MUTATION_CLAIM_PATTERN.matcher(value).find()) {
+                throw new BadRequestException(provider + " AI analysis response claimed ledger data was changed.");
+            }
+        }
+    }
+
+    private static List<String> allTextValues(LedgerAiRemoteResponse response) {
+        List<String> values = new ArrayList<>();
+        add(values, response.error());
+        add(values, response.summary());
+        add(values, response.nextPeriodForecast());
+        add(values, response.habitAssessment());
+        addAll(values, response.highlights());
+        addAll(values, response.warnings());
+        addAll(values, response.risks());
+        addAll(values, response.recommendations());
+        addAll(values, response.categoryInsights());
+        addAll(values, response.paymentInsights());
+        addAll(values, response.trendInsights());
+        addAll(values, response.unusualSpendingInsights());
+        addAll(values, response.fixedCostInsights());
+        addReport(values, response.report());
+        return values;
+    }
+
+    private static void addReport(List<String> values, LedgerAiAnalysisReportResponse report) {
+        if (report == null) {
+            return;
+        }
+        add(values, report.keySummary());
+        add(values, report.fullReport());
+        add(values, report.averageAmountInsight());
+        add(values, report.topPaymentMethod());
+        addAll(values, report.notableSpending());
+        addAll(values, report.regularSpending());
+        addAll(values, report.abnormalSpending());
+        addAll(values, report.subscriptions());
+        addAll(values, report.fixedExpenses());
+        addAll(values, report.improvementActions());
+        addAll(values, report.comparisonFocus());
+    }
+
+    private static void add(List<String> values, String value) {
+        if (value != null) {
+            values.add(value);
+        }
+    }
+
+    private static void addAll(List<String> values, Collection<String> source) {
+        if (source != null) {
+            values.addAll(source);
+        }
     }
 
     private static boolean hasUsableAnalysis(LedgerAiRemoteResponse response) {

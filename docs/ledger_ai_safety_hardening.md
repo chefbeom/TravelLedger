@@ -41,7 +41,8 @@ sequenceDiagram
 | AI-INV-04 | Invalid or non-JSON provider output must fail closed. | LM Studio client extracts JSON and throws on parse failure. | Unit tests for markdown-only, empty, invalid JSON, and missing content responses. |
 | AI-INV-05 | Failed AI requests must be recorded without rolling back the failure history. | `analyze` uses `@Transactional(noRollbackFor = RuntimeException.class)`. | Test: provider failure stores `FAILED` history with limited error message. |
 | AI-INV-06 | LLM output must be treated as advice, not verified facts. | UI labels the result as advisory AI analysis and states that ledger entries are not automatically created, updated, or deleted; backend output contract requires advisory-only recommendations. | `StatisticsWorkspace.vue` advisory notice plus provider-contract tests should avoid automatic action wording. |
-| AI-INV-07 | Raw sensitive tokens/keys must not appear in history payload/result/error fields. | Payload contains ledger statistics and entries, not provider credentials; failed history redacts configured provider URLs, API key headers, and API keys from stored error messages. | `LedgerAiAnalysisServiceTest.analyzeStoresFailedHistoryWithoutLeakingProviderSecrets` plus secret scan/grep gate for key-like env values in stored request/result serialization tests. |
+| AI-INV-07 | Raw sensitive tokens/keys must not appear in history payload/result/error fields. | Payload contains ledger statistics and entries, not provider credentials; failed history redacts configured provider URLs, API key headers, and API keys from stored error messages. Shared response validation rejects key/token/password-like output before it is accepted as usable analysis. | `LedgerAiAnalysisServiceTest.analyzeStoresFailedHistoryWithoutLeakingProviderSecrets` plus `LedgerAiRemoteResponseValidatorTest.rejectsSecretLikeProviderOutput`; add secret scan/grep gate for key-like env values in stored request/result serialization tests. |
+| AI-INV-08 | Prompt-injection instructions echoed by the provider must not become trusted UI output. | Shared response validation rejects output containing instruction-override patterns such as ignoring previous/system/developer prompts. | `LedgerAiRemoteResponseValidatorTest.rejectsPromptInjectionEchoFromProviderOutput`. |
 
 ## Threat Checklist
 
@@ -107,7 +108,7 @@ Minimum acceptance rule for provider responses:
 
 | Control | Implementation | Test evidence |
 | --- | --- | --- |
-| Shared provider response validation | `LedgerAiRemoteResponseValidator` rejects null responses, `ok=false`, and successful responses with no usable summary/report/list/forecast/habit content. | `LedgerAiRemoteResponseValidatorTest` |
+| Shared provider response validation | `LedgerAiRemoteResponseValidator` rejects null responses, `ok=false`, successful responses with no usable summary/report/list/forecast/habit content, secret-like output, prompt-injection echoes, and mutation claims. | `LedgerAiRemoteResponseValidatorTest` |
 | LM Studio response validation | `LedgerAiLmStudioClient` resolves `APP_LEDGER_AI_MODEL=auto` through `/api/v1/models`, extracts assistant JSON, and passes parsed responses through the shared validator without leaking provider URL/API key values in model-list failures. | `LedgerAiLmStudioClientTest`, `LedgerAiRemoteResponseValidatorTest`, `LedgerAiAnalysisServiceTest` |
 | n8n response validation | `LedgerAiN8nClient` passes webhook responses through the shared validator. | `LedgerAiRemoteResponseValidatorTest`, `LedgerAiAnalysisServiceTest` |
 | Provider observability | `LedgerAiLmStudioClient` and `LedgerAiN8nClient` register `calen.external.workflow.requests` and `calen.external.workflow.request` with workflow/status tags. | Pending targeted metric assertions. |
@@ -122,7 +123,7 @@ Minimum acceptance rule for provider responses:
 
 | Priority | Work item | File candidates | Verification |
 | --- | --- | --- | --- |
-| P0 | Keep response shape validator and LM Studio model auto-resolution enforced as providers evolve. | `LedgerAiRemoteResponseValidator`, provider clients | Tests for empty schema object, missing report/summary, provider failure, OpenAI-like chat content extraction, and `/api/v1/models` model selection. |
+| P0 | Keep response shape and unsafe-text validator plus LM Studio model auto-resolution enforced as providers evolve. | `LedgerAiRemoteResponseValidator`, provider clients | Tests for empty schema object, missing report/summary, provider failure, secret-like output, prompt-injection echo, mutation claims, OpenAI-like chat content extraction, and `/api/v1/models` model selection. |
 | P0 | Keep malicious memo/title prompt-injection and excessive-agency coverage. | `LedgerAiAnalysisServiceTest`, `LedgerAiAnalysisService.outputContract` | Captured payload preserves hostile-looking text as data; output contract says ledger text is untrusted user data, output is advisory only, and ledger changes require explicit user confirmation. |
 | P0 | Ensure status endpoint never exposes provider URLs/API keys. | `LedgerAiAnalysisStatusResponse`, `LedgerAiAnalysisServiceTest` | JSON assertion excludes workflow URL, LM Studio base URL, and all API key values; only boolean configured flags are exposed. |
 | P1 | Add configurable redaction profiles. | `LedgerAiAnalysisService`, provider payload DTO | Sensitive title/memo fields can be masked more aggressively for production profiles. |
@@ -182,3 +183,13 @@ A change to ledger AI code is not release-ready until:
 5. Frontend copy does not imply that AI automatically changes ledger data.
 6. README and `.env.example` match `application.yml` configuration names.
 
+
+## 2026-06-30 Unsafe Output Validation Update
+
+`LedgerAiRemoteResponseValidator` now rejects otherwise usable provider responses when any text field contains:
+
+- Secret-like assignments such as API keys, bearer tokens, passwords, or authorization values.
+- Prompt-injection echoes that ask the system to ignore, override, bypass, or disregard prior/system/developer instructions.
+- Claims that ledger transactions, expenses, or income entries were already created, updated, deleted, saved, categorized, or reclassified.
+
+These checks keep AI output in the "advice/analysis" lane and fail closed before unsafe provider text is stored as an accepted analysis result.

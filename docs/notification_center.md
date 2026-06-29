@@ -1,8 +1,8 @@
-# Notification Center Backend Baseline
+# Notification Center Contract
 
 Updated: 2026-06-30
 
-This document records the notification-center backend baseline and the first producer wiring. Storage, listing, unread counts, read handling, AI analysis events, OCR failure events, scheduled backup failure events, and shared-file events are now in place; budget and travel producers remain in the queue.
+This document records the notification-center contract. Storage, listing, unread counts, read handling, AI analysis events, OCR failure events, scheduled backup failure events, shared-file events, and the frontend notification center are now in place. Budget and travel producers remain in the queue, and every new producer must keep notifications owner-scoped, bounded, and free of operational secrets.
 
 ## Implemented API
 
@@ -13,7 +13,7 @@ This document records the notification-center backend baseline and the first pro
 | `/api/notifications/{notificationId}/read` | `PATCH` | Mark one owned notification as read. |
 | `/api/notifications/read-all` | `PATCH` | Mark all unread owned notifications as read. |
 
-## Data Model
+## Data model
 
 | Field | Reason |
 | --- | --- |
@@ -24,19 +24,36 @@ This document records the notification-center backend baseline and the first pro
 | `metadataJson` | Optional structured payload for future UI rendering. Sensitive field values and signed-token query parameters are redacted before persistence. |
 | `readAt` | Supports unread badge counts without deleting history. |
 
-## Safety Rules
+## Event flow
+
+```mermaid
+flowchart TD
+    A["Feature producer detects event"] --> B["Choose stable type and bounded target URL"]
+    B --> C["Build short title/message and minimal metadata"]
+    C --> D["UserNotificationService redacts sensitive fields and query tokens"]
+    D --> E["Persist notification for one owner or approved admin audience"]
+    E --> F["Frontend lists current user's notifications"]
+    F --> G{"User marks read?"}
+    G -- "Single" --> H["Owner-scoped findByIdAndOwnerId"]
+    G -- "All" --> I["Owner-scoped markAllUnreadAsRead"]
+```
+
+## Safety rules
 
 | Rule | Reason |
 | --- | --- |
 | Current user ID always comes from `@AuthenticationPrincipal`. | Prevents cross-user notification access. |
-| List and read APIs are owner-scoped. | A user cannot mark another user's notification as read. |
+| List and read APIs are owner-scoped. | A user cannot list or mark another user's notification as read. |
+| Manual/internal creation uses the authenticated user as owner. | A request body cannot target another user. |
 | API responses include `unreadCount`. | Header badge can render without a second count endpoint. |
-| Notification metadata must not contain API keys, signed URLs, raw prompts, or backup credentials. | Notifications are designed for UI convenience, not sensitive data storage. |
+| Notification metadata must not contain API keys, signed URLs, raw prompts, provider responses, backup credentials, secondary PINs, public tokens, or storage paths. | Notifications are designed for awareness, not sensitive data storage. |
 | Notification creation redacts sensitive metadata fields, bearer tokens, and signed URL query parameters before persistence. | Producer mistakes should not turn the notification table into a secret store. |
 | Scheduled backup failure notifications go only to active admins and store bounded `backupType`/`status` metadata. | Operators need actionability without leaking backup paths, remote names, or credentials. |
+| Budget, travel, household, and privacy producers must store IDs/counts/status labels only. | These domains can include sensitive spending, family, route, photo, and location details. |
 | Event producers should write short messages and link to the source page. | Keeps the center useful without duplicating feature data. |
+| Notification links must be relative application paths. | Avoids turning notifications into open redirects or signed URL storage. |
 
-## Implemented Producers
+## Implemented producers
 
 | Producer | Type | Target |
 | --- | --- | --- |
@@ -47,23 +64,52 @@ This document records the notification-center backend baseline and the first pro
 | Scheduled MinIO backup failed | `BACKUP_FAILED` | Admin data-management page. |
 | CalenDrive file shared with user | `SHARED_FILE_RECEIVED` | CalenDrive shared-files view. |
 
-## Event Producer Queue
+## Event producer queue
 
-| Producer | Suggested type | Target |
-| --- | --- | --- |
-| Budget threshold exceeded | `BUDGET_WARNING` | Ledger dashboard. |
-| Travel date approaching | `TRAVEL_REMINDER` | Travel plan detail page. |
+| Producer | Suggested type | Target | Required metadata boundary |
+| --- | --- | --- | --- |
+| Budget threshold exceeded | `BUDGET_WARNING` | Ledger or Household dashboard. | Budget/goal ID, threshold label, period, and status only; no raw ledger titles or member-private entries. |
+| Travel date approaching | `TRAVEL_REMINDER` | Travel plan detail page. | Plan ID, date label, and status only; no raw GPS/EXIF, storage path, media token, or private note. |
+| Household goal progress | `GOAL_PROGRESS` | Household goal dashboard. | Goal ID, status, progress bucket, and actor visibility label only; no non-visible member contribution details. |
+| Privacy cleanup complete | `PRIVACY_ACTION_DONE` | Profile privacy panel. | Counts and action labels only; no deleted item names, tokens, archive contents, or AI prompt fragments. |
 
-## Test Backlog
+## Current implementation anchors
 
-- Service tests cover sensitive metadata redaction and owner-scoped single-notification read lookup.
-- OCR remote/config failures create bounded `AI_OR_OCR_FAILED` notifications without masking the original OCR error.
-- Scheduled backup failures create bounded `BACKUP_FAILED` notifications for active admins without leaking backup paths, remote names, or credentials.
+| Anchor | Evidence |
+| --- | --- |
+| `UserNotificationController` | Exposes authenticated list/create/read/read-all endpoints and passes only `currentUser.userId()` to the service. |
+| `UserNotificationService` | Redacts sensitive metadata/query/bearer-token values, truncates fields, lists by owner, counts unread by owner, and marks read by owner. |
+| `UserNotificationRepository` | Provides owner-scoped list, unread list, single lookup, unread count, and bulk read update queries. |
+| `UserNotificationServiceTest` | Covers sensitive metadata/target redaction and owner-scoped single-notification read lookup. |
+| `NotificationCenterWorkspace.vue` | Loads notifications, filters unread-only, marks one/all read, and only opens relative target URLs. |
+| `App.vue` / `api.js` | Routes to the notification center and exposes frontend notification API calls. |
+
+## Release gate
+
+Before promoting a change that adds or modifies notification storage, notification UI, event producers, budget/travel/household/privacy notification payloads, backup/AI/OCR notification behavior, or read-state behavior:
+
+1. Confirm every list/read/write path is scoped to the authenticated owner or an explicitly approved admin audience.
+2. Confirm producers do not persist API keys, signed URLs, presigned URLs, public tokens, object storage paths, raw OCR images, raw AI prompts, provider responses, backup credentials, secondary PINs, raw GPS/EXIF, or private member ledger details.
+3. Confirm target URLs are relative application paths and do not contain signed-token query values.
+4. Confirm `metadataJson` remains bounded and redacted before persistence.
+5. Confirm unread counts stay owner-scoped after read/read-all operations.
+6. Confirm frontend notification cards expose enough status/action text without depending on color only.
+7. Run `scripts/verify-notification-center-contract.ps1` and focused notification service/controller/UI tests.
+
+## CI contract
+
+The `notification-center-contract` GitHub Actions job must run `scripts/verify-notification-center-contract.ps1`. The release gate must include that job so future producers cannot bypass owner scope, redaction, target URL, unread-count, or frontend wiring rules.
+
+## Test backlog
+
 - Unauthenticated users cannot call `/api/notifications`.
 - User A cannot list or mark User B's notification as read.
 - `unreadCount` decreases after read/read-all operations.
-- Event producers do not include raw prompts, backup credentials, or long raw payloads in `metadataJson`.
+- Event producers do not include raw prompts, backup credentials, route coordinates, storage paths, public tokens, signed URLs, or long raw payloads in `metadataJson`.
 - Pagination clamps `size` to the backend maximum.
+- Budget, travel, household, and privacy producers use bounded metadata and source-page links only.
+- Notification center E2E verifies unread/read-all UI and owner isolation.
+
 ## Frontend notification center
 
 - `frontend/src/components/NotificationCenterWorkspace.vue` provides the in-app notification center for the signed-in user.

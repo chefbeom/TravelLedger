@@ -93,5 +93,6 @@ This roadmap turns the current improvement analysis into an implementation queue
 | `scripts/verify-ledger-anomaly-contract.ps1` | Fails CI if transaction anomaly detection loses read-only owner scope, bounded range/limit rules, detector evidence, security checklist coverage, or release-gate wiring. |
 | `scripts/verify-travel-story-export-contract.ps1` | Fails CI if travel story/export loses owner/shared/public visibility rules, media-token safety, secret exclusion, roadmap coverage, or release-gate wiring. |
 | `scripts/verify-household-budget-goals-contract.ps1` | Fails CI if household budget/shared-goal contracts lose owner/member scope, explicit mutation boundaries, export/notification safety, implementation anchors, or release-gate wiring. |
+| `scripts/verify-notification-center-contract.ps1` | Fails CI if notification center loses owner scope, redaction, bounded metadata, relative target links, frontend/API anchors, roadmap coverage, or release-gate wiring. |
 | `scripts/verify-db-migrations.ps1` | Fails CI on malformed migration names, duplicate versions, or missing baseline marker. |
 | `scripts/verify-prometheus-alerts.ps1` | Fails CI when alert rules are malformed, undocumented, or not loaded by Prometheus. |

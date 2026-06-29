@@ -6,11 +6,14 @@ import com.playdata.calen.drive.domain.DriveDownloadLink;
 import com.playdata.calen.drive.domain.DriveItem;
 import com.playdata.calen.drive.dto.DriveDtos;
 import com.playdata.calen.drive.repository.DriveDownloadLinkRepository;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.security.SecureRandom;
 import java.time.LocalDateTime;
 import java.util.Base64;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -29,6 +32,10 @@ public class DriveDownloadLinkService {
     private final DriveDownloadLinkRepository driveDownloadLinkRepository;
     private final DriveService driveService;
     private final DriveStorageService driveStorageService;
+
+    @Autowired(required = false)
+    private MeterRegistry meterRegistry;
+
     private final SecureRandom secureRandom = new SecureRandom();
 
     @Transactional
@@ -74,9 +81,11 @@ public class DriveDownloadLinkService {
     public DriveService.DriveFilePayload downloadByToken(String token) {
         DriveItem item = resolveAvailableDownloadLink(token).getItem();
         byte[] bytes = driveStorageService.loadObjectBytes(item.getStoragePath());
+        String contentType = driveService.resolveContentType(item.getExtension());
+        recordPublicDownloadLinkRequest("success");
         return new DriveService.DriveFilePayload(
                 bytes,
-                driveService.resolveContentType(item.getExtension()),
+                contentType,
                 item.getOriginalName(),
                 item.getFileSize()
         );
@@ -85,24 +94,47 @@ public class DriveDownloadLinkService {
     @Transactional
     public String resolveDownloadUrlByToken(String token) {
         DriveItem item = resolveAvailableDownloadLink(token).getItem();
-        return driveStorageService.generateDownloadUrl(
+        String downloadUrl = driveStorageService.generateDownloadUrl(
                 item.getStoragePath(),
                 item.getOriginalName(),
                 driveService.resolveContentType(item.getExtension())
         );
+        recordPublicDownloadLinkRequest("success");
+        return downloadUrl;
     }
 
     private DriveDownloadLink resolveAvailableDownloadLink(String token) {
         if (token == null || token.isBlank()) {
+            recordPublicDownloadLinkRequest("invalid");
             throw new NotFoundException("Download link was not found.");
         }
 
-        DriveDownloadLink link = driveDownloadLinkRepository.findByToken(token.trim())
-                .orElseThrow(() -> new NotFoundException("Download link was not found."));
+        DriveDownloadLink link = driveDownloadLinkRepository.findByToken(token.trim()).orElse(null);
+        if (link == null) {
+            recordPublicDownloadLinkRequest("invalid");
+            throw new NotFoundException("Download link was not found.");
+        }
 
         LocalDateTime now = LocalDateTime.now();
         DriveItem item = link.getItem();
-        if (link.getRevokedAt() != null || link.isExpired(now) || link.isDownloadLimitReached() || item == null || !item.isFile() || item.isTrashed()) {
+        if (link.getRevokedAt() != null) {
+            recordPublicDownloadLinkRequest("revoked");
+            throw new BadRequestException("Download link is expired or no longer available.");
+        }
+        if (link.isExpired(now)) {
+            recordPublicDownloadLinkRequest("expired");
+            throw new BadRequestException("Download link is expired or no longer available.");
+        }
+        if (link.isDownloadLimitReached()) {
+            recordPublicDownloadLinkRequest("limit_reached");
+            throw new BadRequestException("Download link is expired or no longer available.");
+        }
+        if (item == null || !item.isFile()) {
+            recordPublicDownloadLinkRequest("invalid_item");
+            throw new BadRequestException("Download link is expired or no longer available.");
+        }
+        if (item.isTrashed()) {
+            recordPublicDownloadLinkRequest("trashed");
             throw new BadRequestException("Download link is expired or no longer available.");
         }
 
@@ -125,6 +157,17 @@ public class DriveDownloadLinkService {
                 .revokedAt(link.getRevokedAt())
                 .available(link.getRevokedAt() == null && !link.isExpired(now) && !link.isDownloadLimitReached())
                 .build();
+    }
+
+    private void recordPublicDownloadLinkRequest(String status) {
+        if (meterRegistry == null) {
+            return;
+        }
+        Counter.builder("calen.public.download.link.requests")
+                .description("Public download link requests")
+                .tag("status", status)
+                .register(meterRegistry)
+                .increment();
     }
 
     private int resolveExpiresInMinutes(DriveDtos.DownloadLinkCreateRequest request) {

@@ -43,7 +43,11 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
@@ -65,6 +69,9 @@ public class LedgerAiAnalysisService {
     private final LedgerAiAnalysisProperties properties;
     private final LedgerAiRemoteClient remoteClient;
     private final ObjectMapper objectMapper;
+
+    @Autowired(required = false)
+    private MeterRegistry meterRegistry;
 
     public LedgerAiAnalysisStatusResponse getStatus() {
         return new LedgerAiAnalysisStatusResponse(
@@ -90,9 +97,13 @@ public class LedgerAiAnalysisService {
         AnalysisPlan plan = resolvePlan(request);
         AnalysisDataset dataset = buildDataset(userId, plan);
         LedgerAiN8nPayload payload = buildPayload(plan, dataset);
+        Timer.Sample aiRequestTimer = startAiRequestTimer();
+        boolean aiRequestRecorded = false;
 
         try {
             LedgerAiRemoteResponse remote = remoteClient.analyze(payload);
+            recordAiRequest(aiRequestTimer, "success");
+            aiRequestRecorded = true;
             LedgerAiAnalysisHistory history = baseHistory(owner, plan);
             history.setStatus(LedgerAiAnalysisStatus.COMPLETED);
             history.setSummary(safeText(remote.summary()));
@@ -103,6 +114,9 @@ public class LedgerAiAnalysisService {
             history.setResultJson(writeJson(response));
             return response;
         } catch (RuntimeException exception) {
+            if (!aiRequestRecorded) {
+                recordAiRequest(aiRequestTimer, "failure");
+            }
             LedgerAiAnalysisHistory failedHistory = baseHistory(owner, plan);
             failedHistory.setStatus(LedgerAiAnalysisStatus.FAILED);
             failedHistory.setSummary("AI 분석 요청 실패");
@@ -811,6 +825,37 @@ public class LedgerAiAnalysisService {
                 .multiply(BigDecimal.valueOf(100))
                 .divide(safeBase, 2, RoundingMode.HALF_UP)
                 .toPlainString() + "%";
+    }
+    private Timer.Sample startAiRequestTimer() {
+        return meterRegistry == null ? null : Timer.start(meterRegistry);
+    }
+
+    private void recordAiRequest(Timer.Sample sample, String status) {
+        if (meterRegistry == null) {
+            return;
+        }
+        String provider = aiProviderMetricLabel();
+        Counter.builder("calen.ledger.ai.requests")
+                .description("Ledger AI remote analysis requests")
+                .tag("provider", provider)
+                .tag("status", status)
+                .register(meterRegistry)
+                .increment();
+        if (sample != null) {
+            sample.stop(Timer.builder("calen.ledger.ai.request")
+                    .description("Ledger AI remote analysis request duration")
+                    .tag("provider", provider)
+                    .tag("status", status)
+                    .register(meterRegistry));
+        }
+    }
+
+    private String aiProviderMetricLabel() {
+        try {
+            return properties.provider().name().toLowerCase(Locale.ROOT);
+        } catch (RuntimeException exception) {
+            return "unknown";
+        }
     }
     private String outputContract() {
         return """

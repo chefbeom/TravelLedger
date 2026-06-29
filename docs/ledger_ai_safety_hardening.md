@@ -40,7 +40,7 @@ sequenceDiagram
 | AI-INV-03 | Provider URL, API keys, and prompts must not be exposed to frontend. | Status response exposes provider/model/config flags, not keys. | DTO/API test: status response excludes `apiKey`, `workflowUrl`, prompt payload. |
 | AI-INV-04 | Invalid or non-JSON provider output must fail closed. | LM Studio client extracts JSON and throws on parse failure. | Unit tests for markdown-only, empty, invalid JSON, and missing content responses. |
 | AI-INV-05 | Failed AI requests must be recorded without rolling back the failure history. | `analyze` uses `@Transactional(noRollbackFor = RuntimeException.class)`. | Test: provider failure stores `FAILED` history with limited error message. |
-| AI-INV-06 | LLM output must be treated as advice, not verified facts. | UI labels it as AI analysis; backend output contract requires advisory-only recommendations. | UI copy and provider-contract tests should avoid automatic action wording. |
+| AI-INV-06 | LLM output must be treated as advice, not verified facts. | UI labels the result as advisory AI analysis and states that ledger entries are not automatically created, updated, or deleted; backend output contract requires advisory-only recommendations. | `StatisticsWorkspace.vue` advisory notice plus provider-contract tests should avoid automatic action wording. |
 | AI-INV-07 | Raw sensitive tokens/keys must not appear in history payload/result/error fields. | Payload contains ledger statistics and entries, not provider credentials; failed history redacts configured provider URLs, API key headers, and API keys from stored error messages. | `LedgerAiAnalysisServiceTest.analyzeStoresFailedHistoryWithoutLeakingProviderSecrets` plus secret scan/grep gate for key-like env values in stored request/result serialization tests. |
 
 ## Threat Checklist
@@ -129,7 +129,7 @@ Minimum acceptance rule for provider responses:
 | P1 | Add explicit client idempotency keys. | `LedgerAiAnalysisService`, history repository, frontend API caller | Parallel retries with the same client key coalesce even before the first request completes. |
 | P1 | Add provider allowlist tests. | `LedgerAiAnalysisProperties`, provider clients | Blocked LM Studio/n8n hosts fail closed without exposing URL/API key values. |
 | P2 | Add manual "Delete AI history" and retention policy. | AI history controller/service | User can delete own AI history; admin retention job documented. |
-| P2 | Add frontend disclaimer and confidence language. | `StatisticsWorkspace.vue` | Visual text clearly says analysis is advisory. |
+| P2 | Keep frontend disclaimer and confidence language visible. | `StatisticsWorkspace.vue` | AI result notice says the analysis is advisory and ledger changes require separate user confirmation/save. |
 
 ## Operational Runbook
 

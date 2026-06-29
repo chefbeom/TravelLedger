@@ -1274,6 +1274,10 @@ watch(
 
           <div class="ai-analysis-result">
             <template v-if="aiHasResult">
+              <aside class="ai-analysis-advisory" role="note" aria-label="AI analysis advisory notice">
+                <strong>AI 분석 결과는 참고용 조언입니다.</strong>
+                <span>이 화면은 거래를 자동으로 생성, 수정, 삭제하지 않습니다. 추천 내용을 실제 가계부에 반영하려면 사용자가 직접 확인하고 별도 저장해야 합니다.</span>
+              </aside>
               <div class="ai-result-card-grid">
                 <article v-for="card in aiResultCards" :key="card.label" class="ai-result-card">
                   <span>{{ card.label }}</span>

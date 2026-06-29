@@ -13645,6 +13645,24 @@ textarea {
   margin-top: 14px;
 }
 
+.ai-analysis-advisory {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 14px;
+  padding: 12px 14px;
+  border: 1px solid rgba(245, 158, 11, 0.42);
+  border-radius: 8px;
+  background: rgba(245, 158, 11, 0.12);
+  color: var(--text-main);
+}
+
+.ai-analysis-advisory strong {
+  font-size: 0.95rem;
+}
+
+.ai-analysis-advisory span {
+  color: var(--text-muted);
+}
 .ai-result-card-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));

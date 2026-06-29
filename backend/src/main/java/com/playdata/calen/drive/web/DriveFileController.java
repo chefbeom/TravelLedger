@@ -2,8 +2,10 @@ package com.playdata.calen.drive.web;
 
 import com.playdata.calen.account.security.AppUserPrincipal;
 import com.playdata.calen.drive.dto.DriveDtos;
+import com.playdata.calen.drive.service.DriveDownloadLinkAccessLogService;
 import com.playdata.calen.drive.service.DriveDownloadLinkService;
 import com.playdata.calen.drive.service.DriveService;
+import jakarta.servlet.http.HttpServletRequest;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
@@ -104,6 +106,14 @@ public class DriveFileController {
         return driveDownloadLinkService.listLinks(currentUser.userId(), fileId);
     }
 
+    @GetMapping("/download-links/{linkId}/access-logs")
+    public List<DriveDtos.DownloadLinkAccessLogResponse> listDownloadLinkAccessLogs(
+            @AuthenticationPrincipal AppUserPrincipal currentUser,
+            @PathVariable Long linkId
+    ) {
+        return driveDownloadLinkService.listAccessLogs(currentUser.userId(), linkId);
+    }
+
     @DeleteMapping("/download-links/{linkId}")
     public DriveDtos.DownloadLinkResponse revokeDownloadLink(
             @AuthenticationPrincipal AppUserPrincipal currentUser,
@@ -113,8 +123,8 @@ public class DriveFileController {
     }
 
     @GetMapping("/public-download/{token}")
-    public ResponseEntity<Void> publicDownload(@PathVariable String token) {
-        return redirectTo(driveDownloadLinkService.resolveDownloadUrlByToken(token));
+    public ResponseEntity<Void> publicDownload(@PathVariable String token, HttpServletRequest request) {
+        return redirectTo(driveDownloadLinkService.resolveDownloadUrlByToken(token, toAccessMetadata(request)));
     }
 
     @PostMapping("/download")
@@ -241,6 +251,38 @@ public class DriveFileController {
                 .build();
     }
 
+    private DriveDownloadLinkAccessLogService.AccessMetadata toAccessMetadata(HttpServletRequest request) {
+        if (request == null) {
+            return new DriveDownloadLinkAccessLogService.AccessMetadata(null, null);
+        }
+        return new DriveDownloadLinkAccessLogService.AccessMetadata(
+                resolveClientAddress(request),
+                request.getHeader(HttpHeaders.USER_AGENT)
+        );
+    }
+
+    private String resolveClientAddress(HttpServletRequest request) {
+        String forwardedFor = firstHeaderValue(request.getHeader("X-Forwarded-For"));
+        if (hasText(forwardedFor)) {
+            return forwardedFor;
+        }
+        String realIp = firstHeaderValue(request.getHeader("X-Real-IP"));
+        if (hasText(realIp)) {
+            return realIp;
+        }
+        return request.getRemoteAddr();
+    }
+
+    private String firstHeaderValue(String headerValue) {
+        if (!hasText(headerValue)) {
+            return null;
+        }
+        return headerValue.split(",", 2)[0].trim();
+    }
+
+    private boolean hasText(String value) {
+        return value != null && !value.isBlank();
+    }
     private ResponseEntity<byte[]> buildThumbnailResponse(
             DriveService.ThumbnailPayload payload,
             String ifNoneMatch

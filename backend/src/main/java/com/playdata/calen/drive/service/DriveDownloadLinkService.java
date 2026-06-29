@@ -6,6 +6,7 @@ import com.playdata.calen.drive.domain.DriveDownloadLink;
 import com.playdata.calen.drive.domain.DriveItem;
 import com.playdata.calen.drive.dto.DriveDtos;
 import com.playdata.calen.drive.repository.DriveDownloadLinkRepository;
+import com.playdata.calen.drive.service.DriveDownloadLinkAccessLogService.AccessMetadata;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.security.SecureRandom;
@@ -13,12 +14,14 @@ import java.time.LocalDateTime;
 import java.util.Base64;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 @Transactional(readOnly = true)
 public class DriveDownloadLinkService {
 
@@ -32,6 +35,7 @@ public class DriveDownloadLinkService {
     private final DriveDownloadLinkRepository driveDownloadLinkRepository;
     private final DriveService driveService;
     private final DriveStorageService driveStorageService;
+    private final DriveDownloadLinkAccessLogService driveDownloadLinkAccessLogService;
 
     @Autowired(required = false)
     private MeterRegistry meterRegistry;
@@ -77,12 +81,25 @@ public class DriveDownloadLinkService {
         return toResponse(link);
     }
 
+    public List<DriveDtos.DownloadLinkAccessLogResponse> listAccessLogs(Long userId, Long linkId) {
+        driveDownloadLinkRepository.findByIdAndOwner_Id(linkId, userId)
+                .orElseThrow(() -> new NotFoundException("Download link was not found."));
+        return driveDownloadLinkAccessLogService.listRecentLogs(userId, linkId);
+    }
+
     @Transactional
     public DriveService.DriveFilePayload downloadByToken(String token) {
-        DriveItem item = resolveAvailableDownloadLink(token).getItem();
+        return downloadByToken(token, null);
+    }
+
+    @Transactional
+    public DriveService.DriveFilePayload downloadByToken(String token, AccessMetadata metadata) {
+        DriveDownloadLink link = resolveAvailableDownloadLink(token, metadata);
+        DriveItem item = link.getItem();
         byte[] bytes = driveStorageService.loadObjectBytes(item.getStoragePath());
         String contentType = driveService.resolveContentType(item.getExtension());
         recordPublicDownloadLinkRequest("success");
+        recordPublicDownloadLinkAccess(link, token, "success", metadata);
         return new DriveService.DriveFilePayload(
                 bytes,
                 contentType,
@@ -93,25 +110,34 @@ public class DriveDownloadLinkService {
 
     @Transactional
     public String resolveDownloadUrlByToken(String token) {
-        DriveItem item = resolveAvailableDownloadLink(token).getItem();
+        return resolveDownloadUrlByToken(token, null);
+    }
+
+    @Transactional
+    public String resolveDownloadUrlByToken(String token, AccessMetadata metadata) {
+        DriveDownloadLink link = resolveAvailableDownloadLink(token, metadata);
+        DriveItem item = link.getItem();
         String downloadUrl = driveStorageService.generateDownloadUrl(
                 item.getStoragePath(),
                 item.getOriginalName(),
                 driveService.resolveContentType(item.getExtension())
         );
         recordPublicDownloadLinkRequest("success");
+        recordPublicDownloadLinkAccess(link, token, "success", metadata);
         return downloadUrl;
     }
 
-    private DriveDownloadLink resolveAvailableDownloadLink(String token) {
+    private DriveDownloadLink resolveAvailableDownloadLink(String token, AccessMetadata metadata) {
         if (token == null || token.isBlank()) {
             recordPublicDownloadLinkRequest("invalid");
+            recordPublicDownloadLinkAccess(null, token, "invalid", metadata);
             throw new NotFoundException("Download link was not found.");
         }
 
         DriveDownloadLink link = driveDownloadLinkRepository.findByToken(token.trim()).orElse(null);
         if (link == null) {
             recordPublicDownloadLinkRequest("invalid");
+            recordPublicDownloadLinkAccess(null, token, "invalid", metadata);
             throw new NotFoundException("Download link was not found.");
         }
 
@@ -119,22 +145,27 @@ public class DriveDownloadLinkService {
         DriveItem item = link.getItem();
         if (link.getRevokedAt() != null) {
             recordPublicDownloadLinkRequest("revoked");
+            recordPublicDownloadLinkAccess(link, token, "revoked", metadata);
             throw new BadRequestException("Download link is expired or no longer available.");
         }
         if (link.isExpired(now)) {
             recordPublicDownloadLinkRequest("expired");
+            recordPublicDownloadLinkAccess(link, token, "expired", metadata);
             throw new BadRequestException("Download link is expired or no longer available.");
         }
         if (link.isDownloadLimitReached()) {
             recordPublicDownloadLinkRequest("limit_reached");
+            recordPublicDownloadLinkAccess(link, token, "limit_reached", metadata);
             throw new BadRequestException("Download link is expired or no longer available.");
         }
         if (item == null || !item.isFile() || item.getStoragePath() == null || item.getStoragePath().isBlank()) {
             recordPublicDownloadLinkRequest("invalid_item");
+            recordPublicDownloadLinkAccess(link, token, "invalid_item", metadata);
             throw new BadRequestException("Download link is expired or no longer available.");
         }
         if (item.isTrashed()) {
             recordPublicDownloadLinkRequest("trashed");
+            recordPublicDownloadLinkAccess(link, token, "trashed", metadata);
             throw new BadRequestException("Download link is expired or no longer available.");
         }
 
@@ -168,6 +199,22 @@ public class DriveDownloadLinkService {
                 .tag("status", status)
                 .register(meterRegistry)
                 .increment();
+    }
+
+    private void recordPublicDownloadLinkAccess(
+            DriveDownloadLink link,
+            String token,
+            String status,
+            AccessMetadata metadata
+    ) {
+        Long linkId = link != null ? link.getId() : null;
+        Long itemId = link != null && link.getItem() != null ? link.getItem().getId() : null;
+        Long ownerId = link != null && link.getOwner() != null ? link.getOwner().getId() : null;
+        try {
+            driveDownloadLinkAccessLogService.record(linkId, itemId, ownerId, token, status, metadata);
+        } catch (RuntimeException ex) {
+            log.warn("Failed to record public download link access log: status={}", status, ex);
+        }
     }
 
     private int resolveExpiresInMinutes(DriveDtos.DownloadLinkCreateRequest request) {

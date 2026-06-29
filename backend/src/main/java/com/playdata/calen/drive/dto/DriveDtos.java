@@ -230,6 +230,18 @@ public final class DriveDtos {
     }
 
     @Builder
+    public record DownloadLinkAccessLogResponse(
+            Long id,
+            Long linkId,
+            Long itemId,
+            String status,
+            String clientAddress,
+            String userAgent,
+            LocalDateTime accessedAt
+    ) {
+    }
+
+    @Builder
     public record ShareRequest(
             List<Long> fileIds,
             String recipientLoginId

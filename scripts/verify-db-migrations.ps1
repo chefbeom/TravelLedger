@@ -53,6 +53,14 @@ $requiredMigrationSnippets = @{
         'ADD COLUMN IF NOT EXISTS line_style VARCHAR(20) NULL',
         'ADD COLUMN IF NOT EXISTS gpx_files_json LONGTEXT NULL'
     )
+    'V20260630_009__ledger_entry_change_history_fields.sql' = @(
+        'ALTER TABLE ledger_entry_change_histories',
+        'MODIFY COLUMN summary VARCHAR(500) NOT NULL',
+        'MODIFY COLUMN before_snapshot_json LONGTEXT NOT NULL',
+        'MODIFY COLUMN after_snapshot_json LONGTEXT NOT NULL',
+        'ADD COLUMN IF NOT EXISTS changes_json LONGTEXT NULL',
+        'MODIFY COLUMN changes_json LONGTEXT NULL'
+    )
 }
 foreach ($entry in $requiredMigrationSnippets.GetEnumerator()) {
     $migrationPath = Join-Path $migrationRoot $entry.Key

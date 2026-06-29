@@ -35,7 +35,7 @@ This checklist maps the current TravelLedger security surface to a practical bas
 | FILE-03 | Uploaded image processing must fail closed. | Thumbnail and EXIF services catch some failures. | Ensure malformed image cannot create partially trusted records or leak stack traces. | Tests with malformed image bytes for travel/family/profile/OCR upload. |
 | PRESIGN-01 | Presigned upload URLs must be short-lived and object-key scoped. | MinIO expiry configurable; travel object key validation rejects wrong owner/record prefixes and unsafe path segments. | Review all generated object keys for owner/record scoping and overwrite prevention. | Tests that user A cannot complete user B's presigned object key. |
 | AI-01 | AI/OCR calls must be backend-only and disabled by default unless explicitly configured. | OCR and AI config flags exist; browser calls backend. | Keep provider URLs out of frontend. Keep `.env.example` placeholders only. | Config tests for disabled state and status response; status JSON must not include provider URLs. |
-| AI-02 | AI/OCR API keys must never be logged or returned to frontend. | Properties store API keys; status response returns configured flags, not keys. | Review exception messages and logs for key inclusion. | Tests or grep gate for `apiKey`, API-key header names, and provider URLs in response DTOs/logging. |
+| AI-02 | AI/OCR API keys must never be logged or returned to frontend. | Properties store API keys; status response returns configured flags, not keys. | Review exception messages and logs for key inclusion. | Tests or grep gate for `apiKey`, API-key header names, provider URLs, and high-risk committed secret patterns. |
 | AUDIT-01 | High-risk admin actions must be audited. | Login audit exists and records `ADMIN_ACTION` detail for backup, restore, user activation, and blocked-IP clear actions. | Extend the same pattern to drive admin changes and future destructive operations. | Unit/integration tests asserting audit event creation and safe detail values. |
 | OBS-01 | Security-relevant failures should emit metrics/alerts. | Actuator/Prometheus exposed. | Add counters for login block, CSRF failure, AI/OCR failure, backup failure, public link invalid access. | Prometheus scrape or unit tests for meter registration. |
 
@@ -75,6 +75,6 @@ Before promoting a build that changes auth, admin, sharing, upload, OCR, AI, or 
 
 1. Run backend security-focused tests.
 2. Verify `.env.example` and `application.yml` have matching public configuration names.
-3. Confirm no real secrets are present in committed files.
+3. Run `scripts/scan-secrets.ps1` and confirm no real secrets are present in committed files.
 4. Confirm public routes are still intentionally listed in this document.
 5. Confirm operational dashboards or alerts cover the changed failure mode.

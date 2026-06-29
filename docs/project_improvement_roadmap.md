@@ -31,7 +31,7 @@ This roadmap turns the current improvement analysis into an implementation queue
 | Observability/alerts | Prometheus/Grafana exists, but alerting is the next operational jump. | Add metrics for AI/OCR failures, backup failures, Redis errors. | Grafana/Prometheus alert rules documented and tested by metric scrape. |
 | Backup reliability | Backups exist, but restore confidence matters more than backup creation. | Use `docs/backup_restore_rehearsal_runbook.md` to record restore evidence and encryption readiness. | Documented restore rehearsal with artifact name, smoke counts, cleanup, and timestamp. |
 | Accessibility/mobile UX | Drag widgets, maps, drive, modals, and PIN/auth screens have keyboard and touch risks. | Use `docs/accessibility_mobile_checklist.md` as the WCAG 2.2 release checklist. | Priority screens have keyboard, focus, target-size, and error-state evidence. |
-| CI gates | Manual checks are easy to skip. | Run backend test, frontend build, secret scan, and config sync in GitHub Actions. | Push triggers automated gates. |
+| CI gates | Manual checks are easy to skip. | Run backend test, frontend build, reusable PowerShell secret scan, and config sync in GitHub Actions. | Push/PR triggers automated backend, frontend, config, and high-risk secret gates. |
 
 ## P2: Product Expansion
 
@@ -79,5 +79,6 @@ This roadmap turns the current improvement analysis into an implementation queue
 
 | Automation | Purpose |
 | --- | --- |
-| `.github/workflows/ci.yml` | Runs secret scan, config sync, backend tests, and frontend build on push/PR. |
+| `.github/workflows/ci.yml` | Runs reusable secret scan, config sync, backend tests, and frontend build on push/PR. |
 | `scripts/verify-env-sync.ps1` | Fails when Spring env placeholders drift from `.env.example` or compose-only allowlist. |
+| `scripts/scan-secrets.ps1` | Fails CI on high-risk token patterns or non-placeholder sensitive env assignments. |

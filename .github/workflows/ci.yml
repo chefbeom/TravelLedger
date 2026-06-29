@@ -21,14 +21,8 @@ jobs:
         with:
           fetch-depth: 0
       - name: Scan committed files for high-risk secret patterns
-        shell: bash
-        run: |
-          set -euo pipefail
-          patterns='(AKIA[0-9A-Z]{16}|-----BEGIN (RSA|OPENSSH|EC|DSA|PRIVATE) KEY-----|ghp_[A-Za-z0-9_]{36,}|github_pat_[A-Za-z0-9_]{80,}|sk-[A-Za-z0-9]{20,}|xox[baprs]-[A-Za-z0-9-]{10,})'
-          if git grep -n -I -E "$patterns" -- . ':!.env.example' ':!.env.oci.app.example' ':!.env.oci.data.example' ':!docs/**'; then
-            echo "Potential secret-like value found in committed files. Rotate the value and replace it with an environment variable."
-            exit 1
-          fi
+        shell: pwsh
+        run: ./scripts/scan-secrets.ps1
 
   config-sync:
     name: Config sync

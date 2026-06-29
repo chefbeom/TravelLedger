@@ -63,6 +63,35 @@ class ProfileCredentialIntegrationTest {
     }
 
     @Test
+    void profileCredentialEndpointsRejectMissingCsrf() throws Exception {
+        MockHttpSession session = login("hana", "test1234", "12345678");
+
+        mockMvc.perform(post("/api/auth/profile/verify-secondary-pin")
+                        .session(session)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of("secondaryPin", "12345678"))))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(put("/api/auth/profile/password")
+                        .session(session)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of(
+                                "secondaryPin", "12345678",
+                                "newPassword", "newpass1234"
+                        ))))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(put("/api/auth/profile/secondary-pin")
+                        .session(session)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of(
+                                "secondaryPin", "12345678",
+                                "newSecondaryPin", "11223344"
+                        ))))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
     void userCanChangePasswordAfterSecondaryPinVerification() throws Exception {
         MockHttpSession session = login("hana", "test1234", "12345678");
 

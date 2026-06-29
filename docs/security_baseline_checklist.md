@@ -1,6 +1,6 @@
 # Security Baseline Checklist
 
-Updated: 2026-06-29
+Updated: 2026-06-30
 
 This checklist maps the current TravelLedger security surface to a practical baseline inspired by OWASP ASVS 5.0.0. It is not a certification document. It is the working checklist for implementation, tests, and release review.
 
@@ -60,7 +60,7 @@ Current explicit public routes from `SecurityConfig`:
 | --- | --- | --- |
 | P0 | unauthenticated, non-admin, unverified-admin, and missing-CSRF requests cannot call admin dashboard/data-management/user mutation routes | `AdminController`, `AdminDashboardIntegrationTest` |
 | P0 | keep `/api/administrator/**` covered for unauthenticated, non-admin, unverified-admin denial, and CSRF rejection on mutation routes | `DriveAdminController`, `DriveAdminSecurityIntegrationTest` |
-| P0 | missing CSRF rejects profile/password/admin mutation requests | `SecurityConfig`, `AdminDashboardIntegrationTest`, profile controller tests pending |
+| P0 | missing CSRF rejects profile verification/password/PIN/admin mutation requests | `SecurityConfig`, `ProfileCredentialIntegrationTest`, `AdminDashboardIntegrationTest` |
 | P0 | public download token fails when token is blank/invalid, item is non-file/trashed/missing storage path, or link is revoked/expired/over limit, and each attempt writes an owner-scoped access log without raw token storage | `DriveDownloadLinkServiceTest`, `DriveDownloadLinkAccessLogServiceTest` |
 | P0 | travel public media token fails for invalid media/token pair | `TravelPublicMediaTokenService` |
 | P1 | OCR rejects too-large files and MIME/extension spoofed non-image uploads before remote OCR calls | `LedgerOcrService`, `LedgerOcrServiceTest` |

@@ -42,6 +42,15 @@ jobs:
       - name: Verify migration naming and versions
         shell: pwsh
         run: ./scripts/verify-db-migrations.ps1
+  observability-alerts:
+    name: Observability alert rules
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Verify Prometheus alert rules are documented and loadable
+        shell: pwsh
+        run: ./scripts/verify-prometheus-alerts.ps1
   backend-test:
     name: Backend tests
     runs-on: ubuntu-latest

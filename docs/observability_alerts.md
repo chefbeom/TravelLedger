@@ -33,6 +33,10 @@ deploy/oci/monitoring/prometheus/rules/*.yml
 
 Prometheus evaluates these rules even before Alertmanager is introduced. Route them through Grafana alerting or add Alertmanager when notification channels are ready.
 
+## Verification gate
+
+`scripts/verify-prometheus-alerts.ps1` checks that Prometheus loads `/etc/prometheus/rules/*.yml`, every alert has an expression, duration, bounded severity, summary, and description, and every alert name is documented here. The GitHub Actions `observability-alerts` job runs this gate on push and pull request.
+
 ## Implemented application metrics
 
 | Area | Prometheus metric | Micrometer source name | Labels | Source |

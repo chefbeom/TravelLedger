@@ -37,7 +37,7 @@ This checklist maps the current TravelLedger security surface to a practical bas
 | AI-01 | AI/OCR calls must be backend-only and disabled by default unless explicitly configured. | OCR and AI config flags exist; browser calls backend. | Keep provider URLs out of frontend. Keep `.env.example` placeholders only. | Config tests for disabled state and status response; status JSON must not include provider URLs. |
 | AI-02 | AI/OCR API keys must never be logged or returned to frontend. | Properties store API keys; status response returns configured flags, not keys. | Review exception messages and logs for key inclusion. | Tests or grep gate for `apiKey`, API-key header names, provider URLs, and high-risk committed secret patterns. |
 | AUDIT-01 | High-risk admin actions must be audited. | Login audit exists and records `ADMIN_ACTION` detail for backup, restore, user activation, and blocked-IP clear actions. | Extend the same pattern to drive admin changes and future destructive operations. | Unit/integration tests asserting audit event creation and safe detail values. |
-| OBS-01 | Security-relevant failures should emit metrics/alerts. | Actuator/Prometheus exposed. | Add counters for login block, CSRF failure, AI/OCR failure, backup failure, public link invalid access. | Prometheus scrape or unit tests for meter registration. |
+| OBS-01 | Security-relevant failures should emit metrics/alerts. | Actuator/Prometheus exposed; Prometheus rules cover backend availability, 5xx/latency, AI/OCR, external workflows, backup, Redis, MinIO, DB pool, public-link abuse, JVM heap, and host disk. | Keep alert labels bounded and add rules when new security-relevant failure modes are introduced. | `scripts/verify-prometheus-alerts.ps1` plus Prometheus scrape or unit tests for new meter registration. |
 
 ## Public Route Allowlist Review
 
@@ -78,4 +78,5 @@ Before promoting a build that changes auth, admin, sharing, upload, OCR, AI, or 
 3. Run `scripts/scan-secrets.ps1` and confirm no real secrets are present in committed files.
 4. Run `scripts/verify-db-migrations.ps1` when schema files change.
 5. Confirm public routes are still intentionally listed in this document.
-6. Confirm operational dashboards or alerts cover the changed failure mode.
+6. Run `scripts/verify-prometheus-alerts.ps1` when alert rules or observability docs change.
+7. Confirm operational dashboards or alerts cover the changed failure mode.

@@ -153,6 +153,31 @@ groups:
           summary: Public download link invalid/unavailable attempts increased
           description: Public download link invalid, revoked, expired, limit-reached, invalid-item, or trashed-item attempts are above 3 per minute for 10 minutes.
 
+  - name: calen.domain.data_ops
+    rules:
+      - alert: CalenDataOpsBackupFailure
+        expr: |
+          sum by (type) (increase(calen_data_ops_backup_runs_total{job="calen-backend", status="failure"}[30m])) > 0
+        for: 0m
+        labels:
+          severity: critical
+          service: calen-backend
+          feature: data-ops-backup
+        annotations:
+          summary: Data operations backup failed
+          description: Data operations backup type {{ $labels.type }} has failed within the last 30 minutes.
+
+      - alert: CalenDataOpsBackupStale
+        expr: |
+          time() - max by (type) (calen_data_ops_backup_last_success_timestamp{job="calen-backend"}) > 93600
+        for: 15m
+        labels:
+          severity: warning
+          service: calen-backend
+          feature: data-ops-backup
+        annotations:
+          summary: Data operations backup has no recent success
+          description: Data operations backup type {{ $labels.type }} has not recorded a successful run within 26 hours.
   - name: calen.host.capacity
     rules:
       - alert: CalenHostDiskNearlyFull

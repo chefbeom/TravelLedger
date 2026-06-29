@@ -15,6 +15,9 @@ import com.playdata.calen.account.repository.AppUserRepository;
 import com.playdata.calen.account.repository.LoginAuditLogRepository;
 import com.playdata.calen.account.repository.SupportInquiryRepository;
 import com.playdata.calen.common.exception.BadRequestException;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.Gauge;
+import io.micrometer.core.instrument.MeterRegistry;
 import com.playdata.calen.familyalbum.repository.FamilyAlbumItemRepository;
 import com.playdata.calen.familyalbum.repository.FamilyAlbumRepository;
 import com.playdata.calen.familyalbum.repository.FamilyCategoryMemberRepository;
@@ -49,6 +52,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.stream.Stream;
@@ -177,64 +182,76 @@ public class AdminDataManagementService {
     }
 
     public AdminBackupFileResponse createManualBackup() {
-        return runExclusive("backup", () -> {
-            DatabaseCommandTarget target = parseDataSourceUrl();
-            Path outputFile = localBackupDirectory().resolve(
-                    "calen-" + LocalDateTime.now(KST).format(BACKUP_FILE_FORMATTER) + ".sql.gz"
-            );
+        try {
+            return runExclusive("backup", () -> {
+                DatabaseCommandTarget target = parseDataSourceUrl();
+                Path outputFile = localBackupDirectory().resolve(
+                        "calen-" + LocalDateTime.now(KST).format(BACKUP_FILE_FORMATTER) + ".sql.gz"
+                );
 
-            commandRunner.runDumpToGzip(buildDumpCommand(target), outputFile);
-            long sizeBytes = fileSize(outputFile);
-            boolean uploaded = false;
+                commandRunner.runDumpToGzip(buildDumpCommand(target), outputFile);
+                long sizeBytes = fileSize(outputFile);
+                boolean uploaded = false;
 
-            try {
-                uploadBackup(outputFile, outputFile.getFileName().toString());
-                uploaded = true;
-            } catch (BadRequestException exception) {
-                if (!isDriveQuotaFallbackMessage(exception.getMessage())) {
-                    throw exception;
+                try {
+                    uploadBackup(outputFile, outputFile.getFileName().toString());
+                    uploaded = true;
+                } catch (BadRequestException exception) {
+                    if (!isDriveQuotaFallbackMessage(exception.getMessage())) {
+                        throw exception;
+                    }
                 }
-            }
 
-            AdminBackupFileResponse response = new AdminBackupFileResponse(
-                    outputFile.getFileName().toString(),
-                    sizeBytes,
-                    DISPLAY_DATE_TIME_FORMATTER.format(LocalDateTime.now(KST))
-            );
-            updateBackupCache(response);
-            deleteLocalFileAfterSuccessfulUpload(outputFile, uploaded);
-            return response;
-        });
+                AdminBackupFileResponse response = new AdminBackupFileResponse(
+                        outputFile.getFileName().toString(),
+                        sizeBytes,
+                        DISPLAY_DATE_TIME_FORMATTER.format(LocalDateTime.now(KST))
+                );
+                updateBackupCache(response);
+                deleteLocalFileAfterSuccessfulUpload(outputFile, uploaded);
+                recordBackupRun("db", "success");
+                return response;
+            });
+        } catch (RuntimeException exception) {
+            recordBackupRun("db", "failure");
+            throw exception;
+        }
     }
 
     public AdminBackupFileResponse createManualMinioBackup() {
-        return runExclusive("minio-backup", () -> {
-            Path outputFile = localMinioBackupDirectory().resolve(
-                    "calen-minio-" + LocalDateTime.now(KST).format(BACKUP_FILE_FORMATTER) + ".zip"
-            );
+        try {
+            return runExclusive("minio-backup", () -> {
+                Path outputFile = localMinioBackupDirectory().resolve(
+                        "calen-minio-" + LocalDateTime.now(KST).format(BACKUP_FILE_FORMATTER) + ".zip"
+                );
 
-            minioBackupArchiveService.writeBackupArchive(outputFile);
-            long sizeBytes = fileSize(outputFile);
-            boolean uploaded = false;
+                minioBackupArchiveService.writeBackupArchive(outputFile);
+                long sizeBytes = fileSize(outputFile);
+                boolean uploaded = false;
 
-            try {
-                uploadMinioBackup(outputFile, outputFile.getFileName().toString());
-                uploaded = true;
-            } catch (BadRequestException exception) {
-                if (!isDriveQuotaFallbackMessage(exception.getMessage())) {
-                    throw exception;
+                try {
+                    uploadMinioBackup(outputFile, outputFile.getFileName().toString());
+                    uploaded = true;
+                } catch (BadRequestException exception) {
+                    if (!isDriveQuotaFallbackMessage(exception.getMessage())) {
+                        throw exception;
+                    }
                 }
-            }
 
-            AdminBackupFileResponse response = new AdminBackupFileResponse(
-                    outputFile.getFileName().toString(),
-                    sizeBytes,
-                    DISPLAY_DATE_TIME_FORMATTER.format(LocalDateTime.now(KST))
-            );
-            updateMinioBackupCache(response);
-            deleteLocalFileAfterSuccessfulUpload(outputFile, uploaded);
-            return response;
-        });
+                AdminBackupFileResponse response = new AdminBackupFileResponse(
+                        outputFile.getFileName().toString(),
+                        sizeBytes,
+                        DISPLAY_DATE_TIME_FORMATTER.format(LocalDateTime.now(KST))
+                );
+                updateMinioBackupCache(response);
+                deleteLocalFileAfterSuccessfulUpload(outputFile, uploaded);
+                recordBackupRun("minio", "success");
+                return response;
+            });
+        } catch (RuntimeException exception) {
+            recordBackupRun("minio", "failure");
+            throw exception;
+        }
     }
 
     public PreparedBackupDownload createDownloadableBackup() {
@@ -315,6 +332,32 @@ public class AdminDataManagementService {
         });
     }
 
+    private void recordBackupRun(String type, String status) {
+        if (meterRegistry == null) {
+            return;
+        }
+        AtomicLong lastSuccessTimestamp = backupLastSuccessTimestamp(type);
+        Counter.builder("calen.data.ops.backup.runs")
+                .description("Data operation backup runs")
+                .tag("type", type)
+                .tag("status", status)
+                .register(meterRegistry)
+                .increment();
+        if ("success".equals(status)) {
+            lastSuccessTimestamp.set(System.currentTimeMillis() / 1000L);
+        }
+    }
+
+    private AtomicLong backupLastSuccessTimestamp(String type) {
+        return backupLastSuccessTimestamps.computeIfAbsent(type, key -> {
+            AtomicLong value = new AtomicLong(0L);
+            Gauge.builder("calen.data.ops.backup.last.success.timestamp", value, AtomicLong::get)
+                    .description("Unix timestamp of the last successful data operation backup")
+                    .tag("type", key)
+                    .register(meterRegistry);
+            return value;
+        });
+    }
     private AdminDataStatsResponse buildStats() {
         long totalUsers = appUserRepository.count();
         long activeUsers = appUserRepository.countByActiveTrue();

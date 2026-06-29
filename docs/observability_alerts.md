@@ -21,6 +21,8 @@ deploy/oci/monitoring/prometheus/rules/*.yml
 | CalenLedgerOcrHighFailureRate | OCR failure ratio above 10% for 10m | warning | Receipt/image analysis is unreliable or unavailable. |
 | CalenLedgerOcrSlowP95 | OCR p95 latency above 60s for 10m | warning | OCR analysis is close to user-visible timeout territory. |
 | CalenPublicDownloadLinkInvalidSpike | invalid/unavailable public-link attempts above 3 per minute for 10m | warning | Shared links may be under abuse, stale, or frequently misused. |
+| CalenDataOpsBackupFailure | backup failure count above 0 within 30m | critical | DB or MinIO backup has failed and needs operator action. |
+| CalenDataOpsBackupStale | no recorded successful backup within 26h | warning | Scheduled backup may be disabled, stuck, or failing before completion. |
 | CalenHostDiskNearlyFull | filesystem free space below 10% for 10m | critical | Uploads, backups, logs, and database files may fail. |
 
 Prometheus evaluates these rules even before Alertmanager is introduced. Route them through Grafana alerting or add Alertmanager when notification channels are ready.
@@ -34,6 +36,8 @@ Prometheus evaluates these rules even before Alertmanager is introduced. Route t
 | Ledger OCR request count | `calen_ledger_ocr_requests_total` | `calen.ledger.ocr.requests` | `status`, `reason` | `LedgerOcrService` |
 | Ledger OCR request duration | `calen_ledger_ocr_request_seconds_bucket` | `calen.ledger.ocr.request` | `status`, `reason` | `LedgerOcrService` |
 | Public download link request count | `calen_public_download_link_requests_total` | `calen.public.download.link.requests` | `status` | `DriveDownloadLinkService` |
+| Data ops backup run count | `calen_data_ops_backup_runs_total` | `calen.data.ops.backup.runs` | `type`, `status` | `AdminDataManagementService` |
+| Data ops backup last success | `calen_data_ops_backup_last_success_timestamp` | `calen.data.ops.backup.last.success.timestamp` | `type` | `AdminDataManagementService` |
 
 Status labels are intentionally bounded. They must not include user IDs, tokens, filenames, prompts, IP addresses, or provider error bodies.
 
@@ -44,13 +48,12 @@ The following alerts are part of the operational target but still require applic
 | Area | Proposed metric | Labels | Alert condition |
 | --- | --- | --- | --- |
 | n8n workflow client | `calen_external_workflow_request_seconds_bucket` | `workflow`, `status` | p95 above 30s or failures above 10% |
-| Backup | `calen_data_ops_backup_runs_total` | `type`, `status` | no success in 26h or any failed run |
 | MinIO | `calen_minio_storage_used_bytes` / `calen_minio_storage_capacity_bytes` | `bucket` | usage above 85% |
 | Redis | `calen_redis_connection_available` | `role` | value is 0 for 5m |
 
 Implementation notes:
 
-- Use Micrometer `Counter`, `Timer`, and `Gauge` in backup, Redis, and MinIO services.
+- Use Micrometer `Gauge` in Redis and MinIO services.
 - Keep labels bounded and operational. Avoid user-controlled or high-cardinality values.
 - Record status values such as `success`, `failure`, `timeout`, `invalid`, `expired`, `revoked`, and `limit_reached`.
 - Alert annotations should describe operational action, not expose private request data.

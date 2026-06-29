@@ -4,7 +4,8 @@ public enum LoginAuditStatus {
     SUCCESS(true),
     BLOCKED(false),
     BAD_CREDENTIALS(false),
-    BAD_SECONDARY_PIN(false);
+    BAD_SECONDARY_PIN(false),
+    ADMIN_ACTION(true);
 
     private final boolean success;
 

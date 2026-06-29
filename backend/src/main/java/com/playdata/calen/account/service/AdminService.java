@@ -105,6 +105,7 @@ public class AdminService {
                 log.getClientIp(),
                 log.getUserAgent(),
                 mapAdminStatus(log.getStatus()),
+                log.getDetail(),
                 log.isSuccess(),
                 appUser != null ? appUser.getId() : null,
                 appUser != null ? appUser.getDisplayName() : null,
@@ -153,6 +154,7 @@ public class AdminService {
     private String mapAdminStatus(LoginAuditStatus status) {
         return switch (status) {
             case SUCCESS -> "SUCCESS";
+            case ADMIN_ACTION -> "ADMIN_ACTION";
             case BLOCKED -> "BLOCKED";
             case BAD_CREDENTIALS, BAD_SECONDARY_PIN -> "FAILED";
         };

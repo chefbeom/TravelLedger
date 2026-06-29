@@ -36,7 +36,7 @@ This checklist maps the current TravelLedger security surface to a practical bas
 | PRESIGN-01 | Presigned upload URLs must be short-lived and object-key scoped. | MinIO expiry configurable; object key validation exists in travel storage. | Review all generated object keys for owner/record scoping and overwrite prevention. | Tests that user A cannot complete user B's presigned object key. |
 | AI-01 | AI/OCR calls must be backend-only and disabled by default unless explicitly configured. | OCR and AI config flags exist; browser calls backend. | Keep provider URLs out of frontend. Keep `.env.example` placeholders only. | Config tests for disabled state and status response. |
 | AI-02 | AI/OCR API keys must never be logged or returned to frontend. | Properties store API keys; status response returns configured flags, not keys. | Review exception messages and logs for key inclusion. | Tests or grep gate for `apiKey` in response DTOs/logging. |
-| AUDIT-01 | High-risk admin actions must be audited. | Login audit exists; backup/restore service exists. | Add admin action audit records for backup, restore, user activation, unblock IP, drive admin changes. | Integration tests asserting audit event creation. |
+| AUDIT-01 | High-risk admin actions must be audited. | Login audit exists and records `ADMIN_ACTION` detail for backup, restore, user activation, and blocked-IP clear actions. | Extend the same pattern to drive admin changes and future destructive operations. | Unit/integration tests asserting audit event creation and safe detail values. |
 | OBS-01 | Security-relevant failures should emit metrics/alerts. | Actuator/Prometheus exposed. | Add counters for login block, CSRF failure, AI/OCR failure, backup failure, public link invalid access. | Prometheus scrape or unit tests for meter registration. |
 
 ## Public Route Allowlist Review
@@ -66,7 +66,7 @@ Current explicit public routes from `SecurityConfig`:
 | P1 | OCR rejects too-large files and MIME/extension spoofed non-image uploads before remote OCR calls | `LedgerOcrService`, `LedgerOcrServiceTest` |
 | P1 | AI status never exposes API keys or provider URLs | `LedgerAiAnalysisServiceTest`, `LedgerAiAnalysisStatusResponse` |
 | P1 | presigned upload completion rejects object key outside expected owner/record scope | `DriveService`, `TravelMediaStorageService` |
-| P1 | admin backup/restore actions produce audit events | `AdminDataManagementService` |
+| P1 | admin backup/restore/user activation/blocked-IP actions produce audit events | `AdminController`, `LoginAuditLogServiceTest` |
 | P2 | malformed image upload cannot create trusted thumbnail/media record | travel/family/profile upload services |
 
 ## Release Gate

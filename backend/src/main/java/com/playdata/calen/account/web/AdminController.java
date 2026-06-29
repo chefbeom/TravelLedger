@@ -14,6 +14,7 @@ import com.playdata.calen.account.security.AppUserPrincipal;
 import com.playdata.calen.account.service.AdminDataManagementService;
 import com.playdata.calen.account.service.AdminService;
 import com.playdata.calen.account.service.AdminPageAccessService;
+import com.playdata.calen.account.service.LoginAuditLogService;
 import com.playdata.calen.account.service.SupportInquiryService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
@@ -50,17 +51,20 @@ public class AdminController {
     private final AdminDataManagementService adminDataManagementService;
     private final AdminPageAccessService adminPageAccessService;
     private final SupportInquiryService supportInquiryService;
+    private final LoginAuditLogService loginAuditLogService;
 
     public AdminController(
             AdminService adminService,
             AdminDataManagementService adminDataManagementService,
             AdminPageAccessService adminPageAccessService,
-            SupportInquiryService supportInquiryService
+            SupportInquiryService supportInquiryService,
+            LoginAuditLogService loginAuditLogService
     ) {
         this.adminService = adminService;
         this.adminDataManagementService = adminDataManagementService;
         this.adminPageAccessService = adminPageAccessService;
         this.supportInquiryService = supportInquiryService;
+        this.loginAuditLogService = loginAuditLogService;
     }
 
     @ModelAttribute
@@ -82,18 +86,32 @@ public class AdminController {
     }
 
     @PostMapping("/data-management/backup")
-    public AdminBackupFileResponse createManualBackup() {
-        return adminDataManagementService.createManualBackup();
+    public AdminBackupFileResponse createManualBackup(
+            @AuthenticationPrincipal AppUserPrincipal currentUser,
+            HttpServletRequest httpRequest
+    ) {
+        AdminBackupFileResponse response = adminDataManagementService.createManualBackup();
+        recordAdminAction(currentUser, httpRequest, "DATA_BACKUP_CREATE:" + response.fileName());
+        return response;
     }
 
     @PostMapping("/data-management/minio-backup")
-    public AdminBackupFileResponse createManualMinioBackup() {
-        return adminDataManagementService.createManualMinioBackup();
+    public AdminBackupFileResponse createManualMinioBackup(
+            @AuthenticationPrincipal AppUserPrincipal currentUser,
+            HttpServletRequest httpRequest
+    ) {
+        AdminBackupFileResponse response = adminDataManagementService.createManualMinioBackup();
+        recordAdminAction(currentUser, httpRequest, "MINIO_BACKUP_CREATE:" + response.fileName());
+        return response;
     }
 
     @PostMapping("/data-management/backup/download")
-    public ResponseEntity<StreamingResponseBody> downloadCurrentBackup() {
+    public ResponseEntity<StreamingResponseBody> downloadCurrentBackup(
+            @AuthenticationPrincipal AppUserPrincipal currentUser,
+            HttpServletRequest httpRequest
+    ) {
         AdminDataManagementService.PreparedBackupDownload preparedBackup = adminDataManagementService.createDownloadableBackup();
+        recordAdminAction(currentUser, httpRequest, "DATA_BACKUP_DOWNLOAD:" + preparedBackup.fileName());
         StreamingResponseBody body = outputStream -> {
             try (InputStream inputStream = java.nio.file.Files.newInputStream(preparedBackup.path())) {
                 inputStream.transferTo(outputStream);
@@ -110,14 +128,24 @@ public class AdminController {
     }
 
     @PostMapping("/data-management/restore")
-    public ResponseEntity<Void> restoreBackup(@Valid @RequestBody AdminRestoreBackupRequest request) {
+    public ResponseEntity<Void> restoreBackup(
+            @AuthenticationPrincipal AppUserPrincipal currentUser,
+            HttpServletRequest httpRequest,
+            @Valid @RequestBody AdminRestoreBackupRequest request
+    ) {
         adminDataManagementService.restoreBackup(request.fileName());
+        recordAdminAction(currentUser, httpRequest, "DATA_RESTORE:" + request.fileName());
         return ResponseEntity.noContent().build();
     }
 
     @PostMapping(value = "/data-management/restore/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public ResponseEntity<Void> restoreUploadedBackup(@RequestPart("file") MultipartFile file) throws IOException {
+    public ResponseEntity<Void> restoreUploadedBackup(
+            @AuthenticationPrincipal AppUserPrincipal currentUser,
+            HttpServletRequest httpRequest,
+            @RequestPart("file") MultipartFile file
+    ) throws IOException {
         adminDataManagementService.restoreUploadedBackup(file);
+        recordAdminAction(currentUser, httpRequest, "DATA_RESTORE_UPLOAD:" + safeDetail(file.getOriginalFilename()));
         return ResponseEntity.noContent().build();
     }
 
@@ -129,16 +157,49 @@ public class AdminController {
     @PatchMapping("/users/{userId}/active")
     public AdminUserSummaryResponse updateUserActive(
             @AuthenticationPrincipal AppUserPrincipal currentUser,
+            HttpServletRequest httpRequest,
             @PathVariable Long userId,
             @RequestBody AdminUserActiveRequest request
     ) {
-        return adminService.updateUserActive(currentUser.userId(), userId, request.active());
+        AdminUserSummaryResponse response = adminService.updateUserActive(currentUser.userId(), userId, request.active());
+        recordAdminAction(currentUser, httpRequest, "USER_ACTIVE_UPDATE:userId=" + userId + ",active=" + request.active());
+        return response;
     }
 
     @DeleteMapping("/blocked-ips")
-    public ResponseEntity<Void> clearBlockedIp(@RequestParam("ip") String ip) {
+    public ResponseEntity<Void> clearBlockedIp(
+            @AuthenticationPrincipal AppUserPrincipal currentUser,
+            HttpServletRequest httpRequest,
+            @RequestParam("ip") String ip
+    ) {
         adminService.clearBlockedIp(ip);
+        recordAdminAction(currentUser, httpRequest, "BLOCKED_IP_CLEAR:" + safeDetail(ip));
         return ResponseEntity.noContent().build();
+    }
+
+    private void recordAdminAction(AppUserPrincipal currentUser, HttpServletRequest httpRequest, String detail) {
+        loginAuditLogService.recordAdminAction(
+                currentUser != null ? currentUser.userId() : null,
+                currentUser != null ? currentUser.loginId() : null,
+                resolveClientIp(httpRequest),
+                httpRequest != null ? httpRequest.getHeader("User-Agent") : null,
+                detail
+        );
+    }
+
+    private String resolveClientIp(HttpServletRequest httpRequest) {
+        if (httpRequest == null) {
+            return "admin-api";
+        }
+        String forwardedFor = httpRequest.getHeader("X-Forwarded-For");
+        if (forwardedFor != null && !forwardedFor.isBlank()) {
+            return forwardedFor.split(",")[0].trim();
+        }
+        return httpRequest.getRemoteAddr();
+    }
+
+    private String safeDetail(String value) {
+        return value == null || value.isBlank() ? "-" : value.trim();
     }
 
     @GetMapping("/support-inquiries")

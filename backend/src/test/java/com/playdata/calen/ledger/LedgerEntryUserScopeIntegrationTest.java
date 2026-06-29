@@ -182,6 +182,26 @@ class LedgerEntryUserScopeIntegrationTest {
                 .andExpect(status().isUnauthorized());
     }
     @Test
+    void rememberMeAutoLoginRotatesTokenAndRejectsPreviousCookie() throws Exception {
+        Cookie initialRememberMeCookie = loginAndGetRememberMeCookie("hana");
+
+        assertThat(initialRememberMeCookie).isNotNull();
+        assertThat(initialRememberMeCookie.getValue()).isNotBlank();
+
+        MvcResult autoLoginResult = mockMvc.perform(get("/api/auth/me").cookie(initialRememberMeCookie))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.loginId").value("hana"))
+                .andReturn();
+
+        Cookie rotatedRememberMeCookie = autoLoginResult.getResponse().getCookie("CALEN_REMEMBER_ME");
+        assertThat(rotatedRememberMeCookie).isNotNull();
+        assertThat(rotatedRememberMeCookie.getValue()).isNotBlank();
+        assertThat(rotatedRememberMeCookie.getValue()).isNotEqualTo(initialRememberMeCookie.getValue());
+
+        mockMvc.perform(get("/api/auth/me").cookie(initialRememberMeCookie))
+                .andExpect(status().isUnauthorized());
+    }
+    @Test
     void csvExportUsesVerifiedSecondaryPinFromSession() throws Exception {
         MockHttpSession hanaSession = loginAndGetSession("hana", false);
 

@@ -36,7 +36,7 @@ This checklist maps the current TravelLedger security surface to a practical bas
 | PRESIGN-01 | Presigned upload URLs must be short-lived and object-key scoped. | MinIO expiry configurable; travel object key validation rejects wrong owner/record prefixes and unsafe path segments. | Review all generated object keys for owner/record scoping and overwrite prevention. | Tests that user A cannot complete user B's presigned object key. |
 | AI-01 | AI/OCR calls must be backend-only and disabled by default unless explicitly configured. | OCR and AI config flags exist; browser calls backend. | Keep provider URLs out of frontend. Keep `.env.example` placeholders only. | Config tests for disabled state and status response; status JSON must not include provider URLs. |
 | AI-02 | AI/OCR API keys must never be logged or returned to frontend. | Properties store API keys; status response returns configured flags, not keys. | Review exception messages and logs for key inclusion. | Tests or grep gate for `apiKey`, API-key header names, provider URLs, and high-risk committed secret patterns. |
-| AUDIT-01 | High-risk admin actions must be audited. | Login audit exists and records `ADMIN_ACTION` detail for backup, restore, user activation, blocked-IP clear actions, and Drive admin storage/user mutations. | Keep the same audit pattern for future destructive operations. | `LoginAuditLogServiceTest` and `DriveAdminSecurityIntegrationTest` assert audit event creation and safe detail values. |
+| AUDIT-01 | High-risk admin actions must be audited. | Login audit exists and records `ADMIN_ACTION` detail for backup, restore, user activation, blocked-IP clear actions, and Drive admin storage/user mutations; `docs/admin_audit_log_contract.md` lists the required action codes and safe-detail policy. | Keep the same audit pattern for future destructive operations and update the contract for every new admin-like mutation. | `LoginAuditLogServiceTest`, `DriveAdminSecurityIntegrationTest`, and `scripts/verify-admin-audit-contract.ps1` assert audit event creation, safe detail values, and CI coverage. |
 | OBS-01 | Security-relevant failures should emit metrics/alerts. | Actuator/Prometheus exposed; Prometheus rules cover backend availability, 5xx/latency, AI/OCR, external workflows, backup, Redis, MinIO, DB pool, public-link abuse, JVM heap, and host disk. | Keep alert labels bounded and add rules when new security-relevant failure modes are introduced. | `scripts/verify-prometheus-alerts.ps1` plus Prometheus scrape or unit tests for new meter registration. |
 
 ## Public Route Allowlist Review
@@ -68,7 +68,7 @@ Current explicit public routes from `SecurityConfig`:
 | P1 | Drive upload initialization rejects known extension/content-type mismatches before MinIO presigned URL generation while allowing generic octet-stream fallbacks | `DriveStorageService`, `DriveStorageServiceTest` |
 | P1 | AI status never exposes API keys, API-key headers, or provider URLs | `LedgerAiAnalysisServiceTest.statusDoesNotExposeProviderUrlsOrApiKeys`, `LedgerAiAnalysisStatusResponse` |
 | P1 | presigned upload completion rejects object key outside expected owner/record scope before MinIO stat | `TravelMediaStorageServiceTest`, `TravelMediaStorageService` |
-| P1 | admin backup/restore/user activation/blocked-IP and drive-admin mutation actions produce audit events | `AdminController`, `DriveAdminController`, `LoginAuditLogServiceTest`, `DriveAdminSecurityIntegrationTest` |
+| P1 | admin backup/restore/user activation/blocked-IP and drive-admin mutation actions produce safe `ADMIN_ACTION` audit events and stay listed in the admin audit contract | `AdminController`, `DriveAdminController`, `LoginAuditLogServiceTest`, `DriveAdminSecurityIntegrationTest`, `docs/admin_audit_log_contract.md`, `scripts/verify-admin-audit-contract.ps1` |
 | P1 | remember-me logout, token rotation, profile credential-change revocation, admin-deactivation revocation, and cookie attributes stay covered | `SecurityConfig`, `AuthController`, `AdminService`, `LedgerEntryUserScopeIntegrationTest`, `ProfileCredentialIntegrationTest`, `AdminDashboardIntegrationTest` |
 | P2 | malformed image upload cannot create trusted thumbnail/media record | travel/family/profile upload services |
 
@@ -76,7 +76,7 @@ Current explicit public routes from `SecurityConfig`:
 
 Before promoting a build that changes auth, admin, sharing, upload, OCR, AI, or backup behavior:
 
-1. Run backend security-focused tests. GitHub Actions now exposes this as `backend-security-tests` and runs admin, remember-me/profile, privacy, drive sharing/public-link, travel public-media token, OCR, and ledger AI safety tests explicitly.
+1. Run backend security-focused tests. GitHub Actions now exposes this as `backend-security-tests` and runs admin, remember-me/profile, privacy, drive sharing/public-link, travel public-media token, OCR, and ledger AI safety tests explicitly. The separate `admin-audit-contract` job verifies high-risk admin action audit coverage and safe detail policy.
 2. Verify `.env.example` and `application.yml` have matching public configuration names.
 3. Run `scripts/scan-secrets.ps1` and confirm no real secrets are present in committed files.
 4. Run `scripts/verify-db-migrations.ps1` when schema files change.

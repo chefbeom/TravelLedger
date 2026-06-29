@@ -68,6 +68,16 @@ jobs:
       - name: Verify backup restore rehearsal runbook
         shell: pwsh
         run: ./scripts/verify-backup-rehearsal-runbook.ps1
+  admin-audit-contract:
+    name: Admin audit contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Verify high-risk admin action audit contract
+        shell: pwsh
+        run: ./scripts/verify-admin-audit-contract.ps1
   pwa-mobile-baseline:
     name: PWA mobile baseline
     runs-on: ubuntu-latest
@@ -181,6 +191,7 @@ jobs:
       - migration-discipline
       - observability-alerts
       - backup-rehearsal-runbook
+      - admin-audit-contract
       - pwa-mobile-baseline
       - service-decomposition-plan
       - backend-test
@@ -198,6 +209,7 @@ jobs:
             [migration-discipline]="${{ needs['migration-discipline'].result }}"
             [observability-alerts]="${{ needs['observability-alerts'].result }}"
             [backup-rehearsal-runbook]="${{ needs['backup-rehearsal-runbook'].result }}"
+            [admin-audit-contract]="${{ needs['admin-audit-contract'].result }}"
             [pwa-mobile-baseline]="${{ needs['pwa-mobile-baseline'].result }}"
             [service-decomposition-plan]="${{ needs['service-decomposition-plan'].result }}"
             [backend-test]="${{ needs['backend-test'].result }}"

@@ -63,7 +63,7 @@ Current explicit public routes from `SecurityConfig`:
 | P0 | missing CSRF rejects profile/password/admin mutation requests | `SecurityConfig` + controllers |
 | P0 | public download token fails when token is blank/invalid, item is non-file/trashed/missing storage path, or link is revoked/expired/over limit | `DriveDownloadLinkService`, `DriveDownloadLinkServiceTest` |
 | P0 | travel public media token fails for invalid media/token pair | `TravelPublicMediaTokenService` |
-| P1 | OCR rejects too-large file and non-image file | `LedgerOcrService` |
+| P1 | OCR rejects too-large files and MIME/extension spoofed non-image uploads before remote OCR calls | `LedgerOcrService`, `LedgerOcrServiceTest` |
 | P1 | AI status never exposes API keys or provider URLs | `LedgerAiAnalysisServiceTest`, `LedgerAiAnalysisStatusResponse` |
 | P1 | presigned upload completion rejects object key outside expected owner/record scope | `DriveService`, `TravelMediaStorageService` |
 | P1 | admin backup/restore actions produce audit events | `AdminDataManagementService` |

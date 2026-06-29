@@ -169,7 +169,7 @@ public class LedgerOcrService {
         String fileName = file.getOriginalFilename() == null ? "" : file.getOriginalFilename().toLowerCase(Locale.ROOT);
         boolean imageContentType = contentType != null && contentType.toLowerCase(Locale.ROOT).startsWith("image/");
         boolean imageExtension = ALLOWED_IMAGE_EXTENSIONS.stream().anyMatch(fileName::endsWith);
-        if (!imageContentType && !imageExtension) {
+        if (!imageContentType || !imageExtension) {
             throw new BadRequestException("Only image files can be analyzed.");
         }
     }

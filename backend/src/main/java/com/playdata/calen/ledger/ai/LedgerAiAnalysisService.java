@@ -1,4 +1,4 @@
-﻿package com.playdata.calen.ledger.ai;
+package com.playdata.calen.ledger.ai;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -109,12 +109,12 @@ public class LedgerAiAnalysisService {
 
         AnalysisDataset dataset = buildDataset(userId, plan);
         LedgerAiN8nPayload payload = buildPayload(plan, dataset);
-        Timer.Sample aiRequestTimer = startAiRequestTimer();
+        Timer.Sample aiRequestTimer = aiMetrics.startAiRequestTimer();
         boolean aiRequestRecorded = false;
 
         try {
             LedgerAiRemoteResponse remote = remoteClient.analyze(payload);
-            recordAiRequest(aiRequestTimer, "success");
+            aiMetrics.recordAiRequest(aiRequestTimer, "success");
             aiRequestRecorded = true;
             LedgerAiAnalysisHistory history = baseHistory(owner, plan);
             history.setStatus(LedgerAiAnalysisStatus.COMPLETED);
@@ -127,7 +127,7 @@ public class LedgerAiAnalysisService {
             return response;
         } catch (RuntimeException exception) {
             if (!aiRequestRecorded) {
-                recordAiRequest(aiRequestTimer, "failure");
+                aiMetrics.recordAiRequest(aiRequestTimer, "failure");
             }
             LedgerAiAnalysisHistory failedHistory = baseHistory(owner, plan);
             failedHistory.setStatus(LedgerAiAnalysisStatus.FAILED);
@@ -276,7 +276,7 @@ public class LedgerAiAnalysisService {
         return historyRepository.findLatestMatchingCompletedAnalysis(
                 userId,
                 LedgerAiAnalysisStatus.COMPLETED,
-                aiProviderMetricLabel(),
+                aiMetrics.providerLabel(),
                 properties.getModel(),
                 plan.mode(),
                 plan.periodType(),
@@ -590,7 +590,7 @@ public class LedgerAiAnalysisService {
             history.setCompareToDate(plan.comparisonRange().to());
         }
         history.setModel(properties.getModel());
-        history.setProvider(aiProviderMetricLabel());
+        history.setProvider(aiMetrics.providerLabel());
         history.setTitle(buildTitle(plan));
         return history;
     }
@@ -968,37 +968,6 @@ public class LedgerAiAnalysisService {
                 .multiply(BigDecimal.valueOf(100))
                 .divide(safeBase, 2, RoundingMode.HALF_UP)
                 .toPlainString() + "%";
-    }
-    private Timer.Sample startAiRequestTimer() {
-        return meterRegistry == null ? null : Timer.start(meterRegistry);
-    }
-
-    private void recordAiRequest(Timer.Sample sample, String status) {
-        if (meterRegistry == null) {
-            return;
-        }
-        String provider = aiProviderMetricLabel();
-        Counter.builder("calen.ledger.ai.requests")
-                .description("Ledger AI remote analysis requests")
-                .tag("provider", provider)
-                .tag("status", status)
-                .register(meterRegistry)
-                .increment();
-        if (sample != null) {
-            sample.stop(Timer.builder("calen.ledger.ai.request")
-                    .description("Ledger AI remote analysis request duration")
-                    .tag("provider", provider)
-                    .tag("status", status)
-                    .register(meterRegistry));
-        }
-    }
-
-    private String aiProviderMetricLabel() {
-        try {
-            return properties.provider().name().toLowerCase(Locale.ROOT);
-        } catch (RuntimeException exception) {
-            return "unknown";
-        }
     }
     private String writeJson(Object value) {
         try {

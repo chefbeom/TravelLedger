@@ -2,7 +2,7 @@
 
 Updated: 2026-06-30
 
-This document records the deterministic transaction anomaly detection baseline. The backend API is read-only and does not use AI, so it can flag duplicate, repeated-payment, unusually large, and travel-out-of-range spending candidates without mutating ledger data.
+This document records the deterministic transaction anomaly detection contract. The backend API is read-only and does not use AI, so it can flag duplicate, repeated-payment, unusually large, and travel-out-of-range spending candidates without mutating ledger data.
 
 ## Implemented API
 
@@ -17,6 +17,23 @@ Optional query parameters:
 | `from` | Start date, `yyyy-MM-dd`. |
 | `to` | End date, `yyyy-MM-dd`. |
 | `limit` | Maximum anomaly groups to return. Defaults to 50 and is capped at 200. |
+
+## Decision flow
+
+```mermaid
+flowchart TD
+    A["Authenticated user opens anomaly review"] --> B["Normalize date range and limit"]
+    B --> C{"Range is 366 days or fewer?"}
+    C -- "No" --> D["Reject before reading ledger entries"]
+    C -- "Yes" --> E["Load non-deleted entries for current owner"]
+    E --> F["Load current owner's travel plans"]
+    F --> G["Run duplicate, repeated-payment, travel, and large-spend detectors"]
+    G --> H["Sort and cap returned groups"]
+    H --> I["Return review candidates with entry summaries"]
+    I --> J{"User edits or dismisses later?"}
+    J -- "No" --> K["No ledger mutation"]
+    J -- "Yes" --> L["Use a separate explicit user action path"]
+```
 
 ## Current Detectors
 
@@ -42,12 +59,38 @@ Normalization and thresholds:
 | Rule | Reason |
 | --- | --- |
 | Detector is read-only. | It must not mutate or delete ledger data automatically. |
-| Results are candidates, not facts. | User confirmation is required before editing or dismissing entries. |
+| Results are candidates, not facts. | User confirmation is required before editing, deleting, merging, dismissing, or reclassifying entries. |
 | Date range is capped at 366 days. | Prevents expensive full-history scans from accidental wide queries. |
+| Result limit is capped at 200 groups. | Prevents unbounded UI/API responses while preserving the full `totalGroups` count. |
 | Repeated-payment detector requires distinct months. | Avoids confusing one-off duplicate imports with recurring spend. |
 | Travel detector uses owner-scoped travel plans. | Prevents another user's trip dates from influencing anomaly results. |
 | Large-spend detector requires a small baseline. | Avoids flagging the first few expenses before there is enough local context. |
 | API returns entry summaries, not hidden deleted records. | Keeps output aligned with normal ledger visibility. |
+| Future dismiss workflows must be separate from source entries. | Reviewing a candidate should not silently hide, delete, or rewrite ledger records. |
+
+## Current implementation anchors
+
+| Anchor | Contract evidence |
+| --- | --- |
+| `LedgerTransactionAnomalyController` | Exposes authenticated `GET /api/entries/anomalies` and passes only `currentUser.userId()` to the service. |
+| `LedgerTransactionAnomalyService` | Is `@Transactional(readOnly = true)`, caps range/limit, loads owner-scoped non-deleted entries, loads owner-scoped travel plans, and emits candidate groups. |
+| `LedgerEntryRepository` | Supplies owner-scoped, non-deleted entry queries for all-entry and date-range anomaly scans. |
+| `TravelPlanRepository` | Supplies owner-scoped travel plans for travel out-of-range checks. |
+| `LedgerTransactionAnomalyServiceTest` | Covers duplicate grouping, repeated payments, travel date range, unusual spending, result cap, and pre-read range rejection. |
+
+## Release gate
+
+Before promoting a change that touches anomaly detection, Excel/OCR import duplicate review, AI risk spending, transaction edit/delete/merge flows, or anomaly dismiss UI:
+
+1. Confirm anomaly output is still a review candidate, not a confirmed fraud/error statement.
+2. Confirm the anomaly API remains read-only and does not create, update, delete, merge, dismiss, or reclassify ledger entries.
+3. Confirm all entry and travel-plan reads remain scoped to the authenticated user.
+4. Confirm deleted entries, income entries, wide date ranges, and excessive limits stay bounded as documented.
+5. Run `scripts/verify-ledger-anomaly-contract.ps1` and the focused service tests listed below.
+
+## CI contract
+
+The `ledger-anomaly-contract` GitHub Actions job must run `scripts/verify-ledger-anomaly-contract.ps1`. The release gate must include that job so anomaly review safety regressions block merges before frontend, AI, or import flows depend on the API.
 
 ## Next Detectors
 
@@ -68,6 +111,7 @@ Normalization and thresholds:
 | `LedgerTransactionAnomalyServiceTest.findAnomaliesFlagsUnusuallyLargeExpenseAgainstMedianExpense` | Verifies a large single expense is flagged against the selected-range median without including income entries. |
 | `LedgerTransactionAnomalyServiceTest.findAnomaliesCapsReturnedGroupsWithoutChangingTotalGroups` | Verifies `limit` is capped at 200 and does not change the full `totalGroups` count. |
 | `LedgerTransactionAnomalyServiceTest.findAnomaliesRejectsRangeLongerThan366DaysBeforeReadingEntries` | Verifies wide date ranges fail before reading ledger entries. |
+| `scripts/verify-ledger-anomaly-contract.ps1` | Verifies the documentation, implementation anchors, security checklist, roadmap, and CI job stay connected. |
 
 ## Test Backlog
 
@@ -77,3 +121,4 @@ Normalization and thresholds:
 - Keep range validation coverage current before adding broader historical detectors.
 - Keep limit cap coverage current so UI pagination cannot hide total candidate count.
 - Add frontend panel and dismiss workflow coverage once the anomaly candidates are shown in the UI.
+- Add Excel/OCR imported-row duplicate preview coverage before import commit uses anomaly hints.

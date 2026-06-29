@@ -1,6 +1,6 @@
 # Ledger Classification Rules
 
-Updated: 2026-06-29
+Updated: 2026-06-30
 
 This document records the first backend slice for user-defined ledger classification rules. The goal is to improve OCR and Excel import quality with explicit, explainable rules before adding AI-recommended rule approval.
 
@@ -42,10 +42,17 @@ This document records the first backend slice for user-defined ledger classifica
 | Rule conflict detection | Warn when a new keyword overlaps with a higher-priority rule. |
 | Usage statistics | Track how often a rule matched and was accepted/rejected. |
 
+## Test Evidence
+
+| Evidence | Coverage |
+| --- | --- |
+| `LedgerClassificationRuleServiceTest.previewReturnsFirstActiveOwnerRuleInPriorityOrder` | Verifies preview reads the current user's active rules in priority order and returns the first matching keyword. |
+| `LedgerClassificationRuleServiceTest.previewDoesNotMatchDifferentEntryTypeRule` | Verifies an income rule does not classify an expense preview even when the keyword text matches. |
+| `LedgerClassificationRuleServiceTest.createRuleRejectsCategoryDetailFromDifferentGroup` | Verifies a rule cannot bind a category detail that belongs to a different category group. |
 ## Test Backlog
 
 - User A cannot create/update/deactivate/preview User B's category or payment IDs.
-- Preview returns the lowest-priority active matching rule.
+- Keep preview priority-order and active-only repository coverage current as matching modes expand.
 - Inactive rules do not match preview.
-- Detail category must belong to the selected group.
+- Keep detail/category consistency coverage current as rule creation gains conflict detection.
 - Preview does not create or update ledger entries.

@@ -8,14 +8,14 @@ This plan keeps the next refactors small and reversible. The goal is not to spli
 
 | Service | Current size | Main risk |
 | --- | ---: | --- |
-| LedgerAiAnalysisService | 1155 lines | AI orchestration still owns payload creation, provider calls, duplicate suppression, history persistence, and report mapping; provider output contract text is isolated in LedgerAiOutputContract, Micrometer request metrics in LedgerAiAnalysisMetrics, and AI analysis notification delivery in LedgerAiAnalysisNotifications. |
+| LedgerAiAnalysisService | 1134 lines | AI orchestration still owns payload creation, provider calls, duplicate suppression, history persistence, and report mapping; provider output contract text is isolated in LedgerAiOutputContract, Micrometer request metrics in LedgerAiAnalysisMetrics, AI analysis notification delivery in LedgerAiAnalysisNotifications, and JSON history/result conversion in LedgerAiAnalysisJsonCodec. |
 | `TravelService` | 3278 lines | Plans, sharing, map snapshots, media upload completion, route/GPX handling, expense reflection, cache invalidation, public atlas reads, and exchange rates are mixed in one service. |
 
 ## CI Line Budget
 
 | Service | Current baseline | CI budget | Policy |
 | --- | ---: | ---: | --- |
-| LedgerAiAnalysisService | 1155 lines | 1180 lines | Growth past the budget must extract payload, provider-call, report, history, or notification behavior before raising the limit. |
+| LedgerAiAnalysisService | 1134 lines | 1159 lines | Growth past the budget must extract payload, provider-call, report, history, or notification behavior before raising the limit. |
 | `TravelService` | 3278 lines | 3300 lines | Growth past the budget must split media, map, share, route, exchange-rate, or ledger-bridge behavior before raising the limit. |
 
 The budget is intentionally close to the current baseline so service decomposition behaves as a ratchet: new feature work should reduce or isolate responsibilities instead of adding more code to the large orchestrators.
@@ -41,7 +41,7 @@ These method groups should move together. A new feature should not add more logi
 | Ledger AI | Provider payload minimization | `buildPayload`, `buildPayloadMinimizationSummary`, `providerExpenseEntries`, `sanitizeProviderExpenseEntry`, `providerRecurringCandidates` | `LedgerAiAnalysisPayloadBuilder` | History writes, notifications, provider HTTP calls, or report fallback text. |
 | Ledger AI | Report merge and fallback copy | `buildReport`, `buildFallbackReport`, `buildFullReport`, `buildKeySummary`, `buildNotableSpending`, `buildImprovementActions` | `LedgerAiAnalysisReportMerger` | Provider calls, persistence, or request validation. |
 | Ledger AI | Period and comparison planning | `resolvePlan`, `resolvePeriodRange`, `resolveComparisonRanges`, `validateCustomRange` | `LedgerAiAnalysisPlanResolver` | Repository reads, provider payload construction, or response mapping. |
-| Ledger AI | History and duplicate suppression | `findReusableAnalysis`, `findLatestMatchingAnalysis`, `baseHistory`, `toSummary`, `readResult` | `LedgerAiAnalysisHistoryCoordinator` | Provider schema validation, notification delivery, or metric registration. |
+| Ledger AI | History and duplicate suppression | `findReusableAnalysis`, `findLatestMatchingAnalysis`, `baseHistory`, `toSummary`, `LedgerAiAnalysisJsonCodec` | `LedgerAiAnalysisHistoryCoordinator`; JSON conversion now belongs to `LedgerAiAnalysisJsonCodec`. | Provider schema validation, notification delivery, or metric registration. |
 | Ledger AI | Metrics and notification side effects | `LedgerAiAnalysisMetrics`, `LedgerAiAnalysisNotifications` | `LedgerAiAnalysisMetrics` owns Micrometer request metrics; `LedgerAiAnalysisNotifications` owns bounded completion/failure notification delivery. | Payload minimization, report text, or history query composition. |
 | Travel | Media upload/download orchestration | `prepareMediaUploadInternal`, `completeMediaUploadInternal`, `getMediaDownload`, `getSharedMediaDownload`, `invalidateOwnedMediaDownloadCache` | `TravelMediaUploadCoordinator` | Share group mutation, map cluster rebuild, route CRUD, or exchange-rate lookup. |
 | Travel | Map and photo cluster reads | `getMyMapOverview`, `getMyMapMarkerDetailBundle`, `getMyMapPhotoClusterDetail`, `resolveMyMapPhotoClusterDetail`, `refreshMyMapPhotoClusterSnapshot` | `TravelMapQueryService` | Upload completion, public-share mutation, or ledger reflection. |
@@ -76,6 +76,7 @@ These method groups should move together. A new feature should not add more logi
 - 2026-06-30: Extracted provider output contract text into LedgerAiOutputContract, reducing LedgerAiAnalysisService to 1230 lines while keeping the existing provider payload contract surface stable.
 - 2026-06-30: Extracted Micrometer AI request counter/timer and provider metric labeling into LedgerAiAnalysisMetrics, reducing LedgerAiAnalysisService to 1199 lines without changing controller DTOs or provider payloads.
 - 2026-06-30: Extracted AI completion/failure notification delivery into LedgerAiAnalysisNotifications, reducing LedgerAiAnalysisService to 1155 lines while keeping notification metadata bounded.
+- 2026-06-30: Extracted AI history/result JSON serialization into LedgerAiAnalysisJsonCodec, reducing LedgerAiAnalysisService to 1134 lines without changing persisted JSON shape.
 ### Ledger AI Exit Criteria
 
 - The original service becomes a thin orchestration layer under roughly 400-600 lines.

@@ -32,9 +32,13 @@ public class TravelPublicMediaTokenService {
     }
 
     public boolean matches(Long mediaId, String token) {
-        if (token == null || token.isBlank()) {
+        if (mediaId == null || token == null || token.isBlank()) {
             return false;
         }
-        return issueToken(mediaId).equals(token.trim());
+        String expected = issueToken(mediaId);
+        return MessageDigest.isEqual(
+                expected.getBytes(StandardCharsets.UTF_8),
+                token.trim().getBytes(StandardCharsets.UTF_8)
+        );
     }
 }

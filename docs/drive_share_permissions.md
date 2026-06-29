@@ -33,10 +33,18 @@ The share list responses include `permission` so clients can hide download/save 
 - Locked files still reject share creation, cancellation, and permission changes.
 - Trashed source files remain unavailable even when a share row exists.
 - `VIEW` shares cannot call shared download URL generation or save the shared file into the recipient drive.
+- Direct shared download URL requests write an owner-scoped audit log with status such as `shared_success`, `shared_permission_denied`, `shared_unavailable`, or `shared_not_found`.
 - Unknown permission values fail fast with `400 Bad Request`.
 
 ## Next hardening steps
 
 - Add frontend affordances for selecting `VIEW`, `DOWNLOAD`, and `EDIT`.
-- Add owner-visible audit rows for direct shared download attempts, not only public download links.
+- Surface direct share access logs in the CalenDrive frontend for file owners.
 - Decide whether `EDIT` should allow rename/version-restore on the owner's original file or create a collaborative copy workflow.
+## Owner audit endpoint
+
+```http
+GET /api/file/share/{fileId}/access-logs
+```
+
+Owners can inspect the latest direct shared-download events for a file. The response reuses the download-link access log shape and intentionally omits raw tokens or synthetic share fingerprints.

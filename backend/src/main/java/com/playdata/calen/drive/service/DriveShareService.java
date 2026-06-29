@@ -44,6 +44,7 @@ public class DriveShareService {
     private final DriveService driveService;
     private final ImageThumbnailService imageThumbnailService;
     private final UserNotificationService userNotificationService;
+    private final DriveDownloadLinkAccessLogService driveDownloadLinkAccessLogService;
 
     public DriveShareService(
             DriveShareRepository driveShareRepository,
@@ -52,7 +53,8 @@ public class DriveShareService {
             DriveStorageService driveStorageService,
             DriveService driveService,
             ImageThumbnailService imageThumbnailService,
-            UserNotificationService userNotificationService
+            UserNotificationService userNotificationService,
+            DriveDownloadLinkAccessLogService driveDownloadLinkAccessLogService
     ) {
         this.driveShareRepository = driveShareRepository;
         this.driveItemRepository = driveItemRepository;
@@ -61,6 +63,7 @@ public class DriveShareService {
         this.driveService = driveService;
         this.imageThumbnailService = imageThumbnailService;
         this.userNotificationService = userNotificationService;
+        this.driveDownloadLinkAccessLogService = driveDownloadLinkAccessLogService;
     }
 
     public List<DriveDtos.SharedFileResponse> getReceivedShares(Long userId) {
@@ -104,6 +107,11 @@ public class DriveShareService {
                 .map(this::toShareInfoResponse)
                 .sorted(Comparator.comparing(DriveDtos.ShareInfoResponse::createdAt).reversed())
                 .toList();
+    }
+
+    public List<DriveDtos.DownloadLinkAccessLogResponse> listSharedFileAccessLogs(Long userId, Long fileId) {
+        DriveItem ownedItem = driveService.getOwnedFile(userId, fileId);
+        return driveDownloadLinkAccessLogService.listRecentDirectShareLogs(userId, ownedItem.getId());
     }
 
     public List<DriveDtos.ShareInfoResponse> searchRecipients(Long userId, String query) {
@@ -281,13 +289,31 @@ public class DriveShareService {
 
     @Transactional
     public String getSharedFileDownloadUrl(Long userId, Long fileId) {
-        DriveItem item = getDownloadableSharedFile(userId, fileId);
+        return getSharedFileDownloadUrl(userId, fileId, null);
+    }
+
+    @Transactional
+    public String getSharedFileDownloadUrl(
+            Long userId,
+            Long fileId,
+            DriveDownloadLinkAccessLogService.AccessMetadata metadata
+    ) {
+        DriveShare share = driveShareRepository.findByItem_IdAndRecipient_Id(fileId, userId).orElse(null);
+        if (share == null) {
+            recordDirectShareAccess(null, fileId, null, userId, "not_found", metadata);
+            throw new NotFoundException("Shared file not found.");
+        }
+
+        DriveItem item = validateSharedFileForDownload(share, userId, metadata);
+        ensureDownloadAllowed(share, userId, metadata);
         item.setLastAccessedAt(LocalDateTime.now());
-        return driveStorageService.generateDownloadUrl(
+        String downloadUrl = driveStorageService.generateDownloadUrl(
                 item.getStoragePath(),
                 item.getOriginalName(),
                 resolveContentType(item.getExtension())
         );
+        recordDirectShareAccess(share, userId, "success", metadata);
+        return downloadUrl;
     }
 
     public DriveService.ThumbnailPayload loadSharedThumbnail(Long userId, Long fileId, Integer width) {
@@ -339,6 +365,65 @@ public class DriveShareService {
     private void ensureDownloadAllowed(DriveShare share) {
         if (!effectivePermission(share).canDownload()) {
             throw new BadRequestException("Shared file permission does not allow download.");
+        }
+    }
+
+    private DriveItem validateSharedFileForDownload(
+            DriveShare share,
+            Long recipientId,
+            DriveDownloadLinkAccessLogService.AccessMetadata metadata
+    ) {
+        try {
+            return validateSharedFile(share);
+        } catch (RuntimeException exception) {
+            recordDirectShareAccess(share, recipientId, "unavailable", metadata);
+            throw exception;
+        }
+    }
+
+    private void ensureDownloadAllowed(
+            DriveShare share,
+            Long recipientId,
+            DriveDownloadLinkAccessLogService.AccessMetadata metadata
+    ) {
+        if (!effectivePermission(share).canDownload()) {
+            recordDirectShareAccess(share, recipientId, "permission_denied", metadata);
+            throw new BadRequestException("Shared file permission does not allow download.");
+        }
+    }
+
+    private void recordDirectShareAccess(
+            DriveShare share,
+            Long recipientId,
+            String status,
+            DriveDownloadLinkAccessLogService.AccessMetadata metadata
+    ) {
+        Long shareId = share != null ? share.getId() : null;
+        DriveItem item = share != null ? share.getItem() : null;
+        Long itemId = item != null ? item.getId() : null;
+        Long ownerId = item != null && item.getOwner() != null ? item.getOwner().getId() : null;
+        recordDirectShareAccess(shareId, itemId, ownerId, recipientId, status, metadata);
+    }
+
+    private void recordDirectShareAccess(
+            Long shareId,
+            Long itemId,
+            Long ownerId,
+            Long recipientId,
+            String status,
+            DriveDownloadLinkAccessLogService.AccessMetadata metadata
+    ) {
+        try {
+            driveDownloadLinkAccessLogService.recordDirectShareAccess(
+                    shareId,
+                    itemId,
+                    ownerId,
+                    recipientId,
+                    status,
+                    metadata
+            );
+        } catch (RuntimeException exception) {
+            log.warn("Failed to record direct shared-file access log: status={}", status, exception);
         }
     }
     private void refreshSharedFlags(Long userId, List<Long> fileIds) {

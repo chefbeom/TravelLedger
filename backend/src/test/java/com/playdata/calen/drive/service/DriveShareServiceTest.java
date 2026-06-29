@@ -52,6 +52,9 @@ class DriveShareServiceTest {
     @Mock
     private UserNotificationService userNotificationService;
 
+    @Mock
+    private DriveDownloadLinkAccessLogService driveDownloadLinkAccessLogService;
+
     @Test
     void shareFilesStoresRequestedViewPermission() {
         AppUser owner = user(1L, "owner");
@@ -150,6 +153,46 @@ class DriveShareServiceTest {
     }
 
     @Test
+    void sharedDownloadUrlRecordsSuccessfulAccess() {
+        DriveItem sharedFile = file(7L);
+        DriveShare share = share(sharedFile, user(1L, "owner"), user(2L, "friend"));
+        share.setId(31L);
+        share.setPermission(DriveSharePermission.DOWNLOAD);
+        DriveDownloadLinkAccessLogService.AccessMetadata metadata = new DriveDownloadLinkAccessLogService.AccessMetadata("203.0.113.8", "agent");
+
+        when(driveShareRepository.findByItem_IdAndRecipient_Id(7L, 2L)).thenReturn(Optional.of(share));
+        when(driveStorageService.generateDownloadUrl("drive/locked.txt", "locked.txt", "text/plain"))
+                .thenReturn("https://download.example/file");
+
+        DriveShareService service = newService();
+
+        String downloadUrl = service.getSharedFileDownloadUrl(2L, 7L, metadata);
+
+        assertThat(downloadUrl).isEqualTo("https://download.example/file");
+        verify(driveDownloadLinkAccessLogService).recordDirectShareAccess(31L, 7L, 1L, 2L, "success", metadata);
+    }
+
+    @Test
+    void sharedDownloadUrlRecordsViewOnlyDeniedAccess() {
+        DriveItem sharedFile = file(7L);
+        DriveShare share = share(sharedFile, user(1L, "owner"), user(2L, "friend"));
+        share.setId(31L);
+        share.setPermission(DriveSharePermission.VIEW);
+        DriveDownloadLinkAccessLogService.AccessMetadata metadata = new DriveDownloadLinkAccessLogService.AccessMetadata("203.0.113.9", "agent");
+
+        when(driveShareRepository.findByItem_IdAndRecipient_Id(7L, 2L)).thenReturn(Optional.of(share));
+
+        DriveShareService service = newService();
+
+        assertThatThrownBy(() -> service.getSharedFileDownloadUrl(2L, 7L, metadata))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessage("Shared file permission does not allow download.");
+
+        verify(driveDownloadLinkAccessLogService).recordDirectShareAccess(31L, 7L, 1L, 2L, "permission_denied", metadata);
+        verify(driveStorageService, never()).generateDownloadUrl(any(), any(), any());
+    }
+
+    @Test
     void downloadSharedFileRejectsTrashedSourceWithoutLoadingObject() {
         DriveItem trashedFile = file(7L);
         trashedFile.markTrashed();
@@ -191,7 +234,8 @@ class DriveShareServiceTest {
                 driveStorageService,
                 driveService,
                 imageThumbnailService,
-                userNotificationService
+                userNotificationService,
+                driveDownloadLinkAccessLogService
         );
     }
 

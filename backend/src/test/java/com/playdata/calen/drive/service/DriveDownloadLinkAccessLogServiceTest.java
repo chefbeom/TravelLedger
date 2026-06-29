@@ -1,4 +1,4 @@
-﻿package com.playdata.calen.drive.service;
+package com.playdata.calen.drive.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.verify;
@@ -51,6 +51,32 @@ class DriveDownloadLinkAccessLogServiceTest {
     }
 
     @Test
+    void recordDirectShareAccessUsesSyntheticFingerprintAndScopedStatus() {
+        DriveDownloadLinkAccessLogService service = new DriveDownloadLinkAccessLogService(driveDownloadLinkAccessLogRepository);
+
+        service.recordDirectShareAccess(
+                31L,
+                11L,
+                1L,
+                2L,
+                "permission_denied",
+                new DriveDownloadLinkAccessLogService.AccessMetadata("198.51.100.7", "agent")
+        );
+
+        ArgumentCaptor<DriveDownloadLinkAccessLog> logCaptor = ArgumentCaptor.forClass(DriveDownloadLinkAccessLog.class);
+        verify(driveDownloadLinkAccessLogRepository).save(logCaptor.capture());
+        DriveDownloadLinkAccessLog log = logCaptor.getValue();
+
+        assertThat(log.getLinkId()).isNull();
+        assertThat(log.getItemId()).isEqualTo(11L);
+        assertThat(log.getOwnerId()).isEqualTo(1L);
+        assertThat(log.getStatus()).isEqualTo("shared_permission_denied");
+        assertThat(log.getTokenFingerprint()).hasSize(64);
+        assertThat(log.getTokenFingerprint()).doesNotContain("31");
+        assertThat(log.getClientAddress()).isEqualTo("198.51.100.7");
+    }
+
+    @Test
     void listRecentLogsDoesNotExposeTokenFingerprint() {
         DriveDownloadLinkAccessLog log = new DriveDownloadLinkAccessLog();
         log.setId(3L);
@@ -72,5 +98,25 @@ class DriveDownloadLinkAccessLogServiceTest {
         assertThat(response.status()).isEqualTo("invalid");
         assertThat(response.clientAddress()).isEqualTo("192.0.2.10");
         assertThat(response.toString()).doesNotContain("aaaaaaaa");
+    }
+
+    @Test
+    void listRecentDirectShareLogsUsesItemOwnerScope() {
+        DriveDownloadLinkAccessLog log = new DriveDownloadLinkAccessLog();
+        log.setId(4L);
+        log.setItemId(11L);
+        log.setOwnerId(1L);
+        log.setStatus("shared_success");
+        log.setTokenFingerprint("b".repeat(64));
+        when(driveDownloadLinkAccessLogRepository.findTop50ByItemIdAndOwnerIdAndLinkIdIsNullOrderByAccessedAtDesc(11L, 1L))
+                .thenReturn(List.of(log));
+
+        DriveDownloadLinkAccessLogService service = new DriveDownloadLinkAccessLogService(driveDownloadLinkAccessLogRepository);
+
+        var response = service.listRecentDirectShareLogs(1L, 11L).get(0);
+
+        assertThat(response.linkId()).isNull();
+        assertThat(response.itemId()).isEqualTo(11L);
+        assertThat(response.status()).isEqualTo("shared_success");
     }
 }

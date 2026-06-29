@@ -2,6 +2,7 @@ package com.playdata.calen.drive.web;
 
 import com.playdata.calen.account.security.AppUserPrincipal;
 import com.playdata.calen.drive.dto.DriveDtos;
+import com.playdata.calen.drive.service.DriveDownloadLinkAccessLogService;
 import com.playdata.calen.drive.service.DriveService;
 import com.playdata.calen.drive.service.DriveShareService;
 import java.net.URI;
@@ -57,6 +58,14 @@ public class DriveShareController {
         return driveShareService.getShareInfo(currentUser.userId(), fileId);
     }
 
+    @GetMapping("/{fileId}/access-logs")
+    public List<DriveDtos.DownloadLinkAccessLogResponse> getSharedFileAccessLogs(
+            @AuthenticationPrincipal AppUserPrincipal currentUser,
+            @PathVariable Long fileId
+    ) {
+        return driveShareService.listSharedFileAccessLogs(currentUser.userId(), fileId);
+    }
+
     @PostMapping
     public DriveDtos.ActionResponse shareFiles(
             @AuthenticationPrincipal AppUserPrincipal currentUser,
@@ -109,18 +118,32 @@ public class DriveShareController {
     @GetMapping("/shared/{fileId}/download")
     public ResponseEntity<Void> downloadSharedFile(
             @AuthenticationPrincipal AppUserPrincipal currentUser,
-            @PathVariable Long fileId
+            @PathVariable Long fileId,
+            @RequestHeader(value = "X-Forwarded-For", required = false) String forwardedFor,
+            @RequestHeader(value = "X-Real-IP", required = false) String realIp,
+            @RequestHeader(value = HttpHeaders.USER_AGENT, required = false) String userAgent
     ) {
-        return redirectTo(driveShareService.getSharedFileDownloadUrl(currentUser.userId(), fileId));
+        return redirectTo(driveShareService.getSharedFileDownloadUrl(
+                currentUser.userId(),
+                fileId,
+                accessMetadata(forwardedFor, realIp, userAgent)
+        ));
     }
 
     @GetMapping("/shared/{fileId}/download-link")
     public DriveDtos.DownloadUrlResponse getSharedDownloadLink(
             @AuthenticationPrincipal AppUserPrincipal currentUser,
-            @PathVariable Long fileId
+            @PathVariable Long fileId,
+            @RequestHeader(value = "X-Forwarded-For", required = false) String forwardedFor,
+            @RequestHeader(value = "X-Real-IP", required = false) String realIp,
+            @RequestHeader(value = HttpHeaders.USER_AGENT, required = false) String userAgent
     ) {
         return DriveDtos.DownloadUrlResponse.builder()
-                .downloadUrl(driveShareService.getSharedFileDownloadUrl(currentUser.userId(), fileId))
+                .downloadUrl(driveShareService.getSharedFileDownloadUrl(
+                        currentUser.userId(),
+                        fileId,
+                        accessMetadata(forwardedFor, realIp, userAgent)
+                ))
                 .build();
     }
 
@@ -131,6 +154,24 @@ public class DriveShareController {
             @RequestHeader(value = HttpHeaders.IF_NONE_MATCH, required = false) String ifNoneMatch
     ) {
         return buildThumbnailResponse(driveShareService.loadSharedThumbnail(currentUser.userId(), fileId, 320), ifNoneMatch);
+    }
+
+    private DriveDownloadLinkAccessLogService.AccessMetadata accessMetadata(
+            String forwardedFor,
+            String realIp,
+            String userAgent
+    ) {
+        return new DriveDownloadLinkAccessLogService.AccessMetadata(resolveClientAddress(forwardedFor, realIp), userAgent);
+    }
+
+    private String resolveClientAddress(String forwardedFor, String realIp) {
+        if (forwardedFor != null && !forwardedFor.isBlank()) {
+            return forwardedFor.split(",")[0].trim();
+        }
+        if (realIp != null && !realIp.isBlank()) {
+            return realIp.trim();
+        }
+        return null;
     }
 
     private ResponseEntity<Void> redirectTo(String downloadUrl) {

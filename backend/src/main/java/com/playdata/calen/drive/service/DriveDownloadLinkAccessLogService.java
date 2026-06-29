@@ -45,10 +45,34 @@ public class DriveDownloadLinkAccessLogService {
         driveDownloadLinkAccessLogRepository.save(log);
     }
 
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void recordDirectShareAccess(
+            Long shareId,
+            Long itemId,
+            Long ownerId,
+            Long recipientId,
+            String status,
+            AccessMetadata metadata
+    ) {
+        String fingerprintSource = "direct-share:" + safeId(shareId)
+                + ":item:" + safeId(itemId)
+                + ":recipient:" + safeId(recipientId);
+        record(null, itemId, ownerId, fingerprintSource, "shared_" + status, metadata);
+    }
+
     @Transactional(readOnly = true)
     public List<DriveDtos.DownloadLinkAccessLogResponse> listRecentLogs(Long ownerId, Long linkId) {
         return driveDownloadLinkAccessLogRepository
                 .findTop50ByLinkIdAndOwnerIdOrderByAccessedAtDesc(linkId, ownerId)
+                .stream()
+                .map(this::toResponse)
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<DriveDtos.DownloadLinkAccessLogResponse> listRecentDirectShareLogs(Long ownerId, Long itemId) {
+        return driveDownloadLinkAccessLogRepository
+                .findTop50ByItemIdAndOwnerIdAndLinkIdIsNullOrderByAccessedAtDesc(itemId, ownerId)
                 .stream()
                 .map(this::toResponse)
                 .toList();
@@ -64,6 +88,10 @@ public class DriveDownloadLinkAccessLogService {
                 .userAgent(log.getUserAgent())
                 .accessedAt(log.getAccessedAt())
                 .build();
+    }
+
+    private String safeId(Long id) {
+        return id == null ? "unknown" : id.toString();
     }
 
     private String tokenFingerprint(String token) {

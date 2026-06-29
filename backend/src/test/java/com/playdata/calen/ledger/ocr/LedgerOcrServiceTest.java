@@ -49,6 +49,23 @@ class LedgerOcrServiceTest {
     }
 
     @Test
+    void analyzeRejectsEmptyFileBeforeRemoteCallOrNotification() {
+        stubUser();
+        MockMultipartFile file = new MockMultipartFile(
+                "file",
+                "receipt.png",
+                "image/png",
+                new byte[] {}
+        );
+
+        assertThatThrownBy(() -> service.analyze(USER_ID, file, "RECEIPT"))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessage("Upload a receipt image first.");
+
+        verifyNoInteractions(remoteClient, userNotificationService);
+    }
+
+    @Test
     void analyzeRejectsOversizedFileBeforeRemoteCall() {
         stubUser();
         MockMultipartFile file = new MockMultipartFile(
@@ -130,7 +147,7 @@ class LedgerOcrServiceTest {
                 .isInstanceOf(BadRequestException.class)
                 .hasMessage("Only image files can be analyzed.");
 
-        verifyNoInteractions(remoteClient);
+        verifyNoInteractions(remoteClient, userNotificationService);
     }
 
     @Test

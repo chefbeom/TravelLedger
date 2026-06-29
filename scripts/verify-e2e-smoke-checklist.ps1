@@ -18,6 +18,7 @@ if ($findings.Count -eq 0) {
         '# E2E smoke checklist',
         '## Shared setup',
         '## P0 smoke flows',
+        '## Automation readiness contract',
         '## Release evidence template',
         '## Automation conversion notes',
         '## Gate policy'
@@ -48,6 +49,11 @@ if ($findings.Count -eq 0) {
     $requiredEvidenceFields = @(
         'Commit SHA:',
         'Environment URL:',
+        'Backend profile/config summary:',
+        'Fixture set:',
+        'Provider mode: stubbed | live-readonly | mixed',
+        'Browser contexts used:',
+        'Automation run URL or artifact path:',
         'Tester:',
         'Date/time:',
         'Desktop browser/version:',
@@ -57,6 +63,28 @@ if ($findings.Count -eq 0) {
     foreach ($field in $requiredEvidenceFields) {
         if (-not $checklist.Contains($field)) {
             $findings.Add("Checklist missing evidence field: $field") | Out-Null
+        }
+    }
+
+    $requiredReadinessSnippets = @(
+        'Stable selectors',
+        'data-testid',
+        'Disposable fixtures',
+        'Provider stubbing',
+        'OCR/AI success, timeout, and failure fixtures',
+        'Cross-user contexts',
+        'two authenticated browser contexts plus one unauthorized or third-user context',
+        'Mutation safety',
+        'before explicit user confirmation',
+        'Admin guardrail',
+        'secondary verification denied',
+        'Mobile/accessibility pass',
+        'Artifact hygiene',
+        'must not log API keys, public-link tokens, presigned URLs, raw OCR images, raw AI prompts, or secondary PIN values'
+    )
+    foreach ($snippet in $requiredReadinessSnippets) {
+        if (-not $checklist.Contains($snippet)) {
+            $findings.Add("Checklist missing automation readiness snippet: $snippet") | Out-Null
         }
     }
 

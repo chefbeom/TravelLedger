@@ -28,12 +28,29 @@ This checklist defines the minimum browser-level evidence required before releas
 | AI analysis advisory | User can run or load AI analysis, sees advisory wording, and any suggested ledger change still requires a separate explicit user action. Provider failure shows bounded error UI. | AI safety, failure handling, no autonomous mutations. |
 | Notification center | User sees AI/share/backup/OCR notifications when produced, unread count changes after read/read-all, and another user's notifications are not visible. | Cross-feature awareness and owner-scoped notification access. |
 
+## Automation readiness contract
+
+| Contract | Required practice | Why it matters |
+| --- | --- | --- |
+| Stable selectors | Prefer role/name assertions; add stable `data-testid` only where dynamic tables, uploads, calendars, maps, or generated AI/OCR content make role/name selectors ambiguous. | Prevents fragile CSS-selector tests while keeping UI behavior user-oriented. |
+| Disposable fixtures | Seed disposable users, ledger rows, spreadsheet fixture, receipt image, travel photo, drive file, notification rows, and admin backup state through setup APIs or fixtures; clean them after the run. | Keeps smoke runs repeatable and safe outside production. |
+| Provider stubbing | Required CI paths use deterministic OCR/AI success, timeout, and failure fixtures; live provider checks are optional and must not expose API keys in logs or screenshots. | Makes OCR/AI smoke tests reliable while still allowing manual provider confidence checks. |
+| Cross-user contexts | Sharing and ownership checks use at least two authenticated browser contexts plus one unauthorized or third-user context. | Catches data isolation failures that a single-user happy path misses. |
+| Mutation safety | OCR and AI scenarios assert no ledger entry, backup restore, file revoke, or destructive admin action happens before explicit user confirmation. | Preserves the project rule that AI/OCR output is advice or draft data until approved. |
+| Admin guardrail | Admin backup/data-management scenarios cover non-admin denied, admin without secondary verification denied, verified admin allowed, and cancel path safe. | Keeps destructive operations behind both role and secondary-verification gates. |
+| Mobile/accessibility pass | Auth, PIN, upload, share, OCR/AI review, and notification flows run at a mobile viewport and include keyboard/focus notes for blocking defects. | Connects the E2E baseline to the accessibility/mobile risk register. |
+| Artifact hygiene | Store commit SHA, environment URL, fixture set, browser contexts, provider mode, screenshots/videos for failures, and skip owner/issue for any skipped P0 flow. | Makes release evidence auditable instead of anecdotal. |
+
 ## Release evidence template
 
 ```text
 Commit SHA:
 Environment URL:
 Backend profile/config summary:
+Fixture set:
+Provider mode: stubbed | live-readonly | mixed
+Browser contexts used:
+Automation run URL or artifact path:
 Tester:
 Date/time:
 Desktop browser/version:
@@ -71,6 +88,7 @@ Release decision:
 ## Gate policy
 
 - Any release touching a P0 flow must attach the corresponding smoke evidence or a linked automated run.
-- Skips require an owner, reason, and follow-up issue.
-- Live AI/OCR provider checks are not required in CI, but stubbed success and failure paths must be covered when E2E automation is introduced.
+- Skips require an owner, reason, follow-up issue, and explicit release approver.
+- Live AI/OCR provider checks are not required in CI, but stubbed success, timeout, and failure paths must be covered when E2E automation is introduced.
+- Automated runs must use disposable fixtures and must not log API keys, public-link tokens, presigned URLs, raw OCR images, raw AI prompts, or secondary PIN values.
 - The checklist must stay in sync with `scripts/verify-e2e-smoke-checklist.ps1` and the CI `frontend-e2e-smoke-checklist` job.

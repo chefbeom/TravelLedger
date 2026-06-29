@@ -103,7 +103,9 @@ class LedgerAiAnalysisServiceTest {
     @Test
     void statusDoesNotExposeProviderUrlsOrApiKeys() throws Exception {
         properties.setWorkflowUrl("https://n8n.example.internal/webhook/travelledger-secret");
+        properties.setLmStudioBaseUrl("http://lmstudio.example.internal:1234/v1");
         properties.setApiKey("n8n-secret-token");
+        properties.setApiKeyHeader("X-Sensitive-N8n-Api-Key");
         properties.setLmStudioApiKey("lmstudio-secret-token");
 
         LedgerAiAnalysisStatusResponse status = service.getStatus();
@@ -115,12 +117,17 @@ class LedgerAiAnalysisServiceTest {
         assertThat(status.lmStudioConfigured()).isTrue();
         assertThat(node.has("workflowUrl")).isFalse();
         assertThat(node.has("lmStudioBaseUrl")).isFalse();
+        assertThat(node.has("providerUrl")).isFalse();
+        assertThat(node.has("baseUrl")).isFalse();
         assertThat(node.has("apiKey")).isFalse();
+        assertThat(node.has("apiKeyHeader")).isFalse();
         assertThat(node.has("lmStudioApiKey")).isFalse();
         assertThat(json)
                 .doesNotContain("https://n8n.example.internal")
-                .doesNotContain("172.18.240.1")
+                .doesNotContain("webhook/travelledger-secret")
+                .doesNotContain("http://lmstudio.example.internal:1234/v1")
                 .doesNotContain("n8n-secret-token")
+                .doesNotContain("X-Sensitive-N8n-Api-Key")
                 .doesNotContain("lmstudio-secret-token");
     }
 

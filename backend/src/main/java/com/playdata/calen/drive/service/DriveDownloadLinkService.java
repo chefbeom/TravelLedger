@@ -129,7 +129,7 @@ public class DriveDownloadLinkService {
             recordPublicDownloadLinkRequest("limit_reached");
             throw new BadRequestException("Download link is expired or no longer available.");
         }
-        if (item == null || !item.isFile()) {
+        if (item == null || !item.isFile() || item.getStoragePath() == null || item.getStoragePath().isBlank()) {
             recordPublicDownloadLinkRequest("invalid_item");
             throw new BadRequestException("Download link is expired or no longer available.");
         }

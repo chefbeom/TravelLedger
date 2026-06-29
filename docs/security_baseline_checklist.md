@@ -61,7 +61,7 @@ Current explicit public routes from `SecurityConfig`:
 | P0 | unauthenticated user cannot call admin dashboard/data-management/restore | `AdminController` |
 | P0 | keep `/api/administrator/**` covered for unauthenticated, non-admin, and unverified-admin denial | `DriveAdminController`, `DriveAdminSecurityIntegrationTest` |
 | P0 | missing CSRF rejects profile/password/admin mutation requests | `SecurityConfig` + controllers |
-| P0 | public download token fails when token is invalid, item trashed, or link revoked/expired | `DriveDownloadLinkService` |
+| P0 | public download token fails when token is blank/invalid, item is non-file/trashed/missing storage path, or link is revoked/expired/over limit | `DriveDownloadLinkService`, `DriveDownloadLinkServiceTest` |
 | P0 | travel public media token fails for invalid media/token pair | `TravelPublicMediaTokenService` |
 | P1 | OCR rejects too-large file and non-image file | `LedgerOcrService` |
 | P1 | AI status never exposes API keys | `LedgerAiAnalysisController` |

@@ -24,7 +24,7 @@ This checklist maps the current TravelLedger security surface to a practical bas
 | --- | --- | --- | --- | --- |
 | AUTH-01 | All non-public API routes require authentication. | `SecurityConfig` permits a small explicit allowlist and authenticates all other requests. | Keep the allowlist explicit. Every new public route must be reviewed here. | Add/update controller tests for unauthenticated access returning `401` except approved public routes. |
 | AUTH-02 | Login, logout, registration, profile credential changes must use CSRF protection for unsafe methods. | CSRF is enabled globally, frontend sends `X-XSRF-TOKEN`. | Ensure every POST/PUT/PATCH/DELETE path used by frontend obtains CSRF first. | MockMvc tests for missing CSRF on auth/profile/admin mutation endpoints. |
-| AUTH-03 | Remember-me tokens must be persistent, random, scoped, and revocable. | Persistent token repository exists; cookie name is `CALEN_REMEMBER_ME`. | Add explicit cookie security review: `Secure`, `SameSite`, domain/path, expiration, logout deletion. | Integration test: login with remember, logout removes token/cookie, old token cannot re-authenticate. |
+| AUTH-03 | Remember-me tokens must be persistent, random, scoped, and revocable. | Persistent token repository exists; cookie name is `CALEN_REMEMBER_ME`; `LedgerEntryUserScopeIntegrationTest` covers restore without session; `docs/remember_me_security_review.md` records cookie/revocation gaps. | Add logout revocation, token rotation, cookie attribute, credential-change revocation, and inactive-user tests. | Integration tests: login without remember does not restore, logout removes token/cookie, old token cannot re-authenticate, and token rotates after auto-login. |
 | AUTH-04 | Repeated login failures must be throttled and audited. | `LoginAttemptService` and login audit code exist. | Document thresholds and lockout semantics. Ensure admin reset exists and is audited. | Tests for failed login threshold, blocked IP state, admin unblock path. |
 | AUTH-05 | Passwords and secondary PINs must be hashed using an adaptive password hashing function. | `BCryptPasswordEncoder` is configured. | Keep raw credentials out of logs and DTO responses. | Unit tests or JSON assertions that profile/admin responses never expose password/PIN hashes. |
 | ACCESS-01 | Admin APIs require admin role, recent secondary verification, and CSRF on unsafe methods. | `AdminController` and `DriveAdminController` call `adminPageAccessService.requireVerified`; admin services still enforce admin role. | Keep every new admin-like route behind admin role, recent secondary verification, and CSRF for mutation methods. | `AdminDashboardIntegrationTest` covers `/api/admin` dashboard/data-management/user-active denial and PATCH CSRF enforcement; `DriveAdminSecurityIntegrationTest` covers `/api/administrator` denial before verification and PATCH CSRF enforcement. |
@@ -48,7 +48,7 @@ Current explicit public routes from `SecurityConfig`:
 | `/api/auth/csrf` | CSRF bootstrap | Keep public. No sensitive data except CSRF metadata. |
 | `/api/auth/login` | login | Rate-limit and audit failures. |
 | `/api/auth/me` | identity probe | Confirm unauthenticated response is minimal. |
-| `/api/auth/logout` | logout | Confirm CSRF behavior and cookie cleanup. |
+| `/api/auth/logout` | logout | Confirm CSRF behavior and remember-me cookie/token cleanup. |
 | `/api/invites/*`, `/api/invites/accept` | invitation flow | Token must stay hashed at rest and expire. |
 | `/api/file/public-download/*` | public drive download token | Access attempts are logged by status without storing raw tokens. Keep expiry/revoke/access log tests. |
 | `/actuator/health`, `/actuator/prometheus` | operations | Prometheus should be network-restricted in production. |
@@ -67,6 +67,7 @@ Current explicit public routes from `SecurityConfig`:
 | P1 | AI status never exposes API keys, API-key headers, or provider URLs | `LedgerAiAnalysisServiceTest.statusDoesNotExposeProviderUrlsOrApiKeys`, `LedgerAiAnalysisStatusResponse` |
 | P1 | presigned upload completion rejects object key outside expected owner/record scope before MinIO stat | `TravelMediaStorageServiceTest`, `TravelMediaStorageService` |
 | P1 | admin backup/restore/user activation/blocked-IP actions produce audit events | `AdminController`, `LoginAuditLogServiceTest` |
+| P1 | remember-me logout, token rotation, cookie attributes, and credential-change revocation are covered | `SecurityConfig`, `AuthController`, `LedgerEntryUserScopeIntegrationTest`, future auth integration tests |
 | P2 | malformed image upload cannot create trusted thumbnail/media record | travel/family/profile upload services |
 
 ## Release Gate

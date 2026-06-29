@@ -1,4 +1,4 @@
-﻿param(
+param(
     [string]$ApplicationConfigPath = "backend/src/main/resources/application.yml",
     [string[]]$EnvExamplePath = @(".env.example", ".env.oci.app.example")
 )
@@ -100,6 +100,7 @@ $allowedExtraPatterns = @(
 )
 
 $valueRules = @(
+    @{ Name = 'APP_LEDGER_AI_MODEL'; Type = 'equals'; Value = 'auto' },
     @{ Name = 'APP_LEDGER_AI_LMSTUDIO_BASE_URL'; Type = 'equals'; Value = 'http://172.18.240.1:1234' },
     @{ Name = 'APP_LEDGER_AI_LMSTUDIO_CHAT_PATH'; Type = 'equals'; Value = '/api/v1/chat' },
     @{ Name = 'APP_LEDGER_AI_LMSTUDIO_MODELS_PATH'; Type = 'equals'; Value = '/api/v1/models' },

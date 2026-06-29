@@ -1,4 +1,4 @@
-﻿# AI Provider Safety Contract
+# AI Provider Safety Contract
 
 Updated: 2026-06-30
 
@@ -97,3 +97,4 @@ Before enabling or changing a provider in production, verify:
 | P1 | Metric-level contract tests | Lock `calen.external.workflow.*` and `calen.ledger.ai.*` tags before dashboards depend on them. |
 | P2 | Redaction profile catalog | Keep provider-specific secret formats documented as new providers are added. |
 | P2 | Frontend confidence copy | Make it clear that AI advice is a suggestion, not verified accounting truth. |
+

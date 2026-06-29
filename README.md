@@ -417,6 +417,7 @@ docker compose up -d --build
 | `APP_LEDGER_AI_MODEL` | 사용할 모델 이름. `auto`이면 LM Studio `/api/v1/models`의 첫 모델을 사용 | `auto` |
 | `APP_LEDGER_AI_LMSTUDIO_BASE_URL` | LM Studio ?쒕쾭 二쇱냼 | `http://172.18.240.1:1234` |
 | `APP_LEDGER_AI_LMSTUDIO_CHAT_PATH` | LM Studio chat endpoint | `/api/v1/chat` |
+| `APP_LEDGER_AI_LMSTUDIO_MODELS_PATH` | LM Studio model discovery endpoint used when `APP_LEDGER_AI_MODEL=auto` | `/api/v1/models` |
 | `APP_LEDGER_AI_LMSTUDIO_API_KEY` | LM Studio API key媛 ?꾩슂??寃쎌슦 ?ъ슜 | empty |
 | `APP_LEDGER_AI_TEMPERATURE` | 紐⑤뜽 ?묐떟 ?⑤룄 | `0.2` |
 | `APP_LEDGER_AI_MAX_TOKENS` | 理쒕? ?묐떟 ?좏겙 | `2048` |
@@ -572,4 +573,5 @@ npm run build
 | [Household Development History](docs/household_development_history.md) | 媛援?媛怨꾨? 媛쒕컻 ?대젰 |
 | [Travel Map Development History](docs/travel_my_map_development_history.md) | ?ы뻾 吏??媛쒕컻 ?대젰 |
 | [Security Patch History](docs/security_patch_history.md) | 蹂댁븞 ?⑥튂 ?대젰 |
+
 

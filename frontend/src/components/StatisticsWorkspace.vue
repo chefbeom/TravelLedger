@@ -1208,9 +1208,9 @@ watch(
         <div class="panel__header">
           <div>
             <h2>AI 소비 분석</h2>
-            <p>선택한 가계부 기간을 설정된 AI provider로 보내고, 반환된 분석 결과를 저장합니다.</p>
+            <p>선택한 가계부 기간을 LM Studio/n8n provider로 보내고, 반환된 분석 결과를 저장합니다.</p>
           </div>
-          <span class="panel__badge">{{ aiAnalysisStatus?.provider || 'AI' }} · {{ aiAnalysisStatus?.model || 'gemma4:e12b' }}</span>
+          <span class="panel__badge">{{ aiAnalysisStatus?.provider || 'AI' }} · {{ aiAnalysisStatus?.model || 'auto' }}</span>
         </div>
 
         <div class="ai-analysis-status" :class="{ 'ai-analysis-status--ready': aiAnalysisStatus?.configured }">

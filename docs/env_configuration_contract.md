@@ -1,4 +1,4 @@
-﻿# Environment Configuration Contract
+# Environment Configuration Contract
 
 Updated: 2026-06-30
 
@@ -38,7 +38,7 @@ flowchart LR
 | Compose-only variables must match the allowlist in `scripts/verify-env-sync.ps1`. | Stops accidental committed variables that are not consumed by the app. |
 | Boolean-like values must be literal `true` or `false`. | Prevents shell/YAML ambiguity and typo-driven disabled controls. |
 | Secret-like example values must be blank or approved placeholders such as `change-me-*`. | Reduces the chance of committing real API keys or passwords. |
-| LM Studio examples must keep `APP_LEDGER_AI_LMSTUDIO_BASE_URL=http://172.18.240.1:1234`, `APP_LEDGER_AI_LMSTUDIO_CHAT_PATH=/api/v1/chat`, and `APP_LEDGER_AI_LMSTUDIO_MODELS_PATH=/api/v1/models`. | Matches the local LM Studio OpenAI-like API surface used by the app. |
+| LM Studio examples must keep `APP_LEDGER_AI_LMSTUDIO_BASE_URL=http://172.18.240.1:1234`, `APP_LEDGER_AI_LMSTUDIO_CHAT_PATH=/api/v1/chat`, `APP_LEDGER_AI_LMSTUDIO_MODELS_PATH=/api/v1/models`, and `APP_LEDGER_AI_MODEL=auto`. | Matches the local LM Studio API surface shown by the app and avoids pinning a model that may not be loaded. |
 | `APP_LEDGER_AI_ALLOWED_PROVIDER_HOSTS` must include `172.18.240.1`. | Keeps the Windows/WSL LM Studio bridge usable when provider URL allowlist is enabled. |
 | `.env.oci.app.example` must set `APP_LEDGER_AI_ENFORCE_PROVIDER_URL_ALLOWLIST=true`. | Production-like deployments should explicitly restrict LM Studio/n8n hosts. |
 | `MINIO_PRESIGNED_URL_EXPIRY_SECONDS` must be an integer no larger than 604800 seconds. | Prevents accidental extremely long-lived presigned URLs in examples. |

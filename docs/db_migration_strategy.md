@@ -7,7 +7,7 @@ Updated: 2026-06-30
 - Flyway is available in the backend build with `flyway-core` and `flyway-mysql`.
 - Flyway is disabled by default with `DB_MIGRATION_ENABLED=false` while legacy startup updaters still exist.
 - Hibernate `ddl-auto: update` remains in place during the transition so existing local and compose workflows keep working.
-- `backend/src/main/resources/db/migration` contains a baseline marker plus versioned migrations for access logs, notifications, classification rules, AI history provider metadata, drive file versions, drive share permissions, direct-share access log indexes, travel route segment fields, ledger entry change-history fields, travel media asset metadata fields, and travel photo cluster tables.
+- `backend/src/main/resources/db/migration` contains a baseline marker plus versioned migrations for access logs, notifications, classification rules, AI history provider metadata, drive file versions, drive share permissions, direct-share access log indexes, travel route segment fields, ledger entry change-history fields, travel media asset metadata fields, travel photo cluster tables, and ledger entry operational fields/indexes.
 - `scripts/verify-db-migrations.ps1` and the CI `migration-discipline` job check migration naming, duplicate versions, baseline marker presence, migration inventory documentation, operational evidence notes, the expected legacy `*SchemaUpdater` inventory, and unexpected startup DDL runners.
 
 ## Current Migration Inventory
@@ -26,13 +26,14 @@ Updated: 2026-06-30
 | `V20260630_009__ledger_entry_change_history_fields.sql` | Ledger entry change-history summary and JSON/text fields previously enforced by startup DDL. |
 | `V20260630_010__travel_media_asset_metadata_fields.sql` | Travel media GPS, representative override, GPS extraction timestamp, and lookup indexes previously enforced by startup DDL. |
 | `V20260630_011__travel_photo_cluster_tables.sql` | Travel photo cluster and cluster-member tables plus lookup/uniqueness indexes previously enforced by startup DDL. |
+| `V20260630_012__ledger_entry_operational_fields.sql` | Ledger entry foreign-currency/travel-link fields and ledger/category/payment lookup indexes previously enforced by startup DDL. |
 
 ## Legacy Schema Updater Inventory
 
 | Priority | Class | Retirement target |
 | --- | --- | --- |
 | 1 | `LedgerAiAnalysisSchemaUpdater` | Capture all AI analysis history columns, provider/model indexes, JSON/text fields, and remove startup mutation. |
-| 2 | `LedgerEntrySchemaUpdater` | Capture ledger entry/category/payment schema drift and indexes. |
+| 2 | `LedgerEntrySchemaUpdater` | Flyway overlap added in `V20260630_012__ledger_entry_operational_fields.sql`; retire after staging Flyway startup proof and ledger create/search/import smoke evidence. |
 | 3 | `LedgerEntryChangeHistorySchemaUpdater` | Flyway overlap added in `V20260630_009__ledger_entry_change_history_fields.sql`; retire after staging Flyway startup proof and restore-history smoke evidence. |
 | 4 | `TravelMediaAssetSchemaUpdater` | Flyway overlap added in `V20260630_010__travel_media_asset_metadata_fields.sql`; retire after staging Flyway startup proof and travel media upload/map smoke evidence. |
 | 5 | `TravelPhotoClusterSchemaUpdater` | Flyway overlap added in `V20260630_011__travel_photo_cluster_tables.sql`; retire after staging Flyway startup proof and map cluster smoke evidence. |
@@ -46,7 +47,7 @@ No new `ApplicationRunner` or `CommandLineRunner` may execute `CREATE TABLE`, `A
 | Legacy exception | Allowed reason | Retirement evidence required |
 | --- | --- | --- |
 | `backend/src/main/java/com/playdata/calen/ledger/config/LedgerAiAnalysisSchemaUpdater.java` | Existing AI history table/index bootstrap. | Migration covers full AI history table/columns/indexes and AI history save/list/delete rehearsal evidence is recorded. |
-| `backend/src/main/java/com/playdata/calen/ledger/config/LedgerEntrySchemaUpdater.java` | Existing ledger entry currency, travel-link, category, payment, and search indexes. | Migration covers ledger entry/category/payment columns and indexes plus ledger create/search/import smoke evidence. |
+| `backend/src/main/java/com/playdata/calen/ledger/config/LedgerEntrySchemaUpdater.java` | Existing ledger entry currency, travel-link, category, payment, and search indexes. | `V20260630_012__ledger_entry_operational_fields.sql` now covers the schema; deletion still requires staging Flyway startup proof and ledger create/search/import smoke evidence. |
 | `backend/src/main/java/com/playdata/calen/ledger/config/LedgerEntryChangeHistorySchemaUpdater.java` | Existing ledger change-history JSON/text shape. | `V20260630_009__ledger_entry_change_history_fields.sql` now covers the schema; deletion still requires staging Flyway startup proof and restore-history smoke evidence. |
 | `backend/src/main/java/com/playdata/calen/travel/config/TravelMediaAssetSchemaUpdater.java` | Existing travel media GPS/representative columns and indexes. | `V20260630_010__travel_media_asset_metadata_fields.sql` now covers the schema; deletion still requires staging Flyway startup proof and travel media upload/map smoke evidence. |
 | `backend/src/main/java/com/playdata/calen/travel/config/TravelPhotoClusterSchemaUpdater.java` | Existing travel photo cluster tables and membership indexes. | `V20260630_011__travel_photo_cluster_tables.sql` now covers the schema; deletion still requires staging Flyway startup proof and map cluster smoke evidence. |
@@ -69,6 +70,7 @@ Retire one legacy updater at a time. Removing one requires: a versioned migratio
 | `V20260630_009__ledger_entry_change_history_fields.sql` | Entry edit/delete restore-history views read summary and before/after/change JSON after Flyway applies the field migration. | Restore the pre-migration DB backup if JSON/text conversion fails; dropping `changes_json` loses detailed diff payloads. | Fully overlaps `LedgerEntryChangeHistorySchemaUpdater`; updater remains until staging Flyway startup evidence permits deletion. |
 | `V20260630_010__travel_media_asset_metadata_fields.sql` | Travel photo upload, GPS extraction, map clustering, and representative-photo override smoke paths run after Flyway applies the metadata migration. | Restore the pre-migration DB backup if metadata/index conversion fails; dropping GPS/representative columns loses map and representative-photo state. | Fully overlaps `TravelMediaAssetSchemaUpdater`; updater remains until staging Flyway startup evidence permits deletion. |
 | `V20260630_011__travel_photo_cluster_tables.sql` | Map photo cluster rebuild/detail views create and read cluster/member rows after Flyway applies the table migration. | Restore the pre-migration DB backup if cluster table creation fails; dropping cluster tables loses derived map clustering state and requires rebuild. | Fully overlaps `TravelPhotoClusterSchemaUpdater`; updater remains until staging Flyway startup evidence permits deletion. |
+| `V20260630_012__ledger_entry_operational_fields.sql` | Ledger create/search/import, foreign-currency display, travel expense linkage, and category/payment lookup flows run after Flyway applies the field/index migration. | Restore the pre-migration DB backup if ledger field/index migration fails; dropping foreign-currency/travel-link fields loses enriched ledger metadata. | Fully overlaps `LedgerEntrySchemaUpdater`; updater remains until staging Flyway startup evidence permits deletion. |
 
 ## Operating Rules
 
@@ -112,5 +114,6 @@ A release that adds or changes schema should include:
 - `V20260630_009__ledger_entry_change_history_fields.sql` moves ledger entry change-history summary and JSON/text field DDL into Flyway.
 - `V20260630_010__travel_media_asset_metadata_fields.sql` moves Travel media GPS/representative metadata fields and indexes into Flyway.
 - `V20260630_011__travel_photo_cluster_tables.sql` moves Travel photo cluster tables and indexes into Flyway.
-- `TravelRouteSchemaUpdater`, `LedgerEntryChangeHistorySchemaUpdater`, `TravelMediaAssetSchemaUpdater`, and `TravelPhotoClusterSchemaUpdater` now have full Flyway overlap but remain documented temporary exceptions until staging Flyway startup and smoke evidence allow deletion.
+- `V20260630_012__ledger_entry_operational_fields.sql` moves ledger entry foreign-currency/travel-link fields and ledger/category/payment indexes into Flyway.
+- `LedgerEntrySchemaUpdater`, `TravelRouteSchemaUpdater`, `LedgerEntryChangeHistorySchemaUpdater`, `TravelMediaAssetSchemaUpdater`, and `TravelPhotoClusterSchemaUpdater` now have full Flyway overlap but remain documented temporary exceptions until staging Flyway startup and smoke evidence allow deletion.
 - Startup DDL freeze is now enforced: new schema mutation runners must be rejected unless they retire one documented legacy exception with migration evidence.

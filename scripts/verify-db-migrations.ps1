@@ -82,6 +82,20 @@ $requiredMigrationSnippets = @{
         'ADD INDEX IF NOT EXISTS idx_travel_photo_cluster_members_cluster (cluster_id)',
         'ADD UNIQUE INDEX IF NOT EXISTS uq_travel_photo_cluster_members_cluster_media (cluster_id, media_id)'
     )
+    'V20260630_012__ledger_entry_operational_fields.sql' = @(
+        'ALTER TABLE ledger_entries',
+        'ADD COLUMN IF NOT EXISTS foreign_currency_code VARCHAR(3) NULL',
+        'ADD COLUMN IF NOT EXISTS foreign_amount DECIMAL(18, 4) NULL',
+        'ADD COLUMN IF NOT EXISTS exchange_rate_to_krw DECIMAL(18, 6) NULL',
+        'ADD COLUMN IF NOT EXISTS exchange_rate_date DATE NULL',
+        'ADD COLUMN IF NOT EXISTS exchange_rate_provider VARCHAR(40) NULL',
+        'ADD COLUMN IF NOT EXISTS travel_plan_id BIGINT NULL',
+        'ADD COLUMN IF NOT EXISTS travel_record_id BIGINT NULL',
+        'ADD INDEX IF NOT EXISTS idx_ledger_entries_owner_deleted_date_id (owner_id, deleted_at, entry_date, id)',
+        'ADD INDEX IF NOT EXISTS idx_ledger_entries_owner_category_date (owner_id, category_group_id, category_detail_id, entry_date)',
+        'ADD INDEX IF NOT EXISTS idx_category_groups_owner_active_type (owner_id, active, entry_type)',
+        'ADD INDEX IF NOT EXISTS idx_payment_methods_owner_active (owner_id, active)'
+    )
 }
 foreach ($entry in $requiredMigrationSnippets.GetEnumerator()) {
     $migrationPath = Join-Path $migrationRoot $entry.Key

@@ -38,7 +38,7 @@ This roadmap turns the current improvement analysis into an implementation queue
 | Feature | User value | First slice | Evidence of done |
 | --- | --- | --- | --- |
 | AI ledger coach | Turns monthly reports into ongoing guidance. | Add risk spend, recurring spend, budget-overrun forecast fields to AI output. | UI shows forecast and action list without mutating ledger data. |
-| Auto classification rules | Improves OCR/Excel import speed and consistency. | User-defined merchant/title keyword rules with preview. | Import preview applies explainable rules before save. |
+| Auto classification rules | Improves OCR/Excel import speed and consistency. | User-defined keyword rule CRUD and preview API are in place; next apply rules in OCR/Excel import preview. | Users can create owner-scoped rules and preview explainable classification suggestions. |
 | Transaction anomaly detection | Catches duplicate, unusual, and out-of-context spending. | Read-only duplicate detector API now flags same-day expense entries with same amount/title; next add frontend panel and dismiss workflow. | API returns user-scoped anomaly candidates without mutating ledger data. |
 | Travel timeline/story export | Combines route, photos, expenses, and memories into a shareable result. | Read-only web story for one trip. | Public/private story link renders route/photos/memories. |
 | PWA/mobile capture | OCR, travel photos, and family album are mobile-heavy. | PWA manifest and production service-worker baseline are in place; next add shared camera upload and offline draft UX. | Production frontend is installable and API/private data is excluded from service-worker caching. |
@@ -74,6 +74,7 @@ This roadmap turns the current improvement analysis into an implementation queue
 | `docs/data_portability.md` | User data export API, archive contents, security rules, and next portability slices. |
 | `docs/notification_center.md` | Notification API contract, safety rules, producer queue, and test backlog. |
 | `docs/transaction_anomaly_detection.md` | Deterministic duplicate detector API, safety rules, and next anomaly detectors. |
+| `docs/ledger_classification_rules.md` | User-defined classification rule API, matching behavior, safety rules, and next import slices. |
 ## Current Automation Set
 
 | Automation | Purpose |

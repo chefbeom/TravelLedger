@@ -70,6 +70,18 @@ $requiredMigrationSnippets = @{
         'ADD INDEX IF NOT EXISTS idx_travel_media_assets_gps (gps_latitude, gps_longitude)',
         'ADD INDEX IF NOT EXISTS idx_travel_media_assets_rep_override (representative_override)'
     )
+    'V20260630_011__travel_photo_cluster_tables.sql' = @(
+        'CREATE TABLE IF NOT EXISTS travel_photo_clusters',
+        'representative_media_id BIGINT NOT NULL',
+        'representative_record_id BIGINT NOT NULL',
+        'max_distance_meters DECIMAL(10,2) NOT NULL',
+        'ADD INDEX IF NOT EXISTS idx_travel_photo_clusters_owner (owner_id)',
+        'ADD INDEX IF NOT EXISTS idx_travel_photo_clusters_rep_media (representative_media_id)',
+        'CREATE TABLE IF NOT EXISTS travel_photo_cluster_members',
+        'ADD INDEX IF NOT EXISTS idx_travel_photo_cluster_members_owner (owner_id)',
+        'ADD INDEX IF NOT EXISTS idx_travel_photo_cluster_members_cluster (cluster_id)',
+        'ADD UNIQUE INDEX IF NOT EXISTS uq_travel_photo_cluster_members_cluster_media (cluster_id, media_id)'
+    )
 }
 foreach ($entry in $requiredMigrationSnippets.GetEnumerator()) {
     $migrationPath = Join-Path $migrationRoot $entry.Key

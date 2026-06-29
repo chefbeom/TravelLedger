@@ -557,6 +557,9 @@ npm run build
 | 문서 | 내용 |
 | --- | --- |
 | [Architecture](docs/architecture.md) | 전체 아키텍처 |
+| [Security Baseline Checklist](docs/security_baseline_checklist.md) | 인증, CSRF, 관리자, 공유 링크, 업로드 보안 기준선 |
+| [Ledger AI Safety Hardening Plan](docs/ledger_ai_safety_hardening.md) | LM Studio/n8n 기반 가계부 AI 분석 안전장치 |
+| [Project Improvement Roadmap](docs/project_improvement_roadmap.md) | 개선/보완 및 추가 기능 우선순위 로드맵 |
 | [Windows 1060 OCR Tailscale Setup Guide](docs/Windows_1060_OCR_Tailscale_Setup_Guide.md) | OCR PC/Tailscale 설정 |
 | [DB Restore From Google Drive](docs/db_restore_from_gdrive.md) | Google Drive 백업에서 DB 복구 |
 | [DB To Google Drive Backup](docs/dbtogdrive.md) | DB 백업 운영 |

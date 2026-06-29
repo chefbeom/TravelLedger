@@ -37,15 +37,8 @@ public class LedgerAiN8nClient {
                     .retrieve()
                     .body(LedgerAiRemoteResponse.class);
 
-            if (response == null) {
-                throw new BadRequestException("n8n AI 분석 워크플로우가 빈 응답을 반환했습니다.");
-            }
-            if (Boolean.FALSE.equals(response.ok())) {
-                throw new BadRequestException(hasText(response.error())
-                        ? response.error()
-                        : "n8n AI 분석 워크플로우가 요청을 처리하지 못했습니다.");
-            }
-            return response;
+            return LedgerAiRemoteResponseValidator.requireUsable(response, "n8n");
+
         } catch (RestClientException exception) {
             throw new BadRequestException("n8n AI 분석 워크플로우에 연결할 수 없습니다. n8n 서버와 웹훅 설정을 확인하세요.");
         }

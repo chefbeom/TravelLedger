@@ -47,12 +47,8 @@ public class LedgerAiLmStudioClient {
             String content = extractAssistantContent(responseBody);
             String json = extractJsonObject(content);
             LedgerAiRemoteResponse response = objectMapper.readValue(json, LedgerAiRemoteResponse.class);
-            if (Boolean.FALSE.equals(response.ok())) {
-                throw new BadRequestException(hasText(response.error())
-                        ? response.error()
-                        : "LM Studio AI 분석 요청이 실패했습니다.");
-            }
-            return response;
+            return LedgerAiRemoteResponseValidator.requireUsable(response, "LM Studio");
+
         } catch (BadRequestException exception) {
             throw exception;
         } catch (RestClientException exception) {

@@ -50,6 +50,53 @@ class DriveDownloadLinkServiceTest {
     }
 
     @Test
+    void downloadByTokenRejectsMissingLinkWithoutLoadingFile() {
+        when(driveDownloadLinkRepository.findByToken("missing-token")).thenReturn(Optional.empty());
+
+        DriveDownloadLinkService service = newService();
+
+        assertThatThrownBy(() -> service.downloadByToken("missing-token"))
+                .isInstanceOf(NotFoundException.class)
+                .hasMessage("Download link was not found.");
+
+        verify(driveStorageService, never()).loadObjectBytes(anyString());
+    }
+
+    @Test
+    void downloadByTokenRejectsTrashedFileWithoutLoadingFile() {
+        DriveDownloadLink link = activeLink();
+        link.getItem().setTrashed(true);
+
+        when(driveDownloadLinkRepository.findByToken("public-token")).thenReturn(Optional.of(link));
+
+        DriveDownloadLinkService service = newService();
+
+        assertThatThrownBy(() -> service.downloadByToken("public-token"))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessage("Download link is expired or no longer available.");
+
+        assertThat(link.getDownloadCount()).isZero();
+        verify(driveStorageService, never()).loadObjectBytes(anyString());
+    }
+
+    @Test
+    void downloadByTokenRejectsDownloadLimitWithoutLoadingFile() {
+        DriveDownloadLink link = activeLink();
+        link.setDownloadCount(3);
+
+        when(driveDownloadLinkRepository.findByToken("public-token")).thenReturn(Optional.of(link));
+
+        DriveDownloadLinkService service = newService();
+
+        assertThatThrownBy(() -> service.downloadByToken("public-token"))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessage("Download link is expired or no longer available.");
+
+        assertThat(link.getDownloadCount()).isEqualTo(3);
+        verify(driveStorageService, never()).loadObjectBytes(anyString());
+    }
+
+    @Test
     void revokeLinkReturnsUnavailableLink() {
         DriveDownloadLink link = activeLink();
 

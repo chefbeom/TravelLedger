@@ -61,6 +61,35 @@ class AdminDashboardIntegrationTest {
     }
 
     @Test
+    void sensitiveDataManagementApisRequireAuthenticatedVerifiedAdmin() throws Exception {
+        MockHttpSession adminSession = login("admin", "test1234", "12345678");
+        MockHttpSession userSession = login("hana", "test1234", "12345678");
+
+        mockMvc.perform(get("/api/admin/data-management"))
+                .andExpect(status().isUnauthorized());
+
+        mockMvc.perform(post("/api/admin/data-management/backup")
+                        .with(csrf()))
+                .andExpect(status().isUnauthorized());
+
+        mockMvc.perform(get("/api/admin/data-management").session(adminSession))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(post("/api/admin/data-management/backup")
+                        .session(adminSession)
+                        .with(csrf()))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(get("/api/admin/data-management").session(userSession))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(post("/api/admin/data-management/backup")
+                        .session(userSession)
+                        .with(csrf()))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
     void dashboardShowsOnlyTenLoginLogsAndSupportsPaging() throws Exception {
         MockHttpSession adminSession = login("admin", "test1234", "12345678");
         verifyAdminAccess(adminSession);
@@ -97,7 +126,7 @@ class AdminDashboardIntegrationTest {
                                 "rememberDevice", false
                         ))))
                 .andExpect(status().isUnauthorized())
-                .andExpect(jsonPath("$.message").value("로그인 정보가 올바르지 않습니다."));
+                .andExpect(jsonPath("$.message").value("濡쒓렇???뺣낫媛 ?щ컮瑜댁? ?딆뒿?덈떎."));
 
         mockMvc.perform(get("/api/admin/login-audit-logs").session(adminSession))
                 .andExpect(status().isOk())

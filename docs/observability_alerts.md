@@ -34,6 +34,23 @@ Prometheus sends firing and resolved alerts to Alertmanager at `alertmanager:909
 | CalenExternalWorkflowSlowP95 | external workflow/client p95 above 30s for 10m | warning | n8n/OCR external calls are approaching user-visible timeout territory. |
 | CalenHostDiskNearlyFull | filesystem free space below 10% for 10m | critical | Uploads, backups, logs, and database files may fail. |
 
+## Required alert coverage contract
+
+| Objective area | Required alert coverage | Operator action |
+| --- | --- | --- |
+| API error rate | `CalenBackendHigh5xxRate` | Check recent deployments, backend logs, upstream DB/Redis errors, and rollback if the error budget is burning quickly. |
+| API latency | `CalenBackendSlowP95` | Check slow endpoints, DB pool saturation, Redis latency, object storage latency, and external workflow calls. |
+| OCR failure and latency | `CalenLedgerOcrHighFailureRate`, `CalenLedgerOcrSlowP95` | Verify OCR provider health, request timeouts, upload constraints, and user-visible retry behavior. |
+| AI failure and latency | `CalenLedgerAiHighFailureRate`, `CalenLedgerAiSlowP95` | Verify LM Studio/n8n availability, provider timeout budget, schema validation failures, and advisory-only UI copy. |
+| n8n/external workflow health | `CalenExternalWorkflowHighFailureRate`, `CalenExternalWorkflowSlowP95` | Check n8n workflow executions, webhook credentials, network reachability, and bounded retry behavior. |
+| Backup success/failure | `CalenDataOpsBackupFailure`, `CalenDataOpsBackupStale` | Inspect DB/MinIO backup logs, confirm last successful artifact, and run the restore rehearsal checklist when needed. |
+| MinIO capacity | `CalenMinioStorageHighUsage`, `CalenHostDiskNearlyFull` | Check bucket capacity configuration, object growth, lifecycle cleanup, and host filesystem space. |
+| Redis availability | `CalenRedisConnectionUnavailable` | Check Redis process/network health and whether cache/state fallback behavior is safe. |
+| DB pool exhaustion | `CalenHikariPoolNearlyExhausted`, `CalenHikariPendingConnections`, `CalenHikariConnectionTimeouts` | Inspect slow queries, connection leaks, pool size, DB health, and recent traffic spikes. |
+| Privacy retention | `CalenLedgerAiHistoryRetentionFailure` | Check scheduled cleanup logs before relying on AI history retention guarantees. |
+
+`scripts/verify-prometheus-alerts.ps1` treats this table as the minimum coverage contract. Removing or renaming one of these alerts should be a deliberate release decision with a replacement alert and updated operator action.
+
 ## Alertmanager routing baseline
 
 | Route | Receiver | Repeat interval | Intended channel |
@@ -46,7 +63,7 @@ Before production use, replace the no-op `ops-critical` and `ops-warning` receiv
 
 ## Verification gate
 
-`scripts/verify-prometheus-alerts.ps1` checks that Prometheus loads `/etc/prometheus/rules/*.yml`, forwards alerts to `alertmanager:9093`, the monitoring compose stack runs Alertmanager, Alertmanager has critical/warning routes, every alert has an expression, duration, bounded severity, summary, and description, and every alert name is documented here. The GitHub Actions `observability-alerts` job runs this gate on push and pull request.
+`scripts/verify-prometheus-alerts.ps1` checks that Prometheus loads `/etc/prometheus/rules/*.yml`, forwards alerts to `alertmanager:9093`, the monitoring compose stack runs Alertmanager, Alertmanager has critical/warning routes, every alert has an expression, duration, bounded severity, summary, and description, every alert name is documented here, and the Required alert coverage contract remains present. The GitHub Actions `observability-alerts` job runs this gate on push and pull request.
 
 ## Implemented application metrics
 

@@ -49,9 +49,52 @@ if ($findings.Count -eq 0) {
     }
 
     $document = Get-Content -LiteralPath $observabilityDocPath -Raw
-    foreach ($snippet in @('Alertmanager routing baseline', 'alertmanager:9093', 'ops-critical', 'ops-warning')) {
+    foreach ($snippet in @('Alertmanager routing baseline', 'Required alert coverage contract', 'alertmanager:9093', 'ops-critical', 'ops-warning')) {
         if (-not $document.Contains($snippet)) {
-            $findings.Add("Observability doc missing Alertmanager snippet: $snippet") | Out-Null
+            $findings.Add("Observability doc missing Alertmanager or coverage snippet: $snippet") | Out-Null
+        }
+    }
+
+    $requiredCoverageAlerts = @(
+        'CalenBackendHigh5xxRate',
+        'CalenBackendSlowP95',
+        'CalenLedgerOcrHighFailureRate',
+        'CalenLedgerOcrSlowP95',
+        'CalenLedgerAiHighFailureRate',
+        'CalenLedgerAiSlowP95',
+        'CalenExternalWorkflowHighFailureRate',
+        'CalenExternalWorkflowSlowP95',
+        'CalenDataOpsBackupFailure',
+        'CalenDataOpsBackupStale',
+        'CalenMinioStorageHighUsage',
+        'CalenHostDiskNearlyFull',
+        'CalenRedisConnectionUnavailable',
+        'CalenHikariPoolNearlyExhausted',
+        'CalenHikariPendingConnections',
+        'CalenHikariConnectionTimeouts',
+        'CalenLedgerAiHistoryRetentionFailure'
+    )
+    foreach ($alert in $requiredCoverageAlerts) {
+        if (-not $document.Contains($alert)) {
+            $findings.Add("Observability doc missing required coverage alert: $alert") | Out-Null
+        }
+    }
+
+    $requiredCoveragePhrases = @(
+        'API error rate',
+        'API latency',
+        'OCR failure and latency',
+        'AI failure and latency',
+        'n8n/external workflow health',
+        'Backup success/failure',
+        'MinIO capacity',
+        'Redis availability',
+        'DB pool exhaustion',
+        'Privacy retention'
+    )
+    foreach ($phrase in $requiredCoveragePhrases) {
+        if (-not $document.Contains($phrase)) {
+            $findings.Add("Observability doc missing required coverage phrase: $phrase") | Out-Null
         }
     }
 
@@ -99,6 +142,12 @@ if ($findings.Count -eq 0) {
             if (-not $document.Contains($name)) {
                 $findings.Add("${name}: alert is not documented in $observabilityDocPath") | Out-Null
             }
+        }
+    }
+
+    foreach ($alert in $requiredCoverageAlerts) {
+        if (-not $alertNames.ContainsKey($alert)) {
+            $findings.Add("Required alert coverage rule is missing: $alert") | Out-Null
         }
     }
 }

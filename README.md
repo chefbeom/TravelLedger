@@ -1,4 +1,4 @@
-﻿# TravelLedger (Calen)
+# TravelLedger (Calen)
 
 TravelLedger??媛怨꾨?, ?ы뻾 湲곕줉, ?ы뻾 ?ъ쭊 吏?? ?뚯씪 ?쒕씪?대툕, 媛議??⑤쾾?????쒕퉬???덉뿉??愿由ы븯??媛쒖씤 ?앺솢 湲곕줉 ?뚮옯?쇱엯?덈떎.
 
@@ -414,7 +414,7 @@ docker compose up -d --build
 | --- | --- | --- |
 | `APP_LEDGER_AI_ENABLED` | 媛怨꾨? AI 遺꾩꽍 ?쒖꽦??| `false` |
 | `APP_LEDGER_AI_PROVIDER` | AI 怨듦툒?? `lmstudio` ?먮뒗 `n8n` | `lmstudio` |
-| `APP_LEDGER_AI_MODEL` | ?ъ슜??紐⑤뜽 ?대쫫 | `gemma4:e12b` |
+| `APP_LEDGER_AI_MODEL` | 사용할 모델 이름. `auto`이면 LM Studio `/api/v1/models`의 첫 모델을 사용 | `auto` |
 | `APP_LEDGER_AI_LMSTUDIO_BASE_URL` | LM Studio ?쒕쾭 二쇱냼 | `http://172.18.240.1:1234` |
 | `APP_LEDGER_AI_LMSTUDIO_CHAT_PATH` | LM Studio chat endpoint | `/api/v1/chat` |
 | `APP_LEDGER_AI_LMSTUDIO_API_KEY` | LM Studio API key媛 ?꾩슂??寃쎌슦 ?ъ슜 | empty |

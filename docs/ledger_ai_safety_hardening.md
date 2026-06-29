@@ -1,4 +1,4 @@
-﻿# Ledger AI Safety Hardening Plan
+# Ledger AI Safety Hardening Plan
 
 Updated: 2026-06-30
 
@@ -142,14 +142,14 @@ Minimum acceptance rule for provider responses:
 ```env
 APP_LEDGER_AI_ENABLED=true
 APP_LEDGER_AI_PROVIDER=lmstudio
-APP_LEDGER_AI_MODEL=gemma4:e12b
+APP_LEDGER_AI_MODEL=auto
 APP_LEDGER_AI_LMSTUDIO_BASE_URL=http://172.18.240.1:1234
 APP_LEDGER_AI_LMSTUDIO_CHAT_PATH=/api/v1/chat
 APP_LEDGER_AI_ENFORCE_PROVIDER_URL_ALLOWLIST=true
 APP_LEDGER_AI_ALLOWED_PROVIDER_HOSTS=172.18.240.1
 ```
 
-If LM Studio is switched to its OpenAI-compatible endpoint, use:
+If LM Studio is switched to its OpenAI-compatible endpoint, keep the same models path unless LM Studio documents a different one, and use:
 
 ```env
 APP_LEDGER_AI_LMSTUDIO_CHAT_PATH=/v1/chat/completions

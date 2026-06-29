@@ -12,6 +12,7 @@ import com.playdata.calen.account.service.PrivacyManagementService;
 import com.playdata.calen.drive.repository.DriveDownloadLinkRepository;
 import com.playdata.calen.ledger.repository.LedgerAiAnalysisHistoryRepository;
 import com.playdata.calen.travel.repository.TravelExpenseRecordRepository;
+import com.playdata.calen.travel.repository.TravelMediaAssetRepository;
 import com.playdata.calen.travel.repository.TravelPlanRepository;
 import java.time.LocalDateTime;
 import org.junit.jupiter.api.BeforeEach;
@@ -38,6 +39,9 @@ class PrivacyManagementServiceTest {
     @Mock
     private TravelExpenseRecordRepository travelExpenseRecordRepository;
 
+    @Mock
+    private TravelMediaAssetRepository travelMediaAssetRepository;
+
     private PrivacyManagementService service;
 
     @BeforeEach
@@ -46,7 +50,8 @@ class PrivacyManagementServiceTest {
                 ledgerAiAnalysisHistoryRepository,
                 driveDownloadLinkRepository,
                 travelPlanRepository,
-                travelExpenseRecordRepository
+                travelExpenseRecordRepository,
+                travelMediaAssetRepository
         );
     }
 
@@ -59,11 +64,12 @@ class PrivacyManagementServiceTest {
 
         ArgumentCaptor<LocalDateTime> processedAtCaptor = ArgumentCaptor.forClass(LocalDateTime.class);
         verify(driveDownloadLinkRepository).revokeAllActiveByOwnerId(eq(USER_ID), processedAtCaptor.capture());
-        verifyNoInteractions(ledgerAiAnalysisHistoryRepository, travelPlanRepository, travelExpenseRecordRepository);
+        verifyNoInteractions(ledgerAiAnalysisHistoryRepository, travelPlanRepository, travelExpenseRecordRepository, travelMediaAssetRepository);
 
         assertThat(response.aiAnalysisHistoriesDeleted()).isZero();
         assertThat(response.publicDownloadLinksRevoked()).isEqualTo(2);
         assertThat(response.travelPublicMediaSharesRevoked()).isZero();
+        assertThat(response.photoLocationMetadataRemoved()).isZero();
         assertThat(response.processedAt()).isEqualTo(processedAtCaptor.getValue());
         assertThat(response.processedAt()).isNotNull();
     }
@@ -77,11 +83,28 @@ class PrivacyManagementServiceTest {
 
         verify(travelPlanRepository).revokePublicSharingByOwnerId(USER_ID);
         verify(travelExpenseRecordRepository).revokeCommunitySharingByOwnerId(USER_ID);
-        verifyNoInteractions(ledgerAiAnalysisHistoryRepository, driveDownloadLinkRepository);
+        verifyNoInteractions(ledgerAiAnalysisHistoryRepository, driveDownloadLinkRepository, travelMediaAssetRepository);
 
         assertThat(response.aiAnalysisHistoriesDeleted()).isZero();
         assertThat(response.publicDownloadLinksRevoked()).isZero();
         assertThat(response.travelPublicMediaSharesRevoked()).isEqualTo(5);
+        assertThat(response.photoLocationMetadataRemoved()).isZero();
+        assertThat(response.processedAt()).isNotNull();
+    }
+
+    @Test
+    void removePhotoLocationMetadataScopesGpsCleanupToCurrentOwner() {
+        when(travelMediaAssetRepository.clearGpsMetadataByPlanOwnerId(USER_ID)).thenReturn(4);
+
+        PrivacyCleanupResponse response = service.removePhotoLocationMetadata(USER_ID);
+
+        verify(travelMediaAssetRepository).clearGpsMetadataByPlanOwnerId(USER_ID);
+        verifyNoInteractions(ledgerAiAnalysisHistoryRepository, driveDownloadLinkRepository, travelPlanRepository, travelExpenseRecordRepository);
+
+        assertThat(response.aiAnalysisHistoriesDeleted()).isZero();
+        assertThat(response.publicDownloadLinksRevoked()).isZero();
+        assertThat(response.travelPublicMediaSharesRevoked()).isZero();
+        assertThat(response.photoLocationMetadataRemoved()).isEqualTo(4);
         assertThat(response.processedAt()).isNotNull();
     }
 
@@ -92,6 +115,7 @@ class PrivacyManagementServiceTest {
                 .thenReturn(5);
         when(travelPlanRepository.revokePublicSharingByOwnerId(USER_ID)).thenReturn(2);
         when(travelExpenseRecordRepository.revokeCommunitySharingByOwnerId(USER_ID)).thenReturn(4);
+        when(travelMediaAssetRepository.clearGpsMetadataByPlanOwnerId(USER_ID)).thenReturn(7);
 
         PrivacyCleanupResponse response = service.cleanupSensitiveData(USER_ID);
 
@@ -100,10 +124,12 @@ class PrivacyManagementServiceTest {
         verify(driveDownloadLinkRepository).revokeAllActiveByOwnerId(eq(USER_ID), processedAtCaptor.capture());
         verify(travelPlanRepository).revokePublicSharingByOwnerId(USER_ID);
         verify(travelExpenseRecordRepository).revokeCommunitySharingByOwnerId(USER_ID);
+        verify(travelMediaAssetRepository).clearGpsMetadataByPlanOwnerId(USER_ID);
 
         assertThat(response.aiAnalysisHistoriesDeleted()).isEqualTo(3);
         assertThat(response.publicDownloadLinksRevoked()).isEqualTo(5);
         assertThat(response.travelPublicMediaSharesRevoked()).isEqualTo(6);
+        assertThat(response.photoLocationMetadataRemoved()).isEqualTo(7);
         assertThat(response.processedAt()).isEqualTo(processedAtCaptor.getValue());
     }
 }

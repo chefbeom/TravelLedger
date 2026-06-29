@@ -6,6 +6,7 @@ public record PrivacyCleanupResponse(
         int aiAnalysisHistoriesDeleted,
         int publicDownloadLinksRevoked,
         int travelPublicMediaSharesRevoked,
+        int photoLocationMetadataRemoved,
         LocalDateTime processedAt
 ) {
 }

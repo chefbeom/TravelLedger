@@ -47,6 +47,11 @@ public class PrivacyController {
         return privacyManagementService.revokeTravelPublicMediaShares(currentUser.userId());
     }
 
+    @DeleteMapping("/photo-location-metadata")
+    public PrivacyCleanupResponse removePhotoLocationMetadata(@AuthenticationPrincipal AppUserPrincipal currentUser) {
+        return privacyManagementService.removePhotoLocationMetadata(currentUser.userId());
+    }
+
     @PostMapping("/cleanup")
     public PrivacyCleanupResponse cleanupSensitiveData(@AuthenticationPrincipal AppUserPrincipal currentUser) {
         return privacyManagementService.cleanupSensitiveData(currentUser.userId());
@@ -60,7 +65,7 @@ public class PrivacyController {
     ) {
         String verifiedSecondaryPin = secondaryPinSessionSupport.getVerifiedSecondaryPin(httpRequest);
         if (verifiedSecondaryPin == null || verifiedSecondaryPin.isBlank()) {
-            throw new BadRequestException("\uB370\uC774\uD130 \uB0B4\uBCF4\uB0B4\uAE30\uB97C \uC2E4\uD589\uD558\uB824\uBA74 2\uCC28 \uBE44\uBC00\uBC88\uD638\uAC00 \uAC80\uC99D\uB41C \uB85C\uADF8\uC778 \uC138\uC158\uC774 \uD544\uC694\uD569\uB2C8\uB2E4.");
+            throw new BadRequestException("A verified secondary PIN session is required before exporting data.");
         }
         DataPortabilityExportService.UserDataArchive archive = dataPortabilityExportService.exportUserDataArchive(
                 currentUser.userId(),

@@ -55,6 +55,7 @@ class PrivacyControllerIntegrationTest {
                 .andExpect(jsonPath("$.aiAnalysisHistoriesDeleted").isNumber())
                 .andExpect(jsonPath("$.publicDownloadLinksRevoked").value(0))
                 .andExpect(jsonPath("$.travelPublicMediaSharesRevoked").value(0))
+                .andExpect(jsonPath("$.photoLocationMetadataRemoved").value(0))
                 .andExpect(jsonPath("$.processedAt").isNotEmpty());
     }
 
@@ -75,6 +76,7 @@ class PrivacyControllerIntegrationTest {
                 .andExpect(jsonPath("$.aiAnalysisHistoriesDeleted").value(0))
                 .andExpect(jsonPath("$.publicDownloadLinksRevoked").isNumber())
                 .andExpect(jsonPath("$.travelPublicMediaSharesRevoked").value(0))
+                .andExpect(jsonPath("$.photoLocationMetadataRemoved").value(0))
                 .andExpect(jsonPath("$.processedAt").isNotEmpty());
     }
 
@@ -95,6 +97,28 @@ class PrivacyControllerIntegrationTest {
                 .andExpect(jsonPath("$.aiAnalysisHistoriesDeleted").value(0))
                 .andExpect(jsonPath("$.publicDownloadLinksRevoked").value(0))
                 .andExpect(jsonPath("$.travelPublicMediaSharesRevoked").isNumber())
+                .andExpect(jsonPath("$.photoLocationMetadataRemoved").value(0))
+                .andExpect(jsonPath("$.processedAt").isNotEmpty());
+    }
+
+    @Test
+    void photoLocationMetadataRemovalRequiresAuthenticationAndCsrf() throws Exception {
+        MockHttpSession session = login("hana", "test1234", "12345678");
+
+        mockMvc.perform(delete("/api/privacy/photo-location-metadata").with(csrf()))
+                .andExpect(status().isUnauthorized());
+
+        mockMvc.perform(delete("/api/privacy/photo-location-metadata").session(session))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(delete("/api/privacy/photo-location-metadata")
+                        .session(session)
+                        .with(csrf()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.aiAnalysisHistoriesDeleted").value(0))
+                .andExpect(jsonPath("$.publicDownloadLinksRevoked").value(0))
+                .andExpect(jsonPath("$.travelPublicMediaSharesRevoked").value(0))
+                .andExpect(jsonPath("$.photoLocationMetadataRemoved").isNumber())
                 .andExpect(jsonPath("$.processedAt").isNotEmpty());
     }
 
@@ -115,6 +139,7 @@ class PrivacyControllerIntegrationTest {
                 .andExpect(jsonPath("$.aiAnalysisHistoriesDeleted").isNumber())
                 .andExpect(jsonPath("$.publicDownloadLinksRevoked").isNumber())
                 .andExpect(jsonPath("$.travelPublicMediaSharesRevoked").isNumber())
+                .andExpect(jsonPath("$.photoLocationMetadataRemoved").isNumber())
                 .andExpect(jsonPath("$.processedAt").isNotEmpty());
     }
 

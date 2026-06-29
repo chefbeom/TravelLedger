@@ -8,6 +8,9 @@ import java.util.Optional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 public interface TravelMediaAssetRepository extends JpaRepository<TravelMediaAsset, Long> {
 
@@ -26,6 +29,19 @@ public interface TravelMediaAssetRepository extends JpaRepository<TravelMediaAss
     Optional<TravelMediaAsset> findByIdAndPlanOwnerId(Long id, Long ownerId);
 
     Page<TravelMediaAsset> findAllByIdGreaterThanAndContentTypeStartingWithOrderByIdAsc(Long id, String contentTypePrefix, Pageable pageable);
+
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+            update TravelMediaAsset asset
+               set asset.gpsLatitude = null,
+                   asset.gpsLongitude = null,
+                   asset.gpsExtractedAt = null
+             where asset.plan.owner.id = :ownerId
+               and (asset.gpsLatitude is not null
+                    or asset.gpsLongitude is not null
+                    or asset.gpsExtractedAt is not null)
+            """)
+    int clearGpsMetadataByPlanOwnerId(@Param("ownerId") Long ownerId);
 
     void deleteAllByPlanId(Long planId);
 

@@ -9,6 +9,7 @@ import {
   deletePrivacyAiAnalysisHistory,
   downloadPrivacyDataExport,
   fetchMySupportInquiries,
+  removePrivacyPhotoLocationMetadata,
   revokePrivacyPublicDownloadLinks,
   revokePrivacyTravelPublicMediaShares,
   verifyProfileSecondaryPin,
@@ -74,48 +75,56 @@ const privacy = reactive({
 })
 
 const statusLabel = {
-  PENDING: '?듬? ?湲?,
-  ANSWERED: '?듬? ?꾨즺',
+  PENDING: 'Waiting for reply',
+  ANSWERED: 'Answered',
 }
 
 const privacyActions = [
   {
     key: 'ai-history',
-    label: 'AI 遺꾩꽍 ?대젰 ??젣',
-    description: '??媛怨꾨? AI 遺꾩꽍 寃곌낵? ??λ맂 遺꾩꽍 ?대젰???곴뎄 ??젣?⑸땲??',
-    warning: '??젣 ?꾩뿉??AI 遺꾩꽍 ?대젰??蹂듦뎄?????놁뒿?덈떎.',
-    resultLabel: 'AI 遺꾩꽍 ?대젰 ??젣',
+    label: 'Delete AI analysis history',
+    description: 'Permanently deletes ledger AI analysis history owned by this account.',
+    warning: 'Deleted AI analysis history cannot be restored.',
+    resultLabel: 'AI analysis history deletion',
     run: deletePrivacyAiAnalysisHistory,
   },
   {
     key: 'drive-links',
-    label: '怨듦컻 ?쒕씪?대툕 留곹겕 ?뚯닔',
-    description: '?닿? 留뚮뱺 ?쒖꽦 怨듦컻 ?ㅼ슫濡쒕뱶 留곹겕瑜?紐⑤몢 ?먭린?⑸땲??',
-    warning: '怨듭쑀諛쏆? ?щ엺? 湲곗〈 怨듦컻 留곹겕濡????댁긽 ?묎렐?????놁뒿?덈떎. ?묎렐 濡쒓렇??蹂댁〈?⑸땲??',
-    resultLabel: '怨듦컻 ?쒕씪?대툕 留곹겕 ?뚯닔',
+    label: 'Revoke public drive links',
+    description: 'Revokes every active public download link created by this account.',
+    warning: 'Recipients will no longer be able to use existing public links. Owner-visible access logs remain.',
+    resultLabel: 'Public drive link revocation',
     run: revokePrivacyPublicDownloadLinks,
   },
   {
     key: 'travel-media',
-    label: '?ы뻾 怨듦컻 誘몃뵒???뚯닔',
-    description: '???ы뻾 怨듦컻 怨듭쑀? 而ㅻ??덊떚 怨듦컻 ?ъ쭊 ?쒕㈃??鍮꾧났媛쒕줈 ?꾪솚?⑸땲??',
-    warning: '湲곗〈 ?ы뻾 怨듦컻 ?붾㈃怨?誘몃뵒???좏겙 ?묎렐??以묐떒?⑸땲??',
-    resultLabel: '?ы뻾 怨듦컻 誘몃뵒???뚯닔',
+    label: 'Revoke travel public media',
+    description: 'Turns off public travel plan sharing and community-visible travel media surfaces.',
+    warning: 'Existing public travel pages and media token access will stop working.',
+    resultLabel: 'Travel public media revocation',
     run: revokePrivacyTravelPublicMediaShares,
   },
   {
+    key: 'photo-location',
+    label: 'Remove photo location metadata',
+    description: 'Clears derived GPS latitude, longitude, and extraction timestamps stored for travel media.',
+    warning: 'Some photos may disappear from photo maps or location-based clusters.',
+    resultLabel: 'Photo location metadata removal',
+    run: removePrivacyPhotoLocationMetadata,
+  },
+  {
     key: 'cleanup',
-    label: '誘쇨컧 ?뚯깮 ?곗씠???쇨큵 ?뺣━',
-    description: 'AI 遺꾩꽍 ?대젰 ??젣, 怨듦컻 ?쒕씪?대툕 留곹겕 ?뚯닔, ?ы뻾 怨듦컻 誘몃뵒???뚯닔瑜???踰덉뿉 ?ㅽ뻾?⑸땲??',
-    warning: '?щ윭 媛쒖씤?뺣낫 ?뺣━ ?묒뾽???숈떆???ㅽ뻾?⑸땲?? ?꾩슂???먮즺瑜?癒쇱? ?대젮諛쏆쑝?몄슂.',
-    resultLabel: '誘쇨컧 ?뚯깮 ?곗씠???쇨큵 ?뺣━',
+    label: 'Clean sensitive derived data',
+    description: 'Deletes AI history, revokes public links, revokes travel public media, and removes photo GPS metadata.',
+    warning: 'Multiple privacy cleanup actions will run together. Download anything you need first.',
+    resultLabel: 'Sensitive derived data cleanup',
     run: cleanupPrivacySensitiveData,
   },
 ]
 
 const pageCount = computed(() => Math.max(state.pageInfo.totalPages || 0, 1))
-const securityModeLabel = computed(() => (security.mode === 'password' ? '鍮꾨?踰덊샇' : '2李?鍮꾨?踰덊샇'))
-const securitySaveLabel = computed(() => (security.mode === 'password' ? '鍮꾨?踰덊샇 蹂寃? : '2李?鍮꾨?踰덊샇 蹂寃?))
+const securityModeLabel = computed(() => (security.mode === 'password' ? 'Password' : 'Secondary PIN'))
+const securitySaveLabel = computed(() => (security.mode === 'password' ? 'Change password' : 'Change secondary PIN'))
 const isPrivacyBusy = computed(() => Boolean(privacy.busyAction || privacy.exporting))
 const privacyResultRows = computed(() => {
   if (!privacy.lastResult || typeof privacy.lastResult !== 'object') {
@@ -149,9 +158,10 @@ function formatNumber(value) {
 
 function privacyResultLabel(key) {
   const labels = {
-    aiAnalysisHistoriesDeleted: '??젣??AI 遺꾩꽍 ?대젰',
-    publicDownloadLinksRevoked: '?뚯닔??怨듦컻 ?쒕씪?대툕 留곹겕',
-    travelPublicMediaSharesRevoked: '?뚯닔???ы뻾 怨듦컻 誘몃뵒??怨듭쑀',
+    aiAnalysisHistoriesDeleted: 'Deleted AI analysis histories',
+    publicDownloadLinksRevoked: 'Revoked public drive links',
+    travelPublicMediaSharesRevoked: 'Revoked travel public media shares',
+    photoLocationMetadataRemoved: 'Removed photo location metadata rows',
   }
   return labels[key] || key
 }
@@ -274,7 +284,7 @@ async function handleSubmitInquiry() {
     }
 
     const createdInquiry = await createSupportInquiry(formData)
-    state.successMessage = '臾몄쓽媛 愿由ъ옄?먭쾶 ?꾨떖?섏뿀?듬땲??'
+    state.successMessage = 'Your inquiry was sent to the administrator.'
     resetForm()
     await loadInquiries(0, createdInquiry.id)
   } catch (error) {
@@ -308,30 +318,30 @@ async function handleCredentialChange() {
   try {
     if (security.mode === 'password') {
       if (security.newPassword.trim().length < 8) {
-        throw new Error('鍮꾨?踰덊샇??8???댁긽?댁뼱???⑸땲??')
+        throw new Error('Password must be at least 8 characters.')
       }
       if (security.newPassword !== security.confirmPassword) {
-        throw new Error('??鍮꾨?踰덊샇? ?뺤씤 媛믪씠 ?쇱튂?섏? ?딆뒿?덈떎.')
+        throw new Error('Password confirmation does not match.')
       }
 
       await changeProfilePassword({
         secondaryPin: security.verifiedSecondaryPin,
         newPassword: security.newPassword,
       })
-      state.successMessage = '鍮꾨?踰덊샇瑜?蹂寃쏀뻽?듬땲??'
+      state.successMessage = 'Password changed.'
     } else {
       if (!/^\d{8}$/.test(security.newSecondaryPin.trim())) {
-        throw new Error('2李?鍮꾨?踰덊샇???レ옄 8?먮━?ъ빞 ?⑸땲??')
+        throw new Error('Secondary PIN must be exactly 8 digits.')
       }
       if (security.newSecondaryPin !== security.confirmSecondaryPin) {
-        throw new Error('??2李?鍮꾨?踰덊샇? ?뺤씤 媛믪씠 ?쇱튂?섏? ?딆뒿?덈떎.')
+        throw new Error('Secondary PIN confirmation does not match.')
       }
 
       await changeProfileSecondaryPin({
         secondaryPin: security.verifiedSecondaryPin,
         newSecondaryPin: security.newSecondaryPin,
       })
-      state.successMessage = '2李?鍮꾨?踰덊샇瑜?蹂寃쏀뻽?듬땲??'
+      state.successMessage = 'Secondary PIN changed.'
     }
 
     closeSecurityModal()
@@ -347,7 +357,7 @@ async function runPrivacyAction(action) {
     return
   }
 
-  const confirmed = window.confirm(`${action.label}\n\n${action.warning}\n\n怨꾩냽 吏꾪뻾?좉퉴??`)
+  const confirmed = window.confirm(`${action.label}\n\n${action.warning}\n\nContinue?`)
   if (!confirmed) {
     return
   }
@@ -359,7 +369,7 @@ async function runPrivacyAction(action) {
 
   try {
     privacy.lastResult = await action.run()
-    privacy.successMessage = `${action.resultLabel} ?묒뾽???꾨즺?덉뒿?덈떎.`
+    privacy.successMessage = `${action.resultLabel} completed.`
   } catch (error) {
     privacy.errorMessage = error.message
   } finally {
@@ -376,10 +386,10 @@ async function handlePrivacyExport() {
 
   try {
     if (privacy.exportFrom && privacy.exportTo && privacy.exportFrom > privacy.exportTo) {
-      throw new Error('?대낫?닿린 ?쒖옉?쇱? 醫낅즺?쇰낫????쓣 ???놁뒿?덈떎.')
+      throw new Error('Export start date cannot be later than the end date.')
     }
     if (!privacy.secondaryPin.trim()) {
-      throw new Error('?곗씠???대낫?닿린 ?꾩뿉 2李?鍮꾨?踰덊샇瑜??낅젰??二쇱꽭??')
+      throw new Error('Enter your secondary PIN before exporting data.')
     }
 
     privacy.exporting = true
@@ -388,7 +398,7 @@ async function handlePrivacyExport() {
       from: privacy.exportFrom || undefined,
       to: privacy.exportTo || undefined,
     })
-    privacy.successMessage = '媛쒖씤 ?곗씠???뺤텞 ?뚯씪 ?ㅼ슫濡쒕뱶瑜??쒖옉?덉뒿?덈떎.'
+    privacy.successMessage = 'Your encrypted data archive download has started.'
     privacy.exportGateVisible = false
     privacy.secondaryPin = ''
   } catch (error) {
@@ -408,27 +418,27 @@ onMounted(() => {
     <section class="panel">
       <div class="panel__header">
         <div>
-          <h2>?꾨줈??/h2>
-          <p>怨꾩젙 ?뺣낫, 蹂댁븞 ?ㅼ젙, 媛쒖씤?뺣낫 愿由? 愿由ъ옄 臾몄쓽瑜???怨녹뿉???뺤씤?⑸땲??</p>
+          <h2>Profile</h2>
+          <p>Manage account security, privacy controls, data export, and support requests.</p>
         </div>
       </div>
       <div class="summary-grid profile-summary-grid">
         <article class="summary-card">
-          <span>濡쒓렇??ID</span>
+          <span>Login ID</span>
           <strong>{{ currentUser.loginId }}</strong>
         </article>
         <article class="summary-card">
-          <span>?쒖떆 ?대쫫</span>
+          <span>Display name</span>
           <strong>{{ currentUser.displayName }}</strong>
         </article>
         <article class="summary-card">
-          <span>沅뚰븳</span>
-          <strong>{{ currentUser.admin ? '愿由ъ옄' : '?쇰컲 ?ъ슜?? }}</strong>
+          <span>Role</span>
+          <strong>{{ currentUser.admin ? 'Admin' : 'User' }}</strong>
         </article>
       </div>
       <div class="profile-security-actions">
-        <button class="button button--ghost" type="button" @click="openSecurityGate('password')">鍮꾨?踰덊샇 蹂寃?/button>
-        <button class="button button--ghost" type="button" @click="openSecurityGate('secondary-pin')">2李?鍮꾨?踰덊샇 蹂寃?/button>
+        <button class="button button--ghost" type="button" @click="openSecurityGate('password')">Change password</button>
+        <button class="button button--ghost" type="button" @click="openSecurityGate('secondary-pin')">Change secondary PIN</button>
       </div>
     </section>
 
@@ -438,29 +448,29 @@ onMounted(() => {
     <section class="panel profile-privacy-panel" aria-labelledby="privacy-panel-title">
       <div class="panel__header">
         <div>
-          <h2 id="privacy-panel-title">媛쒖씤?뺣낫 愿由?/h2>
-          <p>AI 遺꾩꽍 ?대젰, 怨듦컻 怨듭쑀 留곹겕, ?ы뻾 怨듦컻 誘몃뵒?? ???곗씠??export瑜?吏곸젒 ?쒖뼱?⑸땲??</p>
+          <h2 id="privacy-panel-title">Privacy controls</h2>
+          <p>Control AI analysis history, public links, travel media exposure, stored photo GPS data, and personal data export.</p>
         </div>
-        <span class="panel__badge">2李?PIN 蹂댄샇</span>
+        <span class="panel__badge">Secondary PIN protected</span>
       </div>
 
       <div class="privacy-export-card">
         <div>
-          <strong>???곗씠???ㅼ슫濡쒕뱶</strong>
-          <p>媛怨꾨? CSV? export 硫뷀??곗씠?곕? 2李?鍮꾨?踰덊샇濡??뷀샇?붾맂 ZIP?쇰줈 ?대젮諛쏆뒿?덈떎.</p>
+          <strong>Download my data</strong>
+          <p>Download ledger CSV and export metadata as a secondary-PIN-encrypted ZIP archive.</p>
         </div>
-        <div class="privacy-export-card__range" aria-label="?대낫?닿린 湲곌컙">
+        <div class="privacy-export-card__range" aria-label="Export date range">
           <label class="field">
-            <span class="field__label">?쒖옉??/span>
+            <span class="field__label">From</span>
             <input v-model="privacy.exportFrom" type="date" :disabled="isPrivacyBusy" />
           </label>
           <label class="field">
-            <span class="field__label">醫낅즺??/span>
+            <span class="field__label">To</span>
             <input v-model="privacy.exportTo" type="date" :disabled="isPrivacyBusy" />
           </label>
         </div>
         <button class="button button--primary" type="button" :disabled="isPrivacyBusy" @click="openPrivacyExportGate">
-          {{ privacy.exporting ? '?대낫?대뒗 以?..' : '?곗씠???대낫?닿린' }}
+          {{ privacy.exporting ? 'Exporting...' : 'Export data' }}
         </button>
       </div>
 
@@ -477,7 +487,7 @@ onMounted(() => {
             :disabled="isPrivacyBusy"
             @click="runPrivacyAction(action)"
           >
-            {{ privacy.busyAction === action.key ? '泥섎━ 以?..' : '?ㅽ뻾' }}
+            {{ privacy.busyAction === action.key ? 'Processing...' : 'Run' }}
           </button>
         </article>
       </div>
@@ -486,11 +496,11 @@ onMounted(() => {
       <div v-if="privacy.errorMessage" class="feedback feedback--error" aria-live="assertive">{{ privacy.errorMessage }}</div>
 
       <div v-if="privacyResultRows.length" class="privacy-result-list" aria-live="polite">
-        <strong>{{ privacy.lastActionLabel }} 寃곌낵</strong>
+        <strong>{{ privacy.lastActionLabel }} result</strong>
         <dl>
           <template v-for="row in privacyResultRows" :key="row.key">
             <dt>{{ row.label }}</dt>
-            <dd>{{ formatNumber(row.value) }}嫄?/dd>
+            <dd>{{ formatNumber(row.value) }}</dd>
           </template>
         </dl>
       </div>
@@ -499,35 +509,18 @@ onMounted(() => {
     <section class="panel">
       <div class="panel__header">
         <div>
-          <h2>臾몄쓽?ы빆 蹂대궡湲?/h2>
-          <p>?쒕ぉ, ?댁슜, 泥⑤? ?대?吏瑜??④린硫?愿由ъ옄?먭쾶 ?꾨떖?⑸땲??</p>
+          <h2>Send support inquiry</h2>
+          <p>Attach an image if it helps explain the issue. Only you and administrators can see it.</p>
         </div>
       </div>
 
       <form class="stack-form" @submit.prevent="handleSubmitInquiry">
-        <input
-          v-model="form.title"
-          type="text"
-          maxlength="140"
-          placeholder="臾몄쓽 ?쒕ぉ"
-          :disabled="state.sending"
-        />
-        <textarea
-          v-model="form.content"
-          rows="6"
-          placeholder="臾몄쓽 ?댁슜?대굹 嫄댁쓽 ?ы빆???낅젰??二쇱꽭??"
-          :disabled="state.sending"
-        />
-        <input
-          ref="attachmentInput"
-          type="file"
-          accept="image/*"
-          :disabled="state.sending"
-          @change="handleAttachmentChange"
-        />
-        <p class="field__hint">泥⑤? ?대?吏???좏깮 ?ы빆?대ŉ, 愿由ъ옄? 蹂몄씤留?蹂????덉뒿?덈떎.</p>
+        <input v-model="form.title" type="text" maxlength="140" placeholder="Inquiry title" :disabled="state.sending" />
+        <textarea v-model="form.content" rows="6" placeholder="Describe the issue or request." :disabled="state.sending" />
+        <input ref="attachmentInput" type="file" accept="image/*" :disabled="state.sending" @change="handleAttachmentChange" />
+        <p class="field__hint">Attachment is optional.</p>
         <button class="button button--primary" type="submit" :disabled="state.sending">
-          {{ state.sending ? '?꾩넚 以?..' : '臾몄쓽 蹂대궡湲? }}
+          {{ state.sending ? 'Sending...' : 'Send inquiry' }}
         </button>
       </form>
     </section>
@@ -535,21 +528,17 @@ onMounted(() => {
     <section class="panel">
       <div class="panel__header">
         <div>
-          <h2>??臾몄쓽 ?댁뿭</h2>
-          <p>臾몄쓽 吏꾪뻾 ?곹깭? 愿由ъ옄 ?듬????뺤씤?⑸땲??</p>
+          <h2>My inquiries</h2>
+          <p>Review support status and administrator replies.</p>
         </div>
         <button class="button button--ghost" type="button" :disabled="state.loading" @click="loadInquiries(state.pageInfo.page)">
-          {{ state.loading ? '遺덈윭?ㅻ뒗 以?..' : '?덈줈怨좎묠' }}
+          {{ state.loading ? 'Loading...' : 'Refresh' }}
         </button>
       </div>
 
-      <p v-if="state.loading" class="panel__empty">臾몄쓽 ?댁뿭??遺덈윭?ㅻ뒗 以묒엯?덈떎.</p>
+      <p v-if="state.loading" class="panel__empty">Loading inquiries.</p>
       <div v-else-if="state.inquiries.length" class="support-inquiry-list support-inquiry-list--compact">
-        <article
-          v-for="inquiry in state.inquiries"
-          :key="inquiry.id"
-          class="support-inquiry-card support-inquiry-card--compact"
-        >
+        <article v-for="inquiry in state.inquiries" :key="inquiry.id" class="support-inquiry-card support-inquiry-card--compact">
           <button class="support-inquiry-row" type="button" @click="toggleInquiry(inquiry.id)">
             <div class="support-inquiry-row__summary">
               <strong class="support-inquiry-row__title">{{ inquiry.title }}</strong>
@@ -559,7 +548,7 @@ onMounted(() => {
             </div>
             <div class="support-inquiry-row__meta">
               <small>{{ formatDateTime(inquiry.createdAt) }}</small>
-              <span class="support-inquiry-row__toggle">{{ state.expandedInquiryId === inquiry.id ? '?묎린' : '?닿린' }}</span>
+              <span class="support-inquiry-row__toggle">{{ state.expandedInquiryId === inquiry.id ? 'Collapse' : 'Open' }}</span>
             </div>
           </button>
 
@@ -567,9 +556,7 @@ onMounted(() => {
             <p class="support-inquiry-content">{{ inquiry.content }}</p>
 
             <div v-if="inquiry.attachmentUrl" class="support-inquiry-attachment">
-              <a class="button button--ghost" :href="inquiry.attachmentUrl" target="_blank" rel="noreferrer">
-                泥⑤? ?대?吏 蹂닿린
-              </a>
+              <a class="button button--ghost" :href="inquiry.attachmentUrl" target="_blank" rel="noreferrer">View attachment</a>
               <img
                 v-if="inquiry.attachmentContentType?.startsWith('image/')"
                 :src="buildThumbnailUrl(inquiry.attachmentUrl)"
@@ -582,29 +569,20 @@ onMounted(() => {
 
             <div v-if="inquiry.replyContent" class="support-inquiry-reply">
               <div class="support-inquiry-reply__header">
-                <strong>愿由ъ옄 ?듬?</strong>
-                <small>{{ inquiry.repliedByDisplayName || inquiry.repliedByLoginId || '愿由ъ옄' }} 쨌 {{ formatDateTime(inquiry.repliedAt) }}</small>
+                <strong>Admin reply</strong>
+                <small>{{ inquiry.repliedByDisplayName || inquiry.repliedByLoginId || 'Admin' }} - {{ formatDateTime(inquiry.repliedAt) }}</small>
               </div>
               <p>{{ inquiry.replyContent }}</p>
             </div>
           </div>
         </article>
       </div>
-      <p v-else class="panel__empty">?꾩쭅 蹂대궦 臾몄쓽媛 ?놁뒿?덈떎.</p>
+      <p v-else class="panel__empty">No inquiries yet.</p>
 
       <div v-if="!state.loading && state.pageInfo.totalElements > 0" class="panel__actions">
-        <button class="button button--ghost" type="button" :disabled="state.pageInfo.page <= 0" @click="changePage(state.pageInfo.page - 1)">
-          ?댁쟾
-        </button>
+        <button class="button button--ghost" type="button" :disabled="state.pageInfo.page <= 0" @click="changePage(state.pageInfo.page - 1)">Previous</button>
         <span>{{ state.pageInfo.page + 1 }} / {{ pageCount }}</span>
-        <button
-          class="button button--ghost"
-          type="button"
-          :disabled="state.pageInfo.page + 1 >= pageCount"
-          @click="changePage(state.pageInfo.page + 1)"
-        >
-          ?ㅼ쓬
-        </button>
+        <button class="button button--ghost" type="button" :disabled="state.pageInfo.page + 1 >= pageCount" @click="changePage(state.pageInfo.page + 1)">Next</button>
       </div>
     </section>
 
@@ -612,16 +590,16 @@ onMounted(() => {
       <div class="travel-modal__dialog profile-security-modal" role="dialog" aria-modal="true" aria-labelledby="privacy-export-title">
         <div class="travel-modal__header">
           <div>
-            <h2 id="privacy-export-title">?곗씠???대낫?닿린 ?뺤씤</h2>
-            <p>誘쇨컧??媛쒖씤 湲덉쑖 ?곗씠?곌? ?ы븿?섎?濡??꾩옱 2李?鍮꾨?踰덊샇濡???踰????뺤씤?⑸땲??</p>
+            <h2 id="privacy-export-title">Confirm data export</h2>
+            <p>This archive can contain sensitive financial data. Confirm your current secondary PIN first.</p>
           </div>
-          <button class="button button--ghost" type="button" :disabled="privacy.exporting" @click="closePrivacyExportGate">?リ린</button>
+          <button class="button button--ghost" type="button" :disabled="privacy.exporting" @click="closePrivacyExportGate">Close</button>
         </div>
 
         <div class="travel-modal__body">
           <div v-if="privacy.errorMessage" class="feedback feedback--error">{{ privacy.errorMessage }}</div>
           <label class="field">
-            <span class="field__label">?꾩옱 2李?鍮꾨?踰덊샇</span>
+            <span class="field__label">Current secondary PIN</span>
             <input
               v-model="privacy.secondaryPin"
               type="password"
@@ -629,18 +607,18 @@ onMounted(() => {
               autocomplete="one-time-code"
               pattern="[0-9]*"
               maxlength="8"
-              placeholder="?レ옄 8?먮━"
+              placeholder="8 digits"
               :disabled="privacy.exporting"
               @keyup.enter="handlePrivacyExport"
             />
           </label>
-          <p class="field__hint">?ㅼ슫濡쒕뱶 ZIP ?뚯씪? 寃利앸맂 2李?鍮꾨?踰덊샇濡??뷀샇?붾맗?덈떎.</p>
+          <p class="field__hint">The downloaded ZIP is encrypted with the verified secondary PIN.</p>
         </div>
 
         <div class="travel-modal__footer">
-          <button class="button button--ghost" type="button" :disabled="privacy.exporting" @click="closePrivacyExportGate">痍⑥냼</button>
+          <button class="button button--ghost" type="button" :disabled="privacy.exporting" @click="closePrivacyExportGate">Cancel</button>
           <button class="button button--primary" type="button" :disabled="privacy.exporting" @click="handlePrivacyExport">
-            {{ privacy.exporting ? '?뺤씤 諛??앹꽦 以?..' : '?뺤씤 ???ㅼ슫濡쒕뱶' }}
+            {{ privacy.exporting ? 'Verifying and creating...' : 'Verify and download' }}
           </button>
         </div>
       </div>
@@ -650,33 +628,24 @@ onMounted(() => {
       <div class="travel-modal__dialog profile-security-modal" role="dialog" aria-modal="true" aria-labelledby="security-gate-title">
         <div class="travel-modal__header">
           <div>
-            <h2 id="security-gate-title">{{ securityModeLabel }} ?닿린</h2>
-            <p>{{ securityModeLabel }} 蹂寃?紐⑤떖???대젮硫??꾩옱 2李?鍮꾨?踰덊샇瑜?癒쇱? ?낅젰??二쇱꽭??</p>
+            <h2 id="security-gate-title">Unlock {{ securityModeLabel }}</h2>
+            <p>Enter your current secondary PIN before changing sensitive account credentials.</p>
           </div>
-          <button class="button button--ghost" type="button" @click="closeSecurityModal">?リ린</button>
+          <button class="button button--ghost" type="button" @click="closeSecurityModal">Close</button>
         </div>
 
         <div class="travel-modal__body">
           <div v-if="security.errorMessage" class="feedback feedback--error">{{ security.errorMessage }}</div>
           <label class="field">
-            <span class="field__label">?꾩옱 2李?鍮꾨?踰덊샇</span>
-            <input
-              v-model="security.secondaryPin"
-              type="password"
-              inputmode="numeric"
-              autocomplete="one-time-code"
-              pattern="[0-9]*"
-              maxlength="8"
-              placeholder="?レ옄 8?먮━"
-              :disabled="security.verifying"
-            />
+            <span class="field__label">Current secondary PIN</span>
+            <input v-model="security.secondaryPin" type="password" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]*" maxlength="8" placeholder="8 digits" :disabled="security.verifying" />
           </label>
         </div>
 
         <div class="travel-modal__footer">
-          <button class="button button--ghost" type="button" :disabled="security.verifying" @click="closeSecurityModal">痍⑥냼</button>
+          <button class="button button--ghost" type="button" :disabled="security.verifying" @click="closeSecurityModal">Cancel</button>
           <button class="button button--primary" type="button" :disabled="security.verifying" @click="handleVerifySecondaryPin">
-            {{ security.verifying ? '?뺤씤 以?..' : '?뺤씤' }}
+            {{ security.verifying ? 'Verifying...' : 'Verify' }}
           </button>
         </div>
       </div>
@@ -687,11 +656,9 @@ onMounted(() => {
         <div class="travel-modal__header">
           <div>
             <h2 id="security-change-title">{{ securitySaveLabel }}</h2>
-            <p>{{ security.mode === 'password'
-              ? '??鍮꾨?踰덊샇瑜??낅젰?섎㈃ 利됱떆 怨꾩젙???곸슜?⑸땲??'
-              : '??2李?鍮꾨?踰덊샇???レ옄 8?먮━?ъ빞 ?⑸땲??' }}</p>
+            <p>{{ security.mode === 'password' ? 'The new password is applied immediately.' : 'The new secondary PIN must be exactly 8 digits.' }}</p>
           </div>
-          <button class="button button--ghost" type="button" @click="closeSecurityModal">?リ린</button>
+          <button class="button button--ghost" type="button" @click="closeSecurityModal">Close</button>
         </div>
 
         <div class="travel-modal__body">
@@ -699,59 +666,31 @@ onMounted(() => {
 
           <template v-if="security.mode === 'password'">
             <label class="field">
-              <span class="field__label">??鍮꾨?踰덊샇</span>
-              <input
-                v-model="security.newPassword"
-                type="password"
-                placeholder="8???댁긽"
-                :disabled="security.saving"
-              />
+              <span class="field__label">New password</span>
+              <input v-model="security.newPassword" type="password" placeholder="At least 8 characters" :disabled="security.saving" />
             </label>
             <label class="field">
-              <span class="field__label">??鍮꾨?踰덊샇 ?뺤씤</span>
-              <input
-                v-model="security.confirmPassword"
-                type="password"
-                placeholder="??踰????낅젰"
-                :disabled="security.saving"
-              />
+              <span class="field__label">Confirm new password</span>
+              <input v-model="security.confirmPassword" type="password" placeholder="Enter it again" :disabled="security.saving" />
             </label>
           </template>
 
           <template v-else>
             <label class="field">
-              <span class="field__label">??2李?鍮꾨?踰덊샇</span>
-              <input
-                v-model="security.newSecondaryPin"
-                type="password"
-                inputmode="numeric"
-                autocomplete="new-password"
-                pattern="[0-9]*"
-                maxlength="8"
-                placeholder="?レ옄 8?먮━"
-                :disabled="security.saving"
-              />
+              <span class="field__label">New secondary PIN</span>
+              <input v-model="security.newSecondaryPin" type="password" inputmode="numeric" autocomplete="new-password" pattern="[0-9]*" maxlength="8" placeholder="8 digits" :disabled="security.saving" />
             </label>
             <label class="field">
-              <span class="field__label">??2李?鍮꾨?踰덊샇 ?뺤씤</span>
-              <input
-                v-model="security.confirmSecondaryPin"
-                type="password"
-                inputmode="numeric"
-                autocomplete="new-password"
-                pattern="[0-9]*"
-                maxlength="8"
-                placeholder="??踰????낅젰"
-                :disabled="security.saving"
-              />
+              <span class="field__label">Confirm new secondary PIN</span>
+              <input v-model="security.confirmSecondaryPin" type="password" inputmode="numeric" autocomplete="new-password" pattern="[0-9]*" maxlength="8" placeholder="Enter it again" :disabled="security.saving" />
             </label>
           </template>
         </div>
 
         <div class="travel-modal__footer">
-          <button class="button button--ghost" type="button" :disabled="security.saving" @click="closeSecurityModal">痍⑥냼</button>
+          <button class="button button--ghost" type="button" :disabled="security.saving" @click="closeSecurityModal">Cancel</button>
           <button class="button button--primary" type="button" :disabled="security.saving" @click="handleCredentialChange">
-            {{ security.saving ? '???以?..' : securitySaveLabel }}
+            {{ security.saving ? 'Saving...' : securitySaveLabel }}
           </button>
         </div>
       </div>

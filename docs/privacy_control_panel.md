@@ -11,7 +11,7 @@ This document records the backend slice for user-facing privacy controls. The UI
 | Delete my AI analysis history | `DELETE /api/privacy/ai-analysis-history` | Permanently deletes ledger AI analysis history rows owned by the current user. |
 | Revoke my public drive links | `DELETE /api/privacy/public-download-links` | Sets `revokedAt` on all active public download links owned by the current user. |
 | Revoke my travel public media shares | `DELETE /api/privacy/travel-public-media-shares` | Disables public sharing on the current user's travel plans and community-shared travel memory records so existing stateless media tokens no longer pass visibility checks. |
-| Cleanup sensitive derived data | `POST /api/privacy/cleanup` | Runs AI-history deletion, public drive-link revocation, and travel public-media share revocation in one authenticated request. |
+| Cleanup sensitive derived data | `POST /api/privacy/cleanup` | Runs AI-history deletion, public drive-link revocation, travel public-media share revocation, and photo location metadata removal in one authenticated request. |
 | Download my ledger data archive | `POST /api/privacy/data-export` | Downloads a secondary-PIN-protected zip containing ledger CSV and export metadata. |
 
 ## Safety Rules
@@ -37,18 +37,20 @@ This document records the backend slice for user-facing privacy controls. The UI
 }
 ```
 
-`travelPublicMediaSharesRevoked` counts disabled public travel plans plus community-shared travel memory records. It is not a count of token strings because travel public media tokens are stateless.
+`travelPublicMediaSharesRevoked` counts disabled public travel plans plus community-shared travel memory records. It is not a count of token strings because travel public media tokens are stateless. `photoLocationMetadataRemoved` counts travel media rows whose derived GPS latitude, longitude, or extraction timestamp was cleared.
 
 ## Test Evidence
 
 | Evidence | Coverage |
 | --- | --- |
 | `PrivacyManagementServiceTest.revokePublicDownloadLinksScopesUpdateToCurrentOwner` | Verifies public drive link revocation calls the owner-scoped repository method with only the authenticated user ID and returns the affected count. |
-| `PrivacyManagementServiceTest.revokeTravelPublicMediaSharesScopesPlanAndCommunityRecordUpdatesToCurrentOwner` | Verifies travel public media share revocation disables owner-scoped public plans and community-shared records only. |
+| PrivacyManagementServiceTest.revokeTravelPublicMediaSharesScopesPlanAndCommunityRecordUpdatesToCurrentOwner | Verifies travel public media share revocation disables owner-scoped public plans and community-shared records only. |
+| PrivacyManagementServiceTest.removePhotoLocationMetadataScopesGpsCleanupToCurrentOwner | Verifies photo location metadata cleanup only calls the owner-scoped travel media GPS metadata update. |
 | `PrivacyManagementServiceTest.cleanupSensitiveDataDeletesAiHistoryAndRevokesOnlyCurrentOwnerShares` | Verifies combined cleanup deletes only the authenticated user AI history and revokes only that user's public drive/travel share surfaces. |
 | `PrivacyControllerIntegrationTest.aiAnalysisHistoryDeletionRequiresAuthenticationAndCsrf` | Verifies AI analysis history deletion rejects unauthenticated requests and authenticated unsafe requests without CSRF. |
 | `PrivacyControllerIntegrationTest.publicDownloadLinkRevocationRequiresAuthenticationAndCsrf` | Verifies public-link revocation rejects unauthenticated requests and authenticated unsafe requests without CSRF. |
-| `PrivacyControllerIntegrationTest.travelPublicMediaShareRevocationRequiresAuthenticationAndCsrf` | Verifies travel public media share revocation rejects unauthenticated requests and authenticated unsafe requests without CSRF. |
+| PrivacyControllerIntegrationTest.travelPublicMediaShareRevocationRequiresAuthenticationAndCsrf | Verifies travel public media share revocation rejects unauthenticated requests and authenticated unsafe requests without CSRF. |
+| PrivacyControllerIntegrationTest.photoLocationMetadataRemovalRequiresAuthenticationAndCsrf | Verifies photo location metadata removal rejects unauthenticated requests and authenticated unsafe requests without CSRF. |
 | `PrivacyControllerIntegrationTest.sensitiveCleanupRequiresAuthenticationAndCsrf` | Verifies combined sensitive cleanup rejects unauthenticated requests and authenticated unsafe requests without CSRF. |
 | `PrivacyControllerIntegrationTest.dataExportRequiresAuthenticationCsrfAndVerifiedSecondaryPin` | Verifies data export rejects unauthenticated requests, missing-CSRF requests, and authenticated sessions without a verified secondary PIN before returning a zip attachment. |
 | `DataPortabilityExportServiceTest.exportUserDataArchiveBuildsEncryptedArchiveWithoutOperationalSecrets` | Verifies the exported archive is encrypted, contains ledger CSV plus metadata, and excludes secret-like values. |

@@ -46,6 +46,12 @@ if (-not (Test-Path -LiteralPath $baseline)) {
 }
 
 $requiredMigrationSnippets = @{
+    'V20260629_004__ledger_ai_history_provider.sql' = @(
+        'CREATE TABLE IF NOT EXISTS ledger_ai_analysis_histories',
+        'provider VARCHAR(40) NOT NULL DEFAULT ''unknown''',
+        'ADD COLUMN IF NOT EXISTS provider VARCHAR(40) NOT NULL DEFAULT ''unknown''',
+        'ADD INDEX IF NOT EXISTS idx_ledger_ai_history_owner_provider_model_range (owner_id, provider, model, mode, period_type, from_date, to_date, created_at)'
+    )
     'V20260630_008__travel_route_segment_fields.sql' = @(
         'ALTER TABLE travel_route_segments',
         'MODIFY COLUMN route_path_json LONGTEXT NOT NULL',

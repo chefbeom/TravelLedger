@@ -18,7 +18,7 @@ Updated: 2026-06-30
 | `V20260629_001__drive_download_link_access_logs.sql` | Drive public download access log table. |
 | `V20260629_002__user_notifications.sql` | User notification table. |
 | `V20260629_003__ledger_classification_rules.sql` | Ledger classification rule table. |
-| `V20260629_004__ledger_ai_history_provider.sql` | AI history provider column and query index. |
+| `V20260629_004__ledger_ai_history_provider.sql` | Fresh-safe AI history table bootstrap, provider column compatibility, and provider/model query index. |
 | `V20260629_005__drive_item_versions.sql` | CalenDrive file version ledger table and owner/item indexes. |
 | `V20260629_006__drive_share_permissions.sql` | Drive share permission level columns and supporting indexes. |
 | `V20260629_007__drive_direct_share_access_log_index.sql` | Direct drive share access-log status and lookup indexes. |
@@ -63,7 +63,7 @@ Retire one legacy updater at a time. Removing one requires: a versioned migratio
 | `V20260629_001__drive_download_link_access_logs.sql` | Public link download creates and queries access-log rows. | Export logs if needed, then restore the DB backup or drop the new log table in a controlled maintenance window. | New Flyway-managed table. |
 | `V20260629_002__user_notifications.sql` | Notification creation, listing, and read-state updates run after migration. | Restore the DB backup if notification state must be preserved; otherwise drop the notification table after draining pending alerts. | New Flyway-managed table. |
 | `V20260629_003__ledger_classification_rules.sql` | Rule create/update/delete and OCR/import rule lookup run after migration. | Export user rules before rollback and restore from backup if rule state must be preserved. | New Flyway-managed table. |
-| `V20260629_004__ledger_ai_history_provider.sql` | AI analysis history save/list/delete covers provider/model queries on databases where the legacy table already exists. | Restore from backup if provider metadata is required; dropping the column loses provider attribution. | Earlier provider slice assumes the AI history table already exists; keep paired with `V20260630_013__ledger_ai_analysis_history_base.sql` and staging Flyway ordering evidence before retiring the updater. |
+| `V20260629_004__ledger_ai_history_provider.sql` | Fresh Flyway bootstrap creates the AI history table when absent and keeps provider/model queries indexed. | Restore from backup if provider metadata is required; dropping the table or provider column loses advisory analysis history/provider attribution. | Now fresh-db safe and paired with `V20260630_013__ledger_ai_analysis_history_base.sql`, which keeps the remaining owner/range/mode indexes explicit before retiring the updater. |
 | `V20260629_005__drive_item_versions.sql` | File overwrite creates version rows and download/restore reads the expected version. | Restore from backup if versions must be preserved; table drop is only safe after confirming no version history is needed. | New Flyway-managed table. |
 | `V20260629_006__drive_share_permissions.sql` | Direct share create/update/read enforces view/download/edit levels. | Restore from backup before downgrading; defaulting permissions during rollback can over-grant access. | New Flyway-managed columns/indexes for drive shares. |
 | `V20260629_007__drive_direct_share_access_log_index.sql` | Direct share download audit queries use status and share/user lookup indexes. | Index rollback is low data-risk, but restore backup if paired with access-log schema changes. | Tightens Flyway-managed access-log performance. |
@@ -117,6 +117,7 @@ A release that adds or changes schema should include:
 - `V20260630_010__travel_media_asset_metadata_fields.sql` moves Travel media GPS/representative metadata fields and indexes into Flyway.
 - `V20260630_011__travel_photo_cluster_tables.sql` moves Travel photo cluster tables and indexes into Flyway.
 - `V20260630_012__ledger_entry_operational_fields.sql` moves ledger entry foreign-currency/travel-link fields and ledger/category/payment indexes into Flyway.
-- `V20260630_013__ledger_ai_analysis_history_base.sql` moves Ledger AI analysis history table, provider compatibility, and owner/range/mode/provider indexes into Flyway.
+- `V20260629_004__ledger_ai_history_provider.sql` is now fresh-db safe and bootstraps the AI history table before adding provider compatibility/indexes.
+- `V20260630_013__ledger_ai_analysis_history_base.sql` keeps Ledger AI analysis history table, provider compatibility, and owner/range/mode/provider indexes explicit in Flyway.
 - All six legacy `*SchemaUpdater` classes now have Flyway overlap but remain documented temporary exceptions until staging Flyway startup, provider ordering, and smoke evidence allow deletion.
 - Startup DDL freeze is now enforced: new schema mutation runners must be rejected unless they retire one documented legacy exception with migration evidence.

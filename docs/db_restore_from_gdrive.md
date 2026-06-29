@@ -1,60 +1,58 @@
-# Google Drive에 저장한 DB 백업 파일을 다시 MariaDB에 복구하는 가이드
+﻿# Google Drive????ν븳 DB 諛깆뾽 ?뚯씪???ㅼ떆 MariaDB??蹂듦뎄?섎뒗 媛?대뱶
 
-이 문서는 `dbtogdrive.md` 방식으로 Google Drive에 저장한 `.sql.gz` 백업 파일을 다시 MariaDB에 적용하는 방법을 정리한 문서입니다.
+??臾몄꽌??`dbtogdrive.md` 諛⑹떇?쇰줈 Google Drive????ν븳 `.sql.gz` 諛깆뾽 ?뚯씪???ㅼ떆 MariaDB???곸슜?섎뒗 諛⑸쾿???뺣━??臾몄꽌?낅땲??
 
-기준 환경:
+湲곗? ?섍꼍:
 
-- 서버: OCI Ubuntu 24.04
-- 앱 경로: `~/calen`
-- Docker Compose 운영 중
-- DB 컨테이너 이름: `calen-mariadb-1`
-- Google Drive remote 이름: `db-backup`
-- 백업 파일 예시: `calen-2026-03-29-000000.sql.gz`
+- ?쒕쾭: OCI Ubuntu 24.04
+- ??寃쎈줈: `~/calen`
+- Docker Compose ?댁쁺 以?- DB 而⑦뀒?대꼫 ?대쫫: `calen-mariadb-1`
+- Google Drive remote ?대쫫: `db-backup`
+- 諛깆뾽 ?뚯씪 ?덉떆: `calen-2026-03-29-000000.sql.gz`
 
-중요:
+以묒슂:
 
-- 운영 DB 복구는 현재 데이터를 덮어쓸 수 있습니다.
-- 반드시 `테스트 복구 -> 실제 복구` 순서로 진행하는 걸 권장합니다.
-- 복구 전에 가능하면 현재 상태도 한 번 더 백업하세요.
+- ?댁쁺 DB 蹂듦뎄???꾩옱 ?곗씠?곕? ??뼱?????덉뒿?덈떎.
+- 諛섎뱶??`?뚯뒪??蹂듦뎄 -> ?ㅼ젣 蹂듦뎄` ?쒖꽌濡?吏꾪뻾?섎뒗 嫄?沅뚯옣?⑸땲??
+- 蹂듦뎄 ?꾩뿉 媛?ν븯硫??꾩옱 ?곹깭????踰???諛깆뾽?섏꽭??
 
 ---
 
-## 1. 복구할 파일 확인
+## 1. 蹂듦뎄???뚯씪 ?뺤씤
 
-먼저 Google Drive에 어떤 백업 파일이 있는지 확인합니다.
+癒쇱? Google Drive???대뼡 諛깆뾽 ?뚯씪???덈뒗吏 ?뺤씤?⑸땲??
 
 ```bash
 rclone lsf db-backup:calen-db-backups
 ```
 
-예:
+??
 
 ```text
 calen-2026-03-28-000000.sql.gz
 calen-2026-03-29-000000.sql.gz
 ```
 
-복구할 파일명을 하나 정합니다.
+蹂듦뎄???뚯씪紐낆쓣 ?섎굹 ?뺥빀?덈떎.
 
 ---
 
-## 2. 복구용 작업 폴더 만들기
-
+## 2. 蹂듦뎄???묒뾽 ?대뜑 留뚮뱾湲?
 ```bash
 mkdir -p /opt/calen-backup/restore
 ```
 
 ---
 
-## 3. Google Drive에서 복구 파일 내려받기
+## 3. Google Drive?먯꽌 蹂듦뎄 ?뚯씪 ?대젮諛쏄린
 
-예를 들어 `calen-2026-03-29-000000.sql.gz`를 복구한다고 가정하면:
+?덈? ?ㅼ뼱 `calen-2026-03-29-000000.sql.gz`瑜?蹂듦뎄?쒕떎怨?媛?뺥븯硫?
 
 ```bash
 rclone copy db-backup:calen-db-backups/calen-2026-03-29-000000.sql.gz /opt/calen-backup/restore/
 ```
 
-로컬에 파일이 내려왔는지 확인:
+濡쒖뺄???뚯씪???대젮?붾뒗吏 ?뺤씤:
 
 ```bash
 ls -lh /opt/calen-backup/restore
@@ -62,9 +60,9 @@ ls -lh /opt/calen-backup/restore
 
 ---
 
-## 4. 프로젝트 `.env` 값을 셸로 불러오기
+## 4. ?꾨줈?앺듃 `.env` 媛믪쓣 ?몃줈 遺덈윭?ㅺ린
 
-현재 프로젝트 DB 이름과 계정을 그대로 사용하기 위해 `.env`를 읽어옵니다.
+?꾩옱 ?꾨줈?앺듃 DB ?대쫫怨?怨꾩젙??洹몃?濡??ъ슜?섍린 ?꾪빐 `.env`瑜??쎌뼱?듬땲??
 
 ```bash
 cd ~/calen
@@ -73,167 +71,164 @@ set -a
 set +a
 ```
 
-이후 아래 변수들이 셸에 올라옵니다.
+?댄썑 ?꾨옒 蹂?섎뱾???몄뿉 ?щ씪?듬땲??
 
 - `DB_NAME`
 - `DB_USER`
 - `DB_PASSWORD`
 - `DB_ROOT_PASSWORD`
 
-확인하고 싶으면:
+?뺤씤?섍퀬 ?띠쑝硫?
 
 ```bash
 echo "$DB_NAME"
 echo "$DB_USER"
 ```
 
-비밀번호는 출력하지 않는 편이 좋습니다.
+鍮꾨?踰덊샇??異쒕젰?섏? ?딅뒗 ?몄씠 醫뗭뒿?덈떎.
 
 ---
 
-## 5. 테스트 DB에 먼저 복구하기
+## 5. ?뚯뒪??DB??癒쇱? 蹂듦뎄?섍린
 
-운영 DB를 바로 덮어쓰지 말고, 먼저 테스트 DB에 복구합니다.
+?댁쁺 DB瑜?諛붾줈 ??뼱?곗? 留먭퀬, 癒쇱? ?뚯뒪??DB??蹂듦뎄?⑸땲??
 
-### 5-1. 테스트 DB 이름 정하기
-
+### 5-1. ?뚯뒪??DB ?대쫫 ?뺥븯湲?
 ```bash
 RESTORE_DB="${DB_NAME}_restore_test"
 ```
 
-### 5-2. 테스트 DB 생성
+### 5-2. ?뚯뒪??DB ?앹꽦
 
 ```bash
 docker exec calen-mariadb-1 mariadb -uroot -p"$DB_ROOT_PASSWORD" -e "DROP DATABASE IF EXISTS \`$RESTORE_DB\`; CREATE DATABASE \`$RESTORE_DB\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
 ```
 
-### 5-3. 백업 파일을 테스트 DB에 복구
+### 5-3. 諛깆뾽 ?뚯씪???뚯뒪??DB??蹂듦뎄
 
 ```bash
 gunzip -c /opt/calen-backup/restore/calen-2026-03-29-000000.sql.gz | docker exec -i calen-mariadb-1 mariadb -u"$DB_USER" -p"$DB_PASSWORD" "$RESTORE_DB"
 ```
 
-여기서는 파일명만 실제 복구 대상 파일로 바꾸면 됩니다.
+?ш린?쒕뒗 ?뚯씪紐낅쭔 ?ㅼ젣 蹂듦뎄 ????뚯씪濡?諛붽씀硫??⑸땲??
 
-### 5-4. 테이블이 들어왔는지 확인
+### 5-4. ?뚯씠釉붿씠 ?ㅼ뼱?붾뒗吏 ?뺤씤
 
 ```bash
 docker exec calen-mariadb-1 mariadb -u"$DB_USER" -p"$DB_PASSWORD" -e "USE \`$RESTORE_DB\`; SHOW TABLES;"
 ```
 
-### 5-5. 사용자 수나 거래 수 확인
+### 5-5. ?ъ슜???섎굹 嫄곕옒 ???뺤씤
 
-예:
+??
 
 ```bash
 docker exec calen-mariadb-1 mariadb -u"$DB_USER" -p"$DB_PASSWORD" -e "USE \`$RESTORE_DB\`; SELECT COUNT(*) AS users_count FROM app_users; SELECT COUNT(*) AS ledger_count FROM ledger_entries;"
 ```
 
-이 단계가 정상이어야 운영 DB 복구로 넘어가는 것이 좋습니다.
+???④퀎媛 ?뺤긽?댁뼱???댁쁺 DB 蹂듦뎄濡??섏뼱媛??寃껋씠 醫뗭뒿?덈떎.
 
 ---
 
-## 6. 운영 DB 복구 전에 권장하는 추가 백업
+## 6. ?댁쁺 DB 蹂듦뎄 ?꾩뿉 沅뚯옣?섎뒗 異붽? 諛깆뾽
 
-복구 직전에 현재 상태도 한 번 더 덤프해두면 안전합니다.
+蹂듦뎄 吏곸쟾???꾩옱 ?곹깭????踰????ㅽ봽?대몢硫??덉쟾?⑸땲??
 
-예:
+??
 
 ```bash
 STAMP="$(date +%F-%H%M%S)"
 docker exec calen-mariadb-1 sh -c "mariadb-dump -u\"$DB_USER\" -p\"$DB_PASSWORD\" \"$DB_NAME\"" | gzip > "/opt/calen-backup/restore/pre-restore-${STAMP}.sql.gz"
 ```
 
-이 파일은 잘못 복구했을 때 되돌릴 수 있는 마지막 안전장치가 됩니다.
+???뚯씪? ?섎せ 蹂듦뎄?덉쓣 ???섎룎由????덈뒗 留덉?留??덉쟾?μ튂媛 ?⑸땲??
 
 ---
 
-## 7. 실제 운영 DB 복구
+## 7. ?ㅼ젣 ?댁쁺 DB 蹂듦뎄
 
-주의:
+二쇱쓽:
 
-- 이 단계부터는 현재 운영 데이터를 덮어씁니다.
-- 서비스 사용자가 있다면 작업 전에 공지하는 것이 좋습니다.
+- ???④퀎遺?곕뒗 ?꾩옱 ?댁쁺 ?곗씠?곕? ??뼱?곷땲??
+- ?쒕퉬???ъ슜?먭? ?덈떎硫??묒뾽 ?꾩뿉 怨듭??섎뒗 寃껋씠 醫뗭뒿?덈떎.
 
-### 7-1. 백엔드 중지
+### 7-1. 諛깆뿏??以묒?
 
-복구 중에는 앱이 DB를 건드리지 않게 백엔드를 잠시 멈춥니다.
+蹂듦뎄 以묒뿉???깆씠 DB瑜?嫄대뱶由ъ? ?딄쾶 諛깆뿏?쒕? ?좎떆 硫덉땅?덈떎.
 
 ```bash
 sudo docker compose -f docker-compose.oci.yml stop backend
 ```
 
-### 7-2. 운영 DB 삭제 후 재생성
-
+### 7-2. ?댁쁺 DB ??젣 ???ъ깮??
 ```bash
 docker exec calen-mariadb-1 mariadb -uroot -p"$DB_ROOT_PASSWORD" -e "DROP DATABASE IF EXISTS \`$DB_NAME\`; CREATE DATABASE \`$DB_NAME\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
 ```
 
-### 7-3. 백업 파일을 운영 DB에 복구
+### 7-3. 諛깆뾽 ?뚯씪???댁쁺 DB??蹂듦뎄
 
 ```bash
 gunzip -c /opt/calen-backup/restore/calen-2026-03-29-000000.sql.gz | docker exec -i calen-mariadb-1 mariadb -u"$DB_USER" -p"$DB_PASSWORD" "$DB_NAME"
 ```
 
-### 7-4. 백엔드 재시작
-
+### 7-4. 諛깆뿏???ъ떆??
 ```bash
 sudo docker compose -f docker-compose.oci.yml start backend
 ```
 
 ---
 
-## 8. 복구 후 확인
+## 8. 蹂듦뎄 ???뺤씤
 
-### 8-1. 컨테이너 상태 확인
+### 8-1. 而⑦뀒?대꼫 ?곹깭 ?뺤씤
 
 ```bash
 sudo docker compose -f docker-compose.oci.yml ps
 ```
 
-### 8-2. 백엔드 로그 확인
+### 8-2. 諛깆뿏??濡쒓렇 ?뺤씤
 
 ```bash
 sudo docker compose -f docker-compose.oci.yml logs --tail=100 backend
 ```
 
-### 8-3. DB 기본 확인
+### 8-3. DB 湲곕낯 ?뺤씤
 
 ```bash
 docker exec calen-mariadb-1 mariadb -u"$DB_USER" -p"$DB_PASSWORD" -e "USE \`$DB_NAME\`; SHOW TABLES;"
 ```
 
-### 8-4. 웹 접속 확인
+### 8-4. ???묒냽 ?뺤씤
 
-브라우저에서:
+釉뚮씪?곗??먯꽌:
 
 ```text
 https://www.innoutdrive.space
 ```
 
-또는 현재 운영 도메인에 맞는 주소로 접속해서 아래를 확인합니다.
+?먮뒗 ?꾩옱 ?댁쁺 ?꾨찓?몄뿉 留욌뒗 二쇱냼濡??묒냽?댁꽌 ?꾨옒瑜??뺤씤?⑸땲??
 
-- 로그인 가능 여부
-- 가계부 데이터 표시 여부
-- 관리자 페이지 진입 여부
+- 濡쒓렇??媛???щ?
+- 媛怨꾨? ?곗씠???쒖떆 ?щ?
+- 愿由ъ옄 ?섏씠吏 吏꾩엯 ?щ?
 
 ---
 
-## 9. 자주 쓰는 변형 명령
+## 9. ?먯＜ ?곕뒗 蹂??紐낅졊
 
-### 최근 백업 하나만 확인
+### 理쒓렐 諛깆뾽 ?섎굹留??뺤씤
 
 ```bash
 rclone lsf db-backup:calen-db-backups | tail -n 1
 ```
 
-### restore 폴더 내용 보기
+### restore ?대뜑 ?댁슜 蹂닿린
 
 ```bash
 ls -lh /opt/calen-backup/restore
 ```
 
-### 테스트 복구 DB 삭제
+### ?뚯뒪??蹂듦뎄 DB ??젣
 
 ```bash
 docker exec calen-mariadb-1 mariadb -uroot -p"$DB_ROOT_PASSWORD" -e "DROP DATABASE IF EXISTS \`${DB_NAME}_restore_test\`;"
@@ -241,66 +236,81 @@ docker exec calen-mariadb-1 mariadb -uroot -p"$DB_ROOT_PASSWORD" -e "DROP DATABA
 
 ---
 
-## 10. 복구 실패 시 점검할 것
+## 10. 蹂듦뎄 ?ㅽ뙣 ???먭???寃?
+### 10-1. `Unknown database` ?ㅻ쪟
 
-### 10-1. `Unknown database` 오류
+- DB ?앹꽦 ?④퀎媛 鍮좎죱?붿? ?뺤씤
+- `DB_NAME`???쒕?濡?遺덈윭?議뚮뒗吏 ?뺤씤
 
-- DB 생성 단계가 빠졌는지 확인
-- `DB_NAME`이 제대로 불러와졌는지 확인
-
-확인:
+?뺤씤:
 
 ```bash
 echo "$DB_NAME"
 ```
 
-### 10-2. `Access denied` 오류
+### 10-2. `Access denied` ?ㅻ쪟
 
-- `DB_USER`, `DB_PASSWORD`, `DB_ROOT_PASSWORD` 확인
-- `.env`를 다시 불러왔는지 확인
+- `DB_USER`, `DB_PASSWORD`, `DB_ROOT_PASSWORD` ?뺤씤
+- `.env`瑜??ㅼ떆 遺덈윭?붾뒗吏 ?뺤씤
 
-### 10-3. `rclone` 다운로드 실패
+### 10-3. `rclone` ?ㅼ슫濡쒕뱶 ?ㅽ뙣
 
-- remote 이름 확인
-- Google Drive 연결이 살아 있는지 확인
+- remote ?대쫫 ?뺤씤
+- Google Drive ?곌껐???댁븘 ?덈뒗吏 ?뺤씤
 
 ```bash
 rclone lsd db-backup:
 ```
 
-### 10-4. 앱은 뜨는데 로그인/데이터가 이상한 경우
+### 10-4. ?깆? ?⑤뒗??濡쒓렇???곗씠?곌? ?댁긽??寃쎌슦
 
-- 백엔드 로그 확인
-- 실제 복구한 파일이 맞는지 다시 확인
-- 운영 DB가 아니라 테스트 DB에만 복구한 것은 아닌지 확인
-
----
-
-## 11. 권장 운영 순서 요약
-
-실제 운영에서는 아래 순서를 추천합니다.
-
-1. 복구 대상 백업 파일 선택
-2. Google Drive에서 서버로 다운로드
-3. `.env` 불러오기
-4. 테스트 DB에 먼저 복구
-5. 테이블/건수 확인
-6. 현재 운영 상태 추가 백업
-7. 백엔드 중지
-8. 운영 DB 재생성 후 복구
-9. 백엔드 재시작
-10. 앱 로그인/데이터 확인
+- 諛깆뿏??濡쒓렇 ?뺤씤
+- ?ㅼ젣 蹂듦뎄???뚯씪??留욌뒗吏 ?ㅼ떆 ?뺤씤
+- ?댁쁺 DB媛 ?꾨땲???뚯뒪??DB?먮쭔 蹂듦뎄??寃껋? ?꾨땶吏 ?뺤씤
 
 ---
 
-## 12. 한 줄 요약
+## 11. 沅뚯옣 ?댁쁺 ?쒖꽌 ?붿빟
 
-복구는 무조건 아래 원칙으로 진행하는 것이 안전합니다.
+?ㅼ젣 ?댁쁺?먯꽌???꾨옒 ?쒖꽌瑜?異붿쿇?⑸땲??
 
-- 백업 파일 선택
-- 테스트 DB로 먼저 검증
-- 운영 DB는 마지막에 덮어쓰기
-- 복구 후 앱까지 직접 확인
+1. 蹂듦뎄 ???諛깆뾽 ?뚯씪 ?좏깮
+2. Google Drive?먯꽌 ?쒕쾭濡??ㅼ슫濡쒕뱶
+3. `.env` 遺덈윭?ㅺ린
+4. ?뚯뒪??DB??癒쇱? 蹂듦뎄
+5. ?뚯씠釉?嫄댁닔 ?뺤씤
+6. ?꾩옱 ?댁쁺 ?곹깭 異붽? 諛깆뾽
+7. 諛깆뿏??以묒?
+8. ?댁쁺 DB ?ъ깮????蹂듦뎄
+9. 諛깆뿏???ъ떆??10. ??濡쒓렇???곗씠???뺤씤
 
-이 원칙만 지키면 Google Drive에 저장해둔 `.sql.gz` 백업 파일로 실제 서비스 DB를 안정적으로 되살릴 수 있습니다.
+---
 
+## 12. ??以??붿빟
+
+蹂듦뎄??臾댁“嫄??꾨옒 ?먯튃?쇰줈 吏꾪뻾?섎뒗 寃껋씠 ?덉쟾?⑸땲??
+
+- 諛깆뾽 ?뚯씪 ?좏깮
+- ?뚯뒪??DB濡?癒쇱? 寃利?- ?댁쁺 DB??留덉?留됱뿉 ??뼱?곌린
+- 蹂듦뎄 ???깃퉴吏 吏곸젒 ?뺤씤
+
+???먯튃留?吏?ㅻ㈃ Google Drive????ν빐??`.sql.gz` 諛깆뾽 ?뚯씪濡??ㅼ젣 ?쒕퉬??DB瑜??덉젙?곸쑝濡??섏궡由????덉뒿?덈떎.
+
+
+## 12. 암호화된 백업 복구
+
+`backup-to-gdrive.sh`에서 `BACKUP_ENCRYPTION_MODE=age` 또는 `gpg`를 사용한 경우, 테스트 DB에 import하기 전에 checksum 검증과 복호화를 먼저 수행합니다. 복호화 키나 passphrase는 명령 기록, 티켓, 채팅에 남기지 않습니다.
+
+```bash
+cd /opt/calen-backup/restore
+sha256sum -c calen-2026-03-29-000000.sql.gz.age.sha256
+age -d -i /secure/keys/calen-backup-age.txt -o calen-2026-03-29-000000.sql.gz calen-2026-03-29-000000.sql.gz.age
+```
+
+```bash
+cd /opt/calen-backup/restore
+sha256sum -c calen-2026-03-29-000000.sql.gz.gpg.sha256
+gpg --batch --decrypt --output calen-2026-03-29-000000.sql.gz calen-2026-03-29-000000.sql.gz.gpg
+```
+
+복호화가 끝난 뒤에는 기존 절차처럼 `${DB_NAME}_restore_test`에 먼저 import하고 smoke count를 기록합니다. 복구 리허설 증적에는 checksum 결과, 복호화 성공 여부, 키 별칭 또는 fingerprint만 남기고 실제 키 자료는 남기지 않습니다.

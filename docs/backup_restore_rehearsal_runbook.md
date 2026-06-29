@@ -1,4 +1,4 @@
-# Backup Restore Rehearsal Runbook
+﻿# Backup Restore Rehearsal Runbook
 
 Updated: 2026-06-30
 
@@ -103,6 +103,19 @@ Minimum encryption acceptance criteria:
 
 Encryption evidence must describe the tool and result, not the secret. Acceptable examples are `age recipient: ops-backup`, `gpg key fingerprint ending ABCD`, or `KMS key alias: calen-backup-prod`; unacceptable evidence includes raw private keys, passphrases, OAuth tokens, rclone config contents, presigned URLs, or full dump snippets.
 
+
+## Script Encryption Options
+
+`deploy/oci/scripts/backup-to-gdrive.sh` supports optional encryption before upload. The default remains plaintext-compatible for existing installs, but production backups should move to `age` or `gpg` before artifacts leave the backup host.
+
+| Variable | Values | Contract |
+| --- | --- | --- |
+| `BACKUP_ENCRYPTION_MODE` | `none`, `age`, `gpg` | `none` preserves existing behavior; `age` and `gpg` encrypt the `.sql.gz` artifact before rclone upload. |
+| `BACKUP_AGE_RECIPIENTS` | comma-separated age recipients | Required when `BACKUP_ENCRYPTION_MODE=age`; private age identities stay outside the backup remote. |
+| `BACKUP_GPG_RECIPIENT` | GPG recipient or key fingerprint | Required when `BACKUP_ENCRYPTION_MODE=gpg`; private keys/passphrases stay outside the backup remote. |
+| `KEEP_PLAINTEXT_AFTER_ENCRYPTION` | `false`, `true` | Default `false` removes the plaintext `.sql.gz` after encryption succeeds. Use `true` only for a time-limited local troubleshooting window. |
+
+The script also uploads a `.sha256` sidecar for the uploaded artifact, whether it is plaintext, `.age`, or `.gpg`. Restore rehearsals must verify the checksum before decrypting or importing.
 ## Evidence Template
 
 Copy this block into the operations ticket or release note after each rehearsal.
@@ -117,7 +130,10 @@ Remote directory:
 Artifact name:
 Artifact timestamp:
 Artifact size:
+Checksum file:
+Checksum verification result:
 Encryption status: encrypted | exception-approved | not-applicable-local
+Backup script encryption mode: none | age | gpg
 Encryption tool or key alias:
 Key owner/recovery owner:
 Decrypt test result:

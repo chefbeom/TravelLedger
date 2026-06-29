@@ -1,26 +1,25 @@
-# MariaDB DB를 Google Drive로 자동 백업하는 설정 가이드
+﻿# MariaDB DB瑜?Google Drive濡??먮룞 諛깆뾽?섎뒗 ?ㅼ젙 媛?대뱶
 
-이 문서는 이 프로젝트를 OCI Ubuntu 서버에서 Docker Compose로 운영하면서, MariaDB 덤프 파일을 매일 Google Drive로 자동 백업하도록 설정한 실제 과정을 정리한 문서입니다.
+??臾몄꽌?????꾨줈?앺듃瑜?OCI Ubuntu ?쒕쾭?먯꽌 Docker Compose濡??댁쁺?섎㈃?? MariaDB ?ㅽ봽 ?뚯씪??留ㅼ씪 Google Drive濡??먮룞 諛깆뾽?섎룄濡??ㅼ젙???ㅼ젣 怨쇱젙???뺣━??臾몄꽌?낅땲??
 
-기준 환경:
+湲곗? ?섍꼍:
 
-- 서버: OCI Ubuntu 24.04
-- 앱 경로: `~/calen`
-- DB 컨테이너 이름: `calen-mariadb-1`
-- 백업 폴더: `/opt/calen-backup`
-- Google Drive remote 이름: `db-backup`
+- ?쒕쾭: OCI Ubuntu 24.04
+- ??寃쎈줈: `~/calen`
+- DB 而⑦뀒?대꼫 ?대쫫: `calen-mariadb-1`
+- 諛깆뾽 ?대뜑: `/opt/calen-backup`
+- Google Drive remote ?대쫫: `db-backup`
 
-주의:
+二쇱쓽:
 
-- 이 문서는 `Docker로 구동 중인 MariaDB`를 대상으로 합니다.
-- `rclone` 토큰, DB 비밀번호, Google 인증 정보는 채팅/문서/스크린샷에 그대로 남기지 마세요.
-- `rclone config show`는 토큰을 그대로 보여주므로 운영 환경에서는 주의해서 사용해야 합니다.
+- ??臾몄꽌??`Docker濡?援щ룞 以묒씤 MariaDB`瑜???곸쑝濡??⑸땲??
+- `rclone` ?좏겙, DB 鍮꾨?踰덊샇, Google ?몄쬆 ?뺣낫??梨꾪똿/臾몄꽌/?ㅽ겕由곗꺑??洹몃?濡??④린吏 留덉꽭??
+- `rclone config show`???좏겙??洹몃?濡?蹂댁뿬二쇰?濡??댁쁺 ?섍꼍?먯꽌??二쇱쓽?댁꽌 ?ъ슜?댁빞 ?⑸땲??
 
 ---
 
-## 1. 백업 폴더 만들기
-
-OCI 서버에서 아래 명령을 실행합니다.
+## 1. 諛깆뾽 ?대뜑 留뚮뱾湲?
+OCI ?쒕쾭?먯꽌 ?꾨옒 紐낅졊???ㅽ뻾?⑸땲??
 
 ```bash
 sudo mkdir -p /opt/calen-backup
@@ -28,24 +27,21 @@ sudo chown $USER:$USER /opt/calen-backup
 cd /opt/calen-backup
 ```
 
-이 폴더는 아래 용도로 사용됩니다.
+???대뜑???꾨옒 ?⑸룄濡??ъ슜?⑸땲??
 
-- 백업 스크립트 저장
-- 임시 덤프 파일 저장
-- 크론 로그 저장
-
+- 諛깆뾽 ?ㅽ겕由쏀듃 ???- ?꾩떆 ?ㅽ봽 ?뚯씪 ???- ?щ줎 濡쒓렇 ???
 ---
 
-## 2. rclone 설치
+## 2. rclone ?ㅼ튂
 
-OCI 서버에서 설치합니다.
+OCI ?쒕쾭?먯꽌 ?ㅼ튂?⑸땲??
 
 ```bash
 sudo apt update
 sudo apt install -y rclone
 ```
 
-설치 확인:
+?ㅼ튂 ?뺤씤:
 
 ```bash
 rclone version
@@ -53,35 +49,34 @@ rclone version
 
 ---
 
-## 3. Google Drive remote 만들기
-
-OCI 서버에서 설정을 시작합니다.
+## 3. Google Drive remote 留뚮뱾湲?
+OCI ?쒕쾭?먯꽌 ?ㅼ젙???쒖옉?⑸땲??
 
 ```bash
 rclone config
 ```
 
-질문이 나오면 아래처럼 입력합니다.
+吏덈Ц???섏삤硫??꾨옒泥섎읆 ?낅젰?⑸땲??
 
-### 3-1. remote 생성
+### 3-1. remote ?앹꽦
 
 ```text
 n
 ```
 
-### 3-2. remote 이름
+### 3-2. remote ?대쫫
 
 ```text
 db-backup
 ```
 
-### 3-3. Storage 선택
+### 3-3. Storage ?좏깮
 
-`drive`를 선택합니다. 화면에 번호가 보이면 그 번호를 입력하면 됩니다.
+`drive`瑜??좏깮?⑸땲?? ?붾㈃??踰덊샇媛 蹂댁씠硫?洹?踰덊샇瑜??낅젰?섎㈃ ?⑸땲??
 
 ### 3-4. client_id
 
-그냥 엔터:
+洹몃깷 ?뷀꽣:
 
 ```text
 Enter
@@ -89,7 +84,7 @@ Enter
 
 ### 3-5. client_secret
 
-그냥 엔터:
+洹몃깷 ?뷀꽣:
 
 ```text
 Enter
@@ -97,21 +92,19 @@ Enter
 
 ### 3-6. scope
 
-아래 중 `3`을 선택합니다.
+?꾨옒 以?`3`???좏깮?⑸땲??
 
 ```text
 3
 ```
 
-의미:
+?섎?:
 
 - `drive.file`
-- rclone이 만든 파일 범위 안에서 업로드/관리 가능
-- 전체 Drive 접근보다 권한이 좁아서 더 안전함
-
+- rclone??留뚮뱺 ?뚯씪 踰붿쐞 ?덉뿉???낅줈??愿由?媛??- ?꾩껜 Drive ?묎렐蹂대떎 沅뚰븳??醫곸븘?????덉쟾??
 ### 3-7. root_folder_id
 
-그냥 엔터:
+洹몃깷 ?뷀꽣:
 
 ```text
 Enter
@@ -119,7 +112,7 @@ Enter
 
 ### 3-8. service_account_file
 
-그냥 엔터:
+洹몃깷 ?뷀꽣:
 
 ```text
 Enter
@@ -137,26 +130,25 @@ n
 y
 ```
 
-이 단계에서 브라우저 인증이 필요합니다.
+???④퀎?먯꽌 釉뚮씪?곗? ?몄쬆???꾩슂?⑸땲??
 
-### 3-11. Shared Drive 여부
+### 3-11. Shared Drive ?щ?
 
-아래 질문이 나오면 반드시 `n`을 선택합니다.
+?꾨옒 吏덈Ц???섏삤硫?諛섎뱶??`n`???좏깮?⑸땲??
 
 ```text
 Configure this as a Shared Drive (Team Drive)?
 n
 ```
 
-이 프로젝트의 백업은 일반 개인 Google Drive 기준입니다. `drive.file` scope로 `Shared Drive = y`를 선택하면 권한 부족 오류가 날 수 있습니다.
+???꾨줈?앺듃??諛깆뾽? ?쇰컲 媛쒖씤 Google Drive 湲곗??낅땲?? `drive.file` scope濡?`Shared Drive = y`瑜??좏깮?섎㈃ 沅뚰븳 遺議??ㅻ쪟媛 ?????덉뒿?덈떎.
 
-### 3-12. 설정 저장
-
+### 3-12. ?ㅼ젙 ???
 ```text
 y
 ```
 
-### 3-13. 설정 종료
+### 3-13. ?ㅼ젙 醫낅즺
 
 ```text
 q
@@ -164,55 +156,55 @@ q
 
 ---
 
-## 4. Google Drive 연결 확인
+## 4. Google Drive ?곌껐 ?뺤씤
 
-remote가 정상인지 확인합니다.
-
-```bash
-rclone lsd db-backup:
-```
-
-아무 에러 없이 끝나면 연결 성공입니다.
-
-예:
+remote媛 ?뺤긽?몄? ?뺤씤?⑸땲??
 
 ```bash
 rclone lsd db-backup:
 ```
 
-출력이 비어 있어도 에러가 없으면 정상입니다.
+?꾨Т ?먮윭 ?놁씠 ?앸굹硫??곌껐 ?깃났?낅땲??
+
+??
+
+```bash
+rclone lsd db-backup:
+```
+
+異쒕젰??鍮꾩뼱 ?덉뼱???먮윭媛 ?놁쑝硫??뺤긽?낅땲??
 
 ---
 
-## 5. DB 접속 정보 확인
+## 5. DB ?묒냽 ?뺣낫 ?뺤씤
 
-프로젝트 `.env`에서 DB 정보를 확인합니다.
+?꾨줈?앺듃 `.env`?먯꽌 DB ?뺣낫瑜??뺤씤?⑸땲??
 
 ```bash
 cd ~/calen
 grep -E '^(DB_NAME|DB_USER|DB_PASSWORD)=' .env
 ```
 
-이 값들은 문서나 채팅에 붙이지 말고, 스크립트 안에서만 읽도록 구성합니다.
+??媛믩뱾? 臾몄꽌??梨꾪똿??遺숈씠吏 留먭퀬, ?ㅽ겕由쏀듃 ?덉뿉?쒕쭔 ?쎈룄濡?援ъ꽦?⑸땲??
 
 ---
 
-## 6. 백업 스크립트 작성
+## 6. 諛깆뾽 ?ㅽ겕由쏀듃 ?묒꽦
 
-스크립트 파일을 엽니다.
+?ㅽ겕由쏀듃 ?뚯씪???쎈땲??
 
 ```bash
 nano /opt/calen-backup/backup-to-gdrive.sh
 ```
 
-레포에 포함된 복구용 스크립트를 그대로 설치해도 됩니다.
+?덊룷???ы븿??蹂듦뎄???ㅽ겕由쏀듃瑜?洹몃?濡??ㅼ튂?대룄 ?⑸땲??
 
 ```bash
 cd /home/ubuntu/calen
 install -m 750 deploy/oci/scripts/backup-to-gdrive.sh /opt/calen-backup/backup-to-gdrive.sh
 ```
 
-아래 내용을 그대로 넣습니다.
+?꾨옒 ?댁슜??洹몃?濡??ｌ뒿?덈떎.
 
 ```bash
 #!/usr/bin/env bash
@@ -242,21 +234,20 @@ rm -f "$FILE_PATH"
 find "$BACKUP_DIR" -type f -name 'calen-*.sql.gz' -mtime +1 -delete
 ```
 
-### 꼭 확인할 값
-
-아래 값은 서버 상황에 따라 수정해야 할 수 있습니다.
+### 瑗??뺤씤??媛?
+?꾨옒 媛믪? ?쒕쾭 ?곹솴???곕씪 ?섏젙?댁빞 ?????덉뒿?덈떎.
 
 #### `PROJECT_DIR`
 
-프로젝트 경로가 `~/calen`이 아닌 경우 수정합니다.
+?꾨줈?앺듃 寃쎈줈媛 `~/calen`???꾨땶 寃쎌슦 ?섏젙?⑸땲??
 
-예:
+??
 
 ```bash
 PROJECT_DIR="/home/ubuntu/calen"
 ```
 
-또는
+?먮뒗
 
 ```bash
 PROJECT_DIR="/root/calen"
@@ -264,27 +255,27 @@ PROJECT_DIR="/root/calen"
 
 #### `RCLONE_CONFIG`
 
-`rclone config`를 `ubuntu` 계정으로 만들었다면:
+`rclone config`瑜?`ubuntu` 怨꾩젙?쇰줈 留뚮뱾?덈떎硫?
 
 ```bash
 RCLONE_CONFIG="/home/ubuntu/.config/rclone/rclone.conf"
 ```
 
-`root` 계정으로 만들었다면:
+`root` 怨꾩젙?쇰줈 留뚮뱾?덈떎硫?
 
 ```bash
 RCLONE_CONFIG="/root/.config/rclone/rclone.conf"
 ```
 
-#### 컨테이너 이름
+#### 而⑦뀒?대꼫 ?대쫫
 
-현재 프로젝트에서는 DB 컨테이너가 아래 이름입니다.
+?꾩옱 ?꾨줈?앺듃?먯꽌??DB 而⑦뀒?대꼫媛 ?꾨옒 ?대쫫?낅땲??
 
 ```bash
 calen-mariadb-1
 ```
 
-프로젝트명이나 Compose 설정이 다르면 이 이름이 바뀔 수 있으니, 아래 명령으로 먼저 확인해도 됩니다.
+?꾨줈?앺듃紐낆씠??Compose ?ㅼ젙???ㅻⅤ硫????대쫫??諛붾????덉쑝?? ?꾨옒 紐낅졊?쇰줈 癒쇱? ?뺤씤?대룄 ?⑸땲??
 
 ```bash
 docker ps --format "table {{.Names}}\t{{.Image}}"
@@ -292,35 +283,32 @@ docker ps --format "table {{.Names}}\t{{.Image}}"
 
 ---
 
-## 7. 스크립트 실행 권한 부여
-
+## 7. ?ㅽ겕由쏀듃 ?ㅽ뻾 沅뚰븳 遺??
 ```bash
 chmod +x /opt/calen-backup/backup-to-gdrive.sh
 ```
 
 ---
 
-## 8. 수동 실행 테스트
-
-자동화 전에 반드시 한 번 수동 실행합니다.
+## 8. ?섎룞 ?ㅽ뻾 ?뚯뒪??
+?먮룞???꾩뿉 諛섎뱶????踰??섎룞 ?ㅽ뻾?⑸땲??
 
 ```bash
 /opt/calen-backup/backup-to-gdrive.sh
 ```
 
-정상이라면:
+?뺤긽?대씪硫?
 
-- `/opt/calen-backup/files` 아래에 `.sql.gz` 파일 임시 생성
-- Google Drive의 `calen-db-backups` 폴더에 같은 파일 업로드
-- 업로드 성공 후 로컬 `.sql.gz` 파일 삭제
+- `/opt/calen-backup/files` ?꾨옒??`.sql.gz` ?뚯씪 ?꾩떆 ?앹꽦
+- Google Drive??`calen-db-backups` ?대뜑??媛숈? ?뚯씪 ?낅줈??- ?낅줈???깃났 ??濡쒖뺄 `.sql.gz` ?뚯씪 ??젣
 
-로컬 확인:
+濡쒖뺄 ?뺤씤:
 
 ```bash
 ls -lh /opt/calen-backup/files
 ```
 
-Drive 확인:
+Drive ?뺤씤:
 
 ```bash
 rclone --config "/home/ubuntu/.config/rclone/rclone.conf" lsf db-backup:calen-db-backups
@@ -328,28 +316,27 @@ rclone --config "/home/ubuntu/.config/rclone/rclone.conf" lsf db-backup:calen-db
 
 ---
 
-## 9. 매일 00:00 자동 실행(cron)
+## 9. 留ㅼ씪 00:00 ?먮룞 ?ㅽ뻾(cron)
 
-크론 편집기를 엽니다.
+?щ줎 ?몄쭛湲곕? ?쎈땲??
 
 ```bash
 crontab -e
 ```
 
-처음 실행이면 에디터 선택 화면이 나올 수 있습니다. 쉬운 쪽은 `nano`입니다.
+泥섏쓬 ?ㅽ뻾?대㈃ ?먮뵒???좏깮 ?붾㈃???섏삱 ???덉뒿?덈떎. ?ъ슫 履쎌? `nano`?낅땲??
 
-맨 아래에 아래 한 줄을 추가합니다.
+留??꾨옒???꾨옒 ??以꾩쓣 異붽??⑸땲??
 
 ```cron
 0 0 * * * /opt/calen-backup/backup-to-gdrive.sh >> /opt/calen-backup/backup.log 2>&1
 ```
 
-의미:
+?섎?:
 
-- 매일 00:00 실행
-- 실행 로그를 `/opt/calen-backup/backup.log`에 저장
-
-등록 확인:
+- 留ㅼ씪 00:00 ?ㅽ뻾
+- ?ㅽ뻾 濡쒓렇瑜?`/opt/calen-backup/backup.log`?????
+?깅줉 ?뺤씤:
 
 ```bash
 crontab -l
@@ -357,21 +344,21 @@ crontab -l
 
 ---
 
-## 10. 운영 중 확인 명령
+## 10. ?댁쁺 以??뺤씤 紐낅졊
 
-### 최근 백업 로그 보기
+### 理쒓렐 諛깆뾽 濡쒓렇 蹂닿린
 
 ```bash
 tail -n 50 /opt/calen-backup/backup.log
 ```
 
-### 로컬 백업 파일 보기
+### 濡쒖뺄 諛깆뾽 ?뚯씪 蹂닿린
 
 ```bash
 ls -lh /opt/calen-backup/files
 ```
 
-### Google Drive 업로드 목록 보기
+### Google Drive ?낅줈??紐⑸줉 蹂닿린
 
 ```bash
 rclone --config "/home/ubuntu/.config/rclone/rclone.conf" lsf db-backup:calen-db-backups
@@ -379,47 +366,61 @@ rclone --config "/home/ubuntu/.config/rclone/rclone.conf" lsf db-backup:calen-db
 
 ---
 
-## 11. 보안 권장 사항
+## 11. 蹂댁븞 沅뚯옣 ?ы빆
 
-이 구성은 동작하지만, 운영에선 아래를 추가 권장합니다.
+??援ъ꽦? ?숈옉?섏?留? ?댁쁺?먯꽑 ?꾨옒瑜?異붽? 沅뚯옣?⑸땲??
 
-### 11-1. Drive에 올리기 전에 암호화
+### 11-1. Drive???щ━湲??꾩뿉 ?뷀샇??
+?꾩옱 ?뚯씪? `.sql.gz`???뺤텞留????곹깭?낅땲??  
+媛?ν븯硫?`gpg` ?먮뒗 `age`濡???踰????뷀샇?뷀빐???낅줈?쒗븯???몄씠 ?덉쟾?⑸땲??
 
-현재 파일은 `.sql.gz`라 압축만 된 상태입니다.  
-가능하면 `gpg` 또는 `age`로 한 번 더 암호화해서 업로드하는 편이 안전합니다.
+### 11-2. 蹂듦뎄 ?뚯뒪??
+諛깆뾽???쒕떎怨??댁꽌 蹂듦뎄媛 ?섎뒗 寃껋? ?꾨떃?덈떎.  
+諛섎뱶???뚯뒪??DB????踰?蹂듦뎄?대낫???덉감瑜??댁쁺 二쇨린???ы븿?쒗궎??寃?醫뗭뒿?덈떎.
 
-### 11-2. 복구 테스트
+### 11-3. ?좏겙 ?좎텧 二쇱쓽
 
-백업이 된다고 해서 복구가 되는 것은 아닙니다.  
-반드시 테스트 DB에 한 번 복구해보는 절차를 운영 주기에 포함시키는 게 좋습니다.
-
-### 11-3. 토큰 유출 주의
-
-아래 명령은 토큰을 그대로 보여줄 수 있으니 주의합니다.
+?꾨옒 紐낅졊? ?좏겙??洹몃?濡?蹂댁뿬以????덉쑝??二쇱쓽?⑸땲??
 
 ```bash
 rclone config show
 ```
 
-토큰이 유출됐다고 판단되면:
+?좏겙???좎텧?먮떎怨??먮떒?섎㈃:
 
-1. 해당 remote 삭제
-2. Google 계정에서 rclone 연결 권한 철회
-3. 다시 설정
+1. ?대떦 remote ??젣
+2. Google 怨꾩젙?먯꽌 rclone ?곌껐 沅뚰븳 泥좏쉶
+3. ?ㅼ떆 ?ㅼ젙
 
 ---
 
-## 12. 이 구성의 핵심 요약
+## 12. ??援ъ꽦???듭떖 ?붿빟
 
-이 프로젝트에서 실제로 동작한 백업 흐름은 아래입니다.
+???꾨줈?앺듃?먯꽌 ?ㅼ젣濡??숈옉??諛깆뾽 ?먮쫫? ?꾨옒?낅땲??
 
-1. `mariadb-dump`로 현재 운영 DB를 덤프
-2. `gzip`으로 압축
-3. `rclone`으로 Google Drive 업로드
-4. `cron`으로 매일 00:00 자동 실행
+1. `mariadb-dump`濡??꾩옱 ?댁쁺 DB瑜??ㅽ봽
+2. `gzip`?쇰줈 ?뺤텞
+3. `rclone`?쇰줈 Google Drive ?낅줈??4. `cron`?쇰줈 留ㅼ씪 00:00 ?먮룞 ?ㅽ뻾
 
-이 구조를 쓰면:
+??援ъ“瑜??곕㈃:
 
-- OCI 서버가 망가져도 Drive에 오프사이트 백업이 남고
-- DB 실수 삭제/손상 시 특정 시점으로 복구할 수 있으며
-- 업로드 성공 후 로컬 백업 파일을 삭제해 서버 디스크가 누적 백업으로 가득 차는 일을 줄일 수 있습니다
+- OCI ?쒕쾭媛 留앷??몃룄 Drive???ㅽ봽?ъ씠??諛깆뾽???④퀬
+- DB ?ㅼ닔 ??젣/?먯긽 ???뱀젙 ?쒖젏?쇰줈 蹂듦뎄?????덉쑝硫?- ?낅줈???깃났 ??濡쒖뺄 諛깆뾽 ?뚯씪????젣???쒕쾭 ?붿뒪?ш? ?꾩쟻 諛깆뾽?쇰줈 媛??李⑤뒗 ?쇱쓣 以꾩씪 ???덉뒿?덈떎
+
+### 11-3. 백업 스크립트 암호화 옵션
+
+레포에 포함된 `deploy/oci/scripts/backup-to-gdrive.sh`는 업로드 전에 백업 파일을 선택적으로 암호화할 수 있습니다. 기존 설치 호환성을 위해 기본값은 `BACKUP_ENCRYPTION_MODE=none`이지만, 운영 백업은 Google Drive로 나가기 전에 `age` 또는 `gpg`를 사용하는 편이 안전합니다.
+
+```bash
+# age 예시
+BACKUP_ENCRYPTION_MODE=age
+BACKUP_AGE_RECIPIENTS=age1...
+KEEP_PLAINTEXT_AFTER_ENCRYPTION=false
+
+# gpg 예시
+BACKUP_ENCRYPTION_MODE=gpg
+BACKUP_GPG_RECIPIENT=backup-ops@example.com
+KEEP_PLAINTEXT_AFTER_ENCRYPTION=false
+```
+
+암호화 모드를 켜면 업로드 대상 파일명은 각각 `.sql.gz.age` 또는 `.sql.gz.gpg`가 됩니다. 스크립트는 업로드 파일과 같은 이름의 `.sha256` sidecar도 함께 올립니다. 개인키, passphrase, rclone token은 백업 remote와 이 레포에 저장하지 말고 운영 secret storage나 별도 키 보관 절차에 둡니다.

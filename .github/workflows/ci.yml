@@ -98,6 +98,16 @@ jobs:
       - name: Verify large media and thumbnail processing contract
         shell: pwsh
         run: ./scripts/verify-media-processing-contract.ps1
+  file-upload-security-contract:
+    name: File upload security contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Verify file upload security contract
+        shell: pwsh
+        run: ./scripts/verify-file-upload-security-contract.ps1
   pwa-mobile-baseline:
     name: PWA mobile baseline
     runs-on: ubuntu-latest
@@ -284,6 +294,7 @@ jobs:
       - admin-audit-contract
       - privacy-control-contract
       - media-processing-contract
+      - file-upload-security-contract
       - ledger-ai-coach-contract
       - ledger-classification-contract
       - ledger-anomaly-contract
@@ -311,6 +322,7 @@ jobs:
             [admin-audit-contract]="${{ needs['admin-audit-contract'].result }}"
             [privacy-control-contract]="${{ needs['privacy-control-contract'].result }}"
             [media-processing-contract]="${{ needs['media-processing-contract'].result }}"
+            [file-upload-security-contract]="${{ needs['file-upload-security-contract'].result }}"
             [ledger-ai-coach-contract]="${{ needs['ledger-ai-coach-contract'].result }}"
             [ledger-classification-contract]="${{ needs['ledger-classification-contract'].result }}"
             [ledger-anomaly-contract]="${{ needs['ledger-anomaly-contract'].result }}"

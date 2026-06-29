@@ -22,6 +22,19 @@ This contract records how TravelLedger should handle large photo/video uploads a
 | Video preview queue | Optional poster frame or metadata extraction for video files. | Blocking upload completion or serving full video bytes as thumbnail fallback. | Record video preview status separately from original object availability. |
 | Data export media queue | Large photo/file archive generation, progress, encryption, retry/resume, and restore rehearsal evidence. | Inline privacy export response for ledger CSV and manifests. | Keep binary archive generation async and encrypted; current `/api/privacy/data-export` remains ledger/manifests only. |
 
+## Concrete lane ownership
+
+| Lane | Trigger | Allowed work | Forbidden work | Bounded controls |
+| --- | --- | --- | --- | --- |
+| Original media upload lane | UI/API upload prepare and completion requests. | Validate file metadata, object-key owner/record scope, original object availability, durable media row/status, and abandoned upload cleanup. | Thumbnail retries, image decode loops, public-share/token mutation, AI/OCR work, and media export archive creation. | `TRAVEL_PRESIGNED_UPLOAD_ENABLED`, object prefix scope, per-feature upload limits, and request/auth rate limits. |
+| Thumbnail backfill/reprocessing lane | Scheduled/manual repair of existing image media rows. | Detect missing prepared variants, call `ensurePreparedThumbnails`, count created/already-present/skipped/failed statuses, and persist bounded failure evidence. | Original upload authorization, presigned URL minting, upload-byte acceptance, public-share/token mutation, video transcoding, and export archive creation. | `TRAVEL_THUMBNAIL_BACKFILL_ENABLED`, `TRAVEL_THUMBNAIL_BACKFILL_FIXED_DELAY_MS`, `TRAVEL_THUMBNAIL_BACKFILL_INITIAL_DELAY_MS`, `TRAVEL_THUMBNAIL_BACKFILL_PAGE_SIZE`, and `TRAVEL_THUMBNAIL_BACKFILL_MAX_ITEMS_PER_RUN`. |
+| Future video/transcode lane | Explicit video preview or transcode job enqueue. | Optional poster/metadata extraction, retry/backoff, status updates, and metrics for expensive video processing. | Synchronous request-thread video decoding, thumbnail backfill reuse, and direct serving of full video bytes as thumbnail fallback. | A separate queue/executor/metrics before broad video processing is enabled. |
+
+- `TRAVEL_PRESIGNED_UPLOAD_ENABLED` controls browser direct original uploads; it is not a switch for thumbnail workers.
+- The `TRAVEL_THUMBNAIL_BACKFILL_*` variables control only the thumbnail backfill/reprocessing lane.
+- Operators must not process original video/photo uploads on the thumbnail backfill scheduler, mint presigned upload URLs, mutate sharing/public-token state, or run export archive work.
+- Future video/transcode support must add a separate queue/executor/metrics before broad video processing is enabled and must not reuse the thumbnail backfill scheduler.
+
 ## Required invariants
 
 | Invariant | Reason |
@@ -57,6 +70,8 @@ A release that changes travel media upload, family album upload, drive preview t
 - A test or contract update proving owner-scoped object-key validation still happens before object metadata reads.
 - A test or contract update proving thumbnail failures do not fall back to original private bytes.
 - Bounded worker settings for any new processor: enable flag, batch/page size, max items per run, running guard, retry/backoff policy, and safe failure reason.
+- Evidence that `TRAVEL_THUMBNAIL_BACKFILL_*` remains present in both env examples and mapped through `application.yml` whenever thumbnail worker behavior changes.
+- Separate queue/executor/metrics evidence before enabling any video preview/transcode processor.
 - A privacy review proving queue payloads and logs do not include raw presigned URLs, public tokens, API keys, secondary PINs, raw EXIF payloads, or full filesystem paths.
 
 ## CI contract

@@ -1,0 +1,43 @@
+﻿# Observability alerts
+
+This project already exposes Spring Actuator Prometheus metrics. The OCI monitoring stack now loads Prometheus alert rules from:
+
+```text
+deploy/oci/monitoring/prometheus/rules/*.yml
+```
+
+## Active Prometheus alerts
+
+| Alert | Signal | Severity | Why it matters |
+| --- | --- | --- | --- |
+| CalenBackendDown | `up{job="calen-backend"} == 0` | critical | Backend metrics endpoint is not reachable. |
+| CalenNodeExporterDown | `up{job="node-exporter"} == 0` | warning | Host metrics are missing for app/data capacity checks. |
+| CalenBackendHigh5xxRate | 5xx ratio above 5% for 5m | critical | Users are seeing server-side failures. |
+| CalenBackendSlowP95 | p95 HTTP latency above 2s for 10m | warning | API responsiveness is degrading. |
+| CalenHikariPoolNearlyExhausted | Hikari active/max above 90% for 5m | critical | DB connection starvation is likely. |
+| CalenJvmHeapHigh | JVM heap above 90% for 10m | warning | The backend may be heading toward GC pressure/OOM. |
+| CalenHostDiskNearlyFull | filesystem free space below 10% for 10m | critical | Uploads, backups, logs, and database files may fail. |
+
+Prometheus evaluates these rules even before Alertmanager is introduced. Route them through Grafana alerting or add Alertmanager when notification channels are ready.
+
+## Metric contract for the next instrumentation pass
+
+The following alerts are part of the operational target but require application/exporter metrics that are not present yet.
+
+| Area | Proposed metric | Labels | Alert condition |
+| --- | --- | --- | --- |
+| Ledger AI | `calen_ledger_ai_requests_total` | `provider`, `status` | failure ratio above 10% for 10m |
+| Ledger AI latency | `calen_ledger_ai_request_seconds_bucket` | `provider` | p95 above configured read timeout budget |
+| OCR | `calen_ledger_ocr_requests_total` | `status`, `reason` | any sustained failure burst for 10m |
+| n8n | `calen_external_workflow_request_seconds_bucket` | `workflow`, `status` | p95 above 30s or failures above 10% |
+| Backup | `calen_data_ops_backup_runs_total` | `type`, `status` | no success in 26h or any failed run |
+| MinIO | `calen_minio_storage_used_bytes` / `calen_minio_storage_capacity_bytes` | `bucket` | usage above 85% |
+| Redis | `calen_redis_connection_available` | `role` | value is 0 for 5m |
+| Public links | `calen_public_download_link_requests_total` | `status` | invalid/revoked/expired attempts spike |
+
+Implementation notes:
+
+- Use Micrometer `Counter` and `Timer` in AI/OCR/backup/public-link services.
+- Keep labels bounded. Do not include user IDs, tokens, filenames, prompts, or IP addresses.
+- Record status values such as `success`, `failure`, `timeout`, `invalid`, `expired`, and `revoked`.
+- Alert annotations should describe operational action, not expose private request data.

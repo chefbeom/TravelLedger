@@ -56,6 +56,21 @@ Then open:
 
 Set `GRAFANA_ADMIN_PASSWORD` before first start.
 
+## Alerts
+
+Prometheus loads alert rules from:
+
+```text
+deploy/oci/monitoring/prometheus/rules/*.yml
+```
+
+The default rules cover backend availability, HTTP 5xx ratio, p95 latency, Hikari pool pressure, JVM heap pressure, node_exporter availability, and host disk capacity. See `docs/observability_alerts.md` for the full rule list and the metric contract for AI/OCR/backup/Redis/MinIO alerts.
+
+After editing rules, restart or reload Prometheus:
+
+```sh
+docker compose -f docker-compose.oci.app.yml -f docker-compose.oci.monitoring.yml restart prometheus
+```
 ## Dashboard imports
 
 Grafana is pre-provisioned with a `Prometheus` datasource.

@@ -13,6 +13,7 @@ services:
     volumes:
       - ./deploy/oci/monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - ./deploy/oci/monitoring/prometheus/file_sd:/etc/prometheus/file_sd:ro
+      - ./deploy/oci/monitoring/prometheus/rules:/etc/prometheus/rules:ro
       - prometheus-data:/prometheus
     extra_hosts:
       - "host.docker.internal:host-gateway"

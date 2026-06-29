@@ -1,0 +1,96 @@
+﻿groups:
+  - name: calen.platform.availability
+    rules:
+      - alert: CalenBackendDown
+        expr: up{job="calen-backend"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          service: calen-backend
+        annotations:
+          summary: Calen backend metrics endpoint is down
+          description: Prometheus has not scraped backend:8080/actuator/prometheus for at least 2 minutes.
+
+      - alert: CalenNodeExporterDown
+        expr: up{job="node-exporter"} == 0
+        for: 5m
+        labels:
+          severity: warning
+          service: node-exporter
+        annotations:
+          summary: Node exporter is down
+          description: Node exporter target {{ $labels.instance }} has been unreachable for at least 5 minutes.
+
+  - name: calen.backend.slo
+    rules:
+      - alert: CalenBackendHigh5xxRate
+        expr: |
+          sum(rate(http_server_requests_seconds_count{job="calen-backend", status=~"5.."}[5m]))
+          /
+          clamp_min(sum(rate(http_server_requests_seconds_count{job="calen-backend"}[5m])), 0.001)
+          > 0.05
+        for: 5m
+        labels:
+          severity: critical
+          service: calen-backend
+        annotations:
+          summary: Backend 5xx rate is above 5 percent
+          description: More than 5 percent of backend HTTP requests have failed with 5xx responses for 5 minutes.
+
+      - alert: CalenBackendSlowP95
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum by (le) (rate(http_server_requests_seconds_bucket{job="calen-backend"}[5m]))
+          ) > 2
+        for: 10m
+        labels:
+          severity: warning
+          service: calen-backend
+        annotations:
+          summary: Backend p95 latency is above 2 seconds
+          description: Backend p95 request latency has stayed above 2 seconds for 10 minutes.
+
+      - alert: CalenHikariPoolNearlyExhausted
+        expr: |
+          max by (pool) (hikaricp_connections_active{job="calen-backend"})
+          /
+          clamp_min(max by (pool) (hikaricp_connections_max{job="calen-backend"}), 1)
+          > 0.90
+        for: 5m
+        labels:
+          severity: critical
+          service: calen-backend
+        annotations:
+          summary: Backend DB connection pool is nearly exhausted
+          description: Hikari pool {{ $labels.pool }} has used more than 90 percent of configured connections for 5 minutes.
+
+      - alert: CalenJvmHeapHigh
+        expr: |
+          sum(jvm_memory_used_bytes{job="calen-backend", area="heap"})
+          /
+          clamp_min(sum(jvm_memory_max_bytes{job="calen-backend", area="heap"}), 1)
+          > 0.90
+        for: 10m
+        labels:
+          severity: warning
+          service: calen-backend
+        annotations:
+          summary: Backend JVM heap usage is high
+          description: JVM heap usage has stayed above 90 percent for 10 minutes.
+
+  - name: calen.host.capacity
+    rules:
+      - alert: CalenHostDiskNearlyFull
+        expr: |
+          node_filesystem_avail_bytes{job="node-exporter", fstype!~"tmpfs|overlay|squashfs|proc|sysfs"}
+          /
+          node_filesystem_size_bytes{job="node-exporter", fstype!~"tmpfs|overlay|squashfs|proc|sysfs"}
+          < 0.10
+        for: 10m
+        labels:
+          severity: critical
+          service: node-exporter
+        annotations:
+          summary: Host filesystem has less than 10 percent free space
+          description: Filesystem {{ $labels.mountpoint }} on {{ $labels.server }} has less than 10 percent free space for 10 minutes.

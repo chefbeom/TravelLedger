@@ -1,4 +1,4 @@
-﻿# Admin Audit Log Contract
+# Admin Audit Log Contract
 
 Updated: 2026-06-30
 
@@ -47,7 +47,7 @@ This contract makes high-risk administrator operations reviewable and testable. 
 | `DriveAdminController` | Records drive user status and provider storage-capacity mutations. |
 | `LoginAuditLogServiceTest` | Proves `recordAdminAction` stores `ADMIN_ACTION`, actor, IP, user agent, detail, success flag, and admin user link. |
 | `AdminControllerAuditDetailTest` | Proves restore and uploaded-restore audit details strip Windows and Unix directory segments before calling `recordAdminAction`. |
-| `DriveAdminSecurityIntegrationTest` | Proves drive storage capacity mutation requires verified admin plus CSRF and records safe audit detail without `password`, `token`, or `key`. |
+| `DriveAdminSecurityIntegrationTest` | Proves drive storage capacity and drive user status mutations require verified admin plus CSRF and record safe audit detail without `password`, `token`, or `key`. |
 | `docs/security_baseline_checklist.md` | Tracks `AUDIT-01` as the security baseline item for high-risk admin actions. |
 
 ## Test and CI gate

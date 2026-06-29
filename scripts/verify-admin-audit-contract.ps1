@@ -1,4 +1,4 @@
-﻿Set-StrictMode -Version Latest
+Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $contractPath = 'docs/admin_audit_log_contract.md'
@@ -114,7 +114,7 @@ if ($findings.Count -eq 0) {
             $findings.Add("AdminControllerAuditDetailTest missing safe audit file-name evidence snippet: $snippet") | Out-Null
         }
     }
-    foreach ($snippet in @('DRIVE_STORAGE_CAPACITY_UPDATE', 'doesNotContain("password", "token", "key")', 'LoginAuditStatus.ADMIN_ACTION')) {
+    foreach ($snippet in @('DRIVE_STORAGE_CAPACITY_UPDATE', 'DRIVE_USER_STATUS_UPDATE', 'administratorUserStatusMutationRequiresCsrfAndRecordsSafeAuditDetail', 'doesNotContain("password", "token", "key")', 'LoginAuditStatus.ADMIN_ACTION')) {
         if (-not $driveAdminSecurityTest.Contains($snippet)) {
             $findings.Add("DriveAdminSecurityIntegrationTest missing safe audit evidence snippet: $snippet") | Out-Null
         }

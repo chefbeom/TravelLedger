@@ -107,6 +107,37 @@ class DriveAdminSecurityIntegrationTest {
                 .andExpect(jsonPath("$.summary.totalUserCount").isNumber());
     }
 
+
+    @Test
+    void administratorUserStatusMutationRequiresCsrfAndRecordsSafeAuditDetail() throws Exception {
+        AppUserPrincipal admin = principal(1L, "admin", AppUserRole.ADMIN);
+
+        mockMvc.perform(patch("/api/administrator/users/{userId}/status", 2L)
+                        .with(user(admin))
+                        .session(verifiedSession(admin.userId()))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of("active", false))))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(patch("/api/administrator/users/{userId}/status", 2L)
+                        .with(user(admin))
+                        .with(csrf())
+                        .session(verifiedSession(admin.userId()))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of("active", false))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(2L))
+                .andExpect(jsonPath("$.active").value(false));
+
+        LoginAuditLog auditLog = loginAuditLogRepository.findAll().stream()
+                .filter(log -> log.getStatus() == LoginAuditStatus.ADMIN_ACTION)
+                .filter(log -> "admin".equals(log.getLoginId()))
+                .filter(log -> log.getDetail() != null && log.getDetail().startsWith("DRIVE_USER_STATUS_UPDATE"))
+                .max(Comparator.comparing(LoginAuditLog::getId))
+                .orElseThrow();
+        assertThat(auditLog.getDetail()).isEqualTo("DRIVE_USER_STATUS_UPDATE:userId=2,active=false");
+        assertThat(auditLog.getDetail()).doesNotContain("password", "token", "key");
+    }
     private AppUserPrincipal principal(Long userId, String loginId, AppUserRole role) {
         return new AppUserPrincipal(userId, loginId, loginId, "password", role, true);
     }

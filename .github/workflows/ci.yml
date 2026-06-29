@@ -109,6 +109,37 @@ jobs:
           chmod +x ./gradlew
           ./gradlew test --no-daemon
 
+  backend-security-tests:
+    name: Backend security-focused tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+      - name: Run security-focused tests
+        run: |
+          chmod +x ./gradlew
+          ./gradlew test --no-daemon \
+            --tests com.playdata.calen.account.AdminDashboardIntegrationTest \
+            --tests com.playdata.calen.account.ProfileCredentialIntegrationTest \
+            --tests com.playdata.calen.account.PrivacyControllerIntegrationTest \
+            --tests com.playdata.calen.drive.web.DriveAdminSecurityIntegrationTest \
+            --tests com.playdata.calen.drive.service.DriveDownloadLinkServiceTest \
+            --tests com.playdata.calen.drive.service.DriveDownloadLinkAccessLogServiceTest \
+            --tests com.playdata.calen.travel.service.TravelPublicMediaTokenServiceTest \
+            --tests com.playdata.calen.ledger.ocr.LedgerOcrServiceTest \
+            --tests com.playdata.calen.ledger.ai.LedgerAiRemoteResponseValidatorTest \
+            --tests com.playdata.calen.ledger.ai.LedgerAiAnalysisServiceTest
+
   frontend-build:
     name: Frontend build
     runs-on: ubuntu-latest
@@ -153,6 +184,7 @@ jobs:
       - pwa-mobile-baseline
       - service-decomposition-plan
       - backend-test
+      - backend-security-tests
       - frontend-build
       - frontend-e2e-smoke-checklist
     if: always()
@@ -169,6 +201,7 @@ jobs:
             [pwa-mobile-baseline]="${{ needs['pwa-mobile-baseline'].result }}"
             [service-decomposition-plan]="${{ needs['service-decomposition-plan'].result }}"
             [backend-test]="${{ needs['backend-test'].result }}"
+            [backend-security-tests]="${{ needs['backend-security-tests'].result }}"
             [frontend-build]="${{ needs['frontend-build'].result }}"
             [frontend-e2e-smoke-checklist]="${{ needs['frontend-e2e-smoke-checklist'].result }}"
           )

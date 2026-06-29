@@ -75,7 +75,7 @@ Current explicit public routes from `SecurityConfig`:
 
 Before promoting a build that changes auth, admin, sharing, upload, OCR, AI, or backup behavior:
 
-1. Run backend security-focused tests.
+1. Run backend security-focused tests. GitHub Actions now exposes this as `backend-security-tests` and runs admin, remember-me/profile, privacy, drive sharing/public-link, travel public-media token, OCR, and ledger AI safety tests explicitly.
 2. Verify `.env.example` and `application.yml` have matching public configuration names.
 3. Run `scripts/scan-secrets.ps1` and confirm no real secrets are present in committed files.
 4. Run `scripts/verify-db-migrations.ps1` when schema files change.
@@ -83,3 +83,7 @@ Before promoting a build that changes auth, admin, sharing, upload, OCR, AI, or 
 6. Run `scripts/verify-prometheus-alerts.ps1` when alert rules or observability docs change.
 7. Run `scripts/verify-e2e-smoke-checklist.ps1` and attach P0 browser smoke evidence for changed frontend-critical flows.
 8. Confirm operational dashboards or alerts cover the changed failure mode.
+
+## CI Security Gate
+
+The `backend-security-tests` GitHub Actions job intentionally duplicates a focused subset of `backend-test` so security-critical regressions are visible by name in branch protection and release review. Keep this list updated whenever a new P0 security test is added for authentication, admin APIs, sharing/public tokens, upload validation, OCR, AI, or privacy controls.

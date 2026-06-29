@@ -11,6 +11,8 @@ import com.playdata.calen.account.dto.PrivacyCleanupResponse;
 import com.playdata.calen.account.service.PrivacyManagementService;
 import com.playdata.calen.drive.repository.DriveDownloadLinkRepository;
 import com.playdata.calen.ledger.repository.LedgerAiAnalysisHistoryRepository;
+import com.playdata.calen.travel.repository.TravelExpenseRecordRepository;
+import com.playdata.calen.travel.repository.TravelPlanRepository;
 import java.time.LocalDateTime;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -30,13 +32,21 @@ class PrivacyManagementServiceTest {
     @Mock
     private DriveDownloadLinkRepository driveDownloadLinkRepository;
 
+    @Mock
+    private TravelPlanRepository travelPlanRepository;
+
+    @Mock
+    private TravelExpenseRecordRepository travelExpenseRecordRepository;
+
     private PrivacyManagementService service;
 
     @BeforeEach
     void setUp() {
         service = new PrivacyManagementService(
                 ledgerAiAnalysisHistoryRepository,
-                driveDownloadLinkRepository
+                driveDownloadLinkRepository,
+                travelPlanRepository,
+                travelExpenseRecordRepository
         );
     }
 
@@ -49,28 +59,51 @@ class PrivacyManagementServiceTest {
 
         ArgumentCaptor<LocalDateTime> processedAtCaptor = ArgumentCaptor.forClass(LocalDateTime.class);
         verify(driveDownloadLinkRepository).revokeAllActiveByOwnerId(eq(USER_ID), processedAtCaptor.capture());
-        verifyNoInteractions(ledgerAiAnalysisHistoryRepository);
+        verifyNoInteractions(ledgerAiAnalysisHistoryRepository, travelPlanRepository, travelExpenseRecordRepository);
 
         assertThat(response.aiAnalysisHistoriesDeleted()).isZero();
         assertThat(response.publicDownloadLinksRevoked()).isEqualTo(2);
+        assertThat(response.travelPublicMediaSharesRevoked()).isZero();
         assertThat(response.processedAt()).isEqualTo(processedAtCaptor.getValue());
         assertThat(response.processedAt()).isNotNull();
     }
 
     @Test
-    void cleanupSensitiveDataDeletesAiHistoryAndRevokesOnlyCurrentOwnerLinks() {
+    void revokeTravelPublicMediaSharesScopesPlanAndCommunityRecordUpdatesToCurrentOwner() {
+        when(travelPlanRepository.revokePublicSharingByOwnerId(USER_ID)).thenReturn(2);
+        when(travelExpenseRecordRepository.revokeCommunitySharingByOwnerId(USER_ID)).thenReturn(3);
+
+        PrivacyCleanupResponse response = service.revokeTravelPublicMediaShares(USER_ID);
+
+        verify(travelPlanRepository).revokePublicSharingByOwnerId(USER_ID);
+        verify(travelExpenseRecordRepository).revokeCommunitySharingByOwnerId(USER_ID);
+        verifyNoInteractions(ledgerAiAnalysisHistoryRepository, driveDownloadLinkRepository);
+
+        assertThat(response.aiAnalysisHistoriesDeleted()).isZero();
+        assertThat(response.publicDownloadLinksRevoked()).isZero();
+        assertThat(response.travelPublicMediaSharesRevoked()).isEqualTo(5);
+        assertThat(response.processedAt()).isNotNull();
+    }
+
+    @Test
+    void cleanupSensitiveDataDeletesAiHistoryAndRevokesOnlyCurrentOwnerShares() {
         when(ledgerAiAnalysisHistoryRepository.deleteAllByOwnerId(USER_ID)).thenReturn(3);
         when(driveDownloadLinkRepository.revokeAllActiveByOwnerId(eq(USER_ID), any(LocalDateTime.class)))
                 .thenReturn(5);
+        when(travelPlanRepository.revokePublicSharingByOwnerId(USER_ID)).thenReturn(2);
+        when(travelExpenseRecordRepository.revokeCommunitySharingByOwnerId(USER_ID)).thenReturn(4);
 
         PrivacyCleanupResponse response = service.cleanupSensitiveData(USER_ID);
 
         ArgumentCaptor<LocalDateTime> processedAtCaptor = ArgumentCaptor.forClass(LocalDateTime.class);
         verify(ledgerAiAnalysisHistoryRepository).deleteAllByOwnerId(USER_ID);
         verify(driveDownloadLinkRepository).revokeAllActiveByOwnerId(eq(USER_ID), processedAtCaptor.capture());
+        verify(travelPlanRepository).revokePublicSharingByOwnerId(USER_ID);
+        verify(travelExpenseRecordRepository).revokeCommunitySharingByOwnerId(USER_ID);
 
         assertThat(response.aiAnalysisHistoriesDeleted()).isEqualTo(3);
         assertThat(response.publicDownloadLinksRevoked()).isEqualTo(5);
+        assertThat(response.travelPublicMediaSharesRevoked()).isEqualTo(6);
         assertThat(response.processedAt()).isEqualTo(processedAtCaptor.getValue());
     }
 }

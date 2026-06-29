@@ -5,6 +5,7 @@ import java.time.LocalDateTime;
 public record PrivacyCleanupResponse(
         int aiAnalysisHistoriesDeleted,
         int publicDownloadLinksRevoked,
+        int travelPublicMediaSharesRevoked,
         LocalDateTime processedAt
 ) {
 }

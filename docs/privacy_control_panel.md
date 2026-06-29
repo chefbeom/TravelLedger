@@ -2,7 +2,7 @@
 
 Updated: 2026-06-30
 
-This document records the first backend slice for user-facing privacy controls. The UI can call these endpoints after showing an explicit confirmation dialog.
+This document records the backend slice for user-facing privacy controls. The UI can call these endpoints after showing an explicit confirmation dialog.
 
 ## Implemented Controls
 
@@ -10,50 +10,64 @@ This document records the first backend slice for user-facing privacy controls. 
 | --- | --- | --- |
 | Delete my AI analysis history | `DELETE /api/privacy/ai-analysis-history` | Permanently deletes ledger AI analysis history rows owned by the current user. |
 | Revoke my public drive links | `DELETE /api/privacy/public-download-links` | Sets `revokedAt` on all active public download links owned by the current user. |
-| Cleanup sensitive derived data | `POST /api/privacy/cleanup` | Runs both AI-history deletion and public-link revocation in one authenticated request. |
+| Revoke my travel public media shares | `DELETE /api/privacy/travel-public-media-shares` | Disables public sharing on the current user's travel plans and community-shared travel memory records so existing stateless media tokens no longer pass visibility checks. |
+| Cleanup sensitive derived data | `POST /api/privacy/cleanup` | Runs AI-history deletion, public drive-link revocation, and travel public-media share revocation in one authenticated request. |
 | Download my ledger data archive | `POST /api/privacy/data-export` | Downloads a secondary-PIN-protected zip containing ledger CSV and export metadata. |
 
 ## Safety Rules
 
 | Rule | Reason |
 | --- | --- |
-| Current user ID comes only from `@AuthenticationPrincipal`. | Prevents users from targeting another account by request body or query parameter. |
-| Public links are revoked, not deleted. | Keeps owner-visible metadata and access-log evidence while stopping future token use. |
-| AI history deletion is hard-delete. | AI history stores derived prompts/results and is user-controlled sensitive data. |
-| Endpoints are not public allowlist routes. | CSRF and authenticated-session protections apply like other state-changing APIs. |
-| UI must show counts returned by the backend. | Users need confirmation of how many derived records were affected. |
+| Every endpoint is under `/api/privacy` and requires authentication. | Prevents unauthenticated destructive privacy operations. |
+| Unsafe methods require CSRF. | Keeps browser-originated destructive operations protected. |
+| Public drive links are revoked, not deleted. | Keeps owner-visible metadata and access-log evidence while stopping future token use. |
+| Travel media tokens are stateless, so revocation disables the public share surfaces they depend on. | Existing token strings cannot be deleted from storage because they are derived from `mediaId + secret`; visibility checks must fail instead. |
+| Data export requires a verified secondary PIN in the current session. | Export can contain private ledger data and should require stronger intent. |
+| Export archives are encrypted with the secondary PIN. | Protects downloaded archives at rest after leaving the server. |
+| Export metadata excludes operational secrets. | Keeps API keys, tokens, workflow URLs, and passwords out of user data archives. |
 
-## Response Contract
+## Response Shape
 
 ```json
 {
   "aiAnalysisHistoriesDeleted": 3,
   "publicDownloadLinksRevoked": 2,
-  "processedAt": "2026-06-29T12:34:56"
+  "travelPublicMediaSharesRevoked": 4,
+  "processedAt": "2026-06-30T12:00:00"
 }
 ```
+
+`travelPublicMediaSharesRevoked` counts disabled public travel plans plus community-shared travel memory records. It is not a count of token strings because travel public media tokens are stateless.
 
 ## Test Evidence
 
 | Evidence | Coverage |
 | --- | --- |
 | `PrivacyManagementServiceTest.revokePublicDownloadLinksScopesUpdateToCurrentOwner` | Verifies public drive link revocation calls the owner-scoped repository method with only the authenticated user ID and returns the affected count. |
-| `PrivacyManagementServiceTest.cleanupSensitiveDataDeletesAiHistoryAndRevokesOnlyCurrentOwnerLinks` | Verifies combined cleanup deletes only the authenticated user AI history and revokes only that user's active public download links. |
+| `PrivacyManagementServiceTest.revokeTravelPublicMediaSharesScopesPlanAndCommunityRecordUpdatesToCurrentOwner` | Verifies travel public media share revocation disables owner-scoped public plans and community-shared records only. |
+| `PrivacyManagementServiceTest.cleanupSensitiveDataDeletesAiHistoryAndRevokesOnlyCurrentOwnerShares` | Verifies combined cleanup deletes only the authenticated user AI history and revokes only that user's public drive/travel share surfaces. |
 | `PrivacyControllerIntegrationTest.aiAnalysisHistoryDeletionRequiresAuthenticationAndCsrf` | Verifies AI analysis history deletion rejects unauthenticated requests and authenticated unsafe requests without CSRF. |
 | `PrivacyControllerIntegrationTest.publicDownloadLinkRevocationRequiresAuthenticationAndCsrf` | Verifies public-link revocation rejects unauthenticated requests and authenticated unsafe requests without CSRF. |
+| `PrivacyControllerIntegrationTest.travelPublicMediaShareRevocationRequiresAuthenticationAndCsrf` | Verifies travel public media share revocation rejects unauthenticated requests and authenticated unsafe requests without CSRF. |
 | `PrivacyControllerIntegrationTest.sensitiveCleanupRequiresAuthenticationAndCsrf` | Verifies combined sensitive cleanup rejects unauthenticated requests and authenticated unsafe requests without CSRF. |
 | `PrivacyControllerIntegrationTest.dataExportRequiresAuthenticationCsrfAndVerifiedSecondaryPin` | Verifies data export rejects unauthenticated requests, missing-CSRF requests, and authenticated sessions without a verified secondary PIN before returning a zip attachment. |
-## Next Controls
+| `DataPortabilityExportServiceTest.exportUserDataArchiveBuildsEncryptedArchiveWithoutOperationalSecrets` | Verifies the exported archive is encrypted, contains ledger CSV plus metadata, and excludes secret-like values. |
+| `DataPortabilityExportServiceTest.exportUserDataArchiveVerifiesSecondaryPinBeforeExportingLedgerData` | Verifies secondary PIN validation happens before ledger data is exported. |
 
-| Candidate | Notes |
+## Remaining Privacy Backlog
+
+| Item | Notes |
 | --- | --- |
-| Strip GPS metadata from travel/family photos | Needs object rewrite path and thumbnail invalidation. |
-| Extend data archive | Add owned file manifests and optional binary archive generation after queue/progress controls exist. |
-| Revoke shared travel/public media tokens | Mirror the drive-link revocation pattern for travel media. |
-| Delete OCR upload artifacts | Needs artifact inventory and retention policy first. |
+| Remove photo GPS metadata | Add owner-scoped EXIF/location stripping for travel/family media. |
+| Include binary photos/files in export | Needs size limits, async job progress, archive encryption, and retry/resume handling. |
+| Add frontend privacy panel | Show destructive action confirmations and counts returned from backend. |
+| Add audit events for privacy destructive actions | Store safe event names and counts without raw file names, tokens, or export contents. |
 
-## Test Backlog
+## UI Contract Notes
 
-- Keep service-level owner-scope tests for AI-history deletion and public-drive-link revocation current.
-- Revoked links keep access logs and no longer resolve.
+- Show destructive confirmation copy before delete/revoke/cleanup actions.
+- Explain that public drive links are revoked but logs remain available to the owner.
+- Explain that travel public media share revocation disables public trip/community visibility and invalidates existing stateless media URLs through visibility checks.
+- Explain that AI analysis history deletion cannot be undone.
+- For export, require the user to verify their secondary PIN first, then call `POST /api/privacy/data-export`.
 - Keep `/api/privacy/*` authentication, CSRF, and secondary-PIN integration tests current for each new unsafe/export endpoint.

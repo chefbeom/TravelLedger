@@ -3,14 +3,16 @@ package com.playdata.calen.travel.repository;
 import com.playdata.calen.travel.domain.TravelExpenseRecord;
 import com.playdata.calen.travel.domain.TravelMediaType;
 import com.playdata.calen.travel.domain.TravelRecordType;
+import java.math.BigDecimal;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
-import java.math.BigDecimal;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 public interface TravelExpenseRecordRepository extends JpaRepository<TravelExpenseRecord, Long> {
 
@@ -74,6 +76,15 @@ public interface TravelExpenseRecordRepository extends JpaRepository<TravelExpen
     );
 
     Optional<TravelExpenseRecord> findByIdAndPlanOwnerIdAndRecordType(Long id, Long ownerId, TravelRecordType recordType);
+
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+            update TravelExpenseRecord record
+            set record.sharedWithCommunity = false
+            where record.plan.owner.id = :ownerId
+              and record.sharedWithCommunity = true
+            """)
+    int revokeCommunitySharingByOwnerId(@Param("ownerId") Long ownerId);
 
     void deleteAllByPlanId(Long planId);
 }

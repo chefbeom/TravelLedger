@@ -2,9 +2,9 @@ package com.playdata.calen.account;
 
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -54,8 +54,10 @@ class PrivacyControllerIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.aiAnalysisHistoriesDeleted").isNumber())
                 .andExpect(jsonPath("$.publicDownloadLinksRevoked").value(0))
+                .andExpect(jsonPath("$.travelPublicMediaSharesRevoked").value(0))
                 .andExpect(jsonPath("$.processedAt").isNotEmpty());
     }
+
     @Test
     void publicDownloadLinkRevocationRequiresAuthenticationAndCsrf() throws Exception {
         MockHttpSession session = login("hana", "test1234", "12345678");
@@ -72,6 +74,27 @@ class PrivacyControllerIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.aiAnalysisHistoriesDeleted").value(0))
                 .andExpect(jsonPath("$.publicDownloadLinksRevoked").isNumber())
+                .andExpect(jsonPath("$.travelPublicMediaSharesRevoked").value(0))
+                .andExpect(jsonPath("$.processedAt").isNotEmpty());
+    }
+
+    @Test
+    void travelPublicMediaShareRevocationRequiresAuthenticationAndCsrf() throws Exception {
+        MockHttpSession session = login("hana", "test1234", "12345678");
+
+        mockMvc.perform(delete("/api/privacy/travel-public-media-shares").with(csrf()))
+                .andExpect(status().isUnauthorized());
+
+        mockMvc.perform(delete("/api/privacy/travel-public-media-shares").session(session))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(delete("/api/privacy/travel-public-media-shares")
+                        .session(session)
+                        .with(csrf()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.aiAnalysisHistoriesDeleted").value(0))
+                .andExpect(jsonPath("$.publicDownloadLinksRevoked").value(0))
+                .andExpect(jsonPath("$.travelPublicMediaSharesRevoked").isNumber())
                 .andExpect(jsonPath("$.processedAt").isNotEmpty());
     }
 
@@ -91,6 +114,7 @@ class PrivacyControllerIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.aiAnalysisHistoriesDeleted").isNumber())
                 .andExpect(jsonPath("$.publicDownloadLinksRevoked").isNumber())
+                .andExpect(jsonPath("$.travelPublicMediaSharesRevoked").isNumber())
                 .andExpect(jsonPath("$.processedAt").isNotEmpty());
     }
 
@@ -131,6 +155,7 @@ class PrivacyControllerIntegrationTest {
                 .andExpect(header().string(HttpHeaders.CONTENT_DISPOSITION, org.hamcrest.Matchers.containsString("travelledger-user-data")))
                 .andExpect(header().string(HttpHeaders.CONTENT_TYPE, org.hamcrest.Matchers.containsString("application/zip")));
     }
+
     private MockHttpSession login(String loginId, String password, String secondaryPin) throws Exception {
         MvcResult result = mockMvc.perform(post("/api/auth/login")
                         .with(csrf())

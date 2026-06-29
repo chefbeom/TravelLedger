@@ -42,6 +42,11 @@ public class PrivacyController {
         return privacyManagementService.revokePublicDownloadLinks(currentUser.userId());
     }
 
+    @DeleteMapping("/travel-public-media-shares")
+    public PrivacyCleanupResponse revokeTravelPublicMediaShares(@AuthenticationPrincipal AppUserPrincipal currentUser) {
+        return privacyManagementService.revokeTravelPublicMediaShares(currentUser.userId());
+    }
+
     @PostMapping("/cleanup")
     public PrivacyCleanupResponse cleanupSensitiveData(@AuthenticationPrincipal AppUserPrincipal currentUser) {
         return privacyManagementService.cleanupSensitiveData(currentUser.userId());

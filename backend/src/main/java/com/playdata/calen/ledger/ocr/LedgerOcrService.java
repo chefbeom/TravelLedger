@@ -9,6 +9,9 @@ import com.playdata.calen.ledger.dto.LedgerOcrLineItemResponse;
 import com.playdata.calen.ledger.ocr.LedgerOcrRemoteClient.RemoteAnalyzeResponse;
 import com.playdata.calen.ledger.ocr.LedgerOcrRemoteClient.RemoteLineItem;
 import com.playdata.calen.ledger.ocr.LedgerOcrRemoteClient.RemoteParsedResult;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -17,6 +20,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -31,43 +35,92 @@ public class LedgerOcrService {
     private final LedgerOcrProperties properties;
     private final LedgerOcrRemoteClient remoteClient;
 
+    @Autowired(required = false)
+    private MeterRegistry meterRegistry;
+
     public LedgerOcrAnalyzeResponse analyze(Long userId, MultipartFile file, String documentType) {
         appUserService.getRequiredUser(userId);
-        validateReady();
-        validateFile(file);
+        Timer.Sample ocrRequestTimer = startOcrRequestTimer();
 
-        String normalizedDocumentType = normalizeDocumentType(documentType);
-        RemoteAnalyzeResponse remoteResponse = remoteClient.analyze(file, normalizedDocumentType);
-        List<RemoteParsedResult> parsedEntries = resolveParsedEntries(remoteResponse);
-        RemoteParsedResult parsed = parsedEntries.isEmpty() ? remoteResponse.parsed() : parsedEntries.get(0);
-        EntryType entryType = parsed != null && parsed.entryType() == EntryType.INCOME
-                ? EntryType.INCOME
-                : EntryType.EXPENSE;
+        try {
+            validateReady();
+            validateFile(file);
 
-        List<LedgerOcrLineItemResponse> lineItems = mapLineItems(parsed);
-        LedgerOcrEntrySuggestionResponse suggestion = buildSuggestion(parsed, entryType, lineItems);
-        List<LedgerOcrEntrySuggestionResponse> suggestions = parsedEntries.stream()
-                .map(this::buildSuggestionForParsedEntry)
-                .toList();
-        if (suggestions.isEmpty() && suggestion != null) {
-            suggestions = List.of(suggestion);
+            String normalizedDocumentType = normalizeDocumentType(documentType);
+            RemoteAnalyzeResponse remoteResponse = remoteClient.analyze(file, normalizedDocumentType);
+            List<RemoteParsedResult> parsedEntries = resolveParsedEntries(remoteResponse);
+            RemoteParsedResult parsed = parsedEntries.isEmpty() ? remoteResponse.parsed() : parsedEntries.get(0);
+            EntryType entryType = parsed != null && parsed.entryType() == EntryType.INCOME
+                    ? EntryType.INCOME
+                    : EntryType.EXPENSE;
+
+            List<LedgerOcrLineItemResponse> lineItems = mapLineItems(parsed);
+            LedgerOcrEntrySuggestionResponse suggestion = buildSuggestion(parsed, entryType, lineItems);
+            List<LedgerOcrEntrySuggestionResponse> suggestions = parsedEntries.stream()
+                    .map(this::buildSuggestionForParsedEntry)
+                    .toList();
+            if (suggestions.isEmpty() && suggestion != null) {
+                suggestions = List.of(suggestion);
+            }
+
+            LedgerOcrAnalyzeResponse response = new LedgerOcrAnalyzeResponse(
+                    firstNonBlank(remoteResponse.documentType(), normalizedDocumentType),
+                    remoteResponse.rawText() == null ? "" : remoteResponse.rawText(),
+                    suggestion,
+                    suggestions,
+                    lineItems,
+                    parsed != null ? parsed.confidence() : null,
+                    parsed != null && parsed.warnings() != null ? parsed.warnings() : List.of(),
+                    parsed != null ? limit(parsed.vendor(), MAX_TEXT_LENGTH) : null,
+                    null,
+                    null,
+                    remoteResponse.timing() == null ? java.util.Map.of() : remoteResponse.timing()
+            );
+            recordOcrRequest(ocrRequestTimer, "success", "none");
+            return response;
+        } catch (RuntimeException exception) {
+            recordOcrRequest(ocrRequestTimer, "failure", ocrFailureReason(exception));
+            throw exception;
         }
-
-        return new LedgerOcrAnalyzeResponse(
-                firstNonBlank(remoteResponse.documentType(), normalizedDocumentType),
-                remoteResponse.rawText() == null ? "" : remoteResponse.rawText(),
-                suggestion,
-                suggestions,
-                lineItems,
-                parsed != null ? parsed.confidence() : null,
-                parsed != null && parsed.warnings() != null ? parsed.warnings() : List.of(),
-                parsed != null ? limit(parsed.vendor(), MAX_TEXT_LENGTH) : null,
-                null,
-                null,
-                remoteResponse.timing() == null ? java.util.Map.of() : remoteResponse.timing()
-        );
+    }
+    private Timer.Sample startOcrRequestTimer() {
+        return meterRegistry == null ? null : Timer.start(meterRegistry);
     }
 
+    private void recordOcrRequest(Timer.Sample sample, String status, String reason) {
+        if (meterRegistry == null) {
+            return;
+        }
+        Counter.builder("calen.ledger.ocr.requests")
+                .description("Ledger OCR analysis requests")
+                .tag("status", status)
+                .tag("reason", reason)
+                .register(meterRegistry)
+                .increment();
+        if (sample != null) {
+            sample.stop(Timer.builder("calen.ledger.ocr.request")
+                    .description("Ledger OCR analysis request duration")
+                    .tag("status", status)
+                    .tag("reason", reason)
+                    .register(meterRegistry));
+        }
+    }
+
+    private String ocrFailureReason(RuntimeException exception) {
+        if (exception instanceof BadRequestException) {
+            String message = exception.getMessage();
+            if ("OCR analysis is not enabled or is missing server configuration.".equals(message)) {
+                return "not_configured";
+            }
+            if ("Upload a receipt image first.".equals(message)
+                    || "Receipt image exceeds the OCR upload size limit.".equals(message)
+                    || "Only image files can be analyzed.".equals(message)) {
+                return "invalid_file";
+            }
+            return "bad_request";
+        }
+        return "runtime_error";
+    }
     private String normalizeDocumentType(String documentType) {
         if (documentType == null || documentType.isBlank()) {
             return "AUTO";

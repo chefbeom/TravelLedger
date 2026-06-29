@@ -79,7 +79,7 @@ groups:
           summary: Backend JVM heap usage is high
           description: JVM heap usage has stayed above 90 percent for 10 minutes.
 
-  - name: calen.domain.ai_and_public_links
+  - name: calen.domain.ai_ocr_and_public_links
     rules:
       - alert: CalenLedgerAiHighFailureRate
         expr: |
@@ -111,6 +111,35 @@ groups:
           summary: Ledger AI p95 latency is above 90 seconds
           description: Ledger AI provider {{ $labels.provider }} p95 request latency has stayed above 90 seconds for 10 minutes.
 
+      - alert: CalenLedgerOcrHighFailureRate
+        expr: |
+          sum(rate(calen_ledger_ocr_requests_total{job="calen-backend", status="failure"}[10m]))
+          /
+          clamp_min(sum(rate(calen_ledger_ocr_requests_total{job="calen-backend"}[10m])), 0.001)
+          > 0.10
+        for: 10m
+        labels:
+          severity: warning
+          service: calen-backend
+          feature: ledger-ocr
+        annotations:
+          summary: Ledger OCR failure rate is above 10 percent
+          description: Ledger OCR analysis requests have failed more than 10 percent of the time for 10 minutes.
+
+      - alert: CalenLedgerOcrSlowP95
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum by (le) (rate(calen_ledger_ocr_request_seconds_bucket{job="calen-backend"}[10m]))
+          ) > 60
+        for: 10m
+        labels:
+          severity: warning
+          service: calen-backend
+          feature: ledger-ocr
+        annotations:
+          summary: Ledger OCR p95 latency is above 60 seconds
+          description: Ledger OCR p95 request latency has stayed above 60 seconds for 10 minutes.
       - alert: CalenPublicDownloadLinkInvalidSpike
         expr: |
           sum(rate(calen_public_download_link_requests_total{job="calen-backend", status=~"invalid|revoked|expired|limit_reached|invalid_item|trashed"}[10m]))

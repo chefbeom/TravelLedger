@@ -1,6 +1,6 @@
 # PWA and Mobile Capture Baseline
 
-Updated: 2026-06-29
+Updated: 2026-06-30
 
 This document records the first PWA/mobile capture slice for TravelLedger. The goal is to make the app installable and safer to open on mobile before adding richer offline drafts and camera-first upload screens.
 
@@ -24,6 +24,13 @@ This document records the first PWA/mobile capture slice for TravelLedger. The g
 | Show offline state before allowing upload submission. | Uploads, OCR, AI, and presigned completion require network connectivity. |
 | Keep offline drafts user-clearable. | Users need a privacy escape hatch for captured but unsent files. |
 
+## Test Evidence
+
+| Evidence | Coverage |
+| --- | --- |
+| scripts/verify-pwa-mobile-baseline.ps1 | Verifies manifest installability fields, index PWA metadata, production-only service-worker registration, and service-worker API-cache exclusion snippets. |
+| GitHub Actions pwa-mobile-baseline job | Runs the PWA/mobile baseline verifier as part of the release gate. |
+
 ## Next Implementation Queue
 
 | Order | Slice | Acceptance evidence |
@@ -32,7 +39,7 @@ This document records the first PWA/mobile capture slice for TravelLedger. The g
 | 2 | Add an offline network banner and disable upload submit while offline. | Offline state is visible without relying on browser errors. |
 | 3 | Add encrypted or clearable IndexedDB drafts for forms without binary blobs first. | User can recover and clear text metadata drafts. |
 | 4 | Add binary draft support only after retention and privacy controls are defined. | Drafted files can be listed, retried, and deleted by the user. |
-| 5 | Add mobile PWA smoke checks to CI or release checklist. | Installability and service-worker registration are checked on production build. |
+| 5 | Keep mobile PWA smoke checks in CI and release checklist. | Installability metadata, service-worker registration, and API-cache exclusion are checked by `scripts/verify-pwa-mobile-baseline.ps1`; manual production-build smoke still confirms browser install prompt behavior. |
 
 ## Manual Smoke Checklist
 

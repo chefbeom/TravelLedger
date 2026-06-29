@@ -68,6 +68,16 @@ jobs:
       - name: Verify backup restore rehearsal runbook
         shell: pwsh
         run: ./scripts/verify-backup-rehearsal-runbook.ps1
+  pwa-mobile-baseline:
+    name: PWA mobile baseline
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Verify PWA installability and API-cache safety baseline
+        shell: pwsh
+        run: ./scripts/verify-pwa-mobile-baseline.ps1
   backend-test:
     name: Backend tests
     runs-on: ubuntu-latest
@@ -120,6 +130,7 @@ jobs:
       - migration-discipline
       - observability-alerts
       - backup-rehearsal-runbook
+      - pwa-mobile-baseline
       - backend-test
       - frontend-build
     if: always()
@@ -133,6 +144,7 @@ jobs:
             [migration-discipline]="${{ needs.migration-discipline.result }}"
             [observability-alerts]="${{ needs.observability-alerts.result }}"
             [backup-rehearsal-runbook]="${{ needs.backup-rehearsal-runbook.result }}"
+            [pwa-mobile-baseline]="${{ needs.pwa-mobile-baseline.result }}"
             [backend-test]="${{ needs.backend-test.result }}"
             [frontend-build]="${{ needs.frontend-build.result }}"
           )

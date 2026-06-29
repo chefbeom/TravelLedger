@@ -1,6 +1,6 @@
 # Privacy Control Panel Backend Slice
 
-Updated: 2026-06-29
+Updated: 2026-06-30
 
 This document records the first backend slice for user-facing privacy controls. The UI can call these endpoints after showing an explicit confirmation dialog.
 
@@ -33,6 +33,12 @@ This document records the first backend slice for user-facing privacy controls. 
 }
 ```
 
+## Test Evidence
+
+| Evidence | Coverage |
+| --- | --- |
+| `PrivacyManagementServiceTest.revokePublicDownloadLinksScopesUpdateToCurrentOwner` | Verifies public drive link revocation calls the owner-scoped repository method with only the authenticated user ID and returns the affected count. |
+| `PrivacyManagementServiceTest.cleanupSensitiveDataDeletesAiHistoryAndRevokesOnlyCurrentOwnerLinks` | Verifies combined cleanup deletes only the authenticated user AI history and revokes only that user's active public download links. |
 ## Next Controls
 
 | Candidate | Notes |
@@ -44,7 +50,6 @@ This document records the first backend slice for user-facing privacy controls. 
 
 ## Test Backlog
 
-- Current user can delete only their own AI history.
-- Current user can revoke only their own public drive links.
+- Keep service-level owner-scope tests for AI-history deletion and public-drive-link revocation current.
 - Revoked links keep access logs and no longer resolve.
 - `/api/privacy/*` rejects unauthenticated requests and unsafe requests without CSRF.

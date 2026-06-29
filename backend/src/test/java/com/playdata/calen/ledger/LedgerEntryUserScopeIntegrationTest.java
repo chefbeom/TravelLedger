@@ -158,6 +158,30 @@ class LedgerEntryUserScopeIntegrationTest {
     }
 
     @Test
+    void logoutRevokesRememberMeCookie() throws Exception {
+        Cookie rememberMeCookie = loginAndGetRememberMeCookie("hana");
+
+        assertThat(rememberMeCookie).isNotNull();
+        assertThat(rememberMeCookie.getValue()).isNotBlank();
+
+        mockMvc.perform(get("/api/auth/me").cookie(rememberMeCookie))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.loginId").value("hana"));
+
+        MvcResult logoutResult = mockMvc.perform(post("/api/auth/logout")
+                        .with(csrf())
+                        .cookie(rememberMeCookie))
+                .andExpect(status().isNoContent())
+                .andReturn();
+
+        Cookie clearedCookie = logoutResult.getResponse().getCookie("CALEN_REMEMBER_ME");
+        assertThat(clearedCookie).isNotNull();
+        assertThat(clearedCookie.getMaxAge()).isZero();
+
+        mockMvc.perform(get("/api/auth/me").cookie(rememberMeCookie))
+                .andExpect(status().isUnauthorized());
+    }
+    @Test
     void csvExportUsesVerifiedSecondaryPinFromSession() throws Exception {
         MockHttpSession hanaSession = loginAndGetSession("hana", false);
 
@@ -479,9 +503,9 @@ class LedgerEntryUserScopeIntegrationTest {
         assertThat(storedHistory.getBeforeSnapshotJson()).isEqualTo("[]");
         assertThat(storedHistory.getAfterSnapshotJson()).isEqualTo("[]");
         assertThat(storedHistory.getChangesJson())
-                .contains("\"key\":\"title\"")
-                .contains("\"beforeRaw\":\"history original title\"")
-                .contains("\"afterRaw\":\"history updated title\"");
+                .contains(""key":"title"")
+                .contains(""beforeRaw":"history original title"")
+                .contains(""afterRaw":"history updated title"");
 
         mockMvc.perform(get("/api/entries/history/{historyId}", historyId)
                         .session(hanaSession))

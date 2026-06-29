@@ -15,14 +15,14 @@ This review captures the current remember-me implementation and the remaining ha
 | Validity | `app.security.remember-me-token-validity-seconds`, default `2592000` seconds. |
 | Login behavior | `AuthController.signIn` calls `rememberMeServices.loginSuccess` only when `rememberDevice=true`; otherwise it calls `rememberMeServices.logout`. |
 | Logout behavior | `AuthController.clearAuthentication` calls `rememberMeServices.logout`, clears the security context, and invalidates the HTTP session. |
-| Existing test evidence | `LedgerEntryUserScopeIntegrationTest.rememberMeRestoresUserWithoutSession` proves a remember-me cookie can restore `/api/auth/me` without a session. |
+| Existing test evidence | `LedgerEntryUserScopeIntegrationTest.rememberMeRestoresUserWithoutSession` proves a remember-me cookie can restore `/api/auth/me` without a session; `logoutRevokesRememberMeCookie` proves logout clears the cookie and old cookie reuse is unauthorized. |
 
 ## Security Invariants
 
 | ID | Invariant | Why it matters | Evidence or gap |
 | --- | --- | --- | --- |
 | RM-01 | Remember-me cookies are issued only after explicit user opt-in. | Avoids silently creating long-lived browser credentials. | Controller only calls `loginSuccess` when `rememberDevice=true`; add direct regression test for `rememberDevice=false` not issuing a usable cookie. |
-| RM-02 | Logout revokes the persistent token and clears the browser cookie. | A stolen or old remember-me cookie should not keep working after logout. | Implementation calls `rememberMeServices.logout`; add integration test that old cookie cannot re-authenticate after logout. |
+| RM-02 | Logout revokes the persistent token and clears the browser cookie. | A stolen or old remember-me cookie should not keep working after logout. | `LedgerEntryUserScopeIntegrationTest.logoutRevokesRememberMeCookie` covers cookie clearing and old-cookie rejection after logout. |
 | RM-03 | Cookie attributes are production-safe. | Long-lived cookies need `HttpOnly`, `Secure`, path/domain, expiry, and SameSite review. | Cookie name/validity are explicit; add environment review for `Secure` and SameSite behavior behind HTTPS/proxy. |
 | RM-04 | Persistent tokens are random and rotated by Spring Security. | Reduces replay window and token prediction risk. | Uses Spring Security persistent token implementation; add test that token value changes after successful remember-me auto-login. |
 | RM-05 | Token storage does not expose plaintext credentials. | DB compromise should not reveal passwords or secondary PINs. | `persistent_logins` stores series/token only; no password/PIN fields. |
@@ -44,7 +44,7 @@ This review captures the current remember-me implementation and the remaining ha
 | Priority | Test | Expected result |
 | --- | --- | --- |
 | P0 | Login with `rememberDevice=false` then start a new request without session. | `/api/auth/me` remains unauthenticated; no usable `CALEN_REMEMBER_ME` is accepted. |
-| P0 | Login with `rememberDevice=true`, logout with CSRF, then reuse old remember-me cookie. | Logout response clears cookie and old cookie cannot restore authentication. |
+| P0 | Keep login with `rememberDevice=true`, logout with CSRF, then reuse old remember-me cookie covered. | `logoutRevokesRememberMeCookie` expects logout cookie clearing and old-cookie `401`. |
 | P0 | Remember-me auto-login rotates token. | Cookie value changes after successful auto-login and old token no longer works. |
 | P1 | Password change revokes remember-me tokens for the account. | Old remember-me cookie fails after password change. |
 | P1 | Secondary PIN change revokes remember-me tokens for the account. | Old remember-me cookie fails after PIN change. |

@@ -1,0 +1,34 @@
+{
+  "name": "TravelLedger",
+  "short_name": "TravelLedger",
+  "description": "Personal ledger, travel, family album, and drive workspace optimized for mobile capture.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f7f1e3",
+  "theme_color": "#1f6f5b",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/Ledger.png",
+      "sizes": "192x192 512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["finance", "productivity", "travel"],
+  "shortcuts": [
+    {
+      "name": "Open Ledger",
+      "short_name": "Ledger",
+      "url": "/?shortcut=ledger",
+      "description": "Open the ledger dashboard."
+    },
+    {
+      "name": "Travel Uploads",
+      "short_name": "Travel",
+      "url": "/?shortcut=travel-upload",
+      "description": "Open travel media capture flows."
+    }
+  ]
+}

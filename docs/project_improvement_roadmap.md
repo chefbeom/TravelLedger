@@ -41,7 +41,7 @@ This roadmap turns the current improvement analysis into an implementation queue
 | Auto classification rules | Improves OCR/Excel import speed and consistency. | User-defined merchant/title keyword rules with preview. | Import preview applies explainable rules before save. |
 | Transaction anomaly detection | Catches duplicate, unusual, and out-of-context spending. | Deterministic detector for duplicate same-day/same-amount entries. | Anomaly panel flags examples with dismiss action. |
 | Travel timeline/story export | Combines route, photos, expenses, and memories into a shareable result. | Read-only web story for one trip. | Public/private story link renders route/photos/memories. |
-| PWA/mobile capture | OCR, travel photos, and family album are mobile-heavy. | PWA manifest, camera upload affordance, offline draft storage. | Mobile install works and camera upload path is tested. |
+| PWA/mobile capture | OCR, travel photos, and family album are mobile-heavy. | PWA manifest and production service-worker baseline are in place; next add shared camera upload and offline draft UX. | Production frontend is installable and API/private data is excluded from service-worker caching. |
 | Drive file versioning | Makes CalenDrive safer for family use. | Version table and restore previous file version. | Uploading same file can preserve previous version. |
 | Family budget/shared goals | Makes Household area more distinct. | Shared monthly budget and goal progress widget. | Household dashboard shows goal/budget status. |
 | Notification center | Connects disconnected events. | Store/read notifications for AI done, budget warning, backup failure, shared file. | Header badge and notification list work across events. |
@@ -70,6 +70,7 @@ This roadmap turns the current improvement analysis into an implementation queue
 | `docs/accessibility_mobile_checklist.md` | WCAG 2.2 and mobile UX checklist for priority screens. |
 | `docs/backup_restore_rehearsal_runbook.md` | Restore rehearsal evidence, encryption readiness, and failure-handling checklist. |
 | `docs/privacy_control_panel.md` | Backend privacy controls, safety rules, response contract, and next privacy actions. |
+| `docs/pwa_mobile_capture.md` | PWA installability, service-worker cache policy, and mobile capture implementation queue. |
 ## Current Automation Set
 
 | Automation | Purpose |

@@ -120,6 +120,14 @@ Minimum acceptance rule for provider responses:
 | Prompt boundary for LM Studio | LM Studio system prompt marks ledger text, OCR text, category names, and user-entered text as untrusted data, not instructions. | Pending prompt-injection regression assertions. |
 | Advice-only provider contract | Shared provider payload contract says output is advisory analysis only, must not claim ledger entries were changed, and must require explicit user confirmation before any ledger data change. | `LedgerAiAnalysisServiceTest.analyzeKeepsPromptInjectionLikeLedgerTextAsData` |
 
+
+## AI Coach Contract
+
+`docs/ledger_ai_coach_contract.md` defines the user-facing AI coach contract for risk spending, recurring/subscription spend, budget overrun forecast, next-period cashflow coaching, category/payment coaching, and manual improvement actions.
+
+The coach contract reuses the existing provider response fields: `warnings`, `report.abnormalSpending`, `unusualSpendingInsights`, `report.subscriptions`, `report.fixedExpenses`, `fixedCostInsights`, `nextPeriodForecast`, `trendInsights`, `comparisonFocus`, `habitAssessment`, `recommendations`, and `report.improvementActions`.
+
+The contract keeps all coach output advisory-only. It must not claim ledger entries were created, updated, deleted, saved, categorized, reclassified, or otherwise changed. Any future action that applies a coach recommendation to ledger data must remain a separate explicit user confirmation/save flow.
 ## Hardening Backlog
 
 | Priority | Work item | File candidates | Verification |
@@ -182,7 +190,7 @@ A change to ledger AI code is not release-ready until:
 3. No API response exposes provider secrets.
 4. AI history stores both success and failure cases with bounded error text.
 5. Frontend copy does not imply that AI automatically changes ledger data.
-6. README and `.env.example` match `application.yml` configuration names.
+6. README and `.env.example` match `application.yml` configuration names.`n7. `scripts/verify-ledger-ai-coach-contract.ps1` passes when coach response fields, prompts, frontend rendering, or AI safety docs change.
 
 
 ## 2026-06-30 Unsafe Output Validation Update

@@ -108,6 +108,16 @@ jobs:
       - name: Verify PWA installability and API-cache safety baseline
         shell: pwsh
         run: ./scripts/verify-pwa-mobile-baseline.ps1
+  ledger-ai-coach-contract:
+    name: Ledger AI coach contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Verify advisory ledger AI coach contract
+        shell: pwsh
+        run: ./scripts/verify-ledger-ai-coach-contract.ps1
   service-decomposition-plan:
     name: Service decomposition plan
     runs-on: ubuntu-latest
@@ -214,6 +224,7 @@ jobs:
       - admin-audit-contract
       - privacy-control-contract
       - media-processing-contract
+      - ledger-ai-coach-contract
       - pwa-mobile-baseline
       - service-decomposition-plan
       - backend-test
@@ -234,6 +245,7 @@ jobs:
             [admin-audit-contract]="${{ needs['admin-audit-contract'].result }}"
             [privacy-control-contract]="${{ needs['privacy-control-contract'].result }}"
             [media-processing-contract]="${{ needs['media-processing-contract'].result }}"
+            [ledger-ai-coach-contract]="${{ needs['ledger-ai-coach-contract'].result }}"
             [pwa-mobile-baseline]="${{ needs['pwa-mobile-baseline'].result }}"
             [service-decomposition-plan]="${{ needs['service-decomposition-plan'].result }}"
             [backend-test]="${{ needs['backend-test'].result }}"

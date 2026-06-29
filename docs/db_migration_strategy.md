@@ -8,7 +8,7 @@ Updated: 2026-06-30
 - Flyway is disabled by default with `DB_MIGRATION_ENABLED=false` while legacy startup updaters still exist.
 - Hibernate `ddl-auto: update` remains in place during the transition so existing local and compose workflows keep working.
 - `backend/src/main/resources/db/migration` contains a baseline marker plus versioned migrations for access-log, notification, classification-rule, and AI-history provider changes.
-- `scripts/verify-db-migrations.ps1` and the CI `migration-discipline` job check migration naming, duplicate versions, and baseline marker presence.
+- `scripts/verify-db-migrations.ps1` and the CI `migration-discipline` job check migration naming, duplicate versions, baseline marker presence, and the expected legacy `*SchemaUpdater` inventory.
 
 ## Current Migration Inventory
 
@@ -36,7 +36,7 @@ Updated: 2026-06-30
 | Rule | Reason |
 | --- | --- |
 | Add every new schema change as a `VYYYYMMDD_NNN__description.sql` migration. | Gives rollback/audit evidence and makes deploys reproducible. |
-| Run `scripts/verify-db-migrations.ps1` before merging schema work. | Catches duplicate versions and filename drift before CI. |
+| Run `scripts/verify-db-migrations.ps1` before merging schema work. | Catches duplicate versions, filename drift, missing baseline marker, and unexpected legacy startup schema updaters before CI. |
 | Do not edit a migration after it has run outside a local throwaway DB. | Flyway checksums should remain stable between environments. |
 | Keep Flyway disabled in production until a staging rehearsal passes. | Avoids surprising startup failures while legacy schema is still updater-managed. |
 | Convert one schema area at a time and remove the matching `*SchemaUpdater` only after migration evidence exists. | Reduces risk while replacing startup mutation logic. |
@@ -57,7 +57,7 @@ Updated: 2026-06-30
 A release that adds or changes schema should include:
 
 - A new versioned migration under `backend/src/main/resources/db/migration`.
-- A passing `scripts/verify-db-migrations.ps1` result or CI `migration-discipline` job.
+- A passing `scripts/verify-db-migrations.ps1` result or CI `migration-discipline` job, including the legacy updater inventory check.
 - A note explaining whether an existing `*SchemaUpdater` was retained, reduced, or removed.
 - A rollback note for data-preserving rollback or restore-from-backup rollback.
 - A staging startup check with Flyway enabled before production promotion.

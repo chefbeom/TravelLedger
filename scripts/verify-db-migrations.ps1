@@ -45,6 +45,37 @@ if (-not (Test-Path -LiteralPath $baseline)) {
     $findings.Add("Missing baseline marker migration: $baseline") | Out-Null
 }
 
+$expectedLegacySchemaUpdaters = @(
+    'backend/src/main/java/com/playdata/calen/ledger/config/LedgerAiAnalysisSchemaUpdater.java',
+    'backend/src/main/java/com/playdata/calen/ledger/config/LedgerEntrySchemaUpdater.java',
+    'backend/src/main/java/com/playdata/calen/ledger/config/LedgerEntryChangeHistorySchemaUpdater.java',
+    'backend/src/main/java/com/playdata/calen/travel/config/TravelMediaAssetSchemaUpdater.java',
+    'backend/src/main/java/com/playdata/calen/travel/config/TravelPhotoClusterSchemaUpdater.java',
+    'backend/src/main/java/com/playdata/calen/travel/config/TravelRouteSchemaUpdater.java'
+)
+$repoRoot = (Get-Location).Path
+$sourceRoot = 'backend/src/main/java'
+$currentLegacySchemaUpdaters = @()
+if (Test-Path -LiteralPath $sourceRoot) {
+    $currentLegacySchemaUpdaters = @(Get-ChildItem -LiteralPath $sourceRoot -Recurse -File -Filter '*SchemaUpdater.java' | ForEach-Object {
+            [System.IO.Path]::GetRelativePath($repoRoot, $_.FullName) -replace '\\', '/'
+        })
+}
+
+$expectedLegacySchemaUpdaterSet = @{}
+foreach ($path in $expectedLegacySchemaUpdaters) {
+    $expectedLegacySchemaUpdaterSet[$path] = $true
+    if (-not (Test-Path -LiteralPath $path)) {
+        $findings.Add("Documented legacy SchemaUpdater is missing; update docs/db_migration_strategy.md and this verifier when retiring it: $path") | Out-Null
+    }
+}
+
+foreach ($path in $currentLegacySchemaUpdaters) {
+    if (-not $expectedLegacySchemaUpdaterSet.ContainsKey($path)) {
+        $findings.Add("Unexpected legacy SchemaUpdater found; add a Flyway migration plan instead of startup schema mutation, or document the temporary exception: $path") | Out-Null
+    }
+}
+
 if ($findings.Count -gt 0) {
     Write-Host 'DB migration discipline check failed.'
     $findings | Sort-Object -Unique | ForEach-Object { Write-Host " - $_" }

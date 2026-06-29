@@ -14,6 +14,8 @@ public interface FamilyMediaAssetRepository extends JpaRepository<FamilyMediaAss
 
     List<FamilyMediaAsset> findAllByCategoryIdIn(Collection<Long> categoryIds);
 
+    List<FamilyMediaAsset> findAllByOwnerIdOrderByUploadedAtDescIdDesc(Long ownerId);
+
     long countByCategoryIdInAndMediaType(Collection<Long> categoryIds, FamilyMediaType mediaType);
 
     @Query("""

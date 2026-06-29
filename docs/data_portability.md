@@ -2,7 +2,7 @@
 
 Updated: 2026-06-29
 
-This document records the first user-facing data portability slice. The current backend export focuses on ledger data and export metadata, then protects the archive with the user's recently verified secondary PIN.
+This document records the user-facing data portability baseline. The current backend export includes ledger data, export metadata, and safe file/media manifest JSON, then protects the archive with the user's recently verified secondary PIN.
 
 ## Implemented API
 
@@ -42,7 +42,7 @@ When `from` and `to` are omitted, all non-deleted ledger entries are exported.
 
 | Slice | Notes |
 | --- | --- |
-| Add drive/travel/family file manifest JSON | Include object metadata without exporting large blobs first. |
+| Add binary photos/files to export | Manifest JSON is included; binary blobs still need async job progress, size limits, and restore rehearsal evidence. |
 | Add optional binary archive generation | Requires queueing, progress, size limits, and retry handling. |
 | Add standard import package | Define stable CSV/JSON schema for restoring into a new account. |
 | Add frontend privacy page action | Show confirmation, date range, secondary PIN state, and download result. |
@@ -58,3 +58,8 @@ When `from` and `to` are omitted, all non-deleted ledger entries are exported.
 - Export includes only the authenticated user's ledger entries.
 - Export date range filters ledger CSV rows.
 - Export metadata contains no secrets or signed URLs.
+## Manifest privacy rules
+
+- Manifest files intentionally exclude object storage paths, internal stored names, public URLs, presigned URLs, raw share credentials, API keys, and workflow URLs.
+- Travel media manifests expose whether GPS metadata exists, but not the latitude/longitude values. Users can remove stored GPS metadata from the profile privacy panel before exporting.
+- The archive currently includes metadata manifests, not binary file blobs. Large photo/file archive export remains a separate async-job backlog item.

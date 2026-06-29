@@ -8,9 +8,11 @@ import com.playdata.calen.travel.repository.TravelMediaAssetRepository;
 import com.playdata.calen.travel.repository.TravelPlanRepository;
 import java.time.LocalDateTime;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 @Transactional
@@ -21,6 +23,7 @@ public class PrivacyManagementService {
     private final TravelPlanRepository travelPlanRepository;
     private final TravelExpenseRecordRepository travelExpenseRecordRepository;
     private final TravelMediaAssetRepository travelMediaAssetRepository;
+    private final UserNotificationService userNotificationService;
 
     public PrivacyCleanupResponse deleteAiAnalysisHistories(Long userId) {
         LocalDateTime processedAt = LocalDateTime.now();
@@ -52,7 +55,32 @@ public class PrivacyManagementService {
         int revoked = driveDownloadLinkRepository.revokeAllActiveByOwnerId(userId, processedAt);
         int travelRevoked = revokeTravelPublicMediaSurfaces(userId);
         int photoLocationRemoved = travelMediaAssetRepository.clearGpsMetadataByPlanOwnerId(userId);
-        return new PrivacyCleanupResponse(deleted, revoked, travelRevoked, photoLocationRemoved, processedAt);
+        PrivacyCleanupResponse response = new PrivacyCleanupResponse(deleted, revoked, travelRevoked, photoLocationRemoved, processedAt);
+        notifyPrivacyCleanupComplete(userId, response);
+        return response;
+    }
+
+    private void notifyPrivacyCleanupComplete(Long userId, PrivacyCleanupResponse response) {
+        try {
+            userNotificationService.createSystemNotification(
+                    userId,
+                    "PRIVACY_ACTION_DONE",
+                    "Privacy cleanup complete",
+                    "Sensitive derived data cleanup finished. Review the result counts in your privacy panel.",
+                    "/profile?privacy=1",
+                    "{\"action\":\"cleanup\",\"aiAnalysisHistoriesDeleted\":"
+                            + response.aiAnalysisHistoriesDeleted()
+                            + ",\"publicDownloadLinksRevoked\":"
+                            + response.publicDownloadLinksRevoked()
+                            + ",\"travelPublicMediaSharesRevoked\":"
+                            + response.travelPublicMediaSharesRevoked()
+                            + ",\"photoLocationMetadataRemoved\":"
+                            + response.photoLocationMetadataRemoved()
+                            + "}"
+            );
+        } catch (RuntimeException exception) {
+            log.warn("Failed to create privacy cleanup notification: userId={}", userId, exception);
+        }
     }
 
     private int revokeTravelPublicMediaSurfaces(Long userId) {

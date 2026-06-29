@@ -16,10 +16,12 @@ $ocrServicePath = 'backend/src/main/java/com/playdata/calen/ledger/ocr/LedgerOcr
 $ocrServiceTestPath = 'backend/src/test/java/com/playdata/calen/ledger/ocr/LedgerOcrServiceTest.java'
 $backupSchedulerPath = 'backend/src/main/java/com/playdata/calen/account/service/DataOpsBackupScheduler.java'
 $backupSchedulerTestPath = 'backend/src/test/java/com/playdata/calen/account/service/DataOpsBackupSchedulerTest.java'
+$privacyServicePath = 'backend/src/main/java/com/playdata/calen/account/service/PrivacyManagementService.java'
+$privacyServiceTestPath = 'backend/src/test/java/com/playdata/calen/account/PrivacyManagementServiceTest.java'
 
 $findings = [System.Collections.Generic.List[string]]::new()
 
-foreach ($path in @($contractPath, $securityChecklistPath, $roadmapPath, $ciPath, $controllerPath, $servicePath, $repositoryPath, $serviceTestPath, $frontendPath, $appPath, $apiPath, $ocrServicePath, $ocrServiceTestPath, $backupSchedulerPath, $backupSchedulerTestPath)) {
+foreach ($path in @($contractPath, $securityChecklistPath, $roadmapPath, $ciPath, $controllerPath, $servicePath, $repositoryPath, $serviceTestPath, $frontendPath, $appPath, $apiPath, $ocrServicePath, $ocrServiceTestPath, $backupSchedulerPath, $backupSchedulerTestPath, $privacyServicePath, $privacyServiceTestPath)) {
     if (-not (Test-Path -LiteralPath $path)) {
         $findings.Add("Missing notification center contract input: $path") | Out-Null
     }
@@ -41,6 +43,8 @@ if ($findings.Count -eq 0) {
     $ocrServiceTest = Get-Content -LiteralPath $ocrServiceTestPath -Raw
     $backupScheduler = Get-Content -LiteralPath $backupSchedulerPath -Raw
     $backupSchedulerTest = Get-Content -LiteralPath $backupSchedulerTestPath -Raw
+    $privacyService = Get-Content -LiteralPath $privacyServicePath -Raw
+    $privacyServiceTest = Get-Content -LiteralPath $privacyServiceTestPath -Raw
 
     foreach ($section in @('# Notification Center Contract', '## Implemented API', '## Data model', '## Event flow', '## Safety rules', '## Implemented producers', '## Event producer queue', '## Release gate', '## CI contract')) {
         if (-not $contract.Contains($section)) {
@@ -97,7 +101,7 @@ if ($findings.Count -eq 0) {
     }
 
 
-    foreach ($snippet in @('Ledger OCR failed', 'Scheduled database backup failed', 'Scheduled MinIO backup failed', 'BACKUP_FAILED', 'AI_OR_OCR_FAILED')) {
+    foreach ($snippet in @('Ledger OCR failed', 'Scheduled database backup failed', 'Scheduled MinIO backup failed', 'Privacy cleanup completed', 'BACKUP_FAILED', 'AI_OR_OCR_FAILED', 'PRIVACY_ACTION_DONE')) {
         if (-not $contract.Contains($snippet)) {
             $findings.Add("Notification center contract missing implemented producer snippet: $snippet") | Out-Null
         }
@@ -124,6 +128,18 @@ if ($findings.Count -eq 0) {
     foreach ($snippet in @('notifiesActiveAdminsWhenScheduledDatabaseBackupFailsWithoutLeakingFailureDetails', 'findAllByRoleAndActiveTrueOrderByIdAsc(AppUserRole.ADMIN)', 'eq("BACKUP_FAILED")', 'eq("Scheduled backup failed")', 'contains("scheduled database backup failed")', 'eq("/admin?panel=data-management")', 'eq("{\"backupType\":\"database\",\"status\":\"failure\"}")')) {
         if (-not $backupSchedulerTest.Contains($snippet)) {
             $findings.Add("DataOpsBackupSchedulerTest missing backup notification evidence snippet: $snippet") | Out-Null
+        }
+    }
+
+    foreach ($snippet in @('private final UserNotificationService userNotificationService', 'notifyPrivacyCleanupComplete(userId, response)', '"PRIVACY_ACTION_DONE"', '"Privacy cleanup complete"', '"/profile?privacy=1"', '"\"aiAnalysisHistoriesDeleted\":"', '"\"publicDownloadLinksRevoked\":"', '"\"travelPublicMediaSharesRevoked\":"', '"\"photoLocationMetadataRemoved\":"')) {
+        if (-not $privacyService.Contains($snippet)) {
+            $findings.Add("PrivacyManagementService missing privacy notification producer snippet: $snippet") | Out-Null
+        }
+    }
+
+    foreach ($snippet in @('cleanupSensitiveDataDeletesAiHistoryAndRevokesOnlyCurrentOwnerShares', 'eq("PRIVACY_ACTION_DONE")', 'eq("Privacy cleanup complete")', 'contains("Sensitive derived data cleanup finished")', 'eq("/profile?privacy=1")', 'eq("{\"action\":\"cleanup\",\"aiAnalysisHistoriesDeleted\":3,\"publicDownloadLinksRevoked\":5,\"travelPublicMediaSharesRevoked\":6,\"photoLocationMetadataRemoved\":7}")')) {
+        if (-not $privacyServiceTest.Contains($snippet)) {
+            $findings.Add("PrivacyManagementServiceTest missing privacy notification evidence snippet: $snippet") | Out-Null
         }
     }
     foreach ($snippet in @('NOTIFY-01', 'Notification center', 'docs/notification_center.md', 'notification-center-contract', 'scripts/verify-notification-center-contract.ps1')) {

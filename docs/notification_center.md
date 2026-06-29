@@ -2,7 +2,7 @@
 
 Updated: 2026-06-30
 
-This document records the notification-center contract. Storage, listing, unread counts, read handling, AI analysis events, OCR failure events, scheduled backup failure events, shared-file events, and the frontend notification center are now in place. The contract verifier now checks OCR and scheduled-backup producer implementation/test anchors directly, not only the generic notification API. Budget and travel producers remain in the queue, and every new producer must keep notifications owner-scoped, bounded, and free of operational secrets.
+This document records the notification-center contract. Storage, listing, unread counts, read handling, AI analysis events, OCR failure events, scheduled backup failure events, privacy cleanup events, shared-file events, and the frontend notification center are now in place. The contract verifier now checks OCR and scheduled-backup producer implementation/test anchors directly, not only the generic notification API. Budget and travel producers remain in the queue, and every new producer must keep notifications owner-scoped, bounded, and free of operational secrets.
 
 ## Implemented API
 
@@ -62,7 +62,7 @@ flowchart TD
 | Ledger OCR failed | `AI_OR_OCR_FAILED` | Receipt OCR retry surface. |
 | Scheduled database backup failed | `BACKUP_FAILED` | Admin data-management page. |
 | Scheduled MinIO backup failed | `BACKUP_FAILED` | Admin data-management page. |
-| CalenDrive file shared with user | `SHARED_FILE_RECEIVED` | CalenDrive shared-files view. |
+| CalenDrive file shared with user | `SHARED_FILE_RECEIVED` | CalenDrive shared-files view. |`n| Privacy cleanup completed | `PRIVACY_ACTION_DONE` | Profile privacy panel. |
 
 ## Event producer queue
 
@@ -71,7 +71,7 @@ flowchart TD
 | Budget threshold exceeded | `BUDGET_WARNING` | Ledger or Household dashboard. | Budget/goal ID, threshold label, period, and status only; no raw ledger titles or member-private entries. |
 | Travel date approaching | `TRAVEL_REMINDER` | Travel plan detail page. | Plan ID, date label, and status only; no raw GPS/EXIF, storage path, media token, or private note. |
 | Household goal progress | `GOAL_PROGRESS` | Household goal dashboard. | Goal ID, status, progress bucket, and actor visibility label only; no non-visible member contribution details. |
-| Privacy cleanup complete | `PRIVACY_ACTION_DONE` | Profile privacy panel. | Counts and action labels only; no deleted item names, tokens, archive contents, or AI prompt fragments. |
+| Privacy export completed | `PRIVACY_EXPORT_DONE` | Profile privacy panel. | Export status, date range label, and archive scope only; no archive contents, secondary PIN, tokens, or file names. |
 
 ## Current implementation anchors
 
@@ -80,7 +80,7 @@ flowchart TD
 | `UserNotificationController` | Exposes authenticated list/create/read/read-all endpoints and passes only `currentUser.userId()` to the service. |
 | `UserNotificationService` | Redacts sensitive metadata/query/bearer-token values, truncates fields, lists by owner, counts unread by owner, and marks read by owner. |
 | `UserNotificationRepository` | Provides owner-scoped list, unread list, single lookup, unread count, and bulk read update queries. |
-| `UserNotificationServiceTest` | Covers sensitive metadata/target redaction and owner-scoped single-notification read lookup. |`n| `LedgerOcrService` / `LedgerOcrServiceTest` | Produces bounded `AI_OR_OCR_FAILED` notifications for remote/configured OCR failures while skipping invalid-file validation failures. |`n| `DataOpsBackupScheduler` / `DataOpsBackupSchedulerTest` | Produces bounded `BACKUP_FAILED` notifications for active admins on scheduled database/MinIO backup failures without storing backup paths, credentials, or raw exception details. |
+| `UserNotificationServiceTest` | Covers sensitive metadata/target redaction and owner-scoped single-notification read lookup. |`n| `LedgerOcrService` / `LedgerOcrServiceTest` | Produces bounded `AI_OR_OCR_FAILED` notifications for remote/configured OCR failures while skipping invalid-file validation failures. |`n| `DataOpsBackupScheduler` / `DataOpsBackupSchedulerTest` | Produces bounded `BACKUP_FAILED` notifications for active admins on scheduled database/MinIO backup failures without storing backup paths, credentials, or raw exception details. |`n| `PrivacyManagementService` / `PrivacyManagementServiceTest` | Produces bounded `PRIVACY_ACTION_DONE` notifications after combined privacy cleanup without storing item names, tokens, archive contents, prompts, or location values. |
 | `NotificationCenterWorkspace.vue` | Loads notifications, filters unread-only, marks one/all read, and only opens relative target URLs. |
 | `App.vue` / `api.js` | Routes to the notification center and exposes frontend notification API calls. |
 
@@ -107,7 +107,7 @@ The `notification-center-contract` GitHub Actions job must run `scripts/verify-n
 - `unreadCount` decreases after read/read-all operations.
 - Event producers do not include raw prompts, backup credentials, route coordinates, storage paths, public tokens, signed URLs, or long raw payloads in `metadataJson`.
 - Pagination clamps `size` to the backend maximum.
-- Budget, travel, household, and privacy producers use bounded metadata and source-page links only.
+- Budget, travel, household, and future privacy-export producers use bounded metadata and source-page links only.
 - Notification center E2E verifies unread/read-all UI and owner isolation.
 
 ## Frontend notification center

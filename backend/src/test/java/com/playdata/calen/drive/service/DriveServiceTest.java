@@ -126,6 +126,49 @@ class DriveServiceTest {
         assertThat(version.getCreatedAt()).isNotNull();
     }
     @Test
+    void restoreFileVersionSwapsActiveMetadataAndRecordsRestoreVersion() {
+        AppUser owner = owner();
+        DriveItem current = item(10L, owner, DriveItemType.FILE, "current.pdf", 100L, 10);
+        DriveItemVersion oldVersion = new DriveItemVersion();
+        oldVersion.setId(55L);
+        oldVersion.setItem(current);
+        oldVersion.setOwner(owner);
+        oldVersion.setVersionNumber(1);
+        oldVersion.setOriginalName("old-report.pdf");
+        oldVersion.setExtension("pdf");
+        oldVersion.setStoredName("old-report-stored.pdf");
+        oldVersion.setStoragePath("drive/1/old-report.pdf");
+        oldVersion.setContentType("application/pdf");
+        oldVersion.setFileSize(500L);
+        oldVersion.setSource("UPLOAD");
+        oldVersion.setCreatedAt(LocalDateTime.of(2026, 6, 1, 9, 0));
+
+        when(appUserRepository.findById(1L)).thenReturn(Optional.of(owner));
+        when(driveItemRepository.findByIdAndOwner_Id(10L, 1L)).thenReturn(Optional.of(current));
+        when(driveItemVersionRepository.findByIdAndItem_IdAndOwner_Id(55L, 10L, 1L)).thenReturn(Optional.of(oldVersion));
+        when(driveItemVersionRepository.countByItem_IdAndOwner_Id(10L, 1L)).thenReturn(1L);
+
+        DriveService service = newService();
+
+        DriveDtos.FileItemResponse response = service.restoreFileVersion(1L, 10L, 55L);
+
+        assertThat(response.fileOriginName()).isEqualTo("old-report.pdf");
+        assertThat(current.getOriginalName()).isEqualTo("old-report.pdf");
+        assertThat(current.getStoredName()).isEqualTo("old-report-stored.pdf");
+        assertThat(current.getStoragePath()).isEqualTo("drive/1/old-report.pdf");
+        assertThat(current.getFileSize()).isEqualTo(500L);
+
+        ArgumentCaptor<DriveItemVersion> versionCaptor = ArgumentCaptor.forClass(DriveItemVersion.class);
+        verify(driveItemVersionRepository).save(versionCaptor.capture());
+        DriveItemVersion restoreVersion = versionCaptor.getValue();
+        assertThat(restoreVersion.getItem().getId()).isEqualTo(10L);
+        assertThat(restoreVersion.getOwner().getId()).isEqualTo(1L);
+        assertThat(restoreVersion.getVersionNumber()).isEqualTo(2);
+        assertThat(restoreVersion.getOriginalName()).isEqualTo("old-report.pdf");
+        assertThat(restoreVersion.getStoragePath()).isEqualTo("drive/1/old-report.pdf");
+        assertThat(restoreVersion.getSource()).isEqualTo("RESTORE");
+    }
+    @Test
     void listPageKeepsFoldersBeforeFilesWhenSortedByRecent() {
         AppUser owner = owner();
         DriveItem oldFolder = item(2L, owner, DriveItemType.FOLDER, "Project Folder", 0L, 10);

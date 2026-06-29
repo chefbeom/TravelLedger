@@ -79,6 +79,14 @@ public class DriveFileController {
         return driveService.listFileVersions(currentUser.userId(), fileId);
     }
 
+    @PatchMapping("/{fileId}/versions/{versionId}/restore")
+    public DriveDtos.FileItemResponse restoreFileVersion(
+            @AuthenticationPrincipal AppUserPrincipal currentUser,
+            @PathVariable Long fileId,
+            @PathVariable Long versionId
+    ) {
+        return driveService.restoreFileVersion(currentUser.userId(), fileId, versionId);
+    }
     @GetMapping("/{fileId}/download")
     public ResponseEntity<Void> download(
             @AuthenticationPrincipal AppUserPrincipal currentUser,

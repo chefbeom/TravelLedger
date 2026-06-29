@@ -364,6 +364,25 @@ public class DriveService {
                 .toList();
     }
 
+    @Transactional
+    public DriveDtos.FileItemResponse restoreFileVersion(Long userId, Long fileId, Long versionId) {
+        DriveItem item = getOwnedFile(userId, fileId);
+        ensureUnlocked(item);
+        DriveItemVersion version = driveItemVersionRepository.findByIdAndItem_IdAndOwner_Id(
+                        versionId,
+                        item.getId(),
+                        item.getOwner().getId()
+                )
+                .orElseThrow(() -> new NotFoundException("Drive file version not found."));
+
+        item.setOriginalName(version.getOriginalName());
+        item.setExtension(version.getExtension());
+        item.setStoredName(version.getStoredName());
+        item.setStoragePath(version.getStoragePath());
+        item.setFileSize(version.getFileSize());
+        recordFileVersion(item, "RESTORE");
+        return toItemResponse(item);
+    }
     public DriveItem getOwnedItem(Long userId, Long fileId) {
         return driveItemRepository.findByIdAndOwner_Id(fileId, getOwner(userId).getId())
                 .orElseThrow(() -> new NotFoundException("드라이브 항목을 찾지 못했습니다."));

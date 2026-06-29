@@ -112,6 +112,49 @@ class AdminDashboardIntegrationTest {
     }
 
     @Test
+    void adminUserActiveMutationRequiresVerifiedAdminAndCsrf() throws Exception {
+        MockHttpSession verifiedAdminSession = login("admin", "test1234", "12345678");
+        MockHttpSession unverifiedAdminSession = login("admin", "test1234", "12345678");
+        MockHttpSession userSession = login("hana", "test1234", "12345678");
+        verifyAdminAccess(verifiedAdminSession);
+        long hanaUserId = findUserId(verifiedAdminSession, "hana");
+
+        mockMvc.perform(patch("/api/admin/users/{userId}/active", hanaUserId)
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of("active", true))))
+                .andExpect(status().isUnauthorized());
+
+        mockMvc.perform(patch("/api/admin/users/{userId}/active", hanaUserId)
+                        .session(userSession)
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of("active", true))))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(patch("/api/admin/users/{userId}/active", hanaUserId)
+                        .session(unverifiedAdminSession)
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of("active", true))))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(patch("/api/admin/users/{userId}/active", hanaUserId)
+                        .session(verifiedAdminSession)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of("active", true))))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(patch("/api/admin/users/{userId}/active", hanaUserId)
+                        .session(verifiedAdminSession)
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of("active", true))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.loginId").value("hana"))
+                .andExpect(jsonPath("$.active").value(true));
+    }
+    @Test
     void adminCannotDeactivateAdminAccountAndFailedLoginReasonStaysGeneric() throws Exception {
         MockHttpSession adminSession = login("admin", "test1234", "12345678");
         verifyAdminAccess(adminSession);
@@ -154,6 +197,18 @@ class AdminDashboardIntegrationTest {
                 .andExpect(status().isBadRequest());
     }
 
+    private long findUserId(MockHttpSession adminSession, String loginId) throws Exception {
+        MvcResult dashboardResult = mockMvc.perform(get("/api/admin/dashboard").session(adminSession))
+                .andExpect(status().isOk())
+                .andReturn();
+        JsonNode users = objectMapper.readTree(dashboardResult.getResponse().getContentAsString()).get("users");
+        for (JsonNode user : users) {
+            if (loginId.equals(user.get("loginId").asText())) {
+                return user.get("id").asLong();
+            }
+        }
+        throw new AssertionError("Seed user not found: " + loginId);
+    }
     private MockHttpSession login(String loginId, String password, String secondaryPin) throws Exception {
         MvcResult result = mockMvc.perform(post("/api/auth/login")
                         .with(csrf())

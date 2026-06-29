@@ -1,10 +1,13 @@
 package com.playdata.calen.travel.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.playdata.calen.common.config.MinioProperties;
+import com.playdata.calen.common.exception.BadRequestException;
 import com.playdata.calen.common.media.PreparedThumbnailProfile;
 import io.minio.MinioClient;
 import java.awt.Color;
@@ -13,6 +16,7 @@ import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 import javax.imageio.ImageIO;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -110,6 +114,51 @@ class TravelMediaStorageServiceTest {
         assertThat(Files.exists(missingThumbnailPath)).isTrue();
     }
 
+    @Test
+    void completePresignedUploadRejectsObjectKeyOutsideOwnerRecordScopeBeforeMinioStat() {
+        MinioClient minioClient = mock(MinioClient.class);
+        TravelMediaStorageService service = createPresignedStorageService(minioClient);
+
+        assertThatThrownBy(() -> service.completePresignedUpload(
+                        1L,
+                        2L,
+                        3L,
+                        new TravelMediaStorageService.CompletedUpload(
+                                "travel-media/9/2/3/receipt.pdf",
+                                "receipt.pdf",
+                                "application/pdf",
+                                128L,
+                                List.of()
+                        )
+                ))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessage("Invalid uploaded file path.");
+
+        verifyNoInteractions(minioClient);
+    }
+
+    @Test
+    void completePresignedUploadRejectsAmbiguousObjectKeyBeforeMinioStat() {
+        MinioClient minioClient = mock(MinioClient.class);
+        TravelMediaStorageService service = createPresignedStorageService(minioClient);
+
+        assertThatThrownBy(() -> service.completePresignedUpload(
+                        1L,
+                        2L,
+                        3L,
+                        new TravelMediaStorageService.CompletedUpload(
+                                "travel-media/1/2/3/../4/receipt.pdf",
+                                "receipt.pdf",
+                                "application/pdf",
+                                128L,
+                                List.of()
+                        )
+                ))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessage("Invalid uploaded file path.");
+
+        verifyNoInteractions(minioClient);
+    }
     private TravelMediaStorageService createLocalStorageService() {
         @SuppressWarnings("unchecked")
         ObjectProvider<MinioClient> minioProvider = mock(ObjectProvider.class);
@@ -124,6 +173,24 @@ class TravelMediaStorageServiceTest {
         );
     }
 
+    private TravelMediaStorageService createPresignedStorageService(MinioClient minioClient) {
+        @SuppressWarnings("unchecked")
+        ObjectProvider<MinioClient> minioProvider = mock(ObjectProvider.class);
+        when(minioProvider.getIfAvailable()).thenReturn(minioClient);
+        MinioProperties minioProperties = new MinioProperties();
+        minioProperties.setEndpoint("http://localhost:9000");
+        minioProperties.setAccessKey("access-key");
+        minioProperties.setSecretKey("secret-key");
+        minioProperties.setBucket_cloud("travel-bucket");
+        return new TravelMediaStorageService(
+                tempDir.toString(),
+                "travel-media",
+                true,
+                minioProvider,
+                minioProperties,
+                new com.playdata.calen.common.media.ImageThumbnailService()
+        );
+    }
     private Path thumbnailPathFor(String storagePath, String contentType, int width) {
         Path relativePath = Path.of(storagePath);
         Path directory = relativePath.getParent();

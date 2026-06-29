@@ -764,6 +764,14 @@ public class TravelMediaStorageService {
             throw new BadRequestException("Object key is required.");
         }
 
+        String trimmedObjectKey = objectKey.trim();
+        String normalizedObjectKey = trimmedObjectKey.replace('\\', '/');
+        if (!objectKey.equals(trimmedObjectKey)
+                || !normalizedObjectKey.equals(objectKey)
+                || hasUnsafeObjectKeySegments(normalizedObjectKey)) {
+            throw new BadRequestException("Invalid uploaded file path.");
+        }
+
         String expectedPrefix = String.join(
                 "/",
                 mediaObjectPrefix,
@@ -772,11 +780,15 @@ public class TravelMediaStorageService {
                 String.valueOf(recordId)
         ) + "/";
 
-        if (!objectKey.startsWith(expectedPrefix)) {
+        if (!normalizedObjectKey.startsWith(expectedPrefix)) {
             throw new BadRequestException("Invalid uploaded file path.");
         }
     }
 
+    private boolean hasUnsafeObjectKeySegments(String objectKey) {
+        return Arrays.stream(objectKey.split("/", -1))
+                .anyMatch(segment -> !StringUtils.hasText(segment) || ".".equals(segment) || "..".equals(segment));
+    }
     private StatObjectResponse verifyUploadedObject(String objectKey, long expectedFileSize) throws Exception {
         StatObjectResponse stat = minioClient.statObject(
                 StatObjectArgs.builder()

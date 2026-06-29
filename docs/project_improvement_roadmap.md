@@ -30,6 +30,7 @@ This roadmap turns the current improvement analysis into an implementation queue
 | DB migration management | `*SchemaUpdater` classes are convenient but weak for production rollback/audit. | Flyway is wired behind `DB_MIGRATION_ENABLED`; convert schema changes one area at a time. | New schema change has versioned migration and repeatable local start. |
 | Observability/alerts | Prometheus/Grafana exists, but alerting is the next operational jump. | Add metrics for AI/OCR failures, backup failures, Redis errors. | Grafana/Prometheus alert rules documented and tested by metric scrape. |
 | Backup reliability | Backups exist, but restore confidence matters more than backup creation. | Add restore rehearsal checklist and encrypted artifact option. | Documented restore test with timestamped result. |
+| Accessibility/mobile UX | Drag widgets, maps, drive, modals, and PIN/auth screens have keyboard and touch risks. | Use `docs/accessibility_mobile_checklist.md` as the WCAG 2.2 release checklist. | Priority screens have keyboard, focus, target-size, and error-state evidence. |
 | CI gates | Manual checks are easy to skip. | Add backend test, frontend build, and secret scan to Jenkins/GitHub Actions. | Push triggers automated gates. |
 
 ## P2: Product Expansion

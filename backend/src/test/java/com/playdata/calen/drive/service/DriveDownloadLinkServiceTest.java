@@ -57,6 +57,26 @@ class DriveDownloadLinkServiceTest {
     }
 
     @Test
+    void resolveDownloadUrlByTokenRecordsAccessWithoutLoadingFileBytes() {
+        DriveDownloadLink link = activeLink();
+
+        when(driveDownloadLinkRepository.findByToken("public-token")).thenReturn(Optional.of(link));
+        when(driveService.resolveContentType("txt")).thenReturn("text/plain");
+        when(driveStorageService.generateDownloadUrl("drive/file.txt", "file.txt", "text/plain"))
+                .thenReturn("https://storage.example/download");
+
+        DriveDownloadLinkService service = newService();
+
+        String downloadUrl = service.resolveDownloadUrlByToken("public-token");
+
+        assertThat(downloadUrl).isEqualTo("https://storage.example/download");
+        assertThat(link.getDownloadCount()).isEqualTo(1);
+        assertThat(link.getLastAccessedAt()).isNotNull();
+        assertThat(link.getItem().getLastAccessedAt()).isNotNull();
+        verify(driveStorageService, never()).loadObjectBytes(anyString());
+        verify(driveDownloadLinkAccessLogService).record(eq(7L), eq(11L), eq(1L), eq("public-token"), eq("success"), isNull());
+    }
+    @Test
     void downloadByTokenRejectsBlankTokenWithoutLoadingFile() {
         DriveDownloadLinkService service = newService();
 

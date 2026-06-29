@@ -9,7 +9,7 @@ import org.springframework.stereotype.Component;
 public class LedgerAiAnalysisProperties {
 
     private boolean enabled = false;
-    private String provider = "n8n";
+    private String provider = "lmstudio";
     private String workflowUrl = "";
     private String apiKey = "";
     private String apiKeyHeader = "X-TravelLedger-AI-Key";

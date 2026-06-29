@@ -419,7 +419,7 @@ docker compose up -d --build
 | 변수 | 설명 | 기본값 |
 | --- | --- | --- |
 | `APP_LEDGER_AI_ENABLED` | 가계부 AI 분석 활성화 | `false` |
-| `APP_LEDGER_AI_PROVIDER` | AI 공급자. `lmstudio` 또는 `n8n` | `n8n` |
+| `APP_LEDGER_AI_PROVIDER` | AI 공급자. `lmstudio` 또는 `n8n` | `lmstudio` |
 | `APP_LEDGER_AI_MODEL` | 사용할 모델 이름 | `gemma4:e12b` |
 | `APP_LEDGER_AI_LMSTUDIO_BASE_URL` | LM Studio 서버 주소 | `http://172.18.240.1:1234` |
 | `APP_LEDGER_AI_LMSTUDIO_CHAT_PATH` | LM Studio chat endpoint | `/api/v1/chat` |

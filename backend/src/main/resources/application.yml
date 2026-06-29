@@ -95,7 +95,7 @@ app:
       max-file-size: ${LEDGER_OCR_MAX_FILE_SIZE:10MB}
     ai:
       enabled: ${APP_LEDGER_AI_ENABLED:false}
-      provider: ${APP_LEDGER_AI_PROVIDER:n8n}
+      provider: ${APP_LEDGER_AI_PROVIDER:lmstudio}
       workflow-url: ${APP_LEDGER_AI_WORKFLOW_URL:}
       api-key: ${APP_LEDGER_AI_API_KEY:}
       api-key-header: ${APP_LEDGER_AI_API_KEY_HEADER:X-TravelLedger-AI-Key}

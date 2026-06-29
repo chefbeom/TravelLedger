@@ -1,7 +1,11 @@
 package com.playdata.calen.ledger.ai;
 
 import com.playdata.calen.common.exception.BadRequestException;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
@@ -13,6 +17,9 @@ import org.springframework.web.client.RestClientException;
 public class LedgerAiN8nClient {
 
     private final LedgerAiAnalysisProperties properties;
+
+    @Autowired(required = false)
+    private MeterRegistry meterRegistry;
 
     public LedgerAiRemoteResponse analyze(Object payload) {
         Timer.Sample workflowTimer = startExternalWorkflowTimer();
@@ -44,7 +51,7 @@ public class LedgerAiN8nClient {
 
         } catch (RestClientException exception) {
             recordExternalWorkflow(workflowTimer, "ledger-ai-n8n", "failure");
-            throw new BadRequestException("n8n AI 遺꾩꽍 ?뚰겕?뚮줈?곗뿉 ?곌껐?????놁뒿?덈떎. n8n ?쒕쾭? ?뱁썒 ?ㅼ젙???뺤씤?섏꽭??");
+            throw new BadRequestException("n8n AI 분석 워크플로에 연결할 수 없습니다. n8n 서버와 webhook 설정을 확인하세요.");
         } catch (RuntimeException exception) {
             recordExternalWorkflow(workflowTimer, "ledger-ai-n8n", "failure");
             throw exception;
@@ -73,6 +80,7 @@ public class LedgerAiN8nClient {
                     .register(meterRegistry));
         }
     }
+
     private boolean hasText(String value) {
         return value != null && !value.isBlank();
     }

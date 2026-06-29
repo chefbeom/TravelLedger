@@ -82,6 +82,7 @@ This roadmap turns the current improvement analysis into an implementation queue
 | `docs/transaction_anomaly_detection.md` | Deterministic duplicate detector API, safety rules, and next anomaly detectors. |
 | `docs/ledger_classification_rules.md` | User-defined classification rule API, matching behavior, safety rules, and next import slices. |
 | `docs/travel_story_export.md` | Travel story/export visibility, media-token safety, secret exclusion, and async export release contract. |
+| `docs/household_budget_goals.md` | Household budget/shared goal owner/member scope, contribution, export, notification, and mutation safety contract. |
 ## Current Automation Set
 
 | Automation | Purpose |
@@ -91,5 +92,6 @@ This roadmap turns the current improvement analysis into an implementation queue
 | `scripts/scan-secrets.ps1` | Fails CI on high-risk token patterns or non-placeholder sensitive env assignments. |
 | `scripts/verify-ledger-anomaly-contract.ps1` | Fails CI if transaction anomaly detection loses read-only owner scope, bounded range/limit rules, detector evidence, security checklist coverage, or release-gate wiring. |
 | `scripts/verify-travel-story-export-contract.ps1` | Fails CI if travel story/export loses owner/shared/public visibility rules, media-token safety, secret exclusion, roadmap coverage, or release-gate wiring. |
+| `scripts/verify-household-budget-goals-contract.ps1` | Fails CI if household budget/shared-goal contracts lose owner/member scope, explicit mutation boundaries, export/notification safety, implementation anchors, or release-gate wiring. |
 | `scripts/verify-db-migrations.ps1` | Fails CI on malformed migration names, duplicate versions, or missing baseline marker. |
 | `scripts/verify-prometheus-alerts.ps1` | Fails CI when alert rules are malformed, undocumented, or not loaded by Prometheus. |

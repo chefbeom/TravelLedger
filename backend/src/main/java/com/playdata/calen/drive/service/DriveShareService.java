@@ -2,6 +2,7 @@ package com.playdata.calen.drive.service;
 
 import com.playdata.calen.account.domain.AppUser;
 import com.playdata.calen.account.repository.AppUserRepository;
+import com.playdata.calen.account.service.UserNotificationService;
 import com.playdata.calen.common.exception.BadRequestException;
 import com.playdata.calen.common.exception.NotFoundException;
 import com.playdata.calen.common.media.ImageThumbnailService;
@@ -21,6 +22,8 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
@@ -31,12 +34,15 @@ import org.springframework.util.StringUtils;
 @Transactional(readOnly = true)
 public class DriveShareService {
 
+    private static final Logger log = LoggerFactory.getLogger(DriveShareService.class);
+
     private final DriveShareRepository driveShareRepository;
     private final DriveItemRepository driveItemRepository;
     private final AppUserRepository appUserRepository;
     private final DriveStorageService driveStorageService;
     private final DriveService driveService;
     private final ImageThumbnailService imageThumbnailService;
+    private final UserNotificationService userNotificationService;
 
     public DriveShareService(
             DriveShareRepository driveShareRepository,
@@ -44,7 +50,8 @@ public class DriveShareService {
             AppUserRepository appUserRepository,
             DriveStorageService driveStorageService,
             DriveService driveService,
-            ImageThumbnailService imageThumbnailService
+            ImageThumbnailService imageThumbnailService,
+            UserNotificationService userNotificationService
     ) {
         this.driveShareRepository = driveShareRepository;
         this.driveItemRepository = driveItemRepository;
@@ -52,6 +59,7 @@ public class DriveShareService {
         this.driveStorageService = driveStorageService;
         this.driveService = driveService;
         this.imageThumbnailService = imageThumbnailService;
+        this.userNotificationService = userNotificationService;
     }
 
     public List<DriveDtos.SharedFileResponse> getReceivedShares(Long userId) {
@@ -143,8 +151,9 @@ public class DriveShareService {
             share.setItem(item);
             share.setOwner(owner);
             share.setRecipient(recipient);
-            driveShareRepository.save(share);
+            share = driveShareRepository.save(share);
             item.setSharedFile(true);
+            notifySharedFileReceived(owner, recipient, item, share);
             affected += 1;
         }
 
@@ -154,6 +163,20 @@ public class DriveShareService {
                 .build();
     }
 
+    private void notifySharedFileReceived(AppUser owner, AppUser recipient, DriveItem item, DriveShare share) {
+        try {
+            userNotificationService.createSystemNotification(
+                    recipient.getId(),
+                    "SHARED_FILE_RECEIVED",
+                    "New shared file",
+                    owner.getDisplayName() + " shared a file with you: " + item.getOriginalName(),
+                    "/drive?tab=shared",
+                    "{\"fileId\":" + item.getId() + ",\"shareId\":" + share.getId() + "}"
+            );
+        } catch (RuntimeException exception) {
+            log.warn("Failed to create shared-file notification: shareId={}", share.getId(), exception);
+        }
+    }
     @Transactional
     public DriveDtos.ActionResponse cancelShare(Long userId, List<Long> fileIds, String recipientLoginId) {
         AppUser recipient = appUserRepository.findByLoginId(safeLoginId(recipientLoginId))

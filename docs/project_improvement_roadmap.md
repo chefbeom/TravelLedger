@@ -44,7 +44,7 @@ This roadmap turns the current improvement analysis into an implementation queue
 | PWA/mobile capture | OCR, travel photos, and family album are mobile-heavy. | PWA manifest and production service-worker baseline are in place; next add shared camera upload and offline draft UX. | Production frontend is installable and API/private data is excluded from service-worker caching. |
 | Drive file versioning | Makes CalenDrive safer for family use. | Version table and restore previous file version. | Uploading same file can preserve previous version. |
 | Family budget/shared goals | Makes Household area more distinct. | Shared monthly budget and goal progress widget. | Household dashboard shows goal/budget status. |
-| Notification center | Connects disconnected events. | Backend notification storage, listing, unread count, and read/read-all APIs are in place; next wire AI/backup/share producers and frontend badge. | Authenticated users can list and mark own notifications with unread counts. |
+| Notification center | Connects disconnected events. | Backend notification APIs now receive AI analysis and shared-file events; next wire backup/budget/travel/OCR producers and frontend badge. | Users can list/read own notifications and receive initial AI/share event records. |
 | Data portability | Builds trust for personal data platform. | User export archive for ledger CSV and metadata JSON. | User can request/download own export. |
 | Privacy control panel | Gives users control over sensitive records. | Backend slice now supports AI history deletion and public drive link revocation; next add GPS stripping and export UI. | Authenticated user can clean up own derived AI data and revoke own public links with returned counts. |
 

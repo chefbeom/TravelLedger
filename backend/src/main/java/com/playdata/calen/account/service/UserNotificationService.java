@@ -59,6 +59,24 @@ public class UserNotificationService {
     }
 
     @Transactional
+    public UserNotificationResponse createSystemNotification(
+            Long userId,
+            String type,
+            String title,
+            String message,
+            String targetUrl,
+            String metadataJson
+    ) {
+        return createNotification(userId, new UserNotificationCreateRequest(
+                type,
+                title,
+                message,
+                targetUrl,
+                metadataJson
+        ));
+    }
+
+    @Transactional
     public UserNotificationReadResponse markRead(Long userId, Long notificationId) {
         UserNotification notification = userNotificationRepository.findByIdAndOwnerId(notificationId, userId)
                 .orElseThrow(() -> new NotFoundException("Notification was not found."));

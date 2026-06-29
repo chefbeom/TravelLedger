@@ -2,14 +2,14 @@
 
 Updated: 2026-06-29
 
-This document records the first notification-center backend slice. It creates the storage and API contract that later event producers can use for AI completion, budget warnings, backup failures, shared files, travel reminders, and OCR failures.
+This document records the notification-center backend baseline and the first producer wiring. Storage, listing, unread counts, read handling, AI analysis events, and shared-file events are now in place; backup, budget, travel, and OCR producers remain in the queue.
 
 ## Implemented API
 
 | Endpoint | Method | Purpose |
 | --- | --- | --- |
 | `/api/notifications` | `GET` | List the current user's notifications with `page`, `size`, and optional `unreadOnly=true`. |
-| `/api/notifications` | `POST` | Create a notification for the current user. This is a temporary internal/manual slice until event producers are wired. |
+| `/api/notifications` | `POST` | Create a notification for the current user. This remains useful for manual/internal UI testing while producers are being wired. |
 | `/api/notifications/{notificationId}/read` | `PATCH` | Mark one owned notification as read. |
 | `/api/notifications/read-all` | `PATCH` | Mark all unread owned notifications as read. |
 
@@ -34,6 +34,13 @@ This document records the first notification-center backend slice. It creates th
 | Notification metadata must not contain API keys, signed URLs, raw prompts, or backup credentials. | Notifications are designed for UI convenience, not sensitive data storage. |
 | Event producers should write short messages and link to the source page. | Keeps the center useful without duplicating feature data. |
 
+## Implemented Producers
+
+| Producer | Type | Target |
+| --- | --- | --- |
+| Ledger AI analysis completed | `AI_ANALYSIS_DONE` | AI analysis history deep link. |
+| Ledger AI analysis failed | `AI_OR_OCR_FAILED` | AI analysis history/status deep link. |
+| CalenDrive file shared with user | `SHARED_FILE_RECEIVED` | CalenDrive shared-files view. |
 ## Event Producer Queue
 
 | Producer | Suggested type | Target |
@@ -50,5 +57,5 @@ This document records the first notification-center backend slice. It creates th
 - Unauthenticated users cannot call `/api/notifications`.
 - User A cannot list or mark User B's notification as read.
 - `unreadCount` decreases after read/read-all operations.
-- Event producers do not include secrets or long raw payloads in `metadataJson`.
+- Event producers do not include secrets, prompts, signed URLs, backup credentials, or long raw payloads in `metadataJson`.
 - Pagination clamps `size` to the backend maximum.

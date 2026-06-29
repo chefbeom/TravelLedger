@@ -69,6 +69,7 @@ public class LedgerAiAnalysisService {
     private final LedgerAiAnalysisProperties properties;
     private final LedgerAiRemoteClient remoteClient;
     private final ObjectMapper objectMapper;
+    private final UserNotificationService userNotificationService;
 
     @Autowired(required = false)
     private MeterRegistry meterRegistry;
@@ -126,6 +127,46 @@ public class LedgerAiAnalysisService {
         }
     }
 
+    private void notifyAiAnalysisCompleted(Long userId, LedgerAiAnalysisHistory history) {
+        notifyAiAnalysis(
+                userId,
+                history,
+                "AI_ANALYSIS_DONE",
+                "AI analysis completed",
+                "Your ledger AI analysis is ready."
+        );
+    }
+
+    private void notifyAiAnalysisFailed(Long userId, LedgerAiAnalysisHistory history) {
+        notifyAiAnalysis(
+                userId,
+                history,
+                "AI_OR_OCR_FAILED",
+                "AI analysis failed",
+                "Your ledger AI analysis could not be completed. Please review the AI status and retry."
+        );
+    }
+
+    private void notifyAiAnalysis(
+            Long userId,
+            LedgerAiAnalysisHistory history,
+            String type,
+            String title,
+            String message
+    ) {
+        try {
+            userNotificationService.createSystemNotification(
+                    userId,
+                    type,
+                    title,
+                    message,
+                    "/statistics?aiAnalysisHistoryId=" + history.getId(),
+                    "{\"historyId\":" + history.getId() + ",\"status\":\"" + history.getStatus().name() + "\"}"
+            );
+        } catch (RuntimeException exception) {
+            log.warn("Failed to create ledger AI notification: historyId={}, type={}", history.getId(), type, exception);
+        }
+    }
     public LedgerAiAnalysisHistoryPageResponse getHistories(
             Long userId,
             LedgerAiAnalysisMode mode,

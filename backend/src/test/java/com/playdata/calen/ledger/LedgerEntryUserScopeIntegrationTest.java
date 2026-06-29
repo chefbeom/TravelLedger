@@ -202,6 +202,20 @@ class LedgerEntryUserScopeIntegrationTest {
                 .andExpect(status().isUnauthorized());
     }
     @Test
+    void loginWithoutRememberDeviceDoesNotIssueReusableRememberMeCookie() throws Exception {
+        MvcResult result = login("hana", false);
+        Cookie rememberMeCookie = result.getResponse().getCookie("CALEN_REMEMBER_ME");
+
+        if (rememberMeCookie != null) {
+            assertThat(rememberMeCookie.getMaxAge()).isZero();
+            mockMvc.perform(get("/api/auth/me").cookie(rememberMeCookie))
+                    .andExpect(status().isUnauthorized());
+        }
+
+        mockMvc.perform(get("/api/auth/me"))
+                .andExpect(status().isUnauthorized());
+    }
+    @Test
     void csvExportUsesVerifiedSecondaryPinFromSession() throws Exception {
         MockHttpSession hanaSession = loginAndGetSession("hana", false);
 

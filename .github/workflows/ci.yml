@@ -88,6 +88,16 @@ jobs:
       - name: Verify user privacy control contract
         shell: pwsh
         run: ./scripts/verify-privacy-control-contract.ps1
+  media-processing-contract:
+    name: Media processing contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Verify large media and thumbnail processing contract
+        shell: pwsh
+        run: ./scripts/verify-media-processing-contract.ps1
   pwa-mobile-baseline:
     name: PWA mobile baseline
     runs-on: ubuntu-latest
@@ -203,6 +213,7 @@ jobs:
       - backup-rehearsal-runbook
       - admin-audit-contract
       - privacy-control-contract
+      - media-processing-contract
       - pwa-mobile-baseline
       - service-decomposition-plan
       - backend-test
@@ -222,6 +233,7 @@ jobs:
             [backup-rehearsal-runbook]="${{ needs['backup-rehearsal-runbook'].result }}"
             [admin-audit-contract]="${{ needs['admin-audit-contract'].result }}"
             [privacy-control-contract]="${{ needs['privacy-control-contract'].result }}"
+            [media-processing-contract]="${{ needs['media-processing-contract'].result }}"
             [pwa-mobile-baseline]="${{ needs['pwa-mobile-baseline'].result }}"
             [service-decomposition-plan]="${{ needs['service-decomposition-plan'].result }}"
             [backend-test]="${{ needs['backend-test'].result }}"

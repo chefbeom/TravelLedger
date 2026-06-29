@@ -8,6 +8,7 @@ import com.playdata.calen.account.dto.UserNotificationResponse;
 import com.playdata.calen.account.repository.UserNotificationRepository;
 import com.playdata.calen.common.exception.NotFoundException;
 import java.time.LocalDateTime;
+import java.util.regex.Pattern;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -23,6 +24,23 @@ public class UserNotificationService {
 
     private static final int DEFAULT_PAGE_SIZE = 20;
     private static final int MAX_PAGE_SIZE = 100;
+    private static final int MAX_METADATA_LENGTH = 4000;
+    private static final String REDACTED = "[redacted]";
+    private static final Pattern SENSITIVE_METADATA_FIELD = Pattern.compile(
+            "(\"(?:api[_-]?key|access[_-]?token|refresh[_-]?token|token|secret|client[_-]?secret|password|"
+                    + "signed[_-]?url|presigned[_-]?url|workflow[_-]?url|authorization|credential)\"\\s*:\\s*\")([^\"]*)(\")",
+            Pattern.CASE_INSENSITIVE
+    );
+    private static final Pattern SENSITIVE_QUERY_PARAM = Pattern.compile(
+            "((?:[?&]|%3f|%26)(?:x-amz-signature|x-amz-credential|x-amz-security-token|x-goog-signature|"
+                    + "x-goog-credential|x-goog-security-token|signature|sig|token|access_token|api[_-]?key|apikey|"
+                    + "secret|password)=)[^\"&\\s]+",
+            Pattern.CASE_INSENSITIVE
+    );
+    private static final Pattern BEARER_TOKEN = Pattern.compile(
+            "(bearer\\s+)[A-Za-z0-9._~+/=-]+",
+            Pattern.CASE_INSENSITIVE
+    );
 
     private final UserNotificationRepository userNotificationRepository;
 
@@ -53,8 +71,8 @@ public class UserNotificationService {
         notification.setType(truncate(required(request.type(), "Notification type is required."), 60));
         notification.setTitle(truncate(required(request.title(), "Notification title is required."), 160));
         notification.setMessage(truncate(required(request.message(), "Notification message is required."), 1000));
-        notification.setTargetUrl(truncate(request.targetUrl(), 500));
-        notification.setMetadataJson(request.metadataJson());
+        notification.setTargetUrl(truncate(redactSensitiveValues(request.targetUrl()), 500));
+        notification.setMetadataJson(truncate(redactSensitiveValues(request.metadataJson()), MAX_METADATA_LENGTH));
         return toResponse(userNotificationRepository.save(notification));
     }
 
@@ -130,5 +148,16 @@ public class UserNotificationService {
         }
         String trimmed = value.trim();
         return trimmed.length() <= maxLength ? trimmed : trimmed.substring(0, maxLength);
+    }
+
+    private String redactSensitiveValues(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        String redacted = value.trim();
+        redacted = SENSITIVE_METADATA_FIELD.matcher(redacted).replaceAll("$1" + REDACTED + "$3");
+        redacted = SENSITIVE_QUERY_PARAM.matcher(redacted).replaceAll("$1" + REDACTED);
+        redacted = BEARER_TOKEN.matcher(redacted).replaceAll("$1" + REDACTED);
+        return redacted;
     }
 }

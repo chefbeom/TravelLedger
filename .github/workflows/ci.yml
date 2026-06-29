@@ -127,7 +127,8 @@ jobs:
         uses: actions/checkout@v4
       - name: Verify ledger classification contract
         shell: pwsh
-        run: ./scripts/verify-ledger-classification-contract.ps1  ledger-anomaly-contract:
+        run: ./scripts/verify-ledger-classification-contract.ps1
+  ledger-anomaly-contract:
     name: Ledger anomaly contract
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -136,7 +137,17 @@ jobs:
         uses: actions/checkout@v4
       - name: Verify ledger anomaly contract
         shell: pwsh
-        run: ./scripts/verify-ledger-anomaly-contract.ps1  service-decomposition-plan:
+        run: ./scripts/verify-ledger-anomaly-contract.ps1
+  travel-story-export-contract:
+    name: Travel story export contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Verify travel story export contract
+        shell: pwsh
+        run: ./scripts/verify-travel-story-export-contract.ps1  service-decomposition-plan:
     name: Service decomposition plan
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -245,6 +256,7 @@ jobs:
       - ledger-ai-coach-contract
       - ledger-classification-contract
       - ledger-anomaly-contract
+      - travel-story-export-contract
       - pwa-mobile-baseline
       - service-decomposition-plan
       - backend-test
@@ -268,6 +280,7 @@ jobs:
             [ledger-ai-coach-contract]="${{ needs['ledger-ai-coach-contract'].result }}"
             [ledger-classification-contract]="${{ needs['ledger-classification-contract'].result }}"
             [ledger-anomaly-contract]="${{ needs['ledger-anomaly-contract'].result }}"
+            [travel-story-export-contract]="${{ needs['travel-story-export-contract'].result }}"
             [pwa-mobile-baseline]="${{ needs['pwa-mobile-baseline'].result }}"
             [service-decomposition-plan]="${{ needs['service-decomposition-plan'].result }}"
             [backend-test]="${{ needs['backend-test'].result }}"

@@ -81,6 +81,7 @@ This roadmap turns the current improvement analysis into an implementation queue
 | `docs/notification_center.md` | Notification API contract, safety rules, producer queue, and test backlog. |
 | `docs/transaction_anomaly_detection.md` | Deterministic duplicate detector API, safety rules, and next anomaly detectors. |
 | `docs/ledger_classification_rules.md` | User-defined classification rule API, matching behavior, safety rules, and next import slices. |
+| `docs/travel_story_export.md` | Travel story/export visibility, media-token safety, secret exclusion, and async export release contract. |
 ## Current Automation Set
 
 | Automation | Purpose |
@@ -89,5 +90,6 @@ This roadmap turns the current improvement analysis into an implementation queue
 | `scripts/verify-env-sync.ps1` | Fails when Spring env placeholders drift from checked env examples or compose-only allowlist. |
 | `scripts/scan-secrets.ps1` | Fails CI on high-risk token patterns or non-placeholder sensitive env assignments. |
 | `scripts/verify-ledger-anomaly-contract.ps1` | Fails CI if transaction anomaly detection loses read-only owner scope, bounded range/limit rules, detector evidence, security checklist coverage, or release-gate wiring. |
+| `scripts/verify-travel-story-export-contract.ps1` | Fails CI if travel story/export loses owner/shared/public visibility rules, media-token safety, secret exclusion, roadmap coverage, or release-gate wiring. |
 | `scripts/verify-db-migrations.ps1` | Fails CI on malformed migration names, duplicate versions, or missing baseline marker. |
 | `scripts/verify-prometheus-alerts.ps1` | Fails CI when alert rules are malformed, undocumented, or not loaded by Prometheus. |

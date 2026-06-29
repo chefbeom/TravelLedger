@@ -158,7 +158,8 @@ public class SecurityConfig {
             UserDetailsService userDetailsService,
             PersistentTokenRepository persistentTokenRepository,
             @Value("${app.security.remember-me-key}") String rememberMeKey,
-            @Value("${app.security.remember-me-token-validity-seconds:2592000}") int tokenValiditySeconds
+            @Value("${app.security.remember-me-token-validity-seconds:2592000}") int tokenValiditySeconds,
+            @Value("${app.security.remember-me-secure-cookie:false}") boolean rememberMeSecureCookie
     ) {
         PersistentTokenBasedRememberMeServices services = new PersistentTokenBasedRememberMeServices(
                 rememberMeKey,
@@ -167,6 +168,7 @@ public class SecurityConfig {
         );
         services.setCookieName("CALEN_REMEMBER_ME");
         services.setAlwaysRemember(true);
+        services.setUseSecureCookie(rememberMeSecureCookie);
         services.setTokenValiditySeconds(tokenValiditySeconds);
         return services;
     }
@@ -176,7 +178,7 @@ public class SecurityConfig {
             HttpServletResponse response,
             AuthenticationException authenticationException
     ) throws IOException {
-        writeJsonError(response, HttpServletResponse.SC_UNAUTHORIZED, "로그인이 필요합니다.");
+        writeJsonError(response, HttpServletResponse.SC_UNAUTHORIZED, "\uB85C\uADF8\uC778\uC774 \uD544\uC694\uD569\uB2C8\uB2E4.");
     }
 
     private void writeJsonError(HttpServletResponse response, int status, String message) throws IOException {

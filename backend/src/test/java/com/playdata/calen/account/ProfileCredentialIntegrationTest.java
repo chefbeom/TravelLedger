@@ -96,6 +96,18 @@ class ProfileCredentialIntegrationTest {
     }
 
     @Test
+    void rememberMeCookieUsesExpectedSecurityAttributes() throws Exception {
+        MvcResult loginResult = loginResult("hana", "test1234", "12345678", true);
+        Cookie rememberMeCookie = loginResult.getResponse().getCookie("CALEN_REMEMBER_ME");
+
+        assertThat(rememberMeCookie).isNotNull();
+        assertThat(rememberMeCookie.getValue()).isNotBlank();
+        assertThat(rememberMeCookie.isHttpOnly()).isTrue();
+        assertThat(rememberMeCookie.getPath()).isEqualTo("/");
+        assertThat(rememberMeCookie.getMaxAge()).isPositive();
+        assertThat(rememberMeCookie.getSecure()).isFalse();
+    }
+    @Test
     void passwordChangeRevokesRememberMeTokens() throws Exception {
         MvcResult loginResult = loginResult("admin", "test1234", "12345678", true);
         MockHttpSession session = (MockHttpSession) loginResult.getRequest().getSession(false);

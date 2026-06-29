@@ -15,7 +15,7 @@ This review captures the current remember-me implementation and the remaining ha
 | Validity | `app.security.remember-me-token-validity-seconds`, default `2592000` seconds. |
 | Login behavior | `AuthController.signIn` calls `rememberMeServices.loginSuccess` only when `rememberDevice=true`; otherwise it calls `rememberMeServices.logout`. |
 | Logout behavior | `AuthController.clearAuthentication` calls `rememberMeServices.logout`, clears the security context, and invalidates the HTTP session. |
-| Existing test evidence | `LedgerEntryUserScopeIntegrationTest.rememberMeRestoresUserWithoutSession` proves a remember-me cookie can restore `/api/auth/me` without a session; `logoutRevokesRememberMeCookie` proves logout clears the cookie and old cookie reuse is unauthorized; `rememberMeAutoLoginRotatesTokenAndRejectsPreviousCookie` proves remember-me auto-login rotates the token and rejects the previous cookie; `loginWithoutRememberDeviceDoesNotIssueReusableRememberMeCookie` proves non-opt-in login does not create a reusable remember-me cookie; `ProfileCredentialIntegrationTest.passwordChangeRevokesRememberMeTokens` and `secondaryPinChangeRevokesRememberMeTokens` prove profile credential changes clear the cookie and reject the old token; `AdminDashboardIntegrationTest.adminDeactivationRevokesRememberMeTokens` proves admin deactivation removes the target user remember-me token and rejects the old cookie. |
+| Existing test evidence | `LedgerEntryUserScopeIntegrationTest.rememberMeRestoresUserWithoutSession` proves a remember-me cookie can restore `/api/auth/me` without a session; `logoutRevokesRememberMeCookie` proves logout clears the cookie and old cookie reuse is unauthorized; `rememberMeAutoLoginRotatesTokenAndRejectsPreviousCookie` proves remember-me auto-login rotates the token and rejects the previous cookie; `loginWithoutRememberDeviceDoesNotIssueReusableRememberMeCookie` proves non-opt-in login does not create a reusable remember-me cookie; `ProfileCredentialIntegrationTest.rememberMeCookieUsesExpectedSecurityAttributes` proves the cookie name, `HttpOnly`, path, max-age, and local secure-cookie default; `passwordChangeRevokesRememberMeTokens` and `secondaryPinChangeRevokesRememberMeTokens` prove profile credential changes clear the cookie and reject the old token; `AdminDashboardIntegrationTest.adminDeactivationRevokesRememberMeTokens` proves admin deactivation removes the target user remember-me token and rejects the old cookie. |
 
 ## Security Invariants
 
@@ -23,7 +23,7 @@ This review captures the current remember-me implementation and the remaining ha
 | --- | --- | --- | --- |
 | RM-01 | Remember-me cookies are issued only after explicit user opt-in. | Avoids silently creating long-lived browser credentials. | `LedgerEntryUserScopeIntegrationTest.loginWithoutRememberDeviceDoesNotIssueReusableRememberMeCookie` covers `rememberDevice=false` not restoring authentication. |
 | RM-02 | Logout revokes the persistent token and clears the browser cookie. | A stolen or old remember-me cookie should not keep working after logout. | `LedgerEntryUserScopeIntegrationTest.logoutRevokesRememberMeCookie` covers cookie clearing and old-cookie rejection after logout. |
-| RM-03 | Cookie attributes are production-safe. | Long-lived cookies need `HttpOnly`, `Secure`, path/domain, expiry, and SameSite review. | Cookie name/validity are explicit; add environment review for `Secure` and SameSite behavior behind HTTPS/proxy. |
+| RM-03 | Cookie attributes are production-safe. | Long-lived cookies need `HttpOnly`, `Secure`, path/domain, expiry, and SameSite review. | `rememberMeCookieUsesExpectedSecurityAttributes` covers cookie name, `HttpOnly`, path, max-age, and local secure-cookie default; `APP_SECURITY_REMEMBER_ME_SECURE_COOKIE=true` can force `Secure` in production. SameSite remains a deployment/header-policy follow-up. |
 | RM-04 | Persistent tokens are random and rotated by Spring Security. | Reduces replay window and token prediction risk. | `LedgerEntryUserScopeIntegrationTest.rememberMeAutoLoginRotatesTokenAndRejectsPreviousCookie` covers token value rotation and previous-cookie rejection after auto-login. |
 | RM-05 | Token storage does not expose plaintext credentials. | DB compromise should not reveal passwords or secondary PINs. | `persistent_logins` stores series/token only; no password/PIN fields. |
 | RM-06 | Account deactivation or password/PIN reset should revoke old remember-me sessions. | Credential/account changes should cut off old devices. | Password and secondary PIN changes call persistent token removal and are covered by `ProfileCredentialIntegrationTest`; admin user deactivation removes target-user persistent tokens and is covered by `AdminDashboardIntegrationTest`. |
@@ -33,11 +33,11 @@ This review captures the current remember-me implementation and the remaining ha
 | Attribute | Desired production posture | Current evidence | Follow-up |
 | --- | --- | --- | --- |
 | Name | Stable, non-generic name. | `CALEN_REMEMBER_ME`. | Keep stable for tests and logout deletion. |
-| HttpOnly | Enabled. | Spring Security remember-me cookies are intended for HTTP-only session use; confirm with MockMvc/browser smoke. | Add assertion on issued cookie. |
-| Secure | Enabled when served over HTTPS. | Not explicitly configured in `SecurityConfig`. | Decide whether to force secure cookie in production or rely on request security/proxy headers. |
+| HttpOnly | Enabled. | `rememberMeCookieUsesExpectedSecurityAttributes` asserts `HttpOnly`. | Keep assertion on issued cookie. |
+| Secure | Enabled when served over HTTPS. | `APP_SECURITY_REMEMBER_ME_SECURE_COOKIE` is wired to `PersistentTokenBasedRememberMeServices#setUseSecureCookie`; local default is `false`. | Set `APP_SECURITY_REMEMBER_ME_SECURE_COOKIE=true` in HTTPS production. |
 | SameSite | `Lax` or stricter unless cross-site embedding is required. | Not explicitly configured for remember-me cookie. | Add deployment-level cookie policy or custom response handling if Spring Security default is insufficient. |
-| Path | App-wide path only. | Spring Security default path behavior. | Add cookie assertion in auth integration test. |
-| Max age | Matches token validity and product expectation. | Default validity is 30 days. | Confirm product requirement; consider shorter duration for shared devices. |
+| Path | App-wide path only. | `rememberMeCookieUsesExpectedSecurityAttributes` asserts `/`. | Keep cookie assertion in auth integration test. |
+| Max age | Matches token validity and product expectation. | Default validity is 30 days and test asserts a positive max-age. | Confirm product requirement; consider shorter duration for shared devices. |
 
 ## Immediate Test Backlog
 
@@ -49,7 +49,7 @@ This review captures the current remember-me implementation and the remaining ha
 | P1 | Keep password-change remember-me revocation covered. | `passwordChangeRevokesRememberMeTokens` expects cookie clearing and old-cookie `401` after password change. |
 | P1 | Keep secondary-PIN-change remember-me revocation covered. | `secondaryPinChangeRevokesRememberMeTokens` expects cookie clearing and old-cookie `401` after PIN change. |
 | P1 | Keep admin-deactivation remember-me revocation covered. | `adminDeactivationRevokesRememberMeTokens` expects target user deactivation to reject the old remember-me cookie. |
-| P1 | Cookie attribute assertions. | Cookie is HttpOnly, production-secure, scoped, expires as expected, and SameSite policy is documented. |
+| P1 | Keep cookie attribute assertions. | Cookie is named, `HttpOnly`, scoped to `/`, has a positive max-age, and local secure-cookie default is explicit; production secure-cookie env and SameSite follow-up are documented. |
 
 ## Release Gate
 

@@ -1,17 +1,22 @@
 package com.playdata.calen.account;
 
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.playdata.calen.account.domain.AppUserRole;
+import com.playdata.calen.account.security.AppUserPrincipal;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.test.web.servlet.MockMvc;
@@ -33,6 +38,24 @@ class PrivacyControllerIntegrationTest {
     @Autowired
     private ObjectMapper objectMapper;
 
+    @Test
+    void aiAnalysisHistoryDeletionRequiresAuthenticationAndCsrf() throws Exception {
+        MockHttpSession session = login("hana", "test1234", "12345678");
+
+        mockMvc.perform(delete("/api/privacy/ai-analysis-history").with(csrf()))
+                .andExpect(status().isUnauthorized());
+
+        mockMvc.perform(delete("/api/privacy/ai-analysis-history").session(session))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(delete("/api/privacy/ai-analysis-history")
+                        .session(session)
+                        .with(csrf()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.aiAnalysisHistoriesDeleted").isNumber())
+                .andExpect(jsonPath("$.publicDownloadLinksRevoked").value(0))
+                .andExpect(jsonPath("$.processedAt").isNotEmpty());
+    }
     @Test
     void publicDownloadLinkRevocationRequiresAuthenticationAndCsrf() throws Exception {
         MockHttpSession session = login("hana", "test1234", "12345678");

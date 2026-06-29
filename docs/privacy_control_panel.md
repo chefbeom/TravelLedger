@@ -39,6 +39,7 @@ This document records the first backend slice for user-facing privacy controls. 
 | --- | --- |
 | `PrivacyManagementServiceTest.revokePublicDownloadLinksScopesUpdateToCurrentOwner` | Verifies public drive link revocation calls the owner-scoped repository method with only the authenticated user ID and returns the affected count. |
 | `PrivacyManagementServiceTest.cleanupSensitiveDataDeletesAiHistoryAndRevokesOnlyCurrentOwnerLinks` | Verifies combined cleanup deletes only the authenticated user AI history and revokes only that user's active public download links. |
+| `PrivacyControllerIntegrationTest.aiAnalysisHistoryDeletionRequiresAuthenticationAndCsrf` | Verifies AI analysis history deletion rejects unauthenticated requests and authenticated unsafe requests without CSRF. |
 | `PrivacyControllerIntegrationTest.publicDownloadLinkRevocationRequiresAuthenticationAndCsrf` | Verifies public-link revocation rejects unauthenticated requests and authenticated unsafe requests without CSRF. |
 | `PrivacyControllerIntegrationTest.sensitiveCleanupRequiresAuthenticationAndCsrf` | Verifies combined sensitive cleanup rejects unauthenticated requests and authenticated unsafe requests without CSRF. |
 | `PrivacyControllerIntegrationTest.dataExportRequiresAuthenticationCsrfAndVerifiedSecondaryPin` | Verifies data export rejects unauthenticated requests, missing-CSRF requests, and authenticated sessions without a verified secondary PIN before returning a zip attachment. |

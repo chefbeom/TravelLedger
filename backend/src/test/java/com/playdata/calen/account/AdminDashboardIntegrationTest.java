@@ -2,6 +2,7 @@ package com.playdata.calen.account;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -63,6 +64,31 @@ class AdminDashboardIntegrationTest {
     }
 
     @Test
+    void adminAccessVerificationRequiresCsrfAndAdminRole() throws Exception {
+        MockHttpSession adminSession = login("admin", "test1234", "12345678");
+        MockHttpSession userSession = login("hana", "test1234", "12345678");
+        String code = adminVerificationCode();
+
+        mockMvc.perform(post("/api/admin/access/verify")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of("code", code))))
+                .andExpect(status().isUnauthorized());
+
+        mockMvc.perform(post("/api/admin/access/verify")
+                        .session(userSession)
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of("code", code))))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(post("/api/admin/access/verify")
+                        .session(adminSession)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of("code", code))))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
     void sensitiveDataManagementApisRequireAuthenticatedVerifiedAdmin() throws Exception {
         MockHttpSession adminSession = login("admin", "test1234", "12345678");
         MockHttpSession userSession = login("hana", "test1234", "12345678");
@@ -88,6 +114,38 @@ class AdminDashboardIntegrationTest {
         mockMvc.perform(post("/api/admin/data-management/backup")
                         .session(userSession)
                         .with(csrf()))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void adminDestructiveOperationsRejectMissingCsrfEvenAfterVerification() throws Exception {
+        MockHttpSession adminSession = login("admin", "test1234", "12345678");
+        verifyAdminAccess(adminSession);
+        long hanaUserId = findUserId(adminSession, "hana");
+
+        mockMvc.perform(post("/api/admin/data-management/backup")
+                        .session(adminSession))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(post("/api/admin/data-management/backup/download")
+                        .session(adminSession))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(post("/api/admin/data-management/restore")
+                        .session(adminSession)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of("fileName", "calen-backup.sql.gz"))))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(delete("/api/admin/blocked-ips")
+                        .session(adminSession)
+                        .param("ip", "203.0.113.7"))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(patch("/api/admin/users/{userId}/active", hanaUserId)
+                        .session(adminSession)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of("active", true))))
                 .andExpect(status().isForbidden());
     }
 
@@ -255,9 +313,7 @@ class AdminDashboardIntegrationTest {
     }
 
     private void verifyAdminAccess(MockHttpSession session) throws Exception {
-        String code = String.valueOf(
-                19990515 + Integer.parseInt(LocalDate.now(ZoneId.of("Asia/Seoul")).format(DateTimeFormatter.BASIC_ISO_DATE))
-        );
+        String code = adminVerificationCode();
 
         mockMvc.perform(post("/api/admin/access/verify")
                         .session(session)
@@ -265,5 +321,11 @@ class AdminDashboardIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(Map.of("code", code))))
                 .andExpect(status().isNoContent());
+    }
+
+    private String adminVerificationCode() {
+        return String.valueOf(
+                19990515 + Integer.parseInt(LocalDate.now(ZoneId.of("Asia/Seoul")).format(DateTimeFormatter.BASIC_ISO_DATE))
+        );
     }
 }

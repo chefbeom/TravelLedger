@@ -126,7 +126,7 @@ public class LedgerAiAnalysisService {
             }
             LedgerAiAnalysisHistory failedHistory = baseHistory(owner, plan);
             failedHistory.setStatus(LedgerAiAnalysisStatus.FAILED);
-            failedHistory.setSummary("AI ?????????щ쫫???????濾???????????쇰뮝??);
+            failedHistory.setSummary("AI analysis failed.");
             failedHistory.setErrorMessage(sanitizeProviderErrorMessage(exception.getMessage()));
             failedHistory.setRequestPayloadJson(aiJsonCodec.write(payload));
             failedHistory = historyRepository.save(failedHistory);
@@ -918,7 +918,7 @@ public class LedgerAiAnalysisService {
     private String formatPercentChange(BigDecimal delta, BigDecimal base) {
         BigDecimal safeBase = nullToZero(base);
         if (safeBase.compareTo(BigDecimal.ZERO) == 0) {
-            return nullToZero(delta).compareTo(BigDecimal.ZERO) == 0 ? "0.00%" : "???????????????怨멸텛??0????饔낅떽???嶺뚮슢??쾮???????????????????????????;
+            return nullToZero(delta).compareTo(BigDecimal.ZERO) == 0 ? "0.00%" : "N/A";
         }
         return nullToZero(delta)
                 .multiply(BigDecimal.valueOf(100))
@@ -1118,4 +1118,5 @@ public class LedgerAiAnalysisService {
         }
     }
 }
+
 

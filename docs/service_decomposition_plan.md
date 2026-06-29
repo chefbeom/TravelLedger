@@ -8,14 +8,14 @@ This plan keeps the next refactors small and reversible. The goal is not to spli
 
 | Service | Current size | Main risk |
 | --- | ---: | --- |
-| LedgerAiAnalysisService | 0 lines | AI orchestration still owns payload creation, provider calls, duplicate suppression, history persistence, and report mapping; provider output contract text is isolated in LedgerAiOutputContract, Micrometer request metrics in LedgerAiAnalysisMetrics, AI analysis notification delivery in LedgerAiAnalysisNotifications, JSON history/result conversion in LedgerAiAnalysisJsonCodec, and text safety/length limiting in LedgerAiAnalysisTextSanitizer. |
+| LedgerAiAnalysisService | 1121 lines | AI orchestration still owns payload creation, provider calls, duplicate suppression, history persistence, and report mapping; provider output contract text is isolated in LedgerAiOutputContract, Micrometer request metrics in LedgerAiAnalysisMetrics, AI analysis notification delivery in LedgerAiAnalysisNotifications, JSON history/result conversion in LedgerAiAnalysisJsonCodec, and text safety/length limiting in LedgerAiAnalysisTextSanitizer. |
 | `TravelService` | 3278 lines | Plans, sharing, map snapshots, media upload completion, route/GPX handling, expense reflection, cache invalidation, public atlas reads, and exchange rates are mixed in one service. |
 
 ## CI Line Budget
 
 | Service | Current baseline | CI budget | Policy |
 | --- | ---: | ---: | --- |
-| LedgerAiAnalysisService | 0 lines | 1144 lines | Growth past the budget must extract payload, provider-call, report, history, or notification behavior before raising the limit. |
+| LedgerAiAnalysisService | 1121 lines | 1144 lines | Growth past the budget must extract payload, provider-call, report, history, or notification behavior before raising the limit. |
 | `TravelService` | 3278 lines | 3300 lines | Growth past the budget must split media, map, share, route, exchange-rate, or ledger-bridge behavior before raising the limit. |
 
 The budget is intentionally close to the current baseline so service decomposition behaves as a ratchet: new feature work should reduce or isolate responsibilities instead of adding more code to the large orchestrators.

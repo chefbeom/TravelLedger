@@ -98,6 +98,16 @@ jobs:
       - name: Verify large media and thumbnail processing contract
         shell: pwsh
         run: ./scripts/verify-media-processing-contract.ps1
+  public-share-authorization-contract:
+    name: Public share authorization contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Verify public share authorization contract
+        shell: pwsh
+        run: ./scripts/verify-public-share-authorization-contract.ps1
   file-upload-security-contract:
     name: File upload security contract
     runs-on: ubuntu-latest
@@ -293,6 +303,7 @@ jobs:
       - backup-rehearsal-runbook
       - admin-audit-contract
       - privacy-control-contract
+      - public-share-authorization-contract
       - media-processing-contract
       - file-upload-security-contract
       - ledger-ai-coach-contract
@@ -321,6 +332,7 @@ jobs:
             [backup-rehearsal-runbook]="${{ needs['backup-rehearsal-runbook'].result }}"
             [admin-audit-contract]="${{ needs['admin-audit-contract'].result }}"
             [privacy-control-contract]="${{ needs['privacy-control-contract'].result }}"
+            [public-share-authorization-contract]="${{ needs['public-share-authorization-contract'].result }}"
             [media-processing-contract]="${{ needs['media-processing-contract'].result }}"
             [file-upload-security-contract]="${{ needs['file-upload-security-contract'].result }}"
             [ledger-ai-coach-contract]="${{ needs['ledger-ai-coach-contract'].result }}"

@@ -68,7 +68,16 @@ jobs:
       - name: Verify backup restore rehearsal runbook
         shell: pwsh
         run: ./scripts/verify-backup-rehearsal-runbook.ps1
-  admin-audit-contract:
+  security-baseline-checklist:
+    name: Security baseline checklist
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Verify ASVS security baseline checklist
+        shell: pwsh
+        run: ./scripts/verify-security-baseline-checklist.ps1  admin-audit-contract:
     name: Admin audit contract
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -331,6 +340,7 @@ jobs:
       - migration-discipline
       - observability-alerts
       - backup-rehearsal-runbook
+      - security-baseline-checklist
       - admin-audit-contract
       - privacy-control-contract
       - public-share-authorization-contract
@@ -345,6 +355,7 @@ jobs:
       - drive-file-versioning-contract
       - data-portability-contract
       - pwa-mobile-baseline
+      - accessibility-mobile-checklist
       - service-decomposition-plan
       - backend-test
       - backend-security-tests
@@ -361,6 +372,7 @@ jobs:
             [migration-discipline]="${{ needs['migration-discipline'].result }}"
             [observability-alerts]="${{ needs['observability-alerts'].result }}"
             [backup-rehearsal-runbook]="${{ needs['backup-rehearsal-runbook'].result }}"
+            [security-baseline-checklist]="${{ needs['security-baseline-checklist'].result }}"
             [admin-audit-contract]="${{ needs['admin-audit-contract'].result }}"
             [privacy-control-contract]="${{ needs['privacy-control-contract'].result }}"
             [public-share-authorization-contract]="${{ needs['public-share-authorization-contract'].result }}"

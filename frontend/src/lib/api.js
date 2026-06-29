@@ -149,7 +149,7 @@ async function request(path, options = {}) {
   })
 
   if (!response.ok) {
-    let message = '요청을 처리하는 중 문제가 발생했습니다.'
+    let message = '?붿껌??泥섎━?섎뒗 以?臾몄젣媛 諛쒖깮?덉뒿?덈떎.'
     let details = null
 
     try {
@@ -233,7 +233,7 @@ export async function downloadAdminDataBackup() {
   })
 
   if (!response.ok) {
-    let message = '요청을 처리하는 중 문제가 발생했습니다.'
+    let message = '?붿껌??泥섎━?섎뒗 以?臾몄젣媛 諛쒖깮?덉뒿?덈떎.'
 
     try {
       const body = await response.json()
@@ -470,7 +470,7 @@ async function downloadFile(path, fallbackFileName, options = {}) {
   })
 
   if (!response.ok) {
-    let message = '요청을 처리하는 중 문제가 발생했습니다.'
+    let message = '?붿껌??泥섎━?섎뒗 以?臾몄젣媛 諛쒖깮?덉뒿?덈떎.'
 
     try {
       const body = await response.json()
@@ -885,7 +885,7 @@ async function uploadPresignedTravelMediaFile(target, file) {
   })
 
   if (!response.ok) {
-    throw new Error('파일 업로드 중 문제가 발생했습니다.')
+    throw new Error('?뚯씪 ?낅줈??以?臾몄젣媛 諛쒖깮?덉뒿?덈떎.')
   }
 }
 
@@ -904,10 +904,10 @@ function uploadPresignedTravelMediaFileWithProgress(target, file) {
         return
       }
 
-      reject(new Error('파일 업로드 중 문제가 발생했습니다.'))
+      reject(new Error('?뚯씪 ?낅줈??以?臾몄젣媛 諛쒖깮?덉뒿?덈떎.'))
     }
-    xhr.onerror = () => reject(new Error('파일 업로드 중 문제가 발생했습니다.'))
-    xhr.onabort = () => reject(new Error('파일 업로드가 취소되었습니다.'))
+    xhr.onerror = () => reject(new Error('?뚯씪 ?낅줈??以?臾몄젣媛 諛쒖깮?덉뒿?덈떎.'))
+    xhr.onabort = () => reject(new Error('?뚯씪 ?낅줈?쒓? 痍⑥냼?섏뿀?듬땲??'))
     xhr.send(file)
   })
 }
@@ -1087,7 +1087,7 @@ async function uploadTravelMediaInternal({
 
   const oversizedFile = selectedFiles.find((file) => Number(file?.size || 0) > MAX_TRAVEL_MEDIA_FILE_SIZE)
   if (oversizedFile) {
-    const error = new Error('여행 사진은 15MB 이하 파일만 업로드할 수 있습니다.')
+    const error = new Error('?ы뻾 ?ъ쭊? 15MB ?댄븯 ?뚯씪留??낅줈?쒗븷 ???덉뒿?덈떎.')
     error.status = 400
     error.code = 'travel-media-too-large'
     throw error
@@ -1313,10 +1313,10 @@ export function uploadDriveFileWithProgress(target, file, onProgress) {
         resolve()
         return
       }
-      reject(new Error('파일 업로드 중 문제가 발생했습니다.'))
+      reject(new Error('?뚯씪 ?낅줈??以?臾몄젣媛 諛쒖깮?덉뒿?덈떎.'))
     }
-    xhr.onerror = () => reject(new Error('파일 업로드 중 문제가 발생했습니다.'))
-    xhr.onabort = () => reject(new Error('파일 업로드가 취소되었습니다.'))
+    xhr.onerror = () => reject(new Error('?뚯씪 ?낅줈??以?臾몄젣媛 諛쒖깮?덉뒿?덈떎.'))
+    xhr.onabort = () => reject(new Error('?뚯씪 ?낅줈?쒓? 痍⑥냼?섏뿀?듬땲??'))
     xhr.send(file)
   })
 }
@@ -1494,5 +1494,22 @@ export function uploadDriveProfileImage(file) {
   return request('/feater/settings/me/profile-image', {
     method: 'POST',
     body: formData,
+  })
+}
+
+export function fetchNotifications(params = {}) {
+  const url = buildUrl('/notifications', params)
+  return request(url.startsWith(API_BASE) ? url.slice(API_BASE.length) || '/notifications' : url)
+}
+
+export function markNotificationRead(notificationId) {
+  return request(`/notifications/${notificationId}/read`, {
+    method: 'PATCH',
+  })
+}
+
+export function markAllNotificationsRead() {
+  return request('/notifications/read-all', {
+    method: 'PATCH',
   })
 }

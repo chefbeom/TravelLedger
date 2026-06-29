@@ -64,3 +64,9 @@ This document records the notification-center backend baseline and the first pro
 - `unreadCount` decreases after read/read-all operations.
 - Event producers do not include raw prompts, backup credentials, or long raw payloads in `metadataJson`.
 - Pagination clamps `size` to the backend maximum.
+## Frontend notification center
+
+- `frontend/src/components/NotificationCenterWorkspace.vue` provides the in-app notification center for the signed-in user.
+- The workspace loads `/api/notifications`, supports unread-only filtering, and can mark a single notification or all notifications as read.
+- It is reachable from the main top navigation through the `notifications` route.
+- Notification cards expose category, severity, read state, creation time, and optional target links so AI/OCR/backup/privacy events are actionable instead of hidden in logs.

@@ -11461,7 +11461,7 @@ textarea {
 }
 
 .drive-file-card--drop-target::after {
-  content: '여기로 이동';
+  content: '?ш린濡??대룞';
   position: absolute;
   inset: 10px 10px auto auto;
   z-index: 3;
@@ -14118,5 +14118,198 @@ textarea {
   :root[data-layout-mode='desktop'] .app-shell {
     min-width: 1180px;
     overflow-x: auto;
+  }
+}
+.notification-center {
+  gap: 1.25rem;
+}
+
+.notification-hero {
+  display: grid;
+  gap: 0.75rem;
+  padding: 1.4rem;
+  border: 1px solid rgba(22, 31, 54, 0.1);
+  border-radius: 1.25rem;
+  background:
+    radial-gradient(circle at top left, rgba(78, 124, 255, 0.16), transparent 32%),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.96), rgba(243, 248, 255, 0.9));
+  box-shadow: 0 18px 45px rgba(28, 44, 74, 0.08);
+}
+
+.notification-hero__eyebrow {
+  margin: 0;
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #3d63dd;
+}
+
+.notification-hero h2 {
+  margin: 0;
+  font-size: clamp(1.6rem, 3vw, 2.35rem);
+  color: #16213a;
+}
+
+.notification-hero__summary {
+  margin: 0;
+  max-width: 44rem;
+  color: #5d6780;
+  line-height: 1.7;
+}
+
+.notification-toolbar,
+.notification-list-panel {
+  border: 1px solid rgba(22, 31, 54, 0.1);
+  border-radius: 1.1rem;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 16px 36px rgba(28, 44, 74, 0.07);
+}
+
+.notification-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem;
+  flex-wrap: wrap;
+}
+
+.notification-toolbar__filters,
+.notification-toolbar__actions,
+.notification-card__actions {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.notification-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  color: #39435c;
+  font-weight: 700;
+}
+
+.notification-error {
+  margin: 0;
+  color: #b42318;
+  font-weight: 700;
+}
+
+.notification-list-panel {
+  display: grid;
+  gap: 0.8rem;
+  padding: 1rem;
+}
+
+.notification-empty {
+  padding: 2rem;
+  text-align: center;
+  color: #697389;
+  font-weight: 700;
+}
+
+.notification-card {
+  display: grid;
+  gap: 0.85rem;
+  padding: 1rem;
+  border: 1px solid rgba(22, 31, 54, 0.09);
+  border-radius: 1rem;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 255, 0.95));
+}
+
+.notification-card--unread {
+  border-color: rgba(61, 99, 221, 0.32);
+  box-shadow: inset 4px 0 0 #3d63dd;
+}
+
+.notification-card__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.notification-card__title {
+  margin: 0.25rem 0 0;
+  color: #16213a;
+  font-size: 1.05rem;
+}
+
+.notification-card__message {
+  margin: 0;
+  color: #4f5b73;
+  line-height: 1.65;
+}
+
+.notification-card__meta {
+  display: flex;
+  gap: 0.65rem;
+  flex-wrap: wrap;
+  color: #707b90;
+  font-size: 0.86rem;
+}
+
+.notification-card__status {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 0.28rem 0.62rem;
+  background: #eef2ff;
+  color: #3151c9;
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.notification-card__status--read {
+  background: #eff4f1;
+  color: #607163;
+}
+
+.notification-card__tone {
+  width: max-content;
+  border-radius: 999px;
+  padding: 0.24rem 0.58rem;
+  background: #f0f5ff;
+  color: #3358cc;
+  font-size: 0.74rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.notification-card__tone--warning {
+  background: #fff4dc;
+  color: #946200;
+}
+
+.notification-card__tone--danger {
+  background: #ffe8e5;
+  color: #ba1a1a;
+}
+
+.notification-card__tone--success {
+  background: #e8f7ed;
+  color: #1a7f42;
+}
+
+@media (max-width: 720px) {
+  .notification-toolbar,
+  .notification-card__header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .notification-toolbar__actions,
+  .notification-card__actions {
+    width: 100%;
+  }
+
+  .notification-toolbar__actions .button,
+  .notification-card__actions .button {
+    flex: 1 1 auto;
   }
 }

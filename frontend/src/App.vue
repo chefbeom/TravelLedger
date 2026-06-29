@@ -13,6 +13,7 @@ const AdminWorkspace = defineAsyncComponent(() => import('./components/AdminWork
 const HouseholdWorkspace = defineAsyncComponent(() => import('./components/HouseholdWorkspace.vue'))
 const MainDashboardWorkspace = defineAsyncComponent(() => import('./components/MainDashboardWorkspace.vue'))
 const CalenDriveWorkspace = defineAsyncComponent(() => import('./components/CalenDriveWorkspace.vue'))
+const NotificationCenterWorkspace = defineAsyncComponent(() => import('./components/NotificationCenterWorkspace.vue'))
 const ProfileWorkspace = defineAsyncComponent(() => import('./components/ProfileWorkspace.vue'))
 const TravelWorkspace = defineAsyncComponent(() => import('./components/TravelWorkspace.vue'))
 
@@ -20,44 +21,44 @@ const legacyFeatureItems = [
   {
     key: 'household',
     number: '1',
-    title: '가계부',
-    description: '가계부, 통계, 검색, 분류 관리까지 한 화면에서 바로 사용할 수 있습니다.',
+    title: '媛怨꾨?',
+    description: '媛怨꾨?, ?듦퀎, 寃?? 遺꾨쪟 愿由ш퉴吏 ???붾㈃?먯꽌 諛붾줈 ?ъ슜?????덉뒿?덈떎.',
   },
   {
     key: 'travel-money',
     number: '2',
-    title: '여행 돈 장부',
-    description: '필요할 때만 여행 예산안과 지출 기록을 보조 화면에서 관리합니다.',
+    title: '?ы뻾 ???λ?',
+    description: '?꾩슂???뚮쭔 ?ы뻾 ?덉궛?덇낵 吏異?湲곕줉??蹂댁“ ?붾㈃?먯꽌 愿由ы빀?덈떎.',
   },
   {
     key: 'travel-log',
     number: '3',
-    title: '여행 로그',
-    description: '여행 기록, 경로, 사진, GPX 파일을 한 워크스페이스에서 정리합니다.',
+    title: '?ы뻾 濡쒓렇',
+    description: '?ы뻾 湲곕줉, 寃쎈줈, ?ъ쭊, GPX ?뚯씪?????뚰겕?ㅽ럹?댁뒪?먯꽌 ?뺣━?⑸땲??',
   },
   {
     key: 'photo-album',
     number: '4',
-    title: '여행 사진',
-    description: '기록에 연결된 여행 사진과 추억을 전용 갤러리 화면에서 볼 수 있습니다.',
+    title: '?ы뻾 ?ъ쭊',
+    description: '湲곕줉???곌껐???ы뻾 ?ъ쭊怨?異붿뼲???꾩슜 媛ㅻ윭由??붾㈃?먯꽌 蹂????덉뒿?덈떎.',
   },
   {
     key: 'family-album',
     number: '5',
-    title: '가족 앨범',
-    description: '초대된 가족 구성원과 카테고리별 사진과 영상을 공유합니다.',
+    title: '媛議??⑤쾾',
+    description: '珥덈???媛議?援ъ꽦?먭낵 移댄뀒怨좊━蹂??ъ쭊怨??곸긽??怨듭쑀?⑸땲??',
   },
   {
     key: 'my-map',
     number: '6',
-    title: '내 지도',
-    description: '지금까지 저장한 여행 장소 핀과 이동 경로를 한 장의 지도에서 확인합니다.',
+    title: '??吏??,
+    description: '吏湲덇퉴吏 ??ν븳 ?ы뻾 ?μ냼 ?怨??대룞 寃쎈줈瑜????μ쓽 吏?꾩뿉???뺤씤?⑸땲??',
   },
   {
     key: 'drive',
     number: '4',
     title: 'CalenDrive',
-    description: '?뚯씪 ?낅줈?쒖? 怨듭쑀, ?댁??? 愿由ъ? ?꾨줈???ㅼ젙源뚯? 而щ씪?곗? ?쒕씪?대툕 湲곕뒫???꾩슜 ?뚰겕?ㅽ럹?댁뒪濡??ъ슜?⑸땲??',
+    description: '???뵬 ??낆쨮??? ?⑤벊?, ????? ?온?귐? ?袁⑥쨮????쇱젟繹먮슣? ?뚎됱뵬?怨? ??뺤뵬????疫꿸퀡????袁⑹뒠 ??곌쾿??쎈읂??곷뮞嚥??????몃빍??',
   },
   {
     key: 'drive',
@@ -71,14 +72,14 @@ const featureItems = [
   {
     key: 'household',
     number: '1',
-    title: '가계부',
-    description: '가계부, 통계, 검색과 분류 관리까지 한 화면에서 바로 사용할 수 있습니다.',
+    title: '媛怨꾨?',
+    description: '媛怨꾨?, ?듦퀎, 寃?됯낵 遺꾨쪟 愿由ш퉴吏 ???붾㈃?먯꽌 諛붾줈 ?ъ슜?????덉뒿?덈떎.',
   },
   {
     key: 'travel',
     number: '2',
-    title: '여행',
-    description: '지도 기록, 장소 방문, GPX 경로와 여행 사진을 한 워크스페이스에서 이어서 관리합니다.',
+    title: '?ы뻾',
+    description: '吏??湲곕줉, ?μ냼 諛⑸Ц, GPX 寃쎈줈? ?ы뻾 ?ъ쭊?????뚰겕?ㅽ럹?댁뒪?먯꽌 ?댁뼱??愿由ы빀?덈떎.',
   },
   {
     key: 'drive',
@@ -91,8 +92,8 @@ const featureItems = [
 const adminFeatureItem = {
   key: 'admin',
   number: '7',
-  title: '관리자',
-  description: '로그인 로그, 차단 IP, 사용자 상태, 초대 현황을 관리합니다.',
+  title: '愿由ъ옄',
+  description: '濡쒓렇??濡쒓렇, 李⑤떒 IP, ?ъ슜???곹깭, 珥덈? ?꾪솴??愿由ы빀?덈떎.',
 }
 
 const THEME_STORAGE_KEY = 'calen-theme-mode'
@@ -101,56 +102,56 @@ const LAYOUT_MODE_STORAGE_KEY = 'calen-layout-mode'
 const MOBILE_LAYOUT_QUERY = '(max-width: 760px)'
 const DEFAULT_TOSS_DEGREE = 100
 const ROUTE_LEAVE_GUARD_EVENT = 'calen-route-leave-guard'
-const DEFAULT_ROUTE_LEAVE_GUARD_MESSAGE = '페이지를 벗어나면 다시 처음부터 업로드 해야합니다.'
+const DEFAULT_ROUTE_LEAVE_GUARD_MESSAGE = '?섏씠吏瑜?踰쀬뼱?섎㈃ ?ㅼ떆 泥섏쓬遺???낅줈???댁빞?⑸땲??'
 
 const routeMeta = {
   launcher: {
-    title: '기능 선택',
-    description: '다음으로 열고 싶은 기능 영역을 선택하세요.',
+    title: '湲곕뒫 ?좏깮',
+    description: '?ㅼ쓬?쇰줈 ?닿퀬 ?띠? 湲곕뒫 ?곸뿭???좏깮?섏꽭??',
   },
   household: {
-    title: '가계부',
-    description: '달력 가계부, 통계, 검색, 분류 관리 기능을 함께 확인합니다.',
+    title: '媛怨꾨?',
+    description: '?щ젰 媛怨꾨?, ?듦퀎, 寃?? 遺꾨쪟 愿由?湲곕뒫???④퍡 ?뺤씤?⑸땲??',
   },
   travel: {
-    title: '여행',
-    description: '지도 기록, 장소 방문, GPX 경로와 여행 사진을 하나의 여행 워크스페이스에서 사용합니다.',
+    title: '?ы뻾',
+    description: '吏??湲곕줉, ?μ냼 諛⑸Ц, GPX 寃쎈줈? ?ы뻾 ?ъ쭊???섎굹???ы뻾 ?뚰겕?ㅽ럹?댁뒪?먯꽌 ?ъ슜?⑸땲??',
   },
   drive: {
     title: 'CalenDrive',
-    description: '?뚯씪 ?쒕씪?대툕, 怨듭쑀, ?댁??? 愿由?, ?꾨줈???ㅼ젙, 愿由ъ옄 湲곕뒫?꾩? 4踰??섏씠吏?먯꽌 ?듯빀?섏뿬 ?ъ슜?⑸땲??',
+    description: '???뵬 ??뺤뵬???? ?⑤벊?, ????? ?온??, ?袁⑥쨮????쇱젟, ?온?귐딆쁽 疫꿸퀡??袁? 4甕???륁뵠筌왖?癒?퐣 ??????뤿연 ?????몃빍??',
   },
   'travel-money': {
-    title: '여행 예산',
-    description: '여행 예산안과 실제 지출을 한 곳에서 관리합니다.',
+    title: '?ы뻾 ?덉궛',
+    description: '?ы뻾 ?덉궛?덇낵 ?ㅼ젣 吏異쒖쓣 ??怨녹뿉??愿由ы빀?덈떎.',
   },
   'travel-log': {
-    title: '여행 로그',
-    description: '여행 메모, 이동 경로, 장소, 업로드 파일을 확인합니다.',
+    title: '?ы뻾 濡쒓렇',
+    description: '?ы뻾 硫붾え, ?대룞 寃쎈줈, ?μ냼, ?낅줈???뚯씪???뺤씤?⑸땲??',
   },
   'photo-album': {
-    title: '여행 사진',
-    description: '기록을 기반으로 구성된 사진 중심 여행 화면을 둘러봅니다.',
+    title: '?ы뻾 ?ъ쭊',
+    description: '湲곕줉??湲곕컲?쇰줈 援ъ꽦???ъ쭊 以묒떖 ?ы뻾 ?붾㈃???섎윭遊낅땲??',
   },
   'family-album': {
-    title: '가족 앨범',
-    description: '초대된 구성원과 가족 카테고리, 앨범, 미디어를 공유합니다.',
+    title: '媛議??⑤쾾',
+    description: '珥덈???援ъ꽦?먭낵 媛議?移댄뀒怨좊━, ?⑤쾾, 誘몃뵒?대? 怨듭쑀?⑸땲??',
   },
   'my-map': {
-    title: '내 지도',
-    description: '전체 여행의 핀과 경로를 지도로 모아 보고, 원하는 핀만 눌러 자세히 확인합니다.',
+    title: '??吏??,
+    description: '?꾩껜 ?ы뻾???怨?寃쎈줈瑜?吏?꾨줈 紐⑥븘 蹂닿퀬, ?먰븯???留??뚮윭 ?먯꽭???뺤씤?⑸땲??',
   },
   admin: {
-    title: '관리자',
-    description: '로그인 로그와 사용자 상태, 초대 현황을 점검합니다.',
+    title: '愿由ъ옄',
+    description: '濡쒓렇??濡쒓렇? ?ъ슜???곹깭, 珥덈? ?꾪솴???먭??⑸땲??',
   },
   profile: {
-    title: '내 프로필',
-    description: '내 계정 정보와 문의 내역, 관리자 답변을 한 곳에서 확인합니다.',
+    title: '???꾨줈??,
+    description: '??怨꾩젙 ?뺣낫? 臾몄쓽 ?댁뿭, 愿由ъ옄 ?듬?????怨녹뿉???뺤씤?⑸땲??',
   },
   invite: {
-    title: '초대 링크 가입',
-    description: '새 계정은 1회용 초대 링크로만 만들 수 있습니다.',
+    title: '珥덈? 留곹겕 媛??,
+    description: '??怨꾩젙? 1?뚯슜 珥덈? 留곹겕濡쒕쭔 留뚮뱾 ???덉뒿?덈떎.',
   },
 }
 
@@ -158,59 +159,59 @@ const correctedFeatureItems = [
   {
     key: 'household',
     number: '1',
-    title: '가계부',
-    description: '가계부, 통계, 검색과 분류 관리까지 한 화면에서 바로 사용할 수 있습니다.',
+    title: '媛怨꾨?',
+    description: '媛怨꾨?, ?듦퀎, 寃?됯낵 遺꾨쪟 愿由ш퉴吏 ???붾㈃?먯꽌 諛붾줈 ?ъ슜?????덉뒿?덈떎.',
   },
   {
     key: 'travel',
     number: '2',
-    title: '여행',
-    description: '지도 기록, 장소 방문, GPX 경로와 여행 사진을 한 워크스페이스에서 관리합니다.',
+    title: '?ы뻾',
+    description: '吏??湲곕줉, ?μ냼 諛⑸Ц, GPX 寃쎈줈? ?ы뻾 ?ъ쭊?????뚰겕?ㅽ럹?댁뒪?먯꽌 愿由ы빀?덈떎.',
   },
   {
     key: 'drive',
     number: '4',
     title: 'CalenDrive',
-    description: '클라우드 드라이브, 공유, 최근 파일, 휴지통, 관리자 기능을 하나의 화면에서 사용합니다.',
+    description: '?대씪?곕뱶 ?쒕씪?대툕, 怨듭쑀, 理쒓렐 ?뚯씪, ?댁??? 愿由ъ옄 湲곕뒫???섎굹???붾㈃?먯꽌 ?ъ슜?⑸땲??',
   },
 ]
 
 const correctedAdminFeatureItem = {
   key: 'admin',
   number: '7',
-  title: '관리자',
-  description: '로그인 로그, 차단 IP, 사용자 상태, 초대 현황을 관리합니다.',
+  title: '愿由ъ옄',
+  description: '濡쒓렇??濡쒓렇, 李⑤떒 IP, ?ъ슜???곹깭, 珥덈? ?꾪솴??愿由ы빀?덈떎.',
 }
 
 const correctedRouteMeta = {
   ...routeMeta,
   launcher: {
-    title: '기능 선택',
-    description: '다음으로 열고 싶은 기능 영역을 선택하세요.',
+    title: '湲곕뒫 ?좏깮',
+    description: '?ㅼ쓬?쇰줈 ?닿퀬 ?띠? 湲곕뒫 ?곸뿭???좏깮?섏꽭??',
   },
   household: {
-    title: '가계부',
-    description: '가계부, 통계, 검색과 분류 관리까지 한 화면에서 바로 사용할 수 있습니다.',
+    title: '媛怨꾨?',
+    description: '媛怨꾨?, ?듦퀎, 寃?됯낵 遺꾨쪟 愿由ш퉴吏 ???붾㈃?먯꽌 諛붾줈 ?ъ슜?????덉뒿?덈떎.',
   },
   travel: {
-    title: '여행',
-    description: '지도 기록, 장소 방문, GPX 경로와 여행 사진을 한 워크스페이스에서 관리합니다.',
+    title: '?ы뻾',
+    description: '吏??湲곕줉, ?μ냼 諛⑸Ц, GPX 寃쎈줈? ?ы뻾 ?ъ쭊?????뚰겕?ㅽ럹?댁뒪?먯꽌 愿由ы빀?덈떎.',
   },
   drive: {
     title: 'CalenDrive',
-    description: '구글 드라이브형 파일 관리 구조를 Calen 안으로 옮겨, 업로드·공유·최근 파일·휴지통·관리 기능을 한 공간에서 사용합니다.',
+    description: '援ш? ?쒕씪?대툕???뚯씪 愿由?援ъ“瑜?Calen ?덉쑝濡???꺼, ?낅줈?쑣룰났?졖룹턀洹??뚯씪쨌?댁??돠룰?由?湲곕뒫????怨듦컙?먯꽌 ?ъ슜?⑸땲??',
   },
   admin: {
-    title: '관리자',
-    description: '로그인 로그, 차단 IP, 사용자 상태, 초대 현황을 관리합니다.',
+    title: '愿由ъ옄',
+    description: '濡쒓렇??濡쒓렇, 李⑤떒 IP, ?ъ슜???곹깭, 珥덈? ?꾪솴??愿由ы빀?덈떎.',
   },
   profile: {
-    title: '내 프로필',
-    description: '계정 정보와 문의 내역, 관리자 답변을 한 곳에서 확인합니다.',
+    title: '???꾨줈??,
+    description: '怨꾩젙 ?뺣낫? 臾몄쓽 ?댁뿭, 愿由ъ옄 ?듬?????怨녹뿉???뺤씤?⑸땲??',
   },
   invite: {
-    title: '초대 링크 가입',
-    description: '새 계정은 1회용 초대 링크로만 만들 수 있습니다.',
+    title: '珥덈? 留곹겕 媛??,
+    description: '??怨꾩젙? 1?뚯슜 珥덈? 留곹겕濡쒕쭔 留뚮뱾 ???덉뒿?덈떎.',
   },
 }
 
@@ -218,78 +219,82 @@ const normalizedFeatureItems = [
   {
     key: 'household',
     number: '1',
-    title: '가계부',
-    description: '가계부, 통계, 검색과 분류 관리까지 한 화면에서 바로 사용할 수 있습니다.',
+    title: '媛怨꾨?',
+    description: '媛怨꾨?, ?듦퀎, 寃?됯낵 遺꾨쪟 愿由ш퉴吏 ???붾㈃?먯꽌 諛붾줈 ?ъ슜?????덉뒿?덈떎.',
   },
   {
     key: 'travel',
     number: '2',
-    title: '여행',
-    description: '지도 기록, 장소 방문, GPX 경로와 여행 사진을 한 워크스페이스에서 관리합니다.',
+    title: '?ы뻾',
+    description: '吏??湲곕줉, ?μ냼 諛⑸Ц, GPX 寃쎈줈? ?ы뻾 ?ъ쭊?????뚰겕?ㅽ럹?댁뒪?먯꽌 愿由ы빀?덈떎.',
   },
   {
     key: 'drive',
     number: '4',
     title: 'CalenDrive',
-    description: '파일 업로드, 공유, 휴지통, 관리자 도구를 하나의 드라이브 화면에서 사용합니다.',
+    description: '?뚯씪 ?낅줈?? 怨듭쑀, ?댁??? 愿由ъ옄 ?꾧뎄瑜??섎굹???쒕씪?대툕 ?붾㈃?먯꽌 ?ъ슜?⑸땲??',
   },
 ]
 
 const normalizedAdminFeatureItem = {
   key: 'admin',
   number: '7',
-  title: '관리자',
-  description: '로그인 로그, 차단 IP, 사용자 상태, 초대 현황을 관리합니다.',
+  title: '愿由ъ옄',
+  description: '濡쒓렇??濡쒓렇, 李⑤떒 IP, ?ъ슜???곹깭, 珥덈? ?꾪솴??愿由ы빀?덈떎.',
 }
 
 const normalizedRouteMeta = {
+  notifications: {
+    title: 'Notifications',
+    description: 'Review AI, OCR, backup, sharing, and operational notifications in one place.',
+  },
   launcher: {
-    title: '기능 선택',
-    description: '다음으로 열고 싶은 기능 영역을 선택하세요.',
+    title: '湲곕뒫 ?좏깮',
+    description: '?ㅼ쓬?쇰줈 ?닿퀬 ?띠? 湲곕뒫 ?곸뿭???좏깮?섏꽭??',
   },
   household: {
-    title: '가계부',
+    title: '媛怨꾨?',
     description: '',
   },
   travel: {
-    title: '여행',
-    description: '지도 기록, 장소 방문, GPX 경로와 여행 사진을 한 워크스페이스에서 사용합니다.',
+    title: '?ы뻾',
+    description: '吏??湲곕줉, ?μ냼 諛⑸Ц, GPX 寃쎈줈? ?ы뻾 ?ъ쭊?????뚰겕?ㅽ럹?댁뒪?먯꽌 ?ъ슜?⑸땲??',
   },
   drive: {
     title: 'CalenDrive',
-    description: '파일 업로드, 폴더 관리, 공유, 휴지통, 관리자 기능을 드라이브 화면에서 사용합니다.',
+    description: '?뚯씪 ?낅줈?? ?대뜑 愿由? 怨듭쑀, ?댁??? 愿由ъ옄 湲곕뒫???쒕씪?대툕 ?붾㈃?먯꽌 ?ъ슜?⑸땲??',
   },
   'travel-money': {
-    title: '여행 가계부',
-    description: '여행 수입·지출은 가계부의 여행 전용 화면에서 관리하고, 기존 예산 화면은 필요할 때만 엽니다.',
+    title: '?ы뻾 媛怨꾨?',
+    description: '?ы뻾 ?섏엯쨌吏異쒖? 媛怨꾨????ы뻾 ?꾩슜 ?붾㈃?먯꽌 愿由ы븯怨? 湲곗〈 ?덉궛 ?붾㈃? ?꾩슂???뚮쭔 ?쎈땲??',
   },
   'travel-log': {
-    title: '여행 로그',
-    description: '여행 기록, 이동 경로, 장소, 업로드 파일을 확인합니다.',
+    title: '?ы뻾 濡쒓렇',
+    description: '?ы뻾 湲곕줉, ?대룞 寃쎈줈, ?μ냼, ?낅줈???뚯씪???뺤씤?⑸땲??',
   },
   'photo-album': {
-    title: '여행 사진',
-    description: '기록 기반으로 구성된 여행 사진 모아보기를 확인합니다.',
+    title: '?ы뻾 ?ъ쭊',
+    description: '湲곕줉 湲곕컲?쇰줈 援ъ꽦???ы뻾 ?ъ쭊 紐⑥븘蹂닿린瑜??뺤씤?⑸땲??',
   },
   'family-album': {
-    title: '가족 앨범',
-    description: '가족 구성원과 함께 쓰는 사진 및 영상 앨범을 확인합니다.',
+    title: '媛議??⑤쾾',
+    description: '媛議?援ъ꽦?먭낵 ?④퍡 ?곕뒗 ?ъ쭊 諛??곸긽 ?⑤쾾???뺤씤?⑸땲??',
   },
   'my-map': {
-    title: '내 지도',
-    description: '전체 여행의 핀과 경로를 지도로 모아 보고, 원하는 핀만 눌러 자세히 확인합니다.',
+    title: '??吏??,
+    description: '?꾩껜 ?ы뻾???怨?寃쎈줈瑜?吏?꾨줈 紐⑥븘 蹂닿퀬, ?먰븯???留??뚮윭 ?먯꽭???뺤씤?⑸땲??',
   },
   admin: {
-    title: '관리자',
-    description: '로그인 로그, 차단 IP, 사용자 상태, 초대 현황을 관리합니다.',
+    title: '愿由ъ옄',
+    description: '濡쒓렇??濡쒓렇, 李⑤떒 IP, ?ъ슜???곹깭, 珥덈? ?꾪솴??愿由ы빀?덈떎.',
   },
   profile: {
-    title: '내 프로필',
-    description: '계정 정보와 문의 내역, 관리자 여부를 한곳에서 확인합니다.',
+    title: '???꾨줈??,
+    description: '怨꾩젙 ?뺣낫? 臾몄쓽 ?댁뿭, 愿由ъ옄 ?щ?瑜??쒓납?먯꽌 ?뺤씤?⑸땲??',
   },
   invite: {
-    title: '초대 링크 만들기',
-    description: '새 계정은 1회용 초대 링크로만 만들 수 있습니다.',
+    title: '珥덈? 留곹겕 留뚮뱾湲?,
+    description: '??怨꾩젙? 1?뚯슜 珥덈? 留곹겕濡쒕쭔 留뚮뱾 ???덉뒿?덈떎.',
   },
 }
 
@@ -343,20 +348,20 @@ const launcherItems = computed(() => (
 ))
 const headerNavItems = computed(() => {
   const items = [
-    { key: 'launcher', label: '메인' },
-    { key: 'household', label: '가계부' },
-    { key: 'travel', label: '여행' },
-    { key: 'drive', label: '드라이브' },
+    { key: 'launcher', label: '硫붿씤' },
+    { key: 'household', label: '媛怨꾨?' },
+    { key: 'travel', label: '?ы뻾' },
+    { key: 'drive', label: '?쒕씪?대툕' },
   ]
   if (currentUser.value?.admin) {
-    items.push({ key: 'admin', label: '관리자' })
+    items.push({ key: 'admin', label: '愿由ъ옄' })
   }
   return items
 })
 const themeDegreeDisplay = computed(() => `${themeDegree.value}%`)
 const layoutModeOptions = [
-  { value: 'mobile', label: '모바일' },
-  { value: 'desktop', label: '데스크탑' },
+  { value: 'mobile', label: '紐⑤컮?? },
+  { value: 'desktop', label: '?곗뒪?ы깙' },
 ]
 
 let inviteRequestSequence = 0
@@ -689,7 +694,7 @@ async function loadInviteDetails(token) {
   if (!token) {
     inviteInfo.value = null
     isInviteLoading.value = false
-    setFeedback('', '초대 링크가 올바르지 않습니다.')
+    setFeedback('', '珥덈? 留곹겕媛 ?щ컮瑜댁? ?딆뒿?덈떎.')
     return
   }
 
@@ -731,7 +736,7 @@ async function handleLogin() {
     loginForm.password = ''
     loginForm.secondaryPin = ''
     navigate('launcher')
-    setFeedback('로그인되었습니다.')
+    setFeedback('濡쒓렇?몃릺?덉뒿?덈떎.')
   } catch (error) {
     setFeedback('', error.message)
   } finally {
@@ -742,7 +747,7 @@ async function handleLogin() {
 
 async function handleAcceptInvite() {
   if (!inviteInfo.value || !inviteToken.value) {
-    setFeedback('', '유효한 초대 링크를 먼저 열어주세요.')
+    setFeedback('', '?좏슚??珥덈? 留곹겕瑜?癒쇱? ?댁뼱二쇱꽭??')
     return
   }
 
@@ -774,7 +779,7 @@ async function handleAcceptInvite() {
     inviteForm.password = ''
     inviteForm.secondaryPin = ''
     navigate('launcher')
-    setFeedback('초대 링크로 계정을 만들고 바로 로그인했습니다.')
+    setFeedback('珥덈? 留곹겕濡?怨꾩젙??留뚮뱾怨?諛붾줈 濡쒓렇?명뻽?듬땲??')
   } catch (error) {
     setFeedback('', error.message)
   } finally {
@@ -796,7 +801,7 @@ async function handleLogout() {
   inviteForm.password = ''
   inviteForm.secondaryPin = ''
   navigate('launcher')
-  setFeedback('로그아웃했습니다.')
+  setFeedback('濡쒓렇?꾩썐?덉뒿?덈떎.')
 }
 
 watch([activeRoute, inviteToken], ([route, token]) => {
@@ -841,7 +846,7 @@ onBeforeUnmount(() => {
   <div class="app-shell" :data-layout-mode="layoutMode">
     <div ref="themeSwitcherRef" class="theme-switcher">
       <div class="theme-switcher__actions">
-        <div class="layout-mode-toggle" role="group" aria-label="보기 환경 전환">
+        <div class="layout-mode-toggle" role="group" aria-label="蹂닿린 ?섍꼍 ?꾪솚">
           <button
             v-for="option in layoutModeOptions"
             :key="option.value"
@@ -855,7 +860,7 @@ onBeforeUnmount(() => {
           </button>
         </div>
         <button class="theme-toggle" type="button" @click="toggleTheme">
-          {{ isTossTheme ? '기본 테마' : '토스 테마' }}
+          {{ isTossTheme ? '湲곕낯 ?뚮쭏' : '?좎뒪 ?뚮쭏' }}
         </button>
         <button
           v-if="isTossTheme"
@@ -863,13 +868,13 @@ onBeforeUnmount(() => {
           type="button"
           @click.stop="toggleThemeDegreePanel"
         >
-          다크 degree {{ themeDegreeDisplay }}
+          ?ㅽ겕 degree {{ themeDegreeDisplay }}
         </button>
       </div>
 
       <div v-if="isTossTheme && themeDegreePanelOpen" class="theme-degree-panel">
         <div class="theme-degree-panel__header">
-          <strong>딥다크 강도</strong>
+          <strong>?λ떎??媛뺣룄</strong>
           <span>{{ themeDegreeDisplay }}</span>
         </div>
         <input
@@ -882,70 +887,70 @@ onBeforeUnmount(() => {
           @input="handleThemeDegreeInput"
         />
         <div class="theme-degree-panel__labels">
-          <span>일반 다크</span>
-          <span>딥다크</span>
+          <span>?쇰컲 ?ㅽ겕</span>
+          <span>?λ떎??/span>
         </div>
       </div>
     </div>
 
     <button v-if="false" class="theme-toggle" type="button" @click="toggleTheme">
-      {{ isTossTheme ? '기본 테마' : '토스 테마' }}
+      {{ isTossTheme ? '湲곕낯 ?뚮쭏' : '?좎뒪 ?뚮쭏' }}
     </button>
 
-    <div v-if="!authChecked" class="loading-overlay">세션을 확인하는 중입니다...</div>
+    <div v-if="!authChecked" class="loading-overlay">?몄뀡???뺤씤?섎뒗 以묒엯?덈떎...</div>
 
     <template v-else-if="activeRoute === 'invite'">
       <section class="auth-shell">
         <div class="auth-copy">
-          <span class="auth-copy__badge">초대 링크 가입</span>
-          <h1>새 계정은 1회용 초대 링크로만 만들 수 있습니다.</h1>
-          <p>링크가 유효하면 로그인 ID, 표시 이름, 비밀번호를 입력해 계정을 만들고 바로 로그인할 수 있습니다.</p>
+          <span class="auth-copy__badge">珥덈? 留곹겕 媛??/span>
+          <h1>??怨꾩젙? 1?뚯슜 珥덈? 留곹겕濡쒕쭔 留뚮뱾 ???덉뒿?덈떎.</h1>
+          <p>留곹겕媛 ?좏슚?섎㈃ 濡쒓렇??ID, ?쒖떆 ?대쫫, 鍮꾨?踰덊샇瑜??낅젰??怨꾩젙??留뚮뱾怨?諛붾줈 濡쒓렇?명븷 ???덉뒿?덈떎.</p>
           <p v-if="currentUser" class="auth-copy__hint">
-            현재 {{ currentUser.displayName }} ({{ currentUser.loginId }}) 계정으로 로그인 중입니다. 가입이 끝나면 이 브라우저는 새 계정으로 전환됩니다.
+            ?꾩옱 {{ currentUser.displayName }} ({{ currentUser.loginId }}) 怨꾩젙?쇰줈 濡쒓렇??以묒엯?덈떎. 媛?낆씠 ?앸굹硫???釉뚮씪?곗?????怨꾩젙?쇰줈 ?꾪솚?⑸땲??
           </p>
         </div>
 
         <div class="auth-grid">
           <article class="auth-card">
-            <h2>초대 상태</h2>
+            <h2>珥덈? ?곹깭</h2>
             <div class="stack-form stack-form--readonly">
-              <p v-if="isInviteLoading">초대 링크를 확인하는 중입니다...</p>
+              <p v-if="isInviteLoading">珥덈? 留곹겕瑜??뺤씤?섎뒗 以묒엯?덈떎...</p>
               <template v-else-if="inviteInfo">
-                <p><strong>{{ inviteInfo.inviterDisplayName }}</strong> 님이 만든 초대 링크입니다.</p>
-                <p>만료 시간: {{ formatDateTime(inviteInfo.expiresAt) }}</p>
+                <p><strong>{{ inviteInfo.inviterDisplayName }}</strong> ?섏씠 留뚮뱺 珥덈? 留곹겕?낅땲??</p>
+                <p>留뚮즺 ?쒓컙: {{ formatDateTime(inviteInfo.expiresAt) }}</p>
               </template>
-              <p v-else>이 링크로는 계정을 만들 수 없습니다.</p>
+              <p v-else>??留곹겕濡쒕뒗 怨꾩젙??留뚮뱾 ???놁뒿?덈떎.</p>
             </div>
           </article>
 
           <article class="auth-card">
-            <h2>초대 계정 만들기</h2>
+            <h2>珥덈? 怨꾩젙 留뚮뱾湲?/h2>
             <form class="stack-form" @submit.prevent="handleAcceptInvite">
               <input
                 v-model="inviteForm.loginId"
                 type="text"
-                placeholder="로그인 ID"
+                placeholder="濡쒓렇??ID"
                 autocomplete="username"
                 :disabled="isSubmitting || isInviteLoading || !inviteInfo"
               />
               <input
                 v-model="inviteForm.displayName"
                 type="text"
-                placeholder="표시 이름"
+                placeholder="?쒖떆 ?대쫫"
                 autocomplete="name"
                 :disabled="isSubmitting || isInviteLoading || !inviteInfo"
               />
               <input
                 v-model="inviteForm.password"
                 type="password"
-                placeholder="비밀번호 (8자 이상)"
+                placeholder="鍮꾨?踰덊샇 (8???댁긽)"
                 autocomplete="new-password"
                 :disabled="isSubmitting || isInviteLoading || !inviteInfo"
               />
               <PinPadInput
                 v-model="inviteForm.secondaryPin"
-                label="2차 비밀번호"
-                hint="가입 후 로그인할 때도 같은 숫자 8자리를 마우스로 눌러 입력합니다."
+                label="2李?鍮꾨?踰덊샇"
+                hint="媛????濡쒓렇?명븷 ?뚮룄 媛숈? ?レ옄 8?먮━瑜?留덉슦?ㅻ줈 ?뚮윭 ?낅젰?⑸땲??"
                 :disabled="isSubmitting || isInviteLoading || !inviteInfo"
               />
               <label class="checkbox-row">
@@ -954,10 +959,10 @@ onBeforeUnmount(() => {
                   type="checkbox"
                   :disabled="isSubmitting || isInviteLoading || !inviteInfo"
                 />
-                <span>이 브라우저에서 로그인 상태 유지</span>
+                <span>??釉뚮씪?곗??먯꽌 濡쒓렇???곹깭 ?좎?</span>
               </label>
               <button class="button button--primary" type="submit" :disabled="isSubmitting || isInviteLoading || !inviteInfo">
-                {{ isSubmitting && activeSubmit === 'invite' ? '계정 생성 중...' : '계정 만들고 로그인' }}
+                {{ isSubmitting && activeSubmit === 'invite' ? '怨꾩젙 ?앹꽦 以?..' : '怨꾩젙 留뚮뱾怨?濡쒓렇?? }}
               </button>
             </form>
           </article>
@@ -973,31 +978,31 @@ onBeforeUnmount(() => {
 
         <div class="auth-grid">
           <article class="auth-card">
-            <h2>로그인</h2>
+            <h2>濡쒓렇??/h2>
             <form class="stack-form" @submit.prevent="handleLogin">
-              <input v-model="loginForm.loginId" type="text" placeholder="로그인 ID" autocomplete="username" />
-              <input v-model="loginForm.password" type="password" placeholder="비밀번호" autocomplete="current-password" />
+              <input v-model="loginForm.loginId" type="text" placeholder="濡쒓렇??ID" autocomplete="username" />
+              <input v-model="loginForm.password" type="password" placeholder="鍮꾨?踰덊샇" autocomplete="current-password" />
               <PinPadInput
                 v-model="loginForm.secondaryPin"
-                label="2차 비밀번호"
-                hint="키보드 대신 숫자 버튼을 눌러 8자리를 입력해주세요."
+                label="2李?鍮꾨?踰덊샇"
+                hint="?ㅻ낫??????レ옄 踰꾪듉???뚮윭 8?먮━瑜??낅젰?댁＜?몄슂."
                 :disabled="isSubmitting"
               />
               <label class="checkbox-row">
                 <input v-model="loginForm.rememberDevice" type="checkbox" />
-                <span>이 브라우저에서 로그인 상태 유지</span>
+                <span>??釉뚮씪?곗??먯꽌 濡쒓렇???곹깭 ?좎?</span>
               </label>
               <button class="button button--primary" type="submit" :disabled="isSubmitting">
-                {{ isSubmitting && activeSubmit === 'login' ? '로그인 중...' : '로그인' }}
+                {{ isSubmitting && activeSubmit === 'login' ? '濡쒓렇??以?..' : '濡쒓렇?? }}
               </button>
             </form>
           </article>
 
           <article class="auth-card">
-            <h2>계정 안내</h2>
+            <h2>怨꾩젙 ?덈궡</h2>
             <div class="stack-form stack-form--readonly">
-              <p>공개 회원가입은 꺼져 있습니다.</p>
-              <p>새 계정이 필요하면 기존 사용자나 관리자에게 1회용 초대 링크 생성을 요청해주세요.</p>
+              <p>怨듦컻 ?뚯썝媛?낆? 爰쇱졇 ?덉뒿?덈떎.</p>
+              <p>??怨꾩젙???꾩슂?섎㈃ 湲곗〈 ?ъ슜?먮굹 愿由ъ옄?먭쾶 1?뚯슜 珥덈? 留곹겕 ?앹꽦???붿껌?댁＜?몄슂.</p>
             </div>
           </article>
         </div>
@@ -1014,7 +1019,7 @@ onBeforeUnmount(() => {
             <p class="topbar__eyebrow">{{ pageMeta.title }}</p>
             <h1>{{ pageMeta.description }}</h1>
           </div>
-          <nav class="topbar__nav" aria-label="주요 기능">
+          <nav class="topbar__nav" aria-label="二쇱슂 湲곕뒫">
             <button
               v-for="item in headerNavItems"
               :key="item.key"
@@ -1025,10 +1030,16 @@ onBeforeUnmount(() => {
             >
               {{ item.label }}
             </button>
-          </nav>
+                    <button
+            type="button"
+            :class="['topbar__nav-button', { 'topbar__nav-button--active': activeRoute === 'notifications' }]"
+            @click="navigate('notifications')"
+          >
+            Notifications
+          </button></nav>
           <div class="topbar__actions">
-            <button v-if="activeRoute !== 'profile'" class="button button--ghost" @click="navigate('profile')">내 프로필</button>
-            <button class="button button--ghost" @click="handleLogout">로그아웃</button>
+            <button v-if="activeRoute !== 'profile'" class="button button--ghost" @click="navigate('profile')">???꾨줈??/button>
+            <button class="button button--ghost" @click="handleLogout">濡쒓렇?꾩썐</button>
           </div>
         </header>
 

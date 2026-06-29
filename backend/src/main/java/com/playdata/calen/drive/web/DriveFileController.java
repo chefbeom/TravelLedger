@@ -71,6 +71,14 @@ public class DriveFileController {
         return driveService.getTrashItems(currentUser.userId());
     }
 
+    @GetMapping("/{fileId}/versions")
+    public List<DriveDtos.FileVersionResponse> listFileVersions(
+            @AuthenticationPrincipal AppUserPrincipal currentUser,
+            @PathVariable Long fileId
+    ) {
+        return driveService.listFileVersions(currentUser.userId(), fileId);
+    }
+
     @GetMapping("/{fileId}/download")
     public ResponseEntity<Void> download(
             @AuthenticationPrincipal AppUserPrincipal currentUser,

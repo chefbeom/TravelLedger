@@ -7,7 +7,7 @@ Updated: 2026-06-30
 - Flyway is available in the backend build with `flyway-core` and `flyway-mysql`.
 - Flyway is disabled by default with `DB_MIGRATION_ENABLED=false` while legacy startup updaters still exist.
 - Hibernate `ddl-auto: update` remains in place during the transition so existing local and compose workflows keep working.
-- `backend/src/main/resources/db/migration` contains a baseline marker plus versioned migrations for access-log, notification, classification-rule, and AI-history provider changes.
+- `backend/src/main/resources/db/migration` contains a baseline marker plus versioned migrations for access-log, notification, classification-rule, AI-history provider, and drive item version changes.
 - `scripts/verify-db-migrations.ps1` and the CI `migration-discipline` job check migration naming, duplicate versions, baseline marker presence, and the expected legacy `*SchemaUpdater` inventory.
 
 ## Current Migration Inventory
@@ -61,3 +61,7 @@ A release that adds or changes schema should include:
 - A note explaining whether an existing `*SchemaUpdater` was retained, reduced, or removed.
 - A rollback note for data-preserving rollback or restore-from-backup rollback.
 - A staging startup check with Flyway enabled before production promotion.
+## Latest schema slice
+
+- `V20260629_005__drive_item_versions.sql` adds the CalenDrive file version ledger table and owner/item indexes.
+- The legacy `*SchemaUpdater` inventory is unchanged; this is a new explicit Flyway-managed schema area.

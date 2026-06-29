@@ -2,6 +2,7 @@ package com.playdata.calen.drive.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -12,9 +13,11 @@ import com.playdata.calen.common.exception.BadRequestException;
 import com.playdata.calen.common.media.ImageThumbnailService;
 import com.playdata.calen.drive.domain.DriveItem;
 import com.playdata.calen.drive.domain.DriveItemType;
+import com.playdata.calen.drive.domain.DriveItemVersion;
 import com.playdata.calen.drive.dto.DriveDtos;
 import com.playdata.calen.drive.repository.DriveDownloadLinkRepository;
 import com.playdata.calen.drive.repository.DriveItemRepository;
+import com.playdata.calen.drive.repository.DriveItemVersionRepository;
 import com.playdata.calen.drive.repository.DriveShareRepository;
 import java.io.ByteArrayInputStream;
 import java.nio.charset.StandardCharsets;
@@ -26,6 +29,7 @@ import java.util.Optional;
 import java.util.zip.ZipInputStream;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -34,6 +38,9 @@ class DriveServiceTest {
 
     @Mock
     private DriveItemRepository driveItemRepository;
+
+    @Mock
+    private DriveItemVersionRepository driveItemVersionRepository;
 
     @Mock
     private DriveShareRepository driveShareRepository;
@@ -71,6 +78,53 @@ class DriveServiceTest {
         verify(driveStorageService, never()).completeUpload(request);
     }
 
+    @Test
+    void completeUploadRecordsInitialFileVersionMetadata() {
+        AppUser owner = owner();
+        DriveDtos.UploadCompleteRequest request = DriveDtos.UploadCompleteRequest.builder()
+                .fileOriginName("report.pdf")
+                .fileFormat("pdf")
+                .fileSize(12L)
+                .finalObjectKey("drive/1/report.pdf")
+                .build();
+        DriveDtos.UploadCompleteResponse completed = DriveDtos.UploadCompleteResponse.builder()
+                .fileOriginName("report.pdf")
+                .fileSaveName("report-saved.pdf")
+                .fileFormat("pdf")
+                .finalObjectKey("drive/1/report.pdf")
+                .build();
+
+        when(appUserRepository.findById(1L)).thenReturn(Optional.of(owner));
+        when(driveStorageService.completeUpload(request)).thenReturn(completed);
+        when(driveItemRepository.findByOwner_IdAndStoragePath(1L, "drive/1/report.pdf")).thenReturn(Optional.empty());
+        when(driveStorageService.resolveObjectSize("drive/1/report.pdf")).thenReturn(1200L);
+        when(driveItemRepository.save(any(DriveItem.class))).thenAnswer(invocation -> {
+            DriveItem item = invocation.getArgument(0);
+            item.setId(10L);
+            return item;
+        });
+        when(driveItemVersionRepository.countByItem_IdAndOwner_Id(10L, 1L)).thenReturn(0L);
+
+        DriveService service = newService();
+
+        DriveDtos.UploadCompleteResponse response = service.completeUpload(1L, request);
+
+        assertThat(response.fileOriginName()).isEqualTo("report.pdf");
+        ArgumentCaptor<DriveItemVersion> versionCaptor = ArgumentCaptor.forClass(DriveItemVersion.class);
+        verify(driveItemVersionRepository).save(versionCaptor.capture());
+        DriveItemVersion version = versionCaptor.getValue();
+        assertThat(version.getItem().getId()).isEqualTo(10L);
+        assertThat(version.getOwner().getId()).isEqualTo(1L);
+        assertThat(version.getVersionNumber()).isEqualTo(1);
+        assertThat(version.getOriginalName()).isEqualTo("report.pdf");
+        assertThat(version.getExtension()).isEqualTo("pdf");
+        assertThat(version.getStoredName()).isEqualTo("report-saved.pdf");
+        assertThat(version.getStoragePath()).isEqualTo("drive/1/report.pdf");
+        assertThat(version.getContentType()).isEqualTo("application/pdf");
+        assertThat(version.getFileSize()).isEqualTo(1200L);
+        assertThat(version.getSource()).isEqualTo("UPLOAD");
+        assertThat(version.getCreatedAt()).isNotNull();
+    }
     @Test
     void listPageKeepsFoldersBeforeFilesWhenSortedByRecent() {
         AppUser owner = owner();

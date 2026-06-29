@@ -7,9 +7,11 @@ import com.playdata.calen.common.exception.NotFoundException;
 import com.playdata.calen.common.media.ImageThumbnailService;
 import com.playdata.calen.drive.domain.DriveItem;
 import com.playdata.calen.drive.domain.DriveItemType;
+import com.playdata.calen.drive.domain.DriveItemVersion;
 import com.playdata.calen.drive.dto.DriveDtos;
 import com.playdata.calen.drive.repository.DriveDownloadLinkRepository;
 import com.playdata.calen.drive.repository.DriveItemRepository;
+import com.playdata.calen.drive.repository.DriveItemVersionRepository;
 import com.playdata.calen.drive.repository.DriveShareRepository;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -35,6 +37,7 @@ import org.springframework.util.StringUtils;
 public class DriveService {
 
     private final DriveItemRepository driveItemRepository;
+    private final DriveItemVersionRepository driveItemVersionRepository;
     private final DriveShareRepository driveShareRepository;
     private final DriveDownloadLinkRepository driveDownloadLinkRepository;
     private final AppUserRepository appUserRepository;
@@ -43,6 +46,7 @@ public class DriveService {
 
     public DriveService(
             DriveItemRepository driveItemRepository,
+            DriveItemVersionRepository driveItemVersionRepository,
             DriveShareRepository driveShareRepository,
             DriveDownloadLinkRepository driveDownloadLinkRepository,
             AppUserRepository appUserRepository,
@@ -50,6 +54,7 @@ public class DriveService {
             ImageThumbnailService imageThumbnailService
     ) {
         this.driveItemRepository = driveItemRepository;
+        this.driveItemVersionRepository = driveItemVersionRepository;
         this.driveShareRepository = driveShareRepository;
         this.driveDownloadLinkRepository = driveDownloadLinkRepository;
         this.appUserRepository = appUserRepository;
@@ -214,6 +219,7 @@ public class DriveService {
         ensureUnlockedTree(item);
         List<DriveItem> descendants = collectDescendants(item);
         deleteDownloadLinks(descendants);
+        deleteFileVersions(descendants);
         descendants.stream().filter(DriveItem::isFile).map(DriveItem::getStoragePath).forEach(driveStorageService::deleteObject);
         driveItemRepository.deleteAll(descendants);
         return DriveDtos.ActionResponse.builder().action("delete").affectedCount(descendants.size()).build();
@@ -230,6 +236,7 @@ public class DriveService {
             }
         }
         deleteDownloadLinks(targets);
+        deleteFileVersions(targets);
         targets.stream().filter(DriveItem::isFile).map(DriveItem::getStoragePath).forEach(driveStorageService::deleteObject);
         driveItemRepository.deleteAll(targets);
         return DriveDtos.ActionResponse.builder().action("clear-trash").affectedCount(targets.size()).build();
@@ -350,6 +357,13 @@ public class DriveService {
         return buildThumbnailPayload(getOwnedFile(userId, fileId), width);
     }
 
+    public List<DriveDtos.FileVersionResponse> listFileVersions(Long userId, Long fileId) {
+        DriveItem item = getOwnedFile(userId, fileId);
+        return driveItemVersionRepository.findAllByItem_IdAndOwner_IdOrderByVersionNumberDescIdDesc(item.getId(), item.getOwner().getId()).stream()
+                .map(this::toVersionResponse)
+                .toList();
+    }
+
     public DriveItem getOwnedItem(Long userId, Long fileId) {
         return driveItemRepository.findByIdAndOwner_Id(fileId, getOwner(userId).getId())
                 .orElseThrow(() -> new NotFoundException("드라이브 항목을 찾지 못했습니다."));
@@ -397,6 +411,20 @@ public class DriveService {
 
     public record DriveFilePayload(byte[] bytes, String contentType, String fileName, long contentLength) {}
 
+    private DriveDtos.FileVersionResponse toVersionResponse(DriveItemVersion version) {
+        return DriveDtos.FileVersionResponse.builder()
+                .id(version.getId())
+                .fileId(version.getItem().getId())
+                .versionNumber(version.getVersionNumber())
+                .fileOriginName(version.getOriginalName())
+                .fileFormat(version.getExtension())
+                .fileSize(version.getFileSize())
+                .contentType(version.getContentType())
+                .source(version.getSource())
+                .createdAt(version.getCreatedAt())
+                .build();
+    }
+
     public record ThumbnailPayload(byte[] bytes, String contentType, String eTag, long lastModifiedEpochMillis) {}
 
     private record ZipSource(DriveItem item, String entryName) {}
@@ -411,7 +439,29 @@ public class DriveService {
         item.setStoredName(completed.fileSaveName());
         item.setStoragePath(completed.finalObjectKey());
         item.setFileSize(driveStorageService.resolveObjectSize(completed.finalObjectKey()));
-        return toCompleteResponse(driveItemRepository.save(item));
+        DriveItem savedItem = driveItemRepository.save(item);
+        recordFileVersion(savedItem, "UPLOAD");
+        return toCompleteResponse(savedItem);
+    }
+
+    private void recordFileVersion(DriveItem item, String source) {
+        if (item == null || !item.isFile()) {
+            return;
+        }
+        long existingVersions = driveItemVersionRepository.countByItem_IdAndOwner_Id(item.getId(), item.getOwner().getId());
+        DriveItemVersion version = new DriveItemVersion();
+        version.setItem(item);
+        version.setOwner(item.getOwner());
+        version.setVersionNumber((int) existingVersions + 1);
+        version.setOriginalName(item.getOriginalName());
+        version.setExtension(item.getExtension());
+        version.setStoredName(item.getStoredName());
+        version.setStoragePath(item.getStoragePath());
+        version.setContentType(resolveContentType(item.getExtension()));
+        version.setFileSize(item.getFileSize());
+        version.setSource(source);
+        version.setCreatedAt(LocalDateTime.now());
+        driveItemVersionRepository.save(version);
     }
 
     private DriveItem resolveUploadParentFolder(AppUser owner, DriveDtos.UploadCompleteRequest request) {
@@ -720,6 +770,17 @@ public class DriveService {
                 .filter(candidate -> candidate.getParent() != null)
                 .filter(candidate -> Objects.equals(candidate.getParent().getId(), item.getId()))
                 .toList();
+    }
+
+    private void deleteFileVersions(List<DriveItem> items) {
+        List<Long> itemIds = items.stream()
+                .filter(DriveItem::isFile)
+                .map(DriveItem::getId)
+                .filter(Objects::nonNull)
+                .toList();
+        if (!itemIds.isEmpty()) {
+            driveItemVersionRepository.deleteAllByItem_IdIn(itemIds);
+        }
     }
 
     private void deleteDownloadLinks(List<DriveItem> items) {

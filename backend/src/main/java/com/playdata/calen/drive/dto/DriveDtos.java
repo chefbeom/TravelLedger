@@ -201,6 +201,19 @@ public final class DriveDtos {
             List<FileItemResponse> recentFiles
     ) {
     }
+    @Builder
+    public record FileVersionResponse(
+            Long id,
+            Long fileId,
+            Integer versionNumber,
+            String fileOriginName,
+            String fileFormat,
+            Long fileSize,
+            String contentType,
+            String source,
+            LocalDateTime createdAt
+    ) {
+    }
 
     @Builder
     public record DownloadUrlResponse(

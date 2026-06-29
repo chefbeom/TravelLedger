@@ -55,7 +55,7 @@ flowchart TD
 | Public link status coverage | `invalid`, `revoked`, `expired`, `limit_reached`, `invalid_item`, `trashed`, and `success`. |
 | Public log safety | `DriveDownloadLinkAccessLogService.record`, `recordDirectShareAccess`, `listRecentLogs`, `listRecentDirectShareLogs`, and token-fingerprint tests. |
 | Direct share permission | `DriveShareService.shareFiles`, `normalizePermission`, `effectivePermission`, `ensureDownloadAllowed`, `getSharedFileDownloadUrl`, `downloadSharedFile`, and `listSharedFileAccessLogs`. |
-| Direct share tests | `DriveShareServiceTest.shareFilesStoresRequestedViewPermission`, `downloadSharedFileRejectsViewOnlyShareWithoutLoadingObject`, `sharedDownloadUrlRecordsSuccessfulAccess`, `sharedDownloadUrlRecordsViewOnlyDeniedAccess`, and trashed/unavailable source tests. |
+| Direct share tests | `DriveShareServiceTest.shareFilesStoresRequestedViewPermission`, `downloadSharedFileRejectsViewOnlyShareWithoutLoadingObject`, `sharedDownloadUrlRecordsSuccessfulAccess`, `sharedDownloadUrlRecordsViewOnlyDeniedAccess`, `sharedDownloadUrlRecordsMissingRecipientAsNotFoundWithoutGeneratingUrl`, and trashed/unavailable source tests. |
 | Travel public token | `TravelPublicMediaTokenService.issueToken`, `matches`, and `MessageDigest.isEqual`. |
 | Travel public media | `TravelService.getSharedMediaDownload`, `TravelPlanUserScopeIntegrationTest` invalid-token coverage, public memory/community visibility, and completed public plan visibility. |
 | Travel shared exhibit | `TravelService.getSharedExhibitMediaDownload`, `getRequiredShare`, completed-plan check, and media-plan match check. |
@@ -97,7 +97,7 @@ A release is not ready if any of these are true:
 - Drive public token presigned URL success logs access without reading bytes.
 - Drive public access logs store fingerprints and bounded metadata only.
 - Direct share `VIEW` cannot download, save, or generate presigned URLs.
-- Direct share failures write owner-scoped bounded statuses.
+- Direct share failures write owner-scoped bounded statuses, including missing-recipient `not_found` attempts before any presigned URL generation.
 - Only file owners can list public/direct-share access logs.
 - Travel public media token rejects null, blank, tampered, wrong-media, and wrong-secret tokens.
 - Travel shared exhibit media rejects non-recipient, non-completed plan, and wrong-plan media ids.

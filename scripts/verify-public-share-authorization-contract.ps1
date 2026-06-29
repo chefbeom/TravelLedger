@@ -134,7 +134,8 @@ Assert-ContainsAll 'DriveShareServiceTest' $driveShareTest @(
     'sharedDownloadUrlRecordsSuccessfulAccess',
     'sharedDownloadUrlRecordsViewOnlyDeniedAccess',
     'Shared file permission does not allow download.',
-    'recordDirectShareAccess(31L, 7L, 1L, 2L, "permission_denied"'
+    'recordDirectShareAccess(31L, 7L, 1L, 2L, "permission_denied"',
+    'recordDirectShareAccess(null, 7L, null, 3L, "not_found"'
 )
 
 Assert-ContainsAll 'TravelPublicMediaTokenService' $travelTokenService @(

@@ -12,6 +12,7 @@ import com.playdata.calen.account.domain.AppUser;
 import com.playdata.calen.account.repository.AppUserRepository;
 import com.playdata.calen.account.service.UserNotificationService;
 import com.playdata.calen.common.exception.BadRequestException;
+import com.playdata.calen.common.exception.NotFoundException;
 import com.playdata.calen.common.media.ImageThumbnailService;
 import com.playdata.calen.drive.domain.DriveItem;
 import com.playdata.calen.drive.domain.DriveItemType;

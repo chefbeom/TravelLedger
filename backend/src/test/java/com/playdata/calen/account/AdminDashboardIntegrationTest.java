@@ -157,6 +157,30 @@ class AdminDashboardIntegrationTest {
                 .andExpect(jsonPath("$.active").value(true));
     }
     @Test
+    @DirtiesContext
+    void adminDeactivationRevokesRememberMeTokens() throws Exception {
+        MockHttpSession adminSession = login("admin", "test1234", "12345678");
+        verifyAdminAccess(adminSession);
+        long minsuUserId = findUserId(adminSession, "minsu");
+
+        MvcResult minsuLoginResult = loginResult("minsu", "test1234", "87654321", true);
+        Cookie rememberMeCookie = minsuLoginResult.getResponse().getCookie("CALEN_REMEMBER_ME");
+        assertThat(rememberMeCookie).isNotNull();
+        assertThat(rememberMeCookie.getValue()).isNotBlank();
+
+        mockMvc.perform(patch("/api/admin/users/{userId}/active", minsuUserId)
+                        .session(adminSession)
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of("active", false))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.loginId").value("minsu"))
+                .andExpect(jsonPath("$.active").value(false));
+
+        mockMvc.perform(get("/api/auth/me").cookie(rememberMeCookie))
+                .andExpect(status().isUnauthorized());
+    }
+    @Test
     void adminCannotDeactivateAdminAccountAndFailedLoginReasonStaysGeneric() throws Exception {
         MockHttpSession adminSession = login("admin", "test1234", "12345678");
         verifyAdminAccess(adminSession);
@@ -212,19 +236,22 @@ class AdminDashboardIntegrationTest {
         throw new AssertionError("Seed user not found: " + loginId);
     }
     private MockHttpSession login(String loginId, String password, String secondaryPin) throws Exception {
-        MvcResult result = mockMvc.perform(post("/api/auth/login")
+        MvcResult result = loginResult(loginId, password, secondaryPin, false);
+        return (MockHttpSession) result.getRequest().getSession(false);
+    }
+
+    private MvcResult loginResult(String loginId, String password, String secondaryPin, boolean rememberDevice) throws Exception {
+        return mockMvc.perform(post("/api/auth/login")
                         .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(Map.of(
                                 "loginId", loginId,
                                 "password", password,
                                 "secondaryPin", secondaryPin,
-                                "rememberDevice", false
+                                "rememberDevice", rememberDevice
                         ))))
                 .andExpect(status().isOk())
                 .andReturn();
-
-        return (MockHttpSession) result.getRequest().getSession(false);
     }
 
     private void verifyAdminAccess(MockHttpSession session) throws Exception {

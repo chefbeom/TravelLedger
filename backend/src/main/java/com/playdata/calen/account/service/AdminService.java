@@ -20,6 +20,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
+import org.springframework.security.web.authentication.rememberme.PersistentTokenRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -35,6 +36,7 @@ public class AdminService {
     private final AccountInviteRepository accountInviteRepository;
     private final LoginAuditLogService loginAuditLogService;
     private final LoginAttemptService loginAttemptService;
+    private final PersistentTokenRepository persistentTokenRepository;
 
     public AdminDashboardResponse getDashboard() {
         List<AppUser> users = appUserRepository.findAllByOrderByIdAsc();
@@ -87,6 +89,9 @@ public class AdminService {
         }
 
         targetUser.setActive(active);
+        if (!active) {
+            persistentTokenRepository.removeUserTokens(targetUser.getLoginId());
+        }
         return toUserResponse(targetUser);
     }
 

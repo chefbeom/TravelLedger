@@ -61,6 +61,15 @@ $requiredMigrationSnippets = @{
         'ADD COLUMN IF NOT EXISTS changes_json LONGTEXT NULL',
         'MODIFY COLUMN changes_json LONGTEXT NULL'
     )
+    'V20260630_010__travel_media_asset_metadata_fields.sql' = @(
+        'ALTER TABLE travel_media_assets',
+        'ADD COLUMN IF NOT EXISTS gps_latitude DECIMAL(10,7) NULL',
+        'ADD COLUMN IF NOT EXISTS gps_longitude DECIMAL(10,7) NULL',
+        'ADD COLUMN IF NOT EXISTS representative_override BOOLEAN NOT NULL DEFAULT FALSE',
+        'ADD COLUMN IF NOT EXISTS gps_extracted_at DATETIME NULL',
+        'ADD INDEX IF NOT EXISTS idx_travel_media_assets_gps (gps_latitude, gps_longitude)',
+        'ADD INDEX IF NOT EXISTS idx_travel_media_assets_rep_override (representative_override)'
+    )
 }
 foreach ($entry in $requiredMigrationSnippets.GetEnumerator()) {
     $migrationPath = Join-Path $migrationRoot $entry.Key

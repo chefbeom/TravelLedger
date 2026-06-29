@@ -264,15 +264,27 @@ groups:
   - name: calen.domain.redis
     rules:
       - alert: CalenRedisConnectionUnavailable
-        expr: calen_redis_connection_available{job="calen-backend"} == 0
+        expr: calen_redis_connection_available{job="calen-backend", role!="state"} == 0
         for: 5m
         labels:
           severity: warning
           service: calen-backend
-          feature: redis
+          feature: redis-cache
         annotations:
-          summary: Redis connection is unavailable
+          summary: Cache Redis connection is unavailable
           description: Redis role {{ $labels.role }} has been unavailable from the backend for at least 5 minutes.
+          runbook_url: docs/observability_alerts.md#alert-runbook-contract
+
+      - alert: CalenRedisStateConnectionUnavailable
+        expr: calen_redis_connection_available{job="calen-backend", role="state"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          service: calen-backend
+          feature: redis-state
+        annotations:
+          summary: State Redis connection is unavailable
+          description: State Redis has been unavailable from the backend for at least 2 minutes; session state, throttling, locks, and backup coordination may be unsafe.
           runbook_url: docs/observability_alerts.md#alert-runbook-contract
 
   - name: calen.domain.minio

@@ -69,6 +69,7 @@ if ($findings.Count -eq 0) {
         'CalenMinioStorageHighUsage',
         'CalenHostDiskNearlyFull',
         'CalenRedisConnectionUnavailable',
+        'CalenRedisStateConnectionUnavailable',
         'CalenHikariPoolNearlyExhausted',
         'CalenHikariPendingConnections',
         'CalenHikariConnectionTimeouts',

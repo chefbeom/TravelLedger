@@ -28,7 +28,8 @@ Prometheus sends firing and resolved alerts to Alertmanager at `alertmanager:909
 | CalenDataOpsBackupFailure | backup failure count above 0 within 30m | critical | DB or MinIO backup has failed and needs operator action. |
 | CalenDataOpsBackupStale | no recorded successful backup within 26h | warning | Scheduled backup may be disabled, stuck, or failing before completion. |
 | CalenLedgerAiHistoryRetentionFailure | AI history retention failure count above 0 within 30m | warning | Automatic cleanup failed, so privacy retention guarantees may not be holding. |
-| CalenRedisConnectionUnavailable | `calen_redis_connection_available == 0` for 5m | warning | Cache/state Redis is unavailable from the backend. |
+| CalenRedisConnectionUnavailable | cache Redis `calen_redis_connection_available == 0` for 5m | warning | Cache Redis is unavailable from the backend. |
+| CalenRedisStateConnectionUnavailable | state Redis `calen_redis_connection_available == 0` for 2m | critical | State Redis is unavailable, so session state, throttling, locks, and backup coordination may be unsafe. |
 | CalenMinioStorageHighUsage | MinIO used/capacity above 85% for 15m | warning | Object storage is nearing configured capacity. |
 | CalenExternalWorkflowHighFailureRate | external workflow/client failure ratio above 10% for 10m | warning | n8n/OCR external calls are unreliable or unavailable. |
 | CalenExternalWorkflowSlowP95 | external workflow/client p95 above 30s for 10m | warning | n8n/OCR external calls are approaching user-visible timeout territory. |
@@ -45,7 +46,7 @@ Prometheus sends firing and resolved alerts to Alertmanager at `alertmanager:909
 | n8n/external workflow health | `CalenExternalWorkflowHighFailureRate`, `CalenExternalWorkflowSlowP95` | Check n8n workflow executions, webhook credentials, network reachability, and bounded retry behavior. |
 | Backup success/failure | `CalenDataOpsBackupFailure`, `CalenDataOpsBackupStale` | Inspect DB/MinIO backup logs, confirm last successful artifact, and run the restore rehearsal checklist when needed. |
 | MinIO capacity | `CalenMinioStorageHighUsage`, `CalenHostDiskNearlyFull` | Check bucket capacity configuration, object growth, lifecycle cleanup, and host filesystem space. |
-| Redis availability | `CalenRedisConnectionUnavailable` | Check Redis process/network health and whether cache/state fallback behavior is safe. |
+| Redis availability | `CalenRedisConnectionUnavailable`, `CalenRedisStateConnectionUnavailable` | Check Redis process/network health, distinguish cache from state Redis, and verify session, throttling, locking, and backup-coordination fallback behavior before declaring recovery. |
 | DB pool exhaustion | `CalenHikariPoolNearlyExhausted`, `CalenHikariPendingConnections`, `CalenHikariConnectionTimeouts` | Inspect slow queries, connection leaks, pool size, DB health, and recent traffic spikes. |
 | Privacy retention | `CalenLedgerAiHistoryRetentionFailure` | Check scheduled cleanup logs before relying on AI history retention guarantees. |
 
@@ -70,7 +71,7 @@ Runbook expectations by alert family:
 | DB pool pressure | Slow query logs, Hikari pending/timeout metrics, connection leak candidates, and traffic spikes. | Fix query/leak cause before increasing pool size; resizing without root cause can move failure to MariaDB. |
 | AI/OCR/n8n/external workflow | Provider health, timeout budget, workflow executions, schema-validation failures, and retry/duplicate-suppression behavior. | Keep results advisory-only; disable provider or workflow integration before allowing duplicate or unsafe writes. |
 | Backup and retention | Backup job logs, latest artifact/checksum, encryption/decrypt evidence, and retention cleanup logs. | Run the restore rehearsal checklist before declaring backup recovery healthy. |
-| Redis, MinIO, and host capacity | Redis connection metrics, bucket usage/capacity, lifecycle cleanup, disk usage by mount, and upload growth. | Prefer cleanup/lifecycle/capacity fixes before reducing retention or disabling safety checks. |
+| Redis, MinIO, and host capacity | Redis connection metrics by `role`, bucket usage/capacity, lifecycle cleanup, disk usage by mount, and upload growth. | Treat `role="state"` Redis loss as critical because locks, throttling, backup coordination, and temporary auth state may be unsafe; prefer cleanup/lifecycle/capacity fixes before reducing retention or disabling safety checks. |
 | Public-link abuse | Access-log status mix, token expiry/revocation settings, rate-limit evidence, and owner-scoped audit logs. | Revoke affected links and preserve token fingerprints only; never log raw public tokens. |
 ## Alertmanager routing baseline
 

@@ -178,6 +178,20 @@ groups:
         annotations:
           summary: Data operations backup has no recent success
           description: Data operations backup type {{ $labels.type }} has not recorded a successful run within 26 hours.
+
+  - name: calen.domain.redis
+    rules:
+      - alert: CalenRedisConnectionUnavailable
+        expr: calen_redis_connection_available{job="calen-backend"} == 0
+        for: 5m
+        labels:
+          severity: warning
+          service: calen-backend
+          feature: redis
+        annotations:
+          summary: Redis connection is unavailable
+          description: Redis role {{ $labels.role }} has been unavailable from the backend for at least 5 minutes.
+
   - name: calen.host.capacity
     rules:
       - alert: CalenHostDiskNearlyFull

@@ -8,12 +8,16 @@ import io.lettuce.core.ScanCursor;
 import io.lettuce.core.SetArgs;
 import io.lettuce.core.api.StatefulRedisConnection;
 import io.lettuce.core.api.sync.RedisCommands;
+import io.micrometer.core.instrument.Gauge;
+import io.micrometer.core.instrument.MeterRegistry;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
@@ -41,6 +45,12 @@ public class RedisStateService {
     private boolean redisStateSsl;
 
     private final Object redisMonitor = new Object();
+    private final AtomicInteger redisConnectionAvailable = new AtomicInteger(0);
+
+    @Autowired(required = false)
+    private MeterRegistry meterRegistry;
+
+    private boolean redisAvailabilityGaugeRegistered = false;
 
     private RedisClient redisClient;
     private StatefulRedisConnection<String, String> redisConnection;
@@ -53,6 +63,8 @@ public class RedisStateService {
         if (!StringUtils.hasText(redisStateHost)) {
             return;
         }
+
+        registerRedisAvailabilityGauge();
 
         RedisURI.Builder redisUriBuilder = RedisURI.builder()
                 .withHost(redisStateHost.trim())
@@ -230,9 +242,11 @@ public class RedisStateService {
             try {
                 redisConnection = redisClient.connect();
                 redisCommands = redisConnection.sync();
+                redisConnectionAvailable.set(1);
                 redisReconnectFailures = 0;
                 nextRedisReconnectAt = 0L;
             } catch (Exception ignored) {
+                redisConnectionAvailable.set(0);
                 redisCommands = null;
                 redisConnection = null;
                 redisReconnectFailures = Math.min(redisReconnectFailures + 1, 10);
@@ -259,10 +273,22 @@ public class RedisStateService {
         }
     }
 
+    private void registerRedisAvailabilityGauge() {
+        if (meterRegistry == null || redisAvailabilityGaugeRegistered) {
+            return;
+        }
+        Gauge.builder("calen.redis.connection.available", redisConnectionAvailable, AtomicInteger::get)
+                .description("Redis connection availability by role")
+                .tag("role", "state")
+                .register(meterRegistry);
+        redisAvailabilityGaugeRegistered = true;
+    }
+
     private void closeRedisConnection() {
         if (redisConnection != null) {
             redisConnection.close();
         }
+        redisConnectionAvailable.set(0);
         redisConnection = null;
         redisCommands = null;
     }

@@ -6,10 +6,14 @@ import io.lettuce.core.RedisClient;
 import io.lettuce.core.RedisURI;
 import io.lettuce.core.api.StatefulRedisConnection;
 import io.lettuce.core.api.sync.RedisCommands;
+import io.micrometer.core.instrument.Gauge;
+import io.micrometer.core.instrument.MeterRegistry;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import java.time.Duration;
+import java.util.concurrent.atomic.AtomicInteger;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
@@ -23,6 +27,12 @@ public class RedisCacheService {
 
     private final ObjectMapper objectMapper;
     private final Object redisMonitor = new Object();
+    private final AtomicInteger redisConnectionAvailable = new AtomicInteger(0);
+
+    @Autowired(required = false)
+    private MeterRegistry meterRegistry;
+
+    private boolean redisAvailabilityGaugeRegistered = false;
 
     @Value("${app.redis.cache.host:}")
     private String redisCacheHost;
@@ -50,6 +60,8 @@ public class RedisCacheService {
         if (!StringUtils.hasText(redisCacheHost)) {
             return;
         }
+
+        registerRedisAvailabilityGauge();
 
         RedisURI.Builder redisUriBuilder = RedisURI.builder()
                 .withHost(redisCacheHost.trim())
@@ -175,9 +187,11 @@ public class RedisCacheService {
             try {
                 redisConnection = redisClient.connect();
                 redisCommands = redisConnection.sync();
+                redisConnectionAvailable.set(1);
                 redisReconnectFailures = 0;
                 nextRedisReconnectAt = 0L;
             } catch (Exception ignored) {
+                redisConnectionAvailable.set(0);
                 redisCommands = null;
                 redisConnection = null;
                 redisReconnectFailures = Math.min(redisReconnectFailures + 1, 10);
@@ -204,10 +218,22 @@ public class RedisCacheService {
         }
     }
 
+    private void registerRedisAvailabilityGauge() {
+        if (meterRegistry == null || redisAvailabilityGaugeRegistered) {
+            return;
+        }
+        Gauge.builder("calen.redis.connection.available", redisConnectionAvailable, AtomicInteger::get)
+                .description("Redis connection availability by role")
+                .tag("role", "cache")
+                .register(meterRegistry);
+        redisAvailabilityGaugeRegistered = true;
+    }
+
     private void closeRedisConnection() {
         if (redisConnection != null) {
             redisConnection.close();
         }
+        redisConnectionAvailable.set(0);
         redisConnection = null;
         redisCommands = null;
     }

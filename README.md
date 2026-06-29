@@ -414,7 +414,7 @@ docker compose up -d --build
 | `LEDGER_OCR_READ_TIMEOUT` | 읽기 timeout | `90s` |
 | `LEDGER_OCR_MAX_FILE_SIZE` | OCR 업로드 최대 크기 | `10MB` |
 
-가계부 AI 분석은 `APP_LEDGER_AI_PROVIDER=lmstudio`일 때 LM Studio를 직접 호출하고, `n8n`일 때 기존 workflow webhook을 호출합니다. Provider로 보내는 거래 목록은 개인정보/토큰 보호를 위해 제목/메모가 축약되고 전송 건수가 제한됩니다. 동일 사용자/기간/provider/model의 빠른 재시도는 최근 완료 결과를 재사용합니다.
+가계부 AI 분석은 `APP_LEDGER_AI_PROVIDER=lmstudio`일 때 LM Studio를 직접 호출하고, `n8n`일 때 기존 workflow webhook을 호출합니다. Provider로 보내는 거래 목록은 개인정보/토큰 보호를 위해 제목/메모가 축약되고 전송 건수가 제한됩니다. 동일 사용자/기간/provider/model의 빠른 재시도는 최근 완료 결과를 재사용합니다. 운영에서는 AI provider URL allowlist를 켜서 LM Studio/n8n 호출 대상을 명시적으로 제한할 수 있습니다.
 
 | 변수 | 설명 | 기본값 |
 | --- | --- | --- |
@@ -429,6 +429,8 @@ docker compose up -d --build
 | `APP_LEDGER_AI_WORKFLOW_URL` | n8n provider용 webhook URL | empty |
 | `APP_LEDGER_AI_API_KEY` | n8n provider용 API key | empty |
 | `APP_LEDGER_AI_API_KEY_HEADER` | n8n API key header | `X-TravelLedger-AI-Key` |
+| `APP_LEDGER_AI_ENFORCE_PROVIDER_URL_ALLOWLIST` | LM Studio/n8n URL host allowlist 강제 여부 | `false` |
+| `APP_LEDGER_AI_ALLOWED_PROVIDER_HOSTS` | 허용할 AI provider host CSV | `localhost,127.0.0.1,::1,172.18.240.1` |
 
 ### Redis
 

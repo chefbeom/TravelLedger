@@ -53,7 +53,7 @@ sequenceDiagram
 | Excessive agency | Model suggests deleting/editing transactions. | AI endpoint does not mutate ledger entries; LM Studio user prompt says not to imply changes were applied. | Add UI disclaimer and controller test that no ledger save/update is called. |
 | Model denial/timeout | LM Studio/n8n is down or slow. | Configurable connect/read timeout, failure history, and provider counter/timer metrics. | Wire alert rules to `calen.external.workflow.requests` and `calen.external.workflow.request`. |
 | Supply chain/workflow drift | n8n workflow changes output shape. | Backend has fallback report if remote report partially missing. | Add contract test using checked-in workflow sample response. |
-| SSRF-like backend call | Misconfigured provider URL points to internal metadata service. | Provider URL comes from server env. | Restrict allowed hostnames/IP ranges for AI provider in production profile. |
+| SSRF-like backend call | Misconfigured provider URL points to internal metadata service. | `APP_LEDGER_AI_ENFORCE_PROVIDER_URL_ALLOWLIST=true` restricts LM Studio/n8n URL hosts to `APP_LEDGER_AI_ALLOWED_PROVIDER_HOSTS`. | Add regression tests for blocked host and allowed host cases. |
 | Cost/resource exhaustion | Large custom date range or too many expense rows. | Custom range capped at 366 days; provider-facing primary/comparison entry lists are capped and overflow counts are included in payloadMinimization. | Add duplicate suppression for repeated requests. |
 | Duplicate/retry confusion | Re-running analysis stores similar histories repeatedly. | Recent completed analyses are reused for the same user/range/provider/model within a short TTL. | Add explicit client idempotency keys if parallel requests become common. |
 | Observability gap | AI fails but no alert fires. | Failure history and provider metrics exist for LM Studio and n8n. | Add dashboard/alert panels for provider failure ratio and p95 latency. |
@@ -114,6 +114,7 @@ Minimum acceptance rule for provider responses:
 | Provider payload minimization | `LedgerAiAnalysisService` keeps full server-side statistics but sends truncated title/memo fields, capped expense entry arrays, and `payloadMinimization` overflow counts to LM Studio/n8n. | Pending payload contract assertions. |
 | Duplicate suppression | `LedgerAiAnalysisService` reuses a readable completed result created within 5 minutes for the same owner, provider, model, mode, period, and comparison range. | Pending repository/service regression assertions. |
 | Provider-aware history | `ledger_ai_analysis_histories.provider` is added through Flyway migration `V20260629_004__ledger_ai_history_provider.sql`. | Migration reviewed; test gate pending. |
+| Provider URL allowlist | `LedgerAiAnalysisProperties` can reject LM Studio/n8n URLs whose host is not in `APP_LEDGER_AI_ALLOWED_PROVIDER_HOSTS` when enforcement is enabled. | Pending property binding and blocked-host assertions. |
 | Prompt boundary for LM Studio | LM Studio system prompt marks ledger text, OCR text, category names, and user-entered text as untrusted data, not instructions. | Pending prompt-injection regression assertions. |
 
 ## Hardening Backlog
@@ -125,7 +126,7 @@ Minimum acceptance rule for provider responses:
 | P0 | Ensure status endpoint never exposes provider URLs/API keys. | `LedgerAiAnalysisStatusResponse`, `LedgerAiAnalysisServiceTest` | JSON assertion excludes workflow URL, LM Studio base URL, and all API key values; only boolean configured flags are exposed. |
 | P1 | Add configurable redaction profiles. | `LedgerAiAnalysisService`, provider payload DTO | Sensitive title/memo fields can be masked more aggressively for production profiles. |
 | P1 | Add explicit client idempotency keys. | `LedgerAiAnalysisService`, history repository, frontend API caller | Parallel retries with the same client key coalesce even before the first request completes. |
-| P1 | Add production provider URL allowlist. | `LedgerAiAnalysisProperties`, provider router | Reject link-local/metadata/private disallowed hosts when profile requires allowlist. |
+| P1 | Add provider allowlist tests. | `LedgerAiAnalysisProperties`, provider clients | Blocked LM Studio/n8n hosts fail closed without exposing URL/API key values. |
 | P2 | Add manual "Delete AI history" and retention policy. | AI history controller/service | User can delete own AI history; admin retention job documented. |
 | P2 | Add frontend disclaimer and confidence language. | `StatisticsWorkspace.vue` | Visual text clearly says analysis is advisory. |
 
@@ -143,6 +144,8 @@ APP_LEDGER_AI_PROVIDER=lmstudio
 APP_LEDGER_AI_MODEL=gemma4:e12b
 APP_LEDGER_AI_LMSTUDIO_BASE_URL=http://172.18.240.1:1234
 APP_LEDGER_AI_LMSTUDIO_CHAT_PATH=/api/v1/chat
+APP_LEDGER_AI_ENFORCE_PROVIDER_URL_ALLOWLIST=true
+APP_LEDGER_AI_ALLOWED_PROVIDER_HOSTS=172.18.240.1
 ```
 
 If LM Studio is switched to its OpenAI-compatible endpoint, use:
@@ -163,6 +166,8 @@ APP_LEDGER_AI_PROVIDER=n8n
 APP_LEDGER_AI_WORKFLOW_URL=http://127.0.0.1:5678/webhook/travelledger-ledger-ai
 APP_LEDGER_AI_API_KEY=<same value as TRAVELLEDGER_AI_WEBHOOK_KEY>
 APP_LEDGER_AI_API_KEY_HEADER=X-TravelLedger-AI-Key
+APP_LEDGER_AI_ENFORCE_PROVIDER_URL_ALLOWLIST=true
+APP_LEDGER_AI_ALLOWED_PROVIDER_HOSTS=127.0.0.1,localhost
 ```
 
 ## Completion Gate for AI Changes

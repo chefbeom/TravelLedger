@@ -107,6 +107,8 @@ app:
       max-tokens: ${APP_LEDGER_AI_MAX_TOKENS:2048}
       connect-timeout: ${APP_LEDGER_AI_CONNECT_TIMEOUT:3s}
       read-timeout: ${APP_LEDGER_AI_READ_TIMEOUT:120s}
+      enforce-provider-url-allowlist: ${APP_LEDGER_AI_ENFORCE_PROVIDER_URL_ALLOWLIST:false}
+      allowed-provider-hosts: "${APP_LEDGER_AI_ALLOWED_PROVIDER_HOSTS:localhost,127.0.0.1,::1,172.18.240.1}"
   redis:
     cache:
       host: ${REDIS_CACHE_HOST:}

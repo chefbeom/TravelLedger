@@ -1,6 +1,9 @@
-package com.playdata.calen.ledger.ai;
+﻿package com.playdata.calen.ledger.ai;
 
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.time.Duration;
+import java.util.Locale;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.stereotype.Component;
 
@@ -21,6 +24,8 @@ public class LedgerAiAnalysisProperties {
     private int maxTokens = 2048;
     private Duration connectTimeout = Duration.ofSeconds(3);
     private Duration readTimeout = Duration.ofSeconds(120);
+    private boolean enforceProviderUrlAllowlist = false;
+    private String allowedProviderHosts = "localhost,127.0.0.1,::1,172.18.240.1";
 
     public boolean isEnabled() {
         return enabled;
@@ -137,8 +142,24 @@ public class LedgerAiAnalysisProperties {
         this.readTimeout = readTimeout;
     }
 
+    public boolean isEnforceProviderUrlAllowlist() {
+        return enforceProviderUrlAllowlist;
+    }
+
+    public void setEnforceProviderUrlAllowlist(boolean enforceProviderUrlAllowlist) {
+        this.enforceProviderUrlAllowlist = enforceProviderUrlAllowlist;
+    }
+
+    public String getAllowedProviderHosts() {
+        return allowedProviderHosts;
+    }
+
+    public void setAllowedProviderHosts(String allowedProviderHosts) {
+        this.allowedProviderHosts = allowedProviderHosts;
+    }
+
     public boolean isWorkflowConfigured() {
-        return workflowUrl != null && !workflowUrl.isBlank();
+        return hasText(workflowUrl) && isProviderUrlAllowed(workflowUrl);
     }
 
     public boolean isApiKeyConfigured() {
@@ -146,7 +167,7 @@ public class LedgerAiAnalysisProperties {
     }
 
     public boolean isLmStudioConfigured() {
-        return hasText(lmStudioBaseUrl) && hasText(model);
+        return hasText(lmStudioBaseUrl) && hasText(model) && isProviderUrlAllowed(lmStudioBaseUrl);
     }
 
     public boolean isConfigured() {
@@ -164,18 +185,63 @@ public class LedgerAiAnalysisProperties {
             return "AI 분석 기능이 비활성화되어 있습니다. APP_LEDGER_AI_ENABLED=true로 설정하세요.";
         }
         if (provider() == LedgerAiProvider.LMSTUDIO) {
-            if (!isLmStudioConfigured()) {
+            if (!hasText(lmStudioBaseUrl) || !hasText(model)) {
                 return "LM Studio 연결 정보가 부족합니다. APP_LEDGER_AI_LMSTUDIO_BASE_URL과 APP_LEDGER_AI_MODEL을 설정하세요.";
+            }
+            if (!isProviderUrlAllowed(lmStudioBaseUrl)) {
+                return "LM Studio 호스트가 AI provider allowlist에 없습니다. APP_LEDGER_AI_ALLOWED_PROVIDER_HOSTS를 확인하세요.";
             }
             return "LM Studio AI 분석 준비가 완료되었습니다.";
         }
-        if (!isWorkflowConfigured()) {
+        if (!hasText(workflowUrl)) {
             return "n8n 웹훅 URL이 설정되지 않았습니다. APP_LEDGER_AI_WORKFLOW_URL을 설정하세요.";
+        }
+        if (!isProviderUrlAllowed(workflowUrl)) {
+            return "n8n 웹훅 호스트가 AI provider allowlist에 없습니다. APP_LEDGER_AI_ALLOWED_PROVIDER_HOSTS를 확인하세요.";
         }
         if (!isApiKeyConfigured()) {
             return "n8n 웹훅 API 키가 비어 있습니다. 마지막 설정 단계에서 APP_LEDGER_AI_API_KEY를 입력할 수 있습니다.";
         }
         return "n8n AI 분석 준비가 완료되었습니다.";
+    }
+
+    public boolean isProviderUrlAllowed(String value) {
+        if (!enforceProviderUrlAllowlist) {
+            return true;
+        }
+        String host = normalizeHost(extractHost(value));
+        if (!hasText(host)) {
+            return false;
+        }
+        for (String allowedHost : safeText(allowedProviderHosts).split(",")) {
+            if (host.equals(normalizeHost(allowedHost))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private String extractHost(String value) {
+        if (!hasText(value)) {
+            return "";
+        }
+        try {
+            return new URI(value.trim()).getHost();
+        } catch (URISyntaxException exception) {
+            return "";
+        }
+    }
+
+    private String normalizeHost(String value) {
+        String host = safeText(value).trim();
+        if (host.startsWith("[") && host.endsWith("]")) {
+            host = host.substring(1, host.length() - 1);
+        }
+        return host.toLowerCase(Locale.ROOT);
+    }
+
+    private String safeText(String value) {
+        return value == null ? "" : value;
     }
 
     private boolean hasText(String value) {

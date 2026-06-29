@@ -27,6 +27,7 @@ const props = defineProps({
 const emit = defineEmits(['update:modelValue'])
 
 const slots = computed(() => Array.from({ length: props.length }, (_, index) => props.modelValue[index] || ''))
+const progressLabel = computed(() => ${props.modelValue.length} of  PIN digits entered)
 
 const keypadRows = [
   ['1', '2', '3'],
@@ -57,13 +58,13 @@ function clearDigits() {
 </script>
 
 <template>
-  <div class="pin-pad" :class="{ 'pin-pad--disabled': disabled }">
+  <div class="pin-pad" :class="{ 'pin-pad--disabled': disabled }" role="group" :aria-label="label">
     <div class="pin-pad__header">
       <span class="field__label">{{ label }}</span>
       <span class="pin-pad__progress">{{ modelValue.length }}/{{ length }}자리</span>
     </div>
 
-    <div class="pin-pad__display" @keydown.prevent>
+    <div class="pin-pad__display" role="status" aria-live="polite" :aria-label="progressLabel" @keydown.prevent>
       <span
         v-for="(slot, index) in slots"
         :key="index"
@@ -84,16 +85,17 @@ function clearDigits() {
           class="pin-pad__key"
           type="button"
           :disabled="disabled"
+          :aria-label="`PIN digit ${digit}`"
           @click="appendDigit(digit)"
         >
           {{ digit }}
         </button>
       </template>
-      <button class="pin-pad__key pin-pad__key--ghost" type="button" :disabled="disabled" @click="clearDigits">
+      <button class="pin-pad__key pin-pad__key--ghost" type="button" :disabled="disabled" aria-label="Clear PIN digits" @click="clearDigits">
         전체삭제
       </button>
-      <button class="pin-pad__key" type="button" :disabled="disabled" @click="appendDigit('0')">0</button>
-      <button class="pin-pad__key pin-pad__key--ghost" type="button" :disabled="disabled" @click="removeDigit">
+      <button class="pin-pad__key" type="button" :disabled="disabled" aria-label="PIN digit 0" @click="appendDigit('0')">0</button>
+      <button class="pin-pad__key pin-pad__key--ghost" type="button" :disabled="disabled" aria-label="Delete last PIN digit" @click="removeDigit">
         지우기
       </button>
     </div>

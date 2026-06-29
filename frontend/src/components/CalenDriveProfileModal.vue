@@ -347,7 +347,7 @@ watch(
                   </label>
                   <label class="field">
                     <span class="field__label">새 비밀번호 확인</span>
-                    <input v-model="security.confirmPassword" type="password" />
+                    <input v-model="security.confirmPassword" type="password" autocomplete="new-password" />
                   </label>
                   <label class="field">
                     <span class="field__label">새 2차 비밀번호</span>
@@ -355,7 +355,7 @@ watch(
                   </label>
                   <label class="field">
                     <span class="field__label">새 2차 비밀번호 확인</span>
-                    <input v-model="security.confirmSecondaryPin" type="password" inputmode="numeric" maxlength="8" />
+                    <input v-model="security.confirmSecondaryPin" type="password" inputmode="numeric" autocomplete="new-password" pattern="[0-9]*" maxlength="8" />
                   </label>
                 </div>
 

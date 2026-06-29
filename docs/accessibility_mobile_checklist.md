@@ -1,6 +1,6 @@
 # Accessibility and Mobile UX Checklist
 
-Updated: 2026-06-29
+Updated: 2026-06-30
 
 This checklist turns the accessibility/mobile UX improvement track into reviewable release criteria. Use it for dashboard drag widgets, maps, CalenDrive, dialogs, PIN/auth screens, upload flows, OCR, and AI report screens.
 
@@ -8,7 +8,7 @@ This checklist turns the accessibility/mobile UX improvement track into reviewab
 
 | Priority | Area | Main risk | First acceptable slice |
 | --- | --- | --- | --- |
-| P0 | Login, PIN, session expiry | Users can be locked out or unable to recover from errors. | Keyboard-only login/PIN flow, visible focus, clear error text, touch-safe controls. |
+| P0 | Login, PIN, session expiry | Users can be locked out or unable to recover from errors. | Keyboard-only login/PIN flow, visible focus, clear error text, touch-safe controls, mobile numeric PIN entry hints, and screen-reader PIN keypad progress. |
 | P0 | Admin dialogs and destructive actions | Focus loss or unclear confirmation can cause unsafe actions. | Focus trap, Escape/Cancel path, action-specific confirmation copy. |
 | P1 | Dashboard drag widgets | Drag-only layout blocks keyboard and touch assistive users. | Add non-drag reorder controls and reset-layout action. |
 | P1 | Drive/share/file upload | File pickers and share dialogs often miss labels and status updates. | Labeled controls, upload progress text, link expiry/revoke state announced. |
@@ -40,6 +40,13 @@ This checklist turns the accessibility/mobile UX improvement track into reviewab
 4. Trigger one validation error and one async failure state.
 5. Confirm focus lands on useful content after navigation, modal close, upload completion, and failed AI/OCR actions.
 6. Record gaps in the roadmap or issue tracker with the affected screen and checklist row.
+
+## Current Evidence
+
+| Area | Evidence |
+| --- | --- |
+| Login and invite PIN keypad | PinPadInput.vue exposes the keypad as a labelled group, gives digit/clear/delete buttons accessible names, and announces PIN entry progress without exposing digits. |
+| Profile and CalenDrive security PIN forms | PIN inputs use numeric input mode, numeric pattern hints, max length, and autocomplete hints so mobile keyboards and password managers behave predictably. |
 
 ## Implementation Queue
 

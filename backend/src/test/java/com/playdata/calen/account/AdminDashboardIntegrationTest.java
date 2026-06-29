@@ -10,6 +10,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.servlet.http.Cookie;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
@@ -20,6 +21,7 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockHttpSession;
+import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
@@ -169,7 +171,7 @@ class AdminDashboardIntegrationTest {
                                 "rememberDevice", false
                         ))))
                 .andExpect(status().isUnauthorized())
-                .andExpect(jsonPath("$.message").value("濡쒓렇???뺣낫媛 ?щ컮瑜댁? ?딆뒿?덈떎."));
+                .andExpect(jsonPath("$.message").value("\uB85C\uADF8\uC778 \uC815\uBCF4\uAC00 \uC62C\uBC14\uB974\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4."));
 
         mockMvc.perform(get("/api/admin/login-audit-logs").session(adminSession))
                 .andExpect(status().isOk())

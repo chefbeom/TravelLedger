@@ -96,6 +96,18 @@ $requiredMigrationSnippets = @{
         'ADD INDEX IF NOT EXISTS idx_category_groups_owner_active_type (owner_id, active, entry_type)',
         'ADD INDEX IF NOT EXISTS idx_payment_methods_owner_active (owner_id, active)'
     )
+    'V20260630_013__ledger_ai_analysis_history_base.sql' = @(
+        'CREATE TABLE IF NOT EXISTS ledger_ai_analysis_histories',
+        'owner_id BIGINT NOT NULL',
+        'request_payload_json LONGTEXT NULL',
+        'result_json LONGTEXT NULL',
+        'provider VARCHAR(40) NOT NULL DEFAULT ''unknown''',
+        'ADD COLUMN IF NOT EXISTS provider VARCHAR(40) NOT NULL DEFAULT ''unknown''',
+        'ADD INDEX IF NOT EXISTS idx_ledger_ai_history_owner_created (owner_id, created_at, id)',
+        'ADD INDEX IF NOT EXISTS idx_ledger_ai_history_owner_range (owner_id, from_date, to_date)',
+        'ADD INDEX IF NOT EXISTS idx_ledger_ai_history_owner_mode (owner_id, mode, period_type)',
+        'ADD INDEX IF NOT EXISTS idx_ledger_ai_history_owner_provider_model_range (owner_id, provider, model, mode, period_type, from_date, to_date, created_at)'
+    )
 }
 foreach ($entry in $requiredMigrationSnippets.GetEnumerator()) {
     $migrationPath = Join-Path $migrationRoot $entry.Key

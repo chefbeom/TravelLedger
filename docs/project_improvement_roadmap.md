@@ -39,7 +39,7 @@ This roadmap turns the current improvement analysis into an implementation queue
 | --- | --- | --- | --- |
 | AI ledger coach | Turns monthly reports into ongoing guidance. | Add risk spend, recurring spend, budget-overrun forecast fields to AI output. | UI shows forecast and action list without mutating ledger data. |
 | Auto classification rules | Improves OCR/Excel import speed and consistency. | User-defined merchant/title keyword rules with preview. | Import preview applies explainable rules before save. |
-| Transaction anomaly detection | Catches duplicate, unusual, and out-of-context spending. | Deterministic detector for duplicate same-day/same-amount entries. | Anomaly panel flags examples with dismiss action. |
+| Transaction anomaly detection | Catches duplicate, unusual, and out-of-context spending. | Read-only duplicate detector API now flags same-day expense entries with same amount/title; next add frontend panel and dismiss workflow. | API returns user-scoped anomaly candidates without mutating ledger data. |
 | Travel timeline/story export | Combines route, photos, expenses, and memories into a shareable result. | Read-only web story for one trip. | Public/private story link renders route/photos/memories. |
 | PWA/mobile capture | OCR, travel photos, and family album are mobile-heavy. | PWA manifest and production service-worker baseline are in place; next add shared camera upload and offline draft UX. | Production frontend is installable and API/private data is excluded from service-worker caching. |
 | Drive file versioning | Makes CalenDrive safer for family use. | Version table and restore previous file version. | Uploading same file can preserve previous version. |
@@ -73,6 +73,7 @@ This roadmap turns the current improvement analysis into an implementation queue
 | `docs/pwa_mobile_capture.md` | PWA installability, service-worker cache policy, and mobile capture implementation queue. |
 | `docs/data_portability.md` | User data export API, archive contents, security rules, and next portability slices. |
 | `docs/notification_center.md` | Notification API contract, safety rules, producer queue, and test backlog. |
+| `docs/transaction_anomaly_detection.md` | Deterministic duplicate detector API, safety rules, and next anomaly detectors. |
 ## Current Automation Set
 
 | Automation | Purpose |

@@ -13595,3 +13595,510 @@ textarea {
     min-height: 96px;
   }
 }
+
+.ai-analysis-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 18px;
+  padding: 12px 14px;
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  background: var(--surface-muted);
+  color: var(--text-muted);
+}
+
+.ai-analysis-status strong {
+  color: var(--text-main);
+}
+
+.ai-analysis-status--ready {
+  border-color: rgba(18, 184, 134, 0.35);
+}
+
+.ai-analysis-layout {
+  display: grid;
+  grid-template-columns: minmax(280px, 0.82fr) minmax(360px, 1.18fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.ai-analysis-controls,
+.ai-analysis-result,
+.ai-result-section,
+.ai-history-item {
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  background: var(--surface-muted);
+}
+
+.ai-analysis-controls,
+.ai-analysis-result {
+  padding: 16px;
+}
+
+.ai-analysis-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.ai-result-card-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.ai-result-card {
+  display: grid;
+  gap: 5px;
+  min-height: 94px;
+  padding: 14px;
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  background: var(--surface-panel);
+}
+
+.ai-result-card span,
+.ai-result-card small,
+.ai-history-item span,
+.ai-history-item small {
+  color: var(--text-muted);
+}
+
+.ai-result-card strong {
+  font-size: 1.15rem;
+  color: var(--text-main);
+}
+
+.ai-result-section {
+  padding: 14px;
+}
+
+.ai-result-section h3 {
+  margin: 0 0 10px;
+  font-size: 0.95rem;
+}
+
+.ai-result-section p,
+.ai-result-section ul {
+  margin: 0;
+}
+
+.ai-result-section ul {
+  display: grid;
+  gap: 8px;
+  padding-left: 18px;
+  color: var(--text-muted);
+}
+
+.ai-result-section--summary {
+  margin-bottom: 12px;
+}
+
+.ai-result-section--report {
+  margin-bottom: 12px;
+}
+
+.ai-result-section--report p {
+  line-height: 1.7;
+  white-space: pre-line;
+}
+
+.ai-result-section--wide {
+  grid-column: 1 / -1;
+}
+
+.ai-result-section-grid,
+.ai-breakdown-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.ai-breakdown-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 0;
+  border-top: 1px solid var(--border-soft);
+}
+
+.ai-breakdown-row:first-of-type {
+  border-top: 0;
+}
+
+.ai-history-filter-grid {
+  margin-bottom: 12px;
+}
+
+.ai-history-list {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.ai-history-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 14px;
+  padding: 14px;
+}
+
+.ai-history-item > div:first-child {
+  display: grid;
+  gap: 5px;
+}
+
+.ai-history-item p {
+  margin: 0;
+  color: var(--text-muted);
+}
+
+.ai-history-item__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ai-analysis-empty {
+  padding: 18px;
+  border: 1px dashed var(--border-soft);
+  border-radius: 8px;
+}
+
+.field-grid--five {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+@media (max-width: 1080px) {
+  .ai-analysis-layout,
+  .ai-result-card-grid,
+  .ai-result-section-grid,
+  .ai-breakdown-grid,
+  .field-grid--five {
+    grid-template-columns: 1fr;
+  }
+
+  .ai-history-item {
+    grid-template-columns: 1fr;
+  }
+}
+.theme-switcher__actions {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  max-width: calc(100vw - 24px);
+}
+
+.layout-mode-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.82);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(16px);
+}
+
+.layout-mode-toggle__button {
+  min-height: 36px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-soft);
+  font-size: 0.84rem;
+  font-weight: 800;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.layout-mode-toggle__button--active {
+  background: var(--interactive-contrast-bg);
+  color: var(--interactive-contrast-text);
+}
+
+:root[data-theme='toss'] .layout-mode-toggle,
+:root[data-theme='toss'] .theme-toggle {
+  border-color: var(--toss-theme-toggle-border, rgba(79, 140, 255, 0.24));
+  background: var(--toss-theme-toggle-bg, rgba(23, 28, 37, 0.92));
+  color: var(--toss-theme-toggle-text, #dce7ff);
+}
+
+:root[data-theme='toss'] .layout-mode-toggle__button {
+  color: var(--text-soft);
+}
+
+:root[data-theme='toss'] .layout-mode-toggle__button--active {
+  background: rgba(79, 140, 255, 0.22);
+  color: var(--text);
+}
+
+:root[data-layout-mode='mobile'] body {
+  min-width: 320px;
+  overflow-x: hidden;
+}
+
+:root[data-layout-mode='mobile'] .app-shell {
+  width: 100%;
+  min-width: 0;
+  overflow-x: hidden;
+  padding-top: 82px;
+}
+
+:root[data-layout-mode='mobile'] .theme-switcher {
+  top: 10px;
+  right: 10px;
+  left: 10px;
+  gap: 8px;
+}
+
+:root[data-layout-mode='mobile'] .theme-switcher__actions {
+  width: 100%;
+  max-width: 100%;
+  gap: 6px;
+}
+
+:root[data-layout-mode='mobile'] .theme-toggle {
+  min-height: 36px;
+  padding: 8px 11px;
+  font-size: 0.78rem;
+}
+
+:root[data-layout-mode='mobile'] .layout-mode-toggle__button {
+  min-height: 32px;
+  padding: 0 10px;
+  font-size: 0.78rem;
+}
+
+:root[data-layout-mode='mobile'] .theme-degree-panel {
+  width: min(100%, calc(100vw - 20px));
+}
+
+:root[data-layout-mode='mobile'] .auth-shell,
+:root[data-layout-mode='mobile'] .main-shell--standalone {
+  width: 100%;
+  max-width: 560px;
+  margin: 0 auto;
+}
+
+:root[data-layout-mode='mobile'] .auth-shell {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 14px;
+  padding: 12px;
+}
+
+:root[data-layout-mode='mobile'] .auth-copy,
+:root[data-layout-mode='mobile'] .auth-card,
+:root[data-layout-mode='mobile'] .panel,
+:root[data-layout-mode='mobile'] .summary-card,
+:root[data-layout-mode='mobile'] .compare-card,
+:root[data-layout-mode='mobile'] .insight-card {
+  padding: 16px;
+  border-radius: 18px;
+}
+
+:root[data-layout-mode='mobile'] .main-shell {
+  min-width: 0;
+  gap: 12px;
+  padding: 16px 12px 24px;
+}
+
+:root[data-layout-mode='mobile'] .main-shell--standalone {
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+:root[data-layout-mode='mobile'] .main-shell--standalone .topbar,
+:root[data-layout-mode='mobile'] .topbar {
+  align-items: stretch;
+  flex-direction: column;
+  gap: 12px;
+}
+
+:root[data-layout-mode='mobile'] .main-shell--standalone .topbar {
+  padding: 12px;
+  border-radius: 14px;
+}
+
+:root[data-layout-mode='mobile'] .topbar__copy {
+  width: 100%;
+}
+
+:root[data-layout-mode='mobile'] .main-shell--standalone .topbar h1,
+:root[data-layout-mode='mobile'] .topbar h1 {
+  font-size: 1rem;
+  line-height: 1.25;
+}
+
+:root[data-layout-mode='mobile'] .topbar__nav {
+  width: 100%;
+  justify-content: flex-start;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  padding-bottom: 2px;
+  scrollbar-width: thin;
+}
+
+:root[data-layout-mode='mobile'] .topbar__nav-button {
+  flex: 0 0 auto;
+  min-height: 36px;
+  padding: 0 12px;
+}
+
+:root[data-layout-mode='mobile'] .topbar__actions {
+  width: 100%;
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+:root[data-layout-mode='mobile'] .topbar__actions .button {
+  flex: 1 1 120px;
+  min-height: 38px;
+}
+
+:root[data-layout-mode='mobile'] .content-grid,
+:root[data-layout-mode='mobile'] .content-grid--calendar,
+:root[data-layout-mode='mobile'] .content-grid--stats,
+:root[data-layout-mode='mobile'] .content-grid--travel,
+:root[data-layout-mode='mobile'] .content-grid--travel-records,
+:root[data-layout-mode='mobile'] .summary-grid,
+:root[data-layout-mode='mobile'] .insight-grid,
+:root[data-layout-mode='mobile'] .profile-summary-grid,
+:root[data-layout-mode='mobile'] .family-album-summary-grid,
+:root[data-layout-mode='mobile'] .travel-summary-grid,
+:root[data-layout-mode='mobile'] .travel-visit-grid,
+:root[data-layout-mode='mobile'] .travel-exchange-result,
+:root[data-layout-mode='mobile'] .travel-media-upload-grid,
+:root[data-layout-mode='mobile'] .travel-media-summary-grid,
+:root[data-layout-mode='mobile'] .travel-media-grid,
+:root[data-layout-mode='mobile'] .travel-media-grid--gallery,
+:root[data-layout-mode='mobile'] .travel-plan-card-grid,
+:root[data-layout-mode='mobile'] .travel-pending-grid,
+:root[data-layout-mode='mobile'] .search-grid,
+:root[data-layout-mode='mobile'] .search-bulk-toolbar,
+:root[data-layout-mode='mobile'] .stats-toolbar__fields,
+:root[data-layout-mode='mobile'] .manager-grid,
+:root[data-layout-mode='mobile'] .household-travel-ledger__connection-main,
+:root[data-layout-mode='mobile'] .household-travel-ledger__plan-form,
+:root[data-layout-mode='mobile'] .household-travel-ledger__types,
+:root[data-layout-mode='mobile'] .household-travel-ledger__summary,
+:root[data-layout-mode='mobile'] .household-travel-ledger__content,
+:root[data-layout-mode='mobile'] .travel-form-grid,
+:root[data-layout-mode='mobile'] .travel-location-filter,
+:root[data-layout-mode='mobile'] .chart-grid--overview,
+:root[data-layout-mode='mobile'] .chart-grid--insights,
+:root[data-layout-mode='mobile'] .chart-grid--travel,
+:root[data-layout-mode='mobile'] .field-grid--five,
+:root[data-layout-mode='mobile'] .ai-analysis-layout,
+:root[data-layout-mode='mobile'] .ai-result-card-grid,
+:root[data-layout-mode='mobile'] .ai-result-section-grid,
+:root[data-layout-mode='mobile'] .ai-breakdown-grid,
+:root[data-layout-mode='mobile'] .entry-editor__fields,
+:root[data-layout-mode='mobile'] .entry-editor__category-grid,
+:root[data-layout-mode='mobile'] .entry-editor__field-row--date-time,
+:root[data-layout-mode='mobile'] .entry-editor__field-row--classification,
+:root[data-layout-mode='mobile'] .travel-my-photos__filters,
+:root[data-layout-mode='mobile'] .travel-my-photos__search,
+:root[data-layout-mode='mobile'] .travel-my-photos__grid,
+:root[data-layout-mode='mobile'] .travel-my-photos__detail,
+:root[data-layout-mode='mobile'] .travel-my-photos__modal-body,
+:root[data-layout-mode='mobile'] .household-entry-summary-grid,
+:root[data-layout-mode='mobile'] .household-ledger-grid,
+:root[data-layout-mode='mobile'] .drive-dashboard__summary,
+:root[data-layout-mode='mobile'] .drive-layout,
+:root[data-layout-mode='mobile'] .drive-browser-actions,
+:root[data-layout-mode='mobile'] .drive-selection-bar,
+:root[data-layout-mode='mobile'] .drive-topbar,
+:root[data-layout-mode='mobile'] .drive-topbar__search,
+:root[data-layout-mode='mobile'] .drive-topbar__actions {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+:root[data-layout-mode='mobile'] .calendar-toolbar {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+:root[data-layout-mode='mobile'] .calendar {
+  width: 100%;
+  min-width: 0;
+  gap: 8px;
+}
+
+:root[data-layout-mode='mobile'] .calendar__weeks,
+:root[data-layout-mode='mobile'] .calendar__weekdays,
+:root[data-layout-mode='mobile'] .calendar__week {
+  gap: 6px;
+}
+
+:root[data-layout-mode='mobile'] .calendar__day {
+  min-height: 118px;
+  gap: 6px;
+  padding: 8px;
+}
+
+:root[data-layout-mode='mobile'] .calendar__expense-total {
+  font-size: 0.96rem;
+}
+
+:root[data-layout-mode='mobile'] .calendar__metric {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 4px;
+  padding: 6px;
+  font-size: 0.72rem;
+}
+
+:root[data-layout-mode='mobile'] .calendar__metric strong {
+  text-align: left;
+}
+
+:root[data-layout-mode='mobile'] .calendar-detail__item,
+:root[data-layout-mode='mobile'] .ai-history-item {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+:root[data-layout-mode='mobile'] .entry-editor,
+:root[data-layout-mode='mobile'] .workspace-stack {
+  gap: 10px;
+}
+
+:root[data-layout-mode='mobile'] .entry-editor__amount,
+:root[data-layout-mode='mobile'] .entry-editor__fields {
+  padding: 14px;
+  border-radius: 18px;
+}
+
+:root[data-layout-mode='mobile'] .amount-shortcuts {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+:root[data-layout-mode='mobile'] .amount-shortcuts__button,
+:root[data-layout-mode='mobile'] .field,
+:root[data-layout-mode='mobile'] input,
+:root[data-layout-mode='mobile'] select,
+:root[data-layout-mode='mobile'] textarea {
+  min-width: 0;
+}
+
+:root[data-layout-mode='mobile'] .travel-map--compact .travel-map__canvas,
+:root[data-layout-mode='mobile'] .travel-map__canvas,
+:root[data-layout-mode='mobile'] .travel-map--expanded .travel-map__canvas {
+  min-height: 420px;
+}
+
+@media (max-width: 760px) {
+  :root[data-layout-mode='desktop'] body,
+  :root[data-layout-mode='desktop'] .app-shell {
+    min-width: 1180px;
+    overflow-x: auto;
+  }
+}

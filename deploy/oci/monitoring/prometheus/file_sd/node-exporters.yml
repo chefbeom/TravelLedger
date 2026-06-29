@@ -1,0 +1,11 @@
+- targets:
+    - host.docker.internal:9100
+  labels:
+    server: calen-app
+    role: app
+
+- targets:
+    - 10.0.0.20:9100
+  labels:
+    server: calen-data
+    role: data

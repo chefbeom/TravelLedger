@@ -78,6 +78,7 @@ public class SecurityConfig {
                             "/api/file/public-download/*",
                             "/actuator/health",
                             "/actuator/health/**",
+                            "/actuator/prometheus",
                             "/error"
                     ).permitAll();
                     if (h2ConsoleEnabled) {

@@ -43,6 +43,7 @@ public class RestoreMaintenanceFilter extends OncePerRequestFilter {
         String uri = request.getRequestURI();
         return "OPTIONS".equalsIgnoreCase(request.getMethod())
                 || uri.startsWith("/actuator/health")
+                || uri.startsWith("/actuator/prometheus")
                 || uri.startsWith("/api/admin/data-management")
                 || uri.startsWith("/api/admin/access");
     }

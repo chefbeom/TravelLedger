@@ -1,0 +1,167 @@
+{
+    "name":  "TravelLedger Ledger AI Analysis",
+    "nodes":  [
+                  {
+                      "parameters":  {
+                                         "path":  "travelledger-ledger-ai",
+                                         "responseMode":  "lastNode",
+                                         "options":  {
+
+                                                     }
+                                     },
+                      "id":  "8d1a79a2-cb69-43b3-87be-a5f728d1265d",
+                      "name":  "TravelLedger Webhook",
+                      "type":  "n8n-nodes-base.webhook",
+                      "typeVersion":  2,
+                      "position":  [
+                                       -760,
+                                       0
+                                   ],
+                      "webhookId":  "travelledger-ledger-ai"
+                  },
+                  {
+                      "parameters":  {
+                                         "jsCode":  "const input = $input.first().json;\nconst body = input.body ?? input;\nconst headers = input.headers ?? {};\nconst expectedKey = $env.TRAVELLEDGER_AI_WEBHOOK_KEY || \u0027\u0027;\nconst providedKey = headers[\u0027x-travelledger-ai-key\u0027] || headers[\u0027X-TravelLedger-AI-Key\u0027] || \u0027\u0027;\n\nif (expectedKey \u0026\u0026 providedKey !== expectedKey) {\n  return [{ json: { skipLlm: true, ok: false, error: \u0027TravelLedger AI \\uC6F9\\uD6C5 \\uC778\\uC99D \\uD0A4\\uAC00 \\uC77C\\uCE58\\uD558\\uC9C0 \\uC54A\\uC2B5\\uB2C8\\uB2E4.\u0027 } }];\n}\n\nconst llmBaseUrl = ($env.LOCAL_LLM_BASE_URL || \u0027\u0027).trim();\nif (!llmBaseUrl) {\n  return [{ json: { skipLlm: true, ok: false, error: \u0027TravelLedger AI \\uBD84\\uC11D\\uC5D0 \\uC0AC\\uC6A9\\uD560 LOCAL_LLM_BASE_URL\\uC774 \\uC124\\uC815\\uB418\\uC9C0 \\uC54A\\uC558\\uC2B5\\uB2C8\\uB2E4.\u0027 } }];\n}\n\nconst compact = {\n  mode: body.mode,\n  periodType: body.periodType,\n  comparisonPreset: body.comparisonPreset,\n  from: body.from,\n  to: body.to,\n  compareFrom: body.compareFrom,\n  compareTo: body.compareTo,\n  overview: body.overview,\n  categoryBreakdown: body.categoryBreakdown,\n  paymentBreakdown: body.paymentBreakdown,\n  expensePaymentBreakdown: body.expensePaymentBreakdown,\n  periodComparison: body.periodComparison,\n  topExpenses: body.topExpenses,\n  recurringExpenseCandidates: body.recurringExpenseCandidates,\n  comparisonOverview: body.comparisonOverview,\n  comparisonCategoryBreakdown: body.comparisonCategoryBreakdown,\n  comparisonPaymentBreakdown: body.comparisonPaymentBreakdown,\n  comparisonExpenseEntries: body.comparisonExpenseEntries,\n};\n\nconst prompt = [\n  \u0027You are a Korean household ledger analyst for TravelLedger.\u0027,\n  \u0027Analyze only the provided ledger JSON. Do not invent missing transactions or private facts.\u0027,\n  \u0027Return JSON only. Every natural-language field must be written in Korean.\u0027,\n  body.outputContract || \u0027\u0027,\n  \u0027Ledger dataset:\u0027,\n  JSON.stringify(compact)\n].join(\u0027\\n\\n\u0027);\n\nreturn [{\n  json: {\n    skipLlm: false,\n    model: body.model || $env.LOCAL_LLM_MODEL || \u0027gemma4:e12b\u0027,\n    llmBaseUrl,\n    prompt,\n  }\n}];"
+                                     },
+                      "id":  "bdd4523a-0e10-4372-b75c-16dfc2bba7d7",
+                      "name":  "Build Prompt",
+                      "type":  "n8n-nodes-base.code",
+                      "typeVersion":  2,
+                      "position":  [
+                                       -520,
+                                       0
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "conditions":  {
+                                                            "boolean":  [
+                                                                            {
+                                                                                "value1":  "={{$json.skipLlm}}",
+                                                                                "value2":  true
+                                                                            }
+                                                                        ]
+                                                        }
+                                     },
+                      "id":  "83255daa-0bb0-47f2-a65d-33cbbd5c080d",
+                      "name":  "Skip LLM?",
+                      "type":  "n8n-nodes-base.if",
+                      "typeVersion":  1,
+                      "position":  [
+                                       -300,
+                                       0
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "method":  "POST",
+                                         "url":  "={{($json.llmBaseUrl || \u0027\u0027).replace(/\\/$/, \u0027\u0027) + \u0027/v1/chat/completions\u0027}}",
+                                         "sendHeaders":  true,
+                                         "headerParameters":  {
+                                                                  "parameters":  [
+                                                                                     {
+                                                                                         "name":  "Authorization",
+                                                                                         "value":  "={{$env.LOCAL_LLM_API_KEY ? \u0027Bearer \u0027 + $env.LOCAL_LLM_API_KEY : \u0027\u0027}}"
+                                                                                     },
+                                                                                     {
+                                                                                         "name":  "Content-Type",
+                                                                                         "value":  "application/json"
+                                                                                     }
+                                                                                 ]
+                                                              },
+                                         "sendBody":  true,
+                                         "specifyBody":  "json",
+                                         "jsonBody":  "={{JSON.stringify({ model: $json.model, temperature: 0.2, response_format: { type: \u0027json_object\u0027 }, messages: [{ role: \u0027system\u0027, content: \u0027You produce strict JSON only.\u0027 }, { role: \u0027user\u0027, content: $json.prompt }] })}}",
+                                         "options":  {
+                                                         "timeout":  120000
+                                                     }
+                                     },
+                      "id":  "28d979c4-4efe-47ce-8ed9-65f69fbf0515",
+                      "name":  "Call Local LLM",
+                      "type":  "n8n-nodes-base.httpRequest",
+                      "typeVersion":  4.2,
+                      "position":  [
+                                       -80,
+                                       120
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "jsCode":  "function fallback(value, fallbackValue) {\n  return value == null ? fallbackValue : value;\n}\n\nfunction text(value, fallbackValue = \u0027\u0027) {\n  return typeof value === \u0027string\u0027 \u0026\u0026 value.trim() ? value.trim() : fallbackValue;\n}\n\nfunction list(value, fallbackValue = []) {\n  if (Array.isArray(value)) {\n    return value.filter((item) =\u003e typeof item === \u0027string\u0027 \u0026\u0026 item.trim()).map((item) =\u003e item.trim());\n  }\n  return fallbackValue;\n}\n\nconst raw = $input.first().json;\nif (raw.ok === false) {\n  return [{ json: raw }];\n}\n\nconst content = raw.choices?.[0]?.message?.content ?? raw.message?.content ?? raw.content ?? raw.response ?? raw.text ?? raw;\nlet parsed = content;\nif (typeof content === \u0027string\u0027) {\n  const trimmed = content.trim().replace(/^```json\\s*/i, \u0027\u0027).replace(/^```\\s*/i, \u0027\u0027).replace(/```$/i, \u0027\u0027).trim();\n  parsed = JSON.parse(trimmed);\n}\n\nconst sourceReport = parsed.report ?? parsed.analysisReport ?? parsed.spendingReport ?? {};\nconst normalizedReport = {\n  keySummary: text(sourceReport.keySummary ?? sourceReport.key_summary ?? parsed.keySummary ?? parsed.summary),\n  fullReport: text(sourceReport.fullReport ?? sourceReport.full_report ?? sourceReport.report ?? parsed.fullReport ?? parsed.reportText),\n  averageAmountInsight: text(sourceReport.averageAmountInsight ?? sourceReport.average_amount_insight ?? parsed.averageAmountInsight),\n  notableSpending: list(sourceReport.notableSpending ?? sourceReport.notable_spending ?? parsed.notableSpending, list(parsed.highlights, [])),\n  regularSpending: list(sourceReport.regularSpending ?? sourceReport.regular_spending ?? parsed.regularSpending, []),\n  abnormalSpending: list(sourceReport.abnormalSpending ?? sourceReport.abnormal_spending ?? parsed.abnormalSpending, list(parsed.unusualSpendingInsights ?? parsed.unusual_spending_insights ?? parsed.warnings, [])),\n  topPaymentMethod: text(sourceReport.topPaymentMethod ?? sourceReport.top_payment_method ?? parsed.topPaymentMethod),\n  subscriptions: list(sourceReport.subscriptions ?? sourceReport.subscriptionInsights ?? parsed.subscriptions ?? parsed.subscriptionInsights, []),\n  fixedExpenses: list(sourceReport.fixedExpenses ?? sourceReport.fixed_expenses ?? parsed.fixedExpenses, list(parsed.fixedCostInsights ?? parsed.fixed_cost_insights, [])),\n  improvementActions: list(sourceReport.improvementActions ?? sourceReport.improvement_actions ?? parsed.improvementActions, list(parsed.recommendations, [])),\n  comparisonFocus: list(sourceReport.comparisonFocus ?? sourceReport.comparison_focus ?? parsed.comparisonFocus ?? parsed.comparisonInsights, list(parsed.trendInsights ?? parsed.trend_insights, [])),\n};\n\nreturn [{\n  json: {\n    ok: fallback(parsed.ok, true),\n    report: normalizedReport,\n    summary: text(parsed.summary, normalizedReport.keySummary),\n    highlights: list(parsed.highlights, normalizedReport.notableSpending),\n    warnings: list(parsed.warnings ?? parsed.risks, normalizedReport.abnormalSpending),\n    recommendations: list(parsed.recommendations, normalizedReport.improvementActions),\n    categoryInsights: list(parsed.categoryInsights ?? parsed.category_insights, []),\n    paymentInsights: list(parsed.paymentInsights ?? parsed.payment_insights, normalizedReport.topPaymentMethod ? [normalizedReport.topPaymentMethod] : []),\n    trendInsights: list(parsed.trendInsights ?? parsed.trend_insights, normalizedReport.comparisonFocus),\n    unusualSpendingInsights: list(parsed.unusualSpendingInsights ?? parsed.unusual_spending_insights ?? parsed.anomalyInsights, normalizedReport.abnormalSpending),\n    fixedCostInsights: list(parsed.fixedCostInsights ?? parsed.fixed_cost_insights ?? parsed.subscriptionInsights, [...normalizedReport.fixedExpenses, ...normalizedReport.subscriptions]),\n    nextPeriodForecast: text(parsed.nextPeriodForecast ?? parsed.next_period_forecast ?? parsed.forecast),\n    habitAssessment: text(parsed.habitAssessment ?? parsed.habit_assessment)\n  }\n}];"
+                                     },
+                      "id":  "349a7e3d-f848-402f-9c0a-bc50c1a90902",
+                      "name":  "Normalize Response",
+                      "type":  "n8n-nodes-base.code",
+                      "typeVersion":  2,
+                      "position":  [
+                                       180,
+                                       0
+                                   ]
+                  }
+              ],
+    "connections":  {
+                        "TravelLedger Webhook":  {
+                                                     "main":  [
+                                                                  [
+                                                                      {
+                                                                          "node":  "Build Prompt",
+                                                                          "type":  "main",
+                                                                          "index":  0
+                                                                      }
+                                                                  ]
+                                                              ]
+                                                 },
+                        "Build Prompt":  {
+                                             "main":  [
+                                                          [
+                                                              {
+                                                                  "node":  "Skip LLM?",
+                                                                  "type":  "main",
+                                                                  "index":  0
+                                                              }
+                                                          ]
+                                                      ]
+                                         },
+                        "Skip LLM?":  {
+                                          "main":  [
+                                                       [
+                                                           {
+                                                               "node":  "Normalize Response",
+                                                               "type":  "main",
+                                                               "index":  0
+                                                           }
+                                                       ],
+                                                       [
+                                                           {
+                                                               "node":  "Call Local LLM",
+                                                               "type":  "main",
+                                                               "index":  0
+                                                           }
+                                                       ]
+                                                   ]
+                                      },
+                        "Call Local LLM":  {
+                                               "main":  [
+                                                            [
+                                                                {
+                                                                    "node":  "Normalize Response",
+                                                                    "type":  "main",
+                                                                    "index":  0
+                                                                }
+                                                            ]
+                                                        ]
+                                           }
+                    },
+    "active":  false,
+    "settings":  {
+                     "executionOrder":  "v1"
+                 },
+    "versionId":  "17c1fbb8-8a2e-4ec9-8c2d-7b5ae2372917",
+    "meta":  {
+                 "templateCredsSetupCompleted":  true
+             },
+    "pinData":  {
+
+                },
+    "id":  "TravelLedgerLedgerAiAnalysis"
+}

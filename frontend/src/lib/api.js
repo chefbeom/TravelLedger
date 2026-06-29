@@ -233,7 +233,7 @@ export async function downloadAdminDataBackup() {
   })
 
   if (!response.ok) {
-    let message = '?붿껌??泥섎━?섎뒗 以?臾몄젣媛 諛쒖깮?덉뒿?덈떎.'
+    let message = '요청을 처리하는 중 문제가 발생했습니다.'
 
     try {
       const body = await response.json()
@@ -385,6 +385,37 @@ export function fetchCompare(anchorDate, unit, periods) {
   return request(buildUrl('/statistics/compare', { anchorDate, unit, periods }).replace(API_BASE, ''))
 }
 
+export function fetchLedgerAiAnalysisStatus() {
+  return request('/statistics/ai-analysis/status')
+}
+
+export function analyzeLedgerSpending(payload) {
+  return request('/statistics/ai-analysis', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+}
+
+export function fetchLedgerAiAnalysisHistories(params = {}) {
+  return request(buildUrl('/statistics/ai-analysis/history', params).replace(API_BASE, ''))
+}
+
+export function fetchLedgerAiAnalysisHistory(historyId) {
+  return request(`/statistics/ai-analysis/history/${historyId}`)
+}
+
+export function rerunLedgerAiAnalysis(historyId) {
+  return request(`/statistics/ai-analysis/history/${historyId}/rerun`, {
+    method: 'POST',
+  })
+}
+
+export function fetchLatestLedgerAiAnalysis(payload) {
+  return request('/statistics/ai-analysis/latest', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+}
 export function fetchEntries(from, to) {
   return request(buildUrl('/entries', { from, to }).replace(API_BASE, ''))
 }

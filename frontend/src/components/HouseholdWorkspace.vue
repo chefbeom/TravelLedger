@@ -5,6 +5,7 @@ import {
   activateCategoryGroup,
   activatePaymentMethod,
   analyzeLedgerReceipt,
+  analyzeLedgerSpending,
   bulkUpdateEntries,
   createCategoryDetail,
   createCategoryGroup,
@@ -31,6 +32,10 @@ import {
   fetchLedgerEntryHistories,
   fetchLedgerEntryHistory,
   fetchLedgerExchangeRate,
+  fetchLedgerAiAnalysisHistory,
+  fetchLedgerAiAnalysisHistories,
+  fetchLedgerAiAnalysisStatus,
+  fetchLatestLedgerAiAnalysis,
   fetchEntrySearchPage,
   fetchEntries,
   fetchHouseholdAggregatePreferences,
@@ -38,6 +43,7 @@ import {
   fetchOverview,
   fetchPaymentBreakdown,
   fetchPaymentMethodUsage,
+  rerunLedgerAiAnalysis,
   linkLedgerEntryToTravelRecord,
   fetchPaymentMethods,
   restoreEntry,
@@ -102,6 +108,7 @@ const foreignCurrencyOptions = ['USD', 'JPY', 'EUR', 'CNY', 'GBP', 'AUD', 'CAD',
 const FOREIGN_EXCHANGE_DEBOUNCE_MS = 180
 const SEARCH_PAGE_SIZE = 100
 const SEARCH_OTHER_FILTER_VALUE = '__OTHER__'
+const AI_HISTORY_PAGE_SIZE = 8
 const csvExportOptions = [
   { value: 'ALL', label: '전체 데이터' },
   { value: 'LAST_6_MONTHS', label: '최근 6개월' },
@@ -110,7 +117,6 @@ const csvExportOptions = [
   { value: 'CURRENT_VIEW', label: '현재 조회 범위' },
   { value: 'CUSTOM', label: '직접 선택' },
 ]
-
 const isLoading = ref(false)
 const isSubmitting = ref(false)
 const activeSubmit = ref('')
@@ -122,7 +128,36 @@ const householdAnchorDate = ref(today)
 const calendarAnchorDate = householdAnchorDate
 const calendarReady = ref(false)
 const statsReady = ref(false)
-
+const aiAnalysisControls = reactive({
+  mode: 'PERIOD',
+  periodType: 'MONTH',
+  comparisonPreset: 'CURRENT_MONTH_VS_PREVIOUS_MONTH',
+  anchorDate: today,
+  from: today,
+  to: today,
+  compareFrom: '',
+  compareTo: '',
+})
+const aiAnalysisHistoryFilters = reactive({
+  mode: '',
+  periodType: '',
+  createdFrom: '',
+  createdTo: '',
+  comparisonOnly: '',
+})
+const aiAnalysisStatus = ref(null)
+const aiAnalysis = ref(null)
+const aiAnalysisLoading = ref(false)
+const aiAnalysisError = ref('')
+const aiAnalysisHistoryPage = ref({
+  content: [],
+  page: 0,
+  size: AI_HISTORY_PAGE_SIZE,
+  totalElements: 0,
+  totalPages: 0,
+})
+const aiAnalysisHistoryLoading = ref(false)
+const aiAnalysisHistoryError = ref('')
 const dashboard = ref({
   anchorDate: today,
   quickStats: [],
@@ -729,8 +764,12 @@ watch(
       return
     }
 
-    if (shouldLoadStatisticsForTab(value)) {
-      await loadStatisticsData()
+    if (value === 'stats-ai') {
+      const tasks = [loadAiAnalysisHistory(0)]
+      if (!aiAnalysisStatus.value) {
+        tasks.push(loadAiAnalysisStatus())
+      }
+      await Promise.all(tasks)
     }
     if (value === 'travel-ledger' && !householdTravelPlans.value.length && !isHouseholdTravelPlanLoading.value) {
       await loadHouseholdTravelPlans()
@@ -1386,7 +1425,7 @@ async function linkTravelLedgerEntry(entry) {
     return
   }
   if (selectedPlan?.startDate && selectedPlan?.endDate && !isDateInSelectedTravelPlan(entry.entryDate)) {
-    setFeedback('', '선택한 여행 기간 안의 거래만 여행 기록으로 연결할 수 있습니다.')
+    setFeedback('', '선택한 여행 기간 밖의 거래는 여행 기록으로 연결할 수 없습니다.')
     return
   }
 
@@ -1407,7 +1446,7 @@ function openTravelRecordLocation(entry) {
   const travelPlanId = entry?.travelPlanId || selectedHouseholdTravelPlan.value?.id
   const travelRecordId = entry?.travelRecordId
   if (!travelPlanId || !travelRecordId) {
-    setFeedback('', '먼저 여행 기록에 연결된 지출을 선택해주세요.')
+    setFeedback('', '먼저 여행 기록에 연결할 지출을 선택해주세요.')
     return
   }
   emit('open-travel-record-location', {
@@ -1425,7 +1464,7 @@ function validateEntryTravelDate() {
     return
   }
   if (String(entryForm.entryDate) < String(plan.startDate) || String(entryForm.entryDate) > String(plan.endDate)) {
-    throw new Error(`여행 가계부 거래는 ${plan.startDate} - ${plan.endDate} 기간 안에서만 입력할 수 있습니다.`)
+    throw new Error(`여행 가계부 거래는 ${plan.startDate} - ${plan.endDate} 기간 안에만 입력할 수 있습니다.`)
   }
 }
 
@@ -1516,6 +1555,175 @@ async function loadStatisticsData({ route = householdTab.value } = {}) {
   }
 }
 
+function normalizeAiOptionalDate(value) {
+  const text = String(value ?? '').trim()
+  return text || null
+}
+
+function buildAiAnalysisPayload() {
+  const mode = aiAnalysisControls.mode || 'PERIOD'
+  const payload = {
+    mode,
+    anchorDate: aiAnalysisControls.anchorDate || statsControls.anchorDate || today,
+  }
+
+  if (mode === 'COMPARISON') {
+    payload.comparisonPreset = aiAnalysisControls.comparisonPreset || 'CURRENT_MONTH_VS_PREVIOUS_MONTH'
+    if (payload.comparisonPreset === 'CUSTOM') {
+      payload.periodType = aiAnalysisControls.periodType || 'CUSTOM'
+      payload.from = normalizeAiOptionalDate(aiAnalysisControls.from)
+      payload.to = normalizeAiOptionalDate(aiAnalysisControls.to)
+      payload.compareFrom = normalizeAiOptionalDate(aiAnalysisControls.compareFrom)
+      payload.compareTo = normalizeAiOptionalDate(aiAnalysisControls.compareTo)
+    }
+    return payload
+  }
+
+  payload.periodType = aiAnalysisControls.periodType || 'MONTH'
+  if (payload.periodType === 'CUSTOM') {
+    payload.from = normalizeAiOptionalDate(aiAnalysisControls.from)
+    payload.to = normalizeAiOptionalDate(aiAnalysisControls.to)
+  }
+  return payload
+}
+
+function syncAiAnalysisControls(history) {
+  if (!history) {
+    return
+  }
+  aiAnalysisControls.mode = history.mode || aiAnalysisControls.mode
+  aiAnalysisControls.periodType = history.periodType || aiAnalysisControls.periodType
+  aiAnalysisControls.comparisonPreset = history.comparisonPreset || aiAnalysisControls.comparisonPreset
+  aiAnalysisControls.anchorDate = history.to || aiAnalysisControls.anchorDate
+  aiAnalysisControls.from = history.from || aiAnalysisControls.from
+  aiAnalysisControls.to = history.to || aiAnalysisControls.to
+  aiAnalysisControls.compareFrom = history.compareFrom || ''
+  aiAnalysisControls.compareTo = history.compareTo || ''
+}
+
+function buildAiAnalysisHistoryParams(page = 0) {
+  const params = {
+    page,
+    size: AI_HISTORY_PAGE_SIZE,
+  }
+  if (aiAnalysisHistoryFilters.mode) {
+    params.mode = aiAnalysisHistoryFilters.mode
+  }
+  if (aiAnalysisHistoryFilters.periodType) {
+    params.periodType = aiAnalysisHistoryFilters.periodType
+  }
+  if (aiAnalysisHistoryFilters.createdFrom) {
+    params.createdFrom = aiAnalysisHistoryFilters.createdFrom
+  }
+  if (aiAnalysisHistoryFilters.createdTo) {
+    params.createdTo = aiAnalysisHistoryFilters.createdTo
+  }
+  if (aiAnalysisHistoryFilters.comparisonOnly !== '') {
+    params.comparisonOnly = aiAnalysisHistoryFilters.comparisonOnly === 'true'
+  }
+  return params
+}
+
+async function loadAiAnalysisStatus() {
+  try {
+    aiAnalysisStatus.value = await fetchLedgerAiAnalysisStatus()
+  } catch (error) {
+    aiAnalysisStatus.value = {
+      enabled: false,
+      configured: false,
+      workflowConfigured: false,
+      apiKeyConfigured: false,
+      model: 'gemma4:e12b',
+      message: error.message || 'AI 분석 설정 상태를 불러오지 못했습니다.',
+    }
+  }
+}
+
+async function loadAiAnalysisHistory(page = 0) {
+  aiAnalysisHistoryLoading.value = true
+  aiAnalysisHistoryError.value = ''
+  try {
+    aiAnalysisHistoryPage.value = await fetchLedgerAiAnalysisHistories(buildAiAnalysisHistoryParams(page))
+  } catch (error) {
+    aiAnalysisHistoryError.value = error.message || 'AI 분석 기록을 불러오지 못했습니다.'
+  } finally {
+    aiAnalysisHistoryLoading.value = false
+  }
+}
+
+async function loadLatestAiAnalysis() {
+  aiAnalysisLoading.value = true
+  aiAnalysisError.value = ''
+  setFeedback()
+  try {
+    if (!aiAnalysisStatus.value) {
+      await loadAiAnalysisStatus()
+    }
+    const detail = await fetchLatestLedgerAiAnalysis(buildAiAnalysisPayload())
+    if (detail?.result) {
+      aiAnalysis.value = detail.result
+      syncAiAnalysisControls(detail.history)
+    } else {
+      aiAnalysisError.value = '같은 조건으로 저장된 AI 분석 기록이 없습니다.'
+    }
+  } catch (error) {
+    aiAnalysisError.value = error.message || '기존 AI 분석 결과를 불러오지 못했습니다.'
+  } finally {
+    aiAnalysisLoading.value = false
+  }
+}
+
+async function openAiAnalysisHistory(historyId) {
+  if (!historyId) {
+    return
+  }
+  aiAnalysisLoading.value = true
+  aiAnalysisError.value = ''
+  try {
+    const detail = await fetchLedgerAiAnalysisHistory(historyId)
+    aiAnalysis.value = detail?.result ?? null
+    syncAiAnalysisControls(detail?.history)
+  } catch (error) {
+    aiAnalysisError.value = error.message || 'AI 분석 기록을 열지 못했습니다.'
+  } finally {
+    aiAnalysisLoading.value = false
+  }
+}
+
+async function requestAiAnalysis() {
+  aiAnalysisLoading.value = true
+  aiAnalysisError.value = ''
+  setFeedback()
+  try {
+    if (!aiAnalysisStatus.value) {
+      await loadAiAnalysisStatus()
+    }
+    const payload = buildAiAnalysisPayload()
+    aiAnalysis.value = await analyzeLedgerSpending(payload)
+    await loadAiAnalysisHistory(0)
+  } catch (error) {
+    aiAnalysisError.value = error.message || 'AI 분석 요청을 처리하지 못했습니다.'
+  } finally {
+    aiAnalysisLoading.value = false
+  }
+}
+
+async function rerunAiAnalysis(historyId) {
+  if (!historyId) {
+    return
+  }
+  aiAnalysisLoading.value = true
+  aiAnalysisError.value = ''
+  setFeedback()
+  try {
+    aiAnalysis.value = await rerunLedgerAiAnalysis(historyId)
+    await loadAiAnalysisHistory(0)
+  } catch (error) {
+    aiAnalysisError.value = error.message || 'AI 분석 재요청을 처리하지 못했습니다.'
+  } finally {
+    aiAnalysisLoading.value = false
+  }
+}
 function queueSearchResultsReload() {
   if (searchRequestTimerId) {
     window.clearTimeout(searchRequestTimerId)
@@ -1756,7 +1964,7 @@ async function restoreLedgerChangeHistoryPoint(history) {
   if (!historyId) {
     return
   }
-  if (!window.confirm('선택한 변경 이력의 변경 전 상태로 거래를 복구할까요? 현재 상태도 새 복구 이력으로 저장됩니다.')) {
+  if (!window.confirm('선택한 변경 이력의 변경 전 상태로 거래를 복구할까요? 현재 상태는 복구 이력으로 저장됩니다.')) {
     return
   }
 
@@ -1910,7 +2118,7 @@ async function startTravelLedgerEntry(payload = 'EXPENSE') {
   calendarAnchorDate.value = entryDate
 
   const travelGroup = normalizedEntryType === 'INCOME'
-    ? findCategoryGroupByKeywords('INCOME', ['여행', '정산', '환급', '수입', '외화'])
+    ? findCategoryGroupByKeywords('INCOME', ['여행', '정산', '환급', '수입', '환전'])
     : findCategoryGroupByKeywords('EXPENSE', ['여행', '교통', '숙박', '문화', '생활'])
   if (travelGroup?.id) {
     entryForm.categoryGroupId = String(travelGroup.id)
@@ -2169,7 +2377,7 @@ async function analyzeReceiptFile(file, documentType) {
     item.categoryText = result?.categoryText || ''
     item.timing = result?.timing || null
     updateLegacyReceiptOcrFields(result, item.suggestedEntries[0] || null, item.fileName)
-    setFeedback('거래 이미지 분석이 완료됐습니다. 완료된 항목을 검토한 뒤 입력칸에 적용해 주세요.')
+    setFeedback('거래 이미지 분석이 완료되었습니다. 결과를 확인한 뒤 입력칸에 적용해 주세요.')
   } catch (error) {
     item.status = 'error'
     item.error = error.message
@@ -2225,7 +2433,7 @@ async function analyzeReceiptImage(payload) {
     receiptOcr.paymentMethodText = result?.paymentMethodText || ''
     receiptOcr.categoryText = result?.categoryText || ''
     receiptOcr.timing = result?.timing || null
-    setFeedback('영수증 분석이 완료됐습니다. 결과를 확인한 뒤 입력칸에 적용해 주세요.')
+    setFeedback('영수증 분석이 완료되었습니다. 결과를 확인한 뒤 입력칸에 적용해 주세요.')
   } catch (error) {
     receiptOcr.error = error.message
     setFeedback('', error.message)
@@ -2268,7 +2476,7 @@ async function applyReceiptOcrSuggestion(suggestion = receiptOcr.suggestedEntry)
 
   await nextTick()
   calendarWorkspaceRef.value?.scrollToEntryEditor?.()
-  setFeedback('영수증 분석 결과를 빠른 거래 입력칸에 적용했습니다. 저장 전 금액과 분류를 확인해 주세요.')
+  setFeedback('영수증 분석 결과를 빠른 거래 입력칸에 적용했습니다. 일자와 금액, 분류를 확인해 주세요.')
 }
 
 function buildEntryPayload() {
@@ -2390,7 +2598,7 @@ function resolveCsvExportRange(preset) {
     return {
       from,
       to: today,
-      label: `최근 6개월 · ${formatDateRange(from, today)}`,
+      label: `최근 6개월 - ${formatDateRange(from, today)}`,
       isAll: false,
     }
   }
@@ -2400,7 +2608,7 @@ function resolveCsvExportRange(preset) {
     return {
       from,
       to: today,
-      label: `최근 1년 · ${formatDateRange(from, today)}`,
+      label: `최근 1년 - ${formatDateRange(from, today)}`,
       isAll: false,
     }
   }
@@ -2410,7 +2618,7 @@ function resolveCsvExportRange(preset) {
     return {
       from,
       to: today,
-      label: `최근 3년 · ${formatDateRange(from, today)}`,
+      label: `최근 3년 - ${formatDateRange(from, today)}`,
       isAll: false,
     }
   }
@@ -2419,7 +2627,7 @@ function resolveCsvExportRange(preset) {
     return {
       from: csvExportControls.customFrom,
       to: csvExportControls.customTo,
-      label: `직접 선택 · ${formatDateRange(csvExportControls.customFrom, csvExportControls.customTo)}`,
+      label: `직접 선택 - ${formatDateRange(csvExportControls.customFrom, csvExportControls.customTo)}`,
       isAll: false,
     }
   }
@@ -2427,11 +2635,10 @@ function resolveCsvExportRange(preset) {
   return {
     from: currentViewCsvRange.value.from,
     to: currentViewCsvRange.value.to,
-    label: `현재 조회 범위 · ${formatDateRange(currentViewCsvRange.value.from, currentViewCsvRange.value.to)}`,
+    label: `현재 조회 범위 - ${formatDateRange(currentViewCsvRange.value.from, currentViewCsvRange.value.to)}`,
     isAll: false,
   }
 }
-
 async function refreshLedgerViews({ forceStatistics = false } = {}) {
   await loadEntryDateRange()
   const tasks = [loadCalendarData()]
@@ -2472,10 +2679,10 @@ async function exportEntriesToCsv() {
   setFeedback()
   try {
     if (!csvExportRange.value.isAll && (!csvExportRange.value.from || !csvExportRange.value.to)) {
-      throw new Error('CSV 저장 범위를 먼저 확인해 주세요.')
+      throw new Error('CSV 조회 범위를 먼저 확인해 주세요.')
     }
     await downloadLedgerCsv(csvExportRange.value.from, csvExportRange.value.to)
-    setFeedback(`현재 로그인에 사용한 2차 비밀번호로 보호된 CSV 압축 파일을 저장했습니다. (${csvExportLabel.value})`)
+    setFeedback(`현재 로그인에 사용하는 2차 비밀번호로 보호한 CSV 압축 파일을 생성했습니다. (${csvExportLabel.value})`)
   } catch (error) {
     setFeedback('', error.message)
   } finally {
@@ -2491,7 +2698,7 @@ async function updateAggregatePreferences(widgets) {
   try {
     const response = await saveHouseholdAggregatePreferences(widgets)
     aggregateWidgetConfigs.value = Array.isArray(response?.widgets) ? response.widgets : []
-    setFeedback('사용자 설정 집계를 저장했습니다.')
+    setFeedback('사용자 지정 집계를 저장했습니다.')
   } catch (error) {
     setFeedback('', error.message)
   } finally {
@@ -2513,7 +2720,7 @@ async function submitEntry() {
         throw new Error('외화 금액을 입력해 주세요.')
       }
       if (!entryForm.exchangeRateToKrw || Number(entryForm.exchangeRateToKrw) <= 0) {
-        throw new Error('환율 정보를 불러온 뒤 저장해 주세요.')
+        throw new Error('환율 정보를 불러온 뒤 다시 시도해 주세요.')
       }
     }
     const submittedSnapshot = buildEntryFormSnapshot()
@@ -2633,7 +2840,7 @@ async function bulkUpdateSearchEntries(payload) {
     return
   }
   if (!payload.categoryGroupId && !payload.paymentMethodId) {
-    setFeedback('', '변경할 대분류나 결제수단을 선택해 주세요.')
+    setFeedback('', '변경할 분류나 결제수단을 선택해 주세요.')
     return
   }
   if (!window.confirm(`선택한 ${entryIds.length}건의 거래를 일괄 변경할까요?`)) {
@@ -2683,7 +2890,7 @@ async function emptyTrash() {
   if (!trashResults.value.length && !(trashPageInfo.value.totalElements > 0)) {
     return
   }
-  if (!window.confirm('휴지통을 비우면 더이상 복구할 수 없습니다. 정말 비우시겠습니까?')) {
+  if (!window.confirm('휴지통을 비우면 다시 복구할 수 없습니다. 정말 비우시겠습니까?')) {
     return
   }
 
@@ -2693,7 +2900,7 @@ async function emptyTrash() {
   try {
     await emptyDeletedEntries()
     await refreshLedgerViews()
-    setFeedback('휴지통을 비웠습니다. 삭제된 가계부 내역은 더이상 복구할 수 없습니다.')
+    setFeedback('휴지통을 비웠습니다. 휴지통 가계부 내역은 다시 복구할 수 없습니다.')
   } catch (error) {
     setFeedback('', error.message)
   } finally {
@@ -2801,7 +3008,7 @@ async function openClassificationDeleteModal(type, target) {
       classificationDeleteModal.usage = await fetchPaymentMethodUsage(target.id)
     }
   } catch (error) {
-    classificationDeleteModal.error = error.message || '연관 데이터를 불러오지 못했습니다.'
+    classificationDeleteModal.error = error.message || '연결 데이터를 불러오지 못했습니다.'
   } finally {
     classificationDeleteModal.isLoading = false
   }
@@ -2888,7 +3095,7 @@ async function createGroup() {
   const name = groupForm.name.trim()
   if (!name) return
   if (hasDuplicateGroupName(name, groupForm.entryType)) {
-    setFeedback('', '이미 있는 분류입니다. 숨겨진 분류는 분류 수정하기에서 복구하세요.')
+    setFeedback('', '숨김 또는 비활성 분류입니다. 숨겨진 분류는 분류 수정하기에서 복구하세요.')
     return
   }
   isSubmitting.value = true
@@ -2916,7 +3123,7 @@ async function createDetail() {
   const name = detailForm.name.trim()
   if (!detailForm.groupId || !name) return
   if (hasDuplicateDetailName(name, detailForm.groupId)) {
-    setFeedback('', '이미 있는 분류입니다. 숨겨진 분류는 분류 수정하기에서 복구하세요.')
+    setFeedback('', '숨김 또는 비활성 분류입니다. 숨겨진 분류는 분류 수정하기에서 복구하세요.')
     return
   }
   isSubmitting.value = true
@@ -2931,7 +3138,7 @@ async function createDetail() {
     detailForm.name = ''
     detailForm.displayOrder = 0
     await Promise.all([loadMetadata(), refreshLedgerViews()])
-    setFeedback('세부 카테고리를 추가했습니다.')
+    setFeedback('소분류 카테고리를 추가했습니다.')
   } catch (error) {
     setFeedback('', error.message)
   } finally {
@@ -2944,7 +3151,7 @@ async function createPayment() {
   const name = paymentForm.name.trim()
   if (!name) return
   if (hasDuplicatePaymentMethodName(name)) {
-    setFeedback('', '이미 있는 결제수단입니다. 숨겨진 결제수단은 분류 수정하기에서 복구하세요.')
+    setFeedback('', '숨김 또는 비활성 결제수단입니다. 숨겨진 결제수단은 분류 수정하기에서 복구하세요.')
     return
   }
   isSubmitting.value = true
@@ -3007,7 +3214,7 @@ async function deactivateDetail(detailId) {
   try {
     await deactivateCategoryDetail(detailId)
     await Promise.all([loadMetadata(), refreshLedgerViews()])
-    setFeedback('세부 카테고리를 비활성화했습니다.')
+    setFeedback('소분류 카테고리를 비활성화했습니다.')
   } catch (error) {
     setFeedback('', error.message)
   } finally {
@@ -3023,7 +3230,7 @@ async function activateDetail(detailId) {
   try {
     await activateCategoryDetail(detailId)
     await Promise.all([loadMetadata(), refreshLedgerViews()])
-    setFeedback('세부 카테고리를 복구했습니다.')
+    setFeedback('소분류 카테고리를 복구했습니다.')
   } catch (error) {
     setFeedback('', error.message)
   } finally {
@@ -3076,7 +3283,7 @@ async function activatePayment(paymentId) {
       <div class="panel__header">
         <div>
           <h2>가계부 전체 기능</h2>
-          <p>예전처럼 달력형 입력, 통계, 검색, 인사이트, 분류 관리 기능을 한 페이지 안에서 다시 사용할 수 있습니다.</p>
+          <p>입력, 달력, 통계, 검색, 가져오기, 분류 관리를 한 화면에서 사용합니다.</p>
         </div>
         <span class="panel__badge">{{ isLoading ? '불러오는 중' : '준비됨' }}</span>
       </div>
@@ -3084,11 +3291,11 @@ async function activatePayment(paymentId) {
       <div class="household-anchor-toolbar">
         <div class="household-anchor-toolbar__meta">
           <strong>기준 날짜</strong>
-          <span>탭을 바꿔도 같은 날짜 기준으로 달력과 통계가 유지됩니다.</span>
+          <span>달력, 입력, 통계 화면이 이 날짜를 기준으로 움직입니다.</span>
         </div>
         <div class="household-anchor-toolbar__actions">
           <label class="field">
-            <span class="field__label">조회 기준</span>
+            <span class="field__label">조회 기준일</span>
             <input :value="householdAnchorDate" type="date" @input="handleChangeHouseholdAnchorDate($event.target.value)" />
           </label>
           <button class="button button--secondary" @click="handleChangeHouseholdAnchorDate(today)">오늘</button>
@@ -3104,17 +3311,18 @@ async function activatePayment(paymentId) {
         <button class="button" :class="{ 'button--primary': householdTab === 'stats-trash' }" @click="householdTab = 'stats-trash'">휴지통</button>
         <button class="button" :class="{ 'button--primary': householdTab === 'stats-insights' }" @click="householdTab = 'stats-insights'">인사이트</button>
         <button class="button" :class="{ 'button--primary': householdTab === 'stats-compare' }" @click="householdTab = 'stats-compare'">비교</button>
+        <button class="button" :class="{ 'button--primary': householdTab === 'stats-ai' }" @click="householdTab = 'stats-ai'">AI 분석</button>
         <div ref="dataActionMenuRef" class="household-data-actions">
           <button
             class="button"
             :class="{ 'button--primary': householdTab === 'import' || dataActionMenuOpen }"
             @click.stop="toggleDataActionMenu"
           >
-            데이터 입/출
+            Data
           </button>
           <div v-if="dataActionMenuOpen" class="household-data-actions__menu" @click.stop>
             <button type="button" class="button button--ghost household-data-actions__menu-button" @click="openImportWorkspace">
-              엑셀 가져오기
+              CSV 가져오기
             </button>
             <div class="household-data-actions__divider"></div>
             <label class="field">
@@ -3134,7 +3342,7 @@ async function activatePayment(paymentId) {
               <input v-model="csvExportControls.customTo" type="date" />
             </label>
             <button class="button button--secondary household-data-actions__menu-button" :disabled="isSubmitting" @click="exportEntriesToCsv">
-              {{ isSubmitting && activeSubmit === 'export-csv' ? 'CSV 저장 중...' : `CSV로 저장하기 (${csvExportLabel})` }}
+              {{ isSubmitting && activeSubmit === 'export-csv' ? 'CSV 내보내는 중...' : `CSV 내보내기 (${csvExportLabel})` }}
             </button>
           </div>
         </div>
@@ -3266,6 +3474,15 @@ async function activatePayment(paymentId) {
       :format-full-date="formatFullDate"
       :format-date-range="formatDateRange"
       :format-time="formatTime"
+      :ai-analysis-controls="aiAnalysisControls"
+      :ai-analysis-history-filters="aiAnalysisHistoryFilters"
+      :ai-analysis-status="aiAnalysisStatus"
+      :ai-analysis="aiAnalysis"
+      :ai-analysis-loading="aiAnalysisLoading"
+      :ai-analysis-error="aiAnalysisError"
+      :ai-analysis-history-page="aiAnalysisHistoryPage"
+      :ai-analysis-history-loading="aiAnalysisHistoryLoading"
+      :ai-analysis-history-error="aiAnalysisHistoryError"
       @update-search-keyword-draft="updateSearchKeywordDraft"
       @submit-search="submitSearch"
       @change-search-page="loadSearchResults"
@@ -3276,6 +3493,11 @@ async function activatePayment(paymentId) {
       @delete-search-entry="deleteEntryFromSearch"
       @restore-trash-entry="restoreEntryFromTrash"
       @empty-trash="emptyTrash"
+      @request-ai-analysis="requestAiAnalysis"
+      @load-latest-ai-analysis="loadLatestAiAnalysis"
+      @load-ai-analysis-history="loadAiAnalysisHistory"
+      @open-ai-analysis-history="openAiAnalysisHistory"
+      @rerun-ai-analysis="rerunAiAnalysis"
     />
 
     <LedgerImportWorkspace
@@ -3328,14 +3550,14 @@ async function activatePayment(paymentId) {
 
         <div class="travel-modal__body">
           <div v-if="classificationDeleteModal.isLoading" class="classification-delete-modal__empty">
-            연관 데이터를 불러오는 중입니다.
+            연결 데이터를 불러오는 중입니다.
           </div>
 
           <template v-else>
             <div class="classification-delete-modal__summary">
               <strong>{{ classificationDeleteModal.usage?.totalCount ?? 0 }}건 연결</strong>
               <span>
-                {{ classificationDeleteModal.usage?.totalCount ? '삭제하면 아래 거래가 대체 분류로 이동합니다.' : '연결된 거래가 없어 바로 삭제할 수 있습니다.' }}
+                {{ classificationDeleteModal.usage?.totalCount ? '삭제하면 아래 거래가 미분류로 이동합니다.' : '연결된 거래가 없어 바로 삭제할 수 있습니다.' }}
               </span>
             </div>
 
@@ -3350,13 +3572,13 @@ async function activatePayment(paymentId) {
                   <span>
                     {{ formatShortDate(entry.entryDate) }}
                     <template v-if="entry.entryTime"> {{ entry.entryTime }}</template>
-                    · {{ entry.entryType === 'INCOME' ? '수입' : '지출' }}
-                    <template v-if="entry.deleted"> · 휴지통</template>
+                    - {{ entry.entryType === 'INCOME' ? '수입' : '지출' }}
+                    <template v-if="entry.deleted"> - 삭제됨</template>
                   </span>
                 </div>
                 <div>
                   <strong>{{ formatCurrency(entry.amount) }}</strong>
-                  <span>{{ entry.categoryGroupName }} / {{ entry.categoryDetailName || '미분류' }} · {{ entry.paymentMethodName }}</span>
+                  <span>{{ entry.categoryGroupName }} / {{ entry.categoryDetailName || '미분류' }} - {{ entry.paymentMethodName }}</span>
                 </div>
               </article>
               <p v-if="classificationDeleteModal.usage?.hasMore" class="classification-delete-modal__hint">
@@ -3429,14 +3651,14 @@ async function activatePayment(paymentId) {
       </section>
     </div>
 
-    <div class="household-floating-tools" aria-label="가계부 빠른 이동">
-      <button class="household-floating-tools__button" type="button" title="맨 위로 가기" @click="scrollHouseholdToTop">
+    <div class="household-floating-tools" aria-label="빠른 이동">
+      <button class="household-floating-tools__button" type="button" title="위로 이동" @click="scrollHouseholdToTop">
         위
       </button>
-      <button class="household-floating-tools__button" type="button" title="맨 아래로 가기" @click="scrollHouseholdToBottom">
+      <button class="household-floating-tools__button" type="button" title="아래로 이동" @click="scrollHouseholdToBottom">
         아래
       </button>
-      <button class="household-floating-tools__button household-floating-tools__button--accent" type="button" title="수정 이력 확인하기" @click="openLedgerChangeHistoryModal">
+      <button class="household-floating-tools__button household-floating-tools__button--accent" type="button" title="변경 이력 열기" @click="openLedgerChangeHistoryModal">
         이력
       </button>
     </div>
@@ -3447,7 +3669,7 @@ async function activatePayment(paymentId) {
           <div>
             <span class="ledger-history-modal__eyebrow">CHANGE HISTORY</span>
             <h2 id="ledger-history-title">수정 이력 확인</h2>
-            <p>검색 화면과 일괄 변경에서 수정된 거래를 확인하고 변경 전 상태로 복구할 수 있습니다.</p>
+            <p>검색 화면과 일괄 변경에서 수정한 거래를 확인하고 변경 전 상태로 복구할 수 있습니다.</p>
           </div>
           <button class="button button--ghost" type="button" @click="closeLedgerChangeHistoryModal">닫기</button>
         </div>
@@ -3457,12 +3679,12 @@ async function activatePayment(paymentId) {
         <div class="ledger-history-modal__body">
           <aside class="ledger-history-list" aria-label="수정 이력 목록">
             <div class="ledger-history-list__toolbar">
-              <strong>{{ ledgerChangeHistory.totalElements }}건</strong>
+              <strong>{{ ledgerChangeHistory.totalElements }} items</strong>
               <span>{{ ledgerChangeHistory.page + 1 }} / {{ ledgerChangeHistoryPageLabel }}</span>
             </div>
 
-            <div v-if="ledgerChangeHistory.isLoading" class="ledger-history-empty">수정 이력을 불러오는 중입니다.</div>
-            <div v-else-if="!ledgerChangeHistory.content.length" class="ledger-history-empty">아직 저장된 수정 이력이 없습니다.</div>
+            <div v-if="ledgerChangeHistory.isLoading" class="ledger-history-empty">변경 이력을 불러오는 중입니다.</div>
+            <div v-else-if="!ledgerChangeHistory.content.length" class="ledger-history-empty">저장된 변경 이력이 없습니다.</div>
             <template v-else>
               <button
                 v-for="history in ledgerChangeHistory.content"
@@ -3482,25 +3704,25 @@ async function activatePayment(paymentId) {
 
             <div class="ledger-history-list__pager">
               <button class="button button--ghost" type="button" :disabled="ledgerChangeHistory.page <= 0 || ledgerChangeHistory.isLoading" @click="loadLedgerChangeHistories(ledgerChangeHistory.page - 1)">
-                이전
+                Previous
               </button>
               <button class="button button--ghost" type="button" :disabled="ledgerChangeHistory.page + 1 >= ledgerChangeHistoryPageLabel || ledgerChangeHistory.isLoading" @click="loadLedgerChangeHistories(ledgerChangeHistory.page + 1)">
-                다음
+                Next
               </button>
             </div>
           </aside>
 
-          <section class="ledger-history-detail" aria-label="수정 이력 상세">
-            <div v-if="ledgerChangeHistory.isDetailLoading" class="ledger-history-empty">상세 변경 내용을 불러오는 중입니다.</div>
-            <div v-else-if="!ledgerChangeHistory.selected" class="ledger-history-empty">왼쪽에서 확인할 이력을 선택하세요.</div>
+          <section class="ledger-history-detail" aria-label="변경 이력 상세">
+            <div v-if="ledgerChangeHistory.isDetailLoading" class="ledger-history-empty">변경 상세를 불러오는 중입니다.</div>
+            <div v-else-if="!ledgerChangeHistory.selected" class="ledger-history-empty">확인할 변경 이력을 선택하세요.</div>
             <template v-else>
               <div class="ledger-history-detail__header">
                 <div>
                   <strong>{{ ledgerChangeHistory.selected.summary }}</strong>
-                  <span>{{ formatLedgerChangeDate(ledgerChangeHistory.selected.createdAt) }} · {{ ledgerChangeHistory.selected.entryCount }}건</span>
+                  <span>{{ formatLedgerChangeDate(ledgerChangeHistory.selected.createdAt) }} - {{ ledgerChangeHistory.selected.entryCount }}건</span>
                 </div>
                 <button class="button button--primary" type="button" :disabled="ledgerChangeHistory.isRestoring" @click="restoreLedgerChangeHistoryPoint(ledgerChangeHistory.selected)">
-                  {{ ledgerChangeHistory.isRestoring ? '복구 중...' : '이 변경 전으로 돌아가기' }}
+                  {{ ledgerChangeHistory.isRestoring ? '복구 중...' : '이 시점으로 복구' }}
                 </button>
               </div>
 
@@ -3515,7 +3737,7 @@ async function activatePayment(paymentId) {
                       <dt>{{ field.field }}</dt>
                       <dd>
                         <span>{{ formatLedgerChangeFieldValue(field.beforeValue) }}</span>
-                        <strong>→</strong>
+                        <strong>-&gt;</strong>
                         <span>{{ formatLedgerChangeFieldValue(field.afterValue) }}</span>
                       </dd>
                     </div>

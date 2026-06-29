@@ -97,6 +97,8 @@ const adminFeatureItem = {
 
 const THEME_STORAGE_KEY = 'calen-theme-mode'
 const THEME_DEGREE_STORAGE_KEY = 'calen-theme-degree'
+const LAYOUT_MODE_STORAGE_KEY = 'calen-layout-mode'
+const MOBILE_LAYOUT_QUERY = '(max-width: 760px)'
 const DEFAULT_TOSS_DEGREE = 100
 const ROUTE_LEAVE_GUARD_EVENT = 'calen-route-leave-guard'
 const DEFAULT_ROUTE_LEAVE_GUARD_MESSAGE = '페이지를 벗어나면 다시 처음부터 업로드 해야합니다.'
@@ -309,6 +311,7 @@ const themeMode = ref('default')
 const themeDegree = ref(DEFAULT_TOSS_DEGREE)
 const themeDegreePanelOpen = ref(false)
 const themeSwitcherRef = ref(null)
+const layoutMode = ref('desktop')
 const routeLeaveGuard = reactive({
   active: false,
   message: DEFAULT_ROUTE_LEAVE_GUARD_MESSAGE,
@@ -351,6 +354,10 @@ const headerNavItems = computed(() => {
   return items
 })
 const themeDegreeDisplay = computed(() => `${themeDegree.value}%`)
+const layoutModeOptions = [
+  { value: 'mobile', label: '모바일' },
+  { value: 'desktop', label: '데스크탑' },
+]
 
 let inviteRequestSequence = 0
 
@@ -512,6 +519,45 @@ function applyTheme(mode) {
   }
 }
 
+function normalizeLayoutMode(mode) {
+  return mode === 'mobile' ? 'mobile' : 'desktop'
+}
+
+function resolveInitialLayoutMode() {
+  if (typeof window === 'undefined') {
+    return 'desktop'
+  }
+
+  const storedMode = window.localStorage.getItem(LAYOUT_MODE_STORAGE_KEY)
+  if (storedMode === 'mobile' || storedMode === 'desktop') {
+    return storedMode
+  }
+
+  return window.matchMedia?.(MOBILE_LAYOUT_QUERY).matches ? 'mobile' : 'desktop'
+}
+
+function applyLayoutMode(mode, persist = true) {
+  const normalized = normalizeLayoutMode(mode)
+  layoutMode.value = normalized
+
+  if (typeof document !== 'undefined') {
+    document.documentElement.setAttribute('data-layout-mode', normalized)
+
+    const viewportMeta = document.querySelector('meta[name="viewport"]')
+    if (viewportMeta) {
+      viewportMeta.setAttribute(
+        'content',
+        normalized === 'desktop'
+          ? 'width=1280, initial-scale=1.0'
+          : 'width=device-width, initial-scale=1.0',
+      )
+    }
+  }
+
+  if (persist && typeof window !== 'undefined') {
+    window.localStorage.setItem(LAYOUT_MODE_STORAGE_KEY, normalized)
+  }
+}
 function toggleTheme() {
   applyTheme(isTossTheme.value ? 'default' : 'toss')
 }
@@ -772,6 +818,7 @@ watch([currentUser, activeRoute], ([user, route]) => {
 
 onMounted(() => {
   if (typeof window !== 'undefined') {
+    applyLayoutMode(resolveInitialLayoutMode(), false)
     themeDegree.value = clampThemeDegree(window.localStorage.getItem(THEME_DEGREE_STORAGE_KEY) ?? DEFAULT_TOSS_DEGREE)
     applyTheme(window.localStorage.getItem(THEME_STORAGE_KEY) || 'default')
   }
@@ -791,9 +838,22 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="app-shell">
+  <div class="app-shell" :data-layout-mode="layoutMode">
     <div ref="themeSwitcherRef" class="theme-switcher">
       <div class="theme-switcher__actions">
+        <div class="layout-mode-toggle" role="group" aria-label="보기 환경 전환">
+          <button
+            v-for="option in layoutModeOptions"
+            :key="option.value"
+            class="layout-mode-toggle__button"
+            :class="{ 'layout-mode-toggle__button--active': layoutMode === option.value }"
+            type="button"
+            :aria-pressed="layoutMode === option.value"
+            @click="applyLayoutMode(option.value)"
+          >
+            {{ option.label }}
+          </button>
+        </div>
         <button class="theme-toggle" type="button" @click="toggleTheme">
           {{ isTossTheme ? '기본 테마' : '토스 테마' }}
         </button>

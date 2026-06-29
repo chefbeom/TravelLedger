@@ -217,7 +217,6 @@ public interface LedgerEntryRepository extends JpaRepository<LedgerEntry, Long> 
             @Param("incomeType") com.playdata.calen.ledger.domain.EntryType incomeType,
             @Param("expenseType") com.playdata.calen.ledger.domain.EntryType expenseType
     );
-
     @Query("""
             select
                 entry.entryDate as entryDate,
@@ -242,7 +241,7 @@ public interface LedgerEntryRepository extends JpaRepository<LedgerEntry, Long> 
     @Query("""
             select
                 categoryGroup.name as groupName,
-                coalesce(categoryDetail.name, '미분류') as detailName,
+                coalesce(categoryDetail.name, '\uBBF8\uBD84\uB958') as detailName,
                 coalesce(sum(entry.amount), 0) as totalAmount,
                 count(entry) as entryCount
             from LedgerEntry entry
@@ -281,7 +280,57 @@ public interface LedgerEntryRepository extends JpaRepository<LedgerEntry, Long> 
             @Param("from") LocalDate from,
             @Param("to") LocalDate to
     );
-
+    @Query("""
+            select
+                entry.entryDate as entryDate,
+                entry.title as title,
+                entry.memo as memo,
+                entry.amount as amount,
+                categoryGroup.name as categoryGroupName,
+                categoryDetail.name as categoryDetailName,
+                paymentMethod.name as paymentMethodName
+            from LedgerEntry entry
+            join entry.categoryGroup categoryGroup
+            left join entry.categoryDetail categoryDetail
+            join entry.paymentMethod paymentMethod
+            where entry.owner.id = :userId
+              and entry.deletedAt is null
+              and entry.entryType = :entryType
+              and entry.entryDate between :from and :to
+            order by entry.entryDate asc, entry.amount desc, entry.id asc
+            """)
+    List<AiExpenseEntryAggregate> findExpenseEntriesForAiAnalysis(
+            @Param("userId") Long userId,
+            @Param("from") LocalDate from,
+            @Param("to") LocalDate to,
+            @Param("entryType") com.playdata.calen.ledger.domain.EntryType entryType
+    );
+    @Query("""
+            select
+                entry.entryDate as entryDate,
+                entry.title as title,
+                entry.memo as memo,
+                entry.amount as amount,
+                categoryGroup.name as categoryGroupName,
+                categoryDetail.name as categoryDetailName,
+                paymentMethod.name as paymentMethodName
+            from LedgerEntry entry
+            join entry.categoryGroup categoryGroup
+            left join entry.categoryDetail categoryDetail
+            join entry.paymentMethod paymentMethod
+            where entry.owner.id = :userId
+              and entry.deletedAt is null
+              and entry.entryType = :entryType
+              and entry.entryDate between :from and :to
+            order by entry.amount desc, entry.entryDate desc, entry.id desc
+            """)
+    List<AiExpenseEntryAggregate> findTopExpenseEntriesForAiAnalysis(
+            @Param("userId") Long userId,
+            @Param("from") LocalDate from,
+            @Param("to") LocalDate to,
+            @Param("entryType") com.playdata.calen.ledger.domain.EntryType entryType,
+            Pageable pageable
+    );
     @Query("""
             select coalesce(sum(entry.amount), 0)
             from LedgerEntry entry
@@ -344,5 +393,21 @@ public interface LedgerEntryRepository extends JpaRepository<LedgerEntry, Long> 
         BigDecimal getTotalAmount();
 
         long getEntryCount();
+    }
+
+    interface AiExpenseEntryAggregate {
+        LocalDate getEntryDate();
+
+        String getTitle();
+
+        String getMemo();
+
+        BigDecimal getAmount();
+
+        String getCategoryGroupName();
+
+        String getCategoryDetailName();
+
+        String getPaymentMethodName();
     }
 }

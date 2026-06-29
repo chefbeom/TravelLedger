@@ -1,4 +1,4 @@
-﻿<script setup>
+<script setup>
 import { computed, reactive, ref, watch } from 'vue'
 import BarChartCard from './BarChartCard.vue'
 import BreakdownList from './BreakdownList.vue'
@@ -20,6 +20,11 @@ const emit = defineEmits([
   'empty-trash',
   'update-search-keyword-draft',
   'submit-search',
+  'request-ai-analysis',
+  'load-latest-ai-analysis',
+  'load-ai-analysis-history',
+  'open-ai-analysis-history',
+  'rerun-ai-analysis',
 ])
 
 const props = defineProps({
@@ -123,6 +128,42 @@ const props = defineProps({
     type: Function,
     required: true,
   },
+  aiAnalysisControls: {
+    type: Object,
+    default: () => ({}),
+  },
+  aiAnalysisHistoryFilters: {
+    type: Object,
+    default: () => ({}),
+  },
+  aiAnalysisStatus: {
+    type: Object,
+    default: null,
+  },
+  aiAnalysis: {
+    type: Object,
+    default: null,
+  },
+  aiAnalysisLoading: {
+    type: Boolean,
+    default: false,
+  },
+  aiAnalysisError: {
+    type: String,
+    default: '',
+  },
+  aiAnalysisHistoryPage: {
+    type: Object,
+    default: () => ({ content: [], page: 0, size: 8, totalElements: 0, totalPages: 0 }),
+  },
+  aiAnalysisHistoryLoading: {
+    type: Boolean,
+    default: false,
+  },
+  aiAnalysisHistoryError: {
+    type: String,
+    default: '',
+  },
 })
 
 const comparisonChartItems = computed(() =>
@@ -207,6 +248,107 @@ const monthOfYearChartItems = computed(() =>
   })),
 )
 
+
+const aiPeriodOptions = [
+  { value: 'WEEK', label: '1주' },
+  { value: 'MONTH', label: '1달' },
+  { value: 'QUARTER', label: '1~3달' },
+  { value: 'HALF_YEAR', label: '6개월' },
+  { value: 'YEAR', label: '1년' },
+  { value: 'CUSTOM', label: '사용자 지정' },
+]
+const aiComparisonPresetOptions = [
+  { value: 'PREVIOUS_WEEK', label: '지난주 vs 지지난주' },
+  { value: 'CURRENT_MONTH_VS_PREVIOUS_MONTH', label: '이번 달 vs 지난달' },
+  { value: 'MONTH_VS_PREVIOUS_3_MONTHS', label: '선택 월 vs 이전 3개월' },
+  { value: 'YEAR_VS_PREVIOUS_YEAR', label: '올해 vs 작년' },
+  { value: 'CUSTOM', label: '직접 비교' },
+]
+const aiModeOptions = [
+  { value: '', label: '전체' },
+  { value: 'PERIOD', label: '기간 분석' },
+  { value: 'COMPARISON', label: '비교 분석' },
+]
+const aiComparisonOnlyOptions = [
+  { value: '', label: '전체' },
+  { value: 'true', label: '비교만' },
+  { value: 'false', label: '단일 기간' },
+]
+const aiAnalysisHistoryItems = computed(() => props.aiAnalysisHistoryPage?.content ?? [])
+const aiHistoryTotalPages = computed(() => Math.max(props.aiAnalysisHistoryPage?.totalPages ?? 0, 1))
+const isAiPeriodCustom = computed(() => props.aiAnalysisControls?.mode !== 'COMPARISON' && props.aiAnalysisControls?.periodType === 'CUSTOM')
+const isAiComparisonCustom = computed(() => props.aiAnalysisControls?.mode === 'COMPARISON' && props.aiAnalysisControls?.comparisonPreset === 'CUSTOM')
+const aiHasResult = computed(() => Boolean(props.aiAnalysis))
+const aiCompareDelta = computed(() => Number(props.aiAnalysis?.totalExpense ?? 0) - Number(props.aiAnalysis?.compareTotalExpense ?? 0))
+const aiResultCards = computed(() => {
+  if (!props.aiAnalysis) {
+    return []
+  }
+  return [
+    { label: '총 지출', value: props.formatCurrency(props.aiAnalysis.totalExpense), meta: `${props.aiAnalysis.expenseEntryCount ?? 0}건 내역` },
+    { label: '일 평균', value: props.formatCurrency(props.aiAnalysis.averageDailyExpense), meta: formatAiRange(props.aiAnalysis.from, props.aiAnalysis.to) },
+    { label: '비교 지출', value: props.formatCurrency(props.aiAnalysis.compareTotalExpense), meta: props.aiAnalysis.compareFrom ? formatAiRange(props.aiAnalysis.compareFrom, props.aiAnalysis.compareTo) : '비교 없음' },
+    { label: '증감', value: `${aiCompareDelta.value > 0 ? '+' : ''}${props.formatCurrency(aiCompareDelta.value)}`, meta: props.aiAnalysis.mode === 'COMPARISON' ? '비교 기간 대비' : '최근 흐름 기준' },
+  ]
+})
+const aiReport = computed(() => props.aiAnalysis?.report ?? {})
+const aiReportKeySummary = computed(() => aiReport.value.keySummary || props.aiAnalysis?.summary || '')
+const aiReportFullReport = computed(() => aiReport.value.fullReport || '')
+const aiIsComparisonResult = computed(() => props.aiAnalysis?.mode === 'COMPARISON')
+const aiFixedReportItems = computed(() => [
+  ...safeAiReportList('regularSpending', props.aiAnalysis?.fixedCostInsights),
+  ...safeAiReportList('fixedExpenses'),
+  ...safeAiReportList('subscriptions'),
+])
+const aiAbnormalReportItems = computed(() => safeAiReportList('abnormalSpending', [
+  ...safeAiList(props.aiAnalysis?.warnings),
+  ...safeAiList(props.aiAnalysis?.unusualSpendingInsights),
+]))
+const aiComparisonReportItems = computed(() => safeAiReportList('comparisonFocus', props.aiAnalysis?.trendInsights))
+function formatAiMode(mode) {
+  return mode === 'COMPARISON' ? '비교 분석' : '기간 분석'
+}
+
+function formatAiPeriod(periodType) {
+  return aiPeriodOptions.find((option) => option.value === periodType)?.label ?? periodType ?? '-'
+}
+
+function formatAiStatus(status) {
+  if (status === 'COMPLETED') {
+    return '완료'
+  }
+  if (status === 'FAILED') {
+    return '실패'
+  }
+  return status ?? '-'
+}
+
+function formatAiRange(from, to) {
+  if (!from || !to) {
+    return '-'
+  }
+  return `${props.formatShortDate(from)} ~ ${props.formatShortDate(to)}`
+}
+
+function formatAiCreatedAt(value) {
+  if (!value) {
+    return '-'
+  }
+  return String(value).replace('T', ' ').slice(0, 16)
+}
+
+function safeAiReportList(fieldName, fallbackItems = []) {
+  const reportItems = safeAiList(aiReport.value?.[fieldName])
+  return reportItems.length ? reportItems : safeAiList(fallbackItems)
+}
+function safeAiList(items) {
+  return Array.isArray(items) ? items.filter(Boolean) : []
+}
+
+function loadAiHistoryPage(page) {
+  const safePage = Math.max(0, Math.min(page, aiHistoryTotalPages.value - 1))
+  emit('load-ai-analysis-history', safePage)
+}
 const searchPageLabel = computed(() => Math.max(props.searchPageInfo.totalPages ?? 0, 1))
 const trashPageLabel = computed(() => Math.max(props.trashPageInfo.totalPages ?? 0, 1))
 const searchCategoryGroupOptions = computed(() =>
@@ -1061,6 +1203,236 @@ watch(
       </section>
     </template>
 
+    <template v-else-if="route === 'stats-ai'">
+      <section class="panel ai-analysis-panel">
+        <div class="panel__header">
+          <div>
+            <h2>AI 소비 분석</h2>
+            <p>선택한 가계부 기간을 n8n 워크플로우로 보내고, 반환된 분석 결과를 저장합니다.</p>
+          </div>
+          <span class="panel__badge">{{ aiAnalysisStatus?.model || 'gemma4:e12b' }}</span>
+        </div>
+
+        <div class="ai-analysis-status" :class="{ 'ai-analysis-status--ready': aiAnalysisStatus?.configured }">
+          <strong>{{ aiAnalysisStatus?.configured ? '준비됨' : '설정 필요' }}</strong>
+          <span>{{ aiAnalysisStatus?.message || 'AI 분석 실행 전 n8n 워크플로우 설정을 확인해주세요.' }}</span>
+        </div>
+
+        <div class="ai-analysis-layout">
+          <div class="ai-analysis-controls">
+            <div class="scope-toggle scope-toggle--wrap">
+              <button class="button" :class="{ 'button--primary': aiAnalysisControls.mode === 'PERIOD' }" type="button" @click="aiAnalysisControls.mode = 'PERIOD'">기간 분석</button>
+              <button class="button" :class="{ 'button--primary': aiAnalysisControls.mode === 'COMPARISON' }" type="button" @click="aiAnalysisControls.mode = 'COMPARISON'">비교 분석</button>
+            </div>
+
+            <div class="field-grid field-grid--four">
+              <label class="field">
+                <span class="field__label">기준일</span>
+                <input v-model="aiAnalysisControls.anchorDate" type="date" />
+              </label>
+              <label class="field">
+                <span class="field__label">분석 기간</span>
+                <select v-model="aiAnalysisControls.periodType">
+                  <option v-for="option in aiPeriodOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
+                </select>
+              </label>
+              <label v-if="aiAnalysisControls.mode === 'COMPARISON'" class="field field--wide">
+                <span class="field__label">비교 조건</span>
+                <select v-model="aiAnalysisControls.comparisonPreset">
+                  <option v-for="option in aiComparisonPresetOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
+                </select>
+              </label>
+            </div>
+
+            <div v-if="isAiPeriodCustom || isAiComparisonCustom" class="field-grid field-grid--four">
+              <label class="field">
+                <span class="field__label">시작일</span>
+                <input v-model="aiAnalysisControls.from" type="date" />
+              </label>
+              <label class="field">
+                <span class="field__label">종료일</span>
+                <input v-model="aiAnalysisControls.to" type="date" />
+              </label>
+              <label v-if="isAiComparisonCustom" class="field">
+                <span class="field__label">비교 시작일</span>
+                <input v-model="aiAnalysisControls.compareFrom" type="date" />
+              </label>
+              <label v-if="isAiComparisonCustom" class="field">
+                <span class="field__label">비교 종료일</span>
+                <input v-model="aiAnalysisControls.compareTo" type="date" />
+              </label>
+            </div>
+
+            <div class="ai-analysis-actions">
+              <button class="button" type="button" :disabled="aiAnalysisLoading" @click="emit('load-latest-ai-analysis')">기존 결과 불러오기</button>
+              <button class="button button--primary" type="button" :disabled="aiAnalysisLoading || aiAnalysisStatus?.configured === false" @click="emit('request-ai-analysis')">
+                {{ aiAnalysisLoading ? '분석 중...' : '분석 요청하기' }}
+              </button>
+            </div>
+            <div v-if="aiAnalysisError" class="feedback feedback--error">{{ aiAnalysisError }}</div>
+          </div>
+
+          <div class="ai-analysis-result">
+            <template v-if="aiHasResult">
+              <div class="ai-result-card-grid">
+                <article v-for="card in aiResultCards" :key="card.label" class="ai-result-card">
+                  <span>{{ card.label }}</span>
+                  <strong>{{ card.value }}</strong>
+                  <small>{{ card.meta }}</small>
+                </article>
+              </div>
+
+              <section class="ai-result-section ai-result-section--summary">
+                <h3>핵심 요약</h3>
+                <p>{{ aiReportKeySummary || '반환된 핵심 요약이 없습니다.' }}</p>
+              </section>
+
+              <section class="ai-result-section ai-result-section--report">
+                <h3>보고서</h3>
+                <p>{{ aiReportFullReport || '반환된 종합 보고서가 없습니다.' }}</p>
+              </section>
+
+              <div class="ai-result-section-grid">
+                <section class="ai-result-section">
+                  <h3>평균 금액</h3>
+                  <p>{{ aiReport.averageAmountInsight || `일 평균 지출은 ${formatCurrency(aiAnalysis.averageDailyExpense)}입니다.` }}</p>
+                </section>
+                <section class="ai-result-section">
+                  <h3>눈에 띄는 소비</h3>
+                  <ul>
+                    <li v-for="item in safeAiReportList('notableSpending', aiAnalysis.highlights)" :key="item">{{ item }}</li>
+                    <li v-if="!safeAiReportList('notableSpending', aiAnalysis.highlights).length">눈에 띄는 소비 항목이 없습니다.</li>
+                  </ul>
+                </section>
+                <section class="ai-result-section">
+                  <h3>고정/구독 지출</h3>
+                  <ul>
+                    <li v-for="item in aiFixedReportItems" :key="item">{{ item }}</li>
+                    <li v-if="!aiFixedReportItems.length">고정 지출 또는 구독 후보가 없습니다.</li>
+                  </ul>
+                </section>
+                <section class="ai-result-section">
+                  <h3>비정상 지출</h3>
+                  <ul>
+                    <li v-for="item in aiAbnormalReportItems" :key="item">{{ item }}</li>
+                    <li v-if="!aiAbnormalReportItems.length">확인이 필요한 비정상 지출 후보가 없습니다.</li>
+                  </ul>
+                </section>
+                <section class="ai-result-section">
+                  <h3>결제 방법</h3>
+                  <p>{{ aiReport.topPaymentMethod || safeAiList(aiAnalysis.paymentInsights)[0] || '결제수단 분석 결과가 없습니다.' }}</p>
+                </section>
+                <section class="ai-result-section">
+                  <h3>개선 사항</h3>
+                  <ul>
+                    <li v-for="item in safeAiReportList('improvementActions', aiAnalysis.recommendations)" :key="item">{{ item }}</li>
+                    <li v-if="!safeAiReportList('improvementActions', aiAnalysis.recommendations).length">반환된 개선 사항이 없습니다.</li>
+                  </ul>
+                </section>
+                <section v-if="aiIsComparisonResult" class="ai-result-section ai-result-section--wide">
+                  <h3>비교 핵심</h3>
+                  <ul>
+                    <li v-for="item in aiComparisonReportItems" :key="item">{{ item }}</li>
+                    <li v-if="!aiComparisonReportItems.length">비교 분석 결과가 없습니다.</li>
+                  </ul>
+                </section>
+              </div>
+              <div class="ai-breakdown-grid">
+                <section class="ai-result-section">
+                  <h3>상위 카테고리</h3>
+                  <div v-for="item in (aiAnalysis.categoryBreakdown ?? []).slice(0, 6)" :key="`${item.groupName}-${item.detailName}`" class="ai-breakdown-row">
+                    <span>{{ item.detailName ? `${item.groupName} / ${item.detailName}` : item.groupName }}</span>
+                    <strong>{{ formatCurrency(item.totalAmount) }}</strong>
+                  </div>
+                </section>
+                <section class="ai-result-section">
+                  <h3>결제수단</h3>
+                  <div v-for="item in (aiAnalysis.paymentBreakdown ?? []).slice(0, 6)" :key="`${item.paymentMethodName}-${item.kind}`" class="ai-breakdown-row">
+                    <span>{{ item.paymentMethodName }} · {{ item.kind }}</span>
+                    <strong>{{ formatCurrency(item.totalAmount) }}</strong>
+                  </div>
+                </section>
+              </div>
+            </template>
+            <div v-else class="empty-state ai-analysis-empty">
+              <strong>아직 AI 분석 결과가 없습니다.</strong>
+              <span>조건을 선택해 분석을 요청하거나 저장된 결과를 불러오세요.</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel ai-history-panel">
+        <div class="panel__header">
+          <div>
+            <h2>분석 기록</h2>
+            <p>분석 유형, 기간, 생성일, 비교 여부로 이전 분석을 조회합니다.</p>
+          </div>
+          <span class="panel__badge">{{ aiAnalysisHistoryPage?.totalElements ?? 0 }}건</span>
+        </div>
+
+        <div class="field-grid field-grid--five ai-history-filter-grid">
+          <label class="field">
+            <span class="field__label">유형</span>
+            <select v-model="aiAnalysisHistoryFilters.mode">
+              <option v-for="option in aiModeOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
+            </select>
+          </label>
+          <label class="field">
+            <span class="field__label">분석 기간</span>
+            <select v-model="aiAnalysisHistoryFilters.periodType">
+              <option value="">전체</option>
+              <option v-for="option in aiPeriodOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
+            </select>
+          </label>
+          <label class="field">
+            <span class="field__label">생성 시작일</span>
+            <input v-model="aiAnalysisHistoryFilters.createdFrom" type="date" />
+          </label>
+          <label class="field">
+            <span class="field__label">생성 종료일</span>
+            <input v-model="aiAnalysisHistoryFilters.createdTo" type="date" />
+          </label>
+          <label class="field">
+            <span class="field__label">Comparison</span>
+            <select v-model="aiAnalysisHistoryFilters.comparisonOnly">
+              <option v-for="option in aiComparisonOnlyOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="ai-analysis-actions">
+          <button class="button" type="button" :disabled="aiAnalysisHistoryLoading" @click="loadAiHistoryPage(0)">기록 검색</button>
+        </div>
+        <div v-if="aiAnalysisHistoryError" class="feedback feedback--error">{{ aiAnalysisHistoryError }}</div>
+
+        <div class="ai-history-list">
+          <article v-for="history in aiAnalysisHistoryItems" :key="history.id" class="ai-history-item">
+            <div>
+              <strong>{{ history.title }}</strong>
+              <span>{{ formatAiMode(history.mode) }} · {{ formatAiPeriod(history.periodType) }} · {{ formatAiStatus(history.status) }}</span>
+              <small>{{ formatAiRange(history.from, history.to) }}<template v-if="history.compareFrom"> vs {{ formatAiRange(history.compareFrom, history.compareTo) }}</template></small>
+              <p>{{ history.summary || history.errorMessage || '저장된 요약이 없습니다.' }}</p>
+              <small>{{ formatAiCreatedAt(history.createdAt) }}</small>
+            </div>
+            <div class="ai-history-item__actions">
+              <button class="button" type="button" @click="emit('open-ai-analysis-history', history.id)">열기</button>
+              <button class="button button--secondary" type="button" :disabled="aiAnalysisLoading || aiAnalysisStatus?.configured === false" @click="emit('rerun-ai-analysis', history.id)">재분석</button>
+            </div>
+          </article>
+          <div v-if="!aiAnalysisHistoryLoading && !aiAnalysisHistoryItems.length" class="empty-state ai-analysis-empty">
+            <strong>저장된 AI 분석 기록이 없습니다.</strong>
+            <span>먼저 분석을 요청하면 이곳에 기록됩니다.</span>
+          </div>
+        </div>
+
+        <div class="pagination-row">
+          <button class="button" type="button" :disabled="(aiAnalysisHistoryPage?.page ?? 0) <= 0" @click="loadAiHistoryPage((aiAnalysisHistoryPage?.page ?? 0) - 1)">이전</button>
+          <span>{{ (aiAnalysisHistoryPage?.page ?? 0) + 1 }} / {{ aiHistoryTotalPages }}</span>
+          <button class="button" type="button" :disabled="(aiAnalysisHistoryPage?.page ?? 0) >= aiHistoryTotalPages - 1" @click="loadAiHistoryPage((aiAnalysisHistoryPage?.page ?? 0) + 1)">다음</button>
+        </div>
+      </section>
+    </template>
     <template v-else-if="route === 'stats-compare'">
       <section class="panel">
         <div class="panel__header">

@@ -27,7 +27,7 @@ This roadmap turns the current improvement analysis into an implementation queue
 | Workstream | Why it matters | First slice | Evidence of done |
 | --- | --- | --- | --- |
 | Service decomposition | `LedgerAiAnalysisService` and `TravelService` carry many responsibilities. | Extract AI payload builder, report merger, and response validator. | Smaller classes with focused unit tests. |
-| DB migration management | `*SchemaUpdater` classes are convenient but weak for production rollback/audit. | Flyway is wired behind `DB_MIGRATION_ENABLED`; AI history provider tracking now uses a versioned migration. | New schema change has versioned migration and repeatable local start. |
+| DB migration management | `*SchemaUpdater` classes are convenient but weak for production rollback/audit. | Flyway is wired behind `DB_MIGRATION_ENABLED`; AI history provider tracking uses a versioned migration; CI now checks migration naming, duplicate versions, and baseline marker presence. | New schema change has a versioned migration, passes migration discipline check, and has repeatable local/staging startup evidence. |
 | Observability/alerts | Prometheus/Grafana exists, but alerting is the next operational jump. | Add metrics for AI/OCR failures, backup failures, Redis errors. | Grafana/Prometheus alert rules documented and tested by metric scrape. |
 | Backup reliability | Backups exist, but restore confidence matters more than backup creation. | Use `docs/backup_restore_rehearsal_runbook.md` to record restore evidence and encryption readiness. | Documented restore rehearsal with artifact name, smoke counts, cleanup, and timestamp. |
 | Accessibility/mobile UX | Drag widgets, maps, drive, modals, and PIN/auth screens have keyboard and touch risks. | Use `docs/accessibility_mobile_checklist.md` as the WCAG 2.2 release checklist. | Priority screens have keyboard, focus, target-size, and error-state evidence. |
@@ -66,7 +66,7 @@ This roadmap turns the current improvement analysis into an implementation queue
 | `docs/security_baseline_checklist.md` | Security checklist and immediate tests. |
 | `docs/ledger_ai_safety_hardening.md` | AI provider safety, failure handling, and hardening backlog. |
 | `docs/project_improvement_roadmap.md` | Prioritized roadmap for improvements and new features. |
-| `docs/db_migration_strategy.md` | Flyway transition plan and schema updater retirement queue. |
+| `docs/db_migration_strategy.md` | Flyway transition plan, current migration inventory, CI migration discipline, and schema updater retirement queue. |
 | `docs/accessibility_mobile_checklist.md` | WCAG 2.2 and mobile UX checklist for priority screens. |
 | `docs/backup_restore_rehearsal_runbook.md` | Restore rehearsal evidence, encryption readiness, and failure-handling checklist. |
 | `docs/privacy_control_panel.md` | Backend privacy controls, safety rules, response contract, and next privacy actions. |
@@ -82,3 +82,4 @@ This roadmap turns the current improvement analysis into an implementation queue
 | `.github/workflows/ci.yml` | Runs reusable secret scan, config sync, backend tests, and frontend build on push/PR. |
 | `scripts/verify-env-sync.ps1` | Fails when Spring env placeholders drift from `.env.example` or compose-only allowlist. |
 | `scripts/scan-secrets.ps1` | Fails CI on high-risk token patterns or non-placeholder sensitive env assignments. |
+| `scripts/verify-db-migrations.ps1` | Fails CI on malformed migration names, duplicate versions, or missing baseline marker. |

@@ -76,5 +76,6 @@ Before promoting a build that changes auth, admin, sharing, upload, OCR, AI, or 
 1. Run backend security-focused tests.
 2. Verify `.env.example` and `application.yml` have matching public configuration names.
 3. Run `scripts/scan-secrets.ps1` and confirm no real secrets are present in committed files.
-4. Confirm public routes are still intentionally listed in this document.
-5. Confirm operational dashboards or alerts cover the changed failure mode.
+4. Run `scripts/verify-db-migrations.ps1` when schema files change.
+5. Confirm public routes are still intentionally listed in this document.
+6. Confirm operational dashboards or alerts cover the changed failure mode.

@@ -23,6 +23,7 @@ $controller = Read-RequiredFile 'backend/src/main/java/com/playdata/calen/accoun
 $service = Read-RequiredFile 'backend/src/main/java/com/playdata/calen/account/service/DataPortabilityExportService.java'
 $serviceTest = Read-RequiredFile 'backend/src/test/java/com/playdata/calen/account/service/DataPortabilityExportServiceTest.java'
 $integrationTest = Read-RequiredFile 'backend/src/test/java/com/playdata/calen/account/PrivacyControllerIntegrationTest.java'
+$profileWorkspace = Read-RequiredFile 'frontend/src/components/ProfileWorkspace.vue'
 
 Assert-ContainsAll 'docs/data_portability.md' $contract @(
     '# Data Portability Contract',
@@ -43,7 +44,12 @@ Assert-ContainsAll 'docs/data_portability.md' $contract @(
     'presigned URLs',
     'raw latitude/longitude',
     'async job',
-    'standard CSV/Excel'
+    'standard CSV/Excel',
+    'Frontend privacy action',
+    'ProfileWorkspace.vue',
+    'privacy-data-export-card',
+    'privacy-export-secondary-pin',
+    'manifest-only archive explanation'
 )
 
 Assert-ContainsAll 'PrivacyController' $controller @(
@@ -92,6 +98,22 @@ Assert-ContainsAll 'PrivacyControllerIntegrationTest' $integrationTest @(
     'application/zip'
 )
 
+Assert-ContainsAll 'ProfileWorkspace.vue' $profileWorkspace @(
+    'profile-privacy-panel',
+    'downloadPrivacyDataExport',
+    'verifyProfileSecondaryPin(privacy.secondaryPin)',
+    'data-testid="privacy-data-export-card"',
+    'data-testid="privacy-export-from"',
+    'data-testid="privacy-export-to"',
+    'data-testid="privacy-export-open"',
+    'data-testid="privacy-export-dialog"',
+    'data-testid="privacy-export-secondary-pin"',
+    'privacy-action-result',
+    'Current archive includes ledger CSV and safe manifests only',
+    'binary photos/files require a future async export job',
+    'aria-live="assertive"'
+)
+
 Assert-ContainsAll 'docs/security_baseline_checklist.md' $securityChecklist @(
     'PORTABILITY-01',
     'docs/data_portability.md',
@@ -103,6 +125,7 @@ Assert-ContainsAll 'docs/project_improvement_roadmap.md' $roadmap @(
     'Data portability',
     'docs/data_portability.md',
     'scripts/verify-data-portability-contract.ps1',
+    'ProfileWorkspace.vue',
     'data-portability-contract'
 )
 

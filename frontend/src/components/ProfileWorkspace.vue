@@ -454,28 +454,29 @@ onMounted(() => {
         <span class="panel__badge">Secondary PIN protected</span>
       </div>
 
-      <div class="privacy-export-card">
+      <div class="privacy-export-card" data-testid="privacy-data-export-card">
         <div>
           <strong>Download my data</strong>
           <p>Download ledger CSV and export metadata as a secondary-PIN-encrypted ZIP archive.</p>
+          <small>Current archive includes ledger CSV and safe manifests only; binary photos/files require a future async export job.</small>
         </div>
         <div class="privacy-export-card__range" aria-label="Export date range">
           <label class="field">
             <span class="field__label">From</span>
-            <input v-model="privacy.exportFrom" type="date" :disabled="isPrivacyBusy" />
+            <input v-model="privacy.exportFrom" data-testid="privacy-export-from" type="date" :disabled="isPrivacyBusy" />
           </label>
           <label class="field">
             <span class="field__label">To</span>
-            <input v-model="privacy.exportTo" type="date" :disabled="isPrivacyBusy" />
+            <input v-model="privacy.exportTo" data-testid="privacy-export-to" type="date" :disabled="isPrivacyBusy" />
           </label>
         </div>
-        <button class="button button--primary" type="button" :disabled="isPrivacyBusy" @click="openPrivacyExportGate">
+        <button class="button button--primary" data-testid="privacy-export-open" type="button" :disabled="isPrivacyBusy" @click="openPrivacyExportGate">
           {{ privacy.exporting ? 'Exporting...' : 'Export data' }}
         </button>
       </div>
 
       <div class="privacy-action-grid">
-        <article v-for="action in privacyActions" :key="action.key" class="privacy-action-card">
+        <article v-for="action in privacyActions" :key="action.key" class="privacy-action-card" :data-testid="`privacy-action-${action.key}`">
           <div>
             <h3>{{ action.label }}</h3>
             <p>{{ action.description }}</p>
@@ -483,6 +484,7 @@ onMounted(() => {
           </div>
           <button
             class="button button--ghost privacy-action-card__button"
+            :data-testid="`privacy-action-run-${action.key}`"
             type="button"
             :disabled="isPrivacyBusy"
             @click="runPrivacyAction(action)"
@@ -492,10 +494,10 @@ onMounted(() => {
         </article>
       </div>
 
-      <div v-if="privacy.successMessage" class="feedback feedback--success" aria-live="polite">{{ privacy.successMessage }}</div>
-      <div v-if="privacy.errorMessage" class="feedback feedback--error" aria-live="assertive">{{ privacy.errorMessage }}</div>
+      <div v-if="privacy.successMessage" class="feedback feedback--success" data-testid="privacy-success-message" aria-live="polite">{{ privacy.successMessage }}</div>
+      <div v-if="privacy.errorMessage" class="feedback feedback--error" data-testid="privacy-error-message" aria-live="assertive">{{ privacy.errorMessage }}</div>
 
-      <div v-if="privacyResultRows.length" class="privacy-result-list" aria-live="polite">
+      <div v-if="privacyResultRows.length" class="privacy-result-list" data-testid="privacy-action-result" aria-live="polite">
         <strong>{{ privacy.lastActionLabel }} result</strong>
         <dl>
           <template v-for="row in privacyResultRows" :key="row.key">
@@ -587,7 +589,7 @@ onMounted(() => {
     </section>
 
     <div v-if="privacy.exportGateVisible" class="travel-modal" @click.self="closePrivacyExportGate">
-      <div class="travel-modal__dialog profile-security-modal" role="dialog" aria-modal="true" aria-labelledby="privacy-export-title">
+      <div class="travel-modal__dialog profile-security-modal" data-testid="privacy-export-dialog" role="dialog" aria-modal="true" aria-labelledby="privacy-export-title">
         <div class="travel-modal__header">
           <div>
             <h2 id="privacy-export-title">Confirm data export</h2>
@@ -597,11 +599,12 @@ onMounted(() => {
         </div>
 
         <div class="travel-modal__body">
-          <div v-if="privacy.errorMessage" class="feedback feedback--error">{{ privacy.errorMessage }}</div>
+          <div v-if="privacy.errorMessage" class="feedback feedback--error" data-testid="privacy-export-error-message" aria-live="assertive">{{ privacy.errorMessage }}</div>
           <label class="field">
             <span class="field__label">Current secondary PIN</span>
             <input
               v-model="privacy.secondaryPin"
+              data-testid="privacy-export-secondary-pin"
               type="password"
               inputmode="numeric"
               autocomplete="one-time-code"

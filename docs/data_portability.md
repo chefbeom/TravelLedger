@@ -68,7 +68,8 @@ Binary photos and files are intentionally not included in the current archive. T
 | Manifest safety | `buildDriveManifest`, `buildTravelMediaManifest`, `buildFamilyMediaManifest`, and `excludedFields` document the safe manifest boundary. |
 | Service tests | `DataPortabilityExportServiceTest.exportUserDataArchiveBuildsEncryptedArchiveWithoutOperationalSecrets` checks encrypted archive contents and secret exclusion. |
 | Ordering tests | `DataPortabilityExportServiceTest.exportUserDataArchiveVerifiesSecondaryPinBeforeExportingLedgerData` keeps secondary PIN verification before ledger export. |
-| API tests | `PrivacyControllerIntegrationTest.dataExportRequiresAuthenticationCsrfAndVerifiedSecondaryPin` keeps auth, CSRF, secondary PIN, and ZIP response behavior covered. |
+| API tests | PrivacyControllerIntegrationTest.dataExportRequiresAuthenticationCsrfAndVerifiedSecondaryPin keeps auth, CSRF, secondary PIN, and ZIP response behavior covered. |
+| Frontend privacy action | rontend/src/components/ProfileWorkspace.vue exposes the privacy panel, date range fields, secondary-PIN export dialog, manifest-only archive explanation, live status messages, and stable data-testid anchors such as privacy-data-export-card, privacy-export-open, and privacy-export-secondary-pin. |
 
 ## Release gate
 
@@ -86,7 +87,7 @@ A release is not ready if any of these are true:
 
 ## CI contract
 
-`scripts/verify-data-portability-contract.ps1` keeps this document synchronized with `PrivacyController`, `DataPortabilityExportService`, data portability tests, `docs/security_baseline_checklist.md`, `docs/project_improvement_roadmap.md`, and the GitHub Actions `data-portability-contract` job.
+`scripts/verify-data-portability-contract.ps1` keeps this document synchronized with `PrivacyController`, `DataPortabilityExportService`, `frontend/src/components/ProfileWorkspace.vue`, data portability tests, `docs/security_baseline_checklist.md`, `docs/project_improvement_roadmap.md`, and the GitHub Actions `data-portability-contract` job.
 
 ## Next slices
 
@@ -95,7 +96,7 @@ A release is not ready if any of these are true:
 | Async binary archive job | Add queueing, progress API, size limits, retry policy, archive expiration, and restore rehearsal evidence before including photos/files. |
 | Standard CSV/Excel export schema | Define stable column names, time zone rules, amount formats, category mapping, and manifest metadata for external tools. |
 | Standard CSV/Excel import schema | Validate rows before writes, preview conflicts, preserve owner scope, and produce an import report. |
-| Frontend privacy action | Show date range, secondary PIN state, expected archive contents, manifest-only binary limitation, and download result. |
+| Frontend E2E coverage | Drive the `ProfileWorkspace.vue` privacy panel through Playwright once disposable privacy/export fixtures are available: date range, secondary PIN dialog, manifest-only limitation, download success, and failure live regions. |
 | Restore/rehearsal runbook | Prove exported data can be interpreted safely without secrets or object storage internals. |
 
 ## Test backlog

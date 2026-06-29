@@ -29,7 +29,7 @@ This roadmap turns the current improvement analysis into an implementation queue
 | Service decomposition | `LedgerAiAnalysisService` and `TravelService` carry many responsibilities. | Extract AI payload builder, report merger, and response validator. | Smaller classes with focused unit tests. |
 | DB migration management | `*SchemaUpdater` classes are convenient but weak for production rollback/audit. | Flyway is wired behind `DB_MIGRATION_ENABLED`; convert schema changes one area at a time. | New schema change has versioned migration and repeatable local start. |
 | Observability/alerts | Prometheus/Grafana exists, but alerting is the next operational jump. | Add metrics for AI/OCR failures, backup failures, Redis errors. | Grafana/Prometheus alert rules documented and tested by metric scrape. |
-| Backup reliability | Backups exist, but restore confidence matters more than backup creation. | Add restore rehearsal checklist and encrypted artifact option. | Documented restore test with timestamped result. |
+| Backup reliability | Backups exist, but restore confidence matters more than backup creation. | Use `docs/backup_restore_rehearsal_runbook.md` to record restore evidence and encryption readiness. | Documented restore rehearsal with artifact name, smoke counts, cleanup, and timestamp. |
 | Accessibility/mobile UX | Drag widgets, maps, drive, modals, and PIN/auth screens have keyboard and touch risks. | Use `docs/accessibility_mobile_checklist.md` as the WCAG 2.2 release checklist. | Priority screens have keyboard, focus, target-size, and error-state evidence. |
 | CI gates | Manual checks are easy to skip. | Run backend test, frontend build, secret scan, and config sync in GitHub Actions. | Push triggers automated gates. |
 

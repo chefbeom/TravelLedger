@@ -12,10 +12,14 @@ $serviceTestPath = 'backend/src/test/java/com/playdata/calen/account/service/Use
 $frontendPath = 'frontend/src/components/NotificationCenterWorkspace.vue'
 $appPath = 'frontend/src/App.vue'
 $apiPath = 'frontend/src/lib/api.js'
+$ocrServicePath = 'backend/src/main/java/com/playdata/calen/ledger/ocr/LedgerOcrService.java'
+$ocrServiceTestPath = 'backend/src/test/java/com/playdata/calen/ledger/ocr/LedgerOcrServiceTest.java'
+$backupSchedulerPath = 'backend/src/main/java/com/playdata/calen/account/service/DataOpsBackupScheduler.java'
+$backupSchedulerTestPath = 'backend/src/test/java/com/playdata/calen/account/service/DataOpsBackupSchedulerTest.java'
 
 $findings = [System.Collections.Generic.List[string]]::new()
 
-foreach ($path in @($contractPath, $securityChecklistPath, $roadmapPath, $ciPath, $controllerPath, $servicePath, $repositoryPath, $serviceTestPath, $frontendPath, $appPath, $apiPath)) {
+foreach ($path in @($contractPath, $securityChecklistPath, $roadmapPath, $ciPath, $controllerPath, $servicePath, $repositoryPath, $serviceTestPath, $frontendPath, $appPath, $apiPath, $ocrServicePath, $ocrServiceTestPath, $backupSchedulerPath, $backupSchedulerTestPath)) {
     if (-not (Test-Path -LiteralPath $path)) {
         $findings.Add("Missing notification center contract input: $path") | Out-Null
     }
@@ -33,6 +37,10 @@ if ($findings.Count -eq 0) {
     $frontend = Get-Content -LiteralPath $frontendPath -Raw
     $app = Get-Content -LiteralPath $appPath -Raw
     $api = Get-Content -LiteralPath $apiPath -Raw
+    $ocrService = Get-Content -LiteralPath $ocrServicePath -Raw
+    $ocrServiceTest = Get-Content -LiteralPath $ocrServiceTestPath -Raw
+    $backupScheduler = Get-Content -LiteralPath $backupSchedulerPath -Raw
+    $backupSchedulerTest = Get-Content -LiteralPath $backupSchedulerTestPath -Raw
 
     foreach ($section in @('# Notification Center Contract', '## Implemented API', '## Data model', '## Event flow', '## Safety rules', '## Implemented producers', '## Event producer queue', '## Release gate', '## CI contract')) {
         if (-not $contract.Contains($section)) {
@@ -88,6 +96,36 @@ if ($findings.Count -eq 0) {
         }
     }
 
+
+    foreach ($snippet in @('Ledger OCR failed', 'Scheduled database backup failed', 'Scheduled MinIO backup failed', 'BACKUP_FAILED', 'AI_OR_OCR_FAILED')) {
+        if (-not $contract.Contains($snippet)) {
+            $findings.Add("Notification center contract missing implemented producer snippet: $snippet") | Out-Null
+        }
+    }
+
+    foreach ($snippet in @('private final UserNotificationService userNotificationService', 'notifyOcrFailure(userId, failureReason)', '"AI_OR_OCR_FAILED"', '"OCR analysis failed"', '"/calendar?receiptOcr=1"', '"{\"reason\":\"" + failureReason + "\"}"', 'if ("invalid_file".equals(failureReason))')) {
+        if (-not $ocrService.Contains($snippet)) {
+            $findings.Add("LedgerOcrService missing notification producer snippet: $snippet") | Out-Null
+        }
+    }
+
+    foreach ($snippet in @('analyzeCreatesBoundedNotificationForRemoteFailureWithoutMaskingOriginalError', 'eq("AI_OR_OCR_FAILED")', 'eq("OCR analysis failed")', 'contains("Receipt OCR could not be completed")', 'eq("/calendar?receiptOcr=1")', 'eq("{\"reason\":\"bad_request\"}")')) {
+        if (-not $ocrServiceTest.Contains($snippet)) {
+            $findings.Add("LedgerOcrServiceTest missing OCR notification evidence snippet: $snippet") | Out-Null
+        }
+    }
+
+    foreach ($snippet in @('private final UserNotificationService userNotificationService', 'findAllByRoleAndActiveTrueOrderByIdAsc(AppUserRole.ADMIN)', 'notifyBackupFailed("database")', 'notifyBackupFailed("minio")', '"BACKUP_FAILED"', '"Scheduled backup failed"', '"/admin?panel=data-management"', '"{\"backupType\":\"" + backupType + "\",\"status\":\"failure\"}"')) {
+        if (-not $backupScheduler.Contains($snippet)) {
+            $findings.Add("DataOpsBackupScheduler missing backup notification producer snippet: $snippet") | Out-Null
+        }
+    }
+
+    foreach ($snippet in @('notifiesActiveAdminsWhenScheduledDatabaseBackupFailsWithoutLeakingFailureDetails', 'findAllByRoleAndActiveTrueOrderByIdAsc(AppUserRole.ADMIN)', 'eq("BACKUP_FAILED")', 'eq("Scheduled backup failed")', 'contains("scheduled database backup failed")', 'eq("/admin?panel=data-management")', 'eq("{\"backupType\":\"database\",\"status\":\"failure\"}")')) {
+        if (-not $backupSchedulerTest.Contains($snippet)) {
+            $findings.Add("DataOpsBackupSchedulerTest missing backup notification evidence snippet: $snippet") | Out-Null
+        }
+    }
     foreach ($snippet in @('NOTIFY-01', 'Notification center', 'docs/notification_center.md', 'notification-center-contract', 'scripts/verify-notification-center-contract.ps1')) {
         if (-not $securityChecklist.Contains($snippet)) {
             $findings.Add("Security baseline missing notification center snippet: $snippet") | Out-Null

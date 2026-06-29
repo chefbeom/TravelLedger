@@ -2,7 +2,7 @@
 
 Updated: 2026-06-30
 
-This document records the notification-center contract. Storage, listing, unread counts, read handling, AI analysis events, OCR failure events, scheduled backup failure events, shared-file events, and the frontend notification center are now in place. Budget and travel producers remain in the queue, and every new producer must keep notifications owner-scoped, bounded, and free of operational secrets.
+This document records the notification-center contract. Storage, listing, unread counts, read handling, AI analysis events, OCR failure events, scheduled backup failure events, shared-file events, and the frontend notification center are now in place. The contract verifier now checks OCR and scheduled-backup producer implementation/test anchors directly, not only the generic notification API. Budget and travel producers remain in the queue, and every new producer must keep notifications owner-scoped, bounded, and free of operational secrets.
 
 ## Implemented API
 
@@ -80,7 +80,7 @@ flowchart TD
 | `UserNotificationController` | Exposes authenticated list/create/read/read-all endpoints and passes only `currentUser.userId()` to the service. |
 | `UserNotificationService` | Redacts sensitive metadata/query/bearer-token values, truncates fields, lists by owner, counts unread by owner, and marks read by owner. |
 | `UserNotificationRepository` | Provides owner-scoped list, unread list, single lookup, unread count, and bulk read update queries. |
-| `UserNotificationServiceTest` | Covers sensitive metadata/target redaction and owner-scoped single-notification read lookup. |
+| `UserNotificationServiceTest` | Covers sensitive metadata/target redaction and owner-scoped single-notification read lookup. |`n| `LedgerOcrService` / `LedgerOcrServiceTest` | Produces bounded `AI_OR_OCR_FAILED` notifications for remote/configured OCR failures while skipping invalid-file validation failures. |`n| `DataOpsBackupScheduler` / `DataOpsBackupSchedulerTest` | Produces bounded `BACKUP_FAILED` notifications for active admins on scheduled database/MinIO backup failures without storing backup paths, credentials, or raw exception details. |
 | `NotificationCenterWorkspace.vue` | Loads notifications, filters unread-only, marks one/all read, and only opens relative target URLs. |
 | `App.vue` / `api.js` | Routes to the notification center and exposes frontend notification API calls. |
 

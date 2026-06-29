@@ -1,5 +1,6 @@
 package com.playdata.calen.ledger.ai;
 
+import com.playdata.calen.account.service.UserNotificationService;
 import com.playdata.calen.ledger.domain.LedgerAiAnalysisHistory;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

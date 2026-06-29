@@ -35,6 +35,7 @@ import com.playdata.calen.ledger.dto.PeriodComparisonItemResponse;
 import com.playdata.calen.ledger.repository.LedgerAiAnalysisHistoryRepository;
 import com.playdata.calen.ledger.repository.LedgerEntryRepository;
 import com.playdata.calen.ledger.service.StatisticsService;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -47,6 +48,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.data.domain.Pageable;
 
 @ExtendWith(MockitoExtension.class)
@@ -75,6 +77,9 @@ class LedgerAiAnalysisServiceTest {
     @Mock
     private UserNotificationService userNotificationService;
 
+    @Mock
+    private ObjectProvider<MeterRegistry> meterRegistryProvider;
+
     private ObjectMapper objectMapper;
     private LedgerAiAnalysisProperties properties;
     private LedgerAiAnalysisService service;
@@ -96,8 +101,10 @@ class LedgerAiAnalysisServiceTest {
                 historyRepository,
                 properties,
                 remoteClient,
-                objectMapper,
-                userNotificationService
+                new LedgerAiAnalysisMetrics(properties, meterRegistryProvider),
+                new LedgerAiAnalysisJsonCodec(objectMapper),
+                new LedgerAiAnalysisTextSanitizer(),
+                new LedgerAiAnalysisNotifications(userNotificationService)
         );
     }
 

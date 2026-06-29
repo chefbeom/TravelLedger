@@ -43,8 +43,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import io.micrometer.core.instrument.Counter;
-import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -72,7 +70,9 @@ public class LedgerAiAnalysisService {
     private final LedgerAiAnalysisHistoryRepository historyRepository;
     private final LedgerAiAnalysisProperties properties;
     private final LedgerAiRemoteClient remoteClient;
-    private final ObjectMapper objectMapper;
+    private final LedgerAiAnalysisMetrics aiMetrics;
+    private final LedgerAiAnalysisJsonCodec aiJsonCodec;
+    private final LedgerAiAnalysisTextSanitizer aiText;
     private final LedgerAiAnalysisNotifications aiNotifications;
 
     public LedgerAiAnalysisStatusResponse getStatus() {
@@ -115,6 +115,7 @@ public class LedgerAiAnalysisService {
             history.setSummary(aiText.safeText(remote.summary()));
             history.setRequestPayloadJson(aiJsonCodec.write(payload));
             history = historyRepository.save(history);
+            aiNotifications.notifyCompleted(userId, history);
 
             LedgerAiAnalysisResponse response = buildResponse(history.getId(), plan, dataset, remote);
             history.setResultJson(aiJsonCodec.write(response));
@@ -128,7 +129,8 @@ public class LedgerAiAnalysisService {
             failedHistory.setSummary("AI ?????????щ쫫???????濾???????????쇰뮝??);
             failedHistory.setErrorMessage(sanitizeProviderErrorMessage(exception.getMessage()));
             failedHistory.setRequestPayloadJson(aiJsonCodec.write(payload));
-            historyRepository.save(failedHistory);
+            failedHistory = historyRepository.save(failedHistory);
+            aiNotifications.notifyFailed(userId, failedHistory);
             throw exception;
         }
     }

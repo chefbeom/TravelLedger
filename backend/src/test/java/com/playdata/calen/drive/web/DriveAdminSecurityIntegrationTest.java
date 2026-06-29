@@ -1,5 +1,6 @@
 package com.playdata.calen.drive.web;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -9,10 +10,14 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.playdata.calen.account.domain.AppUserRole;
+import com.playdata.calen.account.domain.LoginAuditLog;
+import com.playdata.calen.account.domain.LoginAuditStatus;
+import com.playdata.calen.account.repository.LoginAuditLogRepository;
 import com.playdata.calen.account.security.AppUserPrincipal;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.util.Comparator;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -40,6 +45,9 @@ class DriveAdminSecurityIntegrationTest {
 
     @Autowired
     private ObjectMapper objectMapper;
+
+    @Autowired
+    private LoginAuditLogRepository loginAuditLogRepository;
 
     @Test
     void administratorApisRequireAuthenticationAdminRoleAndRecentVerification() throws Exception {
@@ -82,6 +90,15 @@ class DriveAdminSecurityIntegrationTest {
                         .content(objectMapper.writeValueAsString(Map.of("providerCapacityBytes", 2_000_000L))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.providerCapacityBytes").value(2_000_000L));
+
+        LoginAuditLog auditLog = loginAuditLogRepository.findAll().stream()
+                .filter(log -> log.getStatus() == LoginAuditStatus.ADMIN_ACTION)
+                .filter(log -> "admin".equals(log.getLoginId()))
+                .filter(log -> log.getDetail() != null && log.getDetail().startsWith("DRIVE_STORAGE_CAPACITY_UPDATE"))
+                .max(Comparator.comparing(LoginAuditLog::getId))
+                .orElseThrow();
+        assertThat(auditLog.getDetail()).isEqualTo("DRIVE_STORAGE_CAPACITY_UPDATE:providerCapacityBytes=2000000");
+        assertThat(auditLog.getDetail()).doesNotContain("password", "token", "key");
 
         mockMvc.perform(get("/api/administrator/dashboard")
                         .with(user(admin))

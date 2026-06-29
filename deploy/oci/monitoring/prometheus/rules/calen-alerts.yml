@@ -65,6 +65,26 @@ groups:
           summary: Backend DB connection pool is nearly exhausted
           description: Hikari pool {{ $labels.pool }} has used more than 90 percent of configured connections for 5 minutes.
 
+      - alert: CalenHikariPendingConnections
+        expr: max by (pool) (hikaricp_connections_pending{job="calen-backend"}) > 0
+        for: 2m
+        labels:
+          severity: critical
+          service: calen-backend
+        annotations:
+          summary: Backend DB connection requests are waiting for pool capacity
+          description: Hikari pool {{ $labels.pool }} has pending connection requests for at least 2 minutes.
+
+      - alert: CalenHikariConnectionTimeouts
+        expr: sum by (pool) (increase(hikaricp_connections_timeout_total{job="calen-backend"}[5m])) > 0
+        for: 0m
+        labels:
+          severity: critical
+          service: calen-backend
+        annotations:
+          summary: Backend DB connection acquisition timed out
+          description: Hikari pool {{ $labels.pool }} has reported one or more connection acquisition timeouts in the last 5 minutes.
+
       - alert: CalenJvmHeapHigh
         expr: |
           sum(jvm_memory_used_bytes{job="calen-backend", area="heap"})

@@ -15,6 +15,8 @@ deploy/oci/monitoring/prometheus/rules/*.yml
 | CalenBackendHigh5xxRate | 5xx ratio above 5% for 5m | critical | Users are seeing server-side failures. |
 | CalenBackendSlowP95 | p95 HTTP latency above 2s for 10m | warning | API responsiveness is degrading. |
 | CalenHikariPoolNearlyExhausted | Hikari active/max above 90% for 5m | critical | DB connection starvation is likely. |
+| CalenHikariPendingConnections | Hikari pending connections above 0 for 2m | critical | Requests are already waiting for DB pool capacity. |
+| CalenHikariConnectionTimeouts | Hikari acquisition timeouts above 0 within 5m | critical | Requests have failed to acquire DB connections. |
 | CalenJvmHeapHigh | JVM heap above 90% for 10m | warning | The backend may be heading toward GC pressure/OOM. |
 | CalenLedgerAiHighFailureRate | AI remote failure ratio above 10% for 10m | warning | LM Studio/n8n analysis is unreliable or unavailable. |
 | CalenLedgerAiSlowP95 | AI remote p95 latency above 90s for 10m | warning | AI analysis is close to user-visible timeout territory. |
@@ -50,6 +52,14 @@ Prometheus evaluates these rules even before Alertmanager is introduced. Route t
 | External workflow request duration | `calen_external_workflow_request_seconds_bucket` | `calen.external.workflow.request` | `workflow`, `status` | `LedgerAiN8nClient`, `LedgerOcrRemoteClient` |
 
 Status labels are intentionally bounded. They must not include user IDs, tokens, filenames, prompts, IP addresses, or provider error bodies.
+
+## Platform metrics used by alerts
+
+| Area | Prometheus metric | Provider | Labels | Alert |
+| --- | --- | --- | --- | --- |
+| DB pool saturation | `hikaricp_connections_active`, `hikaricp_connections_max` | Spring Boot Actuator / Micrometer HikariCP | `pool` | `CalenHikariPoolNearlyExhausted` |
+| DB pool waiting requests | `hikaricp_connections_pending` | Spring Boot Actuator / Micrometer HikariCP | `pool` | `CalenHikariPendingConnections` |
+| DB connection acquisition timeout | `hikaricp_connections_timeout_total` | Spring Boot Actuator / Micrometer HikariCP | `pool` | `CalenHikariConnectionTimeouts` |
 
 ## Remaining metric contract
 

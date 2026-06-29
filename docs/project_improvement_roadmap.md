@@ -20,7 +20,7 @@ This roadmap turns the current improvement analysis into an implementation queue
 | AI safety | Ledger AI sends sensitive spending data to LM Studio or n8n and stores results. | Add response validator and malformed-output tests. | Provider failures store failed history; invalid JSON/schema is rejected. |
 | Admin/share authorization tests | Admin APIs and public links are high-impact. | Add tests for non-admin admin access and invalid/revoked public links. | Normal users receive `403`; invalid tokens receive controlled errors. |
 | Upload validation | Drive/travel/family/support/OCR upload paths have different risk profiles. | Define per-feature max size and MIME rules. | Oversized/spoofed uploads are rejected by tests. |
-| Configuration sync | `.env.example`, `application.yml`, compose files can drift. | Add a manual checklist now; later add script verification. | New env names are documented in README and examples. |
+| Configuration sync | `.env.example`, `application.yml`, compose files can drift. | Run `scripts/verify-env-sync.ps1` in CI to compare Spring env placeholders with `.env.example`. | CI fails on missing, duplicate, malformed, or unallowlisted env names. |
 
 ## P1: Operations and Maintainability
 
@@ -31,7 +31,7 @@ This roadmap turns the current improvement analysis into an implementation queue
 | Observability/alerts | Prometheus/Grafana exists, but alerting is the next operational jump. | Add metrics for AI/OCR failures, backup failures, Redis errors. | Grafana/Prometheus alert rules documented and tested by metric scrape. |
 | Backup reliability | Backups exist, but restore confidence matters more than backup creation. | Add restore rehearsal checklist and encrypted artifact option. | Documented restore test with timestamped result. |
 | Accessibility/mobile UX | Drag widgets, maps, drive, modals, and PIN/auth screens have keyboard and touch risks. | Use `docs/accessibility_mobile_checklist.md` as the WCAG 2.2 release checklist. | Priority screens have keyboard, focus, target-size, and error-state evidence. |
-| CI gates | Manual checks are easy to skip. | Add backend test, frontend build, and secret scan to Jenkins/GitHub Actions. | Push triggers automated gates. |
+| CI gates | Manual checks are easy to skip. | Run backend test, frontend build, secret scan, and config sync in GitHub Actions. | Push triggers automated gates. |
 
 ## P2: Product Expansion
 
@@ -67,3 +67,9 @@ This roadmap turns the current improvement analysis into an implementation queue
 | `docs/ledger_ai_safety_hardening.md` | AI provider safety, failure handling, and hardening backlog. |
 | `docs/project_improvement_roadmap.md` | Prioritized roadmap for improvements and new features. |
 | `docs/db_migration_strategy.md` | Flyway transition plan and schema updater retirement queue. |
+## Current Automation Set
+
+| Automation | Purpose |
+| --- | --- |
+| `.github/workflows/ci.yml` | Runs secret scan, config sync, backend tests, and frontend build on push/PR. |
+| `scripts/verify-env-sync.ps1` | Fails when Spring env placeholders drift from `.env.example` or compose-only allowlist. |

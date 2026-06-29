@@ -115,7 +115,7 @@ Minimum acceptance rule for provider responses:
 | Priority | Work item | File candidates | Verification |
 | --- | --- | --- | --- |
 | P0 | Keep response shape validator enforced as providers evolve. | `LedgerAiRemoteResponseValidator`, provider clients | Tests for empty schema object, missing report/summary, and provider failure. |
-| P0 | Add malicious memo/title prompt-injection test. | `LedgerAiAnalysisServiceTest` | Captured payload preserves text as data and prompt keeps output contract. |
+| P0 | Keep malicious memo/title prompt-injection coverage. | `LedgerAiAnalysisServiceTest`, `LedgerAiAnalysisService.outputContract` | Captured payload preserves hostile-looking text as data and output contract says ledger text is untrusted user data, not instructions. |
 | P0 | Ensure status endpoint never exposes provider URLs/API keys. | `LedgerAiAnalysisStatusResponse`, `LedgerAiAnalysisServiceTest` | JSON assertion excludes workflow URL, LM Studio base URL, and all API key values; only boolean configured flags are exposed. |
 | P1 | Add provider metrics. | `LedgerAiLmStudioClient`, `LedgerAiN8nClient` | Counter/timer registered for success/failure/duration/provider. |
 | P1 | Add payload minimization. | `LedgerAiAnalysisService` | Titles/memos truncated; max entry count enforced; overflow count included. |

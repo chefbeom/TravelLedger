@@ -1,6 +1,6 @@
 # Backup Restore Rehearsal Runbook
 
-Updated: 2026-06-29
+Updated: 2026-06-30
 
 This runbook is the evidence checklist for proving that TravelLedger backups can be restored. It complements `docs/dbtogdrive.md` for backup setup and `docs/db_restore_from_gdrive.md` for detailed restore commands.
 
@@ -139,7 +139,7 @@ Follow-up issues:
 
 A release that changes backup, restore, schema migration, storage layout, or admin data-management behavior should include:
 
-- A successful rehearsal record using this runbook.
+- A successful rehearsal record using this runbook. CI also runs `scripts/verify-backup-rehearsal-runbook.ps1` to keep this runbook release-ready.
 - A named fallback artifact created before risky production work.
 - A statement that production data was not touched during rehearsal.
 - A follow-up ticket for encryption if backups are still stored as plaintext archives.

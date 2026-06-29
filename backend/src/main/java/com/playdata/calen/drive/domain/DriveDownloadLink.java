@@ -50,6 +50,8 @@ public class DriveDownloadLink {
     @Column(nullable = false)
     private int downloadCount;
 
+    private LocalDateTime lastAccessedAt;
+
     private LocalDateTime revokedAt;
 
     @PrePersist

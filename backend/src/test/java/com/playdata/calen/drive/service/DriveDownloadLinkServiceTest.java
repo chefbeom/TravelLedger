@@ -33,6 +33,22 @@ class DriveDownloadLinkServiceTest {
     private DriveStorageService driveStorageService;
 
     @Test
+    void downloadByTokenRecordsLinkAccessTimeWhenAvailable() {
+        DriveDownloadLink link = activeLink();
+
+        when(driveDownloadLinkRepository.findByToken("public-token")).thenReturn(Optional.of(link));
+        when(driveStorageService.loadObjectBytes("drive/file.txt")).thenReturn(new byte[] {1, 2, 3});
+
+        DriveDownloadLinkService service = newService();
+
+        service.downloadByToken("public-token");
+
+        assertThat(link.getDownloadCount()).isEqualTo(1);
+        assertThat(link.getLastAccessedAt()).isNotNull();
+        assertThat(link.getItem().getLastAccessedAt()).isNotNull();
+    }
+
+    @Test
     void downloadByTokenRejectsRevokedLinkWithoutLoadingFile() {
         DriveDownloadLink link = activeLink();
         link.setRevokedAt(LocalDateTime.now().minusMinutes(1));

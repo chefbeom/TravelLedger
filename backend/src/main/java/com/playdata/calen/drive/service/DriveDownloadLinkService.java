@@ -107,6 +107,7 @@ public class DriveDownloadLinkService {
         }
 
         link.setDownloadCount(link.getDownloadCount() + 1);
+        link.setLastAccessedAt(now);
         item.setLastAccessedAt(now);
         return link;
     }
@@ -120,6 +121,7 @@ public class DriveDownloadLinkService {
                 .expiresAt(link.getExpiresAt())
                 .maxDownloads(link.getMaxDownloads())
                 .downloadCount(link.getDownloadCount())
+                .lastAccessedAt(link.getLastAccessedAt())
                 .revokedAt(link.getRevokedAt())
                 .available(link.getRevokedAt() == null && !link.isExpired(now) && !link.isDownloadLimitReached())
                 .build();

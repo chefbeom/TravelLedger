@@ -223,6 +223,7 @@ public final class DriveDtos {
             LocalDateTime expiresAt,
             Integer maxDownloads,
             Integer downloadCount,
+            LocalDateTime lastAccessedAt,
             LocalDateTime revokedAt,
             Boolean available
     ) {

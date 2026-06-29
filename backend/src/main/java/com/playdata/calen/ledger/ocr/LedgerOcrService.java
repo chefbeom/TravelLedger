@@ -1,6 +1,7 @@
 package com.playdata.calen.ledger.ocr;
 
 import com.playdata.calen.account.service.AppUserService;
+import com.playdata.calen.account.service.UserNotificationService;
 import com.playdata.calen.common.exception.BadRequestException;
 import com.playdata.calen.ledger.domain.EntryType;
 import com.playdata.calen.ledger.dto.LedgerOcrAnalyzeResponse;
@@ -22,10 +23,12 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class LedgerOcrService {
@@ -37,6 +40,7 @@ public class LedgerOcrService {
     private final AppUserService appUserService;
     private final LedgerOcrProperties properties;
     private final LedgerOcrRemoteClient remoteClient;
+    private final UserNotificationService userNotificationService;
 
     @Autowired(required = false)
     private MeterRegistry meterRegistry;
@@ -82,10 +86,31 @@ public class LedgerOcrService {
             recordOcrRequest(ocrRequestTimer, "success", "none");
             return response;
         } catch (RuntimeException exception) {
-            recordOcrRequest(ocrRequestTimer, "failure", ocrFailureReason(exception));
+            String failureReason = ocrFailureReason(exception);
+            recordOcrRequest(ocrRequestTimer, "failure", failureReason);
+            notifyOcrFailure(userId, failureReason);
             throw exception;
         }
     }
+
+    private void notifyOcrFailure(Long userId, String failureReason) {
+        if ("invalid_file".equals(failureReason)) {
+            return;
+        }
+        try {
+            userNotificationService.createSystemNotification(
+                    userId,
+                    "AI_OR_OCR_FAILED",
+                    "OCR analysis failed",
+                    "Receipt OCR could not be completed. Please check the OCR service or try again later.",
+                    "/calendar?receiptOcr=1",
+                    "{\"reason\":\"" + failureReason + "\"}"
+            );
+        } catch (RuntimeException exception) {
+            log.warn("Failed to create ledger OCR notification: userId={}, reason={}", userId, failureReason, exception);
+        }
+    }
+
     private Timer.Sample startOcrRequestTimer() {
         return meterRegistry == null ? null : Timer.start(meterRegistry);
     }

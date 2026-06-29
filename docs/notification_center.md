@@ -2,7 +2,7 @@
 
 Updated: 2026-06-30
 
-This document records the notification-center backend baseline and the first producer wiring. Storage, listing, unread counts, read handling, AI analysis events, and shared-file events are now in place; backup, budget, travel, and OCR producers remain in the queue.
+This document records the notification-center backend baseline and the first producer wiring. Storage, listing, unread counts, read handling, AI analysis events, OCR failure events, and shared-file events are now in place; backup, budget, and travel producers remain in the queue.
 
 ## Implemented API
 
@@ -57,6 +57,7 @@ This document records the notification-center backend baseline and the first pro
 ## Test Backlog
 
 - Service tests cover sensitive metadata redaction and owner-scoped single-notification read lookup.
+- OCR remote/config failures create bounded `AI_OR_OCR_FAILED` notifications without masking the original OCR error.
 - Unauthenticated users cannot call `/api/notifications`.
 - User A cannot list or mark User B's notification as read.
 - `unreadCount` decreases after read/read-all operations.

@@ -2,11 +2,16 @@ package com.playdata.calen.ledger.ocr;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.contains;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.playdata.calen.account.domain.AppUser;
 import com.playdata.calen.account.service.AppUserService;
+import com.playdata.calen.account.service.UserNotificationService;
 import com.playdata.calen.common.exception.BadRequestException;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
@@ -29,6 +34,9 @@ class LedgerOcrServiceTest {
     @Mock
     private LedgerOcrRemoteClient remoteClient;
 
+    @Mock
+    private UserNotificationService userNotificationService;
+
     private LedgerOcrService service;
 
     @BeforeEach
@@ -37,7 +45,7 @@ class LedgerOcrServiceTest {
         properties.setEnabled(true);
         properties.setWorkflowUrl("https://ocr.example.internal/webhook");
         properties.setMaxFileSize(DataSize.ofBytes(4));
-        service = new LedgerOcrService(appUserService, properties, remoteClient);
+        service = new LedgerOcrService(appUserService, properties, remoteClient, userNotificationService);
     }
 
     @Test
@@ -124,6 +132,7 @@ class LedgerOcrServiceTest {
 
         verifyNoInteractions(remoteClient);
     }
+
     @Test
     void analyzeRecordsInvalidFileMetricWhenUploadValidationFails() {
         stubUser();
@@ -147,6 +156,43 @@ class LedgerOcrServiceTest {
                 .count()).isEqualTo(1.0);
         verifyNoInteractions(remoteClient);
     }
+
+    @Test
+    void analyzeCreatesBoundedNotificationForRemoteFailureWithoutMaskingOriginalError() {
+        stubUser();
+        MockMultipartFile file = new MockMultipartFile(
+                "file",
+                "receipt.jpg",
+                "image/jpeg",
+                new byte[] {(byte) 0xFF, (byte) 0xD8, (byte) 0xFF}
+        );
+        when(remoteClient.analyze(file, "RECEIPT"))
+                .thenThrow(new BadRequestException("OCR analysis server is unavailable. Check the OCR service and network."));
+        doThrow(new IllegalStateException("notification unavailable"))
+                .when(userNotificationService)
+                .createSystemNotification(
+                        eq(USER_ID),
+                        eq("AI_OR_OCR_FAILED"),
+                        eq("OCR analysis failed"),
+                        contains("Receipt OCR could not be completed"),
+                        eq("/calendar?receiptOcr=1"),
+                        eq("{\"reason\":\"bad_request\"}")
+                );
+
+        assertThatThrownBy(() -> service.analyze(USER_ID, file, "RECEIPT"))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessage("OCR analysis server is unavailable. Check the OCR service and network.");
+
+        verify(userNotificationService).createSystemNotification(
+                eq(USER_ID),
+                eq("AI_OR_OCR_FAILED"),
+                eq("OCR analysis failed"),
+                contains("Receipt OCR could not be completed"),
+                eq("/calendar?receiptOcr=1"),
+                eq("{\"reason\":\"bad_request\"}")
+        );
+    }
+
     private void stubUser() {
         AppUser user = new AppUser();
         user.setId(USER_ID);

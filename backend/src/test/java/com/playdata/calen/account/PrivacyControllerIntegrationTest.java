@@ -71,6 +71,43 @@ class PrivacyControllerIntegrationTest {
                 .andExpect(jsonPath("$.processedAt").isNotEmpty());
     }
 
+    @Test
+    void dataExportRequiresAuthenticationCsrfAndVerifiedSecondaryPin() throws Exception {
+        MockHttpSession session = login("hana", "test1234", "12345678");
+        AppUserPrincipal hanaPrincipal = new AppUserPrincipal(2L, "hana", "hana", "password", AppUserRole.USER, true);
+        String payload = objectMapper.writeValueAsString(Map.of(
+                "from", "2026-06-01",
+                "to", "2026-06-30"
+        ));
+
+        mockMvc.perform(post("/api/privacy/data-export")
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(payload))
+                .andExpect(status().isUnauthorized());
+
+        mockMvc.perform(post("/api/privacy/data-export")
+                        .session(session)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(payload))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(post("/api/privacy/data-export")
+                        .with(user(hanaPrincipal))
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(payload))
+                .andExpect(status().isBadRequest());
+
+        mockMvc.perform(post("/api/privacy/data-export")
+                        .session(session)
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(payload))
+                .andExpect(status().isOk())
+                .andExpect(header().string(HttpHeaders.CONTENT_DISPOSITION, org.hamcrest.Matchers.containsString("travelledger-user-data")))
+                .andExpect(header().string(HttpHeaders.CONTENT_TYPE, org.hamcrest.Matchers.containsString("application/zip")));
+    }
     private MockHttpSession login(String loginId, String password, String secondaryPin) throws Exception {
         MvcResult result = mockMvc.perform(post("/api/auth/login")
                         .with(csrf())

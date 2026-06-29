@@ -41,6 +41,7 @@ This document records the first backend slice for user-facing privacy controls. 
 | `PrivacyManagementServiceTest.cleanupSensitiveDataDeletesAiHistoryAndRevokesOnlyCurrentOwnerLinks` | Verifies combined cleanup deletes only the authenticated user AI history and revokes only that user's active public download links. |
 | `PrivacyControllerIntegrationTest.publicDownloadLinkRevocationRequiresAuthenticationAndCsrf` | Verifies public-link revocation rejects unauthenticated requests and authenticated unsafe requests without CSRF. |
 | `PrivacyControllerIntegrationTest.sensitiveCleanupRequiresAuthenticationAndCsrf` | Verifies combined sensitive cleanup rejects unauthenticated requests and authenticated unsafe requests without CSRF. |
+| `PrivacyControllerIntegrationTest.dataExportRequiresAuthenticationCsrfAndVerifiedSecondaryPin` | Verifies data export rejects unauthenticated requests, missing-CSRF requests, and authenticated sessions without a verified secondary PIN before returning a zip attachment. |
 ## Next Controls
 
 | Candidate | Notes |
@@ -54,4 +55,4 @@ This document records the first backend slice for user-facing privacy controls. 
 
 - Keep service-level owner-scope tests for AI-history deletion and public-drive-link revocation current.
 - Revoked links keep access logs and no longer resolve.
-- Keep `/api/privacy/*` authentication and CSRF integration tests current for each new unsafe endpoint.
+- Keep `/api/privacy/*` authentication, CSRF, and secondary-PIN integration tests current for each new unsafe/export endpoint.

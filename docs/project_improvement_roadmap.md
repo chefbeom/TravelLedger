@@ -45,7 +45,7 @@ This roadmap turns the current improvement analysis into an implementation queue
 | Drive file versioning | Makes CalenDrive safer for family use. | Version table and restore previous file version. | Uploading same file can preserve previous version. |
 | Family budget/shared goals | Makes Household area more distinct. | Shared monthly budget and goal progress widget. | Household dashboard shows goal/budget status. |
 | Notification center | Connects disconnected events. | Backend notification APIs now receive AI analysis and shared-file events; next wire backup/budget/travel/OCR producers and frontend badge. | Users can list/read own notifications and receive initial AI/share event records. |
-| Data portability | Builds trust for personal data platform. | User export archive for ledger CSV and metadata JSON. | User can request/download own export. |
+| Data portability | Builds trust for personal data platform. | Backend data export now returns a secondary-PIN-protected ledger CSV plus metadata archive. | Authenticated user can download own archive without exposing secrets or other users data. |
 | Privacy control panel | Gives users control over sensitive records. | Backend slice now supports AI history deletion and public drive link revocation; next add GPS stripping and export UI. | Authenticated user can clean up own derived AI data and revoke own public links with returned counts. |
 
 ## Suggested Execution Order
@@ -71,6 +71,7 @@ This roadmap turns the current improvement analysis into an implementation queue
 | `docs/backup_restore_rehearsal_runbook.md` | Restore rehearsal evidence, encryption readiness, and failure-handling checklist. |
 | `docs/privacy_control_panel.md` | Backend privacy controls, safety rules, response contract, and next privacy actions. |
 | `docs/pwa_mobile_capture.md` | PWA installability, service-worker cache policy, and mobile capture implementation queue. |
+| `docs/data_portability.md` | User data export API, archive contents, security rules, and next portability slices. |
 | `docs/notification_center.md` | Notification API contract, safety rules, producer queue, and test backlog. |
 ## Current Automation Set
 

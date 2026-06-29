@@ -64,6 +64,8 @@ public interface LedgerAiAnalysisHistoryRepository extends JpaRepository<LedgerA
 
     Optional<LedgerAiAnalysisHistory> findByIdAndOwnerId(Long id, Long ownerId);
 
+    long countByOwnerId(Long ownerId);
+
     Optional<LedgerAiAnalysisHistory> findTop1ByOwnerIdAndStatusAndModeAndPeriodTypeAndFromDateAndToDateAndCompareFromDateAndCompareToDateOrderByCreatedAtDescIdDesc(
             Long ownerId,
             LedgerAiAnalysisStatus status,

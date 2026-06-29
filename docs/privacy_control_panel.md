@@ -11,6 +11,7 @@ This document records the first backend slice for user-facing privacy controls. 
 | Delete my AI analysis history | `DELETE /api/privacy/ai-analysis-history` | Permanently deletes ledger AI analysis history rows owned by the current user. |
 | Revoke my public drive links | `DELETE /api/privacy/public-download-links` | Sets `revokedAt` on all active public download links owned by the current user. |
 | Cleanup sensitive derived data | `POST /api/privacy/cleanup` | Runs both AI-history deletion and public-link revocation in one authenticated request. |
+| Download my ledger data archive | `POST /api/privacy/data-export` | Downloads a secondary-PIN-protected zip containing ledger CSV and export metadata. |
 
 ## Safety Rules
 
@@ -37,7 +38,7 @@ This document records the first backend slice for user-facing privacy controls. 
 | Candidate | Notes |
 | --- | --- |
 | Strip GPS metadata from travel/family photos | Needs object rewrite path and thumbnail invalidation. |
-| Download my data archive | Should include ledger CSV, metadata JSON, and owned file manifest. |
+| Extend data archive | Add owned file manifests and optional binary archive generation after queue/progress controls exist. |
 | Revoke shared travel/public media tokens | Mirror the drive-link revocation pattern for travel media. |
 | Delete OCR upload artifacts | Needs artifact inventory and retention policy first. |
 

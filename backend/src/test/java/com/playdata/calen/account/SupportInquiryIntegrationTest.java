@@ -56,7 +56,7 @@ class SupportInquiryIntegrationTest {
                 "attachment",
                 "support.png",
                 MediaType.IMAGE_PNG_VALUE,
-                "fake-image".getBytes()
+                pngBytes()
         );
 
         mockMvc.perform(multipart("/api/support/inquiries")
@@ -126,6 +126,26 @@ class SupportInquiryIntegrationTest {
     }
 
     @Test
+    void supportAttachmentRejectsSpoofedImageContent() throws Exception {
+        MockHttpSession userSession = login("hana", "test1234", "12345678");
+        MockMultipartFile attachment = new MockMultipartFile(
+                "attachment",
+                "support.png",
+                MediaType.IMAGE_PNG_VALUE,
+                "not-a-real-png".getBytes()
+        );
+
+        mockMvc.perform(multipart("/api/support/inquiries")
+                        .file(attachment)
+                        .param("title", "spoofed image")
+                        .param("content", "content type and extension look valid, but bytes are not PNG")
+                        .session(userSession)
+                        .with(csrf()))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Support attachment binary content does not match its image type."));
+    }
+
+    @Test
     void userCanCreateOnlyThreeInquiriesPerDay() throws Exception {
         MockHttpSession userSession = login("hana", "test1234", "12345678");
 
@@ -145,6 +165,14 @@ class SupportInquiryIntegrationTest {
                         .with(csrf()))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message").value("문의는 하루에 최대 3개까지만 보낼 수 있습니다."));
+    }
+
+    private byte[] pngBytes() {
+        return new byte[] {
+                (byte) 0x89, 0x50, 0x4E, 0x47,
+                0x0D, 0x0A, 0x1A, 0x0A,
+                0x00, 0x00, 0x00, 0x0D
+        };
     }
 
     private MockHttpSession login(String loginId, String password, String secondaryPin) throws Exception {

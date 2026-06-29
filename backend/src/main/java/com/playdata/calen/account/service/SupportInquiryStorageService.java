@@ -10,7 +10,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.util.Locale;
-import java.util.Set;
+import java.util.Map;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
@@ -24,7 +24,15 @@ import org.springframework.web.multipart.MultipartFile;
 @RequiredArgsConstructor
 public class SupportInquiryStorageService {
 
-    private static final Set<String> ALLOWED_EXTENSIONS = Set.of(".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp");
+    private static final long MAX_ATTACHMENT_SIZE_BYTES = 5L * 1024L * 1024L;
+    private static final Map<String, String> ALLOWED_CONTENT_TYPES_BY_EXTENSION = Map.of(
+            ".png", "image/png",
+            ".jpg", "image/jpeg",
+            ".jpeg", "image/jpeg",
+            ".gif", "image/gif",
+            ".webp", "image/webp",
+            ".bmp", "image/bmp"
+    );
 
     @Value("${app.support.attachment-storage-path:${user.dir}/uploads/support-inquiries}")
     private String attachmentStoragePath;
@@ -46,16 +54,14 @@ public class SupportInquiryStorageService {
             return null;
         }
 
+        if (file.getSize() > MAX_ATTACHMENT_SIZE_BYTES) {
+            throw new BadRequestException("Support attachment must be 5MB or smaller.");
+        }
+
         String originalFileName = StringUtils.cleanPath(file.getOriginalFilename() != null ? file.getOriginalFilename() : "attachment");
         String extension = extractExtension(originalFileName);
-        String contentType = file.getContentType() != null ? file.getContentType().toLowerCase(Locale.ROOT) : "";
-
-        if (!contentType.startsWith("image/")) {
-            throw new BadRequestException("첨부 파일은 이미지여야 합니다.");
-        }
-        if (!ALLOWED_EXTENSIONS.contains(extension)) {
-            throw new BadRequestException("지원하지 않는 이미지 형식입니다.");
-        }
+        String contentType = resolveAllowedContentType(extension, file.getContentType());
+        validateBinarySignature(file, contentType);
 
         Path userDirectory = rootPath.resolve("user-" + userId).normalize();
         if (!userDirectory.startsWith(rootPath)) {
@@ -122,6 +128,70 @@ public class SupportInquiryStorageService {
         }
     }
 
+    private String resolveAllowedContentType(String extension, String rawContentType) {
+        String expectedContentType = ALLOWED_CONTENT_TYPES_BY_EXTENSION.get(extension);
+        if (expectedContentType == null) {
+            throw new BadRequestException("Unsupported support attachment image format.");
+        }
+        String normalizedContentType = rawContentType == null ? "" : rawContentType.trim().toLowerCase(Locale.ROOT);
+        if (!expectedContentType.equals(normalizedContentType)) {
+            throw new BadRequestException("Support attachment extension and content type must match.");
+        }
+        return expectedContentType;
+    }
+
+    private void validateBinarySignature(MultipartFile file, String contentType) {
+        byte[] header = new byte[16];
+        int bytesRead;
+        try (InputStream inputStream = file.getInputStream()) {
+            bytesRead = inputStream.read(header);
+        } catch (IOException exception) {
+            throw new BadRequestException("Support attachment content could not be inspected.");
+        }
+        if (bytesRead <= 0 || !matchesSignature(header, bytesRead, contentType)) {
+            throw new BadRequestException("Support attachment binary content does not match its image type.");
+        }
+    }
+
+    private boolean matchesSignature(byte[] header, int bytesRead, String contentType) {
+        return switch (contentType) {
+            case "image/png" -> bytesRead >= 8
+                    && unsigned(header[0]) == 0x89
+                    && header[1] == 0x50
+                    && header[2] == 0x4E
+                    && header[3] == 0x47
+                    && header[4] == 0x0D
+                    && header[5] == 0x0A
+                    && header[6] == 0x1A
+                    && header[7] == 0x0A;
+            case "image/jpeg" -> bytesRead >= 3
+                    && unsigned(header[0]) == 0xFF
+                    && unsigned(header[1]) == 0xD8
+                    && unsigned(header[2]) == 0xFF;
+            case "image/gif" -> bytesRead >= 4
+                    && header[0] == 0x47
+                    && header[1] == 0x49
+                    && header[2] == 0x46
+                    && header[3] == 0x38;
+            case "image/webp" -> bytesRead >= 12
+                    && header[0] == 0x52
+                    && header[1] == 0x49
+                    && header[2] == 0x46
+                    && header[3] == 0x46
+                    && header[8] == 0x57
+                    && header[9] == 0x45
+                    && header[10] == 0x42
+                    && header[11] == 0x50;
+            case "image/bmp" -> bytesRead >= 2
+                    && header[0] == 0x42
+                    && header[1] == 0x4D;
+            default -> false;
+        };
+    }
+
+    private int unsigned(byte value) {
+        return value & 0xFF;
+    }
     private String extractExtension(String fileName) {
         int dotIndex = fileName.lastIndexOf('.');
         if (dotIndex < 0) {

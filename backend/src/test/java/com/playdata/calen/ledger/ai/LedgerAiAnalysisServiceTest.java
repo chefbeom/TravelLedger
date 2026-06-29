@@ -1,4 +1,4 @@
-﻿package com.playdata.calen.ledger.ai;
+package com.playdata.calen.ledger.ai;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -208,6 +208,41 @@ class LedgerAiAnalysisServiceTest {
         assertThat(history.getResultJson()).contains("Reduce dining out");
     }
 
+    @Test
+    void analyzeLimitsProviderPayloadEntryCountAndText() {
+        stubUser();
+        stubNoReusableHistory();
+        String longTitle = "T".repeat(120);
+        String longMemo = "M".repeat(220);
+        java.util.List<LedgerEntryRepository.AiExpenseEntryAggregate> entries = new java.util.ArrayList<>();
+        entries.add(expenseEntry(LocalDate.of(2026, 6, 1), longTitle, longMemo, "1000"));
+        for (int i = 0; i < 204; i++) {
+            entries.add(expenseEntry(LocalDate.of(2026, 6, 2 + (i % 20)), "Entry " + i, "Memo " + i, "1000"));
+        }
+        stubMonthlyDatasetWithEntries(entries);
+        when(remoteClient.analyze(any())).thenReturn(remoteResponse());
+        when(historyRepository.save(any())).thenAnswer(invocation -> withId(invocation.getArgument(0), 46L));
+
+        service.analyze(USER_ID, monthlyRequest());
+
+        ArgumentCaptor<LedgerAiAnalysisService.LedgerAiN8nPayload> payloadCaptor =
+                ArgumentCaptor.forClass(LedgerAiAnalysisService.LedgerAiN8nPayload.class);
+        verify(remoteClient).analyze(payloadCaptor.capture());
+        LedgerAiAnalysisService.LedgerAiN8nPayload payload = payloadCaptor.getValue();
+
+        assertThat(payload.expenseEntries()).hasSize(200);
+        assertThat(payload.topExpenses()).hasSize(20);
+        assertThat(payload.payloadMinimization().expenseEntryTotalCount()).isEqualTo(205);
+        assertThat(payload.payloadMinimization().expenseEntrySentCount()).isEqualTo(200);
+        assertThat(payload.payloadMinimization().expenseEntryOverflowCount()).isEqualTo(5);
+        assertThat(payload.payloadMinimization().textLimit()).isEqualTo(80);
+        assertThat(payload.payloadMinimization().memoLimit()).isEqualTo(160);
+        assertThat(payload.expenseEntries().get(0).title()).hasSize(80);
+        assertThat(payload.expenseEntries().get(0).memo()).hasSize(160);
+        assertThat(payload.expenseEntries().get(0).title()).isEqualTo(longTitle.substring(0, 80));
+        assertThat(payload.expenseEntries().get(0).memo()).isEqualTo(longMemo.substring(0, 160));
+        assertThat(payload.outputContract()).contains("payloadMinimization overflow counts");
+    }
     @Test
     void analyzeReusesRecentCompletedHistoryWithoutCallingRemoteProvider() throws Exception {
         stubUser();

@@ -78,6 +78,16 @@ jobs:
       - name: Verify PWA installability and API-cache safety baseline
         shell: pwsh
         run: ./scripts/verify-pwa-mobile-baseline.ps1
+  service-decomposition-plan:
+    name: Service decomposition plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Verify service decomposition plan stays current
+        shell: pwsh
+        run: ./scripts/verify-service-decomposition-plan.ps1
   backend-test:
     name: Backend tests
     runs-on: ubuntu-latest
@@ -131,6 +141,7 @@ jobs:
       - observability-alerts
       - backup-rehearsal-runbook
       - pwa-mobile-baseline
+      - service-decomposition-plan
       - backend-test
       - frontend-build
     if: always()
@@ -139,14 +150,15 @@ jobs:
         shell: bash
         run: |
           declare -A results=(
-            [secret-scan]="${{ needs.secret-scan.result }}"
-            [config-sync]="${{ needs.config-sync.result }}"
-            [migration-discipline]="${{ needs.migration-discipline.result }}"
-            [observability-alerts]="${{ needs.observability-alerts.result }}"
-            [backup-rehearsal-runbook]="${{ needs.backup-rehearsal-runbook.result }}"
-            [pwa-mobile-baseline]="${{ needs.pwa-mobile-baseline.result }}"
-            [backend-test]="${{ needs.backend-test.result }}"
-            [frontend-build]="${{ needs.frontend-build.result }}"
+            [secret-scan]="${{ needs['secret-scan'].result }}"
+            [config-sync]="${{ needs['config-sync'].result }}"
+            [migration-discipline]="${{ needs['migration-discipline'].result }}"
+            [observability-alerts]="${{ needs['observability-alerts'].result }}"
+            [backup-rehearsal-runbook]="${{ needs['backup-rehearsal-runbook'].result }}"
+            [pwa-mobile-baseline]="${{ needs['pwa-mobile-baseline'].result }}"
+            [service-decomposition-plan]="${{ needs['service-decomposition-plan'].result }}"
+            [backend-test]="${{ needs['backend-test'].result }}"
+            [frontend-build]="${{ needs['frontend-build'].result }}"
           )
 
           failed=0

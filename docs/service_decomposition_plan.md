@@ -8,7 +8,7 @@ This plan keeps the next refactors small and reversible. The goal is not to spli
 
 | Service | Current size | Main risk |
 | --- | ---: | --- |
-| `LedgerAiAnalysisService` | 1255 lines | AI payload creation, provider orchestration, duplicate suppression, history persistence, report mapping, metrics, and notification side effects live in one transaction boundary. |
+| `LedgerAiAnalysisService` | 1258 lines | AI payload creation, provider orchestration, duplicate suppression, history persistence, report mapping, metrics, and notification side effects live in one transaction boundary. |
 | `TravelService` | 3278 lines | Plans, sharing, map snapshots, media upload completion, route/GPX handling, expense reflection, cache invalidation, public atlas reads, and exchange rates are mixed in one service. |
 
 ## Refactor Guardrails
@@ -65,6 +65,10 @@ This plan keeps the next refactors small and reversible. The goal is not to spli
 3. Extract `TravelMediaUploadCoordinator` because presigned object-key scope and upload validation are now covered by focused storage tests.
 4. Extract `TravelMapQueryService` after map/share visibility tests are in place.
 5. Extract write-heavy travel sharing and ledger bridge code only after owner-scope integration tests cover the moved behavior.
+
+## Plan Sync Gate
+
+scripts/verify-service-decomposition-plan.ps1 checks that the Current Baseline line counts match the tracked service files and that the guardrails, extraction queues, exit criteria, and refactor review checklist stay present. The CI service-decomposition-plan job runs this gate so large-service drift is visible before refactor work merges.
 
 ## Refactor Review Checklist
 

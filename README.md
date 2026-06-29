@@ -414,7 +414,7 @@ docker compose up -d --build
 | `LEDGER_OCR_READ_TIMEOUT` | 읽기 timeout | `90s` |
 | `LEDGER_OCR_MAX_FILE_SIZE` | OCR 업로드 최대 크기 | `10MB` |
 
-가계부 AI 분석은 `APP_LEDGER_AI_PROVIDER=lmstudio`일 때 LM Studio를 직접 호출하고, `n8n`일 때 기존 workflow webhook을 호출합니다.
+가계부 AI 분석은 `APP_LEDGER_AI_PROVIDER=lmstudio`일 때 LM Studio를 직접 호출하고, `n8n`일 때 기존 workflow webhook을 호출합니다. Provider로 보내는 거래 목록은 개인정보/토큰 보호를 위해 제목/메모가 축약되고 전송 건수가 제한됩니다.
 
 | 변수 | 설명 | 기본값 |
 | --- | --- | --- |

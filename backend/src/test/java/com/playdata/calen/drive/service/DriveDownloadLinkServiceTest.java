@@ -189,6 +189,18 @@ class DriveDownloadLinkServiceTest {
     }
 
     @Test
+    void listAccessLogsRejectsNonOwnerBeforeReadingLogs() {
+        when(driveDownloadLinkRepository.findByIdAndOwner_Id(7L, 2L)).thenReturn(Optional.empty());
+
+        DriveDownloadLinkService service = newService();
+
+        assertThatThrownBy(() -> service.listAccessLogs(2L, 7L))
+                .isInstanceOf(NotFoundException.class)
+                .hasMessage("Download link was not found.");
+
+        verify(driveDownloadLinkAccessLogService, never()).listRecentLogs(2L, 7L);
+    }
+    @Test
     void revokeLinkReturnsUnavailableLink() {
         DriveDownloadLink link = activeLink();
 

@@ -231,6 +231,18 @@ groups:
           summary: Data operations backup has no recent success
           description: Data operations backup type {{ $labels.type }} has not recorded a successful run within 26 hours.
 
+      - alert: CalenLedgerAiHistoryRetentionFailure
+        expr: |
+          sum(increase(calen_ledger_ai_history_retention_runs_total{job="calen-backend", status="failure"}[30m])) > 0
+        for: 0m
+        labels:
+          severity: warning
+          service: calen-backend
+          feature: ledger-ai-retention
+        annotations:
+          summary: Ledger AI history retention cleanup failed
+          description: Ledger AI history retention cleanup has failed within the last 30 minutes. Check backend scheduler logs before relying on retention guarantees.
+
   - name: calen.domain.redis
     rules:
       - alert: CalenRedisConnectionUnavailable

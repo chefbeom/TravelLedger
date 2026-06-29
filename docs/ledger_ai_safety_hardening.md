@@ -215,4 +215,4 @@ APP_LEDGER_AI_HISTORY_RETENTION_CRON=0 15 3 * * *
 APP_LEDGER_AI_HISTORY_RETENTION_ZONE=Asia/Seoul
 ```
 
-The default is disabled to avoid surprise data loss. When enabled, the backend deletes `ledger_ai_analysis_histories` rows whose `createdAt` timestamp is older than the configured retention window. Retention days are clamped to at least one day.
+The default is disabled to avoid surprise data loss. When enabled, the backend deletes `ledger_ai_analysis_histories` rows whose `createdAt` timestamp is older than the configured retention window. Retention days are clamped to at least one day. Retention runs emit `calen_ledger_ai_history_retention_runs_total{status="success|failure"}`, and `CalenLedgerAiHistoryRetentionFailure` alerts when cleanup fails.

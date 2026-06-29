@@ -1,6 +1,7 @@
 package com.playdata.calen.ledger.ai;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -52,6 +53,18 @@ class LedgerAiAnalysisHistoryRetentionServiceTest {
 
         verify(historyRepository).deleteByCreatedAtBefore(cutoffCaptor.capture());
         assertThat(cutoffCaptor.getValue()).isEqualTo(LocalDateTime.of(2026, 6, 29, 3, 15));
+    }
+
+    @Test
+    void scheduledCleanupRecordsFailureWithoutThrowing() {
+        LedgerAiAnalysisHistoryRetentionService service = newService(true, 180);
+        doThrow(new IllegalStateException("database unavailable"))
+                .when(historyRepository)
+                .deleteByCreatedAtBefore(org.mockito.ArgumentMatchers.any(LocalDateTime.class));
+
+        service.runScheduledRetentionCleanup();
+
+        verify(historyRepository).deleteByCreatedAtBefore(org.mockito.ArgumentMatchers.any(LocalDateTime.class));
     }
 
     @Test

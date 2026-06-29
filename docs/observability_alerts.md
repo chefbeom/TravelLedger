@@ -27,6 +27,7 @@ Prometheus sends firing and resolved alerts to Alertmanager at `alertmanager:909
 | CalenPublicDownloadLinkInvalidSpike | invalid/unavailable public-link attempts above 3 per minute for 10m | warning | Shared links may be under abuse, stale, or frequently misused. |
 | CalenDataOpsBackupFailure | backup failure count above 0 within 30m | critical | DB or MinIO backup has failed and needs operator action. |
 | CalenDataOpsBackupStale | no recorded successful backup within 26h | warning | Scheduled backup may be disabled, stuck, or failing before completion. |
+| CalenLedgerAiHistoryRetentionFailure | AI history retention failure count above 0 within 30m | warning | Automatic cleanup failed, so privacy retention guarantees may not be holding. |
 | CalenRedisConnectionUnavailable | `calen_redis_connection_available == 0` for 5m | warning | Cache/state Redis is unavailable from the backend. |
 | CalenMinioStorageHighUsage | MinIO used/capacity above 85% for 15m | warning | Object storage is nearing configured capacity. |
 | CalenExternalWorkflowHighFailureRate | external workflow/client failure ratio above 10% for 10m | warning | n8n/OCR external calls are unreliable or unavailable. |
@@ -64,6 +65,7 @@ Before production use, replace the no-op `ops-critical` and `ops-warning` receiv
 | MinIO object count | `calen_minio_storage_objects` | `calen.minio.storage.objects` | `bucket` | `MinioBackupArchiveService` |
 | External workflow request count | `calen_external_workflow_requests_total` | `calen.external.workflow.requests` | `workflow`, `status` | `LedgerAiN8nClient`, `LedgerOcrRemoteClient` |
 | External workflow request duration | `calen_external_workflow_request_seconds_bucket` | `calen.external.workflow.request` | `workflow`, `status` | `LedgerAiN8nClient`, `LedgerOcrRemoteClient` |
+| Ledger AI history retention run count | `calen_ledger_ai_history_retention_runs_total` | `calen.ledger.ai.history.retention.runs` | `status` | `LedgerAiAnalysisHistoryRetentionService` |
 
 Status labels are intentionally bounded. They must not include user IDs, tokens, filenames, prompts, IP addresses, or provider error bodies.
 

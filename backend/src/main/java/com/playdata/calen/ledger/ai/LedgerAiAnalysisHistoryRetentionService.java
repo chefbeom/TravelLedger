@@ -1,9 +1,12 @@
 package com.playdata.calen.ledger.ai;
 
 import com.playdata.calen.ledger.repository.LedgerAiAnalysisHistoryRepository;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import jakarta.annotation.PostConstruct;
 import java.time.LocalDateTime;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
@@ -20,6 +23,9 @@ public class LedgerAiAnalysisHistoryRetentionService {
     private final int retentionDays;
     private final String retentionCron;
     private final String retentionZone;
+
+    @Autowired(required = false)
+    private MeterRegistry meterRegistry;
 
     public LedgerAiAnalysisHistoryRetentionService(
             LedgerAiAnalysisHistoryRepository historyRepository,
@@ -55,9 +61,15 @@ public class LedgerAiAnalysisHistoryRetentionService {
         if (!retentionEnabled) {
             return;
         }
-        int deletedCount = deleteExpiredHistories(LocalDateTime.now());
-        if (deletedCount > 0) {
-            log.info("Deleted {} expired ledger AI analysis history rows.", deletedCount);
+        try {
+            int deletedCount = deleteExpiredHistories(LocalDateTime.now());
+            recordRetentionRun("success");
+            if (deletedCount > 0) {
+                log.info("Deleted {} expired ledger AI analysis history rows.", deletedCount);
+            }
+        } catch (RuntimeException exception) {
+            recordRetentionRun("failure");
+            log.warn("Scheduled ledger AI history retention cleanup failed.", exception);
         }
     }
 
@@ -66,6 +78,17 @@ public class LedgerAiAnalysisHistoryRetentionService {
         LocalDateTime baseTime = now == null ? LocalDateTime.now() : now;
         LocalDateTime cutoff = baseTime.minusDays(normalizedRetentionDays());
         return historyRepository.deleteByCreatedAtBefore(cutoff);
+    }
+
+    private void recordRetentionRun(String status) {
+        if (meterRegistry == null) {
+            return;
+        }
+        Counter.builder("calen.ledger.ai.history.retention.runs")
+                .description("Ledger AI history retention cleanup runs")
+                .tag("status", status)
+                .register(meterRegistry)
+                .increment();
     }
 
     private int normalizedRetentionDays() {

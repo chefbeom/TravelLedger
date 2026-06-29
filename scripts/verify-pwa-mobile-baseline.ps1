@@ -7,9 +7,9 @@ $indexPath = 'frontend/index.html'
 $registrationPath = 'frontend/src/registerServiceWorker.js'
 $findings = [System.Collections.Generic.List[string]]::new()
 
-foreach ($path in @($manifestPath, $serviceWorkerPath, $indexPath, $registrationPath)) {
+foreach ($path in @($manifestPath, $serviceWorkerPath, $indexPath, $registrationPath, $accessibilityChecklistPath)) {
     if (-not (Test-Path -LiteralPath $path)) {
-        $findings.Add("Missing PWA baseline file: $path") | Out-Null
+        $findings.Add("Missing PWA/mobile/accessibility baseline file: $path") | Out-Null
     }
 }
 
@@ -74,6 +74,34 @@ if (Test-Path -LiteralPath $registrationPath) {
         $findings.Add('Service worker registration must register /sw.js.') | Out-Null
     }
 }
+if (Test-Path -LiteralPath $accessibilityChecklistPath) {
+    $accessibility = Get-Content -LiteralPath $accessibilityChecklistPath -Raw
+    $requiredAccessibilitySnippets = @(
+        'WCAG 2.2 Recommendation',
+        '## WCAG 2.2 Traceability',
+        '2.4.11 Focus Not Obscured',
+        '2.5.7 Dragging Movements',
+        '2.5.8 Target Size (Minimum)',
+        '3.3.8 Accessible Authentication',
+        '4.1.3 Status Messages',
+        '## Accessibility Risk Register',
+        'Login, PIN, session expiry',
+        'Admin dialogs and destructive actions',
+        'Dashboard drag widgets',
+        'Drive/share/file upload',
+        'Maps and travel media',
+        'AI/OCR result review',
+        'Focus returns to the trigger',
+        '360x640',
+        '44x44 CSS px'
+    )
+    foreach ($snippet in $requiredAccessibilitySnippets) {
+        if (-not $accessibility.Contains($snippet)) {
+            $findings.Add("Accessibility/mobile checklist missing required WCAG 2.2 baseline snippet: $snippet") | Out-Null
+        }
+    }
+}
+
 
 if ($findings.Count -gt 0) {
     Write-Host 'PWA/mobile baseline check failed.'

@@ -27,7 +27,7 @@ This roadmap turns the current improvement analysis into an implementation queue
 | Workstream | Why it matters | First slice | Evidence of done |
 | --- | --- | --- | --- |
 | Service decomposition | `LedgerAiAnalysisService` and `TravelService` carry many responsibilities. | Extract AI payload builder, report merger, and response validator. | Smaller classes with focused unit tests. |
-| DB migration management | `*SchemaUpdater` classes are convenient but weak for production rollback/audit. | Introduce Flyway or Liquibase for new tables first. | New schema change has versioned migration and repeatable local start. |
+| DB migration management | `*SchemaUpdater` classes are convenient but weak for production rollback/audit. | Flyway is wired behind `DB_MIGRATION_ENABLED`; convert schema changes one area at a time. | New schema change has versioned migration and repeatable local start. |
 | Observability/alerts | Prometheus/Grafana exists, but alerting is the next operational jump. | Add metrics for AI/OCR failures, backup failures, Redis errors. | Grafana/Prometheus alert rules documented and tested by metric scrape. |
 | Backup reliability | Backups exist, but restore confidence matters more than backup creation. | Add restore rehearsal checklist and encrypted artifact option. | Documented restore test with timestamped result. |
 | CI gates | Manual checks are easy to skip. | Add backend test, frontend build, and secret scan to Jenkins/GitHub Actions. | Push triggers automated gates. |
@@ -65,3 +65,4 @@ This roadmap turns the current improvement analysis into an implementation queue
 | `docs/security_baseline_checklist.md` | Security checklist and immediate tests. |
 | `docs/ledger_ai_safety_hardening.md` | AI provider safety, failure handling, and hardening backlog. |
 | `docs/project_improvement_roadmap.md` | Prioritized roadmap for improvements and new features. |
+| `docs/db_migration_strategy.md` | Flyway transition plan and schema updater retirement queue. |

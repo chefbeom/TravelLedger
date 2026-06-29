@@ -216,6 +216,7 @@ CalenDrive는 개인 파일 드라이브 기능입니다. 파일/폴더 탐색, 
 | Spring Web/Security/JPA/Validation | REST API, 인증, ORM, 요청 검증 |
 | Spring Actuator | health/info/prometheus 운영 엔드포인트 |
 | MariaDB | 운영 데이터베이스 |
+| Flyway | 버전 기반 DB 마이그레이션 |
 | H2 | 로컬 기본 인메모리 데이터베이스 |
 | Redis/Lettuce | 캐시/상태 저장 |
 | MinIO | 오브젝트 스토리지 |
@@ -371,6 +372,9 @@ docker compose up -d --build
 | `JWT_EXPIRE` | JWT 만료 시간 | `300000000` |
 | `APP_SEED_ENABLED` | 초기 데이터 seed 여부 | `false` |
 | `H2_CONSOLE_ENABLED` | H2 console 활성화 | `false` |
+| `DB_MIGRATION_ENABLED` | Flyway 마이그레이션 활성화 | `false` |
+| `DB_MIGRATION_BASELINE_ON_MIGRATE` | 기존 DB baseline 허용 | `true` |
+| `DB_MIGRATION_VALIDATE_ON_MIGRATE` | 마이그레이션 검증 활성화 | `true` |
 
 ### Storage
 

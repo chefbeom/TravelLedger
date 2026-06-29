@@ -14,6 +14,12 @@ spring:
     properties:
       hibernate:
         format_sql: ${JPA_FORMAT_SQL:false}
+  flyway:
+    enabled: ${DB_MIGRATION_ENABLED:false}
+    locations: classpath:db/migration
+    baseline-on-migrate: ${DB_MIGRATION_BASELINE_ON_MIGRATE:true}
+    baseline-version: ${DB_MIGRATION_BASELINE_VERSION:0}
+    validate-on-migrate: ${DB_MIGRATION_VALIDATE_ON_MIGRATE:true}
   h2:
     console:
       enabled: ${H2_CONSOLE_ENABLED:false}

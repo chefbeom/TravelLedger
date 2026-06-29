@@ -1,0 +1,7 @@
+-- TravelLedger Flyway baseline marker.
+--
+-- This migration intentionally changes no schema. It gives new installations and
+-- controlled migration rehearsals a first versioned Flyway entry while existing
+-- production schemas are prepared with baseline-on-migrate.
+--
+-- Add all future schema changes as explicit versioned migrations in this folder.

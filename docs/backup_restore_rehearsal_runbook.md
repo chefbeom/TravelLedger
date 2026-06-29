@@ -93,6 +93,16 @@ Minimum encryption acceptance criteria:
 - A test decrypt succeeds during the rehearsal.
 - Failed decrypt produces an alert or manual incident note.
 
+## Encryption Acceptance Matrix
+
+| Artifact | Required encryption state | Key custody | Rehearsal proof | Plaintext exception path |
+| --- | --- | --- | --- | --- |
+| MariaDB logical dump | Encrypted before leaving the backup host or admin workstation. | Key owner and recovery owner are named; key material is not stored on the backup remote. | Test decrypt, checksum or row-count smoke check, and isolated DB import succeed. | Exception must name owner, expiry date, compensating access control, and follow-up issue. |
+| MinIO archive | Encrypted before upload when it contains user files, photos, OCR images, or drive objects. | Key owner and recovery owner are named; restore operator can locate the key through approved secret storage. | Test decrypt/unpack, `_backup-manifest.json` validation, and sample object restore succeed. | Exception must name owner, expiry date, compensating access control, and follow-up issue. |
+| Pre-production fallback dump | Encrypted if retained after the maintenance window. | Temporary key custody is recorded and destroyed or escrowed after the restore decision. | Test decrypt or immediate restore verification succeeds before production restore proceeds. | Plaintext fallback must be deleted after the window and recorded in cleanup evidence. |
+
+Encryption evidence must describe the tool and result, not the secret. Acceptable examples are `age recipient: ops-backup`, `gpg key fingerprint ending ABCD`, or `KMS key alias: calen-backup-prod`; unacceptable evidence includes raw private keys, passphrases, OAuth tokens, rclone config contents, presigned URLs, or full dump snippets.
+
 ## Evidence Template
 
 Copy this block into the operations ticket or release note after each rehearsal.
@@ -107,6 +117,12 @@ Remote directory:
 Artifact name:
 Artifact timestamp:
 Artifact size:
+Encryption status: encrypted | exception-approved | not-applicable-local
+Encryption tool or key alias:
+Key owner/recovery owner:
+Decrypt test result:
+Integrity check: checksum | manifest | table counts | sample object compare
+Plaintext exception owner/expiry:
 Restore target:
 Restore started at:
 Restore finished at:
@@ -142,4 +158,5 @@ A release that changes backup, restore, schema migration, storage layout, or adm
 - A successful rehearsal record using this runbook. CI also runs `scripts/verify-backup-rehearsal-runbook.ps1` to keep this runbook release-ready.
 - A named fallback artifact created before risky production work.
 - A statement that production data was not touched during rehearsal.
-- A follow-up ticket for encryption if backups are still stored as plaintext archives.
+- Encryption evidence for DB dumps, MinIO archives, and fallback dumps, including decrypt and integrity-check results.
+- A plaintext exception owner, expiry date, compensating control, and follow-up issue if any backup artifact remains unencrypted.

@@ -62,7 +62,9 @@ $requiredSafetyPhrases = @(
     'If encryption is enabled, rehearse decrypt-and-restore, not only download.',
     'Store encryption keys outside the backup remote.',
     'A successful rehearsal record using this runbook.',
-    'A named fallback artifact created before risky production work.'
+    'A named fallback artifact created before risky production work.',
+    'Encryption evidence for DB dumps, MinIO archives, and fallback dumps, including decrypt and integrity-check results.',
+    'A plaintext exception owner, expiry date, compensating control, and follow-up issue if any backup artifact remains unencrypted.'
 )
 
 foreach ($phrase in $requiredSafetyPhrases) {

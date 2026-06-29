@@ -1,6 +1,6 @@
 # PWA and Mobile Capture Baseline
 
-This slice makes the frontend more usable as an installable mobile workspace without changing server-side upload trust boundaries.
+This slice makes the frontend more usable as an installable mobile workspace without changing server-side upload trust boundaries. `scripts/verify-pwa-mobile-baseline.ps1` now gates the installable app shell, API-cache exclusion, WCAG/mobile checklist anchors, and camera capture hints for the main image upload flows.
 
 ## Installed app shell
 
@@ -19,7 +19,7 @@ The following image upload inputs now include `capture="environment"` so support
 - Travel memory photo uploads in `TravelMemoryPanel.vue`.
 - CalenDrive profile image upload in `CalenDriveProfileModal.vue`.
 
-These are client-side hints only. The backend MIME, extension, size, OCR, thumbnail, and privacy checks remain the authority.
+These are client-side hints only. The backend MIME, extension, size, OCR, thumbnail, and privacy checks remain the authority. The verifier checks the component anchors so camera hints cannot silently disappear from OCR, travel, family album, or profile image flows.
 
 ## Remaining backlog
 
@@ -28,4 +28,4 @@ These are client-side hints only. The backend MIME, extension, size, OCR, thumbn
 | Offline temporary upload queue | Store selected upload intents in IndexedDB with explicit user retry, size limits, and encryption/privacy review. |
 | Install prompt UX | Add a small non-blocking install prompt that respects browser support and user dismissal. |
 | Mobile capture choice | Add separate `Take photo` and `Choose from library` buttons where `capture` is too aggressive for album workflows. |
-| E2E coverage | Add mobile viewport smoke tests for install shell, OCR capture, travel photo upload, and family album upload. |
+| E2E coverage | Add mobile viewport smoke tests for install shell, OCR capture, travel photo upload, family album upload, and camera-hint fallback behavior. |

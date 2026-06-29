@@ -47,8 +47,12 @@ When `from` and `to` are omitted, all non-deleted ledger entries are exported.
 | Add standard import package | Define stable CSV/JSON schema for restoring into a new account. |
 | Add frontend privacy page action | Show confirmation, date range, secondary PIN state, and download result. |
 
-## Test Backlog
+## Test Evidence
 
+- `PrivacyControllerIntegrationTest.dataExportRequiresAuthenticationCsrfAndVerifiedSecondaryPin`: endpoint requires authentication, CSRF, and a verified secondary PIN session before export.
+- `DataPortabilityExportServiceTest.exportUserDataArchiveBuildsEncryptedArchiveWithoutOperationalSecrets`: archive is password-protected, contains ledger CSV plus metadata, and metadata excludes operational secrets, signed URLs, passwords, and tokens.
+- `DataPortabilityExportServiceTest.exportUserDataArchiveVerifiesSecondaryPinBeforeExportingLedgerData`: secondary PIN validation runs before ledger data is exported.
+## Test Backlog
 - Export rejects unauthenticated requests.
 - Export rejects requests without a verified secondary PIN session.
 - Export includes only the authenticated user's ledger entries.

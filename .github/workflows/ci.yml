@@ -168,6 +168,16 @@ jobs:
       - name: Verify notification center contract
         shell: pwsh
         run: ./scripts/verify-notification-center-contract.ps1
+  data-portability-contract:
+    name: Data portability contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Verify data portability contract
+        shell: pwsh
+        run: ./scripts/verify-data-portability-contract.ps1
   service-decomposition-plan:
     name: Service decomposition plan
     runs-on: ubuntu-latest
@@ -280,6 +290,7 @@ jobs:
       - travel-story-export-contract
       - household-budget-goals-contract
       - notification-center-contract
+      - data-portability-contract
       - pwa-mobile-baseline
       - service-decomposition-plan
       - backend-test
@@ -306,6 +317,7 @@ jobs:
             [travel-story-export-contract]="${{ needs['travel-story-export-contract'].result }}"
             [household-budget-goals-contract]="${{ needs['household-budget-goals-contract'].result }}"
             [notification-center-contract]="${{ needs['notification-center-contract'].result }}"
+            [data-portability-contract]="${{ needs['data-portability-contract'].result }}"
             [pwa-mobile-baseline]="${{ needs['pwa-mobile-baseline'].result }}"
             [service-decomposition-plan]="${{ needs['service-decomposition-plan'].result }}"
             [backend-test]="${{ needs['backend-test'].result }}"

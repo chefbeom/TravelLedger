@@ -46,7 +46,7 @@ This roadmap turns the current improvement analysis into an implementation queue
 | Drive file versioning | Makes CalenDrive safer for family use. | Version table, upload-created version rows, owner-scoped version list API, and restore endpoint are in place; frontend drawer remains next. | Uploading a new file records version 1, restore records a RESTORE version row, and the version API is owner-scoped. |
 | Family budget/shared goals | Makes Household area more distinct. | Shared monthly budget and goal progress widget. | Household dashboard shows goal/budget status. |
 | Notification center | Connects disconnected events. | Backend notification APIs now receive AI analysis and shared-file events; next wire backup/budget/travel/OCR producers and frontend badge. | Users can list/read own notifications and receive initial AI/share event records. |
-| Data portability | Builds trust for personal data platform. | Backend data export now returns a secondary-PIN-protected ledger CSV plus metadata archive. | Authenticated user can download own archive without exposing secrets or other users data. |
+| Data portability | Builds trust for personal data platform. | Backend data export returns a secondary-PIN-protected ledger CSV plus safe drive/travel/family media manifests; contract now gates secret-free manifests, owner scope, standard CSV/Excel direction, and future async binary archive boundaries. | Authenticated user can download own archive without exposing secrets, storage paths, raw coordinates, prompts, provider responses, or other users data. |
 | Privacy control panel | Gives users control over sensitive records. | Backend slice now supports AI history deletion and public drive link revocation; next add GPS stripping and export UI. | Authenticated user can clean up own derived AI data and revoke own public links with returned counts. |
 
 ## Suggested Execution Order
@@ -76,7 +76,7 @@ This roadmap turns the current improvement analysis into an implementation queue
 | `docs/backup_restore_rehearsal_runbook.md` | Restore rehearsal evidence, encryption readiness, and failure-handling checklist. |
 | `docs/privacy_control_panel.md` | Backend privacy controls, safety rules, response contract, and next privacy actions. |
 | `docs/pwa_mobile_capture.md` | PWA installability, service-worker cache policy, and mobile capture implementation queue. |
-| `docs/data_portability.md` | User data export API, archive contents, security rules, and next portability slices. |
+| `docs/data_portability.md` | User data export API, archive contents, safe manifest rules, standard import/export direction, and async binary archive release contract. |
 | `docs/drive_file_versioning.md` | CalenDrive version table/API baseline and restore backlog. |
 | `docs/notification_center.md` | Notification API contract, safety rules, producer queue, and test backlog. |
 | `docs/transaction_anomaly_detection.md` | Deterministic duplicate detector API, safety rules, and next anomaly detectors. |
@@ -94,5 +94,6 @@ This roadmap turns the current improvement analysis into an implementation queue
 | `scripts/verify-travel-story-export-contract.ps1` | Fails CI if travel story/export loses owner/shared/public visibility rules, media-token safety, secret exclusion, roadmap coverage, or release-gate wiring. |
 | `scripts/verify-household-budget-goals-contract.ps1` | Fails CI if household budget/shared-goal contracts lose owner/member scope, explicit mutation boundaries, export/notification safety, implementation anchors, or release-gate wiring. |
 | `scripts/verify-notification-center-contract.ps1` | Fails CI if notification center loses owner scope, redaction, bounded metadata, relative target links, frontend/API anchors, roadmap coverage, or release-gate wiring. |
+| `scripts/verify-data-portability-contract.ps1` | Fails CI if data portability loses secondary-PIN protection, owner scope, safe manifest/secret exclusion, implementation anchors, roadmap coverage, or release-gate wiring. |
 | `scripts/verify-db-migrations.ps1` | Fails CI on malformed migration names, duplicate versions, or missing baseline marker. |
 | `scripts/verify-prometheus-alerts.ps1` | Fails CI when alert rules are malformed, undocumented, or not loaded by Prometheus. |

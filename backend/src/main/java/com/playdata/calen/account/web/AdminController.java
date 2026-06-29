@@ -1,4 +1,4 @@
-package com.playdata.calen.account.web;
+﻿package com.playdata.calen.account.web;
 
 import com.playdata.calen.account.dto.AdminDashboardResponse;
 import com.playdata.calen.account.dto.AdminDataManagementResponse;
@@ -91,7 +91,7 @@ public class AdminController {
             HttpServletRequest httpRequest
     ) {
         AdminBackupFileResponse response = adminDataManagementService.createManualBackup();
-        recordAdminAction(currentUser, httpRequest, "DATA_BACKUP_CREATE:" + response.fileName());
+        recordAdminAction(currentUser, httpRequest, "DATA_BACKUP_CREATE:" + safeBackupFileName(response.fileName()));
         return response;
     }
 
@@ -101,7 +101,7 @@ public class AdminController {
             HttpServletRequest httpRequest
     ) {
         AdminBackupFileResponse response = adminDataManagementService.createManualMinioBackup();
-        recordAdminAction(currentUser, httpRequest, "MINIO_BACKUP_CREATE:" + response.fileName());
+        recordAdminAction(currentUser, httpRequest, "MINIO_BACKUP_CREATE:" + safeBackupFileName(response.fileName()));
         return response;
     }
 
@@ -111,7 +111,7 @@ public class AdminController {
             HttpServletRequest httpRequest
     ) {
         AdminDataManagementService.PreparedBackupDownload preparedBackup = adminDataManagementService.createDownloadableBackup();
-        recordAdminAction(currentUser, httpRequest, "DATA_BACKUP_DOWNLOAD:" + preparedBackup.fileName());
+        recordAdminAction(currentUser, httpRequest, "DATA_BACKUP_DOWNLOAD:" + safeBackupFileName(preparedBackup.fileName()));
         StreamingResponseBody body = outputStream -> {
             try (InputStream inputStream = java.nio.file.Files.newInputStream(preparedBackup.path())) {
                 inputStream.transferTo(outputStream);
@@ -134,7 +134,7 @@ public class AdminController {
             @Valid @RequestBody AdminRestoreBackupRequest request
     ) {
         adminDataManagementService.restoreBackup(request.fileName());
-        recordAdminAction(currentUser, httpRequest, "DATA_RESTORE:" + request.fileName());
+        recordAdminAction(currentUser, httpRequest, "DATA_RESTORE:" + safeBackupFileName(request.fileName()));
         return ResponseEntity.noContent().build();
     }
 
@@ -145,7 +145,7 @@ public class AdminController {
             @RequestPart("file") MultipartFile file
     ) throws IOException {
         adminDataManagementService.restoreUploadedBackup(file);
-        recordAdminAction(currentUser, httpRequest, "DATA_RESTORE_UPLOAD:" + safeDetail(file.getOriginalFilename()));
+        recordAdminAction(currentUser, httpRequest, "DATA_RESTORE_UPLOAD:" + safeBackupFileName(file.getOriginalFilename()));
         return ResponseEntity.noContent().build();
     }
 
@@ -198,6 +198,16 @@ public class AdminController {
         return httpRequest.getRemoteAddr();
     }
 
+
+    private String safeBackupFileName(String value) {
+        String detail = safeDetail(value);
+        if ("-".equals(detail)) {
+            return detail;
+        }
+        String normalized = detail.replace('\\', '/');
+        int separatorIndex = normalized.lastIndexOf('/');
+        return separatorIndex >= 0 ? normalized.substring(separatorIndex + 1) : normalized;
+    }
     private String safeDetail(String value) {
         return value == null || value.isBlank() ? "-" : value.trim();
     }
@@ -230,3 +240,6 @@ public class AdminController {
         return ResponseEntity.noContent().build();
     }
 }
+
+
+

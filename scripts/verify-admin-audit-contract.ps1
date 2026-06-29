@@ -1,4 +1,4 @@
-Set-StrictMode -Version Latest
+﻿Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $contractPath = 'docs/admin_audit_log_contract.md'
@@ -8,11 +8,12 @@ $loginAuditServicePath = 'backend/src/main/java/com/playdata/calen/account/servi
 $adminControllerPath = 'backend/src/main/java/com/playdata/calen/account/web/AdminController.java'
 $driveAdminControllerPath = 'backend/src/main/java/com/playdata/calen/drive/web/DriveAdminController.java'
 $loginAuditTestPath = 'backend/src/test/java/com/playdata/calen/account/service/LoginAuditLogServiceTest.java'
+$adminControllerAuditDetailTestPath = 'backend/src/test/java/com/playdata/calen/account/web/AdminControllerAuditDetailTest.java'
 $driveAdminSecurityTestPath = 'backend/src/test/java/com/playdata/calen/drive/web/DriveAdminSecurityIntegrationTest.java'
 
 $findings = [System.Collections.Generic.List[string]]::new()
 
-foreach ($path in @($contractPath, $securityChecklistPath, $ciPath, $loginAuditServicePath, $adminControllerPath, $driveAdminControllerPath, $loginAuditTestPath, $driveAdminSecurityTestPath)) {
+foreach ($path in @($contractPath, $securityChecklistPath, $ciPath, $loginAuditServicePath, $adminControllerPath, $driveAdminControllerPath, $loginAuditTestPath, $adminControllerAuditDetailTestPath, $driveAdminSecurityTestPath)) {
     if (-not (Test-Path -LiteralPath $path)) {
         $findings.Add("Missing admin audit contract input: $path") | Out-Null
     }
@@ -26,6 +27,7 @@ if ($findings.Count -eq 0) {
     $adminController = Get-Content -LiteralPath $adminControllerPath -Raw
     $driveAdminController = Get-Content -LiteralPath $driveAdminControllerPath -Raw
     $loginAuditTest = Get-Content -LiteralPath $loginAuditTestPath -Raw
+    $adminControllerAuditDetailTest = Get-Content -LiteralPath $adminControllerAuditDetailTestPath -Raw
     $driveAdminSecurityTest = Get-Content -LiteralPath $driveAdminSecurityTestPath -Raw
 
     $requiredSections = @(
@@ -69,7 +71,7 @@ if ($findings.Count -eq 0) {
             $findings.Add("LoginAuditLogService missing audit persistence snippet: $snippet") | Out-Null
         }
     }
-    foreach ($snippet in @('LoginAuditLogService', 'recordAdminAction(', 'safeDetail(')) {
+    foreach ($snippet in @('LoginAuditLogService', 'recordAdminAction(', 'safeDetail(', 'safeBackupFileName(', "detail.replace('\\', '/')")) {
         if (-not $adminController.Contains($snippet)) {
             $findings.Add("AdminController missing audit wiring snippet: $snippet") | Out-Null
         }
@@ -93,7 +95,8 @@ if ($findings.Count -eq 0) {
         'raw OCR image data',
         'raw AI prompt',
         'provider response body',
-        'full filesystem path'
+        'full filesystem path',
+        'safeBackupFileName(...) to avoid storing full paths'
     )
     foreach ($phrase in $requiredSafeDetailPhrases) {
         if (-not $contract.Contains($phrase)) {
@@ -106,13 +109,18 @@ if ($findings.Count -eq 0) {
             $findings.Add("LoginAuditLogServiceTest missing audit evidence snippet: $snippet") | Out-Null
         }
     }
+    foreach ($snippet in @('restoreAuditDetailUsesBackupBaseFileNameOnly', 'uploadedRestoreAuditDetailUsesUploadedBackupBaseFileNameOnly', 'DATA_RESTORE:calen-2026-06-30.sql.gz', 'DATA_RESTORE_UPLOAD:uploaded-backup.sql')) {
+        if (-not $adminControllerAuditDetailTest.Contains($snippet)) {
+            $findings.Add("AdminControllerAuditDetailTest missing safe audit file-name evidence snippet: $snippet") | Out-Null
+        }
+    }
     foreach ($snippet in @('DRIVE_STORAGE_CAPACITY_UPDATE', 'doesNotContain("password", "token", "key")', 'LoginAuditStatus.ADMIN_ACTION')) {
         if (-not $driveAdminSecurityTest.Contains($snippet)) {
             $findings.Add("DriveAdminSecurityIntegrationTest missing safe audit evidence snippet: $snippet") | Out-Null
         }
     }
 
-    foreach ($snippet in @('AUDIT-01', 'docs/admin_audit_log_contract.md', 'scripts/verify-admin-audit-contract.ps1')) {
+    foreach ($snippet in @('AUDIT-01', 'docs/admin_audit_log_contract.md', 'scripts/verify-admin-audit-contract.ps1', 'AdminControllerAuditDetailTest')) {
         if (-not $securityChecklist.Contains($snippet)) {
             $findings.Add("Security baseline missing admin audit contract snippet: $snippet") | Out-Null
         }
@@ -132,3 +140,4 @@ if ($findings.Count -gt 0) {
 }
 
 Write-Host 'Admin audit contract verification passed.'
+

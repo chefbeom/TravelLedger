@@ -1,4 +1,4 @@
-Set-StrictMode -Version Latest
+﻿Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $planPath = 'docs/service_decomposition_plan.md'
@@ -13,7 +13,7 @@ $trackedServices = @(
     @{
         Name = 'LedgerAiAnalysisService'
         Path = 'backend/src/main/java/com/playdata/calen/ledger/ai/LedgerAiAnalysisService.java'
-        MaxLines = 1200
+        MaxLines = 1255
         RequiredSections = @('## Ledger AI Extraction Queue', '### Ledger AI Exit Criteria')
     },
     @{

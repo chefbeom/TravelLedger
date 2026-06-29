@@ -1,4 +1,4 @@
-# Service Decomposition Plan
+﻿# Service Decomposition Plan
 
 Updated: 2026-06-30
 
@@ -8,14 +8,14 @@ This plan keeps the next refactors small and reversible. The goal is not to spli
 
 | Service | Current size | Main risk |
 | --- | ---: | --- |
-| `LedgerAiAnalysisService` | 1175 lines | AI payload creation, provider orchestration, duplicate suppression, history persistence, report mapping, metrics, and notification side effects live in one transaction boundary. |
+| LedgerAiAnalysisService | 1230 lines | AI orchestration still owns payload creation, provider calls, duplicate suppression, history persistence, report mapping, metrics, and notification side effects; provider output contract text is now isolated in LedgerAiOutputContract. |
 | `TravelService` | 2940 lines | Plans, sharing, map snapshots, media upload completion, route/GPX handling, expense reflection, cache invalidation, public atlas reads, and exchange rates are mixed in one service. |
 
 ## CI Line Budget
 
 | Service | Current baseline | CI budget | Policy |
 | --- | ---: | ---: | --- |
-| `LedgerAiAnalysisService` | 1175 lines | 1200 lines | Growth past the budget must extract payload, provider-call, report, history, or notification behavior before raising the limit. |
+| LedgerAiAnalysisService | 1230 lines | 1255 lines | Growth past the budget must extract payload, provider-call, report, history, or notification behavior before raising the limit. |
 | `TravelService` | 2940 lines | 3000 lines | Growth past the budget must split media, map, share, route, exchange-rate, or ledger-bridge behavior before raising the limit. |
 
 The budget is intentionally close to the current baseline so service decomposition behaves as a ratchet: new feature work should reduce or isolate responsibilities instead of adding more code to the large orchestrators.
@@ -36,12 +36,16 @@ The budget is intentionally close to the current baseline so service decompositi
 
 | Phase | Candidate collaborator | Move out of `LedgerAiAnalysisService` | Test focus |
 | --- | --- | --- | --- |
-| 1 | `LedgerAiAnalysisPayloadBuilder` | Dataset-to-provider payload mapping, entry truncation, top expense limiting, `payloadMinimization`, output contract text. | Prompt-injection-as-data, text limits, overflow counts, provider payload shape. |
+| 1 | `LedgerAiAnalysisPayloadBuilder` | Dataset-to-provider payload mapping, entry truncation, top expense limiting, and `payloadMinimization`; provider output contract text is already isolated in `LedgerAiOutputContract`. | Prompt-injection-as-data, text limits, overflow counts, provider payload shape. |
 | 2 | `LedgerAiAnalysisReportMerger` | Fallback report creation, remote report merge, summary/highlight/warning fallback rules. | Invalid/partial provider responses still produce safe advice-only report fields. |
 | 3 | `LedgerAiAnalysisPlanResolver` | Request mode/period/custom date validation and comparison range resolution. | Monthly/custom/comparison range boundaries and bad request messages. |
 | 4 | `LedgerAiAnalysisHistoryCoordinator` | Recent completed duplicate suppression, failed/completed history persistence, provider/model identity. | 5-minute reuse, failed history on provider exception, provider-aware lookup keys. |
 | 5 | `LedgerAiAnalysisOrchestrator` | Remote provider call sequence, timer/counter recording, notification side effects. | Provider failure metrics, notification metadata safety, no duplicate remote call on cache hit. |
 
+
+### Ledger AI Extraction Progress
+
+- 2026-06-30: Extracted provider output contract text into LedgerAiOutputContract, reducing LedgerAiAnalysisService to 1230 lines while keeping the existing provider payload contract surface stable.
 ### Ledger AI Exit Criteria
 
 - The original service becomes a thin orchestration layer under roughly 400-600 lines.
@@ -69,7 +73,7 @@ The budget is intentionally close to the current baseline so service decompositi
 
 ## Suggested First Implementation Slices
 
-1. Extract `LedgerAiAnalysisPayloadBuilder` because it is mostly pure and already has strong payload-minimization tests.
+1. Continue `LedgerAiAnalysisPayloadBuilder` extraction by moving dataset-to-provider payload mapping and truncation now that output contract text is isolated.
 2. Extract `LedgerAiAnalysisReportMerger` because it makes provider response safety easier to test without repositories.
 3. Extract `TravelMediaUploadCoordinator` because presigned object-key scope and upload validation are now covered by focused storage tests.
 4. Extract `TravelMapQueryService` after map/share visibility tests are in place.

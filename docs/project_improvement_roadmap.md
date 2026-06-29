@@ -26,7 +26,7 @@ This roadmap turns the current improvement analysis into an implementation queue
 
 | Workstream | Why it matters | First slice | Evidence of done |
 | --- | --- | --- | --- |
-| Service decomposition | `LedgerAiAnalysisService` is 1255 lines and `TravelService` is 3278 lines, so risky behavior is hard to isolate. | Use `docs/service_decomposition_plan.md` to extract pure AI payload/report/plan collaborators first, then travel media/map/share collaborators. | Each extraction leaves controller DTOs stable and adds focused tests for owner scope, AI safety, cache invalidation, and side effects. |
+| Service decomposition | LedgerAiAnalysisService is 1230 lines and TravelService is 3278 lines, so risky behavior is hard to isolate. | LedgerAiOutputContract now owns provider output contract text; use docs/service_decomposition_plan.md to extract remaining pure AI payload/report/plan collaborators next, then travel media/map/share collaborators. | Each extraction leaves controller DTOs stable and adds focused tests for owner scope, AI safety, cache invalidation, and side effects. |
 | DB migration management | `*SchemaUpdater` classes are convenient but weak for production rollback/audit. | Flyway is wired behind `DB_MIGRATION_ENABLED`; AI history provider tracking uses a versioned migration; CI now checks migration naming, duplicate versions, and baseline marker presence. | New schema change has a versioned migration, passes migration discipline check, and has repeatable local/staging startup evidence. |
 | Observability/alerts | Prometheus/Grafana exists, but alerting is the next operational jump. | Prometheus alert rules cover AI/OCR failures, external workflow latency, backup failures/staleness, Redis availability, MinIO capacity, DB pool pressure, backend SLOs, public-link abuse, JVM heap, and host disk; CI now verifies alert documentation and rule structure. | Alert changes pass `scripts/verify-prometheus-alerts.ps1`, and new runtime metrics still need scrape/unit evidence. |
 | Backup reliability | Backups exist, but restore confidence matters more than backup creation. | Use `docs/backup_restore_rehearsal_runbook.md` to record restore evidence and encryption readiness. | Documented restore rehearsal with artifact name, smoke counts, cleanup, and timestamp. |
@@ -98,4 +98,5 @@ This roadmap turns the current improvement analysis into an implementation queue
 | `scripts/verify-data-portability-contract.ps1` | Fails CI if data portability loses secondary-PIN protection, owner scope, safe manifest/secret exclusion, implementation anchors, roadmap coverage, or release-gate wiring. |
 | `scripts/verify-db-migrations.ps1` | Fails CI on malformed migration names, duplicate versions, or missing baseline marker. |
 | `scripts/verify-prometheus-alerts.ps1` | Fails CI when alert rules are malformed, undocumented, or not loaded by Prometheus. |
+
 

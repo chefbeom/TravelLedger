@@ -1,4 +1,4 @@
-﻿Set-StrictMode -Version Latest
+Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $migrationRoot = 'backend/src/main/resources/db/migration'
@@ -43,6 +43,30 @@ if ($trackedMigrations.Count -eq 0) {
 $baseline = Join-Path $migrationRoot 'V20260629_000__baseline_marker.sql'
 if (-not (Test-Path -LiteralPath $baseline)) {
     $findings.Add("Missing baseline marker migration: $baseline") | Out-Null
+}
+
+$requiredMigrationSnippets = @{
+    'V20260630_008__travel_route_segment_fields.sql' = @(
+        'ALTER TABLE travel_route_segments',
+        'MODIFY COLUMN route_path_json LONGTEXT NOT NULL',
+        'ADD COLUMN IF NOT EXISTS line_color_hex VARCHAR(7) NULL',
+        'ADD COLUMN IF NOT EXISTS line_style VARCHAR(20) NULL',
+        'ADD COLUMN IF NOT EXISTS gpx_files_json LONGTEXT NULL'
+    )
+}
+foreach ($entry in $requiredMigrationSnippets.GetEnumerator()) {
+    $migrationPath = Join-Path $migrationRoot $entry.Key
+    if (-not (Test-Path -LiteralPath $migrationPath)) {
+        $findings.Add("Missing required migration content check target: $($entry.Key)") | Out-Null
+        continue
+    }
+
+    $migrationContent = Get-Content -LiteralPath $migrationPath -Raw
+    foreach ($snippet in $entry.Value) {
+        if (-not $migrationContent.Contains($snippet)) {
+            $findings.Add("$($entry.Key): missing required migration snippet: $snippet") | Out-Null
+        }
+    }
 }
 
 $strategyPath = 'docs/db_migration_strategy.md'

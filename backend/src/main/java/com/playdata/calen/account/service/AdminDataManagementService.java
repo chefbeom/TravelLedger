@@ -109,6 +109,11 @@ public class AdminDataManagementService {
     private final RestoreMaintenanceService restoreMaintenanceService;
     private RedisStateService redisStateService;
 
+    @Autowired(required = false)
+    private MeterRegistry meterRegistry;
+
+    private final Map<String, AtomicLong> backupLastSuccessTimestamps = new ConcurrentHashMap<>();
+
     @Value("${spring.datasource.url}")
     private String dataSourceUrl;
 

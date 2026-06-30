@@ -50,6 +50,7 @@ $propertiesTest = Read-RepoFile 'backend/src/test/java/com/playdata/calen/ledger
 $historyRepository = Read-RepoFile 'backend/src/main/java/com/playdata/calen/ledger/repository/LedgerAiAnalysisHistoryRepository.java'
 $outputContract = Read-RepoFile 'backend/src/main/java/com/playdata/calen/ledger/ai/LedgerAiOutputContract.java'
 $frontendApi = Read-RepoFile 'frontend/src/lib/api.js'
+$statisticsWorkspace = Read-RepoFile 'frontend/src/components/StatisticsWorkspace.vue'
 
 Assert-ContainsAll -Label 'AI provider safety contract document' -Content $contract -Needles @(
     '# AI Provider Safety Contract',
@@ -134,6 +135,10 @@ Assert-ContainsAll -Label 'Ledger AI frontend request wrapper' -Content $fronten
     'function withLedgerAiClientRequestId(payload = {})'
     'clientRequestId: payload?.clientRequestId || buildLedgerAiClientRequestId()'
     'JSON.stringify(withLedgerAiClientRequestId(payload))'
+)Assert-ContainsAll -Label 'Statistics AI advisory copy' -Content $statisticsWorkspace -Needles @(
+    'AI 분석 결과는 참고용 조언입니다.'
+    '거래를 자동으로 생성, 수정, 삭제, 분류하지 않습니다'
+    '별도의 확인 액션을 직접 수행해야 합니다'
 )
 Assert-ContainsAll -Label 'Ledger AI output contract' -Content $outputContract -Needles @(
     'final class LedgerAiOutputContract',

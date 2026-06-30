@@ -51,7 +51,7 @@ flowchart TD
 | AI-PROV-09 | Failed provider requests still persist failed history, but error messages are redacted before storage. | `LedgerAiAnalysisServiceTest.analyzeStoresFailedHistoryWhenRemoteRequestFails` and `analyzeStoresFailedHistoryWithoutLeakingProviderSecrets`. |
 | AI-PROV-10 | Recent duplicate completed analysis requests for the same owner, provider, model, mode, period, comparison range, and optional bounded `clientRequestId` reuse the existing result instead of calling the provider again; same-JVM in-flight duplicates are serialized so a browser double-submit cannot create parallel provider calls. The frontend `analyzeLedgerSpending` request wrapper generates bounded `clientRequestId` values before posting analysis requests. `clientRequestId` is backend-only dedupe metadata and must not be sent to LM Studio or n8n payloads. | `LedgerAiAnalysisServiceTest.analyzeReusesRecentCompletedHistoryWithoutCallingRemoteProvider`, `analyzeSerializesParallelDuplicateRequestsAndReusesFirstResult`, `analyzeUsesClientRequestIdOnlyForBackendDedupe`, `LedgerAiAnalysisRequest.clientRequestId`, `LedgerAiAnalysisService.inFlightAnalysisLocks`, and `LedgerAiAnalysisHistoryRepository.findLatestMatchingCompletedAnalysis`. |
 | AI-PROV-11 | Provider latency/failure metrics keep workflow/provider/status tags available for alerting. | `calen.external.workflow.requests`, `calen.external.workflow.request`, `calen.ledger.ai.requests`, and `calen.ledger.ai.request`. |
-| AI-PROV-12 | AI output remains advisory only; any feature that applies mutations must require a separate explicit user action and a dedicated authorization/audit contract. | Output contract text and validator mutation-claim rejection. |
+| AI-PROV-12 | AI output remains advisory only; any feature that applies mutations must require a separate explicit user action and a dedicated authorization/audit contract. The statistics UI must keep visible copy that AI analysis does not create, update, delete, or classify ledger data automatically. | Output contract text, validator mutation-claim rejection, and `StatisticsWorkspace.vue` advisory copy. |
 
 ## LM Studio connection contract
 
@@ -98,5 +98,5 @@ Before enabling or changing a provider in production, verify:
 | P1 | Provider sample fixtures for LM Studio and n8n | Make provider drift visible without requiring live LM Studio or n8n access in CI. |
 | P1 | Metric-level contract tests | Lock `calen.external.workflow.*` and `calen.ledger.ai.*` tags before dashboards depend on them. |
 | P2 | Redaction profile catalog | Keep provider-specific secret formats documented as new providers are added. |
-| P2 | Frontend confidence copy | Make it clear that AI advice is a suggestion, not verified accounting truth. |
+| P2 | Frontend confidence copy | Keep AI advice labeled as advisory analysis and keep the no-automatic-ledger-mutation/user-confirmation boundary visible near every AI result surface. |
 

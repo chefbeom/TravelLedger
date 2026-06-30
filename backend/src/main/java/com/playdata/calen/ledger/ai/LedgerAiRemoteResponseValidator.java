@@ -9,6 +9,9 @@ import java.util.regex.Pattern;
 
 public final class LedgerAiRemoteResponseValidator {
 
+    private static final int MAX_TEXT_VALUE_LENGTH = 2000;
+    private static final int MAX_COLLECTION_SIZE = 20;
+
     private static final Pattern SECRET_DISCLOSURE_PATTERN = Pattern.compile(
             "(?i)(api[_-]?key|secret|token|password)\\s*[:=]\\s*[A-Za-z0-9._~+/=-]{8,}"
     );
@@ -47,6 +50,7 @@ public final class LedgerAiRemoteResponseValidator {
         if (!hasUsableAnalysis(response)) {
             throw new BadRequestException(provider + " AI 遺꾩꽍 ?묐떟???ъ슜?????덈뒗 遺꾩꽍 ?댁슜???놁뒿?덈떎.");
         }
+        rejectOversizedContent(response, provider);
         rejectUnsafeContent(response, provider);
         return response;
     }
@@ -69,6 +73,52 @@ public final class LedgerAiRemoteResponseValidator {
         }
     }
 
+    private static void rejectOversizedContent(LedgerAiRemoteResponse response, String provider) {
+        for (Collection<String> values : allTextCollections(response)) {
+            if (values.size() > MAX_COLLECTION_SIZE) {
+                throw new BadRequestException(provider + " AI analysis response exceeded safe response bounds.");
+            }
+        }
+        for (String value : allTextValues(response)) {
+            if (value != null && value.length() > MAX_TEXT_VALUE_LENGTH) {
+                throw new BadRequestException(provider + " AI analysis response exceeded safe response bounds.");
+            }
+        }
+    }
+
+    private static List<Collection<String>> allTextCollections(LedgerAiRemoteResponse response) {
+        List<Collection<String>> collections = new ArrayList<>();
+        addCollection(collections, response.highlights());
+        addCollection(collections, response.warnings());
+        addCollection(collections, response.risks());
+        addCollection(collections, response.recommendations());
+        addCollection(collections, response.categoryInsights());
+        addCollection(collections, response.paymentInsights());
+        addCollection(collections, response.trendInsights());
+        addCollection(collections, response.unusualSpendingInsights());
+        addCollection(collections, response.fixedCostInsights());
+        addReportCollections(collections, response.report());
+        return collections;
+    }
+
+    private static void addReportCollections(List<Collection<String>> collections, LedgerAiAnalysisReportResponse report) {
+        if (report == null) {
+            return;
+        }
+        addCollection(collections, report.notableSpending());
+        addCollection(collections, report.regularSpending());
+        addCollection(collections, report.abnormalSpending());
+        addCollection(collections, report.subscriptions());
+        addCollection(collections, report.fixedExpenses());
+        addCollection(collections, report.improvementActions());
+        addCollection(collections, report.comparisonFocus());
+    }
+
+    private static void addCollection(List<Collection<String>> collections, Collection<String> source) {
+        if (source != null) {
+            collections.add(source);
+        }
+    }
     private static boolean containsSecretLikeContent(String value) {
         return SECRET_DISCLOSURE_PATTERN.matcher(value).find()
                 || AUTHORIZATION_HEADER_PATTERN.matcher(value).find()

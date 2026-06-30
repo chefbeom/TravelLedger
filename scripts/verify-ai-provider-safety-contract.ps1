@@ -58,6 +58,8 @@ Assert-ContainsAll -Label 'AI provider safety contract document' -Content $contr
     'fail closed',
     'prompt-injection',
     'secret-like',
+    'authorization-header echoes',
+    'oversized text fields',
     'mutation claims',
     'payloadMinimization',
     'Duplicate suppression',
@@ -163,6 +165,10 @@ Assert-ContainsAll -Label 'Remote response validator implementation' -Content $v
     'ENGLISH_MUTATION_CLAIM_PATTERN',
     'KOREAN_MUTATION_CLAIM_PATTERN',
     'requireUsable',
+    'MAX_TEXT_VALUE_LENGTH',
+    'MAX_COLLECTION_SIZE',
+    'rejectOversizedContent',
+    'exceeded safe response bounds',
     'contained secret-like content',
     'claimed ledger data was changed'
 )
@@ -171,6 +177,8 @@ Assert-ContainsAll -Label 'Remote response validator tests' -Content $validatorT
     'rejectsNullResponse',
     'rejectsProviderFailureWithProviderError',
     'rejectsSecretLikeProviderOutput',
+    'rejectsOversizedProviderTextValue',
+    'rejectsOversizedProviderList',
     'rejectsPromptInjectionEchoFromProviderOutput',
     'rejectsProviderOutputClaimingLedgerMutation',
     'rejectsEmptySuccessResponse'

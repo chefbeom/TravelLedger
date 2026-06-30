@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import com.playdata.calen.common.exception.BadRequestException;
 import com.playdata.calen.ledger.dto.LedgerAiAnalysisReportResponse;
 import java.util.List;
+import java.util.stream.IntStream;
 import org.junit.jupiter.api.Test;
 
 class LedgerAiRemoteResponseValidatorTest {
@@ -111,6 +112,39 @@ class LedgerAiRemoteResponseValidatorTest {
                 .hasMessage("LM Studio AI analysis response contained secret-like content.");
     }
 
+    @Test
+    void rejectsOversizedProviderTextValue() {
+        LedgerAiRemoteResponse response = responseWithSummary("x".repeat(2001));
+
+        assertThatThrownBy(() -> LedgerAiRemoteResponseValidator.requireUsable(response, "LM Studio"))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessage("LM Studio AI analysis response exceeded safe response bounds.");
+    }
+
+    @Test
+    void rejectsOversizedProviderList() {
+        LedgerAiRemoteResponse response = new LedgerAiRemoteResponse(
+                true,
+                null,
+                "summary",
+                IntStream.range(0, 21).mapToObj(index -> "highlight " + index).toList(),
+                List.of(),
+                List.of(),
+                List.of(),
+                List.of(),
+                List.of(),
+                List.of(),
+                List.of(),
+                List.of(),
+                null,
+                null,
+                null
+        );
+
+        assertThatThrownBy(() -> LedgerAiRemoteResponseValidator.requireUsable(response, "n8n"))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessage("n8n AI analysis response exceeded safe response bounds.");
+    }
     @Test
     void rejectsAuthorizationHeaderFromProviderOutput() {
         LedgerAiRemoteResponse response = responseWithSummary("Authorization: Bearer abcdefghijk123456789");

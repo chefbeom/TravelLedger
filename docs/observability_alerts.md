@@ -31,6 +31,7 @@ Prometheus sends firing and resolved alerts to Alertmanager at `alertmanager:909
 | CalenRedisConnectionUnavailable | cache Redis `calen_redis_connection_available == 0` for 5m | warning | Cache Redis is unavailable from the backend. |
 | CalenRedisStateConnectionUnavailable | state Redis `calen_redis_connection_available == 0` for 2m | critical | State Redis is unavailable, so session state, throttling, locks, and backup coordination may be unsafe. |
 | CalenMinioStorageHighUsage | MinIO used/capacity above 85% for 15m | warning | Object storage is nearing configured capacity. |
+| CalenMinioCapacityMissing | MinIO capacity metric is missing or not positive for 30m | warning | Usage-ratio alerts cannot evaluate safely without capacity metric/configuration. |
 | CalenExternalWorkflowHighFailureRate | external workflow/client failure ratio above 10% for 10m | warning | n8n/OCR external calls are unreliable or unavailable. |
 | CalenExternalWorkflowSlowP95 | external workflow/client p95 above 30s for 10m | warning | n8n/OCR external calls are approaching user-visible timeout territory. |
 | CalenHostDiskNearlyFull | filesystem free space below 10% for 10m | critical | Uploads, backups, logs, and database files may fail. |
@@ -45,7 +46,7 @@ Prometheus sends firing and resolved alerts to Alertmanager at `alertmanager:909
 | AI failure and latency | `CalenLedgerAiHighFailureRate`, `CalenLedgerAiSlowP95` | Verify LM Studio/n8n availability, provider timeout budget, schema validation failures, and advisory-only UI copy. |
 | n8n/external workflow health | `CalenExternalWorkflowHighFailureRate`, `CalenExternalWorkflowSlowP95` | Check n8n workflow executions, webhook credentials, network reachability, and bounded retry behavior. |
 | Backup success/failure | `CalenDataOpsBackupFailure`, `CalenDataOpsBackupStale` | Inspect DB/MinIO backup logs, confirm last successful artifact, and run the restore rehearsal checklist when needed. |
-| MinIO capacity | `CalenMinioStorageHighUsage`, `CalenHostDiskNearlyFull` | Check bucket capacity configuration, object growth, lifecycle cleanup, and host filesystem space. |
+| MinIO capacity | `CalenMinioStorageHighUsage`, `CalenMinioCapacityMissing`, `CalenHostDiskNearlyFull` | Check bucket capacity configuration, object growth, lifecycle cleanup, and host filesystem space; set a positive `MINIO_STORAGE_CAPACITY_BYTES` before trusting usage-ratio alerts. |
 | Redis availability | `CalenRedisConnectionUnavailable`, `CalenRedisStateConnectionUnavailable` | Check Redis process/network health, distinguish cache from state Redis, and verify session, throttling, locking, and backup-coordination fallback behavior before declaring recovery. |
 | DB pool exhaustion | `CalenHikariPoolNearlyExhausted`, `CalenHikariPendingConnections`, `CalenHikariConnectionTimeouts` | Inspect slow queries, connection leaks, pool size, DB health, and recent traffic spikes. |
 | Privacy retention | `CalenLedgerAiHistoryRetentionFailure` | Check scheduled cleanup logs before relying on AI history retention guarantees. |
@@ -71,7 +72,7 @@ Runbook expectations by alert family:
 | DB pool pressure | Slow query logs, Hikari pending/timeout metrics, connection leak candidates, and traffic spikes. | Fix query/leak cause before increasing pool size; resizing without root cause can move failure to MariaDB. |
 | AI/OCR/n8n/external workflow | Provider health, timeout budget, workflow executions, schema-validation failures, and retry/duplicate-suppression behavior. | Keep results advisory-only; disable provider or workflow integration before allowing duplicate or unsafe writes. |
 | Backup and retention | Backup job logs, latest artifact/checksum, encryption/decrypt evidence, and retention cleanup logs. | Run the restore rehearsal checklist before declaring backup recovery healthy. |
-| Redis, MinIO, and host capacity | Redis connection metrics by `role`, bucket usage/capacity, lifecycle cleanup, disk usage by mount, and upload growth. | Treat `role="state"` Redis loss as critical because locks, throttling, backup coordination, and temporary auth state may be unsafe; prefer cleanup/lifecycle/capacity fixes before reducing retention or disabling safety checks. |
+| Redis, MinIO, and host capacity | Redis connection metrics by `role`, bucket usage/capacity, capacity missing/non-positive alerts, lifecycle cleanup, disk usage by mount, and upload growth. | Treat `role="state"` Redis loss as critical because locks, throttling, backup coordination, and temporary auth state may be unsafe; prefer cleanup/lifecycle/capacity fixes before reducing retention or disabling safety checks. |
 | Public-link abuse | Access-log status mix, token expiry/revocation settings, rate-limit evidence, and owner-scoped audit logs. | Revoke affected links and preserve token fingerprints only; never log raw public tokens. |
 ## Alertmanager routing baseline
 
@@ -100,7 +101,7 @@ Before production use, replace the no-op `ops-critical` and `ops-warning` receiv
 | Data ops backup last success | `calen_data_ops_backup_last_success_timestamp` | `calen.data.ops.backup.last.success.timestamp` | `type` | `AdminDataManagementService` |
 | Redis connection availability | `calen_redis_connection_available` | `calen.redis.connection.available` | `role` | `RedisCacheService`, `RedisStateService` |
 | MinIO storage used bytes | `calen_minio_storage_used_bytes` | `calen.minio.storage.used.bytes` | `bucket` | `MinioBackupArchiveService` |
-| MinIO storage capacity bytes | `calen_minio_storage_capacity_bytes` | `calen.minio.storage.capacity.bytes` | `bucket` | `MinioBackupArchiveService` |
+| MinIO storage capacity bytes | `calen_minio_storage_capacity_bytes` | `calen.minio.storage.capacity.bytes` | `bucket` | `MinioBackupArchiveService`; also drives `CalenMinioCapacityMissing` when not positive |
 | MinIO object count | `calen_minio_storage_objects` | `calen.minio.storage.objects` | `bucket` | `MinioBackupArchiveService` |
 | External workflow request count | `calen_external_workflow_requests_total` | `calen.external.workflow.requests` | `workflow`, `status` | `LedgerAiN8nClient`, `LedgerOcrRemoteClient` |
 | External workflow request duration | `calen_external_workflow_request_seconds_bucket` | `calen.external.workflow.request` | `workflow`, `status` | `LedgerAiN8nClient`, `LedgerOcrRemoteClient` |
@@ -121,7 +122,7 @@ Status labels are intentionally bounded. They must not include user IDs, tokens,
 No remaining metric contract from this alert pass is pending implementation.
 Implementation notes:
 
-- Keep `MINIO_STORAGE_CAPACITY_BYTES` set to a positive value in production to enable usage-ratio alerts.
+- Keep `MINIO_STORAGE_CAPACITY_BYTES` set to a positive value in production; `CalenMinioCapacityMissing` fires when capacity is missing or non-positive so usage-ratio alerts are not silently disabled.
 - Keep labels bounded and operational. Avoid user-controlled or high-cardinality values.
 - Record status values such as `success`, `failure`, `timeout`, `invalid`, `expired`, `revoked`, and `limit_reached`.
 - Alert annotations should describe operational action, include `runbook_url`, and not expose private request data.

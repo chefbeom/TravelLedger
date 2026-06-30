@@ -67,6 +67,7 @@ if ($findings.Count -eq 0) {
         'CalenDataOpsBackupFailure',
         'CalenDataOpsBackupStale',
         'CalenMinioStorageHighUsage',
+        'CalenMinioCapacityMissing',
         'CalenHostDiskNearlyFull',
         'CalenRedisConnectionUnavailable',
         'CalenRedisStateConnectionUnavailable',

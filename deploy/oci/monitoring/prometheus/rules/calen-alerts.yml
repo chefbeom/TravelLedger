@@ -307,6 +307,20 @@ groups:
           summary: MinIO storage usage is above 85 percent
           description: MinIO bucket {{ $labels.bucket }} has used more than 85 percent of configured capacity for 15 minutes.
           runbook_url: docs/observability_alerts.md#alert-runbook-contract
+      - alert: CalenMinioCapacityMissing
+        expr: |
+          absent(calen_minio_storage_capacity_bytes{job="calen-backend"})
+          or
+          max by (bucket) (calen_minio_storage_capacity_bytes{job="calen-backend"}) <= 0
+        for: 30m
+        labels:
+          severity: warning
+          service: calen-backend
+          feature: minio-storage
+        annotations:
+          summary: MinIO storage capacity metric is missing or not configured
+          description: MinIO storage capacity is missing or not positive, so usage-ratio alerts cannot evaluate safely.
+          runbook_url: docs/observability_alerts.md#alert-runbook-contract
 
   - name: calen.host.capacity
     rules:

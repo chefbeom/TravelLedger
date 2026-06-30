@@ -17,12 +17,15 @@ $ocrServicePath = 'backend/src/main/java/com/playdata/calen/ledger/ocr/LedgerOcr
 $ocrServiceTestPath = 'backend/src/test/java/com/playdata/calen/ledger/ocr/LedgerOcrServiceTest.java'
 $backupSchedulerPath = 'backend/src/main/java/com/playdata/calen/account/service/DataOpsBackupScheduler.java'
 $backupSchedulerTestPath = 'backend/src/test/java/com/playdata/calen/account/service/DataOpsBackupSchedulerTest.java'
+$travelReminderSchedulerPath = 'backend/src/main/java/com/playdata/calen/travel/service/TravelReminderNotificationScheduler.java'
+$travelReminderSchedulerTestPath = 'backend/src/test/java/com/playdata/calen/travel/service/TravelReminderNotificationSchedulerTest.java'
+$travelPlanRepositoryPath = 'backend/src/main/java/com/playdata/calen/travel/repository/TravelPlanRepository.java'
 $privacyServicePath = 'backend/src/main/java/com/playdata/calen/account/service/PrivacyManagementService.java'
 $privacyServiceTestPath = 'backend/src/test/java/com/playdata/calen/account/PrivacyManagementServiceTest.java'
 
 $findings = [System.Collections.Generic.List[string]]::new()
 
-foreach ($path in @($contractPath, $securityChecklistPath, $roadmapPath, $ciPath, $controllerPath, $servicePath, $repositoryPath, $serviceTestPath, $frontendPath, $appPath, $apiPath, $ocrServicePath, $ocrServiceTestPath, $backupSchedulerPath, $backupSchedulerTestPath, $privacyServicePath, $privacyServiceTestPath)) {
+foreach ($path in @($contractPath, $securityChecklistPath, $roadmapPath, $ciPath, $controllerPath, $servicePath, $repositoryPath, $serviceTestPath, $frontendPath, $appPath, $apiPath, $ocrServicePath, $ocrServiceTestPath, $backupSchedulerPath, $backupSchedulerTestPath, $travelReminderSchedulerPath, $travelReminderSchedulerTestPath, $travelPlanRepositoryPath, $privacyServicePath, $privacyServiceTestPath)) {
     if (-not (Test-Path -LiteralPath $path)) {
         $findings.Add("Missing notification center contract input: $path") | Out-Null
     }
@@ -45,6 +48,9 @@ $style = Get-Content -LiteralPath $stylePath -Raw
     $ocrServiceTest = Get-Content -LiteralPath $ocrServiceTestPath -Raw
     $backupScheduler = Get-Content -LiteralPath $backupSchedulerPath -Raw
     $backupSchedulerTest = Get-Content -LiteralPath $backupSchedulerTestPath -Raw
+    $travelReminderScheduler = Get-Content -LiteralPath $travelReminderSchedulerPath -Raw
+    $travelReminderSchedulerTest = Get-Content -LiteralPath $travelReminderSchedulerTestPath -Raw
+    $travelPlanRepository = Get-Content -LiteralPath $travelPlanRepositoryPath -Raw
     $privacyService = Get-Content -LiteralPath $privacyServicePath -Raw
     $privacyServiceTest = Get-Content -LiteralPath $privacyServiceTestPath -Raw
 
@@ -108,7 +114,7 @@ $style = Get-Content -LiteralPath $stylePath -Raw
     }
 
 
-    foreach ($snippet in @('Ledger OCR failed', 'Scheduled database backup failed', 'Scheduled MinIO backup failed', 'Privacy cleanup completed', 'BACKUP_FAILED', 'AI_OR_OCR_FAILED', 'PRIVACY_ACTION_DONE')) {
+    foreach ($snippet in @('Ledger OCR failed', 'Scheduled database backup failed', 'Scheduled MinIO backup failed', 'Privacy cleanup completed', 'Travel starts tomorrow', 'BACKUP_FAILED', 'AI_OR_OCR_FAILED', 'PRIVACY_ACTION_DONE', 'TRAVEL_REMINDER')) {
         if (-not $contract.Contains($snippet)) {
             $findings.Add("Notification center contract missing implemented producer snippet: $snippet") | Out-Null
         }
@@ -138,6 +144,24 @@ $style = Get-Content -LiteralPath $stylePath -Raw
         }
     }
 
+
+    foreach ($snippet in @('findAllByStatusAndStartDateBetweenOrderByStartDateAscIdAsc')) {
+        if (-not $travelPlanRepository.Contains($snippet)) {
+            $findings.Add("TravelPlanRepository missing travel reminder query snippet: $snippet") | Out-Null
+        }
+    }
+
+    foreach ($snippet in @('class TravelReminderNotificationScheduler', 'private final TravelPlanRepository travelPlanRepository', 'private final UserNotificationService userNotificationService', 'runTravelRemindersForDate(LocalDate today)', 'findAllByStatusAndStartDateBetweenOrderByStartDateAscIdAsc(', 'TravelPlanStatus.PLANNED', '"TRAVEL_REMINDER"', '"Travel starts tomorrow"', '"/travel-money?planId=" + planId', 'starting_tomorrow')) {
+        if (-not $travelReminderScheduler.Contains($snippet)) {
+            $findings.Add("TravelReminderNotificationScheduler missing producer snippet: $snippet") | Out-Null
+        }
+    }
+
+    foreach ($snippet in @('notifiesOwnersWhenPlannedTravelStartsTomorrowWithBoundedMetadata', 'eq("TRAVEL_REMINDER")', 'eq("Travel starts tomorrow")', 'contains("planned trip starts tomorrow")', 'eq("/travel-money?planId=7")', 'eq("{\"planId\":7,\"dateLabel\":\"2026-07-01\",\"status\":\"starting_tomorrow\"}")', 'Private trip name should not be copied into notification metadata')) {
+        if (-not $travelReminderSchedulerTest.Contains($snippet)) {
+            $findings.Add("TravelReminderNotificationSchedulerTest missing travel reminder evidence snippet: $snippet") | Out-Null
+        }
+    }
     foreach ($snippet in @('private final UserNotificationService userNotificationService', 'notifyPrivacyCleanupComplete(userId, response)', '"PRIVACY_ACTION_DONE"', '"Privacy cleanup complete"', '"/profile?privacy=1"', '"\"aiAnalysisHistoriesDeleted\":"', '"\"publicDownloadLinksRevoked\":"', '"\"travelPublicMediaSharesRevoked\":"', '"\"photoLocationMetadataRemoved\":"')) {
         if (-not $privacyService.Contains($snippet)) {
             $findings.Add("PrivacyManagementService missing privacy notification producer snippet: $snippet") | Out-Null

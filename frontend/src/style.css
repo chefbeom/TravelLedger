@@ -1,4 +1,4 @@
-:root {
+﻿:root {
   font-family: 'Pretendard', 'Segoe UI', 'Apple SD Gothic Neo', sans-serif;
   line-height: 1.5;
   font-weight: 400;
@@ -14116,6 +14116,59 @@ textarea {
 
 :root[data-layout-mode='mobile'] .calendar__metric strong {
   text-align: left;
+}
+
+:root[data-layout-mode='mobile'] .calendar-layout-grid,
+:root[data-layout-mode='mobile'] .calendar-layout-grid.grid-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  height: auto !important;
+  min-height: 0 !important;
+  overflow: visible;
+}
+
+:root[data-layout-mode='mobile'] .calendar-layout-grid > .grid-stack-item,
+:root[data-layout-mode='mobile'] .calendar-layout-grid > .calendar-layout-panel {
+  position: relative !important;
+  inset: auto !important;
+  left: auto !important;
+  top: auto !important;
+  width: 100% !important;
+  height: auto !important;
+  min-height: 0 !important;
+  transform: none !important;
+}
+
+:root[data-layout-mode='mobile'] .calendar-layout-grid .grid-stack-item-content,
+:root[data-layout-mode='mobile'] .calendar-layout-panel__content {
+  position: relative !important;
+  inset: auto !important;
+  width: 100% !important;
+  height: auto !important;
+  min-height: 0 !important;
+  overflow: visible;
+}
+
+:root[data-layout-mode='mobile'] .calendar-layout-panel--quick-entry {
+  order: 1;
+}
+
+:root[data-layout-mode='mobile'] .calendar-layout-panel--calendar {
+  order: 2;
+}
+
+:root[data-layout-mode='mobile'] .calendar-layout-panel--aggregate {
+  order: 3;
+}
+
+:root[data-layout-mode='mobile'] .calendar-layout-panel--sheet {
+  order: 4;
+}
+
+:root[data-layout-mode='mobile'] .calendar-layout-panel--quick-entry .panel {
+  border-color: rgba(49, 130, 246, 0.28);
+  box-shadow: 0 18px 42px rgba(49, 130, 246, 0.12);
 }
 
 :root[data-layout-mode='mobile'] .calendar-detail__item,

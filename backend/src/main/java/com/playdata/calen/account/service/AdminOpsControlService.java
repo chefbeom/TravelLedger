@@ -227,7 +227,7 @@ public class AdminOpsControlService {
         try {
             Integer one = jdbcTemplate.queryForObject("select 1", Integer.class);
             reachable = one != null && one == 1;
-            product = jdbcTemplate.execute(connection -> connection.getMetaData().getDatabaseProductName());
+            product = jdbcTemplate.execute((org.springframework.jdbc.core.ConnectionCallback<String>) connection -> connection.getMetaData().getDatabaseProductName());
             message = reachable ? "Database connection is healthy." : "Database response was invalid.";
         } catch (Exception exception) {
             message = safeMessage(exception);
@@ -238,7 +238,7 @@ public class AdminOpsControlService {
 
     private String databaseHost() {
         try {
-            String url = jdbcTemplate.execute(connection -> connection.getMetaData().getURL());
+            String url = jdbcTemplate.execute((org.springframework.jdbc.core.ConnectionCallback<String>) connection -> connection.getMetaData().getURL());
             if (!hasText(url)) {
                 return "-";
             }

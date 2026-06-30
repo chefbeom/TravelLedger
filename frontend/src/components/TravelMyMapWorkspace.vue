@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, defineAsyncComponent, onMounted, ref, watch } from 'vue'
 import {
   fetchTravelMyMapOverview,
   fetchTravelMyMapPhotoCluster,
@@ -7,8 +7,9 @@ import {
 } from '../lib/api'
 import { formatDate, safeNumber } from '../lib/uiFormat'
 import TravelMyMapClusterPanel from './TravelMyMapClusterPanel.vue'
-import TravelMyMapInspectorPanels from './TravelMyMapInspectorPanels.vue'
-import TravelPhotoLightbox from './TravelPhotoLightbox.vue'
+
+const TravelMyMapInspectorPanels = defineAsyncComponent(() => import('./TravelMyMapInspectorPanels.vue'))
+const TravelPhotoLightbox = defineAsyncComponent(() => import('./TravelPhotoLightbox.vue'))
 
 const CLUSTER_PHOTO_PAGE_SIZE = 12
 const LIGHTBOX_SCOPE_GLOBAL = 'global'

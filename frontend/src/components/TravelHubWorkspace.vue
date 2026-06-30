@@ -1,5 +1,5 @@
-﻿<script setup>
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+<script setup>
+import { computed, defineAsyncComponent, onMounted, reactive, ref, watch } from 'vue'
 import {
   createTravelBudgetItem,
   createTravelMemory,
@@ -49,13 +49,13 @@ import {
 import { reverseGeocode } from '../lib/photoMetadata'
 import { buildThumbnailUrl } from '../lib/mediaPreview'
 import { useTableSelection } from '../lib/tableSelection'
-import TravelCommunityWorkspace from './TravelCommunityWorkspace.vue'
-import TravelMapPanel from './TravelMapPanel.vue'
-import TravelMemoryPanel from './TravelMemoryPanel.vue'
-import TravelMyPhotosWorkspace from './TravelMyPhotosWorkspace.vue'
-import TravelOverviewWorkspace from './TravelOverviewWorkspace.vue'
-import TravelRouteWorkspace from './TravelRouteWorkspace.vue'
-import TravelSharedExhibitWorkspace from './TravelSharedExhibitWorkspace.vue'
+const TravelCommunityWorkspace = defineAsyncComponent(() => import('./TravelCommunityWorkspace.vue'))
+const TravelMapPanel = defineAsyncComponent(() => import('./TravelMapPanel.vue'))
+const TravelMemoryPanel = defineAsyncComponent(() => import('./TravelMemoryPanel.vue'))
+const TravelMyPhotosWorkspace = defineAsyncComponent(() => import('./TravelMyPhotosWorkspace.vue'))
+const TravelOverviewWorkspace = defineAsyncComponent(() => import('./TravelOverviewWorkspace.vue'))
+const TravelRouteWorkspace = defineAsyncComponent(() => import('./TravelRouteWorkspace.vue'))
+const TravelSharedExhibitWorkspace = defineAsyncComponent(() => import('./TravelSharedExhibitWorkspace.vue'))
 
 const props = defineProps({
   route: {

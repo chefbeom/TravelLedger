@@ -1,9 +1,9 @@
 <script setup>
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, defineAsyncComponent, onMounted, ref, watch } from 'vue'
 import { fetchTravelPortfolio } from '../lib/api'
-import TravelHubWorkspace from './TravelHubWorkspace.vue'
-import TravelMyMapWorkspace from './TravelMyMapWorkspace.vue'
-import TravelPublicTripsWorkspace from './TravelPublicTripsWorkspace.vue'
+const TravelHubWorkspace = defineAsyncComponent(() => import('./TravelHubWorkspace.vue'))
+const TravelMyMapWorkspace = defineAsyncComponent(() => import('./TravelMyMapWorkspace.vue'))
+const TravelPublicTripsWorkspace = defineAsyncComponent(() => import('./TravelPublicTripsWorkspace.vue'))
 
 const props = defineProps({
   route: {
@@ -271,6 +271,17 @@ const isHubVisible = computed(() =>
   && (primaryTab.value !== 'finance' || financeLegacyOpen.value)
 )
 const isIntegratedPhotoMode = computed(() => primaryTab.value === 'photos')
+const shouldMountHub = ref(false)
+
+watch(
+  isHubVisible,
+  (value) => {
+    if (value) {
+      shouldMountHub.value = true
+    }
+  },
+  { immediate: true },
+)
 
 watch(
   () => props.route,
@@ -401,7 +412,7 @@ onMounted(loadTravelSummary)
       </div>
     </section>
 
-    <div v-show="isHubVisible" class="workspace-stack">
+    <div v-if="shouldMountHub" v-show="isHubVisible" class="workspace-stack">
       <TravelHubWorkspace
         :route="hubRoute"
         :integrated-mode="true"

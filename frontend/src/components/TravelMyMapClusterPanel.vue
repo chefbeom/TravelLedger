@@ -670,7 +670,8 @@ function createPopupContent(aggregate) {
     image.className = 'travel-cluster-popup__image'
     image.src = buildThumbnailUrl(photoUrl, THUMBNAIL_VARIANTS.mini)
     image.alt = aggregate?.representative?.title || aggregate?.representative?.placeName || '대표 사진'
-    image.loading = 'eager'
+    image.loading = 'lazy'
+    image.fetchPriority = 'low'
     image.decoding = 'async'
     root.appendChild(image)
   }
@@ -726,8 +727,9 @@ function createPopupContentLegacy(aggregate) {
       image.className = 'travel-cluster-popup__image'
       image.src = buildThumbnailUrl(aggregate.representative.photoUrl, THUMBNAIL_VARIANTS.mini)
       image.alt = aggregate?.representative?.title || aggregate?.representative?.placeName || '기록 사진'
-      image.loading = 'eager'
-      image.decoding = 'async'
+      image.loading = 'lazy'
+    image.fetchPriority = 'low'
+    image.decoding = 'async'
       root.appendChild(image)
     }
 
@@ -774,7 +776,8 @@ function createPopupContentLegacy(aggregate) {
     image.className = 'travel-cluster-popup__image'
     image.src = buildThumbnailUrl(photoUrl, THUMBNAIL_VARIANTS.mini)
     image.alt = aggregate?.representative?.title || aggregate?.representative?.placeName || '대표 사진'
-    image.loading = 'eager'
+    image.loading = 'lazy'
+    image.fetchPriority = 'low'
     image.decoding = 'async'
     root.appendChild(image)
   }

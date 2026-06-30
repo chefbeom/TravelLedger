@@ -358,7 +358,7 @@ const aiProgressElapsedLabel = computed(() => {
   const seconds = aiProgressElapsedSeconds.value
   const minutes = Math.floor(seconds / 60).toString().padStart(2, '0')
   const remain = (seconds % 60).toString().padStart(2, '0')
-  return ${minutes}:
+  return minutes + ':' + remain
 })
 
 const aiProgressVisible = computed(() => Boolean(props.aiAnalysisLoading))
@@ -1477,6 +1477,58 @@ watch(
   color: var(--ai-mint-ink);
 }
 
+
+
+.ai-history-item__titleline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.55rem;
+}
+
+.ai-history-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 1.6rem;
+  padding: 0.18rem 0.55rem;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.1);
+  color: #cbd5e1;
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+.ai-history-item--pending {
+  border-color: rgba(167, 243, 181, 0.52);
+  background:
+    radial-gradient(circle at 8% 20%, rgba(167, 243, 181, 0.18), transparent 36%),
+    rgba(18, 34, 31, 0.66);
+}
+
+
+.ai-history-status--completed {
+  border-color: rgba(167, 243, 181, 0.45);
+  background: rgba(167, 243, 181, 0.14);
+  color: #bbf7d0;
+}
+
+.ai-history-status--failed {
+  border-color: rgba(248, 113, 113, 0.45);
+  background: rgba(248, 113, 113, 0.12);
+  color: #fecaca;
+}
+
+.ai-history-status--pending {
+  border-color: rgba(250, 204, 21, 0.42);
+  background: rgba(250, 204, 21, 0.12);
+  color: #fde68a;
+}
+.ai-history-status--running {
+  border-color: rgba(167, 243, 181, 0.45);
+  background: rgba(167, 243, 181, 0.16);
+  color: #bbf7d0;
+}
 .ai-history-summary-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -2315,8 +2367,8 @@ watch(
                 </div>
                 <time>{{ aiProgressElapsedLabel }}</time>
               </div>
-              <div class="ai-progress-bar" aria-hidden="true">
-                <span :style="{ width: ${aiProgressPercent}% }"></span>
+              <div class="ai-progress-bar" role="progressbar" :aria-valuenow="aiProgressPercent" aria-valuemin="0" aria-valuemax="100" :aria-label="'AI 분석 진행률 ' + aiProgressPercent + '%'">
+                <span :style="{ width: aiProgressPercent + '%' }"></span>
               </div>
               <ol class="ai-progress-steps">
                 <li
@@ -2435,10 +2487,20 @@ watch(
         <div v-if="aiAnalysisHistoryError" class="feedback feedback--error">{{ aiAnalysisHistoryError }}</div>
 
         <div class="ai-history-list">
+          <article v-if="aiAnalysisLoading" class="ai-history-item ai-history-item--pending">
+            <div>
+              <strong>현재 AI 분석 요청 처리 중</strong>
+              <small>완료되면 결과 이력에 자동 저장됩니다. {{ aiProgressElapsedLabel }} 경과</small>
+            </div>
+            <span class="ai-history-status ai-history-status--running">분석 중</span>
+          </article>
           <article v-for="history in aiAnalysisHistoryItems" :key="history.id" class="ai-history-item">
             <div>
-              <strong>{{ history.title }}</strong>
-              <span>{{ formatAiMode(history.mode) }} · {{ formatAiPeriod(history.periodType) }} · {{ formatAiStatus(history.status) }}</span>
+              <div class="ai-history-item__titleline">
+                <strong>{{ history.title }}</strong>
+                <span :class="['ai-history-status', 'ai-history-status--' + String(history.status || '').toLowerCase()]">{{ formatAiStatus(history.status) }}</span>
+              </div>
+              <span>{{ formatAiMode(history.mode) }} · {{ formatAiPeriod(history.periodType) }}</span>
               <small>{{ formatAiRange(history.from, history.to) }}<template v-if="history.compareFrom"> vs {{ formatAiRange(history.compareFrom, history.compareTo) }}
 </template></small>
               <p>{{ history.summary || history.errorMessage || '저장된 요약이 없습니다.' }}</p>
@@ -2542,4 +2604,13 @@ watch(
     </div>
   </Teleport>
 </template>
+
+
+
+
+
+
+
+
+
 

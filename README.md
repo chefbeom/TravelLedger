@@ -417,14 +417,14 @@ docker compose up -d --build
 
 ### AI 소비 분석
 
-LM Studio를 기본 provider로 사용합니다. 현재 내부망 AI 서버는 Tailscale을 통해 `http://100.92.170.22:1234` 주소로 접근하는 구성을 기준으로 합니다.
+LM Studio를 기본 provider로 사용합니다. 현재 내부망 AI 서버는 Tailscale을 통해 `http://your-lm-studio-host:1234` 주소로 접근하는 구성을 기준으로 합니다.
 
 | 변수 | 설명 | 기본값 |
 | --- | --- | --- |
 | `APP_LEDGER_AI_ENABLED` | AI 분석 활성화 | `true` |
 | `APP_LEDGER_AI_PROVIDER` | `lmstudio` 또는 `n8n` | `lmstudio` |
 | `APP_LEDGER_AI_MODEL` | 모델명. `auto`이면 models endpoint에서 자동 선택 | `auto` |
-| `APP_LEDGER_AI_LMSTUDIO_BASE_URL` | LM Studio base URL | `http://100.92.170.22:1234` |
+| `APP_LEDGER_AI_LMSTUDIO_BASE_URL` | LM Studio base URL | `http://your-lm-studio-host:1234` |
 | `APP_LEDGER_AI_LMSTUDIO_CHAT_PATH` | OpenAI-compatible chat endpoint | `/v1/chat/completions` |
 | `APP_LEDGER_AI_LMSTUDIO_MODELS_PATH` | 모델 조회 endpoint | `/v1/models` |
 | `APP_LEDGER_AI_LMSTUDIO_API_KEY` | LM Studio 인증 토큰 | empty |
@@ -434,7 +434,7 @@ LM Studio를 기본 provider로 사용합니다. 현재 내부망 AI 서버는 T
 | `APP_LEDGER_AI_API_KEY` | n8n provider API key | empty |
 | `APP_LEDGER_AI_API_KEY_HEADER` | n8n API key header | `X-TravelLedger-AI-Key` |
 | `APP_LEDGER_AI_ENFORCE_PROVIDER_URL_ALLOWLIST` | provider URL allowlist 강제 | `false` |
-| `APP_LEDGER_AI_ALLOWED_PROVIDER_HOSTS` | 허용 provider host CSV | `localhost,127.0.0.1,::1,100.92.170.22` |
+| `APP_LEDGER_AI_ALLOWED_PROVIDER_HOSTS` | 허용 provider host CSV | `localhost,127.0.0.1,::1,your-lm-studio-host` |
 | `APP_LEDGER_AI_HISTORY_RETENTION_ENABLED` | AI 이력 보관 정책 활성화 | `false` |
 | `APP_LEDGER_AI_HISTORY_RETENTION_DAYS` | AI 이력 보관 일수 | `180` |
 

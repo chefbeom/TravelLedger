@@ -103,7 +103,7 @@ app:
       api-key: ${APP_LEDGER_AI_API_KEY:}
       api-key-header: ${APP_LEDGER_AI_API_KEY_HEADER:X-TravelLedger-AI-Key}
       model: ${APP_LEDGER_AI_MODEL:auto}
-      lm-studio-base-url: ${APP_LEDGER_AI_LMSTUDIO_BASE_URL:http://100.92.170.22:1234}
+      lm-studio-base-url: ${APP_LEDGER_AI_LMSTUDIO_BASE_URL:}
       lm-studio-chat-path: ${APP_LEDGER_AI_LMSTUDIO_CHAT_PATH:/v1/chat/completions}
       lm-studio-models-path: ${APP_LEDGER_AI_LMSTUDIO_MODELS_PATH:/v1/models}
       lm-studio-api-key: ${APP_LEDGER_AI_LMSTUDIO_API_KEY:}
@@ -112,7 +112,7 @@ app:
       connect-timeout: ${APP_LEDGER_AI_CONNECT_TIMEOUT:3s}
       read-timeout: ${APP_LEDGER_AI_READ_TIMEOUT:120s}
       enforce-provider-url-allowlist: ${APP_LEDGER_AI_ENFORCE_PROVIDER_URL_ALLOWLIST:false}
-      allowed-provider-hosts: "${APP_LEDGER_AI_ALLOWED_PROVIDER_HOSTS:localhost,127.0.0.1,::1,100.92.170.22}"
+      allowed-provider-hosts: "${APP_LEDGER_AI_ALLOWED_PROVIDER_HOSTS:localhost,127.0.0.1,::1}"
       history-retention-enabled: ${APP_LEDGER_AI_HISTORY_RETENTION_ENABLED:false}
       history-retention-days: ${APP_LEDGER_AI_HISTORY_RETENTION_DAYS:180}
       history-retention-cron: ${APP_LEDGER_AI_HISTORY_RETENTION_CRON:0 15 3 * * *}

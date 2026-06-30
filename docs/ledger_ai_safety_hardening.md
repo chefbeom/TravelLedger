@@ -6,7 +6,7 @@ This document defines the safety baseline for the ledger AI analysis feature. It
 
 | Provider | Code path | External dependency |
 | --- | --- | --- |
-| `lmstudio` | `LedgerAiLmStudioClient` | LM Studio local server, default `http://172.18.240.1:1234/api/v1/chat`; `APP_LEDGER_AI_MODEL=auto` resolves the first model from `/api/v1/models`. |
+| `lmstudio` | `LedgerAiLmStudioClient` | LM Studio local server, default `http://your-lm-studio-host:1234/api/v1/chat`; `APP_LEDGER_AI_MODEL=auto` resolves the first model from `/api/v1/models`. |
 | `n8n` | `LedgerAiN8nClient` | n8n webhook workflow |
 
 The baseline is inspired by OWASP Top 10 for LLM Applications 2025. The goal is to keep AI output useful without allowing it to mutate ledger data, leak secrets, or silently accept invalid model output.
@@ -153,10 +153,10 @@ The contract keeps all coach output advisory-only. It must not claim ledger entr
 APP_LEDGER_AI_ENABLED=true
 APP_LEDGER_AI_PROVIDER=lmstudio
 APP_LEDGER_AI_MODEL=auto
-APP_LEDGER_AI_LMSTUDIO_BASE_URL=http://172.18.240.1:1234
+APP_LEDGER_AI_LMSTUDIO_BASE_URL=http://your-lm-studio-host:1234
 APP_LEDGER_AI_LMSTUDIO_CHAT_PATH=/api/v1/chat
 APP_LEDGER_AI_ENFORCE_PROVIDER_URL_ALLOWLIST=true
-APP_LEDGER_AI_ALLOWED_PROVIDER_HOSTS=172.18.240.1
+APP_LEDGER_AI_ALLOWED_PROVIDER_HOSTS=your-lm-studio-host
 ```
 
 If LM Studio is switched to its OpenAI-compatible endpoint, keep the same models path unless LM Studio documents a different one, and use:

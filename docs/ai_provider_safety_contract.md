@@ -59,12 +59,12 @@ Use the OpenAI-like LM Studio endpoint shown by LM Studio:
 
 | Setting | Required value or rule |
 | --- | --- |
-| Base URL | `APP_LEDGER_AI_LMSTUDIO_BASE_URL=http://172.18.240.1:1234` for the local Windows/WSL bridge shown in LM Studio. |
+| Base URL | `APP_LEDGER_AI_LMSTUDIO_BASE_URL=http://your-lm-studio-host:1234` for the local Windows/WSL bridge shown in LM Studio. |
 | Chat path | `APP_LEDGER_AI_LMSTUDIO_CHAT_PATH=/api/v1/chat`. |
 | Models path | `APP_LEDGER_AI_LMSTUDIO_MODELS_PATH=/api/v1/models`. |
 | Model | `APP_LEDGER_AI_MODEL=auto` is allowed only when model discovery succeeds without leaking provider secrets. |
 | API key | Optional; if configured, it is sent as `Authorization: Bearer ...` only from the backend and must not appear in status/history/errors. |
-| Allowlist | In production-like environments set `APP_LEDGER_AI_ENFORCE_PROVIDER_URL_ALLOWLIST=true` and include only trusted hosts such as `172.18.240.1`, `localhost`, or the approved internal host. |
+| Allowlist | In production-like environments set `APP_LEDGER_AI_ENFORCE_PROVIDER_URL_ALLOWLIST=true` and include only trusted hosts such as `your-lm-studio-host`, `localhost`, or the approved internal host. |
 
 ## n8n connection contract
 

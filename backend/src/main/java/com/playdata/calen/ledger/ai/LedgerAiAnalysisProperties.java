@@ -17,7 +17,7 @@ public class LedgerAiAnalysisProperties {
     private String apiKey = "";
     private String apiKeyHeader = "X-TravelLedger-AI-Key";
     private String model = "auto";
-    private String lmStudioBaseUrl = "http://100.92.170.22:1234";
+    private String lmStudioBaseUrl = "";
     private String lmStudioModelsPath = "/v1/models";
     private String lmStudioChatPath = "/v1/chat/completions";
     private String lmStudioApiKey = "";
@@ -26,7 +26,7 @@ public class LedgerAiAnalysisProperties {
     private Duration connectTimeout = Duration.ofSeconds(3);
     private Duration readTimeout = Duration.ofSeconds(120);
     private boolean enforceProviderUrlAllowlist = false;
-    private String allowedProviderHosts = "localhost,127.0.0.1,::1,100.92.170.22";
+    private String allowedProviderHosts = "localhost,127.0.0.1,::1";
 
     public boolean isEnabled() {
         return enabled;

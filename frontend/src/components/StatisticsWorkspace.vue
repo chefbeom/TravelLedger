@@ -1,5 +1,5 @@
 <script setup>
-import { computed, reactive, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import BarChartCard from './BarChartCard.vue'
 import BreakdownList from './BreakdownList.vue'
 import ComparisonTable from './ComparisonTable.vue'
@@ -152,6 +152,10 @@ const props = defineProps({
     type: String,
     default: '',
   },
+  aiAnalysisStale: {
+    type: Boolean,
+    default: false,
+  },
   aiAnalysisHistoryPage: {
     type: Object,
     default: () => ({ content: [], page: 0, size: 8, totalElements: 0, totalPages: 0 }),
@@ -291,20 +295,33 @@ const aiResultCards = computed(() => {
     { label: '증감', value: `${aiCompareDelta.value > 0 ? '+' : ''}${props.formatCurrency(aiCompareDelta.value)}`, meta: props.aiAnalysis.mode === 'COMPARISON' ? '비교 기간 대비' : '최근 흐름 기준' },
   ]
 })
-const aiReport = computed(() => props.aiAnalysis?.report ?? {})
-const aiReportKeySummary = computed(() => aiReport.value.keySummary || props.aiAnalysis?.summary || '')
-const aiReportFullReport = computed(() => aiReport.value.fullReport || '')
+const rawAiReport = computed(() => props.aiAnalysis?.report ?? {})
+const parsedAiPayload = computed(() => findParsedAiPayload(props.aiAnalysis, rawAiReport.value))
+const aiReport = computed(() => buildNormalizedAiReport(rawAiReport.value, parsedAiPayload.value, props.aiAnalysis))
+const aiReportKeySummary = computed(() => sanitizeAiText(aiReport.value.keySummary || props.aiAnalysis?.summary || ''))
+const aiReportFullReport = computed(() => sanitizeAiText(aiReport.value.fullReport || ''))
 const aiIsComparisonResult = computed(() => props.aiAnalysis?.mode === 'COMPARISON')
-const aiFixedReportItems = computed(() => [
+const aiFixedReportItems = computed(() => dedupeAiItems([
   ...safeAiReportList('regularSpending', props.aiAnalysis?.fixedCostInsights),
-  ...safeAiReportList('fixedExpenses'),
   ...safeAiReportList('subscriptions'),
-])
-const aiAbnormalReportItems = computed(() => safeAiReportList('abnormalSpending', [
+  ...safeAiReportList('fixedExpenses'),
+]))
+const aiAbnormalReportItems = computed(() => dedupeAiItems([
   ...safeAiList(props.aiAnalysis?.warnings),
   ...safeAiList(props.aiAnalysis?.unusualSpendingInsights),
+  ...safeAiReportList('abnormalSpending'),
 ]))
 const aiComparisonReportItems = computed(() => safeAiReportList('comparisonFocus', props.aiAnalysis?.trendInsights))
+const hasStaleAiResult = computed(() => Boolean(props.aiAnalysisStale && props.aiAnalysis))
+const aiResultModalOpen = ref(false)
+const aiPresentationSections = computed(() => buildAiPresentationSections())
+const aiPrintableReport = computed(() => ({
+  title: 'TravelLedger AI 소비 분석 보고서',
+  generatedAt: new Date().toLocaleString('ko-KR'),
+  range: props.aiAnalysis ? formatAiRange(props.aiAnalysis.from, props.aiAnalysis.to) : '',
+  cards: aiResultCards.value,
+  sections: aiPresentationSections.value,
+}))
 function formatAiMode(mode) {
   return mode === 'COMPARISON' ? '비교 분석' : '기간 분석'
 }
@@ -339,10 +356,380 @@ function formatAiCreatedAt(value) {
 
 function safeAiReportList(fieldName, fallbackItems = []) {
   const reportItems = safeAiList(aiReport.value?.[fieldName])
-  return reportItems.length ? reportItems : safeAiList(fallbackItems)
+  if (reportItems.length) {
+    return reportItems
+  }
+  return safeAiList(fallbackItems)
 }
+function sanitizeAiText(value) {
+  return String(value ?? '')
+    .replace(/```(?:json)?/gi, '')
+    .replace(/```/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function isRawJsonLike(value) {
+  const text = sanitizeAiText(value)
+  return text.startsWith('{') && (text.includes('"ok"') || text.includes('"report"') || text.includes('"summary"'))
+}
+
+function extractJsonCandidate(value) {
+  const text = sanitizeAiText(value)
+  const start = text.indexOf('{')
+  const end = text.lastIndexOf('}')
+  if (start < 0 || end <= start) {
+    return ''
+  }
+  return text.slice(start, end + 1)
+}
+
+function parseAiJsonCandidate(value) {
+  const json = extractJsonCandidate(value)
+  if (!json) {
+    return null
+  }
+  try {
+    return JSON.parse(json)
+  } catch {
+    try {
+      return JSON.parse(json.replace(/,\s*([}\]])/g, '$1'))
+    } catch {
+      return null
+    }
+  }
+}
+
+function collectAiTextCandidates(analysis, report) {
+  return [
+    analysis?.summary,
+    analysis?.nextPeriodForecast,
+    analysis?.habitAssessment,
+    report?.keySummary,
+    report?.fullReport,
+    report?.averageAmountInsight,
+    report?.topPaymentMethod,
+    ...(analysis?.highlights ?? []),
+    ...(analysis?.warnings ?? []),
+    ...(analysis?.recommendations ?? []),
+    ...(analysis?.categoryInsights ?? []),
+    ...(analysis?.paymentInsights ?? []),
+    ...(analysis?.trendInsights ?? []),
+    ...(analysis?.unusualSpendingInsights ?? []),
+    ...(analysis?.fixedCostInsights ?? []),
+    ...(report?.notableSpending ?? []),
+    ...(report?.regularSpending ?? []),
+    ...(report?.abnormalSpending ?? []),
+    ...(report?.subscriptions ?? []),
+    ...(report?.fixedExpenses ?? []),
+    ...(report?.improvementActions ?? []),
+    ...(report?.comparisonFocus ?? []),
+  ].filter(Boolean)
+}
+
+function findParsedAiPayload(analysis, report) {
+  for (const candidate of collectAiTextCandidates(analysis, report)) {
+    const parsed = parseAiJsonCandidate(candidate)
+    if (parsed && (parsed.report || parsed.summary || parsed.ok != null)) {
+      return parsed
+    }
+  }
+  return null
+}
+
+function firstNonRawText(...values) {
+  return values.map(sanitizeAiText).find((value) => value && !isRawJsonLike(value)) || ''
+}
+
+function listFrom(...values) {
+  return dedupeAiItems(values.flatMap((value) => Array.isArray(value) ? value : value ? [value] : []).map(sanitizeAiText).filter((item) => item && !isRawJsonLike(item)))
+}
+
+function buildNormalizedAiReport(report, parsed, analysis) {
+  const parsedReport = parsed?.report ?? {}
+  return {
+    keySummary: firstNonRawText(report?.keySummary, parsedReport?.keySummary, parsed?.summary, analysis?.summary),
+    fullReport: firstNonRawText(report?.fullReport, parsedReport?.fullReport),
+    averageAmountInsight: firstNonRawText(report?.averageAmountInsight, parsedReport?.averageAmountInsight),
+    notableSpending: listFrom(report?.notableSpending, parsedReport?.notableSpending, parsed?.highlights, analysis?.highlights),
+    regularSpending: listFrom(report?.regularSpending, parsedReport?.regularSpending),
+    abnormalSpending: listFrom(report?.abnormalSpending, parsedReport?.abnormalSpending, parsed?.warnings, parsed?.unusualSpendingInsights),
+    topPaymentMethod: firstNonRawText(report?.topPaymentMethod, parsedReport?.topPaymentMethod),
+    subscriptions: listFrom(report?.subscriptions, parsedReport?.subscriptions),
+    fixedExpenses: listFrom(report?.fixedExpenses, parsedReport?.fixedExpenses),
+    improvementActions: listFrom(report?.improvementActions, parsedReport?.improvementActions, parsed?.recommendations, analysis?.recommendations),
+    comparisonFocus: listFrom(report?.comparisonFocus, parsedReport?.comparisonFocus, parsed?.trendInsights, analysis?.trendInsights),
+  }
+}
+
+function dedupeAiItems(items) {
+  const seen = new Set()
+  return (items ?? []).filter((item) => {
+    const value = sanitizeAiText(item)
+    if (!value || seen.has(value)) {
+      return false
+    }
+    seen.add(value)
+    return true
+  })
+}
+
+function splitAiParagraphs(text) {
+  const value = sanitizeAiText(text)
+  if (!value || isRawJsonLike(value)) {
+    return []
+  }
+  return value
+    .replace(/([.!?다요니다])\s+(?=[가-힣A-Z0-9])/g, '$1\n')
+    .split(/\n+/)
+    .map((item) => item.trim())
+    .filter(Boolean)
+}
+
+function createAiSection(key, title, paragraphs = [], items = [], wide = false) {
+  return {
+    key,
+    title,
+    wide,
+    paragraphs: dedupeAiItems(paragraphs.flatMap(splitAiParagraphs)),
+    items: dedupeAiItems(items),
+  }
+}
+
+function buildAiPresentationSections() {
+  if (!props.aiAnalysis) {
+    return []
+  }
+  const analysis = props.aiAnalysis
+  const report = aiReport.value
+  const improvementItems = safeAiReportList('improvementActions', analysis.recommendations)
+  return [
+    createAiSection('summary', '핵심 요약', [aiReportKeySummary.value || `${formatAiRange(analysis.from, analysis.to)} 기간의 소비 분석입니다.`], [], true),
+    createAiSection('overview', '지출 개요', [
+      `분석 기간은 ${formatAiRange(analysis.from, analysis.to)}입니다.`,
+      `총 지출은 ${props.formatCurrency(analysis.totalExpense)}이고 하루 평균 지출은 ${props.formatCurrency(analysis.averageDailyExpense)}입니다.`,
+    ], [
+      `${analysis.expenseEntryCount ?? 0}건의 지출 내역을 기준으로 계산했습니다.`,
+      analysis.compareFrom ? `비교 기간은 ${formatAiRange(analysis.compareFrom, analysis.compareTo)}입니다.` : '비교 기간은 설정되지 않았습니다.',
+    ]),
+    createAiSection('report', '보고서', [aiReportFullReport.value || 'AI 구조화 보고서가 부족해 핵심 지표 중심으로 표시합니다.'], [], true),
+    createAiSection('payment', '결제방법', [report.topPaymentMethod || safeAiList(analysis.paymentInsights)[0] || '결제수단 분석은 상위 결제수단과 지출 비중을 기준으로 확인하세요.'], safeAiList(analysis.paymentInsights)),
+    createAiSection('notable', '눈에 띄는 소비', [], safeAiReportList('notableSpending', analysis.highlights)),
+    createAiSection('fixed', '고정/구독 지출', [], aiFixedReportItems.value.length ? aiFixedReportItems.value : ['반복 지출 후보가 부족하거나 아직 확인되지 않았습니다.']),
+    createAiSection('abnormal', '이상/주의 지출', [], aiAbnormalReportItems.value.length ? aiAbnormalReportItems.value : ['확인이 필요한 이상 지출 후보가 뚜렷하게 반환되지 않았습니다.']),
+    createAiSection('actions', '개선사항', [], improvementItems.length ? improvementItems : ['예산 조정이나 분류 변경은 사용자가 직접 확인한 뒤 반영하세요.']),
+    createAiSection('comparison', '비교 분석', [], aiComparisonReportItems.value.length ? aiComparisonReportItems.value : [aiIsComparisonResult.value ? '비교 분석 결과가 부족합니다.' : '비교 분석 모드가 아니므로 비교 항목은 생략됩니다.']),
+  ]
+}
+
+function openAiResultModal() {
+  if (aiHasResult.value) {
+    aiResultModalOpen.value = true
+  }
+}
+
+function closeAiResultModal() {
+  aiResultModalOpen.value = false
+}
+
+function handleAiResultEscape(event) {
+  if (event.key === 'Escape') {
+    closeAiResultModal()
+  }
+}
+
+function escapePrintHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
+
+function printAiAnalysisReport() {
+  if (!aiHasResult.value || typeof window === 'undefined') {
+    return
+  }
+  const report = aiPrintableReport.value
+  const printWindow = window.open('', '_blank', 'width=960,height=720')
+  if (!printWindow) {
+    return
+  }
+  const cards = report.cards.map((card) => `<article><span>${escapePrintHtml(card.label)}</span><strong>${escapePrintHtml(card.value)}</strong><small>${escapePrintHtml(card.meta)}</small></article>`).join('')
+  const sections = report.sections.map((section) => `
+    <section>
+      <h2>${escapePrintHtml(section.title)}</h2>
+      ${section.paragraphs.map((paragraph) => `<p>${escapePrintHtml(paragraph)}</p>`).join('')}
+      ${section.items.length ? `<ul>${section.items.map((item) => `<li>${escapePrintHtml(item)}</li>`).join('')}</ul>` : ''}
+    </section>
+  `).join('')
+  printWindow.document.write(`<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>${escapePrintHtml(report.title)}</title><style>
+    body{font-family:'Malgun Gothic','Apple SD Gothic Neo',sans-serif;margin:32px;color:#111827;line-height:1.7}h1{font-size:28px;margin:0 0 6px}h2{font-size:18px;margin:28px 0 8px;border-bottom:1px solid #e5e7eb;padding-bottom:6px}.meta{color:#6b7280;margin-bottom:24px}.cards{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:22px 0}.cards article{border:1px solid #e5e7eb;border-radius:14px;padding:14px}.cards span,.cards small{display:block;color:#6b7280}.cards strong{display:block;font-size:20px;margin:6px 0}section{break-inside:avoid}li{margin:5px 0}@media print{body{margin:18mm}.cards{grid-template-columns:repeat(2,1fr)}}
+  
+.ai-analysis-stale-note {
+  border: 1px solid rgba(245, 158, 11, 0.5);
+  background: rgba(245, 158, 11, 0.12);
+  color: #f8d28a;
+  border-radius: 16px;
+  padding: 12px 14px;
+  font-weight: 800;
+}
+
+.ai-result-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-end;
+  margin: 14px 0 18px;
+}
+
+.ai-presentation-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.ai-result-section--presentation p {
+  margin: 0 0 10px;
+  line-height: 1.75;
+}
+
+.ai-result-section--presentation ul {
+  margin: 8px 0 0;
+  padding-left: 20px;
+}
+
+.ai-result-section--presentation li {
+  margin: 8px 0;
+  line-height: 1.7;
+}
+
+.ai-result-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(6, 12, 24, 0.72);
+  backdrop-filter: blur(10px);
+}
+
+.ai-result-modal__dialog {
+  width: min(1120px, 100%);
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  border-radius: 28px;
+  background: linear-gradient(145deg, #1f2937, #111827);
+  box-shadow: 0 28px 80px rgba(0, 0, 0, 0.45);
+  color: #e5e7eb;
+}
+
+.ai-result-modal__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 24px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.22);
+}
+
+.ai-result-modal__header h2 {
+  margin: 4px 0 6px;
+}
+
+.ai-result-modal__header p {
+  margin: 0;
+  color: #aeb8c8;
+}
+
+.ai-result-modal__eyebrow {
+  color: #60a5fa;
+  font-size: 0.78rem;
+  font-weight: 900;
+  letter-spacing: 0.14em;
+}
+
+.ai-result-modal__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+.ai-result-modal__body {
+  overflow: auto;
+  padding: 24px;
+}
+
+.ai-analysis-advisory--modal,
+.ai-result-card-grid--modal {
+  margin-bottom: 18px;
+}
+
+@media (max-width: 760px) {
+  .ai-presentation-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .ai-result-modal {
+    align-items: stretch;
+    padding: 10px;
+  }
+
+  .ai-result-modal__dialog {
+    max-height: calc(100vh - 20px);
+    border-radius: 22px;
+  }
+
+  .ai-result-modal__header {
+    flex-direction: column;
+    padding: 18px;
+  }
+
+  .ai-result-modal__actions {
+    width: 100%;
+    justify-content: stretch;
+  }
+
+  .ai-result-modal__actions .button {
+    flex: 1 1 140px;
+  }
+
+  .ai-result-modal__body {
+    padding: 18px;
+  }
+}
+</style></head><body><h1>${escapePrintHtml(report.title)}</h1><div class="meta">${escapePrintHtml(report.range)} · ${escapePrintHtml(report.generatedAt)}</div><div class="cards">${cards}</div>${sections}</body></html>`)
+  printWindow.document.close()
+  printWindow.focus()
+  setTimeout(() => printWindow.print(), 250)
+}
+
+watch(() => props.aiAnalysis, (next, previous) => {
+  if (next && next !== previous) {
+    openAiResultModal()
+  }
+})
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('keydown', handleAiResultEscape)
+}
+
+onBeforeUnmount(() => {
+  if (typeof window !== 'undefined') {
+    window.removeEventListener('keydown', handleAiResultEscape)
+  }
+})
+
 function safeAiList(items) {
-  return Array.isArray(items) ? items.filter(Boolean) : []
+  const source = Array.isArray(items) ? items : []
+  return dedupeAiItems(source.map(sanitizeAiText).filter((item) => item && !isRawJsonLike(item)))
 }
 
 function loadAiHistoryPage(page) {
@@ -715,7 +1102,7 @@ watch(
           <BreakdownList title="결제수단 상세" :items="paymentBreakdown" />
         </section>
       </div>
-    </template>
+</template>
 
     <template v-else-if="route === 'stats-search'">
       <section class="panel">
@@ -969,7 +1356,7 @@ watch(
                       @change="searchEditDraft.amount = normalizeAmountInput(searchEditDraft.amount)"
                     />
                   </td>
-                </template>
+</template>
                 <template v-else>
                   <td>{{ formatFullDate(entry.entryDate) }}</td>
                   <td>{{ formatTime(entry.entryTime) }}</td>
@@ -979,12 +1366,13 @@ watch(
                       <span v-if="entry.memo" class="stats-search-title-cell__memo">{{ entry.memo }}</span>
                     </div>
                   </td>
-                  <td class="sheet-table__category">{{ entry.categoryGroupName }}<template v-if="entry.categoryDetailName"> / {{ entry.categoryDetailName }}</template></td>
+                  <td class="sheet-table__category">{{ entry.categoryGroupName }}<template v-if="entry.categoryDetailName"> / {{ entry.categoryDetailName }}
+</template></td>
                   <td class="sheet-table__textwrap">{{ entry.paymentMethodName }}</td>
                   <td :class="entry.entryType === 'INCOME' ? 'is-income' : 'is-expense'">
                     {{ formatCurrency(entry.amount) }}
                   </td>
-                </template>
+</template>
                 <td>
                   <div class="sheet-table__actions">
                     <template v-if="editingSearchEntryId === entry.id">
@@ -997,11 +1385,11 @@ watch(
                         저장
                       </button>
                       <button type="button" class="button button--ghost" @click="cancelSearchEntryEdit">취소</button>
-                    </template>
+</template>
                     <template v-else>
                       <button type="button" class="button button--ghost" @click="startSearchEntryEdit(entry)">수정</button>
                       <button type="button" class="button button--ghost" @click="emit('move-search-entry', entry)">이동</button>
-                    </template>
+</template>
                     <button type="button" class="button button--ghost" @click="emit('delete-search-entry', entry)">삭제</button>
                   </div>
                   <p v-if="editingSearchEntryId === entry.id && searchEditErrors.length" class="stats-search-edit__hint">
@@ -1036,7 +1424,7 @@ watch(
           </button>
         </div>
       </section>
-    </template>
+</template>
 
     <template v-else-if="route === 'stats-trash'">
       <section class="panel">
@@ -1094,7 +1482,8 @@ watch(
                 <td>{{ formatFullDate(entry.entryDate) }}</td>
                 <td>{{ formatTime(entry.entryTime) }}</td>
                 <td class="sheet-table__title">{{ entry.title }}</td>
-                <td class="sheet-table__category">{{ entry.categoryGroupName }}<template v-if="entry.categoryDetailName"> / {{ entry.categoryDetailName }}</template></td>
+                <td class="sheet-table__category">{{ entry.categoryGroupName }}<template v-if="entry.categoryDetailName"> / {{ entry.categoryDetailName }}
+</template></td>
                 <td class="sheet-table__textwrap">{{ entry.paymentMethodName }}</td>
                 <td :class="entry.entryType === 'INCOME' ? 'is-income' : 'is-expense'">
                   {{ formatCurrency(entry.amount) }}
@@ -1132,7 +1521,7 @@ watch(
           </button>
         </div>
       </section>
-    </template>
+</template>
 
     <template v-else-if="route === 'stats-insights'">
       <section class="insight-grid">
@@ -1201,7 +1590,7 @@ watch(
           empty-text="월별 지출 데이터가 없습니다."
         />
       </section>
-    </template>
+</template>
 
     <template v-else-if="route === 'stats-ai'">
       <section class="panel ai-analysis-panel">
@@ -1278,6 +1667,11 @@ watch(
                 <strong>AI 분석 결과는 참고용 조언입니다.</strong>
                 <span>이 화면은 거래를 자동으로 생성, 수정, 삭제, 분류하지 않습니다. AI 추천을 실제 가계부에 반영하려면 사용자가 별도의 확인 액션을 직접 수행해야 합니다.</span>
               </aside>
+              <div v-if="hasStaleAiResult" class="ai-analysis-stale-note">새 분석 요청에 실패해 이전 결과를 표시 중입니다.</div>
+              <div class="ai-result-toolbar">
+                <button class="button" type="button" @click="openAiResultModal">상세 보기</button>
+                <button class="button button--secondary" type="button" @click="printAiAnalysisReport">PDF 저장/인쇄</button>
+              </div>
               <div class="ai-result-card-grid">
                 <article v-for="card in aiResultCards" :key="card.label" class="ai-result-card">
                   <span>{{ card.label }}</span>
@@ -1285,79 +1679,21 @@ watch(
                   <small>{{ card.meta }}</small>
                 </article>
               </div>
-
-              <section class="ai-result-section ai-result-section--summary">
-                <h3>핵심 요약</h3>
-                <p>{{ aiReportKeySummary || '반환된 핵심 요약이 없습니다.' }}</p>
-              </section>
-
-              <section class="ai-result-section ai-result-section--report">
-                <h3>보고서</h3>
-                <p>{{ aiReportFullReport || '반환된 종합 보고서가 없습니다.' }}</p>
-              </section>
-
-              <div class="ai-result-section-grid">
-                <section class="ai-result-section">
-                  <h3>평균 금액</h3>
-                  <p>{{ aiReport.averageAmountInsight || `일 평균 지출은 ${formatCurrency(aiAnalysis.averageDailyExpense)}입니다.` }}</p>
-                </section>
-                <section class="ai-result-section">
-                  <h3>눈에 띄는 소비</h3>
-                  <ul>
-                    <li v-for="item in safeAiReportList('notableSpending', aiAnalysis.highlights)" :key="item">{{ item }}</li>
-                    <li v-if="!safeAiReportList('notableSpending', aiAnalysis.highlights).length">눈에 띄는 소비 항목이 없습니다.</li>
+              <div class="ai-presentation-grid">
+                <section
+                  v-for="section in aiPresentationSections"
+                  :key="section.key"
+                  class="ai-result-section ai-result-section--presentation"
+                  :class="{ 'ai-result-section--wide': section.wide }"
+                >
+                  <h3>{{ section.title }}</h3>
+                  <p v-for="paragraph in section.paragraphs" :key="paragraph">{{ paragraph }}</p>
+                  <ul v-if="section.items.length">
+                    <li v-for="item in section.items" :key="item">{{ item }}</li>
                   </ul>
                 </section>
-                <section class="ai-result-section">
-                  <h3>고정/구독 지출</h3>
-                  <ul>
-                    <li v-for="item in aiFixedReportItems" :key="item">{{ item }}</li>
-                    <li v-if="!aiFixedReportItems.length">고정 지출 또는 구독 후보가 없습니다.</li>
-                  </ul>
-                </section>
-                <section class="ai-result-section">
-                  <h3>비정상 지출</h3>
-                  <ul>
-                    <li v-for="item in aiAbnormalReportItems" :key="item">{{ item }}</li>
-                    <li v-if="!aiAbnormalReportItems.length">확인이 필요한 비정상 지출 후보가 없습니다.</li>
-                  </ul>
-                </section>
-                <section class="ai-result-section">
-                  <h3>결제 방법</h3>
-                  <p>{{ aiReport.topPaymentMethod || safeAiList(aiAnalysis.paymentInsights)[0] || '결제수단 분석 결과가 없습니다.' }}</p>
-                </section>
-                <section class="ai-result-section">
-                  <h3>개선 사항</h3>
-                  <ul>
-                    <li v-for="item in safeAiReportList('improvementActions', aiAnalysis.recommendations)" :key="item">{{ item }}</li>
-                    <li v-if="!safeAiReportList('improvementActions', aiAnalysis.recommendations).length">반환된 개선 사항이 없습니다.</li>
-                  </ul>
-                </section>
-                <section v-if="aiIsComparisonResult" class="ai-result-section ai-result-section--wide">
-                  <h3>비교 핵심</h3>
-                  <ul>
-                    <li v-for="item in aiComparisonReportItems" :key="item">{{ item }}</li>
-                    <li v-if="!aiComparisonReportItems.length">비교 분석 결과가 없습니다.</li>
-                  </ul>
-                </section>
-              </div>
-              <div class="ai-breakdown-grid">
-                <section class="ai-result-section">
-                  <h3>상위 카테고리</h3>
-                  <div v-for="item in (aiAnalysis.categoryBreakdown ?? []).slice(0, 6)" :key="`${item.groupName}-${item.detailName}`" class="ai-breakdown-row">
-                    <span>{{ item.detailName ? `${item.groupName} / ${item.detailName}` : item.groupName }}</span>
-                    <strong>{{ formatCurrency(item.totalAmount) }}</strong>
-                  </div>
-                </section>
-                <section class="ai-result-section">
-                  <h3>결제수단</h3>
-                  <div v-for="item in (aiAnalysis.paymentBreakdown ?? []).slice(0, 6)" :key="`${item.paymentMethodName}-${item.kind}`" class="ai-breakdown-row">
-                    <span>{{ item.paymentMethodName }} · {{ item.kind }}</span>
-                    <strong>{{ formatCurrency(item.totalAmount) }}</strong>
-                  </div>
-                </section>
-              </div>
-            </template>
+              </div>            
+</template>
             <div v-else class="empty-state ai-analysis-empty">
               <strong>아직 AI 분석 결과가 없습니다.</strong>
               <span>조건을 선택해 분석을 요청하거나 저장된 결과를 불러오세요.</span>
@@ -1415,7 +1751,8 @@ watch(
             <div>
               <strong>{{ history.title }}</strong>
               <span>{{ formatAiMode(history.mode) }} · {{ formatAiPeriod(history.periodType) }} · {{ formatAiStatus(history.status) }}</span>
-              <small>{{ formatAiRange(history.from, history.to) }}<template v-if="history.compareFrom"> vs {{ formatAiRange(history.compareFrom, history.compareTo) }}</template></small>
+              <small>{{ formatAiRange(history.from, history.to) }}<template v-if="history.compareFrom"> vs {{ formatAiRange(history.compareFrom, history.compareTo) }}
+</template></small>
               <p>{{ history.summary || history.errorMessage || '저장된 요약이 없습니다.' }}</p>
               <small>{{ formatAiCreatedAt(history.createdAt) }}</small>
             </div>
@@ -1436,7 +1773,7 @@ watch(
           <button class="button" type="button" :disabled="(aiAnalysisHistoryPage?.page ?? 0) >= aiHistoryTotalPages - 1" @click="loadAiHistoryPage((aiAnalysisHistoryPage?.page ?? 0) + 1)">다음</button>
         </div>
       </section>
-    </template>
+</template>
     <template v-else-if="route === 'stats-compare'">
       <section class="panel">
         <div class="panel__header">
@@ -1467,6 +1804,52 @@ watch(
           </article>
         </div>
       </section>
-    </template>
+</template>
   </div>
+
+  <Teleport to="body">
+    <div v-if="aiResultModalOpen && aiHasResult" class="ai-result-modal" @click.self="closeAiResultModal">
+      <section class="ai-result-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="ai-result-modal-title">
+        <header class="ai-result-modal__header">
+          <div>
+            <span class="ai-result-modal__eyebrow">AI ANALYSIS REPORT</span>
+            <h2 id="ai-result-modal-title">AI 소비 분석 상세 결과</h2>
+            <p>{{ aiPrintableReport.range }} · {{ aiAnalysisStatus?.provider || 'AI' }} · {{ aiAnalysisStatus?.model || 'auto' }}</p>
+          </div>
+          <div class="ai-result-modal__actions">
+            <button class="button button--secondary" type="button" @click="printAiAnalysisReport">PDF 저장/인쇄</button>
+            <button class="button" type="button" @click="closeAiResultModal">닫기</button>
+          </div>
+        </header>
+        <div class="ai-result-modal__body">
+          <aside class="ai-analysis-advisory ai-analysis-advisory--modal" role="note">
+            <strong>AI 분석 결과는 참고용 조언입니다.</strong>
+            <span>거래 생성, 수정, 삭제, 분류는 자동으로 수행되지 않습니다.</span>
+          </aside>
+          <div v-if="hasStaleAiResult" class="ai-analysis-stale-note">새 분석 요청에 실패해 이전 결과를 표시 중입니다.</div>
+          <div class="ai-result-card-grid ai-result-card-grid--modal">
+            <article v-for="card in aiResultCards" :key="`modal-${card.label}`" class="ai-result-card">
+              <span>{{ card.label }}</span>
+              <strong>{{ card.value }}</strong>
+              <small>{{ card.meta }}</small>
+            </article>
+          </div>
+          <div class="ai-presentation-grid ai-presentation-grid--modal">
+            <section
+              v-for="section in aiPresentationSections"
+              :key="`modal-${section.key}`"
+              class="ai-result-section ai-result-section--presentation"
+              :class="{ 'ai-result-section--wide': section.wide }"
+            >
+              <h3>{{ section.title }}</h3>
+              <p v-for="paragraph in section.paragraphs" :key="paragraph">{{ paragraph }}</p>
+              <ul v-if="section.items.length">
+                <li v-for="item in section.items" :key="item">{{ item }}</li>
+              </ul>
+            </section>
+          </div>
+        </div>
+      </section>
+    </div>
+  </Teleport>
 </template>

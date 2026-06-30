@@ -257,15 +257,14 @@ public class LedgerAiLmStudioClient {
         if (!hasText(fallbackText)) {
             return null;
         }
-        String limitedText = limitText(fallbackText, 1800);
         return new LedgerAiRemoteResponse(
                 true,
                 null,
-                "LM Studio가 JSON 형식 대신 일반 텍스트 분석을 반환했습니다.",
-                java.util.List.of("LM Studio 응답을 일반 텍스트 분석으로 처리했습니다."),
-                java.util.List.of("AI 모델이 JSON 계약을 지키지 않아 구조화 항목 일부는 기본 계산 결과로 보완됩니다."),
+                "LM Studio 응답이 구조화 JSON 형식을 지키지 않아 기본 계산 기반 분석으로 보완했습니다.",
+                java.util.List.of("AI 응답 형식이 맞지 않아 핵심 지표와 기본 분석을 우선 표시합니다."),
+                java.util.List.of("일부 세부 항목은 AI 원문 대신 가계부 데이터 계산 결과로 대체됩니다."),
                 java.util.List.of(),
-                java.util.List.of(limitedText),
+                java.util.List.of("AI 응답을 다시 시도하거나 관리자 화면에서 모델과 JSON 응답 설정을 확인하세요."),
                 java.util.List.of(),
                 java.util.List.of(),
                 java.util.List.of(),

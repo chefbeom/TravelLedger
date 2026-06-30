@@ -149,6 +149,7 @@ const aiAnalysisStatus = ref(null)
 const aiAnalysis = ref(null)
 const aiAnalysisLoading = ref(false)
 const aiAnalysisError = ref('')
+const aiAnalysisStale = ref(false)
 const aiAnalysisHistoryPage = ref({
   content: [],
   page: 0,
@@ -1662,6 +1663,7 @@ async function loadLatestAiAnalysis() {
     const detail = await fetchLatestLedgerAiAnalysis(buildAiAnalysisPayload())
     if (detail?.result) {
       aiAnalysis.value = detail.result
+      aiAnalysisStale.value = false
       syncAiAnalysisControls(detail.history)
     } else {
       aiAnalysisError.value = '같은 조건으로 저장된 AI 분석 기록이 없습니다.'
@@ -1682,6 +1684,7 @@ async function openAiAnalysisHistory(historyId) {
   try {
     const detail = await fetchLedgerAiAnalysisHistory(historyId)
     aiAnalysis.value = detail?.result ?? null
+    aiAnalysisStale.value = false
     syncAiAnalysisControls(detail?.history)
   } catch (error) {
     aiAnalysisError.value = error.message || 'AI 분석 기록을 열지 못했습니다.'
@@ -1691,8 +1694,10 @@ async function openAiAnalysisHistory(historyId) {
 }
 
 async function requestAiAnalysis() {
+  const hadPreviousResult = Boolean(aiAnalysis.value)
   aiAnalysisLoading.value = true
   aiAnalysisError.value = ''
+  aiAnalysisStale.value = hadPreviousResult
   setFeedback()
   try {
     if (!aiAnalysisStatus.value) {
@@ -1700,9 +1705,17 @@ async function requestAiAnalysis() {
     }
     const payload = buildAiAnalysisPayload()
     aiAnalysis.value = await analyzeLedgerSpending(payload)
-    await loadAiAnalysisHistory(0)
+    aiAnalysisStale.value = false
+    await loadAiAnalysisHistory()
   } catch (error) {
-    aiAnalysisError.value = error.message || 'AI 분석 요청을 처리하지 못했습니다.'
+    const message = error.message || 'AI 분석 요청을 처리하지 못했습니다.'
+    if (aiAnalysis.value) {
+      aiAnalysisStale.value = true
+      aiAnalysisError.value = `새 분석 요청에 실패했습니다. 아래는 이전 저장/표시 결과입니다. (${message})`
+    } else {
+      aiAnalysisStale.value = false
+      aiAnalysisError.value = message
+    }
   } finally {
     aiAnalysisLoading.value = false
   }
@@ -1712,14 +1725,24 @@ async function rerunAiAnalysis(historyId) {
   if (!historyId) {
     return
   }
+  const hadPreviousResult = Boolean(aiAnalysis.value)
   aiAnalysisLoading.value = true
   aiAnalysisError.value = ''
+  aiAnalysisStale.value = hadPreviousResult
   setFeedback()
   try {
     aiAnalysis.value = await rerunLedgerAiAnalysis(historyId)
-    await loadAiAnalysisHistory(0)
+    aiAnalysisStale.value = false
+    await loadAiAnalysisHistory(aiAnalysisHistoryPage.value?.page ?? 0)
   } catch (error) {
-    aiAnalysisError.value = error.message || 'AI 분석 재요청을 처리하지 못했습니다.'
+    const message = error.message || 'AI 분석 재요청을 처리하지 못했습니다.'
+    if (aiAnalysis.value) {
+      aiAnalysisStale.value = true
+      aiAnalysisError.value = `AI 재분석 요청에 실패했습니다. 아래는 이전 저장/표시 결과입니다. (${message})`
+    } else {
+      aiAnalysisStale.value = false
+      aiAnalysisError.value = message
+    }
   } finally {
     aiAnalysisLoading.value = false
   }
@@ -3480,6 +3503,7 @@ async function activatePayment(paymentId) {
       :ai-analysis="aiAnalysis"
       :ai-analysis-loading="aiAnalysisLoading"
       :ai-analysis-error="aiAnalysisError"
+      :ai-analysis-stale="aiAnalysisStale"
       :ai-analysis-history-page="aiAnalysisHistoryPage"
       :ai-analysis-history-loading="aiAnalysisHistoryLoading"
       :ai-analysis-history-error="aiAnalysisHistoryError"

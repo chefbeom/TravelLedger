@@ -43,6 +43,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import io.micrometer.core.instrument.Timer;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -74,6 +75,8 @@ public class LedgerAiAnalysisService {
     private final LedgerAiAnalysisPayloadBuilder aiPayloadBuilder;
     private final LedgerAiAnalysisNotifications aiNotifications;
 
+    private final Map<String, Object> inFlightAnalysisLocks = new ConcurrentHashMap<>();
+
     public LedgerAiAnalysisStatusResponse getStatus() {
         return new LedgerAiAnalysisStatusResponse(
                 properties.isEnabled(),
@@ -95,6 +98,18 @@ public class LedgerAiAnalysisService {
         }
 
         AnalysisPlan plan = resolvePlan(request);
+        String inFlightKey = analysisInFlightKey(userId, plan);
+        Object lock = inFlightAnalysisLocks.computeIfAbsent(inFlightKey, ignored -> new Object());
+        try {
+            synchronized (lock) {
+                return analyzeResolvedPlan(owner, userId, plan);
+            }
+        } finally {
+            inFlightAnalysisLocks.remove(inFlightKey, lock);
+        }
+    }
+
+    private LedgerAiAnalysisResponse analyzeResolvedPlan(AppUser owner, Long userId, AnalysisPlan plan) {
         LedgerAiAnalysisResponse reusableResponse = findReusableAnalysis(userId, plan);
         if (reusableResponse != null) {
             return reusableResponse;
@@ -133,7 +148,6 @@ public class LedgerAiAnalysisService {
             throw exception;
         }
     }
-
     public LedgerAiAnalysisHistoryPageResponse getHistories(
             Long userId,
             LedgerAiAnalysisMode mode,
@@ -218,6 +232,21 @@ public class LedgerAiAnalysisService {
         return findLatestMatchingAnalysis(userId, plan, null)
                 .map(history -> new LedgerAiAnalysisHistoryDetailResponse(toSummary(history), aiJsonCodec.readResult(history.getResultJson())))
                 .orElse(null);
+    }
+
+    private String analysisInFlightKey(Long userId, AnalysisPlan plan) {
+        DateRange comparison = plan.comparisonRange();
+        return String.join("|",
+                String.valueOf(userId),
+                aiMetrics.providerLabel(),
+                properties.getModel(),
+                String.valueOf(plan.mode()),
+                String.valueOf(plan.periodType()),
+                String.valueOf(plan.primaryRange().from()),
+                String.valueOf(plan.primaryRange().to()),
+                comparison == null ? "" : String.valueOf(comparison.from()),
+                comparison == null ? "" : String.valueOf(comparison.to())
+        );
     }
 
     private LedgerAiAnalysisResponse findReusableAnalysis(Long userId, AnalysisPlan plan) {

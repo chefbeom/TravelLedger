@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -42,6 +43,12 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -310,6 +317,50 @@ class LedgerAiAnalysisServiceTest {
         verify(remoteClient, never()).analyze(any());
         verify(historyRepository, never()).save(any());
         verifyNoInteractions(statisticsService, ledgerEntryRepository);
+    }
+
+    @Test
+    void analyzeSerializesParallelDuplicateRequestsAndReusesFirstResult() throws Exception {
+        stubUser();
+        stubMonthlyDataset();
+        CountDownLatch remoteEntered = new CountDownLatch(1);
+        CountDownLatch releaseRemote = new CountDownLatch(1);
+        AtomicReference<LedgerAiAnalysisHistory> savedCompletedHistory = new AtomicReference<>();
+        when(historyRepository.findLatestMatchingCompletedAnalysis(
+                any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any()
+        )).thenAnswer(invocation -> {
+            LedgerAiAnalysisHistory history = savedCompletedHistory.get();
+            return history == null || history.getResultJson() == null ? Optional.empty() : Optional.of(history);
+        });
+        when(remoteClient.analyze(any())).thenAnswer(invocation -> {
+            remoteEntered.countDown();
+            releaseRemote.await(2, TimeUnit.SECONDS);
+            return remoteResponse();
+        });
+        when(historyRepository.save(any())).thenAnswer(invocation -> {
+            LedgerAiAnalysisHistory history = withId(invocation.getArgument(0), 90L);
+            if (history.getStatus() == LedgerAiAnalysisStatus.COMPLETED) {
+                savedCompletedHistory.set(history);
+            }
+            return history;
+        });
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        try {
+            Future<LedgerAiAnalysisResponse> first = executor.submit(() -> service.analyze(USER_ID, monthlyRequest()));
+            assertThat(remoteEntered.await(2, TimeUnit.SECONDS)).isTrue();
+            Future<LedgerAiAnalysisResponse> second = executor.submit(() -> service.analyze(USER_ID, monthlyRequest()));
+
+            releaseRemote.countDown();
+            LedgerAiAnalysisResponse firstResponse = first.get(2, TimeUnit.SECONDS);
+            LedgerAiAnalysisResponse secondResponse = second.get(2, TimeUnit.SECONDS);
+
+            assertThat(firstResponse.historyId()).isEqualTo(90L);
+            assertThat(secondResponse.historyId()).isEqualTo(90L);
+            verify(remoteClient, times(1)).analyze(any());
+        } finally {
+            releaseRemote.countDown();
+            executor.shutdownNow();
+        }
     }
 
     @Test

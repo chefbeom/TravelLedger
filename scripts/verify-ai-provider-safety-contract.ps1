@@ -1,4 +1,4 @@
-﻿$ErrorActionPreference = 'Stop'
+$ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
 $Root = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
@@ -62,7 +62,8 @@ Assert-ContainsAll -Label 'AI provider safety contract document' -Content $contr
     'Duplicate suppression',
     'APP_LEDGER_AI_LMSTUDIO_BASE_URL=http://172.18.240.1:1234',
     'APP_LEDGER_AI_LMSTUDIO_CHAT_PATH=/api/v1/chat',
-    'Client idempotency keys'
+    'same-JVM in-flight duplicate requests',
+    'Durable client idempotency keys'
 )
 
 Assert-ContainsAll -Label 'AI hardening plan' -Content $hardening -Needles @(
@@ -85,7 +86,8 @@ Assert-ContainsAll -Label 'Project roadmap' -Content $roadmap -Needles @(
     'docs/ai_provider_safety_contract.md',
     'scripts/verify-ai-provider-safety-contract.ps1',
     'AI provider safety',
-    'client idempotency keys'
+    'same-JVM in-flight duplicate requests',
+    'durable client idempotency keys'
 )
 
 Assert-ContainsAll -Label 'CI workflow' -Content $ci -Needles @(
@@ -97,6 +99,9 @@ Assert-ContainsAll -Label 'CI workflow' -Content $ci -Needles @(
 Assert-ContainsAll -Label 'Ledger AI service implementation' -Content $service -Needles @(
     '@Transactional(noRollbackFor = RuntimeException.class)',
     'DUPLICATE_SUPPRESSION_WINDOW = Duration.ofMinutes(5)',
+    'inFlightAnalysisLocks',
+    'analysisInFlightKey',
+    'analyzeResolvedPlan',
     'findLatestMatchingCompletedAnalysis',
     'PROVIDER_EXPENSE_ENTRY_LIMIT = 200',
     'PROVIDER_TEXT_LIMIT = 80',
@@ -122,6 +127,8 @@ Assert-ContainsAll -Label 'Ledger AI service tests' -Content $serviceTest -Needl
     'analyzeKeepsPromptInjectionLikeLedgerTextAsData',
     'analyzeLimitsProviderPayloadEntryCountAndText',
     'analyzeReusesRecentCompletedHistoryWithoutCallingRemoteProvider',
+    'analyzeSerializesParallelDuplicateRequestsAndReusesFirstResult',
+    'verify(remoteClient, times(1)).analyze(any())',
     'analyzeStoresFailedHistoryWhenRemoteRequestFails',
     'analyzeStoresFailedHistoryWithoutLeakingProviderSecrets',
     'doesNotContain("https://n8n.example.internal")',

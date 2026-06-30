@@ -11,7 +11,7 @@ This contract pins the release criteria for Ledger AI provider calls. Ledger AI 
 | LM Studio | Backend-only OpenAI-like chat call through `LedgerAiLmStudioClient`; `APP_LEDGER_AI_MODEL=auto` resolves the first available model from `/api/v1/models`. |
 | n8n | Backend-only webhook call through `LedgerAiN8nClient`; optional API key header is used only server-side. |
 | Shared response validation | `LedgerAiRemoteResponseValidator.requireUsable(...)` rejects null, failed, empty, secret-like, prompt-injection echo, and ledger-mutation-claim responses. |
-| Analysis service | `LedgerAiAnalysisService` builds owner-scoped, minimized provider payloads, stores completed or failed history, redacts provider failure details, records metrics, and reuses recent duplicate completed analysis results. |
+| Analysis service | `LedgerAiAnalysisService` builds owner-scoped, minimized provider payloads, stores completed or failed history, redacts provider failure details, records metrics, serializes same-JVM in-flight duplicate requests, and reuses recent duplicate completed analysis results. |
 | Configuration/status | AI status can expose enabled/configured/provider/model state, but must not expose provider URLs, base URLs, webhook paths, API keys, or API-key header names. |
 | Release gate | `scripts/verify-ai-provider-safety-contract.ps1` must run in CI before the release gate succeeds. |
 
@@ -47,7 +47,7 @@ flowchart TD
 | AI-PROV-07 | Provider output that contains secret-like content is rejected. | `LedgerAiRemoteResponseValidatorTest.rejectsSecretLikeProviderOutput`. |
 | AI-PROV-08 | Provider output that claims ledger entries were created, updated, deleted, saved, categorized, or reclassified is rejected. | `LedgerAiRemoteResponseValidatorTest.rejectsProviderOutputClaimingLedgerMutation`. |
 | AI-PROV-09 | Failed provider requests still persist failed history, but error messages are redacted before storage. | `LedgerAiAnalysisServiceTest.analyzeStoresFailedHistoryWhenRemoteRequestFails` and `analyzeStoresFailedHistoryWithoutLeakingProviderSecrets`. |
-| AI-PROV-10 | Recent duplicate completed analysis requests for the same owner, provider, model, mode, period, and comparison range reuse the existing result instead of calling the provider again. | `LedgerAiAnalysisServiceTest.analyzeReusesRecentCompletedHistoryWithoutCallingRemoteProvider` and `LedgerAiAnalysisHistoryRepository.findLatestMatchingCompletedAnalysis`. |
+| AI-PROV-10 | Recent duplicate completed analysis requests for the same owner, provider, model, mode, period, and comparison range reuse the existing result instead of calling the provider again; same-JVM in-flight duplicates are serialized so a browser double-submit cannot create parallel provider calls. | `LedgerAiAnalysisServiceTest.analyzeReusesRecentCompletedHistoryWithoutCallingRemoteProvider`, `analyzeSerializesParallelDuplicateRequestsAndReusesFirstResult`, `LedgerAiAnalysisService.inFlightAnalysisLocks`, and `LedgerAiAnalysisHistoryRepository.findLatestMatchingCompletedAnalysis`. |
 | AI-PROV-11 | Provider latency/failure metrics keep workflow/provider/status tags available for alerting. | `calen.external.workflow.requests`, `calen.external.workflow.request`, `calen.ledger.ai.requests`, and `calen.ledger.ai.request`. |
 | AI-PROV-12 | AI output remains advisory only; any feature that applies mutations must require a separate explicit user action and a dedicated authorization/audit contract. | Output contract text and validator mutation-claim rejection. |
 
@@ -84,15 +84,15 @@ Before enabling or changing a provider in production, verify:
 5. Invalid/non-JSON provider responses fail closed.
 6. Prompt-injection echoes, secret-like output, and mutation claims are rejected.
 7. Failed history is persisted with redacted error messages.
-8. Duplicate suppression remains provider/model/range aware.
+8. Duplicate suppression remains provider/model/range aware and same-JVM in-flight duplicate requests are serialized before provider calls.
 9. Provider failure and latency metrics remain alertable.
-10. Client idempotency keys are added before supporting parallel retries from multiple browser tabs.
+10. Durable client idempotency keys are added before supporting cross-node or queued parallel retries from multiple browser tabs.
 
 ## Next hardening slices
 
 | Priority | Slice | Reason |
 | --- | --- | --- |
-| P1 | Client idempotency keys for `POST /api/ledger/ai/analyze` | Prevent parallel browser retries from bypassing the current 5-minute completed-result reuse window. |
+| P1 | Durable client idempotency keys for `POST /api/ledger/ai/analyze` | Extend the current same-JVM in-flight guard and 5-minute completed-result reuse window across nodes, restarts, and queued retries. |
 | P1 | Provider sample fixtures for LM Studio and n8n | Make provider drift visible without requiring live LM Studio or n8n access in CI. |
 | P1 | Metric-level contract tests | Lock `calen.external.workflow.*` and `calen.ledger.ai.*` tags before dashboards depend on them. |
 | P2 | Redaction profile catalog | Keep provider-specific secret formats documented as new providers are added. |

@@ -1,4 +1,4 @@
-﻿spring:
+spring:
   application:
     name: calen-backend
   datasource:
@@ -94,7 +94,7 @@ app:
       read-timeout: ${LEDGER_OCR_READ_TIMEOUT:90s}
       max-file-size: ${LEDGER_OCR_MAX_FILE_SIZE:10MB}
     ai:
-      enabled: ${APP_LEDGER_AI_ENABLED:false}
+      enabled: ${APP_LEDGER_AI_ENABLED:true}
       provider: ${APP_LEDGER_AI_PROVIDER:lmstudio}
       workflow-url: ${APP_LEDGER_AI_WORKFLOW_URL:}
       api-key: ${APP_LEDGER_AI_API_KEY:}

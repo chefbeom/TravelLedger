@@ -1,4 +1,4 @@
-Set-StrictMode -Version Latest
+﻿Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $privacyDocPath = 'docs/privacy_control_panel.md'
@@ -35,10 +35,22 @@ if ($findings.Count -eq 0) {
     $requiredPrivacySections = @(
         '# Privacy Control Panel Backend Slice',
         '## Implemented Controls',
+        '## Privacy management screen contract',
         '## Safety Rules',
         '## Test Evidence',
         '## Contract and CI Gate',
-        '## UI Contract Notes'
+        '## UI Contract Notes',
+        'My data download',
+        'Revoke all shared links',
+        'Delete AI analysis history',
+        'Remove photo location metadata',
+        'Sensitive cleanup',
+        'Privacy screen must not become a secret viewer',
+        'aiAnalysisHistoriesDeleted',
+        'publicDownloadLinksRevoked',
+        'travelPublicMediaSharesRevoked',
+        'photoLocationMetadataRemoved',
+        'processedAt'
     )
     foreach ($section in $requiredPrivacySections) {
         if (-not $privacyDoc.Contains($section)) {
@@ -117,9 +129,11 @@ if ($findings.Count -eq 0) {
         'manifest/travel-media.json',
         'manifest/family-media.json',
         'hasGpsMetadata',
-        'not the latitude/longitude values',
-        'API keys, signed URLs, prompt payloads, provider responses, object storage paths, public link tokens, and backup credentials are not included',
-        '## CI Contract'
+        'raw latitude/longitude',
+        'Secret exclusion',
+        'object storage paths',
+        'presigned URLs',
+        '## CI contract'
     )
     foreach ($snippet in $requiredDataDocSnippets) {
         if (-not $dataPortabilityDoc.Contains($snippet)) {
@@ -173,3 +187,4 @@ if ($findings.Count -gt 0) {
 }
 
 Write-Host 'Privacy control contract verification passed.'
+

@@ -45,6 +45,8 @@ Assert-ContainsAll 'docs/public_share_authorization_contract.md' $contract @(
     'CalenDrive public download link',
     'CalenDrive direct share',
     'Travel public media token',
+    'app.security.public-media-key',
+    'rotating `app.security.public-media-key` revokes previously issued stateless URLs',
     'Travel shared exhibit media',
     'Privacy revocation',
     'token fingerprints',
@@ -142,6 +144,7 @@ Assert-ContainsAll 'TravelPublicMediaTokenService' $travelTokenService @(
     'public String issueToken(Long mediaId)',
     'public boolean matches(Long mediaId, String token)',
     'MessageDigest.isEqual',
+    'app.security.public-media-key',
     'token.trim()'
 )
 
@@ -149,6 +152,9 @@ Assert-ContainsAll 'TravelPublicMediaTokenServiceTest' $travelTokenTest @(
     'issuedTokenMatchesOnlyOriginalMediaId',
     'invalidOrMissingTokensDoNotMatch',
     'tokenIssuedWithDifferentSecretDoesNotMatch',
+    'rotatingPublicMediaKeyRevokesPreviouslyIssuedToken',
+    'travel-public-media-key-v1',
+    'travel-public-media-key-v2',
     'tampered',
     'different-public-media-secret'
 )

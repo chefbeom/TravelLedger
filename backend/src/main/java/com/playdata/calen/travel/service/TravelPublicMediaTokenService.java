@@ -2,6 +2,7 @@ package com.playdata.calen.travel.service;
 
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
+import java.security.MessageDigest;
 import java.util.Base64;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
@@ -27,7 +28,7 @@ public class TravelPublicMediaTokenService {
             byte[] digest = mac.doFinal(String.valueOf(mediaId).getBytes(StandardCharsets.UTF_8));
             return Base64.getUrlEncoder().withoutPadding().encodeToString(digest);
         } catch (GeneralSecurityException exception) {
-            throw new IllegalStateException("공개 여행 사진 토큰을 생성할 수 없습니다.", exception);
+            throw new IllegalStateException("Failed to issue public travel media token.", exception);
         }
     }
 

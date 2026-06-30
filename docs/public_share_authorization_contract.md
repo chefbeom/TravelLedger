@@ -11,7 +11,7 @@ This contract records the release boundary for public and shared file/media acce
 | CalenDrive public download link | `/api/file/public-download/{token}` and public presigned download resolution | Link must exist, not be revoked, not be expired, under download limit, attached to a valid non-trashed file, and access must be logged without raw-token storage. |
 | CalenDrive direct share | `/api/file/share/shared/{fileId}/download`, `/api/file/share/{fileId}/access-logs` | Recipient must have an explicit share row; `VIEW` cannot download or save; owner alone can read direct-share access logs. |
 | CalenDrive share permission | `DriveSharePermission.VIEW`, `DOWNLOAD`, `EDIT` | Omitted permissions default to `DOWNLOAD`; unknown values fail fast; `EDIT` is reserved but still download-capable until collaborative edit semantics exist. |
-| Travel public media token | `/api/travel/public/media/{mediaId}/content?token=...` | Token must match the requested media id using the configured public-media secret and the media must still be public/community-visible. |
+| Travel public media token | `/api/travel/public/media/{mediaId}/content?token=...` | Token must match the requested media id using the configured public-media secret and the media must still be public/community-visible; rotating `app.security.public-media-key` revokes previously issued stateless URLs. |
 | Travel shared exhibit media | `/api/travel/shared-exhibits/{shareId}/media/{mediaId}/content` | Authenticated recipient must own the share row, the source plan must be completed, and media must belong to that shared plan. |
 | Privacy revocation | `/api/privacy/public-download-links`, `/api/privacy/travel-public-media-shares`, `/api/privacy/cleanup` | Authenticated user with CSRF can revoke only their own Drive public links and Travel public/community media share surfaces. |
 
@@ -41,7 +41,7 @@ flowchart TD
 | Direct share permissions are enforced | `VIEW` shares can list/preview only; download URL generation, object loading, and save-to-drive must require `DOWNLOAD` or `EDIT`. |
 | Direct share failures are observable | `not_found`, `unavailable`, `permission_denied`, and `success` direct-share statuses remain bounded and owner-scoped. |
 | Access log visibility is owner-only | File owners can inspect public/direct-share access logs; non-owners must be rejected before log reads. |
-| Travel public media token is pair-bound | A token issued for one media id must not work for another media id, missing token, blank token, tampered token, or different secret. |
+| Travel public media token is pair-bound | A token issued for one media id must not work for another media id, missing token, blank token, tampered token, or different secret. Rotating `app.security.public-media-key` must invalidate previously issued Travel public media URLs. |
 | Travel public media visibility is checked after token match | A valid token is not enough; media must be a public/community-visible photo or belong to a completed public plan. |
 | Travel shared exhibit is recipient-bound | Authenticated shared exhibit media requires the recipient share row and the requested media must belong to the shared completed plan. |
 | Revocation is current-user scoped | Privacy revocation must revoke only the current user's Drive public links and Travel public/community media surfaces. |
@@ -56,7 +56,7 @@ flowchart TD
 | Public log safety | `DriveDownloadLinkAccessLogService.record`, `recordDirectShareAccess`, `listRecentLogs`, `listRecentDirectShareLogs`, and token-fingerprint tests. |
 | Direct share permission | `DriveShareService.shareFiles`, `normalizePermission`, `effectivePermission`, `ensureDownloadAllowed`, `getSharedFileDownloadUrl`, `downloadSharedFile`, and `listSharedFileAccessLogs`. |
 | Direct share tests | `DriveShareServiceTest.shareFilesStoresRequestedViewPermission`, `downloadSharedFileRejectsViewOnlyShareWithoutLoadingObject`, `sharedDownloadUrlRecordsSuccessfulAccess`, `sharedDownloadUrlRecordsViewOnlyDeniedAccess`, `sharedDownloadUrlRecordsMissingRecipientAsNotFoundWithoutGeneratingUrl`, and trashed/unavailable source tests. |
-| Travel public token | `TravelPublicMediaTokenService.issueToken`, `matches`, and `MessageDigest.isEqual`. |
+| Travel public token | `TravelPublicMediaTokenService.issueToken`, `matches`, `MessageDigest.isEqual`, `app.security.public-media-key`, and `TravelPublicMediaTokenServiceTest.rotatingPublicMediaKeyRevokesPreviouslyIssuedToken`. |
 | Travel public media | `TravelService.getSharedMediaDownload`, `TravelPlanUserScopeIntegrationTest` invalid-token coverage, public memory/community visibility, and completed public plan visibility. |
 | Travel shared exhibit | `TravelService.getSharedExhibitMediaDownload`, `getRequiredShare`, completed-plan check, and media-plan match check. |
 | Privacy revocation | `PrivacyManagementService.revokePublicDownloadLinks`, `revokeTravelPublicMediaSurfaces`, `PrivacyManagementServiceTest`, and `PrivacyControllerIntegrationTest` auth/CSRF coverage. |
@@ -73,7 +73,7 @@ A release is not ready if any of these are true:
 | Raw token is stored in access logs. | Converts logs into bearer-secret storage. |
 | Non-owner can read a public/direct-share access log. | Leaks forensic history across users. |
 | `VIEW` direct share can download, save, or generate a presigned URL. | Breaks the permission model promised to owners. |
-| Travel media token works across media ids or secrets. | Makes public URLs transferable beyond the intended media object. |
+| Travel media token works across media ids or secrets, or key rotation fails to revoke old URLs. | Makes public URLs transferable beyond the intended media object or impossible to revoke during incident response. |
 | Valid Travel token bypasses public/community/completed-plan visibility. | Exposes private trip media. |
 | Privacy revocation updates another user's public links or travel share surfaces. | Breaks account isolation. |
 
@@ -86,8 +86,8 @@ A release is not ready if any of these are true:
 | Slice | Notes |
 | --- | --- |
 | Frontend access log view | Surface owner-only Drive public/direct-share access logs without raw tokens. |
-| Public media expiry | Add optional expiration/revocation for Travel public media tokens or public plan media URLs. |
-| Token rotation runbook | Document how changing `app.security.public-media-key` invalidates existing Travel media URLs. |
+| Public media expiry | Add optional expiration/revocation for Travel public media tokens or public plan media URLs; until then, `app.security.public-media-key` rotation is the emergency revocation path. |
+| Token rotation runbook | Changing `app.security.public-media-key` invalidates existing Travel public media URLs because tokens are HMACs over media id plus the configured secret; rotate during incident response, redeploy all app nodes with the same new key, and ask owners to regenerate public/community links as needed. |
 | Abuse controls | Add rate limiting and alerting for repeated invalid public tokens by bounded fingerprint/status. |
 | Share notification hardening | Keep notification metadata relative-link-only and free of raw tokens/presigned URLs. |
 
@@ -99,6 +99,6 @@ A release is not ready if any of these are true:
 - Direct share `VIEW` cannot download, save, or generate presigned URLs.
 - Direct share failures write owner-scoped bounded statuses, including missing-recipient `not_found` attempts before any presigned URL generation.
 - Only file owners can list public/direct-share access logs.
-- Travel public media token rejects null, blank, tampered, wrong-media, and wrong-secret tokens.
+- Travel public media token rejects null, blank, tampered, wrong-media, and wrong-secret tokens, and key rotation rejects previously issued URLs.
 - Travel shared exhibit media rejects non-recipient, non-completed plan, and wrong-plan media ids.
 - Privacy revocation endpoints require auth/CSRF and remain current-user scoped.

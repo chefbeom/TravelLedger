@@ -35,4 +35,16 @@ class TravelPublicMediaTokenServiceTest {
 
         assertThat(otherSecretService.matches(100L, token)).isFalse();
     }
+
+    @Test
+    void rotatingPublicMediaKeyRevokesPreviouslyIssuedToken() {
+        TravelPublicMediaTokenService originalKeyService = new TravelPublicMediaTokenService("travel-public-media-key-v1");
+        TravelPublicMediaTokenService rotatedKeyService = new TravelPublicMediaTokenService("travel-public-media-key-v2");
+        String oldToken = originalKeyService.issueToken(100L);
+        String newToken = rotatedKeyService.issueToken(100L);
+
+        assertThat(originalKeyService.matches(100L, oldToken)).isTrue();
+        assertThat(rotatedKeyService.matches(100L, oldToken)).isFalse();
+        assertThat(rotatedKeyService.matches(100L, newToken)).isTrue();
+    }
 }

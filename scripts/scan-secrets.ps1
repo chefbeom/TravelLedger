@@ -6,15 +6,18 @@ $tokenPatterns = @(
     @{ Name = 'Private key block'; Regex = '-----BEGIN (RSA|OPENSSH|EC|DSA|PRIVATE) KEY-----' },
     @{ Name = 'GitHub classic token'; Regex = 'ghp_[A-Za-z0-9_]{36,}' },
     @{ Name = 'GitHub fine-grained token'; Regex = 'github_pat_[A-Za-z0-9_]{80,}' },
+    @{ Name = 'GitLab personal access token'; Regex = 'glpat-[A-Za-z0-9_-]{20,}' },
+    @{ Name = 'npm access token'; Regex = 'npm_[A-Za-z0-9]{36,}' },
     @{ Name = 'OpenAI-style API key'; Regex = 'sk-[A-Za-z0-9]{20,}' },
     @{ Name = 'Google API key'; Regex = 'AIza[0-9A-Za-z_-]{35}' },
     @{ Name = 'Stripe live secret key'; Regex = 'sk_live_[0-9A-Za-z]{16,}' },
+    @{ Name = 'SendGrid API key'; Regex = 'SG\.[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}' },
     @{ Name = 'Slack token'; Regex = 'xox[baprs]-[A-Za-z0-9-]{10,}' },
     @{ Name = 'JWT token'; Regex = 'eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}' }
 )
 
-$sensitiveAssignmentPattern = [regex]'(?im)^\s*(?:export\s+)?[A-Z0-9_]*(?:API_KEY|SECRET|TOKEN|PASSWORD|PRIVATE_KEY|JWT_KEY)[A-Z0-9_]*\s*[:=]\s*["'']?([^"''\s#]+)'
-$placeholderPattern = [regex]'(?i)(^$|example|placeholder|change-?me|replace-?me|your-|dummy|test|local|dev|^\$\{|^\$\(|^%|^<.*>$)'
+$sensitiveAssignmentPattern = [regex]'(?im)^\s*(?:export\s+)?[A-Z0-9_]*(?:API_KEY|SECRET|TOKEN|PASSWORD|PRIVATE_KEY|JWT_KEY|ACCESS_KEY|CREDENTIAL|PASSPHRASE)[A-Z0-9_]*\s*[:=]\s*["'']?([^"''\s#]+)'
+$placeholderPattern = [regex]'(?i)(^$|example|placeholder|change-?me|replace-?me|your-|dummy|test|local|dev|sample|fixture|^\$\{|^\$\(|^%|^<.*>$)'
 $excludedPathPatterns = @(
     '^\.git/',
     '^\.gradle/',

@@ -25,6 +25,17 @@ jobs:
         shell: pwsh
         run: ./scripts/scan-secrets.ps1
 
+  secret-scan-contract:
+    name: Secret scan contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Verify secret scan coverage and CI wiring
+        shell: pwsh
+        run: ./scripts/verify-secret-scan-contract.ps1
+
   config-sync:
     name: Config sync
     runs-on: ubuntu-latest
@@ -77,7 +88,8 @@ jobs:
         uses: actions/checkout@v4
       - name: Verify ASVS security baseline checklist
         shell: pwsh
-        run: ./scripts/verify-security-baseline-checklist.ps1  admin-audit-contract:
+        run: ./scripts/verify-security-baseline-checklist.ps1
+  admin-audit-contract:
     name: Admin audit contract
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -336,6 +348,7 @@ jobs:
     timeout-minutes: 5
     needs:
       - secret-scan
+      - secret-scan-contract
       - config-sync
       - migration-discipline
       - observability-alerts
@@ -368,6 +381,7 @@ jobs:
         run: |
           declare -A results=(
             [secret-scan]="${{ needs['secret-scan'].result }}"
+            [secret-scan-contract]="${{ needs['secret-scan-contract'].result }}"
             [config-sync]="${{ needs['config-sync'].result }}"
             [migration-discipline]="${{ needs['migration-discipline'].result }}"
             [observability-alerts]="${{ needs['observability-alerts'].result }}"

@@ -148,6 +148,7 @@ if (-not (Test-Path -LiteralPath $retirementEvidencePath)) {
         '# DB Migration Retirement Evidence',
         'Evidence fields required before retirement',
         'Staging Flyway startup proof',
+        'APP_SCHEMA_LEGACY_UPDATERS_ENABLED=false',
         'Flyway history proof',
         'Smoke evidence',
         'Rollback/restore evidence',
@@ -191,6 +192,7 @@ if (-not (Test-Path -LiteralPath $retirementEvidencePath)) {
         }
         foreach ($requiredReadyEvidenceToken in @(
             'DB_MIGRATION_ENABLED=true',
+            'APP_SCHEMA_LEGACY_UPDATERS_ENABLED=false',
             'flyway_schema_history',
             'backup',
             'restore',
@@ -221,6 +223,7 @@ if (-not (Test-Path -LiteralPath $strategyPath)) {
     foreach ($snippet in @(
         '## Startup DDL Freeze',
         'No new `ApplicationRunner` or `CommandLineRunner` may execute `CREATE TABLE`, `ALTER TABLE`, `DROP TABLE`, `CREATE INDEX`, or `ALTER INDEX`.',
+        'must stay guarded by `APP_SCHEMA_LEGACY_UPDATERS_ENABLED`',
         'New schema changes must be Flyway migrations only.',
         'Retire one legacy updater at a time',
         'A `Ready` row in `docs/db_migration_retirement_evidence.md` must include a concrete evidence bundle and no `TBD` placeholders.',
@@ -267,6 +270,13 @@ foreach ($path in $expectedLegacySchemaUpdaters) {
     $expectedLegacySchemaUpdaterSet[$path] = $true
     if (-not (Test-Path -LiteralPath $path)) {
         $findings.Add("Documented legacy SchemaUpdater is missing; update docs/db_migration_strategy.md and this verifier when retiring it: $path") | Out-Null
+    } else {
+        $legacySource = Get-Content -LiteralPath $path -Raw
+        foreach ($snippet in @('@ConditionalOnProperty(prefix = "app.schema.legacy-updaters"', 'name = "enabled"', 'matchIfMissing = true')) {
+            if (-not $legacySource.Contains($snippet)) {
+                $findings.Add("Documented legacy SchemaUpdater is missing toggle guard snippet ${snippet}: $path") | Out-Null
+            }
+        }
     }
 }
 

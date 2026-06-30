@@ -26,6 +26,7 @@ The data-only OCI stack is intentionally not checked against Spring placeholders
 - Keep `APP_LEDGER_AI_HISTORY_RETENTION_ENABLED=false` until an explicit AI history retention window is approved; then set `APP_LEDGER_AI_HISTORY_RETENTION_DAYS`, cron, and zone together.
 - Keep `MINIO_STORAGE_CAPACITY_BYTES` positive in production if MinIO usage alerts should fire.
 - Keep migration variables explicit even when Flyway is disabled so operators can intentionally turn it on per environment.
+- Keep `APP_SCHEMA_LEGACY_UPDATERS_ENABLED=true` until a Flyway staging rehearsal needs to prove startup without legacy `*SchemaUpdater` assistance, then set it to `false` only with `DB_MIGRATION_ENABLED=true` and backup/restore evidence.
 
 ## Manual usage
 

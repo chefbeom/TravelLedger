@@ -61,6 +61,9 @@ management:
       show-details: never
 
 app:
+  schema:
+    legacy-updaters:
+      enabled: ${APP_SCHEMA_LEGACY_UPDATERS_ENABLED:true}
   security:
     remember-me-key: ${JWT_KEY:calen-remember-me-key}
     remember-me-token-validity-seconds: 2592000

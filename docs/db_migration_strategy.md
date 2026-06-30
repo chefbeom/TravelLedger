@@ -6,6 +6,7 @@ Updated: 2026-06-30
 
 - Flyway is available in the backend build with `flyway-core` and `flyway-mysql`.
 - Flyway is disabled by default with `DB_MIGRATION_ENABLED=false` while legacy startup updaters still exist.
+- Legacy startup updaters are enabled by default with `APP_SCHEMA_LEGACY_UPDATERS_ENABLED=true`; staging Flyway rehearsals can set it to `false` to prove startup without updater assistance before deleting a class.
 - Hibernate `ddl-auto: update` remains in place during the transition so existing local and compose workflows keep working.
 - `backend/src/main/resources/db/migration` contains a baseline marker plus versioned migrations for access logs, notifications, classification rules, AI history provider metadata, drive file versions, drive share permissions, direct-share access log indexes, travel route segment fields, ledger entry change-history fields, travel media asset metadata fields, travel photo cluster tables, ledger entry operational fields/indexes, and AI analysis history base table/indexes, and household goal tables/indexes.
 - `scripts/verify-db-migrations.ps1` and the CI `migration-discipline` job check migration naming, duplicate versions, baseline marker presence, migration inventory documentation, operational evidence notes, the expected legacy `*SchemaUpdater` inventory, retirement evidence ledger coverage, Ready evidence placeholders, and unexpected startup DDL runners.
@@ -45,7 +46,7 @@ Updated: 2026-06-30
 
 ## Startup DDL Freeze
 
-No new `ApplicationRunner` or `CommandLineRunner` may execute `CREATE TABLE`, `ALTER TABLE`, `DROP TABLE`, `CREATE INDEX`, or `ALTER INDEX`. New schema changes must be Flyway migrations only. The existing startup DDL classes below are temporary legacy exceptions and are allowed only while their matching migration evidence is prepared.
+No new `ApplicationRunner` or `CommandLineRunner` may execute `CREATE TABLE`, `ALTER TABLE`, `DROP TABLE`, `CREATE INDEX`, or `ALTER INDEX`. New schema changes must be Flyway migrations only. The existing startup DDL classes below are temporary legacy exceptions, must stay guarded by `APP_SCHEMA_LEGACY_UPDATERS_ENABLED`, and are allowed only while their matching migration evidence is prepared.
 
 | Legacy exception | Allowed reason | Retirement evidence required |
 | --- | --- | --- |
@@ -96,9 +97,10 @@ Retire one legacy updater at a time. Removing one requires: a versioned migratio
 2. Confirm the app starts with `DB_MIGRATION_ENABLED=false`.
 3. Run backend tests and `scripts/verify-db-migrations.ps1` locally.
 4. Enable `DB_MIGRATION_ENABLED=true` in a staging copy first.
-5. Keep `DB_MIGRATION_BASELINE_ON_MIGRATE=true` for existing non-empty schemas without `flyway_schema_history`.
-6. Confirm `flyway_schema_history` exists and contains the baseline marker plus expected migrations.
-7. After all legacy schema updaters are converted, set Hibernate DDL mode to `validate` for non-local profiles.
+5. Set `APP_SCHEMA_LEGACY_UPDATERS_ENABLED=false` for the staging proof run to confirm Flyway alone can provide the schema.
+6. Keep `DB_MIGRATION_BASELINE_ON_MIGRATE=true` for existing non-empty schemas without `flyway_schema_history`.
+7. Confirm `flyway_schema_history` exists and contains the baseline marker plus expected migrations.
+8. After all legacy schema updaters are converted, set Hibernate DDL mode to `validate` for non-local profiles.
 
 ## Release Gate
 
@@ -109,7 +111,7 @@ A release that adds or changes schema should include:
 - A passing `scripts/verify-db-migrations.ps1` result or CI `migration-discipline` job, including the legacy updater inventory and startup DDL freeze checks.
 - A note explaining whether an existing `*SchemaUpdater` was retained, reduced, or removed.
 - A rollback note for data-preserving rollback or restore-from-backup rollback.
-- A staging startup check with Flyway enabled before production promotion.
+- A staging startup check with Flyway enabled and `APP_SCHEMA_LEGACY_UPDATERS_ENABLED=false` before production promotion.
 - A completed `docs/db_migration_retirement_evidence.md` row with a concrete Ready evidence bundle before deleting any legacy `*SchemaUpdater`.
 
 ## Latest schema slices
@@ -127,3 +129,4 @@ A release that adds or changes schema should include:
 - `V20260630_014__household_goals.sql` moves owner-scoped household goal table and progress lookup indexes into Flyway.
 - All seven legacy `*SchemaUpdater` classes now have Flyway overlap but remain documented temporary exceptions until staging Flyway startup, provider ordering, smoke evidence, and `docs/db_migration_retirement_evidence.md` rows allow deletion.
 - Startup DDL freeze is now enforced: new schema mutation runners must be rejected unless they retire one documented legacy exception with migration evidence.
+- Legacy updater assistance can now be disabled with `APP_SCHEMA_LEGACY_UPDATERS_ENABLED=false` during Flyway staging rehearsals so retirement evidence proves the migration path rather than startup DDL fallback.

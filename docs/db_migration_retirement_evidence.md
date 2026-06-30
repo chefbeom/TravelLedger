@@ -8,7 +8,7 @@ This ledger separates Flyway overlap from permission to delete legacy startup sc
 
 | Field | Requirement |
 | --- | --- |
-| Staging Flyway startup proof | Date, environment, commit SHA, `DB_MIGRATION_ENABLED=true`, `DB_MIGRATION_BASELINE_ON_MIGRATE` value, and confirmation that startup completed without legacy updater assistance. |
+| Staging Flyway startup proof | Date, environment, commit SHA, `DB_MIGRATION_ENABLED=true`, `APP_SCHEMA_LEGACY_UPDATERS_ENABLED=false`, `DB_MIGRATION_BASELINE_ON_MIGRATE` value, and confirmation that startup completed without legacy updater assistance. |
 | Flyway history proof | `flyway_schema_history` contains the baseline marker plus every required migration for the retired updater. |
 | Smoke evidence | Feature-specific read/write flow listed in the table below completed after Flyway startup. |
 | Rollback/restore evidence | Backup artifact or restore point, rollback decision, and restore command/runbook link are recorded. |
@@ -16,7 +16,7 @@ This ledger separates Flyway overlap from permission to delete legacy startup sc
 | Ready evidence bundle | A `Ready` row must include concrete evidence references for startup proof, `flyway_schema_history`, smoke result, backup/restore artifact, and the removal commit. |
 | Blocker/exception note | A `Pending` row must keep the current blocker clear when Flyway overlap exists but deletion is not permitted. |
 
-Ready rows must include concrete evidence references and cannot keep `TBD` placeholders. At minimum, the row must name `DB_MIGRATION_ENABLED=true`, `flyway_schema_history`, a backup artifact, a restore command or runbook, and the commit or pull request that removes the legacy updater.
+Ready rows must include concrete evidence references and cannot keep `TBD` placeholders. At minimum, the row must name `DB_MIGRATION_ENABLED=true`, `APP_SCHEMA_LEGACY_UPDATERS_ENABLED=false`, `flyway_schema_history`, a backup artifact, a restore command or runbook, and the commit or pull request that removes the legacy updater.
 
 ## Legacy updater retirement ledger
 

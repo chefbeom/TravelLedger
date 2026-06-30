@@ -147,10 +147,6 @@ if (-not (Test-Path -LiteralPath $retirementEvidencePath)) {
         'Blocker/exception note',
         'Ready rows must include concrete evidence references',
         'Blocked: staging Flyway startup proof, Flyway history proof, smoke evidence, and rollback/restore evidence are not recorded yet.',
-        'Ready evidence bundle',
-        'Blocker/exception note',
-        'Ready rows must include concrete evidence references',
-        'Blocked: staging Flyway startup proof, Flyway history proof, smoke evidence, and rollback/restore evidence are not recorded yet.',
         'All six legacy updaters have Flyway overlap, but none are marked `Ready` here.'
     )) {
         if (-not $retirementEvidence.Contains($snippet)) {
@@ -177,27 +173,6 @@ if (-not (Test-Path -LiteralPath $retirementEvidencePath)) {
         }
     }
 
-    $readyRows = @([regex]::Matches($retirementEvidence, '(?m)^\|\s*Ready\s*\|(?<row>.+)$'))
-    foreach ($readyRow in $readyRows) {
-        $readyRowText = $readyRow.Value
-        if ($readyRowText.Contains('TBD')) {
-            $findings.Add("DB migration retirement Ready row still contains TBD placeholder: $readyRowText") | Out-Null
-        }
-        foreach ($requiredReadyEvidenceToken in @(
-            'DB_MIGRATION_ENABLED=true',
-            'flyway_schema_history',
-            'backup',
-            'restore',
-            'commit'
-        )) {
-            if ($readyRowText.IndexOf($requiredReadyEvidenceToken, [System.StringComparison]::OrdinalIgnoreCase) -lt 0) {
-                $findings.Add("DB migration retirement Ready row missing evidence token '$requiredReadyEvidenceToken': $readyRowText") | Out-Null
-            }
-        }
-    }
-}
-
-$strategyPathif (Test-Path -LiteralPath $retirementEvidencePath) {
     $readyRows = @([regex]::Matches($retirementEvidence, '(?m)^\|\s*Ready\s*\|(?<row>.+)$'))
     foreach ($readyRow in $readyRows) {
         $readyRowText = $readyRow.Value

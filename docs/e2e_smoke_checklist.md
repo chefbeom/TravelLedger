@@ -2,7 +2,7 @@
 
 Updated: 2026-06-30
 
-This checklist defines the minimum browser-level evidence required before releases that change authentication, ledger, OCR/AI, travel, drive sharing, notifications, or admin backup behavior. It is paired with the first Playwright smoke skeleton at `frontend/e2e/smoke.spec.js`; the checklist remains the source of truth for acceptance criteria, fixture safety, and release evidence.
+This checklist defines the minimum backend and browser-level evidence required before releases that change authentication, ledger, OCR/AI, travel, drive sharing, notifications, file uploads, or admin backup behavior. It is paired with the first Playwright smoke skeleton at `frontend/e2e/smoke.spec.js`; the checklist remains the source of truth for acceptance criteria, fixture safety, and release evidence.
 
 ## Shared setup
 
@@ -28,6 +28,19 @@ This checklist defines the minimum browser-level evidence required before releas
 | AI analysis advisory | User can run or load AI analysis, sees advisory wording, and any suggested ledger change still requires a separate explicit user action. Provider failure shows bounded error UI. | AI safety, failure handling, no autonomous mutations. |
 | Notification center | User sees AI/share/backup/OCR notifications when produced, unread count changes after read/read-all, and another user's notifications are not visible. | Cross-feature awareness and owner-scoped notification access. |
 
+## Backend high-risk test coverage
+
+The CI `backend-security-tests` job is the fast high-risk backend subset. The full `backend-test` job still runs the complete Gradle test suite, but this subset must keep explicit coverage for the areas most likely to create user-visible data loss, authorization leakage, or unsafe AI/OCR behavior.
+
+| Area | Required CI coverage | Test classes in `backend-security-tests` |
+| --- | --- | --- |
+| AI analysis and OCR safety | Prompt/output validation, provider configuration, LM Studio/n8n failures, report merge behavior, retention cleanup, OCR failure notification, and no autonomous ledger mutation. | `LedgerAiRemoteResponseValidatorTest`, `LedgerAiLmStudioClientTest`, `LedgerAiAnalysisPropertiesTest`, `LedgerAiAnalysisPayloadBuilderTest`, `LedgerAiAnalysisReportMergerTest`, `LedgerAiAnalysisHistoryRetentionServiceTest`, `LedgerAiAnalysisServiceTest`, `LedgerOcrServiceTest` |
+| Authorization and account boundaries | Admin-only surfaces, secondary credential flows, privacy/account scoping, and data-management access denial. | `AdminDashboardIntegrationTest`, `AdminDataManagementServiceTest`, `ProfileCredentialIntegrationTest`, `PrivacyControllerIntegrationTest`, `DriveAdminSecurityIntegrationTest` |
+| Sharing and public links | Drive owner scope, direct share grants, download link status/logging, travel public media token behavior, and cross-user visibility. | `DriveServiceTest`, `DriveShareServiceTest`, `DriveDownloadLinkServiceTest`, `DriveDownloadLinkAccessLogServiceTest`, `TravelServiceShareVisibilityTest`, `TravelPublicMediaTokenServiceTest` |
+| Backup, restore, and data portability | Backup scheduler behavior, admin data-management service guardrails, and export contract safety. | `DataOpsBackupSchedulerTest`, `AdminDataManagementServiceTest`, `DataPortabilityExportServiceTest` |
+| File upload and media limits | Drive storage validation, travel media storage validation, travel controller upload paths, and family album upload controller behavior. | `DriveStorageServiceTest`, `TravelMediaStorageServiceTest`, `TravelControllerTest`, `FamilyAlbumControllerTest` |
+
+Adding a new AI provider, upload surface, share mode, backup target, or admin data operation should add or extend a backend test in this matrix before the release gate is considered complete.
 ## Playwright smoke skeleton
 
 | Item | Current contract |

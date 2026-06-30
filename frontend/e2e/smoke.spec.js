@@ -12,6 +12,44 @@ const roleEnvPrefix = {
 
 const dedicatedFlowNames = new Set(['Login and session', 'Notification center'])
 
+const flowEvidence = {
+  'Login and session': {
+    acceptance: 'CSRF bootstrap, API login, refresh persistence, /api/auth/me, logout, and logged-out denial are exercised.',
+    nextAutomation: 'Add visible login form assertions once selectors and localized labels are stable.',
+  },
+  'Ledger entry create/edit/delete': {
+    acceptance: 'Create, edit, calendar/statistics visibility, delete/trash path, and owner isolation must pass with disposable ledger data.',
+    nextAutomation: 'Add stable selectors for entry fields, calendar day rows, statistics result rows, and delete confirmation.',
+  },
+  'Excel import preview and confirm': {
+    acceptance: 'Valid spreadsheet preview, explicit confirm, visible imported rows, and invalid file rejection must pass.',
+    nextAutomation: 'Add a tiny deterministic spreadsheet fixture and upload/confirm assertions.',
+  },
+  'OCR confirm-save': {
+    acceptance: 'Stubbed receipt upload, visible suggestions, explicit save, and no ledger mutation before approval must pass.',
+    nextAutomation: 'Add deterministic receipt image fixtures for success, timeout, and provider failure.',
+  },
+  'Travel photo upload': {
+    acceptance: 'Travel plan selection, valid photo upload, visible media result, and invalid image recovery must pass.',
+    nextAutomation: 'Add tiny JPEG and malformed-image fixtures, then assert no broken media record remains visible.',
+  },
+  'CalenDrive share': {
+    acceptance: 'User A upload/share, User B visibility, revoked/expired public link feedback, and User C denial must pass.',
+    nextAutomation: 'Use two authenticated contexts plus an unauthenticated or third-user context for share/revoke assertions.',
+  },
+  'Admin backup action': {
+    acceptance: 'Non-admin denied, unverified admin denied, verified admin allowed, and cancel path safe must pass.',
+    nextAutomation: 'Prefer a mocked backup endpoint for UI automation and keep real backup rehearsal in backend runbooks.',
+  },
+  'AI analysis advisory': {
+    acceptance: 'Advisory copy, provider failure UI, schema-safe response rendering, and no direct ledger mutation must pass.',
+    nextAutomation: 'Add stubbed AI success, timeout, schema failure, and prompt-injection fixture responses.',
+  },
+  'Notification center': {
+    acceptance: 'Owner-scoped notification API shape, visible center UI, unread count, filters, and read-all affordance must pass.',
+    nextAutomation: 'Seed cross-user notifications and assert owner isolation plus read/read-all state transitions.',
+  },
+}
 const p0Flows = [
   {
     name: 'Login and session',
@@ -137,6 +175,12 @@ async function signIn(page, role = 'user') {
   expect(meResponse.ok(), `${role} session should be visible through /api/auth/me.`).toBeTruthy()
 }
 
+function annotateFlow(testInfo, flow) {
+  const evidence = flowEvidence[flow.name]
+  annotateFlow(testInfo, flow)
+  testInfo.annotations.push({ type: 'acceptance-criteria', description: evidence.acceptance })
+  testInfo.annotations.push({ type: 'next-automation', description: evidence.nextAutomation })
+}
 async function expectRenderedApp(page) {
   const app = page.locator('#app')
   await expect(app).toBeVisible()
@@ -167,6 +211,10 @@ test('P0 scenario inventory matches release checklist', () => {
     'AI analysis advisory',
     'Notification center',
   ])
+  for (const flow of p0Flows) {
+    expect(flowEvidence[flow.name]?.acceptance).toBeTruthy()
+    expect(flowEvidence[flow.name]?.nextAutomation).toBeTruthy()
+  }
 })
 
 test('public app shell loads without authenticated fixtures', async ({ page }) => {
@@ -179,8 +227,10 @@ test('public app shell loads without authenticated fixtures', async ({ page }) =
   expect(pageErrors).toEqual([])
 })
 
-test('P0 Login and session smoke', async ({ page }) => {
+test('P0 Login and session smoke', async ({ page }, testInfo) => {
+  const flow = p0Flows.find((candidate) => candidate.name === 'Login and session')
   requireEnv(USER_ENV)
+  annotateFlow(testInfo, flow)
 
   await signIn(page, 'user')
   await page.goto('/')
@@ -203,7 +253,7 @@ test('P1 Notification center API and UI smoke', async ({ page }, testInfo) => {
   const flow = p0Flows.find((candidate) => candidate.name === 'Notification center')
   requireEnv(flow.env)
 
-  testInfo.annotations.push({ type: 'flow-risk', description: flow.risk })
+  annotateFlow(testInfo, flow)
   testInfo.annotations.push({
     type: 'automation-stage',
     description: 'Verifies owner-scoped notification API shape plus the visible notification center heading, filters, read-all affordance, and unread count badge.',
@@ -232,7 +282,7 @@ for (const flow of p0Flows.filter((candidate) => !dedicatedFlowNames.has(candida
       requireFlag('E2E_PROVIDER_MODE', flow.providerMode)
     }
 
-    testInfo.annotations.push({ type: 'flow-risk', description: flow.risk })
+    annotateFlow(testInfo, flow)
     testInfo.annotations.push({
       type: 'automation-stage',
       description: 'Phase 1 verifies fixture gates, authenticated context, and target workspace rendering. Add feature-specific assertions before treating this as full release evidence.',

@@ -312,14 +312,29 @@ jobs:
           chmod +x ./gradlew
           ./gradlew test --no-daemon \
             --tests com.playdata.calen.account.AdminDashboardIntegrationTest \
+            --tests com.playdata.calen.account.AdminDataManagementServiceTest \
             --tests com.playdata.calen.account.ProfileCredentialIntegrationTest \
             --tests com.playdata.calen.account.PrivacyControllerIntegrationTest \
+            --tests com.playdata.calen.account.service.DataOpsBackupSchedulerTest \
+            --tests com.playdata.calen.account.service.DataPortabilityExportServiceTest \
             --tests com.playdata.calen.drive.web.DriveAdminSecurityIntegrationTest \
+            --tests com.playdata.calen.drive.service.DriveServiceTest \
+            --tests com.playdata.calen.drive.service.DriveShareServiceTest \
+            --tests com.playdata.calen.drive.service.DriveStorageServiceTest \
             --tests com.playdata.calen.drive.service.DriveDownloadLinkServiceTest \
             --tests com.playdata.calen.drive.service.DriveDownloadLinkAccessLogServiceTest \
+            --tests com.playdata.calen.travel.web.TravelControllerTest \
+            --tests com.playdata.calen.travel.service.TravelServiceShareVisibilityTest \
+            --tests com.playdata.calen.travel.service.TravelMediaStorageServiceTest \
             --tests com.playdata.calen.travel.service.TravelPublicMediaTokenServiceTest \
+            --tests com.playdata.calen.familyalbum.web.FamilyAlbumControllerTest \
             --tests com.playdata.calen.ledger.ocr.LedgerOcrServiceTest \
             --tests com.playdata.calen.ledger.ai.LedgerAiRemoteResponseValidatorTest \
+            --tests com.playdata.calen.ledger.ai.LedgerAiLmStudioClientTest \
+            --tests com.playdata.calen.ledger.ai.LedgerAiAnalysisPropertiesTest \
+            --tests com.playdata.calen.ledger.ai.LedgerAiAnalysisPayloadBuilderTest \
+            --tests com.playdata.calen.ledger.ai.LedgerAiAnalysisReportMergerTest \
+            --tests com.playdata.calen.ledger.ai.LedgerAiAnalysisHistoryRetentionServiceTest \
             --tests com.playdata.calen.ledger.ai.LedgerAiAnalysisServiceTest
 
   frontend-build:

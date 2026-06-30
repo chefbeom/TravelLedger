@@ -20,6 +20,7 @@ if ($findings.Count -eq 0) {
         '# E2E smoke checklist',
         '## Shared setup',
         '## P0 smoke flows',
+        '## Backend high-risk test coverage',
         '## Playwright smoke skeleton',
         '## Automation readiness contract',
         '## Release evidence template',
@@ -46,6 +47,45 @@ if ($findings.Count -eq 0) {
     foreach ($flow in $requiredFlows) {
         if (-not $checklist.Contains($flow)) {
             $findings.Add("Checklist missing P0 flow: $flow") | Out-Null
+        }
+    }
+
+    $requiredBackendCoverageSnippets = @(
+        'backend-security-tests',
+        'AI analysis and OCR safety',
+        'Authorization and account boundaries',
+        'Sharing and public links',
+        'Backup, restore, and data portability',
+        'File upload and media limits',
+        'LedgerAiRemoteResponseValidatorTest',
+        'LedgerAiLmStudioClientTest',
+        'LedgerAiAnalysisPropertiesTest',
+        'LedgerAiAnalysisPayloadBuilderTest',
+        'LedgerAiAnalysisReportMergerTest',
+        'LedgerAiAnalysisHistoryRetentionServiceTest',
+        'LedgerAiAnalysisServiceTest',
+        'LedgerOcrServiceTest',
+        'AdminDashboardIntegrationTest',
+        'AdminDataManagementServiceTest',
+        'ProfileCredentialIntegrationTest',
+        'PrivacyControllerIntegrationTest',
+        'DriveAdminSecurityIntegrationTest',
+        'DriveServiceTest',
+        'DriveShareServiceTest',
+        'DriveStorageServiceTest',
+        'DriveDownloadLinkServiceTest',
+        'DriveDownloadLinkAccessLogServiceTest',
+        'TravelServiceShareVisibilityTest',
+        'TravelPublicMediaTokenServiceTest',
+        'DataOpsBackupSchedulerTest',
+        'DataPortabilityExportServiceTest',
+        'TravelMediaStorageServiceTest',
+        'TravelControllerTest',
+        'FamilyAlbumControllerTest'
+    )
+    foreach ($snippet in $requiredBackendCoverageSnippets) {
+        if (-not $checklist.Contains($snippet)) {
+            $findings.Add("Checklist missing backend coverage snippet: $snippet") | Out-Null
         }
     }
 
@@ -140,6 +180,9 @@ if ($findings.Count -eq 0) {
         'P0 scenario inventory matches release checklist',
         'public app shell loads without authenticated fixtures',
         'P0 Login and session smoke',
+        'flowEvidence',
+        'acceptance-criteria',
+        'next-automation',
         'E2E_USER_LOGIN_ID',
         'E2E_SECOND_USER_LOGIN_ID',
         'E2E_ADMIN_LOGIN_ID',
@@ -167,7 +210,28 @@ if ($findings.Count -eq 0) {
     }
 
     $ci = Get-Content -LiteralPath $ciPath -Raw
-    foreach ($snippet in @('frontend-e2e-smoke-checklist:', './scripts/verify-e2e-smoke-checklist.ps1', "[frontend-e2e-smoke-checklist]=`"")) {
+    foreach ($snippet in @(
+        'com.playdata.calen.account.AdminDataManagementServiceTest',
+        'com.playdata.calen.account.service.DataOpsBackupSchedulerTest',
+        'com.playdata.calen.account.service.DataPortabilityExportServiceTest',
+        'com.playdata.calen.drive.service.DriveServiceTest',
+        'com.playdata.calen.drive.service.DriveShareServiceTest',
+        'com.playdata.calen.drive.service.DriveStorageServiceTest',
+        'com.playdata.calen.travel.web.TravelControllerTest',
+        'com.playdata.calen.travel.service.TravelServiceShareVisibilityTest',
+        'com.playdata.calen.travel.service.TravelMediaStorageServiceTest',
+        'com.playdata.calen.familyalbum.web.FamilyAlbumControllerTest',
+        'com.playdata.calen.ledger.ai.LedgerAiLmStudioClientTest',
+        'com.playdata.calen.ledger.ai.LedgerAiAnalysisPropertiesTest',
+        'com.playdata.calen.ledger.ai.LedgerAiAnalysisPayloadBuilderTest',
+        'com.playdata.calen.ledger.ai.LedgerAiAnalysisReportMergerTest',
+        'com.playdata.calen.ledger.ai.LedgerAiAnalysisHistoryRetentionServiceTest'
+    )) {
+        if (-not $ci.Contains($snippet)) {
+            $findings.Add("CI backend-security-tests missing high-risk test: $snippet") | Out-Null
+        }
+    }
+    foreach ($snippet in @('frontend-e2e-smoke-checklist:', './scripts/verify-e2e-smoke-checklist.ps1', '[frontend-e2e-smoke-checklist]="${{ needs[''frontend-e2e-smoke-checklist''].result }}"')) {
         if (-not $ci.Contains($snippet)) {
             $findings.Add("CI workflow missing E2E checklist snippet: $snippet") | Out-Null
         }

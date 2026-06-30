@@ -74,6 +74,7 @@ public class LedgerAiAnalysisService {
     private final LedgerAiAnalysisJsonCodec aiJsonCodec;
     private final LedgerAiAnalysisTextSanitizer aiText;
     private final LedgerAiAnalysisPayloadBuilder aiPayloadBuilder;
+    private final LedgerAiAnalysisReportMerger aiReportMerger;
     private final LedgerAiAnalysisNotifications aiNotifications;
 
     private final Map<String, Object> inFlightAnalysisLocks = new ConcurrentHashMap<>();
@@ -612,21 +613,7 @@ public class LedgerAiAnalysisService {
         return aiText.safeText(value).trim().replaceAll("\\s+", " ").toLowerCase(Locale.ROOT);
     }
     private LedgerAiAnalysisReportResponse buildReport(AnalysisPlan plan, AnalysisDataset dataset, LedgerAiRemoteResponse remote) {
-        LedgerAiAnalysisReportResponse fallback = buildFallbackReport(plan, dataset);
-        LedgerAiAnalysisReportResponse remoteReport = remote.report();
-        return new LedgerAiAnalysisReportResponse(
-                firstNonBlank(remoteReport == null ? null : remoteReport.keySummary(), firstNonBlank(remote.summary(), fallback.keySummary())),
-                firstNonBlank(remoteReport == null ? null : remoteReport.fullReport(), fallback.fullReport()),
-                firstNonBlank(remoteReport == null ? null : remoteReport.averageAmountInsight(), fallback.averageAmountInsight()),
-                firstNonEmpty(remoteReport == null ? null : remoteReport.notableSpending(), firstNonEmpty(remote.highlights(), fallback.notableSpending())),
-                firstNonEmpty(remoteReport == null ? null : remoteReport.regularSpending(), fallback.regularSpending()),
-                firstNonEmpty(remoteReport == null ? null : remoteReport.abnormalSpending(), firstNonEmpty(remote.unusualSpendingInsights(), firstNonEmpty(remote.warnings(), fallback.abnormalSpending()))),
-                firstNonBlank(remoteReport == null ? null : remoteReport.topPaymentMethod(), fallback.topPaymentMethod()),
-                firstNonEmpty(remoteReport == null ? null : remoteReport.subscriptions(), fallback.subscriptions()),
-                firstNonEmpty(remoteReport == null ? null : remoteReport.fixedExpenses(), fallback.fixedExpenses()),
-                firstNonEmpty(remoteReport == null ? null : remoteReport.improvementActions(), firstNonEmpty(remote.recommendations(), fallback.improvementActions())),
-                firstNonEmpty(remoteReport == null ? null : remoteReport.comparisonFocus(), firstNonEmpty(remote.trendInsights(), fallback.comparisonFocus()))
-        );
+        return aiReportMerger.merge(buildFallbackReport(plan, dataset), remote);
     }
 
     private LedgerAiAnalysisReportResponse buildFallbackReport(AnalysisPlan plan, AnalysisDataset dataset) {

@@ -1,9 +1,11 @@
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-$planPath = 'docs/service_decomposition_plan.md'
- = 'backend/src/main/java/com/playdata/calen/ledger/ai/LedgerAiAnalysisStatusService.java'
- = 'backend/src/test/java/com/playdata/calen/ledger/ai/LedgerAiAnalysisStatusServiceTest.java'
+$planPath$planPath = 'docs/service_decomposition_plan.md'
+$statusServicePath = 'backend/src/main/java/com/playdata/calen/ledger/ai/LedgerAiAnalysisStatusService.java'
+$statusServiceTestPath = 'backend/src/test/java/com/playdata/calen/ledger/ai/LedgerAiAnalysisStatusServiceTest.java'
+$reportMergerPath = 'backend/src/main/java/com/playdata/calen/ledger/ai/LedgerAiAnalysisReportMerger.java'
+$reportMergerTestPath = 'backend/src/test/java/com/playdata/calen/ledger/ai/LedgerAiAnalysisReportMergerTest.java'
 if (-not (Test-Path -LiteralPath $planPath)) {
     throw "Service decomposition plan not found: $planPath"
 }
@@ -137,6 +139,27 @@ foreach ($path in @($statusServicePath, $statusServiceTestPath)) {
     }
 }
 
+
+foreach ($path in @($reportMergerPath, $reportMergerTestPath)) {
+    if (-not (Test-Path -LiteralPath $path)) {
+        $findings.Add("Report merger extraction file is missing: $path") | Out-Null
+    }
+}
+
+if ((Test-Path -LiteralPath $reportMergerPath) -and (Test-Path -LiteralPath $reportMergerTestPath)) {
+    $reportMerger = Get-Content -LiteralPath $reportMergerPath -Raw
+    $reportMergerTest = Get-Content -LiteralPath $reportMergerTestPath -Raw
+    foreach ($snippet in @('class LedgerAiAnalysisReportMerger', 'merge(LedgerAiAnalysisReportResponse fallback, LedgerAiRemoteResponse remote)', 'firstNonBlank', 'firstNonEmpty')) {
+        if (-not $reportMerger.Contains($snippet)) {
+            $findings.Add("LedgerAiAnalysisReportMerger missing report snippet: $snippet") | Out-Null
+        }
+    }
+    foreach ($snippet in @('remoteReportFieldsOverrideFallbackReport', 'remoteSummaryAndListsFillBlankRemoteReportFields', 'provider summary only', 'remote action')) {
+        if (-not $reportMergerTest.Contains($snippet)) {
+            $findings.Add("LedgerAiAnalysisReportMergerTest missing report evidence snippet: $snippet") | Out-Null
+        }
+    }
+}
 if ((Test-Path -LiteralPath $statusServicePath) -and (Test-Path -LiteralPath $statusServiceTestPath)) {
     $statusService = Get-Content -LiteralPath $statusServicePath -Raw
     $statusServiceTest = Get-Content -LiteralPath $statusServiceTestPath -Raw

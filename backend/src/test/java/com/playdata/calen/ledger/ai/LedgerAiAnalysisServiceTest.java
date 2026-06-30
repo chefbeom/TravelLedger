@@ -113,6 +113,7 @@ class LedgerAiAnalysisServiceTest {
                 new LedgerAiAnalysisJsonCodec(objectMapper),
                 new LedgerAiAnalysisTextSanitizer(),
                 new LedgerAiAnalysisPayloadBuilder(new LedgerAiAnalysisTextSanitizer()),
+                new LedgerAiAnalysisReportMerger(new LedgerAiAnalysisTextSanitizer()),
                 new LedgerAiAnalysisNotifications(userNotificationService)
         );
     }

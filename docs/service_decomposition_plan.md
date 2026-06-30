@@ -8,14 +8,14 @@ This plan keeps the next refactors small and reversible. The goal is not to spli
 
 | Service | Current size | Main risk |
 | --- | ---: | --- |
-| `LedgerAiAnalysisService` | 1058 lines | AI orchestration still owns provider calls, duplicate suppression, history persistence, and report mapping; provider output contract text is isolated in LedgerAiOutputContract, readiness/status assembly in LedgerAiAnalysisStatusService, provider payload minimization in LedgerAiAnalysisPayloadBuilder, Micrometer request metrics in LedgerAiAnalysisMetrics, AI analysis notification delivery in LedgerAiAnalysisNotifications, JSON history/result conversion in LedgerAiAnalysisJsonCodec, and text safety/length limiting in LedgerAiAnalysisTextSanitizer. |
+| `LedgerAiAnalysisService` | 1081 lines | AI orchestration still owns provider calls, duplicate suppression, history persistence, and fallback report copy; provider output contract text is isolated in LedgerAiOutputContract, readiness/status assembly in LedgerAiAnalysisStatusService, provider payload minimization in LedgerAiAnalysisPayloadBuilder, remote report merge in LedgerAiAnalysisReportMerger, Micrometer request metrics in LedgerAiAnalysisMetrics, AI analysis notification delivery in LedgerAiAnalysisNotifications, JSON history/result conversion in LedgerAiAnalysisJsonCodec, and text safety/length limiting in LedgerAiAnalysisTextSanitizer. |
 | `TravelService` | 3278 lines | Plans, sharing, map snapshots, media upload completion, route/GPX handling, expense reflection, cache invalidation, public atlas reads, and exchange rates are mixed in one service. |
 
 ## CI Line Budget
 
 | Service | Current baseline | CI budget | Policy |
 | --- | ---: | ---: | --- |
-| `LedgerAiAnalysisService` | 1058 lines | 1144 lines | Growth past the budget must extract payload, provider-call, report, history, status, or notification behavior before raising the limit. |
+| `LedgerAiAnalysisService` | 1081 lines | 1144 lines | Growth past the budget must extract payload, provider-call, report, history, status, or notification behavior before raising the limit. |
 | `TravelService` | 3278 lines | 3300 lines | Growth past the budget must split media, map, share, route, exchange-rate, or ledger-bridge behavior before raising the limit. |
 
 The budget is intentionally close to the current baseline so service decomposition behaves as a ratchet: new feature work should reduce or isolate responsibilities instead of adding more code to the large orchestrators.
@@ -39,7 +39,7 @@ These method groups should move together. A new feature should not add more logi
 | Service | Boundary | Current anchors | Target collaborator | Must not own |
 | --- | --- | --- | --- | --- |
 | Ledger AI | Provider payload minimization | `buildPayload`, `buildPayloadMinimizationSummary`, `providerExpenseEntries`, `sanitizeProviderExpenseEntry`, `providerRecurringCandidates`, `LedgerAiAnalysisTextSanitizer` | `LedgerAiAnalysisPayloadBuilder`; provider entry caps, recurring candidate truncation, and overflow counts now live outside `LedgerAiAnalysisService`. | History writes, notifications, provider HTTP calls, or report fallback text. |
-| Ledger AI | Report merge and fallback copy | `buildReport`, `buildFallbackReport`, `buildFullReport`, `buildKeySummary`, `buildNotableSpending`, `buildImprovementActions` | `LedgerAiAnalysisReportMerger` | Provider calls, persistence, or request validation. |
+| Ledger AI | Report merge and fallback copy | `LedgerAiAnalysisReportMerger.merge`, `buildReport`, `buildFallbackReport`, `buildFullReport`, `buildKeySummary`, `buildNotableSpending`, `buildImprovementActions` | `LedgerAiAnalysisReportMerger` now owns remote report merge and fallback field selection; fallback copy generation remains in `LedgerAiAnalysisService` for the next slice. | Provider calls, persistence, or request validation. |
 | Ledger AI | Period and comparison planning | `resolvePlan`, `resolvePeriodRange`, `resolveComparisonRanges`, `validateCustomRange` | `LedgerAiAnalysisPlanResolver` | Repository reads, provider payload construction, or response mapping. |
 | Ledger AI | History and duplicate suppression | `findReusableAnalysis`, `findLatestMatchingAnalysis`, `baseHistory`, `toSummary`, `LedgerAiAnalysisJsonCodec` | `LedgerAiAnalysisHistoryCoordinator`; JSON conversion now belongs to `LedgerAiAnalysisJsonCodec`. | Provider schema validation, notification delivery, or metric registration. |
 | Ledger AI | Status, metrics, and notification side effects | `LedgerAiAnalysisStatusService`, `LedgerAiAnalysisMetrics`, `LedgerAiAnalysisNotifications` | `LedgerAiAnalysisStatusService` owns readiness/status response assembly; `LedgerAiAnalysisMetrics` owns Micrometer request metrics; `LedgerAiAnalysisNotifications` owns bounded completion/failure notification delivery. | Payload minimization, report text, history query composition, or provider HTTP calls. |
@@ -79,6 +79,7 @@ These method groups should move together. A new feature should not add more logi
 - 2026-06-30: Extracted AI history/result JSON serialization into LedgerAiAnalysisJsonCodec, reducing LedgerAiAnalysisService to 1134 lines without changing persisted JSON shape.
 - 2026-06-30: Extracted AI text safety and provider length limiting into LedgerAiAnalysisTextSanitizer, reducing LedgerAiAnalysisService to 1119 lines without changing payload text limits.
 - 2026-06-30: Wired LedgerAiAnalysisService to the extracted metrics, JSON codec, text sanitizer, and notification collaborators so the decomposition boundary is enforced in constructor dependencies.
+- 2026-06-30: Extracted LedgerAiAnalysisReportMerger for remote report merge and fallback field selection, reducing LedgerAiAnalysisService to 1081 lines while keeping provider calls, persistence, and fallback copy generation in the orchestrating service.
 - 2026-06-30: Extracted provider entry limiting and payloadMinimization counting into LedgerAiAnalysisPayloadBuilder, reducing the service while preserving provider payload safety limits.
 - 2026-06-30: Extracted AI readiness/status response assembly into LedgerAiAnalysisStatusService and added focused secret/URL redaction coverage for status output.
 ### Ledger AI Exit Criteria
@@ -109,7 +110,7 @@ These method groups should move together. A new feature should not add more logi
 ## Suggested First Implementation Slices
 
 1. Continue `LedgerAiAnalysisPayloadBuilder` extraction by moving dataset-to-provider payload mapping and truncation now that output contract text is isolated.
-2. Extract `LedgerAiAnalysisReportMerger` because it makes provider response safety easier to test without repositories.
+2. Continue moving fallback report creation into `LedgerAiAnalysisReportMerger` now that remote report merge is testable without repositories.
 3. Extract `TravelMediaUploadCoordinator` because presigned object-key scope and upload validation are now covered by focused storage tests.
 4. Extract `TravelMapQueryService` after map/share visibility tests are in place.
 5. Extract write-heavy travel sharing and ledger bridge code only after owner-scope integration tests cover the moved behavior.

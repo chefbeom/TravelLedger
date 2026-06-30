@@ -7,7 +7,7 @@ Updated: 2026-06-30
 - Flyway is available in the backend build with `flyway-core` and `flyway-mysql`.
 - Flyway is disabled by default with `DB_MIGRATION_ENABLED=false` while legacy startup updaters still exist.
 - Hibernate `ddl-auto: update` remains in place during the transition so existing local and compose workflows keep working.
-- `backend/src/main/resources/db/migration` contains a baseline marker plus versioned migrations for access logs, notifications, classification rules, AI history provider metadata, drive file versions, drive share permissions, direct-share access log indexes, travel route segment fields, ledger entry change-history fields, travel media asset metadata fields, travel photo cluster tables, ledger entry operational fields/indexes, and AI analysis history base table/indexes.
+- `backend/src/main/resources/db/migration` contains a baseline marker plus versioned migrations for access logs, notifications, classification rules, AI history provider metadata, drive file versions, drive share permissions, direct-share access log indexes, travel route segment fields, ledger entry change-history fields, travel media asset metadata fields, travel photo cluster tables, ledger entry operational fields/indexes, and AI analysis history base table/indexes, and household goal tables/indexes.
 - `scripts/verify-db-migrations.ps1` and the CI `migration-discipline` job check migration naming, duplicate versions, baseline marker presence, migration inventory documentation, operational evidence notes, the expected legacy `*SchemaUpdater` inventory, retirement evidence ledger coverage, Ready evidence placeholders, and unexpected startup DDL runners.
 
 ## Current Migration Inventory
@@ -28,6 +28,7 @@ Updated: 2026-06-30
 | `V20260630_011__travel_photo_cluster_tables.sql` | Travel photo cluster and cluster-member tables plus lookup/uniqueness indexes previously enforced by startup DDL. |
 | `V20260630_012__ledger_entry_operational_fields.sql` | Ledger entry foreign-currency/travel-link fields and ledger/category/payment lookup indexes previously enforced by startup DDL. |
 | `V20260630_013__ledger_ai_analysis_history_base.sql` | Ledger AI analysis history base table, provider column compatibility, and owner/range/mode/provider indexes previously enforced by startup DDL plus provider migration. |
+| `V20260630_014__household_goals.sql` | Owner-scoped household goal table and owner/status plus owner/due-date indexes previously enforced by startup DDL. |
 
 ## Legacy Schema Updater Inventory
 
@@ -39,6 +40,7 @@ Updated: 2026-06-30
 | 4 | `TravelMediaAssetSchemaUpdater` | Flyway overlap added in `V20260630_010__travel_media_asset_metadata_fields.sql`; retire after staging Flyway startup proof and travel media upload/map smoke evidence. |
 | 5 | `TravelPhotoClusterSchemaUpdater` | Flyway overlap added in `V20260630_011__travel_photo_cluster_tables.sql`; retire after staging Flyway startup proof and map cluster smoke evidence. |
 | 6 | `TravelRouteSchemaUpdater` | Flyway overlap added in `V20260630_008__travel_route_segment_fields.sql`; retire after staging Flyway startup proof and route/GPX smoke evidence. |
+| 7 | `HouseholdGoalSchemaUpdater` | Flyway overlap added in `V20260630_014__household_goals.sql`; retire after staging Flyway startup proof and household goal create/list/update/archive smoke evidence. |
 
 
 ## Startup DDL Freeze
@@ -53,6 +55,7 @@ No new `ApplicationRunner` or `CommandLineRunner` may execute `CREATE TABLE`, `A
 | `backend/src/main/java/com/playdata/calen/travel/config/TravelMediaAssetSchemaUpdater.java` | Existing travel media GPS/representative columns and indexes. | `V20260630_010__travel_media_asset_metadata_fields.sql` now covers the schema; deletion still requires staging Flyway startup proof and travel media upload/map smoke evidence. |
 | `backend/src/main/java/com/playdata/calen/travel/config/TravelPhotoClusterSchemaUpdater.java` | Existing travel photo cluster tables and membership indexes. | `V20260630_011__travel_photo_cluster_tables.sql` now covers the schema; deletion still requires staging Flyway startup proof and map cluster smoke evidence. |
 | `backend/src/main/java/com/playdata/calen/travel/config/TravelRouteSchemaUpdater.java` | Existing route path, style, and GPX fields. | `V20260630_008__travel_route_segment_fields.sql` now covers the schema; deletion still requires staging Flyway startup proof and route/GPX smoke evidence. |
+| `backend/src/main/java/com/playdata/calen/account/config/HouseholdGoalSchemaUpdater.java` | Existing household goal table and owner/status due-date indexes. | `V20260630_014__household_goals.sql` now covers the schema; deletion still requires staging Flyway startup proof and household goal create/list/update/archive smoke evidence. |
 
 Retire one legacy updater at a time. Removing one requires: a versioned migration, updated inventory/evidence rows, a backup/restore rollback note, staging startup evidence with Flyway enabled, a `Ready` row in `docs/db_migration_retirement_evidence.md`, and deletion of the class from both this table and `scripts/verify-db-migrations.ps1`. A `Ready` row in `docs/db_migration_retirement_evidence.md` must include a concrete evidence bundle and no `TBD` placeholders.
 ## Migration Operational Evidence
@@ -73,6 +76,7 @@ Retire one legacy updater at a time. Removing one requires: a versioned migratio
 | `V20260630_011__travel_photo_cluster_tables.sql` | Map photo cluster rebuild/detail views create and read cluster/member rows after Flyway applies the table migration. | Restore the pre-migration DB backup if cluster table creation fails; dropping cluster tables loses derived map clustering state and requires rebuild. | Fully overlaps `TravelPhotoClusterSchemaUpdater`; updater remains until staging Flyway startup evidence permits deletion. |
 | `V20260630_012__ledger_entry_operational_fields.sql` | Ledger create/search/import, foreign-currency display, travel expense linkage, and category/payment lookup flows run after Flyway applies the field/index migration. | Restore the pre-migration DB backup if ledger field/index migration fails; dropping foreign-currency/travel-link fields loses enriched ledger metadata. | Fully overlaps `LedgerEntrySchemaUpdater`; updater remains until staging Flyway startup evidence permits deletion. |
 | `V20260630_013__ledger_ai_analysis_history_base.sql` | AI analysis save/list/detail/delete, latest matching reuse, retention cleanup, and provider/model history queries run after Flyway applies the base table/index migration. | Restore the pre-migration DB backup if AI history migration fails; dropping the table loses advisory analysis history and failure records. | Fully overlaps `LedgerAiAnalysisSchemaUpdater`; updater remains until staging Flyway startup and provider migration ordering evidence permits deletion. |
+| `V20260630_014__household_goals.sql` | Household goal create/list/update/archive and `GOAL_PROGRESS` notification paths run after Flyway applies the table/index migration. | Restore the pre-migration DB backup if goal migration fails; dropping the table loses personal goal progress and archived goal metadata. | Fully overlaps `HouseholdGoalSchemaUpdater`; updater remains until staging Flyway startup and household goal smoke evidence permits deletion. |
 
 ## Operating Rules
 
@@ -120,5 +124,6 @@ A release that adds or changes schema should include:
 - `V20260630_012__ledger_entry_operational_fields.sql` moves ledger entry foreign-currency/travel-link fields and ledger/category/payment indexes into Flyway.
 - `V20260629_004__ledger_ai_history_provider.sql` is now fresh-db safe and bootstraps the AI history table before adding provider compatibility/indexes.
 - `V20260630_013__ledger_ai_analysis_history_base.sql` keeps Ledger AI analysis history table, provider compatibility, and owner/range/mode/provider indexes explicit in Flyway.
-- All six legacy `*SchemaUpdater` classes now have Flyway overlap but remain documented temporary exceptions until staging Flyway startup, provider ordering, smoke evidence, and `docs/db_migration_retirement_evidence.md` rows allow deletion.
+- `V20260630_014__household_goals.sql` moves owner-scoped household goal table and progress lookup indexes into Flyway.
+- All seven legacy `*SchemaUpdater` classes now have Flyway overlap but remain documented temporary exceptions until staging Flyway startup, provider ordering, smoke evidence, and `docs/db_migration_retirement_evidence.md` rows allow deletion.
 - Startup DDL freeze is now enforced: new schema mutation runners must be rejected unless they retire one documented legacy exception with migration evidence.

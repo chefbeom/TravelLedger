@@ -9,7 +9,7 @@ This document defines the release contract for turning the Household area into f
 | Surface | Current anchor | Relevance to shared goals |
 | --- | --- | --- |
 | Household aggregate widgets | `HouseholdAggregatePreferenceService` and `HouseholdWorkspace.vue` | Lets a user choose dashboard aggregate cards for total/payment-method summaries. |
-| Owner-scoped household goals | `HouseholdGoal`, `HouseholdGoalService`, and `/api/account/preferences/household-goals` | Provides the first personal goal foundation before multi-member shared goals ship. |
+| Owner-scoped household goals | `HouseholdGoal`, `HouseholdGoalService`, `/api/account/preferences/household-goals`, and `V20260630_014__household_goals.sql` | Provides the first personal goal foundation before multi-member shared goals ship, with explicit Flyway schema coverage. |
 | Household travel ledger | `HouseholdTravelLedgerWorkspace.vue` and travel-linked ledger entries | Gives a household-style view for trip spending and travel-plan linkage. |
 | Travel budget items | `TravelBudgetItem` and `TravelBudgetItemRepository` | Existing budget category/title/amount/currency fields can inform future shared trip goals. |
 | Ledger statistics | overview, payment breakdown, category breakdown, comparison, and calendar flows | Source data for future monthly family budget progress. |
@@ -59,7 +59,7 @@ flowchart TD
 | --- | --- |
 | `HouseholdAggregatePreferenceService` | Stores up to 4 widgets on the current active user, normalizes kind/period/amount type, and validates payment methods by owner. |
 | `HouseholdGoalService` / `HouseholdGoalServiceTest` | Lists, creates, updates, and archives owner-scoped personal goals; emits bounded `GOAL_PROGRESS` notifications when a goal reaches target; suppresses duplicate unread notifications by target URL. |
-| `HouseholdGoalSchemaUpdater` | Creates the `household_goals` table with owner/status and owner/due-date indexes while the project transitions away from runtime schema updaters. |
+| `V20260630_014__household_goals.sql` / `HouseholdGoalSchemaUpdater` | Flyway now creates the `household_goals` table with owner/status and owner/due-date indexes; the runtime updater remains only as a documented transition fallback until staging Flyway evidence allows retirement. |
 | `HouseholdAggregatePreferenceServiceTest` | Covers legacy/sparse widget normalization and owner-scoped active payment method validation. |
 | `HouseholdWorkspace.vue` | Loads/saves household aggregate preferences and connects household travel-ledger UI to current user's travel plans and entries. |
 | `TravelBudgetItemRepository` | Reads travel budget items through plan owner predicates and item owner predicates. |

@@ -11,6 +11,7 @@ $goalDomainPath = 'backend/src/main/java/com/playdata/calen/account/domain/House
 $goalRepositoryPath = 'backend/src/main/java/com/playdata/calen/account/repository/HouseholdGoalRepository.java'
 $goalServicePath = 'backend/src/main/java/com/playdata/calen/account/service/HouseholdGoalService.java'
 $goalSchemaUpdaterPath = 'backend/src/main/java/com/playdata/calen/account/config/HouseholdGoalSchemaUpdater.java'
+$goalMigrationPath = 'backend/src/main/resources/db/migration/V20260630_014__household_goals.sql'
 $goalControllerPath = 'backend/src/main/java/com/playdata/calen/account/web/AccountPreferenceController.java'
 $goalServiceTestPath = 'backend/src/test/java/com/playdata/calen/account/HouseholdGoalServiceTest.java'
 $travelBudgetRepositoryPath = 'backend/src/main/java/com/playdata/calen/travel/repository/TravelBudgetItemRepository.java'
@@ -19,7 +20,7 @@ $householdWorkspacePath = 'frontend/src/components/HouseholdWorkspace.vue'
 
 $findings = [System.Collections.Generic.List[string]]::new()
 
-foreach ($path in @($contractPath, $securityChecklistPath, $roadmapPath, $ciPath, $aggregateServicePath, $aggregateTestPath, $goalDomainPath, $goalRepositoryPath, $goalServicePath, $goalSchemaUpdaterPath, $goalControllerPath, $goalServiceTestPath, $travelBudgetRepositoryPath, $travelBudgetDomainPath, $householdWorkspacePath)) {
+foreach ($path in @($contractPath, $securityChecklistPath, $roadmapPath, $ciPath, $aggregateServicePath, $aggregateTestPath, $goalDomainPath, $goalRepositoryPath, $goalServicePath, $goalSchemaUpdaterPath, $goalControllerPath, $goalServiceTestPath, $goalMigrationPath, $travelBudgetRepositoryPath, $travelBudgetDomainPath, $householdWorkspacePath)) {
     if (-not (Test-Path -LiteralPath $path)) {
         $findings.Add("Missing household budget/goals contract input: $path") | Out-Null
     }
@@ -36,6 +37,7 @@ if ($findings.Count -eq 0) {
     $goalRepository = Get-Content -LiteralPath $goalRepositoryPath -Raw
     $goalService = Get-Content -LiteralPath $goalServicePath -Raw
     $goalSchemaUpdater = Get-Content -LiteralPath $goalSchemaUpdaterPath -Raw
+    $goalMigration = Get-Content -LiteralPath $goalMigrationPath -Raw
     $goalController = Get-Content -LiteralPath $goalControllerPath -Raw
     $goalServiceTest = Get-Content -LiteralPath $goalServiceTestPath -Raw
     $travelBudgetRepository = Get-Content -LiteralPath $travelBudgetRepositoryPath -Raw
@@ -48,7 +50,7 @@ if ($findings.Count -eq 0) {
         }
     }
 
-    foreach ($phrase in @('owner-scoped or membership-scoped', 'explicit membership/grant rows', 'explicit CSRF-protected mutation', 'non-visible member data', 'Notification producers must use bounded metadata', 'optimistic locking', 'Goal progress does not include another user', 'Owner-scoped personal household goals', 'GOAL_PROGRESS')) {
+    foreach ($phrase in @('owner-scoped or membership-scoped', 'explicit membership/grant rows', 'explicit CSRF-protected mutation', 'non-visible member data', 'Notification producers must use bounded metadata', 'optimistic locking', 'Goal progress does not include another user', 'Owner-scoped personal household goals', 'V20260630_014__household_goals.sql', 'GOAL_PROGRESS')) {
         if (-not $contract.Contains($phrase)) {
             $findings.Add("Household budget/goals contract missing required phrase: $phrase") | Out-Null
         }
@@ -66,6 +68,11 @@ if ($findings.Count -eq 0) {
         }
     }
 
+    foreach ($snippet in @('CREATE TABLE IF NOT EXISTS household_goals', 'owner_id BIGINT NOT NULL', 'target_amount_krw DECIMAL(19,2) NOT NULL', 'current_amount_krw DECIMAL(19,2) NOT NULL', 'version BIGINT NOT NULL DEFAULT 0', 'idx_household_goals_owner_status', 'idx_household_goals_owner_due')) {
+        if (-not $goalMigration.Contains($snippet)) {
+            $findings.Add("Household goal Flyway migration missing schema snippet: $snippet") | Out-Null
+        }
+    }
     foreach ($snippet in @('findAllByPlanIdAndPlanOwnerIdOrderByDisplayOrderAscIdAsc', 'findAllByPlanOwnerId', 'findByIdAndPlanOwnerId')) {
         if (-not $travelBudgetRepository.Contains($snippet)) {
             $findings.Add("TravelBudgetItemRepository missing owner-scoped budget query: $snippet") | Out-Null

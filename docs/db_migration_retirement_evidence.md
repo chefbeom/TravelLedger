@@ -28,6 +28,7 @@ Ready rows must include concrete evidence references and cannot keep `TBD` place
 | Pending | `TravelMediaAssetSchemaUpdater` | `V20260630_010__travel_media_asset_metadata_fields.sql` | Travel photo upload, GPS extraction, map display, and representative-photo override. | Blocked: staging Flyway startup proof, Flyway history proof, smoke evidence, and rollback/restore evidence are not recorded yet. | TBD |
 | Pending | `TravelPhotoClusterSchemaUpdater` | `V20260630_011__travel_photo_cluster_tables.sql` | Map photo cluster rebuild, marker detail, cluster detail, and member ordering. | Blocked: staging Flyway startup proof, Flyway history proof, smoke evidence, and rollback/restore evidence are not recorded yet. | TBD |
 | Pending | `TravelRouteSchemaUpdater` | `V20260630_008__travel_route_segment_fields.sql` | Travel route create/edit, route map display, GPX attachment, and GPX readback. | Blocked: staging Flyway startup proof, Flyway history proof, smoke evidence, and rollback/restore evidence are not recorded yet. | TBD |
+| Pending | `HouseholdGoalSchemaUpdater` | `V20260630_014__household_goals.sql` | Household goal create, list, update, archive, and goal-progress notification. | Blocked: staging Flyway startup proof, Flyway history proof, smoke evidence, and rollback/restore evidence are not recorded yet. | TBD |
 
 ## Retirement procedure
 
@@ -41,4 +42,4 @@ Ready rows must include concrete evidence references and cannot keep `TBD` place
 
 ## Current status
 
-All six legacy updaters have Flyway overlap, but none are marked `Ready` here. Deleting any updater before real staging evidence is recorded should be treated as a release blocker.
+All seven legacy updaters have Flyway overlap, but none are marked `Ready` here. Deleting any updater before real staging evidence is recorded should be treated as a release blocker.

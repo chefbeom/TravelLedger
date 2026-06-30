@@ -102,6 +102,15 @@ $requiredMigrationSnippets = @{
         'ADD INDEX IF NOT EXISTS idx_category_groups_owner_active_type (owner_id, active, entry_type)',
         'ADD INDEX IF NOT EXISTS idx_payment_methods_owner_active (owner_id, active)'
     )
+    'V20260630_014__household_goals.sql' = @(
+        'CREATE TABLE IF NOT EXISTS household_goals',
+        'owner_id BIGINT NOT NULL',
+        'target_amount_krw DECIMAL(19,2) NOT NULL',
+        'current_amount_krw DECIMAL(19,2) NOT NULL',
+        'version BIGINT NOT NULL DEFAULT 0',
+        'ADD INDEX IF NOT EXISTS idx_household_goals_owner_status (owner_id, status, created_at, id)',
+        'ADD INDEX IF NOT EXISTS idx_household_goals_owner_due (owner_id, due_date)'
+    )
     'V20260630_013__ledger_ai_analysis_history_base.sql' = @(
         'CREATE TABLE IF NOT EXISTS ledger_ai_analysis_histories',
         'owner_id BIGINT NOT NULL',
@@ -147,7 +156,7 @@ if (-not (Test-Path -LiteralPath $retirementEvidencePath)) {
         'Blocker/exception note',
         'Ready rows must include concrete evidence references',
         'Blocked: staging Flyway startup proof, Flyway history proof, smoke evidence, and rollback/restore evidence are not recorded yet.',
-        'All six legacy updaters have Flyway overlap, but none are marked `Ready` here.'
+        'All seven legacy updaters have Flyway overlap, but none are marked `Ready` here.'
     )) {
         if (-not $retirementEvidence.Contains($snippet)) {
             $findings.Add("DB migration retirement evidence missing snippet: $snippet") | Out-Null
@@ -161,6 +170,7 @@ if (-not (Test-Path -LiteralPath $retirementEvidencePath)) {
         'TravelMediaAssetSchemaUpdater' = @('V20260630_010__travel_media_asset_metadata_fields.sql', 'Travel photo upload, GPS extraction')
         'TravelPhotoClusterSchemaUpdater' = @('V20260630_011__travel_photo_cluster_tables.sql', 'Map photo cluster rebuild')
         'TravelRouteSchemaUpdater' = @('V20260630_008__travel_route_segment_fields.sql', 'Travel route create/edit')
+        'HouseholdGoalSchemaUpdater' = @('V20260630_014__household_goals.sql', 'Household goal create, list, update, archive')
     }
     foreach ($entry in $requiredRetirementRows.GetEnumerator()) {
         if (-not $retirementEvidence.Contains("Pending | ``$($entry.Key)``")) {
@@ -240,7 +250,8 @@ $expectedLegacySchemaUpdaters = @(
     'backend/src/main/java/com/playdata/calen/ledger/config/LedgerEntryChangeHistorySchemaUpdater.java',
     'backend/src/main/java/com/playdata/calen/travel/config/TravelMediaAssetSchemaUpdater.java',
     'backend/src/main/java/com/playdata/calen/travel/config/TravelPhotoClusterSchemaUpdater.java',
-    'backend/src/main/java/com/playdata/calen/travel/config/TravelRouteSchemaUpdater.java'
+    'backend/src/main/java/com/playdata/calen/travel/config/TravelRouteSchemaUpdater.java',
+    'backend/src/main/java/com/playdata/calen/account/config/HouseholdGoalSchemaUpdater.java'
 )
 $repoRoot = (Get-Location).Path
 $sourceRoot = 'backend/src/main/java'

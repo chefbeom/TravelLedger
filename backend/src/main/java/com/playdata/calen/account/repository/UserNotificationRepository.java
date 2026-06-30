@@ -20,6 +20,8 @@ public interface UserNotificationRepository extends JpaRepository<UserNotificati
 
     long countByOwnerIdAndReadAtIsNull(Long ownerId);
 
+    boolean existsByOwnerIdAndTypeAndTargetUrlAndReadAtIsNull(Long ownerId, String type, String targetUrl);
+
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("""
             update UserNotification notification

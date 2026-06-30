@@ -17,6 +17,10 @@ $ocrServicePath = 'backend/src/main/java/com/playdata/calen/ledger/ocr/LedgerOcr
 $ocrServiceTestPath = 'backend/src/test/java/com/playdata/calen/ledger/ocr/LedgerOcrServiceTest.java'
 $backupSchedulerPath = 'backend/src/main/java/com/playdata/calen/account/service/DataOpsBackupScheduler.java'
 $backupSchedulerTestPath = 'backend/src/test/java/com/playdata/calen/account/service/DataOpsBackupSchedulerTest.java'
+$budgetWarningSchedulerPath = 'backend/src/main/java/com/playdata/calen/travel/service/TravelBudgetWarningNotificationScheduler.java'
+$budgetWarningSchedulerTestPath = 'backend/src/test/java/com/playdata/calen/travel/service/TravelBudgetWarningNotificationSchedulerTest.java'
+$travelBudgetItemRepositoryPath = 'backend/src/main/java/com/playdata/calen/travel/repository/TravelBudgetItemRepository.java'
+$travelExpenseRecordRepositoryPath = 'backend/src/main/java/com/playdata/calen/travel/repository/TravelExpenseRecordRepository.java'
 $travelReminderSchedulerPath = 'backend/src/main/java/com/playdata/calen/travel/service/TravelReminderNotificationScheduler.java'
 $travelReminderSchedulerTestPath = 'backend/src/test/java/com/playdata/calen/travel/service/TravelReminderNotificationSchedulerTest.java'
 $travelPlanRepositoryPath = 'backend/src/main/java/com/playdata/calen/travel/repository/TravelPlanRepository.java'
@@ -25,7 +29,7 @@ $privacyServiceTestPath = 'backend/src/test/java/com/playdata/calen/account/Priv
 
 $findings = [System.Collections.Generic.List[string]]::new()
 
-foreach ($path in @($contractPath, $securityChecklistPath, $roadmapPath, $ciPath, $controllerPath, $servicePath, $repositoryPath, $serviceTestPath, $frontendPath, $appPath, $apiPath, $ocrServicePath, $ocrServiceTestPath, $backupSchedulerPath, $backupSchedulerTestPath, $travelReminderSchedulerPath, $travelReminderSchedulerTestPath, $travelPlanRepositoryPath, $privacyServicePath, $privacyServiceTestPath)) {
+foreach ($path in @($contractPath, $securityChecklistPath, $roadmapPath, $ciPath, $controllerPath, $servicePath, $repositoryPath, $serviceTestPath, $frontendPath, $appPath, $apiPath, $ocrServicePath, $ocrServiceTestPath, $backupSchedulerPath, $backupSchedulerTestPath, $budgetWarningSchedulerPath, $budgetWarningSchedulerTestPath, $travelBudgetItemRepositoryPath, $travelExpenseRecordRepositoryPath, $travelReminderSchedulerPath, $travelReminderSchedulerTestPath, $travelPlanRepositoryPath, $privacyServicePath, $privacyServiceTestPath)) {
     if (-not (Test-Path -LiteralPath $path)) {
         $findings.Add("Missing notification center contract input: $path") | Out-Null
     }
@@ -48,6 +52,10 @@ $style = Get-Content -LiteralPath $stylePath -Raw
     $ocrServiceTest = Get-Content -LiteralPath $ocrServiceTestPath -Raw
     $backupScheduler = Get-Content -LiteralPath $backupSchedulerPath -Raw
     $backupSchedulerTest = Get-Content -LiteralPath $backupSchedulerTestPath -Raw
+    $budgetWarningScheduler = Get-Content -LiteralPath $budgetWarningSchedulerPath -Raw
+    $budgetWarningSchedulerTest = Get-Content -LiteralPath $budgetWarningSchedulerTestPath -Raw
+    $travelBudgetItemRepository = Get-Content -LiteralPath $travelBudgetItemRepositoryPath -Raw
+    $travelExpenseRecordRepository = Get-Content -LiteralPath $travelExpenseRecordRepositoryPath -Raw
     $travelReminderScheduler = Get-Content -LiteralPath $travelReminderSchedulerPath -Raw
     $travelReminderSchedulerTest = Get-Content -LiteralPath $travelReminderSchedulerTestPath -Raw
     $travelPlanRepository = Get-Content -LiteralPath $travelPlanRepositoryPath -Raw
@@ -114,7 +122,7 @@ $style = Get-Content -LiteralPath $stylePath -Raw
     }
 
 
-    foreach ($snippet in @('Ledger OCR failed', 'Scheduled database backup failed', 'Scheduled MinIO backup failed', 'Privacy cleanup completed', 'Travel starts tomorrow', 'BACKUP_FAILED', 'AI_OR_OCR_FAILED', 'PRIVACY_ACTION_DONE', 'TRAVEL_REMINDER')) {
+    foreach ($snippet in @('Ledger OCR failed', 'Scheduled database backup failed', 'Scheduled MinIO backup failed', 'Privacy cleanup completed', 'Travel starts tomorrow', 'Travel budget threshold exceeded', 'BACKUP_FAILED', 'AI_OR_OCR_FAILED', 'PRIVACY_ACTION_DONE', 'TRAVEL_REMINDER', 'BUDGET_WARNING')) {
         if (-not $contract.Contains($snippet)) {
             $findings.Add("Notification center contract missing implemented producer snippet: $snippet") | Out-Null
         }
@@ -145,6 +153,41 @@ $style = Get-Content -LiteralPath $stylePath -Raw
     }
 
 
+    foreach ($snippet in @('existsByOwnerIdAndTypeAndTargetUrlAndReadAtIsNull')) {
+        if (-not $repository.Contains($snippet)) {
+            $findings.Add("UserNotificationRepository missing budget duplicate-suppression snippet: $snippet") | Out-Null
+        }
+    }
+
+    foreach ($snippet in @('sumAmountKrwByPlanId')) {
+        if (-not $travelBudgetItemRepository.Contains($snippet)) {
+            $findings.Add("TravelBudgetItemRepository missing budget warning sum snippet: $snippet") | Out-Null
+        }
+    }
+
+    foreach ($snippet in @('sumAmountKrwByPlanIdAndRecordType')) {
+        if (-not $travelExpenseRecordRepository.Contains($snippet)) {
+            $findings.Add("TravelExpenseRecordRepository missing budget warning sum snippet: $snippet") | Out-Null
+        }
+    }
+
+    foreach ($snippet in @('findAllByStatusInOrderByStartDateDescIdDesc')) {
+        if (-not $travelPlanRepository.Contains($snippet)) {
+            $findings.Add("TravelPlanRepository missing budget warning query snippet: $snippet") | Out-Null
+        }
+    }
+
+    foreach ($snippet in @('class TravelBudgetWarningNotificationScheduler', 'private final TravelBudgetItemRepository travelBudgetItemRepository', 'private final TravelExpenseRecordRepository travelExpenseRecordRepository', 'private final UserNotificationRepository userNotificationRepository', 'runBudgetWarnings()', 'findAllByStatusInOrderByStartDateDescIdDesc(List.of(', 'sumAmountKrwByPlanId(planId)', 'sumAmountKrwByPlanIdAndRecordType(', 'TravelRecordType.LEDGER', 'existsByOwnerIdAndTypeAndTargetUrlAndReadAtIsNull(ownerId, NOTIFICATION_TYPE, targetUrl)', '"BUDGET_WARNING"', '"Travel budget exceeded"', '"/travel-money?planId=" + planId + "&tab=records"', 'thresholdLabel', 'over_100_percent', 'period', 'exceeded')) {
+        if (-not $budgetWarningScheduler.Contains($snippet)) {
+            $findings.Add("TravelBudgetWarningNotificationScheduler missing producer snippet: $snippet") | Out-Null
+        }
+    }
+
+    foreach ($snippet in @('notifiesOwnerWhenTravelSpendingExceedsBudgetWithBoundedMetadata', 'skipsDuplicateUnreadTravelBudgetWarningForSamePlan', 'eq("BUDGET_WARNING")', 'eq("Travel budget exceeded")', 'eq("/travel-money?planId=7&tab=records")', 'existsByOwnerIdAndTypeAndTargetUrlAndReadAtIsNull(', 'eq("{\"planId\":7,\"thresholdLabel\":\"over_100_percent\",\"period\":\"trip\",\"status\":\"exceeded\"}")', 'Private trip name should not be copied into budget notification metadata')) {
+        if (-not $budgetWarningSchedulerTest.Contains($snippet)) {
+            $findings.Add("TravelBudgetWarningNotificationSchedulerTest missing budget warning evidence snippet: $snippet") | Out-Null
+        }
+    }
     foreach ($snippet in @('findAllByStatusAndStartDateBetweenOrderByStartDateAscIdAsc')) {
         if (-not $travelPlanRepository.Contains($snippet)) {
             $findings.Add("TravelPlanRepository missing travel reminder query snippet: $snippet") | Out-Null

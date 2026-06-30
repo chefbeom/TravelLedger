@@ -22,6 +22,17 @@ public interface TravelExpenseRecordRepository extends JpaRepository<TravelExpen
             """)
     BigDecimal sumAmountKrw();
 
+    @Query("""
+            select coalesce(sum(record.amountKrw), 0)
+            from TravelExpenseRecord record
+            where record.plan.id = :planId
+              and record.recordType = :recordType
+            """)
+    BigDecimal sumAmountKrwByPlanIdAndRecordType(
+            @Param("planId") Long planId,
+            @Param("recordType") TravelRecordType recordType
+    );
+
     List<TravelExpenseRecord> findAllByPlanIdAndPlanOwnerIdOrderByExpenseDateDescIdDesc(Long planId, Long ownerId);
 
     List<TravelExpenseRecord> findAllByPlanOwnerId(Long ownerId);

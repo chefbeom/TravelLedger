@@ -1,4 +1,4 @@
-$ErrorActionPreference = 'Stop'
+﻿$ErrorActionPreference = 'Stop'
 
 function Read-RequiredFile([string]$Path) {
     if (-not (Test-Path -LiteralPath $Path)) {
@@ -15,7 +15,8 @@ function Assert-ContainsAll([string]$Name, [string]$Content, [string[]]$Snippets
     }
 }
 
-$contract = Read-RequiredFile 'docs/drive_file_versioning.md'
+$contract$contract = Read-RequiredFile 'docs/drive_file_versioning.md'
+$publicShareContract = Read-RequiredFile 'docs/public_share_authorization_contract.md'
 $securityChecklist = Read-RequiredFile 'docs/security_baseline_checklist.md'
 $roadmap = Read-RequiredFile 'docs/project_improvement_roadmap.md'
 $ci = Read-RequiredFile '.github/workflows/ci.yml'
@@ -31,6 +32,7 @@ $migration = Read-RequiredFile 'backend/src/main/resources/db/migration/V2026062
 Assert-ContainsAll 'docs/drive_file_versioning.md' $contract @(
     '# CalenDrive File Versioning Contract',
     '## Implemented surfaces',
+    '## Safe family drive model',
     '## API contract',
     '## Frontend contract',
     '## Non-negotiable rules',
@@ -41,9 +43,22 @@ Assert-ContainsAll 'docs/drive_file_versioning.md' $contract @(
     'drive-version-drawer',
     'restoreDriveFileVersion',
     'RESTORE',
-    'must not show storage object keys'
+    'must not show storage object keys',
+    'expiring public links',
+    'download audit logs',
+    'VIEW / DOWNLOAD / EDIT',
+    'owner-facing access-log panel',
+    'docs/public_share_authorization_contract.md'
 )
-
+Assert-ContainsAll 'docs/public_share_authorization_contract.md' $publicShareContract @(
+    'CalenDrive public download link',
+    'not be revoked, not be expired',
+    'access must be logged without raw-token storage',
+    'DriveSharePermission.VIEW',
+    'DOWNLOAD',
+    'EDIT',
+    'owner alone can read direct-share access logs'
+)
 Assert-ContainsAll 'frontend/src/lib/api.js' $api @(
     'export function fetchDriveFileVersions(fileId)',
     'return request(`/file/${fileId}/versions`)',
@@ -140,3 +155,4 @@ Assert-ContainsAll '.github/workflows/ci.yml' $ci @(
 )
 
 Write-Host 'drive file versioning contract verified'
+

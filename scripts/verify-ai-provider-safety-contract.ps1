@@ -192,7 +192,7 @@ Assert-ContainsAll -Label 'LM Studio provider client' -Content $lmStudioClient -
     'Authorization',
     'Bearer ',
     'LedgerAiRemoteResponseValidator.requireUsable(response, "LM Studio")',
-    'LM Studio AI ?�답??JSON 분석 결과�??�석?��? 못했?�니??,
+    'LM Studio AI ?�답??JSON 분석 결과�??�석?��? 못했?�니??,
     'calen.external.workflow.requests',
     'calen.external.workflow.request'
 )

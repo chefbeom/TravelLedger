@@ -10,7 +10,13 @@ import java.util.regex.Pattern;
 public final class LedgerAiRemoteResponseValidator {
 
     private static final Pattern SECRET_DISCLOSURE_PATTERN = Pattern.compile(
-            "(?i)(api[_-]?key|secret|token|authorization|bearer|password)\\s*[:=]\\s*[A-Za-z0-9._~+/=-]{8,}"
+            "(?i)(api[_-]?key|secret|token|password)\\s*[:=]\\s*[A-Za-z0-9._~+/=-]{8,}"
+    );
+    private static final Pattern AUTHORIZATION_HEADER_PATTERN = Pattern.compile(
+            "(?i)(?:authorization\\s*[:=]\\s*(?:bearer|basic)\\s+[A-Za-z0-9._~+/=-]{8,}|\\bbearer\\s+[A-Za-z0-9._~+/=-]{16,})"
+    );
+    private static final Pattern SECRET_BEARING_URL_PATTERN = Pattern.compile(
+            "(?i)https?://\\S*(?:(?:[?&](?:X-Amz-Signature|X-Amz-Credential|X-Amz-Security-Token|X-Goog-Signature|AWSAccessKeyId|Signature|token|access_token|api_key)=)|/webhook/)\\S*"
     );
     private static final Pattern PROMPT_INJECTION_ECHO_PATTERN = Pattern.compile(
             "(?i)(ignore|disregard|override|bypass).{0,40}(previous|above|system|developer).{0,40}(instruction|prompt|message)"
@@ -50,7 +56,7 @@ public final class LedgerAiRemoteResponseValidator {
             if (!hasText(value)) {
                 continue;
             }
-            if (SECRET_DISCLOSURE_PATTERN.matcher(value).find()) {
+            if (containsSecretLikeContent(value)) {
                 throw new BadRequestException(provider + " AI analysis response contained secret-like content.");
             }
             if (PROMPT_INJECTION_ECHO_PATTERN.matcher(value).find()) {
@@ -61,6 +67,12 @@ public final class LedgerAiRemoteResponseValidator {
                 throw new BadRequestException(provider + " AI analysis response claimed ledger data was changed.");
             }
         }
+    }
+
+    private static boolean containsSecretLikeContent(String value) {
+        return SECRET_DISCLOSURE_PATTERN.matcher(value).find()
+                || AUTHORIZATION_HEADER_PATTERN.matcher(value).find()
+                || SECRET_BEARING_URL_PATTERN.matcher(value).find();
     }
 
     private static List<String> allTextValues(LedgerAiRemoteResponse response) {

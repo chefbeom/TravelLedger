@@ -10,7 +10,7 @@ This contract pins the release criteria for Ledger AI provider calls. Ledger AI 
 | --- | --- |
 | LM Studio | Backend-only OpenAI-like chat call through `LedgerAiLmStudioClient`; `APP_LEDGER_AI_MODEL=auto` resolves the first available model from `/api/v1/models`. |
 | n8n | Backend-only webhook call through `LedgerAiN8nClient`; optional API key header is used only server-side. |
-| Shared response validation | `LedgerAiRemoteResponseValidator.requireUsable(...)` rejects null, failed, empty, secret-like, prompt-injection echo, and ledger-mutation-claim responses. |
+| Shared response validation | `LedgerAiRemoteResponseValidator.requireUsable(...)` rejects null, failed, empty, secret-like content, authorization-header echoes, secret-bearing URLs/presigned URLs, prompt-injection echo, and ledger-mutation-claim responses. |
 | Analysis service | `LedgerAiAnalysisService` builds owner-scoped, minimized provider payloads, stores completed or failed history, redacts provider failure details, records metrics, accepts a frontend-generated bounded `clientRequestId`, serializes same-JVM in-flight duplicate requests, and reuses recent duplicate completed analysis results. |
 | Configuration/status | AI status can expose enabled/configured/provider/model state, but must not expose provider URLs, base URLs, webhook paths, API keys, or API-key header names. |
 | Release gate | `scripts/verify-ai-provider-safety-contract.ps1` must run in CI before the release gate succeeds. |
@@ -44,7 +44,7 @@ flowchart TD
 | AI-PROV-04 | Prompt-injection-like ledger titles or memos remain data and are not treated as system/developer instructions. | `LedgerAiAnalysisServiceTest.analyzeKeepsPromptInjectionLikeLedgerTextAsData`. |
 | AI-PROV-05 | Provider output must fail closed when it is null, failed, empty, non-JSON for LM Studio, or lacks usable analysis. | `LedgerAiRemoteResponseValidatorTest` and `LedgerAiLmStudioClient` JSON parsing errors. |
 | AI-PROV-06 | Provider output that echoes prompt-injection instructions is rejected. | `LedgerAiRemoteResponseValidatorTest.rejectsPromptInjectionEchoFromProviderOutput`. |
-| AI-PROV-07 | Provider output that contains secret-like content is rejected. | `LedgerAiRemoteResponseValidatorTest.rejectsSecretLikeProviderOutput`. |
+| AI-PROV-07 | Provider output that contains secret-like content, authorization headers, provider webhook URLs, or presigned URLs is rejected. | `LedgerAiRemoteResponseValidatorTest.rejectsSecretLikeProviderOutput`. |
 | AI-PROV-08 | Provider output that claims ledger entries were created, updated, deleted, saved, categorized, or reclassified is rejected. | `LedgerAiRemoteResponseValidatorTest.rejectsProviderOutputClaimingLedgerMutation`. |
 | AI-PROV-09 | Failed provider requests still persist failed history, but error messages are redacted before storage. | `LedgerAiAnalysisServiceTest.analyzeStoresFailedHistoryWhenRemoteRequestFails` and `analyzeStoresFailedHistoryWithoutLeakingProviderSecrets`. |
 | AI-PROV-10 | Recent duplicate completed analysis requests for the same owner, provider, model, mode, period, comparison range, and optional bounded `clientRequestId` reuse the existing result instead of calling the provider again; same-JVM in-flight duplicates are serialized so a browser double-submit cannot create parallel provider calls. The frontend `analyzeLedgerSpending` request wrapper generates bounded `clientRequestId` values before posting analysis requests. `clientRequestId` is backend-only dedupe metadata and must not be sent to LM Studio or n8n payloads. | `LedgerAiAnalysisServiceTest.analyzeReusesRecentCompletedHistoryWithoutCallingRemoteProvider`, `analyzeSerializesParallelDuplicateRequestsAndReusesFirstResult`, `analyzeUsesClientRequestIdOnlyForBackendDedupe`, `LedgerAiAnalysisRequest.clientRequestId`, `LedgerAiAnalysisService.inFlightAnalysisLocks`, and `LedgerAiAnalysisHistoryRepository.findLatestMatchingCompletedAnalysis`. |
@@ -82,7 +82,7 @@ Before enabling or changing a provider in production, verify:
 3. Status responses hide provider URLs, base URLs, webhook paths, API keys, and API-key header names.
 4. Provider payloads stay capped and include `payloadMinimization` counts.
 5. Invalid/non-JSON provider responses fail closed.
-6. Prompt-injection echoes, secret-like output, and mutation claims are rejected.
+6. Prompt-injection echoes, secret-like output, authorization-header echoes, secret-bearing URLs/presigned URLs, and mutation claims are rejected.
 7. Failed history is persisted with redacted error messages.
 8. Frontend `analyzeLedgerSpending` keeps generating bounded `clientRequestId` values; duplicate suppression remains provider/model/range/clientRequestId aware, `clientRequestId` stays out of provider payloads, and same-JVM in-flight duplicate requests are serialized before provider calls.
 9. Provider failure and latency metrics remain alertable.

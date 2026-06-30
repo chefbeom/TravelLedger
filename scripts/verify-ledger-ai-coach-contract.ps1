@@ -14,7 +14,7 @@ $validatorTestPath = 'backend/src/test/java/com/playdata/calen/ledger/ai/LedgerA
 
 $findings = [System.Collections.Generic.List[string]]::new()
 
-foreach ($path in @($contractPath, $safetyPath, $securityChecklistPath, $ciPath, $reportDtoPath, $responseDtoPath, $servicePath, $validatorPath, $serviceTestPath, $validatorTestPath)) {
+foreach ($path in @($contractPath, $safetyPath, $securityChecklistPath, $roadmapPath, $ciPath, $reportDtoPath, $responseDtoPath, $servicePath, $validatorPath, $serviceTestPath, $validatorTestPath)) {
     if (-not (Test-Path -LiteralPath $path)) {
         $findings.Add("Missing ledger AI coach contract input: $path") | Out-Null
     }
@@ -24,6 +24,7 @@ if ($findings.Count -eq 0) {
     $contract = Get-Content -LiteralPath $contractPath -Raw
     $safety = Get-Content -LiteralPath $safetyPath -Raw
     $securityChecklist = Get-Content -LiteralPath $securityChecklistPath -Raw
+    $roadmap = Get-Content -LiteralPath $roadmapPath -Raw
     $ci = Get-Content -LiteralPath $ciPath -Raw
     $reportDto = Get-Content -LiteralPath $reportDtoPath -Raw
     $responseDto = Get-Content -LiteralPath $responseDtoPath -Raw
@@ -32,13 +33,13 @@ if ($findings.Count -eq 0) {
     $serviceTest = Get-Content -LiteralPath $serviceTestPath -Raw
     $validatorTest = Get-Content -LiteralPath $validatorTestPath -Raw
 
-    foreach ($section in @('# Ledger AI Coach Contract', '## Coach outcomes', '## Non-negotiable safety rules', '## Current implementation anchors', '## Provider prompt contract', '## Release gate', '## CI contract')) {
+    foreach ($section in @('# Ledger AI Coach Contract', '## Coach outcomes', '## Expanded coach modules', '## Non-negotiable safety rules', '## Current implementation anchors', '## Provider prompt contract', '## Release gate', '## CI contract')) {
         if (-not $contract.Contains($section)) {
             $findings.Add("Ledger AI coach contract missing section: $section") | Out-Null
         }
     }
 
-    foreach ($phrase in @('Risk spending', 'Recurring/subscription spend', 'Budget overrun forecast', 'Cashflow coaching', 'Category/payment coaching', 'advisory-only analysis', 'separate explicit user confirmation/save action', 'created, updated, deleted, saved, categorized, reclassified', 'uncertainty language')) {
+    foreach ($phrase in @('Risk spending', 'Recurring/subscription spend', 'Budget overrun forecast', 'Cashflow coaching', 'Category/payment coaching', 'This month''s risk spending', 'Subscription and recurring spend', 'Next-month cashflow forecast', 'Coach action list', 'source evidence', 'advisory-only analysis', 'separate explicit user confirmation/save action', 'created, updated, deleted, saved, categorized, reclassified', 'uncertainty language')) {
         if (-not $contract.Contains($phrase)) {
             $findings.Add("Ledger AI coach contract missing required phrase: $phrase") | Out-Null
         }
@@ -86,6 +87,12 @@ if ($findings.Count -eq 0) {
         }
     }
 
+
+    foreach ($snippet in @('Current hardening coverage snapshot', 'AI ledger coach', 'docs/ledger_ai_coach_contract.md', 'current-month risk spending', 'subscription/recurring spend', 'budget overrun forecast', 'next-month cashflow forecast', 'scripts/verify-ledger-ai-coach-contract.ps1')) {
+        if (-not $roadmap.Contains($snippet)) {
+            $findings.Add("Project roadmap missing ledger AI coach snippet: $snippet") | Out-Null
+        }
+    }
     foreach ($snippet in @('ledger-ai-coach-contract', 'docs/ledger_ai_coach_contract.md', 'scripts/verify-ledger-ai-coach-contract.ps1')) {
         if (-not $securityChecklist.Contains($snippet)) {
             $findings.Add("Security baseline missing ledger AI coach contract snippet: $snippet") | Out-Null

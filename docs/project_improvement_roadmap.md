@@ -12,6 +12,20 @@ This roadmap turns the current improvement analysis into an implementation queue
 | P1 | High-value product/operations work. Do after P0 baseline is stable. |
 | P2 | Strategic enhancements. Do when core workflows are reliable. |
 
+## Current hardening coverage snapshot
+
+These items are already tracked as release contracts rather than loose ideas. Keep the contracts current when implementation changes.
+
+| Requested area | Current project anchor | Next practical gap |
+| --- | --- | --- |
+| `.env.example` and `application.yml` env sync | `docs/env_configuration_contract.md`, `scripts/verify-env-sync.ps1`, and the `config-sync` CI job. | Keep OCI compose-only values and production secret placeholders aligned as new providers are added. |
+| Backup encryption and restore rehearsal | `docs/backup_restore_rehearsal_runbook.md`, `scripts/verify-backup-rehearsal-runbook.ps1`, and encrypted `backup-to-gdrive.sh` support. | Attach scheduled restore rehearsal evidence and decrypt/checksum results per release window. |
+| Public share link expiry, revocation, and access logs | `docs/public_share_authorization_contract.md` plus Drive download-link service/access-log tests. | Add frontend owner-facing access-log review and Travel media token expiry/rotation evidence. |
+| File upload MIME, extension, and image failure isolation | `docs/file_upload_security_contract.md`, media storage tests, and `docs/media_processing_queue_contract.md`. | Consolidate shared upload policy helpers and add per-feature max-size/malformed-image regression cases. |
+| Admin action audit logs | `docs/admin_audit_log_contract.md` and `scripts/verify-admin-audit-contract.ps1`. | Extend bounded action-code coverage whenever new admin backup, restore, user, throttle, or drive-admin mutations are added. |
+| GitHub Actions backend/frontend/secret automation | `.github/workflows/ci.yml`, `docs/ci_workflow_contract.md`, `scripts/scan-secrets.ps1`, and release-gate result mapping. | Add a Jenkins mirror only if deployment operations require a second CI surface; otherwise keep GitHub Actions authoritative. |
+| Large photo/video upload queue and thumbnail reprocessing queue | `docs/media_processing_queue_contract.md` separates upload, thumbnail backfill/reprocessing, and future video/transcode lanes. | Implement durable queue ownership, retry budget, and video transcode lane metrics before large video support. |
+| AI ledger coach | `docs/ledger_ai_coach_contract.md` and `scripts/verify-ledger-ai-coach-contract.ps1`. | Build review cards for current-month risk spending, subscription/recurring spend, budget overrun forecast, and next-month cashflow forecast. |
 ## P0: Safety and Reliability Foundation
 
 | Workstream | Why it matters | First slice | Evidence of done |
@@ -39,7 +53,7 @@ This roadmap turns the current improvement analysis into an implementation queue
 
 | Feature | User value | First slice | Evidence of done |
 | --- | --- | --- | --- |
-| AI ledger coach | Turns monthly reports into ongoing guidance. | Add risk spend, recurring spend, budget-overrun forecast fields to AI output. | UI shows forecast and action list without mutating ledger data. |
+| AI ledger coach | Turns monthly reports into ongoing guidance. | Build advisory review cards for current-month risk spending, subscription/recurring spend, budget overrun forecast, and next-month cashflow forecast, then rank manual coach actions. | UI shows source-backed forecast cards and action list without mutating ledger data; unsafe claims still fail validation. |
 | Auto classification rules | Improves OCR/Excel import speed and consistency. | User-defined keyword rule CRUD and preview API are in place; next apply rules in OCR/Excel import preview. | Users can create owner-scoped rules and preview explainable classification suggestions. |
 | Transaction anomaly detection | Catches duplicate, unusual, and out-of-context spending. | Read-only duplicate detector API now flags same-day expense entries with same amount/title; next add frontend panel and dismiss workflow. | API returns user-scoped anomaly candidates without mutating ledger data. |
 | Travel timeline/story export | Combines route, photos, expenses, and memories into a shareable result. | Read-only web story for one trip. | Public/private story link renders route/photos/memories. |
@@ -58,7 +72,7 @@ This roadmap turns the current improvement analysis into an implementation queue
 4. Add metrics/alerts for AI/OCR/backup/Redis failures.
 5. Follow `docs/service_decomposition_plan.md` to extract `LedgerAiAnalysisService` and `TravelService` collaborators in low-risk slices.
 6. Retire the next legacy `*SchemaUpdater` by adding a versioned migration, evidence row, and staging Flyway startup proof.
-7. Build AI ledger coach fields on top of the hardened AI contract.
+7. Build AI ledger coach cards for risk spending, recurring spend, budget overrun, and next-month cashflow on top of the hardened AI contract.
 8. Add notification center so AI/backup/share events become visible.
 9. Complete fixture-backed Playwright automation for the P0 flows in `frontend/e2e/smoke.spec.js`.
 
@@ -69,6 +83,7 @@ This roadmap turns the current improvement analysis into an implementation queue
 | `docs/security_baseline_checklist.md` | Security checklist and immediate tests. |
 | `docs/remember_me_security_review.md` | Remember-me cookie, persistent token, logout, rotation, and revocation review. |
 | `docs/ledger_ai_safety_hardening.md` | AI provider safety, failure handling, and hardening backlog. |
+| `docs/ledger_ai_coach_contract.md` | Advisory AI coach outcomes, risk spending, recurring spend, budget overrun, cashflow forecast, and no-mutation safety contract. |
 | `docs/ai_provider_safety_contract.md` | Release contract for LM Studio/n8n provider safety, response validation, prompt-injection rejection, payload minimization, duplicate suppression, and secret redaction. |
 | `docs/env_configuration_contract.md` | Runtime configuration contract for `.env.example`, `.env.oci.app.example`, `application.yml`, LM Studio/n8n provider endpoints, secret placeholders, and production-safety toggles. |
 | `docs/secret_scanning_contract.md` | Secret scanning contract for token patterns, sensitive assignment placeholders, CI jobs, rotation expectations, and release evidence. |
@@ -98,6 +113,7 @@ This roadmap turns the current improvement analysis into an implementation queue
 | `scripts/verify-secret-scan-contract.ps1` | Fails CI if high-risk secret gates, scanner patterns, placeholder policy, security baseline coverage, roadmap coverage, or release-gate wiring drift. |
 | `scripts/verify-ci-workflow-contract.ps1` | Fails CI if required workflow jobs, release-gate dependencies, result-map entries, or CI topology documentation drift. |
 | `scripts/verify-ledger-anomaly-contract.ps1` | Fails CI if transaction anomaly detection loses read-only owner scope, bounded range/limit rules, detector evidence, security checklist coverage, or release-gate wiring. |
+| `scripts/verify-ledger-ai-coach-contract.ps1` | Fails CI if the AI coach loses advisory/no-mutation rules, expanded coach module coverage, implementation anchors, security checklist coverage, or release-gate wiring. |
 | `scripts/verify-travel-story-export-contract.ps1` | Fails CI if travel story/export loses owner/shared/public visibility rules, media-token safety, secret exclusion, roadmap coverage, or release-gate wiring. |
 | `scripts/verify-household-budget-goals-contract.ps1` | Fails CI if household budget/shared-goal contracts lose owner/member scope, explicit mutation boundaries, export/notification safety, implementation anchors, or release-gate wiring. |
 | `scripts/verify-notification-center-contract.ps1` | Fails CI if notification center loses owner scope, redaction, bounded metadata, relative target links, frontend/API anchors, roadmap coverage, or release-gate wiring. |

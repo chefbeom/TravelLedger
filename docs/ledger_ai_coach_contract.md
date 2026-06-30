@@ -14,6 +14,17 @@ This contract turns the existing ledger AI analysis report into a user-facing co
 | Cashflow coaching | `summary`, `habitAssessment`, `recommendations`, `report.improvementActions` | Explain spending habits and next actions in plain Korean without creating, editing, deleting, categorizing, or reclassifying ledger entries. |
 | Category/payment coaching | `categoryInsights`, `paymentInsights`, `report.topPaymentMethod` | Suggest review points for category/payment patterns while keeping source ledger records unchanged. |
 
+## Expanded coach modules
+
+The coach should move beyond a monthly summary by rendering four review cards plus one action list. These cards can be backed by deterministic ledger aggregates first, then enriched by the LLM only after the advisory and privacy contracts are satisfied.
+
+| Module | Minimum signal | User-facing output | Safety acceptance |
+| --- | --- | --- | --- |
+| This month's risk spending | Current-month outliers, duplicate-looking payments, sudden category growth, travel-out-of-range spending, and unusually high single merchants. | A ranked list of review candidates with amount, category, date range, reason, confidence, and source evidence. | Use uncertainty language, never call a transaction fraud, and never edit/delete/categorize entries. |
+| Subscription and recurring spend | Similar merchant/title, cadence, amount variance, payment method, and last paid date. | Likely subscriptions, fixed expenses, renewal risk, and manual review/cancel suggestions. | Mark uncertain matches as candidates and keep classification unchanged until the user confirms a separate action. |
+| Budget overrun forecast | Elapsed days, current spend pace, comparison period, configured household/ledger goals, and known fixed expenses. | Category-level and total budget pressure with projected range, confidence, and suggested intervention. | Forecasts are estimates, not guarantees; overrun labels must be explainable from source aggregates. |
+| Next-month cashflow forecast | Recent income, recurring expenses, subscriptions, planned travel spend, fixed expenses, and unusual current-month events. | Estimated next-month inflow/outflow pressure, upcoming cash pinch points, and preparation suggestions. | Do not present financial advice as certainty; avoid account-balance claims unless the source data supports them. |
+| Coach action list | Combined risk, recurring, overrun, and cashflow signals. | Three to five prioritized actions the user can manually review, dismiss, or convert into an explicit ledger/budget task later. | Every action remains advisory until the user separately confirms a mutation in a non-AI flow. |
 ## Non-negotiable safety rules
 
 | Rule | Reason |

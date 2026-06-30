@@ -53,6 +53,7 @@ flowchart TD
 | Public link creation/revocation | `DriveDownloadLinkService.createLink`, `revokeLink`, `resolveExpiresInMinutes`, `resolveMaxDownloads`, `DEFAULT_EXPIRES_IN_MINUTES`, `MIN_EXPIRES_IN_MINUTES`, `MAX_EXPIRES_IN_MINUTES`, and `DEFAULT_MAX_DOWNLOADS`. |
 | Public link access | `DriveDownloadLinkService.downloadByToken`, `resolveDownloadUrlByToken`, `resolveAvailableDownloadLink`, `recordPublicDownloadLinkRequest`, and `recordPublicDownloadLinkAccess`. |
 | Public link status coverage | `invalid`, `revoked`, `expired`, `limit_reached`, `invalid_item`, `trashed`, and `success`. |
+| Public presigned URL tests | `resolveDownloadUrlByTokenRecordsAccessWithoutLoadingFileBytes` verifies successful public URL resolution logs access without loading raw bytes; `resolveDownloadUrlByTokenRejectsExpiredLinkWithoutGeneratingPresignedUrl` verifies expired public tokens cannot create presigned URLs. |
 | Public log safety | `DriveDownloadLinkAccessLogService.record`, `recordDirectShareAccess`, `listRecentLogs`, `listRecentDirectShareLogs`, and token-fingerprint tests. |
 | Direct share permission | `DriveShareService.shareFiles`, `normalizePermission`, `effectivePermission`, `ensureDownloadAllowed`, `getSharedFileDownloadUrl`, `downloadSharedFile`, and `listSharedFileAccessLogs`. |
 | Direct share tests | `DriveShareServiceTest.shareFilesStoresRequestedViewPermission`, `downloadSharedFileRejectsViewOnlyShareWithoutLoadingObject`, `sharedDownloadUrlRecordsSuccessfulAccess`, `sharedDownloadUrlRecordsViewOnlyDeniedAccess`, `sharedDownloadUrlRecordsMissingRecipientAsNotFoundWithoutGeneratingUrl`, and trashed/unavailable source tests. |
@@ -93,7 +94,7 @@ A release is not ready if any of these are true:
 
 ## Test backlog
 
-- Drive public token invalid/revoked/expired/limit/trashed/invalid-item paths never load object bytes.
+- Drive public token invalid/revoked/expired/limit/trashed/invalid-item paths never load object bytes or generate presigned URLs.
 - Drive public token presigned URL success logs access without reading bytes.
 - Drive public access logs store fingerprints and bounded metadata only.
 - Direct share `VIEW` cannot download, save, or generate presigned URLs.

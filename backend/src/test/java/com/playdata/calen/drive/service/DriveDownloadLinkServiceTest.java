@@ -77,6 +77,24 @@ class DriveDownloadLinkServiceTest {
         verify(driveDownloadLinkAccessLogService).record(eq(7L), eq(11L), eq(1L), eq("public-token"), eq("success"), isNull());
     }
     @Test
+    void resolveDownloadUrlByTokenRejectsExpiredLinkWithoutGeneratingPresignedUrl() {
+        DriveDownloadLink link = activeLink();
+        link.setExpiresAt(LocalDateTime.now().minusMinutes(1));
+
+        when(driveDownloadLinkRepository.findByToken("public-token")).thenReturn(Optional.of(link));
+
+        DriveDownloadLinkService service = newService();
+
+        assertThatThrownBy(() -> service.resolveDownloadUrlByToken("public-token"))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessage("Download link is expired or no longer available.");
+
+        assertThat(link.getDownloadCount()).isZero();
+        verify(driveStorageService, never()).generateDownloadUrl(anyString(), anyString(), anyString());
+        verify(driveStorageService, never()).loadObjectBytes(anyString());
+        verify(driveDownloadLinkAccessLogService).record(eq(7L), eq(11L), eq(1L), eq("public-token"), eq("expired"), isNull());
+    }
+    @Test
     void downloadByTokenRejectsBlankTokenWithoutLoadingFile() {
         DriveDownloadLinkService service = newService();
 

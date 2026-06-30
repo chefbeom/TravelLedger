@@ -103,7 +103,8 @@ Assert-ContainsAll 'DriveDownloadLinkServiceTest' $downloadLinkTest @(
     'downloadByTokenRejectsMissingLinkWithoutLoadingFile',
     'downloadByTokenRejectsTrashedFileWithoutLoadingFile',
     'downloadByTokenRejectsDownloadLimitWithoutLoadingFile',
-    'listAccessLogsRejectsNonOwnerBeforeReadingLogs',
+    'resolveDownloadUrlByTokenRejectsExpiredLinkWithoutGeneratingPresignedUrl',
+    'generateDownloadUrl(anyString(), anyString(), anyString())',    'listAccessLogsRejectsNonOwnerBeforeReadingLogs',
     'revokeLinkReturnsUnavailableLink',
     'record(eq(7L), eq(11L), eq(1L), eq("public-token")'
 )

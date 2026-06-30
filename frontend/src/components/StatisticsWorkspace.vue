@@ -312,16 +312,56 @@ const aiAbnormalReportItems = computed(() => dedupeAiItems([
   ...safeAiReportList('abnormalSpending'),
 ]))
 const aiComparisonReportItems = computed(() => safeAiReportList('comparisonFocus', props.aiAnalysis?.trendInsights))
+const aiTopCategoryItems = computed(() => topAiBreakdownItems(props.aiAnalysis?.categoryBreakdown, formatAiCategoryBreakdownLabel))
+const aiTopPaymentItems = computed(() => topAiBreakdownItems(props.aiAnalysis?.paymentBreakdown, formatAiPaymentBreakdownLabel))
+const aiPrintableCards = computed(() => [
+  ...aiResultCards.value,
+  ...buildAiFocusMetricCards(),
+])
 const hasStaleAiResult = computed(() => Boolean(props.aiAnalysisStale && props.aiAnalysis))
 const aiResultModalOpen = ref(false)
 const aiPresentationSections = computed(() => buildAiPresentationSections())
-const aiPrintableReport = computed(() => ({
-  title: 'TravelLedger AI 소비 분석 보고서',
-  generatedAt: new Date().toLocaleString('ko-KR'),
-  range: props.aiAnalysis ? formatAiRange(props.aiAnalysis.from, props.aiAnalysis.to) : '',
-  cards: aiResultCards.value,
-  sections: aiPresentationSections.value,
-}))
+const aiPrintableSections = computed(() => aiPresentationSections.value
+  .filter((section) => !['evidence', 'actions'].includes(section.key))
+  .map(compactAiPrintableSection))
+const aiPrintableReport = computed(() => {
+  const analysis = props.aiAnalysis
+  return {
+    title: 'TravelLedger AI 소비 분석 리포트',
+    printTitle: buildAiPrintTitle(analysis),
+    reportId: buildAiReportId(analysis),
+    subtitle: '가계부 데이터 기반 소비 패턴 진단 및 실행 권고',
+    generatedAt: new Date().toLocaleString('ko-KR'),
+    analysisGeneratedAt: formatAiCreatedAt(analysis?.generatedAt),
+    mode: formatAiMode(analysis?.mode),
+    period: formatAiPeriod(analysis?.periodType),
+    range: analysis ? formatAiRange(analysis.from, analysis.to) : '',
+    comparisonRange: analysis?.compareFrom ? formatAiRange(analysis.compareFrom, analysis.compareTo) : '',
+    model: analysis?.model || props.aiAnalysisStatus?.model || 'auto',
+    stale: hasStaleAiResult.value,
+    cards: aiPrintableCards.value,
+    sections: aiPrintableSections.value,
+    executiveSummary: buildAiExecutiveSummary(analysis),
+    reportOutline: buildAiReportOutline(),
+    dataEvidence: buildAiDataEvidence(analysis),
+    actionPriorities: buildAiActionPriorities(analysis),
+    conclusion: buildAiReportConclusion(analysis),
+    reviewChecklist: buildAiReviewChecklist(analysis),
+    qualityNotes: buildAiQualityNotes(analysis),
+    methodology: buildAiMethodology(analysis),
+    advisory: '본 리포트는 가계부 데이터와 AI 분석 결과를 바탕으로 작성된 참고용 분석 자료입니다. 거래 생성, 수정, 삭제, 분류 변경은 사용자의 확인 후 별도로 수행해야 합니다.',
+  }
+})
+function buildAiPrintTitle(analysis) {
+  const range = analysis ? formatAiRange(analysis.from, analysis.to).replace(/\s+/g, '') : 'preview'
+  const id = analysis?.historyId ?? 'draft'
+  return `TravelLedger_AI_Report_${id}_${range}`
+}
+function buildAiReportId(analysis) {
+  const id = analysis?.historyId ?? 'draft'
+  const generated = String(analysis?.generatedAt || new Date().toISOString()).replace(/[^0-9]/g, '').slice(0, 14)
+  return `TL-AI-${id}-${generated || 'preview'}`
+}
 function formatAiMode(mode) {
   return mode === 'COMPARISON' ? '비교 분석' : '기간 분석'
 }
@@ -354,6 +394,185 @@ function formatAiCreatedAt(value) {
   return String(value).replace('T', ' ').slice(0, 16)
 }
 
+function aiNumericAmount(value) {
+  const amount = Number(value ?? 0)
+  return Number.isFinite(amount) ? amount : 0
+}
+
+function formatAiShare(amount, total) {
+  const safeTotal = aiNumericAmount(total)
+  if (safeTotal <= 0) {
+    return '비중 산정 불가'
+  }
+  return `${((aiNumericAmount(amount) / safeTotal) * 100).toFixed(1)}%`
+}
+
+function formatAiCategoryBreakdownLabel(item) {
+  if (!item) {
+    return '미분류'
+  }
+  return item.detailName ? `${item.groupName || '미분류'} / ${item.detailName}` : (item.groupName || '미분류')
+}
+
+function formatAiPaymentBreakdownLabel(item) {
+  if (!item) {
+    return '결제수단 미확인'
+  }
+  return item.kind ? `${item.paymentMethodName || '결제수단 미확인'} (${item.kind})` : (item.paymentMethodName || '결제수단 미확인')
+}
+
+function topAiBreakdownItems(items, labeler, limit = 3) {
+  const source = Array.isArray(items) ? items : []
+  const total = source.reduce((sum, item) => sum + aiNumericAmount(item?.totalAmount), 0)
+  return source
+    .map((item) => ({
+      label: labeler(item),
+      amount: aiNumericAmount(item?.totalAmount),
+      entryCount: Number(item?.entryCount ?? 0),
+      share: formatAiShare(item?.totalAmount, total),
+    }))
+    .filter((item) => item.amount > 0)
+    .sort((a, b) => b.amount - a.amount)
+    .slice(0, limit)
+    .map((item) => `${item.label}: ${props.formatCurrency(item.amount)} · ${item.entryCount}건 · ${item.share}`)
+}
+
+function buildAiFocusMetricCards() {
+  const focusCards = []
+  const topCategory = splitAiTopBreakdownItem(aiTopCategoryItems.value[0])
+  const topPayment = splitAiTopBreakdownItem(aiTopPaymentItems.value[0])
+  if (topCategory) {
+    focusCards.push({ label: '최대 지출 축', value: topCategory.label, meta: topCategory.meta || '상위 카테고리' })
+  }
+  if (topPayment) {
+    focusCards.push({ label: '주요 결제수단', value: topPayment.label, meta: topPayment.meta || '상위 결제수단' })
+  }
+  return focusCards
+}
+
+function splitAiTopBreakdownItem(value) {
+  const text = sanitizeAiText(value)
+  if (!text) {
+    return null
+  }
+  const separator = text.indexOf(': ')
+  if (separator < 0) {
+    return { label: text, meta: '' }
+  }
+  return {
+    label: text.slice(0, separator),
+    meta: text.slice(separator + 2),
+  }
+}
+
+function buildAiDataEvidence(analysis) {
+  if (!analysis) {
+    return []
+  }
+  const items = [
+    `분석 데이터: ${formatAiRange(analysis.from, analysis.to)} 기간의 지출 ${analysis.expenseEntryCount ?? 0}건`,
+    `총 지출 ${props.formatCurrency(analysis.totalExpense)} / 일 평균 ${props.formatCurrency(analysis.averageDailyExpense)}`,
+    analysis.compareFrom ? `비교 기준: ${formatAiRange(analysis.compareFrom, analysis.compareTo)} 기간 총 지출 ${props.formatCurrency(analysis.compareTotalExpense)}` : '비교 기준: 단일 기간 분석',
+  ]
+  if (aiTopCategoryItems.value.length) {
+    items.push(`상위 지출 카테고리: ${aiTopCategoryItems.value.join(' / ')}`)
+  }
+  if (aiTopPaymentItems.value.length) {
+    items.push(`주요 결제수단: ${aiTopPaymentItems.value.join(' / ')}`)
+  }
+  return dedupeAiItems(items)
+}
+
+function buildAiActionPriorities(analysis) {
+  if (!analysis) {
+    return []
+  }
+  const improvementItems = safeAiReportList('improvementActions', analysis.recommendations)
+  const priorities = []
+  if (aiAbnormalReportItems.value.length) {
+    priorities.push(`1순위 점검: 이상/주의 지출 후보를 먼저 확인하세요. ${aiAbnormalReportItems.value[0]}`)
+  }
+  if (aiFixedReportItems.value.length) {
+    priorities.push(`2순위 관리: 반복/구독성 지출을 예산 항목으로 분리하세요. ${aiFixedReportItems.value[0]}`)
+  }
+  if (aiTopCategoryItems.value.length) {
+    priorities.push(`3순위 조정: 가장 큰 지출 축은 ${aiTopCategoryItems.value[0]}입니다. 해당 카테고리의 필요/충동 지출을 구분하세요.`)
+  }
+  improvementItems.slice(0, 3).forEach((item, index) => {
+    priorities.push(`AI 권고 ${index + 1}: ${item}`)
+  })
+  return dedupeAiItems(priorities)
+}
+
+function buildAiReportConclusion(analysis) {
+  if (!analysis) {
+    return []
+  }
+  const totalExpense = aiNumericAmount(analysis.totalExpense)
+  const compareExpense = aiNumericAmount(analysis.compareTotalExpense)
+  const delta = totalExpense - compareExpense
+  const deltaText = analysis.compareFrom
+    ? `비교 기간 대비 ${props.formatCurrency(Math.abs(delta))} ${delta > 0 ? '증가' : delta < 0 ? '감소' : '변동 없음'}했습니다.`
+    : '비교 기간이 없어 단일 기간 기준으로 해석합니다.'
+  const concentrationText = aiTopCategoryItems.value[0]
+    ? `소비 집중도는 ${aiTopCategoryItems.value[0]} 항목에서 가장 높게 나타납니다.`
+    : '상위 카테고리 집중도는 산정할 수 없습니다.'
+  const controlText = aiAbnormalReportItems.value.length || aiFixedReportItems.value.length
+    ? '우선 관리는 이상 지출 후보와 반복/구독성 지출 점검에 두는 것이 적절합니다.'
+    : '뚜렷한 이상 신호가 부족하므로 예산 대비 추세 확인을 우선합니다.'
+  return dedupeAiItems([
+    `종합 판단: ${formatAiRange(analysis.from, analysis.to)} 기간의 지출 규모는 ${props.formatCurrency(totalExpense)}이며, ${deltaText}`,
+    concentrationText,
+    controlText,
+  ])
+}
+
+function buildAiReviewChecklist(analysis) {
+  if (!analysis) {
+    return []
+  }
+  return dedupeAiItems([
+    '상위 지출 카테고리의 필수/선택 지출을 분리해 확인합니다.',
+    '반복 결제와 구독성 지출은 다음 달 예산에 별도 항목으로 반영합니다.',
+    '이상/주의 지출 후보는 중복 결제, 일회성 고액 지출, 결제수단 오류 여부를 확인합니다.',
+    'AI 권고를 가계부에 반영하기 전 거래 원본과 영수증 또는 결제 내역을 대조합니다.',
+  ])
+}
+
+function buildAiQualityNotes(analysis) {
+  if (!analysis) {
+    return []
+  }
+  const entryCount = Number(analysis.expenseEntryCount ?? 0)
+  return dedupeAiItems([
+    entryCount > 0 ? `분석 신뢰 기준: ${entryCount}건의 지출 데이터가 포함되었습니다.` : '분석 신뢰 기준: 지출 데이터가 부족해 해석 범위가 제한됩니다.',
+    aiTopCategoryItems.value.length ? '카테고리 집중도는 저장된 카테고리 집계 금액을 기준으로 산출했습니다.' : '카테고리 집계가 부족해 지출 집중도 판단은 제한됩니다.',
+    aiTopPaymentItems.value.length ? '결제수단 분석은 저장된 결제수단별 금액과 건수를 기준으로 산출했습니다.' : '결제수단 집계가 부족해 결제 패턴 판단은 제한됩니다.',
+    analysis.compareFrom ? '비교 분석은 선택된 비교 기간의 총 지출과 현재 기간 총 지출을 단순 비교합니다.' : '비교 기간이 없어 증가/감소 평가는 제공하지 않습니다.',
+    hasStaleAiResult.value ? '주의: 새 분석 실패로 이전 저장 결과가 표시되어 최신 거래와 차이가 있을 수 있습니다.' : '',
+  ])
+}
+
+function buildAiReportOutline() {
+  return [
+    'Executive Summary: 분석 기간의 핵심 지표와 주요 판단을 빠르게 확인합니다.',
+    '데이터 근거 및 우선 조치: 실제 집계값과 먼저 확인할 실행 항목을 확인합니다.',
+    '종합 판단 및 체크리스트: 결론과 사용자가 직접 검토할 항목을 확인합니다.',
+    '방법론 및 품질 한계: 계산 기준, 비교 기준, 해석 제한 사항을 확인합니다.',
+    '상세 분석: 보고서, 결제방법, 소비 패턴, 고정/이상 지출, 비교 분석을 세부적으로 검토합니다.',
+  ]
+}
+function buildAiMethodology(analysis) {
+  if (!analysis) {
+    return []
+  }
+  return dedupeAiItems([
+    '금액 지표는 저장된 거래 데이터의 지출 합계, 일 평균, 결제수단별 합계, 카테고리별 합계를 기준으로 계산했습니다.',
+    '상위 지출 카테고리와 주요 결제수단은 금액 기준으로 내림차순 정렬한 뒤 상위 항목을 표시합니다.',
+    analysis.compareFrom ? '증감 평가는 현재 분석 기간과 사용자가 선택한 비교 기간의 총 지출 차이를 기준으로 합니다.' : '비교 기간이 없는 경우 증감 평가는 참고 지표로만 표시합니다.',
+    'AI 문장은 계산된 집계값과 저장된 분석 결과를 해석한 설명이며, 원본 거래 데이터의 자동 변경에는 사용하지 않습니다.',
+  ])
+}
 function safeAiReportList(fieldName, fallbackItems = []) {
   const reportItems = safeAiList(aiReport.value?.[fieldName])
   if (reportItems.length) {
@@ -496,6 +715,50 @@ function createAiSection(key, title, paragraphs = [], items = [], wide = false) 
   }
 }
 
+const AI_PRINT_SECTION_LIMITS = {
+  summary: { paragraphs: 2, items: 0, paragraphLength: 260, itemLength: 180 },
+  overview: { paragraphs: 2, items: 3, paragraphLength: 240, itemLength: 180 },
+  report: { paragraphs: 5, items: 0, paragraphLength: 420, itemLength: 220 },
+  payment: { paragraphs: 1, items: 5, paragraphLength: 240, itemLength: 220 },
+  notable: { paragraphs: 1, items: 6, paragraphLength: 220, itemLength: 220 },
+  fixed: { paragraphs: 1, items: 6, paragraphLength: 220, itemLength: 220 },
+  abnormal: { paragraphs: 1, items: 6, paragraphLength: 220, itemLength: 220 },
+  comparison: { paragraphs: 1, items: 5, paragraphLength: 220, itemLength: 220 },
+}
+
+function compactAiPrintableSection(section) {
+  const limits = AI_PRINT_SECTION_LIMITS[section.key] ?? { paragraphs: 3, items: 5, paragraphLength: 260, itemLength: 220 }
+  return {
+    ...section,
+    paragraphs: limitAiPrintEntries(section.paragraphs, limits.paragraphs, limits.paragraphLength),
+    items: limitAiPrintEntries(section.items, limits.items, limits.itemLength),
+  }
+}
+
+function limitAiPrintEntries(items, limit, maxLength) {
+  if (limit <= 0) {
+    return []
+  }
+  const source = dedupeAiItems(items ?? [])
+  const selected = source.slice(0, limit).map((item) => shortenAiPrintText(item, maxLength))
+  const remaining = source.length - selected.length
+  if (remaining > 0) {
+    selected.push(`추가 ${remaining}개 항목은 화면 상세 결과에서 확인하세요.`)
+  }
+  return selected
+}
+
+function shortenAiPrintText(text, maxLength) {
+  const value = sanitizeAiText(text)
+  if (!value || value.length <= maxLength) {
+    return value
+  }
+  const slice = value.slice(0, maxLength)
+  const boundary = Math.max(slice.lastIndexOf('.'), slice.lastIndexOf('다'), slice.lastIndexOf('요'), slice.lastIndexOf(';'))
+  const end = boundary > Math.floor(maxLength * 0.6) ? boundary + 1 : maxLength
+  return `${slice.slice(0, end).trim()}...`
+}
+
 function buildAiPresentationSections() {
   if (!props.aiAnalysis) {
     return []
@@ -503,6 +766,8 @@ function buildAiPresentationSections() {
   const analysis = props.aiAnalysis
   const report = aiReport.value
   const improvementItems = safeAiReportList('improvementActions', analysis.recommendations)
+  const dataEvidence = buildAiDataEvidence(analysis)
+  const actionPriorities = buildAiActionPriorities(analysis)
   return [
     createAiSection('summary', '핵심 요약', [aiReportKeySummary.value || `${formatAiRange(analysis.from, analysis.to)} 기간의 소비 분석입니다.`], [], true),
     createAiSection('overview', '지출 개요', [
@@ -512,16 +777,16 @@ function buildAiPresentationSections() {
       `${analysis.expenseEntryCount ?? 0}건의 지출 내역을 기준으로 계산했습니다.`,
       analysis.compareFrom ? `비교 기간은 ${formatAiRange(analysis.compareFrom, analysis.compareTo)}입니다.` : '비교 기간은 설정되지 않았습니다.',
     ]),
+    createAiSection('evidence', '데이터 근거', ['아래 항목은 AI 문장이 아니라 저장된 가계부 집계값으로 산출한 핵심 근거입니다.'], dataEvidence, true),
     createAiSection('report', '보고서', [aiReportFullReport.value || 'AI 구조화 보고서가 부족해 핵심 지표 중심으로 표시합니다.'], [], true),
-    createAiSection('payment', '결제방법', [report.topPaymentMethod || safeAiList(analysis.paymentInsights)[0] || '결제수단 분석은 상위 결제수단과 지출 비중을 기준으로 확인하세요.'], safeAiList(analysis.paymentInsights)),
+    createAiSection('payment', '결제방법', [report.topPaymentMethod || safeAiList(analysis.paymentInsights)[0] || '결제수단 분석은 상위 결제수단과 지출 비중을 기준으로 확인하세요.'], aiTopPaymentItems.value.length ? aiTopPaymentItems.value : safeAiList(analysis.paymentInsights)),
     createAiSection('notable', '눈에 띄는 소비', [], safeAiReportList('notableSpending', analysis.highlights)),
     createAiSection('fixed', '고정/구독 지출', [], aiFixedReportItems.value.length ? aiFixedReportItems.value : ['반복 지출 후보가 부족하거나 아직 확인되지 않았습니다.']),
     createAiSection('abnormal', '이상/주의 지출', [], aiAbnormalReportItems.value.length ? aiAbnormalReportItems.value : ['확인이 필요한 이상 지출 후보가 뚜렷하게 반환되지 않았습니다.']),
-    createAiSection('actions', '개선사항', [], improvementItems.length ? improvementItems : ['예산 조정이나 분류 변경은 사용자가 직접 확인한 뒤 반영하세요.']),
+    createAiSection('actions', '우선 조치 권고', ['지출 규모, 반복성, 이상 신호를 기준으로 먼저 확인할 항목입니다.'], actionPriorities.length ? actionPriorities : (improvementItems.length ? improvementItems : ['예산 조정이나 분류 변경은 사용자가 직접 확인한 뒤 반영하세요.']), true),
     createAiSection('comparison', '비교 분석', [], aiComparisonReportItems.value.length ? aiComparisonReportItems.value : [aiIsComparisonResult.value ? '비교 분석 결과가 부족합니다.' : '비교 분석 모드가 아니므로 비교 항목은 생략됩니다.']),
   ]
 }
-
 function openAiResultModal() {
   if (aiHasResult.value) {
     aiResultModalOpen.value = true
@@ -547,6 +812,188 @@ function escapePrintHtml(value) {
     .replace(/'/g, '&#39;')
 }
 
+function buildAiExecutiveSummary(analysis) {
+  if (!analysis) {
+    return []
+  }
+  const delta = Number(aiCompareDelta.value || 0)
+  const deltaDirection = delta > 0 ? '증가' : delta < 0 ? '감소' : '변동 없음'
+  const keySummary = splitAiParagraphs(aiReportKeySummary.value)[0]
+  return dedupeAiItems([
+    `${formatAiRange(analysis.from, analysis.to)} 기간의 ${analysis.expenseEntryCount ?? 0}건 지출 내역을 기준으로 분석했습니다.`,
+    `총 지출은 ${props.formatCurrency(analysis.totalExpense)}, 일 평균 지출은 ${props.formatCurrency(analysis.averageDailyExpense)}입니다.`,
+    analysis.compareFrom ? `비교 기간(${formatAiRange(analysis.compareFrom, analysis.compareTo)}) 대비 지출 변화는 ${props.formatCurrency(Math.abs(delta))} ${deltaDirection}입니다.` : '',
+    aiTopCategoryItems.value[0] ? `최대 지출 축: ${aiTopCategoryItems.value[0]}` : '',
+    aiTopPaymentItems.value[0] ? `주요 결제수단: ${aiTopPaymentItems.value[0]}` : '',
+    keySummary ? `핵심 판단: ${keySummary}` : '',
+    'AI 권고는 자동 반영되지 않으며, 예산 조정이나 거래 분류 변경은 사용자가 직접 확인한 뒤 적용해야 합니다.',
+  ])
+}
+
+function renderPrintParagraphs(paragraphs, emptyText = '') {
+  const items = dedupeAiItems(paragraphs ?? [])
+  if (!items.length) {
+    return emptyText ? `<p class="muted">${escapePrintHtml(emptyText)}</p>` : ''
+  }
+  return items.map((paragraph) => `<p>${escapePrintHtml(paragraph)}</p>`).join('')
+}
+
+function renderPrintList(items, className = '') {
+  const values = dedupeAiItems(items ?? [])
+  if (!values.length) {
+    return ''
+  }
+  const classAttribute = className ? ` class="${escapePrintHtml(className)}"` : ''
+  return `<ul${classAttribute}>${values.map((item) => `<li>${escapePrintHtml(item)}</li>`).join('')}</ul>`
+}
+
+function renderPrintSection(section, index) {
+  const items = renderPrintList(section.items)
+  const paragraphs = renderPrintParagraphs(section.paragraphs, items ? '' : '반환된 분석 내용이 부족해 기본 지표 중심으로 확인해 주세요.')
+  const wideClass = section.wide ? ' report-section--wide' : ''
+  return `
+    <section class="report-section${wideClass}">
+      <div class="section-kicker">${String(index + 1).padStart(2, '0')}</div>
+      <h2>${escapePrintHtml(section.title)}</h2>
+      ${paragraphs}
+      ${items}
+    </section>
+  `
+}
+
+function renderPrintMeta(report) {
+  const rows = [
+    ['리포트 ID', report.reportId],
+    ['문서 구분', '개인 재무 AI 분석 참고 보고서'],
+    ['주의 등급', report.stale ? '이전 결과 기준' : '정상 생성 결과'],
+    ['분석 유형', report.mode],
+    ['분석 단위', report.period],
+    ['분석 기간', report.range],
+    ['비교 기간', report.comparisonRange || '비교 없음'],
+    ['AI 모델', report.model],
+    ['결과 생성', report.analysisGeneratedAt || '-'],
+    ['PDF 생성', report.generatedAt],
+  ]
+  return rows.map(([label, value]) => `
+    <div class="meta-row">
+      <span>${escapePrintHtml(label)}</span>
+      <strong>${escapePrintHtml(value)}</strong>
+    </div>
+  `).join('')
+}
+
+function renderPrintCards(cards) {
+  return cards.map((card) => `
+    <article class="metric-card">
+      <span>${escapePrintHtml(card.label)}</span>
+      <strong>${escapePrintHtml(card.value)}</strong>
+      <small>${escapePrintHtml(card.meta)}</small>
+    </article>
+  `).join('')
+}
+
+function buildAiPrintHtml(report) {
+  const cards = renderPrintCards(report.cards)
+  const sections = report.sections.map(renderPrintSection).join('')
+  const executiveSummary = renderPrintList(report.executiveSummary, 'executive-list')
+  const reportOutline = renderPrintList(report.reportOutline, 'outline-list')
+  const dataEvidence = renderPrintList(report.dataEvidence, 'evidence-list')
+  const actionPriorities = renderPrintList(report.actionPriorities, 'priority-list')
+  const conclusion = renderPrintList(report.conclusion, 'conclusion-list')
+  const reviewChecklist = renderPrintList(report.reviewChecklist, 'checklist')
+  const qualityNotes = renderPrintList(report.qualityNotes, 'quality-list')
+  const methodology = renderPrintList(report.methodology, 'methodology-list')
+  const staleNotice = report.stale ? '<div class="notice notice--warning">새 분석 요청 실패로 이전 저장 결과를 기준으로 출력했습니다.</div>' : ''
+  const styles = `
+    @page { size: A4; margin: 16mm 14mm; }
+    * { box-sizing: border-box; }
+    body { margin: 0; color: #172033; font-family: 'Malgun Gothic', 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif; line-height: 1.68; background: #ffffff; }
+    .cover { padding: 22px 0 18px; border-bottom: 3px solid #1d4ed8; }
+    .eyebrow { color: #1d4ed8; font-size: 11px; font-weight: 900; letter-spacing: 0.18em; text-transform: uppercase; }
+    h1 { margin: 8px 0 6px; font-size: 30px; letter-spacing: -0.04em; color: #0f172a; }
+    .subtitle { margin: 0; color: #475569; font-size: 14px; }
+    .report-id-badge { display: inline-flex; margin-top: 12px; padding: 5px 10px; border-radius: 999px; background: #e0f2fe; color: #075985; font-size: 11px; font-weight: 900; letter-spacing: 0.04em; }
+    .report-meta { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 18px; margin: 18px 0 0; padding: 16px; border: 1px solid #dbe4f0; border-radius: 16px; background: #f8fafc; }
+    .meta-row { display: flex; justify-content: space-between; gap: 12px; font-size: 12px; border-bottom: 1px dashed #dbe4f0; padding-bottom: 6px; }
+    .meta-row span { color: #64748b; }
+    .meta-row strong { color: #0f172a; text-align: right; }
+    .notice { margin: 16px 0 0; padding: 12px 14px; border-radius: 14px; font-size: 12px; font-weight: 800; }
+    .notice--warning { color: #92400e; background: #fffbeb; border: 1px solid #f59e0b; }
+    .notice--info { color: #1e3a8a; background: #eff6ff; border: 1px solid #bfdbfe; }
+    .metric-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin: 18px 0; }
+    .metric-card { min-height: 94px; padding: 14px; border: 1px solid #dbe4f0; border-radius: 16px; background: linear-gradient(180deg, #ffffff, #f8fafc); break-inside: avoid; }
+    .metric-card span, .metric-card small { display: block; color: #64748b; font-size: 12px; }
+    .metric-card strong { display: block; margin: 5px 0; color: #0f172a; font-size: 20px; letter-spacing: -0.03em; }
+    .executive { margin: 18px 0; padding: 18px; border-radius: 18px; background: #102a56; color: #ffffff; break-inside: avoid; }
+    .executive h2 { margin: 0 0 10px; color: #ffffff; border: 0; padding: 0; }
+    .executive-list { margin: 0; padding-left: 20px; }
+    .executive-list li { margin: 6px 0; }
+    .outline-box { margin: 18px 0; padding: 16px 18px; border-radius: 18px; border: 1px solid #dbe4f0; background: #ffffff; break-inside: avoid; }
+    .outline-box h2 { margin-top: 0; }
+    .insight-strip { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin: 18px 0; }
+    .insight-box { padding: 16px; border-radius: 18px; border: 1px solid #cbd5e1; background: #f8fafc; break-inside: avoid; }
+    .insight-box h2 { margin-top: 0; }
+    .conclusion-box { margin: 18px 0; padding: 18px; border-radius: 18px; border: 1px solid #bfdbfe; background: #eff6ff; break-inside: avoid; }
+    .conclusion-box h2 { margin-top: 0; }
+    .checklist-box { margin: 18px 0; padding: 18px; border-radius: 18px; border: 1px solid #d1d5db; background: #ffffff; break-inside: avoid; }
+    .checklist-box h2 { margin-top: 0; }
+    .quality-box { margin: 18px 0; padding: 18px; border-radius: 18px; border: 1px solid #fde68a; background: #fffbeb; break-inside: avoid; }
+    .quality-box h2 { margin-top: 0; }
+    .methodology-box { margin: 18px 0; padding: 18px; border-radius: 18px; border: 1px solid #c7d2fe; background: #eef2ff; break-inside: avoid; }
+    .methodology-box h2 { margin-top: 0; }
+    .detail-heading { margin: 18px 0 10px; padding-bottom: 6px; border-bottom: 2px solid #dbe4f0; font-size: 18px; }
+    .section-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin-top: 12px; }
+    .report-section { position: relative; padding: 18px; border: 1px solid #dbe4f0; border-radius: 18px; break-inside: avoid; background: #ffffff; }
+    .report-section--wide { grid-column: 1 / -1; }
+    .section-kicker { color: #2563eb; font-size: 11px; font-weight: 900; letter-spacing: 0.16em; }
+    h2 { margin: 4px 0 10px; color: #0f172a; font-size: 17px; letter-spacing: -0.03em; }
+    p { margin: 0 0 8px; font-size: 13px; color: #334155; }
+    ul { margin: 8px 0 0; padding-left: 19px; }
+    li { margin: 6px 0; font-size: 13px; color: #334155; }
+    .muted { color: #94a3b8; }
+    .appendix { margin-top: 18px; padding-top: 14px; border-top: 1px solid #dbe4f0; font-size: 11px; color: #64748b; }
+    @media print { .metric-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .insight-strip, .section-grid { grid-template-columns: 1fr; } .cover { padding-top: 0; } }
+  `
+  return `<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <title>${escapePrintHtml(report.printTitle || report.title)}</title>
+  <style>${styles}</style>
+</head>
+<body>
+  <header class="cover">
+    <div class="eyebrow">TravelLedger AI Analysis</div>
+    <h1>${escapePrintHtml(report.title)}</h1>
+    <p class="subtitle">${escapePrintHtml(report.subtitle)}</p>
+    <div class="report-id-badge">Report ID: ${escapePrintHtml(report.reportId)}</div>
+    <div class="report-meta">${renderPrintMeta(report)}</div>
+    ${staleNotice}
+  </header>
+  <main>
+    <section class="executive">
+      <h2>Executive Summary</h2>
+      ${executiveSummary || '<p>핵심 요약을 구성할 수 있는 분석 결과가 부족합니다.</p>'}
+    </section>
+    <section class="outline-box"><h2>리포트 구성</h2>${reportOutline || '<p class="muted">리포트 구성 정보를 표시할 수 없습니다.</p>'}</section>
+    <section class="metric-grid" aria-label="핵심 지표">${cards}</section>
+    <section class="insight-strip" aria-label="데이터 근거와 우선 조치">
+      <article class="insight-box"><h2>데이터 근거</h2>${dataEvidence || '<p class="muted">집계 근거가 부족합니다.</p>'}</article>
+      <article class="insight-box"><h2>우선 조치 권고</h2>${actionPriorities || '<p class="muted">우선 조치 항목이 부족합니다.</p>'}</article>
+    </section>
+    <section class="conclusion-box"><h2>종합 판단</h2>${conclusion || '<p class="muted">종합 판단을 구성할 수 있는 데이터가 부족합니다.</p>'}</section>
+    <section class="checklist-box"><h2>검토 체크리스트</h2>${reviewChecklist || '<p class="muted">검토 항목이 부족합니다.</p>'}</section>
+    <section class="methodology-box"><h2>분석 방법론</h2>${methodology || '<p class="muted">분석 방법론 정보를 구성할 수 없습니다.</p>'}</section>
+    <section class="quality-box"><h2>데이터 품질 및 해석 한계</h2>${qualityNotes || '<p class="muted">데이터 품질 정보를 구성할 수 없습니다.</p>'}</section>
+    <h2 class="detail-heading">상세 분석</h2>
+    <div class="section-grid">${sections}</div>
+    <div class="notice notice--info">${escapePrintHtml(report.advisory)}</div>
+    <footer class="appendix">Report ID: ${escapePrintHtml(report.reportId)} · 본 문서는 브라우저 인쇄 기능으로 생성되었습니다. 금액과 건수는 저장된 가계부 데이터 기준이며, AI 문장은 참고용 분석입니다.</footer>
+  </main>
+</body>
+</html>`
+}
+
 function printAiAnalysisReport() {
   if (!aiHasResult.value || typeof window === 'undefined') {
     return
@@ -556,161 +1003,11 @@ function printAiAnalysisReport() {
   if (!printWindow) {
     return
   }
-  const cards = report.cards.map((card) => `<article><span>${escapePrintHtml(card.label)}</span><strong>${escapePrintHtml(card.value)}</strong><small>${escapePrintHtml(card.meta)}</small></article>`).join('')
-  const sections = report.sections.map((section) => `
-    <section>
-      <h2>${escapePrintHtml(section.title)}</h2>
-      ${section.paragraphs.map((paragraph) => `<p>${escapePrintHtml(paragraph)}</p>`).join('')}
-      ${section.items.length ? `<ul>${section.items.map((item) => `<li>${escapePrintHtml(item)}</li>`).join('')}</ul>` : ''}
-    </section>
-  `).join('')
-  printWindow.document.write(`<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>${escapePrintHtml(report.title)}</title><style>
-    body{font-family:'Malgun Gothic','Apple SD Gothic Neo',sans-serif;margin:32px;color:#111827;line-height:1.7}h1{font-size:28px;margin:0 0 6px}h2{font-size:18px;margin:28px 0 8px;border-bottom:1px solid #e5e7eb;padding-bottom:6px}.meta{color:#6b7280;margin-bottom:24px}.cards{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:22px 0}.cards article{border:1px solid #e5e7eb;border-radius:14px;padding:14px}.cards span,.cards small{display:block;color:#6b7280}.cards strong{display:block;font-size:20px;margin:6px 0}section{break-inside:avoid}li{margin:5px 0}@media print{body{margin:18mm}.cards{grid-template-columns:repeat(2,1fr)}}
-  
-.ai-analysis-stale-note {
-  border: 1px solid rgba(245, 158, 11, 0.5);
-  background: rgba(245, 158, 11, 0.12);
-  color: #f8d28a;
-  border-radius: 16px;
-  padding: 12px 14px;
-  font-weight: 800;
-}
-
-.ai-result-toolbar {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  justify-content: flex-end;
-  margin: 14px 0 18px;
-}
-
-.ai-presentation-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16px;
-}
-
-.ai-result-section--presentation p {
-  margin: 0 0 10px;
-  line-height: 1.75;
-}
-
-.ai-result-section--presentation ul {
-  margin: 8px 0 0;
-  padding-left: 20px;
-}
-
-.ai-result-section--presentation li {
-  margin: 8px 0;
-  line-height: 1.7;
-}
-
-.ai-result-modal {
-  position: fixed;
-  inset: 0;
-  z-index: 1000;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 24px;
-  background: rgba(6, 12, 24, 0.72);
-  backdrop-filter: blur(10px);
-}
-
-.ai-result-modal__dialog {
-  width: min(1120px, 100%);
-  max-height: 80vh;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  border: 1px solid rgba(148, 163, 184, 0.35);
-  border-radius: 28px;
-  background: linear-gradient(145deg, #1f2937, #111827);
-  box-shadow: 0 28px 80px rgba(0, 0, 0, 0.45);
-  color: #e5e7eb;
-}
-
-.ai-result-modal__header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 18px;
-  padding: 24px;
-  border-bottom: 1px solid rgba(148, 163, 184, 0.22);
-}
-
-.ai-result-modal__header h2 {
-  margin: 4px 0 6px;
-}
-
-.ai-result-modal__header p {
-  margin: 0;
-  color: #aeb8c8;
-}
-
-.ai-result-modal__eyebrow {
-  color: #60a5fa;
-  font-size: 0.78rem;
-  font-weight: 900;
-  letter-spacing: 0.14em;
-}
-
-.ai-result-modal__actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  justify-content: flex-end;
-}
-
-.ai-result-modal__body {
-  overflow: auto;
-  padding: 24px;
-}
-
-.ai-analysis-advisory--modal,
-.ai-result-card-grid--modal {
-  margin-bottom: 18px;
-}
-
-@media (max-width: 760px) {
-  .ai-presentation-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .ai-result-modal {
-    align-items: stretch;
-    padding: 10px;
-  }
-
-  .ai-result-modal__dialog {
-    max-height: calc(100vh - 20px);
-    border-radius: 22px;
-  }
-
-  .ai-result-modal__header {
-    flex-direction: column;
-    padding: 18px;
-  }
-
-  .ai-result-modal__actions {
-    width: 100%;
-    justify-content: stretch;
-  }
-
-  .ai-result-modal__actions .button {
-    flex: 1 1 140px;
-  }
-
-  .ai-result-modal__body {
-    padding: 18px;
-  }
-}
-</style></head><body><h1>${escapePrintHtml(report.title)}</h1><div class="meta">${escapePrintHtml(report.range)} · ${escapePrintHtml(report.generatedAt)}</div><div class="cards">${cards}</div>${sections}</body></html>`)
+  printWindow.document.write(buildAiPrintHtml(report))
   printWindow.document.close()
   printWindow.focus()
   setTimeout(() => printWindow.print(), 250)
 }
-
 watch(() => props.aiAnalysis, (next, previous) => {
   if (next && next !== previous) {
     openAiResultModal()
@@ -995,6 +1292,146 @@ watch(
 )
 </script>
 
+<style scoped>
+.ai-analysis-stale-note {
+  border: 1px solid rgba(245, 158, 11, 0.5);
+  background: rgba(245, 158, 11, 0.12);
+  color: #f8d28a;
+  border-radius: 16px;
+  padding: 12px 14px;
+  font-weight: 800;
+}
+
+.ai-result-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-end;
+  margin: 14px 0 18px;
+}
+
+.ai-presentation-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.ai-result-section--presentation p {
+  margin: 0 0 10px;
+  line-height: 1.75;
+}
+
+.ai-result-section--presentation ul {
+  margin: 8px 0 0;
+  padding-left: 20px;
+}
+
+.ai-result-section--presentation li {
+  margin: 8px 0;
+  line-height: 1.7;
+}
+
+.ai-result-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(6, 12, 24, 0.72);
+  backdrop-filter: blur(10px);
+}
+
+.ai-result-modal__dialog {
+  width: min(1120px, 100%);
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  border-radius: 28px;
+  background: linear-gradient(145deg, #1f2937, #111827);
+  box-shadow: 0 28px 80px rgba(0, 0, 0, 0.45);
+  color: #e5e7eb;
+}
+
+.ai-result-modal__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 24px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.22);
+}
+
+.ai-result-modal__header h2 {
+  margin: 4px 0 6px;
+}
+
+.ai-result-modal__header p {
+  margin: 0;
+  color: #aeb8c8;
+}
+
+.ai-result-modal__eyebrow {
+  color: #60a5fa;
+  font-size: 0.78rem;
+  font-weight: 900;
+  letter-spacing: 0.14em;
+}
+
+.ai-result-modal__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+.ai-result-modal__body {
+  overflow: auto;
+  padding: 24px;
+}
+
+.ai-analysis-advisory--modal,
+.ai-result-card-grid--modal {
+  margin-bottom: 18px;
+}
+
+@media (max-width: 760px) {
+  .ai-presentation-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .ai-result-modal {
+    align-items: stretch;
+    padding: 10px;
+  }
+
+  .ai-result-modal__dialog {
+    max-height: calc(100vh - 20px);
+    border-radius: 22px;
+  }
+
+  .ai-result-modal__header {
+    flex-direction: column;
+    padding: 18px;
+  }
+
+  .ai-result-modal__actions {
+    width: 100%;
+    justify-content: stretch;
+  }
+
+  .ai-result-modal__actions .button {
+    flex: 1 1 140px;
+  }
+
+  .ai-result-modal__body {
+    padding: 18px;
+  }
+}
+</style>
 <template>
   <div class="workspace-stack">
     <section class="panel toss-control-panel">

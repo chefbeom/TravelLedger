@@ -40,6 +40,10 @@ Assert-ContainsAll 'docs/data_portability.md' $contract @(
     'manifest/drive-items.json',
     'manifest/travel-media.json',
     'manifest/family-media.json',
+    'PRIVACY_EXPORT_DONE',
+    'Data export ready',
+    'dateRangeLabel',
+    'ledger_csv_and_safe_manifests',
     'object storage paths',
     'presigned URLs',
     'raw latitude/longitude',
@@ -49,7 +53,9 @@ Assert-ContainsAll 'docs/data_portability.md' $contract @(
     'ProfileWorkspace.vue',
     'privacy-data-export-card',
     'privacy-export-secondary-pin',
-    'manifest-only archive explanation'
+    'manifest-only archive explanation',
+    'PRIVACY_EXPORT_DONE',
+    'Export notification'
 )
 
 Assert-ContainsAll 'PrivacyController' $controller @(
@@ -72,13 +78,24 @@ Assert-ContainsAll 'DataPortabilityExportService' $service @(
     'manifest/drive-items.json',
     'manifest/travel-media.json',
     'manifest/family-media.json',
+    'PRIVACY_EXPORT_DONE',
+    'Data export ready',
+    'dateRangeLabel',
+    'ledger_csv_and_safe_manifests',
     'excludedFields',
     'storagePath',
     'publicLink',
     'temporaryDownloadLink',
     'hasGpsMetadata',
     'createPasswordProtectedZip',
-    'setEncryptFiles(true)'
+    'setEncryptFiles(true)',
+    'private final UserNotificationService userNotificationService',
+    'notifyPrivacyExportCompleted(userId, from, to)',
+    'userNotificationService.createSystemNotification(',
+    '"PRIVACY_EXPORT_DONE"',
+    'privacyExportMetadata(from, to)',
+    'dateRangeLabel(from, to)',
+    'ledger_csv_and_safe_manifests'
 )
 
 Assert-ContainsAll 'DataPortabilityExportServiceTest' $serviceTest @(
@@ -88,7 +105,11 @@ Assert-ContainsAll 'DataPortabilityExportServiceTest' $serviceTest @(
     'zipFile.isEncrypted()',
     'manifest/drive-items.json',
     'manifest/travel-media.json',
-    'manifest/family-media.json'
+    'manifest/family-media.json',
+    'PRIVACY_EXPORT_DONE',
+    'Data export ready',
+    'dateRangeLabel',
+    'ledger_csv_and_safe_manifests'
 )
 
 Assert-ContainsAll 'PrivacyControllerIntegrationTest' $integrationTest @(

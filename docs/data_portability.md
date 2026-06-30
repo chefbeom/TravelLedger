@@ -2,7 +2,7 @@
 
 Updated: 2026-06-30
 
-This document is the release contract for user data portability. The current backend export provides a password-protected archive containing ledger CSV data, export metadata, and safe file/media manifests. The archive is created only for the authenticated user and only after a recently verified secondary PIN session.
+This document is the release contract for user data portability. The current backend export provides a password-protected archive containing ledger CSV data, export metadata, and safe file/media manifests. The archive is created only for the authenticated user and only after a recently verified secondary PIN session. Successful exports create a bounded `PRIVACY_EXPORT_DONE` notification without file names, archive contents, secondary PIN values, tokens, or storage paths.
 
 ## Implemented API
 
@@ -58,22 +58,23 @@ Binary photos and files are intentionally not included in the current archive. T
 | Membership privacy | Future household, family, travel, and shared-budget exports must include only data visible to the current user. |
 | Binary archive boundary | Binary file/photo export must be async, bounded, encrypted, expiring, and separately rehearsed before it can be part of the release path. |
 | Import/export standardization | Future standard CSV/Excel import and export schemas must preserve owner scope, manifest redaction, and validation before database writes. |
+| Export notification | Completion notifications must store only status, date range label, and archive scope; they must not include file names, archive contents, secondary PIN values, tokens, public links, presigned URLs, storage paths, prompts, provider responses, raw GPS, or owner identity fields. |
 
 ## Current implementation anchors
 
 | Area | Anchor |
 | --- | --- |
 | API controller | `PrivacyController.exportUserDataArchive` maps `POST /api/privacy/data-export`, reads `@AuthenticationPrincipal AppUserPrincipal currentUser`, verifies the secondary PIN session, and returns `application/zip` as an attachment. |
-| Export service | `DataPortabilityExportService.exportUserDataArchive` verifies the secondary PIN, exports ledger CSV, fetches owner-scoped drive/travel/family manifest data, and creates the encrypted ZIP. |
+| Export service | `DataPortabilityExportService.exportUserDataArchive` verifies the secondary PIN, exports ledger CSV, fetches owner-scoped drive/travel/family manifest data, creates the encrypted ZIP, and emits `PRIVACY_EXPORT_DONE` with bounded metadata. |
 | Manifest safety | `buildDriveManifest`, `buildTravelMediaManifest`, `buildFamilyMediaManifest`, and `excludedFields` document the safe manifest boundary. |
-| Service tests | `DataPortabilityExportServiceTest.exportUserDataArchiveBuildsEncryptedArchiveWithoutOperationalSecrets` checks encrypted archive contents and secret exclusion. |
+| Service tests | `DataPortabilityExportServiceTest.exportUserDataArchiveBuildsEncryptedArchiveWithoutOperationalSecrets` checks encrypted archive contents, secret exclusion, and the bounded privacy-export notification. |
 | Ordering tests | `DataPortabilityExportServiceTest.exportUserDataArchiveVerifiesSecondaryPinBeforeExportingLedgerData` keeps secondary PIN verification before ledger export. |
 | API tests | PrivacyControllerIntegrationTest.dataExportRequiresAuthenticationCsrfAndVerifiedSecondaryPin keeps auth, CSRF, secondary PIN, and ZIP response behavior covered. |
-| Frontend privacy action | rontend/src/components/ProfileWorkspace.vue exposes the privacy panel, date range fields, secondary-PIN export dialog, manifest-only archive explanation, live status messages, and stable data-testid anchors such as privacy-data-export-card, privacy-export-open, and privacy-export-secondary-pin. |
+| Frontend privacy action | `frontend/src/components/ProfileWorkspace.vue` exposes the privacy panel, date range fields, secondary-PIN export dialog, manifest-only archive explanation, live status messages, and stable data-testid anchors such as privacy-data-export-card, privacy-export-open, and privacy-export-secondary-pin. |
 
 ## Release gate
 
-The `data-portability-contract` CI job must pass before promoting changes that affect privacy controls, data export, ledger CSV generation, media manifests, storage links, secondary PIN handling, or future import/export jobs.
+The `data-portability-contract` CI job must pass before promoting changes that affect privacy controls, data export, ledger CSV generation, media manifests, storage links, secondary PIN handling, export notifications, or future import/export jobs.
 
 A release is not ready if any of these are true:
 
@@ -81,7 +82,7 @@ A release is not ready if any of these are true:
 | --- | --- |
 | Export can be requested for another user. | Breaks owner scope. |
 | Export does not require authentication, CSRF, or secondary PIN. | Creates direct account-data exfiltration risk. |
-| Archive includes operational secrets, storage paths, public tokens, presigned URLs, raw GPS, AI prompts, or provider responses. | Leaks infrastructure and sensitive derived data. |
+| Archive or export notification includes operational secrets, storage paths, public tokens, presigned URLs, raw GPS, AI prompts, provider responses, file names, archive contents, or secondary PIN values. | Leaks infrastructure and sensitive derived data. |
 | Binary media export is synchronous or unbounded. | Creates timeout, memory, cost, and partial-export risk. |
 | Standard CSV/Excel import bypasses validation or owner scope. | Can corrupt or cross-contaminate user data. |
 
@@ -106,6 +107,6 @@ A release is not ready if any of these are true:
 - Export rejects requests without a verified secondary PIN session.
 - Export includes only the authenticated user's ledger entries and visible media manifest rows.
 - Export date range filters ledger CSV rows.
-- Export metadata contains no secrets, signed URLs, presigned URLs, public tokens, raw GPS, prompts, provider responses, or storage internals.
+- Export metadata and `PRIVACY_EXPORT_DONE` notification metadata contain no secrets, signed URLs, presigned URLs, public tokens, raw GPS, prompts, provider responses, file names, archive contents, secondary PIN values, or storage internals.
 - Async binary archive job enforces size limits, expiration, retry behavior, and encrypted output before release.
 - Standard CSV/Excel import/export preserves owner scope and validates every row before writes.

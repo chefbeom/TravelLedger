@@ -68,6 +68,9 @@ class DataPortabilityExportServiceTest {
     @Mock
     private FamilyMediaAssetRepository familyMediaAssetRepository;
 
+    @Mock
+    private UserNotificationService userNotificationService;
+
     @TempDir
     private Path tempDir;
 
@@ -84,6 +87,7 @@ class DataPortabilityExportServiceTest {
                 driveItemRepository,
                 travelMediaAssetRepository,
                 familyMediaAssetRepository,
+                userNotificationService,
                 objectMapper
         );
     }
@@ -191,6 +195,14 @@ class DataPortabilityExportServiceTest {
         verify(driveItemRepository).findAllByOwner_IdOrderByLastModifiedAtDesc(USER_ID);
         verify(travelMediaAssetRepository).findAllByPlanOwnerIdOrderByUploadedAtDescIdDesc(USER_ID);
         verify(familyMediaAssetRepository).findAllByOwnerIdOrderByUploadedAtDescIdDesc(USER_ID);
+        verify(userNotificationService).createSystemNotification(
+                USER_ID,
+                "PRIVACY_EXPORT_DONE",
+                "Data export ready",
+                "Your protected data export archive is ready. Keep the downloaded file and secondary PIN private.",
+                "/profile?privacy=1",
+                "{\"status\":\"ready\",\"dateRangeLabel\":\"2026-01-01..2026-01-31\",\"archiveScope\":\"ledger_csv_and_safe_manifests\"}"
+        );
     }
 
     @Test
@@ -213,7 +225,8 @@ class DataPortabilityExportServiceTest {
                 ledgerAiAnalysisHistoryRepository,
                 driveItemRepository,
                 travelMediaAssetRepository,
-                familyMediaAssetRepository
+                familyMediaAssetRepository,
+                userNotificationService
         );
     }
 

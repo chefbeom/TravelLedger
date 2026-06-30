@@ -17,6 +17,8 @@ $ocrServicePath = 'backend/src/main/java/com/playdata/calen/ledger/ocr/LedgerOcr
 $ocrServiceTestPath = 'backend/src/test/java/com/playdata/calen/ledger/ocr/LedgerOcrServiceTest.java'
 $backupSchedulerPath = 'backend/src/main/java/com/playdata/calen/account/service/DataOpsBackupScheduler.java'
 $backupSchedulerTestPath = 'backend/src/test/java/com/playdata/calen/account/service/DataOpsBackupSchedulerTest.java'
+$dataPortabilityServicePath = 'backend/src/main/java/com/playdata/calen/account/service/DataPortabilityExportService.java'
+$dataPortabilityServiceTestPath = 'backend/src/test/java/com/playdata/calen/account/service/DataPortabilityExportServiceTest.java'
 $budgetWarningSchedulerPath = 'backend/src/main/java/com/playdata/calen/travel/service/TravelBudgetWarningNotificationScheduler.java'
 $budgetWarningSchedulerTestPath = 'backend/src/test/java/com/playdata/calen/travel/service/TravelBudgetWarningNotificationSchedulerTest.java'
 $travelBudgetItemRepositoryPath = 'backend/src/main/java/com/playdata/calen/travel/repository/TravelBudgetItemRepository.java'
@@ -29,7 +31,7 @@ $privacyServiceTestPath = 'backend/src/test/java/com/playdata/calen/account/Priv
 
 $findings = [System.Collections.Generic.List[string]]::new()
 
-foreach ($path in @($contractPath, $securityChecklistPath, $roadmapPath, $ciPath, $controllerPath, $servicePath, $repositoryPath, $serviceTestPath, $frontendPath, $appPath, $apiPath, $ocrServicePath, $ocrServiceTestPath, $backupSchedulerPath, $backupSchedulerTestPath, $budgetWarningSchedulerPath, $budgetWarningSchedulerTestPath, $travelBudgetItemRepositoryPath, $travelExpenseRecordRepositoryPath, $travelReminderSchedulerPath, $travelReminderSchedulerTestPath, $travelPlanRepositoryPath, $privacyServicePath, $privacyServiceTestPath)) {
+foreach ($path in @($contractPath, $securityChecklistPath, $roadmapPath, $ciPath, $controllerPath, $servicePath, $repositoryPath, $serviceTestPath, $frontendPath, $appPath, $apiPath, $ocrServicePath, $ocrServiceTestPath, $backupSchedulerPath, $backupSchedulerTestPath, $dataPortabilityServicePath, $dataPortabilityServiceTestPath, $budgetWarningSchedulerPath, $budgetWarningSchedulerTestPath, $travelBudgetItemRepositoryPath, $travelExpenseRecordRepositoryPath, $travelReminderSchedulerPath, $travelReminderSchedulerTestPath, $travelPlanRepositoryPath, $privacyServicePath, $privacyServiceTestPath)) {
     if (-not (Test-Path -LiteralPath $path)) {
         $findings.Add("Missing notification center contract input: $path") | Out-Null
     }
@@ -52,6 +54,8 @@ $style = Get-Content -LiteralPath $stylePath -Raw
     $ocrServiceTest = Get-Content -LiteralPath $ocrServiceTestPath -Raw
     $backupScheduler = Get-Content -LiteralPath $backupSchedulerPath -Raw
     $backupSchedulerTest = Get-Content -LiteralPath $backupSchedulerTestPath -Raw
+    $dataPortabilityService = Get-Content -LiteralPath $dataPortabilityServicePath -Raw
+    $dataPortabilityServiceTest = Get-Content -LiteralPath $dataPortabilityServiceTestPath -Raw
     $budgetWarningScheduler = Get-Content -LiteralPath $budgetWarningSchedulerPath -Raw
     $budgetWarningSchedulerTest = Get-Content -LiteralPath $budgetWarningSchedulerTestPath -Raw
     $travelBudgetItemRepository = Get-Content -LiteralPath $travelBudgetItemRepositoryPath -Raw
@@ -68,7 +72,7 @@ $style = Get-Content -LiteralPath $stylePath -Raw
         }
     }
 
-    foreach ($phrase in @('owner-scoped', 'redacts sensitive metadata fields', 'Budget, travel, household, and privacy producers', 'target URLs are relative application paths', 'API keys, signed URLs, raw prompts, provider responses, backup credentials, secondary PINs, public tokens, or storage paths', 'notification-center-contract')) {
+    foreach ($phrase in @('owner-scoped', 'redacts sensitive metadata fields', 'Household producers remain in the queue', 'target URLs are relative application paths', 'API keys, signed URLs, raw prompts, provider responses, backup credentials, secondary PINs, public tokens, or storage paths', 'notification-center-contract')) {
         if (-not $contract.Contains($phrase)) {
             $findings.Add("Notification center contract missing required phrase: $phrase") | Out-Null
         }
@@ -122,7 +126,7 @@ $style = Get-Content -LiteralPath $stylePath -Raw
     }
 
 
-    foreach ($snippet in @('Ledger OCR failed', 'Scheduled database backup failed', 'Scheduled MinIO backup failed', 'Privacy cleanup completed', 'Travel starts tomorrow', 'Travel budget threshold exceeded', 'BACKUP_FAILED', 'AI_OR_OCR_FAILED', 'PRIVACY_ACTION_DONE', 'TRAVEL_REMINDER', 'BUDGET_WARNING')) {
+    foreach ($snippet in @('Ledger OCR failed', 'Scheduled database backup failed', 'Scheduled MinIO backup failed', 'Privacy cleanup completed', 'Privacy export completed', 'Travel starts tomorrow', 'Travel budget threshold exceeded', 'BACKUP_FAILED', 'AI_OR_OCR_FAILED', 'PRIVACY_ACTION_DONE', 'PRIVACY_EXPORT_DONE', 'TRAVEL_REMINDER', 'BUDGET_WARNING')) {
         if (-not $contract.Contains($snippet)) {
             $findings.Add("Notification center contract missing implemented producer snippet: $snippet") | Out-Null
         }
@@ -153,6 +157,17 @@ $style = Get-Content -LiteralPath $stylePath -Raw
     }
 
 
+    foreach ($snippet in @('private final UserNotificationService userNotificationService', 'notifyPrivacyExportCompleted(userId, from, to)', '"PRIVACY_EXPORT_DONE"', '"Data export ready"', '"/profile?privacy=1"', 'privacyExportMetadata(from, to)', 'dateRangeLabel(from, to)', 'ledger_csv_and_safe_manifests')) {
+        if (-not $dataPortabilityService.Contains($snippet)) {
+            $findings.Add("DataPortabilityExportService missing privacy export notification snippet: $snippet") | Out-Null
+        }
+    }
+
+    foreach ($snippet in @('PRIVACY_EXPORT_DONE', 'Data export ready', 'dateRangeLabel', 'ledger_csv_and_safe_manifests', 'userNotificationService')) {
+        if (-not $dataPortabilityServiceTest.Contains($snippet)) {
+            $findings.Add("DataPortabilityExportServiceTest missing privacy export notification evidence snippet: $snippet") | Out-Null
+        }
+    }
     foreach ($snippet in @('existsByOwnerIdAndTypeAndTargetUrlAndReadAtIsNull')) {
         if (-not $repository.Contains($snippet)) {
             $findings.Add("UserNotificationRepository missing budget duplicate-suppression snippet: $snippet") | Out-Null

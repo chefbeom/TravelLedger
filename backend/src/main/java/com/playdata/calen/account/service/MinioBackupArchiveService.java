@@ -57,7 +57,10 @@ public class MinioBackupArchiveService {
                     safeBucketName(),
                     0L,
                     0L,
-                    "MinIO 설정이 준비되지 않았습니다."
+                    0L,
+                    0L,
+                    0D,
+                    "MinIO is not configured."
             );
         }
 
@@ -66,13 +69,20 @@ public class MinioBackupArchiveService {
 
         try {
             MinioObjectSummary summary = scanObjects();
-            minioStorageUsedBytes.set(summary.totalSizeBytes());
+            long capacityBytes = Math.max(minioProperties.getStorageCapacityBytes(), 0L);
+            long usedBytes = summary.totalSizeBytes();
+            long remainingBytes = capacityBytes > 0L ? Math.max(capacityBytes - usedBytes, 0L) : 0L;
+            double usedPercent = capacityBytes > 0L ? Math.min(100D, (usedBytes * 100D) / capacityBytes) : 0D;
+            minioStorageUsedBytes.set(usedBytes);
             minioStorageObjectCount.set(summary.objectCount());
             return new AdminMinioStorageSummaryResponse(
                     true,
                     safeBucketName(),
                     summary.objectCount(),
-                    summary.totalSizeBytes(),
+                    usedBytes,
+                    capacityBytes,
+                    remainingBytes,
+                    usedPercent,
                     null
             );
         } catch (Exception exception) {
@@ -81,14 +91,17 @@ public class MinioBackupArchiveService {
                     safeBucketName(),
                     0L,
                     0L,
-                    "MinIO 저장소 상태를 불러오지 못했습니다."
+                    Math.max(minioProperties.getStorageCapacityBytes(), 0L),
+                    0L,
+                    0D,
+                    "Failed to load MinIO storage status."
             );
         }
     }
 
     public void writeBackupArchive(Path outputFile) {
         if (!isConfigured()) {
-            throw new BadRequestException("MinIO 백업 설정이 준비되지 않았습니다.");
+            throw new BadRequestException("Unsafe MinIO object path was found.");
         }
 
         try (ZipOutputStream zipOutputStream = new ZipOutputStream(java.nio.file.Files.newOutputStream(outputFile))) {
@@ -121,9 +134,9 @@ public class MinioBackupArchiveService {
         } catch (BadRequestException exception) {
             throw exception;
         } catch (UncheckedIOException exception) {
-            throw new BadRequestException("MinIO 백업 파일을 생성하지 못했습니다.");
+            throw new BadRequestException("Unsafe MinIO object path was found.");
         } catch (Exception exception) {
-            throw new BadRequestException("MinIO 백업을 생성하지 못했습니다.");
+            throw new BadRequestException("Unsafe MinIO object path was found.");
         }
     }
 
@@ -211,7 +224,7 @@ public class MinioBackupArchiveService {
         Path path = Path.of(normalized).normalize();
         String sanitized = path.toString().replace('\\', '/');
         if (sanitized.startsWith("..")) {
-            throw new BadRequestException("안전하지 않은 MinIO 객체 경로가 포함되어 있습니다.");
+            throw new BadRequestException("Unsafe MinIO object path was found.");
         }
 
         return sanitized;

@@ -2,7 +2,10 @@ package com.playdata.calen.account.web;
 
 import com.playdata.calen.account.dto.AdminDashboardResponse;
 import com.playdata.calen.account.dto.AdminDataManagementResponse;
+import com.playdata.calen.account.dto.AdminDataStorageControlUpdateRequest;
 import com.playdata.calen.account.dto.AdminLoginAuditPageResponse;
+import com.playdata.calen.account.dto.AdminAiControlUpdateRequest;
+import com.playdata.calen.account.dto.AdminOpsControlResponse;
 import com.playdata.calen.account.dto.SupportInquiryArchiveRequest;
 import com.playdata.calen.account.dto.SupportInquiryReplyRequest;
 import com.playdata.calen.account.dto.SupportInquiryResponse;
@@ -14,6 +17,7 @@ import com.playdata.calen.account.security.AppUserPrincipal;
 import com.playdata.calen.account.service.AdminDataManagementService;
 import com.playdata.calen.account.service.AdminService;
 import com.playdata.calen.account.service.AdminPageAccessService;
+import com.playdata.calen.account.service.AdminOpsControlService;
 import com.playdata.calen.account.service.LoginAuditLogService;
 import com.playdata.calen.account.service.SupportInquiryService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -50,6 +54,7 @@ public class AdminController {
     private final AdminService adminService;
     private final AdminDataManagementService adminDataManagementService;
     private final AdminPageAccessService adminPageAccessService;
+    private final AdminOpsControlService adminOpsControlService;
     private final SupportInquiryService supportInquiryService;
     private final LoginAuditLogService loginAuditLogService;
 
@@ -57,12 +62,14 @@ public class AdminController {
             AdminService adminService,
             AdminDataManagementService adminDataManagementService,
             AdminPageAccessService adminPageAccessService,
+            AdminOpsControlService adminOpsControlService,
             SupportInquiryService supportInquiryService,
             LoginAuditLogService loginAuditLogService
     ) {
         this.adminService = adminService;
         this.adminDataManagementService = adminDataManagementService;
         this.adminPageAccessService = adminPageAccessService;
+        this.adminOpsControlService = adminOpsControlService;
         this.supportInquiryService = supportInquiryService;
         this.loginAuditLogService = loginAuditLogService;
     }
@@ -83,6 +90,33 @@ public class AdminController {
     @GetMapping("/data-management")
     public AdminDataManagementResponse getDataManagement() {
         return adminDataManagementService.getSnapshot();
+    }
+
+    @GetMapping("/ops-control")
+    public AdminOpsControlResponse getOpsControl() {
+        return adminOpsControlService.getSnapshot();
+    }
+
+    @PatchMapping("/ops-control/ai")
+    public AdminOpsControlResponse updateAiControl(
+            @AuthenticationPrincipal AppUserPrincipal currentUser,
+            HttpServletRequest httpRequest,
+            @RequestBody AdminAiControlUpdateRequest request
+    ) {
+        AdminOpsControlResponse response = adminOpsControlService.updateAi(request);
+        recordAdminAction(currentUser, httpRequest, "AI_CONTROL_UPDATE:enabled=" + response.ai().enabled() + ",provider=" + safeDetail(response.ai().provider()) + ",model=" + safeDetail(response.ai().model()));
+        return response;
+    }
+
+    @PatchMapping("/ops-control/data-storage")
+    public AdminOpsControlResponse updateDataStorageControl(
+            @AuthenticationPrincipal AppUserPrincipal currentUser,
+            HttpServletRequest httpRequest,
+            @RequestBody AdminDataStorageControlUpdateRequest request
+    ) {
+        AdminOpsControlResponse response = adminOpsControlService.updateDataStorage(request);
+        recordAdminAction(currentUser, httpRequest, "DATA_STORAGE_CONTROL_UPDATE:capacityBytes=" + response.dataServer().minioStorage().capacityBytes());
+        return response;
     }
 
     @PostMapping("/data-management/backup")

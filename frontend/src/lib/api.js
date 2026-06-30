@@ -149,7 +149,7 @@ async function request(path, options = {}) {
   })
 
   if (!response.ok) {
-    let message = '??ë¸ìŠ™???ï¦«ëš³?£ç‘—???æ¿¡ãƒ«ì¸?ç¹????–êµ£?ç¯€?†ì¾¸? ?ê¾©ë£‡è£•ë‰‘????ê³?????ˆíŽ².'
+    let message = 'ì„œë²„ ìš”ì²­ì„ ì²˜ë¦¬í•˜ì§€ ëª»í–ˆìŠµë‹ˆë‹¤.'
     let details = null
 
     try {
@@ -210,6 +210,23 @@ export function fetchAdminDataManagement() {
   return request('/admin/data-management')
 }
 
+export function fetchAdminOpsControl() {
+  return request('/admin/ops-control')
+}
+
+export function updateAdminAiControl(payload) {
+  return request('/admin/ops-control/ai', {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  })
+}
+export function updateAdminDataStorageControl(payload) {
+  return request('/admin/ops-control/data-storage', {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  })
+}
+
 export function createAdminDataBackup() {
   return request('/admin/data-management/backup', {
     method: 'POST',
@@ -233,7 +250,7 @@ export async function downloadAdminDataBackup() {
   })
 
   if (!response.ok) {
-    let message = '??ë¸ìŠ™???ï¦«ëš³?£ç‘—???æ¿¡ãƒ«ì¸?ç¹????–êµ£?ç¯€?†ì¾¸? ?ê¾©ë£‡è£•ë‰‘????ê³?????ˆíŽ².'
+    let message = 'ì„œë²„ ìš”ì²­ì„ ì²˜ë¦¬í•˜ì§€ ëª»í–ˆìŠµë‹ˆë‹¤.'
 
     try {
       const body = await response.json()
@@ -389,6 +406,16 @@ export function fetchLedgerAiAnalysisStatus() {
   return request('/statistics/ai-analysis/status')
 }
 
+function withLedgerAiClientRequestId(payload = {}) {
+  const source = payload && typeof payload === 'object' ? payload : {}
+  const requestId = typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+    ? crypto.randomUUID()
+    : `ledger-ai-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
+  return {
+    ...source,
+    clientRequestId: source.clientRequestId || requestId,
+  }
+}
 export function analyzeLedgerSpending(payload) {
   return request('/statistics/ai-analysis', {
     method: 'POST',
@@ -470,7 +497,7 @@ async function downloadFile(path, fallbackFileName, options = {}) {
   })
 
   if (!response.ok) {
-    let message = '??ë¸ìŠ™???ï¦«ëš³?£ç‘—???æ¿¡ãƒ«ì¸?ç¹????–êµ£?ç¯€?†ì¾¸? ?ê¾©ë£‡è£•ë‰‘????ê³?????ˆíŽ².'
+    let message = 'ì„œë²„ ìš”ì²­ì„ ì²˜ë¦¬í•˜ì§€ ëª»í–ˆìŠµë‹ˆë‹¤.'
 
     try {
       const body = await response.json()
@@ -894,7 +921,7 @@ async function uploadPresignedTravelMediaFile(target, file) {
   })
 
   if (!response.ok) {
-    throw new Error('?????????Å??ç¹????–êµ£?ç¯€?†ì¾¸? ?ê¾©ë£‡è£•ë‰‘????ê³?????ˆíŽ².')
+    throw new Error('File upload failed.')
   }
 }
 
@@ -913,10 +940,10 @@ function uploadPresignedTravelMediaFileWithProgress(target, file) {
         return
       }
 
-      reject(new Error('?????????Å??ç¹????–êµ£?ç¯€?†ì¾¸? ?ê¾©ë£‡è£•ë‰‘????ê³?????ˆíŽ².'))
+      reject(new Error('File upload failed.'))
     }
-    xhr.onerror = () => reject(new Error('?????????Å??ç¹????–êµ£?ç¯€?†ì¾¸? ?ê¾©ë£‡è£•ë‰‘????ê³?????ˆíŽ².'))
-    xhr.onabort = () => reject(new Error('?????????Å??? ???ì³???ï§???????'))
+    xhr.onerror = () => reject(new Error('File upload failed.'))
+    xhr.onabort = () => reject(new Error('File upload failed.'))
     xhr.send(file)
   })
 }
@@ -1096,7 +1123,7 @@ async function uploadTravelMediaInternal({
 
   const oversizedFile = selectedFiles.find((file) => Number(file?.size || 0) > MAX_TRAVEL_MEDIA_FILE_SIZE)
   if (oversizedFile) {
-    const error = new Error('??ç­???å£?? 15MB ??è¢â‘¤??????¾Ñ…ì¶¯?????Å????«ì­‘ ?????ê³?????ˆíŽ².')
+    const error = new Error('File upload failed.')
     error.status = 400
     error.code = 'travel-media-too-large'
     throw error
@@ -1322,10 +1349,10 @@ export function uploadDriveFileWithProgress(target, file, onProgress) {
         resolve()
         return
       }
-      reject(new Error('?????????Å??ç¹????–êµ£?ç¯€?†ì¾¸? ?ê¾©ë£‡è£•ë‰‘????ê³?????ˆíŽ².'))
+      reject(new Error('File upload failed.'))
     }
-    xhr.onerror = () => reject(new Error('?????????Å??ç¹????–êµ£?ç¯€?†ì¾¸? ?ê¾©ë£‡è£•ë‰‘????ê³?????ˆíŽ².'))
-    xhr.onabort = () => reject(new Error('?????????Å??? ???ì³???ï§???????'))
+    xhr.onerror = () => reject(new Error('File upload failed.'))
+    xhr.onabort = () => reject(new Error('File upload failed.'))
     xhr.send(file)
   })
 }

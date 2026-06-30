@@ -1550,6 +1550,24 @@ button {
   gap: 8px;
 }
 
+.field--inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  width: fit-content;
+  color: var(--text-soft);
+}
+
+.field--inline input[type='checkbox'] {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: var(--brand);
+}
+
+.field--inline .field__label {
+  color: inherit;
+}
 .field--full {
   grid-column: 1 / -1;
 }

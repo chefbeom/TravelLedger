@@ -206,32 +206,31 @@ public class LedgerAiAnalysisProperties {
 
     public String statusMessage() {
         if (!enabled) {
-            return "AI 遺꾩꽍 湲곕뒫??鍮꾪솢?깊솕?섏뼱 ?덉뒿?덈떎. APP_LEDGER_AI_ENABLED=true濡??ㅼ젙?섏꽭??";
+            return "AI analysis is disabled. Set APP_LEDGER_AI_ENABLED=true to enable it.";
         }
         if (provider() == LedgerAiProvider.LMSTUDIO) {
             if (!hasText(lmStudioBaseUrl)) {
-                return "LM Studio ?곌껐 ?뺣낫媛 遺議깊빀?덈떎. APP_LEDGER_AI_LMSTUDIO_BASE_URL???ㅼ젙?섏꽭??";
+                return "LM Studio URL is missing. Set APP_LEDGER_AI_LMSTUDIO_BASE_URL.";
             }
             if (!isProviderUrlAllowed(lmStudioBaseUrl)) {
-                return "LM Studio ?몄뒪?멸? AI provider allowlist???놁뒿?덈떎. APP_LEDGER_AI_ALLOWED_PROVIDER_HOSTS瑜??뺤씤?섏꽭??";
+                return "LM Studio host is not in the AI provider allowlist. Check APP_LEDGER_AI_ALLOWED_PROVIDER_HOSTS.";
             }
             if (isLmStudioModelAuto()) {
-                return "LM Studio AI 遺꾩꽍 以鍮꾧? ?꾨즺?섏뿀?듬땲?? 紐⑤뜽? /api/v1/models?먯꽌 ?먮룞 ?좏깮?⑸땲??";
+                return "LM Studio AI analysis is ready. The model will be selected from the models endpoint.";
             }
-            return "LM Studio AI 遺꾩꽍 以鍮꾧? ?꾨즺?섏뿀?듬땲??";
+            return "LM Studio AI analysis is ready.";
         }
         if (!hasText(workflowUrl)) {
-            return "n8n ?뱁썒 URL???ㅼ젙?섏? ?딆븯?듬땲?? APP_LEDGER_AI_WORKFLOW_URL???ㅼ젙?섏꽭??";
+            return "n8n webhook URL is missing. Set APP_LEDGER_AI_WORKFLOW_URL.";
         }
         if (!isProviderUrlAllowed(workflowUrl)) {
-            return "n8n ?뱁썒 ?몄뒪?멸? AI provider allowlist???놁뒿?덈떎. APP_LEDGER_AI_ALLOWED_PROVIDER_HOSTS瑜??뺤씤?섏꽭??";
+            return "n8n webhook host is not in the AI provider allowlist. Check APP_LEDGER_AI_ALLOWED_PROVIDER_HOSTS.";
         }
         if (!isApiKeyConfigured()) {
-            return "n8n ?뱁썒 API ?ㅺ? 鍮꾩뼱 ?덉뒿?덈떎. 留덉?留??ㅼ젙 ?④퀎?먯꽌 APP_LEDGER_AI_API_KEY瑜??낅젰?????덉뒿?덈떎.";
+            return "n8n webhook API key is missing. Set APP_LEDGER_AI_API_KEY.";
         }
-        return "n8n AI 遺꾩꽍 以鍮꾧? ?꾨즺?섏뿀?듬땲??";
+        return "n8n AI analysis is ready.";
     }
-
     public boolean isProviderUrlAllowed(String value) {
         if (!enforceProviderUrlAllowlist) {
             return true;

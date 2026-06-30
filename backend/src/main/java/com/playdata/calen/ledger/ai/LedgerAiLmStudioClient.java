@@ -65,10 +65,10 @@ public class LedgerAiLmStudioClient {
             throw exception;
         } catch (RestClientException exception) {
             recordExternalWorkflow(workflowTimer, "ledger-ai-lmstudio", "failure");
-            throw new BadRequestException("LM Studio AI 서버에 연결할 수 없습니다. APP_LEDGER_AI_LMSTUDIO_BASE_URL과 LM Studio 서버 상태를 확인하세요.");
+            throw new BadRequestException("Cannot connect to LM Studio AI server. Check APP_LEDGER_AI_LMSTUDIO_BASE_URL and the LM Studio server status.");
         } catch (JsonProcessingException exception) {
             recordExternalWorkflow(workflowTimer, "ledger-ai-lmstudio", "failure");
-            throw new BadRequestException("LM Studio AI 응답을 JSON 분석 결과로 해석하지 못했습니다. 모델이 JSON only 형식으로 응답하는지 확인하세요.");
+            throw new BadRequestException("LM Studio AI response could not be parsed as JSON analysis. Check that the model returns JSON only.");
         }
     }
 
@@ -109,7 +109,7 @@ public class LedgerAiLmStudioClient {
 
     private String extractFirstModelId(String responseBody) {
         if (!hasText(responseBody)) {
-            throw new BadRequestException("LM Studio 모델 목록이 비어 있습니다. LM Studio에서 모델을 먼저 로드하세요.");
+            throw new BadRequestException("LM Studio model list is empty. Load a model in LM Studio first.");
         }
         try {
             JsonNode root = objectMapper.readTree(responseBody);
@@ -133,10 +133,10 @@ public class LedgerAiLmStudioClient {
                 return rootArrayModel;
             }
         } catch (JsonProcessingException exception) {
-            throw new BadRequestException("LM Studio 모델 목록을 JSON으로 해석하지 못했습니다.");
+            throw new BadRequestException("LM Studio model list could not be parsed as JSON.");
         }
 
-        throw new BadRequestException("LM Studio에 로드된 모델을 찾지 못했습니다. LM Studio에서 모델을 로드한 뒤 다시 시도하세요.");
+        throw new BadRequestException("No loaded LM Studio model was found. Load a model and try again.");
     }
 
     private String firstModelIdFromArray(JsonNode node) {
@@ -171,7 +171,7 @@ public class LedgerAiLmStudioClient {
 
     private String extractAssistantContent(String responseBody) throws JsonProcessingException {
         if (!hasText(responseBody)) {
-            throw new BadRequestException("LM Studio AI 서버가 빈 응답을 반환했습니다.");
+            throw new BadRequestException("LM Studio AI server returned an empty response.");
         }
         JsonNode root = objectMapper.readTree(responseBody);
         if (root.isTextual() && hasText(root.asText())) {
@@ -221,7 +221,7 @@ public class LedgerAiLmStudioClient {
         if (root.has("report") || root.has("summary") || root.has("highlights") || root.has("recommendations")) {
             return responseBody;
         }
-        throw new BadRequestException("LM Studio AI 응답에서 분석 JSON 본문을 찾지 못했습니다.");
+        throw new BadRequestException("LM Studio AI response could not be parsed as JSON analysis. Check that the model returns JSON only.");
     }
 
     private String extractJsonObject(String content) {
@@ -236,7 +236,7 @@ public class LedgerAiLmStudioClient {
         int start = trimmed.indexOf('{');
         int end = trimmed.lastIndexOf('}');
         if (start < 0 || end <= start) {
-            throw new BadRequestException("LM Studio AI 응답에 JSON 객체가 없습니다.");
+            throw new BadRequestException("LM Studio AI response could not be parsed as JSON analysis. Check that the model returns JSON only.");
         }
         return trimmed.substring(start, end + 1);
     }

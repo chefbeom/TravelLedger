@@ -5,6 +5,9 @@ public record AdminMinioStorageSummaryResponse(
         String bucketName,
         long objectCount,
         long totalSizeBytes,
+        long capacityBytes,
+        long remainingBytes,
+        double usedPercent,
         String errorMessage
 ) {
 }

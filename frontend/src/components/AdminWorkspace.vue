@@ -13,11 +13,14 @@ import {
   fetchAdminDataManagement,
   fetchAdminDashboard,
   fetchAdminLoginAuditLogs,
+  fetchAdminOpsControl,
   fetchAdminSupportInquiries,
   replyAdminSupportInquiry,
   restoreAdminDataBackup,
   restoreAdminUploadedBackup,
   unlockBlockedIp,
+  updateAdminAiControl,
+  updateAdminDataStorageControl,
   updateAdminUserActive,
   verifyAdminAccess,
 } from '../lib/api'
@@ -55,6 +58,38 @@ const state = reactive({
   restoreUploadFile: null,
   dataManagementError: '',
   dataManagement: null,
+  opsControl: null,
+  opsControlError: '',
+  opsControlMessage: '',
+  opsControlCheckedAt: '',
+  loadingOpsControl: false,
+  savingAiControl: false,
+  savingDataControl: false,
+  aiControlForm: {
+    enabled: false,
+    provider: 'lmstudio',
+    model: '',
+    workflowUrl: '',
+    apiKeyHeader: 'X-TravelLedger-AI-Key',
+    apiKey: '',
+    clearApiKey: false,
+    lmStudioBaseUrl: '',
+    lmStudioChatPath: '/v1/chat/completions',
+    lmStudioModelsPath: '/v1/models',
+    lmStudioApiKey: '',
+    clearLmStudioApiKey: false,
+    apiKeyConfigured: false,
+    lmStudioApiKeyConfigured: false,
+    temperature: 0.2,
+    maxTokens: 2048,
+    connectTimeoutSeconds: 3,
+    readTimeoutSeconds: 120,
+    enforceProviderUrlAllowlist: true,
+    allowedProviderHosts: '',
+  },
+  dataControlForm: {
+    minioStorageCapacityGb: 0,
+  },
   recentLoginLogs: [],
   loginLogPage: { content: [], page: 0, size: 10, totalElements: 0, totalPages: 0 },
   blockedIps: [],
@@ -204,6 +239,8 @@ function handleAdminAccessRequired(error) {
   state.adminAccessError = '관리자 페이지 접근을 위해 3차 비밀번호를 입력해 주세요.'
   state.loading = false
   state.loadingLoginLogs = false
+  state.loadingOpsControl = false
+  state.savingAiControl = false
   return true
 }
 
@@ -267,6 +304,7 @@ async function loadDashboard() {
     state.userPage = clampPage(state.userPage, state.users.length)
     state.invitePage = clampPage(state.invitePage, state.recentInvites.length)
     syncSelection()
+    await loadOpsControl()
   } catch (error) {
     if (!handleAdminAccessRequired(error)) {
       state.errorMessage = error.message
@@ -462,6 +500,163 @@ function formatFileSize(bytes) {
   return `${value >= 10 || unitIndex === 0 ? value.toFixed(0) : value.toFixed(1)} ${units[unitIndex]}`
 }
 
+function syncAiControlForm(control = state.opsControl) {
+  const ai = control?.ai
+  if (!ai) {
+    return
+  }
+  state.aiControlForm = {
+    enabled: Boolean(ai.enabled),
+    provider: ai.provider || 'lmstudio',
+    model: ai.model || '',
+    workflowUrl: ai.workflowUrl || '',
+    apiKeyHeader: ai.apiKeyHeader || 'X-TravelLedger-AI-Key',
+    apiKey: '',
+    clearApiKey: false,
+    lmStudioBaseUrl: ai.lmStudioBaseUrl || '',
+    lmStudioChatPath: ai.lmStudioChatPath || '/v1/chat/completions',
+    lmStudioModelsPath: ai.lmStudioModelsPath || '/v1/models',
+    lmStudioApiKey: '',
+    clearLmStudioApiKey: false,
+    apiKeyConfigured: Boolean(ai.apiKeyConfigured),
+    lmStudioApiKeyConfigured: Boolean(ai.lmStudioApiKeyConfigured),
+    temperature: Number(ai.temperature ?? 0.2),
+    maxTokens: Number(ai.maxTokens ?? 2048),
+    connectTimeoutSeconds: Number(ai.connectTimeoutSeconds ?? 3),
+    readTimeoutSeconds: Number(ai.readTimeoutSeconds ?? 120),
+    enforceProviderUrlAllowlist: Boolean(ai.enforceProviderUrlAllowlist),
+    allowedProviderHosts: ai.allowedProviderHosts || '',
+  }
+}
+
+function syncDataControlForm(control = state.opsControl) {
+  const capacityBytes = Number(control?.dataServer?.minioStorage?.capacityBytes ?? 0)
+  state.dataControlForm = {
+    minioStorageCapacityGb: bytesToGb(capacityBytes),
+  }
+}
+function markOpsControlChecked() {
+  state.opsControlCheckedAt = new Date().toISOString()
+}
+
+function formatOpsControlCheckedAt(value) {
+  if (!value) {
+    return '-'
+  }
+  return new Intl.DateTimeFormat('ko-KR', {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  }).format(new Date(value))
+}
+async function loadOpsControl() {
+  state.loadingOpsControl = true
+  state.opsControlError = ''
+  state.opsControlMessage = ''
+
+  try {
+    state.opsControl = await fetchAdminOpsControl()
+    syncAiControlForm()
+    syncDataControlForm()
+    markOpsControlChecked()
+  } catch (error) {
+    if (!handleAdminAccessRequired(error)) {
+      state.opsControlError = error.message || 'AI/서버 제어판 정보를 불러오지 못했습니다.'
+    }
+  } finally {
+    state.loadingOpsControl = false
+  }
+}
+
+async function handleSaveAiControl() {
+  state.savingAiControl = true
+  state.opsControlError = ''
+  state.opsControlMessage = ''
+
+  try {
+    const payload = {
+      enabled: Boolean(state.aiControlForm.enabled),
+      provider: state.aiControlForm.provider,
+      model: state.aiControlForm.model,
+      workflowUrl: state.aiControlForm.workflowUrl,
+      apiKeyHeader: state.aiControlForm.apiKeyHeader,
+      lmStudioBaseUrl: state.aiControlForm.lmStudioBaseUrl,
+      lmStudioChatPath: state.aiControlForm.lmStudioChatPath,
+      lmStudioModelsPath: state.aiControlForm.lmStudioModelsPath,
+      temperature: Number(state.aiControlForm.temperature),
+      maxTokens: Number(state.aiControlForm.maxTokens),
+      connectTimeoutSeconds: Number(state.aiControlForm.connectTimeoutSeconds),
+      readTimeoutSeconds: Number(state.aiControlForm.readTimeoutSeconds),
+      enforceProviderUrlAllowlist: Boolean(state.aiControlForm.enforceProviderUrlAllowlist),
+      allowedProviderHosts: state.aiControlForm.allowedProviderHosts,
+    }
+    if (state.aiControlForm.clearApiKey) {
+      payload.clearApiKey = true
+    } else if (state.aiControlForm.apiKey?.trim()) {
+      payload.apiKey = state.aiControlForm.apiKey.trim()
+    }
+    if (state.aiControlForm.clearLmStudioApiKey) {
+      payload.clearLmStudioApiKey = true
+    } else if (state.aiControlForm.lmStudioApiKey?.trim()) {
+      payload.lmStudioApiKey = state.aiControlForm.lmStudioApiKey.trim()
+    }
+    state.opsControl = await updateAdminAiControl(payload)
+    syncAiControlForm()
+    syncDataControlForm()
+    markOpsControlChecked()
+    state.opsControlMessage = 'AI 설정이 적용되었습니다. 설정 저장소 상태를 확인하세요.'
+  } catch (error) {
+    if (!handleAdminAccessRequired(error)) {
+      state.opsControlError = error.message || 'AI 설정을 저장하지 못했습니다.'
+    }
+  } finally {
+    state.savingAiControl = false
+  }
+}
+
+async function handleSaveDataControl() {
+  state.savingDataControl = true
+  state.opsControlError = ''
+  state.opsControlMessage = ''
+
+  try {
+    state.opsControl = await updateAdminDataStorageControl({
+      minioStorageCapacityBytes: gbToBytes(state.dataControlForm.minioStorageCapacityGb),
+    })
+    syncAiControlForm()
+    syncDataControlForm()
+    markOpsControlChecked()
+    state.opsControlMessage = '데이터 서버 설정이 적용되었습니다. 설정 저장소 상태를 확인하세요.'
+  } catch (error) {
+    if (!handleAdminAccessRequired(error)) {
+      state.opsControlError = error.message || '데이터 서버 설정을 저장하지 못했습니다.'
+    }
+  } finally {
+    state.savingDataControl = false
+  }
+}
+
+function bytesToGb(bytes) {
+  const value = Number(bytes)
+  if (!Number.isFinite(value) || value <= 0) {
+    return 0
+  }
+  return Number((value / 1024 / 1024 / 1024).toFixed(2))
+}
+
+function gbToBytes(gb) {
+  const value = Number(gb)
+  if (!Number.isFinite(value) || value <= 0) {
+    return 0
+  }
+  return Math.round(value * 1024 * 1024 * 1024)
+}
+function formatPercent(value) {
+  const numberValue = Number(value)
+  if (!Number.isFinite(numberValue)) {
+    return '0%'
+  }
+  return `${numberValue.toFixed(numberValue >= 10 ? 0 : 1)}%`
+}
 async function loadDataManagement() {
   state.loadingDataManagement = true
   state.dataManagementError = ''
@@ -881,6 +1076,207 @@ onMounted(initializeAdminWorkspace)
         </article>
       </section>
 
+      <section class="panel">
+        <div class="panel__header">
+          <div>
+            <h2>AI/서버 제어판</h2>
+            <p>AI 분석 기능을 켜고 끄며 LM Studio 연결값을 조절하고, AI 서버와 데이터 서버 상태를 확인합니다.</p>
+          </div>
+          <div class="admin-toolbar">
+            <button class="button button--ghost" type="button" :disabled="state.loadingOpsControl" @click="loadOpsControl">
+              {{ state.loadingOpsControl ? '점검 중...' : '상태 새로고침' }}
+            </button>
+          </div>
+        </div>
+
+        <div v-if="state.opsControlError" class="feedback feedback--error" role="alert">{{ state.opsControlError }}</div>
+        <div v-if="state.opsControlMessage" class="feedback feedback--success" role="status" aria-live="polite">{{ state.opsControlMessage }}</div>
+        <p v-if="state.opsControlCheckedAt" class="field__hint">최근 점검: {{ formatOpsControlCheckedAt(state.opsControlCheckedAt) }}</p>
+        <p v-if="state.opsControl?.persistenceMessage" class="field__hint">설정 저장소: {{ state.opsControl.persistenceMessage }}</p>
+
+        <div class="summary-grid">
+          <article class="summary-card">
+            <span>AI 기능</span>
+            <strong>{{ state.opsControl?.ai?.enabled ? '켜짐' : '꺼짐' }}</strong>
+            <small>{{ state.opsControl?.ai?.statusMessage || '-' }}</small>
+          </article>
+          <article class="summary-card">
+            <span>AI 서버</span>
+            <strong>{{ state.opsControl?.aiServer?.reachable ? '정상' : '확인 필요' }}</strong>
+            <small>{{ state.opsControl?.aiServer?.message || '-' }}</small>
+          </article>
+          <article class="summary-card">
+            <span>DB 서버</span>
+            <strong>{{ state.opsControl?.dataServer?.databaseReachable ? '정상' : '확인 필요' }}</strong>
+            <small>{{ state.opsControl?.dataServer?.databaseHost || '-' }}</small>
+          </article>
+          <article class="summary-card">
+            <span>데이터 스토리지 잔여</span>
+            <strong>{{ formatFileSize(state.opsControl?.dataServer?.minioStorage?.remainingBytes || 0) }}</strong>
+            <small>
+              {{ formatFileSize(state.opsControl?.dataServer?.minioStorage?.totalSizeBytes || 0) }} / {{ formatFileSize(state.opsControl?.dataServer?.minioStorage?.capacityBytes || 0) }} 사용
+            </small>
+          </article>
+        </div>
+
+        <form class="support-detail-grid" @submit.prevent="handleSaveAiControl">
+          <div class="support-inquiry-card">
+            <div class="support-inquiry-reply__header">
+              <strong>AI 기능 제어</strong>
+              <small>일반 설정은 저장되어 재시작 후에도 복원됩니다. API key는 보안상 현재 실행 중인 서버에만 반영됩니다.</small>
+            </div>
+            <label class="field">
+              <span class="field__label">AI 분석 사용</span>
+              <input v-model="state.aiControlForm.enabled" type="checkbox" />
+            </label>
+            <label class="field">
+              <span class="field__label">Provider</span>
+              <select v-model="state.aiControlForm.provider">
+                <option value="lmstudio">LM Studio</option>
+                <option value="n8n">n8n</option>
+              </select>
+            </label>
+            <label class="field">
+              <span class="field__label">모델</span>
+              <input v-model="state.aiControlForm.model" placeholder="google/gemma-4-e2b 또는 auto" />
+            </label>
+            <label class="field">
+              <span class="field__label">n8n webhook URL</span>
+              <input v-model="state.aiControlForm.workflowUrl" placeholder="https://n8n.example.com/webhook/..." />
+            </label>
+            <label class="field">
+              <span class="field__label">n8n API key header</span>
+              <input v-model="state.aiControlForm.apiKeyHeader" placeholder="X-TravelLedger-AI-Key" />
+            </label>
+            <label class="field">
+              <span class="field__label">n8n API key 새 값</span>
+              <input v-model="state.aiControlForm.apiKey" type="password" autocomplete="new-password" :disabled="state.aiControlForm.clearApiKey" :placeholder="state.aiControlForm.apiKeyConfigured ? '설정됨 - 변경할 때만 입력' : '미설정'" />
+            </label>
+            <label class="field field--inline">
+              <input v-model="state.aiControlForm.clearApiKey" type="checkbox" />
+              <span class="field__label">n8n API key 삭제</span>
+            </label>
+            <label class="field">
+              <span class="field__label">LM Studio URL</span>
+              <input v-model="state.aiControlForm.lmStudioBaseUrl" placeholder="http://100.92.170.22:1234" />
+            </label>
+            <label class="field">
+              <span class="field__label">LM Studio API key 새 값</span>
+              <input v-model="state.aiControlForm.lmStudioApiKey" type="password" autocomplete="new-password" :disabled="state.aiControlForm.clearLmStudioApiKey" :placeholder="state.aiControlForm.lmStudioApiKeyConfigured ? '설정됨 - 변경할 때만 입력' : '미설정'" />
+            </label>
+            <label class="field field--inline">
+              <input v-model="state.aiControlForm.clearLmStudioApiKey" type="checkbox" />
+              <span class="field__label">LM Studio API key 삭제</span>
+            </label>
+            <label class="field">
+              <span class="field__label">Chat path</span>
+              <input v-model="state.aiControlForm.lmStudioChatPath" placeholder="/v1/chat/completions" />
+            </label>
+            <label class="field">
+              <span class="field__label">Models path</span>
+              <input v-model="state.aiControlForm.lmStudioModelsPath" placeholder="/v1/models" />
+            </label>
+          </div>
+
+          <div class="support-inquiry-card">
+            <div class="support-inquiry-reply__header">
+              <strong>응답/보안 조절</strong>
+              <small>응답 품질과 안전한 provider host 범위를 조절합니다.</small>
+            </div>
+            <label class="field">
+              <span class="field__label">Temperature</span>
+              <input v-model.number="state.aiControlForm.temperature" type="number" min="0" max="2" step="0.1" />
+            </label>
+            <label class="field">
+              <span class="field__label">Max tokens</span>
+              <input v-model.number="state.aiControlForm.maxTokens" type="number" min="128" max="8192" step="128" />
+            </label>
+            <label class="field">
+              <span class="field__label">연결 제한 시간(초)</span>
+              <input v-model.number="state.aiControlForm.connectTimeoutSeconds" type="number" min="1" max="600" />
+            </label>
+            <label class="field">
+              <span class="field__label">응답 제한 시간(초)</span>
+              <input v-model.number="state.aiControlForm.readTimeoutSeconds" type="number" min="1" max="600" />
+            </label>
+            <label class="field">
+              <span class="field__label">Provider allowlist 강제</span>
+              <input v-model="state.aiControlForm.enforceProviderUrlAllowlist" type="checkbox" />
+            </label>
+            <label class="field">
+              <span class="field__label">허용 host</span>
+              <input v-model="state.aiControlForm.allowedProviderHosts" placeholder="100.92.170.22,127.0.0.1,localhost" />
+            </label>
+            <div class="panel__actions">
+              <button class="button button--primary" type="submit" :disabled="state.savingAiControl">
+                {{ state.savingAiControl ? '저장 중...' : 'AI 설정 저장' }}
+              </button>
+            </div>
+          </div>
+        </form>
+        <form class="support-detail-grid" @submit.prevent="handleSaveDataControl">
+          <div class="support-inquiry-card">
+            <div class="support-inquiry-reply__header">
+              <strong>데이터 서버 제어</strong>
+              <small>MinIO 잔여 용량 계산에 사용할 운영 기준 용량을 조절합니다. 설정은 저장되어 재시작 후에도 복원됩니다.</small>
+            </div>
+            <label class="field">
+              <span class="field__label">스토리지 기준 용량(GB)</span>
+              <input v-model.number="state.dataControlForm.minioStorageCapacityGb" type="number" min="0" max="1048576" step="1" />
+            </label>
+            <p class="form-hint">
+              현재 사용량 {{ formatFileSize(state.opsControl?.dataServer?.minioStorage?.totalSizeBytes || 0) }}, 남은 용량 {{ formatFileSize(state.opsControl?.dataServer?.minioStorage?.remainingBytes || 0) }}입니다.
+            </p>
+            <div class="panel__actions">
+              <button class="button button--primary" type="submit" :disabled="state.savingDataControl">
+                {{ state.savingDataControl ? '저장 중...' : '스토리지 기준 저장' }}
+              </button>
+            </div>
+          </div>
+
+          <div class="support-inquiry-card">
+            <div class="support-inquiry-reply__header">
+              <strong>운영 참고</strong>
+              <small>0GB는 용량 기준 미설정입니다. 최대 1PB까지 입력할 수 있으며, 실제 디스크 여유 공간이 아니라 MinIO 객체 사용량과 설정한 기준 용량으로 남은 용량을 계산합니다.</small>
+            </div>
+            <p class="form-hint">
+              백업, 여행 미디어, 드라이브 파일이 같은 버킷을 사용하면 이 기준값을 실제 서버 디스크/오브젝트 스토리지 한도에 맞춰 관리하세요.
+            </p>
+          </div>
+        </form>
+        <div class="sheet-table-wrap">
+          <table class="sheet-table">
+            <thead>
+              <tr>
+                <th>대상</th>
+                <th>상태</th>
+                <th>상세</th>
+                <th>측정값</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>AI 서버</td>
+                <td>{{ state.opsControl?.aiServer?.reachable ? '정상' : '확인 필요' }}</td>
+                <td>{{ state.opsControl?.aiServer?.baseUrl || '-' }} {{ state.opsControl?.aiServer?.modelsPath || '' }}</td>
+                <td>{{ state.opsControl?.aiServer?.latencyMillis || 0 }} ms / {{ state.opsControl?.aiServer?.models?.join(', ') || '모델 없음' }}</td>
+              </tr>
+              <tr>
+                <td>DB 서버</td>
+                <td>{{ state.opsControl?.dataServer?.databaseReachable ? '정상' : '확인 필요' }}</td>
+                <td>{{ state.opsControl?.dataServer?.databaseProduct || '-' }} @ {{ state.opsControl?.dataServer?.databaseHost || '-' }}</td>
+                <td>{{ state.opsControl?.dataServer?.databaseMessage || '-' }}</td>
+              </tr>
+              <tr>
+                <td>MinIO 스토리지</td>
+                <td>{{ state.opsControl?.dataServer?.minioStorage?.available ? '정상' : '확인 필요' }}</td>
+                <td>버킷 {{ state.opsControl?.dataServer?.minioStorage?.bucketName || '-' }}, 객체 {{ state.opsControl?.dataServer?.minioStorage?.objectCount || 0 }}개</td>
+                <td>{{ formatPercent(state.opsControl?.dataServer?.minioStorage?.usedPercent || 0) }} 사용, {{ formatFileSize(state.opsControl?.dataServer?.minioStorage?.remainingBytes || 0) }} 남음</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
       <InviteAccessPanel
         :expires-in-hours="state.inviteManager.expiresInHours"
         :generated-link="state.inviteManager.generatedLink"

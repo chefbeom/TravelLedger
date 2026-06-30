@@ -10,6 +10,7 @@ $servicePath = 'backend/src/main/java/com/playdata/calen/account/service/UserNot
 $repositoryPath = 'backend/src/main/java/com/playdata/calen/account/repository/UserNotificationRepository.java'
 $serviceTestPath = 'backend/src/test/java/com/playdata/calen/account/service/UserNotificationServiceTest.java'
 $frontendPath = 'frontend/src/components/NotificationCenterWorkspace.vue'
+$stylePath = 'frontend/src/style.css'
 $appPath = 'frontend/src/App.vue'
 $apiPath = 'frontend/src/lib/api.js'
 $ocrServicePath = 'backend/src/main/java/com/playdata/calen/ledger/ocr/LedgerOcrService.java'
@@ -37,6 +38,7 @@ if ($findings.Count -eq 0) {
     $repository = Get-Content -LiteralPath $repositoryPath -Raw
     $serviceTest = Get-Content -LiteralPath $serviceTestPath -Raw
     $frontend = Get-Content -LiteralPath $frontendPath -Raw
+$style = Get-Content -LiteralPath $stylePath -Raw
     $app = Get-Content -LiteralPath $appPath -Raw
     $api = Get-Content -LiteralPath $apiPath -Raw
     $ocrService = Get-Content -LiteralPath $ocrServicePath -Raw
@@ -82,18 +84,23 @@ if ($findings.Count -eq 0) {
         }
     }
 
-    foreach ($snippet in @('fetchNotifications', 'markAllNotificationsRead', 'markNotificationRead', 'unreadOnly', 'unreadCount', 'markAllRead', 'markRead', 'openTarget', 'target.startsWith(''/''))')) {
+    foreach ($snippet in @('fetchNotifications', 'markAllNotificationsRead', 'markNotificationRead', 'unreadOnly', 'unreadCount', 'markAllRead', 'markRead', 'openTarget', 'target.startsWith(''/''))', 'defineEmits([''unread-count-change''])', 'emit(''unread-count-change'', unreadCount.value)')) {
         if (-not $frontend.Contains($snippet)) {
             $findings.Add("NotificationCenterWorkspace missing UI snippet: $snippet") | Out-Null
         }
     }
 
-    foreach ($snippet in @('NotificationCenterWorkspace', 'notifications:', 'navigate(''notifications'')', 'activeRoute === ''notifications''')) {
+    foreach ($snippet in @('NotificationCenterWorkspace', 'notifications:', 'navigate(''notifications'')', 'activeRoute === ''notifications''', '@unread-count-change="handleNotificationUnreadCountChange"', 'notificationUnreadCount', 'topbar__notification-badge')) {
         if (-not $app.Contains($snippet)) {
             $findings.Add("App.vue missing notification route snippet: $snippet") | Out-Null
         }
     }
 
+    foreach ($snippet in @('.topbar__nav-button--notifications', '.topbar__notification-badge')) {
+        if (-not $style.Contains($snippet)) {
+            $findings.Add("Notification topbar badge styles missing snippet: $snippet") | Out-Null
+        }
+    }
     foreach ($snippet in @('fetchNotifications', 'markNotificationRead', 'markAllNotificationsRead', '/notifications/read-all')) {
         if (-not $api.Contains($snippet)) {
             $findings.Add("frontend api missing notification snippet: $snippet") | Out-Null

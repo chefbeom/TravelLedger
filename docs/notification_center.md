@@ -2,7 +2,7 @@
 
 Updated: 2026-06-30
 
-This document records the notification-center contract. Storage, listing, unread counts, read handling, AI analysis events, OCR failure events, scheduled backup failure events, privacy cleanup events, shared-file events, and the frontend notification center are now in place. The contract verifier now checks OCR and scheduled-backup producer implementation/test anchors directly, not only the generic notification API. Budget and travel producers remain in the queue, and every new producer must keep notifications owner-scoped, bounded, and free of operational secrets.
+This document records the notification-center contract. Storage, listing, unread counts, read handling, AI analysis events, OCR failure events, scheduled backup failure events, privacy cleanup events, shared-file events, frontend route rendering, and the topbar unread badge are now in place. The contract verifier now checks OCR and scheduled-backup producer implementation/test anchors directly, not only the generic notification API. Budget and travel producers remain in the queue, and every new producer must keep notifications owner-scoped, bounded, and free of operational secrets.
 
 ## Implemented API
 
@@ -62,7 +62,8 @@ flowchart TD
 | Ledger OCR failed | `AI_OR_OCR_FAILED` | Receipt OCR retry surface. |
 | Scheduled database backup failed | `BACKUP_FAILED` | Admin data-management page. |
 | Scheduled MinIO backup failed | `BACKUP_FAILED` | Admin data-management page. |
-| CalenDrive file shared with user | `SHARED_FILE_RECEIVED` | CalenDrive shared-files view. |`n| Privacy cleanup completed | `PRIVACY_ACTION_DONE` | Profile privacy panel. |
+| CalenDrive file shared with user | `SHARED_FILE_RECEIVED` | CalenDrive shared-files view. |
+| Privacy cleanup completed | `PRIVACY_ACTION_DONE` | Profile privacy panel. |
 
 ## Event producer queue
 
@@ -80,7 +81,10 @@ flowchart TD
 | `UserNotificationController` | Exposes authenticated list/create/read/read-all endpoints and passes only `currentUser.userId()` to the service. |
 | `UserNotificationService` | Redacts sensitive metadata/query/bearer-token values, truncates fields, lists by owner, counts unread by owner, and marks read by owner. |
 | `UserNotificationRepository` | Provides owner-scoped list, unread list, single lookup, unread count, and bulk read update queries. |
-| `UserNotificationServiceTest` | Covers sensitive metadata/target redaction and owner-scoped single-notification read lookup. |`n| `LedgerOcrService` / `LedgerOcrServiceTest` | Produces bounded `AI_OR_OCR_FAILED` notifications for remote/configured OCR failures while skipping invalid-file validation failures. |`n| `DataOpsBackupScheduler` / `DataOpsBackupSchedulerTest` | Produces bounded `BACKUP_FAILED` notifications for active admins on scheduled database/MinIO backup failures without storing backup paths, credentials, or raw exception details. |`n| `PrivacyManagementService` / `PrivacyManagementServiceTest` | Produces bounded `PRIVACY_ACTION_DONE` notifications after combined privacy cleanup without storing item names, tokens, archive contents, prompts, or location values. |
+| UserNotificationServiceTest | Covers sensitive metadata/target redaction and owner-scoped single-notification read lookup. |
+| LedgerOcrService / LedgerOcrServiceTest | Produces bounded AI_OR_OCR_FAILED notifications for remote/configured OCR failures while skipping invalid-file validation failures. |
+| DataOpsBackupScheduler / DataOpsBackupSchedulerTest | Produces bounded BACKUP_FAILED notifications for active admins on scheduled database/MinIO backup failures without storing backup paths, credentials, or raw exception details. |
+| PrivacyManagementService / PrivacyManagementServiceTest | Produces bounded PRIVACY_ACTION_DONE notifications after combined privacy cleanup without storing item names, tokens, archive contents, prompts, or location values. |
 | `NotificationCenterWorkspace.vue` | Loads notifications, filters unread-only, marks one/all read, and only opens relative target URLs. |
 | `App.vue` / `api.js` | Routes to the notification center and exposes frontend notification API calls. |
 
@@ -114,5 +118,5 @@ The `notification-center-contract` GitHub Actions job must run `scripts/verify-n
 
 - `frontend/src/components/NotificationCenterWorkspace.vue` provides the in-app notification center for the signed-in user.
 - The workspace loads `/api/notifications`, supports unread-only filtering, and can mark a single notification or all notifications as read.
-- It is reachable from the main top navigation through the `notifications` route.
+- It is reachable from the main top navigation through the `notifications` route, and `App.vue` renders `NotificationCenterWorkspace` for that route.
 - Notification cards expose category, severity, read state, creation time, and optional target links so AI/OCR/backup/privacy events are actionable instead of hidden in logs.

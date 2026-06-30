@@ -6,6 +6,8 @@ import {
   markNotificationRead,
 } from '../lib/api'
 
+const emit = defineEmits(['unread-count-change'])
+
 const notifications = ref([])
 const unreadCount = ref(0)
 const pageInfo = ref({ page: 0, size: 20, totalElements: 0, totalPages: 0 })
@@ -23,6 +25,10 @@ function formatDateTime(value) {
   return new Intl.DateTimeFormat('ko-KR', { dateStyle: 'medium', timeStyle: 'short' }).format(date)
 }
 
+function setUnreadCount(value) {
+  unreadCount.value = Math.max(0, Number(value || 0))
+  emit('unread-count-change', unreadCount.value)
+}
 function notificationTone(type) {
   const normalized = String(type || '').toUpperCase()
   if (normalized.includes('FAILED') || normalized.includes('BACKUP')) return 'danger'
@@ -41,7 +47,7 @@ async function loadNotifications(page = pageInfo.value.page || 0) {
       unreadOnly: unreadOnly.value ? 'true' : undefined,
     })
     notifications.value = Array.isArray(response?.content) ? response.content : []
-    unreadCount.value = Number(response?.unreadCount || 0)
+    setUnreadCount(response?.unreadCount)
     pageInfo.value = {
       page: Number(response?.page || 0),
       size: Number(response?.size || pageInfo.value.size || 20),
@@ -71,7 +77,7 @@ async function markRead(notification) {
         ? { ...item, read: true, readAt: response?.processedAt || new Date().toISOString() }
         : item
     ))
-    unreadCount.value = Number(response?.unreadCount ?? Math.max(0, unreadCount.value - 1))
+    setUnreadCount(response?.unreadCount ?? Math.max(0, unreadCount.value - 1))
     if (unreadOnly.value) {
       notifications.value = notifications.value.filter((item) => !item.read)
     }
@@ -88,7 +94,7 @@ async function markAllRead() {
   errorMessage.value = ''
   try {
     const response = await markAllNotificationsRead()
-    unreadCount.value = Number(response?.unreadCount || 0)
+    setUnreadCount(response?.unreadCount)
     if (unreadOnly.value) {
       notifications.value = []
     } else {

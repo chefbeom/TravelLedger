@@ -11461,7 +11461,7 @@ textarea {
 }
 
 .drive-file-card--drop-target::after {
-  content: '??由경에???猷?;
+  content: '???�경???????;
   position: absolute;
   inset: 10px 10px auto auto;
   z-index: 3;
@@ -14528,4 +14528,25 @@ textarea {
   .drive-version-launcher .button {
     width: 100%;
   }
+}
+
+.topbar__nav-button--notifications {
+  position: relative;
+  gap: 0.45rem;
+}
+
+.topbar__notification-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.35rem;
+  height: 1.35rem;
+  padding: 0 0.35rem;
+  border-radius: 999px;
+  background: #e11d48;
+  color: #fff;
+  font-size: 0.72rem;
+  font-weight: 800;
+  line-height: 1;
+  box-shadow: 0 8px 16px rgba(225, 29, 72, 0.28);
 }

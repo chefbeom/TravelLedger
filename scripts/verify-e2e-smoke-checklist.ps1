@@ -149,7 +149,12 @@ if ($findings.Count -eq 0) {
         '/api/auth/login',
         '/api/auth/me',
         '/api/auth/logout',
-        'fixture gate and workspace checkpoint'
+        'fixture gate and workspace checkpoint',
+        'P1 Notification center API and UI smoke',
+        '/api/notifications?size=20',
+        'expectNotificationCenterWorkspace',
+        'E2E_NOTIFICATION_SMOKE_READY',
+        'not.toMatch(/api[_-]?key|access[_-]?token|presigned|public[_-]?token|rawPrompt|providerResponse/i)'
     )) {
         if (-not $playwrightSmoke.Contains($snippet)) {
             $findings.Add("Playwright smoke spec missing snippet: $snippet") | Out-Null

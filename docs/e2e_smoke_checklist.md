@@ -33,7 +33,7 @@ This checklist defines the minimum browser-level evidence required before releas
 | Item | Current contract |
 | --- | --- |
 | Config | `frontend/playwright.config.js` defines desktop `1440x900` and mobile `390x844` Chromium projects. |
-| Spec | `frontend/e2e/smoke.spec.js` keeps the P0 flow inventory in code and verifies public shell rendering, login/session behavior, authenticated workspace routing, and fixture gates. |
+| Spec | `frontend/e2e/smoke.spec.js` keeps the P0 flow inventory in code and verifies public shell rendering, login/session behavior, authenticated workspace routing, fixture gates, and a notification-center API/UI smoke path. |
 | Command | From `frontend`, run `npm run test:e2e:install` once for Chromium, then run `npm run test:e2e:smoke`. Use `npm run test:e2e:smoke:headed` for local debugging. |
 | Base URL | `E2E_BASE_URL` or `PLAYWRIGHT_BASE_URL`; default is `http://127.0.0.1:5173`. Set `E2E_START_LOCAL_SERVER=0` when targeting an already running deployed environment. |
 | User credentials | `E2E_USER_LOGIN_ID`, `E2E_USER_PASSWORD`, optional `E2E_USER_SECONDARY_PIN`. |
@@ -98,7 +98,7 @@ Release decision:
 | P1 | Admin backup action | Current Playwright checkpoint requires admin credentials, `E2E_ADMIN_BACKUP_SMOKE_READY=1`, and `E2E_ALLOW_MUTATING_SMOKE=1`; prefer mocked backup endpoint in automated UI tests and run real backup rehearsal through the backend runbook gate. |
 | P1 | Travel photo upload | Current Playwright checkpoint requires `E2E_TRAVEL_MEDIA_SMOKE_READY=1`; use a tiny valid JPEG and a malformed-image fixture, then verify no broken media record remains visible after invalid upload. |
 | P1 | AI analysis advisory | Current Playwright checkpoint requires `E2E_PROVIDER_MODE=stubbed` and `E2E_AI_STUB_READY=1`; next step is asserting advisory copy, provider failure UI, and absence of direct ledger mutation. |
-| P1 | Notification center | Current Playwright checkpoint requires `E2E_NOTIFICATION_SMOKE_READY=1`; next step is seeding notifications through API setup, then verifying unread/read-all UI and owner isolation. |
+| P1 | Notification center | `frontend/e2e/smoke.spec.js` now requires `E2E_NOTIFICATION_SMOKE_READY=1`, verifies `/api/notifications` response shape and secret-free payload text, and checks the notification center heading, filters, read-all affordance, and unread badge. Next step is seeding cross-user notifications and asserting owner isolation plus read/read-all state transitions with disposable fixtures. |
 
 ## Gate policy
 

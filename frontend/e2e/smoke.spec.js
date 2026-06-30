@@ -10,6 +10,8 @@ const roleEnvPrefix = {
   admin: 'E2E_ADMIN',
 }
 
+const dedicatedFlowNames = new Set(['Login and session', 'Notification center'])
+
 const p0Flows = [
   {
     name: 'Login and session',
@@ -143,6 +145,15 @@ async function expectRenderedApp(page) {
     { message: 'The Vue app shell should render visible text.' },
   ).toBeGreaterThan(10)
 }
+async function expectNotificationCenterWorkspace(page, expectedUnreadCount) {
+  const workspace = page.locator('.notification-center')
+  await expect(workspace.getByText('Notification center')).toBeVisible()
+  await expect(workspace.getByRole('heading', { name: 'Operations, AI, OCR, and sharing updates' })).toBeVisible()
+  await expect(workspace.getByText('Review user-scoped events from AI analysis, OCR, backups, and shared files in one place.')).toBeVisible()
+  await expect(workspace.getByRole('button', { name: /Unread only|Show all/ })).toBeVisible()
+  await expect(workspace.getByRole('button', { name: 'Mark all read' })).toBeVisible()
+  await expect(workspace.getByText(`${expectedUnreadCount} unread`)).toBeVisible()
+}
 
 test('P0 scenario inventory matches release checklist', () => {
   expect(p0Flows.map((flow) => flow.name)).toEqual([
@@ -187,7 +198,31 @@ test('P0 Login and session smoke', async ({ page }) => {
   expect(meAfterLogout.ok(), 'Logged-out context must not expose the previous user.').toBeFalsy()
 })
 
-for (const flow of p0Flows.filter((candidate) => candidate.name !== 'Login and session')) {
+
+test('P1 Notification center API and UI smoke', async ({ page }, testInfo) => {
+  const flow = p0Flows.find((candidate) => candidate.name === 'Notification center')
+  requireEnv(flow.env)
+
+  testInfo.annotations.push({ type: 'flow-risk', description: flow.risk })
+  testInfo.annotations.push({
+    type: 'automation-stage',
+    description: 'Verifies owner-scoped notification API shape plus the visible notification center heading, filters, read-all affordance, and unread count badge.',
+  })
+
+  await signIn(page, flow.role)
+
+  const notificationsResponse = await page.request.get('/api/notifications?size=20')
+  expect(notificationsResponse.ok(), 'Notification list API should be available to the signed-in user.').toBeTruthy()
+  const notificationsPayload = await notificationsResponse.json()
+  expect(Array.isArray(notificationsPayload.content), 'Notification response content should be an array.').toBeTruthy()
+  expect(Number.isFinite(Number(notificationsPayload.unreadCount)), 'Notification response should include a numeric unreadCount.').toBeTruthy()
+  expect(String(JSON.stringify(notificationsPayload))).not.toMatch(/api[_-]?key|access[_-]?token|presigned|public[_-]?token|rawPrompt|providerResponse/i)
+
+  await page.goto(flow.route)
+  await expectRenderedApp(page)
+  await expectNotificationCenterWorkspace(page, Number(notificationsPayload.unreadCount || 0))
+})
+for (const flow of p0Flows.filter((candidate) => !dedicatedFlowNames.has(candidate.name))) {
   test(`P0 ${flow.name} fixture gate and workspace checkpoint`, async ({ page }, testInfo) => {
     requireEnv(flow.env)
     if (flow.mutating) {

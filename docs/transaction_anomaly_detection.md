@@ -54,6 +54,18 @@ Normalization and thresholds:
 - Deleted entries and non-expense entries are ignored.
 - User scope comes only from `@AuthenticationPrincipal`.
 
+## User-facing anomaly cards
+
+The backend already returns the four anomaly families that best fit this product. The frontend review panel should present them as review cards with cautious language, source entries, and a clear path to edit or dismiss later.
+
+| User-facing card | Backend type | Copy direction | Primary action |
+| --- | --- | --- | --- |
+| Larger than usual spending | `UNUSUALLY_LARGE_EXPENSE` | "평소보다 큰 지출 후보" based on local median, not a confirmed mistake. | Review entry, compare category, then optionally edit through the normal ledger form. |
+| Possible duplicate payment | `DUPLICATE_SAME_DAY_AMOUNT_TITLE` | "중복 결제 의심" when same-day amount/title match. | Compare entries side by side before deleting or merging elsewhere. |
+| Repeated same-amount payment | `REPEATED_SAME_AMOUNT_TITLE` | "같은 금액 반복 결제" for subscription/fixed-cost candidates across distinct months. | Review as recurring spend; optionally create a classification or budget rule later. |
+| Travel spending outside trip dates | `TRAVEL_OUT_OF_RANGE_EXPENSE` | "여행 기간 외 여행 지출 후보" when a linked travel expense falls outside the owned travel plan date range. | Review the travel link/date and fix through explicit edit if needed. |
+
+All cards must say "review candidate" or equivalent wording. They must not say fraud, error, duplicate confirmed, or automatically fixed.
 ## Safety Rules
 
 | Rule | Reason |

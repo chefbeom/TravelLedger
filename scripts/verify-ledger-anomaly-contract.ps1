@@ -26,13 +26,13 @@ if ($findings.Count -eq 0) {
     $service = Get-Content -LiteralPath $servicePath -Raw
     $serviceTest = Get-Content -LiteralPath $serviceTestPath -Raw
 
-    foreach ($section in @('# Transaction Anomaly Detection', '## Decision flow', '## Current Detectors', '## Safety Rules', '## Current implementation anchors', '## Release gate', '## CI contract')) {
+    foreach ($section in @('# Transaction Anomaly Detection', '## Decision flow', '## Current Detectors', '## User-facing anomaly cards', '## Safety Rules', '## Current implementation anchors', '## Release gate', '## CI contract')) {
         if (-not $contract.Contains($section)) {
             $findings.Add("Transaction anomaly contract missing section: $section") | Out-Null
         }
     }
 
-    foreach ($phrase in @('read-only', 'candidates, not facts', 'User confirmation is required', 'Date range is capped at 366 days', 'Result limit is capped at 200 groups', 'owner-scoped travel plans', 'Future dismiss workflows', 'Excel/OCR imported-row duplicate preview')) {
+    foreach ($phrase in @('read-only', 'candidates, not facts', 'User confirmation is required', 'Date range is capped at 366 days', 'Result limit is capped at 200 groups', 'owner-scoped travel plans', 'Larger than usual spending', 'Possible duplicate payment', 'Repeated same-amount payment', 'Travel spending outside trip dates', 'review candidate', 'Future dismiss workflows', 'Excel/OCR imported-row duplicate preview')) {
         if (-not $contract.Contains($phrase)) {
             $findings.Add("Transaction anomaly contract missing required phrase: $phrase") | Out-Null
         }

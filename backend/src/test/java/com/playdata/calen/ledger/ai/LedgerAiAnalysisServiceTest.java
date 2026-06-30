@@ -320,6 +320,23 @@ class LedgerAiAnalysisServiceTest {
     }
 
     @Test
+    void analyzeUsesClientRequestIdOnlyForBackendDedupe() throws Exception {
+        stubUser();
+        stubNoReusableHistory();
+        stubMonthlyDataset();
+        when(remoteClient.analyze(any())).thenReturn(remoteResponse());
+        when(historyRepository.save(any())).thenAnswer(invocation -> withId(invocation.getArgument(0), 91L));
+
+        service.analyze(USER_ID, monthlyRequestWithClientRequestId("ledger-ai-20260630T120000Z"));
+
+        ArgumentCaptor<LedgerAiAnalysisService.LedgerAiN8nPayload> payloadCaptor =
+                ArgumentCaptor.forClass(LedgerAiAnalysisService.LedgerAiN8nPayload.class);
+        verify(remoteClient).analyze(payloadCaptor.capture());
+        assertThat(objectMapper.writeValueAsString(payloadCaptor.getValue()))
+                .doesNotContain("ledger-ai-20260630T120000Z");
+    }
+
+    @Test
     void analyzeSerializesParallelDuplicateRequestsAndReusesFirstResult() throws Exception {
         stubUser();
         stubMonthlyDataset();
@@ -524,7 +541,22 @@ class LedgerAiAnalysisServiceTest {
                 null,
                 null,
                 null,
+                null,
                 null
+        );
+    }
+
+    private LedgerAiAnalysisRequest monthlyRequestWithClientRequestId(String clientRequestId) {
+        return new LedgerAiAnalysisRequest(
+                LedgerAiAnalysisMode.PERIOD,
+                LedgerAiAnalysisPeriod.MONTH,
+                null,
+                JUNE_18,
+                null,
+                null,
+                null,
+                null,
+                clientRequestId
         );
     }
 

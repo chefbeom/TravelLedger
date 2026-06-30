@@ -63,6 +63,8 @@ Assert-ContainsAll -Label 'AI provider safety contract document' -Content $contr
     'APP_LEDGER_AI_LMSTUDIO_BASE_URL=http://172.18.240.1:1234',
     'APP_LEDGER_AI_LMSTUDIO_CHAT_PATH=/api/v1/chat',
     'same-JVM in-flight duplicate requests',
+    'bounded `clientRequestId`',
+    'backend-only dedupe metadata',
     'Durable client idempotency keys'
 )
 
@@ -96,11 +98,19 @@ Assert-ContainsAll -Label 'CI workflow' -Content $ci -Needles @(
     'needs.ai-provider-safety-contract.result'
 )
 
+Assert-ContainsAll -Label 'Ledger AI request DTO' -Content $requestDto -Needles @(
+    'String clientRequestId',
+    '@Size(max = 80',
+    '@Pattern(regexp = "^[A-Za-z0-9][A-Za-z0-9._:-]{0,79}$"'
+)
+
 Assert-ContainsAll -Label 'Ledger AI service implementation' -Content $service -Needles @(
     '@Transactional(noRollbackFor = RuntimeException.class)',
     'DUPLICATE_SUPPRESSION_WINDOW = Duration.ofMinutes(5)',
     'inFlightAnalysisLocks',
+    'normalizeClientRequestId',
     'analysisInFlightKey',
+    'request.clientRequestId()',
     'analyzeResolvedPlan',
     'findLatestMatchingCompletedAnalysis',
     'PROVIDER_EXPENSE_ENTRY_LIMIT = 200',
@@ -128,6 +138,9 @@ Assert-ContainsAll -Label 'Ledger AI service tests' -Content $serviceTest -Needl
     'analyzeLimitsProviderPayloadEntryCountAndText',
     'analyzeReusesRecentCompletedHistoryWithoutCallingRemoteProvider',
     'analyzeSerializesParallelDuplicateRequestsAndReusesFirstResult',
+    'analyzeUsesClientRequestIdOnlyForBackendDedupe',
+    'monthlyRequestWithClientRequestId',
+    'doesNotContain("ledger-ai-20260630T120000Z")',
     'verify(remoteClient, times(1)).analyze(any())',
     'analyzeStoresFailedHistoryWhenRemoteRequestFails',
     'analyzeStoresFailedHistoryWithoutLeakingProviderSecrets',

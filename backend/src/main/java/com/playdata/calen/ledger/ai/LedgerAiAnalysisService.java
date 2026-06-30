@@ -98,7 +98,8 @@ public class LedgerAiAnalysisService {
         }
 
         AnalysisPlan plan = resolvePlan(request);
-        String inFlightKey = analysisInFlightKey(userId, plan);
+        String clientRequestId = normalizeClientRequestId(request.clientRequestId());
+        String inFlightKey = analysisInFlightKey(userId, plan, clientRequestId);
         Object lock = inFlightAnalysisLocks.computeIfAbsent(inFlightKey, ignored -> new Object());
         try {
             synchronized (lock) {
@@ -222,7 +223,8 @@ public class LedgerAiAnalysisService {
                 history.getFromDate(),
                 history.getToDate(),
                 history.getCompareFromDate(),
-                history.getCompareToDate()
+                history.getCompareToDate(),
+                null
         ));
     }
 
@@ -234,7 +236,11 @@ public class LedgerAiAnalysisService {
                 .orElse(null);
     }
 
-    private String analysisInFlightKey(Long userId, AnalysisPlan plan) {
+    private String normalizeClientRequestId(String clientRequestId) {
+        return clientRequestId == null ? "" : clientRequestId.trim();
+    }
+
+    private String analysisInFlightKey(Long userId, AnalysisPlan plan, String clientRequestId) {
         DateRange comparison = plan.comparisonRange();
         return String.join("|",
                 String.valueOf(userId),
@@ -245,7 +251,8 @@ public class LedgerAiAnalysisService {
                 String.valueOf(plan.primaryRange().from()),
                 String.valueOf(plan.primaryRange().to()),
                 comparison == null ? "" : String.valueOf(comparison.from()),
-                comparison == null ? "" : String.valueOf(comparison.to())
+                comparison == null ? "" : String.valueOf(comparison.to()),
+                clientRequestId == null ? "" : clientRequestId
         );
     }
 

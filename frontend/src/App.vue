@@ -972,7 +972,7 @@ onBeforeUnmount(() => {
               <input
                 v-model="inviteForm.displayName"
                 type="text"
-                placeholder="??�떆 ??��?
+                placeholder="표시 이름"
                 autocomplete="name"
                 :disabled="isSubmitting || isInviteLoading || !inviteInfo"
               />
@@ -985,7 +985,7 @@ onBeforeUnmount(() => {
               />
               <PinPadInput
                 v-model="inviteForm.secondaryPin"
-                label="2�???��?踰덊??
+                label="2차 비밀번호"
                 hint="媛????濡쒓??명븷 ???�� 媛숈? ??�옄 8?�?��??留덉???�줈 ???�� ??�젰??�땲??"
                 :disabled="isSubmitting || isInviteLoading || !inviteInfo"
               />
@@ -1020,7 +1020,7 @@ onBeforeUnmount(() => {
               <input v-model="loginForm.password" type="password" placeholder="??��?踰덊?? autocomplete="current-password" />
               <PinPadInput
                 v-model="loginForm.secondaryPin"
-                label="2�???��?踰덊??
+                label="2차 비밀번호"
                 hint="??�낫????????�옄 踰꾪??????�� 8?�?��????�젰??�＜?몄슂."
                 :disabled="isSubmitting"
               />

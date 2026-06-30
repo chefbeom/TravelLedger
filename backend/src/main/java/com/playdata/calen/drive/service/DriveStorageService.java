@@ -2,6 +2,7 @@ package com.playdata.calen.drive.service;
 
 import com.playdata.calen.common.config.MinioProperties;
 import com.playdata.calen.common.exception.BadRequestException;
+import com.playdata.calen.common.exception.ServiceUnavailableException;
 import com.playdata.calen.drive.dto.DriveDtos;
 import io.minio.BucketExistsArgs;
 import io.minio.CopyObjectArgs;
@@ -61,6 +62,8 @@ public class DriveStorageService {
             Map.entry("wav", List.of("audio/wav", "audio/x-wav"))
     );
     private static final List<String> GENERIC_CONTENT_TYPES = List.of("application/octet-stream", "binary/octet-stream");
+    private static final String STORAGE_NOT_CONFIGURED_MESSAGE = "드라이브 저장소가 설정되지 않았습니다. 관리자 페이지에서 MinIO 환경변수를 확인해 주세요.";
+    private static final String STORAGE_UNAVAILABLE_MESSAGE = "드라이브 저장소에 연결할 수 없습니다. 관리자 페이지에서 MinIO 상태와 환경변수를 확인해 주세요.";
 
     private final ObjectProvider<MinioClient> minioClientProvider;
     private final MinioProperties minioProperties;
@@ -301,14 +304,14 @@ public class DriveStorageService {
     private MinioClient minioClient() {
         MinioClient client = minioClientProvider.getIfAvailable();
         if (client == null) {
-            throw new BadRequestException("클라우드 저장소가 설정되지 않았습니다.");
+            throw new ServiceUnavailableException(STORAGE_NOT_CONFIGURED_MESSAGE);
         }
         return client;
     }
 
     private void ensureStorageConfigured() {
         if (!supportsStorage()) {
-            throw new BadRequestException("클라우드 저장소 설정을 먼저 확인해 주세요.");
+            throw new ServiceUnavailableException(STORAGE_NOT_CONFIGURED_MESSAGE);
         }
         ensureBucketAvailable();
     }
@@ -350,7 +353,7 @@ public class DriveStorageService {
             ));
         } catch (Exception exception) {
             log.error("Failed to generate drive upload URL. bucket={}, objectKey={}", resolveBucket(), objectKey, exception);
-            throw new BadRequestException("업로드 URL을 만들지 못했습니다.");
+            throw new ServiceUnavailableException(STORAGE_UNAVAILABLE_MESSAGE);
         }
     }
 

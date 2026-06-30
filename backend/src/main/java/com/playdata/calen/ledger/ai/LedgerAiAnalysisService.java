@@ -35,6 +35,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.YearMonth;
+import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
 import java.time.temporal.TemporalAdjusters;
 import java.util.ArrayList;
@@ -185,7 +186,7 @@ public class LedgerAiAnalysisService {
         appUserService.getRequiredUser(userId);
         LedgerAiAnalysisHistory history = historyRepository.findByIdAndOwnerId(historyId, userId)
                 .orElseThrow(() -> new NotFoundException("AI 분석 이력을 찾을 수 없습니다."));
-        LedgerAiAnalysisResponse result = aiJsonCodec.readResult(history.getResultJson());
+        LedgerAiAnalysisResponse result = readStoredHistoryResultOrFallback(history);
         return new LedgerAiAnalysisHistoryDetailResponse(toSummary(history), result);
     }
 
@@ -225,7 +226,7 @@ public class LedgerAiAnalysisService {
         appUserService.getRequiredUser(userId);
         AnalysisPlan plan = resolvePlan(request);
         return findLatestMatchingAnalysis(userId, plan, null)
-                .map(history -> new LedgerAiAnalysisHistoryDetailResponse(toSummary(history), aiJsonCodec.readResult(history.getResultJson())))
+                .map(history -> new LedgerAiAnalysisHistoryDetailResponse(toSummary(history), readStoredHistoryResultOrFallback(history)))
                 .orElse(null);
     }
 
@@ -249,10 +250,85 @@ public class LedgerAiAnalysisService {
         );
     }
 
+    private LedgerAiAnalysisResponse readStoredHistoryResultOrFallback(LedgerAiAnalysisHistory history) {
+        if (history == null) {
+            return null;
+        }
+        if (history.getStatus() != LedgerAiAnalysisStatus.COMPLETED || !aiText.hasText(history.getResultJson())) {
+            return buildUnreadableHistoryResult(history, "저장된 AI 분석 결과가 없습니다. 재분석을 실행해 주세요.");
+        }
+        try {
+            LedgerAiAnalysisResponse result = aiJsonCodec.readResult(history.getResultJson());
+            return result == null
+                    ? buildUnreadableHistoryResult(history, "저장된 AI 분석 결과가 비어 있습니다. 재분석을 실행해 주세요.")
+                    : result;
+        } catch (RuntimeException exception) {
+            return buildUnreadableHistoryResult(history, "저장된 AI 분석 결과를 읽지 못했습니다. 재분석을 실행해 주세요.");
+        }
+    }
+
+    private LedgerAiAnalysisResponse readReusableStoredHistoryResult(LedgerAiAnalysisHistory history) {
+        if (history == null || history.getStatus() != LedgerAiAnalysisStatus.COMPLETED || !aiText.hasText(history.getResultJson())) {
+            return null;
+        }
+        try {
+            return aiJsonCodec.readResult(history.getResultJson());
+        } catch (RuntimeException exception) {
+            return null;
+        }
+    }
+
+    private LedgerAiAnalysisResponse buildUnreadableHistoryResult(LedgerAiAnalysisHistory history, String message) {
+        String summary = firstNonBlank(history.getSummary(), message);
+        LedgerAiAnalysisReportResponse report = new LedgerAiAnalysisReportResponse(
+                summary,
+                "이 저장 이력의 원본 분석 결과가 비어 있거나 현재 응답 형식과 맞지 않습니다. 재분석 버튼으로 새 결과를 생성해 주세요.",
+                "저장된 상세 지표를 읽을 수 없어 금액 분석은 표시하지 않습니다.",
+                List.of(),
+                List.of(),
+                List.of(message),
+                "",
+                List.of(),
+                List.of(),
+                List.of("이 이력을 재분석해 새 결과를 저장하세요."),
+                List.of()
+        );
+        return new LedgerAiAnalysisResponse(
+                history.getId(),
+                history.getMode(),
+                history.getPeriodType(),
+                history.getComparisonPreset(),
+                history.getFromDate(),
+                history.getToDate(),
+                history.getCompareFromDate(),
+                history.getCompareToDate(),
+                history.getModel(),
+                history.getCreatedAt() == null ? Instant.now() : history.getCreatedAt().atZone(ZoneId.systemDefault()).toInstant(),
+                BigDecimal.ZERO,
+                BigDecimal.ZERO,
+                0L,
+                BigDecimal.ZERO,
+                List.of(),
+                List.of(),
+                List.of(),
+                report,
+                summary,
+                List.of("저장된 분석 이력은 확인됐지만 상세 결과를 읽을 수 없습니다."),
+                List.of(message),
+                List.of("재분석을 실행해 현재 형식의 결과를 다시 저장하세요."),
+                List.of(),
+                List.of(),
+                List.of(),
+                List.of(),
+                List.of(),
+                "",
+                ""
+        );
+    }
     private LedgerAiAnalysisResponse findReusableAnalysis(Long userId, AnalysisPlan plan) {
         LocalDateTime createdAfter = LocalDateTime.now().minus(DUPLICATE_SUPPRESSION_WINDOW);
         return findLatestMatchingAnalysis(userId, plan, createdAfter)
-                .map(history -> aiJsonCodec.readResult(history.getResultJson()))
+                .map(this::readReusableStoredHistoryResult)
                 .orElse(null);
     }
 

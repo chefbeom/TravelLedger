@@ -7,6 +7,7 @@ import static org.mockito.Mockito.when;
 
 import com.playdata.calen.common.config.MinioProperties;
 import com.playdata.calen.common.exception.BadRequestException;
+import com.playdata.calen.common.exception.ServiceUnavailableException;
 import com.playdata.calen.drive.dto.DriveDtos;
 import io.minio.MinioClient;
 import java.util.List;
@@ -61,7 +62,7 @@ class DriveStorageServiceTest {
         when(minioClientProvider.getIfAvailable()).thenReturn(null);
 
         assertThatThrownBy(() -> service.initUpload(1L, List.of(request)))
-                .isInstanceOf(BadRequestException.class);
+                .isInstanceOf(ServiceUnavailableException.class);
 
         verify(minioClientProvider).getIfAvailable();
     }

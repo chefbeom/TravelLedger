@@ -87,6 +87,12 @@ public class GlobalExceptionHandler {
         return buildResponse(HttpStatus.TOO_MANY_REQUESTS, exception.getMessage(), null);
     }
 
+
+    @ExceptionHandler(ServiceUnavailableException.class)
+    public ResponseEntity<Map<String, Object>> handleServiceUnavailable(ServiceUnavailableException exception) {
+        log.error("Service unavailable: {}", exception.getMessage());
+        return buildResponse(HttpStatus.SERVICE_UNAVAILABLE, exception.getMessage(), null);
+    }
     @ExceptionHandler(NoResourceFoundException.class)
     public ResponseEntity<Map<String, Object>> handleNoResourceFound(NoResourceFoundException exception) {
         log.warn("Static resource not found: {}", exception.getMessage());

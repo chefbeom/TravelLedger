@@ -87,7 +87,7 @@ if ($findings.Count -eq 0) {
         'API latency',
         'OCR failure and latency',
         'AI failure and latency',
-        'n8n/external workflow health',
+        'n8n response time and failure',
         'Backup success/failure',
         'MinIO capacity',
         'Redis availability',

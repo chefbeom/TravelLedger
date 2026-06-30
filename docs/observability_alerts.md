@@ -34,6 +34,8 @@ Prometheus sends firing and resolved alerts to Alertmanager at `alertmanager:909
 | CalenMinioCapacityMissing | MinIO capacity metric is missing or not positive for 30m | warning | Usage-ratio alerts cannot evaluate safely without capacity metric/configuration. |
 | CalenExternalWorkflowHighFailureRate | external workflow/client failure ratio above 10% for 10m | warning | n8n/OCR external calls are unreliable or unavailable. |
 | CalenExternalWorkflowSlowP95 | external workflow/client p95 above 30s for 10m | warning | n8n/OCR external calls are approaching user-visible timeout territory. |
+| CalenN8nWorkflowHighFailureRate | n8n/workflow failure ratio above 10% for 10m | warning | Isolates n8n-backed and workflow-backed failures from direct LM Studio/OCR client calls. |
+| CalenN8nWorkflowSlowP95 | n8n/workflow p95 above 30s for 10m | warning | Tracks n8n response time separately so workflow latency is not hidden inside generic provider latency. |
 | CalenHostDiskNearlyFull | filesystem free space below 10% for 10m | critical | Uploads, backups, logs, and database files may fail. |
 
 ## Required alert coverage contract
@@ -44,7 +46,7 @@ Prometheus sends firing and resolved alerts to Alertmanager at `alertmanager:909
 | API latency | `CalenBackendSlowP95` | Check slow endpoints, DB pool saturation, Redis latency, object storage latency, and external workflow calls. |
 | OCR failure and latency | `CalenLedgerOcrHighFailureRate`, `CalenLedgerOcrSlowP95` | Verify OCR provider health, request timeouts, upload constraints, and user-visible retry behavior. |
 | AI failure and latency | `CalenLedgerAiHighFailureRate`, `CalenLedgerAiSlowP95` | Verify LM Studio/n8n availability, provider timeout budget, schema validation failures, and advisory-only UI copy. |
-| n8n/external workflow health | `CalenExternalWorkflowHighFailureRate`, `CalenExternalWorkflowSlowP95` | Check n8n workflow executions, webhook credentials, network reachability, and bounded retry behavior. |
+| n8n response time and failure | `CalenN8nWorkflowHighFailureRate`, `CalenN8nWorkflowSlowP95`, `CalenExternalWorkflowHighFailureRate`, `CalenExternalWorkflowSlowP95` | Check n8n workflow executions, webhook credentials, network reachability, and bounded retry behavior. Use the n8n-specific alerts first when the `workflow` label contains `n8n` or `workflow`; use the generic external-workflow alerts for direct LM Studio/OCR client degradation. |
 | Backup success/failure | `CalenDataOpsBackupFailure`, `CalenDataOpsBackupStale` | Inspect DB/MinIO backup logs, confirm last successful artifact, and run the restore rehearsal checklist when needed. |
 | MinIO capacity | `CalenMinioStorageHighUsage`, `CalenMinioCapacityMissing`, `CalenHostDiskNearlyFull` | Check bucket capacity configuration, object growth, lifecycle cleanup, and host filesystem space; set a positive `MINIO_STORAGE_CAPACITY_BYTES` before trusting usage-ratio alerts. |
 | Redis availability | `CalenRedisConnectionUnavailable`, `CalenRedisStateConnectionUnavailable` | Check Redis process/network health, distinguish cache from state Redis, and verify session, throttling, locking, and backup-coordination fallback behavior before declaring recovery. |
@@ -108,6 +110,9 @@ Before production use, replace the no-op `ops-critical` and `ops-warning` receiv
 | Ledger AI history retention run count | `calen_ledger_ai_history_retention_runs_total` | `calen.ledger.ai.history.retention.runs` | `status` | `LedgerAiAnalysisHistoryRetentionService` |
 
 Status labels are intentionally bounded. They must not include user IDs, tokens, filenames, prompts, IP addresses, or provider error bodies.
+
+n8n-specific alerts match bounded workflow labels containing 
+8n or workflow, such as ledger-ai-n8n and ledger-ocr-workflow. Direct clients such as ledger-ai-lmstudio and ledger-ocr-direct remain covered by the generic external workflow/client alerts.
 
 ## Platform metrics used by alerts
 

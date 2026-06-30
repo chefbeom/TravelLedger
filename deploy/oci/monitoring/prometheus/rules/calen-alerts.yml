@@ -220,6 +220,38 @@ groups:
           summary: External workflow/client p95 latency is above 30 seconds
           description: External workflow/client {{ $labels.workflow }} p95 latency has stayed above 30 seconds for 10 minutes.
           runbook_url: docs/observability_alerts.md#alert-runbook-contract
+
+      - alert: CalenN8nWorkflowHighFailureRate
+        expr: |
+          sum(rate(calen_external_workflow_requests_total{job="calen-backend", workflow=~".*(n8n|workflow).*", status="failure"}[10m]))
+          /
+          clamp_min(sum(rate(calen_external_workflow_requests_total{job="calen-backend", workflow=~".*(n8n|workflow).*"}[10m])), 0.001)
+          > 0.10
+        for: 10m
+        labels:
+          severity: warning
+          service: calen-backend
+          feature: n8n-workflow
+        annotations:
+          summary: n8n/workflow failure rate is above 10 percent
+          description: n8n-backed or workflow-backed external requests have failed more than 10 percent of the time for 10 minutes.
+          runbook_url: docs/observability_alerts.md#alert-runbook-contract
+
+      - alert: CalenN8nWorkflowSlowP95
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum by (workflow, le) (rate(calen_external_workflow_request_seconds_bucket{job="calen-backend", workflow=~".*(n8n|workflow).*"}[10m]))
+          ) > 30
+        for: 10m
+        labels:
+          severity: warning
+          service: calen-backend
+          feature: n8n-workflow
+        annotations:
+          summary: n8n/workflow p95 latency is above 30 seconds
+          description: n8n-backed or workflow-backed external request {{ $labels.workflow }} p95 latency has stayed above 30 seconds for 10 minutes.
+          runbook_url: docs/observability_alerts.md#alert-runbook-contract
   - name: calen.domain.data_ops
     rules:
       - alert: CalenDataOpsBackupFailure

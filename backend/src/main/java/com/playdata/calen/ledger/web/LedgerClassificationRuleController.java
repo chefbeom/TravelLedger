@@ -43,6 +43,14 @@ public class LedgerClassificationRuleController {
         return ledgerClassificationRuleService.createRule(currentUser.userId(), request);
     }
 
+    @PostMapping("/recommendations/approve")
+    public LedgerClassificationRuleResponse approveRecommendedRule(
+            @AuthenticationPrincipal AppUserPrincipal currentUser,
+            @Valid @RequestBody LedgerClassificationRuleRequest request
+    ) {
+        return ledgerClassificationRuleService.approveRecommendedRule(currentUser.userId(), request);
+    }
+
     @PutMapping("/{ruleId}")
     public LedgerClassificationRuleResponse updateRule(
             @AuthenticationPrincipal AppUserPrincipal currentUser,

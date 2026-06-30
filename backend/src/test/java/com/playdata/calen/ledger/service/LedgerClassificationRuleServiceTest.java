@@ -2,6 +2,7 @@ package com.playdata.calen.ledger.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -100,6 +101,35 @@ class LedgerClassificationRuleServiceTest {
         assertThat(response.matched()).isFalse();
         assertThat(response.message()).isEqualTo("No classification rule matched.");
         assertThat(response.rule()).isNull();
+    }
+
+    @Test
+    void approveRecommendedRuleCreatesActiveOwnerRuleFromDraft() {
+        stubUser();
+        CategoryGroup food = categoryGroup(10L, "Food", EntryType.EXPENSE);
+        when(categoryGroupRepository.findByIdAndOwnerId(10L, USER_ID)).thenReturn(Optional.of(food));
+        when(ledgerClassificationRuleRepository.save(any(LedgerClassificationRule.class))).thenAnswer(invocation -> {
+            LedgerClassificationRule saved = invocation.getArgument(0);
+            saved.setId(88L);
+            return saved;
+        });
+
+        var response = service.approveRecommendedRule(USER_ID, new LedgerClassificationRuleRequest(
+                "Starbucks",
+                EntryType.EXPENSE,
+                10L,
+                null,
+                null,
+                20,
+                false
+        ));
+
+        assertThat(response.id()).isEqualTo(88L);
+        assertThat(response.keyword()).isEqualTo("Starbucks");
+        assertThat(response.normalizedKeyword()).isEqualTo("starbucks");
+        assertThat(response.priority()).isEqualTo(20);
+        assertThat(response.active()).isTrue();
+        verify(ledgerClassificationRuleRepository).save(any(LedgerClassificationRule.class));
     }
 
     @Test

@@ -12,7 +12,8 @@ This document records the backend contract for user-defined ledger classificatio
 | `/api/ledger/classification-rules` | `POST` | Create a keyword rule. |
 | `/api/ledger/classification-rules/{ruleId}` | `PUT` | Replace a rule owned by the current user. |
 | `/api/ledger/classification-rules/{ruleId}` | `DELETE` | Deactivate a rule instead of hard-deleting it. |
-| `/api/ledger/classification-rules/preview` | `POST` | Preview the first matching rule for a title/memo/entryType input. |
+| /api/ledger/classification-rules/preview | POST | Preview the first matching rule for a title/memo/entryType input. |
+| /api/ledger/classification-rules/recommendations/approve | POST | Approve an AI-recommended keyword/category/payment draft as an active owner-scoped rule. |
 
 ## Decision flow
 
@@ -49,7 +50,7 @@ flowchart TD
 | Manual preview | Returns a matched rule and suggested category/detail/payment. | Preview does not mutate ledger data. |
 | OCR preview | OCR text can call the same preview contract and show a draft suggestion next to extracted rows. | OCR output must stay editable and unsaved until explicit user confirmation. |
 | Excel import preview | Parsed spreadsheet rows can call the same preview contract before import. | Excel import must not create, update, delete, or reclassify entries until the user confirms selected rows. |
-| AI-recommended rule approval | AI may propose a keyword/category/payment rule as a draft suggestion. | AI recommendations remain inactive/unapplied until the user approves the rule and later confirms an affected save/import. |
+| AI-recommended rule approval | AI may propose a keyword/category/payment rule as a draft suggestion. The approval API reuses the same owner/category/detail/payment validation and stores the approved rule as active for future previews. | AI recommendations remain inactive/unapplied until the user approves the rule; approval creates only a rule, not ledger entries, and affected OCR/Excel rows still require a later save/import confirmation. |
 
 ## Non-negotiable safety rules
 
@@ -68,8 +69,8 @@ flowchart TD
 
 | Anchor | Contract evidence |
 | --- | --- |
-| `LedgerClassificationRuleController` | Exposes owner-scoped CRUD and `/preview` endpoints under authenticated API routes. |
-| `LedgerClassificationRuleService` | Uses owner-scoped repositories, active-only preview, priority ordering, normalized keyword matching, category/detail consistency checks, and payment owner checks. |
+| `LedgerClassificationRuleController` | Exposes owner-scoped CRUD, `/preview`, and `/recommendations/approve` endpoints under authenticated API routes. |
+| `LedgerClassificationRuleService` | Uses owner-scoped repositories, active-only preview, priority ordering, normalized keyword matching, category/detail consistency checks, payment owner checks, and active rule creation for user-approved AI drafts. |
 | `LedgerClassificationRuleRepository` | Provides owner-scoped list/find queries and active-only priority lookup. |
 | `LedgerClassificationRule` | Persists owner, normalized keyword, entry type, category group/detail, payment method, priority, active state, and timestamps. |
 | `LedgerClassificationRuleServiceTest` | Covers priority-order preview, entry-type mismatch, and category detail/group mismatch. |
@@ -80,7 +81,8 @@ flowchart TD
 | --- | --- |
 | `LedgerClassificationRuleServiceTest.previewReturnsFirstActiveOwnerRuleInPriorityOrder` | Verifies preview reads the current user's active rules in priority order and returns the first matching keyword. |
 | `LedgerClassificationRuleServiceTest.previewDoesNotMatchDifferentEntryTypeRule` | Verifies an income rule does not classify an expense preview even when the keyword text matches. |
-| `LedgerClassificationRuleServiceTest.createRuleRejectsCategoryDetailFromDifferentGroup` | Verifies a rule cannot bind a category detail that belongs to a different category group. |
+| LedgerClassificationRuleServiceTest.createRuleRejectsCategoryDetailFromDifferentGroup | Verifies a rule cannot bind a category detail that belongs to a different category group. |
+| LedgerClassificationRuleServiceTest.approveRecommendedRuleCreatesActiveOwnerRuleFromDraft | Verifies an AI draft approval creates an active normalized owner rule even when the draft payload was inactive. |
 | `scripts/verify-ledger-classification-contract.ps1` | Verifies the documentation, implementation anchors, security checklist, and CI job stay connected. |
 
 ## Release gate
@@ -102,7 +104,7 @@ The `ledger-classification-contract` GitHub Actions job must run `scripts/verify
 | Slice | Notes |
 | --- | --- |
 | Apply rules in Excel/OCR preview | Show matched rule and suggested category/payment before save. |
-| AI-recommended rule approval | Let AI suggest new keyword rules, but require user approval before activation or application. |
+| AI-recommended rule approval API | Backend endpoint accepts an AI draft only after user approval and turns it into an active owner-scoped rule without mutating ledger entries. |
 | Rule conflict detection | Warn when a new keyword overlaps with a higher-priority rule. |
 | Usage statistics | Track how often a rule matched and was accepted/rejected. |
 
@@ -114,4 +116,4 @@ The `ledger-classification-contract` GitHub Actions job must run `scripts/verify
 - Keep detail/category consistency coverage current as rule creation gains conflict detection.
 - Preview does not create or update ledger entries.
 - OCR and Excel import previews display classification matches without saving entries before confirmation.
-- AI-recommended rules stay inactive and unapplied until user approval.
+- AI-recommended rules stay inactive and unapplied until user approval; approval stores only a rule and never creates or reclassifies ledger entries by itself.

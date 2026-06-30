@@ -34,19 +34,19 @@ if ($findings.Count -eq 0) {
         }
     }
 
-    foreach ($phrase in @('draft suggestion', 'explicit user confirmation', 'must not create, update, delete, or reclassify', 'OCR preview', 'Excel import preview', 'AI-recommended rule approval', 'owner-scoped', 'active-only preview', 'Preview does not mutate ledger data')) {
+    foreach ($phrase in @('draft suggestion', 'explicit user confirmation', 'must not create, update, delete, or reclassify', 'OCR preview', 'Excel import preview', 'AI-recommended rule approval', 'AI-recommended rule approval API', 'owner-scoped', 'active-only preview', 'Preview does not mutate ledger data')) {
         if (-not $contract.Contains($phrase)) {
             $findings.Add("Ledger classification contract missing required phrase: $phrase") | Out-Null
         }
     }
 
-    foreach ($snippet in @('@RequestMapping("/api/ledger/classification-rules")', '@PostMapping("/preview")', '@AuthenticationPrincipal AppUserPrincipal currentUser', 'ledgerClassificationRuleService.preview(currentUser.userId(), request)')) {
+    foreach ($snippet in @('@RequestMapping("/api/ledger/classification-rules")', '@PostMapping("/preview")', '@PostMapping("/recommendations/approve")', '@AuthenticationPrincipal AppUserPrincipal currentUser', 'ledgerClassificationRuleService.preview(currentUser.userId(), request)', 'ledgerClassificationRuleService.approveRecommendedRule(currentUser.userId(), request)')) {
         if (-not $controller.Contains($snippet)) {
             $findings.Add("LedgerClassificationRuleController missing endpoint/auth snippet: $snippet") | Out-Null
         }
     }
 
-    foreach ($snippet in @('findAllByOwnerIdAndActiveTrueOrderByPriorityAscIdAsc(userId)', 'findByIdAndOwnerId(ruleId, userId)', 'rule.setActive(false)', 'normalizeText', 'haystack.contains(rule.getNormalizedKeyword())', 'categoryDetailRepository.findByIdAndGroupOwnerId', 'paymentMethodRepository.findByIdAndOwnerId', 'Category detail must belong to the selected category group.', 'Rule priority must be between 1 and 1000.')) {
+    foreach ($snippet in @('approveRecommendedRule', 'approvedRecommendationRequest', 'findAllByOwnerIdAndActiveTrueOrderByPriorityAscIdAsc(userId)', 'findByIdAndOwnerId(ruleId, userId)', 'rule.setActive(false)', 'normalizeText', 'haystack.contains(rule.getNormalizedKeyword())', 'categoryDetailRepository.findByIdAndGroupOwnerId', 'paymentMethodRepository.findByIdAndOwnerId', 'Category detail must belong to the selected category group.', 'Rule priority must be between 1 and 1000.')) {
         if (-not $service.Contains($snippet)) {
             $findings.Add("LedgerClassificationRuleService missing safety/matching snippet: $snippet") | Out-Null
         }
@@ -64,7 +64,7 @@ if ($findings.Count -eq 0) {
         }
     }
 
-    foreach ($snippet in @('previewReturnsFirstActiveOwnerRuleInPriorityOrder', 'previewDoesNotMatchDifferentEntryTypeRule', 'createRuleRejectsCategoryDetailFromDifferentGroup', 'findAllByOwnerIdAndActiveTrueOrderByPriorityAscIdAsc(USER_ID)')) {
+    foreach ($snippet in @('previewReturnsFirstActiveOwnerRuleInPriorityOrder', 'previewDoesNotMatchDifferentEntryTypeRule', 'createRuleRejectsCategoryDetailFromDifferentGroup', 'approveRecommendedRuleCreatesActiveOwnerRuleFromDraft', 'findAllByOwnerIdAndActiveTrueOrderByPriorityAscIdAsc(USER_ID)')) {
         if (-not $serviceTest.Contains($snippet)) {
             $findings.Add("LedgerClassificationRuleServiceTest missing evidence snippet: $snippet") | Out-Null
         }

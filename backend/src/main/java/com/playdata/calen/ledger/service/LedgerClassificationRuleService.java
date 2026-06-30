@@ -56,6 +56,15 @@ public class LedgerClassificationRuleService {
     }
 
     @Transactional
+    public LedgerClassificationRuleResponse approveRecommendedRule(Long userId, LedgerClassificationRuleRequest request) {
+        AppUser owner = appUserService.getRequiredUser(userId);
+        LedgerClassificationRule rule = new LedgerClassificationRule();
+        rule.setOwner(owner);
+        apply(rule, userId, approvedRecommendationRequest(request));
+        return toResponse(ledgerClassificationRuleRepository.save(rule));
+    }
+
+    @Transactional
     public LedgerClassificationRuleResponse updateRule(Long userId, Long ruleId, LedgerClassificationRuleRequest request) {
         appUserService.getRequiredUser(userId);
         LedgerClassificationRule rule = ledgerClassificationRuleRepository.findByIdAndOwnerId(ruleId, userId)
@@ -90,6 +99,21 @@ public class LedgerClassificationRuleService {
                         toResponse(rule)
                 ))
                 .orElseGet(() -> new LedgerClassificationPreviewResponse(false, "No classification rule matched.", null));
+    }
+
+    private LedgerClassificationRuleRequest approvedRecommendationRequest(LedgerClassificationRuleRequest request) {
+        if (request == null) {
+            throw new BadRequestException("AI recommended classification rule draft is required.");
+        }
+        return new LedgerClassificationRuleRequest(
+                request.keyword(),
+                request.entryType(),
+                request.categoryGroupId(),
+                request.categoryDetailId(),
+                request.paymentMethodId(),
+                request.priority(),
+                true
+        );
     }
 
     private void apply(LedgerClassificationRule rule, Long userId, LedgerClassificationRuleRequest request) {

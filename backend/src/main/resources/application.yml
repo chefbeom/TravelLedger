@@ -108,7 +108,7 @@ app:
       lm-studio-models-path: ${APP_LEDGER_AI_LMSTUDIO_MODELS_PATH:/v1/models}
       lm-studio-api-key: ${APP_LEDGER_AI_LMSTUDIO_API_KEY:}
       temperature: ${APP_LEDGER_AI_TEMPERATURE:0.2}
-      max-tokens: ${APP_LEDGER_AI_MAX_TOKENS:2048}
+      max-tokens: ${APP_LEDGER_AI_MAX_TOKENS:4096}
       connect-timeout: ${APP_LEDGER_AI_CONNECT_TIMEOUT:3s}
       read-timeout: ${APP_LEDGER_AI_READ_TIMEOUT:120s}
       enforce-provider-url-allowlist: ${APP_LEDGER_AI_ENFORCE_PROVIDER_URL_ALLOWLIST:false}

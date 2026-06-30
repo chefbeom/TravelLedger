@@ -22,7 +22,7 @@ public class LedgerAiAnalysisProperties {
     private String lmStudioChatPath = "/v1/chat/completions";
     private String lmStudioApiKey = "";
     private double temperature = 0.2;
-    private int maxTokens = 2048;
+    private int maxTokens = 4096;
     private Duration connectTimeout = Duration.ofSeconds(3);
     private Duration readTimeout = Duration.ofSeconds(120);
     private boolean enforceProviderUrlAllowlist = false;

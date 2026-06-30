@@ -1,268 +1,290 @@
 # TravelLedger (Calen)
 
-TravelLedger??媛怨꾨?, ?ы뻾 湲곕줉, ?ы뻾 ?ъ쭊 吏?? ?뚯씪 ?쒕씪?대툕, 媛議??⑤쾾?????쒕퉬???덉뿉??愿由ы븯??媛쒖씤 ?앺솢 湲곕줉 ?뚮옯?쇱엯?덈떎.
+TravelLedger는 개인과 가족의 일정, 가계부, 여행 기록, 사진 지도, 파일 드라이브, OCR/AI 분석, 백업/운영 관리를 하나의 서비스로 묶은 생활 데이터 플랫폼입니다.
 
-臾몄꽌 媛깆떊?? 2026-06-29
+최종 갱신일: 2026-06-30
 
-## ?쒕늿??蹂닿린
+## 프로젝트 요약
 
-| 援щ텇 | ?댁슜 |
+| 구분 | 내용 |
 | --- | --- |
-| ?쒗뭹 ?깃꺽 | 媛쒖씤/媛議??앺솢 湲곕줉 ?뚮옯??|
-| 二쇱슂 ?꾨찓??| 媛怨꾨?, ?ы뻾, ?ъ쭊 吏?? ?뚯씪 ?쒕씪?대툕, 媛議??⑤쾾, 愿由ъ옄 ?댁쁺 |
+| 핵심 목적 | 일정, 지출, 여행, 사진, 파일, 가족 데이터를 한 곳에서 기록하고 분석합니다. |
+| 주요 사용자 | 개인 사용자, 가족 구성원, 여행 기록을 관리하는 사용자, 운영 관리자 |
 | Frontend | Vue 3, Vite, Pinia, GridStack, Leaflet, exifr |
-| Backend | Java 17, Spring Boot 3.5.11, Spring Security, JPA, Actuator |
-| Data/Storage | MariaDB, H2(local default), Redis, MinIO, local upload storage |
-| OCR/AI | FastAPI, PaddleOCR, n8n/Ollama ?곕룞 媛??|
-| Infra | Docker Compose, OCI ???곗씠???쒕쾭 遺꾨━, Nginx HTTPS, Jenkins, rclone Google Drive backup |
+| Backend | Java 17, Spring Boot 3.5.11, Spring Security, JPA, Actuator, Flyway |
+| Data/Storage | MariaDB, H2 로컬 기본값, Redis, MinIO, 로컬 업로드 저장소 |
+| OCR/AI | FastAPI, PaddleOCR, LM Studio, n8n 연동 가능 |
+| Infra | Docker Compose, OCI, Nginx HTTPS, Jenkins, rclone Google Drive 백업, Prometheus/Grafana |
 
-## 湲곕뒫 吏??
+## 전체 기능 지도
+
 ```mermaid
 flowchart TB
-  app["TravelLedger / Calen"]
+  app["TravelLedger"]
 
-  app --> dashboard["硫붿씤 ??쒕낫??br/>?붾젅?? KPI, ?꾩젽 諛곗튂"]
-  app --> ledger["媛怨꾨?<br/>?낅젰, 寃?? ?듦퀎, ?묒?, 蹂寃??대젰"]
-  app --> ocr["媛怨꾨? OCR/AI<br/>?곸닔利?嫄곕옒?댁뿭 ?대?吏 遺꾩꽍"]
-  app --> travel["?ы뻾<br/>怨꾪쉷, ?덉궛, 吏異? 湲곗뼲, 寃쎈줈"]
-  app --> map["?ы뻾 ?ъ쭊 吏??br/>GPS, ?대윭?ㅽ꽣, 怨듦컻 吏??]
-  app --> drive["CalenDrive<br/>?뚯씪/?대뜑, 怨듭쑀, ?댁??? ?몃꽕??]
-  app --> family["媛議??⑤쾾<br/>?⑤쾾, 移댄뀒怨좊━, 媛議?怨듭쑀 誘몃뵒??]
-  app --> household["媛援?吏묎퀎<br/>媛援щ퀎 ?듦퀎? ?ы뻾 媛怨꾨?"]
-  app --> account["怨꾩젙/愿由ъ옄<br/>珥덈?, 沅뚰븳, PIN, 臾몄쓽, 諛깆뾽"]
+  app --> dashboard["대시보드\n일정, 지출, 여행, 가족 KPI"]
+  app --> ledger["가계부\n입력, 분류, 엑셀, OCR"]
+  app --> ai["AI 소비 분석\nLM Studio 또는 n8n"]
+  app --> travel["여행 관리\n일정, 경비, 장소, 공유"]
+  app --> map["여행 사진 지도\nGPS, EXIF, 클러스터"]
+  app --> drive["CalenDrive\n파일, 공유, 다운로드"]
+  app --> family["가족 앨범\n사진, 추억, 구성원"]
+  app --> household["가구 예산\n가족 통계, 공동 지출"]
+  app --> admin["관리자\n사용자, 백업, AI, 상태 점검"]
 ```
 
-## ?쒖뒪??援ъ“
+## 시스템 아키텍처
 
 ```mermaid
 flowchart LR
-  user["User Browser"]
-  frontend["Frontend<br/>Vue 3 + Vite<br/>Nginx static serving"]
-  backend["Backend API<br/>Spring Boot 3.5.11"]
-  db["MariaDB<br/>H2 local fallback"]
-  minio["MinIO<br/>object storage"]
-  upload["Local uploads<br/>travel/family/support"]
-  redis["Redis<br/>cache/state"]
-  ocr["OCR/AI server<br/>FastAPI + PaddleOCR<br/>n8n/Ollama optional"]
-  external["External APIs<br/>exchange rate / reverse geocode"]
-  backup["Google Drive backup<br/>rclone"]
+  user["사용자 브라우저"]
+  frontend["Frontend\nVue 3 + Vite\nNginx 정적 파일"]
+  backend["Backend API\nSpring Boot"]
+  db["MariaDB\n운영 데이터"]
+  h2["H2\n로컬 기본 DB"]
+  redis["Redis\n캐시와 상태"]
+  minio["MinIO\n오브젝트 저장소"]
+  local["로컬 업로드\n여행/가족/문의 파일"]
+  lmstudio["LM Studio\nTailscale AI 서버"]
+  n8n["n8n\n선택형 워크플로"]
+  ocr["OCR 서버\nFastAPI + PaddleOCR"]
+  backup["Google Drive\nrclone 백업"]
+  monitor["Prometheus/Grafana\n관측성"]
 
   user --> frontend
   frontend --> backend
   backend --> db
-  backend --> minio
-  backend --> upload
+  backend --> h2
   backend --> redis
+  backend --> minio
+  backend --> local
+  backend --> lmstudio
+  backend --> n8n
   backend --> ocr
-  backend --> external
   backend --> backup
+  backend --> monitor
 ```
 
-## 湲곕뒫蹂??ㅻ챸
+## 주요 기능
 
-### 1. 硫붿씤 ??쒕낫??
-媛怨꾨?, ?ы뻾, ?쒕씪?대툕 ?뺣낫瑜????붾㈃?먯꽌 ?붿빟?⑸땲?? `GridStack` 湲곕컲 ?붾젅?몃줈 移대뱶? ?꾩젽??諛곗튂?섍퀬, ?ъ슜?먮퀎 ?쒖떆 ??ぉ怨??덉씠?꾩썐????ν빀?덈떎. ?ㅽ겕/?쇱씠??紐⑤뱶瑜?吏?먰빀?덈떎.
+### 1. 대시보드
 
-愿??Frontend: `MainDashboardWorkspace.vue`, `FeatureLauncher.vue`, `features/palette/*`
+대시보드는 일정, 가계부, 여행, 가족 기능의 핵심 정보를 카드형 위젯으로 보여줍니다. GridStack 기반으로 위젯 배치를 조정할 수 있고, 사용자가 필요한 기능으로 빠르게 이동할 수 있습니다.
 
-### 2. 媛怨꾨?
-
-| 湲곕뒫 | ?ㅻ챸 |
+| 기능 | 설명 |
 | --- | --- |
-| 嫄곕옒 ?낅젰 | ???щ젰 湲곕컲 ?낅젰怨?鍮좊Ⅸ 嫄곕옒 ?낅젰???쒓났?⑸땲?? |
-| 寃???꾪꽣 | 嫄곕옒 紐⑸줉 寃?? 遺꾨쪟/寃곗젣?섎떒 湲곗? 議고쉶瑜??쒓났?⑸땲?? |
-| ?듦퀎/鍮꾧탳 | 移댄뀒怨좊━, 寃곗젣?섎떒, 湲곌컙 鍮꾧탳, 李⑦듃 遺꾩꽍???쒓났?⑸땲?? |
-| 遺꾨쪟 愿由?| ?遺꾨쪟/?곸꽭遺꾨쪟? 寃곗젣?섎떒??愿由ы빀?덈떎. |
-| ?묒? 媛?몄삤湲?| ?묒? ?뚯씪 誘몃━蹂닿린 ???좏깮???됱쓣 嫄곕옒濡?諛섏쁺?⑸땲?? |
-| CSV/?묒? ?대낫?닿린 | 議곌굔??留욌뒗 嫄곕옒 ?곗씠?곕? ?몃? ?뚯씪濡??대낫?낅땲?? |
-| 蹂寃??대젰 | 寃???섏젙/?쇨큵 蹂寃??대젰??湲곕줉?섍퀬 蹂듦뎄?????덉뒿?덈떎. |
+| 통합 요약 | 일정, 지출, 여행, 가족 관련 주요 지표를 한 화면에 표시합니다. |
+| 위젯 배치 | GridStack 기반으로 카드 위치와 크기를 조정합니다. |
+| 빠른 실행 | 가계부 입력, 여행 관리, 파일 드라이브 등 주요 기능으로 이동합니다. |
+| 모바일 대응 | 좁은 화면에서는 입력과 핵심 정보를 우선 배치합니다. |
 
-愿??Backend: `ledger/web`, `ledger/service`, `ledger/domain`, `ledger/repository`
+### 2. 가계부
 
-### 3. 媛怨꾨? OCR/AI
+가계부는 수입과 지출을 기록하고, 카테고리, 결제수단, 반복 지출, 엑셀 import/export, OCR 분석을 함께 제공합니다.
 
-?곸닔利??먮뒗 移대뱶 嫄곕옒?댁뿭 罹≪쿂 ?대?吏瑜??낅줈?쒗븯硫?OCR/AI 遺꾩꽍 寃곌낵瑜??뺤씤?섍퀬 嫄곕옒 ?낅젰 ?쇱뿉 ?곸슜?????덉뒿?덈떎. ?먮룞 ??μ? ?섏? ?딆쑝硫? ?ъ슜?먭? 寃?좏븳 ??理쒖쥌 ?깅줉?⑸땲??
+| 기능 | 설명 |
+| --- | --- |
+| 수입/지출 입력 | 날짜, 금액, 카테고리, 결제수단, 메모를 기록합니다. |
+| 결제수단 관리 | 카드, 현금, 계좌 등 결제수단별 지출을 집계합니다. |
+| 카테고리 관리 | 식비, 교통, 여행, 구독 등 사용자 분류를 관리합니다. |
+| 엑셀 import/export | 대량 거래 데이터를 가져오거나 내보냅니다. |
+| OCR 입력 | 영수증과 결제 화면 이미지를 분석해 거래 후보를 생성합니다. |
+| AI 소비 분석 | 선택 기간의 지출 흐름, 이상 소비, 개선점을 분석합니다. |
+| 변경 이력 | 거래 생성, 수정, 삭제 이력을 추적합니다. |
+
+### 3. AI 소비 분석
+
+AI 소비 분석은 선택한 가계부 기간 데이터를 LM Studio 또는 n8n provider로 보내고, 분석 결과를 저장한 뒤 화면과 PDF로 제공합니다. AI 결과는 자동 거래 변경이 아니라 참고용 조언으로만 표시됩니다.
 
 ```mermaid
 sequenceDiagram
-  participant U as User
+  participant U as 사용자
   participant F as Frontend
   participant B as Backend
-  participant O as OCR/AI Server
-  participant L as Ledger
+  participant A as LM Studio 또는 n8n
+  participant D as DB
 
-  U->>F: ?곸닔利?嫄곕옒?댁뿭 ?대?吏 ?낅줈??  F->>B: /api/ledger/ocr/analyze
-  B->>B: ?몄쬆, ?⑸웾, OCR ?쒖꽦???щ? ?뺤씤
-  B->>O: FastAPI OCR ?먮뒗 n8n workflow ?몄텧
-  O-->>B: OCR ?띿뒪?몄? 嫄곕옒 ?꾨낫 諛섑솚
-  B-->>F: ?뺥삎 遺꾩꽍 寃곌낵 諛섑솚
-  U->>F: 誘몃━蹂닿린 寃???섏젙
-  F->>L: ?ъ슜?먭? 嫄곕옒 ?깅줉
+  U->>F: 분석 기간 선택 후 요청
+  F->>B: POST /api/statistics/ai-analysis
+  B->>B: 지출 데이터 최소화와 payload 생성
+  B->>A: JSON Schema 기반 분석 요청
+  A-->>B: 구조화 JSON 응답
+  B->>B: JSON 파싱, 검증, 기본 계산 결과와 병합
+  B->>D: 분석 이력 저장
+  B-->>F: 분석 결과 반환
+  F-->>U: 모달, 상세 보기, PDF 저장/인쇄 제공
 ```
 
-| ?좏삎 | ?ㅻ챸 |
+| 기능 | 설명 |
 | --- | --- |
-| `RECEIPT` | ?곸닔利????μ뿉????嫄곕옒 ?쒖븞 |
-| `PAYMENT_CAPTURE` | 移대뱶/怨꾩쥖 嫄곕옒?댁뿭 罹≪쿂 ???μ뿉???щ윭 嫄곕옒 ?꾨낫 ?쒖븞 |
-| `AUTO` | ?쒕쾭媛 媛?ν븳 踰붿쐞?먯꽌 臾몄꽌 ?좏삎 ?먮룞 ?먮떒 |
+| 기간 분석 | 선택한 기간의 총 지출, 일 평균, 주요 소비를 분석합니다. |
+| 비교 분석 | 기준 기간과 비교 기간의 지출 변화를 비교합니다. |
+| JSON Schema 강제 | LM Studio 요청에 `response_format=json_schema`를 사용하고, 미지원 시 `json_object`로 재시도합니다. |
+| fallback 처리 | 모델 응답이 깨져도 원본 JSON이나 기술 문구를 사용자 화면에 길게 노출하지 않고 기본 계산 기반 결과로 보완합니다. |
+| 결과 모달 | 분석 성공 또는 저장 결과 열기 시 스크롤 가능한 상세 모달을 표시합니다. |
+| PDF 저장/인쇄 | 새 의존성 없이 브라우저 인쇄 기능으로 PDF 저장을 지원합니다. |
+| 안전 원칙 | AI 권고는 조언이며, 실제 거래 변경은 사용자가 별도로 확인해야 합니다. |
 
-OCR ?쒕쾭媛 爰쇱졇 ?덉뼱???쇰컲 媛怨꾨? ?낅젰, ?섏젙, ??젣, 寃?? ?듦퀎, ?묒? 湲곕뒫? 怨꾩냽 ?ъ슜?????덉뼱???⑸땲??
+### 4. OCR 분석
 
-### 4. ?ы뻾
+OCR 기능은 영수증, 결제 화면, 거래 캡처 이미지를 분석해 가계부 입력 후보를 생성합니다. FastAPI/PaddleOCR 서버 또는 n8n 워크플로와 연동할 수 있습니다.
 
-?ы뻾 湲곕뒫? 怨꾪쉷, ?덉궛, 吏異? 湲곗뼲, 寃쎈줈, 誘몃뵒?대? ???⑥쐞濡?臾띠뼱 愿由ы빀?덈떎.
-
-| 湲곕뒫 | ?ㅻ챸 |
+| 분석 모드 | 설명 |
 | --- | --- |
-| ?ы뻾 怨꾪쉷 | ?ы뻾蹂??쇱젙, ?곹깭, ?붿빟 ?뺣낫瑜?愿由ы빀?덈떎. |
-| ?덉궛/吏異?| ?ы뻾 ?덉궛 ??ぉ怨??ㅼ젣 吏異쒖쓣 湲곕줉?⑸땲?? |
-| ?ы뻾 湲곗뼲 | ?ы뻾 以??④릿 硫붾え? 湲곕줉??愿由ы빀?덈떎. |
-| 寃쎈줈 | ?대룞 援ш컙, 援먰넻?섎떒, 寃쎈줈 ?ㅽ??쇱쓣 ??ν빀?덈떎. |
-| ?ы뻾 而ㅻ??덊떚 | 怨듦컻 ?쇰뱶/怨듭쑀 ?붾㈃???듯빐 ?ы뻾 ?뺣낫瑜??몄텧?⑸땲?? |
-| ?섏쑉 | ?몃? ?섏쑉 API瑜??ъ슜?섍퀬 罹먯떆 TTL???〓땲?? |
-| ????ㅼ퐫??| ?ъ쭊 ?꾩튂??醫뚰몴 湲곕컲 ?꾩튂紐낆쓣 議고쉶?섍퀬 罹먯떆?⑸땲?? |
+| `RECEIPT` | 영수증 이미지에서 상호, 날짜, 금액, 품목 후보를 추출합니다. |
+| `PAYMENT_CAPTURE` | 결제 완료 화면에서 결제금액, 결제수단, 가맹점 후보를 추출합니다. |
+| `AUTO` | 입력 이미지 특성에 따라 적절한 OCR 흐름을 선택합니다. |
 
-愿??Backend: `travel/web`, `travel/service`, `travel/domain`, `travel/repository`
+### 5. 여행 관리
 
-### 5. ?ы뻾 ?ъ쭊 吏?꾩? 怨듭쑀
+여행 기능은 여행 일정, 장소, 경비, 사진, 공유 링크를 연결합니다. 여행 중 발생한 가계부 지출과 여행 기록을 함께 관리할 수 있습니다.
 
-?낅줈?쒗븳 ?ы뻾 ?ъ쭊??GPS 硫뷀??곗씠?곕? 湲곕컲?쇰줈 吏???꾩뿉 ?쒖떆?⑸땲?? ?ъ쭊??留롮쓣 ?뚮뒗 ?대윭?ㅽ꽣? 酉고룷??湲곕컲 ?뚮뜑留곸쑝濡??붾㈃ 遺?댁쓣 以꾩엯?덈떎.
-
-| 湲곕뒫 | ?ㅻ챸 |
+| 기능 | 설명 |
 | --- | --- |
-| ???ъ쭊 | ?ы뻾 ?ъ쭊???몃꽕???⑤쾾?쇰줈 蹂닿퀬 ?곸꽭 紐⑤떖?먯꽌 ?먮낯 鍮꾩쑉怨??꾩튂瑜??뺤씤?⑸땲?? |
-| ?ъ쭊 吏??| GPS ?ъ쭊??吏???/?대윭?ㅽ꽣濡??쒖떆?⑸땲?? |
-| ?대윭?ㅽ꽣 ????대?吏 | 吏???대윭?ㅽ꽣??????ъ쭊??吏?뺥븷 ???덉뒿?덈떎. |
-| 怨듦컻 ?ы뻾 吏??| 怨듦컻 媛?ν븳 ?ы뻾 吏???ъ쭊 ?뺣낫瑜?蹂꾨룄 ?붾㈃?쇰줈 ?쒓났?⑸땲?? |
-| 洹몃９ 怨듭쑀 | ?쒗븳???ъ슜??洹몃９???ы뻾 ?뺣낫瑜?怨듭쑀?⑸땲?? |
-| ?몃꽕??諛깊븘 | ?꾨씫???ы뻾 誘몃뵒???몃꽕?쇱쓣 諛곗튂 ?묒뾽?쇰줈 蹂닿컯?⑸땲?? |
+| 여행 일정 | 여행 제목, 기간, 장소, 설명을 관리합니다. |
+| 여행 경비 | 여행별 예산과 지출 내역을 정리합니다. |
+| 지도 경로 | 장소와 이동 경로를 지도 위에 표시합니다. |
+| 환율 | 외화 경비를 환율 API 기반으로 계산합니다. |
+| 공유 | 여행 기록을 공개 또는 제한 공유 형태로 노출합니다. |
+| 타임라인 | 사진, 장소, 지출, 메모를 시간 흐름으로 정리합니다. |
 
-愿??Frontend: `TravelMyMapWorkspace.vue`, `TravelMyPhotosWorkspace.vue`, `TravelPublicTripsWorkspace.vue`, `TravelSharedExhibitWorkspace.vue`
+### 6. 여행 사진 지도
 
-### 6. CalenDrive
+여행 사진 지도는 사진의 EXIF GPS 정보를 읽어 지도에 표시하고, 가까운 사진을 클러스터로 묶어 보여줍니다.
 
-CalenDrive??媛쒖씤 ?뚯씪 ?쒕씪?대툕 湲곕뒫?낅땲?? ?뚯씪/?대뜑 ?먯깋, ?낅줈?? ?ㅼ슫濡쒕뱶, 怨듭쑀, 諛쏆? ?뚯씪 ??? ?댁??? ?몃꽕?? ?꾨줈???대?吏瑜?愿由ы빀?덈떎.
+```mermaid
+flowchart LR
+  upload["사진 업로드"] --> exif["EXIF/GPS 추출"]
+  exif --> storage["원본/썸네일 저장"]
+  storage --> map["지도 클러스터 표시"]
+  map --> panel["오른쪽 상세 패널"]
+  panel --> share["여행 공유/전시"]
+```
 
-| 湲곕뒫 | ?ㅻ챸 |
+| 기능 | 설명 |
 | --- | --- |
-| ?뚯씪/?대뜑 | ?쒕씪?대툕 ?꾩씠?쒖쓣 ?대뜑 援ъ“濡?愿由ы빀?덈떎. |
-| ?낅줈???ㅼ슫濡쒕뱶 | ?뚯씪 ?낅줈?쒖? ?ㅼ슫濡쒕뱶 留곹겕瑜??쒓났?⑸땲?? |
-| 怨듭쑀 | ?ъ슜??媛??뚯씪 怨듭쑀? 諛쏆? ?뚯씪 ??μ쓣 吏?먰빀?덈떎. |
-| ?댁???| ??젣???뚯씪???댁????먮쫫?쇰줈 愿由ы빀?덈떎. |
-| ?몃꽕??| ?대?吏 誘몃━蹂닿린? ?쒕씪?대툕 ?꾨줈???대?吏瑜?吏?먰빀?덈떎. |
-| 愿由ъ옄 ?ㅼ젙 | ?쒕씪?대툕 ?댁쁺 ?ㅼ젙??愿由ъ옄 API濡?遺꾨━?⑸땲?? |
+| GPS 추출 | 사진 EXIF에서 위도와 경도를 읽습니다. |
+| 지도 클러스터 | 가까운 사진들을 묶고 대표 썸네일과 개수를 표시합니다. |
+| 썸네일 API | 지도와 패널에서 가벼운 썸네일을 우선 로드합니다. |
+| 원본 보기 | 상세 패널에서 원본 또는 큰 이미지를 확인합니다. |
+| 실패 격리 | 특정 이미지 처리 실패가 전체 지도 렌더링을 막지 않도록 분리합니다. |
 
-愿??Backend: `drive/web`, `drive/service`, `drive/domain`, `drive/repository`
+### 7. CalenDrive
 
-### 7. 媛議??⑤쾾
+CalenDrive는 개인 파일 저장, 폴더 관리, 공유 링크, 다운로드, 관리자 점검을 제공하는 파일 드라이브 기능입니다.
 
-媛議??⑤쾾? 媛議??⑥쐞 誘몃뵒?대? ?⑤쾾怨?移댄뀒怨좊━濡?臾띠뼱 愿由ы븯???곸뿭?낅땲??
-
-| 湲곕뒫 | ?ㅻ챸 |
+| 기능 | 설명 |
 | --- | --- |
-| ?⑤쾾 | 媛議??⑤쾾 ?앹꽦怨??⑤쾾蹂?誘몃뵒??援ъ꽦??愿由ы빀?덈떎. |
-| 移댄뀒怨좊━ | 媛議?移댄뀒怨좊━? 援ъ꽦?먯쓣 愿由ы빀?덈떎. |
-| 誘몃뵒??| 媛議??ъ쭊/誘몃뵒???뚯씪????ν븯怨?紐⑸줉?쇰줈 ?쒓났?⑸땲?? |
-| ?ъ슜??寃??| 媛議??⑤쾾 援ъ꽦??異붽?瑜??꾪븳 ?ъ슜??寃???듭뀡???쒓났?⑸땲?? |
+| 파일/폴더 | 파일 업로드, 폴더 생성, 이동, 삭제를 지원합니다. |
+| 공유 링크 | 파일 또는 폴더를 외부에 공유할 수 있습니다. |
+| 만료 관리 | 공유 URL 만료와 폐기 정책을 관리할 수 있습니다. |
+| 다운로드 | 개별 파일 또는 묶음 다운로드를 지원합니다. |
+| 저장소 점검 | 관리자 화면에서 드라이브 저장소 연결 상태를 확인합니다. |
+| 감사 로그 | 관리자 작업과 공유 접근 흐름을 추적하는 방향으로 확장 중입니다. |
 
-愿??Backend: `familyalbum/web`, `familyalbum/service`, `familyalbum/domain`, `familyalbum/repository`
+### 8. 가족 앨범
 
-### 8. 媛援?吏묎퀎
+가족 앨범은 가족 구성원과 사진, 추억, 위치 정보를 함께 관리합니다.
 
-媛援??⑥쐞 ?붾㈃? ?ъ슜?먮퀎 媛怨꾨? ?곗씠?곕? ?⑹궛??媛議??먮뒗 媛援?愿?먯쓽 吏異??먮쫫???뺤씤?섎뒗 ?곸뿭?낅땲?? ?ы뻾 媛怨꾨? ?붾㈃怨??곌퀎?섏뼱 媛援??⑥쐞 ?ы뻾 吏異쒖쓣 ?곕줈 蹂????덉뒿?덈떎.
-
-愿??Frontend: `HouseholdWorkspace.vue`, `HouseholdTravelLedgerWorkspace.vue`
-
-### 9. 怨꾩젙, 沅뚰븳, 愿由ъ옄
-
-| 湲곕뒫 | ?ㅻ챸 |
+| 기능 | 설명 |
 | --- | --- |
-| ?몄쬆 | 濡쒓렇?? ?뚯썝媛?? remember-me/JWT 湲곕컲 ?몄쬆???쒓났?⑸땲?? |
-| 珥덈? | 愿由ъ옄 珥덈? 留곹겕 ?앹꽦怨?珥덈? ?섎씫 ?먮쫫???쒓났?⑸땲?? |
-| 蹂댁“ PIN | ?꾨줈??愿由ъ옄 ?묎렐 蹂댄샇瑜??꾪븳 2李?PIN ?먮쫫??吏?먰빀?덈떎. |
-| ?ъ슜???덉씠?꾩썐 | ?ъ슜?먮퀎 ??쒕낫???붾㈃ ?ㅼ젙????ν빀?덈떎. |
-| 怨좉컼 臾몄쓽 | 臾몄쓽 ?깅줉, 泥⑤??뚯씪 ??? 愿由ъ옄 ?듬?/蹂닿????쒓났?⑸땲?? |
-| 愿由ъ옄 ??쒕낫??| ?ъ슜?? 濡쒓렇??媛먯궗, 珥덈?, ?곗씠???꾪솴??愿由ы빀?덈떎. |
-| 諛깆뾽/蹂듦뎄 | DB/MinIO 諛깆뾽怨?蹂듦뎄 吏꾩엯?먯쓣 ?쒓났?⑸땲?? |
-| Redis ?곹깭 | Redis ?μ븷媛 ?꾩껜 湲곕뒫 ?μ븷濡?踰덉?吏 ?딅룄濡?媛?ν븳 踰붿쐞?먯꽌 ?꾪솕?⑸땲?? |
+| 구성원 관리 | 가족 구성원 정보를 등록하고 관리합니다. |
+| 앨범 | 가족 사진과 설명을 저장합니다. |
+| 위치 정보 | 사진 위치와 여행 기록을 함께 연결할 수 있습니다. |
+| 권한 | 가족 단위 접근 권한을 기준으로 데이터를 보호합니다. |
 
-愿??Backend: `account/web`, `account/service`, `account/security`, `common/cache`
+### 9. 가구 예산과 공동 통계
 
-## 湲곗닠 ?ㅽ깮
+가구 기능은 개인 가계부를 넘어 가족 단위 통계와 공동 예산을 관리하기 위한 영역입니다.
+
+| 기능 | 설명 |
+| --- | --- |
+| 가족 지출 통계 | 가족 구성원과 가계부 데이터를 묶어 분석합니다. |
+| 공동 예산 | 가족 예산, 공동 목표, 여행 적립 목표로 확장할 수 있습니다. |
+| 여행 가계부 연결 | 여행 경비와 가족 지출을 함께 볼 수 있습니다. |
+
+### 10. 관리자 제어판
+
+관리자 화면은 사용자, 인증, 백업, 저장소, AI 서버, 운영 상태를 확인하고 제어하는 영역입니다.
+
+| 기능 | 설명 |
+| --- | --- |
+| 사용자 관리 | 계정, 권한, 관리자 작업을 관리합니다. |
+| 보안 설정 | 인증, remember-me, CSRF, PIN, 공유 링크 정책을 관리합니다. |
+| AI 제어 | AI 기능 on/off, provider, 모델, base URL, timeout, max token을 조정합니다. |
+| AI 서버 상태 | LM Studio 모델 목록과 응답 상태를 확인합니다. |
+| 데이터 서버 상태 | DB, MinIO, Redis, 스토리지 사용량을 점검합니다. |
+| 백업/복구 | DB와 MinIO 백업, Google Drive 업로드, 복구 리허설을 관리합니다. |
+| 알림/관측성 | OCR/AI 실패, 백업 실패, 저장소 오류, API 오류율을 알림 대상으로 확장합니다. |
+
+## 기술 스택
 
 ### Frontend
 
-| 湲곗닠 | ?⑸룄 |
+| 기술 | 역할 |
 | --- | --- |
-| Vue 3.5 | SPA UI |
-| Vite 7 | 媛쒕컻 ?쒕쾭? 鍮뚮뱶 |
-| Pinia 3 | ?대씪?댁뼵???곹깭 愿由?|
-| GridStack 12 | ??쒕낫???붾젅???쒕옒洹?諛곗튂 |
-| Leaflet 1.9 | 吏??UI |
-| exifr | ?ъ쭊 EXIF/GPS 硫뷀??곗씠??泥섎━ |
-| JavaScript SFC | TypeScript???ъ슜?섏? ?딆쓬 |
-
-?좉퇋 Vue SFC??`<script setup>` JavaScript 湲곗??쇰줈 ?묒꽦?⑸땲??
+| Vue 3.5 | SPA UI 구성 |
+| Vite 7 | 개발 서버와 빌드 도구 |
+| Pinia 3 | 프론트 상태 관리 |
+| GridStack 12 | 대시보드 위젯 배치 |
+| Leaflet 1.9 | 지도 UI |
+| exifr | 사진 EXIF/GPS 추출 |
+| JavaScript SFC | Vue Single File Component 작성 |
 
 ### Backend
 
-| 湲곗닠 | ?⑸룄 |
+| 기술 | 역할 |
 | --- | --- |
-| Java 17 | 諛깆뿏???고???|
-| Spring Boot 3.5.11 | API ?쒕쾭 |
-| Spring Web/Security/JPA/Validation | REST API, ?몄쬆, ORM, ?붿껌 寃利?|
-| Spring Actuator | health/info/prometheus ?댁쁺 ?붾뱶?ъ씤??|
-| MariaDB | ?댁쁺 ?곗씠?곕쿋?댁뒪 |
-| Flyway | 踰꾩쟾 湲곕컲 DB 留덉씠洹몃젅?댁뀡 |
-| H2 | 濡쒖뺄 湲곕낯 ?몃찓紐⑤━ ?곗씠?곕쿋?댁뒪 |
-| Redis/Lettuce | 罹먯떆/?곹깭 ???|
-| MinIO | ?ㅻ툕?앺듃 ?ㅽ넗由ъ? |
-| Apache POI | ?묒? 媛?몄삤湲??대낫?닿린 |
-| zip4j | ?뺤텞 ?뚯씪 泥섎━ |
-| metadata-extractor | ?대?吏 硫뷀??곗씠??泥섎━ |
-| Micrometer Prometheus | 紐⑤땲?곕쭅 硫뷀듃由?|
-| Lombok | Java 蹂댁씪?ы뵆?덉씠??異뺤냼 |
-
-### OCR / AI
-
-| 湲곗닠 | ?⑸룄 |
-| --- | --- |
-| FastAPI | OCR 遺꾩꽍 ?쒕쾭 |
-| PaddleOCR | ?대?吏 OCR |
-| Ollama Gemma 怨꾩뿴 紐⑤뜽 | OCR 寃곌낵 蹂댁젙/?뺥삎???좏깮吏 |
-| n8n workflow | AI 遺꾩꽍 ?뚯씠?꾨씪???좏깮吏 |
-| Windows 1060 PC | 蹂꾨룄 OCR/AI 遺꾩꽍 ?쒕쾭 ?댁쁺 ?섍꼍 |
+| Java 17 | 백엔드 런타임 |
+| Spring Boot 3.5.11 | REST API 서버 |
+| Spring Security | 인증과 권한 제어 |
+| Spring Data JPA | DB ORM |
+| Spring Validation | 요청 검증 |
+| Spring Actuator | health, info, prometheus endpoint |
+| Flyway | 명시적 DB migration 관리 |
+| MariaDB | 운영 DB |
+| H2 | 로컬 기본 DB |
+| Redis | 캐시와 상태 저장 |
+| MinIO | 오브젝트 저장소 |
+| Apache POI | 엑셀 import/export |
+| zip4j | 압축 파일 생성 |
+| metadata-extractor | 이미지 메타데이터 처리 |
+| Micrometer Prometheus | 메트릭 수집 |
+| Lombok | 반복 코드 축소 |
 
 ### Infra
 
-| 湲곗닠 | ?⑸룄 |
+| 기술 | 역할 |
 | --- | --- |
-| Docker Compose | 濡쒖뺄/?댁쁺 而⑦뀒?대꼫 援ъ꽦 |
-| Nginx | HTTPS reverse proxy? frontend ?뺤쟻 ?뚯씪 ?쒕튃 |
-| OCI | ???쒕쾭? ?곗씠???쒕쾭 遺꾨━ ?댁쁺 |
-| Jenkins | GitHub main push 湲곕컲 諛고룷 |
-| rclone | Google Drive 諛깆뾽 |
-| Prometheus/Grafana | ?댁쁺 紐⑤땲?곕쭅 援ъ꽦 |
+| Docker Compose | 로컬과 운영 컨테이너 구성 |
+| OCI | 운영 서버 인프라 |
+| Nginx | HTTPS reverse proxy와 정적 파일 서빙 |
+| Jenkins | GitHub push 기반 배포 자동화 |
+| rclone | Google Drive 백업 연동 |
+| Prometheus/Grafana | 메트릭 수집과 대시보드 |
+| Tailscale | 내부망 AI/OCR 서버 연결 |
 
-## ?꾨줈?앺듃 援ъ“
+## 프로젝트 구조
 
 ```text
 .
 |-- backend/
 |   |-- src/main/java/com/playdata/calen/
-|   |   |-- account/        ?몄쬆, 珥덈?, 愿由ъ옄, 臾몄쓽, ?ъ슜???ㅼ젙
-|   |   |-- common/         怨듯넻 ?ㅼ젙, ?덉쇅, 罹먯떆, 誘몃뵒??泥섎━
-|   |   |-- drive/          CalenDrive ?뚯씪/怨듭쑀/?꾨줈??|   |   |-- familyalbum/    媛議??⑤쾾怨?媛議?誘몃뵒??|   |   |-- ledger/         媛怨꾨?, ?듦퀎, ?묒?, OCR, AI 遺꾩꽍
-|   |   `-- travel/         ?ы뻾, 吏?? 誘몃뵒?? 怨듭쑀, ?섏쑉
+|   |   |-- account/        인증, 사용자, 관리자, 백업, 운영 제어
+|   |   |-- common/         공통 예외, 캐시, 설정, 보안 보조 기능
+|   |   |-- drive/          CalenDrive 파일, 공유, 다운로드
+|   |   |-- familyalbum/    가족 앨범과 가족 사진
+|   |   |-- ledger/         가계부, 엑셀, OCR, AI 분석
+|   |   `-- travel/         여행, 지도, 사진, 경비, 공유
 |   |-- src/main/resources/application.yml
+|   |-- src/main/resources/db/migration/
 |   |-- src/test/java/
-|   |-- sql/ledger-dummy/
 |   |-- build.gradle
 |   `-- Dockerfile
 |-- frontend/
-|   |-- src/components/     二쇱슂 ?붾㈃ ?⑥쐞 Vue 而댄룷?뚰듃
-|   |-- src/features/       ?붾젅????湲곕뒫 紐⑤뱢
-|   |-- src/lib/            API, ?щ㎎, 誘몃뵒???ы뻾 ?좏떥
+|   |-- src/components/     주요 화면 컴포넌트
+|   |-- src/features/       대시보드 위젯과 기능 모듈
+|   |-- src/lib/            API 클라이언트와 공통 유틸
 |   |-- public/
 |   |-- package.json
 |   `-- Dockerfile
@@ -271,7 +293,7 @@ CalenDrive??媛쒖씤 ?뚯씪 ?쒕씪?대툕 湲곕뒫?낅땲?? ?뚯씪/?대뜑 
 |   |-- requirements.txt
 |   `-- install_windows_ocr.ps1
 |-- deploy/
-|   |-- n8n/                OCR/AI workflow? n8n compose
+|   |-- n8n/
 |   `-- oci/
 |       |-- nginx/
 |       |-- redis/
@@ -285,26 +307,17 @@ CalenDrive??媛쒖씤 ?뚯씪 ?쒕씪?대툕 湲곕뒫?낅땲?? ?뚯씪/?대뜑 
 `-- README.md
 ```
 
-猷⑦듃?먯꽌 ?뺤씤?섎뒗 蹂댁“/?묒뾽 ??ぉ:
+## 로컬 실행
 
-| ??ぉ | ?깃꺽 |
-| --- | --- |
-| `.env`, `.env.*.example` | 濡쒖뺄/?댁쁺 ?섍꼍蹂???덉떆? ?ㅼ젣 ?섍꼍媛?|
-| `.wiki-temp`, `worklog.md` | 臾몄꽌/?묒뾽 濡쒓렇 蹂댁“ ?먮즺 |
-| `ea`, `miniossl`, `?좎쭨` | 濡쒖뺄 ?먮뒗 ?댁쁺 蹂댁“ ?먮즺濡?蹂댁씠硫??듭떖 ?좏뵆由ъ??댁뀡 ?뚯뒪???꾨떂 |
-| `backend/build`, `backend/.gradle`, `frontend/node_modules`, `frontend/dist`, `*.log` | 鍮뚮뱶/罹먯떆/濡쒓렇 ?곗텧臾?|
+### 사전 준비
 
-## 濡쒖뺄 媛쒕컻
-
-### ?붽뎄 ?ы빆
-
-| ?꾧뎄 | 沅뚯옣 |
+| 항목 | 권장 값 |
 | --- | --- |
 | JDK | 17 |
-| Node.js/npm | ?꾩옱 Vite/Vue 鍮뚮뱶媛 媛?ν븳 LTS 踰꾩쟾 |
-| Docker Desktop ?먮뒗 Docker Engine | Compose 湲곕컲 ?ㅽ뻾 ???꾩슂 |
-| MariaDB/MinIO/Redis | Docker Compose瑜??곕㈃ 蹂꾨룄 ?ㅼ튂 遺덊븘??|
-| OCR ?쒕쾭 | OCR 湲곕뒫 ?뚯뒪????蹂꾨룄 Windows OCR PC ?먮뒗 ?명솚 ?쒕쾭 ?꾩슂 |
+| Node.js/npm | Vite/Vue 호환 LTS |
+| Docker | Docker Desktop 또는 Docker Engine |
+| DB/Storage | Docker Compose의 MariaDB, Redis, MinIO 사용 권장 |
+| OCR/AI | 필요 시 별도 FastAPI OCR 서버 또는 LM Studio 서버 실행 |
 
 ### Frontend
 
@@ -314,8 +327,6 @@ npm install
 npm run dev
 npm run build
 ```
-
-?꾨줎?몄뿏??媛쒕컻 ?쒕쾭??Vite媛 湲곕낯 ?ы듃瑜??ъ슜?⑸땲?? ?댁쁺 而⑦뀒?대꼫?먯꽌??Nginx媛 ?뺤쟻 ?뚯씪???쒕튃?섍퀬 `/api` ?붿껌??backend濡??꾨줉?쒗빀?덈떎.
 
 ### Backend
 
@@ -333,8 +344,6 @@ cd backend
 .\gradlew.bat bootWar
 ```
 
-?섍꼍蹂?섍? ?놁쑝硫?`application.yml` 湲곕낯媛믪뿉 ?곕씪 H2 ?몃찓紐⑤━ DB瑜??ъ슜?⑸땲?? MariaDB, MinIO, Redis ?곕룞? `.env` ?먮뒗 ?쒕쾭 ?섍꼍蹂?섎줈 ?ㅼ젙?⑸땲??
-
 ### Docker Compose
 
 ```bash
@@ -342,123 +351,125 @@ cp .env.example .env
 docker compose up -d --build
 ```
 
-湲곕낯 Compose ?쒕퉬??
-
-| ?쒕퉬??| ?ㅻ챸 | 湲곕낯 ?묎렐 |
+| 서비스 | 역할 | 기본 접근 |
 | --- | --- | --- |
-| `frontend` | Vue ?뺤쟻 ??+ Nginx | `http://localhost:8080` |
-| `backend` | Spring Boot API | compose ?대? `backend:8080` |
-| `mariadb` | MariaDB 11.4 | compose ?대? |
-| `minio` | ?뚯씪/object storage | API `9000`, Console `9001` |
-| `minio-init` | 湲곕낯 bucket ?앹꽦 | 1?뚯꽦 ?묒뾽 |
+| `frontend` | Vue 정적 파일과 Nginx | `http://localhost:8080` |
+| `backend` | Spring Boot API | Compose 내부 `backend:8080` |
+| `mariadb` | MariaDB | Compose 내부 |
+| `redis` | Redis | Compose 내부 |
+| `minio` | 오브젝트 저장소 | API `9000`, Console `9001` |
+| `minio-init` | 기본 bucket 생성 | 1회성 작업 |
 
-湲곕낯 bucket ?대쫫? `MINIO_CLOUD_BUCKET` 媛믪씠硫? 湲곕낯媛믪? `budgetjourneybucket`?낅땲??
+## 주요 환경변수
 
-## 二쇱슂 ?섍꼍蹂??
-### 怨듯넻/Backend
+### Backend 공통
 
-| 蹂??| ?ㅻ챸 | 湲곕낯媛?|
+| 변수 | 설명 | 기본값 |
 | --- | --- | --- |
-| `DB_URL` | JDBC ?곌껐 臾몄옄??| H2 ?몃찓紐⑤━ |
+| `DB_URL` | JDBC 연결 URL | H2 로컬 DB |
 | `DB_DRIVER` | JDBC driver | `org.h2.Driver` |
-| `DB_ID`, `DB_PASS` | DB 怨꾩젙 | `sa` / empty |
-| `JWT_KEY` | JWT/remember-me key | 濡쒖뺄 湲곕낯媛??덉쓬 |
-| `JWT_EXPIRE` | JWT 留뚮즺 ?쒓컙 | `300000000` |
-| `APP_SEED_ENABLED` | 珥덇린 ?곗씠??seed ?щ? | `false` |
-| `H2_CONSOLE_ENABLED` | H2 console ?쒖꽦??| `false` |
-| `DB_MIGRATION_ENABLED` | Flyway 留덉씠洹몃젅?댁뀡 ?쒖꽦??| `false` |
-| `DB_MIGRATION_BASELINE_ON_MIGRATE` | 湲곗〈 DB baseline ?덉슜 | `true` |
-| `DB_MIGRATION_VALIDATE_ON_MIGRATE` | 留덉씠洹몃젅?댁뀡 寃利??쒖꽦??| `true` |
+| `DB_ID`, `DB_PASS` | DB 계정 | `sa` / empty |
+| `JWT_KEY` | JWT와 remember-me 서명 키 | 개발 기본값 |
+| `JWT_EXPIRE` | JWT 만료 시간 | `300000000` |
+| `APP_SEED_ENABLED` | seed 데이터 생성 여부 | `false` |
+| `H2_CONSOLE_ENABLED` | H2 console 활성화 | `false` |
+| `DB_MIGRATION_ENABLED` | Flyway migration 활성화 | `false` |
+| `DB_MIGRATION_BASELINE_ON_MIGRATE` | 기존 DB baseline 처리 | `true` |
+| `DB_MIGRATION_VALIDATE_ON_MIGRATE` | migration 검증 | `true` |
 
 ### Storage
 
-| 蹂??| ?ㅻ챸 | 湲곕낯媛?|
+| 변수 | 설명 | 기본값 |
 | --- | --- | --- |
-| `MINIO_API` | ?대? MinIO endpoint | empty |
-| `MINIO_PUBLIC_API` | ?몃? 怨듦컻 endpoint | empty |
-| `MINIO_NAME`, `MINIO_SECRET` | MinIO access key/secret | empty |
-| `MINIO_CLOUD_BUCKET` | 湲곕낯 bucket | `budgetjourneybucket` |
-| `MINIO_PRESIGNED_URL_EXPIRY_SECONDS` | presigned URL 留뚮즺 | `6000` |
-| `TRAVEL_MEDIA_STORAGE_PATH` | ?ы뻾 誘몃뵒??濡쒖뺄 ???寃쎈줈 | `${user.dir}/uploads/travel-media` |
-| `FAMILY_MEDIA_STORAGE_PATH` | 媛議??⑤쾾 誘몃뵒??濡쒖뺄 ???寃쎈줈 | `${user.dir}/uploads/family-media` |
-| `SUPPORT_ATTACHMENT_STORAGE_PATH` | 臾몄쓽 泥⑤? ???寃쎈줈 | `${user.dir}/uploads/support-inquiries` |
+| `MINIO_API` | 내부 MinIO endpoint | empty |
+| `MINIO_PUBLIC_API` | 공개 MinIO endpoint | empty |
+| `MINIO_NAME`, `MINIO_SECRET` | MinIO access key와 secret | empty |
+| `MINIO_CLOUD_BUCKET` | 기본 bucket | `budgetjourneybucket` |
+| `MINIO_PRESIGNED_URL_EXPIRY_SECONDS` | presigned URL 만료 시간 | `6000` |
+| `TRAVEL_MEDIA_STORAGE_PATH` | 여행 미디어 로컬 저장 경로 | `${user.dir}/uploads/travel-media` |
+| `FAMILY_MEDIA_STORAGE_PATH` | 가족 앨범 로컬 저장 경로 | `${user.dir}/uploads/family-media` |
+| `SUPPORT_ATTACHMENT_STORAGE_PATH` | 문의 첨부 저장 경로 | `${user.dir}/uploads/support-inquiries` |
 
 ### Travel
 
-| 蹂??| ?ㅻ챸 | 湲곕낯媛?|
+| 변수 | 설명 | 기본값 |
 | --- | --- | --- |
-| `TRAVEL_EXCHANGE_RATE_BASE_URL` | ?섏쑉 API base URL | `https://api.frankfurter.dev/v1` |
-| `TRAVEL_EXCHANGE_RATE_CACHE_MINUTES` | ?섏쑉 罹먯떆 ?쒓컙 | `30` |
-| `TRAVEL_REVERSE_GEOCODE_BASE_URL` | ????ㅼ퐫??API | Nominatim reverse |
-| `TRAVEL_REVERSE_GEOCODE_USER_AGENT` | ????ㅼ퐫??User-Agent | `TravelLedger/1.0 ...` |
-| `TRAVEL_SUMMARY_CACHE_TTL_SECONDS` | ?ы뻾 ?붿빟 罹먯떆 TTL | `60` |
-| `TRAVEL_MEDIA_DOWNLOAD_CACHE_TTL_SECONDS` | 誘몃뵒???ㅼ슫濡쒕뱶 罹먯떆 TTL | `300` |
-| `TRAVEL_THUMBNAIL_BACKFILL_ENABLED` | ?몃꽕??諛깊븘 ?쒖꽦??| `true` |
-| `TRAVEL_PRESIGNED_UPLOAD_ENABLED` | ?ы뻾 presigned upload ?쒖꽦??| `false` |
+| `TRAVEL_EXCHANGE_RATE_BASE_URL` | 환율 API base URL | `https://api.frankfurter.dev/v1` |
+| `TRAVEL_EXCHANGE_RATE_CACHE_MINUTES` | 환율 캐시 시간 | `30` |
+| `TRAVEL_REVERSE_GEOCODE_BASE_URL` | reverse geocode API | Nominatim reverse |
+| `TRAVEL_REVERSE_GEOCODE_USER_AGENT` | reverse geocode User-Agent | `TravelLedger/1.0` |
+| `TRAVEL_SUMMARY_CACHE_TTL_SECONDS` | 여행 요약 캐시 TTL | `60` |
+| `TRAVEL_MEDIA_DOWNLOAD_CACHE_TTL_SECONDS` | 미디어 다운로드 캐시 TTL | `300` |
+| `TRAVEL_THUMBNAIL_BACKFILL_ENABLED` | 썸네일 backfill 활성화 | `true` |
+| `TRAVEL_PRESIGNED_UPLOAD_ENABLED` | 여행 presigned upload 활성화 | `false` |
 
-### OCR / AI
+### OCR
 
-| 蹂??| ?ㅻ챸 | 湲곕낯媛?|
+| 변수 | 설명 | 기본값 |
 | --- | --- | --- |
-| `LEDGER_OCR_ENABLED` | 媛怨꾨? OCR ?쒖꽦??| `false` |
-| `LEDGER_OCR_BASE_URL` | FastAPI OCR ?쒕쾭 URL | empty |
-| `LEDGER_OCR_WORKFLOW_URL` | n8n workflow webhook URL | empty |
+| `LEDGER_OCR_ENABLED` | OCR 기능 활성화 | `false` |
+| `LEDGER_OCR_BASE_URL` | FastAPI OCR 서버 URL | empty |
+| `LEDGER_OCR_WORKFLOW_URL` | n8n OCR webhook URL | empty |
 | `LEDGER_OCR_API_KEY` | OCR API key | empty |
-| `LEDGER_OCR_CONNECT_TIMEOUT` | ?곌껐 timeout | `3s` |
-| `LEDGER_OCR_READ_TIMEOUT` | ?쎄린 timeout | `90s` |
-| `LEDGER_OCR_MAX_FILE_SIZE` | OCR ?낅줈??理쒕? ?ш린 | `10MB` |
+| `LEDGER_OCR_CONNECT_TIMEOUT` | 연결 timeout | `3s` |
+| `LEDGER_OCR_READ_TIMEOUT` | 읽기 timeout | `90s` |
+| `LEDGER_OCR_MAX_FILE_SIZE` | OCR 업로드 최대 크기 | `10MB` |
 
-媛怨꾨? AI 遺꾩꽍? `APP_LEDGER_AI_PROVIDER=lmstudio`????LM Studio瑜?吏곸젒 ?몄텧?섍퀬, `n8n`????湲곗〈 workflow webhook???몄텧?⑸땲?? Provider濡?蹂대궡??嫄곕옒 紐⑸줉? 媛쒖씤?뺣낫/?좏겙 蹂댄샇瑜??꾪빐 ?쒕ぉ/硫붾え媛 異뺤빟?섍퀬 ?꾩넚 嫄댁닔媛 ?쒗븳?⑸땲?? ?숈씪 ?ъ슜??湲곌컙/provider/model??鍮좊Ⅸ ?ъ떆?꾨뒗 理쒓렐 ?꾨즺 寃곌낵瑜??ъ궗?⑺빀?덈떎. ?댁쁺?먯꽌??AI provider URL allowlist瑜?耳쒖꽌 LM Studio/n8n ?몄텧 ??곸쓣 紐낆떆?곸쑝濡??쒗븳?????덉뒿?덈떎.
+### AI 소비 분석
 
-| 蹂??| ?ㅻ챸 | 湲곕낯媛?|
+LM Studio를 기본 provider로 사용합니다. 현재 내부망 AI 서버는 Tailscale을 통해 `http://100.92.170.22:1234` 주소로 접근하는 구성을 기준으로 합니다.
+
+| 변수 | 설명 | 기본값 |
 | --- | --- | --- |
-| `APP_LEDGER_AI_ENABLED` | 媛怨꾨? AI 遺꾩꽍 ?쒖꽦??| `true` |
-| `APP_LEDGER_AI_PROVIDER` | AI 怨듦툒?? `lmstudio` ?먮뒗 `n8n` | `lmstudio` |
-| `APP_LEDGER_AI_MODEL` | 사용할 모델 이름. `auto`이면 LM Studio `/api/v1/models`의 첫 모델을 사용 | `auto` |
-| `APP_LEDGER_AI_LMSTUDIO_BASE_URL` | LM Studio ?쒕쾭 二쇱냼 | `http://172.18.240.1:1234` |
-| `APP_LEDGER_AI_LMSTUDIO_CHAT_PATH` | LM Studio chat endpoint | `/api/v1/chat` |
-| `APP_LEDGER_AI_LMSTUDIO_MODELS_PATH` | LM Studio model discovery endpoint used when `APP_LEDGER_AI_MODEL=auto` | `/api/v1/models` |
-| `APP_LEDGER_AI_LMSTUDIO_API_KEY` | LM Studio API key媛 ?꾩슂??寃쎌슦 ?ъ슜 | empty |
-| `APP_LEDGER_AI_TEMPERATURE` | 紐⑤뜽 ?묐떟 ?⑤룄 | `0.2` |
-| `APP_LEDGER_AI_MAX_TOKENS` | 理쒕? ?묐떟 ?좏겙 | `2048` |
-| `APP_LEDGER_AI_WORKFLOW_URL` | n8n provider??webhook URL | empty |
-| `APP_LEDGER_AI_API_KEY` | n8n provider??API key | empty |
+| `APP_LEDGER_AI_ENABLED` | AI 분석 활성화 | `true` |
+| `APP_LEDGER_AI_PROVIDER` | `lmstudio` 또는 `n8n` | `lmstudio` |
+| `APP_LEDGER_AI_MODEL` | 모델명. `auto`이면 models endpoint에서 자동 선택 | `auto` |
+| `APP_LEDGER_AI_LMSTUDIO_BASE_URL` | LM Studio base URL | `http://100.92.170.22:1234` |
+| `APP_LEDGER_AI_LMSTUDIO_CHAT_PATH` | OpenAI-compatible chat endpoint | `/v1/chat/completions` |
+| `APP_LEDGER_AI_LMSTUDIO_MODELS_PATH` | 모델 조회 endpoint | `/v1/models` |
+| `APP_LEDGER_AI_LMSTUDIO_API_KEY` | LM Studio 인증 토큰 | empty |
+| `APP_LEDGER_AI_TEMPERATURE` | 응답 무작위성 | `0.2` |
+| `APP_LEDGER_AI_MAX_TOKENS` | 최대 응답 토큰 | `4096` |
+| `APP_LEDGER_AI_WORKFLOW_URL` | n8n provider webhook URL | empty |
+| `APP_LEDGER_AI_API_KEY` | n8n provider API key | empty |
 | `APP_LEDGER_AI_API_KEY_HEADER` | n8n API key header | `X-TravelLedger-AI-Key` |
-| `APP_LEDGER_AI_ENFORCE_PROVIDER_URL_ALLOWLIST` | LM Studio/n8n URL host allowlist 媛뺤젣 ?щ? | `false` |
-| `APP_LEDGER_AI_ALLOWED_PROVIDER_HOSTS` | ?덉슜??AI provider host CSV | `localhost,127.0.0.1,::1,172.18.240.1` |
+| `APP_LEDGER_AI_ENFORCE_PROVIDER_URL_ALLOWLIST` | provider URL allowlist 강제 | `false` |
+| `APP_LEDGER_AI_ALLOWED_PROVIDER_HOSTS` | 허용 provider host CSV | `localhost,127.0.0.1,::1,100.92.170.22` |
+| `APP_LEDGER_AI_HISTORY_RETENTION_ENABLED` | AI 이력 보관 정책 활성화 | `false` |
+| `APP_LEDGER_AI_HISTORY_RETENTION_DAYS` | AI 이력 보관 일수 | `180` |
+
+AI 요청은 OpenAI-compatible `/v1/chat/completions` 형식을 사용합니다. LM Studio가 지원하면 `response_format=json_schema`로 구조화 JSON을 강제하고, 미지원 시 `json_object`로 재시도합니다.
 
 ### Redis
 
-| 蹂??| ?ㅻ챸 |
+| 변수 | 설명 |
 | --- | --- |
-| `REDIS_CACHE_HOST`, `REDIS_CACHE_PORT`, `REDIS_CACHE_PASSWORD`, `REDIS_CACHE_DATABASE`, `REDIS_CACHE_SSL` | 罹먯떆 Redis |
-| `REDIS_STATE_HOST`, `REDIS_STATE_PORT`, `REDIS_STATE_PASSWORD`, `REDIS_STATE_DATABASE`, `REDIS_STATE_SSL` | ?곹깭 Redis |
+| `REDIS_CACHE_HOST`, `REDIS_CACHE_PORT`, `REDIS_CACHE_PASSWORD`, `REDIS_CACHE_DATABASE`, `REDIS_CACHE_SSL` | 캐시 Redis 설정 |
+| `REDIS_STATE_HOST`, `REDIS_STATE_PORT`, `REDIS_STATE_PASSWORD`, `REDIS_STATE_DATABASE`, `REDIS_STATE_SSL` | 상태 Redis 설정 |
 
-### 諛깆뾽/?댁쁺
+### 백업과 데이터 운영
 
-| 蹂??| ?ㅻ챸 |
+| 변수 | 설명 |
 | --- | --- |
-| `DATA_OPS_BACKUP_WORKDIR` | 諛깆뾽 ?묒뾽 ?붾젆?곕━ |
-| `DATA_OPS_BACKUP_REMOTE_NAME` | rclone remote ?대쫫 |
-| `DATA_OPS_BACKUP_REMOTE_DIR` | DB 諛깆뾽 ?먭꺽 ?붾젆?곕━ |
-| `DATA_OPS_MINIO_BACKUP_REMOTE_DIR` | MinIO 諛깆뾽 ?먭꺽 ?붾젆?곕━ |
-| `DATA_OPS_RCLONE_CONFIG_PATH` | rclone config 寃쎈줈 |
-| `DATA_OPS_DB_BACKUP_ENABLED`, `DATA_OPS_DB_BACKUP_CRON` | DB 諛깆뾽 ?ㅼ?以?|
-| `DATA_OPS_MINIO_BACKUP_ENABLED`, `DATA_OPS_MINIO_BACKUP_CRON` | MinIO 諛깆뾽 ?ㅼ?以?|
+| `DATA_OPS_BACKUP_WORKDIR` | 백업 작업 디렉터리 |
+| `DATA_OPS_BACKUP_REMOTE_NAME` | rclone remote 이름 |
+| `DATA_OPS_BACKUP_REMOTE_DIR` | DB 백업 업로드 경로 |
+| `DATA_OPS_MINIO_BACKUP_REMOTE_DIR` | MinIO 백업 업로드 경로 |
+| `DATA_OPS_RCLONE_CONFIG_PATH` | rclone config 경로 |
+| `DATA_OPS_DB_BACKUP_ENABLED`, `DATA_OPS_DB_BACKUP_CRON` | DB 백업 스케줄 |
+| `DATA_OPS_MINIO_BACKUP_ENABLED`, `DATA_OPS_MINIO_BACKUP_CRON` | MinIO 백업 스케줄 |
 
-## ?댁쁺 援ъ“
-
-?댁쁺? ???쒕쾭? ?곗씠???쒕쾭瑜?遺꾨━?섎뒗 援ъ꽦??湲곗??쇰줈 ?⑸땲??
+## 운영 배포 흐름
 
 ```mermaid
 flowchart LR
   github["GitHub main push"]
   jenkins["Jenkins"]
-  app["OCI App Server<br/>backend + frontend"]
-  data["OCI Data Server<br/>MariaDB + MinIO + Redis"]
-  nginx["Nginx HTTPS<br/>reverse proxy"]
+  app["OCI App Server\nbackend + frontend"]
+  data["OCI Data Server\nMariaDB + MinIO + Redis"]
+  nginx["Nginx HTTPS\nreverse proxy"]
   users["Users"]
-  gdrive["Google Drive<br/>backup archive"]
+  gdrive["Google Drive\nbackup archive"]
 
   github --> jenkins
   jenkins --> app
@@ -468,67 +479,59 @@ flowchart LR
   data --> gdrive
 ```
 
-?댁쁺 Compose ?뚯씪:
-
-| ?뚯씪 | ?⑸룄 |
+| 파일 | 역할 |
 | --- | --- |
-| `docker-compose.oci.app.yml` | ???쒕쾭??backend/frontend 援ъ꽦 |
-| `docker-compose.oci.data.yml` | ?곗씠???쒕쾭??MariaDB/MinIO ???곹깭 ???援ъ꽦 |
-| `docker-compose.oci.monitoring.yml` | Prometheus/Grafana 紐⑤땲?곕쭅 援ъ꽦 |
-| `docker-compose.oci.yml` | OCI ?듯빀/蹂댁“ 援ъ꽦 |
+| `docker-compose.oci.app.yml` | 운영 app 서버의 backend/frontend 구성 |
+| `docker-compose.oci.data.yml` | 운영 data 서버의 MariaDB/MinIO/Redis 구성 |
+| `docker-compose.oci.monitoring.yml` | Prometheus/Grafana 구성 |
+| `docker-compose.oci.yml` | OCI 통합 구성 |
 
-Jenkins 諛고룷 ?먮쫫:
+Jenkins 배포 흐름은 GitHub main push를 기준으로 checkout, 서버 반영, Docker Compose config 확인, backend/frontend 재기동 순서로 동작합니다.
 
-```text
-GitHub main push
-  -> Jenkins checkout
-  -> SSH to app server
-  -> git fetch/reset
-  -> docker compose config
-  -> docker compose up -d --build backend frontend
-```
+## 백업과 복구
 
-## 諛깆뾽
-
-`deploy/oci/scripts/backup-to-gdrive.sh`??DB/MinIO 諛깆뾽???앹꽦?섍퀬 Google Drive濡??낅줈?쒗븳 ??濡쒖뺄 ?꾩떆 ?곗텧臾쇱쓣 ?뺣━?섎뒗 諛⑺뼢?쇰줈 ?댁쁺?⑸땲??
+`deploy/oci/scripts/backup-to-gdrive.sh`는 DB dump와 MinIO archive를 생성하고 rclone으로 Google Drive에 업로드하는 운영 백업 흐름을 담당합니다.
 
 ```mermaid
 flowchart LR
-  scheduler["Scheduler / Admin trigger"]
-  backup["backup-to-gdrive.sh"]
-  db["MariaDB dump"]
-  minio["MinIO archive"]
-  local["Local temporary backup"]
-  drive["Google Drive"]
-  cleanup["Local cleanup"]
-
-  scheduler --> backup
-  backup --> db
-  backup --> minio
-  db --> local
-  minio --> local
-  local --> drive
-  drive --> cleanup
+  trigger["Scheduler 또는 Admin"] --> script["backup-to-gdrive.sh"]
+  script --> dbdump["MariaDB dump"]
+  script --> minioarchive["MinIO archive"]
+  dbdump --> local["임시 백업 파일"]
+  minioarchive --> local
+  local --> drive["Google Drive"]
+  drive --> cleanup["로컬 정리"]
 ```
 
-?쒕쾭 ?붿뒪?ш? 諛깆뾽 ?뚯씪 ?꾩쟻?쇰줈 媛??李⑥? ?딅룄濡?諛깆뾽 ??濡쒖뺄 ?곗텧臾??뺣━瑜??뺤씤?댁빞 ?⑸땲??
+운영 데이터가 중요해진 상태이므로 백업 성공 여부, 복구 리허설, 암호화, 백업 파일 보관 정책을 함께 관리해야 합니다.
 
-## 蹂댁븞 二쇱쓽
+## 보안 기준
 
-?ㅼ쓬 ?뚯씪怨?媛믪? 而ㅻ컠?섏? ?딆뒿?덈떎.
-
-| ???| ?덉떆 |
+| 영역 | 기준 |
 | --- | --- |
-| ?섍꼍 ?뚯씪 | `.env`, ?ㅼ젣 ?댁쁺 `.env.*` |
-| ?몄쬆 ?뺣낫 | SSH private key, JWT key, OCR API key |
-| ?곗씠???묒냽 ?뺣낫 | DB/Redis/MinIO 怨꾩젙怨?鍮꾨?踰덊샇 |
-| 媛쒖씤 ?곗씠??| ?ㅼ젣 ?곸닔利? 移대뱶 ?댁뿭, 媛쒖씤 ?ъ쭊 ?먮낯 ?뚯뒪???뚯씪 |
-| AI/OCR ?곗텧臾?| OCR 媛?곹솚寃? 紐⑤뜽 罹먯떆, ?뚯뒪???대?吏 |
-| ?댁쁺 ?곗텧臾?| ?댁쁺 濡쒓렇, 諛깆뾽 ?뚯씪, ?꾩떆 蹂듦뎄 ?뚯씪 |
+| 인증 | Spring Security, remember-me, JWT, PIN 흐름을 분리해 관리합니다. |
+| CSRF | 브라우저 기반 요청은 CSRF 정책을 명확히 유지합니다. |
+| 관리자 | 관리자 API는 권한 테스트와 감사 로그를 강화합니다. |
+| 공유 링크 | 만료, 폐기, 접근 로그를 관리합니다. |
+| 파일 업로드 | MIME, 확장자, 크기, 이미지 처리 실패를 검증합니다. |
+| AI/OCR | API key, provider allowlist, prompt injection 방어, JSON schema 검증을 적용합니다. |
+| 데이터 | 개인정보 다운로드, 공유 회수, AI 이력 삭제, 위치정보 제거 기능을 확장합니다. |
 
-愿???쒖쇅 ??곸? `.gitignore`, 媛??쒕퉬?ㅻ퀎 `.dockerignore`, ?댁쁺 臾몄꽌瑜??④퍡 ?뺤씤?⑸땲??
+## 관측성과 알림
 
-## ?뚯뒪?몄? ?덉쭏 ?뺤씤
+Actuator, Prometheus, Grafana 구성을 기반으로 다음 항목을 우선 알림 대상으로 봅니다.
+
+| 대상 | 알림 기준 예시 |
+| --- | --- |
+| API | 오류율 증가, 5xx 증가, 응답 지연 |
+| OCR/AI | 분석 실패율, LM Studio 응답 지연, JSON 파싱 실패 |
+| 백업 | DB/MinIO 백업 실패, Google Drive 업로드 실패 |
+| 저장소 | MinIO 사용량, 로컬 업로드 용량 부족 |
+| Redis | 연결 실패, timeout 증가 |
+| DB | 커넥션 풀 고갈, migration 실패 |
+| Jenkins | 빌드 실패, 배포 실패 |
+
+## 테스트와 빌드
 
 ### Backend
 
@@ -551,27 +554,48 @@ cd frontend
 npm run build
 ```
 
-?꾩옱 `package.json`?먮뒗 `dev`, `build`, `preview` ?ㅽ겕由쏀듃媛 ?뺤쓽?섏뼱 ?덉뒿?덈떎.
+권장 핵심 테스트 영역은 로그인, 가계부 입력, 엑셀 import, OCR 분석, AI 분석, 여행 사진 업로드, 지도 썸네일, 드라이브 공유, 관리자 백업입니다.
 
-## 李멸퀬 臾몄꽌
+## 향후 개선 방향
 
-| 臾몄꽌 | ?댁슜 |
+| 항목 | 설명 |
 | --- | --- |
-| [Architecture](docs/architecture.md) | ?꾩껜 ?꾪궎?띿쿂 |
-| [Security Baseline Checklist](docs/security_baseline_checklist.md) | ?몄쬆, CSRF, 愿由ъ옄, 怨듭쑀 留곹겕, ?낅줈??蹂댁븞 湲곗???|
-| [Ledger AI Safety Hardening Plan](docs/ledger_ai_safety_hardening.md) | LM Studio/n8n 湲곕컲 媛怨꾨? AI 遺꾩꽍 ?덉쟾?μ튂 |
-| [Project Improvement Roadmap](docs/project_improvement_roadmap.md) | 媛쒖꽑/蹂댁셿 諛?異붽? 湲곕뒫 ?곗꽑?쒖쐞 濡쒕뱶留?|
-| [Observability Alerts](docs/observability_alerts.md) | Prometheus ?뚮┝ 洹쒖튃怨?AI/OCR/諛깆뾽 怨꾩륫 怨꾩빟 |
-| [Windows 1060 OCR Tailscale Setup Guide](docs/Windows_1060_OCR_Tailscale_Setup_Guide.md) | OCR PC/Tailscale ?ㅼ젙 |
-| [DB Restore From Google Drive](docs/db_restore_from_gdrive.md) | Google Drive 諛깆뾽?먯꽌 DB 蹂듦뎄 |
-| [DB To Google Drive Backup](docs/dbtogdrive.md) | DB 諛깆뾽 ?댁쁺 |
-| [OCI Project Tenant Provisioning Guide](docs/OCI_Project_Tenant_Provisioning_Guide.md) | OCI ?꾨줈?앺듃/?뚮꼳???꾨줈鍮꾩???|
-| [OCI DB/MinIO 遺꾨━ 諛고룷 媛?대뱶](docs/OCI_DB_MinIO_遺꾨━_諛고룷媛?대뱶.md) | ?곗씠???쒕쾭 遺꾨━ 諛고룷 |
-| [OCI Redis 2Server ?ㅼ젙 媛?대뱶](docs/OCI_Redis_2Server_?ㅼ젙媛?대뱶.md) | Redis 遺꾨━ ?댁쁺 |
-| [OCI Docker Nginx HTTPS ?ㅼ젙 媛?대뱶](docs/OCI_?꾩빱_Nginx_HTTPS_?ㅼ젙媛?대뱶.md) | Nginx/HTTPS ?댁쁺 |
-| [OCI MinIO presigned URL ?ㅼ젙 媛?대뱶](docs/OCI_MinIO_presignedURL_?ㅼ젙媛?대뱶.md) | MinIO presigned URL |
-| [Household Development History](docs/household_development_history.md) | 媛援?媛怨꾨? 媛쒕컻 ?대젰 |
-| [Travel Map Development History](docs/travel_my_map_development_history.md) | ?ы뻾 吏??媛쒕컻 ?대젰 |
-| [Security Patch History](docs/security_patch_history.md) | 蹂댁븞 ?⑥튂 ?대젰 |
+| AI 가계부 코치 | 위험 지출, 반복 구독, 예산 초과 예상, 다음 달 현금흐름 예측을 제공합니다. |
+| 자동 분류 규칙 엔진 | 사용자가 승인한 규칙으로 거래 분류 품질을 높입니다. |
+| 거래 이상 탐지 | 큰 지출, 중복 결제, 반복 결제, 여행 기간 외 지출을 감지합니다. |
+| 여행 스토리 export | 여행 경로, 사진 지도, 지출, 메모를 PDF 또는 웹 전시 페이지로 내보냅니다. |
+| PWA/모바일 업로드 | 모바일 촬영 업로드, 오프라인 임시 저장, PWA 설치를 지원합니다. |
+| 드라이브 버전 관리 | 파일 버전, 만료 링크, 다운로드 감사 로그, 공유 권한 단계를 추가합니다. |
+| 가족 예산/공동 목표 | 가족 예산, 저축 목표, 여행 적립 목표, 구성원별 지출 비중을 제공합니다. |
+| 알림 센터 | 예산 초과, AI 완료, 백업 실패, 공유 수신, 여행 일정 임박, OCR 실패를 모읍니다. |
+| 데이터 포터빌리티 | 사용자별 전체 데이터 export, 사진/파일 포함 archive, CSV/Excel 표준 import/export를 강화합니다. |
+| 개인정보 관리 | 내 데이터 다운로드, 공유 링크 전체 회수, AI 분석 이력 삭제, 사진 위치정보 제거를 제공합니다. |
 
+## 관련 문서
 
+| 문서 | 설명 |
+| --- | --- |
+| `docs/architecture.md` | 시스템 구조와 설계 메모 |
+| `docs/security_baseline_checklist.md` | 인증, 세션, 접근제어, 파일 업로드, 관리자 보안 기준 |
+| `docs/ledger_ai_safety_hardening.md` | AI 분석 안전장치와 provider 연동 기준 |
+| `docs/project_improvement_roadmap.md` | 개선 과제와 기능 확장 계획 |
+| `docs/observability_alerts.md` | 운영 알림 기준 |
+| `docs/env_configuration_contract.md` | 환경변수 동기화 기준 |
+| `docs/db_restore_from_gdrive.md` | Google Drive 백업에서 DB 복구 |
+| `docs/dbtogdrive.md` | DB 백업 운영 문서 |
+| `docs/Windows_1060_OCR_Tailscale_Setup_Guide.md` | OCR/AI 서버와 Tailscale 연결 가이드 |
+| `docs/travel_my_map_development_history.md` | 여행 지도 기능 개발 기록 |
+| `docs/household_development_history.md` | 가구 기능 개발 기록 |
+| `docs/security_patch_history.md` | 보안 패치 이력 |
+
+## 운영 주의사항
+
+| 항목 | 주의사항 |
+| --- | --- |
+| `.env` | 실제 비밀값은 Git에 올리지 않습니다. |
+| JWT/API key | 운영에서는 반드시 강한 값으로 교체합니다. |
+| LM Studio | 외부 공개 시 Require Authentication과 방화벽, allowlist를 함께 사용합니다. |
+| Tailscale | 내부망 AI/OCR 서버는 Tailscale IP와 ACL을 기준으로 접근을 제한합니다. |
+| MinIO | public endpoint와 internal endpoint를 혼동하지 않도록 분리합니다. |
+| 백업 | 백업 성공만 보지 말고 복구 리허설을 주기적으로 실행합니다. |
+| AI 결과 | AI 분석은 조언이며 거래 데이터 변경은 사용자 확인 후 수행합니다. |

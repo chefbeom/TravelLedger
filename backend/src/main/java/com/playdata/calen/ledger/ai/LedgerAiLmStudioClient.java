@@ -1,4 +1,4 @@
-﻿package com.playdata.calen.ledger.ai;
+package com.playdata.calen.ledger.ai;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -223,6 +223,78 @@ public class LedgerAiLmStudioClient {
         throw new BadRequestException("LM Studio AI response could not be parsed as JSON analysis. Check that the model returns JSON only.");
     }
 
+    private LedgerAiRemoteResponse parseAssistantContent(String content) throws JsonProcessingException {
+        try {
+            return readRemoteResponse(extractJsonObject(content));
+        } catch (BadRequestException | JsonProcessingException exception) {
+            LedgerAiRemoteResponse fallback = fallbackPlainTextResponse(content);
+            if (fallback != null) {
+                return fallback;
+            }
+            throw exception;
+        }
+    }
+
+    private LedgerAiRemoteResponse readRemoteResponse(String json) throws JsonProcessingException {
+        try {
+            return objectMapper.readValue(json, LedgerAiRemoteResponse.class);
+        } catch (JsonProcessingException exception) {
+            String relaxedJson = relaxJson(json);
+            if (!relaxedJson.equals(json)) {
+                return objectMapper.readValue(relaxedJson, LedgerAiRemoteResponse.class);
+            }
+            throw exception;
+        }
+    }
+
+    private String relaxJson(String json) {
+        String trimmed = json == null ? "" : json.trim();
+        return trimmed.replaceAll(",\\s*([}\\]])", "$1");
+    }
+
+    private LedgerAiRemoteResponse fallbackPlainTextResponse(String content) {
+        String fallbackText = normalizePlainTextResponse(content);
+        if (!hasText(fallbackText)) {
+            return null;
+        }
+        String limitedText = limitText(fallbackText, 1800);
+        return new LedgerAiRemoteResponse(
+                true,
+                null,
+                "LM Studio가 JSON 형식 대신 일반 텍스트 분석을 반환했습니다.",
+                java.util.List.of("LM Studio 응답을 일반 텍스트 분석으로 처리했습니다."),
+                java.util.List.of("AI 모델이 JSON 계약을 지키지 않아 구조화 항목 일부는 기본 계산 결과로 보완됩니다."),
+                java.util.List.of(),
+                java.util.List.of(limitedText),
+                java.util.List.of(),
+                java.util.List.of(),
+                java.util.List.of(),
+                java.util.List.of(),
+                java.util.List.of(),
+                "",
+                "",
+                null
+        );
+    }
+
+    private String normalizePlainTextResponse(String content) {
+        String text = content == null ? "" : content.trim();
+        if (text.startsWith("```")) {
+            int firstNewLine = text.indexOf('\n');
+            int lastFence = text.lastIndexOf("```");
+            if (firstNewLine >= 0 && lastFence > firstNewLine) {
+                text = text.substring(firstNewLine + 1, lastFence).trim();
+            }
+        }
+        return text;
+    }
+
+    private String limitText(String text, int maxLength) {
+        if (text == null || text.length() <= maxLength) {
+            return text;
+        }
+        return text.substring(0, Math.max(0, maxLength - 3)).trim() + "...";
+    }
     private String extractJsonObject(String content) {
         String trimmed = content == null ? "" : content.trim();
         if (trimmed.startsWith("```")) {

@@ -485,16 +485,16 @@ public class TravelController {
 
         if (thumbnail) {
             byte[] thumbnailBytes = loadThumbnailBytes(download, width);
-            if (thumbnailBytes == null) {
-                return ResponseEntity.notFound().build();
+            if (thumbnailBytes != null) {
+                return ResponseEntity.ok()
+                        .contentType(MediaType.parseMediaType(resolveThumbnailContentType(download.contentType())))
+                        .contentLength(thumbnailBytes.length)
+                        .header(HttpHeaders.CONTENT_DISPOSITION, disposition.toString())
+                        .header("Cache-Control", "public, max-age=86400")
+                        .header("X-Content-Type-Options", "nosniff")
+                        .body(new ByteArrayResource(thumbnailBytes));
             }
-            return ResponseEntity.ok()
-                    .contentType(MediaType.parseMediaType(resolveThumbnailContentType(download.contentType())))
-                    .contentLength(thumbnailBytes.length)
-                    .header(HttpHeaders.CONTENT_DISPOSITION, disposition.toString())
-                    .header("Cache-Control", "public, max-age=86400")
-                    .header("X-Content-Type-Options", "nosniff")
-                    .body(new ByteArrayResource(thumbnailBytes));
+            log.warn("Travel thumbnail is unavailable; serving original media. path={}, requestedWidth={}", download.storagePath(), width);
         }
 
         Resource originalResource = travelMediaStorageService.loadAsResource(download.storagePath());

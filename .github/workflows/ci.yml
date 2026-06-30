@@ -12,6 +12,16 @@ permissions:
   contents: read
 
 jobs:
+  no-utf8-bom:
+    name: No UTF-8 BOM
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Verify source files do not contain UTF-8 BOM
+        shell: pwsh
+        run: ./scripts/verify-no-utf8-bom.ps1
   secret-scan:
     name: Secret scan
     runs-on: ubuntu-latest

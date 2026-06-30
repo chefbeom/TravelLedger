@@ -107,6 +107,7 @@ class LedgerAiAnalysisServiceTest {
                 ledgerEntryRepository,
                 historyRepository,
                 properties,
+                new LedgerAiAnalysisStatusService(properties),
                 remoteClient,
                 new LedgerAiAnalysisMetrics(properties, meterRegistryProvider),
                 new LedgerAiAnalysisJsonCodec(objectMapper),

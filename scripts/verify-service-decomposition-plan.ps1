@@ -2,6 +2,8 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $planPath = 'docs/service_decomposition_plan.md'
+ = 'backend/src/main/java/com/playdata/calen/ledger/ai/LedgerAiAnalysisStatusService.java'
+ = 'backend/src/test/java/com/playdata/calen/ledger/ai/LedgerAiAnalysisStatusServiceTest.java'
 if (-not (Test-Path -LiteralPath $planPath)) {
     throw "Service decomposition plan not found: $planPath"
 }
@@ -102,6 +104,7 @@ foreach ($item in $requiredReviewItems) {
 $requiredBoundarySnippets = @(
     'Responsibility Boundary Contract',
     'Decomposition Ratchet Rules',
+    'LedgerAiAnalysisStatusService',
     'LedgerAiAnalysisMetrics',
     'LedgerAiAnalysisNotifications',
     'LedgerAiAnalysisJsonCodec',
@@ -128,6 +131,28 @@ foreach ($snippet in $requiredBoundarySnippets) {
     }
 }
 
+foreach ($path in @($statusServicePath, $statusServiceTestPath)) {
+    if (-not (Test-Path -LiteralPath $path)) {
+        $findings.Add("Service decomposition status extraction file is missing: $path") | Out-Null
+    }
+}
+
+if ((Test-Path -LiteralPath $statusServicePath) -and (Test-Path -LiteralPath $statusServiceTestPath)) {
+    $statusService = Get-Content -LiteralPath $statusServicePath -Raw
+    $statusServiceTest = Get-Content -LiteralPath $statusServiceTestPath -Raw
+
+    foreach ($snippet in @('public LedgerAiAnalysisStatusResponse getStatus()', 'properties.isEnabled()', 'properties.isConfigured()', 'properties.isLmStudioConfigured()', 'properties.statusMessage()')) {
+        if (-not $statusService.Contains($snippet)) {
+            $findings.Add("LedgerAiAnalysisStatusService missing status snippet: $snippet") | Out-Null
+        }
+    }
+
+    foreach ($snippet in @('getStatusReturnsReadinessWithoutProviderSecretsOrUrls', 'doesNotContain("http://172.18.240.1:1234")', 'doesNotContain("lmstudio-secret-token")', 'doesNotContain("n8n-secret-token")')) {
+        if (-not $statusServiceTest.Contains($snippet)) {
+            $findings.Add("LedgerAiAnalysisStatusServiceTest missing redaction evidence snippet: $snippet") | Out-Null
+        }
+    }
+}
 if ($findings.Count -gt 0) {
     Write-Host 'Service decomposition plan check failed.'
     $findings | Sort-Object -Unique | ForEach-Object { Write-Host " - $_" }

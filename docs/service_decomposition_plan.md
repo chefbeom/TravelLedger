@@ -8,14 +8,14 @@ This plan keeps the next refactors small and reversible. The goal is not to spli
 
 | Service | Current size | Main risk |
 | --- | ---: | --- |
-| LedgerAiAnalysisService | 1066 lines | AI orchestration still owns provider calls, duplicate suppression, history persistence, and report mapping; provider output contract text is isolated in LedgerAiOutputContract, provider payload minimization in LedgerAiAnalysisPayloadBuilder, Micrometer request metrics in LedgerAiAnalysisMetrics, AI analysis notification delivery in LedgerAiAnalysisNotifications, JSON history/result conversion in LedgerAiAnalysisJsonCodec, and text safety/length limiting in LedgerAiAnalysisTextSanitizer. |
+| `LedgerAiAnalysisService` | 1058 lines | AI orchestration still owns provider calls, duplicate suppression, history persistence, and report mapping; provider output contract text is isolated in LedgerAiOutputContract, readiness/status assembly in LedgerAiAnalysisStatusService, provider payload minimization in LedgerAiAnalysisPayloadBuilder, Micrometer request metrics in LedgerAiAnalysisMetrics, AI analysis notification delivery in LedgerAiAnalysisNotifications, JSON history/result conversion in LedgerAiAnalysisJsonCodec, and text safety/length limiting in LedgerAiAnalysisTextSanitizer. |
 | `TravelService` | 3278 lines | Plans, sharing, map snapshots, media upload completion, route/GPX handling, expense reflection, cache invalidation, public atlas reads, and exchange rates are mixed in one service. |
 
 ## CI Line Budget
 
 | Service | Current baseline | CI budget | Policy |
 | --- | ---: | ---: | --- |
-| LedgerAiAnalysisService | 1066 lines | 1144 lines | Growth past the budget must extract payload, provider-call, report, history, or notification behavior before raising the limit. |
+| `LedgerAiAnalysisService` | 1058 lines | 1144 lines | Growth past the budget must extract payload, provider-call, report, history, status, or notification behavior before raising the limit. |
 | `TravelService` | 3278 lines | 3300 lines | Growth past the budget must split media, map, share, route, exchange-rate, or ledger-bridge behavior before raising the limit. |
 
 The budget is intentionally close to the current baseline so service decomposition behaves as a ratchet: new feature work should reduce or isolate responsibilities instead of adding more code to the large orchestrators.
@@ -42,7 +42,7 @@ These method groups should move together. A new feature should not add more logi
 | Ledger AI | Report merge and fallback copy | `buildReport`, `buildFallbackReport`, `buildFullReport`, `buildKeySummary`, `buildNotableSpending`, `buildImprovementActions` | `LedgerAiAnalysisReportMerger` | Provider calls, persistence, or request validation. |
 | Ledger AI | Period and comparison planning | `resolvePlan`, `resolvePeriodRange`, `resolveComparisonRanges`, `validateCustomRange` | `LedgerAiAnalysisPlanResolver` | Repository reads, provider payload construction, or response mapping. |
 | Ledger AI | History and duplicate suppression | `findReusableAnalysis`, `findLatestMatchingAnalysis`, `baseHistory`, `toSummary`, `LedgerAiAnalysisJsonCodec` | `LedgerAiAnalysisHistoryCoordinator`; JSON conversion now belongs to `LedgerAiAnalysisJsonCodec`. | Provider schema validation, notification delivery, or metric registration. |
-| Ledger AI | Metrics and notification side effects | `LedgerAiAnalysisMetrics`, `LedgerAiAnalysisNotifications` | `LedgerAiAnalysisMetrics` owns Micrometer request metrics; `LedgerAiAnalysisNotifications` owns bounded completion/failure notification delivery. | Payload minimization, report text, or history query composition. |
+| Ledger AI | Status, metrics, and notification side effects | `LedgerAiAnalysisStatusService`, `LedgerAiAnalysisMetrics`, `LedgerAiAnalysisNotifications` | `LedgerAiAnalysisStatusService` owns readiness/status response assembly; `LedgerAiAnalysisMetrics` owns Micrometer request metrics; `LedgerAiAnalysisNotifications` owns bounded completion/failure notification delivery. | Payload minimization, report text, history query composition, or provider HTTP calls. |
 | Travel | Media upload/download orchestration | `prepareMediaUploadInternal`, `completeMediaUploadInternal`, `getMediaDownload`, `getSharedMediaDownload`, `invalidateOwnedMediaDownloadCache` | `TravelMediaUploadCoordinator` | Share group mutation, map cluster rebuild, route CRUD, or exchange-rate lookup. |
 | Travel | Map and photo cluster reads | `getMyMapOverview`, `getMyMapMarkerDetailBundle`, `getMyMapPhotoClusterDetail`, `resolveMyMapPhotoClusterDetail`, `refreshMyMapPhotoClusterSnapshot` | `TravelMapQueryService` | Upload completion, public-share mutation, or ledger reflection. |
 | Travel | Sharing and public atlas visibility | `shareCompletedPlan`, `getPlanShares`, `cancelPlanShare`, `searchShareRecipients`, `updatePlanPublicShare`, `getSharedExhibits` | `TravelShareService` | Media byte serving, route storage, or expense reflection. |
@@ -80,10 +80,11 @@ These method groups should move together. A new feature should not add more logi
 - 2026-06-30: Extracted AI text safety and provider length limiting into LedgerAiAnalysisTextSanitizer, reducing LedgerAiAnalysisService to 1119 lines without changing payload text limits.
 - 2026-06-30: Wired LedgerAiAnalysisService to the extracted metrics, JSON codec, text sanitizer, and notification collaborators so the decomposition boundary is enforced in constructor dependencies.
 - 2026-06-30: Extracted provider entry limiting and payloadMinimization counting into LedgerAiAnalysisPayloadBuilder, reducing the service while preserving provider payload safety limits.
+- 2026-06-30: Extracted AI readiness/status response assembly into LedgerAiAnalysisStatusService and added focused secret/URL redaction coverage for status output.
 ### Ledger AI Exit Criteria
 
 - The original service becomes a thin orchestration layer under roughly 400-600 lines.
-- Payload, report, plan, and history collaborators have focused unit tests.
+- Payload, status, report, plan, and history collaborators have focused unit tests.
 - Existing AI safety tests still cover prompt injection, status redaction, provider allowlist, payload minimization, duplicate suppression, and response schema validation.
 - AI output remains advice/analysis only; no ledger mutation is introduced without explicit user confirmation.
 

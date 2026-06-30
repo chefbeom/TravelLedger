@@ -1,4 +1,4 @@
-﻿- targets:
+- targets:
     - host.docker.internal:9100
   labels:
     server: calen-app

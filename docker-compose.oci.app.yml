@@ -1,4 +1,4 @@
-﻿name: ${COMPOSE_PROJECT_NAME:-calen-app}
+name: ${COMPOSE_PROJECT_NAME:-calen-app}
 
 services:
   backend:

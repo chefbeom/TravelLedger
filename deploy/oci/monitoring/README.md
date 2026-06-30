@@ -1,4 +1,4 @@
-﻿# Calen monitoring
+# Calen monitoring
 
 This stack runs Prometheus, Alertmanager, and Grafana on the app server, then scrapes:
 

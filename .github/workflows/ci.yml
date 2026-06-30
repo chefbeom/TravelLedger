@@ -36,6 +36,17 @@ jobs:
         shell: pwsh
         run: ./scripts/verify-secret-scan-contract.ps1
 
+  ci-workflow-contract:
+    name: CI workflow contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Verify CI workflow topology and release gate wiring
+        shell: pwsh
+        run: ./scripts/verify-ci-workflow-contract.ps1
+
   config-sync:
     name: Config sync
     runs-on: ubuntu-latest
@@ -349,6 +360,7 @@ jobs:
     needs:
       - secret-scan
       - secret-scan-contract
+      - ci-workflow-contract
       - config-sync
       - migration-discipline
       - observability-alerts
@@ -369,6 +381,7 @@ jobs:
       - data-portability-contract
       - pwa-mobile-baseline
       - accessibility-mobile-checklist
+      - ai-provider-safety-contract
       - service-decomposition-plan
       - backend-test
       - backend-security-tests
@@ -382,6 +395,7 @@ jobs:
           declare -A results=(
             [secret-scan]="${{ needs['secret-scan'].result }}"
             [secret-scan-contract]="${{ needs['secret-scan-contract'].result }}"
+            [ci-workflow-contract]="${{ needs['ci-workflow-contract'].result }}"
             [config-sync]="${{ needs['config-sync'].result }}"
             [migration-discipline]="${{ needs['migration-discipline'].result }}"
             [observability-alerts]="${{ needs['observability-alerts'].result }}"
@@ -402,6 +416,7 @@ jobs:
             [data-portability-contract]="${{ needs['data-portability-contract'].result }}"
             [pwa-mobile-baseline]="${{ needs['pwa-mobile-baseline'].result }}"
             [accessibility-mobile-checklist]="${{ needs['accessibility-mobile-checklist'].result }}"
+            [ai-provider-safety-contract]="${{ needs['ai-provider-safety-contract'].result }}"
             [service-decomposition-plan]="${{ needs['service-decomposition-plan'].result }}"
             [backend-test]="${{ needs['backend-test'].result }}"
             [backend-security-tests]="${{ needs['backend-security-tests'].result }}"

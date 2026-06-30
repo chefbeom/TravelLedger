@@ -60,7 +60,7 @@ if ($findings.Count -eq 0) {
 
     Assert-ContainsAll 'Baseline rule anchors' $baseline @(
         'AUTH-01', 'AUTH-02', 'AUTH-03', 'ACCESS-01', 'ACCESS-03', 'SHARE-01',
-        'UPLOAD-01', 'PRESIGN-01', 'AI-05', 'AUDIT-01', 'OBS-01'
+        'UPLOAD-01', 'PRESIGN-01', 'AI-05', 'AUDIT-01', 'OBS-01', 'SECRET-01', 'CI-01'
     )
 
     Assert-ContainsAll 'Contract/verifier anchors' $baseline @(
@@ -71,7 +71,11 @@ if ($findings.Count -eq 0) {
         'scripts/verify-public-share-authorization-contract.ps1',
         'scripts/verify-ai-provider-safety-contract.ps1',
         'scripts/verify-admin-audit-contract.ps1',
-        'scripts/scan-secrets.ps1'
+        'scripts/scan-secrets.ps1',
+        'docs/secret_scanning_contract.md',
+        'scripts/verify-secret-scan-contract.ps1',
+        'docs/ci_workflow_contract.md',
+        'scripts/verify-ci-workflow-contract.ps1'
     )
 
     Assert-ContainsAll 'Public route allowlist' $baseline @(
@@ -91,7 +95,10 @@ if ($findings.Count -eq 0) {
         'security-baseline-checklist:',
         'Verify ASVS security baseline checklist',
         './scripts/verify-security-baseline-checklist.ps1',
-        '[security-baseline-checklist]="${{ needs[''security-baseline-checklist''].result }}"'
+        '[security-baseline-checklist]="${{ needs[''security-baseline-checklist''].result }}"',
+        'ci-workflow-contract:',
+        './scripts/verify-ci-workflow-contract.ps1',
+        '[ci-workflow-contract]="${{ needs[''ci-workflow-contract''].result }}"'
     )
 }
 

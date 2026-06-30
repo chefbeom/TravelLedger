@@ -1,8 +1,8 @@
-# Data Portability Contract
+﻿# Data Portability Contract
 
 Updated: 2026-06-30
 
-This document is the release contract for user data portability. The current backend export provides a password-protected archive containing ledger CSV data, export metadata, and safe file/media manifests. The archive is created only for the authenticated user and only after a recently verified secondary PIN session. Successful exports create a bounded `PRIVACY_EXPORT_DONE` notification without file names, archive contents, secondary PIN values, tokens, or storage paths.
+This document is the release contract for user data portability. The current backend export provides a password-protected archive containing ledger CSV data, export metadata, and safe file/media manifests. The long-term product direction is user-owned full data export, async photo/file archive packaging, and standardized ledger CSV/Excel import/export that makes TravelLedger trustworthy as a personal data platform. The archive is created only for the authenticated user and only after a recently verified secondary PIN session. Successful exports create a bounded `PRIVACY_EXPORT_DONE` notification without file names, archive contents, secondary PIN values, tokens, or storage paths.
 
 ## Implemented API
 
@@ -21,8 +21,37 @@ Request body is optional:
 
 When `from` and `to` are omitted, all non-deleted ledger entries visible to the authenticated owner are exported.
 
-## Export flow
+## Portability product tiers
 
+| Tier | User value | First safe release | Guardrail |
+| --- | --- | --- | --- |
+| Account data export | User can download their own ledger, profile-adjacent metadata, and safe drive/travel/family manifests. | Current password-protected archive with ledger CSV, export metadata, and manifest-only media/file listings. | Owner scope, CSRF, secondary PIN, secret exclusion, safe manifests, and bounded completion notification remain mandatory. |
+| Photo/file archive | User can request an archive that includes original photos, family album media, and CalenDrive files. | Future async binary archive job with queueing, progress, size limits, resumable/retry policy, encryption, expiration cleanup, and restore rehearsal evidence. | Never run synchronously in the request thread; never include another user's private files; never expose storage paths, public tokens, or presigned URLs. |
+| Standard ledger export | User can move ledger data to external tools. | Stable CSV/Excel schema with documented columns, time zone, currency, amount, category, payment method, tags, and import report metadata. | Exported rows stay owner-scoped and omit internal ids/secrets unless explicitly documented as portable external ids. |
+| Standard ledger import | User can bring ledger data back from CSV/Excel without corruption. | Preview-first import with row validation, duplicate detection, category/payment-method mapping, conflict report, and explicit confirm-save. | Import cannot write until validation passes and the user confirms; every row is assigned to the authenticated owner only. |
+
+## Full archive release requirements
+
+| Requirement | Required behavior |
+| --- | --- |
+| Async job | Binary photo/file archive generation must run through a queued job with progress API, cancel/expire states, retry budget, and cleanup ownership. |
+| Size and type bounds | Enforce per-file, total-byte, item-count, and archive-count limits before reading object storage data. |
+| Encryption and expiry | Archive output must be encrypted, time-limited, and deleted after expiry or successful cleanup. |
+| Access isolation | Archive workers must re-check owner/member visibility before adding every ledger row, drive file, travel photo, or family album item. |
+| Restore rehearsal | Each release must prove the archive can be opened and interpreted without secrets, object storage paths, or presigned URLs. |
+| Audit/notification | Completion/failure notifications must contain only status, date range, archive scope, counts, and relative target links. |
+
+## CSV/Excel standardization contract
+
+| Area | Export rule | Import rule |
+| --- | --- | --- |
+| Columns | Publish stable column names for date, type, amount, currency, KRW amount, category, payment method, memo, tags, travel link, and external id. | Reject unknown required columns, tolerate optional columns, and report unmapped values before writes. |
+| Dates/time zones | Export dates with documented locale/time-zone behavior. | Parse only supported date formats and show row-level errors for ambiguous values. |
+| Amounts | Export signed/typed amounts consistently for income, expense, transfer, and travel-linked records. | Validate numeric range, currency, sign, and record type before preview confirmation. |
+| Classification | Export category/payment method labels plus portable external ids when safe. | Map by owner-visible labels/rules and let the user approve new categories or payment methods. |
+| Idempotency | Include optional import batch id and row fingerprint in reports. | Detect duplicate rows and repeated imports before saving. |
+| Report | Include manifest metadata and row counts. | Produce accepted/rejected/conflict counts with downloadable error report. |
+## Export flow
 ```mermaid
 flowchart TD
     A["Authenticated user"] --> B["POST /api/privacy/data-export"]
@@ -57,8 +86,9 @@ Binary photos and files are intentionally not included in the current archive. T
 | Location privacy | Travel media manifests may expose `hasGpsMetadata`; they must not expose raw latitude/longitude or raw EXIF/GPS payloads. |
 | Membership privacy | Future household, family, travel, and shared-budget exports must include only data visible to the current user. |
 | Binary archive boundary | Binary file/photo export must be async, bounded, encrypted, expiring, and separately rehearsed before it can be part of the release path. |
-| Import/export standardization | Future standard CSV/Excel import and export schemas must preserve owner scope, manifest redaction, and validation before database writes. |
-| Export notification | Completion notifications must store only status, date range label, and archive scope; they must not include file names, archive contents, secondary PIN values, tokens, public links, presigned URLs, storage paths, prompts, provider responses, raw GPS, or owner identity fields. |
+| Import/export standardization | Future standard CSV/Excel import and export schemas must preserve owner scope, manifest redaction, preview-first validation, duplicate detection, row-level error reports, and explicit confirm-save before database writes. |
+| Export notification | Completion notifications must store only status, date range label, archive scope, counts, and relative target links; they must not include file names, archive contents, secondary PIN values, tokens, public links, presigned URLs, storage paths, prompts, provider responses, raw GPS, or owner identity fields. |
+| Import is preview-first | CSV/Excel import must produce validation and conflict reports before any ledger write; saving requires explicit user confirmation. |
 
 ## Current implementation anchors
 
@@ -84,7 +114,8 @@ A release is not ready if any of these are true:
 | Export does not require authentication, CSRF, or secondary PIN. | Creates direct account-data exfiltration risk. |
 | Archive or export notification includes operational secrets, storage paths, public tokens, presigned URLs, raw GPS, AI prompts, provider responses, file names, archive contents, or secondary PIN values. | Leaks infrastructure and sensitive derived data. |
 | Binary media export is synchronous or unbounded. | Creates timeout, memory, cost, and partial-export risk. |
-| Standard CSV/Excel import bypasses validation or owner scope. | Can corrupt or cross-contaminate user data. |
+| Photo/file archive lacks encryption, expiry, progress, cleanup, or restore rehearsal evidence. | Makes full-data export unreliable and risky for private media/files. |
+| Standard CSV/Excel import bypasses validation, preview, duplicate detection, explicit confirmation, or owner scope. | Can corrupt or cross-contaminate user data. |
 
 ## CI contract
 
@@ -94,9 +125,9 @@ A release is not ready if any of these are true:
 
 | Slice | Notes |
 | --- | --- |
-| Async binary archive job | Add queueing, progress API, size limits, retry policy, archive expiration, and restore rehearsal evidence before including photos/files. |
-| Standard CSV/Excel export schema | Define stable column names, time zone rules, amount formats, category mapping, and manifest metadata for external tools. |
-| Standard CSV/Excel import schema | Validate rows before writes, preview conflicts, preserve owner scope, and produce an import report. |
+| Async binary archive job | Add queueing, progress API, size limits, retry policy, archive encryption, archive expiration, cleanup ownership, and restore rehearsal evidence before including photos/files. |
+| Standard CSV/Excel export schema | Define stable column names, time zone rules, currency/amount formats, category/payment-method mapping, portable external ids, and manifest metadata for external tools. |
+| Standard CSV/Excel import schema | Validate rows before writes, preview conflicts, detect duplicates/repeated imports, preserve owner scope, and produce an import/error report before explicit confirm-save. |
 | Frontend E2E coverage | Drive the `ProfileWorkspace.vue` privacy panel through Playwright once disposable privacy/export fixtures are available: date range, secondary PIN dialog, manifest-only limitation, download success, and failure live regions. |
 | Restore/rehearsal runbook | Prove exported data can be interpreted safely without secrets or object storage internals. |
 
@@ -109,4 +140,5 @@ A release is not ready if any of these are true:
 - Export date range filters ledger CSV rows.
 - Export metadata and `PRIVACY_EXPORT_DONE` notification metadata contain no secrets, signed URLs, presigned URLs, public tokens, raw GPS, prompts, provider responses, file names, archive contents, secondary PIN values, or storage internals.
 - Async binary archive job enforces size limits, expiration, retry behavior, and encrypted output before release.
-- Standard CSV/Excel import/export preserves owner scope and validates every row before writes.
+- Standard CSV/Excel import/export preserves owner scope, validates every row before writes, detects duplicates, produces row-level reports, and requires explicit confirm-save.
+

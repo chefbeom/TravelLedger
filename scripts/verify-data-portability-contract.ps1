@@ -1,4 +1,4 @@
-$ErrorActionPreference = 'Stop'
+﻿$ErrorActionPreference = 'Stop'
 
 function Read-RequiredFile([string]$Path) {
     if (-not (Test-Path -LiteralPath $Path)) {
@@ -29,6 +29,9 @@ Assert-ContainsAll 'docs/data_portability.md' $contract @(
     '# Data Portability Contract',
     '## Implemented API',
     '## Export flow',
+    '## Portability product tiers',
+    '## Full archive release requirements',
+    '## CSV/Excel standardization contract',
     '## Archive contents',
     '## Non-negotiable safety rules',
     '## Current implementation anchors',
@@ -55,7 +58,17 @@ Assert-ContainsAll 'docs/data_portability.md' $contract @(
     'privacy-export-secondary-pin',
     'manifest-only archive explanation',
     'PRIVACY_EXPORT_DONE',
-    'Export notification'
+    'Export notification',
+    'personal data platform',
+    'full data export',
+    'Photo/file archive',
+    'Standard ledger export',
+    'Standard ledger import',
+    'queued job with progress API',
+    'per-file, total-byte, item-count',
+    'preview-first validation',
+    'duplicate detection',
+    'explicit confirm-save'
 )
 
 Assert-ContainsAll 'PrivacyController' $controller @(
@@ -158,3 +171,4 @@ Assert-ContainsAll '.github/workflows/ci.yml' $ci @(
 )
 
 Write-Host 'data portability contract verified'
+

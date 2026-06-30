@@ -165,7 +165,7 @@ class AdminDataManagementServiceTest {
         when(accountInviteRepository.count()).thenReturn(5L);
         when(accountInviteRepository.countByUsedAtIsNullAndExpiresAtAfter(any())).thenReturn(2L);
         when(minioBackupArchiveService.getSummary()).thenReturn(
-                new AdminMinioStorageSummaryResponse(true, "budgetjourneybucket", 12L, 4096L, null)
+                new AdminMinioStorageSummaryResponse(true, "budgetjourneybucket", 12L, 4096L, 0L, 0L, 0.0, null)
         );
     }
 

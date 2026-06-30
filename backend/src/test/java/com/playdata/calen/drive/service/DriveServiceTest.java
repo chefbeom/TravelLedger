@@ -316,6 +316,7 @@ class DriveServiceTest {
     private DriveService newService() {
         return new DriveService(
                 driveItemRepository,
+                driveItemVersionRepository,
                 driveShareRepository,
                 driveDownloadLinkRepository,
                 appUserRepository,

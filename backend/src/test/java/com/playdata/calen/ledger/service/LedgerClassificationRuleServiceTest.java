@@ -78,7 +78,7 @@ class LedgerClassificationRuleServiceTest {
         ));
 
         assertThat(response.matched()).isTrue();
-        assertThat(response.message()).isEqualTo("Matched keyword: starbucks");
+        assertThat(response.reason()).isEqualTo("Matched keyword: starbucks");
         assertThat(response.rule().id()).isEqualTo(2L);
         assertThat(response.rule().priority()).isEqualTo(10);
         verify(ledgerClassificationRuleRepository).findAllByOwnerIdAndActiveTrueOrderByPriorityAscIdAsc(USER_ID);
@@ -99,7 +99,7 @@ class LedgerClassificationRuleServiceTest {
         ));
 
         assertThat(response.matched()).isFalse();
-        assertThat(response.message()).isEqualTo("No classification rule matched.");
+        assertThat(response.reason()).isEqualTo("No classification rule matched.");
         assertThat(response.rule()).isNull();
     }
 

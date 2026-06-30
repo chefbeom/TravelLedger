@@ -4,16 +4,15 @@ import com.playdata.calen.common.config.MinioProperties;
 import com.playdata.calen.common.exception.BadRequestException;
 import com.playdata.calen.common.exception.ServiceUnavailableException;
 import com.playdata.calen.drive.dto.DriveDtos;
-import io.minio.BucketExistsArgs;
 import io.minio.CopyObjectArgs;
 import io.minio.CopySource;
 import io.minio.GetObjectArgs;
 import io.minio.GetPresignedObjectUrlArgs;
-import io.minio.MakeBucketArgs;
 import io.minio.MinioClient;
 import io.minio.PutObjectArgs;
 import io.minio.RemoveObjectArgs;
 import io.minio.StatObjectArgs;
+import io.minio.errors.ErrorResponseException;
 import io.minio.http.Method;
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
@@ -26,6 +25,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -62,6 +62,7 @@ public class DriveStorageService {
             Map.entry("wav", List.of("audio/wav", "audio/x-wav"))
     );
     private static final List<String> GENERIC_CONTENT_TYPES = List.of("application/octet-stream", "binary/octet-stream");
+    private static final Set<String> MISSING_OBJECT_ERROR_CODES = Set.of("NoSuchKey", "NoSuchObject");
     private static final String STORAGE_NOT_CONFIGURED_MESSAGE = "드라이브 저장소가 설정되지 않았습니다. 관리자 페이지에서 MinIO 환경변수를 확인해 주세요.";
     private static final String STORAGE_UNAVAILABLE_MESSAGE = "드라이브 저장소에 연결할 수 없습니다. 관리자 페이지에서 MinIO 상태와 환경변수를 확인해 주세요.";
 
@@ -174,8 +175,15 @@ public class DriveStorageService {
                             .build()
             );
             return true;
+        } catch (ErrorResponseException exception) {
+            if (isMissingObject(exception)) {
+                return false;
+            }
+            log.error("Failed to verify drive object. bucket={}, objectKey={}, code={}", resolveBucket(), objectKey, minioErrorCode(exception), exception);
+            throw new ServiceUnavailableException(STORAGE_UNAVAILABLE_MESSAGE);
         } catch (Exception exception) {
-            return false;
+            log.error("Failed to verify drive object. bucket={}, objectKey={}", resolveBucket(), objectKey, exception);
+            throw new ServiceUnavailableException(STORAGE_UNAVAILABLE_MESSAGE);
         }
     }
 
@@ -313,34 +321,15 @@ public class DriveStorageService {
         if (!supportsStorage()) {
             throw new ServiceUnavailableException(STORAGE_NOT_CONFIGURED_MESSAGE);
         }
-        ensureBucketAvailable();
     }
 
-    private void ensureBucketAvailable() {
-        String bucket = resolveBucket();
-        try {
-            MinioClient client = minioClient();
-            boolean exists = client.bucketExists(
-                    BucketExistsArgs.builder()
-                            .bucket(bucket)
-                            .build()
-            );
-            if (!exists) {
-                client.makeBucket(
-                        MakeBucketArgs.builder()
-                                .bucket(bucket)
-                                .build()
-                );
-                log.info("Created missing drive bucket: {}", bucket);
-            }
-        } catch (BadRequestException exception) {
-            throw exception;
-        } catch (Exception exception) {
-            log.error("Failed to verify drive bucket {}", bucket, exception);
-            throw new BadRequestException("드라이브 저장소 연결을 확인해 주세요.");
-        }
+    private boolean isMissingObject(ErrorResponseException exception) {
+        return MISSING_OBJECT_ERROR_CODES.contains(minioErrorCode(exception));
     }
 
+    private String minioErrorCode(ErrorResponseException exception) {
+        return exception != null && exception.errorResponse() != null ? exception.errorResponse().code() : "";
+    }
     private String generateUploadUrl(String objectKey) {
         try {
             return rewritePublicUrl(minioClient().getPresignedObjectUrl(

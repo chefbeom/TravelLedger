@@ -1,4 +1,4 @@
-﻿package com.playdata.calen.account.web;
+package com.playdata.calen.account.web;
 
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
@@ -8,6 +8,7 @@ import com.playdata.calen.account.dto.AdminRestoreBackupRequest;
 import com.playdata.calen.account.security.AppUserPrincipal;
 import com.playdata.calen.account.service.AdminDataManagementService;
 import com.playdata.calen.account.service.AdminPageAccessService;
+import com.playdata.calen.account.service.AdminOpsControlService;
 import com.playdata.calen.account.service.AdminService;
 import com.playdata.calen.account.service.LoginAuditLogService;
 import com.playdata.calen.account.service.SupportInquiryService;
@@ -29,6 +30,9 @@ class AdminControllerAuditDetailTest {
 
     @Mock
     private AdminPageAccessService adminPageAccessService;
+
+    @Mock
+    private AdminOpsControlService adminOpsControlService;
 
     @Mock
     private SupportInquiryService supportInquiryService;
@@ -85,6 +89,7 @@ class AdminControllerAuditDetailTest {
                 adminService,
                 adminDataManagementService,
                 adminPageAccessService,
+                adminOpsControlService,
                 supportInquiryService,
                 loginAuditLogService
         );

@@ -537,9 +537,9 @@ class LedgerEntryUserScopeIntegrationTest {
         assertThat(storedHistory.getBeforeSnapshotJson()).isEqualTo("[]");
         assertThat(storedHistory.getAfterSnapshotJson()).isEqualTo("[]");
         assertThat(storedHistory.getChangesJson())
-                .contains(""key":"title"")
-                .contains(""beforeRaw":"history original title"")
-                .contains(""afterRaw":"history updated title"");
+                .contains("\"key\":\"title\"")
+                .contains("\"beforeRaw\":\"history original title\"")
+                .contains("\"afterRaw\":\"history updated title\"");
 
         mockMvc.perform(get("/api/entries/history/{historyId}", historyId)
                         .session(hanaSession))

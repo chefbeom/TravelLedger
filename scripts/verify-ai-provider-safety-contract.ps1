@@ -49,6 +49,7 @@ $lmStudioClientTest = Read-RepoFile 'backend/src/test/java/com/playdata/calen/le
 $propertiesTest = Read-RepoFile 'backend/src/test/java/com/playdata/calen/ledger/ai/LedgerAiAnalysisPropertiesTest.java'
 $historyRepository = Read-RepoFile 'backend/src/main/java/com/playdata/calen/ledger/repository/LedgerAiAnalysisHistoryRepository.java'
 $outputContract = Read-RepoFile 'backend/src/main/java/com/playdata/calen/ledger/ai/LedgerAiOutputContract.java'
+$frontendApi = Read-RepoFile 'frontend/src/lib/api.js'
 
 Assert-ContainsAll -Label 'AI provider safety contract document' -Content $contract -Needles @(
     '# AI Provider Safety Contract',
@@ -123,6 +124,14 @@ Assert-ContainsAll -Label 'Ledger AI service implementation' -Content $service -
 )
 
 
+Assert-ContainsAll -Label 'Ledger AI frontend request wrapper' -Content $frontendApi -Needles @(
+    'function buildLedgerAiClientRequestId()'
+    'globalThis.crypto?.getRandomValues'
+    'return `ledger-ai-${timestamp}-${randomPart}`.slice(0, 80)'
+    'function withLedgerAiClientRequestId(payload = {})'
+    'clientRequestId: payload?.clientRequestId || buildLedgerAiClientRequestId()'
+    'JSON.stringify(withLedgerAiClientRequestId(payload))'
+)
 Assert-ContainsAll -Label 'Ledger AI output contract' -Content $outputContract -Needles @(
     'final class LedgerAiOutputContract',
     'static String text()',
@@ -183,7 +192,7 @@ Assert-ContainsAll -Label 'LM Studio provider client' -Content $lmStudioClient -
     'Authorization',
     'Bearer ',
     'LedgerAiRemoteResponseValidator.requireUsable(response, "LM Studio")',
-    'LM Studio AI 응답을 JSON 분석 결과로 해석하지 못했습니다',
+    'LM Studio AI ?�답??JSON 분석 결과�??�석?��? 못했?�니??,
     'calen.external.workflow.requests',
     'calen.external.workflow.request'
 )

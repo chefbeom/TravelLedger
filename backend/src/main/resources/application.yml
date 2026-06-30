@@ -1,4 +1,4 @@
-spring:
+﻿spring:
   application:
     name: calen-backend
   datasource:
@@ -103,16 +103,16 @@ app:
       api-key: ${APP_LEDGER_AI_API_KEY:}
       api-key-header: ${APP_LEDGER_AI_API_KEY_HEADER:X-TravelLedger-AI-Key}
       model: ${APP_LEDGER_AI_MODEL:auto}
-      lm-studio-base-url: ${APP_LEDGER_AI_LMSTUDIO_BASE_URL:http://172.18.240.1:1234}
-      lm-studio-chat-path: ${APP_LEDGER_AI_LMSTUDIO_CHAT_PATH:/api/v1/chat}
-      lm-studio-models-path: ${APP_LEDGER_AI_LMSTUDIO_MODELS_PATH:/api/v1/models}
+      lm-studio-base-url: ${APP_LEDGER_AI_LMSTUDIO_BASE_URL:http://100.92.170.22:1234}
+      lm-studio-chat-path: ${APP_LEDGER_AI_LMSTUDIO_CHAT_PATH:/v1/chat/completions}
+      lm-studio-models-path: ${APP_LEDGER_AI_LMSTUDIO_MODELS_PATH:/v1/models}
       lm-studio-api-key: ${APP_LEDGER_AI_LMSTUDIO_API_KEY:}
       temperature: ${APP_LEDGER_AI_TEMPERATURE:0.2}
       max-tokens: ${APP_LEDGER_AI_MAX_TOKENS:2048}
       connect-timeout: ${APP_LEDGER_AI_CONNECT_TIMEOUT:3s}
       read-timeout: ${APP_LEDGER_AI_READ_TIMEOUT:120s}
       enforce-provider-url-allowlist: ${APP_LEDGER_AI_ENFORCE_PROVIDER_URL_ALLOWLIST:false}
-      allowed-provider-hosts: "${APP_LEDGER_AI_ALLOWED_PROVIDER_HOSTS:localhost,127.0.0.1,::1,172.18.240.1}"
+      allowed-provider-hosts: "${APP_LEDGER_AI_ALLOWED_PROVIDER_HOSTS:localhost,127.0.0.1,::1,100.92.170.22}"
       history-retention-enabled: ${APP_LEDGER_AI_HISTORY_RETENTION_ENABLED:false}
       history-retention-days: ${APP_LEDGER_AI_HISTORY_RETENTION_DAYS:180}
       history-retention-cron: ${APP_LEDGER_AI_HISTORY_RETENTION_CRON:0 15 3 * * *}

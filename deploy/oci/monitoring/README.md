@@ -1,10 +1,10 @@
-# Calen monitoring
+﻿# Calen monitoring
 
 This stack runs Prometheus, Alertmanager, and Grafana on the app server, then scrapes:
 
 - the Calen backend Prometheus endpoint at `backend:8080/actuator/prometheus`
 - the app server node_exporter at `host.docker.internal:9100`
-- the data server node_exporter at `10.0.0.20:9100`
+- the data server node_exporter at `10.0.0.2:9100`
 
 ## Before starting
 
@@ -19,10 +19,10 @@ curl -fsS http://127.0.0.1:9100/metrics | head
 From the app server to the data server:
 
 ```sh
-curl -fsS http://10.0.0.20:9100/metrics | head
+curl -fsS http://10.0.0.2:9100/metrics | head
 ```
 
-If the data server private IP is not `10.0.0.20`, edit:
+If the data server private IP is not `10.0.0.2`, edit:
 
 ```text
 deploy/oci/monitoring/prometheus/file_sd/node-exporters.yml

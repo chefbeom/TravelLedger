@@ -1,172 +1,172 @@
-# OCI DB + MinIO 분리 배포 가이드
+﻿# OCI DB + MinIO 遺꾨━ 諛고룷 媛?대뱶
 
-이 문서는 현재 프로젝트를 다음 2서버 구조로 분리할 때 바로 사용할 수 있는 설정 가이드입니다.
+??臾몄꽌???꾩옱 ?꾨줈?앺듃瑜??ㅼ쓬 2?쒕쾭 援ъ“濡?遺꾨━????諛붾줈 ?ъ슜?????덈뒗 ?ㅼ젙 媛?대뱶?낅땲??
 
-- 앱 서버: `3 OCPU / 6GB`
+- ???쒕쾭: `3 OCPU / 6GB`
   - `backend`
   - `frontend`
-  - 호스트 `nginx`
-- 데이터 서버: `2 OCPU / 4GB`
+  - ?몄뒪??`nginx`
+- ?곗씠???쒕쾭: `2 OCPU / 4GB`
   - `MariaDB`
   - `MinIO`
 
-기존 [docker-compose.oci.yml](C:/Users/kjs99/Desktop/calen/docker-compose.oci.yml)은 그대로 두고, 아래 신규 파일만 사용합니다.
+湲곗〈 [docker-compose.oci.yml](C:/Users/kjs99/Desktop/calen/docker-compose.oci.yml)? 洹몃?濡??먭퀬, ?꾨옒 ?좉퇋 ?뚯씪留??ъ슜?⑸땲??
 
-- 앱 서버용: [docker-compose.oci.app.yml](C:/Users/kjs99/Desktop/calen/docker-compose.oci.app.yml)
-- 데이터 서버용: [docker-compose.oci.data.yml](C:/Users/kjs99/Desktop/calen/docker-compose.oci.data.yml)
-- 앱 서버 환경파일 예시: [.env.oci.app.example](C:/Users/kjs99/Desktop/calen/.env.oci.app.example)
-- 데이터 서버 환경파일 예시: [.env.oci.data.example](C:/Users/kjs99/Desktop/calen/.env.oci.data.example)
+- ???쒕쾭?? [docker-compose.oci.app.yml](C:/Users/kjs99/Desktop/calen/docker-compose.oci.app.yml)
+- ?곗씠???쒕쾭?? [docker-compose.oci.data.yml](C:/Users/kjs99/Desktop/calen/docker-compose.oci.data.yml)
+- ???쒕쾭 ?섍꼍?뚯씪 ?덉떆: [.env.oci.app.example](C:/Users/kjs99/Desktop/calen/.env.oci.app.example)
+- ?곗씠???쒕쾭 ?섍꼍?뚯씪 ?덉떆: [.env.oci.data.example](C:/Users/kjs99/Desktop/calen/.env.oci.data.example)
 
-## 1. 준비 방향
+## 1. 以鍮?諛⑺뼢
 
-핵심은 이렇습니다.
+?듭떖? ?대젃?듬땲??
 
-- 앱 서버는 DB와 MinIO를 더 이상 로컬 컨테이너로 띄우지 않습니다.
-- 앱 서버의 `backend`는 **원격 MariaDB**와 **원격 MinIO**를 사용합니다.
-- 데이터 서버는 `3306`, `9000`, `9001`을 열되, 가능하면 **사설망/NSG 기준으로 제한**합니다.
+- ???쒕쾭??DB? MinIO瑜????댁긽 濡쒖뺄 而⑦뀒?대꼫濡??꾩슦吏 ?딆뒿?덈떎.
+- ???쒕쾭??`backend`??**?먭꺽 MariaDB**? **?먭꺽 MinIO**瑜??ъ슜?⑸땲??
+- ?곗씠???쒕쾭??`3306`, `9000`, `9001`???대릺, 媛?ν븯硫?**?ъ꽕留?NSG 湲곗??쇰줈 ?쒗븳**?⑸땲??
 
-## 2. 권장 네트워크
+## 2. 沅뚯옣 ?ㅽ듃?뚰겕
 
-권장 연결은 아래와 같습니다.
+沅뚯옣 ?곌껐? ?꾨옒? 媛숈뒿?덈떎.
 
-- 앱 서버 -> 데이터 서버
+- ???쒕쾭 -> ?곗씠???쒕쾭
   - MariaDB `3306`
   - MinIO API `9000`
-- 관리자 PC -> 데이터 서버
-  - MinIO Console `9001` (필요할 때만)
+- 愿由ъ옄 PC -> ?곗씠???쒕쾭
+  - MinIO Console `9001` (?꾩슂???뚮쭔)
 
-권장 정책:
+沅뚯옣 ?뺤콉:
 
-- `3306`: 앱 서버 사설 IP만 허용
-- `9000`: 앱 서버 사설 IP만 허용
-- `9001`: 관리자 IP만 허용
+- `3306`: ???쒕쾭 ?ъ꽕 IP留??덉슜
+- `9000`: ???쒕쾭 ?ъ꽕 IP留??덉슜
+- `9001`: 愿由ъ옄 IP留??덉슜
 
-추가로, `presigned URL` 업로드를 유지하려면 브라우저가 접근할 수 있는 MinIO API 주소가 필요합니다.
+異붽?濡? `presigned URL` ?낅줈?쒕? ?좎??섎젮硫?釉뚮씪?곗?媛 ?묎렐?????덈뒗 MinIO API 二쇱냼媛 ?꾩슂?⑸땲??
 
-- 내부 업로드만 쓸 경우:
-  - 앱 서버 `.env`에서 `TRAVEL_PRESIGNED_UPLOAD_ENABLED=false`
-- 직접 업로드를 유지할 경우:
-  - `MINIO_PUBLIC_API`에 브라우저가 접근 가능한 주소 설정
+- ?대? ?낅줈?쒕쭔 ??寃쎌슦:
+  - ???쒕쾭 `.env`?먯꽌 `TRAVEL_PRESIGNED_UPLOAD_ENABLED=false`
+- 吏곸젒 ?낅줈?쒕? ?좎???寃쎌슦:
+  - `MINIO_PUBLIC_API`??釉뚮씪?곗?媛 ?묎렐 媛?ν븳 二쇱냼 ?ㅼ젙
   - `TRAVEL_PRESIGNED_UPLOAD_ENABLED=true`
 
-실제 `MinIO presigned URL` 구성 절차는 별도 가이드로 분리해 두었습니다.
+?ㅼ젣 `MinIO presigned URL` 援ъ꽦 ?덉감??蹂꾨룄 媛?대뱶濡?遺꾨━???먯뿀?듬땲??
 
-- [OCI_MinIO_presignedURL_설정가이드.md](C:/Users/kjs99/Desktop/calen/docs/OCI_MinIO_presignedURL_설정가이드.md)
+- [OCI_MinIO_presignedURL_?ㅼ젙媛?대뱶.md](C:/Users/kjs99/Desktop/calen/docs/OCI_MinIO_presignedURL_?ㅼ젙媛?대뱶.md)
 
-## 3. 데이터 서버 준비
+## 3. ?곗씠???쒕쾭 以鍮?
 
-데이터 서버에서 레포를 두고 아래처럼 환경파일을 만듭니다.
+?곗씠???쒕쾭?먯꽌 ?덊룷瑜??먭퀬 ?꾨옒泥섎읆 ?섍꼍?뚯씪??留뚮벊?덈떎.
 
 ```bash
 cp .env.oci.data.example .env.oci.data
 ```
 
-주요 값만 수정합니다.
+二쇱슂 媛믩쭔 ?섏젙?⑸땲??
 
 - `DB_PASSWORD`
 - `DB_ROOT_PASSWORD`
 - `MINIO_ROOT_PASSWORD`
 - `MINIO_CONSOLE_EXTERNAL_URL`
 
-데이터 서버 실행:
+?곗씠???쒕쾭 ?ㅽ뻾:
 
 ```bash
 docker compose --env-file .env.oci.data -f docker-compose.oci.data.yml up -d
 ```
 
-정상 확인:
+?뺤긽 ?뺤씤:
 
 ```bash
 docker compose --env-file .env.oci.data -f docker-compose.oci.data.yml ps
 ```
 
-## 4. 앱 서버 준비
+## 4. ???쒕쾭 以鍮?
 
-앱 서버에서도 레포를 두고 아래처럼 환경파일을 만듭니다.
+???쒕쾭?먯꽌???덊룷瑜??먭퀬 ?꾨옒泥섎읆 ?섍꼍?뚯씪??留뚮벊?덈떎.
 
 ```bash
 cp .env.oci.app.example .env.oci.app
 ```
 
-주요 값만 수정합니다.
+二쇱슂 媛믩쭔 ?섏젙?⑸땲??
 
 - `DB_PASSWORD`
 - `DB_INTERNAL_HOST`
-  - 데이터 서버 사설 IP
+  - ?곗씠???쒕쾭 ?ъ꽕 IP
 - `MINIO_ROOT_PASSWORD`
 - `MINIO_API_INTERNAL_URL`
-  - 예: `http://10.0.0.20:9000`
+  - ?? `http://10.0.0.2:9000`
 - `MINIO_PUBLIC_API`
-  - 예: `https://minio.example.com`
+  - ?? `https://minio.example.com`
 - `TRAVEL_PRESIGNED_UPLOAD_ENABLED`
-  - MinIO 공개 업로드 경로를 열었을 때만 `true`
+  - MinIO 怨듦컻 ?낅줈??寃쎈줈瑜??댁뿀???뚮쭔 `true`
 
-앱 서버 실행:
+???쒕쾭 ?ㅽ뻾:
 
 ```bash
 docker compose --env-file .env.oci.app -f docker-compose.oci.app.yml up -d --build
 ```
 
-정상 확인:
+?뺤긽 ?뺤씤:
 
 ```bash
 docker compose --env-file .env.oci.app -f docker-compose.oci.app.yml ps
 ```
 
-## 5. Nginx 유지
+## 5. Nginx ?좎?
 
-기존 Nginx 설정은 그대로 유지해도 됩니다.
+湲곗〈 Nginx ?ㅼ젙? 洹몃?濡??좎??대룄 ?⑸땲??
 
-- 앱 서버의 `127.0.0.1:8081` -> 프런트
-- 앱 서버의 `127.0.0.1:8080` -> 백엔드
+- ???쒕쾭??`127.0.0.1:8081` -> ?꾨윴??
+- ???쒕쾭??`127.0.0.1:8080` -> 諛깆뿏??
 
-즉 기존 [docker-compose.oci.yml](C:/Users/kjs99/Desktop/calen/docker-compose.oci.yml) 기반 Nginx 프록시 구조는 바뀌지 않습니다.
+利?湲곗〈 [docker-compose.oci.yml](C:/Users/kjs99/Desktop/calen/docker-compose.oci.yml) 湲곕컲 Nginx ?꾨줉??援ъ“??諛붾뚯? ?딆뒿?덈떎.
 
-## 6. 백업/복구 영향
+## 6. 諛깆뾽/蹂듦뎄 ?곹뼢
 
-현재 프로젝트의 관리자 데이터 백업/복구는 앱 서버의 백엔드 컨테이너에서 수행됩니다.
+?꾩옱 ?꾨줈?앺듃??愿由ъ옄 ?곗씠??諛깆뾽/蹂듦뎄?????쒕쾭??諛깆뿏??而⑦뀒?대꼫?먯꽌 ?섑뻾?⑸땲??
 
-분리 후에도 그대로 동작하려면:
+遺꾨━ ?꾩뿉??洹몃?濡??숈옉?섎젮硫?
 
-- 앱 서버에서 데이터 서버 `3306` 접근 가능
-- 앱 서버에서 MinIO `9000` 접근 가능
-- 앱 서버에 `rclone` 설정과 `/opt/calen-backup` 유지
+- ???쒕쾭?먯꽌 ?곗씠???쒕쾭 `3306` ?묎렐 媛??
+- ???쒕쾭?먯꽌 MinIO `9000` ?묎렐 媛??
+- ???쒕쾭??`rclone` ?ㅼ젙怨?`/opt/calen-backup` ?좎?
 
-즉 DB와 MinIO를 분리해도 백업/복구 로직 자체는 그대로 유지됩니다.
+利?DB? MinIO瑜?遺꾨━?대룄 諛깆뾽/蹂듦뎄 濡쒖쭅 ?먯껜??洹몃?濡??좎??⑸땲??
 
-## 7. Presigned 업로드 체크
+## 7. Presigned ?낅줈??泥댄겕
 
-여행 사진 직접 업로드를 유지하려면 아래 2개가 함께 맞아야 합니다.
+?ы뻾 ?ъ쭊 吏곸젒 ?낅줈?쒕? ?좎??섎젮硫??꾨옒 2媛쒓? ?④퍡 留욎븘???⑸땲??
 
-- 앱 서버 `.env.oci.app`
+- ???쒕쾭 `.env.oci.app`
   - `TRAVEL_PRESIGNED_UPLOAD_ENABLED=true`
   - `MINIO_PUBLIC_API=https://...`
-- 데이터 서버
-  - 브라우저가 접근 가능한 MinIO API 주소 제공
+- ?곗씠???쒕쾭
+  - 釉뚮씪?곗?媛 ?묎렐 媛?ν븳 MinIO API 二쇱냼 ?쒓났
 
-공개 주소가 아직 없다면, 먼저는 아래처럼 두는 편이 안전합니다.
+怨듦컻 二쇱냼媛 ?꾩쭅 ?녿떎硫? 癒쇱????꾨옒泥섎읆 ?먮뒗 ?몄씠 ?덉쟾?⑸땲??
 
 ```env
 TRAVEL_PRESIGNED_UPLOAD_ENABLED=false
 MINIO_PUBLIC_API=
 ```
 
-이 경우 업로드는 기존 서버 중계 방식으로 계속 동작합니다.
+??寃쎌슦 ?낅줈?쒕뒗 湲곗〈 ?쒕쾭 以묎퀎 諛⑹떇?쇰줈 怨꾩냽 ?숈옉?⑸땲??
 
-## 8. 점검 순서
+## 8. ?먭? ?쒖꽌
 
-1. 데이터 서버 먼저 실행
-2. MariaDB health 확인
-3. MinIO health 확인
-4. 앱 서버 실행
-5. 웹 로그인 확인
-6. 가계부 조회/저장 확인
-7. 여행 사진 업로드 확인
-8. 관리자 백업/복구 모달 확인
+1. ?곗씠???쒕쾭 癒쇱? ?ㅽ뻾
+2. MariaDB health ?뺤씤
+3. MinIO health ?뺤씤
+4. ???쒕쾭 ?ㅽ뻾
+5. ??濡쒓렇???뺤씤
+6. 媛怨꾨? 議고쉶/????뺤씤
+7. ?ы뻾 ?ъ쭊 ?낅줈???뺤씤
+8. 愿由ъ옄 諛깆뾽/蹂듦뎄 紐⑤떖 ?뺤씤
 
-## 9. 빠른 확인 명령
+## 9. 鍮좊Ⅸ ?뺤씤 紐낅졊
 
-데이터 서버:
+?곗씠???쒕쾭:
 
 ```bash
 docker compose --env-file .env.oci.data -f docker-compose.oci.data.yml ps
@@ -174,7 +174,7 @@ docker compose --env-file .env.oci.data -f docker-compose.oci.data.yml logs --ta
 docker compose --env-file .env.oci.data -f docker-compose.oci.data.yml logs --tail=100 minio
 ```
 
-앱 서버:
+???쒕쾭:
 
 ```bash
 docker compose --env-file .env.oci.app -f docker-compose.oci.app.yml ps
@@ -182,16 +182,16 @@ docker compose --env-file .env.oci.app -f docker-compose.oci.app.yml logs --tail
 docker compose --env-file .env.oci.app -f docker-compose.oci.app.yml logs --tail=100 frontend
 ```
 
-## 10. 요약
+## 10. ?붿빟
 
-이 프로젝트 규모에서는 아래 구성이 가장 현실적입니다.
+???꾨줈?앺듃 洹쒕え?먯꽌???꾨옒 援ъ꽦??媛???꾩떎?곸엯?덈떎.
 
-- 앱 서버 `3 / 6`
-- 데이터 서버 `2 / 4`
+- ???쒕쾭 `3 / 6`
+- ?곗씠???쒕쾭 `2 / 4`
 
-이 분리 방식의 장점:
+??遺꾨━ 諛⑹떇???μ젏:
 
-- Java backend 메모리 압박 감소
-- MariaDB/MinIO와 앱 서버 역할 분리
-- 장애 원인 파악이 쉬움
-- 현재 기능 구조를 거의 바꾸지 않고 이전 가능
+- Java backend 硫붾え由??뺣컯 媛먯냼
+- MariaDB/MinIO? ???쒕쾭 ??븷 遺꾨━
+- ?μ븷 ?먯씤 ?뚯븙???ъ?
+- ?꾩옱 湲곕뒫 援ъ“瑜?嫄곗쓽 諛붽씀吏 ?딄퀬 ?댁쟾 媛??

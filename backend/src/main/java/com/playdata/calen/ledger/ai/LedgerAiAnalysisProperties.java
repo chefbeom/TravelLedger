@@ -1,4 +1,4 @@
-package com.playdata.calen.ledger.ai;
+﻿package com.playdata.calen.ledger.ai;
 
 import java.net.URI;
 import java.net.URISyntaxException;
@@ -17,16 +17,16 @@ public class LedgerAiAnalysisProperties {
     private String apiKey = "";
     private String apiKeyHeader = "X-TravelLedger-AI-Key";
     private String model = "auto";
-    private String lmStudioBaseUrl = "http://172.18.240.1:1234";
-    private String lmStudioModelsPath = "/api/v1/models";
-    private String lmStudioChatPath = "/api/v1/chat";
+    private String lmStudioBaseUrl = "http://100.92.170.22:1234";
+    private String lmStudioModelsPath = "/v1/models";
+    private String lmStudioChatPath = "/v1/chat/completions";
     private String lmStudioApiKey = "";
     private double temperature = 0.2;
     private int maxTokens = 2048;
     private Duration connectTimeout = Duration.ofSeconds(3);
     private Duration readTimeout = Duration.ofSeconds(120);
     private boolean enforceProviderUrlAllowlist = false;
-    private String allowedProviderHosts = "localhost,127.0.0.1,::1,172.18.240.1";
+    private String allowedProviderHosts = "localhost,127.0.0.1,::1,100.92.170.22";
 
     public boolean isEnabled() {
         return enabled;
@@ -98,7 +98,7 @@ public class LedgerAiAnalysisProperties {
 
     public String normalizedLmStudioModelsPath() {
         if (lmStudioModelsPath == null || lmStudioModelsPath.isBlank()) {
-            return "/api/v1/models";
+            return "/v1/models";
         }
         return lmStudioModelsPath.startsWith("/") ? lmStudioModelsPath : "/" + lmStudioModelsPath;
     }
@@ -113,7 +113,7 @@ public class LedgerAiAnalysisProperties {
 
     public String normalizedLmStudioChatPath() {
         if (lmStudioChatPath == null || lmStudioChatPath.isBlank()) {
-            return "/api/v1/chat";
+            return "/v1/chat/completions";
         }
         return lmStudioChatPath.startsWith("/") ? lmStudioChatPath : "/" + lmStudioChatPath;
     }
@@ -206,30 +206,30 @@ public class LedgerAiAnalysisProperties {
 
     public String statusMessage() {
         if (!enabled) {
-            return "AI 분석 기능이 비활성화되어 있습니다. APP_LEDGER_AI_ENABLED=true로 설정하세요.";
+            return "AI 遺꾩꽍 湲곕뒫??鍮꾪솢?깊솕?섏뼱 ?덉뒿?덈떎. APP_LEDGER_AI_ENABLED=true濡??ㅼ젙?섏꽭??";
         }
         if (provider() == LedgerAiProvider.LMSTUDIO) {
             if (!hasText(lmStudioBaseUrl)) {
-                return "LM Studio 연결 정보가 부족합니다. APP_LEDGER_AI_LMSTUDIO_BASE_URL을 설정하세요.";
+                return "LM Studio ?곌껐 ?뺣낫媛 遺議깊빀?덈떎. APP_LEDGER_AI_LMSTUDIO_BASE_URL???ㅼ젙?섏꽭??";
             }
             if (!isProviderUrlAllowed(lmStudioBaseUrl)) {
-                return "LM Studio 호스트가 AI provider allowlist에 없습니다. APP_LEDGER_AI_ALLOWED_PROVIDER_HOSTS를 확인하세요.";
+                return "LM Studio ?몄뒪?멸? AI provider allowlist???놁뒿?덈떎. APP_LEDGER_AI_ALLOWED_PROVIDER_HOSTS瑜??뺤씤?섏꽭??";
             }
             if (isLmStudioModelAuto()) {
-                return "LM Studio AI 분석 준비가 완료되었습니다. 모델은 /api/v1/models에서 자동 선택됩니다.";
+                return "LM Studio AI 遺꾩꽍 以鍮꾧? ?꾨즺?섏뿀?듬땲?? 紐⑤뜽? /api/v1/models?먯꽌 ?먮룞 ?좏깮?⑸땲??";
             }
-            return "LM Studio AI 분석 준비가 완료되었습니다.";
+            return "LM Studio AI 遺꾩꽍 以鍮꾧? ?꾨즺?섏뿀?듬땲??";
         }
         if (!hasText(workflowUrl)) {
-            return "n8n 웹훅 URL이 설정되지 않았습니다. APP_LEDGER_AI_WORKFLOW_URL을 설정하세요.";
+            return "n8n ?뱁썒 URL???ㅼ젙?섏? ?딆븯?듬땲?? APP_LEDGER_AI_WORKFLOW_URL???ㅼ젙?섏꽭??";
         }
         if (!isProviderUrlAllowed(workflowUrl)) {
-            return "n8n 웹훅 호스트가 AI provider allowlist에 없습니다. APP_LEDGER_AI_ALLOWED_PROVIDER_HOSTS를 확인하세요.";
+            return "n8n ?뱁썒 ?몄뒪?멸? AI provider allowlist???놁뒿?덈떎. APP_LEDGER_AI_ALLOWED_PROVIDER_HOSTS瑜??뺤씤?섏꽭??";
         }
         if (!isApiKeyConfigured()) {
-            return "n8n 웹훅 API 키가 비어 있습니다. 마지막 설정 단계에서 APP_LEDGER_AI_API_KEY를 입력할 수 있습니다.";
+            return "n8n ?뱁썒 API ?ㅺ? 鍮꾩뼱 ?덉뒿?덈떎. 留덉?留??ㅼ젙 ?④퀎?먯꽌 APP_LEDGER_AI_API_KEY瑜??낅젰?????덉뒿?덈떎.";
         }
-        return "n8n AI 분석 준비가 완료되었습니다.";
+        return "n8n AI 遺꾩꽍 以鍮꾧? ?꾨즺?섏뿀?듬땲??";
     }
 
     public boolean isProviderUrlAllowed(String value) {

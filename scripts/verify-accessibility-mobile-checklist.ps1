@@ -5,6 +5,8 @@ $checklistPath = 'docs/accessibility_mobile_checklist.md'
 $ciPath = '.github/workflows/ci.yml'
 $roadmapPath = 'docs/project_improvement_roadmap.md'
 $securityChecklistPath = 'docs/security_baseline_checklist.md'
+$stylePath = 'frontend/src/style.css'
+$dragDropGridPath = 'frontend/src/features/palette/components/DragDropGrid.vue'
 $pinPadPath = 'frontend/src/components/PinPadInput.vue'
 $profileModalPath = 'frontend/src/components/CalenDriveProfileModal.vue'
 $inviteAccessPanelPath = 'frontend/src/components/InviteAccessPanel.vue'
@@ -28,7 +30,7 @@ function Assert-Contains {
     }
 }
 
-foreach ($path in @($checklistPath, $ciPath, $roadmapPath, $securityChecklistPath, $pinPadPath, $profileModalPath, $inviteAccessPanelPath)) {
+foreach ($path in @($checklistPath, $ciPath, $roadmapPath, $securityChecklistPath, $stylePath, $dragDropGridPath, $pinPadPath, $profileModalPath, $inviteAccessPanelPath)) {
     Assert-FileExists -Path $path
 }
 
@@ -37,6 +39,8 @@ if ($findings.Count -eq 0) {
     $ci = Get-Content -LiteralPath $ciPath -Raw
     $roadmap = Get-Content -LiteralPath $roadmapPath -Raw
     $securityChecklist = Get-Content -LiteralPath $securityChecklistPath -Raw
+    $style = Get-Content -LiteralPath $stylePath -Raw
+    $dragDropGrid = Get-Content -LiteralPath $dragDropGridPath -Raw
     $pinPad = Get-Content -LiteralPath $pinPadPath -Raw
     $profileModal = Get-Content -LiteralPath $profileModalPath -Raw
     $inviteAccessPanel = Get-Content -LiteralPath $inviteAccessPanelPath -Raw
@@ -45,6 +49,7 @@ if ($findings.Count -eq 0) {
         '# Accessibility and Mobile UX Checklist',
         '## Priority Screens',
         '## WCAG 2.2 Traceability',
+        '## Global accessibility primitives',
         '## Accessibility Risk Register',
         '## WCAG 2.2 Checklist',
         '## Manual Test Recipe',
@@ -103,6 +108,14 @@ if ($findings.Count -eq 0) {
     )
     foreach ($field in $requiredEvidenceFields) {
         Assert-Contains -Label 'Accessibility evidence template' -Content $checklist -Needle $field
+    }
+
+    foreach ($snippet in @('--focus-ring', '--touch-target-min', ':focus-visible', 'scroll-margin-block', 'prefers-reduced-motion: reduce', '.sr-only', '.visually-hidden')) {
+        Assert-Contains -Label 'Global style accessibility anchor' -Content $style -Needle $snippet
+    }
+
+    foreach ($snippet in @('keyboardMoveItems', 'movePaletteByKeyboard', 'Keyboard dashboard layout controls', 'palette-grid-keyboard-controls', 'data-no-drag="true"', 'Move ${item.title} up', 'Move ${item.title} left', 'Move ${item.title} down', 'Move ${item.title} right')) {
+        Assert-Contains -Label 'DragDropGrid.vue keyboard movement anchor' -Content $dragDropGrid -Needle $snippet
     }
 
     foreach ($snippet in @('role="group"', ':aria-label="label"', 'role="status"', 'aria-live="polite"', ':aria-label="progressLabel"', ':aria-label="`PIN digit ${digit}`"', 'aria-label="Clear PIN digits"', 'aria-label="Delete last PIN digit"', 'type="button"')) {

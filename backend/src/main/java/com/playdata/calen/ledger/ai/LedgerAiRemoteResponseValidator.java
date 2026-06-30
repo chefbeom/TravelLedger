@@ -50,6 +50,7 @@ public final class LedgerAiRemoteResponseValidator {
         if (!hasUsableAnalysis(response)) {
             throw new BadRequestException(provider + " AI 遺꾩꽍 ?묐떟???ъ슜?????덈뒗 遺꾩꽍 ?댁슜???놁뒿?덈떎.");
         }
+        rejectMalformedTextCollections(response, provider);
         rejectOversizedContent(response, provider);
         rejectUnsafeContent(response, provider);
         return response;
@@ -73,6 +74,15 @@ public final class LedgerAiRemoteResponseValidator {
         }
     }
 
+    private static void rejectMalformedTextCollections(LedgerAiRemoteResponse response, String provider) {
+        for (Collection<String> values : allTextCollections(response)) {
+            for (String value : values) {
+                if (!hasText(value)) {
+                    throw new BadRequestException(provider + " AI analysis response did not match the expected schema.");
+                }
+            }
+        }
+    }
     private static void rejectOversizedContent(LedgerAiRemoteResponse response, String provider) {
         for (Collection<String> values : allTextCollections(response)) {
             if (values.size() > MAX_COLLECTION_SIZE) {

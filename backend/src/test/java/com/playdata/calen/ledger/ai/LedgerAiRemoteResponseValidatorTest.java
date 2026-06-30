@@ -113,6 +113,30 @@ class LedgerAiRemoteResponseValidatorTest {
     }
 
     @Test
+    void rejectsBlankProviderListItem() {
+        LedgerAiRemoteResponse response = new LedgerAiRemoteResponse(
+                true,
+                null,
+                "summary",
+                List.of("usable highlight", " "),
+                List.of(),
+                List.of(),
+                List.of(),
+                List.of(),
+                List.of(),
+                List.of(),
+                List.of(),
+                List.of(),
+                null,
+                null,
+                null
+        );
+
+        assertThatThrownBy(() -> LedgerAiRemoteResponseValidator.requireUsable(response, "LM Studio"))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessage("LM Studio AI analysis response did not match the expected schema.");
+    }
+    @Test
     void rejectsOversizedProviderTextValue() {
         LedgerAiRemoteResponse response = responseWithSummary("x".repeat(2001));
 

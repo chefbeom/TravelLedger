@@ -1,4 +1,4 @@
-Set-StrictMode -Version Latest
+﻿Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $contractPath = 'docs/household_budget_goals.md'
@@ -44,13 +44,21 @@ if ($findings.Count -eq 0) {
     $travelBudgetDomain = Get-Content -LiteralPath $travelBudgetDomainPath -Raw
     $householdWorkspace = Get-Content -LiteralPath $householdWorkspacePath -Raw
 
-    foreach ($section in @('# Household Budget and Shared Goals Contract', '## Current baseline', '## Product boundary', '## Target data flow', '## Non-negotiable safety rules', '## Current implementation anchors', '## Release gate', '## CI contract')) {
+    foreach ($section in @('# Household Budget and Shared Goals Contract', '## Current baseline', '## Product boundary',
+        '## Family feature modules', '## Target data flow', '## Non-negotiable safety rules', '## Current implementation anchors', '## Release gate', '## CI contract')) {
         if (-not $contract.Contains($section)) {
             $findings.Add("Household budget/goals contract missing section: $section") | Out-Null
         }
     }
 
-    foreach ($phrase in @('owner-scoped or membership-scoped', 'explicit membership/grant rows', 'explicit CSRF-protected mutation', 'non-visible member data', 'Notification producers must use bounded metadata', 'optimistic locking', 'Goal progress does not include another user', 'Owner-scoped personal household goals', 'V20260630_014__household_goals.sql', 'GOAL_PROGRESS')) {
+    foreach ($phrase in @('owner-scoped or membership-scoped', 'explicit membership/grant rows', 'explicit CSRF-protected mutation', 'non-visible member data', 'Notification producers must use bounded metadata', 'optimistic locking', 'Goal progress does not include another user', 'Owner-scoped personal household goals',
+        'family budgets',
+        'shared savings goals',
+        'travel savings goals',
+        'member spending ratio',
+        'Family feature modules',
+        'aggregate amounts/percentages',
+        'idempotency keys', 'V20260630_014__household_goals.sql', 'GOAL_PROGRESS')) {
         if (-not $contract.Contains($phrase)) {
             $findings.Add("Household budget/goals contract missing required phrase: $phrase") | Out-Null
         }
@@ -117,3 +125,4 @@ if ($findings.Count -gt 0) {
 }
 
 Write-Host 'Household budget/goals contract verification passed.'
+

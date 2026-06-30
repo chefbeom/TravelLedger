@@ -1,8 +1,8 @@
-# Household Budget and Shared Goals Contract
+﻿# Household Budget and Shared Goals Contract
 
 Updated: 2026-06-30
 
-This document defines the release contract for turning the Household area into family budgets and shared goals. The current product baseline has household aggregate widgets, household travel-ledger views, travel budget items, and owner-scoped personal household goals. The next feature slice should build on those owner-scoped foundations without accidentally exposing another user's ledger, payment methods, travel plans, or goal contributions.
+This document defines the release contract for turning the Household area into family budgets, shared savings goals, travel savings goals, and member spending ratio insights. The current product baseline has household aggregate widgets, household travel-ledger views, travel budget items, and owner-scoped personal household goals. The next feature slice should build on those owner-scoped foundations without accidentally exposing another user's ledger, payment methods, travel plans, or goal contributions.
 
 ## Current baseline
 
@@ -25,8 +25,15 @@ This document defines the release contract for turning the Household area into f
 | Contribution | A user-entered amount or selected ledger entry that increases goal progress. | Never infer or publish another user's ledger entries without explicit opt-in. |
 | Settlement/adjustment | Any action that changes ledger entries or money movement because of a shared goal. | Keep out of the first slice; later mutations require explicit confirmation and audit/event evidence. |
 
-## Target data flow
+## Family feature modules
 
+| Module | User value | Data source | Release guardrail |
+| --- | --- | --- | --- |
+| Family budget | Shows monthly/weekly budget caps for household, category, payment method, or travel context. | Existing ledger statistics, household aggregate preferences, and future membership-scoped budget rows. | Start with owner-visible summaries; shared budgets require explicit membership/grant rows and source visibility labels. |
+| Shared savings goal | Tracks family savings targets such as emergency funds, appliances, education, or events. | Goal metadata plus explicit contribution records. | Progress is advisory/read-only unless the user confirms a ledger change; contributions must be scoped to visible members only. |
+| Travel savings goal | Connects trip planning to a target fund before and during travel. | Travel plans, travel budget items, and explicit trip-fund contributions. | A travel goal can link only to a travel plan visible to the acting user and must not publish another member's trip or ledger data. |
+| Member spending ratio | Explains each visible member's share of household spending. | Aggregated ledger summaries by member/category/period after explicit sharing. | Show percentages and bounded aggregate amounts first; never expose raw ledger titles, notes, payment methods, or private entries without opt-in. |
+## Target data flow
 ```mermaid
 flowchart TD
     A["Authenticated user opens Household goals"] --> B["Load owner-scoped dashboard preferences"]
@@ -52,6 +59,9 @@ flowchart TD
 | Dismissed/archived goals should remain auditable through safe metadata. | Avoids silent loss of financial collaboration context. |
 | Notification producers must use bounded metadata only. | Budget/goal notifications should not include raw ledger titles, private notes, tokens, or account secrets. |
 | Multi-member write conflicts need deterministic resolution or optimistic locking before shared editing ships. | Avoids overwriting family contribution decisions. |
+| Member spending ratios must remain aggregate until a member explicitly shares item-level ledger detail. | Keeps family analytics from becoming involuntary surveillance. |
+| Shared savings and travel savings goals require explicit contribution records, idempotency keys, and safe audit metadata. | Prevents duplicate progress, unclear ownership, and hidden ledger mutations. |
+| Family budget alerts must show the scope, period, source, and confidence of the summary. | Users need to understand whether a card is personal, shared, travel-linked, or estimated. |
 
 ## Current implementation anchors
 
@@ -68,15 +78,17 @@ flowchart TD
 
 ## Release gate
 
-Before promoting a change that adds household budgets, shared goals, goal contributions, household member permissions, goal notifications, or goal export/import:
+Before promoting a change that adds household budgets, shared goals, shared savings goals, travel savings goals, member spending ratios, goal contributions, household member permissions, goal notifications, or goal export/import:
 
 1. Confirm budget/goal list/detail APIs are owner-scoped or membership-scoped.
 2. Confirm category, payment method, ledger entry, travel plan, and contribution references are validated against current-user visibility.
 3. Confirm progress displays are read-only summaries unless the user performs an explicit CSRF-protected mutation.
 4. Confirm member invitation/removal/permission changes have focused authorization tests.
 5. Confirm data export and notification payloads exclude non-visible member details, raw ledger notes, storage paths, public tokens, presigned URLs, API keys, secondary PINs, and operational secrets.
-6. Confirm shared editing has an optimistic-locking or deterministic conflict strategy before multi-member mutations ship.
-7. Run `scripts/verify-household-budget-goals-contract.ps1` and focused household/travel budget tests.
+6. Confirm member spending ratios expose only aggregate amounts/percentages unless every item-level source is explicitly shared by the owner.
+7. Confirm shared savings and travel savings contributions use idempotency keys or duplicate-submission protection before progress is stored.
+8. Confirm shared editing has an optimistic-locking or deterministic conflict strategy before multi-member mutations ship.
+9. Run `scripts/verify-household-budget-goals-contract.ps1` and focused household/travel budget tests.
 
 ## CI contract
 
@@ -87,11 +99,15 @@ The `household-budget-goals-contract` GitHub Actions job must run `scripts/verif
 | Slice | Notes |
 | --- | --- |
 | Owner-scoped personal household budget | Add budget metadata for the current user only before introducing members. |
+| Family budget dashboard | Add budget cards for monthly household cap, category cap, payment-method cap, and travel-linked budget summaries with visible scope labels. |
 | Frontend personal household goal panel | Wire `GET/POST/PUT/DELETE /api/account/preferences/household-goals` into Household with accessible create/edit/archive controls. |
 | Shared goal domain | Extend the current owner-scoped `HouseholdGoal` foundation with explicit membership/grant rows before multi-member sharing. |
+| Shared savings goals | Add emergency/event/project saving goals backed by explicit contribution records and duplicate-submission protection. |
+| Travel savings goals | Link goals to visible travel plans and travel budget items so trip funds can be planned before the trip. |
 | Contribution records | Store explicit contributions and optional visible ledger-entry references. |
 | Membership/permission model | Define viewer/editor/admin permission levels and invitation/revocation flow. |
 | Goal dashboard widgets | Add progress cards to Household using existing aggregate widget patterns. |
+| Member spending ratio | Add aggregate-only member share cards for visible members, categories, and periods after explicit sharing. |
 | Notifications | `GOAL_PROGRESS` now fires for owner-scoped goal completion with bounded goalId/status/progressBucket/visibility metadata; future shared notifications must keep the same boundary. |
 
 ## Test backlog
@@ -103,3 +119,4 @@ The `household-budget-goals-contract` GitHub Actions job must run `scripts/verif
 - Goal archive/delete is explicit and leaves safe metadata for audit/debug.
 - Export excludes non-visible member data, public tokens, storage paths, presigned URLs, raw ledger notes, API keys, secondary PINs, and operational secrets.
 - Notification payloads contain goal IDs/counts/status labels only, not raw private ledger details; current `GOAL_PROGRESS` metadata is limited to goalId/status/progressBucket/visibility.
+

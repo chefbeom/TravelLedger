@@ -1,4 +1,4 @@
-<script setup>
+﻿<script setup>
 import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import BarChartCard from './BarChartCard.vue'
 import BreakdownList from './BreakdownList.vue'
@@ -320,6 +320,52 @@ const aiPrintableCards = computed(() => [
 ])
 const hasStaleAiResult = computed(() => Boolean(props.aiAnalysisStale && props.aiAnalysis))
 const aiResultModalOpen = ref(false)
+const pendingAiHistoryPrintId = ref(null)
+const aiProgressStartedAt = ref(0)
+const aiProgressTick = ref(Date.now())
+let aiProgressTimerId = null
+
+const aiProgressSteps = [
+  { key: 'queued', label: '요청 접수', detail: '분석 요청을 등록하고 입력 조건을 확인합니다.' },
+  { key: 'dataset', label: '데이터 정리', detail: '선택한 기간의 거래 데이터를 분석용으로 정리합니다.' },
+  { key: 'provider', label: 'AI 응답 대기', detail: 'LM Studio 또는 n8n 응답을 기다립니다. 로컬 모델은 시간이 걸릴 수 있습니다.' },
+  { key: 'save', label: '결과 저장', detail: '분석 결과를 저장하고 화면에 표시할 준비를 합니다.' },
+]
+
+const aiProgressElapsedSeconds = computed(() => {
+  if (!props.aiAnalysisLoading || !aiProgressStartedAt.value) return 0
+  return Math.max(0, Math.floor((aiProgressTick.value - aiProgressStartedAt.value) / 1000))
+})
+
+const aiProgressStepIndex = computed(() => {
+  const seconds = aiProgressElapsedSeconds.value
+  if (seconds < 4) return 0
+  if (seconds < 10) return 1
+  if (seconds < 55) return 2
+  return 3
+})
+
+const aiProgressPercent = computed(() => {
+  if (!props.aiAnalysisLoading) return 100
+  const seconds = aiProgressElapsedSeconds.value
+  if (seconds < 4) return Math.min(22, 8 + seconds * 4)
+  if (seconds < 10) return Math.min(42, 24 + (seconds - 4) * 3)
+  if (seconds < 55) return Math.min(88, 44 + Math.floor((seconds - 10) * 0.95))
+  return Math.min(94, 89 + Math.floor((seconds - 55) * 0.2))
+})
+
+const aiProgressElapsedLabel = computed(() => {
+  const seconds = aiProgressElapsedSeconds.value
+  const minutes = Math.floor(seconds / 60).toString().padStart(2, '0')
+  const remain = (seconds % 60).toString().padStart(2, '0')
+  return ${minutes}:
+})
+
+const aiProgressVisible = computed(() => Boolean(props.aiAnalysisLoading))
+const aiProgressCurrentStep = computed(() => aiProgressSteps[aiProgressStepIndex.value] ?? aiProgressSteps[0])
+
+const aiHistoryCompletedCount = computed(() => aiAnalysisHistoryItems.value.filter((history) => history.status === 'COMPLETED').length)
+const aiHistoryFailedCount = computed(() => aiAnalysisHistoryItems.value.filter((history) => history.status === 'FAILED').length)
 const aiPresentationSections = computed(() => buildAiPresentationSections())
 const aiPrintableSections = computed(() => aiPresentationSections.value
   .filter((section) => !['evidence', 'actions'].includes(section.key))
@@ -1293,6 +1339,170 @@ watch(
 </script>
 
 <style scoped>
+
+.ai-analysis-panel,
+.ai-history-panel,
+.ai-result-modal {
+  --ai-mint: #a7f3b5;
+  --ai-mint-strong: #58d47a;
+  --ai-mint-deep: #1f8f58;
+  --ai-mint-ink: #062615;
+}
+
+.ai-analysis-panel .button--primary,
+.ai-history-panel .button--primary,
+.ai-result-modal .button--primary {
+  background: linear-gradient(135deg, var(--ai-mint), var(--ai-mint-strong));
+  border-color: rgba(167, 243, 181, 0.72);
+  color: var(--ai-mint-ink);
+  box-shadow: 0 14px 32px rgba(88, 212, 122, 0.2);
+}
+
+.ai-analysis-panel .button--primary:hover,
+.ai-history-panel .button--primary:hover,
+.ai-result-modal .button--primary:hover {
+  filter: brightness(1.04);
+}
+
+.ai-progress-card {
+  margin-top: 1rem;
+  padding: 1.1rem;
+  border: 1px solid rgba(167, 243, 181, 0.38);
+  border-radius: 22px;
+  background:
+    radial-gradient(circle at 12% 18%, rgba(167, 243, 181, 0.2), transparent 34%),
+    linear-gradient(135deg, rgba(18, 34, 31, 0.94), rgba(21, 31, 45, 0.94));
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.24);
+}
+
+.ai-progress-card__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.9rem;
+}
+
+.ai-progress-card__header strong {
+  display: block;
+  color: #f6fff8;
+  font-size: 1.02rem;
+}
+
+.ai-progress-card__header span {
+  display: block;
+  margin-top: 0.25rem;
+  color: #b8c7c0;
+  line-height: 1.55;
+}
+
+.ai-progress-card__header time {
+  flex: 0 0 auto;
+  padding: 0.35rem 0.7rem;
+  border-radius: 999px;
+  background: rgba(167, 243, 181, 0.14);
+  color: var(--ai-mint);
+  font-weight: 800;
+}
+
+.ai-progress-bar {
+  height: 12px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.18);
+}
+
+.ai-progress-bar span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--ai-mint), var(--ai-mint-strong), #34d399);
+  transition: width 0.45s ease;
+}
+
+.ai-progress-steps {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin: 1rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ai-progress-steps li {
+  display: flex;
+  gap: 0.6rem;
+  min-width: 0;
+  padding: 0.75rem;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 16px;
+  background: rgba(15, 23, 42, 0.48);
+  color: #94a3b8;
+}
+
+.ai-progress-steps li > span {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 1.65rem;
+  height: 1.65rem;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.14);
+  color: inherit;
+  font-weight: 900;
+}
+
+.ai-progress-steps strong {
+  display: block;
+  color: inherit;
+  font-size: 0.9rem;
+}
+
+.ai-progress-steps small {
+  display: block;
+  margin-top: 0.2rem;
+  color: #9aa8b8;
+  line-height: 1.4;
+}
+
+.ai-progress-steps li.is-active,
+.ai-progress-steps li.is-done {
+  border-color: rgba(167, 243, 181, 0.44);
+  color: #eaffef;
+}
+
+.ai-progress-steps li.is-active > span,
+.ai-progress-steps li.is-done > span {
+  background: var(--ai-mint);
+  color: var(--ai-mint-ink);
+}
+
+.ai-history-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.8rem;
+  margin: 1rem 0;
+}
+
+.ai-history-summary-grid article {
+  padding: 0.9rem 1rem;
+  border: 1px solid rgba(167, 243, 181, 0.25);
+  border-radius: 18px;
+  background: linear-gradient(135deg, rgba(167, 243, 181, 0.13), rgba(15, 23, 42, 0.5));
+}
+
+.ai-history-summary-grid span {
+  display: block;
+  color: #a8b3c2;
+  font-size: 0.86rem;
+}
+
+.ai-history-summary-grid strong {
+  display: block;
+  margin-top: 0.28rem;
+  color: #f6fff8;
+  font-size: 1.15rem;
+}
 .ai-analysis-stale-note {
   border: 1px solid rgba(245, 158, 11, 0.5);
   background: rgba(245, 158, 11, 0.12);
@@ -2096,6 +2306,32 @@ watch(
               </button>
             </div>
             <div v-if="aiAnalysisError" class="feedback feedback--error">{{ aiAnalysisError }}</div>
+
+            <div v-if="aiProgressVisible" class="ai-progress-card" role="status" aria-live="polite">
+              <div class="ai-progress-card__header">
+                <div>
+                  <strong>AI 분석 진행 중</strong>
+                  <span>{{ aiProgressCurrentStep.detail }}</span>
+                </div>
+                <time>{{ aiProgressElapsedLabel }}</time>
+              </div>
+              <div class="ai-progress-bar" aria-hidden="true">
+                <span :style="{ width: ${aiProgressPercent}% }"></span>
+              </div>
+              <ol class="ai-progress-steps">
+                <li
+                  v-for="(step, index) in aiProgressSteps"
+                  :key="step.key"
+                  :class="{ 'is-active': index === aiProgressStepIndex, 'is-done': index < aiProgressStepIndex }"
+                >
+                  <span>{{ index + 1 }}</span>
+                  <div>
+                    <strong>{{ step.label }}</strong>
+                    <small>{{ step.detail }}</small>
+                  </div>
+                </li>
+              </ol>
+            </div>
           </div>
 
           <div class="ai-analysis-result">
@@ -2148,6 +2384,21 @@ watch(
           <span class="panel__badge">{{ aiAnalysisHistoryPage?.totalElements ?? 0 }}건</span>
         </div>
 
+        <div class="ai-history-summary-grid">
+          <article>
+            <span>전체 기록</span>
+            <strong>{{ aiAnalysisHistoryPage?.totalElements ?? 0 }}건</strong>
+          </article>
+          <article>
+            <span>현재 페이지 완료</span>
+            <strong>{{ aiHistoryCompletedCount }}건</strong>
+          </article>
+          <article>
+            <span>현재 페이지 실패</span>
+            <strong>{{ aiHistoryFailedCount }}건</strong>
+          </article>
+        </div>
+
         <div class="field-grid field-grid--five ai-history-filter-grid">
           <label class="field">
             <span class="field__label">유형</span>
@@ -2195,6 +2446,7 @@ watch(
             </div>
             <div class="ai-history-item__actions">
               <button class="button" type="button" @click="emit('open-ai-analysis-history', history.id)">열기</button>
+              <button class="button button--secondary" type="button" :disabled="aiAnalysisLoading || history.status !== 'COMPLETED'" @click="printAiHistory(history.id)">PDF 저장</button>
               <button class="button button--secondary" type="button" :disabled="aiAnalysisLoading || aiAnalysisStatus?.configured === false" @click="emit('rerun-ai-analysis', history.id)">재분석</button>
             </div>
           </article>
@@ -2290,3 +2542,4 @@ watch(
     </div>
   </Teleport>
 </template>
+

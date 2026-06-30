@@ -1,4 +1,4 @@
-Set-StrictMode -Version Latest
+﻿Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $manifestPath = 'frontend/public/manifest.webmanifest'
@@ -77,7 +77,7 @@ Require-Snippets 'Service worker' $serviceWorker @(
     "request.method !== 'GET'",
     "url.origin !== self.location.origin",
     "url.pathname.startsWith('/api/')",
-    "networkFirst(request, '/')",
+    'networkFirstNavigation(request)',
     'cacheFirst(request)'
 )
 
@@ -122,12 +122,22 @@ Require-Snippets 'PWA/mobile capture doc' $pwaDoc @(
     '# PWA and Mobile Capture Baseline',
     '## Installed app shell',
     '## Mobile camera upload hints',
+    '## Mobile upload product slices',
+    '## Offline temporary upload contract',
     'Calendar/ledger image capture flows in `CalendarWorkspace.vue`',
     'Family album media uploads in `FamilyAlbumWorkspace.vue`',
     'Travel memory photo uploads in `TravelMemoryPanel.vue`',
     'CalenDrive profile image upload in `CalenDriveProfileModal.vue`',
     'backend MIME, extension, size, OCR, thumbnail, and privacy checks remain the authority',
     'Offline temporary upload queue',
+    'Receipt OCR',
+    'Travel photo uploads',
+    'Family album uploads',
+    'IndexedDB',
+    'manual retry',
+    'logout',
+    'presigned URLs',
+    'idempotency',
     'E2E coverage'
 )
 
@@ -164,7 +174,10 @@ Require-Snippets 'Project roadmap' $roadmap @(
     'PWA/mobile capture',
     'docs/pwa_mobile_capture.md',
     'scripts/verify-pwa-mobile-baseline.ps1',
-    'pwa-mobile-baseline'
+    'pwa-mobile-baseline',
+    'IndexedDB draft tray',
+    'manual retry/delete',
+    'offline drafts never cache API data'
 )
 
 $ci = Read-TextIfExists $ciPath
@@ -172,7 +185,10 @@ Require-Snippets 'CI workflow' $ci @(
     'pwa-mobile-baseline:',
     './scripts/verify-pwa-mobile-baseline.ps1',
     '- pwa-mobile-baseline',
-    '[pwa-mobile-baseline]="${{ needs[''pwa-mobile-baseline''].result }}"'
+    '[pwa-mobile-baseline]="${{ needs[''pwa-mobile-baseline',
+    'IndexedDB draft tray',
+    'manual retry/delete',
+    'offline drafts never cache API data''].result }}"'
 )
 
 if ($findings.Count -gt 0) {

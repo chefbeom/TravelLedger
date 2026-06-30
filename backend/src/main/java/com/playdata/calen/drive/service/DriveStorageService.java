@@ -377,7 +377,7 @@ public class DriveStorageService {
             asciiName = "download";
         }
         String encodedName = URLEncoder.encode(fileName, StandardCharsets.UTF_8).replace("+", "%20");
-        return "attachment; filename="" + asciiName + ""; filename*=UTF-8''" + encodedName;
+        return "attachment; filename=\"" + asciiName + "\"; filename*=UTF-8''" + encodedName;
     }
 
     private String rewritePublicUrl(String sourceUrl) {
@@ -420,7 +420,7 @@ public class DriveStorageService {
         if (!StringUtils.hasText(normalized)) {
             throw new BadRequestException("파일 이름을 확인해 주세요.");
         }
-        if (normalized.length() > 255 || normalized.contains("..") || normalized.contains("/") || normalized.contains("\")) {
+        if (normalized.length() > 255 || normalized.contains("..") || normalized.contains("/") || normalized.contains("\\")) {
             throw new BadRequestException("허용되지 않는 파일 이름입니다.");
         }
         return normalized;

@@ -1,4 +1,4 @@
-﻿package com.playdata.calen.account.web;
+package com.playdata.calen.account.web;
 
 import com.playdata.calen.account.dto.AdminDashboardResponse;
 import com.playdata.calen.account.dto.AdminDataManagementResponse;

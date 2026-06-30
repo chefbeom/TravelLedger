@@ -1,4 +1,4 @@
-﻿package com.playdata.calen.ledger.ai;
+package com.playdata.calen.ledger.ai;
 
 final class LedgerAiOutputContract {
 

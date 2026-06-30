@@ -1,4 +1,4 @@
-﻿package com.playdata.calen.ledger.ai;
+package com.playdata.calen.ledger.ai;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;

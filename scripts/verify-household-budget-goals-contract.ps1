@@ -7,13 +7,19 @@ $roadmapPath = 'docs/project_improvement_roadmap.md'
 $ciPath = '.github/workflows/ci.yml'
 $aggregateServicePath = 'backend/src/main/java/com/playdata/calen/account/service/HouseholdAggregatePreferenceService.java'
 $aggregateTestPath = 'backend/src/test/java/com/playdata/calen/account/HouseholdAggregatePreferenceServiceTest.java'
+$goalDomainPath = 'backend/src/main/java/com/playdata/calen/account/domain/HouseholdGoal.java'
+$goalRepositoryPath = 'backend/src/main/java/com/playdata/calen/account/repository/HouseholdGoalRepository.java'
+$goalServicePath = 'backend/src/main/java/com/playdata/calen/account/service/HouseholdGoalService.java'
+$goalSchemaUpdaterPath = 'backend/src/main/java/com/playdata/calen/account/config/HouseholdGoalSchemaUpdater.java'
+$goalControllerPath = 'backend/src/main/java/com/playdata/calen/account/web/AccountPreferenceController.java'
+$goalServiceTestPath = 'backend/src/test/java/com/playdata/calen/account/HouseholdGoalServiceTest.java'
 $travelBudgetRepositoryPath = 'backend/src/main/java/com/playdata/calen/travel/repository/TravelBudgetItemRepository.java'
 $travelBudgetDomainPath = 'backend/src/main/java/com/playdata/calen/travel/domain/TravelBudgetItem.java'
 $householdWorkspacePath = 'frontend/src/components/HouseholdWorkspace.vue'
 
 $findings = [System.Collections.Generic.List[string]]::new()
 
-foreach ($path in @($contractPath, $securityChecklistPath, $roadmapPath, $ciPath, $aggregateServicePath, $aggregateTestPath, $travelBudgetRepositoryPath, $travelBudgetDomainPath, $householdWorkspacePath)) {
+foreach ($path in @($contractPath, $securityChecklistPath, $roadmapPath, $ciPath, $aggregateServicePath, $aggregateTestPath, $goalDomainPath, $goalRepositoryPath, $goalServicePath, $goalSchemaUpdaterPath, $goalControllerPath, $goalServiceTestPath, $travelBudgetRepositoryPath, $travelBudgetDomainPath, $householdWorkspacePath)) {
     if (-not (Test-Path -LiteralPath $path)) {
         $findings.Add("Missing household budget/goals contract input: $path") | Out-Null
     }
@@ -26,6 +32,12 @@ if ($findings.Count -eq 0) {
     $ci = Get-Content -LiteralPath $ciPath -Raw
     $aggregateService = Get-Content -LiteralPath $aggregateServicePath -Raw
     $aggregateTest = Get-Content -LiteralPath $aggregateTestPath -Raw
+    $goalDomain = Get-Content -LiteralPath $goalDomainPath -Raw
+    $goalRepository = Get-Content -LiteralPath $goalRepositoryPath -Raw
+    $goalService = Get-Content -LiteralPath $goalServicePath -Raw
+    $goalSchemaUpdater = Get-Content -LiteralPath $goalSchemaUpdaterPath -Raw
+    $goalController = Get-Content -LiteralPath $goalControllerPath -Raw
+    $goalServiceTest = Get-Content -LiteralPath $goalServiceTestPath -Raw
     $travelBudgetRepository = Get-Content -LiteralPath $travelBudgetRepositoryPath -Raw
     $travelBudgetDomain = Get-Content -LiteralPath $travelBudgetDomainPath -Raw
     $householdWorkspace = Get-Content -LiteralPath $householdWorkspacePath -Raw
@@ -36,7 +48,7 @@ if ($findings.Count -eq 0) {
         }
     }
 
-    foreach ($phrase in @('owner-scoped or membership-scoped', 'explicit membership/grant rows', 'explicit CSRF-protected mutation', 'non-visible member data', 'Notification producers must use bounded metadata', 'optimistic locking', 'Goal progress does not include another user')) {
+    foreach ($phrase in @('owner-scoped or membership-scoped', 'explicit membership/grant rows', 'explicit CSRF-protected mutation', 'non-visible member data', 'Notification producers must use bounded metadata', 'optimistic locking', 'Goal progress does not include another user', 'Owner-scoped personal household goals', 'GOAL_PROGRESS')) {
         if (-not $contract.Contains($phrase)) {
             $findings.Add("Household budget/goals contract missing required phrase: $phrase") | Out-Null
         }

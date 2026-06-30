@@ -19,6 +19,8 @@ $backupSchedulerPath = 'backend/src/main/java/com/playdata/calen/account/service
 $backupSchedulerTestPath = 'backend/src/test/java/com/playdata/calen/account/service/DataOpsBackupSchedulerTest.java'
 $dataPortabilityServicePath = 'backend/src/main/java/com/playdata/calen/account/service/DataPortabilityExportService.java'
 $dataPortabilityServiceTestPath = 'backend/src/test/java/com/playdata/calen/account/service/DataPortabilityExportServiceTest.java'
+$householdGoalServicePath = 'backend/src/main/java/com/playdata/calen/account/service/HouseholdGoalService.java'
+$householdGoalServiceTestPath = 'backend/src/test/java/com/playdata/calen/account/HouseholdGoalServiceTest.java'
 $budgetWarningSchedulerPath = 'backend/src/main/java/com/playdata/calen/travel/service/TravelBudgetWarningNotificationScheduler.java'
 $budgetWarningSchedulerTestPath = 'backend/src/test/java/com/playdata/calen/travel/service/TravelBudgetWarningNotificationSchedulerTest.java'
 $travelBudgetItemRepositoryPath = 'backend/src/main/java/com/playdata/calen/travel/repository/TravelBudgetItemRepository.java'
@@ -31,7 +33,7 @@ $privacyServiceTestPath = 'backend/src/test/java/com/playdata/calen/account/Priv
 
 $findings = [System.Collections.Generic.List[string]]::new()
 
-foreach ($path in @($contractPath, $securityChecklistPath, $roadmapPath, $ciPath, $controllerPath, $servicePath, $repositoryPath, $serviceTestPath, $frontendPath, $appPath, $apiPath, $ocrServicePath, $ocrServiceTestPath, $backupSchedulerPath, $backupSchedulerTestPath, $dataPortabilityServicePath, $dataPortabilityServiceTestPath, $budgetWarningSchedulerPath, $budgetWarningSchedulerTestPath, $travelBudgetItemRepositoryPath, $travelExpenseRecordRepositoryPath, $travelReminderSchedulerPath, $travelReminderSchedulerTestPath, $travelPlanRepositoryPath, $privacyServicePath, $privacyServiceTestPath)) {
+foreach ($path in @($contractPath, $securityChecklistPath, $roadmapPath, $ciPath, $controllerPath, $servicePath, $repositoryPath, $serviceTestPath, $frontendPath, $appPath, $apiPath, $ocrServicePath, $ocrServiceTestPath, $backupSchedulerPath, $backupSchedulerTestPath, $dataPortabilityServicePath, $dataPortabilityServiceTestPath, $householdGoalServicePath, $householdGoalServiceTestPath, $budgetWarningSchedulerPath, $budgetWarningSchedulerTestPath, $travelBudgetItemRepositoryPath, $travelExpenseRecordRepositoryPath, $travelReminderSchedulerPath, $travelReminderSchedulerTestPath, $travelPlanRepositoryPath, $privacyServicePath, $privacyServiceTestPath)) {
     if (-not (Test-Path -LiteralPath $path)) {
         $findings.Add("Missing notification center contract input: $path") | Out-Null
     }
@@ -56,6 +58,8 @@ $style = Get-Content -LiteralPath $stylePath -Raw
     $backupSchedulerTest = Get-Content -LiteralPath $backupSchedulerTestPath -Raw
     $dataPortabilityService = Get-Content -LiteralPath $dataPortabilityServicePath -Raw
     $dataPortabilityServiceTest = Get-Content -LiteralPath $dataPortabilityServiceTestPath -Raw
+    $householdGoalService = Get-Content -LiteralPath $householdGoalServicePath -Raw
+    $householdGoalServiceTest = Get-Content -LiteralPath $householdGoalServiceTestPath -Raw
     $budgetWarningScheduler = Get-Content -LiteralPath $budgetWarningSchedulerPath -Raw
     $budgetWarningSchedulerTest = Get-Content -LiteralPath $budgetWarningSchedulerTestPath -Raw
     $travelBudgetItemRepository = Get-Content -LiteralPath $travelBudgetItemRepositoryPath -Raw
@@ -72,7 +76,7 @@ $style = Get-Content -LiteralPath $stylePath -Raw
         }
     }
 
-    foreach ($phrase in @('owner-scoped', 'redacts sensitive metadata fields', 'Household producers remain in the queue', 'target URLs are relative application paths', 'API keys, signed URLs, raw prompts, provider responses, backup credentials, secondary PINs, public tokens, or storage paths', 'notification-center-contract')) {
+    foreach ($phrase in @('owner-scoped', 'redacts sensitive metadata fields', 'Future multi-member household producers remain in the queue', 'target URLs are relative application paths', 'API keys, signed URLs, raw prompts, provider responses, backup credentials, secondary PINs, public tokens, or storage paths', 'notification-center-contract')) {
         if (-not $contract.Contains($phrase)) {
             $findings.Add("Notification center contract missing required phrase: $phrase") | Out-Null
         }
@@ -126,7 +130,7 @@ $style = Get-Content -LiteralPath $stylePath -Raw
     }
 
 
-    foreach ($snippet in @('Ledger OCR failed', 'Scheduled database backup failed', 'Scheduled MinIO backup failed', 'Privacy cleanup completed', 'Privacy export completed', 'Travel starts tomorrow', 'Travel budget threshold exceeded', 'BACKUP_FAILED', 'AI_OR_OCR_FAILED', 'PRIVACY_ACTION_DONE', 'PRIVACY_EXPORT_DONE', 'TRAVEL_REMINDER', 'BUDGET_WARNING')) {
+    foreach ($snippet in @('Ledger OCR failed', 'Scheduled database backup failed', 'Scheduled MinIO backup failed', 'Privacy cleanup completed', 'Privacy export completed', 'Travel starts tomorrow', 'Travel budget threshold exceeded', 'Household goal reached', 'BACKUP_FAILED', 'AI_OR_OCR_FAILED', 'PRIVACY_ACTION_DONE', 'PRIVACY_EXPORT_DONE', 'TRAVEL_REMINDER', 'BUDGET_WARNING', 'GOAL_PROGRESS')) {
         if (-not $contract.Contains($snippet)) {
             $findings.Add("Notification center contract missing implemented producer snippet: $snippet") | Out-Null
         }

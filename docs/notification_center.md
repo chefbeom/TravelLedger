@@ -2,7 +2,7 @@
 
 Updated: 2026-06-30
 
-This document records the notification-center contract. Storage, listing, unread counts, read handling, AI analysis events, OCR failure events, scheduled backup failure events, privacy cleanup events, privacy export completion events, shared-file events, travel reminder events, budget warning events, frontend route rendering, and the topbar unread badge are now in place. The contract verifier now checks OCR and scheduled-backup producer implementation/test anchors directly, not only the generic notification API. Household producers remain in the queue, and every new producer must keep notifications owner-scoped, bounded, and free of operational secrets.
+This document records the notification-center contract. Storage, listing, unread counts, read handling, AI analysis events, OCR failure events, scheduled backup failure events, privacy cleanup events, privacy export completion events, shared-file events, travel reminder events, budget warning events, household goal progress events, frontend route rendering, and the topbar unread badge are now in place. The contract verifier now checks OCR and scheduled-backup producer implementation/test anchors directly, not only the generic notification API. Future multi-member household producers remain in the queue, and every new producer must keep notifications owner-scoped or membership-scoped, bounded, and free of operational secrets.
 
 ## Implemented API
 
@@ -67,12 +67,12 @@ flowchart TD
 | Privacy export completed | `PRIVACY_EXPORT_DONE` | Profile privacy panel. |
 | Travel starts tomorrow | `TRAVEL_REMINDER` | Travel money/planner page. |
 | Travel budget threshold exceeded | `BUDGET_WARNING` | Travel money ledger page. |
+| Household goal reached | `GOAL_PROGRESS` | Household goal dashboard. |
 
 ## Event producer queue
 
 | Producer | Suggested type | Target | Required metadata boundary |
 | --- | --- | --- | --- |
-| Household goal progress | `GOAL_PROGRESS` | Household goal dashboard. | Goal ID, status, progress bucket, and actor visibility label only; no non-visible member contribution details. |
 
 ## Current implementation anchors
 
@@ -88,6 +88,7 @@ flowchart TD
 | DataPortabilityExportService / DataPortabilityExportServiceTest | Produces bounded PRIVACY_EXPORT_DONE notifications after protected archive creation without storing file names, archive contents, secondary PIN values, tokens, storage paths, prompts, provider responses, or raw GPS. |
 | TravelReminderNotificationScheduler / TravelReminderNotificationSchedulerTest | Produces bounded TRAVEL_REMINDER notifications for PLANNED trips that start tomorrow without storing travel names, private notes, GPS/EXIF, media tokens, or storage paths. |
 | TravelBudgetWarningNotificationScheduler / TravelBudgetWarningNotificationSchedulerTest | Produces bounded BUDGET_WARNING notifications for PLANNED/COMPLETED trips whose LEDGER spending exceeds planned budget and suppresses duplicate unread warnings for the same plan. |
+| HouseholdGoalService / HouseholdGoalServiceTest | Produces bounded GOAL_PROGRESS notifications for owner-scoped goals that reach target and suppresses duplicate unread notifications by target URL. |
 | `NotificationCenterWorkspace.vue` | Loads notifications, filters unread-only, marks one/all read, and only opens relative target URLs. |
 | `App.vue` / `api.js` | Routes to the notification center and exposes frontend notification API calls. |
 
@@ -114,7 +115,7 @@ The `notification-center-contract` GitHub Actions job must run `scripts/verify-n
 - `unreadCount` decreases after read/read-all operations.
 - Event producers do not include raw prompts, backup credentials, route coordinates, storage paths, public tokens, signed URLs, or long raw payloads in `metadataJson`.
 - Pagination clamps `size` to the backend maximum.
-- Household producers use bounded metadata and source-page links only; travel reminder, budget warning, and privacy export producers already use bounded planId/date/status, planId/threshold/period/status, or status/dateRange/archiveScope metadata only.
+- Household goal, travel reminder, budget warning, and privacy export producers already use bounded goalId/status/progressBucket/visibility, planId/date/status, planId/threshold/period/status, or status/dateRange/archiveScope metadata only; future multi-member household producers must not include non-visible member details.
 - Notification center E2E verifies unread/read-all UI and owner isolation.
 
 ## Frontend notification center

@@ -1,4 +1,4 @@
-Set-StrictMode -Version Latest
+﻿Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $contractPath = 'docs/travel_story_export.md'
@@ -34,7 +34,9 @@ if ($findings.Count -eq 0) {
     $publicMediaTokenTest = Get-Content -LiteralPath $publicMediaTokenTestPath -Raw
     $privacyTest = Get-Content -LiteralPath $privacyTestPath -Raw
 
-    foreach ($section in @('# Travel Story Export Contract', '## Current baseline', '## Story assembly flow', '## Data contract', '## Non-negotiable safety rules', '## Current implementation anchors', '## Release gate', '## CI contract')) {
+    foreach ($section in @('# Travel Story Export Contract', '## Current baseline', '## Story assembly flow', '## Data contract',
+    '## Export product modes',
+    '## Story composition checklist', '## Non-negotiable safety rules', '## Current implementation anchors', '## Release gate', '## CI contract')) {
         if (-not $contract.Contains($section)) {
             $findings.Add("Travel story export contract missing section: $section") | Out-Null
         }
@@ -88,7 +90,10 @@ if ($findings.Count -eq 0) {
         }
     }
 
-    foreach ($snippet in @('Travel timeline/story export', 'docs/travel_story_export.md', 'travel-story-export-contract', 'scripts/verify-travel-story-export-contract.ps1')) {
+    foreach ($snippet in @('Travel timeline/story export',
+    'web story, web exhibition',
+    'future PDF/static export modes',
+    'route timeline, photo map, spending summary, and memories', 'docs/travel_story_export.md', 'travel-story-export-contract', 'scripts/verify-travel-story-export-contract.ps1')) {
         if (-not $roadmap.Contains($snippet)) {
             $findings.Add("Project roadmap missing travel story export snippet: $snippet") | Out-Null
         }

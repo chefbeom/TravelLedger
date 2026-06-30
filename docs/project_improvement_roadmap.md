@@ -1,4 +1,4 @@
-# Project Improvement Roadmap
+﻿# Project Improvement Roadmap
 
 Updated: 2026-06-30
 
@@ -56,7 +56,7 @@ These items are already tracked as release contracts rather than loose ideas. Ke
 | AI ledger coach | Turns monthly reports into ongoing guidance. | Build advisory review cards for current-month risk spending, subscription/recurring spend, budget overrun forecast, and next-month cashflow forecast, then rank manual coach actions. | UI shows source-backed forecast cards and action list without mutating ledger data; unsafe claims still fail validation. |
 | Auto classification rules | Improves OCR/Excel import speed and consistency. | User-defined keyword rule CRUD, preview API, and AI recommendation approval endpoint are in place; next apply rules directly inside OCR/Excel import preview UI. | Users can create owner-scoped rules, approve AI-recommended keyword rules, and preview explainable classification suggestions without automatic ledger mutation. |
 | Transaction anomaly detection | Catches duplicate, unusual, recurring, and out-of-context spending. | Read-only API now flags duplicate, repeated-payment, unusually large, and travel-out-of-range expense candidates; next add frontend review cards and dismiss workflow. | API returns user-scoped anomaly candidates without mutating ledger data, and UI must present them as review candidates rather than confirmed fraud/errors. |
-| Travel timeline/story export | Combines route, photos, expenses, and memories into a shareable result. | Read-only web story for one trip. | Public/private story link renders route/photos/memories. |
+| Travel timeline/story export | Combines route, photo map, expenses, and memories into a shareable result. | Contract now separates web story, web exhibition, and future PDF/static export modes; next compose owner story DTO and frontend story route from existing travel detail/shared/public surfaces. | Web story renders route timeline, photo map, spending summary, and memories without leaking tokens/storage paths or mutating source trip data. |
 | PWA/mobile capture | OCR, travel photos, and family album are mobile-heavy. | PWA manifest, production service-worker baseline, and camera capture hints for OCR, travel memory, family album, and CalenDrive profile image flows are in place; next add offline draft UX. | Production frontend is installable, API/private data is excluded from service-worker caching, and CI gates capture hints plus app-shell privacy boundaries. |
 | Drive file versioning | Makes CalenDrive safer for family use. | Version table, upload-created version rows, owner-scoped version list API, restore endpoint, and CalenDrive frontend version drawer are in place. | Uploading a new file records version 1, users can inspect selected-file versions, restore records a RESTORE version row, and the version API is owner-scoped. |
 | Family budget/shared goals | Makes Household area more distinct. | Owner-scoped personal household goal backend API, schema updater, archive mutation, and bounded `GOAL_PROGRESS` notification producer are in place before multi-member sharing. | Next wire Household frontend goal cards and then add explicit membership/grant rows for shared goals. |
@@ -101,7 +101,7 @@ These items are already tracked as release contracts rather than loose ideas. Ke
 | `docs/notification_center.md` | Notification API contract, safety rules, producer queue, and test backlog. |
 | `docs/transaction_anomaly_detection.md` | Deterministic duplicate, repeated-payment, unusually large, and travel-out-of-range anomaly detector API, safety rules, and frontend review-card backlog. |
 | `docs/ledger_classification_rules.md` | User-defined classification rule API, matching behavior, safety rules, and next import slices. |
-| `docs/travel_story_export.md` | Travel story/export visibility, media-token safety, secret exclusion, and async export release contract. |
+| `docs/travel_story_export.md` | Travel story/export modes, route/photo/expense/memory composition, visibility, media-token safety, secret exclusion, and async PDF/static export release contract. |
 | `docs/household_budget_goals.md` | Household budget/shared goal owner/member scope, contribution, export, notification, and mutation safety contract. |
 ## Current Automation Set
 
@@ -122,6 +122,7 @@ These items are already tracked as release contracts rather than loose ideas. Ke
 | `scripts/verify-pwa-mobile-baseline.ps1` | Fails CI if PWA manifest/app-shell privacy, production-only service worker registration, WCAG/mobile checklist anchors, or camera capture hints for core upload flows drift. |
 | `scripts/verify-db-migrations.ps1` | Fails CI on malformed migration names, duplicate versions, missing baseline marker, undocumented migration/evidence rows, unexpected legacy `*SchemaUpdater` files, or new startup DDL runners. |
 | `scripts/verify-prometheus-alerts.ps1` | Fails CI when alert rules are malformed, undocumented, or not loaded by Prometheus. |
+
 
 
 

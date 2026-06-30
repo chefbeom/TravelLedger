@@ -1,4 +1,4 @@
-# Travel Story Export Contract
+﻿# Travel Story Export Contract
 
 Updated: 2026-06-30
 
@@ -45,8 +45,24 @@ flowchart TD
 | Memories | Travel memory titles/body already visible to the same viewer. | AI prompts, private notes from unrelated plans, or hidden operational metadata. |
 | Export metadata | Export timestamp, story version, included section counts, and visibility mode. | API keys, public tokens, signed URLs, secondary PINs, provider URLs, or raw archive credentials. |
 
-## Non-negotiable safety rules
+## Export product modes
 
+| Mode | Output | First release shape | Guardrail |
+| --- | --- | --- | --- |
+| Web story | Shareable responsive page that combines route timeline, photo map, spending summary, and memories. | Reuse private, shared, and public visibility paths and render read-only sections from existing travel DTOs. | No source mutation, no hidden records, no raw storage paths, tokens, GPS, or EXIF leakage. |
+| Web exhibition | Curated gallery and timeline for completed shared or public trips. | Build on shared exhibits and public trips; show visibility badge, section counts, and media coverage. | Completed-plan-only and recipient/public visibility checks remain authoritative. |
+| PDF/static export | Downloadable artifact for one trip. | Future async bounded job with size caps, cleanup retention, and optional encryption/private-link policy. | Do not block request threads; artifact excludes secrets and uses expiring access. |
+
+## Story composition checklist
+
+| Section | Required source | User value | Release check |
+| --- | --- | --- | --- |
+| Route timeline | Plan dates, itinerary days, route segments, and map coordinates already visible to the viewer. | Turns the trip into a chronological narrative. | Omits private stops or hidden locations outside the current viewer scope. |
+| Photo map | Approved media, clusters, generated thumbnails, and safe public media tokens. | Shows where memories happened without exposing storage internals. | Uses tokenized media access and never emits raw object keys or presigned URLs. |
+| Spending summary | Travel expense totals, category summaries, and optional daily spend buckets. | Connects travel memories to actual cost. | Shows aggregate/read-only values first; itemized spend requires the same owner/shared visibility rule as the source trip. |
+| Memories | User notes, highlights, captions, and curated moments. | Preserves the personal story around photos and routes. | Excludes deleted/private notes and supports redaction before sharing. |
+| Share/export metadata | Visibility, generatedAt, section counts, export mode, and source plan id. | Makes the artifact auditable and easy to review before publishing. | Metadata contains no secrets, API keys, raw GPS/EXIF, storage paths, or internal tokens. |
+## Non-negotiable safety rules
 | Rule | Reason |
 | --- | --- |
 | Story/export is read-only. | Rendering a story must not mutate travel plans, media, expenses, ledger entries, shares, or memories. |

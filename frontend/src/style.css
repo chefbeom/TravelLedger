@@ -15026,3 +15026,167 @@ textarea {
 .drive-storage-meter__bar {
   background: linear-gradient(90deg, var(--brand), var(--brand-strong));
 }
+
+/* mobile-calendar-entry-layout-fix */
+:root[data-layout-mode='mobile'] .calendar-layout-grid,
+:root[data-layout-mode='mobile'] .calendar-layout-grid.grid-stack {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 14px !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+  overflow: visible !important;
+}
+
+:root[data-layout-mode='mobile'] .calendar-layout-grid > .grid-stack-item,
+:root[data-layout-mode='mobile'] .calendar-layout-grid > .calendar-layout-panel,
+:root[data-layout-mode='mobile'] .calendar-layout-grid .grid-stack-item-content,
+:root[data-layout-mode='mobile'] .calendar-layout-panel__content {
+  position: relative !important;
+  inset: auto !important;
+  left: auto !important;
+  top: auto !important;
+  transform: none !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+  height: auto !important;
+  min-height: 0 !important;
+  overflow: visible !important;
+}
+
+:root[data-layout-mode='mobile'] .calendar-layout-panel--quick-entry {
+  order: 1 !important;
+}
+
+:root[data-layout-mode='mobile'] .calendar-layout-panel--calendar {
+  order: 2 !important;
+}
+
+:root[data-layout-mode='mobile'] .calendar-layout-panel--aggregate {
+  order: 3 !important;
+}
+
+:root[data-layout-mode='mobile'] .calendar-layout-panel--sheet {
+  order: 4 !important;
+}
+
+:root[data-layout-mode='mobile'] .calendar-layout-panel--quick-entry,
+:root[data-layout-mode='mobile'] .calendar-layout-panel--calendar {
+  scroll-margin-top: 96px;
+}
+
+:root[data-layout-mode='mobile'] .calendar-layout-panel--quick-entry .panel,
+:root[data-layout-mode='mobile'] .calendar-layout-panel--calendar .panel,
+:root[data-layout-mode='mobile'] .calendar-layout-panel--quick-entry .card,
+:root[data-layout-mode='mobile'] .calendar-layout-panel--calendar .card {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
+}
+
+:root[data-layout-mode='mobile'] .calendar-toolbar,
+:root[data-layout-mode='mobile'] .calendar-header,
+:root[data-layout-mode='mobile'] .calendar-month-header,
+:root[data-layout-mode='mobile'] .household-calendar-header-actions {
+  min-width: 0;
+  max-width: 100%;
+  flex-wrap: wrap;
+}
+
+:root[data-layout-mode='mobile'] .calendar,
+:root[data-layout-mode='mobile'] .month-calendar,
+:root[data-layout-mode='mobile'] .calendar-board {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
+}
+
+:root[data-layout-mode='mobile'] .calendar__weeks,
+:root[data-layout-mode='mobile'] .calendar__weekdays,
+:root[data-layout-mode='mobile'] .calendar__week {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  width: 100%;
+  min-width: 0;
+}
+
+:root[data-layout-mode='mobile'] .calendar__day {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  padding: 7px 5px;
+  border-radius: 14px;
+}
+
+:root[data-layout-mode='mobile'] .calendar__day > *,
+:root[data-layout-mode='mobile'] .calendar__metric,
+:root[data-layout-mode='mobile'] .calendar__expense-total,
+:root[data-layout-mode='mobile'] .calendar__income-total,
+:root[data-layout-mode='mobile'] .calendar__day-label,
+:root[data-layout-mode='mobile'] .calendar__day-summary {
+  min-width: 0;
+  max-width: 100%;
+}
+
+:root[data-layout-mode='mobile'] .calendar__expense-total,
+:root[data-layout-mode='mobile'] .calendar__income-total,
+:root[data-layout-mode='mobile'] .calendar__metric span,
+:root[data-layout-mode='mobile'] .calendar__metric strong,
+:root[data-layout-mode='mobile'] .calendar__day-summary {
+  overflow-wrap: anywhere;
+  word-break: keep-all;
+}
+
+:root[data-layout-mode='mobile'] .entry-editor,
+:root[data-layout-mode='mobile'] .entry-editor__amount,
+:root[data-layout-mode='mobile'] .entry-editor__fields,
+:root[data-layout-mode='mobile'] .entry-editor__field-row,
+:root[data-layout-mode='mobile'] .entry-editor__category-grid,
+:root[data-layout-mode='mobile'] .entry-editor__field-row--date-time,
+:root[data-layout-mode='mobile'] .entry-editor__field-row--classification {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+}
+
+:root[data-layout-mode='mobile'] .entry-editor__amount {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 10px;
+}
+
+:root[data-layout-mode='mobile'] .amount-display,
+:root[data-layout-mode='mobile'] .amount-display__value,
+:root[data-layout-mode='mobile'] .amount-input,
+:root[data-layout-mode='mobile'] .amount-shortcuts,
+:root[data-layout-mode='mobile'] .amount-shortcuts__button {
+  min-width: 0;
+  max-width: 100%;
+}
+
+:root[data-layout-mode='mobile'] .amount-display__value,
+:root[data-layout-mode='mobile'] .amount-input {
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 430px) {
+  :root[data-layout-mode='mobile'] .calendar__day {
+    min-height: 92px;
+    padding: 6px 4px;
+    font-size: 0.78rem;
+  }
+
+  :root[data-layout-mode='mobile'] .calendar__expense-total,
+  :root[data-layout-mode='mobile'] .calendar__income-total {
+    font-size: 0.78rem;
+    line-height: 1.15;
+  }
+
+  :root[data-layout-mode='mobile'] .calendar__metric {
+    gap: 2px;
+  }
+}

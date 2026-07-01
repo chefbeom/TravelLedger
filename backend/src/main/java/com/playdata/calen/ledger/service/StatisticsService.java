@@ -100,7 +100,7 @@ public class StatisticsService {
     public List<PaymentBreakdownItemResponse> getPaymentBreakdown(Long userId, LocalDate from, LocalDate to) {
         appUserService.getRequiredUser(userId);
         validateRange(from, to);
-        return ledgerEntryRepository.aggregatePaymentBreakdownByOwnerIdAndDateRange(userId, from, to).stream()
+        return ledgerEntryRepository.aggregatePaymentBreakdownByOwnerIdAndDateRange(userId, from, to, EntryType.EXPENSE).stream()
                 .map(row -> new PaymentBreakdownItemResponse(
                         row.getPaymentMethodName(),
                         row.getKind(),

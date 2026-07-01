@@ -560,7 +560,7 @@ async function loadOpsControl() {
     markOpsControlChecked()
   } catch (error) {
     if (!handleAdminAccessRequired(error)) {
-      state.opsControlError = error.message || 'AI/서버 제어판 정보를 불러오지 못했습니다.'
+      state.opsControlError = error.message || 'AI 및 서버 제어판 정보를 불러오지 못했습니다.'
     }
   } finally {
     state.loadingOpsControl = false
@@ -1079,8 +1079,8 @@ onMounted(initializeAdminWorkspace)
       <section class="panel">
         <div class="panel__header">
           <div>
-            <h2>AI/서버 제어판</h2>
-            <p>AI 분석 기능을 켜고 끄며 LM Studio 연결값을 조절하고, AI 서버와 데이터 서버 상태를 확인합니다.</p>
+            <h2>AI 및 서버 제어판</h2>
+            <p>AI 분석 기능을 켜고 끄며 LM Studio 연결 정보, AI 서버 상태, 데이터 서버 상태를 한곳에서 확인하고 조절합니다.</p>
           </div>
           <div class="admin-toolbar">
             <button class="button button--ghost" type="button" :disabled="state.loadingOpsControl" @click="loadOpsControl">
@@ -1149,7 +1149,7 @@ onMounted(initializeAdminWorkspace)
               <input v-model="state.aiControlForm.apiKeyHeader" placeholder="X-TravelLedger-AI-Key" />
             </label>
             <label class="field">
-              <span class="field__label">n8n API key 새 값</span>
+              <span class="field__label">n8n API key 변경</span>
               <input v-model="state.aiControlForm.apiKey" type="password" autocomplete="new-password" :disabled="state.aiControlForm.clearApiKey" :placeholder="state.aiControlForm.apiKeyConfigured ? '설정됨 - 변경할 때만 입력' : '미설정'" />
             </label>
             <label class="field field--inline">
@@ -1161,7 +1161,7 @@ onMounted(initializeAdminWorkspace)
               <input v-model="state.aiControlForm.lmStudioBaseUrl" placeholder="http://100.92.170.22:1234" />
             </label>
             <label class="field">
-              <span class="field__label">LM Studio API key 새 값</span>
+              <span class="field__label">LM Studio API key 변경</span>
               <input v-model="state.aiControlForm.lmStudioApiKey" type="password" autocomplete="new-password" :disabled="state.aiControlForm.clearLmStudioApiKey" :placeholder="state.aiControlForm.lmStudioApiKeyConfigured ? '설정됨 - 변경할 때만 입력' : '미설정'" />
             </label>
             <label class="field field--inline">
@@ -1200,11 +1200,11 @@ onMounted(initializeAdminWorkspace)
               <input v-model.number="state.aiControlForm.readTimeoutSeconds" type="number" min="1" max="600" />
             </label>
             <label class="field">
-              <span class="field__label">Provider allowlist 강제</span>
+              <span class="field__label">Provider 허용 목록 강제</span>
               <input v-model="state.aiControlForm.enforceProviderUrlAllowlist" type="checkbox" />
             </label>
             <label class="field">
-              <span class="field__label">허용 host</span>
+              <span class="field__label">허용 호스트</span>
               <input v-model="state.aiControlForm.allowedProviderHosts" placeholder="100.92.170.22,127.0.0.1,localhost" />
             </label>
             <div class="panel__actions">

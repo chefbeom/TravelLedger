@@ -272,13 +272,15 @@ public interface LedgerEntryRepository extends JpaRepository<LedgerEntry, Long> 
             where entry.owner.id = :userId
               and entry.deletedAt is null
               and entry.entryDate between :from and :to
+              and entry.entryType = :entryType
             group by paymentMethod.id, paymentMethod.name, paymentMethod.kind
             order by sum(entry.amount) desc
             """)
     List<PaymentBreakdownAggregate> aggregatePaymentBreakdownByOwnerIdAndDateRange(
             @Param("userId") Long userId,
             @Param("from") LocalDate from,
-            @Param("to") LocalDate to
+            @Param("to") LocalDate to,
+            @Param("entryType") com.playdata.calen.ledger.domain.EntryType entryType
     );
     @Query("""
             select

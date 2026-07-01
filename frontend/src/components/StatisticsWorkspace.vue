@@ -1,4 +1,4 @@
-﻿<script setup>
+<script setup>
 import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import BarChartCard from './BarChartCard.vue'
 import BreakdownList from './BreakdownList.vue'
@@ -288,12 +288,19 @@ const aiResultCards = computed(() => {
   if (!props.aiAnalysis) {
     return []
   }
-  return [
+  const cards = [
     { label: '총 지출', value: props.formatCurrency(props.aiAnalysis.totalExpense), meta: `${props.aiAnalysis.expenseEntryCount ?? 0}건 내역` },
     { label: '일 평균', value: props.formatCurrency(props.aiAnalysis.averageDailyExpense), meta: formatAiRange(props.aiAnalysis.from, props.aiAnalysis.to) },
-    { label: '비교 지출', value: props.formatCurrency(props.aiAnalysis.compareTotalExpense), meta: props.aiAnalysis.compareFrom ? formatAiRange(props.aiAnalysis.compareFrom, props.aiAnalysis.compareTo) : '비교 없음' },
-    { label: '증감', value: `${aiCompareDelta.value > 0 ? '+' : ''}${props.formatCurrency(aiCompareDelta.value)}`, meta: props.aiAnalysis.mode === 'COMPARISON' ? '비교 기간 대비' : '최근 흐름 기준' },
   ]
+  if (props.aiAnalysis.compareFrom) {
+    cards.push(
+      { label: '비교 지출', value: props.formatCurrency(props.aiAnalysis.compareTotalExpense), meta: formatAiRange(props.aiAnalysis.compareFrom, props.aiAnalysis.compareTo) },
+      { label: '증감', value: `${aiCompareDelta.value > 0 ? '+' : ''}${props.formatCurrency(aiCompareDelta.value)}`, meta: '비교 기간 대비' },
+    )
+  } else {
+    cards.push({ label: '비교', value: '비교 불가', meta: '비교 기간 없음' })
+  }
+  return cards
 })
 const rawAiReport = computed(() => props.aiAnalysis?.report ?? {})
 const parsedAiPayload = computed(() => findParsedAiPayload(props.aiAnalysis, rawAiReport.value))
@@ -313,7 +320,9 @@ const aiAbnormalReportItems = computed(() => dedupeAiItems([
 ]))
 const aiComparisonReportItems = computed(() => safeAiReportList('comparisonFocus', props.aiAnalysis?.trendInsights))
 const aiTopCategoryItems = computed(() => topAiBreakdownItems(props.aiAnalysis?.categoryBreakdown, formatAiCategoryBreakdownLabel))
-const aiTopPaymentItems = computed(() => topAiBreakdownItems(props.aiAnalysis?.paymentBreakdown, formatAiPaymentBreakdownLabel))
+const aiPaymentBreakdownItems = computed(() => normalizeAiPaymentBreakdown(props.aiAnalysis?.paymentBreakdown, props.aiAnalysis?.totalExpense))
+const aiTopPaymentItems = computed(() => topAiBreakdownItems(aiPaymentBreakdownItems.value, formatAiPaymentBreakdownLabel, 3, props.aiAnalysis?.totalExpense))
+const aiComputedTopPaymentInsight = computed(() => buildComputedTopPaymentInsight())
 const aiPrintableCards = computed(() => [
   ...aiResultCards.value,
   ...buildAiFocusMetricCards(),
@@ -467,20 +476,43 @@ function formatAiPaymentBreakdownLabel(item) {
   return item.kind ? `${item.paymentMethodName || '결제수단 미확인'} (${item.kind})` : (item.paymentMethodName || '결제수단 미확인')
 }
 
-function topAiBreakdownItems(items, labeler, limit = 3) {
+function normalizeAiPaymentBreakdown(items, totalExpense) {
   const source = Array.isArray(items) ? items : []
-  const total = source.reduce((sum, item) => sum + aiNumericAmount(item?.totalAmount), 0)
+  const total = aiNumericAmount(totalExpense)
+  return source
+    .filter((item) => aiNumericAmount(item?.totalAmount) > 0)
+    .filter((item) => !isIncomePlaceholderPayment(item))
+    .filter((item) => total <= 0 || aiNumericAmount(item?.totalAmount) <= total + 1)
+}
+
+function isIncomePlaceholderPayment(item) {
+  const name = String(item?.paymentMethodName ?? '').trim().toLowerCase()
+  return name === '-' || name === 'income' || name === '수입'
+}
+
+function topAiBreakdownItems(items, labeler, limit = 3, totalOverride = null) {
+  const source = Array.isArray(items) ? items : []
+  const calculatedTotal = source.reduce((sum, item) => sum + aiNumericAmount(item?.totalAmount), 0)
+  const total = totalOverride == null ? calculatedTotal : aiNumericAmount(totalOverride)
   return source
     .map((item) => ({
       label: labeler(item),
       amount: aiNumericAmount(item?.totalAmount),
       entryCount: Number(item?.entryCount ?? 0),
-      share: formatAiShare(item?.totalAmount, total),
+      share: formatAiShare(item?.totalAmount, total || calculatedTotal),
     }))
     .filter((item) => item.amount > 0)
     .sort((a, b) => b.amount - a.amount)
     .slice(0, limit)
     .map((item) => `${item.label}: ${props.formatCurrency(item.amount)} · ${item.entryCount}건 · ${item.share}`)
+}
+
+function buildComputedTopPaymentInsight() {
+  const topPayment = splitAiTopBreakdownItem(aiTopPaymentItems.value[0])
+  if (!topPayment) {
+    return ''
+  }
+  return `지출 기준 결제수단 1위는 ${topPayment.label}이며 ${topPayment.meta}입니다. 결제수단 해석은 수입용 결제수단을 제외한 지출 집계만 기준으로 합니다.`
 }
 
 function buildAiFocusMetricCards() {
@@ -593,7 +625,7 @@ function buildAiQualityNotes(analysis) {
   return dedupeAiItems([
     entryCount > 0 ? `분석 신뢰 기준: ${entryCount}건의 지출 데이터가 포함되었습니다.` : '분석 신뢰 기준: 지출 데이터가 부족해 해석 범위가 제한됩니다.',
     aiTopCategoryItems.value.length ? '카테고리 집중도는 저장된 카테고리 집계 금액을 기준으로 산출했습니다.' : '카테고리 집계가 부족해 지출 집중도 판단은 제한됩니다.',
-    aiTopPaymentItems.value.length ? '결제수단 분석은 저장된 결제수단별 금액과 건수를 기준으로 산출했습니다.' : '결제수단 집계가 부족해 결제 패턴 판단은 제한됩니다.',
+    aiTopPaymentItems.value.length ? '결제수단 분석은 수입용 결제수단을 제외한 지출 기준 금액과 건수를 기준으로 산출했습니다.' : '결제수단 집계가 부족하거나 총 지출보다 큰 비정상 결제수단 항목이 제외되어 결제 패턴 판단은 제한됩니다.',
     analysis.compareFrom ? '비교 분석은 선택된 비교 기간의 총 지출과 현재 기간 총 지출을 단순 비교합니다.' : '비교 기간이 없어 증가/감소 평가는 제공하지 않습니다.',
     hasStaleAiResult.value ? '주의: 새 분석 실패로 이전 저장 결과가 표시되어 최신 거래와 차이가 있을 수 있습니다.' : '',
   ])
@@ -615,7 +647,7 @@ function buildAiMethodology(analysis) {
   return dedupeAiItems([
     '금액 지표는 저장된 거래 데이터의 지출 합계, 일 평균, 결제수단별 합계, 카테고리별 합계를 기준으로 계산했습니다.',
     '상위 지출 카테고리와 주요 결제수단은 금액 기준으로 내림차순 정렬한 뒤 상위 항목을 표시합니다.',
-    analysis.compareFrom ? '증감 평가는 현재 분석 기간과 사용자가 선택한 비교 기간의 총 지출 차이를 기준으로 합니다.' : '비교 기간이 없는 경우 증감 평가는 참고 지표로만 표시합니다.',
+    analysis.compareFrom ? '증감 평가는 현재 분석 기간과 사용자가 선택한 비교 기간의 총 지출 차이를 기준으로 합니다.' : '비교 기간이 없는 경우 증가/감소 평가는 표시하지 않습니다.',
     'AI 문장은 계산된 집계값과 저장된 분석 결과를 해석한 설명이며, 원본 거래 데이터의 자동 변경에는 사용하지 않습니다.',
   ])
 }
@@ -782,29 +814,15 @@ function compactAiPrintableSection(section) {
 }
 
 function limitAiPrintEntries(items, limit, maxLength) {
-  if (limit <= 0) {
+  if (limit === 0) {
     return []
   }
-  const source = dedupeAiItems(items ?? [])
-  const selected = source.slice(0, limit).map((item) => shortenAiPrintText(item, maxLength))
-  const remaining = source.length - selected.length
-  if (remaining > 0) {
-    selected.push(`추가 ${remaining}개 항목은 화면 상세 결과에서 확인하세요.`)
-  }
-  return selected
+  return dedupeAiItems(items ?? []).map((item) => shortenAiPrintText(item, maxLength))
 }
 
 function shortenAiPrintText(text, maxLength) {
-  const value = sanitizeAiText(text)
-  if (!value || value.length <= maxLength) {
-    return value
-  }
-  const slice = value.slice(0, maxLength)
-  const boundary = Math.max(slice.lastIndexOf('.'), slice.lastIndexOf('다'), slice.lastIndexOf('요'), slice.lastIndexOf(';'))
-  const end = boundary > Math.floor(maxLength * 0.6) ? boundary + 1 : maxLength
-  return `${slice.slice(0, end).trim()}...`
+  return sanitizeAiText(text)
 }
-
 function buildAiPresentationSections() {
   if (!props.aiAnalysis) {
     return []
@@ -825,9 +843,9 @@ function buildAiPresentationSections() {
     ]),
     createAiSection('evidence', '데이터 근거', ['아래 항목은 AI 문장이 아니라 저장된 가계부 집계값으로 산출한 핵심 근거입니다.'], dataEvidence, true),
     createAiSection('report', '보고서', [aiReportFullReport.value || 'AI 구조화 보고서가 부족해 핵심 지표 중심으로 표시합니다.'], [], true),
-    createAiSection('payment', '결제방법', [report.topPaymentMethod || safeAiList(analysis.paymentInsights)[0] || '결제수단 분석은 상위 결제수단과 지출 비중을 기준으로 확인하세요.'], aiTopPaymentItems.value.length ? aiTopPaymentItems.value : safeAiList(analysis.paymentInsights)),
+    createAiSection('payment', '결제방법', [aiComputedTopPaymentInsight.value || '결제수단 분석은 상위 결제수단과 지출 비중을 기준으로 확인하세요.'], aiTopPaymentItems.value.length ? aiTopPaymentItems.value : safeAiList(analysis.paymentInsights)),
     createAiSection('notable', '눈에 띄는 소비', [], safeAiReportList('notableSpending', analysis.highlights)),
-    createAiSection('fixed', '고정/구독 지출', [], aiFixedReportItems.value.length ? aiFixedReportItems.value : ['반복 지출 후보가 부족하거나 아직 확인되지 않았습니다.']),
+    createAiSection('fixed', '고정비/구독/반복성 지출', [], aiFixedReportItems.value.length ? aiFixedReportItems.value : ['고정비, 구독비, 반복성 변동비 후보가 부족하거나 아직 확인되지 않았습니다.']),
     createAiSection('abnormal', '이상/주의 지출', [], aiAbnormalReportItems.value.length ? aiAbnormalReportItems.value : ['확인이 필요한 이상 지출 후보가 뚜렷하게 반환되지 않았습니다.']),
     createAiSection('actions', '우선 조치 권고', ['지출 규모, 반복성, 이상 신호를 기준으로 먼저 확인할 항목입니다.'], actionPriorities.length ? actionPriorities : (improvementItems.length ? improvementItems : ['예산 조정이나 분류 변경은 사용자가 직접 확인한 뒤 반영하세요.']), true),
     createAiSection('comparison', '비교 분석', [], aiComparisonReportItems.value.length ? aiComparisonReportItems.value : [aiIsComparisonResult.value ? '비교 분석 결과가 부족합니다.' : '비교 분석 모드가 아니므로 비교 항목은 생략됩니다.']),

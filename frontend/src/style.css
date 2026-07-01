@@ -18703,3 +18703,4786 @@ textarea {
     opacity: 1;
   }
 }
+/* Final cross-page modal, drawer, popup and state contrast guard. */
+:root:not([data-theme='toss']) .travel-modal__dialog,
+:root:not([data-theme='toss']) .travel-progress-modal__dialog,
+:root:not([data-theme='toss']) .drive-version-drawer,
+:root:not([data-theme='toss']) .travel-public-map-drawer,
+:root:not([data-theme='toss']) .drive-context-menu,
+:root:not([data-theme='toss']) .household-data-actions__menu,
+:root:not([data-theme='toss']) .leaflet-popup-content-wrapper,
+:root:not([data-theme='toss']) .travel-map__popup,
+:root:not([data-theme='toss']) .travel-cluster-popup {
+  background: #ffffff !important;
+  color: #10231b !important;
+  -webkit-text-fill-color: #10231b !important;
+  border-color: rgba(14, 93, 69, 0.2) !important;
+  text-shadow: none !important;
+}
+
+:root:not([data-theme='toss']) .travel-modal__dialog h1,
+:root:not([data-theme='toss']) .travel-modal__dialog h2,
+:root:not([data-theme='toss']) .travel-modal__dialog h3,
+:root:not([data-theme='toss']) .travel-modal__dialog h4,
+:root:not([data-theme='toss']) .travel-progress-modal__dialog h1,
+:root:not([data-theme='toss']) .travel-progress-modal__dialog h2,
+:root:not([data-theme='toss']) .drive-version-drawer h1,
+:root:not([data-theme='toss']) .drive-version-drawer h2,
+:root:not([data-theme='toss']) .travel-public-map-drawer h1,
+:root:not([data-theme='toss']) .travel-public-map-drawer h2,
+:root:not([data-theme='toss']) .leaflet-popup-content-wrapper strong,
+:root:not([data-theme='toss']) .travel-map__popup strong,
+:root:not([data-theme='toss']) .travel-cluster-popup strong {
+  color: #082f22 !important;
+  -webkit-text-fill-color: #082f22 !important;
+  opacity: 1 !important;
+}
+
+:root:not([data-theme='toss']) .travel-modal__dialog p,
+:root:not([data-theme='toss']) .travel-modal__dialog span,
+:root:not([data-theme='toss']) .travel-modal__dialog small,
+:root:not([data-theme='toss']) .travel-modal__dialog label,
+:root:not([data-theme='toss']) .travel-progress-modal__dialog p,
+:root:not([data-theme='toss']) .travel-progress-modal__dialog span,
+:root:not([data-theme='toss']) .drive-version-drawer p,
+:root:not([data-theme='toss']) .drive-version-drawer span,
+:root:not([data-theme='toss']) .drive-version-drawer small,
+:root:not([data-theme='toss']) .travel-public-map-drawer p,
+:root:not([data-theme='toss']) .travel-public-map-drawer span,
+:root:not([data-theme='toss']) .travel-public-map-drawer small,
+:root:not([data-theme='toss']) .leaflet-popup-content-wrapper p,
+:root:not([data-theme='toss']) .leaflet-popup-content-wrapper span,
+:root:not([data-theme='toss']) .travel-map__popup p,
+:root:not([data-theme='toss']) .travel-map__popup span,
+:root:not([data-theme='toss']) .travel-cluster-popup p,
+:root:not([data-theme='toss']) .travel-cluster-popup span {
+  color: #3e5048 !important;
+  -webkit-text-fill-color: #3e5048 !important;
+  opacity: 1 !important;
+}
+
+[data-theme='toss'] .travel-modal__dialog,
+[data-theme='toss'] .travel-progress-modal__dialog,
+[data-theme='toss'] .drive-version-drawer,
+[data-theme='toss'] .travel-public-map-drawer,
+[data-theme='toss'] .drive-context-menu,
+[data-theme='toss'] .household-data-actions__menu,
+[data-theme='toss'] .leaflet-popup-content-wrapper,
+[data-theme='toss'] .travel-map__popup,
+[data-theme='toss'] .travel-cluster-popup {
+  background: #111b16 !important;
+  color: #f6fff8 !important;
+  -webkit-text-fill-color: #f6fff8 !important;
+  border-color: rgba(149, 235, 171, 0.28) !important;
+  text-shadow: none !important;
+}
+
+[data-theme='toss'] .travel-modal__dialog h1,
+[data-theme='toss'] .travel-modal__dialog h2,
+[data-theme='toss'] .travel-modal__dialog h3,
+[data-theme='toss'] .travel-modal__dialog h4,
+[data-theme='toss'] .travel-progress-modal__dialog h1,
+[data-theme='toss'] .travel-progress-modal__dialog h2,
+[data-theme='toss'] .drive-version-drawer h1,
+[data-theme='toss'] .drive-version-drawer h2,
+[data-theme='toss'] .travel-public-map-drawer h1,
+[data-theme='toss'] .travel-public-map-drawer h2,
+[data-theme='toss'] .leaflet-popup-content-wrapper strong,
+[data-theme='toss'] .travel-map__popup strong,
+[data-theme='toss'] .travel-cluster-popup strong {
+  color: #f6fff8 !important;
+  -webkit-text-fill-color: #f6fff8 !important;
+  opacity: 1 !important;
+}
+
+[data-theme='toss'] .travel-modal__dialog p,
+[data-theme='toss'] .travel-modal__dialog span,
+[data-theme='toss'] .travel-modal__dialog small,
+[data-theme='toss'] .travel-modal__dialog label,
+[data-theme='toss'] .travel-progress-modal__dialog p,
+[data-theme='toss'] .travel-progress-modal__dialog span,
+[data-theme='toss'] .drive-version-drawer p,
+[data-theme='toss'] .drive-version-drawer span,
+[data-theme='toss'] .drive-version-drawer small,
+[data-theme='toss'] .travel-public-map-drawer p,
+[data-theme='toss'] .travel-public-map-drawer span,
+[data-theme='toss'] .travel-public-map-drawer small,
+[data-theme='toss'] .leaflet-popup-content-wrapper p,
+[data-theme='toss'] .leaflet-popup-content-wrapper span,
+[data-theme='toss'] .travel-map__popup p,
+[data-theme='toss'] .travel-map__popup span,
+[data-theme='toss'] .travel-cluster-popup p,
+[data-theme='toss'] .travel-cluster-popup span {
+  color: #cbdace !important;
+  -webkit-text-fill-color: #cbdace !important;
+  opacity: 1 !important;
+}
+
+:root:not([data-theme='toss']) .calendar__day--muted,
+:root:not([data-theme='toss']) .household-travel-ledger__date-card--muted,
+:root:not([data-theme='toss']) .travel-public-rail__button,
+:root:not([data-theme='toss']) .catalog-chip__action:disabled,
+:root:not([data-theme='toss']) .button:disabled,
+:root:not([data-theme='toss']) .travel-map__toolbar-button:disabled,
+:root:not([data-theme='toss']) .travel-map__slider-button:disabled,
+:root:not([data-theme='toss']) .drive-move-destination:disabled,
+:root:not([data-theme='toss']) .drive-folder-tree__toggle:disabled,
+:root:not([data-theme='toss']) .drive-folder-tree__action:disabled {
+  color: #42544b !important;
+  -webkit-text-fill-color: #42544b !important;
+  opacity: 0.82 !important;
+}
+
+[data-theme='toss'] .calendar__day--muted,
+[data-theme='toss'] .household-travel-ledger__date-card--muted,
+[data-theme='toss'] .travel-public-rail__button,
+[data-theme='toss'] .catalog-chip__action:disabled,
+[data-theme='toss'] .button:disabled,
+[data-theme='toss'] .travel-map__toolbar-button:disabled,
+[data-theme='toss'] .travel-map__slider-button:disabled,
+[data-theme='toss'] .drive-move-destination:disabled,
+[data-theme='toss'] .drive-folder-tree__toggle:disabled,
+[data-theme='toss'] .drive-folder-tree__action:disabled {
+  color: #cbdace !important;
+  -webkit-text-fill-color: #cbdace !important;
+  opacity: 0.82 !important;
+}
+
+@media (max-width: 720px) {
+  .travel-modal__dialog,
+  .travel-progress-modal__dialog,
+  .drive-version-drawer,
+  .travel-public-map-drawer,
+  .drive-context-menu,
+  .household-data-actions__menu {
+    max-width: min(100vw - 24px, 640px) !important;
+    overflow-wrap: anywhere;
+  }
+
+  .travel-modal__dialog h1,
+  .travel-modal__dialog h2,
+  .travel-modal__dialog h3,
+  .travel-progress-modal__dialog h1,
+  .travel-progress-modal__dialog h2,
+  .drive-version-drawer h1,
+  .drive-version-drawer h2,
+  .travel-public-map-drawer h1,
+  .travel-public-map-drawer h2 {
+    line-height: 1.22 !important;
+  }
+}
+/* Interaction contrast override: keep controls readable inside modal/drawer/popup safety nets. */
+:root:not([data-theme='toss']) .travel-modal__dialog button,
+:root:not([data-theme='toss']) .travel-modal__dialog .button,
+:root:not([data-theme='toss']) .travel-modal__dialog a,
+:root:not([data-theme='toss']) .travel-modal__dialog .chip,
+:root:not([data-theme='toss']) .travel-modal__dialog .toggle-chip,
+:root:not([data-theme='toss']) .travel-modal__dialog .preset-chip,
+:root:not([data-theme='toss']) .travel-modal__dialog .catalog-chip,
+:root:not([data-theme='toss']) .drive-version-drawer button,
+:root:not([data-theme='toss']) .drive-version-drawer .button,
+:root:not([data-theme='toss']) .drive-version-drawer a,
+:root:not([data-theme='toss']) .travel-public-map-drawer button,
+:root:not([data-theme='toss']) .travel-public-map-drawer .button,
+:root:not([data-theme='toss']) .travel-public-map-drawer a,
+:root:not([data-theme='toss']) .drive-context-menu button,
+:root:not([data-theme='toss']) .household-data-actions__menu button,
+:root:not([data-theme='toss']) .leaflet-popup-content-wrapper button,
+:root:not([data-theme='toss']) .leaflet-popup-content-wrapper a,
+:root:not([data-theme='toss']) .travel-map__popup button,
+:root:not([data-theme='toss']) .travel-map__popup a,
+:root:not([data-theme='toss']) .travel-cluster-popup button,
+:root:not([data-theme='toss']) .travel-cluster-popup a {
+  color: #0b2f22 !important;
+  -webkit-text-fill-color: #0b2f22 !important;
+  opacity: 1 !important;
+  text-shadow: none !important;
+}
+
+:root:not([data-theme='toss']) .travel-modal__dialog button *,
+:root:not([data-theme='toss']) .travel-modal__dialog .button *,
+:root:not([data-theme='toss']) .travel-modal__dialog a *,
+:root:not([data-theme='toss']) .travel-modal__dialog .chip *,
+:root:not([data-theme='toss']) .travel-modal__dialog .toggle-chip *,
+:root:not([data-theme='toss']) .travel-modal__dialog .preset-chip *,
+:root:not([data-theme='toss']) .travel-modal__dialog .catalog-chip *,
+:root:not([data-theme='toss']) .drive-version-drawer button *,
+:root:not([data-theme='toss']) .drive-version-drawer .button *,
+:root:not([data-theme='toss']) .drive-version-drawer a *,
+:root:not([data-theme='toss']) .travel-public-map-drawer button *,
+:root:not([data-theme='toss']) .travel-public-map-drawer .button *,
+:root:not([data-theme='toss']) .travel-public-map-drawer a *,
+:root:not([data-theme='toss']) .drive-context-menu button *,
+:root:not([data-theme='toss']) .household-data-actions__menu button *,
+:root:not([data-theme='toss']) .leaflet-popup-content-wrapper button *,
+:root:not([data-theme='toss']) .leaflet-popup-content-wrapper a *,
+:root:not([data-theme='toss']) .travel-map__popup button *,
+:root:not([data-theme='toss']) .travel-map__popup a *,
+:root:not([data-theme='toss']) .travel-cluster-popup button *,
+:root:not([data-theme='toss']) .travel-cluster-popup a * {
+  color: inherit !important;
+  -webkit-text-fill-color: currentColor !important;
+  opacity: 1 !important;
+}
+
+:root:not([data-theme='toss']) .travel-modal__dialog .button--primary,
+:root:not([data-theme='toss']) .travel-modal__dialog button[type='submit'],
+:root:not([data-theme='toss']) .travel-modal__dialog .toggle-chip--active,
+:root:not([data-theme='toss']) .travel-modal__dialog .preset-chip--active,
+:root:not([data-theme='toss']) .travel-modal__dialog .travel-color-chip--active,
+:root:not([data-theme='toss']) .drive-version-drawer .button--primary,
+:root:not([data-theme='toss']) .drive-version-drawer button[type='submit'],
+:root:not([data-theme='toss']) .travel-public-map-drawer .button--primary,
+:root:not([data-theme='toss']) .travel-public-map-drawer button[type='submit'],
+:root:not([data-theme='toss']) .leaflet-popup-content-wrapper .button--primary,
+:root:not([data-theme='toss']) .travel-map__popup .button--primary,
+:root:not([data-theme='toss']) .travel-cluster-popup .button--primary {
+  color: #ffffff !important;
+  -webkit-text-fill-color: #ffffff !important;
+  text-shadow: 0 1px 2px rgba(6, 35, 23, 0.28) !important;
+}
+
+:root:not([data-theme='toss']) .travel-modal__dialog .button--primary *,
+:root:not([data-theme='toss']) .travel-modal__dialog button[type='submit'] *,
+:root:not([data-theme='toss']) .travel-modal__dialog .toggle-chip--active *,
+:root:not([data-theme='toss']) .travel-modal__dialog .preset-chip--active *,
+:root:not([data-theme='toss']) .travel-modal__dialog .travel-color-chip--active *,
+:root:not([data-theme='toss']) .drive-version-drawer .button--primary *,
+:root:not([data-theme='toss']) .drive-version-drawer button[type='submit'] *,
+:root:not([data-theme='toss']) .travel-public-map-drawer .button--primary *,
+:root:not([data-theme='toss']) .travel-public-map-drawer button[type='submit'] *,
+:root:not([data-theme='toss']) .leaflet-popup-content-wrapper .button--primary *,
+:root:not([data-theme='toss']) .travel-map__popup .button--primary *,
+:root:not([data-theme='toss']) .travel-cluster-popup .button--primary * {
+  color: inherit !important;
+  -webkit-text-fill-color: currentColor !important;
+}
+
+[data-theme='toss'] .travel-modal__dialog button,
+[data-theme='toss'] .travel-modal__dialog .button,
+[data-theme='toss'] .travel-modal__dialog a,
+[data-theme='toss'] .travel-modal__dialog .chip,
+[data-theme='toss'] .travel-modal__dialog .toggle-chip,
+[data-theme='toss'] .travel-modal__dialog .preset-chip,
+[data-theme='toss'] .travel-modal__dialog .catalog-chip,
+[data-theme='toss'] .drive-version-drawer button,
+[data-theme='toss'] .drive-version-drawer .button,
+[data-theme='toss'] .drive-version-drawer a,
+[data-theme='toss'] .travel-public-map-drawer button,
+[data-theme='toss'] .travel-public-map-drawer .button,
+[data-theme='toss'] .travel-public-map-drawer a,
+[data-theme='toss'] .drive-context-menu button,
+[data-theme='toss'] .household-data-actions__menu button,
+[data-theme='toss'] .leaflet-popup-content-wrapper button,
+[data-theme='toss'] .leaflet-popup-content-wrapper a,
+[data-theme='toss'] .travel-map__popup button,
+[data-theme='toss'] .travel-map__popup a,
+[data-theme='toss'] .travel-cluster-popup button,
+[data-theme='toss'] .travel-cluster-popup a {
+  color: #f6fff8 !important;
+  -webkit-text-fill-color: #f6fff8 !important;
+  opacity: 1 !important;
+  text-shadow: none !important;
+}
+
+[data-theme='toss'] .travel-modal__dialog button *,
+[data-theme='toss'] .travel-modal__dialog .button *,
+[data-theme='toss'] .travel-modal__dialog a *,
+[data-theme='toss'] .travel-modal__dialog .chip *,
+[data-theme='toss'] .travel-modal__dialog .toggle-chip *,
+[data-theme='toss'] .travel-modal__dialog .preset-chip *,
+[data-theme='toss'] .travel-modal__dialog .catalog-chip *,
+[data-theme='toss'] .drive-version-drawer button *,
+[data-theme='toss'] .drive-version-drawer .button *,
+[data-theme='toss'] .drive-version-drawer a *,
+[data-theme='toss'] .travel-public-map-drawer button *,
+[data-theme='toss'] .travel-public-map-drawer .button *,
+[data-theme='toss'] .travel-public-map-drawer a *,
+[data-theme='toss'] .drive-context-menu button *,
+[data-theme='toss'] .household-data-actions__menu button *,
+[data-theme='toss'] .leaflet-popup-content-wrapper button *,
+[data-theme='toss'] .leaflet-popup-content-wrapper a *,
+[data-theme='toss'] .travel-map__popup button *,
+[data-theme='toss'] .travel-map__popup a *,
+[data-theme='toss'] .travel-cluster-popup button *,
+[data-theme='toss'] .travel-cluster-popup a * {
+  color: inherit !important;
+  -webkit-text-fill-color: currentColor !important;
+  opacity: 1 !important;
+}
+
+[data-theme='toss'] .travel-modal__dialog .button--primary,
+[data-theme='toss'] .travel-modal__dialog button[type='submit'],
+[data-theme='toss'] .travel-modal__dialog .toggle-chip--active,
+[data-theme='toss'] .travel-modal__dialog .preset-chip--active,
+[data-theme='toss'] .travel-modal__dialog .travel-color-chip--active,
+[data-theme='toss'] .drive-version-drawer .button--primary,
+[data-theme='toss'] .drive-version-drawer button[type='submit'],
+[data-theme='toss'] .travel-public-map-drawer .button--primary,
+[data-theme='toss'] .travel-public-map-drawer button[type='submit'],
+[data-theme='toss'] .leaflet-popup-content-wrapper .button--primary,
+[data-theme='toss'] .travel-map__popup .button--primary,
+[data-theme='toss'] .travel-cluster-popup .button--primary {
+  color: #ffffff !important;
+  -webkit-text-fill-color: #ffffff !important;
+  text-shadow: 0 1px 2px rgba(6, 35, 23, 0.34) !important;
+}
+
+:root:not([data-theme='toss']) .button--danger,
+:root:not([data-theme='toss']) button.danger,
+:root:not([data-theme='toss']) .travel-modal__dialog .button--danger,
+:root:not([data-theme='toss']) .travel-modal__dialog button.danger {
+  color: #ffffff !important;
+  -webkit-text-fill-color: #ffffff !important;
+  text-shadow: 0 1px 2px rgba(75, 8, 18, 0.35) !important;
+}
+
+[data-theme='toss'] .button--danger,
+[data-theme='toss'] button.danger,
+[data-theme='toss'] .travel-modal__dialog .button--danger,
+[data-theme='toss'] .travel-modal__dialog button.danger {
+  color: #ffffff !important;
+  -webkit-text-fill-color: #ffffff !important;
+  text-shadow: 0 1px 2px rgba(75, 8, 18, 0.35) !important;
+}
+/* Badge, status and icon contrast guard after modal text overrides. */
+:root:not([data-theme='toss']) .panel__badge,
+:root:not([data-theme='toss']) .chip,
+:root:not([data-theme='toss']) .catalog-chip,
+:root:not([data-theme='toss']) .entry-type-pill,
+:root:not([data-theme='toss']) .notification-card__status,
+:root:not([data-theme='toss']) .notification-card__tone,
+:root:not([data-theme='toss']) .ai-history-status,
+:root:not([data-theme='toss']) .ai-analysis-status,
+:root:not([data-theme='toss']) .drive-lock-badge,
+:root:not([data-theme='toss']) .receipt-ocr-review-card__status,
+:root:not([data-theme='toss']) .travel-record-media-count,
+:root:not([data-theme='toss']) .travel-map__thumb-pin span,
+:root:not([data-theme='toss']) .travel-cluster-pin__count,
+:root:not([data-theme='toss']) .ledger-history-list__count,
+:root:not([data-theme='toss']) .household-calendar-layout-toolbar__status,
+:root:not([data-theme='toss']) .household-entry-panel__date-badge,
+:root:not([data-theme='toss']) .main-palette__file-icon,
+:root:not([data-theme='toss']) .travel-public-rail__badge {
+  color: #082f22 !important;
+  -webkit-text-fill-color: #082f22 !important;
+  opacity: 1 !important;
+  text-shadow: none !important;
+}
+
+:root:not([data-theme='toss']) .panel__badge *,
+:root:not([data-theme='toss']) .chip *,
+:root:not([data-theme='toss']) .catalog-chip *,
+:root:not([data-theme='toss']) .entry-type-pill *,
+:root:not([data-theme='toss']) .notification-card__status *,
+:root:not([data-theme='toss']) .notification-card__tone *,
+:root:not([data-theme='toss']) .ai-history-status *,
+:root:not([data-theme='toss']) .ai-analysis-status *,
+:root:not([data-theme='toss']) .drive-lock-badge *,
+:root:not([data-theme='toss']) .receipt-ocr-review-card__status *,
+:root:not([data-theme='toss']) .travel-record-media-count *,
+:root:not([data-theme='toss']) .travel-map__thumb-pin span *,
+:root:not([data-theme='toss']) .travel-cluster-pin__count *,
+:root:not([data-theme='toss']) .ledger-history-list__count *,
+:root:not([data-theme='toss']) .household-calendar-layout-toolbar__status *,
+:root:not([data-theme='toss']) .household-entry-panel__date-badge *,
+:root:not([data-theme='toss']) .main-palette__file-icon *,
+:root:not([data-theme='toss']) .travel-public-rail__badge * {
+  color: inherit !important;
+  -webkit-text-fill-color: currentColor !important;
+  opacity: 1 !important;
+}
+
+[data-theme='toss'] .panel__badge,
+[data-theme='toss'] .chip,
+[data-theme='toss'] .catalog-chip,
+[data-theme='toss'] .entry-type-pill,
+[data-theme='toss'] .notification-card__status,
+[data-theme='toss'] .notification-card__tone,
+[data-theme='toss'] .ai-history-status,
+[data-theme='toss'] .ai-analysis-status,
+[data-theme='toss'] .drive-lock-badge,
+[data-theme='toss'] .receipt-ocr-review-card__status,
+[data-theme='toss'] .travel-record-media-count,
+[data-theme='toss'] .travel-map__thumb-pin span,
+[data-theme='toss'] .travel-cluster-pin__count,
+[data-theme='toss'] .ledger-history-list__count,
+[data-theme='toss'] .household-calendar-layout-toolbar__status,
+[data-theme='toss'] .household-entry-panel__date-badge,
+[data-theme='toss'] .main-palette__file-icon,
+[data-theme='toss'] .travel-public-rail__badge {
+  color: #f6fff8 !important;
+  -webkit-text-fill-color: #f6fff8 !important;
+  opacity: 1 !important;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.32) !important;
+}
+
+[data-theme='toss'] .panel__badge *,
+[data-theme='toss'] .chip *,
+[data-theme='toss'] .catalog-chip *,
+[data-theme='toss'] .entry-type-pill *,
+[data-theme='toss'] .notification-card__status *,
+[data-theme='toss'] .notification-card__tone *,
+[data-theme='toss'] .ai-history-status *,
+[data-theme='toss'] .ai-analysis-status *,
+[data-theme='toss'] .drive-lock-badge *,
+[data-theme='toss'] .receipt-ocr-review-card__status *,
+[data-theme='toss'] .travel-record-media-count *,
+[data-theme='toss'] .travel-map__thumb-pin span *,
+[data-theme='toss'] .travel-cluster-pin__count *,
+[data-theme='toss'] .ledger-history-list__count *,
+[data-theme='toss'] .household-calendar-layout-toolbar__status *,
+[data-theme='toss'] .household-entry-panel__date-badge *,
+[data-theme='toss'] .main-palette__file-icon *,
+[data-theme='toss'] .travel-public-rail__badge * {
+  color: inherit !important;
+  -webkit-text-fill-color: currentColor !important;
+  opacity: 1 !important;
+}
+
+:root:not([data-theme='toss']) .entry-type-pill--income,
+:root:not([data-theme='toss']) .status--success,
+:root:not([data-theme='toss']) .notification-card__status--success,
+:root:not([data-theme='toss']) .feedback--success,
+:root:not([data-theme='toss']) .chip--success {
+  color: #064e3b !important;
+  -webkit-text-fill-color: #064e3b !important;
+}
+
+:root:not([data-theme='toss']) .entry-type-pill--expense,
+:root:not([data-theme='toss']) .status--error,
+:root:not([data-theme='toss']) .notification-card__status--error,
+:root:not([data-theme='toss']) .feedback--error,
+:root:not([data-theme='toss']) .chip--danger {
+  color: #8f1d2c !important;
+  -webkit-text-fill-color: #8f1d2c !important;
+}
+
+[data-theme='toss'] .entry-type-pill--income,
+[data-theme='toss'] .status--success,
+[data-theme='toss'] .notification-card__status--success,
+[data-theme='toss'] .feedback--success,
+[data-theme='toss'] .chip--success {
+  color: #bff7ce !important;
+  -webkit-text-fill-color: #bff7ce !important;
+}
+
+[data-theme='toss'] .entry-type-pill--expense,
+[data-theme='toss'] .status--error,
+[data-theme='toss'] .notification-card__status--error,
+[data-theme='toss'] .feedback--error,
+[data-theme='toss'] .chip--danger {
+  color: #ffc4cc !important;
+  -webkit-text-fill-color: #ffc4cc !important;
+}
+
+:root:not([data-theme='toss']) svg,
+:root:not([data-theme='toss']) svg path,
+:root:not([data-theme='toss']) svg circle,
+:root:not([data-theme='toss']) svg rect,
+:root:not([data-theme='toss']) svg line,
+:root:not([data-theme='toss']) svg polyline,
+:root:not([data-theme='toss']) svg polygon {
+  opacity: 1;
+}
+
+[data-theme='toss'] svg,
+[data-theme='toss'] svg path,
+[data-theme='toss'] svg circle,
+[data-theme='toss'] svg rect,
+[data-theme='toss'] svg line,
+[data-theme='toss'] svg polyline,
+[data-theme='toss'] svg polygon {
+  opacity: 1;
+}
+/* Global overlay/toast/alert readability guard for every theme and viewport. */
+:root:not([data-theme='toss']) [role='dialog'],
+:root:not([data-theme='toss']) [role='alertdialog'],
+:root:not([data-theme='toss']) [role='menu'],
+:root:not([data-theme='toss']) [role='tooltip'],
+:root:not([data-theme='toss']) [role='alert'],
+:root:not([data-theme='toss']) [role='status'],
+:root:not([data-theme='toss']) .modal,
+:root:not([data-theme='toss']) .modal-content,
+:root:not([data-theme='toss']) .dialog,
+:root:not([data-theme='toss']) .confirm-dialog,
+:root:not([data-theme='toss']) .toast,
+:root:not([data-theme='toss']) .snackbar,
+:root:not([data-theme='toss']) .alert,
+:root:not([data-theme='toss']) .banner,
+:root:not([data-theme='toss']) .popover,
+:root:not([data-theme='toss']) .tooltip,
+:root:not([data-theme='toss']) .dropdown-menu {
+  color: #10231b !important;
+  -webkit-text-fill-color: #10231b !important;
+  opacity: 1 !important;
+  text-shadow: none !important;
+}
+
+:root:not([data-theme='toss']) [role='dialog'] h1,
+:root:not([data-theme='toss']) [role='dialog'] h2,
+:root:not([data-theme='toss']) [role='dialog'] h3,
+:root:not([data-theme='toss']) [role='alertdialog'] h1,
+:root:not([data-theme='toss']) [role='alertdialog'] h2,
+:root:not([data-theme='toss']) [role='alertdialog'] h3,
+:root:not([data-theme='toss']) [role='alert'] strong,
+:root:not([data-theme='toss']) [role='status'] strong,
+:root:not([data-theme='toss']) .modal h1,
+:root:not([data-theme='toss']) .modal h2,
+:root:not([data-theme='toss']) .modal h3,
+:root:not([data-theme='toss']) .dialog h1,
+:root:not([data-theme='toss']) .dialog h2,
+:root:not([data-theme='toss']) .dialog h3,
+:root:not([data-theme='toss']) .toast strong,
+:root:not([data-theme='toss']) .snackbar strong,
+:root:not([data-theme='toss']) .alert strong,
+:root:not([data-theme='toss']) .popover strong,
+:root:not([data-theme='toss']) .tooltip strong,
+:root:not([data-theme='toss']) .dropdown-menu strong {
+  color: #082f22 !important;
+  -webkit-text-fill-color: #082f22 !important;
+  opacity: 1 !important;
+}
+
+:root:not([data-theme='toss']) [role='dialog'] p,
+:root:not([data-theme='toss']) [role='dialog'] span,
+:root:not([data-theme='toss']) [role='dialog'] small,
+:root:not([data-theme='toss']) [role='dialog'] label,
+:root:not([data-theme='toss']) [role='alertdialog'] p,
+:root:not([data-theme='toss']) [role='alertdialog'] span,
+:root:not([data-theme='toss']) [role='alertdialog'] small,
+:root:not([data-theme='toss']) [role='alertdialog'] label,
+:root:not([data-theme='toss']) [role='menu'] span,
+:root:not([data-theme='toss']) [role='tooltip'] span,
+:root:not([data-theme='toss']) [role='alert'] span,
+:root:not([data-theme='toss']) [role='status'] span,
+:root:not([data-theme='toss']) .modal p,
+:root:not([data-theme='toss']) .modal span,
+:root:not([data-theme='toss']) .modal small,
+:root:not([data-theme='toss']) .dialog p,
+:root:not([data-theme='toss']) .dialog span,
+:root:not([data-theme='toss']) .dialog small,
+:root:not([data-theme='toss']) .toast span,
+:root:not([data-theme='toss']) .snackbar span,
+:root:not([data-theme='toss']) .alert span,
+:root:not([data-theme='toss']) .banner span,
+:root:not([data-theme='toss']) .popover span,
+:root:not([data-theme='toss']) .tooltip span,
+:root:not([data-theme='toss']) .dropdown-menu span {
+  color: #3e5048 !important;
+  -webkit-text-fill-color: #3e5048 !important;
+  opacity: 1 !important;
+}
+
+[data-theme='toss'] [role='dialog'],
+[data-theme='toss'] [role='alertdialog'],
+[data-theme='toss'] [role='menu'],
+[data-theme='toss'] [role='tooltip'],
+[data-theme='toss'] [role='alert'],
+[data-theme='toss'] [role='status'],
+[data-theme='toss'] .modal,
+[data-theme='toss'] .modal-content,
+[data-theme='toss'] .dialog,
+[data-theme='toss'] .confirm-dialog,
+[data-theme='toss'] .toast,
+[data-theme='toss'] .snackbar,
+[data-theme='toss'] .alert,
+[data-theme='toss'] .banner,
+[data-theme='toss'] .popover,
+[data-theme='toss'] .tooltip,
+[data-theme='toss'] .dropdown-menu {
+  color: #f6fff8 !important;
+  -webkit-text-fill-color: #f6fff8 !important;
+  opacity: 1 !important;
+  text-shadow: none !important;
+}
+
+[data-theme='toss'] [role='dialog'] h1,
+[data-theme='toss'] [role='dialog'] h2,
+[data-theme='toss'] [role='dialog'] h3,
+[data-theme='toss'] [role='alertdialog'] h1,
+[data-theme='toss'] [role='alertdialog'] h2,
+[data-theme='toss'] [role='alertdialog'] h3,
+[data-theme='toss'] [role='alert'] strong,
+[data-theme='toss'] [role='status'] strong,
+[data-theme='toss'] .modal h1,
+[data-theme='toss'] .modal h2,
+[data-theme='toss'] .modal h3,
+[data-theme='toss'] .dialog h1,
+[data-theme='toss'] .dialog h2,
+[data-theme='toss'] .dialog h3,
+[data-theme='toss'] .toast strong,
+[data-theme='toss'] .snackbar strong,
+[data-theme='toss'] .alert strong,
+[data-theme='toss'] .popover strong,
+[data-theme='toss'] .tooltip strong,
+[data-theme='toss'] .dropdown-menu strong {
+  color: #f6fff8 !important;
+  -webkit-text-fill-color: #f6fff8 !important;
+  opacity: 1 !important;
+}
+
+[data-theme='toss'] [role='dialog'] p,
+[data-theme='toss'] [role='dialog'] span,
+[data-theme='toss'] [role='dialog'] small,
+[data-theme='toss'] [role='dialog'] label,
+[data-theme='toss'] [role='alertdialog'] p,
+[data-theme='toss'] [role='alertdialog'] span,
+[data-theme='toss'] [role='alertdialog'] small,
+[data-theme='toss'] [role='alertdialog'] label,
+[data-theme='toss'] [role='menu'] span,
+[data-theme='toss'] [role='tooltip'] span,
+[data-theme='toss'] [role='alert'] span,
+[data-theme='toss'] [role='status'] span,
+[data-theme='toss'] .modal p,
+[data-theme='toss'] .modal span,
+[data-theme='toss'] .modal small,
+[data-theme='toss'] .dialog p,
+[data-theme='toss'] .dialog span,
+[data-theme='toss'] .dialog small,
+[data-theme='toss'] .toast span,
+[data-theme='toss'] .snackbar span,
+[data-theme='toss'] .alert span,
+[data-theme='toss'] .banner span,
+[data-theme='toss'] .popover span,
+[data-theme='toss'] .tooltip span,
+[data-theme='toss'] .dropdown-menu span {
+  color: #cbdace !important;
+  -webkit-text-fill-color: #cbdace !important;
+  opacity: 1 !important;
+}
+
+:root:not([data-theme='toss']) [role='dialog'] button,
+:root:not([data-theme='toss']) [role='alertdialog'] button,
+:root:not([data-theme='toss']) [role='menu'] button,
+:root:not([data-theme='toss']) .modal button,
+:root:not([data-theme='toss']) .dialog button,
+:root:not([data-theme='toss']) .toast button,
+:root:not([data-theme='toss']) .snackbar button,
+:root:not([data-theme='toss']) .alert button,
+:root:not([data-theme='toss']) .popover button,
+:root:not([data-theme='toss']) .dropdown-menu button {
+  color: #0b2f22 !important;
+  -webkit-text-fill-color: #0b2f22 !important;
+  opacity: 1 !important;
+}
+
+[data-theme='toss'] [role='dialog'] button,
+[data-theme='toss'] [role='alertdialog'] button,
+[data-theme='toss'] [role='menu'] button,
+[data-theme='toss'] .modal button,
+[data-theme='toss'] .dialog button,
+[data-theme='toss'] .toast button,
+[data-theme='toss'] .snackbar button,
+[data-theme='toss'] .alert button,
+[data-theme='toss'] .popover button,
+[data-theme='toss'] .dropdown-menu button {
+  color: #f6fff8 !important;
+  -webkit-text-fill-color: #f6fff8 !important;
+  opacity: 1 !important;
+}
+
+@media (max-width: 720px) {
+  [role='dialog'],
+  [role='alertdialog'],
+  .modal,
+  .modal-content,
+  .dialog,
+  .confirm-dialog,
+  .toast,
+  .snackbar,
+  .alert,
+  .banner,
+  .popover,
+  .tooltip,
+  .dropdown-menu {
+    overflow-wrap: anywhere;
+    word-break: keep-all;
+  }
+}
+/* Last-mile control priority: keep primary, active and destructive controls readable after global overlay guards. */
+:root:not([data-theme='toss']) .button--primary,
+:root:not([data-theme='toss']) button[type='submit'],
+:root:not([data-theme='toss']) .primary-button,
+:root:not([data-theme='toss']) .submit-button,
+:root:not([data-theme='toss']) .is-active.button,
+:root:not([data-theme='toss']) .button.is-active,
+:root:not([data-theme='toss']) .toggle-chip--active,
+:root:not([data-theme='toss']) .preset-chip--active,
+:root:not([data-theme='toss']) .travel-color-chip--active,
+:root:not([data-theme='toss']) [role='dialog'] .button--primary,
+:root:not([data-theme='toss']) [role='dialog'] button[type='submit'],
+:root:not([data-theme='toss']) [role='alertdialog'] .button--primary,
+:root:not([data-theme='toss']) [role='alertdialog'] button[type='submit'],
+:root:not([data-theme='toss']) .modal .button--primary,
+:root:not([data-theme='toss']) .modal button[type='submit'],
+:root:not([data-theme='toss']) .dialog .button--primary,
+:root:not([data-theme='toss']) .dialog button[type='submit'],
+:root:not([data-theme='toss']) .travel-modal__dialog .button--primary,
+:root:not([data-theme='toss']) .travel-modal__dialog button[type='submit'] {
+  color: #ffffff !important;
+  -webkit-text-fill-color: #ffffff !important;
+  opacity: 1 !important;
+  text-shadow: 0 1px 2px rgba(6, 35, 23, 0.34) !important;
+}
+
+:root:not([data-theme='toss']) .button--primary *,
+:root:not([data-theme='toss']) button[type='submit'] *,
+:root:not([data-theme='toss']) .primary-button *,
+:root:not([data-theme='toss']) .submit-button *,
+:root:not([data-theme='toss']) .is-active.button *,
+:root:not([data-theme='toss']) .button.is-active *,
+:root:not([data-theme='toss']) .toggle-chip--active *,
+:root:not([data-theme='toss']) .preset-chip--active *,
+:root:not([data-theme='toss']) .travel-color-chip--active *,
+:root:not([data-theme='toss']) [role='dialog'] .button--primary *,
+:root:not([data-theme='toss']) [role='dialog'] button[type='submit'] *,
+:root:not([data-theme='toss']) [role='alertdialog'] .button--primary *,
+:root:not([data-theme='toss']) [role='alertdialog'] button[type='submit'] *,
+:root:not([data-theme='toss']) .modal .button--primary *,
+:root:not([data-theme='toss']) .modal button[type='submit'] *,
+:root:not([data-theme='toss']) .dialog .button--primary *,
+:root:not([data-theme='toss']) .dialog button[type='submit'] *,
+:root:not([data-theme='toss']) .travel-modal__dialog .button--primary *,
+:root:not([data-theme='toss']) .travel-modal__dialog button[type='submit'] * {
+  color: inherit !important;
+  -webkit-text-fill-color: currentColor !important;
+  opacity: 1 !important;
+}
+
+[data-theme='toss'] .button--primary,
+[data-theme='toss'] button[type='submit'],
+[data-theme='toss'] .primary-button,
+[data-theme='toss'] .submit-button,
+[data-theme='toss'] .is-active.button,
+[data-theme='toss'] .button.is-active,
+[data-theme='toss'] .toggle-chip--active,
+[data-theme='toss'] .preset-chip--active,
+[data-theme='toss'] .travel-color-chip--active,
+[data-theme='toss'] [role='dialog'] .button--primary,
+[data-theme='toss'] [role='dialog'] button[type='submit'],
+[data-theme='toss'] [role='alertdialog'] .button--primary,
+[data-theme='toss'] [role='alertdialog'] button[type='submit'],
+[data-theme='toss'] .modal .button--primary,
+[data-theme='toss'] .modal button[type='submit'],
+[data-theme='toss'] .dialog .button--primary,
+[data-theme='toss'] .dialog button[type='submit'],
+[data-theme='toss'] .travel-modal__dialog .button--primary,
+[data-theme='toss'] .travel-modal__dialog button[type='submit'] {
+  color: #ffffff !important;
+  -webkit-text-fill-color: #ffffff !important;
+  opacity: 1 !important;
+  text-shadow: 0 1px 2px rgba(6, 35, 23, 0.38) !important;
+}
+
+[data-theme='toss'] .button--primary *,
+[data-theme='toss'] button[type='submit'] *,
+[data-theme='toss'] .primary-button *,
+[data-theme='toss'] .submit-button *,
+[data-theme='toss'] .is-active.button *,
+[data-theme='toss'] .button.is-active *,
+[data-theme='toss'] .toggle-chip--active *,
+[data-theme='toss'] .preset-chip--active *,
+[data-theme='toss'] .travel-color-chip--active *,
+[data-theme='toss'] [role='dialog'] .button--primary *,
+[data-theme='toss'] [role='dialog'] button[type='submit'] *,
+[data-theme='toss'] [role='alertdialog'] .button--primary *,
+[data-theme='toss'] [role='alertdialog'] button[type='submit'] *,
+[data-theme='toss'] .modal .button--primary *,
+[data-theme='toss'] .modal button[type='submit'] *,
+[data-theme='toss'] .dialog .button--primary *,
+[data-theme='toss'] .dialog button[type='submit'] *,
+[data-theme='toss'] .travel-modal__dialog .button--primary *,
+[data-theme='toss'] .travel-modal__dialog button[type='submit'] * {
+  color: inherit !important;
+  -webkit-text-fill-color: currentColor !important;
+  opacity: 1 !important;
+}
+
+:root:not([data-theme='toss']) .button--danger,
+:root:not([data-theme='toss']) .danger-button,
+:root:not([data-theme='toss']) button.danger,
+:root:not([data-theme='toss']) [data-variant='danger'],
+:root:not([data-theme='toss']) [role='dialog'] .button--danger,
+:root:not([data-theme='toss']) [role='dialog'] .danger-button,
+:root:not([data-theme='toss']) [role='dialog'] button.danger,
+:root:not([data-theme='toss']) [role='dialog'] [data-variant='danger'],
+[data-theme='toss'] .button--danger,
+[data-theme='toss'] .danger-button,
+[data-theme='toss'] button.danger,
+[data-theme='toss'] [data-variant='danger'],
+[data-theme='toss'] [role='dialog'] .button--danger,
+[data-theme='toss'] [role='dialog'] .danger-button,
+[data-theme='toss'] [role='dialog'] button.danger,
+[data-theme='toss'] [role='dialog'] [data-variant='danger'] {
+  color: #ffffff !important;
+  -webkit-text-fill-color: #ffffff !important;
+  opacity: 1 !important;
+  text-shadow: 0 1px 2px rgba(75, 8, 18, 0.4) !important;
+}
+
+:root:not([data-theme='toss']) .button--danger *,
+:root:not([data-theme='toss']) .danger-button *,
+:root:not([data-theme='toss']) button.danger *,
+:root:not([data-theme='toss']) [data-variant='danger'] *,
+[data-theme='toss'] .button--danger *,
+[data-theme='toss'] .danger-button *,
+[data-theme='toss'] button.danger *,
+[data-theme='toss'] [data-variant='danger'] * {
+  color: inherit !important;
+  -webkit-text-fill-color: currentColor !important;
+  opacity: 1 !important;
+}
+
+:root:not([data-theme='toss']) .button--ghost,
+:root:not([data-theme='toss']) .button--secondary,
+:root:not([data-theme='toss']) .ghost-button,
+:root:not([data-theme='toss']) .secondary-button,
+:root:not([data-theme='toss']) [role='dialog'] .button--ghost,
+:root:not([data-theme='toss']) [role='dialog'] .button--secondary,
+:root:not([data-theme='toss']) [role='alertdialog'] .button--ghost,
+:root:not([data-theme='toss']) [role='alertdialog'] .button--secondary {
+  color: #0b2f22 !important;
+  -webkit-text-fill-color: #0b2f22 !important;
+  opacity: 1 !important;
+  text-shadow: none !important;
+}
+
+[data-theme='toss'] .button--ghost,
+[data-theme='toss'] .button--secondary,
+[data-theme='toss'] .ghost-button,
+[data-theme='toss'] .secondary-button,
+[data-theme='toss'] [role='dialog'] .button--ghost,
+[data-theme='toss'] [role='dialog'] .button--secondary,
+[data-theme='toss'] [role='alertdialog'] .button--ghost,
+[data-theme='toss'] [role='alertdialog'] .button--secondary {
+  color: #f6fff8 !important;
+  -webkit-text-fill-color: #f6fff8 !important;
+  opacity: 1 !important;
+  text-shadow: none !important;
+}
+/* Print/PDF and forced-colors readability guard. */
+@media print {
+  :root,
+  body,
+  .app-shell,
+  .main-shell,
+  .main-shell--standalone,
+  .panel,
+  .panel-card,
+  .travel-modal__dialog,
+  .ai-result-modal__dialog,
+  .admin-workspace,
+  .auth-card,
+  .launcher-card,
+  .main-dashboard,
+  .main-palette,
+  .sheet-table,
+  .comparison-table,
+  .ledger-history-list,
+  .notification-card,
+  .drive-details-panel,
+  .travel-public-app,
+  .travel-public-card,
+  .travel-map__popup,
+  .travel-cluster-popup {
+    background: #ffffff !important;
+    color: #111827 !important;
+    -webkit-text-fill-color: #111827 !important;
+    text-shadow: none !important;
+    box-shadow: none !important;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6,
+  p,
+  span,
+  small,
+  strong,
+  em,
+  label,
+  li,
+  dt,
+  dd,
+  th,
+  td,
+  caption,
+  figcaption,
+  input,
+  select,
+  textarea,
+  button,
+  a {
+    color: #111827 !important;
+    -webkit-text-fill-color: #111827 !important;
+    opacity: 1 !important;
+    text-shadow: none !important;
+  }
+
+  a,
+  a:visited {
+    color: #064e3b !important;
+    -webkit-text-fill-color: #064e3b !important;
+    text-decoration: underline !important;
+  }
+
+  .button--primary,
+  button[type='submit'],
+  .toggle-chip--active,
+  .preset-chip--active,
+  .travel-color-chip--active,
+  .entry-type-pill,
+  .panel__badge,
+  .chip,
+  .ai-history-status,
+  .ai-analysis-status,
+  .notification-card__status {
+    background: #ffffff !important;
+    border: 1px solid #6b7280 !important;
+    color: #111827 !important;
+    -webkit-text-fill-color: #111827 !important;
+    text-shadow: none !important;
+  }
+
+  svg text,
+  svg tspan {
+    fill: #111827 !important;
+    color: #111827 !important;
+    -webkit-text-fill-color: #111827 !important;
+    opacity: 1 !important;
+  }
+}
+
+@media (forced-colors: active) {
+  :root,
+  body,
+  .app-shell,
+  .main-shell,
+  .panel,
+  .panel-card,
+  .travel-modal__dialog,
+  .ai-result-modal__dialog,
+  .admin-workspace,
+  .auth-card,
+  .launcher-card,
+  .main-dashboard,
+  .main-palette,
+  .sheet-table,
+  .comparison-table,
+  .ledger-history-list,
+  .notification-card,
+  .drive-details-panel,
+  .travel-public-app,
+  .travel-public-card,
+  .travel-map__popup,
+  .travel-cluster-popup {
+    forced-color-adjust: auto;
+    background: Canvas !important;
+    color: CanvasText !important;
+    -webkit-text-fill-color: CanvasText !important;
+    border-color: CanvasText !important;
+    text-shadow: none !important;
+    box-shadow: none !important;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6,
+  p,
+  span,
+  small,
+  strong,
+  em,
+  label,
+  li,
+  dt,
+  dd,
+  th,
+  td,
+  caption,
+  figcaption,
+  input,
+  select,
+  textarea,
+  button,
+  a,
+  .button,
+  .chip,
+  .panel__badge,
+  .entry-type-pill,
+  .notification-card__status,
+  .ai-history-status,
+  .ai-analysis-status {
+    color: CanvasText !important;
+    -webkit-text-fill-color: CanvasText !important;
+    opacity: 1 !important;
+    text-shadow: none !important;
+  }
+
+  button,
+  .button,
+  input,
+  select,
+  textarea,
+  .chip,
+  .panel__badge,
+  .entry-type-pill {
+    background: ButtonFace !important;
+    color: ButtonText !important;
+    -webkit-text-fill-color: ButtonText !important;
+    border: 1px solid ButtonText !important;
+  }
+
+  a,
+  a:visited {
+    color: LinkText !important;
+    -webkit-text-fill-color: LinkText !important;
+  }
+
+  svg text,
+  svg tspan {
+    fill: CanvasText !important;
+    color: CanvasText !important;
+    -webkit-text-fill-color: CanvasText !important;
+    opacity: 1 !important;
+  }
+}
+/* Rich text, report and code block contrast guard. */
+:root:not([data-theme='toss']) .markdown,
+:root:not([data-theme='toss']) .markdown-body,
+:root:not([data-theme='toss']) .prose,
+:root:not([data-theme='toss']) .rich-text,
+:root:not([data-theme='toss']) .report-content,
+:root:not([data-theme='toss']) .ai-printable-report,
+:root:not([data-theme='toss']) .ai-result-section,
+:root:not([data-theme='toss']) .privacy-result-list,
+:root:not([data-theme='toss']) .backup-runbook,
+:root:not([data-theme='toss']) .support-inquiry-detail,
+:root:not([data-theme='toss']) .drive-version-detail {
+  color: #10231b !important;
+  -webkit-text-fill-color: #10231b !important;
+  opacity: 1 !important;
+  text-shadow: none !important;
+}
+
+:root:not([data-theme='toss']) .markdown h1,
+:root:not([data-theme='toss']) .markdown h2,
+:root:not([data-theme='toss']) .markdown h3,
+:root:not([data-theme='toss']) .markdown-body h1,
+:root:not([data-theme='toss']) .markdown-body h2,
+:root:not([data-theme='toss']) .markdown-body h3,
+:root:not([data-theme='toss']) .prose h1,
+:root:not([data-theme='toss']) .prose h2,
+:root:not([data-theme='toss']) .prose h3,
+:root:not([data-theme='toss']) .rich-text h1,
+:root:not([data-theme='toss']) .rich-text h2,
+:root:not([data-theme='toss']) .rich-text h3,
+:root:not([data-theme='toss']) .report-content h1,
+:root:not([data-theme='toss']) .report-content h2,
+:root:not([data-theme='toss']) .report-content h3,
+:root:not([data-theme='toss']) .ai-result-section h1,
+:root:not([data-theme='toss']) .ai-result-section h2,
+:root:not([data-theme='toss']) .ai-result-section h3 {
+  color: #082f22 !important;
+  -webkit-text-fill-color: #082f22 !important;
+  opacity: 1 !important;
+}
+
+:root:not([data-theme='toss']) .markdown p,
+:root:not([data-theme='toss']) .markdown li,
+:root:not([data-theme='toss']) .markdown-body p,
+:root:not([data-theme='toss']) .markdown-body li,
+:root:not([data-theme='toss']) .prose p,
+:root:not([data-theme='toss']) .prose li,
+:root:not([data-theme='toss']) .rich-text p,
+:root:not([data-theme='toss']) .rich-text li,
+:root:not([data-theme='toss']) .report-content p,
+:root:not([data-theme='toss']) .report-content li,
+:root:not([data-theme='toss']) .ai-result-section p,
+:root:not([data-theme='toss']) .ai-result-section li {
+  color: #3e5048 !important;
+  -webkit-text-fill-color: #3e5048 !important;
+  opacity: 1 !important;
+}
+
+:root:not([data-theme='toss']) pre,
+:root:not([data-theme='toss']) code,
+:root:not([data-theme='toss']) kbd,
+:root:not([data-theme='toss']) samp,
+:root:not([data-theme='toss']) .markdown pre,
+:root:not([data-theme='toss']) .markdown code,
+:root:not([data-theme='toss']) .markdown-body pre,
+:root:not([data-theme='toss']) .markdown-body code,
+:root:not([data-theme='toss']) .prose pre,
+:root:not([data-theme='toss']) .prose code,
+:root:not([data-theme='toss']) .rich-text pre,
+:root:not([data-theme='toss']) .rich-text code,
+:root:not([data-theme='toss']) .report-content pre,
+:root:not([data-theme='toss']) .report-content code,
+:root:not([data-theme='toss']) .ai-result-section pre,
+:root:not([data-theme='toss']) .ai-result-section code {
+  background: #f3faf6 !important;
+  color: #0b2f22 !important;
+  -webkit-text-fill-color: #0b2f22 !important;
+  border-color: rgba(14, 93, 69, 0.2) !important;
+  opacity: 1 !important;
+  text-shadow: none !important;
+}
+
+:root:not([data-theme='toss']) blockquote,
+:root:not([data-theme='toss']) .markdown blockquote,
+:root:not([data-theme='toss']) .markdown-body blockquote,
+:root:not([data-theme='toss']) .prose blockquote,
+:root:not([data-theme='toss']) .rich-text blockquote,
+:root:not([data-theme='toss']) .report-content blockquote,
+:root:not([data-theme='toss']) .ai-result-section blockquote {
+  background: #f7fbf8 !important;
+  color: #233b31 !important;
+  -webkit-text-fill-color: #233b31 !important;
+  border-left-color: #16a064 !important;
+  opacity: 1 !important;
+}
+
+:root:not([data-theme='toss']) mark,
+:root:not([data-theme='toss']) .markdown mark,
+:root:not([data-theme='toss']) .markdown-body mark,
+:root:not([data-theme='toss']) .prose mark,
+:root:not([data-theme='toss']) .rich-text mark,
+:root:not([data-theme='toss']) .report-content mark,
+:root:not([data-theme='toss']) .ai-result-section mark {
+  background: #dffbe8 !important;
+  color: #064e3b !important;
+  -webkit-text-fill-color: #064e3b !important;
+}
+
+[data-theme='toss'] .markdown,
+[data-theme='toss'] .markdown-body,
+[data-theme='toss'] .prose,
+[data-theme='toss'] .rich-text,
+[data-theme='toss'] .report-content,
+[data-theme='toss'] .ai-printable-report,
+[data-theme='toss'] .ai-result-section,
+[data-theme='toss'] .privacy-result-list,
+[data-theme='toss'] .backup-runbook,
+[data-theme='toss'] .support-inquiry-detail,
+[data-theme='toss'] .drive-version-detail {
+  color: #f6fff8 !important;
+  -webkit-text-fill-color: #f6fff8 !important;
+  opacity: 1 !important;
+  text-shadow: none !important;
+}
+
+[data-theme='toss'] .markdown h1,
+[data-theme='toss'] .markdown h2,
+[data-theme='toss'] .markdown h3,
+[data-theme='toss'] .markdown-body h1,
+[data-theme='toss'] .markdown-body h2,
+[data-theme='toss'] .markdown-body h3,
+[data-theme='toss'] .prose h1,
+[data-theme='toss'] .prose h2,
+[data-theme='toss'] .prose h3,
+[data-theme='toss'] .rich-text h1,
+[data-theme='toss'] .rich-text h2,
+[data-theme='toss'] .rich-text h3,
+[data-theme='toss'] .report-content h1,
+[data-theme='toss'] .report-content h2,
+[data-theme='toss'] .report-content h3,
+[data-theme='toss'] .ai-result-section h1,
+[data-theme='toss'] .ai-result-section h2,
+[data-theme='toss'] .ai-result-section h3 {
+  color: #f6fff8 !important;
+  -webkit-text-fill-color: #f6fff8 !important;
+  opacity: 1 !important;
+}
+
+[data-theme='toss'] .markdown p,
+[data-theme='toss'] .markdown li,
+[data-theme='toss'] .markdown-body p,
+[data-theme='toss'] .markdown-body li,
+[data-theme='toss'] .prose p,
+[data-theme='toss'] .prose li,
+[data-theme='toss'] .rich-text p,
+[data-theme='toss'] .rich-text li,
+[data-theme='toss'] .report-content p,
+[data-theme='toss'] .report-content li,
+[data-theme='toss'] .ai-result-section p,
+[data-theme='toss'] .ai-result-section li {
+  color: #cbdace !important;
+  -webkit-text-fill-color: #cbdace !important;
+  opacity: 1 !important;
+}
+
+[data-theme='toss'] pre,
+[data-theme='toss'] code,
+[data-theme='toss'] kbd,
+[data-theme='toss'] samp,
+[data-theme='toss'] .markdown pre,
+[data-theme='toss'] .markdown code,
+[data-theme='toss'] .markdown-body pre,
+[data-theme='toss'] .markdown-body code,
+[data-theme='toss'] .prose pre,
+[data-theme='toss'] .prose code,
+[data-theme='toss'] .rich-text pre,
+[data-theme='toss'] .rich-text code,
+[data-theme='toss'] .report-content pre,
+[data-theme='toss'] .report-content code,
+[data-theme='toss'] .ai-result-section pre,
+[data-theme='toss'] .ai-result-section code {
+  background: #0d1712 !important;
+  color: #eaffef !important;
+  -webkit-text-fill-color: #eaffef !important;
+  border-color: rgba(149, 235, 171, 0.26) !important;
+  opacity: 1 !important;
+  text-shadow: none !important;
+}
+
+[data-theme='toss'] blockquote,
+[data-theme='toss'] .markdown blockquote,
+[data-theme='toss'] .markdown-body blockquote,
+[data-theme='toss'] .prose blockquote,
+[data-theme='toss'] .rich-text blockquote,
+[data-theme='toss'] .report-content blockquote,
+[data-theme='toss'] .ai-result-section blockquote {
+  background: #101d16 !important;
+  color: #d8eadc !important;
+  -webkit-text-fill-color: #d8eadc !important;
+  border-left-color: #95ebab !important;
+  opacity: 1 !important;
+}
+
+[data-theme='toss'] mark,
+[data-theme='toss'] .markdown mark,
+[data-theme='toss'] .markdown-body mark,
+[data-theme='toss'] .prose mark,
+[data-theme='toss'] .rich-text mark,
+[data-theme='toss'] .report-content mark,
+[data-theme='toss'] .ai-result-section mark {
+  background: rgba(149, 235, 171, 0.22) !important;
+  color: #eaffef !important;
+  -webkit-text-fill-color: #eaffef !important;
+}
+
+@media (max-width: 720px) {
+  .markdown,
+  .markdown-body,
+  .prose,
+  .rich-text,
+  .report-content,
+  .ai-result-section,
+  pre,
+  code,
+  blockquote {
+    overflow-wrap: anywhere;
+    word-break: keep-all;
+  }
+
+  pre,
+  .markdown pre,
+  .markdown-body pre,
+  .prose pre,
+  .rich-text pre,
+  .report-content pre,
+  .ai-result-section pre {
+    white-space: pre-wrap;
+    max-width: 100%;
+  }
+}
+/* Accessibility hidden-text guard: keep screen-reader-only text hidden unless intentionally focused. */
+.sr-only,
+.visually-hidden,
+.screen-reader-only,
+[data-sr-only='true'] {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  clip-path: inset(50%) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}
+
+.skip-link:not(:focus):not(:active),
+.skip-to-content:not(:focus):not(:active) {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  clip-path: inset(50%) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}
+
+:root:not([data-theme='toss']) .skip-link:focus,
+:root:not([data-theme='toss']) .skip-link:active,
+:root:not([data-theme='toss']) .skip-to-content:focus,
+:root:not([data-theme='toss']) .skip-to-content:active {
+  position: fixed !important;
+  z-index: 10000 !important;
+  inset: 16px auto auto 16px !important;
+  width: auto !important;
+  height: auto !important;
+  min-height: 44px !important;
+  padding: 12px 16px !important;
+  margin: 0 !important;
+  overflow: visible !important;
+  clip: auto !important;
+  clip-path: none !important;
+  white-space: normal !important;
+  border: 2px solid #0b2f22 !important;
+  border-radius: 14px !important;
+  background: #ffffff !important;
+  color: #0b2f22 !important;
+  -webkit-text-fill-color: #0b2f22 !important;
+  box-shadow: 0 16px 40px rgba(6, 35, 23, 0.2) !important;
+  text-shadow: none !important;
+}
+
+[data-theme='toss'] .skip-link:focus,
+[data-theme='toss'] .skip-link:active,
+[data-theme='toss'] .skip-to-content:focus,
+[data-theme='toss'] .skip-to-content:active {
+  position: fixed !important;
+  z-index: 10000 !important;
+  inset: 16px auto auto 16px !important;
+  width: auto !important;
+  height: auto !important;
+  min-height: 44px !important;
+  padding: 12px 16px !important;
+  margin: 0 !important;
+  overflow: visible !important;
+  clip: auto !important;
+  clip-path: none !important;
+  white-space: normal !important;
+  border: 2px solid #95ebab !important;
+  border-radius: 14px !important;
+  background: #0f1b15 !important;
+  color: #f6fff8 !important;
+  -webkit-text-fill-color: #f6fff8 !important;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.32) !important;
+  text-shadow: none !important;
+}
+
+@media (max-width: 720px) {
+  .skip-link:focus,
+  .skip-link:active,
+  .skip-to-content:focus,
+  .skip-to-content:active {
+    inset: 12px 12px auto 12px !important;
+    max-width: calc(100vw - 24px) !important;
+    overflow-wrap: anywhere !important;
+  }
+}
+/* Media and map overlay readability guard: text over photos/maps needs its own contrast layer. */
+.travel-map__thumb-pin span,
+.travel-cluster-pin__count,
+.travel-record-media-count,
+.travel-public-rail__badge,
+.travel-public-photo-tile span,
+.travel-public-mini-photo-grid span,
+.travel-public-map-drawer__cover--empty,
+.travel-public-trip-card__empty,
+.travel-public-spot-card__empty,
+.travel-photo-card-button span,
+.travel-photo-preview-button span,
+.travel-media-thumb--cluster-tile span,
+.travel-media-copy,
+.family-media-card__badge,
+.family-media-card__count,
+.drive-card__thumb span,
+.drive-table__thumb span,
+.main-palette__photo-hero span,
+.main-palette__photo-hero strong,
+.main-palette__file-icon,
+.receipt-ocr-review-card__image-badge {
+  background: rgba(8, 20, 16, 0.78) !important;
+  color: #ffffff !important;
+  -webkit-text-fill-color: #ffffff !important;
+  border-color: rgba(255, 255, 255, 0.72) !important;
+  opacity: 1 !important;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.72) !important;
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.24) !important;
+}
+
+.travel-map__thumb-pin span *,
+.travel-cluster-pin__count *,
+.travel-record-media-count *,
+.travel-public-rail__badge *,
+.travel-public-photo-tile span *,
+.travel-public-mini-photo-grid span *,
+.travel-public-map-drawer__cover--empty *,
+.travel-public-trip-card__empty *,
+.travel-public-spot-card__empty *,
+.travel-photo-card-button span *,
+.travel-photo-preview-button span *,
+.travel-media-thumb--cluster-tile span *,
+.travel-media-copy *,
+.family-media-card__badge *,
+.family-media-card__count *,
+.drive-card__thumb span *,
+.drive-table__thumb span *,
+.main-palette__photo-hero span *,
+.main-palette__photo-hero strong *,
+.main-palette__file-icon *,
+.receipt-ocr-review-card__image-badge * {
+  color: inherit !important;
+  -webkit-text-fill-color: currentColor !important;
+  opacity: 1 !important;
+}
+
+.travel-map__thumb-pin img,
+.travel-photo-card-button img,
+.travel-photo-preview-button img,
+.travel-media-thumb--cluster-tile img,
+.travel-public-photo-tile img,
+.travel-public-mini-photo-grid img,
+.family-media-card img,
+.drive-card__thumb img,
+.drive-table__thumb img,
+.main-palette__photo-hero img {
+  opacity: 1 !important;
+}
+
+@media (max-width: 720px) {
+  .travel-map__thumb-pin span,
+  .travel-cluster-pin__count,
+  .travel-record-media-count,
+  .travel-public-rail__badge,
+  .travel-public-photo-tile span,
+  .travel-public-mini-photo-grid span,
+  .travel-photo-card-button span,
+  .travel-photo-preview-button span,
+  .travel-media-thumb--cluster-tile span,
+  .family-media-card__badge,
+  .family-media-card__count,
+  .drive-card__thumb span,
+  .drive-table__thumb span,
+  .main-palette__photo-hero span,
+  .main-palette__photo-hero strong,
+  .receipt-ocr-review-card__image-badge {
+    min-height: 24px;
+    max-width: calc(100vw - 32px);
+    overflow-wrap: anywhere;
+    line-height: 1.25;
+  }
+}
+/* Pseudo-element text contrast guard for badges, tabs and status labels. */
+:root:not([data-theme='toss']) .button::before,
+:root:not([data-theme='toss']) .button::after,
+:root:not([data-theme='toss']) button::before,
+:root:not([data-theme='toss']) button::after,
+:root:not([data-theme='toss']) .chip::before,
+:root:not([data-theme='toss']) .chip::after,
+:root:not([data-theme='toss']) .panel__badge::before,
+:root:not([data-theme='toss']) .panel__badge::after,
+:root:not([data-theme='toss']) .entry-type-pill::before,
+:root:not([data-theme='toss']) .entry-type-pill::after,
+:root:not([data-theme='toss']) .notification-card__status::before,
+:root:not([data-theme='toss']) .notification-card__status::after,
+:root:not([data-theme='toss']) .ai-history-status::before,
+:root:not([data-theme='toss']) .ai-history-status::after,
+:root:not([data-theme='toss']) .ai-analysis-status::before,
+:root:not([data-theme='toss']) .ai-analysis-status::after,
+:root:not([data-theme='toss']) .toggle-chip::before,
+:root:not([data-theme='toss']) .toggle-chip::after,
+:root:not([data-theme='toss']) .preset-chip::before,
+:root:not([data-theme='toss']) .preset-chip::after,
+:root:not([data-theme='toss']) .travel-color-chip::before,
+:root:not([data-theme='toss']) .travel-color-chip::after,
+:root:not([data-theme='toss']) .launcher-tab::before,
+:root:not([data-theme='toss']) .launcher-tab::after,
+:root:not([data-theme='toss']) .topbar__nav-button::before,
+:root:not([data-theme='toss']) .topbar__nav-button::after,
+:root:not([data-theme='toss']) .travel-map__thumb-pin::before,
+:root:not([data-theme='toss']) .travel-map__thumb-pin::after,
+:root:not([data-theme='toss']) .travel-cluster-pin::before,
+:root:not([data-theme='toss']) .travel-cluster-pin::after {
+  color: inherit;
+  -webkit-text-fill-color: currentColor;
+  opacity: 1;
+  text-shadow: inherit;
+}
+
+[data-theme='toss'] .button::before,
+[data-theme='toss'] .button::after,
+[data-theme='toss'] button::before,
+[data-theme='toss'] button::after,
+[data-theme='toss'] .chip::before,
+[data-theme='toss'] .chip::after,
+[data-theme='toss'] .panel__badge::before,
+[data-theme='toss'] .panel__badge::after,
+[data-theme='toss'] .entry-type-pill::before,
+[data-theme='toss'] .entry-type-pill::after,
+[data-theme='toss'] .notification-card__status::before,
+[data-theme='toss'] .notification-card__status::after,
+[data-theme='toss'] .ai-history-status::before,
+[data-theme='toss'] .ai-history-status::after,
+[data-theme='toss'] .ai-analysis-status::before,
+[data-theme='toss'] .ai-analysis-status::after,
+[data-theme='toss'] .toggle-chip::before,
+[data-theme='toss'] .toggle-chip::after,
+[data-theme='toss'] .preset-chip::before,
+[data-theme='toss'] .preset-chip::after,
+[data-theme='toss'] .travel-color-chip::before,
+[data-theme='toss'] .travel-color-chip::after,
+[data-theme='toss'] .launcher-tab::before,
+[data-theme='toss'] .launcher-tab::after,
+[data-theme='toss'] .topbar__nav-button::before,
+[data-theme='toss'] .topbar__nav-button::after,
+[data-theme='toss'] .travel-map__thumb-pin::before,
+[data-theme='toss'] .travel-map__thumb-pin::after,
+[data-theme='toss'] .travel-cluster-pin::before,
+[data-theme='toss'] .travel-cluster-pin::after {
+  color: inherit;
+  -webkit-text-fill-color: currentColor;
+  opacity: 1;
+  text-shadow: inherit;
+}
+
+:root:not([data-theme='toss']) .button--primary::before,
+:root:not([data-theme='toss']) .button--primary::after,
+:root:not([data-theme='toss']) button[type='submit']::before,
+:root:not([data-theme='toss']) button[type='submit']::after,
+:root:not([data-theme='toss']) .toggle-chip--active::before,
+:root:not([data-theme='toss']) .toggle-chip--active::after,
+:root:not([data-theme='toss']) .preset-chip--active::before,
+:root:not([data-theme='toss']) .preset-chip--active::after,
+:root:not([data-theme='toss']) .travel-color-chip--active::before,
+:root:not([data-theme='toss']) .travel-color-chip--active::after,
+[data-theme='toss'] .button--primary::before,
+[data-theme='toss'] .button--primary::after,
+[data-theme='toss'] button[type='submit']::before,
+[data-theme='toss'] button[type='submit']::after,
+[data-theme='toss'] .toggle-chip--active::before,
+[data-theme='toss'] .toggle-chip--active::after,
+[data-theme='toss'] .preset-chip--active::before,
+[data-theme='toss'] .preset-chip--active::after,
+[data-theme='toss'] .travel-color-chip--active::before,
+[data-theme='toss'] .travel-color-chip--active::after {
+  color: #ffffff !important;
+  -webkit-text-fill-color: #ffffff !important;
+  opacity: 1 !important;
+  text-shadow: 0 1px 2px rgba(6, 35, 23, 0.35) !important;
+}
+
+@media (max-width: 720px) {
+  .button::before,
+  .button::after,
+  button::before,
+  button::after,
+  .chip::before,
+  .chip::after,
+  .panel__badge::before,
+  .panel__badge::after,
+  .entry-type-pill::before,
+  .entry-type-pill::after,
+  .notification-card__status::before,
+  .notification-card__status::after,
+  .ai-history-status::before,
+  .ai-history-status::after,
+  .ai-analysis-status::before,
+  .ai-analysis-status::after {
+    overflow-wrap: anywhere;
+  }
+}
+/* Native browser form-control contrast guard. */
+:root:not([data-theme='toss']) input[type='date'],
+:root:not([data-theme='toss']) input[type='datetime-local'],
+:root:not([data-theme='toss']) input[type='month'],
+:root:not([data-theme='toss']) input[type='time'],
+:root:not([data-theme='toss']) input[type='week'],
+:root:not([data-theme='toss']) input[type='number'],
+:root:not([data-theme='toss']) input[type='search'],
+:root:not([data-theme='toss']) input[type='file'],
+:root:not([data-theme='toss']) input[type='color'] {
+  color: #10231b !important;
+  -webkit-text-fill-color: #10231b !important;
+  background-color: #ffffff !important;
+  border-color: rgba(14, 93, 69, 0.24) !important;
+  color-scheme: light;
+  opacity: 1 !important;
+}
+
+[data-theme='toss'] input[type='date'],
+[data-theme='toss'] input[type='datetime-local'],
+[data-theme='toss'] input[type='month'],
+[data-theme='toss'] input[type='time'],
+[data-theme='toss'] input[type='week'],
+[data-theme='toss'] input[type='number'],
+[data-theme='toss'] input[type='search'],
+[data-theme='toss'] input[type='file'],
+[data-theme='toss'] input[type='color'] {
+  color: #f6fff8 !important;
+  -webkit-text-fill-color: #f6fff8 !important;
+  background-color: #0f1b15 !important;
+  border-color: rgba(149, 235, 171, 0.34) !important;
+  color-scheme: dark;
+  opacity: 1 !important;
+}
+
+:root:not([data-theme='toss']) input[type='file']::file-selector-button,
+:root:not([data-theme='toss']) input[type='date']::-webkit-calendar-picker-indicator,
+:root:not([data-theme='toss']) input[type='datetime-local']::-webkit-calendar-picker-indicator,
+:root:not([data-theme='toss']) input[type='month']::-webkit-calendar-picker-indicator,
+:root:not([data-theme='toss']) input[type='time']::-webkit-calendar-picker-indicator,
+:root:not([data-theme='toss']) input[type='week']::-webkit-calendar-picker-indicator,
+:root:not([data-theme='toss']) input[type='search']::-webkit-search-cancel-button,
+:root:not([data-theme='toss']) input[type='search']::-webkit-search-decoration,
+:root:not([data-theme='toss']) input[type='number']::-webkit-inner-spin-button,
+:root:not([data-theme='toss']) input[type='number']::-webkit-outer-spin-button {
+  color: #0b2f22 !important;
+  -webkit-text-fill-color: #0b2f22 !important;
+  opacity: 1 !important;
+}
+
+[data-theme='toss'] input[type='file']::file-selector-button,
+[data-theme='toss'] input[type='date']::-webkit-calendar-picker-indicator,
+[data-theme='toss'] input[type='datetime-local']::-webkit-calendar-picker-indicator,
+[data-theme='toss'] input[type='month']::-webkit-calendar-picker-indicator,
+[data-theme='toss'] input[type='time']::-webkit-calendar-picker-indicator,
+[data-theme='toss'] input[type='week']::-webkit-calendar-picker-indicator,
+[data-theme='toss'] input[type='search']::-webkit-search-cancel-button,
+[data-theme='toss'] input[type='search']::-webkit-search-decoration,
+[data-theme='toss'] input[type='number']::-webkit-inner-spin-button,
+[data-theme='toss'] input[type='number']::-webkit-outer-spin-button {
+  color: #f6fff8 !important;
+  -webkit-text-fill-color: #f6fff8 !important;
+  filter: invert(1) brightness(1.4) contrast(1.05);
+  opacity: 1 !important;
+}
+
+:root:not([data-theme='toss']) input[type='file']::file-selector-button {
+  background: #e8f8ee !important;
+  border: 1px solid rgba(14, 93, 69, 0.24) !important;
+  border-radius: 10px !important;
+  color: #0b2f22 !important;
+  -webkit-text-fill-color: #0b2f22 !important;
+  font-weight: 800 !important;
+}
+
+[data-theme='toss'] input[type='file']::file-selector-button {
+  background: #17251d !important;
+  border: 1px solid rgba(149, 235, 171, 0.34) !important;
+  border-radius: 10px !important;
+  color: #f6fff8 !important;
+  -webkit-text-fill-color: #f6fff8 !important;
+  font-weight: 800 !important;
+}
+
+:root:not([data-theme='toss']) input[type='color']::-webkit-color-swatch-wrapper,
+:root:not([data-theme='toss']) input[type='color']::-webkit-color-swatch {
+  border-color: rgba(14, 93, 69, 0.34) !important;
+}
+
+[data-theme='toss'] input[type='color']::-webkit-color-swatch-wrapper,
+[data-theme='toss'] input[type='color']::-webkit-color-swatch {
+  border-color: rgba(149, 235, 171, 0.44) !important;
+}
+
+@media (max-width: 720px) {
+  input[type='date'],
+  input[type='datetime-local'],
+  input[type='month'],
+  input[type='time'],
+  input[type='week'],
+  input[type='number'],
+  input[type='search'],
+  input[type='file'],
+  input[type='color'] {
+    min-height: 44px;
+    font-size: max(1rem, 16px) !important;
+  }
+}
+/* Inline form help, validation and status-message contrast guard. */
+:root:not([data-theme='toss']) .field__hint,
+:root:not([data-theme='toss']) .field__description,
+:root:not([data-theme='toss']) .form-help,
+:root:not([data-theme='toss']) .help-text,
+:root:not([data-theme='toss']) .input-help,
+:root:not([data-theme='toss']) .validation-help,
+:root:not([data-theme='toss']) .muted-help,
+:root:not([data-theme='toss']) [data-help='true'] {
+  color: #3e5048 !important;
+  -webkit-text-fill-color: #3e5048 !important;
+  opacity: 1 !important;
+  text-shadow: none !important;
+}
+
+[data-theme='toss'] .field__hint,
+[data-theme='toss'] .field__description,
+[data-theme='toss'] .form-help,
+[data-theme='toss'] .help-text,
+[data-theme='toss'] .input-help,
+[data-theme='toss'] .validation-help,
+[data-theme='toss'] .muted-help,
+[data-theme='toss'] [data-help='true'] {
+  color: #cbdace !important;
+  -webkit-text-fill-color: #cbdace !important;
+  opacity: 1 !important;
+  text-shadow: none !important;
+}
+
+:root:not([data-theme='toss']) .field__error,
+:root:not([data-theme='toss']) .form-error,
+:root:not([data-theme='toss']) .error-text,
+:root:not([data-theme='toss']) .invalid-feedback,
+:root:not([data-theme='toss']) .validation-error,
+:root:not([data-theme='toss']) [data-error='true'],
+:root:not([data-theme='toss']) [role='alert'].error,
+:root:not([data-theme='toss']) [aria-invalid='true'] + .field__hint,
+:root:not([data-theme='toss']) [aria-invalid='true'] + .form-help {
+  color: #8f1d2c !important;
+  -webkit-text-fill-color: #8f1d2c !important;
+  opacity: 1 !important;
+  text-shadow: none !important;
+}
+
+[data-theme='toss'] .field__error,
+[data-theme='toss'] .form-error,
+[data-theme='toss'] .error-text,
+[data-theme='toss'] .invalid-feedback,
+[data-theme='toss'] .validation-error,
+[data-theme='toss'] [data-error='true'],
+[data-theme='toss'] [role='alert'].error,
+[data-theme='toss'] [aria-invalid='true'] + .field__hint,
+[data-theme='toss'] [aria-invalid='true'] + .form-help {
+  color: #ffc4cc !important;
+  -webkit-text-fill-color: #ffc4cc !important;
+  opacity: 1 !important;
+  text-shadow: none !important;
+}
+
+:root:not([data-theme='toss']) .field__warning,
+:root:not([data-theme='toss']) .form-warning,
+:root:not([data-theme='toss']) .warning-text,
+:root:not([data-theme='toss']) .validation-warning,
+:root:not([data-theme='toss']) [data-warning='true'] {
+  color: #7a4b00 !important;
+  -webkit-text-fill-color: #7a4b00 !important;
+  opacity: 1 !important;
+  text-shadow: none !important;
+}
+
+[data-theme='toss'] .field__warning,
+[data-theme='toss'] .form-warning,
+[data-theme='toss'] .warning-text,
+[data-theme='toss'] .validation-warning,
+[data-theme='toss'] [data-warning='true'] {
+  color: #ffe2a8 !important;
+  -webkit-text-fill-color: #ffe2a8 !important;
+  opacity: 1 !important;
+  text-shadow: none !important;
+}
+
+:root:not([data-theme='toss']) .field__success,
+:root:not([data-theme='toss']) .form-success,
+:root:not([data-theme='toss']) .success-text,
+:root:not([data-theme='toss']) .valid-feedback,
+:root:not([data-theme='toss']) .validation-success,
+:root:not([data-theme='toss']) [data-success='true'] {
+  color: #064e3b !important;
+  -webkit-text-fill-color: #064e3b !important;
+  opacity: 1 !important;
+  text-shadow: none !important;
+}
+
+[data-theme='toss'] .field__success,
+[data-theme='toss'] .form-success,
+[data-theme='toss'] .success-text,
+[data-theme='toss'] .valid-feedback,
+[data-theme='toss'] .validation-success,
+[data-theme='toss'] [data-success='true'] {
+  color: #bff7ce !important;
+  -webkit-text-fill-color: #bff7ce !important;
+  opacity: 1 !important;
+  text-shadow: none !important;
+}
+
+:root:not([data-theme='toss']) input[aria-invalid='true'],
+:root:not([data-theme='toss']) select[aria-invalid='true'],
+:root:not([data-theme='toss']) textarea[aria-invalid='true'],
+:root:not([data-theme='toss']) input:invalid:not(:placeholder-shown),
+:root:not([data-theme='toss']) select:invalid,
+:root:not([data-theme='toss']) textarea:invalid:not(:placeholder-shown) {
+  border-color: #c7364d !important;
+  box-shadow: 0 0 0 3px rgba(199, 54, 77, 0.16) !important;
+  color: #10231b !important;
+  -webkit-text-fill-color: #10231b !important;
+}
+
+[data-theme='toss'] input[aria-invalid='true'],
+[data-theme='toss'] select[aria-invalid='true'],
+[data-theme='toss'] textarea[aria-invalid='true'],
+[data-theme='toss'] input:invalid:not(:placeholder-shown),
+[data-theme='toss'] select:invalid,
+[data-theme='toss'] textarea:invalid:not(:placeholder-shown) {
+  border-color: #ff9aaa !important;
+  box-shadow: 0 0 0 3px rgba(255, 154, 170, 0.18) !important;
+  color: #f6fff8 !important;
+  -webkit-text-fill-color: #f6fff8 !important;
+}
+
+@media (max-width: 720px) {
+  .field__hint,
+  .field__description,
+  .field__error,
+  .field__warning,
+  .field__success,
+  .form-help,
+  .form-error,
+  .form-warning,
+  .form-success,
+  .help-text,
+  .error-text,
+  .warning-text,
+  .success-text,
+  .invalid-feedback,
+  .valid-feedback {
+    overflow-wrap: anywhere;
+    word-break: keep-all;
+    line-height: 1.45;
+  }
+}
+/* Loading, skeleton and progress-state readability guard. */
+:root:not([data-theme='toss']) .loading,
+:root:not([data-theme='toss']) .loading-state,
+:root:not([data-theme='toss']) .loader,
+:root:not([data-theme='toss']) .spinner,
+:root:not([data-theme='toss']) .progress,
+:root:not([data-theme='toss']) .progress-state,
+:root:not([data-theme='toss']) .progress-message,
+:root:not([data-theme='toss']) .skeleton,
+:root:not([data-theme='toss']) .skeleton-card,
+:root:not([data-theme='toss']) .placeholder,
+:root:not([data-theme='toss']) .placeholder-card,
+:root:not([data-theme='toss']) [aria-busy='true'],
+:root:not([data-theme='toss']) [data-loading='true'] {
+  color: #10231b !important;
+  -webkit-text-fill-color: #10231b !important;
+  opacity: 1 !important;
+  text-shadow: none !important;
+}
+
+:root:not([data-theme='toss']) .loading p,
+:root:not([data-theme='toss']) .loading span,
+:root:not([data-theme='toss']) .loading-state p,
+:root:not([data-theme='toss']) .loading-state span,
+:root:not([data-theme='toss']) .progress p,
+:root:not([data-theme='toss']) .progress span,
+:root:not([data-theme='toss']) .progress-state p,
+:root:not([data-theme='toss']) .progress-state span,
+:root:not([data-theme='toss']) .progress-message,
+:root:not([data-theme='toss']) .placeholder p,
+:root:not([data-theme='toss']) .placeholder span,
+:root:not([data-theme='toss']) .placeholder-card p,
+:root:not([data-theme='toss']) .placeholder-card span,
+:root:not([data-theme='toss']) [aria-busy='true'] p,
+:root:not([data-theme='toss']) [aria-busy='true'] span,
+:root:not([data-theme='toss']) [data-loading='true'] p,
+:root:not([data-theme='toss']) [data-loading='true'] span {
+  color: #3e5048 !important;
+  -webkit-text-fill-color: #3e5048 !important;
+  opacity: 1 !important;
+}
+
+:root:not([data-theme='toss']) .skeleton,
+:root:not([data-theme='toss']) .skeleton-card,
+:root:not([data-theme='toss']) .skeleton-line,
+:root:not([data-theme='toss']) .skeleton-block,
+:root:not([data-theme='toss']) .placeholder-card {
+  background: linear-gradient(90deg, #edf8f1 0%, #f8fcf9 45%, #e4f3ea 100%) !important;
+  border-color: rgba(14, 93, 69, 0.16) !important;
+}
+
+[data-theme='toss'] .loading,
+[data-theme='toss'] .loading-state,
+[data-theme='toss'] .loader,
+[data-theme='toss'] .spinner,
+[data-theme='toss'] .progress,
+[data-theme='toss'] .progress-state,
+[data-theme='toss'] .progress-message,
+[data-theme='toss'] .skeleton,
+[data-theme='toss'] .skeleton-card,
+[data-theme='toss'] .placeholder,
+[data-theme='toss'] .placeholder-card,
+[data-theme='toss'] [aria-busy='true'],
+[data-theme='toss'] [data-loading='true'] {
+  color: #f6fff8 !important;
+  -webkit-text-fill-color: #f6fff8 !important;
+  opacity: 1 !important;
+  text-shadow: none !important;
+}
+
+[data-theme='toss'] .loading p,
+[data-theme='toss'] .loading span,
+[data-theme='toss'] .loading-state p,
+[data-theme='toss'] .loading-state span,
+[data-theme='toss'] .progress p,
+[data-theme='toss'] .progress span,
+[data-theme='toss'] .progress-state p,
+[data-theme='toss'] .progress-state span,
+[data-theme='toss'] .progress-message,
+[data-theme='toss'] .placeholder p,
+[data-theme='toss'] .placeholder span,
+[data-theme='toss'] .placeholder-card p,
+[data-theme='toss'] .placeholder-card span,
+[data-theme='toss'] [aria-busy='true'] p,
+[data-theme='toss'] [aria-busy='true'] span,
+[data-theme='toss'] [data-loading='true'] p,
+[data-theme='toss'] [data-loading='true'] span {
+  color: #cbdace !important;
+  -webkit-text-fill-color: #cbdace !important;
+  opacity: 1 !important;
+}
+
+[data-theme='toss'] .skeleton,
+[data-theme='toss'] .skeleton-card,
+[data-theme='toss'] .skeleton-line,
+[data-theme='toss'] .skeleton-block,
+[data-theme='toss'] .placeholder-card {
+  background: linear-gradient(90deg, #101d16 0%, #17251d 45%, #0d1712 100%) !important;
+  border-color: rgba(149, 235, 171, 0.2) !important;
+}
+
+:root:not([data-theme='toss']) progress,
+:root:not([data-theme='toss']) meter {
+  color: #0b7d52 !important;
+  accent-color: #0b7d52 !important;
+  opacity: 1 !important;
+}
+
+[data-theme='toss'] progress,
+[data-theme='toss'] meter {
+  color: #95ebab !important;
+  accent-color: #95ebab !important;
+  opacity: 1 !important;
+}
+
+@media (max-width: 720px) {
+  .loading,
+  .loading-state,
+  .progress-state,
+  .progress-message,
+  .placeholder,
+  .placeholder-card,
+  [aria-busy='true'],
+  [data-loading='true'] {
+    overflow-wrap: anywhere;
+    word-break: keep-all;
+    line-height: 1.45;
+  }
+}
+/* Table, list metadata, empty-value and numeric text readability guard. */
+:root:not([data-theme='toss']) .meta,
+:root:not([data-theme='toss']) .metadata,
+:root:not([data-theme='toss']) .caption,
+:root:not([data-theme='toss']) .subtext,
+:root:not([data-theme='toss']) .secondary-text,
+:root:not([data-theme='toss']) .tertiary-text,
+:root:not([data-theme='toss']) .empty-value,
+:root:not([data-theme='toss']) .dash-value,
+:root:not([data-theme='toss']) .count,
+:root:not([data-theme='toss']) .amount,
+:root:not([data-theme='toss']) .date,
+:root:not([data-theme='toss']) .time,
+:root:not([data-theme='toss']) .sheet-table small,
+:root:not([data-theme='toss']) .sheet-table .meta,
+:root:not([data-theme='toss']) .sheet-table .amount,
+:root:not([data-theme='toss']) .sheet-table .date,
+:root:not([data-theme='toss']) .sheet-table .time,
+:root:not([data-theme='toss']) .comparison-table small,
+:root:not([data-theme='toss']) .comparison-table .meta,
+:root:not([data-theme='toss']) .ledger-history-list small,
+:root:not([data-theme='toss']) .ledger-history-list .meta,
+:root:not([data-theme='toss']) .support-inquiry-table small,
+:root:not([data-theme='toss']) .support-inquiry-table .meta,
+:root:not([data-theme='toss']) .notification-card__meta,
+:root:not([data-theme='toss']) .drive-file-card__meta,
+:root:not([data-theme='toss']) .drive-table__meta,
+:root:not([data-theme='toss']) .travel-plan-card__meta,
+:root:not([data-theme='toss']) .travel-public-trip-card__meta,
+:root:not([data-theme='toss']) .travel-public-spot-card__meta {
+  color: #42544b !important;
+  -webkit-text-fill-color: #42544b !important;
+  opacity: 1 !important;
+  text-shadow: none !important;
+}
+
+[data-theme='toss'] .meta,
+[data-theme='toss'] .metadata,
+[data-theme='toss'] .caption,
+[data-theme='toss'] .subtext,
+[data-theme='toss'] .secondary-text,
+[data-theme='toss'] .tertiary-text,
+[data-theme='toss'] .empty-value,
+[data-theme='toss'] .dash-value,
+[data-theme='toss'] .count,
+[data-theme='toss'] .amount,
+[data-theme='toss'] .date,
+[data-theme='toss'] .time,
+[data-theme='toss'] .sheet-table small,
+[data-theme='toss'] .sheet-table .meta,
+[data-theme='toss'] .sheet-table .amount,
+[data-theme='toss'] .sheet-table .date,
+[data-theme='toss'] .sheet-table .time,
+[data-theme='toss'] .comparison-table small,
+[data-theme='toss'] .comparison-table .meta,
+[data-theme='toss'] .ledger-history-list small,
+[data-theme='toss'] .ledger-history-list .meta,
+[data-theme='toss'] .support-inquiry-table small,
+[data-theme='toss'] .support-inquiry-table .meta,
+[data-theme='toss'] .notification-card__meta,
+[data-theme='toss'] .drive-file-card__meta,
+[data-theme='toss'] .drive-table__meta,
+[data-theme='toss'] .travel-plan-card__meta,
+[data-theme='toss'] .travel-public-trip-card__meta,
+[data-theme='toss'] .travel-public-spot-card__meta {
+  color: #cbdace !important;
+  -webkit-text-fill-color: #cbdace !important;
+  opacity: 1 !important;
+  text-shadow: none !important;
+}
+
+:root:not([data-theme='toss']) .sheet-table th,
+:root:not([data-theme='toss']) .comparison-table th,
+:root:not([data-theme='toss']) .support-inquiry-table th,
+:root:not([data-theme='toss']) .drive-table th,
+:root:not([data-theme='toss']) .admin-table th,
+:root:not([data-theme='toss']) .ledger-history-table th {
+  background: #edf8f1 !important;
+  color: #082f22 !important;
+  -webkit-text-fill-color: #082f22 !important;
+  opacity: 1 !important;
+}
+
+[data-theme='toss'] .sheet-table th,
+[data-theme='toss'] .comparison-table th,
+[data-theme='toss'] .support-inquiry-table th,
+[data-theme='toss'] .drive-table th,
+[data-theme='toss'] .admin-table th,
+[data-theme='toss'] .ledger-history-table th {
+  background: #14231b !important;
+  color: #f6fff8 !important;
+  -webkit-text-fill-color: #f6fff8 !important;
+  opacity: 1 !important;
+}
+
+:root:not([data-theme='toss']) .sheet-table td,
+:root:not([data-theme='toss']) .comparison-table td,
+:root:not([data-theme='toss']) .support-inquiry-table td,
+:root:not([data-theme='toss']) .drive-table td,
+:root:not([data-theme='toss']) .admin-table td,
+:root:not([data-theme='toss']) .ledger-history-table td {
+  color: #10231b !important;
+  -webkit-text-fill-color: #10231b !important;
+  opacity: 1 !important;
+}
+
+[data-theme='toss'] .sheet-table td,
+[data-theme='toss'] .comparison-table td,
+[data-theme='toss'] .support-inquiry-table td,
+[data-theme='toss'] .drive-table td,
+[data-theme='toss'] .admin-table td,
+[data-theme='toss'] .ledger-history-table td {
+  color: #f6fff8 !important;
+  -webkit-text-fill-color: #f6fff8 !important;
+  opacity: 1 !important;
+}
+
+:root:not([data-theme='toss']) .sheet-table tr:hover td,
+:root:not([data-theme='toss']) .comparison-table tr:hover td,
+:root:not([data-theme='toss']) .support-inquiry-table tr:hover td,
+:root:not([data-theme='toss']) .drive-table tr:hover td,
+:root:not([data-theme='toss']) .admin-table tr:hover td,
+:root:not([data-theme='toss']) .ledger-history-table tr:hover td {
+  color: #082f22 !important;
+  -webkit-text-fill-color: #082f22 !important;
+}
+
+[data-theme='toss'] .sheet-table tr:hover td,
+[data-theme='toss'] .comparison-table tr:hover td,
+[data-theme='toss'] .support-inquiry-table tr:hover td,
+[data-theme='toss'] .drive-table tr:hover td,
+[data-theme='toss'] .admin-table tr:hover td,
+[data-theme='toss'] .ledger-history-table tr:hover td {
+  color: #f6fff8 !important;
+  -webkit-text-fill-color: #f6fff8 !important;
+}
+
+@media (max-width: 720px) {
+  .meta,
+  .metadata,
+  .caption,
+  .subtext,
+  .secondary-text,
+  .tertiary-text,
+  .empty-value,
+  .dash-value,
+  .count,
+  .amount,
+  .date,
+  .time,
+  .sheet-table small,
+  .comparison-table small,
+  .ledger-history-list small,
+  .notification-card__meta,
+  .drive-file-card__meta,
+  .travel-plan-card__meta,
+  .travel-public-trip-card__meta,
+  .travel-public-spot-card__meta {
+    overflow-wrap: anywhere;
+    line-height: 1.35;
+  }
+}
+/* Leaflet/native map control readability guard. */
+:root:not([data-theme='toss']) .leaflet-control,
+:root:not([data-theme='toss']) .leaflet-control a,
+:root:not([data-theme='toss']) .leaflet-control span,
+:root:not([data-theme='toss']) .leaflet-control-layers,
+:root:not([data-theme='toss']) .leaflet-control-layers label,
+:root:not([data-theme='toss']) .leaflet-control-attribution,
+:root:not([data-theme='toss']) .leaflet-control-attribution a,
+:root:not([data-theme='toss']) .leaflet-bar a,
+:root:not([data-theme='toss']) .leaflet-bar a:hover,
+:root:not([data-theme='toss']) .leaflet-bar a:focus {
+  background: rgba(255, 255, 255, 0.94) !important;
+  color: #0b2f22 !important;
+  -webkit-text-fill-color: #0b2f22 !important;
+  border-color: rgba(14, 93, 69, 0.24) !important;
+  opacity: 1 !important;
+  text-shadow: none !important;
+}
+
+:root:not([data-theme='toss']) .leaflet-control a *,
+:root:not([data-theme='toss']) .leaflet-control span *,
+:root:not([data-theme='toss']) .leaflet-control-layers label *,
+:root:not([data-theme='toss']) .leaflet-control-attribution a *,
+:root:not([data-theme='toss']) .leaflet-bar a * {
+  color: inherit !important;
+  -webkit-text-fill-color: currentColor !important;
+  opacity: 1 !important;
+}
+
+[data-theme='toss'] .leaflet-control,
+[data-theme='toss'] .leaflet-control a,
+[data-theme='toss'] .leaflet-control span,
+[data-theme='toss'] .leaflet-control-layers,
+[data-theme='toss'] .leaflet-control-layers label,
+[data-theme='toss'] .leaflet-control-attribution,
+[data-theme='toss'] .leaflet-control-attribution a,
+[data-theme='toss'] .leaflet-bar a,
+[data-theme='toss'] .leaflet-bar a:hover,
+[data-theme='toss'] .leaflet-bar a:focus {
+  background: rgba(15, 27, 21, 0.94) !important;
+  color: #f6fff8 !important;
+  -webkit-text-fill-color: #f6fff8 !important;
+  border-color: rgba(149, 235, 171, 0.34) !important;
+  opacity: 1 !important;
+  text-shadow: none !important;
+}
+
+[data-theme='toss'] .leaflet-control a *,
+[data-theme='toss'] .leaflet-control span *,
+[data-theme='toss'] .leaflet-control-layers label *,
+[data-theme='toss'] .leaflet-control-attribution a *,
+[data-theme='toss'] .leaflet-bar a * {
+  color: inherit !important;
+  -webkit-text-fill-color: currentColor !important;
+  opacity: 1 !important;
+}
+
+:root:not([data-theme='toss']) .leaflet-control-layers-toggle,
+:root:not([data-theme='toss']) .leaflet-control-zoom-in,
+:root:not([data-theme='toss']) .leaflet-control-zoom-out,
+[data-theme='toss'] .leaflet-control-layers-toggle,
+[data-theme='toss'] .leaflet-control-zoom-in,
+[data-theme='toss'] .leaflet-control-zoom-out {
+  opacity: 1 !important;
+}
+
+@media (max-width: 720px) {
+  .leaflet-control,
+  .leaflet-control a,
+  .leaflet-control-layers,
+  .leaflet-control-attribution {
+    font-size: max(0.78rem, 12px) !important;
+    line-height: 1.25 !important;
+  }
+
+  .leaflet-bar a {
+    min-width: 36px !important;
+    min-height: 36px !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+  }
+}
+/* Date/time native subpart readability guard. */
+:root:not([data-theme='toss']) input[type='date']::-webkit-datetime-edit,
+:root:not([data-theme='toss']) input[type='date']::-webkit-datetime-edit-fields-wrapper,
+:root:not([data-theme='toss']) input[type='date']::-webkit-datetime-edit-text,
+:root:not([data-theme='toss']) input[type='date']::-webkit-datetime-edit-month-field,
+:root:not([data-theme='toss']) input[type='date']::-webkit-datetime-edit-day-field,
+:root:not([data-theme='toss']) input[type='date']::-webkit-datetime-edit-year-field,
+:root:not([data-theme='toss']) input[type='time']::-webkit-datetime-edit,
+:root:not([data-theme='toss']) input[type='time']::-webkit-datetime-edit-fields-wrapper,
+:root:not([data-theme='toss']) input[type='time']::-webkit-datetime-edit-text,
+:root:not([data-theme='toss']) input[type='time']::-webkit-datetime-edit-hour-field,
+:root:not([data-theme='toss']) input[type='time']::-webkit-datetime-edit-minute-field,
+:root:not([data-theme='toss']) input[type='time']::-webkit-datetime-edit-second-field,
+:root:not([data-theme='toss']) input[type='time']::-webkit-datetime-edit-ampm-field,
+:root:not([data-theme='toss']) input[type='datetime-local']::-webkit-datetime-edit,
+:root:not([data-theme='toss']) input[type='datetime-local']::-webkit-datetime-edit-fields-wrapper,
+:root:not([data-theme='toss']) input[type='datetime-local']::-webkit-datetime-edit-text,
+:root:not([data-theme='toss']) input[type='datetime-local']::-webkit-datetime-edit-month-field,
+:root:not([data-theme='toss']) input[type='datetime-local']::-webkit-datetime-edit-day-field,
+:root:not([data-theme='toss']) input[type='datetime-local']::-webkit-datetime-edit-year-field,
+:root:not([data-theme='toss']) input[type='datetime-local']::-webkit-datetime-edit-hour-field,
+:root:not([data-theme='toss']) input[type='datetime-local']::-webkit-datetime-edit-minute-field,
+:root:not([data-theme='toss']) input[type='datetime-local']::-webkit-datetime-edit-second-field,
+:root:not([data-theme='toss']) input[type='datetime-local']::-webkit-datetime-edit-ampm-field,
+:root:not([data-theme='toss']) input[type='month']::-webkit-datetime-edit,
+:root:not([data-theme='toss']) input[type='month']::-webkit-datetime-edit-fields-wrapper,
+:root:not([data-theme='toss']) input[type='month']::-webkit-datetime-edit-text,
+:root:not([data-theme='toss']) input[type='month']::-webkit-datetime-edit-month-field,
+:root:not([data-theme='toss']) input[type='month']::-webkit-datetime-edit-year-field,
+:root:not([data-theme='toss']) input[type='week']::-webkit-datetime-edit,
+:root:not([data-theme='toss']) input[type='week']::-webkit-datetime-edit-fields-wrapper,
+:root:not([data-theme='toss']) input[type='week']::-webkit-datetime-edit-text,
+:root:not([data-theme='toss']) input[type='week']::-webkit-datetime-edit-week-field,
+:root:not([data-theme='toss']) input[type='week']::-webkit-datetime-edit-year-field {
+  color: #10231b !important;
+  -webkit-text-fill-color: #10231b !important;
+  opacity: 1 !important;
+}
+
+[data-theme='toss'] input[type='date']::-webkit-datetime-edit,
+[data-theme='toss'] input[type='date']::-webkit-datetime-edit-fields-wrapper,
+[data-theme='toss'] input[type='date']::-webkit-datetime-edit-text,
+[data-theme='toss'] input[type='date']::-webkit-datetime-edit-month-field,
+[data-theme='toss'] input[type='date']::-webkit-datetime-edit-day-field,
+[data-theme='toss'] input[type='date']::-webkit-datetime-edit-year-field,
+[data-theme='toss'] input[type='time']::-webkit-datetime-edit,
+[data-theme='toss'] input[type='time']::-webkit-datetime-edit-fields-wrapper,
+[data-theme='toss'] input[type='time']::-webkit-datetime-edit-text,
+[data-theme='toss'] input[type='time']::-webkit-datetime-edit-hour-field,
+[data-theme='toss'] input[type='time']::-webkit-datetime-edit-minute-field,
+[data-theme='toss'] input[type='time']::-webkit-datetime-edit-second-field,
+[data-theme='toss'] input[type='time']::-webkit-datetime-edit-ampm-field,
+[data-theme='toss'] input[type='datetime-local']::-webkit-datetime-edit,
+[data-theme='toss'] input[type='datetime-local']::-webkit-datetime-edit-fields-wrapper,
+[data-theme='toss'] input[type='datetime-local']::-webkit-datetime-edit-text,
+[data-theme='toss'] input[type='datetime-local']::-webkit-datetime-edit-month-field,
+[data-theme='toss'] input[type='datetime-local']::-webkit-datetime-edit-day-field,
+[data-theme='toss'] input[type='datetime-local']::-webkit-datetime-edit-year-field,
+[data-theme='toss'] input[type='datetime-local']::-webkit-datetime-edit-hour-field,
+[data-theme='toss'] input[type='datetime-local']::-webkit-datetime-edit-minute-field,
+[data-theme='toss'] input[type='datetime-local']::-webkit-datetime-edit-second-field,
+[data-theme='toss'] input[type='datetime-local']::-webkit-datetime-edit-ampm-field,
+[data-theme='toss'] input[type='month']::-webkit-datetime-edit,
+[data-theme='toss'] input[type='month']::-webkit-datetime-edit-fields-wrapper,
+[data-theme='toss'] input[type='month']::-webkit-datetime-edit-text,
+[data-theme='toss'] input[type='month']::-webkit-datetime-edit-month-field,
+[data-theme='toss'] input[type='month']::-webkit-datetime-edit-year-field,
+[data-theme='toss'] input[type='week']::-webkit-datetime-edit,
+[data-theme='toss'] input[type='week']::-webkit-datetime-edit-fields-wrapper,
+[data-theme='toss'] input[type='week']::-webkit-datetime-edit-text,
+[data-theme='toss'] input[type='week']::-webkit-datetime-edit-week-field,
+[data-theme='toss'] input[type='week']::-webkit-datetime-edit-year-field {
+  color: #f6fff8 !important;
+  -webkit-text-fill-color: #f6fff8 !important;
+  opacity: 1 !important;
+}
+
+:root:not([data-theme='toss']) input[type='date']::-webkit-datetime-edit-text,
+:root:not([data-theme='toss']) input[type='time']::-webkit-datetime-edit-text,
+:root:not([data-theme='toss']) input[type='datetime-local']::-webkit-datetime-edit-text,
+:root:not([data-theme='toss']) input[type='month']::-webkit-datetime-edit-text,
+:root:not([data-theme='toss']) input[type='week']::-webkit-datetime-edit-text {
+  color: #42544b !important;
+  -webkit-text-fill-color: #42544b !important;
+}
+
+[data-theme='toss'] input[type='date']::-webkit-datetime-edit-text,
+[data-theme='toss'] input[type='time']::-webkit-datetime-edit-text,
+[data-theme='toss'] input[type='datetime-local']::-webkit-datetime-edit-text,
+[data-theme='toss'] input[type='month']::-webkit-datetime-edit-text,
+[data-theme='toss'] input[type='week']::-webkit-datetime-edit-text {
+  color: #cbdace !important;
+  -webkit-text-fill-color: #cbdace !important;
+}
+/* Disclosure, accordion and collapsible-panel readability guard. */
+:root:not([data-theme='toss']) details,
+:root:not([data-theme='toss']) summary,
+:root:not([data-theme='toss']) .accordion,
+:root:not([data-theme='toss']) .accordion-item,
+:root:not([data-theme='toss']) .accordion-header,
+:root:not([data-theme='toss']) .accordion-button,
+:root:not([data-theme='toss']) .accordion-panel,
+:root:not([data-theme='toss']) .collapse,
+:root:not([data-theme='toss']) .collapsible,
+:root:not([data-theme='toss']) .collapsible-header,
+:root:not([data-theme='toss']) .collapsible-content,
+:root:not([data-theme='toss']) [aria-expanded] {
+  color: #10231b !important;
+  -webkit-text-fill-color: #10231b !important;
+  opacity: 1 !important;
+  text-shadow: none !important;
+}
+
+:root:not([data-theme='toss']) summary,
+:root:not([data-theme='toss']) .accordion-header,
+:root:not([data-theme='toss']) .accordion-button,
+:root:not([data-theme='toss']) .collapsible-header,
+:root:not([data-theme='toss']) [aria-expanded='true'],
+:root:not([data-theme='toss']) [aria-expanded='false'] {
+  background: rgba(237, 248, 241, 0.92) !important;
+  color: #082f22 !important;
+  -webkit-text-fill-color: #082f22 !important;
+  border-color: rgba(14, 93, 69, 0.22) !important;
+  opacity: 1 !important;
+}
+
+:root:not([data-theme='toss']) details p,
+:root:not([data-theme='toss']) details span,
+:root:not([data-theme='toss']) details small,
+:root:not([data-theme='toss']) .accordion-panel p,
+:root:not([data-theme='toss']) .accordion-panel span,
+:root:not([data-theme='toss']) .accordion-panel small,
+:root:not([data-theme='toss']) .collapsible-content p,
+:root:not([data-theme='toss']) .collapsible-content span,
+:root:not([data-theme='toss']) .collapsible-content small,
+:root:not([data-theme='toss']) .collapse p,
+:root:not([data-theme='toss']) .collapse span,
+:root:not([data-theme='toss']) .collapse small {
+  color: #3e5048 !important;
+  -webkit-text-fill-color: #3e5048 !important;
+  opacity: 1 !important;
+}
+
+[data-theme='toss'] details,
+[data-theme='toss'] summary,
+[data-theme='toss'] .accordion,
+[data-theme='toss'] .accordion-item,
+[data-theme='toss'] .accordion-header,
+[data-theme='toss'] .accordion-button,
+[data-theme='toss'] .accordion-panel,
+[data-theme='toss'] .collapse,
+[data-theme='toss'] .collapsible,
+[data-theme='toss'] .collapsible-header,
+[data-theme='toss'] .collapsible-content,
+[data-theme='toss'] [aria-expanded] {
+  color: #f6fff8 !important;
+  -webkit-text-fill-color: #f6fff8 !important;
+  opacity: 1 !important;
+  text-shadow: none !important;
+}
+
+[data-theme='toss'] summary,
+[data-theme='toss'] .accordion-header,
+[data-theme='toss'] .accordion-button,
+[data-theme='toss'] .collapsible-header,
+[data-theme='toss'] [aria-expanded='true'],
+[data-theme='toss'] [aria-expanded='false'] {
+  background: rgba(20, 35, 27, 0.94) !important;
+  color: #f6fff8 !important;
+  -webkit-text-fill-color: #f6fff8 !important;
+  border-color: rgba(149, 235, 171, 0.28) !important;
+  opacity: 1 !important;
+}
+
+[data-theme='toss'] details p,
+[data-theme='toss'] details span,
+[data-theme='toss'] details small,
+[data-theme='toss'] .accordion-panel p,
+[data-theme='toss'] .accordion-panel span,
+[data-theme='toss'] .accordion-panel small,
+[data-theme='toss'] .collapsible-content p,
+[data-theme='toss'] .collapsible-content span,
+[data-theme='toss'] .collapsible-content small,
+[data-theme='toss'] .collapse p,
+[data-theme='toss'] .collapse span,
+[data-theme='toss'] .collapse small {
+  color: #cbdace !important;
+  -webkit-text-fill-color: #cbdace !important;
+  opacity: 1 !important;
+}
+
+:root:not([data-theme='toss']) summary::marker,
+:root:not([data-theme='toss']) summary::-webkit-details-marker,
+[data-theme='toss'] summary::marker,
+[data-theme='toss'] summary::-webkit-details-marker {
+  opacity: 1 !important;
+}
+
+@media (max-width: 720px) {
+  summary,
+  .accordion-header,
+  .accordion-button,
+  .collapsible-header,
+  [aria-expanded] {
+    min-height: 44px;
+    overflow-wrap: anywhere;
+    line-height: 1.35;
+  }
+}
+/* Chart, graph, legend and tooltip text readability guard. */
+:root:not([data-theme='toss']) .chart,
+:root:not([data-theme='toss']) .chart-card,
+:root:not([data-theme='toss']) .chart-panel,
+:root:not([data-theme='toss']) .chart-wrapper,
+:root:not([data-theme='toss']) .chart-container,
+:root:not([data-theme='toss']) .chart-legend,
+:root:not([data-theme='toss']) .chart-tooltip,
+:root:not([data-theme='toss']) .graph,
+:root:not([data-theme='toss']) .graph-card,
+:root:not([data-theme='toss']) .graph-panel,
+:root:not([data-theme='toss']) .graph-legend,
+:root:not([data-theme='toss']) .graph-tooltip,
+:root:not([data-theme='toss']) .dashboard-chart,
+:root:not([data-theme='toss']) .stats-chart,
+:root:not([data-theme='toss']) .recharts-wrapper,
+:root:not([data-theme='toss']) .recharts-default-tooltip,
+:root:not([data-theme='toss']) .recharts-legend-wrapper {
+  color: #10231b !important;
+  -webkit-text-fill-color: #10231b !important;
+  opacity: 1 !important;
+  text-shadow: none !important;
+}
+
+:root:not([data-theme='toss']) .chart-title,
+:root:not([data-theme='toss']) .chart-card h1,
+:root:not([data-theme='toss']) .chart-card h2,
+:root:not([data-theme='toss']) .chart-card h3,
+:root:not([data-theme='toss']) .chart-panel h1,
+:root:not([data-theme='toss']) .chart-panel h2,
+:root:not([data-theme='toss']) .chart-panel h3,
+:root:not([data-theme='toss']) .graph-title,
+:root:not([data-theme='toss']) .graph-card h1,
+:root:not([data-theme='toss']) .graph-card h2,
+:root:not([data-theme='toss']) .graph-card h3,
+:root:not([data-theme='toss']) .dashboard-chart h1,
+:root:not([data-theme='toss']) .dashboard-chart h2,
+:root:not([data-theme='toss']) .dashboard-chart h3,
+:root:not([data-theme='toss']) .stats-chart h1,
+:root:not([data-theme='toss']) .stats-chart h2,
+:root:not([data-theme='toss']) .stats-chart h3 {
+  color: #082f22 !important;
+  -webkit-text-fill-color: #082f22 !important;
+  opacity: 1 !important;
+}
+
+:root:not([data-theme='toss']) .chart p,
+:root:not([data-theme='toss']) .chart span,
+:root:not([data-theme='toss']) .chart small,
+:root:not([data-theme='toss']) .chart-card p,
+:root:not([data-theme='toss']) .chart-card span,
+:root:not([data-theme='toss']) .chart-card small,
+:root:not([data-theme='toss']) .chart-legend,
+:root:not([data-theme='toss']) .chart-legend *,
+:root:not([data-theme='toss']) .chart-tooltip,
+:root:not([data-theme='toss']) .chart-tooltip *,
+:root:not([data-theme='toss']) .graph p,
+:root:not([data-theme='toss']) .graph span,
+:root:not([data-theme='toss']) .graph small,
+:root:not([data-theme='toss']) .graph-legend,
+:root:not([data-theme='toss']) .graph-legend *,
+:root:not([data-theme='toss']) .graph-tooltip,
+:root:not([data-theme='toss']) .graph-tooltip *,
+:root:not([data-theme='toss']) .recharts-default-tooltip,
+:root:not([data-theme='toss']) .recharts-default-tooltip *,
+:root:not([data-theme='toss']) .recharts-legend-wrapper,
+:root:not([data-theme='toss']) .recharts-legend-wrapper * {
+  color: #3e5048 !important;
+  -webkit-text-fill-color: #3e5048 !important;
+  opacity: 1 !important;
+}
+
+:root:not([data-theme='toss']) .chart-tooltip,
+:root:not([data-theme='toss']) .graph-tooltip,
+:root:not([data-theme='toss']) .recharts-default-tooltip {
+  background: #ffffff !important;
+  border-color: rgba(14, 93, 69, 0.22) !important;
+  box-shadow: 0 16px 40px rgba(6, 35, 23, 0.12) !important;
+}
+
+:root:not([data-theme='toss']) .recharts-cartesian-axis-tick text,
+:root:not([data-theme='toss']) .recharts-label,
+:root:not([data-theme='toss']) .recharts-text,
+:root:not([data-theme='toss']) .recharts-legend-item-text,
+:root:not([data-theme='toss']) .recharts-tooltip-label,
+:root:not([data-theme='toss']) .recharts-tooltip-item-name,
+:root:not([data-theme='toss']) .recharts-tooltip-item-value {
+  fill: #10231b !important;
+  color: #10231b !important;
+  -webkit-text-fill-color: #10231b !important;
+  opacity: 1 !important;
+}
+
+[data-theme='toss'] .chart,
+[data-theme='toss'] .chart-card,
+[data-theme='toss'] .chart-panel,
+[data-theme='toss'] .chart-wrapper,
+[data-theme='toss'] .chart-container,
+[data-theme='toss'] .chart-legend,
+[data-theme='toss'] .chart-tooltip,
+[data-theme='toss'] .graph,
+[data-theme='toss'] .graph-card,
+[data-theme='toss'] .graph-panel,
+[data-theme='toss'] .graph-legend,
+[data-theme='toss'] .graph-tooltip,
+[data-theme='toss'] .dashboard-chart,
+[data-theme='toss'] .stats-chart,
+[data-theme='toss'] .recharts-wrapper,
+[data-theme='toss'] .recharts-default-tooltip,
+[data-theme='toss'] .recharts-legend-wrapper {
+  color: #f6fff8 !important;
+  -webkit-text-fill-color: #f6fff8 !important;
+  opacity: 1 !important;
+  text-shadow: none !important;
+}
+
+[data-theme='toss'] .chart-title,
+[data-theme='toss'] .chart-card h1,
+[data-theme='toss'] .chart-card h2,
+[data-theme='toss'] .chart-card h3,
+[data-theme='toss'] .chart-panel h1,
+[data-theme='toss'] .chart-panel h2,
+[data-theme='toss'] .chart-panel h3,
+[data-theme='toss'] .graph-title,
+[data-theme='toss'] .graph-card h1,
+[data-theme='toss'] .graph-card h2,
+[data-theme='toss'] .graph-card h3,
+[data-theme='toss'] .dashboard-chart h1,
+[data-theme='toss'] .dashboard-chart h2,
+[data-theme='toss'] .dashboard-chart h3,
+[data-theme='toss'] .stats-chart h1,
+[data-theme='toss'] .stats-chart h2,
+[data-theme='toss'] .stats-chart h3 {
+  color: #f6fff8 !important;
+  -webkit-text-fill-color: #f6fff8 !important;
+  opacity: 1 !important;
+}
+
+[data-theme='toss'] .chart p,
+[data-theme='toss'] .chart span,
+[data-theme='toss'] .chart small,
+[data-theme='toss'] .chart-card p,
+[data-theme='toss'] .chart-card span,
+[data-theme='toss'] .chart-card small,
+[data-theme='toss'] .chart-legend,
+[data-theme='toss'] .chart-legend *,
+[data-theme='toss'] .chart-tooltip,
+[data-theme='toss'] .chart-tooltip *,
+[data-theme='toss'] .graph p,
+[data-theme='toss'] .graph span,
+[data-theme='toss'] .graph small,
+[data-theme='toss'] .graph-legend,
+[data-theme='toss'] .graph-legend *,
+[data-theme='toss'] .graph-tooltip,
+[data-theme='toss'] .graph-tooltip *,
+[data-theme='toss'] .recharts-default-tooltip,
+[data-theme='toss'] .recharts-default-tooltip *,
+[data-theme='toss'] .recharts-legend-wrapper,
+[data-theme='toss'] .recharts-legend-wrapper * {
+  color: #cbdace !important;
+  -webkit-text-fill-color: #cbdace !important;
+  opacity: 1 !important;
+}
+
+[data-theme='toss'] .chart-tooltip,
+[data-theme='toss'] .graph-tooltip,
+[data-theme='toss'] .recharts-default-tooltip {
+  background: #111b16 !important;
+  border-color: rgba(149, 235, 171, 0.28) !important;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.32) !important;
+}
+
+[data-theme='toss'] .recharts-cartesian-axis-tick text,
+[data-theme='toss'] .recharts-label,
+[data-theme='toss'] .recharts-text,
+[data-theme='toss'] .recharts-legend-item-text,
+[data-theme='toss'] .recharts-tooltip-label,
+[data-theme='toss'] .recharts-tooltip-item-name,
+[data-theme='toss'] .recharts-tooltip-item-value {
+  fill: #f6fff8 !important;
+  color: #f6fff8 !important;
+  -webkit-text-fill-color: #f6fff8 !important;
+  opacity: 1 !important;
+}
+
+@media (max-width: 720px) {
+  .chart,
+  .chart-card,
+  .chart-panel,
+  .chart-legend,
+  .chart-tooltip,
+  .graph,
+  .graph-card,
+  .graph-panel,
+  .graph-legend,
+  .graph-tooltip,
+  .dashboard-chart,
+  .stats-chart,
+  .recharts-default-tooltip,
+  .recharts-legend-wrapper {
+    overflow-wrap: anywhere;
+    line-height: 1.35;
+  }
+}
+/* Navigation crumbs, pagination, tabs and stepper readability guard. */
+:root:not([data-theme='toss']) .breadcrumb,
+:root:not([data-theme='toss']) .breadcrumbs,
+:root:not([data-theme='toss']) .breadcrumb-item,
+:root:not([data-theme='toss']) .breadcrumb-link,
+:root:not([data-theme='toss']) .pagination,
+:root:not([data-theme='toss']) .pagination button,
+:root:not([data-theme='toss']) .pagination a,
+:root:not([data-theme='toss']) .page-button,
+:root:not([data-theme='toss']) .page-link,
+:root:not([data-theme='toss']) .tabs,
+:root:not([data-theme='toss']) .tab,
+:root:not([data-theme='toss']) .tab-button,
+:root:not([data-theme='toss']) [role='tablist'],
+:root:not([data-theme='toss']) [role='tab'],
+:root:not([data-theme='toss']) .stepper,
+:root:not([data-theme='toss']) .step,
+:root:not([data-theme='toss']) .step-label,
+:root:not([data-theme='toss']) .wizard-step {
+  color: #10231b !important;
+  -webkit-text-fill-color: #10231b !important;
+  opacity: 1 !important;
+  text-shadow: none !important;
+}
+
+:root:not([data-theme='toss']) .breadcrumb a,
+:root:not([data-theme='toss']) .breadcrumbs a,
+:root:not([data-theme='toss']) .breadcrumb-link,
+:root:not([data-theme='toss']) .page-link,
+:root:not([data-theme='toss']) .pagination a {
+  color: #0b6b46 !important;
+  -webkit-text-fill-color: #0b6b46 !important;
+  opacity: 1 !important;
+  text-decoration-color: rgba(11, 107, 70, 0.45) !important;
+}
+
+:root:not([data-theme='toss']) .pagination .is-active,
+:root:not([data-theme='toss']) .pagination [aria-current='page'],
+:root:not([data-theme='toss']) .page-button.is-active,
+:root:not([data-theme='toss']) .page-link.is-active,
+:root:not([data-theme='toss']) .tabs .is-active,
+:root:not([data-theme='toss']) .tab.is-active,
+:root:not([data-theme='toss']) .tab-button.is-active,
+:root:not([data-theme='toss']) [role='tab'][aria-selected='true'],
+:root:not([data-theme='toss']) .step.is-active,
+:root:not([data-theme='toss']) .step[aria-current='step'],
+:root:not([data-theme='toss']) .wizard-step.is-active {
+  background: #0b7d52 !important;
+  color: #ffffff !important;
+  -webkit-text-fill-color: #ffffff !important;
+  border-color: #0b7d52 !important;
+  opacity: 1 !important;
+  text-shadow: 0 1px 2px rgba(6, 35, 23, 0.35) !important;
+}
+
+:root:not([data-theme='toss']) .pagination button:disabled,
+:root:not([data-theme='toss']) .page-button:disabled,
+:root:not([data-theme='toss']) .tab-button:disabled,
+:root:not([data-theme='toss']) [role='tab'][aria-disabled='true'],
+:root:not([data-theme='toss']) .step.is-disabled,
+:root:not([data-theme='toss']) .wizard-step.is-disabled {
+  color: #5b6b63 !important;
+  -webkit-text-fill-color: #5b6b63 !important;
+  opacity: 0.82 !important;
+  text-shadow: none !important;
+}
+
+[data-theme='toss'] .breadcrumb,
+[data-theme='toss'] .breadcrumbs,
+[data-theme='toss'] .breadcrumb-item,
+[data-theme='toss'] .breadcrumb-link,
+[data-theme='toss'] .pagination,
+[data-theme='toss'] .pagination button,
+[data-theme='toss'] .pagination a,
+[data-theme='toss'] .page-button,
+[data-theme='toss'] .page-link,
+[data-theme='toss'] .tabs,
+[data-theme='toss'] .tab,
+[data-theme='toss'] .tab-button,
+[data-theme='toss'] [role='tablist'],
+[data-theme='toss'] [role='tab'],
+[data-theme='toss'] .stepper,
+[data-theme='toss'] .step,
+[data-theme='toss'] .step-label,
+[data-theme='toss'] .wizard-step {
+  color: #f6fff8 !important;
+  -webkit-text-fill-color: #f6fff8 !important;
+  opacity: 1 !important;
+  text-shadow: none !important;
+}
+
+[data-theme='toss'] .breadcrumb a,
+[data-theme='toss'] .breadcrumbs a,
+[data-theme='toss'] .breadcrumb-link,
+[data-theme='toss'] .page-link,
+[data-theme='toss'] .pagination a {
+  color: #95ebab !important;
+  -webkit-text-fill-color: #95ebab !important;
+  opacity: 1 !important;
+  text-decoration-color: rgba(149, 235, 171, 0.55) !important;
+}
+
+[data-theme='toss'] .pagination .is-active,
+[data-theme='toss'] .pagination [aria-current='page'],
+[data-theme='toss'] .page-button.is-active,
+[data-theme='toss'] .page-link.is-active,
+[data-theme='toss'] .tabs .is-active,
+[data-theme='toss'] .tab.is-active,
+[data-theme='toss'] .tab-button.is-active,
+[data-theme='toss'] [role='tab'][aria-selected='true'],
+[data-theme='toss'] .step.is-active,
+[data-theme='toss'] .step[aria-current='step'],
+[data-theme='toss'] .wizard-step.is-active {
+  background: #1f8f5d !important;
+  color: #ffffff !important;
+  -webkit-text-fill-color: #ffffff !important;
+  border-color: #95ebab !important;
+  opacity: 1 !important;
+  text-shadow: 0 1px 2px rgba(6, 35, 23, 0.4) !important;
+}
+
+[data-theme='toss'] .pagination button:disabled,
+[data-theme='toss'] .page-button:disabled,
+[data-theme='toss'] .tab-button:disabled,
+[data-theme='toss'] [role='tab'][aria-disabled='true'],
+[data-theme='toss'] .step.is-disabled,
+[data-theme='toss'] .wizard-step.is-disabled {
+  color: #b3c4b8 !important;
+  -webkit-text-fill-color: #b3c4b8 !important;
+  opacity: 0.82 !important;
+  text-shadow: none !important;
+}
+
+:root:not([data-theme='toss']) .pagination .is-active *,
+:root:not([data-theme='toss']) .pagination [aria-current='page'] *,
+:root:not([data-theme='toss']) .page-button.is-active *,
+:root:not([data-theme='toss']) .page-link.is-active *,
+:root:not([data-theme='toss']) .tabs .is-active *,
+:root:not([data-theme='toss']) .tab.is-active *,
+:root:not([data-theme='toss']) .tab-button.is-active *,
+:root:not([data-theme='toss']) [role='tab'][aria-selected='true'] *,
+:root:not([data-theme='toss']) .step.is-active *,
+:root:not([data-theme='toss']) .step[aria-current='step'] *,
+:root:not([data-theme='toss']) .wizard-step.is-active *,
+[data-theme='toss'] .pagination .is-active *,
+[data-theme='toss'] .pagination [aria-current='page'] *,
+[data-theme='toss'] .page-button.is-active *,
+[data-theme='toss'] .page-link.is-active *,
+[data-theme='toss'] .tabs .is-active *,
+[data-theme='toss'] .tab.is-active *,
+[data-theme='toss'] .tab-button.is-active *,
+[data-theme='toss'] [role='tab'][aria-selected='true'] *,
+[data-theme='toss'] .step.is-active *,
+[data-theme='toss'] .step[aria-current='step'] *,
+[data-theme='toss'] .wizard-step.is-active * {
+  color: inherit !important;
+  -webkit-text-fill-color: currentColor !important;
+  opacity: 1 !important;
+}
+
+@media (max-width: 720px) {
+  .breadcrumb,
+  .breadcrumbs,
+  .pagination,
+  .tabs,
+  [role='tablist'],
+  .stepper {
+    overflow-wrap: anywhere;
+    line-height: 1.35;
+  }
+
+  .pagination button,
+  .page-button,
+  .tab-button,
+  [role='tab'],
+  .step,
+  .wizard-step {
+    min-height: 44px;
+  }
+}
+/* Sidebar, off-canvas and bottom-sheet readability guard. */
+:root:not([data-theme='toss']) .sidebar,
+:root:not([data-theme='toss']) .side-panel,
+:root:not([data-theme='toss']) .side-drawer,
+:root:not([data-theme='toss']) .drawer,
+:root:not([data-theme='toss']) .offcanvas,
+:root:not([data-theme='toss']) .mobile-menu,
+:root:not([data-theme='toss']) .bottom-sheet,
+:root:not([data-theme='toss']) .sheet,
+:root:not([data-theme='toss']) .flyout,
+:root:not([data-theme='toss']) .command-panel,
+:root:not([data-theme='toss']) .admin-drawer,
+:root:not([data-theme='toss']) .drive-sidebar,
+:root:not([data-theme='toss']) .drive-details-panel,
+:root:not([data-theme='toss']) .travel-public-map-drawer {
+  background: #ffffff !important;
+  color: #10231b !important;
+  -webkit-text-fill-color: #10231b !important;
+  border-color: rgba(14, 93, 69, 0.2) !important;
+  opacity: 1 !important;
+  text-shadow: none !important;
+}
+
+:root:not([data-theme='toss']) .sidebar h1,
+:root:not([data-theme='toss']) .sidebar h2,
+:root:not([data-theme='toss']) .sidebar h3,
+:root:not([data-theme='toss']) .side-panel h1,
+:root:not([data-theme='toss']) .side-panel h2,
+:root:not([data-theme='toss']) .side-panel h3,
+:root:not([data-theme='toss']) .drawer h1,
+:root:not([data-theme='toss']) .drawer h2,
+:root:not([data-theme='toss']) .drawer h3,
+:root:not([data-theme='toss']) .offcanvas h1,
+:root:not([data-theme='toss']) .offcanvas h2,
+:root:not([data-theme='toss']) .offcanvas h3,
+:root:not([data-theme='toss']) .mobile-menu h1,
+:root:not([data-theme='toss']) .mobile-menu h2,
+:root:not([data-theme='toss']) .mobile-menu h3,
+:root:not([data-theme='toss']) .bottom-sheet h1,
+:root:not([data-theme='toss']) .bottom-sheet h2,
+:root:not([data-theme='toss']) .bottom-sheet h3,
+:root:not([data-theme='toss']) .drive-sidebar h1,
+:root:not([data-theme='toss']) .drive-sidebar h2,
+:root:not([data-theme='toss']) .drive-sidebar h3,
+:root:not([data-theme='toss']) .drive-details-panel h1,
+:root:not([data-theme='toss']) .drive-details-panel h2,
+:root:not([data-theme='toss']) .drive-details-panel h3 {
+  color: #082f22 !important;
+  -webkit-text-fill-color: #082f22 !important;
+  opacity: 1 !important;
+}
+
+:root:not([data-theme='toss']) .sidebar p,
+:root:not([data-theme='toss']) .sidebar span,
+:root:not([data-theme='toss']) .sidebar small,
+:root:not([data-theme='toss']) .side-panel p,
+:root:not([data-theme='toss']) .side-panel span,
+:root:not([data-theme='toss']) .side-panel small,
+:root:not([data-theme='toss']) .drawer p,
+:root:not([data-theme='toss']) .drawer span,
+:root:not([data-theme='toss']) .drawer small,
+:root:not([data-theme='toss']) .offcanvas p,
+:root:not([data-theme='toss']) .offcanvas span,
+:root:not([data-theme='toss']) .offcanvas small,
+:root:not([data-theme='toss']) .mobile-menu p,
+:root:not([data-theme='toss']) .mobile-menu span,
+:root:not([data-theme='toss']) .mobile-menu small,
+:root:not([data-theme='toss']) .bottom-sheet p,
+:root:not([data-theme='toss']) .bottom-sheet span,
+:root:not([data-theme='toss']) .bottom-sheet small,
+:root:not([data-theme='toss']) .drive-sidebar p,
+:root:not([data-theme='toss']) .drive-sidebar span,
+:root:not([data-theme='toss']) .drive-sidebar small,
+:root:not([data-theme='toss']) .drive-details-panel p,
+:root:not([data-theme='toss']) .drive-details-panel span,
+:root:not([data-theme='toss']) .drive-details-panel small {
+  color: #3e5048 !important;
+  -webkit-text-fill-color: #3e5048 !important;
+  opacity: 1 !important;
+}
+
+:root:not([data-theme='toss']) .sidebar a,
+:root:not([data-theme='toss']) .sidebar button,
+:root:not([data-theme='toss']) .side-panel a,
+:root:not([data-theme='toss']) .side-panel button,
+:root:not([data-theme='toss']) .drawer a,
+:root:not([data-theme='toss']) .drawer button,
+:root:not([data-theme='toss']) .offcanvas a,
+:root:not([data-theme='toss']) .offcanvas button,
+:root:not([data-theme='toss']) .mobile-menu a,
+:root:not([data-theme='toss']) .mobile-menu button,
+:root:not([data-theme='toss']) .bottom-sheet a,
+:root:not([data-theme='toss']) .bottom-sheet button,
+:root:not([data-theme='toss']) .drive-sidebar a,
+:root:not([data-theme='toss']) .drive-sidebar button,
+:root:not([data-theme='toss']) .drive-details-panel a,
+:root:not([data-theme='toss']) .drive-details-panel button {
+  color: #0b2f22 !important;
+  -webkit-text-fill-color: #0b2f22 !important;
+  opacity: 1 !important;
+  text-shadow: none !important;
+}
+
+[data-theme='toss'] .sidebar,
+[data-theme='toss'] .side-panel,
+[data-theme='toss'] .side-drawer,
+[data-theme='toss'] .drawer,
+[data-theme='toss'] .offcanvas,
+[data-theme='toss'] .mobile-menu,
+[data-theme='toss'] .bottom-sheet,
+[data-theme='toss'] .sheet,
+[data-theme='toss'] .flyout,
+[data-theme='toss'] .command-panel,
+[data-theme='toss'] .admin-drawer,
+[data-theme='toss'] .drive-sidebar,
+[data-theme='toss'] .drive-details-panel,
+[data-theme='toss'] .travel-public-map-drawer {
+  background: #111b16 !important;
+  color: #f6fff8 !important;
+  -webkit-text-fill-color: #f6fff8 !important;
+  border-color: rgba(149, 235, 171, 0.28) !important;
+  opacity: 1 !important;
+  text-shadow: none !important;
+}
+
+[data-theme='toss'] .sidebar h1,
+[data-theme='toss'] .sidebar h2,
+[data-theme='toss'] .sidebar h3,
+[data-theme='toss'] .side-panel h1,
+[data-theme='toss'] .side-panel h2,
+[data-theme='toss'] .side-panel h3,
+[data-theme='toss'] .drawer h1,
+[data-theme='toss'] .drawer h2,
+[data-theme='toss'] .drawer h3,
+[data-theme='toss'] .offcanvas h1,
+[data-theme='toss'] .offcanvas h2,
+[data-theme='toss'] .offcanvas h3,
+[data-theme='toss'] .mobile-menu h1,
+[data-theme='toss'] .mobile-menu h2,
+[data-theme='toss'] .mobile-menu h3,
+[data-theme='toss'] .bottom-sheet h1,
+[data-theme='toss'] .bottom-sheet h2,
+[data-theme='toss'] .bottom-sheet h3,
+[data-theme='toss'] .drive-sidebar h1,
+[data-theme='toss'] .drive-sidebar h2,
+[data-theme='toss'] .drive-sidebar h3,
+[data-theme='toss'] .drive-details-panel h1,
+[data-theme='toss'] .drive-details-panel h2,
+[data-theme='toss'] .drive-details-panel h3 {
+  color: #f6fff8 !important;
+  -webkit-text-fill-color: #f6fff8 !important;
+  opacity: 1 !important;
+}
+
+[data-theme='toss'] .sidebar p,
+[data-theme='toss'] .sidebar span,
+[data-theme='toss'] .sidebar small,
+[data-theme='toss'] .side-panel p,
+[data-theme='toss'] .side-panel span,
+[data-theme='toss'] .side-panel small,
+[data-theme='toss'] .drawer p,
+[data-theme='toss'] .drawer span,
+[data-theme='toss'] .drawer small,
+[data-theme='toss'] .offcanvas p,
+[data-theme='toss'] .offcanvas span,
+[data-theme='toss'] .offcanvas small,
+[data-theme='toss'] .mobile-menu p,
+[data-theme='toss'] .mobile-menu span,
+[data-theme='toss'] .mobile-menu small,
+[data-theme='toss'] .bottom-sheet p,
+[data-theme='toss'] .bottom-sheet span,
+[data-theme='toss'] .bottom-sheet small,
+[data-theme='toss'] .drive-sidebar p,
+[data-theme='toss'] .drive-sidebar span,
+[data-theme='toss'] .drive-sidebar small,
+[data-theme='toss'] .drive-details-panel p,
+[data-theme='toss'] .drive-details-panel span,
+[data-theme='toss'] .drive-details-panel small {
+  color: #cbdace !important;
+  -webkit-text-fill-color: #cbdace !important;
+  opacity: 1 !important;
+}
+
+[data-theme='toss'] .sidebar a,
+[data-theme='toss'] .sidebar button,
+[data-theme='toss'] .side-panel a,
+[data-theme='toss'] .side-panel button,
+[data-theme='toss'] .drawer a,
+[data-theme='toss'] .drawer button,
+[data-theme='toss'] .offcanvas a,
+[data-theme='toss'] .offcanvas button,
+[data-theme='toss'] .mobile-menu a,
+[data-theme='toss'] .mobile-menu button,
+[data-theme='toss'] .bottom-sheet a,
+[data-theme='toss'] .bottom-sheet button,
+[data-theme='toss'] .drive-sidebar a,
+[data-theme='toss'] .drive-sidebar button,
+[data-theme='toss'] .drive-details-panel a,
+[data-theme='toss'] .drive-details-panel button {
+  color: #f6fff8 !important;
+  -webkit-text-fill-color: #f6fff8 !important;
+  opacity: 1 !important;
+  text-shadow: none !important;
+}
+
+:root:not([data-theme='toss']) .sidebar .is-active,
+:root:not([data-theme='toss']) .side-panel .is-active,
+:root:not([data-theme='toss']) .drawer .is-active,
+:root:not([data-theme='toss']) .offcanvas .is-active,
+:root:not([data-theme='toss']) .mobile-menu .is-active,
+:root:not([data-theme='toss']) .bottom-sheet .is-active,
+:root:not([data-theme='toss']) .drive-sidebar .is-active,
+[data-theme='toss'] .sidebar .is-active,
+[data-theme='toss'] .side-panel .is-active,
+[data-theme='toss'] .drawer .is-active,
+[data-theme='toss'] .offcanvas .is-active,
+[data-theme='toss'] .mobile-menu .is-active,
+[data-theme='toss'] .bottom-sheet .is-active,
+[data-theme='toss'] .drive-sidebar .is-active {
+  color: #ffffff !important;
+  -webkit-text-fill-color: #ffffff !important;
+  opacity: 1 !important;
+  text-shadow: 0 1px 2px rgba(6, 35, 23, 0.35) !important;
+}
+
+@media (max-width: 720px) {
+  .sidebar,
+  .side-panel,
+  .side-drawer,
+  .drawer,
+  .offcanvas,
+  .mobile-menu,
+  .bottom-sheet,
+  .sheet,
+  .flyout,
+  .command-panel,
+  .drive-sidebar,
+  .drive-details-panel,
+  .travel-public-map-drawer {
+    overflow-wrap: anywhere;
+    word-break: keep-all;
+  }
+
+  .sidebar a,
+  .sidebar button,
+  .side-panel a,
+  .side-panel button,
+  .drawer a,
+  .drawer button,
+  .offcanvas a,
+  .offcanvas button,
+  .mobile-menu a,
+  .mobile-menu button,
+  .bottom-sheet a,
+  .bottom-sheet button,
+  .drive-sidebar a,
+  .drive-sidebar button,
+  .drive-details-panel a,
+  .drive-details-panel button {
+    min-height: 44px;
+  }
+}
+/* Fieldset, legend, divider and section-label readability guard. */
+:root:not([data-theme='toss']) fieldset,
+:root:not([data-theme='toss']) .fieldset,
+:root:not([data-theme='toss']) .form-section,
+:root:not([data-theme='toss']) .section,
+:root:not([data-theme='toss']) .section-card,
+:root:not([data-theme='toss']) .group,
+:root:not([data-theme='toss']) .group-card {
+  border-color: rgba(14, 93, 69, 0.2) !important;
+  color: #10231b !important;
+  -webkit-text-fill-color: #10231b !important;
+  opacity: 1 !important;
+  text-shadow: none !important;
+}
+
+:root:not([data-theme='toss']) legend,
+:root:not([data-theme='toss']) .legend,
+:root:not([data-theme='toss']) .section-label,
+:root:not([data-theme='toss']) .section-title,
+:root:not([data-theme='toss']) .group-label,
+:root:not([data-theme='toss']) .group-title,
+:root:not([data-theme='toss']) .divider-label,
+:root:not([data-theme='toss']) .form-section__title,
+:root:not([data-theme='toss']) .form-section__label,
+:root:not([data-theme='toss']) .panel-section__title,
+:root:not([data-theme='toss']) .panel-section__label {
+  color: #082f22 !important;
+  -webkit-text-fill-color: #082f22 !important;
+  opacity: 1 !important;
+  text-shadow: none !important;
+}
+
+:root:not([data-theme='toss']) .section-description,
+:root:not([data-theme='toss']) .group-description,
+:root:not([data-theme='toss']) .form-section__description,
+:root:not([data-theme='toss']) .panel-section__description,
+:root:not([data-theme='toss']) fieldset p,
+:root:not([data-theme='toss']) fieldset small,
+:root:not([data-theme='toss']) .fieldset p,
+:root:not([data-theme='toss']) .fieldset small,
+:root:not([data-theme='toss']) .form-section p,
+:root:not([data-theme='toss']) .form-section small,
+:root:not([data-theme='toss']) .group p,
+:root:not([data-theme='toss']) .group small {
+  color: #3e5048 !important;
+  -webkit-text-fill-color: #3e5048 !important;
+  opacity: 1 !important;
+  text-shadow: none !important;
+}
+
+:root:not([data-theme='toss']) hr,
+:root:not([data-theme='toss']) .divider,
+:root:not([data-theme='toss']) .separator,
+:root:not([data-theme='toss']) .section-divider {
+  border-color: rgba(14, 93, 69, 0.22) !important;
+  background-color: rgba(14, 93, 69, 0.18) !important;
+  opacity: 1 !important;
+}
+
+[data-theme='toss'] fieldset,
+[data-theme='toss'] .fieldset,
+[data-theme='toss'] .form-section,
+[data-theme='toss'] .section,
+[data-theme='toss'] .section-card,
+[data-theme='toss'] .group,
+[data-theme='toss'] .group-card {
+  border-color: rgba(149, 235, 171, 0.28) !important;
+  color: #f6fff8 !important;
+  -webkit-text-fill-color: #f6fff8 !important;
+  opacity: 1 !important;
+  text-shadow: none !important;
+}
+
+[data-theme='toss'] legend,
+[data-theme='toss'] .legend,
+[data-theme='toss'] .section-label,
+[data-theme='toss'] .section-title,
+[data-theme='toss'] .group-label,
+[data-theme='toss'] .group-title,
+[data-theme='toss'] .divider-label,
+[data-theme='toss'] .form-section__title,
+[data-theme='toss'] .form-section__label,
+[data-theme='toss'] .panel-section__title,
+[data-theme='toss'] .panel-section__label {
+  color: #f6fff8 !important;
+  -webkit-text-fill-color: #f6fff8 !important;
+  opacity: 1 !important;
+  text-shadow: none !important;
+}
+
+[data-theme='toss'] .section-description,
+[data-theme='toss'] .group-description,
+[data-theme='toss'] .form-section__description,
+[data-theme='toss'] .panel-section__description,
+[data-theme='toss'] fieldset p,
+[data-theme='toss'] fieldset small,
+[data-theme='toss'] .fieldset p,
+[data-theme='toss'] .fieldset small,
+[data-theme='toss'] .form-section p,
+[data-theme='toss'] .form-section small,
+[data-theme='toss'] .group p,
+[data-theme='toss'] .group small {
+  color: #cbdace !important;
+  -webkit-text-fill-color: #cbdace !important;
+  opacity: 1 !important;
+  text-shadow: none !important;
+}
+
+[data-theme='toss'] hr,
+[data-theme='toss'] .divider,
+[data-theme='toss'] .separator,
+[data-theme='toss'] .section-divider {
+  border-color: rgba(149, 235, 171, 0.28) !important;
+  background-color: rgba(149, 235, 171, 0.18) !important;
+  opacity: 1 !important;
+}
+
+@media (max-width: 720px) {
+  legend,
+  .legend,
+  .section-label,
+  .section-title,
+  .group-label,
+  .group-title,
+  .divider-label,
+  .form-section__title,
+  .form-section__label,
+  .panel-section__title,
+  .panel-section__label,
+  .section-description,
+  .group-description,
+  .form-section__description,
+  .panel-section__description {
+    overflow-wrap: anywhere;
+    word-break: keep-all;
+    line-height: 1.35;
+  }
+}
+/* Readonly, inert and option-list readability guard. */
+:root:not([data-theme='toss']) input[readonly],
+:root:not([data-theme='toss']) textarea[readonly],
+:root:not([data-theme='toss']) select[readonly],
+:root:not([data-theme='toss']) [aria-readonly='true'],
+:root:not([data-theme='toss']) .readonly,
+:root:not([data-theme='toss']) .read-only,
+:root:not([data-theme='toss']) .is-readonly,
+:root:not([data-theme='toss']) .is-read-only {
+  background: #f7fbf8 !important;
+  color: #10231b !important;
+  -webkit-text-fill-color: #10231b !important;
+  border-color: rgba(14, 93, 69, 0.22) !important;
+  opacity: 1 !important;
+  text-shadow: none !important;
+}
+
+[data-theme='toss'] input[readonly],
+[data-theme='toss'] textarea[readonly],
+[data-theme='toss'] select[readonly],
+[data-theme='toss'] [aria-readonly='true'],
+[data-theme='toss'] .readonly,
+[data-theme='toss'] .read-only,
+[data-theme='toss'] .is-readonly,
+[data-theme='toss'] .is-read-only {
+  background: #111b16 !important;
+  color: #f6fff8 !important;
+  -webkit-text-fill-color: #f6fff8 !important;
+  border-color: rgba(149, 235, 171, 0.28) !important;
+  opacity: 1 !important;
+  text-shadow: none !important;
+}
+
+:root:not([data-theme='toss']) [inert],
+:root:not([data-theme='toss']) .is-inert,
+:root:not([data-theme='toss']) .is-unavailable,
+:root:not([data-theme='toss']) .is-locked {
+  color: #42544b !important;
+  -webkit-text-fill-color: #42544b !important;
+  opacity: 0.84 !important;
+  text-shadow: none !important;
+}
+
+[data-theme='toss'] [inert],
+[data-theme='toss'] .is-inert,
+[data-theme='toss'] .is-unavailable,
+[data-theme='toss'] .is-locked {
+  color: #cbdace !important;
+  -webkit-text-fill-color: #cbdace !important;
+  opacity: 0.84 !important;
+  text-shadow: none !important;
+}
+
+:root:not([data-theme='toss']) option,
+:root:not([data-theme='toss']) optgroup,
+:root:not([data-theme='toss']) datalist,
+:root:not([data-theme='toss']) select option,
+:root:not([data-theme='toss']) select optgroup {
+  background: #ffffff !important;
+  color: #10231b !important;
+  -webkit-text-fill-color: #10231b !important;
+}
+
+[data-theme='toss'] option,
+[data-theme='toss'] optgroup,
+[data-theme='toss'] datalist,
+[data-theme='toss'] select option,
+[data-theme='toss'] select optgroup {
+  background: #111b16 !important;
+  color: #f6fff8 !important;
+  -webkit-text-fill-color: #f6fff8 !important;
+}
+
+:root:not([data-theme='toss']) option:checked,
+:root:not([data-theme='toss']) option:hover,
+:root:not([data-theme='toss']) select option:checked,
+:root:not([data-theme='toss']) select option:hover {
+  background: #0b7d52 !important;
+  color: #ffffff !important;
+  -webkit-text-fill-color: #ffffff !important;
+}
+
+[data-theme='toss'] option:checked,
+[data-theme='toss'] option:hover,
+[data-theme='toss'] select option:checked,
+[data-theme='toss'] select option:hover {
+  background: #1f8f5d !important;
+  color: #ffffff !important;
+  -webkit-text-fill-color: #ffffff !important;
+}
+
+:root:not([data-theme='toss']) [aria-hidden='true'].visually-hidden,
+:root:not([data-theme='toss']) [aria-hidden='true'].sr-only,
+[data-theme='toss'] [aria-hidden='true'].visually-hidden,
+[data-theme='toss'] [aria-hidden='true'].sr-only {
+  -webkit-text-fill-color: currentColor;
+}
+
+@media (max-width: 720px) {
+  input[readonly],
+  textarea[readonly],
+  select[readonly],
+  [aria-readonly='true'],
+  .readonly,
+  .read-only,
+  .is-readonly,
+  .is-read-only,
+  [inert],
+  .is-inert,
+  .is-unavailable,
+  .is-locked {
+    overflow-wrap: anywhere;
+    line-height: 1.4;
+  }
+}
+/* Editor, JSON, log and console-output readability guard. */
+:root:not([data-theme='toss']) [contenteditable='true'],
+:root:not([data-theme='toss']) .editor,
+:root:not([data-theme='toss']) .text-editor,
+:root:not([data-theme='toss']) .code-editor,
+:root:not([data-theme='toss']) .json-view,
+:root:not([data-theme='toss']) .json-viewer,
+:root:not([data-theme='toss']) .log-output,
+:root:not([data-theme='toss']) .console-output,
+:root:not([data-theme='toss']) .terminal,
+:root:not([data-theme='toss']) .debug-output,
+:root:not([data-theme='toss']) .raw-output,
+:root:not([data-theme='toss']) .api-response,
+:root:not([data-theme='toss']) .response-body,
+:root:not([data-theme='toss']) .stacktrace,
+:root:not([data-theme='toss']) .diff-view,
+:root:not([data-theme='toss']) .diff-output {
+  background: #f3faf6 !important;
+  color: #10231b !important;
+  -webkit-text-fill-color: #10231b !important;
+  border-color: rgba(14, 93, 69, 0.22) !important;
+  opacity: 1 !important;
+  text-shadow: none !important;
+}
+
+:root:not([data-theme='toss']) [contenteditable='true'] *,
+:root:not([data-theme='toss']) .editor *,
+:root:not([data-theme='toss']) .text-editor *,
+:root:not([data-theme='toss']) .code-editor *,
+:root:not([data-theme='toss']) .json-view *,
+:root:not([data-theme='toss']) .json-viewer *,
+:root:not([data-theme='toss']) .log-output *,
+:root:not([data-theme='toss']) .console-output *,
+:root:not([data-theme='toss']) .terminal *,
+:root:not([data-theme='toss']) .debug-output *,
+:root:not([data-theme='toss']) .raw-output *,
+:root:not([data-theme='toss']) .api-response *,
+:root:not([data-theme='toss']) .response-body *,
+:root:not([data-theme='toss']) .stacktrace *,
+:root:not([data-theme='toss']) .diff-view *,
+:root:not([data-theme='toss']) .diff-output * {
+  color: inherit !important;
+  -webkit-text-fill-color: currentColor !important;
+  opacity: 1 !important;
+}
+
+[data-theme='toss'] [contenteditable='true'],
+[data-theme='toss'] .editor,
+[data-theme='toss'] .text-editor,
+[data-theme='toss'] .code-editor,
+[data-theme='toss'] .json-view,
+[data-theme='toss'] .json-viewer,
+[data-theme='toss'] .log-output,
+[data-theme='toss'] .console-output,
+[data-theme='toss'] .terminal,
+[data-theme='toss'] .debug-output,
+[data-theme='toss'] .raw-output,
+[data-theme='toss'] .api-response,
+[data-theme='toss'] .response-body,
+[data-theme='toss'] .stacktrace,
+[data-theme='toss'] .diff-view,
+[data-theme='toss'] .diff-output {
+  background: #0d1712 !important;
+  color: #eaffef !important;
+  -webkit-text-fill-color: #eaffef !important;
+  border-color: rgba(149, 235, 171, 0.28) !important;
+  opacity: 1 !important;
+  text-shadow: none !important;
+}
+
+[data-theme='toss'] [contenteditable='true'] *,
+[data-theme='toss'] .editor *,
+[data-theme='toss'] .text-editor *,
+[data-theme='toss'] .code-editor *,
+[data-theme='toss'] .json-view *,
+[data-theme='toss'] .json-viewer *,
+[data-theme='toss'] .log-output *,
+[data-theme='toss'] .console-output *,
+[data-theme='toss'] .terminal *,
+[data-theme='toss'] .debug-output *,
+[data-theme='toss'] .raw-output *,
+[data-theme='toss'] .api-response *,
+[data-theme='toss'] .response-body *,
+[data-theme='toss'] .stacktrace *,
+[data-theme='toss'] .diff-view *,
+[data-theme='toss'] .diff-output * {
+  color: inherit !important;
+  -webkit-text-fill-color: currentColor !important;
+  opacity: 1 !important;
+}
+
+:root:not([data-theme='toss']) .token,
+:root:not([data-theme='toss']) .token.string,
+:root:not([data-theme='toss']) .token.number,
+:root:not([data-theme='toss']) .token.boolean,
+:root:not([data-theme='toss']) .token.property,
+:root:not([data-theme='toss']) .token.keyword,
+:root:not([data-theme='toss']) .token.operator,
+:root:not([data-theme='toss']) .token.punctuation {
+  color: #0b2f22 !important;
+  -webkit-text-fill-color: #0b2f22 !important;
+  opacity: 1 !important;
+}
+
+[data-theme='toss'] .token,
+[data-theme='toss'] .token.string,
+[data-theme='toss'] .token.number,
+[data-theme='toss'] .token.boolean,
+[data-theme='toss'] .token.property,
+[data-theme='toss'] .token.keyword,
+[data-theme='toss'] .token.operator,
+[data-theme='toss'] .token.punctuation {
+  color: #eaffef !important;
+  -webkit-text-fill-color: #eaffef !important;
+  opacity: 1 !important;
+}
+
+:root:not([data-theme='toss']) .diff-added,
+:root:not([data-theme='toss']) .diff-line-added,
+:root:not([data-theme='toss']) .log-success {
+  background: #e4f8eb !important;
+  color: #064e3b !important;
+  -webkit-text-fill-color: #064e3b !important;
+}
+
+:root:not([data-theme='toss']) .diff-removed,
+:root:not([data-theme='toss']) .diff-line-removed,
+:root:not([data-theme='toss']) .log-error {
+  background: #ffe8ec !important;
+  color: #8f1d2c !important;
+  -webkit-text-fill-color: #8f1d2c !important;
+}
+
+[data-theme='toss'] .diff-added,
+[data-theme='toss'] .diff-line-added,
+[data-theme='toss'] .log-success {
+  background: rgba(149, 235, 171, 0.18) !important;
+  color: #bff7ce !important;
+  -webkit-text-fill-color: #bff7ce !important;
+}
+
+[data-theme='toss'] .diff-removed,
+[data-theme='toss'] .diff-line-removed,
+[data-theme='toss'] .log-error {
+  background: rgba(255, 154, 170, 0.18) !important;
+  color: #ffc4cc !important;
+  -webkit-text-fill-color: #ffc4cc !important;
+}
+
+@media (max-width: 720px) {
+  [contenteditable='true'],
+  .editor,
+  .text-editor,
+  .code-editor,
+  .json-view,
+  .json-viewer,
+  .log-output,
+  .console-output,
+  .terminal,
+  .debug-output,
+  .raw-output,
+  .api-response,
+  .response-body,
+  .stacktrace,
+  .diff-view,
+  .diff-output {
+    max-width: 100%;
+    overflow-x: auto;
+    overflow-wrap: anywhere;
+    white-space: pre-wrap;
+    line-height: 1.45;
+  }
+}
+/* Switch, toggle and range-slider readability guard. */
+:root:not([data-theme='toss']) .switch,
+:root:not([data-theme='toss']) .switch-label,
+:root:not([data-theme='toss']) .switch-text,
+:root:not([data-theme='toss']) .toggle,
+:root:not([data-theme='toss']) .toggle-label,
+:root:not([data-theme='toss']) .toggle-text,
+:root:not([data-theme='toss']) .toggle-switch,
+:root:not([data-theme='toss']) .slider,
+:root:not([data-theme='toss']) .range-slider,
+:root:not([data-theme='toss']) .range-value,
+:root:not([data-theme='toss']) .slider-value,
+:root:not([data-theme='toss']) [role='switch'],
+:root:not([data-theme='toss']) [role='slider'] {
+  color: #10231b !important;
+  -webkit-text-fill-color: #10231b !important;
+  opacity: 1 !important;
+  text-shadow: none !important;
+}
+
+:root:not([data-theme='toss']) .switch span,
+:root:not([data-theme='toss']) .switch small,
+:root:not([data-theme='toss']) .toggle span,
+:root:not([data-theme='toss']) .toggle small,
+:root:not([data-theme='toss']) .toggle-switch span,
+:root:not([data-theme='toss']) .toggle-switch small,
+:root:not([data-theme='toss']) .range-slider span,
+:root:not([data-theme='toss']) .range-slider small,
+:root:not([data-theme='toss']) [role='switch'] span,
+:root:not([data-theme='toss']) [role='slider'] span {
+  color: #3e5048 !important;
+  -webkit-text-fill-color: #3e5048 !important;
+  opacity: 1 !important;
+}
+
+:root:not([data-theme='toss']) .switch.is-active,
+:root:not([data-theme='toss']) .toggle.is-active,
+:root:not([data-theme='toss']) .toggle-switch.is-active,
+:root:not([data-theme='toss']) [role='switch'][aria-checked='true'],
+:root:not([data-theme='toss']) [role='switch'][data-state='checked'],
+:root:not([data-theme='toss']) [role='switch'].is-active {
+  background: #0b7d52 !important;
+  color: #ffffff !important;
+  -webkit-text-fill-color: #ffffff !important;
+  border-color: #0b7d52 !important;
+  opacity: 1 !important;
+  text-shadow: 0 1px 2px rgba(6, 35, 23, 0.34) !important;
+}
+
+:root:not([data-theme='toss']) .switch.is-active *,
+:root:not([data-theme='toss']) .toggle.is-active *,
+:root:not([data-theme='toss']) .toggle-switch.is-active *,
+:root:not([data-theme='toss']) [role='switch'][aria-checked='true'] *,
+:root:not([data-theme='toss']) [role='switch'][data-state='checked'] *,
+:root:not([data-theme='toss']) [role='switch'].is-active * {
+  color: inherit !important;
+  -webkit-text-fill-color: currentColor !important;
+  opacity: 1 !important;
+}
+
+:root:not([data-theme='toss']) input[type='range'] {
+  accent-color: #0b7d52 !important;
+  color: #10231b !important;
+  -webkit-text-fill-color: #10231b !important;
+  opacity: 1 !important;
+}
+
+:root:not([data-theme='toss']) input[type='range']::-webkit-slider-runnable-track {
+  background: #dcefe4 !important;
+  border: 1px solid rgba(14, 93, 69, 0.2) !important;
+}
+
+:root:not([data-theme='toss']) input[type='range']::-webkit-slider-thumb {
+  background: #0b7d52 !important;
+  border: 2px solid #ffffff !important;
+  box-shadow: 0 2px 10px rgba(6, 35, 23, 0.25) !important;
+  opacity: 1 !important;
+}
+
+:root:not([data-theme='toss']) input[type='range']::-moz-range-track {
+  background: #dcefe4 !important;
+  border: 1px solid rgba(14, 93, 69, 0.2) !important;
+}
+
+:root:not([data-theme='toss']) input[type='range']::-moz-range-thumb {
+  background: #0b7d52 !important;
+  border: 2px solid #ffffff !important;
+  box-shadow: 0 2px 10px rgba(6, 35, 23, 0.25) !important;
+  opacity: 1 !important;
+}
+
+[data-theme='toss'] .switch,
+[data-theme='toss'] .switch-label,
+[data-theme='toss'] .switch-text,
+[data-theme='toss'] .toggle,
+[data-theme='toss'] .toggle-label,
+[data-theme='toss'] .toggle-text,
+[data-theme='toss'] .toggle-switch,
+[data-theme='toss'] .slider,
+[data-theme='toss'] .range-slider,
+[data-theme='toss'] .range-value,
+[data-theme='toss'] .slider-value,
+[data-theme='toss'] [role='switch'],
+[data-theme='toss'] [role='slider'] {
+  color: #f6fff8 !important;
+  -webkit-text-fill-color: #f6fff8 !important;
+  opacity: 1 !important;
+  text-shadow: none !important;
+}
+
+[data-theme='toss'] .switch span,
+[data-theme='toss'] .switch small,
+[data-theme='toss'] .toggle span,
+[data-theme='toss'] .toggle small,
+[data-theme='toss'] .toggle-switch span,
+[data-theme='toss'] .toggle-switch small,
+[data-theme='toss'] .range-slider span,
+[data-theme='toss'] .range-slider small,
+[data-theme='toss'] [role='switch'] span,
+[data-theme='toss'] [role='slider'] span {
+  color: #cbdace !important;
+  -webkit-text-fill-color: #cbdace !important;
+  opacity: 1 !important;
+}
+
+[data-theme='toss'] .switch.is-active,
+[data-theme='toss'] .toggle.is-active,
+[data-theme='toss'] .toggle-switch.is-active,
+[data-theme='toss'] [role='switch'][aria-checked='true'],
+[data-theme='toss'] [role='switch'][data-state='checked'],
+[data-theme='toss'] [role='switch'].is-active {
+  background: #1f8f5d !important;
+  color: #ffffff !important;
+  -webkit-text-fill-color: #ffffff !important;
+  border-color: #95ebab !important;
+  opacity: 1 !important;
+  text-shadow: 0 1px 2px rgba(6, 35, 23, 0.4) !important;
+}
+
+[data-theme='toss'] .switch.is-active *,
+[data-theme='toss'] .toggle.is-active *,
+[data-theme='toss'] .toggle-switch.is-active *,
+[data-theme='toss'] [role='switch'][aria-checked='true'] *,
+[data-theme='toss'] [role='switch'][data-state='checked'] *,
+[data-theme='toss'] [role='switch'].is-active * {
+  color: inherit !important;
+  -webkit-text-fill-color: currentColor !important;
+  opacity: 1 !important;
+}
+
+[data-theme='toss'] input[type='range'] {
+  accent-color: #95ebab !important;
+  color: #f6fff8 !important;
+  -webkit-text-fill-color: #f6fff8 !important;
+  opacity: 1 !important;
+}
+
+[data-theme='toss'] input[type='range']::-webkit-slider-runnable-track {
+  background: #17251d !important;
+  border: 1px solid rgba(149, 235, 171, 0.28) !important;
+}
+
+[data-theme='toss'] input[type='range']::-webkit-slider-thumb {
+  background: #95ebab !important;
+  border: 2px solid #0d1712 !important;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.38) !important;
+  opacity: 1 !important;
+}
+
+[data-theme='toss'] input[type='range']::-moz-range-track {
+  background: #17251d !important;
+  border: 1px solid rgba(149, 235, 171, 0.28) !important;
+}
+
+[data-theme='toss'] input[type='range']::-moz-range-thumb {
+  background: #95ebab !important;
+  border: 2px solid #0d1712 !important;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.38) !important;
+  opacity: 1 !important;
+}
+
+@media (max-width: 720px) {
+  .switch,
+  .toggle,
+  .toggle-switch,
+  .range-slider,
+  [role='switch'],
+  [role='slider'] {
+    min-height: 44px;
+    overflow-wrap: anywhere;
+    line-height: 1.35;
+  }
+
+  input[type='range'] {
+    min-height: 44px;
+  }
+}
+/* Drag, drop, sortable and transient selection readability guard. */
+:root:not([data-theme='toss']) .dragging,
+:root:not([data-theme='toss']) .is-dragging,
+:root:not([data-theme='toss']) .drag-over,
+:root:not([data-theme='toss']) .is-drag-over,
+:root:not([data-theme='toss']) .dropzone,
+:root:not([data-theme='toss']) .drop-zone,
+:root:not([data-theme='toss']) .drop-target,
+:root:not([data-theme='toss']) .sortable-ghost,
+:root:not([data-theme='toss']) .sortable-chosen,
+:root:not([data-theme='toss']) .sortable-drag,
+:root:not([data-theme='toss']) [draggable='true'],
+:root:not([data-theme='toss']) [aria-grabbed='true'],
+:root:not([data-theme='toss']) [data-dragging='true'],
+:root:not([data-theme='toss']) [data-drop-target='true'] {
+  color: #10231b !important;
+  -webkit-text-fill-color: #10231b !important;
+  opacity: 1 !important;
+  text-shadow: none !important;
+}
+
+:root:not([data-theme='toss']) .drag-over,
+:root:not([data-theme='toss']) .is-drag-over,
+:root:not([data-theme='toss']) .dropzone,
+:root:not([data-theme='toss']) .drop-zone,
+:root:not([data-theme='toss']) .drop-target,
+:root:not([data-theme='toss']) [data-drop-target='true'] {
+  background: rgba(237, 248, 241, 0.96) !important;
+  border-color: #0b7d52 !important;
+  box-shadow: 0 0 0 3px rgba(11, 125, 82, 0.16) !important;
+}
+
+:root:not([data-theme='toss']) .dragging *,
+:root:not([data-theme='toss']) .is-dragging *,
+:root:not([data-theme='toss']) .drag-over *,
+:root:not([data-theme='toss']) .is-drag-over *,
+:root:not([data-theme='toss']) .dropzone *,
+:root:not([data-theme='toss']) .drop-zone *,
+:root:not([data-theme='toss']) .drop-target *,
+:root:not([data-theme='toss']) .sortable-ghost *,
+:root:not([data-theme='toss']) .sortable-chosen *,
+:root:not([data-theme='toss']) .sortable-drag *,
+:root:not([data-theme='toss']) [draggable='true'] *,
+:root:not([data-theme='toss']) [aria-grabbed='true'] *,
+:root:not([data-theme='toss']) [data-dragging='true'] *,
+:root:not([data-theme='toss']) [data-drop-target='true'] * {
+  color: inherit !important;
+  -webkit-text-fill-color: currentColor !important;
+  opacity: 1 !important;
+}
+
+[data-theme='toss'] .dragging,
+[data-theme='toss'] .is-dragging,
+[data-theme='toss'] .drag-over,
+[data-theme='toss'] .is-drag-over,
+[data-theme='toss'] .dropzone,
+[data-theme='toss'] .drop-zone,
+[data-theme='toss'] .drop-target,
+[data-theme='toss'] .sortable-ghost,
+[data-theme='toss'] .sortable-chosen,
+[data-theme='toss'] .sortable-drag,
+[data-theme='toss'] [draggable='true'],
+[data-theme='toss'] [aria-grabbed='true'],
+[data-theme='toss'] [data-dragging='true'],
+[data-theme='toss'] [data-drop-target='true'] {
+  color: #f6fff8 !important;
+  -webkit-text-fill-color: #f6fff8 !important;
+  opacity: 1 !important;
+  text-shadow: none !important;
+}
+
+[data-theme='toss'] .drag-over,
+[data-theme='toss'] .is-drag-over,
+[data-theme='toss'] .dropzone,
+[data-theme='toss'] .drop-zone,
+[data-theme='toss'] .drop-target,
+[data-theme='toss'] [data-drop-target='true'] {
+  background: rgba(20, 35, 27, 0.96) !important;
+  border-color: #95ebab !important;
+  box-shadow: 0 0 0 3px rgba(149, 235, 171, 0.18) !important;
+}
+
+[data-theme='toss'] .dragging *,
+[data-theme='toss'] .is-dragging *,
+[data-theme='toss'] .drag-over *,
+[data-theme='toss'] .is-drag-over *,
+[data-theme='toss'] .dropzone *,
+[data-theme='toss'] .drop-zone *,
+[data-theme='toss'] .drop-target *,
+[data-theme='toss'] .sortable-ghost *,
+[data-theme='toss'] .sortable-chosen *,
+[data-theme='toss'] .sortable-drag *,
+[data-theme='toss'] [draggable='true'] *,
+[data-theme='toss'] [aria-grabbed='true'] *,
+[data-theme='toss'] [data-dragging='true'] *,
+[data-theme='toss'] [data-drop-target='true'] * {
+  color: inherit !important;
+  -webkit-text-fill-color: currentColor !important;
+  opacity: 1 !important;
+}
+
+.sortable-ghost,
+.sortable-chosen,
+.sortable-drag,
+.dragging,
+.is-dragging,
+[data-dragging='true'] {
+  filter: none !important;
+}
+
+@media (max-width: 720px) {
+  .dragging,
+  .is-dragging,
+  .drag-over,
+  .is-drag-over,
+  .dropzone,
+  .drop-zone,
+  .drop-target,
+  .sortable-ghost,
+  .sortable-chosen,
+  .sortable-drag,
+  [draggable='true'],
+  [aria-grabbed='true'],
+  [data-dragging='true'],
+  [data-drop-target='true'] {
+    overflow-wrap: anywhere;
+    line-height: 1.35;
+  }
+}
+/* Icon button, tool action and adjacent icon-label readability guard. */
+:root:not([data-theme='toss']) .icon-button,
+:root:not([data-theme='toss']) .icon-btn,
+:root:not([data-theme='toss']) .tool-button,
+:root:not([data-theme='toss']) .action-icon,
+:root:not([data-theme='toss']) .icon-action,
+:root:not([data-theme='toss']) .close-button,
+:root:not([data-theme='toss']) .close-btn,
+:root:not([data-theme='toss']) .menu-button,
+:root:not([data-theme='toss']) .more-button,
+:root:not([data-theme='toss']) .kebab-button,
+:root:not([data-theme='toss']) .icon-label,
+:root:not([data-theme='toss']) .tool-label,
+:root:not([data-theme='toss']) [aria-label].icon-button,
+:root:not([data-theme='toss']) [aria-label].icon-btn,
+:root:not([data-theme='toss']) [aria-label].tool-button {
+  color: #0b2f22 !important;
+  -webkit-text-fill-color: #0b2f22 !important;
+  opacity: 1 !important;
+  text-shadow: none !important;
+}
+
+:root:not([data-theme='toss']) .icon-button svg,
+:root:not([data-theme='toss']) .icon-btn svg,
+:root:not([data-theme='toss']) .tool-button svg,
+:root:not([data-theme='toss']) .action-icon svg,
+:root:not([data-theme='toss']) .icon-action svg,
+:root:not([data-theme='toss']) .close-button svg,
+:root:not([data-theme='toss']) .close-btn svg,
+:root:not([data-theme='toss']) .menu-button svg,
+:root:not([data-theme='toss']) .more-button svg,
+:root:not([data-theme='toss']) .kebab-button svg,
+:root:not([data-theme='toss']) .icon-button path,
+:root:not([data-theme='toss']) .icon-btn path,
+:root:not([data-theme='toss']) .tool-button path,
+:root:not([data-theme='toss']) .action-icon path,
+:root:not([data-theme='toss']) .icon-action path,
+:root:not([data-theme='toss']) .close-button path,
+:root:not([data-theme='toss']) .close-btn path,
+:root:not([data-theme='toss']) .menu-button path,
+:root:not([data-theme='toss']) .more-button path,
+:root:not([data-theme='toss']) .kebab-button path {
+  color: inherit !important;
+  fill: currentColor;
+  stroke: currentColor;
+  opacity: 1 !important;
+}
+
+:root:not([data-theme='toss']) .icon-button span,
+:root:not([data-theme='toss']) .icon-btn span,
+:root:not([data-theme='toss']) .tool-button span,
+:root:not([data-theme='toss']) .action-icon span,
+:root:not([data-theme='toss']) .icon-action span,
+:root:not([data-theme='toss']) .close-button span,
+:root:not([data-theme='toss']) .close-btn span,
+:root:not([data-theme='toss']) .menu-button span,
+:root:not([data-theme='toss']) .more-button span,
+:root:not([data-theme='toss']) .kebab-button span,
+:root:not([data-theme='toss']) .icon-label span,
+:root:not([data-theme='toss']) .tool-label span {
+  color: inherit !important;
+  -webkit-text-fill-color: currentColor !important;
+  opacity: 1 !important;
+}
+
+[data-theme='toss'] .icon-button,
+[data-theme='toss'] .icon-btn,
+[data-theme='toss'] .tool-button,
+[data-theme='toss'] .action-icon,
+[data-theme='toss'] .icon-action,
+[data-theme='toss'] .close-button,
+[data-theme='toss'] .close-btn,
+[data-theme='toss'] .menu-button,
+[data-theme='toss'] .more-button,
+[data-theme='toss'] .kebab-button,
+[data-theme='toss'] .icon-label,
+[data-theme='toss'] .tool-label,
+[data-theme='toss'] [aria-label].icon-button,
+[data-theme='toss'] [aria-label].icon-btn,
+[data-theme='toss'] [aria-label].tool-button {
+  color: #f6fff8 !important;
+  -webkit-text-fill-color: #f6fff8 !important;
+  opacity: 1 !important;
+  text-shadow: none !important;
+}
+
+[data-theme='toss'] .icon-button svg,
+[data-theme='toss'] .icon-btn svg,
+[data-theme='toss'] .tool-button svg,
+[data-theme='toss'] .action-icon svg,
+[data-theme='toss'] .icon-action svg,
+[data-theme='toss'] .close-button svg,
+[data-theme='toss'] .close-btn svg,
+[data-theme='toss'] .menu-button svg,
+[data-theme='toss'] .more-button svg,
+[data-theme='toss'] .kebab-button svg,
+[data-theme='toss'] .icon-button path,
+[data-theme='toss'] .icon-btn path,
+[data-theme='toss'] .tool-button path,
+[data-theme='toss'] .action-icon path,
+[data-theme='toss'] .icon-action path,
+[data-theme='toss'] .close-button path,
+[data-theme='toss'] .close-btn path,
+[data-theme='toss'] .menu-button path,
+[data-theme='toss'] .more-button path,
+[data-theme='toss'] .kebab-button path {
+  color: inherit !important;
+  fill: currentColor;
+  stroke: currentColor;
+  opacity: 1 !important;
+}
+
+[data-theme='toss'] .icon-button span,
+[data-theme='toss'] .icon-btn span,
+[data-theme='toss'] .tool-button span,
+[data-theme='toss'] .action-icon span,
+[data-theme='toss'] .icon-action span,
+[data-theme='toss'] .close-button span,
+[data-theme='toss'] .close-btn span,
+[data-theme='toss'] .menu-button span,
+[data-theme='toss'] .more-button span,
+[data-theme='toss'] .kebab-button span,
+[data-theme='toss'] .icon-label span,
+[data-theme='toss'] .tool-label span {
+  color: inherit !important;
+  -webkit-text-fill-color: currentColor !important;
+  opacity: 1 !important;
+}
+
+:root:not([data-theme='toss']) .icon-button.is-active,
+:root:not([data-theme='toss']) .icon-btn.is-active,
+:root:not([data-theme='toss']) .tool-button.is-active,
+:root:not([data-theme='toss']) .icon-action.is-active,
+:root:not([data-theme='toss']) .icon-button[aria-pressed='true'],
+:root:not([data-theme='toss']) .icon-btn[aria-pressed='true'],
+:root:not([data-theme='toss']) .tool-button[aria-pressed='true'],
+[data-theme='toss'] .icon-button.is-active,
+[data-theme='toss'] .icon-btn.is-active,
+[data-theme='toss'] .tool-button.is-active,
+[data-theme='toss'] .icon-action.is-active,
+[data-theme='toss'] .icon-button[aria-pressed='true'],
+[data-theme='toss'] .icon-btn[aria-pressed='true'],
+[data-theme='toss'] .tool-button[aria-pressed='true'] {
+  color: #ffffff !important;
+  -webkit-text-fill-color: #ffffff !important;
+  opacity: 1 !important;
+  text-shadow: 0 1px 2px rgba(6, 35, 23, 0.35) !important;
+}
+
+:root:not([data-theme='toss']) .icon-button.is-danger,
+:root:not([data-theme='toss']) .icon-btn.is-danger,
+:root:not([data-theme='toss']) .tool-button.is-danger,
+:root:not([data-theme='toss']) .icon-action.is-danger,
+[data-theme='toss'] .icon-button.is-danger,
+[data-theme='toss'] .icon-btn.is-danger,
+[data-theme='toss'] .tool-button.is-danger,
+[data-theme='toss'] .icon-action.is-danger {
+  color: #ffffff !important;
+  -webkit-text-fill-color: #ffffff !important;
+  opacity: 1 !important;
+  text-shadow: 0 1px 2px rgba(75, 8, 18, 0.42) !important;
+}
+
+@media (max-width: 720px) {
+  .icon-button,
+  .icon-btn,
+  .tool-button,
+  .action-icon,
+  .icon-action,
+  .close-button,
+  .close-btn,
+  .menu-button,
+  .more-button,
+  .kebab-button {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .icon-label,
+  .tool-label,
+  .icon-button span,
+  .icon-btn span,
+  .tool-button span {
+    overflow-wrap: anywhere;
+    line-height: 1.3;
+  }
+}
+/* Household calendar, transaction sheet and amount-entry readability guard. */
+:root:not([data-theme='toss']) .household-calendar-layout-toolbar,
+:root:not([data-theme='toss']) .household-calendar-layout-toolbar *,
+:root:not([data-theme='toss']) .household-entry-panel,
+:root:not([data-theme='toss']) .household-entry-panel *,
+:root:not([data-theme='toss']) .household-transaction-sheet,
+:root:not([data-theme='toss']) .household-transaction-sheet *,
+:root:not([data-theme='toss']) .household-aggregate-panel,
+:root:not([data-theme='toss']) .household-aggregate-panel *,
+:root:not([data-theme='toss']) .household-aggregate-card,
+:root:not([data-theme='toss']) .household-aggregate-card *,
+:root:not([data-theme='toss']) .calendar__day,
+:root:not([data-theme='toss']) .calendar__day *,
+:root:not([data-theme='toss']) .calendar-weekday,
+:root:not([data-theme='toss']) .calendar-weekday *,
+:root:not([data-theme='toss']) .amount-input,
+:root:not([data-theme='toss']) .amount-input * {
+  color: #10231b !important;
+  -webkit-text-fill-color: #10231b !important;
+  opacity: 1 !important;
+  text-shadow: none !important;
+}
+
+:root:not([data-theme='toss']) .household-calendar-layout-toolbar h1,
+:root:not([data-theme='toss']) .household-calendar-layout-toolbar h2,
+:root:not([data-theme='toss']) .household-calendar-layout-toolbar h3,
+:root:not([data-theme='toss']) .household-entry-panel h1,
+:root:not([data-theme='toss']) .household-entry-panel h2,
+:root:not([data-theme='toss']) .household-entry-panel h3,
+:root:not([data-theme='toss']) .household-transaction-sheet h1,
+:root:not([data-theme='toss']) .household-transaction-sheet h2,
+:root:not([data-theme='toss']) .household-transaction-sheet h3,
+:root:not([data-theme='toss']) .household-aggregate-panel h1,
+:root:not([data-theme='toss']) .household-aggregate-panel h2,
+:root:not([data-theme='toss']) .household-aggregate-panel h3,
+:root:not([data-theme='toss']) .household-aggregate-card strong,
+:root:not([data-theme='toss']) .calendar__day strong,
+:root:not([data-theme='toss']) .amount-input strong {
+  color: #082f22 !important;
+  -webkit-text-fill-color: #082f22 !important;
+  opacity: 1 !important;
+}
+
+:root:not([data-theme='toss']) .household-calendar-layout-toolbar p,
+:root:not([data-theme='toss']) .household-calendar-layout-toolbar small,
+:root:not([data-theme='toss']) .household-entry-panel p,
+:root:not([data-theme='toss']) .household-entry-panel small,
+:root:not([data-theme='toss']) .household-transaction-sheet p,
+:root:not([data-theme='toss']) .household-transaction-sheet small,
+:root:not([data-theme='toss']) .household-aggregate-panel p,
+:root:not([data-theme='toss']) .household-aggregate-panel small,
+:root:not([data-theme='toss']) .household-aggregate-card span,
+:root:not([data-theme='toss']) .household-aggregate-card small,
+:root:not([data-theme='toss']) .calendar__day span,
+:root:not([data-theme='toss']) .calendar__day small,
+:root:not([data-theme='toss']) .amount-input span,
+:root:not([data-theme='toss']) .amount-input small {
+  color: #3e5048 !important;
+  -webkit-text-fill-color: #3e5048 !important;
+  opacity: 1 !important;
+}
+
+:root:not([data-theme='toss']) .calendar__day--active,
+:root:not([data-theme='toss']) .calendar__day.is-active,
+:root:not([data-theme='toss']) .calendar__day[aria-selected='true'],
+:root:not([data-theme='toss']) .household-entry-panel__date-badge,
+:root:not([data-theme='toss']) .household-calendar-layout-toolbar__status {
+  background: #0b7d52 !important;
+  border-color: #0b7d52 !important;
+  color: #ffffff !important;
+  -webkit-text-fill-color: #ffffff !important;
+  opacity: 1 !important;
+  text-shadow: 0 1px 2px rgba(6, 35, 23, 0.35) !important;
+}
+
+:root:not([data-theme='toss']) .calendar__day--active *,
+:root:not([data-theme='toss']) .calendar__day.is-active *,
+:root:not([data-theme='toss']) .calendar__day[aria-selected='true'] *,
+:root:not([data-theme='toss']) .household-entry-panel__date-badge *,
+:root:not([data-theme='toss']) .household-calendar-layout-toolbar__status * {
+  color: inherit !important;
+  -webkit-text-fill-color: currentColor !important;
+  opacity: 1 !important;
+}
+
+:root:not([data-theme='toss']) .entry-type-pill--income,
+:root:not([data-theme='toss']) .household-transaction-sheet .income,
+:root:not([data-theme='toss']) .household-entry-panel .income,
+:root:not([data-theme='toss']) .amount-input .income {
+  color: #064e3b !important;
+  -webkit-text-fill-color: #064e3b !important;
+  opacity: 1 !important;
+}
+
+:root:not([data-theme='toss']) .entry-type-pill--expense,
+:root:not([data-theme='toss']) .household-transaction-sheet .expense,
+:root:not([data-theme='toss']) .household-entry-panel .expense,
+:root:not([data-theme='toss']) .amount-input .expense {
+  color: #8f1d2c !important;
+  -webkit-text-fill-color: #8f1d2c !important;
+  opacity: 1 !important;
+}
+
+[data-theme='toss'] .household-calendar-layout-toolbar,
+[data-theme='toss'] .household-calendar-layout-toolbar *,
+[data-theme='toss'] .household-entry-panel,
+[data-theme='toss'] .household-entry-panel *,
+[data-theme='toss'] .household-transaction-sheet,
+[data-theme='toss'] .household-transaction-sheet *,
+[data-theme='toss'] .household-aggregate-panel,
+[data-theme='toss'] .household-aggregate-panel *,
+[data-theme='toss'] .household-aggregate-card,
+[data-theme='toss'] .household-aggregate-card *,
+[data-theme='toss'] .calendar__day,
+[data-theme='toss'] .calendar__day *,
+[data-theme='toss'] .calendar-weekday,
+[data-theme='toss'] .calendar-weekday *,
+[data-theme='toss'] .amount-input,
+[data-theme='toss'] .amount-input * {
+  color: #f6fff8 !important;
+  -webkit-text-fill-color: #f6fff8 !important;
+  opacity: 1 !important;
+  text-shadow: none !important;
+}
+
+[data-theme='toss'] .household-calendar-layout-toolbar h1,
+[data-theme='toss'] .household-calendar-layout-toolbar h2,
+[data-theme='toss'] .household-calendar-layout-toolbar h3,
+[data-theme='toss'] .household-entry-panel h1,
+[data-theme='toss'] .household-entry-panel h2,
+[data-theme='toss'] .household-entry-panel h3,
+[data-theme='toss'] .household-transaction-sheet h1,
+[data-theme='toss'] .household-transaction-sheet h2,
+[data-theme='toss'] .household-transaction-sheet h3,
+[data-theme='toss'] .household-aggregate-panel h1,
+[data-theme='toss'] .household-aggregate-panel h2,
+[data-theme='toss'] .household-aggregate-panel h3,
+[data-theme='toss'] .household-aggregate-card strong,
+[data-theme='toss'] .calendar__day strong,
+[data-theme='toss'] .amount-input strong {
+  color: #f6fff8 !important;
+  -webkit-text-fill-color: #f6fff8 !important;
+  opacity: 1 !important;
+}
+
+[data-theme='toss'] .household-calendar-layout-toolbar p,
+[data-theme='toss'] .household-calendar-layout-toolbar small,
+[data-theme='toss'] .household-entry-panel p,
+[data-theme='toss'] .household-entry-panel small,
+[data-theme='toss'] .household-transaction-sheet p,
+[data-theme='toss'] .household-transaction-sheet small,
+[data-theme='toss'] .household-aggregate-panel p,
+[data-theme='toss'] .household-aggregate-panel small,
+[data-theme='toss'] .household-aggregate-card span,
+[data-theme='toss'] .household-aggregate-card small,
+[data-theme='toss'] .calendar__day span,
+[data-theme='toss'] .calendar__day small,
+[data-theme='toss'] .amount-input span,
+[data-theme='toss'] .amount-input small {
+  color: #cbdace !important;
+  -webkit-text-fill-color: #cbdace !important;
+  opacity: 1 !important;
+}
+
+[data-theme='toss'] .calendar__day--active,
+[data-theme='toss'] .calendar__day.is-active,
+[data-theme='toss'] .calendar__day[aria-selected='true'],
+[data-theme='toss'] .household-entry-panel__date-badge,
+[data-theme='toss'] .household-calendar-layout-toolbar__status {
+  background: #1f8f5d !important;
+  border-color: #95ebab !important;
+  color: #ffffff !important;
+  -webkit-text-fill-color: #ffffff !important;
+  opacity: 1 !important;
+  text-shadow: 0 1px 2px rgba(6, 35, 23, 0.4) !important;
+}
+
+[data-theme='toss'] .calendar__day--active *,
+[data-theme='toss'] .calendar__day.is-active *,
+[data-theme='toss'] .calendar__day[aria-selected='true'] *,
+[data-theme='toss'] .household-entry-panel__date-badge *,
+[data-theme='toss'] .household-calendar-layout-toolbar__status * {
+  color: inherit !important;
+  -webkit-text-fill-color: currentColor !important;
+  opacity: 1 !important;
+}
+
+[data-theme='toss'] .entry-type-pill--income,
+[data-theme='toss'] .household-transaction-sheet .income,
+[data-theme='toss'] .household-entry-panel .income,
+[data-theme='toss'] .amount-input .income {
+  color: #bff7ce !important;
+  -webkit-text-fill-color: #bff7ce !important;
+  opacity: 1 !important;
+}
+
+[data-theme='toss'] .entry-type-pill--expense,
+[data-theme='toss'] .household-transaction-sheet .expense,
+[data-theme='toss'] .household-entry-panel .expense,
+[data-theme='toss'] .amount-input .expense {
+  color: #ffc4cc !important;
+  -webkit-text-fill-color: #ffc4cc !important;
+  opacity: 1 !important;
+}
+
+@media (max-width: 720px) {
+  .household-calendar-layout-toolbar,
+  .household-entry-panel,
+  .household-transaction-sheet,
+  .household-aggregate-panel,
+  .household-aggregate-card,
+  .calendar__day,
+  .calendar-weekday,
+  .amount-input {
+    overflow-wrap: anywhere;
+    word-break: keep-all;
+    line-height: 1.35;
+  }
+}
+/* Responsive table/card data-label readability guard. */
+:root:not([data-theme='toss']) [data-label]::before,
+:root:not([data-theme='toss']) [data-title]::before,
+:root:not([data-theme='toss']) [data-meta]::before,
+:root:not([data-theme='toss']) .responsive-table [data-label]::before,
+:root:not([data-theme='toss']) .mobile-table [data-label]::before,
+:root:not([data-theme='toss']) .sheet-table [data-label]::before,
+:root:not([data-theme='toss']) .comparison-table [data-label]::before,
+:root:not([data-theme='toss']) .support-inquiry-table [data-label]::before,
+:root:not([data-theme='toss']) .drive-table [data-label]::before,
+:root:not([data-theme='toss']) .admin-table [data-label]::before,
+:root:not([data-theme='toss']) .ledger-history-table [data-label]::before {
+  color: #082f22 !important;
+  -webkit-text-fill-color: #082f22 !important;
+  opacity: 1 !important;
+  text-shadow: none !important;
+  font-weight: 800 !important;
+}
+
+[data-theme='toss'] [data-label]::before,
+[data-theme='toss'] [data-title]::before,
+[data-theme='toss'] [data-meta]::before,
+[data-theme='toss'] .responsive-table [data-label]::before,
+[data-theme='toss'] .mobile-table [data-label]::before,
+[data-theme='toss'] .sheet-table [data-label]::before,
+[data-theme='toss'] .comparison-table [data-label]::before,
+[data-theme='toss'] .support-inquiry-table [data-label]::before,
+[data-theme='toss'] .drive-table [data-label]::before,
+[data-theme='toss'] .admin-table [data-label]::before,
+[data-theme='toss'] .ledger-history-table [data-label]::before {
+  color: #f6fff8 !important;
+  -webkit-text-fill-color: #f6fff8 !important;
+  opacity: 1 !important;
+  text-shadow: none !important;
+  font-weight: 800 !important;
+}
+
+:root:not([data-theme='toss']) .responsive-table-card,
+:root:not([data-theme='toss']) .mobile-table-card,
+:root:not([data-theme='toss']) .table-card,
+:root:not([data-theme='toss']) .data-row-card,
+:root:not([data-theme='toss']) .record-row-card,
+:root:not([data-theme='toss']) .sheet-row-card,
+:root:not([data-theme='toss']) .ledger-row-card {
+  background: #ffffff !important;
+  color: #10231b !important;
+  -webkit-text-fill-color: #10231b !important;
+  border-color: rgba(14, 93, 69, 0.2) !important;
+  opacity: 1 !important;
+}
+
+[data-theme='toss'] .responsive-table-card,
+[data-theme='toss'] .mobile-table-card,
+[data-theme='toss'] .table-card,
+[data-theme='toss'] .data-row-card,
+[data-theme='toss'] .record-row-card,
+[data-theme='toss'] .sheet-row-card,
+[data-theme='toss'] .ledger-row-card {
+  background: #111b16 !important;
+  color: #f6fff8 !important;
+  -webkit-text-fill-color: #f6fff8 !important;
+  border-color: rgba(149, 235, 171, 0.28) !important;
+  opacity: 1 !important;
+}
+
+:root:not([data-theme='toss']) .responsive-table-card *,
+:root:not([data-theme='toss']) .mobile-table-card *,
+:root:not([data-theme='toss']) .table-card *,
+:root:not([data-theme='toss']) .data-row-card *,
+:root:not([data-theme='toss']) .record-row-card *,
+:root:not([data-theme='toss']) .sheet-row-card *,
+:root:not([data-theme='toss']) .ledger-row-card *,
+[data-theme='toss'] .responsive-table-card *,
+[data-theme='toss'] .mobile-table-card *,
+[data-theme='toss'] .table-card *,
+[data-theme='toss'] .data-row-card *,
+[data-theme='toss'] .record-row-card *,
+[data-theme='toss'] .sheet-row-card *,
+[data-theme='toss'] .ledger-row-card * {
+  opacity: 1 !important;
+}
+
+@media (max-width: 720px) {
+  [data-label]::before,
+  [data-title]::before,
+  [data-meta]::before,
+  .responsive-table-card,
+  .mobile-table-card,
+  .table-card,
+  .data-row-card,
+  .record-row-card,
+  .sheet-row-card,
+  .ledger-row-card {
+    overflow-wrap: anywhere;
+    line-height: 1.35;
+  }
+}
+/* User accessibility preference guard: stronger contrast and reduced transparency. */
+@media (prefers-contrast: more) {
+  :root:not([data-theme='toss']) body,
+  :root:not([data-theme='toss']) .app-shell,
+  :root:not([data-theme='toss']) .main-shell,
+  :root:not([data-theme='toss']) .panel,
+  :root:not([data-theme='toss']) .panel-card,
+  :root:not([data-theme='toss']) .travel-modal__dialog,
+  :root:not([data-theme='toss']) .admin-workspace,
+  :root:not([data-theme='toss']) .auth-card,
+  :root:not([data-theme='toss']) .launcher-card,
+  :root:not([data-theme='toss']) .main-dashboard,
+  :root:not([data-theme='toss']) .main-palette {
+    background: #ffffff !important;
+    color: #0b1712 !important;
+    -webkit-text-fill-color: #0b1712 !important;
+    border-color: #164b35 !important;
+    text-shadow: none !important;
+  }
+
+  :root:not([data-theme='toss']) h1,
+  :root:not([data-theme='toss']) h2,
+  :root:not([data-theme='toss']) h3,
+  :root:not([data-theme='toss']) h4,
+  :root:not([data-theme='toss']) h5,
+  :root:not([data-theme='toss']) h6,
+  :root:not([data-theme='toss']) p,
+  :root:not([data-theme='toss']) span,
+  :root:not([data-theme='toss']) small,
+  :root:not([data-theme='toss']) strong,
+  :root:not([data-theme='toss']) label,
+  :root:not([data-theme='toss']) li,
+  :root:not([data-theme='toss']) th,
+  :root:not([data-theme='toss']) td {
+    color: #0b1712 !important;
+    -webkit-text-fill-color: #0b1712 !important;
+    opacity: 1 !important;
+    text-shadow: none !important;
+  }
+
+  :root:not([data-theme='toss']) input,
+  :root:not([data-theme='toss']) select,
+  :root:not([data-theme='toss']) textarea,
+  :root:not([data-theme='toss']) button,
+  :root:not([data-theme='toss']) .button,
+  :root:not([data-theme='toss']) .chip,
+  :root:not([data-theme='toss']) .panel__badge {
+    border-color: #164b35 !important;
+    opacity: 1 !important;
+  }
+
+  :root:not([data-theme='toss']) a,
+  :root:not([data-theme='toss']) a:visited {
+    color: #005f3d !important;
+    -webkit-text-fill-color: #005f3d !important;
+    text-decoration: underline !important;
+  }
+
+  :root:not([data-theme='toss']) .button--primary,
+  :root:not([data-theme='toss']) button[type='submit'],
+  :root:not([data-theme='toss']) .is-active,
+  :root:not([data-theme='toss']) [aria-selected='true'] {
+    background: #005f3d !important;
+    color: #ffffff !important;
+    -webkit-text-fill-color: #ffffff !important;
+    border-color: #005f3d !important;
+  }
+
+  [data-theme='toss'] body,
+  [data-theme='toss'] .app-shell,
+  [data-theme='toss'] .main-shell,
+  [data-theme='toss'] .panel,
+  [data-theme='toss'] .panel-card,
+  [data-theme='toss'] .travel-modal__dialog,
+  [data-theme='toss'] .admin-workspace,
+  [data-theme='toss'] .auth-card,
+  [data-theme='toss'] .launcher-card,
+  [data-theme='toss'] .main-dashboard,
+  [data-theme='toss'] .main-palette {
+    background: #050b08 !important;
+    color: #ffffff !important;
+    -webkit-text-fill-color: #ffffff !important;
+    border-color: #b8ffd0 !important;
+    text-shadow: none !important;
+  }
+
+  [data-theme='toss'] h1,
+  [data-theme='toss'] h2,
+  [data-theme='toss'] h3,
+  [data-theme='toss'] h4,
+  [data-theme='toss'] h5,
+  [data-theme='toss'] h6,
+  [data-theme='toss'] p,
+  [data-theme='toss'] span,
+  [data-theme='toss'] small,
+  [data-theme='toss'] strong,
+  [data-theme='toss'] label,
+  [data-theme='toss'] li,
+  [data-theme='toss'] th,
+  [data-theme='toss'] td {
+    color: #ffffff !important;
+    -webkit-text-fill-color: #ffffff !important;
+    opacity: 1 !important;
+    text-shadow: none !important;
+  }
+
+  [data-theme='toss'] input,
+  [data-theme='toss'] select,
+  [data-theme='toss'] textarea,
+  [data-theme='toss'] button,
+  [data-theme='toss'] .button,
+  [data-theme='toss'] .chip,
+  [data-theme='toss'] .panel__badge {
+    border-color: #b8ffd0 !important;
+    opacity: 1 !important;
+  }
+
+  [data-theme='toss'] a,
+  [data-theme='toss'] a:visited {
+    color: #b8ffd0 !important;
+    -webkit-text-fill-color: #b8ffd0 !important;
+    text-decoration: underline !important;
+  }
+
+  [data-theme='toss'] .button--primary,
+  [data-theme='toss'] button[type='submit'],
+  [data-theme='toss'] .is-active,
+  [data-theme='toss'] [aria-selected='true'] {
+    background: #007a4d !important;
+    color: #ffffff !important;
+    -webkit-text-fill-color: #ffffff !important;
+    border-color: #b8ffd0 !important;
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .panel,
+  .panel-card,
+  .travel-modal__dialog,
+  .ai-result-modal__dialog,
+  .admin-workspace,
+  .auth-card,
+  .launcher-card,
+  .main-dashboard,
+  .main-palette,
+  .toast,
+  .popover,
+  .tooltip,
+  .dropdown-menu,
+  .sidebar,
+  .drawer,
+  .bottom-sheet,
+  .leaflet-popup-content-wrapper {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+
+  :root:not([data-theme='toss']) .panel,
+  :root:not([data-theme='toss']) .panel-card,
+  :root:not([data-theme='toss']) .travel-modal__dialog,
+  :root:not([data-theme='toss']) .ai-result-modal__dialog,
+  :root:not([data-theme='toss']) .admin-workspace,
+  :root:not([data-theme='toss']) .auth-card,
+  :root:not([data-theme='toss']) .launcher-card,
+  :root:not([data-theme='toss']) .main-dashboard,
+  :root:not([data-theme='toss']) .main-palette,
+  :root:not([data-theme='toss']) .toast,
+  :root:not([data-theme='toss']) .popover,
+  :root:not([data-theme='toss']) .tooltip,
+  :root:not([data-theme='toss']) .dropdown-menu,
+  :root:not([data-theme='toss']) .sidebar,
+  :root:not([data-theme='toss']) .drawer,
+  :root:not([data-theme='toss']) .bottom-sheet,
+  :root:not([data-theme='toss']) .leaflet-popup-content-wrapper {
+    background: #ffffff !important;
+    color: #10231b !important;
+    -webkit-text-fill-color: #10231b !important;
+  }
+
+  [data-theme='toss'] .panel,
+  [data-theme='toss'] .panel-card,
+  [data-theme='toss'] .travel-modal__dialog,
+  [data-theme='toss'] .ai-result-modal__dialog,
+  [data-theme='toss'] .admin-workspace,
+  [data-theme='toss'] .auth-card,
+  [data-theme='toss'] .launcher-card,
+  [data-theme='toss'] .main-dashboard,
+  [data-theme='toss'] .main-palette,
+  [data-theme='toss'] .toast,
+  [data-theme='toss'] .popover,
+  [data-theme='toss'] .tooltip,
+  [data-theme='toss'] .dropdown-menu,
+  [data-theme='toss'] .sidebar,
+  [data-theme='toss'] .drawer,
+  [data-theme='toss'] .bottom-sheet,
+  [data-theme='toss'] .leaflet-popup-content-wrapper {
+    background: #111b16 !important;
+    color: #f6fff8 !important;
+    -webkit-text-fill-color: #f6fff8 !important;
+  }
+}
+/* Scroll container, sticky header/footer and fixed action bar readability guard. */
+:root:not([data-theme='toss']) .scroll-container,
+:root:not([data-theme='toss']) .scroll-panel,
+:root:not([data-theme='toss']) .scroll-region,
+:root:not([data-theme='toss']) .table-scroll,
+:root:not([data-theme='toss']) .sticky-header,
+:root:not([data-theme='toss']) .sticky-footer,
+:root:not([data-theme='toss']) .sticky-toolbar,
+:root:not([data-theme='toss']) .fixed-toolbar,
+:root:not([data-theme='toss']) .fixed-action-bar,
+:root:not([data-theme='toss']) .modal-footer,
+:root:not([data-theme='toss']) .dialog-footer,
+:root:not([data-theme='toss']) .sheet-footer,
+:root:not([data-theme='toss']) .panel-footer,
+:root:not([data-theme='toss']) [data-sticky='true'] {
+  background: rgba(255, 255, 255, 0.96) !important;
+  color: #10231b !important;
+  -webkit-text-fill-color: #10231b !important;
+  border-color: rgba(14, 93, 69, 0.2) !important;
+  opacity: 1 !important;
+  text-shadow: none !important;
+}
+
+:root:not([data-theme='toss']) .scroll-container *,
+:root:not([data-theme='toss']) .scroll-panel *,
+:root:not([data-theme='toss']) .scroll-region *,
+:root:not([data-theme='toss']) .table-scroll *,
+:root:not([data-theme='toss']) .sticky-header *,
+:root:not([data-theme='toss']) .sticky-footer *,
+:root:not([data-theme='toss']) .sticky-toolbar *,
+:root:not([data-theme='toss']) .fixed-toolbar *,
+:root:not([data-theme='toss']) .fixed-action-bar *,
+:root:not([data-theme='toss']) .modal-footer *,
+:root:not([data-theme='toss']) .dialog-footer *,
+:root:not([data-theme='toss']) .sheet-footer *,
+:root:not([data-theme='toss']) .panel-footer *,
+:root:not([data-theme='toss']) [data-sticky='true'] * {
+  opacity: 1 !important;
+}
+
+:root:not([data-theme='toss']) .sticky-header h1,
+:root:not([data-theme='toss']) .sticky-header h2,
+:root:not([data-theme='toss']) .sticky-header h3,
+:root:not([data-theme='toss']) .sticky-toolbar strong,
+:root:not([data-theme='toss']) .fixed-toolbar strong,
+:root:not([data-theme='toss']) .fixed-action-bar strong,
+:root:not([data-theme='toss']) .modal-footer strong,
+:root:not([data-theme='toss']) .dialog-footer strong,
+:root:not([data-theme='toss']) .sheet-footer strong,
+:root:not([data-theme='toss']) .panel-footer strong {
+  color: #082f22 !important;
+  -webkit-text-fill-color: #082f22 !important;
+  opacity: 1 !important;
+}
+
+:root:not([data-theme='toss']) .sticky-header p,
+:root:not([data-theme='toss']) .sticky-header span,
+:root:not([data-theme='toss']) .sticky-header small,
+:root:not([data-theme='toss']) .sticky-toolbar p,
+:root:not([data-theme='toss']) .sticky-toolbar span,
+:root:not([data-theme='toss']) .sticky-toolbar small,
+:root:not([data-theme='toss']) .fixed-toolbar p,
+:root:not([data-theme='toss']) .fixed-toolbar span,
+:root:not([data-theme='toss']) .fixed-toolbar small,
+:root:not([data-theme='toss']) .fixed-action-bar p,
+:root:not([data-theme='toss']) .fixed-action-bar span,
+:root:not([data-theme='toss']) .fixed-action-bar small,
+:root:not([data-theme='toss']) .modal-footer p,
+:root:not([data-theme='toss']) .modal-footer span,
+:root:not([data-theme='toss']) .modal-footer small,
+:root:not([data-theme='toss']) .dialog-footer p,
+:root:not([data-theme='toss']) .dialog-footer span,
+:root:not([data-theme='toss']) .dialog-footer small,
+:root:not([data-theme='toss']) .sheet-footer p,
+:root:not([data-theme='toss']) .sheet-footer span,
+:root:not([data-theme='toss']) .sheet-footer small,
+:root:not([data-theme='toss']) .panel-footer p,
+:root:not([data-theme='toss']) .panel-footer span,
+:root:not([data-theme='toss']) .panel-footer small {
+  color: #3e5048 !important;
+  -webkit-text-fill-color: #3e5048 !important;
+  opacity: 1 !important;
+}
+
+:root:not([data-theme='toss']) .sticky-header button,
+:root:not([data-theme='toss']) .sticky-toolbar button,
+:root:not([data-theme='toss']) .fixed-toolbar button,
+:root:not([data-theme='toss']) .fixed-action-bar button,
+:root:not([data-theme='toss']) .modal-footer button,
+:root:not([data-theme='toss']) .dialog-footer button,
+:root:not([data-theme='toss']) .sheet-footer button,
+:root:not([data-theme='toss']) .panel-footer button {
+  color: #0b2f22 !important;
+  -webkit-text-fill-color: #0b2f22 !important;
+  opacity: 1 !important;
+}
+
+[data-theme='toss'] .scroll-container,
+[data-theme='toss'] .scroll-panel,
+[data-theme='toss'] .scroll-region,
+[data-theme='toss'] .table-scroll,
+[data-theme='toss'] .sticky-header,
+[data-theme='toss'] .sticky-footer,
+[data-theme='toss'] .sticky-toolbar,
+[data-theme='toss'] .fixed-toolbar,
+[data-theme='toss'] .fixed-action-bar,
+[data-theme='toss'] .modal-footer,
+[data-theme='toss'] .dialog-footer,
+[data-theme='toss'] .sheet-footer,
+[data-theme='toss'] .panel-footer,
+[data-theme='toss'] [data-sticky='true'] {
+  background: rgba(17, 27, 22, 0.96) !important;
+  color: #f6fff8 !important;
+  -webkit-text-fill-color: #f6fff8 !important;
+  border-color: rgba(149, 235, 171, 0.28) !important;
+  opacity: 1 !important;
+  text-shadow: none !important;
+}
+
+[data-theme='toss'] .scroll-container *,
+[data-theme='toss'] .scroll-panel *,
+[data-theme='toss'] .scroll-region *,
+[data-theme='toss'] .table-scroll *,
+[data-theme='toss'] .sticky-header *,
+[data-theme='toss'] .sticky-footer *,
+[data-theme='toss'] .sticky-toolbar *,
+[data-theme='toss'] .fixed-toolbar *,
+[data-theme='toss'] .fixed-action-bar *,
+[data-theme='toss'] .modal-footer *,
+[data-theme='toss'] .dialog-footer *,
+[data-theme='toss'] .sheet-footer *,
+[data-theme='toss'] .panel-footer *,
+[data-theme='toss'] [data-sticky='true'] * {
+  opacity: 1 !important;
+}
+
+[data-theme='toss'] .sticky-header h1,
+[data-theme='toss'] .sticky-header h2,
+[data-theme='toss'] .sticky-header h3,
+[data-theme='toss'] .sticky-toolbar strong,
+[data-theme='toss'] .fixed-toolbar strong,
+[data-theme='toss'] .fixed-action-bar strong,
+[data-theme='toss'] .modal-footer strong,
+[data-theme='toss'] .dialog-footer strong,
+[data-theme='toss'] .sheet-footer strong,
+[data-theme='toss'] .panel-footer strong {
+  color: #f6fff8 !important;
+  -webkit-text-fill-color: #f6fff8 !important;
+  opacity: 1 !important;
+}
+
+[data-theme='toss'] .sticky-header p,
+[data-theme='toss'] .sticky-header span,
+[data-theme='toss'] .sticky-header small,
+[data-theme='toss'] .sticky-toolbar p,
+[data-theme='toss'] .sticky-toolbar span,
+[data-theme='toss'] .sticky-toolbar small,
+[data-theme='toss'] .fixed-toolbar p,
+[data-theme='toss'] .fixed-toolbar span,
+[data-theme='toss'] .fixed-toolbar small,
+[data-theme='toss'] .fixed-action-bar p,
+[data-theme='toss'] .fixed-action-bar span,
+[data-theme='toss'] .fixed-action-bar small,
+[data-theme='toss'] .modal-footer p,
+[data-theme='toss'] .modal-footer span,
+[data-theme='toss'] .modal-footer small,
+[data-theme='toss'] .dialog-footer p,
+[data-theme='toss'] .dialog-footer span,
+[data-theme='toss'] .dialog-footer small,
+[data-theme='toss'] .sheet-footer p,
+[data-theme='toss'] .sheet-footer span,
+[data-theme='toss'] .sheet-footer small,
+[data-theme='toss'] .panel-footer p,
+[data-theme='toss'] .panel-footer span,
+[data-theme='toss'] .panel-footer small {
+  color: #cbdace !important;
+  -webkit-text-fill-color: #cbdace !important;
+  opacity: 1 !important;
+}
+
+[data-theme='toss'] .sticky-header button,
+[data-theme='toss'] .sticky-toolbar button,
+[data-theme='toss'] .fixed-toolbar button,
+[data-theme='toss'] .fixed-action-bar button,
+[data-theme='toss'] .modal-footer button,
+[data-theme='toss'] .dialog-footer button,
+[data-theme='toss'] .sheet-footer button,
+[data-theme='toss'] .panel-footer button {
+  color: #f6fff8 !important;
+  -webkit-text-fill-color: #f6fff8 !important;
+  opacity: 1 !important;
+}
+
+@media (max-width: 720px) {
+  .scroll-container,
+  .scroll-panel,
+  .scroll-region,
+  .table-scroll,
+  .sticky-header,
+  .sticky-footer,
+  .sticky-toolbar,
+  .fixed-toolbar,
+  .fixed-action-bar,
+  .modal-footer,
+  .dialog-footer,
+  .sheet-footer,
+  .panel-footer,
+  [data-sticky='true'] {
+    overflow-wrap: anywhere;
+    word-break: keep-all;
+    line-height: 1.35;
+  }
+
+  .sticky-header button,
+  .sticky-toolbar button,
+  .fixed-toolbar button,
+  .fixed-action-bar button,
+  .modal-footer button,
+  .dialog-footer button,
+  .sheet-footer button,
+  .panel-footer button {
+    min-height: 44px;
+  }
+}
+/* Screen verification contrast hardening: primary actions and active layout/theme toggles */
+.button.button--primary,
+button.button--primary,
+.auth-card .button--primary,
+.stack-form .button--primary {
+  background-color: #047857 !important;
+  background-image: linear-gradient(135deg, #059669 0%, #047857 55%, #065f46 100%) !important;
+  color: #ffffff !important;
+  border-color: rgba(255, 255, 255, 0.58) !important;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35) !important;
+}
+
+.layout-mode-toggle__button--active,
+.theme-switcher .layout-mode-toggle__button--active,
+.theme-switcher__actions .layout-mode-toggle__button--active {
+  background-color: #065f46 !important;
+  background-image: linear-gradient(135deg, #047857 0%, #065f46 100%) !important;
+  color: #ffffff !important;
+  border-color: rgba(255, 255, 255, 0.64) !important;
+  box-shadow: 0 12px 28px rgba(6, 95, 70, 0.24), inset 0 1px 0 rgba(255, 255, 255, 0.2) !important;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.38) !important;
+}

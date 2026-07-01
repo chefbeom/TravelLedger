@@ -1693,7 +1693,63 @@ watch(
     padding: 18px;
   }
 }
+
+/* ai-mobile-mode-touch-upgrade */
+@media (max-width: 760px) {
+  :global(:root[data-layout-mode='mobile']) .ai-analysis-panel .button,
+  :global(:root[data-layout-mode='mobile']) .ai-history-panel .button,
+  :global(:root[data-layout-mode='mobile']) .ai-result-modal .button {
+    min-height: 48px;
+    padding: 0 14px;
+    border-radius: 16px;
+    font-size: 0.94rem;
+    white-space: normal;
+  }
+
+  :global(:root[data-layout-mode='mobile']) .ai-analysis-actions,
+  :global(:root[data-layout-mode='mobile']) .ai-result-toolbar,
+  :global(:root[data-layout-mode='mobile']) .ai-history-item__actions,
+  :global(:root[data-layout-mode='mobile']) .ai-result-modal__actions {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
+    width: 100%;
+  }
+
+  :global(:root[data-layout-mode='mobile']) .ai-analysis-actions .button,
+  :global(:root[data-layout-mode='mobile']) .ai-result-toolbar .button,
+  :global(:root[data-layout-mode='mobile']) .ai-history-item__actions .button,
+  :global(:root[data-layout-mode='mobile']) .ai-result-modal__actions .button {
+    width: 100%;
+  }
+
+  :global(:root[data-layout-mode='mobile']) .scope-toggle--wrap {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  :global(:root[data-layout-mode='mobile']) .ai-progress-card {
+    padding: 0.95rem;
+    border-radius: 18px;
+  }
+
+  :global(:root[data-layout-mode='mobile']) .ai-progress-card__header {
+    flex-direction: column;
+  }
+
+  :global(:root[data-layout-mode='mobile']) .ai-progress-steps,
+  :global(:root[data-layout-mode='mobile']) .ai-history-summary-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  :global(:root[data-layout-mode='mobile']) .ai-history-item__titleline {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
 </style>
+
 <template>
   <div class="workspace-stack">
     <section class="panel toss-control-panel">
@@ -2604,6 +2660,8 @@ watch(
     </div>
   </Teleport>
 </template>
+
+
 
 
 

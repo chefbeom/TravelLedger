@@ -1,4 +1,4 @@
-:root {
+﻿:root {
   font-family: 'Pretendard', 'Segoe UI', 'Apple SD Gothic Neo', sans-serif;
   line-height: 1.5;
   font-weight: 400;
@@ -14659,4 +14659,319 @@ textarea {
   font-weight: 800;
   line-height: 1;
   box-shadow: 0 8px 16px rgba(225, 29, 72, 0.28);
+}
+
+/* mobile-touch-button-upgrade */
+:root[data-layout-mode='mobile'] .button {
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+:root[data-layout-mode='mobile'] .button:focus-visible {
+  outline: 3px solid rgba(90, 216, 122, 0.38);
+  outline-offset: 2px;
+}
+
+:root[data-layout-mode='mobile'] .button,
+:root[data-layout-mode='mobile'] button.button {
+  min-height: 48px;
+  padding: 0 16px;
+  border-radius: 16px;
+  font-size: 0.95rem;
+  line-height: 1.2;
+  white-space: normal;
+}
+
+:root[data-layout-mode='mobile'] .theme-toggle {
+  min-height: 42px;
+}
+
+:root[data-layout-mode='mobile'] .layout-mode-toggle__button,
+:root[data-layout-mode='mobile'] .topbar__nav-button {
+  min-height: 44px;
+}
+
+:root[data-layout-mode='mobile'] .topbar__actions .button {
+  min-height: 48px;
+}
+
+:root[data-layout-mode='mobile'] .panel__actions,
+:root[data-layout-mode='mobile'] .entry-editor__actions,
+:root[data-layout-mode='mobile'] .receipt-ocr-panel__actions,
+:root[data-layout-mode='mobile'] .receipt-ocr-result__actions,
+:root[data-layout-mode='mobile'] .search-bulk-toolbar__actions,
+:root[data-layout-mode='mobile'] .travel-toolbar__actions,
+:root[data-layout-mode='mobile'] .travel-media-actions,
+:root[data-layout-mode='mobile'] .travel-my-photos__detail-actions,
+:root[data-layout-mode='mobile'] .drive-toolbar__actions,
+:root[data-layout-mode='mobile'] .drive-browser-actions,
+:root[data-layout-mode='mobile'] .drive-topbar__actions,
+:root[data-layout-mode='mobile'] .drive-selection-bar__actions,
+:root[data-layout-mode='mobile'] .household-anchor-toolbar__actions,
+:root[data-layout-mode='mobile'] .household-data-actions__menu,
+:root[data-layout-mode='mobile'] .household-calendar-header-actions,
+:root[data-layout-mode='mobile'] .household-calendar-layout-toolbar__actions {
+  gap: 10px;
+}
+
+:root[data-layout-mode='mobile'] .panel__actions .button,
+:root[data-layout-mode='mobile'] .entry-editor__actions .button,
+:root[data-layout-mode='mobile'] .receipt-ocr-panel__actions .button,
+:root[data-layout-mode='mobile'] .receipt-ocr-result__actions .button,
+:root[data-layout-mode='mobile'] .search-bulk-toolbar__actions .button,
+:root[data-layout-mode='mobile'] .travel-toolbar__actions .button,
+:root[data-layout-mode='mobile'] .travel-media-actions .button,
+:root[data-layout-mode='mobile'] .travel-my-photos__detail-actions .button,
+:root[data-layout-mode='mobile'] .drive-toolbar__actions .button,
+:root[data-layout-mode='mobile'] .drive-browser-actions .button,
+:root[data-layout-mode='mobile'] .drive-topbar__actions .button,
+:root[data-layout-mode='mobile'] .drive-selection-bar__actions .button,
+:root[data-layout-mode='mobile'] .household-anchor-toolbar__actions .button,
+:root[data-layout-mode='mobile'] .household-data-actions__menu .button,
+:root[data-layout-mode='mobile'] .household-calendar-header-actions .button,
+:root[data-layout-mode='mobile'] .household-calendar-layout-toolbar__actions .button {
+  flex: 1 1 140px;
+  min-width: 0;
+}
+
+@media (max-width: 560px) {
+  :root[data-layout-mode='mobile'] .panel__actions,
+  :root[data-layout-mode='mobile'] .entry-editor__actions,
+  :root[data-layout-mode='mobile'] .search-bulk-toolbar__actions,
+  :root[data-layout-mode='mobile'] .travel-toolbar__actions,
+  :root[data-layout-mode='mobile'] .drive-browser-actions,
+  :root[data-layout-mode='mobile'] .drive-selection-bar__actions,
+  :root[data-layout-mode='mobile'] .household-calendar-header-actions {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  :root[data-layout-mode='mobile'] .panel__actions .button,
+  :root[data-layout-mode='mobile'] .entry-editor__actions .button,
+  :root[data-layout-mode='mobile'] .search-bulk-toolbar__actions .button,
+  :root[data-layout-mode='mobile'] .travel-toolbar__actions .button,
+  :root[data-layout-mode='mobile'] .drive-browser-actions .button,
+  :root[data-layout-mode='mobile'] .drive-selection-bar__actions .button,
+  :root[data-layout-mode='mobile'] .household-calendar-header-actions .button {
+    width: 100%;
+  }
+}
+
+
+/* mobile-household-travel-touch-upgrade */
+:root[data-layout-mode='mobile'] .household-anchor-toolbar__actions,
+:root[data-layout-mode='mobile'] .household-data-actions,
+:root[data-layout-mode='mobile'] .household-travel-ledger__plan-actions,
+:root[data-layout-mode='mobile'] .household-travel-ledger__actions,
+:root[data-layout-mode='mobile'] .household-travel-ledger__entry-actions,
+:root[data-layout-mode='mobile'] .travel-record-switcher__finance-actions,
+:root[data-layout-mode='mobile'] .travel-plan-card__actions,
+:root[data-layout-mode='mobile'] .travel-media-actions,
+:root[data-layout-mode='mobile'] .travel-public-hero__actions,
+:root[data-layout-mode='mobile'] .travel-public-story-actions,
+:root[data-layout-mode='mobile'] .travel-point-list__actions,
+:root[data-layout-mode='mobile'] .travel-lightbox__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  width: 100%;
+}
+
+:root[data-layout-mode='mobile'] .household-anchor-toolbar__actions .button,
+:root[data-layout-mode='mobile'] .household-data-actions .button,
+:root[data-layout-mode='mobile'] .household-travel-ledger__plan-actions .button,
+:root[data-layout-mode='mobile'] .household-travel-ledger__actions .button,
+:root[data-layout-mode='mobile'] .household-travel-ledger__entry-actions .button,
+:root[data-layout-mode='mobile'] .travel-record-switcher__finance-actions .button,
+:root[data-layout-mode='mobile'] .travel-plan-card__actions .button,
+:root[data-layout-mode='mobile'] .travel-media-actions .button,
+:root[data-layout-mode='mobile'] .travel-public-hero__actions .button,
+:root[data-layout-mode='mobile'] .travel-public-story-actions .button,
+:root[data-layout-mode='mobile'] .travel-point-list__actions .button,
+:root[data-layout-mode='mobile'] .travel-lightbox__actions .button {
+  flex: 1 1 144px;
+  min-width: 0;
+  min-height: 48px;
+}
+
+:root[data-layout-mode='mobile'] .amount-shortcuts {
+  gap: 10px;
+}
+
+:root[data-layout-mode='mobile'] .amount-shortcuts__button {
+  min-height: 50px;
+  border-radius: 16px;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+:root[data-layout-mode='mobile'] .scope-toggle,
+:root[data-layout-mode='mobile'] .travel-record-switcher__tabs,
+:root[data-layout-mode='mobile'] .travel-record-switcher__action-group {
+  gap: 8px;
+}
+
+:root[data-layout-mode='mobile'] .scope-toggle .button,
+:root[data-layout-mode='mobile'] .travel-record-switcher__action,
+:root[data-layout-mode='mobile'] .travel-record-switcher__tabs .button {
+  min-height: 46px;
+  touch-action: manipulation;
+}
+
+:root[data-layout-mode='mobile'] .sheet-table__actions-inner,
+:root[data-layout-mode='mobile'] .household-sheet-panel .sheet-table__actions-inner {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+  min-width: 132px;
+}
+
+:root[data-layout-mode='mobile'] .sheet-table__actions-inner .button,
+:root[data-layout-mode='mobile'] .household-sheet-panel .sheet-table__actions-inner .button {
+  width: 100%;
+  min-height: 44px;
+  padding-inline: 10px;
+}
+
+:root[data-layout-mode='mobile'] .travel-media-card--compact .travel-media-actions,
+:root[data-layout-mode='mobile'] .travel-media-actions--cluster-tile {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+:root[data-layout-mode='mobile'] .travel-cluster-popup__action,
+:root[data-layout-mode='mobile'] .travel-public-map-drawer__actions button,
+:root[data-layout-mode='mobile'] .travel-public-story-actions button {
+  min-height: 46px;
+  touch-action: manipulation;
+}
+
+@media (max-width: 560px) {
+  :root[data-layout-mode='mobile'] .household-anchor-toolbar__actions,
+  :root[data-layout-mode='mobile'] .household-data-actions,
+  :root[data-layout-mode='mobile'] .household-travel-ledger__plan-actions,
+  :root[data-layout-mode='mobile'] .household-travel-ledger__actions,
+  :root[data-layout-mode='mobile'] .household-travel-ledger__entry-actions,
+  :root[data-layout-mode='mobile'] .travel-record-switcher__finance-actions,
+  :root[data-layout-mode='mobile'] .travel-plan-card__actions,
+  :root[data-layout-mode='mobile'] .travel-media-actions,
+  :root[data-layout-mode='mobile'] .travel-public-hero__actions,
+  :root[data-layout-mode='mobile'] .travel-public-story-actions,
+  :root[data-layout-mode='mobile'] .travel-point-list__actions,
+  :root[data-layout-mode='mobile'] .travel-lightbox__actions {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  :root[data-layout-mode='mobile'] .household-anchor-toolbar__actions .button,
+  :root[data-layout-mode='mobile'] .household-data-actions .button,
+  :root[data-layout-mode='mobile'] .household-travel-ledger__plan-actions .button,
+  :root[data-layout-mode='mobile'] .household-travel-ledger__actions .button,
+  :root[data-layout-mode='mobile'] .household-travel-ledger__entry-actions .button,
+  :root[data-layout-mode='mobile'] .travel-record-switcher__finance-actions .button,
+  :root[data-layout-mode='mobile'] .travel-plan-card__actions .button,
+  :root[data-layout-mode='mobile'] .travel-media-actions .button,
+  :root[data-layout-mode='mobile'] .travel-public-hero__actions .button,
+  :root[data-layout-mode='mobile'] .travel-public-story-actions .button,
+  :root[data-layout-mode='mobile'] .travel-point-list__actions .button,
+  :root[data-layout-mode='mobile'] .travel-lightbox__actions .button {
+    width: 100%;
+  }
+}
+
+/* mobile-household-travel-action-safety */
+:root[data-layout-mode='mobile'] .entry-editor__actions,
+:root[data-layout-mode='mobile'] .receipt-ocr-review-card__actions,
+:root[data-layout-mode='mobile'] .household-aggregate-header__actions,
+:root[data-layout-mode='mobile'] .household-calendar-layout-toolbar--inline .household-calendar-layout-toolbar__actions,
+:root[data-layout-mode='mobile'] .travel-route-workspace__actions,
+:root[data-layout-mode='mobile'] .travel-my-map-header__actions,
+:root[data-layout-mode='mobile'] .travel-public-map-drawer__actions,
+:root[data-layout-mode='mobile'] .travel-community-card__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  width: 100%;
+}
+
+:root[data-layout-mode='mobile'] .entry-editor__actions .button,
+:root[data-layout-mode='mobile'] .receipt-ocr-review-card__actions .button,
+:root[data-layout-mode='mobile'] .household-aggregate-header__actions .button,
+:root[data-layout-mode='mobile'] .household-calendar-layout-toolbar--inline .household-calendar-layout-toolbar__actions .button,
+:root[data-layout-mode='mobile'] .travel-route-workspace__actions .button,
+:root[data-layout-mode='mobile'] .travel-my-map-header__actions .button,
+:root[data-layout-mode='mobile'] .travel-public-map-drawer__actions button,
+:root[data-layout-mode='mobile'] .travel-community-card__actions .button {
+  flex: 1 1 144px;
+  min-width: 0;
+  min-height: 48px;
+}
+
+:root[data-layout-mode='mobile'] .household-data-actions__menu {
+  width: min(100%, calc(100vw - 24px));
+  max-height: min(74vh, 560px);
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+:root[data-layout-mode='mobile'] .household-data-actions__menu-button {
+  justify-content: flex-start;
+  min-height: 48px;
+  text-align: left;
+}
+
+:root[data-layout-mode='mobile'] .household-floating-tools {
+  right: 12px;
+  bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+  gap: 8px;
+}
+
+:root[data-layout-mode='mobile'] .household-floating-tools__button {
+  width: 52px;
+  height: 52px;
+  min-width: 52px;
+  min-height: 52px;
+  touch-action: manipulation;
+}
+
+:root[data-layout-mode='mobile'] .travel-lightbox__actions {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+:root[data-layout-mode='mobile'] .travel-lightbox__actions .button,
+:root[data-layout-mode='mobile'] .travel-photo-card-button,
+:root[data-layout-mode='mobile'] .travel-photo-preview-button,
+:root[data-layout-mode='mobile'] .travel-photo-card-button--cluster-tile {
+  min-height: 48px;
+  touch-action: manipulation;
+}
+
+:root[data-layout-mode='mobile'] .travel-public-map-drawer__actions {
+  padding-bottom: max(10px, env(safe-area-inset-bottom, 0px));
+}
+
+@media (max-width: 560px) {
+  :root[data-layout-mode='mobile'] .entry-editor__actions,
+  :root[data-layout-mode='mobile'] .receipt-ocr-review-card__actions,
+  :root[data-layout-mode='mobile'] .household-aggregate-header__actions,
+  :root[data-layout-mode='mobile'] .household-calendar-layout-toolbar--inline .household-calendar-layout-toolbar__actions,
+  :root[data-layout-mode='mobile'] .travel-route-workspace__actions,
+  :root[data-layout-mode='mobile'] .travel-my-map-header__actions,
+  :root[data-layout-mode='mobile'] .travel-public-map-drawer__actions,
+  :root[data-layout-mode='mobile'] .travel-community-card__actions {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  :root[data-layout-mode='mobile'] .entry-editor__actions .button,
+  :root[data-layout-mode='mobile'] .receipt-ocr-review-card__actions .button,
+  :root[data-layout-mode='mobile'] .household-aggregate-header__actions .button,
+  :root[data-layout-mode='mobile'] .household-calendar-layout-toolbar--inline .household-calendar-layout-toolbar__actions .button,
+  :root[data-layout-mode='mobile'] .travel-route-workspace__actions .button,
+  :root[data-layout-mode='mobile'] .travel-my-map-header__actions .button,
+  :root[data-layout-mode='mobile'] .travel-public-map-drawer__actions button,
+  :root[data-layout-mode='mobile'] .travel-community-card__actions .button {
+    width: 100%;
+  }
 }

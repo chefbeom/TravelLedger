@@ -15338,3 +15338,181 @@ textarea {
     border-radius: 18px;
   }
 }
+
+/* mobile-household-calendar-inner-fit-fix */
+:root[data-layout-mode='mobile'] .household-calendar-control-panel,
+:root[data-layout-mode='mobile'] .household-calendar-control-panel__header,
+:root[data-layout-mode='mobile'] .household-calendar-header-actions,
+:root[data-layout-mode='mobile'] .household-calendar-layout-toolbar,
+:root[data-layout-mode='mobile'] .household-calendar-layout-toolbar__status,
+:root[data-layout-mode='mobile'] .household-calendar-layout-toolbar__actions {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+}
+
+:root[data-layout-mode='mobile'] .household-calendar-control-panel__header,
+:root[data-layout-mode='mobile'] .household-calendar-header-actions,
+:root[data-layout-mode='mobile'] .household-calendar-layout-toolbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: stretch;
+  gap: 10px;
+}
+
+:root[data-layout-mode='mobile'] .household-calendar-layout-toolbar__status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+}
+
+:root[data-layout-mode='mobile'] .household-calendar-layout-toolbar__status strong,
+:root[data-layout-mode='mobile'] .household-calendar-layout-toolbar__status span,
+:root[data-layout-mode='mobile'] .household-entry-panel__heading h2,
+:root[data-layout-mode='mobile'] .household-entry-panel__date-badge {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: keep-all;
+}
+
+:root[data-layout-mode='mobile'] .household-calendar-layout-toolbar__actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+:root[data-layout-mode='mobile'] .household-calendar-layout-toolbar__actions .button,
+:root[data-layout-mode='mobile'] .household-entry-panel .button,
+:root[data-layout-mode='mobile'] .receipt-ocr-panel__actions .button,
+:root[data-layout-mode='mobile'] .receipt-ocr-result__actions .button {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  min-height: 46px;
+  white-space: normal;
+  line-height: 1.25;
+}
+
+:root[data-layout-mode='mobile'] .household-entry-panel .panel__header,
+:root[data-layout-mode='mobile'] .receipt-ocr-panel__header,
+:root[data-layout-mode='mobile'] .receipt-ocr-result__summary,
+:root[data-layout-mode='mobile'] .receipt-ocr-result__actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: stretch;
+  gap: 10px;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+}
+
+:root[data-layout-mode='mobile'] .receipt-ocr-panel,
+:root[data-layout-mode='mobile'] .receipt-ocr-panel__message,
+:root[data-layout-mode='mobile'] .receipt-ocr-result__summary,
+:root[data-layout-mode='mobile'] .receipt-ocr-result__summary *,
+:root[data-layout-mode='mobile'] .receipt-ocr-panel__header * {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: keep-all;
+}
+
+:root[data-layout-mode='mobile'] .household-calendar-layout-item--calendar .calendar,
+:root[data-layout-mode='mobile'] .household-calendar-layout-item--calendar .calendar__body,
+:root[data-layout-mode='mobile'] .household-calendar-layout-item--calendar .calendar__row,
+:root[data-layout-mode='mobile'] .household-calendar-layout-item--calendar .calendar__content {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
+}
+
+:root[data-layout-mode='mobile'] .household-calendar-layout-item--calendar .calendar__day-head,
+:root[data-layout-mode='mobile'] .household-calendar-layout-item--calendar .calendar__day-stamp,
+:root[data-layout-mode='mobile'] .household-calendar-layout-item--calendar .calendar__day-stamp strong,
+:root[data-layout-mode='mobile'] .household-calendar-layout-item--calendar .calendar__day-stamp span {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+@media (max-width: 430px) {
+  :root[data-layout-mode='mobile'] .household-calendar-layout-toolbar__actions {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  :root[data-layout-mode='mobile'] .household-calendar-control-panel {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+
+  :root[data-layout-mode='mobile'] .household-entry-panel .panel__header {
+    gap: 8px;
+  }
+}
+
+/* mobile-household-calendar-order-fallback */
+:root[data-layout-mode='mobile'] .household-calendar-layout-grid > .grid-stack-item:not(.household-calendar-layout-item--quick-entry):not(.household-calendar-layout-item--aggregate):not(.household-calendar-layout-item--sheet) {
+  order: 2 !important;
+}
+
+:root[data-layout-mode='mobile'] .household-calendar-layout-grid > .grid-stack-item:not(.household-calendar-layout-item--quick-entry):not(.household-calendar-layout-item--aggregate):not(.household-calendar-layout-item--sheet) .panel,
+:root[data-layout-mode='mobile'] .household-calendar-layout-grid > .grid-stack-item:not(.household-calendar-layout-item--quick-entry):not(.household-calendar-layout-item--aggregate):not(.household-calendar-layout-item--sheet) .calendar,
+:root[data-layout-mode='mobile'] .household-calendar-layout-grid > .grid-stack-item:not(.household-calendar-layout-item--quick-entry):not(.household-calendar-layout-item--aggregate):not(.household-calendar-layout-item--sheet) .calendar__body,
+:root[data-layout-mode='mobile'] .household-calendar-layout-grid > .grid-stack-item:not(.household-calendar-layout-item--quick-entry):not(.household-calendar-layout-item--aggregate):not(.household-calendar-layout-item--sheet) .calendar__content {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
+}
+
+:root[data-layout-mode='mobile'] .household-calendar-layout-grid > .grid-stack-item:not(.household-calendar-layout-item--quick-entry):not(.household-calendar-layout-item--aggregate):not(.household-calendar-layout-item--sheet) .calendar__day {
+  min-width: 0;
+  max-width: 100%;
+}
+
+/* mobile-household-calendar-viewport-fit */
+:root[data-layout-mode='mobile'] .household-calendar-workspace,
+:root[data-layout-mode='mobile'] .household-calendar-workspace * {
+  box-sizing: border-box;
+}
+
+:root[data-layout-mode='mobile'] .household-calendar-workspace,
+:root[data-layout-mode='mobile'] .household-calendar-workspace .panel,
+:root[data-layout-mode='mobile'] .household-calendar-workspace .panel__header,
+:root[data-layout-mode='mobile'] .household-calendar-workspace .panel__body,
+:root[data-layout-mode='mobile'] .household-calendar-workspace .field,
+:root[data-layout-mode='mobile'] .household-calendar-workspace input,
+:root[data-layout-mode='mobile'] .household-calendar-workspace select,
+:root[data-layout-mode='mobile'] .household-calendar-workspace textarea {
+  max-width: 100%;
+  min-width: 0;
+}
+
+:root[data-layout-mode='mobile'] .household-calendar-workspace {
+  width: 100%;
+  overflow-x: clip;
+}
+
+:root[data-layout-mode='mobile'] .household-calendar-workspace .panel__badge,
+:root[data-layout-mode='mobile'] .household-calendar-workspace .button,
+:root[data-layout-mode='mobile'] .household-calendar-workspace label,
+:root[data-layout-mode='mobile'] .household-calendar-workspace p,
+:root[data-layout-mode='mobile'] .household-calendar-workspace span,
+:root[data-layout-mode='mobile'] .household-calendar-workspace strong {
+  max-width: 100%;
+}
+
+:root[data-layout-mode='mobile'] .household-calendar-workspace .button {
+  overflow-wrap: anywhere;
+  word-break: keep-all;
+}
+
+@supports not (overflow: clip) {
+  :root[data-layout-mode='mobile'] .household-calendar-workspace {
+    overflow-x: hidden;
+  }
+}

@@ -15934,3 +15934,32 @@ textarea {
     font-size: 0.62rem !important;
   }
 }
+
+/* mobile-household-sheet-card-label-encoding-fix */
+:root[data-layout-mode='mobile'] .household-sheet-panel .sheet-table td:nth-child(2)::before {
+  content: "\C2DC \AC04" !important;
+}
+
+:root[data-layout-mode='mobile'] .household-sheet-panel .sheet-table td:nth-child(3)::before {
+  content: "\AD6C \BD84" !important;
+}
+
+:root[data-layout-mode='mobile'] .household-sheet-panel .sheet-table td.sheet-table__title::before {
+  content: "\C81C \BAA9" !important;
+}
+
+:root[data-layout-mode='mobile'] .household-sheet-panel .sheet-table td.sheet-table__category::before {
+  content: "\CE74 \D14C \ACE0 \B9AC" !important;
+}
+
+:root[data-layout-mode='mobile'] .household-sheet-panel .sheet-table td:nth-child(6)::before {
+  content: "\ACB0 \C81C \C218 \B2E8" !important;
+}
+
+:root[data-layout-mode='mobile'] .household-sheet-panel .sheet-table td.sheet-table__amount::before {
+  content: "\AE08 \C561" !important;
+}
+
+:root[data-layout-mode='mobile'] .household-sheet-panel .sheet-table td.sheet-table__memo::before {
+  content: "\BA54 \BAA8" !important;
+}

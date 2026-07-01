@@ -16575,3 +16575,67 @@ textarea {
     order: -1;
   }
 }
+/* Default theme contrast safety net for light dialogs and cards */
+:root:not([data-theme='toss']) .travel-modal__dialog,
+:root:not([data-theme='toss']) .receipt-ocr-modal__dialog,
+:root:not([data-theme='toss']) .travel-my-photos__modal-info,
+:root:not([data-theme='toss']) .profile-security-modal,
+:root:not([data-theme='toss']) .admin-workspace .travel-modal__dialog {
+  color: var(--text, #191f28) !important;
+}
+
+:root:not([data-theme='toss']) .travel-modal__dialog h1,
+:root:not([data-theme='toss']) .travel-modal__dialog h2,
+:root:not([data-theme='toss']) .travel-modal__dialog h3,
+:root:not([data-theme='toss']) .travel-modal__dialog h4,
+:root:not([data-theme='toss']) .receipt-ocr-modal__dialog h1,
+:root:not([data-theme='toss']) .receipt-ocr-modal__dialog h2,
+:root:not([data-theme='toss']) .receipt-ocr-modal__dialog h3,
+:root:not([data-theme='toss']) .profile-security-modal h1,
+:root:not([data-theme='toss']) .profile-security-modal h2,
+:root:not([data-theme='toss']) .profile-security-modal h3,
+:root:not([data-theme='toss']) .admin-workspace .travel-modal__dialog h1,
+:root:not([data-theme='toss']) .admin-workspace .travel-modal__dialog h2,
+:root:not([data-theme='toss']) .admin-workspace .travel-modal__dialog h3,
+:root:not([data-theme='toss']) .admin-workspace .travel-modal__dialog .field__label,
+:root:not([data-theme='toss']) .admin-workspace .travel-modal__dialog .support-inquiry-meta strong,
+:root:not([data-theme='toss']) .admin-workspace .travel-modal__dialog .support-inquiry-reply__header strong {
+  color: var(--text, #191f28) !important;
+}
+
+:root:not([data-theme='toss']) .travel-modal__dialog p,
+:root:not([data-theme='toss']) .travel-modal__dialog small,
+:root:not([data-theme='toss']) .travel-modal__dialog .field__hint,
+:root:not([data-theme='toss']) .travel-modal__dialog .form-hint,
+:root:not([data-theme='toss']) .receipt-ocr-modal__dialog p,
+:root:not([data-theme='toss']) .receipt-ocr-modal__dialog small,
+:root:not([data-theme='toss']) .profile-security-modal p,
+:root:not([data-theme='toss']) .profile-security-modal small,
+:root:not([data-theme='toss']) .admin-workspace .travel-modal__dialog p,
+:root:not([data-theme='toss']) .admin-workspace .travel-modal__dialog small,
+:root:not([data-theme='toss']) .admin-workspace .travel-modal__dialog .field__hint,
+:root:not([data-theme='toss']) .admin-workspace .travel-modal__dialog .form-hint,
+:root:not([data-theme='toss']) .admin-workspace .travel-modal__dialog .panel__empty,
+:root:not([data-theme='toss']) .admin-workspace .travel-modal__dialog .support-inquiry-reply__header small,
+:root:not([data-theme='toss']) .admin-workspace .travel-modal__dialog .support-inquiry-reply p,
+:root:not([data-theme='toss']) .admin-workspace .travel-modal__dialog .support-inquiry-content {
+  color: var(--text-soft, #4e5968) !important;
+}
+
+:root:not([data-theme='toss']) .admin-workspace .travel-modal__dialog .field input,
+:root:not([data-theme='toss']) .admin-workspace .travel-modal__dialog .field select,
+:root:not([data-theme='toss']) .admin-workspace .travel-modal__dialog textarea {
+  background: var(--field-bg, #ffffff) !important;
+  border-color: var(--field-border, #d8dee8) !important;
+  color: var(--text, #191f28) !important;
+}
+
+:root:not([data-theme='toss']) .admin-workspace .travel-modal__dialog .field input::placeholder,
+:root:not([data-theme='toss']) .admin-workspace .travel-modal__dialog textarea::placeholder {
+  color: var(--text-muted, #8b95a1) !important;
+}
+
+:root:not([data-theme='toss']) .admin-workspace .travel-modal__dialog .button--ghost,
+:root:not([data-theme='toss']) .admin-workspace .travel-modal__dialog .button--secondary {
+  color: var(--text, #191f28) !important;
+}

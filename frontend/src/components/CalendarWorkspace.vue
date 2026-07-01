@@ -294,6 +294,7 @@ const isAggregateEditMode = ref(false)
 const isAggregatePanelEnabled = ref(true)
 const isReceiptOcrPanelEnabled = ref(true)
 const isLayoutEditMode = ref(false)
+const isMobileLayoutMode = ref(false)
 const quickEntryPanelRef = ref(null)
 const ledgerSheetRef = ref(null)
 const quickEntryScrollTargetRef = ref(null)
@@ -310,6 +311,7 @@ const entryTimeText = ref('00:00')
 let calendarResizeObserver = null
 let layoutGrid = null
 let layoutGridResizeObserver = null
+let layoutModeObserver = null
 let layoutGridRebuildTimer = 0
 let layoutRemoteHydrationSequence = 0
 let layoutRemoteSaveTimer = 0
@@ -680,6 +682,12 @@ const calendarLayoutGridStyle = computed(() => ({
   '--calendar-layout-grid-gap': `${CALENDAR_LAYOUT_GRID_GAP}px`,
   '--calendar-layout-grid-margin': `${CALENDAR_LAYOUT_GRID_MARGIN}px`,
 }))
+const mobileCalendarPanelOrder = {
+  'quick-entry': 1,
+  calendar: 2,
+  aggregate: 3,
+  sheet: 4,
+}
 const entryDateMin = computed(() => props.entryDateLimit?.min || '')
 const entryDateMax = computed(() => props.entryDateLimit?.max || '')
 
@@ -857,11 +865,21 @@ onMounted(() => {
   }
 
   hydrateCalendarPanelLayout()
+  isMobileLayoutMode.value = readIsMobileLayoutMode()
+  if (typeof MutationObserver !== 'undefined') {
+    layoutModeObserver = new MutationObserver(syncMobileLayoutMode)
+    layoutModeObserver.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['data-layout-mode'],
+    })
+  }
   const viewPreferenceSequence = hydrateCalendarViewPreferencesFromLocal()
   hydrateRemoteCalendarViewPreferences(viewPreferenceSequence, calendarViewPreferencePayload())
 
   nextTick(() => {
-    initLayoutGrid()
+    if (!isMobileLayoutMode.value) {
+      initLayoutGrid()
+    }
     if (typeof ResizeObserver !== 'undefined') {
       layoutGridResizeObserver = new ResizeObserver(() => {
         updateLayoutCellHeight()
@@ -895,6 +913,11 @@ onBeforeUnmount(() => {
   saveCalendarViewPreferencesRemoteNow()
   layoutGridResizeObserver?.disconnect()
   destroyLayoutGrid()
+
+  if (layoutModeObserver) {
+    layoutModeObserver.disconnect()
+    layoutModeObserver = null
+  }
 
   if (calendarResizeObserver) {
     calendarResizeObserver.disconnect()
@@ -1388,6 +1411,10 @@ function calendarPanelAttrs(panel) {
 }
 
 function updateLayoutCellHeight() {
+  if (isMobileLayoutMode.value) {
+    return
+  }
+
   const layoutGridElement = resolveElementRef(layoutGridRef.value)
   const width = layoutGridElement?.clientWidth || layoutGridElement?.parentElement?.clientWidth || 0
   if (!width || !layoutGrid) {
@@ -1430,6 +1457,43 @@ function handleLayoutGridStop() {
   applyCalendarPanelLayout(readLayoutGridSnapshot(), { immediate: true })
 }
 
+function readIsMobileLayoutMode() {
+  if (typeof document === 'undefined') {
+    return false
+  }
+
+  return document.documentElement?.getAttribute('data-layout-mode') === 'mobile'
+}
+
+function syncMobileLayoutMode() {
+  const nextIsMobile = readIsMobileLayoutMode()
+  if (isMobileLayoutMode.value === nextIsMobile) {
+    return
+  }
+
+  isMobileLayoutMode.value = nextIsMobile
+  if (nextIsMobile) {
+    if (isLayoutEditMode.value) {
+      isLayoutEditMode.value = false
+    }
+    destroyLayoutGrid()
+    refreshCalendarMeasurements()
+    return
+  }
+
+  queueLayoutGridRebuild()
+}
+
+function calendarPanelMobileStyle(panel) {
+  if (!isMobileLayoutMode.value) {
+    return null
+  }
+
+  return {
+    '--mobile-calendar-panel-order': String(mobileCalendarPanelOrder[panel.id] ?? 5),
+  }
+}
+
 function destroyLayoutGrid() {
   if (!layoutGrid) {
     return
@@ -1442,6 +1506,11 @@ function destroyLayoutGrid() {
 }
 
 function initLayoutGrid() {
+  if (isMobileLayoutMode.value) {
+    destroyLayoutGrid()
+    return
+  }
+
   const layoutGridElement = resolveElementRef(layoutGridRef.value)
   if (!layoutGridElement) {
     return
@@ -1477,6 +1546,12 @@ function queueLayoutGridRebuild() {
     return
   }
 
+  if (isMobileLayoutMode.value) {
+    destroyLayoutGrid()
+    refreshCalendarMeasurements()
+    return
+  }
+
   if (layoutGridRebuildTimer) {
     window.clearTimeout(layoutGridRebuildTimer)
   }
@@ -1490,6 +1565,10 @@ function queueLayoutGridRebuild() {
 }
 
 function toggleLayoutEditMode() {
+  if (isMobileLayoutMode.value) {
+    return
+  }
+
   const isFinishingEdit = isLayoutEditMode.value
   isLayoutEditMode.value = !isLayoutEditMode.value
   if (isFinishingEdit) {
@@ -2119,7 +2198,7 @@ defineExpose({
               <button type="button" class="button button--secondary" @click="resetCalendarPanelLayout">
                 기본 배치
               </button>
-              <button type="button" class="button button--primary" @click="toggleLayoutEditMode">
+              <button type="button" class="button button--primary" :disabled="isMobileLayoutMode" @click="toggleLayoutEditMode">
                 {{ isLayoutEditMode ? '배치 완료' : '배치 편집' }}
               </button>
             </div>
@@ -2229,29 +2308,42 @@ defineExpose({
 
     <section
       class="household-calendar-layout-board"
-      :class="{ 'household-calendar-layout-board--editing': isLayoutEditMode }"
+      :class="{
+        'household-calendar-layout-board--editing': isLayoutEditMode && !isMobileLayoutMode,
+        'household-calendar-layout-board--mobile-flow': isMobileLayoutMode,
+      }"
       :style="calendarLayoutGridStyle"
     >
-      <div v-if="isLayoutEditMode" class="household-calendar-layout-guide" aria-hidden="true">
+      <div v-if="isLayoutEditMode && !isMobileLayoutMode" class="household-calendar-layout-guide" aria-hidden="true">
         <span v-for="index in calendarLayoutGuideCellCount" :key="index"></span>
       </div>
 
-      <div ref="layoutGridRef" class="grid-stack household-calendar-layout-grid">
+      <div
+        ref="layoutGridRef"
+        class="household-calendar-layout-grid"
+        :class="{
+          'grid-stack': !isMobileLayoutMode,
+          'household-calendar-layout-grid--mobile-flow': isMobileLayoutMode,
+        }"
+      >
         <div
           v-for="panel in calendarLayoutPanels"
           :key="panel.id"
-          class="grid-stack-item"
-          :class="`household-calendar-layout-item--${panel.id}`"
+          :class="[
+            isMobileLayoutMode ? 'household-calendar-layout-flow-item' : 'grid-stack-item',
+            `household-calendar-layout-item--${panel.id}`,
+          ]"
+          :style="calendarPanelMobileStyle(panel)"
           :gs-id="panel.id"
           :data-calendar-panel-id="panel.id"
-          :gs-x="calendarPanelAttrs(panel).x"
-          :gs-y="calendarPanelAttrs(panel).y"
-          :gs-w="calendarPanelAttrs(panel).w"
-          :gs-h="calendarPanelAttrs(panel).h"
-          :gs-min-w="calendarPanelAttrs(panel).minW"
-          :gs-min-h="calendarPanelAttrs(panel).minH"
-          :gs-max-w="calendarPanelAttrs(panel).maxW"
-          :gs-max-h="calendarPanelAttrs(panel).maxH"
+          :gs-x="isMobileLayoutMode ? null : calendarPanelAttrs(panel).x"
+          :gs-y="isMobileLayoutMode ? null : calendarPanelAttrs(panel).y"
+          :gs-w="isMobileLayoutMode ? null : calendarPanelAttrs(panel).w"
+          :gs-h="isMobileLayoutMode ? null : calendarPanelAttrs(panel).h"
+          :gs-min-w="isMobileLayoutMode ? null : calendarPanelAttrs(panel).minW"
+          :gs-min-h="isMobileLayoutMode ? null : calendarPanelAttrs(panel).minH"
+          :gs-max-w="isMobileLayoutMode ? null : calendarPanelAttrs(panel).maxW"
+          :gs-max-h="isMobileLayoutMode ? null : calendarPanelAttrs(panel).maxH"
           :id="panel.id === 'quick-entry'
             ? 'household-calendar-entry-editor-target'
             : panel.id === 'sheet'
@@ -2260,7 +2352,7 @@ defineExpose({
           :ref="(element) => setCalendarPanelScrollTarget(panel.id, element)"
           tabindex="-1"
         >
-          <div class="grid-stack-item-content">
+          <div :class="isMobileLayoutMode ? 'household-calendar-layout-flow-content' : 'grid-stack-item-content'">
             <div
               class="household-calendar-layout-panel-shell"
               :class="{ 'household-calendar-layout-panel-shell--editing': isLayoutEditMode }"

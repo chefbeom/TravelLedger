@@ -15516,3 +15516,73 @@ textarea {
     overflow-x: hidden;
   }
 }
+
+/* mobile-household-calendar-gridstack-runtime-fix */
+:root[data-layout-mode='mobile'] .household-calendar-layout-board--mobile-flow {
+  overflow: visible !important;
+}
+
+:root[data-layout-mode='mobile'] .household-calendar-layout-grid--mobile-flow {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: stretch !important;
+  gap: 16px !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+  height: auto !important;
+  min-height: 0 !important;
+  overflow: visible !important;
+}
+
+:root[data-layout-mode='mobile'] .household-calendar-layout-flow-item {
+  order: var(--mobile-calendar-panel-order, 5) !important;
+  position: relative !important;
+  inset: auto !important;
+  left: auto !important;
+  top: auto !important;
+  right: auto !important;
+  bottom: auto !important;
+  transform: none !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+  height: auto !important;
+  min-height: 0 !important;
+  margin: 0 !important;
+  overflow: visible !important;
+  z-index: auto !important;
+}
+
+:root[data-layout-mode='mobile'] .household-calendar-layout-flow-content,
+:root[data-layout-mode='mobile'] .household-calendar-layout-flow-item .household-calendar-layout-panel-shell {
+  position: relative !important;
+  inset: auto !important;
+  left: auto !important;
+  top: auto !important;
+  right: auto !important;
+  bottom: auto !important;
+  transform: none !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+  height: auto !important;
+  min-height: 0 !important;
+  overflow: visible !important;
+}
+
+:root[data-layout-mode='mobile'] .household-calendar-layout-flow-item .household-calendar-layout-panel-shell {
+  container-type: inline-size;
+}
+
+:root[data-layout-mode='mobile'] .household-calendar-layout-flow-item .household-calendar-layout-panel-shell > .panel {
+  height: auto !important;
+  min-height: 0 !important;
+  overflow: hidden;
+}
+
+@media (max-width: 430px) {
+  :root[data-layout-mode='mobile'] .household-calendar-layout-grid--mobile-flow {
+    gap: 12px !important;
+  }
+}

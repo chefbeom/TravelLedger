@@ -15586,3 +15586,218 @@ textarea {
     gap: 12px !important;
   }
 }
+
+
+/* mobile-household-calendar-visible-month-and-sheet-cards */
+:root[data-layout-mode='mobile'] .household-calendar-layout-item--calendar .household-calendar-panel--content-only,
+:root[data-layout-mode='mobile'] .household-calendar-layout-item--calendar .household-calendar-panel {
+  display: block !important;
+  container-type: inline-size !important;
+  height: auto !important;
+  min-height: 0 !important;
+  overflow: visible !important;
+}
+
+:root[data-layout-mode='mobile'] .household-calendar-layout-item--calendar .calendar-shell,
+:root[data-layout-mode='mobile'] .household-calendar-layout-item--calendar .calendar-scale-frame,
+:root[data-layout-mode='mobile'] .household-calendar-layout-item--calendar .calendar-scale-content,
+:root[data-layout-mode='mobile'] .household-calendar-layout-item--calendar .calendar,
+:root[data-layout-mode='mobile'] .household-calendar-layout-item--calendar .calendar__weeks {
+  height: auto !important;
+  min-height: 0 !important;
+  overflow: visible !important;
+}
+
+:root[data-layout-mode='mobile'] .household-calendar-layout-item--calendar .calendar-shell {
+  flex: none !important;
+  width: 100% !important;
+  padding-bottom: 0 !important;
+}
+
+:root[data-layout-mode='mobile'] .household-calendar-layout-item--calendar .calendar__weekdays,
+:root[data-layout-mode='mobile'] .household-calendar-layout-item--calendar .calendar__week {
+  display: grid !important;
+  grid-template-columns: repeat(7, minmax(0, 1fr)) !important;
+  width: 100% !important;
+  min-width: 0 !important;
+}
+
+:root[data-layout-mode='mobile'] .household-calendar-layout-item--calendar .calendar__weeks {
+  display: grid !important;
+  grid-auto-rows: minmax(92px, auto) !important;
+  gap: 6px !important;
+}
+
+:root[data-layout-mode='mobile'] .household-calendar-layout-item--calendar .calendar__week {
+  gap: 6px !important;
+  min-height: 0 !important;
+}
+
+:root[data-layout-mode='mobile'] .household-calendar-layout-item--calendar .calendar__day {
+  height: auto !important;
+  min-height: 92px !important;
+  overflow: hidden !important;
+}
+
+:root[data-layout-mode='mobile'] .household-sheet-panel,
+:root[data-layout-mode='mobile'] .household-sheet-table-wrap {
+  height: auto !important;
+  max-height: none !important;
+  overflow: visible !important;
+}
+
+:root[data-layout-mode='mobile'] .household-sheet-table {
+  display: block !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  border-collapse: separate !important;
+  border-spacing: 0 !important;
+}
+
+:root[data-layout-mode='mobile'] .household-sheet-table colgroup,
+:root[data-layout-mode='mobile'] .household-sheet-table thead {
+  display: none !important;
+}
+
+:root[data-layout-mode='mobile'] .household-sheet-table tbody {
+  display: grid !important;
+  gap: 10px !important;
+  width: 100% !important;
+  min-width: 0 !important;
+}
+
+:root[data-layout-mode='mobile'] .household-sheet-table tr {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) !important;
+  gap: 0 !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  padding: 12px !important;
+  border: 1px solid var(--calendar-panel-border) !important;
+  border-radius: 16px !important;
+  background: rgba(15, 23, 42, 0.38) !important;
+}
+
+:root[data-layout-mode='mobile'] .household-sheet-panel .sheet-table td {
+  display: flex !important;
+  align-items: flex-start !important;
+  justify-content: space-between !important;
+  gap: 12px !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  height: auto !important;
+  padding: 7px 0 !important;
+  border: 0 !important;
+  overflow: visible !important;
+  text-align: right !important;
+  text-overflow: clip !important;
+  white-space: normal !important;
+}
+
+:root[data-layout-mode='mobile'] .household-sheet-panel .sheet-table td::before {
+  flex: 0 0 5.8rem;
+  color: var(--muted);
+  content: '';
+  font-size: 0.82rem;
+  font-weight: 800;
+  line-height: 1.35;
+  text-align: left;
+}
+
+:root[data-layout-mode='mobile'] .household-sheet-panel .sheet-table td.sheet-table__select {
+  display: none !important;
+}
+
+:root[data-layout-mode='mobile'] .household-sheet-panel .sheet-table td:nth-child(2)::before {
+  content: '??';
+}
+
+:root[data-layout-mode='mobile'] .household-sheet-panel .sheet-table td:nth-child(3)::before {
+  content: '??';
+}
+
+:root[data-layout-mode='mobile'] .household-sheet-panel .sheet-table td.sheet-table__title::before {
+  content: '??';
+}
+
+:root[data-layout-mode='mobile'] .household-sheet-panel .sheet-table td.sheet-table__category::before {
+  content: '????';
+}
+
+:root[data-layout-mode='mobile'] .household-sheet-panel .sheet-table td:nth-child(6)::before {
+  content: '????';
+}
+
+:root[data-layout-mode='mobile'] .household-sheet-panel .sheet-table td.sheet-table__amount::before {
+  content: '??';
+}
+
+:root[data-layout-mode='mobile'] .household-sheet-panel .sheet-table td.sheet-table__memo::before {
+  content: '??';
+}
+
+:root[data-layout-mode='mobile'] .household-sheet-panel .sheet-table__title,
+:root[data-layout-mode='mobile'] .household-sheet-panel .sheet-table__category,
+:root[data-layout-mode='mobile'] .household-sheet-panel .sheet-table__memo,
+:root[data-layout-mode='mobile'] .household-sheet-panel .sheet-table__textwrap,
+:root[data-layout-mode='mobile'] .household-sheet-panel .sheet-table__amount {
+  min-width: 0 !important;
+  overflow: visible !important;
+  text-overflow: clip !important;
+  white-space: normal !important;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+
+:root[data-layout-mode='mobile'] .household-sheet-panel .sheet-table__amount-stack {
+  align-items: flex-end;
+  min-width: 0;
+}
+
+:root[data-layout-mode='mobile'] .household-sheet-panel td.sheet-table__actions {
+  display: block !important;
+  padding-top: 10px !important;
+  text-align: stretch !important;
+}
+
+:root[data-layout-mode='mobile'] .household-sheet-panel td.sheet-table__actions::before {
+  display: none !important;
+}
+
+:root[data-layout-mode='mobile'] .household-sheet-panel .sheet-table__actions-inner {
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  gap: 8px !important;
+  width: 100% !important;
+}
+
+:root[data-layout-mode='mobile'] .household-sheet-panel .sheet-table__actions-inner .button {
+  width: 100% !important;
+  min-width: 0 !important;
+}
+
+:root[data-layout-mode='mobile'] .household-sheet-panel .sheet-table__empty {
+  display: block !important;
+  padding: 14px 0 !important;
+  text-align: left !important;
+}
+
+:root[data-layout-mode='mobile'] .household-sheet-panel .sheet-table__empty::before {
+  display: none !important;
+}
+
+@media (max-width: 430px) {
+  :root[data-layout-mode='mobile'] .household-calendar-layout-item--calendar .calendar__weeks {
+    grid-auto-rows: minmax(84px, auto) !important;
+    gap: 5px !important;
+  }
+
+  :root[data-layout-mode='mobile'] .household-calendar-layout-item--calendar .calendar__week {
+    gap: 5px !important;
+  }
+
+  :root[data-layout-mode='mobile'] .household-calendar-layout-item--calendar .calendar__day {
+    min-height: 84px !important;
+    padding: 6px 4px !important;
+  }
+}

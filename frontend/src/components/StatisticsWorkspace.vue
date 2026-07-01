@@ -323,6 +323,7 @@ const aiTopCategoryItems = computed(() => topAiBreakdownItems(props.aiAnalysis?.
 const aiPaymentBreakdownItems = computed(() => normalizeAiPaymentBreakdown(props.aiAnalysis?.paymentBreakdown, props.aiAnalysis?.totalExpense))
 const aiTopPaymentItems = computed(() => topAiBreakdownItems(aiPaymentBreakdownItems.value, formatAiPaymentBreakdownLabel, 3, props.aiAnalysis?.totalExpense))
 const aiComputedTopPaymentInsight = computed(() => buildComputedTopPaymentInsight())
+const aiImprovementDirectionItems = computed(() => buildAiImprovementDirectionItems())
 const aiPrintableCards = computed(() => [
   ...aiResultCards.value,
   ...buildAiFocusMetricCards(),
@@ -515,6 +516,26 @@ function buildComputedTopPaymentInsight() {
   return `지출 기준 결제수단 1위는 ${topPayment.label}이며 ${topPayment.meta}입니다. 결제수단 해석은 수입용 결제수단을 제외한 지출 집계만 기준으로 합니다.`
 }
 
+function buildAiImprovementDirectionItems() {
+  const analysis = props.aiAnalysis
+  if (!analysis) {
+    return []
+  }
+  const source = safeAiReportList('improvementActions', analysis.recommendations)
+  const explicit = source.filter((item) => /개선 방향|실행 방법|관리 수단|점검 수단|로드맵|상한|유지\/보류\/해지/.test(item))
+  const generated = []
+  if (aiTopCategoryItems.value[0]) {
+    generated.push(`개선 방향: 가장 큰 지출 축인 ${aiTopCategoryItems.value[0]} 항목은 다음 기간 예산 한도를 먼저 정하고, 필수 지출과 선택 지출을 분리해 보세요.`)
+  }
+  if (aiAbnormalReportItems.value[0]) {
+    generated.push(`실행 방법: ${aiAbnormalReportItems.value[0]} 항목은 비정기 지출로 따로 표시하고, 월 생활비 평가에서 분리해 원인을 확인하세요.`)
+  }
+  if (aiFixedReportItems.value[0]) {
+    generated.push(`관리 수단: ${aiFixedReportItems.value[0]} 항목은 유지/보류/해지 후보로 나누고, 사용 빈도와 월 금액을 함께 기록하세요.`)
+  }
+  generated.push('점검 수단: 예산 알림, 자동 분류 규칙, 비정기 지출 태그, 월말 PDF 보고서를 함께 사용해 다음 기간 개선 여부를 확인하세요.')
+  return dedupeAiItems([...explicit, ...generated])
+}
 function buildAiFocusMetricCards() {
   const focusCards = []
   const topCategory = splitAiTopBreakdownItem(aiTopCategoryItems.value[0])
@@ -637,7 +658,7 @@ function buildAiReportOutline() {
     '데이터 근거 및 우선 조치: 실제 집계값과 먼저 확인할 실행 항목을 확인합니다.',
     '종합 판단 및 체크리스트: 결론과 사용자가 직접 검토할 항목을 확인합니다.',
     '방법론 및 품질 한계: 계산 기준, 비교 기준, 해석 제한 사항을 확인합니다.',
-    '상세 분석: 보고서, 결제방법, 소비 패턴, 고정/이상 지출, 비교 분석을 세부적으로 검토합니다.',
+    '상세 분석: 보고서, 결제방법, 소비 패턴, 개선 방향/방법/수단, 고정/이상 지출, 비교 분석을 세부적으로 검토합니다.',
   ]
 }
 function buildAiMethodology(analysis) {
@@ -802,6 +823,7 @@ const AI_PRINT_SECTION_LIMITS = {
   fixed: { paragraphs: 1, items: 6, paragraphLength: 220, itemLength: 220 },
   abnormal: { paragraphs: 1, items: 6, paragraphLength: 220, itemLength: 220 },
   comparison: { paragraphs: 1, items: 5, paragraphLength: 220, itemLength: 220 },
+  improvementRoadmap: { paragraphs: 1, items: 12, paragraphLength: 260, itemLength: 260 },
 }
 
 function compactAiPrintableSection(section) {

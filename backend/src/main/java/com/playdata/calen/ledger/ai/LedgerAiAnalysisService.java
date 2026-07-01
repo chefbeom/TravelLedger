@@ -858,6 +858,22 @@ public class LedgerAiAnalysisService {
         return actions;
     }
 
+    private List<String> buildFutureImprovementDirections(AnalysisDataset dataset, List<RecurringExpenseCandidatePayload> recurringCandidates) {
+        List<String> directions = new ArrayList<>();
+        BigDecimal totalExpense = nullToZero(dataset.overview().expense());
+        dataset.categoryBreakdown().stream().findFirst().ifPresent(item -> {
+            BigDecimal target = nullToZero(item.totalAmount()).multiply(BigDecimal.valueOf(0.9)).setScale(0, RoundingMode.HALF_UP);
+            directions.add("개선 방향: " + categoryLabel(item.groupName(), item.detailName()) + "처럼 비중이 큰 지출 축은 다음 기간 목표 금액을 " + formatWon(target) + " 안팎으로 낮춰 관리하세요.");
+        });
+        dataset.topExpenses().stream().findFirst().ifPresent(item -> directions.add("실행 방법: " + item.title() + " 같은 고액 지출은 생활비와 분리해 '비정기 지출'로 표시하고, 월 한도보다 분기 한도로 관리하세요."));
+        recurringCandidates.stream().filter(this::isSubscriptionCandidate).findFirst().ifPresent(item -> directions.add("관리 수단: " + item.title() + " 같은 구독성 지출은 사용 빈도, 월 금액, 대체 가능성을 기준으로 유지/보류/해지 후보로 나누세요."));
+        recurringCandidates.stream().filter(this::isRecurringVariableCandidate).findFirst().ifPresent(item -> directions.add("관리 수단: " + item.title() + " 같은 반복성 변동비는 월 상한액과 결제 횟수 제한을 함께 설정하고, 초과 시 다음 달로 미루는 규칙을 두세요."));
+        if (totalExpense.compareTo(BigDecimal.ZERO) > 0) {
+            BigDecimal alertLine = totalExpense.multiply(BigDecimal.valueOf(0.8)).setScale(0, RoundingMode.HALF_UP);
+            directions.add("점검 수단: 다음 분석 기간에는 총지출이 " + formatWon(alertLine) + "에 도달하면 중간 점검 알림을 띄우고, 월말 PDF 보고서에서 예산 초과 원인을 확인하세요.");
+        }
+        return directions;
+    }
     private boolean isSubscriptionCandidate(RecurringExpenseCandidatePayload item) {
         String text = recurringText(item);
         return containsAny(text, List.of("구독", "subscription", "subscribe", "멤버십", "프리미엄", "라프텔", "톡서랍", "넷플릭스", "유튜브", "웨이브", "티빙", "왓챠", "디즈니", "클라우드", "icloud", "apple", "google one", "쿠팡와우"));

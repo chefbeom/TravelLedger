@@ -33,6 +33,7 @@ const props = defineProps({
 })
 
 const PAGE_SIZE = 10
+const AI_CONTROL_PRESETS_STORAGE_KEY = 'travelledger:admin-ai-control-presets:v1'
 
 const state = reactive({
   loading: true,
@@ -198,6 +199,44 @@ const userPageCount = computed(() => Math.max(1, Math.ceil(state.users.length / 
 const pagedInvites = computed(() => paginate(state.recentInvites, state.invitePage))
 const invitePageCount = computed(() => Math.max(1, Math.ceil(state.recentInvites.length / PAGE_SIZE)))
 
+const adminPanelCards = computed(() => [
+  {
+    key: 'ops',
+    eyebrow: 'AI / Server',
+    title: 'AI 및 서버 제어판',
+    description: 'LM Studio 모델, AI 기능, 데이터 서버와 스토리지 상태를 관리합니다.',
+    metric: state.opsControl?.aiServer?.reachable ? 'AI 정상' : 'AI 점검 필요',
+    detail: state.opsControl?.ai?.model || state.aiControlForm.model || '모델 미설정',
+  },
+  {
+    key: 'support',
+    eyebrow: 'Support',
+    title: '문의 관리',
+    description: '문의 메일함, 보관함, 문의 상세 확인과 답변 등록을 처리합니다.',
+    metric: `${inboxSupportInquiries.value.length}건 대기`,
+    detail: `보관 ${archivedSupportInquiries.value.length}건`,
+  },
+  {
+    key: 'access',
+    eyebrow: 'Access / Users',
+    title: '접근 및 사용자 관리',
+    description: '초대 링크, 차단 IP, 로그인 기록, 사용자 상태를 묶어서 관리합니다.',
+    metric: `${state.blockedIps.length}개 차단 IP`,
+    detail: `미사용 초대 ${state.summary?.pendingInvites ?? 0}건`,
+  },
+])
+
+function openAdminPanel(panel) {
+  state.activeAdminPanel = state.activeAdminPanel === panel ? '' : panel
+  if (panel === 'ops' && !state.opsControl && !state.loadingOpsControl) {
+    loadOpsControl()
+  }
+}
+
+function closeAdminPanel() {
+  state.activeAdminPanel = ''
+}
+
 function syncSelection(preferredId = state.selectedSupportInquiryId) {
   state.supportPages.inbox = clampPage(state.supportPages.inbox, inboxSupportInquiries.value.length)
   state.supportPages.archive = clampPage(state.supportPages.archive, archivedSupportInquiries.value.length)
@@ -245,6 +284,7 @@ function handleAdminAccessRequired(error) {
 }
 
 async function initializeAdminWorkspace() {
+  loadAiControlPresets()
   state.loading = true
   state.errorMessage = ''
   state.adminAccessError = ''
@@ -500,6 +540,61 @@ function formatFileSize(bytes) {
   return `${value >= 10 || unitIndex === 0 ? value.toFixed(0) : value.toFixed(1)} ${units[unitIndex]}`
 }
 
+function aiControlPresetKeyFor(preset) {
+  return [preset.provider, preset.model, preset.lmStudioBaseUrl, preset.lmStudioChatPath, preset.lmStudioModelsPath].join('|')
+}
+
+function readAiControlPresets() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(AI_CONTROL_PRESETS_STORAGE_KEY) || '[]')
+    return Array.isArray(parsed) ? parsed.filter((item) => item && item.key && item.lmStudioBaseUrl).slice(0, 12) : []
+  } catch {
+    return []
+  }
+}
+
+function persistAiControlPresets() {
+  localStorage.setItem(AI_CONTROL_PRESETS_STORAGE_KEY, JSON.stringify(state.aiControlPresets.slice(0, 12)))
+}
+
+function loadAiControlPresets() {
+  state.aiControlPresets = readAiControlPresets()
+}
+
+function rememberAiControlPreset(source = state.aiControlForm) {
+  if ((source.provider || 'lmstudio') !== 'lmstudio' || !source.lmStudioBaseUrl) {
+    return
+  }
+  const preset = {
+    provider: source.provider || 'lmstudio',
+    model: source.model || 'auto',
+    lmStudioBaseUrl: source.lmStudioBaseUrl,
+    lmStudioChatPath: source.lmStudioChatPath || '/v1/chat/completions',
+    lmStudioModelsPath: source.lmStudioModelsPath || '/v1/models',
+    savedAt: new Date().toISOString(),
+  }
+  preset.key = aiControlPresetKeyFor(preset)
+  state.aiControlPresets = [preset, ...state.aiControlPresets.filter((item) => item.key !== preset.key)].slice(0, 12)
+  state.aiControlPresetKey = preset.key
+  persistAiControlPresets()
+}
+
+function applyAiControlPreset() {
+  const preset = state.aiControlPresets.find((item) => item.key === state.aiControlPresetKey)
+  if (!preset) {
+    return
+  }
+  state.aiControlForm.provider = preset.provider || 'lmstudio'
+  state.aiControlForm.model = preset.model || 'auto'
+  state.aiControlForm.lmStudioBaseUrl = preset.lmStudioBaseUrl || ''
+  state.aiControlForm.lmStudioChatPath = preset.lmStudioChatPath || '/v1/chat/completions'
+  state.aiControlForm.lmStudioModelsPath = preset.lmStudioModelsPath || '/v1/models'
+}
+
+function formatAiControlPreset(preset) {
+  const saved = preset.savedAt ? formatDateTime(preset.savedAt) : '저장 시각 없음'
+  return `${preset.model || 'auto'} · ${preset.lmStudioBaseUrl} · ${saved}`
+}
 function syncAiControlForm(control = state.opsControl) {
   const ai = control?.ai
   if (!ai) {
@@ -603,6 +698,7 @@ async function handleSaveAiControl() {
     syncAiControlForm()
     syncDataControlForm()
     markOpsControlChecked()
+    rememberAiControlPreset()
     state.opsControlMessage = 'AI 설정이 적용되었습니다. 설정 저장소 상태를 확인하세요.'
   } catch (error) {
     if (!handleAdminAccessRequired(error)) {
@@ -1076,7 +1172,49 @@ onMounted(initializeAdminWorkspace)
         </article>
       </section>
 
-      <section class="panel">
+      <section class="admin-command-center">
+        <div class="admin-command-center__header">
+          <div>
+            <span class="admin-command-center__eyebrow">Admin Control Hub</span>
+            <h2>관리 기능 요약 대시보드</h2>
+            <p>필요한 기능을 선택하면 아래에 해당 관리 페이지가 열립니다. 같은 버튼을 다시 누르면 접힙니다.</p>
+          </div>
+          <div class="admin-toolbar">
+            <button class="button button--ghost" type="button" :disabled="state.loading" @click="loadDashboard">
+              {{ state.loading ? '불러오는 중...' : '요약 새로고침' }}
+            </button>
+          </div>
+        </div>
+        <div class="admin-command-grid">
+          <article
+            v-for="panel in adminPanelCards"
+            :key="panel.key"
+            class="admin-command-card"
+            :class="{ 'is-active': state.activeAdminPanel === panel.key }"
+          >
+            <span>{{ panel.eyebrow }}</span>
+            <strong>{{ panel.title }}</strong>
+            <p>{{ panel.description }}</p>
+            <div class="admin-command-card__meta">
+              <b>{{ panel.metric }}</b>
+              <small>{{ panel.detail }}</small>
+            </div>
+            <button class="button button--primary" type="button" @click="openAdminPanel(panel.key)">
+              {{ state.activeAdminPanel === panel.key ? '닫기' : '열기' }}
+            </button>
+          </article>
+        </div>
+      </section>
+
+      <section v-if="!state.activeAdminPanel" class="panel admin-empty-state">
+        <div>
+          <strong>관리할 기능을 선택하세요.</strong>
+          <p>AI/서버, 문의, 접근/사용자 관리가 기능별로 분리되어 있습니다. 위 카드에서 필요한 관리 영역을 열어 작업하세요.</p>
+        </div>
+      </section>
+
+      <template v-if="state.activeAdminPanel === 'ops'">
+      <section class="panel admin-panel-section">
         <div class="panel__header">
           <div>
             <h2>AI 및 서버 제어판</h2>
@@ -1139,6 +1277,16 @@ onMounted(initializeAdminWorkspace)
             <label class="field">
               <span class="field__label">모델</span>
               <input v-model="state.aiControlForm.model" placeholder="google/gemma-4-e2b 또는 auto" />
+            </label>
+            <label class="field">
+              <span class="field__label">이전 AI 서버/모델 불러오기</span>
+              <select v-model="state.aiControlPresetKey" @change="applyAiControlPreset">
+                <option value="">저장된 조합 선택</option>
+                <option v-for="preset in state.aiControlPresets" :key="preset.key" :value="preset.key">
+                  {{ formatAiControlPreset(preset) }}
+                </option>
+              </select>
+              <small class="field__hint">AI 설정 저장에 성공한 LM Studio URL과 모델 조합이 최근순으로 남습니다.</small>
             </label>
             <label class="field">
               <span class="field__label">n8n webhook URL</span>
@@ -1277,7 +1425,9 @@ onMounted(initializeAdminWorkspace)
           </table>
         </div>
       </section>
+      </template>
       <InviteAccessPanel
+        v-if="state.activeAdminPanel === 'access'"
         :expires-in-hours="state.inviteManager.expiresInHours"
         :generated-link="state.inviteManager.generatedLink"
         :generated-expires-at="state.inviteManager.generatedExpiresAt"
@@ -1289,7 +1439,7 @@ onMounted(initializeAdminWorkspace)
         @copy-invite="copyInviteLink"
       />
 
-      <section class="panel">
+      <section v-if="state.activeAdminPanel === 'support'" class="panel admin-panel-section">
         <div class="panel__header">
           <div>
             <h2>문의 메일함</h2>
@@ -1376,7 +1526,7 @@ onMounted(initializeAdminWorkspace)
         </div>
       </section>
 
-      <section class="panel">
+      <section v-if="state.activeAdminPanel === 'support'" class="panel admin-panel-section">
         <div class="panel__header">
           <div>
             <h2>문의 상세 / 답변</h2>
@@ -1456,7 +1606,7 @@ onMounted(initializeAdminWorkspace)
         <p v-else class="panel__empty">왼쪽 목록에서 확인할 문의를 선택해 주세요.</p>
       </section>
 
-      <section class="panel">
+      <section v-if="state.activeAdminPanel === 'access'" class="panel admin-panel-section">
         <div class="panel__header">
           <div>
             <h2>현재 차단된 IP</h2>
@@ -1502,7 +1652,7 @@ onMounted(initializeAdminWorkspace)
         </div>
       </section>
 
-      <section class="panel">
+      <section v-if="state.activeAdminPanel === 'access'" class="panel admin-panel-section">
         <div class="panel__header">
           <div>
             <h2>최근 로그인 기록</h2>
@@ -1559,7 +1709,7 @@ onMounted(initializeAdminWorkspace)
         </div>
       </section>
 
-      <section class="panel">
+      <section v-if="state.activeAdminPanel === 'access'" class="panel admin-panel-section">
         <div class="panel__header">
           <div>
             <h2>사용자 상태</h2>
@@ -1613,7 +1763,7 @@ onMounted(initializeAdminWorkspace)
         </div>
       </section>
 
-      <section class="panel">
+      <section v-if="state.activeAdminPanel === 'access'" class="panel admin-panel-section">
         <div class="panel__header">
           <div>
             <h2>최근 초대 링크</h2>

@@ -16,9 +16,13 @@
   --text: #191f28;
   --text-soft: #4e5968;
   --text-muted: #8b95a1;
-  --blue: #3182f6;
-  --blue-soft: rgba(49, 130, 246, 0.1);
-  --income: #12b886;
+  --blue: #5fd36f;
+  --blue-soft: rgba(95, 211, 111, 0.14);
+  --brand: #5fd36f;
+  --brand-strong: #36b85a;
+  --brand-soft: rgba(95, 211, 111, 0.14);
+  --brand-surface: #effdf2;
+  --income: #22c55e;
   --expense: #f04452;
   --shadow: 0 12px 40px rgba(15, 23, 42, 0.06);
   --shadow-strong: 0 10px 22px rgba(15, 23, 42, 0.18);
@@ -40,13 +44,13 @@
   --map-control-bg: rgba(248, 250, 252, 0.94);
   --map-control-border: rgba(148, 163, 184, 0.36);
   --map-control-text: #253044;
-  --map-hint-bg: linear-gradient(135deg, rgba(49, 130, 246, 0.1), rgba(18, 184, 134, 0.08));
-  --map-hint-border: rgba(49, 130, 246, 0.14);
+  --map-hint-bg: linear-gradient(135deg, rgba(95, 211, 111, 0.16), rgba(34, 197, 94, 0.1));
+  --map-hint-border: rgba(95, 211, 111, 0.22);
   --field-bg: #ffffff;
   --field-bg-muted: #f7f9fc;
   --field-border: #d8dee8;
-  --field-focus-border: rgba(49, 130, 246, 0.54);
-  --field-focus-shadow: 0 0 0 3px rgba(49, 130, 246, 0.12);
+  --field-focus-border: rgba(95, 211, 111, 0.62);
+  --field-focus-shadow: 0 0 0 3px rgba(95, 211, 111, 0.18);
   --control-bg: #eef3f8;
   --control-bg-hover: #e6edf7;
   --calendar-board-bg: #eef2f7;
@@ -58,21 +62,21 @@
   --calendar-day-border: rgba(148, 163, 184, 0.16);
   --calendar-day-active-bg: linear-gradient(180deg, rgba(240, 68, 82, 0.045), #ffffff 88%);
   --calendar-day-income-bg: linear-gradient(180deg, rgba(18, 184, 134, 0.06), #ffffff 88%);
-  --calendar-day-hover-bg: #f1f6ff;
+  --calendar-day-hover-bg: #f0fdf4;
   --calendar-metric-bg: rgba(255, 255, 255, 0.9);
   --calendar-track-expense-bg: rgba(240, 68, 82, 0.1);
   --calendar-track-income-bg: rgba(18, 184, 134, 0.13);
-  --household-anchor-bg: linear-gradient(135deg, rgba(49, 130, 246, 0.08), rgba(255, 255, 255, 0.96));
+  --household-anchor-bg: linear-gradient(135deg, rgba(95, 211, 111, 0.12), rgba(255, 255, 255, 0.96));
   --household-anchor-border: rgba(148, 163, 184, 0.2);
   --entry-section-bg: #f3f6fa;
   --entry-section-border: #dfe6ef;
   --entry-toggle-bg: #e8edf5;
   --entry-toggle-active-bg: #ffffff;
   --entry-toggle-active-text: #191f28;
-  --amount-input-bg: linear-gradient(180deg, rgba(49, 130, 246, 0.08), rgba(255, 255, 255, 0.96));
-  --amount-input-border: rgba(49, 130, 246, 0.18);
-  --focus-ring: #005fcc;
-  --focus-ring-shadow: rgba(0, 95, 204, 0.22);
+  --amount-input-bg: linear-gradient(180deg, rgba(95, 211, 111, 0.12), rgba(255, 255, 255, 0.96));
+  --amount-input-border: rgba(95, 211, 111, 0.24);
+  --focus-ring: #36b85a;
+  --focus-ring-shadow: rgba(54, 184, 90, 0.24);
   --touch-target-min: 44px;
   --focus-scroll-margin: 96px;
 }
@@ -308,7 +312,7 @@ button {
 }
 
 .sidebar__link--active {
-  border-color: rgba(49, 130, 246, 0.18);
+  border-color: rgba(95, 211, 111, 0.18);
   background: var(--blue-soft);
 }
 
@@ -461,7 +465,7 @@ button {
 }
 
 .search-bulk-toggle--active {
-  border-color: rgba(49, 130, 246, 0.45);
+  border-color: rgba(95, 211, 111, 0.45);
   background: var(--blue-soft);
   color: var(--blue);
 }
@@ -641,7 +645,7 @@ button {
 
 .calendar-stepper__arrow:hover {
   transform: translateY(-1px);
-  border-color: rgba(49, 130, 246, 0.34);
+  border-color: rgba(95, 211, 111, 0.34);
   background: rgba(239, 246, 255, 0.95);
 }
 
@@ -696,8 +700,8 @@ button {
 }
 
 .calendar__day--selected {
-  border-color: rgba(49, 130, 246, 0.3);
-  box-shadow: inset 0 0 0 1px rgba(49, 130, 246, 0.12);
+  border-color: rgba(95, 211, 111, 0.3);
+  box-shadow: inset 0 0 0 1px rgba(95, 211, 111, 0.12);
 }
 
 .calendar__day-head {
@@ -729,7 +733,7 @@ button {
   width: fit-content;
   padding: 4px 8px;
   border-radius: 999px;
-  background: rgba(49, 130, 246, 0.1);
+  background: rgba(95, 211, 111, 0.1);
   color: var(--blue);
   font-size: 0.74rem;
   font-weight: 700;
@@ -965,7 +969,7 @@ button {
 }
 
 .entry-date-control__step:hover {
-  border-color: rgba(49, 130, 246, 0.34);
+  border-color: rgba(95, 211, 111, 0.34);
   background: var(--field-bg-muted);
 }
 
@@ -1223,8 +1227,8 @@ button {
 }
 
 .receipt-ocr-modal__type-button.is-active {
-  border-color: rgba(49, 126, 242, 0.55);
-  background: rgba(49, 126, 242, 0.12);
+  border-color: rgba(95, 211, 111, 0.55);
+  background: rgba(95, 211, 111, 0.12);
   color: var(--brand);
 }
 
@@ -1240,9 +1244,9 @@ button {
   gap: 10px;
   min-height: 44px;
   padding: 10px 12px;
-  border: 1px solid rgba(49, 126, 242, 0.28);
+  border: 1px solid rgba(95, 211, 111, 0.28);
   border-radius: 14px;
-  background: rgba(49, 126, 242, 0.1);
+  background: rgba(95, 211, 111, 0.1);
   color: var(--brand);
   font-size: 0.9rem;
   font-weight: 800;
@@ -1251,7 +1255,7 @@ button {
 .receipt-ocr-modal__progress span {
   width: 14px;
   height: 14px;
-  border: 2px solid rgba(49, 126, 242, 0.22);
+  border: 2px solid rgba(95, 211, 111, 0.22);
   border-top-color: var(--brand);
   border-radius: 50%;
   animation: receipt-ocr-spin 0.75s linear infinite;
@@ -1341,7 +1345,7 @@ button {
 }
 
 .receipt-ocr-review-card__steps span.is-active {
-  border-color: rgba(49, 126, 242, 0.46);
+  border-color: rgba(95, 211, 111, 0.46);
   color: var(--brand);
 }
 
@@ -1708,7 +1712,7 @@ button {
 
 .entry-suggestion-item:hover {
   transform: translateY(-1px);
-  border-color: rgba(49, 130, 246, 0.28);
+  border-color: rgba(95, 211, 111, 0.28);
   box-shadow: var(--shadow);
 }
 
@@ -1784,8 +1788,8 @@ button {
 
 .entry-title-suggestion:hover,
 .entry-title-suggestion:focus-visible {
-  border-color: rgba(49, 130, 246, 0.32);
-  background: rgba(49, 130, 246, 0.08);
+  border-color: rgba(95, 211, 111, 0.32);
+  background: rgba(95, 211, 111, 0.08);
   outline: none;
 }
 
@@ -1880,8 +1884,8 @@ button {
 }
 
 .sheet-table__row--focused td {
-  background: color-mix(in srgb, var(--surface-soft) 74%, rgba(49, 130, 246, 0.22));
-  box-shadow: inset 0 1px rgba(49, 130, 246, 0.22), inset 0 -1px rgba(49, 130, 246, 0.22);
+  background: color-mix(in srgb, var(--surface-soft) 74%, rgba(95, 211, 111, 0.22));
+  box-shadow: inset 0 1px rgba(95, 211, 111, 0.22), inset 0 -1px rgba(95, 211, 111, 0.22);
 }
 
 .stats-search-edit__stack {
@@ -2249,8 +2253,8 @@ button {
   max-width: 42px;
   min-height: 8px;
   border-radius: 16px 16px 8px 8px;
-  background: linear-gradient(180deg, #3182f6, #8dbbff);
-  box-shadow: 0 8px 20px rgba(49, 130, 246, 0.2);
+  background: linear-gradient(180deg, #5fd36f, #a7f3b5);
+  box-shadow: 0 8px 20px rgba(95, 211, 111, 0.2);
 }
 
 .bar-chart__label {
@@ -2444,8 +2448,8 @@ button {
   margin-top: 18px;
   padding: 18px;
   border-radius: 20px;
-  background: linear-gradient(135deg, rgba(49, 130, 246, 0.12), rgba(18, 184, 134, 0.08));
-  box-shadow: inset 4px 0 0 var(--travel-plan-color, #3182f6);
+  background: linear-gradient(135deg, rgba(95, 211, 111, 0.12), rgba(18, 184, 134, 0.08));
+  box-shadow: inset 4px 0 0 var(--travel-plan-color, #5fd36f);
 }
 
 .travel-plan-banner span,
@@ -2502,20 +2506,20 @@ button {
 
 .travel-record-switcher__card:hover {
   transform: translateY(-1px);
-  border-color: rgba(49, 130, 246, 0.34);
+  border-color: rgba(95, 211, 111, 0.34);
 }
 
 .travel-record-switcher__card--active {
-  border-color: rgba(49, 130, 246, 0.5);
-  background: linear-gradient(180deg, rgba(49, 130, 246, 0.14), rgba(49, 130, 246, 0.05));
-  box-shadow: inset 0 0 0 1px rgba(49, 130, 246, 0.2);
+  border-color: rgba(95, 211, 111, 0.5);
+  background: linear-gradient(180deg, rgba(95, 211, 111, 0.14), rgba(95, 211, 111, 0.05));
+  box-shadow: inset 0 0 0 1px rgba(95, 211, 111, 0.2);
 }
 
 .travel-record-switcher__card span {
   width: fit-content;
   padding: 3px 7px;
   border-radius: 8px;
-  background: rgba(49, 130, 246, 0.1);
+  background: rgba(95, 211, 111, 0.1);
   color: var(--accent);
   font-size: 0.72rem;
   font-weight: 800;
@@ -2692,13 +2696,13 @@ button {
 
 .travel-ledger-card:hover {
   transform: translateY(-1px);
-  border-color: rgba(49, 130, 246, 0.32);
+  border-color: rgba(95, 211, 111, 0.32);
 }
 
 .travel-ledger-card--active {
-  border-color: rgba(49, 130, 246, 0.42);
-  box-shadow: inset 0 0 0 1px rgba(49, 130, 246, 0.28);
-  background: linear-gradient(180deg, rgba(49, 130, 246, 0.12), rgba(49, 130, 246, 0.04));
+  border-color: rgba(95, 211, 111, 0.42);
+  box-shadow: inset 0 0 0 1px rgba(95, 211, 111, 0.28);
+  background: linear-gradient(180deg, rgba(95, 211, 111, 0.12), rgba(95, 211, 111, 0.04));
 }
 
 .travel-ledger-card small,
@@ -2810,13 +2814,13 @@ button {
   height: 34px;
   border: 0;
   border-radius: 999px;
-  background: var(--travel-plan-color, #3182f6);
+  background: var(--travel-plan-color, #5fd36f);
   box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.92);
   cursor: pointer;
 }
 
 .travel-color-chip--active {
-  outline: 2px solid var(--travel-plan-color, #3182f6);
+  outline: 2px solid var(--travel-plan-color, #5fd36f);
   outline-offset: 3px;
 }
 
@@ -2856,7 +2860,7 @@ button {
   margin: 0;
   padding: 12px 14px;
   border-radius: 16px;
-  background: rgba(49, 130, 246, 0.08);
+  background: rgba(95, 211, 111, 0.08);
   color: var(--text-soft);
 }
 
@@ -2925,8 +2929,8 @@ button {
   width: 12px;
   height: 12px;
   border-radius: 999px;
-  background: var(--travel-plan-color, #3182f6);
-  box-shadow: 0 0 0 4px rgba(49, 130, 246, 0.12);
+  background: var(--travel-plan-color, #5fd36f);
+  box-shadow: 0 0 0 4px rgba(95, 211, 111, 0.12);
 }
 
 .travel-rate-grid {
@@ -2961,7 +2965,7 @@ button {
   margin-top: 18px;
   padding: 20px 22px;
   border-radius: 22px;
-  background: linear-gradient(135deg, rgba(49, 130, 246, 0.1), rgba(124, 92, 255, 0.08));
+  background: linear-gradient(135deg, rgba(95, 211, 111, 0.1), rgba(124, 92, 255, 0.08));
 }
 
 .travel-split-result span,
@@ -2992,7 +2996,7 @@ button {
 .travel-exchange-card {
   padding: 20px;
   border-radius: 22px;
-  background: linear-gradient(135deg, rgba(49, 130, 246, 0.1), rgba(18, 184, 134, 0.08));
+  background: linear-gradient(135deg, rgba(95, 211, 111, 0.1), rgba(18, 184, 134, 0.08));
 }
 
 .travel-exchange-card span,
@@ -3226,7 +3230,7 @@ button {
 }
 
 .household-travel-ledger__date-card:hover {
-  border-color: rgba(49, 130, 246, 0.42);
+  border-color: rgba(95, 211, 111, 0.42);
   background: color-mix(in srgb, var(--surface-soft) 78%, var(--accent) 22%);
 }
 
@@ -3244,8 +3248,8 @@ button {
 }
 
 .household-travel-ledger__date-card--active {
-  border-color: rgba(49, 130, 246, 0.72);
-  box-shadow: inset 0 0 0 1px rgba(49, 130, 246, 0.36);
+  border-color: rgba(95, 211, 111, 0.72);
+  box-shadow: inset 0 0 0 1px rgba(95, 211, 111, 0.36);
 }
 
 .household-travel-ledger__date-card-head {
@@ -3311,7 +3315,7 @@ button {
 
 .household-travel-ledger__type:hover,
 .household-travel-ledger__type--active {
-  border-color: rgba(49, 130, 246, 0.4);
+  border-color: rgba(95, 211, 111, 0.4);
   background: var(--surface-soft);
 }
 
@@ -3577,7 +3581,7 @@ button {
   border: 0;
   border-radius: 999px;
   padding: 6px 10px;
-  background: rgba(49, 130, 246, 0.12);
+  background: rgba(95, 211, 111, 0.12);
   color: var(--text);
   font: inherit;
   cursor: pointer;
@@ -3846,8 +3850,8 @@ button {
 }
 
 .travel-my-photos__card--selected {
-  border-color: rgba(49, 130, 246, 0.62);
-  box-shadow: 0 18px 42px rgba(49, 130, 246, 0.18);
+  border-color: rgba(95, 211, 111, 0.62);
+  box-shadow: 0 18px 42px rgba(95, 211, 111, 0.18);
 }
 
 .travel-my-photos__thumb-button {
@@ -3864,7 +3868,7 @@ button {
 }
 
 .travel-my-photos__thumb-button:focus-visible {
-  outline: 2px solid rgba(49, 130, 246, 0.85);
+  outline: 2px solid rgba(95, 211, 111, 0.85);
   outline-offset: 3px;
 }
 
@@ -4413,9 +4417,9 @@ button {
   gap: 10px;
   margin-top: 14px;
   padding: 10px 12px;
-  border: 1px solid rgba(49, 130, 246, 0.28);
+  border: 1px solid rgba(95, 211, 111, 0.28);
   border-radius: 14px;
-  background: rgba(49, 130, 246, 0.08);
+  background: rgba(95, 211, 111, 0.08);
   color: var(--text);
   font-weight: 800;
 }
@@ -4467,8 +4471,8 @@ button {
 }
 
 .travel-public-rank--active {
-  border-color: rgba(49, 130, 246, 0.5);
-  box-shadow: 0 14px 28px rgba(49, 130, 246, 0.14);
+  border-color: rgba(95, 211, 111, 0.5);
+  box-shadow: 0 14px 28px rgba(95, 211, 111, 0.14);
 }
 
 .travel-public-chip-list {
@@ -4586,8 +4590,8 @@ button {
 }
 
 .travel-public-trip-card--active {
-  border-color: rgba(49, 130, 246, 0.48);
-  box-shadow: 0 18px 40px rgba(49, 130, 246, 0.16);
+  border-color: rgba(95, 211, 111, 0.48);
+  box-shadow: 0 18px 40px rgba(95, 211, 111, 0.16);
 }
 
 .travel-public-trip-card img,
@@ -5930,7 +5934,7 @@ button {
 .travel-plan-card__placeholder {
   display: grid;
   place-items: center;
-  background: linear-gradient(135deg, rgba(49, 130, 246, 0.12), rgba(18, 184, 134, 0.08));
+  background: linear-gradient(135deg, rgba(95, 211, 111, 0.12), rgba(18, 184, 134, 0.08));
   color: var(--text-soft);
   font-weight: 700;
 }
@@ -5974,13 +5978,13 @@ button {
 
 .travel-plan-picker-card:hover {
   transform: translateY(-1px);
-  border-color: rgba(49, 130, 246, 0.34);
+  border-color: rgba(95, 211, 111, 0.34);
   box-shadow: var(--shadow-strong);
 }
 
 .travel-plan-picker-card--active {
-  border-color: rgba(49, 130, 246, 0.52);
-  box-shadow: 0 0 0 1px rgba(49, 130, 246, 0.22), var(--shadow-strong);
+  border-color: rgba(95, 211, 111, 0.52);
+  box-shadow: 0 0 0 1px rgba(95, 211, 111, 0.22), var(--shadow-strong);
 }
 
 .travel-plan-picker-card span,
@@ -6098,7 +6102,7 @@ button {
   padding: 2px 7px;
   border: 0;
   border-radius: 999px;
-  background: rgba(49, 130, 246, 0.14);
+  background: rgba(95, 211, 111, 0.14);
   color: var(--blue);
   font-size: 12px;
   font-weight: 800;
@@ -6170,7 +6174,7 @@ button {
   display: block;
   height: 100%;
   border-radius: 999px;
-  background: linear-gradient(90deg, #3182f6, #64a3ff);
+  background: linear-gradient(90deg, #5fd36f, #86efac);
 }
 
 .stack-form {
@@ -6330,7 +6334,7 @@ textarea {
 .auth-copy__hint {
   padding: 14px 16px;
   border-radius: 18px;
-  background: rgba(49, 130, 246, 0.08);
+  background: rgba(95, 211, 111, 0.08);
 }
 
 .auth-grid {
@@ -6388,8 +6392,8 @@ textarea {
 }
 
 .pin-pad__slot--filled {
-  border-color: rgba(49, 130, 246, 0.35);
-  background: rgba(49, 130, 246, 0.08);
+  border-color: rgba(95, 211, 111, 0.35);
+  background: rgba(95, 211, 111, 0.08);
 }
 
 .pin-pad__hint {
@@ -7086,11 +7090,11 @@ textarea {
   gap: 10px;
   padding: 16px;
   border-radius: 18px;
-  background: rgba(49, 130, 246, 0.08);
+  background: rgba(95, 211, 111, 0.08);
 }
 
 .support-inquiry-row--selected td {
-  background: rgba(49, 130, 246, 0.08);
+  background: rgba(95, 211, 111, 0.08);
 }
 
 .panel__actions {
@@ -7263,7 +7267,7 @@ textarea {
 
 .travel-map__toolbar-button:hover {
   transform: translateY(-1px);
-  border-color: rgba(49, 130, 246, 0.45);
+  border-color: rgba(95, 211, 111, 0.45);
 }
 
 .travel-map__toolbar-button.is-active {
@@ -7335,7 +7339,7 @@ textarea {
   height: 40px;
   border-radius: 999px;
   border: 3px solid #fff;
-  background: var(--marker-color, #3182f6);
+  background: var(--marker-color, #5fd36f);
   color: #fff;
   font-size: 0.8rem;
   font-weight: 900;
@@ -7352,7 +7356,7 @@ textarea {
   height: 14px;
   border-right: 3px solid #fff;
   border-bottom: 3px solid #fff;
-  background: var(--marker-color, #3182f6);
+  background: var(--marker-color, #5fd36f);
   transform: translateX(-50%) rotate(45deg);
   box-shadow: 6px 8px 16px rgba(15, 23, 42, 0.12);
 }
@@ -7394,7 +7398,7 @@ textarea {
   height: 50px;
   border-radius: 18px;
   overflow: hidden;
-  background-color: var(--marker-color, #3182f6);
+  background-color: var(--marker-color, #5fd36f);
   background-position: center;
   background-repeat: no-repeat;
   background-size: cover;
@@ -7416,7 +7420,7 @@ textarea {
   bottom: -10px;
   width: 16px;
   height: 16px;
-  background: var(--marker-color, #3182f6);
+  background: var(--marker-color, #5fd36f);
   border-radius: 0 0 8px 8px;
   transform: translateX(-50%) rotate(45deg);
   box-shadow: 6px 10px 18px rgba(15, 23, 42, 0.18);
@@ -7435,8 +7439,8 @@ textarea {
 }
 
 .travel-map__thumb-pin.is-active {
-  border-color: var(--marker-color, #3182f6);
-  box-shadow: 0 0 0 4px rgba(49, 130, 246, 0.16), 0 14px 28px rgba(15, 23, 42, 0.28);
+  border-color: var(--marker-color, #5fd36f);
+  box-shadow: 0 0 0 4px rgba(95, 211, 111, 0.16), 0 14px 28px rgba(15, 23, 42, 0.28);
 }
 
 .travel-map--moving .travel-map__thumb-pin {
@@ -7486,9 +7490,9 @@ textarea {
 }
 
 .travel-day-tabs__button.is-active {
-  border-color: rgba(49, 130, 246, 0.4);
-  background: linear-gradient(135deg, rgba(49, 130, 246, 0.12), rgba(18, 184, 134, 0.08));
-  box-shadow: 0 16px 34px rgba(49, 130, 246, 0.12);
+  border-color: rgba(95, 211, 111, 0.4);
+  background: linear-gradient(135deg, rgba(95, 211, 111, 0.12), rgba(18, 184, 134, 0.08));
+  box-shadow: 0 16px 34px rgba(95, 211, 111, 0.12);
 }
 
 .travel-point-editor {
@@ -7563,7 +7567,7 @@ textarea {
   margin: 14px 0 0;
   padding: 12px 14px;
   border-radius: 16px;
-  background: rgba(49, 130, 246, 0.1);
+  background: rgba(95, 211, 111, 0.1);
   color: var(--text);
   font-weight: 700;
 }
@@ -7881,8 +7885,8 @@ textarea {
 
 .travel-map__toolbar-select:focus {
   outline: none;
-  border-color: rgba(49, 130, 246, 0.52);
-  box-shadow: 0 0 0 3px rgba(49, 130, 246, 0.12);
+  border-color: rgba(95, 211, 111, 0.52);
+  box-shadow: 0 0 0 3px rgba(95, 211, 111, 0.12);
 }
 
 .travel-map__search {
@@ -7919,8 +7923,8 @@ textarea {
 
 .travel-map__search-input:focus {
   outline: none;
-  border-color: rgba(49, 130, 246, 0.52);
-  box-shadow: 0 0 0 3px rgba(49, 130, 246, 0.12);
+  border-color: rgba(95, 211, 111, 0.52);
+  box-shadow: 0 0 0 3px rgba(95, 211, 111, 0.12);
 }
 
 .travel-map__search-button {
@@ -7961,7 +7965,7 @@ textarea {
 }
 
 .travel-map__search-result:hover {
-  border-color: rgba(49, 130, 246, 0.38);
+  border-color: rgba(95, 211, 111, 0.38);
   background: rgba(239, 246, 255, 0.96);
 }
 
@@ -8248,7 +8252,7 @@ textarea {
 
 .household-floating-tools__button:hover,
 .household-floating-tools__button:focus-visible {
-  border-color: rgba(49, 130, 246, 0.42);
+  border-color: rgba(95, 211, 111, 0.42);
   color: var(--blue);
 }
 
@@ -8327,7 +8331,7 @@ textarea {
 }
 
 .ledger-history-list__item.is-active {
-  border-color: rgba(49, 130, 246, 0.5);
+  border-color: rgba(95, 211, 111, 0.5);
   background: var(--blue-soft);
 }
 
@@ -8498,7 +8502,7 @@ textarea {
 .travel-progress-modal__spinner {
   width: 42px;
   height: 42px;
-  border: 3px solid rgba(49, 130, 246, 0.16);
+  border: 3px solid rgba(95, 211, 111, 0.16);
   border-top-color: var(--interactive-contrast-bg);
   border-radius: 50%;
   animation: travel-progress-spin 0.9s linear infinite;
@@ -8532,16 +8536,16 @@ textarea {
   --text: #f3f5fa;
   --text-soft: var(--toss-text-soft, #b0bacb);
   --text-muted: var(--toss-text-muted, #7e8aa0);
-  --blue: #4f8cff;
-  --blue-soft: rgba(79, 140, 255, 0.18);
+  --blue: #6ee07f;
+  --blue-soft: rgba(95, 211, 111, 0.18);
   --income: #16c784;
   --expense: #ff5d73;
   --shadow: 0 24px 64px rgba(0, 0, 0, 0.42);
   --shadow-strong: 0 18px 36px rgba(0, 0, 0, 0.52);
   --bg-gradient:
-    radial-gradient(circle at top, var(--toss-bg-glow, rgba(79, 140, 255, 0.16)), transparent 28%),
+    radial-gradient(circle at top, var(--toss-bg-glow, rgba(95, 211, 111, 0.16)), transparent 28%),
     linear-gradient(180deg, var(--toss-bg, #0e1117) 0%, var(--toss-bg-gradient-mid, #10141c) 48%, var(--toss-bg-gradient-end, #0c1016) 100%);
-  --interactive-contrast-bg: linear-gradient(180deg, #4f8cff 0%, #2f6df3 100%);
+  --interactive-contrast-bg: linear-gradient(180deg, #6ee07f 0%, #2f6df3 100%);
   --interactive-contrast-text: #ffffff;
   --calendar-size-toggle-bg: var(--toss-calendar-size-toggle-bg, rgba(24, 29, 38, 0.94));
   --grid-guide-bg: rgba(185, 197, 255, 0.08);
@@ -8556,12 +8560,12 @@ textarea {
   --map-control-border: rgba(78, 95, 125, 0.62);
   --map-control-text: #edf3ff;
   --map-hint-bg: linear-gradient(135deg, rgba(34, 64, 122, 0.48), rgba(16, 53, 79, 0.42));
-  --map-hint-border: rgba(79, 140, 255, 0.22);
+  --map-hint-border: rgba(95, 211, 111, 0.22);
   --field-bg: #111821;
   --field-bg-muted: #151d28;
   --field-border: rgba(92, 108, 135, 0.58);
-  --field-focus-border: rgba(79, 140, 255, 0.72);
-  --field-focus-shadow: 0 0 0 3px rgba(79, 140, 255, 0.2);
+  --field-focus-border: rgba(95, 211, 111, 0.72);
+  --field-focus-shadow: 0 0 0 3px rgba(95, 211, 111, 0.2);
   --control-bg: rgba(27, 35, 48, 0.98);
   --control-bg-hover: rgba(35, 45, 61, 0.98);
   --calendar-board-bg: rgba(14, 20, 30, 0.92);
@@ -8573,24 +8577,24 @@ textarea {
   --calendar-day-border: rgba(98, 116, 146, 0.24);
   --calendar-day-active-bg: linear-gradient(180deg, rgba(255, 93, 115, 0.12), rgba(24, 29, 39, 0.96));
   --calendar-day-income-bg: linear-gradient(180deg, rgba(52, 211, 153, 0.12), rgba(24, 29, 39, 0.96));
-  --calendar-day-hover-bg: rgba(79, 140, 255, 0.12);
+  --calendar-day-hover-bg: rgba(95, 211, 111, 0.12);
   --calendar-metric-bg: rgba(17, 24, 36, 0.62);
   --calendar-track-expense-bg: rgba(255, 93, 115, 0.14);
   --calendar-track-income-bg: rgba(52, 211, 153, 0.16);
-  --household-anchor-bg: linear-gradient(135deg, rgba(79, 140, 255, 0.12), rgba(25, 33, 46, 0.96));
+  --household-anchor-bg: linear-gradient(135deg, rgba(95, 211, 111, 0.12), rgba(25, 33, 46, 0.96));
   --household-anchor-border: rgba(92, 108, 135, 0.42);
   --entry-section-bg: rgba(26, 35, 49, 0.98);
   --entry-section-border: rgba(92, 108, 135, 0.4);
   --entry-toggle-bg: #101722;
-  --entry-toggle-active-bg: linear-gradient(180deg, #4f8cff 0%, #2f6df3 100%);
+  --entry-toggle-active-bg: linear-gradient(180deg, #6ee07f 0%, #2f6df3 100%);
   --entry-toggle-active-text: #ffffff;
   --amount-input-bg: linear-gradient(180deg, rgba(15, 22, 32, 0.98), rgba(17, 24, 34, 0.98));
-  --amount-input-border: rgba(79, 140, 255, 0.38);
+  --amount-input-border: rgba(95, 211, 111, 0.38);
 }
 
 :root[data-theme='toss'] .theme-toggle {
   background: var(--toss-theme-toggle-bg, rgba(23, 28, 37, 0.92));
-  border-color: var(--toss-theme-toggle-border, rgba(79, 140, 255, 0.24));
+  border-color: var(--toss-theme-toggle-border, rgba(95, 211, 111, 0.24));
   color: var(--toss-theme-toggle-text, #dce7ff);
 }
 
@@ -8630,7 +8634,7 @@ textarea {
 
 :root[data-theme='toss'] .button--primary {
   border-color: transparent;
-  background: linear-gradient(180deg, #4f8cff 0%, #2f6df3 100%);
+  background: linear-gradient(180deg, #6ee07f 0%, #2f6df3 100%);
   color: #f8fbff;
 }
 
@@ -8778,7 +8782,7 @@ textarea {
 }
 
 :root[data-theme='toss'] .travel-modal .travel-autofill-note {
-  background: rgba(79, 140, 255, 0.12);
+  background: rgba(95, 211, 111, 0.12);
   color: #d5e4ff;
 }
 
@@ -8843,8 +8847,8 @@ textarea {
 :root[data-theme='toss'] .sidebar__link--active,
 :root[data-theme='toss'] .panel__badge,
 :root[data-theme='toss'] .calendar__day--selected {
-  background: rgba(79, 140, 255, 0.14);
-  border-color: rgba(79, 140, 255, 0.24);
+  background: rgba(95, 211, 111, 0.14);
+  border-color: rgba(95, 211, 111, 0.24);
 }
 
 :root[data-theme='toss'] .main-shell--standalone {
@@ -8877,7 +8881,7 @@ textarea {
 }
 
 :root[data-theme='toss'] .main-shell--standalone .topbar__nav-button:hover {
-  background: rgba(79, 140, 255, 0.14);
+  background: rgba(95, 211, 111, 0.14);
   color: var(--text);
 }
 
@@ -8916,7 +8920,7 @@ textarea {
 
 :root[data-theme='toss'] .support-inquiry-row--selected td,
 :root[data-theme='toss'] .support-inquiry-reply {
-  background: rgba(79, 140, 255, 0.12);
+  background: rgba(95, 211, 111, 0.12);
 }
 
 :root[data-theme='toss'] .support-inquiry-row__body {
@@ -9688,8 +9692,8 @@ textarea {
 }
 
 .household-aggregate-toggle[aria-pressed='true'] {
-  border-color: rgba(49, 130, 246, 0.28);
-  background: rgba(49, 130, 246, 0.08);
+  border-color: rgba(95, 211, 111, 0.28);
+  background: rgba(95, 211, 111, 0.08);
   color: var(--blue);
 }
 
@@ -10153,7 +10157,7 @@ textarea {
 
 .family-category-card:hover {
   transform: translateY(-2px);
-  border-color: rgba(49, 130, 246, 0.28);
+  border-color: rgba(95, 211, 111, 0.28);
 }
 
 .family-category-card strong {
@@ -10166,9 +10170,9 @@ textarea {
 }
 
 .family-category-card--active {
-  border-color: rgba(49, 130, 246, 0.38);
-  box-shadow: 0 18px 36px rgba(49, 130, 246, 0.12);
-  background: linear-gradient(180deg, #fafdff 0%, #eef6ff 100%);
+  border-color: rgba(95, 211, 111, 0.38);
+  box-shadow: 0 18px 36px rgba(95, 211, 111, 0.12);
+  background: linear-gradient(180deg, #fafdff 0%, #effdf2 100%);
 }
 
 .family-member-picker {
@@ -10197,8 +10201,8 @@ textarea {
 }
 
 .family-member-chip--active {
-  border-color: rgba(49, 130, 246, 0.36);
-  background: rgba(49, 130, 246, 0.09);
+  border-color: rgba(95, 211, 111, 0.36);
+  background: rgba(95, 211, 111, 0.09);
 }
 
 .family-media-grid {
@@ -10221,8 +10225,8 @@ textarea {
 }
 
 .family-media-card--selected {
-  border-color: rgba(49, 130, 246, 0.36);
-  box-shadow: 0 18px 34px rgba(49, 130, 246, 0.14);
+  border-color: rgba(95, 211, 111, 0.36);
+  box-shadow: 0 18px 34px rgba(95, 211, 111, 0.14);
 }
 
 .family-media-card__select {
@@ -10289,8 +10293,8 @@ textarea {
 }
 
 .family-album-list__item--active {
-  border-color: rgba(49, 130, 246, 0.36);
-  background: rgba(49, 130, 246, 0.08);
+  border-color: rgba(95, 211, 111, 0.36);
+  background: rgba(95, 211, 111, 0.08);
 }
 
 .family-album-focus {
@@ -10298,9 +10302,9 @@ textarea {
   gap: 14px;
   margin-bottom: 20px;
   padding: 18px;
-  border: 1px solid rgba(49, 130, 246, 0.18);
+  border: 1px solid rgba(95, 211, 111, 0.18);
   border-radius: 22px;
-  background: linear-gradient(180deg, rgba(49, 130, 246, 0.06) 0%, rgba(255, 255, 255, 0.96) 100%);
+  background: linear-gradient(180deg, rgba(95, 211, 111, 0.06) 0%, rgba(255, 255, 255, 0.96) 100%);
 }
 
 .family-album-focus__head {
@@ -10360,7 +10364,7 @@ textarea {
   height: 52px;
   border-radius: 18px;
   object-fit: cover;
-  background: linear-gradient(135deg, rgba(49, 130, 246, 0.16), rgba(49, 130, 246, 0.04));
+  background: linear-gradient(135deg, rgba(95, 211, 111, 0.16), rgba(95, 211, 111, 0.04));
 }
 
 .drive-shell__avatar--placeholder {
@@ -10399,8 +10403,8 @@ textarea {
 
 .drive-input:focus {
   outline: none;
-  border-color: rgba(49, 130, 246, 0.45);
-  box-shadow: 0 0 0 4px rgba(49, 130, 246, 0.12);
+  border-color: rgba(95, 211, 111, 0.45);
+  box-shadow: 0 0 0 4px rgba(95, 211, 111, 0.12);
 }
 
 .drive-upload-button {
@@ -10429,8 +10433,8 @@ textarea {
 
 .drive-breadcrumbs__item--drop-target {
   color: var(--blue);
-  background: color-mix(in srgb, var(--surface-soft) 56%, rgba(49, 130, 246, 0.24));
-  box-shadow: inset 0 0 0 2px rgba(49, 130, 246, 0.36);
+  background: color-mix(in srgb, var(--surface-soft) 56%, rgba(95, 211, 111, 0.24));
+  box-shadow: inset 0 0 0 2px rgba(95, 211, 111, 0.36);
 }
 
 .drive-card-grid {
@@ -10589,7 +10593,7 @@ textarea {
   display: block;
   height: 100%;
   border-radius: inherit;
-  background: linear-gradient(90deg, #8dbbff, #3182f6);
+  background: linear-gradient(90deg, #a7f3b5, #5fd36f);
   transition: width 0.18s ease;
 }
 
@@ -10668,8 +10672,8 @@ textarea {
 
 .drive-move-destination:not(:disabled):hover,
 .drive-move-destination--active {
-  border-color: rgba(49, 130, 246, 0.45);
-  background: rgba(49, 130, 246, 0.08);
+  border-color: rgba(95, 211, 111, 0.45);
+  background: rgba(95, 211, 111, 0.08);
 }
 
 .drive-move-destination__icon {
@@ -10773,8 +10777,8 @@ textarea {
 }
 
 .drive-profile-modal__nav-item--active {
-  background: rgba(49, 130, 246, 0.12);
-  border-color: rgba(49, 130, 246, 0.22);
+  background: rgba(95, 211, 111, 0.12);
+  border-color: rgba(95, 211, 111, 0.22);
 }
 
 .drive-profile-modal__nav-icon {
@@ -10913,8 +10917,8 @@ textarea {
 }
 
 .drive-share-search-result--active {
-  border-color: rgba(49, 130, 246, 0.4);
-  background: rgba(49, 130, 246, 0.08);
+  border-color: rgba(95, 211, 111, 0.4);
+  background: rgba(95, 211, 111, 0.08);
 }
 
 .drive-share-group {
@@ -11037,8 +11041,8 @@ textarea {
 }
 
 .drive-sidebar__nav-item--active {
-  background: rgba(49, 130, 246, 0.12);
-  border-color: rgba(49, 130, 246, 0.22);
+  background: rgba(95, 211, 111, 0.12);
+  border-color: rgba(95, 211, 111, 0.22);
 }
 
 .drive-sidebar__nav-icon {
@@ -11116,14 +11120,14 @@ textarea {
 }
 
 .drive-folder-tree__row--active {
-  background: rgba(49, 130, 246, 0.13);
+  background: rgba(95, 211, 111, 0.13);
   color: var(--blue);
 }
 
 .drive-folder-tree__row--drop-target {
-  background: color-mix(in srgb, var(--surface-soft) 56%, rgba(49, 130, 246, 0.24));
+  background: color-mix(in srgb, var(--surface-soft) 56%, rgba(95, 211, 111, 0.24));
   color: var(--blue);
-  box-shadow: inset 0 0 0 2px rgba(49, 130, 246, 0.36);
+  box-shadow: inset 0 0 0 2px rgba(95, 211, 111, 0.36);
 }
 
 .drive-folder-tree__row--locked {
@@ -11228,7 +11232,7 @@ textarea {
   display: block;
   height: 100%;
   border-radius: inherit;
-  background: linear-gradient(90deg, #8dbbff, #3182f6);
+  background: linear-gradient(90deg, #a7f3b5, #5fd36f);
 }
 
 .drive-main {
@@ -11266,8 +11270,8 @@ textarea {
 
 .drive-topbar__search-input:focus {
   outline: none;
-  border-color: rgba(49, 130, 246, 0.45);
-  box-shadow: 0 0 0 4px rgba(49, 130, 246, 0.12);
+  border-color: rgba(95, 211, 111, 0.45);
+  box-shadow: 0 0 0 4px rgba(95, 211, 111, 0.12);
 }
 
 .drive-dashboard {
@@ -11366,7 +11370,7 @@ textarea {
 }
 
 .drive-browser-panel--drop-active {
-  border-color: rgba(49, 130, 246, 0.48);
+  border-color: rgba(95, 211, 111, 0.48);
 }
 
 .drive-drop-overlay {
@@ -11377,9 +11381,9 @@ textarea {
   place-items: center;
   align-content: center;
   gap: 8px;
-  border: 2px dashed rgba(49, 130, 246, 0.7);
+  border: 2px dashed rgba(95, 211, 111, 0.7);
   border-radius: 26px;
-  background: color-mix(in srgb, var(--surface) 76%, rgba(49, 130, 246, 0.16));
+  background: color-mix(in srgb, var(--surface) 76%, rgba(95, 211, 111, 0.16));
   color: var(--text);
   text-align: center;
   pointer-events: none;
@@ -11490,12 +11494,12 @@ textarea {
 
 .drive-file-card:hover,
 .drive-file-card--selected {
-  border-color: rgba(49, 130, 246, 0.5);
-  box-shadow: 0 18px 42px rgba(37, 99, 235, 0.14);
+  border-color: rgba(95, 211, 111, 0.5);
+  box-shadow: 0 18px 42px rgba(54, 184, 90, 0.14);
 }
 
 .drive-file-card--selected {
-  outline: 2px solid rgba(49, 130, 246, 0.28);
+  outline: 2px solid rgba(95, 211, 111, 0.28);
   outline-offset: -4px;
 }
 
@@ -11512,8 +11516,8 @@ textarea {
 }
 
 .drive-file-card--drop-target {
-  border-color: rgba(49, 130, 246, 0.78);
-  box-shadow: 0 22px 54px rgba(37, 99, 235, 0.22);
+  border-color: rgba(95, 211, 111, 0.78);
+  box-shadow: 0 22px 54px rgba(54, 184, 90, 0.22);
   transform: translateY(-2px);
 }
 
@@ -11530,7 +11534,7 @@ textarea {
   font-size: 0.78rem;
   font-weight: 900;
   line-height: 28px;
-  box-shadow: 0 12px 26px rgba(49, 130, 246, 0.28);
+  box-shadow: 0 12px 26px rgba(95, 211, 111, 0.28);
 }
 
 .drive-lock-badge {
@@ -11556,12 +11560,12 @@ textarea {
 }
 
 .drive-table__row--selected td {
-  background: color-mix(in srgb, var(--surface-soft) 72%, rgba(49, 130, 246, 0.16));
+  background: color-mix(in srgb, var(--surface-soft) 72%, rgba(95, 211, 111, 0.16));
 }
 
 .drive-table__row--drop-target td {
-  background: color-mix(in srgb, var(--surface-soft) 58%, rgba(49, 130, 246, 0.24));
-  box-shadow: inset 0 0 0 2px rgba(49, 130, 246, 0.44);
+  background: color-mix(in srgb, var(--surface-soft) 58%, rgba(95, 211, 111, 0.24));
+  box-shadow: inset 0 0 0 2px rgba(95, 211, 111, 0.44);
 }
 
 .drive-file-card__check-space,
@@ -11911,8 +11915,8 @@ textarea {
 
 :root[data-theme='toss'] .family-category-card--active,
 :root[data-theme='toss'] .family-album-focus {
-  background: linear-gradient(180deg, rgba(79, 140, 255, 0.14), rgba(24, 29, 38, 0.96)) !important;
-  border-color: rgba(79, 140, 255, 0.32);
+  background: linear-gradient(180deg, rgba(95, 211, 111, 0.14), rgba(24, 29, 38, 0.96)) !important;
+  border-color: rgba(95, 211, 111, 0.32);
 }
 
 :root[data-theme='toss'] .household-aggregate-card__copy small,
@@ -11966,11 +11970,11 @@ textarea {
 :root[data-theme='toss'] .travel-map__search-result:hover,
 :root[data-theme='toss'] .travel-map__slider-button:hover {
   background: rgba(34, 42, 56, 0.98);
-  border-color: rgba(79, 140, 255, 0.54);
+  border-color: rgba(95, 211, 111, 0.54);
 }
 
 :root[data-theme='toss'] .travel-map__toolbar-button.is-active {
-  background: linear-gradient(180deg, #4f8cff 0%, #2f6df3 100%);
+  background: linear-gradient(180deg, #6ee07f 0%, #2f6df3 100%);
   border-color: transparent;
   color: #ffffff;
 }
@@ -11986,8 +11990,8 @@ textarea {
 }
 
 :root[data-theme='toss'] .travel-map__toolbar-select:focus {
-  border-color: rgba(79, 140, 255, 0.72);
-  box-shadow: 0 0 0 3px rgba(79, 140, 255, 0.18);
+  border-color: rgba(95, 211, 111, 0.72);
+  box-shadow: 0 0 0 3px rgba(95, 211, 111, 0.18);
 }
 
 :root[data-theme='toss'] .travel-map__search-input {
@@ -12001,8 +12005,8 @@ textarea {
 }
 
 :root[data-theme='toss'] .travel-map__search-input:focus {
-  border-color: rgba(79, 140, 255, 0.72);
-  box-shadow: 0 0 0 3px rgba(79, 140, 255, 0.18);
+  border-color: rgba(95, 211, 111, 0.72);
+  box-shadow: 0 0 0 3px rgba(95, 211, 111, 0.18);
 }
 
 :root[data-theme='toss'] .travel-map__search-result {
@@ -12090,8 +12094,8 @@ textarea {
 :root[data-theme='toss'] .travel-overview-timeline .panel__badge,
 :root[data-theme='toss'] .travel-overview-place-list .chip--neutral,
 :root[data-theme='toss'] .travel-overview-day-grid .chip--neutral {
-  background: rgba(79, 140, 255, 0.12);
-  border-color: rgba(79, 140, 255, 0.2);
+  background: rgba(95, 211, 111, 0.12);
+  border-color: rgba(95, 211, 111, 0.2);
   color: #dfeaff;
 }
 
@@ -12768,7 +12772,7 @@ textarea {
   bottom: -10px;
   width: 18px;
   height: 18px;
-  background: var(--cluster-color, #3182F6);
+  background: var(--cluster-color, #5fd36f);
   border-radius: 0 0 8px 8px;
   transform: translateX(-50%) rotate(45deg);
   box-shadow: none;
@@ -12781,12 +12785,12 @@ textarea {
 }
 
 .travel-cluster-pin.is-active {
-  border-color: var(--cluster-color, #3182F6);
-  box-shadow: 0 0 0 4px rgba(49, 130, 246, 0.18), 0 3px 8px rgba(15, 23, 42, 0.14);
+  border-color: var(--cluster-color, #5fd36f);
+  box-shadow: 0 0 0 4px rgba(95, 211, 111, 0.18), 0 3px 8px rgba(15, 23, 42, 0.14);
 }
 
 .travel-cluster-pin.is-client-cluster {
-  background-color: var(--cluster-color, #3182F6);
+  background-color: var(--cluster-color, #5fd36f);
 }
 
 .travel-map--moving .travel-cluster-pin {
@@ -12840,14 +12844,14 @@ textarea {
 
 .travel-photo-card-button:focus-visible,
 .travel-photo-preview-button:focus-visible {
-  outline: 2px solid rgba(49, 130, 246, 0.85);
+  outline: 2px solid rgba(95, 211, 111, 0.85);
   outline-offset: 3px;
   border-radius: 18px;
 }
 
 .travel-media-card--selected {
-  border-color: rgba(49, 130, 246, 0.45);
-  box-shadow: 0 18px 40px rgba(49, 130, 246, 0.16);
+  border-color: rgba(95, 211, 111, 0.45);
+  box-shadow: 0 18px 40px rgba(95, 211, 111, 0.16);
 }
 
 .travel-lightbox {
@@ -12891,7 +12895,7 @@ textarea {
 }
 
 .travel-lightbox__nav:hover {
-  background: rgba(37, 99, 235, 0.82);
+  background: rgba(54, 184, 90, 0.82);
   border-color: rgba(96, 165, 250, 0.72);
 }
 
@@ -13902,7 +13906,7 @@ textarea {
 
 :root[data-theme='toss'] .layout-mode-toggle,
 :root[data-theme='toss'] .theme-toggle {
-  border-color: var(--toss-theme-toggle-border, rgba(79, 140, 255, 0.24));
+  border-color: var(--toss-theme-toggle-border, rgba(95, 211, 111, 0.24));
   background: var(--toss-theme-toggle-bg, rgba(23, 28, 37, 0.92));
   color: var(--toss-theme-toggle-text, #dce7ff);
 }
@@ -13912,7 +13916,7 @@ textarea {
 }
 
 :root[data-theme='toss'] .layout-mode-toggle__button--active {
-  background: rgba(79, 140, 255, 0.22);
+  background: rgba(95, 211, 111, 0.22);
   color: var(--text);
 }
 
@@ -14185,8 +14189,8 @@ textarea {
 }
 
 :root[data-layout-mode='mobile'] .calendar-layout-panel--quick-entry .panel {
-  border-color: rgba(49, 130, 246, 0.28);
-  box-shadow: 0 18px 42px rgba(49, 130, 246, 0.12);
+  border-color: rgba(95, 211, 111, 0.28);
+  box-shadow: 0 18px 42px rgba(95, 211, 111, 0.12);
 }
 
 :root[data-layout-mode='mobile'] .calendar-detail__item,
@@ -14974,4 +14978,51 @@ textarea {
   :root[data-layout-mode='mobile'] .travel-community-card__actions .button {
     width: 100%;
   }
+}
+
+/* green-core-design-upgrade */
+.button--primary {
+  background: linear-gradient(135deg, var(--brand), var(--brand-strong));
+  box-shadow: 0 14px 28px rgba(54, 184, 90, 0.18);
+}
+
+.button--secondary {
+  background: color-mix(in srgb, var(--brand-soft) 52%, #ffffff);
+  border-color: color-mix(in srgb, var(--brand) 24%, var(--line));
+}
+
+.sidebar__link--active,
+.search-bulk-toggle--active,
+.ledger-history-list__item.is-active,
+.drive-sidebar__nav-item--active,
+.drive-folder-tree__row--active {
+  background: var(--brand-soft);
+  border-color: color-mix(in srgb, var(--brand) 32%, var(--line));
+}
+
+.calendar__day--selected,
+.travel-record-switcher__card--active,
+.travel-ledger-card--active,
+.travel-public-rank--active,
+.travel-public-trip-card--active,
+.travel-plan-picker-card--active,
+.family-category-card--active,
+.family-member-chip--active,
+.family-media-card--selected,
+.drive-file-card--selected {
+  border-color: color-mix(in srgb, var(--brand) 50%, var(--line));
+  box-shadow: 0 16px 34px rgba(54, 184, 90, 0.14);
+}
+
+.travel-public-chip--active,
+.household-floating-tools__button--accent {
+  background: var(--brand);
+  border-color: var(--brand);
+  color: #063b18;
+}
+
+.progress-bar__fill,
+.drive-upload-progress__bar,
+.drive-storage-meter__bar {
+  background: linear-gradient(90deg, var(--brand), var(--brand-strong));
 }

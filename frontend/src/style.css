@@ -15190,3 +15190,151 @@ textarea {
     gap: 2px;
   }
 }
+
+/* mobile-household-calendar-layout-fix */
+:root[data-layout-mode='mobile'] .household-calendar-layout,
+:root[data-layout-mode='mobile'] .household-calendar-layout-board {
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+  height: auto !important;
+  min-height: 0 !important;
+  overflow: visible !important;
+}
+
+:root[data-layout-mode='mobile'] .household-calendar-layout-grid,
+:root[data-layout-mode='mobile'] .household-calendar-layout-grid.grid-stack {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: stretch !important;
+  gap: 14px !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+  height: auto !important;
+  min-height: 0 !important;
+  overflow: visible !important;
+}
+
+:root[data-layout-mode='mobile'] .household-calendar-layout-grid > .grid-stack-item,
+:root[data-layout-mode='mobile'] .household-calendar-layout-grid > .grid-stack-item[gs-x],
+:root[data-layout-mode='mobile'] .household-calendar-layout-grid > .grid-stack-item[gs-y],
+:root[data-layout-mode='mobile'] .household-calendar-layout-grid > .grid-stack-item[gs-w],
+:root[data-layout-mode='mobile'] .household-calendar-layout-grid > .grid-stack-item[gs-h] {
+  position: relative !important;
+  left: auto !important;
+  top: auto !important;
+  right: auto !important;
+  bottom: auto !important;
+  transform: none !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+  height: auto !important;
+  min-height: 0 !important;
+  margin: 0 !important;
+  overflow: visible !important;
+}
+
+:root[data-layout-mode='mobile'] .household-calendar-layout-grid > .grid-stack-item > .grid-stack-item-content,
+:root[data-layout-mode='mobile'] .household-calendar-layout-panel-shell {
+  position: relative !important;
+  inset: auto !important;
+  left: auto !important;
+  top: auto !important;
+  right: auto !important;
+  bottom: auto !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+  height: auto !important;
+  min-height: 0 !important;
+  overflow: visible !important;
+}
+
+:root[data-layout-mode='mobile'] .household-calendar-layout-item--quick-entry {
+  order: 1 !important;
+}
+
+:root[data-layout-mode='mobile'] .household-calendar-layout-item--calendar {
+  order: 2 !important;
+}
+
+:root[data-layout-mode='mobile'] .household-calendar-layout-item--aggregate {
+  order: 3 !important;
+}
+
+:root[data-layout-mode='mobile'] .household-calendar-layout-item--sheet {
+  order: 4 !important;
+}
+
+:root[data-layout-mode='mobile'] .household-calendar-layout-item--quick-entry .panel,
+:root[data-layout-mode='mobile'] .household-calendar-layout-item--calendar .panel,
+:root[data-layout-mode='mobile'] .household-calendar-layout-item--aggregate .panel,
+:root[data-layout-mode='mobile'] .household-calendar-layout-item--sheet .panel {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
+}
+
+:root[data-layout-mode='mobile'] .household-calendar-layout-item--quick-entry .panel__header,
+:root[data-layout-mode='mobile'] .household-calendar-layout-item--calendar .panel__header,
+:root[data-layout-mode='mobile'] .household-calendar-layout-toolbar,
+:root[data-layout-mode='mobile'] .household-calendar-layout-toolbar__actions {
+  min-width: 0;
+  max-width: 100%;
+  flex-wrap: wrap;
+}
+
+:root[data-layout-mode='mobile'] .household-calendar-layout-item--quick-entry .entry-editor,
+:root[data-layout-mode='mobile'] .household-calendar-layout-item--quick-entry .entry-editor__amount,
+:root[data-layout-mode='mobile'] .household-calendar-layout-item--quick-entry .entry-editor__fields,
+:root[data-layout-mode='mobile'] .household-calendar-layout-item--quick-entry .entry-editor__field-row,
+:root[data-layout-mode='mobile'] .household-calendar-layout-item--quick-entry .entry-editor__field-row--date-time,
+:root[data-layout-mode='mobile'] .household-calendar-layout-item--quick-entry .entry-editor__field-row--classification,
+:root[data-layout-mode='mobile'] .household-calendar-layout-item--quick-entry .entry-date-control,
+:root[data-layout-mode='mobile'] .household-calendar-layout-item--quick-entry .amount-input,
+:root[data-layout-mode='mobile'] .household-calendar-layout-item--quick-entry .amount-shortcuts {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+}
+
+:root[data-layout-mode='mobile'] .household-calendar-layout-item--quick-entry .entry-editor__amount,
+:root[data-layout-mode='mobile'] .household-calendar-layout-item--quick-entry .entry-editor__fields,
+:root[data-layout-mode='mobile'] .household-calendar-layout-item--quick-entry .entry-editor__field-row,
+:root[data-layout-mode='mobile'] .household-calendar-layout-item--quick-entry .entry-editor__field-row--date-time,
+:root[data-layout-mode='mobile'] .household-calendar-layout-item--quick-entry .entry-editor__field-row--classification {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 10px;
+}
+
+:root[data-layout-mode='mobile'] .household-calendar-layout-item--quick-entry .amount-input input,
+:root[data-layout-mode='mobile'] .household-calendar-layout-item--quick-entry .amount-shortcuts__button,
+:root[data-layout-mode='mobile'] .household-calendar-layout-item--quick-entry .button {
+  min-width: 0;
+  max-width: 100%;
+}
+
+:root[data-layout-mode='mobile'] .household-calendar-layout-item--calendar .calendar-grid,
+:root[data-layout-mode='mobile'] .household-calendar-layout-item--calendar .calendar__grid,
+:root[data-layout-mode='mobile'] .household-calendar-layout-item--calendar .calendar__weeks,
+:root[data-layout-mode='mobile'] .household-calendar-layout-item--calendar .calendar__week,
+:root[data-layout-mode='mobile'] .household-calendar-layout-item--calendar .calendar__weekdays {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+}
+
+@media (max-width: 430px) {
+  :root[data-layout-mode='mobile'] .household-calendar-layout-grid {
+    gap: 12px !important;
+  }
+
+  :root[data-layout-mode='mobile'] .household-calendar-layout-item--quick-entry .panel,
+  :root[data-layout-mode='mobile'] .household-calendar-layout-item--calendar .panel {
+    border-radius: 18px;
+  }
+}

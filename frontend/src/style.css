@@ -15801,3 +15801,136 @@ textarea {
     padding: 6px 4px !important;
   }
 }
+
+
+/* mobile-household-calendar-real-month-grid */
+:root[data-layout-mode='mobile'] .household-calendar-layout-item--calendar .calendar__weeks {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) !important;
+  grid-auto-flow: row !important;
+  grid-auto-rows: auto !important;
+  gap: 6px !important;
+  width: 100% !important;
+  min-width: 0 !important;
+}
+
+:root[data-layout-mode='mobile'] .household-calendar-layout-item--calendar .calendar__weekdays,
+:root[data-layout-mode='mobile'] .household-calendar-layout-item--calendar .calendar__week {
+  display: grid !important;
+  grid-template-columns: repeat(7, minmax(0, 1fr)) !important;
+  grid-auto-flow: column !important;
+  gap: 6px !important;
+  width: 100% !important;
+  min-width: 0 !important;
+}
+
+:root[data-layout-mode='mobile'] .household-calendar-layout-item--calendar .calendar__weekdays {
+  align-items: center !important;
+  padding: 0 2px !important;
+  font-size: 0.75rem !important;
+  text-align: center !important;
+}
+
+:root[data-layout-mode='mobile'] .household-calendar-layout-item--calendar .calendar__weekdays span {
+  min-width: 0 !important;
+  overflow: hidden !important;
+  text-align: center !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+
+:root[data-layout-mode='mobile'] .household-calendar-layout-item--calendar .calendar__day {
+  display: grid !important;
+  grid-template-rows: auto minmax(0, 1fr) auto !important;
+  align-content: stretch !important;
+  gap: 3px !important;
+  min-width: 0 !important;
+  min-height: 78px !important;
+  padding: 6px 4px !important;
+  border-radius: 12px !important;
+  text-align: left !important;
+}
+
+:root[data-layout-mode='mobile'] .household-calendar-layout-item--calendar .calendar__day-head {
+  align-items: flex-start !important;
+  gap: 2px !important;
+  font-size: 0.68rem !important;
+  line-height: 1.05 !important;
+}
+
+:root[data-layout-mode='mobile'] .household-calendar-layout-item--calendar .calendar__day-head > span {
+  max-width: 2.2rem !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+
+:root[data-layout-mode='mobile'] .household-calendar-layout-item--calendar .calendar__day-stamp {
+  display: block !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+  white-space: nowrap !important;
+}
+
+:root[data-layout-mode='mobile'] .household-calendar-layout-item--calendar .calendar__month-tag {
+  display: none !important;
+}
+
+:root[data-layout-mode='mobile'] .household-calendar-layout-item--calendar .calendar__day-stamp strong {
+  display: inline-block !important;
+  font-size: 0.88rem !important;
+  line-height: 1.05 !important;
+}
+
+:root[data-layout-mode='mobile'] .household-calendar-layout-item--calendar .calendar__expense-block {
+  align-self: end !important;
+  gap: 1px !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+  overflow: hidden !important;
+}
+
+:root[data-layout-mode='mobile'] .household-calendar-layout-item--calendar .calendar__label,
+:root[data-layout-mode='mobile'] .household-calendar-layout-item--calendar .calendar__metrics {
+  display: none !important;
+}
+
+:root[data-layout-mode='mobile'] .household-calendar-layout-item--calendar .calendar__expense-total {
+  display: block !important;
+  max-width: 100% !important;
+  overflow: hidden !important;
+  font-size: 0.68rem !important;
+  line-height: 1.05 !important;
+  text-align: right !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+  word-break: normal !important;
+  overflow-wrap: normal !important;
+}
+
+:root[data-layout-mode='mobile'] .household-calendar-layout-item--calendar .calendar__bar {
+  height: 3px !important;
+  min-width: 0 !important;
+}
+
+@media (max-width: 430px) {
+  :root[data-layout-mode='mobile'] .household-calendar-layout-item--calendar .calendar__weeks,
+  :root[data-layout-mode='mobile'] .household-calendar-layout-item--calendar .calendar__weekdays,
+  :root[data-layout-mode='mobile'] .household-calendar-layout-item--calendar .calendar__week {
+    gap: 4px !important;
+  }
+
+  :root[data-layout-mode='mobile'] .household-calendar-layout-item--calendar .calendar__day {
+    min-height: 70px !important;
+    padding: 5px 3px !important;
+    border-radius: 10px !important;
+  }
+
+  :root[data-layout-mode='mobile'] .household-calendar-layout-item--calendar .calendar__day-stamp strong {
+    font-size: 0.82rem !important;
+  }
+
+  :root[data-layout-mode='mobile'] .household-calendar-layout-item--calendar .calendar__expense-total {
+    font-size: 0.62rem !important;
+  }
+}

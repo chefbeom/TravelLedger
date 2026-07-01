@@ -756,7 +756,7 @@ onBeforeUnmount(() => {
           </button>
         </div>
         <button class="theme-toggle" type="button" @click="toggleTheme">
-          {{ isTossTheme ? '기본 테마' : '토스 테마' }}
+          {{ isTossTheme ? '기본 테마' : '다크 테마' }}
         </button>
         <button
           v-if="isTossTheme"
@@ -764,13 +764,13 @@ onBeforeUnmount(() => {
           type="button"
           @click.stop="toggleThemeDegreePanel"
         >
-          토스 강도 {{ themeDegreeDisplay }}
+          다크 강도 {{ themeDegreeDisplay }}
         </button>
       </div>
 
       <div v-if="isTossTheme && themeDegreePanelOpen" class="theme-degree-panel">
         <div class="theme-degree-panel__header">
-          <strong>토스 강도</strong>
+          <strong>다크 강도</strong>
           <span>{{ themeDegreeDisplay }}</span>
         </div>
         <input
@@ -783,14 +783,14 @@ onBeforeUnmount(() => {
           @input="handleThemeDegreeInput"
         />
         <div class="theme-degree-panel__labels">
-          <span>일반 토스</span>
+          <span>일반 다크</span>
           <span>강하게</span>
         </div>
       </div>
     </div>
 
     <button v-if="false" class="theme-toggle" type="button" @click="toggleTheme">
-      {{ isTossTheme ? '기본 테마' : '토스 테마' }}
+      {{ isTossTheme ? '기본 테마' : '다크 테마' }}
     </button>
 
     <div v-if="!authChecked" class="loading-overlay">인증 확인 중입니다...</div>

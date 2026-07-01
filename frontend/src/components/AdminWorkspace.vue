@@ -1257,29 +1257,18 @@ onMounted(initializeAdminWorkspace)
           </article>
         </div>
 
-        <form class="support-detail-grid" @submit.prevent="handleSaveAiControl">
-          <div class="support-inquiry-card">
+        <form class="support-detail-grid admin-ai-control-grid" @submit.prevent="handleSaveAiControl">
+          <div class="support-inquiry-card admin-ai-card admin-ai-card--select">
             <div class="support-inquiry-reply__header">
-              <strong>AI 기능 제어</strong>
-              <small>일반 설정은 저장되어 재시작 후에도 복원됩니다. API key는 보안상 현재 실행 중인 서버에만 반영됩니다.</small>
+              <strong>1. AI 서버 선택</strong>
+              <small>기존에 저장해 둔 LM Studio 서버/모델 조합을 바로 불러옵니다.</small>
             </div>
-            <label class="field">
-              <span class="field__label">AI 분석 사용</span>
+            <label class="field field--inline admin-ai-enable-row">
               <input v-model="state.aiControlForm.enabled" type="checkbox" />
+              <span class="field__label">AI 분석 사용</span>
             </label>
             <label class="field">
-              <span class="field__label">Provider</span>
-              <select v-model="state.aiControlForm.provider">
-                <option value="lmstudio">LM Studio</option>
-                <option value="n8n">n8n</option>
-              </select>
-            </label>
-            <label class="field">
-              <span class="field__label">모델</span>
-              <input v-model="state.aiControlForm.model" placeholder="google/gemma-4-e2b 또는 auto" />
-            </label>
-            <label class="field">
-              <span class="field__label">이전 AI 서버/모델 불러오기</span>
+              <span class="field__label">저장된 AI 서버/모델</span>
               <select v-model="state.aiControlPresetKey" @change="applyAiControlPreset">
                 <option value="">저장된 조합 선택</option>
                 <option v-for="preset in state.aiControlPresets" :key="preset.key" :value="preset.key">
@@ -1288,73 +1277,100 @@ onMounted(initializeAdminWorkspace)
               </select>
               <small class="field__hint">AI 설정 저장에 성공한 LM Studio URL과 모델 조합이 최근순으로 남습니다.</small>
             </label>
-            <label class="field">
-              <span class="field__label">n8n webhook URL</span>
-              <input v-model="state.aiControlForm.workflowUrl" placeholder="https://n8n.example.com/webhook/..." />
-            </label>
-            <label class="field">
-              <span class="field__label">n8n API key header</span>
-              <input v-model="state.aiControlForm.apiKeyHeader" placeholder="X-TravelLedger-AI-Key" />
-            </label>
-            <label class="field">
-              <span class="field__label">n8n API key 변경</span>
-              <input v-model="state.aiControlForm.apiKey" type="password" autocomplete="new-password" :disabled="state.aiControlForm.clearApiKey" :placeholder="state.aiControlForm.apiKeyConfigured ? '설정됨 - 변경할 때만 입력' : '미설정'" />
-            </label>
-            <label class="field field--inline">
-              <input v-model="state.aiControlForm.clearApiKey" type="checkbox" />
-              <span class="field__label">n8n API key 삭제</span>
-            </label>
-            <label class="field">
-              <span class="field__label">LM Studio URL</span>
-              <input v-model="state.aiControlForm.lmStudioBaseUrl" placeholder="http://100.92.170.22:1234" />
-            </label>
-            <label class="field">
-              <span class="field__label">LM Studio API key 변경</span>
-              <input v-model="state.aiControlForm.lmStudioApiKey" type="password" autocomplete="new-password" :disabled="state.aiControlForm.clearLmStudioApiKey" :placeholder="state.aiControlForm.lmStudioApiKeyConfigured ? '설정됨 - 변경할 때만 입력' : '미설정'" />
-            </label>
-            <label class="field field--inline">
-              <input v-model="state.aiControlForm.clearLmStudioApiKey" type="checkbox" />
-              <span class="field__label">LM Studio API key 삭제</span>
-            </label>
-            <label class="field">
-              <span class="field__label">Chat path</span>
-              <input v-model="state.aiControlForm.lmStudioChatPath" placeholder="/v1/chat/completions" />
-            </label>
-            <label class="field">
-              <span class="field__label">Models path</span>
-              <input v-model="state.aiControlForm.lmStudioModelsPath" placeholder="/v1/models" />
-            </label>
+            <div class="admin-ai-current">
+              <span>현재 선택</span>
+              <strong>{{ state.aiControlForm.model || 'auto' }}</strong>
+              <small>{{ state.aiControlForm.lmStudioBaseUrl || 'LM Studio URL 미설정' }}</small>
+            </div>
           </div>
 
-          <div class="support-inquiry-card">
+          <div class="support-inquiry-card admin-ai-card admin-ai-card--add">
+            <div class="support-inquiry-reply__header">
+              <strong>2. AI 서버 추가 / 새 설정 입력</strong>
+              <small>새 GPU 서버 IP, 모델, API 경로, 인증 정보를 입력한 뒤 저장하면 이후 드롭다운에서 다시 선택할 수 있습니다.</small>
+            </div>
+            <div class="admin-ai-field-grid">
+              <label class="field">
+                <span class="field__label">Provider</span>
+                <select v-model="state.aiControlForm.provider">
+                  <option value="lmstudio">LM Studio</option>
+                  <option value="n8n">n8n</option>
+                </select>
+              </label>
+              <label class="field">
+                <span class="field__label">모델</span>
+                <input v-model="state.aiControlForm.model" placeholder="google/gemma-4-e2b 또는 auto" />
+              </label>
+              <label class="field admin-ai-field-grid__wide">
+                <span class="field__label">LM Studio URL</span>
+                <input v-model="state.aiControlForm.lmStudioBaseUrl" placeholder="http://100.x.x.x:1234" />
+              </label>
+              <label class="field">
+                <span class="field__label">Chat path</span>
+                <input v-model="state.aiControlForm.lmStudioChatPath" placeholder="/v1/chat/completions" />
+              </label>
+              <label class="field">
+                <span class="field__label">Models path</span>
+                <input v-model="state.aiControlForm.lmStudioModelsPath" placeholder="/v1/models" />
+              </label>
+              <label class="field admin-ai-field-grid__wide">
+                <span class="field__label">LM Studio API key 변경</span>
+                <input v-model="state.aiControlForm.lmStudioApiKey" type="password" autocomplete="new-password" :disabled="state.aiControlForm.clearLmStudioApiKey" :placeholder="state.aiControlForm.lmStudioApiKeyConfigured ? '설정됨 - 변경할 때만 입력' : '미설정'" />
+              </label>
+              <label class="field field--inline admin-ai-field-grid__wide">
+                <input v-model="state.aiControlForm.clearLmStudioApiKey" type="checkbox" />
+                <span class="field__label">LM Studio API key 삭제</span>
+              </label>
+              <label class="field admin-ai-field-grid__wide">
+                <span class="field__label">n8n webhook URL</span>
+                <input v-model="state.aiControlForm.workflowUrl" placeholder="https://n8n.example.com/webhook/..." />
+              </label>
+              <label class="field">
+                <span class="field__label">n8n API key header</span>
+                <input v-model="state.aiControlForm.apiKeyHeader" placeholder="X-TravelLedger-AI-Key" />
+              </label>
+              <label class="field">
+                <span class="field__label">n8n API key 변경</span>
+                <input v-model="state.aiControlForm.apiKey" type="password" autocomplete="new-password" :disabled="state.aiControlForm.clearApiKey" :placeholder="state.aiControlForm.apiKeyConfigured ? '설정됨 - 변경할 때만 입력' : '미설정'" />
+              </label>
+              <label class="field field--inline admin-ai-field-grid__wide">
+                <input v-model="state.aiControlForm.clearApiKey" type="checkbox" />
+                <span class="field__label">n8n API key 삭제</span>
+              </label>
+            </div>
+          </div>
+
+          <div class="support-inquiry-card admin-ai-card admin-ai-card--tuning">
             <div class="support-inquiry-reply__header">
               <strong>응답/보안 조절</strong>
-              <small>응답 품질과 안전한 provider host 범위를 조절합니다.</small>
+              <small>응답 품질, 제한 시간, provider host 허용 범위를 조절합니다.</small>
             </div>
-            <label class="field">
-              <span class="field__label">Temperature</span>
-              <input v-model.number="state.aiControlForm.temperature" type="number" min="0" max="2" step="0.1" />
-            </label>
-            <label class="field">
-              <span class="field__label">Max tokens</span>
-              <input v-model.number="state.aiControlForm.maxTokens" type="number" min="128" max="8192" step="128" />
-            </label>
-            <label class="field">
-              <span class="field__label">연결 제한 시간(초)</span>
-              <input v-model.number="state.aiControlForm.connectTimeoutSeconds" type="number" min="1" max="600" />
-            </label>
-            <label class="field">
-              <span class="field__label">응답 제한 시간(초)</span>
-              <input v-model.number="state.aiControlForm.readTimeoutSeconds" type="number" min="1" max="600" />
-            </label>
-            <label class="field">
-              <span class="field__label">Provider 허용 목록 강제</span>
-              <input v-model="state.aiControlForm.enforceProviderUrlAllowlist" type="checkbox" />
-            </label>
-            <label class="field">
-              <span class="field__label">허용 호스트</span>
-              <input v-model="state.aiControlForm.allowedProviderHosts" placeholder="100.92.170.22,127.0.0.1,localhost" />
-            </label>
+            <div class="admin-ai-field-grid admin-ai-field-grid--compact">
+              <label class="field">
+                <span class="field__label">Temperature</span>
+                <input v-model.number="state.aiControlForm.temperature" type="number" min="0" max="2" step="0.1" />
+              </label>
+              <label class="field">
+                <span class="field__label">Max tokens</span>
+                <input v-model.number="state.aiControlForm.maxTokens" type="number" min="128" max="8192" step="128" />
+              </label>
+              <label class="field">
+                <span class="field__label">연결 제한 시간(초)</span>
+                <input v-model.number="state.aiControlForm.connectTimeoutSeconds" type="number" min="1" max="600" />
+              </label>
+              <label class="field">
+                <span class="field__label">응답 제한 시간(초)</span>
+                <input v-model.number="state.aiControlForm.readTimeoutSeconds" type="number" min="1" max="600" />
+              </label>
+              <label class="field field--inline">
+                <input v-model="state.aiControlForm.enforceProviderUrlAllowlist" type="checkbox" />
+                <span class="field__label">Provider 허용 목록 강제</span>
+              </label>
+              <label class="field admin-ai-field-grid__wide">
+                <span class="field__label">허용 호스트</span>
+                <input v-model="state.aiControlForm.allowedProviderHosts" placeholder="100.x.x.x,127.0.0.1,localhost" />
+              </label>
+            </div>
             <div class="panel__actions">
               <button class="button button--primary" type="submit" :disabled="state.savingAiControl">
                 {{ state.savingAiControl ? '저장 중...' : 'AI 설정 저장' }}

@@ -9,15 +9,15 @@ const DEFAULT_CENTER = [37.5547, 126.9706]
 const DEFAULT_ZOOM = 11
 
 const iconPresetMap = {
-  general: { label: '📍' },
-  lodging: { label: '🏠' },
-  food: { label: '🍽' },
-  cafe: { label: '☕' },
-  museum: { label: '🏛' },
-  sightseeing: { label: '📸' },
-  shopping: { label: '🛍' },
-  transit: { label: '🚌' },
-  route: { label: '➜' },
+  general: { label: '핀' },
+  lodging: { label: '숙' },
+  food: { label: '식' },
+  cafe: { label: '카' },
+  museum: { label: '관' },
+  sightseeing: { label: '명' },
+  shopping: { label: '쇼' },
+  transit: { label: '차' },
+  route: { label: '길' },
 }
 
 const props = defineProps({
@@ -71,11 +71,11 @@ const props = defineProps({
   },
   hintTitle: {
     type: String,
-    default: '지도 상호작용',
+    default: '지도 조작',
   },
   hintText: {
     type: String,
-    default: '지도를 눌러 위치를 선택하거나 경로 점을 추가할 수 있습니다.',
+    default: '지도를 손가락으로 드래그하거나 핀을 눌러 위치와 사진을 확인할 수 있습니다.',
   },
   viewKey: {
     type: [String, Number],
@@ -145,6 +145,52 @@ let hasFittedInitialView = false
 let searchAbortController = null
 let activePopupMarkerId = null
 let activePopupOpen = false
+
+function isTouchMapDevice() {
+  if (typeof window === 'undefined') {
+    return false
+  }
+
+  return Boolean(window.matchMedia?.('(pointer: coarse)').matches || navigator.maxTouchPoints > 0)
+}
+
+function createMapOptions() {
+  const touchDevice = isTouchMapDevice()
+
+  return {
+    zoomControl: true,
+    scrollWheelZoom: !touchDevice,
+    dragging: true,
+    touchZoom: 'center',
+    tap: true,
+    keyboard: !touchDevice,
+    inertia: true,
+    bounceAtZoomLimits: false,
+  }
+}
+
+function createPopupImage(sourceUrl, className, alt, variant = THUMBNAIL_VARIANTS.mini) {
+  const image = document.createElement('img')
+  let hasTriedOriginal = false
+
+  image.className = className
+  image.src = buildThumbnailUrl(sourceUrl, variant)
+  image.alt = alt
+  image.loading = 'eager'
+  image.decoding = 'async'
+  image.fetchPriority = 'high'
+  image.addEventListener('error', () => {
+    if (!hasTriedOriginal && sourceUrl) {
+      hasTriedOriginal = true
+      image.src = sourceUrl
+      return
+    }
+
+    image.remove()
+  })
+
+  return image
+}
 
 function queueMapResize() {
   requestAnimationFrame(() => {
@@ -350,14 +396,7 @@ function createPopupContent(marker) {
   const heroPhoto = marker.photoUrl || ''
 
   if (heroPhoto) {
-    const image = document.createElement('img')
-    image.className = 'travel-map__popup-image'
-    image.src = buildThumbnailUrl(heroPhoto, THUMBNAIL_VARIANTS.mini)
-    image.alt = marker.title || marker.placeName || '사진'
-    image.loading = 'eager'
-    image.decoding = 'async'
-    image.fetchPriority = 'high'
-    root.appendChild(image)
+    root.appendChild(createPopupImage(heroPhoto, 'travel-map__popup-image', marker.title || marker.placeName || '사진'))
   }
 
   const copy = document.createElement('div')
@@ -487,12 +526,17 @@ function createMarkerLayer(marker) {
   })
 
   layer.bindPopup(() => createPopupContent(marker))
-  layer.on('click', () => {
+  layer.on('click', (event) => {
+    if (event?.originalEvent) {
+      L.DomEvent.stopPropagation(event.originalEvent)
+      L.DomEvent.preventDefault(event.originalEvent)
+    }
+
     if (props.preserveSelectedPopup && markerId) {
       activePopupMarkerId = markerId
       activePopupOpen = true
-      layer.openPopup()
     }
+    layer.openPopup()
     emit('select-marker', marker)
   })
   layer.on('popupopen', () => {
@@ -909,8 +953,7 @@ onMounted(() => {
   document.addEventListener('fullscreenchange', handleFullscreenChange)
 
   mapInstance = L.map(mapElement.value, {
-    zoomControl: true,
-    scrollWheelZoom: true,
+    ...createMapOptions(),
   }).setView(resolveInitialCenter(), DEFAULT_ZOOM)
 
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {

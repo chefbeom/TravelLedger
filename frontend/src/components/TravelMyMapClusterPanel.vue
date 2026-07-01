@@ -12,6 +12,7 @@ const VIEWPORT_RENDER_DEBOUNCE_MS = 80
 const CLIENT_CLUSTER_MIN_SIZE = 2
 const CLIENT_CLUSTER_MAX_ZOOM = 17
 const SMOOTH_ZOOM_DURATION = 0.45
+const MAP_BACKGROUND_CLICK_SUPPRESS_MS = 450
 const TILE_PROVIDERS = {
   osm: {
     url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
@@ -103,6 +104,57 @@ let mapRenderTimer = 0
 let popupOpenSequence = 0
 let suppressNextMapBackgroundClick = false
 
+function isTouchMapDevice() {
+  if (typeof window === 'undefined') {
+    return false
+  }
+
+  return Boolean(window.matchMedia?.('(pointer: coarse)').matches || navigator.maxTouchPoints > 0)
+}
+
+function createMapOptions(extra = {}) {
+  const touchDevice = isTouchMapDevice()
+
+  return {
+    zoomControl: true,
+    scrollWheelZoom: !touchDevice,
+    dragging: true,
+    touchZoom: 'center',
+    tap: true,
+    keyboard: !touchDevice,
+    inertia: true,
+    bounceAtZoomLimits: false,
+    ...extra,
+  }
+}
+
+function appendPopupImage(root, sourceUrl, alt, variant = THUMBNAIL_VARIANTS.mini) {
+  if (!sourceUrl) {
+    return
+  }
+
+  const image = document.createElement('img')
+  let hasTriedOriginal = false
+
+  image.className = 'travel-cluster-popup__image'
+  image.src = buildThumbnailUrl(sourceUrl, variant)
+  image.alt = alt || '여행 사진'
+  image.loading = 'eager'
+  image.fetchPriority = 'high'
+  image.decoding = 'async'
+  image.addEventListener('error', () => {
+    if (!hasTriedOriginal && sourceUrl) {
+      hasTriedOriginal = true
+      image.src = sourceUrl
+      return
+    }
+
+    image.remove()
+  })
+
+  root.appendChild(image)
+}
+
 function scheduleMarkerPopup(markerKey, remainingAttempts = 6, sequence = popupOpenSequence) {
   const normalizedKey = String(markerKey ?? '')
   if (!normalizedKey) {
@@ -146,7 +198,7 @@ function suppressMapBackgroundClickOnce() {
   suppressNextMapBackgroundClick = true
   setTimeout(() => {
     suppressNextMapBackgroundClick = false
-  }, 0)
+  }, MAP_BACKGROUND_CLICK_SUPPRESS_MS)
 }
 
 function normalizeColorHex(value, fallback = '#3182F6') {
@@ -657,23 +709,26 @@ function createPopupContent(aggregate) {
   const root = document.createElement('button')
   root.type = 'button'
   root.className = 'travel-cluster-popup travel-cluster-popup--actionable'
-  root.addEventListener('click', (event) => {
+  let lastActivatedAt = 0
+  const activatePreview = (event) => {
+    const now = Date.now()
+    if (now - lastActivatedAt < 350) {
+      return
+    }
+    lastActivatedAt = now
+
     event.preventDefault()
     event.stopPropagation()
+    suppressMapBackgroundClickOnce()
     emit('preview-cluster', aggregate?.representative)
-  })
+  }
+  root.addEventListener('click', activatePreview)
+  root.addEventListener('touchend', activatePreview, { passive: false })
   L.DomEvent.disableClickPropagation(root)
 
   const photoUrl = aggregate?.representative?.representativePhotoUrl
   if (photoUrl) {
-    const image = document.createElement('img')
-    image.className = 'travel-cluster-popup__image'
-    image.src = buildThumbnailUrl(photoUrl, THUMBNAIL_VARIANTS.mini)
-    image.alt = aggregate?.representative?.title || aggregate?.representative?.placeName || '대표 사진'
-    image.loading = 'lazy'
-    image.fetchPriority = 'low'
-    image.decoding = 'async'
-    root.appendChild(image)
+    appendPopupImage(root, photoUrl, aggregate?.representative?.title || aggregate?.representative?.placeName || '여행 사진')
   }
 
   const copy = document.createElement('div')
@@ -723,14 +778,7 @@ function createPopupContentLegacy(aggregate) {
     root.className = 'travel-cluster-popup'
 
     if (aggregate?.representative?.photoUrl) {
-      const image = document.createElement('img')
-      image.className = 'travel-cluster-popup__image'
-      image.src = buildThumbnailUrl(aggregate.representative.photoUrl, THUMBNAIL_VARIANTS.mini)
-      image.alt = aggregate?.representative?.title || aggregate?.representative?.placeName || '기록 사진'
-      image.loading = 'lazy'
-    image.fetchPriority = 'low'
-    image.decoding = 'async'
-      root.appendChild(image)
+      appendPopupImage(root, aggregate.representative.photoUrl, aggregate?.representative?.title || aggregate?.representative?.placeName || '기록 사진')
     }
 
     const copy = document.createElement('div')
@@ -772,14 +820,7 @@ function createPopupContentLegacy(aggregate) {
 
   const photoUrl = aggregate?.representative?.representativePhotoUrl
   if (photoUrl) {
-    const image = document.createElement('img')
-    image.className = 'travel-cluster-popup__image'
-    image.src = buildThumbnailUrl(photoUrl, THUMBNAIL_VARIANTS.mini)
-    image.alt = aggregate?.representative?.title || aggregate?.representative?.placeName || '대표 사진'
-    image.loading = 'lazy'
-    image.fetchPriority = 'low'
-    image.decoding = 'async'
-    root.appendChild(image)
+    appendPopupImage(root, photoUrl, aggregate?.representative?.title || aggregate?.representative?.placeName || '여행 사진')
   }
 
   const copy = document.createElement('div')
@@ -955,6 +996,7 @@ function renderClusters() {
       }
 
       suppressMapBackgroundClickOnce()
+      marker.openPopup()
       requestMarkerPopup(aggregate.markerKey)
       selectRepresentativeAggregate(aggregate)
       scheduleRenderClusters(0)
@@ -1077,17 +1119,17 @@ onMounted(() => {
   document.addEventListener('fullscreenchange', handleFullscreenChange)
 
   mapInstance = L.map(mapElement.value, {
-    zoomControl: true,
-    scrollWheelZoom: true,
-    preferCanvas: true,
-    zoomAnimation: true,
-    markerZoomAnimation: true,
-    fadeAnimation: true,
-    zoomSnap: 0.5,
-    zoomDelta: 0.5,
-    wheelPxPerZoomLevel: 96,
-    wheelDebounceTime: 28,
-    easeLinearity: 0.2,
+    ...createMapOptions({
+      preferCanvas: true,
+      zoomAnimation: true,
+      markerZoomAnimation: true,
+      fadeAnimation: true,
+      zoomSnap: 0.5,
+      zoomDelta: 0.5,
+      wheelPxPerZoomLevel: 96,
+      wheelDebounceTime: 28,
+      easeLinearity: 0.2,
+    }),
   }).setView(resolveInitialCenter(), DEFAULT_ZOOM)
 
   const provider = resolveTileProvider()

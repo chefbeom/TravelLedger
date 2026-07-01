@@ -16639,3 +16639,664 @@ textarea {
 :root:not([data-theme='toss']) .admin-workspace .travel-modal__dialog .button--secondary {
   color: var(--text, #191f28) !important;
 }
+/* Cross-page contrast safety net: keep text readable on light/dark themes */
+:root:not([data-theme='toss']) .auth-card,
+:root:not([data-theme='toss']) .auth-copy,
+:root:not([data-theme='toss']) .launcher-card,
+:root:not([data-theme='toss']) .feature-card,
+:root:not([data-theme='toss']) .notification-hero,
+:root:not([data-theme='toss']) .notification-toolbar,
+:root:not([data-theme='toss']) .notification-list-panel,
+:root:not([data-theme='toss']) .notification-card,
+:root:not([data-theme='toss']) .privacy-export-card,
+:root:not([data-theme='toss']) .privacy-action-card,
+:root:not([data-theme='toss']) .privacy-result-list,
+:root:not([data-theme='toss']) .profile-security-modal,
+:root:not([data-theme='toss']) .travel-modal__dialog,
+:root:not([data-theme='toss']) .receipt-ocr-modal__dialog,
+:root:not([data-theme='toss']) .drive-details-panel,
+:root:not([data-theme='toss']) .drive-file-card,
+:root:not([data-theme='toss']) .family-category-card,
+:root:not([data-theme='toss']) .family-album-focus,
+:root:not([data-theme='toss']) .travel-plan-card,
+:root:not([data-theme='toss']) .travel-media-card,
+:root:not([data-theme='toss']) .travel-pending-card,
+:root:not([data-theme='toss']) .support-inquiry-card:not(.admin-workspace .support-inquiry-card),
+:root:not([data-theme='toss']) .invite-panel__result {
+  color: var(--text, #191f28) !important;
+}
+
+:root:not([data-theme='toss']) .auth-card h1,
+:root:not([data-theme='toss']) .auth-card h2,
+:root:not([data-theme='toss']) .auth-copy h1,
+:root:not([data-theme='toss']) .launcher-card strong,
+:root:not([data-theme='toss']) .feature-card strong,
+:root:not([data-theme='toss']) .notification-hero h2,
+:root:not([data-theme='toss']) .notification-card h3,
+:root:not([data-theme='toss']) .privacy-export-card strong,
+:root:not([data-theme='toss']) .privacy-action-card strong,
+:root:not([data-theme='toss']) .profile-security-modal h1,
+:root:not([data-theme='toss']) .profile-security-modal h2,
+:root:not([data-theme='toss']) .profile-security-modal h3,
+:root:not([data-theme='toss']) .travel-modal__dialog h1,
+:root:not([data-theme='toss']) .travel-modal__dialog h2,
+:root:not([data-theme='toss']) .travel-modal__dialog h3,
+:root:not([data-theme='toss']) .travel-modal__dialog h4,
+:root:not([data-theme='toss']) .travel-modal__dialog .field__label,
+:root:not([data-theme='toss']) .receipt-ocr-modal__dialog h1,
+:root:not([data-theme='toss']) .receipt-ocr-modal__dialog h2,
+:root:not([data-theme='toss']) .receipt-ocr-modal__dialog h3,
+:root:not([data-theme='toss']) .drive-details-panel__head strong,
+:root:not([data-theme='toss']) .drive-file-card strong,
+:root:not([data-theme='toss']) .family-category-card strong,
+:root:not([data-theme='toss']) .family-album-focus strong,
+:root:not([data-theme='toss']) .travel-plan-card strong,
+:root:not([data-theme='toss']) .travel-media-card strong,
+:root:not([data-theme='toss']) .travel-pending-card strong,
+:root:not([data-theme='toss']) .support-inquiry-card:not(.admin-workspace .support-inquiry-card) strong {
+  color: var(--text, #191f28) !important;
+}
+
+:root:not([data-theme='toss']) .auth-card p,
+:root:not([data-theme='toss']) .auth-copy p,
+:root:not([data-theme='toss']) .launcher-card span,
+:root:not([data-theme='toss']) .feature-card span,
+:root:not([data-theme='toss']) .notification-hero p,
+:root:not([data-theme='toss']) .notification-card p,
+:root:not([data-theme='toss']) .notification-card__meta,
+:root:not([data-theme='toss']) .privacy-export-card small,
+:root:not([data-theme='toss']) .privacy-action-card small,
+:root:not([data-theme='toss']) .profile-security-modal p,
+:root:not([data-theme='toss']) .profile-security-modal small,
+:root:not([data-theme='toss']) .travel-modal__dialog p,
+:root:not([data-theme='toss']) .travel-modal__dialog small,
+:root:not([data-theme='toss']) .travel-modal__dialog .field__hint,
+:root:not([data-theme='toss']) .travel-modal__dialog .form-hint,
+:root:not([data-theme='toss']) .receipt-ocr-modal__dialog p,
+:root:not([data-theme='toss']) .receipt-ocr-modal__dialog small,
+:root:not([data-theme='toss']) .drive-details-panel__head span,
+:root:not([data-theme='toss']) .drive-details-panel__meta,
+:root:not([data-theme='toss']) .drive-file-card small,
+:root:not([data-theme='toss']) .family-category-card small,
+:root:not([data-theme='toss']) .family-album-focus small,
+:root:not([data-theme='toss']) .travel-plan-card small,
+:root:not([data-theme='toss']) .travel-media-card small,
+:root:not([data-theme='toss']) .travel-pending-card small,
+:root:not([data-theme='toss']) .support-inquiry-card:not(.admin-workspace .support-inquiry-card) small,
+:root:not([data-theme='toss']) .support-inquiry-card:not(.admin-workspace .support-inquiry-card) p {
+  color: var(--text-soft, #4e5968) !important;
+}
+
+:root[data-theme='toss'] .notification-hero,
+:root[data-theme='toss'] .notification-toolbar,
+:root[data-theme='toss'] .notification-list-panel,
+:root[data-theme='toss'] .notification-card,
+:root[data-theme='toss'] .privacy-export-card,
+:root[data-theme='toss'] .privacy-action-card,
+:root[data-theme='toss'] .privacy-result-list,
+:root[data-theme='toss'] .profile-security-modal,
+:root[data-theme='toss'] .travel-modal__dialog,
+:root[data-theme='toss'] .receipt-ocr-modal__dialog,
+:root[data-theme='toss'] .drive-details-panel,
+:root[data-theme='toss'] .drive-file-card,
+:root[data-theme='toss'] .family-category-card,
+:root[data-theme='toss'] .family-album-focus,
+:root[data-theme='toss'] .travel-plan-card,
+:root[data-theme='toss'] .travel-media-card,
+:root[data-theme='toss'] .travel-pending-card,
+:root[data-theme='toss'] .support-inquiry-card,
+:root[data-theme='toss'] .invite-panel__result {
+  background: var(--surface-panel) !important;
+  border-color: var(--line) !important;
+  color: var(--text, #f3f5fa) !important;
+}
+
+:root[data-theme='toss'] .notification-hero h2,
+:root[data-theme='toss'] .notification-card h3,
+:root[data-theme='toss'] .privacy-export-card strong,
+:root[data-theme='toss'] .privacy-action-card strong,
+:root[data-theme='toss'] .profile-security-modal h1,
+:root[data-theme='toss'] .profile-security-modal h2,
+:root[data-theme='toss'] .profile-security-modal h3,
+:root[data-theme='toss'] .travel-modal__dialog h1,
+:root[data-theme='toss'] .travel-modal__dialog h2,
+:root[data-theme='toss'] .travel-modal__dialog h3,
+:root[data-theme='toss'] .travel-modal__dialog h4,
+:root[data-theme='toss'] .travel-modal__dialog .field__label,
+:root[data-theme='toss'] .receipt-ocr-modal__dialog h1,
+:root[data-theme='toss'] .receipt-ocr-modal__dialog h2,
+:root[data-theme='toss'] .receipt-ocr-modal__dialog h3,
+:root[data-theme='toss'] .drive-details-panel__head strong,
+:root[data-theme='toss'] .drive-file-card strong,
+:root[data-theme='toss'] .family-category-card strong,
+:root[data-theme='toss'] .family-album-focus strong,
+:root[data-theme='toss'] .travel-plan-card strong,
+:root[data-theme='toss'] .travel-media-card strong,
+:root[data-theme='toss'] .travel-pending-card strong,
+:root[data-theme='toss'] .support-inquiry-card strong {
+  color: var(--text, #f3f5fa) !important;
+}
+
+:root[data-theme='toss'] .notification-hero p,
+:root[data-theme='toss'] .notification-card p,
+:root[data-theme='toss'] .notification-card__meta,
+:root[data-theme='toss'] .notification-page-summary,
+:root[data-theme='toss'] .notification-page-size,
+:root[data-theme='toss'] .privacy-export-card small,
+:root[data-theme='toss'] .privacy-action-card small,
+:root[data-theme='toss'] .profile-security-modal p,
+:root[data-theme='toss'] .profile-security-modal small,
+:root[data-theme='toss'] .travel-modal__dialog p,
+:root[data-theme='toss'] .travel-modal__dialog small,
+:root[data-theme='toss'] .travel-modal__dialog .field__hint,
+:root[data-theme='toss'] .travel-modal__dialog .form-hint,
+:root[data-theme='toss'] .receipt-ocr-modal__dialog p,
+:root[data-theme='toss'] .receipt-ocr-modal__dialog small,
+:root[data-theme='toss'] .drive-details-panel__head span,
+:root[data-theme='toss'] .drive-details-panel__meta,
+:root[data-theme='toss'] .drive-file-card small,
+:root[data-theme='toss'] .family-category-card small,
+:root[data-theme='toss'] .family-album-focus small,
+:root[data-theme='toss'] .travel-plan-card small,
+:root[data-theme='toss'] .travel-media-card small,
+:root[data-theme='toss'] .travel-pending-card small,
+:root[data-theme='toss'] .support-inquiry-card small,
+:root[data-theme='toss'] .support-inquiry-card p {
+  color: var(--text-soft, #b0bacb) !important;
+}
+
+:root[data-theme='toss'] .notification-page-size select,
+:root[data-theme='toss'] .travel-modal__dialog input,
+:root[data-theme='toss'] .travel-modal__dialog select,
+:root[data-theme='toss'] .travel-modal__dialog textarea,
+:root[data-theme='toss'] .profile-security-modal input,
+:root[data-theme='toss'] .profile-security-modal select,
+:root[data-theme='toss'] .profile-security-modal textarea,
+:root[data-theme='toss'] .receipt-ocr-modal__dialog input,
+:root[data-theme='toss'] .receipt-ocr-modal__dialog select,
+:root[data-theme='toss'] .receipt-ocr-modal__dialog textarea {
+  background: var(--field-bg, #111821) !important;
+  border-color: var(--field-border, rgba(92, 108, 135, 0.58)) !important;
+  color: var(--text, #f3f5fa) !important;
+}
+
+:root[data-theme='toss'] .notification-card__status,
+:root[data-theme='toss'] .panel__badge,
+:root[data-theme='toss'] .chip--neutral {
+  color: var(--text, #f3f5fa) !important;
+}
+/* Cross-page contrast safety net: repeated controls, tables and badges */
+:root:not([data-theme='toss']) {
+  --brand-readable: #047857;
+  --brand-readable-strong: #065f46;
+  --link-readable: #2563eb;
+}
+
+:root[data-theme='toss'] {
+  --brand-readable: #86efac;
+  --brand-readable-strong: #bbf7d0;
+  --link-readable: #9fc0ff;
+}
+
+:root:not([data-theme='toss']) .panel__eyebrow,
+:root:not([data-theme='toss']) .notification-hero__eyebrow,
+:root:not([data-theme='toss']) .travel-map__toolbar-label,
+:root:not([data-theme='toss']) .travel-cluster-popup__action,
+:root:not([data-theme='toss']) .travel-record-switcher__card em,
+:root:not([data-theme='toss']) .travel-ledger-card em,
+:root:not([data-theme='toss']) .profile-privacy-panel .panel__badge,
+:root:not([data-theme='toss']) .notification-card__tone,
+:root:not([data-theme='toss']) .chip--neutral {
+  color: var(--brand-readable, #047857) !important;
+}
+
+:root:not([data-theme='toss']) .panel__badge,
+:root:not([data-theme='toss']) .notification-card__status,
+:root:not([data-theme='toss']) .topbar__notification-badge {
+  background: rgba(4, 120, 87, 0.12) !important;
+  color: var(--brand-readable-strong, #065f46) !important;
+  border-color: rgba(4, 120, 87, 0.22) !important;
+}
+
+:root:not([data-theme='toss']) .button--ghost,
+:root:not([data-theme='toss']) .button--secondary,
+:root:not([data-theme='toss']) .topbar__nav-button,
+:root:not([data-theme='toss']) .layout-mode-toggle__button,
+:root:not([data-theme='toss']) .theme-toggle,
+:root:not([data-theme='toss']) .travel-map__toolbar-button,
+:root:not([data-theme='toss']) .notification-page-size select {
+  color: var(--text, #191f28) !important;
+}
+
+:root:not([data-theme='toss']) .button--primary,
+:root:not([data-theme='toss']) .topbar__nav-button--active,
+:root:not([data-theme='toss']) .layout-mode-toggle__button--active,
+:root:not([data-theme='toss']) .travel-map__toolbar-button.is-active {
+  color: #ffffff !important;
+}
+
+:root:not([data-theme='toss']) .sheet-table th,
+:root:not([data-theme='toss']) .sheet-table td,
+:root:not([data-theme='toss']) .comparison-table th,
+:root:not([data-theme='toss']) .comparison-table td,
+:root:not([data-theme='toss']) .ledger-history-list,
+:root:not([data-theme='toss']) .drive-details-panel__meta dt,
+:root:not([data-theme='toss']) .drive-details-panel__meta dd {
+  color: var(--text, #191f28) !important;
+}
+
+:root:not([data-theme='toss']) .sheet-table__memo,
+:root:not([data-theme='toss']) .sheet-table__empty,
+:root:not([data-theme='toss']) .panel__empty,
+:root:not([data-theme='toss']) .comparison-table small,
+:root:not([data-theme='toss']) .ledger-history-list small,
+:root:not([data-theme='toss']) .drive-details-panel__empty,
+:root:not([data-theme='toss']) .form-hint,
+:root:not([data-theme='toss']) .field__hint {
+  color: var(--text-soft, #4e5968) !important;
+}
+
+:root[data-theme='toss'] .panel__eyebrow,
+:root[data-theme='toss'] .notification-hero__eyebrow,
+:root[data-theme='toss'] .travel-map__toolbar-label,
+:root[data-theme='toss'] .travel-cluster-popup__action,
+:root[data-theme='toss'] .travel-record-switcher__card em,
+:root[data-theme='toss'] .travel-ledger-card em,
+:root[data-theme='toss'] .chip--neutral {
+  color: var(--brand-readable, #86efac) !important;
+}
+
+:root[data-theme='toss'] .sheet-table th,
+:root[data-theme='toss'] .sheet-table td,
+:root[data-theme='toss'] .comparison-table th,
+:root[data-theme='toss'] .comparison-table td,
+:root[data-theme='toss'] .ledger-history-list,
+:root[data-theme='toss'] .drive-details-panel__meta dt,
+:root[data-theme='toss'] .drive-details-panel__meta dd {
+  color: var(--text, #f3f5fa) !important;
+}
+
+:root[data-theme='toss'] .sheet-table__memo,
+:root[data-theme='toss'] .sheet-table__empty,
+:root[data-theme='toss'] .panel__empty,
+:root[data-theme='toss'] .comparison-table small,
+:root[data-theme='toss'] .ledger-history-list small,
+:root[data-theme='toss'] .drive-details-panel__empty,
+:root[data-theme='toss'] .form-hint,
+:root[data-theme='toss'] .field__hint {
+  color: var(--text-soft, #b0bacb) !important;
+}
+
+:root[data-theme='toss'] .button--ghost,
+:root[data-theme='toss'] .button--secondary,
+:root[data-theme='toss'] .topbar__nav-button,
+:root[data-theme='toss'] .layout-mode-toggle__button,
+:root[data-theme='toss'] .theme-toggle,
+:root[data-theme='toss'] .travel-map__toolbar-button,
+:root[data-theme='toss'] .notification-page-size select {
+  color: var(--text, #f3f5fa) !important;
+}
+
+:root[data-theme='toss'] .button--primary,
+:root[data-theme='toss'] .topbar__nav-button--active,
+:root[data-theme='toss'] .layout-mode-toggle__button--active,
+:root[data-theme='toss'] .travel-map__toolbar-button.is-active {
+  color: #ffffff !important;
+}
+
+:root[data-theme='toss'] .panel__badge,
+:root[data-theme='toss'] .notification-card__status,
+:root[data-theme='toss'] .topbar__notification-badge {
+  background: rgba(134, 239, 172, 0.14) !important;
+  color: var(--brand-readable-strong, #bbf7d0) !important;
+  border-color: rgba(134, 239, 172, 0.22) !important;
+}
+
+@media (max-width: 720px) {
+  :root:not([data-theme='toss']) .panel__eyebrow,
+  :root:not([data-theme='toss']) .field__label,
+  :root[data-theme='toss'] .panel__eyebrow,
+  :root[data-theme='toss'] .field__label {
+    font-weight: 900;
+  }
+}
+/* Cross-page contrast safety net: forms, disabled states, links and empty states */
+:root:not([data-theme='toss']) input,
+:root:not([data-theme='toss']) select,
+:root:not([data-theme='toss']) textarea,
+:root:not([data-theme='toss']) .field input,
+:root:not([data-theme='toss']) .field select,
+:root:not([data-theme='toss']) .stack-form input,
+:root:not([data-theme='toss']) .stack-form select,
+:root:not([data-theme='toss']) .amount-input input,
+:root:not([data-theme='toss']) .travel-map__search-input {
+  background: var(--field-bg, #ffffff) !important;
+  border-color: var(--field-border, #d8dee8) !important;
+  color: var(--text, #191f28) !important;
+  -webkit-text-fill-color: var(--text, #191f28);
+}
+
+:root:not([data-theme='toss']) input::placeholder,
+:root:not([data-theme='toss']) textarea::placeholder,
+:root:not([data-theme='toss']) .field input::placeholder,
+:root:not([data-theme='toss']) .stack-form input::placeholder,
+:root:not([data-theme='toss']) .travel-map__search-input::placeholder {
+  color: #64748b !important;
+  opacity: 1 !important;
+  -webkit-text-fill-color: #64748b;
+}
+
+:root:not([data-theme='toss']) button:disabled,
+:root:not([data-theme='toss']) .button:disabled,
+:root:not([data-theme='toss']) input:disabled,
+:root:not([data-theme='toss']) select:disabled,
+:root:not([data-theme='toss']) textarea:disabled {
+  color: #64748b !important;
+  -webkit-text-fill-color: #64748b;
+  opacity: 0.82 !important;
+}
+
+:root:not([data-theme='toss']) a,
+:root:not([data-theme='toss']) .link-button,
+:root:not([data-theme='toss']) .drive-location-hint,
+:root:not([data-theme='toss']) .travel-share-current-item a {
+  color: var(--link-readable, #2563eb) !important;
+}
+
+:root:not([data-theme='toss']) .notification-empty,
+:root:not([data-theme='toss']) .panel__empty,
+:root:not([data-theme='toss']) .drive-details-panel__empty,
+:root:not([data-theme='toss']) .receipt-ocr-modal__empty,
+:root:not([data-theme='toss']) .privacy-result-list,
+:root:not([data-theme='toss']) .travel-map__hint span,
+:root:not([data-theme='toss']) .travel-map__search-message {
+  color: var(--text-soft, #4e5968) !important;
+}
+
+:root[data-theme='toss'] input,
+:root[data-theme='toss'] select,
+:root[data-theme='toss'] textarea,
+:root[data-theme='toss'] .field input,
+:root[data-theme='toss'] .field select,
+:root[data-theme='toss'] .stack-form input,
+:root[data-theme='toss'] .stack-form select,
+:root[data-theme='toss'] .amount-input input,
+:root[data-theme='toss'] .travel-map__search-input {
+  background: var(--field-bg, #111821) !important;
+  border-color: var(--field-border, rgba(92, 108, 135, 0.58)) !important;
+  color: var(--text, #f3f5fa) !important;
+  -webkit-text-fill-color: var(--text, #f3f5fa);
+}
+
+:root[data-theme='toss'] input::placeholder,
+:root[data-theme='toss'] textarea::placeholder,
+:root[data-theme='toss'] .field input::placeholder,
+:root[data-theme='toss'] .stack-form input::placeholder,
+:root[data-theme='toss'] .travel-map__search-input::placeholder {
+  color: #94a3b8 !important;
+  opacity: 1 !important;
+  -webkit-text-fill-color: #94a3b8;
+}
+
+:root[data-theme='toss'] button:disabled,
+:root[data-theme='toss'] .button:disabled,
+:root[data-theme='toss'] input:disabled,
+:root[data-theme='toss'] select:disabled,
+:root[data-theme='toss'] textarea:disabled {
+  color: #94a3b8 !important;
+  -webkit-text-fill-color: #94a3b8;
+  opacity: 0.78 !important;
+}
+
+:root[data-theme='toss'] a,
+:root[data-theme='toss'] .link-button,
+:root[data-theme='toss'] .drive-location-hint,
+:root[data-theme='toss'] .travel-share-current-item a {
+  color: var(--link-readable, #9fc0ff) !important;
+}
+
+:root[data-theme='toss'] .notification-empty,
+:root[data-theme='toss'] .panel__empty,
+:root[data-theme='toss'] .drive-details-panel__empty,
+:root[data-theme='toss'] .receipt-ocr-modal__empty,
+:root[data-theme='toss'] .privacy-result-list,
+:root[data-theme='toss'] .travel-map__hint span,
+:root[data-theme='toss'] .travel-map__search-message {
+  color: var(--text-soft, #b0bacb) !important;
+}
+/* Cross-page contrast safety net: image, map and public story surfaces */
+.travel-public-spot-card__meta,
+.travel-public-spot-card strong,
+.travel-public-spot-card small,
+.travel-public-map-card__intro,
+.travel-public-map-card__intro span,
+.travel-public-map-card__intro strong,
+.travel-public-map-card__intro small,
+.travel-public-story-panel,
+.travel-public-story-panel__head span,
+.travel-public-story-panel__head strong,
+.travel-public-story-panel p,
+.travel-cluster-pin__count,
+.travel-map__thumb-pin span,
+.travel-photo-card-button span,
+.travel-photo-preview-button span,
+.travel-media-thumb--cluster-tile span {
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.68), 0 8px 20px rgba(0, 0, 0, 0.28);
+}
+
+.travel-public-spot-card::after,
+.travel-public-map-card::after,
+.travel-photo-card-button::after,
+.travel-photo-preview-button::after {
+  pointer-events: none;
+}
+
+:root:not([data-theme='toss']) .travel-public-trip-card,
+:root:not([data-theme='toss']) .travel-public-update,
+:root:not([data-theme='toss']) .travel-public-rank,
+:root:not([data-theme='toss']) .travel-public-toggle,
+:root:not([data-theme='toss']) .travel-public-active-filter,
+:root:not([data-theme='toss']) .travel-share-recipient-results button,
+:root:not([data-theme='toss']) .travel-share-current-item,
+:root:not([data-theme='toss']) .travel-overview-place-card,
+:root:not([data-theme='toss']) .travel-overview-day-group,
+:root:not([data-theme='toss']) .travel-overview-timeline-row,
+:root:not([data-theme='toss']) .travel-cluster-summary-card,
+:root:not([data-theme='toss']) .travel-map-inspector:not(.travel-map-inspector--fullscreen) .panel {
+  color: var(--text, #191f28) !important;
+}
+
+:root:not([data-theme='toss']) .travel-public-trip-card strong,
+:root:not([data-theme='toss']) .travel-public-update strong,
+:root:not([data-theme='toss']) .travel-public-rank strong,
+:root:not([data-theme='toss']) .travel-overview-place-card strong,
+:root:not([data-theme='toss']) .travel-overview-day-group__head h3,
+:root:not([data-theme='toss']) .travel-overview-timeline-row__main strong,
+:root:not([data-theme='toss']) .travel-cluster-summary-card strong,
+:root:not([data-theme='toss']) .travel-map-inspector:not(.travel-map-inspector--fullscreen) .panel__header h2 {
+  color: var(--text, #191f28) !important;
+}
+
+:root:not([data-theme='toss']) .travel-public-trip-card small,
+:root:not([data-theme='toss']) .travel-public-trip-card span,
+:root:not([data-theme='toss']) .travel-public-update small,
+:root:not([data-theme='toss']) .travel-public-rank small,
+:root:not([data-theme='toss']) .travel-overview-place-card small,
+:root:not([data-theme='toss']) .travel-overview-day-group__head p,
+:root:not([data-theme='toss']) .travel-overview-timeline-row__main small,
+:root:not([data-theme='toss']) .travel-overview-timeline-row__meta small,
+:root:not([data-theme='toss']) .travel-cluster-summary-card small,
+:root:not([data-theme='toss']) .travel-map-inspector:not(.travel-map-inspector--fullscreen) .panel__header p {
+  color: var(--text-soft, #4e5968) !important;
+}
+
+:root[data-theme='toss'] .travel-public-trip-card,
+:root[data-theme='toss'] .travel-public-update,
+:root[data-theme='toss'] .travel-public-rank,
+:root[data-theme='toss'] .travel-public-toggle,
+:root[data-theme='toss'] .travel-public-active-filter,
+:root[data-theme='toss'] .travel-share-recipient-results button,
+:root[data-theme='toss'] .travel-share-current-item,
+:root[data-theme='toss'] .travel-overview-place-card,
+:root[data-theme='toss'] .travel-overview-day-group,
+:root[data-theme='toss'] .travel-overview-timeline-row,
+:root[data-theme='toss'] .travel-cluster-summary-card,
+:root[data-theme='toss'] .travel-map-inspector:not(.travel-map-inspector--fullscreen) .panel {
+  background: var(--surface-panel) !important;
+  border-color: var(--line) !important;
+  color: var(--text, #f3f5fa) !important;
+}
+
+:root[data-theme='toss'] .travel-public-trip-card strong,
+:root[data-theme='toss'] .travel-public-update strong,
+:root[data-theme='toss'] .travel-public-rank strong,
+:root[data-theme='toss'] .travel-overview-place-card strong,
+:root[data-theme='toss'] .travel-overview-day-group__head h3,
+:root[data-theme='toss'] .travel-overview-timeline-row__main strong,
+:root[data-theme='toss'] .travel-cluster-summary-card strong,
+:root[data-theme='toss'] .travel-map-inspector:not(.travel-map-inspector--fullscreen) .panel__header h2 {
+  color: var(--text, #f3f5fa) !important;
+}
+
+:root[data-theme='toss'] .travel-public-trip-card small,
+:root[data-theme='toss'] .travel-public-trip-card span,
+:root[data-theme='toss'] .travel-public-update small,
+:root[data-theme='toss'] .travel-public-rank small,
+:root[data-theme='toss'] .travel-overview-place-card small,
+:root[data-theme='toss'] .travel-overview-day-group__head p,
+:root[data-theme='toss'] .travel-overview-timeline-row__main small,
+:root[data-theme='toss'] .travel-overview-timeline-row__meta small,
+:root[data-theme='toss'] .travel-cluster-summary-card small,
+:root[data-theme='toss'] .travel-map-inspector:not(.travel-map-inspector--fullscreen) .panel__header p {
+  color: var(--text-soft, #b0bacb) !important;
+}
+
+:root[data-theme='toss'] .leaflet-popup-content-wrapper,
+:root[data-theme='toss'] .leaflet-popup-tip {
+  background: #111821 !important;
+  color: var(--text, #f3f5fa) !important;
+}
+
+:root:not([data-theme='toss']) .leaflet-popup-content-wrapper,
+:root:not([data-theme='toss']) .leaflet-popup-tip {
+  background: #ffffff !important;
+  color: var(--text, #191f28) !important;
+}
+/* Cross-page contrast safety net: launcher, profile, drive and side surfaces */
+:root:not([data-theme='toss']) .launcher-card,
+:root:not([data-theme='toss']) .feature-card,
+:root:not([data-theme='toss']) .profile-privacy-panel,
+:root:not([data-theme='toss']) .privacy-export-card,
+:root:not([data-theme='toss']) .privacy-action-card,
+:root:not([data-theme='toss']) .drive-dashboard__card,
+:root:not([data-theme='toss']) .drive-dashboard__controls,
+:root:not([data-theme='toss']) .drive-browser-panel,
+:root:not([data-theme='toss']) .drive-browser-actions,
+:root:not([data-theme='toss']) .drive-selection-bar,
+:root:not([data-theme='toss']) .drive-context-menu,
+:root:not([data-theme='toss']) .drive-move-destination,
+:root:not([data-theme='toss']) .drive-shared-save-target-list,
+:root:not([data-theme='toss']) .drive-move-target-list,
+:root:not([data-theme='toss']) .sidebar,
+:root:not([data-theme='toss']) .sidebar__user,
+:root:not([data-theme='toss']) .sidebar__logout {
+  color: var(--text, #191f28) !important;
+}
+
+:root:not([data-theme='toss']) .launcher-card strong,
+:root:not([data-theme='toss']) .feature-card strong,
+:root:not([data-theme='toss']) .privacy-export-card h3,
+:root:not([data-theme='toss']) .privacy-action-card h3,
+:root:not([data-theme='toss']) .drive-dashboard__card strong,
+:root:not([data-theme='toss']) .drive-browser-panel h2,
+:root:not([data-theme='toss']) .drive-browser-panel h3,
+:root:not([data-theme='toss']) .drive-file-card strong,
+:root:not([data-theme='toss']) .drive-context-menu button,
+:root:not([data-theme='toss']) .drive-move-target-list strong,
+:root:not([data-theme='toss']) .drive-shared-save-target-list strong,
+:root:not([data-theme='toss']) .sidebar strong,
+:root:not([data-theme='toss']) .sidebar__user strong {
+  color: var(--text, #191f28) !important;
+}
+
+:root:not([data-theme='toss']) .launcher-card span,
+:root:not([data-theme='toss']) .feature-card span,
+:root:not([data-theme='toss']) .privacy-export-card p,
+:root:not([data-theme='toss']) .privacy-action-card p,
+:root:not([data-theme='toss']) .drive-dashboard__card span,
+:root:not([data-theme='toss']) .drive-dashboard__card small,
+:root:not([data-theme='toss']) .drive-browser-panel p,
+:root:not([data-theme='toss']) .drive-file-card small,
+:root:not([data-theme='toss']) .drive-context-menu small,
+:root:not([data-theme='toss']) .drive-move-target-list small,
+:root:not([data-theme='toss']) .drive-shared-save-target-list small,
+:root:not([data-theme='toss']) .sidebar small,
+:root:not([data-theme='toss']) .sidebar__user small {
+  color: var(--text-soft, #4e5968) !important;
+}
+
+:root[data-theme='toss'] .launcher-card,
+:root[data-theme='toss'] .feature-card,
+:root[data-theme='toss'] .profile-privacy-panel,
+:root[data-theme='toss'] .privacy-export-card,
+:root[data-theme='toss'] .privacy-action-card,
+:root[data-theme='toss'] .drive-dashboard__card,
+:root[data-theme='toss'] .drive-dashboard__controls,
+:root[data-theme='toss'] .drive-browser-panel,
+:root[data-theme='toss'] .drive-browser-actions,
+:root[data-theme='toss'] .drive-selection-bar,
+:root[data-theme='toss'] .drive-context-menu,
+:root[data-theme='toss'] .drive-move-destination,
+:root[data-theme='toss'] .drive-shared-save-target-list,
+:root[data-theme='toss'] .drive-move-target-list,
+:root[data-theme='toss'] .sidebar,
+:root[data-theme='toss'] .sidebar__user,
+:root[data-theme='toss'] .sidebar__logout {
+  background: var(--surface-panel) !important;
+  border-color: var(--line) !important;
+  color: var(--text, #f3f5fa) !important;
+}
+
+:root[data-theme='toss'] .launcher-card strong,
+:root[data-theme='toss'] .feature-card strong,
+:root[data-theme='toss'] .privacy-export-card h3,
+:root[data-theme='toss'] .privacy-action-card h3,
+:root[data-theme='toss'] .drive-dashboard__card strong,
+:root[data-theme='toss'] .drive-browser-panel h2,
+:root[data-theme='toss'] .drive-browser-panel h3,
+:root[data-theme='toss'] .drive-file-card strong,
+:root[data-theme='toss'] .drive-context-menu button,
+:root[data-theme='toss'] .drive-move-target-list strong,
+:root[data-theme='toss'] .drive-shared-save-target-list strong,
+:root[data-theme='toss'] .sidebar strong,
+:root[data-theme='toss'] .sidebar__user strong {
+  color: var(--text, #f3f5fa) !important;
+}
+
+:root[data-theme='toss'] .launcher-card span,
+:root[data-theme='toss'] .feature-card span,
+:root[data-theme='toss'] .privacy-export-card p,
+:root[data-theme='toss'] .privacy-action-card p,
+:root[data-theme='toss'] .drive-dashboard__card span,
+:root[data-theme='toss'] .drive-dashboard__card small,
+:root[data-theme='toss'] .drive-browser-panel p,
+:root[data-theme='toss'] .drive-file-card small,
+:root[data-theme='toss'] .drive-context-menu small,
+:root[data-theme='toss'] .drive-move-target-list small,
+:root[data-theme='toss'] .drive-shared-save-target-list small,
+:root[data-theme='toss'] .sidebar small,
+:root[data-theme='toss'] .sidebar__user small {
+  color: var(--text-soft, #b0bacb) !important;
+}
+
+:root[data-theme='toss'] .sidebar__link,
+:root[data-theme='toss'] .sidebar__logout,
+:root[data-theme='toss'] .drive-context-menu button {
+  color: var(--text, #f3f5fa) !important;
+}
+
+:root:not([data-theme='toss']) .sidebar__link,
+:root:not([data-theme='toss']) .sidebar__logout,
+:root:not([data-theme='toss']) .drive-context-menu button {
+  color: var(--text, #191f28) !important;
+}

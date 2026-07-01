@@ -845,7 +845,7 @@ async function handlePhotoSelection(event) {
       resetMultiPhotoDrafts()
       autofillState.status = 'manual'
       autofillState.fileName = files[0]?.name || ''
-      autofillState.message = error?.message || '?ъ쭊 硫뷀??곗씠?곕? ?쎌? 紐삵뻽?듬땲??'
+      autofillState.message = error?.message || '사진 메타데이터를 읽지 못했습니다.'
     }
     multiPhotoLoading.value = false
     multiPhotoLoadingCount.value = 0

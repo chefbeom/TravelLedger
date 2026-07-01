@@ -1,4 +1,4 @@
-﻿<script setup>
+<script setup>
 import { computed, nextTick, reactive, ref, watch } from 'vue'
 import { useTableSelection } from '../lib/tableSelection'
 import { formatDate, formatTime, safeNumber, todayIso, toIsoDate } from '../lib/uiFormat'
@@ -288,7 +288,7 @@ const draftPointRows = computed(() => {
 
 const selectedDraftPointDisplayLabel = computed(() => {
   if (!canPlaceRoutePoints.value || highlightedDraftIndex.value < 0) {
-    return '?좏깮???쒖뼱???놁쓬'
+    return '선택된 지점 없음'
   }
   return buildDraftPointDisplayLabel(draftPoints.value[highlightedDraftIndex.value], highlightedDraftIndex.value, draftPoints.value.length)
 })

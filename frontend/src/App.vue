@@ -931,8 +931,8 @@ onBeforeUnmount(() => {
             :class="['topbar__nav-button', 'topbar__nav-button--notifications', { 'topbar__nav-button--active': activeRoute === 'notifications' }]"
             @click="navigate('notifications')"
           >
-            <span>Notifications</span>
-            <span v-if="notificationUnreadCount" class="topbar__notification-badge" aria-label="Unread notifications" aria-live="polite">{{ notificationUnreadBadgeLabel }}</span>
+            <span>알림</span>
+            <span v-if="notificationUnreadCount" class="topbar__notification-badge" aria-label="읽지 않은 알림" aria-live="polite">{{ notificationUnreadBadgeLabel }}</span>
           </button></nav>
           <div class="topbar__actions">
             <button v-if="activeRoute !== 'profile'" class="button button--ghost" @click="navigate('profile')">프로필</button>

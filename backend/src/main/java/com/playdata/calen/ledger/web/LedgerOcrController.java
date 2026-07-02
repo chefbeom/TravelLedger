@@ -1,11 +1,16 @@
 package com.playdata.calen.ledger.web;
 
 import com.playdata.calen.account.security.AppUserPrincipal;
+import com.playdata.calen.ledger.dto.LedgerImageAnalysisHistoryResponse;
 import com.playdata.calen.ledger.dto.LedgerOcrAnalyzeResponse;
 import com.playdata.calen.ledger.ocr.LedgerOcrService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.MediaType;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -27,5 +32,29 @@ public class LedgerOcrController {
             @RequestParam(name = "documentType", defaultValue = "AUTO") String documentType
     ) {
         return ledgerOcrService.analyze(currentUser.userId(), file, documentType);
+    }
+
+    @GetMapping("/history")
+    public Page<LedgerImageAnalysisHistoryResponse> listHistories(
+            @AuthenticationPrincipal AppUserPrincipal currentUser,
+            Pageable pageable
+    ) {
+        return ledgerOcrService.listHistories(currentUser.userId(), pageable);
+    }
+
+    @GetMapping("/history/{historyId}")
+    public LedgerImageAnalysisHistoryResponse getHistory(
+            @AuthenticationPrincipal AppUserPrincipal currentUser,
+            @PathVariable Long historyId
+    ) {
+        return ledgerOcrService.getHistory(currentUser.userId(), historyId);
+    }
+
+    @PostMapping("/history/{historyId}/cancel")
+    public LedgerImageAnalysisHistoryResponse cancelHistory(
+            @AuthenticationPrincipal AppUserPrincipal currentUser,
+            @PathVariable Long historyId
+    ) {
+        return ledgerOcrService.cancelHistory(currentUser.userId(), historyId);
     }
 }

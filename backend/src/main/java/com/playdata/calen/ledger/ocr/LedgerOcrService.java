@@ -1,16 +1,23 @@
 package com.playdata.calen.ledger.ocr;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.playdata.calen.account.domain.AppUser;
 import com.playdata.calen.account.service.AppUserService;
 import com.playdata.calen.account.service.UserNotificationService;
 import com.playdata.calen.common.exception.BadRequestException;
 import com.playdata.calen.ledger.ai.LedgerAiAnalysisProperties;
 import com.playdata.calen.ledger.domain.EntryType;
+import com.playdata.calen.ledger.domain.LedgerImageAnalysisRequest;
+import com.playdata.calen.ledger.domain.LedgerImageAnalysisStatus;
+import com.playdata.calen.ledger.dto.LedgerImageAnalysisHistoryResponse;
 import com.playdata.calen.ledger.dto.LedgerOcrAnalyzeResponse;
 import com.playdata.calen.ledger.dto.LedgerOcrEntrySuggestionResponse;
 import com.playdata.calen.ledger.dto.LedgerOcrLineItemResponse;
 import com.playdata.calen.ledger.ocr.LedgerOcrRemoteClient.RemoteAnalyzeResponse;
 import com.playdata.calen.ledger.ocr.LedgerOcrRemoteClient.RemoteLineItem;
 import com.playdata.calen.ledger.ocr.LedgerOcrRemoteClient.RemoteParsedResult;
+import com.playdata.calen.ledger.repository.LedgerImageAnalysisRequestRepository;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
@@ -18,6 +25,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -26,6 +34,8 @@ import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -42,20 +52,24 @@ public class LedgerOcrService {
     private final LedgerOcrProperties properties;
     private final LedgerAiAnalysisProperties aiProperties;
     private final LedgerOcrRemoteClient remoteClient;
+    private final LedgerImageAnalysisRequestRepository imageAnalysisRequestRepository;
+    private final ObjectMapper objectMapper;
     private final UserNotificationService userNotificationService;
 
     @Autowired(required = false)
     private MeterRegistry meterRegistry;
 
     public LedgerOcrAnalyzeResponse analyze(Long userId, MultipartFile file, String documentType) {
-        appUserService.getRequiredUser(userId);
+        AppUser owner = appUserService.getRequiredUser(userId);
         Timer.Sample ocrRequestTimer = startOcrRequestTimer();
+        LedgerImageAnalysisRequest history = null;
 
         try {
             validateReady();
             validateFile(file);
 
             String normalizedDocumentType = normalizeDocumentType(documentType);
+            history = createImageAnalysisRequest(owner, file, normalizedDocumentType);
             RemoteAnalyzeResponse remoteResponse = remoteClient.analyze(file, normalizedDocumentType);
             List<RemoteParsedResult> parsedEntries = resolveParsedEntries(remoteResponse);
             RemoteParsedResult parsed = parsedEntries.isEmpty() ? remoteResponse.parsed() : parsedEntries.get(0);
@@ -73,6 +87,8 @@ public class LedgerOcrService {
             }
 
             LedgerOcrAnalyzeResponse response = new LedgerOcrAnalyzeResponse(
+                    history.getId(),
+                    LedgerImageAnalysisStatus.COMPLETED.name(),
                     firstNonBlank(remoteResponse.documentType(), normalizedDocumentType),
                     remoteResponse.rawText() == null ? "" : remoteResponse.rawText(),
                     suggestion,
@@ -85,9 +101,13 @@ public class LedgerOcrService {
                     null,
                     remoteResponse.timing() == null ? java.util.Map.of() : remoteResponse.timing()
             );
+            completeImageAnalysisRequest(history, response);
             recordOcrRequest(ocrRequestTimer, "success", "none");
             return response;
         } catch (RuntimeException exception) {
+            if (history != null) {
+                failImageAnalysisRequest(history, exception);
+            }
             String failureReason = ocrFailureReason(exception);
             recordOcrRequest(ocrRequestTimer, "failure", failureReason);
             notifyOcrFailure(userId, failureReason);
@@ -95,6 +115,112 @@ public class LedgerOcrService {
         }
     }
 
+    public Page<LedgerImageAnalysisHistoryResponse> listHistories(Long userId, Pageable pageable) {
+        appUserService.getRequiredUser(userId);
+        return imageAnalysisRequestRepository.findAllByOwnerIdOrderByCreatedAtDescIdDesc(userId, pageable)
+                .map(this::toHistoryResponse);
+    }
+
+    public LedgerImageAnalysisHistoryResponse getHistory(Long userId, Long historyId) {
+        appUserService.getRequiredUser(userId);
+        return imageAnalysisRequestRepository.findByIdAndOwnerId(historyId, userId)
+                .map(this::toHistoryResponse)
+                .orElseThrow(() -> new BadRequestException("Image analysis request history was not found."));
+    }
+
+    public LedgerImageAnalysisHistoryResponse cancelHistory(Long userId, Long historyId) {
+        appUserService.getRequiredUser(userId);
+        LedgerImageAnalysisRequest history = imageAnalysisRequestRepository.findByIdAndOwnerId(historyId, userId)
+                .orElseThrow(() -> new BadRequestException("Image analysis request history was not found."));
+        if (history.getStatus() != LedgerImageAnalysisStatus.CANCELLED) {
+            history.setStatus(LedgerImageAnalysisStatus.CANCELLED);
+            history.setCancelledAt(LocalDateTime.now());
+            history.setSummary("사용자가 이미지 분석 요청을 취소했습니다.");
+            imageAnalysisRequestRepository.save(history);
+        }
+        return toHistoryResponse(history);
+    }
+
+    private LedgerImageAnalysisRequest createImageAnalysisRequest(AppUser owner, MultipartFile file, String documentType) {
+        LedgerImageAnalysisRequest history = new LedgerImageAnalysisRequest();
+        history.setOwner(owner);
+        history.setStatus(LedgerImageAnalysisStatus.PROCESSING);
+        history.setDocumentType(documentType);
+        history.setFileName(limit(file.getOriginalFilename(), 260));
+        history.setContentType(limit(file.getContentType(), 120));
+        history.setFileSizeBytes(file.getSize());
+        history.setSummary("AI 이미지 분석 요청을 처리 중입니다.");
+        return imageAnalysisRequestRepository.save(history);
+    }
+
+    private void completeImageAnalysisRequest(LedgerImageAnalysisRequest history, LedgerOcrAnalyzeResponse response) {
+        history.setStatus(LedgerImageAnalysisStatus.COMPLETED);
+        history.setCompletedAt(LocalDateTime.now());
+        history.setDocumentType(firstNonBlank(response.documentType(), history.getDocumentType()));
+        history.setRawText(response.rawText());
+        history.setSummary(limit(summarizeResponse(response), 500));
+        history.setResultJson(writeResponseJson(response));
+        imageAnalysisRequestRepository.save(history);
+    }
+
+    private void failImageAnalysisRequest(LedgerImageAnalysisRequest history, RuntimeException exception) {
+        history.setStatus(LedgerImageAnalysisStatus.FAILED);
+        history.setCompletedAt(LocalDateTime.now());
+        history.setErrorMessage(limit(exception.getMessage(), 1000));
+        history.setSummary("AI 이미지 분석 요청에 실패했습니다.");
+        imageAnalysisRequestRepository.save(history);
+    }
+
+    private LedgerImageAnalysisHistoryResponse toHistoryResponse(LedgerImageAnalysisRequest history) {
+        return new LedgerImageAnalysisHistoryResponse(
+                history.getId(),
+                history.getStatus() == null ? null : history.getStatus().name(),
+                history.getDocumentType(),
+                history.getFileName(),
+                history.getContentType(),
+                history.getFileSizeBytes(),
+                history.getSummary(),
+                history.getErrorMessage(),
+                history.getRawText(),
+                readResponseJson(history.getResultJson()),
+                history.getCreatedAt(),
+                history.getUpdatedAt(),
+                history.getCompletedAt(),
+                history.getCancelledAt()
+        );
+    }
+
+    private String summarizeResponse(LedgerOcrAnalyzeResponse response) {
+        LedgerOcrEntrySuggestionResponse entry = response.suggestedEntry();
+        int count = response.suggestedEntries() == null ? 0 : response.suggestedEntries().size();
+        if (entry == null) {
+            return count > 0 ? count + "건 거래 후보 추출" : "추출된 거래 후보가 없습니다.";
+        }
+        String amount = entry.amount() == null ? "금액 확인 필요" : entry.amount().toPlainString() + " KRW";
+        String title = firstNonBlank(entry.title(), "제목 확인 필요");
+        return title + " - " + amount + " - " + Math.max(count, 1) + "? ??";
+    }
+
+    private String writeResponseJson(LedgerOcrAnalyzeResponse response) {
+        try {
+            return objectMapper.writeValueAsString(response);
+        } catch (JsonProcessingException exception) {
+            log.warn("Failed to serialize ledger image analysis response: analysisId={}", response.analysisId(), exception);
+            return "";
+        }
+    }
+
+    private LedgerOcrAnalyzeResponse readResponseJson(String json) {
+        if (!isPresent(json)) {
+            return null;
+        }
+        try {
+            return objectMapper.readValue(json, LedgerOcrAnalyzeResponse.class);
+        } catch (JsonProcessingException exception) {
+            log.warn("Failed to deserialize ledger image analysis response history", exception);
+            return null;
+        }
+    }
     private void notifyOcrFailure(Long userId, String failureReason) {
         if ("invalid_file".equals(failureReason)) {
             return;
@@ -143,7 +269,7 @@ public class LedgerOcrService {
                 return "not_configured";
             }
             if ("Upload a receipt image first.".equals(message)
-                    || "Receipt image exceeds the OCR upload size limit.".equals(message)
+                    || "Receipt image exceeds the AI image analysis upload size limit.".equals(message)
                     || "Only image files can be analyzed.".equals(message)) {
                 return "invalid_file";
             }
@@ -192,7 +318,7 @@ public class LedgerOcrService {
             throw new BadRequestException("Upload a receipt image first.");
         }
         if (file.getSize() > properties.getMaxFileSize().toBytes()) {
-            throw new BadRequestException("Receipt image exceeds the OCR upload size limit.");
+            throw new BadRequestException("Receipt image exceeds the AI image analysis upload size limit.");
         }
 
         String contentType = normalizeContentType(file.getContentType());

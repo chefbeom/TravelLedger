@@ -4,6 +4,8 @@ import java.util.List;
 import java.util.Map;
 
 public record LedgerOcrAnalyzeResponse(
+        Long analysisId,
+        String analysisStatus,
         String documentType,
         String rawText,
         LedgerOcrEntrySuggestionResponse suggestedEntry,

@@ -600,6 +600,19 @@ export function analyzeLedgerReceipt(file, options = {}) {
     body: formData,
   })
 }
+export function fetchLedgerImageAnalysisHistories(params = {}) {
+  return request(buildUrl('/ledger/ocr/history', params).replace(API_BASE, ''))
+}
+
+export function fetchLedgerImageAnalysisHistory(historyId) {
+  return request(`/ledger/ocr/history/${historyId}`)
+}
+
+export function cancelLedgerImageAnalysisHistory(historyId) {
+  return request(`/ledger/ocr/history/${historyId}/cancel`, {
+    method: 'POST',
+  })
+}
 
 export function fetchCategories(entryType, options = {}) {
   return request(buildUrl('/categories', {

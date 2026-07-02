@@ -11,4 +11,6 @@ public interface LedgerImageAnalysisRequestRepository extends JpaRepository<Ledg
     Page<LedgerImageAnalysisRequest> findAllByOwnerIdOrderByCreatedAtDescIdDesc(Long ownerId, Pageable pageable);
 
     Optional<LedgerImageAnalysisRequest> findByIdAndOwnerId(Long id, Long ownerId);
+
+    Optional<LedgerImageAnalysisRequest> findByClientRequestIdAndOwnerId(String clientRequestId, Long ownerId);
 }

@@ -19,7 +19,7 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
 @RestController
-@RequestMapping("/api/ledger/ocr")
+@RequestMapping(path = {"/api/ledger/ocr", "/api/ledger/image-analysis"})
 @RequiredArgsConstructor
 public class LedgerOcrController {
 
@@ -29,9 +29,10 @@ public class LedgerOcrController {
     public LedgerOcrAnalyzeResponse analyzeReceipt(
             @AuthenticationPrincipal AppUserPrincipal currentUser,
             @RequestPart("file") MultipartFile file,
-            @RequestParam(name = "documentType", defaultValue = "AUTO") String documentType
+            @RequestParam(name = "documentType", defaultValue = "AUTO") String documentType,
+            @RequestParam(name = "clientRequestId", required = false) String clientRequestId
     ) {
-        return ledgerOcrService.analyze(currentUser.userId(), file, documentType);
+        return ledgerOcrService.analyze(currentUser.userId(), file, documentType, clientRequestId);
     }
 
     @GetMapping("/history")
@@ -48,6 +49,14 @@ public class LedgerOcrController {
             @PathVariable Long historyId
     ) {
         return ledgerOcrService.getHistory(currentUser.userId(), historyId);
+    }
+
+    @PostMapping("/history/client/{clientRequestId}/cancel")
+    public LedgerImageAnalysisHistoryResponse cancelHistoryByClientRequestId(
+            @AuthenticationPrincipal AppUserPrincipal currentUser,
+            @PathVariable String clientRequestId
+    ) {
+        return ledgerOcrService.cancelHistoryByClientRequestId(currentUser.userId(), clientRequestId);
     }
 
     @PostMapping("/history/{historyId}/cancel")

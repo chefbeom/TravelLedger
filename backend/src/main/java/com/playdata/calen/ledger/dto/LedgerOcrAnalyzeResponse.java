@@ -5,6 +5,7 @@ import java.util.Map;
 
 public record LedgerOcrAnalyzeResponse(
         Long analysisId,
+        String clientRequestId,
         String analysisStatus,
         String documentType,
         String rawText,

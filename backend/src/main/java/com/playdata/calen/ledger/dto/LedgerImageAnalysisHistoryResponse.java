@@ -4,6 +4,7 @@ import java.time.LocalDateTime;
 
 public record LedgerImageAnalysisHistoryResponse(
         Long id,
+        String clientRequestId,
         String status,
         String documentType,
         String fileName,

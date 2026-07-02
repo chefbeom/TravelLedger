@@ -594,26 +594,35 @@ export function analyzeLedgerReceipt(file, options = {}) {
   if (options.documentType) {
     formData.append('documentType', options.documentType)
   }
+  if (options.clientRequestId) {
+    formData.append('clientRequestId', options.clientRequestId)
+  }
 
-  return request('/ledger/ocr/analyze', {
+  return request('/ledger/image-analysis/analyze', {
     method: 'POST',
     body: formData,
+    signal: options.signal,
   })
 }
 export function fetchLedgerImageAnalysisHistories(params = {}) {
-  return request(buildUrl('/ledger/ocr/history', params).replace(API_BASE, ''))
+  return request(buildUrl('/ledger/image-analysis/history', params).replace(API_BASE, ''))
 }
 
 export function fetchLedgerImageAnalysisHistory(historyId) {
-  return request(`/ledger/ocr/history/${historyId}`)
+  return request(`/ledger/image-analysis/history/${historyId}`)
 }
 
 export function cancelLedgerImageAnalysisHistory(historyId) {
-  return request(`/ledger/ocr/history/${historyId}/cancel`, {
+  return request(`/ledger/image-analysis/history/${historyId}/cancel`, {
     method: 'POST',
   })
 }
 
+export function cancelLedgerImageAnalysisClientRequest(clientRequestId) {
+  return request(`/ledger/image-analysis/history/client/${encodeURIComponent(clientRequestId)}/cancel`, {
+    method: 'POST',
+  })
+}
 export function fetchCategories(entryType, options = {}) {
   return request(buildUrl('/categories', {
     entryType,

@@ -35,12 +35,16 @@ public class LedgerImageAnalysisRequestSchemaUpdater implements ApplicationRunne
                 return;
             }
 
+            addColumnIfMissing(connection, "client_request_id",
+                    "ALTER TABLE ledger_image_analysis_requests ADD COLUMN client_request_id VARCHAR(120) NULL AFTER document_type");
             addIndexIfMissing(connection, "idx_ledger_image_analysis_owner_created",
                     "ALTER TABLE ledger_image_analysis_requests ADD INDEX idx_ledger_image_analysis_owner_created (owner_id, created_at, id)");
             addIndexIfMissing(connection, "idx_ledger_image_analysis_owner_status",
                     "ALTER TABLE ledger_image_analysis_requests ADD INDEX idx_ledger_image_analysis_owner_status (owner_id, status, created_at)");
             addIndexIfMissing(connection, "idx_ledger_image_analysis_owner_type",
                     "ALTER TABLE ledger_image_analysis_requests ADD INDEX idx_ledger_image_analysis_owner_type (owner_id, document_type, created_at)");
+            addIndexIfMissing(connection, "idx_ledger_image_analysis_owner_client",
+                    "ALTER TABLE ledger_image_analysis_requests ADD INDEX idx_ledger_image_analysis_owner_client (owner_id, client_request_id)");
         } catch (SQLException exception) {
             log.warn("Failed to verify ledger image analysis request schema: {}", exception.getMessage());
         }
@@ -56,6 +60,7 @@ public class LedgerImageAnalysisRequestSchemaUpdater implements ApplicationRunne
                     owner_id BIGINT NOT NULL,
                     status VARCHAR(20) NOT NULL,
                     document_type VARCHAR(30) NOT NULL,
+                    client_request_id VARCHAR(120) NULL,
                     file_name VARCHAR(260) NULL,
                     content_type VARCHAR(120) NULL,
                     file_size_bytes BIGINT NOT NULL,
@@ -70,6 +75,12 @@ public class LedgerImageAnalysisRequestSchemaUpdater implements ApplicationRunne
                     PRIMARY KEY (id)
                 )
                 """);
+    }
+
+    private void addColumnIfMissing(Connection connection, String columnName, String sql) throws SQLException {
+        if (!hasColumn(connection, columnName)) {
+            executeQuietly(sql);
+        }
     }
 
     private void addIndexIfMissing(Connection connection, String indexName, String sql) throws SQLException {
@@ -95,6 +106,30 @@ public class LedgerImageAnalysisRequestSchemaUpdater implements ApplicationRunne
         }
         try (ResultSet tables = metaData.getTables(connection.getCatalog(), null, tableName.toUpperCase(), null)) {
             return tables.next();
+        }
+    }
+
+    private boolean hasColumn(Connection connection, String columnName) throws SQLException {
+        DatabaseMetaData metaData = connection.getMetaData();
+        if (hasColumnInTable(metaData, connection, "ledger_image_analysis_requests", columnName)) {
+            return true;
+        }
+        return hasColumnInTable(metaData, connection, "LEDGER_IMAGE_ANALYSIS_REQUESTS", columnName);
+    }
+
+    private boolean hasColumnInTable(
+            DatabaseMetaData metaData,
+            Connection connection,
+            String tableName,
+            String columnName
+    ) throws SQLException {
+        try (ResultSet columns = metaData.getColumns(connection.getCatalog(), null, tableName, columnName)) {
+            if (columns.next()) {
+                return true;
+            }
+        }
+        try (ResultSet columns = metaData.getColumns(connection.getCatalog(), null, tableName, columnName.toUpperCase())) {
+            return columns.next();
         }
     }
 

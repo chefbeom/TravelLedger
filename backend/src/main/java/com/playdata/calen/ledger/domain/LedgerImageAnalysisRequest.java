@@ -25,7 +25,8 @@ import lombok.Setter;
 @Table(name = "ledger_image_analysis_requests", indexes = {
         @Index(name = "idx_ledger_image_analysis_owner_created", columnList = "owner_id, created_at, id"),
         @Index(name = "idx_ledger_image_analysis_owner_status", columnList = "owner_id, status, created_at"),
-        @Index(name = "idx_ledger_image_analysis_owner_type", columnList = "owner_id, document_type, created_at")
+        @Index(name = "idx_ledger_image_analysis_owner_type", columnList = "owner_id, document_type, created_at"),
+        @Index(name = "idx_ledger_image_analysis_owner_client", columnList = "owner_id, client_request_id")
 })
 @Getter
 @Setter
@@ -46,6 +47,9 @@ public class LedgerImageAnalysisRequest {
 
     @Column(name = "document_type", nullable = false, length = 30)
     private String documentType = "AUTO";
+
+    @Column(name = "client_request_id", length = 120)
+    private String clientRequestId;
 
     @Column(name = "file_name", length = 260)
     private String fileName;

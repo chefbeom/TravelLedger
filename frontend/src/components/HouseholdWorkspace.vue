@@ -6,6 +6,7 @@ import {
   activatePaymentMethod,
   analyzeLedgerReceipt,
   cancelLedgerImageAnalysisHistory,
+  cancelLedgerImageAnalysisClientRequest,
   analyzeLedgerSpending,
   bulkUpdateEntries,
   createCategoryDetail,
@@ -251,6 +252,8 @@ const receiptOcr = reactive({
   isHistoryLoading: false,
   historyError: '',
   lastAppliedAnalysisId: null,
+  lastAppliedReviewItemId: null,
+  lastAppliedReviewEntryIndex: null,
   lastAppliedSnapshot: null,
 })
 const ledgerChangeHistory = reactive({
@@ -851,7 +854,10 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   window.removeEventListener('pointerdown', handleGlobalPointerDown)
-  receiptOcr.items.forEach(revokeReceiptOcrItemPreview)
+  receiptOcr.items.forEach((item) => {
+    item.abortController?.abort()
+    revokeReceiptOcrItemPreview(item)
+  })
   if (feedbackTimerId) {
     window.clearTimeout(feedbackTimerId)
   }
@@ -2260,7 +2266,10 @@ function revokeReceiptOcrItemPreview(item) {
 }
 
 function clearReceiptOcr() {
-  receiptOcr.items.forEach(revokeReceiptOcrItemPreview)
+  receiptOcr.items.forEach((item) => {
+    item.abortController?.abort()
+    revokeReceiptOcrItemPreview(item)
+  })
   receiptOcr.isAnalyzing = false
   receiptOcr.pendingCount = 0
   receiptOcr.error = ''
@@ -2318,14 +2327,26 @@ function normalizeOcrSuggestion(suggestion = {}) {
   }
 }
 
+function attachReceiptOcrSuggestionMeta(suggestion, item, entryIndex) {
+  return {
+    ...normalizeOcrSuggestion(suggestion),
+    analysisId: item.analysisId || null,
+    clientRequestId: item.clientRequestId || null,
+    analysisStatus: item.analysisStatus || null,
+    reviewItemId: item.id,
+    reviewEntryIndex: entryIndex,
+  }
+}
 function createReceiptOcrItem(file, documentType) {
   receiptOcrItemSequence += 1
+  const clientRequestId = `image-analysis-${Date.now()}-${receiptOcrItemSequence}`
   return {
-    id: `ocr-${Date.now()}-${receiptOcrItemSequence}`,
+    id: clientRequestId,
+    clientRequestId,
     fileName: file.name || `transaction-image-${receiptOcrItemSequence}`,
     previewUrl: URL.createObjectURL(file),
     documentType,
-    status: 'analyzing',
+    status: 'queued',
     error: '',
     rawText: '',
     suggestedEntries: [],
@@ -2340,28 +2361,42 @@ function createReceiptOcrItem(file, documentType) {
     analysisStatus: 'PROCESSING',
     fromHistory: false,
     cancelled: false,
+    abortController: null,
   }
 }
-
 function syncReceiptOcrBusyState() {
-  receiptOcr.pendingCount = receiptOcr.items.filter((item) => item.status === 'analyzing').length
+  receiptOcr.pendingCount = receiptOcr.items.filter((item) => item.status === 'queued' || item.status === 'analyzing').length
   receiptOcr.isAnalyzing = receiptOcr.pendingCount > 0
 }
 
-function removeReceiptOcrItem(itemId) {
+async function removeReceiptOcrItem(itemId) {
   const item = receiptOcr.items.find((candidate) => candidate.id === itemId)
+  const shouldCancelServerRequest = item?.status === 'analyzing'
   if (item) {
+    item.abortController?.abort()
+    item.abortController = null
     item.cancelled = true
     item.status = 'cancelled'
+    item.analysisStatus = 'CANCELLED'
   }
   revokeReceiptOcrItemPreview(item)
   receiptOcr.items = receiptOcr.items.filter((candidate) => candidate.id !== itemId)
-  if (item?.analysisId && receiptOcr.lastAppliedAnalysisId === item.analysisId) {
+  if (shouldCancelServerRequest) {
+    try {
+      if (item.analysisId) {
+        await cancelLedgerImageAnalysisHistory(item.analysisId)
+      } else if (item.clientRequestId) {
+        await cancelLedgerImageAnalysisClientRequest(item.clientRequestId)
+      }
+    } catch (cancelError) {
+      console.warn('Failed to cancel image analysis request', cancelError)
+    }
+  }
+  if (item?.analysisId && String(receiptOcr.lastAppliedAnalysisId) === String(item.analysisId)) {
     clearReceiptOcrAppliedMarker()
   }
   syncReceiptOcrBusyState()
 }
-
 function isReceiptOcrItemActive(item) {
   return !!item && !item.cancelled && receiptOcr.items.some((candidate) => candidate.id === item.id)
 }
@@ -2406,15 +2441,20 @@ function mapImageAnalysisHistoryToReviewItem(history = {}) {
   const suggestions = Array.isArray(result.suggestedEntries) && result.suggestedEntries.length
     ? result.suggestedEntries
     : [result.suggestedEntry].filter(Boolean)
+  const itemId = `history-${history.id || Date.now()}`
+  const analysisId = history.id || result.analysisId || null
+  const clientRequestId = history.clientRequestId || result.clientRequestId || null
+  const analysisStatus = status
   return {
-    id: `history-${history.id || Date.now()}`,
+    id: itemId,
+    clientRequestId,
     fileName: history.fileName || `저장된 분석 #${history.id || ''}`.trim(),
     previewUrl: '',
     documentType: normalizeOcrDocumentType(history.documentType || result.documentType),
-    status: status === 'FAILED' ? 'error' : status === 'CANCELLED' ? 'cancelled' : 'done',
+    status: status === 'COMPLETED' ? 'done' : status === 'PROCESSING' ? 'analyzing' : status === 'CANCELLED' ? 'cancelled' : 'error',
     error: history.errorMessage || '',
     rawText: history.rawText || result.rawText || '',
-    suggestedEntries: suggestions.map(normalizeOcrSuggestion),
+    suggestedEntries: suggestions.map((suggestion, entryIndex) => attachReceiptOcrSuggestionMeta(suggestion, { id: itemId, analysisId, clientRequestId, analysisStatus }, entryIndex)),
     lineItems: Array.isArray(result.lineItems) ? result.lineItems : [],
     warnings: Array.isArray(result.warnings) ? result.warnings : [],
     confidence: result.confidence ?? null,
@@ -2423,11 +2463,11 @@ function mapImageAnalysisHistoryToReviewItem(history = {}) {
     categoryText: result.categoryText || '',
     timing: result.timing || null,
     analysisId: history.id || result.analysisId || null,
+    clientRequestId,
     analysisStatus: status,
     fromHistory: true,
   }
 }
-
 async function loadReceiptOcrHistories(page = receiptOcr.historyPage || 0) {
   receiptOcr.isHistoryLoading = true
   receiptOcr.historyError = ''
@@ -2453,12 +2493,16 @@ async function reuseReceiptOcrHistory(history) {
   try {
     const detail = history.result ? history : await fetchLedgerImageAnalysisHistory(history.id)
     const item = mapImageAnalysisHistoryToReviewItem(detail)
-    if (item.analysisStatus === 'CANCELLED') {
-      receiptOcr.historyError = '취소된 분석 기록은 다시 기입할 수 없습니다.'
+    receiptOcr.items = receiptOcr.items.filter((candidate) => String(candidate.analysisId) !== String(item.analysisId))
+    receiptOcr.items.unshift(item)
+    if (item.analysisStatus !== 'COMPLETED') {
+      receiptOcr.historyError = item.analysisStatus === 'CANCELLED'
+        ? '취소된 분석 기록입니다. 내용은 확인할 수 있지만 입력칸 적용은 막혀 있습니다.'
+        : item.analysisStatus === 'PROCESSING'
+          ? '아직 처리 중인 분석 기록입니다. 완료 후 다시 검수할 수 있습니다.'
+          : '실패한 분석 기록입니다. 내용은 확인할 수 있지만 입력칸 적용은 막혀 있습니다.'
       return
     }
-    receiptOcr.items = receiptOcr.items.filter((candidate) => candidate.analysisId !== item.analysisId)
-    receiptOcr.items.unshift(item)
     updateLegacyReceiptOcrFields(detail.result || {}, item.suggestedEntries[0] || null, item.fileName)
   } catch (error) {
     receiptOcr.historyError = error.message || '이미지 분석 기록을 다시 불러오지 못했습니다.'
@@ -2472,9 +2516,9 @@ async function cancelReceiptOcrHistory(historyId) {
   receiptOcr.historyError = ''
   try {
     const cancelled = await cancelLedgerImageAnalysisHistory(historyId)
-    receiptOcr.historyItems = receiptOcr.historyItems.map((item) => item.id === historyId ? cancelled : item)
+    receiptOcr.historyItems = receiptOcr.historyItems.map((item) => String(item.id) === String(historyId) ? cancelled : item)
     receiptOcr.items = receiptOcr.items.map((item) => {
-      if (item.analysisId !== historyId) {
+      if (String(item.analysisId) !== String(historyId)) {
         return item
       }
       return {
@@ -2485,7 +2529,7 @@ async function cancelReceiptOcrHistory(historyId) {
         error: '사용자가 취소한 분석 요청입니다.',
       }
     })
-    if (receiptOcr.lastAppliedAnalysisId === historyId) {
+    if (String(receiptOcr.lastAppliedAnalysisId) === String(historyId)) {
       if (isReceiptOcrAppliedSnapshotCurrent()) {
         editingEntryId.value = null
         amountInput.value = ''
@@ -2495,9 +2539,9 @@ async function cancelReceiptOcrHistory(historyId) {
         entryForm.categoryGroupId = ''
         entryForm.categoryDetailId = ''
         entryForm.paymentMethodId = ''
-        setFeedback('\uCDE8\uC18C\uD55C \uBD84\uC11D \uACB0\uACFC\uB97C \uC785\uB825\uCE78\uC5D0\uC11C \uC81C\uAC70\uD588\uC2B5\uB2C8\uB2E4.')
+        setFeedback('취소한 분석 결과를 입력칸에서 제거했습니다.')
       } else {
-        setFeedback('\uC785\uB825\uCE78\uC774 \uC218\uB3D9\uC73C\uB85C \uC218\uC815\uB41C \uC0C1\uD0DC\uB77C \uBD84\uC11D \uCDE8\uC18C\uB85C \uC9C0\uC6B0\uC9C0 \uC54A\uC558\uC2B5\uB2C8\uB2E4.')
+        setFeedback('입력칸이 수동으로 수정된 상태라 분석 취소로 지우지 않았습니다.')
       }
       clearReceiptOcrAppliedMarker()
     }
@@ -2519,22 +2563,47 @@ function updateLegacyReceiptOcrFields(result, firstSuggestion, fileName) {
   receiptOcr.timing = result?.timing || null
 }
 
-async function analyzeReceiptFile(file, documentType) {
-  const item = createReceiptOcrItem(file, documentType)
-  receiptOcr.items.unshift(item)
+async function analyzeReceiptFile(file, documentType, existingItem = null) {
+  const item = existingItem || createReceiptOcrItem(file, documentType)
+  if (!existingItem) {
+    receiptOcr.items.unshift(item)
+  }
+  item.status = 'analyzing'
+  item.analysisStatus = 'PROCESSING'
+  item.abortController = new AbortController()
   syncReceiptOcrBusyState()
 
   try {
-    const result = await analyzeLedgerReceipt(file, { documentType })
+    const result = await analyzeLedgerReceipt(file, { documentType, clientRequestId: item.clientRequestId, signal: item.abortController.signal })
     if (!isReceiptOcrItemActive(item)) {
+      if (result?.analysisId) {
+        try {
+          await cancelLedgerImageAnalysisHistory(result.analysisId)
+        } catch (cancelError) {
+          console.warn('Failed to cancel removed image analysis history', cancelError)
+        }
+      }
+      return
+    }
+    if (String(result?.analysisStatus || '').toUpperCase() === 'CANCELLED') {
+      item.status = 'cancelled'
+      item.analysisId = result?.analysisId || item.analysisId
+      item.clientRequestId = result?.clientRequestId || item.clientRequestId
+      item.analysisStatus = 'CANCELLED'
+      item.cancelled = true
+      item.error = '취소된 분석 요청입니다.'
       return
     }
     const suggestions = Array.isArray(result?.suggestedEntries) && result.suggestedEntries.length
       ? result.suggestedEntries
       : [result?.suggestedEntry].filter(Boolean)
     item.status = 'done'
+    item.documentType = normalizeOcrDocumentType(result?.documentType || documentType)
+    item.analysisId = result?.analysisId || null
+    item.clientRequestId = result?.clientRequestId || item.clientRequestId
+    item.analysisStatus = result?.analysisStatus || 'COMPLETED'
     item.rawText = result?.rawText || ''
-    item.suggestedEntries = suggestions.map(normalizeOcrSuggestion)
+    item.suggestedEntries = suggestions.map((suggestion, entryIndex) => attachReceiptOcrSuggestionMeta(suggestion, item, entryIndex))
     item.lineItems = Array.isArray(result?.lineItems) ? result.lineItems : []
     item.warnings = Array.isArray(result?.warnings) ? result.warnings : []
     item.confidence = result?.confidence ?? null
@@ -2542,19 +2611,26 @@ async function analyzeReceiptFile(file, documentType) {
     item.paymentMethodText = result?.paymentMethodText || ''
     item.categoryText = result?.categoryText || ''
     item.timing = result?.timing || null
-    item.analysisId = result?.analysisId || null
-    item.analysisStatus = result?.analysisStatus || 'COMPLETED'
     updateLegacyReceiptOcrFields(result, item.suggestedEntries[0] || null, item.fileName)
     setFeedback('거래 이미지 분석이 완료되었습니다. 결과를 확인한 뒤 입력칸에 적용해 주세요.')
   } catch (error) {
     if (!isReceiptOcrItemActive(item)) {
       return
     }
+    if (error?.name === 'AbortError') {
+      item.status = 'cancelled'
+      item.analysisStatus = 'CANCELLED'
+      item.cancelled = true
+      item.error = '사용자가 취소한 분석 요청입니다.'
+      return
+    }
     item.status = 'error'
+    item.analysisStatus = 'FAILED'
     item.error = error.message
     receiptOcr.error = error.message
     setFeedback('', error.message)
   } finally {
+    item.abortController = null
     syncReceiptOcrBusyState()
   }
 }
@@ -2569,53 +2645,27 @@ async function analyzeReceiptImage(payload) {
     return
   }
 
-  const documentType = normalizeOcrDocumentType(payload?.documentType || receiptOcr.documentType)
+  const requestedDocumentType = normalizeOcrDocumentType(payload?.documentType || receiptOcr.documentType)
+  const documentType = files.length > 1 ? 'AUTO' : requestedDocumentType
   receiptOcr.documentType = documentType
   receiptOcr.isOpen = true
   receiptOcr.error = ''
-  setFeedback()
+  setFeedback(files.length > 1 ? '여러 이미지를 한 번에 올려 자동 분석 요청으로 처리합니다.' : '')
   if (!receiptOcr.historyItems.length && !receiptOcr.isHistoryLoading) {
     loadReceiptOcrHistories(0)
   }
-  files.forEach((file) => {
-    analyzeReceiptFile(file, documentType)
-  })
-  return
-
-  receiptOcr.isAnalyzing = true
-  receiptOcr.error = ''
-  receiptOcr.fileName = file.name || 'receipt-image'
-  receiptOcr.rawText = ''
-  receiptOcr.suggestedEntry = null
-  receiptOcr.lineItems = []
-  receiptOcr.warnings = []
-  receiptOcr.confidence = null
-  receiptOcr.vendor = ''
-  receiptOcr.paymentMethodText = ''
-  receiptOcr.categoryText = ''
-  receiptOcr.timing = null
-  setFeedback()
-
-  try {
-    const result = await analyzeLedgerReceipt(file)
-    receiptOcr.rawText = result?.rawText || ''
-    receiptOcr.suggestedEntry = result?.suggestedEntry || null
-    receiptOcr.lineItems = Array.isArray(result?.lineItems) ? result.lineItems : []
-    receiptOcr.warnings = Array.isArray(result?.warnings) ? result.warnings : []
-    receiptOcr.confidence = result?.confidence ?? null
-    receiptOcr.vendor = result?.vendor || ''
-    receiptOcr.paymentMethodText = result?.paymentMethodText || ''
-    receiptOcr.categoryText = result?.categoryText || ''
-    receiptOcr.timing = result?.timing || null
-    setFeedback('영수증 분석이 완료되었습니다. 결과를 확인한 뒤 입력칸에 적용해 주세요.')
-  } catch (error) {
-    receiptOcr.error = error.message
-    setFeedback('', error.message)
-  } finally {
-    receiptOcr.isAnalyzing = false
+  const queue = files.map((file) => ({
+    file,
+    item: createReceiptOcrItem(file, documentType),
+  }))
+  receiptOcr.items.unshift(...queue.map(({ item }) => item))
+  syncReceiptOcrBusyState()
+  for (const { file, item } of queue) {
+    if (isReceiptOcrItemActive(item)) {
+      await analyzeReceiptFile(file, documentType, item)
+    }
   }
 }
-
 
 function buildReceiptOcrAppliedSnapshot(suggestion = {}) {
   const amount = suggestion.amount !== null && suggestion.amount !== undefined && suggestion.amount !== ''
@@ -2649,7 +2699,29 @@ function isReceiptOcrAppliedSnapshotCurrent(snapshot = receiptOcr.lastAppliedSna
 
 function clearReceiptOcrAppliedMarker() {
   receiptOcr.lastAppliedAnalysisId = null
+  receiptOcr.lastAppliedReviewItemId = null
+  receiptOcr.lastAppliedReviewEntryIndex = null
   receiptOcr.lastAppliedSnapshot = null
+}
+
+function cancelReceiptOcrAppliedSuggestion() {
+  if (!receiptOcr.lastAppliedAnalysisId) {
+    return
+  }
+  if (isReceiptOcrAppliedSnapshotCurrent()) {
+    editingEntryId.value = null
+    amountInput.value = ''
+    entryForm.amount = ''
+    entryForm.title = ''
+    entryForm.memo = ''
+    entryForm.categoryGroupId = ''
+    entryForm.categoryDetailId = ''
+    entryForm.paymentMethodId = ''
+    setFeedback('AI 분석 결과 적용을 취소하고 입력칸을 비웠습니다.')
+  } else {
+    setFeedback('입력칸이 수동으로 수정된 상태라 AI 적용 취소로 지우지 않았습니다.')
+  }
+  clearReceiptOcrAppliedMarker()
 }
 
 async function applyReceiptOcrSuggestion(suggestion = receiptOcr.suggestedEntry) {
@@ -2657,7 +2729,19 @@ async function applyReceiptOcrSuggestion(suggestion = receiptOcr.suggestedEntry)
     return
   }
 
+  const suggestionStatus = String(suggestion.analysisStatus || '').toUpperCase()
+  if (suggestionStatus && suggestionStatus !== 'COMPLETED') {
+    setFeedback('', '완료된 AI 이미지 분석 결과만 입력칸에 적용할 수 있습니다.')
+    return
+  }
+  const suggestedAmount = Number(suggestion.amount)
+  if (!String(suggestion.title || '').trim() || !Number.isFinite(suggestedAmount) || suggestedAmount <= 0) {
+    setFeedback('', '제목과 금액을 확인해야 입력칸에 적용할 수 있습니다.')
+    return
+  }
   receiptOcr.lastAppliedAnalysisId = suggestion.analysisId || null
+  receiptOcr.lastAppliedReviewItemId = suggestion.reviewItemId || null
+  receiptOcr.lastAppliedReviewEntryIndex = Number.isFinite(Number(suggestion.reviewEntryIndex)) ? Number(suggestion.reviewEntryIndex) : null
   receiptOcr.lastAppliedSnapshot = buildReceiptOcrAppliedSnapshot(suggestion)
 
   editingEntryId.value = null
@@ -3623,6 +3707,7 @@ async function activatePayment(paymentId) {
       @remove-receipt-analysis="removeReceiptOcrItem"
       @apply-receipt-suggestion="applyReceiptOcrSuggestion"
       @clear-receipt-analysis="clearReceiptOcr"
+      @cancel-receipt-applied="cancelReceiptOcrAppliedSuggestion"
       @load-receipt-history="loadReceiptOcrHistories"
       @reuse-receipt-history="reuseReceiptOcrHistory"
       @cancel-receipt-history="cancelReceiptOcrHistory"

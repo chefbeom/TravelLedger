@@ -3,6 +3,7 @@ package com.playdata.calen.ledger.ocr;
 import com.playdata.calen.account.service.AppUserService;
 import com.playdata.calen.account.service.UserNotificationService;
 import com.playdata.calen.common.exception.BadRequestException;
+import com.playdata.calen.ledger.ai.LedgerAiAnalysisProperties;
 import com.playdata.calen.ledger.domain.EntryType;
 import com.playdata.calen.ledger.dto.LedgerOcrAnalyzeResponse;
 import com.playdata.calen.ledger.dto.LedgerOcrEntrySuggestionResponse;
@@ -39,6 +40,7 @@ public class LedgerOcrService {
 
     private final AppUserService appUserService;
     private final LedgerOcrProperties properties;
+    private final LedgerAiAnalysisProperties aiProperties;
     private final LedgerOcrRemoteClient remoteClient;
     private final UserNotificationService userNotificationService;
 
@@ -101,8 +103,8 @@ public class LedgerOcrService {
             userNotificationService.createSystemNotification(
                     userId,
                     "AI_OR_OCR_FAILED",
-                    "OCR analysis failed",
-                    "Receipt OCR could not be completed. Please check the OCR service or try again later.",
+                    "AI image analysis failed",
+                    "Receipt image analysis could not be completed. Please check the AI server or try again later.",
                     "/calendar?receiptOcr=1",
                     "{\"reason\":\"" + failureReason + "\"}"
             );
@@ -137,7 +139,7 @@ public class LedgerOcrService {
     private String ocrFailureReason(RuntimeException exception) {
         if (exception instanceof BadRequestException) {
             String message = exception.getMessage();
-            if ("OCR analysis is not enabled or is missing server configuration.".equals(message)) {
+            if ("AI image analysis is not enabled or is missing server configuration.".equals(message)) {
                 return "not_configured";
             }
             if ("Upload a receipt image first.".equals(message)
@@ -180,8 +182,8 @@ public class LedgerOcrService {
     }
 
     private void validateReady() {
-        if (!properties.isConfigured()) {
-            throw new BadRequestException("OCR analysis is not enabled or is missing server configuration.");
+        if (!aiProperties.isConfigured() || !aiProperties.isLmStudioConfigured()) {
+            throw new BadRequestException("AI image analysis is not enabled or is missing server configuration.");
         }
     }
 

@@ -23905,3 +23905,196 @@ button.button--primary,
 .drive-preview-modal__frame--text {
   background: #f8fafc;
 }
+/* household quick entry toggle alignment */
+.entry-editor__amount {
+  align-items: start;
+  grid-template-columns: auto auto minmax(0, 1fr);
+}
+
+.entry-editor__amount > .entry-type-toggle {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.entry-editor__amount > .entry-currency-toggle {
+  grid-column: 2;
+  grid-row: 1;
+  margin-left: 10px;
+  margin-top: 0;
+}
+
+.entry-editor__amount > :not(.entry-type-toggle):not(.entry-currency-toggle) {
+  grid-column: 1 / -1;
+}
+
+.entry-type-toggle,
+.entry-currency-toggle {
+  box-sizing: border-box;
+  justify-self: start;
+  max-width: 100%;
+  width: fit-content;
+}
+
+@media (max-width: 420px) {
+  .entry-editor__amount {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .entry-editor__amount > .entry-currency-toggle {
+    grid-column: 1;
+    grid-row: 2;
+    margin-left: 0;
+  }
+}
+/* household aggregate panel layout stabilization */
+.household-aggregate-header {
+  align-items: center !important;
+  display: flex !important;
+  flex-direction: row !important;
+  gap: 12px !important;
+  justify-content: space-between !important;
+  width: 100% !important;
+}
+
+.household-aggregate-header > div:first-child {
+  align-items: center;
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.household-aggregate-header h2 {
+  line-height: 1.2;
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.household-aggregate-header__actions {
+  align-items: center !important;
+  align-self: center !important;
+  display: flex !important;
+  flex: 0 0 auto !important;
+  flex-wrap: nowrap !important;
+  gap: 10px !important;
+  justify-content: flex-end !important;
+  margin-left: auto !important;
+}
+
+.household-aggregate-grid {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
+}
+
+.household-aggregate-card,
+.household-aggregate-card:not(:has(.household-aggregate-card__controls)) {
+  align-content: stretch !important;
+  display: grid !important;
+  gap: 12px !important;
+  grid-template-columns: minmax(0, 1fr) !important;
+  grid-template-rows: auto minmax(112px, 1fr) auto !important;
+  min-height: 276px;
+  overflow: hidden;
+}
+
+.household-aggregate-card__copy {
+  align-content: start;
+  display: grid;
+  gap: 6px;
+  grid-column: 1 !important;
+  min-width: 0;
+}
+
+.household-aggregate-card__eyebrow,
+.household-aggregate-card__copy strong,
+.household-aggregate-card__copy small {
+  min-width: 0;
+  overflow-wrap: normal;
+  word-break: keep-all;
+}
+
+.household-aggregate-card__eyebrow,
+.household-aggregate-card__copy small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.household-aggregate-card__copy strong {
+  display: block;
+  line-height: 1.1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.household-aggregate-chart,
+.household-aggregate-goal {
+  align-self: stretch;
+  grid-column: 1 !important;
+  min-height: 0;
+  min-width: 0;
+  width: 100%;
+}
+
+.household-aggregate-chart {
+  display: grid;
+  grid-template-rows: minmax(96px, 1fr) auto;
+}
+
+.household-aggregate-chart svg {
+  display: block;
+  height: 100%;
+  min-height: 96px;
+  width: 100%;
+}
+
+.household-aggregate-chart__legend,
+.household-aggregate-goal__stats,
+.household-aggregate-card__meta {
+  align-items: center;
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 6px 12px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.household-aggregate-chart__legend span,
+.household-aggregate-goal__stats span,
+.household-aggregate-card__meta span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.household-aggregate-goal {
+  align-content: start;
+  grid-template-rows: auto auto;
+}
+
+@container household-aggregate (max-width: 760px) {
+  .household-aggregate-header {
+    align-items: flex-start !important;
+  }
+
+  .household-aggregate-header__actions {
+    flex-wrap: wrap !important;
+  }
+
+  .household-aggregate-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .household-aggregate-card {
+    min-height: 240px;
+  }
+
+  .household-aggregate-chart__legend,
+  .household-aggregate-goal__stats,
+  .household-aggregate-card__meta {
+    flex-wrap: wrap;
+  }
+}

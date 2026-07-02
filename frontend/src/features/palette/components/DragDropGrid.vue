@@ -71,6 +71,7 @@ const keyboardMoveItems = computed(() => renderItems.value.map((item) => {
 let grid = null
 let resizeObserver = null
 let dragStartLayout = new Map()
+let resizeStartLayout = new Map()
 let rebuildTimer = 0
 
 function gridAttrs(config) {
@@ -220,6 +221,16 @@ function handleResizeStart(event, element) {
 
 function handleResizeStop(event, element) {
   element?.classList.remove('is-palette-resizing')
+  const resizedId = element?.getAttribute('gs-id') || element?.getAttribute('data-palette-id')
+  const node = element?.gridstackNode
+  const item = renderItems.value.find((candidate) => String(candidate.config.id) === String(resizedId))
+
+  if (resizedId && node && item) {
+    const nextSize = closestSupportedSize(item, node.w, node.h)
+    const nextSpan = getSpanBySize(nextSize)
+    grid?.update(element, { w: nextSpan.w, h: nextSpan.h })
+  }
+
   emit('apply-layout-patches', readSnapshot())
   resizeStartLayout = new Map()
 }
@@ -251,12 +262,13 @@ function initGrid() {
     animate: true,
     draggable: {
       appendTo: 'body',
-      cancel: 'button,a,input,select,textarea,[data-no-drag="true"]',
+      cancel: '.ui-resizable-handle,button,a,input,select,textarea,[data-no-drag="true"]',
       handle: '.palette-item',
       scroll: false,
     },
     resizable: {
-      handles: 'e, se, s',
+      autoHide: false,
+      handles: 'se',
     },
   }, gridElement.value)
   grid.enableMove(props.editMode)
@@ -475,6 +487,25 @@ watch(layoutKey, () => {
   }
 }
 
+
+.palette-grid-shell:not(.palette-grid-shell--editing) :deep(.ui-resizable-handle),
+.palette-grid-shell--editing :deep(.ui-resizable-handle:not(.ui-resizable-se)) {
+  display: none !important;
+}
+
+.palette-grid-shell--editing :deep(.ui-resizable-se) {
+  background: linear-gradient(135deg, transparent 0 44%, var(--household-dash-teal, #006960) 45% 58%, transparent 59% 100%);
+  border: 2px solid rgba(255, 255, 255, 0.72);
+  border-radius: 999px;
+  bottom: 10px !important;
+  box-shadow: 0 8px 18px rgba(0, 83, 77, 0.28);
+  cursor: nwse-resize;
+  height: 18px !important;
+  opacity: 1 !important;
+  right: 10px !important;
+  width: 18px !important;
+  z-index: 5;
+}
 :deep(.grid-stack-item) {
   z-index: 1;
 }

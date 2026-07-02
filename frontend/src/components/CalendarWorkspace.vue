@@ -1893,20 +1893,115 @@ function listDateRange(from, to) {
   return dates
 }
 
-function buildChartPoints(dailyItems, key, maxAmount) {
-  const width = 320
-  const height = 116
-  const horizontalPadding = 8
-  const topPadding = 8
-  const bottomPadding = 16
-  const drawableWidth = width - (horizontalPadding * 2)
-  const drawableHeight = height - topPadding - bottomPadding
+const aggregateChartDetailCard = ref(null)
+const aggregateChartSelectedPoint = ref(null)
+
+const AGGREGATE_CHART_WIDTH = 320
+const AGGREGATE_CHART_HEIGHT = 116
+const AGGREGATE_CHART_HORIZONTAL_PADDING = 28
+const AGGREGATE_CHART_RIGHT_PADDING = 10
+const AGGREGATE_CHART_TOP_PADDING = 12
+const AGGREGATE_CHART_BOTTOM_PADDING = 22
+
+function aggregateChartDrawableWidth() {
+  return AGGREGATE_CHART_WIDTH - AGGREGATE_CHART_HORIZONTAL_PADDING - AGGREGATE_CHART_RIGHT_PADDING
+}
+
+function aggregateChartDrawableHeight() {
+  return AGGREGATE_CHART_HEIGHT - AGGREGATE_CHART_TOP_PADDING - AGGREGATE_CHART_BOTTOM_PADDING
+}
+
+function chartXForIndex(index, total) {
+  const drawableWidth = aggregateChartDrawableWidth()
+  return total <= 1
+    ? AGGREGATE_CHART_HORIZONTAL_PADDING + (drawableWidth / 2)
+    : AGGREGATE_CHART_HORIZONTAL_PADDING + (drawableWidth * index) / (total - 1)
+}
+
+function chartYForAmount(amount, maxAmount) {
   const safeMax = Math.max(1, maxAmount)
+  const drawableHeight = aggregateChartDrawableHeight()
+  return AGGREGATE_CHART_TOP_PADDING + drawableHeight - ((Number(amount) || 0) / safeMax) * drawableHeight
+}
+
+function buildChartPointItems(dailyItems, key, maxAmount) {
   return dailyItems.map((item, index) => {
-    const x = dailyItems.length <= 1 ? width / 2 : horizontalPadding + (drawableWidth * index) / (dailyItems.length - 1)
-    const y = topPadding + drawableHeight - ((Number(item[key]) || 0) / safeMax) * drawableHeight
-    return `${x.toFixed(1)},${y.toFixed(1)}`
-  }).join(' ')
+    const amount = Number(item[key]) || 0
+    const previousAmount = index > 0 ? Number(dailyItems[index - 1]?.[key]) || 0 : 0
+    const x = chartXForIndex(index, dailyItems.length)
+    const y = chartYForAmount(amount, maxAmount)
+    return {
+      key: `${item.date}-${key}`,
+      date: item.date,
+      xLabel: item.date.slice(5).replace('-', '/'),
+      day: item.day,
+      series: key,
+      seriesLabel: key === 'income' ? '수입' : '지출',
+      amount,
+      dailyAmount: amount - previousAmount,
+      x: Number(x.toFixed(1)),
+      y: Number(y.toFixed(1)),
+    }
+  })
+}
+
+function buildChartPoints(pointItems) {
+  return pointItems.map((item) => `${item.x.toFixed(1)},${item.y.toFixed(1)}`).join(' ')
+}
+
+function buildChartDateTicks(dailyItems) {
+  if (!dailyItems.length) return []
+  const indexes = Array.from(new Set([
+    0,
+    Math.floor((dailyItems.length - 1) / 2),
+    dailyItems.length - 1,
+  ])).filter((index) => index >= 0 && index < dailyItems.length)
+  return indexes.map((index) => {
+    const item = dailyItems[index]
+    return {
+      key: item.date,
+      label: item.date.slice(5).replace('-', '/'),
+      x: Number(chartXForIndex(index, dailyItems.length).toFixed(1)),
+    }
+  })
+}
+
+function buildChartAmountTicks(maxAmount) {
+  const safeMax = Math.max(1, Number(maxAmount) || 0)
+  return [0, 0.5, 1].map((ratio) => {
+    const value = Math.round(safeMax * ratio)
+    const y = chartYForAmount(value, safeMax)
+    return {
+      key: `${ratio}-${value}`,
+      label: ratio === 0 ? '0' : formatCompactNumber(value),
+      value,
+      y: Number(y.toFixed(1)),
+      labelY: Number(Math.max(10, y - 2).toFixed(1)),
+    }
+  })
+}
+
+function findDefaultAggregateChartPoint(card) {
+  const points = [
+    ...(card?.chart?.incomePointItems || []),
+    ...(card?.chart?.expensePointItems || []),
+  ]
+  return points.length ? points[points.length - 1] : null
+}
+
+function openAggregateChartDetail(card) {
+  if (!card?.chart) return
+  aggregateChartDetailCard.value = card
+  aggregateChartSelectedPoint.value = findDefaultAggregateChartPoint(card)
+}
+
+function closeAggregateChartDetail() {
+  aggregateChartDetailCard.value = null
+  aggregateChartSelectedPoint.value = null
+}
+
+function selectAggregateChartPoint(point) {
+  aggregateChartSelectedPoint.value = point
 }
 
 function buildMonthlyCumulativeChartData(entries, range, overview) {
@@ -1925,14 +2020,20 @@ function buildMonthlyCumulativeChartData(entries, range, overview) {
     return { date, day: Number(date.slice(-2)), income: cumulativeIncome, expense: cumulativeExpense }
   })
   const maxAmount = Math.max(1, ...dailyItems.map((item) => Math.max(item.income, item.expense)))
+  const incomePointItems = buildChartPointItems(dailyItems, 'income', maxAmount)
+  const expensePointItems = buildChartPointItems(dailyItems, 'expense', maxAmount)
   return {
     rangeLabel: `${range.from.slice(5).replace('-', '/')} ~ ${range.to.slice(5).replace('-', '/')}`,
     hasEntries: Number(overview.entryCount || 0) > 0,
     incomeTotal: cumulativeIncome,
     expenseTotal: cumulativeExpense,
     maxAmount,
-    incomePoints: buildChartPoints(dailyItems, 'income', maxAmount),
-    expensePoints: buildChartPoints(dailyItems, 'expense', maxAmount),
+    incomePointItems,
+    expensePointItems,
+    incomePoints: buildChartPoints(incomePointItems),
+    expensePoints: buildChartPoints(expensePointItems),
+    dateTicks: buildChartDateTicks(dailyItems),
+    amountTicks: buildChartAmountTicks(maxAmount),
   }
 }
 
@@ -2939,11 +3040,30 @@ defineExpose({
               </template>
             </div>
 
+            <button
+              v-if="card.chart"
+              type="button"
+              class="household-aggregate-chart__detail-button"
+              @click="openAggregateChartDetail(card)"
+            >
+              누적 그래프 자세히 보기
+            </button>
             <div v-if="card.chart" class="household-aggregate-chart" :class="{ 'is-empty': !card.chart.hasEntries }">
               <svg viewBox="0 0 320 116" preserveAspectRatio="none" role="img" aria-label="월 누적 수입과 지출 그래프">
-                <line x1="8" y1="100" x2="312" y2="100" class="household-aggregate-chart__axis" />
+                <g class="household-aggregate-chart__grid" aria-hidden="true">
+                  <line v-for="tick in card.chart.amountTicks" :key="`amount-${tick.key}`" x1="28" x2="310" :y1="tick.y" :y2="tick.y" />
+                </g>
+                <g class="household-aggregate-chart__axis-labels" aria-hidden="true">
+                  <text x="6" y="11">금액</text>
+                  <text x="286" y="113">시간</text>
+                  <text v-for="tick in card.chart.amountTicks" :key="`amount-label-${tick.key}`" x="6" :y="tick.labelY">{{ tick.label }}</text>
+                  <text v-for="tick in card.chart.dateTicks" :key="`date-label-${tick.key}`" :x="tick.x" y="113" text-anchor="middle">{{ tick.label }}</text>
+                </g>
+                <line x1="28" y1="94" x2="310" y2="94" class="household-aggregate-chart__axis" />
                 <polyline :points="card.chart.incomePoints" class="household-aggregate-chart__line household-aggregate-chart__line--income" />
                 <polyline :points="card.chart.expensePoints" class="household-aggregate-chart__line household-aggregate-chart__line--expense" />
+                <circle v-for="point in card.chart.incomePointItems" :key="`income-dot-${point.key}`" :cx="point.x" :cy="point.y" r="2.6" class="household-aggregate-chart__point household-aggregate-chart__point--income" />
+                <circle v-for="point in card.chart.expensePointItems" :key="`expense-dot-${point.key}`" :cx="point.x" :cy="point.y" r="2.6" class="household-aggregate-chart__point household-aggregate-chart__point--expense" />
               </svg>
               <div class="household-aggregate-chart__legend">
                 <span><i class="income"></i>수입 누적</span>
@@ -2974,6 +3094,90 @@ defineExpose({
           <span>우측 상단 수정 버튼에서 필요한 집계만 골라 등록하면 이 영역에 바로 나타납니다.</span>
         </div>
       </section>
+
+      <div
+        v-if="aggregateChartDetailCard"
+        class="household-aggregate-chart-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-label="누적 그래프 상세 보기"
+        @click.self="closeAggregateChartDetail"
+      >
+        <section class="household-aggregate-chart-modal__panel">
+          <header class="household-aggregate-chart-modal__header">
+            <div>
+              <span class="household-aggregate-chart-modal__eyebrow">누적 그래프 자세히 보기</span>
+              <h3>{{ aggregateChartDetailCard.title }}</h3>
+              <p>{{ aggregateChartDetailCard.chart.rangeLabel }} · X축 시간 / Y축 금액</p>
+            </div>
+            <button type="button" class="button button--secondary" @click="closeAggregateChartDetail">닫기</button>
+          </header>
+
+          <div class="household-aggregate-chart-modal__summary">
+            <span>수입 누적 <strong>{{ formatCurrency(aggregateChartDetailCard.chart.incomeTotal) }}</strong></span>
+            <span>지출 누적 <strong>{{ formatCurrency(aggregateChartDetailCard.chart.expenseTotal) }}</strong></span>
+          </div>
+
+          <div class="household-aggregate-chart-modal__canvas">
+            <svg viewBox="0 0 320 116" preserveAspectRatio="none" role="img" aria-label="월 누적 수입과 지출 상세 그래프">
+              <g class="household-aggregate-chart__grid" aria-hidden="true">
+                <line v-for="tick in aggregateChartDetailCard.chart.amountTicks" :key="`detail-amount-${tick.key}`" x1="28" x2="310" :y1="tick.y" :y2="tick.y" />
+              </g>
+              <g class="household-aggregate-chart__axis-labels" aria-hidden="true">
+                <text x="6" y="11">금액</text>
+                <text x="286" y="113">시간</text>
+                <text v-for="tick in aggregateChartDetailCard.chart.amountTicks" :key="`detail-amount-label-${tick.key}`" x="6" :y="tick.labelY">{{ tick.label }}</text>
+                <text v-for="tick in aggregateChartDetailCard.chart.dateTicks" :key="`detail-date-label-${tick.key}`" :x="tick.x" y="113" text-anchor="middle">{{ tick.label }}</text>
+              </g>
+              <line x1="28" y1="94" x2="310" y2="94" class="household-aggregate-chart__axis" />
+              <polyline :points="aggregateChartDetailCard.chart.incomePoints" class="household-aggregate-chart__line household-aggregate-chart__line--income" />
+              <polyline :points="aggregateChartDetailCard.chart.expensePoints" class="household-aggregate-chart__line household-aggregate-chart__line--expense" />
+              <circle
+                v-for="point in aggregateChartDetailCard.chart.incomePointItems"
+                :key="`detail-income-${point.key}`"
+                :cx="point.x"
+                :cy="point.y"
+                r="4.8"
+                tabindex="0"
+                role="button"
+                class="household-aggregate-chart__point household-aggregate-chart__point--income household-aggregate-chart__point--interactive"
+                :class="{ 'is-selected': aggregateChartSelectedPoint?.key === point.key }"
+                @click.stop="selectAggregateChartPoint(point)"
+                @keydown.enter.prevent="selectAggregateChartPoint(point)"
+                @keydown.space.prevent="selectAggregateChartPoint(point)"
+              />
+              <circle
+                v-for="point in aggregateChartDetailCard.chart.expensePointItems"
+                :key="`detail-expense-${point.key}`"
+                :cx="point.x"
+                :cy="point.y"
+                r="4.8"
+                tabindex="0"
+                role="button"
+                class="household-aggregate-chart__point household-aggregate-chart__point--expense household-aggregate-chart__point--interactive"
+                :class="{ 'is-selected': aggregateChartSelectedPoint?.key === point.key }"
+                @click.stop="selectAggregateChartPoint(point)"
+                @keydown.enter.prevent="selectAggregateChartPoint(point)"
+                @keydown.space.prevent="selectAggregateChartPoint(point)"
+              />
+            </svg>
+          </div>
+
+          <div class="household-aggregate-chart__legend household-aggregate-chart-modal__legend">
+            <span><i class="income"></i>수입 누적</span>
+            <span><i class="expense"></i>지출 누적</span>
+          </div>
+
+          <aside v-if="aggregateChartSelectedPoint" class="household-aggregate-chart-modal__selected">
+            <span>{{ aggregateChartSelectedPoint.date }} · {{ aggregateChartSelectedPoint.seriesLabel }}</span>
+            <strong>{{ formatCurrency(aggregateChartSelectedPoint.amount) }}</strong>
+            <p>
+              해당 교차점은 {{ aggregateChartSelectedPoint.xLabel }} 시점의 누적 {{ aggregateChartSelectedPoint.seriesLabel }} 금액입니다.
+              하루 증가분은 {{ formatCurrency(aggregateChartSelectedPoint.dailyAmount) }}입니다.
+            </p>
+          </aside>
+        </section>
+      </div>
 
               </template>
 

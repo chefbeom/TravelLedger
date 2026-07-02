@@ -276,9 +276,26 @@ public class DriveShareService {
     }
 
     public DriveService.DriveFilePayload downloadSharedFile(Long userId, Long fileId) {
-        DriveItem item = getDownloadableSharedFile(userId, fileId);
+        return downloadSharedFile(userId, fileId, null);
+    }
+
+    @Transactional
+    public DriveService.DriveFilePayload downloadSharedFile(
+            Long userId,
+            Long fileId,
+            DriveDownloadLinkAccessLogService.AccessMetadata metadata
+    ) {
+        DriveShare share = driveShareRepository.findByItem_IdAndRecipient_Id(fileId, userId).orElse(null);
+        if (share == null) {
+            recordDirectShareAccess(null, fileId, null, userId, "not_found", metadata);
+            throw new NotFoundException("Shared file not found.");
+        }
+
+        DriveItem item = validateSharedFileForDownload(share, userId, metadata);
+        ensureDownloadAllowed(share, userId, metadata);
         byte[] bytes = driveStorageService.loadObjectBytes(item.getStoragePath());
         item.setLastAccessedAt(LocalDateTime.now());
+        recordDirectShareAccess(share, userId, "success", metadata);
         return new DriveService.DriveFilePayload(
                 bytes,
                 resolveContentType(item.getExtension()),

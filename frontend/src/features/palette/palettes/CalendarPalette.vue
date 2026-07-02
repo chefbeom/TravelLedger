@@ -37,6 +37,28 @@ function dayTone(day) {
   if (income || expense) return 'neutral'
   return 'empty'
 }
+function formatCompactAmount(value) {
+  const amount = Math.abs(Number(value ?? 0))
+  if (!amount) return ''
+
+  const units = [
+    { value: 1_000_000_000, suffix: 'B' },
+    { value: 1_000_000, suffix: 'M' },
+    { value: 1_000, suffix: 'k' },
+  ]
+  const unit = units.find((item) => amount >= item.value)
+  if (!unit) {
+    return String(Math.round(amount))
+  }
+
+  const compact = amount / unit.value
+  const fractionDigits = compact >= 10 ? 0 : 1
+  return `${compact.toFixed(fractionDigits).replace(/\.0$/, '')}${unit.suffix}`
+}
+
+function expenseCompact(day) {
+  return formatCompactAmount(day?.summary?.expense)
+}
 </script>
 
 <template>
@@ -60,9 +82,7 @@ function dayTone(day) {
         ]"
       >
         <span class="calendar-palette__number">{{ day.dayNumber }}</span>
-        <span v-if="Number(day.summary?.entryCount || 0)" class="calendar-palette__count">
-          {{ day.summary.entryCount }}
-        </span>
+        <span v-if="expenseCompact(day)" class="calendar-palette__expense">`n          {{ expenseCompact(day) }}`n        </span>
         <span class="calendar-palette__marker"></span>
       </div>
     </div>
@@ -143,7 +163,7 @@ function dayTone(day) {
   line-height: 1;
 }
 
-.calendar-palette__count {
+.calendar-palette__expense {
   align-self: end;
   background: var(--household-dash-card, #ffffff);
   border: 1px solid var(--household-dash-line, #d1d5db);
@@ -209,7 +229,7 @@ function dayTone(day) {
   font-size: 0.56rem;
 }
 
-.calendar-palette--1x2 .calendar-palette__count {
+.calendar-palette--1x2 .calendar-palette__expense {
   display: none;
 }
 
@@ -225,7 +245,7 @@ function dayTone(day) {
 }
 
 :global(html[data-theme='toss'] .calendar-palette__head strong),
-:global(html[data-theme='toss'] .calendar-palette__count) {
+:global(html[data-theme='toss'] .calendar-palette__expense) {
   color: var(--household-dash-ink, #edf3f8);
 }
 
@@ -247,7 +267,7 @@ function dayTone(day) {
   color: var(--household-dash-ink, #edf3f8);
 }
 
-:global(html[data-theme='toss'] .calendar-palette__count) {
+:global(html[data-theme='toss'] .calendar-palette__expense) {
   background: var(--household-dash-card, rgba(24, 31, 42, 0.97));
   border-color: var(--household-dash-line, rgba(91, 107, 129, 0.32));
 }

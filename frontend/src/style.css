@@ -890,6 +890,11 @@ button {
   background: var(--entry-section-bg);
 }
 
+.entry-editor__amount {
+  display: grid;
+  gap: 12px;
+}
+
 .entry-editor__fields {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1586,7 +1591,8 @@ button {
   color: var(--text-muted);
 }
 
-.entry-type-toggle {
+.entry-type-toggle,
+.entry-currency-toggle {
   display: inline-flex;
   gap: 8px;
   padding: 6px;
@@ -1651,9 +1657,7 @@ button {
 }
 
 .entry-currency-toggle {
-  display: inline-flex;
-  gap: 8px;
-  margin-top: 10px;
+  width: fit-content;
 }
 
 .foreign-amount-panel {
@@ -8709,7 +8713,8 @@ textarea {
   color: var(--entry-toggle-active-text);
 }
 
-:root[data-theme='toss'] .entry-type-toggle {
+:root[data-theme='toss'] .entry-type-toggle,
+.entry-currency-toggle {
   background: var(--entry-toggle-bg);
   border: 1px solid var(--entry-section-border);
 }
@@ -23878,4 +23883,25 @@ button.button--primary,
   background: transparent !important;
   box-shadow: none !important;
   filter: none !important;
+}
+.drive-preview-modal__body img,
+.drive-preview-modal__body video {
+  display: block;
+  max-width: 100%;
+  max-height: 72vh;
+  border-radius: 16px;
+  object-fit: contain;
+}
+
+.drive-preview-modal__frame {
+  width: min(100%, 1040px);
+  height: min(74vh, 760px);
+  border: 0;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 18px 55px rgba(0, 0, 0, 0.24);
+}
+
+.drive-preview-modal__frame--text {
+  background: #f8fafc;
 }

@@ -55,6 +55,7 @@ const canShowBars = computed(() => ['3x2', '3x3'].includes(props.config.size))
 .kpi-palette {
   display: grid;
   gap: 10px;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
   height: 100%;
   min-height: 0;
   overflow: hidden;
@@ -137,7 +138,10 @@ const canShowBars = computed(() => ['3x2', '3x3'].includes(props.config.size))
   display: grid;
   gap: 5px;
   min-height: 0;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding-right: 2px;
+  scrollbar-gutter: stable;
 }
 
 .kpi-palette__row {

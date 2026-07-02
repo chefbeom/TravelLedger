@@ -14,6 +14,34 @@ function formatNumber(value) {
   return new Intl.NumberFormat('ko-KR').format(Number(value ?? 0))
 }
 
+const RECENT_FLOW_DEFAULT_LIMIT = 8
+const RECENT_FLOW_MIN_LIMIT = 5
+const RECENT_FLOW_MAX_LIMIT = 10
+
+function clampRecentFlowLimit(value) {
+  const parsed = Number(value ?? RECENT_FLOW_DEFAULT_LIMIT)
+  if (!Number.isFinite(parsed)) return RECENT_FLOW_DEFAULT_LIMIT
+  return Math.min(RECENT_FLOW_MAX_LIMIT, Math.max(RECENT_FLOW_MIN_LIMIT, Math.round(parsed)))
+}
+
+function resolveRecentFlowType(value) {
+  return value === 'INCOME' ? 'INCOME' : 'EXPENSE'
+}
+
+function entryTimestamp(entry) {
+  const date = entry.entryDate || entry.date || entry.transactionDate || entry.localDate || ''
+  const time = entry.entryTime || entry.time || ''
+  const dateTime = date ? Date.parse(`${date}T${time || '00:00:00'}`) : Number.NaN
+  if (Number.isFinite(dateTime)) return dateTime
+  const createdTime = Date.parse(entry.createdAt || entry.updatedAt || '')
+  if (Number.isFinite(createdTime)) return createdTime
+  return Number(entry.id ?? 0)
+}
+
+function entryTitle(entry) {
+  return entry.title || entry.categoryDetailName || entry.categoryName || entry.paymentMethodName || '거래'
+}
+
 function quickStat(context, key) {
   return (context.dashboard?.quickStats ?? []).find((item) => item.key === key)?.overview ?? null
 }
@@ -67,31 +95,32 @@ function buildIncomeExpenseKpi(context) {
   }
 }
 
-function buildRecentFlowKpi(context) {
-  const recentEntries = context.dashboard?.recentEntries ?? []
-  const totalExpense = recentEntries
-    .filter((entry) => entry.entryType === 'EXPENSE')
-    .reduce((total, entry) => total + Number(entry.amount ?? 0), 0)
-  const totalIncome = recentEntries
-    .filter((entry) => entry.entryType === 'INCOME')
-    .reduce((total, entry) => total + Number(entry.amount ?? 0), 0)
-  const maxValue = Math.max(totalIncome, totalExpense, 1)
+function buildRecentFlowKpi(context, options = {}) {
+  const entryType = resolveRecentFlowType(options.entryType)
+  const limit = clampRecentFlowLimit(options.limit)
+  const sourceEntries = Array.isArray(context.entries) && context.entries.length
+    ? context.entries
+    : (context.dashboard?.recentEntries ?? [])
+  const recentEntries = sourceEntries
+    .filter((entry) => entry.entryType === entryType)
+    .slice()
+    .sort((left, right) => entryTimestamp(right) - entryTimestamp(left))
+    .slice(0, limit)
+  const latestEntry = recentEntries[0]
+  const flowLabel = entryType === 'INCOME' ? '최근 수입' : '최근 지출'
 
   return {
     title: '최근 흐름',
-    eyebrow: '최근 입력',
-    value: `${formatNumber(recentEntries.length)}건`,
-    meta: recentEntries[0]?.title || '최근 거래 없음',
-    tone: 'neutral',
-    rows: recentEntries.slice(0, 3).map((entry) => ({
-      label: entry.title || '-',
+    eyebrow: flowLabel,
+    value: latestEntry ? formatCurrency(latestEntry.amount) : '-',
+    meta: latestEntry ? '최신순 거래' : `${flowLabel} 없음`,
+    tone: entryType === 'INCOME' ? 'positive' : 'negative',
+    rows: recentEntries.map((entry) => ({
+      label: entryTitle(entry),
       value: formatCurrency(entry.amount),
       tone: entry.entryType === 'INCOME' ? 'positive' : 'negative',
     })),
-    bars: [
-      { label: '수입', value: totalIncome, percent: Math.round((totalIncome / maxValue) * 100), tone: 'positive' },
-      { label: '지출', value: totalExpense, percent: Math.round((totalExpense / maxValue) * 100), tone: 'negative' },
-    ],
+    bars: [],
   }
 }
 
@@ -122,7 +151,7 @@ export const paletteRegistry = {
       if (variant === 'month') return buildOverviewKpi(context, 'month', '이번 달')
       if (variant === 'year') return buildOverviewKpi(context, 'year', '올해')
       if (variant === 'incomeExpense') return buildIncomeExpenseKpi(context)
-      if (variant === 'recentFlow') return buildRecentFlowKpi(context)
+      if (variant === 'recentFlow') return buildRecentFlowKpi(context, config.options)
       return buildOverviewKpi(context, 'month', '이번 달')
     },
   },

@@ -245,6 +245,22 @@ export const useDashboardPaletteStore = defineStore('dashboardPalette', () => {
     persist()
   }
 
+  function updatePaletteOptions(id, options = {}) {
+    const nextPalettes = (currentPreset.value?.palettes ?? []).map((palette) => {
+      if (String(palette.id) !== String(id)) {
+        return palette
+      }
+      return {
+        ...palette,
+        options: {
+          ...(palette.options ?? {}),
+          ...(options ?? {}),
+        },
+      }
+    })
+    replacePresetPalettes(currentPresetId.value, nextPalettes)
+    persist()
+  }
   function applyLayoutPatches(patches) {
     const paletteById = new Map((currentPreset.value?.palettes ?? []).map((palette) => [String(palette.id), palette]))
     const normalizedPatches = (patches ?? []).map((patch) => {
@@ -354,6 +370,7 @@ export const useDashboardPaletteStore = defineStore('dashboardPalette', () => {
     movePalette,
     resizePalette,
     applyLayoutPatches,
+    updatePaletteOptions,
     hidePalette,
     restorePalette,
     removePalette,

@@ -39,7 +39,7 @@ export const paletteTemplates = [
     type: 'kpi',
     label: '최근 흐름',
     defaultSize: '3x2',
-    options: { variant: 'recentFlow' },
+    options: { variant: 'recentFlow', entryType: 'EXPENSE', limit: 8 },
   },
   {
     id: 'calendar-month',
@@ -59,7 +59,7 @@ export function createDefaultPalettePresets() {
         { id: 'preset1-calendar', type: 'calendar', size: '3x3', position: { x: 0, y: 0 }, visible: true, options: {} },
         { id: 'preset1-today', type: 'kpi', size: '1x1', position: { x: 3, y: 0 }, visible: true, options: { variant: 'today' } },
         { id: 'preset1-week', type: 'kpi', size: '1x1', position: { x: 4, y: 0 }, visible: true, options: { variant: 'week' } },
-        { id: 'preset1-recent', type: 'kpi', size: '3x2', position: { x: 5, y: 0 }, visible: true, options: { variant: 'recentFlow' } },
+        { id: 'preset1-recent', type: 'kpi', size: '3x2', position: { x: 5, y: 0 }, visible: true, options: { variant: 'recentFlow', entryType: 'EXPENSE', limit: 8 } },
         { id: 'preset1-month', type: 'kpi', size: '2x2', position: { x: 3, y: 1 }, visible: true, options: { variant: 'month' } },
       ],
     },
@@ -73,7 +73,7 @@ export function createDefaultPalettePresets() {
         { id: 'preset2-today', type: 'kpi', size: '1x1', position: { x: 7, y: 0 }, visible: true, options: { variant: 'today' } },
         { id: 'preset2-week', type: 'kpi', size: '1x1', position: { x: 8, y: 0 }, visible: true, options: { variant: 'week' } },
         { id: 'preset2-calendar', type: 'calendar', size: '3x3', position: { x: 0, y: 2 }, visible: true, options: {} },
-        { id: 'preset2-recent', type: 'kpi', size: '3x2', position: { x: 3, y: 2 }, visible: true, options: { variant: 'recentFlow' } },
+        { id: 'preset2-recent', type: 'kpi', size: '3x2', position: { x: 3, y: 2 }, visible: true, options: { variant: 'recentFlow', entryType: 'EXPENSE', limit: 8 } },
       ],
     },
     {
@@ -85,7 +85,7 @@ export function createDefaultPalettePresets() {
         { id: 'preset3-month', type: 'kpi', size: '2x2', position: { x: 2, y: 0 }, visible: true, options: { variant: 'month' } },
         { id: 'preset3-calendar', type: 'calendar', size: '3x3', position: { x: 4, y: 0 }, visible: true, options: {} },
         { id: 'preset3-balance', type: 'kpi', size: '3x2', position: { x: 0, y: 2 }, visible: true, options: { variant: 'incomeExpense' } },
-        { id: 'preset3-recent', type: 'kpi', size: '2x2', position: { x: 7, y: 0 }, visible: true, options: { variant: 'recentFlow' } },
+        { id: 'preset3-recent', type: 'kpi', size: '2x2', position: { x: 7, y: 0 }, visible: true, options: { variant: 'recentFlow', entryType: 'EXPENSE', limit: 8 } },
       ],
     },
   ]

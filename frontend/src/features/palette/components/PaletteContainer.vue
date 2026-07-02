@@ -39,6 +39,10 @@ const toolsOpen = ref(false)
 const selectedTemplateId = ref('kpi-month')
 const toolsPanelRef = ref(null)
 const toolsButtonRef = ref(null)
+const recentFlowLimits = [5, 6, 7, 8, 9, 10]
+const recentFlowPalettes = computed(() => store.visiblePalettes.filter((palette) => (
+  palette.type === 'kpi' && palette.options?.variant === 'recentFlow'
+)))
 
 const userStorageId = computed(() => props.currentUser?.id || props.currentUser?.loginId || 'anonymous')
 const paletteContext = computed(() => ({
@@ -89,6 +93,10 @@ function handleResetPreset() {
   if (confirmed) {
     store.resetPreset(store.currentPresetId)
   }
+}
+
+function updateRecentFlowPalette(palette, patch) {
+  store.updatePaletteOptions(palette.id, patch)
 }
 
 function hiddenPaletteTitle(palette) {
@@ -166,6 +174,33 @@ onBeforeUnmount(() => {
         <button class="palette-dashboard__secondary" type="button" @click="handleAddPalette">
           추가
         </button>
+        <div v-if="recentFlowPalettes.length" class="palette-dashboard__option-panel">
+          <span>최근 흐름 설정</span>
+          <div v-for="palette in recentFlowPalettes" :key="palette.id" class="palette-dashboard__option-card">
+            <small>{{ hiddenPaletteTitle(palette) }}</small>
+            <label class="palette-dashboard__field">
+              <span>표시 기준</span>
+              <select
+                :value="palette.options?.entryType || 'EXPENSE'"
+                @change="updateRecentFlowPalette(palette, { entryType: $event.target.value })"
+              >
+                <option value="EXPENSE">지출</option>
+                <option value="INCOME">수입</option>
+              </select>
+            </label>
+            <label class="palette-dashboard__field">
+              <span>표시 개수</span>
+              <select
+                :value="palette.options?.limit || 8"
+                @change="updateRecentFlowPalette(palette, { limit: Number($event.target.value) })"
+              >
+                <option v-for="limit in recentFlowLimits" :key="limit" :value="limit">
+                  {{ limit }}개
+                </option>
+              </select>
+            </label>
+          </div>
+        </div>
 
         <div class="palette-dashboard__hidden">
           <span>숨긴 팔레트</span>
@@ -364,6 +399,29 @@ onBeforeUnmount(() => {
   color: var(--household-dash-ink);
 }
 
+.palette-dashboard__option-panel {
+  border: 1px solid var(--household-dash-line);
+  border-radius: 14px;
+  display: grid;
+  gap: 10px;
+  padding: 10px;
+}
+
+.palette-dashboard__option-panel > span,
+.palette-dashboard__option-card small {
+  color: var(--household-dash-teal);
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.palette-dashboard__option-card {
+  background: var(--household-dash-tile);
+  border: 1px solid var(--household-dash-line);
+  border-radius: 12px;
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+}
 .palette-dashboard__hidden {
   display: grid;
   gap: 6px;

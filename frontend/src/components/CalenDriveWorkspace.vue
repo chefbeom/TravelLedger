@@ -757,6 +757,16 @@ function isVideoFile(item) {
   return ['mp4', 'mov', 'webm', 'avi', 'mkv'].includes(extension)
 }
 
+function isPdfFile(item) {
+  const extension = String(item?.fileFormat || '').toLowerCase()
+  return extension === 'pdf'
+}
+
+function isTextFile(item) {
+  const extension = String(item?.fileFormat || '').toLowerCase()
+  return ['txt', 'text', 'md', 'markdown', 'csv', 'log', 'json', 'xml', 'yaml', 'yml'].includes(extension)
+}
+
 function buildOwnedDownloadPath(item) {
   return item?.id ? `/api/file/${item.id}/download` : ''
 }
@@ -790,9 +800,14 @@ function itemPreviewType(item) {
   if (isVideoFile(item)) {
     return 'video'
   }
+  if (isPdfFile(item)) {
+    return 'pdf'
+  }
+  if (isTextFile(item)) {
+    return 'text'
+  }
   return 'file'
 }
-
 function itemTypeLabel(item) {
   if (isFolder(item)) {
     return '폴더'
@@ -817,7 +832,7 @@ function itemOwnerLabel(item) {
 }
 
 function canPreviewItem(item) {
-  return !isFolder(item) && (isImageFile(item) || isVideoFile(item))
+  return !isFolder(item) && (isImageFile(item) || isVideoFile(item) || isPdfFile(item) || isTextFile(item))
 }
 
 function openPreviewDialog(item) {
@@ -3646,6 +3661,18 @@ onBeforeUnmount(() => {
                 controls
                 playsinline
               ></video>
+              <iframe
+                v-else-if="itemPreviewType(previewDialog.item) === 'pdf'"
+                class="drive-preview-modal__frame"
+                :src="itemDownloadPath(previewDialog.item)"
+                :title="previewDialog.item.fileOriginName"
+              ></iframe>
+              <iframe
+                v-else-if="itemPreviewType(previewDialog.item) === 'text'"
+                class="drive-preview-modal__frame drive-preview-modal__frame--text"
+                :src="itemDownloadPath(previewDialog.item)"
+                :title="previewDialog.item.fileOriginName"
+              ></iframe>
             </div>
           </div>
         </div>

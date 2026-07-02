@@ -6,7 +6,6 @@ import com.playdata.calen.drive.service.DriveDownloadLinkAccessLogService;
 import com.playdata.calen.drive.service.DriveDownloadLinkService;
 import com.playdata.calen.drive.service.DriveService;
 import jakarta.servlet.http.HttpServletRequest;
-import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Arrays;
@@ -15,7 +14,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.CacheControl;
 import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -88,11 +86,11 @@ public class DriveFileController {
         return driveService.restoreFileVersion(currentUser.userId(), fileId, versionId);
     }
     @GetMapping("/{fileId}/download")
-    public ResponseEntity<Void> download(
+    public ResponseEntity<byte[]> download(
             @AuthenticationPrincipal AppUserPrincipal currentUser,
             @PathVariable Long fileId
     ) {
-        return redirectTo(driveService.getDownloadUrl(currentUser.userId(), fileId));
+        return buildDownloadResponse(driveService.downloadFile(currentUser.userId(), fileId));
     }
 
     @GetMapping("/{fileId}/download-link")
@@ -139,8 +137,8 @@ public class DriveFileController {
     }
 
     @GetMapping("/public-download/{token}")
-    public ResponseEntity<Void> publicDownload(@PathVariable String token, HttpServletRequest request) {
-        return redirectTo(driveDownloadLinkService.resolveDownloadUrlByToken(token, toAccessMetadata(request)));
+    public ResponseEntity<byte[]> publicDownload(@PathVariable String token, HttpServletRequest request) {
+        return buildDownloadResponse(driveDownloadLinkService.downloadByToken(token, toAccessMetadata(request)));
     }
 
     @PostMapping("/download")
@@ -248,23 +246,18 @@ public class DriveFileController {
     }
 
     private ResponseEntity<byte[]> buildDownloadResponse(DriveService.DriveFilePayload payload) {
-        return ResponseEntity.ok()
-                .header(
-                        HttpHeaders.CONTENT_DISPOSITION,
-                        ContentDisposition.attachment()
-                                .filename(payload.fileName(), StandardCharsets.UTF_8)
-                                .build()
-                                .toString()
-                )
-                .contentLength(payload.contentLength())
-                .contentType(resolveMediaType(payload.contentType()))
-                .body(payload.bytes());
-    }
-
-    private ResponseEntity<Void> redirectTo(String downloadUrl) {
-        return ResponseEntity.status(HttpStatus.FOUND)
-                .location(URI.create(downloadUrl))
+        ContentDisposition disposition = (isInlinePreviewContent(payload.contentType())
+                ? ContentDisposition.inline()
+                : ContentDisposition.attachment())
+                .filename(payload.fileName(), StandardCharsets.UTF_8)
                 .build();
+
+        byte[] bytes = payload.bytes() != null ? payload.bytes() : new byte[0];
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, disposition.toString())
+                .contentLength(bytes.length)
+                .contentType(resolveMediaType(payload.contentType()))
+                .body(bytes);
     }
 
     private DriveDownloadLinkAccessLogService.AccessMetadata toAccessMetadata(HttpServletRequest request) {
@@ -326,6 +319,18 @@ public class DriveFileController {
                 .body(payload.bytes());
     }
 
+
+    private boolean isInlinePreviewContent(String contentType) {
+        if (contentType == null || contentType.isBlank()) {
+            return false;
+        }
+        String normalized = contentType.toLowerCase();
+        return normalized.startsWith("image/")
+                || normalized.startsWith("video/")
+                || normalized.startsWith("text/")
+                || normalized.equals("application/pdf");
+    }
+
     private MediaType resolveMediaType(String contentType) {
         if (contentType == null || contentType.isBlank()) {
             return MediaType.APPLICATION_OCTET_STREAM;
@@ -354,7 +359,7 @@ public class DriveFileController {
         if (normalized.startsWith("W/")) {
             normalized = normalized.substring(2).trim();
         }
-        if (normalized.startsWith("\"") && normalized.endsWith("\"") && normalized.length() >= 2) {
+        if (normalized.startsWith(""") && normalized.endsWith(""") && normalized.length() >= 2) {
             normalized = normalized.substring(1, normalized.length() - 1);
         }
         return normalized;

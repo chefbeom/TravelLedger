@@ -116,14 +116,14 @@ public class DriveShareController {
     }
 
     @GetMapping("/shared/{fileId}/download")
-    public ResponseEntity<Void> downloadSharedFile(
+    public ResponseEntity<byte[]> downloadSharedFile(
             @AuthenticationPrincipal AppUserPrincipal currentUser,
             @PathVariable Long fileId,
             @RequestHeader(value = "X-Forwarded-For", required = false) String forwardedFor,
             @RequestHeader(value = "X-Real-IP", required = false) String realIp,
             @RequestHeader(value = HttpHeaders.USER_AGENT, required = false) String userAgent
     ) {
-        return redirectTo(driveShareService.getSharedFileDownloadUrl(
+        return buildDownloadResponse(driveShareService.downloadSharedFile(
                 currentUser.userId(),
                 fileId,
                 accessMetadata(forwardedFor, realIp, userAgent)
@@ -174,10 +174,41 @@ public class DriveShareController {
         return null;
     }
 
-    private ResponseEntity<Void> redirectTo(String downloadUrl) {
-        return ResponseEntity.status(HttpStatus.FOUND)
-                .location(URI.create(downloadUrl))
+    private ResponseEntity<byte[]> buildDownloadResponse(DriveService.DriveFilePayload payload) {
+        ContentDisposition disposition = (isInlinePreviewContent(payload.contentType())
+                ? ContentDisposition.inline()
+                : ContentDisposition.attachment())
+                .filename(payload.fileName(), StandardCharsets.UTF_8)
                 .build();
+
+        byte[] bytes = payload.bytes() != null ? payload.bytes() : new byte[0];
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, disposition.toString())
+                .contentLength(bytes.length)
+                .contentType(resolveMediaType(payload.contentType()))
+                .body(bytes);
+    }
+
+    private boolean isInlinePreviewContent(String contentType) {
+        if (contentType == null || contentType.isBlank()) {
+            return false;
+        }
+        String normalized = contentType.toLowerCase();
+        return normalized.startsWith("image/")
+                || normalized.startsWith("video/")
+                || normalized.startsWith("text/")
+                || normalized.equals("application/pdf");
+    }
+
+    private MediaType resolveMediaType(String contentType) {
+        if (contentType == null || contentType.isBlank()) {
+            return MediaType.APPLICATION_OCTET_STREAM;
+        }
+        try {
+            return MediaType.parseMediaType(contentType);
+        } catch (Exception ignored) {
+            return MediaType.APPLICATION_OCTET_STREAM;
+        }
     }
 
     private ResponseEntity<byte[]> buildThumbnailResponse(

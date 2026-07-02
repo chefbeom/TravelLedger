@@ -66,6 +66,8 @@ const aggregateWidgetKinds = [
   { value: 'NONE', label: '사용 안 함' },
   { value: 'TOTAL', label: '합계' },
   { value: 'PAYMENT_METHOD', label: '결제수단' },
+  { value: 'MONTHLY_CUMULATIVE_CHART', label: '월 누적 그래프' },
+  { value: 'MONTHLY_GOAL', label: '이번달 목표' },
 ]
 
 const aggregateWidgetPeriods = [
@@ -102,11 +104,11 @@ const calendarPanelDefinitions = [
   {
     id: 'aggregate',
     title: '사용자 설정 집계',
-    defaultLayout: { x: 0, y: 0, w: 9, h: 2 },
+    defaultLayout: { x: 0, y: 0, w: 9, h: 3 },
     minW: 4,
-    minH: 2,
+    minH: 3,
     maxW: 9,
-    maxH: 6,
+    maxH: 8,
   },
   {
     id: 'sheet',
@@ -1700,11 +1702,24 @@ function getCalendarBarRatio(day) {
 function createDefaultAggregateConfigs() {
   const defaultPaymentMethodId = props.paymentMethods[0] ? String(props.paymentMethods[0].id) : ''
   return [
-    { id: 'aggregate-1', kind: 'TOTAL', period: 'MONTH', paymentMethodId: '', amountType: 'NET' },
-    { id: 'aggregate-2', kind: 'NONE', period: 'MONTH', paymentMethodId: '', amountType: 'NET' },
-    { id: 'aggregate-3', kind: 'NONE', period: 'WEEK', paymentMethodId: '', amountType: 'NET' },
-    { id: 'aggregate-4', kind: 'NONE', period: 'DAY', paymentMethodId: defaultPaymentMethodId, amountType: 'NET' },
+    { id: 'aggregate-1', kind: 'TOTAL', period: 'MONTH', paymentMethodId: '', amountType: 'NET', monthlyExpenseTarget: 0, singleExpenseLimit: 0 },
+    { id: 'aggregate-2', kind: 'NONE', period: 'MONTH', paymentMethodId: '', amountType: 'NET', monthlyExpenseTarget: 0, singleExpenseLimit: 0 },
+    { id: 'aggregate-3', kind: 'NONE', period: 'WEEK', paymentMethodId: '', amountType: 'NET', monthlyExpenseTarget: 0, singleExpenseLimit: 0 },
+    { id: 'aggregate-4', kind: 'NONE', period: 'DAY', paymentMethodId: defaultPaymentMethodId, amountType: 'NET', monthlyExpenseTarget: 0, singleExpenseLimit: 0 },
   ]
+}
+
+function normalizeAggregateTargetAmount(value) {
+  const numericValue = Number(value)
+  return Number.isFinite(numericValue) && numericValue > 0 ? Math.round(numericValue) : 0
+}
+
+function isAggregatePeriodEditable(kind) {
+  return kind !== 'MONTHLY_CUMULATIVE_CHART' && kind !== 'MONTHLY_GOAL'
+}
+
+function isAggregateAmountTypeEditable(kind) {
+  return kind !== 'NONE' && kind !== 'MONTHLY_CUMULATIVE_CHART' && kind !== 'MONTHLY_GOAL'
 }
 
 function normalizeAggregateConfigs(configs) {
@@ -1715,19 +1730,27 @@ function normalizeAggregateConfigs(configs) {
   return fallback.map((baseConfig, index) => {
     const current = configs?.[index] ?? {}
     const kind = aggregateWidgetKinds.some((item) => item.value === current.kind) ? current.kind : baseConfig.kind
-    const period = aggregateWidgetPeriods.some((item) => item.value === current.period) ? current.period : baseConfig.period
-    const amountType = aggregateWidgetAmountTypes.some((item) => item.value === current.amountType) ? current.amountType : baseConfig.amountType
-    const paymentMethodId = kind === 'PAYMENT_METHOD'
+    let period = aggregateWidgetPeriods.some((item) => item.value === current.period) ? current.period : baseConfig.period
+    let amountType = aggregateWidgetAmountTypes.some((item) => item.value === current.amountType) ? current.amountType : baseConfig.amountType
+    let paymentMethodId = kind === 'PAYMENT_METHOD'
       ? (validPaymentIds.has(String(current.paymentMethodId ?? '')) ? String(current.paymentMethodId) : (baseConfig.paymentMethodId || firstPaymentMethodId))
       : ''
+    const monthlyExpenseTarget = normalizeAggregateTargetAmount(current.monthlyExpenseTarget ?? baseConfig.monthlyExpenseTarget)
+    const singleExpenseLimit = normalizeAggregateTargetAmount(current.singleExpenseLimit ?? baseConfig.singleExpenseLimit)
 
-    return {
-      id: current.id || baseConfig.id,
-      kind,
-      period,
-      paymentMethodId,
-      amountType,
+    if (kind === 'MONTHLY_CUMULATIVE_CHART') {
+      period = 'MONTH'
+      amountType = 'NET'
+      paymentMethodId = ''
     }
+
+    if (kind === 'MONTHLY_GOAL') {
+      period = 'MONTH'
+      amountType = 'EXPENSE'
+      paymentMethodId = ''
+    }
+
+    return { id: current.id || baseConfig.id, kind, period, paymentMethodId, amountType, monthlyExpenseTarget, singleExpenseLimit }
   })
 }
 
@@ -1738,24 +1761,27 @@ function updateAggregateWidget(index, field, value) {
         return config
       }
 
-      const nextConfig = {
-        ...config,
-        [field]: value,
-      }
+      const nextConfig = { ...config, [field]: value }
 
       if (field === 'kind' && value !== 'PAYMENT_METHOD') {
         nextConfig.paymentMethodId = ''
       }
-
       if (field === 'kind' && value === 'PAYMENT_METHOD' && !nextConfig.paymentMethodId) {
         nextConfig.paymentMethodId = props.paymentMethods[0] ? String(props.paymentMethods[0].id) : ''
+      }
+      if (field === 'kind' && value === 'MONTHLY_CUMULATIVE_CHART') {
+        nextConfig.period = 'MONTH'
+        nextConfig.amountType = 'NET'
+      }
+      if (field === 'kind' && value === 'MONTHLY_GOAL') {
+        nextConfig.period = 'MONTH'
+        nextConfig.amountType = 'EXPENSE'
       }
 
       return nextConfig
     }),
   )
 }
-
 function syncAggregateWidgetDraft() {
   aggregateWidgetDraftConfigs.value = normalizeAggregateConfigs(props.aggregateWidgetConfigs)
 }
@@ -1773,16 +1799,17 @@ function cancelAggregateEdit() {
 function saveAggregateWidgetConfigs() {
   emit(
     'save-aggregate-widget-configs',
-    normalizeAggregateConfigs(aggregateWidgetDraftConfigs.value).map(({ kind, period, paymentMethodId, amountType }) => ({
+    normalizeAggregateConfigs(aggregateWidgetDraftConfigs.value).map(({ kind, period, paymentMethodId, amountType, monthlyExpenseTarget, singleExpenseLimit }) => ({
       kind,
       period,
       paymentMethodId: paymentMethodId ? Number(paymentMethodId) : null,
       amountType,
+      monthlyExpenseTarget: normalizeAggregateTargetAmount(monthlyExpenseTarget),
+      singleExpenseLimit: normalizeAggregateTargetAmount(singleExpenseLimit),
     })),
   )
   isAggregateEditMode.value = false
 }
-
 function toggleAggregatePanelEnabled() {
   isAggregatePanelEnabled.value = !isAggregatePanelEnabled.value
 
@@ -1821,48 +1848,120 @@ function getAggregateRange(period) {
   }
 }
 
+function shiftIsoDate(value, dayOffset) {
+  const parts = String(value || '').split('-').map((part) => Number(part))
+  if (parts.length !== 3 || parts.some((part) => !Number.isFinite(part))) return value
+  return new Date(Date.UTC(parts[0], parts[1] - 1, parts[2] + dayOffset)).toISOString().slice(0, 10)
+}
+
+function listDateRange(from, to) {
+  const dates = []
+  let cursor = from
+  while (/^\d{4}-\d{2}-\d{2}$/.test(cursor) && cursor <= to && dates.length < 32) {
+    dates.push(cursor)
+    cursor = shiftIsoDate(cursor, 1)
+  }
+  return dates
+}
+
+function buildChartPoints(dailyItems, key, maxAmount) {
+  const width = 320
+  const height = 116
+  const horizontalPadding = 8
+  const topPadding = 8
+  const bottomPadding = 16
+  const drawableWidth = width - (horizontalPadding * 2)
+  const drawableHeight = height - topPadding - bottomPadding
+  const safeMax = Math.max(1, maxAmount)
+  return dailyItems.map((item, index) => {
+    const x = dailyItems.length <= 1 ? width / 2 : horizontalPadding + (drawableWidth * index) / (dailyItems.length - 1)
+    const y = topPadding + drawableHeight - ((Number(item[key]) || 0) / safeMax) * drawableHeight
+    return `${x.toFixed(1)},${y.toFixed(1)}`
+  }).join(' ')
+}
+
+function buildMonthlyCumulativeChartData(entries, range, overview) {
+  const entriesByDate = entries.reduce((map, entry) => {
+    const date = entry.entryDate
+    if (!map.has(date)) map.set(date, [])
+    map.get(date).push(entry)
+    return map
+  }, new Map())
+  let cumulativeIncome = 0
+  let cumulativeExpense = 0
+  const dailyItems = listDateRange(range.from, range.to).map((date) => {
+    const dailyOverview = summarizeEntries(entriesByDate.get(date) || [])
+    cumulativeIncome += Number(dailyOverview.income || 0)
+    cumulativeExpense += Number(dailyOverview.expense || 0)
+    return { date, day: Number(date.slice(-2)), income: cumulativeIncome, expense: cumulativeExpense }
+  })
+  const maxAmount = Math.max(1, ...dailyItems.map((item) => Math.max(item.income, item.expense)))
+  return {
+    rangeLabel: `${range.from.slice(5).replace('-', '/')} ~ ${range.to.slice(5).replace('-', '/')}`,
+    hasEntries: Number(overview.entryCount || 0) > 0,
+    incomeTotal: cumulativeIncome,
+    expenseTotal: cumulativeExpense,
+    maxAmount,
+    incomePoints: buildChartPoints(dailyItems, 'income', maxAmount),
+    expensePoints: buildChartPoints(dailyItems, 'expense', maxAmount),
+  }
+}
+
+function buildMonthlyGoalData(config, entries, overview) {
+  const target = normalizeAggregateTargetAmount(config.monthlyExpenseTarget)
+  const singleLimit = normalizeAggregateTargetAmount(config.singleExpenseLimit)
+  const expense = Number(overview.expense || 0)
+  const progress = target > 0 ? Math.round((expense / target) * 100) : 0
+  const remaining = target - expense
+  const overLimitCount = singleLimit > 0
+    ? entries.reduce((count, entry) => count + (Number(summarizeEntries([entry]).expense || 0) >= singleLimit ? 1 : 0), 0)
+    : 0
+  return {
+    target,
+    singleLimit,
+    expense,
+    progress,
+    progressWidth: target > 0 ? Math.min(100, Math.max(0, progress)) : 0,
+    remaining,
+    remainingAbs: Math.abs(remaining),
+    remainingState: remaining >= 0 ? 'remaining' : 'over',
+    overLimitCount,
+  }
+}
+
 function buildAggregateCard(config, index) {
   if (config.kind === 'NONE') {
-    return {
-      id: config.id || ('aggregate-' + (index + 1)),
-      index,
-      config,
-      title: '사용 안 함',
-      periodLabel: '',
-      totalAmount: 0,
-      overview: summarizeEntries([]),
-    }
+    return { id: config.id || ('aggregate-' + (index + 1)), index, config, title: '사용 안 함', periodLabel: '', totalAmount: 0, overview: summarizeEntries([]), chart: null, goal: null }
   }
 
-  const range = getAggregateRange(config.period)
+  const range = getAggregateRange(config.kind === 'MONTHLY_CUMULATIVE_CHART' || config.kind === 'MONTHLY_GOAL' ? 'MONTH' : config.period)
   const rangeEntries = props.entries.filter((entry) => entry.entryDate >= range.from && entry.entryDate <= range.to)
   const filteredEntries = config.kind === 'PAYMENT_METHOD' && config.paymentMethodId
     ? rangeEntries.filter((entry) => String(entry.paymentMethodId) === String(config.paymentMethodId))
     : rangeEntries
   const overview = summarizeEntries(filteredEntries)
-  const totalAmount = config.amountType === 'INCOME'
-    ? Number(overview.income)
-    : config.amountType === 'EXPENSE'
-      ? Number(overview.expense)
-      : Number(overview.income) + Number(overview.expense)
+
+  if (config.kind === 'MONTHLY_CUMULATIVE_CHART') {
+    const monthOverview = summarizeEntries(rangeEntries)
+    const chart = buildMonthlyCumulativeChartData(rangeEntries, range, monthOverview)
+    return { id: config.id || ('aggregate-' + (index + 1)), index, config, title: '월초부터 말일까지 누적 그래프', periodLabel: '이번 달', totalAmount: chart.expenseTotal, overview: monthOverview, chart, goal: null }
+  }
+
+  if (config.kind === 'MONTHLY_GOAL') {
+    const monthOverview = summarizeEntries(rangeEntries)
+    const goal = buildMonthlyGoalData(config, rangeEntries, monthOverview)
+    return { id: config.id || ('aggregate-' + (index + 1)), index, config, title: '이번달 지출 목표', periodLabel: '이번 달', totalAmount: goal.expense, overview: monthOverview, chart: null, goal }
+  }
+
+  const totalAmount = config.amountType === 'INCOME' ? Number(overview.income) : config.amountType === 'EXPENSE' ? Number(overview.expense) : Number(overview.income) + Number(overview.expense)
   const paymentMethodName = props.paymentMethods.find((item) => String(item.id) === String(config.paymentMethodId))?.name || '결제수단'
   const periodLabel = aggregateWidgetPeriods.find((item) => item.value === config.period)?.label || '이번 달'
   const amountTypeLabel = aggregateWidgetAmountTypes.find((item) => item.value === config.amountType)?.label || '전체'
   const title = config.kind === 'PAYMENT_METHOD'
     ? (periodLabel + ' ' + paymentMethodName + ' ' + amountTypeLabel + ' 합계')
-    : (config.amountType === 'NET'
-        ? (periodLabel + ' 총 합계')
-        : (periodLabel + ' 총 ' + amountTypeLabel + ' 합계'))
+    : (config.amountType === 'NET' ? (periodLabel + ' 총 합계') : (periodLabel + ' 총 ' + amountTypeLabel + ' 합계'))
 
-  return {
-    id: config.id || ('aggregate-' + (index + 1)),
-    index,
-    config,
-    title,
-    periodLabel,
-    totalAmount,
-    overview,
-  }
+  return { id: config.id || ('aggregate-' + (index + 1)), index, config, title, periodLabel, totalAmount, overview, chart: null, goal: null }
 }
 
 function stripImportedMemo(value) {
@@ -2758,7 +2857,10 @@ defineExpose({
               </template>
 
               <template v-else-if="panel.id === 'aggregate'">
-                <section class="panel household-quickstats-panel">
+                <section
+                  class="panel household-quickstats-panel household-aggregate-panel"
+                  :class="{ 'household-aggregate-panel--editing': isAggregateEditMode }"
+                >
         <div class="panel__header household-aggregate-header">
           <div>
             <h2>사용자 설정 집계</h2>
@@ -2804,7 +2906,15 @@ defineExpose({
           <span>저장된 카드 구성을 불러온 뒤 현재 달력 데이터로 집계를 보여줍니다.</span>
         </div>
         <div v-else-if="aggregateCards.length" class="household-aggregate-grid">
-          <article v-for="card in aggregateCards" :key="card.id" class="household-aggregate-card">
+          <article
+            v-for="card in aggregateCards"
+            :key="card.id"
+            class="household-aggregate-card"
+            :class="{
+              'household-aggregate-card--chart': card.config.kind === 'MONTHLY_CUMULATIVE_CHART',
+              'household-aggregate-card--goal': card.config.kind === 'MONTHLY_GOAL',
+            }"
+          >
             <div v-if="isAggregateEditMode" class="household-aggregate-card__controls">
               <label class="field household-aggregate-card__field">
                 <span class="field__label">집계</span>
@@ -2822,7 +2932,7 @@ defineExpose({
                   </option>
                 </select>
               </label>
-              <label v-if="card.config.kind !== 'NONE'" class="field household-aggregate-card__field">
+              <label v-if="isAggregateAmountTypeEditable(card.config.kind)" class="field household-aggregate-card__field">
                 <span class="field__label">기준</span>
                 <select :value="card.config.amountType" @change="updateAggregateWidget(card.index, 'amountType', $event.target.value)">
                   <option v-for="option in aggregateWidgetAmountTypes" :key="option.value" :value="option.value">
@@ -2842,16 +2952,60 @@ defineExpose({
               </select>
             </label>
 
+            <div v-if="isAggregateEditMode && card.config.kind === 'MONTHLY_GOAL'" class="household-aggregate-goal-fields">
+              <label class="field household-aggregate-card__field">
+                <span class="field__label">월 지출 목표</span>
+                <input type="number" min="0" step="10000" inputmode="numeric" :value="card.config.monthlyExpenseTarget || ''" placeholder="예: 800000" @input="updateAggregateWidget(card.index, 'monthlyExpenseTarget', $event.target.value)">
+              </label>
+              <label class="field household-aggregate-card__field">
+                <span class="field__label">1회 지출 기준</span>
+                <input type="number" min="0" step="10000" inputmode="numeric" :value="card.config.singleExpenseLimit || ''" placeholder="예: 100000" @input="updateAggregateWidget(card.index, 'singleExpenseLimit', $event.target.value)">
+              </label>
+            </div>
+
             <div class="household-aggregate-card__copy">
               <span class="household-aggregate-card__eyebrow">{{ card.title }}</span>
               <template v-if="card.config.kind === 'NONE'">
                 <strong>-</strong>
                 <small>이 슬롯은 저장 후 화면에서 숨김 처리됩니다.</small>
               </template>
+              <template v-else-if="card.chart">
+                <strong>{{ formatCurrency(card.chart.expenseTotal) }}</strong>
+                <small>{{ card.chart.rangeLabel }} 지출 누적 · 수입 {{ formatCurrency(card.chart.incomeTotal) }}</small>
+              </template>
+              <template v-else-if="card.goal">
+                <strong>{{ formatCurrency(card.goal.expense) }}</strong>
+                <small v-if="card.goal.target">월 목표 {{ formatCurrency(card.goal.target) }} 중 {{ card.goal.progress }}%</small>
+                <small v-else>월 목표 금액을 설정하면 진행률을 표시합니다.</small>
+              </template>
               <template v-else>
                 <strong>{{ formatCurrency(card.totalAmount) }}</strong>
                 <small>{{ card.periodLabel }} 기준 {{ card.overview.entryCount }}건</small>
               </template>
+            </div>
+
+            <div v-if="card.chart" class="household-aggregate-chart" :class="{ 'is-empty': !card.chart.hasEntries }">
+              <svg viewBox="0 0 320 116" preserveAspectRatio="none" role="img" aria-label="월 누적 수입과 지출 그래프">
+                <line x1="8" y1="100" x2="312" y2="100" class="household-aggregate-chart__axis" />
+                <polyline :points="card.chart.incomePoints" class="household-aggregate-chart__line household-aggregate-chart__line--income" />
+                <polyline :points="card.chart.expensePoints" class="household-aggregate-chart__line household-aggregate-chart__line--expense" />
+              </svg>
+              <div class="household-aggregate-chart__legend">
+                <span><i class="income"></i>수입 누적</span>
+                <span><i class="expense"></i>지출 누적</span>
+              </div>
+            </div>
+
+            <div v-if="card.goal" class="household-aggregate-goal">
+              <div class="household-aggregate-goal__bar" :aria-label="`월 목표 사용률 ${card.goal.progress}%`">
+                <span :style="{ width: `${card.goal.progressWidth}%` }"></span>
+              </div>
+              <div class="household-aggregate-goal__stats">
+                <span v-if="card.goal.target">{{ card.goal.remainingState === 'over' ? '목표 초과' : '남은 목표' }} {{ formatCurrency(card.goal.remainingAbs) }}</span>
+                <span v-else>월 목표 미설정</span>
+                <span v-if="card.goal.singleLimit">1회 기준 초과 {{ card.goal.overLimitCount }}건</span>
+                <span v-else>1회 지출 기준 미설정</span>
+              </div>
             </div>
 
             <div v-if="card.config.kind !== 'NONE'" class="household-aggregate-card__meta">

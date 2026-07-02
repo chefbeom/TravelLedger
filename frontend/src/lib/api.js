@@ -724,6 +724,16 @@ export async function previewLedgerExcelImport(file) {
   })
 }
 
+
+export async function previewLedgerAiExcelImport(file) {
+  const formData = new FormData()
+  formData.append('file', file)
+
+  return request('/entries/imports/excel/preview-ai', {
+    method: 'POST',
+    body: formData,
+  })
+}
 export function commitLedgerExcelImport(rows) {
   return request('/entries/imports/excel/commit', {
     method: 'POST',

@@ -75,56 +75,56 @@ const privacy = reactive({
 })
 
 const statusLabel = {
-  PENDING: 'Waiting for reply',
-  ANSWERED: 'Answered',
+  PENDING: '답변 대기',
+  ANSWERED: '답변 완료',
 }
 
 const privacyActions = [
   {
     key: 'ai-history',
-    label: 'Delete AI analysis history',
-    description: 'Permanently deletes ledger AI analysis history owned by this account.',
-    warning: 'Deleted AI analysis history cannot be restored.',
-    resultLabel: 'AI analysis history deletion',
+    label: 'AI 분석 이력 삭제',
+    description: '이 계정의 가계부 AI 분석 이력을 영구 삭제합니다.',
+    warning: '삭제된 AI 분석 이력은 복구할 수 없습니다.',
+    resultLabel: 'AI 분석 이력 삭제',
     run: deletePrivacyAiAnalysisHistory,
   },
   {
     key: 'drive-links',
-    label: 'Revoke public drive links',
-    description: 'Revokes every active public download link created by this account.',
-    warning: 'Recipients will no longer be able to use existing public links. Owner-visible access logs remain.',
-    resultLabel: 'Public drive link revocation',
+    label: '공개 드라이브 링크 회수',
+    description: '이 계정이 만든 활성 공개 다운로드 링크를 모두 회수합니다.',
+    warning: '기존 공개 링크는 더 이상 사용할 수 없습니다. 소유자가 확인할 수 있는 접근 로그는 유지됩니다.',
+    resultLabel: '공개 드라이브 링크 회수',
     run: revokePrivacyPublicDownloadLinks,
   },
   {
     key: 'travel-media',
-    label: 'Revoke travel public media',
-    description: 'Turns off public travel plan sharing and community-visible travel media surfaces.',
-    warning: 'Existing public travel pages and media token access will stop working.',
-    resultLabel: 'Travel public media revocation',
+    label: '여행 공개 미디어 회수',
+    description: '공개 여행 계획 공유와 커뮤니티에 노출되는 여행 미디어를 비활성화합니다.',
+    warning: '기존 공개 여행 페이지와 미디어 토큰 접근이 중지됩니다.',
+    resultLabel: '여행 공개 미디어 회수',
     run: revokePrivacyTravelPublicMediaShares,
   },
   {
     key: 'photo-location',
-    label: 'Remove photo location metadata',
-    description: 'Clears derived GPS latitude, longitude, and extraction timestamps stored for travel media.',
-    warning: 'Some photos may disappear from photo maps or location-based clusters.',
-    resultLabel: 'Photo location metadata removal',
+    label: '사진 위치정보 제거',
+    description: '여행 미디어에 저장된 GPS 위도, 경도, 추출 시간을 제거합니다.',
+    warning: '일부 사진은 사진 지도나 위치 기반 클러스터에서 사라질 수 있습니다.',
+    resultLabel: '사진 위치정보 제거',
     run: removePrivacyPhotoLocationMetadata,
   },
   {
     key: 'cleanup',
-    label: 'Clean sensitive derived data',
-    description: 'Deletes AI history, revokes public links, revokes travel public media, and removes photo GPS metadata.',
-    warning: 'Multiple privacy cleanup actions will run together. Download anything you need first.',
-    resultLabel: 'Sensitive derived data cleanup',
+    label: '민감 파생 데이터 정리',
+    description: 'AI 이력 삭제, 공개 링크 회수, 여행 공개 미디어 회수, 사진 GPS 정보 제거를 함께 실행합니다.',
+    warning: '여러 개인정보 정리 작업이 동시에 실행됩니다. 필요한 데이터는 먼저 내려받아 주세요.',
+    resultLabel: '민감 파생 데이터 정리',
     run: cleanupPrivacySensitiveData,
   },
 ]
 
 const pageCount = computed(() => Math.max(state.pageInfo.totalPages || 0, 1))
-const securityModeLabel = computed(() => (security.mode === 'password' ? 'Password' : 'Secondary PIN'))
-const securitySaveLabel = computed(() => (security.mode === 'password' ? 'Change password' : 'Change secondary PIN'))
+const securityModeLabel = computed(() => (security.mode === 'password' ? '비밀번호' : '2차 PIN'))
+const securitySaveLabel = computed(() => (security.mode === 'password' ? '비밀번호 변경' : '2차 PIN 변경'))
 const isPrivacyBusy = computed(() => Boolean(privacy.busyAction || privacy.exporting))
 const privacyResultRows = computed(() => {
   if (!privacy.lastResult || typeof privacy.lastResult !== 'object') {
@@ -158,10 +158,10 @@ function formatNumber(value) {
 
 function privacyResultLabel(key) {
   const labels = {
-    aiAnalysisHistoriesDeleted: 'Deleted AI analysis histories',
-    publicDownloadLinksRevoked: 'Revoked public drive links',
-    travelPublicMediaSharesRevoked: 'Revoked travel public media shares',
-    photoLocationMetadataRemoved: 'Removed photo location metadata rows',
+    aiAnalysisHistoriesDeleted: '삭제된 AI 분석 이력',
+    publicDownloadLinksRevoked: '회수된 공개 드라이브 링크',
+    travelPublicMediaSharesRevoked: '회수된 여행 공개 미디어',
+    photoLocationMetadataRemoved: '제거된 사진 위치정보',
   }
   return labels[key] || key
 }
@@ -284,7 +284,7 @@ async function handleSubmitInquiry() {
     }
 
     const createdInquiry = await createSupportInquiry(formData)
-    state.successMessage = 'Your inquiry was sent to the administrator.'
+    state.successMessage = '문의가 관리자에게 전송되었습니다.'
     resetForm()
     await loadInquiries(0, createdInquiry.id)
   } catch (error) {
@@ -318,30 +318,30 @@ async function handleCredentialChange() {
   try {
     if (security.mode === 'password') {
       if (security.newPassword.trim().length < 8) {
-        throw new Error('Password must be at least 8 characters.')
+        throw new Error('비밀번호는 8자 이상이어야 합니다.')
       }
       if (security.newPassword !== security.confirmPassword) {
-        throw new Error('Password confirmation does not match.')
+        throw new Error('비밀번호 확인이 일치하지 않습니다.')
       }
 
       await changeProfilePassword({
         secondaryPin: security.verifiedSecondaryPin,
         newPassword: security.newPassword,
       })
-      state.successMessage = 'Password changed.'
+      state.successMessage = '비밀번호가 변경되었습니다.'
     } else {
       if (!/^\d{8}$/.test(security.newSecondaryPin.trim())) {
-        throw new Error('Secondary PIN must be exactly 8 digits.')
+        throw new Error('2차 PIN은 숫자 8자리여야 합니다.')
       }
       if (security.newSecondaryPin !== security.confirmSecondaryPin) {
-        throw new Error('Secondary PIN confirmation does not match.')
+        throw new Error('2차 PIN 확인이 일치하지 않습니다.')
       }
 
       await changeProfileSecondaryPin({
         secondaryPin: security.verifiedSecondaryPin,
         newSecondaryPin: security.newSecondaryPin,
       })
-      state.successMessage = 'Secondary PIN changed.'
+      state.successMessage = '2차 PIN이 변경되었습니다.'
     }
 
     closeSecurityModal()
@@ -357,7 +357,7 @@ async function runPrivacyAction(action) {
     return
   }
 
-  const confirmed = window.confirm(`${action.label}\n\n${action.warning}\n\nContinue?`)
+  const confirmed = window.confirm(`${action.label}\n\n${action.warning}\n\n계속 진행할까요?`)
   if (!confirmed) {
     return
   }
@@ -369,7 +369,7 @@ async function runPrivacyAction(action) {
 
   try {
     privacy.lastResult = await action.run()
-    privacy.successMessage = `${action.resultLabel} completed.`
+    privacy.successMessage = `${action.resultLabel} 작업이 완료되었습니다.`
   } catch (error) {
     privacy.errorMessage = error.message
   } finally {
@@ -386,10 +386,10 @@ async function handlePrivacyExport() {
 
   try {
     if (privacy.exportFrom && privacy.exportTo && privacy.exportFrom > privacy.exportTo) {
-      throw new Error('Export start date cannot be later than the end date.')
+      throw new Error('내보내기 시작일은 종료일보다 늦을 수 없습니다.')
     }
     if (!privacy.secondaryPin.trim()) {
-      throw new Error('Enter your secondary PIN before exporting data.')
+      throw new Error('데이터를 내보내기 전에 2차 PIN을 입력해 주세요.')
     }
 
     privacy.exporting = true
@@ -398,7 +398,7 @@ async function handlePrivacyExport() {
       from: privacy.exportFrom || undefined,
       to: privacy.exportTo || undefined,
     })
-    privacy.successMessage = 'Your encrypted data archive download has started.'
+    privacy.successMessage = '암호화된 데이터 압축 파일 다운로드를 시작했습니다.'
     privacy.exportGateVisible = false
     privacy.secondaryPin = ''
   } catch (error) {
@@ -418,27 +418,27 @@ onMounted(() => {
     <section class="panel">
       <div class="panel__header">
         <div>
-          <h2>Profile</h2>
-          <p>Manage account security, privacy controls, data export, and support requests.</p>
+          <h2>프로필</h2>
+          <p>계정 보안, 개인정보 관리, 데이터 내보내기, 문의 요청을 관리합니다.</p>
         </div>
       </div>
       <div class="summary-grid profile-summary-grid">
         <article class="summary-card">
-          <span>Login ID</span>
+          <span>로그인 ID</span>
           <strong>{{ currentUser.loginId }}</strong>
         </article>
         <article class="summary-card">
-          <span>Display name</span>
+          <span>표시 이름</span>
           <strong>{{ currentUser.displayName }}</strong>
         </article>
         <article class="summary-card">
-          <span>Role</span>
-          <strong>{{ currentUser.admin ? 'Admin' : 'User' }}</strong>
+          <span>권한</span>
+          <strong>{{ currentUser.admin ? '관리자' : '사용자' }}</strong>
         </article>
       </div>
       <div class="profile-security-actions">
-        <button class="button button--ghost" type="button" @click="openSecurityGate('password')">Change password</button>
-        <button class="button button--ghost" type="button" @click="openSecurityGate('secondary-pin')">Change secondary PIN</button>
+        <button class="button button--ghost" type="button" @click="openSecurityGate('password')">비밀번호 변경</button>
+        <button class="button button--ghost" type="button" @click="openSecurityGate('secondary-pin')">2차 PIN 변경</button>
       </div>
     </section>
 
@@ -448,30 +448,30 @@ onMounted(() => {
     <section class="panel profile-privacy-panel" aria-labelledby="privacy-panel-title">
       <div class="panel__header">
         <div>
-          <h2 id="privacy-panel-title">Privacy controls</h2>
-          <p>Control AI analysis history, public links, travel media exposure, stored photo GPS data, and personal data export.</p>
+          <h2 id="privacy-panel-title">개인정보 관리</h2>
+          <p>AI 분석 이력, 공개 링크, 여행 미디어 공개 상태, 사진 GPS 데이터, 개인 데이터 내보내기를 관리합니다.</p>
         </div>
-        <span class="panel__badge">Secondary PIN protected</span>
+        <span class="panel__badge">2차 PIN 보호</span>
       </div>
 
       <div class="privacy-export-card" data-testid="privacy-data-export-card">
         <div>
-          <strong>Download my data</strong>
-          <p>Download ledger CSV and export metadata as a secondary-PIN-encrypted ZIP archive.</p>
-          <small>Current archive includes ledger CSV and safe manifests only; binary photos/files require a future async export job.</small>
+          <strong>내 데이터 다운로드</strong>
+          <p>가계부 CSV와 내보내기 메타데이터를 2차 PIN으로 암호화된 ZIP 파일로 다운로드합니다.</p>
+          <small>현재 압축 파일에는 가계부 CSV와 안전한 목록 정보만 포함됩니다. 사진과 파일 원본은 추후 비동기 내보내기 작업이 필요합니다.</small>
         </div>
         <div class="privacy-export-card__range" aria-label="Export date range">
           <label class="field">
-            <span class="field__label">From</span>
+            <span class="field__label">시작일</span>
             <input v-model="privacy.exportFrom" data-testid="privacy-export-from" type="date" :disabled="isPrivacyBusy" />
           </label>
           <label class="field">
-            <span class="field__label">To</span>
+            <span class="field__label">종료일</span>
             <input v-model="privacy.exportTo" data-testid="privacy-export-to" type="date" :disabled="isPrivacyBusy" />
           </label>
         </div>
         <button class="button button--primary" data-testid="privacy-export-open" type="button" :disabled="isPrivacyBusy" @click="openPrivacyExportGate">
-          {{ privacy.exporting ? 'Exporting...' : 'Export data' }}
+          {{ privacy.exporting ? '내보내는 중...' : '데이터 내보내기' }}
         </button>
       </div>
 
@@ -489,7 +489,7 @@ onMounted(() => {
             :disabled="isPrivacyBusy"
             @click="runPrivacyAction(action)"
           >
-            {{ privacy.busyAction === action.key ? 'Processing...' : 'Run' }}
+            {{ privacy.busyAction === action.key ? '처리 중...' : '실행' }}
           </button>
         </article>
       </div>
@@ -498,7 +498,7 @@ onMounted(() => {
       <div v-if="privacy.errorMessage" class="feedback feedback--error" data-testid="privacy-error-message" aria-live="assertive">{{ privacy.errorMessage }}</div>
 
       <div v-if="privacyResultRows.length" class="privacy-result-list" data-testid="privacy-action-result" aria-live="polite">
-        <strong>{{ privacy.lastActionLabel }} result</strong>
+        <strong>{{ privacy.lastActionLabel }} 결과</strong>
         <dl>
           <template v-for="row in privacyResultRows" :key="row.key">
             <dt>{{ row.label }}</dt>
@@ -511,18 +511,18 @@ onMounted(() => {
     <section class="panel">
       <div class="panel__header">
         <div>
-          <h2>Send support inquiry</h2>
-          <p>Attach an image if it helps explain the issue. Only you and administrators can see it.</p>
+          <h2>문의 보내기</h2>
+          <p>문제 설명에 도움이 되는 이미지를 첨부할 수 있습니다. 문의 내용은 본인과 관리자만 확인할 수 있습니다.</p>
         </div>
       </div>
 
       <form class="stack-form" @submit.prevent="handleSubmitInquiry">
-        <input v-model="form.title" type="text" maxlength="140" placeholder="Inquiry title" :disabled="state.sending" />
-        <textarea v-model="form.content" rows="6" placeholder="Describe the issue or request." :disabled="state.sending" />
+        <input v-model="form.title" type="text" maxlength="140" placeholder="문의 제목" :disabled="state.sending" />
+        <textarea v-model="form.content" rows="6" placeholder="문제 상황이나 요청 내용을 입력해 주세요." :disabled="state.sending" />
         <input ref="attachmentInput" type="file" accept="image/*" :disabled="state.sending" @change="handleAttachmentChange" />
-        <p class="field__hint">Attachment is optional.</p>
+        <p class="field__hint">첨부 파일은 선택 사항입니다.</p>
         <button class="button button--primary" type="submit" :disabled="state.sending">
-          {{ state.sending ? 'Sending...' : 'Send inquiry' }}
+          {{ state.sending ? '전송 중...' : '문의 보내기' }}
         </button>
       </form>
     </section>
@@ -530,15 +530,15 @@ onMounted(() => {
     <section class="panel">
       <div class="panel__header">
         <div>
-          <h2>My inquiries</h2>
-          <p>Review support status and administrator replies.</p>
+          <h2>내 문의 내역</h2>
+          <p>문의 처리 상태와 관리자 답변을 확인합니다.</p>
         </div>
         <button class="button button--ghost" type="button" :disabled="state.loading" @click="loadInquiries(state.pageInfo.page)">
-          {{ state.loading ? 'Loading...' : 'Refresh' }}
+          {{ state.loading ? '불러오는 중...' : '새로고침' }}
         </button>
       </div>
 
-      <p v-if="state.loading" class="panel__empty">Loading inquiries.</p>
+      <p v-if="state.loading" class="panel__empty">문의 내역을 불러오는 중입니다.</p>
       <div v-else-if="state.inquiries.length" class="support-inquiry-list support-inquiry-list--compact">
         <article v-for="inquiry in state.inquiries" :key="inquiry.id" class="support-inquiry-card support-inquiry-card--compact">
           <button class="support-inquiry-row" type="button" @click="toggleInquiry(inquiry.id)">
@@ -550,7 +550,7 @@ onMounted(() => {
             </div>
             <div class="support-inquiry-row__meta">
               <small>{{ formatDateTime(inquiry.createdAt) }}</small>
-              <span class="support-inquiry-row__toggle">{{ state.expandedInquiryId === inquiry.id ? 'Collapse' : 'Open' }}</span>
+              <span class="support-inquiry-row__toggle">{{ state.expandedInquiryId === inquiry.id ? '접기' : '열기' }}</span>
             </div>
           </button>
 
@@ -558,7 +558,7 @@ onMounted(() => {
             <p class="support-inquiry-content">{{ inquiry.content }}</p>
 
             <div v-if="inquiry.attachmentUrl" class="support-inquiry-attachment">
-              <a class="button button--ghost" :href="inquiry.attachmentUrl" target="_blank" rel="noreferrer">View attachment</a>
+              <a class="button button--ghost" :href="inquiry.attachmentUrl" target="_blank" rel="noreferrer">첨부 파일 보기</a>
               <img
                 v-if="inquiry.attachmentContentType?.startsWith('image/')"
                 :src="buildThumbnailUrl(inquiry.attachmentUrl)"
@@ -571,20 +571,20 @@ onMounted(() => {
 
             <div v-if="inquiry.replyContent" class="support-inquiry-reply">
               <div class="support-inquiry-reply__header">
-                <strong>Admin reply</strong>
-                <small>{{ inquiry.repliedByDisplayName || inquiry.repliedByLoginId || 'Admin' }} - {{ formatDateTime(inquiry.repliedAt) }}</small>
+                <strong>관리자 답변</strong>
+                <small>{{ inquiry.repliedByDisplayName || inquiry.repliedByLoginId || '관리자' }} - {{ formatDateTime(inquiry.repliedAt) }}</small>
               </div>
               <p>{{ inquiry.replyContent }}</p>
             </div>
           </div>
         </article>
       </div>
-      <p v-else class="panel__empty">No inquiries yet.</p>
+      <p v-else class="panel__empty">아직 등록된 문의가 없습니다.</p>
 
       <div v-if="!state.loading && state.pageInfo.totalElements > 0" class="panel__actions">
-        <button class="button button--ghost" type="button" :disabled="state.pageInfo.page <= 0" @click="changePage(state.pageInfo.page - 1)">Previous</button>
+        <button class="button button--ghost" type="button" :disabled="state.pageInfo.page <= 0" @click="changePage(state.pageInfo.page - 1)">이전</button>
         <span>{{ state.pageInfo.page + 1 }} / {{ pageCount }}</span>
-        <button class="button button--ghost" type="button" :disabled="state.pageInfo.page + 1 >= pageCount" @click="changePage(state.pageInfo.page + 1)">Next</button>
+        <button class="button button--ghost" type="button" :disabled="state.pageInfo.page + 1 >= pageCount" @click="changePage(state.pageInfo.page + 1)">다음</button>
       </div>
     </section>
 
@@ -592,16 +592,16 @@ onMounted(() => {
       <div class="travel-modal__dialog profile-security-modal" data-testid="privacy-export-dialog" role="dialog" aria-modal="true" aria-labelledby="privacy-export-title">
         <div class="travel-modal__header">
           <div>
-            <h2 id="privacy-export-title">Confirm data export</h2>
-            <p>This archive can contain sensitive financial data. Confirm your current secondary PIN first.</p>
+            <h2 id="privacy-export-title">데이터 내보내기 확인</h2>
+            <p>압축 파일에는 민감한 금융 데이터가 포함될 수 있습니다. 먼저 현재 2차 PIN을 확인합니다.</p>
           </div>
-          <button class="button button--ghost" type="button" :disabled="privacy.exporting" @click="closePrivacyExportGate">Close</button>
+          <button class="button button--ghost" type="button" :disabled="privacy.exporting" @click="closePrivacyExportGate">닫기</button>
         </div>
 
         <div class="travel-modal__body">
           <div v-if="privacy.errorMessage" class="feedback feedback--error" data-testid="privacy-export-error-message" aria-live="assertive">{{ privacy.errorMessage }}</div>
           <label class="field">
-            <span class="field__label">Current secondary PIN</span>
+            <span class="field__label">현재 2차 PIN</span>
             <input
               v-model="privacy.secondaryPin"
               data-testid="privacy-export-secondary-pin"
@@ -610,18 +610,18 @@ onMounted(() => {
               autocomplete="one-time-code"
               pattern="[0-9]*"
               maxlength="8"
-              placeholder="8 digits"
+              placeholder="숫자 8자리"
               :disabled="privacy.exporting"
               @keyup.enter="handlePrivacyExport"
             />
           </label>
-          <p class="field__hint">The downloaded ZIP is encrypted with the verified secondary PIN.</p>
+          <p class="field__hint">다운로드되는 ZIP 파일은 확인된 2차 PIN으로 암호화됩니다.</p>
         </div>
 
         <div class="travel-modal__footer">
-          <button class="button button--ghost" type="button" :disabled="privacy.exporting" @click="closePrivacyExportGate">Cancel</button>
+          <button class="button button--ghost" type="button" :disabled="privacy.exporting" @click="closePrivacyExportGate">취소</button>
           <button class="button button--primary" type="button" :disabled="privacy.exporting" @click="handlePrivacyExport">
-            {{ privacy.exporting ? 'Verifying and creating...' : 'Verify and download' }}
+            {{ privacy.exporting ? '확인 및 생성 중...' : '확인 후 다운로드' }}
           </button>
         </div>
       </div>
@@ -631,24 +631,24 @@ onMounted(() => {
       <div class="travel-modal__dialog profile-security-modal" role="dialog" aria-modal="true" aria-labelledby="security-gate-title">
         <div class="travel-modal__header">
           <div>
-            <h2 id="security-gate-title">Unlock {{ securityModeLabel }}</h2>
-            <p>Enter your current secondary PIN before changing sensitive account credentials.</p>
+            <h2 id="security-gate-title">{{ securityModeLabel }} 변경 잠금 해제</h2>
+            <p>민감한 계정 정보를 변경하려면 현재 2차 PIN을 먼저 입력해야 합니다.</p>
           </div>
-          <button class="button button--ghost" type="button" @click="closeSecurityModal">Close</button>
+          <button class="button button--ghost" type="button" @click="closeSecurityModal">닫기</button>
         </div>
 
         <div class="travel-modal__body">
           <div v-if="security.errorMessage" class="feedback feedback--error">{{ security.errorMessage }}</div>
           <label class="field">
-            <span class="field__label">Current secondary PIN</span>
-            <input v-model="security.secondaryPin" type="password" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]*" maxlength="8" placeholder="8 digits" :disabled="security.verifying" />
+            <span class="field__label">현재 2차 PIN</span>
+            <input v-model="security.secondaryPin" type="password" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]*" maxlength="8" placeholder="숫자 8자리" :disabled="security.verifying" />
           </label>
         </div>
 
         <div class="travel-modal__footer">
-          <button class="button button--ghost" type="button" :disabled="security.verifying" @click="closeSecurityModal">Cancel</button>
+          <button class="button button--ghost" type="button" :disabled="security.verifying" @click="closeSecurityModal">취소</button>
           <button class="button button--primary" type="button" :disabled="security.verifying" @click="handleVerifySecondaryPin">
-            {{ security.verifying ? 'Verifying...' : 'Verify' }}
+            {{ security.verifying ? '확인 중...' : '확인' }}
           </button>
         </div>
       </div>
@@ -659,9 +659,9 @@ onMounted(() => {
         <div class="travel-modal__header">
           <div>
             <h2 id="security-change-title">{{ securitySaveLabel }}</h2>
-            <p>{{ security.mode === 'password' ? 'The new password is applied immediately.' : 'The new secondary PIN must be exactly 8 digits.' }}</p>
+            <p>{{ security.mode === 'password' ? '새 비밀번호는 즉시 적용됩니다.' : '새 2차 PIN은 숫자 8자리여야 합니다.' }}</p>
           </div>
-          <button class="button button--ghost" type="button" @click="closeSecurityModal">Close</button>
+          <button class="button button--ghost" type="button" @click="closeSecurityModal">닫기</button>
         </div>
 
         <div class="travel-modal__body">
@@ -669,31 +669,31 @@ onMounted(() => {
 
           <template v-if="security.mode === 'password'">
             <label class="field">
-              <span class="field__label">New password</span>
-              <input v-model="security.newPassword" type="password" placeholder="At least 8 characters" :disabled="security.saving" />
+              <span class="field__label">새 비밀번호</span>
+              <input v-model="security.newPassword" type="password" placeholder="8자 이상" :disabled="security.saving" />
             </label>
             <label class="field">
-              <span class="field__label">Confirm new password</span>
-              <input v-model="security.confirmPassword" type="password" placeholder="Enter it again" :disabled="security.saving" />
+              <span class="field__label">새 비밀번호 확인</span>
+              <input v-model="security.confirmPassword" type="password" placeholder="다시 입력" :disabled="security.saving" />
             </label>
           </template>
 
           <template v-else>
             <label class="field">
-              <span class="field__label">New secondary PIN</span>
-              <input v-model="security.newSecondaryPin" type="password" inputmode="numeric" autocomplete="new-password" pattern="[0-9]*" maxlength="8" placeholder="8 digits" :disabled="security.saving" />
+              <span class="field__label">새 2차 PIN</span>
+              <input v-model="security.newSecondaryPin" type="password" inputmode="numeric" autocomplete="new-password" pattern="[0-9]*" maxlength="8" placeholder="숫자 8자리" :disabled="security.saving" />
             </label>
             <label class="field">
-              <span class="field__label">Confirm new secondary PIN</span>
-              <input v-model="security.confirmSecondaryPin" type="password" inputmode="numeric" autocomplete="new-password" pattern="[0-9]*" maxlength="8" placeholder="Enter it again" :disabled="security.saving" />
+              <span class="field__label">새 2차 PIN 확인</span>
+              <input v-model="security.confirmSecondaryPin" type="password" inputmode="numeric" autocomplete="new-password" pattern="[0-9]*" maxlength="8" placeholder="다시 입력" :disabled="security.saving" />
             </label>
           </template>
         </div>
 
         <div class="travel-modal__footer">
-          <button class="button button--ghost" type="button" :disabled="security.saving" @click="closeSecurityModal">Cancel</button>
+          <button class="button button--ghost" type="button" :disabled="security.saving" @click="closeSecurityModal">취소</button>
           <button class="button button--primary" type="button" :disabled="security.saving" @click="handleCredentialChange">
-            {{ security.saving ? 'Saving...' : securitySaveLabel }}
+            {{ security.saving ? '저장 중...' : securitySaveLabel }}
           </button>
         </div>
       </div>

@@ -3,10 +3,16 @@ import { DASHBOARD_GRID_COLUMNS, PALETTE_SIZES } from '../types'
 export const SIZE_SPANS = {
   '1x1': { w: 1, h: 1 },
   '1x2': { w: 1, h: 2 },
+  '2x1': { w: 2, h: 1 },
   '2x2': { w: 2, h: 2 },
+  '2x3': { w: 2, h: 3 },
+  '3x1': { w: 3, h: 1 },
   '3x2': { w: 3, h: 2 },
   '3x3': { w: 3, h: 3 },
   '3x4': { w: 3, h: 4 },
+  '4x2': { w: 4, h: 2 },
+  '4x3': { w: 4, h: 3 },
+  '4x4': { w: 4, h: 4 },
 }
 
 const OLD_SIZE_MIGRATIONS = {

@@ -4,6 +4,7 @@ import com.playdata.calen.account.security.AppUserPrincipal;
 import com.playdata.calen.ledger.dto.LedgerExcelImportRequest;
 import com.playdata.calen.ledger.dto.LedgerExcelImportResultResponse;
 import com.playdata.calen.ledger.dto.LedgerExcelPreviewResponse;
+import com.playdata.calen.ledger.service.LedgerAiExcelImportService;
 import com.playdata.calen.ledger.service.LedgerExcelImportService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -21,6 +22,7 @@ import org.springframework.web.multipart.MultipartFile;
 public class LedgerExcelImportController {
 
     private final LedgerExcelImportService ledgerExcelImportService;
+    private final LedgerAiExcelImportService ledgerAiExcelImportService;
 
     @PostMapping("/preview")
     public LedgerExcelPreviewResponse preview(
@@ -28,6 +30,15 @@ public class LedgerExcelImportController {
             @RequestParam("file") MultipartFile file
     ) {
         return ledgerExcelImportService.preview(currentUser.userId(), file);
+    }
+
+
+    @PostMapping("/preview-ai")
+    public LedgerExcelPreviewResponse previewWithAi(
+            @AuthenticationPrincipal AppUserPrincipal currentUser,
+            @RequestParam("file") MultipartFile file
+    ) {
+        return ledgerAiExcelImportService.preview(currentUser.userId(), file);
     }
 
     @PostMapping("/commit")

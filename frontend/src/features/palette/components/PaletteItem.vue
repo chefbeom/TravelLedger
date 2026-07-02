@@ -101,7 +101,7 @@ function handleResize(event) {
   align-items: center;
   display: flex;
   flex: 0 0 auto;
-  gap: 4px;
+  gap: 6px;
 }
 
 .palette-item__actions select,
@@ -110,9 +110,16 @@ function handleResize(event) {
   border: 1px solid var(--household-dash-line, #d1d5db);
   border-radius: 8px;
   color: var(--household-dash-ink, #374151);
-  font-size: 0.68rem;
-  height: 24px;
-  padding: 0 6px;
+  font-size: 0.72rem;
+  font-weight: 800;
+  height: 34px;
+  min-width: 44px;
+  padding: 0 10px;
+  white-space: nowrap;
+}
+
+.palette-item__actions select {
+  min-width: 72px;
 }
 
 .palette-item__actions button:hover,
@@ -164,9 +171,8 @@ function handleResize(event) {
   }
 
   .palette-item__actions button {
-    max-width: 42px;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    min-width: 42px;
+    padding-inline: 8px;
   }
 }
 </style>

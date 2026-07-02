@@ -28,6 +28,19 @@ function createPaletteId(templateId) {
   return `${templateId}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
 }
 
+function resolveAllowedPaletteSize(palette, requestedSize) {
+  const definition = getPaletteDefinition(palette?.type)
+  const currentSize = normalizePaletteSize(palette?.size, definition.defaultSize)
+  const normalizedSize = normalizePaletteSize(requestedSize, currentSize)
+  if (definition.supportedSizes.includes(normalizedSize)) {
+    return normalizedSize
+  }
+  if (definition.supportedSizes.includes(currentSize)) {
+    return currentSize
+  }
+  return definition.defaultSize
+}
+
 export const useDashboardPaletteStore = defineStore('dashboardPalette', () => {
   const currentPresetId = ref(3)
   const presets = ref(createDefaultPalettePresets())
@@ -221,11 +234,7 @@ export const useDashboardPaletteStore = defineStore('dashboardPalette', () => {
       if (String(palette.id) !== String(id)) {
         return palette
       }
-      const definition = getPaletteDefinition(palette.type)
-      const normalizedSize = normalizePaletteSize(size, definition.defaultSize)
-      const allowedSize = definition.supportedSizes.includes(normalizedSize)
-        ? normalizedSize
-        : definition.defaultSize
+      const allowedSize = resolveAllowedPaletteSize(palette, size)
       return {
         ...palette,
         size: allowedSize,
@@ -237,9 +246,22 @@ export const useDashboardPaletteStore = defineStore('dashboardPalette', () => {
   }
 
   function applyLayoutPatches(patches) {
+    const paletteById = new Map((currentPreset.value?.palettes ?? []).map((palette) => [String(palette.id), palette]))
+    const normalizedPatches = (patches ?? []).map((patch) => {
+      const palette = paletteById.get(String(patch.id))
+      if (!palette) {
+        return patch
+      }
+      const size = resolveAllowedPaletteSize(palette, patch.size ?? palette.size)
+      return {
+        ...patch,
+        size,
+        position: clampPosition(patch.position ?? palette.position, size),
+      }
+    })
     replacePresetPalettes(
       currentPresetId.value,
-      applyLayoutPatchesToPalettes(currentPreset.value?.palettes ?? [], patches),
+      applyLayoutPatchesToPalettes(currentPreset.value?.palettes ?? [], normalizedPatches),
     )
     persist()
   }
@@ -284,8 +306,7 @@ export const useDashboardPaletteStore = defineStore('dashboardPalette', () => {
       return
     }
     const definition = getPaletteDefinition(template.type)
-    const size = normalizePaletteSize(template.defaultSize, definition.defaultSize)
-    const allowedSize = definition.supportedSizes.includes(size) ? size : definition.defaultSize
+    const allowedSize = resolveAllowedPaletteSize({ type: template.type, size: definition.defaultSize }, template.defaultSize)
     const nextPalette = {
       id: createPaletteId(template.id),
       type: template.type,

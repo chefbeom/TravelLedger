@@ -9649,10 +9649,17 @@ textarea {
 
 .household-quickstats-panel {
   min-width: 0;
+  min-height: 0;
   display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
   align-content: start;
   container: household-aggregate / inline-size;
-  overflow: hidden;
+  overflow: auto;
+}
+
+.household-calendar-layout-item--aggregate .household-aggregate-panel {
+  height: 100%;
+  max-height: 100%;
 }
 
 .household-quickstats-grid {
@@ -9701,7 +9708,11 @@ textarea {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr));
   align-items: stretch;
+  align-content: start;
   gap: 14px;
+  min-height: 0;
+  overflow: auto;
+  padding-right: 2px;
 }
 
 .household-aggregate-card {
@@ -9724,6 +9735,12 @@ textarea {
 
 .household-aggregate-card__field {
   min-width: 0;
+}
+
+.household-aggregate-goal-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 140px), 1fr));
+  gap: 10px;
 }
 
 .household-aggregate-card__copy {
@@ -9762,6 +9779,89 @@ textarea {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.household-aggregate-chart {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.household-aggregate-chart svg {
+  width: 100%;
+  min-height: 104px;
+  border: 1px solid rgba(95, 211, 111, 0.16);
+  border-radius: 16px;
+  background: linear-gradient(180deg, rgba(95, 211, 111, 0.08), rgba(49, 130, 246, 0.04)), var(--surface-soft);
+}
+
+.household-aggregate-chart__axis {
+  stroke: rgba(148, 163, 184, 0.4);
+  stroke-width: 1;
+}
+
+.household-aggregate-chart__line {
+  fill: none;
+  stroke-width: 4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.household-aggregate-chart__line--income {
+  stroke: #75e08f;
+}
+
+.household-aggregate-chart__line--expense {
+  stroke: #ff8aa0;
+}
+
+.household-aggregate-chart__legend,
+.household-aggregate-goal__stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  color: var(--text-soft);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.household-aggregate-chart__legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.household-aggregate-chart__legend i {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+}
+
+.household-aggregate-chart__legend i.income {
+  background: #75e08f;
+}
+
+.household-aggregate-chart__legend i.expense {
+  background: #ff8aa0;
+}
+
+.household-aggregate-goal {
+  display: grid;
+  gap: 9px;
+  min-width: 0;
+}
+
+.household-aggregate-goal__bar {
+  height: 12px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.22);
+}
+
+.household-aggregate-goal__bar span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #5fd36f, #3182f6);
 }
 
 .household-aggregate-empty {
@@ -15276,6 +15376,12 @@ textarea {
   max-width: 100%;
   min-width: 0;
   overflow: hidden;
+}
+
+:root[data-layout-mode='mobile'] .household-calendar-layout-item--aggregate .household-aggregate-panel {
+  height: auto;
+  max-height: none;
+  overflow: visible;
 }
 
 :root[data-layout-mode='mobile'] .household-calendar-layout-item--quick-entry .panel__header,
@@ -23750,4 +23856,26 @@ button.button--primary,
 [data-theme='toss'] .travel-cluster-pin.is-photo-pin {
   border-color: rgba(255, 255, 255, 0.96) !important;
   box-shadow: 0 12px 26px rgba(0, 0, 0, 0.36), 0 0 0 1px rgba(149, 235, 171, 0.34) !important;
+}
+/* Travel map pin shadow guard: keep pins lightweight when many markers overlap. */
+.travel-cluster-pin,
+.travel-cluster-pin.is-active,
+.travel-cluster-pin.is-photo-pin,
+.travel-cluster-pin.is-photo-pin.is-active,
+[data-theme='toss'] .travel-cluster-pin.is-photo-pin {
+  box-shadow: none !important;
+  filter: none !important;
+}
+
+.travel-cluster-pin::after,
+.travel-cluster-pin.is-photo-pin::after {
+  box-shadow: none !important;
+  filter: none !important;
+}
+
+.travel-cluster-pin.is-photo-pin::before {
+  display: none !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  filter: none !important;
 }

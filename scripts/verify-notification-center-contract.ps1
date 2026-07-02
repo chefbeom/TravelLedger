@@ -1,4 +1,4 @@
-Set-StrictMode -Version Latest
+﻿Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $contractPath = 'docs/notification_center.md'
@@ -70,7 +70,8 @@ $style = Get-Content -LiteralPath $stylePath -Raw
     $privacyService = Get-Content -LiteralPath $privacyServicePath -Raw
     $privacyServiceTest = Get-Content -LiteralPath $privacyServiceTestPath -Raw
 
-    foreach ($section in @('# Notification Center Contract', '## Implemented API', '## Data model', '## Event flow', '## Safety rules', '## Implemented producers', '## Event producer queue', '## Release gate', '## CI contract')) {
+    foreach ($section in @('# Notification Center Contract', '## Implemented API', '## Data model', '## Event flow', '## Safety rules', '## Implemented producers', '## Event producer queue',
+        '## Unified notification inbox', '## Release gate', '## CI contract')) {
         if (-not $contract.Contains($section)) {
             $findings.Add("Notification center contract missing section: $section") | Out-Null
         }
@@ -235,13 +236,19 @@ $style = Get-Content -LiteralPath $stylePath -Raw
             $findings.Add("PrivacyManagementServiceTest missing privacy notification evidence snippet: $snippet") | Out-Null
         }
     }
-    foreach ($snippet in @('NOTIFY-01', 'Notification center', 'docs/notification_center.md', 'notification-center-contract', 'scripts/verify-notification-center-contract.ps1')) {
+    foreach ($snippet in @('NOTIFY-01', 'Notification center',
+            'budget exceeded, AI analysis completed',
+            'shared file received, travel starts soon',
+            'OCR failed', 'docs/notification_center.md', 'notification-center-contract', 'scripts/verify-notification-center-contract.ps1')) {
         if (-not $securityChecklist.Contains($snippet)) {
             $findings.Add("Security baseline missing notification center snippet: $snippet") | Out-Null
         }
     }
 
-    foreach ($snippet in @('Notification center', 'docs/notification_center.md', 'notification-center-contract', 'scripts/verify-notification-center-contract.ps1')) {
+    foreach ($snippet in @('Notification center',
+            'budget exceeded, AI analysis completed',
+            'shared file received, travel starts soon',
+            'OCR failed', 'docs/notification_center.md', 'notification-center-contract', 'scripts/verify-notification-center-contract.ps1')) {
         if (-not $roadmap.Contains($snippet)) {
             $findings.Add("Project roadmap missing notification center snippet: $snippet") | Out-Null
         }
@@ -261,3 +268,4 @@ if ($findings.Count -gt 0) {
 }
 
 Write-Host 'Notification center contract verification passed.'
+

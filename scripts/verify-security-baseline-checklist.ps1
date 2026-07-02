@@ -3,9 +3,10 @@ $ErrorActionPreference = 'Stop'
 
 $baselinePath = 'docs/security_baseline_checklist.md'
 $ciPath = '.github/workflows/ci.yml'
+ = 'backend/src/test/java/com/playdata/calen/account/SupportInquiryIntegrationTest.java'
 $findings = [System.Collections.Generic.List[string]]::new()
 
-foreach ($path in @($baselinePath, $ciPath)) {
+foreach ($path in @($baselinePath, $ciPath, $supportInquiryTestPath)) {
     if (-not (Test-Path -LiteralPath $path)) {
         $findings.Add("Missing security baseline input: $path") | Out-Null
     }
@@ -21,7 +22,8 @@ function Assert-ContainsAll([string]$Label, [string]$Content, [string[]]$Needles
 
 if ($findings.Count -eq 0) {
     $baseline = Get-Content -LiteralPath $baselinePath -Raw
-    $ci = Get-Content -LiteralPath $ciPath -Raw
+     = Get-Content -LiteralPath  -Raw
+     = Get-Content -LiteralPath  -Raw
 
     Assert-ContainsAll 'Security baseline sections' $baseline @(
         '# Security Baseline Checklist',
@@ -61,6 +63,19 @@ if ($findings.Count -eq 0) {
     Assert-ContainsAll 'Baseline rule anchors' $baseline @(
         'AUTH-01', 'AUTH-02', 'AUTH-03', 'ACCESS-01', 'ACCESS-03', 'SHARE-01',
         'UPLOAD-01', 'PRESIGN-01', 'AI-05', 'AUDIT-01', 'OBS-01', 'SECRET-01', 'CI-01'
+    )
+    Assert-ContainsAll 'Admin support inquiry baseline anchors' $baseline @(
+        'support inquiry admin inbox/reply/archive/delete routes',
+        'SupportInquiryIntegrationTest.adminSupportInquiryApisRequireVerifiedAdminAndCsrf'
+    )
+
+    Assert-ContainsAll 'Admin support inquiry authorization test' $supportInquiryTest @(
+        'adminSupportInquiryApisRequireVerifiedAdminAndCsrf',
+        'get("/api/admin/support-inquiries")',
+        'put("/api/admin/support-inquiries/{inquiryId}/reply"',
+        'patch("/api/admin/support-inquiries/{inquiryId}/archive"',
+        'delete("/api/admin/support-inquiries/{inquiryId}"',
+        'status().isUnauthorized()'
     )
 
     Assert-ContainsAll 'Contract/verifier anchors' $baseline @(

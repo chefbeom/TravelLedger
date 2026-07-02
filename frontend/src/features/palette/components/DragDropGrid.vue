@@ -84,6 +84,41 @@ function gridAttrs(config) {
   }
 }
 
+function supportedSizeSpans(definition) {
+  const sizes = Array.isArray(definition?.supportedSizes) && definition.supportedSizes.length
+    ? definition.supportedSizes
+    : ['2x2']
+  return sizes.map((size) => ({ size, span: getSpanBySize(size) }))
+}
+
+function resizeAttrs(item) {
+  const spans = supportedSizeSpans(item?.definition)
+  return {
+    minW: Math.min(...spans.map((itemSpan) => itemSpan.span.w)),
+    minH: Math.min(...spans.map((itemSpan) => itemSpan.span.h)),
+    maxW: Math.min(DASHBOARD_GRID_COLUMNS, Math.max(...spans.map((itemSpan) => itemSpan.span.w))),
+    maxH: Math.max(...spans.map((itemSpan) => itemSpan.span.h)),
+  }
+}
+
+function closestSupportedSize(item, width, height) {
+  const spans = supportedSizeSpans(item?.definition)
+  const exact = spans.find((itemSpan) => itemSpan.span.w === width && itemSpan.span.h === height)
+  if (exact) {
+    return exact.size
+  }
+
+  return spans.slice().sort((left, right) => {
+    const leftScore = Math.abs(left.span.w - width) * 10
+      + Math.abs(left.span.h - height) * 10
+      + Math.abs((left.span.w * left.span.h) - (width * height))
+    const rightScore = Math.abs(right.span.w - width) * 10
+      + Math.abs(right.span.h - height) * 10
+      + Math.abs((right.span.w * right.span.h) - (width * height))
+    return leftScore - rightScore
+  })[0]?.size ?? item?.config?.size ?? '2x2'
+}
+
 function updateCellHeight() {
   const width = gridElement.value?.clientWidth || gridElement.value?.parentElement?.clientWidth || 0
   if (!width || !grid) {
@@ -103,11 +138,15 @@ function readSnapshot() {
   if (!grid) {
     return []
   }
-  return (grid.engine?.nodes ?? []).map((node) => ({
-    id: node.el?.getAttribute('gs-id') || node.el?.getAttribute('data-palette-id'),
-    position: { x: node.x, y: node.y },
-    size: `${node.w}x${node.h}`,
-  })).filter((patch) => patch.id)
+  return (grid.engine?.nodes ?? []).map((node) => {
+    const id = node.el?.getAttribute('gs-id') || node.el?.getAttribute('data-palette-id')
+    const item = renderItems.value.find((candidate) => String(candidate.config.id) === String(id))
+    return {
+      id,
+      position: { x: node.x, y: node.y },
+      size: closestSupportedSize(item, node.w, node.h),
+    }
+  }).filter((patch) => patch.id)
 }
 
 function movePaletteByKeyboard(id, deltaX, deltaY) {
@@ -170,12 +209,29 @@ function handleDragStop(event, element) {
   emit('apply-layout-patches', readSnapshot())
 }
 
+function handleResizeStart(event, element) {
+  resizeStartLayout = new Map(props.palettes.map((palette) => [String(palette.id), {
+    id: String(palette.id),
+    size: palette.size,
+    position: { ...(palette.position ?? { x: 0, y: 0 }) },
+  }]))
+  element?.classList.add('is-palette-resizing')
+}
+
+function handleResizeStop(event, element) {
+  element?.classList.remove('is-palette-resizing')
+  emit('apply-layout-patches', readSnapshot())
+  resizeStartLayout = new Map()
+}
+
 function destroyGrid() {
   if (!grid) {
     return
   }
   grid.off('dragstart')
   grid.off('dragstop')
+  grid.off('resizestart')
+  grid.off('resizestop')
   grid.destroy(false)
   grid = null
 }
@@ -190,7 +246,7 @@ function initGrid() {
     column: DASHBOARD_GRID_COLUMNS,
     margin: PALETTE_GRID_MARGIN,
     cellHeight: cellHeight.value,
-    disableResize: true,
+    disableResize: !props.editMode,
     float: false,
     animate: true,
     draggable: {
@@ -199,11 +255,16 @@ function initGrid() {
       handle: '.palette-item',
       scroll: false,
     },
+    resizable: {
+      handles: 'e, se, s',
+    },
   }, gridElement.value)
   grid.enableMove(props.editMode)
-  grid.enableResize(false)
+  grid.enableResize(props.editMode)
   grid.on('dragstart', handleDragStart)
   grid.on('dragstop', handleDragStop)
+  grid.on('resizestart', handleResizeStart)
+  grid.on('resizestop', handleResizeStop)
   updateCellHeight()
 }
 
@@ -238,7 +299,7 @@ onBeforeUnmount(() => {
 watch(() => props.editMode, (value) => {
   if (grid) {
     grid.enableMove(value)
-    grid.enableResize(false)
+    grid.enableResize(props.editMode)
   }
 })
 
@@ -288,6 +349,10 @@ watch(layoutKey, () => {
         :gs-y="gridAttrs(item.config).y"
         :gs-w="gridAttrs(item.config).w"
         :gs-h="gridAttrs(item.config).h"
+        :gs-min-w="resizeAttrs(item).minW"
+        :gs-min-h="resizeAttrs(item).minH"
+        :gs-max-w="resizeAttrs(item).maxW"
+        :gs-max-h="resizeAttrs(item).maxH"
       >
         <div class="grid-stack-item-content">
           <PaletteItem
@@ -419,7 +484,8 @@ watch(layoutKey, () => {
   overflow: hidden;
 }
 
-:deep(.grid-stack-item.is-palette-dragging .palette-item) {
+:deep(.grid-stack-item.is-palette-dragging .palette-item),
+:deep(.grid-stack-item.is-palette-resizing .palette-item) {
   cursor: grabbing;
   opacity: 0.92;
 }

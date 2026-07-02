@@ -108,7 +108,7 @@ export const paletteRegistry = {
   kpi: {
     type: 'kpi',
     label: 'KPI',
-    supportedSizes: ['1x1', '1x2', '2x2', '3x2', '3x3'],
+    supportedSizes: ['1x1', '2x1', '1x2', '2x2', '2x3', '3x1', '3x2', '3x3', '4x2', '4x3'],
     defaultSize: '2x2',
     spanBySize: getSpanBySize,
     component: KpiPalette,
@@ -129,7 +129,7 @@ export const paletteRegistry = {
   calendar: {
     type: 'calendar',
     label: '월 달력',
-    supportedSizes: ['1x2', '2x2', '3x2', '3x3'],
+    supportedSizes: ['2x2', '3x2', '3x3', '3x4', '4x3', '4x4'],
     defaultSize: '3x3',
     spanBySize: getSpanBySize,
     component: CalendarPalette,

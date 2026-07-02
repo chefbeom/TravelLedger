@@ -126,6 +126,50 @@ class SupportInquiryIntegrationTest {
     }
 
     @Test
+    void adminSupportInquiryApisRequireVerifiedAdminAndCsrf() throws Exception {
+        MockHttpSession adminSession = login("admin", "test1234", "12345678");
+        MockHttpSession unverifiedAdminSession = login("admin", "test1234", "12345678");
+        MockHttpSession userSession = login("hana", "test1234", "12345678");
+
+        mockMvc.perform(get("/api/admin/support-inquiries"))
+                .andExpect(status().isUnauthorized());
+
+        mockMvc.perform(get("/api/admin/support-inquiries").session(userSession))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(get("/api/admin/support-inquiries").session(unverifiedAdminSession))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(put("/api/admin/support-inquiries/{inquiryId}/reply", 999L)
+                        .session(unverifiedAdminSession)
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of("content", "admin reply"))))
+                .andExpect(status().isForbidden());
+
+        verifyAdminAccess(adminSession);
+
+        mockMvc.perform(get("/api/admin/support-inquiries").session(adminSession))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$").isArray());
+
+        mockMvc.perform(put("/api/admin/support-inquiries/{inquiryId}/reply", 999L)
+                        .session(adminSession)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of("content", "admin reply"))))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(patch("/api/admin/support-inquiries/{inquiryId}/archive", 999L)
+                        .session(adminSession)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of("archived", true))))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(delete("/api/admin/support-inquiries/{inquiryId}", 999L)
+                        .session(adminSession))
+                .andExpect(status().isForbidden());
+    }
+    @Test
     void supportAttachmentRejectsSpoofedImageContent() throws Exception {
         MockHttpSession userSession = login("hana", "test1234", "12345678");
         MockMultipartFile attachment = new MockMultipartFile(

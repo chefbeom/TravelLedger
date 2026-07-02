@@ -1,9 +1,10 @@
 <script setup>
 import { computed, ref } from 'vue'
-import { commitLedgerExcelImport, previewLedgerExcelImport } from '../lib/api'
+import { commitLedgerExcelImport, previewLedgerAiExcelImport, previewLedgerExcelImport } from '../lib/api'
 
 const emit = defineEmits(['imported'])
 
+const importMode = ref('standard')
 const selectedFile = ref(null)
 const preview = ref(null)
 const previewRows = ref([])
@@ -14,6 +15,7 @@ const errorMessage = ref('')
 
 const selectedCount = computed(() => previewRows.value.filter((row) => row.selected).length)
 const readyCount = computed(() => previewRows.value.filter((row) => row.ready).length)
+const importModeLabel = computed(() => (importMode.value === 'ai' ? 'AI로 엑셀 데이터 가져오기' : '기존 Excel 가져오기'))
 
 function normalizeAmountValue(value) {
   const normalized = String(value ?? '').replace(/,/g, '').trim()
@@ -93,6 +95,16 @@ function handleFileChange(event) {
   resetMessages()
 }
 
+function changeImportMode(mode) {
+  if (isPreviewing.value || isImporting.value) {
+    return
+  }
+  importMode.value = mode
+  preview.value = null
+  previewRows.value = []
+  resetMessages()
+}
+
 async function handlePreview() {
   if (!selectedFile.value) {
     errorMessage.value = '가져올 엑셀 파일을 먼저 선택해 주세요.'
@@ -102,10 +114,11 @@ async function handlePreview() {
   isPreviewing.value = true
   resetMessages()
   try {
-    const response = await previewLedgerExcelImport(selectedFile.value)
+    const previewFn = importMode.value === 'ai' ? previewLedgerAiExcelImport : previewLedgerExcelImport
+    const response = await previewFn(selectedFile.value)
     preview.value = response
     previewRows.value = (response.rows ?? []).map(toEditablePreviewRow)
-    feedback.value = `엑셀에서 ${response.readyRowCount}개 거래를 가져올 준비가 됐습니다.`
+    feedback.value = `${importModeLabel.value}로 ${response.readyRowCount}개 거래를 가져올 준비가 됐습니다.`
   } catch (error) {
     errorMessage.value = error.message
   } finally {
@@ -159,13 +172,23 @@ async function handleImport() {
     <div class="panel__header">
       <div>
         <h2>엑셀 가져오기</h2>
-        <p>기존 가계부 엑셀 파일을 올리면 거래 내역만 추출해 현재 가계부 형식으로 가져옵니다.</p>
+        <p>기존 정형 Excel 가져오기와 AI로 엑셀 데이터 가져오기를 선택할 수 있습니다. AI 방식도 최종 확인 전에는 DB에 삽입되지 않습니다.</p>
       </div>
-      <span class="panel__badge">{{ preview ? `${selectedCount}개 선택` : '준비 중' }}</span>
+      <span class="panel__badge">{{ preview ? `${selectedCount}개 선택` : importModeLabel }}</span>
     </div>
 
     <div v-if="feedback" class="feedback feedback--success">{{ feedback }}</div>
     <div v-if="errorMessage" class="feedback feedback--error">{{ errorMessage }}</div>
+
+    <div class="ledger-import-summary">
+      <button type="button" class="button" :class="importMode === 'standard' ? 'button--primary' : 'button--secondary'" :disabled="isPreviewing || isImporting" @click="changeImportMode('standard')">
+        기존 Excel 가져오기
+      </button>
+      <button type="button" class="button" :class="importMode === 'ai' ? 'button--primary' : 'button--secondary'" :disabled="isPreviewing || isImporting" @click="changeImportMode('ai')">
+        AI로 엑셀 데이터 가져오기
+      </button>
+      <span class="chip chip--neutral">{{ importMode === 'ai' ? 'AI가 형식, 위치, 분류를 추론합니다.' : '지원되는 정형 양식을 빠르게 분석합니다.' }}</span>
+    </div>
 
     <div class="ledger-import-toolbar">
       <label class="field field--full">
@@ -174,7 +197,7 @@ async function handleImport() {
       </label>
       <div class="ledger-import-toolbar__actions">
         <button class="button button--secondary" :disabled="isPreviewing || isImporting" @click="handlePreview">
-          {{ isPreviewing ? '추출 중...' : '미리보기' }}
+          {{ isPreviewing ? '추출 중...' : (importMode === 'ai' ? 'AI 미리보기' : '미리보기') }}
         </button>
         <button class="button button--primary" :disabled="isPreviewing || isImporting || !previewRows.length" @click="handleImport">
           {{ isImporting ? '가져오는 중...' : '선택 행 가져오기' }}
@@ -185,6 +208,7 @@ async function handleImport() {
 
     <div class="ledger-import-summary">
       <span class="chip chip--neutral">지원 형식 .xlsx / .xls</span>
+      <span class="chip chip--neutral">{{ importModeLabel }}</span>
       <span v-if="preview" class="chip chip--neutral">시트 {{ preview.sheetName }}</span>
       <span v-if="preview" class="chip chip--neutral">헤더 행 {{ preview.headerRowNumber }}행</span>
       <span v-if="preview" class="chip chip--neutral">준비 완료 {{ readyCount }}건</span>
@@ -306,6 +330,6 @@ async function handleImport() {
         </tbody>
       </table>
     </div>
-    <p v-else class="panel__empty">실제 가계부 엑셀 파일을 올리면 거래일, 지출내용, 지출금액 열을 찾아 미리보기를 만들어 드립니다.</p>
+    <p v-else class="panel__empty">사용하던 가계부 엑셀 파일을 올리면 선택한 방식으로 거래일, 내용, 금액, 분류를 미리보기로 만들 수 있습니다.</p>
   </section>
 </template>

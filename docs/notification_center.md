@@ -1,8 +1,8 @@
-# Notification Center Contract
+﻿# Notification Center Contract
 
 Updated: 2026-06-30
 
-This document records the notification-center contract. Storage, listing, unread counts, read handling, AI analysis events, OCR failure events, scheduled backup failure events, privacy cleanup events, privacy export completion events, shared-file events, travel reminder events, budget warning events, household goal progress events, frontend route rendering, and the topbar unread badge are now in place. The contract verifier now checks OCR and scheduled-backup producer implementation/test anchors directly, not only the generic notification API. Future multi-member household producers remain in the queue, and every new producer must keep notifications owner-scoped or membership-scoped, bounded, and free of operational secrets.
+This document records the notification-center contract. Storage, listing, unread counts, read handling, AI analysis completed events, OCR failure events, scheduled backup failed events, privacy cleanup events, privacy export completion events, shared file received events, travel starts soon reminders, budget exceeded warnings, household goal progress events, frontend route rendering, and the topbar unread badge are now in place. The contract verifier now checks OCR and scheduled-backup producer implementation/test anchors directly, not only the generic notification API. Future multi-member household producers remain in the queue, and every new producer must keep notifications owner-scoped or membership-scoped, bounded, and free of operational secrets.
 
 ## Implemented API
 
@@ -51,6 +51,7 @@ flowchart TD
 | Scheduled backup failure notifications go only to active admins and store bounded `backupType`/`status` metadata. | Operators need actionability without leaking backup paths, remote names, or credentials. |
 | Budget, travel, household, and privacy producers must store IDs/counts/status labels only. | These domains can include sensitive spending, family, route, photo, and location details. |
 | Event producers should write short messages and link to the source page. | Keeps the center useful without duplicating feature data. |
+| Notification center UX must group budget exceeded, AI analysis completed, backup failed, shared file received, travel starts soon, and OCR failed events as first-class inbox categories. | Users should not have to hunt through separate feature screens to know what needs attention. |
 | Notification links must be relative application paths. | Avoids turning notifications into open redirects or signed URL storage. |
 
 ## Implemented producers
@@ -69,8 +70,17 @@ flowchart TD
 | Travel budget threshold exceeded | `BUDGET_WARNING` | Travel money ledger page. |
 | Household goal reached | `GOAL_PROGRESS` | Household goal dashboard. |
 
-## Event producer queue
+## Unified notification inbox
 
+| Product group | Event examples | User action | Metadata boundary |
+| --- | --- | --- | --- |
+| Budget exceeded | Travel budget threshold exceeded, future family budget cap exceeded. | Open the budget or travel ledger review page and decide whether to adjust spending or the goal. | Store IDs, threshold label, period, and status only; never raw ledger notes, payment details, or member-private spending. |
+| AI analysis completed | Ledger AI analysis done or failed. | Open the AI analysis history/status page and review advice. | Store analysis id/status only; never raw prompts, provider responses, API keys, or full transaction payloads. |
+| Backup failed | Scheduled database or MinIO backup failed. | Open the admin data-management page and inspect operational runbooks/logs. | Notify active admins only with backupType/status; never backup paths, remote names, credentials, or raw exceptions. |
+| Shared file received | CalenDrive file shared with the user. | Open shared files and review VIEW / DOWNLOAD / EDIT permission. | Store item/share ids and relative links only; never public tokens, presigned URLs, object keys, or storage paths. |
+| Travel starts soon | Planned trip starts tomorrow or enters a future reminder window. | Open the travel planner/money page and prepare budget, route, and media. | Store plan id/date/status only; never trip private notes, raw GPS/EXIF, media tokens, or storage paths. |
+| OCR failed | Receipt OCR could not complete after remote/configured OCR failure. | Open the OCR retry surface and upload again or enter manually. | Store bounded failure reason only; never raw receipt images, OCR text, AI output, or file paths. |
+## Event producer queue
 | Producer | Suggested type | Target | Required metadata boundary |
 | --- | --- | --- | --- |
 
@@ -94,7 +104,7 @@ flowchart TD
 
 ## Release gate
 
-Before promoting a change that adds or modifies notification storage, notification UI, event producers, budget/travel/household/privacy notification payloads, backup/AI/OCR notification behavior, or read-state behavior:
+Before promoting a change that adds or modifies notification storage, notification UI, event producers, budget exceeded, AI analysis completed, backup failed, shared file received, travel starts soon, OCR failed, budget/travel/household/privacy notification payloads, backup/AI/OCR notification behavior, or read-state behavior:
 
 1. Confirm every list/read/write path is scoped to the authenticated owner or an explicitly approved admin audience.
 2. Confirm producers do not persist API keys, signed URLs, presigned URLs, public tokens, object storage paths, raw OCR images, raw AI prompts, provider responses, backup credentials, secondary PINs, raw GPS/EXIF, or private member ledger details.
@@ -123,4 +133,5 @@ The `notification-center-contract` GitHub Actions job must run `scripts/verify-n
 - `frontend/src/components/NotificationCenterWorkspace.vue` provides the in-app notification center for the signed-in user.
 - The workspace loads `/api/notifications`, supports unread-only filtering, and can mark a single notification or all notifications as read.
 - It is reachable from the main top navigation through the `notifications` route, and `App.vue` renders `NotificationCenterWorkspace` for that route.
-- Notification cards expose category, severity, read state, creation time, and optional target links so AI/OCR/backup/privacy events are actionable instead of hidden in logs.
+- Notification cards expose category, severity, read state, creation time, and optional target links so budget exceeded, AI analysis completed, backup failed, shared file received, travel starts soon, OCR failed, privacy, and household events are actionable instead of hidden in separate feature logs.
+

@@ -4,6 +4,8 @@ public record HouseholdAggregateWidgetResponse(
         String kind,
         String period,
         Long paymentMethodId,
-        String amountType
+        String amountType,
+        Long monthlyExpenseTarget,
+        Long singleExpenseLimit
 ) {
 }

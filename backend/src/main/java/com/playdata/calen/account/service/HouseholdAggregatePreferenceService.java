@@ -28,7 +28,7 @@ import org.springframework.util.StringUtils;
 public class HouseholdAggregatePreferenceService {
 
     private static final int MAX_WIDGETS = 4;
-    private static final Set<String> ALLOWED_KINDS = Set.of("NONE", "TOTAL", "PAYMENT_METHOD");
+    private static final Set<String> ALLOWED_KINDS = Set.of("NONE", "TOTAL", "PAYMENT_METHOD", "MONTHLY_CUMULATIVE_CHART", "MONTHLY_GOAL");
     private static final Set<String> ALLOWED_PERIODS = Set.of("MONTH", "WEEK", "DAY");
     private static final Set<String> ALLOWED_AMOUNT_TYPES = Set.of("NET", "INCOME", "EXPENSE");
 
@@ -74,10 +74,10 @@ public class HouseholdAggregatePreferenceService {
 
     private StoredWidget toStoredWidget(HouseholdAggregateWidgetRequest widget) {
         if (widget == null) {
-            return new StoredWidget(null, null, null, null);
+            return new StoredWidget(null, null, null, null, null, null);
         }
 
-        return new StoredWidget(widget.kind(), widget.period(), widget.paymentMethodId(), widget.amountType());
+        return new StoredWidget(widget.kind(), widget.period(), widget.paymentMethodId(), widget.amountType(), widget.monthlyExpenseTarget(), widget.singleExpenseLimit());
     }
 
     private List<StoredWidget> readWidgets(String rawJson) {
@@ -113,12 +113,13 @@ public class HouseholdAggregatePreferenceService {
                                 widget.kind(),
                                 widget.period(),
                                 widget.paymentMethodId(),
-                                widget.amountType()
+                                widget.amountType(),
+                                widget.monthlyExpenseTarget(),
+                                widget.singleExpenseLimit()
                         ))
                         .toList()
         );
     }
-
     private List<StoredWidget> normalizeWidgets(List<StoredWidget> widgets, Long userId) {
         List<Long> validPaymentMethodIds = paymentMethodRepository.findAllByOwnerIdAndActiveTrueOrderByDisplayOrderAscIdAsc(userId)
                 .stream()
@@ -140,6 +141,8 @@ public class HouseholdAggregatePreferenceService {
                     ? requestedAmountType
                     : baseWidget.amountType();
             Long paymentMethodId = null;
+            Long monthlyExpenseTarget = normalizePositiveAmount(requestedWidget.monthlyExpenseTarget());
+            Long singleExpenseLimit = normalizePositiveAmount(requestedWidget.singleExpenseLimit());
 
             if ("PAYMENT_METHOD".equals(kind)) {
                 Long candidatePaymentMethodId = requestedWidget.paymentMethodId();
@@ -148,18 +151,40 @@ public class HouseholdAggregatePreferenceService {
                         : fallbackPaymentMethodId;
             }
 
-            normalizedWidgets.add(new StoredWidget(kind, period, paymentMethodId, amountType));
+            if ("MONTHLY_CUMULATIVE_CHART".equals(kind)) {
+                period = "MONTH";
+                amountType = "NET";
+                paymentMethodId = null;
+            }
+
+            if ("MONTHLY_GOAL".equals(kind)) {
+                period = "MONTH";
+                amountType = "EXPENSE";
+                paymentMethodId = null;
+            } else {
+                monthlyExpenseTarget = null;
+                singleExpenseLimit = null;
+            }
+
+            normalizedWidgets.add(new StoredWidget(kind, period, paymentMethodId, amountType, monthlyExpenseTarget, singleExpenseLimit));
         }
 
         return normalizedWidgets;
     }
 
+    private Long normalizePositiveAmount(Long value) {
+        if (value == null || value <= 0) {
+            return null;
+        }
+        return value;
+    }
+
     private List<StoredWidget> buildDefaultWidgets() {
         return List.of(
-                new StoredWidget("TOTAL", "MONTH", null, "NET"),
-                new StoredWidget("NONE", "MONTH", null, "NET"),
-                new StoredWidget("NONE", "WEEK", null, "NET"),
-                new StoredWidget("NONE", "DAY", null, "NET")
+                new StoredWidget("TOTAL", "MONTH", null, "NET", null, null),
+                new StoredWidget("NONE", "MONTH", null, "NET", null, null),
+                new StoredWidget("NONE", "WEEK", null, "NET", null, null),
+                new StoredWidget("NONE", "DAY", null, "NET", null, null)
         );
     }
 
@@ -167,7 +192,8 @@ public class HouseholdAggregatePreferenceService {
             String kind,
             String period,
             Long paymentMethodId,
-            String amountType
+            String amountType,
+            Long monthlyExpenseTarget,
+            Long singleExpenseLimit
     ) {
-    }
-}
+    }}

@@ -899,26 +899,30 @@ function buildClusterIcon(aggregate, active) {
     return buildRecordMarkerIcon(aggregate?.representative, active)
   }
 
-  const photoUrl = aggregate?.representative?.representativePhotoUrl
+  const shouldUsePhotoThumbnail = !aggregate?.isPhotoPin && props.displayMode !== 'pin' && aggregate?.representative?.representativePhotoUrl
+  const photoUrl = shouldUsePhotoThumbnail
     ? buildThumbnailUrl(aggregate.representative.representativePhotoUrl, THUMBNAIL_VARIANTS.pin)
     : ''
-  const markerSize = aggregate?.isAggregate ? 68 : 60
+  const markerSize = aggregate?.isPhotoPin ? 44 : aggregate?.isAggregate ? 68 : 60
   const clusterCount = aggregate?.photoCount || 0
   const colorHex = normalizeColorHex(aggregate?.representative?.planColorHex, '#3182F6')
+  const markerBody = aggregate?.isPhotoPin
+    ? '<span class="travel-cluster-pin__dot" aria-hidden="true"></span>'
+    : `<span class="travel-cluster-pin__count">${formatCompactCount(clusterCount)}</span>`
 
   return L.divIcon({
     className: 'travel-map__icon-root',
     html: `
       <div
-        class="travel-cluster-pin${aggregate?.isAggregate ? ' is-aggregate' : ''}${aggregate?.isClientCluster ? ' is-client-cluster' : ''}${active ? ' is-active' : ''}"
+        class="travel-cluster-pin${aggregate?.isAggregate ? ' is-aggregate' : ''}${aggregate?.isClientCluster ? ' is-client-cluster' : ''}${aggregate?.isPhotoPin ? ' is-photo-pin' : ''}${active ? ' is-active' : ''}"
         style="--cluster-color:${colorHex};${photoUrl ? `background-image:url('${escapeHtml(photoUrl)}')` : ''}"
       >
-        <span class="travel-cluster-pin__count">${formatCompactCount(clusterCount)}</span>
+        ${markerBody}
       </div>
     `,
-    iconSize: [markerSize, markerSize],
-    iconAnchor: [Math.round(markerSize / 2), markerSize - 6],
-    popupAnchor: [0, -markerSize + 16],
+    iconSize: aggregate?.isPhotoPin ? [44, 52] : [markerSize, markerSize],
+    iconAnchor: aggregate?.isPhotoPin ? [22, 50] : [Math.round(markerSize / 2), markerSize - 6],
+    popupAnchor: aggregate?.isPhotoPin ? [0, -46] : [0, -markerSize + 16],
   })
 }
 

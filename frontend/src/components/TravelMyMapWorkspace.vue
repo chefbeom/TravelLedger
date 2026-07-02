@@ -426,6 +426,99 @@ const photoClusters = computed(() => overview.value?.photoClusters ?? [])
 const photoPins = computed(() => overview.value?.photoPins ?? [])
 const markers = computed(() => overview.value?.markers ?? [])
 const routes = computed(() => overview.value?.routes ?? [])
+const expandedRoutePlanKey = ref('')
+
+function getRoutePlanKey(route) {
+  const planId = route?.planId ?? route?.travelPlanId ?? route?.plan?.id
+  if (planId !== undefined && planId !== null && String(planId).trim()) {
+    return `plan-${planId}`
+  }
+  return `name-${route?.planName || 'unassigned'}`
+}
+
+function getRoutePlanName(route) {
+  return route?.planName || '여행 미지정'
+}
+
+function formatRouteGroupDuration(minutes) {
+  const value = Math.round(safeNumber(minutes))
+  if (!value) {
+    return ''
+  }
+  const hours = Math.floor(value / 60)
+  const remainingMinutes = value % 60
+  return hours ? `${hours}시간 ${remainingMinutes}분` : `${remainingMinutes}분`
+}
+
+function formatRouteGroupDateRange(group) {
+  if (!group.firstDate && !group.lastDate) {
+    return '날짜 정보 없음'
+  }
+  if (group.firstDate === group.lastDate) {
+    return formatDate(group.firstDate)
+  }
+  return `${formatDate(group.firstDate)} ~ ${formatDate(group.lastDate)}`
+}
+
+function buildRouteGroupSummary(group) {
+  return [
+    `${group.routes.length}개 경로`,
+    group.totalDistanceKm ? `${group.totalDistanceKm.toFixed(2)}km` : '',
+    formatRouteGroupDuration(group.totalDurationMinutes),
+    group.totalSteps ? `${Math.round(group.totalSteps).toLocaleString('ko-KR')}걸음` : '',
+  ].filter(Boolean).join(' / ')
+}
+
+const routePlanGroups = computed(() => {
+  const groups = new Map()
+  routes.value.forEach((route) => {
+    const key = getRoutePlanKey(route)
+    if (!groups.has(key)) {
+      groups.set(key, {
+        key,
+        planName: getRoutePlanName(route),
+        routes: [],
+        totalDistanceKm: 0,
+        totalDurationMinutes: 0,
+        totalSteps: 0,
+        firstDate: '',
+        lastDate: '',
+      })
+    }
+
+    const group = groups.get(key)
+    group.routes.push(route)
+    group.totalDistanceKm += safeNumber(route?.distanceKm)
+    group.totalDurationMinutes += safeNumber(route?.durationMinutes)
+    group.totalSteps += safeNumber(route?.stepCount)
+
+    const routeDate = route?.routeDate || ''
+    if (routeDate) {
+      group.firstDate = !group.firstDate || routeDate < group.firstDate ? routeDate : group.firstDate
+      group.lastDate = !group.lastDate || routeDate > group.lastDate ? routeDate : group.lastDate
+    }
+  })
+
+  return Array.from(groups.values())
+    .map((group) => {
+      const sortedRoutes = group.routes.slice().sort((left, right) => String(right.routeDate || '').localeCompare(String(left.routeDate || '')))
+      const normalizedGroup = { ...group, routes: sortedRoutes }
+      return {
+        ...normalizedGroup,
+        dateRange: formatRouteGroupDateRange(normalizedGroup),
+        summary: buildRouteGroupSummary(normalizedGroup),
+      }
+    })
+    .sort((left, right) => String(right.lastDate || '').localeCompare(String(left.lastDate || '')) || left.planName.localeCompare(right.planName))
+})
+
+function isRoutePlanGroupExpanded(group) {
+  return expandedRoutePlanKey.value === group.key
+}
+
+function toggleRoutePlanGroup(group) {
+  expandedRoutePlanKey.value = isRoutePlanGroupExpanded(group) ? '' : group.key
+}
 
 const selectedClusterPhotos = computed(() => {
   const photos = selectedClusterDetail.value?.photos ?? []
@@ -656,43 +749,64 @@ watch(
       <p class="panel__empty">{{ detailErrorMessage }}</p>
     </section>
 
-    <section class="panel">
+    <section class="panel travel-route-plan-panel">
       <div class="panel__header travel-my-map-header">
         <div>
-          <h2>전체 GPX 경로 목록</h2>
-          <p>사진 클러스터와 함께 저장된 이동 경로를 확인하고, 필요하면 GPX 기록 화면에서 새 경로를 추가합니다.</p>
+          <h2>여행별 GPX 경로</h2>
+          <p>저장된 이동 경로를 여행 단위로 묶어 확인합니다. 자세히 보기를 누르면 해당 여행의 GPX 경로만 펼쳐집니다.</p>
         </div>
         <div class="travel-my-map-header__actions">
-          <span class="panel__badge">{{ routes.length }}개 경로</span>
+          <span class="panel__badge">{{ routePlanGroups.length }}개 여행 · {{ routes.length }}개 경로</span>
           <button class="button button--secondary" type="button" @click="emit('open-routes')">경로 관리</button>
         </div>
       </div>
 
-      <div class="sheet-table-wrap">
-        <table class="sheet-table">
-          <thead>
-            <tr>
-              <th>여행</th>
-              <th>날짜</th>
-              <th>제목</th>
-              <th>요약</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="route in routes" :key="route.id">
-              <td>{{ route.planName }}</td>
-              <td>{{ formatDate(route.routeDate) }}</td>
-              <td>{{ route.title || '이동 경로' }}</td>
-              <td>{{ routeSummary(route) || '-' }}</td>
-            </tr>
-            <tr v-if="!routes.length">
-              <td colspan="4" class="sheet-table__empty">아직 저장된 경로가 없습니다.</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </section>
+      <div v-if="routePlanGroups.length" class="travel-route-plan-list">
+        <article
+          v-for="group in routePlanGroups"
+          :key="group.key"
+          class="travel-route-plan-card"
+          :class="{ 'is-expanded': isRoutePlanGroupExpanded(group) }"
+        >
+          <div class="travel-route-plan-card__summary">
+            <div class="travel-route-plan-card__title">
+              <span class="chip chip--neutral">여행</span>
+              <h3>{{ group.planName }}</h3>
+              <p>{{ group.dateRange }}</p>
+            </div>
+            <div class="travel-route-plan-card__stats">
+              <span>{{ group.routes.length }}개 경로</span>
+              <span>{{ group.totalDistanceKm.toFixed(2) }}km</span>
+              <span v-if="group.totalSteps">{{ Math.round(group.totalSteps).toLocaleString('ko-KR') }}걸음</span>
+            </div>
+            <button class="button button--secondary" type="button" @click="toggleRoutePlanGroup(group)">
+              {{ isRoutePlanGroupExpanded(group) ? '접기' : `${group.planName} 자세히 보기` }}
+            </button>
+          </div>
 
+          <div v-if="isRoutePlanGroupExpanded(group)" class="sheet-table-wrap travel-route-plan-card__details">
+            <table class="sheet-table">
+              <thead>
+                <tr>
+                  <th>날짜</th>
+                  <th>제목</th>
+                  <th>요약</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="route in group.routes" :key="route.id">
+                  <td>{{ formatDate(route.routeDate) }}</td>
+                  <td>{{ route.title || '이동 경로' }}</td>
+                  <td>{{ routeSummary(route) || '-' }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </article>
+      </div>
+
+      <p v-else class="panel__empty">아직 저장된 경로가 없습니다.</p>
+    </section>
     <TravelPhotoLightbox
       v-if="!isMapFullscreen && lightboxPhoto"
       :photo="lightboxPhoto"

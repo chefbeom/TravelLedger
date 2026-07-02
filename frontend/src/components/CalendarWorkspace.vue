@@ -1902,6 +1902,7 @@ const AGGREGATE_CHART_HORIZONTAL_PADDING = 28
 const AGGREGATE_CHART_RIGHT_PADDING = 10
 const AGGREGATE_CHART_TOP_PADDING = 12
 const AGGREGATE_CHART_BOTTOM_PADDING = 22
+const AGGREGATE_CHART_BASELINE_Y = AGGREGATE_CHART_HEIGHT - AGGREGATE_CHART_BOTTOM_PADDING
 
 function aggregateChartDrawableWidth() {
   return AGGREGATE_CHART_WIDTH - AGGREGATE_CHART_HORIZONTAL_PADDING - AGGREGATE_CHART_RIGHT_PADDING
@@ -1947,6 +1948,18 @@ function buildChartPointItems(dailyItems, key, maxAmount) {
 
 function buildChartPoints(pointItems) {
   return pointItems.map((item) => `${item.x.toFixed(1)},${item.y.toFixed(1)}`).join(' ')
+}
+
+function buildChartAreaPoints(pointItems) {
+  if (!pointItems.length) return ''
+  const baseline = AGGREGATE_CHART_BASELINE_Y
+  const first = pointItems[0]
+  const last = pointItems[pointItems.length - 1]
+  return [
+    `${first.x.toFixed(1)},${baseline.toFixed(1)}`,
+    ...pointItems.map((item) => `${item.x.toFixed(1)},${item.y.toFixed(1)}`),
+    `${last.x.toFixed(1)},${baseline.toFixed(1)}`,
+  ].join(' ')
 }
 
 function buildChartDateTicks(dailyItems) {
@@ -2032,8 +2045,12 @@ function buildMonthlyCumulativeChartData(entries, range, overview) {
     expensePointItems,
     incomePoints: buildChartPoints(incomePointItems),
     expensePoints: buildChartPoints(expensePointItems),
+    incomeAreaPoints: buildChartAreaPoints(incomePointItems),
+    expenseAreaPoints: buildChartAreaPoints(expensePointItems),
     dateTicks: buildChartDateTicks(dailyItems),
     amountTicks: buildChartAmountTicks(maxAmount),
+    maxAmountLabel: formatCompactNumber(maxAmount),
+    netTotal: cumulativeIncome - cumulativeExpense,
   }
 }
 
@@ -3049,7 +3066,7 @@ defineExpose({
               누적 그래프 자세히 보기
             </button>
             <div v-if="card.chart" class="household-aggregate-chart" :class="{ 'is-empty': !card.chart.hasEntries }">
-              <svg viewBox="0 0 320 116" preserveAspectRatio="none" role="img" aria-label="월 누적 수입과 지출 그래프">
+              <svg viewBox="0 0 320 116" preserveAspectRatio="xMidYMid meet" role="img" aria-label="월 누적 수입과 지출 그래프">
                 <g class="household-aggregate-chart__grid" aria-hidden="true">
                   <line v-for="tick in card.chart.amountTicks" :key="`amount-${tick.key}`" x1="28" x2="310" :y1="tick.y" :y2="tick.y" />
                 </g>
@@ -3059,7 +3076,10 @@ defineExpose({
                   <text v-for="tick in card.chart.amountTicks" :key="`amount-label-${tick.key}`" x="6" :y="tick.labelY">{{ tick.label }}</text>
                   <text v-for="tick in card.chart.dateTicks" :key="`date-label-${tick.key}`" :x="tick.x" y="113" text-anchor="middle">{{ tick.label }}</text>
                 </g>
-                <line x1="28" y1="94" x2="310" y2="94" class="household-aggregate-chart__axis" />
+                <line x1="28" y1="12" x2="28" y2="94" class="household-aggregate-chart__axis household-aggregate-chart__axis--y" />
+                <line x1="28" y1="94" x2="310" y2="94" class="household-aggregate-chart__axis household-aggregate-chart__axis--x" />
+                <polygon v-if="card.chart.incomeAreaPoints" :points="card.chart.incomeAreaPoints" class="household-aggregate-chart__area household-aggregate-chart__area--income" />
+                <polygon v-if="card.chart.expenseAreaPoints" :points="card.chart.expenseAreaPoints" class="household-aggregate-chart__area household-aggregate-chart__area--expense" />
                 <polyline :points="card.chart.incomePoints" class="household-aggregate-chart__line household-aggregate-chart__line--income" />
                 <polyline :points="card.chart.expensePoints" class="household-aggregate-chart__line household-aggregate-chart__line--expense" />
                 <circle v-for="point in card.chart.incomePointItems" :key="`income-dot-${point.key}`" :cx="point.x" :cy="point.y" r="2.6" class="household-aggregate-chart__point household-aggregate-chart__point--income" />
@@ -3119,7 +3139,7 @@ defineExpose({
           </div>
 
           <div class="household-aggregate-chart-modal__canvas">
-            <svg viewBox="0 0 320 116" preserveAspectRatio="none" role="img" aria-label="월 누적 수입과 지출 상세 그래프">
+            <svg viewBox="0 0 320 116" preserveAspectRatio="xMidYMid meet" role="img" aria-label="월 누적 수입과 지출 상세 그래프">
               <g class="household-aggregate-chart__grid" aria-hidden="true">
                 <line v-for="tick in aggregateChartDetailCard.chart.amountTicks" :key="`detail-amount-${tick.key}`" x1="28" x2="310" :y1="tick.y" :y2="tick.y" />
               </g>
@@ -3129,9 +3149,20 @@ defineExpose({
                 <text v-for="tick in aggregateChartDetailCard.chart.amountTicks" :key="`detail-amount-label-${tick.key}`" x="6" :y="tick.labelY">{{ tick.label }}</text>
                 <text v-for="tick in aggregateChartDetailCard.chart.dateTicks" :key="`detail-date-label-${tick.key}`" :x="tick.x" y="113" text-anchor="middle">{{ tick.label }}</text>
               </g>
-              <line x1="28" y1="94" x2="310" y2="94" class="household-aggregate-chart__axis" />
+              <line x1="28" y1="12" x2="28" y2="94" class="household-aggregate-chart__axis household-aggregate-chart__axis--y" />
+                <line x1="28" y1="94" x2="310" y2="94" class="household-aggregate-chart__axis household-aggregate-chart__axis--x" />
+              <polygon v-if="aggregateChartDetailCard.chart.incomeAreaPoints" :points="aggregateChartDetailCard.chart.incomeAreaPoints" class="household-aggregate-chart__area household-aggregate-chart__area--income" />
+              <polygon v-if="aggregateChartDetailCard.chart.expenseAreaPoints" :points="aggregateChartDetailCard.chart.expenseAreaPoints" class="household-aggregate-chart__area household-aggregate-chart__area--expense" />
               <polyline :points="aggregateChartDetailCard.chart.incomePoints" class="household-aggregate-chart__line household-aggregate-chart__line--income" />
               <polyline :points="aggregateChartDetailCard.chart.expensePoints" class="household-aggregate-chart__line household-aggregate-chart__line--expense" />
+              <g v-if="aggregateChartSelectedPoint" class="household-aggregate-chart__crosshair" aria-hidden="true">
+                <line :x1="aggregateChartSelectedPoint.x" :x2="aggregateChartSelectedPoint.x" y1="12" y2="94" />
+                <line x1="28" x2="310" :y1="aggregateChartSelectedPoint.y" :y2="aggregateChartSelectedPoint.y" />
+                <circle :cx="aggregateChartSelectedPoint.x" :cy="aggregateChartSelectedPoint.y" r="7" />
+                <text :x="Math.min(aggregateChartSelectedPoint.x + 8, 258)" :y="Math.max(aggregateChartSelectedPoint.y - 8, 18)">
+                  {{ aggregateChartSelectedPoint.xLabel }} · {{ formatCompactNumber(aggregateChartSelectedPoint.amount) }}
+                </text>
+              </g>
               <circle
                 v-for="point in aggregateChartDetailCard.chart.incomePointItems"
                 :key="`detail-income-${point.key}`"

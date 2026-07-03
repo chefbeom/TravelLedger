@@ -64,7 +64,7 @@ public class HouseholdAggregatePreferenceService {
         }
 
         if (request.widgets().size() > MAX_WIDGETS) {
-            throw new BadRequestException("사용자 설정 집계는 최대 4개까지만 저장할 수 있습니다.");
+            throw new BadRequestException("사용자 설정 집계는 최대 4개까지 저장할 수 있습니다.");
         }
 
         return request.widgets().stream()
@@ -74,10 +74,25 @@ public class HouseholdAggregatePreferenceService {
 
     private StoredWidget toStoredWidget(HouseholdAggregateWidgetRequest widget) {
         if (widget == null) {
-            return new StoredWidget(null, null, null, null, null, null, null, null, null);
+            return new StoredWidget(null, null, null, null, null, null, null, null, null, null, null, null, null, null);
         }
 
-        return new StoredWidget(widget.kind(), widget.period(), widget.paymentMethodId(), widget.amountType(), widget.monthlyExpenseTarget(), widget.singleExpenseLimit(), widget.showIncomeCumulative(), widget.showExpenseCumulative(), widget.comparePreviousPeriod());
+        return new StoredWidget(
+                widget.kind(),
+                widget.period(),
+                widget.paymentMethodId(),
+                widget.amountType(),
+                widget.monthlyExpenseTarget(),
+                widget.singleExpenseLimit(),
+                widget.showIncomeCumulative(),
+                widget.showExpenseCumulative(),
+                widget.comparePreviousPeriod(),
+                widget.layoutX(),
+                widget.layoutY(),
+                widget.layoutW(),
+                widget.layoutH(),
+                widget.layoutOrder()
+        );
     }
 
     private List<StoredWidget> readWidgets(String rawJson) {
@@ -118,11 +133,17 @@ public class HouseholdAggregatePreferenceService {
                                 widget.singleExpenseLimit(),
                                 widget.showIncomeCumulative(),
                                 widget.showExpenseCumulative(),
-                                widget.comparePreviousPeriod()
+                                widget.comparePreviousPeriod(),
+                                widget.layoutX(),
+                                widget.layoutY(),
+                                widget.layoutW(),
+                                widget.layoutH(),
+                                widget.layoutOrder()
                         ))
                         .toList()
         );
     }
+
     private List<StoredWidget> normalizeWidgets(List<StoredWidget> widgets, Long userId) {
         List<Long> validPaymentMethodIds = paymentMethodRepository.findAllByOwnerIdAndActiveTrueOrderByDisplayOrderAscIdAsc(userId)
                 .stream()
@@ -149,6 +170,11 @@ public class HouseholdAggregatePreferenceService {
             Boolean showIncomeCumulative = normalizeBoolean(requestedWidget.showIncomeCumulative(), baseWidget.showIncomeCumulative());
             Boolean showExpenseCumulative = normalizeBoolean(requestedWidget.showExpenseCumulative(), baseWidget.showExpenseCumulative());
             Boolean comparePreviousPeriod = normalizeBoolean(requestedWidget.comparePreviousPeriod(), baseWidget.comparePreviousPeriod());
+            Integer layoutW = normalizeGridSpan(requestedWidget.layoutW(), baseWidget.layoutW(), 4);
+            Integer layoutX = normalizeGridPosition(requestedWidget.layoutX(), baseWidget.layoutX(), Math.max(1, 5 - layoutW));
+            Integer layoutH = normalizeGridSpan(requestedWidget.layoutH(), baseWidget.layoutH(), 3);
+            Integer layoutY = normalizeGridPosition(requestedWidget.layoutY(), baseWidget.layoutY(), Math.max(1, 9 - layoutH));
+            Integer layoutOrder = normalizeLayoutOrder(requestedWidget.layoutOrder(), baseWidget.layoutOrder() != null ? baseWidget.layoutOrder() : index + 1);
 
             if ("PAYMENT_METHOD".equals(kind)) {
                 Long candidatePaymentMethodId = requestedWidget.paymentMethodId();
@@ -165,6 +191,9 @@ public class HouseholdAggregatePreferenceService {
                 if (!Boolean.TRUE.equals(showIncomeCumulative) && !Boolean.TRUE.equals(showExpenseCumulative)) {
                     showExpenseCumulative = true;
                 }
+                layoutW = Math.max(layoutW, 4);
+                layoutX = 1;
+                layoutH = Math.max(layoutH, 2);
             }
 
             if ("MONTHLY_GOAL".equals(kind)) {
@@ -176,16 +205,115 @@ public class HouseholdAggregatePreferenceService {
                 singleExpenseLimit = null;
             }
 
+            layoutX = normalizeGridPosition(layoutX, baseWidget.layoutX(), Math.max(1, 5 - layoutW));
+            layoutY = normalizeGridPosition(layoutY, baseWidget.layoutY(), Math.max(1, 9 - layoutH));
+
             if (!"MONTHLY_CUMULATIVE_CHART".equals(kind)) {
                 showIncomeCumulative = null;
                 showExpenseCumulative = null;
                 comparePreviousPeriod = null;
             }
 
-            normalizedWidgets.add(new StoredWidget(kind, period, paymentMethodId, amountType, monthlyExpenseTarget, singleExpenseLimit, showIncomeCumulative, showExpenseCumulative, comparePreviousPeriod));
+            normalizedWidgets.add(new StoredWidget(
+                    kind,
+                    period,
+                    paymentMethodId,
+                    amountType,
+                    monthlyExpenseTarget,
+                    singleExpenseLimit,
+                    showIncomeCumulative,
+                    showExpenseCumulative,
+                    comparePreviousPeriod,
+                    layoutX,
+                    layoutY,
+                    layoutW,
+                    layoutH,
+                    layoutOrder
+            ));
         }
 
-        return normalizedWidgets;
+        return packNormalizedWidgets(normalizedWidgets);
+    }
+
+
+    private List<StoredWidget> packNormalizedWidgets(List<StoredWidget> widgets) {
+        boolean[][] occupied = new boolean[9][5];
+        StoredWidget[] packedWidgets = widgets.toArray(new StoredWidget[0]);
+        List<Integer> orderedIndexes = new ArrayList<>();
+        for (int index = 0; index < packedWidgets.length; index++) {
+            orderedIndexes.add(index);
+        }
+        orderedIndexes.sort((left, right) -> {
+            int leftOrder = normalizeLayoutOrder(packedWidgets[left].layoutOrder(), left + 1);
+            int rightOrder = normalizeLayoutOrder(packedWidgets[right].layoutOrder(), right + 1);
+            if (leftOrder != rightOrder) {
+                return Integer.compare(leftOrder, rightOrder);
+            }
+            return Integer.compare(left, right);
+        });
+
+        for (Integer index : orderedIndexes) {
+            StoredWidget widget = packedWidgets[index];
+            int width = normalizeGridSpan(widget.layoutW(), 2, 4);
+            int height = normalizeGridSpan(widget.layoutH(), 2, 3);
+            int preferredColumn = normalizeGridPosition(widget.layoutX(), 1, Math.max(1, 5 - width));
+            int preferredRow = normalizeGridPosition(widget.layoutY(), 1, Math.max(1, 9 - height));
+            int[] slot = findGridSlot(occupied, preferredColumn, preferredRow, width, height);
+            reserveGridSlot(occupied, slot[0], slot[1], width, height);
+            packedWidgets[index] = new StoredWidget(
+                    widget.kind(),
+                    widget.period(),
+                    widget.paymentMethodId(),
+                    widget.amountType(),
+                    widget.monthlyExpenseTarget(),
+                    widget.singleExpenseLimit(),
+                    widget.showIncomeCumulative(),
+                    widget.showExpenseCumulative(),
+                    widget.comparePreviousPeriod(),
+                    slot[0],
+                    slot[1],
+                    width,
+                    height,
+                    normalizeLayoutOrder(widget.layoutOrder(), index + 1)
+            );
+        }
+
+        return Arrays.asList(packedWidgets);
+    }
+
+    private int[] findGridSlot(boolean[][] occupied, int preferredColumn, int preferredRow, int width, int height) {
+        if (isGridSlotFree(occupied, preferredColumn, preferredRow, width, height)) {
+            return new int[]{preferredColumn, preferredRow};
+        }
+        int maxColumn = Math.max(1, 5 - width);
+        int maxRow = Math.max(1, 9 - height);
+        for (int row = 1; row <= maxRow; row++) {
+            for (int column = 1; column <= maxColumn; column++) {
+                if (isGridSlotFree(occupied, column, row, width, height)) {
+                    return new int[]{column, row};
+                }
+            }
+        }
+        return new int[]{preferredColumn, preferredRow};
+    }
+
+    private boolean isGridSlotFree(boolean[][] occupied, int column, int row, int width, int height) {
+        for (int y = row; y < row + height; y++) {
+            for (int x = column; x < column + width; x++) {
+                if (occupied[y][x]) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    private void reserveGridSlot(boolean[][] occupied, int column, int row, int width, int height) {
+        for (int y = row; y < row + height; y++) {
+            for (int x = column; x < column + width; x++) {
+                occupied[y][x] = true;
+            }
+        }
     }
 
     private Long normalizePositiveAmount(Long value) {
@@ -195,16 +323,31 @@ public class HouseholdAggregatePreferenceService {
         return value;
     }
 
+    private Integer normalizeGridPosition(Integer value, Integer fallback, int max) {
+        int candidate = value != null ? value : (fallback != null ? fallback : 1);
+        return Math.min(max, Math.max(1, candidate));
+    }
+
+    private Integer normalizeGridSpan(Integer value, Integer fallback, int max) {
+        int candidate = value != null ? value : (fallback != null ? fallback : 2);
+        return Math.min(max, Math.max(1, candidate));
+    }
+
+    private Integer normalizeLayoutOrder(Integer value, Integer fallback) {
+        int candidate = value != null ? value : (fallback != null ? fallback : 1);
+        return Math.min(99, Math.max(1, candidate));
+    }
+
     private Boolean normalizeBoolean(Boolean value, Boolean fallback) {
         return value != null ? value : Boolean.TRUE.equals(fallback);
     }
 
     private List<StoredWidget> buildDefaultWidgets() {
         return List.of(
-                new StoredWidget("TOTAL", "MONTH", null, "NET", null, null, null, null, null),
-                new StoredWidget("NONE", "MONTH", null, "NET", null, null, null, null, null),
-                new StoredWidget("NONE", "WEEK", null, "NET", null, null, null, null, null),
-                new StoredWidget("NONE", "DAY", null, "NET", null, null, null, null, null)
+                new StoredWidget("TOTAL", "MONTH", null, "NET", null, null, null, null, null, 1, 1, 2, 2, 1),
+                new StoredWidget("NONE", "MONTH", null, "NET", null, null, null, null, null, 3, 1, 2, 2, 2),
+                new StoredWidget("NONE", "WEEK", null, "NET", null, null, null, null, null, 1, 3, 2, 2, 3),
+                new StoredWidget("NONE", "DAY", null, "NET", null, null, null, null, null, 3, 3, 2, 2, 4)
         );
     }
 
@@ -217,7 +360,12 @@ public class HouseholdAggregatePreferenceService {
             Long singleExpenseLimit,
             Boolean showIncomeCumulative,
             Boolean showExpenseCumulative,
-            Boolean comparePreviousPeriod
+            Boolean comparePreviousPeriod,
+            Integer layoutX,
+            Integer layoutY,
+            Integer layoutW,
+            Integer layoutH,
+            Integer layoutOrder
     ) {
     }
 }

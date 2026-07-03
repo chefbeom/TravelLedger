@@ -14,17 +14,24 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.AuthenticationTrustResolver;
+import org.springframework.security.authentication.AuthenticationTrustResolverImpl;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.core.AuthenticationException;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.security.web.authentication.rememberme.CookieTheftException;
+import org.springframework.security.web.authentication.rememberme.InvalidCookieException;
 import org.springframework.security.web.authentication.rememberme.JdbcTokenRepositoryImpl;
 import org.springframework.security.web.authentication.rememberme.PersistentTokenBasedRememberMeServices;
 import org.springframework.security.web.authentication.rememberme.PersistentTokenRepository;
@@ -54,6 +61,7 @@ public class SecurityConfig {
     ) throws Exception {
         CsrfTokenRequestAttributeHandler csrfRequestHandler = new CsrfTokenRequestAttributeHandler();
         csrfRequestHandler.setCsrfRequestAttributeName("_csrf");
+        AuthenticationTrustResolver trustResolver = new AuthenticationTrustResolverImpl();
 
         return http
                 .csrf(csrf -> csrf
@@ -89,8 +97,14 @@ public class SecurityConfig {
                 .headers(headers -> headers.frameOptions(frame -> frame.sameOrigin()))
                 .exceptionHandling(ex -> ex
                         .authenticationEntryPoint(this::writeUnauthorized)
-                        .accessDeniedHandler((request, response, accessDeniedException) ->
-                                writeJsonError(response, HttpServletResponse.SC_FORBIDDEN, "접근 권한이 없습니다."))
+                        .accessDeniedHandler((request, response, accessDeniedException) -> {
+                            Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+                            if (authentication == null || trustResolver.isAnonymous(authentication)) {
+                                writeUnauthorized(request, response, null);
+                                return;
+                            }
+                            writeJsonError(response, HttpServletResponse.SC_FORBIDDEN, "Access is denied.");
+                        })
                 )
                 .cors(Customizer.withDefaults())
                 .addFilterAfter(csrfCookieFilter(), UsernamePasswordAuthenticationFilter.class)
@@ -165,7 +179,20 @@ public class SecurityConfig {
                 rememberMeKey,
                 userDetailsService,
                 persistentTokenRepository
-        );
+        ) {
+            @Override
+            protected UserDetails processAutoLoginCookie(
+                    String[] cookieTokens,
+                    HttpServletRequest request,
+                    HttpServletResponse response
+            ) {
+                try {
+                    return super.processAutoLoginCookie(cookieTokens, request, response);
+                } catch (CookieTheftException exception) {
+                    throw new InvalidCookieException("Invalid remember-me cookie.");
+                }
+            }
+        };
         services.setCookieName("CALEN_REMEMBER_ME");
         services.setAlwaysRemember(true);
         services.setUseSecureCookie(rememberMeSecureCookie);

@@ -16,7 +16,7 @@ class LedgerAiAnalysisPropertiesTest {
         assertThat(properties.normalizedLmStudioModel()).isEmpty();
         assertThat(properties.isLmStudioConfigured()).isTrue();
         assertThat(properties.isConfigured()).isTrue();
-        assertThat(properties.statusMessage()).contains("/api/v1/models");
+        assertThat(properties.statusMessage()).contains("/v1/models");
     }
 
     @Test

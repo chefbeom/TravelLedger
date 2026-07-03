@@ -17,7 +17,7 @@ public class LedgerAiAnalysisProperties {
     private String apiKey = "";
     private String apiKeyHeader = "X-TravelLedger-AI-Key";
     private String model = "auto";
-    private String lmStudioBaseUrl = "";
+    private String lmStudioBaseUrl = "http://localhost:1234";
     private String lmStudioModelsPath = "/v1/models";
     private String lmStudioChatPath = "/v1/chat/completions";
     private String lmStudioApiKey = "";
@@ -216,7 +216,8 @@ public class LedgerAiAnalysisProperties {
                 return "LM Studio host is not in the AI provider allowlist. Check APP_LEDGER_AI_ALLOWED_PROVIDER_HOSTS.";
             }
             if (isLmStudioModelAuto()) {
-                return "LM Studio AI analysis is ready. The model will be selected from the models endpoint.";
+                return "LM Studio AI analysis is ready. The model will be selected from "
+                        + normalizedLmStudioModelsPath() + ".";
             }
             return "LM Studio AI analysis is ready.";
         }

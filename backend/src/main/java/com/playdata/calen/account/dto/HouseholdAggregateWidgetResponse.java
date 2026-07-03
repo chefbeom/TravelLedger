@@ -9,6 +9,11 @@ public record HouseholdAggregateWidgetResponse(
         Long singleExpenseLimit,
         Boolean showIncomeCumulative,
         Boolean showExpenseCumulative,
-        Boolean comparePreviousPeriod
+        Boolean comparePreviousPeriod,
+        Integer layoutX,
+        Integer layoutY,
+        Integer layoutW,
+        Integer layoutH,
+        Integer layoutOrder
 ) {
 }

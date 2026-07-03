@@ -136,7 +136,7 @@ public class LedgerAiAnalysisService {
             LedgerAiAnalysisHistory failedHistory = baseHistory(owner, plan);
             failedHistory.setStatus(LedgerAiAnalysisStatus.FAILED);
             failedHistory.setSummary("AI analysis failed.");
-            failedHistory.setErrorMessage(aiText.limitText(exception.getMessage(), 500));
+            failedHistory.setErrorMessage(aiText.redactSensitiveText(exception.getMessage(), 500));
             failedHistory.setRequestPayloadJson(aiJsonCodec.write(payload));
             failedHistory = historyRepository.save(failedHistory);
             aiNotifications.notifyFailed(userId, failedHistory);

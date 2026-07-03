@@ -11,6 +11,14 @@ public final class LedgerAiRemoteResponseValidator {
 
     private static final int MAX_TEXT_VALUE_LENGTH = 2000;
     private static final int MAX_COLLECTION_SIZE = 20;
+    private static final String EMPTY_RESPONSE_MESSAGE = " AI analysis response was empty.";
+    private static final String PROVIDER_FAILURE_MESSAGE = " AI analysis request failed.";
+    private static final String UNUSABLE_RESPONSE_MESSAGE = " AI analysis response did not contain usable analysis content.";
+    private static final String SECRET_LIKE_MESSAGE = " AI analysis response contained secret-like content.";
+    private static final String PROMPT_INJECTION_MESSAGE = " AI analysis response echoed prompt-injection instructions.";
+    private static final String MUTATION_CLAIM_MESSAGE = " AI analysis response claimed ledger data was changed.";
+    private static final String SCHEMA_MESSAGE = " AI analysis response did not match the expected schema.";
+    private static final String SAFE_BOUNDS_MESSAGE = " AI analysis response exceeded safe response bounds.";
 
     private static final Pattern SECRET_DISCLOSURE_PATTERN = Pattern.compile(
             "(?i)(api[_-]?key|secret|token|password)\\s*[:=]\\s*[A-Za-z0-9._~+/=-]{8,}"
@@ -30,9 +38,6 @@ public final class LedgerAiRemoteResponseValidator {
                     + "|(transaction|ledger entr(?:y|ies)|expense|income).{0,60}"
                     + "(created|updated|deleted|modified|saved|categorized|reclassified))"
     );
-    private static final Pattern KOREAN_MUTATION_CLAIM_PATTERN = Pattern.compile(
-            "(거래|가계부|지출|수입).{0,30}(생성|수정|삭제|저장|분류).{0,20}(했습니다|완료|반영)"
-    );
 
     private LedgerAiRemoteResponseValidator() {
     }
@@ -40,15 +45,15 @@ public final class LedgerAiRemoteResponseValidator {
     public static LedgerAiRemoteResponse requireUsable(LedgerAiRemoteResponse response, String providerName) {
         String provider = hasText(providerName) ? providerName : "AI provider";
         if (response == null) {
-            throw new BadRequestException(provider + " AI 분석 응답이 비어 있습니다.");
+            throw new BadRequestException(provider + EMPTY_RESPONSE_MESSAGE);
         }
         if (Boolean.FALSE.equals(response.ok())) {
             throw new BadRequestException(hasText(response.error())
                     ? response.error()
-                    : provider + " AI 분석 응답이 실패했습니다.");
+                    : provider + PROVIDER_FAILURE_MESSAGE);
         }
         if (!hasUsableAnalysis(response)) {
-            throw new BadRequestException(provider + " AI 분석 응답에 사용할 수 있는 분석 내용이 없습니다.");
+            throw new BadRequestException(provider + UNUSABLE_RESPONSE_MESSAGE);
         }
         rejectMalformedTextCollections(response, provider);
         rejectOversizedContent(response, provider);
@@ -62,14 +67,13 @@ public final class LedgerAiRemoteResponseValidator {
                 continue;
             }
             if (containsSecretLikeContent(value)) {
-                throw new BadRequestException(provider + " AI 분석 응답에 민감정보로 보이는 내용이 포함되어 있습니다.");
+                throw new BadRequestException(provider + SECRET_LIKE_MESSAGE);
             }
             if (PROMPT_INJECTION_ECHO_PATTERN.matcher(value).find()) {
-                throw new BadRequestException(provider + " AI 분석 응답이 프롬프트 인젝션 문구를 그대로 포함했습니다.");
+                throw new BadRequestException(provider + PROMPT_INJECTION_MESSAGE);
             }
-            if (ENGLISH_MUTATION_CLAIM_PATTERN.matcher(value).find()
-                    || KOREAN_MUTATION_CLAIM_PATTERN.matcher(value).find()) {
-                throw new BadRequestException(provider + " AI 분석 응답이 거래 데이터 변경을 완료했다고 주장했습니다.");
+            if (ENGLISH_MUTATION_CLAIM_PATTERN.matcher(value).find()) {
+                throw new BadRequestException(provider + MUTATION_CLAIM_MESSAGE);
             }
         }
     }
@@ -78,7 +82,7 @@ public final class LedgerAiRemoteResponseValidator {
         for (Collection<String> values : allTextCollections(response)) {
             for (String value : values) {
                 if (!hasText(value)) {
-                    throw new BadRequestException(provider + " AI 분석 응답이 기대한 스키마와 맞지 않습니다.");
+                    throw new BadRequestException(provider + SCHEMA_MESSAGE);
                 }
             }
         }
@@ -87,12 +91,12 @@ public final class LedgerAiRemoteResponseValidator {
     private static void rejectOversizedContent(LedgerAiRemoteResponse response, String provider) {
         for (Collection<String> values : allTextCollections(response)) {
             if (values.size() > MAX_COLLECTION_SIZE) {
-                throw new BadRequestException(provider + " AI 분석 응답이 안전한 응답 크기를 초과했습니다.");
+                throw new BadRequestException(provider + SAFE_BOUNDS_MESSAGE);
             }
         }
         for (String value : allTextValues(response)) {
             if (value != null && value.length() > MAX_TEXT_VALUE_LENGTH) {
-                throw new BadRequestException(provider + " AI 분석 응답이 안전한 응답 크기를 초과했습니다.");
+                throw new BadRequestException(provider + SAFE_BOUNDS_MESSAGE);
             }
         }
     }

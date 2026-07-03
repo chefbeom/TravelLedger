@@ -75,7 +75,7 @@ class LedgerAiRemoteResponseValidatorTest {
     void rejectsNullResponse() {
         assertThatThrownBy(() -> LedgerAiRemoteResponseValidator.requireUsable(null, "n8n"))
                 .isInstanceOf(BadRequestException.class)
-                .hasMessage("n8n AI 遺꾩꽍 ?묐떟??鍮꾩뼱 ?덉뒿?덈떎.");
+                .hasMessage("n8n AI analysis response was empty.");
     }
 
     @Test
@@ -228,7 +228,7 @@ class LedgerAiRemoteResponseValidatorTest {
 
         assertThatThrownBy(() -> LedgerAiRemoteResponseValidator.requireUsable(response, "LM Studio"))
                 .isInstanceOf(BadRequestException.class)
-                .hasMessage("LM Studio AI 遺꾩꽍 ?묐떟???ъ슜?????덈뒗 遺꾩꽍 ?댁슜???놁뒿?덈떎.");
+                .hasMessage("LM Studio AI analysis response did not contain usable analysis content.");
     }
 
     private LedgerAiRemoteResponse responseWithSummary(String summary) {

@@ -225,7 +225,13 @@ public class DataPortabilityExportService {
         manifest.put("generatedAt", Instant.now().toString());
         manifest.put("count", items.size());
         manifest.put("items", new ArrayList<>(items));
-        manifest.put("excludedFields", List.of("storagePath", "storedName", "publicLink", "temporaryDownloadLink", "rawShareCredential"));
+        manifest.put("omittedSensitiveData", List.of(
+                "internal object locator",
+                "server file name",
+                "public sharing URL",
+                "temporary download URL",
+                "raw sharing credential"
+        ));
         return toJsonBytes(manifest, "Failed to create user data export manifest.");
     }
 

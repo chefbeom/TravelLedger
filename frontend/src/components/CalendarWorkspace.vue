@@ -715,7 +715,7 @@ const calendarLayoutGridStyle = computed(() => ({
   '--calendar-layout-grid-gap': `${CALENDAR_LAYOUT_GRID_GAP}px`,
   '--calendar-layout-grid-margin': `${CALENDAR_LAYOUT_GRID_MARGIN}px`,
 }))
-const isCalendarGridStackActive = computed(() => isLayoutEditMode.value && !isMobileLayoutMode.value)
+const isCalendarGridStackActive = computed(() => !isMobileLayoutMode.value)
 const mobileCalendarPanelOrder = {
   'quick-entry': 1,
   calendar: 2,
@@ -846,12 +846,19 @@ watch(calendarPanelLayoutKey, () => {
 })
 
 watch(isLayoutEditMode, (value) => {
-  if (value && !isMobileLayoutMode.value) {
+  if (isMobileLayoutMode.value) {
+    destroyLayoutGrid()
+    refreshCalendarMeasurements()
+    return
+  }
+
+  if (!layoutGrid) {
     nextTick(() => initLayoutGrid())
     return
   }
 
-  destroyLayoutGrid()
+  layoutGrid.enableMove(value)
+  layoutGrid.enableResize(value)
   refreshCalendarMeasurements()
 })
 
@@ -1553,7 +1560,7 @@ function destroyLayoutGrid() {
 }
 
 function initLayoutGrid() {
-  if (!isCalendarGridStackActive.value) {
+  if (isMobileLayoutMode.value) {
     destroyLayoutGrid()
     return
   }
@@ -1593,7 +1600,7 @@ function queueLayoutGridRebuild() {
     return
   }
 
-  if (!isCalendarGridStackActive.value) {
+  if (isMobileLayoutMode.value) {
     destroyLayoutGrid()
     refreshCalendarMeasurements()
     return
@@ -2632,7 +2639,7 @@ defineExpose({
     <section
       class="household-calendar-layout-board"
       :class="{
-        'household-calendar-layout-board--editing': isCalendarGridStackActive,
+        'household-calendar-layout-board--editing': isLayoutEditMode && !isMobileLayoutMode,
         'household-calendar-layout-board--mobile-flow': isMobileLayoutMode,
       }"
       :style="calendarLayoutGridStyle"

@@ -25105,3 +25105,67 @@ button.button--primary,
   max-height: 2.8em !important;
   overflow: hidden !important;
 }
+
+/* Household sheet title/memo word wrapping guard */
+.household-sheet-panel .sheet-table td.sheet-table__title,
+.household-sheet-panel .sheet-table td.sheet-table__memo {
+  display: table-cell !important;
+  max-width: none !important;
+  min-width: 0 !important;
+  overflow: hidden !important;
+  overflow-wrap: break-word !important;
+  text-overflow: clip !important;
+  white-space: normal !important;
+  word-break: keep-all !important;
+  line-break: strict;
+  line-height: 1.55 !important;
+  vertical-align: top !important;
+}
+
+.household-sheet-panel .sheet-table td.sheet-table__title {
+  width: 24% !important;
+}
+
+.household-sheet-panel .sheet-table td.sheet-table__memo {
+  width: 18% !important;
+}
+
+.household-sheet-panel .sheet-table th:nth-child(4),
+.household-sheet-panel .sheet-table td.sheet-table__title {
+  min-width: 12rem !important;
+}
+
+.household-sheet-panel .sheet-table th.sheet-table__memo,
+.household-sheet-panel .sheet-table td.sheet-table__memo {
+  min-width: 10rem !important;
+}
+
+.household-sheet-panel .sheet-table td.sheet-table__title *,
+.household-sheet-panel .sheet-table td.sheet-table__memo * {
+  max-width: 100% !important;
+  overflow-wrap: break-word !important;
+  text-overflow: clip !important;
+  white-space: normal !important;
+  word-break: keep-all !important;
+}
+
+.household-sheet-panel .sheet-table td.sheet-table__actions {
+  white-space: nowrap !important;
+}
+
+@media (max-width: 900px) {
+  .household-sheet-panel .sheet-table td.sheet-table__title,
+  .household-sheet-panel .sheet-table td.sheet-table__memo {
+    min-width: 0 !important;
+    width: auto !important;
+  }
+}
+
+/* Household aggregate chart preview hint removal */
+.household-aggregate-chart-preview-button__hint {
+  display: none !important;
+}
+
+.household-aggregate-card--chart .household-aggregate-chart-preview-button {
+  grid-template-rows: minmax(0, 1fr) auto !important;
+}

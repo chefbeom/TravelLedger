@@ -715,6 +715,7 @@ const calendarLayoutGridStyle = computed(() => ({
   '--calendar-layout-grid-gap': `${CALENDAR_LAYOUT_GRID_GAP}px`,
   '--calendar-layout-grid-margin': `${CALENDAR_LAYOUT_GRID_MARGIN}px`,
 }))
+const isCalendarGridStackActive = computed(() => isLayoutEditMode.value && !isMobileLayoutMode.value)
 const mobileCalendarPanelOrder = {
   'quick-entry': 1,
   calendar: 2,
@@ -845,12 +846,13 @@ watch(calendarPanelLayoutKey, () => {
 })
 
 watch(isLayoutEditMode, (value) => {
-  if (!layoutGrid) {
+  if (value && !isMobileLayoutMode.value) {
+    nextTick(() => initLayoutGrid())
     return
   }
 
-  layoutGrid.enableMove(value)
-  layoutGrid.enableResize(value)
+  destroyLayoutGrid()
+  refreshCalendarMeasurements()
 })
 
 watch([calendarWeekMode, displayedCalendarWeeks], () => {
@@ -910,7 +912,7 @@ onMounted(() => {
   hydrateRemoteCalendarViewPreferences(viewPreferenceSequence, calendarViewPreferencePayload())
 
   nextTick(() => {
-    if (!isMobileLayoutMode.value) {
+    if (isCalendarGridStackActive.value) {
       initLayoutGrid()
     }
     if (typeof ResizeObserver !== 'undefined') {
@@ -1517,13 +1519,25 @@ function syncMobileLayoutMode() {
   queueLayoutGridRebuild()
 }
 
-function calendarPanelMobileStyle(panel) {
-  if (!isMobileLayoutMode.value) {
+function calendarPanelLayoutItemStyle(panel) {
+  if (isMobileLayoutMode.value) {
+    return {
+      '--mobile-calendar-panel-order': String(mobileCalendarPanelOrder[panel.id] ?? 5),
+    }
+  }
+
+  if (isCalendarGridStackActive.value) {
     return null
   }
 
+  const columnStart = (Number(panel.x ?? 0) || 0) + 1
+  const rowStart = (Number(panel.y ?? 0) || 0) + 1
+  const columnSpan = Math.max(1, Number(panel.w ?? 1) || 1)
+  const rowSpan = Math.max(1, Number(panel.h ?? 1) || 1)
+
   return {
-    '--mobile-calendar-panel-order': String(mobileCalendarPanelOrder[panel.id] ?? 5),
+    gridColumn: columnStart + ' / span ' + columnSpan,
+    gridRow: rowStart + ' / span ' + rowSpan,
   }
 }
 
@@ -1539,7 +1553,7 @@ function destroyLayoutGrid() {
 }
 
 function initLayoutGrid() {
-  if (isMobileLayoutMode.value) {
+  if (!isCalendarGridStackActive.value) {
     destroyLayoutGrid()
     return
   }
@@ -1579,7 +1593,7 @@ function queueLayoutGridRebuild() {
     return
   }
 
-  if (isMobileLayoutMode.value) {
+  if (!isCalendarGridStackActive.value) {
     destroyLayoutGrid()
     refreshCalendarMeasurements()
     return
@@ -2611,7 +2625,7 @@ defineExpose({
     <section
       class="household-calendar-layout-board"
       :class="{
-        'household-calendar-layout-board--editing': isLayoutEditMode && !isMobileLayoutMode,
+        'household-calendar-layout-board--editing': isCalendarGridStackActive,
         'household-calendar-layout-board--mobile-flow': isMobileLayoutMode,
       }"
       :style="calendarLayoutGridStyle"
@@ -2624,7 +2638,8 @@ defineExpose({
         ref="layoutGridRef"
         class="household-calendar-layout-grid"
         :class="{
-          'grid-stack': !isMobileLayoutMode,
+          'grid-stack': isCalendarGridStackActive,
+          'household-calendar-layout-grid--static': !isCalendarGridStackActive && !isMobileLayoutMode,
           'household-calendar-layout-grid--mobile-flow': isMobileLayoutMode,
         }"
       >
@@ -2632,20 +2647,20 @@ defineExpose({
           v-for="panel in calendarLayoutPanels"
           :key="panel.id"
           :class="[
-            isMobileLayoutMode ? 'household-calendar-layout-flow-item' : 'grid-stack-item',
+            isMobileLayoutMode ? 'household-calendar-layout-flow-item' : (isCalendarGridStackActive ? 'grid-stack-item' : 'household-calendar-layout-static-item'),
             `household-calendar-layout-item--${panel.id}`,
           ]"
-          :style="calendarPanelMobileStyle(panel)"
+          :style="calendarPanelLayoutItemStyle(panel)"
           :gs-id="panel.id"
           :data-calendar-panel-id="panel.id"
-          :gs-x="isMobileLayoutMode ? null : calendarPanelAttrs(panel).x"
-          :gs-y="isMobileLayoutMode ? null : calendarPanelAttrs(panel).y"
-          :gs-w="isMobileLayoutMode ? null : calendarPanelAttrs(panel).w"
-          :gs-h="isMobileLayoutMode ? null : calendarPanelAttrs(panel).h"
-          :gs-min-w="isMobileLayoutMode ? null : calendarPanelAttrs(panel).minW"
-          :gs-min-h="isMobileLayoutMode ? null : calendarPanelAttrs(panel).minH"
-          :gs-max-w="isMobileLayoutMode ? null : calendarPanelAttrs(panel).maxW"
-          :gs-max-h="isMobileLayoutMode ? null : calendarPanelAttrs(panel).maxH"
+          :gs-x="isCalendarGridStackActive ? calendarPanelAttrs(panel).x : null"
+          :gs-y="isCalendarGridStackActive ? calendarPanelAttrs(panel).y : null"
+          :gs-w="isCalendarGridStackActive ? calendarPanelAttrs(panel).w : null"
+          :gs-h="isCalendarGridStackActive ? calendarPanelAttrs(panel).h : null"
+          :gs-min-w="isCalendarGridStackActive ? calendarPanelAttrs(panel).minW : null"
+          :gs-min-h="isCalendarGridStackActive ? calendarPanelAttrs(panel).minH : null"
+          :gs-max-w="isCalendarGridStackActive ? calendarPanelAttrs(panel).maxW : null"
+          :gs-max-h="isCalendarGridStackActive ? calendarPanelAttrs(panel).maxH : null"
           :id="panel.id === 'quick-entry'
             ? 'household-calendar-entry-editor-target'
             : panel.id === 'sheet'
@@ -2654,7 +2669,7 @@ defineExpose({
           :ref="(element) => setCalendarPanelScrollTarget(panel.id, element)"
           tabindex="-1"
         >
-          <div :class="isMobileLayoutMode ? 'household-calendar-layout-flow-content' : 'grid-stack-item-content'">
+          <div :class="isMobileLayoutMode ? 'household-calendar-layout-flow-content' : (isCalendarGridStackActive ? 'grid-stack-item-content' : 'household-calendar-layout-static-content')">
             <div
               class="household-calendar-layout-panel-shell"
               :class="{ 'household-calendar-layout-panel-shell--editing': isLayoutEditMode }"

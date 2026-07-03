@@ -2067,9 +2067,9 @@ function summarizeEntriesByDate(entries, dateItems) {
 }
 
 function buildChartHeadline(showIncome, showExpense, incomeTotal, expenseTotal) {
-  if (showIncome && !showExpense) return { amount: incomeTotal, caption: `수입 누적 ${formatCurrency(incomeTotal)}` }
-  if (!showIncome && showExpense) return { amount: expenseTotal, caption: `지출 누적 ${formatCurrency(expenseTotal)}` }
-  return { amount: expenseTotal, caption: `수입 ${formatCurrency(incomeTotal)} · 지출 ${formatCurrency(expenseTotal)}` }
+  if (showIncome && !showExpense) return { amount: incomeTotal, caption: `수입 누적 ${props.formatCurrency(incomeTotal)}` }
+  if (!showIncome && showExpense) return { amount: expenseTotal, caption: `지출 누적 ${props.formatCurrency(expenseTotal)}` }
+  return { amount: expenseTotal, caption: `수입 ${props.formatCurrency(incomeTotal)} · 지출 ${props.formatCurrency(expenseTotal)}` }
 }
 
 function buildMonthlyCumulativeChartData(entries, range, overview, options = {}) {

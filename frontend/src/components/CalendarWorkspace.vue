@@ -3,7 +3,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { GridStack } from 'gridstack'
 import 'gridstack/dist/gridstack.min.css'
 import { formatCompactNumber } from '../lib/format'
-import { resolveRange, summarizeEntries } from '../lib/analytics'
+import { resolveRange, shiftRange, summarizeEntries } from '../lib/analytics'
 import { useTableSelection } from '../lib/tableSelection'
 import { fetchLayoutSetting, saveLayoutSetting } from '../lib/api'
 
@@ -71,6 +71,8 @@ const aggregateWidgetKinds = [
 ]
 
 const aggregateWidgetPeriods = [
+  { value: 'YEAR', label: '올해' },
+  { value: 'QUARTER', label: '이번 분기' },
   { value: 'MONTH', label: '이번 달' },
   { value: 'WEEK', label: '이번 주' },
   { value: 'DAY', label: '오늘' },
@@ -1731,10 +1733,10 @@ function getCalendarBarRatio(day) {
 function createDefaultAggregateConfigs() {
   const defaultPaymentMethodId = props.paymentMethods[0] ? String(props.paymentMethods[0].id) : ''
   return [
-    { id: 'aggregate-1', kind: 'TOTAL', period: 'MONTH', paymentMethodId: '', amountType: 'NET', monthlyExpenseTarget: 0, singleExpenseLimit: 0 },
-    { id: 'aggregate-2', kind: 'NONE', period: 'MONTH', paymentMethodId: '', amountType: 'NET', monthlyExpenseTarget: 0, singleExpenseLimit: 0 },
-    { id: 'aggregate-3', kind: 'NONE', period: 'WEEK', paymentMethodId: '', amountType: 'NET', monthlyExpenseTarget: 0, singleExpenseLimit: 0 },
-    { id: 'aggregate-4', kind: 'NONE', period: 'DAY', paymentMethodId: defaultPaymentMethodId, amountType: 'NET', monthlyExpenseTarget: 0, singleExpenseLimit: 0 },
+    { id: 'aggregate-1', kind: 'TOTAL', period: 'MONTH', paymentMethodId: '', amountType: 'NET', monthlyExpenseTarget: 0, singleExpenseLimit: 0, showIncomeCumulative: true, showExpenseCumulative: true, comparePreviousPeriod: false },
+    { id: 'aggregate-2', kind: 'NONE', period: 'MONTH', paymentMethodId: '', amountType: 'NET', monthlyExpenseTarget: 0, singleExpenseLimit: 0, showIncomeCumulative: true, showExpenseCumulative: true, comparePreviousPeriod: false },
+    { id: 'aggregate-3', kind: 'NONE', period: 'WEEK', paymentMethodId: '', amountType: 'NET', monthlyExpenseTarget: 0, singleExpenseLimit: 0, showIncomeCumulative: true, showExpenseCumulative: true, comparePreviousPeriod: false },
+    { id: 'aggregate-4', kind: 'NONE', period: 'DAY', paymentMethodId: defaultPaymentMethodId, amountType: 'NET', monthlyExpenseTarget: 0, singleExpenseLimit: 0, showIncomeCumulative: true, showExpenseCumulative: true, comparePreviousPeriod: false },
   ]
 }
 
@@ -1743,8 +1745,14 @@ function normalizeAggregateTargetAmount(value) {
   return Number.isFinite(numericValue) && numericValue > 0 ? Math.round(numericValue) : 0
 }
 
+function normalizeAggregateFlag(value, fallback = false) {
+  if (value === true || value === 'true') return true
+  if (value === false || value === 'false') return false
+  return Boolean(fallback)
+}
+
 function isAggregatePeriodEditable(kind) {
-  return kind !== 'MONTHLY_CUMULATIVE_CHART' && kind !== 'MONTHLY_GOAL'
+  return kind !== 'MONTHLY_GOAL'
 }
 
 function isAggregateAmountTypeEditable(kind) {
@@ -1766,11 +1774,16 @@ function normalizeAggregateConfigs(configs) {
       : ''
     const monthlyExpenseTarget = normalizeAggregateTargetAmount(current.monthlyExpenseTarget ?? baseConfig.monthlyExpenseTarget)
     const singleExpenseLimit = normalizeAggregateTargetAmount(current.singleExpenseLimit ?? baseConfig.singleExpenseLimit)
+    let showIncomeCumulative = normalizeAggregateFlag(current.showIncomeCumulative, baseConfig.showIncomeCumulative)
+    let showExpenseCumulative = normalizeAggregateFlag(current.showExpenseCumulative, baseConfig.showExpenseCumulative)
+    const comparePreviousPeriod = normalizeAggregateFlag(current.comparePreviousPeriod, baseConfig.comparePreviousPeriod)
 
     if (kind === 'MONTHLY_CUMULATIVE_CHART') {
-      period = 'MONTH'
       amountType = 'NET'
       paymentMethodId = ''
+      if (!showIncomeCumulative && !showExpenseCumulative) {
+        showExpenseCumulative = true
+      }
     }
 
     if (kind === 'MONTHLY_GOAL') {
@@ -1779,34 +1792,27 @@ function normalizeAggregateConfigs(configs) {
       paymentMethodId = ''
     }
 
-    return { id: current.id || baseConfig.id, kind, period, paymentMethodId, amountType, monthlyExpenseTarget, singleExpenseLimit }
+    return { id: current.id || baseConfig.id, kind, period, paymentMethodId, amountType, monthlyExpenseTarget, singleExpenseLimit, showIncomeCumulative, showExpenseCumulative, comparePreviousPeriod }
   })
 }
 
 function updateAggregateWidget(index, field, value) {
   aggregateWidgetDraftConfigs.value = normalizeAggregateConfigs(
     aggregateWidgetDraftConfigs.value.map((config, configIndex) => {
-      if (configIndex !== index) {
-        return config
-      }
-
+      if (configIndex !== index) return config
       const nextConfig = { ...config, [field]: value }
-
-      if (field === 'kind' && value !== 'PAYMENT_METHOD') {
-        nextConfig.paymentMethodId = ''
-      }
-      if (field === 'kind' && value === 'PAYMENT_METHOD' && !nextConfig.paymentMethodId) {
-        nextConfig.paymentMethodId = props.paymentMethods[0] ? String(props.paymentMethods[0].id) : ''
-      }
+      if (field === 'kind' && value !== 'PAYMENT_METHOD') nextConfig.paymentMethodId = ''
+      if (field === 'kind' && value === 'PAYMENT_METHOD' && !nextConfig.paymentMethodId) nextConfig.paymentMethodId = props.paymentMethods[0] ? String(props.paymentMethods[0].id) : ''
       if (field === 'kind' && value === 'MONTHLY_CUMULATIVE_CHART') {
-        nextConfig.period = 'MONTH'
         nextConfig.amountType = 'NET'
+        nextConfig.showIncomeCumulative = true
+        nextConfig.showExpenseCumulative = true
+        nextConfig.comparePreviousPeriod = false
       }
       if (field === 'kind' && value === 'MONTHLY_GOAL') {
         nextConfig.period = 'MONTH'
         nextConfig.amountType = 'EXPENSE'
       }
-
       return nextConfig
     }),
   )
@@ -1828,13 +1834,16 @@ function cancelAggregateEdit() {
 function saveAggregateWidgetConfigs() {
   emit(
     'save-aggregate-widget-configs',
-    normalizeAggregateConfigs(aggregateWidgetDraftConfigs.value).map(({ kind, period, paymentMethodId, amountType, monthlyExpenseTarget, singleExpenseLimit }) => ({
+    normalizeAggregateConfigs(aggregateWidgetDraftConfigs.value).map(({ kind, period, paymentMethodId, amountType, monthlyExpenseTarget, singleExpenseLimit, showIncomeCumulative, showExpenseCumulative, comparePreviousPeriod }) => ({
       kind,
       period,
       paymentMethodId: paymentMethodId ? Number(paymentMethodId) : null,
       amountType,
       monthlyExpenseTarget: normalizeAggregateTargetAmount(monthlyExpenseTarget),
       singleExpenseLimit: normalizeAggregateTargetAmount(singleExpenseLimit),
+      showIncomeCumulative: Boolean(showIncomeCumulative),
+      showExpenseCumulative: Boolean(showExpenseCumulative),
+      comparePreviousPeriod: Boolean(comparePreviousPeriod),
     })),
   )
   isAggregateEditMode.value = false
@@ -1883,10 +1892,10 @@ function shiftIsoDate(value, dayOffset) {
   return new Date(Date.UTC(parts[0], parts[1] - 1, parts[2] + dayOffset)).toISOString().slice(0, 10)
 }
 
-function listDateRange(from, to) {
+function listDateRange(from, to, maxDays = 370) {
   const dates = []
   let cursor = from
-  while (/^\d{4}-\d{2}-\d{2}$/.test(cursor) && cursor <= to && dates.length < 32) {
+  while (/^\d{4}-\d{2}-\d{2}$/.test(cursor) && cursor <= to && dates.length < maxDays) {
     dates.push(cursor)
     cursor = shiftIsoDate(cursor, 1)
   }
@@ -1914,9 +1923,7 @@ function aggregateChartDrawableHeight() {
 
 function chartXForIndex(index, total) {
   const drawableWidth = aggregateChartDrawableWidth()
-  return total <= 1
-    ? AGGREGATE_CHART_HORIZONTAL_PADDING + (drawableWidth / 2)
-    : AGGREGATE_CHART_HORIZONTAL_PADDING + (drawableWidth * index) / (total - 1)
+  return total <= 1 ? AGGREGATE_CHART_HORIZONTAL_PADDING + (drawableWidth / 2) : AGGREGATE_CHART_HORIZONTAL_PADDING + (drawableWidth * index) / (total - 1)
 }
 
 function chartYForAmount(amount, maxAmount) {
@@ -1925,24 +1932,13 @@ function chartYForAmount(amount, maxAmount) {
   return AGGREGATE_CHART_TOP_PADDING + drawableHeight - ((Number(amount) || 0) / safeMax) * drawableHeight
 }
 
-function buildChartPointItems(dailyItems, key, maxAmount) {
+function buildChartPointItems(dailyItems, key, maxAmount, seriesLabel, periodLabel = '') {
   return dailyItems.map((item, index) => {
     const amount = Number(item[key]) || 0
     const previousAmount = index > 0 ? Number(dailyItems[index - 1]?.[key]) || 0 : 0
     const x = chartXForIndex(index, dailyItems.length)
     const y = chartYForAmount(amount, maxAmount)
-    return {
-      key: `${item.date}-${key}`,
-      date: item.date,
-      xLabel: item.date.slice(5).replace('-', '/'),
-      day: item.day,
-      series: key,
-      seriesLabel: key === 'income' ? '수입' : '지출',
-      amount,
-      dailyAmount: amount - previousAmount,
-      x: Number(x.toFixed(1)),
-      y: Number(y.toFixed(1)),
-    }
+    return { key: `${periodLabel || 'current'}-${item.date}-${key}`, date: item.date, xLabel: item.date.slice(5).replace('-', '/'), day: Number(item.date.slice(-2)), series: key, seriesLabel, amount, dailyAmount: amount - previousAmount, x: Number(x.toFixed(1)), y: Number(y.toFixed(1)) }
   })
 }
 
@@ -1955,50 +1951,62 @@ function buildChartAreaPoints(pointItems) {
   const baseline = AGGREGATE_CHART_BASELINE_Y
   const first = pointItems[0]
   const last = pointItems[pointItems.length - 1]
-  return [
-    `${first.x.toFixed(1)},${baseline.toFixed(1)}`,
-    ...pointItems.map((item) => `${item.x.toFixed(1)},${item.y.toFixed(1)}`),
-    `${last.x.toFixed(1)},${baseline.toFixed(1)}`,
-  ].join(' ')
+  return [`${first.x.toFixed(1)},${baseline.toFixed(1)}`, ...pointItems.map((item) => `${item.x.toFixed(1)},${item.y.toFixed(1)}`), `${last.x.toFixed(1)},${baseline.toFixed(1)}`].join(' ')
 }
 
-function buildChartDateTicks(dailyItems) {
+function chartTickLabel(date, period) {
+  const month = Number(date.slice(5, 7))
+  const day = Number(date.slice(8, 10))
+  if (period === 'YEAR') return `${month}월`
+  if (period === 'QUARTER' || period === 'MONTH') return `${month}/${String(day).padStart(2, '0')}`
+  if (period === 'WEEK') return `${day}일`
+  return date.slice(5).replace('-', '/')
+}
+
+function buildChartDateTicks(dailyItems, period) {
   if (!dailyItems.length) return []
-  const indexes = Array.from(new Set([
-    0,
-    Math.floor((dailyItems.length - 1) / 2),
-    dailyItems.length - 1,
-  ])).filter((index) => index >= 0 && index < dailyItems.length)
-  return indexes.map((index) => {
+  const indexes = []
+  if (period === 'YEAR') {
+    const seenMonths = new Set()
+    dailyItems.forEach((item, index) => {
+      const monthKey = item.date.slice(0, 7)
+      if (!seenMonths.has(monthKey)) { seenMonths.add(monthKey); indexes.push(index) }
+    })
+  } else if (period === 'QUARTER') {
+    for (let index = 0; index < dailyItems.length; index += 14) indexes.push(index)
+  } else if (period === 'MONTH') {
+    for (let index = 0; index < dailyItems.length; index += 7) indexes.push(index)
+  } else if (period === 'WEEK') {
+    dailyItems.forEach((_, index) => indexes.push(index))
+  } else {
+    indexes.push(0)
+  }
+  indexes.push(dailyItems.length - 1)
+  return Array.from(new Set(indexes)).filter((index) => index >= 0 && index < dailyItems.length).map((index) => {
     const item = dailyItems[index]
-    return {
-      key: item.date,
-      label: item.date.slice(5).replace('-', '/'),
-      x: Number(chartXForIndex(index, dailyItems.length).toFixed(1)),
-    }
+    return { key: item.date, label: chartTickLabel(item.date, period), x: Number(chartXForIndex(index, dailyItems.length).toFixed(1)) }
   })
 }
 
 function buildChartAmountTicks(maxAmount) {
   const safeMax = Math.max(1, Number(maxAmount) || 0)
-  return [0, 0.5, 1].map((ratio) => {
+  return [0, 0.25, 0.5, 0.75, 1].map((ratio) => {
     const value = Math.round(safeMax * ratio)
     const y = chartYForAmount(value, safeMax)
-    return {
-      key: `${ratio}-${value}`,
-      label: ratio === 0 ? '0' : formatCompactNumber(value),
-      value,
-      y: Number(y.toFixed(1)),
-      labelY: Number(Math.max(10, y - 2).toFixed(1)),
-    }
+    return { key: `${ratio}-${value}`, label: ratio === 0 ? '0' : formatCompactNumber(value), value, y: Number(y.toFixed(1)), labelY: Number(Math.max(10, y - 2).toFixed(1)) }
   })
 }
 
+function visibleAggregateChartPoints(card) {
+  if (!card?.chart) return []
+  const points = []
+  if (card.config.showIncomeCumulative) points.push(...(card.chart.incomePointItems || []))
+  if (card.config.showExpenseCumulative) points.push(...(card.chart.expensePointItems || []))
+  return points
+}
+
 function findDefaultAggregateChartPoint(card) {
-  const points = [
-    ...(card?.chart?.incomePointItems || []),
-    ...(card?.chart?.expensePointItems || []),
-  ]
+  const points = visibleAggregateChartPoints(card)
   return points.length ? points[points.length - 1] : null
 }
 
@@ -2017,7 +2025,17 @@ function selectAggregateChartPoint(point) {
   aggregateChartSelectedPoint.value = point
 }
 
-function buildMonthlyCumulativeChartData(entries, range, overview) {
+function selectAggregateChartNearestPoint(event, card) {
+  const points = visibleAggregateChartPoints(card)
+  if (!points.length || !event?.currentTarget) return
+  const rect = event.currentTarget.getBoundingClientRect()
+  if (!rect.width) return
+  const x = ((event.clientX - rect.left) / rect.width) * AGGREGATE_CHART_WIDTH
+  const nearest = points.reduce((best, point) => (!best || Math.abs(point.x - x) < Math.abs(best.x - x) ? point : best), null)
+  if (nearest) aggregateChartSelectedPoint.value = nearest
+}
+
+function summarizeEntriesByDate(entries, dateItems) {
   const entriesByDate = entries.reduce((map, entry) => {
     const date = entry.entryDate
     if (!map.has(date)) map.set(date, [])
@@ -2026,34 +2044,62 @@ function buildMonthlyCumulativeChartData(entries, range, overview) {
   }, new Map())
   let cumulativeIncome = 0
   let cumulativeExpense = 0
-  const dailyItems = listDateRange(range.from, range.to).map((date) => {
+  return dateItems.map((date) => {
     const dailyOverview = summarizeEntries(entriesByDate.get(date) || [])
     cumulativeIncome += Number(dailyOverview.income || 0)
     cumulativeExpense += Number(dailyOverview.expense || 0)
-    return { date, day: Number(date.slice(-2)), income: cumulativeIncome, expense: cumulativeExpense }
+    return { date, income: cumulativeIncome, expense: cumulativeExpense }
   })
-  const maxAmount = Math.max(1, ...dailyItems.map((item) => Math.max(item.income, item.expense)))
-  const incomePointItems = buildChartPointItems(dailyItems, 'income', maxAmount)
-  const expensePointItems = buildChartPointItems(dailyItems, 'expense', maxAmount)
+}
+
+function buildChartHeadline(showIncome, showExpense, incomeTotal, expenseTotal) {
+  if (showIncome && !showExpense) return { amount: incomeTotal, caption: `수입 누적 ${formatCurrency(incomeTotal)}` }
+  if (!showIncome && showExpense) return { amount: expenseTotal, caption: `지출 누적 ${formatCurrency(expenseTotal)}` }
+  return { amount: expenseTotal, caption: `수입 ${formatCurrency(incomeTotal)} · 지출 ${formatCurrency(expenseTotal)}` }
+}
+
+function buildMonthlyCumulativeChartData(entries, range, overview, options = {}) {
+  const period = options.period || 'MONTH'
+  const showIncome = options.showIncome !== false
+  const showExpense = options.showExpense !== false
+  const currentDates = listDateRange(range.from, range.to, period === 'YEAR' ? 370 : 120)
+  const currentItems = summarizeEntriesByDate(entries, currentDates)
+  const previousDates = options.previousRange ? listDateRange(options.previousRange.from, options.previousRange.to, period === 'YEAR' ? 370 : 120) : []
+  const previousItems = options.previousEntries ? summarizeEntriesByDate(options.previousEntries, previousDates) : []
+  const incomeTotal = currentItems.at(-1)?.income || 0
+  const expenseTotal = currentItems.at(-1)?.expense || 0
+  const maxAmount = Math.max(1, ...currentItems.map((item) => Math.max(item.income, item.expense)), ...previousItems.map((item) => Math.max(item.income, item.expense)))
+  const incomePointItems = buildChartPointItems(currentItems, 'income', maxAmount, '수입')
+  const expensePointItems = buildChartPointItems(currentItems, 'expense', maxAmount, '지출')
+  const previousIncomePointItems = buildChartPointItems(previousItems, 'income', maxAmount, '이전 수입', 'previous')
+  const previousExpensePointItems = buildChartPointItems(previousItems, 'expense', maxAmount, '이전 지출', 'previous')
+  const headline = buildChartHeadline(showIncome, showExpense, incomeTotal, expenseTotal)
   return {
     rangeLabel: `${range.from.slice(5).replace('-', '/')} ~ ${range.to.slice(5).replace('-', '/')}`,
+    previousRangeLabel: options.previousRange ? `${options.previousRange.from.slice(5).replace('-', '/')} ~ ${options.previousRange.to.slice(5).replace('-', '/')}` : '',
     hasEntries: Number(overview.entryCount || 0) > 0,
-    incomeTotal: cumulativeIncome,
-    expenseTotal: cumulativeExpense,
+    incomeTotal,
+    expenseTotal,
     maxAmount,
     incomePointItems,
     expensePointItems,
+    previousIncomePointItems,
+    previousExpensePointItems,
     incomePoints: buildChartPoints(incomePointItems),
     expensePoints: buildChartPoints(expensePointItems),
+    previousIncomePoints: buildChartPoints(previousIncomePointItems),
+    previousExpensePoints: buildChartPoints(previousExpensePointItems),
     incomeAreaPoints: buildChartAreaPoints(incomePointItems),
     expenseAreaPoints: buildChartAreaPoints(expensePointItems),
-    dateTicks: buildChartDateTicks(dailyItems),
+    dateTicks: buildChartDateTicks(currentItems, period),
     amountTicks: buildChartAmountTicks(maxAmount),
     maxAmountLabel: formatCompactNumber(maxAmount),
-    netTotal: cumulativeIncome - cumulativeExpense,
+    netTotal: incomeTotal - expenseTotal,
+    headlineAmount: headline.amount,
+    headlineCaption: headline.caption,
+    comparePreviousPeriod: Boolean(options.previousRange),
   }
 }
-
 function buildMonthlyGoalData(config, entries, overview) {
   const target = normalizeAggregateTargetAmount(config.monthlyExpenseTarget)
   const singleLimit = normalizeAggregateTargetAmount(config.singleExpenseLimit)
@@ -2089,11 +2135,21 @@ function buildAggregateCard(config, index) {
   const overview = summarizeEntries(filteredEntries)
 
   if (config.kind === 'MONTHLY_CUMULATIVE_CHART') {
-    const monthOverview = summarizeEntries(rangeEntries)
-    const chart = buildMonthlyCumulativeChartData(rangeEntries, range, monthOverview)
-    return { id: config.id || ('aggregate-' + (index + 1)), index, config, title: '월초부터 말일까지 누적 그래프', periodLabel: '이번 달', totalAmount: chart.expenseTotal, overview: monthOverview, chart, goal: null }
+    const chartOverview = summarizeEntries(rangeEntries)
+    const previousRange = config.comparePreviousPeriod ? shiftRange(props.anchorDate, config.period, props.anchorDate, props.anchorDate, 1) : null
+    const previousEntries = previousRange
+      ? props.entries.filter((entry) => entry.entryDate >= previousRange.from && entry.entryDate <= previousRange.to)
+      : []
+    const chart = buildMonthlyCumulativeChartData(rangeEntries, range, chartOverview, {
+      period: config.period,
+      showIncome: config.showIncomeCumulative,
+      showExpense: config.showExpenseCumulative,
+      previousRange,
+      previousEntries,
+    })
+    const chartPeriodLabel = aggregateWidgetPeriods.find((item) => item.value === config.period)?.label || '이번 달'
+    return { id: config.id || ('aggregate-' + (index + 1)), index, config, title: `${chartPeriodLabel} 누적 그래프`, periodLabel: chartPeriodLabel, totalAmount: chart.headlineAmount, overview: chartOverview, chart, goal: null }
   }
-
   if (config.kind === 'MONTHLY_GOAL') {
     const monthOverview = summarizeEntries(rangeEntries)
     const goal = buildMonthlyGoalData(config, rangeEntries, monthOverview)
@@ -3036,6 +3092,22 @@ defineExpose({
               </label>
             </div>
 
+
+            <div v-if="isAggregateEditMode && card.config.kind === 'MONTHLY_CUMULATIVE_CHART'" class="household-aggregate-chart-options">
+              <span class="household-aggregate-chart-options__title">그래프 표시</span>
+              <label>
+                <input type="checkbox" :checked="card.config.showIncomeCumulative" @change="updateAggregateWidget(card.index, 'showIncomeCumulative', $event.target.checked)">
+                수입 누적
+              </label>
+              <label>
+                <input type="checkbox" :checked="card.config.showExpenseCumulative" @change="updateAggregateWidget(card.index, 'showExpenseCumulative', $event.target.checked)">
+                지출 누적
+              </label>
+              <label>
+                <input type="checkbox" :checked="card.config.comparePreviousPeriod" @change="updateAggregateWidget(card.index, 'comparePreviousPeriod', $event.target.checked)">
+                지난 기간 비교
+              </label>
+            </div>
             <div class="household-aggregate-card__copy">
               <span class="household-aggregate-card__eyebrow">{{ card.title }}</span>
               <template v-if="card.config.kind === 'NONE'">
@@ -3043,8 +3115,8 @@ defineExpose({
                 <small>이 슬롯은 저장 후 화면에서 숨김 처리됩니다.</small>
               </template>
               <template v-else-if="card.chart">
-                <strong>{{ formatCurrency(card.chart.expenseTotal) }}</strong>
-                <small>{{ card.chart.rangeLabel }} 지출 누적 · 수입 {{ formatCurrency(card.chart.incomeTotal) }}</small>
+                <strong>{{ formatCurrency(card.chart.headlineAmount) }}</strong>
+                <small>{{ card.chart.rangeLabel }} · {{ card.chart.headlineCaption }}</small>
               </template>
               <template v-else-if="card.goal">
                 <strong>{{ formatCurrency(card.goal.expense) }}</strong>
@@ -3060,37 +3132,32 @@ defineExpose({
             <button
               v-if="card.chart"
               type="button"
-              class="household-aggregate-chart__detail-button"
+              class="household-aggregate-chart-preview-button"
+              :aria-label="`${card.title} 상세 보기`"
               @click="openAggregateChartDetail(card)"
             >
-              누적 그래프 자세히 보기
-            </button>
-            <div v-if="card.chart" class="household-aggregate-chart" :class="{ 'is-empty': !card.chart.hasEntries }">
-              <svg viewBox="0 0 320 116" preserveAspectRatio="xMidYMid meet" role="img" aria-label="월 누적 수입과 지출 그래프">
-                <g class="household-aggregate-chart__grid" aria-hidden="true">
-                  <line v-for="tick in card.chart.amountTicks" :key="`amount-${tick.key}`" x1="28" x2="310" :y1="tick.y" :y2="tick.y" />
-                </g>
-                <g class="household-aggregate-chart__axis-labels" aria-hidden="true">
-                  <text x="6" y="11">금액</text>
-                  <text x="286" y="113">시간</text>
-                  <text v-for="tick in card.chart.amountTicks" :key="`amount-label-${tick.key}`" x="6" :y="tick.labelY">{{ tick.label }}</text>
-                  <text v-for="tick in card.chart.dateTicks" :key="`date-label-${tick.key}`" :x="tick.x" y="113" text-anchor="middle">{{ tick.label }}</text>
-                </g>
-                <line x1="28" y1="12" x2="28" y2="94" class="household-aggregate-chart__axis household-aggregate-chart__axis--y" />
-                <line x1="28" y1="94" x2="310" y2="94" class="household-aggregate-chart__axis household-aggregate-chart__axis--x" />
-                <polygon v-if="card.chart.incomeAreaPoints" :points="card.chart.incomeAreaPoints" class="household-aggregate-chart__area household-aggregate-chart__area--income" />
-                <polygon v-if="card.chart.expenseAreaPoints" :points="card.chart.expenseAreaPoints" class="household-aggregate-chart__area household-aggregate-chart__area--expense" />
-                <polyline :points="card.chart.incomePoints" class="household-aggregate-chart__line household-aggregate-chart__line--income" />
-                <polyline :points="card.chart.expensePoints" class="household-aggregate-chart__line household-aggregate-chart__line--expense" />
-                <circle v-for="point in card.chart.incomePointItems" :key="`income-dot-${point.key}`" :cx="point.x" :cy="point.y" r="2.6" class="household-aggregate-chart__point household-aggregate-chart__point--income" />
-                <circle v-for="point in card.chart.expensePointItems" :key="`expense-dot-${point.key}`" :cx="point.x" :cy="point.y" r="2.6" class="household-aggregate-chart__point household-aggregate-chart__point--expense" />
-              </svg>
-              <div class="household-aggregate-chart__legend">
-                <span><i class="income"></i>수입 누적</span>
-                <span><i class="expense"></i>지출 누적</span>
+              <span class="household-aggregate-chart-preview-button__hint">그래프를 눌러 상세 보기</span>
+              <div class="household-aggregate-chart household-aggregate-chart--preview" :class="{ 'is-empty': !card.chart.hasEntries }">
+                <svg viewBox="0 0 320 116" preserveAspectRatio="xMidYMid meet" role="img" aria-label="누적 수입과 지출 미리보기 그래프">
+                  <g class="household-aggregate-chart__preview-grid" aria-hidden="true">
+                    <line x1="28" x2="310" y1="28" y2="28" />
+                    <line x1="28" x2="310" y1="62" y2="62" />
+                    <line x1="28" x2="310" y1="94" y2="94" />
+                  </g>
+                  <polygon v-if="card.config.showIncomeCumulative && card.chart.incomeAreaPoints" :points="card.chart.incomeAreaPoints" class="household-aggregate-chart__area household-aggregate-chart__area--income" />
+                  <polygon v-if="card.config.showExpenseCumulative && card.chart.expenseAreaPoints" :points="card.chart.expenseAreaPoints" class="household-aggregate-chart__area household-aggregate-chart__area--expense" />
+                  <polyline v-if="card.config.comparePreviousPeriod && card.config.showIncomeCumulative" :points="card.chart.previousIncomePoints" class="household-aggregate-chart__line household-aggregate-chart__line--income household-aggregate-chart__line--previous" />
+                  <polyline v-if="card.config.comparePreviousPeriod && card.config.showExpenseCumulative" :points="card.chart.previousExpensePoints" class="household-aggregate-chart__line household-aggregate-chart__line--expense household-aggregate-chart__line--previous" />
+                  <polyline v-if="card.config.showIncomeCumulative" :points="card.chart.incomePoints" class="household-aggregate-chart__line household-aggregate-chart__line--income" />
+                  <polyline v-if="card.config.showExpenseCumulative" :points="card.chart.expensePoints" class="household-aggregate-chart__line household-aggregate-chart__line--expense" />
+                </svg>
               </div>
-            </div>
-
+              <div class="household-aggregate-chart__legend household-aggregate-chart__legend--preview">
+                <span v-if="card.config.showIncomeCumulative"><i class="income"></i>수입 누적</span>
+                <span v-if="card.config.showExpenseCumulative"><i class="expense"></i>지출 누적</span>
+                <span v-if="card.config.comparePreviousPeriod"><i class="previous"></i>지난 기간</span>
+              </div>
+            </button>
             <div v-if="card.goal" class="household-aggregate-goal">
               <div class="household-aggregate-goal__bar" :aria-label="`월 목표 사용률 ${card.goal.progress}%`">
                 <span :style="{ width: `${card.goal.progressWidth}%` }"></span>
@@ -3126,20 +3193,22 @@ defineExpose({
         <section class="household-aggregate-chart-modal__panel">
           <header class="household-aggregate-chart-modal__header">
             <div>
-              <span class="household-aggregate-chart-modal__eyebrow">누적 그래프 자세히 보기</span>
+              <span class="household-aggregate-chart-modal__eyebrow">CUMULATIVE FLOW</span>
               <h3>{{ aggregateChartDetailCard.title }}</h3>
-              <p>{{ aggregateChartDetailCard.chart.rangeLabel }} · X축 시간 / Y축 금액</p>
+              <p>{{ aggregateChartDetailCard.chart.rangeLabel }} · X축 시간 / Y축 금액 · 마우스를 움직이면 기준 십자선이 표시됩니다.</p>
             </div>
             <button type="button" class="button button--secondary" @click="closeAggregateChartDetail">닫기</button>
           </header>
 
           <div class="household-aggregate-chart-modal__summary">
-            <span>수입 누적 <strong>{{ formatCurrency(aggregateChartDetailCard.chart.incomeTotal) }}</strong></span>
-            <span>지출 누적 <strong>{{ formatCurrency(aggregateChartDetailCard.chart.expenseTotal) }}</strong></span>
+            <span v-if="aggregateChartDetailCard.config.showIncomeCumulative" class="household-aggregate-chart-modal__metric household-aggregate-chart-modal__metric--income">수입 누적 <strong>{{ formatCurrency(aggregateChartDetailCard.chart.incomeTotal) }}</strong></span>
+            <span v-if="aggregateChartDetailCard.config.showExpenseCumulative" class="household-aggregate-chart-modal__metric household-aggregate-chart-modal__metric--expense">지출 누적 <strong>{{ formatCurrency(aggregateChartDetailCard.chart.expenseTotal) }}</strong></span>
+            <span class="household-aggregate-chart-modal__metric">최대 축 금액 <strong>{{ aggregateChartDetailCard.chart.maxAmountLabel }}</strong></span>
+            <span class="household-aggregate-chart-modal__metric">순흐름 <strong>{{ formatCurrency(aggregateChartDetailCard.chart.netTotal) }}</strong></span>
           </div>
 
           <div class="household-aggregate-chart-modal__canvas">
-            <svg viewBox="0 0 320 116" preserveAspectRatio="xMidYMid meet" role="img" aria-label="월 누적 수입과 지출 상세 그래프">
+            <svg viewBox="0 0 320 116" preserveAspectRatio="xMidYMid meet" role="img" aria-label="누적 수입과 지출 상세 그래프" @mousemove="selectAggregateChartNearestPoint($event, aggregateChartDetailCard)" @click="selectAggregateChartNearestPoint($event, aggregateChartDetailCard)">
               <g class="household-aggregate-chart__grid" aria-hidden="true">
                 <line v-for="tick in aggregateChartDetailCard.chart.amountTicks" :key="`detail-amount-${tick.key}`" x1="28" x2="310" :y1="tick.y" :y2="tick.y" />
               </g>
@@ -3150,62 +3219,32 @@ defineExpose({
                 <text v-for="tick in aggregateChartDetailCard.chart.dateTicks" :key="`detail-date-label-${tick.key}`" :x="tick.x" y="113" text-anchor="middle">{{ tick.label }}</text>
               </g>
               <line x1="28" y1="12" x2="28" y2="94" class="household-aggregate-chart__axis household-aggregate-chart__axis--y" />
-                <line x1="28" y1="94" x2="310" y2="94" class="household-aggregate-chart__axis household-aggregate-chart__axis--x" />
-              <polygon v-if="aggregateChartDetailCard.chart.incomeAreaPoints" :points="aggregateChartDetailCard.chart.incomeAreaPoints" class="household-aggregate-chart__area household-aggregate-chart__area--income" />
-              <polygon v-if="aggregateChartDetailCard.chart.expenseAreaPoints" :points="aggregateChartDetailCard.chart.expenseAreaPoints" class="household-aggregate-chart__area household-aggregate-chart__area--expense" />
-              <polyline :points="aggregateChartDetailCard.chart.incomePoints" class="household-aggregate-chart__line household-aggregate-chart__line--income" />
-              <polyline :points="aggregateChartDetailCard.chart.expensePoints" class="household-aggregate-chart__line household-aggregate-chart__line--expense" />
+              <line x1="28" y1="94" x2="310" y2="94" class="household-aggregate-chart__axis household-aggregate-chart__axis--x" />
+              <polyline v-if="aggregateChartDetailCard.config.comparePreviousPeriod && aggregateChartDetailCard.config.showIncomeCumulative" :points="aggregateChartDetailCard.chart.previousIncomePoints" class="household-aggregate-chart__line household-aggregate-chart__line--income household-aggregate-chart__line--previous" />
+              <polyline v-if="aggregateChartDetailCard.config.comparePreviousPeriod && aggregateChartDetailCard.config.showExpenseCumulative" :points="aggregateChartDetailCard.chart.previousExpensePoints" class="household-aggregate-chart__line household-aggregate-chart__line--expense household-aggregate-chart__line--previous" />
+              <polygon v-if="aggregateChartDetailCard.config.showIncomeCumulative && aggregateChartDetailCard.chart.incomeAreaPoints" :points="aggregateChartDetailCard.chart.incomeAreaPoints" class="household-aggregate-chart__area household-aggregate-chart__area--income" />
+              <polygon v-if="aggregateChartDetailCard.config.showExpenseCumulative && aggregateChartDetailCard.chart.expenseAreaPoints" :points="aggregateChartDetailCard.chart.expenseAreaPoints" class="household-aggregate-chart__area household-aggregate-chart__area--expense" />
+              <polyline v-if="aggregateChartDetailCard.config.showIncomeCumulative" :points="aggregateChartDetailCard.chart.incomePoints" class="household-aggregate-chart__line household-aggregate-chart__line--income" />
+              <polyline v-if="aggregateChartDetailCard.config.showExpenseCumulative" :points="aggregateChartDetailCard.chart.expensePoints" class="household-aggregate-chart__line household-aggregate-chart__line--expense" />
               <g v-if="aggregateChartSelectedPoint" class="household-aggregate-chart__crosshair" aria-hidden="true">
                 <line :x1="aggregateChartSelectedPoint.x" :x2="aggregateChartSelectedPoint.x" y1="12" y2="94" />
                 <line x1="28" x2="310" :y1="aggregateChartSelectedPoint.y" :y2="aggregateChartSelectedPoint.y" />
                 <circle :cx="aggregateChartSelectedPoint.x" :cy="aggregateChartSelectedPoint.y" r="7" />
-                <text :x="Math.min(aggregateChartSelectedPoint.x + 8, 258)" :y="Math.max(aggregateChartSelectedPoint.y - 8, 18)">
-                  {{ aggregateChartSelectedPoint.xLabel }} · {{ formatCompactNumber(aggregateChartSelectedPoint.amount) }}
-                </text>
+                <text :x="Math.min(aggregateChartSelectedPoint.x + 8, 250)" :y="Math.max(aggregateChartSelectedPoint.y - 8, 18)">{{ aggregateChartSelectedPoint.xLabel }} · {{ formatCompactNumber(aggregateChartSelectedPoint.amount) }}</text>
               </g>
-              <circle
-                v-for="point in aggregateChartDetailCard.chart.incomePointItems"
-                :key="`detail-income-${point.key}`"
-                :cx="point.x"
-                :cy="point.y"
-                r="4.8"
-                tabindex="0"
-                role="button"
-                class="household-aggregate-chart__point household-aggregate-chart__point--income household-aggregate-chart__point--interactive"
-                :class="{ 'is-selected': aggregateChartSelectedPoint?.key === point.key }"
-                @click.stop="selectAggregateChartPoint(point)"
-                @keydown.enter.prevent="selectAggregateChartPoint(point)"
-                @keydown.space.prevent="selectAggregateChartPoint(point)"
-              />
-              <circle
-                v-for="point in aggregateChartDetailCard.chart.expensePointItems"
-                :key="`detail-expense-${point.key}`"
-                :cx="point.x"
-                :cy="point.y"
-                r="4.8"
-                tabindex="0"
-                role="button"
-                class="household-aggregate-chart__point household-aggregate-chart__point--expense household-aggregate-chart__point--interactive"
-                :class="{ 'is-selected': aggregateChartSelectedPoint?.key === point.key }"
-                @click.stop="selectAggregateChartPoint(point)"
-                @keydown.enter.prevent="selectAggregateChartPoint(point)"
-                @keydown.space.prevent="selectAggregateChartPoint(point)"
-              />
             </svg>
           </div>
 
           <div class="household-aggregate-chart__legend household-aggregate-chart-modal__legend">
-            <span><i class="income"></i>수입 누적</span>
-            <span><i class="expense"></i>지출 누적</span>
+            <span v-if="aggregateChartDetailCard.config.showIncomeCumulative"><i class="income"></i>수입 누적</span>
+            <span v-if="aggregateChartDetailCard.config.showExpenseCumulative"><i class="expense"></i>지출 누적</span>
+            <span v-if="aggregateChartDetailCard.config.comparePreviousPeriod"><i class="previous"></i>지난 기간 비교 {{ aggregateChartDetailCard.chart.previousRangeLabel }}</span>
           </div>
 
           <aside v-if="aggregateChartSelectedPoint" class="household-aggregate-chart-modal__selected">
             <span>{{ aggregateChartSelectedPoint.date }} · {{ aggregateChartSelectedPoint.seriesLabel }}</span>
             <strong>{{ formatCurrency(aggregateChartSelectedPoint.amount) }}</strong>
-            <p>
-              해당 교차점은 {{ aggregateChartSelectedPoint.xLabel }} 시점의 누적 {{ aggregateChartSelectedPoint.seriesLabel }} 금액입니다.
-              하루 증가분은 {{ formatCurrency(aggregateChartSelectedPoint.dailyAmount) }}입니다.
-            </p>
+            <p>마우스가 가리키는 X축 시간과 Y축 금액의 교차점입니다. 해당 시점의 누적 {{ aggregateChartSelectedPoint.seriesLabel }} 금액은 {{ formatCurrency(aggregateChartSelectedPoint.amount) }}이고, 직전 날짜 대비 증가분은 {{ formatCurrency(aggregateChartSelectedPoint.dailyAmount) }}입니다.</p>
           </aside>
         </section>
       </div>

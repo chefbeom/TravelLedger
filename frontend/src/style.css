@@ -24629,3 +24629,147 @@ button.button--primary,
     max-width: 100% !important;
   }
 }
+/* Household aggregate cumulative chart final UX */
+.household-aggregate-chart-options {
+  border: 1px solid rgba(117, 224, 143, 0.22);
+  border-radius: 16px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  padding: 10px;
+}
+
+.household-aggregate-chart-options__title {
+  color: #75e08f;
+  flex: 1 0 100%;
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+
+.household-aggregate-chart-options label {
+  align-items: center;
+  color: var(--text-soft);
+  display: inline-flex;
+  font-size: 0.82rem;
+  font-weight: 800;
+  gap: 6px;
+}
+
+.household-aggregate-chart-preview-button {
+  align-self: center;
+  background: transparent;
+  border: 0;
+  color: inherit;
+  cursor: pointer;
+  display: grid;
+  gap: 8px;
+  margin: 4px 0 2px;
+  min-width: 0;
+  padding: 0;
+  text-align: left;
+  width: 100%;
+}
+
+.household-aggregate-chart-preview-button__hint {
+  border: 1px solid rgba(117, 224, 143, 0.36);
+  border-radius: 999px;
+  color: var(--text-soft);
+  display: inline-flex;
+  font-size: 0.76rem;
+  font-weight: 900;
+  justify-self: center;
+  padding: 5px 10px;
+}
+
+.household-aggregate-chart--preview {
+  align-self: center !important;
+  border: 1px solid rgba(117, 224, 143, 0.22) !important;
+  border-radius: 22px !important;
+  background: linear-gradient(180deg, rgba(117, 224, 143, 0.08), rgba(15, 23, 42, 0.35)) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  height: clamp(112px, 24cqw, 172px);
+  justify-content: center;
+  overflow: hidden;
+  padding: 12px !important;
+}
+
+.household-aggregate-chart--preview svg {
+  aspect-ratio: 16 / 5.6 !important;
+  height: 100% !important;
+  margin: auto;
+  max-height: 150px;
+  overflow: hidden !important;
+}
+
+.household-aggregate-chart--preview .household-aggregate-chart__line {
+  stroke-width: 2.5;
+}
+
+.household-aggregate-chart__preview-grid line {
+  stroke: rgba(148, 163, 184, 0.16);
+  stroke-dasharray: 3 5;
+  stroke-width: 0.8;
+}
+
+.household-aggregate-chart__line--previous {
+  opacity: 0.28;
+  stroke-dasharray: 5 5;
+  stroke-width: 2 !important;
+}
+
+.household-aggregate-chart__legend i.previous {
+  background: rgba(226, 232, 240, 0.45);
+}
+
+.household-aggregate-chart__legend--preview {
+  justify-content: center;
+}
+
+.household-aggregate-chart-modal {
+  padding: clamp(12px, 2vw, 30px) !important;
+}
+
+.household-aggregate-chart-modal__panel {
+  gap: 20px !important;
+  max-height: 94vh !important;
+  max-width: 1372px !important;
+  padding: clamp(20px, 2.4vw, 34px) !important;
+  width: min(98vw, 1372px) !important;
+}
+
+.household-aggregate-chart-modal__canvas {
+  min-height: clamp(420px, 58vh, 720px) !important;
+  padding: clamp(14px, 2vw, 26px) !important;
+}
+
+.household-aggregate-chart-modal__canvas svg {
+  aspect-ratio: 16 / 7 !important;
+  height: auto !important;
+  max-height: none !important;
+  width: 100%;
+}
+
+.household-aggregate-chart-modal__summary {
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)) !important;
+}
+
+.household-aggregate-chart-modal__legend {
+  background: rgba(15, 23, 42, 0.46);
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 16px;
+  padding: 12px 14px;
+}
+
+@media (max-width: 720px) {
+  .household-aggregate-chart--preview {
+    height: 132px;
+  }
+
+  .household-aggregate-chart-modal__canvas {
+    min-height: 340px !important;
+  }
+
+  .household-aggregate-chart-modal__canvas svg {
+    aspect-ratio: 4 / 3 !important;
+  }
+}

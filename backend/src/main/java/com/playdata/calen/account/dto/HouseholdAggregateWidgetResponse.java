@@ -6,6 +6,9 @@ public record HouseholdAggregateWidgetResponse(
         Long paymentMethodId,
         String amountType,
         Long monthlyExpenseTarget,
-        Long singleExpenseLimit
+        Long singleExpenseLimit,
+        Boolean showIncomeCumulative,
+        Boolean showExpenseCumulative,
+        Boolean comparePreviousPeriod
 ) {
 }

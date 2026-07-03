@@ -29,7 +29,7 @@ public class HouseholdAggregatePreferenceService {
 
     private static final int MAX_WIDGETS = 4;
     private static final Set<String> ALLOWED_KINDS = Set.of("NONE", "TOTAL", "PAYMENT_METHOD", "MONTHLY_CUMULATIVE_CHART", "MONTHLY_GOAL");
-    private static final Set<String> ALLOWED_PERIODS = Set.of("MONTH", "WEEK", "DAY");
+    private static final Set<String> ALLOWED_PERIODS = Set.of("YEAR", "QUARTER", "MONTH", "WEEK", "DAY");
     private static final Set<String> ALLOWED_AMOUNT_TYPES = Set.of("NET", "INCOME", "EXPENSE");
 
     private final AppUserRepository appUserRepository;
@@ -74,10 +74,10 @@ public class HouseholdAggregatePreferenceService {
 
     private StoredWidget toStoredWidget(HouseholdAggregateWidgetRequest widget) {
         if (widget == null) {
-            return new StoredWidget(null, null, null, null, null, null);
+            return new StoredWidget(null, null, null, null, null, null, null, null, null);
         }
 
-        return new StoredWidget(widget.kind(), widget.period(), widget.paymentMethodId(), widget.amountType(), widget.monthlyExpenseTarget(), widget.singleExpenseLimit());
+        return new StoredWidget(widget.kind(), widget.period(), widget.paymentMethodId(), widget.amountType(), widget.monthlyExpenseTarget(), widget.singleExpenseLimit(), widget.showIncomeCumulative(), widget.showExpenseCumulative(), widget.comparePreviousPeriod());
     }
 
     private List<StoredWidget> readWidgets(String rawJson) {
@@ -115,7 +115,10 @@ public class HouseholdAggregatePreferenceService {
                                 widget.paymentMethodId(),
                                 widget.amountType(),
                                 widget.monthlyExpenseTarget(),
-                                widget.singleExpenseLimit()
+                                widget.singleExpenseLimit(),
+                                widget.showIncomeCumulative(),
+                                widget.showExpenseCumulative(),
+                                widget.comparePreviousPeriod()
                         ))
                         .toList()
         );
@@ -143,6 +146,9 @@ public class HouseholdAggregatePreferenceService {
             Long paymentMethodId = null;
             Long monthlyExpenseTarget = normalizePositiveAmount(requestedWidget.monthlyExpenseTarget());
             Long singleExpenseLimit = normalizePositiveAmount(requestedWidget.singleExpenseLimit());
+            Boolean showIncomeCumulative = normalizeBoolean(requestedWidget.showIncomeCumulative(), baseWidget.showIncomeCumulative());
+            Boolean showExpenseCumulative = normalizeBoolean(requestedWidget.showExpenseCumulative(), baseWidget.showExpenseCumulative());
+            Boolean comparePreviousPeriod = normalizeBoolean(requestedWidget.comparePreviousPeriod(), baseWidget.comparePreviousPeriod());
 
             if ("PAYMENT_METHOD".equals(kind)) {
                 Long candidatePaymentMethodId = requestedWidget.paymentMethodId();
@@ -152,9 +158,13 @@ public class HouseholdAggregatePreferenceService {
             }
 
             if ("MONTHLY_CUMULATIVE_CHART".equals(kind)) {
-                period = "MONTH";
                 amountType = "NET";
                 paymentMethodId = null;
+                monthlyExpenseTarget = null;
+                singleExpenseLimit = null;
+                if (!Boolean.TRUE.equals(showIncomeCumulative) && !Boolean.TRUE.equals(showExpenseCumulative)) {
+                    showExpenseCumulative = true;
+                }
             }
 
             if ("MONTHLY_GOAL".equals(kind)) {
@@ -166,7 +176,13 @@ public class HouseholdAggregatePreferenceService {
                 singleExpenseLimit = null;
             }
 
-            normalizedWidgets.add(new StoredWidget(kind, period, paymentMethodId, amountType, monthlyExpenseTarget, singleExpenseLimit));
+            if (!"MONTHLY_CUMULATIVE_CHART".equals(kind)) {
+                showIncomeCumulative = null;
+                showExpenseCumulative = null;
+                comparePreviousPeriod = null;
+            }
+
+            normalizedWidgets.add(new StoredWidget(kind, period, paymentMethodId, amountType, monthlyExpenseTarget, singleExpenseLimit, showIncomeCumulative, showExpenseCumulative, comparePreviousPeriod));
         }
 
         return normalizedWidgets;
@@ -179,12 +195,16 @@ public class HouseholdAggregatePreferenceService {
         return value;
     }
 
+    private Boolean normalizeBoolean(Boolean value, Boolean fallback) {
+        return value != null ? value : Boolean.TRUE.equals(fallback);
+    }
+
     private List<StoredWidget> buildDefaultWidgets() {
         return List.of(
-                new StoredWidget("TOTAL", "MONTH", null, "NET", null, null),
-                new StoredWidget("NONE", "MONTH", null, "NET", null, null),
-                new StoredWidget("NONE", "WEEK", null, "NET", null, null),
-                new StoredWidget("NONE", "DAY", null, "NET", null, null)
+                new StoredWidget("TOTAL", "MONTH", null, "NET", null, null, null, null, null),
+                new StoredWidget("NONE", "MONTH", null, "NET", null, null, null, null, null),
+                new StoredWidget("NONE", "WEEK", null, "NET", null, null, null, null, null),
+                new StoredWidget("NONE", "DAY", null, "NET", null, null, null, null, null)
         );
     }
 
@@ -194,6 +214,10 @@ public class HouseholdAggregatePreferenceService {
             Long paymentMethodId,
             String amountType,
             Long monthlyExpenseTarget,
-            Long singleExpenseLimit
+            Long singleExpenseLimit,
+            Boolean showIncomeCumulative,
+            Boolean showExpenseCumulative,
+            Boolean comparePreviousPeriod
     ) {
-    }}
+    }
+}

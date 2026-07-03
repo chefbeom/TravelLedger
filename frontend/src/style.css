@@ -24797,3 +24797,112 @@ button.button--primary,
   min-width: 0;
   overflow: hidden;
 }
+/* Household aggregate cumulative chart placement normalization */
+.household-aggregate-card--chart {
+  align-content: stretch !important;
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) !important;
+  grid-template-rows: auto minmax(178px, 1fr) auto !important;
+  min-height: 348px !important;
+  overflow: hidden !important;
+}
+
+.household-aggregate-card--chart .household-aggregate-card__copy {
+  align-self: start !important;
+  min-height: 0 !important;
+}
+
+.household-aggregate-card--chart .household-aggregate-chart-preview-button {
+  align-self: stretch !important;
+  display: grid !important;
+  gap: 10px !important;
+  grid-template-rows: auto minmax(136px, 1fr) auto !important;
+  height: 100% !important;
+  margin: 0 !important;
+  min-height: 190px !important;
+  overflow: hidden !important;
+  width: 100% !important;
+}
+
+.household-aggregate-card--chart .household-aggregate-chart-preview-button__hint {
+  align-self: start !important;
+  justify-self: center !important;
+  max-width: 100% !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+
+.household-aggregate-card--chart .household-aggregate-chart--preview {
+  align-self: center !important;
+  display: grid !important;
+  height: 100% !important;
+  justify-self: stretch !important;
+  max-height: 220px !important;
+  min-height: 136px !important;
+  overflow: hidden !important;
+  padding: 10px !important;
+  place-items: center !important;
+  width: 100% !important;
+}
+
+.household-aggregate-card--chart .household-aggregate-chart--preview svg {
+  aspect-ratio: auto !important;
+  display: block !important;
+  height: 100% !important;
+  margin: 0 auto !important;
+  max-height: none !important;
+  min-height: 0 !important;
+  overflow: visible !important;
+  width: 100% !important;
+}
+
+.household-aggregate-card--chart .household-aggregate-chart__legend--preview {
+  align-self: end !important;
+  display: flex !important;
+  flex-wrap: wrap !important;
+  justify-content: center !important;
+  max-width: 100% !important;
+  overflow: visible !important;
+  row-gap: 6px !important;
+}
+
+.household-aggregate-card--chart .household-aggregate-card__meta {
+  align-self: end !important;
+  flex-wrap: wrap !important;
+  justify-content: flex-end !important;
+  overflow: visible !important;
+}
+
+.household-aggregate-chart-modal__canvas {
+  display: grid !important;
+  overflow: hidden !important;
+  place-items: center !important;
+}
+
+.household-aggregate-chart-modal__canvas svg {
+  height: min(58vh, 620px) !important;
+  min-height: 360px !important;
+  width: 100% !important;
+}
+
+@media (max-width: 720px) {
+  .household-aggregate-card--chart {
+    grid-template-rows: auto minmax(158px, 1fr) auto !important;
+    min-height: 320px !important;
+  }
+
+  .household-aggregate-card--chart .household-aggregate-chart-preview-button {
+    min-height: 170px !important;
+  }
+
+  .household-aggregate-card--chart .household-aggregate-chart--preview {
+    min-height: 124px !important;
+  }
+
+  .household-aggregate-chart-modal__canvas svg {
+    aspect-ratio: auto !important;
+    height: min(52vh, 460px) !important;
+    min-height: 300px !important;
+  }
+}

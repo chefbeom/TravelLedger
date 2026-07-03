@@ -3,11 +3,16 @@ package com.playdata.calen.ledger.ocr;
 import com.fasterxml.jackson.annotation.JsonAlias;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.JsonToken;
 import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.DeserializationContext;
+import com.fasterxml.jackson.databind.JsonDeserializer;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.playdata.calen.common.exception.BadRequestException;
 import com.playdata.calen.ledger.ai.LedgerAiAnalysisProperties;
@@ -19,10 +24,14 @@ import java.io.IOException;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
@@ -109,6 +118,9 @@ public class LedgerOcrRemoteClient {
                         Amounts must be positive KRW numbers with no currency symbol. Use EXPENSE unless the image clearly shows income/deposit.
                         Every entries item must be a transaction candidate for user review and must include entryType, title, amount, items, and warnings.
                         Do not put product-only rows directly in entries. For a receipt, put purchased products inside entries[0].items and use the final paid total as entries[0].amount.
+                        Extract visible transaction date and time aggressively. Important labels include 주문 날짜, 결제일자, 거래일시, 승인일시, TRANS DATE, order date, payment date, approval time, and transaction time.
+                        If a field contains both date and time such as 2026.06.22 02:38:34 or 2026-06-26 17:50:39, split it into date=YYYY-MM-DD and time=HH:mm. Drop seconds. If only a date is visible and no time is visible, use time null.
+                        For simple NAVER FINANCIAL purchase receipts, use 주문 날짜 as the transaction date/time and 합계 as the amount. For card receipts, use 결제일자 as the transaction date/time and 합계/승인금액 as the amount. For sales slips, use 거래일시/TRANS DATE and 합계/TOTAL.
                         Use null or empty strings for unknown fields. Dates must use YYYY-MM-DD and times HH:mm.
                         Output JSON schema:
                         {
@@ -455,6 +467,70 @@ public class LedgerOcrRemoteClient {
     private boolean hasText(String value) {
         return value != null && !value.isBlank();
     }
+    static class FlexibleLocalDateDeserializer extends JsonDeserializer<LocalDate> {
+        private static final Pattern DATE_PATTERN = Pattern.compile("(?<!\\d)(20\\d{2})\\s*(?:[-./]|년)\\s*(\\d{1,2})\\s*(?:[-./]|월)\\s*(\\d{1,2})");
+        private static final DateTimeFormatter ISO_DATE = DateTimeFormatter.ISO_LOCAL_DATE;
+
+        @Override
+        public LocalDate deserialize(JsonParser parser, DeserializationContext context) throws IOException {
+            if (parser.currentToken() == JsonToken.VALUE_NULL) {
+                return null;
+            }
+            String value = parser.getValueAsString();
+            if (!hasTextStatic(value) || "null".equalsIgnoreCase(value.trim())) {
+                return null;
+            }
+            String normalized = value.trim();
+            try {
+                return LocalDate.parse(normalized, ISO_DATE);
+            } catch (DateTimeParseException ignored) {
+                Matcher matcher = DATE_PATTERN.matcher(normalized);
+                if (matcher.find()) {
+                    int year = Integer.parseInt(matcher.group(1));
+                    int month = Integer.parseInt(matcher.group(2));
+                    int day = Integer.parseInt(matcher.group(3));
+                    return LocalDate.of(year, month, day);
+                }
+                return null;
+            }
+        }
+    }
+
+    static class FlexibleLocalTimeDeserializer extends JsonDeserializer<LocalTime> {
+        private static final Pattern TIME_PATTERN = Pattern.compile("(?<!\\d)([01]?\\d|2[0-3])\\s*(?::|시)\\s*([0-5]\\d)(?:\\s*(?::|분)\\s*([0-5]\\d))?");
+        private static final DateTimeFormatter SHORT_TIME = DateTimeFormatter.ofPattern("H:mm");
+        private static final DateTimeFormatter LONG_TIME = DateTimeFormatter.ofPattern("H:mm:ss");
+
+        @Override
+        public LocalTime deserialize(JsonParser parser, DeserializationContext context) throws IOException {
+            if (parser.currentToken() == JsonToken.VALUE_NULL) {
+                return null;
+            }
+            String value = parser.getValueAsString();
+            if (!hasTextStatic(value) || "null".equalsIgnoreCase(value.trim())) {
+                return null;
+            }
+            String normalized = value.trim();
+            for (DateTimeFormatter formatter : List.of(SHORT_TIME, LONG_TIME)) {
+                try {
+                    return LocalTime.parse(normalized, formatter).withSecond(0).withNano(0);
+                } catch (DateTimeParseException ignored) {
+                    // continue with text extraction below
+                }
+            }
+            Matcher matcher = TIME_PATTERN.matcher(normalized);
+            if (matcher.find()) {
+                int hour = Integer.parseInt(matcher.group(1));
+                int minute = Integer.parseInt(matcher.group(2));
+                return LocalTime.of(hour, minute);
+            }
+            return null;
+        }
+    }
+
+    private static boolean hasTextStatic(String value) {
+        return value != null && !value.isBlank();
+    }
 
     @JsonIgnoreProperties(ignoreUnknown = true)
     public record RemoteAnalyzeResponse(
@@ -473,10 +549,12 @@ public class LedgerOcrRemoteClient {
 
     @JsonIgnoreProperties(ignoreUnknown = true)
     public record RemoteParsedResult(
-            @JsonAlias("date")
+            @JsonAlias({"date", "entryDate", "transactionDate", "paymentDate", "orderDate", "purchaseDate", "approvalDate", "transactionDateTime", "paymentDateTime", "orderDateTime"})
+            @JsonDeserialize(using = FlexibleLocalDateDeserializer.class)
             LocalDate entryDate,
-            @JsonAlias("time")
+            @JsonAlias({"time", "entryTime", "transactionTime", "paymentTime", "orderTime", "purchaseTime", "approvalTime", "timeText", "transactionDateTime", "paymentDateTime", "orderDateTime"})
             @JsonFormat(pattern = "HH:mm")
+            @JsonDeserialize(using = FlexibleLocalTimeDeserializer.class)
             LocalTime entryTime,
             @JsonAlias({"type", "entryType"})
             EntryType entryType,

@@ -25341,3 +25341,314 @@ button.button--primary,
 .household-aggregate-panel--editing .household-aggregate-grid > .household-aggregate-card[data-aggregate-height='3'] {
   min-height: 594px !important;
 }
+/* Household aggregate edit form fit fix */
+.household-calendar-layout-item--aggregate:has(.household-aggregate-panel--editing),
+.household-calendar-layout-item--aggregate:has(.household-aggregate-panel--editing) > .grid-stack-item-content,
+.household-calendar-layout-item--aggregate:has(.household-aggregate-panel--editing) .household-calendar-layout-card,
+.household-calendar-layout-item--aggregate:has(.household-aggregate-panel--editing) .household-calendar-layout-static-content {
+  overflow: visible !important;
+  z-index: 30 !important;
+}
+
+.household-quickstats-panel.household-aggregate-panel--editing {
+  height: auto !important;
+  max-height: none !important;
+  min-height: 0 !important;
+  overflow: visible !important;
+}
+
+.household-aggregate-panel--editing .household-aggregate-grid {
+  align-content: start !important;
+  align-items: stretch !important;
+  display: grid !important;
+  gap: 16px !important;
+  grid-auto-flow: row !important;
+  grid-auto-rows: auto !important;
+  grid-template-columns: minmax(0, 1fr) !important;
+  height: auto !important;
+  max-height: none !important;
+  min-height: 0 !important;
+  overflow: visible !important;
+  padding-right: 0 !important;
+}
+
+.household-aggregate-panel--editing .household-aggregate-grid > .household-aggregate-card {
+  align-content: start !important;
+  align-items: stretch !important;
+  display: grid !important;
+  gap: 14px !important;
+  grid-column: 1 / -1 !important;
+  grid-row: auto !important;
+  grid-template-columns: minmax(0, 1fr) !important;
+  height: auto !important;
+  max-height: none !important;
+  min-height: 0 !important;
+  order: var(--aggregate-card-order, 0) !important;
+  overflow: visible !important;
+  padding: clamp(14px, 1.4cqw, 20px) !important;
+}
+
+.household-aggregate-panel--editing .household-aggregate-card__copy,
+.household-aggregate-panel--editing .household-aggregate-card__meta,
+.household-aggregate-panel--editing .household-aggregate-goal,
+.household-aggregate-panel--editing .household-aggregate-chart-preview-button,
+.household-aggregate-panel--editing .household-aggregate-chart--preview,
+.household-aggregate-panel--editing .household-aggregate-chart__legend--preview {
+  display: none !important;
+}
+
+.household-aggregate-panel--editing .household-aggregate-card__controls {
+  align-items: end !important;
+  display: grid !important;
+  gap: 12px !important;
+  grid-template-columns: repeat(5, minmax(120px, 1fr)) !important;
+  min-width: 0 !important;
+  width: 100% !important;
+}
+
+.household-aggregate-panel--editing .household-aggregate-layout-controls {
+  align-items: end !important;
+  display: grid !important;
+  gap: 10px !important;
+  grid-column: 1 / -1 !important;
+  grid-template-columns: minmax(150px, 1.4fr) repeat(2, minmax(96px, 0.8fr)) repeat(2, minmax(58px, auto)) !important;
+  min-width: 0 !important;
+  width: 100% !important;
+}
+
+.household-aggregate-panel--editing .household-aggregate-goal-fields,
+.household-aggregate-panel--editing .household-aggregate-chart-options {
+  align-items: end !important;
+  display: grid !important;
+  gap: 12px !important;
+  grid-template-columns: repeat(3, minmax(150px, 1fr)) !important;
+  min-width: 0 !important;
+  width: 100% !important;
+}
+
+.household-aggregate-panel--editing .household-aggregate-chart-options__title {
+  align-self: center !important;
+  min-width: 0 !important;
+}
+
+.household-aggregate-panel--editing .household-aggregate-chart-options label {
+  align-items: center !important;
+  display: inline-flex !important;
+  gap: 8px !important;
+  min-width: 0 !important;
+  white-space: nowrap !important;
+}
+
+.household-aggregate-panel--editing .household-aggregate-card > .household-aggregate-card__field {
+  width: 100% !important;
+}
+
+.household-aggregate-panel--editing .household-aggregate-card__field,
+.household-aggregate-panel--editing .household-aggregate-card__field label,
+.household-aggregate-panel--editing .household-aggregate-layout-controls__axis {
+  min-width: 0 !important;
+}
+
+.household-aggregate-panel--editing .household-aggregate-card__field select,
+.household-aggregate-panel--editing .household-aggregate-card__field input,
+.household-aggregate-panel--editing .household-aggregate-layout-controls select {
+  box-sizing: border-box !important;
+  min-height: 48px !important;
+  min-width: 0 !important;
+  width: 100% !important;
+}
+
+.household-aggregate-panel--editing .household-aggregate-layout-controls .button {
+  min-height: 48px !important;
+  min-width: 0 !important;
+  padding-inline: 12px !important;
+  width: 100% !important;
+}
+
+@media (max-width: 1180px) {
+  .household-aggregate-panel--editing .household-aggregate-card__controls {
+    grid-template-columns: repeat(3, minmax(140px, 1fr)) !important;
+  }
+
+  .household-aggregate-panel--editing .household-aggregate-layout-controls,
+  .household-aggregate-panel--editing .household-aggregate-goal-fields,
+  .household-aggregate-panel--editing .household-aggregate-chart-options {
+    grid-template-columns: repeat(2, minmax(140px, 1fr)) !important;
+  }
+}
+
+@media (max-width: 720px) {
+  .household-aggregate-panel--editing .household-aggregate-card__controls,
+  .household-aggregate-panel--editing .household-aggregate-layout-controls,
+  .household-aggregate-panel--editing .household-aggregate-goal-fields,
+  .household-aggregate-panel--editing .household-aggregate-chart-options {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+}
+/* Household aggregate fixed 4x3 grid contract */
+.household-calendar-layout-static-content .household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-grid,
+.household-calendar-layout-item--aggregate .household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-grid,
+.household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-grid {
+  align-content: stretch !important;
+  align-items: stretch !important;
+  display: grid !important;
+  grid-auto-flow: row !important;
+  grid-auto-rows: minmax(0, 1fr) !important;
+  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  grid-template-rows: repeat(3, minmax(0, 1fr)) !important;
+  height: 100% !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+}
+
+.household-calendar-layout-static-content .household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-grid > .household-aggregate-card,
+.household-calendar-layout-item--aggregate .household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-grid > .household-aggregate-card,
+.household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-grid > .household-aggregate-card {
+  grid-column: var(--aggregate-card-grid-column, auto) !important;
+  grid-row: var(--aggregate-card-grid-row, auto) !important;
+  height: 100% !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+  width: 100% !important;
+}
+
+.household-aggregate-panel--editing .household-aggregate-grid {
+  align-content: start !important;
+  display: grid !important;
+  gap: 18px !important;
+  grid-auto-flow: row !important;
+  grid-auto-rows: auto !important;
+  grid-template-columns: minmax(0, 1fr) !important;
+  height: auto !important;
+  max-height: none !important;
+  overflow: visible !important;
+}
+
+.household-aggregate-panel--editing .household-aggregate-grid > .household-aggregate-card {
+  align-content: start !important;
+  grid-column: 1 / -1 !important;
+  grid-row: auto !important;
+  height: auto !important;
+  min-height: 0 !important;
+  order: var(--aggregate-card-order, 0) !important;
+  overflow: visible !important;
+}
+
+.household-aggregate-panel--editing .household-aggregate-card__controls {
+  align-items: end !important;
+  display: grid !important;
+  gap: 12px !important;
+  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+}
+
+.household-aggregate-panel--editing .household-aggregate-card__controls .household-field {
+  min-width: 0 !important;
+}
+
+.household-aggregate-panel--editing .household-aggregate-layout-controls {
+  align-items: end !important;
+  display: grid !important;
+  gap: 10px !important;
+  grid-column: 1 / -1 !important;
+  grid-template-columns: minmax(160px, 1fr) repeat(2, minmax(104px, 0.7fr)) auto auto !important;
+  min-width: 0 !important;
+}
+
+.household-aggregate-panel--editing .household-aggregate-layout-controls .household-field,
+.household-aggregate-panel--editing .household-aggregate-layout-controls .household-secondary-button {
+  min-width: 0 !important;
+}
+
+.household-aggregate-panel--editing .household-aggregate-card--chart .household-aggregate-chart-options,
+.household-aggregate-panel--editing .household-aggregate-card--goal .household-aggregate-goal-editor,
+.household-aggregate-panel--editing .household-aggregate-card__payment-editor {
+  grid-column: 1 / -1 !important;
+  min-width: 0 !important;
+}
+
+@media (max-width: 980px) {
+  .household-aggregate-panel--editing .household-aggregate-card__controls,
+  .household-aggregate-panel--editing .household-aggregate-layout-controls {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+
+@media (max-width: 640px) {
+  .household-aggregate-panel--editing .household-aggregate-card__controls,
+  .household-aggregate-panel--editing .household-aggregate-layout-controls {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+}
+/* receipt OCR review modal enlargement and field fit */
+.receipt-ocr-modal {
+  padding: clamp(12px, 1.8vw, 20px) !important;
+}
+
+.receipt-ocr-modal__dialog {
+  width: min(1456px, calc(100vw - 32px)) !important;
+  max-height: min(1118px, calc(100vh - 32px)) !important;
+  grid-template-rows: auto auto auto minmax(0, 1fr) !important;
+}
+
+.receipt-ocr-safety,
+.receipt-ocr-modal__header > div > span,
+.receipt-ocr-history__header > div > span {
+  display: none !important;
+}
+
+.receipt-ocr-review-card__body {
+  grid-template-columns: minmax(220px, 320px) minmax(0, 1fr) !important;
+}
+
+.receipt-ocr-review-card__columns {
+  grid-template-columns: minmax(280px, 0.82fr) minmax(480px, 1.18fr) !important;
+}
+
+.receipt-ocr-review-entry__grid {
+  grid-template-columns: minmax(120px, 0.72fr) minmax(190px, 1.08fr) minmax(150px, 0.86fr) minmax(210px, 1.18fr) !important;
+  align-items: end !important;
+}
+
+.receipt-ocr-review-entry__field--date,
+.receipt-ocr-review-entry__field--time,
+.receipt-ocr-review-entry__field--amount {
+  min-width: 0 !important;
+}
+
+.receipt-ocr-review-entry input,
+.receipt-ocr-review-entry select,
+.receipt-ocr-review-entry textarea {
+  box-sizing: border-box !important;
+  padding-inline: 13px !important;
+  font-size: 0.95rem !important;
+}
+
+.receipt-ocr-review-entry input[type='date'],
+.receipt-ocr-review-entry input[type='text'],
+.receipt-ocr-review-entry input[type='number'] {
+  min-height: 48px !important;
+  font-variant-numeric: tabular-nums !important;
+}
+
+@media (max-width: 1180px) {
+  .receipt-ocr-review-card__columns {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .receipt-ocr-review-entry__grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+
+@media (max-width: 900px) {
+  .receipt-ocr-modal__dialog {
+    width: calc(100vw - 20px) !important;
+    max-height: calc(100vh - 20px) !important;
+  }
+}
+
+@media (max-width: 560px) {
+  .receipt-ocr-review-entry__grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+}

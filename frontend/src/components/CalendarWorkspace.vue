@@ -1616,11 +1616,18 @@ function toggleLayoutEditMode() {
     return
   }
 
-  const isFinishingEdit = isLayoutEditMode.value
-  isLayoutEditMode.value = !isLayoutEditMode.value
-  if (isFinishingEdit) {
-    saveCalendarPanelLayoutRemoteNow()
+  if (isLayoutEditMode.value) {
+    const snapshot = readLayoutGridSnapshot()
+    if (snapshot.length) {
+      applyCalendarPanelLayout(snapshot, { immediate: true })
+    } else {
+      saveCalendarPanelLayoutRemoteNow(clone(calendarPanelLayout.value))
+    }
+    isLayoutEditMode.value = false
+    return
   }
+
+  isLayoutEditMode.value = true
 }
 
 function toggleReceiptOcrPanelEnabled() {

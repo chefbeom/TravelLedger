@@ -78,8 +78,8 @@ import {
   shiftRange,
 } from '../lib/analytics'
 import PaletteContainer from '../features/palette/components/PaletteContainer.vue'
+import CalendarWorkspace from './CalendarWorkspace.vue'
 
-const CalendarWorkspace = defineAsyncComponent(() => import('./CalendarWorkspace.vue'))
 const HouseholdTravelLedgerWorkspace = defineAsyncComponent(() => import('./HouseholdTravelLedgerWorkspace.vue'))
 const LedgerImportWorkspace = defineAsyncComponent(() => import('./LedgerImportWorkspace.vue'))
 const ManagementWorkspace = defineAsyncComponent(() => import('./ManagementWorkspace.vue'))

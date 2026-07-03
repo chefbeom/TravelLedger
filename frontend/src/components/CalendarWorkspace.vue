@@ -83,7 +83,7 @@ const aggregateWidgetAmountTypes = [
   { value: 'INCOME', label: '수입' },
   { value: 'EXPENSE', label: '지출' },
 ]
-const aggregateGridColumnCount = 4
+const aggregateGridColumnCount = 8
 const aggregateGridRowCount = 3
 const aggregateDefaultWidgetWidth = 1
 const aggregateDefaultWidgetHeight = 2
@@ -91,17 +91,17 @@ const aggregateDefaultWidgetHeight = 2
 const aggregateWidgetSizeOptions = [
   { value: '1x1', label: '1 x 1', width: 1, height: 1 },
   { value: '2x1', label: '2 x 1', width: 2, height: 1 },
-  { value: '3x1', label: '3 x 1', width: 3, height: 1 },
   { value: '4x1', label: '4 x 1', width: 4, height: 1 },
+  { value: '8x1', label: '8 x 1', width: 8, height: 1 },
   { value: '1x2', label: '1 x 2', width: 1, height: 2 },
   { value: '2x2', label: '2 x 2', width: 2, height: 2 },
-  { value: '3x2', label: '3 x 2', width: 3, height: 2 },
   { value: '4x2', label: '4 x 2', width: 4, height: 2 },
+  { value: '8x2', label: '8 x 2', width: 8, height: 2 },
   { value: '1x3', label: '1 x 3', width: 1, height: 3 },
   { value: '2x3', label: '2 x 3', width: 2, height: 3 },
-  { value: '3x3', label: '3 x 3', width: 3, height: 3 },
   { value: '4x3', label: '4 x 3', width: 4, height: 3 },
-]
+  { value: '8x3', label: '8 x 3', width: 8, height: 3 },
+];
 const calendarPanelDefinitions = [
   {
     id: 'calendar',

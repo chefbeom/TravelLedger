@@ -332,6 +332,7 @@ const receiptCameraInputRef = ref(null)
 const selectedReceiptDocumentType = ref('AUTO')
 const aggregateWidgetDraftConfigs = ref(createDefaultAggregateConfigs())
 const aggregateDragState = ref(null)
+const aggregateGridRef = ref(null)
 const aggregateGridDropCells = computed(() => Array.from({ length: aggregateGridColumnCount * aggregateGridRowCount }, (_, index) => ({
   key: `aggregate-drop-${index + 1}`,
   column: (index % aggregateGridColumnCount) + 1,
@@ -1880,6 +1881,70 @@ function getAggregateDropCellStyle(cell) {
   }
 }
 
+function getAggregateCardPlacement(index) {
+  const config = aggregateWidgetDraftConfigs.value[index]
+  if (!config) return null
+  const width = normalizeAggregateGridSpan(config.layoutW, aggregateDefaultWidgetWidth, aggregateGridColumnCount)
+  const height = normalizeAggregateGridSpan(config.layoutH, aggregateDefaultWidgetHeight, aggregateGridRowCount)
+  return {
+    width,
+    height,
+    column: normalizeAggregateGridPosition(config.layoutX, 1, getAggregateMaxColumnForWidth(width)),
+    row: normalizeAggregateGridPosition(config.layoutY, 1, getAggregateMaxRowForHeight(height)),
+  }
+}
+
+function getAggregatePointerCell(event) {
+  const gridElement = aggregateGridRef.value
+  if (!gridElement || !event) return null
+  const rect = gridElement.getBoundingClientRect()
+  if (!rect.width || !rect.height) return null
+  const styles = window.getComputedStyle(gridElement)
+  const paddingLeft = parseFloat(styles.paddingLeft) || 0
+  const paddingRight = parseFloat(styles.paddingRight) || 0
+  const paddingTop = parseFloat(styles.paddingTop) || 0
+  const paddingBottom = parseFloat(styles.paddingBottom) || 0
+  const columnGap = parseFloat(styles.columnGap) || 0
+  const rowGap = parseFloat(styles.rowGap) || 0
+  const contentWidth = Math.max(1, rect.width - paddingLeft - paddingRight)
+  const contentHeight = Math.max(1, rect.height - paddingTop - paddingBottom)
+  const cellWidth = Math.max(1, (contentWidth - columnGap * (aggregateGridColumnCount - 1)) / aggregateGridColumnCount)
+  const cellHeight = Math.max(1, (contentHeight - rowGap * (aggregateGridRowCount - 1)) / aggregateGridRowCount)
+  const x = event.clientX - rect.left - paddingLeft
+  const y = event.clientY - rect.top - paddingTop
+  const column = Math.min(aggregateGridColumnCount, Math.max(1, Math.floor(x / (cellWidth + columnGap)) + 1))
+  const row = Math.min(aggregateGridRowCount, Math.max(1, Math.floor(y / (cellHeight + rowGap)) + 1))
+  return { column, row }
+}
+
+function getAggregatePlacementPreview() {
+  const state = aggregateDragState.value
+  if (!state) return null
+  const placement = getAggregateCardPlacement(state.index)
+  if (!placement) return null
+  const column = normalizeAggregateGridPosition(state.previewColumn ?? placement.column, placement.column, getAggregateMaxColumnForWidth(placement.width))
+  const row = normalizeAggregateGridPosition(state.previewRow ?? placement.row, placement.row, getAggregateMaxRowForHeight(placement.height))
+  return { ...placement, column, row }
+}
+
+function getAggregatePlacementPreviewStyle() {
+  const preview = getAggregatePlacementPreview()
+  if (!preview) return {}
+  return {
+    gridColumn: `${preview.column} / span ${preview.width}`,
+    gridRow: `${preview.row} / span ${preview.height}`,
+  }
+}
+
+function isAggregateDropCellPreview(cell) {
+  const preview = getAggregatePlacementPreview()
+  if (!preview) return false
+  return cell.column >= preview.column
+    && cell.column < preview.column + preview.width
+    && cell.row >= preview.row
+    && cell.row < preview.row + preview.height
+}
+
 function readAggregateDragIndex(event) {
   const rawIndex = event?.dataTransfer?.getData('text/plain') || aggregateDragState.value?.index
   const index = Number(rawIndex)
@@ -1890,7 +1955,18 @@ function startAggregateDrag(index, event) {
   if (!isAggregateEditMode.value) return
   const sourceIndex = Number(index)
   if (!Number.isInteger(sourceIndex)) return
-  aggregateDragState.value = { index: sourceIndex }
+  const placement = getAggregateCardPlacement(sourceIndex)
+  if (!placement) return
+  aggregateDragState.value = {
+    index: sourceIndex,
+    pointerId: event?.pointerId,
+    previewColumn: placement.column,
+    previewRow: placement.row,
+  }
+  if (event?.type === 'pointerdown') {
+    event.preventDefault?.()
+    event.currentTarget?.setPointerCapture?.(event.pointerId)
+  }
   if (event?.dataTransfer) {
     event.dataTransfer.effectAllowed = 'move'
     event.dataTransfer.dropEffect = 'move'
@@ -1898,16 +1974,93 @@ function startAggregateDrag(index, event) {
   }
 }
 
+function handleAggregatePointerMove(event) {
+  const state = aggregateDragState.value
+  if (!isAggregateEditMode.value || !state) return
+  if (state.pointerId !== undefined && event?.pointerId !== undefined && state.pointerId !== event.pointerId) return
+  const cell = getAggregatePointerCell(event)
+  const placement = getAggregateCardPlacement(state.index)
+  if (!cell || !placement) return
+  aggregateDragState.value = {
+    ...state,
+    previewColumn: normalizeAggregateGridPosition(cell.column, placement.column, getAggregateMaxColumnForWidth(placement.width)),
+    previewRow: normalizeAggregateGridPosition(cell.row, placement.row, getAggregateMaxRowForHeight(placement.height)),
+  }
+}
+
 function handleAggregateDragOver(event) {
   if (!isAggregateEditMode.value || !aggregateDragState.value) return
   event.preventDefault()
+  const cell = getAggregatePointerCell(event)
+  if (cell) {
+    const state = aggregateDragState.value
+    const placement = getAggregateCardPlacement(state.index)
+    if (placement) {
+      aggregateDragState.value = {
+        ...state,
+        previewColumn: normalizeAggregateGridPosition(cell.column, placement.column, getAggregateMaxColumnForWidth(placement.width)),
+        previewRow: normalizeAggregateGridPosition(cell.row, placement.row, getAggregateMaxRowForHeight(placement.height)),
+      }
+    }
+  }
   if (event?.dataTransfer) {
     event.dataTransfer.dropEffect = 'move'
   }
 }
 
-function finishAggregateDrag() {
+function moveAggregateWidgetToCell(sourceIndex, column, row) {
+  const configs = aggregateWidgetDraftConfigs.value
+  const sourceConfig = configs[sourceIndex]
+  if (!sourceConfig) return
+  const width = normalizeAggregateGridSpan(sourceConfig.layoutW, aggregateDefaultWidgetWidth, aggregateGridColumnCount)
+  const height = normalizeAggregateGridSpan(sourceConfig.layoutH, aggregateDefaultWidgetHeight, aggregateGridRowCount)
+  const targetColumn = normalizeAggregateGridPosition(column, sourceConfig.layoutX || 1, getAggregateMaxColumnForWidth(width))
+  const targetRow = normalizeAggregateGridPosition(row, sourceConfig.layoutY || 1, getAggregateMaxRowForHeight(height))
+  const sourceColumn = normalizeAggregateGridPosition(sourceConfig.layoutX, 1, getAggregateMaxColumnForWidth(width))
+  const sourceRow = normalizeAggregateGridPosition(sourceConfig.layoutY, 1, getAggregateMaxRowForHeight(height))
+  const targetIndex = configs.findIndex((config, configIndex) => configIndex !== sourceIndex && aggregateConfigCoversCell(config, targetColumn, targetRow))
+
+  aggregateWidgetDraftConfigs.value = normalizeAggregateConfigs(configs.map((config, configIndex) => {
+    if (configIndex === sourceIndex) {
+      return { ...config, layoutX: targetColumn, layoutY: targetRow }
+    }
+    if (configIndex === targetIndex) {
+      return { ...config, layoutX: sourceColumn, layoutY: sourceRow }
+    }
+    return config
+  }))
+}
+
+function finishAggregateDrag(commit = false, event = null) {
+  const state = aggregateDragState.value
+  if (commit && state) {
+    const preview = getAggregatePlacementPreview()
+    if (preview) {
+      moveAggregateWidgetToCell(state.index, preview.column, preview.row)
+    }
+  }
+  if (state?.pointerId !== undefined && event?.currentTarget?.releasePointerCapture) {
+    try {
+      if (!event.currentTarget.hasPointerCapture || event.currentTarget.hasPointerCapture(state.pointerId)) {
+        event.currentTarget.releasePointerCapture(state.pointerId)
+      }
+    } catch (_) {
+      // Pointer capture can already be released by the browser.
+    }
+  }
   aggregateDragState.value = null
+}
+
+function finishAggregatePointerMove(event) {
+  const state = aggregateDragState.value
+  if (!state || state.pointerId === undefined) return
+  if (event?.pointerId !== undefined && state.pointerId !== event.pointerId) return
+  event?.preventDefault?.()
+  finishAggregateDrag(true, event)
+}
+
+function cancelAggregatePointerMove(event = null) {
+  finishAggregateDrag(false, event)
 }
 
 function aggregateConfigCoversCell(config, column, row) {
@@ -1922,31 +2075,10 @@ function dropAggregateWidgetAtCell(column, row, event) {
   if (!isAggregateEditMode.value) return
   event?.preventDefault?.()
   const sourceIndex = readAggregateDragIndex(event)
-  if (sourceIndex < 0) {
-    finishAggregateDrag()
-    return
+  if (sourceIndex >= 0) {
+    moveAggregateWidgetToCell(sourceIndex, column, row)
   }
-
-  const configs = aggregateWidgetDraftConfigs.value
-  const sourceConfig = configs[sourceIndex]
-  const width = normalizeAggregateGridSpan(sourceConfig.layoutW, aggregateDefaultWidgetWidth, aggregateGridColumnCount)
-  const height = normalizeAggregateGridSpan(sourceConfig.layoutH, aggregateDefaultWidgetHeight, aggregateGridRowCount)
-  const targetColumn = normalizeAggregateGridPosition(column, sourceConfig.layoutX || 1, getAggregateMaxColumnForWidth(width))
-  const targetRow = normalizeAggregateGridPosition(row, sourceConfig.layoutY || 1, getAggregateMaxRowForHeight(height))
-  const sourceColumn = normalizeAggregateGridPosition(sourceConfig.layoutX, 1, getAggregateMaxColumnForWidth(width))
-  const sourceRow = normalizeAggregateGridPosition(sourceConfig.layoutY, 1, getAggregateMaxRowForHeight(height))
-  const targetIndex = configs.findIndex((config, index) => index !== sourceIndex && aggregateConfigCoversCell(config, targetColumn, targetRow))
-
-  aggregateWidgetDraftConfigs.value = normalizeAggregateConfigs(configs.map((config, index) => {
-    if (index === sourceIndex) {
-      return { ...config, layoutX: targetColumn, layoutY: targetRow }
-    }
-    if (index === targetIndex) {
-      return { ...config, layoutX: sourceColumn, layoutY: sourceRow }
-    }
-    return config
-  }))
-  finishAggregateDrag()
+  finishAggregateDrag(false, event)
 }
 
 function dropAggregateWidgetOnCard(targetIndex, event) {
@@ -3446,17 +3578,29 @@ defineExpose({
           <strong>집계 설정을 불러오는 중입니다.</strong>
           <span>저장된 카드 구성을 불러온 뒤 현재 달력 데이터로 집계를 보여줍니다.</span>
         </div>
-        <div v-else-if="aggregateCards.length" class="household-aggregate-grid">
+        <div
+          v-else-if="aggregateCards.length"
+          ref="aggregateGridRef"
+          class="household-aggregate-grid"
+          @pointermove="handleAggregatePointerMove"
+          @pointerup="finishAggregatePointerMove"
+          @pointercancel="cancelAggregatePointerMove"
+        >
           <div
             v-if="isAggregateEditMode"
             v-for="cell in aggregateGridDropCells"
             :key="cell.key"
             class="household-aggregate-grid__drop-cell"
-            :class="{ 'is-drag-active': aggregateDragState }"
+            :class="{ 'is-drag-active': aggregateDragState, 'is-preview-target': isAggregateDropCellPreview(cell) }"
             :style="getAggregateDropCellStyle(cell)"
             @dragover="handleAggregateDragOver"
             @drop="dropAggregateWidgetAtCell(cell.column, cell.row, $event)"
           ></div>
+          <div
+            v-if="aggregateDragState"
+            class="household-aggregate-grid__preview"
+            :style="getAggregatePlacementPreviewStyle()"
+          ><span>&#51060;&#46041; &#50948;&#52824;</span></div>
           <article
             v-for="card in aggregateCards"
             :key="card.id"
@@ -3480,9 +3624,11 @@ defineExpose({
               v-if="isAggregateEditMode"
               type="button"
               class="household-aggregate-card__drag-handle"
-              draggable="true"
-              @dragstart="startAggregateDrag(card.index, $event)"
-              @dragend="finishAggregateDrag"
+              draggable="false"
+              @pointerdown="startAggregateDrag(card.index, $event)"
+              @pointerup="finishAggregatePointerMove"
+              @pointercancel="cancelAggregatePointerMove"
+              @click.prevent
             >&#50948;&#52824; &#51060;&#46041;</button>
             <div v-if="isAggregateEditMode" class="household-aggregate-card__controls">
               <label class="field household-aggregate-card__field">

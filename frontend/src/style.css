@@ -25951,3 +25951,59 @@ button.button--primary,
   max-height: calc(100% - 42px);
   overflow: auto;
 }
+/* Household aggregate pointer placement preview */
+.household-aggregate-panel--editing .household-aggregate-grid {
+  position: relative;
+  touch-action: none;
+  user-select: none;
+}
+
+.household-aggregate-panel--editing .household-aggregate-grid__drop-cell.is-preview-target {
+  border-color: rgba(134, 239, 172, 0.9);
+  background: rgba(34, 197, 94, 0.1);
+}
+
+.household-aggregate-panel--editing .household-aggregate-grid__preview {
+  align-self: stretch;
+  justify-self: stretch;
+  display: grid;
+  place-items: center;
+  min-width: 0;
+  min-height: 0;
+  border: 2px solid rgba(134, 239, 172, 0.95);
+  border-radius: 18px;
+  background: linear-gradient(135deg, rgba(34, 197, 94, 0.22), rgba(37, 99, 235, 0.14));
+  box-shadow: 0 0 0 1px rgba(134, 239, 172, 0.28), 0 18px 42px rgba(16, 185, 129, 0.16);
+  color: #dcfce7;
+  font-weight: 900;
+  pointer-events: none;
+  z-index: 30;
+}
+
+.household-aggregate-panel--editing .household-aggregate-grid__preview span {
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.72);
+  border: 1px solid rgba(134, 239, 172, 0.45);
+}
+
+.household-aggregate-panel--editing .household-aggregate-card {
+  position: relative;
+  z-index: 10;
+}
+
+.household-aggregate-panel--editing .household-aggregate-card.is-dragging {
+  opacity: 0.48;
+  outline: 2px dashed rgba(134, 239, 172, 0.85);
+  outline-offset: -3px;
+}
+
+.household-aggregate-card__drag-handle {
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+.household-aggregate-card__drag-handle:active {
+  cursor: grabbing;
+}

@@ -579,6 +579,37 @@ function rememberAiControlPreset(source = state.aiControlForm) {
   persistAiControlPresets()
 }
 
+
+function toggleAiServerStatusPanel() {
+  state.aiServerStatusOpen = !state.aiServerStatusOpen
+}
+
+async function handleCheckAiServerStatus() {
+  state.aiServerStatusOpen = true
+  await loadOpsControl()
+}
+
+function toggleAiServerEditor() {
+  state.aiServerEditorOpen = !state.aiServerEditorOpen
+}
+
+function openAiServerEditor() {
+  state.aiServerEditorOpen = true
+}
+
+function formatAiServerStatusLabel() {
+  if (!state.opsControl?.aiServer) {
+    return '상태 미확인'
+  }
+  return state.opsControl.aiServer.reachable ? '정상 연결' : '확인 필요'
+}
+
+function formatAiServerModelList(models) {
+  if (!Array.isArray(models) || !models.length) {
+    return '조회된 모델 없음'
+  }
+  return models.join(', ')
+}
 function applyAiControlPreset() {
   const preset = state.aiControlPresets.find((item) => item.key === state.aiControlPresetKey)
   if (!preset) {
@@ -589,6 +620,7 @@ function applyAiControlPreset() {
   state.aiControlForm.lmStudioBaseUrl = preset.lmStudioBaseUrl || ''
   state.aiControlForm.lmStudioChatPath = preset.lmStudioChatPath || '/v1/chat/completions'
   state.aiControlForm.lmStudioModelsPath = preset.lmStudioModelsPath || '/v1/models'
+  state.aiServerEditorOpen = true
 }
 
 function formatAiControlPreset(preset) {

@@ -1951,33 +1951,50 @@ function readAggregateDragIndex(event) {
   return Number.isInteger(index) && index >= 0 && index < aggregateWidgetDraftConfigs.value.length ? index : -1
 }
 
+function addAggregatePointerListeners() {
+  if (typeof window === 'undefined') return
+  window.addEventListener('pointermove', handleAggregatePointerMove, { passive: false })
+  window.addEventListener('pointerup', finishAggregatePointerMove, { passive: false })
+  window.addEventListener('pointercancel', cancelAggregatePointerMove, { passive: false })
+}
+
+function removeAggregatePointerListeners() {
+  if (typeof window === 'undefined') return
+  window.removeEventListener('pointermove', handleAggregatePointerMove)
+  window.removeEventListener('pointerup', finishAggregatePointerMove)
+  window.removeEventListener('pointercancel', cancelAggregatePointerMove)
+}
+
 function startAggregateDrag(index, event) {
   if (!isAggregateEditMode.value) return
   const sourceIndex = Number(index)
   if (!Number.isInteger(sourceIndex)) return
   const placement = getAggregateCardPlacement(sourceIndex)
   if (!placement) return
+  removeAggregatePointerListeners()
   aggregateDragState.value = {
     index: sourceIndex,
     pointerId: event?.pointerId,
     previewColumn: placement.column,
     previewRow: placement.row,
   }
-  if (event?.type === 'pointerdown') {
-    event.preventDefault?.()
-    event.currentTarget?.setPointerCapture?.(event.pointerId)
+  event?.preventDefault?.()
+  event?.stopPropagation?.()
+  if (event?.currentTarget?.setPointerCapture && event?.pointerId !== undefined) {
+    try {
+      event.currentTarget.setPointerCapture(event.pointerId)
+    } catch (_) {
+      // Some browsers refuse capture when the pointer is already released.
+    }
   }
-  if (event?.dataTransfer) {
-    event.dataTransfer.effectAllowed = 'move'
-    event.dataTransfer.dropEffect = 'move'
-    event.dataTransfer.setData('text/plain', String(sourceIndex))
-  }
+  addAggregatePointerListeners()
 }
 
 function handleAggregatePointerMove(event) {
   const state = aggregateDragState.value
   if (!isAggregateEditMode.value || !state) return
   if (state.pointerId !== undefined && event?.pointerId !== undefined && state.pointerId !== event.pointerId) return
+  event?.preventDefault?.()
   const cell = getAggregatePointerCell(event)
   const placement = getAggregateCardPlacement(state.index)
   if (!cell || !placement) return
@@ -1991,18 +2008,7 @@ function handleAggregatePointerMove(event) {
 function handleAggregateDragOver(event) {
   if (!isAggregateEditMode.value || !aggregateDragState.value) return
   event.preventDefault()
-  const cell = getAggregatePointerCell(event)
-  if (cell) {
-    const state = aggregateDragState.value
-    const placement = getAggregateCardPlacement(state.index)
-    if (placement) {
-      aggregateDragState.value = {
-        ...state,
-        previewColumn: normalizeAggregateGridPosition(cell.column, placement.column, getAggregateMaxColumnForWidth(placement.width)),
-        previewRow: normalizeAggregateGridPosition(cell.row, placement.row, getAggregateMaxRowForHeight(placement.height)),
-      }
-    }
-  }
+  handleAggregatePointerMove(event)
   if (event?.dataTransfer) {
     event.dataTransfer.dropEffect = 'move'
   }
@@ -2048,6 +2054,7 @@ function finishAggregateDrag(commit = false, event = null) {
       // Pointer capture can already be released by the browser.
     }
   }
+  removeAggregatePointerListeners()
   aggregateDragState.value = null
 }
 
@@ -2055,6 +2062,7 @@ function finishAggregatePointerMove(event) {
   const state = aggregateDragState.value
   if (!state || state.pointerId === undefined) return
   if (event?.pointerId !== undefined && state.pointerId !== event.pointerId) return
+  handleAggregatePointerMove(event)
   event?.preventDefault?.()
   finishAggregateDrag(true, event)
 }
@@ -3583,8 +3591,6 @@ defineExpose({
           ref="aggregateGridRef"
           class="household-aggregate-grid"
           @pointermove="handleAggregatePointerMove"
-          @pointerup="finishAggregatePointerMove"
-          @pointercancel="cancelAggregatePointerMove"
         >
           <div
             v-if="isAggregateEditMode"
@@ -3624,10 +3630,8 @@ defineExpose({
               v-if="isAggregateEditMode"
               type="button"
               class="household-aggregate-card__drag-handle"
-              draggable="false"
+              draggable="false"`r`n              title="드래그해서 위치 이동"
               @pointerdown="startAggregateDrag(card.index, $event)"
-              @pointerup="finishAggregatePointerMove"
-              @pointercancel="cancelAggregatePointerMove"
               @click.prevent
             >&#50948;&#52824; &#51060;&#46041;</button>
             <div v-if="isAggregateEditMode" class="household-aggregate-card__controls">

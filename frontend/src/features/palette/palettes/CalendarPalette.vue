@@ -12,7 +12,7 @@ const props = defineProps({
   },
 })
 
-const weekdayLabels = ['월', '화', '수', '목', '금', '토', '일']
+const weekdayLabels = ['일', '월', '화', '수', '목', '금', '토']
 const flatDays = computed(() => {
   const days = (props.data.weeks ?? []).flat().slice(0, 42)
   if (days.length >= 42) {
@@ -82,7 +82,7 @@ function expenseCompact(day) {
         ]"
       >
         <span class="calendar-palette__number">{{ day.dayNumber }}</span>
-        <span v-if="expenseCompact(day)" class="calendar-palette__expense">`n          {{ expenseCompact(day) }}`n        </span>
+        <span v-if="expenseCompact(day)" class="calendar-palette__expense">{{ expenseCompact(day) }}</span>
         <span class="calendar-palette__marker"></span>
       </div>
     </div>

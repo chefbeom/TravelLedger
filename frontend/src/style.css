@@ -25852,3 +25852,30 @@ button.button--primary,
   min-height: 0 !important;
   min-width: 0 !important;
 }
+/* Household aggregate square-cell grid ratio override */
+.household-calendar-layout-static-content .household-aggregate-panel:not(.household-aggregate-panel--editing),
+.household-calendar-layout-item--aggregate .household-aggregate-panel:not(.household-aggregate-panel--editing),
+.household-aggregate-panel:not(.household-aggregate-panel--editing) {
+  align-content: start !important;
+  align-items: start !important;
+}
+
+.household-calendar-layout-static-content .household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-grid,
+.household-calendar-layout-item--aggregate .household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-grid,
+.household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-grid {
+  aspect-ratio: 8 / 3 !important;
+  grid-template-columns: repeat(8, minmax(0, 1fr)) !important;
+  grid-template-rows: repeat(3, minmax(0, 1fr)) !important;
+  height: auto !important;
+  max-height: none !important;
+  min-height: 0 !important;
+  width: 100% !important;
+}
+
+.household-calendar-layout-static-content .household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-grid > .household-aggregate-card,
+.household-calendar-layout-item--aggregate .household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-grid > .household-aggregate-card,
+.household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-grid > .household-aggregate-card {
+  height: 100% !important;
+  min-height: 0 !important;
+  min-width: 0 !important;
+}

@@ -331,6 +331,12 @@ const receiptFileInputRef = ref(null)
 const receiptCameraInputRef = ref(null)
 const selectedReceiptDocumentType = ref('AUTO')
 const aggregateWidgetDraftConfigs = ref(createDefaultAggregateConfigs())
+const aggregateDragState = ref(null)
+const aggregateGridDropCells = computed(() => Array.from({ length: aggregateGridColumnCount * aggregateGridRowCount }, (_, index) => ({
+  key: `aggregate-drop-${index + 1}`,
+  column: (index % aggregateGridColumnCount) + 1,
+  row: Math.floor(index / aggregateGridColumnCount) + 1,
+})))
 const calendarShellWidth = ref(0)
 const layoutCellHeight = ref(112)
 const calendarPanelLayout = ref(createDefaultCalendarPanelLayout())
@@ -1867,6 +1873,88 @@ function getAggregateCardGridStyle(card) {
     order,
   }
 }
+function getAggregateDropCellStyle(cell) {
+  return {
+    gridColumn: `${cell.column} / span 1`,
+    gridRow: `${cell.row} / span 1`,
+  }
+}
+
+function readAggregateDragIndex(event) {
+  const rawIndex = event?.dataTransfer?.getData('text/plain') || aggregateDragState.value?.index
+  const index = Number(rawIndex)
+  return Number.isInteger(index) && index >= 0 && index < aggregateWidgetDraftConfigs.value.length ? index : -1
+}
+
+function startAggregateDrag(index, event) {
+  if (!isAggregateEditMode.value) return
+  const sourceIndex = Number(index)
+  if (!Number.isInteger(sourceIndex)) return
+  aggregateDragState.value = { index: sourceIndex }
+  if (event?.dataTransfer) {
+    event.dataTransfer.effectAllowed = 'move'
+    event.dataTransfer.dropEffect = 'move'
+    event.dataTransfer.setData('text/plain', String(sourceIndex))
+  }
+}
+
+function handleAggregateDragOver(event) {
+  if (!isAggregateEditMode.value || !aggregateDragState.value) return
+  event.preventDefault()
+  if (event?.dataTransfer) {
+    event.dataTransfer.dropEffect = 'move'
+  }
+}
+
+function finishAggregateDrag() {
+  aggregateDragState.value = null
+}
+
+function aggregateConfigCoversCell(config, column, row) {
+  const width = normalizeAggregateGridSpan(config.layoutW, aggregateDefaultWidgetWidth, aggregateGridColumnCount)
+  const height = normalizeAggregateGridSpan(config.layoutH, aggregateDefaultWidgetHeight, aggregateGridRowCount)
+  const originColumn = normalizeAggregateGridPosition(config.layoutX, 1, getAggregateMaxColumnForWidth(width))
+  const originRow = normalizeAggregateGridPosition(config.layoutY, 1, getAggregateMaxRowForHeight(height))
+  return column >= originColumn && column < originColumn + width && row >= originRow && row < originRow + height
+}
+
+function dropAggregateWidgetAtCell(column, row, event) {
+  if (!isAggregateEditMode.value) return
+  event?.preventDefault?.()
+  const sourceIndex = readAggregateDragIndex(event)
+  if (sourceIndex < 0) {
+    finishAggregateDrag()
+    return
+  }
+
+  const configs = aggregateWidgetDraftConfigs.value
+  const sourceConfig = configs[sourceIndex]
+  const width = normalizeAggregateGridSpan(sourceConfig.layoutW, aggregateDefaultWidgetWidth, aggregateGridColumnCount)
+  const height = normalizeAggregateGridSpan(sourceConfig.layoutH, aggregateDefaultWidgetHeight, aggregateGridRowCount)
+  const targetColumn = normalizeAggregateGridPosition(column, sourceConfig.layoutX || 1, getAggregateMaxColumnForWidth(width))
+  const targetRow = normalizeAggregateGridPosition(row, sourceConfig.layoutY || 1, getAggregateMaxRowForHeight(height))
+  const sourceColumn = normalizeAggregateGridPosition(sourceConfig.layoutX, 1, getAggregateMaxColumnForWidth(width))
+  const sourceRow = normalizeAggregateGridPosition(sourceConfig.layoutY, 1, getAggregateMaxRowForHeight(height))
+  const targetIndex = configs.findIndex((config, index) => index !== sourceIndex && aggregateConfigCoversCell(config, targetColumn, targetRow))
+
+  aggregateWidgetDraftConfigs.value = normalizeAggregateConfigs(configs.map((config, index) => {
+    if (index === sourceIndex) {
+      return { ...config, layoutX: targetColumn, layoutY: targetRow }
+    }
+    if (index === targetIndex) {
+      return { ...config, layoutX: sourceColumn, layoutY: sourceRow }
+    }
+    return config
+  }))
+  finishAggregateDrag()
+}
+
+function dropAggregateWidgetOnCard(targetIndex, event) {
+  if (!isAggregateEditMode.value) return
+  const targetConfig = aggregateWidgetDraftConfigs.value[targetIndex]
+  if (!targetConfig) return
+  dropAggregateWidgetAtCell(Number(targetConfig.layoutX) || 1, Number(targetConfig.layoutY) || 1, event)
+}
 function isAggregatePeriodEditable(kind) {
   return kind !== 'MONTHLY_GOAL'
 }
@@ -3359,6 +3447,16 @@ defineExpose({
           <span>저장된 카드 구성을 불러온 뒤 현재 달력 데이터로 집계를 보여줍니다.</span>
         </div>
         <div v-else-if="aggregateCards.length" class="household-aggregate-grid">
+          <div
+            v-if="isAggregateEditMode"
+            v-for="cell in aggregateGridDropCells"
+            :key="cell.key"
+            class="household-aggregate-grid__drop-cell"
+            :class="{ 'is-drag-active': aggregateDragState }"
+            :style="getAggregateDropCellStyle(cell)"
+            @dragover="handleAggregateDragOver"
+            @drop="dropAggregateWidgetAtCell(cell.column, cell.row, $event)"
+          ></div>
           <article
             v-for="card in aggregateCards"
             :key="card.id"
@@ -3366,6 +3464,7 @@ defineExpose({
             :class="{
               'household-aggregate-card--chart': card.config.kind === 'MONTHLY_CUMULATIVE_CHART',
               'household-aggregate-card--goal': card.config.kind === 'MONTHLY_GOAL',
+              'is-dragging': aggregateDragState?.index === card.index,
             }"
             :style="getAggregateCardGridStyle(card)"
             :data-aggregate-size="getAggregateWidgetSizeValue(card.config)"
@@ -3373,7 +3472,18 @@ defineExpose({
             :data-aggregate-y="card.config.layoutY"
             :data-aggregate-width="card.config.layoutW"
             :data-aggregate-height="card.config.layoutH"
+            :data-aggregate-index="card.index"
+            @dragover="handleAggregateDragOver"
+            @drop="dropAggregateWidgetOnCard(card.index, $event)"
           >
+            <button
+              v-if="isAggregateEditMode"
+              type="button"
+              class="household-aggregate-card__drag-handle"
+              draggable="true"
+              @dragstart="startAggregateDrag(card.index, $event)"
+              @dragend="finishAggregateDrag"
+            >&#50948;&#52824; &#51060;&#46041;</button>
             <div v-if="isAggregateEditMode" class="household-aggregate-card__controls">
               <label class="field household-aggregate-card__field">
                 <span class="field__label">집계</span>

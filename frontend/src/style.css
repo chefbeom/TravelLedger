@@ -25879,3 +25879,75 @@ button.button--primary,
   min-height: 0 !important;
   min-width: 0 !important;
 }
+/* Household aggregate drag placement editor */
+.household-aggregate-panel--editing .household-aggregate-grid {
+  aspect-ratio: 8 / 3 !important;
+  display: grid !important;
+  gap: 10px !important;
+  grid-template-columns: repeat(8, minmax(0, 1fr)) !important;
+  grid-template-rows: repeat(3, minmax(0, 1fr)) !important;
+  height: auto !important;
+  max-height: none !important;
+  min-height: 0 !important;
+  overflow: visible !important;
+  position: relative !important;
+}
+
+.household-aggregate-panel--editing .household-aggregate-grid__drop-cell {
+  border: 1px dashed rgba(125, 211, 252, 0.18);
+  border-radius: 16px;
+  min-height: 0;
+  pointer-events: auto;
+  position: relative;
+  z-index: 0;
+}
+
+.household-aggregate-panel--editing .household-aggregate-grid__drop-cell.is-drag-active {
+  background: rgba(34, 197, 94, 0.08);
+  border-color: rgba(134, 239, 172, 0.36);
+}
+
+.household-aggregate-panel--editing .household-aggregate-grid > .household-aggregate-card {
+  grid-column: var(--aggregate-card-grid-column, auto) !important;
+  grid-row: var(--aggregate-card-grid-row, auto) !important;
+  height: 100% !important;
+  min-height: 0 !important;
+  min-width: 0 !important;
+  overflow: auto !important;
+  padding: 10px !important;
+  position: relative !important;
+  z-index: 2;
+}
+
+.household-aggregate-panel--editing .household-aggregate-card.is-dragging {
+  opacity: 0.58;
+  outline: 2px solid rgba(134, 239, 172, 0.72);
+  transform: scale(0.985);
+}
+
+.household-aggregate-card__drag-handle {
+  align-items: center;
+  background: linear-gradient(135deg, rgba(22, 163, 74, 0.95), rgba(37, 99, 235, 0.9));
+  border: 1px solid rgba(187, 247, 208, 0.38);
+  border-radius: 999px;
+  color: #fff;
+  cursor: grab;
+  display: inline-flex;
+  font-size: 0.78rem;
+  font-weight: 900;
+  justify-content: center;
+  margin: 0 0 8px;
+  max-width: 100%;
+  padding: 0.45rem 0.7rem;
+  user-select: none;
+}
+
+.household-aggregate-card__drag-handle:active {
+  cursor: grabbing;
+}
+
+.household-aggregate-panel--editing .household-aggregate-card__controls {
+  grid-template-columns: minmax(0, 1fr) !important;
+  max-height: calc(100% - 42px);
+  overflow: auto;
+}

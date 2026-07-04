@@ -1894,6 +1894,13 @@ function getAggregateCardPlacement(index) {
   }
 }
 
+function getAggregateEventPoint(event) {
+  const source = event?.touches?.[0] || event?.changedTouches?.[0] || event
+  const clientX = Number(source?.clientX)
+  const clientY = Number(source?.clientY)
+  return Number.isFinite(clientX) && Number.isFinite(clientY) ? { clientX, clientY } : null
+}
+
 function getAggregatePointerCell(event) {
   const gridElement = aggregateGridRef.value
   if (!gridElement || !event) return null
@@ -1956,6 +1963,11 @@ function addAggregatePointerListeners() {
   window.addEventListener('pointermove', handleAggregatePointerMove, { passive: false })
   window.addEventListener('pointerup', finishAggregatePointerMove, { passive: false })
   window.addEventListener('pointercancel', cancelAggregatePointerMove, { passive: false })
+  window.addEventListener('mousemove', handleAggregatePointerMove, { passive: false })
+  window.addEventListener('mouseup', finishAggregatePointerMove, { passive: false })
+  window.addEventListener('touchmove', handleAggregatePointerMove, { passive: false })
+  window.addEventListener('touchend', finishAggregatePointerMove, { passive: false })
+  window.addEventListener('touchcancel', cancelAggregatePointerMove, { passive: false })
 }
 
 function removeAggregatePointerListeners() {
@@ -1963,6 +1975,11 @@ function removeAggregatePointerListeners() {
   window.removeEventListener('pointermove', handleAggregatePointerMove)
   window.removeEventListener('pointerup', finishAggregatePointerMove)
   window.removeEventListener('pointercancel', cancelAggregatePointerMove)
+  window.removeEventListener('mousemove', handleAggregatePointerMove)
+  window.removeEventListener('mouseup', finishAggregatePointerMove)
+  window.removeEventListener('touchmove', handleAggregatePointerMove)
+  window.removeEventListener('touchend', finishAggregatePointerMove)
+  window.removeEventListener('touchcancel', cancelAggregatePointerMove)
 }
 
 function startAggregateDrag(index, event) {
@@ -3630,8 +3647,10 @@ defineExpose({
               v-if="isAggregateEditMode"
               type="button"
               class="household-aggregate-card__drag-handle"
-              draggable="false"`r`n              title="드래그해서 위치 이동"
-              @pointerdown="startAggregateDrag(card.index, $event)"
+              draggable="false"
+              @mousedown="startAggregateDrag(card.index, $event)"
+              @touchstart="startAggregateDrag(card.index, $event)"
+              @dragstart.prevent
               @click.prevent
             >&#50948;&#52824; &#51060;&#46041;</button>
             <div v-if="isAggregateEditMode" class="household-aggregate-card__controls">

@@ -2039,21 +2039,40 @@ function moveAggregateWidgetToCell(sourceIndex, column, row) {
   const height = normalizeAggregateGridSpan(sourceConfig.layoutH, aggregateDefaultWidgetHeight, aggregateGridRowCount)
   const targetColumn = normalizeAggregateGridPosition(column, sourceConfig.layoutX || 1, getAggregateMaxColumnForWidth(width))
   const targetRow = normalizeAggregateGridPosition(row, sourceConfig.layoutY || 1, getAggregateMaxRowForHeight(height))
-  const sourceColumn = normalizeAggregateGridPosition(sourceConfig.layoutX, 1, getAggregateMaxColumnForWidth(width))
-  const sourceRow = normalizeAggregateGridPosition(sourceConfig.layoutY, 1, getAggregateMaxRowForHeight(height))
-  const targetIndex = configs.findIndex((config, configIndex) => configIndex !== sourceIndex && aggregateConfigCoversCell(config, targetColumn, targetRow))
+  const occupied = new Set()
+  const nextConfigs = configs.map((config) => ({ ...config }))
 
-  aggregateWidgetDraftConfigs.value = normalizeAggregateConfigs(configs.map((config, configIndex) => {
-    if (configIndex === sourceIndex) {
-      return { ...config, layoutX: targetColumn, layoutY: targetRow }
+  nextConfigs[sourceIndex] = {
+    ...sourceConfig,
+    layoutX: targetColumn,
+    layoutY: targetRow,
+    layoutW: width,
+    layoutH: height,
+  }
+  reserveAggregateGridSpace(occupied, targetColumn, targetRow, width, height)
+
+  nextConfigs.forEach((config, configIndex) => {
+    if (configIndex === sourceIndex) return
+    const itemWidth = normalizeAggregateGridSpan(config.layoutW, aggregateDefaultWidgetWidth, aggregateGridColumnCount)
+    const itemHeight = normalizeAggregateGridSpan(config.layoutH, aggregateDefaultWidgetHeight, aggregateGridRowCount)
+    const preferredColumn = normalizeAggregateGridPosition(config.layoutX, 1, getAggregateMaxColumnForWidth(itemWidth))
+    const preferredRow = normalizeAggregateGridPosition(config.layoutY, 1, getAggregateMaxRowForHeight(itemHeight))
+    const slot = findAggregateGridSlot(occupied, preferredColumn, preferredRow, itemWidth, itemHeight)
+    nextConfigs[configIndex] = {
+      ...config,
+      layoutX: slot.column,
+      layoutY: slot.row,
+      layoutW: itemWidth,
+      layoutH: itemHeight,
     }
-    if (configIndex === targetIndex) {
-      return { ...config, layoutX: sourceColumn, layoutY: sourceRow }
-    }
-    return config
+    reserveAggregateGridSpace(occupied, slot.column, slot.row, itemWidth, itemHeight)
+  })
+
+  aggregateWidgetDraftConfigs.value = nextConfigs.map((config, index) => ({
+    ...config,
+    layoutOrder: normalizeAggregateLayoutOrder(config.layoutOrder, index + 1),
   }))
 }
-
 function finishAggregateDrag(commit = false, event = null) {
   const state = aggregateDragState.value
   if (commit && state) {
@@ -3685,30 +3704,9 @@ defineExpose({
                     {{ option.label }}
                   </option>
                 </select>
-              </label>              <div class="household-aggregate-layout-controls" aria-label="집계 카드 위치 조절">
-                <label class="field household-aggregate-layout-controls__order">
-                  <span class="field__label">위치 순서</span>
-                  <select :value="card.config.layoutOrder" @change="updateAggregateWidgetLayout(card.index, { layoutOrder: Number($event.target.value) })">
-                    <option v-for="position in aggregateWidgetDraftConfigs.length" :key="position" :value="position">
-                      {{ position }}번째
-                    </option>
-                  </select>
-                </label>
-                <label class="field household-aggregate-layout-controls__axis">
-                  <span class="field__label">열</span>
-                  <select :value="card.config.layoutX" @change="updateAggregateWidgetLayout(card.index, { layoutX: Number($event.target.value) })">
-                    <option v-for="column in getAggregateAllowedColumns(card.config)" :key="column" :value="column">{{ column }}열</option>
-                  </select>
-                </label>
-                <label class="field household-aggregate-layout-controls__axis">
-                  <span class="field__label">행</span>
-                  <select :value="card.config.layoutY" @change="updateAggregateWidgetLayout(card.index, { layoutY: Number($event.target.value) })">
-                    <option v-for="row in getAggregateAllowedRows(card.config)" :key="row" :value="row">{{ row }}행</option>
-                  </select>
-                </label>
-                <button type="button" class="button button--secondary" @click="moveAggregateWidget(card.index, -1)">앞</button>
-                <button type="button" class="button button--secondary" @click="moveAggregateWidget(card.index, 1)">뒤</button>
-              </div></div>
+              </label>
+                <p class="household-aggregate-drag-hint">위치 이동 버튼을 마우스로 끌어 원하는 칸에 놓으세요.</p>
+              </div>
 
 
             <label v-if="isAggregateEditMode && card.config.kind === 'PAYMENT_METHOD'" class="field household-aggregate-card__field">

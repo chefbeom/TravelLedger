@@ -26007,3 +26007,39 @@ button.button--primary,
 .household-aggregate-card__drag-handle:active {
   cursor: grabbing;
 }
+/* Household aggregate drag-only placement cleanup */
+.household-aggregate-panel--editing .household-aggregate-grid > .household-aggregate-card {
+  overflow: hidden !important;
+}
+
+.household-aggregate-panel--editing .household-aggregate-card__controls {
+  max-height: none !important;
+  overflow: visible !important;
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) !important;
+  gap: 8px !important;
+}
+
+.household-aggregate-panel--editing .household-aggregate-card__field,
+.household-aggregate-panel--editing .household-aggregate-card__field select,
+.household-aggregate-panel--editing .household-aggregate-card__field input {
+  min-width: 0 !important;
+  width: 100% !important;
+}
+
+.household-aggregate-panel--editing .household-aggregate-drag-hint {
+  margin: 2px 0 0;
+  padding: 8px 10px;
+  border: 1px dashed rgba(134, 239, 172, 0.38);
+  border-radius: 12px;
+  background: rgba(16, 185, 129, 0.08);
+  color: rgba(220, 252, 231, 0.88);
+  font-size: 0.78rem;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
+.household-aggregate-panel--editing .household-aggregate-card__drag-handle {
+  width: 100%;
+  min-height: 42px;
+}

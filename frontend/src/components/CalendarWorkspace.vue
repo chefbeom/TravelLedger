@@ -2505,15 +2505,23 @@ function getExpenseRatio(day) {
 
 function formatCompactCurrency(value) {
   const amount = Number(value ?? 0)
-  if (!amount) {
-    return '0원'
+  if (!Number.isFinite(amount) || amount === 0) {
+    return '0'
   }
 
-  if (amount >= 10000) {
-    return `${(amount / 10000).toFixed(amount >= 100000 ? 0 : 1).replace(/\.0$/, '')}만`
+  const sign = amount < 0 ? '-' : ''
+  const absoluteAmount = Math.abs(amount)
+  if (absoluteAmount >= 1000000000) {
+    return `${sign}${(absoluteAmount / 1000000000).toFixed(absoluteAmount >= 10000000000 ? 0 : 1).replace(/\.0$/, '')}B`
+  }
+  if (absoluteAmount >= 1000000) {
+    return `${sign}${(absoluteAmount / 1000000).toFixed(absoluteAmount >= 10000000 ? 0 : 1).replace(/\.0$/, '')}M`
+  }
+  if (absoluteAmount >= 1000) {
+    return `${sign}${(absoluteAmount / 1000).toFixed(absoluteAmount >= 10000 ? 0 : 1).replace(/\.0$/, '')}k`
   }
 
-  return `${amount.toLocaleString('ko-KR')}원`
+  return `${sign}${absoluteAmount.toLocaleString('ko-KR')}`
 }
 
 function updateAnchorMonth(year, month) {

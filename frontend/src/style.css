@@ -25823,3 +25823,32 @@ button.button--primary,
     grid-template-columns: minmax(0, 1fr) !important;
   }
 }
+/* Household aggregate final 8-column specificity override */
+.household-calendar-layout-static-content .household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-grid,
+.household-calendar-layout-item--aggregate .household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-grid,
+.household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-grid {
+  --aggregate-guide-line: rgba(133, 245, 173, 0.16);
+  display: grid !important;
+  gap: 10px !important;
+  grid-auto-flow: row !important;
+  grid-auto-rows: minmax(0, 1fr) !important;
+  grid-template-columns: repeat(8, minmax(0, 1fr)) !important;
+  grid-template-rows: repeat(3, minmax(0, 1fr)) !important;
+}
+
+.household-calendar-layout-static-content .household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-grid::before,
+.household-calendar-layout-item--aggregate .household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-grid::before,
+.household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-grid::before {
+  background-image:
+    repeating-linear-gradient(to right, transparent 0 calc(12.5% - 0.5px), var(--aggregate-guide-line) calc(12.5% - 0.5px) calc(12.5% + 0.5px), transparent calc(12.5% + 0.5px) 12.5%),
+    repeating-linear-gradient(to bottom, transparent 0 calc(33.333% - 0.5px), var(--aggregate-guide-line) calc(33.333% - 0.5px) calc(33.333% + 0.5px), transparent calc(33.333% + 0.5px) 33.333%);
+}
+
+.household-calendar-layout-static-content .household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-grid > .household-aggregate-card,
+.household-calendar-layout-item--aggregate .household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-grid > .household-aggregate-card,
+.household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-grid > .household-aggregate-card {
+  grid-column: var(--aggregate-card-grid-column, auto) !important;
+  grid-row: var(--aggregate-card-grid-row, auto) !important;
+  min-height: 0 !important;
+  min-width: 0 !important;
+}

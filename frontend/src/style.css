@@ -27293,3 +27293,46 @@ button.button--primary,
   height: 100% !important;
   overflow: visible !important;
 }
+
+/* Calendar aggregate edit: preserve each widget slot and keep its editor inside the card. */
+.household-calendar-layout-grid:not(.household-calendar-layout-grid--editing):not(.household-calendar-layout-grid--mobile-flow) .household-calendar-layout-item--aggregate .household-aggregate-panel--editing .household-aggregate-grid {
+  grid-template-columns: repeat(8, minmax(0, 1fr)) !important;
+  grid-template-rows: minmax(0, 1fr) !important;
+  grid-auto-rows: minmax(0, 1fr) !important;
+  overflow: hidden !important;
+}
+
+.household-calendar-layout-grid:not(.household-calendar-layout-grid--editing):not(.household-calendar-layout-grid--mobile-flow) .household-calendar-layout-item--aggregate .household-aggregate-panel--editing .household-aggregate-grid > .household-aggregate-card,
+.household-aggregate-panel--editing .household-aggregate-grid > .household-aggregate-card {
+  align-content: start !important;
+  grid-column: var(--aggregate-card-grid-column, auto / span var(--aggregate-card-col-span, 1)) !important;
+  grid-row: var(--aggregate-card-grid-row, auto / span var(--aggregate-card-row-span, 1)) !important;
+  height: 100% !important;
+  min-height: 0 !important;
+  overflow: auto !important;
+  padding: 10px !important;
+}
+
+.household-calendar-layout-grid:not(.household-calendar-layout-grid--editing):not(.household-calendar-layout-grid--mobile-flow) .household-calendar-layout-item--aggregate .household-aggregate-panel--editing .household-aggregate-card--chart,
+.household-aggregate-panel--editing .household-aggregate-card--chart {
+  grid-column: var(--aggregate-card-grid-column, auto / span 2) !important;
+}
+
+.household-aggregate-panel--editing .household-aggregate-card__controls,
+.household-aggregate-panel--editing .household-aggregate-goal-fields,
+.household-aggregate-panel--editing .household-aggregate-chart-options,
+.household-aggregate-panel--editing .household-aggregate-position-controls {
+  grid-template-columns: minmax(0, 1fr) !important;
+  gap: 8px !important;
+}
+
+.household-aggregate-panel--editing .household-aggregate-card__field,
+.household-aggregate-panel--editing .household-aggregate-card__field label {
+  gap: 5px !important;
+}
+
+.household-aggregate-panel--editing .household-aggregate-card__field select,
+.household-aggregate-panel--editing .household-aggregate-card__field input {
+  min-height: 34px !important;
+  padding: 7px 10px !important;
+}

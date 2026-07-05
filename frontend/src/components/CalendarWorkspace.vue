@@ -1969,7 +1969,7 @@ function getAggregateDropCellStyle(cell) {
   }
 }
 function isAggregatePeriodEditable(kind) {
-  return kind !== 'MONTHLY_GOAL'
+  return kind !== 'NONE' && kind !== 'MONTHLY_GOAL'
 }
 
 function isAggregateAmountTypeEditable(kind) {
@@ -3496,7 +3496,7 @@ defineExpose({
                   </option>
                 </select>
               </label>
-              <label class="field household-aggregate-card__field">
+              <label v-if="isAggregatePeriodEditable(card.config.kind)" class="field household-aggregate-card__field">
                 <span class="field__label">기간</span>
                 <select :value="card.config.period" @change="updateAggregateWidget(card.index, 'period', $event.target.value)">
                   <option v-for="option in aggregateWidgetPeriods" :key="option.value" :value="option.value">
@@ -3512,15 +3512,15 @@ defineExpose({
                   </option>
                 </select>
               </label>
-              <label class="field household-aggregate-card__field">
+              <label v-if="card.config.kind === 'MONTHLY_CUMULATIVE_CHART'" class="field household-aggregate-card__field">
                 <span class="field__label">크기</span>
-                <select :value="getAggregateWidgetSizeValue(card.config)" :disabled="card.config.kind !== 'MONTHLY_CUMULATIVE_CHART'" @change="updateAggregateWidgetSize(card.index, $event.target.value)">
+                <select :value="getAggregateWidgetSizeValue(card.config)" @change="updateAggregateWidgetSize(card.index, $event.target.value)">
                   <option v-for="option in getAggregateWidgetSizeOptions(card.config.kind)" :key="option.value" :value="option.value">
                     {{ option.label }}
                   </option>
                 </select>
               </label>
-                <div class="household-aggregate-position-controls">
+                <div v-if="card.config.kind !== 'NONE'" class="household-aggregate-position-controls">
                   <label class="field household-aggregate-card__field">
                     <span class="field__label">위치</span>
                     <select :value="card.config.layoutX" @change="updateAggregateWidgetLayout(card.index, { layoutX: Number($event.target.value), layoutY: 1 })">

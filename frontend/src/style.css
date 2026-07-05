@@ -27142,3 +27142,88 @@ button.button--primary,
   min-height: 0 !important;
   overflow: hidden !important;
 }
+
+/* Calendar layout normal mode: restore visible aggregate panel within its assigned GridStack slot. */
+.household-calendar-layout-grid:not(.household-calendar-layout-grid--editing) .household-calendar-layout-item--aggregate {
+  display: block !important;
+  height: calc(2 * var(--gs-cell-height, var(--calendar-layout-cell-height, 112px))) !important;
+  min-height: 0 !important;
+  opacity: 1 !important;
+  overflow: hidden !important;
+  visibility: visible !important;
+  z-index: 2 !important;
+}
+
+.household-calendar-layout-grid:not(.household-calendar-layout-grid--editing) .household-calendar-layout-item--aggregate > .grid-stack-item-content,
+.household-calendar-layout-grid:not(.household-calendar-layout-grid--editing) .household-calendar-layout-item--aggregate .household-calendar-layout-static-content,
+.household-calendar-layout-grid:not(.household-calendar-layout-grid--editing) .household-calendar-layout-item--aggregate .household-calendar-layout-panel-shell {
+  display: block !important;
+  height: 100% !important;
+  min-height: 0 !important;
+  opacity: 1 !important;
+  overflow: hidden !important;
+  visibility: visible !important;
+}
+
+.household-calendar-layout-grid:not(.household-calendar-layout-grid--editing) .household-calendar-layout-item--aggregate .household-aggregate-panel:not(.household-aggregate-panel--editing) {
+  background: var(--calendar-panel-bg) !important;
+  border: 1px solid var(--calendar-panel-border) !important;
+  color: var(--text) !important;
+  display: grid !important;
+  grid-template-rows: auto minmax(0, 1fr) !important;
+  height: 100% !important;
+  max-height: 100% !important;
+  min-height: 0 !important;
+  opacity: 1 !important;
+  overflow: hidden !important;
+  visibility: visible !important;
+}
+
+.household-calendar-layout-grid:not(.household-calendar-layout-grid--editing) .household-calendar-layout-item--aggregate .household-aggregate-header,
+.household-calendar-layout-grid:not(.household-calendar-layout-grid--editing) .household-calendar-layout-item--aggregate .household-aggregate-header__actions {
+  display: flex !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+}
+
+.household-calendar-layout-grid:not(.household-calendar-layout-grid--editing) .household-calendar-layout-item--aggregate .household-aggregate-grid {
+  align-items: stretch !important;
+  display: grid !important;
+  gap: 8px !important;
+  grid-auto-flow: row !important;
+  grid-auto-rows: minmax(0, 1fr) !important;
+  grid-template-columns: repeat(8, minmax(0, 1fr)) !important;
+  grid-template-rows: minmax(0, 1fr) !important;
+  height: 100% !important;
+  margin: 0 !important;
+  max-height: none !important;
+  min-height: 0 !important;
+  opacity: 1 !important;
+  overflow: hidden !important;
+  padding: 0 !important;
+  visibility: visible !important;
+}
+
+.household-calendar-layout-grid:not(.household-calendar-layout-grid--editing) .household-calendar-layout-item--aggregate .household-aggregate-empty {
+  align-items: center !important;
+  display: flex !important;
+  flex-direction: column !important;
+  height: 100% !important;
+  justify-content: center !important;
+  min-height: 0 !important;
+  opacity: 1 !important;
+  overflow: hidden !important;
+  visibility: visible !important;
+}
+
+.household-calendar-layout-grid:not(.household-calendar-layout-grid--editing) .household-calendar-layout-item--aggregate .household-aggregate-grid > .household-aggregate-card {
+  align-self: stretch !important;
+  box-sizing: border-box !important;
+  height: 100% !important;
+  max-height: none !important;
+  min-height: 0 !important;
+  min-width: 0 !important;
+  opacity: 1 !important;
+  overflow: hidden !important;
+  visibility: visible !important;
+}

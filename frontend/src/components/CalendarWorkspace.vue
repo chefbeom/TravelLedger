@@ -1,4 +1,4 @@
-﻿<script setup>
+<script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { GridStack } from 'gridstack'
 import 'gridstack/dist/gridstack.min.css'
@@ -3385,15 +3385,8 @@ defineExpose({
         <div
           v-else-if="aggregateCards.length"
           class="household-aggregate-grid"
-          @pointermove="handleAggregatePointerMove"
+          
         >
-          <div
-            v-if="isAggregateEditMode"
-            v-for="cell in aggregateGridDropCells"
-            :key="cell.key"
-            class="household-aggregate-grid__drop-cell"
-            :style="getAggregateDropCellStyle(cell)"
-          ></div>
           <article
             v-for="card in aggregateCards"
             :key="card.id"
@@ -3410,7 +3403,6 @@ defineExpose({
             :data-aggregate-height="card.config.layoutH"
             :data-aggregate-index="card.index"
           >
-            <div v-if="isAggregateEditMode" class="household-aggregate-card__drag-handle household-aggregate-card__drag-handle--static">위치/크기 설정</div>
             <div v-if="isAggregateEditMode" class="household-aggregate-card__controls">
               <label class="field household-aggregate-card__field">
                 <span class="field__label">집계</span>
@@ -3452,7 +3444,6 @@ defineExpose({
                     </select>
                   </label>
                 </div>
-                <p class="household-aggregate-drag-hint">8칸 고정 그리드에서 위치와 크기 값으로 배치합니다. 긴 그래프는 2~4칸 크기를 선택하세요.</p>
               </div>
 
 

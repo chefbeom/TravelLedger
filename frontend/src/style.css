@@ -26145,3 +26145,133 @@ button.button--primary,
   position: relative !important;
   z-index: 2147483001 !important;
 }
+/* Household aggregate editor: compact single-screen form, no nested scroll bars */
+.household-aggregate-panel.household-aggregate-panel--editing {
+  height: auto !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  overflow: visible !important;
+}
+
+.household-aggregate-panel--editing .household-aggregate-grid {
+  display: grid !important;
+  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  grid-template-rows: none !important;
+  grid-auto-rows: auto !important;
+  grid-auto-flow: row !important;
+  gap: 12px !important;
+  height: auto !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  overflow: visible !important;
+  padding: 0 !important;
+  scrollbar-gutter: auto !important;
+}
+
+.household-aggregate-panel--editing .household-aggregate-grid__drop-cell,
+.household-aggregate-panel--editing .household-aggregate-card__drag-handle,
+.household-aggregate-panel--editing .household-aggregate-drag-hint {
+  display: none !important;
+}
+
+.household-aggregate-panel--editing .household-aggregate-card {
+  grid-column: auto / span 1 !important;
+  grid-row: auto / span 1 !important;
+  width: auto !important;
+  height: auto !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  padding: 12px !important;
+  overflow: visible !important;
+  display: grid !important;
+  gap: 10px !important;
+  align-content: start !important;
+}
+
+.household-aggregate-panel--editing .household-aggregate-card--chart {
+  grid-column: auto / span 2 !important;
+}
+
+.household-aggregate-panel--editing .household-aggregate-card__controls {
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  gap: 10px !important;
+  max-height: none !important;
+  overflow: visible !important;
+}
+
+.household-aggregate-panel--editing .household-aggregate-card__field,
+.household-aggregate-panel--editing .household-aggregate-goal-fields,
+.household-aggregate-panel--editing .household-aggregate-chart-options,
+.household-aggregate-panel--editing .household-aggregate-position-controls {
+  min-width: 0 !important;
+  max-width: 100% !important;
+}
+
+.household-aggregate-panel--editing .field__label {
+  white-space: normal !important;
+  overflow-wrap: anywhere !important;
+  line-height: 1.35 !important;
+}
+
+.household-aggregate-panel--editing select,
+.household-aggregate-panel--editing input {
+  width: 100% !important;
+  min-width: 0 !important;
+}
+
+.household-aggregate-panel--editing .household-aggregate-chart-options {
+  display: grid !important;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  gap: 10px !important;
+}
+
+.household-aggregate-panel--editing .household-aggregate-chart-options label {
+  min-width: 0 !important;
+  overflow-wrap: anywhere !important;
+}
+
+.household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-grid {
+  height: auto !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  overflow: visible !important;
+  grid-template-rows: minmax(150px, auto) !important;
+  grid-auto-rows: minmax(150px, auto) !important;
+  align-items: stretch !important;
+  scrollbar-gutter: auto !important;
+}
+
+.household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-card {
+  height: auto !important;
+  min-height: 150px !important;
+  max-height: none !important;
+  overflow: hidden !important;
+}
+
+.household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-card--chart {
+  min-height: 170px !important;
+}
+
+@media (max-width: 1100px) {
+  .household-aggregate-panel--editing .household-aggregate-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .household-aggregate-panel--editing .household-aggregate-card--chart {
+    grid-column: auto / span 2 !important;
+  }
+}
+
+@media (max-width: 680px) {
+  .household-aggregate-panel--editing .household-aggregate-grid,
+  .household-aggregate-panel--editing .household-aggregate-card__controls,
+  .household-aggregate-panel--editing .household-aggregate-chart-options {
+    grid-template-columns: 1fr !important;
+  }
+
+  .household-aggregate-panel--editing .household-aggregate-card--chart {
+    grid-column: auto / span 1 !important;
+  }
+}

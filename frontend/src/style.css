@@ -26467,3 +26467,62 @@ button.button--primary,
     grid-column: auto / span 1 !important;
   }
 }
+/* Household aggregate chart preview visibility */
+.household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-chart--preview .household-aggregate-chart__line {
+  fill: none !important;
+  stroke-width: 3.2px !important;
+  opacity: 1 !important;
+  vector-effect: non-scaling-stroke;
+}
+
+.household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-chart--preview .household-aggregate-chart__line--income {
+  stroke: #86efac !important;
+}
+
+.household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-chart--preview .household-aggregate-chart__line--expense {
+  stroke: #fb7185 !important;
+}
+
+.household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-chart--preview .household-aggregate-chart__line--previous {
+  stroke: rgba(203, 213, 225, 0.78) !important;
+  stroke-width: 2px !important;
+  opacity: 0.72 !important;
+}
+
+.household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-chart--preview .household-aggregate-chart__area {
+  opacity: 0.18 !important;
+}
+
+.household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-chart--preview .household-aggregate-chart__point {
+  opacity: 1 !important;
+  stroke-width: 1.8px !important;
+}
+
+.household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-chart--preview .household-aggregate-chart__point--income {
+  fill: #86efac !important;
+  stroke: #0f172a !important;
+}
+
+.household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-chart--preview .household-aggregate-chart__point--expense {
+  fill: #fb7185 !important;
+  stroke: #0f172a !important;
+}
+
+.household-aggregate-chart__value-label--preview {
+  font-size: 10px !important;
+  font-weight: 900 !important;
+  letter-spacing: -0.02em !important;
+  paint-order: stroke !important;
+  stroke: rgba(9, 14, 24, 0.9) !important;
+  stroke-width: 3px !important;
+  stroke-linejoin: round !important;
+  pointer-events: none !important;
+}
+
+.household-aggregate-chart__value-label--income {
+  fill: #bbf7d0 !important;
+}
+
+.household-aggregate-chart__value-label--expense {
+  fill: #fecdd3 !important;
+}

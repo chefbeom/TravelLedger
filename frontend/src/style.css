@@ -26043,3 +26043,47 @@ button.button--primary,
   width: 100%;
   min-height: 42px;
 }
+/* Household aggregate fixed 8-slot model */
+.household-aggregate-grid,
+.household-aggregate-panel--editing .household-aggregate-grid {
+  grid-template-columns: repeat(8, 250px) !important;
+  grid-template-rows: 250px !important;
+  grid-auto-rows: 250px !important;
+  grid-auto-flow: column !important;
+  gap: 12px !important;
+  align-items: stretch !important;
+  aspect-ratio: auto !important;
+  min-height: 250px !important;
+  height: 250px !important;
+  max-height: 250px !important;
+  overflow-x: auto !important;
+  overflow-y: hidden !important;
+  padding: 0 !important;
+  scrollbar-gutter: stable;
+}
+
+.household-aggregate-grid > .household-aggregate-card,
+.household-aggregate-panel--editing .household-aggregate-grid > .household-aggregate-card {
+  width: auto !important;
+  height: 250px !important;
+  min-height: 250px !important;
+  max-height: 250px !important;
+  overflow: hidden !important;
+  align-self: stretch !important;
+}
+
+.household-aggregate-panel--editing .household-aggregate-card__controls {
+  max-height: none !important;
+  overflow: visible !important;
+}
+
+.household-aggregate-card__drag-handle--static {
+  cursor: default !important;
+  pointer-events: none;
+}
+
+.household-aggregate-position-controls {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+}

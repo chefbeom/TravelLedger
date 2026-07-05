@@ -1,4 +1,4 @@
-<script setup>
+﻿<script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { GridStack } from 'gridstack'
 import 'gridstack/dist/gridstack.min.css'
@@ -84,61 +84,15 @@ const aggregateWidgetAmountTypes = [
   { value: 'EXPENSE', label: '지출' },
 ]
 const aggregateGridColumnCount = 8
-const aggregateGridRowCount = 3
+const aggregateGridRowCount = 1
 const aggregateDefaultWidgetWidth = 1
-const aggregateDefaultWidgetHeight = 2
+const aggregateDefaultWidgetHeight = 1
 
 const aggregateWidgetSizeOptions = [
-  { value: '1x1', label: '1 x 1', width: 1, height: 1 },
-  { value: '2x1', label: '2 x 1', width: 2, height: 1 },
-  { value: '4x1', label: '4 x 1', width: 4, height: 1 },
-  { value: '8x1', label: '8 x 1', width: 8, height: 1 },
-  { value: '1x2', label: '1 x 2', width: 1, height: 2 },
-  { value: '2x2', label: '2 x 2', width: 2, height: 2 },
-  { value: '4x2', label: '4 x 2', width: 4, height: 2 },
-  { value: '8x2', label: '8 x 2', width: 8, height: 2 },
-  { value: '1x3', label: '1 x 3', width: 1, height: 3 },
-  { value: '2x3', label: '2 x 3', width: 2, height: 3 },
-  { value: '4x3', label: '4 x 3', width: 4, height: 3 },
-  { value: '8x3', label: '8 x 3', width: 8, height: 3 },
-];
-const calendarPanelDefinitions = [
-  {
-    id: 'calendar',
-    title: '달력',
-    defaultLayout: { x: 0, y: 2, w: 6, h: 6 },
-    minW: 4,
-    minH: 4,
-    maxW: 9,
-    maxH: 10,
-  },
-  {
-    id: 'quick-entry',
-    title: '빠른 거래 입력',
-    defaultLayout: { x: 6, y: 2, w: 3, h: 6 },
-    minW: 3,
-    minH: 5,
-    maxW: 5,
-    maxH: 10,
-  },
-  {
-    id: 'aggregate',
-    title: '사용자 설정 집계',
-    defaultLayout: { x: 0, y: 0, w: 9, h: 3 },
-    minW: 4,
-    minH: 3,
-    maxW: 9,
-    maxH: 8,
-  },
-  {
-    id: 'sheet',
-    title: '거래 시트',
-    defaultLayout: { x: 0, y: 8, w: 9, h: 4 },
-    minW: 4,
-    minH: 2,
-    maxW: 9,
-    maxH: 8,
-  },
+  { value: '1x1', label: '1칸', width: 1, height: 1 },
+  { value: '2x1', label: '2칸', width: 2, height: 1 },
+  { value: '3x1', label: '3칸', width: 3, height: 1 },
+  { value: '4x1', label: '4칸', width: 4, height: 1 },
 ]
 
 const props = defineProps({
@@ -331,8 +285,6 @@ const receiptFileInputRef = ref(null)
 const receiptCameraInputRef = ref(null)
 const selectedReceiptDocumentType = ref('AUTO')
 const aggregateWidgetDraftConfigs = ref(createDefaultAggregateConfigs())
-const aggregateDragState = ref(null)
-const aggregateGridRef = ref(null)
 const aggregateGridDropCells = computed(() => Array.from({ length: aggregateGridColumnCount * aggregateGridRowCount }, (_, index) => ({
   key: `aggregate-drop-${index + 1}`,
   column: (index % aggregateGridColumnCount) + 1,
@@ -1785,11 +1737,28 @@ function getCalendarBarRatio(day) {
 
 function createDefaultAggregateConfigs() {
   const defaultPaymentMethodId = props.paymentMethods[0] ? String(props.paymentMethods[0].id) : ''
+  const baseConfig = {
+    period: 'MONTH',
+    paymentMethodId: '',
+    amountType: 'EXPENSE',
+    monthlyExpenseTarget: 0,
+    singleExpenseLimit: 0,
+    showIncomeCumulative: true,
+    showExpenseCumulative: true,
+    comparePreviousPeriod: false,
+    layoutY: 1,
+    layoutW: 1,
+    layoutH: 1,
+  }
   return [
-    { id: 'aggregate-1', kind: 'TOTAL', period: 'MONTH', paymentMethodId: '', amountType: 'NET', monthlyExpenseTarget: 0, singleExpenseLimit: 0, showIncomeCumulative: true, showExpenseCumulative: true, comparePreviousPeriod: false, layoutX: 1, layoutY: 1, layoutW: 1, layoutH: 2, layoutOrder: 1 },
-    { id: 'aggregate-2', kind: 'NONE', period: 'MONTH', paymentMethodId: '', amountType: 'NET', monthlyExpenseTarget: 0, singleExpenseLimit: 0, showIncomeCumulative: true, showExpenseCumulative: true, comparePreviousPeriod: false, layoutX: 2, layoutY: 1, layoutW: 1, layoutH: 2, layoutOrder: 2 },
-    { id: 'aggregate-3', kind: 'NONE', period: 'WEEK', paymentMethodId: '', amountType: 'NET', monthlyExpenseTarget: 0, singleExpenseLimit: 0, showIncomeCumulative: true, showExpenseCumulative: true, comparePreviousPeriod: false, layoutX: 3, layoutY: 1, layoutW: 1, layoutH: 2, layoutOrder: 3 },
-    { id: 'aggregate-4', kind: 'NONE', period: 'DAY', paymentMethodId: defaultPaymentMethodId, amountType: 'NET', monthlyExpenseTarget: 0, singleExpenseLimit: 0, showIncomeCumulative: true, showExpenseCumulative: true, comparePreviousPeriod: false, layoutX: 4, layoutY: 1, layoutW: 1, layoutH: 2, layoutOrder: 4 },
+    { ...baseConfig, id: 'aggregate-1', kind: 'TOTAL', amountType: 'EXPENSE', layoutX: 1, layoutOrder: 1 },
+    { ...baseConfig, id: 'aggregate-2', kind: 'MONTHLY_GOAL', amountType: 'EXPENSE', layoutX: 2, layoutOrder: 2 },
+    { ...baseConfig, id: 'aggregate-3', kind: 'PAYMENT_METHOD', paymentMethodId: defaultPaymentMethodId, amountType: 'EXPENSE', layoutX: 3, layoutOrder: 3 },
+    { ...baseConfig, id: 'aggregate-4', kind: 'MONTHLY_CUMULATIVE_CHART', layoutW: 2, amountType: 'NET', layoutX: 4, layoutOrder: 4 },
+    { ...baseConfig, id: 'aggregate-5', kind: 'NONE', layoutX: 6, layoutOrder: 5 },
+    { ...baseConfig, id: 'aggregate-6', kind: 'NONE', layoutX: 6, layoutOrder: 6 },
+    { ...baseConfig, id: 'aggregate-7', kind: 'NONE', layoutX: 7, layoutOrder: 7 },
+    { ...baseConfig, id: 'aggregate-8', kind: 'NONE', layoutX: 8, layoutOrder: 8 },
   ]
 }
 function normalizeAggregateTargetAmount(value) {
@@ -1840,23 +1809,31 @@ function normalizeAggregateLayoutOrder(value, fallback = 1) {
   return Math.min(99, Math.max(1, Math.round(numericValue)))
 }
 
-function getAggregateWidgetSizeValue(config) {
-  const width = normalizeAggregateGridSpan(config?.layoutW, aggregateDefaultWidgetWidth, aggregateGridColumnCount)
-  const height = normalizeAggregateGridSpan(config?.layoutH, aggregateDefaultWidgetHeight, aggregateGridRowCount)
-  return `${width}x${height}`
+function getAggregateWidgetSizeOptions(kind) {
+  if (kind === 'MONTHLY_CUMULATIVE_CHART') {
+    return aggregateWidgetSizeOptions.filter((option) => option.width >= 2 && option.width <= 4)
+  }
+  return aggregateWidgetSizeOptions.filter((option) => option.width === 1)
 }
 
+function getAggregateWidgetSizeValue(config) {
+  if (config?.kind !== 'MONTHLY_CUMULATIVE_CHART') {
+    return '1x1'
+  }
+  const width = Math.min(4, Math.max(2, normalizeAggregateGridSpan(config?.layoutW, 2, 4)))
+  return `${width}x1`
+}
 function parseAggregateWidgetSize(value, fallbackConfig = {}) {
+  if (fallbackConfig.kind !== 'MONTHLY_CUMULATIVE_CHART') {
+    return { width: 1, height: 1 }
+  }
   const selected = aggregateWidgetSizeOptions.find((option) => option.value === value)
-  if (selected) return { width: selected.width, height: selected.height }
-
-  const [rawWidth, rawHeight] = String(value || '').split('x').map((item) => Number(item))
+  const rawWidth = selected ? selected.width : Number(String(value || '').split('x')[0])
   return {
-    width: normalizeAggregateGridSpan(rawWidth, fallbackConfig.layoutW || aggregateDefaultWidgetWidth, aggregateGridColumnCount),
-    height: normalizeAggregateGridSpan(rawHeight, fallbackConfig.layoutH || aggregateDefaultWidgetHeight, aggregateGridRowCount),
+    width: Math.min(4, Math.max(2, normalizeAggregateGridSpan(rawWidth, fallbackConfig.layoutW || 2, 4))),
+    height: 1,
   }
 }
-
 function getAggregateCardGridStyle(card) {
   const config = card?.config ?? {}
   const width = normalizeAggregateGridSpan(config.layoutW, aggregateDefaultWidgetWidth, aggregateGridColumnCount)
@@ -1877,259 +1854,8 @@ function getAggregateCardGridStyle(card) {
 function getAggregateDropCellStyle(cell) {
   return {
     gridColumn: `${cell.column} / span 1`,
-    gridRow: `${cell.row} / span 1`,
+    gridRow: '1 / span 1',
   }
-}
-
-function getAggregateCardPlacement(index) {
-  const config = aggregateWidgetDraftConfigs.value[index]
-  if (!config) return null
-  const width = normalizeAggregateGridSpan(config.layoutW, aggregateDefaultWidgetWidth, aggregateGridColumnCount)
-  const height = normalizeAggregateGridSpan(config.layoutH, aggregateDefaultWidgetHeight, aggregateGridRowCount)
-  return {
-    width,
-    height,
-    column: normalizeAggregateGridPosition(config.layoutX, 1, getAggregateMaxColumnForWidth(width)),
-    row: normalizeAggregateGridPosition(config.layoutY, 1, getAggregateMaxRowForHeight(height)),
-  }
-}
-
-function getAggregateEventPoint(event) {
-  const source = event?.touches?.[0] || event?.changedTouches?.[0] || event
-  const clientX = Number(source?.clientX)
-  const clientY = Number(source?.clientY)
-  return Number.isFinite(clientX) && Number.isFinite(clientY) ? { clientX, clientY } : null
-}
-
-function getAggregatePointerCell(event) {
-  const gridElement = aggregateGridRef.value
-  if (!gridElement || !event) return null
-  const rect = gridElement.getBoundingClientRect()
-  if (!rect.width || !rect.height) return null
-  const styles = window.getComputedStyle(gridElement)
-  const paddingLeft = parseFloat(styles.paddingLeft) || 0
-  const paddingRight = parseFloat(styles.paddingRight) || 0
-  const paddingTop = parseFloat(styles.paddingTop) || 0
-  const paddingBottom = parseFloat(styles.paddingBottom) || 0
-  const columnGap = parseFloat(styles.columnGap) || 0
-  const rowGap = parseFloat(styles.rowGap) || 0
-  const contentWidth = Math.max(1, rect.width - paddingLeft - paddingRight)
-  const contentHeight = Math.max(1, rect.height - paddingTop - paddingBottom)
-  const cellWidth = Math.max(1, (contentWidth - columnGap * (aggregateGridColumnCount - 1)) / aggregateGridColumnCount)
-  const cellHeight = Math.max(1, (contentHeight - rowGap * (aggregateGridRowCount - 1)) / aggregateGridRowCount)
-  const x = event.clientX - rect.left - paddingLeft
-  const y = event.clientY - rect.top - paddingTop
-  const column = Math.min(aggregateGridColumnCount, Math.max(1, Math.floor(x / (cellWidth + columnGap)) + 1))
-  const row = Math.min(aggregateGridRowCount, Math.max(1, Math.floor(y / (cellHeight + rowGap)) + 1))
-  return { column, row }
-}
-
-function getAggregatePlacementPreview() {
-  const state = aggregateDragState.value
-  if (!state) return null
-  const placement = getAggregateCardPlacement(state.index)
-  if (!placement) return null
-  const column = normalizeAggregateGridPosition(state.previewColumn ?? placement.column, placement.column, getAggregateMaxColumnForWidth(placement.width))
-  const row = normalizeAggregateGridPosition(state.previewRow ?? placement.row, placement.row, getAggregateMaxRowForHeight(placement.height))
-  return { ...placement, column, row }
-}
-
-function getAggregatePlacementPreviewStyle() {
-  const preview = getAggregatePlacementPreview()
-  if (!preview) return {}
-  return {
-    gridColumn: `${preview.column} / span ${preview.width}`,
-    gridRow: `${preview.row} / span ${preview.height}`,
-  }
-}
-
-function isAggregateDropCellPreview(cell) {
-  const preview = getAggregatePlacementPreview()
-  if (!preview) return false
-  return cell.column >= preview.column
-    && cell.column < preview.column + preview.width
-    && cell.row >= preview.row
-    && cell.row < preview.row + preview.height
-}
-
-function readAggregateDragIndex(event) {
-  const rawIndex = event?.dataTransfer?.getData('text/plain') || aggregateDragState.value?.index
-  const index = Number(rawIndex)
-  return Number.isInteger(index) && index >= 0 && index < aggregateWidgetDraftConfigs.value.length ? index : -1
-}
-
-function addAggregatePointerListeners() {
-  if (typeof window === 'undefined') return
-  window.addEventListener('pointermove', handleAggregatePointerMove, { passive: false })
-  window.addEventListener('pointerup', finishAggregatePointerMove, { passive: false })
-  window.addEventListener('pointercancel', cancelAggregatePointerMove, { passive: false })
-  window.addEventListener('mousemove', handleAggregatePointerMove, { passive: false })
-  window.addEventListener('mouseup', finishAggregatePointerMove, { passive: false })
-  window.addEventListener('touchmove', handleAggregatePointerMove, { passive: false })
-  window.addEventListener('touchend', finishAggregatePointerMove, { passive: false })
-  window.addEventListener('touchcancel', cancelAggregatePointerMove, { passive: false })
-}
-
-function removeAggregatePointerListeners() {
-  if (typeof window === 'undefined') return
-  window.removeEventListener('pointermove', handleAggregatePointerMove)
-  window.removeEventListener('pointerup', finishAggregatePointerMove)
-  window.removeEventListener('pointercancel', cancelAggregatePointerMove)
-  window.removeEventListener('mousemove', handleAggregatePointerMove)
-  window.removeEventListener('mouseup', finishAggregatePointerMove)
-  window.removeEventListener('touchmove', handleAggregatePointerMove)
-  window.removeEventListener('touchend', finishAggregatePointerMove)
-  window.removeEventListener('touchcancel', cancelAggregatePointerMove)
-}
-
-function startAggregateDrag(index, event) {
-  if (!isAggregateEditMode.value) return
-  const sourceIndex = Number(index)
-  if (!Number.isInteger(sourceIndex)) return
-  const placement = getAggregateCardPlacement(sourceIndex)
-  if (!placement) return
-  removeAggregatePointerListeners()
-  aggregateDragState.value = {
-    index: sourceIndex,
-    pointerId: event?.pointerId,
-    previewColumn: placement.column,
-    previewRow: placement.row,
-  }
-  event?.preventDefault?.()
-  event?.stopPropagation?.()
-  if (event?.currentTarget?.setPointerCapture && event?.pointerId !== undefined) {
-    try {
-      event.currentTarget.setPointerCapture(event.pointerId)
-    } catch (_) {
-      // Some browsers refuse capture when the pointer is already released.
-    }
-  }
-  addAggregatePointerListeners()
-}
-
-function handleAggregatePointerMove(event) {
-  const state = aggregateDragState.value
-  if (!isAggregateEditMode.value || !state) return
-  if (state.pointerId !== undefined && event?.pointerId !== undefined && state.pointerId !== event.pointerId) return
-  event?.preventDefault?.()
-  const cell = getAggregatePointerCell(event)
-  const placement = getAggregateCardPlacement(state.index)
-  if (!cell || !placement) return
-  aggregateDragState.value = {
-    ...state,
-    previewColumn: normalizeAggregateGridPosition(cell.column, placement.column, getAggregateMaxColumnForWidth(placement.width)),
-    previewRow: normalizeAggregateGridPosition(cell.row, placement.row, getAggregateMaxRowForHeight(placement.height)),
-  }
-}
-
-function handleAggregateDragOver(event) {
-  if (!isAggregateEditMode.value || !aggregateDragState.value) return
-  event.preventDefault()
-  handleAggregatePointerMove(event)
-  if (event?.dataTransfer) {
-    event.dataTransfer.dropEffect = 'move'
-  }
-}
-
-function moveAggregateWidgetToCell(sourceIndex, column, row) {
-  const configs = aggregateWidgetDraftConfigs.value
-  const sourceConfig = configs[sourceIndex]
-  if (!sourceConfig) return
-  const width = normalizeAggregateGridSpan(sourceConfig.layoutW, aggregateDefaultWidgetWidth, aggregateGridColumnCount)
-  const height = normalizeAggregateGridSpan(sourceConfig.layoutH, aggregateDefaultWidgetHeight, aggregateGridRowCount)
-  const targetColumn = normalizeAggregateGridPosition(column, sourceConfig.layoutX || 1, getAggregateMaxColumnForWidth(width))
-  const targetRow = normalizeAggregateGridPosition(row, sourceConfig.layoutY || 1, getAggregateMaxRowForHeight(height))
-  const occupied = new Set()
-  const nextConfigs = configs.map((config) => ({ ...config }))
-
-  nextConfigs[sourceIndex] = {
-    ...sourceConfig,
-    layoutX: targetColumn,
-    layoutY: targetRow,
-    layoutW: width,
-    layoutH: height,
-  }
-  reserveAggregateGridSpace(occupied, targetColumn, targetRow, width, height)
-
-  nextConfigs.forEach((config, configIndex) => {
-    if (configIndex === sourceIndex) return
-    const itemWidth = normalizeAggregateGridSpan(config.layoutW, aggregateDefaultWidgetWidth, aggregateGridColumnCount)
-    const itemHeight = normalizeAggregateGridSpan(config.layoutH, aggregateDefaultWidgetHeight, aggregateGridRowCount)
-    const preferredColumn = normalizeAggregateGridPosition(config.layoutX, 1, getAggregateMaxColumnForWidth(itemWidth))
-    const preferredRow = normalizeAggregateGridPosition(config.layoutY, 1, getAggregateMaxRowForHeight(itemHeight))
-    const slot = findAggregateGridSlot(occupied, preferredColumn, preferredRow, itemWidth, itemHeight)
-    nextConfigs[configIndex] = {
-      ...config,
-      layoutX: slot.column,
-      layoutY: slot.row,
-      layoutW: itemWidth,
-      layoutH: itemHeight,
-    }
-    reserveAggregateGridSpace(occupied, slot.column, slot.row, itemWidth, itemHeight)
-  })
-
-  aggregateWidgetDraftConfigs.value = nextConfigs.map((config, index) => ({
-    ...config,
-    layoutOrder: normalizeAggregateLayoutOrder(config.layoutOrder, index + 1),
-  }))
-}
-function finishAggregateDrag(commit = false, event = null) {
-  const state = aggregateDragState.value
-  if (commit && state) {
-    const preview = getAggregatePlacementPreview()
-    if (preview) {
-      moveAggregateWidgetToCell(state.index, preview.column, preview.row)
-    }
-  }
-  if (state?.pointerId !== undefined && event?.currentTarget?.releasePointerCapture) {
-    try {
-      if (!event.currentTarget.hasPointerCapture || event.currentTarget.hasPointerCapture(state.pointerId)) {
-        event.currentTarget.releasePointerCapture(state.pointerId)
-      }
-    } catch (_) {
-      // Pointer capture can already be released by the browser.
-    }
-  }
-  removeAggregatePointerListeners()
-  aggregateDragState.value = null
-}
-
-function finishAggregatePointerMove(event) {
-  const state = aggregateDragState.value
-  if (!state || state.pointerId === undefined) return
-  if (event?.pointerId !== undefined && state.pointerId !== event.pointerId) return
-  handleAggregatePointerMove(event)
-  event?.preventDefault?.()
-  finishAggregateDrag(true, event)
-}
-
-function cancelAggregatePointerMove(event = null) {
-  finishAggregateDrag(false, event)
-}
-
-function aggregateConfigCoversCell(config, column, row) {
-  const width = normalizeAggregateGridSpan(config.layoutW, aggregateDefaultWidgetWidth, aggregateGridColumnCount)
-  const height = normalizeAggregateGridSpan(config.layoutH, aggregateDefaultWidgetHeight, aggregateGridRowCount)
-  const originColumn = normalizeAggregateGridPosition(config.layoutX, 1, getAggregateMaxColumnForWidth(width))
-  const originRow = normalizeAggregateGridPosition(config.layoutY, 1, getAggregateMaxRowForHeight(height))
-  return column >= originColumn && column < originColumn + width && row >= originRow && row < originRow + height
-}
-
-function dropAggregateWidgetAtCell(column, row, event) {
-  if (!isAggregateEditMode.value) return
-  event?.preventDefault?.()
-  const sourceIndex = readAggregateDragIndex(event)
-  if (sourceIndex >= 0) {
-    moveAggregateWidgetToCell(sourceIndex, column, row)
-  }
-  finishAggregateDrag(false, event)
-}
-
-function dropAggregateWidgetOnCard(targetIndex, event) {
-  if (!isAggregateEditMode.value) return
-  const targetConfig = aggregateWidgetDraftConfigs.value[targetIndex]
-  if (!targetConfig) return
-  dropAggregateWidgetAtCell(Number(targetConfig.layoutX) || 1, Number(targetConfig.layoutY) || 1, event)
 }
 function isAggregatePeriodEditable(kind) {
   return kind !== 'MONTHLY_GOAL'
@@ -3624,7 +3350,6 @@ defineExpose({
         </div>
         <div
           v-else-if="aggregateCards.length"
-          ref="aggregateGridRef"
           class="household-aggregate-grid"
           @pointermove="handleAggregatePointerMove"
         >
@@ -3633,16 +3358,8 @@ defineExpose({
             v-for="cell in aggregateGridDropCells"
             :key="cell.key"
             class="household-aggregate-grid__drop-cell"
-            :class="{ 'is-drag-active': aggregateDragState, 'is-preview-target': isAggregateDropCellPreview(cell) }"
             :style="getAggregateDropCellStyle(cell)"
-            @dragover="handleAggregateDragOver"
-            @drop="dropAggregateWidgetAtCell(cell.column, cell.row, $event)"
           ></div>
-          <div
-            v-if="aggregateDragState"
-            class="household-aggregate-grid__preview"
-            :style="getAggregatePlacementPreviewStyle()"
-          ><span>&#51060;&#46041; &#50948;&#52824;</span></div>
           <article
             v-for="card in aggregateCards"
             :key="card.id"
@@ -3650,7 +3367,6 @@ defineExpose({
             :class="{
               'household-aggregate-card--chart': card.config.kind === 'MONTHLY_CUMULATIVE_CHART',
               'household-aggregate-card--goal': card.config.kind === 'MONTHLY_GOAL',
-              'is-dragging': aggregateDragState?.index === card.index,
             }"
             :style="getAggregateCardGridStyle(card)"
             :data-aggregate-size="getAggregateWidgetSizeValue(card.config)"
@@ -3659,19 +3375,8 @@ defineExpose({
             :data-aggregate-width="card.config.layoutW"
             :data-aggregate-height="card.config.layoutH"
             :data-aggregate-index="card.index"
-            @dragover="handleAggregateDragOver"
-            @drop="dropAggregateWidgetOnCard(card.index, $event)"
           >
-            <button
-              v-if="isAggregateEditMode"
-              type="button"
-              class="household-aggregate-card__drag-handle"
-              draggable="false"
-              @mousedown="startAggregateDrag(card.index, $event)"
-              @touchstart="startAggregateDrag(card.index, $event)"
-              @dragstart.prevent
-              @click.prevent
-            >&#50948;&#52824; &#51060;&#46041;</button>
+            <div v-if="isAggregateEditMode" class="household-aggregate-card__drag-handle household-aggregate-card__drag-handle--static">위치/크기 설정</div>
             <div v-if="isAggregateEditMode" class="household-aggregate-card__controls">
               <label class="field household-aggregate-card__field">
                 <span class="field__label">집계</span>
@@ -3699,13 +3404,21 @@ defineExpose({
               </label>
               <label class="field household-aggregate-card__field">
                 <span class="field__label">크기</span>
-                <select :value="getAggregateWidgetSizeValue(card.config)" @change="updateAggregateWidgetSize(card.index, $event.target.value)">
-                  <option v-for="option in aggregateWidgetSizeOptions" :key="option.value" :value="option.value">
+                <select :value="getAggregateWidgetSizeValue(card.config)" :disabled="card.config.kind !== 'MONTHLY_CUMULATIVE_CHART'" @change="updateAggregateWidgetSize(card.index, $event.target.value)">
+                  <option v-for="option in getAggregateWidgetSizeOptions(card.config.kind)" :key="option.value" :value="option.value">
                     {{ option.label }}
                   </option>
                 </select>
               </label>
-                <p class="household-aggregate-drag-hint">위치 이동 버튼을 마우스로 끌어 원하는 칸에 놓으세요.</p>
+                <div class="household-aggregate-position-controls">
+                  <label class="field household-aggregate-card__field">
+                    <span class="field__label">위치</span>
+                    <select :value="card.config.layoutX" @change="updateAggregateWidgetLayout(card.index, { layoutX: Number($event.target.value), layoutY: 1 })">
+                      <option v-for="position in getAggregateAllowedColumns(card.config)" :key="position" :value="position">{{ position }}번째 칸</option>
+                    </select>
+                  </label>
+                </div>
+                <p class="household-aggregate-drag-hint">8칸 고정 그리드에서 위치와 크기 값으로 배치합니다. 긴 그래프는 2~4칸 크기를 선택하세요.</p>
               </div>
 
 
@@ -4416,3 +4129,4 @@ defineExpose({
   font-weight: 700;
 }
 </style>
+

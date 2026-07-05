@@ -26114,3 +26114,34 @@ button.button--primary,
     inset 0 0 0 1px rgba(132, 244, 169, 0.18),
     0 4px 10px rgba(0, 0, 0, 0.2) !important;
 }
+
+/* Household aggregate chart modal must escape calendar GridStack panel stacking order. */
+.household-calendar-layout-board:has(.household-aggregate-chart-modal),
+.household-calendar-layout-grid:has(.household-aggregate-chart-modal) {
+  position: relative;
+  z-index: 2147482000 !important;
+  overflow: visible !important;
+}
+
+.household-calendar-layout-item--aggregate:has(.household-aggregate-chart-modal),
+.household-calendar-layout-item--aggregate:has(.household-aggregate-chart-modal) > .grid-stack-item-content,
+.household-calendar-layout-item--aggregate:has(.household-aggregate-chart-modal) .household-calendar-layout-card,
+.household-calendar-layout-item--aggregate:has(.household-aggregate-chart-modal) .household-calendar-layout-static-content,
+.household-calendar-layout-item--aggregate:has(.household-aggregate-chart-modal) .household-quickstats-panel,
+.household-calendar-layout-item--aggregate:has(.household-aggregate-chart-modal) .household-aggregate-panel {
+  z-index: 2147482500 !important;
+  overflow: visible !important;
+  transform: none !important;
+}
+
+.household-aggregate-chart-modal {
+  position: fixed !important;
+  inset: 0 !important;
+  z-index: 2147483000 !important;
+  isolation: isolate !important;
+}
+
+.household-aggregate-chart-modal__panel {
+  position: relative !important;
+  z-index: 2147483001 !important;
+}

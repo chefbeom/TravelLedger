@@ -1904,16 +1904,6 @@ function getAggregateMaxRowForHeight(height) {
   return Math.max(1, aggregateGridRowCount + 1 - normalizeAggregateGridSpan(height, aggregateDefaultWidgetHeight, aggregateGridRowCount))
 }
 
-function getAggregateAllowedColumns(config) {
-  const maxColumn = getAggregateMaxColumnForWidth(config?.layoutW)
-  return Array.from({ length: maxColumn }, (_, index) => index + 1)
-}
-
-function getAggregateAllowedRows(config) {
-  const maxRow = getAggregateMaxRowForHeight(config?.layoutH)
-  return Array.from({ length: maxRow }, (_, index) => index + 1)
-}
-
 function normalizeAggregateLayoutOrder(value, fallback = 1) {
   const numericValue = Number(value)
   if (!Number.isFinite(numericValue)) return fallback
@@ -2099,11 +2089,15 @@ function normalizeAggregateConfigs(configs) {
     let paymentMethodId = kind === 'PAYMENT_METHOD'
       ? (validPaymentIds.has(String(current.paymentMethodId ?? '')) ? String(current.paymentMethodId) : (baseConfig.paymentMethodId || firstPaymentMethodId))
       : ''
-    const monthlyExpenseTarget = normalizeAggregateTargetAmount(current.monthlyExpenseTarget ?? baseConfig.monthlyExpenseTarget)
-    const singleExpenseLimit = normalizeAggregateTargetAmount(current.singleExpenseLimit ?? baseConfig.singleExpenseLimit)
+    const monthlyExpenseTarget = kind === 'MONTHLY_GOAL'
+      ? normalizeAggregateTargetAmount(current.monthlyExpenseTarget ?? baseConfig.monthlyExpenseTarget)
+      : 0
+    const singleExpenseLimit = kind === 'MONTHLY_GOAL'
+      ? normalizeAggregateTargetAmount(current.singleExpenseLimit ?? baseConfig.singleExpenseLimit)
+      : 0
     let showIncomeCumulative = normalizeAggregateFlag(current.showIncomeCumulative, baseConfig.showIncomeCumulative)
     let showExpenseCumulative = normalizeAggregateFlag(current.showExpenseCumulative, baseConfig.showExpenseCumulative)
-    const comparePreviousPeriod = normalizeAggregateFlag(current.comparePreviousPeriod, baseConfig.comparePreviousPeriod)
+    let comparePreviousPeriod = normalizeAggregateFlag(current.comparePreviousPeriod, baseConfig.comparePreviousPeriod)
     let layoutW = normalizeAggregateGridSpan(current.layoutW ?? baseConfig.layoutW, baseConfig.layoutW, aggregateGridColumnCount)
     let layoutH = normalizeAggregateGridSpan(current.layoutH ?? baseConfig.layoutH, baseConfig.layoutH, aggregateGridRowCount)
     let layoutX = normalizeAggregateGridPosition(current.layoutX ?? baseConfig.layoutX, baseConfig.layoutX, getAggregateMaxColumnForWidth(layoutW))
@@ -2116,9 +2110,23 @@ function normalizeAggregateConfigs(configs) {
       if (!showIncomeCumulative && !showExpenseCumulative) {
         showExpenseCumulative = true
       }
+      layoutW = Math.min(4, Math.max(2, normalizeAggregateGridSpan(layoutW, 2, 4)))
+      layoutH = aggregateDefaultWidgetHeight
+    } else {
+      layoutW = aggregateDefaultWidgetWidth
+      layoutH = aggregateDefaultWidgetHeight
+      showIncomeCumulative = true
+      showExpenseCumulative = true
+      comparePreviousPeriod = false
     }
 
     if (kind === 'MONTHLY_GOAL') {
+      period = 'MONTH'
+      amountType = 'EXPENSE'
+      paymentMethodId = ''
+    }
+
+    if (kind === 'NONE') {
       period = 'MONTH'
       amountType = 'EXPENSE'
       paymentMethodId = ''
@@ -2140,18 +2148,50 @@ function updateAggregateWidget(index, field, value) {
     aggregateWidgetDraftConfigs.value.map((config, configIndex) => {
       if (configIndex !== index) return config
       const nextConfig = { ...config, [field]: value }
-      if (field === 'kind' && value !== 'PAYMENT_METHOD') nextConfig.paymentMethodId = ''
-      if (field === 'kind' && value === 'PAYMENT_METHOD' && !nextConfig.paymentMethodId) nextConfig.paymentMethodId = props.paymentMethods[0] ? String(props.paymentMethods[0].id) : ''
-      if (field === 'kind' && value === 'MONTHLY_CUMULATIVE_CHART') {
-        nextConfig.amountType = 'NET'
-        nextConfig.showIncomeCumulative = true
-        nextConfig.showExpenseCumulative = true
-        nextConfig.comparePreviousPeriod = false
+
+      if (field === 'kind') {
+        const nextKind = String(value || 'NONE')
+        nextConfig.kind = nextKind
+        nextConfig.layoutH = aggregateDefaultWidgetHeight
+
+        if (nextKind === 'MONTHLY_CUMULATIVE_CHART') {
+          nextConfig.layoutW = Math.min(4, Math.max(2, normalizeAggregateGridSpan(nextConfig.layoutW, 2, 4)))
+          nextConfig.layoutX = normalizeAggregateGridPosition(nextConfig.layoutX, 1, getAggregateMaxColumnForWidth(nextConfig.layoutW))
+          nextConfig.amountType = 'NET'
+          nextConfig.paymentMethodId = ''
+          nextConfig.showIncomeCumulative = true
+          nextConfig.showExpenseCumulative = true
+          nextConfig.comparePreviousPeriod = false
+          return nextConfig
+        }
+
+        nextConfig.layoutW = aggregateDefaultWidgetWidth
+        nextConfig.layoutX = normalizeAggregateGridPosition(nextConfig.layoutX, 1, getAggregateMaxColumnForWidth(nextConfig.layoutW))
+
+        if (nextKind === 'PAYMENT_METHOD') {
+          nextConfig.paymentMethodId = nextConfig.paymentMethodId || (props.paymentMethods[0] ? String(props.paymentMethods[0].id) : '')
+          return nextConfig
+        }
+
+        nextConfig.paymentMethodId = ''
+
+        if (nextKind === 'MONTHLY_GOAL') {
+          nextConfig.period = 'MONTH'
+          nextConfig.amountType = 'EXPENSE'
+          return nextConfig
+        }
+
+        if (nextKind === 'NONE') {
+          nextConfig.period = 'MONTH'
+          nextConfig.amountType = 'EXPENSE'
+          nextConfig.monthlyExpenseTarget = 0
+          nextConfig.singleExpenseLimit = 0
+          nextConfig.showIncomeCumulative = true
+          nextConfig.showExpenseCumulative = true
+          nextConfig.comparePreviousPeriod = false
+        }
       }
-      if (field === 'kind' && value === 'MONTHLY_GOAL') {
-        nextConfig.period = 'MONTH'
-        nextConfig.amountType = 'EXPENSE'
-      }
+
       return nextConfig
     }),
   )
@@ -2214,16 +2254,20 @@ function saveAggregateWidgetConfigs() {
         ? Math.min(4, Math.max(2, normalizeAggregateGridSpan(layoutW, 2, 4)))
         : aggregateDefaultWidgetWidth
       const normalizedHeight = aggregateDefaultWidgetHeight
+      const normalizedPeriod = isAggregatePeriodEditable(kind) ? period : 'MONTH'
+      const normalizedAmountType = isAggregateAmountTypeEditable(kind)
+        ? amountType
+        : (kind === 'MONTHLY_CUMULATIVE_CHART' ? 'NET' : 'EXPENSE')
       return {
         kind,
-        period,
-        paymentMethodId: paymentMethodId ? Number(paymentMethodId) : null,
-        amountType,
-        monthlyExpenseTarget: normalizeAggregateTargetAmount(monthlyExpenseTarget),
-        singleExpenseLimit: normalizeAggregateTargetAmount(singleExpenseLimit),
-        showIncomeCumulative: Boolean(showIncomeCumulative),
-        showExpenseCumulative: Boolean(showExpenseCumulative),
-        comparePreviousPeriod: Boolean(comparePreviousPeriod),
+        period: normalizedPeriod,
+        paymentMethodId: kind === 'PAYMENT_METHOD' && paymentMethodId ? Number(paymentMethodId) : null,
+        amountType: normalizedAmountType,
+        monthlyExpenseTarget: kind === 'MONTHLY_GOAL' ? normalizeAggregateTargetAmount(monthlyExpenseTarget) : 0,
+        singleExpenseLimit: kind === 'MONTHLY_GOAL' ? normalizeAggregateTargetAmount(singleExpenseLimit) : 0,
+        showIncomeCumulative: kind === 'MONTHLY_CUMULATIVE_CHART' ? Boolean(showIncomeCumulative) : true,
+        showExpenseCumulative: kind === 'MONTHLY_CUMULATIVE_CHART' ? Boolean(showExpenseCumulative) : true,
+        comparePreviousPeriod: kind === 'MONTHLY_CUMULATIVE_CHART' ? Boolean(comparePreviousPeriod) : false,
         layoutX: normalizeAggregateGridPosition(layoutX, 1, getAggregateMaxColumnForWidth(normalizedWidth)),
         layoutY: normalizeAggregateGridPosition(layoutY, 1, getAggregateMaxRowForHeight(normalizedHeight)),
         layoutW: normalizedWidth,
@@ -3520,14 +3564,6 @@ defineExpose({
                   </option>
                 </select>
               </label>
-                <div v-if="card.config.kind !== 'NONE'" class="household-aggregate-position-controls">
-                  <label class="field household-aggregate-card__field">
-                    <span class="field__label">위치</span>
-                    <select :value="card.config.layoutX" @change="updateAggregateWidgetLayout(card.index, { layoutX: Number($event.target.value), layoutY: 1 })">
-                      <option v-for="position in getAggregateAllowedColumns(card.config)" :key="position" :value="position">{{ position }}번째 칸</option>
-                    </select>
-                  </label>
-                </div>
               </div>
 
 
@@ -3567,7 +3603,7 @@ defineExpose({
                 지난 기간 비교
               </label>
             </div>
-            <div class="household-aggregate-card__copy">
+            <div v-if="!isAggregateEditMode" class="household-aggregate-card__copy">
               <span class="household-aggregate-card__eyebrow">{{ card.title }}</span>
               <template v-if="card.config.kind === 'NONE'">
                 <strong>-</strong>
@@ -3589,7 +3625,7 @@ defineExpose({
             </div>
 
             <button
-              v-if="card.chart"
+              v-if="!isAggregateEditMode && card.chart"
               type="button"
               class="household-aggregate-chart-preview-button"
               :aria-label="`${card.title} 상세 보기`"
@@ -3623,7 +3659,7 @@ defineExpose({
                 <span v-if="card.config.comparePreviousPeriod"><i class="previous"></i>지난 기간</span>
               </div>
             </button>
-            <div v-if="card.goal" class="household-aggregate-goal">
+            <div v-if="!isAggregateEditMode && card.goal" class="household-aggregate-goal">
               <div class="household-aggregate-goal__bar" :aria-label="`월 목표 사용률 ${card.goal.progress}%`">
                 <span :style="{ width: `${card.goal.progressWidth}%` }"></span>
               </div>
@@ -3635,7 +3671,7 @@ defineExpose({
               </div>
             </div>
 
-            <div v-if="card.config.kind !== 'NONE'" class="household-aggregate-card__meta">
+            <div v-if="!isAggregateEditMode && card.config.kind !== 'NONE'" class="household-aggregate-card__meta">
               <span>수입 {{ formatCurrency(card.overview.income) }}</span>
               <span>지출 {{ formatCurrency(card.overview.expense) }}</span>
             </div>

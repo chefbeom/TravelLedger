@@ -26082,11 +26082,6 @@ button.button--primary,
   pointer-events: none;
 }
 
-.household-aggregate-position-controls {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 8px;
-}
 /* Dark login PIN slots: keep the wrapper transparent and render each digit cell as its own dark tile. */
 :root[data-theme='toss'] .pin-pad__display {
   gap: 7px !important;
@@ -26203,8 +26198,7 @@ button.button--primary,
 
 .household-aggregate-panel--editing .household-aggregate-card__field,
 .household-aggregate-panel--editing .household-aggregate-goal-fields,
-.household-aggregate-panel--editing .household-aggregate-chart-options,
-.household-aggregate-panel--editing .household-aggregate-position-controls {
+.household-aggregate-panel--editing .household-aggregate-chart-options {
   min-width: 0 !important;
   max-width: 100% !important;
 }
@@ -26420,13 +26414,6 @@ button.button--primary,
   overflow: visible !important;
 }
 
-.household-aggregate-panel--editing .household-aggregate-position-controls {
-  display: grid !important;
-  grid-template-columns: minmax(0, 1fr) !important;
-  gap: 8px !important;
-  max-height: none !important;
-  overflow: visible !important;
-}
 
 .household-aggregate-panel--editing .household-aggregate-card__field,
 .household-aggregate-panel--editing .household-aggregate-card__field select,
@@ -27320,10 +27307,9 @@ button.button--primary,
 
 .household-aggregate-panel--editing .household-aggregate-card__controls,
 .household-aggregate-panel--editing .household-aggregate-goal-fields,
-.household-aggregate-panel--editing .household-aggregate-chart-options,
-.household-aggregate-panel--editing .household-aggregate-position-controls {
+.household-aggregate-panel--editing .household-aggregate-chart-options {
   grid-template-columns: minmax(0, 1fr) !important;
-  gap: 8px !important;
+  gap: 6px !important;
 }
 
 .household-aggregate-panel--editing .household-aggregate-card__field,

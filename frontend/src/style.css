@@ -26695,9 +26695,9 @@ button.button--primary,
     grid-row: auto !important;
   }
 }
-/* Household aggregate chart preview strict 25:75 split */
+/* Household aggregate chart preview strict 20:80 split */
 .household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-card--chart {
-  grid-template-columns: minmax(0, 1fr) minmax(0, 3fr) !important;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 4fr) !important;
   grid-template-rows: 1fr !important;
   column-gap: 14px !important;
   align-items: stretch !important;
@@ -26751,11 +26751,11 @@ button.button--primary,
 .household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-card--chart .household-aggregate-card__meta {
   display: none !important;
 }
-/* Household aggregate chart preview final enforcement: text 25%, graph 75% */
+/* Household aggregate chart preview final enforcement: text 20%, graph 80% */
 .household-calendar-layout-item--aggregate .household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-grid > .household-aggregate-card.household-aggregate-card--chart,
 .household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-grid > .household-aggregate-card.household-aggregate-card--chart {
   display: grid !important;
-  grid-template-columns: minmax(0, 25%) minmax(0, 75%) !important;
+  grid-template-columns: minmax(0, 20%) minmax(0, 80%) !important;
   grid-template-rows: minmax(132px, 1fr) !important;
   gap: 0 !important;
   column-gap: 0 !important;
@@ -26992,7 +26992,7 @@ button.button--primary,
 
 .household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-card--chart {
   display: grid !important;
-  grid-template-columns: minmax(0, 25%) minmax(0, 75%) !important;
+  grid-template-columns: minmax(0, 20%) minmax(0, 80%) !important;
   grid-template-rows: 1fr !important;
   gap: 0 !important;
   align-items: stretch !important;
@@ -27173,7 +27173,7 @@ button.button--primary,
 .household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-card--chart {
   align-items: stretch !important;
   display: grid !important;
-  grid-template-columns: minmax(0, 25%) minmax(0, 75%) !important;
+  grid-template-columns: minmax(0, 20%) minmax(0, 80%) !important;
   grid-template-rows: minmax(0, 1fr) !important;
   min-height: 0 !important;
 }

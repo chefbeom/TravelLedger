@@ -26993,3 +26993,18 @@ button.button--primary,
   overflow: visible !important;
   padding: 12px !important;
 }
+/* Calendar layout edit mode: reserve aggregate height so other panels cannot float over it. */
+.household-calendar-layout-grid--editing .household-calendar-layout-item--aggregate,
+.household-calendar-layout-grid--editing .household-calendar-layout-item--aggregate > .grid-stack-item-content,
+.household-calendar-layout-grid--editing .household-calendar-layout-item--aggregate .household-calendar-layout-card,
+.household-calendar-layout-grid--editing .household-calendar-layout-item--aggregate .household-calendar-layout-static-content,
+.household-calendar-layout-grid--editing .household-calendar-layout-item--aggregate .household-aggregate-panel {
+  overflow: hidden !important;
+  z-index: 1 !important;
+}
+
+.household-calendar-layout-grid--editing .household-calendar-layout-item--calendar,
+.household-calendar-layout-grid--editing .household-calendar-layout-item--quick-entry,
+.household-calendar-layout-grid--editing .household-calendar-layout-item--sheet {
+  z-index: 2 !important;
+}

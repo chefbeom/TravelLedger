@@ -106,7 +106,7 @@ const calendarPanelDefinitions = [
   },
   {
     id: 'calendar',
-    defaultLayout: { x: 0, y: 3, w: 6, h: 5 },
+    defaultLayout: { x: 0, y: 6, w: 6, h: 5 },
     minW: 4,
     maxW: 9,
     minH: 3,
@@ -114,7 +114,7 @@ const calendarPanelDefinitions = [
   },
   {
     id: 'quick-entry',
-    defaultLayout: { x: 6, y: 3, w: 3, h: 5 },
+    defaultLayout: { x: 6, y: 6, w: 3, h: 5 },
     minW: 2,
     maxW: 5,
     minH: 3,
@@ -122,7 +122,7 @@ const calendarPanelDefinitions = [
   },
   {
     id: 'sheet',
-    defaultLayout: { x: 0, y: 8, w: 9, h: 3 },
+    defaultLayout: { x: 0, y: 11, w: 9, h: 3 },
     minW: 4,
     maxW: 9,
     minH: 2,
@@ -1320,7 +1320,7 @@ function normalizeCalendarPanelLayout(layouts) {
     aggregate.x = 0
     aggregate.y = 0
     aggregate.w = CALENDAR_LAYOUT_GRID_COLUMNS
-    aggregate.h = 3
+    aggregate.h = 6
   }
 
   const aggregateBottom = aggregate ? aggregate.y + aggregate.h : 0

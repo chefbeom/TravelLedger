@@ -26526,3 +26526,76 @@ button.button--primary,
 .household-aggregate-chart__value-label--expense {
   fill: #fecdd3 !important;
 }
+
+/* Household aggregate chart preview split layout */
+.household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-card--chart {
+  grid-template-columns: minmax(154px, 0.32fr) minmax(220px, 1fr) !important;
+  grid-template-rows: 1fr auto !important;
+  column-gap: 16px !important;
+  row-gap: 8px !important;
+  min-height: 150px !important;
+  align-items: stretch !important;
+}
+
+.household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-card--chart .household-aggregate-card__copy {
+  grid-column: 1 !important;
+  grid-row: 1 !important;
+  align-self: start !important;
+  padding-right: 2px !important;
+}
+
+.household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-card--chart .household-aggregate-card__copy strong {
+  font-size: clamp(1.35rem, 1.8vw, 1.72rem) !important;
+  line-height: 1.05 !important;
+}
+
+.household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-card--chart .household-aggregate-card__copy small {
+  line-height: 1.45 !important;
+  overflow-wrap: anywhere !important;
+}
+
+.household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-card--chart .household-aggregate-chart-preview-button {
+  grid-column: 2 !important;
+  grid-row: 1 / span 2 !important;
+  min-height: 124px !important;
+  height: 100% !important;
+  align-self: stretch !important;
+  display: grid !important;
+  grid-template-rows: minmax(104px, 1fr) auto !important;
+  gap: 7px !important;
+}
+
+.household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-card--chart .household-aggregate-chart--preview {
+  height: 112px !important;
+  min-height: 112px !important;
+  max-height: none !important;
+  padding: 0 !important;
+}
+
+.household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-card--chart .household-aggregate-chart--preview svg {
+  height: 112px !important;
+  min-height: 112px !important;
+}
+
+.household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-card--chart .household-aggregate-card__meta {
+  grid-column: 1 !important;
+  grid-row: 2 !important;
+  align-self: end !important;
+  justify-content: flex-start !important;
+  gap: 8px !important;
+  font-size: 0.76rem !important;
+}
+
+@media (max-width: 980px) {
+  .household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-card--chart {
+    grid-template-columns: minmax(0, 1fr) !important;
+    grid-template-rows: auto minmax(112px, 1fr) auto !important;
+  }
+
+  .household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-card--chart .household-aggregate-card__copy,
+  .household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-card--chart .household-aggregate-chart-preview-button,
+  .household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-card--chart .household-aggregate-card__meta {
+    grid-column: 1 !important;
+    grid-row: auto !important;
+  }
+}

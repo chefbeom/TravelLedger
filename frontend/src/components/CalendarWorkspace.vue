@@ -95,6 +95,40 @@ const aggregateWidgetSizeOptions = [
   { value: '4x1', label: '4칸', width: 4, height: 1 },
 ]
 
+const calendarPanelDefinitions = [
+  {
+    id: 'aggregate',
+    defaultLayout: { x: 0, y: 0, w: 9, h: 2 },
+    minW: 4,
+    maxW: 9,
+    minH: 1,
+    maxH: 3,
+  },
+  {
+    id: 'calendar',
+    defaultLayout: { x: 0, y: 2, w: 6, h: 5 },
+    minW: 4,
+    maxW: 9,
+    minH: 3,
+    maxH: 8,
+  },
+  {
+    id: 'quick-entry',
+    defaultLayout: { x: 6, y: 2, w: 3, h: 5 },
+    minW: 2,
+    maxW: 5,
+    minH: 3,
+    maxH: 8,
+  },
+  {
+    id: 'sheet',
+    defaultLayout: { x: 0, y: 7, w: 9, h: 3 },
+    minW: 4,
+    maxW: 9,
+    minH: 2,
+    maxH: 6,
+  },
+]
 const props = defineProps({
   currentUser: {
     type: Object,
@@ -670,7 +704,7 @@ const hasReceiptAnalysis = computed(() => Boolean(
 
 const aggregateCards = computed(() => {
   const sourceConfigs = isAggregateEditMode.value ? aggregateWidgetDraftConfigs.value : props.aggregateWidgetConfigs
-  const cards = normalizeAggregateConfigs(sourceConfigs).slice(0, 4).map((config, index) => buildAggregateCard(config, index))
+  const cards = normalizeAggregateConfigs(sourceConfigs).slice(0, aggregateGridColumnCount).map((config, index) => buildAggregateCard(config, index))
   return isAggregateEditMode.value ? cards : cards.filter((card) => card.config.kind !== 'NONE')
 })
 const calendarLayoutPanels = computed(() => (
@@ -4129,4 +4163,6 @@ defineExpose({
   font-weight: 700;
 }
 </style>
+
+
 

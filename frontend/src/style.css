@@ -26655,3 +26655,101 @@ button.button--primary,
 .household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-card--chart .household-aggregate-card__meta {
   display: none !important;
 }
+/* Household aggregate chart preview final enforcement: text 25%, graph 75% */
+.household-calendar-layout-item--aggregate .household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-grid > .household-aggregate-card.household-aggregate-card--chart,
+.household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-grid > .household-aggregate-card.household-aggregate-card--chart {
+  display: grid !important;
+  grid-template-columns: minmax(0, 25%) minmax(0, 75%) !important;
+  grid-template-rows: minmax(132px, 1fr) !important;
+  gap: 0 !important;
+  column-gap: 0 !important;
+  align-items: stretch !important;
+  justify-items: stretch !important;
+}
+
+.household-calendar-layout-item--aggregate .household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-card--chart .household-aggregate-card__copy,
+.household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-card--chart .household-aggregate-card__copy {
+  grid-column: 1 !important;
+  grid-row: 1 !important;
+  width: 100% !important;
+  max-width: none !important;
+  min-width: 0 !important;
+  height: 100% !important;
+  margin: 0 !important;
+  padding: 0 14px 0 0 !important;
+  border-right: 1px solid rgba(148, 163, 184, 0.2) !important;
+  border-bottom: 0 !important;
+  box-shadow: none !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: flex-start !important;
+  justify-content: flex-start !important;
+  box-sizing: border-box !important;
+}
+
+.household-calendar-layout-item--aggregate .household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-card--chart .household-aggregate-card__copy::before,
+.household-calendar-layout-item--aggregate .household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-card--chart .household-aggregate-card__copy::after,
+.household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-card--chart .household-aggregate-card__copy::before,
+.household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-card--chart .household-aggregate-card__copy::after {
+  display: none !important;
+  content: none !important;
+}
+
+.household-calendar-layout-item--aggregate .household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-card--chart .household-aggregate-chart-preview-button,
+.household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-card--chart .household-aggregate-chart-preview-button {
+  grid-column: 2 !important;
+  grid-row: 1 !important;
+  place-self: stretch !important;
+  align-self: stretch !important;
+  justify-self: stretch !important;
+  width: 100% !important;
+  inline-size: 100% !important;
+  max-width: none !important;
+  max-inline-size: none !important;
+  min-width: 0 !important;
+  height: 100% !important;
+  min-height: 132px !important;
+  margin: 0 !important;
+  padding: 0 0 0 14px !important;
+  box-sizing: border-box !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: stretch !important;
+  justify-content: stretch !important;
+}
+
+.household-calendar-layout-item--aggregate .household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-card--chart .household-aggregate-chart--preview,
+.household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-card--chart .household-aggregate-chart--preview {
+  flex: 1 1 auto !important;
+  align-self: stretch !important;
+  justify-self: stretch !important;
+  width: 100% !important;
+  inline-size: 100% !important;
+  max-width: none !important;
+  max-inline-size: none !important;
+  min-width: 0 !important;
+  height: 100% !important;
+  min-height: 120px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  box-sizing: border-box !important;
+}
+
+.household-calendar-layout-item--aggregate .household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-card--chart .household-aggregate-chart--preview svg,
+.household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-card--chart .household-aggregate-chart--preview svg {
+  display: block !important;
+  width: 100% !important;
+  inline-size: 100% !important;
+  max-width: none !important;
+  max-inline-size: none !important;
+  height: 100% !important;
+  min-height: 120px !important;
+  margin: 0 !important;
+}
+
+.household-calendar-layout-item--aggregate .household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-card--chart .household-aggregate-chart__legend--preview,
+.household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-card--chart .household-aggregate-chart__legend--preview,
+.household-calendar-layout-item--aggregate .household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-card--chart .household-aggregate-card__meta,
+.household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-card--chart .household-aggregate-card__meta {
+  display: none !important;
+}

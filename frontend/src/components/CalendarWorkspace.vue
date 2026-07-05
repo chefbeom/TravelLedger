@@ -20,7 +20,8 @@ const DEFAULT_CALENDAR_HIGHLIGHT_MODE = 'net'
 const CALENDAR_LAYOUT_GRID_COLUMNS = 9
 const CALENDAR_LAYOUT_GRID_MARGIN = 4
 const CALENDAR_LAYOUT_GRID_GAP = CALENDAR_LAYOUT_GRID_MARGIN * 2
-const CALENDAR_AGGREGATE_PANEL_ROWS = 6
+const CALENDAR_AGGREGATE_PANEL_ROWS = 2
+const LEGACY_CALENDAR_AGGREGATE_PANEL_ROWS = 6
 const REMOTE_LAYOUT_SAVE_DELAY_MS = 800
 const CALENDAR_DAY_LONG_PRESS_MS = 520
 const CALENDAR_DAY_CLICK_SUPPRESS_MS = 450
@@ -107,7 +108,7 @@ const calendarPanelDefinitions = [
   },
   {
     id: 'calendar',
-    defaultLayout: { x: 0, y: 6, w: 6, h: 5 },
+    defaultLayout: { x: 0, y: CALENDAR_AGGREGATE_PANEL_ROWS, w: 6, h: 5 },
     minW: 4,
     maxW: 9,
     minH: 3,
@@ -115,7 +116,7 @@ const calendarPanelDefinitions = [
   },
   {
     id: 'quick-entry',
-    defaultLayout: { x: 6, y: 6, w: 3, h: 5 },
+    defaultLayout: { x: 6, y: CALENDAR_AGGREGATE_PANEL_ROWS, w: 3, h: 5 },
     minW: 2,
     maxW: 5,
     minH: 3,
@@ -123,7 +124,7 @@ const calendarPanelDefinitions = [
   },
   {
     id: 'sheet',
-    defaultLayout: { x: 0, y: 11, w: 9, h: 3 },
+    defaultLayout: { x: 0, y: CALENDAR_AGGREGATE_PANEL_ROWS + 5, w: 9, h: 3 },
     minW: 4,
     maxW: 9,
     minH: 2,
@@ -1327,13 +1328,22 @@ function normalizeCalendarPanelLayout(layouts) {
   const aggregateBottom = aggregate ? aggregate.y + aggregate.h : 0
   const calendar = normalized.find((item) => item.id === 'calendar')
   const quickEntry = normalized.find((item) => item.id === 'quick-entry')
+  const sheet = normalized.find((item) => item.id === 'sheet')
+  const legacyAggregateShift = aggregateBottom - LEGACY_CALENDAR_AGGREGATE_PANEL_ROWS
+  if (legacyAggregateShift < 0) {
+    for (const item of [calendar, quickEntry, sheet]) {
+      if (item && item.y >= LEGACY_CALENDAR_AGGREGATE_PANEL_ROWS) {
+        item.y = Math.max(aggregateBottom, item.y + legacyAggregateShift)
+      }
+    }
+  }
+
   for (const item of [calendar, quickEntry]) {
     if (item && item.y < aggregateBottom) {
       item.y = aggregateBottom
     }
   }
 
-  const sheet = normalized.find((item) => item.id === 'sheet')
   const contentBottom = Math.max(
     aggregateBottom,
     calendar ? calendar.y + calendar.h : 0,

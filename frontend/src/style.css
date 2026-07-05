@@ -27008,3 +27008,103 @@ button.button--primary,
 .household-calendar-layout-grid--editing .household-calendar-layout-item--sheet {
   z-index: 2 !important;
 }
+/* Household aggregate palette: final compact GridStack contract. */
+.household-calendar-layout-grid:not(.household-calendar-layout-grid--editing) .household-calendar-layout-item--aggregate,
+.household-calendar-layout-grid:not(.household-calendar-layout-grid--editing) .household-calendar-layout-item--aggregate > .grid-stack-item-content,
+.household-calendar-layout-grid:not(.household-calendar-layout-grid--editing) .household-calendar-layout-item--aggregate .household-calendar-layout-static-content {
+  min-height: 0 !important;
+  overflow: hidden !important;
+  z-index: 1 !important;
+}
+
+.household-calendar-layout-grid:not(.household-calendar-layout-grid--editing) .household-calendar-layout-item--aggregate .household-aggregate-panel:not(.household-aggregate-panel--editing),
+.household-calendar-layout-item--aggregate .household-aggregate-panel:not(.household-aggregate-panel--editing),
+.household-aggregate-panel:not(.household-aggregate-panel--editing) {
+  display: grid !important;
+  grid-template-rows: auto minmax(0, 1fr) !important;
+  height: 100% !important;
+  min-height: 0 !important;
+  max-height: 100% !important;
+  overflow: hidden !important;
+}
+
+.household-calendar-layout-static-content .household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-grid,
+.household-calendar-layout-item--aggregate .household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-grid,
+.household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-grid {
+  align-items: stretch !important;
+  display: grid !important;
+  flex: initial !important;
+  gap: 8px !important;
+  grid-auto-flow: row !important;
+  grid-auto-rows: minmax(0, 1fr) !important;
+  grid-template-columns: repeat(8, minmax(0, 1fr)) !important;
+  grid-template-rows: minmax(0, 1fr) !important;
+  height: 100% !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  overflow: hidden !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  background-image: none !important;
+  scrollbar-gutter: auto !important;
+}
+
+.household-calendar-layout-static-content .household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-grid > .household-aggregate-card,
+.household-calendar-layout-item--aggregate .household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-grid > .household-aggregate-card,
+.household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-grid > .household-aggregate-card {
+  align-self: stretch !important;
+  box-sizing: border-box !important;
+  height: 100% !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  min-width: 0 !important;
+  overflow: hidden !important;
+}
+
+.household-calendar-layout-item--aggregate .household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-card__copy,
+.household-calendar-layout-item--aggregate .household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-card__meta,
+.household-calendar-layout-item--aggregate .household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-goal,
+.household-calendar-layout-item--aggregate .household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-goal__stats,
+.household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-card__copy,
+.household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-card__meta,
+.household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-goal,
+.household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-goal__stats {
+  min-height: 0 !important;
+  min-width: 0 !important;
+}
+
+.household-calendar-layout-item--aggregate .household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-card--chart,
+.household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-card--chart {
+  align-items: stretch !important;
+  display: grid !important;
+  grid-template-columns: minmax(0, 25%) minmax(0, 75%) !important;
+  grid-template-rows: minmax(0, 1fr) !important;
+  min-height: 0 !important;
+}
+
+.household-calendar-layout-item--aggregate .household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-card--chart .household-aggregate-card__copy,
+.household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-card--chart .household-aggregate-card__copy {
+  height: 100% !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+}
+
+.household-calendar-layout-item--aggregate .household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-card--chart .household-aggregate-chart-preview-button,
+.household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-card--chart .household-aggregate-chart-preview-button {
+  align-self: stretch !important;
+  display: flex !important;
+  height: 100% !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+}
+
+.household-calendar-layout-item--aggregate .household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-card--chart .household-aggregate-chart--preview,
+.household-calendar-layout-item--aggregate .household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-card--chart .household-aggregate-chart--preview svg,
+.household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-card--chart .household-aggregate-chart--preview,
+.household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-card--chart .household-aggregate-chart--preview svg {
+  height: 100% !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  overflow: hidden !important;
+  width: 100% !important;
+}

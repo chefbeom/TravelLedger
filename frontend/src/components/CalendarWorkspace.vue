@@ -98,15 +98,15 @@ const aggregateWidgetSizeOptions = [
 const calendarPanelDefinitions = [
   {
     id: 'aggregate',
-    defaultLayout: { x: 0, y: 0, w: 9, h: 2 },
+    defaultLayout: { x: 0, y: 0, w: 9, h: 1 },
     minW: 4,
     maxW: 9,
     minH: 1,
-    maxH: 3,
+    maxH: 1,
   },
   {
     id: 'calendar',
-    defaultLayout: { x: 0, y: 2, w: 6, h: 5 },
+    defaultLayout: { x: 0, y: 1, w: 6, h: 5 },
     minW: 4,
     maxW: 9,
     minH: 3,
@@ -114,7 +114,7 @@ const calendarPanelDefinitions = [
   },
   {
     id: 'quick-entry',
-    defaultLayout: { x: 6, y: 2, w: 3, h: 5 },
+    defaultLayout: { x: 6, y: 1, w: 3, h: 5 },
     minW: 2,
     maxW: 5,
     minH: 3,
@@ -122,7 +122,7 @@ const calendarPanelDefinitions = [
   },
   {
     id: 'sheet',
-    defaultLayout: { x: 0, y: 7, w: 9, h: 3 },
+    defaultLayout: { x: 0, y: 6, w: 9, h: 3 },
     minW: 4,
     maxW: 9,
     minH: 2,
@@ -2132,22 +2132,28 @@ function cancelAggregateEdit() {
 function saveAggregateWidgetConfigs() {
   emit(
     'save-aggregate-widget-configs',
-    normalizeAggregateConfigs(aggregateWidgetDraftConfigs.value).map(({ kind, period, paymentMethodId, amountType, monthlyExpenseTarget, singleExpenseLimit, showIncomeCumulative, showExpenseCumulative, comparePreviousPeriod, layoutX, layoutY, layoutW, layoutH, layoutOrder }) => ({
-      kind,
-      period,
-      paymentMethodId: paymentMethodId ? Number(paymentMethodId) : null,
-      amountType,
-      monthlyExpenseTarget: normalizeAggregateTargetAmount(monthlyExpenseTarget),
-      singleExpenseLimit: normalizeAggregateTargetAmount(singleExpenseLimit),
-      showIncomeCumulative: Boolean(showIncomeCumulative),
-      showExpenseCumulative: Boolean(showExpenseCumulative),
-      comparePreviousPeriod: Boolean(comparePreviousPeriod),
-      layoutX: normalizeAggregateGridPosition(layoutX, 1, getAggregateMaxColumnForWidth(layoutW)),
-      layoutY: normalizeAggregateGridPosition(layoutY, 1, getAggregateMaxRowForHeight(layoutH)),
-      layoutW: normalizeAggregateGridSpan(layoutW, 2, 4),
-      layoutH: normalizeAggregateGridSpan(layoutH, 2, 3),
-      layoutOrder: normalizeAggregateLayoutOrder(layoutOrder, 1),
-    })),
+    normalizeAggregateConfigs(aggregateWidgetDraftConfigs.value).map(({ kind, period, paymentMethodId, amountType, monthlyExpenseTarget, singleExpenseLimit, showIncomeCumulative, showExpenseCumulative, comparePreviousPeriod, layoutX, layoutY, layoutW, layoutOrder }) => {
+      const normalizedWidth = kind === 'MONTHLY_CUMULATIVE_CHART'
+        ? Math.min(4, Math.max(2, normalizeAggregateGridSpan(layoutW, 2, 4)))
+        : aggregateDefaultWidgetWidth
+      const normalizedHeight = aggregateDefaultWidgetHeight
+      return {
+        kind,
+        period,
+        paymentMethodId: paymentMethodId ? Number(paymentMethodId) : null,
+        amountType,
+        monthlyExpenseTarget: normalizeAggregateTargetAmount(monthlyExpenseTarget),
+        singleExpenseLimit: normalizeAggregateTargetAmount(singleExpenseLimit),
+        showIncomeCumulative: Boolean(showIncomeCumulative),
+        showExpenseCumulative: Boolean(showExpenseCumulative),
+        comparePreviousPeriod: Boolean(comparePreviousPeriod),
+        layoutX: normalizeAggregateGridPosition(layoutX, 1, getAggregateMaxColumnForWidth(normalizedWidth)),
+        layoutY: normalizeAggregateGridPosition(layoutY, 1, getAggregateMaxRowForHeight(normalizedHeight)),
+        layoutW: normalizedWidth,
+        layoutH: normalizedHeight,
+        layoutOrder: normalizeAggregateLayoutOrder(layoutOrder, 1),
+      }
+    }),
   )
   isAggregateEditMode.value = false
 }

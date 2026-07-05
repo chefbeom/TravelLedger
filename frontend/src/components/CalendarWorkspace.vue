@@ -710,6 +710,13 @@ const aggregateCards = computed(() => {
   const cards = normalizeAggregateConfigs(sourceConfigs).slice(0, aggregateGridColumnCount).map((config, index) => buildAggregateCard(config, index))
   return isAggregateEditMode.value ? cards : cards.filter((card) => card.config.kind !== 'NONE')
 })
+const aggregateDisplayCardCount = computed(() => {
+  const sourceConfigs = isAggregateEditMode.value ? aggregateWidgetDraftConfigs.value : props.aggregateWidgetConfigs
+  return normalizeAggregateConfigs(sourceConfigs).filter((config) => config.kind !== 'NONE').length
+})
+const aggregateBadgeLabel = computed(() => (
+  isAggregateEditMode.value ? `${aggregateDisplayCardCount.value}개 표시` : `${aggregateDisplayCardCount.value}개`
+))
 function expandAggregateEditPanelLayout(panels) {
   const aggregate = panels.find((panel) => panel.id === 'aggregate')
   if (!aggregate || !isAggregateEditMode.value) {
@@ -3471,7 +3478,7 @@ defineExpose({
             <h2>사용자 설정 집계</h2>
           </div>
           <div class="household-aggregate-header__actions">
-            <span v-if="isAggregatePanelEnabled && aggregateSettingsReady" class="panel__badge">{{ aggregateCards.length }}칸</span>
+            <span v-if="isAggregatePanelEnabled && aggregateSettingsReady" class="panel__badge">{{ aggregateBadgeLabel }}</span>
             <template v-if="isAggregatePanelEnabled && isAggregateEditMode">
               <button
                 type="button"
@@ -3522,6 +3529,7 @@ defineExpose({
             :class="{
               'household-aggregate-card--chart': card.config.kind === 'MONTHLY_CUMULATIVE_CHART',
               'household-aggregate-card--goal': card.config.kind === 'MONTHLY_GOAL',
+              'household-aggregate-card--empty': card.config.kind === 'NONE',
             }"
             :style="getAggregateCardGridStyle(card)"
             :data-aggregate-size="getAggregateWidgetSizeValue(card.config)"

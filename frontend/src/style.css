@@ -27305,6 +27305,11 @@ button.button--primary,
   grid-column: var(--aggregate-card-grid-column, auto / span 2) !important;
 }
 
+.household-aggregate-panel--editing .household-aggregate-card--empty {
+  border-style: dashed !important;
+  opacity: 0.76;
+}
+
 .household-aggregate-panel--editing .household-aggregate-card__controls,
 .household-aggregate-panel--editing .household-aggregate-goal-fields,
 .household-aggregate-panel--editing .household-aggregate-chart-options {

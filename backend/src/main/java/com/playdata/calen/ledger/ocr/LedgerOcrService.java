@@ -7,6 +7,8 @@ import com.playdata.calen.account.service.AppUserService;
 import com.playdata.calen.account.service.UserNotificationService;
 import com.playdata.calen.common.exception.BadRequestException;
 import com.playdata.calen.ledger.ai.LedgerAiAnalysisProperties;
+import com.playdata.calen.ledger.domain.CategoryDetail;
+import com.playdata.calen.ledger.domain.CategoryGroup;
 import com.playdata.calen.ledger.domain.EntryType;
 import com.playdata.calen.ledger.domain.LedgerImageAnalysisRequest;
 import com.playdata.calen.ledger.domain.LedgerImageAnalysisStatus;
@@ -17,6 +19,8 @@ import com.playdata.calen.ledger.dto.LedgerOcrLineItemResponse;
 import com.playdata.calen.ledger.ocr.LedgerOcrRemoteClient.RemoteAnalyzeResponse;
 import com.playdata.calen.ledger.ocr.LedgerOcrRemoteClient.RemoteLineItem;
 import com.playdata.calen.ledger.ocr.LedgerOcrRemoteClient.RemoteParsedResult;
+import com.playdata.calen.ledger.repository.CategoryDetailRepository;
+import com.playdata.calen.ledger.repository.CategoryGroupRepository;
 import com.playdata.calen.ledger.repository.LedgerImageAnalysisRequestRepository;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -24,6 +28,8 @@ import io.micrometer.core.instrument.Timer;
 import java.io.IOException;
 import java.io.InputStream;
 import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.text.NumberFormat;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
@@ -45,6 +51,8 @@ import org.springframework.web.multipart.MultipartFile;
 public class LedgerOcrService {
 
     private static final int MAX_TEXT_LENGTH = 500;
+    private static final int MAX_USER_PROMPT_LENGTH = 1200;
+    private static final String UNCATEGORIZED_CATEGORY_NAME = "\uBBF8\uBD84\uB958";
     private static final List<String> ALLOWED_IMAGE_EXTENSIONS = List.of(".jpg", ".jpeg", ".png", ".webp", ".bmp");
     private static final byte[] PNG_SIGNATURE = new byte[] {(byte) 0x89, 'P', 'N', 'G', '\r', '\n', 0x1A, '\n'};
 
@@ -53,13 +61,15 @@ public class LedgerOcrService {
     private final LedgerAiAnalysisProperties aiProperties;
     private final LedgerOcrRemoteClient remoteClient;
     private final LedgerImageAnalysisRequestRepository imageAnalysisRequestRepository;
+    private final CategoryGroupRepository categoryGroupRepository;
+    private final CategoryDetailRepository categoryDetailRepository;
     private final ObjectMapper objectMapper;
     private final UserNotificationService userNotificationService;
 
     @Autowired(required = false)
     private MeterRegistry meterRegistry;
 
-    public LedgerOcrAnalyzeResponse analyze(Long userId, MultipartFile file, String documentType, String clientRequestId) {
+    public LedgerOcrAnalyzeResponse analyze(Long userId, MultipartFile file, String documentType, String clientRequestId, String prompt) {
         AppUser owner = appUserService.getRequiredUser(userId);
         Timer.Sample ocrRequestTimer = startOcrRequestTimer();
         LedgerImageAnalysisRequest history = null;
@@ -70,8 +80,9 @@ public class LedgerOcrService {
 
             String normalizedDocumentType = normalizeDocumentType(documentType);
             String normalizedClientRequestId = normalizeClientRequestId(clientRequestId);
+            String normalizedUserPrompt = normalizeUserPrompt(prompt);
             history = createImageAnalysisRequest(owner, file, normalizedDocumentType, normalizedClientRequestId);
-            RemoteAnalyzeResponse remoteResponse = remoteClient.analyze(file, normalizedDocumentType);
+            RemoteAnalyzeResponse remoteResponse = remoteClient.analyze(file, normalizedDocumentType, normalizedUserPrompt);
             List<RemoteParsedResult> parsedEntries = resolveParsedEntries(remoteResponse);
             RemoteParsedResult parsed = parsedEntries.isEmpty() ? remoteResponse.parsed() : parsedEntries.get(0);
             EntryType entryType = parsed != null && parsed.entryType() == EntryType.INCOME
@@ -79,10 +90,10 @@ public class LedgerOcrService {
                     : EntryType.EXPENSE;
 
             List<LedgerOcrLineItemResponse> lineItems = mapLineItems(parsed);
-            LedgerOcrEntrySuggestionResponse suggestion = parsed == null ? null : buildSuggestion(parsed, entryType, lineItems);
+            LedgerOcrEntrySuggestionResponse suggestion = parsed == null ? null : buildSuggestion(owner, parsed, entryType, lineItems);
             List<LedgerOcrEntrySuggestionResponse> suggestions = parsedEntries.stream()
                     .filter(Objects::nonNull)
-                    .map(this::buildSuggestionForParsedEntry)
+                    .map(parsedEntry -> buildSuggestionForParsedEntry(owner, parsedEntry))
                     .toList();
             List<String> validationWarnings = buildSuggestionValidationWarnings(suggestions);
             if (!validationWarnings.isEmpty()) {
@@ -351,6 +362,14 @@ public class LedgerOcrService {
         return limit(clientRequestId.trim(), 120);
     }
 
+    private String normalizeUserPrompt(String prompt) {
+        if (!isPresent(prompt)) {
+            return null;
+        }
+        String normalized = prompt.replace('\u0000', ' ').trim();
+        return normalized.isBlank() ? null : limit(normalized, MAX_USER_PROMPT_LENGTH);
+    }
+
     private String normalizeDocumentType(String documentType) {
         if (documentType == null || documentType.isBlank()) {
             return "AUTO";
@@ -443,11 +462,11 @@ public class LedgerOcrService {
         );
     }
 
-    private LedgerOcrEntrySuggestionResponse buildSuggestionForParsedEntry(RemoteParsedResult parsed) {
+    private LedgerOcrEntrySuggestionResponse buildSuggestionForParsedEntry(AppUser owner, RemoteParsedResult parsed) {
         EntryType entryType = parsed != null && parsed.entryType() == EntryType.INCOME
                 ? EntryType.INCOME
                 : EntryType.EXPENSE;
-        return buildSuggestion(parsed, entryType, mapLineItems(parsed));
+        return buildSuggestion(owner, parsed, entryType, mapLineItems(parsed));
     }
 
     private void validateReady() {
@@ -542,6 +561,7 @@ public class LedgerOcrService {
         return true;
     }
     private LedgerOcrEntrySuggestionResponse buildSuggestion(
+            AppUser owner,
             RemoteParsedResult parsed,
             EntryType entryType,
             List<LedgerOcrLineItemResponse> lineItems
@@ -560,6 +580,7 @@ public class LedgerOcrService {
                 "Receipt"
         ), 120);
         String memo = limit(buildMemo(parsed, lineItems), MAX_TEXT_LENGTH);
+        ResolvedOcrCategory category = resolveOcrCategory(owner, entryType, parsed);
 
         return new LedgerOcrEntrySuggestionResponse(
                 entryDate,
@@ -568,13 +589,78 @@ public class LedgerOcrService {
                 memo,
                 amount,
                 entryType,
-                null,
-                null,
-                null,
-                null,
+                category.groupId(),
+                category.groupName(),
+                category.detailId(),
+                category.detailName(),
                 null,
                 null
         );
+    }
+
+    private ResolvedOcrCategory resolveOcrCategory(AppUser owner, EntryType entryType, RemoteParsedResult parsed) {
+        if (owner == null || owner.getId() == null) {
+            return new ResolvedOcrCategory(null, null, null, null);
+        }
+        EntryType resolvedEntryType = entryType == EntryType.INCOME ? EntryType.INCOME : EntryType.EXPENSE;
+        CategoryGroup group = findActiveCategoryGroup(owner.getId(), resolvedEntryType, parsed == null ? null : parsed.categoryGroupName());
+        if (group == null) {
+            group = resolveUncategorizedCategoryGroup(owner, resolvedEntryType);
+        }
+        CategoryDetail detail = findActiveCategoryDetail(group, parsed == null ? null : parsed.categoryDetailName());
+        return new ResolvedOcrCategory(
+                group == null ? null : group.getId(),
+                group == null ? null : group.getName(),
+                detail == null ? null : detail.getId(),
+                detail == null ? null : detail.getName()
+        );
+    }
+
+    private CategoryGroup findActiveCategoryGroup(Long ownerId, EntryType entryType, String categoryGroupName) {
+        if (ownerId == null || !isPresent(categoryGroupName)) {
+            return null;
+        }
+        return categoryGroupRepository.findFirstByOwnerIdAndEntryTypeAndNameIgnoreCaseOrderByIdAsc(
+                        ownerId,
+                        entryType,
+                        categoryGroupName.trim()
+                )
+                .filter(CategoryGroup::isActive)
+                .orElse(null);
+    }
+
+    private CategoryGroup resolveUncategorizedCategoryGroup(AppUser owner, EntryType entryType) {
+        return categoryGroupRepository.findAllByOwnerIdAndEntryTypeOrderByDisplayOrderAscIdAsc(owner.getId(), entryType)
+                .stream()
+                .filter(group -> UNCATEGORIZED_CATEGORY_NAME.equalsIgnoreCase(group.getName()))
+                .findFirst()
+                .map(group -> {
+                    if (!group.isActive()) {
+                        group.setActive(true);
+                        return categoryGroupRepository.save(group);
+                    }
+                    return group;
+                })
+                .orElseGet(() -> createUncategorizedCategoryGroup(owner, entryType));
+    }
+
+    private CategoryGroup createUncategorizedCategoryGroup(AppUser owner, EntryType entryType) {
+        CategoryGroup group = new CategoryGroup();
+        group.setOwner(owner);
+        group.setName(UNCATEGORIZED_CATEGORY_NAME);
+        group.setEntryType(entryType);
+        group.setDisplayOrder(Integer.MAX_VALUE);
+        group.setActive(true);
+        return categoryGroupRepository.save(group);
+    }
+
+    private CategoryDetail findActiveCategoryDetail(CategoryGroup group, String categoryDetailName) {
+        if (group == null || group.getId() == null || !isPresent(categoryDetailName)) {
+            return null;
+        }
+        return categoryDetailRepository.findFirstByGroupIdAndNameIgnoreCaseOrderByIdAsc(group.getId(), categoryDetailName.trim())
+                .filter(CategoryDetail::isActive)
+                .orElse(null);
     }
 
     private String buildMemo(RemoteParsedResult parsed, List<LedgerOcrLineItemResponse> lineItems) {
@@ -585,11 +671,9 @@ public class LedgerOcrService {
         List<String> parts = new ArrayList<>();
         if (!lineItems.isEmpty()) {
             String itemSummary = lineItems.stream()
-                    .limit(5)
-                    .map(LedgerOcrLineItemResponse::itemName)
+                    .limit(8)
+                    .map(this::formatLineItem)
                     .filter(this::isPresent)
-                    .toList()
-                    .stream()
                     .reduce((left, right) -> left + ", " + right)
                     .orElse("");
             addIfPresent(parts, itemSummary);
@@ -598,12 +682,40 @@ public class LedgerOcrService {
         return parts.isEmpty() ? null : String.join(" / ", parts);
     }
 
-    private void addIfPresent(List<String> parts, String value) {
-        if (isPresent(value)) {
-            parts.add(value.trim());
+    private String formatLineItem(LedgerOcrLineItemResponse item) {
+        if (item == null || !isPresent(item.itemName())) {
+            return "";
         }
+        StringBuilder builder = new StringBuilder(item.itemName().trim());
+        if (item.quantity() != null && item.quantity().compareTo(BigDecimal.ONE) != 0) {
+            builder.append(" x").append(formatQuantity(item.quantity()));
+            if (isPresent(item.unit())) {
+                builder.append(item.unit().trim());
+            }
+        }
+        if (item.price() != null && item.price().compareTo(BigDecimal.ZERO) > 0) {
+            builder.append('(').append(formatWon(item.price())).append("\uC6D0)");
+        }
+        return builder.toString();
     }
 
+    private String formatQuantity(BigDecimal quantity) {
+        return quantity.stripTrailingZeros().toPlainString();
+    }
+
+    private String formatWon(BigDecimal amount) {
+        return NumberFormat.getIntegerInstance(Locale.KOREA).format(amount.setScale(0, RoundingMode.HALF_UP));
+    }
+
+    private void addIfPresent(List<String> parts, String value) {
+        if (!isPresent(value)) {
+            return;
+        }
+        String trimmed = value.trim();
+        if (parts.stream().noneMatch(existing -> existing.equalsIgnoreCase(trimmed))) {
+            parts.add(trimmed);
+        }
+    }
     private List<LedgerOcrLineItemResponse> mapLineItems(RemoteParsedResult parsed) {
         if (parsed == null || parsed.lineItems() == null) {
             return List.of();
@@ -644,4 +756,12 @@ public class LedgerOcrService {
         return trimmed.length() <= maxLength ? trimmed : trimmed.substring(0, maxLength);
     }
 
+
+    private record ResolvedOcrCategory(
+            Long groupId,
+            String groupName,
+            Long detailId,
+            String detailName
+    ) {
+    }
 }

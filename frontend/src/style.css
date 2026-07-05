@@ -25579,13 +25579,13 @@ button.button--primary,
     grid-template-columns: minmax(0, 1fr) !important;
   }
 }
-/* receipt OCR review modal enlargement and field fit */
+/* receipt OCR review modal fit guard */
 .receipt-ocr-modal {
   padding: clamp(12px, 1.8vw, 20px) !important;
 }
 
 .receipt-ocr-modal__dialog {
-  width: min(1456px, calc(100vw - 32px)) !important;
+  width: min(1360px, calc(100vw - 32px)) !important;
   max-height: min(1118px, calc(100vh - 32px)) !important;
   grid-template-rows: auto auto auto minmax(0, 1fr) !important;
 }
@@ -25596,22 +25596,111 @@ button.button--primary,
   display: none !important;
 }
 
+.receipt-ocr-modal__dialog,
+.receipt-ocr-modal__toolbar,
+.receipt-ocr-history,
+.receipt-ocr-history__list,
+.receipt-ocr-history__item,
+.receipt-ocr-modal__list,
+.receipt-ocr-review-card,
+.receipt-ocr-review-card__body,
+.receipt-ocr-review-card__analysis,
+.receipt-ocr-review-card__columns,
+.receipt-ocr-review-card__entries,
+.receipt-ocr-review-entry,
+.receipt-ocr-review-entry__grid,
+.receipt-ocr-text-panel,
+.receipt-ocr-line-items {
+  box-sizing: border-box !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+}
+
+.receipt-ocr-modal__list {
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+  scrollbar-gutter: stable;
+}
+
+.receipt-ocr-history {
+  overflow: hidden !important;
+}
+
+.receipt-ocr-history__list {
+  display: grid !important;
+  gap: 8px !important;
+  max-height: clamp(112px, 22vh, 236px) !important;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+  padding-right: 4px !important;
+}
+
+.receipt-ocr-history__item {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) auto !important;
+  gap: 10px !important;
+  align-items: center !important;
+}
+
+.receipt-ocr-history__item > div:first-child {
+  display: grid !important;
+  gap: 3px !important;
+  min-width: 0 !important;
+}
+
+.receipt-ocr-history__item strong,
+.receipt-ocr-history__item span,
+.receipt-ocr-history__item small,
+.receipt-ocr-review-card__header strong,
+.receipt-ocr-review-card__header span,
+.receipt-ocr-line-items span,
+.receipt-ocr-text-panel pre {
+  max-width: 100% !important;
+  overflow-wrap: anywhere !important;
+  word-break: break-word !important;
+}
+
 .receipt-ocr-review-card__body {
-  grid-template-columns: minmax(220px, 320px) minmax(0, 1fr) !important;
+  grid-template-columns: minmax(180px, 280px) minmax(0, 1fr) !important;
+  align-items: start !important;
 }
 
 .receipt-ocr-review-card__columns {
-  grid-template-columns: minmax(280px, 0.82fr) minmax(480px, 1.18fr) !important;
+  grid-template-columns: minmax(240px, 0.82fr) minmax(360px, 1.18fr) !important;
+  align-items: start !important;
+}
+
+.receipt-ocr-text-panel {
+  max-height: min(520px, 58vh) !important;
+}
+
+.receipt-ocr-text-panel pre {
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+  white-space: pre-wrap !important;
+}
+
+.receipt-ocr-review-entry__title {
+  align-items: center !important;
+}
+
+.receipt-ocr-review-entry__title > span {
+  min-width: 0 !important;
+}
+
+.receipt-ocr-review-entry__title .button {
+  flex: 0 0 auto !important;
 }
 
 .receipt-ocr-review-entry__grid {
-  grid-template-columns: minmax(120px, 0.72fr) minmax(190px, 1.08fr) minmax(150px, 0.86fr) minmax(210px, 1.18fr) !important;
+  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
   align-items: end !important;
 }
 
 .receipt-ocr-review-entry__field--date,
 .receipt-ocr-review-entry__field--time,
-.receipt-ocr-review-entry__field--amount {
+.receipt-ocr-review-entry__field--amount,
+.receipt-ocr-review-entry .field {
   min-width: 0 !important;
 }
 
@@ -25630,13 +25719,19 @@ button.button--primary,
   font-variant-numeric: tabular-nums !important;
 }
 
+@media (max-width: 1480px) {
+  .receipt-ocr-review-entry__grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+
 @media (max-width: 1180px) {
   .receipt-ocr-review-card__columns {
     grid-template-columns: minmax(0, 1fr) !important;
   }
 
-  .receipt-ocr-review-entry__grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  .receipt-ocr-text-panel {
+    max-height: 320px !important;
   }
 }
 
@@ -25644,6 +25739,20 @@ button.button--primary,
   .receipt-ocr-modal__dialog {
     width: calc(100vw - 20px) !important;
     max-height: calc(100vh - 20px) !important;
+  }
+
+  .receipt-ocr-history__item {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .receipt-ocr-history__actions {
+    justify-content: flex-start !important;
+  }
+}
+
+@media (max-width: 760px) {
+  .receipt-ocr-review-card__body {
+    grid-template-columns: minmax(0, 1fr) !important;
   }
 }
 
@@ -27348,4 +27457,159 @@ button.button--primary,
 .household-aggregate-panel--editing .household-aggregate-card__field input {
   min-height: 34px !important;
   padding: 7px 10px !important;
+}
+
+/* receipt OCR tabbed workflow */
+.receipt-ocr-modal__dialog {
+  display: grid !important;
+  grid-template-rows: auto auto auto minmax(0, 1fr) !important;
+  gap: 14px !important;
+  overflow: hidden !important;
+}
+
+.receipt-ocr-modal__nav {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  min-width: 0;
+}
+
+.receipt-ocr-modal__nav-button {
+  align-items: center;
+  background: rgba(12, 20, 33, 0.76);
+  border: 1px solid rgba(121, 142, 171, 0.36);
+  border-radius: 10px;
+  color: var(--text-primary);
+  cursor: pointer;
+  display: inline-flex;
+  font-weight: 800;
+  justify-content: center;
+  min-height: 42px;
+  min-width: 0;
+  padding: 0.65rem 1rem;
+  white-space: nowrap;
+}
+
+.receipt-ocr-modal__nav-button.is-active {
+  background: linear-gradient(135deg, rgba(37, 177, 118, 0.96), rgba(49, 130, 246, 0.96));
+  border-color: rgba(134, 245, 178, 0.66);
+  color: #fff;
+  box-shadow: 0 10px 24px rgba(49, 130, 246, 0.22);
+}
+
+.receipt-ocr-workspace,
+.receipt-ocr-prompt-box,
+.receipt-ocr-toggle,
+.receipt-ocr-review-entry__actions {
+  box-sizing: border-box;
+  min-width: 0;
+}
+
+.receipt-ocr-workspace {
+  display: grid;
+  gap: 12px;
+  min-height: 0;
+}
+
+.receipt-ocr-prompt-box {
+  background: rgba(13, 22, 36, 0.7);
+  border: 1px solid rgba(121, 142, 171, 0.28);
+  border-radius: 14px;
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+}
+
+.receipt-ocr-prompt-box--rules {
+  min-height: 0;
+}
+
+.receipt-ocr-toggle {
+  align-items: center;
+  color: var(--text-primary);
+  display: inline-flex;
+  gap: 8px;
+  font-size: 0.9rem;
+  font-weight: 800;
+}
+
+.receipt-ocr-toggle input {
+  accent-color: #25b176;
+  flex: 0 0 auto;
+}
+
+.receipt-ocr-prompt-box textarea {
+  background: rgba(9, 17, 28, 0.95);
+  border: 1px solid rgba(121, 142, 171, 0.32);
+  border-radius: 10px;
+  box-sizing: border-box;
+  color: var(--text-primary);
+  line-height: 1.45;
+  min-height: 82px;
+  min-width: 0;
+  resize: vertical;
+  width: 100%;
+}
+
+.receipt-ocr-prompt-box--rules textarea {
+  min-height: min(360px, 46vh);
+}
+
+.receipt-ocr-prompt-box textarea:disabled {
+  opacity: 0.55;
+}
+
+.receipt-ocr-prompt-box__hint {
+  color: var(--text-muted);
+  font-size: 0.86rem;
+  margin: 0;
+}
+
+.receipt-ocr-review-entry__actions {
+  align-items: center;
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.receipt-ocr-review-entry__actions .button {
+  min-height: 40px;
+  white-space: nowrap;
+}
+
+.receipt-ocr-review-entry__field--category,
+.receipt-ocr-review-entry__field--payment {
+  min-width: 0 !important;
+}
+
+.receipt-ocr-review-entry__field--category select,
+.receipt-ocr-review-entry__field--payment select {
+  width: 100% !important;
+}
+
+.receipt-ocr-workspace--history + .receipt-ocr-modal__list,
+.receipt-ocr-workspace--analyze + .receipt-ocr-modal__list {
+  min-height: 0 !important;
+}
+
+@media (max-width: 760px) {
+  .receipt-ocr-modal__nav {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .receipt-ocr-modal__nav-button {
+    white-space: normal;
+  }
+
+  .receipt-ocr-review-entry__actions {
+    justify-content: stretch;
+  }
+
+  .receipt-ocr-review-entry__actions .button {
+    flex: 1 1 150px;
+  }
 }

@@ -597,6 +597,9 @@ export function analyzeLedgerReceipt(file, options = {}) {
   if (options.clientRequestId) {
     formData.append('clientRequestId', options.clientRequestId)
   }
+  if (options.prompt) {
+    formData.append('prompt', options.prompt)
+  }
 
   return request('/ledger/image-analysis/analyze', {
     method: 'POST',

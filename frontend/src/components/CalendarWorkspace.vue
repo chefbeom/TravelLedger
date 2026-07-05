@@ -280,10 +280,19 @@ const emit = defineEmits([
   'open-receipt-ocr',
   'close-receipt-ocr',
   'set-receipt-document-type',
+  'set-receipt-ocr-view',
+  'set-receipt-request-prompt-enabled',
+  'set-receipt-request-prompt',
+  'set-receipt-rerun-prompt-enabled',
+  'set-receipt-rerun-prompt',
+  'set-receipt-prompt-rules-enabled',
+  'set-receipt-prompt-rules',
   'analyze-receipt',
   'update-receipt-review-entry',
   'remove-receipt-analysis',
   'apply-receipt-suggestion',
+  'approve-receipt-suggestion',
+  'rerun-receipt-analysis',
   'clear-receipt-analysis',
   'cancel-receipt-applied',
   'load-receipt-history',
@@ -441,6 +450,7 @@ function handleReceiptFileChange(event) {
     emit('analyze-receipt', {
       files,
       documentType: selectedReceiptDocumentType.value,
+      prompt: props.receiptOcr?.requestPromptEnabled ? props.receiptOcr?.requestPrompt : '',
     })
   }
   event.target.value = ''
@@ -454,6 +464,58 @@ function closeReceiptOcrModal() {
   emit('close-receipt-ocr')
 }
 
+function setReceiptOcrModalView(view) {
+  emit('set-receipt-ocr-view', view)
+}
+
+function updateReceiptRequestPromptEnabled(event) {
+  emit('set-receipt-request-prompt-enabled', event.target.checked)
+}
+
+function updateReceiptRequestPrompt(event) {
+  emit('set-receipt-request-prompt', event.target.value)
+}
+
+function updateReceiptRerunPromptEnabled(event) {
+  emit('set-receipt-rerun-prompt-enabled', event.target.checked)
+}
+
+function updateReceiptRerunPrompt(event) {
+  emit('set-receipt-rerun-prompt', event.target.value)
+}
+
+function updateReceiptPromptRulesEnabled(event) {
+  emit('set-receipt-prompt-rules-enabled', event.target.checked)
+}
+
+function updateReceiptPromptRules(event) {
+  emit('set-receipt-prompt-rules', event.target.value)
+}
+
+function requestReceiptRerun(item) {
+  emit('rerun-receipt-analysis', {
+    item,
+    prompt: props.receiptOcr?.rerunPromptEnabled ? props.receiptOcr?.rerunPrompt : '',
+  })
+}
+
+function approveReceiptSuggestion(entry, item, entryIndex) {
+  emit('approve-receipt-suggestion', {
+    ...entry,
+    analysisId: item.analysisId,
+    reviewItemId: item.id,
+    reviewEntryIndex: entryIndex,
+    analysisStatus: item.analysisStatus,
+  })
+}
+
+function canUseReceiptEntry(item, entry) {
+  if (item.status === 'cancelled' || item.status === 'error' || item.status === 'queued' || item.status === 'analyzing') {
+    return false
+  }
+  const amount = Number(entry?.amount)
+  return Boolean(entry?.title) && Number.isFinite(amount) && amount > 0
+}
 function updateReceiptDocumentType(value) {
   selectedReceiptDocumentType.value = value
   emit('set-receipt-document-type', value)
@@ -697,7 +759,17 @@ const receiptLineItems = computed(() => (
 const receiptReviewItems = computed(() => (
   Array.isArray(props.receiptOcr?.items) ? props.receiptOcr.items : []
 ))
-const receiptPendingCount = computed(() => receiptReviewItems.value.filter((item) => item.status === 'analyzing').length)
+const receiptOcrView = computed(() => (
+  ['analyze', 'history', 'rules'].includes(props.receiptOcr?.activeView) ? props.receiptOcr.activeView : 'analyze'
+))
+const receiptAnalyzeItems = computed(() => receiptReviewItems.value.filter((item) => item.status !== 'done' && !item.fromHistory))
+const receiptCompletedItems = computed(() => receiptReviewItems.value.filter((item) => item.status === 'done'))
+const receiptVisibleReviewItems = computed(() => {
+  if (receiptOcrView.value === 'analyze') return receiptAnalyzeItems.value
+  if (receiptOcrView.value === 'history') return receiptCompletedItems.value
+  return []
+})
+const receiptPendingCount = computed(() => Number(props.receiptOcr?.pendingCount ?? receiptReviewItems.value.filter((item) => item.status === 'queued' || item.status === 'analyzing').length))
 const receiptTotalSuggestionCount = computed(() => receiptReviewItems.value.reduce(
   (total, item) => total + (Array.isArray(item.suggestedEntries) ? item.suggestedEntries.length : 0),
   0,
@@ -3991,7 +4063,7 @@ defineExpose({
       </div>
     </section>
 
-    <div
+        <div
       v-if="receiptOcr?.isOpen"
       class="receipt-ocr-modal"
       data-no-drag="true"
@@ -4006,129 +4078,210 @@ defineExpose({
           <button type="button" class="button button--ghost" @click="closeReceiptOcrModal">닫기</button>
         </header>
 
-        <div class="receipt-ocr-modal__toolbar">
-          <div class="receipt-ocr-modal__type-group" role="group" aria-label="이미지 유형">
-            <button
-              v-for="option in receiptDocumentTypes"
-              :key="option.value"
-              type="button"
-              :class="['receipt-ocr-modal__type-button', { 'is-active': selectedReceiptDocumentType === option.value }]"
-              @click="updateReceiptDocumentType(option.value)"
-            >
-              {{ option.label }}
-            </button>
-          </div>
-          <div class="receipt-ocr-modal__upload">
-            <input
-              ref="receiptFileInputRef"
-              class="receipt-ocr-panel__file"
-              type="file"
-              accept="image/*"
-              multiple
-              @change="handleReceiptFileChange"
-            />
-            <input
-              ref="receiptCameraInputRef"
-              class="receipt-ocr-panel__file"
-              type="file"
-              accept="image/*"
-              capture="environment"
-              @change="handleReceiptFileChange"
-            />
-            <button
-              type="button"
-              class="button button--primary"
-              @click="openReceiptFilePicker"
-            >
-              사진 선택
-            </button>
-            <button
-              type="button"
-              class="button button--secondary"
-              @click="openReceiptCameraCapture"
-            >
-              카메라 촬영
-            </button>
-          </div>
-        </div>
+        <nav class="receipt-ocr-modal__nav" aria-label="이미지 분석 메뉴">
+          <button
+            type="button"
+            :class="['receipt-ocr-modal__nav-button', { 'is-active': receiptOcrView === 'analyze' }]"
+            @click="setReceiptOcrModalView('analyze')"
+          >
+            이미지 분석하기
+          </button>
+          <button
+            type="button"
+            :class="['receipt-ocr-modal__nav-button', { 'is-active': receiptOcrView === 'history' }]"
+            @click="setReceiptOcrModalView('history')"
+          >
+            분석 내용 확인 및 불러오기
+          </button>
+          <button
+            type="button"
+            :class="['receipt-ocr-modal__nav-button', { 'is-active': receiptOcrView === 'rules' }]"
+            @click="setReceiptOcrModalView('rules')"
+          >
+            나만의 프롬프트 규칙 정하기
+          </button>
+        </nav>
 
-        <section class="receipt-ocr-history" aria-label="이미지 분석 기록">
-          <div class="receipt-ocr-history__header">
-            <div>
-              <strong>분석 기록</strong>
+        <input
+          ref="receiptFileInputRef"
+          class="receipt-ocr-panel__file"
+          type="file"
+          accept="image/*"
+          multiple
+          @change="handleReceiptFileChange"
+        />
+        <input
+          ref="receiptCameraInputRef"
+          class="receipt-ocr-panel__file"
+          type="file"
+          accept="image/*"
+          capture="environment"
+          @change="handleReceiptFileChange"
+        />
+
+        <section v-if="receiptOcrView === 'analyze'" class="receipt-ocr-workspace receipt-ocr-workspace--analyze">
+          <div class="receipt-ocr-modal__toolbar">
+            <div class="receipt-ocr-modal__type-group" role="group" aria-label="이미지 유형">
+              <button
+                v-for="option in receiptDocumentTypes"
+                :key="option.value"
+                type="button"
+                :class="['receipt-ocr-modal__type-button', { 'is-active': selectedReceiptDocumentType === option.value }]"
+                @click="updateReceiptDocumentType(option.value)"
+              >
+                {{ option.label }}
+              </button>
             </div>
-            <button
-              type="button"
-              class="button button--ghost"
-              :disabled="receiptOcr?.isHistoryLoading"
-              @click="emit('load-receipt-history', 0)"
-            >
-              {{ receiptOcr?.isHistoryLoading ? '불러오는 중...' : '기록 새로고침' }}
-            </button>
+            <div class="receipt-ocr-modal__upload">
+              <button type="button" class="button button--primary" @click="openReceiptFilePicker">
+                검수 요청
+              </button>
+              <button type="button" class="button button--secondary" @click="openReceiptCameraCapture">
+                카메라 촬영
+              </button>
+            </div>
           </div>
-          <p v-if="receiptOcr?.historyError" class="receipt-ocr-history__error">{{ receiptOcr.historyError }}</p>
-          <div v-if="receiptOcr?.historyItems?.length" class="receipt-ocr-history__list">
-            <article v-for="history in receiptOcr.historyItems" :key="history.id" class="receipt-ocr-history__item">
-              <div>
-                <strong>{{ history.fileName || ('분석 기록 #' + history.id) }}</strong>
-                <span>{{ getReceiptDocumentLabel(history.documentType) }} / {{ getReceiptHistoryStatusLabel(history.status) }}</span>
-                <small>{{ history.summary || history.errorMessage || '저장된 분석 요청' }}</small>
-              </div>
-              <div class="receipt-ocr-history__actions">
-                <button
-                  type="button"
-                  class="button button--secondary"
-                  :disabled="normalizeReceiptHistoryStatus(history.status) === 'PROCESSING'"
-                  @click="emit('reuse-receipt-history', history)"
-                >
-                  {{ getReceiptHistoryActionLabel(history) }}
-                </button>
-                <button
-                  type="button"
-                  class="button button--ghost"
-                  :disabled="normalizeReceiptHistoryStatus(history.status) === 'CANCELLED'"
-                  @click="emit('cancel-receipt-history', history.id)"
-                >
-                  요청 취소
-                </button>
-              </div>
-            </article>
+
+          <div class="receipt-ocr-prompt-box">
+            <label class="receipt-ocr-toggle">
+              <input
+                type="checkbox"
+                :checked="receiptOcr?.requestPromptEnabled"
+                @change="updateReceiptRequestPromptEnabled"
+              />
+              <span>이번 요청사항 사용</span>
+            </label>
+            <textarea
+              :value="receiptOcr?.requestPrompt || ''"
+              rows="3"
+              placeholder="예: 제목은 네이버페이 : 상품명 형식으로 정리하고, 메모에는 원문 상태와 상세 금액을 남겨줘."
+              :disabled="!receiptOcr?.requestPromptEnabled"
+              @input="updateReceiptRequestPrompt"
+            ></textarea>
           </div>
-          <p v-else-if="!receiptOcr?.isHistoryLoading" class="receipt-ocr-history__empty">
-            아직 저장된 이미지 분석 기록이 없습니다.
+
+          <div v-if="receiptOcr?.isAnalyzing" class="receipt-ocr-modal__progress">
+            <span></span>
+            {{ receiptPendingCount }}개 이미지 분석 중입니다. 완료된 결과는 분석 내용 확인 및 불러오기에서 검수합니다.
+          </div>
+          <p v-else-if="!receiptAnalyzeItems.length" class="receipt-ocr-modal__empty">
+            새 이미지를 선택하면 현재 요청만 이곳에 표시됩니다. 완료된 결과와 과거 기록은 분석 내용 확인 및 불러오기에서 확인합니다.
           </p>
-          <div v-if="receiptOcr?.historyTotalPages > 1" class="receipt-ocr-history__pagination">
-            <button
-              type="button"
-              class="button button--ghost"
-              :disabled="receiptOcr?.isHistoryLoading || receiptOcr?.historyPage <= 0"
-              @click="emit('load-receipt-history', Math.max(0, (receiptOcr?.historyPage || 0) - 1))"
-            >
-              이전
-            </button>
-            <span>{{ (receiptOcr?.historyPage || 0) + 1 }} / {{ receiptOcr?.historyTotalPages || 1 }}</span>
-            <button
-              type="button"
-              class="button button--ghost"
-              :disabled="receiptOcr?.isHistoryLoading || (receiptOcr?.historyPage || 0) >= (receiptOcr?.historyTotalPages || 1) - 1"
-              @click="emit('load-receipt-history', (receiptOcr?.historyPage || 0) + 1)"
-            >
-              다음
-            </button>
+        </section>
+
+        <section v-else-if="receiptOcrView === 'history'" class="receipt-ocr-workspace receipt-ocr-workspace--history">
+          <section class="receipt-ocr-history" aria-label="이미지 분석 기록">
+            <div class="receipt-ocr-history__header">
+              <div>
+                <strong>과거 분석 내용</strong>
+              </div>
+              <button
+                type="button"
+                class="button button--ghost"
+                :disabled="receiptOcr?.isHistoryLoading"
+                @click="emit('load-receipt-history', 0)"
+              >
+                {{ receiptOcr?.isHistoryLoading ? '불러오는 중...' : '기록 새로고침' }}
+              </button>
+            </div>
+            <p v-if="receiptOcr?.historyError" class="receipt-ocr-history__error">{{ receiptOcr.historyError }}</p>
+            <div v-if="receiptOcr?.historyItems?.length" class="receipt-ocr-history__list">
+              <article v-for="history in receiptOcr.historyItems" :key="history.id" class="receipt-ocr-history__item">
+                <div>
+                  <strong>{{ history.fileName || ('분석 기록 #' + history.id) }}</strong>
+                  <span>{{ getReceiptDocumentLabel(history.documentType) }} / {{ getReceiptHistoryStatusLabel(history.status) }}</span>
+                  <small>{{ history.summary || history.errorMessage || '저장된 분석 요청' }}</small>
+                </div>
+                <div class="receipt-ocr-history__actions">
+                  <button
+                    type="button"
+                    class="button button--secondary"
+                    :disabled="normalizeReceiptHistoryStatus(history.status) === 'PROCESSING'"
+                    @click="emit('reuse-receipt-history', history)"
+                  >
+                    {{ getReceiptHistoryActionLabel(history) }}
+                  </button>
+                  <button
+                    type="button"
+                    class="button button--ghost"
+                    :disabled="normalizeReceiptHistoryStatus(history.status) === 'CANCELLED'"
+                    @click="emit('cancel-receipt-history', history.id)"
+                  >
+                    요청 취소
+                  </button>
+                </div>
+              </article>
+            </div>
+            <p v-else-if="!receiptOcr?.isHistoryLoading" class="receipt-ocr-history__empty">
+              아직 저장된 이미지 분석 기록이 없습니다.
+            </p>
+            <div v-if="receiptOcr?.historyTotalPages > 1" class="receipt-ocr-history__pagination">
+              <button
+                type="button"
+                class="button button--ghost"
+                :disabled="receiptOcr?.isHistoryLoading || receiptOcr?.historyPage <= 0"
+                @click="emit('load-receipt-history', Math.max(0, (receiptOcr?.historyPage || 0) - 1))"
+              >
+                이전
+              </button>
+              <span>{{ (receiptOcr?.historyPage || 0) + 1 }} / {{ receiptOcr?.historyTotalPages || 1 }}</span>
+              <button
+                type="button"
+                class="button button--ghost"
+                :disabled="receiptOcr?.isHistoryLoading || (receiptOcr?.historyPage || 0) >= (receiptOcr?.historyTotalPages || 1) - 1"
+                @click="emit('load-receipt-history', (receiptOcr?.historyPage || 0) + 1)"
+              >
+                다음
+              </button>
+            </div>
+          </section>
+
+          <div class="receipt-ocr-prompt-box receipt-ocr-prompt-box--rerun">
+            <label class="receipt-ocr-toggle">
+              <input
+                type="checkbox"
+                :checked="receiptOcr?.rerunPromptEnabled"
+                @change="updateReceiptRerunPromptEnabled"
+              />
+              <span>재요청 요청사항 사용</span>
+            </label>
+            <textarea
+              :value="receiptOcr?.rerunPrompt || ''"
+              rows="3"
+              placeholder="재검수할 때 반영할 요청사항을 입력하세요."
+              :disabled="!receiptOcr?.rerunPromptEnabled"
+              @input="updateReceiptRerunPrompt"
+            ></textarea>
+          </div>
+
+          <p v-if="!receiptCompletedItems.length" class="receipt-ocr-modal__empty">
+            불러온 분석 결과가 없습니다. 과거 기록을 불러오거나 새 이미지를 분석해 주세요.
+          </p>
+        </section>
+
+        <section v-else class="receipt-ocr-workspace receipt-ocr-workspace--rules">
+          <div class="receipt-ocr-prompt-box receipt-ocr-prompt-box--rules">
+            <label class="receipt-ocr-toggle">
+              <input
+                type="checkbox"
+                :checked="receiptOcr?.promptRulesEnabled"
+                @change="updateReceiptPromptRulesEnabled"
+              />
+              <span>나만의 프롬프트 규칙 사용</span>
+            </label>
+            <textarea
+              :value="receiptOcr?.promptRules || ''"
+              rows="12"
+              placeholder="예: 네이버페이 결제 내역은 제목을 '네이버페이 : 상품명' 형식으로 정리한다. 메모에는 원문 상태, 상품명, 상세 금액, 날짜/시간을 보이는 그대로 남긴다. 결제수단은 카드/계좌가 명시된 경우에만 채운다."
+              @input="updateReceiptPromptRules"
+            ></textarea>
+            <p class="receipt-ocr-prompt-box__hint">저장된 규칙은 새 분석과 재요청에 함께 참고됩니다.</p>
           </div>
         </section>
 
-        <div v-if="receiptOcr?.isAnalyzing" class="receipt-ocr-modal__progress">
-          <span></span>
-          {{ receiptPendingCount }}개 이미지 분석 중입니다. 완료된 결과는 아래에서 바로 수정할 수 있습니다.
-        </div>
-        <p v-else-if="!receiptReviewItems.length" class="receipt-ocr-modal__empty">
-          영수증 또는 거래내역 캡처 이미지를 추가하면 이곳에서 검토할 수 있습니다.
-        </p>
-
-        <div v-if="receiptReviewItems.length" class="receipt-ocr-modal__list">
+        <div v-if="receiptOcrView !== 'rules' && receiptVisibleReviewItems.length" class="receipt-ocr-modal__list">
           <article
-            v-for="item in receiptReviewItems"
+            v-for="item in receiptVisibleReviewItems"
             :key="item.id"
             :class="['receipt-ocr-review-card', `receipt-ocr-review-card--${item.status}`]"
           >
@@ -4143,6 +4296,16 @@ defineExpose({
                 <span v-else-if="item.status === 'cancelled'" class="receipt-ocr-review-card__status receipt-ocr-review-card__status--error">취소됨</span>
                 <span v-else-if="item.status === 'error'" class="receipt-ocr-review-card__status receipt-ocr-review-card__status--error">실패</span>
                 <span v-else class="receipt-ocr-review-card__status">{{ item.suggestedEntries.length ? '완료 ' + item.suggestedEntries.length + '건' : '후보 없음' }}</span>
+                <button
+                  v-if="item.status === 'done'"
+                  type="button"
+                  class="button button--secondary"
+                  :disabled="!item.sourceFile"
+                  :title="item.sourceFile ? '현재 이미지로 다시 검수합니다.' : '원본 이미지가 현재 세션에 없어 재요청할 수 없습니다.'"
+                  @click="requestReceiptRerun(item)"
+                >
+                  재요청
+                </button>
                 <button type="button" class="button button--ghost" @click="removeReceiptAnalysis(item.id)">제거</button>
               </div>
             </div>
@@ -4185,7 +4348,7 @@ defineExpose({
                       AI가 입력 가능한 거래 후보를 찾지 못했습니다. 이미지가 선명한지 확인하고 다시 요청해 주세요.
                     </p>
                     <div v-if="formatReceiptLineItemSummary(item.lineItems)" class="receipt-ocr-line-items">
-                      <strong>구매 품목</strong>
+                      <strong>구매 항목</strong>
                       <span>{{ formatReceiptLineItemSummary(item.lineItems) }}</span>
                     </div>
 
@@ -4195,14 +4358,29 @@ defineExpose({
                       :class="['receipt-ocr-review-entry', { 'is-applied': receiptOcr?.lastAppliedReviewItemId === item.id && receiptOcr?.lastAppliedReviewEntryIndex === entryIndex }]"
                     >
                       <div class="receipt-ocr-review-entry__title">
-                        <span>빠른 거래 입력 {{ entryIndex + 1 }}</span>
+                        <span>검수 거래 {{ entryIndex + 1 }}</span>
                         <span v-if="receiptOcr?.lastAppliedReviewItemId === item.id && receiptOcr?.lastAppliedReviewEntryIndex === entryIndex" class="receipt-ocr-review-entry__applied">입력칸 적용됨</span>
-                        <button type="button" class="button button--secondary" :disabled="item.status === 'cancelled' || item.status === 'error' || item.status === 'queued' || item.status === 'analyzing' || !entry.title || entry.amount === null || entry.amount === undefined || entry.amount === '' || !Number.isFinite(Number(entry.amount)) || Number(entry.amount) <= 0" @click="applyReceiptSuggestion({ ...entry, analysisId: item.analysisId, reviewItemId: item.id, reviewEntryIndex: entryIndex, analysisStatus: item.analysisStatus })">
-                          입력칸에 적용
-                        </button>
+                        <div class="receipt-ocr-review-entry__actions">
+                          <button
+                            type="button"
+                            class="button button--primary"
+                            :disabled="!canUseReceiptEntry(item, entry) || isSubmitting"
+                            @click="approveReceiptSuggestion(entry, item, entryIndex)"
+                          >
+                            승인 후 기입
+                          </button>
+                          <button
+                            type="button"
+                            class="button button--secondary"
+                            :disabled="!canUseReceiptEntry(item, entry)"
+                            @click="applyReceiptSuggestion({ ...entry, analysisId: item.analysisId, reviewItemId: item.id, reviewEntryIndex: entryIndex, analysisStatus: item.analysisStatus })"
+                          >
+                            입력칸에 적용
+                          </button>
+                        </div>
                       </div>
-                      <p v-if="!entry.title || entry.amount === null || entry.amount === undefined || entry.amount === '' || Number(entry.amount) <= 0" class="receipt-ocr-review-entry__guard">
-                        제목과 금액을 확인해야 입력칸에 적용할 수 있습니다.
+                      <p v-if="!canUseReceiptEntry(item, entry)" class="receipt-ocr-review-entry__guard">
+                        제목과 금액을 확인해야 거래 내역에 기입할 수 있습니다.
                       </p>
                       <div class="receipt-ocr-review-entry__grid">
                         <label class="field receipt-ocr-review-entry__field--type">
@@ -4243,6 +4421,42 @@ defineExpose({
                             @input="updateReceiptReviewEntry(item.id, entryIndex, 'amount', $event.target.value)"
                           />
                         </label>
+                        <label class="field receipt-ocr-review-entry__field--category">
+                          <span class="field__label">대분류</span>
+                          <select
+                            :value="entry.categoryGroupId"
+                            @change="updateReceiptReviewEntry(item.id, entryIndex, 'categoryGroupId', $event.target.value)"
+                          >
+                            <option value="">대분류 선택</option>
+                            <option v-for="group in getReceiptReviewGroups(entry.entryType)" :key="group.id" :value="String(group.id)">
+                              {{ group.name }}
+                            </option>
+                          </select>
+                        </label>
+                        <label class="field receipt-ocr-review-entry__field--category">
+                          <span class="field__label">분류</span>
+                          <select
+                            :value="entry.categoryDetailId"
+                            @change="updateReceiptReviewEntry(item.id, entryIndex, 'categoryDetailId', $event.target.value)"
+                          >
+                            <option value="">분류 없음</option>
+                            <option v-for="detail in getReceiptReviewDetails(entry)" :key="detail.id" :value="String(detail.id)">
+                              {{ detail.name }}
+                            </option>
+                          </select>
+                        </label>
+                        <label v-if="entry.entryType !== 'INCOME'" class="field receipt-ocr-review-entry__field--payment">
+                          <span class="field__label">결제수단</span>
+                          <select
+                            :value="entry.paymentMethodId"
+                            @change="updateReceiptReviewEntry(item.id, entryIndex, 'paymentMethodId', $event.target.value)"
+                          >
+                            <option value="">결제수단 선택</option>
+                            <option v-for="method in paymentMethods" :key="method.id" :value="String(method.id)">
+                              {{ method.name }}
+                            </option>
+                          </select>
+                        </label>
                         <label class="field field--full">
                           <span class="field__label">제목</span>
                           <input
@@ -4255,7 +4469,7 @@ defineExpose({
                           <span class="field__label">메모</span>
                           <textarea
                             :value="entry.memo"
-                            rows="3"
+                            rows="4"
                             @input="updateReceiptReviewEntry(item.id, entryIndex, 'memo', $event.target.value)"
                           ></textarea>
                         </label>

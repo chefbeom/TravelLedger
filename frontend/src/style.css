@@ -26826,3 +26826,170 @@ button.button--primary,
   min-width: 0 !important;
   white-space: normal !important;
 }
+/* Household aggregate containment reset: final contract after analysis */
+.household-calendar-layout-grid:not(.household-calendar-layout-grid--editing) .household-calendar-layout-item--aggregate,
+.household-calendar-layout-grid:not(.household-calendar-layout-grid--editing) .household-calendar-layout-item--aggregate > .grid-stack-item-content,
+.household-calendar-layout-grid:not(.household-calendar-layout-grid--editing) .household-calendar-layout-item--aggregate .household-calendar-layout-card,
+.household-calendar-layout-grid:not(.household-calendar-layout-grid--editing) .household-calendar-layout-item--aggregate .household-calendar-layout-static-content {
+  min-height: 338px !important;
+  overflow: hidden !important;
+  z-index: 1 !important;
+}
+
+.household-calendar-layout-grid:not(.household-calendar-layout-grid--editing) .household-calendar-layout-item--aggregate:has(.household-aggregate-chart-modal),
+.household-calendar-layout-grid:not(.household-calendar-layout-grid--editing) .household-calendar-layout-item--aggregate:has(.household-aggregate-chart-modal) > .grid-stack-item-content,
+.household-calendar-layout-grid:not(.household-calendar-layout-grid--editing) .household-calendar-layout-item--aggregate:has(.household-aggregate-chart-modal) .household-calendar-layout-card,
+.household-calendar-layout-grid:not(.household-calendar-layout-grid--editing) .household-calendar-layout-item--aggregate:has(.household-aggregate-chart-modal) .household-calendar-layout-static-content {
+  overflow: visible !important;
+  z-index: 2147482500 !important;
+}
+
+.household-aggregate-panel:not(.household-aggregate-panel--editing) {
+  height: 100% !important;
+  min-height: 318px !important;
+  max-height: none !important;
+  overflow: hidden !important;
+  display: flex !important;
+  flex-direction: column !important;
+}
+
+.household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-header {
+  flex: 0 0 auto !important;
+}
+
+.household-aggregate-grid::before,
+.household-aggregate-grid__drop-cell,
+.household-aggregate-grid__preview,
+.household-aggregate-card__drag-handle,
+.household-aggregate-drag-hint {
+  display: none !important;
+  content: none !important;
+}
+
+.household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-grid {
+  flex: 0 0 250px !important;
+  display: grid !important;
+  grid-template-columns: repeat(8, minmax(0, 1fr)) !important;
+  grid-template-rows: 250px !important;
+  grid-auto-rows: 250px !important;
+  grid-auto-flow: row !important;
+  gap: 8px !important;
+  height: 250px !important;
+  min-height: 250px !important;
+  max-height: 250px !important;
+  overflow: hidden !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  background-image: none !important;
+  scrollbar-gutter: auto !important;
+}
+
+.household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-grid > .household-aggregate-card {
+  height: 250px !important;
+  min-height: 250px !important;
+  max-height: 250px !important;
+  min-width: 0 !important;
+  overflow: hidden !important;
+  align-self: stretch !important;
+  box-sizing: border-box !important;
+}
+
+.household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-card--chart {
+  display: grid !important;
+  grid-template-columns: minmax(0, 25%) minmax(0, 75%) !important;
+  grid-template-rows: 1fr !important;
+  gap: 0 !important;
+  align-items: stretch !important;
+}
+
+.household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-card--chart .household-aggregate-card__copy {
+  grid-column: 1 !important;
+  grid-row: 1 !important;
+  min-width: 0 !important;
+  height: 100% !important;
+  padding: 0 12px 0 0 !important;
+  border-right: 1px solid rgba(148, 163, 184, 0.18) !important;
+  overflow: hidden !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: flex-start !important;
+}
+
+.household-aggregate-card__chart-caption {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 2px !important;
+  max-width: 100% !important;
+  line-height: 1.35 !important;
+  white-space: normal !important;
+}
+
+.household-aggregate-card__chart-caption span {
+  display: block !important;
+  max-width: 100% !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+
+.household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-card--chart .household-aggregate-chart-preview-button {
+  grid-column: 2 !important;
+  grid-row: 1 !important;
+  min-width: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  min-height: 0 !important;
+  padding: 0 0 0 12px !important;
+  margin: 0 !important;
+  overflow: hidden !important;
+  display: flex !important;
+  align-items: stretch !important;
+  justify-content: center !important;
+}
+
+.household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-card--chart .household-aggregate-chart--preview {
+  flex: 1 1 auto !important;
+  width: 100% !important;
+  height: 100% !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  overflow: hidden !important;
+}
+
+.household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-card--chart .household-aggregate-chart--preview svg {
+  width: 100% !important;
+  height: 100% !important;
+  min-height: 0 !important;
+  overflow: visible !important;
+}
+
+.household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-card--chart .household-aggregate-chart__legend--preview,
+.household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-card--chart .household-aggregate-card__meta {
+  display: none !important;
+}
+
+.household-aggregate-panel--editing {
+  min-height: 0 !important;
+  overflow: visible !important;
+}
+
+.household-aggregate-panel--editing .household-aggregate-grid {
+  display: grid !important;
+  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  grid-auto-rows: auto !important;
+  gap: 12px !important;
+  height: auto !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  overflow: visible !important;
+  padding: 0 !important;
+  background-image: none !important;
+}
+
+.household-aggregate-panel--editing .household-aggregate-card {
+  height: auto !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  overflow: visible !important;
+  padding: 12px !important;
+}

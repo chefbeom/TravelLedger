@@ -106,7 +106,7 @@ const calendarPanelDefinitions = [
   },
   {
     id: 'calendar',
-    defaultLayout: { x: 0, y: 1, w: 6, h: 5 },
+    defaultLayout: { x: 0, y: 3, w: 6, h: 5 },
     minW: 4,
     maxW: 9,
     minH: 3,
@@ -114,7 +114,7 @@ const calendarPanelDefinitions = [
   },
   {
     id: 'quick-entry',
-    defaultLayout: { x: 6, y: 1, w: 3, h: 5 },
+    defaultLayout: { x: 6, y: 3, w: 3, h: 5 },
     minW: 2,
     maxW: 5,
     minH: 3,
@@ -122,7 +122,7 @@ const calendarPanelDefinitions = [
   },
   {
     id: 'sheet',
-    defaultLayout: { x: 0, y: 6, w: 9, h: 3 },
+    defaultLayout: { x: 0, y: 8, w: 9, h: 3 },
     minW: 4,
     maxW: 9,
     minH: 2,
@@ -1301,7 +1301,7 @@ function parseRemoteUpdatedAt(value) {
 function normalizeCalendarPanelLayout(layouts) {
   const source = new Map((layouts ?? []).map((item) => [String(item.id), item]))
 
-  return calendarPanelDefinitions.map((definition) => {
+  const normalized = calendarPanelDefinitions.map((definition) => {
     const raw = source.get(definition.id) ?? definition.defaultLayout
     const width = clamp(Number(raw.w) || definition.defaultLayout.w, definition.minW, definition.maxW)
     const height = clamp(Number(raw.h) || definition.defaultLayout.h, definition.minH, definition.maxH)
@@ -1314,6 +1314,35 @@ function normalizeCalendarPanelLayout(layouts) {
       h: height,
     }
   })
+
+  const aggregate = normalized.find((item) => item.id === 'aggregate')
+  if (aggregate) {
+    aggregate.x = 0
+    aggregate.y = 0
+    aggregate.w = CALENDAR_LAYOUT_GRID_COLUMNS
+    aggregate.h = 3
+  }
+
+  const aggregateBottom = aggregate ? aggregate.y + aggregate.h : 0
+  const calendar = normalized.find((item) => item.id === 'calendar')
+  const quickEntry = normalized.find((item) => item.id === 'quick-entry')
+  for (const item of [calendar, quickEntry]) {
+    if (item && item.y < aggregateBottom) {
+      item.y = aggregateBottom
+    }
+  }
+
+  const sheet = normalized.find((item) => item.id === 'sheet')
+  const contentBottom = Math.max(
+    aggregateBottom,
+    calendar ? calendar.y + calendar.h : 0,
+    quickEntry ? quickEntry.y + quickEntry.h : 0,
+  )
+  if (sheet && sheet.y < contentBottom) {
+    sheet.y = contentBottom
+  }
+
+  return normalized
 }
 
 function hydrateCalendarPanelLayout() {

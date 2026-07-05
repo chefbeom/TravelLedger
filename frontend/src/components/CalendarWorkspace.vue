@@ -20,6 +20,7 @@ const DEFAULT_CALENDAR_HIGHLIGHT_MODE = 'net'
 const CALENDAR_LAYOUT_GRID_COLUMNS = 9
 const CALENDAR_LAYOUT_GRID_MARGIN = 4
 const CALENDAR_LAYOUT_GRID_GAP = CALENDAR_LAYOUT_GRID_MARGIN * 2
+const CALENDAR_AGGREGATE_PANEL_ROWS = 6
 const REMOTE_LAYOUT_SAVE_DELAY_MS = 800
 const CALENDAR_DAY_LONG_PRESS_MS = 520
 const CALENDAR_DAY_CLICK_SUPPRESS_MS = 450
@@ -98,11 +99,11 @@ const aggregateWidgetSizeOptions = [
 const calendarPanelDefinitions = [
   {
     id: 'aggregate',
-    defaultLayout: { x: 0, y: 0, w: 9, h: 1 },
+    defaultLayout: { x: 0, y: 0, w: 9, h: CALENDAR_AGGREGATE_PANEL_ROWS },
     minW: 4,
     maxW: 9,
-    minH: 1,
-    maxH: 1,
+    minH: CALENDAR_AGGREGATE_PANEL_ROWS,
+    maxH: CALENDAR_AGGREGATE_PANEL_ROWS,
   },
   {
     id: 'calendar',
@@ -1320,7 +1321,7 @@ function normalizeCalendarPanelLayout(layouts) {
     aggregate.x = 0
     aggregate.y = 0
     aggregate.w = CALENDAR_LAYOUT_GRID_COLUMNS
-    aggregate.h = 6
+    aggregate.h = CALENDAR_AGGREGATE_PANEL_ROWS
   }
 
   const aggregateBottom = aggregate ? aggregate.y + aggregate.h : 0

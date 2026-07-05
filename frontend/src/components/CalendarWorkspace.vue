@@ -86,6 +86,7 @@ const aggregateWidgetAmountTypes = [
   { value: 'INCOME', label: '수입' },
   { value: 'EXPENSE', label: '지출' },
 ]
+const aggregateWidgetMaxCount = 6
 const aggregateGridColumnCount = 8
 const aggregateGridRowCount = 1
 const aggregateDefaultWidgetWidth = 1
@@ -707,7 +708,7 @@ const hasReceiptAnalysis = computed(() => Boolean(
 
 const aggregateCards = computed(() => {
   const sourceConfigs = isAggregateEditMode.value ? aggregateWidgetDraftConfigs.value : props.aggregateWidgetConfigs
-  const cards = normalizeAggregateConfigs(sourceConfigs).slice(0, aggregateGridColumnCount).map((config, index) => buildAggregateCard(config, index))
+  const cards = normalizeAggregateConfigs(sourceConfigs).slice(0, aggregateWidgetMaxCount).map((config, index) => buildAggregateCard(config, index))
   return isAggregateEditMode.value ? cards : cards.filter((card) => card.config.kind !== 'NONE')
 })
 const aggregateDisplayCardCount = computed(() => {
@@ -715,7 +716,7 @@ const aggregateDisplayCardCount = computed(() => {
   return normalizeAggregateConfigs(sourceConfigs).filter((config) => config.kind !== 'NONE').length
 })
 const aggregateBadgeLabel = computed(() => (
-  isAggregateEditMode.value ? `${aggregateDisplayCardCount.value}개 표시` : `${aggregateDisplayCardCount.value}개`
+  isAggregateEditMode.value ? `${aggregateDisplayCardCount.value}/${aggregateWidgetMaxCount}개 표시` : `${aggregateDisplayCardCount.value}/${aggregateWidgetMaxCount}개`
 ))
 function expandAggregateEditPanelLayout(panels) {
   const aggregate = panels.find((panel) => panel.id === 'aggregate')
@@ -1874,9 +1875,7 @@ function createDefaultAggregateConfigs() {
     { ...baseConfig, id: 'aggregate-3', kind: 'PAYMENT_METHOD', paymentMethodId: defaultPaymentMethodId, amountType: 'EXPENSE', layoutX: 3, layoutOrder: 3 },
     { ...baseConfig, id: 'aggregate-4', kind: 'MONTHLY_CUMULATIVE_CHART', layoutW: 2, amountType: 'NET', layoutX: 4, layoutOrder: 4 },
     { ...baseConfig, id: 'aggregate-5', kind: 'NONE', layoutX: 6, layoutOrder: 5 },
-    { ...baseConfig, id: 'aggregate-6', kind: 'NONE', layoutX: 6, layoutOrder: 6 },
-    { ...baseConfig, id: 'aggregate-7', kind: 'NONE', layoutX: 7, layoutOrder: 7 },
-    { ...baseConfig, id: 'aggregate-8', kind: 'NONE', layoutX: 8, layoutOrder: 8 },
+    { ...baseConfig, id: 'aggregate-6', kind: 'NONE', layoutX: 7, layoutOrder: 6 },
   ]
 }
 function normalizeAggregateTargetAmount(value) {
@@ -1915,6 +1914,17 @@ function normalizeAggregateLayoutOrder(value, fallback = 1) {
   const numericValue = Number(value)
   if (!Number.isFinite(numericValue)) return fallback
   return Math.min(99, Math.max(1, Math.round(numericValue)))
+}
+
+function orderAggregateConfigs(configs) {
+  return configs
+    .map((config, index) => ({ config, index }))
+    .sort((left, right) => {
+      const leftOrder = normalizeAggregateLayoutOrder(left.config.layoutOrder, left.index + 1)
+      const rightOrder = normalizeAggregateLayoutOrder(right.config.layoutOrder, right.index + 1)
+      return leftOrder - rightOrder || left.index - right.index
+    })
+    .map(({ config }, index) => ({ ...config, layoutOrder: index + 1 }))
 }
 
 function getAggregateWidgetSizeOptions(kind) {
@@ -2148,7 +2158,7 @@ function normalizeAggregateConfigs(configs) {
     return { id: current.id || baseConfig.id, kind, period, paymentMethodId, amountType, monthlyExpenseTarget, singleExpenseLimit, showIncomeCumulative, showExpenseCumulative, comparePreviousPeriod, layoutX, layoutY, layoutW, layoutH, layoutOrder }
   })
 
-  return packAggregateGridConfigs(normalizedConfigs)
+  return packAggregateGridConfigs(orderAggregateConfigs(normalizedConfigs))
 }
 function updateAggregateWidget(index, field, value) {
   aggregateWidgetDraftConfigs.value = normalizeAggregateConfigs(
@@ -2224,20 +2234,22 @@ function updateAggregateWidgetLayout(index, patch) {
 }
 
 function moveAggregateWidget(index, direction) {
-  const configs = normalizeAggregateConfigs(aggregateWidgetDraftConfigs.value)
-  const sortedIndexes = configs
-    .map((config, configIndex) => ({ configIndex, order: normalizeAggregateLayoutOrder(config.layoutOrder, configIndex + 1) }))
-    .sort((a, b) => a.order - b.order || a.configIndex - b.configIndex)
-  const currentPosition = sortedIndexes.findIndex((item) => item.configIndex === index)
-  const nextPosition = currentPosition + direction
-  if (currentPosition < 0 || nextPosition < 0 || nextPosition >= sortedIndexes.length) return
+  const configs = normalizeAggregateConfigs(aggregateWidgetDraftConfigs.value).slice(0, aggregateWidgetMaxCount)
+  const nextIndex = index + direction
+  if (index < 0 || nextIndex < 0 || index >= configs.length || nextIndex >= configs.length) return
 
-  const currentItem = sortedIndexes[currentPosition]
-  const swapItem = sortedIndexes[nextPosition]
-  const currentOrder = configs[currentItem.configIndex].layoutOrder
-  configs[currentItem.configIndex] = { ...configs[currentItem.configIndex], layoutOrder: configs[swapItem.configIndex].layoutOrder }
-  configs[swapItem.configIndex] = { ...configs[swapItem.configIndex], layoutOrder: currentOrder }
-  aggregateWidgetDraftConfigs.value = normalizeAggregateConfigs(configs)
+  const nextConfigs = configs.slice()
+  const currentConfig = nextConfigs[index]
+  nextConfigs[index] = nextConfigs[nextIndex]
+  nextConfigs[nextIndex] = currentConfig
+  aggregateWidgetDraftConfigs.value = normalizeAggregateConfigs(
+    nextConfigs.map((config, configIndex) => ({
+      ...config,
+      layoutX: Math.min(configIndex + 1, getAggregateMaxColumnForWidth(config.layoutW)),
+      layoutY: 1,
+      layoutOrder: configIndex + 1,
+    })),
+  )
 }
 function syncAggregateWidgetDraft() {
   aggregateWidgetDraftConfigs.value = normalizeAggregateConfigs(props.aggregateWidgetConfigs)
@@ -2256,7 +2268,7 @@ function cancelAggregateEdit() {
 function saveAggregateWidgetConfigs() {
   emit(
     'save-aggregate-widget-configs',
-    normalizeAggregateConfigs(aggregateWidgetDraftConfigs.value).map(({ kind, period, paymentMethodId, amountType, monthlyExpenseTarget, singleExpenseLimit, showIncomeCumulative, showExpenseCumulative, comparePreviousPeriod, layoutX, layoutY, layoutW, layoutOrder }) => {
+    normalizeAggregateConfigs(aggregateWidgetDraftConfigs.value).slice(0, aggregateWidgetMaxCount).map(({ kind, period, paymentMethodId, amountType, monthlyExpenseTarget, singleExpenseLimit, showIncomeCumulative, showExpenseCumulative, comparePreviousPeriod, layoutX, layoutY, layoutW }, configIndex) => {
       const normalizedWidth = kind === 'MONTHLY_CUMULATIVE_CHART'
         ? Math.min(4, Math.max(2, normalizeAggregateGridSpan(layoutW, 2, 4)))
         : aggregateDefaultWidgetWidth
@@ -2279,7 +2291,7 @@ function saveAggregateWidgetConfigs() {
         layoutY: normalizeAggregateGridPosition(layoutY, 1, getAggregateMaxRowForHeight(normalizedHeight)),
         layoutW: normalizedWidth,
         layoutH: normalizedHeight,
-        layoutOrder: normalizeAggregateLayoutOrder(layoutOrder, 1),
+        layoutOrder: configIndex + 1,
       }
     }),
   )
@@ -3539,6 +3551,11 @@ defineExpose({
             :data-aggregate-height="card.config.layoutH"
             :data-aggregate-index="card.index"
           >
+            <div v-if="isAggregateEditMode" class="household-aggregate-order-controls" aria-label="집계 순서 변경">
+              <button type="button" class="button button--secondary" :disabled="aggregateSettingsSaving || card.index <= 0" aria-label="왼쪽으로 이동" title="왼쪽으로 이동" @click="moveAggregateWidget(card.index, -1)">←</button>
+              <span>{{ card.index + 1 }} / {{ aggregateCards.length }}</span>
+              <button type="button" class="button button--secondary" :disabled="aggregateSettingsSaving || card.index >= aggregateCards.length - 1" aria-label="오른쪽으로 이동" title="오른쪽으로 이동" @click="moveAggregateWidget(card.index, 1)">→</button>
+            </div>
             <div v-if="isAggregateEditMode" class="household-aggregate-card__controls">
               <label class="field household-aggregate-card__field">
                 <span class="field__label">집계</span>

@@ -27,7 +27,7 @@ import org.springframework.util.StringUtils;
 @Transactional(readOnly = true)
 public class HouseholdAggregatePreferenceService {
 
-    private static final int MAX_WIDGETS = 4;
+    private static final int MAX_WIDGETS = 6;
     private static final Set<String> ALLOWED_KINDS = Set.of("NONE", "TOTAL", "PAYMENT_METHOD", "MONTHLY_CUMULATIVE_CHART", "MONTHLY_GOAL");
     private static final Set<String> ALLOWED_PERIODS = Set.of("YEAR", "QUARTER", "MONTH", "WEEK", "DAY");
     private static final Set<String> ALLOWED_AMOUNT_TYPES = Set.of("NET", "INCOME", "EXPENSE");
@@ -64,7 +64,7 @@ public class HouseholdAggregatePreferenceService {
         }
 
         if (request.widgets().size() > MAX_WIDGETS) {
-            throw new BadRequestException("사용자 설정 집계는 최대 4개까지 저장할 수 있습니다.");
+            throw new BadRequestException("사용자 설정 집계는 최대 6개까지 저장할 수 있습니다.");
         }
 
         return request.widgets().stream()
@@ -347,7 +347,9 @@ public class HouseholdAggregatePreferenceService {
                 new StoredWidget("TOTAL", "MONTH", null, "NET", null, null, null, null, null, 1, 1, 2, 2, 1),
                 new StoredWidget("NONE", "MONTH", null, "NET", null, null, null, null, null, 3, 1, 2, 2, 2),
                 new StoredWidget("NONE", "WEEK", null, "NET", null, null, null, null, null, 1, 3, 2, 2, 3),
-                new StoredWidget("NONE", "DAY", null, "NET", null, null, null, null, null, 3, 3, 2, 2, 4)
+                new StoredWidget("NONE", "DAY", null, "NET", null, null, null, null, null, 3, 3, 2, 2, 4),
+                new StoredWidget("NONE", "MONTH", null, "NET", null, null, null, null, null, 1, 5, 2, 2, 5),
+                new StoredWidget("NONE", "MONTH", null, "NET", null, null, null, null, null, 3, 5, 2, 2, 6)
         );
     }
 

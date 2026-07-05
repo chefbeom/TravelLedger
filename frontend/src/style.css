@@ -27310,6 +27310,28 @@ button.button--primary,
   opacity: 0.76;
 }
 
+.household-aggregate-panel--editing .household-aggregate-order-controls {
+  align-items: center !important;
+  display: flex !important;
+  gap: 6px !important;
+  justify-content: space-between !important;
+  min-width: 0 !important;
+}
+
+.household-aggregate-panel--editing .household-aggregate-order-controls .button {
+  border-radius: 8px !important;
+  flex: 0 0 34px !important;
+  min-height: 28px !important;
+  padding: 3px 8px !important;
+}
+
+.household-aggregate-panel--editing .household-aggregate-order-controls span {
+  color: rgba(226, 232, 240, 0.76) !important;
+  font-size: 0.72rem !important;
+  font-weight: 800 !important;
+  white-space: nowrap !important;
+}
+
 .household-aggregate-panel--editing .household-aggregate-card__controls,
 .household-aggregate-panel--editing .household-aggregate-goal-fields,
 .household-aggregate-panel--editing .household-aggregate-chart-options {

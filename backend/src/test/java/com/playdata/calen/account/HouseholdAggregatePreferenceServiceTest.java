@@ -56,7 +56,7 @@ class HouseholdAggregatePreferenceServiceTest {
 
         var response = service.getPreferences(1L);
 
-        assertThat(response.widgets()).hasSize(4);
+        assertThat(response.widgets()).hasSize(6);
         assertThat(response.widgets().get(0).kind()).isEqualTo("TOTAL");
         assertThat(response.widgets().get(0).period()).isEqualTo("MONTH");
         assertThat(response.widgets().get(0).amountType()).isEqualTo("NET");
@@ -67,13 +67,17 @@ class HouseholdAggregatePreferenceServiceTest {
         assertThat(response.widgets().get(2).amountType()).isEqualTo("INCOME");
         assertThat(response.widgets().get(3).kind()).isEqualTo("NONE");
         assertThat(response.widgets().get(3).period()).isEqualTo("DAY");
+        assertThat(response.widgets().get(4).kind()).isEqualTo("NONE");
+        assertThat(response.widgets().get(5).kind()).isEqualTo("NONE");
         assertThat(response.widgets())
                 .extracting(widget -> List.of(widget.layoutW(), widget.layoutH(), widget.layoutOrder()))
                 .containsExactly(
                         List.of(2, 2, 1),
                         List.of(2, 2, 2),
                         List.of(2, 2, 3),
-                        List.of(2, 2, 4)
+                        List.of(2, 2, 4),
+                        List.of(2, 2, 5),
+                        List.of(2, 2, 6)
                 );
     }
 
@@ -100,6 +104,7 @@ class HouseholdAggregatePreferenceServiceTest {
                 new HouseholdAggregateWidgetRequest("NONE", "DAY", null, "NET", null, null, null, null, null, 3, 3, 3, 2, 4)
         )));
 
+        assertThat(response.widgets()).hasSize(6);
         assertThat(response.widgets().get(0).layoutX()).isEqualTo(3);
         assertThat(response.widgets().get(0).layoutY()).isEqualTo(3);
         assertThat(response.widgets().get(0).layoutW()).isEqualTo(1);

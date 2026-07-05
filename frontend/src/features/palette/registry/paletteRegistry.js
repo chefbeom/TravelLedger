@@ -112,6 +112,7 @@ function buildRecentFlowKpi(context, options = {}) {
   return {
     title: '최근 흐름',
     eyebrow: flowLabel,
+    hideTitle: true,
     value: latestEntry ? formatCurrency(latestEntry.amount) : '-',
     meta: latestEntry ? '최신순 거래' : `${flowLabel} 없음`,
     tone: entryType === 'INCOME' ? 'positive' : 'negative',

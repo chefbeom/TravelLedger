@@ -22,7 +22,7 @@ const canShowBars = computed(() => ['3x2', '3x3'].includes(props.config.size))
   <div class="kpi-palette" :class="`kpi-palette--${config.size}`">
     <div class="kpi-palette__head">
       <span>{{ data.eyebrow || 'KPI' }}</span>
-      <strong>{{ data.title || '가계부' }}</strong>
+      <strong v-if="!data.hideTitle">{{ data.title || '가계부' }}</strong>
     </div>
 
     <div class="kpi-palette__metric" :class="`kpi-palette__metric--${data.tone || 'neutral'}`">

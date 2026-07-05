@@ -21,6 +21,7 @@ const CALENDAR_LAYOUT_GRID_COLUMNS = 9
 const CALENDAR_LAYOUT_GRID_MARGIN = 4
 const CALENDAR_LAYOUT_GRID_GAP = CALENDAR_LAYOUT_GRID_MARGIN * 2
 const CALENDAR_AGGREGATE_PANEL_ROWS = 2
+const CALENDAR_AGGREGATE_EDIT_PANEL_ROWS = 4
 const LEGACY_CALENDAR_AGGREGATE_PANEL_ROWS = 6
 const REMOTE_LAYOUT_SAVE_DELAY_MS = 800
 const CALENDAR_DAY_LONG_PRESS_MS = 520
@@ -709,12 +710,46 @@ const aggregateCards = computed(() => {
   const cards = normalizeAggregateConfigs(sourceConfigs).slice(0, aggregateGridColumnCount).map((config, index) => buildAggregateCard(config, index))
   return isAggregateEditMode.value ? cards : cards.filter((card) => card.config.kind !== 'NONE')
 })
-const calendarLayoutPanels = computed(() => (
-  calendarPanelDefinitions.map((definition) => ({
+function expandAggregateEditPanelLayout(panels) {
+  const aggregate = panels.find((panel) => panel.id === 'aggregate')
+  if (!aggregate || !isAggregateEditMode.value) {
+    return panels
+  }
+
+  const aggregateTop = Number(aggregate.y ?? 0) || 0
+  const normalBottom = aggregateTop + (Number(aggregate.h ?? CALENDAR_AGGREGATE_PANEL_ROWS) || CALENDAR_AGGREGATE_PANEL_ROWS)
+  const editBottom = aggregateTop + CALENDAR_AGGREGATE_EDIT_PANEL_ROWS
+  const rowShift = Math.max(0, editBottom - normalBottom)
+
+  return panels.map((panel) => {
+    if (panel.id === 'aggregate') {
+      return {
+        ...panel,
+        h: CALENDAR_AGGREGATE_EDIT_PANEL_ROWS,
+        minH: CALENDAR_AGGREGATE_EDIT_PANEL_ROWS,
+        maxH: CALENDAR_AGGREGATE_EDIT_PANEL_ROWS,
+      }
+    }
+
+    if (rowShift > 0 && Number(panel.y ?? 0) >= normalBottom) {
+      return {
+        ...panel,
+        y: Number(panel.y ?? 0) + rowShift,
+      }
+    }
+
+    return panel
+  })
+}
+
+const calendarLayoutPanels = computed(() => {
+  const panels = calendarPanelDefinitions.map((definition) => ({
     ...definition,
     ...calendarPanelLayout.value.find((item) => item.id === definition.id),
   })).filter((panel) => panel.id !== 'aggregate' || isAggregatePanelEnabled.value)
-))
+
+  return expandAggregateEditPanelLayout(panels)
+})
 const calendarPanelLayoutKey = computed(() => (
   calendarLayoutPanels.value.map((panel) => `${panel.id}:${panel.x}:${panel.y}:${panel.w}:${panel.h}`).join('|')
 ))
@@ -727,6 +762,8 @@ const calendarLayoutGridStyle = computed(() => ({
   '--calendar-layout-cell-height': `${layoutCellHeight.value}px`,
   '--calendar-layout-grid-gap': `${CALENDAR_LAYOUT_GRID_GAP}px`,
   '--calendar-layout-grid-margin': `${CALENDAR_LAYOUT_GRID_MARGIN}px`,
+  '--calendar-aggregate-panel-rows': String(CALENDAR_AGGREGATE_PANEL_ROWS),
+  '--calendar-aggregate-edit-panel-rows': String(CALENDAR_AGGREGATE_EDIT_PANEL_ROWS),
 }))
 const isCalendarGridStackActive = computed(() => !isMobileLayoutMode.value)
 const mobileCalendarPanelOrder = {

@@ -27146,7 +27146,7 @@ button.button--primary,
 /* Calendar layout normal mode: restore visible aggregate panel within its assigned GridStack slot. */
 .household-calendar-layout-grid:not(.household-calendar-layout-grid--editing) .household-calendar-layout-item--aggregate {
   display: block !important;
-  height: calc(2 * var(--gs-cell-height, var(--calendar-layout-cell-height, 112px))) !important;
+  height: calc(var(--calendar-aggregate-panel-rows, 2) * var(--gs-cell-height, var(--calendar-layout-cell-height, 112px))) !important;
   min-height: 0 !important;
   opacity: 1 !important;
   overflow: hidden !important;
@@ -27226,4 +27226,70 @@ button.button--primary,
   opacity: 1 !important;
   overflow: hidden !important;
   visibility: visible !important;
+}
+
+/* Calendar aggregate final fit pass: keep normal borders visible and give edit mode its own slot. */
+.household-calendar-layout-grid:not(.household-calendar-layout-grid--editing) .household-calendar-layout-item--aggregate:not(:has(.household-aggregate-panel--editing)) > .grid-stack-item-content {
+  height: auto !important;
+  overflow: hidden !important;
+}
+
+.household-calendar-layout-grid:not(.household-calendar-layout-grid--editing) .household-calendar-layout-item--aggregate:not(:has(.household-aggregate-panel--editing)) .household-calendar-layout-panel-shell {
+  height: 100% !important;
+  overflow: hidden !important;
+}
+
+.household-calendar-layout-grid:not(.household-calendar-layout-grid--editing) .household-calendar-layout-item--aggregate:has(.household-aggregate-panel--editing) {
+  height: calc(var(--calendar-aggregate-edit-panel-rows, 4) * var(--gs-cell-height, var(--calendar-layout-cell-height, 112px))) !important;
+  min-height: 0 !important;
+  overflow: visible !important;
+  z-index: 30 !important;
+}
+
+.household-calendar-layout-grid:not(.household-calendar-layout-grid--editing) .household-calendar-layout-item--aggregate:has(.household-aggregate-panel--editing) > .grid-stack-item-content,
+.household-calendar-layout-grid:not(.household-calendar-layout-grid--editing) .household-calendar-layout-item--aggregate:has(.household-aggregate-panel--editing) .household-calendar-layout-panel-shell {
+  height: auto !important;
+  min-height: 0 !important;
+  overflow: visible !important;
+}
+
+.household-calendar-layout-grid:not(.household-calendar-layout-grid--editing) .household-calendar-layout-item--aggregate .household-aggregate-panel--editing {
+  display: grid !important;
+  grid-template-rows: auto minmax(0, 1fr) !important;
+  height: 100% !important;
+  max-height: 100% !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+}
+
+.household-calendar-layout-grid:not(.household-calendar-layout-grid--editing) .household-calendar-layout-item--aggregate .household-aggregate-panel--editing .household-aggregate-grid {
+  align-content: start !important;
+  align-items: stretch !important;
+  display: grid !important;
+  gap: 12px !important;
+  grid-auto-flow: row !important;
+  grid-auto-rows: auto !important;
+  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  height: 100% !important;
+  max-height: none !important;
+  min-height: 0 !important;
+  overflow: auto !important;
+  padding: 0 2px 2px 0 !important;
+}
+
+.household-calendar-layout-grid:not(.household-calendar-layout-grid--editing) .household-calendar-layout-item--aggregate .household-aggregate-panel--editing .household-aggregate-grid > .household-aggregate-card {
+  grid-column: auto / span 1 !important;
+  grid-row: auto !important;
+  height: auto !important;
+  max-height: none !important;
+  min-height: 0 !important;
+  overflow: visible !important;
+}
+
+.household-calendar-layout-grid:not(.household-calendar-layout-grid--editing) .household-calendar-layout-item--aggregate .household-aggregate-panel--editing .household-aggregate-card--chart {
+  grid-column: auto / span 2 !important;
+}
+.household-calendar-layout-grid:not(.household-calendar-layout-grid--editing) .household-calendar-layout-item--aggregate:has(.household-aggregate-panel--editing) .household-calendar-layout-panel-shell {
+  height: 100% !important;
+  overflow: visible !important;
 }

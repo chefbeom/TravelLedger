@@ -3018,6 +3018,7 @@ defineExpose({
         class="household-calendar-layout-grid"
         :class="{
           'grid-stack': isCalendarGridStackActive,
+          'household-calendar-layout-grid--editing': isLayoutEditMode && !isMobileLayoutMode,
           'household-calendar-layout-grid--static': !isCalendarGridStackActive && !isMobileLayoutMode,
           'household-calendar-layout-grid--mobile-flow': isMobileLayoutMode,
         }"

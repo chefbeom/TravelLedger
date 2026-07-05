@@ -27108,3 +27108,37 @@ button.button--primary,
   overflow: hidden !important;
   width: 100% !important;
 }
+
+/* Calendar layout edit mode: visible aggregate GridStack contract. */
+.household-calendar-layout-grid--editing .household-calendar-layout-item--aggregate {
+  min-height: 0 !important;
+  opacity: 1 !important;
+  overflow: hidden !important;
+  visibility: visible !important;
+  z-index: 3 !important;
+}
+
+.household-calendar-layout-grid--editing .household-calendar-layout-item--aggregate > .grid-stack-item-content,
+.household-calendar-layout-grid--editing .household-calendar-layout-item--aggregate .household-calendar-layout-static-content,
+.household-calendar-layout-grid--editing .household-calendar-layout-item--aggregate .household-calendar-layout-panel-shell {
+  min-height: 0 !important;
+  opacity: 1 !important;
+  overflow: hidden !important;
+  visibility: visible !important;
+}
+
+.household-calendar-layout-grid--editing .household-calendar-layout-item--aggregate .household-aggregate-panel:not(.household-aggregate-panel--editing) {
+  display: grid !important;
+  grid-template-rows: auto minmax(0, 1fr) !important;
+  height: 100% !important;
+  min-height: 0 !important;
+  max-height: 100% !important;
+  opacity: 1 !important;
+  overflow: hidden !important;
+  visibility: visible !important;
+}
+
+.household-calendar-layout-grid--editing .household-calendar-layout-item--aggregate .household-aggregate-grid {
+  min-height: 0 !important;
+  overflow: hidden !important;
+}

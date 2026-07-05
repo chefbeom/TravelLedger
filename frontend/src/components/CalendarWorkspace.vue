@@ -3497,7 +3497,7 @@ defineExpose({
               </template>
               <template v-else-if="card.chart">
                 <strong>{{ formatCurrency(card.chart.headlineAmount) }}</strong>
-                <small>{{ card.chart.rangeLabel }} · {{ card.chart.headlineCaption }}</small>
+                <small class="household-aggregate-card__chart-caption"><span>{{ card.chart.rangeLabel }}</span><span>{{ card.chart.headlineCaption }}</span></small>
               </template>
               <template v-else-if="card.goal">
                 <strong>{{ formatCurrency(card.goal.expense) }}</strong>

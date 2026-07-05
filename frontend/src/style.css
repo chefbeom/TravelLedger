@@ -26753,3 +26753,76 @@ button.button--primary,
 .household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-card--chart .household-aggregate-card__meta {
   display: none !important;
 }
+/* Household aggregate panel visibility and edit-mode sizing fix */
+.household-calendar-layout-grid:not(.household-calendar-layout-grid--editing) .household-calendar-layout-item--aggregate,
+.household-calendar-layout-grid:not(.household-calendar-layout-grid--editing) .household-calendar-layout-item--aggregate > .grid-stack-item-content,
+.household-calendar-layout-grid:not(.household-calendar-layout-grid--editing) .household-calendar-layout-item--aggregate .household-calendar-layout-card,
+.household-calendar-layout-grid:not(.household-calendar-layout-grid--editing) .household-calendar-layout-item--aggregate .household-calendar-layout-static-content,
+.household-calendar-layout-grid:not(.household-calendar-layout-grid--editing) .household-calendar-layout-item--aggregate .household-aggregate-panel {
+  min-height: 250px !important;
+  height: auto !important;
+  overflow: visible !important;
+}
+
+.household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-grid {
+  min-height: 162px !important;
+  align-items: stretch !important;
+}
+
+.household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-card {
+  min-height: 162px !important;
+}
+
+.household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-card--chart .household-aggregate-card__copy {
+  overflow: hidden !important;
+}
+
+.household-aggregate-card__chart-caption {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: flex-start !important;
+  gap: 3px !important;
+  max-width: 100% !important;
+  white-space: normal !important;
+  overflow: hidden !important;
+  text-overflow: clip !important;
+  line-height: 1.35 !important;
+}
+
+.household-aggregate-card__chart-caption span {
+  display: block !important;
+  max-width: 100% !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+
+.household-aggregate-panel--editing,
+.household-aggregate-panel--editing .household-aggregate-grid,
+.household-aggregate-panel--editing .household-aggregate-card,
+.household-aggregate-panel--editing .household-aggregate-card__controls,
+.household-aggregate-panel--editing .household-aggregate-chart-options,
+.household-aggregate-panel--editing .household-aggregate-goal-fields {
+  max-height: none !important;
+  height: auto !important;
+  overflow: visible !important;
+}
+
+.household-aggregate-panel--editing .household-aggregate-card {
+  min-height: 246px !important;
+  align-content: start !important;
+}
+
+.household-aggregate-panel--editing .household-aggregate-card--chart {
+  min-height: 286px !important;
+}
+
+.household-aggregate-panel--editing .household-aggregate-chart-options {
+  grid-column: 1 / -1 !important;
+  padding: 10px !important;
+}
+
+.household-aggregate-panel--editing .household-aggregate-chart-options label {
+  min-width: 0 !important;
+  white-space: normal !important;
+}

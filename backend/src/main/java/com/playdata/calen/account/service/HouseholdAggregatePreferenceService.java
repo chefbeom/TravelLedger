@@ -170,10 +170,10 @@ public class HouseholdAggregatePreferenceService {
             Boolean showIncomeCumulative = normalizeBoolean(requestedWidget.showIncomeCumulative(), baseWidget.showIncomeCumulative());
             Boolean showExpenseCumulative = normalizeBoolean(requestedWidget.showExpenseCumulative(), baseWidget.showExpenseCumulative());
             Boolean comparePreviousPeriod = normalizeBoolean(requestedWidget.comparePreviousPeriod(), baseWidget.comparePreviousPeriod());
-            Integer layoutW = normalizeGridSpan(requestedWidget.layoutW(), baseWidget.layoutW(), 4);
-            Integer layoutX = normalizeGridPosition(requestedWidget.layoutX(), baseWidget.layoutX(), Math.max(1, 5 - layoutW));
-            Integer layoutH = normalizeGridSpan(requestedWidget.layoutH(), baseWidget.layoutH(), 3);
-            Integer layoutY = normalizeGridPosition(requestedWidget.layoutY(), baseWidget.layoutY(), Math.max(1, 9 - layoutH));
+            Integer layoutW = normalizeGridSpan(requestedWidget.layoutW(), baseWidget.layoutW(), 8);
+            Integer layoutX = normalizeGridPosition(requestedWidget.layoutX(), baseWidget.layoutX(), Math.max(1, 9 - layoutW));
+            Integer layoutH = normalizeGridSpan(requestedWidget.layoutH(), baseWidget.layoutH(), 1);
+            Integer layoutY = normalizeGridPosition(requestedWidget.layoutY(), baseWidget.layoutY(), 1);
             Integer layoutOrder = normalizeLayoutOrder(requestedWidget.layoutOrder(), baseWidget.layoutOrder() != null ? baseWidget.layoutOrder() : index + 1);
 
             if ("PAYMENT_METHOD".equals(kind)) {
@@ -191,9 +191,14 @@ public class HouseholdAggregatePreferenceService {
                 if (!Boolean.TRUE.equals(showIncomeCumulative) && !Boolean.TRUE.equals(showExpenseCumulative)) {
                     showExpenseCumulative = true;
                 }
-                layoutW = Math.max(layoutW, 4);
-                layoutX = 1;
-                layoutH = Math.max(layoutH, 2);
+                layoutW = Math.min(4, Math.max(2, normalizeGridSpan(layoutW, 2, 4)));
+                layoutX = normalizeGridPosition(layoutX, 1, Math.max(1, 9 - layoutW));
+                layoutH = 1;
+                layoutY = 1;
+            } else {
+                layoutW = 1;
+                layoutH = 1;
+                layoutY = 1;
             }
 
             if ("MONTHLY_GOAL".equals(kind)) {
@@ -205,8 +210,14 @@ public class HouseholdAggregatePreferenceService {
                 singleExpenseLimit = null;
             }
 
-            layoutX = normalizeGridPosition(layoutX, baseWidget.layoutX(), Math.max(1, 5 - layoutW));
-            layoutY = normalizeGridPosition(layoutY, baseWidget.layoutY(), Math.max(1, 9 - layoutH));
+            if ("NONE".equals(kind)) {
+                period = "MONTH";
+                amountType = "EXPENSE";
+                paymentMethodId = null;
+            }
+
+            layoutX = normalizeGridPosition(layoutX, baseWidget.layoutX(), Math.max(1, 9 - layoutW));
+            layoutY = normalizeGridPosition(layoutY, baseWidget.layoutY(), 1);
 
             if (!"MONTHLY_CUMULATIVE_CHART".equals(kind)) {
                 showIncomeCumulative = null;
@@ -237,7 +248,7 @@ public class HouseholdAggregatePreferenceService {
 
 
     private List<StoredWidget> packNormalizedWidgets(List<StoredWidget> widgets) {
-        boolean[][] occupied = new boolean[9][5];
+        boolean[][] occupied = new boolean[2][9];
         StoredWidget[] packedWidgets = widgets.toArray(new StoredWidget[0]);
         List<Integer> orderedIndexes = new ArrayList<>();
         for (int index = 0; index < packedWidgets.length; index++) {
@@ -254,10 +265,10 @@ public class HouseholdAggregatePreferenceService {
 
         for (Integer index : orderedIndexes) {
             StoredWidget widget = packedWidgets[index];
-            int width = normalizeGridSpan(widget.layoutW(), 2, 4);
-            int height = normalizeGridSpan(widget.layoutH(), 2, 3);
-            int preferredColumn = normalizeGridPosition(widget.layoutX(), 1, Math.max(1, 5 - width));
-            int preferredRow = normalizeGridPosition(widget.layoutY(), 1, Math.max(1, 9 - height));
+            int width = normalizeGridSpan(widget.layoutW(), 1, 8);
+            int height = 1;
+            int preferredColumn = normalizeGridPosition(widget.layoutX(), 1, Math.max(1, 9 - width));
+            int preferredRow = normalizeGridPosition(widget.layoutY(), 1, 1);
             int[] slot = findGridSlot(occupied, preferredColumn, preferredRow, width, height);
             reserveGridSlot(occupied, slot[0], slot[1], width, height);
             packedWidgets[index] = new StoredWidget(
@@ -285,8 +296,8 @@ public class HouseholdAggregatePreferenceService {
         if (isGridSlotFree(occupied, preferredColumn, preferredRow, width, height)) {
             return new int[]{preferredColumn, preferredRow};
         }
-        int maxColumn = Math.max(1, 5 - width);
-        int maxRow = Math.max(1, 9 - height);
+        int maxColumn = Math.max(1, 9 - width);
+        int maxRow = 1;
         for (int row = 1; row <= maxRow; row++) {
             for (int column = 1; column <= maxColumn; column++) {
                 if (isGridSlotFree(occupied, column, row, width, height)) {
@@ -344,12 +355,12 @@ public class HouseholdAggregatePreferenceService {
 
     private List<StoredWidget> buildDefaultWidgets() {
         return List.of(
-                new StoredWidget("TOTAL", "MONTH", null, "NET", null, null, null, null, null, 1, 1, 2, 2, 1),
-                new StoredWidget("NONE", "MONTH", null, "NET", null, null, null, null, null, 3, 1, 2, 2, 2),
-                new StoredWidget("NONE", "WEEK", null, "NET", null, null, null, null, null, 1, 3, 2, 2, 3),
-                new StoredWidget("NONE", "DAY", null, "NET", null, null, null, null, null, 3, 3, 2, 2, 4),
-                new StoredWidget("NONE", "MONTH", null, "NET", null, null, null, null, null, 1, 5, 2, 2, 5),
-                new StoredWidget("NONE", "MONTH", null, "NET", null, null, null, null, null, 3, 5, 2, 2, 6)
+                new StoredWidget("TOTAL", "MONTH", null, "EXPENSE", null, null, null, null, null, 1, 1, 1, 1, 1),
+                new StoredWidget("MONTHLY_GOAL", "MONTH", null, "EXPENSE", null, null, null, null, null, 2, 1, 1, 1, 2),
+                new StoredWidget("PAYMENT_METHOD", "MONTH", null, "EXPENSE", null, null, null, null, null, 3, 1, 1, 1, 3),
+                new StoredWidget("MONTHLY_CUMULATIVE_CHART", "MONTH", null, "NET", null, null, true, true, false, 4, 1, 2, 1, 4),
+                new StoredWidget("NONE", "MONTH", null, "EXPENSE", null, null, null, null, null, 6, 1, 1, 1, 5),
+                new StoredWidget("NONE", "MONTH", null, "EXPENSE", null, null, null, null, null, 7, 1, 1, 1, 6)
         );
     }
 

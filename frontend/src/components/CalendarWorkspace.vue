@@ -2789,8 +2789,8 @@ function buildAggregateCard(config, index) {
   const range = getAggregateRange(aggregateRangePeriod)
   const aggregateSourceEntries = Array.isArray(props.aggregateEntries) ? props.aggregateEntries : []
   const rangeEntries = aggregateSourceEntries.filter((entry) => entry.entryDate >= range.from && entry.entryDate <= range.to)
-  const filteredEntries = config.kind === 'PAYMENT_METHOD' && config.paymentMethodId
-    ? rangeEntries.filter((entry) => String(entry.paymentMethodId) === String(config.paymentMethodId))
+  const filteredEntries = config.kind === 'PAYMENT_METHOD'
+    ? (config.paymentMethodId ? rangeEntries.filter((entry) => String(entry.paymentMethodId) === String(config.paymentMethodId)) : [])
     : rangeEntries
   const overview = summarizeEntries(filteredEntries)
 

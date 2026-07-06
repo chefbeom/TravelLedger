@@ -27948,3 +27948,34 @@ button.button--primary,
     grid-column: auto;
   }
 }
+/* Receipt OCR per-image prompt controls. */
+.receipt-ocr-selected-prompt {
+  align-content: start;
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+.receipt-ocr-prompt-box--item {
+  gap: 8px !important;
+  padding: 12px !important;
+}
+
+.receipt-ocr-prompt-box--item textarea {
+  font-size: 0.88rem !important;
+  max-height: min(180px, 24vh) !important;
+  min-height: 104px !important;
+  resize: vertical !important;
+}
+
+.receipt-ocr-review-card--selected .receipt-ocr-review-card__analysis {
+  align-content: start;
+  display: grid;
+  gap: 12px;
+}
+
+@media (max-width: 900px) {
+  .receipt-ocr-prompt-box--item textarea {
+    min-height: 88px !important;
+  }
+}

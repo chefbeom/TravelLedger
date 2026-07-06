@@ -513,10 +513,32 @@ function selectReceiptRequestPromptHistory(event) {
   }
 }
 
-function startReceiptAnalysis() {
-  emit('start-receipt-analysis', {
-    prompt: props.receiptOcr?.requestPromptEnabled ? props.receiptOcr?.requestPrompt : '',
+function updateReceiptItemPromptEnabled(item, event) {
+  emit('update-receipt-item-prompt', {
+    itemId: item.id,
+    enabled: event.target.checked,
   })
+}
+
+function updateReceiptItemPrompt(item, event) {
+  emit('update-receipt-item-prompt', {
+    itemId: item.id,
+    prompt: event.target.value,
+  })
+}
+
+function selectReceiptItemPromptHistory(item, event) {
+  if (event.target.value) {
+    emit('update-receipt-item-prompt', {
+      itemId: item.id,
+      enabled: true,
+      prompt: event.target.value,
+    })
+  }
+}
+
+function startReceiptAnalysis() {
+  emit('start-receipt-analysis', {})
 }
 
 function updateReceiptRerunPromptEnabled(event) {
@@ -4224,33 +4246,7 @@ defineExpose({
               >
                 {{ receiptOcr?.isAnalyzing ? '분석 중' : '분석 요청하기' }}
               </button>
-              <div class="receipt-ocr-prompt-box receipt-ocr-prompt-box--request receipt-ocr-prompt-box--inline">
-                <label class="receipt-ocr-toggle receipt-ocr-toggle--compact">
-                  <input
-                    type="checkbox"
-                    :checked="receiptOcr?.requestPromptEnabled"
-                    @change="updateReceiptRequestPromptEnabled"
-                  />
-                  <span>이번 요청사항</span>
-                </label>
-                <div v-if="receiptOcr?.requestPromptEnabled" class="receipt-ocr-prompt-box__body receipt-ocr-prompt-box__body--inline">
-                  <label v-if="receiptPromptHistory.length" class="field receipt-ocr-prompt-history">
-                    <span class="field__label">지난 요청사항</span>
-                    <select @change="selectReceiptRequestPromptHistory">
-                      <option value="">최근 요청사항 선택</option>
-                      <option v-for="prompt in receiptPromptHistory" :key="prompt" :value="prompt">
-                        {{ prompt }}
-                      </option>
-                    </select>
-                  </label>
-                  <textarea
-                    :value="receiptOcr?.requestPrompt || ''"
-                    rows="2"
-                    placeholder="예: 제목은 네이버페이 : 상품명 형식, 메모에는 원문 상태와 상세 금액."
-                    @input="updateReceiptRequestPrompt"
-                  ></textarea>
-                </div>
-              </div>
+
             </div>
           </div>
 
@@ -4462,9 +4458,38 @@ defineExpose({
               </aside>
 
               <div class="receipt-ocr-review-card__analysis">
-                <p v-if="item.status === 'selected'" class="receipt-ocr-review-card__message">
-                  이미지가 선택되었습니다. 요청사항을 확인한 뒤 분석 요청하기를 눌러 주세요.
-                </p>
+                <div v-if="item.status === 'selected'" class="receipt-ocr-selected-prompt">
+                  <p class="receipt-ocr-review-card__message">
+                    이미지가 선택되었습니다. 이 이미지에만 적용할 요청사항을 설정한 뒤 분석 요청하기를 눌러 주세요.
+                  </p>
+                  <div class="receipt-ocr-prompt-box receipt-ocr-prompt-box--item">
+                    <label class="receipt-ocr-toggle receipt-ocr-toggle--compact">
+                      <input
+                        type="checkbox"
+                        :checked="item.requestPromptEnabled"
+                        @change="updateReceiptItemPromptEnabled(item, $event)"
+                      />
+                      <span>이 이미지 요청사항</span>
+                    </label>
+                    <div v-if="item.requestPromptEnabled" class="receipt-ocr-prompt-box__body receipt-ocr-prompt-box__body--inline">
+                      <label v-if="receiptPromptHistory.length" class="field receipt-ocr-prompt-history">
+                        <span class="field__label">지난 요청사항</span>
+                        <select @change="selectReceiptItemPromptHistory(item, $event)">
+                          <option value="">최근 요청사항 선택</option>
+                          <option v-for="prompt in receiptPromptHistory" :key="prompt" :value="prompt">
+                            {{ prompt }}
+                          </option>
+                        </select>
+                      </label>
+                      <textarea
+                        :value="item.requestPrompt || ''"
+                        rows="4"
+                        placeholder="예: 이 이미지는 네이버페이 형식으로 제목을 정리하고, 메모에는 원문 상태와 상세 금액을 남겨줘."
+                        @input="updateReceiptItemPrompt(item, $event)"
+                      ></textarea>
+                    </div>
+                  </div>
+                </div>
                 <p v-else-if="item.status === 'queued'" class="receipt-ocr-review-card__message">
                   앞선 이미지 분석이 끝나면 이 이미지를 AI 서버로 보냅니다.
                 </p>

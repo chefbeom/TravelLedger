@@ -2556,6 +2556,20 @@ async function removeReceiptOcrItem(itemId) {
 function isReceiptOcrItemActive(item) {
   return !!item && !item.cancelled && receiptOcr.items.some((candidate) => candidate.id === item.id)
 }
+function updateReceiptOcrItemPrompt({ itemId, enabled, prompt }) {
+  const item = receiptOcr.items.find((candidate) => candidate.id === itemId)
+  if (!item || item.status !== 'selected' || item.fromHistory) {
+    return
+  }
+  if (enabled !== undefined) {
+    item.requestPromptEnabled = Boolean(enabled)
+  }
+  if (prompt !== undefined) {
+    item.requestPrompt = normalizeReceiptPrompt(prompt)
+    saveReceiptOcrRequestPromptLast(item.requestPrompt)
+  }
+}
+
 function updateReceiptOcrReviewEntry({ itemId, entryIndex, field, value }) {
   const item = receiptOcr.items.find((candidate) => candidate.id === itemId)
   const entry = item?.suggestedEntries?.[entryIndex]
@@ -2871,17 +2885,18 @@ async function startSelectedReceiptOcrAnalysis(payload = {}) {
   if (!items.length) {
     return
   }
-  const requestPrompt = payload?.prompt || ''
-  if (normalizeReceiptPrompt(requestPrompt)) {
-    rememberReceiptOcrRequestPrompt(requestPrompt)
-  }
-  const prompt = buildReceiptOcrPrompt(requestPrompt)
+  const fallbackPrompt = payload?.prompt || ''
   receiptOcr.isOpen = true
   receiptOcr.activeView = 'analyze'
   receiptOcr.error = ''
   syncReceiptOcrBusyState()
 
   for (const item of items) {
+    const itemPrompt = item.requestPromptEnabled ? item.requestPrompt : fallbackPrompt
+    if (normalizeReceiptPrompt(itemPrompt)) {
+      rememberReceiptOcrRequestPrompt(itemPrompt)
+    }
+    const prompt = buildReceiptOcrPrompt(itemPrompt)
     if (isReceiptOcrItemActive(item)) {
       await analyzeReceiptFile(item.sourceFile, normalizeOcrDocumentType(item.documentType || receiptOcr.documentType), item, prompt)
     }
@@ -4097,6 +4112,7 @@ async function activatePayment(paymentId) {
       @select-receipt-files="selectReceiptOcrFiles"
       @start-receipt-analysis="startSelectedReceiptOcrAnalysis"
       @analyze-receipt="analyzeReceiptImage"
+      @update-receipt-item-prompt="updateReceiptOcrItemPrompt"
       @update-receipt-review-entry="updateReceiptOcrReviewEntry"
       @remove-receipt-analysis="removeReceiptOcrItem"
       @apply-receipt-suggestion="applyReceiptOcrSuggestion"

@@ -136,6 +136,10 @@ public class LedgerOcrRemoteClient {
                         Do not merge rows, skip rows, or create extra rows from review buttons, action buttons, thumbnails, product face values, or item details.
                         Status text such as 결제완료, 구매확정완료, 승인완료, 취소됨, 리뷰쓰기, 다시 담기 is not a transaction title by itself. Put such status/visible context in memo or warnings.
                         Amounts must be the final total paid for that one visible row. Do not use gift-card face values such as 1만원권 or 3만원권 as amount when a paid price such as 8,730원 or 27,000원 is visible. Do not split one row into item-level entries. Put item-level names/prices in items or memo.
+                        Shopping order-history table rules:
+                        If visible columns include 주문 상품 정보, 상품금액(수량), 상품금액(부가), 배송비(판매자), 주문상태, 확인/취소/리뷰, or similar order-history labels, each product row is one transaction candidate.
+                        The amount must be the money printed in that same row's 상품금액/상품금액(수량)/상품금액(부가)/주문금액 cell. Do not concatenate, add, or multiply it with product quantities, product model numbers, order dates, or order ids.
+                        Example: if the row item is "비바스 내추럴99% 시카 천연샴푸 1000g_2개" and 상품금액 is "25,020원", JSON amount must be 25020, not 50020 or 50040. Preserve quantity and seller/order context in memo/items.
                         JSON amount fields must be numeric values without commas, currency symbols, or unit text.
                         Titles should describe the payment source and item/service. When the platform or merchant is visible, use the Korean form "플랫폼/가맹점 : 상품 또는 서비스명" such as "네이버페이 : 웹툰·시리즈 쿠키 59개" or "네이버페이 : 메가MGC커피 모바일금액권 1만원권". N Pay, N+ membership, a green N logo, or Naver-related payment branding is a Naver Pay platform clue. If the platform/merchant is not clearly visible, use only the clearest item/service title.
                         Do not shorten titles to only a merchant, platform, status, or generic event word. Keep the visible product/service name, count, and voucher face value in the title when they identify the transaction, such as 쿠키 59개, 모바일쿠폰 1만원권, 모바일금액권 3만원권.

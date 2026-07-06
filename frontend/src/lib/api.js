@@ -639,6 +639,13 @@ export function rerunLedgerImageAnalysisHistory(historyId, options = {}) {
     signal: options.signal,
   })
 }
+export function markLedgerImageAnalysisEntryApproved(historyId, entryIndex, entryId) {
+  return request(buildUrl(`/ledger/image-analysis/history/${encodeURIComponent(historyId)}/entries/${encodeURIComponent(entryIndex)}/approve`, {
+    entryId,
+  }).replace(API_BASE, ''), {
+    method: 'POST',
+  })
+}
 export function cancelLedgerImageAnalysisHistory(historyId) {
   return request(`/ledger/image-analysis/history/${historyId}/cancel`, {
     method: 'POST',

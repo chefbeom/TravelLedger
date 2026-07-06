@@ -423,6 +423,43 @@ class LedgerOcrServiceTest {
     }
 
     @Test
+    void analyzeAddsCurrentCategoryCriteriaToPrompt() {
+        AppUser user = stubUser();
+        MockMultipartFile file = validJpeg("category-criteria.jpg");
+        stubHistoryPersistence(110L);
+        CategoryGroup food = categoryGroup(31L, user, "식비", EntryType.EXPENSE, true);
+        CategoryGroup hobby = categoryGroup(32L, user, "취미", EntryType.EXPENSE, true);
+        CategoryGroup salary = categoryGroup(33L, user, "급여", EntryType.INCOME, true);
+        CategoryDetail grocery = categoryDetail(41L, food, "식재료", true);
+        CategoryDetail cafe = categoryDetail(42L, food, "카페", true);
+        CategoryDetail inactive = categoryDetail(43L, food, "비활성", false);
+        CategoryDetail game = categoryDetail(44L, hobby, "게임", true);
+        when(categoryGroupRepository.findAllByOwnerIdAndActiveTrueOrderByDisplayOrderAscIdAsc(USER_ID))
+                .thenReturn(List.of(food, hobby, salary));
+        when(categoryDetailRepository.findAllByGroupIdAndActiveTrueOrderByDisplayOrderAscIdAsc(31L))
+                .thenReturn(List.of(grocery, cafe, inactive));
+        when(categoryDetailRepository.findAllByGroupIdAndActiveTrueOrderByDisplayOrderAscIdAsc(32L))
+                .thenReturn(List.of(game));
+        when(categoryDetailRepository.findAllByGroupIdAndActiveTrueOrderByDisplayOrderAscIdAsc(33L))
+                .thenReturn(List.of());
+        when(remoteClient.analyze(eq(file), eq("PAYMENT_CAPTURE"), any()))
+                .thenReturn(new RemoteAnalyzeResponse(true, null, "PAYMENT_CAPTURE", "", null, List.of(), Map.of()));
+
+        service.analyze(USER_ID, file, "PAYMENT_CAPTURE", "category-criteria", "네이버페이 캡처입니다.", false);
+
+        ArgumentCaptor<String> promptCaptor = ArgumentCaptor.forClass(String.class);
+        verify(remoteClient).analyze(eq(file), eq("PAYMENT_CAPTURE"), promptCaptor.capture());
+        assertThat(promptCaptor.getValue())
+                .contains("네이버페이 캡처입니다.")
+                .contains("현재 사용자 분류 기준")
+                .contains("정확한 이름")
+                .contains("지출:\n- 식비: 식재료, 카페")
+                .contains("- 취미: 게임")
+                .contains("수입:\n- 급여")
+                .doesNotContain("비활성");
+        verify(ledgerEntryRepository, never()).findRecentEntriesForOcrStyle(any(), any());
+    }
+    @Test
     void analyzeDoesNotLoadExistingEntryStyleExamplesWhenDisabled() {
         stubUser();
         MockMultipartFile file = validJpeg("style-context-disabled.jpg");
@@ -436,6 +473,122 @@ class LedgerOcrServiceTest {
         verify(remoteClient).analyze(file, "PAYMENT_CAPTURE", "사용자 요청");
     }
 
+    @Test
+    void analyzeCorrectsOrderHistoryAmountFromVisibleProductAmount() {
+        AppUser user = stubUser();
+        MockMultipartFile file = validJpeg("order-history.jpg");
+        stubHistoryPersistence(107L);
+        CategoryGroup uncategorized = categoryGroup(21L, user, UNCATEGORIZED, EntryType.EXPENSE, true);
+        when(categoryGroupRepository.findAllByOwnerIdAndEntryTypeOrderByDisplayOrderAscIdAsc(USER_ID, EntryType.EXPENSE))
+                .thenReturn(List.of(uncategorized));
+
+        String itemName = "비바스 내추럴99% 시카 천연샴푸 1000g_2개";
+        String memo = itemName
+                + " / 주문일자: 2026-04-23 / 상품금액(부가): 25,020원 / 주문처(판매자): 해두엔 / 구매확정";
+        RemoteParsedResult parsed = new RemoteParsedResult(
+                LocalDate.of(2026, 4, 23),
+                LocalTime.of(15, 34),
+                EntryType.EXPENSE,
+                "네이버페이 : 해두엔 : " + itemName,
+                memo,
+                new BigDecimal("50020"),
+                "해두엔",
+                "",
+                "",
+                "",
+                "",
+                List.of(new RemoteLineItem(itemName, new BigDecimal("2"), "개", new BigDecimal("25020"))),
+                0.77,
+                List.of()
+        );
+        when(remoteClient.analyze(file, "PAYMENT_CAPTURE", null))
+                .thenReturn(new RemoteAnalyzeResponse(true, null, "PAYMENT_CAPTURE", memo, parsed, List.of(parsed), Map.of()));
+
+        LedgerOcrEntrySuggestionResponse suggestion = service.analyze(USER_ID, file, "PAYMENT_CAPTURE", "order-history", null)
+                .suggestedEntries()
+                .get(0);
+
+        assertThat(suggestion.amount()).isEqualByComparingTo("25020");
+        assertThat(suggestion.memo()).contains("상품금액(부가): 25,020원", "해두엔", "구매확정");
+    }
+
+    @Test
+    void analyzeCorrectsOrderHistoryAmountFromLineItemMemoAmountWithoutLabel() {
+        AppUser user = stubUser();
+        MockMultipartFile file = validJpeg("order-history-unlabeled.jpg");
+        stubHistoryPersistence(108L);
+        CategoryGroup uncategorized = categoryGroup(22L, user, UNCATEGORIZED, EntryType.EXPENSE, true);
+        when(categoryGroupRepository.findAllByOwnerIdAndEntryTypeOrderByDisplayOrderAscIdAsc(USER_ID, EntryType.EXPENSE))
+                .thenReturn(List.of(uncategorized));
+
+        String itemName = "비바스 내추럴99% 시카 천연샴푸 1000g_2개";
+        String memo = itemName + " x2개(25,020원) / 주문일자: 2026-04-23 / 주문처(판매자): 해두엔 / 구매확정";
+        RemoteParsedResult parsed = new RemoteParsedResult(
+                LocalDate.of(2026, 4, 23),
+                LocalTime.of(15, 34),
+                EntryType.EXPENSE,
+                "네이버페이 : 해두엔 : " + itemName,
+                memo,
+                new BigDecimal("50020"),
+                "해두엔",
+                "",
+                "",
+                "",
+                "",
+                List.of(new RemoteLineItem(itemName, new BigDecimal("2"), "개", new BigDecimal("25020"))),
+                0.77,
+                List.of()
+        );
+        when(remoteClient.analyze(file, "PAYMENT_CAPTURE", null))
+                .thenReturn(new RemoteAnalyzeResponse(true, null, "PAYMENT_CAPTURE", memo, parsed, List.of(parsed), Map.of()));
+
+        LedgerOcrEntrySuggestionResponse suggestion = service.analyze(USER_ID, file, "PAYMENT_CAPTURE", "order-history-unlabeled", null)
+                .suggestedEntries()
+                .get(0);
+
+        assertThat(suggestion.amount()).isEqualByComparingTo("25020");
+        assertThat(suggestion.memo()).contains("25,020원", "해두엔", "구매확정");
+    }
+
+    @Test
+    void analyzeChoosesAmountNearMatchingOrderHistoryRowWhenMemoContainsMultipleRows() {
+        AppUser user = stubUser();
+        MockMultipartFile file = validJpeg("order-history-multiple-rows.jpg");
+        stubHistoryPersistence(109L);
+        CategoryGroup uncategorized = categoryGroup(23L, user, UNCATEGORIZED, EntryType.EXPENSE, true);
+        when(categoryGroupRepository.findAllByOwnerIdAndEntryTypeOrderByDisplayOrderAscIdAsc(USER_ID, EntryType.EXPENSE))
+                .thenReturn(List.of(uncategorized));
+
+        String firstItem = "비바스 내추럴99% 시카 천연샴푸 1000g_2개";
+        String secondItem = "초강력 무선 에어건 Aero X10 130000rpm";
+        String memo = firstItem + " / 상품금액(부가): 25,020원 / 주문처(판매자): 해두엔 / 구매확정\n"
+                + secondItem + " / 상품금액(부가): 37,370원 / 주문처(판매자): 은큰 / 구매확정";
+        RemoteParsedResult parsed = new RemoteParsedResult(
+                LocalDate.of(2026, 1, 23),
+                null,
+                EntryType.EXPENSE,
+                "네이버페이 : 은큰 : " + secondItem,
+                memo,
+                new BigDecimal("50020"),
+                "은큰",
+                "",
+                "",
+                "",
+                "",
+                List.of(),
+                0.71,
+                List.of()
+        );
+        when(remoteClient.analyze(file, "PAYMENT_CAPTURE", null))
+                .thenReturn(new RemoteAnalyzeResponse(true, null, "PAYMENT_CAPTURE", memo, parsed, List.of(parsed), Map.of()));
+
+        LedgerOcrEntrySuggestionResponse suggestion = service.analyze(USER_ID, file, "PAYMENT_CAPTURE", "order-history-multiple-rows", null)
+                .suggestedEntries()
+                .get(0);
+
+        assertThat(suggestion.amount()).isEqualByComparingTo("37370");
+        assertThat(suggestion.title()).contains("초강력 무선 에어건");
+    }
     @Test
     void analyzeUsesLineItemTitleWhenSalesSlipTitleIsGeneric() {
         AppUser user = stubUser();

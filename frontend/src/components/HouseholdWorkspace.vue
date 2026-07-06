@@ -40,6 +40,7 @@ import {
   fetchLedgerAiAnalysisHistories,
   fetchLedgerImageAnalysisHistories,
   fetchLedgerImageAnalysisHistory,
+  markLedgerImageAnalysisEntryApproved,
   fetchLedgerAiAnalysisStatus,
   fetchLatestLedgerAiAnalysis,
   fetchEntrySearchPage,
@@ -368,6 +369,7 @@ const receiptOcr = reactive({
   lastAppliedAnalysisId: null,
   lastAppliedReviewItemId: null,
   lastAppliedReviewEntryIndex: null,
+  lastAppliedMode: '',
   lastAppliedSnapshot: null,
 })
 const ledgerChangeHistory = reactive({
@@ -2966,12 +2968,47 @@ function normalizeImageAnalysisHistoryStatus(status) {
   return ['PROCESSING', 'COMPLETED', 'FAILED', 'CANCELLED'].includes(normalized) ? normalized : 'COMPLETED'
 }
 
+function normalizeReceiptApprovedEntryIndexes(values = []) {
+  if (!Array.isArray(values)) {
+    return []
+  }
+  const seen = new Set()
+  return values
+    .map((value) => Number(value))
+    .filter((value) => Number.isInteger(value) && value >= 0)
+    .filter((value) => {
+      if (seen.has(value)) {
+        return false
+      }
+      seen.add(value)
+      return true
+    })
+}
+
+function normalizeReceiptApprovedEntryIds(values = []) {
+  if (!Array.isArray(values)) {
+    return []
+  }
+  const seen = new Set()
+  return values
+    .map((value) => Number(value))
+    .filter((value) => Number.isFinite(value) && value > 0)
+    .filter((value) => {
+      if (seen.has(value)) {
+        return false
+      }
+      seen.add(value)
+      return true
+    })
+}
 function mapImageAnalysisHistoryToReviewItem(history = {}) {
   const result = history.result || {}
   const status = normalizeImageAnalysisHistoryStatus(history.status || result.analysisStatus)
   const suggestions = Array.isArray(result.suggestedEntries) && result.suggestedEntries.length
     ? result.suggestedEntries
     : [result.suggestedEntry].filter(Boolean)
+  const approvedEntryIndexes = normalizeReceiptApprovedEntryIndexes(result.approvedEntryIndexes)
+  const approvedEntryIds = normalizeReceiptApprovedEntryIds(result.approvedEntryIds)
   const itemId = `history-${history.id || Date.now()}`
   const analysisId = history.id || result.analysisId || null
   const clientRequestId = history.clientRequestId || result.clientRequestId || null
@@ -2990,6 +3027,8 @@ function mapImageAnalysisHistoryToReviewItem(history = {}) {
     error: history.errorMessage || '',
     rawText: history.rawText || result.rawText || '',
     suggestedEntries: suggestions.map((suggestion, entryIndex) => attachReceiptOcrSuggestionMeta(suggestion, { id: itemId, analysisId, clientRequestId, analysisStatus, rawText: history.rawText || result.rawText || '' }, entryIndex)),
+    approvedEntryIndexes,
+    approvedEntryIds,
     lineItems: Array.isArray(result.lineItems) ? result.lineItems : [],
     warnings: Array.isArray(result.warnings) ? result.warnings : [],
     confidence: result.confidence ?? null,
@@ -3106,7 +3145,7 @@ async function cancelReceiptOcrHistory(historyId) {
       receiptOcr.historyDetailAnalysisId = ''
     }
     if (String(receiptOcr.lastAppliedAnalysisId) === String(historyId)) {
-      if (isReceiptOcrAppliedSnapshotCurrent()) {
+      if (receiptOcr.lastAppliedMode === 'form' && isReceiptOcrAppliedSnapshotCurrent()) {
         editingEntryId.value = null
         amountInput.value = ''
         entryForm.amount = ''
@@ -3508,11 +3547,12 @@ function clearReceiptOcrAppliedMarker() {
   receiptOcr.lastAppliedAnalysisId = null
   receiptOcr.lastAppliedReviewItemId = null
   receiptOcr.lastAppliedReviewEntryIndex = null
+  receiptOcr.lastAppliedMode = ''
   receiptOcr.lastAppliedSnapshot = null
 }
 
 function cancelReceiptOcrAppliedSuggestion() {
-  if (!receiptOcr.lastAppliedAnalysisId) {
+  if (!receiptOcr.lastAppliedAnalysisId || receiptOcr.lastAppliedMode !== 'form') {
     return
   }
   if (isReceiptOcrAppliedSnapshotCurrent()) {
@@ -3593,6 +3633,90 @@ function buildReceiptOcrSubmittedSnapshot(payload) {
   }
 }
 
+function markReceiptOcrReviewEntryApprovedLocally(analysisId, reviewItemId, entryIndex, entryId) {
+  const normalizedIndex = Number(entryIndex)
+  if (!analysisId || !Number.isInteger(normalizedIndex) || normalizedIndex < 0) {
+    return
+  }
+  const normalizedEntryId = Number(entryId)
+  const updateItem = (item) => {
+    const matchesAnalysis = String(item.analysisId || '') === String(analysisId)
+    const matchesReviewItem = reviewItemId && String(item.id || '') === String(reviewItemId)
+    if (!matchesAnalysis && !matchesReviewItem) {
+      return item
+    }
+    return {
+      ...item,
+      approvedEntryIndexes: normalizeReceiptApprovedEntryIndexes([...(item.approvedEntryIndexes || []), normalizedIndex]),
+      approvedEntryIds: normalizeReceiptApprovedEntryIds([
+        ...(item.approvedEntryIds || []),
+        Number.isFinite(normalizedEntryId) && normalizedEntryId > 0 ? normalizedEntryId : null,
+      ]),
+    }
+  }
+  receiptOcr.items = receiptOcr.items.map(updateItem)
+  receiptOcr.historyItems = receiptOcr.historyItems.map((history) => {
+    if (String(history.id || '') !== String(analysisId)) {
+      return history
+    }
+    const result = history.result || {}
+    return {
+      ...history,
+      result: {
+        ...result,
+        approvedEntryIndexes: normalizeReceiptApprovedEntryIndexes([...(result.approvedEntryIndexes || []), normalizedIndex]),
+        approvedEntryIds: normalizeReceiptApprovedEntryIds([
+          ...(result.approvedEntryIds || []),
+          Number.isFinite(normalizedEntryId) && normalizedEntryId > 0 ? normalizedEntryId : null,
+        ]),
+      },
+    }
+  })
+}
+
+function mergeReceiptOcrApprovedHistory(history) {
+  if (!history?.id) {
+    return
+  }
+  const updatedItem = mapImageAnalysisHistoryToReviewItem(history)
+  receiptOcr.historyItems = receiptOcr.historyItems.map((candidate) => String(candidate.id || '') === String(history.id) ? history : candidate)
+  receiptOcr.items = receiptOcr.items.map((candidate) => {
+    if (String(candidate.analysisId || '') !== String(updatedItem.analysisId || '')) {
+      return candidate
+    }
+    return {
+      ...candidate,
+      approvedEntryIndexes: updatedItem.approvedEntryIndexes,
+      approvedEntryIds: updatedItem.approvedEntryIds,
+      suggestedEntries: updatedItem.suggestedEntries,
+      warnings: updatedItem.warnings,
+      rawText: updatedItem.rawText,
+      lineItems: updatedItem.lineItems,
+      confidence: updatedItem.confidence,
+      vendor: updatedItem.vendor,
+      paymentMethodText: updatedItem.paymentMethodText,
+      categoryText: updatedItem.categoryText,
+      timing: updatedItem.timing,
+    }
+  })
+}
+
+async function persistReceiptOcrApprovedEntry(suggestion, entryId) {
+  const analysisId = suggestion?.analysisId
+  const entryIndex = Number(suggestion?.reviewEntryIndex)
+  if (!analysisId || !Number.isInteger(entryIndex) || entryIndex < 0) {
+    return false
+  }
+  try {
+    const history = await markLedgerImageAnalysisEntryApproved(analysisId, entryIndex, entryId)
+    markReceiptOcrReviewEntryApprovedLocally(analysisId, suggestion?.reviewItemId, entryIndex, entryId)
+    mergeReceiptOcrApprovedHistory(history)
+    return true
+  } catch (error) {
+    console.warn('Failed to persist approved image analysis entry marker', error)
+    return false
+  }
+}
 async function approveReceiptOcrSuggestion(suggestion = receiptOcr.suggestedEntry) {
   if (!suggestion) {
     return
@@ -3616,10 +3740,12 @@ async function approveReceiptOcrSuggestion(suggestion = receiptOcr.suggestedEntr
     receiptOcr.lastAppliedAnalysisId = suggestion.analysisId || null
     receiptOcr.lastAppliedReviewItemId = suggestion.reviewItemId || null
     receiptOcr.lastAppliedReviewEntryIndex = Number.isFinite(Number(suggestion.reviewEntryIndex)) ? Number(suggestion.reviewEntryIndex) : null
-    receiptOcr.lastAppliedSnapshot = buildReceiptOcrAppliedSnapshot(suggestion)
+    receiptOcr.lastAppliedMode = 'entry'
+    receiptOcr.lastAppliedSnapshot = null
+    const markerPersisted = await persistReceiptOcrApprovedEntry(suggestion, createdEntry?.id)
     await refreshLedgerViews()
     await refreshOpenLedgerChangeHistory()
-    setFeedback('AI 분석 결과를 승인하고 거래 내역에 기입했습니다.')
+    setFeedback(markerPersisted ? 'AI 분석 결과를 승인하고 거래 내역에 기입했습니다.' : '거래는 기입됐지만 분석 기록의 승인 표시를 저장하지 못했습니다.')
   } catch (error) {
     setFeedback('', error.message)
   } finally {
@@ -3646,6 +3772,7 @@ async function applyReceiptOcrSuggestion(suggestion = receiptOcr.suggestedEntry)
   receiptOcr.lastAppliedAnalysisId = suggestion.analysisId || null
   receiptOcr.lastAppliedReviewItemId = suggestion.reviewItemId || null
   receiptOcr.lastAppliedReviewEntryIndex = Number.isFinite(Number(suggestion.reviewEntryIndex)) ? Number(suggestion.reviewEntryIndex) : null
+  receiptOcr.lastAppliedMode = 'form'
   receiptOcr.lastAppliedSnapshot = buildReceiptOcrAppliedSnapshot(normalizedSuggestion)
 
   editingEntryId.value = null
@@ -3674,6 +3801,8 @@ async function applyReceiptOcrSuggestion(suggestion = receiptOcr.suggestedEntry)
   isEntryTimeEnabled.value = hasEntryTimeValue(normalizedSuggestion.entryTime)
   syncEntryDefaults({ preferLatest: false, force: false })
 
+  receiptOcr.isOpen = false
+  receiptOcr.activeView = ''
   await nextTick()
   calendarWorkspaceRef.value?.scrollToEntryEditor?.()
   setFeedback('영수증 분석 결과를 빠른 거래 입력칸에 적용했습니다. 일자와 시간, 분류를 확인해 주세요.')

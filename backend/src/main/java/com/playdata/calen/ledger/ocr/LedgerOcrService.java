@@ -39,9 +39,13 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
+import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -62,10 +66,25 @@ public class LedgerOcrService {
     private static final int EXISTING_ENTRY_STYLE_EXAMPLE_LIMIT = 12;
     private static final int MAX_STYLE_FIELD_LENGTH = 90;
     private static final int MAX_STYLE_MEMO_LENGTH = 140;
+    private static final int MAX_CATEGORY_CRITERIA_GROUPS = 80;
+    private static final int MAX_CATEGORY_CRITERIA_DETAILS_PER_GROUP = 12;
+    private static final int MAX_CATEGORY_CRITERIA_NAME_LENGTH = 40;
     private static final String UNCATEGORIZED_CATEGORY_NAME = "\uBBF8\uBD84\uB958";
     private static final List<String> ALLOWED_IMAGE_EXTENSIONS = List.of(".jpg", ".jpeg", ".png", ".webp", ".bmp");
     private static final byte[] PNG_SIGNATURE = new byte[] {(byte) 0x89, 'P', 'N', 'G', '\r', '\n', 0x1A, '\n'};
-
+    private static final List<Pattern> FINAL_TOTAL_AMOUNT_PATTERNS = List.of(
+            Pattern.compile("(?i)(?:총\\s*결제\\s*금액|총\\s*금액|합계|승인\\s*금액|TOTAL|GRAND\\s*TOTAL)[^0-9]{0,40}([0-9]{1,3}(?:,[0-9]{3})+|[0-9]{4,9})\\s*(?:원|KRW)?"),
+            Pattern.compile("(?i)(?:paid\\s*amount|approved\\s*amount|total\\s*amount)[^0-9]{0,40}([0-9]{1,3}(?:,[0-9]{3})+|[0-9]{4,9})\\s*(?:원|KRW)?")
+    );
+    private static final List<Pattern> ORDER_ROW_AMOUNT_PATTERNS = List.of(
+            Pattern.compile("(?i)(?:상품\\s*금액(?:\\s*\\([^)]*\\))?|주문\\s*금액(?:\\s*\\([^)]*\\))?)[^0-9]{0,40}([0-9]{1,3}(?:,[0-9]{3})+|[0-9]{4,9})\\s*(?:원|KRW)?"),
+            Pattern.compile("(?i)(?:product\\s*amount|order\\s*amount|item\\s*amount)[^0-9]{0,40}([0-9]{1,3}(?:,[0-9]{3})+|[0-9]{4,9})\\s*(?:원|KRW)?")
+    );
+    private static final List<Pattern> PAYMENT_AMOUNT_PATTERNS = List.of(
+            Pattern.compile("(?i)(?:결제\\s*금액|결제액)(?:(?!TAXABLE|VAT|과세|부가세)[^0-9]){0,40}([0-9]{1,3}(?:,[0-9]{3})+|[0-9]{4,9})\\s*(?:원|KRW)?"),
+            Pattern.compile("(?i)(?:payment\\s*amount|paid\\s*price)[^0-9]{0,40}([0-9]{1,3}(?:,[0-9]{3})+|[0-9]{4,9})\\s*(?:원|KRW)?")
+    );
+    private static final Pattern EXPLICIT_CURRENCY_AMOUNT_PATTERN = Pattern.compile("(?i)(?:[₩￦]\\s*|KRW\\s*)?([0-9]{1,3}(?:,[0-9]{3})+|[0-9]{4,9})\\s*(?:원|KRW)");
     private final AppUserService appUserService;
     private final LedgerOcrProperties properties;
     private final LedgerAiAnalysisProperties aiProperties;
@@ -146,7 +165,9 @@ public class LedgerOcrService {
                             parsed.categoryGroupName(),
                             parsed.categoryDetailName()
                     ), MAX_TEXT_LENGTH) : null,
-                    remoteResponse.timing() == null ? java.util.Map.of() : remoteResponse.timing()
+                    remoteResponse.timing() == null ? java.util.Map.of() : remoteResponse.timing(),
+                    List.of(),
+                    List.of()
             );
             completeImageAnalysisRequest(history, response);
             LedgerOcrAnalyzeResponse finalResponse = withCurrentHistoryStatus(response);
@@ -240,6 +261,86 @@ public class LedgerOcrService {
         return loadStoredHistoryImage(history);
     }
 
+    @Transactional
+    public LedgerImageAnalysisHistoryResponse markHistoryEntryApproved(Long userId, Long historyId, int entryIndex, Long entryId) {
+        appUserService.getRequiredUser(userId);
+        if (historyId == null) {
+            throw new BadRequestException("이미지 분석 기록을 확인할 수 없습니다.");
+        }
+        if (entryIndex < 0) {
+            throw new BadRequestException("승인한 거래 후보 번호가 올바르지 않습니다.");
+        }
+        LedgerImageAnalysisRequest history = imageAnalysisRequestRepository.findByIdAndOwnerId(historyId, userId)
+                .orElseThrow(() -> new NotFoundException("이미지 분석 기록을 찾을 수 없습니다."));
+        if (history.getStatus() != LedgerImageAnalysisStatus.COMPLETED) {
+            throw new BadRequestException("완료된 이미지 분석 기록만 승인 표시할 수 있습니다.");
+        }
+        LedgerOcrAnalyzeResponse response = readResponseJson(history.getResultJson());
+        if (response == null) {
+            throw new BadRequestException("이미지 분석 결과를 확인할 수 없습니다.");
+        }
+        int suggestionCount = response.suggestedEntries() == null ? 0 : response.suggestedEntries().size();
+        if (suggestionCount == 0 && response.suggestedEntry() != null) {
+            suggestionCount = 1;
+        }
+        if (entryIndex >= suggestionCount) {
+            throw new BadRequestException("승인한 거래 후보 번호가 분석 결과 범위를 벗어났습니다.");
+        }
+        LedgerOcrAnalyzeResponse updatedResponse = withApprovedEntry(response, entryIndex, entryId);
+        history.setResultJson(writeResponseJson(updatedResponse));
+        history.setSummary(limit(summarizeResponse(updatedResponse), 500));
+        LedgerImageAnalysisRequest saved = imageAnalysisRequestRepository.save(history);
+        return toHistoryResponse(saved);
+    }
+
+    private LedgerOcrAnalyzeResponse withApprovedEntry(LedgerOcrAnalyzeResponse response, int entryIndex, Long entryId) {
+        Set<Integer> approvedIndexes = new LinkedHashSet<>(safeIntegerList(response.approvedEntryIndexes()));
+        approvedIndexes.add(entryIndex);
+        Set<Long> approvedIds = new LinkedHashSet<>(safeLongList(response.approvedEntryIds()));
+        if (entryId != null && entryId > 0) {
+            approvedIds.add(entryId);
+        }
+        return new LedgerOcrAnalyzeResponse(
+                response.analysisId(),
+                response.clientRequestId(),
+                response.analysisStatus(),
+                response.documentType(),
+                response.rawText(),
+                response.suggestedEntry(),
+                response.suggestedEntries(),
+                response.lineItems(),
+                response.confidence(),
+                response.warnings(),
+                response.vendor(),
+                response.paymentMethodText(),
+                response.categoryText(),
+                response.timing(),
+                List.copyOf(approvedIndexes),
+                List.copyOf(approvedIds)
+        );
+    }
+
+    private List<Integer> safeIntegerList(List<Integer> values) {
+        if (values == null || values.isEmpty()) {
+            return List.of();
+        }
+        return values.stream()
+                .filter(Objects::nonNull)
+                .filter(value -> value >= 0)
+                .distinct()
+                .toList();
+    }
+
+    private List<Long> safeLongList(List<Long> values) {
+        if (values == null || values.isEmpty()) {
+            return List.of();
+        }
+        return values.stream()
+                .filter(Objects::nonNull)
+                .filter(value -> value > 0)
+                .distinct()
+                .toList();
+    }
     private LedgerImageAnalysisHistoryResponse cancelHistoryRecord(LedgerImageAnalysisRequest history) {
         if (history.getStatus() != LedgerImageAnalysisStatus.PROCESSING) {
             return toHistoryResponse(history);
@@ -380,7 +481,9 @@ public class LedgerOcrService {
                 response.vendor(),
                 response.paymentMethodText(),
                 response.categoryText(),
-                response.timing()
+                response.timing(),
+                safeIntegerList(response.approvedEntryIndexes()),
+                safeLongList(response.approvedEntryIds())
         );
     }
 
@@ -476,22 +579,131 @@ public class LedgerOcrService {
     }
 
     private String buildEffectiveUserPrompt(Long ownerId, String userPrompt, boolean useExistingEntryStyle) {
-        if (!useExistingEntryStyle) {
-            return userPrompt;
+        List<String> sections = new ArrayList<>();
+        addIfPresent(sections, userPrompt);
+        addIfPresent(sections, buildCategoryCriteriaPrompt(ownerId));
+        if (useExistingEntryStyle) {
+            addIfPresent(sections, buildExistingEntryStylePrompt(ownerId));
         }
-        String stylePrompt = buildExistingEntryStylePrompt(ownerId);
-        if (!isPresent(stylePrompt)) {
-            return userPrompt;
+        return combinePromptSections(sections);
+    }
+
+    private String combinePromptSections(List<String> sections) {
+        if (sections == null || sections.isEmpty()) {
+            return null;
         }
-        if (!isPresent(userPrompt)) {
-            return limit(stylePrompt, MAX_USER_PROMPT_LENGTH);
+        StringBuilder builder = new StringBuilder();
+        for (String section : sections) {
+            if (!isPresent(section)) {
+                continue;
+            }
+            if (!builder.isEmpty()) {
+                builder.append("\n\n");
+            }
+            int remaining = MAX_USER_PROMPT_LENGTH - builder.length();
+            if (remaining <= 0) {
+                break;
+            }
+            builder.append(limit(section.trim(), remaining));
         }
-        String prefix = userPrompt.trim() + "\n\n";
-        int remaining = MAX_USER_PROMPT_LENGTH - prefix.length();
-        if (remaining <= 0) {
-            return limit(userPrompt, MAX_USER_PROMPT_LENGTH);
+        return builder.isEmpty() ? null : builder.toString();
+    }
+
+    private String buildCategoryCriteriaPrompt(Long ownerId) {
+        if (ownerId == null) {
+            return null;
         }
-        return prefix + limit(stylePrompt, remaining);
+        List<CategoryGroup> groups;
+        try {
+            groups = categoryGroupRepository.findAllByOwnerIdAndActiveTrueOrderByDisplayOrderAscIdAsc(ownerId);
+        } catch (RuntimeException exception) {
+            log.warn("Failed to load active category criteria for OCR prompt: userId={}", ownerId, exception);
+            return null;
+        }
+        if (groups == null || groups.isEmpty()) {
+            return null;
+        }
+
+        List<String> expenseLines = new ArrayList<>();
+        List<String> incomeLines = new ArrayList<>();
+        for (CategoryGroup group : groups) {
+            if (group == null || !group.isActive() || !isPresent(group.getName())) {
+                continue;
+            }
+            String line = formatCategoryCriteriaLine(group);
+            if (!isPresent(line)) {
+                continue;
+            }
+            if (group.getEntryType() == EntryType.INCOME) {
+                incomeLines.add(line);
+            } else {
+                expenseLines.add(line);
+            }
+            if (expenseLines.size() + incomeLines.size() >= MAX_CATEGORY_CRITERIA_GROUPS) {
+                break;
+            }
+        }
+        if (expenseLines.isEmpty() && incomeLines.isEmpty()) {
+            return null;
+        }
+
+        List<String> sections = new ArrayList<>();
+        if (!expenseLines.isEmpty()) {
+            sections.add("지출:\n" + String.join("\n", expenseLines));
+        }
+        if (!incomeLines.isEmpty()) {
+            sections.add("수입:\n" + String.join("\n", incomeLines));
+        }
+        return "[현재 사용자 분류 기준]\n"
+                + "아래 목록은 이 사용자가 현재 사용 중인 활성 대분류/분류입니다. "
+                + "categoryGroupName/categoryDetailName은 가능하면 아래 정확한 이름 중에서만 선택하세요. "
+                + "거래 구분이 지출이면 지출 목록에서, 수입이면 수입 목록에서만 고르세요. "
+                + "대분류만 맞고 상세분류가 애매하면 categoryGroupName만 채우고 categoryDetailName은 빈 문자열로 두세요. "
+                + "맞는 항목이 없거나 근거가 부족하면 새 분류명을 만들지 말고 두 필드를 빈 문자열로 두세요. "
+                + "미분류는 맞는 분류가 없을 때만 사용하세요.\n"
+                + String.join("\n", sections);
+    }
+
+    private String formatCategoryCriteriaLine(CategoryGroup group) {
+        String groupName = compactPromptValue(group.getName(), MAX_CATEGORY_CRITERIA_NAME_LENGTH);
+        if (!isPresent(groupName)) {
+            return null;
+        }
+        List<String> detailNames = activeCategoryDetailNames(group);
+        if (detailNames.isEmpty()) {
+            return "- " + groupName;
+        }
+        return "- " + groupName + ": " + String.join(", ", detailNames);
+    }
+
+    private List<String> activeCategoryDetailNames(CategoryGroup group) {
+        if (group == null || group.getId() == null) {
+            return List.of();
+        }
+        List<CategoryDetail> details;
+        try {
+            details = categoryDetailRepository.findAllByGroupIdAndActiveTrueOrderByDisplayOrderAscIdAsc(group.getId());
+        } catch (RuntimeException exception) {
+            log.warn("Failed to load active category details for OCR prompt: groupId={}", group.getId(), exception);
+            return List.of();
+        }
+        if (details == null || details.isEmpty()) {
+            return List.of();
+        }
+        List<String> names = new ArrayList<>();
+        for (CategoryDetail detail : details) {
+            if (detail == null || !detail.isActive()) {
+                continue;
+            }
+            String name = compactPromptValue(detail.getName(), MAX_CATEGORY_CRITERIA_NAME_LENGTH);
+            if (isPresent(name) && names.stream().noneMatch(existing -> existing.equalsIgnoreCase(name))) {
+                names.add(name);
+            }
+            if (names.size() >= MAX_CATEGORY_CRITERIA_DETAILS_PER_GROUP) {
+                break;
+            }
+        }
+        return names;
     }
 
     private String buildExistingEntryStylePrompt(Long ownerId) {
@@ -923,11 +1135,7 @@ public class LedgerOcrService {
     ) {
         LocalDate entryDate = parsed == null ? null : parsed.entryDate();
         LocalTime entryTime = parsed == null ? null : parsed.entryTime();
-        BigDecimal amount = parsed != null
-                && parsed.amount() != null
-                && parsed.amount().abs().compareTo(BigDecimal.ZERO) > 0
-                ? parsed.amount().abs()
-                : null;
+        BigDecimal amount = resolveOcrAmount(parsed, lineItems);
         String title = limit(normalizeOcrTitle(parsed, lineItems, paymentCapturePlatform), 120);
         String memo = limit(buildMemo(parsed, lineItems), MAX_TEXT_LENGTH);
         ResolvedOcrCategory category = resolveOcrCategory(owner, entryType, parsed);
@@ -948,6 +1156,277 @@ public class LedgerOcrService {
         );
     }
 
+    private BigDecimal resolveOcrAmount(RemoteParsedResult parsed, List<LedgerOcrLineItemResponse> lineItems) {
+        if (parsed == null) {
+            return null;
+        }
+        BigDecimal parsedAmount = positiveAmount(parsed.amount());
+        boolean orderHistory = looksLikeOrderHistory(parsed);
+        BigDecimal orderHistoryAmount = resolveOrderHistoryAmount(parsed, lineItems, parsedAmount);
+        if (orderHistoryAmount != null) {
+            return orderHistoryAmount;
+        }
+        BigDecimal anchoredAmount = orderHistory
+                ? firstAmountFromPatterns(ocrAmountSourceTexts(parsed), FINAL_TOTAL_AMOUNT_PATTERNS)
+                : firstAnchoredAmount(parsed);
+        if (anchoredAmount != null) {
+            return anchoredAmount;
+        }
+        BigDecimal lineItemAmount = singleLineItemAmount(lineItems);
+        if (lineItemAmount != null && (parsedAmount == null || (orderHistory && parsedAmount.compareTo(lineItemAmount) != 0 && amountAppearsInParsedText(parsed, lineItemAmount)))) {
+            return lineItemAmount;
+        }
+        return parsedAmount;
+    }
+
+    private BigDecimal resolveOrderHistoryAmount(RemoteParsedResult parsed, List<LedgerOcrLineItemResponse> lineItems, BigDecimal parsedAmount) {
+        if (!looksLikeOrderHistory(parsed)) {
+            return null;
+        }
+        List<String> texts = ocrAmountSourceTexts(parsed);
+        BigDecimal nearbyAmount = explicitCurrencyAmountNearEntry(parsed, lineItems, texts);
+        if (nearbyAmount != null) {
+            return nearbyAmount;
+        }
+        List<BigDecimal> explicitAmounts = distinctExplicitCurrencyAmounts(texts);
+        if (explicitAmounts.size() == 1) {
+            return explicitAmounts.get(0);
+        }
+        BigDecimal lineItemAmount = singleLineItemAmount(lineItems);
+        if (lineItemAmount != null
+                && (parsedAmount == null || parsedAmount.compareTo(lineItemAmount) != 0)
+                && amountAppearsInParsedText(parsed, lineItemAmount)) {
+            return lineItemAmount;
+        }
+        return null;
+    }
+
+    private BigDecimal firstAnchoredAmount(RemoteParsedResult parsed) {
+        List<String> texts = ocrAmountSourceTexts(parsed);
+        BigDecimal amount = firstAmountFromPatterns(texts, FINAL_TOTAL_AMOUNT_PATTERNS);
+        if (amount != null) {
+            return amount;
+        }
+        amount = firstAmountFromPatterns(texts, ORDER_ROW_AMOUNT_PATTERNS);
+        if (amount != null) {
+            return amount;
+        }
+        return firstAmountFromPatterns(texts, PAYMENT_AMOUNT_PATTERNS);
+    }
+
+    private List<String> ocrAmountSourceTexts(RemoteParsedResult parsed) {
+        List<String> texts = new ArrayList<>();
+        if (parsed == null) {
+            return texts;
+        }
+        addIfPresent(texts, parsed.memo());
+        addIfPresent(texts, parsed.title());
+        addIfPresent(texts, parsed.vendor());
+        addIfPresent(texts, parsed.categoryText());
+        return texts;
+    }
+
+    private BigDecimal explicitCurrencyAmountNearEntry(
+            RemoteParsedResult parsed,
+            List<LedgerOcrLineItemResponse> lineItems,
+            List<String> texts
+    ) {
+        List<String> keywords = entryAmountKeywords(parsed, lineItems);
+        if (keywords.isEmpty()) {
+            return null;
+        }
+        BigDecimal bestAmount = null;
+        int bestScore = 0;
+        for (String text : texts) {
+            if (!isPresent(text)) {
+                continue;
+            }
+            Matcher matcher = EXPLICIT_CURRENCY_AMOUNT_PATTERN.matcher(text);
+            while (matcher.find()) {
+                BigDecimal amount = parseWonAmount(matcher.group(1));
+                if (amount == null) {
+                    continue;
+                }
+                int score = keywordScoreNearAmount(text, matcher.start(), keywords);
+                if (score > bestScore) {
+                    bestScore = score;
+                    bestAmount = amount;
+                }
+            }
+        }
+        return bestScore > 0 ? bestAmount : null;
+    }
+
+    private List<BigDecimal> distinctExplicitCurrencyAmounts(List<String> texts) {
+        List<BigDecimal> amounts = new ArrayList<>();
+        for (String text : texts) {
+            if (!isPresent(text)) {
+                continue;
+            }
+            Matcher matcher = EXPLICIT_CURRENCY_AMOUNT_PATTERN.matcher(text);
+            while (matcher.find()) {
+                BigDecimal amount = parseWonAmount(matcher.group(1));
+                if (amount != null && amounts.stream().noneMatch(existing -> existing.compareTo(amount) == 0)) {
+                    amounts.add(amount);
+                }
+            }
+        }
+        return amounts;
+    }
+
+    private List<String> entryAmountKeywords(RemoteParsedResult parsed, List<LedgerOcrLineItemResponse> lineItems) {
+        List<String> keywords = new ArrayList<>();
+        if (parsed != null) {
+            addAmountKeywords(keywords, parsed.title());
+        }
+        if (lineItems != null) {
+            lineItems.stream()
+                    .filter(Objects::nonNull)
+                    .map(LedgerOcrLineItemResponse::itemName)
+                    .forEach(value -> addAmountKeywords(keywords, value));
+        }
+        return keywords;
+    }
+
+    private void addAmountKeywords(List<String> keywords, String value) {
+        if (!isPresent(value)) {
+            return;
+        }
+        String[] tokens = value.split("[^0-9A-Za-z가-힣]+");
+        for (String token : tokens) {
+            String normalized = normalizeAmountKeyword(token);
+            if (normalized.length() < 2 || isCommonAmountKeyword(normalized) || normalized.matches("[0-9]+")) {
+                continue;
+            }
+            if (keywords.stream().noneMatch(existing -> existing.equals(normalized))) {
+                keywords.add(normalized);
+            }
+        }
+    }
+
+    private int keywordScoreNearAmount(String text, int amountStart, List<String> keywords) {
+        int from = Math.max(0, amountStart - 220);
+        String window = normalizeAmountKeyword(text.substring(from, amountStart));
+        int score = 0;
+        for (String keyword : keywords) {
+            if (window.contains(keyword)) {
+                score += keyword.length() >= 4 ? 2 : 1;
+            }
+        }
+        return score;
+    }
+
+    private String normalizeAmountKeyword(String value) {
+        if (value == null) {
+            return "";
+        }
+        return value.toLowerCase(Locale.ROOT).replaceAll("[^0-9a-z가-힣]", "");
+    }
+
+    private boolean isCommonAmountKeyword(String value) {
+        return List.of(
+                "네이버페이",
+                "naver",
+                "pay",
+                "결제",
+                "결제완료",
+                "구매",
+                "구매확정",
+                "구매확정완료",
+                "주문",
+                "상품",
+                "상품명",
+                "상품정보",
+                "금액",
+                "배송",
+                "배송조회",
+                "상세보기",
+                "리뷰쓰기",
+                "다시담기"
+        ).contains(value);
+    }
+
+    private BigDecimal firstAmountFromPatterns(List<String> texts, List<Pattern> patterns) {
+        for (String text : texts) {
+            if (!isPresent(text)) {
+                continue;
+            }
+            for (Pattern pattern : patterns) {
+                Matcher matcher = pattern.matcher(text);
+                if (matcher.find()) {
+                    BigDecimal amount = parseWonAmount(matcher.group(1));
+                    if (amount != null) {
+                        return amount;
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
+    private BigDecimal singleLineItemAmount(List<LedgerOcrLineItemResponse> lineItems) {
+        if (lineItems == null || lineItems.size() != 1) {
+            return null;
+        }
+        return positiveAmount(lineItems.get(0).price());
+    }
+
+    private BigDecimal positiveAmount(BigDecimal amount) {
+        if (amount == null) {
+            return null;
+        }
+        BigDecimal normalized = amount.abs();
+        return normalized.compareTo(BigDecimal.ZERO) > 0 ? normalized : null;
+    }
+
+    private BigDecimal parseWonAmount(String value) {
+        if (!isPresent(value)) {
+            return null;
+        }
+        try {
+            return positiveAmount(new BigDecimal(value.replace(",", "").trim()));
+        } catch (NumberFormatException exception) {
+            return null;
+        }
+    }
+
+    private boolean amountAppearsInParsedText(RemoteParsedResult parsed, BigDecimal amount) {
+        if (parsed == null || amount == null) {
+            return false;
+        }
+        String formatted = formatWon(amount);
+        String plain = amount.setScale(0, RoundingMode.HALF_UP).toPlainString();
+        String joined = String.join(" ", List.of(
+                firstNonBlank(parsed.title()),
+                firstNonBlank(parsed.memo()),
+                firstNonBlank(parsed.vendor()),
+                firstNonBlank(parsed.categoryText())
+        ));
+        return containsIgnoreCase(joined, formatted + "원")
+                || containsIgnoreCase(joined, formatted + " KRW")
+                || containsIgnoreCase(joined, plain + "원")
+                || containsIgnoreCase(joined, plain + " KRW");
+    }
+
+    private boolean looksLikeOrderHistory(RemoteParsedResult parsed) {
+        if (parsed == null) {
+            return false;
+        }
+        String joined = String.join(" ", List.of(
+                firstNonBlank(parsed.title()),
+                firstNonBlank(parsed.memo()),
+                firstNonBlank(parsed.vendor()),
+                firstNonBlank(parsed.categoryText())
+        ));
+        return containsIgnoreCase(joined, "주문")
+                || containsIgnoreCase(joined, "상품금액")
+                || containsIgnoreCase(joined, "구매확정")
+                || containsIgnoreCase(joined, "배송조회")
+                || containsIgnoreCase(joined, "주문처")
+                || containsIgnoreCase(joined, "판매자")
+                || containsIgnoreCase(joined, "order")
+                || containsIgnoreCase(joined, "product amount");
+    }
     private ResolvedOcrCategory resolveOcrCategory(AppUser owner, EntryType entryType, RemoteParsedResult parsed) {
         if (owner == null || owner.getId() == null) {
             return new ResolvedOcrCategory(null, null, null, null);

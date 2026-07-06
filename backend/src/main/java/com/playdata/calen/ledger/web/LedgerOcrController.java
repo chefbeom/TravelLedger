@@ -112,6 +112,15 @@ public class LedgerOcrController {
         }
     }
 
+    @PostMapping("/history/{historyId}/entries/{entryIndex}/approve")
+    public LedgerImageAnalysisHistoryResponse markHistoryEntryApproved(
+            @AuthenticationPrincipal AppUserPrincipal currentUser,
+            @PathVariable Long historyId,
+            @PathVariable int entryIndex,
+            @RequestParam(name = "entryId", required = false) Long entryId
+    ) {
+        return ledgerOcrService.markHistoryEntryApproved(currentUser.userId(), historyId, entryIndex, entryId);
+    }
     @PostMapping("/history/{historyId}/cancel")
     public LedgerImageAnalysisHistoryResponse cancelHistory(
             @AuthenticationPrincipal AppUserPrincipal currentUser,

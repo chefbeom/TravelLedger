@@ -17,6 +17,8 @@ public record LedgerOcrAnalyzeResponse(
         String vendor,
         String paymentMethodText,
         String categoryText,
-        Map<String, Object> timing
+        Map<String, Object> timing,
+        List<Integer> approvedEntryIndexes,
+        List<Long> approvedEntryIds
 ) {
 }

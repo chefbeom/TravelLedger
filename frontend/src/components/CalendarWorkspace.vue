@@ -611,6 +611,29 @@ function approveReceiptSuggestion(entry, item, entryIndex) {
   })
 }
 
+function isReceiptReviewEntryApproved(item, entryIndex) {
+  const normalizedIndex = Number(entryIndex)
+  if (!Number.isInteger(normalizedIndex) || normalizedIndex < 0 || !Array.isArray(item?.approvedEntryIndexes)) {
+    return false
+  }
+  return item.approvedEntryIndexes.some((value) => Number(value) === normalizedIndex)
+}
+
+function isReceiptReviewEntryAppliedToForm(item, entryIndex) {
+  return props.receiptOcr?.lastAppliedMode === 'form'
+    && props.receiptOcr?.lastAppliedReviewItemId === item?.id
+    && props.receiptOcr?.lastAppliedReviewEntryIndex === entryIndex
+}
+
+function getReceiptReviewEntryMarkerLabel(item, entryIndex) {
+  if (isReceiptReviewEntryApproved(item, entryIndex)) {
+    return '승인 후 기입됨'
+  }
+  if (isReceiptReviewEntryAppliedToForm(item, entryIndex)) {
+    return '입력칸 적용됨'
+  }
+  return ''
+}
 function canUseReceiptEntry(item, entry) {
   if (item.status === 'selected' || item.status === 'cancelled' || item.status === 'error' || item.status === 'queued' || item.status === 'analyzing') {
     return false
@@ -4590,11 +4613,11 @@ defineExpose({
                     <section
                       v-for="(entry, entryIndex) in item.suggestedEntries"
                       :key="`${item.id}-${entryIndex}`"
-                      :class="['receipt-ocr-review-entry', { 'is-applied': receiptOcr?.lastAppliedReviewItemId === item.id && receiptOcr?.lastAppliedReviewEntryIndex === entryIndex }]"
+                      :class="['receipt-ocr-review-entry', { 'is-applied': isReceiptReviewEntryAppliedToForm(item, entryIndex), 'is-approved': isReceiptReviewEntryApproved(item, entryIndex) }]"
                     >
                       <div class="receipt-ocr-review-entry__title">
                         <span>검수 거래 {{ entryIndex + 1 }}</span>
-                        <span v-if="receiptOcr?.lastAppliedReviewItemId === item.id && receiptOcr?.lastAppliedReviewEntryIndex === entryIndex" class="receipt-ocr-review-entry__applied">입력칸 적용됨</span>
+                        <span v-if="getReceiptReviewEntryMarkerLabel(item, entryIndex)" class="receipt-ocr-review-entry__applied">{{ getReceiptReviewEntryMarkerLabel(item, entryIndex) }}</span>
                         <div class="receipt-ocr-review-entry__actions">
                           <button
                             type="button"
@@ -4726,9 +4749,10 @@ defineExpose({
 </template>
 
 <style scoped>
-.receipt-ocr-review-entry.is-applied {
-  border-color: rgba(90, 215, 145, 0.72);
-  box-shadow: 0 0 0 1px rgba(90, 215, 145, 0.25), 0 16px 34px rgba(35, 160, 95, 0.18);
+.receipt-ocr-review-entry.is-applied,
+.receipt-ocr-review-entry.is-approved {
+  border-color: #6dff9d;
+  box-shadow: 0 0 0 2px rgba(109, 255, 157, 0.52), 0 0 24px rgba(109, 255, 157, 0.26), 0 16px 34px rgba(35, 160, 95, 0.18);
 }
 
 .receipt-ocr-review-entry__applied {
@@ -4736,8 +4760,8 @@ defineExpose({
   align-items: center;
   border-radius: 999px;
   padding: 0.25rem 0.6rem;
-  background: rgba(90, 215, 145, 0.16);
-  color: #8ef0b0;
+  background: rgba(109, 255, 157, 0.2);
+  color: #b8ffd0;
   font-size: 0.78rem;
   font-weight: 800;
   white-space: nowrap;

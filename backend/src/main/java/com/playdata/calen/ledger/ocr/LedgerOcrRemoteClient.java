@@ -120,18 +120,22 @@ public class LedgerOcrRemoteClient {
 
                         PAYMENT_CAPTURE row rules:
                         For app purchase history screens such as Naver Pay, Kakao Pay, card app, bank app, or shopping app payment lists, each visible payment card/row is one transaction candidate. If four payment rows are visible, return four entries.
+                        Do not merge rows, skip rows, or create extra rows from review buttons, action buttons, thumbnails, product face values, or item details.
                         Status text such as 결제완료, 구매확정완료, 승인완료, 취소됨, 리뷰쓰기, 다시 담기 is not a transaction title by itself. Put such status/visible context in memo or warnings.
-                        Amounts must be the final total paid for that one visible row. Do not split one row into item-level entries. Put item-level names/prices in items or memo.
-                        Titles should describe the payment source and item/service. When the platform or merchant is visible, use the Korean form "플랫폼/가맹점 : 상품 또는 서비스명" such as "네이버페이 : 웹툰·시리즈 쿠키 59개" or "네이버페이 : 메가MGC커피 모바일금액권 1만원권". If the platform/merchant is not clearly visible, use only the clearest item/service title.
+                        Amounts must be the final total paid for that one visible row. Do not use gift-card face values such as 1만원권 or 3만원권 as amount when a paid price such as 8,730원 or 27,000원 is visible. Do not split one row into item-level entries. Put item-level names/prices in items or memo.
+                        JSON amount fields must be numeric values without commas, currency symbols, or unit text.
+                        Titles should describe the payment source and item/service. When the platform or merchant is visible, use the Korean form "플랫폼/가맹점 : 상품 또는 서비스명" such as "네이버페이 : 웹툰·시리즈 쿠키 59개" or "네이버페이 : 메가MGC커피 모바일금액권 1만원권". N Pay, N+ membership, a green N logo, or Naver-related payment branding is a Naver Pay platform clue. If the platform/merchant is not clearly visible, use only the clearest item/service title.
+                        Remove decorative trailing chevrons such as >, action labels such as 리뷰쓰기 or 다시 담기, and status-only words from titles.
 
                         Date and time rules:
                         Extract visible transaction date and time aggressively. Time is often small or faint; inspect small gray text near the amount/status carefully.
                         Important labels include 주문 날짜, 결제일자, 거래일시, 승인일시, TRANS DATE, order date, payment date, approval time, and transaction time.
                         If a field contains both date and time such as 2026.06.22 02:38:34, 2026-06-26 17:50:39, or 7. 5. 15:15, split it into date=YYYY-MM-DD and time=HH:mm. Drop seconds.
+                        For Korean app shorthand like "7. 5. 15:15 결제", the first number pair is month/day and the final HH:mm token is the time: date=YYYY-MM-DD, time=15:15. Never output a Korean day label such as "15일" as time. Times must be HH:mm or null.
                         If the visible date omits the year, use the current server year supplied by the user message and add a Korean warning that the year was inferred. If only a date is visible and no time is visible, use time null.
 
                         Amount, payment method, category, and memo rules:
-                        Amounts must be positive KRW numbers with no currency symbol. Use EXPENSE unless the image clearly shows income/deposit.
+                        Amounts must be positive KRW numbers with no currency symbol. Use EXPENSE unless the image clearly shows income/deposit. The JSON amount value must be a number, not a string.
                         Do not infer paymentMethodText unless a concrete card/account/cash/transfer/payment method is explicitly visible. Do not use payment platforms such as 네이버페이 as paymentMethodText unless the image explicitly says it is the payment method.
                         Choose logical Korean categoryGroupName/categoryDetailName from the visible words only. For webtoon, cookie, game, digital content, and entertainment purchases, prefer hobby/culture/content-like Korean categories such as 취미 or 문화 when appropriate, but do not label as 구독 unless recurring/regular payment is visible. For coffee, cafe, mobile voucher, or food coupon purchases, prefer 식비/카페 or 식비/간식 when appropriate. Use empty strings when uncertain.
                         Memo must preserve review-useful details visible in the image without inventing facts. For receipts, list purchased products in items and memo. For multi-payment captures, include visible status, product/service text, amount detail, date/time text, and other useful row context as-is.

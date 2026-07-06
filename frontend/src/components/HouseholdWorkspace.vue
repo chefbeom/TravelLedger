@@ -252,6 +252,7 @@ const dashboard = ref({
   recentEntries: [],
 })
 const monthEntries = ref([])
+const calendarAggregateEntries = ref([])
 const statsEntries = ref([])
 const statsOverview = ref({
   from: today,
@@ -924,7 +925,8 @@ onMounted(async () => {
   try {
     await loadMetadata()
     await loadEntryDateRange()
-    await Promise.all([loadCalendarData(), loadAggregatePreferences()])
+    await loadAggregatePreferences()
+    await loadCalendarData()
     if (shouldLoadStatisticsForTab()) {
       await loadStatisticsData()
     }
@@ -1580,6 +1582,9 @@ async function loadAggregatePreferences() {
   const response = await fetchHouseholdAggregatePreferences()
   aggregateWidgetConfigs.value = Array.isArray(response?.widgets) ? response.widgets : []
   aggregateSettingsReady.value = true
+  if (calendarReady.value) {
+    await loadCalendarAggregateEntries()
+  }
 }
 
 async function loadEntryDateRange() {
@@ -1617,14 +1622,65 @@ function buildCalendarEntryRange(anchorDate) {
   }
 }
 
+function normalizeAggregateDataPeriod(value) {
+  return ['DAY', 'WEEK', 'MONTH', 'QUARTER', 'YEAR'].includes(value) ? value : 'MONTH'
+}
+
+function resolveAggregateWidgetDataRange(widget) {
+  const kind = String(widget?.kind || '')
+  const period = kind === 'MONTHLY_GOAL' ? 'MONTH' : normalizeAggregateDataPeriod(widget?.period)
+  if (period === 'DAY' || period === 'WEEK') {
+    return buildCalendarEntryRange(calendarAnchorDate.value)
+  }
+  return resolveRange(calendarAnchorDate.value, period, calendarAnchorDate.value, calendarAnchorDate.value)
+}
+
+function buildCalendarAggregateEntryRange(configs = aggregateWidgetConfigs.value) {
+  const ranges = []
+  const widgets = Array.isArray(configs) ? configs : []
+  widgets.forEach((widget) => {
+    const kind = String(widget?.kind || '')
+    if (!kind || kind === 'NONE') return
+
+    const period = kind === 'MONTHLY_GOAL' ? 'MONTH' : normalizeAggregateDataPeriod(widget?.period)
+    const currentRange = resolveAggregateWidgetDataRange(widget)
+    ranges.push(currentRange)
+
+    if (kind === 'MONTHLY_CUMULATIVE_CHART' && widget?.comparePreviousPeriod) {
+      ranges.push(shiftRange(calendarAnchorDate.value, period, calendarAnchorDate.value, calendarAnchorDate.value, 1))
+    }
+  })
+
+  if (!ranges.length) {
+    ranges.push(buildCalendarEntryRange(calendarAnchorDate.value))
+  }
+
+  return ranges.reduce((merged, range) => ({
+    from: !merged.from || range.from < merged.from ? range.from : merged.from,
+    to: !merged.to || range.to > merged.to ? range.to : merged.to,
+  }), { from: '', to: '' })
+}
+
+async function loadCalendarAggregateEntries() {
+  const range = buildCalendarAggregateEntryRange()
+  calendarAggregateEntries.value = await fetchEntries(range.from, range.to)
+}
+
 async function loadCalendarData() {
   const range = buildCalendarEntryRange(calendarAnchorDate.value)
-  const [dashboardResponse, entryItems] = await Promise.all([
+  const aggregateRange = buildCalendarAggregateEntryRange()
+  const entryItemsPromise = fetchEntries(range.from, range.to)
+  const aggregateItemsPromise = aggregateRange.from === range.from && aggregateRange.to === range.to
+    ? entryItemsPromise
+    : fetchEntries(aggregateRange.from, aggregateRange.to)
+  const [dashboardResponse, entryItems, aggregateItems] = await Promise.all([
     fetchDashboard(calendarAnchorDate.value),
-    fetchEntries(range.from, range.to),
+    entryItemsPromise,
+    aggregateItemsPromise,
   ])
   dashboard.value = dashboardResponse
   monthEntries.value = entryItems
+  calendarAggregateEntries.value = aggregateItems
 }
 
 async function loadStatisticsData({ route = householdTab.value } = {}) {
@@ -3393,6 +3449,7 @@ async function updateAggregatePreferences(widgets) {
   try {
     const response = await saveHouseholdAggregatePreferences(widgets)
     aggregateWidgetConfigs.value = Array.isArray(response?.widgets) ? response.widgets : []
+    await loadCalendarAggregateEntries()
     setFeedback('사용자 지정 집계를 저장했습니다.')
   } catch (error) {
     setFeedback('', error.message)
@@ -4066,6 +4123,7 @@ async function activatePayment(paymentId) {
       :weekday-labels="weekdayLabels"
       :calendar-weeks="calendarWeeks"
       :entries="sortedMonthEntries"
+      :aggregate-entries="calendarAggregateEntries"
       :entry-form="entryForm"
       :entry-date-limit="entryTravelPlanDateLimit"
       :is-editing-entry="isEditingEntry"

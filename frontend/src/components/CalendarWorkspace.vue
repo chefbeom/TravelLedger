@@ -162,6 +162,10 @@ const props = defineProps({
     type: Array,
     default: () => [],
   },
+  aggregateEntries: {
+    type: Array,
+    default: () => [],
+  },
   entryForm: {
     type: Object,
     required: true,
@@ -2783,7 +2787,8 @@ function buildAggregateCard(config, index) {
 
   const aggregateRangePeriod = config.kind === 'MONTHLY_GOAL' ? 'MONTH' : config.period
   const range = getAggregateRange(aggregateRangePeriod)
-  const rangeEntries = props.entries.filter((entry) => entry.entryDate >= range.from && entry.entryDate <= range.to)
+  const aggregateSourceEntries = Array.isArray(props.aggregateEntries) ? props.aggregateEntries : []
+  const rangeEntries = aggregateSourceEntries.filter((entry) => entry.entryDate >= range.from && entry.entryDate <= range.to)
   const filteredEntries = config.kind === 'PAYMENT_METHOD' && config.paymentMethodId
     ? rangeEntries.filter((entry) => String(entry.paymentMethodId) === String(config.paymentMethodId))
     : rangeEntries
@@ -2793,7 +2798,7 @@ function buildAggregateCard(config, index) {
     const chartOverview = summarizeEntries(rangeEntries)
     const previousRange = config.comparePreviousPeriod ? shiftRange(props.anchorDate, config.period, props.anchorDate, props.anchorDate, 1) : null
     const previousEntries = previousRange
-      ? props.entries.filter((entry) => entry.entryDate >= previousRange.from && entry.entryDate <= previousRange.to)
+      ? aggregateSourceEntries.filter((entry) => entry.entryDate >= previousRange.from && entry.entryDate <= previousRange.to)
       : []
     const chart = buildMonthlyCumulativeChartData(rangeEntries, range, chartOverview, {
       period: config.period,

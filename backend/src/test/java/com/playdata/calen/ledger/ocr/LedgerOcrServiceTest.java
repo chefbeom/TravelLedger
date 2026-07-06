@@ -435,6 +435,43 @@ class LedgerOcrServiceTest {
         verify(ledgerEntryRepository, never()).findRecentEntriesForOcrStyle(any(), any());
         verify(remoteClient).analyze(file, "PAYMENT_CAPTURE", "사용자 요청");
     }
+
+    @Test
+    void analyzeUsesLineItemTitleWhenSalesSlipTitleIsGeneric() {
+        AppUser user = stubUser();
+        MockMultipartFile file = validJpeg("sales-slip.jpg");
+        stubHistoryPersistence(106L);
+        CategoryGroup uncategorized = categoryGroup(20L, user, UNCATEGORIZED, EntryType.EXPENSE, true);
+        when(categoryGroupRepository.findAllByOwnerIdAndEntryTypeOrderByDisplayOrderAscIdAsc(USER_ID, EntryType.EXPENSE))
+                .thenReturn(List.of(uncategorized));
+        RemoteParsedResult parsed = new RemoteParsedResult(
+                LocalDate.of(2026, 6, 24),
+                LocalTime.of(15, 15),
+                EntryType.EXPENSE,
+                "SALES SLIP",
+                "CARD TYPE Hyundai Card / ITEM Lost Ark 80,000 Royal Crystal / TOTAL 80,000",
+                new BigDecimal("80000"),
+                "Hyundai Card",
+                "Hyundai Card",
+                "",
+                "",
+                "",
+                List.of(new RemoteLineItem("Lost Ark 80,000 Royal Crystal", BigDecimal.ONE, "item", new BigDecimal("80000"))),
+                0.9,
+                List.of()
+        );
+        when(remoteClient.analyze(file, "RECEIPT", null))
+                .thenReturn(new RemoteAnalyzeResponse(true, null, "RECEIPT", "SALES SLIP ITEM Lost Ark 80,000 Royal Crystal", parsed, List.of(parsed), Map.of()));
+
+        LedgerOcrEntrySuggestionResponse suggestion = service.analyze(USER_ID, file, "RECEIPT", "sales-slip-item", null)
+                .suggestedEntry();
+
+        assertThat(suggestion.title()).isEqualTo("Lost Ark 80,000 Royal Crystal");
+        assertThat(suggestion.amount()).isEqualByComparingTo("80000");
+        assertThat(suggestion.entryDate()).isEqualTo(LocalDate.of(2026, 6, 24));
+        assertThat(suggestion.entryTime()).isEqualTo(LocalTime.of(15, 15));
+        assertThat(suggestion.memo()).contains("Lost Ark 80,000 Royal Crystal", "80,000");
+    }
     private RemoteParsedResult naverPayEntry(
             String title,
             String memo,

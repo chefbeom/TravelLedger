@@ -720,12 +720,16 @@ public class LedgerOcrService {
                 "Receipt"
         );
         String title = cleanupPaymentCaptureTitle(rawTitle);
+        String firstItemName = lineItems.isEmpty() ? null : cleanupPaymentCaptureTitle(lineItems.get(0).itemName());
         if (!isPresent(title)) {
             title = firstNonBlank(
-                    lineItems.isEmpty() ? null : lineItems.get(0).itemName(),
+                    firstItemName,
                     parsed != null ? parsed.vendor() : null,
                     "Receipt"
             );
+        }
+        if (isGenericOcrTitle(title) && isPresent(firstItemName) && !isGenericOcrTitle(firstItemName)) {
+            title = firstItemName;
         }
         if (isPresent(paymentCapturePlatform) && !hasPlatformPrefix(title, paymentCapturePlatform)) {
             title = paymentCapturePlatform + " : " + title;
@@ -769,6 +773,43 @@ public class LedgerOcrService {
         return cleaned.replaceAll("\\s+", " ").trim();
     }
 
+    private boolean isGenericOcrTitle(String title) {
+        if (!isPresent(title)) {
+            return true;
+        }
+        String normalized = title
+                .replaceAll("[\\s:_/\\-.]+", "")
+                .toLowerCase(Locale.ROOT);
+        if (!isPresent(normalized)) {
+            return true;
+        }
+        if (List.of(
+                "receipt",
+                "salesslip",
+                "cardtype",
+                "cardno",
+                "taxable",
+                "vat",
+                "taxfree",
+                "total",
+                "hyundaicard",
+                "\uD604\uB300\uCE74\uB4DC",
+                "\uD569\uACC4",
+                "\uACB0\uC81C\uAE08\uC561",
+                "\uACFC\uC138\uAE08\uC561",
+                "\uBD80\uAC00\uC138",
+                "\uC2B9\uC778\uBC88\uD638"
+        ).contains(normalized)) {
+            return true;
+        }
+        return normalized.contains("salesslip")
+                || normalized.contains("cardtransaction")
+                || normalized.contains("cardno")
+                || normalized.contains("taxable")
+                || normalized.contains("\uCE74\uB4DC\uAC70\uB798\uB0B4\uC5ED\uD655\uC778\uC11C")
+                || normalized.contains("\uAC70\uB798\uB0B4\uC5ED\uD655\uC778\uC11C")
+                || normalized.contains("\uCE74\uB4DC\uB9E4\uCD9C\uC804\uD45C");
+    }
     private boolean hasPlatformPrefix(String title, String platform) {
         if (!isPresent(title) || !isPresent(platform)) {
             return false;

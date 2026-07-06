@@ -2440,10 +2440,8 @@ function clearReceiptOcr() {
 
 function openReceiptOcrModal() {
   receiptOcr.isOpen = true
-  receiptOcr.activeView = receiptOcr.activeView || 'analyze'
-  if (!receiptOcr.historyItems.length && !receiptOcr.isHistoryLoading) {
-    loadReceiptOcrHistories(0)
-  }
+  receiptOcr.activeView = ''
+  receiptOcr.historyDetailAnalysisId = ''
 }
 
 function closeReceiptOcrModal() {

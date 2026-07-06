@@ -4394,7 +4394,7 @@ defineExpose({
             </section>
           </template>
         </section>
-        <section v-else class="receipt-ocr-workspace receipt-ocr-workspace--rules">
+        <section v-else-if="receiptOcrView === 'rules'" class="receipt-ocr-workspace receipt-ocr-workspace--rules">
           <div class="receipt-ocr-prompt-box receipt-ocr-prompt-box--rules">
             <label class="receipt-ocr-toggle">
               <input

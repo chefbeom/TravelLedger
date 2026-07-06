@@ -27979,3 +27979,145 @@ button.button--primary,
     min-height: 88px !important;
   }
 }
+/* UI audit fixes: keep assigned calendar palettes isolated while preserving access to tall quick-entry forms. */
+.household-calendar-layout-grid:not(.household-calendar-layout-grid--editing) .household-calendar-layout-item--quick-entry > .grid-stack-item-content,
+.household-calendar-layout-grid:not(.household-calendar-layout-grid--editing) .household-calendar-layout-item--quick-entry .household-calendar-layout-card,
+.household-calendar-layout-grid:not(.household-calendar-layout-grid--editing) .household-calendar-layout-item--quick-entry .household-calendar-layout-static-content,
+.household-calendar-layout-grid:not(.household-calendar-layout-grid--editing) .household-calendar-layout-item--quick-entry .household-calendar-layout-panel-shell {
+  min-height: 0 !important;
+  overflow: hidden !important;
+}
+
+.household-calendar-layout-grid:not(.household-calendar-layout-grid--editing) .household-calendar-layout-item--quick-entry .household-entry-panel {
+  display: flex !important;
+  flex-direction: column !important;
+  height: 100% !important;
+  min-height: 0 !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  scrollbar-gutter: stable;
+}
+
+.drive-upload-button {
+  align-items: center !important;
+  box-sizing: border-box !important;
+  display: inline-flex !important;
+  justify-content: center !important;
+  min-height: 48px !important;
+}
+
+:root[data-layout-mode='mobile'] .household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-grid {
+  grid-template-columns: minmax(0, 1fr) !important;
+  grid-auto-rows: minmax(150px, auto) !important;
+}
+
+:root[data-layout-mode='mobile'] .household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-grid > .household-aggregate-card,
+:root[data-layout-mode='mobile'] .household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-grid > .household-aggregate-card[data-aggregate-width] {
+  grid-column: 1 / -1 !important;
+  min-width: 0 !important;
+}
+
+:root[data-layout-mode='mobile'] .household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-card__eyebrow {
+  max-width: 100% !important;
+  white-space: normal !important;
+  overflow: visible !important;
+  text-overflow: clip !important;
+}
+
+:root[data-layout-mode='mobile'] .main-dashboard__grid.grid-stack {
+  display: grid !important;
+  gap: 12px !important;
+  height: auto !important;
+  min-height: 0 !important;
+}
+
+:root[data-layout-mode='mobile'] .main-dashboard__grid.grid-stack > .grid-stack-item {
+  height: auto !important;
+  min-height: 156px !important;
+  position: relative !important;
+  top: auto !important;
+  left: auto !important;
+  transform: none !important;
+  width: 100% !important;
+}
+
+:root[data-layout-mode='mobile'] .main-dashboard__grid.grid-stack > .grid-stack-item > .grid-stack-item-content {
+  inset: auto !important;
+  min-height: 156px !important;
+  position: relative !important;
+  overflow: visible !important;
+}
+
+:root[data-layout-mode='mobile'] .main-dashboard__grid .main-palette {
+  height: auto !important;
+  min-height: 156px !important;
+  overflow: visible !important;
+}
+
+:root[data-layout-mode='mobile'] .main-dashboard__grid .main-palette__body,
+:root[data-layout-mode='mobile'] .main-dashboard__grid .main-palette__quick-form,
+:root[data-layout-mode='mobile'] .main-dashboard__grid .main-palette__quick-actions,
+:root[data-layout-mode='mobile'] .main-dashboard__grid .main-palette__feature-links,
+:root[data-layout-mode='mobile'] .main-dashboard__grid .main-palette__photo-empty {
+  height: auto !important;
+  overflow: visible !important;
+}
+
+:root[data-layout-mode='mobile'] .main-dashboard__grid .main-palette__quick-buttons button,
+:root[data-layout-mode='mobile'] .main-dashboard__grid .main-palette__quick-action {
+  min-width: 0 !important;
+  white-space: normal !important;
+}
+
+:root[data-layout-mode='mobile'] .palette-grid.grid-stack {
+  display: grid !important;
+  gap: 12px !important;
+  height: auto !important;
+  min-height: 0 !important;
+}
+
+:root[data-layout-mode='mobile'] .palette-grid.grid-stack > .grid-stack-item {
+  height: auto !important;
+  min-height: 156px !important;
+  position: relative !important;
+  top: auto !important;
+  left: auto !important;
+  transform: none !important;
+  width: 100% !important;
+}
+
+:root[data-layout-mode='mobile'] .palette-grid.grid-stack > .grid-stack-item > .grid-stack-item-content {
+  inset: auto !important;
+  min-height: 156px !important;
+  position: relative !important;
+  overflow: visible !important;
+}
+
+:root[data-layout-mode='mobile'] .palette-grid .palette-item,
+:root[data-layout-mode='mobile'] .palette-grid .palette-item__body,
+:root[data-layout-mode='mobile'] .palette-grid .kpi-palette,
+:root[data-layout-mode='mobile'] .palette-grid .calendar-palette {
+  height: auto !important;
+  min-height: 156px !important;
+  overflow: visible !important;
+}
+
+:root[data-layout-mode='mobile'] .palette-grid .kpi-palette__row,
+:root[data-layout-mode='mobile'] .palette-grid .kpi-palette__bar-label {
+  align-items: flex-start !important;
+  flex-wrap: wrap !important;
+}
+
+:root[data-layout-mode='mobile'] .palette-grid .kpi-palette__row span,
+:root[data-layout-mode='mobile'] .palette-grid .kpi-palette__row strong,
+:root[data-layout-mode='mobile'] .palette-grid .kpi-palette__bar-label span,
+:root[data-layout-mode='mobile'] .palette-grid .kpi-palette__bar-label strong {
+  white-space: normal !important;
+  overflow: visible !important;
+  text-overflow: clip !important;
+}
+
+:root[data-layout-mode='mobile'] .palette-grid .calendar-palette__expense {
+  justify-self: stretch !important;
+  white-space: nowrap !important;
+}

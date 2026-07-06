@@ -321,6 +321,8 @@ const receiptOcr = reactive({
   promptRules: loadReceiptOcrPromptRules(),
   isAnalyzing: false,
   pendingCount: 0,
+  batchTotalCount: 0,
+  batchCompletedCount: 0,
   error: '',
   items: [],
   fileName: '',
@@ -2683,6 +2685,8 @@ function clearReceiptOcr() {
   })
   receiptOcr.isAnalyzing = false
   receiptOcr.pendingCount = 0
+  receiptOcr.batchTotalCount = 0
+  receiptOcr.batchCompletedCount = 0
   receiptOcr.error = ''
   receiptOcr.activeView = 'analyze'
   receiptOcr.historyDetailAnalysisId = ''
@@ -3151,17 +3155,34 @@ async function startSelectedReceiptOcrAnalysis(payload = {}) {
   receiptOcr.isOpen = true
   receiptOcr.activeView = 'analyze'
   receiptOcr.error = ''
+  receiptOcr.batchTotalCount = items.length
+  receiptOcr.batchCompletedCount = 0
+
+  items.forEach((item) => {
+    item.status = 'queued'
+    item.analysisStatus = 'PROCESSING'
+    item.error = ''
+  })
   syncReceiptOcrBusyState()
 
   for (const item of items) {
+    if (!isReceiptOcrItemActive(item) || item.status !== 'queued') {
+      receiptOcr.batchCompletedCount = Math.min(receiptOcr.batchCompletedCount + 1, receiptOcr.batchTotalCount)
+      syncReceiptOcrBusyState()
+      continue
+    }
     const itemPrompt = item.requestPromptEnabled ? item.requestPrompt : fallbackPrompt
     if (normalizeReceiptPrompt(itemPrompt)) {
       rememberReceiptOcrRequestPrompt(itemPrompt)
     }
     const prompt = buildReceiptOcrPrompt(itemPrompt)
-    if (isReceiptOcrItemActive(item)) {
-      await analyzeReceiptFile(item.sourceFile, normalizeOcrDocumentType(item.documentType || receiptOcr.documentType), item, prompt, useExistingEntryStyle)
-    }
+    await analyzeReceiptFile(item.sourceFile, normalizeOcrDocumentType(item.documentType || receiptOcr.documentType), item, prompt, useExistingEntryStyle)
+    receiptOcr.batchCompletedCount = Math.min(receiptOcr.batchCompletedCount + 1, receiptOcr.batchTotalCount)
+    syncReceiptOcrBusyState()
+  }
+  if (!receiptOcr.pendingCount) {
+    receiptOcr.batchTotalCount = 0
+    receiptOcr.batchCompletedCount = 0
   }
   if (items.some((item) => item.status === 'done')) {
     receiptOcr.activeView = 'history'

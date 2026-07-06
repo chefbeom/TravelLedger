@@ -875,6 +875,14 @@ const receiptVisibleReviewItems = computed(() => {
   return []
 })
 const receiptPendingCount = computed(() => Number(props.receiptOcr?.pendingCount ?? receiptReviewItems.value.filter((item) => item.status === 'queued' || item.status === 'analyzing').length))
+const receiptBatchTotalCount = computed(() => Number(props.receiptOcr?.batchTotalCount || 0))
+const receiptBatchCompletedCount = computed(() => Number(props.receiptOcr?.batchCompletedCount || 0))
+const receiptBatchProgressLabel = computed(() => {
+  if (receiptBatchTotalCount.value > 0) {
+    return `${Math.min(receiptBatchCompletedCount.value, receiptBatchTotalCount.value)} / ${receiptBatchTotalCount.value}`
+  }
+  return `${Math.max(0, receiptReviewItems.value.filter((item) => item.status === 'done' || item.status === 'error' || item.status === 'cancelled').length)} / ${receiptReviewItems.value.length || receiptPendingCount.value}`
+})
 const receiptTotalSuggestionCount = computed(() => receiptReviewItems.value.reduce(
   (total, item) => total + (Array.isArray(item.suggestedEntries) ? item.suggestedEntries.length : 0),
   0,
@@ -4275,7 +4283,7 @@ defineExpose({
 
           <div v-if="receiptOcr?.isAnalyzing" class="receipt-ocr-modal__progress">
             <span></span>
-            {{ receiptPendingCount }}개 이미지 분석 중입니다. 완료된 결과는 분석 내용 확인 및 불러오기에서 검수합니다.
+            선택된 이미지가 순서대로 자동 분석 중입니다. 진행 {{ receiptBatchProgressLabel }}, 남은 작업 {{ receiptPendingCount }}건.
           </div>
           <p v-if="!receiptAnalyzeItems.length" class="receipt-ocr-modal__empty">
             이미지를 선택하면 이곳에 미리보기가 표시됩니다. 분석은 분석 요청하기를 눌러야 시작됩니다.

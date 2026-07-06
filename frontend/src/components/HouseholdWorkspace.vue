@@ -114,6 +114,9 @@ const SEARCH_PAGE_SIZE = 100
 const SEARCH_OTHER_FILTER_VALUE = '__OTHER__'
 const AI_HISTORY_PAGE_SIZE = 8
 const RECEIPT_OCR_PROMPT_RULES_KEY = 'calen-household-receipt-ocr-prompt-rules:v1'
+const RECEIPT_OCR_REQUEST_PROMPT_LAST_KEY = 'calen-household-receipt-ocr-request-prompt-last:v1'
+const RECEIPT_OCR_REQUEST_PROMPT_HISTORY_KEY = 'calen-household-receipt-ocr-request-prompt-history:v1'
+const RECEIPT_OCR_REQUEST_PROMPT_HISTORY_LIMIT = 5
 const csvExportOptions = [
   { value: 'ALL', label: '전체 데이터' },
   { value: 'LAST_6_MONTHS', label: '최근 6개월' },
@@ -145,6 +148,54 @@ function saveReceiptOcrPromptRules(value) {
   }
 }
 
+function loadReceiptOcrRequestPromptLast() {
+  if (typeof window === 'undefined') {
+    return ''
+  }
+  try {
+    return window.localStorage.getItem(RECEIPT_OCR_REQUEST_PROMPT_LAST_KEY) || ''
+  } catch (error) {
+    console.warn('Failed to load receipt OCR request prompt', error)
+    return ''
+  }
+}
+
+function saveReceiptOcrRequestPromptLast(value) {
+  if (typeof window === 'undefined') {
+    return
+  }
+  try {
+    window.localStorage.setItem(RECEIPT_OCR_REQUEST_PROMPT_LAST_KEY, value || '')
+  } catch (error) {
+    console.warn('Failed to save receipt OCR request prompt', error)
+  }
+}
+
+function loadReceiptOcrRequestPromptHistory() {
+  if (typeof window === 'undefined') {
+    return []
+  }
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(RECEIPT_OCR_REQUEST_PROMPT_HISTORY_KEY) || '[]')
+    return Array.isArray(parsed)
+      ? parsed.map((item) => normalizeReceiptPrompt(item)).filter(Boolean).slice(0, RECEIPT_OCR_REQUEST_PROMPT_HISTORY_LIMIT)
+      : []
+  } catch (error) {
+    console.warn('Failed to load receipt OCR request prompt history', error)
+    return []
+  }
+}
+
+function saveReceiptOcrRequestPromptHistory(items) {
+  if (typeof window === 'undefined') {
+    return
+  }
+  try {
+    window.localStorage.setItem(RECEIPT_OCR_REQUEST_PROMPT_HISTORY_KEY, JSON.stringify(items || []))
+  } catch (error) {
+    console.warn('Failed to save receipt OCR request prompt history', error)
+  }
+}
 function normalizeReceiptPrompt(value, maxLength = 1800) {
   const normalized = String(value || '').replace(/\u0000/g, ' ').trim()
   return normalized.length > maxLength ? normalized.slice(0, maxLength) : normalized
@@ -257,10 +308,11 @@ const isHouseholdTravelPlanSubmitting = ref(false)
 const linkingTravelEntryId = ref('')
 const receiptOcr = reactive({
   isOpen: false,
-  activeView: 'analyze',
+  activeView: '',
   documentType: 'AUTO',
   requestPromptEnabled: false,
-  requestPrompt: '',
+  requestPrompt: loadReceiptOcrRequestPromptLast(),
+  requestPromptHistory: loadReceiptOcrRequestPromptHistory(),
   rerunPromptEnabled: false,
   rerunPrompt: '',
   promptRulesEnabled: true,
@@ -2294,7 +2346,7 @@ function applyEntryTitleSuggestion(suggestion) {
 }
 
 function setReceiptOcrView(view) {
-  receiptOcr.activeView = ['analyze', 'history', 'rules'].includes(view) ? view : 'analyze'
+  receiptOcr.activeView = ['analyze', 'history', 'rules'].includes(view) ? view : ''
   if (receiptOcr.activeView === 'history' && !receiptOcr.historyItems.length && !receiptOcr.isHistoryLoading) {
     loadReceiptOcrHistories(0)
   }
@@ -2305,7 +2357,21 @@ function setReceiptRequestPromptEnabled(value) {
 }
 
 function setReceiptRequestPrompt(value) {
-  receiptOcr.requestPrompt = normalizeReceiptPrompt(value)
+  const normalized = normalizeReceiptPrompt(value)
+  receiptOcr.requestPrompt = normalized
+  saveReceiptOcrRequestPromptLast(normalized)
+}
+
+function rememberReceiptOcrRequestPrompt(value) {
+  const normalized = normalizeReceiptPrompt(value)
+  if (!normalized) {
+    return
+  }
+  const nextHistory = [normalized, ...receiptOcr.requestPromptHistory.filter((item) => item !== normalized)]
+    .slice(0, RECEIPT_OCR_REQUEST_PROMPT_HISTORY_LIMIT)
+  receiptOcr.requestPromptHistory = nextHistory
+  saveReceiptOcrRequestPromptHistory(nextHistory)
+  saveReceiptOcrRequestPromptLast(normalized)
 }
 
 function setReceiptRerunPromptEnabled(value) {
@@ -2718,10 +2784,69 @@ async function analyzeReceiptFile(file, documentType, existingItem = null, promp
   }
 }
 
+function selectedReceiptOcrItems() {
+  return receiptOcr.items.filter((item) => item.status === 'selected' && !item.cancelled && !item.fromHistory && typeof File !== 'undefined' && item.sourceFile instanceof File)
+}
+
+function selectReceiptOcrFiles(payload) {
+  const files = Array.isArray(payload?.files)
+    ? payload.files
+    : typeof File !== 'undefined' && payload instanceof File
+      ? [payload]
+      : []
+  if (!files.length) {
+    return
+  }
+
+  const requestedDocumentType = normalizeOcrDocumentType(payload?.documentType || receiptOcr.documentType)
+  const documentType = files.length > 1 ? 'AUTO' : requestedDocumentType
+  receiptOcr.documentType = documentType
+  receiptOcr.isOpen = true
+  receiptOcr.activeView = 'analyze'
+  receiptOcr.error = ''
+
+  const previousDrafts = receiptOcr.items.filter((item) => item.status === 'selected' && !item.fromHistory)
+  previousDrafts.forEach((item) => revokeReceiptOcrItemPreview(item))
+  const retainedItems = receiptOcr.items.filter((item) => item.status !== 'selected' || item.fromHistory)
+  const draftItems = files.map((file) => {
+    const item = createReceiptOcrItem(file, documentType)
+    item.status = 'selected'
+    item.analysisStatus = 'DRAFT'
+    return item
+  })
+  receiptOcr.items = [...draftItems, ...retainedItems]
+  syncReceiptOcrBusyState()
+}
+
+async function startSelectedReceiptOcrAnalysis(payload = {}) {
+  const items = selectedReceiptOcrItems()
+  if (!items.length) {
+    return
+  }
+  const requestPrompt = payload?.prompt || ''
+  if (normalizeReceiptPrompt(requestPrompt)) {
+    rememberReceiptOcrRequestPrompt(requestPrompt)
+  }
+  const prompt = buildReceiptOcrPrompt(requestPrompt)
+  receiptOcr.isOpen = true
+  receiptOcr.activeView = 'analyze'
+  receiptOcr.error = ''
+  syncReceiptOcrBusyState()
+
+  for (const item of items) {
+    if (isReceiptOcrItemActive(item)) {
+      await analyzeReceiptFile(item.sourceFile, normalizeOcrDocumentType(item.documentType || receiptOcr.documentType), item, prompt)
+    }
+  }
+  if (items.some((item) => item.status === 'done')) {
+    receiptOcr.activeView = 'history'
+    await loadReceiptOcrHistories(0)
+  }
+}
 async function analyzeReceiptImage(payload) {
   const files = Array.isArray(payload?.files)
     ? payload.files
-    : payload instanceof File
+    : typeof File !== 'undefined' && payload instanceof File
       ? [payload]
       : []
   if (!files.length) {
@@ -3915,6 +4040,8 @@ async function activatePayment(paymentId) {
       @update:time-enabled="updateTimeEnabled"
       @fill-amount="fillAmount"
       @add-amount="addAmount"
+      @select-receipt-files="selectReceiptOcrFiles"
+      @start-receipt-analysis="startSelectedReceiptOcrAnalysis"
       @analyze-receipt="analyzeReceiptImage"
       @update-receipt-review-entry="updateReceiptOcrReviewEntry"
       @remove-receipt-analysis="removeReceiptOcrItem"

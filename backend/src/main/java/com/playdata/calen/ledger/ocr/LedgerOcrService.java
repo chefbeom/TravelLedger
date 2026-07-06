@@ -6,6 +6,7 @@ import com.playdata.calen.account.domain.AppUser;
 import com.playdata.calen.account.service.AppUserService;
 import com.playdata.calen.account.service.UserNotificationService;
 import com.playdata.calen.common.exception.BadRequestException;
+import com.playdata.calen.common.exception.NotFoundException;
 import com.playdata.calen.ledger.ai.LedgerAiAnalysisProperties;
 import com.playdata.calen.ledger.domain.CategoryDetail;
 import com.playdata.calen.ledger.domain.CategoryGroup;
@@ -13,6 +14,7 @@ import com.playdata.calen.ledger.domain.EntryType;
 import com.playdata.calen.ledger.domain.LedgerImageAnalysisRequest;
 import com.playdata.calen.ledger.domain.LedgerImageAnalysisStatus;
 import com.playdata.calen.ledger.dto.LedgerImageAnalysisHistoryResponse;
+import com.playdata.calen.ledger.dto.LedgerImageAnalysisHistoryDeleteResponse;
 import com.playdata.calen.ledger.dto.LedgerOcrAnalyzeResponse;
 import com.playdata.calen.ledger.dto.LedgerOcrEntrySuggestionResponse;
 import com.playdata.calen.ledger.dto.LedgerOcrLineItemResponse;
@@ -47,6 +49,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 @Slf4j
@@ -192,6 +195,22 @@ public class LedgerOcrService {
     }
 
 
+
+    @Transactional
+    public LedgerImageAnalysisHistoryDeleteResponse deleteHistory(Long userId, Long historyId) {
+        appUserService.getRequiredUser(userId);
+        LedgerImageAnalysisRequest history = imageAnalysisRequestRepository.findByIdAndOwnerId(historyId, userId)
+                .orElseThrow(() -> new NotFoundException("Image analysis history was not found."));
+        if (history.getStatus() == LedgerImageAnalysisStatus.PROCESSING) {
+            throw new BadRequestException("Processing image analysis history cannot be deleted. Cancel it first.");
+        }
+        if (imageStorageService != null && hasStoredImage(history)) {
+            imageStorageService.delete(history.getImageObjectKey());
+        }
+        imageAnalysisRequestRepository.delete(history);
+        return new LedgerImageAnalysisHistoryDeleteResponse(1);
+    }
+
     public LedgerOcrAnalyzeResponse reanalyzeHistoryImage(
             Long userId,
             Long historyId,
@@ -222,12 +241,13 @@ public class LedgerOcrService {
     }
 
     private LedgerImageAnalysisHistoryResponse cancelHistoryRecord(LedgerImageAnalysisRequest history) {
-        if (history.getStatus() != LedgerImageAnalysisStatus.CANCELLED) {
-            history.setStatus(LedgerImageAnalysisStatus.CANCELLED);
-            history.setCancelledAt(LocalDateTime.now());
-            history.setSummary("사용자가 이미지 분석 요청을 취소했습니다.");
-            imageAnalysisRequestRepository.save(history);
+        if (history.getStatus() != LedgerImageAnalysisStatus.PROCESSING) {
+            return toHistoryResponse(history);
         }
+        history.setStatus(LedgerImageAnalysisStatus.CANCELLED);
+        history.setCancelledAt(LocalDateTime.now());
+        history.setSummary("사용자가 이미지 분석 요청을 취소했습니다.");
+        imageAnalysisRequestRepository.save(history);
         return toHistoryResponse(history);
     }
     private void storeImageForHistory(Long ownerId, LedgerImageAnalysisRequest history, MultipartFile file) {

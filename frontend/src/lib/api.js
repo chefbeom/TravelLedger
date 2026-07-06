@@ -645,6 +645,12 @@ export function cancelLedgerImageAnalysisHistory(historyId) {
   })
 }
 
+export function deleteLedgerImageAnalysisHistory(historyId) {
+  return request(`/ledger/image-analysis/history/${encodeURIComponent(historyId)}`, {
+    method: 'DELETE',
+  })
+}
+
 export function cancelLedgerImageAnalysisClientRequest(clientRequestId) {
   return request(`/ledger/image-analysis/history/client/${encodeURIComponent(clientRequestId)}/cancel`, {
     method: 'POST',

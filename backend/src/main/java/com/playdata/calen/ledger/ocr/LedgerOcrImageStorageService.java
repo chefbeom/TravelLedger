@@ -6,6 +6,7 @@ import com.playdata.calen.common.exception.ServiceUnavailableException;
 import io.minio.GetObjectArgs;
 import io.minio.MinioClient;
 import io.minio.PutObjectArgs;
+import io.minio.RemoveObjectArgs;
 import java.io.InputStream;
 import java.time.LocalDateTime;
 import java.util.Locale;
@@ -69,6 +70,24 @@ public class LedgerOcrImageStorageService {
         } catch (Exception exception) {
             log.error("Failed to load ledger OCR image. bucket={}, objectKey={}", resolveBucket(), objectKey, exception);
             throw new BadRequestException("Stored OCR image could not be loaded.");
+        }
+    }
+
+    public void delete(String objectKey) {
+        if (!StringUtils.hasText(objectKey)) {
+            return;
+        }
+        ensureStorageConfigured();
+        try {
+            minioClient().removeObject(
+                    RemoveObjectArgs.builder()
+                            .bucket(resolveBucket())
+                            .object(objectKey)
+                            .build()
+            );
+        } catch (Exception exception) {
+            log.error("Failed to delete ledger OCR image. bucket={}, objectKey={}", resolveBucket(), objectKey, exception);
+            throw new ServiceUnavailableException(STORAGE_UNAVAILABLE_MESSAGE);
         }
     }
 

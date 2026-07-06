@@ -2,6 +2,7 @@ package com.playdata.calen.ledger.web;
 
 import com.playdata.calen.account.security.AppUserPrincipal;
 import com.playdata.calen.ledger.dto.LedgerImageAnalysisHistoryResponse;
+import com.playdata.calen.ledger.dto.LedgerImageAnalysisHistoryDeleteResponse;
 import com.playdata.calen.ledger.dto.LedgerOcrAnalyzeResponse;
 import com.playdata.calen.ledger.ocr.LedgerOcrImageStorageService;
 import com.playdata.calen.ledger.ocr.LedgerOcrService;
@@ -14,6 +15,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -66,6 +68,14 @@ public class LedgerOcrController {
         return ledgerOcrService.cancelHistoryByClientRequestId(currentUser.userId(), clientRequestId);
     }
 
+
+    @DeleteMapping("/history/{historyId}")
+    public LedgerImageAnalysisHistoryDeleteResponse deleteHistory(
+            @AuthenticationPrincipal AppUserPrincipal currentUser,
+            @PathVariable Long historyId
+    ) {
+        return ledgerOcrService.deleteHistory(currentUser.userId(), historyId);
+    }
 
     @GetMapping("/history/{historyId}/image")
     public ResponseEntity<byte[]> getHistoryImage(

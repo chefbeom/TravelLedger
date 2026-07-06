@@ -22,6 +22,7 @@ import {
   deactivateCategoryGroup,
   deactivatePaymentMethod,
   deleteEntry,
+  deleteLedgerImageAnalysisHistory,
   downloadLedgerCsv,
   emptyDeletedEntries,
   fetchCategories,
@@ -3124,6 +3125,35 @@ async function cancelReceiptOcrHistory(historyId) {
     receiptOcr.historyError = error.message || '이미지 분석 기록을 취소하지 못했습니다.'
   }
 }
+async function deleteReceiptOcrHistory(history) {
+  const historyId = typeof history === 'object' && history !== null ? history.id : history
+  if (!historyId) {
+    return
+  }
+  const fileName = typeof history === 'object' && history !== null ? (history.fileName || `분석 기록 #${historyId}`) : `분석 기록 #${historyId}`
+  if (!window.confirm(`'${fileName}' 분석 기록을 삭제할까요?\n\n삭제하면 저장된 원본 이미지와 분석 결과를 다시 불러올 수 없습니다.`)) {
+    return
+  }
+  receiptOcr.historyError = ''
+  try {
+    await deleteLedgerImageAnalysisHistory(historyId)
+    receiptOcr.historyItems = receiptOcr.historyItems.filter((item) => String(item.id) !== String(historyId))
+    receiptOcr.items = receiptOcr.items.filter((item) => String(item.analysisId) !== String(historyId))
+    receiptOcr.historyTotalElements = Math.max(0, Number(receiptOcr.historyTotalElements || 0) - 1)
+    if (String(receiptOcr.historyDetailAnalysisId) === String(historyId)) {
+      receiptOcr.historyDetailAnalysisId = ''
+    }
+    if (String(receiptOcr.lastAppliedAnalysisId) === String(historyId)) {
+      clearReceiptOcrAppliedMarker()
+    }
+    if (!receiptOcr.historyItems.length && receiptOcr.historyPage > 0) {
+      await loadReceiptOcrHistories(receiptOcr.historyPage - 1)
+    }
+    setFeedback('이미지 분석 기록을 삭제했습니다.')
+  } catch (error) {
+    receiptOcr.historyError = error.message || '이미지 분석 기록을 삭제하지 못했습니다.'
+  }
+}
 function updateLegacyReceiptOcrFields(result, firstSuggestion, fileName) {
   receiptOcr.error = ''
   receiptOcr.fileName = fileName || ''
@@ -4598,6 +4628,7 @@ async function activatePayment(paymentId) {
       @open-receipt-history-detail="openReceiptOcrHistoryDetail"
       @close-receipt-history-detail="closeReceiptOcrHistoryDetail"
       @cancel-receipt-history="cancelReceiptOcrHistory"
+      @delete-receipt-history="deleteReceiptOcrHistory"
       @submit-entry="submitEntry"
       @undo-entry-action="undoLastEntryAction"
       @edit-entry="fillEntryForm"

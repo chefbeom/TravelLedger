@@ -305,6 +305,7 @@ const emit = defineEmits([
   'load-receipt-history',
   'reuse-receipt-history',
   'cancel-receipt-history',
+  'delete-receipt-history',
   'submit-entry',
   'undo-entry-action',
   'edit-entry',
@@ -646,6 +647,10 @@ function normalizeReceiptHistoryStatus(status) {
 
 function isReceiptHistoryCompleted(history) {
   return normalizeReceiptHistoryStatus(history?.status) === 'COMPLETED'
+}
+
+function isReceiptHistoryCancellable(history) {
+  return normalizeReceiptHistoryStatus(history?.status) === 'PROCESSING'
 }
 
 function getReceiptHistoryActionLabel(history) {
@@ -4414,12 +4419,20 @@ defineExpose({
                       {{ normalizeReceiptHistoryStatus(history.status) === 'PROCESSING' ? '처리 중' : '내용 보기' }}
                     </button>
                     <button
+                      v-if="isReceiptHistoryCancellable(history)"
                       type="button"
                       class="button button--ghost"
-                      :disabled="normalizeReceiptHistoryStatus(history.status) === 'CANCELLED'"
                       @click.stop="emit('cancel-receipt-history', history.id)"
                     >
                       요청 취소
+                    </button>
+                    <button
+                      v-if="!isReceiptHistoryCancellable(history)"
+                      type="button"
+                      class="button button--danger"
+                      @click.stop="emit('delete-receipt-history', history)"
+                    >
+                      삭제
                     </button>
                   </div>
                 </article>

@@ -60,6 +60,12 @@ public class LedgerImageAnalysisRequest {
     @Column(name = "file_size_bytes", nullable = false)
     private long fileSizeBytes;
 
+    @Column(name = "image_object_key", length = 600)
+    private String imageObjectKey;
+
+    @Column(name = "image_stored_at")
+    private LocalDateTime imageStoredAt;
+
     @Column(name = "summary", length = 500)
     private String summary;
 

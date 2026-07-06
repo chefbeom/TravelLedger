@@ -3,11 +3,16 @@ package com.playdata.calen.ledger.web;
 import com.playdata.calen.account.security.AppUserPrincipal;
 import com.playdata.calen.ledger.dto.LedgerImageAnalysisHistoryResponse;
 import com.playdata.calen.ledger.dto.LedgerOcrAnalyzeResponse;
+import com.playdata.calen.ledger.ocr.LedgerOcrImageStorageService;
 import com.playdata.calen.ledger.ocr.LedgerOcrService;
+import java.nio.charset.StandardCharsets;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -59,6 +64,42 @@ public class LedgerOcrController {
             @PathVariable String clientRequestId
     ) {
         return ledgerOcrService.cancelHistoryByClientRequestId(currentUser.userId(), clientRequestId);
+    }
+
+
+    @GetMapping("/history/{historyId}/image")
+    public ResponseEntity<byte[]> getHistoryImage(
+            @AuthenticationPrincipal AppUserPrincipal currentUser,
+            @PathVariable Long historyId
+    ) {
+        LedgerOcrImageStorageService.StoredImageContent image = ledgerOcrService.getHistoryImage(currentUser.userId(), historyId);
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(parseMediaType(image.contentType()));
+        headers.setContentDisposition(ContentDisposition.inline()
+                .filename(image.fileName(), StandardCharsets.UTF_8)
+                .build());
+        return ResponseEntity.ok()
+                .headers(headers)
+                .body(image.bytes());
+    }
+
+    @PostMapping("/history/{historyId}/rerun")
+    public LedgerOcrAnalyzeResponse reanalyzeHistory(
+            @AuthenticationPrincipal AppUserPrincipal currentUser,
+            @PathVariable Long historyId,
+            @RequestParam(name = "documentType", required = false) String documentType,
+            @RequestParam(name = "prompt", required = false) String prompt,
+            @RequestParam(name = "useExistingEntryStyle", defaultValue = "false") boolean useExistingEntryStyle
+    ) {
+        return ledgerOcrService.reanalyzeHistoryImage(currentUser.userId(), historyId, documentType, prompt, useExistingEntryStyle);
+    }
+
+    private MediaType parseMediaType(String contentType) {
+        try {
+            return MediaType.parseMediaType(contentType == null || contentType.isBlank() ? MediaType.APPLICATION_OCTET_STREAM_VALUE : contentType);
+        } catch (RuntimeException exception) {
+            return MediaType.APPLICATION_OCTET_STREAM;
+        }
     }
 
     @PostMapping("/history/{historyId}/cancel")

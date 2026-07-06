@@ -37,6 +37,10 @@ public class LedgerImageAnalysisRequestSchemaUpdater implements ApplicationRunne
 
             addColumnIfMissing(connection, "client_request_id",
                     "ALTER TABLE ledger_image_analysis_requests ADD COLUMN client_request_id VARCHAR(120) NULL AFTER document_type");
+            addColumnIfMissing(connection, "image_object_key",
+                    "ALTER TABLE ledger_image_analysis_requests ADD COLUMN image_object_key VARCHAR(600) NULL AFTER file_size_bytes");
+            addColumnIfMissing(connection, "image_stored_at",
+                    "ALTER TABLE ledger_image_analysis_requests ADD COLUMN image_stored_at DATETIME(6) NULL AFTER image_object_key");
             addIndexIfMissing(connection, "idx_ledger_image_analysis_owner_created",
                     "ALTER TABLE ledger_image_analysis_requests ADD INDEX idx_ledger_image_analysis_owner_created (owner_id, created_at, id)");
             addIndexIfMissing(connection, "idx_ledger_image_analysis_owner_status",
@@ -64,6 +68,8 @@ public class LedgerImageAnalysisRequestSchemaUpdater implements ApplicationRunne
                     file_name VARCHAR(260) NULL,
                     content_type VARCHAR(120) NULL,
                     file_size_bytes BIGINT NOT NULL,
+                    image_object_key VARCHAR(600) NULL,
+                    image_stored_at DATETIME(6) NULL,
                     summary VARCHAR(500) NULL,
                     error_message VARCHAR(1000) NULL,
                     raw_text LONGTEXT NULL,

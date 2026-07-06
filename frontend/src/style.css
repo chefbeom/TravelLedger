@@ -1304,7 +1304,7 @@ button {
 
 .receipt-ocr-review-card__body {
   display: grid;
-  grid-template-columns: minmax(180px, 260px) minmax(0, 1fr);
+  grid-template-columns: minmax(220px, 320px) minmax(0, 1fr);
   gap: 14px;
   min-width: 0;
 }
@@ -1368,7 +1368,7 @@ button {
 
 .receipt-ocr-review-card__columns {
   display: grid;
-  grid-template-columns: minmax(220px, 0.82fr) minmax(0, 1.18fr);
+  grid-template-columns: minmax(0, 1fr);
   gap: 14px;
   min-width: 0;
 }
@@ -1411,6 +1411,7 @@ button {
   text-align: right;
 }
 
+
 .receipt-ocr-text-panel pre {
   min-height: 240px;
   margin: 0;
@@ -1424,6 +1425,14 @@ button {
   word-break: keep-all;
 }
 
+.receipt-ocr-text-panel--preview {
+  max-height: clamp(180px, 28vh, 300px);
+}
+
+.receipt-ocr-text-panel--preview pre {
+  min-height: 118px;
+  max-height: clamp(120px, 20vh, 230px);
+}
 .receipt-ocr-line-items {
   display: grid;
   gap: 6px;
@@ -1548,6 +1557,10 @@ button {
   .receipt-ocr-review-card__preview {
     grid-template-columns: minmax(120px, 180px) minmax(0, 1fr);
     align-items: start;
+  }
+
+  .receipt-ocr-text-panel--preview {
+    grid-column: 1 / -1;
   }
 }
 
@@ -3025,6 +3038,29 @@ button {
   gap: 10px;
 }
 
+
+.household-analysis-nav {
+  display: grid;
+  gap: 14px;
+}
+
+.household-analysis-nav .panel__header {
+  margin-bottom: 0;
+}
+
+.household-analysis-nav__copy {
+  display: grid;
+  gap: 4px;
+}
+
+.household-analysis-nav__copy p {
+  margin: 0;
+  color: var(--text-soft);
+}
+
+.household-analysis-nav__tabs {
+  align-items: center;
+}
 .household-anchor-toolbar {
   display: flex;
   align-items: center;
@@ -6818,6 +6854,7 @@ textarea {
   .travel-media-actions {
     align-items: stretch;
   }
+
 
   .household-anchor-toolbar {
     flex-direction: column;
@@ -24906,7 +24943,7 @@ button.button--primary,
   .household-aggregate-chart-modal__canvas svg {
     aspect-ratio: auto !important;
     height: min(52vh, 460px) !important;
-    min-height: 300px !important;
+    min-height: 140px !important;
   }
 }
 /* Household aggregate current vs previous comparison chart */
@@ -25664,18 +25701,19 @@ button.button--primary,
 }
 
 .receipt-ocr-review-card__body {
-  grid-template-columns: minmax(180px, 280px) minmax(0, 1fr) !important;
+  grid-template-columns: minmax(220px, 320px) minmax(0, 1fr) !important;
   align-items: start !important;
 }
 
 .receipt-ocr-review-card__columns {
-  grid-template-columns: minmax(240px, 0.82fr) minmax(360px, 1.18fr) !important;
+  grid-template-columns: minmax(0, 1fr) !important;
   align-items: start !important;
 }
 
 .receipt-ocr-text-panel {
-  max-height: min(520px, 58vh) !important;
+  max-height: clamp(180px, 28vh, 300px) !important;
 }
+
 
 .receipt-ocr-text-panel pre {
   overflow-x: hidden !important;
@@ -27856,18 +27894,22 @@ button.button--primary,
 }
 
 .receipt-ocr-detail-tools {
-  align-items: start;
+  align-items: center;
   background: rgba(13, 22, 36, 0.7);
   border: 1px solid rgba(121, 142, 171, 0.28);
   border-radius: 14px;
+  column-gap: 14px;
   display: grid;
-  gap: 10px;
-  grid-template-columns: minmax(190px, 1fr) auto minmax(260px, 0.8fr) auto;
+  grid-template-columns: minmax(220px, 1fr) minmax(280px, auto) auto;
   min-width: 0;
   padding: 10px 12px;
+  row-gap: 10px;
 }
 
 .receipt-ocr-detail-tools__copy {
+  align-self: center;
+  grid-column: 1 / 2;
+  grid-row: 1;
   display: grid;
   gap: 3px;
   min-width: 0;
@@ -27883,6 +27925,32 @@ button.button--primary,
   color: var(--text-muted, var(--text-soft));
   font-size: 0.78rem;
   line-height: 1.35;
+}
+
+.receipt-ocr-detail-tools__controls {
+  align-items: center;
+  grid-column: 2 / 3;
+  grid-row: 1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+  justify-content: flex-start;
+  min-width: 0;
+}
+
+.receipt-ocr-detail-tools .receipt-ocr-toggle {
+  flex: 0 0 auto;
+}
+
+.receipt-ocr-detail-tools .receipt-ocr-existing-style-toggle {
+  max-width: none !important;
+}
+
+.receipt-ocr-detail-tools__action {
+  grid-column: 3 / 4;
+  grid-row: 1;
+  justify-self: end;
+  min-width: 112px;
 }
 
 .receipt-ocr-detail-tools textarea {
@@ -27901,6 +27969,10 @@ button.button--primary,
   width: 100%;
 }
 
+.receipt-ocr-detail-tools__prompt {
+  grid-column: 1 / -1;
+  grid-row: 2;
+}
 .receipt-ocr-history__list--index {
   max-height: min(52vh, 560px) !important;
 }
@@ -28018,19 +28090,19 @@ button.button--primary,
 }
 
 .receipt-ocr-review-card--detail .receipt-ocr-review-card__body {
-  grid-template-columns: minmax(210px, 300px) minmax(0, 1fr) !important;
+  grid-template-columns: minmax(260px, 360px) minmax(0, 1fr) !important;
 }
 
 .receipt-ocr-review-card--detail .receipt-ocr-review-card__columns {
-  grid-template-columns: minmax(260px, 0.58fr) minmax(520px, 1.42fr) !important;
+  grid-template-columns: minmax(0, 1fr) !important;
 }
 
 .receipt-ocr-review-card--detail .receipt-ocr-text-panel {
-  max-height: min(620px, 68vh) !important;
+  max-height: clamp(200px, 30vh, 340px) !important;
 }
 
 .receipt-ocr-review-card--detail .receipt-ocr-text-panel pre {
-  min-height: 300px !important;
+  min-height: 140px !important;
 }
 
 .receipt-ocr-review-card--detail .receipt-ocr-review-entry {
@@ -28066,8 +28138,25 @@ button.button--primary,
     grid-template-columns: minmax(0, 1fr) auto;
   }
 
+  .receipt-ocr-detail-tools__copy {
+    grid-column: 1 / -1;
+    grid-row: 1;
+  }
+
+  .receipt-ocr-detail-tools__controls {
+    grid-column: 1 / 2;
+    grid-row: 2;
+  }
+
+  .receipt-ocr-detail-tools__action {
+    grid-column: 2 / 3;
+    grid-row: 2;
+  }
+
+  .receipt-ocr-detail-tools__prompt,
   .receipt-ocr-detail-tools textarea {
     grid-column: 1 / -1;
+    grid-row: 3;
   }
 
   .receipt-ocr-review-card--detail .receipt-ocr-review-card__columns {
@@ -28083,6 +28172,36 @@ button.button--primary,
   .receipt-ocr-history-detail__header,
   .receipt-ocr-detail-tools {
     grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .receipt-ocr-detail-tools__copy,
+  .receipt-ocr-detail-tools__controls,
+  .receipt-ocr-detail-tools__prompt,
+  .receipt-ocr-detail-tools textarea,
+  .receipt-ocr-detail-tools__action {
+    grid-column: 1 / -1;
+  }
+
+  .receipt-ocr-detail-tools__copy {
+    grid-row: 1;
+  }
+
+  .receipt-ocr-detail-tools__controls {
+    grid-row: 2;
+  }
+
+  .receipt-ocr-detail-tools__prompt,
+  .receipt-ocr-detail-tools textarea {
+    grid-row: 3;
+  }
+
+  .receipt-ocr-detail-tools__action {
+    grid-row: 4;
+  }
+
+  .receipt-ocr-detail-tools__controls {
+    align-items: flex-start;
+    flex-direction: column;
   }
 
   .receipt-ocr-detail-tools .button,

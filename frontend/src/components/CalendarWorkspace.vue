@@ -568,6 +568,19 @@ function updateReceiptPromptRules(event) {
   emit('set-receipt-prompt-rules', event.target.value)
 }
 
+function canRerunReceiptItem(item) {
+  return Boolean(item && (item.sourceFile || (item.analysisId && item.storedImageAvailable)))
+}
+
+function getReceiptRerunTitle(item) {
+  if (item?.sourceFile) {
+    return '현재 이미지로 다시 검수합니다.'
+  }
+  if (item?.analysisId && item?.storedImageAvailable) {
+    return '저장된 원본 이미지로 다시 검수합니다.'
+  }
+  return '저장된 원본 이미지가 없어 재요청할 수 없습니다.'
+}
 function requestReceiptRerun(item) {
   emit('rerun-receipt-analysis', {
     item,
@@ -4324,24 +4337,27 @@ defineExpose({
                 <strong>재요청 검수</strong>
                 <span>현재 세션에 원본 이미지가 남아 있을 때만 같은 이미지로 다시 검수할 수 있습니다.</span>
               </div>
-              <label class="receipt-ocr-toggle receipt-ocr-toggle--compact receipt-ocr-existing-style-toggle" title="기존 가계부 입력 형식을 참고합니다. 정확하지 않으면 끄세요.">
-                <input
-                  type="checkbox"
-                  :checked="receiptOcr?.useExistingEntryStyle"
-                  @change="updateReceiptExistingEntryStyleEnabled"
-                />
-                <span>기존 입력 보정</span>
-              </label>
-              <label class="receipt-ocr-toggle receipt-ocr-toggle--compact">
-                <input
-                  type="checkbox"
-                  :checked="receiptOcr?.rerunPromptEnabled"
-                  @change="updateReceiptRerunPromptEnabled"
-                />
-                <span>재요청 요청사항</span>
-              </label>
+              <div class="receipt-ocr-detail-tools__controls" aria-label="재요청 옵션">
+                <label class="receipt-ocr-toggle receipt-ocr-toggle--compact receipt-ocr-existing-style-toggle" title="기존 가계부 입력 형식을 참고합니다. 정확하지 않으면 끄세요.">
+                  <input
+                    type="checkbox"
+                    :checked="receiptOcr?.useExistingEntryStyle"
+                    @change="updateReceiptExistingEntryStyleEnabled"
+                  />
+                  <span>기존 입력 보정</span>
+                </label>
+                <label class="receipt-ocr-toggle receipt-ocr-toggle--compact">
+                  <input
+                    type="checkbox"
+                    :checked="receiptOcr?.rerunPromptEnabled"
+                    @change="updateReceiptRerunPromptEnabled"
+                  />
+                  <span>재요청 요청사항</span>
+                </label>
+              </div>
               <textarea
                 v-if="receiptOcr?.rerunPromptEnabled"
+                class="receipt-ocr-detail-tools__prompt"
                 :value="receiptOcr?.rerunPrompt || ''"
                 rows="2"
                 placeholder="재검수할 때 반영할 요청사항을 입력하세요."
@@ -4349,9 +4365,9 @@ defineExpose({
               ></textarea>
               <button
                 type="button"
-                class="button button--secondary"
-                :disabled="!receiptHistoryDetailItem.sourceFile || receiptOcr?.isAnalyzing"
-                :title="receiptHistoryDetailItem.sourceFile ? '현재 이미지로 다시 검수합니다.' : '원본 이미지가 현재 세션에 없어 재요청할 수 없습니다.'"
+                class="button button--secondary receipt-ocr-detail-tools__action"
+                :disabled="!canRerunReceiptItem(receiptHistoryDetailItem) || receiptOcr?.isAnalyzing"
+                :title="getReceiptRerunTitle(receiptHistoryDetailItem)"
                 @click="requestReceiptRerun(receiptHistoryDetailItem)"
               >
                 재요청 검수
@@ -4475,8 +4491,8 @@ defineExpose({
                   v-if="item.status === 'done'"
                   type="button"
                   class="button button--secondary"
-                  :disabled="!item.sourceFile"
-                  :title="item.sourceFile ? '현재 이미지로 다시 검수합니다.' : '원본 이미지가 현재 세션에 없어 재요청할 수 없습니다.'"
+                  :disabled="!canRerunReceiptItem(item)"
+                  :title="getReceiptRerunTitle(item)"
                   @click="requestReceiptRerun(item)"
                 >
                   재요청
@@ -4494,6 +4510,13 @@ defineExpose({
                   <span :class="{ 'is-complete': item.rawText, 'is-active': item.status === 'analyzing' }">이미지 내용 추출</span>
                   <span :class="{ 'is-complete': item.status === 'done', 'is-active': item.status === 'analyzing' }">AI 항목 분석</span>
                 </div>
+                <section v-if="item.status === 'done' && !item.error" class="receipt-ocr-text-panel receipt-ocr-text-panel--preview">
+                  <div class="receipt-ocr-text-panel__header">
+                    <strong>AI 추출 내용</strong>
+                    <span>{{ formatReceiptOcrTiming(item.timing) }}</span>
+                  </div>
+                  <pre>{{ item.rawText || '추출된 내용이 없습니다.' }}</pre>
+                </section>
               </aside>
 
               <div class="receipt-ocr-review-card__analysis">
@@ -4542,14 +4565,6 @@ defineExpose({
                   {{ item.error }}
                 </p>
                 <div v-else class="receipt-ocr-review-card__columns">
-                  <section class="receipt-ocr-text-panel">
-                    <div class="receipt-ocr-text-panel__header">
-                      <strong>AI 추출 내용</strong>
-                      <span>{{ formatReceiptOcrTiming(item.timing) }}</span>
-                    </div>
-                    <pre>{{ item.rawText || '추출된 내용이 없습니다.' }}</pre>
-                  </section>
-
                   <section class="receipt-ocr-review-card__entries">
                     <p v-if="!item.suggestedEntries?.length" class="receipt-ocr-review-card__message">
                       AI가 입력 가능한 거래 후보를 찾지 못했습니다. 이미지가 선명한지 확인하고 다시 요청해 주세요.

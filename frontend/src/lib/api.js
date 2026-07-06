@@ -618,6 +618,27 @@ export function fetchLedgerImageAnalysisHistory(historyId) {
   return request(`/ledger/image-analysis/history/${historyId}`)
 }
 
+export function buildLedgerImageAnalysisImageUrl(historyId) {
+  return `${API_BASE}/ledger/image-analysis/history/${encodeURIComponent(historyId)}/image`
+}
+
+export function rerunLedgerImageAnalysisHistory(historyId, options = {}) {
+  const formData = new FormData()
+  if (options.documentType) {
+    formData.append('documentType', options.documentType)
+  }
+  if (options.prompt) {
+    formData.append('prompt', options.prompt)
+  }
+  if (options.useExistingEntryStyle) {
+    formData.append('useExistingEntryStyle', 'true')
+  }
+  return request(`/ledger/image-analysis/history/${encodeURIComponent(historyId)}/rerun`, {
+    method: 'POST',
+    body: formData,
+    signal: options.signal,
+  })
+}
 export function cancelLedgerImageAnalysisHistory(historyId) {
   return request(`/ledger/image-analysis/history/${historyId}/cancel`, {
     method: 'POST',

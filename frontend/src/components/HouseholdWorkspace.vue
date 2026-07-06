@@ -5,6 +5,7 @@ import {
   activateCategoryGroup,
   activatePaymentMethod,
   analyzeLedgerReceipt,
+  buildLedgerImageAnalysisImageUrl,
   cancelLedgerImageAnalysisHistory,
   cancelLedgerImageAnalysisClientRequest,
   analyzeLedgerSpending,
@@ -48,6 +49,7 @@ import {
   fetchPaymentBreakdown,
   fetchPaymentMethodUsage,
   rerunLedgerAiAnalysis,
+  rerunLedgerImageAnalysisHistory,
   linkLedgerEntryToTravelRecord,
   fetchPaymentMethods,
   restoreEntry,
@@ -124,6 +126,23 @@ const csvExportOptions = [
   { value: 'LAST_3_YEARS', label: '최근 3년' },
   { value: 'CURRENT_VIEW', label: '현재 조회 범위' },
   { value: 'CUSTOM', label: '직접 선택' },
+]
+const householdAnalysisRouteKeys = ['stats-overview', 'stats-insights', 'stats-compare', 'stats-ai']
+const householdDirectTabKeys = [
+  'dashboard',
+  'calendar',
+  'travel-ledger',
+  'ledger-analysis',
+  'stats-search',
+  'stats-trash',
+  'import',
+  'management',
+]
+const householdAnalysisTabs = [
+  { key: 'stats-overview', label: '통계 요약' },
+  { key: 'stats-insights', label: '인사이트' },
+  { key: 'stats-compare', label: '비교' },
+  { key: 'stats-ai', label: 'AI 분석' },
 ]
 function loadReceiptOcrPromptRules() {
   if (typeof window === 'undefined') {
@@ -207,6 +226,7 @@ const feedback = ref('')
 const errorMessage = ref('')
 const undoableEntryAction = ref(null)
 const householdTab = ref('dashboard')
+const householdAnalysisRoute = ref('stats-overview')
 const householdAnchorDate = ref(today)
 const calendarAnchorDate = householdAnchorDate
 const calendarReady = ref(false)
@@ -573,11 +593,42 @@ const statsCards = computed(() => [
   ...quickStats.value.slice(0, 3),
 ])
 const comparisonBadge = computed(() => `${compareUnitLabels[statsControls.compareUnit] || statsControls.compareUnit} / ${statsControls.comparePeriods}개 구간`)
+function isHouseholdAnalysisRoute(tab) {
+  return householdAnalysisRouteKeys.includes(tab)
+}
+
+function resolveHouseholdStatisticsRoute(tab = householdTab.value) {
+  return tab === 'ledger-analysis' ? householdAnalysisRoute.value : tab
+}
+
+function setHouseholdTab(tab) {
+  const nextTab = String(tab || '').trim()
+  if (isHouseholdAnalysisRoute(nextTab)) {
+    householdAnalysisRoute.value = nextTab
+    householdTab.value = 'ledger-analysis'
+    return
+  }
+  if (nextTab === 'ledger-analysis') {
+    householdTab.value = 'ledger-analysis'
+    return
+  }
+  householdTab.value = householdDirectTabKeys.includes(nextTab) ? nextTab : 'dashboard'
+}
+
+function setHouseholdAnalysisRoute(tab) {
+  if (!isHouseholdAnalysisRoute(tab)) {
+    return
+  }
+  householdAnalysisRoute.value = tab
+  householdTab.value = 'ledger-analysis'
+}
 const currentViewCsvRange = computed(() => (
-  householdTab.value.startsWith('stats-')
+  householdTab.value === 'ledger-analysis' || householdTab.value.startsWith('stats-')
     ? statsRange.value
     : getMonthRange(calendarAnchorDate.value)
 ))
+const statisticsWorkspaceRoute = computed(() => resolveHouseholdStatisticsRoute())
+const isStatisticsWorkspaceVisible = computed(() => householdTab.value === 'ledger-analysis' || householdTab.value === 'stats-search' || householdTab.value === 'stats-trash')
 const comparisonAnchorDate = computed(() => {
   if (statsControls.preset === 'ALL') {
     return entryDateRange.value.latestDate || statsControls.anchorDate
@@ -588,30 +639,32 @@ const csvExportRange = computed(() => resolveCsvExportRange(csvExportControls.pr
 const csvExportLabel = computed(() => csvExportRange.value.label)
 
 function shouldLoadStatisticsForTab(tab = householdTab.value) {
+  const route = resolveHouseholdStatisticsRoute(tab)
   return tab === 'travel-ledger'
-    || tab === 'stats-overview'
-    || tab === 'stats-insights'
-    || tab === 'stats-compare'
+    || route === 'stats-overview'
+    || route === 'stats-insights'
+    || route === 'stats-compare'
 }
 
 function shouldLoadOverviewForTab(tab = householdTab.value) {
-  return tab === 'stats-overview'
+  return resolveHouseholdStatisticsRoute(tab) === 'stats-overview'
 }
 
 function shouldLoadBreakdownsForTab(tab = householdTab.value) {
-  return tab === 'stats-overview'
+  return resolveHouseholdStatisticsRoute(tab) === 'stats-overview'
 }
 
 function shouldLoadComparisonRowsForTab(tab = householdTab.value) {
-  return tab === 'stats-overview'
+  return resolveHouseholdStatisticsRoute(tab) === 'stats-overview'
 }
 
 function shouldLoadStatisticsEntriesForTab(tab = householdTab.value) {
-  return tab === 'stats-insights' || tab === 'travel-ledger'
+  const route = resolveHouseholdStatisticsRoute(tab)
+  return route === 'stats-insights' || tab === 'travel-ledger'
 }
 
 function shouldLoadPastComparisonsForTab(tab = householdTab.value) {
-  return tab === 'stats-compare'
+  return resolveHouseholdStatisticsRoute(tab) === 'stats-compare'
 }
 
 const sortedMonthEntries = computed(() =>
@@ -1001,16 +1054,16 @@ watch(
 watch(
   householdTab,
   async (value, previousValue) => {
+    if (isHouseholdAnalysisRoute(value)) {
+      setHouseholdTab(value)
+      return
+    }
     if (!statsReady.value || value === previousValue) {
       return
     }
 
-    if (value === 'stats-ai') {
-      const tasks = [loadAiAnalysisHistory(0)]
-      if (!aiAnalysisStatus.value) {
-        tasks.push(loadAiAnalysisStatus())
-      }
-      await Promise.all(tasks)
+    if (value === 'ledger-analysis') {
+      await loadHouseholdAnalysisRouteData()
     }
     if (value === 'travel-ledger' && !householdTravelPlans.value.length && !isHouseholdTravelPlanLoading.value) {
       await loadHouseholdTravelPlans()
@@ -1024,10 +1077,20 @@ watch(
 )
 
 watch(
+  householdAnalysisRoute,
+  async (value, previousValue) => {
+    if (!statsReady.value || householdTab.value !== 'ledger-analysis' || value === previousValue) {
+      return
+    }
+    await loadHouseholdAnalysisRouteData(value)
+  },
+)
+
+watch(
   () => props.initialTab,
   (value) => {
-    if (value === 'travel-ledger') {
-      householdTab.value = 'travel-ledger'
+    if (value) {
+      setHouseholdTab(value)
     }
   },
   { immediate: true },
@@ -1888,7 +1951,7 @@ async function loadCalendarData() {
   calendarAggregateEntries.value = aggregateItems
 }
 
-async function loadStatisticsData({ route = householdTab.value } = {}) {
+async function loadStatisticsData({ route = resolveHouseholdStatisticsRoute() } = {}) {
   if (!shouldLoadStatisticsForTab(route)) {
     return
   }
@@ -2780,6 +2843,38 @@ function createReceiptOcrItem(file, documentType) {
     cancelled: false,
     abortController: null,
     sourceFile: file,
+    storedImageAvailable: false,
+  }
+}
+function createReceiptOcrStoredImageItem(sourceItem, documentType) {
+  receiptOcrItemSequence += 1
+  const clientRequestId = `image-analysis-rerun-${Date.now()}-${receiptOcrItemSequence}`
+  const sourceAnalysisId = sourceItem?.analysisId || null
+  return {
+    id: clientRequestId,
+    clientRequestId,
+    fileName: sourceItem?.fileName || `transaction-image-${receiptOcrItemSequence}`,
+    previewUrl: sourceItem?.previewUrl || (sourceAnalysisId ? buildLedgerImageAnalysisImageUrl(sourceAnalysisId) : ''),
+    documentType,
+    status: 'queued',
+    error: '',
+    rawText: '',
+    suggestedEntries: [],
+    lineItems: [],
+    warnings: [],
+    confidence: null,
+    vendor: '',
+    paymentMethodText: '',
+    categoryText: '',
+    timing: null,
+    analysisId: null,
+    analysisStatus: 'PROCESSING',
+    fromHistory: false,
+    cancelled: false,
+    abortController: null,
+    sourceFile: null,
+    storedImageAvailable: Boolean(sourceItem?.storedImageAvailable || sourceItem?.previewUrl),
+    sourceAnalysisId,
   }
 }
 function syncReceiptOcrBusyState() {
@@ -2880,11 +2975,15 @@ function mapImageAnalysisHistoryToReviewItem(history = {}) {
   const analysisId = history.id || result.analysisId || null
   const clientRequestId = history.clientRequestId || result.clientRequestId || null
   const analysisStatus = status
+  const storedImageAvailable = Boolean(history.imageAvailable || history.imageUrl)
+  const previewUrl = history.imageUrl || (storedImageAvailable && analysisId ? buildLedgerImageAnalysisImageUrl(analysisId) : '')
   return {
     id: itemId,
     clientRequestId,
     fileName: history.fileName || `저장된 분석 #${history.id || ''}`.trim(),
-    previewUrl: '',
+    previewUrl,
+    imageUrl: previewUrl,
+    storedImageAvailable,
     documentType: normalizeOcrDocumentType(history.documentType || result.documentType),
     status: status === 'COMPLETED' ? 'done' : status === 'PROCESSING' ? 'analyzing' : status === 'CANCELLED' ? 'cancelled' : 'error',
     error: history.errorMessage || '',
@@ -2901,7 +3000,7 @@ function mapImageAnalysisHistoryToReviewItem(history = {}) {
     clientRequestId,
     analysisStatus: status,
     fromHistory: true,
-      sourceFile: null,
+    sourceFile: null,
   }
 }
 async function loadReceiptOcrHistories(page = receiptOcr.historyPage || 0) {
@@ -3231,8 +3330,10 @@ async function analyzeReceiptImage(payload) {
 async function rerunReceiptOcrItem(payload = {}) {
   const item = payload.item || payload
   const sourceFile = item?.sourceFile
-  if (!(sourceFile instanceof File)) {
-    setFeedback('', '원본 이미지가 현재 세션에 없어 재요청할 수 없습니다. 이미지를 다시 선택해 주세요.')
+  const canUseSourceFile = typeof File !== 'undefined' && sourceFile instanceof File
+  const canUseStoredImage = Boolean(item?.analysisId && item?.storedImageAvailable)
+  if (!canUseSourceFile && !canUseStoredImage) {
+    setFeedback('', '저장된 원본 이미지가 없어 재요청할 수 없습니다. 이미지를 다시 선택해 주세요.')
     return
   }
   const requestPrompt = payload.prompt || ''
@@ -3242,20 +3343,105 @@ async function rerunReceiptOcrItem(payload = {}) {
   const useExistingEntryStyle = Boolean(payload?.useExistingEntryStyle ?? receiptOcr.useExistingEntryStyle)
   const documentType = normalizeOcrDocumentType(item.documentType || receiptOcr.documentType)
   const prompt = buildReceiptOcrPrompt(requestPrompt)
-  const nextItem = createReceiptOcrItem(sourceFile, documentType)
-  nextItem.fileName = item.fileName || nextItem.fileName
+
+  if (canUseSourceFile) {
+    const nextItem = createReceiptOcrItem(sourceFile, documentType)
+    nextItem.fileName = item.fileName || nextItem.fileName
+    receiptOcr.items.unshift(nextItem)
+    receiptOcr.activeView = 'analyze'
+    receiptOcr.historyDetailAnalysisId = ''
+    syncReceiptOcrBusyState()
+    await analyzeReceiptFile(sourceFile, documentType, nextItem, prompt, useExistingEntryStyle)
+    if (nextItem.status === 'done') {
+      receiptOcr.activeView = 'history'
+      receiptOcr.historyDetailAnalysisId = nextItem.analysisId ? String(nextItem.analysisId) : ''
+      await loadReceiptOcrHistories(0)
+    }
+    return
+  }
+
+  const nextItem = createReceiptOcrStoredImageItem(item, documentType)
   receiptOcr.items.unshift(nextItem)
   receiptOcr.activeView = 'analyze'
   receiptOcr.historyDetailAnalysisId = ''
+  nextItem.status = 'analyzing'
+  nextItem.analysisStatus = 'PROCESSING'
+  nextItem.abortController = new AbortController()
   syncReceiptOcrBusyState()
-  await analyzeReceiptFile(sourceFile, documentType, nextItem, prompt, useExistingEntryStyle)
+
+  try {
+    const result = await rerunLedgerImageAnalysisHistory(item.analysisId, {
+      documentType,
+      prompt,
+      useExistingEntryStyle,
+      signal: nextItem.abortController.signal,
+    })
+    if (!isReceiptOcrItemActive(nextItem)) {
+      if (result?.analysisId) {
+        try {
+          await cancelLedgerImageAnalysisHistory(result.analysisId)
+        } catch (cancelError) {
+          console.warn('Failed to cancel removed image analysis history', cancelError)
+        }
+      }
+      return
+    }
+    if (String(result?.analysisStatus || '').toUpperCase() === 'CANCELLED') {
+      nextItem.status = 'cancelled'
+      nextItem.analysisId = result?.analysisId || nextItem.analysisId
+      nextItem.clientRequestId = result?.clientRequestId || nextItem.clientRequestId
+      nextItem.analysisStatus = 'CANCELLED'
+      nextItem.cancelled = true
+      nextItem.error = '취소된 이미지 분석 요청입니다.'
+      return
+    }
+    const suggestions = Array.isArray(result?.suggestedEntries) && result.suggestedEntries.length
+      ? result.suggestedEntries
+      : [result?.suggestedEntry].filter(Boolean)
+    nextItem.status = 'done'
+    nextItem.documentType = normalizeOcrDocumentType(result?.documentType || documentType)
+    nextItem.analysisId = result?.analysisId || null
+    nextItem.clientRequestId = result?.clientRequestId || nextItem.clientRequestId
+    nextItem.analysisStatus = result?.analysisStatus || 'COMPLETED'
+    nextItem.rawText = result?.rawText || ''
+    nextItem.suggestedEntries = suggestions.map((suggestion, entryIndex) => attachReceiptOcrSuggestionMeta(suggestion, nextItem, entryIndex))
+    nextItem.lineItems = Array.isArray(result?.lineItems) ? result.lineItems : []
+    nextItem.warnings = Array.isArray(result?.warnings) ? result.warnings : []
+    nextItem.confidence = result?.confidence ?? null
+    nextItem.vendor = result?.vendor || ''
+    nextItem.paymentMethodText = result?.paymentMethodText || ''
+    nextItem.categoryText = result?.categoryText || ''
+    nextItem.timing = result?.timing || null
+    nextItem.storedImageAvailable = true
+    updateLegacyReceiptOcrFields(result, nextItem.suggestedEntries[0] || null, nextItem.fileName)
+    setFeedback('저장된 원본 이미지로 다시 검수했습니다. 결과를 확인한 뒤 입력칸에 적용해 주세요.')
+  } catch (error) {
+    if (!isReceiptOcrItemActive(nextItem)) {
+      return
+    }
+    if (error?.name === 'AbortError') {
+      nextItem.status = 'cancelled'
+      nextItem.analysisStatus = 'CANCELLED'
+      nextItem.cancelled = true
+      nextItem.error = '사용자가 취소한 이미지 분석 요청입니다.'
+      return
+    }
+    nextItem.status = 'error'
+    nextItem.analysisStatus = 'FAILED'
+    nextItem.error = error.message
+    receiptOcr.error = error.message
+    setFeedback('', error.message)
+  } finally {
+    nextItem.abortController = null
+    syncReceiptOcrBusyState()
+  }
+
   if (nextItem.status === 'done') {
     receiptOcr.activeView = 'history'
     receiptOcr.historyDetailAnalysisId = nextItem.analysisId ? String(nextItem.analysisId) : ''
     await loadReceiptOcrHistories(0)
   }
 }
-
 function buildReceiptOcrAppliedSnapshot(suggestion = {}) {
   const normalizedSuggestion = normalizeOcrSuggestion(suggestion)
   const amount = normalizedSuggestion.amount !== ''
@@ -4288,15 +4474,12 @@ async function activatePayment(paymentId) {
       </div>
 
       <div class="scope-toggle scope-toggle--wrap">
-        <button class="button" :class="{ 'button--primary': householdTab === 'dashboard' }" @click="householdTab = 'dashboard'">대시보드</button>
-        <button class="button" :class="{ 'button--primary': householdTab === 'calendar' }" @click="householdTab = 'calendar'">달력 가계부</button>
-        <button class="button" :class="{ 'button--primary': householdTab === 'travel-ledger' }" @click="householdTab = 'travel-ledger'">여행 가계부</button>
-        <button class="button" :class="{ 'button--primary': householdTab === 'stats-overview' }" @click="householdTab = 'stats-overview'">통계 요약</button>
-        <button class="button" :class="{ 'button--primary': householdTab === 'stats-search' }" @click="householdTab = 'stats-search'">검색</button>
-        <button class="button" :class="{ 'button--primary': householdTab === 'stats-trash' }" @click="householdTab = 'stats-trash'">휴지통</button>
-        <button class="button" :class="{ 'button--primary': householdTab === 'stats-insights' }" @click="householdTab = 'stats-insights'">인사이트</button>
-        <button class="button" :class="{ 'button--primary': householdTab === 'stats-compare' }" @click="householdTab = 'stats-compare'">비교</button>
-        <button class="button" :class="{ 'button--primary': householdTab === 'stats-ai' }" @click="householdTab = 'stats-ai'">AI 분석</button>
+        <button class="button" :class="{ 'button--primary': householdTab === 'dashboard' }" @click="setHouseholdTab('dashboard')">대시보드</button>
+        <button class="button" :class="{ 'button--primary': householdTab === 'calendar' }" @click="setHouseholdTab('calendar')">달력 가계부</button>
+        <button class="button" :class="{ 'button--primary': householdTab === 'travel-ledger' }" @click="setHouseholdTab('travel-ledger')">여행 가계부</button>
+        <button class="button" :class="{ 'button--primary': householdTab === 'ledger-analysis' }" @click="setHouseholdTab('ledger-analysis')">가계부 분석</button>
+        <button class="button" :class="{ 'button--primary': householdTab === 'stats-search' }" @click="setHouseholdTab('stats-search')">검색</button>
+        <button class="button" :class="{ 'button--primary': householdTab === 'stats-trash' }" @click="setHouseholdTab('stats-trash')">휴지통</button>
         <div ref="dataActionMenuRef" class="household-data-actions">
           <button
             class="button"
@@ -4331,7 +4514,7 @@ async function activatePayment(paymentId) {
             </button>
           </div>
         </div>
-        <button class="button" :class="{ 'button--primary': householdTab === 'management' }" @click="householdTab = 'management'">분류 관리</button>
+        <button class="button" :class="{ 'button--primary': householdTab === 'management' }" @click="setHouseholdTab('management')">분류 관리</button>
       </div>
     </section>
 
@@ -4452,9 +4635,30 @@ async function activatePayment(paymentId) {
       @open-travel-record-location="openTravelRecordLocation"
     />
 
-    <StatisticsWorkspace
-      v-else-if="householdTab.startsWith('stats-')"
-      :route="householdTab"
+    <template v-else-if="isStatisticsWorkspaceVisible">
+      <section v-if="householdTab === 'ledger-analysis'" class="panel panel--compact household-analysis-nav">
+        <div class="panel__header">
+          <div class="household-analysis-nav__copy">
+            <h2>가계부 분석</h2>
+            <p>통계 요약, 인사이트, 비교, AI 분석을 한 곳에서 확인합니다.</p>
+          </div>
+        </div>
+        <div class="scope-toggle scope-toggle--wrap household-analysis-nav__tabs" aria-label="가계부 분석 보기">
+          <button
+            v-for="tab in householdAnalysisTabs"
+            :key="tab.key"
+            class="button"
+            :class="{ 'button--primary': householdAnalysisRoute === tab.key }"
+            type="button"
+            @click="setHouseholdAnalysisRoute(tab.key)"
+          >
+            {{ tab.label }}
+          </button>
+        </div>
+      </section>
+
+      <StatisticsWorkspace
+        :route="statisticsWorkspaceRoute"
       :stats-controls="statsControls"
       :search-form="searchForm"
       :search-keyword-draft="searchKeywordDraft"
@@ -4504,7 +4708,8 @@ async function activatePayment(paymentId) {
       @load-ai-analysis-history="loadAiAnalysisHistory"
       @open-ai-analysis-history="openAiAnalysisHistory"
       @rerun-ai-analysis="rerunAiAnalysis"
-    />
+      />
+    </template>
 
     <LedgerImportWorkspace
       v-else-if="householdTab === 'import'"

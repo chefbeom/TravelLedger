@@ -27,6 +27,7 @@ import com.playdata.calen.ledger.repository.LedgerEntryRepository.ExistingEntryS
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.math.BigDecimal;
@@ -76,6 +77,9 @@ public class LedgerOcrService {
     @Autowired(required = false)
     private MeterRegistry meterRegistry;
 
+    @Autowired(required = false)
+    private LedgerOcrImageStorageService imageStorageService;
+
     public LedgerOcrAnalyzeResponse analyze(Long userId, MultipartFile file, String documentType, String clientRequestId, String prompt) {
         return analyze(userId, file, documentType, clientRequestId, prompt, false);
     }
@@ -94,6 +98,7 @@ public class LedgerOcrService {
             String normalizedUserPrompt = normalizeUserPrompt(prompt);
             String effectiveUserPrompt = buildEffectiveUserPrompt(owner.getId(), normalizedUserPrompt, useExistingEntryStyle);
             history = createImageAnalysisRequest(owner, file, normalizedDocumentType, normalizedClientRequestId);
+            storeImageForHistory(owner.getId(), history, file);
             RemoteAnalyzeResponse remoteResponse = remoteClient.analyze(file, normalizedDocumentType, effectiveUserPrompt);
             String paymentCapturePlatform = resolvePaymentCapturePlatform(
                     firstNonBlank(remoteResponse.documentType(), normalizedDocumentType),
@@ -186,6 +191,36 @@ public class LedgerOcrService {
         return cancelHistoryRecord(history);
     }
 
+
+    public LedgerOcrAnalyzeResponse reanalyzeHistoryImage(
+            Long userId,
+            Long historyId,
+            String documentType,
+            String prompt,
+            boolean useExistingEntryStyle
+    ) {
+        AppUser owner = appUserService.getRequiredUser(userId);
+        LedgerImageAnalysisRequest history = imageAnalysisRequestRepository.findByIdAndOwnerId(historyId, owner.getId())
+                .orElseThrow(() -> new BadRequestException("Image analysis history was not found."));
+        LedgerOcrImageStorageService.StoredImageContent storedImage = loadStoredHistoryImage(history);
+        String effectiveDocumentType = normalizeDocumentType(firstNonBlank(documentType, history.getDocumentType()));
+        String clientRequestId = "image-analysis-rerun-" + history.getId() + "-" + System.currentTimeMillis();
+        MultipartFile storedFile = new StoredImageMultipartFile(
+                "file",
+                firstNonBlank(history.getFileName(), storedImage.fileName(), "ocr-image"),
+                firstNonBlank(history.getContentType(), storedImage.contentType(), "application/octet-stream"),
+                storedImage.bytes()
+        );
+        return analyze(owner.getId(), storedFile, effectiveDocumentType, clientRequestId, prompt, useExistingEntryStyle);
+    }
+
+    public LedgerOcrImageStorageService.StoredImageContent getHistoryImage(Long userId, Long historyId) {
+        appUserService.getRequiredUser(userId);
+        LedgerImageAnalysisRequest history = imageAnalysisRequestRepository.findByIdAndOwnerId(historyId, userId)
+                .orElseThrow(() -> new BadRequestException("Image analysis history was not found."));
+        return loadStoredHistoryImage(history);
+    }
+
     private LedgerImageAnalysisHistoryResponse cancelHistoryRecord(LedgerImageAnalysisRequest history) {
         if (history.getStatus() != LedgerImageAnalysisStatus.CANCELLED) {
             history.setStatus(LedgerImageAnalysisStatus.CANCELLED);
@@ -195,6 +230,37 @@ public class LedgerOcrService {
         }
         return toHistoryResponse(history);
     }
+    private void storeImageForHistory(Long ownerId, LedgerImageAnalysisRequest history, MultipartFile file) {
+        if (history == null || imageStorageService == null || !imageStorageService.supportsStorage()) {
+            return;
+        }
+        LedgerOcrImageStorageService.StoredImage storedImage = imageStorageService.store(ownerId, history.getId(), file);
+        history.setImageObjectKey(storedImage.objectKey());
+        history.setImageStoredAt(storedImage.storedAt());
+        imageAnalysisRequestRepository.save(history);
+    }
+
+    private LedgerOcrImageStorageService.StoredImageContent loadStoredHistoryImage(LedgerImageAnalysisRequest history) {
+        if (history == null || !isPresent(history.getImageObjectKey())) {
+            throw new BadRequestException("Stored original image is not available for this analysis history.");
+        }
+        if (imageStorageService == null) {
+            throw new BadRequestException("OCR image storage is not available.");
+        }
+        return imageStorageService.load(history.getImageObjectKey(), history.getFileName(), history.getContentType());
+    }
+
+    private boolean hasStoredImage(LedgerImageAnalysisRequest history) {
+        return history != null && isPresent(history.getImageObjectKey());
+    }
+
+    private String imageUrlForHistory(LedgerImageAnalysisRequest history) {
+        if (!hasStoredImage(history) || history.getId() == null) {
+            return null;
+        }
+        return "/api/ledger/image-analysis/history/" + history.getId() + "/image";
+    }
+
     private LedgerImageAnalysisRequest createImageAnalysisRequest(AppUser owner, MultipartFile file, String documentType, String clientRequestId) {
         LedgerImageAnalysisRequest history = new LedgerImageAnalysisRequest();
         history.setOwner(owner);
@@ -250,7 +316,9 @@ public class LedgerOcrService {
                 history.getCreatedAt(),
                 history.getUpdatedAt(),
                 history.getCompletedAt(),
-                history.getCancelledAt()
+                history.getCancelledAt(),
+                hasStoredImage(history),
+                imageUrlForHistory(history)
         );
     }
 
@@ -1025,5 +1093,60 @@ public class LedgerOcrService {
             Long detailId,
             String detailName
     ) {
+    }
+
+    private static class StoredImageMultipartFile implements MultipartFile {
+
+        private final String name;
+        private final String originalFilename;
+        private final String contentType;
+        private final byte[] bytes;
+
+        private StoredImageMultipartFile(String name, String originalFilename, String contentType, byte[] bytes) {
+            this.name = name;
+            this.originalFilename = originalFilename;
+            this.contentType = contentType;
+            this.bytes = bytes == null ? new byte[0] : bytes;
+        }
+
+        @Override
+        public String getName() {
+            return name;
+        }
+
+        @Override
+        public String getOriginalFilename() {
+            return originalFilename;
+        }
+
+        @Override
+        public String getContentType() {
+            return contentType;
+        }
+
+        @Override
+        public boolean isEmpty() {
+            return bytes.length == 0;
+        }
+
+        @Override
+        public long getSize() {
+            return bytes.length;
+        }
+
+        @Override
+        public byte[] getBytes() {
+            return bytes.clone();
+        }
+
+        @Override
+        public InputStream getInputStream() {
+            return new ByteArrayInputStream(bytes);
+        }
+
+        @Override
+        public void transferTo(java.io.File dest) throws IOException, IllegalStateException {
+            throw new UnsupportedOperationException("Stored OCR image files are not transferred to disk.");
+        }
     }
 }

@@ -17,6 +17,8 @@ public record LedgerImageAnalysisHistoryResponse(
         LocalDateTime createdAt,
         LocalDateTime updatedAt,
         LocalDateTime completedAt,
-        LocalDateTime cancelledAt
+        LocalDateTime cancelledAt,
+        boolean imageAvailable,
+        String imageUrl
 ) {
 }

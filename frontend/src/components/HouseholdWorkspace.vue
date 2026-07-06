@@ -754,8 +754,8 @@ function resolveDefaultGroupId(entryType, latestEntry) {
   return groups[0] ? String(groups[0].id) : ''
 }
 
-function resolveDefaultDetailId(groupId, latestEntry) {
-  const details = getDetailsForGroupId(groupId)
+function resolveDefaultDetailId(groupId, latestEntry, entryType = entryForm.entryType) {
+  const details = getDetailsForGroupId(groupId, entryType)
   const latestMatchesGroup = latestEntry && String(latestEntry.categoryGroupId ?? '') === String(groupId)
   const latestDetailId = latestMatchesGroup && latestEntry.categoryDetailId != null
     ? String(latestEntry.categoryDetailId)
@@ -770,6 +770,66 @@ function resolveDefaultDetailId(groupId, latestEntry) {
   return details[0] ? String(details[0].id) : ''
 }
 
+function normalizeCategoryLookupName(value) {
+  return String(value || '')
+    .trim()
+    .replace(/[\s/_:：·.,()\[\]-]+/g, '')
+    .toLowerCase()
+}
+
+function findCategoryGroupForSuggestion(entryType, groupId, groupName) {
+  const groups = getGroupsForType(entryType)
+  const id = groupId != null && groupId !== '' ? String(groupId) : ''
+  if (id) {
+    const byId = groups.find((group) => String(group.id) === id)
+    if (byId) return byId
+  }
+  const normalizedName = normalizeCategoryLookupName(groupName)
+  if (normalizedName) {
+    return groups.find((group) => normalizeCategoryLookupName(group.name) === normalizedName) || null
+  }
+  return null
+}
+
+function findCategoryDetailForSuggestion(groupId, entryType, detailId, detailName) {
+  const details = getDetailsForGroupId(groupId, entryType)
+  const id = detailId != null && detailId !== '' ? String(detailId) : ''
+  if (id) {
+    const byId = details.find((detail) => String(detail.id) === id)
+    if (byId) return byId
+  }
+  const normalizedName = normalizeCategoryLookupName(detailName)
+  if (normalizedName) {
+    return details.find((detail) => normalizeCategoryLookupName(detail.name) === normalizedName) || null
+  }
+  return null
+}
+
+function resolveReceiptSuggestionCategory(suggestion = {}, entryType = 'EXPENSE') {
+  const latestEntry = getLatestEntryForType(entryType)
+  const matchedGroup = findCategoryGroupForSuggestion(entryType, suggestion.categoryGroupId, suggestion.categoryGroupName)
+  const categoryGroupId = matchedGroup
+    ? String(matchedGroup.id)
+    : resolveDefaultGroupId(entryType, latestEntry)
+  const matchedDetail = categoryGroupId
+    ? findCategoryDetailForSuggestion(categoryGroupId, entryType, suggestion.categoryDetailId, suggestion.categoryDetailName)
+    : null
+  const categoryDetailId = matchedDetail
+    ? String(matchedDetail.id)
+    : resolveDefaultDetailId(categoryGroupId, latestEntry, entryType)
+  const group = categoryGroupId
+    ? getGroupsForType(entryType).find((item) => String(item.id) === String(categoryGroupId))
+    : null
+  const detail = categoryDetailId
+    ? getDetailsForGroupId(categoryGroupId, entryType).find((item) => String(item.id) === String(categoryDetailId))
+    : null
+  return {
+    categoryGroupId,
+    categoryGroupName: group?.name || suggestion.categoryGroupName || '',
+    categoryDetailId,
+    categoryDetailName: detail?.name || suggestion.categoryDetailName || '',
+  }
+}
 function resolveDefaultPaymentMethodId(latestEntry) {
   const latestPaymentMethodId = latestEntry?.paymentMethodId != null ? String(latestEntry.paymentMethodId) : ''
   if (latestPaymentMethodId && paymentMethods.value.some((item) => String(item.id) === latestPaymentMethodId)) {
@@ -2520,6 +2580,7 @@ function setReceiptOcrDocumentType(documentType) {
 
 function normalizeOcrSuggestion(suggestion = {}) {
   const entryType = suggestion.entryType === 'INCOME' ? 'INCOME' : 'EXPENSE'
+  const category = resolveReceiptSuggestionCategory(suggestion, entryType)
   return {
     entryDate: suggestion.entryDate || '',
     entryTime: suggestion.entryTime ? normalizeEntryTimePayload(suggestion.entryTime) : '',
@@ -2529,10 +2590,10 @@ function normalizeOcrSuggestion(suggestion = {}) {
       ? String(Number(suggestion.amount || 0))
       : '',
     entryType,
-    categoryGroupId: suggestion.categoryGroupId != null ? String(suggestion.categoryGroupId) : '',
-    categoryGroupName: suggestion.categoryGroupName || '',
-    categoryDetailId: suggestion.categoryDetailId != null ? String(suggestion.categoryDetailId) : '',
-    categoryDetailName: suggestion.categoryDetailName || '',
+    categoryGroupId: category.categoryGroupId,
+    categoryGroupName: category.categoryGroupName,
+    categoryDetailId: category.categoryDetailId,
+    categoryDetailName: category.categoryDetailName,
     paymentMethodId: suggestion.paymentMethodId != null ? String(suggestion.paymentMethodId) : '',
     paymentMethodName: suggestion.paymentMethodName || '',
   }
@@ -3034,19 +3095,20 @@ async function rerunReceiptOcrItem(payload = {}) {
 }
 
 function buildReceiptOcrAppliedSnapshot(suggestion = {}) {
-  const amount = suggestion.amount !== null && suggestion.amount !== undefined && suggestion.amount !== ''
-    ? String(Number(suggestion.amount || 0))
+  const normalizedSuggestion = normalizeOcrSuggestion(suggestion)
+  const amount = normalizedSuggestion.amount !== ''
+    ? String(Number(normalizedSuggestion.amount || 0))
     : entryForm.amount
   return {
-    entryDate: suggestion.entryDate || entryForm.entryDate,
-    entryTime: suggestion.entryTime ? normalizeEntryTimePayload(suggestion.entryTime) : '',
-    title: suggestion.title || entryForm.title,
-    memo: suggestion.memo || entryForm.memo,
+    entryDate: normalizedSuggestion.entryDate || entryForm.entryDate,
+    entryTime: normalizedSuggestion.entryTime ? normalizeEntryTimePayload(normalizedSuggestion.entryTime) : '',
+    title: normalizedSuggestion.title || entryForm.title,
+    memo: normalizedSuggestion.memo || entryForm.memo,
     amount,
-    entryType: suggestion.entryType || 'EXPENSE',
-    categoryGroupId: suggestion.categoryGroupId ? String(suggestion.categoryGroupId) : entryForm.categoryGroupId,
-    categoryDetailId: suggestion.categoryDetailId ? String(suggestion.categoryDetailId) : entryForm.categoryDetailId,
-    paymentMethodId: suggestion.paymentMethodId ? String(suggestion.paymentMethodId) : entryForm.paymentMethodId,
+    entryType: normalizedSuggestion.entryType || 'EXPENSE',
+    categoryGroupId: normalizedSuggestion.categoryGroupId || entryForm.categoryGroupId,
+    categoryDetailId: normalizedSuggestion.categoryDetailId || entryForm.categoryDetailId,
+    paymentMethodId: normalizedSuggestion.paymentMethodId || entryForm.paymentMethodId,
   }
 }
 
@@ -3092,11 +3154,11 @@ function cancelReceiptOcrAppliedSuggestion() {
 }
 
 function buildReceiptOcrDirectEntryPayload(suggestion = {}) {
-  const entryType = suggestion.entryType === 'INCOME' ? 'INCOME' : 'EXPENSE'
-  const amount = Number(suggestion.amount || 0)
-  const latestEntry = getLatestEntryForType(entryType)
-  const categoryGroupId = suggestion.categoryGroupId || resolveDefaultGroupId(entryType, latestEntry)
-  if (!String(suggestion.title || '').trim()) {
+  const normalizedSuggestion = normalizeOcrSuggestion(suggestion)
+  const entryType = normalizedSuggestion.entryType === 'INCOME' ? 'INCOME' : 'EXPENSE'
+  const amount = Number(normalizedSuggestion.amount || 0)
+  const categoryGroupId = normalizedSuggestion.categoryGroupId
+  if (!String(normalizedSuggestion.title || '').trim()) {
     throw new Error('제목을 확인해 주세요.')
   }
   if (!Number.isFinite(amount) || amount <= 0) {
@@ -3107,22 +3169,22 @@ function buildReceiptOcrDirectEntryPayload(suggestion = {}) {
   }
   const paymentMethodId = entryType === 'INCOME'
     ? null
-    : suggestion.paymentMethodId
+    : normalizedSuggestion.paymentMethodId
   if (entryType === 'EXPENSE' && !paymentMethodId) {
-    throw new Error('지출 거래는 결제수단을 선택해 주세요.')
+    throw new Error('지출 거래의 결제수단을 선택해 주세요.')
   }
   return {
-    entryDate: suggestion.entryDate || entryForm.entryDate,
-    entryTime: suggestion.entryTime ? normalizeEntryTimePayload(suggestion.entryTime) : '00:00',
-    title: String(suggestion.title || '').trim(),
-    memo: String(suggestion.memo || '').trim() || null,
+    entryDate: normalizedSuggestion.entryDate || entryForm.entryDate,
+    entryTime: normalizedSuggestion.entryTime ? normalizeEntryTimePayload(normalizedSuggestion.entryTime) : '00:00',
+    title: String(normalizedSuggestion.title || '').trim(),
+    memo: String(normalizedSuggestion.memo || '').trim() || null,
     amount,
     foreignCurrencyCode: null,
     foreignAmount: null,
     exchangeRateToKrw: null,
     entryType,
     categoryGroupId: Number(categoryGroupId),
-    categoryDetailId: suggestion.categoryDetailId ? Number(suggestion.categoryDetailId) : null,
+    categoryDetailId: normalizedSuggestion.categoryDetailId ? Number(normalizedSuggestion.categoryDetailId) : null,
     paymentMethodId: entryType === 'INCOME' ? null : Number(paymentMethodId),
     travelPlanId: null,
     travelRecordId: null,
@@ -3192,53 +3254,51 @@ async function applyReceiptOcrSuggestion(suggestion = receiptOcr.suggestedEntry)
     return
   }
 
+  const normalizedSuggestion = normalizeOcrSuggestion(suggestion)
   const suggestionStatus = String(suggestion.analysisStatus || '').toUpperCase()
   if (suggestionStatus && suggestionStatus !== 'COMPLETED') {
     setFeedback('', '완료된 AI 이미지 분석 결과만 입력칸에 적용할 수 있습니다.')
     return
   }
-  const suggestedAmount = Number(suggestion.amount)
-  if (!String(suggestion.title || '').trim() || !Number.isFinite(suggestedAmount) || suggestedAmount <= 0) {
+  const suggestedAmount = Number(normalizedSuggestion.amount)
+  if (!String(normalizedSuggestion.title || '').trim() || !Number.isFinite(suggestedAmount) || suggestedAmount <= 0) {
     setFeedback('', '제목과 금액을 확인해야 입력칸에 적용할 수 있습니다.')
     return
   }
   receiptOcr.lastAppliedAnalysisId = suggestion.analysisId || null
   receiptOcr.lastAppliedReviewItemId = suggestion.reviewItemId || null
   receiptOcr.lastAppliedReviewEntryIndex = Number.isFinite(Number(suggestion.reviewEntryIndex)) ? Number(suggestion.reviewEntryIndex) : null
-  receiptOcr.lastAppliedSnapshot = buildReceiptOcrAppliedSnapshot(suggestion)
+  receiptOcr.lastAppliedSnapshot = buildReceiptOcrAppliedSnapshot(normalizedSuggestion)
 
   editingEntryId.value = null
-  entryForm.entryDate = suggestion.entryDate || entryForm.entryDate
-  if (suggestion.entryTime) {
-    entryForm.entryTime = normalizeEntryTimePayload(suggestion.entryTime)
+  entryForm.entryDate = normalizedSuggestion.entryDate || entryForm.entryDate
+  if (normalizedSuggestion.entryTime) {
+    entryForm.entryTime = normalizeEntryTimePayload(normalizedSuggestion.entryTime)
   }
-  entryForm.title = suggestion.title || entryForm.title
-  entryForm.memo = suggestion.memo || entryForm.memo
-  entryForm.entryType = suggestion.entryType || 'EXPENSE'
+  entryForm.title = normalizedSuggestion.title || entryForm.title
+  entryForm.memo = normalizedSuggestion.memo || entryForm.memo
+  entryForm.entryType = normalizedSuggestion.entryType || 'EXPENSE'
   entryForm.currencyMode = 'KRW'
   clearForeignExchangeFields()
 
-  if (suggestion.amount !== null && suggestion.amount !== undefined && suggestion.amount !== '') {
-    const nextAmount = String(Number(suggestion.amount || 0))
+  if (normalizedSuggestion.amount !== '') {
+    const nextAmount = String(Number(normalizedSuggestion.amount || 0))
     amountInput.value = nextAmount
     entryForm.amount = nextAmount
   }
 
-  if (suggestion.categoryGroupId) {
-    entryForm.categoryGroupId = String(suggestion.categoryGroupId)
+  entryForm.categoryGroupId = normalizedSuggestion.categoryGroupId || entryForm.categoryGroupId
+  entryForm.categoryDetailId = normalizedSuggestion.categoryDetailId || entryForm.categoryDetailId
+  if (normalizedSuggestion.paymentMethodId) {
+    entryForm.paymentMethodId = String(normalizedSuggestion.paymentMethodId)
   }
-  if (suggestion.categoryDetailId) {
-    entryForm.categoryDetailId = String(suggestion.categoryDetailId)
-  }
-  if (suggestion.paymentMethodId) {
-    entryForm.paymentMethodId = String(suggestion.paymentMethodId)
-  }
-  isEntryTimeEnabled.value = hasEntryTimeValue(suggestion.entryTime)
-  syncEntryDefaults({ preferLatest: true, force: false })
+
+  isEntryTimeEnabled.value = hasEntryTimeValue(normalizedSuggestion.entryTime)
+  syncEntryDefaults({ preferLatest: false, force: false })
 
   await nextTick()
   calendarWorkspaceRef.value?.scrollToEntryEditor?.()
-  setFeedback('영수증 분석 결과를 빠른 거래 입력칸에 적용했습니다. 일자와 금액, 분류를 확인해 주세요.')
+  setFeedback('영수증 분석 결과를 빠른 거래 입력칸에 적용했습니다. 일자와 시간, 분류를 확인해 주세요.')
 }
 
 function buildEntryPayload() {

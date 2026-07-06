@@ -28,6 +28,8 @@ import com.playdata.calen.ledger.ocr.LedgerOcrRemoteClient.RemoteParsedResult;
 import com.playdata.calen.ledger.repository.CategoryDetailRepository;
 import com.playdata.calen.ledger.repository.CategoryGroupRepository;
 import com.playdata.calen.ledger.repository.LedgerImageAnalysisRequestRepository;
+import com.playdata.calen.ledger.repository.LedgerEntryRepository;
+import com.playdata.calen.ledger.repository.LedgerEntryRepository.ExistingEntryStyleAggregate;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -36,6 +38,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
+import org.mockito.ArgumentCaptor;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -68,6 +71,9 @@ class LedgerOcrServiceTest {
     @Mock
     private CategoryDetailRepository categoryDetailRepository;
 
+    @Mock
+    private LedgerEntryRepository ledgerEntryRepository;
+
     private LedgerOcrService service;
 
     @BeforeEach
@@ -90,6 +96,7 @@ class LedgerOcrServiceTest {
                 imageAnalysisRequestRepository,
                 categoryGroupRepository,
                 categoryDetailRepository,
+                ledgerEntryRepository,
                 new ObjectMapper(),
                 userNotificationService
         );
@@ -383,6 +390,51 @@ class LedgerOcrServiceTest {
         verify(categoryGroupRepository, never()).save(any(CategoryGroup.class));
     }
 
+    @Test
+    void analyzeAddsExistingEntryStyleExamplesToPromptWhenEnabled() {
+        stubUser();
+        MockMultipartFile file = validJpeg("style-context.jpg");
+        stubHistoryPersistence(104L);
+        ExistingEntryStyleAggregate existingExample = existingStyleExample(
+                "쿠팡 : 사과 1개",
+                "정기배송 아님. 빨간 사과 1개.",
+                "생활",
+                "식료품",
+                "국민카드",
+                new BigDecimal("12000"),
+                EntryType.EXPENSE
+        );
+        when(ledgerEntryRepository.findRecentEntriesForOcrStyle(eq(USER_ID), any()))
+                .thenReturn(List.of(existingExample));
+        when(remoteClient.analyze(eq(file), eq("PAYMENT_CAPTURE"), any()))
+                .thenReturn(new RemoteAnalyzeResponse(true, null, "PAYMENT_CAPTURE", "", null, List.of(), Map.of()));
+
+        service.analyze(USER_ID, file, "PAYMENT_CAPTURE", "style-on", "쿠팡 캡처입니다.", true);
+
+        ArgumentCaptor<String> promptCaptor = ArgumentCaptor.forClass(String.class);
+        verify(remoteClient).analyze(eq(file), eq("PAYMENT_CAPTURE"), promptCaptor.capture());
+        assertThat(promptCaptor.getValue())
+                .contains("쿠팡 캡처입니다.")
+                .contains("현재 입력데이터 기반 데이터 추출 보정")
+                .contains("쿠팡 : 사과 1개")
+                .contains("생활/식료품")
+                .contains("국민카드")
+                .contains("이미지에서 확인되는 사실이 최우선");
+    }
+
+    @Test
+    void analyzeDoesNotLoadExistingEntryStyleExamplesWhenDisabled() {
+        stubUser();
+        MockMultipartFile file = validJpeg("style-context-disabled.jpg");
+        stubHistoryPersistence(105L);
+        when(remoteClient.analyze(file, "PAYMENT_CAPTURE", "사용자 요청"))
+                .thenReturn(new RemoteAnalyzeResponse(true, null, "PAYMENT_CAPTURE", "", null, List.of(), Map.of()));
+
+        service.analyze(USER_ID, file, "PAYMENT_CAPTURE", "style-off", "사용자 요청", false);
+
+        verify(ledgerEntryRepository, never()).findRecentEntriesForOcrStyle(any(), any());
+        verify(remoteClient).analyze(file, "PAYMENT_CAPTURE", "사용자 요청");
+    }
     private RemoteParsedResult naverPayEntry(
             String title,
             String memo,
@@ -451,6 +503,25 @@ class LedgerOcrServiceTest {
         return detail;
     }
 
+    private ExistingEntryStyleAggregate existingStyleExample(
+            String title,
+            String memo,
+            String categoryGroupName,
+            String categoryDetailName,
+            String paymentMethodName,
+            BigDecimal amount,
+            EntryType entryType
+    ) {
+        ExistingEntryStyleAggregate example = org.mockito.Mockito.mock(ExistingEntryStyleAggregate.class);
+        when(example.getTitle()).thenReturn(title);
+        when(example.getMemo()).thenReturn(memo);
+        when(example.getCategoryGroupName()).thenReturn(categoryGroupName);
+        when(example.getCategoryDetailName()).thenReturn(categoryDetailName);
+        when(example.getPaymentMethodName()).thenReturn(paymentMethodName);
+        when(example.getAmount()).thenReturn(amount);
+        when(example.getEntryType()).thenReturn(entryType);
+        return example;
+    }
     private AppUser stubUser() {
         AppUser user = new AppUser();
         user.setId(USER_ID);

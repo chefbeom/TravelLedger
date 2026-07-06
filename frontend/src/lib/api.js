@@ -600,6 +600,9 @@ export function analyzeLedgerReceipt(file, options = {}) {
   if (options.prompt) {
     formData.append('prompt', options.prompt)
   }
+  if (options.useExistingEntryStyle) {
+    formData.append('useExistingEntryStyle', 'true')
+  }
 
   return request('/ledger/image-analysis/analyze', {
     method: 'POST',

@@ -31,9 +31,10 @@ public class LedgerOcrController {
             @RequestPart("file") MultipartFile file,
             @RequestParam(name = "documentType", defaultValue = "AUTO") String documentType,
             @RequestParam(name = "clientRequestId", required = false) String clientRequestId,
-            @RequestParam(name = "prompt", required = false) String prompt
+            @RequestParam(name = "prompt", required = false) String prompt,
+            @RequestParam(name = "useExistingEntryStyle", defaultValue = "false") boolean useExistingEntryStyle
     ) {
-        return ledgerOcrService.analyze(currentUser.userId(), file, documentType, clientRequestId, prompt);
+        return ledgerOcrService.analyze(currentUser.userId(), file, documentType, clientRequestId, prompt, useExistingEntryStyle);
     }
 
     @GetMapping("/history")

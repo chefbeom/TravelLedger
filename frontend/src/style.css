@@ -27664,6 +27664,10 @@ button.button--primary,
   white-space: nowrap !important;
 }
 
+.receipt-ocr-existing-style-toggle {
+  align-self: center !important;
+  min-height: 36px !important;
+}
 .receipt-ocr-prompt-box__body {
   display: grid;
   gap: 8px;

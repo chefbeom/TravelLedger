@@ -314,6 +314,7 @@ const receiptOcr = reactive({
   requestPromptEnabled: false,
   requestPrompt: loadReceiptOcrRequestPromptLast(),
   requestPromptHistory: loadReceiptOcrRequestPromptHistory(),
+  useExistingEntryStyle: false,
   rerunPromptEnabled: false,
   rerunPrompt: '',
   promptRulesEnabled: true,
@@ -2433,6 +2434,10 @@ function rememberReceiptOcrRequestPrompt(value) {
   saveReceiptOcrRequestPromptLast(normalized)
 }
 
+function setReceiptExistingEntryStyleEnabled(value) {
+  receiptOcr.useExistingEntryStyle = Boolean(value)
+}
+
 function setReceiptRerunPromptEnabled(value) {
   receiptOcr.rerunPromptEnabled = Boolean(value)
 }
@@ -2828,7 +2833,7 @@ function updateLegacyReceiptOcrFields(result, firstSuggestion, fileName) {
   receiptOcr.timing = result?.timing || null
 }
 
-async function analyzeReceiptFile(file, documentType, existingItem = null, prompt = '') {
+async function analyzeReceiptFile(file, documentType, existingItem = null, prompt = '', useExistingEntryStyle = false) {
   const item = existingItem || createReceiptOcrItem(file, documentType)
   if (!existingItem) {
     receiptOcr.items.unshift(item)
@@ -2839,7 +2844,7 @@ async function analyzeReceiptFile(file, documentType, existingItem = null, promp
   syncReceiptOcrBusyState()
 
   try {
-    const result = await analyzeLedgerReceipt(file, { documentType, clientRequestId: item.clientRequestId, prompt, signal: item.abortController.signal })
+    const result = await analyzeLedgerReceipt(file, { documentType, clientRequestId: item.clientRequestId, prompt, useExistingEntryStyle, signal: item.abortController.signal })
     if (!isReceiptOcrItemActive(item)) {
       if (result?.analysisId) {
         try {
@@ -2940,6 +2945,7 @@ async function startSelectedReceiptOcrAnalysis(payload = {}) {
     return
   }
   const fallbackPrompt = payload?.prompt || ''
+  const useExistingEntryStyle = Boolean(payload?.useExistingEntryStyle ?? receiptOcr.useExistingEntryStyle)
   receiptOcr.isOpen = true
   receiptOcr.activeView = 'analyze'
   receiptOcr.error = ''
@@ -2952,7 +2958,7 @@ async function startSelectedReceiptOcrAnalysis(payload = {}) {
     }
     const prompt = buildReceiptOcrPrompt(itemPrompt)
     if (isReceiptOcrItemActive(item)) {
-      await analyzeReceiptFile(item.sourceFile, normalizeOcrDocumentType(item.documentType || receiptOcr.documentType), item, prompt)
+      await analyzeReceiptFile(item.sourceFile, normalizeOcrDocumentType(item.documentType || receiptOcr.documentType), item, prompt, useExistingEntryStyle)
     }
   }
   if (items.some((item) => item.status === 'done')) {
@@ -2973,6 +2979,7 @@ async function analyzeReceiptImage(payload) {
   const requestedDocumentType = normalizeOcrDocumentType(payload?.documentType || receiptOcr.documentType)
   const documentType = files.length > 1 ? 'AUTO' : requestedDocumentType
   const prompt = buildReceiptOcrPrompt(payload?.prompt)
+  const useExistingEntryStyle = Boolean(payload?.useExistingEntryStyle ?? receiptOcr.useExistingEntryStyle)
   receiptOcr.documentType = documentType
   receiptOcr.isOpen = true
   receiptOcr.activeView = 'analyze'
@@ -2989,7 +2996,7 @@ async function analyzeReceiptImage(payload) {
   syncReceiptOcrBusyState()
   for (const { file, item } of queue) {
     if (isReceiptOcrItemActive(item)) {
-      await analyzeReceiptFile(file, documentType, item, prompt)
+      await analyzeReceiptFile(file, documentType, item, prompt, useExistingEntryStyle)
     }
   }
   if (queue.some(({ item }) => item.status === 'done')) {
@@ -3009,6 +3016,7 @@ async function rerunReceiptOcrItem(payload = {}) {
   if (normalizeReceiptPrompt(requestPrompt)) {
     rememberReceiptOcrRequestPrompt(requestPrompt)
   }
+  const useExistingEntryStyle = Boolean(payload?.useExistingEntryStyle ?? receiptOcr.useExistingEntryStyle)
   const documentType = normalizeOcrDocumentType(item.documentType || receiptOcr.documentType)
   const prompt = buildReceiptOcrPrompt(requestPrompt)
   const nextItem = createReceiptOcrItem(sourceFile, documentType)
@@ -3017,7 +3025,7 @@ async function rerunReceiptOcrItem(payload = {}) {
   receiptOcr.activeView = 'analyze'
   receiptOcr.historyDetailAnalysisId = ''
   syncReceiptOcrBusyState()
-  await analyzeReceiptFile(sourceFile, documentType, nextItem, prompt)
+  await analyzeReceiptFile(sourceFile, documentType, nextItem, prompt, useExistingEntryStyle)
   if (nextItem.status === 'done') {
     receiptOcr.activeView = 'history'
     receiptOcr.historyDetailAnalysisId = nextItem.analysisId ? String(nextItem.analysisId) : ''
@@ -4160,6 +4168,7 @@ async function activatePayment(paymentId) {
       @set-receipt-ocr-view="setReceiptOcrView"
       @set-receipt-request-prompt-enabled="setReceiptRequestPromptEnabled"
       @set-receipt-request-prompt="setReceiptRequestPrompt"
+      @set-receipt-existing-entry-style-enabled="setReceiptExistingEntryStyleEnabled"
       @set-receipt-rerun-prompt-enabled="setReceiptRerunPromptEnabled"
       @set-receipt-rerun-prompt="setReceiptRerunPrompt"
       @set-receipt-prompt-rules-enabled="setReceiptPromptRulesEnabled"

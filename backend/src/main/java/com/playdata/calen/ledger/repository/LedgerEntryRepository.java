@@ -4,6 +4,7 @@ import com.playdata.calen.ledger.domain.LedgerEntry;
 import com.playdata.calen.ledger.domain.PaymentMethodKind;
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.util.Collection;
 import java.util.List;
 import org.springframework.data.domain.Page;
@@ -333,6 +334,30 @@ public interface LedgerEntryRepository extends JpaRepository<LedgerEntry, Long> 
             @Param("entryType") com.playdata.calen.ledger.domain.EntryType entryType,
             Pageable pageable
     );
+
+    @Query("""
+            select
+                entry.entryDate as entryDate,
+                entry.entryTime as entryTime,
+                entry.entryType as entryType,
+                entry.title as title,
+                entry.memo as memo,
+                entry.amount as amount,
+                categoryGroup.name as categoryGroupName,
+                categoryDetail.name as categoryDetailName,
+                paymentMethod.name as paymentMethodName
+            from LedgerEntry entry
+            join entry.categoryGroup categoryGroup
+            left join entry.categoryDetail categoryDetail
+            join entry.paymentMethod paymentMethod
+            where entry.owner.id = :userId
+              and entry.deletedAt is null
+            order by entry.entryDate desc, entry.id desc
+            """)
+    List<ExistingEntryStyleAggregate> findRecentEntriesForOcrStyle(
+            @Param("userId") Long userId,
+            Pageable pageable
+    );
     @Query("""
             select coalesce(sum(entry.amount), 0)
             from LedgerEntry entry
@@ -399,6 +424,25 @@ public interface LedgerEntryRepository extends JpaRepository<LedgerEntry, Long> 
 
     interface AiExpenseEntryAggregate {
         LocalDate getEntryDate();
+
+        String getTitle();
+
+        String getMemo();
+
+        BigDecimal getAmount();
+
+        String getCategoryGroupName();
+
+        String getCategoryDetailName();
+
+        String getPaymentMethodName();
+    }
+    interface ExistingEntryStyleAggregate {
+        LocalDate getEntryDate();
+
+        LocalTime getEntryTime();
+
+        com.playdata.calen.ledger.domain.EntryType getEntryType();
 
         String getTitle();
 

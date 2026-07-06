@@ -22,6 +22,8 @@ import com.playdata.calen.ledger.ocr.LedgerOcrRemoteClient.RemoteParsedResult;
 import com.playdata.calen.ledger.repository.CategoryDetailRepository;
 import com.playdata.calen.ledger.repository.CategoryGroupRepository;
 import com.playdata.calen.ledger.repository.LedgerImageAnalysisRequestRepository;
+import com.playdata.calen.ledger.repository.LedgerEntryRepository;
+import com.playdata.calen.ledger.repository.LedgerEntryRepository.ExistingEntryStyleAggregate;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
@@ -41,6 +43,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
@@ -51,7 +54,10 @@ import org.springframework.web.multipart.MultipartFile;
 public class LedgerOcrService {
 
     private static final int MAX_TEXT_LENGTH = 500;
-    private static final int MAX_USER_PROMPT_LENGTH = 1200;
+    private static final int MAX_USER_PROMPT_LENGTH = 2400;
+    private static final int EXISTING_ENTRY_STYLE_EXAMPLE_LIMIT = 12;
+    private static final int MAX_STYLE_FIELD_LENGTH = 90;
+    private static final int MAX_STYLE_MEMO_LENGTH = 140;
     private static final String UNCATEGORIZED_CATEGORY_NAME = "\uBBF8\uBD84\uB958";
     private static final List<String> ALLOWED_IMAGE_EXTENSIONS = List.of(".jpg", ".jpeg", ".png", ".webp", ".bmp");
     private static final byte[] PNG_SIGNATURE = new byte[] {(byte) 0x89, 'P', 'N', 'G', '\r', '\n', 0x1A, '\n'};
@@ -63,6 +69,7 @@ public class LedgerOcrService {
     private final LedgerImageAnalysisRequestRepository imageAnalysisRequestRepository;
     private final CategoryGroupRepository categoryGroupRepository;
     private final CategoryDetailRepository categoryDetailRepository;
+    private final LedgerEntryRepository ledgerEntryRepository;
     private final ObjectMapper objectMapper;
     private final UserNotificationService userNotificationService;
 
@@ -70,6 +77,10 @@ public class LedgerOcrService {
     private MeterRegistry meterRegistry;
 
     public LedgerOcrAnalyzeResponse analyze(Long userId, MultipartFile file, String documentType, String clientRequestId, String prompt) {
+        return analyze(userId, file, documentType, clientRequestId, prompt, false);
+    }
+
+    public LedgerOcrAnalyzeResponse analyze(Long userId, MultipartFile file, String documentType, String clientRequestId, String prompt, boolean useExistingEntryStyle) {
         AppUser owner = appUserService.getRequiredUser(userId);
         Timer.Sample ocrRequestTimer = startOcrRequestTimer();
         LedgerImageAnalysisRequest history = null;
@@ -81,11 +92,12 @@ public class LedgerOcrService {
             String normalizedDocumentType = normalizeDocumentType(documentType);
             String normalizedClientRequestId = normalizeClientRequestId(clientRequestId);
             String normalizedUserPrompt = normalizeUserPrompt(prompt);
+            String effectiveUserPrompt = buildEffectiveUserPrompt(owner.getId(), normalizedUserPrompt, useExistingEntryStyle);
             history = createImageAnalysisRequest(owner, file, normalizedDocumentType, normalizedClientRequestId);
-            RemoteAnalyzeResponse remoteResponse = remoteClient.analyze(file, normalizedDocumentType, normalizedUserPrompt);
+            RemoteAnalyzeResponse remoteResponse = remoteClient.analyze(file, normalizedDocumentType, effectiveUserPrompt);
             String paymentCapturePlatform = resolvePaymentCapturePlatform(
                     firstNonBlank(remoteResponse.documentType(), normalizedDocumentType),
-                    normalizedUserPrompt,
+                    effectiveUserPrompt,
                     remoteResponse
             );
             List<RemoteParsedResult> parsedEntries = resolveParsedEntries(remoteResponse);
@@ -375,6 +387,95 @@ public class LedgerOcrService {
         return normalized.isBlank() ? null : limit(normalized, MAX_USER_PROMPT_LENGTH);
     }
 
+    private String buildEffectiveUserPrompt(Long ownerId, String userPrompt, boolean useExistingEntryStyle) {
+        if (!useExistingEntryStyle) {
+            return userPrompt;
+        }
+        String stylePrompt = buildExistingEntryStylePrompt(ownerId);
+        if (!isPresent(stylePrompt)) {
+            return userPrompt;
+        }
+        if (!isPresent(userPrompt)) {
+            return limit(stylePrompt, MAX_USER_PROMPT_LENGTH);
+        }
+        String prefix = userPrompt.trim() + "\n\n";
+        int remaining = MAX_USER_PROMPT_LENGTH - prefix.length();
+        if (remaining <= 0) {
+            return limit(userPrompt, MAX_USER_PROMPT_LENGTH);
+        }
+        return prefix + limit(stylePrompt, remaining);
+    }
+
+    private String buildExistingEntryStylePrompt(Long ownerId) {
+        if (ownerId == null) {
+            return null;
+        }
+        List<ExistingEntryStyleAggregate> examples;
+        try {
+            examples = ledgerEntryRepository.findRecentEntriesForOcrStyle(
+                    ownerId,
+                    PageRequest.of(0, EXISTING_ENTRY_STYLE_EXAMPLE_LIMIT)
+            );
+        } catch (RuntimeException exception) {
+            log.warn("Failed to load existing ledger entry style examples for OCR prompt: userId={}", ownerId, exception);
+            return null;
+        }
+        if (examples == null || examples.isEmpty()) {
+            return null;
+        }
+
+        List<String> lines = new ArrayList<>();
+        for (ExistingEntryStyleAggregate example : examples) {
+            String line = formatExistingEntryStyleExample(example, lines.size() + 1);
+            if (isPresent(line)) {
+                lines.add(line);
+            }
+        }
+        if (lines.isEmpty()) {
+            return null;
+        }
+        return "[현재 입력데이터 기반 데이터 추출 보정]\n"
+                + "사용자가 이 옵션을 켰습니다. 아래 예시는 이 사용자의 기존 가계부 입력 형식입니다. "
+                + "이미지에서 확인되는 사실이 최우선이며, 예시의 날짜/금액/결제수단을 복사하지 마세요. "
+                + "유사한 상호나 서비스가 보일 때 제목 접두어, 메모 작성 방식, 대분류/분류 명칭만 참고하세요. "
+                + "확실하지 않으면 보정하지 말고 원문 기반 추출, 빈 결제수단, 미분류 또는 빈 분류명을 유지하세요.\n"
+                + "기존 입력 예시:\n"
+                + String.join("\n", lines);
+    }
+
+    private String formatExistingEntryStyleExample(ExistingEntryStyleAggregate example, int index) {
+        if (example == null || !isPresent(example.getTitle())) {
+            return null;
+        }
+        List<String> fields = new ArrayList<>();
+        fields.add("제목=" + compactPromptValue(example.getTitle(), MAX_STYLE_FIELD_LENGTH));
+        fields.add("구분=" + (example.getEntryType() == EntryType.INCOME ? "수입" : "지출"));
+        if (example.getAmount() != null) {
+            fields.add("금액=" + formatWon(example.getAmount()) + "원");
+        }
+        String categoryGroup = compactPromptValue(example.getCategoryGroupName(), 40);
+        String categoryDetail = compactPromptValue(example.getCategoryDetailName(), 40);
+        if (isPresent(categoryGroup) || isPresent(categoryDetail)) {
+            fields.add("분류=" + firstNonBlank(categoryGroup, "미분류") + (isPresent(categoryDetail) ? "/" + categoryDetail : ""));
+        }
+        String paymentMethod = compactPromptValue(example.getPaymentMethodName(), 50);
+        if (isPresent(paymentMethod)) {
+            fields.add("결제수단=" + paymentMethod);
+        }
+        String memo = compactPromptValue(example.getMemo(), MAX_STYLE_MEMO_LENGTH);
+        if (isPresent(memo)) {
+            fields.add("메모=" + memo);
+        }
+        return index + ". " + String.join(" | ", fields);
+    }
+
+    private String compactPromptValue(String value, int maxLength) {
+        if (!isPresent(value)) {
+            return "";
+        }
+        String normalized = value.replace('\u0000', ' ').replaceAll("\\s+", " ").trim();
+        return limit(normalized, maxLength);
+    }
     private String normalizeDocumentType(String documentType) {
         if (documentType == null || documentType.isBlank()) {
             return "AUTO";

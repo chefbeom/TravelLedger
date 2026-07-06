@@ -287,6 +287,7 @@ const emit = defineEmits([
   'set-receipt-ocr-view',
   'set-receipt-request-prompt-enabled',
   'set-receipt-request-prompt',
+  'set-receipt-existing-entry-style-enabled',
   'set-receipt-rerun-prompt-enabled',
   'set-receipt-rerun-prompt',
   'set-receipt-prompt-rules-enabled',
@@ -541,8 +542,14 @@ function selectReceiptItemPromptHistory(item, event) {
   }
 }
 
+function updateReceiptExistingEntryStyleEnabled(event) {
+  emit('set-receipt-existing-entry-style-enabled', event.target.checked)
+}
+
 function startReceiptAnalysis() {
-  emit('start-receipt-analysis', {})
+  emit('start-receipt-analysis', {
+    useExistingEntryStyle: Boolean(props.receiptOcr?.useExistingEntryStyle),
+  })
 }
 
 function updateReceiptRerunPromptEnabled(event) {
@@ -565,6 +572,7 @@ function requestReceiptRerun(item) {
   emit('rerun-receipt-analysis', {
     item,
     prompt: props.receiptOcr?.rerunPromptEnabled ? props.receiptOcr?.rerunPrompt : '',
+    useExistingEntryStyle: Boolean(props.receiptOcr?.useExistingEntryStyle),
   })
 }
 
@@ -4237,6 +4245,14 @@ defineExpose({
               </button>
             </div>
             <div class="receipt-ocr-modal__upload">
+              <label class="receipt-ocr-toggle receipt-ocr-toggle--compact receipt-ocr-existing-style-toggle">
+                <input
+                  type="checkbox"
+                  :checked="receiptOcr?.useExistingEntryStyle"
+                  @change="updateReceiptExistingEntryStyleEnabled"
+                />
+                <span>현재 입력데이터 기반 보정</span>
+              </label>
               <button type="button" class="button button--secondary" @click="openReceiptFilePicker">
                 이미지 선택
               </button>
@@ -4298,6 +4314,14 @@ defineExpose({
                 <strong>재요청 검수</strong>
                 <span>현재 세션에 원본 이미지가 남아 있을 때만 같은 이미지로 다시 검수할 수 있습니다.</span>
               </div>
+              <label class="receipt-ocr-toggle receipt-ocr-toggle--compact receipt-ocr-existing-style-toggle">
+                <input
+                  type="checkbox"
+                  :checked="receiptOcr?.useExistingEntryStyle"
+                  @change="updateReceiptExistingEntryStyleEnabled"
+                />
+                <span>현재 입력데이터 기반 보정</span>
+              </label>
               <label class="receipt-ocr-toggle receipt-ocr-toggle--compact">
                 <input
                   type="checkbox"

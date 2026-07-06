@@ -338,6 +338,8 @@ const receiptOcr = reactive({
   historyTotalElements: 0,
   isHistoryLoading: false,
   historyError: '',
+  historyDetailAnalysisId: '',
+  isHistoryDetailLoading: false,
   lastAppliedAnalysisId: null,
   lastAppliedReviewItemId: null,
   lastAppliedReviewEntryIndex: null,
@@ -2347,6 +2349,7 @@ function applyEntryTitleSuggestion(suggestion) {
 
 function setReceiptOcrView(view) {
   receiptOcr.activeView = ['analyze', 'history', 'rules'].includes(view) ? view : ''
+  receiptOcr.historyDetailAnalysisId = ''
   if (receiptOcr.activeView === 'history' && !receiptOcr.historyItems.length && !receiptOcr.isHistoryLoading) {
     loadReceiptOcrHistories(0)
   }
@@ -2419,6 +2422,8 @@ function clearReceiptOcr() {
   receiptOcr.pendingCount = 0
   receiptOcr.error = ''
   receiptOcr.activeView = 'analyze'
+  receiptOcr.historyDetailAnalysisId = ''
+  receiptOcr.isHistoryDetailLoading = false
   receiptOcr.items = []
   receiptOcr.fileName = ''
   receiptOcr.rawText = ''
@@ -2540,6 +2545,9 @@ async function removeReceiptOcrItem(itemId) {
       console.warn('Failed to cancel image analysis request', cancelError)
     }
   }
+  if (item?.analysisId && String(receiptOcr.historyDetailAnalysisId) === String(item.analysisId)) {
+    receiptOcr.historyDetailAnalysisId = ''
+  }
   if (item?.analysisId && String(receiptOcr.lastAppliedAnalysisId) === String(item.analysisId)) {
     clearReceiptOcrAppliedMarker()
   }
@@ -2635,11 +2643,27 @@ async function loadReceiptOcrHistories(page = receiptOcr.historyPage || 0) {
 
 async function reuseReceiptOcrHistory(history) {
   if (!history?.id) {
-    return
+    return null
   }
   receiptOcr.isOpen = true
   receiptOcr.historyError = ''
   try {
+    const existing = receiptOcr.items.find((candidate) => String(candidate.analysisId) === String(history.id))
+    if (existing) {
+      receiptOcr.items = [existing, ...receiptOcr.items.filter((candidate) => candidate.id !== existing.id)]
+      updateLegacyReceiptOcrFields({
+        rawText: existing.rawText,
+        lineItems: existing.lineItems,
+        warnings: existing.warnings,
+        confidence: existing.confidence,
+        vendor: existing.vendor,
+        paymentMethodText: existing.paymentMethodText,
+        categoryText: existing.categoryText,
+        timing: existing.timing,
+      }, existing.suggestedEntries?.[0] || null, existing.fileName)
+      return existing
+    }
+
     const detail = history.result ? history : await fetchLedgerImageAnalysisHistory(history.id)
     const item = mapImageAnalysisHistoryToReviewItem(detail)
     receiptOcr.items = receiptOcr.items.filter((candidate) => String(candidate.analysisId) !== String(item.analysisId))
@@ -2650,12 +2674,33 @@ async function reuseReceiptOcrHistory(history) {
         : item.analysisStatus === 'PROCESSING'
           ? '아직 처리 중인 분석 기록입니다. 완료 후 다시 검수할 수 있습니다.'
           : '실패한 분석 기록입니다. 내용은 확인할 수 있지만 입력칸 적용은 막혀 있습니다.'
-      return
+      return item
     }
     updateLegacyReceiptOcrFields(detail.result || {}, item.suggestedEntries[0] || null, item.fileName)
+    return item
   } catch (error) {
     receiptOcr.historyError = error.message || '이미지 분석 기록을 다시 불러오지 못했습니다.'
+    return null
   }
+}
+
+async function openReceiptOcrHistoryDetail(history) {
+  if (!history?.id) {
+    return
+  }
+  receiptOcr.isOpen = true
+  receiptOcr.activeView = 'history'
+  receiptOcr.historyDetailAnalysisId = String(history.id)
+  receiptOcr.isHistoryDetailLoading = true
+  try {
+    await reuseReceiptOcrHistory(history)
+  } finally {
+    receiptOcr.isHistoryDetailLoading = false
+  }
+}
+
+function closeReceiptOcrHistoryDetail() {
+  receiptOcr.historyDetailAnalysisId = ''
 }
 
 async function cancelReceiptOcrHistory(historyId) {
@@ -2678,6 +2723,9 @@ async function cancelReceiptOcrHistory(historyId) {
         error: '사용자가 취소한 분석 요청입니다.',
       }
     })
+    if (String(receiptOcr.historyDetailAnalysisId) === String(historyId)) {
+      receiptOcr.historyDetailAnalysisId = ''
+    }
     if (String(receiptOcr.lastAppliedAnalysisId) === String(historyId)) {
       if (isReceiptOcrAppliedSnapshotCurrent()) {
         editingEntryId.value = null
@@ -2888,16 +2936,22 @@ async function rerunReceiptOcrItem(payload = {}) {
     setFeedback('', '원본 이미지가 현재 세션에 없어 재요청할 수 없습니다. 이미지를 다시 선택해 주세요.')
     return
   }
+  const requestPrompt = payload.prompt || ''
+  if (normalizeReceiptPrompt(requestPrompt)) {
+    rememberReceiptOcrRequestPrompt(requestPrompt)
+  }
   const documentType = normalizeOcrDocumentType(item.documentType || receiptOcr.documentType)
-  const prompt = buildReceiptOcrPrompt(payload.prompt || '')
+  const prompt = buildReceiptOcrPrompt(requestPrompt)
   const nextItem = createReceiptOcrItem(sourceFile, documentType)
   nextItem.fileName = item.fileName || nextItem.fileName
   receiptOcr.items.unshift(nextItem)
   receiptOcr.activeView = 'analyze'
+  receiptOcr.historyDetailAnalysisId = ''
   syncReceiptOcrBusyState()
   await analyzeReceiptFile(sourceFile, documentType, nextItem, prompt)
   if (nextItem.status === 'done') {
     receiptOcr.activeView = 'history'
+    receiptOcr.historyDetailAnalysisId = nextItem.analysisId ? String(nextItem.analysisId) : ''
     await loadReceiptOcrHistories(0)
   }
 }
@@ -4052,6 +4106,8 @@ async function activatePayment(paymentId) {
       @cancel-receipt-applied="cancelReceiptOcrAppliedSuggestion"
       @load-receipt-history="loadReceiptOcrHistories"
       @reuse-receipt-history="reuseReceiptOcrHistory"
+      @open-receipt-history-detail="openReceiptOcrHistoryDetail"
+      @close-receipt-history-detail="closeReceiptOcrHistoryDetail"
       @cancel-receipt-history="cancelReceiptOcrHistory"
       @submit-entry="submitEntry"
       @undo-entry-action="undoLastEntryAction"

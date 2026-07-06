@@ -27541,6 +27541,15 @@ button.button--primary,
   accent-color: #25b176;
   flex: 0 0 auto;
 }
+.receipt-ocr-toggle input[type="checkbox"] {
+  box-sizing: border-box !important;
+  height: 16px !important;
+  margin: 0 !important;
+  min-height: 16px !important;
+  min-width: 16px !important;
+  padding: 0 !important;
+  width: 16px !important;
+}
 
 .receipt-ocr-prompt-box textarea {
   background: rgba(9, 17, 28, 0.95);
@@ -27630,16 +27639,43 @@ button.button--primary,
   align-items: start !important;
   display: grid !important;
   gap: 10px !important;
-  grid-template-columns: minmax(260px, 1fr) minmax(0, auto) !important;
+  grid-template-columns: minmax(320px, 1fr) minmax(420px, auto) !important;
+}
+
+.receipt-ocr-modal__type-group {
+  align-items: center !important;
+  display: flex !important;
+  flex-wrap: wrap !important;
+  gap: 8px !important;
+  min-width: 0 !important;
+}
+
+.receipt-ocr-control-label {
+  align-items: center !important;
+  color: var(--text-muted, var(--text-soft)) !important;
+  display: inline-flex !important;
+  flex: 0 0 auto !important;
+  font-size: 0.78rem !important;
+  font-weight: 900 !important;
+  min-height: 36px !important;
+  white-space: nowrap !important;
+}
+
+.receipt-ocr-control-label--upload {
+  margin-left: auto !important;
 }
 
 .receipt-ocr-modal__toolbar--analyze .receipt-ocr-modal__upload {
-  align-items: flex-start !important;
+  align-items: center !important;
   display: flex !important;
   flex-wrap: wrap !important;
   gap: 8px !important;
   justify-content: flex-end !important;
   max-width: min(760px, 100%) !important;
+}
+
+.receipt-ocr-camera-button {
+  display: none !important;
 }
 
 .receipt-ocr-prompt-box--request {
@@ -27666,8 +27702,17 @@ button.button--primary,
 
 .receipt-ocr-existing-style-toggle {
   align-self: center !important;
+  max-width: 170px !important;
   min-height: 36px !important;
+  overflow: hidden !important;
 }
+
+.receipt-ocr-existing-style-toggle span {
+  min-width: 0 !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+
 .receipt-ocr-prompt-box__body {
   display: grid;
   gap: 8px;
@@ -27736,8 +27781,16 @@ button.button--primary,
     max-width: none !important;
   }
 
+  .receipt-ocr-control-label--upload {
+    margin-left: 0 !important;
+  }
+
   .receipt-ocr-modal__toolbar--analyze .receipt-ocr-modal__upload .button {
     flex: 1 1 150px !important;
+  }
+
+  .receipt-ocr-camera-button {
+    display: inline-flex !important;
   }
 
   .receipt-ocr-prompt-box--inline {
@@ -27748,6 +27801,12 @@ button.button--primary,
 
   .receipt-ocr-review-card--selected .receipt-ocr-review-card__body {
     grid-template-columns: minmax(0, 1fr) !important;
+  }
+}
+
+@media (hover: none) and (pointer: coarse) {
+  .receipt-ocr-camera-button {
+    display: inline-flex !important;
   }
 }
 
@@ -28055,7 +28114,30 @@ button.button--primary,
 
 .receipt-ocr-prompt-box--item {
   gap: 8px !important;
+  max-width: 100% !important;
+  overflow: hidden !important;
   padding: 12px !important;
+}
+
+.receipt-ocr-prompt-box--item .receipt-ocr-prompt-box__body--inline {
+  max-width: 100% !important;
+  width: 100% !important;
+}
+
+.receipt-ocr-toggle--item {
+  background: rgba(8, 16, 28, 0.46) !important;
+  border: 1px solid rgba(121, 142, 171, 0.24) !important;
+  border-radius: 8px !important;
+  box-sizing: border-box !important;
+  max-width: 100% !important;
+  padding: 8px 10px !important;
+  white-space: normal !important;
+  width: 100% !important;
+}
+
+.receipt-ocr-toggle--item span {
+  min-width: 0 !important;
+  overflow-wrap: anywhere !important;
 }
 
 .receipt-ocr-prompt-box--item textarea {

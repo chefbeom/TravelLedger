@@ -51,9 +51,9 @@ const calendarHighlightModes = [
 ]
 
 const receiptDocumentTypes = [
-  { value: 'AUTO', label: '자동 분석' },
-  { value: 'RECEIPT', label: '영수증 분석' },
-  { value: 'PAYMENT_CAPTURE', label: '거래내역 분석' },
+  { value: 'AUTO', label: '자동 감지' },
+  { value: 'RECEIPT', label: '영수증' },
+  { value: 'PAYMENT_CAPTURE', label: '거래내역' },
 ]
 
 const timeValueOptions = Array.from({ length: 24 * 60 }, (_, index) => {
@@ -4234,6 +4234,7 @@ defineExpose({
         <section v-if="receiptOcrView === 'analyze'" class="receipt-ocr-workspace receipt-ocr-workspace--analyze">
           <div class="receipt-ocr-modal__toolbar receipt-ocr-modal__toolbar--analyze">
             <div class="receipt-ocr-modal__type-group" role="group" aria-label="이미지 유형">
+              <span class="receipt-ocr-control-label">분석 유형</span>
               <button
                 v-for="option in receiptDocumentTypes"
                 :key="option.value"
@@ -4245,19 +4246,20 @@ defineExpose({
               </button>
             </div>
             <div class="receipt-ocr-modal__upload">
-              <label class="receipt-ocr-toggle receipt-ocr-toggle--compact receipt-ocr-existing-style-toggle">
+              <span class="receipt-ocr-control-label receipt-ocr-control-label--upload">이미지 입력</span>
+              <label class="receipt-ocr-toggle receipt-ocr-toggle--compact receipt-ocr-existing-style-toggle" title="기존 가계부 입력 형식을 참고합니다. 정확하지 않으면 끄세요.">
                 <input
                   type="checkbox"
                   :checked="receiptOcr?.useExistingEntryStyle"
                   @change="updateReceiptExistingEntryStyleEnabled"
                 />
-                <span>현재 입력데이터 기반 보정</span>
+                <span>기존 입력 보정</span>
               </label>
-              <button type="button" class="button button--secondary" @click="openReceiptFilePicker">
-                이미지 선택
+              <button type="button" class="button button--secondary" title="저장된 이미지 파일을 선택합니다." @click="openReceiptFilePicker">
+                파일에서 선택
               </button>
-              <button type="button" class="button button--secondary" @click="openReceiptCameraCapture">
-                카메라 촬영
+              <button type="button" class="button button--secondary receipt-ocr-camera-button" title="모바일 기기 카메라로 새 사진을 촬영합니다." @click="openReceiptCameraCapture">
+                카메라로 촬영
               </button>
               <button
                 type="button"
@@ -4314,13 +4316,13 @@ defineExpose({
                 <strong>재요청 검수</strong>
                 <span>현재 세션에 원본 이미지가 남아 있을 때만 같은 이미지로 다시 검수할 수 있습니다.</span>
               </div>
-              <label class="receipt-ocr-toggle receipt-ocr-toggle--compact receipt-ocr-existing-style-toggle">
+              <label class="receipt-ocr-toggle receipt-ocr-toggle--compact receipt-ocr-existing-style-toggle" title="기존 가계부 입력 형식을 참고합니다. 정확하지 않으면 끄세요.">
                 <input
                   type="checkbox"
                   :checked="receiptOcr?.useExistingEntryStyle"
                   @change="updateReceiptExistingEntryStyleEnabled"
                 />
-                <span>현재 입력데이터 기반 보정</span>
+                <span>기존 입력 보정</span>
               </label>
               <label class="receipt-ocr-toggle receipt-ocr-toggle--compact">
                 <input
@@ -4492,7 +4494,7 @@ defineExpose({
                     이미지가 선택되었습니다. 이 이미지에만 적용할 요청사항을 설정한 뒤 분석 요청하기를 눌러 주세요.
                   </p>
                   <div class="receipt-ocr-prompt-box receipt-ocr-prompt-box--item">
-                    <label class="receipt-ocr-toggle receipt-ocr-toggle--compact">
+                    <label class="receipt-ocr-toggle receipt-ocr-toggle--compact receipt-ocr-toggle--item">
                       <input
                         type="checkbox"
                         :checked="item.requestPromptEnabled"

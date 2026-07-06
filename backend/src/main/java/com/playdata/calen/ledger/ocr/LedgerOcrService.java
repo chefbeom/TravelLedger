@@ -83,6 +83,11 @@ public class LedgerOcrService {
             String normalizedUserPrompt = normalizeUserPrompt(prompt);
             history = createImageAnalysisRequest(owner, file, normalizedDocumentType, normalizedClientRequestId);
             RemoteAnalyzeResponse remoteResponse = remoteClient.analyze(file, normalizedDocumentType, normalizedUserPrompt);
+            String paymentCapturePlatform = resolvePaymentCapturePlatform(
+                    firstNonBlank(remoteResponse.documentType(), normalizedDocumentType),
+                    normalizedUserPrompt,
+                    remoteResponse
+            );
             List<RemoteParsedResult> parsedEntries = resolveParsedEntries(remoteResponse);
             RemoteParsedResult parsed = parsedEntries.isEmpty() ? remoteResponse.parsed() : parsedEntries.get(0);
             EntryType entryType = parsed != null && parsed.entryType() == EntryType.INCOME
@@ -90,10 +95,10 @@ public class LedgerOcrService {
                     : EntryType.EXPENSE;
 
             List<LedgerOcrLineItemResponse> lineItems = mapLineItems(parsed);
-            LedgerOcrEntrySuggestionResponse suggestion = parsed == null ? null : buildSuggestion(owner, parsed, entryType, lineItems);
+            LedgerOcrEntrySuggestionResponse suggestion = parsed == null ? null : buildSuggestion(owner, parsed, entryType, lineItems, paymentCapturePlatform);
             List<LedgerOcrEntrySuggestionResponse> suggestions = parsedEntries.stream()
                     .filter(Objects::nonNull)
-                    .map(parsedEntry -> buildSuggestionForParsedEntry(owner, parsedEntry))
+                    .map(parsedEntry -> buildSuggestionForParsedEntry(owner, parsedEntry, paymentCapturePlatform))
                     .toList();
             List<String> validationWarnings = buildSuggestionValidationWarnings(suggestions);
             if (!validationWarnings.isEmpty()) {
@@ -462,11 +467,11 @@ public class LedgerOcrService {
         );
     }
 
-    private LedgerOcrEntrySuggestionResponse buildSuggestionForParsedEntry(AppUser owner, RemoteParsedResult parsed) {
+    private LedgerOcrEntrySuggestionResponse buildSuggestionForParsedEntry(AppUser owner, RemoteParsedResult parsed, String paymentCapturePlatform) {
         EntryType entryType = parsed != null && parsed.entryType() == EntryType.INCOME
                 ? EntryType.INCOME
                 : EntryType.EXPENSE;
-        return buildSuggestion(owner, parsed, entryType, mapLineItems(parsed));
+        return buildSuggestion(owner, parsed, entryType, mapLineItems(parsed), paymentCapturePlatform);
     }
 
     private void validateReady() {
@@ -560,25 +565,140 @@ public class LedgerOcrService {
         }
         return true;
     }
+
+    private String resolvePaymentCapturePlatform(String documentType, String userPrompt, RemoteAnalyzeResponse response) {
+        if (!"PAYMENT_CAPTURE".equalsIgnoreCase(firstNonBlank(documentType, ""))) {
+            return null;
+        }
+
+        List<String> clues = new ArrayList<>();
+        addIfPresent(clues, userPrompt);
+        if (response != null) {
+            addIfPresent(clues, response.rawText());
+            addRemoteParsedPlatformClues(clues, response.parsed());
+            if (response.parsedEntries() != null) {
+                response.parsedEntries().forEach(parsed -> addRemoteParsedPlatformClues(clues, parsed));
+            }
+        }
+
+        String joined = String.join(" ", clues);
+        if (containsNaverPayClue(joined)) {
+            return "네이버페이";
+        }
+        return null;
+    }
+
+    private void addRemoteParsedPlatformClues(List<String> clues, RemoteParsedResult parsed) {
+        if (parsed == null) {
+            return;
+        }
+        addIfPresent(clues, parsed.title());
+        addIfPresent(clues, parsed.vendor());
+        addIfPresent(clues, parsed.memo());
+        addIfPresent(clues, parsed.categoryText());
+        if (parsed.lineItems() != null) {
+            parsed.lineItems().forEach(item -> addIfPresent(clues, item == null ? null : item.itemName()));
+        }
+    }
+
+    private boolean containsNaverPayClue(String value) {
+        return containsIgnoreCase(value, "네이버페이")
+                || containsIgnoreCase(value, "네이버 페이")
+                || containsIgnoreCase(value, "naver pay")
+                || containsIgnoreCase(value, "n pay")
+                || containsIgnoreCase(value, "npay")
+                || containsIgnoreCase(value, "n+ membership")
+                || containsIgnoreCase(value, "n+");
+    }
+
+    private String normalizeOcrTitle(RemoteParsedResult parsed, List<LedgerOcrLineItemResponse> lineItems, String paymentCapturePlatform) {
+        String rawTitle = firstNonBlank(
+                parsed != null ? parsed.title() : null,
+                parsed != null ? parsed.vendor() : null,
+                lineItems.isEmpty() ? null : lineItems.get(0).itemName(),
+                "Receipt"
+        );
+        String title = cleanupPaymentCaptureTitle(rawTitle);
+        if (!isPresent(title)) {
+            title = firstNonBlank(
+                    lineItems.isEmpty() ? null : lineItems.get(0).itemName(),
+                    parsed != null ? parsed.vendor() : null,
+                    "Receipt"
+            );
+        }
+        if (isPresent(paymentCapturePlatform) && !hasPlatformPrefix(title, paymentCapturePlatform)) {
+            title = paymentCapturePlatform + " : " + title;
+        }
+        return title;
+    }
+
+    private String cleanupPaymentCaptureTitle(String value) {
+        if (!isPresent(value)) {
+            return value;
+        }
+        String cleaned = value
+                .replace('\u203A', '>')
+                .replace('\u3009', '>')
+                .replace('\uFF1E', '>')
+                .trim();
+        int arrowIndex = cleaned.indexOf('>');
+        if (arrowIndex >= 0) {
+            cleaned = cleaned.substring(0, arrowIndex).trim();
+        }
+        for (String marker : List.of(
+                "구매확정",
+                "결제완료",
+                "승인완료",
+                "취소됨",
+                "리뷰쓰기",
+                "다시 담기"
+        )) {
+            int markerIndex = cleaned.indexOf(marker);
+            if (markerIndex > 0) {
+                cleaned = cleaned.substring(0, markerIndex).trim();
+            } else if (markerIndex == 0) {
+                cleaned = "";
+            }
+        }
+        for (String suffix : List.of("구매건", "결제건")) {
+            if (cleaned.endsWith(suffix)) {
+                cleaned = cleaned.substring(0, cleaned.length() - suffix.length()).trim();
+            }
+        }
+        return cleaned.replaceAll("\\s+", " ").trim();
+    }
+
+    private boolean hasPlatformPrefix(String title, String platform) {
+        if (!isPresent(title) || !isPresent(platform)) {
+            return false;
+        }
+        String normalizedTitle = title.replace(" ", "").toLowerCase(Locale.ROOT);
+        String normalizedPlatform = platform.replace(" ", "").toLowerCase(Locale.ROOT);
+        return normalizedTitle.startsWith(normalizedPlatform + ":")
+                || normalizedTitle.startsWith(normalizedPlatform + "\uFF1A");
+    }
+
+    private boolean containsIgnoreCase(String value, String needle) {
+        if (!isPresent(value) || !isPresent(needle)) {
+            return false;
+        }
+        return value.toLowerCase(Locale.ROOT).contains(needle.toLowerCase(Locale.ROOT));
+    }
     private LedgerOcrEntrySuggestionResponse buildSuggestion(
             AppUser owner,
             RemoteParsedResult parsed,
             EntryType entryType,
-            List<LedgerOcrLineItemResponse> lineItems
+            List<LedgerOcrLineItemResponse> lineItems,
+            String paymentCapturePlatform
     ) {
-        LocalDate entryDate = parsed != null && parsed.entryDate() != null ? parsed.entryDate() : LocalDate.now();
-        LocalTime entryTime = parsed != null && parsed.entryTime() != null ? parsed.entryTime() : LocalTime.MIDNIGHT;
+        LocalDate entryDate = parsed == null ? null : parsed.entryDate();
+        LocalTime entryTime = parsed == null ? null : parsed.entryTime();
         BigDecimal amount = parsed != null
                 && parsed.amount() != null
                 && parsed.amount().abs().compareTo(BigDecimal.ZERO) > 0
                 ? parsed.amount().abs()
                 : null;
-        String title = limit(firstNonBlank(
-                parsed != null ? parsed.title() : null,
-                parsed != null ? parsed.vendor() : null,
-                lineItems.isEmpty() ? null : lineItems.get(0).itemName(),
-                "Receipt"
-        ), 120);
+        String title = limit(normalizeOcrTitle(parsed, lineItems, paymentCapturePlatform), 120);
         String memo = limit(buildMemo(parsed, lineItems), MAX_TEXT_LENGTH);
         ResolvedOcrCategory category = resolveOcrCategory(owner, entryType, parsed);
 

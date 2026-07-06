@@ -295,6 +295,51 @@ class LedgerOcrServiceTest {
         assertThat(suggestions.get(0).memo()).contains("웹툰·시리즈 쿠키 59개(4,900원)", "결제완료", "15:15");
         assertThat(suggestions.get(1).memo()).contains("메가MGC커피 모바일금액권 1만원권(8,730원)", "구매확정완료", "18:32");
     }
+    @Test
+    void analyzeAppliesPromptPlatformAndCleansPaymentCaptureTitleNoise() {
+        AppUser user = stubUser();
+        MockMultipartFile file = validJpeg("naver-pay-prompt.jpg");
+        stubHistoryPersistence(103L);
+        CategoryGroup uncategorized = categoryGroup(88L, user, UNCATEGORIZED, EntryType.EXPENSE, true);
+        when(categoryGroupRepository.findAllByOwnerIdAndEntryTypeOrderByDisplayOrderAscIdAsc(USER_ID, EntryType.EXPENSE))
+                .thenReturn(List.of(uncategorized));
+
+        String prompt = "\uB124\uC774\uBC84\uD398\uC774 \uB2E4\uAC74 \uACB0\uC81C \uCEA1\uCC98\uC785\uB2C8\uB2E4.";
+        String itemName = "\uBA54\uAC00MGC\uCEE4\uD53C \uBAA8\uBC14\uC77C\uCFE0\uD3F0 1\uB9CC\uC6D0\uAD8C";
+        String noisyTitle = "[EVENT] " + itemName + " \uAD6C\uB9E4\uD655\uC815\uC804\uC6D4";
+        String memo = "\uAD6C\uB9E4\uD655\uC815\uC644\uB8CC / 7. 4. 18:32 \uACB0\uC81C";
+        RemoteParsedResult parsed = new RemoteParsedResult(
+                LocalDate.of(2026, 7, 4),
+                LocalTime.of(18, 32),
+                EntryType.EXPENSE,
+                noisyTitle,
+                memo,
+                new BigDecimal("8730"),
+                "",
+                "",
+                "",
+                "",
+                "",
+                List.of(new RemoteLineItem(itemName, BigDecimal.ONE, "", new BigDecimal("8730"))),
+                0.82,
+                List.of()
+        );
+        when(remoteClient.analyze(file, "PAYMENT_CAPTURE", prompt))
+                .thenReturn(new RemoteAnalyzeResponse(true, null, "PAYMENT_CAPTURE", itemName + " 8,730\uC6D0", parsed, List.of(parsed), Map.of()));
+
+        LedgerOcrEntrySuggestionResponse suggestion = service.analyze(USER_ID, file, "PAYMENT_CAPTURE", "naver-pay-prompt", prompt)
+                .suggestedEntries()
+                .get(0);
+
+        assertThat(suggestion.title()).isEqualTo("\uB124\uC774\uBC84\uD398\uC774 : [EVENT] " + itemName);
+        assertThat(suggestion.title()).doesNotContain("\uAD6C\uB9E4\uD655\uC815", "\uAD6C\uB9E4\uAC74");
+        assertThat(suggestion.memo()).contains(itemName + "(8,730\uC6D0)", memo);
+        assertThat(suggestion.paymentMethodId()).isNull();
+        assertThat(suggestion.paymentMethodName()).isNull();
+        assertThat(suggestion.categoryGroupId()).isEqualTo(88L);
+        assertThat(suggestion.categoryGroupName()).isEqualTo(UNCATEGORIZED);
+    }
+
 
     @Test
     void analyzeFallsBackToUncategorizedWhenSuggestedCategoryDoesNotExist() {

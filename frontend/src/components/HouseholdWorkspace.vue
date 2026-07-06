@@ -2516,8 +2516,8 @@ function setReceiptOcrDocumentType(documentType) {
 function normalizeOcrSuggestion(suggestion = {}) {
   const entryType = suggestion.entryType === 'INCOME' ? 'INCOME' : 'EXPENSE'
   return {
-    entryDate: suggestion.entryDate || calendarAnchorDate.value,
-    entryTime: normalizeEntryTimePayload(suggestion.entryTime),
+    entryDate: suggestion.entryDate || '',
+    entryTime: suggestion.entryTime ? normalizeEntryTimePayload(suggestion.entryTime) : '',
     title: suggestion.title || '',
     memo: suggestion.memo || '',
     amount: suggestion.amount !== null && suggestion.amount !== undefined && suggestion.amount !== ''
@@ -3031,7 +3031,7 @@ function buildReceiptOcrAppliedSnapshot(suggestion = {}) {
     : entryForm.amount
   return {
     entryDate: suggestion.entryDate || entryForm.entryDate,
-    entryTime: normalizeEntryTimePayload(suggestion.entryTime),
+    entryTime: suggestion.entryTime ? normalizeEntryTimePayload(suggestion.entryTime) : '',
     title: suggestion.title || entryForm.title,
     memo: suggestion.memo || entryForm.memo,
     amount,
@@ -3044,8 +3044,9 @@ function buildReceiptOcrAppliedSnapshot(suggestion = {}) {
 
 function isReceiptOcrAppliedSnapshotCurrent(snapshot = receiptOcr.lastAppliedSnapshot) {
   if (!snapshot) return false
+  const currentEntryTime = isEntryTimeEnabled.value ? normalizeEntryTimePayload(entryForm.entryTime) : ''
   return String(entryForm.entryDate || '') === String(snapshot.entryDate || '')
-    && String(normalizeEntryTimePayload(entryForm.entryTime) || '') === String(snapshot.entryTime || '')
+    && String(currentEntryTime || '') === String(snapshot.entryTime || '')
     && String(entryForm.title || '') === String(snapshot.title || '')
     && String(entryForm.memo || '') === String(snapshot.memo || '')
     && String(entryForm.amount || '') === String(snapshot.amount || '')
@@ -3104,7 +3105,7 @@ function buildReceiptOcrDirectEntryPayload(suggestion = {}) {
   }
   return {
     entryDate: suggestion.entryDate || entryForm.entryDate,
-    entryTime: normalizeEntryTimePayload(suggestion.entryTime),
+    entryTime: suggestion.entryTime ? normalizeEntryTimePayload(suggestion.entryTime) : '00:00',
     title: String(suggestion.title || '').trim(),
     memo: String(suggestion.memo || '').trim() || null,
     amount,
@@ -3200,7 +3201,9 @@ async function applyReceiptOcrSuggestion(suggestion = receiptOcr.suggestedEntry)
 
   editingEntryId.value = null
   entryForm.entryDate = suggestion.entryDate || entryForm.entryDate
-  entryForm.entryTime = normalizeEntryTimePayload(suggestion.entryTime)
+  if (suggestion.entryTime) {
+    entryForm.entryTime = normalizeEntryTimePayload(suggestion.entryTime)
+  }
   entryForm.title = suggestion.title || entryForm.title
   entryForm.memo = suggestion.memo || entryForm.memo
   entryForm.entryType = suggestion.entryType || 'EXPENSE'

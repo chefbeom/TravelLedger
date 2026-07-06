@@ -51,6 +51,41 @@ class LedgerOcrRemoteClientTest {
         assertThat(entry.warnings()).noneSatisfy(warning -> assertThat(warning).contains("시간은 null"));
     }
     @Test
+    void buildAnalyzeResponseInfersDateAndTimeFromRawTextWhenEntryFieldsAreMissing() {
+        LedgerOcrRemoteClient client = new LedgerOcrRemoteClient(new LedgerAiAnalysisProperties(), new ObjectMapper());
+        String responseBody = """
+                {
+                  "ok": true,
+                  "documentType": "PAYMENT_CAPTURE",
+                  "rawText": "payment completed nebibe one month subscription 4,900 KRW | 7. 6. 17:04 paid",
+                  "entries": [
+                    {
+                      "entryType": "EXPENSE",
+                      "title": "nebibe one month subscription",
+                      "memo": "nebibe one month subscription(4,900 KRW)",
+                      "amount": 4900,
+                      "vendor": "",
+                      "paymentMethodText": "",
+                      "categoryGroupName": "",
+                      "categoryDetailName": "",
+                      "categoryText": "",
+                      "items": [],
+                      "confidence": 0.9,
+                      "warnings": []
+                    }
+                  ],
+                  "warnings": []
+                }
+                """;
+
+        RemoteAnalyzeResponse response = client.buildAnalyzeResponse(responseBody, "PAYMENT_CAPTURE", System.nanoTime());
+        RemoteParsedResult entry = response.parsedEntries().get(0);
+
+        assertThat(entry.entryDate()).isEqualTo(LocalDate.of(LocalDate.now().getYear(), 7, 6));
+        assertThat(entry.entryTime()).isEqualTo(LocalTime.of(17, 4));
+        assertThat(entry.warnings()).anySatisfy(warning -> assertThat(warning).contains("\uC5F0\uB3C4"));
+    }
+    @Test
     void buildAnalyzeResponseMapsSalesSlipProductNameAliasToLineItemName() {
         LedgerOcrRemoteClient client = new LedgerOcrRemoteClient(new LedgerAiAnalysisProperties(), new ObjectMapper());
         String responseBody = """

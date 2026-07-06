@@ -805,15 +805,88 @@ function findCategoryDetailForSuggestion(groupId, entryType, detailId, detailNam
   return null
 }
 
-function resolveReceiptSuggestionCategory(suggestion = {}, entryType = 'EXPENSE') {
+function isUncategorizedCategoryName(value) {
+  return normalizeCategoryLookupName(value) === normalizeCategoryLookupName('\uBBF8\uBD84\uB958')
+}
+
+function findCategoryGroupByCandidateNames(entryType, names = []) {
+  const normalizedNames = names.map(normalizeCategoryLookupName).filter(Boolean)
+  return getGroupsForType(entryType)
+    .filter((group) => !isUncategorizedCategoryName(group.name))
+    .find((group) => normalizedNames.includes(normalizeCategoryLookupName(group.name))) || null
+}
+
+function findCategoryDetailByCandidateNames(groupId, entryType, names = []) {
+  const normalizedNames = names.map(normalizeCategoryLookupName).filter(Boolean)
+  return getDetailsForGroupId(groupId, entryType)
+    .find((detail) => normalizedNames.includes(normalizeCategoryLookupName(detail.name))) || null
+}
+
+function findCategoryByDetailCandidateNames(entryType, names = []) {
+  const groups = getGroupsForType(entryType).filter((group) => !isUncategorizedCategoryName(group.name))
+  for (const group of groups) {
+    const detail = findCategoryDetailByCandidateNames(group.id, entryType, names)
+    if (detail) {
+      return { group, detail }
+    }
+  }
+  return { group: null, detail: null }
+}
+
+function resolveReceiptCategoryHint(entryType, suggestion = {}, context = {}) {
+  const text = collectReceiptOcrTextCandidates(suggestion, context).join(' ').toLowerCase()
+  const rules = [
+    {
+      keywords: ['\uC815\uAE30\uAD6C\uB3C5', '\uAD6C\uB3C5', '\uBA64\uBC84\uC2ED', 'subscription'],
+      groupNames: ['\uAD6C\uB3C5', '\uCDE8\uBBF8', '\uBB38\uD654\uC0DD\uD65C'],
+      detailNames: ['\uAD6C\uB3C5', '\uC815\uAE30\uAD6C\uB3C5', '\uC815\uAE30\uACB0\uC81C', '\uBA64\uBC84\uC2ED', '\uCF58\uD150\uCE20'],
+    },
+    {
+      keywords: ['\uC6F9\uD230', '\uC2DC\uB9AC\uC988', '\uCFE0\uD0A4'],
+      groupNames: ['\uCDE8\uBBF8', '\uBB38\uD654\uC0DD\uD65C'],
+      detailNames: ['\uCF58\uD150\uCE20', '\uC6F9\uD230', '\uCDE8\uBBF8'],
+    },
+    {
+      keywords: ['\uAC8C\uC784', 'game'],
+      groupNames: ['\uAC8C\uC784', '\uCDE8\uBBF8'],
+      detailNames: ['\uAC8C\uC784', '\uCF58\uD150\uCE20', '\uCDE8\uBBF8'],
+    },
+  ]
+  for (const rule of rules) {
+    if (!rule.keywords.some((keyword) => text.includes(keyword.toLowerCase()))) {
+      continue
+    }
+    const group = findCategoryGroupByCandidateNames(entryType, rule.groupNames)
+    if (group) {
+      return {
+        group,
+        detail: findCategoryDetailByCandidateNames(group.id, entryType, rule.detailNames),
+      }
+    }
+    const byDetail = findCategoryByDetailCandidateNames(entryType, rule.detailNames)
+    if (byDetail.group) {
+      return byDetail
+    }
+  }
+  return { group: null, detail: null }
+}
+function resolveReceiptSuggestionCategory(suggestion = {}, entryType = 'EXPENSE', context = {}) {
   const latestEntry = getLatestEntryForType(entryType)
-  const matchedGroup = findCategoryGroupForSuggestion(entryType, suggestion.categoryGroupId, suggestion.categoryGroupName)
+  const suggestedGroup = findCategoryGroupForSuggestion(entryType, suggestion.categoryGroupId, suggestion.categoryGroupName)
+  const hintedCategory = resolveReceiptCategoryHint(entryType, suggestion, context)
+  const matchedGroup = suggestedGroup && !isUncategorizedCategoryName(suggestedGroup.name)
+    ? suggestedGroup
+    : hintedCategory.group || suggestedGroup
   const categoryGroupId = matchedGroup
     ? String(matchedGroup.id)
     : resolveDefaultGroupId(entryType, latestEntry)
-  const matchedDetail = categoryGroupId
+  const suggestedDetail = categoryGroupId
     ? findCategoryDetailForSuggestion(categoryGroupId, entryType, suggestion.categoryDetailId, suggestion.categoryDetailName)
     : null
+  const hintedDetail = hintedCategory.group && String(hintedCategory.group.id) === String(categoryGroupId)
+    ? hintedCategory.detail
+    : null
+  const matchedDetail = suggestedDetail || hintedDetail
   const categoryDetailId = matchedDetail
     ? String(matchedDetail.id)
     : resolveDefaultDetailId(categoryGroupId, latestEntry, entryType)
@@ -829,8 +902,7 @@ function resolveReceiptSuggestionCategory(suggestion = {}, entryType = 'EXPENSE'
     categoryDetailId,
     categoryDetailName: detail?.name || suggestion.categoryDetailName || '',
   }
-}
-function resolveDefaultPaymentMethodId(latestEntry) {
+}function resolveDefaultPaymentMethodId(latestEntry) {
   const latestPaymentMethodId = latestEntry?.paymentMethodId != null ? String(latestEntry.paymentMethodId) : ''
   if (latestPaymentMethodId && paymentMethods.value.some((item) => String(item.id) === latestPaymentMethodId)) {
     return latestPaymentMethodId
@@ -1404,6 +1476,76 @@ function hasEntryTimeValue(value) {
   return Boolean(normalized && normalized !== '00:00')
 }
 
+function buildReceiptIsoDateText(year, month, day) {
+  const parsedYear = Number(year)
+  const parsedMonth = Number(month)
+  const parsedDay = Number(day)
+  if (!Number.isInteger(parsedYear) || !Number.isInteger(parsedMonth) || !Number.isInteger(parsedDay)) {
+    return ''
+  }
+  const date = new Date(parsedYear, parsedMonth - 1, parsedDay)
+  if (date.getFullYear() !== parsedYear || date.getMonth() !== parsedMonth - 1 || date.getDate() !== parsedDay) {
+    return ''
+  }
+  return `${String(parsedYear).padStart(4, '0')}-${String(parsedMonth).padStart(2, '0')}-${String(parsedDay).padStart(2, '0')}`
+}
+
+function parseReceiptOcrDateText(value) {
+  const text = String(value ?? '').trim()
+  if (!text) return ''
+  const fullDate = text.match(/(^|[^0-9])((?:19|20)\d{2})\s*[-./]\s*(\d{1,2})\s*[-./]\s*(\d{1,2})(?=$|[^0-9])/)
+  if (fullDate) {
+    return buildReceiptIsoDateText(fullDate[2], fullDate[3], fullDate[4])
+  }
+  const monthDay = text.match(/(^|[^0-9])(\d{1,2})\s*[-./]\s*(\d{1,2})(?:\s*[-./])?(?=$|[^0-9])/)
+  if (monthDay) {
+    return buildReceiptIsoDateText(new Date().getFullYear(), monthDay[2], monthDay[3])
+  }
+  return ''
+}
+
+function parseReceiptOcrTimeText(value) {
+  const text = String(value ?? '').trim()
+  if (!text) return ''
+  const time = text.match(/(^|[^0-9])([01]?\d|2[0-3])\s*:\s*([0-5]\d)(?=$|[^0-9])/)
+  if (!time) return ''
+  return normalizeEntryTimePayload(`${time[2]}:${time[3]}`)
+}
+function collectReceiptOcrTextCandidates(suggestion = {}, context = {}) {
+  return [
+    suggestion.entryDate,
+    suggestion.entryTime,
+    suggestion.rawText,
+    context.rawText,
+    suggestion.title,
+    suggestion.memo,
+    suggestion.categoryGroupName,
+    suggestion.categoryDetailName,
+    suggestion.categoryText,
+  ]
+    .map((value) => String(value ?? '').trim())
+    .filter(Boolean)
+}
+
+function resolveReceiptSuggestionDate(suggestion = {}, context = {}) {
+  const direct = parseReceiptOcrDateText(suggestion.entryDate)
+  if (direct) return direct
+  for (const text of collectReceiptOcrTextCandidates(suggestion, context)) {
+    const parsed = parseReceiptOcrDateText(text)
+    if (parsed) return parsed
+  }
+  return ''
+}
+
+function resolveReceiptSuggestionTime(suggestion = {}, context = {}) {
+  const direct = parseReceiptOcrTimeText(suggestion.entryTime)
+  if (direct) return direct
+  for (const text of collectReceiptOcrTextCandidates(suggestion, context)) {
+    const parsed = parseReceiptOcrTimeText(text)
+    if (parsed) return parsed
+  }
+  return ''
+}
 function resolveEntryPaymentMethodPayload(entryType, paymentMethodId) {
   return entryType === 'INCOME' ? null : toOptionalNumber(paymentMethodId)
 }
@@ -2578,12 +2720,12 @@ function setReceiptOcrDocumentType(documentType) {
   receiptOcr.documentType = normalizeOcrDocumentType(documentType)
 }
 
-function normalizeOcrSuggestion(suggestion = {}) {
+function normalizeOcrSuggestion(suggestion = {}, context = {}) {
   const entryType = suggestion.entryType === 'INCOME' ? 'INCOME' : 'EXPENSE'
-  const category = resolveReceiptSuggestionCategory(suggestion, entryType)
+  const category = resolveReceiptSuggestionCategory(suggestion, entryType, context)
   return {
-    entryDate: suggestion.entryDate || '',
-    entryTime: suggestion.entryTime ? normalizeEntryTimePayload(suggestion.entryTime) : '',
+    entryDate: resolveReceiptSuggestionDate(suggestion, context),
+    entryTime: resolveReceiptSuggestionTime(suggestion, context),
     title: suggestion.title || '',
     memo: suggestion.memo || '',
     amount: suggestion.amount !== null && suggestion.amount !== undefined && suggestion.amount !== ''
@@ -2598,10 +2740,9 @@ function normalizeOcrSuggestion(suggestion = {}) {
     paymentMethodName: suggestion.paymentMethodName || '',
   }
 }
-
 function attachReceiptOcrSuggestionMeta(suggestion, item, entryIndex) {
   return {
-    ...normalizeOcrSuggestion(suggestion),
+    ...normalizeOcrSuggestion(suggestion, { rawText: item.rawText }),
     analysisId: item.analysisId || null,
     clientRequestId: item.clientRequestId || null,
     analysisStatus: item.analysisStatus || null,
@@ -2744,7 +2885,7 @@ function mapImageAnalysisHistoryToReviewItem(history = {}) {
     status: status === 'COMPLETED' ? 'done' : status === 'PROCESSING' ? 'analyzing' : status === 'CANCELLED' ? 'cancelled' : 'error',
     error: history.errorMessage || '',
     rawText: history.rawText || result.rawText || '',
-    suggestedEntries: suggestions.map((suggestion, entryIndex) => attachReceiptOcrSuggestionMeta(suggestion, { id: itemId, analysisId, clientRequestId, analysisStatus }, entryIndex)),
+    suggestedEntries: suggestions.map((suggestion, entryIndex) => attachReceiptOcrSuggestionMeta(suggestion, { id: itemId, analysisId, clientRequestId, analysisStatus, rawText: history.rawText || result.rawText || '' }, entryIndex)),
     lineItems: Array.isArray(result.lineItems) ? result.lineItems : [],
     warnings: Array.isArray(result.warnings) ? result.warnings : [],
     confidence: result.confidence ?? null,

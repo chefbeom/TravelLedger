@@ -301,7 +301,7 @@ public class LedgerOcrRemoteClient {
                     ? objectMapper.convertValue(entriesNode, new TypeReference<List<RemoteParsedResult>>() {})
                     : List.of();
             if (entriesNode.isArray()) {
-                entries = normalizeEntryTemporalValues(entriesNode, entries);
+                entries = normalizeEntryTemporalValues(entriesNode, entries, rawText);
             }
             entries = entries.stream()
                     .map(entry -> mergeRootWarnings(entry, rootWarnings))
@@ -310,7 +310,7 @@ public class LedgerOcrRemoteClient {
             if (firstEntry == null && root.has("parsed")) {
                 JsonNode parsedNode = root.path("parsed");
                 firstEntry = objectMapper.convertValue(parsedNode, RemoteParsedResult.class);
-                firstEntry = normalizeEntryTemporalValues(parsedNode, firstEntry);
+                firstEntry = normalizeEntryTemporalValues(parsedNode, firstEntry, rawText);
                 firstEntry = mergeRootWarnings(firstEntry, rootWarnings);
                 entries = List.of(firstEntry);
             }
@@ -325,7 +325,7 @@ public class LedgerOcrRemoteClient {
         }
     }
 
-    private List<RemoteParsedResult> normalizeEntryTemporalValues(JsonNode entriesNode, List<RemoteParsedResult> entries) {
+    private List<RemoteParsedResult> normalizeEntryTemporalValues(JsonNode entriesNode, List<RemoteParsedResult> entries, String rawText) {
         if (entries == null || entries.isEmpty()) {
             return List.of();
         }
@@ -335,17 +335,18 @@ public class LedgerOcrRemoteClient {
         List<RemoteParsedResult> normalized = new ArrayList<>(entries.size());
         for (int index = 0; index < entries.size(); index++) {
             JsonNode entryNode = index < entriesNode.size() ? entriesNode.get(index) : null;
-            normalized.add(normalizeEntryTemporalValues(entryNode, entries.get(index)));
+            normalized.add(normalizeEntryTemporalValues(entryNode, entries.get(index), rawText));
         }
         return normalized;
     }
 
-    private RemoteParsedResult normalizeEntryTemporalValues(JsonNode entryNode, RemoteParsedResult entry) {
+    private RemoteParsedResult normalizeEntryTemporalValues(JsonNode entryNode, RemoteParsedResult entry, String rawText) {
         if (entry == null || entryNode == null || entryNode.isMissingNode() || entryNode.isNull()) {
             return entry;
         }
-        List<String> dateTexts = collectTextFields(entryNode, DATE_TEXT_FIELDS);
-        List<String> timeTexts = collectTextFields(entryNode, TIME_TEXT_FIELDS);
+        List<String> dateTexts = new ArrayList<>(collectTextFields(entryNode, DATE_TEXT_FIELDS));
+        List<String> timeTexts = new ArrayList<>(collectTextFields(entryNode, TIME_TEXT_FIELDS));
+        addFallbackTemporalTexts(dateTexts, timeTexts, entry, rawText);
         LocalDate entryDate = entry.entryDate() != null
                 ? entry.entryDate()
                 : firstParsedDate(dateTexts, timeTexts);
@@ -386,6 +387,33 @@ public class LedgerOcrRemoteClient {
         return values;
     }
 
+    private void addFallbackTemporalTexts(List<String> dateTexts, List<String> timeTexts, RemoteParsedResult entry, String rawText) {
+        List<String> fallbackTexts = new ArrayList<>();
+        addTextIfPresent(fallbackTexts, rawText);
+        if (entry != null) {
+            addTextIfPresent(fallbackTexts, entry.title());
+            addTextIfPresent(fallbackTexts, entry.memo());
+            addTextIfPresent(fallbackTexts, entry.vendor());
+            addTextIfPresent(fallbackTexts, entry.categoryText());
+            if (entry.lineItems() != null) {
+                entry.lineItems().forEach(item -> addTextIfPresent(fallbackTexts, item == null ? null : item.itemName()));
+            }
+        }
+        for (String text : fallbackTexts) {
+            if (!dateTexts.contains(text)) {
+                dateTexts.add(text);
+            }
+            if (!timeTexts.contains(text)) {
+                timeTexts.add(text);
+            }
+        }
+    }
+
+    private void addTextIfPresent(List<String> texts, String value) {
+        if (hasText(value)) {
+            texts.add(value.trim());
+        }
+    }
     private LocalDate firstParsedDate(List<String> primaryTexts, List<String> fallbackTexts) {
         for (String value : concatTextCandidates(primaryTexts, fallbackTexts)) {
             LocalDate parsed = FlexibleLocalDateDeserializer.parseDate(value);

@@ -125,6 +125,7 @@ public class LedgerOcrRemoteClient {
                         Amounts must be the final total paid for that one visible row. Do not use gift-card face values such as 1만원권 or 3만원권 as amount when a paid price such as 8,730원 or 27,000원 is visible. Do not split one row into item-level entries. Put item-level names/prices in items or memo.
                         JSON amount fields must be numeric values without commas, currency symbols, or unit text.
                         Titles should describe the payment source and item/service. When the platform or merchant is visible, use the Korean form "플랫폼/가맹점 : 상품 또는 서비스명" such as "네이버페이 : 웹툰·시리즈 쿠키 59개" or "네이버페이 : 메가MGC커피 모바일금액권 1만원권". N Pay, N+ membership, a green N logo, or Naver-related payment branding is a Naver Pay platform clue. If the platform/merchant is not clearly visible, use only the clearest item/service title.
+                        Do not shorten titles to only a merchant, platform, status, or generic event word. Keep the visible product/service name, count, and voucher face value in the title when they identify the transaction, such as 쿠키 59개, 모바일쿠폰 1만원권, 모바일금액권 3만원권.
                         Remove decorative trailing chevrons such as >, action labels such as 리뷰쓰기 or 다시 담기, and status-only words from titles.
 
                         Date and time rules:
@@ -132,6 +133,7 @@ public class LedgerOcrRemoteClient {
                         Important labels include 주문 날짜, 결제일자, 거래일시, 승인일시, TRANS DATE, order date, payment date, approval time, and transaction time.
                         If a field contains both date and time such as 2026.06.22 02:38:34, 2026-06-26 17:50:39, or 7. 5. 15:15, split it into date=YYYY-MM-DD and time=HH:mm. Drop seconds.
                         For Korean app shorthand like "7. 5. 15:15 결제", the first number pair is month/day and the final HH:mm token is the time: date=YYYY-MM-DD, time=15:15. Never output a Korean day label such as "15일" as time. Times must be HH:mm or null.
+                        Each PAYMENT_CAPTURE row/card can have a different HH:mm. Read date/time from the same visible row as that row's amount/title; never copy a time from the row above or below. If a row's own time is unreadable, output time null and add a warning rather than reusing a nearby row's time. In stacked Naver Pay rows, lower rows can share the same date but have different minutes such as 18:32 and 18:29; preserve the visible minute for each row.
                         If the visible date omits the year, use the current server year supplied by the user message and add a Korean warning that the year was inferred. If only a date is visible and no time is visible, use time null.
 
                         Amount, payment method, category, and memo rules:
@@ -139,6 +141,7 @@ public class LedgerOcrRemoteClient {
                         Do not infer paymentMethodText unless a concrete card/account/cash/transfer/payment method is explicitly visible. Do not use payment platforms such as 네이버페이 as paymentMethodText unless the image explicitly says it is the payment method.
                         Choose logical Korean categoryGroupName/categoryDetailName from the visible words only. For webtoon, cookie, game, digital content, and entertainment purchases, prefer hobby/culture/content-like Korean categories such as 취미 or 문화 when appropriate, but do not label as 구독 unless recurring/regular payment is visible. For coffee, cafe, mobile voucher, or food coupon purchases, prefer 식비/카페 or 식비/간식 when appropriate. Use empty strings when uncertain.
                         Memo must preserve review-useful details visible in the image without inventing facts. For receipts, list purchased products in items and memo. For multi-payment captures, include visible status, product/service text, amount detail, date/time text, and other useful row context as-is.
+                        For PAYMENT_CAPTURE rows, memo should normally be non-empty whenever visible row context exists. Include the original status text, product/service label, final paid amount, and visible date/time text in Korean; do not leave memo empty just because the title already summarizes the row.
 
                         Every entries item must be a transaction candidate for user review and must include entryType, title, amount, items, and warnings.
                         Do not put product-only rows directly in entries. For a receipt, put purchased products inside entries[0].items and use the final paid total as entries[0].amount.

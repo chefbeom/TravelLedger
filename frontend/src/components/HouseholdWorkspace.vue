@@ -398,8 +398,10 @@ let searchRequestTimerId = null
 let titleSuggestionSearchTimerId = null
 let titleSuggestionSearchRequestId = 0
 let receiptOcrItemSequence = 0
+let receiptOcrHistoryRefreshTimerId = null
 const RECEIPT_OCR_HISTORY_POLL_INTERVAL_MS = 2500
 const RECEIPT_OCR_HISTORY_POLL_ATTEMPTS = 240
+const RECEIPT_OCR_HISTORY_AUTO_REFRESH_INTERVAL_MS = 5000
 let foreignExchangeTimerId = null
 let foreignExchangeRequestId = 0
 let foreignExchangeLoadedKey = ''
@@ -1164,6 +1166,7 @@ onBeforeUnmount(() => {
   if (foreignExchangeTimerId) {
     window.clearTimeout(foreignExchangeTimerId)
   }
+  clearReceiptOcrHistoryAutoRefresh()
 })
 
 function setFeedback(message = '', error = '') {
@@ -2679,9 +2682,15 @@ function applyEntryTitleSuggestion(suggestion) {
 function setReceiptOcrView(view) {
   receiptOcr.activeView = ['analyze', 'history', 'rules'].includes(view) ? view : ''
   receiptOcr.historyDetailAnalysisId = ''
-  if (receiptOcr.activeView === 'history' && !receiptOcr.historyItems.length && !receiptOcr.isHistoryLoading) {
-    loadReceiptOcrHistories(0)
+  if (receiptOcr.activeView !== 'history') {
+    clearReceiptOcrHistoryAutoRefresh()
+    return
   }
+  if (!receiptOcr.historyItems.length && !receiptOcr.isHistoryLoading) {
+    loadReceiptOcrHistories(0)
+    return
+  }
+  scheduleReceiptOcrHistoryAutoRefresh()
 }
 
 function setReceiptRequestPromptEnabled(value) {
@@ -2777,10 +2786,12 @@ function openReceiptOcrModal() {
   receiptOcr.isOpen = true
   receiptOcr.activeView = ''
   receiptOcr.historyDetailAnalysisId = ''
+  clearReceiptOcrHistoryAutoRefresh()
 }
 
 function closeReceiptOcrModal() {
   receiptOcr.isOpen = false
+  clearReceiptOcrHistoryAutoRefresh()
 }
 
 function normalizeOcrDocumentType(documentType) {
@@ -2970,6 +2981,38 @@ function normalizeImageAnalysisHistoryStatus(status) {
   return ['PROCESSING', 'COMPLETED', 'FAILED', 'CANCELLED'].includes(normalized) ? normalized : 'COMPLETED'
 }
 
+function hasProcessingReceiptOcrHistoryItems(items = receiptOcr.historyItems) {
+  return Array.isArray(items) && items.some((history) => (
+    normalizeImageAnalysisHistoryStatus(history?.status || history?.result?.analysisStatus) === 'PROCESSING'
+  ))
+}
+
+function clearReceiptOcrHistoryAutoRefresh() {
+  if (!receiptOcrHistoryRefreshTimerId || typeof window === 'undefined') {
+    receiptOcrHistoryRefreshTimerId = null
+    return
+  }
+  window.clearTimeout(receiptOcrHistoryRefreshTimerId)
+  receiptOcrHistoryRefreshTimerId = null
+}
+
+function scheduleReceiptOcrHistoryAutoRefresh() {
+  clearReceiptOcrHistoryAutoRefresh()
+  if (typeof window === 'undefined') {
+    return
+  }
+  if (!receiptOcr.isOpen || receiptOcr.activeView !== 'history' || !hasProcessingReceiptOcrHistoryItems()) {
+    return
+  }
+  receiptOcrHistoryRefreshTimerId = window.setTimeout(async () => {
+    receiptOcrHistoryRefreshTimerId = null
+    if (!receiptOcr.isOpen || receiptOcr.activeView !== 'history') {
+      return
+    }
+    await loadReceiptOcrHistories(receiptOcr.historyPage || 0, { silent: true })
+  }, RECEIPT_OCR_HISTORY_AUTO_REFRESH_INTERVAL_MS)
+}
+
 function normalizeReceiptApprovedEntryIndexes(values = []) {
   if (!Array.isArray(values)) {
     return []
@@ -3128,8 +3171,12 @@ async function waitForReceiptOcrHistoryResult(item, initialResult = {}) {
   throw new Error('AI image analysis is still running. Please check the analysis history again later.')
 }
 
-async function loadReceiptOcrHistories(page = receiptOcr.historyPage || 0) {
-  receiptOcr.isHistoryLoading = true
+async function loadReceiptOcrHistories(page = receiptOcr.historyPage || 0, options = {}) {
+  const silent = Boolean(options?.silent)
+  clearReceiptOcrHistoryAutoRefresh()
+  if (!silent) {
+    receiptOcr.isHistoryLoading = true
+  }
   receiptOcr.historyError = ''
   try {
     const response = await fetchLedgerImageAnalysisHistories({ page, size: receiptOcr.historySize })
@@ -3140,7 +3187,10 @@ async function loadReceiptOcrHistories(page = receiptOcr.historyPage || 0) {
   } catch (error) {
     receiptOcr.historyError = error.message || '이미지 분석 기록을 불러오지 못했습니다.'
   } finally {
-    receiptOcr.isHistoryLoading = false
+    if (!silent) {
+      receiptOcr.isHistoryLoading = false
+    }
+    scheduleReceiptOcrHistoryAutoRefresh()
   }
 }
 
@@ -3424,11 +3474,11 @@ async function startSelectedReceiptOcrAnalysis(payload = {}) {
   })
   syncReceiptOcrBusyState()
 
-  await Promise.all(items.map(async (item) => {
+  for (const item of items) {
     if (!isReceiptOcrItemActive(item) || item.status !== 'queued') {
       receiptOcr.batchCompletedCount = Math.min(receiptOcr.batchCompletedCount + 1, receiptOcr.batchTotalCount)
       syncReceiptOcrBusyState()
-      return
+      continue
     }
     const itemPrompt = item.requestPromptEnabled ? item.requestPrompt : fallbackPrompt
     if (normalizeReceiptPrompt(itemPrompt)) {
@@ -3438,7 +3488,7 @@ async function startSelectedReceiptOcrAnalysis(payload = {}) {
     await analyzeReceiptFile(item.sourceFile, normalizeOcrDocumentType(item.documentType || receiptOcr.documentType), item, prompt, useExistingEntryStyle)
     receiptOcr.batchCompletedCount = Math.min(receiptOcr.batchCompletedCount + 1, receiptOcr.batchTotalCount)
     syncReceiptOcrBusyState()
-  }))
+  }
   if (!receiptOcr.pendingCount) {
     receiptOcr.batchTotalCount = 0
     receiptOcr.batchCompletedCount = 0
@@ -3476,11 +3526,11 @@ async function analyzeReceiptImage(payload) {
   }))
   receiptOcr.items.unshift(...queue.map(({ item }) => item))
   syncReceiptOcrBusyState()
-  await Promise.all(queue.map(async ({ file, item }) => {
+  for (const { file, item } of queue) {
     if (isReceiptOcrItemActive(item)) {
       await analyzeReceiptFile(file, documentType, item, prompt, useExistingEntryStyle)
     }
-  }))
+  }
   if (queue.some(({ item }) => item.status === 'done')) {
     receiptOcr.activeView = 'history'
     await loadReceiptOcrHistories(0)

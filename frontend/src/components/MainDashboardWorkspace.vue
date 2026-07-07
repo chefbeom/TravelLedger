@@ -7,7 +7,9 @@ import {
   fetchCategories,
   fetchCompare,
   fetchDashboard,
+  fetchDriveFolderDestinations,
   fetchDriveHomeSummary,
+  fetchDrivePhotos,
   fetchDriveRecentFiles,
   fetchLayoutSetting,
   fetchPaymentMethods,
@@ -163,6 +165,9 @@ const householdDashboard = ref(null)
 const travelPortfolio = ref(null)
 const driveSummary = ref(null)
 const driveRecentFileItems = ref([])
+const drivePhotoFileItems = ref([])
+const driveFolderItems = ref([])
+const photoFrameFolderPhotoItems = ref({})
 const weekCompareRows = ref([])
 const monthCompareRows = ref([])
 const categories = ref([])
@@ -197,6 +202,18 @@ let paletteRemoteHydrationSequence = 0
 let paletteRemoteSaveTimer = 0
 let pendingPaletteRemotePayload = null
 let paletteChangedDuringRemoteHydration = false
+const photoFrameSettings = reactive({
+  open: false,
+  paletteId: '',
+  source: 'all',
+  mode: 'latest',
+  fixedPhotoId: '',
+  driveFolderId: '',
+  travelPlanId: '',
+  sort: 'recent',
+  loading: false,
+  error: '',
+})
 
 const userStorageId = computed(() => props.currentUser?.id || props.currentUser?.loginId || 'anonymous')
 const storageKey = computed(() => `calen-main-dashboard-palettes:${MAIN_DASHBOARD_STORAGE_VERSION}:${userStorageId.value}:${MAIN_DASHBOARD_SCOPE}`)
@@ -295,11 +312,15 @@ const driveCapacity = computed(() => {
     percent: totalBytes > 0 ? Math.min(100, Math.round((usedBytes / totalBytes) * 100)) : 0,
   }
 })
+const allDrivePhotoItems = computed(() => collectDrivePhotoItems(
+  drivePhotoFileItems.value.length ? drivePhotoFileItems.value : allRecentDriveFiles.value,
+))
+const allTravelPhotoItems = computed(() => collectTravelPhotoItems())
 const photoFrameItems = computed(() => [
-  ...collectDrivePhotoItems(allRecentDriveFiles.value),
-  ...collectTravelPhotoItems(),
-].slice(0, 6))
-const heroPhoto = computed(() => photoFrameItems.value[0] ?? null)
+  ...allDrivePhotoItems.value,
+  ...allTravelPhotoItems.value,
+])
+const photoFrameSettingsPhotos = computed(() => photoFramePhotosForOptions(photoFrameSettings))
 const quickActionItems = computed(() => [
   { key: 'household', label: '가계부 입력', meta: '달력/대시보드', route: 'household' },
   { key: 'travel', label: '여행 기록', meta: '예산/사진/지도', route: 'travel' },
@@ -418,10 +439,14 @@ function collectDrivePhotoItems(items) {
     .filter((item) => isImageFile(item))
     .map((item) => ({
       id: `drive-${item.id ?? fileName(item)}`,
+      rawId: item.id == null ? '' : String(item.id),
+      sourceType: 'drive',
       title: fileName(item),
       source: '드라이브',
       imageUrl: buildDriveThumbnailPath(item),
       openUrl: buildDriveOpenPath(item),
+      parentId: item.parentId == null ? '' : String(item.parentId),
+      updatedAt: item.lastModifyDate || item.uploadDate || '',
     }))
     .filter((item) => item.imageUrl)
 }
@@ -435,16 +460,215 @@ function collectTravelPhotoItems() {
       if (!imageUrl) return
       photos.push({
         id: `travel-${item.id ?? imageUrl}`,
+        rawId: item.id == null ? '' : String(item.id),
+        sourceType: 'travel',
+        planId: plan.id == null ? '' : String(plan.id),
         title: item.caption || item.originalFileName || plan.name || '여행 사진',
         source: plan.name || '여행',
         imageUrl,
         openUrl: imageUrl,
+        updatedAt: item.takenAt || item.createdAt || plan.updatedAt || plan.startDate || '',
       })
     })
   })
   return photos
 }
 
+function normalizePhotoFrameOptions(options = {}) {
+  const source = ['all', 'drive', 'travel', 'drive-folder', 'travel-plan'].includes(options.source) ? options.source : 'all'
+  const mode = ['latest', 'fixed', 'random', 'name'].includes(options.mode) ? options.mode : 'latest'
+  const sort = ['recent', 'name'].includes(options.sort) ? options.sort : 'recent'
+  return {
+    source,
+    mode,
+    sort,
+    fixedPhotoId: String(options.fixedPhotoId || ''),
+    driveFolderId: String(options.driveFolderId || ''),
+    travelPlanId: String(options.travelPlanId || ''),
+  }
+}
+
+function folderPhotosFor(folderId) {
+  const key = String(folderId || '')
+  return key ? collectDrivePhotoItems(photoFrameFolderPhotoItems.value[key] || []) : []
+}
+
+function photoFramePhotosForOptions(options = {}) {
+  const normalized = normalizePhotoFrameOptions(options)
+  if (normalized.source === 'drive') {
+    return allDrivePhotoItems.value
+  }
+  if (normalized.source === 'travel') {
+    return allTravelPhotoItems.value
+  }
+  if (normalized.source === 'drive-folder') {
+    return folderPhotosFor(normalized.driveFolderId)
+  }
+  if (normalized.source === 'travel-plan') {
+    return allTravelPhotoItems.value.filter((photo) => String(photo.planId || '') === normalized.travelPlanId)
+  }
+  return photoFrameItems.value
+}
+
+function sortPhotoFramePhotos(items, options = {}) {
+  const normalized = normalizePhotoFrameOptions(options)
+  const nextItems = [...(items || [])]
+  if (normalized.mode === 'name' || normalized.sort === 'name') {
+    return nextItems.sort((left, right) => String(left.title || '').localeCompare(String(right.title || ''), 'ko-KR'))
+  }
+  return nextItems.sort((left, right) => String(right.updatedAt || '').localeCompare(String(left.updatedAt || '')))
+}
+
+function photoFrameRandomIndex(length, seed) {
+  if (!length) return -1
+  let hash = 0
+  const text = String(seed || '')
+  for (let index = 0; index < text.length; index += 1) {
+    hash = ((hash << 5) - hash) + text.charCodeAt(index)
+    hash |= 0
+  }
+  return Math.abs(hash) % length
+}
+
+function photoFrameDisplayItemsFor(palette) {
+  const options = normalizePhotoFrameOptions(palette?.options)
+  const items = sortPhotoFramePhotos(photoFramePhotosForOptions(options), options)
+  if (!items.length) return []
+  if (options.mode === 'fixed') {
+    const fixed = items.find((photo) => String(photo.id) === options.fixedPhotoId)
+    return fixed ? [fixed, ...items.filter((photo) => String(photo.id) !== options.fixedPhotoId)] : items
+  }
+  if (options.mode === 'random') {
+    const index = photoFrameRandomIndex(items.length, `${palette?.id || ''}:${new Date().toISOString().slice(0, 10)}`)
+    const selected = items[index]
+    return selected ? [selected, ...items.filter((_, itemIndex) => itemIndex !== index)] : items
+  }
+  return items
+}
+
+function photoFrameHeroFor(palette) {
+  return photoFrameDisplayItemsFor(palette)[0] || null
+}
+
+function photoFrameModeLabel(palette) {
+  const options = normalizePhotoFrameOptions(palette?.options)
+  const sourceLabel = {
+    all: '전체 사진',
+    drive: '드라이브',
+    travel: '여행',
+    'drive-folder': '드라이브 폴더',
+    'travel-plan': '특정 여행',
+  }[options.source] || '전체 사진'
+  const modeLabel = {
+    latest: '최신',
+    fixed: '고정',
+    random: '랜덤',
+    name: '이름순',
+  }[options.mode] || '최신'
+  return `${sourceLabel} · ${modeLabel}`
+}
+
+async function loadPhotoFrameFolderPhotos(folderId, sort = 'recent') {
+  const key = String(folderId || '')
+  if (!key) return []
+  photoFrameSettings.loading = true
+  photoFrameSettings.error = ''
+  try {
+    const items = await fetchDrivePhotos({ parentId: key, sortOption: sort, size: 300 })
+    photoFrameFolderPhotoItems.value = {
+      ...photoFrameFolderPhotoItems.value,
+      [key]: items || [],
+    }
+    return items || []
+  } catch (error) {
+    photoFrameSettings.error = error.message || '폴더 사진을 불러오지 못했습니다.'
+    return []
+  } finally {
+    photoFrameSettings.loading = false
+  }
+}
+
+async function refreshConfiguredPhotoFrameFolders() {
+  const folderIds = Array.from(new Set(palettes.value
+    .filter((palette) => palette.type === 'photo-frame')
+    .map((palette) => normalizePhotoFrameOptions(palette.options))
+    .filter((options) => options.source === 'drive-folder' && options.driveFolderId)
+    .map((options) => options.driveFolderId)))
+  for (const folderId of folderIds) {
+    if (!photoFrameFolderPhotoItems.value[folderId]) {
+      await loadPhotoFrameFolderPhotos(folderId)
+    }
+  }
+}
+
+function photoFrameSourceLabel(photo) {
+  return photo ? `${photo.source} · ${photo.title}` : '사진 선택'
+}
+
+async function openPhotoFrameSettings(palette) {
+  const options = normalizePhotoFrameOptions(palette?.options)
+  photoFrameSettings.open = true
+  photoFrameSettings.paletteId = String(palette?.id || '')
+  photoFrameSettings.source = options.source
+  photoFrameSettings.mode = options.mode
+  photoFrameSettings.fixedPhotoId = options.fixedPhotoId
+  photoFrameSettings.driveFolderId = options.driveFolderId
+  photoFrameSettings.travelPlanId = options.travelPlanId
+  photoFrameSettings.sort = options.sort
+  photoFrameSettings.error = ''
+  if (!driveFolderItems.value.length) {
+    try {
+      driveFolderItems.value = await fetchDriveFolderDestinations()
+    } catch (error) {
+      photoFrameSettings.error = error.message || '드라이브 폴더를 불러오지 못했습니다.'
+    }
+  }
+  if (photoFrameSettings.source === 'drive-folder' && photoFrameSettings.driveFolderId) {
+    await loadPhotoFrameFolderPhotos(photoFrameSettings.driveFolderId, photoFrameSettings.sort)
+  }
+}
+
+function closePhotoFrameSettings() {
+  photoFrameSettings.open = false
+  photoFrameSettings.paletteId = ''
+  photoFrameSettings.error = ''
+}
+
+async function handlePhotoFrameFolderChange() {
+  photoFrameSettings.fixedPhotoId = ''
+  if (photoFrameSettings.driveFolderId) {
+    await loadPhotoFrameFolderPhotos(photoFrameSettings.driveFolderId, photoFrameSettings.sort)
+  }
+}
+
+function handlePhotoFrameSourceChange() {
+  photoFrameSettings.fixedPhotoId = ''
+  if (photoFrameSettings.source !== 'drive-folder') {
+    photoFrameSettings.driveFolderId = ''
+  }
+  if (photoFrameSettings.source !== 'travel-plan') {
+    photoFrameSettings.travelPlanId = ''
+  }
+}
+
+function savePhotoFrameSettings() {
+  const target = palettes.value.find((palette) => String(palette.id) === String(photoFrameSettings.paletteId))
+  if (!target) return
+  const nextOptions = {
+    ...(target.options || {}),
+    source: photoFrameSettings.source,
+    mode: photoFrameSettings.mode,
+    fixedPhotoId: photoFrameSettings.fixedPhotoId,
+    driveFolderId: photoFrameSettings.source === 'drive-folder' ? photoFrameSettings.driveFolderId : '',
+    travelPlanId: photoFrameSettings.source === 'travel-plan' ? photoFrameSettings.travelPlanId : '',
+    sort: photoFrameSettings.sort,
+  }
+  palettes.value = normalizeMainPalettes(palettes.value.map((palette) => (
+    String(palette.id) === String(target.id) ? { ...palette, options: nextOptions } : palette
+  )))
+  persistPalettes()
+  closePhotoFrameSettings()
+}
 function createPaletteId(templateId) {
   return `${templateId}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
 }
@@ -708,6 +932,8 @@ function hydrateSummaryCache() {
     travelPortfolio.value = cache.travelPortfolio ?? null
     driveSummary.value = cache.driveSummary ?? null
     driveRecentFileItems.value = cache.driveRecentFileItems ?? []
+    drivePhotoFileItems.value = cache.drivePhotoFileItems ?? []
+    driveFolderItems.value = cache.driveFolderItems ?? []
     weekCompareRows.value = cache.weekCompareRows ?? []
     monthCompareRows.value = cache.monthCompareRows ?? []
     categories.value = cache.categories ?? []
@@ -727,6 +953,8 @@ function persistSummaryCache() {
       travelPortfolio: travelPortfolio.value,
       driveSummary: driveSummary.value,
       driveRecentFileItems: driveRecentFileItems.value,
+      drivePhotoFileItems: drivePhotoFileItems.value,
+      driveFolderItems: driveFolderItems.value,
       weekCompareRows: weekCompareRows.value,
       monthCompareRows: monthCompareRows.value,
       categories: categories.value,
@@ -802,7 +1030,7 @@ function compareRowsVisibleFor(palette) {
 function photoStripItemsFor(palette) {
   const span = mainSpanForPalette(palette)
   const count = span.w >= 5 ? 6 : span.w >= 4 ? 5 : 4
-  return photoFrameItems.value.slice(1, count)
+  return photoFrameDisplayItemsFor(palette).slice(1, count)
 }
 
 function quickStat(key) {
@@ -1125,6 +1353,12 @@ async function loadSummaries() {
     settleSummaryRequest(loadId, fetchDriveRecentFiles(), (value) => {
       driveRecentFileItems.value = value ?? []
     }),
+    settleSummaryRequest(loadId, fetchDrivePhotos({ sortOption: 'recent', size: 300 }), (value) => {
+      drivePhotoFileItems.value = value ?? []
+    }),
+    settleSummaryRequest(loadId, fetchDriveFolderDestinations(), (value) => {
+      driveFolderItems.value = value ?? []
+    }),
     settleSummaryRequest(loadId, fetchCompare(anchorDate, 'WEEK', 2), (value) => {
       weekCompareRows.value = value ?? []
     }),
@@ -1142,6 +1376,7 @@ async function loadSummaries() {
   ])
 
   if (loadId === summaryLoadSequence) {
+    await refreshConfiguredPhotoFrameFolders()
     syncQuickEntryDefaults()
 
     const failed = results.slice(0, 6).filter((result) => result.status === 'rejected')
@@ -1253,11 +1488,19 @@ onBeforeUnmount(() => {
                 paletteSizeClasses(palette),
               ]"
             >
-              <header class="main-palette__head">
+                            <header class="main-palette__head">
                 <strong>{{ paletteTitle(palette) }}</strong>
-                <div v-if="isEditMode" class="main-palette__actions" data-no-drag="true">
-                  <button type="button" @click="hidePalette(palette.id)">숨김</button>
-                  <button type="button" @click="removePalette(palette.id)">삭제</button>
+                <div class="main-palette__head-actions" data-no-drag="true">
+                  <button
+                    v-if="palette.type === 'photo-frame'"
+                    class="main-palette__settings-button"
+                    type="button"
+                    @click="openPhotoFrameSettings(palette)"
+                  >설정</button>
+                  <div v-if="isEditMode" class="main-palette__actions">
+                    <button type="button" @click="hidePalette(palette.id)">숨김</button>
+                    <button type="button" @click="removePalette(palette.id)">삭제</button>
+                  </div>
                 </div>
               </header>
 
@@ -1393,25 +1636,24 @@ onBeforeUnmount(() => {
                   </div>
                 </template>
 
-                <template v-else-if="palette.type === 'photo-frame'">
+                                <template v-else-if="palette.type === 'photo-frame'">
                   <div class="main-palette__photo-frame">
-                    <a
-                      v-if="heroPhoto"
+                    <button
+                      v-if="photoFrameHeroFor(palette)"
                       class="main-palette__photo-hero"
-                      :href="heroPhoto.openUrl || heroPhoto.imageUrl"
-                      target="_blank"
-                      rel="noreferrer"
+                      type="button"
                       data-no-drag="true"
+                      @click="openPhotoFrameSettings(palette)"
                     >
-                      <img :src="heroPhoto.imageUrl" :alt="heroPhoto.title" loading="lazy" decoding="async" />
-                      <span>{{ heroPhoto.source }}</span>
-                      <strong>{{ heroPhoto.title }}</strong>
-                    </a>
-                    <div v-else class="main-palette__photo-empty">
+                      <img :src="photoFrameHeroFor(palette).imageUrl" :alt="photoFrameHeroFor(palette).title" loading="lazy" decoding="async" />
+                      <span>{{ photoFrameModeLabel(palette) }}</span>
+                      <strong>{{ photoFrameHeroFor(palette).title }}</strong>
+                    </button>
+                    <button v-else class="main-palette__photo-empty" type="button" data-no-drag="true" @click="openPhotoFrameSettings(palette)">
                       <strong>표시할 사진이 없습니다.</strong>
-                      <span>드라이브나 여행 기록에 사진을 업로드하면 액자처럼 표시됩니다.</span>
-                    </div>
-                    <div v-if="photoFrameItems.length > 1" class="main-palette__photo-strip">
+                      <span>드라이브 또는 여행 사진을 선택해 액자를 설정하세요.</span>
+                    </button>
+                    <div v-if="photoFrameDisplayItemsFor(palette).length > 1" class="main-palette__photo-strip">
                       <img
                         v-for="photo in photoStripItemsFor(palette)"
                         :key="photo.id"
@@ -1547,6 +1789,111 @@ onBeforeUnmount(() => {
         <button class="main-dashboard__primary" type="button" @click="toggleEditMode">편집 완료</button>
       </template>
     </aside>
+    <div v-if="photoFrameSettings.open" class="main-photo-frame-modal" data-no-drag="true" @click.self="closePhotoFrameSettings">
+      <section class="main-photo-frame-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="main-photo-frame-title">
+        <header class="main-photo-frame-modal__header">
+          <div>
+            <span>사진 액자</span>
+            <h2 id="main-photo-frame-title">사진 액자 설정</h2>
+          </div>
+          <button type="button" @click="closePhotoFrameSettings">닫기</button>
+        </header>
+
+        <div class="main-photo-frame-modal__body">
+          <div class="main-photo-frame-modal__form">
+            <label>
+              <span>사진 가져오기</span>
+              <select v-model="photoFrameSettings.source" @change="handlePhotoFrameSourceChange">
+                <option value="all">드라이브와 여행 전체</option>
+                <option value="drive">드라이브 전체 사진</option>
+                <option value="travel">여행 전체 사진</option>
+                <option value="drive-folder">드라이브 특정 폴더</option>
+                <option value="travel-plan">여행 특정 항목</option>
+              </select>
+            </label>
+
+            <label v-if="photoFrameSettings.source === 'drive-folder'">
+              <span>드라이브 폴더</span>
+              <select v-model="photoFrameSettings.driveFolderId" @change="handlePhotoFrameFolderChange">
+                <option value="">폴더 선택</option>
+                <option v-for="folder in driveFolderItems" :key="folder.id" :value="String(folder.id)">
+                  {{ folder.name || folder.folderName || folder.path || '폴더' }}
+                </option>
+              </select>
+            </label>
+
+            <label v-if="photoFrameSettings.source === 'travel-plan'">
+              <span>여행 선택</span>
+              <select v-model="photoFrameSettings.travelPlanId" @change="photoFrameSettings.fixedPhotoId = ''">
+                <option value="">여행 선택</option>
+                <option v-for="plan in travelPlans" :key="plan.id" :value="String(plan.id)">
+                  {{ plan.name || plan.destination || '여행' }}
+                </option>
+              </select>
+            </label>
+
+            <label>
+              <span>표시 방식</span>
+              <select v-model="photoFrameSettings.mode">
+                <option value="latest">가장 최근 사진</option>
+                <option value="fixed">선택한 사진 고정</option>
+                <option value="random">사진 목록에서 랜덤</option>
+                <option value="name">이름순으로 표시</option>
+              </select>
+            </label>
+
+            <label>
+              <span>정렬 기준</span>
+              <select v-model="photoFrameSettings.sort">
+                <option value="recent">최근 추가순</option>
+                <option value="name">이름순</option>
+              </select>
+            </label>
+
+            <label v-if="photoFrameSettings.mode === 'fixed'">
+              <span>고정할 사진</span>
+              <select v-model="photoFrameSettings.fixedPhotoId">
+                <option value="">사진 선택</option>
+                <option v-for="photo in photoFrameSettingsPhotos" :key="photo.id" :value="String(photo.id)">
+                  {{ photoFrameSourceLabel(photo) }}
+                </option>
+              </select>
+            </label>
+
+            <p v-if="photoFrameSettings.loading" class="main-photo-frame-modal__state">사진을 불러오는 중입니다.</p>
+            <p v-if="photoFrameSettings.error" class="main-photo-frame-modal__error">{{ photoFrameSettings.error }}</p>
+          </div>
+
+          <div class="main-photo-frame-modal__preview">
+            <div class="main-photo-frame-modal__preview-head">
+              <strong>미리보기</strong>
+              <span>{{ photoFrameSettingsPhotos.length }}장</span>
+            </div>
+            <div v-if="photoFrameSettingsPhotos.length" class="main-photo-frame-modal__photo-grid">
+              <button
+                v-for="photo in photoFrameSettingsPhotos.slice(0, 24)"
+                :key="photo.id"
+                type="button"
+                :class="{ 'is-selected': String(photo.id) === String(photoFrameSettings.fixedPhotoId) }"
+                @click="photoFrameSettings.mode = 'fixed'; photoFrameSettings.fixedPhotoId = String(photo.id)"
+              >
+                <img :src="photo.imageUrl" :alt="photo.title" loading="lazy" decoding="async" />
+                <span>{{ photo.title }}</span>
+              </button>
+            </div>
+            <div v-else class="main-photo-frame-modal__empty">
+              <strong>표시할 사진이 없습니다.</strong>
+              <span>드라이브나 여행에 사진을 추가한 뒤 다시 선택하세요.</span>
+            </div>
+          </div>
+        </div>
+
+        <footer class="main-photo-frame-modal__footer">
+          <button type="button" @click="closePhotoFrameSettings">취소</button>
+          <button class="main-dashboard__primary" type="button" @click="savePhotoFrameSettings">저장</button>
+        </footer>
+      </section>
+    </div>
   </div>
 </template>
 
@@ -1751,6 +2098,25 @@ onBeforeUnmount(() => {
   white-space: nowrap;
 }
 
+
+.main-palette__head-actions {
+  align-items: center;
+  display: flex;
+  flex: 0 0 auto;
+  gap: 6px;
+  min-width: 0;
+}
+
+.main-palette__settings-button {
+  background: #f8fafc;
+  border: 1px solid #d1d5db;
+  color: #374151;
+  cursor: pointer;
+  font-size: 0.76rem;
+  font-weight: 900;
+  min-height: 28px;
+  padding: 0 9px;
+}
 .main-palette__actions {
   align-items: center;
   display: flex;
@@ -1951,12 +2317,18 @@ onBeforeUnmount(() => {
 
 .main-palette__photo-hero {
   background: #111827;
+  border: 0;
   color: #ffffff;
+  cursor: pointer;
   display: block;
+  height: 100%;
   min-height: 0;
   overflow: hidden;
+  padding: 0;
   position: relative;
+  text-align: left;
   text-decoration: none;
+  width: 100%;
 }
 
 .main-palette__photo-hero img {
@@ -2019,6 +2391,177 @@ onBeforeUnmount(() => {
   font-size: 0.9rem;
 }
 
+
+.main-photo-frame-modal {
+  align-items: center;
+  background: rgba(2, 6, 23, 0.68);
+  display: flex;
+  inset: 0;
+  justify-content: center;
+  padding: 24px;
+  position: fixed;
+  z-index: 1000;
+}
+
+.main-photo-frame-modal__dialog {
+  background: #111b2a;
+  border: 1px solid #334155;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.36);
+  color: #e5edf7;
+  display: grid;
+  gap: 16px;
+  max-height: calc(100vh - 48px);
+  max-width: 1040px;
+  overflow: auto;
+  padding: 18px;
+  width: min(1040px, 100%);
+}
+
+.main-photo-frame-modal__header,
+.main-photo-frame-modal__footer,
+.main-photo-frame-modal__preview-head {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  min-width: 0;
+}
+
+.main-photo-frame-modal__header span {
+  color: #8fdcc6;
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+
+.main-photo-frame-modal__header h2 {
+  color: #f8fafc;
+  font-size: 1.2rem;
+  margin: 4px 0 0;
+}
+
+.main-photo-frame-modal__header button,
+.main-photo-frame-modal__footer button {
+  background: #0b1220;
+  border: 1px solid #334155;
+  color: #f8fafc;
+  cursor: pointer;
+  font-weight: 900;
+  min-height: 40px;
+  padding: 0 16px;
+}
+
+.main-photo-frame-modal__body {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: minmax(240px, 320px) minmax(0, 1fr);
+  min-width: 0;
+}
+
+.main-photo-frame-modal__form,
+.main-photo-frame-modal__preview {
+  background: #0b1220;
+  border: 1px solid #334155;
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  padding: 14px;
+}
+
+.main-photo-frame-modal__form label {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.main-photo-frame-modal__form label span,
+.main-photo-frame-modal__preview-head strong {
+  color: #cbd5e1;
+  font-size: 0.82rem;
+  font-weight: 900;
+}
+
+.main-photo-frame-modal__form select {
+  background: #111827;
+  border: 1px solid #475569;
+  color: #f8fafc;
+  min-height: 40px;
+  min-width: 0;
+  padding: 0 10px;
+}
+
+.main-photo-frame-modal__photo-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fill, minmax(128px, 1fr));
+  max-height: 460px;
+  min-width: 0;
+  overflow: auto;
+}
+
+.main-photo-frame-modal__photo-grid button {
+  background: #111827;
+  border: 1px solid #334155;
+  color: #e5edf7;
+  cursor: pointer;
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+  padding: 8px;
+  text-align: left;
+}
+
+.main-photo-frame-modal__photo-grid button.is-selected {
+  border-color: #34d399;
+  box-shadow: 0 0 0 1px rgba(52, 211, 153, 0.55);
+}
+
+.main-photo-frame-modal__photo-grid img {
+  aspect-ratio: 4 / 3;
+  background: #020617;
+  object-fit: cover;
+  width: 100%;
+}
+
+.main-photo-frame-modal__photo-grid span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.main-photo-frame-modal__empty,
+.main-photo-frame-modal__state,
+.main-photo-frame-modal__error {
+  color: #cbd5e1;
+  margin: 0;
+}
+
+.main-photo-frame-modal__empty {
+  align-content: center;
+  border: 1px dashed #475569;
+  display: grid;
+  gap: 6px;
+  min-height: 220px;
+  padding: 18px;
+  text-align: center;
+}
+
+.main-photo-frame-modal__error {
+  color: #fecaca;
+}
+
+@media (max-width: 860px) {
+  .main-photo-frame-modal {
+    padding: 12px;
+  }
+
+  .main-photo-frame-modal__body {
+    grid-template-columns: 1fr;
+  }
+
+  .main-photo-frame-modal__dialog {
+    max-height: calc(100vh - 24px);
+  }
+}
 .main-palette__capacity {
   display: grid;
   gap: 10px;
@@ -2836,6 +3379,7 @@ onBeforeUnmount(() => {
 .main-palette__capacity .main-palette__single-metric {
   height: auto;
 }
+
 
 .main-palette__capacity {
   grid-template-rows: minmax(0, 1fr) auto auto;

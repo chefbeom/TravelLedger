@@ -61,6 +61,15 @@ public class DriveItem {
     private boolean lockedFile = false;
 
     @Column(nullable = false)
+    private boolean systemManaged = false;
+
+    @Column(length = 40)
+    private String sourceType;
+
+    @Column(length = 160)
+    private String sourceReference;
+
+    @Column(nullable = false)
     private boolean sharedFile = false;
 
     @Column(nullable = false)

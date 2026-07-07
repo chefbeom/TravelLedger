@@ -345,7 +345,7 @@ const moveDestinationOptions = computed(() => {
       value: String(folder.id),
       label: folder.path || folder.fileOriginName,
       path: folder.path || folder.fileOriginName,
-      disabled: moveDestinationBlockedFolderIds.value.has(String(folder.id)) || Boolean(folder.lockedFile),
+      disabled: moveDestinationBlockedFolderIds.value.has(String(folder.id)) || Boolean(folder.lockedFile || folder.systemManaged),
     })),
   ]
 })
@@ -580,7 +580,7 @@ const moveDialogDestinationOptions = computed(() => [
     value: String(folder.id),
     label: folder.fileOriginName,
     path: folder.path || folder.fileOriginName,
-    disabled: moveDialogBlockedFolderIds.value.has(String(folder.id)) || Boolean(folder.lockedFile),
+    disabled: moveDialogBlockedFolderIds.value.has(String(folder.id)) || Boolean(folder.lockedFile || folder.systemManaged),
   })),
 ])
 
@@ -606,7 +606,7 @@ const sharedSaveDestinationOptions = computed(() => [
     value: String(folder.id),
     label: folder.fileOriginName,
     path: folder.path || folder.fileOriginName,
-    disabled: Boolean(folder.lockedFile),
+    disabled: Boolean(folder.lockedFile || folder.systemManaged),
   })),
 ])
 
@@ -633,7 +633,7 @@ const folderDialogDestinationOptions = computed(() => [
     value: String(folder.id),
     label: folder.fileOriginName,
     path: folder.path || folder.fileOriginName,
-    disabled: Boolean(folder.lockedFile),
+    disabled: Boolean(folder.lockedFile || folder.systemManaged),
   })),
 ])
 
@@ -696,8 +696,12 @@ function isFolder(item) {
   return resolveNodeType(item) === 'FOLDER'
 }
 
+function isSystemManagedItem(item) {
+  return Boolean(item?.systemManaged)
+}
+
 function isLockedItem(item) {
-  return Boolean(item?.lockedFile)
+  return Boolean(item?.lockedFile || item?.systemManaged)
 }
 
 function canModifyOwnedItem(item) {
@@ -721,7 +725,7 @@ function canOpenItemLocation(item) {
 }
 
 function canToggleLock(item) {
-  return activeTab.value !== 'trash' && activeTab.value !== 'shared' && Boolean(item?.id)
+  return activeTab.value !== 'trash' && activeTab.value !== 'shared' && Boolean(item?.id) && !isSystemManagedItem(item)
 }
 
 function canDragDriveItem(item) {
@@ -1563,7 +1567,7 @@ async function promptCreateFolderInside(item) {
 }
 
 async function promptCreateFolderFromTree(node) {
-  if (!node?.id || node.lockedFile) {
+  if (!node?.id || node.lockedFile || node.systemManaged) {
     setMessages('', '잠긴 폴더에는 새 폴더를 만들 수 없습니다. 먼저 잠금을 해제해 주세요.')
     return
   }
@@ -2541,7 +2545,7 @@ onBeforeUnmount(() => {
             class="drive-folder-tree__row"
             :class="{
               'drive-folder-tree__row--active': node.active,
-              'drive-folder-tree__row--locked': node.lockedFile,
+              'drive-folder-tree__row--locked': node.lockedFile || node.systemManaged,
               'drive-folder-tree__row--drop-target': isDriveMoveDropTarget(node),
             }"
             :style="{ paddingLeft: `${Math.min(node.depth, 5) * 12}px` }"
@@ -2565,7 +2569,7 @@ onBeforeUnmount(() => {
             <button
               class="drive-folder-tree__action"
               type="button"
-              :disabled="node.lockedFile"
+              :disabled="node.lockedFile || node.systemManaged"
               title="하위 폴더 만들기"
               @click="promptCreateFolderFromTree(node)"
             >

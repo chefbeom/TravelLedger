@@ -54,6 +54,7 @@ class TravelServiceCacheTest {
         TravelShareGroupMemberRepository travelShareGroupMemberRepository = mock(TravelShareGroupMemberRepository.class);
         ExchangeRateService exchangeRateService = mock(ExchangeRateService.class);
         TravelMediaStorageService travelMediaStorageService = mock(TravelMediaStorageService.class);
+        TravelDriveLinkService travelDriveLinkService = mock(TravelDriveLinkService.class);
         TravelPhotoGpsMetadataService travelPhotoGpsMetadataService = mock(TravelPhotoGpsMetadataService.class);
         TravelPhotoClusterService travelPhotoClusterService = mock(TravelPhotoClusterService.class);
         TravelMyMapPhotoClusterSnapshotService travelMyMapPhotoClusterSnapshotService = mock(TravelMyMapPhotoClusterSnapshotService.class);
@@ -76,6 +77,7 @@ class TravelServiceCacheTest {
                 travelShareGroupMemberRepository,
                 exchangeRateService,
                 travelMediaStorageService,
+                travelDriveLinkService,
                 travelPhotoGpsMetadataService,
                 travelPhotoClusterService,
                 travelMyMapPhotoClusterSnapshotService,
@@ -134,6 +136,7 @@ class TravelServiceCacheTest {
         TravelShareGroupMemberRepository travelShareGroupMemberRepository = mock(TravelShareGroupMemberRepository.class);
         ExchangeRateService exchangeRateService = mock(ExchangeRateService.class);
         TravelMediaStorageService travelMediaStorageService = mock(TravelMediaStorageService.class);
+        TravelDriveLinkService travelDriveLinkService = mock(TravelDriveLinkService.class);
         TravelPhotoGpsMetadataService travelPhotoGpsMetadataService = mock(TravelPhotoGpsMetadataService.class);
         TravelPhotoClusterService travelPhotoClusterService = mock(TravelPhotoClusterService.class);
         TravelMyMapPhotoClusterSnapshotService travelMyMapPhotoClusterSnapshotService = mock(TravelMyMapPhotoClusterSnapshotService.class);
@@ -156,6 +159,7 @@ class TravelServiceCacheTest {
                 travelShareGroupMemberRepository,
                 exchangeRateService,
                 travelMediaStorageService,
+                travelDriveLinkService,
                 travelPhotoGpsMetadataService,
                 travelPhotoClusterService,
                 travelMyMapPhotoClusterSnapshotService,
@@ -212,6 +216,7 @@ class TravelServiceCacheTest {
         TravelShareGroupMemberRepository travelShareGroupMemberRepository = mock(TravelShareGroupMemberRepository.class);
         ExchangeRateService exchangeRateService = mock(ExchangeRateService.class);
         TravelMediaStorageService travelMediaStorageService = mock(TravelMediaStorageService.class);
+        TravelDriveLinkService travelDriveLinkService = mock(TravelDriveLinkService.class);
         TravelPhotoGpsMetadataService travelPhotoGpsMetadataService = mock(TravelPhotoGpsMetadataService.class);
         TravelPhotoClusterService travelPhotoClusterService = mock(TravelPhotoClusterService.class);
         TravelMyMapPhotoClusterSnapshotService travelMyMapPhotoClusterSnapshotService = mock(TravelMyMapPhotoClusterSnapshotService.class);
@@ -234,6 +239,7 @@ class TravelServiceCacheTest {
                 travelShareGroupMemberRepository,
                 exchangeRateService,
                 travelMediaStorageService,
+                travelDriveLinkService,
                 travelPhotoGpsMetadataService,
                 travelPhotoClusterService,
                 travelMyMapPhotoClusterSnapshotService,
@@ -273,6 +279,7 @@ class TravelServiceCacheTest {
         TravelShareGroupMemberRepository travelShareGroupMemberRepository = mock(TravelShareGroupMemberRepository.class);
         ExchangeRateService exchangeRateService = mock(ExchangeRateService.class);
         TravelMediaStorageService travelMediaStorageService = mock(TravelMediaStorageService.class);
+        TravelDriveLinkService travelDriveLinkService = mock(TravelDriveLinkService.class);
         TravelPhotoGpsMetadataService travelPhotoGpsMetadataService = mock(TravelPhotoGpsMetadataService.class);
         TravelPhotoClusterService travelPhotoClusterService = mock(TravelPhotoClusterService.class);
         TravelMyMapPhotoClusterSnapshotService travelMyMapPhotoClusterSnapshotService = mock(TravelMyMapPhotoClusterSnapshotService.class);
@@ -295,6 +302,7 @@ class TravelServiceCacheTest {
                 travelShareGroupMemberRepository,
                 exchangeRateService,
                 travelMediaStorageService,
+                travelDriveLinkService,
                 travelPhotoGpsMetadataService,
                 travelPhotoClusterService,
                 travelMyMapPhotoClusterSnapshotService,

@@ -145,6 +145,9 @@ public final class DriveDtos {
             String nodeType,
             Long parentId,
             Boolean lockedFile,
+            Boolean systemManaged,
+            String sourceType,
+            String sourceReference,
             Boolean sharedFile,
             Boolean trashed,
             LocalDateTime deletedAt,
@@ -174,7 +177,10 @@ public final class DriveDtos {
             String fileOriginName,
             Long parentId,
             String path,
-            Boolean lockedFile
+            Boolean lockedFile,
+            Boolean systemManaged,
+            String sourceType,
+            String sourceReference
     ) {
     }
 

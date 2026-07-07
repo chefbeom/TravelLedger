@@ -103,6 +103,9 @@ public class DriveService {
                         .parentId(folder.getParent() != null ? folder.getParent().getId() : null)
                         .path(buildFolderPath(folder))
                         .lockedFile(folder.isLockedFile())
+                        .systemManaged(folder.isSystemManaged())
+                        .sourceType(folder.getSourceType())
+                        .sourceReference(folder.getSourceReference())
                         .build())
                 .toList();
     }
@@ -168,6 +171,21 @@ public class DriveService {
                 .filter(DriveItem::isFile)
                 .filter(item -> !item.isTrashed())
                 .limit(30)
+                .map(this::toItemResponse)
+                .toList();
+    }
+
+    public List<DriveDtos.FileItemResponse> getPhotoFiles(Long userId, Long parentId, String sortOption, Integer size) {
+        AppUser owner = getOwner(userId);
+        DriveItem parent = parentId == null ? null : resolveParentFolder(owner.getId(), parentId);
+        int limit = Math.min(Math.max(size == null ? 200 : size, 1), 500);
+        return driveItemRepository.findAllByOwner_Id(owner.getId()).stream()
+                .filter(DriveItem::isFile)
+                .filter(item -> !item.isTrashed())
+                .filter(this::isImageItem)
+                .filter(item -> parent == null || isInsideFolder(item, parent))
+                .sorted(resolveComparator(sortOption))
+                .limit(limit)
                 .map(this::toItemResponse)
                 .toList();
     }
@@ -269,6 +287,9 @@ public class DriveService {
         DriveItem item = getOwnedItem(userId, fileId);
         if (item.isTrashed()) {
             throw new BadRequestException("Items in trash cannot be locked or unlocked.");
+        }
+        if (isSystemManagedPath(item)) {
+            throw new BadRequestException("Travel-linked drive items are read-only.");
         }
         item.setLockedFile(locked);
         return toItemResponse(item);
@@ -413,6 +434,9 @@ public class DriveService {
                 .nodeType(item.getItemType().name())
                 .parentId(item.getParent() != null ? item.getParent().getId() : null)
                 .lockedFile(item.isLockedFile())
+                .systemManaged(item.isSystemManaged())
+                .sourceType(item.getSourceType())
+                .sourceReference(item.getSourceReference())
                 .sharedFile(item.isSharedFile())
                 .trashed(item.isTrashed())
                 .deletedAt(item.getDeletedAt())
@@ -552,6 +576,23 @@ public class DriveService {
                 .build();
     }
 
+    private boolean isImageItem(DriveItem item) {
+        return item != null && item.isFile() && resolveContentType(item.getExtension()).startsWith("image/");
+    }
+
+    private boolean isInsideFolder(DriveItem item, DriveItem folder) {
+        if (item == null || folder == null) {
+            return false;
+        }
+        DriveItem cursor = item.getParent();
+        while (cursor != null) {
+            if (Objects.equals(cursor.getId(), folder.getId())) {
+                return true;
+            }
+            cursor = cursor.getParent();
+        }
+        return false;
+    }
     private boolean matchParent(DriveItem item, Long parentId) {
         Long itemParentId = item.getParent() != null ? item.getParent().getId() : null;
         return Objects.equals(itemParentId, parentId);
@@ -661,11 +702,25 @@ public class DriveService {
     public void ensureUnlocked(DriveItem item) {
         DriveItem cursor = item;
         while (cursor != null) {
+            if (cursor.isSystemManaged()) {
+                throw new BadRequestException("Travel-linked drive items are read-only.");
+            }
             if (cursor.isLockedFile()) {
                 throw new BadRequestException("Locked drive items cannot be changed. Unlock the item first.");
             }
             cursor = cursor.getParent();
         }
+    }
+
+    private boolean isSystemManagedPath(DriveItem item) {
+        DriveItem cursor = item;
+        while (cursor != null) {
+            if (cursor.isSystemManaged()) {
+                return true;
+            }
+            cursor = cursor.getParent();
+        }
+        return false;
     }
 
     public void ensureUnlockedTree(DriveItem item) {
@@ -844,6 +899,7 @@ public class DriveService {
             case "webp" -> "image/webp";
             case "bmp" -> "image/bmp";
             case "pdf" -> MediaType.APPLICATION_PDF_VALUE;
+            case "gpx", "xml" -> "application/gpx+xml";
             default -> MediaType.APPLICATION_OCTET_STREAM_VALUE;
         };
     }

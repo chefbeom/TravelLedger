@@ -26,6 +26,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestHeader;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
@@ -62,6 +63,16 @@ public class DriveFileController {
     @GetMapping("/recent")
     public List<DriveDtos.FileItemResponse> getRecent(@AuthenticationPrincipal AppUserPrincipal currentUser) {
         return driveService.getRecentFiles(currentUser.userId());
+    }
+
+    @GetMapping("/photos")
+    public List<DriveDtos.FileItemResponse> getPhotos(
+            @AuthenticationPrincipal AppUserPrincipal currentUser,
+            @RequestParam(required = false) Long parentId,
+            @RequestParam(defaultValue = "recent") String sortOption,
+            @RequestParam(defaultValue = "200") Integer size
+    ) {
+        return driveService.getPhotoFiles(currentUser.userId(), parentId, sortOption, size);
     }
 
     @GetMapping("/trash")

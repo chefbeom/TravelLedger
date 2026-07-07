@@ -1362,6 +1362,10 @@ export function fetchDriveRecentFiles() {
   return request('/file/recent')
 }
 
+export function fetchDrivePhotos(params = {}) {
+  return request(buildUrl('/file/photos', params).replace(API_BASE, ''))
+}
+
 export function fetchDriveFolderDestinations() {
   return request('/file/folders')
 }

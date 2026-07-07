@@ -121,6 +121,10 @@ public class TravelMediaStorageService {
         return presignedUploadEnabled && isMinioEnabled();
     }
 
+    public boolean canExposeToDrive(String storagePath) {
+        return StringUtils.hasText(storagePath) && isMinioEnabled() && isMinioObject(storagePath);
+    }
+
     public void validateUploadCandidates(List<UploadCandidate> files) {
         if (files == null || files.isEmpty()) {
             throw new BadRequestException("Select a file to upload.");

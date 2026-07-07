@@ -17,5 +17,9 @@ public interface DriveItemRepository extends JpaRepository<DriveItem, Long> {
 
     Optional<DriveItem> findByOwner_IdAndStoragePath(Long ownerId, String storagePath);
 
+    Optional<DriveItem> findByOwner_IdAndSourceTypeAndSourceReference(Long ownerId, String sourceType, String sourceReference);
+
+    List<DriveItem> findAllByOwner_IdAndSourceTypeAndSourceReference(Long ownerId, String sourceType, String sourceReference);
+
     long countByParent_Id(Long parentId);
 }

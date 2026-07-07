@@ -190,6 +190,7 @@ public class TravelService {
     private final TravelShareGroupMemberRepository travelShareGroupMemberRepository;
     private final ExchangeRateService exchangeRateService;
     private final TravelMediaStorageService travelMediaStorageService;
+    private final TravelDriveLinkService travelDriveLinkService;
     private final TravelPhotoGpsMetadataService travelPhotoGpsMetadataService;
     private final TravelPhotoClusterService travelPhotoClusterService;
     private final TravelMyMapPhotoClusterSnapshotService travelMyMapPhotoClusterSnapshotService;
@@ -908,6 +909,7 @@ public class TravelService {
     @Transactional
     public void deletePlan(Long userId, Long planId) {
         TravelPlan plan = getRequiredPlan(userId, planId);
+        travelDriveLinkService.removePlanLinks(plan);
         deleteMediaAssets(getPlanMedia(userId, planId));
         travelMediaAssetRepository.deleteAllByPlanId(plan.getId());
         deleteRouteAssets(getPlanRoutes(userId, planId));
@@ -1051,6 +1053,7 @@ public class TravelService {
             throw new BadRequestException("Select at least one GPX file.");
         }
 
+        travelDriveLinkService.removeRouteGpxLinks(routeSegment);
         deleteRouteGpxFilesQuietly(routeSegment);
 
         List<RouteGpxFile> storedFiles = new ArrayList<>();
@@ -1071,6 +1074,14 @@ public class TravelService {
 
         routeSegment.setSourceType(TravelRouteSourceType.GPX);
         routeSegment.setGpxFilesJson(serializeRouteGpxFiles(storedFiles));
+        travelDriveLinkService.replaceRouteGpxLinks(routeSegment, storedFiles.stream()
+                .map(file -> new TravelDriveLinkService.TravelLinkedFile(
+                        file.originalFileName(),
+                        file.storagePath(),
+                        file.contentType(),
+                        file.fileSize()
+                ))
+                .toList());
         TravelRouteSegmentResponse response = toRouteSegmentResponse(routeSegment);
         invalidateTravelSummaryCaches(userId);
         return response;
@@ -1080,6 +1091,7 @@ public class TravelService {
     public void deleteRouteSegment(Long userId, Long routeId) {
         TravelRouteSegment routeSegment = travelRouteSegmentRepository.findByIdAndPlanOwnerId(routeId, userId)
                 .orElseThrow(() -> new NotFoundException("Travel route not found."));
+        travelDriveLinkService.removeRouteGpxLinks(routeSegment);
         deleteRouteGpxFilesQuietly(routeSegment);
         travelRouteSegmentRepository.delete(routeSegment);
         invalidateTravelSummaryCaches(userId);
@@ -1124,6 +1136,7 @@ public class TravelService {
         TravelMediaAsset mediaAsset = travelMediaAssetRepository.findByIdAndPlanOwnerId(mediaId, userId)
                 .orElseThrow(() -> new NotFoundException("Uploaded file not found."));
         boolean affectsPhotoCluster = mediaAsset.getMediaType() == TravelMediaType.PHOTO && isMemoryRecord(mediaAsset.getRecord());
+        travelDriveLinkService.removeMediaLink(mediaAsset);
         travelMediaStorageService.deleteImageWithThumbnailsQuietly(mediaAsset.getStoragePath(), mediaAsset.getContentType());
         travelMediaAssetRepository.delete(mediaAsset);
         invalidateOwnedMediaDownloadCache(userId, mediaId);
@@ -1264,7 +1277,7 @@ public class TravelService {
         TravelExpenseRecord record = getRequiredRecord(userId, recordId, recordType, resolveMissingRecordMessage(recordType));
         TravelMediaType resolvedMediaType = resolveMediaType(recordType, mediaType);
 
-        List<TravelMediaResponse> responses = request.files().stream()
+        List<TravelMediaAsset> savedAssets = request.files().stream()
                 .map(file -> {
                     TravelMediaStorageService.StoredTravelMedia storedFile = travelMediaStorageService.completePresignedUpload(
                             userId,
@@ -1294,6 +1307,9 @@ public class TravelService {
                             toCompletedUploadPhotoGps(file)
                     );
                 })
+                .toList();
+        savedAssets.forEach(travelDriveLinkService::linkMediaAsset);
+        List<TravelMediaResponse> responses = savedAssets.stream()
                 .map(this::toMediaResponse)
                 .toList();
         if (!responses.isEmpty()) {
@@ -2646,10 +2662,12 @@ public class TravelService {
     }
 
     private void deleteMediaAssets(List<TravelMediaAsset> mediaAssets) {
+        travelDriveLinkService.removeMediaLinks(mediaAssets);
         mediaAssets.forEach(asset -> travelMediaStorageService.deleteImageWithThumbnailsQuietly(asset.getStoragePath(), asset.getContentType()));
     }
 
     private void deleteRouteAssets(List<TravelRouteSegment> routeSegments) {
+        routeSegments.forEach(travelDriveLinkService::removeRouteGpxLinks);
         routeSegments.forEach(this::deleteRouteGpxFilesQuietly);
     }
 

@@ -536,6 +536,7 @@ public class DriveShareService {
             case "bmp" -> "image/bmp";
             case "svg" -> "image/svg+xml";
             case "pdf" -> MediaType.APPLICATION_PDF_VALUE;
+            case "gpx", "xml" -> "application/gpx+xml";
             case "txt", "md", "csv", "json" -> MediaType.TEXT_PLAIN_VALUE;
             default -> MediaType.APPLICATION_OCTET_STREAM_VALUE;
         };

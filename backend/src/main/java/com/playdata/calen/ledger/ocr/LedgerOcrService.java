@@ -39,8 +39,10 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.ArrayList;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.Executor;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.Future;
+import java.util.concurrent.FutureTask;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
@@ -55,6 +57,7 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -107,7 +110,9 @@ public class LedgerOcrService {
 
     @Autowired(required = false)
     @Qualifier("ledgerOcrTaskExecutor")
-    private Executor ledgerOcrTaskExecutor;
+    private ThreadPoolTaskExecutor ledgerOcrTaskExecutor;
+
+    private final ConcurrentMap<Long, Future<?>> imageAnalysisTasks = new ConcurrentHashMap<>();
 
     public LedgerOcrAnalyzeResponse startAnalyze(Long userId, MultipartFile file, String documentType, String clientRequestId, String prompt, boolean useExistingEntryStyle) {
         AppUser owner = appUserService.getRequiredUser(userId);
@@ -246,14 +251,26 @@ public class LedgerOcrService {
             String normalizedDocumentType,
             String effectiveUserPrompt
     ) {
-        Runnable task = () -> processImageAnalysisInBackground(userId, history.getId(), file, normalizedDocumentType, effectiveUserPrompt);
+        Long historyId = history.getId();
+        FutureTask<Void> task = new FutureTask<>(() -> {
+            try {
+                processImageAnalysisInBackground(userId, historyId, file, normalizedDocumentType, effectiveUserPrompt);
+            } finally {
+                imageAnalysisTasks.remove(historyId);
+            }
+        }, null);
+        imageAnalysisTasks.put(historyId, task);
         try {
             if (ledgerOcrTaskExecutor == null) {
-                CompletableFuture.runAsync(task);
+                Thread thread = new Thread(task, "ledger-ocr-fallback-" + historyId);
+                thread.setDaemon(true);
+                thread.start();
             } else {
-                CompletableFuture.runAsync(task, ledgerOcrTaskExecutor);
+                ledgerOcrTaskExecutor.execute(task);
             }
         } catch (RuntimeException exception) {
+            imageAnalysisTasks.remove(historyId, task);
+            task.cancel(true);
             failImageAnalysisRequest(history, exception);
             throw new BadRequestException("Image analysis task could not be started.");
         }
@@ -513,6 +530,7 @@ public class LedgerOcrService {
                 .toList();
     }
     private LedgerImageAnalysisHistoryResponse cancelHistoryRecord(LedgerImageAnalysisRequest history) {
+        cancelRunningImageAnalysis(history.getId());
         if (history.getStatus() != LedgerImageAnalysisStatus.PROCESSING) {
             return toHistoryResponse(history);
         }
@@ -521,6 +539,15 @@ public class LedgerOcrService {
         history.setSummary("사용자가 이미지 분석 요청을 취소했습니다.");
         imageAnalysisRequestRepository.save(history);
         return toHistoryResponse(history);
+    }
+    private void cancelRunningImageAnalysis(Long historyId) {
+        if (historyId == null) {
+            return;
+        }
+        Future<?> task = imageAnalysisTasks.remove(historyId);
+        if (task != null) {
+            task.cancel(true);
+        }
     }
     private void storeImageForHistory(Long ownerId, LedgerImageAnalysisRequest history, MultipartFile file) {
         if (history == null || imageStorageService == null || !imageStorageService.supportsStorage()) {

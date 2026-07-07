@@ -37,7 +37,8 @@ import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.Executor;
+import java.util.concurrent.FutureTask;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.Map;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
@@ -47,6 +48,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.util.unit.DataSize;
 
@@ -108,14 +110,16 @@ class LedgerOcrServiceTest {
     @Test
     void startAnalyzeReturnsProcessingAndQueuesBackgroundTask() {
         stubUser();
+        AtomicReference<LedgerImageAnalysisRequest> savedHistory = new AtomicReference<>();
         when(imageAnalysisRequestRepository.save(any(LedgerImageAnalysisRequest.class)))
                 .thenAnswer(invocation -> {
                     LedgerImageAnalysisRequest request = invocation.getArgument(0);
                     request.setId(42L);
+                    savedHistory.set(request);
                     return request;
                 });
-        List<Runnable> queuedTasks = new ArrayList<>();
-        ReflectionTestUtils.setField(service, "ledgerOcrTaskExecutor", (Executor) queuedTasks::add);
+        CapturingTaskExecutor executor = new CapturingTaskExecutor();
+        ReflectionTestUtils.setField(service, "ledgerOcrTaskExecutor", executor);
 
         LedgerOcrAnalyzeResponse response = service.startAnalyze(
                 USER_ID,
@@ -129,8 +133,12 @@ class LedgerOcrServiceTest {
         assertThat(response.analysisId()).isEqualTo(42L);
         assertThat(response.clientRequestId()).isEqualTo("client-1");
         assertThat(response.analysisStatus()).isEqualTo("PROCESSING");
-        assertThat(queuedTasks).hasSize(1);
+        assertThat(executor.queuedTasks).hasSize(1);
         verify(remoteClient, never()).analyze(any(), anyString(), anyString());
+
+        when(imageAnalysisRequestRepository.findByIdAndOwnerId(42L, USER_ID)).thenReturn(Optional.of(savedHistory.get()));
+        assertThat(service.cancelHistory(USER_ID, 42L).status()).isEqualTo("CANCELLED");
+        assertThat((FutureTask<?>) executor.queuedTasks.get(0)).isCancelled();
     }
     @Test
     void analyzeRejectsEmptyFileBeforeRemoteCallOrNotification() {
@@ -741,6 +749,14 @@ class LedgerOcrServiceTest {
         when(example.getAmount()).thenReturn(amount);
         when(example.getEntryType()).thenReturn(entryType);
         return example;
+    }
+    private static class CapturingTaskExecutor extends ThreadPoolTaskExecutor {
+        private final List<Runnable> queuedTasks = new ArrayList<>();
+
+        @Override
+        public void execute(Runnable task) {
+            queuedTasks.add(task);
+        }
     }
     private AppUser stubUser() {
         AppUser user = new AppUser();

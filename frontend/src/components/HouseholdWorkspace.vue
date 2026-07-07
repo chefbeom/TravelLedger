@@ -1583,13 +1583,13 @@ function collectReceiptOcrTextCandidates(suggestion = {}, context = {}) {
   return [
     suggestion.entryDate,
     suggestion.entryTime,
-    suggestion.rawText,
-    context.rawText,
     suggestion.title,
     suggestion.memo,
     suggestion.categoryGroupName,
     suggestion.categoryDetailName,
     suggestion.categoryText,
+    suggestion.rawText,
+    context.rawText,
   ]
     .map((value) => String(value ?? '').trim())
     .filter(Boolean)

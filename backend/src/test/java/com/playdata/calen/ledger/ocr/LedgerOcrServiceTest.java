@@ -22,6 +22,7 @@ import com.playdata.calen.ledger.domain.CategoryGroup;
 import com.playdata.calen.ledger.domain.EntryType;
 import com.playdata.calen.ledger.domain.LedgerImageAnalysisRequest;
 import com.playdata.calen.ledger.dto.LedgerOcrEntrySuggestionResponse;
+import com.playdata.calen.ledger.dto.LedgerOcrAnalyzeResponse;
 import com.playdata.calen.ledger.ocr.LedgerOcrRemoteClient.RemoteAnalyzeResponse;
 import com.playdata.calen.ledger.ocr.LedgerOcrRemoteClient.RemoteLineItem;
 import com.playdata.calen.ledger.ocr.LedgerOcrRemoteClient.RemoteParsedResult;
@@ -34,7 +35,9 @@ import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.Executor;
 import java.util.Map;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
@@ -102,6 +105,33 @@ class LedgerOcrServiceTest {
         );
     }
 
+    @Test
+    void startAnalyzeReturnsProcessingAndQueuesBackgroundTask() {
+        stubUser();
+        when(imageAnalysisRequestRepository.save(any(LedgerImageAnalysisRequest.class)))
+                .thenAnswer(invocation -> {
+                    LedgerImageAnalysisRequest request = invocation.getArgument(0);
+                    request.setId(42L);
+                    return request;
+                });
+        List<Runnable> queuedTasks = new ArrayList<>();
+        ReflectionTestUtils.setField(service, "ledgerOcrTaskExecutor", (Executor) queuedTasks::add);
+
+        LedgerOcrAnalyzeResponse response = service.startAnalyze(
+                USER_ID,
+                validJpeg("receipt.jpg"),
+                "AUTO",
+                "client-1",
+                "",
+                false
+        );
+
+        assertThat(response.analysisId()).isEqualTo(42L);
+        assertThat(response.clientRequestId()).isEqualTo("client-1");
+        assertThat(response.analysisStatus()).isEqualTo("PROCESSING");
+        assertThat(queuedTasks).hasSize(1);
+        verify(remoteClient, never()).analyze(any(), anyString(), anyString());
+    }
     @Test
     void analyzeRejectsEmptyFileBeforeRemoteCallOrNotification() {
         stubUser();

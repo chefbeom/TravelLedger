@@ -398,6 +398,8 @@ let searchRequestTimerId = null
 let titleSuggestionSearchTimerId = null
 let titleSuggestionSearchRequestId = 0
 let receiptOcrItemSequence = 0
+const RECEIPT_OCR_HISTORY_POLL_INTERVAL_MS = 2500
+const RECEIPT_OCR_HISTORY_POLL_ATTEMPTS = 240
 let foreignExchangeTimerId = null
 let foreignExchangeRequestId = 0
 let foreignExchangeLoadedKey = ''
@@ -3043,6 +3045,89 @@ function mapImageAnalysisHistoryToReviewItem(history = {}) {
     sourceFile: null,
   }
 }
+function sleepReceiptOcrPoll(ms, signal) {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(new DOMException('Aborted', 'AbortError'))
+      return
+    }
+    const timeoutId = window.setTimeout(resolve, ms)
+    const abortHandler = () => {
+      window.clearTimeout(timeoutId)
+      reject(new DOMException('Aborted', 'AbortError'))
+    }
+    signal?.addEventListener('abort', abortHandler, { once: true })
+  })
+}
+
+function applyReceiptOcrHistoryToItem(item, history = {}) {
+  if (!item) {
+    return null
+  }
+  const mapped = mapImageAnalysisHistoryToReviewItem(history)
+  const localId = item.id
+  const sourceFile = item.sourceFile || null
+  const localPreviewUrl = item.previewUrl || ''
+  const fromHistory = item.fromHistory
+  Object.assign(item, mapped, {
+    id: localId,
+    fromHistory,
+    sourceFile,
+    previewUrl: localPreviewUrl || mapped.previewUrl,
+    imageUrl: mapped.imageUrl || item.imageUrl || '',
+    storedImageAvailable: Boolean(mapped.storedImageAvailable || item.storedImageAvailable),
+    cancelled: item.cancelled || mapped.status === 'cancelled',
+  })
+  item.suggestedEntries = (Array.isArray(mapped.suggestedEntries) ? mapped.suggestedEntries : [])
+    .map((suggestion, entryIndex) => attachReceiptOcrSuggestionMeta(suggestion, item, entryIndex))
+  return item
+}
+
+async function waitForReceiptOcrHistoryResult(item, initialResult = {}) {
+  const analysisId = initialResult?.analysisId || item?.analysisId
+  if (!analysisId) {
+    return initialResult
+  }
+  item.analysisId = analysisId
+  item.clientRequestId = initialResult?.clientRequestId || item.clientRequestId
+  item.analysisStatus = 'PROCESSING'
+  item.status = 'analyzing'
+
+  for (let attempt = 0; attempt < RECEIPT_OCR_HISTORY_POLL_ATTEMPTS; attempt += 1) {
+    if (!isReceiptOcrItemActive(item)) {
+      return null
+    }
+    const history = await fetchLedgerImageAnalysisHistory(analysisId)
+    if (!isReceiptOcrItemActive(item)) {
+      return null
+    }
+    const status = normalizeImageAnalysisHistoryStatus(history?.status || history?.result?.analysisStatus)
+    if (status === 'COMPLETED') {
+      applyReceiptOcrHistoryToItem(item, history)
+      return {
+        ...(history.result || {}),
+        analysisId: history.id || analysisId,
+        clientRequestId: history.clientRequestId || item.clientRequestId,
+        analysisStatus: 'COMPLETED',
+      }
+    }
+    if (status === 'FAILED') {
+      throw new Error(history?.errorMessage || 'AI image analysis failed.')
+    }
+    if (status === 'CANCELLED') {
+      return {
+        analysisId: history?.id || analysisId,
+        clientRequestId: history?.clientRequestId || item.clientRequestId,
+        analysisStatus: 'CANCELLED',
+      }
+    }
+    item.analysisStatus = 'PROCESSING'
+    item.status = 'analyzing'
+    await sleepReceiptOcrPoll(RECEIPT_OCR_HISTORY_POLL_INTERVAL_MS, item.abortController?.signal)
+  }
+  throw new Error('AI image analysis is still running. Please check the analysis history again later.')
+}
+
 async function loadReceiptOcrHistories(page = receiptOcr.historyPage || 0) {
   receiptOcr.isHistoryLoading = true
   receiptOcr.historyError = ''
@@ -3218,7 +3303,7 @@ async function analyzeReceiptFile(file, documentType, existingItem = null, promp
   syncReceiptOcrBusyState()
 
   try {
-    const result = await analyzeLedgerReceipt(file, { documentType, clientRequestId: item.clientRequestId, prompt, useExistingEntryStyle, signal: item.abortController.signal })
+    let result = await analyzeLedgerReceipt(file, { documentType, clientRequestId: item.clientRequestId, prompt, useExistingEntryStyle, signal: item.abortController.signal })
     if (!isReceiptOcrItemActive(item)) {
       if (result?.analysisId) {
         try {
@@ -3228,6 +3313,12 @@ async function analyzeReceiptFile(file, documentType, existingItem = null, promp
         }
       }
       return
+    }
+    if (String(result?.analysisStatus || '').toUpperCase() === 'PROCESSING') {
+      result = await waitForReceiptOcrHistoryResult(item, result)
+      if (!result || !isReceiptOcrItemActive(item)) {
+        return
+      }
     }
     if (String(result?.analysisStatus || '').toUpperCase() === 'CANCELLED') {
       item.status = 'cancelled'
@@ -3333,11 +3424,11 @@ async function startSelectedReceiptOcrAnalysis(payload = {}) {
   })
   syncReceiptOcrBusyState()
 
-  for (const item of items) {
+  await Promise.all(items.map(async (item) => {
     if (!isReceiptOcrItemActive(item) || item.status !== 'queued') {
       receiptOcr.batchCompletedCount = Math.min(receiptOcr.batchCompletedCount + 1, receiptOcr.batchTotalCount)
       syncReceiptOcrBusyState()
-      continue
+      return
     }
     const itemPrompt = item.requestPromptEnabled ? item.requestPrompt : fallbackPrompt
     if (normalizeReceiptPrompt(itemPrompt)) {
@@ -3347,7 +3438,7 @@ async function startSelectedReceiptOcrAnalysis(payload = {}) {
     await analyzeReceiptFile(item.sourceFile, normalizeOcrDocumentType(item.documentType || receiptOcr.documentType), item, prompt, useExistingEntryStyle)
     receiptOcr.batchCompletedCount = Math.min(receiptOcr.batchCompletedCount + 1, receiptOcr.batchTotalCount)
     syncReceiptOcrBusyState()
-  }
+  }))
   if (!receiptOcr.pendingCount) {
     receiptOcr.batchTotalCount = 0
     receiptOcr.batchCompletedCount = 0
@@ -3385,11 +3476,11 @@ async function analyzeReceiptImage(payload) {
   }))
   receiptOcr.items.unshift(...queue.map(({ item }) => item))
   syncReceiptOcrBusyState()
-  for (const { file, item } of queue) {
+  await Promise.all(queue.map(async ({ file, item }) => {
     if (isReceiptOcrItemActive(item)) {
       await analyzeReceiptFile(file, documentType, item, prompt, useExistingEntryStyle)
     }
-  }
+  }))
   if (queue.some(({ item }) => item.status === 'done')) {
     receiptOcr.activeView = 'history'
     await loadReceiptOcrHistories(0)
@@ -3439,7 +3530,7 @@ async function rerunReceiptOcrItem(payload = {}) {
   syncReceiptOcrBusyState()
 
   try {
-    const result = await rerunLedgerImageAnalysisHistory(item.analysisId, {
+    let result = await rerunLedgerImageAnalysisHistory(item.analysisId, {
       documentType,
       prompt,
       useExistingEntryStyle,
@@ -3454,6 +3545,12 @@ async function rerunReceiptOcrItem(payload = {}) {
         }
       }
       return
+    }
+    if (String(result?.analysisStatus || '').toUpperCase() === 'PROCESSING') {
+      result = await waitForReceiptOcrHistoryResult(nextItem, result)
+      if (!result || !isReceiptOcrItemActive(nextItem)) {
+        return
+      }
     }
     if (String(result?.analysisStatus || '').toUpperCase() === 'CANCELLED') {
       nextItem.status = 'cancelled'

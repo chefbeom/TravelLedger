@@ -41,7 +41,7 @@ public class LedgerOcrController {
             @RequestParam(name = "prompt", required = false) String prompt,
             @RequestParam(name = "useExistingEntryStyle", defaultValue = "false") boolean useExistingEntryStyle
     ) {
-        return ledgerOcrService.analyze(currentUser.userId(), file, documentType, clientRequestId, prompt, useExistingEntryStyle);
+        return ledgerOcrService.startAnalyze(currentUser.userId(), file, documentType, clientRequestId, prompt, useExistingEntryStyle);
     }
 
     @GetMapping("/history")
@@ -101,7 +101,7 @@ public class LedgerOcrController {
             @RequestParam(name = "prompt", required = false) String prompt,
             @RequestParam(name = "useExistingEntryStyle", defaultValue = "false") boolean useExistingEntryStyle
     ) {
-        return ledgerOcrService.reanalyzeHistoryImage(currentUser.userId(), historyId, documentType, prompt, useExistingEntryStyle);
+        return ledgerOcrService.startReanalyzeHistoryImage(currentUser.userId(), historyId, documentType, prompt, useExistingEntryStyle);
     }
 
     private MediaType parseMediaType(String contentType) {

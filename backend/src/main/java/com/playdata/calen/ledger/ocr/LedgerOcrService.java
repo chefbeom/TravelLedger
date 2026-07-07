@@ -39,6 +39,8 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.ArrayList;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executor;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
@@ -49,6 +51,7 @@ import java.util.regex.Pattern;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -101,6 +104,58 @@ public class LedgerOcrService {
 
     @Autowired(required = false)
     private LedgerOcrImageStorageService imageStorageService;
+
+    @Autowired(required = false)
+    @Qualifier("ledgerOcrTaskExecutor")
+    private Executor ledgerOcrTaskExecutor;
+
+    public LedgerOcrAnalyzeResponse startAnalyze(Long userId, MultipartFile file, String documentType, String clientRequestId, String prompt, boolean useExistingEntryStyle) {
+        AppUser owner = appUserService.getRequiredUser(userId);
+        try {
+            validateReady();
+            validateFile(file);
+
+            String normalizedDocumentType = normalizeDocumentType(documentType);
+            String normalizedClientRequestId = normalizeClientRequestId(clientRequestId);
+            String normalizedUserPrompt = normalizeUserPrompt(prompt);
+            String effectiveUserPrompt = buildEffectiveUserPrompt(owner.getId(), normalizedUserPrompt, useExistingEntryStyle);
+            byte[] fileBytes = file.getBytes();
+            MultipartFile backgroundFile = new StoredImageMultipartFile(
+                    "file",
+                    firstNonBlank(file.getOriginalFilename(), "ocr-image"),
+                    firstNonBlank(file.getContentType(), "application/octet-stream"),
+                    fileBytes
+            );
+            LedgerImageAnalysisRequest history = createImageAnalysisRequest(owner, backgroundFile, normalizedDocumentType, normalizedClientRequestId);
+            storeImageForHistory(owner.getId(), history, backgroundFile);
+            submitImageAnalysisTask(owner.getId(), history, backgroundFile, normalizedDocumentType, effectiveUserPrompt);
+            return processingAnalyzeResponse(history);
+        } catch (IOException exception) {
+            throw new BadRequestException("Image file could not be read.");
+        }
+    }
+
+    public LedgerOcrAnalyzeResponse startReanalyzeHistoryImage(
+            Long userId,
+            Long historyId,
+            String documentType,
+            String prompt,
+            boolean useExistingEntryStyle
+    ) {
+        AppUser owner = appUserService.getRequiredUser(userId);
+        LedgerImageAnalysisRequest history = imageAnalysisRequestRepository.findByIdAndOwnerId(historyId, owner.getId())
+                .orElseThrow(() -> new BadRequestException("Image analysis history was not found."));
+        LedgerOcrImageStorageService.StoredImageContent storedImage = loadStoredHistoryImage(history);
+        String effectiveDocumentType = normalizeDocumentType(firstNonBlank(documentType, history.getDocumentType()));
+        String clientRequestId = "image-analysis-rerun-" + history.getId() + "-" + System.currentTimeMillis();
+        MultipartFile storedFile = new StoredImageMultipartFile(
+                "file",
+                firstNonBlank(history.getFileName(), storedImage.fileName(), "ocr-image"),
+                firstNonBlank(history.getContentType(), storedImage.contentType(), "application/octet-stream"),
+                storedImage.bytes()
+        );
+        return startAnalyze(owner.getId(), storedFile, effectiveDocumentType, clientRequestId, prompt, useExistingEntryStyle);
+    }
 
     public LedgerOcrAnalyzeResponse analyze(Long userId, MultipartFile file, String documentType, String clientRequestId, String prompt) {
         return analyze(userId, file, documentType, clientRequestId, prompt, false);
@@ -182,6 +237,122 @@ public class LedgerOcrService {
             notifyOcrFailure(userId, failureReason);
             throw exception;
         }
+    }
+
+    private void submitImageAnalysisTask(
+            Long userId,
+            LedgerImageAnalysisRequest history,
+            MultipartFile file,
+            String normalizedDocumentType,
+            String effectiveUserPrompt
+    ) {
+        Runnable task = () -> processImageAnalysisInBackground(userId, history.getId(), file, normalizedDocumentType, effectiveUserPrompt);
+        try {
+            if (ledgerOcrTaskExecutor == null) {
+                CompletableFuture.runAsync(task);
+            } else {
+                CompletableFuture.runAsync(task, ledgerOcrTaskExecutor);
+            }
+        } catch (RuntimeException exception) {
+            failImageAnalysisRequest(history, exception);
+            throw new BadRequestException("Image analysis task could not be started.");
+        }
+    }
+
+    private void processImageAnalysisInBackground(
+            Long userId,
+            Long historyId,
+            MultipartFile file,
+            String normalizedDocumentType,
+            String effectiveUserPrompt
+    ) {
+        Timer.Sample ocrRequestTimer = startOcrRequestTimer();
+        LedgerImageAnalysisRequest history = imageAnalysisRequestRepository.findByIdAndOwnerId(historyId, userId).orElse(null);
+        if (history == null || history.getStatus() == LedgerImageAnalysisStatus.CANCELLED) {
+            recordOcrRequest(ocrRequestTimer, "cancelled", "cancelled");
+            return;
+        }
+
+        try {
+            AppUser owner = appUserService.getRequiredUser(userId);
+            RemoteAnalyzeResponse remoteResponse = remoteClient.analyze(file, normalizedDocumentType, effectiveUserPrompt);
+            String paymentCapturePlatform = resolvePaymentCapturePlatform(
+                    firstNonBlank(remoteResponse.documentType(), normalizedDocumentType),
+                    effectiveUserPrompt,
+                    remoteResponse
+            );
+            List<RemoteParsedResult> parsedEntries = resolveParsedEntries(remoteResponse);
+            RemoteParsedResult parsed = parsedEntries.isEmpty() ? remoteResponse.parsed() : parsedEntries.get(0);
+            EntryType entryType = parsed != null && parsed.entryType() == EntryType.INCOME
+                    ? EntryType.INCOME
+                    : EntryType.EXPENSE;
+
+            List<LedgerOcrLineItemResponse> lineItems = mapLineItems(parsed);
+            LedgerOcrEntrySuggestionResponse suggestion = parsed == null ? null : buildSuggestion(owner, parsed, entryType, lineItems, paymentCapturePlatform);
+            List<LedgerOcrEntrySuggestionResponse> suggestions = parsedEntries.stream()
+                    .filter(Objects::nonNull)
+                    .map(parsedEntry -> buildSuggestionForParsedEntry(owner, parsedEntry, paymentCapturePlatform))
+                    .toList();
+            List<String> validationWarnings = buildSuggestionValidationWarnings(suggestions);
+            if (!validationWarnings.isEmpty()) {
+                parsed = appendWarnings(parsed, validationWarnings);
+            }
+            if (suggestions.isEmpty() && suggestion != null) {
+                suggestions = List.of(suggestion);
+            }
+
+            LedgerOcrAnalyzeResponse response = new LedgerOcrAnalyzeResponse(
+                    history.getId(),
+                    history.getClientRequestId(),
+                    LedgerImageAnalysisStatus.COMPLETED.name(),
+                    firstNonBlank(remoteResponse.documentType(), normalizedDocumentType),
+                    remoteResponse.rawText() == null ? "" : remoteResponse.rawText(),
+                    suggestion,
+                    suggestions,
+                    lineItems,
+                    parsed != null ? parsed.confidence() : null,
+                    resolveResponseWarnings(parsed, validationWarnings),
+                    parsed != null ? limit(parsed.vendor(), MAX_TEXT_LENGTH) : null,
+                    parsed != null ? limit(parsed.paymentMethodText(), MAX_TEXT_LENGTH) : null,
+                    parsed != null ? limit(firstNonBlank(
+                            parsed.categoryText(),
+                            parsed.categoryGroupName(),
+                            parsed.categoryDetailName()
+                    ), MAX_TEXT_LENGTH) : null,
+                    remoteResponse.timing() == null ? java.util.Map.of() : remoteResponse.timing(),
+                    List.of(),
+                    List.of()
+            );
+            completeImageAnalysisRequest(history, response);
+            recordOcrRequest(ocrRequestTimer, "success", "none");
+        } catch (RuntimeException exception) {
+            failImageAnalysisRequest(history, exception);
+            String failureReason = ocrFailureReason(exception);
+            recordOcrRequest(ocrRequestTimer, "failure", failureReason);
+            notifyOcrFailure(userId, failureReason);
+            log.warn("Ledger image analysis background task failed: historyId={}", historyId, exception);
+        }
+    }
+
+    private LedgerOcrAnalyzeResponse processingAnalyzeResponse(LedgerImageAnalysisRequest history) {
+        return new LedgerOcrAnalyzeResponse(
+                history.getId(),
+                history.getClientRequestId(),
+                LedgerImageAnalysisStatus.PROCESSING.name(),
+                history.getDocumentType(),
+                "",
+                null,
+                List.of(),
+                List.of(),
+                null,
+                List.of("Image analysis request accepted. The result will appear in analysis history when complete."),
+                null,
+                null,
+                null,
+                java.util.Map.of(),
+                List.of(),
+                List.of()
+        );
     }
 
     public Page<LedgerImageAnalysisHistoryResponse> listHistories(Long userId, Pageable pageable) {

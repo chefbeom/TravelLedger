@@ -24,7 +24,7 @@ public class LedgerAiAnalysisProperties {
     private double temperature = 0.2;
     private int maxTokens = 4096;
     private Duration connectTimeout = Duration.ofSeconds(3);
-    private Duration readTimeout = Duration.ofSeconds(120);
+    private Duration readTimeout = Duration.ofMinutes(10);
     private boolean enforceProviderUrlAllowlist = false;
     private String allowedProviderHosts = "localhost,127.0.0.1,::1";
 

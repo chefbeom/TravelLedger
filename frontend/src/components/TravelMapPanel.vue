@@ -145,6 +145,7 @@ let hasFittedInitialView = false
 let searchAbortController = null
 let activePopupMarkerId = null
 let activePopupOpen = false
+let mapResizeFrame = 0
 
 function isTouchMapDevice() {
   if (typeof window === 'undefined') {
@@ -193,11 +194,23 @@ function createPopupImage(sourceUrl, className, alt, variant = THUMBNAIL_VARIANT
 }
 
 function queueMapResize() {
-  requestAnimationFrame(() => {
-    requestAnimationFrame(() => {
-      mapInstance?.invalidateSize(false)
-    })
+  if (mapResizeFrame) {
+    cancelAnimationFrame(mapResizeFrame)
+  }
+
+  mapResizeFrame = requestAnimationFrame(() => {
+    mapResizeFrame = 0
+    mapInstance?.invalidateSize(false)
   })
+}
+
+function cancelQueuedMapResize() {
+  if (!mapResizeFrame) {
+    return
+  }
+
+  cancelAnimationFrame(mapResizeFrame)
+  mapResizeFrame = 0
 }
 
 function escapeHtml(value) {
@@ -972,6 +985,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   document.removeEventListener('fullscreenchange', handleFullscreenChange)
+  cancelQueuedMapResize()
 
   if (searchAbortController) {
     searchAbortController.abort()
@@ -1045,16 +1059,12 @@ watch(
     }
 
     await nextTick()
+    if (props.autoFit && canFit.value) {
+      fitToAll()
+      return
+    }
+
     queueMapResize()
-
-    requestAnimationFrame(() => {
-      if (props.autoFit && canFit.value) {
-        fitToAll()
-        return
-      }
-
-      mapInstance?.invalidateSize(false)
-    })
   },
 )
 

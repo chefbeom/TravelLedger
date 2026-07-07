@@ -101,6 +101,8 @@ let renderedMarkers = new Map()
 let pendingPopupMarkerKey = null
 let mapRenderFrame = 0
 let mapRenderTimer = 0
+let mapResizeFrame = 0
+let mapResizeTimer = 0
 let popupOpenSequence = 0
 let suppressNextMapBackgroundClick = false
 
@@ -619,16 +621,37 @@ function scheduleRenderClusters(delay = VIEWPORT_RENDER_DEBOUNCE_MS) {
 }
 
 function queueMapResize() {
+  if (mapResizeFrame) {
+    cancelAnimationFrame(mapResizeFrame)
+    mapResizeFrame = 0
+  }
+  if (mapResizeTimer) {
+    clearTimeout(mapResizeTimer)
+    mapResizeTimer = 0
+  }
+
   const resize = () => {
+    mapResizeFrame = 0
     mapInstance?.invalidateSize(false)
     scheduleRenderClusters(0)
   }
 
-  requestAnimationFrame(() => {
-    requestAnimationFrame(resize)
-  })
-  setTimeout(resize, 120)
-  setTimeout(resize, 360)
+  mapResizeFrame = requestAnimationFrame(resize)
+  mapResizeTimer = setTimeout(() => {
+    mapResizeTimer = 0
+    resize()
+  }, isTouchMapDevice() ? 180 : 120)
+}
+
+function cancelQueuedMapResize() {
+  if (mapResizeFrame) {
+    cancelAnimationFrame(mapResizeFrame)
+    mapResizeFrame = 0
+  }
+  if (mapResizeTimer) {
+    clearTimeout(mapResizeTimer)
+    mapResizeTimer = 0
+  }
 }
 
 function resolveTileProvider() {
@@ -1161,6 +1184,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   document.removeEventListener('fullscreenchange', handleFullscreenChange)
+  cancelQueuedMapResize()
 
   if (mapInstance) {
     cancelScheduledClusterRender()
@@ -1212,7 +1236,6 @@ watch(
 
     await nextTick()
     queueMapResize()
-    requestAnimationFrame(() => mapInstance?.invalidateSize(false))
     scheduleRenderClusters(0)
   },
 )

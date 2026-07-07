@@ -25,6 +25,7 @@ const emit = defineEmits([
   'load-ai-analysis-history',
   'open-ai-analysis-history',
   'rerun-ai-analysis',
+  'delete-ai-analysis-history',
 ])
 
 const props = defineProps({
@@ -168,6 +169,10 @@ const props = defineProps({
     type: String,
     default: '',
   },
+  aiAnalysisModalRequestKey: {
+    type: Number,
+    default: 0,
+  },
 })
 
 const comparisonChartItems = computed(() =>
@@ -278,6 +283,14 @@ const aiComparisonOnlyOptions = [
   { value: 'true', label: '비교만' },
   { value: 'false', label: '단일 기간' },
 ]
+const aiFocusPresetOptions = [
+  { value: 'SPENDING_PATTERN', label: '지출 패턴 분석', description: '많이 쓰는 영역과 반복되는 소비 흐름을 우선 봅니다.' },
+  { value: 'FIXED_COST', label: '고정 지출 분석', description: '정기적으로 반복되는 지출과 줄일 후보를 우선 봅니다.' },
+  { value: 'RECURRING_IRREGULAR', label: '비정기 지출 및 정기 지출 종합 분석', description: '반복 지출과 갑작스러운 지출을 함께 구분합니다.' },
+  { value: 'DETAILED_CONSUMPTION', label: '소비 패턴 정밀 분석', description: '카테고리, 결제수단, 금액대, 시점별 특징을 자세히 봅니다.' },
+  { value: 'COMPREHENSIVE', label: '종합 분석', description: '지출 패턴, 고정비, 비정기 지출, 개선 방향을 균형 있게 봅니다.' },
+  { value: 'CUSTOM', label: '요청하고 싶은 내용(간단히)', description: '짧은 요청 문장을 추가로 반영합니다.' },
+]
 const aiAnalysisHistoryItems = computed(() => props.aiAnalysisHistoryPage?.content ?? [])
 const aiHistoryTotalPages = computed(() => Math.max(props.aiAnalysisHistoryPage?.totalPages ?? 0, 1))
 const isAiPeriodCustom = computed(() => props.aiAnalysisControls?.mode !== 'COMPARISON' && props.aiAnalysisControls?.periodType === 'CUSTOM')
@@ -330,6 +343,8 @@ const aiPrintableCards = computed(() => [
 ])
 const hasStaleAiResult = computed(() => Boolean(props.aiAnalysisStale && props.aiAnalysis))
 const aiResultModalOpen = ref(false)
+const aiAnalysisModalOpen = ref(false)
+const aiAnalysisModalView = ref('')
 const pendingAiHistoryPrintId = ref(null)
 const aiProgressStartedAt = ref(0)
 const aiProgressTick = ref(Date.now())
@@ -873,6 +888,38 @@ function buildAiPresentationSections() {
     createAiSection('comparison', '비교 분석', [], aiComparisonReportItems.value.length ? aiComparisonReportItems.value : [aiIsComparisonResult.value ? '비교 분석 결과가 부족합니다.' : '비교 분석 모드가 아니므로 비교 항목은 생략됩니다.']),
   ]
 }
+function openAiAnalysisModal() {
+  aiAnalysisModalOpen.value = true
+  aiAnalysisModalView.value = ''
+}
+
+function closeAiAnalysisModal() {
+  aiAnalysisModalOpen.value = false
+  aiAnalysisModalView.value = ''
+}
+
+function setAiAnalysisModalView(view) {
+  aiAnalysisModalView.value = ['analyze', 'history', 'focus'].includes(view) ? view : ''
+  if (aiAnalysisModalView.value === 'history' && !props.aiAnalysisHistoryLoading && !aiAnalysisHistoryItems.value.length) {
+    loadAiHistoryPage(0)
+  }
+}
+
+function requestAiAnalysisFromModal() {
+  emit('request-ai-analysis')
+}
+
+function loadLatestAiAnalysisFromModal() {
+  emit('load-latest-ai-analysis')
+}
+
+function currentAiFocusPresetDescription() {
+  return aiFocusPresetOptions.find((option) => option.value === props.aiAnalysisControls?.focusPreset)?.description || ''
+}
+
+function deleteAiHistoryFromModal(history) {
+  emit('delete-ai-analysis-history', history)
+}
 function openAiResultModal() {
   if (aiHasResult.value) {
     aiResultModalOpen.value = true
@@ -884,8 +931,15 @@ function closeAiResultModal() {
 }
 
 function handleAiResultEscape(event) {
-  if (event.key === 'Escape') {
+  if (event.key !== 'Escape') {
+    return
+  }
+  if (aiResultModalOpen.value) {
     closeAiResultModal()
+    return
+  }
+  if (aiAnalysisModalOpen.value) {
+    closeAiAnalysisModal()
   }
 }
 
@@ -1360,11 +1414,22 @@ function submitSearchEntryEdit(entry) {
 }
 
 watch(
+  () => props.aiAnalysisModalRequestKey,
+  (value, previousValue) => {
+    if (value && value !== previousValue) {
+      openAiAnalysisModal()
+    }
+  },
+)
+watch(
   () => props.route,
-  () => {
+  (route) => {
     cancelSearchEntryEdit()
     isSearchBulkToolbarVisible.value = false
     searchResultSelection.clearSelection()
+    if (route !== 'stats-ai') {
+      closeAiAnalysisModal()
+    }
   },
 )
 
@@ -1382,7 +1447,8 @@ watch(
 
 .ai-analysis-panel,
 .ai-history-panel,
-.ai-result-modal {
+.ai-result-modal,
+.ledger-ai-modal {
   --ai-mint: #a7f3b5;
   --ai-mint-strong: #58d47a;
   --ai-mint-deep: #1f8f58;
@@ -1391,7 +1457,8 @@ watch(
 
 .ai-analysis-panel .button--primary,
 .ai-history-panel .button--primary,
-.ai-result-modal .button--primary {
+.ai-result-modal .button--primary,
+.ledger-ai-modal .button--primary {
   background: linear-gradient(135deg, var(--ai-mint), var(--ai-mint-strong));
   border-color: rgba(167, 243, 181, 0.72);
   color: var(--ai-mint-ink);
@@ -1400,8 +1467,225 @@ watch(
 
 .ai-analysis-panel .button--primary:hover,
 .ai-history-panel .button--primary:hover,
-.ai-result-modal .button--primary:hover {
+.ai-result-modal .button--primary:hover,
+.ledger-ai-modal .button--primary:hover {
   filter: brightness(1.04);
+}
+.ai-analysis-launch-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin: 16px 0;
+}
+
+.ai-analysis-launch-grid article,
+.ledger-ai-focus-summary,
+.ledger-ai-result-preview,
+.ledger-ai-focus-editor,
+.ledger-ai-focus-presets article,
+.ledger-ai-modal__empty {
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  border-radius: 18px;
+  background: rgba(15, 23, 42, 0.42);
+  padding: 14px;
+}
+
+.ai-analysis-launch-grid span,
+.ledger-ai-focus-summary span,
+.ledger-ai-result-preview small,
+.ledger-ai-focus-presets span {
+  display: block;
+  color: rgba(226, 232, 240, 0.76);
+  font-size: 0.86rem;
+}
+
+.ai-analysis-launch-grid strong,
+.ledger-ai-focus-summary strong,
+.ledger-ai-result-preview strong,
+.ledger-ai-focus-presets strong {
+  display: block;
+  margin-top: 6px;
+  color: #f8fafc;
+  font-weight: 900;
+}
+
+.ai-analysis-launch-grid small,
+.ledger-ai-focus-summary small {
+  display: block;
+  margin-top: 8px;
+  color: rgba(203, 213, 225, 0.76);
+}
+
+.ai-analysis-launch-actions,
+.ai-analysis-actions {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.ledger-ai-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 1100;
+  display: grid;
+  place-items: center;
+  padding: 28px;
+  background: rgba(2, 6, 23, 0.68);
+  backdrop-filter: blur(8px);
+  overflow: auto;
+}
+
+.ledger-ai-modal__dialog {
+  width: min(1220px, calc(100vw - 56px));
+  max-height: calc(100vh - 56px);
+  overflow: auto;
+  border: 1px solid rgba(148, 163, 184, 0.34);
+  border-radius: 24px;
+  background: #1f2937;
+  padding: 22px;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.42);
+}
+
+.ledger-ai-modal__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.ledger-ai-modal__eyebrow {
+  margin: 0 0 4px;
+  color: var(--ai-mint);
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+
+.ledger-ai-modal__header h2 {
+  margin: 0;
+  color: #f8fafc;
+}
+
+.ledger-ai-modal__nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 18px 0;
+  padding: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  border-radius: 16px;
+  background: rgba(15, 23, 42, 0.44);
+}
+
+.ledger-ai-modal__nav-button {
+  min-height: 42px;
+  border: 1px solid rgba(148, 163, 184, 0.36);
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.82);
+  color: #f8fafc;
+  padding: 0 16px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.ledger-ai-modal__nav-button.is-active {
+  background: linear-gradient(135deg, var(--ai-mint), #3182f6);
+  border-color: rgba(167, 243, 181, 0.72);
+  color: #062615;
+}
+
+.ledger-ai-workspace {
+  display: grid;
+  gap: 16px;
+}
+
+.ledger-ai-request-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 280px;
+  gap: 16px;
+  align-items: stretch;
+}
+
+.ledger-ai-focus-summary {
+  display: grid;
+  gap: 8px;
+  align-content: start;
+}
+
+.ledger-ai-result-preview {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.ledger-ai-modal__empty {
+  min-height: 240px;
+  display: grid;
+  place-items: center;
+  text-align: center;
+  color: rgba(226, 232, 240, 0.82);
+}
+
+.ledger-ai-focus-editor {
+  display: grid;
+  gap: 12px;
+}
+
+.ledger-ai-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #f8fafc;
+  font-weight: 900;
+}
+
+.ledger-ai-focus-editor p {
+  margin: 0;
+  color: rgba(203, 213, 225, 0.82);
+}
+
+.ledger-ai-focus-editor textarea {
+  width: 100%;
+  min-height: 96px;
+  resize: vertical;
+  border: 1px solid rgba(148, 163, 184, 0.34);
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.72);
+  color: #f8fafc;
+  padding: 12px;
+}
+
+.ledger-ai-focus-presets {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.ledger-ai-focus-presets article {
+  cursor: pointer;
+}
+
+.ledger-ai-focus-presets article.is-selected {
+  border-color: rgba(167, 243, 181, 0.72);
+  box-shadow: 0 0 0 1px rgba(167, 243, 181, 0.2) inset;
+}
+
+.ai-history-list--modal {
+  max-height: min(52vh, 620px);
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.button--danger {
+  border-color: rgba(248, 113, 113, 0.56);
+  background: rgba(127, 29, 29, 0.34);
+  color: #fecaca;
+}
+
+.button--danger:hover {
+  background: rgba(153, 27, 27, 0.48);
 }
 
 .ai-progress-card {
@@ -2388,11 +2672,11 @@ watch(
 </template>
 
     <template v-else-if="route === 'stats-ai'">
-      <section class="panel ai-analysis-panel">
+      <section class="panel ai-analysis-panel ai-analysis-launch-panel">
         <div class="panel__header">
           <div>
-            <h2>AI 소비 분석</h2>
-            <p>선택한 가계부 기간을 LM Studio/n8n provider로 보내고, 반환된 분석 결과를 저장합니다.</p>
+            <h2>가계부 AI 분석</h2>
+            <p>분석 요청, 결과 확인, 기록 관리를 모달에서 처리합니다.</p>
           </div>
           <span class="panel__badge">{{ aiAnalysisStatus?.provider || 'AI' }} · {{ aiAnalysisStatus?.model || 'auto' }}</span>
         </div>
@@ -2402,222 +2686,27 @@ watch(
           <span>{{ aiAnalysisStatus?.message || 'AI 분석 실행 전 provider 설정을 확인해주세요.' }}</span>
         </div>
 
-        <div class="ai-analysis-layout">
-          <div class="ai-analysis-controls">
-            <div class="scope-toggle scope-toggle--wrap">
-              <button class="button" :class="{ 'button--primary': aiAnalysisControls.mode === 'PERIOD' }" type="button" @click="aiAnalysisControls.mode = 'PERIOD'">기간 분석</button>
-              <button class="button" :class="{ 'button--primary': aiAnalysisControls.mode === 'COMPARISON' }" type="button" @click="aiAnalysisControls.mode = 'COMPARISON'">비교 분석</button>
-            </div>
-
-            <div class="field-grid field-grid--four">
-              <label class="field">
-                <span class="field__label">기준일</span>
-                <input v-model="aiAnalysisControls.anchorDate" type="date" />
-              </label>
-              <label class="field">
-                <span class="field__label">분석 기간</span>
-                <select v-model="aiAnalysisControls.periodType">
-                  <option v-for="option in aiPeriodOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
-                </select>
-              </label>
-              <label v-if="aiAnalysisControls.mode === 'COMPARISON'" class="field field--wide">
-                <span class="field__label">비교 조건</span>
-                <select v-model="aiAnalysisControls.comparisonPreset">
-                  <option v-for="option in aiComparisonPresetOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
-                </select>
-              </label>
-            </div>
-
-            <div v-if="isAiPeriodCustom || isAiComparisonCustom" class="field-grid field-grid--four">
-              <label class="field">
-                <span class="field__label">시작일</span>
-                <input v-model="aiAnalysisControls.from" type="date" />
-              </label>
-              <label class="field">
-                <span class="field__label">종료일</span>
-                <input v-model="aiAnalysisControls.to" type="date" />
-              </label>
-              <label v-if="isAiComparisonCustom" class="field">
-                <span class="field__label">비교 시작일</span>
-                <input v-model="aiAnalysisControls.compareFrom" type="date" />
-              </label>
-              <label v-if="isAiComparisonCustom" class="field">
-                <span class="field__label">비교 종료일</span>
-                <input v-model="aiAnalysisControls.compareTo" type="date" />
-              </label>
-            </div>
-
-            <div class="ai-analysis-actions">
-              <button class="button" type="button" :disabled="aiAnalysisLoading" @click="emit('load-latest-ai-analysis')">기존 결과 불러오기</button>
-              <button class="button button--primary" type="button" :disabled="aiAnalysisLoading || aiAnalysisStatus?.configured === false" @click="emit('request-ai-analysis')">
-                {{ aiAnalysisLoading ? '분석 중...' : '분석 요청하기' }}
-              </button>
-            </div>
-            <div v-if="aiAnalysisError" class="feedback feedback--error">{{ aiAnalysisError }}</div>
-
-            <div v-if="aiProgressVisible" class="ai-progress-card" role="status" aria-live="polite">
-              <div class="ai-progress-card__header">
-                <div>
-                  <strong>AI 분석 진행 중</strong>
-                  <span>{{ aiProgressCurrentStep.detail }}</span>
-                </div>
-                <time>{{ aiProgressElapsedLabel }}</time>
-              </div>
-              <div class="ai-progress-bar" role="progressbar" :aria-valuenow="aiProgressPercent" aria-valuemin="0" aria-valuemax="100" :aria-label="'AI 분석 진행률 ' + aiProgressPercent + '%'">
-                <span :style="{ width: aiProgressPercent + '%' }"></span>
-              </div>
-              <ol class="ai-progress-steps">
-                <li
-                  v-for="(step, index) in aiProgressSteps"
-                  :key="step.key"
-                  :class="{ 'is-active': index === aiProgressStepIndex, 'is-done': index < aiProgressStepIndex }"
-                >
-                  <span>{{ index + 1 }}</span>
-                  <div>
-                    <strong>{{ step.label }}</strong>
-                    <small>{{ step.detail }}</small>
-                  </div>
-                </li>
-              </ol>
-            </div>
-          </div>
-
-          <div class="ai-analysis-result">
-            <template v-if="aiHasResult">
-              <aside class="ai-analysis-advisory" role="note" aria-label="AI analysis advisory notice">
-                <strong>AI 분석 결과는 참고용 조언입니다.</strong>
-                <span>이 화면은 거래를 자동으로 생성, 수정, 삭제, 분류하지 않습니다. AI 추천을 실제 가계부에 반영하려면 사용자가 별도의 확인 액션을 직접 수행해야 합니다.</span>
-              </aside>
-              <div v-if="hasStaleAiResult" class="ai-analysis-stale-note">새 분석 요청에 실패해 이전 결과를 표시 중입니다.</div>
-              <div class="ai-result-toolbar">
-                <button class="button" type="button" @click="openAiResultModal">상세 보기</button>
-                <button class="button button--secondary" type="button" @click="printAiAnalysisReport">PDF 저장/인쇄</button>
-              </div>
-              <div class="ai-result-card-grid">
-                <article v-for="card in aiResultCards" :key="card.label" class="ai-result-card">
-                  <span>{{ card.label }}</span>
-                  <strong>{{ card.value }}</strong>
-                  <small>{{ card.meta }}</small>
-                </article>
-              </div>
-              <div class="ai-presentation-grid">
-                <section
-                  v-for="section in aiPresentationSections"
-                  :key="section.key"
-                  class="ai-result-section ai-result-section--presentation"
-                  :class="{ 'ai-result-section--wide': section.wide }"
-                >
-                  <h3>{{ section.title }}</h3>
-                  <p v-for="paragraph in section.paragraphs" :key="paragraph">{{ paragraph }}</p>
-                  <ul v-if="section.items.length">
-                    <li v-for="item in section.items" :key="item">{{ item }}</li>
-                  </ul>
-                </section>
-              </div>            
-</template>
-            <div v-else class="empty-state ai-analysis-empty">
-              <strong>아직 AI 분석 결과가 없습니다.</strong>
-              <span>조건을 선택해 분석을 요청하거나 저장된 결과를 불러오세요.</span>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section class="panel ai-history-panel">
-        <div class="panel__header">
-          <div>
-            <h2>분석 기록</h2>
-            <p>분석 유형, 기간, 생성일, 비교 여부로 이전 분석을 조회합니다.</p>
-          </div>
-          <span class="panel__badge">{{ aiAnalysisHistoryPage?.totalElements ?? 0 }}건</span>
-        </div>
-
-        <div class="ai-history-summary-grid">
+        <div class="ai-analysis-launch-grid">
           <article>
-            <span>전체 기록</span>
+            <span>저장된 기록</span>
             <strong>{{ aiAnalysisHistoryPage?.totalElements ?? 0 }}건</strong>
+            <small>분석 기록 확인 및 삭제 가능</small>
           </article>
           <article>
-            <span>현재 페이지 완료</span>
-            <strong>{{ aiHistoryCompletedCount }}건</strong>
+            <span>현재 결과</span>
+            <strong>{{ aiHasResult ? '있음' : '없음' }}</strong>
+            <small>{{ hasStaleAiResult ? '이전 결과 표시 중' : '상세 결과 모달 확인 가능' }}</small>
           </article>
           <article>
-            <span>현재 페이지 실패</span>
-            <strong>{{ aiHistoryFailedCount }}건</strong>
+            <span>요청 초점</span>
+            <strong>{{ aiAnalysisControls?.focusEnabled ? '사용' : '사용 안 함' }}</strong>
+            <small>{{ aiAnalysisControls?.focusEnabled ? (aiFocusPresetOptions.find((option) => option.value === aiAnalysisControls?.focusPreset)?.label || '직접 요청') : '기본 분석' }}</small>
           </article>
         </div>
 
-        <div class="field-grid field-grid--five ai-history-filter-grid">
-          <label class="field">
-            <span class="field__label">유형</span>
-            <select v-model="aiAnalysisHistoryFilters.mode">
-              <option v-for="option in aiModeOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
-            </select>
-          </label>
-          <label class="field">
-            <span class="field__label">분석 기간</span>
-            <select v-model="aiAnalysisHistoryFilters.periodType">
-              <option value="">전체</option>
-              <option v-for="option in aiPeriodOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
-            </select>
-          </label>
-          <label class="field">
-            <span class="field__label">생성 시작일</span>
-            <input v-model="aiAnalysisHistoryFilters.createdFrom" type="date" />
-          </label>
-          <label class="field">
-            <span class="field__label">생성 종료일</span>
-            <input v-model="aiAnalysisHistoryFilters.createdTo" type="date" />
-          </label>
-          <label class="field">
-            <span class="field__label">Comparison</span>
-            <select v-model="aiAnalysisHistoryFilters.comparisonOnly">
-              <option v-for="option in aiComparisonOnlyOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
-            </select>
-          </label>
-        </div>
-
-        <div class="ai-analysis-actions">
-          <button class="button" type="button" :disabled="aiAnalysisHistoryLoading" @click="loadAiHistoryPage(0)">기록 검색</button>
-        </div>
-        <div v-if="aiAnalysisHistoryError" class="feedback feedback--error">{{ aiAnalysisHistoryError }}</div>
-
-        <div class="ai-history-list">
-          <article v-if="aiAnalysisLoading" class="ai-history-item ai-history-item--pending">
-            <div>
-              <strong>현재 AI 분석 요청 처리 중</strong>
-              <small>완료되면 결과 이력에 자동 저장됩니다. {{ aiProgressElapsedLabel }} 경과</small>
-            </div>
-            <span class="ai-history-status ai-history-status--running">분석 중</span>
-          </article>
-          <article v-for="history in aiAnalysisHistoryItems" :key="history.id" class="ai-history-item">
-            <div>
-              <div class="ai-history-item__titleline">
-                <strong>{{ history.title }}</strong>
-                <span :class="['ai-history-status', 'ai-history-status--' + String(history.status || '').toLowerCase()]">{{ formatAiStatus(history.status) }}</span>
-              </div>
-              <span>{{ formatAiMode(history.mode) }} · {{ formatAiPeriod(history.periodType) }}</span>
-              <small>{{ formatAiRange(history.from, history.to) }}<template v-if="history.compareFrom"> vs {{ formatAiRange(history.compareFrom, history.compareTo) }}
-</template></small>
-              <p>{{ history.summary || history.errorMessage || '저장된 요약이 없습니다.' }}</p>
-              <small>{{ formatAiCreatedAt(history.createdAt) }}</small>
-            </div>
-            <div class="ai-history-item__actions">
-              <button class="button" type="button" @click="emit('open-ai-analysis-history', history.id)">열기</button>
-              <button class="button button--secondary" type="button" :disabled="aiAnalysisLoading || history.status !== 'COMPLETED'" @click="printAiHistory(history.id)">PDF 저장</button>
-              <button class="button button--secondary" type="button" :disabled="aiAnalysisLoading || aiAnalysisStatus?.configured === false" @click="emit('rerun-ai-analysis', history.id)">재분석</button>
-            </div>
-          </article>
-          <div v-if="!aiAnalysisHistoryLoading && !aiAnalysisHistoryItems.length" class="empty-state ai-analysis-empty">
-            <strong>저장된 AI 분석 기록이 없습니다.</strong>
-            <span>먼저 분석을 요청하면 이곳에 기록됩니다.</span>
-          </div>
-        </div>
-
-        <div class="pagination-row">
-          <button class="button" type="button" :disabled="(aiAnalysisHistoryPage?.page ?? 0) <= 0" @click="loadAiHistoryPage((aiAnalysisHistoryPage?.page ?? 0) - 1)">이전</button>
-          <span>{{ (aiAnalysisHistoryPage?.page ?? 0) + 1 }} / {{ aiHistoryTotalPages }}</span>
-          <button class="button" type="button" :disabled="(aiAnalysisHistoryPage?.page ?? 0) >= aiHistoryTotalPages - 1" @click="loadAiHistoryPage((aiAnalysisHistoryPage?.page ?? 0) + 1)">다음</button>
+        <div class="ai-analysis-launch-actions">
+          <button class="button button--primary" type="button" @click="openAiAnalysisModal">AI 분석 열기</button>
+          <button class="button" type="button" :disabled="!aiHasResult" @click="openAiResultModal">현재 결과 상세 보기</button>
         </div>
       </section>
 </template>
@@ -2654,6 +2743,42 @@ watch(
 </template>
   </div>
 
+  <Teleport to="body">
+    <div v-if="aiAnalysisModalOpen" class="ledger-ai-modal" @click.self="closeAiAnalysisModal" @wheel.stop>
+      <section class="ledger-ai-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="ledger-ai-modal-title">
+        <header class="ledger-ai-modal__header">
+          <div>
+            <p class="ledger-ai-modal__eyebrow">가계부 AI 분석</p>
+            <h2 id="ledger-ai-modal-title">AI 분석 및 기록 관리</h2>
+          </div>
+          <button type="button" class="button button--ghost" @click="closeAiAnalysisModal">닫기</button>
+        </header>
+        <nav class="ledger-ai-modal__nav" aria-label="가계부 AI 분석 메뉴">
+          <button type="button" :class="['ledger-ai-modal__nav-button', { 'is-active': aiAnalysisModalView === 'analyze' }]" @click="setAiAnalysisModalView('analyze')">AI 분석하기</button>
+          <button type="button" :class="['ledger-ai-modal__nav-button', { 'is-active': aiAnalysisModalView === 'history' }]" @click="setAiAnalysisModalView('history')">분석 기록 확인</button>
+          <button type="button" :class="['ledger-ai-modal__nav-button', { 'is-active': aiAnalysisModalView === 'focus' }]" @click="setAiAnalysisModalView('focus')">분석 초점 정하기</button>
+        </nav>
+        <section v-if="aiAnalysisModalView === 'analyze'" class="ledger-ai-workspace">
+          <div class="ai-analysis-status" :class="{ 'ai-analysis-status--ready': aiAnalysisStatus?.configured }"><strong>{{ aiAnalysisStatus?.configured ? '준비됨' : '설정 필요' }}</strong><span>{{ aiAnalysisStatus?.message || 'AI 분석 실행 전 provider 설정을 확인해주세요.' }}</span></div>
+          <div class="ledger-ai-request-grid">
+            <div class="ai-analysis-controls">
+              <div class="scope-toggle scope-toggle--wrap"><button class="button" :class="{ 'button--primary': aiAnalysisControls.mode === 'PERIOD' }" type="button" @click="aiAnalysisControls.mode = 'PERIOD'">기간 분석</button><button class="button" :class="{ 'button--primary': aiAnalysisControls.mode === 'COMPARISON' }" type="button" @click="aiAnalysisControls.mode = 'COMPARISON'">비교 분석</button></div>
+              <div class="field-grid field-grid--four"><label class="field"><span class="field__label">기준일</span><input v-model="aiAnalysisControls.anchorDate" type="date" /></label><label class="field"><span class="field__label">분석 기간</span><select v-model="aiAnalysisControls.periodType"><option v-for="option in aiPeriodOptions" :key="option.value" :value="option.value">{{ option.label }}</option></select></label><label v-if="aiAnalysisControls.mode === 'COMPARISON'" class="field field--wide"><span class="field__label">비교 조건</span><select v-model="aiAnalysisControls.comparisonPreset"><option v-for="option in aiComparisonPresetOptions" :key="option.value" :value="option.value">{{ option.label }}</option></select></label></div>
+              <div v-if="isAiPeriodCustom || isAiComparisonCustom" class="field-grid field-grid--four"><label class="field"><span class="field__label">시작일</span><input v-model="aiAnalysisControls.from" type="date" /></label><label class="field"><span class="field__label">종료일</span><input v-model="aiAnalysisControls.to" type="date" /></label><label v-if="isAiComparisonCustom" class="field"><span class="field__label">비교 시작일</span><input v-model="aiAnalysisControls.compareFrom" type="date" /></label><label v-if="isAiComparisonCustom" class="field"><span class="field__label">비교 종료일</span><input v-model="aiAnalysisControls.compareTo" type="date" /></label></div>
+            </div>
+            <aside class="ledger-ai-focus-summary"><strong>분석 초점</strong><span>{{ aiAnalysisControls?.focusEnabled ? (aiFocusPresetOptions.find((option) => option.value === aiAnalysisControls?.focusPreset)?.label || '직접 요청') : '사용 안 함' }}</span><small>{{ aiAnalysisControls?.focusEnabled ? currentAiFocusPresetDescription() : '기본 분석 흐름으로 요청합니다.' }}</small><button class="button button--secondary" type="button" @click="setAiAnalysisModalView('focus')">초점 설정</button></aside>
+          </div>
+          <div class="ai-analysis-actions"><button class="button" type="button" :disabled="aiAnalysisLoading" @click="loadLatestAiAnalysisFromModal">기존 결과 불러오기</button><button class="button button--primary" type="button" :disabled="aiAnalysisLoading || aiAnalysisStatus?.configured === false" @click="requestAiAnalysisFromModal">{{ aiAnalysisLoading ? '분석 중...' : '분석 요청하기' }}</button></div>
+          <div v-if="aiAnalysisError" class="feedback feedback--error">{{ aiAnalysisError }}</div>
+          <div v-if="aiProgressVisible" class="ai-progress-card" role="status" aria-live="polite"><div class="ai-progress-card__header"><div><strong>AI 분석 진행 중</strong><span>{{ aiProgressCurrentStep.detail }}</span></div><time>{{ aiProgressElapsedLabel }}</time></div><div class="ai-progress-bar" role="progressbar" :aria-valuenow="aiProgressPercent" aria-valuemin="0" aria-valuemax="100" :aria-label="'AI 분석 진행률 ' + aiProgressPercent + '%'"><span :style="{ width: aiProgressPercent + '%' }"></span></div></div>
+          <div v-if="aiHasResult" class="ledger-ai-result-preview"><div><strong>{{ aiReportKeySummary || 'AI 분석 결과가 준비되었습니다.' }}</strong><small>{{ formatAiRange(aiAnalysis?.from, aiAnalysis?.to) }} · {{ formatAiMode(aiAnalysis?.mode) }}</small></div><button class="button" type="button" @click="openAiResultModal">상세 보기</button></div><div v-else class="empty-state ai-analysis-empty"><strong>아직 AI 분석 결과가 없습니다.</strong><span>조건과 분석 초점을 확인한 뒤 분석을 요청하세요.</span></div>
+        </section>
+        <section v-else-if="aiAnalysisModalView === 'history'" class="ledger-ai-workspace"><div class="ai-history-summary-grid"><article><span>전체 기록</span><strong>{{ aiAnalysisHistoryPage?.totalElements ?? 0 }}건</strong></article><article><span>현재 페이지 완료</span><strong>{{ aiHistoryCompletedCount }}건</strong></article><article><span>현재 페이지 실패</span><strong>{{ aiHistoryFailedCount }}건</strong></article></div><div class="field-grid field-grid--five ai-history-filter-grid"><label class="field"><span class="field__label">유형</span><select v-model="aiAnalysisHistoryFilters.mode"><option v-for="option in aiModeOptions" :key="option.value" :value="option.value">{{ option.label }}</option></select></label><label class="field"><span class="field__label">분석 기간</span><select v-model="aiAnalysisHistoryFilters.periodType"><option value="">전체</option><option v-for="option in aiPeriodOptions" :key="option.value" :value="option.value">{{ option.label }}</option></select></label><label class="field"><span class="field__label">생성 시작일</span><input v-model="aiAnalysisHistoryFilters.createdFrom" type="date" /></label><label class="field"><span class="field__label">생성 종료일</span><input v-model="aiAnalysisHistoryFilters.createdTo" type="date" /></label><label class="field"><span class="field__label">비교 여부</span><select v-model="aiAnalysisHistoryFilters.comparisonOnly"><option v-for="option in aiComparisonOnlyOptions" :key="option.value" :value="option.value">{{ option.label }}</option></select></label></div><div class="ai-analysis-actions"><button class="button" type="button" :disabled="aiAnalysisHistoryLoading" @click="loadAiHistoryPage(0)">{{ aiAnalysisHistoryLoading ? '불러오는 중...' : '기록 새로고침' }}</button></div><div v-if="aiAnalysisHistoryError" class="feedback feedback--error">{{ aiAnalysisHistoryError }}</div><div class="ai-history-list ai-history-list--modal"><article v-if="aiAnalysisLoading" class="ai-history-item ai-history-item--pending"><div><strong>현재 AI 분석 요청 처리 중</strong><small>완료되면 결과 이력에 저장됩니다. {{ aiProgressElapsedLabel }} 경과</small></div><span class="ai-history-status ai-history-status--running">분석 중</span></article><article v-for="history in aiAnalysisHistoryItems" :key="history.id" class="ai-history-item"><div><div class="ai-history-item__titleline"><strong>{{ history.title }}</strong><span :class="['ai-history-status', 'ai-history-status--' + String(history.status || '').toLowerCase()]">{{ formatAiStatus(history.status) }}</span></div><span>{{ formatAiMode(history.mode) }} · {{ formatAiPeriod(history.periodType) }}</span><small>{{ formatAiRange(history.from, history.to) }}<template v-if="history.compareFrom"> vs {{ formatAiRange(history.compareFrom, history.compareTo) }}</template></small><p>{{ history.summary || history.errorMessage || '저장된 요약이 없습니다.' }}</p><small>{{ formatAiCreatedAt(history.createdAt) }}</small></div><div class="ai-history-item__actions"><button class="button" type="button" @click="emit('open-ai-analysis-history', history.id)">내용 보기</button><button class="button button--secondary" type="button" :disabled="aiAnalysisLoading || history.status !== 'COMPLETED'" @click="printAiHistory(history.id)">PDF 저장</button><button class="button button--secondary" type="button" :disabled="aiAnalysisLoading || aiAnalysisStatus?.configured === false" @click="emit('rerun-ai-analysis', history.id)">재분석</button><button class="button button--danger" type="button" :disabled="aiAnalysisLoading" @click="deleteAiHistoryFromModal(history)">삭제</button></div></article><div v-if="!aiAnalysisHistoryLoading && !aiAnalysisHistoryItems.length" class="empty-state ai-analysis-empty"><strong>저장된 AI 분석 기록이 없습니다.</strong><span>먼저 분석을 요청하면 이곳에 기록됩니다.</span></div></div><div class="pagination-row"><button class="button" type="button" :disabled="(aiAnalysisHistoryPage?.page ?? 0) <= 0" @click="loadAiHistoryPage((aiAnalysisHistoryPage?.page ?? 0) - 1)">이전</button><span>{{ (aiAnalysisHistoryPage?.page ?? 0) + 1 }} / {{ aiHistoryTotalPages }}</span><button class="button" type="button" :disabled="(aiAnalysisHistoryPage?.page ?? 0) >= aiHistoryTotalPages - 1" @click="loadAiHistoryPage((aiAnalysisHistoryPage?.page ?? 0) + 1)">다음</button></div></section>
+        <section v-else-if="aiAnalysisModalView === 'focus'" class="ledger-ai-workspace ledger-ai-workspace--focus"><div class="ledger-ai-focus-editor"><label class="ledger-ai-switch"><input v-model="aiAnalysisControls.focusEnabled" type="checkbox" /><span>분석 요청 초점 사용</span></label><p>끄면 기존과 동일한 기본 AI 분석을 진행합니다. 켜면 선택한 초점을 AI 요청에 포함합니다.</p><label class="field"><span class="field__label">요청 초점</span><select v-model="aiAnalysisControls.focusPreset" :disabled="!aiAnalysisControls.focusEnabled"><option v-for="option in aiFocusPresetOptions" :key="option.value" :value="option.value">{{ option.label }}</option></select></label><textarea v-if="aiAnalysisControls.focusPreset === 'CUSTOM'" v-model="aiAnalysisControls.focusCustomText" :disabled="!aiAnalysisControls.focusEnabled" maxlength="500" placeholder="예: 지난달보다 늘어난 구독비와 줄일 수 있는 결제수단 중심으로 봐줘."></textarea></div><div class="ledger-ai-focus-presets"><article v-for="option in aiFocusPresetOptions" :key="option.value" :class="{ 'is-selected': aiAnalysisControls.focusPreset === option.value }" @click="aiAnalysisControls.focusPreset = option.value"><strong>{{ option.label }}</strong><span>{{ option.description }}</span></article></div></section>
+        <div v-else class="ledger-ai-modal__empty"><strong>원하는 작업을 선택하세요.</strong><span>AI 분석하기, 분석 기록 확인, 분석 초점 정하기 중 하나를 선택하면 해당 화면이 열립니다.</span></div>
+      </section>
+    </div>
+  </Teleport>
   <Teleport to="body">
     <div v-if="aiResultModalOpen && aiHasResult" class="ai-result-modal" @click.self="closeAiResultModal">
       <section class="ai-result-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="ai-result-modal-title">

@@ -43,6 +43,7 @@ import {
   markLedgerImageAnalysisEntryApproved,
   fetchLedgerAiAnalysisStatus,
   fetchLatestLedgerAiAnalysis,
+  deleteLedgerAiAnalysisHistory,
   fetchEntrySearchPage,
   fetchEntries,
   fetchHouseholdAggregatePreferences,
@@ -242,6 +243,9 @@ const aiAnalysisControls = reactive({
   to: today,
   compareFrom: '',
   compareTo: '',
+  focusEnabled: false,
+  focusPreset: 'SPENDING_PATTERN',
+  focusCustomText: '',
 })
 const aiAnalysisHistoryFilters = reactive({
   mode: '',
@@ -252,6 +256,7 @@ const aiAnalysisHistoryFilters = reactive({
 })
 const aiAnalysisStatus = ref(null)
 const aiAnalysis = ref(null)
+const aiAnalysisModalRequestKey = ref(0)
 const aiAnalysisLoading = ref(false)
 const aiAnalysisError = ref('')
 const aiAnalysisStale = ref(false)
@@ -628,6 +633,9 @@ function setHouseholdAnalysisRoute(tab) {
   }
   householdAnalysisRoute.value = tab
   householdTab.value = 'ledger-analysis'
+  if (tab === 'stats-ai') {
+    aiAnalysisModalRequestKey.value += 1
+  }
 }
 const currentViewCsvRange = computed(() => (
   householdTab.value === 'ledger-analysis' || householdTab.value.startsWith('stats-')
@@ -1999,12 +2007,30 @@ function normalizeAiOptionalDate(value) {
   const text = String(value ?? '').trim()
   return text || null
 }
-
+function buildAiAnalysisFocusPrompt() {
+  if (!aiAnalysisControls.focusEnabled) {
+    return ''
+  }
+  const customText = String(aiAnalysisControls.focusCustomText || '').trim()
+  const prompts = {
+    SPENDING_PATTERN: '지출 패턴 분석을 중점으로, 지출이 많이 발생한 영역과 반복되는 소비 흐름을 우선 분석해 주세요.',
+    FIXED_COST: '고정 지출 분석을 중점으로, 정기적으로 반복되는 지출과 줄일 수 있는 고정비 후보를 우선 분석해 주세요.',
+    RECURRING_IRREGULAR: '비정기 지출 및 정기 지출 종합 분석을 중점으로, 반복 지출과 갑작스러운 지출을 구분해 설명해 주세요.',
+    DETAILED_CONSUMPTION: '소비 패턴 정밀 분석을 중점으로, 카테고리, 결제수단, 금액대, 시점별 소비 특징을 구체적으로 분석해 주세요.',
+    COMPREHENSIVE: '종합 분석을 중점으로, 지출 패턴, 고정비, 비정기 지출, 개선 방향을 균형 있게 분석해 주세요.',
+    CUSTOM: customText,
+  }
+  return String(prompts[aiAnalysisControls.focusPreset] || '').trim().slice(0, 500)
+}
 function buildAiAnalysisPayload() {
   const mode = aiAnalysisControls.mode || 'PERIOD'
+  const focusPrompt = buildAiAnalysisFocusPrompt()
   const payload = {
     mode,
     anchorDate: aiAnalysisControls.anchorDate || statsControls.anchorDate || today,
+  }
+  if (focusPrompt) {
+    payload.focusPrompt = focusPrompt
   }
 
   if (mode === 'COMPARISON') {
@@ -2160,6 +2186,28 @@ async function requestAiAnalysis() {
   }
 }
 
+
+async function deleteAiAnalysisHistory(history) {
+  const historyId = history?.id ?? history
+  if (!historyId) {
+    return
+  }
+  const title = history?.title || 'AI 분석 기록'
+  if (!window.confirm(`'${title}' 기록을 삭제할까요?\n\n삭제하면 저장된 AI 분석 결과를 다시 불러올 수 없습니다.`)) {
+    return
+  }
+  try {
+    await deleteLedgerAiAnalysisHistory(historyId)
+    if (String(aiAnalysis.value?.historyId || '') === String(historyId)) {
+      aiAnalysis.value = null
+      aiAnalysisStale.value = false
+    }
+    setFeedback('AI 분석 기록을 삭제했습니다.')
+    await loadAiAnalysisHistory(aiAnalysisHistoryPage.value?.page ?? 0)
+  } catch (error) {
+    setFeedback('', error.message || 'AI 분석 기록을 삭제하지 못했습니다.')
+  }
+}
 async function rerunAiAnalysis(historyId) {
   if (!historyId) {
     return
@@ -5000,6 +5048,7 @@ async function activatePayment(paymentId) {
       :ai-analysis-history-page="aiAnalysisHistoryPage"
       :ai-analysis-history-loading="aiAnalysisHistoryLoading"
       :ai-analysis-history-error="aiAnalysisHistoryError"
+      :ai-analysis-modal-request-key="aiAnalysisModalRequestKey"
       @update-search-keyword-draft="updateSearchKeywordDraft"
       @submit-search="submitSearch"
       @change-search-page="loadSearchResults"
@@ -5015,6 +5064,7 @@ async function activatePayment(paymentId) {
       @load-ai-analysis-history="loadAiAnalysisHistory"
       @open-ai-analysis-history="openAiAnalysisHistory"
       @rerun-ai-analysis="rerunAiAnalysis"
+      @delete-ai-analysis-history="deleteAiAnalysisHistory"
       />
     </template>
 

@@ -33,40 +33,64 @@ public class PrivacyController {
     private final SecondaryPinSessionSupport secondaryPinSessionSupport;
 
     @DeleteMapping("/ai-analysis-history")
-    public PrivacyCleanupResponse deleteAiAnalysisHistories(@AuthenticationPrincipal AppUserPrincipal currentUser) {
+    public PrivacyCleanupResponse deleteAiAnalysisHistories(
+            @AuthenticationPrincipal AppUserPrincipal currentUser,
+            HttpServletRequest httpRequest
+    ) {
+        requireVerifiedSecondaryPin(httpRequest);
         return privacyManagementService.deleteAiAnalysisHistories(currentUser.userId());
     }
 
     @DeleteMapping("/public-download-links")
-    public PrivacyCleanupResponse revokePublicDownloadLinks(@AuthenticationPrincipal AppUserPrincipal currentUser) {
+    public PrivacyCleanupResponse revokePublicDownloadLinks(
+            @AuthenticationPrincipal AppUserPrincipal currentUser,
+            HttpServletRequest httpRequest
+    ) {
+        requireVerifiedSecondaryPin(httpRequest);
         return privacyManagementService.revokePublicDownloadLinks(currentUser.userId());
     }
 
     @DeleteMapping("/travel-public-media-shares")
-    public PrivacyCleanupResponse revokeTravelPublicMediaShares(@AuthenticationPrincipal AppUserPrincipal currentUser) {
+    public PrivacyCleanupResponse revokeTravelPublicMediaShares(
+            @AuthenticationPrincipal AppUserPrincipal currentUser,
+            HttpServletRequest httpRequest
+    ) {
+        requireVerifiedSecondaryPin(httpRequest);
         return privacyManagementService.revokeTravelPublicMediaShares(currentUser.userId());
     }
 
     @DeleteMapping("/photo-location-metadata")
-    public PrivacyCleanupResponse removePhotoLocationMetadata(@AuthenticationPrincipal AppUserPrincipal currentUser) {
+    public PrivacyCleanupResponse removePhotoLocationMetadata(
+            @AuthenticationPrincipal AppUserPrincipal currentUser,
+            HttpServletRequest httpRequest
+    ) {
+        requireVerifiedSecondaryPin(httpRequest);
         return privacyManagementService.removePhotoLocationMetadata(currentUser.userId());
     }
 
     @PostMapping("/cleanup")
-    public PrivacyCleanupResponse cleanupSensitiveData(@AuthenticationPrincipal AppUserPrincipal currentUser) {
+    public PrivacyCleanupResponse cleanupSensitiveData(
+            @AuthenticationPrincipal AppUserPrincipal currentUser,
+            HttpServletRequest httpRequest
+    ) {
+        requireVerifiedSecondaryPin(httpRequest);
         return privacyManagementService.cleanupSensitiveData(currentUser.userId());
     }
 
+    private String requireVerifiedSecondaryPin(HttpServletRequest httpRequest) {
+        String verifiedSecondaryPin = secondaryPinSessionSupport.getVerifiedSecondaryPin(httpRequest);
+        if (verifiedSecondaryPin == null || verifiedSecondaryPin.isBlank()) {
+            throw new BadRequestException("개인정보 관리 작업을 실행하려면 현재 비밀번호와 2차 PIN 검증이 필요합니다.");
+        }
+        return verifiedSecondaryPin;
+    }
     @PostMapping("/data-export")
     public ResponseEntity<ByteArrayResource> exportUserDataArchive(
             @AuthenticationPrincipal AppUserPrincipal currentUser,
             @Valid @RequestBody DataPortabilityExportRequest request,
             HttpServletRequest httpRequest
     ) {
-        String verifiedSecondaryPin = secondaryPinSessionSupport.getVerifiedSecondaryPin(httpRequest);
-        if (verifiedSecondaryPin == null || verifiedSecondaryPin.isBlank()) {
-            throw new BadRequestException("A verified secondary PIN session is required before exporting data.");
-        }
+        String verifiedSecondaryPin = requireVerifiedSecondaryPin(httpRequest);
         DataPortabilityExportService.UserDataArchive archive = dataPortabilityExportService.exportUserDataArchive(
                 currentUser.userId(),
                 request.from(),

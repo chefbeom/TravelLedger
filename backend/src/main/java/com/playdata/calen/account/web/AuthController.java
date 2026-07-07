@@ -3,6 +3,7 @@ package com.playdata.calen.account.web;
 import com.playdata.calen.account.dto.AppUserResponse;
 import com.playdata.calen.account.dto.AuthLoginRequest;
 import com.playdata.calen.account.dto.ProfilePasswordChangeRequest;
+import com.playdata.calen.account.dto.ProfilePrivacyAccessVerifyRequest;
 import com.playdata.calen.account.dto.ProfileSecondaryPinChangeRequest;
 import com.playdata.calen.account.dto.ProfileSecondaryPinVerifyRequest;
 import com.playdata.calen.account.domain.AppUser;
@@ -160,9 +161,26 @@ public class AuthController {
     @PostMapping("/profile/verify-secondary-pin")
     public ResponseEntity<Void> verifyProfileSecondaryPin(
             @Valid @RequestBody ProfileSecondaryPinVerifyRequest request,
-            Authentication authentication
+            Authentication authentication,
+            HttpServletRequest httpRequest
     ) {
         appUserService.verifySecondaryPin(requireAuthenticatedUserId(authentication), request.secondaryPin());
+        secondaryPinSessionSupport.storeVerifiedSecondaryPin(httpRequest, request.secondaryPin().trim());
+        return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/profile/verify-privacy-access")
+    public ResponseEntity<Void> verifyProfilePrivacyAccess(
+            @Valid @RequestBody ProfilePrivacyAccessVerifyRequest request,
+            Authentication authentication,
+            HttpServletRequest httpRequest
+    ) {
+        String verifiedSecondaryPin = appUserService.verifyPrivacyAccess(
+                requireAuthenticatedUserId(authentication),
+                request.password(),
+                request.secondaryPin()
+        );
+        secondaryPinSessionSupport.storeVerifiedSecondaryPin(httpRequest, verifiedSecondaryPin);
         return ResponseEntity.noContent().build();
     }
 

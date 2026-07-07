@@ -111,6 +111,28 @@ public class SupportInquiryService {
     }
 
     @Transactional
+    public SupportInquiryResponse updateStatus(Long inquiryId, String statusRaw) {
+        SupportInquiry inquiry = supportInquiryRepository.findById(inquiryId)
+                .orElseThrow(() -> new NotFoundException("臾몄쓽 ?댁뿭??李얠쓣 ???놁뒿?덈떎."));
+        SupportInquiryStatus status = parseAdminStatus(statusRaw);
+        inquiry.setStatus(status);
+        inquiry.setAdminArchived(status == SupportInquiryStatus.ANSWERED);
+        inquiry.setAdminDeleted(false);
+        inquiry.setUpdatedAt(LocalDateTime.now());
+        return toResponse(inquiry);
+    }
+
+    private SupportInquiryStatus parseAdminStatus(String statusRaw) {
+        if (!StringUtils.hasText(statusRaw)) {
+            throw new BadRequestException("문의 상태가 필요합니다.");
+        }
+        try {
+            return SupportInquiryStatus.valueOf(statusRaw.trim().toUpperCase());
+        } catch (IllegalArgumentException exception) {
+            throw new BadRequestException("지원하지 않는 문의 상태입니다.");
+        }
+    }
+    @Transactional
     public void deleteForAdmin(Long inquiryId) {
         SupportInquiry inquiry = supportInquiryRepository.findById(inquiryId)
                 .orElseThrow(() -> new NotFoundException("문의 내역을 찾을 수 없습니다."));

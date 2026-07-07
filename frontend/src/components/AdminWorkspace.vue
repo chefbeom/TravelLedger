@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, reactive } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive } from 'vue'
 import InviteAccessPanel from './InviteAccessPanel.vue'
 import { buildThumbnailUrl } from '../lib/mediaPreview'
 import {
@@ -21,6 +21,7 @@ import {
   unlockBlockedIp,
   updateAdminAiControl,
   updateAdminDataStorageControl,
+  updateAdminSupportInquiryStatus,
   updateAdminUserActive,
   verifyAdminAccess,
 } from '../lib/api'
@@ -31,6 +32,8 @@ const props = defineProps({
     required: true,
   },
 })
+
+const emit = defineEmits(['exit-admin-access'])
 
 const PAGE_SIZE = 10
 const AI_CONTROL_PRESETS_STORAGE_KEY = 'travelledger:admin-ai-control-presets:v1'
@@ -63,6 +66,15 @@ const state = reactive({
   opsControlError: '',
   opsControlMessage: '',
   opsControlCheckedAt: '',
+  opsControlModalOpen: false,
+  opsControlModalView: 'menu',
+  aiServerWizardStep: 1,
+  aiServerDraftName: '',
+  activeAdminPanel: '',
+  aiControlPresets: [],
+  aiControlPresetKey: '',
+  aiServerStatusOpen: false,
+  aiServerEditorOpen: false,
   loadingOpsControl: false,
   savingAiControl: false,
   savingDataControl: false,
@@ -97,11 +109,14 @@ const state = reactive({
   blockedIpPage: 0,
   users: [],
   userPage: 0,
+  accessModalOpen: false,
+  accessModalView: 'invite',
   recentInvites: [],
   invitePage: 0,
   supportInquiries: [],
-  supportTab: 'inbox',
-  supportPages: { inbox: 0, archive: 0 },
+  supportModalOpen: false,
+  supportTab: 'pending',
+  supportPages: { pending: 0, processing: 0, done: 0 },
   selectedSupportInquiryId: null,
   supportReplyContent: '',
   creatingInvite: false,
@@ -166,19 +181,42 @@ function paginate(items, page) {
   return items.slice(start, start + PAGE_SIZE)
 }
 
-const inboxSupportInquiries = computed(() => (
-  state.supportInquiries.filter((inquiry) => !inquiry.archived)
+const pendingSupportInquiries = computed(() => (
+  state.supportInquiries.filter((inquiry) => !inquiry.archived && inquiry.status === 'PENDING')
 ))
 
-const archivedSupportInquiries = computed(() => (
-  state.supportInquiries.filter((inquiry) => inquiry.archived)
+const processingSupportInquiries = computed(() => (
+  state.supportInquiries.filter((inquiry) => !inquiry.archived && inquiry.status === 'IN_PROGRESS')
 ))
 
-const currentSupportSource = computed(() => (
-  state.supportTab === 'archive' ? archivedSupportInquiries.value : inboxSupportInquiries.value
+const completedSupportInquiries = computed(() => (
+  state.supportInquiries.filter((inquiry) => inquiry.archived || inquiry.status === 'ANSWERED')
 ))
 
-const currentSupportPage = computed(() => state.supportPages[state.supportTab])
+const inboxSupportInquiries = computed(() => ([
+  ...pendingSupportInquiries.value,
+  ...processingSupportInquiries.value,
+]))
+
+const archivedSupportInquiries = completedSupportInquiries
+
+const supportTabOptions = computed(() => [
+  { key: 'pending', label: '미확인', description: '아직 처리 상태로 전환하지 않은 새 문의', count: pendingSupportInquiries.value.length },
+  { key: 'processing', label: '진행중', description: '담당자가 확인하고 처리 중인 문의', count: processingSupportInquiries.value.length },
+  { key: 'done', label: '완료됨', description: '답변 완료 또는 보관 처리된 문의', count: completedSupportInquiries.value.length },
+])
+
+const currentSupportSource = computed(() => {
+  if (state.supportTab === 'processing') {
+    return processingSupportInquiries.value
+  }
+  if (state.supportTab === 'done') {
+    return completedSupportInquiries.value
+  }
+  return pendingSupportInquiries.value
+})
+
+const currentSupportPage = computed(() => state.supportPages[state.supportTab] ?? 0)
 
 const pagedSupportInquiries = computed(() => (
   paginate(currentSupportSource.value, currentSupportPage.value)
@@ -187,7 +225,7 @@ const pagedSupportInquiries = computed(() => (
 const supportPageCount = computed(() => Math.max(1, Math.ceil(currentSupportSource.value.length / PAGE_SIZE)))
 
 const selectedSupportInquiry = computed(() => (
-  currentSupportSource.value.find((inquiry) => inquiry.id === state.selectedSupportInquiryId) ?? null
+  state.supportInquiries.find((inquiry) => inquiry.id === state.selectedSupportInquiryId) ?? null
 ))
 
 const pagedBlockedIps = computed(() => paginate(state.blockedIps, state.blockedIpPage))
@@ -198,6 +236,33 @@ const userPageCount = computed(() => Math.max(1, Math.ceil(state.users.length / 
 
 const pagedInvites = computed(() => paginate(state.recentInvites, state.invitePage))
 const invitePageCount = computed(() => Math.max(1, Math.ceil(state.recentInvites.length / PAGE_SIZE)))
+
+const accessModalOptions = computed(() => [
+  {
+    key: 'invite',
+    label: '초대 링크 생성',
+    description: '새 초대 링크를 만들고 최근 링크 상태를 확인합니다.',
+    count: state.recentInvites.length,
+  },
+  {
+    key: 'blocked',
+    label: '차단된 IP 조회',
+    description: '로그인 실패로 차단된 IP를 확인하고 즉시 해제합니다.',
+    count: state.blockedIps.length,
+  },
+  {
+    key: 'logs',
+    label: '최근 로그인 기록',
+    description: '성공, 실패, 차단된 로그인 시도를 페이지 단위로 확인합니다.',
+    count: state.loginLogPage.totalElements ?? state.recentLoginLogs.length,
+  },
+  {
+    key: 'users',
+    label: '사용자 상태',
+    description: '사용자 권한과 활성 상태를 확인하고 일반 사용자를 제어합니다.',
+    count: state.users.length,
+  },
+])
 
 const adminPanelCards = computed(() => [
   {
@@ -227,19 +292,91 @@ const adminPanelCards = computed(() => [
 ])
 
 function openAdminPanel(panel) {
-  state.activeAdminPanel = state.activeAdminPanel === panel ? '' : panel
-  if (panel === 'ops' && !state.opsControl && !state.loadingOpsControl) {
-    loadOpsControl()
+  if (panel === 'ops') {
+    openOpsControlModal('menu')
+    return
   }
+  if (panel === 'support') {
+    openSupportModal('pending')
+    return
+  }
+  if (panel === 'access') {
+    openAccessModal('invite')
+    return
+  }
+  state.activeAdminPanel = state.activeAdminPanel === panel ? '' : panel
 }
 
 function closeAdminPanel() {
   state.activeAdminPanel = ''
 }
 
+function openOpsControlModal(view = 'menu') {
+  state.activeAdminPanel = ''
+  state.opsControlModalOpen = true
+  state.opsControlModalView = view
+  if (!state.opsControl && !state.loadingOpsControl) {
+    loadOpsControl()
+  }
+}
+
+function closeOpsControlModal() {
+  state.opsControlModalOpen = false
+  state.opsControlModalView = 'menu'
+  state.aiServerWizardStep = 1
+}
+
+function selectOpsControlModalView(view) {
+  state.opsControlModalView = view
+  if (view === 'status') {
+    handleCheckAiServerStatus()
+    return
+  }
+  if (view === 'add') {
+    state.aiServerWizardStep = 1
+    state.aiServerDraftName = state.aiServerDraftName || buildCurrentAiServerName()
+  }
+}
+
+function startAiServerAdd() {
+  state.aiServerDraftName = buildCurrentAiServerName()
+  selectOpsControlModalView('add')
+}
+
+function buildCurrentAiServerName() {
+  const provider = state.aiControlForm.provider === 'n8n' ? 'n8n' : 'LM Studio'
+  const model = state.aiControlForm.model || 'auto'
+  return `${provider} - ${model}`
+}
+
+function currentAiServerAddress() {
+  return state.aiControlForm.provider === 'n8n'
+    ? (state.aiControlForm.workflowUrl || '-')
+    : (state.aiControlForm.lmStudioBaseUrl || '-')
+}
+
+function currentAiProviderLabel() {
+  return state.aiControlForm.provider === 'n8n' ? 'n8n' : 'LM Studio'
+}
+
+function goNextAiServerStep() {
+  state.aiServerWizardStep = Math.min(3, state.aiServerWizardStep + 1)
+}
+
+function goPrevAiServerStep() {
+  state.aiServerWizardStep = Math.max(1, state.aiServerWizardStep - 1)
+}
+
+function applyAiControlPresetByKey(key) {
+  state.aiControlPresetKey = key
+  applyAiControlPreset()
+  state.opsControlMessage = '선택한 서버 설정을 불러왔습니다. 변경 내용을 적용하려면 저장을 누르세요.'
+}
+
 function syncSelection(preferredId = state.selectedSupportInquiryId) {
-  state.supportPages.inbox = clampPage(state.supportPages.inbox, inboxSupportInquiries.value.length)
-  state.supportPages.archive = clampPage(state.supportPages.archive, archivedSupportInquiries.value.length)
+  state.supportPages.pending = clampPage(state.supportPages.pending, pendingSupportInquiries.value.length)
+  state.supportPages.processing = clampPage(state.supportPages.processing, processingSupportInquiries.value.length)
+  state.supportPages.done = clampPage(state.supportPages.done, completedSupportInquiries.value.length)
 
   const visibleList = currentSupportSource.value
   const preferred = visibleList.find((item) => item.id === preferredId)
@@ -249,8 +386,45 @@ function syncSelection(preferredId = state.selectedSupportInquiryId) {
   state.supportReplyContent = nextInquiry?.replyContent ?? ''
 }
 
+function openAccessModal(view = 'invite') {
+  state.activeAdminPanel = ''
+  state.accessModalOpen = true
+  state.accessModalView = accessModalOptions.value.some((option) => option.key === view) ? view : 'invite'
+}
+
+function closeAccessModal() {
+  state.accessModalOpen = false
+}
+
+function selectAccessModalView(view) {
+  state.accessModalView = accessModalOptions.value.some((option) => option.key === view) ? view : 'invite'
+}
+
+function supportTabForInquiry(inquiry) {
+  if (!inquiry) {
+    return 'pending'
+  }
+  if (inquiry.archived || inquiry.status === 'ANSWERED') {
+    return 'done'
+  }
+  if (inquiry.status === 'IN_PROGRESS') {
+    return 'processing'
+  }
+  return 'pending'
+}
+
+function openSupportModal(tab = state.supportTab || 'pending') {
+  state.activeAdminPanel = ''
+  state.supportModalOpen = true
+  setSupportTab(tab)
+}
+
+function closeSupportModal() {
+  state.supportModalOpen = false
+}
+
 function setSupportTab(tab) {
-  state.supportTab = tab
+  state.supportTab = state.supportPages[tab] === undefined ? 'pending' : tab
   syncSelection()
 }
 
@@ -320,6 +494,24 @@ async function handleVerifyAdminAccess() {
   } finally {
     state.verifyingAdminAccess = false
   }
+}
+
+function exitAdminAccess() {
+  if (state.verifyingAdminAccess) {
+    return
+  }
+  emit('exit-admin-access')
+}
+
+function handleAdminAccessKeydown(event) {
+  if (event.key !== 'Escape') {
+    return
+  }
+  if (!state.adminAccessReady || state.adminAccessVerified) {
+    return
+  }
+  event.preventDefault()
+  exitAdminAccess()
 }
 
 async function loadDashboard() {
@@ -475,7 +667,7 @@ async function handleReplySupportInquiry() {
     state.supportInquiries = state.supportInquiries.map((item) => (
       item.id === updatedInquiry.id ? updatedInquiry : item
     ))
-    state.supportTab = 'archive'
+    state.supportTab = 'done'
     syncSelection(updatedInquiry.id)
   } catch (error) {
     if (!handleAdminAccessRequired(error)) {
@@ -483,6 +675,26 @@ async function handleReplySupportInquiry() {
     }
   } finally {
     state.savingReply = false
+  }
+}
+
+async function handleUpdateSupportStatus(inquiry, status) {
+  state.mutatingInquiryId = inquiry.id
+  state.errorMessage = ''
+
+  try {
+    const updatedInquiry = await updateAdminSupportInquiryStatus(inquiry.id, status)
+    state.supportInquiries = state.supportInquiries.map((item) => (
+      item.id === updatedInquiry.id ? updatedInquiry : item
+    ))
+    state.supportTab = supportTabForInquiry(updatedInquiry)
+    syncSelection(updatedInquiry.id)
+  } catch (error) {
+    if (!handleAdminAccessRequired(error)) {
+      state.errorMessage = error.message
+    }
+  } finally {
+    state.mutatingInquiryId = null
   }
 }
 
@@ -495,7 +707,7 @@ async function handleArchiveToggle(inquiry, archived) {
     state.supportInquiries = state.supportInquiries.map((item) => (
       item.id === updatedInquiry.id ? updatedInquiry : item
     ))
-    state.supportTab = archived ? 'archive' : 'inbox'
+    state.supportTab = archived ? 'done' : supportTabForInquiry(updatedInquiry)
     syncSelection(updatedInquiry.id)
   } catch (error) {
     if (!handleAdminAccessRequired(error)) {
@@ -566,6 +778,7 @@ function rememberAiControlPreset(source = state.aiControlForm) {
     return
   }
   const preset = {
+    title: state.aiServerDraftName || source.title || buildCurrentAiServerName(),
     provider: source.provider || 'lmstudio',
     model: source.model || 'auto',
     lmStudioBaseUrl: source.lmStudioBaseUrl,
@@ -625,7 +838,7 @@ function applyAiControlPreset() {
 
 function formatAiControlPreset(preset) {
   const saved = preset.savedAt ? formatDateTime(preset.savedAt) : '저장 시각 없음'
-  return `${preset.model || 'auto'} · ${preset.lmStudioBaseUrl} · ${saved}`
+  return `${preset.title || preset.model || 'AI 서버'} · ${preset.model || 'auto'} · ${preset.lmStudioBaseUrl || preset.workflowUrl || '-'} · ${saved}`
 }
 function syncAiControlForm(control = state.opsControl) {
   const ai = control?.ai
@@ -927,7 +1140,14 @@ async function handleRestoreUploadedBackup() {
   }
 }
 
-onMounted(initializeAdminWorkspace)
+onMounted(() => {
+  initializeAdminWorkspace()
+  window.addEventListener('keydown', handleAdminAccessKeydown)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', handleAdminAccessKeydown)
+})
 </script>
 
 <template>
@@ -956,6 +1176,14 @@ onMounted(initializeAdminWorkspace)
           </label>
         </form>
         <div class="travel-modal__footer">
+          <button
+            class="button button--ghost"
+            type="button"
+            :disabled="state.verifyingAdminAccess"
+            @click="exitAdminAccess"
+          >
+            메인으로 나가기 (Esc)
+          </button>
           <button
             class="button button--primary"
             type="button"
@@ -1238,6 +1466,723 @@ onMounted(initializeAdminWorkspace)
         </div>
       </section>
 
+      <div v-if="state.opsControlModalOpen" class="travel-modal admin-ops-modal" @click.self="closeOpsControlModal">
+        <div class="travel-modal__dialog admin-ops-modal__dialog">
+          <div class="travel-modal__header admin-ops-modal__header">
+            <div>
+              <span class="admin-command-center__eyebrow">AI / Server</span>
+              <h2>AI 및 서버 제어판</h2>
+              <p>AI 서버 상태 확인, 서버 목록 조회 및 변경, 새 서버 추가를 모달 안에서 처리합니다.</p>
+            </div>
+            <button class="button button--ghost" type="button" @click="closeOpsControlModal">닫기</button>
+          </div>
+
+          <div class="travel-modal__body admin-ops-modal__body">
+            <div v-if="state.opsControlError" class="feedback feedback--error" role="alert">{{ state.opsControlError }}</div>
+            <div v-if="state.opsControlMessage" class="feedback feedback--success" role="status" aria-live="polite">{{ state.opsControlMessage }}</div>
+
+            <div class="admin-ops-modal__nav" aria-label="AI 및 서버 제어판 기능 선택">
+              <button
+                type="button"
+                :class="['admin-ops-action-card', { 'is-active': state.opsControlModalView === 'status' }]"
+                @click="selectOpsControlModalView('status')"
+              >
+                <span>1</span>
+                <strong>서버 상태 확인</strong>
+                <small>현재 연결된 AI 서버와 데이터 서버의 연결 상태를 테스트합니다.</small>
+              </button>
+              <button
+                type="button"
+                :class="['admin-ops-action-card', { 'is-active': state.opsControlModalView === 'list' }]"
+                @click="selectOpsControlModalView('list')"
+              >
+                <span>2</span>
+                <strong>서버 리스트 조회 및 서버 변경</strong>
+                <small>현재 서버와 저장된 AI 서버 프리셋을 확인하고 불러옵니다.</small>
+              </button>
+              <button
+                type="button"
+                :class="['admin-ops-action-card', { 'is-active': state.opsControlModalView === 'add' }]"
+                @click="startAiServerAdd"
+              >
+                <span>3</span>
+                <strong>서버 추가</strong>
+                <small>이름, 주소, 모델, 제공자, 응답/보안 설정을 단계별로 입력합니다.</small>
+              </button>
+            </div>
+
+            <section v-if="state.opsControlModalView === 'menu'" class="admin-ops-modal__empty">
+              <strong>작업할 기능을 선택하세요.</strong>
+              <p>상단의 3가지 기능 중 하나를 선택하면 해당 관리 화면이 이 모달 안에서 열립니다.</p>
+            </section>
+
+            <section v-else-if="state.opsControlModalView === 'status'" class="admin-ops-panel">
+              <div class="panel__header">
+                <div>
+                  <h3>서버 상태 확인</h3>
+                  <p>테스트 연결은 현재 저장된 설정 기준으로 AI 서버 모델 목록, DB, MinIO 상태를 확인합니다.</p>
+                </div>
+                <button class="button button--primary" type="button" :disabled="state.loadingOpsControl" @click="handleCheckAiServerStatus">
+                  {{ state.loadingOpsControl ? '테스트 중...' : '테스트 연결' }}
+                </button>
+              </div>
+              <p v-if="state.opsControlCheckedAt" class="field__hint">최근 점검: {{ formatOpsControlCheckedAt(state.opsControlCheckedAt) }}</p>
+              <p v-if="state.opsControl?.persistenceMessage" class="field__hint">설정 저장소: {{ state.opsControl.persistenceMessage }}</p>
+              <div class="summary-grid admin-ops-status-grid">
+                <article class="summary-card">
+                  <span>AI 기능</span>
+                  <strong>{{ state.opsControl?.ai?.enabled ? '켜짐' : '꺼짐' }}</strong>
+                  <small>{{ state.opsControl?.ai?.statusMessage || '-' }}</small>
+                </article>
+                <article class="summary-card">
+                  <span>AI 서버</span>
+                  <strong>{{ state.opsControl?.aiServer?.reachable ? '정상' : '확인 필요' }}</strong>
+                  <small>{{ state.opsControl?.aiServer?.message || '-' }}</small>
+                </article>
+                <article class="summary-card">
+                  <span>DB 서버</span>
+                  <strong>{{ state.opsControl?.dataServer?.databaseReachable ? '정상' : '확인 필요' }}</strong>
+                  <small>{{ state.opsControl?.dataServer?.databaseHost || '-' }}</small>
+                </article>
+                <article class="summary-card">
+                  <span>MinIO 여유</span>
+                  <strong>{{ formatFileSize(state.opsControl?.dataServer?.minioStorage?.remainingBytes || 0) }}</strong>
+                  <small>{{ formatPercent(state.opsControl?.dataServer?.minioStorage?.usedPercent || 0) }} 사용</small>
+                </article>
+              </div>
+              <div class="sheet-table-wrap">
+                <table class="sheet-table">
+                  <thead>
+                    <tr>
+                      <th>대상</th>
+                      <th>상태</th>
+                      <th>연결 정보</th>
+                      <th>측정값</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td>AI 서버</td>
+                      <td>{{ state.opsControl?.aiServer?.reachable ? '정상' : '확인 필요' }}</td>
+                      <td>{{ state.opsControl?.aiServer?.baseUrl || '-' }} {{ state.opsControl?.aiServer?.modelsPath || '' }}</td>
+                      <td>{{ state.opsControl?.aiServer?.latencyMillis || 0 }} ms / {{ formatAiServerModelList(state.opsControl?.aiServer?.models) }}</td>
+                    </tr>
+                    <tr>
+                      <td>DB 서버</td>
+                      <td>{{ state.opsControl?.dataServer?.databaseReachable ? '정상' : '확인 필요' }}</td>
+                      <td>{{ state.opsControl?.dataServer?.databaseProduct || '-' }} @ {{ state.opsControl?.dataServer?.databaseHost || '-' }}</td>
+                      <td>{{ state.opsControl?.dataServer?.databaseMessage || '-' }}</td>
+                    </tr>
+                    <tr>
+                      <td>MinIO 스토리지</td>
+                      <td>{{ state.opsControl?.dataServer?.minioStorage?.available ? '정상' : '확인 필요' }}</td>
+                      <td>버킷 {{ state.opsControl?.dataServer?.minioStorage?.bucketName || '-' }}, 객체 {{ state.opsControl?.dataServer?.minioStorage?.objectCount || 0 }}개</td>
+                      <td>{{ formatFileSize(state.opsControl?.dataServer?.minioStorage?.totalSizeBytes || 0) }} 사용</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </section>
+
+            <section v-else-if="state.opsControlModalView === 'list'" class="admin-ops-panel">
+              <div class="panel__header">
+                <div>
+                  <h3>서버 리스트 조회 및 서버 변경</h3>
+                  <p>현재 적용된 AI 서버와 저장된 서버 프리셋을 확인합니다. 프리셋을 불러온 뒤 저장하면 현재 서버로 적용됩니다.</p>
+                </div>
+                <button class="button button--ghost" type="button" :disabled="state.loadingOpsControl" @click="loadOpsControl">
+                  {{ state.loadingOpsControl ? '조회 중...' : '현재 설정 조회' }}
+                </button>
+              </div>
+
+              <div class="admin-ops-current-server">
+                <span>현재 적용 서버</span>
+                <strong>{{ currentAiProviderLabel() }} · {{ state.aiControlForm.model || 'auto' }}</strong>
+                <small>{{ currentAiServerAddress() }}</small>
+                <label class="field field--inline admin-ai-enable-row">
+                  <input v-model="state.aiControlForm.enabled" type="checkbox" />
+                  <span class="field__label">AI 분석 사용</span>
+                </label>
+              </div>
+
+              <div class="admin-ops-server-list">
+                <article v-if="!state.aiControlPresets.length" class="admin-ops-server-row admin-ops-server-row--empty">
+                  <strong>저장된 서버 프리셋이 없습니다.</strong>
+                  <p>서버 추가 화면에서 저장하면 이 목록에 최근 서버가 표시됩니다.</p>
+                </article>
+                <article v-for="preset in state.aiControlPresets" :key="preset.key" class="admin-ops-server-row">
+                  <div>
+                    <strong>{{ preset.title || preset.model || 'AI 서버' }}</strong>
+                    <span>{{ preset.provider || 'lmstudio' }} · {{ preset.model || 'auto' }}</span>
+                    <small>{{ preset.lmStudioBaseUrl || preset.workflowUrl || '-' }}</small>
+                  </div>
+                  <button class="button button--ghost" type="button" @click="applyAiControlPresetByKey(preset.key)">불러오기</button>
+                </article>
+              </div>
+
+              <div class="panel__actions">
+                <button class="button button--secondary" type="button" @click="startAiServerAdd">새 서버 추가</button>
+                <button class="button button--primary" type="button" :disabled="state.savingAiControl" @click="handleSaveAiControl">
+                  {{ state.savingAiControl ? '저장 중...' : '불러온 설정 저장' }}
+                </button>
+              </div>
+            </section>
+
+            <section v-else-if="state.opsControlModalView === 'add'" class="admin-ops-panel">
+              <div class="panel__header">
+                <div>
+                  <h3>서버 추가</h3>
+                  <p>다음 버튼으로 기본 정보, 제공자별 연결 정보, 응답/보안 설정을 순서대로 입력합니다.</p>
+                </div>
+                <div class="admin-ops-step-indicator" aria-label="서버 추가 단계">
+                  <span :class="{ 'is-active': state.aiServerWizardStep === 1 }">1 기본</span>
+                  <span :class="{ 'is-active': state.aiServerWizardStep === 2 }">2 연결</span>
+                  <span :class="{ 'is-active': state.aiServerWizardStep === 3 }">3 응답/보안</span>
+                </div>
+              </div>
+
+              <form class="admin-ops-wizard" @submit.prevent="handleSaveAiControl">
+                <div v-if="state.aiServerWizardStep === 1" class="admin-ai-field-grid">
+                  <label class="field admin-ai-field-grid__wide">
+                    <span class="field__label">서버 이름</span>
+                    <input v-model="state.aiServerDraftName" placeholder="예: 집 LM Studio Gemma 서버" />
+                  </label>
+                  <label class="field">
+                    <span class="field__label">제공자</span>
+                    <select v-model="state.aiControlForm.provider">
+                      <option value="lmstudio">LM Studio</option>
+                      <option value="n8n">n8n</option>
+                    </select>
+                  </label>
+                  <label class="field">
+                    <span class="field__label">서버 모델 명</span>
+                    <input v-model="state.aiControlForm.model" placeholder="google/gemma-4-e2b 또는 auto" />
+                  </label>
+                  <label v-if="state.aiControlForm.provider === 'lmstudio'" class="field admin-ai-field-grid__wide">
+                    <span class="field__label">서버 주소</span>
+                    <input v-model="state.aiControlForm.lmStudioBaseUrl" placeholder="http://100.x.x.x:1234" />
+                  </label>
+                  <label v-else class="field admin-ai-field-grid__wide">
+                    <span class="field__label">서버 주소 / n8n Webhook URL</span>
+                    <input v-model="state.aiControlForm.workflowUrl" placeholder="https://n8n.example.com/webhook/..." />
+                  </label>
+                  <label class="field field--inline admin-ai-field-grid__wide admin-ai-enable-row">
+                    <input v-model="state.aiControlForm.enabled" type="checkbox" />
+                    <span class="field__label">저장 후 AI 분석 사용</span>
+                  </label>
+                </div>
+
+                <div v-else-if="state.aiServerWizardStep === 2" class="admin-ai-field-grid">
+                  <template v-if="state.aiControlForm.provider === 'lmstudio'">
+                    <label class="field">
+                      <span class="field__label">Chat path</span>
+                      <input v-model="state.aiControlForm.lmStudioChatPath" placeholder="/v1/chat/completions" />
+                    </label>
+                    <label class="field">
+                      <span class="field__label">Models path</span>
+                      <input v-model="state.aiControlForm.lmStudioModelsPath" placeholder="/v1/models" />
+                    </label>
+                    <label class="field admin-ai-field-grid__wide">
+                      <span class="field__label">LM Studio API key</span>
+                      <input v-model="state.aiControlForm.lmStudioApiKey" type="password" autocomplete="new-password" :disabled="state.aiControlForm.clearLmStudioApiKey" :placeholder="state.aiControlForm.lmStudioApiKeyConfigured ? '설정됨 - 변경할 때만 입력' : '미설정'" />
+                    </label>
+                    <label class="field field--inline admin-ai-field-grid__wide">
+                      <input v-model="state.aiControlForm.clearLmStudioApiKey" type="checkbox" />
+                      <span class="field__label">LM Studio API key 삭제</span>
+                    </label>
+                  </template>
+                  <template v-else>
+                    <label class="field admin-ai-field-grid__wide">
+                      <span class="field__label">n8n Webhook URL</span>
+                      <input v-model="state.aiControlForm.workflowUrl" placeholder="https://n8n.example.com/webhook/..." />
+                    </label>
+                    <label class="field">
+                      <span class="field__label">n8n API key header</span>
+                      <input v-model="state.aiControlForm.apiKeyHeader" placeholder="X-TravelLedger-AI-Key" />
+                    </label>
+                    <label class="field">
+                      <span class="field__label">n8n API key</span>
+                      <input v-model="state.aiControlForm.apiKey" type="password" autocomplete="new-password" :disabled="state.aiControlForm.clearApiKey" :placeholder="state.aiControlForm.apiKeyConfigured ? '설정됨 - 변경할 때만 입력' : '미설정'" />
+                    </label>
+                    <label class="field field--inline admin-ai-field-grid__wide">
+                      <input v-model="state.aiControlForm.clearApiKey" type="checkbox" />
+                      <span class="field__label">n8n API key 삭제</span>
+                    </label>
+                  </template>
+                </div>
+
+                <div v-else class="admin-ai-field-grid admin-ai-field-grid--compact">
+                  <label class="field">
+                    <span class="field__label">Temperature</span>
+                    <input v-model.number="state.aiControlForm.temperature" type="number" min="0" max="2" step="0.1" />
+                  </label>
+                  <label class="field">
+                    <span class="field__label">Max tokens</span>
+                    <input v-model.number="state.aiControlForm.maxTokens" type="number" min="128" max="8192" step="128" />
+                  </label>
+                  <label class="field">
+                    <span class="field__label">연결 제한 시간(초)</span>
+                    <input v-model.number="state.aiControlForm.connectTimeoutSeconds" type="number" min="1" max="600" />
+                  </label>
+                  <label class="field">
+                    <span class="field__label">응답 제한 시간(초)</span>
+                    <input v-model.number="state.aiControlForm.readTimeoutSeconds" type="number" min="1" max="600" />
+                  </label>
+                  <label class="field field--inline">
+                    <input v-model="state.aiControlForm.enforceProviderUrlAllowlist" type="checkbox" />
+                    <span class="field__label">Provider 허용 목록 강제</span>
+                  </label>
+                  <label class="field admin-ai-field-grid__wide">
+                    <span class="field__label">허용 호스트</span>
+                    <input v-model="state.aiControlForm.allowedProviderHosts" placeholder="100.x.x.x,127.0.0.1,localhost" />
+                  </label>
+                </div>
+
+                <div class="panel__actions admin-ops-wizard__actions">
+                  <button class="button button--ghost" type="button" :disabled="state.aiServerWizardStep === 1" @click="goPrevAiServerStep">이전</button>
+                  <button v-if="state.aiServerWizardStep < 3" class="button button--primary" type="button" @click="goNextAiServerStep">다음</button>
+                  <button v-else class="button button--primary" type="submit" :disabled="state.savingAiControl">
+                    {{ state.savingAiControl ? '저장 중...' : '서버 저장' }}
+                  </button>
+                </div>
+              </form>
+            </section>
+          </div>
+        </div>
+      </div>
+
+      <div v-if="state.supportModalOpen" class="travel-modal admin-support-modal" @click.self="closeSupportModal">
+        <div class="travel-modal__dialog admin-support-modal__dialog">
+          <div class="travel-modal__header admin-support-modal__header">
+            <div>
+              <span class="admin-command-center__eyebrow">Support</span>
+              <h2>문의 관리</h2>
+              <p>문의 상태를 미확인, 진행중, 완료됨으로 나누고 모달 안에서 답변과 보관 처리를 진행합니다.</p>
+            </div>
+            <button class="button button--ghost" type="button" @click="closeSupportModal">닫기</button>
+          </div>
+
+          <div class="travel-modal__body admin-support-modal__body">
+            <div v-if="state.errorMessage" class="feedback feedback--error">{{ state.errorMessage }}</div>
+            <div class="admin-support-tabs" role="tablist" aria-label="문의 상태 필터">
+              <button
+                v-for="tab in supportTabOptions"
+                :key="tab.key"
+                type="button"
+                :class="['admin-support-tab', { 'is-active': state.supportTab === tab.key }]"
+                @click="setSupportTab(tab.key)"
+              >
+                <strong>{{ tab.label }}</strong>
+                <span>{{ tab.count }}건</span>
+                <small>{{ tab.description }}</small>
+              </button>
+            </div>
+
+            <div class="admin-support-workspace">
+              <section class="admin-support-list-panel">
+                <div class="panel__header admin-support-list-panel__header">
+                  <div>
+                    <h3>{{ supportTabOptions.find((tab) => tab.key === state.supportTab)?.label || '문의' }}</h3>
+                    <p>선택한 상태의 문의 목록입니다. 항목을 열면 오른쪽에서 상세 처리할 수 있습니다.</p>
+                  </div>
+                  <button class="button button--ghost" type="button" :disabled="state.loading" @click="loadDashboard">
+                    {{ state.loading ? '새로고침 중...' : '새로고침' }}
+                  </button>
+                </div>
+                <div class="admin-support-list">
+                  <button
+                    v-for="inquiry in pagedSupportInquiries"
+                    :key="inquiry.id"
+                    type="button"
+                    :class="['admin-support-row', { 'is-selected': inquiry.id === state.selectedSupportInquiryId }]"
+                    @click="selectSupportInquiry(inquiry)"
+                  >
+                    <span class="admin-support-row__meta">
+                      <b>{{ inquiry.senderDisplayName }} ({{ inquiry.senderLoginId }})</b>
+                      <small>{{ formatDateTime(inquiry.createdAt) }}</small>
+                    </span>
+                    <strong>{{ inquiry.title }}</strong>
+                    <span class="admin-support-row__footer">
+                      <span :class="['entry-type-pill', inquiry.status === 'ANSWERED' ? 'entry-type-pill--income' : inquiry.status === 'IN_PROGRESS' ? 'entry-type-pill--neutral' : 'entry-type-pill--expense']">
+                        {{ inquiryStatusLabel[inquiry.status] ?? inquiry.status }}
+                      </span>
+                      <small>{{ inquiry.attachmentFileName ? '첨부 있음' : '첨부 없음' }}</small>
+                    </span>
+                  </button>
+                  <p v-if="!pagedSupportInquiries.length" class="panel__empty">현재 탭에 표시할 문의가 없습니다.</p>
+                </div>
+                <div class="panel__actions admin-support-pagination">
+                  <button
+                    class="button button--ghost"
+                    type="button"
+                    :disabled="currentSupportPage <= 0"
+                    @click="state.supportPages[state.supportTab] = currentSupportPage - 1"
+                  >
+                    이전
+                  </button>
+                  <span>{{ currentSupportPage + 1 }} / {{ supportPageCount }}</span>
+                  <button
+                    class="button button--ghost"
+                    type="button"
+                    :disabled="currentSupportPage + 1 >= supportPageCount"
+                    @click="state.supportPages[state.supportTab] = currentSupportPage + 1"
+                  >
+                    다음
+                  </button>
+                </div>
+              </section>
+
+              <section class="admin-support-detail-panel">
+                <template v-if="selectedSupportInquiry">
+                  <div class="support-inquiry-card admin-support-detail-card">
+                    <div class="support-inquiry-meta">
+                      <strong>{{ selectedSupportInquiry.title }}</strong>
+                      <span :class="['entry-type-pill', selectedSupportInquiry.status === 'ANSWERED' ? 'entry-type-pill--income' : selectedSupportInquiry.status === 'IN_PROGRESS' ? 'entry-type-pill--neutral' : 'entry-type-pill--expense']">
+                        {{ inquiryStatusLabel[selectedSupportInquiry.status] ?? selectedSupportInquiry.status }}
+                      </span>
+                    </div>
+                    <small>{{ selectedSupportInquiry.senderDisplayName }} ({{ selectedSupportInquiry.senderLoginId }}) · {{ formatDateTime(selectedSupportInquiry.createdAt) }}</small>
+                    <p class="support-inquiry-content">{{ selectedSupportInquiry.content }}</p>
+                    <div v-if="selectedSupportInquiry.attachmentUrl" class="support-inquiry-attachment admin-support-attachment">
+                      <a class="button button--ghost" :href="selectedSupportInquiry.attachmentUrl" target="_blank" rel="noreferrer">
+                        첨부 파일 보기
+                      </a>
+                      <img
+                        v-if="selectedSupportInquiry.attachmentContentType?.startsWith('image/')"
+                        :src="buildThumbnailUrl(selectedSupportInquiry.attachmentUrl)"
+                        :alt="selectedSupportInquiry.attachmentFileName || selectedSupportInquiry.title"
+                        loading="eager"
+                        fetchpriority="high"
+                        decoding="async"
+                        class="support-inquiry-preview admin-support-preview"
+                      />
+                    </div>
+                  </div>
+
+                  <div class="support-inquiry-card admin-support-reply-card">
+                    <div class="support-inquiry-reply__header">
+                      <strong>답변 및 처리</strong>
+                      <small>{{ selectedSupportInquiry.replyContent ? '기존 답변을 수정할 수 있습니다.' : '답변을 등록하면 완료됨으로 이동합니다.' }}</small>
+                    </div>
+                    <textarea
+                      v-model="state.supportReplyContent"
+                      rows="8"
+                      placeholder="사용자에게 전달할 답변을 입력하세요."
+                      :disabled="state.savingReply || state.mutatingInquiryId === selectedSupportInquiry.id"
+                    />
+                    <div class="support-inquiry-actions admin-support-actions">
+                      <button
+                        v-if="selectedSupportInquiry.status === 'PENDING' && !selectedSupportInquiry.archived"
+                        class="button button--secondary"
+                        type="button"
+                        :disabled="state.mutatingInquiryId === selectedSupportInquiry.id"
+                        @click="handleUpdateSupportStatus(selectedSupportInquiry, 'IN_PROGRESS')"
+                      >
+                        처리중으로 이동
+                      </button>
+                      <button
+                        v-if="selectedSupportInquiry.status === 'IN_PROGRESS' && !selectedSupportInquiry.archived"
+                        class="button button--ghost"
+                        type="button"
+                        :disabled="state.mutatingInquiryId === selectedSupportInquiry.id"
+                        @click="handleUpdateSupportStatus(selectedSupportInquiry, 'PENDING')"
+                      >
+                        미확인으로 되돌리기
+                      </button>
+                      <button
+                        v-if="selectedSupportInquiry.archived || selectedSupportInquiry.status === 'ANSWERED'"
+                        class="button button--secondary"
+                        type="button"
+                        :disabled="state.mutatingInquiryId === selectedSupportInquiry.id"
+                        @click="handleUpdateSupportStatus(selectedSupportInquiry, 'IN_PROGRESS')"
+                      >
+                        처리중으로 되돌리기
+                      </button>
+                      <button
+                        class="button button--ghost"
+                        type="button"
+                        :disabled="state.mutatingInquiryId === selectedSupportInquiry.id"
+                        @click="handleArchiveToggle(selectedSupportInquiry, true)"
+                      >
+                        완료 보관
+                      </button>
+                      <button
+                        v-if="selectedSupportInquiry.archived"
+                        class="button button--danger"
+                        type="button"
+                        :disabled="state.mutatingInquiryId === selectedSupportInquiry.id"
+                        @click="handleDeleteSupportInquiry(selectedSupportInquiry)"
+                      >
+                        삭제
+                      </button>
+                      <button
+                        class="button button--primary"
+                        type="button"
+                        :disabled="state.savingReply"
+                        @click="handleReplySupportInquiry"
+                      >
+                        {{ state.savingReply ? '저장 중...' : selectedSupportInquiry.replyContent ? '답변 저장' : '답변 등록' }}
+                      </button>
+                    </div>
+                  </div>
+                </template>
+                <p v-else class="panel__empty">왼쪽 목록에서 처리할 문의를 선택하세요.</p>
+              </section>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div v-if="state.accessModalOpen" class="travel-modal admin-access-control-modal" @click.self="closeAccessModal">
+        <div class="travel-modal__dialog admin-access-control-modal__dialog">
+          <div class="travel-modal__header admin-access-control-modal__header">
+            <div>
+              <span class="admin-command-center__eyebrow">Access / Users</span>
+              <h2>접근 및 사용자 관리</h2>
+              <p>초대 링크, 차단 IP, 로그인 기록, 사용자 상태를 모달 안에서 빠르게 확인하고 처리합니다.</p>
+            </div>
+            <button class="button button--ghost" type="button" @click="closeAccessModal">닫기</button>
+          </div>
+
+          <div class="travel-modal__body admin-access-control-modal__body">
+            <div v-if="state.errorMessage" class="feedback feedback--error">{{ state.errorMessage }}</div>
+            <div v-if="state.inviteManager.feedbackMessage && state.accessModalView === 'invite'" class="feedback feedback--success">{{ state.inviteManager.feedbackMessage }}</div>
+            <div v-if="state.inviteManager.errorMessage && state.accessModalView === 'invite'" class="feedback feedback--error">{{ state.inviteManager.errorMessage }}</div>
+
+            <div class="admin-access-control-nav" aria-label="접근 및 사용자 관리 기능 선택">
+              <button
+                v-for="option in accessModalOptions"
+                :key="option.key"
+                type="button"
+                :class="['admin-access-control-card', { 'is-active': state.accessModalView === option.key }]"
+                @click="selectAccessModalView(option.key)"
+              >
+                <strong>{{ option.label }}</strong>
+                <span>{{ option.count }}건</span>
+                <small>{{ option.description }}</small>
+              </button>
+            </div>
+
+            <section v-if="state.accessModalView === 'invite'" class="admin-access-control-panel">
+              <div class="admin-access-invite-grid">
+                <InviteAccessPanel
+                  :expires-in-hours="state.inviteManager.expiresInHours"
+                  :generated-link="state.inviteManager.generatedLink"
+                  :generated-expires-at="state.inviteManager.generatedExpiresAt"
+                  :is-creating="state.creatingInvite"
+                  :feedback-message="state.inviteManager.feedbackMessage"
+                  :error-message="state.inviteManager.errorMessage"
+                  @change-expiry="state.inviteManager.expiresInHours = $event"
+                  @create-invite="handleCreateInvite"
+                  @copy-invite="copyInviteLink"
+                />
+                <div class="support-inquiry-card admin-access-recent-card">
+                  <div class="support-inquiry-reply__header">
+                    <strong>최근 초대 링크 상태</strong>
+                    <small>최근 발급한 링크의 만료, 사용 여부를 확인합니다.</small>
+                  </div>
+                  <div class="sheet-table-wrap">
+                    <table class="sheet-table">
+                      <thead>
+                        <tr>
+                          <th>생성 시각</th>
+                          <th>생성자</th>
+                          <th>만료 시각</th>
+                          <th>상태</th>
+                          <th>사용자</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr v-if="!pagedInvites.length">
+                          <td colspan="5" class="sheet-table__empty">초대 링크 기록이 없습니다.</td>
+                        </tr>
+                        <tr v-for="invite in pagedInvites" :key="invite.id">
+                          <td>{{ formatDateTime(invite.createdAt) }}</td>
+                          <td>{{ invite.createdByDisplayName }} ({{ invite.createdByLoginId }})</td>
+                          <td>{{ formatDateTime(invite.expiresAt) }}</td>
+                          <td>{{ inviteStatusLabel[invite.status] ?? invite.status }}</td>
+                          <td>
+                            <template v-if="invite.usedByLoginId">
+                              {{ invite.usedByDisplayName }} ({{ invite.usedByLoginId }})
+                            </template>
+                            <template v-else>-</template>
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                  <div class="panel__actions admin-access-pagination">
+                    <button class="button button--ghost" type="button" :disabled="state.invitePage <= 0" @click="state.invitePage -= 1">이전</button>
+                    <span>{{ state.invitePage + 1 }} / {{ invitePageCount }}</span>
+                    <button class="button button--ghost" type="button" :disabled="state.invitePage + 1 >= invitePageCount" @click="state.invitePage += 1">다음</button>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <section v-else-if="state.accessModalView === 'blocked'" class="admin-access-control-panel">
+              <div class="panel__header">
+                <div>
+                  <h3>차단된 IP 조회</h3>
+                  <p>5회 이상 실패로 24시간 차단된 IP를 확인하고 즉시 해제할 수 있습니다.</p>
+                </div>
+              </div>
+              <div class="sheet-table-wrap">
+                <table class="sheet-table">
+                  <thead>
+                    <tr>
+                      <th>IP</th>
+                      <th>실패 횟수</th>
+                      <th>차단 해제 예정</th>
+                      <th>관리</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-if="!pagedBlockedIps.length">
+                      <td colspan="4" class="sheet-table__empty">현재 차단된 IP가 없습니다.</td>
+                    </tr>
+                    <tr v-for="blockedIp in pagedBlockedIps" :key="blockedIp.clientIp">
+                      <td>{{ blockedIp.clientIp }}</td>
+                      <td>{{ blockedIp.failureCount }}회</td>
+                      <td>{{ formatDateTime(blockedIp.lockedUntil) }}</td>
+                      <td>
+                        <button
+                          class="button button--ghost"
+                          type="button"
+                          :disabled="state.unlockingIp === blockedIp.clientIp"
+                          @click="handleUnlockIp(blockedIp.clientIp)"
+                        >
+                          {{ state.unlockingIp === blockedIp.clientIp ? '해제 중...' : '차단 해제' }}
+                        </button>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              <div class="panel__actions admin-access-pagination">
+                <button class="button button--ghost" type="button" :disabled="state.blockedIpPage <= 0" @click="state.blockedIpPage -= 1">이전</button>
+                <span>{{ state.blockedIpPage + 1 }} / {{ blockedIpPageCount }}</span>
+                <button class="button button--ghost" type="button" :disabled="state.blockedIpPage + 1 >= blockedIpPageCount" @click="state.blockedIpPage += 1">다음</button>
+              </div>
+            </section>
+
+            <section v-else-if="state.accessModalView === 'logs'" class="admin-access-control-panel">
+              <div class="panel__header">
+                <div>
+                  <h3>최근 로그인 기록</h3>
+                  <p>최근 로그인 성공, 실패, 차단 상태를 페이지 단위로 확인합니다.</p>
+                </div>
+                <button class="button button--ghost" type="button" :disabled="state.loadingLoginLogs" @click="loadLoginAuditLogs(state.loginLogPage.page || 0)">
+                  {{ state.loadingLoginLogs ? '조회 중...' : '기록 새로고침' }}
+                </button>
+              </div>
+              <div class="sheet-table-wrap">
+                <table class="sheet-table">
+                  <thead>
+                    <tr>
+                      <th>시각</th>
+                      <th>상태</th>
+                      <th>로그인 ID</th>
+                      <th>표시 이름</th>
+                      <th>IP</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-if="!state.recentLoginLogs.length">
+                      <td colspan="5" class="sheet-table__empty">아직 기록된 로그인 로그가 없습니다.</td>
+                    </tr>
+                    <tr v-for="log in state.recentLoginLogs" :key="log.id">
+                      <td>{{ formatDateTime(log.attemptedAt) }}</td>
+                      <td>
+                        <span :class="['entry-type-pill', log.success ? 'entry-type-pill--income' : 'entry-type-pill--expense']">
+                          {{ loginStatusLabel[log.status] ?? log.status }}
+                        </span>
+                      </td>
+                      <td>{{ log.loginId }}</td>
+                      <td>{{ log.displayName || '-' }}</td>
+                      <td>{{ log.clientIp }}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              <div class="panel__actions admin-access-pagination">
+                <button
+                  class="button button--ghost"
+                  type="button"
+                  :disabled="state.loadingLoginLogs || state.loginLogPage.page <= 0"
+                  @click="loadLoginAuditLogs(state.loginLogPage.page - 1)"
+                >
+                  이전
+                </button>
+                <span>{{ state.loginLogPage.page + 1 }} / {{ Math.max(state.loginLogPage.totalPages, 1) }}</span>
+                <button
+                  class="button button--ghost"
+                  type="button"
+                  :disabled="state.loadingLoginLogs || state.loginLogPage.page + 1 >= Math.max(state.loginLogPage.totalPages, 1)"
+                  @click="loadLoginAuditLogs(state.loginLogPage.page + 1)"
+                >
+                  다음
+                </button>
+              </div>
+            </section>
+
+            <section v-else-if="state.accessModalView === 'users'" class="admin-access-control-panel">
+              <div class="panel__header">
+                <div>
+                  <h3>사용자 상태</h3>
+                  <p>관리자 여부와 활성 상태를 확인하고 일반 사용자만 활성/비활성 처리할 수 있습니다.</p>
+                </div>
+              </div>
+              <div class="sheet-table-wrap">
+                <table class="sheet-table">
+                  <thead>
+                    <tr>
+                      <th>로그인 ID</th>
+                      <th>이름</th>
+                      <th>권한</th>
+                      <th>상태</th>
+                      <th>관리</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-if="!pagedUsers.length">
+                      <td colspan="5" class="sheet-table__empty">사용자 정보가 없습니다.</td>
+                    </tr>
+                    <tr v-for="user in pagedUsers" :key="user.id">
+                      <td>{{ user.loginId }}</td>
+                      <td>{{ user.displayName }}</td>
+                      <td>
+                        <span :class="['entry-type-pill', user.admin ? 'entry-type-pill--income' : 'entry-type-pill--expense']">
+                          {{ user.admin ? '관리자' : '일반 사용자' }}
+                        </span>
+                      </td>
+                      <td>{{ user.active ? '활성' : '비활성' }}</td>
+                      <td>
+                        <template v-if="user.admin">-</template>
+                        <button
+                          v-else
+                          class="button button--ghost"
+                          type="button"
+                          :disabled="state.mutatingUserId === user.id"
+                          @click="toggleUserActive(user)"
+                        >
+                          {{ state.mutatingUserId === user.id ? '처리 중...' : user.active ? '비활성화' : '활성화' }}
+                        </button>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              <div class="panel__actions admin-access-pagination">
+                <button class="button button--ghost" type="button" :disabled="state.userPage <= 0" @click="state.userPage -= 1">이전</button>
+                <span>{{ state.userPage + 1 }} / {{ userPageCount }}</span>
+                <button class="button button--ghost" type="button" :disabled="state.userPage + 1 >= userPageCount" @click="state.userPage += 1">다음</button>
+              </div>
+            </section>
+          </div>
+        </div>
+      </div>
+
       <section v-if="!state.activeAdminPanel" class="panel admin-empty-state">
         <div>
           <strong>관리할 기능을 선택하세요.</strong>
@@ -1474,386 +2419,7 @@ onMounted(initializeAdminWorkspace)
         </div>
       </section>
       </template>
-      <InviteAccessPanel
-        v-if="state.activeAdminPanel === 'access'"
-        :expires-in-hours="state.inviteManager.expiresInHours"
-        :generated-link="state.inviteManager.generatedLink"
-        :generated-expires-at="state.inviteManager.generatedExpiresAt"
-        :is-creating="state.creatingInvite"
-        :feedback-message="state.inviteManager.feedbackMessage"
-        :error-message="state.inviteManager.errorMessage"
-        @change-expiry="state.inviteManager.expiresInHours = $event"
-        @create-invite="handleCreateInvite"
-        @copy-invite="copyInviteLink"
-      />
 
-      <section v-if="state.activeAdminPanel === 'support'" class="panel admin-panel-section">
-        <div class="panel__header">
-          <div>
-            <h2>문의 메일함</h2>
-            <p>답변 완료된 문의는 자동으로 보관함으로 이동하고, 보관함에서는 꺼내기·삭제·재답변이 가능합니다.</p>
-          </div>
-          <div class="scope-toggle scope-toggle--wrap">
-            <button
-              class="button button--ghost"
-              type="button"
-              :class="{ 'is-active': state.supportTab === 'inbox' }"
-              @click="setSupportTab('inbox')"
-            >
-              진행 중
-            </button>
-            <button
-              class="button button--ghost"
-              type="button"
-              :class="{ 'is-active': state.supportTab === 'archive' }"
-              @click="setSupportTab('archive')"
-            >
-              보관함
-            </button>
-          </div>
-        </div>
-        <div class="sheet-table-wrap">
-          <table class="sheet-table">
-            <thead>
-              <tr>
-                <th>보낸 시각</th>
-                <th>상태</th>
-                <th>보낸 사람</th>
-                <th>제목</th>
-                <th>첨부</th>
-                <th>관리</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-if="!pagedSupportInquiries.length">
-                <td colspan="6" class="sheet-table__empty">
-                  {{ state.supportTab === 'archive' ? '보관된 문의가 없습니다.' : '진행 중인 문의가 없습니다.' }}
-                </td>
-              </tr>
-              <tr
-                v-for="inquiry in pagedSupportInquiries"
-                :key="inquiry.id"
-                :class="{ 'support-inquiry-row--selected': inquiry.id === state.selectedSupportInquiryId }"
-              >
-                <td>{{ formatDateTime(inquiry.createdAt) }}</td>
-                <td>
-                  <span :class="['entry-type-pill', inquiry.status === 'ANSWERED' ? 'entry-type-pill--income' : 'entry-type-pill--expense']">
-                    {{ inquiryStatusLabel[inquiry.status] ?? inquiry.status }}
-                  </span>
-                </td>
-                <td>{{ inquiry.senderDisplayName }} ({{ inquiry.senderLoginId }})</td>
-                <td>{{ inquiry.title }}</td>
-                <td>{{ inquiry.attachmentFileName || '-' }}</td>
-                <td>
-                  <button class="button button--ghost" type="button" @click="selectSupportInquiry(inquiry)">
-                    {{ inquiry.id === state.selectedSupportInquiryId ? '선택됨' : '열기' }}
-                  </button>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-        <div class="panel__actions">
-          <button
-            class="button button--ghost"
-            type="button"
-            :disabled="currentSupportPage <= 0"
-            @click="state.supportPages[state.supportTab] = currentSupportPage - 1"
-          >
-            이전
-          </button>
-          <span>{{ currentSupportPage + 1 }} / {{ supportPageCount }}</span>
-          <button
-            class="button button--ghost"
-            type="button"
-            :disabled="currentSupportPage + 1 >= supportPageCount"
-            @click="state.supportPages[state.supportTab] = currentSupportPage + 1"
-          >
-            다음
-          </button>
-        </div>
-      </section>
-
-      <section v-if="state.activeAdminPanel === 'support'" class="panel admin-panel-section">
-        <div class="panel__header">
-          <div>
-            <h2>문의 상세 / 답변</h2>
-            <p>선택한 문의 내용을 확인하고 답변을 저장하면 사용자 프로필에서 답변을 확인할 수 있습니다.</p>
-          </div>
-        </div>
-
-        <div v-if="selectedSupportInquiry" class="support-detail-grid">
-          <div class="support-inquiry-card">
-            <div class="support-inquiry-meta">
-              <strong>{{ selectedSupportInquiry.title }}</strong>
-              <span :class="['entry-type-pill', selectedSupportInquiry.status === 'ANSWERED' ? 'entry-type-pill--income' : 'entry-type-pill--expense']">
-                {{ inquiryStatusLabel[selectedSupportInquiry.status] ?? selectedSupportInquiry.status }}
-              </span>
-            </div>
-            <small>{{ selectedSupportInquiry.senderDisplayName }} ({{ selectedSupportInquiry.senderLoginId }}) · {{ formatDateTime(selectedSupportInquiry.createdAt) }}</small>
-            <p class="support-inquiry-content">{{ selectedSupportInquiry.content }}</p>
-
-            <div v-if="selectedSupportInquiry.attachmentUrl" class="support-inquiry-attachment">
-              <a class="button button--ghost" :href="selectedSupportInquiry.attachmentUrl" target="_blank" rel="noreferrer">
-                첨부 이미지 열기
-              </a>
-              <img
-                v-if="selectedSupportInquiry.attachmentContentType?.startsWith('image/')"
-                :src="buildThumbnailUrl(selectedSupportInquiry.attachmentUrl)"
-                :alt="selectedSupportInquiry.attachmentFileName || selectedSupportInquiry.title"
-                loading="eager"
-                fetchpriority="high"
-                decoding="async"
-                class="support-inquiry-preview"
-              />
-            </div>
-          </div>
-
-          <div class="support-inquiry-card">
-            <div class="support-inquiry-reply__header">
-              <strong>{{ state.supportTab === 'archive' ? '보관 문의 관리' : '답변하기' }}</strong>
-              <small>
-                {{ selectedSupportInquiry.replyContent ? '기존 답변을 수정할 수 있습니다.' : '아직 답변하지 않은 문의입니다.' }}
-              </small>
-            </div>
-            <textarea
-              v-model="state.supportReplyContent"
-              rows="8"
-              placeholder="사용자에게 전달할 답변을 입력해 주세요."
-              :disabled="state.savingReply || state.mutatingInquiryId === selectedSupportInquiry.id"
-            />
-            <div class="support-inquiry-actions">
-              <button
-                class="button button--ghost"
-                type="button"
-                :disabled="state.mutatingInquiryId === selectedSupportInquiry.id"
-                @click="handleArchiveToggle(selectedSupportInquiry, !selectedSupportInquiry.archived)"
-              >
-                {{ selectedSupportInquiry.archived ? '꺼내기' : '보관함으로' }}
-              </button>
-              <button
-                v-if="selectedSupportInquiry.archived"
-                class="button button--ghost"
-                type="button"
-                :disabled="state.mutatingInquiryId === selectedSupportInquiry.id"
-                @click="handleDeleteSupportInquiry(selectedSupportInquiry)"
-              >
-                삭제
-              </button>
-              <button
-                class="button button--primary"
-                type="button"
-                :disabled="state.savingReply"
-                @click="handleReplySupportInquiry"
-              >
-                {{ state.savingReply ? '저장 중...' : selectedSupportInquiry.replyContent ? '답변 저장' : '답변 등록' }}
-              </button>
-            </div>
-          </div>
-        </div>
-        <p v-else class="panel__empty">왼쪽 목록에서 확인할 문의를 선택해 주세요.</p>
-      </section>
-
-      <section v-if="state.activeAdminPanel === 'access'" class="panel admin-panel-section">
-        <div class="panel__header">
-          <div>
-            <h2>현재 차단된 IP</h2>
-            <p>5회 이상 실패로 24시간 차단된 IP를 확인하고 즉시 해제할 수 있습니다.</p>
-          </div>
-        </div>
-        <div class="sheet-table-wrap">
-          <table class="sheet-table">
-            <thead>
-              <tr>
-                <th>IP</th>
-                <th>실패 횟수</th>
-                <th>차단 해제 예정</th>
-                <th>관리</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-if="!pagedBlockedIps.length">
-                <td colspan="4" class="sheet-table__empty">현재 차단된 IP가 없습니다.</td>
-              </tr>
-              <tr v-for="blockedIp in pagedBlockedIps" :key="blockedIp.clientIp">
-                <td>{{ blockedIp.clientIp }}</td>
-                <td>{{ blockedIp.failureCount }}회</td>
-                <td>{{ formatDateTime(blockedIp.lockedUntil) }}</td>
-                <td>
-                  <button
-                    class="button button--ghost"
-                    type="button"
-                    :disabled="state.unlockingIp === blockedIp.clientIp"
-                    @click="handleUnlockIp(blockedIp.clientIp)"
-                  >
-                    {{ state.unlockingIp === blockedIp.clientIp ? '해제 중...' : '차단 해제' }}
-                  </button>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-        <div class="panel__actions">
-          <button class="button button--ghost" type="button" :disabled="state.blockedIpPage <= 0" @click="state.blockedIpPage -= 1">이전</button>
-          <span>{{ state.blockedIpPage + 1 }} / {{ blockedIpPageCount }}</span>
-          <button class="button button--ghost" type="button" :disabled="state.blockedIpPage + 1 >= blockedIpPageCount" @click="state.blockedIpPage += 1">다음</button>
-        </div>
-      </section>
-
-      <section v-if="state.activeAdminPanel === 'access'" class="panel admin-panel-section">
-        <div class="panel__header">
-          <div>
-            <h2>최근 로그인 기록</h2>
-            <p>최근 10개만 먼저 보여주고, 이후 기록은 페이지를 넘겨 확인할 수 있습니다.</p>
-          </div>
-        </div>
-        <div class="sheet-table-wrap">
-          <table class="sheet-table">
-            <thead>
-              <tr>
-                <th>시각</th>
-                <th>상태</th>
-                <th>로그인 ID</th>
-                <th>표시 이름</th>
-                <th>IP</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-if="!state.recentLoginLogs.length">
-                <td colspan="5" class="sheet-table__empty">아직 기록된 로그인 로그가 없습니다.</td>
-              </tr>
-              <tr v-for="log in state.recentLoginLogs" :key="log.id">
-                <td>{{ formatDateTime(log.attemptedAt) }}</td>
-                <td>
-                  <span :class="['entry-type-pill', log.success ? 'entry-type-pill--income' : 'entry-type-pill--expense']">
-                    {{ loginStatusLabel[log.status] ?? log.status }}
-                  </span>
-                </td>
-                <td>{{ log.loginId }}</td>
-                <td>{{ log.displayName || '-' }}</td>
-                <td>{{ log.clientIp }}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-        <div class="panel__actions">
-          <button
-            class="button button--ghost"
-            type="button"
-            :disabled="state.loadingLoginLogs || state.loginLogPage.page <= 0"
-            @click="loadLoginAuditLogs(state.loginLogPage.page - 1)"
-          >
-            이전
-          </button>
-          <span>{{ state.loginLogPage.page + 1 }} / {{ Math.max(state.loginLogPage.totalPages, 1) }}</span>
-          <button
-            class="button button--ghost"
-            type="button"
-            :disabled="state.loadingLoginLogs || state.loginLogPage.page + 1 >= Math.max(state.loginLogPage.totalPages, 1)"
-            @click="loadLoginAuditLogs(state.loginLogPage.page + 1)"
-          >
-            다음
-          </button>
-        </div>
-      </section>
-
-      <section v-if="state.activeAdminPanel === 'access'" class="panel admin-panel-section">
-        <div class="panel__header">
-          <div>
-            <h2>사용자 상태</h2>
-            <p>관리자 여부와 활성 상태를 확인하고, 일반 사용자만 활성/비활성 처리할 수 있습니다.</p>
-          </div>
-        </div>
-        <div class="sheet-table-wrap">
-          <table class="sheet-table">
-            <thead>
-              <tr>
-                <th>로그인 ID</th>
-                <th>이름</th>
-                <th>권한</th>
-                <th>상태</th>
-                <th>관리</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-if="!pagedUsers.length">
-                <td colspan="5" class="sheet-table__empty">사용자 정보가 없습니다.</td>
-              </tr>
-              <tr v-for="user in pagedUsers" :key="user.id">
-                <td>{{ user.loginId }}</td>
-                <td>{{ user.displayName }}</td>
-                <td>
-                  <span :class="['entry-type-pill', user.admin ? 'entry-type-pill--income' : 'entry-type-pill--expense']">
-                    {{ user.admin ? '관리자' : '일반 사용자' }}
-                  </span>
-                </td>
-                <td>{{ user.active ? '활성' : '비활성' }}</td>
-                <td>
-                  <template v-if="user.admin">-</template>
-                  <button
-                    v-else
-                    class="button button--ghost"
-                    type="button"
-                    :disabled="state.mutatingUserId === user.id"
-                    @click="toggleUserActive(user)"
-                  >
-                    {{ state.mutatingUserId === user.id ? '처리 중...' : user.active ? '비활성화' : '활성화' }}
-                  </button>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-        <div class="panel__actions">
-          <button class="button button--ghost" type="button" :disabled="state.userPage <= 0" @click="state.userPage -= 1">이전</button>
-          <span>{{ state.userPage + 1 }} / {{ userPageCount }}</span>
-          <button class="button button--ghost" type="button" :disabled="state.userPage + 1 >= userPageCount" @click="state.userPage += 1">다음</button>
-        </div>
-      </section>
-
-      <section v-if="state.activeAdminPanel === 'access'" class="panel admin-panel-section">
-        <div class="panel__header">
-          <div>
-            <h2>최근 초대 링크</h2>
-            <p>최근에 발급된 초대 링크가 사용됐는지, 아직 남아 있는지 확인할 수 있습니다.</p>
-          </div>
-        </div>
-        <div class="sheet-table-wrap">
-          <table class="sheet-table">
-            <thead>
-              <tr>
-                <th>생성 시각</th>
-                <th>생성자</th>
-                <th>만료 시각</th>
-                <th>상태</th>
-                <th>사용자</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-if="!pagedInvites.length">
-                <td colspan="5" class="sheet-table__empty">초대 링크 기록이 없습니다.</td>
-              </tr>
-              <tr v-for="invite in pagedInvites" :key="invite.id">
-                <td>{{ formatDateTime(invite.createdAt) }}</td>
-                <td>{{ invite.createdByDisplayName }} ({{ invite.createdByLoginId }})</td>
-                <td>{{ formatDateTime(invite.expiresAt) }}</td>
-                <td>{{ inviteStatusLabel[invite.status] ?? invite.status }}</td>
-                <td>
-                  <template v-if="invite.usedByLoginId">
-                    {{ invite.usedByDisplayName }} ({{ invite.usedByLoginId }})
-                  </template>
-                  <template v-else>-</template>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-        <div class="panel__actions">
-          <button class="button button--ghost" type="button" :disabled="state.invitePage <= 0" @click="state.invitePage -= 1">이전</button>
-          <span>{{ state.invitePage + 1 }} / {{ invitePageCount }}</span>
-          <button class="button button--ghost" type="button" :disabled="state.invitePage + 1 >= invitePageCount" @click="state.invitePage += 1">다음</button>
-        </div>
-      </section>
     </template>
   </section>
 </template>

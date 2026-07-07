@@ -333,6 +333,13 @@ export function archiveAdminSupportInquiry(inquiryId, archived) {
   })
 }
 
+export function updateAdminSupportInquiryStatus(inquiryId, status) {
+  return request(`/admin/support-inquiries/${inquiryId}/status`, {
+    method: 'PATCH',
+    body: JSON.stringify({ status }),
+  })
+}
+
 export function deleteAdminSupportInquiry(inquiryId) {
   return request(`/admin/support-inquiries/${inquiryId}`, {
     method: 'DELETE',
@@ -368,6 +375,12 @@ export function verifyProfileSecondaryPin(secondaryPin) {
   })
 }
 
+export function verifyProfilePrivacyAccess(payload) {
+  return request('/auth/profile/verify-privacy-access', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+}
 export function changeProfilePassword(payload) {
   return request('/auth/profile/password', {
     method: 'PUT',
@@ -441,6 +454,12 @@ export function fetchLatestLedgerAiAnalysis(payload) {
   return request('/statistics/ai-analysis/latest', {
     method: 'POST',
     body: JSON.stringify(payload),
+  })
+}
+
+export function deleteLedgerAiAnalysisHistory(historyId) {
+  return request(`/statistics/ai-analysis/history/${encodeURIComponent(historyId)}`, {
+    method: 'DELETE',
   })
 }
 export function fetchEntries(from, to) {

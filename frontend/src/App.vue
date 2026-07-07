@@ -5,6 +5,7 @@ import {
   acceptInvite,
   fetchCurrentUser,
   fetchInvite,
+  fetchNotifications,
   login,
   logout as logoutRequest,
 } from './lib/api'
@@ -97,6 +98,8 @@ const MOBILE_LAYOUT_QUERY = '(max-width: 760px)'
 const DEFAULT_TOSS_DEGREE = 100
 const ROUTE_LEAVE_GUARD_EVENT = 'calen-route-leave-guard'
 const DEFAULT_ROUTE_LEAVE_GUARD_MESSAGE = '페이지를 벗어나면 작성 중인 내용이 사라질 수 있습니다.'
+const NOTIFICATION_POLL_INTERVAL_MS = 15000
+const NOTIFICATION_TOAST_DURATION_MS = 3000
 
 const routeMeta = {
   notifications: {
@@ -170,6 +173,15 @@ const errorMessage = ref('')
 const activeRoute = ref(initialRouteState.route)
 const notificationUnreadCount = ref(0)
 const notificationUnreadBadgeLabel = computed(() => (notificationUnreadCount.value > 99 ? '99+' : String(notificationUnreadCount.value)))
+const notificationModalOpen = ref(false)
+const latestUnreadNotificationId = ref(null)
+const notificationToast = reactive({
+  visible: false,
+  id: '',
+  title: '',
+  message: '',
+})
+const notificationSignalVisible = computed(() => Boolean(currentUser.value && (notificationUnreadCount.value || notificationToast.visible)))
 const inviteToken = ref(initialRouteState.token)
 const householdInitialTab = ref('')
 const travelRecordFocusRequest = ref(null)
@@ -228,6 +240,8 @@ const layoutModeOptions = [
 ]
 
 let inviteRequestSequence = 0
+let notificationPollTimer = null
+let notificationToastTimer = null
 
 function resolveRouteState(hash) {
   const route = String(hash || '').replace(/^#/, '').trim()
@@ -487,21 +501,116 @@ function setNotificationUnreadCount(value) {
   notificationUnreadCount.value = Math.max(0, Number(value || 0))
 }
 
-async function refreshNotificationUnreadCount() {
+function clearNotificationToast() {
+  if (notificationToastTimer) {
+    window.clearTimeout(notificationToastTimer)
+    notificationToastTimer = null
+  }
+  notificationToast.visible = false
+}
+
+function showNotificationToast(notification) {
+  const title = String(notification?.title || '새 알림').trim() || '새 알림'
+  notificationToast.id = String(notification?.id || '')
+  notificationToast.title = title
+  notificationToast.message = String(notification?.message || '').trim()
+  notificationToast.visible = true
+  if (notificationToastTimer) {
+    window.clearTimeout(notificationToastTimer)
+  }
+  notificationToastTimer = window.setTimeout(() => {
+    notificationToast.visible = false
+    notificationToastTimer = null
+  }, NOTIFICATION_TOAST_DURATION_MS)
+}
+
+async function refreshNotificationUnreadCount(options = {}) {
   if (!currentUser.value) {
     setNotificationUnreadCount(0)
+    latestUnreadNotificationId.value = null
+    clearNotificationToast()
     return
   }
+
   try {
-    const response = await fetchNotifications({ page: 0, size: 1, unreadOnly: 'true' })
+    const response = await fetchNotifications({ page: 0, size: 5, unreadOnly: 'true' })
+    const unreadNotifications = Array.isArray(response?.content) ? response.content : []
+    const latestNotification = unreadNotifications[0] || null
+    const latestId = latestNotification?.id != null ? String(latestNotification.id) : ''
+    const previousId = latestUnreadNotificationId.value
+    const shouldNotify = Boolean(options.notify && !notificationModalOpen.value && activeRoute.value !== 'notifications')
+
     setNotificationUnreadCount(response?.unreadCount)
+    if (shouldNotify && previousId !== null && latestId && latestId !== previousId) {
+      showNotificationToast(latestNotification)
+    }
+    latestUnreadNotificationId.value = latestId || ''
   } catch (error) {
     setNotificationUnreadCount(0)
   }
 }
 
+function startNotificationPolling() {
+  stopNotificationPolling()
+  refreshNotificationUnreadCount({ notify: false })
+  notificationPollTimer = window.setInterval(() => {
+    refreshNotificationUnreadCount({ notify: true })
+  }, NOTIFICATION_POLL_INTERVAL_MS)
+}
+
+function stopNotificationPolling() {
+  if (notificationPollTimer) {
+    window.clearInterval(notificationPollTimer)
+    notificationPollTimer = null
+  }
+}
+
+function openNotificationModal() {
+  notificationModalOpen.value = true
+  clearNotificationToast()
+  refreshNotificationUnreadCount({ notify: false })
+}
+
+function closeNotificationModal() {
+  notificationModalOpen.value = false
+  refreshNotificationUnreadCount({ notify: false })
+}
+
+function resolveNotificationTargetRoute(target) {
+  const rawTarget = String(target || '').trim()
+  if (!rawTarget.startsWith('/')) {
+    return null
+  }
+
+  const url = new URL(rawTarget, window.location.origin)
+  const route = url.pathname.replace(/^\/+/, '') || 'launcher'
+  if (route === 'household') {
+    return { route, options: { householdTab: url.searchParams.get('tab') || '' } }
+  }
+  if (route === 'travel-money' || route === 'travel-log' || route === 'photo-album' || route === 'family-album' || route === 'my-map') {
+    return { route, options: {} }
+  }
+  if (normalizedRouteMeta[route]) {
+    return { route, options: {} }
+  }
+  return null
+}
+
+function handleNotificationTargetOpen(target) {
+  const resolvedTarget = resolveNotificationTargetRoute(target)
+  closeNotificationModal()
+  if (resolvedTarget) {
+    navigate(resolvedTarget.route, resolvedTarget.options)
+    return
+  }
+  if (String(target || '').startsWith('/')) {
+    window.location.assign(target)
+  }
+}
+
 function handleNotificationUnreadCountChange(value) {
   setNotificationUnreadCount(value)
+  refreshNotificationUnreadCount({ notify: false })
 }
 function navigate(route, options = {}) {
   const nextRoute = normalizedRouteMeta[route] ? route : 'launcher'
@@ -706,9 +815,13 @@ watch([currentUser, activeRoute], ([user, route]) => {
 
 watch(currentUser, (user) => {
   if (user) {
-    refreshNotificationUnreadCount()
+    startNotificationPolling()
   } else {
+    stopNotificationPolling()
     setNotificationUnreadCount(0)
+    latestUnreadNotificationId.value = null
+    notificationModalOpen.value = false
+    clearNotificationToast()
   }
 })
 
@@ -735,6 +848,8 @@ onBeforeUnmount(() => {
   window.removeEventListener('beforeunload', handleBeforeUnload)
   window.removeEventListener(ROUTE_LEAVE_GUARD_EVENT, handleRouteLeaveGuardChange)
   document.removeEventListener('pointerdown', handleDocumentPointerDown)
+  stopNotificationPolling()
+  clearNotificationToast()
 })
 </script>
 
@@ -928,8 +1043,8 @@ onBeforeUnmount(() => {
             </button>
                     <button
             type="button"
-            :class="['topbar__nav-button', 'topbar__nav-button--notifications', { 'topbar__nav-button--active': activeRoute === 'notifications' }]"
-            @click="navigate('notifications')"
+            :class="['topbar__nav-button', 'topbar__nav-button--notifications', { 'topbar__nav-button--active': activeRoute === 'notifications' || notificationModalOpen }]"
+            @click="openNotificationModal"
           >
             <span>알림</span>
             <span v-if="notificationUnreadCount" class="topbar__notification-badge" aria-label="읽지 않은 알림" aria-live="polite">{{ notificationUnreadBadgeLabel }}</span>
@@ -950,7 +1065,7 @@ onBeforeUnmount(() => {
             @navigate="navigate"
           />
         </div>
-        <AdminWorkspace v-else-if="activeRoute === 'admin'" :current-user="currentUser" />
+        <AdminWorkspace v-else-if="activeRoute === 'admin'" :current-user="currentUser" @exit-admin-access="navigate('launcher')" />
         <ProfileWorkspace v-else-if="activeRoute === 'profile'" :current-user="currentUser" />
         <HouseholdWorkspace
           v-else-if="activeRoute === 'household'"
@@ -962,6 +1077,7 @@ onBeforeUnmount(() => {
         <NotificationCenterWorkspace
           v-else-if="activeRoute === 'notifications'"
           @unread-count-change="handleNotificationUnreadCountChange"
+          @open-target="handleNotificationTargetOpen"
         />
         <TravelWorkspace
           v-else-if="travelRouteKeys.has(activeRoute)"
@@ -970,6 +1086,38 @@ onBeforeUnmount(() => {
           @open-household-travel-ledger="navigateHouseholdTravelLedger"
           @record-focus-consumed="clearTravelRecordFocusRequest"
         />
+
+        <button
+          v-if="notificationSignalVisible"
+          class="global-notification-signal"
+          type="button"
+          aria-label="알림 센터 열기"
+          @click="openNotificationModal"
+        >
+          <span class="global-notification-signal__icon" aria-hidden="true">✉</span>
+          <span v-if="notificationUnreadCount" class="global-notification-signal__badge">{{ notificationUnreadBadgeLabel }}</span>
+          <span v-if="notificationToast.visible" class="global-notification-signal__toast" role="status" aria-live="polite">
+            <small>새 알림</small>
+            <strong>{{ notificationToast.title }}</strong>
+          </span>
+        </button>
+
+        <div v-if="notificationModalOpen" class="travel-modal global-notification-modal" @click.self="closeNotificationModal">
+          <div class="travel-modal__dialog global-notification-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="global-notification-title">
+            <div class="travel-modal__header global-notification-modal__header">
+              <div>
+                <h2 id="global-notification-title">알림 센터</h2>
+                <p>새 알림을 확인하고 관련 화면으로 바로 이동할 수 있습니다.</p>
+              </div>
+              <button class="button button--ghost" type="button" @click="closeNotificationModal">닫기</button>
+            </div>
+            <NotificationCenterWorkspace
+              embedded
+              @unread-count-change="handleNotificationUnreadCountChange"
+              @open-target="handleNotificationTargetOpen"
+            />
+          </div>
+        </div>
       </div>
     </template>
   </div>

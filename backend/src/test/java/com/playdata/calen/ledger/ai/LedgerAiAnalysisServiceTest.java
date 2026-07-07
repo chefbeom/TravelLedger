@@ -544,6 +544,7 @@ class LedgerAiAnalysisServiceTest {
                 null,
                 null,
                 null,
+                null,
                 null
         );
     }
@@ -554,6 +555,7 @@ class LedgerAiAnalysisServiceTest {
                 LedgerAiAnalysisPeriod.MONTH,
                 null,
                 JUNE_18,
+                null,
                 null,
                 null,
                 null,

@@ -12,6 +12,7 @@ import {
   removePrivacyPhotoLocationMetadata,
   revokePrivacyPublicDownloadLinks,
   revokePrivacyTravelPublicMediaShares,
+  verifyProfilePrivacyAccess,
   verifyProfileSecondaryPin,
 } from '../lib/api'
 
@@ -62,6 +63,11 @@ const security = reactive({
 })
 
 const privacy = reactive({
+  modalVisible: false,
+  verified: false,
+  verifying: false,
+  accessPassword: '',
+  accessSecondaryPin: '',
   busyAction: '',
   errorMessage: '',
   successMessage: '',
@@ -125,7 +131,7 @@ const privacyActions = [
 const pageCount = computed(() => Math.max(state.pageInfo.totalPages || 0, 1))
 const securityModeLabel = computed(() => (security.mode === 'password' ? '비밀번호' : '2차 PIN'))
 const securitySaveLabel = computed(() => (security.mode === 'password' ? '비밀번호 변경' : '2차 PIN 변경'))
-const isPrivacyBusy = computed(() => Boolean(privacy.busyAction || privacy.exporting))
+const isPrivacyBusy = computed(() => Boolean(privacy.busyAction || privacy.exporting || privacy.verifying))
 const privacyResultRows = computed(() => {
   if (!privacy.lastResult || typeof privacy.lastResult !== 'object') {
     return []
@@ -192,6 +198,29 @@ function resetSecurityState() {
 function resetPrivacyMessages() {
   privacy.errorMessage = ''
   privacy.successMessage = ''
+}
+
+function resetPrivacyAccess() {
+  privacy.verified = false
+  privacy.verifying = false
+  privacy.accessPassword = ''
+  privacy.accessSecondaryPin = ''
+}
+
+function openPrivacyManagementModal() {
+  resetPrivacyMessages()
+  resetPrivacyAccess()
+  privacy.lastActionLabel = ''
+  privacy.lastResult = null
+  privacy.modalVisible = true
+}
+
+function closePrivacyManagementModal() {
+  if (isPrivacyBusy.value) {
+    return
+  }
+  privacy.modalVisible = false
+  resetPrivacyAccess()
 }
 
 function openSecurityGate(mode) {
@@ -352,8 +381,44 @@ async function handleCredentialChange() {
   }
 }
 
+async function handlePrivacyAccessVerify() {
+  if (privacy.verifying) {
+    return
+  }
+
+  resetPrivacyMessages()
+
+  try {
+    if (!privacy.accessPassword.trim()) {
+      throw new Error('현재 로그인 비밀번호를 입력해 주세요.')
+    }
+    if (!/^\d{8}$/.test(privacy.accessSecondaryPin.trim())) {
+      throw new Error('2차 PIN은 숫자 8자리여야 합니다.')
+    }
+
+    privacy.verifying = true
+    await verifyProfilePrivacyAccess({
+      password: privacy.accessPassword,
+      secondaryPin: privacy.accessSecondaryPin,
+    })
+    privacy.verified = true
+    privacy.successMessage = '검증이 완료되었습니다. 개인정보 관리 작업을 실행할 수 있습니다.'
+  } catch (error) {
+    privacy.errorMessage = error.message
+  } finally {
+    privacy.verifying = false
+    privacy.accessPassword = ''
+    privacy.accessSecondaryPin = ''
+  }
+}
+
 async function runPrivacyAction(action) {
   if (isPrivacyBusy.value) {
+    return
+  }
+  if (!privacy.verified) {
+    privacy.modalVisible = true
+    privacy.errorMessage = '개인정보 관리 작업을 실행하려면 현재 비밀번호와 2차 PIN 검증이 필요합니다.'
     return
   }
 
@@ -451,7 +516,12 @@ onMounted(() => {
           <h2 id="privacy-panel-title">개인정보 관리</h2>
           <p>AI 분석 이력, 공개 링크, 여행 미디어 공개 상태, 사진 GPS 데이터, 개인 데이터 내보내기를 관리합니다.</p>
         </div>
-        <span class="panel__badge">2차 PIN 보호</span>
+        <div class="profile-privacy-panel__actions">
+          <span class="panel__badge">로그인 + 2차 PIN 보호</span>
+          <button class="button button--primary" data-testid="privacy-management-open" type="button" :disabled="isPrivacyBusy" @click="openPrivacyManagementModal">
+            개인정보 관리
+          </button>
+        </div>
       </div>
 
       <div class="privacy-export-card" data-testid="privacy-data-export-card">
@@ -475,36 +545,12 @@ onMounted(() => {
         </button>
       </div>
 
-      <div class="privacy-action-grid">
-        <article v-for="action in privacyActions" :key="action.key" class="privacy-action-card" :data-testid="`privacy-action-${action.key}`">
-          <div>
-            <h3>{{ action.label }}</h3>
-            <p>{{ action.description }}</p>
-            <small>{{ action.warning }}</small>
-          </div>
-          <button
-            class="button button--ghost privacy-action-card__button"
-            :data-testid="`privacy-action-run-${action.key}`"
-            type="button"
-            :disabled="isPrivacyBusy"
-            @click="runPrivacyAction(action)"
-          >
-            {{ privacy.busyAction === action.key ? '처리 중...' : '실행' }}
-          </button>
-        </article>
-      </div>
-
-      <div v-if="privacy.successMessage" class="feedback feedback--success" data-testid="privacy-success-message" aria-live="polite">{{ privacy.successMessage }}</div>
-      <div v-if="privacy.errorMessage" class="feedback feedback--error" data-testid="privacy-error-message" aria-live="assertive">{{ privacy.errorMessage }}</div>
-
-      <div v-if="privacyResultRows.length" class="privacy-result-list" data-testid="privacy-action-result" aria-live="polite">
-        <strong>{{ privacy.lastActionLabel }} 결과</strong>
-        <dl>
-          <template v-for="row in privacyResultRows" :key="row.key">
-            <dt>{{ row.label }}</dt>
-            <dd>{{ formatNumber(row.value) }}</dd>
-          </template>
-        </dl>
+      <div class="privacy-management-card" data-testid="privacy-management-card">
+        <div>
+          <strong>민감 작업은 검증 후 실행</strong>
+          <p>AI 분석 이력 삭제, 공개 링크 회수, 여행 공개 미디어 회수, 사진 위치정보 제거, 민감 파생 데이터 정리는 현재 비밀번호와 2차 PIN 확인 후 모달 안에서 실행합니다.</p>
+        </div>
+        <button class="button button--ghost" type="button" :disabled="isPrivacyBusy" @click="openPrivacyManagementModal">개인정보 관리 열기</button>
       </div>
     </section>
 
@@ -539,8 +585,8 @@ onMounted(() => {
       </div>
 
       <p v-if="state.loading" class="panel__empty">문의 내역을 불러오는 중입니다.</p>
-      <div v-else-if="state.inquiries.length" class="support-inquiry-list support-inquiry-list--compact">
-        <article v-for="inquiry in state.inquiries" :key="inquiry.id" class="support-inquiry-card support-inquiry-card--compact">
+      <div v-else-if="state.inquiries.length" class="support-inquiry-list support-inquiry-list--compact profile-inquiry-list">
+        <article v-for="inquiry in state.inquiries" :key="inquiry.id" class="support-inquiry-card support-inquiry-card--compact profile-inquiry-card">
           <button class="support-inquiry-row" type="button" @click="toggleInquiry(inquiry.id)">
             <div class="support-inquiry-row__summary">
               <strong class="support-inquiry-row__title">{{ inquiry.title }}</strong>
@@ -554,22 +600,25 @@ onMounted(() => {
             </div>
           </button>
 
-          <div v-if="state.expandedInquiryId === inquiry.id" class="support-inquiry-row__body">
+          <div v-if="state.expandedInquiryId === inquiry.id" class="support-inquiry-row__body profile-inquiry-body">
             <p class="support-inquiry-content">{{ inquiry.content }}</p>
 
-            <div v-if="inquiry.attachmentUrl" class="support-inquiry-attachment">
-              <a class="button button--ghost" :href="inquiry.attachmentUrl" target="_blank" rel="noreferrer">첨부 파일 보기</a>
+            <div v-if="inquiry.attachmentUrl" class="support-inquiry-attachment profile-inquiry-attachment">
               <img
                 v-if="inquiry.attachmentContentType?.startsWith('image/')"
                 :src="buildThumbnailUrl(inquiry.attachmentUrl)"
                 :alt="inquiry.attachmentFileName || inquiry.title"
                 loading="lazy"
                 decoding="async"
-                class="support-inquiry-preview"
+                class="support-inquiry-preview profile-inquiry-preview"
               />
+              <div class="profile-inquiry-attachment__meta">
+                <strong>{{ inquiry.attachmentFileName || '첨부 파일' }}</strong>
+                <a class="button button--ghost profile-inquiry-attachment__button" :href="inquiry.attachmentUrl" target="_blank" rel="noreferrer">첨부 파일 보기</a>
+              </div>
             </div>
 
-            <div v-if="inquiry.replyContent" class="support-inquiry-reply">
+            <div v-if="inquiry.replyContent" class="support-inquiry-reply profile-inquiry-reply">
               <div class="support-inquiry-reply__header">
                 <strong>관리자 답변</strong>
                 <small>{{ inquiry.repliedByDisplayName || inquiry.repliedByLoginId || '관리자' }} - {{ formatDateTime(inquiry.repliedAt) }}</small>
@@ -588,6 +637,80 @@ onMounted(() => {
       </div>
     </section>
 
+    <div v-if="privacy.modalVisible" class="travel-modal" @click.self="closePrivacyManagementModal">
+      <div class="travel-modal__dialog profile-privacy-modal" data-testid="privacy-management-dialog" role="dialog" aria-modal="true" aria-labelledby="privacy-management-title">
+        <div class="travel-modal__header">
+          <div>
+            <h2 id="privacy-management-title">개인정보 관리</h2>
+            <p>민감한 개인정보 정리 작업은 현재 로그인 비밀번호와 2차 PIN을 확인한 뒤 실행할 수 있습니다.</p>
+          </div>
+          <button class="button button--ghost" type="button" :disabled="isPrivacyBusy" @click="closePrivacyManagementModal">닫기</button>
+        </div>
+
+        <div class="travel-modal__body profile-privacy-modal__body">
+          <div v-if="privacy.successMessage" class="feedback feedback--success" data-testid="privacy-success-message" aria-live="polite">{{ privacy.successMessage }}</div>
+          <div v-if="privacy.errorMessage" class="feedback feedback--error" data-testid="privacy-error-message" aria-live="assertive">{{ privacy.errorMessage }}</div>
+
+          <form v-if="!privacy.verified" class="profile-privacy-verification" data-testid="privacy-access-form" @submit.prevent="handlePrivacyAccessVerify">
+            <div>
+              <strong>검증 필요</strong>
+              <p>현재 계정의 로그인 비밀번호와 2차 PIN을 모두 통과해야 아래 5개 작업을 실행할 수 있습니다.</p>
+            </div>
+            <div class="profile-privacy-verification__grid">
+              <label class="field">
+                <span class="field__label">현재 로그인 비밀번호</span>
+                <input v-model="privacy.accessPassword" type="password" autocomplete="current-password" :disabled="privacy.verifying" placeholder="현재 비밀번호" />
+              </label>
+              <label class="field">
+                <span class="field__label">현재 2차 PIN</span>
+                <input v-model="privacy.accessSecondaryPin" type="password" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]*" maxlength="8" :disabled="privacy.verifying" placeholder="숫자 8자리" />
+              </label>
+            </div>
+            <div class="profile-privacy-verification__actions">
+              <button class="button button--primary" type="submit" :disabled="privacy.verifying">
+                {{ privacy.verifying ? '검증 중...' : '검증 후 작업 열기' }}
+              </button>
+            </div>
+          </form>
+
+          <template v-else>
+            <div class="profile-privacy-unlocked" data-testid="privacy-access-unlocked">
+              <strong>검증 완료</strong>
+              <p>아래 작업은 즉시 계정 데이터에 반영됩니다. 실행 전 확인 창에서 한 번 더 확인합니다.</p>
+            </div>
+
+            <div class="privacy-action-grid profile-privacy-modal__actions">
+              <article v-for="action in privacyActions" :key="action.key" class="privacy-action-card" :data-testid="`privacy-action-${action.key}`">
+                <div>
+                  <h3>{{ action.label }}</h3>
+                  <p>{{ action.description }}</p>
+                  <small>{{ action.warning }}</small>
+                </div>
+                <button
+                  class="button button--ghost privacy-action-card__button"
+                  :data-testid="`privacy-action-run-${action.key}`"
+                  type="button"
+                  :disabled="isPrivacyBusy"
+                  @click="runPrivacyAction(action)"
+                >
+                  {{ privacy.busyAction === action.key ? '처리 중...' : '실행' }}
+                </button>
+              </article>
+            </div>
+
+            <div v-if="privacyResultRows.length" class="privacy-result-list" data-testid="privacy-action-result" aria-live="polite">
+              <strong>{{ privacy.lastActionLabel }} 결과</strong>
+              <dl>
+                <template v-for="row in privacyResultRows" :key="row.key">
+                  <dt>{{ row.label }}</dt>
+                  <dd>{{ formatNumber(row.value) }}</dd>
+                </template>
+              </dl>
+            </div>
+          </template>
+        </div>
+      </div>
+    </div>
     <div v-if="privacy.exportGateVisible" class="travel-modal" @click.self="closePrivacyExportGate">
       <div class="travel-modal__dialog profile-security-modal" data-testid="privacy-export-dialog" role="dialog" aria-modal="true" aria-labelledby="privacy-export-title">
         <div class="travel-modal__header">

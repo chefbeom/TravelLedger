@@ -6,7 +6,14 @@ import {
   markNotificationRead,
 } from '../lib/api'
 
-const emit = defineEmits(['unread-count-change'])
+const props = defineProps({
+  embedded: {
+    type: Boolean,
+    default: false,
+  },
+})
+
+const emit = defineEmits(['unread-count-change', 'open-target'])
 
 const PAGE_SIZE_OPTIONS = [10, 20, 50]
 const DEFAULT_PAGE_SIZE = 10
@@ -181,14 +188,14 @@ async function markAllRead() {
 function openTarget(notification) {
   const target = String(notification?.targetUrl || '')
   if (!target.startsWith('/')) return
-  window.location.assign(target)
+  emit('open-target', target)
 }
 
 onMounted(() => loadNotifications(0))
 </script>
 
 <template>
-  <div class="workspace-stack notification-center">
+  <div :class="['workspace-stack notification-center', { 'notification-center--embedded': embedded }]">
     <section class="panel notification-hero">
       <div class="panel__header notification-hero__header">
         <div>

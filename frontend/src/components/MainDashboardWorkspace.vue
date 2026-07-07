@@ -17,6 +17,7 @@ import {
   saveLayoutSetting,
 } from '../lib/api'
 import { DASHBOARD_GRID_COLUMNS } from '../features/palette/types'
+import { buildThumbnailUrl, THUMBNAIL_VARIANTS } from '../lib/mediaPreview'
 
 const props = defineProps({
   currentUser: {
@@ -41,6 +42,13 @@ const MAIN_DASHBOARD_GRID_MARGIN = 4
 const MAIN_DASHBOARD_GRID_GAP = MAIN_DASHBOARD_GRID_MARGIN * 2
 const REMOTE_LAYOUT_SAVE_DELAY_MS = 800
 const PHOTO_FRAME_FETCH_SIZE = 5000
+const PHOTO_FRAME_RANDOM_INTERVAL_OPTIONS = [
+  { value: 'refresh', label: '새로고침 시 변경' },
+  { value: '5000', label: '5초' },
+  { value: '10000', label: '10초' },
+  { value: '30000', label: '30초' },
+  { value: '60000', label: '1분' },
+]
 
 const paletteTemplates = [
   { id: 'household-summary', type: 'household-summary', label: '가계부 종합', options: {} },
@@ -203,6 +211,9 @@ let paletteRemoteHydrationSequence = 0
 let paletteRemoteSaveTimer = 0
 let pendingPaletteRemotePayload = null
 let paletteChangedDuringRemoteHydration = false
+let photoFrameClockTimer = 0
+const photoFrameClock = ref(Date.now())
+const photoFrameRefreshSeed = Date.now()
 const photoFrameSettings = reactive({
   open: false,
   paletteId: '',
@@ -212,6 +223,7 @@ const photoFrameSettings = reactive({
   driveFolderId: '',
   travelPlanId: '',
   sort: 'recent',
+  randomInterval: 'refresh',
   loading: false,
   error: '',
 })
@@ -454,35 +466,48 @@ function collectDrivePhotoItems(items) {
 
 function collectTravelPhotoItems() {
   const photos = []
-  ;(travelPortfolio.value?.plans ?? []).forEach((plan) => {
-    ;(plan.mediaItems ?? []).forEach((item) => {
-      const imageUrl = item.contentUrl || item.thumbnailUrl || item.mediaUrl || item.imageUrl || ''
-      if (item.mediaType && item.mediaType !== 'PHOTO') return
-      if (!imageUrl) return
-      photos.push({
-        id: `travel-${item.id ?? imageUrl}`,
-        rawId: item.id == null ? '' : String(item.id),
-        sourceType: 'travel',
-        planId: plan.id == null ? '' : String(plan.id),
-        title: item.caption || item.originalFileName || plan.name || '여행 사진',
-        source: plan.name || '여행',
-        imageUrl,
-        openUrl: imageUrl,
-        updatedAt: item.takenAt || item.createdAt || plan.updatedAt || plan.startDate || '',
-      })
+  const plansById = new Map((travelPortfolio.value?.plans ?? []).map((plan) => [String(plan.id), plan]))
+  ;(travelPortfolio.value?.mediaItems ?? []).forEach((item) => {
+    const contentUrl = item.contentUrl || item.mediaUrl || item.imageUrl || item.thumbnailUrl || ''
+    const mediaType = String(item.mediaType || '').toUpperCase()
+    if (mediaType && mediaType !== 'PHOTO') return
+    if (!contentUrl) return
+    const imageUrl = buildThumbnailUrl(contentUrl, THUMBNAIL_VARIANTS.preview)
+    if (!imageUrl) return
+    const plan = plansById.get(String(item.planId || '')) || {}
+    const location = [item.country, item.region, item.placeName]
+      .map((value) => String(value || '').trim())
+      .filter(Boolean)
+      .filter((value, index, array) => array.indexOf(value) === index)
+      .join(' · ')
+    photos.push({
+      id: `travel-${item.id ?? imageUrl}`,
+      rawId: item.id == null ? '' : String(item.id),
+      sourceType: 'travel',
+      planId: item.planId == null ? '' : String(item.planId),
+      title: item.caption || item.originalFileName || item.title || item.planName || plan.name || '여행 사진',
+      source: item.planName || plan.name || '여행',
+      imageUrl,
+      openUrl: contentUrl,
+      date: item.expenseDate || String(item.uploadedAt || '').slice(0, 10) || plan.startDate || '',
+      travelType: item.recordType === 'MEMORY' ? '여행 기록' : '여행 사진',
+      location,
+      updatedAt: item.uploadedAt || item.expenseDate || plan.updatedAt || plan.startDate || '',
     })
   })
   return photos
 }
-
 function normalizePhotoFrameOptions(options = {}) {
   const source = ['all', 'drive', 'travel', 'drive-folder', 'travel-plan'].includes(options.source) ? options.source : 'all'
   const mode = ['latest', 'fixed', 'random', 'name'].includes(options.mode) ? options.mode : 'latest'
   const sort = ['recent', 'name'].includes(options.sort) ? options.sort : 'recent'
+  const randomIntervalValue = String(options.randomInterval || 'refresh')
+  const randomInterval = PHOTO_FRAME_RANDOM_INTERVAL_OPTIONS.some((item) => item.value === randomIntervalValue) ? randomIntervalValue : 'refresh'
   return {
     source,
     mode,
     sort,
+    randomInterval,
     fixedPhotoId: String(options.fixedPhotoId || ''),
     driveFolderId: String(options.driveFolderId || ''),
     travelPlanId: String(options.travelPlanId || ''),
@@ -531,20 +556,50 @@ function photoFrameRandomIndex(length, seed) {
   return Math.abs(hash) % length
 }
 
+function photoFrameRandomSeed(palette, options) {
+  if (options.randomInterval === 'refresh') {
+    return `${palette?.id || ''}:${photoFrameRefreshSeed}`
+  }
+  const intervalMs = Number(options.randomInterval || 0)
+  if (!Number.isFinite(intervalMs) || intervalMs <= 0) {
+    return `${palette?.id || ''}:${photoFrameRefreshSeed}`
+  }
+  return `${palette?.id || ''}:${options.randomInterval}:${Math.floor(photoFrameClock.value / intervalMs)}`
+}
+
+function formatPhotoFrameDate(value) {
+  const text = String(value || '').trim()
+  if (!text) return ''
+  const match = text.match(/\d{4}-\d{2}-\d{2}/)
+  if (match) return match[0]
+  return text.length >= 10 ? text.slice(0, 10) : text
+}
+
+function photoFrameInfoLine(photo) {
+  if (!photo) return ''
+  const parts = [
+    formatPhotoFrameDate(photo.date || photo.updatedAt),
+    photo.sourceType === 'travel' ? (photo.source || photo.travelType || '여행') : photo.source,
+    photo.location,
+  ]
+    .map((value) => String(value || '').trim())
+    .filter(Boolean)
+  return parts.join(' · ')
+}
 function photoFrameDisplayItemsFor(palette) {
   const options = normalizePhotoFrameOptions(palette?.options)
   const items = sortPhotoFramePhotos(photoFramePhotosForOptions(options), options)
   if (!items.length) return []
   if (options.mode === 'fixed') {
     const fixed = items.find((photo) => String(photo.id) === options.fixedPhotoId)
-    return fixed ? [fixed, ...items.filter((photo) => String(photo.id) !== options.fixedPhotoId)] : items
+    return [fixed || items[0]].filter(Boolean)
   }
   if (options.mode === 'random') {
-    const index = photoFrameRandomIndex(items.length, `${palette?.id || ''}:${new Date().toISOString().slice(0, 10)}`)
+    const index = photoFrameRandomIndex(items.length, photoFrameRandomSeed(palette, options))
     const selected = items[index]
-    return selected ? [selected, ...items.filter((_, itemIndex) => itemIndex !== index)] : items
+    return [selected || items[0]].filter(Boolean)
   }
-  return items
+  return [items[0]].filter(Boolean)
 }
 
 function photoFrameHeroFor(palette) {
@@ -616,6 +671,7 @@ async function openPhotoFrameSettings(palette) {
   photoFrameSettings.driveFolderId = options.driveFolderId
   photoFrameSettings.travelPlanId = options.travelPlanId
   photoFrameSettings.sort = options.sort
+  photoFrameSettings.randomInterval = options.randomInterval
   photoFrameSettings.error = ''
   if (!driveFolderItems.value.length) {
     try {
@@ -663,6 +719,7 @@ function savePhotoFrameSettings() {
     driveFolderId: photoFrameSettings.source === 'drive-folder' ? photoFrameSettings.driveFolderId : '',
     travelPlanId: photoFrameSettings.source === 'travel-plan' ? photoFrameSettings.travelPlanId : '',
     sort: photoFrameSettings.sort,
+    randomInterval: photoFrameSettings.randomInterval,
   }
   palettes.value = normalizeMainPalettes(palettes.value.map((palette) => (
     String(palette.id) === String(target.id) ? { ...palette, options: nextOptions } : palette
@@ -1028,11 +1085,6 @@ function compareRowsVisibleFor(palette) {
   return compareRowsFor(palette).slice(-Math.min(4, paletteListLimit(palette)))
 }
 
-function photoStripItemsFor(palette) {
-  const span = mainSpanForPalette(palette)
-  const count = span.w >= 5 ? 6 : span.w >= 4 ? 5 : 4
-  return photoFrameDisplayItemsFor(palette).slice(1, count)
-}
 
 function quickStat(key) {
   return (householdDashboard.value?.quickStats ?? []).find((item) => item.key === key)?.overview ?? {}
@@ -1419,6 +1471,9 @@ onMounted(async () => {
     resizeObserver.observe(gridElement.value.parentElement)
   }
   loadSummaries()
+  photoFrameClockTimer = window.setInterval(() => {
+    photoFrameClock.value = Date.now()
+  }, 1000)
 })
 
 onBeforeUnmount(() => {
@@ -1426,6 +1481,9 @@ onBeforeUnmount(() => {
   summaryLoadSequence += 1
   if (rebuildTimer) {
     window.clearTimeout(rebuildTimer)
+  }
+  if (photoFrameClockTimer) {
+    window.clearInterval(photoFrameClockTimer)
   }
   savePaletteRemoteNow()
   resizeObserver?.disconnect()
@@ -1647,23 +1705,16 @@ onBeforeUnmount(() => {
                       @click="openPhotoFrameSettings(palette)"
                     >
                       <img :src="photoFrameHeroFor(palette).imageUrl" :alt="photoFrameHeroFor(palette).title" loading="lazy" decoding="async" />
-                      <span>{{ photoFrameModeLabel(palette) }}</span>
-                      <strong>{{ photoFrameHeroFor(palette).title }}</strong>
+                      <div class="main-palette__photo-caption">
+                        <span>{{ photoFrameModeLabel(palette) }}</span>
+                        <strong>{{ photoFrameHeroFor(palette).title }}</strong>
+                        <small v-if="photoFrameInfoLine(photoFrameHeroFor(palette))">{{ photoFrameInfoLine(photoFrameHeroFor(palette)) }}</small>
+                      </div>
                     </button>
                     <button v-else class="main-palette__photo-empty" type="button" data-no-drag="true" @click="openPhotoFrameSettings(palette)">
                       <strong>표시할 사진이 없습니다.</strong>
                       <span>드라이브 또는 여행 사진을 선택해 액자를 설정하세요.</span>
                     </button>
-                    <div v-if="photoFrameDisplayItemsFor(palette).length > 1" class="main-palette__photo-strip">
-                      <img
-                        v-for="photo in photoStripItemsFor(palette)"
-                        :key="photo.id"
-                        :src="photo.imageUrl"
-                        :alt="photo.title"
-                        loading="lazy"
-                        decoding="async"
-                      />
-                    </div>
                   </div>
                 </template>
 
@@ -1843,6 +1894,15 @@ onBeforeUnmount(() => {
               </select>
             </label>
 
+            <label v-if="photoFrameSettings.mode === 'random'">
+              <span>변경 주기</span>
+              <select v-model="photoFrameSettings.randomInterval">
+                <option v-for="option in PHOTO_FRAME_RANDOM_INTERVAL_OPTIONS" :key="option.value" :value="option.value">
+                  {{ option.label }}
+                </option>
+              </select>
+            </label>
+
             <label>
               <span>정렬 기준</span>
               <select v-model="photoFrameSettings.sort">
@@ -1880,6 +1940,7 @@ onBeforeUnmount(() => {
               >
                 <img :src="photo.imageUrl" :alt="photo.title" loading="lazy" decoding="async" />
                 <span>{{ photo.title }}</span>
+                <small v-if="photoFrameInfoLine(photo)">{{ photoFrameInfoLine(photo) }}</small>
               </button>
             </div>
             <div v-else class="main-photo-frame-modal__empty">
@@ -2311,7 +2372,7 @@ onBeforeUnmount(() => {
 .main-palette__photo-frame {
   display: grid;
   gap: 8px;
-  grid-template-rows: minmax(0, 1fr) auto;
+  grid-template-rows: minmax(0, 1fr);
   height: 100%;
   min-height: 0;
 }
@@ -2339,41 +2400,50 @@ onBeforeUnmount(() => {
   width: 100%;
 }
 
-.main-palette__photo-hero span,
-.main-palette__photo-hero strong {
-  background: rgba(17, 24, 39, 0.72);
+.main-palette__photo-caption {
+  bottom: 8px;
+  display: grid;
+  gap: 4px;
   left: 8px;
   max-width: calc(100% - 16px);
-  overflow: hidden;
-  padding: 3px 6px;
   position: absolute;
+  right: 8px;
+  z-index: 2;
+}
+
+.main-palette__photo-caption span,
+.main-palette__photo-caption strong,
+.main-palette__photo-caption small {
+  background: rgba(17, 24, 39, 0.76);
+  border-radius: 999px;
+  color: #ffffff;
+  display: block;
+  left: auto !important;
+  max-width: 100%;
+  overflow: hidden;
+  padding: 3px 7px;
+  position: static !important;
   text-overflow: ellipsis;
   white-space: nowrap;
+  width: fit-content;
 }
 
-.main-palette__photo-hero span {
-  bottom: 34px;
+.main-palette__photo-caption span {
+  color: #bbf7d0;
   font-size: 0.68rem;
+  font-weight: 800;
 }
 
-.main-palette__photo-hero strong {
-  bottom: 8px;
+.main-palette__photo-caption strong {
   font-size: 0.78rem;
 }
 
-.main-palette__photo-strip {
-  display: grid;
-  gap: 6px;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  min-height: 44px;
+.main-palette__photo-caption small {
+  color: #dbeafe;
+  font-size: 0.68rem;
+  font-weight: 800;
 }
 
-.main-palette__photo-strip img {
-  aspect-ratio: 1;
-  border: 1px solid #e5e7eb;
-  object-fit: cover;
-  width: 100%;
-}
 
 .main-palette__photo-empty {
   align-content: center;
@@ -2523,10 +2593,17 @@ onBeforeUnmount(() => {
   width: 100%;
 }
 
-.main-photo-frame-modal__photo-grid span {
+.main-photo-frame-modal__photo-grid span,
+.main-photo-frame-modal__photo-grid small {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.main-photo-frame-modal__photo-grid small {
+  color: #93c5fd;
+  font-size: 0.72rem;
+  font-weight: 800;
 }
 
 .main-photo-frame-modal__empty,
@@ -3001,18 +3078,12 @@ onBeforeUnmount(() => {
 }
 
 .main-palette__photo-hero,
-.main-palette__photo-strip img,
 .main-palette__recent-file img,
 .main-palette__file-icon {
   border: 0;
   border-radius: 10px;
 }
 
-.main-palette__photo-hero span,
-.main-palette__photo-hero strong {
-  background: rgba(16, 17, 31, 0.72);
-  border-radius: 6px;
-}
 
 .main-palette__inline-action {
   background: var(--dash-control-bg);
@@ -3255,7 +3326,6 @@ onBeforeUnmount(() => {
   background: var(--dash-teal-strong);
 }
 
-:global(html[data-theme='toss'] .main-palette__photo-strip img),
 :global(html[data-theme='toss'] .main-palette__recent-file img),
 :global(html[data-theme='toss'] .main-palette__file-icon ){
   background: rgba(33, 41, 54, 0.94);
@@ -3523,9 +3593,6 @@ onBeforeUnmount(() => {
   grid-column: 1 / -1;
 }
 
-.main-palette--tall .main-palette__photo-strip {
-  min-height: 58px;
-}
 
 .main-palette--roomy .main-palette__recent-files {
   gap: 8px;

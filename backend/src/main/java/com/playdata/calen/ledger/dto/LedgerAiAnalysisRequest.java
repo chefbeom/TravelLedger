@@ -18,6 +18,8 @@ public record LedgerAiAnalysisRequest(
         LocalDate to,
         LocalDate compareFrom,
         LocalDate compareTo,
+        @Size(max = 500, message = "AI analysis focus prompt must be at most 500 characters.")
+        String focusPrompt,
         @Size(max = 80, message = "AI analysis clientRequestId must be at most 80 characters.")
         @Pattern(regexp = "^[A-Za-z0-9][A-Za-z0-9._:-]{0,79}$", message = "AI analysis clientRequestId may contain only letters, numbers, dot, underscore, colon, and hyphen.")
         String clientRequestId

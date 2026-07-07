@@ -9,6 +9,7 @@ import com.playdata.calen.account.dto.AdminOpsControlResponse;
 import com.playdata.calen.account.dto.SupportInquiryArchiveRequest;
 import com.playdata.calen.account.dto.SupportInquiryReplyRequest;
 import com.playdata.calen.account.dto.SupportInquiryResponse;
+import com.playdata.calen.account.dto.SupportInquiryStatusUpdateRequest;
 import com.playdata.calen.account.dto.AdminUserActiveRequest;
 import com.playdata.calen.account.dto.AdminUserSummaryResponse;
 import com.playdata.calen.account.dto.AdminBackupFileResponse;
@@ -268,6 +269,13 @@ public class AdminController {
         return supportInquiryService.setArchived(inquiryId, request.archived());
     }
 
+    @PatchMapping("/support-inquiries/{inquiryId}/status")
+    public SupportInquiryResponse updateSupportInquiryStatus(
+            @PathVariable Long inquiryId,
+            @RequestBody SupportInquiryStatusUpdateRequest request
+    ) {
+        return supportInquiryService.updateStatus(inquiryId, request.status());
+    }
     @DeleteMapping("/support-inquiries/{inquiryId}")
     public ResponseEntity<Void> deleteSupportInquiry(@PathVariable Long inquiryId) {
         supportInquiryService.deleteForAdmin(inquiryId);

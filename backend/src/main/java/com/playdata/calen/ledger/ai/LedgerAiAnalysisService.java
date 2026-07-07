@@ -105,7 +105,7 @@ public class LedgerAiAnalysisService {
     }
 
     private LedgerAiAnalysisResponse analyzeResolvedPlan(AppUser owner, Long userId, AnalysisPlan plan) {
-        LedgerAiAnalysisResponse reusableResponse = findReusableAnalysis(userId, plan);
+        LedgerAiAnalysisResponse reusableResponse = aiText.hasText(plan.focusPrompt()) ? null : findReusableAnalysis(userId, plan);
         if (reusableResponse != null) {
             return reusableResponse;
         }
@@ -218,6 +218,7 @@ public class LedgerAiAnalysisService {
                 history.getToDate(),
                 history.getCompareFromDate(),
                 history.getCompareToDate(),
+                null,
                 null
         ));
     }
@@ -225,6 +226,9 @@ public class LedgerAiAnalysisService {
     public LedgerAiAnalysisHistoryDetailResponse getLatestMatching(Long userId, LedgerAiAnalysisRequest request) {
         appUserService.getRequiredUser(userId);
         AnalysisPlan plan = resolvePlan(request);
+        if (aiText.hasText(plan.focusPrompt())) {
+            return null;
+        }
         return findLatestMatchingAnalysis(userId, plan, null)
                 .map(history -> new LedgerAiAnalysisHistoryDetailResponse(toSummary(history), readStoredHistoryResultOrFallback(history)))
                 .orElse(null);
@@ -246,6 +250,7 @@ public class LedgerAiAnalysisService {
                 String.valueOf(plan.primaryRange().to()),
                 comparison == null ? "" : String.valueOf(comparison.from()),
                 comparison == null ? "" : String.valueOf(comparison.to()),
+                plan.focusPrompt() == null ? "" : plan.focusPrompt(),
                 clientRequestId == null ? "" : clientRequestId
         );
     }
@@ -439,6 +444,7 @@ public class LedgerAiAnalysisService {
                 dataset.comparisonCategoryBreakdown(),
                 dataset.comparisonPaymentBreakdown(),
                 providerComparisonExpenseEntries,
+                plan.focusPrompt(),
                 aiPayloadBuilder.buildPayloadMinimizationSummary(dataset.expenseEntries().size(), dataset.comparisonExpenseEntries().size(), providerExpenseEntries, providerComparisonExpenseEntries),
                 LedgerAiOutputContract.text()
         );
@@ -491,10 +497,14 @@ public class LedgerAiAnalysisService {
                     ? LedgerAiComparisonPreset.CURRENT_MONTH_VS_PREVIOUS_MONTH
                     : request.comparisonPreset();
             ComparisonRanges ranges = resolveComparisonRanges(preset, anchor, request);
-            return new AnalysisPlan(mode, ranges.periodType(), preset, ranges.primary(), ranges.comparison());
+            return new AnalysisPlan(mode, ranges.periodType(), preset, ranges.primary(), ranges.comparison(), normalizeFocusPrompt(request.focusPrompt()));
         }
         LedgerAiAnalysisPeriod periodType = request.periodType() == null ? LedgerAiAnalysisPeriod.MONTH : request.periodType();
-        return new AnalysisPlan(mode, periodType, null, resolvePeriodRange(periodType, anchor, request.from(), request.to()), null);
+        return new AnalysisPlan(mode, periodType, null, resolvePeriodRange(periodType, anchor, request.from(), request.to()), null, normalizeFocusPrompt(request.focusPrompt()));
+    }
+
+    private String normalizeFocusPrompt(String focusPrompt) {
+        return aiText.redactSensitiveText(focusPrompt, 500);
     }
 
     private DateRange resolvePeriodRange(LedgerAiAnalysisPeriod periodType, LocalDate anchor, LocalDate customFrom, LocalDate customTo) {
@@ -1049,7 +1059,8 @@ public class LedgerAiAnalysisService {
             LedgerAiAnalysisPeriod periodType,
             LedgerAiComparisonPreset comparisonPreset,
             DateRange primaryRange,
-            DateRange comparisonRange
+            DateRange comparisonRange,
+            String focusPrompt
     ) {
     }
 
@@ -1100,6 +1111,7 @@ public class LedgerAiAnalysisService {
             List<CategoryBreakdownItemResponse> comparisonCategoryBreakdown,
             List<PaymentBreakdownItemResponse> comparisonPaymentBreakdown,
             List<ExpenseEntryPayload> comparisonExpenseEntries,
+            String focusPrompt,
             PayloadMinimizationSummary payloadMinimization,
             String outputContract
     ) {

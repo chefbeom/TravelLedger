@@ -101,6 +101,18 @@ public class AppUserService {
         ensureSecondaryPinMatches(getRequiredUser(userId), secondaryPinRaw);
     }
 
+    public String verifyPrivacyAccess(Long userId, String passwordRaw, String secondaryPinRaw) {
+        AppUser user = getRequiredUser(userId);
+        String password = passwordRaw != null ? passwordRaw.trim() : "";
+        if (!StringUtils.hasText(user.getPasswordHash()) || !passwordEncoder.matches(password, user.getPasswordHash())) {
+            throw new BadRequestException("현재 비밀번호가 일치하지 않습니다.");
+        }
+
+        String secondaryPin = normalizeSecondaryPin(secondaryPinRaw);
+        ensureSecondaryPinMatches(user, secondaryPin);
+        return secondaryPin;
+    }
+
     @Transactional
     public void updatePassword(Long userId, String secondaryPinRaw, String newPasswordRaw) {
         AppUser user = getRequiredUser(userId);

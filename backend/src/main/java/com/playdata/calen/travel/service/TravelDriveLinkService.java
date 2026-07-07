@@ -40,14 +40,13 @@ public class TravelDriveLinkService {
     private final DriveItemRepository driveItemRepository;
     private final DriveItemVersionRepository driveItemVersionRepository;
     private final DriveDownloadLinkRepository driveDownloadLinkRepository;
-    private final TravelMediaStorageService travelMediaStorageService;
 
     @Transactional
     public void linkMediaAsset(TravelMediaAsset asset) {
         if (asset == null || asset.getId() == null || asset.getPlan() == null || asset.getPlan().getOwner() == null) {
             return;
         }
-        if (!travelMediaStorageService.canExposeToDrive(asset.getStoragePath())) {
+        if (!hasLinkableStoragePath(asset.getStoragePath())) {
             return;
         }
 
@@ -96,7 +95,7 @@ public class TravelDriveLinkService {
         removeRouteGpxLinks(routeSegment);
 
         List<TravelLinkedFile> linkableFiles = files == null ? List.of() : files.stream()
-                .filter(file -> file != null && travelMediaStorageService.canExposeToDrive(file.storagePath()))
+                .filter(file -> file != null && hasLinkableStoragePath(file.storagePath()))
                 .toList();
         if (linkableFiles.isEmpty()) {
             return;
@@ -141,6 +140,14 @@ public class TravelDriveLinkService {
                         String.valueOf(plan.getId())
                 )
                 .ifPresent(this::deleteMetadataTree);
+    }
+
+    @Transactional
+    public void ensurePlanFolder(TravelPlan plan) {
+        if (plan == null || plan.getId() == null || plan.getOwner() == null) {
+            return;
+        }
+        resolvePlanFolder(plan);
     }
 
     private DriveItem resolveMediaSectionFolder(TravelPlan plan, TravelMediaType mediaType) {
@@ -282,6 +289,10 @@ public class TravelDriveLinkService {
             normalized = fallback;
         }
         return normalized.length() > 255 ? normalized.substring(0, 255) : normalized;
+    }
+
+    private boolean hasLinkableStoragePath(String storagePath) {
+        return StringUtils.hasText(storagePath);
     }
 
     private String storedNameFromPath(String storagePath) {

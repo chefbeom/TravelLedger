@@ -40,6 +40,7 @@ const SUMMARY_CACHE_STORAGE_VERSION = 'v1'
 const MAIN_DASHBOARD_GRID_MARGIN = 4
 const MAIN_DASHBOARD_GRID_GAP = MAIN_DASHBOARD_GRID_MARGIN * 2
 const REMOTE_LAYOUT_SAVE_DELAY_MS = 800
+const PHOTO_FRAME_FETCH_SIZE = 5000
 
 const paletteTemplates = [
   { id: 'household-summary', type: 'household-summary', label: '가계부 종합', options: {} },
@@ -574,7 +575,7 @@ async function loadPhotoFrameFolderPhotos(folderId, sort = 'recent') {
   photoFrameSettings.loading = true
   photoFrameSettings.error = ''
   try {
-    const items = await fetchDrivePhotos({ parentId: key, sortOption: sort, size: 300 })
+    const items = await fetchDrivePhotos({ parentId: key, sortOption: sort, size: PHOTO_FRAME_FETCH_SIZE })
     photoFrameFolderPhotoItems.value = {
       ...photoFrameFolderPhotoItems.value,
       [key]: items || [],
@@ -1353,7 +1354,7 @@ async function loadSummaries() {
     settleSummaryRequest(loadId, fetchDriveRecentFiles(), (value) => {
       driveRecentFileItems.value = value ?? []
     }),
-    settleSummaryRequest(loadId, fetchDrivePhotos({ sortOption: 'recent', size: 300 }), (value) => {
+    settleSummaryRequest(loadId, fetchDrivePhotos({ sortOption: 'recent', size: PHOTO_FRAME_FETCH_SIZE }), (value) => {
       drivePhotoFileItems.value = value ?? []
     }),
     settleSummaryRequest(loadId, fetchDriveFolderDestinations(), (value) => {

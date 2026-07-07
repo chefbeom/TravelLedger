@@ -13,6 +13,8 @@ import com.playdata.calen.drive.repository.DriveDownloadLinkRepository;
 import com.playdata.calen.drive.repository.DriveItemRepository;
 import com.playdata.calen.drive.repository.DriveItemVersionRepository;
 import com.playdata.calen.drive.repository.DriveShareRepository;
+import com.playdata.calen.travel.service.TravelDriveLinkService;
+import com.playdata.calen.travel.service.TravelMediaStorageService;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -36,12 +38,16 @@ import org.springframework.util.StringUtils;
 @Transactional(readOnly = true)
 public class DriveService {
 
+    private static final int DEFAULT_PHOTO_FILE_LIMIT = 1200;
+    private static final int MAX_PHOTO_FILE_LIMIT = 5000;
+
     private final DriveItemRepository driveItemRepository;
     private final DriveItemVersionRepository driveItemVersionRepository;
     private final DriveShareRepository driveShareRepository;
     private final DriveDownloadLinkRepository driveDownloadLinkRepository;
     private final AppUserRepository appUserRepository;
     private final DriveStorageService driveStorageService;
+    private final TravelMediaStorageService travelMediaStorageService;
     private final ImageThumbnailService imageThumbnailService;
 
     public DriveService(
@@ -51,6 +57,7 @@ public class DriveService {
             DriveDownloadLinkRepository driveDownloadLinkRepository,
             AppUserRepository appUserRepository,
             DriveStorageService driveStorageService,
+            TravelMediaStorageService travelMediaStorageService,
             ImageThumbnailService imageThumbnailService
     ) {
         this.driveItemRepository = driveItemRepository;
@@ -59,6 +66,7 @@ public class DriveService {
         this.driveDownloadLinkRepository = driveDownloadLinkRepository;
         this.appUserRepository = appUserRepository;
         this.driveStorageService = driveStorageService;
+        this.travelMediaStorageService = travelMediaStorageService;
         this.imageThumbnailService = imageThumbnailService;
     }
 
@@ -178,7 +186,7 @@ public class DriveService {
     public List<DriveDtos.FileItemResponse> getPhotoFiles(Long userId, Long parentId, String sortOption, Integer size) {
         AppUser owner = getOwner(userId);
         DriveItem parent = parentId == null ? null : resolveParentFolder(owner.getId(), parentId);
-        int limit = Math.min(Math.max(size == null ? 200 : size, 1), 500);
+        int limit = Math.min(Math.max(size == null ? DEFAULT_PHOTO_FILE_LIMIT : size, 1), MAX_PHOTO_FILE_LIMIT);
         return driveItemRepository.findAllByOwner_Id(owner.getId()).stream()
                 .filter(DriveItem::isFile)
                 .filter(item -> !item.isTrashed())
@@ -323,7 +331,7 @@ public class DriveService {
 
     public DriveFilePayload downloadFile(Long userId, Long fileId) {
         DriveItem item = getOwnedFile(userId, fileId);
-        byte[] bytes = driveStorageService.loadObjectBytes(item.getStoragePath());
+        byte[] bytes = loadFileBytes(item);
         item.setLastAccessedAt(LocalDateTime.now());
         return new DriveFilePayload(bytes, resolveContentType(item.getExtension()), item.getOriginalName(), item.getFileSize());
     }
@@ -367,6 +375,9 @@ public class DriveService {
     public String getDownloadUrl(Long userId, Long fileId) {
         DriveItem item = getOwnedFile(userId, fileId);
         item.setLastAccessedAt(LocalDateTime.now());
+        if (isTravelLinkedFile(item)) {
+            return "/api/file/" + item.getId() + "/download";
+        }
         return driveStorageService.generateDownloadUrl(
                 item.getStoragePath(),
                 item.getOriginalName(),
@@ -773,7 +784,7 @@ public class DriveService {
             for (ZipSource source : zipSources) {
                 ZipEntry entry = new ZipEntry(source.entryName());
                 zip.putNextEntry(entry);
-                zip.write(driveStorageService.loadObjectBytes(source.item().getStoragePath()));
+                zip.write(loadFileBytes(source.item()));
                 zip.closeEntry();
                 source.item().setLastAccessedAt(LocalDateTime.now());
             }
@@ -873,7 +884,12 @@ public class DriveService {
             return null;
         }
 
-        byte[] sourceBytes = driveStorageService.loadObjectBytes(item.getStoragePath());
+        ThumbnailPayload travelThumbnail = buildTravelLinkedThumbnailPayload(item, contentType, width);
+        if (travelThumbnail != null) {
+            return travelThumbnail;
+        }
+
+        byte[] sourceBytes = loadFileBytes(item);
         return imageThumbnailService.createPreparedThumbnails(sourceBytes, contentType, List.of(width == null ? 320 : width)).stream()
                 .findFirst()
                 .map(thumbnail -> new ThumbnailPayload(
@@ -888,6 +904,51 @@ public class DriveService {
                         "\"" + item.getId() + "-" + item.getLastModifiedAt() + "-full\"",
                         item.getLastModifiedAt() != null ? item.getLastModifiedAt().atZone(ZoneId.systemDefault()).toInstant().toEpochMilli() : System.currentTimeMillis()
                 ));
+    }
+    private ThumbnailPayload buildTravelLinkedThumbnailPayload(DriveItem item, String contentType, Integer width) {
+        if (!isTravelLinkedFile(item)) {
+            return null;
+        }
+        TravelMediaStorageService.PreparedThumbnail preparedThumbnail = travelMediaStorageService.loadThumbnail(
+                item.getStoragePath(),
+                contentType,
+                width
+        );
+        if (preparedThumbnail == null) {
+            return null;
+        }
+        try (var inputStream = preparedThumbnail.resource().getInputStream()) {
+            byte[] bytes = inputStream.readAllBytes();
+            return new ThumbnailPayload(
+                    bytes,
+                    preparedThumbnail.contentType(),
+                    "\"" + item.getId() + "-" + item.getLastModifiedAt() + "-travel-thumb\"",
+                    item.getLastModifiedAt() != null
+                            ? item.getLastModifiedAt().atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
+                            : System.currentTimeMillis()
+            );
+        } catch (IOException exception) {
+            return null;
+        }
+    }
+
+    byte[] loadFileBytes(DriveItem item) {
+        if (isTravelLinkedFile(item)) {
+            try (var inputStream = travelMediaStorageService.loadAsResource(item.getStoragePath()).getInputStream()) {
+                return inputStream.readAllBytes();
+            } catch (IOException exception) {
+                throw new BadRequestException("Travel-linked file could not be loaded.");
+            }
+        }
+        return driveStorageService.loadObjectBytes(item.getStoragePath());
+    }
+
+    private boolean isTravelLinkedFile(DriveItem item) {
+        if (item == null || !item.isFile()) {
+            return false;
+        }
+        return TravelDriveLinkService.SOURCE_TRAVEL_MEDIA.equals(item.getSourceType())
+                || TravelDriveLinkService.SOURCE_TRAVEL_GPX.equals(item.getSourceType());
     }
 
     public String resolveContentType(String extension) {

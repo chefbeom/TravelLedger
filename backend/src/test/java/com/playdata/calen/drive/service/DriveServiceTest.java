@@ -19,6 +19,8 @@ import com.playdata.calen.drive.repository.DriveDownloadLinkRepository;
 import com.playdata.calen.drive.repository.DriveItemRepository;
 import com.playdata.calen.drive.repository.DriveItemVersionRepository;
 import com.playdata.calen.drive.repository.DriveShareRepository;
+import com.playdata.calen.travel.service.TravelDriveLinkService;
+import com.playdata.calen.travel.service.TravelMediaStorageService;
 import java.io.ByteArrayInputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashMap;
@@ -32,6 +34,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.core.io.ByteArrayResource;
 
 @ExtendWith(MockitoExtension.class)
 class DriveServiceTest {
@@ -53,6 +56,9 @@ class DriveServiceTest {
 
     @Mock
     private DriveStorageService driveStorageService;
+
+    @Mock
+    private TravelMediaStorageService travelMediaStorageService;
 
     @Mock
     private ImageThumbnailService imageThumbnailService;
@@ -288,6 +294,26 @@ class DriveServiceTest {
     }
 
     @Test
+    void downloadTravelLinkedFileUsesTravelStorage() {
+        AppUser owner = owner();
+        DriveItem file = item(5L, owner, DriveItemType.FILE, "trip.jpg", 6L, 10);
+        file.setStoragePath("travel/1/photo.jpg");
+        file.setSourceType(TravelDriveLinkService.SOURCE_TRAVEL_MEDIA);
+
+        when(appUserRepository.findById(1L)).thenReturn(Optional.of(owner));
+        when(driveItemRepository.findByIdAndOwner_Id(5L, 1L)).thenReturn(Optional.of(file));
+        when(travelMediaStorageService.loadAsResource("travel/1/photo.jpg"))
+                .thenReturn(new ByteArrayResource("travel".getBytes(StandardCharsets.UTF_8)));
+
+        DriveService service = newService();
+
+        DriveService.DriveFilePayload payload = service.downloadFile(1L, 5L);
+
+        assertThat(new String(payload.bytes(), StandardCharsets.UTF_8)).isEqualTo("travel");
+        verify(driveStorageService, never()).loadObjectBytes(any());
+    }
+
+    @Test
     void downloadItemsAsZipKeepsFolderPaths() throws Exception {
         AppUser owner = owner();
         DriveItem folder = item(2L, owner, DriveItemType.FOLDER, "Trips", 0L, 10);
@@ -321,6 +347,7 @@ class DriveServiceTest {
                 driveDownloadLinkRepository,
                 appUserRepository,
                 driveStorageService,
+                travelMediaStorageService,
                 imageThumbnailService
         );
     }

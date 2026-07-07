@@ -4,8 +4,10 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.playdata.calen.travel.domain.TravelMediaAsset;
+import com.playdata.calen.travel.domain.TravelPlan;
 import com.playdata.calen.travel.domain.TravelRouteSegment;
 import com.playdata.calen.travel.repository.TravelMediaAssetRepository;
+import com.playdata.calen.travel.repository.TravelPlanRepository;
 import com.playdata.calen.travel.repository.TravelRouteSegmentRepository;
 import java.util.Collections;
 import java.util.List;
@@ -26,10 +28,11 @@ import org.springframework.util.StringUtils;
 @ConditionalOnProperty(prefix = "app.travel.drive-link-backfill", name = "enabled", havingValue = "true", matchIfMissing = true)
 public class TravelDriveLinkBackfillService {
 
-    private static final String JOB_KEY = "travel-drive-link-backfill-20260707";
+    private static final String JOB_KEY = "travel-drive-link-backfill-20260707-v2";
     private static final int MAX_NOTE_LENGTH = 500;
 
     private final TravelMediaAssetRepository travelMediaAssetRepository;
+    private final TravelPlanRepository travelPlanRepository;
     private final TravelRouteSegmentRepository travelRouteSegmentRepository;
     private final TravelDriveLinkService travelDriveLinkService;
     private final ObjectMapper objectMapper;
@@ -42,6 +45,12 @@ public class TravelDriveLinkBackfillService {
         if (isCompleted()) {
             log.info("Travel drive link backfill already completed. jobKey={}", JOB_KEY);
             return;
+        }
+
+        int planCount = 0;
+        for (TravelPlan plan : travelPlanRepository.findAll()) {
+            travelDriveLinkService.ensurePlanFolder(plan);
+            planCount += 1;
         }
 
         int mediaCount = 0;
@@ -69,9 +78,10 @@ public class TravelDriveLinkBackfillService {
                     .toList());
         }
 
-        markCompleted("media=" + mediaCount + ", routes=" + routeCount + ", gpxFiles=" + gpxFileCount);
+        markCompleted("plans=" + planCount + ", media=" + mediaCount + ", routes=" + routeCount + ", gpxFiles=" + gpxFileCount);
         log.info(
-                "Travel drive link backfill completed. media={}, routes={}, gpxFiles={}",
+                "Travel drive link backfill completed. plans={}, media={}, routes={}, gpxFiles={}",
+                planCount,
                 mediaCount,
                 routeCount,
                 gpxFileCount

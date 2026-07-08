@@ -25,6 +25,7 @@ const selectedClusterSummary = ref(null)
 const selectedClusterDetail = ref(null)
 const selectedPhotoId = ref(null)
 const selectedMarkerId = ref(null)
+const photoModalOpen = ref(false)
 const displayMode = ref('cluster')
 const mapFitRequestKey = ref(0)
 
@@ -47,6 +48,19 @@ const selectedPhoto = computed(() => (
   selectedPhotos.value.find((photo) => String(photo.id) === String(selectedPhotoId.value))
   ?? selectedRepresentativePhoto.value
 ))
+const selectedPhotoIndex = computed(() => selectedPhotos.value.findIndex((photo) => String(photo.id) === String(selectedPhotoId.value)))
+const photoModalTitle = computed(() => selectedClusterSummary.value?.title || selectedPhoto.value?.placeName || selectedPhoto.value?.title || selectedPhoto.value?.originalFileName || '여행 사진')
+const photoModalMeta = computed(() => {
+  const photo = selectedPhoto.value
+  const cluster = selectedClusterSummary.value
+  const date = formatDate(cluster?.memoryDate || photo?.expenseDate || photo?.memoryDate)
+  const time = formatTime(cluster?.memoryTime || photo?.expenseTime || photo?.memoryTime)
+  return [
+    cluster?.planName || photo?.planName,
+    [date, time].filter(Boolean).join(' '),
+    photo?.placeName || photo?.region || photo?.country,
+  ].filter(Boolean).join(' · ')
+})
 const shareTitle = computed(() => share.value?.title || '공유 여행 지도')
 
 function setError(message = '') {
@@ -57,7 +71,7 @@ function setDetailError(message = '') {
   detailErrorMessage.value = message
 }
 
-async function loadShare({ autoSelect = true } = {}) {
+async function loadShare({ autoSelect = false } = {}) {
   const token = String(props.token || '').trim()
   if (!token) {
     share.value = null
@@ -121,6 +135,7 @@ async function handleSelectCluster(cluster) {
   }
   selectedClusterSummary.value = cluster
   selectedMarkerId.value = null
+  photoModalOpen.value = true
   await loadClusterDetail(cluster.id, cluster.representativeMediaId)
 }
 
@@ -131,6 +146,7 @@ async function handleSelectPhotoPin(pin) {
   const cluster = photoClusters.value.find((candidate) => String(candidate.id) === String(pin.clusterId))
   selectedClusterSummary.value = cluster ?? selectedClusterSummary.value
   selectedMarkerId.value = null
+  photoModalOpen.value = true
   await loadClusterDetail(pin.clusterId, pin.mediaId)
 }
 
@@ -139,6 +155,7 @@ function handleSelectMarker(marker) {
   selectedClusterSummary.value = null
   selectedClusterDetail.value = null
   selectedPhotoId.value = null
+  photoModalOpen.value = false
 }
 
 function clearSelection() {
@@ -146,8 +163,23 @@ function clearSelection() {
   selectedClusterDetail.value = null
   selectedPhotoId.value = null
   selectedMarkerId.value = null
+  photoModalOpen.value = false
 }
 
+
+function closePhotoModal() {
+  clearSelection()
+}
+
+function selectAdjacentPhoto(offset) {
+  const photos = selectedPhotos.value
+  if (!photos.length) {
+    return
+  }
+  const currentIndex = selectedPhotoIndex.value >= 0 ? selectedPhotoIndex.value : 0
+  const nextIndex = (currentIndex + offset + photos.length) % photos.length
+  selectedPhotoId.value = photos[nextIndex]?.id ?? selectedPhotoId.value
+}
 function formatDateRange(start, end) {
   const startText = formatDate(start)
   const endText = formatDate(end)
@@ -232,44 +264,61 @@ onMounted(() => {
       />
     </section>
 
-    <section v-if="selectedClusterSummary || selectedClusterDetail || selectedMarkerId" class="panel public-map-share-detail">
-      <div class="panel__header">
-        <div>
-          <span class="panel__eyebrow">DETAIL</span>
-          <h2>{{ selectedClusterSummary?.title || selectedPhoto?.title || '선택한 장소' }}</h2>
-          <p>
-            {{ selectedClusterSummary?.planName || selectedPhoto?.planName || '' }}
-            <template v-if="selectedClusterSummary?.memoryDate || selectedPhoto?.expenseDate">
-              · {{ formatDateRange(selectedClusterSummary?.memoryDate || selectedPhoto?.expenseDate, selectedClusterSummary?.memoryDate || selectedPhoto?.expenseDate) }}
-              <span v-if="selectedClusterSummary?.memoryTime || selectedPhoto?.expenseTime">{{ formatTime(selectedClusterSummary?.memoryTime || selectedPhoto?.expenseTime) }}</span>
-            </template>
-          </p>
-        </div>
-        <button class="button button--ghost" type="button" @click="clearSelection">선택 해제</button>
-      </div>
+    <div v-if="photoModalOpen" class="public-map-share-photo-modal" role="dialog" aria-modal="true" aria-labelledby="public-map-share-photo-modal-title" @click.self="closePhotoModal">
+      <article class="public-map-share-photo-modal__panel">
+        <header class="public-map-share-photo-modal__header">
+          <div>
+            <span class="panel__eyebrow">PHOTO DETAIL</span>
+            <h2 id="public-map-share-photo-modal-title">{{ photoModalTitle }}</h2>
+            <p v-if="photoModalMeta">{{ photoModalMeta }}</p>
+          </div>
+          <button class="button button--ghost" type="button" @click="closePhotoModal">닫기</button>
+        </header>
 
-      <p v-if="detailErrorMessage" class="panel__empty">{{ detailErrorMessage }}</p>
-      <p v-else-if="isDetailLoading" class="panel__empty">사진 정보를 불러오는 중입니다...</p>
-      <div v-else class="public-map-share-detail__grid">
-        <figure v-if="selectedRepresentativePhoto?.contentUrl" class="public-map-share-detail__cover">
-          <img :src="selectedRepresentativePhoto.contentUrl" :alt="selectedRepresentativePhoto.title || selectedRepresentativePhoto.originalFileName || '여행 사진'" />
-          <figcaption>{{ selectedRepresentativePhoto.placeName || selectedRepresentativePhoto.region || selectedRepresentativePhoto.country || '위치 정보 없음' }}</figcaption>
-        </figure>
-        <div v-if="selectedPhotos.length" class="public-map-share-detail__photos">
+        <p v-if="detailErrorMessage" class="panel__empty">{{ detailErrorMessage }}</p>
+        <p v-else-if="isDetailLoading" class="panel__empty">사진 정보를 불러오는 중입니다...</p>
+        <div v-else-if="selectedPhoto?.contentUrl" class="public-map-share-photo-modal__body">
+          <button
+            v-if="selectedPhotos.length > 1"
+            class="public-map-share-photo-modal__nav public-map-share-photo-modal__nav--prev"
+            type="button"
+            aria-label="이전 사진"
+            @click="selectAdjacentPhoto(-1)"
+          >
+            ‹
+          </button>
+          <figure class="public-map-share-photo-modal__figure">
+            <img :src="selectedPhoto.contentUrl" :alt="selectedPhoto.title || selectedPhoto.originalFileName || '여행 사진'" />
+            <figcaption>
+              <strong>{{ selectedPhoto.placeName || selectedPhoto.title || selectedPhoto.originalFileName || '여행 사진' }}</strong>
+              <span>{{ selectedPhoto.region || selectedPhoto.country || selectedPhoto.planName || '' }}</span>
+            </figcaption>
+          </figure>
+          <button
+            v-if="selectedPhotos.length > 1"
+            class="public-map-share-photo-modal__nav public-map-share-photo-modal__nav--next"
+            type="button"
+            aria-label="다음 사진"
+            @click="selectAdjacentPhoto(1)"
+          >
+            ›
+          </button>
+        </div>
+        <p v-else class="panel__empty">표시할 사진 상세가 없습니다.</p>
+
+        <div v-if="!isDetailLoading && !detailErrorMessage && selectedPhotos.length > 1" class="public-map-share-photo-modal__thumbs" aria-label="클러스터 사진 목록">
           <button
             v-for="photo in selectedPhotos"
             :key="photo.id"
-            class="public-map-share-photo"
+            class="public-map-share-photo-modal__thumb"
             :class="{ 'is-active': String(photo.id) === String(selectedPhotoId) }"
             type="button"
             @click="selectedPhotoId = photo.id"
           >
             <img :src="photo.contentUrl" :alt="photo.title || photo.originalFileName || '여행 사진'" />
-            <span>{{ photo.placeName || photo.title || photo.originalFileName }}</span>
           </button>
         </div>
-        <p v-else class="panel__empty">표시할 사진 상세가 없습니다.</p>
-      </div>
-    </section>
+      </article>
+    </div>
   </main>
 </template>

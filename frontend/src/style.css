@@ -29536,7 +29536,11 @@ button.button--primary,
   max-width: none;
 }
 .travel-map-share-modal__dialog {
-  width: min(1120px, 100%);
+  width: min(1120px, calc(100vw - 40px));
+  max-height: min(900px, calc(100dvh - 40px));
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 .travel-map-share-modal__body,
@@ -29544,6 +29548,13 @@ button.button--primary,
 .travel-map-share-exclusion-list,
 .travel-map-share-result {
   min-width: 0;
+}
+
+.travel-map-share-modal__body {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-right: 2px;
 }
 
 .travel-map-share-section {
@@ -29559,6 +29570,7 @@ button.button--primary,
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: 12px;
 }
 
@@ -29578,6 +29590,11 @@ button.button--primary,
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
 }
 
+.travel-map-share-exclusion-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: start;
+}
+
 .travel-map-share-chip,
 .travel-map-share-exclusion-item {
   display: grid;
@@ -29593,6 +29610,12 @@ button.button--primary,
   cursor: pointer;
 }
 
+.travel-map-share-exclusion-item {
+  min-height: 72px;
+  align-content: center;
+  line-height: 1.35;
+}
+
 .travel-map-share-chip.is-active {
   border-color: rgba(52, 211, 153, 0.75);
   background: rgba(16, 185, 129, 0.16);
@@ -29603,16 +29626,41 @@ button.button--primary,
 .travel-map-share-exclusion-item span,
 .travel-map-share-exclusion-item small {
   min-width: 0;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+  word-break: keep-all;
+}
+
+.travel-map-share-chip strong,
+.travel-map-share-chip span {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.travel-map-share-exclusion-item span,
+.travel-map-share-exclusion-item small {
+  display: -webkit-box;
+  overflow: hidden;
+  white-space: normal;
+  -webkit-box-orient: vertical;
+}
+
+.travel-map-share-exclusion-item span {
+  -webkit-line-clamp: 2;
+}
+
+.travel-map-share-exclusion-item small {
+  -webkit-line-clamp: 2;
 }
 
 .travel-map-share-exclusion-list {
   display: grid;
   align-content: start;
   gap: 8px;
-  max-height: 320px;
+  min-height: 280px;
+  max-height: min(440px, 46vh);
+  padding-right: 4px;
   overflow: auto;
 }
 
@@ -29647,6 +29695,17 @@ button.button--primary,
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+}
+
+@media (max-width: 1020px) {
+  .travel-map-share-exclusion-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .travel-map-share-exclusion-list {
+    min-height: 0;
+    max-height: none;
+  }
 }
 
 .public-map-share-page {

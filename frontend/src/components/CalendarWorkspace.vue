@@ -688,6 +688,140 @@ function getReceiptHistoryStatusLabel(status) {
   return '확인 필요'
 }
 
+function getReceiptHistoryRequestDateKey(history) {
+  const rawValue = String(history?.createdAt || history?.requestedAt || history?.updatedAt || history?.completedAt || '').trim()
+  if (!rawValue) {
+    return 'unknown'
+  }
+  const isoMatch = rawValue.match(/^(\d{4}-\d{2}-\d{2})/)
+  if (isoMatch) {
+    return isoMatch[1]
+  }
+  const parsedDate = new Date(rawValue)
+  if (Number.isNaN(parsedDate.getTime())) {
+    return 'unknown'
+  }
+  return getLocalIsoDate(parsedDate)
+}
+
+function formatReceiptHistoryRequestDateLabel(dateKey) {
+  if (!dateKey || dateKey === 'unknown') {
+    return '요청 날짜 없음'
+  }
+  return props.formatShortDate ? props.formatShortDate(dateKey) : formatIsoDate(dateKey)
+}
+
+function getReceiptHistorySuggestedEntries(history) {
+  const result = history?.result || {}
+  if (Array.isArray(result.suggestedEntries) && result.suggestedEntries.length) {
+    return result.suggestedEntries
+  }
+  return result.suggestedEntry ? [result.suggestedEntry] : []
+}
+
+function getReceiptHistoryApprovedIndexes(history, totalCount) {
+  const values = Array.isArray(history?.result?.approvedEntryIndexes) ? history.result.approvedEntryIndexes : []
+  const maxCount = Number(totalCount)
+  const seen = new Set()
+  values.forEach((value) => {
+    const index = Number(value)
+    if (!Number.isInteger(index) || index < 0) {
+      return
+    }
+    if (Number.isFinite(maxCount) && maxCount > 0 && index >= maxCount) {
+      return
+    }
+    seen.add(index)
+  })
+  return seen
+}
+
+function getReceiptHistoryUsageState(history) {
+  const entries = getReceiptHistorySuggestedEntries(history)
+  const totalCount = entries.length
+  const approvedIndexes = getReceiptHistoryApprovedIndexes(history, totalCount)
+  const usedIndexes = new Set(approvedIndexes)
+  let formAppliedCount = 0
+  const persistedAppliedMarkers = Array.isArray(props.receiptOcr?.appliedEntryMarkers)
+    ? props.receiptOcr.appliedEntryMarkers
+    : []
+  persistedAppliedMarkers.forEach((marker) => {
+    const markerIndex = Number(marker?.entryIndex)
+    if (String(marker?.analysisId || '') !== String(history?.id || '')) {
+      return
+    }
+    if (!Number.isInteger(markerIndex) || markerIndex < 0 || (totalCount && markerIndex >= totalCount)) {
+      return
+    }
+    usedIndexes.add(markerIndex)
+    formAppliedCount += 1
+  })
+  const appliedIndex = Number(props.receiptOcr?.lastAppliedReviewEntryIndex)
+  const isAppliedToThisHistory = props.receiptOcr?.lastAppliedMode === 'form'
+    && String(props.receiptOcr?.lastAppliedAnalysisId || '') === String(history?.id || '')
+    && Number.isInteger(appliedIndex)
+    && appliedIndex >= 0
+    && (!totalCount || appliedIndex < totalCount)
+  if (isAppliedToThisHistory) {
+    usedIndexes.add(appliedIndex)
+    formAppliedCount += persistedAppliedMarkers.some((marker) => (
+      String(marker?.analysisId || '') === String(history?.id || '') && Number(marker?.entryIndex) === appliedIndex
+    )) ? 0 : 1
+  }
+  const usedCount = Math.min(totalCount || usedIndexes.size, usedIndexes.size)
+  const label = totalCount > 0
+    ? usedCount > 0
+      ? `${usedCount}/${totalCount}건 완료`
+      : `미사용 0/${totalCount}건`
+    : usedCount > 0
+      ? `${usedCount}건 완료`
+      : '미사용'
+  const details = [
+    approvedIndexes.size ? `승인 ${approvedIndexes.size}건` : '',
+    formAppliedCount ? `입력칸 적용 ${formAppliedCount}건` : '',
+  ].filter(Boolean).join(' · ')
+
+  return {
+    totalCount,
+    usedCount,
+    approvedCount: approvedIndexes.size,
+    formAppliedCount,
+    label,
+    details,
+    isUsed: usedCount > 0,
+    isComplete: totalCount > 0 && usedCount >= totalCount,
+  }
+}
+
+function getReceiptHistoryUsageLabel(history) {
+  return getReceiptHistoryUsageState(history).label
+}
+
+function getReceiptHistoryUsageTitle(history) {
+  const state = getReceiptHistoryUsageState(history)
+  return state.details || state.label
+}
+
+const receiptHistoryGroups = computed(() => {
+  const groups = new Map()
+  const items = Array.isArray(props.receiptOcr?.historyItems) ? props.receiptOcr.historyItems : []
+  items.forEach((history) => {
+    const dateKey = getReceiptHistoryRequestDateKey(history)
+    if (!groups.has(dateKey)) {
+      groups.set(dateKey, {
+        key: dateKey,
+        label: formatReceiptHistoryRequestDateLabel(dateKey),
+        items: [],
+      })
+    }
+    groups.get(dateKey).items.push(history)
+  })
+  return Array.from(groups.values()).sort((left, right) => {
+    if (left.key === 'unknown') return 1
+    if (right.key === 'unknown') return -1
+    return String(right.key).localeCompare(String(left.key))
+  })
+})
 
 function formatReceiptOcrTiming(timing) {
   if (!timing || typeof timing !== 'object') {
@@ -4420,45 +4554,57 @@ defineExpose({
                 </button>
               </div>
               <p v-if="receiptOcr?.historyError" class="receipt-ocr-history__error">{{ receiptOcr.historyError }}</p>
-              <div v-if="receiptOcr?.historyItems?.length" class="receipt-ocr-history__list receipt-ocr-history__list--index">
-                <article
-                  v-for="history in receiptOcr.historyItems"
-                  :key="history.id"
-                  :class="['receipt-ocr-history__item', { 'is-disabled': normalizeReceiptHistoryStatus(history.status) === 'PROCESSING' }]"
-                  @click="openReceiptHistoryDetail(history)"
-                >
-                  <div>
-                    <strong>{{ history.fileName || ('분석 기록 #' + history.id) }}</strong>
-                    <span>{{ getReceiptDocumentLabel(history.documentType) }} / {{ getReceiptHistoryStatusLabel(history.status) }}</span>
-                    <small>{{ history.summary || history.errorMessage || '저장된 분석 요청' }}</small>
-                  </div>
-                  <div class="receipt-ocr-history__actions">
-                    <button
-                      type="button"
-                      class="button button--secondary"
-                      :disabled="normalizeReceiptHistoryStatus(history.status) === 'PROCESSING'"
-                      @click.stop="openReceiptHistoryDetail(history)"
-                    >
-                      {{ normalizeReceiptHistoryStatus(history.status) === 'PROCESSING' ? '처리 중' : '내용 보기' }}
-                    </button>
-                    <button
-                      v-if="isReceiptHistoryCancellable(history)"
-                      type="button"
-                      class="button button--ghost"
-                      @click.stop="emit('cancel-receipt-history', history.id)"
-                    >
-                      요청 취소
-                    </button>
-                    <button
-                      v-if="!isReceiptHistoryCancellable(history)"
-                      type="button"
-                      class="button button--danger"
-                      @click.stop="emit('delete-receipt-history', history)"
-                    >
-                      삭제
-                    </button>
-                  </div>
-                </article>
+              <div v-if="receiptHistoryGroups.length" class="receipt-ocr-history__groups receipt-ocr-history__list--index">
+                <section v-for="group in receiptHistoryGroups" :key="group.key" class="receipt-ocr-history__date-group">
+                  <header class="receipt-ocr-history__date-header">
+                    <strong>{{ group.label }}</strong>
+                    <span>{{ group.items.length }}건</span>
+                  </header>
+                  <article
+                    v-for="history in group.items"
+                    :key="history.id"
+                    :class="['receipt-ocr-history__item', { 'is-disabled': normalizeReceiptHistoryStatus(history.status) === 'PROCESSING' }]"
+                    @click="openReceiptHistoryDetail(history)"
+                  >
+                    <div>
+                      <strong>{{ history.fileName || ('분석 기록 #' + history.id) }}</strong>
+                      <span>{{ getReceiptDocumentLabel(history.documentType) }} / {{ getReceiptHistoryStatusLabel(history.status) }}</span>
+                      <span
+                        :class="['receipt-ocr-history__usage-badge', { 'is-used': getReceiptHistoryUsageState(history).isUsed, 'is-complete': getReceiptHistoryUsageState(history).isComplete }]"
+                        :title="getReceiptHistoryUsageTitle(history)"
+                      >
+                        {{ getReceiptHistoryUsageLabel(history) }}
+                      </span>
+                      <small>{{ history.summary || history.errorMessage || '저장된 분석 요청' }}</small>
+                    </div>
+                    <div class="receipt-ocr-history__actions">
+                      <button
+                        type="button"
+                        class="button button--secondary"
+                        :disabled="normalizeReceiptHistoryStatus(history.status) === 'PROCESSING'"
+                        @click.stop="openReceiptHistoryDetail(history)"
+                      >
+                        {{ normalizeReceiptHistoryStatus(history.status) === 'PROCESSING' ? '처리 중' : '내용 보기' }}
+                      </button>
+                      <button
+                        v-if="isReceiptHistoryCancellable(history)"
+                        type="button"
+                        class="button button--ghost"
+                        @click.stop="emit('cancel-receipt-history', history.id)"
+                      >
+                        요청 취소
+                      </button>
+                      <button
+                        v-if="!isReceiptHistoryCancellable(history)"
+                        type="button"
+                        class="button button--danger"
+                        @click.stop="emit('delete-receipt-history', history)"
+                      >
+                        삭제
+                      </button>
+                    </div>
+                  </article>
+                </section>
               </div>
               <p v-else-if="!receiptOcr?.isHistoryLoading" class="receipt-ocr-history__empty">
                 아직 저장된 이미지 분석 기록이 없습니다.

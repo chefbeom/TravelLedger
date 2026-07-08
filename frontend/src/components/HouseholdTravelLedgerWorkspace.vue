@@ -572,7 +572,6 @@ function startTravelEntryFromSelectedDate() {
       <div class="panel__header">
         <div>
           <h3>{{ selectedTravelDateTitle }}</h3>
-          <p>여행 가계부 안에서 선택한 날짜의 여행 지출만 확인합니다.</p>
         </div>
         <div class="household-travel-ledger__date-sheet-summary">
           <span>{{ selectedTravelDateEntries.length }}건</span>

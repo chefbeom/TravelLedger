@@ -21,6 +21,8 @@ import com.playdata.calen.travel.dto.TravelMyMapOverviewResponse;
 import com.playdata.calen.travel.dto.TravelMyMapPhotoClusterPageResponse;
 import com.playdata.calen.travel.dto.TravelMemoryRecordRequest;
 import com.playdata.calen.travel.dto.TravelMemoryRecordResponse;
+import com.playdata.calen.travel.dto.TravelMapShareLinkRequest;
+import com.playdata.calen.travel.dto.TravelMapShareLinkResponse;
 import com.playdata.calen.travel.dto.TravelPlanDetailResponse;
 import com.playdata.calen.travel.dto.TravelPlanPublicShareRequest;
 import com.playdata.calen.travel.dto.TravelPlanPublicShareResponse;
@@ -30,6 +32,7 @@ import com.playdata.calen.travel.dto.TravelPlanShareResponse;
 import com.playdata.calen.travel.dto.TravelPlanSummaryResponse;
 import com.playdata.calen.travel.dto.TravelPortfolioResponse;
 import com.playdata.calen.travel.dto.TravelPublicTripsOverviewResponse;
+import com.playdata.calen.travel.dto.TravelPublicMapShareResponse;
 import com.playdata.calen.travel.dto.TravelReverseGeocodeResponse;
 import com.playdata.calen.travel.dto.TravelRouteSegmentRequest;
 import com.playdata.calen.travel.dto.TravelRouteSegmentResponse;
@@ -116,6 +119,30 @@ public class TravelController {
             @RequestParam(name = "focusMediaId", required = false) Long focusMediaId
     ) {
         return travelService.getMyMapPhotoClusterDetail(currentUser.userId(), clusterId, page, size, focusMediaId);
+    }
+
+    @PostMapping("/map-shares")
+    public TravelMapShareLinkResponse createMapShare(
+            @AuthenticationPrincipal AppUserPrincipal currentUser,
+            @Valid @RequestBody TravelMapShareLinkRequest request
+    ) {
+        return travelService.createTravelMapShareLink(currentUser.userId(), request);
+    }
+
+    @GetMapping("/public/map-shares/{token}")
+    public TravelPublicMapShareResponse getPublicMapShare(@PathVariable String token) {
+        return travelService.getTravelMapShare(token);
+    }
+
+    @GetMapping("/public/map-shares/{token}/photo-clusters/{clusterId}")
+    public TravelMyMapPhotoClusterPageResponse getPublicMapSharePhotoCluster(
+            @PathVariable String token,
+            @PathVariable Long clusterId,
+            @RequestParam(name = "page", defaultValue = "0") Integer page,
+            @RequestParam(name = "size", defaultValue = "12") Integer size,
+            @RequestParam(name = "focusMediaId", required = false) Long focusMediaId
+    ) {
+        return travelService.getTravelMapSharePhotoCluster(token, clusterId, page, size, focusMediaId);
     }
 
     @PutMapping("/my-map/photo-clusters/{clusterId}/representative")
@@ -457,6 +484,16 @@ public class TravelController {
         return buildMediaResponse(download, thumbnail, width);
     }
 
+    @GetMapping("/public/map-shares/{token}/media/{mediaId}/content")
+    public ResponseEntity<?> downloadPublicMapShareMedia(
+            @PathVariable String token,
+            @PathVariable Long mediaId,
+            @RequestParam(name = "thumbnail", defaultValue = "false") boolean thumbnail,
+            @RequestParam(name = "w", required = false) Integer width
+    ) {
+        TravelService.MediaDownload download = travelService.getTravelMapShareMediaDownload(token, mediaId);
+        return buildMediaResponse(download, thumbnail, width);
+    }
     @GetMapping("/public/media/{mediaId}/content")
     public ResponseEntity<?> downloadSharedMedia(
             @PathVariable Long mediaId,

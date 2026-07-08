@@ -74,6 +74,7 @@ public class LedgerEntryController {
             @RequestParam(defaultValue = "false") boolean categoryDetailOther,
             @RequestParam(required = false) BigDecimal minAmount,
             @RequestParam(required = false) BigDecimal maxAmount,
+            @RequestParam(defaultValue = "true") boolean keywordSpaceAnd,
             @RequestParam(defaultValue = "DATE_DESC") String sortBy,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "100") int size
@@ -92,6 +93,7 @@ public class LedgerEntryController {
                 categoryDetailOther,
                 minAmount,
                 maxAmount,
+                keywordSpaceAnd,
                 sortBy,
                 page,
                 size

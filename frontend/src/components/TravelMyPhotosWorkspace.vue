@@ -434,7 +434,6 @@ watch(
       <div class="panel__header">
         <div>
           <h2>사진 타임라인</h2>
-          <p>목록에는 사진만 표시하고, 선택한 사진의 세부 정보는 아래 상세 보기에서 확인합니다.</p>
         </div>
         <span class="panel__badge">{{ groupedPhotos.length }}개 날짜</span>
       </div>

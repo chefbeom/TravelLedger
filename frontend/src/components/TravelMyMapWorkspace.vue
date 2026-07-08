@@ -1,6 +1,7 @@
 <script setup>
-import { computed, defineAsyncComponent, onMounted, ref, watch } from 'vue'
+import { computed, defineAsyncComponent, onMounted, reactive, ref, watch } from 'vue'
 import {
+  createTravelMapShare,
   fetchTravelMyMapOverview,
   fetchTravelMyMapPhotoCluster,
   updateTravelMyMapPhotoClusterRepresentative,
@@ -42,6 +43,22 @@ const lightboxScope = ref(LIGHTBOX_SCOPE_GLOBAL)
 const representativeUpdatingId = ref(null)
 const viewMode = ref('cluster')
 const detailRecoveryClusterId = ref(null)
+const mapFilterMode = ref('all')
+const selectedPlanFilterKeys = ref([])
+const selectedCountryKey = ref('all')
+const selectedRegionKey = ref('all')
+const mapFitRequestKey = ref(0)
+const shareDialog = reactive({
+  open: false,
+  title: '',
+  selectedPlanIds: [],
+  excludedRecordIds: [],
+  excludedMediaIds: [],
+  excludedRouteIds: [],
+  saving: false,
+  error: '',
+  generatedUrl: '',
+})
 
 function setOverviewError(message = '') {
   overviewErrorMessage.value = message
@@ -414,18 +431,319 @@ async function handleUpdateRepresentative(photo) {
 }
 
 const summary = computed(() => ({
-  includedPlanCount: overview.value?.includedPlanCount ?? 0,
-  markerCount: overview.value?.markerCount ?? 0,
-  photoMarkerCount: overview.value?.photoMarkerCount ?? 0,
-  photoClusterCount: overview.value?.photoClusterCount ?? 0,
-  routeCount: overview.value?.routeCount ?? 0,
-  totalDistanceKm: safeNumber(overview.value?.totalDistanceKm),
+  includedPlanCount: visiblePlanCount.value,
+  markerCount: visibleMarkers.value.length,
+  photoMarkerCount: visiblePhotoPins.value.length,
+  photoClusterCount: visiblePhotoClusters.value.length,
+  routeCount: visibleRoutes.value.length,
+  totalDistanceKm: visibleRoutes.value.reduce((total, route) => total + safeNumber(route?.distanceKm), 0),
 }))
 
 const photoClusters = computed(() => overview.value?.photoClusters ?? [])
 const photoPins = computed(() => overview.value?.photoPins ?? [])
 const markers = computed(() => overview.value?.markers ?? [])
 const routes = computed(() => overview.value?.routes ?? [])
+
+function normalizeFilterText(value) {
+  return String(value ?? '').trim()
+}
+
+function getPlanFilterKey(source) {
+  const planId = source?.planId ?? source?.travelPlanId ?? source?.plan?.id
+  if (planId !== undefined && planId !== null && String(planId).trim()) {
+    return `plan:${planId}`
+  }
+  const planName = normalizeFilterText(source?.planName || source?.plan?.name)
+  return planName ? `name:${planName}` : 'name:unassigned'
+}
+
+function getPlanFilterLabel(source) {
+  return normalizeFilterText(source?.planName || source?.plan?.name) || '여행 미지정'
+}
+
+function getCountryFilterKey(source) {
+  return normalizeFilterText(source?.country) || 'unknown-country'
+}
+
+function getCountryFilterLabel(key) {
+  return key === 'unknown-country' ? '국가 미입력' : key
+}
+
+function getRegionFilterKey(source) {
+  const country = getCountryFilterKey(source)
+  const region = normalizeFilterText(source?.region) || '지역 미입력'
+  return `${country}::${region}`
+}
+
+function getRegionFilterLabel(key) {
+  if (!key || key === 'unknown-country::지역 미입력') {
+    return '지역 미입력'
+  }
+  const [country, region] = String(key).split('::')
+  return `${getCountryFilterLabel(country)} / ${region || '지역 미입력'}`
+}
+
+function addCountOption(map, key, label, amount = 1) {
+  const current = map.get(key) ?? { key, label, count: 0 }
+  current.count += Math.max(1, Number(amount) || 1)
+  if (!current.label || current.label.includes('미지정') || current.label.includes('미입력')) {
+    current.label = label || current.label
+  }
+  map.set(key, current)
+}
+
+const planFilterOptions = computed(() => {
+  const options = new Map()
+  ;[...photoPins.value, ...markers.value, ...routes.value].forEach((item) => {
+    addCountOption(options, getPlanFilterKey(item), getPlanFilterLabel(item))
+  })
+  photoClusters.value.forEach((cluster) => {
+    addCountOption(options, getPlanFilterKey(cluster), getPlanFilterLabel(cluster), cluster?.photoCount || 1)
+  })
+  return Array.from(options.values())
+    .sort((left, right) => left.label.localeCompare(right.label, 'ko') || left.key.localeCompare(right.key))
+})
+
+const selectedPlanKeySet = computed(() => new Set(selectedPlanFilterKeys.value.map(String)))
+
+const planLocationIndex = computed(() => {
+  const index = new Map()
+  ;[...photoPins.value, ...markers.value, ...photoClusters.value].forEach((item) => {
+    const planKey = getPlanFilterKey(item)
+    const current = index.get(planKey) ?? { countryKeys: new Set(), regionKeys: new Set() }
+    current.countryKeys.add(getCountryFilterKey(item))
+    current.regionKeys.add(getRegionFilterKey(item))
+    index.set(planKey, current)
+  })
+  return index
+})
+
+const countryFilterOptions = computed(() => {
+  const options = new Map()
+  ;[...photoPins.value, ...markers.value, ...photoClusters.value].forEach((item) => {
+    const key = getCountryFilterKey(item)
+    addCountOption(options, key, getCountryFilterLabel(key), item?.photoCount || 1)
+  })
+  return Array.from(options.values())
+    .sort((left, right) => {
+      if (left.key === 'unknown-country') return 1
+      if (right.key === 'unknown-country') return -1
+      return left.label.localeCompare(right.label, 'ko')
+    })
+})
+
+const regionFilterOptions = computed(() => {
+  const options = new Map()
+  ;[...photoPins.value, ...markers.value, ...photoClusters.value].forEach((item) => {
+    const key = getRegionFilterKey(item)
+    addCountOption(options, key, getRegionFilterLabel(key), item?.photoCount || 1)
+  })
+  return Array.from(options.values())
+    .sort((left, right) => {
+      if (left.key.startsWith('unknown-country::')) return 1
+      if (right.key.startsWith('unknown-country::')) return -1
+      return left.label.localeCompare(right.label, 'ko')
+    })
+})
+
+function planMatchesMapFilter(source) {
+  if (mapFilterMode.value !== 'plans' || !selectedPlanFilterKeys.value.length) {
+    return true
+  }
+  return selectedPlanKeySet.value.has(getPlanFilterKey(source))
+}
+
+function countryMatchesMapFilter(source) {
+  if (mapFilterMode.value !== 'country' || selectedCountryKey.value === 'all') {
+    return true
+  }
+  if (getCountryFilterKey(source) === selectedCountryKey.value) {
+    return true
+  }
+  const planEntry = planLocationIndex.value.get(getPlanFilterKey(source))
+  return Boolean(planEntry?.countryKeys?.has(selectedCountryKey.value))
+}
+
+function regionMatchesMapFilter(source) {
+  if (mapFilterMode.value !== 'region' || selectedRegionKey.value === 'all') {
+    return true
+  }
+  if (getRegionFilterKey(source) === selectedRegionKey.value) {
+    return true
+  }
+  const planEntry = planLocationIndex.value.get(getPlanFilterKey(source))
+  return Boolean(planEntry?.regionKeys?.has(selectedRegionKey.value))
+}
+
+function itemMatchesMapFilters(source) {
+  return planMatchesMapFilter(source)
+    && countryMatchesMapFilter(source)
+    && regionMatchesMapFilter(source)
+}
+
+const visiblePhotoClusters = computed(() => photoClusters.value.filter(itemMatchesMapFilters))
+const visiblePhotoPins = computed(() => photoPins.value.filter(itemMatchesMapFilters))
+const visibleMarkers = computed(() => markers.value.filter(itemMatchesMapFilters))
+const visibleRoutes = computed(() => routes.value.filter(itemMatchesMapFilters))
+const visiblePlanCount = computed(() => {
+  const keys = new Set()
+  ;[...visiblePhotoPins.value, ...visibleMarkers.value, ...visibleRoutes.value, ...visiblePhotoClusters.value].forEach((item) => {
+    keys.add(getPlanFilterKey(item))
+  })
+  return keys.size
+})
+const hasActiveMapFilter = computed(() => (
+  mapFilterMode.value !== 'all'
+  && (
+    (mapFilterMode.value === 'plans' && selectedPlanFilterKeys.value.length > 0)
+    || (mapFilterMode.value === 'country' && selectedCountryKey.value !== 'all')
+    || (mapFilterMode.value === 'region' && selectedRegionKey.value !== 'all')
+  )
+))
+const mapFilterResultLabel = computed(() => [
+  `여행 ${summary.value.includedPlanCount}개`,
+  `사진 ${summary.value.photoMarkerCount}장`,
+  `기록 ${summary.value.markerCount}개`,
+  `경로 ${summary.value.routeCount}개`,
+].join(' · '))
+
+function setMapFilterMode(mode) {
+  mapFilterMode.value = ['all', 'plans', 'country', 'region'].includes(mode) ? mode : 'all'
+}
+
+function togglePlanFilter(key) {
+  const normalizedKey = String(key)
+  selectedPlanFilterKeys.value = selectedPlanKeySet.value.has(normalizedKey)
+    ? selectedPlanFilterKeys.value.filter((item) => String(item) !== normalizedKey)
+    : [...selectedPlanFilterKeys.value, normalizedKey]
+}
+
+function clearMapFilters() {
+  mapFilterMode.value = 'all'
+  selectedPlanFilterKeys.value = []
+  selectedCountryKey.value = 'all'
+  selectedRegionKey.value = 'all'
+}
+
+const sharePlanOptions = computed(() => planFilterOptions.value
+  .map((plan) => ({
+    ...plan,
+    planId: parsePlanIdFromFilterKey(plan.key),
+  }))
+  .filter((plan) => plan.planId != null))
+const shareSelectedPlanIdSet = computed(() => new Set(shareDialog.selectedPlanIds.map((id) => String(id))))
+const shareExcludedRecordIdSet = computed(() => new Set(shareDialog.excludedRecordIds.map((id) => String(id))))
+const shareExcludedMediaIdSet = computed(() => new Set(shareDialog.excludedMediaIds.map((id) => String(id))))
+const shareExcludedRouteIdSet = computed(() => new Set(shareDialog.excludedRouteIds.map((id) => String(id))))
+const shareCandidateMarkers = computed(() => markers.value.filter((item) => shareSelectedPlanIdSet.value.has(String(item?.planId))))
+const shareCandidatePhotoPins = computed(() => photoPins.value.filter((item) => shareSelectedPlanIdSet.value.has(String(item?.planId))))
+const shareCandidateRoutes = computed(() => routes.value.filter((item) => shareSelectedPlanIdSet.value.has(String(item?.planId))))
+
+function parsePlanIdFromFilterKey(key) {
+  const text = String(key || '')
+  if (!text.startsWith('plan:')) {
+    return null
+  }
+  const numeric = Number(text.slice('plan:'.length))
+  return Number.isFinite(numeric) && numeric > 0 ? numeric : null
+}
+
+function buildTravelShareUrl(token) {
+  const base = `${window.location.origin}${window.location.pathname}`
+  return `${base}#travel-share/${encodeURIComponent(token)}`
+}
+
+function openShareDialog() {
+  const selectedFromFilter = mapFilterMode.value === 'plans'
+    ? selectedPlanFilterKeys.value.map(parsePlanIdFromFilterKey).filter(Boolean)
+    : []
+  shareDialog.open = true
+  shareDialog.title = ''
+  shareDialog.selectedPlanIds = selectedFromFilter.length
+    ? selectedFromFilter
+    : sharePlanOptions.value.map((plan) => plan.planId)
+  shareDialog.excludedRecordIds = []
+  shareDialog.excludedMediaIds = []
+  shareDialog.excludedRouteIds = []
+  shareDialog.error = ''
+  shareDialog.generatedUrl = ''
+}
+
+function closeShareDialog() {
+  shareDialog.open = false
+}
+
+function toggleSharePlan(planId) {
+  const normalizedId = Number(planId)
+  if (!Number.isFinite(normalizedId)) {
+    return
+  }
+  shareDialog.generatedUrl = ''
+  const exists = shareSelectedPlanIdSet.value.has(String(normalizedId))
+  shareDialog.selectedPlanIds = exists
+    ? shareDialog.selectedPlanIds.filter((id) => String(id) !== String(normalizedId))
+    : [...shareDialog.selectedPlanIds, normalizedId]
+  const nextPlanSet = new Set(shareDialog.selectedPlanIds.map((id) => String(id)))
+  shareDialog.excludedRecordIds = shareDialog.excludedRecordIds.filter((id) => {
+    const marker = markers.value.find((item) => String(item.id) === String(id))
+    return marker && nextPlanSet.has(String(marker.planId))
+  })
+  shareDialog.excludedMediaIds = shareDialog.excludedMediaIds.filter((id) => {
+    const pin = photoPins.value.find((item) => String(item.mediaId) === String(id))
+    return pin && nextPlanSet.has(String(pin.planId))
+  })
+  shareDialog.excludedRouteIds = shareDialog.excludedRouteIds.filter((id) => {
+    const route = routes.value.find((item) => String(item.id) === String(id))
+    return route && nextPlanSet.has(String(route.planId))
+  })
+}
+
+function toggleId(listName, id) {
+  const normalizedId = Number(id)
+  if (!Number.isFinite(normalizedId)) {
+    return
+  }
+  shareDialog.generatedUrl = ''
+  const list = shareDialog[listName]
+  shareDialog[listName] = list.some((item) => String(item) === String(normalizedId))
+    ? list.filter((item) => String(item) !== String(normalizedId))
+    : [...list, normalizedId]
+}
+
+async function createShareLink() {
+  if (!shareDialog.selectedPlanIds.length) {
+    shareDialog.error = '공유할 여행을 하나 이상 선택해 주세요.'
+    return
+  }
+  shareDialog.saving = true
+  shareDialog.error = ''
+  shareDialog.generatedUrl = ''
+  try {
+    const response = await createTravelMapShare({
+      title: shareDialog.title,
+      planIds: shareDialog.selectedPlanIds,
+      excludedRecordIds: shareDialog.excludedRecordIds,
+      excludedMediaIds: shareDialog.excludedMediaIds,
+      excludedRouteIds: shareDialog.excludedRouteIds,
+    })
+    shareDialog.generatedUrl = buildTravelShareUrl(response.token)
+  } catch (error) {
+    shareDialog.error = error.message || '공유 링크를 만들지 못했습니다.'
+  } finally {
+    shareDialog.saving = false
+  }
+}
+
+async function copyShareUrl() {
+  if (!shareDialog.generatedUrl) {
+    return
+  }
+  try {
+    await navigator.clipboard?.writeText(shareDialog.generatedUrl)
+  } catch {
+    shareDialog.error = '클립보드 복사에 실패했습니다. 링크를 직접 복사해 주세요.'
+  }
+}
 const expandedRoutePlanKey = ref('')
 
 function getRoutePlanKey(route) {
@@ -471,7 +789,7 @@ function buildRouteGroupSummary(group) {
 
 const routePlanGroups = computed(() => {
   const groups = new Map()
-  routes.value.forEach((route) => {
+  visibleRoutes.value.forEach((route) => {
     const key = getRoutePlanKey(route)
     if (!groups.has(key)) {
       groups.set(key, {
@@ -535,7 +853,7 @@ const selectedClusterPhotosInTimeOrder = computed(() =>
 const allMapPhotosInTimeOrder = computed(() =>
   sortPhotosByTime(
     mergeLightboxPhotos(
-      photoPins.value.map(normalizeGlobalLightboxPhoto).filter(Boolean),
+      visiblePhotoPins.value.map(normalizeGlobalLightboxPhoto).filter(Boolean),
       selectedClusterPhotos.value,
     ),
   ),
@@ -614,6 +932,32 @@ watch(
     await loadClusterDetail(summaryId, selectedPhotoId.value)
   },
 )
+
+watch(
+  () => [
+    mapFilterMode.value,
+    selectedPlanFilterKeys.value.join('|'),
+    selectedCountryKey.value,
+    selectedRegionKey.value,
+  ],
+  () => {
+    mapFitRequestKey.value += 1
+    if (selectedClusterSummary.value?.id && !visiblePhotoClusters.value.some((cluster) => String(cluster.id) === String(selectedClusterSummary.value?.id))) {
+      clearSelection()
+    }
+    if (expandedRoutePlanKey.value && !routePlanGroups.value.some((group) => group.key === expandedRoutePlanKey.value)) {
+      expandedRoutePlanKey.value = ''
+    }
+  },
+)
+
+watch(planFilterOptions, (options) => {
+  const availableKeys = new Set(options.map((option) => String(option.key)))
+  const nextKeys = selectedPlanFilterKeys.value.filter((key) => availableKeys.has(String(key)))
+  if (nextKeys.length !== selectedPlanFilterKeys.value.length) {
+    selectedPlanFilterKeys.value = nextKeys
+  }
+})
 </script>
 
 <template>
@@ -623,36 +967,80 @@ watch(
         <div>
           <span class="panel__eyebrow">TRAVEL ATLAS</span>
           <h2>내 여행 지도</h2>
-          <p>업로드한 사진의 GPS, 장소 방문 기록, GPX 이동 경로를 한 지도에서 확인합니다.</p>
         </div>
         <div class="travel-my-map-header__actions">
           <button class="button button--primary" type="button" @click="emit('open-memories')">장소 기록 추가</button>
           <button class="button button--secondary" type="button" @click="emit('open-routes')">GPX 경로 추가</button>
           <button class="button button--ghost" type="button" @click="emit('open-photos')">사진첩 열기</button>
+          <button class="button button--primary" type="button" @click="openShareDialog">지도 공유</button>
         </div>
       </div>
-
       <div class="travel-summary-grid">
         <article class="travel-stat-card">
           <span>사진 핀</span>
           <strong>{{ summary.photoMarkerCount }}</strong>
-          <small>서버에서 계산된 전체 사진 위치 개수</small>
         </article>
         <article class="travel-stat-card">
           <span>사진 클러스터</span>
           <strong>{{ summary.photoClusterCount }}</strong>
-          <small>같은 위치 묶음을 지도에 고정 표시합니다.</small>
         </article>
         <article class="travel-stat-card">
           <span>장소 기록</span>
           <strong>{{ summary.markerCount }}</strong>
-          <small>여행 기억과 연결된 방문 장소 기록</small>
         </article>
         <article class="travel-stat-card">
           <span>경로 거리</span>
           <strong>{{ summary.totalDistanceKm.toFixed(2) }}km</strong>
-          <small>저장된 전체 이동 경로의 합계</small>
         </article>
+      </div>
+
+      <div class="travel-map-filter-panel">
+        <div class="travel-map-filter-panel__top">
+          <div class="scope-toggle scope-toggle--wrap" role="group" aria-label="여행 지도 보기 기준">
+            <button class="button" :class="{ 'button--primary': mapFilterMode === 'all' }" type="button" @click="setMapFilterMode('all')">전체</button>
+            <button class="button" :class="{ 'button--primary': mapFilterMode === 'plans' }" type="button" @click="setMapFilterMode('plans')">여행별</button>
+            <button class="button" :class="{ 'button--primary': mapFilterMode === 'country' }" type="button" @click="setMapFilterMode('country')">국가별</button>
+            <button class="button" :class="{ 'button--primary': mapFilterMode === 'region' }" type="button" @click="setMapFilterMode('region')">지역별</button>
+          </div>
+          <div class="travel-map-filter-panel__meta">
+            <span class="chip chip--neutral">{{ mapFilterResultLabel }}</span>
+            <button v-if="hasActiveMapFilter" class="button button--ghost" type="button" @click="clearMapFilters">초기화</button>
+          </div>
+        </div>
+
+        <div v-if="mapFilterMode === 'plans'" class="travel-map-filter-options" aria-label="여행 선택">
+          <button
+            v-for="plan in planFilterOptions"
+            :key="plan.key"
+            class="travel-map-filter-chip"
+            :class="{ 'is-active': selectedPlanKeySet.has(plan.key) }"
+            type="button"
+            @click="togglePlanFilter(plan.key)"
+          >
+            <strong>{{ plan.label }}</strong>
+            <span>{{ plan.count }}</span>
+          </button>
+        </div>
+
+        <label v-else-if="mapFilterMode === 'country'" class="field travel-map-filter-select">
+          <span class="field__label">국가</span>
+          <select v-model="selectedCountryKey">
+            <option value="all">전체 국가</option>
+            <option v-for="country in countryFilterOptions" :key="country.key" :value="country.key">
+              {{ country.label }} ({{ country.count }})
+            </option>
+          </select>
+        </label>
+
+        <label v-else-if="mapFilterMode === 'region'" class="field travel-map-filter-select">
+          <span class="field__label">지역</span>
+          <select v-model="selectedRegionKey">
+            <option value="all">전체 지역</option>
+            <option v-for="region in regionFilterOptions" :key="region.key" :value="region.key">
+              {{ region.label }} ({{ region.count }})
+            </option>
+          </select>
+        </label>
       </div>
     </section>
 
@@ -686,15 +1074,16 @@ watch(
       <p v-else-if="isLoading" class="panel__empty">사진 지도 데이터를 불러오는 중입니다...</p>
       <TravelMyMapClusterPanel
         v-else
-        :photo-clusters="photoClusters"
-        :photo-pins="photoPins"
-        :markers="markers"
-        :routes="routes"
+        :photo-clusters="visiblePhotoClusters"
+        :photo-pins="visiblePhotoPins"
+        :markers="visibleMarkers"
+        :routes="visibleRoutes"
         :active="props.active"
         :display-mode="viewMode"
         :selected-cluster-id="selectedClusterSummary?.id ?? null"
         :selected-photo-id="selectedPhotoId ?? null"
         :selected-marker-id="selectedMarkerId ?? null"
+        :fit-request-key="mapFitRequestKey"
         @select-cluster="handleSelectCluster"
         @select-marker="handleSelectMarker"
         @select-photo-pin="handleSelectPhotoPin"
@@ -753,10 +1142,9 @@ watch(
       <div class="panel__header travel-my-map-header">
         <div>
           <h2>여행별 GPX 경로</h2>
-          <p>저장된 이동 경로를 여행 단위로 묶어 확인합니다. 자세히 보기를 누르면 해당 여행의 GPX 경로만 펼쳐집니다.</p>
         </div>
         <div class="travel-my-map-header__actions">
-          <span class="panel__badge">{{ routePlanGroups.length }}개 여행 · {{ routes.length }}개 경로</span>
+          <span class="panel__badge">{{ routePlanGroups.length }}개 여행 · {{ visibleRoutes.length }}개 경로</span>
           <button class="button button--secondary" type="button" @click="emit('open-routes')">경로 관리</button>
         </div>
       </div>
@@ -805,8 +1193,120 @@ watch(
         </article>
       </div>
 
-      <p v-else class="panel__empty">아직 저장된 경로가 없습니다.</p>
+      <p v-else class="panel__empty">현재 보기 기준에 맞는 경로가 없습니다.</p>
     </section>
+    <div v-if="shareDialog.open" class="travel-modal travel-map-share-modal" @click.self="closeShareDialog">
+      <div class="travel-modal__dialog travel-map-share-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="travel-map-share-title">
+        <div class="travel-modal__header">
+          <div>
+            <span class="panel__eyebrow">PUBLIC MAP SHARE</span>
+            <h2 id="travel-map-share-title">여행 지도 공유</h2>
+            <p>공개 URL을 가진 사람은 로그인 없이 선택한 여행 지도를 읽기 전용으로 볼 수 있습니다.</p>
+          </div>
+          <button class="button button--ghost" type="button" @click="closeShareDialog">닫기</button>
+        </div>
+
+        <div class="travel-modal__body travel-map-share-modal__body">
+          <label class="field">
+            <span class="field__label">공유 제목</span>
+            <input v-model="shareDialog.title" type="text" placeholder="예: 2026 외가 가족 여행 공유 지도" />
+          </label>
+
+          <section class="travel-map-share-section">
+            <div class="travel-map-share-section__header">
+              <h3>공유할 여행</h3>
+              <span>{{ shareDialog.selectedPlanIds.length }}개 선택</span>
+            </div>
+            <div class="travel-map-share-chip-grid">
+              <button
+                v-for="plan in sharePlanOptions"
+                :key="plan.planId"
+                class="travel-map-share-chip"
+                :class="{ 'is-active': shareSelectedPlanIdSet.has(String(plan.planId)) }"
+                type="button"
+                @click="toggleSharePlan(plan.planId)"
+              >
+                <strong>{{ plan.label }}</strong>
+                <span>{{ plan.count }}개 항목</span>
+              </button>
+            </div>
+          </section>
+
+          <section class="travel-map-share-section">
+            <div class="travel-map-share-section__header">
+              <h3>공유에서 제외할 항목</h3>
+              <span>장소 {{ shareDialog.excludedRecordIds.length }} · 사진 {{ shareDialog.excludedMediaIds.length }} · 경로 {{ shareDialog.excludedRouteIds.length }}</span>
+            </div>
+            <div class="travel-map-share-exclusion-grid">
+              <div class="travel-map-share-exclusion-list">
+                <strong>장소/핀</strong>
+                <button
+                  v-for="marker in shareCandidateMarkers"
+                  :key="marker.id"
+                  class="travel-map-share-exclusion-item"
+                  :class="{ 'is-excluded': shareExcludedRecordIdSet.has(String(marker.id)) }"
+                  type="button"
+                  @click="toggleId('excludedRecordIds', marker.id)"
+                >
+                  <span>{{ marker.title || marker.placeName || '장소' }}</span>
+                  <small>{{ marker.planName }} · {{ formatDate(marker.memoryDate) }}</small>
+                </button>
+                <p v-if="!shareCandidateMarkers.length" class="panel__empty">선택한 여행에 장소 핀이 없습니다.</p>
+              </div>
+
+              <div class="travel-map-share-exclusion-list">
+                <strong>사진</strong>
+                <button
+                  v-for="pin in shareCandidatePhotoPins"
+                  :key="pin.mediaId"
+                  class="travel-map-share-exclusion-item"
+                  :class="{ 'is-excluded': shareExcludedMediaIdSet.has(String(pin.mediaId)) }"
+                  type="button"
+                  @click="toggleId('excludedMediaIds', pin.mediaId)"
+                >
+                  <span>{{ pin.title || pin.placeName || '사진' }}</span>
+                  <small>{{ pin.planName }} · {{ formatDate(pin.memoryDate) }}</small>
+                </button>
+                <p v-if="!shareCandidatePhotoPins.length" class="panel__empty">선택한 여행에 위치 사진이 없습니다.</p>
+              </div>
+
+              <div class="travel-map-share-exclusion-list">
+                <strong>경로</strong>
+                <button
+                  v-for="route in shareCandidateRoutes"
+                  :key="route.id"
+                  class="travel-map-share-exclusion-item"
+                  :class="{ 'is-excluded': shareExcludedRouteIdSet.has(String(route.id)) }"
+                  type="button"
+                  @click="toggleId('excludedRouteIds', route.id)"
+                >
+                  <span>{{ route.title || '이동 경로' }}</span>
+                  <small>{{ route.planName }} · {{ formatDate(route.routeDate) }}</small>
+                </button>
+                <p v-if="!shareCandidateRoutes.length" class="panel__empty">선택한 여행에 경로가 없습니다.</p>
+              </div>
+            </div>
+          </section>
+
+          <div v-if="shareDialog.generatedUrl" class="travel-map-share-result">
+            <strong>공유 URL</strong>
+            <input :value="shareDialog.generatedUrl" readonly />
+            <div class="travel-map-share-result__actions">
+              <button class="button button--secondary" type="button" @click="copyShareUrl">복사</button>
+              <a class="button button--primary" :href="shareDialog.generatedUrl" target="_blank" rel="noopener noreferrer">열기</a>
+            </div>
+          </div>
+          <p v-if="shareDialog.error" class="form-error">{{ shareDialog.error }}</p>
+        </div>
+
+        <div class="travel-modal__footer">
+          <button class="button button--ghost" type="button" @click="closeShareDialog">취소</button>
+          <button class="button button--primary" type="button" :disabled="shareDialog.saving || !shareDialog.selectedPlanIds.length" @click="createShareLink">
+            {{ shareDialog.saving ? '생성 중...' : '공유 URL 생성' }}
+          </button>
+        </div>
+      </div>
+    </div>
     <TravelPhotoLightbox
       v-if="!isMapFullscreen && lightboxPhoto"
       :photo="lightboxPhoto"

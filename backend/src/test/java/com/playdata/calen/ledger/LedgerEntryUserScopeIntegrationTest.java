@@ -937,6 +937,89 @@ class LedgerEntryUserScopeIntegrationTest {
 
     @Test
     @Transactional
+    void searchEntriesSupportsComposedKeywordExpression() throws Exception {
+        MockHttpSession hanaSession = loginAndGetSession("hana", false);
+        AppUser hana = appUserRepository.findByLoginId("hana").orElseThrow();
+        LocalDate searchDate = LocalDate.of(2041, 7, 20);
+
+        PaymentMethod payment = savePaymentMethod(hana, "search-expression-card-2041", true);
+        CategoryGroup group = saveCategoryGroup(hana, "search-expression-group-2041", true);
+        CategoryDetail detail = saveCategoryDetail(group, "search-expression-detail-2041", true);
+        String naverCpu = "\uB124\uC774\uBC84 \uD560\uC778 \uCEF4\uD4E8\uD130 CPU \uBD80\uD488";
+        String naverCanceled = "\uB124\uC774\uBC84 \uCEF4\uD4E8\uD130 \uC8FC\uBB38 \uCDE8\uC18C";
+        String coupangCpu = "\uCFE0\uD321 \uCEF4\uD4E8\uD130 CPU \uBD80\uD488";
+        String naverGrocery = "\uB124\uC774\uBC84 \uC7A5\uBCF4\uAE30";
+
+        saveLedgerEntry(hana, searchDate, naverCpu, payment, group, detail);
+        saveLedgerEntry(hana, searchDate, naverCanceled, payment, group, detail);
+        saveLedgerEntry(hana, searchDate, coupangCpu, payment, group, detail);
+        saveLedgerEntry(hana, searchDate, naverGrocery, payment, group, detail);
+
+        mockMvc.perform(get("/api/entries/search")
+                        .session(hanaSession)
+                        .param("from", searchDate.toString())
+                        .param("to", searchDate.toString())
+                        .param("keyword", "\uB124\uC774\uBC84 + \uCEF4\uD4E8\uD130")
+                        .param("sortBy", "DATE_ASC"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.summary.count").value(2))
+                .andExpect(jsonPath("$.content[*].title", org.hamcrest.Matchers.containsInAnyOrder(
+                        naverCpu,
+                        naverCanceled
+                )));
+
+        mockMvc.perform(get("/api/entries/search")
+                        .session(hanaSession)
+                        .param("from", searchDate.toString())
+                        .param("to", searchDate.toString())
+                        .param("keyword", "\uB124\uC774\uBC84 -\uCDE8\uC18C"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.summary.count").value(2))
+                .andExpect(jsonPath("$.content[*].title", org.hamcrest.Matchers.containsInAnyOrder(
+                        naverCpu,
+                        naverGrocery
+                )));
+
+        mockMvc.perform(get("/api/entries/search")
+                        .session(hanaSession)
+                        .param("from", searchDate.toString())
+                        .param("to", searchDate.toString())
+                        .param("keyword", "\uB124\uC774\uBC84 + (CPU | \uC7A5\uBCF4\uAE30)"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.summary.count").value(2))
+                .andExpect(jsonPath("$.content[*].title", org.hamcrest.Matchers.containsInAnyOrder(
+                        naverCpu,
+                        naverGrocery
+                )));
+
+        mockMvc.perform(get("/api/entries/search")
+                        .session(hanaSession)
+                        .param("from", searchDate.toString())
+                        .param("to", searchDate.toString())
+                        .param("keyword", "\uB124\uC774\uBC84 \uCEF4\uD4E8\uD130"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.summary.count").value(2));
+
+        mockMvc.perform(get("/api/entries/search")
+                        .session(hanaSession)
+                        .param("from", searchDate.toString())
+                        .param("to", searchDate.toString())
+                        .param("keyword", "\uB124\uC774\uBC84 \uCEF4\uD4E8\uD130")
+                        .param("keywordSpaceAnd", "false"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.summary.count").value(1))
+                .andExpect(jsonPath("$.content[0].title").value(naverCanceled));
+
+        mockMvc.perform(get("/api/entries/search")
+                        .session(hanaSession)
+                        .param("from", searchDate.toString())
+                        .param("to", searchDate.toString())
+                        .param("keyword", "\uB124\uC774\uBC84 + (\uCEF4\uD4E8\uD130 |"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    @Transactional
     void managementRejectsDuplicateClassificationNames() throws Exception {
         MockHttpSession hanaSession = loginAndGetSession("hana", false);
 

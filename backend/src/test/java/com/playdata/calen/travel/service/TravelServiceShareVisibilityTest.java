@@ -14,6 +14,7 @@ import com.playdata.calen.travel.dto.TravelSharedExhibitPageResponse;
 import com.playdata.calen.travel.repository.TravelBudgetItemRepository;
 import com.playdata.calen.travel.repository.TravelExpenseRecordRepository;
 import com.playdata.calen.travel.repository.TravelMediaAssetRepository;
+import com.playdata.calen.travel.repository.TravelMapShareLinkRepository;
 import com.playdata.calen.travel.repository.TravelPhotoClusterMemberRepository;
 import com.playdata.calen.travel.repository.TravelPhotoClusterRepository;
 import com.playdata.calen.travel.repository.TravelPlanRepository;
@@ -54,6 +55,7 @@ class TravelServiceShareVisibilityTest {
         travelBudgetItemRepository = mock(TravelBudgetItemRepository.class);
         TravelExpenseRecordRepository travelExpenseRecordRepository = mock(TravelExpenseRecordRepository.class);
         TravelMediaAssetRepository travelMediaAssetRepository = mock(TravelMediaAssetRepository.class);
+        TravelMapShareLinkRepository travelMapShareLinkRepository = mock(TravelMapShareLinkRepository.class);
         TravelPhotoClusterRepository travelPhotoClusterRepository = mock(TravelPhotoClusterRepository.class);
         TravelPhotoClusterMemberRepository travelPhotoClusterMemberRepository = mock(TravelPhotoClusterMemberRepository.class);
         TravelRouteSegmentRepository travelRouteSegmentRepository = mock(TravelRouteSegmentRepository.class);
@@ -77,6 +79,7 @@ class TravelServiceShareVisibilityTest {
                 travelBudgetItemRepository,
                 travelExpenseRecordRepository,
                 travelMediaAssetRepository,
+                travelMapShareLinkRepository,
                 travelPhotoClusterRepository,
                 travelPhotoClusterMemberRepository,
                 travelRouteSegmentRepository,

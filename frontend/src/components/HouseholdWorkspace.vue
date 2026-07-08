@@ -121,6 +121,7 @@ const AI_HISTORY_PAGE_SIZE = 8
 const RECEIPT_OCR_PROMPT_RULES_KEY = 'calen-household-receipt-ocr-prompt-rules:v1'
 const RECEIPT_OCR_REQUEST_PROMPT_LAST_KEY = 'calen-household-receipt-ocr-request-prompt-last:v1'
 const RECEIPT_OCR_REQUEST_PROMPT_HISTORY_KEY = 'calen-household-receipt-ocr-request-prompt-history:v1'
+const RECEIPT_OCR_APPLIED_ENTRY_MARKERS_KEY = 'calen-household-receipt-ocr-applied-entry-markers:v1'
 const RECEIPT_OCR_REQUEST_PROMPT_HISTORY_LIMIT = 5
 const csvExportOptions = [
   { value: 'ALL', label: '전체 데이터' },
@@ -221,6 +222,51 @@ function saveReceiptOcrRequestPromptHistory(items) {
 function normalizeReceiptPrompt(value, maxLength = 1800) {
   const normalized = String(value || '').replace(/\u0000/g, ' ').trim()
   return normalized.length > maxLength ? normalized.slice(0, maxLength) : normalized
+}
+
+function normalizeReceiptOcrAppliedEntryMarkers(items) {
+  if (!Array.isArray(items)) {
+    return []
+  }
+  const seen = new Set()
+  return items
+    .map((item) => ({
+      analysisId: String(item?.analysisId || '').trim(),
+      entryIndex: Number(item?.entryIndex),
+      appliedAt: String(item?.appliedAt || '').trim(),
+    }))
+    .filter((item) => item.analysisId && Number.isInteger(item.entryIndex) && item.entryIndex >= 0)
+    .filter((item) => {
+      const key = `${item.analysisId}:${item.entryIndex}`
+      if (seen.has(key)) {
+        return false
+      }
+      seen.add(key)
+      return true
+    })
+}
+
+function loadReceiptOcrAppliedEntryMarkers() {
+  if (typeof window === 'undefined') {
+    return []
+  }
+  try {
+    return normalizeReceiptOcrAppliedEntryMarkers(JSON.parse(window.localStorage.getItem(RECEIPT_OCR_APPLIED_ENTRY_MARKERS_KEY) || '[]'))
+  } catch (error) {
+    console.warn('Failed to load receipt OCR applied entry markers', error)
+    return []
+  }
+}
+
+function saveReceiptOcrAppliedEntryMarkers(items) {
+  if (typeof window === 'undefined') {
+    return
+  }
+  try {
+    window.localStorage.setItem(RECEIPT_OCR_APPLIED_ENTRY_MARKERS_KEY, JSON.stringify(normalizeReceiptOcrAppliedEntryMarkers(items).slice(0, 500)))
+  } catch (error) {
+    console.warn('Failed to save receipt OCR applied entry markers', error)
+  }
 }
 const isLoading = ref(false)
 const isSubmitting = ref(false)
@@ -376,6 +422,7 @@ const receiptOcr = reactive({
   lastAppliedReviewEntryIndex: null,
   lastAppliedMode: '',
   lastAppliedSnapshot: null,
+  appliedEntryMarkers: loadReceiptOcrAppliedEntryMarkers(),
 })
 const ledgerChangeHistory = reactive({
   isOpen: false,
@@ -455,6 +502,7 @@ const statsControls = reactive({
 
 const searchForm = reactive({
   keyword: '',
+  keywordSpaceAnd: true,
   entryType: '',
   paymentMethodId: '',
   categoryGroupId: '',
@@ -2300,6 +2348,7 @@ async function loadTitleSuggestionSearch() {
     from: entryDateRange.value.earliestDate,
     to: entryDateRange.value.latestDate,
     keyword: getTitleSuggestionSearchKeyword(entryForm.title),
+    keywordSpaceAnd: false,
     entryType: entryForm.entryType,
     sortBy: 'DATE_DESC',
     page: 0,
@@ -2321,6 +2370,7 @@ async function loadSearchResults(page = 0) {
     from: range.from,
     to: range.to,
     keyword: searchForm.keyword,
+    keywordSpaceAnd: searchForm.keywordSpaceAnd ? true : false,
     entryType: searchForm.entryType,
     paymentMethodId: paymentMethodOther ? '' : searchForm.paymentMethodId,
     categoryGroupId: categoryGroupOther ? '' : searchForm.categoryGroupId,
@@ -2657,6 +2707,7 @@ async function openTravelLedgerSearch(payload = '여행') {
   searchForm.minAmount = ''
   searchForm.maxAmount = ''
   searchForm.sortBy = 'DATE_DESC'
+  searchForm.keywordSpaceAnd = true
   householdTab.value = 'stats-search'
   await nextTick()
   if (statsReady.value) {
@@ -3738,7 +3789,42 @@ function isReceiptOcrAppliedSnapshotCurrent(snapshot = receiptOcr.lastAppliedSna
     && String(entryForm.paymentMethodId || '') === String(snapshot.paymentMethodId || '')
 }
 
+function recordReceiptOcrAppliedEntryMarker(analysisId, entryIndex) {
+  const normalizedAnalysisId = String(analysisId || '').trim()
+  const normalizedEntryIndex = Number(entryIndex)
+  if (!normalizedAnalysisId || !Number.isInteger(normalizedEntryIndex) || normalizedEntryIndex < 0) {
+    return
+  }
+  const nextMarkers = normalizeReceiptOcrAppliedEntryMarkers([
+    {
+      analysisId: normalizedAnalysisId,
+      entryIndex: normalizedEntryIndex,
+      appliedAt: new Date().toISOString(),
+    },
+    ...receiptOcr.appliedEntryMarkers,
+  ])
+  receiptOcr.appliedEntryMarkers = nextMarkers
+  saveReceiptOcrAppliedEntryMarkers(nextMarkers)
+}
+
+function removeReceiptOcrAppliedEntryMarker(analysisId, entryIndex) {
+  const normalizedAnalysisId = String(analysisId || '').trim()
+  const normalizedEntryIndex = Number(entryIndex)
+  if (!normalizedAnalysisId || !Number.isInteger(normalizedEntryIndex) || normalizedEntryIndex < 0) {
+    return
+  }
+  const nextMarkers = receiptOcr.appliedEntryMarkers.filter((item) => (
+    String(item.analysisId) !== normalizedAnalysisId || Number(item.entryIndex) !== normalizedEntryIndex
+  ))
+  if (nextMarkers.length === receiptOcr.appliedEntryMarkers.length) {
+    return
+  }
+  receiptOcr.appliedEntryMarkers = nextMarkers
+  saveReceiptOcrAppliedEntryMarkers(nextMarkers)
+}
+
 function clearReceiptOcrAppliedMarker() {
+  removeReceiptOcrAppliedEntryMarker(receiptOcr.lastAppliedAnalysisId, receiptOcr.lastAppliedReviewEntryIndex)
   receiptOcr.lastAppliedAnalysisId = null
   receiptOcr.lastAppliedReviewItemId = null
   receiptOcr.lastAppliedReviewEntryIndex = null
@@ -3969,6 +4055,7 @@ async function applyReceiptOcrSuggestion(suggestion = receiptOcr.suggestedEntry)
   receiptOcr.lastAppliedReviewEntryIndex = Number.isFinite(Number(suggestion.reviewEntryIndex)) ? Number(suggestion.reviewEntryIndex) : null
   receiptOcr.lastAppliedMode = 'form'
   receiptOcr.lastAppliedSnapshot = buildReceiptOcrAppliedSnapshot(normalizedSuggestion)
+  recordReceiptOcrAppliedEntryMarker(receiptOcr.lastAppliedAnalysisId, receiptOcr.lastAppliedReviewEntryIndex)
 
   editingEntryId.value = null
   entryForm.entryDate = normalizedSuggestion.entryDate || entryForm.entryDate
@@ -4995,7 +5082,6 @@ async function activatePayment(paymentId) {
         <div class="panel__header">
           <div class="household-analysis-nav__copy">
             <h2>가계부 분석</h2>
-            <p>통계 요약, 인사이트, 비교, AI 분석을 한 곳에서 확인합니다.</p>
           </div>
         </div>
         <div class="scope-toggle scope-toggle--wrap household-analysis-nav__tabs" aria-label="가계부 분석 보기">

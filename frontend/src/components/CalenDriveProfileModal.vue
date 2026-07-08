@@ -24,11 +24,11 @@ const props = defineProps({
 const emit = defineEmits(['close', 'updated'])
 
 const tabs = [
-  { id: 'profile', label: '기본 프로필', description: '이름과 프로필 사진', icon: '프' },
-  { id: 'security', label: '계정 보안', description: '비밀번호와 2차 PIN', icon: '보' },
-  { id: 'notif', label: '알림 설정', description: '마케팅과 보안 알림', icon: '알' },
-  { id: 'region', label: '언어·지역', description: '표시 언어와 지역 코드', icon: '지' },
-  { id: 'storage', label: '저장소 현황', description: '사용량과 계정 이력', icon: '용' },
+  { id: 'profile', label: '기본 프로필', icon: '프' },
+  { id: 'security', label: '계정 보안', icon: '보' },
+  { id: 'notif', label: '알림 설정', icon: '알' },
+  { id: 'region', label: '언어·지역', icon: '지' },
+  { id: 'storage', label: '저장소 현황', icon: '용' },
 ]
 
 const activeTab = ref('profile')
@@ -274,7 +274,6 @@ watch(
                 <span class="drive-profile-modal__nav-icon">{{ tab.icon }}</span>
                 <span class="drive-profile-modal__nav-copy">
                   <strong>{{ tab.label }}</strong>
-                  <small>{{ tab.description }}</small>
                 </span>
               </button>
             </nav>
@@ -290,7 +289,6 @@ watch(
                 <div class="panel__header">
                   <div>
                     <h3>기본 프로필</h3>
-                    <p>표시 이름과 프로필 이미지를 정리하고, 로그인 계정 상태를 확인합니다.</p>
                   </div>
                 </div>
 

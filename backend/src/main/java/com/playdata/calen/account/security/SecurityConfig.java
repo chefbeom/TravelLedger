@@ -84,6 +84,7 @@ public class SecurityConfig {
                             "/api/invites/*",
                             "/api/invites/accept",
                             "/api/file/public-download/*",
+                            "/api/travel/public/**",
                             "/actuator/health",
                             "/actuator/health/**",
                             "/actuator/prometheus",

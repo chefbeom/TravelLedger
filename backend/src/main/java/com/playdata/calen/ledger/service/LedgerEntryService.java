@@ -34,9 +34,22 @@ import com.playdata.calen.ledger.repository.CategoryGroupRepository;
 import com.playdata.calen.ledger.repository.LedgerEntryChangeHistoryRepository;
 import com.playdata.calen.ledger.repository.LedgerEntryRepository;
 import com.playdata.calen.ledger.repository.PaymentMethodRepository;
+import com.playdata.calen.ledger.search.LedgerSearchExpression;
 import com.playdata.calen.travel.dto.TravelExchangeRateResponse;
 import com.playdata.calen.travel.repository.TravelPlanRepository;
 import com.playdata.calen.travel.service.ExchangeRateService;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
+import jakarta.persistence.Tuple;
+import jakarta.persistence.TypedQuery;
+import jakarta.persistence.criteria.CriteriaBuilder;
+import jakarta.persistence.criteria.CriteriaQuery;
+import jakarta.persistence.criteria.Expression;
+import jakarta.persistence.criteria.Join;
+import jakarta.persistence.criteria.JoinType;
+import jakarta.persistence.criteria.Order;
+import jakarta.persistence.criteria.Predicate;
+import jakarta.persistence.criteria.Root;
 import java.io.ByteArrayInputStream;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -64,6 +77,8 @@ import net.lingala.zip4j.model.enums.CompressionMethod;
 import net.lingala.zip4j.model.enums.EncryptionMethod;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -82,6 +97,9 @@ public class LedgerEntryService {
     private final TravelPlanRepository travelPlanRepository;
     private final ExchangeRateService exchangeRateService;
     private final ObjectMapper objectMapper;
+
+    @PersistenceContext
+    private EntityManager entityManager;
 
     private static final String INCOME_PAYMENT_METHOD_NAME = "-";
     private static final int MAX_SEARCH_PAGE_SIZE = 100;
@@ -152,21 +170,22 @@ public class LedgerEntryService {
             boolean categoryDetailOther,
             BigDecimal minAmount,
             BigDecimal maxAmount,
+            boolean keywordSpaceAnd,
             String sortBy,
             int page,
             int size
     ) {
         appUserService.getRequiredUser(userId);
         DateRange range = normalizeRange(from, to);
-        String normalizedKeyword = normalizeKeyword(keyword);
+        LedgerSearchExpression searchExpression = LedgerSearchExpression.parse(keyword, keywordSpaceAnd);
         int safePage = Math.max(page, 0);
         int safeSize = Math.min(Math.max(size, 1), MAX_SEARCH_PAGE_SIZE);
+        Pageable pageable = PageRequest.of(safePage, safeSize, resolveSearchSort(sortBy));
 
-        Page<LedgerEntry> resultPage = ledgerEntryRepository.searchPageByOwnerIdAndFilters(
+        Page<LedgerEntry> resultPage = searchEntriesByCriteria(
                 userId,
-                range.from(),
-                range.to(),
-                normalizedKeyword,
+                range,
+                searchExpression,
                 entryType,
                 paymentMethodId,
                 categoryGroupId,
@@ -176,14 +195,14 @@ public class LedgerEntryService {
                 categoryDetailOther,
                 minAmount,
                 maxAmount,
-                PageRequest.of(safePage, safeSize, resolveSearchSort(sortBy))
+                sortBy,
+                pageable
         );
 
-        LedgerEntryRepository.SearchSummaryAggregate summaryAggregate = ledgerEntryRepository.summarizeAmountsByOwnerIdAndFilters(
+        SearchSummaryValues summaryAggregate = summarizeEntriesByCriteria(
                 userId,
-                range.from(),
-                range.to(),
-                normalizedKeyword,
+                range,
+                searchExpression,
                 entryType,
                 paymentMethodId,
                 categoryGroupId,
@@ -192,17 +211,15 @@ public class LedgerEntryService {
                 categoryGroupOther,
                 categoryDetailOther,
                 minAmount,
-                maxAmount,
-                EntryType.INCOME,
-                EntryType.EXPENSE
+                maxAmount
         );
-        BigDecimal income = summaryAggregate == null ? BigDecimal.ZERO : nullToZero(summaryAggregate.getIncome());
-        BigDecimal expense = summaryAggregate == null ? BigDecimal.ZERO : nullToZero(summaryAggregate.getExpense());
+        BigDecimal income = summaryAggregate == null ? BigDecimal.ZERO : nullToZero(summaryAggregate.income());
+        BigDecimal expense = summaryAggregate == null ? BigDecimal.ZERO : nullToZero(summaryAggregate.expense());
         LedgerEntrySearchSummaryResponse summary = new LedgerEntrySearchSummaryResponse(
                 income,
                 expense,
                 income.subtract(expense),
-                summaryAggregate == null ? 0 : summaryAggregate.getEntryCount()
+                summaryAggregate == null ? 0 : summaryAggregate.entryCount()
         );
 
         return new LedgerEntrySearchPageResponse(
@@ -217,6 +234,318 @@ public class LedgerEntryService {
         );
     }
 
+    private Page<LedgerEntry> searchEntriesByCriteria(
+            Long userId,
+            DateRange range,
+            LedgerSearchExpression searchExpression,
+            EntryType entryType,
+            Long paymentMethodId,
+            Long categoryGroupId,
+            Long categoryDetailId,
+            boolean paymentMethodOther,
+            boolean categoryGroupOther,
+            boolean categoryDetailOther,
+            BigDecimal minAmount,
+            BigDecimal maxAmount,
+            String sortBy,
+            Pageable pageable
+    ) {
+        CriteriaBuilder criteriaBuilder = entityManager.getCriteriaBuilder();
+        CriteriaQuery<LedgerEntry> criteriaQuery = criteriaBuilder.createQuery(LedgerEntry.class);
+        Root<LedgerEntry> entry = criteriaQuery.from(LedgerEntry.class);
+        entry.fetch(FIELD_CATEGORY_GROUP, JoinType.INNER);
+        entry.fetch(FIELD_CATEGORY_DETAIL, JoinType.LEFT);
+        entry.fetch(FIELD_PAYMENT_METHOD, JoinType.INNER);
+        LedgerSearchJoins joins = joinSearchFields(entry);
+
+        criteriaQuery.select(entry)
+                .where(buildSearchWherePredicate(
+                        criteriaBuilder,
+                        entry,
+                        joins,
+                        userId,
+                        range,
+                        searchExpression,
+                        entryType,
+                        paymentMethodId,
+                        categoryGroupId,
+                        categoryDetailId,
+                        paymentMethodOther,
+                        categoryGroupOther,
+                        categoryDetailOther,
+                        minAmount,
+                        maxAmount
+                ))
+                .orderBy(resolveSearchCriteriaOrders(criteriaBuilder, entry, sortBy));
+
+        TypedQuery<LedgerEntry> contentQuery = entityManager.createQuery(criteriaQuery);
+        contentQuery.setFirstResult((int) pageable.getOffset());
+        contentQuery.setMaxResults(pageable.getPageSize());
+        List<LedgerEntry> content = contentQuery.getResultList();
+        long totalElements = countEntriesByCriteria(
+                userId,
+                range,
+                searchExpression,
+                entryType,
+                paymentMethodId,
+                categoryGroupId,
+                categoryDetailId,
+                paymentMethodOther,
+                categoryGroupOther,
+                categoryDetailOther,
+                minAmount,
+                maxAmount
+        );
+        return new PageImpl<>(content, pageable, totalElements);
+    }
+
+    private long countEntriesByCriteria(
+            Long userId,
+            DateRange range,
+            LedgerSearchExpression searchExpression,
+            EntryType entryType,
+            Long paymentMethodId,
+            Long categoryGroupId,
+            Long categoryDetailId,
+            boolean paymentMethodOther,
+            boolean categoryGroupOther,
+            boolean categoryDetailOther,
+            BigDecimal minAmount,
+            BigDecimal maxAmount
+    ) {
+        CriteriaBuilder criteriaBuilder = entityManager.getCriteriaBuilder();
+        CriteriaQuery<Long> criteriaQuery = criteriaBuilder.createQuery(Long.class);
+        Root<LedgerEntry> entry = criteriaQuery.from(LedgerEntry.class);
+        LedgerSearchJoins joins = joinSearchFields(entry);
+        criteriaQuery.select(criteriaBuilder.count(entry))
+                .where(buildSearchWherePredicate(
+                        criteriaBuilder,
+                        entry,
+                        joins,
+                        userId,
+                        range,
+                        searchExpression,
+                        entryType,
+                        paymentMethodId,
+                        categoryGroupId,
+                        categoryDetailId,
+                        paymentMethodOther,
+                        categoryGroupOther,
+                        categoryDetailOther,
+                        minAmount,
+                        maxAmount
+                ));
+        return entityManager.createQuery(criteriaQuery).getSingleResult();
+    }
+
+    private SearchSummaryValues summarizeEntriesByCriteria(
+            Long userId,
+            DateRange range,
+            LedgerSearchExpression searchExpression,
+            EntryType entryType,
+            Long paymentMethodId,
+            Long categoryGroupId,
+            Long categoryDetailId,
+            boolean paymentMethodOther,
+            boolean categoryGroupOther,
+            boolean categoryDetailOther,
+            BigDecimal minAmount,
+            BigDecimal maxAmount
+    ) {
+        CriteriaBuilder criteriaBuilder = entityManager.getCriteriaBuilder();
+        CriteriaQuery<Tuple> criteriaQuery = criteriaBuilder.createTupleQuery();
+        Root<LedgerEntry> entry = criteriaQuery.from(LedgerEntry.class);
+        LedgerSearchJoins joins = joinSearchFields(entry);
+        Expression<BigDecimal> incomeAmount = criteriaBuilder.<BigDecimal>selectCase()
+                .when(criteriaBuilder.equal(entry.<EntryType>get(FIELD_ENTRY_TYPE), EntryType.INCOME), entry.<BigDecimal>get(FIELD_AMOUNT))
+                .otherwise(BigDecimal.ZERO);
+        Expression<BigDecimal> expenseAmount = criteriaBuilder.<BigDecimal>selectCase()
+                .when(criteriaBuilder.equal(entry.<EntryType>get(FIELD_ENTRY_TYPE), EntryType.EXPENSE), entry.<BigDecimal>get(FIELD_AMOUNT))
+                .otherwise(BigDecimal.ZERO);
+
+        criteriaQuery.multiselect(
+                        criteriaBuilder.coalesce(criteriaBuilder.sum(incomeAmount), BigDecimal.ZERO).alias("income"),
+                        criteriaBuilder.coalesce(criteriaBuilder.sum(expenseAmount), BigDecimal.ZERO).alias("expense"),
+                        criteriaBuilder.count(entry).alias("entryCount")
+                )
+                .where(buildSearchWherePredicate(
+                        criteriaBuilder,
+                        entry,
+                        joins,
+                        userId,
+                        range,
+                        searchExpression,
+                        entryType,
+                        paymentMethodId,
+                        categoryGroupId,
+                        categoryDetailId,
+                        paymentMethodOther,
+                        categoryGroupOther,
+                        categoryDetailOther,
+                        minAmount,
+                        maxAmount
+                ));
+
+        Tuple tuple = entityManager.createQuery(criteriaQuery).getSingleResult();
+        return new SearchSummaryValues(
+                tuple.get("income", BigDecimal.class),
+                tuple.get("expense", BigDecimal.class),
+                tuple.get("entryCount", Long.class)
+        );
+    }
+
+    private Predicate buildSearchWherePredicate(
+            CriteriaBuilder criteriaBuilder,
+            Root<LedgerEntry> entry,
+            LedgerSearchJoins joins,
+            Long userId,
+            DateRange range,
+            LedgerSearchExpression searchExpression,
+            EntryType entryType,
+            Long paymentMethodId,
+            Long categoryGroupId,
+            Long categoryDetailId,
+            boolean paymentMethodOther,
+            boolean categoryGroupOther,
+            boolean categoryDetailOther,
+            BigDecimal minAmount,
+            BigDecimal maxAmount
+    ) {
+        List<Predicate> predicates = new ArrayList<>();
+        predicates.add(criteriaBuilder.equal(entry.get("owner").get("id"), userId));
+        predicates.add(criteriaBuilder.isNull(entry.get("deletedAt")));
+        predicates.add(criteriaBuilder.between(entry.<LocalDate>get(FIELD_ENTRY_DATE), range.from(), range.to()));
+        if (!searchExpression.isEmpty()) {
+            predicates.add(buildSearchExpressionPredicate(criteriaBuilder, entry, joins, searchExpression.root()));
+        }
+        if (entryType != null) {
+            predicates.add(criteriaBuilder.equal(entry.<EntryType>get(FIELD_ENTRY_TYPE), entryType));
+        }
+        if (paymentMethodOther) {
+            predicates.add(criteriaBuilder.isFalse(joins.paymentMethod().get("active")));
+        } else if (paymentMethodId != null) {
+            predicates.add(criteriaBuilder.equal(joins.paymentMethod().get("id"), paymentMethodId));
+        }
+        if (categoryGroupOther) {
+            predicates.add(criteriaBuilder.isFalse(joins.categoryGroup().get("active")));
+        } else if (categoryGroupId != null) {
+            predicates.add(criteriaBuilder.equal(joins.categoryGroup().get("id"), categoryGroupId));
+        }
+        if (categoryDetailOther) {
+            predicates.add(criteriaBuilder.or(
+                    criteriaBuilder.isNull(joins.categoryDetail().get("id")),
+                    criteriaBuilder.isFalse(joins.categoryDetail().get("active"))
+            ));
+        } else if (categoryDetailId != null) {
+            predicates.add(criteriaBuilder.equal(joins.categoryDetail().get("id"), categoryDetailId));
+        }
+        if (minAmount != null) {
+            predicates.add(criteriaBuilder.greaterThanOrEqualTo(entry.<BigDecimal>get(FIELD_AMOUNT), minAmount));
+        }
+        if (maxAmount != null) {
+            predicates.add(criteriaBuilder.lessThanOrEqualTo(entry.<BigDecimal>get(FIELD_AMOUNT), maxAmount));
+        }
+        return criteriaBuilder.and(predicates.toArray(Predicate[]::new));
+    }
+
+    private Predicate buildSearchExpressionPredicate(
+            CriteriaBuilder criteriaBuilder,
+            Root<LedgerEntry> entry,
+            LedgerSearchJoins joins,
+            LedgerSearchExpression.Node node
+    ) {
+        if (node instanceof LedgerSearchExpression.TermNode termNode) {
+            return buildSearchTermPredicate(criteriaBuilder, entry, joins, termNode.term());
+        }
+        if (node instanceof LedgerSearchExpression.AndNode andNode) {
+            return criteriaBuilder.and(andNode.children().stream()
+                    .map(child -> buildSearchExpressionPredicate(criteriaBuilder, entry, joins, child))
+                    .toArray(Predicate[]::new));
+        }
+        if (node instanceof LedgerSearchExpression.OrNode orNode) {
+            return criteriaBuilder.or(orNode.children().stream()
+                    .map(child -> buildSearchExpressionPredicate(criteriaBuilder, entry, joins, child))
+                    .toArray(Predicate[]::new));
+        }
+        if (node instanceof LedgerSearchExpression.NotNode notNode) {
+            return criteriaBuilder.not(buildSearchExpressionPredicate(criteriaBuilder, entry, joins, notNode.child()));
+        }
+        return criteriaBuilder.conjunction();
+    }
+
+    private Predicate buildSearchTermPredicate(
+            CriteriaBuilder criteriaBuilder,
+            Root<LedgerEntry> entry,
+            LedgerSearchJoins joins,
+            String term
+    ) {
+        String pattern = "%" + escapeLikePattern(term.toLowerCase(Locale.ROOT)) + "%";
+        return criteriaBuilder.or(
+                buildLikePredicate(criteriaBuilder, entry.get(FIELD_TITLE), pattern),
+                buildLikePredicate(criteriaBuilder, entry.get(FIELD_MEMO), pattern),
+                buildLikePredicate(criteriaBuilder, joins.categoryGroup().get("name"), pattern),
+                buildLikePredicate(criteriaBuilder, joins.categoryDetail().get("name"), pattern),
+                buildLikePredicate(criteriaBuilder, joins.paymentMethod().get("name"), pattern)
+        );
+    }
+
+    private Predicate buildLikePredicate(CriteriaBuilder criteriaBuilder, Expression<String> expression, String pattern) {
+        return criteriaBuilder.like(
+                criteriaBuilder.lower(criteriaBuilder.coalesce(expression, "")),
+                pattern,
+                '\\'
+        );
+    }
+
+    private String escapeLikePattern(String value) {
+        StringBuilder builder = new StringBuilder(value.length());
+        for (int index = 0; index < value.length(); index++) {
+            char ch = value.charAt(index);
+            if (ch == '\\' || ch == '%' || ch == '_') {
+                builder.append('\\');
+            }
+            builder.append(ch);
+        }
+        return builder.toString();
+    }
+
+    private List<Order> resolveSearchCriteriaOrders(CriteriaBuilder criteriaBuilder, Root<LedgerEntry> entry, String sortBy) {
+        return switch (sortBy) {
+            case "AMOUNT_DESC" -> List.of(
+                    criteriaBuilder.desc(entry.<BigDecimal>get(FIELD_AMOUNT)),
+                    criteriaBuilder.desc(entry.<LocalDate>get(FIELD_ENTRY_DATE)),
+                    criteriaBuilder.desc(entry.get("id"))
+            );
+            case "AMOUNT_ASC" -> List.of(
+                    criteriaBuilder.asc(entry.<BigDecimal>get(FIELD_AMOUNT)),
+                    criteriaBuilder.desc(entry.<LocalDate>get(FIELD_ENTRY_DATE)),
+                    criteriaBuilder.desc(entry.get("id"))
+            );
+            case "DATE_ASC" -> List.of(
+                    criteriaBuilder.asc(entry.<LocalDate>get(FIELD_ENTRY_DATE)),
+                    criteriaBuilder.asc(entry.<LocalTime>get(FIELD_ENTRY_TIME)),
+                    criteriaBuilder.asc(entry.get("id"))
+            );
+            case "DATE_DESC" -> List.of(
+                    criteriaBuilder.desc(entry.<LocalDate>get(FIELD_ENTRY_DATE)),
+                    criteriaBuilder.desc(entry.<LocalTime>get(FIELD_ENTRY_TIME)),
+                    criteriaBuilder.desc(entry.get("id"))
+            );
+            default -> List.of(
+                    criteriaBuilder.desc(entry.<LocalDate>get(FIELD_ENTRY_DATE)),
+                    criteriaBuilder.desc(entry.<LocalTime>get(FIELD_ENTRY_TIME)),
+                    criteriaBuilder.desc(entry.get("id"))
+            );
+        };
+    }
+
+    private LedgerSearchJoins joinSearchFields(Root<LedgerEntry> entry) {
+        return new LedgerSearchJoins(
+                entry.join(FIELD_CATEGORY_GROUP, JoinType.INNER),
+                entry.join(FIELD_CATEGORY_DETAIL, JoinType.LEFT),
+                entry.join(FIELD_PAYMENT_METHOD, JoinType.INNER)
+        );
+    }
     public LedgerCsvExport exportEntriesCsv(Long userId, LocalDate from, LocalDate to) {
         appUserService.getRequiredUser(userId);
         if (from == null && to == null) {
@@ -1259,6 +1588,19 @@ public class LedgerEntryService {
     ) {
     }
 
+    private record LedgerSearchJoins(
+            Join<LedgerEntry, CategoryGroup> categoryGroup,
+            Join<LedgerEntry, CategoryDetail> categoryDetail,
+            Join<LedgerEntry, PaymentMethod> paymentMethod
+    ) {
+    }
+
+    private record SearchSummaryValues(
+            BigDecimal income,
+            BigDecimal expense,
+            long entryCount
+    ) {
+    }
     private record DateRange(LocalDate from, LocalDate to) {
     }
 

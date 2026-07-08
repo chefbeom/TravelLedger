@@ -201,9 +201,9 @@ const inboxSupportInquiries = computed(() => ([
 const archivedSupportInquiries = completedSupportInquiries
 
 const supportTabOptions = computed(() => [
-  { key: 'pending', label: '미확인', description: '아직 처리 상태로 전환하지 않은 새 문의', count: pendingSupportInquiries.value.length },
-  { key: 'processing', label: '진행중', description: '담당자가 확인하고 처리 중인 문의', count: processingSupportInquiries.value.length },
-  { key: 'done', label: '완료됨', description: '답변 완료 또는 보관 처리된 문의', count: completedSupportInquiries.value.length },
+  { key: 'pending', label: '미확인', count: pendingSupportInquiries.value.length },
+  { key: 'processing', label: '진행중', count: processingSupportInquiries.value.length },
+  { key: 'done', label: '완료됨', count: completedSupportInquiries.value.length },
 ])
 
 const currentSupportSource = computed(() => {
@@ -241,25 +241,21 @@ const accessModalOptions = computed(() => [
   {
     key: 'invite',
     label: '초대 링크 생성',
-    description: '새 초대 링크를 만들고 최근 링크 상태를 확인합니다.',
     count: state.recentInvites.length,
   },
   {
     key: 'blocked',
     label: '차단된 IP 조회',
-    description: '로그인 실패로 차단된 IP를 확인하고 즉시 해제합니다.',
     count: state.blockedIps.length,
   },
   {
     key: 'logs',
     label: '최근 로그인 기록',
-    description: '성공, 실패, 차단된 로그인 시도를 페이지 단위로 확인합니다.',
     count: state.loginLogPage.totalElements ?? state.recentLoginLogs.length,
   },
   {
     key: 'users',
     label: '사용자 상태',
-    description: '사용자 권한과 활성 상태를 확인하고 일반 사용자를 제어합니다.',
     count: state.users.length,
   },
 ])
@@ -269,7 +265,6 @@ const adminPanelCards = computed(() => [
     key: 'ops',
     eyebrow: 'AI / Server',
     title: 'AI 및 서버 제어판',
-    description: 'LM Studio 모델, AI 기능, 데이터 서버와 스토리지 상태를 관리합니다.',
     metric: state.opsControl?.aiServer?.reachable ? 'AI 정상' : 'AI 점검 필요',
     detail: state.opsControl?.ai?.model || state.aiControlForm.model || '모델 미설정',
   },
@@ -277,7 +272,6 @@ const adminPanelCards = computed(() => [
     key: 'support',
     eyebrow: 'Support',
     title: '문의 관리',
-    description: '문의 메일함, 보관함, 문의 상세 확인과 답변 등록을 처리합니다.',
     metric: `${inboxSupportInquiries.value.length}건 대기`,
     detail: `보관 ${archivedSupportInquiries.value.length}건`,
   },
@@ -285,7 +279,6 @@ const adminPanelCards = computed(() => [
     key: 'access',
     eyebrow: 'Access / Users',
     title: '접근 및 사용자 관리',
-    description: '초대 링크, 차단 IP, 로그인 기록, 사용자 상태를 묶어서 관리합니다.',
     metric: `${state.blockedIps.length}개 차단 IP`,
     detail: `미사용 초대 ${state.summary?.pendingInvites ?? 0}건`,
   },
@@ -1201,7 +1194,6 @@ onBeforeUnmount(() => {
         <div class="travel-modal__header">
           <div>
             <h2>데이터 백업/복구</h2>
-            <p>현재 저장된 데이터 통계, 수동 백업, Google Drive 백업 목록 조회와 복구를 한 화면에서 관리합니다.</p>
           </div>
           <button class="button button--ghost" type="button" @click="closeDataManagement">
             닫기
@@ -1214,7 +1206,6 @@ onBeforeUnmount(() => {
             <div class="panel__header">
               <div>
                 <h2>현재 데이터 통계</h2>
-                <p>관리자 기준으로 저장된 전체 데이터의 개수와 합계를 요약합니다.</p>
               </div>
               <button class="button button--ghost" type="button" :disabled="state.loadingDataManagement" @click="loadDataManagement">
                 {{ state.loadingDataManagement ? '불러오는 중...' : '통계 새로고침' }}
@@ -1248,7 +1239,6 @@ onBeforeUnmount(() => {
             <div class="panel__header">
               <div>
                 <h2>파일 백업/복구</h2>
-                <p>현재 데이터를 Google Drive 백업 형식인 `.sql.gz` 파일로 내려받고, 준비한 `.sql` 파일을 업로드해 현재 데이터에 복구 적용할 수 있습니다.</p>
               </div>
             </div>
             <div class="admin-data-upload-row">
@@ -1287,7 +1277,6 @@ onBeforeUnmount(() => {
             <div class="panel__header">
               <div>
                 <h2>수동 백업</h2>
-                <p>현재 상태를 즉시 Google Drive 백업 목록에 추가합니다. 자동 새벽 백업과 별개로 원하는 시점 백업을 만들 수 있습니다.</p>
               </div>
               <div class="admin-data-status">
                 <span v-if="state.dataManagement?.busy" class="entry-type-pill entry-type-pill--expense">
@@ -1309,7 +1298,6 @@ onBeforeUnmount(() => {
             <div class="panel__header">
               <div>
                 <h2>백업 목록</h2>
-                <p>Google Drive에 저장된 백업 파일 목록입니다. 복구할 시점을 선택해 즉시 현재 데이터에 적용할 수 있습니다.</p>
               </div>
             </div>
             <div v-if="state.dataManagement?.backupsError" class="feedback feedback--error">
@@ -1355,7 +1343,6 @@ onBeforeUnmount(() => {
             <div class="panel__header">
               <div>
                 <h2>MinIO 파일 백업</h2>
-                <p>여행 사진, GPX, 가족 앨범, 문의 첨부처럼 MinIO 버킷에 저장된 파일을 묶어서 Google Drive에 백업합니다.</p>
               </div>
               <div class="admin-data-status">
                 <span v-if="state.dataManagement?.minioStorage" class="field__hint">
@@ -1412,7 +1399,6 @@ onBeforeUnmount(() => {
         <div class="panel__header">
           <div>
             <h2>관리자 페이지</h2>
-            <p>{{ currentUser.displayName }} 계정으로 로그인한 상태에서 사용자 상태, 로그인 기록, 문의 메일함을 관리합니다.</p>
           </div>
           <div class="admin-toolbar">
             <button class="button button--ghost" type="button" :disabled="state.loading" @click="openDataManagement">
@@ -1437,7 +1423,6 @@ onBeforeUnmount(() => {
           <div>
             <span class="admin-command-center__eyebrow">Admin Control Hub</span>
             <h2>관리 기능 요약 대시보드</h2>
-            <p>필요한 기능을 선택하면 아래에 해당 관리 페이지가 열립니다. 같은 버튼을 다시 누르면 접힙니다.</p>
           </div>
           <div class="admin-toolbar">
             <button class="button button--ghost" type="button" :disabled="state.loading" @click="loadDashboard">
@@ -1454,10 +1439,8 @@ onBeforeUnmount(() => {
           >
             <span>{{ panel.eyebrow }}</span>
             <strong>{{ panel.title }}</strong>
-            <p>{{ panel.description }}</p>
             <div class="admin-command-card__meta">
               <b>{{ panel.metric }}</b>
-              <small>{{ panel.detail }}</small>
             </div>
             <button class="button button--primary" type="button" @click="openAdminPanel(panel.key)">
               {{ state.activeAdminPanel === panel.key ? '닫기' : '열기' }}
@@ -1472,7 +1455,6 @@ onBeforeUnmount(() => {
             <div>
               <span class="admin-command-center__eyebrow">AI / Server</span>
               <h2>AI 및 서버 제어판</h2>
-              <p>AI 서버 상태 확인, 서버 목록 조회 및 변경, 새 서버 추가를 모달 안에서 처리합니다.</p>
             </div>
             <button class="button button--ghost" type="button" @click="closeOpsControlModal">닫기</button>
           </div>
@@ -1489,7 +1471,6 @@ onBeforeUnmount(() => {
               >
                 <span>1</span>
                 <strong>서버 상태 확인</strong>
-                <small>현재 연결된 AI 서버와 데이터 서버의 연결 상태를 테스트합니다.</small>
               </button>
               <button
                 type="button"
@@ -1498,7 +1479,6 @@ onBeforeUnmount(() => {
               >
                 <span>2</span>
                 <strong>서버 리스트 조회 및 서버 변경</strong>
-                <small>현재 서버와 저장된 AI 서버 프리셋을 확인하고 불러옵니다.</small>
               </button>
               <button
                 type="button"
@@ -1507,20 +1487,17 @@ onBeforeUnmount(() => {
               >
                 <span>3</span>
                 <strong>서버 추가</strong>
-                <small>이름, 주소, 모델, 제공자, 응답/보안 설정을 단계별로 입력합니다.</small>
               </button>
             </div>
 
             <section v-if="state.opsControlModalView === 'menu'" class="admin-ops-modal__empty">
               <strong>작업할 기능을 선택하세요.</strong>
-              <p>상단의 3가지 기능 중 하나를 선택하면 해당 관리 화면이 이 모달 안에서 열립니다.</p>
             </section>
 
             <section v-else-if="state.opsControlModalView === 'status'" class="admin-ops-panel">
               <div class="panel__header">
                 <div>
                   <h3>서버 상태 확인</h3>
-                  <p>테스트 연결은 현재 저장된 설정 기준으로 AI 서버 모델 목록, DB, MinIO 상태를 확인합니다.</p>
                 </div>
                 <button class="button button--primary" type="button" :disabled="state.loadingOpsControl" @click="handleCheckAiServerStatus">
                   {{ state.loadingOpsControl ? '테스트 중...' : '테스트 연결' }}
@@ -1588,7 +1565,6 @@ onBeforeUnmount(() => {
               <div class="panel__header">
                 <div>
                   <h3>서버 리스트 조회 및 서버 변경</h3>
-                  <p>현재 적용된 AI 서버와 저장된 서버 프리셋을 확인합니다. 프리셋을 불러온 뒤 저장하면 현재 서버로 적용됩니다.</p>
                 </div>
                 <button class="button button--ghost" type="button" :disabled="state.loadingOpsControl" @click="loadOpsControl">
                   {{ state.loadingOpsControl ? '조회 중...' : '현재 설정 조회' }}
@@ -1608,7 +1584,6 @@ onBeforeUnmount(() => {
               <div class="admin-ops-server-list">
                 <article v-if="!state.aiControlPresets.length" class="admin-ops-server-row admin-ops-server-row--empty">
                   <strong>저장된 서버 프리셋이 없습니다.</strong>
-                  <p>서버 추가 화면에서 저장하면 이 목록에 최근 서버가 표시됩니다.</p>
                 </article>
                 <article v-for="preset in state.aiControlPresets" :key="preset.key" class="admin-ops-server-row">
                   <div>
@@ -1632,7 +1607,6 @@ onBeforeUnmount(() => {
               <div class="panel__header">
                 <div>
                   <h3>서버 추가</h3>
-                  <p>다음 버튼으로 기본 정보, 제공자별 연결 정보, 응답/보안 설정을 순서대로 입력합니다.</p>
                 </div>
                 <div class="admin-ops-step-indicator" aria-label="서버 추가 단계">
                   <span :class="{ 'is-active': state.aiServerWizardStep === 1 }">1 기본</span>
@@ -1757,7 +1731,6 @@ onBeforeUnmount(() => {
             <div>
               <span class="admin-command-center__eyebrow">Support</span>
               <h2>문의 관리</h2>
-              <p>문의 상태를 미확인, 진행중, 완료됨으로 나누고 모달 안에서 답변과 보관 처리를 진행합니다.</p>
             </div>
             <button class="button button--ghost" type="button" @click="closeSupportModal">닫기</button>
           </div>
@@ -1774,7 +1747,6 @@ onBeforeUnmount(() => {
               >
                 <strong>{{ tab.label }}</strong>
                 <span>{{ tab.count }}건</span>
-                <small>{{ tab.description }}</small>
               </button>
             </div>
 
@@ -1783,7 +1755,6 @@ onBeforeUnmount(() => {
                 <div class="panel__header admin-support-list-panel__header">
                   <div>
                     <h3>{{ supportTabOptions.find((tab) => tab.key === state.supportTab)?.label || '문의' }}</h3>
-                    <p>선택한 상태의 문의 목록입니다. 항목을 열면 오른쪽에서 상세 처리할 수 있습니다.</p>
                   </div>
                   <button class="button button--ghost" type="button" :disabled="state.loading" @click="loadDashboard">
                     {{ state.loading ? '새로고침 중...' : '새로고침' }}
@@ -1862,7 +1833,6 @@ onBeforeUnmount(() => {
                   <div class="support-inquiry-card admin-support-reply-card">
                     <div class="support-inquiry-reply__header">
                       <strong>답변 및 처리</strong>
-                      <small>{{ selectedSupportInquiry.replyContent ? '기존 답변을 수정할 수 있습니다.' : '답변을 등록하면 완료됨으로 이동합니다.' }}</small>
                     </div>
                     <textarea
                       v-model="state.supportReplyContent"
@@ -1939,7 +1909,6 @@ onBeforeUnmount(() => {
             <div>
               <span class="admin-command-center__eyebrow">Access / Users</span>
               <h2>접근 및 사용자 관리</h2>
-              <p>초대 링크, 차단 IP, 로그인 기록, 사용자 상태를 모달 안에서 빠르게 확인하고 처리합니다.</p>
             </div>
             <button class="button button--ghost" type="button" @click="closeAccessModal">닫기</button>
           </div>
@@ -1959,7 +1928,6 @@ onBeforeUnmount(() => {
               >
                 <strong>{{ option.label }}</strong>
                 <span>{{ option.count }}건</span>
-                <small>{{ option.description }}</small>
               </button>
             </div>
 
@@ -1979,7 +1947,6 @@ onBeforeUnmount(() => {
                 <div class="support-inquiry-card admin-access-recent-card">
                   <div class="support-inquiry-reply__header">
                     <strong>최근 초대 링크 상태</strong>
-                    <small>최근 발급한 링크의 만료, 사용 여부를 확인합니다.</small>
                   </div>
                   <div class="sheet-table-wrap">
                     <table class="sheet-table">
@@ -2024,7 +1991,6 @@ onBeforeUnmount(() => {
               <div class="panel__header">
                 <div>
                   <h3>차단된 IP 조회</h3>
-                  <p>5회 이상 실패로 24시간 차단된 IP를 확인하고 즉시 해제할 수 있습니다.</p>
                 </div>
               </div>
               <div class="sheet-table-wrap">
@@ -2070,7 +2036,6 @@ onBeforeUnmount(() => {
               <div class="panel__header">
                 <div>
                   <h3>최근 로그인 기록</h3>
-                  <p>최근 로그인 성공, 실패, 차단 상태를 페이지 단위로 확인합니다.</p>
                 </div>
                 <button class="button button--ghost" type="button" :disabled="state.loadingLoginLogs" @click="loadLoginAuditLogs(state.loginLogPage.page || 0)">
                   {{ state.loadingLoginLogs ? '조회 중...' : '기록 새로고침' }}
@@ -2130,7 +2095,6 @@ onBeforeUnmount(() => {
               <div class="panel__header">
                 <div>
                   <h3>사용자 상태</h3>
-                  <p>관리자 여부와 활성 상태를 확인하고 일반 사용자만 활성/비활성 처리할 수 있습니다.</p>
                 </div>
               </div>
               <div class="sheet-table-wrap">
@@ -2186,7 +2150,6 @@ onBeforeUnmount(() => {
       <section v-if="!state.activeAdminPanel" class="panel admin-empty-state">
         <div>
           <strong>관리할 기능을 선택하세요.</strong>
-          <p>AI/서버, 문의, 접근/사용자 관리가 기능별로 분리되어 있습니다. 위 카드에서 필요한 관리 영역을 열어 작업하세요.</p>
         </div>
       </section>
 
@@ -2195,7 +2158,6 @@ onBeforeUnmount(() => {
         <div class="panel__header">
           <div>
             <h2>AI 및 서버 제어판</h2>
-            <p>AI 분석 기능을 켜고 끄며 LM Studio 연결 정보, AI 서버 상태, 데이터 서버 상태를 한곳에서 확인하고 조절합니다.</p>
           </div>
           <div class="admin-toolbar">
             <button class="button button--ghost" type="button" :disabled="state.loadingOpsControl" @click="loadOpsControl">
@@ -2238,7 +2200,6 @@ onBeforeUnmount(() => {
           <div class="support-inquiry-card admin-ai-card admin-ai-card--select">
             <div class="support-inquiry-reply__header">
               <strong>1. AI 서버 선택</strong>
-              <small>기존에 저장해 둔 LM Studio 서버/모델 조합을 바로 불러옵니다.</small>
             </div>
             <label class="field field--inline admin-ai-enable-row">
               <input v-model="state.aiControlForm.enabled" type="checkbox" />
@@ -2252,7 +2213,6 @@ onBeforeUnmount(() => {
                   {{ formatAiControlPreset(preset) }}
                 </option>
               </select>
-              <small class="field__hint">AI 설정 저장에 성공한 LM Studio URL과 모델 조합이 최근순으로 남습니다.</small>
             </label>
             <div class="admin-ai-current">
               <span>현재 선택</span>
@@ -2264,7 +2224,6 @@ onBeforeUnmount(() => {
           <div class="support-inquiry-card admin-ai-card admin-ai-card--add">
             <div class="support-inquiry-reply__header">
               <strong>2. AI 서버 추가 / 새 설정 입력</strong>
-              <small>새 GPU 서버 IP, 모델, API 경로, 인증 정보를 입력한 뒤 저장하면 이후 드롭다운에서 다시 선택할 수 있습니다.</small>
             </div>
             <div class="admin-ai-field-grid">
               <label class="field">
@@ -2320,7 +2279,6 @@ onBeforeUnmount(() => {
           <div class="support-inquiry-card admin-ai-card admin-ai-card--tuning">
             <div class="support-inquiry-reply__header">
               <strong>응답/보안 조절</strong>
-              <small>응답 품질, 제한 시간, provider host 허용 범위를 조절합니다.</small>
             </div>
             <div class="admin-ai-field-grid admin-ai-field-grid--compact">
               <label class="field">
@@ -2359,7 +2317,6 @@ onBeforeUnmount(() => {
           <div class="support-inquiry-card">
             <div class="support-inquiry-reply__header">
               <strong>데이터 서버 제어</strong>
-              <small>MinIO 잔여 용량 계산에 사용할 운영 기준 용량을 조절합니다. 설정은 저장되어 재시작 후에도 복원됩니다.</small>
             </div>
             <label class="field">
               <span class="field__label">스토리지 기준 용량(GB)</span>
@@ -2378,7 +2335,6 @@ onBeforeUnmount(() => {
           <div class="support-inquiry-card">
             <div class="support-inquiry-reply__header">
               <strong>운영 참고</strong>
-              <small>0GB는 용량 기준 미설정입니다. 최대 1PB까지 입력할 수 있으며, 실제 디스크 여유 공간이 아니라 MinIO 객체 사용량과 설정한 기준 용량으로 남은 용량을 계산합니다.</small>
             </div>
             <p class="form-hint">
               백업, 여행 미디어, 드라이브 파일이 같은 버킷을 사용하면 이 기준값을 실제 서버 디스크/오브젝트 스토리지 한도에 맞춰 관리하세요.

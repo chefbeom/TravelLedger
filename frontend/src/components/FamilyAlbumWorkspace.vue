@@ -444,7 +444,6 @@ onMounted(() => {
       <div class="panel__header">
         <div>
           <h2>가족 카테고리</h2>
-          <p>초대한 멤버만 접근할 수 있는 카테고리 단위로 파일을 나눠 관리합니다.</p>
         </div>
         <span class="panel__badge">{{ selectedCategory ? `${selectedCategory.memberCount}명 참여 중` : '카테고리 선택 필요' }}</span>
       </div>

@@ -504,7 +504,6 @@ function itemTypeLabel(type) {
       <div class="panel__header">
         <div>
           <h2>{{ scopeLabel }} 타임라인</h2>
-          <p>장소 기록과 이동 경로를 날짜 흐름대로 묶어 보며 여행의 전체 서사를 확인합니다.</p>
         </div>
       </div>
 

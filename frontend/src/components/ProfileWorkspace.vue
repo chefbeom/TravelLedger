@@ -89,7 +89,6 @@ const privacyActions = [
   {
     key: 'ai-history',
     label: 'AI 분석 이력 삭제',
-    description: '이 계정의 가계부 AI 분석 이력을 영구 삭제합니다.',
     warning: '삭제된 AI 분석 이력은 복구할 수 없습니다.',
     resultLabel: 'AI 분석 이력 삭제',
     run: deletePrivacyAiAnalysisHistory,
@@ -97,7 +96,6 @@ const privacyActions = [
   {
     key: 'drive-links',
     label: '공개 드라이브 링크 회수',
-    description: '이 계정이 만든 활성 공개 다운로드 링크를 모두 회수합니다.',
     warning: '기존 공개 링크는 더 이상 사용할 수 없습니다. 소유자가 확인할 수 있는 접근 로그는 유지됩니다.',
     resultLabel: '공개 드라이브 링크 회수',
     run: revokePrivacyPublicDownloadLinks,
@@ -105,7 +103,6 @@ const privacyActions = [
   {
     key: 'travel-media',
     label: '여행 공개 미디어 회수',
-    description: '공개 여행 계획 공유와 커뮤니티에 노출되는 여행 미디어를 비활성화합니다.',
     warning: '기존 공개 여행 페이지와 미디어 토큰 접근이 중지됩니다.',
     resultLabel: '여행 공개 미디어 회수',
     run: revokePrivacyTravelPublicMediaShares,
@@ -113,7 +110,6 @@ const privacyActions = [
   {
     key: 'photo-location',
     label: '사진 위치정보 제거',
-    description: '여행 미디어에 저장된 GPS 위도, 경도, 추출 시간을 제거합니다.',
     warning: '일부 사진은 사진 지도나 위치 기반 클러스터에서 사라질 수 있습니다.',
     resultLabel: '사진 위치정보 제거',
     run: removePrivacyPhotoLocationMetadata,
@@ -121,7 +117,6 @@ const privacyActions = [
   {
     key: 'cleanup',
     label: '민감 파생 데이터 정리',
-    description: 'AI 이력 삭제, 공개 링크 회수, 여행 공개 미디어 회수, 사진 GPS 정보 제거를 함께 실행합니다.',
     warning: '여러 개인정보 정리 작업이 동시에 실행됩니다. 필요한 데이터는 먼저 내려받아 주세요.',
     resultLabel: '민감 파생 데이터 정리',
     run: cleanupPrivacySensitiveData,
@@ -484,7 +479,6 @@ onMounted(() => {
       <div class="panel__header">
         <div>
           <h2>프로필</h2>
-          <p>계정 보안, 개인정보 관리, 데이터 내보내기, 문의 요청을 관리합니다.</p>
         </div>
       </div>
       <div class="summary-grid profile-summary-grid">
@@ -514,7 +508,6 @@ onMounted(() => {
       <div class="panel__header">
         <div>
           <h2 id="privacy-panel-title">개인정보 관리</h2>
-          <p>AI 분석 이력, 공개 링크, 여행 미디어 공개 상태, 사진 GPS 데이터, 개인 데이터 내보내기를 관리합니다.</p>
         </div>
         <div class="profile-privacy-panel__actions">
           <span class="panel__badge">로그인 + 2차 PIN 보호</span>
@@ -548,7 +541,6 @@ onMounted(() => {
       <div class="privacy-management-card" data-testid="privacy-management-card">
         <div>
           <strong>민감 작업은 검증 후 실행</strong>
-          <p>AI 분석 이력 삭제, 공개 링크 회수, 여행 공개 미디어 회수, 사진 위치정보 제거, 민감 파생 데이터 정리는 현재 비밀번호와 2차 PIN 확인 후 모달 안에서 실행합니다.</p>
         </div>
         <button class="button button--ghost" type="button" :disabled="isPrivacyBusy" @click="openPrivacyManagementModal">개인정보 관리 열기</button>
       </div>
@@ -558,7 +550,6 @@ onMounted(() => {
       <div class="panel__header">
         <div>
           <h2>문의 보내기</h2>
-          <p>문제 설명에 도움이 되는 이미지를 첨부할 수 있습니다. 문의 내용은 본인과 관리자만 확인할 수 있습니다.</p>
         </div>
       </div>
 
@@ -577,7 +568,6 @@ onMounted(() => {
       <div class="panel__header">
         <div>
           <h2>내 문의 내역</h2>
-          <p>문의 처리 상태와 관리자 답변을 확인합니다.</p>
         </div>
         <button class="button button--ghost" type="button" :disabled="state.loading" @click="loadInquiries(state.pageInfo.page)">
           {{ state.loading ? '불러오는 중...' : '새로고침' }}
@@ -642,7 +632,6 @@ onMounted(() => {
         <div class="travel-modal__header">
           <div>
             <h2 id="privacy-management-title">개인정보 관리</h2>
-            <p>민감한 개인정보 정리 작업은 현재 로그인 비밀번호와 2차 PIN을 확인한 뒤 실행할 수 있습니다.</p>
           </div>
           <button class="button button--ghost" type="button" :disabled="isPrivacyBusy" @click="closePrivacyManagementModal">닫기</button>
         </div>
@@ -654,7 +643,6 @@ onMounted(() => {
           <form v-if="!privacy.verified" class="profile-privacy-verification" data-testid="privacy-access-form" @submit.prevent="handlePrivacyAccessVerify">
             <div>
               <strong>검증 필요</strong>
-              <p>현재 계정의 로그인 비밀번호와 2차 PIN을 모두 통과해야 아래 5개 작업을 실행할 수 있습니다.</p>
             </div>
             <div class="profile-privacy-verification__grid">
               <label class="field">
@@ -676,14 +664,12 @@ onMounted(() => {
           <template v-else>
             <div class="profile-privacy-unlocked" data-testid="privacy-access-unlocked">
               <strong>검증 완료</strong>
-              <p>아래 작업은 즉시 계정 데이터에 반영됩니다. 실행 전 확인 창에서 한 번 더 확인합니다.</p>
             </div>
 
             <div class="privacy-action-grid profile-privacy-modal__actions">
               <article v-for="action in privacyActions" :key="action.key" class="privacy-action-card" :data-testid="`privacy-action-${action.key}`">
                 <div>
                   <h3>{{ action.label }}</h3>
-                  <p>{{ action.description }}</p>
                   <small>{{ action.warning }}</small>
                 </div>
                 <button

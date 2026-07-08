@@ -2641,8 +2641,6 @@ onBeforeUnmount(() => {
           <article class="drive-dashboard__card">
             <span>현재 위치</span>
             <strong>{{ normalizedCurrentLocationLabel }}</strong>
-            <small v-if="activeTab === 'drive'">현재 폴더 기준으로 업로드와 정리가 이루어집니다.</small>
-            <small v-else>선택한 탭 기준으로 파일 상태를 빠르게 정리합니다.</small>
           </article>
         </div>
 
@@ -2693,7 +2691,6 @@ onBeforeUnmount(() => {
             <div class="panel__header">
               <div>
                 <h3>빠른 시작</h3>
-                <p>업로드, 최근 작업, 공유 파일, 휴지통 정리를 홈에서 바로 이어서 진행할 수 있습니다.</p>
               </div>
               <div class="drive-toolbar__actions">
                 <button class="button button--ghost" type="button" @click="selectTab('drive')">드라이브 열기</button>
@@ -2748,7 +2745,6 @@ onBeforeUnmount(() => {
                 <h3 v-else-if="activeTab === 'recent'">최근 파일</h3>
                 <h3 v-else-if="activeTab === 'trash'">휴지통</h3>
                 <h3 v-else>받은 공유 파일</h3>
-                <p>보기 모드와 선택 도구를 이용해 파일을 빠르게 정리하고, 공유와 이동 작업을 한 화면에서 처리합니다.</p>
               </div>
               <div class="drive-toolbar__actions" v-if="activeTab === 'drive'">
                 <div class="drive-breadcrumbs">
@@ -2788,8 +2784,6 @@ onBeforeUnmount(() => {
             <div class="drive-browser-actions">
               <div>
                 <strong>{{ selectedIds.length ? selectedIds.length + '개 선택' : normalizedCurrentLocationLabel }}</strong>
-                <small v-if="activeTab === 'drive'">파일을 끌어다 놓으면 현재 폴더에 업로드됩니다.</small>
-                <small v-else>선택한 파일의 상세와 작업을 오른쪽에서 확인합니다.</small>
               </div>
               <button class="button button--ghost" type="button" @click="toggleDetailsPanel">
                 {{ detailsPanelOpen ? '상세 닫기' : '상세 보기' }}
@@ -2893,7 +2887,6 @@ onBeforeUnmount(() => {
     <div v-if="selectedVersionableItem" class="drive-version-launcher" data-testid="drive-version-launcher">
       <div>
         <strong>File version history</strong>
-        <p>Review upload/restore versions for the selected owned file.</p>
       </div>
       <button class="button button--ghost" type="button" data-testid="drive-version-open" @click="openDriveVersionDrawer(selectedVersionableItem)">
         View versions
@@ -2906,7 +2899,6 @@ onBeforeUnmount(() => {
           <div>
             <p class="eyebrow">CalenDrive versions</p>
             <h2 id="drive-version-title">{{ versionDrawer.item?.fileOriginName || 'File versions' }}</h2>
-            <p>Restore keeps ownership checks on the backend and records a new RESTORE version entry.</p>
           </div>
           <button class="button button--ghost" type="button" :disabled="versionDrawer.loading || Boolean(versionDrawer.restoringId)" @click="closeDriveVersionDrawer">
             Close
@@ -2953,7 +2945,6 @@ onBeforeUnmount(() => {
     <div v-if="selectedVersionableItem" class="drive-version-launcher" data-testid="drive-version-launcher">
       <div>
         <strong>File version history</strong>
-        <p>Review upload/restore versions for the selected owned file.</p>
       </div>
       <button class="button button--ghost" type="button" data-testid="drive-version-open" @click="openDriveVersionDrawer(selectedVersionableItem)">
         View versions
@@ -2966,7 +2957,6 @@ onBeforeUnmount(() => {
           <div>
             <p class="eyebrow">CalenDrive versions</p>
             <h2 id="drive-version-title">{{ versionDrawer.item?.fileOriginName || 'File versions' }}</h2>
-            <p>Restore keeps ownership checks on the backend and records a new RESTORE version entry.</p>
           </div>
           <button class="button button--ghost" type="button" :disabled="versionDrawer.loading || Boolean(versionDrawer.restoringId)" @click="closeDriveVersionDrawer">
             Close
@@ -3011,7 +3001,6 @@ onBeforeUnmount(() => {
     <div v-if="selectedVersionableItem" class="drive-version-launcher" data-testid="drive-version-launcher">
       <div>
         <strong>File version history</strong>
-        <p>Review upload/restore versions for the selected owned file.</p>
       </div>
       <button class="button button--ghost" type="button" data-testid="drive-version-open" @click="openDriveVersionDrawer(selectedVersionableItem)">
         View versions
@@ -3024,7 +3013,6 @@ onBeforeUnmount(() => {
           <div>
             <p class="eyebrow">CalenDrive versions</p>
             <h2 id="drive-version-title">{{ versionDrawer.item?.fileOriginName || 'File versions' }}</h2>
-            <p>Restore keeps ownership checks on the backend and records a new RESTORE version entry.</p>
           </div>
           <button class="button button--ghost" type="button" :disabled="versionDrawer.loading || Boolean(versionDrawer.restoringId)" @click="closeDriveVersionDrawer">
             Close
@@ -3239,7 +3227,6 @@ onBeforeUnmount(() => {
     <div v-if="selectedVersionableItem" class="drive-version-launcher" data-testid="drive-version-launcher">
       <div>
         <strong>File version history</strong>
-        <p>Review upload/restore versions for the selected owned file.</p>
       </div>
       <button class="button button--ghost" type="button" data-testid="drive-version-open" @click="openDriveVersionDrawer(selectedVersionableItem)">
         View versions
@@ -3252,7 +3239,6 @@ onBeforeUnmount(() => {
           <div>
             <p class="eyebrow">CalenDrive versions</p>
             <h2 id="drive-version-title">{{ versionDrawer.item?.fileOriginName || 'File versions' }}</h2>
-            <p>Restore keeps ownership checks on the backend and records a new RESTORE version entry.</p>
           </div>
           <button class="button button--ghost" type="button" :disabled="versionDrawer.loading || Boolean(versionDrawer.restoringId)" @click="closeDriveVersionDrawer">
             Close
@@ -3296,7 +3282,6 @@ onBeforeUnmount(() => {
     <div v-if="selectedVersionableItem" class="drive-version-launcher" data-testid="drive-version-launcher">
       <div>
         <strong>File version history</strong>
-        <p>Review upload/restore versions for the selected owned file.</p>
       </div>
       <button class="button button--ghost" type="button" data-testid="drive-version-open" @click="openDriveVersionDrawer(selectedVersionableItem)">
         View versions
@@ -3309,7 +3294,6 @@ onBeforeUnmount(() => {
           <div>
             <p class="eyebrow">CalenDrive versions</p>
             <h2 id="drive-version-title">{{ versionDrawer.item?.fileOriginName || 'File versions' }}</h2>
-            <p>Restore keeps ownership checks on the backend and records a new RESTORE version entry.</p>
           </div>
           <button class="button button--ghost" type="button" :disabled="versionDrawer.loading || Boolean(versionDrawer.restoringId)" @click="closeDriveVersionDrawer">
             Close
@@ -3370,7 +3354,6 @@ onBeforeUnmount(() => {
     <div v-if="selectedVersionableItem" class="drive-version-launcher" data-testid="drive-version-launcher">
       <div>
         <strong>File version history</strong>
-        <p>Review upload/restore versions for the selected owned file.</p>
       </div>
       <button class="button button--ghost" type="button" data-testid="drive-version-open" @click="openDriveVersionDrawer(selectedVersionableItem)">
         View versions
@@ -3383,7 +3366,6 @@ onBeforeUnmount(() => {
           <div>
             <p class="eyebrow">CalenDrive versions</p>
             <h2 id="drive-version-title">{{ versionDrawer.item?.fileOriginName || 'File versions' }}</h2>
-            <p>Restore keeps ownership checks on the backend and records a new RESTORE version entry.</p>
           </div>
           <button class="button button--ghost" type="button" :disabled="versionDrawer.loading || Boolean(versionDrawer.restoringId)" @click="closeDriveVersionDrawer">
             Close
@@ -3441,7 +3423,6 @@ onBeforeUnmount(() => {
     <div v-if="selectedVersionableItem" class="drive-version-launcher" data-testid="drive-version-launcher">
       <div>
         <strong>File version history</strong>
-        <p>Review upload/restore versions for the selected owned file.</p>
       </div>
       <button class="button button--ghost" type="button" data-testid="drive-version-open" @click="openDriveVersionDrawer(selectedVersionableItem)">
         View versions
@@ -3454,7 +3435,6 @@ onBeforeUnmount(() => {
           <div>
             <p class="eyebrow">CalenDrive versions</p>
             <h2 id="drive-version-title">{{ versionDrawer.item?.fileOriginName || 'File versions' }}</h2>
-            <p>Restore keeps ownership checks on the backend and records a new RESTORE version entry.</p>
           </div>
           <button class="button button--ghost" type="button" :disabled="versionDrawer.loading || Boolean(versionDrawer.restoringId)" @click="closeDriveVersionDrawer">
             Close
@@ -3508,7 +3488,6 @@ onBeforeUnmount(() => {
             <div class="panel__header">
               <div>
                 <h3>보낸 공유 관리</h3>
-                <p>내가 보낸 공유를 묶음별로 확인하고 개별 또는 전체 공유를 취소할 수 있습니다.</p>
               </div>
             </div>
 
@@ -3560,7 +3539,6 @@ onBeforeUnmount(() => {
             <div class="panel__header">
               <div>
                 <h3>스토리지 관리</h3>
-                <p>전체 공급 용량, 현재 사용량, 남은 공간과 무결성 이슈를 한 번에 점검합니다.</p>
               </div>
             </div>
             <div class="travel-form-grid">
@@ -3601,7 +3579,6 @@ onBeforeUnmount(() => {
             <div class="panel__header">
               <div>
                 <h3>사용자 현황</h3>
-                <p>사용자별 파일 수, 공유 수, 사용량과 활성 상태를 관리합니다.</p>
               </div>
             </div>
             <div class="sheet-table-wrap drive-table-wrap">
@@ -3705,7 +3682,6 @@ onBeforeUnmount(() => {
             <div class="travel-modal__header">
               <div>
                 <h2>{{ folderDialog.title }}</h2>
-                <p>폴더 이름과 저장할 위치를 선택합니다.</p>
               </div>
               <button class="button button--ghost" type="button" @click="closeFolderDialog">닫기</button>
             </div>
@@ -3714,7 +3690,6 @@ onBeforeUnmount(() => {
                 <div class="panel__header">
                   <div>
                     <h3>폴더 정보</h3>
-                    <p>선택한 위치에 새 폴더가 만들어지고 바로 해당 위치로 이동합니다.</p>
                   </div>
                 </div>
                 <label class="field">
@@ -3738,7 +3713,6 @@ onBeforeUnmount(() => {
                 <div class="panel__header">
                   <div>
                     <h3>위치 선택</h3>
-                    <p>잠긴 폴더에는 새 폴더를 만들 수 없습니다.</p>
                   </div>
                 </div>
                 <div v-if="folderDialog.loading" class="panel__empty">폴더 목록을 불러오는 중입니다.</div>
@@ -3775,7 +3749,6 @@ onBeforeUnmount(() => {
             <div class="travel-modal__header">
               <div>
                 <h2>위치 이동</h2>
-                <p>{{ moveDialogTitle }}을 이동할 폴더를 선택합니다.</p>
               </div>
               <button class="button button--ghost" type="button" @click="closeMoveDialog">닫기</button>
             </div>
@@ -3784,7 +3757,6 @@ onBeforeUnmount(() => {
                 <div class="panel__header">
                   <div>
                     <h3>이동 대상</h3>
-                    <p>잠긴 폴더와 선택한 폴더의 하위 위치는 이동 대상으로 사용할 수 없습니다.</p>
                   </div>
                 </div>
                 <div v-if="moveDialog.loading" class="panel__empty">폴더 목록을 불러오는 중입니다.</div>
@@ -3811,7 +3783,6 @@ onBeforeUnmount(() => {
                 <div class="panel__header">
                   <div>
                     <h3>선택 항목</h3>
-                    <p>{{ moveDialog.targets.length }}개 항목이 선택되어 있습니다.</p>
                   </div>
                 </div>
                 <div class="drive-move-target-list">
@@ -3835,7 +3806,6 @@ onBeforeUnmount(() => {
             <div class="travel-modal__header">
               <div>
                 <h2>내 드라이브에 저장</h2>
-                <p>{{ sharedSaveDialogTitle }}을 저장할 위치를 선택합니다.</p>
               </div>
               <button class="button button--ghost" type="button" @click="closeSharedSaveDialog">닫기</button>
             </div>
@@ -3844,7 +3814,6 @@ onBeforeUnmount(() => {
                 <div class="panel__header">
                   <div>
                     <h3>저장 위치</h3>
-                    <p>잠긴 폴더에는 공유 파일을 저장할 수 없습니다.</p>
                   </div>
                 </div>
                 <div v-if="sharedSaveDialog.loading" class="panel__empty">폴더 목록을 불러오는 중입니다.</div>
@@ -3871,7 +3840,6 @@ onBeforeUnmount(() => {
                 <div class="panel__header">
                   <div>
                     <h3>선택 파일</h3>
-                    <p>{{ sharedSaveDialog.targets.length }}개 공유 파일이 선택되어 있습니다.</p>
                   </div>
                 </div>
                 <div class="drive-shared-save-target-list">
@@ -3908,7 +3876,6 @@ onBeforeUnmount(() => {
                 <div class="panel__header">
                   <div>
                     <h3>받는 사람 찾기</h3>
-                    <p>loginId 또는 표시 이름으로 검색해 바로 공유합니다.</p>
                   </div>
                 </div>
                 <div class="drive-toolbar__filters">
@@ -3940,7 +3907,6 @@ onBeforeUnmount(() => {
                 <div class="panel__header">
                   <div>
                     <h3>다운로드 링크</h3>
-                    <p>만료 시간과 다운로드 횟수를 정해 외부에 전달할 수 있는 링크를 만듭니다.</p>
                   </div>
                 </div>
                 <div class="drive-toolbar__filters">
@@ -4016,7 +3982,6 @@ onBeforeUnmount(() => {
                 <div class="panel__header">
                   <div>
                     <h3>현재 공유 대상</h3>
-                    <p>이미 공유된 사용자를 확인하고 개별 취소 또는 전체 취소를 할 수 있습니다.</p>
                   </div>
                 </div>
                 <div v-if="shareDialog.existingRecipients.length" class="workspace-stack">
@@ -4045,7 +4010,6 @@ onBeforeUnmount(() => {
     <div v-if="selectedVersionableItem" class="drive-version-launcher" data-testid="drive-version-launcher">
       <div>
         <strong>File version history</strong>
-        <p>Review upload/restore versions for the selected owned file.</p>
       </div>
       <button class="button button--ghost" type="button" data-testid="drive-version-open" @click="openDriveVersionDrawer(selectedVersionableItem)">
         View versions
@@ -4058,7 +4022,6 @@ onBeforeUnmount(() => {
           <div>
             <p class="eyebrow">CalenDrive versions</p>
             <h2 id="drive-version-title">{{ versionDrawer.item?.fileOriginName || 'File versions' }}</h2>
-            <p>Restore keeps ownership checks on the backend and records a new RESTORE version entry.</p>
           </div>
           <button class="button button--ghost" type="button" :disabled="versionDrawer.loading || Boolean(versionDrawer.restoringId)" @click="closeDriveVersionDrawer">
             Close
@@ -4103,7 +4066,6 @@ onBeforeUnmount(() => {
     <div v-if="selectedVersionableItem" class="drive-version-launcher" data-testid="drive-version-launcher">
       <div>
         <strong>File version history</strong>
-        <p>Review upload/restore versions for the selected owned file.</p>
       </div>
       <button class="button button--ghost" type="button" data-testid="drive-version-open" @click="openDriveVersionDrawer(selectedVersionableItem)">
         View versions
@@ -4116,7 +4078,6 @@ onBeforeUnmount(() => {
           <div>
             <p class="eyebrow">CalenDrive versions</p>
             <h2 id="drive-version-title">{{ versionDrawer.item?.fileOriginName || 'File versions' }}</h2>
-            <p>Restore keeps ownership checks on the backend and records a new RESTORE version entry.</p>
           </div>
           <button class="button button--ghost" type="button" :disabled="versionDrawer.loading || Boolean(versionDrawer.restoringId)" @click="closeDriveVersionDrawer">
             Close

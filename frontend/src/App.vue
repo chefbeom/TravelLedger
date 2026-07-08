@@ -17,6 +17,7 @@ const CalenDriveWorkspace = defineAsyncComponent(() => import('./components/Cale
 const NotificationCenterWorkspace = defineAsyncComponent(() => import('./components/NotificationCenterWorkspace.vue'))
 const ProfileWorkspace = defineAsyncComponent(() => import('./components/ProfileWorkspace.vue'))
 const TravelWorkspace = defineAsyncComponent(() => import('./components/TravelWorkspace.vue'))
+const TravelPublicMapShareWorkspace = defineAsyncComponent(() => import('./components/TravelPublicMapShareWorkspace.vue'))
 
 const legacyFeatureItems = [
   {
@@ -252,6 +253,13 @@ function resolveRouteState(hash) {
     }
   }
 
+  if (route.toLowerCase().startsWith('travel-share/')) {
+    return {
+      route: 'travel-share',
+      token: decodeURIComponent(route.slice('travel-share/'.length)).trim(),
+    }
+  }
+
   if (route === 'family-album') {
     return {
       route: 'travel',
@@ -471,6 +479,9 @@ function handleDocumentPointerDown(event) {
 function buildCurrentHashRoute() {
   if (activeRoute.value === 'invite' && inviteToken.value) {
     return `invite/${encodeURIComponent(inviteToken.value)}`
+  }
+  if (activeRoute.value === 'travel-share' && inviteToken.value) {
+    return `travel-share/${encodeURIComponent(inviteToken.value)}`
   }
   return activeRoute.value || 'launcher'
 }
@@ -909,6 +920,10 @@ onBeforeUnmount(() => {
     </button>
 
     <div v-if="!authChecked" class="loading-overlay">인증 확인 중입니다...</div>
+
+    <template v-else-if="activeRoute === 'travel-share'">
+      <TravelPublicMapShareWorkspace :token="inviteToken" />
+    </template>
 
     <template v-else-if="activeRoute === 'invite'">
       <section class="auth-shell">

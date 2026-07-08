@@ -147,22 +147,18 @@ const metricDefinitions = {
 const featureCopy = {
   household: {
     title: '가계부',
-    description: '월별 흐름, 최근 거래, 통계 화면으로 이동합니다.',
     badge: 'Finance',
   },
   travel: {
     title: '여행',
-    description: '여행 예산, 기록, 지도와 사진을 이어서 관리합니다.',
     badge: 'Travel',
   },
   drive: {
     title: '드라이브',
-    description: '파일, 폴더, 공유, 휴지통 상태를 확인합니다.',
     badge: 'Cloud',
   },
   admin: {
     title: '관리자',
-    description: '사용자, 초대, 접근 상태와 운영 도구를 확인합니다.',
     badge: 'Admin',
   },
 }
@@ -450,18 +446,23 @@ function buildDriveOpenPath(item) {
 function collectDrivePhotoItems(items) {
   return (items ?? [])
     .filter((item) => isImageFile(item))
-    .map((item) => ({
-      id: `drive-${item.id ?? fileName(item)}`,
-      rawId: item.id == null ? '' : String(item.id),
-      sourceType: 'drive',
-      title: fileName(item),
-      source: '드라이브',
-      imageUrl: buildDriveThumbnailPath(item),
-      openUrl: buildDriveOpenPath(item),
-      parentId: item.parentId == null ? '' : String(item.parentId),
-      updatedAt: item.lastModifyDate || item.uploadDate || '',
-    }))
-    .filter((item) => item.imageUrl)
+    .map((item) => {
+      const thumbnailUrl = buildDriveThumbnailPath(item)
+      const originalUrl = buildDriveOpenPath(item) || thumbnailUrl
+      return {
+        id: `drive-${item.id ?? fileName(item)}`,
+        rawId: item.id == null ? '' : String(item.id),
+        sourceType: 'drive',
+        title: fileName(item),
+        source: '드라이브',
+        imageUrl: originalUrl,
+        thumbnailUrl,
+        openUrl: originalUrl,
+        parentId: item.parentId == null ? '' : String(item.parentId),
+        updatedAt: item.lastModifyDate || item.uploadDate || '',
+      }
+    })
+    .filter((item) => item.imageUrl || item.thumbnailUrl)
 }
 
 function collectTravelPhotoItems() {
@@ -472,8 +473,7 @@ function collectTravelPhotoItems() {
     const mediaType = String(item.mediaType || '').toUpperCase()
     if (mediaType && mediaType !== 'PHOTO') return
     if (!contentUrl) return
-    const imageUrl = buildThumbnailUrl(contentUrl, THUMBNAIL_VARIANTS.preview)
-    if (!imageUrl) return
+    const thumbnailUrl = buildThumbnailUrl(contentUrl, THUMBNAIL_VARIANTS.preview) || item.thumbnailUrl || contentUrl
     const plan = plansById.get(String(item.planId || '')) || {}
     const location = [item.country, item.region, item.placeName]
       .map((value) => String(value || '').trim())
@@ -487,7 +487,8 @@ function collectTravelPhotoItems() {
       planId: item.planId == null ? '' : String(item.planId),
       title: item.caption || item.originalFileName || item.title || item.planName || plan.name || '여행 사진',
       source: item.planName || plan.name || '여행',
-      imageUrl,
+      imageUrl: contentUrl,
+      thumbnailUrl,
       openUrl: contentUrl,
       date: item.expenseDate || String(item.uploadedAt || '').slice(0, 10) || plan.startDate || '',
       travelType: item.recordType === 'MEMORY' ? '여행 기록' : '여행 사진',
@@ -604,6 +605,14 @@ function photoFrameDisplayItemsFor(palette) {
 
 function photoFrameHeroFor(palette) {
   return photoFrameDisplayItemsFor(palette)[0] || null
+}
+
+function photoFrameDashboardImageUrl(photo) {
+  return photo?.imageUrl || photo?.openUrl || photo?.thumbnailUrl || ''
+}
+
+function photoFramePreviewImageUrl(photo) {
+  return photo?.thumbnailUrl || photo?.imageUrl || photo?.openUrl || ''
 }
 
 function photoFrameModeLabel(palette) {
@@ -1704,7 +1713,7 @@ onBeforeUnmount(() => {
                       data-no-drag="true"
                       @click="openPhotoFrameSettings(palette)"
                     >
-                      <img :src="photoFrameHeroFor(palette).imageUrl" :alt="photoFrameHeroFor(palette).title" loading="lazy" decoding="async" />
+                      <img :src="photoFrameDashboardImageUrl(photoFrameHeroFor(palette))" :alt="photoFrameHeroFor(palette).title" loading="lazy" decoding="async" />
                       <div class="main-palette__photo-caption">
                         <span>{{ photoFrameModeLabel(palette) }}</span>
                         <strong>{{ photoFrameHeroFor(palette).title }}</strong>
@@ -1724,7 +1733,6 @@ onBeforeUnmount(() => {
                       <span>사용 중인 용량</span>
                       <strong>{{ formatBytes(driveCapacity.usedBytes) }}</strong>
                       <small v-if="driveCapacity.totalBytes">{{ formatBytes(driveCapacity.totalBytes) }} 중 {{ driveCapacity.percent }}%</small>
-                      <small v-else>전체 용량 정보는 드라이브 설정에서 확인합니다.</small>
                     </div>
                     <div class="main-palette__capacity-track">
                       <span :style="{ width: `${driveCapacity.totalBytes ? driveCapacity.percent : 18}%` }"></span>
@@ -1938,14 +1946,13 @@ onBeforeUnmount(() => {
                 :class="{ 'is-selected': String(photo.id) === String(photoFrameSettings.fixedPhotoId) }"
                 @click="photoFrameSettings.mode = 'fixed'; photoFrameSettings.fixedPhotoId = String(photo.id)"
               >
-                <img :src="photo.imageUrl" :alt="photo.title" loading="lazy" decoding="async" />
+                <img :src="photoFramePreviewImageUrl(photo)" :alt="photo.title" loading="lazy" decoding="async" />
                 <span>{{ photo.title }}</span>
                 <small v-if="photoFrameInfoLine(photo)">{{ photoFrameInfoLine(photo) }}</small>
               </button>
             </div>
             <div v-else class="main-photo-frame-modal__empty">
               <strong>표시할 사진이 없습니다.</strong>
-              <span>드라이브나 여행에 사진을 추가한 뒤 다시 선택하세요.</span>
             </div>
           </div>
         </div>

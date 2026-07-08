@@ -855,6 +855,21 @@ export function fetchTravelMyMapPhotoCluster(clusterId, params = {}) {
   return request(buildUrl(`/travel/my-map/photo-clusters/${clusterId}`, params).replace(API_BASE, ''))
 }
 
+export function createTravelMapShare(payload) {
+  return request('/travel/map-shares', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+}
+
+export function fetchTravelPublicMapShare(token) {
+  return request(`/travel/public/map-shares/${encodeURIComponent(token)}`)
+}
+
+export function fetchTravelPublicMapSharePhotoCluster(token, clusterId, params = {}) {
+  return request(buildUrl(`/travel/public/map-shares/${encodeURIComponent(token)}/photo-clusters/${clusterId}`, params).replace(API_BASE, ''))
+}
+
 export function fetchTravelPublicTrips() {
   return request('/travel/public-trips')
 }

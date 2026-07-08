@@ -201,7 +201,6 @@ onMounted(() => loadNotifications(0))
         <div>
           <p class="panel__eyebrow">알림 센터</p>
           <h2>운영, AI, OCR, 공유 알림</h2>
-          <p>AI 분석, OCR 처리, 백업, 공유 파일, 여행과 예산 관련 알림을 한곳에서 확인합니다.</p>
         </div>
         <span class="panel__badge notification-hero__badge">읽지 않음 {{ unreadCount }}건</span>
       </div>

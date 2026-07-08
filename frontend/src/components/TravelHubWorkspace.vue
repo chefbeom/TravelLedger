@@ -119,22 +119,18 @@ const workspaceMeta = computed(() => {
     case 'travel-money':
       return {
         title: '여행 돈 장부',
-        description: '여행 생성, 예산안, 지출 기록, 장소별 소비 통계를 한곳에서 관리합니다.',
       }
     case 'travel-log':
       return {
         title: '여행 로그',
-        description: '날짜별 메모와 GPX 경로를 기록하고, 전체 또는 일차별 여행 보기를 함께 확인합니다.',
       }
     case 'travel-share':
       return {
         title: '여행 공유',
-        description: '선택한 여행을 사람, 그룹, 전체 공개 범위로 나누어 공유합니다.',
       }
     default:
       return {
         title: '사진첩',
-        description: '여행 로그에서 올린 사진을 다시 보고, 지도 갤러리와 공유받은 전시를 확인합니다.',
       }
   }
 })
@@ -2039,7 +2035,6 @@ async function openPortfolioMemoryEditor(payload) {
       <div class="panel__header">
         <div>
           <h2>{{ workspaceMeta.title }}</h2>
-          <p>{{ workspaceMeta.description }}</p>
         </div>
         <span v-if="travelPlan" class="panel__badge">{{ travelPlan.name }}</span>
       </div>

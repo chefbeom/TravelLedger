@@ -7,7 +7,7 @@ import {
 import { formatDate, formatTime, safeNumber } from '../lib/uiFormat'
 import TravelMyMapClusterPanel from './TravelMyMapClusterPanel.vue'
 
-const CLUSTER_PHOTO_PAGE_SIZE = 12
+const CLUSTER_PHOTO_PAGE_SIZE = 36
 
 const props = defineProps({
   token: {
@@ -25,6 +25,7 @@ const selectedClusterSummary = ref(null)
 const selectedClusterDetail = ref(null)
 const selectedPhotoId = ref(null)
 const selectedMarkerId = ref(null)
+const selectedClusterPage = ref(0)
 const photoModalOpen = ref(false)
 const displayMode = ref('cluster')
 const mapFitRequestKey = ref(0)
@@ -49,6 +50,8 @@ const selectedPhoto = computed(() => (
   ?? selectedRepresentativePhoto.value
 ))
 const selectedPhotoIndex = computed(() => selectedPhotos.value.findIndex((photo) => String(photo.id) === String(selectedPhotoId.value)))
+const selectedTotalPhotoCount = computed(() => selectedClusterDetail.value?.totalPhotoCount ?? selectedClusterSummary.value?.photoCount ?? selectedPhotos.value.length)
+const canNavigatePhotos = computed(() => selectedTotalPhotoCount.value > 1)
 const photoModalTitle = computed(() => selectedClusterSummary.value?.title || selectedPhoto.value?.placeName || selectedPhoto.value?.title || selectedPhoto.value?.originalFileName || '여행 사진')
 const photoModalMeta = computed(() => {
   const photo = selectedPhoto.value
@@ -102,10 +105,11 @@ async function loadShare({ autoSelect = false } = {}) {
   }
 }
 
-async function loadClusterDetail(clusterId, preferredPhotoId = null) {
+async function loadClusterDetail(clusterId, preferredPhotoId = null, page = 0, preferredIndex = null) {
   if (!clusterId) {
     selectedClusterDetail.value = null
     selectedPhotoId.value = null
+    selectedClusterPage.value = 0
     return
   }
 
@@ -113,15 +117,20 @@ async function loadClusterDetail(clusterId, preferredPhotoId = null) {
   setDetailError('')
   try {
     const detail = await fetchTravelPublicMapSharePhotoCluster(props.token, clusterId, {
-      page: 0,
+      page,
       size: CLUSTER_PHOTO_PAGE_SIZE,
-      focusMediaId: preferredPhotoId,
+      focusMediaId: page === 0 ? preferredPhotoId : null,
     })
+    const pagePhotos = detail?.photos ?? []
     selectedClusterDetail.value = detail
-    selectedPhotoId.value = preferredPhotoId ?? detail?.representativeMediaId ?? detail?.photos?.[0]?.id ?? null
+    selectedClusterPage.value = detail?.page ?? page
+    selectedPhotoId.value = preferredIndex != null && pagePhotos[preferredIndex]
+      ? pagePhotos[preferredIndex].id
+      : preferredPhotoId ?? detail?.representativeMediaId ?? pagePhotos[0]?.id ?? null
   } catch (error) {
     selectedClusterDetail.value = null
     selectedPhotoId.value = null
+    selectedClusterPage.value = 0
     setDetailError(error.message || '사진 상세 정보를 불러오지 못했습니다.')
   } finally {
     isDetailLoading.value = false
@@ -155,6 +164,7 @@ function handleSelectMarker(marker) {
   selectedClusterSummary.value = null
   selectedClusterDetail.value = null
   selectedPhotoId.value = null
+  selectedClusterPage.value = 0
   photoModalOpen.value = false
 }
 
@@ -163,22 +173,36 @@ function clearSelection() {
   selectedClusterDetail.value = null
   selectedPhotoId.value = null
   selectedMarkerId.value = null
+  selectedClusterPage.value = 0
   photoModalOpen.value = false
 }
-
 
 function closePhotoModal() {
   clearSelection()
 }
 
-function selectAdjacentPhoto(offset) {
-  const photos = selectedPhotos.value
-  if (!photos.length) {
+async function selectAdjacentPhoto(offset) {
+  if (isDetailLoading.value) {
     return
   }
+  const total = selectedTotalPhotoCount.value
+  if (total <= 1) {
+    return
+  }
+
+  const currentPage = selectedClusterDetail.value?.page ?? selectedClusterPage.value ?? 0
+  const pageSize = selectedClusterDetail.value?.size ?? CLUSTER_PHOTO_PAGE_SIZE
   const currentIndex = selectedPhotoIndex.value >= 0 ? selectedPhotoIndex.value : 0
-  const nextIndex = (currentIndex + offset + photos.length) % photos.length
-  selectedPhotoId.value = photos[nextIndex]?.id ?? selectedPhotoId.value
+  const targetGlobalIndex = (currentPage * pageSize + currentIndex + offset + total) % total
+  const targetPage = Math.floor(targetGlobalIndex / pageSize)
+  const targetIndex = targetGlobalIndex % pageSize
+
+  if (targetPage !== currentPage) {
+    await loadClusterDetail(selectedClusterSummary.value?.id ?? selectedClusterDetail.value?.id, null, targetPage, targetIndex)
+    return
+  }
+
+  selectedPhotoId.value = selectedPhotos.value[targetIndex]?.id ?? selectedPhotoId.value
 }
 function formatDateRange(start, end) {
   const startText = formatDate(start)
@@ -272,14 +296,18 @@ onMounted(() => {
             <h2 id="public-map-share-photo-modal-title">{{ photoModalTitle }}</h2>
             <p v-if="photoModalMeta">{{ photoModalMeta }}</p>
           </div>
-          <button class="button button--ghost" type="button" @click="closePhotoModal">닫기</button>
+          <div class="public-map-share-photo-modal__header-actions">
+            <button v-if="canNavigatePhotos" class="button button--secondary" type="button" @click="selectAdjacentPhoto(-1)">이전 사진</button>
+            <button v-if="canNavigatePhotos" class="button button--secondary" type="button" @click="selectAdjacentPhoto(1)">다음 사진</button>
+            <button class="button button--ghost" type="button" @click="closePhotoModal">닫기</button>
+          </div>
         </header>
 
         <p v-if="detailErrorMessage" class="panel__empty">{{ detailErrorMessage }}</p>
         <p v-else-if="isDetailLoading" class="panel__empty">사진 정보를 불러오는 중입니다...</p>
         <div v-else-if="selectedPhoto?.contentUrl" class="public-map-share-photo-modal__body">
           <button
-            v-if="selectedPhotos.length > 1"
+            v-if="canNavigatePhotos"
             class="public-map-share-photo-modal__nav public-map-share-photo-modal__nav--prev"
             type="button"
             aria-label="이전 사진"
@@ -295,7 +323,7 @@ onMounted(() => {
             </figcaption>
           </figure>
           <button
-            v-if="selectedPhotos.length > 1"
+            v-if="canNavigatePhotos"
             class="public-map-share-photo-modal__nav public-map-share-photo-modal__nav--next"
             type="button"
             aria-label="다음 사진"

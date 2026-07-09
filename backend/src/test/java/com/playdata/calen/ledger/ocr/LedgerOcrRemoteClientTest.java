@@ -87,6 +87,49 @@ class LedgerOcrRemoteClientTest {
     }
 
     @Test
+    void buildAnalyzeResponseCorrectsCopiedDateFromAdjacentOrderRows() {
+        LedgerOcrRemoteClient client = new LedgerOcrRemoteClient(new LedgerAiAnalysisProperties(), new ObjectMapper());
+        String responseBody = """
+                {
+                  "ok": true,
+                  "documentType": "PAYMENT_CAPTURE",
+                  "rawText": "Order info recent orders\\nOrder date product amount seller status\\n2026-04-23 (20260423061328376)\\nVivas natural cica shampoo 1000g 2ea\\n25,020 KRW (1)\\nfree haeduen0\\nconfirmed\\n2026-01-23 (2026012303520621)\\nAero X10 130000rpm wireless air duster\\n37,370 KRW (1)\\nfree eunkeon\\nconfirmed",
+                  "entries": [
+                    {
+                      "date": "2026-04-23",
+                      "entryType": "EXPENSE",
+                      "title": "Shop : Vivas natural cica shampoo 1000g 2ea",
+                      "memo": "Vivas natural cica shampoo 1000g 2ea(25,020 KRW)",
+                      "amount": 25020,
+                      "items": [{"name":"Vivas natural cica shampoo 1000g 2ea","price":25020}],
+                      "warnings": []
+                    },
+                    {
+                      "date": "2026-04-23",
+                      "entryType": "EXPENSE",
+                      "title": "Shop : Aero X10 130000rpm wireless air duster",
+                      "memo": "Aero X10 130000rpm wireless air duster(37,370 KRW)",
+                      "amount": 37370,
+                      "items": [{"name":"Aero X10 130000rpm wireless air duster","price":37370}],
+                      "warnings": []
+                    }
+                  ],
+                  "warnings": []
+                }
+                """;
+
+        RemoteAnalyzeResponse response = client.buildAnalyzeResponse(responseBody, "PAYMENT_CAPTURE", System.nanoTime());
+
+        assertThat(response.parsedEntries()).extracting(RemoteParsedResult::entryDate)
+                .containsExactly(
+                        LocalDate.of(2026, 4, 23),
+                        LocalDate.of(2026, 1, 23)
+                );
+        assertThat(response.parsedEntries().get(1).warnings())
+                .anySatisfy(warning -> assertThat(warning).contains("OCR"));
+    }
+
+    @Test
     void buildAnalyzeResponseMapsSalesSlipProductNameAliasToLineItemName() {
         LedgerOcrRemoteClient client = new LedgerOcrRemoteClient(new LedgerAiAnalysisProperties(), new ObjectMapper());
         String responseBody = """

@@ -49,13 +49,17 @@ import org.springframework.web.multipart.MultipartFile;
 public class LedgerOcrRemoteClient {
 
     private static final String YEAR_INFERRED_WARNING = "\uC5F0\uB3C4\uAC00 \uC5C6\uB294 \uB0A0\uC9DC\uB97C \uD604\uC7AC \uC5F0\uB3C4\uB85C \uBCF4\uC815\uD588\uC2B5\uB2C8\uB2E4.";
+    private static final String ROW_DATE_CORRECTED_WARNING = "OCR \uD589 \uAE30\uC900\uC73C\uB85C \uAC70\uB798\uC77C\uC744 \uBCF4\uC815\uD588\uC2B5\uB2C8\uB2E4.";
+    private static final String ROW_TIME_CLEARED_WARNING = "OCR \uD589\uC5D0 \uC2DC\uAC04 \uADFC\uAC70\uAC00 \uC5C6\uC5B4 \uAC70\uB798 \uC2DC\uAC04\uC744 \uBE44\uC6E0\uC2B5\uB2C8\uB2E4.";
     private static final List<String> DATE_TEXT_FIELDS = List.of(
             "date", "entryDate", "transactionDate", "paymentDate", "orderDate", "purchaseDate", "approvalDate",
-            "transactionDateTime", "paymentDateTime", "orderDateTime"
+            "transactionDateTime", "paymentDateTime", "orderDateTime",
+            "dateText", "sourceDateText", "ocrDateText", "rowDateText"
     );
     private static final List<String> TIME_TEXT_FIELDS = List.of(
             "time", "entryTime", "transactionTime", "paymentTime", "orderTime", "purchaseTime", "approvalTime",
-            "timeText", "transactionDateTime", "paymentDateTime", "orderDateTime"
+            "timeText", "transactionDateTime", "paymentDateTime", "orderDateTime",
+            "sourceTimeText", "ocrTimeText", "rowTimeText"
     );
 
     private final LedgerAiAnalysisProperties aiProperties;
@@ -93,7 +97,7 @@ public class LedgerOcrRemoteClient {
             if (!hasText(responseBody)) {
                 throw new BadRequestException("AI 이미지 분석 서버가 빈 응답을 반환했습니다.");
             }
-            RemoteAnalyzeResponse response = buildAnalyzeResponse(responseBody, documentType, startedAt);
+            RemoteAnalyzeResponse response = buildAnalyzeResponse(responseBody, documentType, startedAt, ocrRoot);
             if (!response.ok()) {
                 throw new BadRequestException(hasText(response.error())
                         ? response.error()
@@ -205,8 +209,11 @@ public class LedgerOcrRemoteClient {
                         The image has already been OCR-transcribed. Your job is to convert OCR rows into reviewable household ledger entries.
 
                         Critical row mapping rules:
-                        - Preserve OCR rowIndex linkage mentally: each ledger entry must use date, time, title, amount, quantity, status, and memo from the same OCR row whenever possible.
-                        - Never take the first date in rawText for every entry. For multi-row captures, each entry date must come from that entry's own OCR row dateText/rawLine/cells.
+                        - Preserve OCR rowIndex linkage explicitly: every entry made from an OCR row should include sourceRowIndex copied from rows[].rowIndex, plus dateText/timeText copied from that same OCR row evidence.
+                        - Each ORDER_ROW/PAYMENT_ROW that has its own product/service and amount is one ledger entry. Keep entries in OCR row order.
+                        - Each ledger entry must use date, time, title, amount, quantity, status, and memo from the same OCR row whenever possible.
+                        - Never take the first date in rawText for every entry. For multi-row captures, each entry date must come from that entry's own OCR row dateText/rawLine/cells/sourceRowIndex.
+                        - If a later row has a different order date than the first row, use the later row's own date. Do not carry the previous entry's date forward.
                         - If row dateText has YYYY-MM-DD, YYYY.MM.DD, or YYYY/MM/DD, convert to YYYY-MM-DD.
                         - If row dateText has only month/day such as 7. 5. and the row has timeText 15:15, use the current server year and add a Korean warning that the year was inferred.
                         - If the row has a date but no time, set time null. Do not copy time from neighboring rows.
@@ -342,6 +349,9 @@ public class LedgerOcrRemoteClient {
         entryProperties.putObject("entryDate").putArray("type").add("string").add("null");
         entryProperties.putObject("time").putArray("type").add("string").add("null");
         entryProperties.putObject("entryTime").putArray("type").add("string").add("null");
+        entryProperties.putObject("dateText").putArray("type").add("string").add("null");
+        entryProperties.putObject("timeText").putArray("type").add("string").add("null");
+        entryProperties.putObject("sourceRowIndex").putArray("type").add("integer").add("number").add("null");
         ObjectNode entryType = entryProperties.putObject("entryType");
         entryType.put("type", "string");
         ArrayNode entryTypeEnum = entryType.putArray("enum");
@@ -371,10 +381,14 @@ public class LedgerOcrRemoteClient {
     }
 
     RemoteAnalyzeResponse buildAnalyzeResponse(String responseBody, String fallbackDocumentType, long startedAt) {
+        return buildAnalyzeResponse(responseBody, fallbackDocumentType, startedAt, null);
+    }
+
+    RemoteAnalyzeResponse buildAnalyzeResponse(String responseBody, String fallbackDocumentType, long startedAt, JsonNode ocrRoot) {
         try {
             JsonNode root = objectMapper.readTree(extractJsonObject(extractAssistantContent(responseBody)));
             String documentType = firstNonBlank(root.path("documentType").asText(""), normalizeDocumentType(fallbackDocumentType));
-            String rawText = root.path("rawText").asText("");
+            String rawText = firstNonBlank(root.path("rawText").asText(""), ocrRoot != null ? ocrRoot.path("rawText").asText("") : "");
             String resolvedDocumentType = normalizeDocumentType(documentType);
             List<String> rootWarnings = readTextList(root.path("warnings"));
             JsonNode entriesNode = root.path("entries");
@@ -434,17 +448,40 @@ public class LedgerOcrRemoteClient {
         }
         List<String> dateTexts = new ArrayList<>(collectTextFields(entryNode, DATE_TEXT_FIELDS));
         List<String> timeTexts = new ArrayList<>(collectTextFields(entryNode, TIME_TEXT_FIELDS));
+        List<String> rowTemporalTexts = extractRawTextWindowsForEntry(entry, rawText);
+        LocalDate rowDate = firstParsedDate(rowTemporalTexts, List.of());
+        LocalTime rowTime = firstParsedTime(rowTemporalTexts, List.of());
         addFallbackTemporalTexts(dateTexts, timeTexts, entry, rawText, allowFullRawTextFallback);
-        LocalDate entryDate = entry.entryDate() != null
-                ? entry.entryDate()
-                : firstParsedDate(dateTexts, timeTexts);
-        LocalTime entryTime = entry.entryTime() != null
-                ? entry.entryTime()
-                : firstParsedTime(timeTexts, dateTexts);
-        boolean inferredYear = entryDate != null && hasYearlessDateText(dateTexts, timeTexts);
+
+        LocalDate parsedDate = firstParsedDate(dateTexts, timeTexts);
+        LocalTime parsedTime = firstParsedTime(timeTexts, dateTexts);
+        LocalDate entryDate = entry.entryDate();
+        LocalTime entryTime = entry.entryTime();
+        boolean correctedByRowDate = false;
+        boolean clearedByRowTime = false;
+
+        if (rowDate != null && (entryDate == null || (!allowFullRawTextFallback && !Objects.equals(entryDate, rowDate)))) {
+            correctedByRowDate = entryDate != null && !Objects.equals(entryDate, rowDate);
+            entryDate = rowDate;
+        } else if (entryDate == null) {
+            entryDate = parsedDate;
+        }
+
+        if (rowTime != null && (entryTime == null || (!allowFullRawTextFallback && !Objects.equals(entryTime, rowTime)))) {
+            entryTime = rowTime;
+        } else if (entryTime == null) {
+            entryTime = parsedTime;
+        } else if (!allowFullRawTextFallback && rowDate != null && rowTime == null && !rowTemporalTexts.isEmpty()) {
+            entryTime = null;
+            clearedByRowTime = true;
+        }
+
+        boolean inferredYear = entryDate != null && hasYearlessDateText(dateTexts, timeTexts, rowTemporalTexts);
         if (Objects.equals(entryDate, entry.entryDate())
                 && Objects.equals(entryTime, entry.entryTime())
-                && !inferredYear) {
+                && !inferredYear
+                && !correctedByRowDate
+                && !clearedByRowTime) {
             return entry;
         }
         List<String> warnings = new ArrayList<>();
@@ -453,6 +490,12 @@ public class LedgerOcrRemoteClient {
         }
         if (inferredYear && !warnings.contains(YEAR_INFERRED_WARNING)) {
             warnings.add(YEAR_INFERRED_WARNING);
+        }
+        if (correctedByRowDate && !warnings.contains(ROW_DATE_CORRECTED_WARNING)) {
+            warnings.add(ROW_DATE_CORRECTED_WARNING);
+        }
+        if (clearedByRowTime && !warnings.contains(ROW_TIME_CLEARED_WARNING)) {
+            warnings.add(ROW_TIME_CLEARED_WARNING);
         }
         return copyWithTemporalAndWarnings(entry, entryDate, entryTime, warnings);
     }
@@ -596,9 +639,21 @@ public class LedgerOcrRemoteClient {
             }
             int lineStart = previousLineStart(rawText, index);
             int lineEnd = nextLineEnd(rawText, index);
-            int start = lineStart >= 0 ? lineStart : Math.max(0, index - 260);
-            int end = lineEnd >= 0 ? lineEnd : Math.min(rawText.length(), index + needle.length() + 260);
-            addDistinctText(windows, rawText.substring(start, end));
+            int start;
+            int end;
+            if (lineStart >= 0 || lineEnd >= 0) {
+                int currentLineStart = lineStart >= 0 ? lineStart : 0;
+                int currentLineEnd = lineEnd >= 0 ? lineEnd : rawText.length();
+                addDistinctText(windows, rawText.substring(currentLineStart, currentLineEnd));
+                start = previousLinesStart(rawText, currentLineStart, 3);
+                end = nextLinesEnd(rawText, currentLineEnd, 4);
+            } else {
+                start = Math.max(0, index - 180);
+                end = Math.min(rawText.length(), index + needle.length() + 180);
+            }
+            if (start < end) {
+                addDistinctText(windows, rawText.substring(start, end));
+            }
             if (windows.size() >= 3) {
                 break;
             }
@@ -606,6 +661,42 @@ public class LedgerOcrRemoteClient {
         return windows;
     }
 
+    private int previousLinesStart(String text, int start, int lineCount) {
+        int result = Math.max(0, Math.min(start, text.length()));
+        for (int i = 0; i < lineCount; i++) {
+            int searchFrom = Math.max(0, result - 2);
+            int lineFeed = text.lastIndexOf('\n', searchFrom);
+            int carriageReturn = text.lastIndexOf('\r', searchFrom);
+            int lineBreak = Math.max(lineFeed, carriageReturn);
+            if (lineBreak < 0) {
+                return 0;
+            }
+            result = lineBreak + 1;
+        }
+        return result;
+    }
+
+    private int nextLinesEnd(String text, int end, int lineCount) {
+        int result = Math.max(0, Math.min(end, text.length()));
+        for (int i = 0; i < lineCount; i++) {
+            int searchFrom = Math.min(text.length(), result + 1);
+            int lineFeed = text.indexOf('\n', searchFrom);
+            int carriageReturn = text.indexOf('\r', searchFrom);
+            int lineBreak;
+            if (lineFeed < 0) {
+                lineBreak = carriageReturn;
+            } else if (carriageReturn < 0) {
+                lineBreak = lineFeed;
+            } else {
+                lineBreak = Math.min(lineFeed, carriageReturn);
+            }
+            if (lineBreak < 0) {
+                return text.length();
+            }
+            result = lineBreak;
+        }
+        return result;
+    }
 
     private int previousLineStart(String text, int index) {
         int lineFeed = text.lastIndexOf('\n', Math.max(0, index));
@@ -668,7 +759,15 @@ public class LedgerOcrRemoteClient {
     }
 
     private boolean hasYearlessDateText(List<String> primaryTexts, List<String> fallbackTexts) {
-        for (String value : concatTextCandidates(primaryTexts, fallbackTexts)) {
+        return hasYearlessDateText(primaryTexts, fallbackTexts, List.of());
+    }
+
+    private boolean hasYearlessDateText(List<String> primaryTexts, List<String> fallbackTexts, List<String> rowTemporalTexts) {
+        List<String> candidates = new ArrayList<>(concatTextCandidates(primaryTexts, fallbackTexts));
+        if (rowTemporalTexts != null) {
+            candidates.addAll(rowTemporalTexts);
+        }
+        for (String value : candidates) {
             if (FlexibleLocalDateDeserializer.hasYearlessDate(value)) {
                 return true;
             }
@@ -1039,10 +1138,10 @@ public class LedgerOcrRemoteClient {
 
     @JsonIgnoreProperties(ignoreUnknown = true)
     public record RemoteParsedResult(
-            @JsonAlias({"date", "entryDate", "transactionDate", "paymentDate", "orderDate", "purchaseDate", "approvalDate", "transactionDateTime", "paymentDateTime", "orderDateTime"})
+            @JsonAlias({"date", "entryDate", "transactionDate", "paymentDate", "orderDate", "purchaseDate", "approvalDate", "transactionDateTime", "paymentDateTime", "orderDateTime", "dateText", "sourceDateText", "ocrDateText", "rowDateText"})
             @JsonDeserialize(using = FlexibleLocalDateDeserializer.class)
             LocalDate entryDate,
-            @JsonAlias({"time", "entryTime", "transactionTime", "paymentTime", "orderTime", "purchaseTime", "approvalTime", "timeText", "transactionDateTime", "paymentDateTime", "orderDateTime"})
+            @JsonAlias({"time", "entryTime", "transactionTime", "paymentTime", "orderTime", "purchaseTime", "approvalTime", "timeText", "transactionDateTime", "paymentDateTime", "orderDateTime", "sourceTimeText", "ocrTimeText", "rowTimeText"})
             @JsonFormat(pattern = "HH:mm")
             @JsonDeserialize(using = FlexibleLocalTimeDeserializer.class)
             LocalTime entryTime,

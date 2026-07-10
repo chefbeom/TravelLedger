@@ -23,6 +23,7 @@ import com.playdata.calen.travel.dto.TravelMemoryRecordRequest;
 import com.playdata.calen.travel.dto.TravelMemoryRecordResponse;
 import com.playdata.calen.travel.dto.TravelMapShareLinkRequest;
 import com.playdata.calen.travel.dto.TravelMapShareLinkResponse;
+import com.playdata.calen.travel.dto.TravelPhotoFrameMediaResponse;
 import com.playdata.calen.travel.dto.TravelPlanDetailResponse;
 import com.playdata.calen.travel.dto.TravelPlanPublicShareRequest;
 import com.playdata.calen.travel.dto.TravelPlanPublicShareResponse;
@@ -82,6 +83,11 @@ public class TravelController {
     @GetMapping("/plans")
     public List<TravelPlanSummaryResponse> getPlans(@AuthenticationPrincipal AppUserPrincipal currentUser) {
         return travelService.getPlans(currentUser.userId());
+    }
+
+    @GetMapping("/photo-frame-media")
+    public List<TravelPhotoFrameMediaResponse> getPhotoFrameMedia(@AuthenticationPrincipal AppUserPrincipal currentUser) {
+        return travelService.getPhotoFrameMedia(currentUser.userId());
     }
 
     @GetMapping("/plans/{planId}")

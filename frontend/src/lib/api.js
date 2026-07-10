@@ -1,5 +1,3 @@
-import { prepareClientImageUpload } from './mediaPreview'
-
 const API_BASE = '/api'
 const CSRF_COOKIE_NAME = 'XSRF-TOKEN'
 const CSRF_HEADER_NAME = 'X-XSRF-TOKEN'
@@ -835,6 +833,10 @@ export function fetchTravelPlans() {
   return request('/travel/plans')
 }
 
+export function fetchTravelPhotoFrameMedia() {
+  return request('/travel/photo-frame-media')
+}
+
 export function fetchTravelPlan(planId) {
   return request(`/travel/plans/${planId}`)
 }
@@ -1074,7 +1076,7 @@ async function prepareTravelMediaUploadEntries(files, onProgress) {
         : new File([file], file.name, { type: contentType, lastModified: file.lastModified })
 
     const preparedImage = contentType.startsWith('image/')
-      ? await prepareClientImageUpload(sourceFile)
+      ? await import('./mediaPreview').then(({ prepareClientImageUpload }) => prepareClientImageUpload(sourceFile))
       : {
           gpsLatitude: null,
           gpsLongitude: null,

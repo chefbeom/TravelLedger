@@ -19,9 +19,27 @@ public interface TravelBudgetItemRepository extends JpaRepository<TravelBudgetIt
             """)
     BigDecimal sumAmountKrwByPlanId(@Param("planId") Long planId);
 
+    @Query("""
+            select item.plan.id as planId,
+                   coalesce(sum(item.amountKrw), 0) as totalAmountKrw,
+                   count(item) as itemCount
+            from TravelBudgetItem item
+            where item.plan.owner.id = :ownerId
+            group by item.plan.id
+            """)
+    List<PlanBudgetAggregate> summarizeByPlanOwnerId(@Param("ownerId") Long ownerId);
+
     List<TravelBudgetItem> findAllByPlanOwnerId(Long ownerId);
 
     Optional<TravelBudgetItem> findByIdAndPlanOwnerId(Long id, Long ownerId);
 
     void deleteAllByPlanId(Long planId);
+
+    interface PlanBudgetAggregate {
+        Long getPlanId();
+
+        BigDecimal getTotalAmountKrw();
+
+        Long getItemCount();
+    }
 }

@@ -53,6 +53,7 @@ import com.playdata.calen.travel.dto.TravelMemoryRecordRequest;
 import com.playdata.calen.travel.dto.TravelMemoryRecordResponse;
 import com.playdata.calen.travel.dto.TravelMapShareLinkRequest;
 import com.playdata.calen.travel.dto.TravelMapShareLinkResponse;
+import com.playdata.calen.travel.dto.TravelPhotoFrameMediaResponse;
 import com.playdata.calen.travel.dto.TravelPlanDetailResponse;
 import com.playdata.calen.travel.dto.TravelPlanPublicShareResponse;
 import com.playdata.calen.travel.dto.TravelPlanRequest;
@@ -278,32 +279,53 @@ public class TravelService {
         }
 
         List<TravelPlan> plans = travelPlanRepository.findAllByOwnerIdOrderByStartDateDescIdDesc(userId);
-        Map<Long, List<TravelBudgetItem>> budgetItemsByPlan = travelBudgetItemRepository.findAllByPlanOwnerId(userId).stream()
-                .collect(Collectors.groupingBy(item -> item.getPlan().getId()));
-        List<TravelExpenseRecord> allRecords = travelExpenseRecordRepository.findAllByPlanOwnerId(userId);
-        Map<Long, List<TravelExpenseRecord>> ledgerRecordsByPlan = allRecords.stream()
-                .filter(this::isLedgerRecord)
-                .collect(Collectors.groupingBy(item -> item.getPlan().getId()));
-        Map<Long, List<TravelExpenseRecord>> memoryRecordsByPlan = allRecords.stream()
-                .filter(this::isMemoryRecord)
-                .collect(Collectors.groupingBy(item -> item.getPlan().getId()));
-        Map<Long, List<TravelMediaAsset>> mediaByPlan = travelMediaAssetRepository.findAllByPlanOwnerIdOrderByUploadedAtDescIdDesc(userId).stream()
-                .collect(Collectors.groupingBy(item -> item.getPlan().getId()));
-        Map<Long, List<TravelRouteSegment>> routesByPlan = travelRouteSegmentRepository.findAllByPlanOwnerIdOrderByRouteDateDescIdDesc(userId).stream()
-                .collect(Collectors.groupingBy(item -> item.getPlan().getId()));
+        Map<Long, TravelBudgetItemRepository.PlanBudgetAggregate> budgetByPlan = travelBudgetItemRepository
+                .summarizeByPlanOwnerId(userId).stream()
+                .collect(Collectors.toMap(TravelBudgetItemRepository.PlanBudgetAggregate::getPlanId, Function.identity()));
+        Map<Long, TravelExpenseRecordRepository.PlanRecordAggregate> recordsByPlan = travelExpenseRecordRepository
+                .summarizeByPlanOwnerId(userId, TravelRecordType.LEDGER, TravelRecordType.MEMORY).stream()
+                .collect(Collectors.toMap(TravelExpenseRecordRepository.PlanRecordAggregate::getPlanId, Function.identity()));
+        Map<Long, TravelMediaAssetRepository.PlanMediaAggregate> mediaByPlan = travelMediaAssetRepository
+                .summarizeByPlanOwnerId(userId).stream()
+                .collect(Collectors.toMap(TravelMediaAssetRepository.PlanMediaAggregate::getPlanId, Function.identity()));
+        Map<Long, TravelRouteSegmentRepository.PlanRouteAggregate> routesByPlan = travelRouteSegmentRepository
+                .summarizeByPlanOwnerId(userId).stream()
+                .collect(Collectors.toMap(TravelRouteSegmentRepository.PlanRouteAggregate::getPlanId, Function.identity()));
 
         List<TravelPlanSummaryResponse> summaries = plans.stream()
                 .map(plan -> toPlanSummary(
                         plan,
-                        budgetItemsByPlan.getOrDefault(plan.getId(), Collections.emptyList()),
-                        ledgerRecordsByPlan.getOrDefault(plan.getId(), Collections.emptyList()),
-                        memoryRecordsByPlan.getOrDefault(plan.getId(), Collections.emptyList()),
-                        mediaByPlan.getOrDefault(plan.getId(), Collections.emptyList()),
-                        routesByPlan.getOrDefault(plan.getId(), Collections.emptyList())
+                        budgetByPlan.get(plan.getId()),
+                        recordsByPlan.get(plan.getId()),
+                        mediaByPlan.get(plan.getId()),
+                        routesByPlan.get(plan.getId())
                 ))
                 .toList();
         cacheTravelSummary(buildPlansCacheKey(userId), summaries);
         return summaries;
+    }
+
+    public List<TravelPhotoFrameMediaResponse> getPhotoFrameMedia(Long userId) {
+        appUserService.getRequiredUser(userId);
+        return travelMediaAssetRepository
+                .findPhotoFrameMediaByOwnerId(userId, TravelMediaType.PHOTO)
+                .stream()
+                .map(media -> new TravelPhotoFrameMediaResponse(
+                        media.getId(),
+                        media.getPlanId(),
+                        media.getPlanName(),
+                        media.getRecordType(),
+                        media.getOriginalFileName(),
+                        media.getCaption(),
+                        media.getUploadedAt(),
+                        "/api/travel/media/" + media.getId() + "/content",
+                        media.getExpenseDate(),
+                        media.getTitle(),
+                        media.getCountry(),
+                        media.getRegion(),
+                        media.getPlaceName()
+                ))
+                .toList();
     }
 
     public TravelPlanDetailResponse getPlan(Long userId, Long planId) {
@@ -452,8 +474,9 @@ public class TravelService {
             throw new BadRequestException("Location coordinates are required for map detail loading.");
         }
 
-        List<TravelExpenseRecord> nearbyRecords = travelExpenseRecordRepository.findAllByPlanOwnerIdAndRecordType(userId, TravelRecordType.MEMORY).stream()
-                .filter(this::hasCoordinates)
+        List<TravelExpenseRecord> nearbyRecords = travelExpenseRecordRepository
+                .findAllByPlanOwnerIdAndRecordTypeAndLatitudeIsNotNullAndLongitudeIsNotNull(userId, TravelRecordType.MEMORY)
+                .stream()
                 .filter(record -> !record.getId().equals(selectedRecord.getId()))
                 .sorted(Comparator.comparingDouble(record -> calculateDistanceMeters(selectedRecord, record)))
                 .limit(MY_MAP_NEARBY_MARKER_COUNT)
@@ -1427,8 +1450,9 @@ public class TravelService {
     }
 
     private List<TravelMediaAsset> getMyMapPhotoMediaItems(Long userId) {
-        return travelMediaAssetRepository.findAllByPlanOwnerIdOrderByUploadedAtDescIdDesc(userId).stream()
-                .filter(asset -> asset.getMediaType() == TravelMediaType.PHOTO)
+        return travelMediaAssetRepository
+                .findAllByPlanOwnerIdAndMediaTypeOrderByUploadedAtDescIdDesc(userId, TravelMediaType.PHOTO)
+                .stream()
                 .filter(asset -> isMemoryRecord(asset.getRecord()))
                 .filter(this::hasClusterCoordinates)
                 .toList();
@@ -1532,7 +1556,7 @@ public class TravelService {
                 .collect(Collectors.groupingBy(TravelPhotoClusterMember::getClusterId));
         Map<Long, TravelPhotoCluster> clusterById = storedClusters.stream()
                 .collect(Collectors.toMap(TravelPhotoCluster::getId, Function.identity()));
-        Map<Long, TravelMediaAsset> mediaAssetById = travelMediaAssetRepository.findAllById(
+        Map<Long, TravelMediaAsset> mediaAssetById = travelMediaAssetRepository.findAllByIdIn(
                         storedMembers.stream()
                                 .map(TravelPhotoClusterMember::getMediaId)
                                 .distinct()
@@ -2246,23 +2270,10 @@ public class TravelService {
             List<TravelMediaAsset> mediaItems,
             List<TravelRouteSegment> routeSegments
     ) {
-        BigDecimal plannedTotalKrw = sumAmountKrw(budgetItems, TravelBudgetItem::getAmountKrw);
-        BigDecimal actualTotalKrw = sumAmountKrw(records, TravelExpenseRecord::getAmountKrw);
-        String colorHex = normalizeColorHex(plan.getColorHex());
-
-        return new TravelPlanSummaryResponse(
-                plan.getId(),
-                plan.getName(),
-                plan.getDestination(),
-                plan.getStartDate(),
-                plan.getEndDate(),
-                plan.getHomeCurrency(),
-                plan.getHeadCount(),
-                resolvePlanStatus(plan.getStatus()).name(),
-                colorHex,
-                plan.getMemo(),
-                plannedTotalKrw,
-                actualTotalKrw,
+        return toPlanSummary(
+                plan,
+                sumAmountKrw(budgetItems, TravelBudgetItem::getAmountKrw),
+                sumAmountKrw(records, TravelExpenseRecord::getAmountKrw),
                 budgetItems.size(),
                 records.size(),
                 memoryRecords.size(),
@@ -2272,6 +2283,74 @@ public class TravelService {
                 sumInteger(routeSegments, TravelRouteSegment::getDurationMinutes),
                 sumInteger(routeSegments, TravelRouteSegment::getStepCount)
         );
+    }
+
+    private TravelPlanSummaryResponse toPlanSummary(
+            TravelPlan plan,
+            TravelBudgetItemRepository.PlanBudgetAggregate budget,
+            TravelExpenseRecordRepository.PlanRecordAggregate records,
+            TravelMediaAssetRepository.PlanMediaAggregate media,
+            TravelRouteSegmentRepository.PlanRouteAggregate routes
+    ) {
+        return toPlanSummary(
+                plan,
+                normalizeAmountKrw(budget != null ? budget.getTotalAmountKrw() : null),
+                normalizeAmountKrw(records != null ? records.getActualTotalKrw() : null),
+                safeInt(budget != null ? budget.getItemCount() : null),
+                safeInt(records != null ? records.getRecordCount() : null),
+                safeInt(records != null ? records.getMemoryRecordCount() : null),
+                safeInt(media != null ? media.getMediaItemCount() : null),
+                safeInt(routes != null ? routes.getRouteSegmentCount() : null),
+                routes != null && routes.getTotalDistanceKm() != null
+                        ? routes.getTotalDistanceKm().setScale(3, RoundingMode.HALF_UP)
+                        : ZERO_DISTANCE,
+                safeInt(routes != null ? routes.getTotalDurationMinutes() : null),
+                safeInt(routes != null ? routes.getTotalStepCount() : null)
+        );
+    }
+
+    private TravelPlanSummaryResponse toPlanSummary(
+            TravelPlan plan,
+            BigDecimal plannedTotalKrw,
+            BigDecimal actualTotalKrw,
+            int budgetItemCount,
+            int recordCount,
+            int memoryRecordCount,
+            int mediaItemCount,
+            int routeSegmentCount,
+            BigDecimal totalDistanceKm,
+            int totalDurationMinutes,
+            int totalStepCount
+    ) {
+        return new TravelPlanSummaryResponse(
+                plan.getId(),
+                plan.getName(),
+                plan.getDestination(),
+                plan.getStartDate(),
+                plan.getEndDate(),
+                plan.getHomeCurrency(),
+                plan.getHeadCount(),
+                resolvePlanStatus(plan.getStatus()).name(),
+                normalizeColorHex(plan.getColorHex()),
+                plan.getMemo(),
+                plannedTotalKrw,
+                actualTotalKrw,
+                budgetItemCount,
+                recordCount,
+                memoryRecordCount,
+                mediaItemCount,
+                routeSegmentCount,
+                totalDistanceKm,
+                totalDurationMinutes,
+                totalStepCount
+        );
+    }
+
+    private int safeInt(Long value) {
+        if (value == null || value <= 0L) {
+            return 0;
+        }
+        return value > Integer.MAX_VALUE ? Integer.MAX_VALUE : value.intValue();
     }
 
     private TravelPlanDetailResponse toPlanDetail(
@@ -3166,6 +3245,9 @@ public class TravelService {
         }
     }
 
+    private BigDecimal normalizeAmountKrw(BigDecimal amount) {
+        return amount == null ? ZERO : amount.setScale(2, RoundingMode.HALF_UP);
+    }
     private <T> BigDecimal sumAmountKrw(Collection<T> items, Function<T, BigDecimal> extractor) {
         return items.stream()
                 .map(extractor)

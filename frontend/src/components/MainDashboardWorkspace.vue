@@ -13,7 +13,8 @@ import {
   fetchDriveRecentFiles,
   fetchLayoutSetting,
   fetchPaymentMethods,
-  fetchTravelPortfolio,
+  fetchTravelPhotoFrameMedia,
+  fetchTravelPlans,
   saveLayoutSetting,
 } from '../lib/api'
 import { DASHBOARD_GRID_COLUMNS } from '../features/palette/types'
@@ -37,7 +38,7 @@ const MAIN_DASHBOARD_SCOPE = 'main'
 const MAIN_DASHBOARD_LAYOUT_SCOPE = 'main-dashboard'
 const MAIN_DASHBOARD_LAYOUT_VERSION = 6
 const PAYMENT_SELECTION_STORAGE_VERSION = 'v1'
-const SUMMARY_CACHE_STORAGE_VERSION = 'v1'
+const SUMMARY_CACHE_STORAGE_VERSION = 'v2'
 const MAIN_DASHBOARD_GRID_MARGIN = 4
 const MAIN_DASHBOARD_GRID_GAP = MAIN_DASHBOARD_GRID_MARGIN * 2
 const REMOTE_LAYOUT_SAVE_DELAY_MS = 800
@@ -555,6 +556,45 @@ function photoFrameRandomIndex(length, seed) {
     hash |= 0
   }
   return Math.abs(hash) % length
+}
+
+function configuredPhotoFrameIntervalMs() {
+  const intervals = visiblePalettes.value
+    .filter((palette) => palette.type === 'photo-frame')
+    .map((palette) => normalizePhotoFrameOptions(palette.options))
+    .filter((options) => options.mode === 'random' && options.randomInterval !== 'refresh')
+    .map((options) => Number(options.randomInterval))
+    .filter((value) => Number.isFinite(value) && value > 0)
+  return intervals.length ? Math.min(...intervals) : 0
+}
+
+function stopPhotoFrameClock() {
+  if (photoFrameClockTimer) {
+    window.clearTimeout(photoFrameClockTimer)
+    photoFrameClockTimer = 0
+  }
+}
+
+function schedulePhotoFrameClock() {
+  stopPhotoFrameClock()
+  const intervalMs = configuredPhotoFrameIntervalMs()
+  if (!intervalMs || document.visibilityState === 'hidden') {
+    return
+  }
+  const delay = Math.max(50, intervalMs - (Date.now() % intervalMs) + 25)
+  photoFrameClockTimer = window.setTimeout(() => {
+    photoFrameClock.value = Date.now()
+    schedulePhotoFrameClock()
+  }, delay)
+}
+
+function handlePhotoFrameVisibilityChange() {
+  if (document.visibilityState === 'hidden') {
+    stopPhotoFrameClock()
+  } else {
+    photoFrameClock.value = Date.now()
+    schedulePhotoFrameClock()
+  }
 }
 
 function photoFrameRandomSeed(palette, options) {
@@ -1396,6 +1436,43 @@ async function settleSummaryRequest(loadId, requestPromise, applyValue) {
   }
 }
 
+function visiblePhotoFrameSources() {
+  return new Set(visiblePalettes.value
+    .filter((palette) => palette.type === 'photo-frame')
+    .map((palette) => normalizePhotoFrameOptions(palette.options).source))
+}
+
+async function loadPhotoFrameSources(loadId) {
+  const sources = visiblePhotoFrameSources()
+  if (!sources.size) {
+    return
+  }
+
+  const requests = []
+  if (sources.has('all') || sources.has('drive')) {
+    requests.push(settleSummaryRequest(
+      loadId,
+      fetchDrivePhotos({ sortOption: 'recent', size: PHOTO_FRAME_FETCH_SIZE }),
+      (value) => {
+        drivePhotoFileItems.value = value ?? []
+      },
+    ))
+  }
+  if (sources.has('all') || sources.has('travel') || sources.has('travel-plan')) {
+    requests.push(settleSummaryRequest(loadId, fetchTravelPhotoFrameMedia(), (value) => {
+      travelPortfolio.value = {
+        ...(travelPortfolio.value ?? {}),
+        mediaItems: value ?? [],
+      }
+    }))
+  }
+
+  await Promise.all(requests)
+  if (loadId === summaryLoadSequence && sources.has('drive-folder')) {
+    await refreshConfiguredPhotoFrameFolders()
+  }
+}
+
 async function loadSummaries() {
   const loadId = summaryLoadSequence + 1
   summaryLoadSequence = loadId
@@ -1406,21 +1483,20 @@ async function loadSummaries() {
     settleSummaryRequest(loadId, fetchDashboard(anchorDate), (value) => {
       householdDashboard.value = value
     }),
-    settleSummaryRequest(loadId, fetchTravelPortfolio(), (value) => {
-      travelPortfolio.value = value
+    settleSummaryRequest(loadId, fetchTravelPlans(), (value) => {
+      travelPortfolio.value = {
+        ...(travelPortfolio.value ?? {}),
+        plans: value ?? [],
+      }
     }),
+
     settleSummaryRequest(loadId, fetchDriveHomeSummary(), (value) => {
       driveSummary.value = value
     }),
     settleSummaryRequest(loadId, fetchDriveRecentFiles(), (value) => {
       driveRecentFileItems.value = value ?? []
     }),
-    settleSummaryRequest(loadId, fetchDrivePhotos({ sortOption: 'recent', size: PHOTO_FRAME_FETCH_SIZE }), (value) => {
-      drivePhotoFileItems.value = value ?? []
-    }),
-    settleSummaryRequest(loadId, fetchDriveFolderDestinations(), (value) => {
-      driveFolderItems.value = value ?? []
-    }),
+
     settleSummaryRequest(loadId, fetchCompare(anchorDate, 'WEEK', 2), (value) => {
       weekCompareRows.value = value ?? []
     }),
@@ -1438,14 +1514,14 @@ async function loadSummaries() {
   ])
 
   if (loadId === summaryLoadSequence) {
-    await refreshConfiguredPhotoFrameFolders()
     syncQuickEntryDefaults()
 
-    const failed = results.slice(0, 6).filter((result) => result.status === 'rejected')
+    const failed = results.filter((result) => result.status === 'rejected')
     if (failed.length) {
       errorMessage.value = '일부 요약 정보를 불러오지 못했습니다. 백엔드 연결 후 자동으로 채워집니다.'
     }
     loading.value = false
+    loadPhotoFrameSources(loadId)
   }
   return results
 }
@@ -1464,6 +1540,13 @@ watch(selectedPaymentMethodId, persistPaymentSelection)
 watch(() => quickEntry.entryType, syncQuickEntryDefaults)
 watch(() => quickEntry.categoryGroupId, syncQuickEntryDefaults)
 watch(layoutKey, queueGridRebuild)
+watch(
+  () => visiblePalettes.value
+    .filter((palette) => palette.type === 'photo-frame')
+    .map((palette) => [palette.id, palette.options?.mode, palette.options?.randomInterval].join(':'))
+    .join('|'),
+  schedulePhotoFrameClock,
+)
 watch(isEditMode, (value) => {
   if (grid) {
     grid.enableMove(value)
@@ -1480,9 +1563,8 @@ onMounted(async () => {
     resizeObserver.observe(gridElement.value.parentElement)
   }
   loadSummaries()
-  photoFrameClockTimer = window.setInterval(() => {
-    photoFrameClock.value = Date.now()
-  }, 1000)
+  document.addEventListener('visibilitychange', handlePhotoFrameVisibilityChange)
+  schedulePhotoFrameClock()
 })
 
 onBeforeUnmount(() => {
@@ -1491,9 +1573,8 @@ onBeforeUnmount(() => {
   if (rebuildTimer) {
     window.clearTimeout(rebuildTimer)
   }
-  if (photoFrameClockTimer) {
-    window.clearInterval(photoFrameClockTimer)
-  }
+  document.removeEventListener('visibilitychange', handlePhotoFrameVisibilityChange)
+  stopPhotoFrameClock()
   savePaletteRemoteNow()
   resizeObserver?.disconnect()
   destroyGrid()

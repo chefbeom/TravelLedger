@@ -103,6 +103,27 @@ class TravelPlanUserScopeIntegrationTest {
         assertPresignRequiresObjectStorage(hanaSession, recordId);
         seedTravelMediaAsset("hana", recordId, "takoyaki.jpg", "Takoyaki stand");
 
+        MvcResult planListResult = mockMvc.perform(get("/api/travel/plans").session(hanaSession))
+                .andExpect(status().isOk())
+                .andReturn();
+        JsonNode ownPlanSummary = null;
+        for (JsonNode planNode : objectMapper.readTree(planListResult.getResponse().getContentAsString())) {
+            if (planNode.path("id").asLong() == planId) {
+                ownPlanSummary = planNode;
+                break;
+            }
+        }
+        assertThat(ownPlanSummary).isNotNull();
+        assertThat(ownPlanSummary.path("budgetItemCount").asInt()).isEqualTo(1);
+        assertThat(ownPlanSummary.path("recordCount").asInt()).isEqualTo(1);
+        assertThat(ownPlanSummary.path("memoryRecordCount").asInt()).isZero();
+        assertThat(ownPlanSummary.path("mediaItemCount").asInt()).isEqualTo(1);
+
+        mockMvc.perform(get("/api/travel/photo-frame-media").session(hanaSession))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].originalFileName").value("takoyaki.jpg"))
+                .andExpect(jsonPath("$[0].planId").value(planId));
+
         mockMvc.perform(get("/api/travel/plans/{planId}", planId).session(minsuSession))
                 .andExpect(status().isNotFound());
 

@@ -14,6 +14,7 @@ spring:
     properties:
       hibernate:
         format_sql: ${JPA_FORMAT_SQL:false}
+        default_batch_fetch_size: ${JPA_DEFAULT_BATCH_FETCH_SIZE:50}
   flyway:
     enabled: ${DB_MIGRATION_ENABLED:false}
     locations: classpath:db/migration

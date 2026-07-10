@@ -77,7 +77,7 @@ import net.lingala.zip4j.model.enums.CompressionMethod;
 import net.lingala.zip4j.model.enums.EncryptionMethod;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.PageImpl;
+
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
@@ -182,7 +182,7 @@ public class LedgerEntryService {
         int safeSize = Math.min(Math.max(size, 1), MAX_SEARCH_PAGE_SIZE);
         Pageable pageable = PageRequest.of(safePage, safeSize, resolveSearchSort(sortBy));
 
-        Page<LedgerEntry> resultPage = searchEntriesByCriteria(
+        List<LedgerEntry> resultContent = searchEntriesByCriteria(
                 userId,
                 range,
                 searchExpression,
@@ -215,26 +215,28 @@ public class LedgerEntryService {
         );
         BigDecimal income = summaryAggregate == null ? BigDecimal.ZERO : nullToZero(summaryAggregate.income());
         BigDecimal expense = summaryAggregate == null ? BigDecimal.ZERO : nullToZero(summaryAggregate.expense());
+        long totalElements = summaryAggregate == null ? 0L : summaryAggregate.entryCount();
+        int totalPages = totalElements == 0L ? 0 : (int) Math.ceil((double) totalElements / safeSize);
         LedgerEntrySearchSummaryResponse summary = new LedgerEntrySearchSummaryResponse(
                 income,
                 expense,
                 income.subtract(expense),
-                summaryAggregate == null ? 0 : summaryAggregate.entryCount()
+                totalElements
         );
 
         return new LedgerEntrySearchPageResponse(
-                resultPage.getContent().stream()
+                resultContent.stream()
                         .map(this::toResponse)
                         .toList(),
-                resultPage.getNumber(),
-                resultPage.getSize(),
-                resultPage.getTotalElements(),
-                resultPage.getTotalPages(),
+                safePage,
+                safeSize,
+                totalElements,
+                totalPages,
                 summary
         );
     }
 
-    private Page<LedgerEntry> searchEntriesByCriteria(
+    private List<LedgerEntry> searchEntriesByCriteria(
             Long userId,
             DateRange range,
             LedgerSearchExpression searchExpression,
@@ -281,61 +283,7 @@ public class LedgerEntryService {
         TypedQuery<LedgerEntry> contentQuery = entityManager.createQuery(criteriaQuery);
         contentQuery.setFirstResult((int) pageable.getOffset());
         contentQuery.setMaxResults(pageable.getPageSize());
-        List<LedgerEntry> content = contentQuery.getResultList();
-        long totalElements = countEntriesByCriteria(
-                userId,
-                range,
-                searchExpression,
-                entryType,
-                paymentMethodId,
-                categoryGroupId,
-                categoryDetailId,
-                paymentMethodOther,
-                categoryGroupOther,
-                categoryDetailOther,
-                minAmount,
-                maxAmount
-        );
-        return new PageImpl<>(content, pageable, totalElements);
-    }
-
-    private long countEntriesByCriteria(
-            Long userId,
-            DateRange range,
-            LedgerSearchExpression searchExpression,
-            EntryType entryType,
-            Long paymentMethodId,
-            Long categoryGroupId,
-            Long categoryDetailId,
-            boolean paymentMethodOther,
-            boolean categoryGroupOther,
-            boolean categoryDetailOther,
-            BigDecimal minAmount,
-            BigDecimal maxAmount
-    ) {
-        CriteriaBuilder criteriaBuilder = entityManager.getCriteriaBuilder();
-        CriteriaQuery<Long> criteriaQuery = criteriaBuilder.createQuery(Long.class);
-        Root<LedgerEntry> entry = criteriaQuery.from(LedgerEntry.class);
-        LedgerSearchJoins joins = joinSearchFields(entry);
-        criteriaQuery.select(criteriaBuilder.count(entry))
-                .where(buildSearchWherePredicate(
-                        criteriaBuilder,
-                        entry,
-                        joins,
-                        userId,
-                        range,
-                        searchExpression,
-                        entryType,
-                        paymentMethodId,
-                        categoryGroupId,
-                        categoryDetailId,
-                        paymentMethodOther,
-                        categoryGroupOther,
-                        categoryDetailOther,
-                        minAmount,
-                        maxAmount
-                ));
-        return entityManager.createQuery(criteriaQuery).getSingleResult();
+        return contentQuery.getResultList();
     }
 
     private SearchSummaryValues summarizeEntriesByCriteria(

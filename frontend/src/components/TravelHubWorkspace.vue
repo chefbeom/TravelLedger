@@ -145,6 +145,8 @@ const travelPlans = ref([])
 const selectedPlanId = ref('')
 const travelPlan = ref(null)
 const travelPortfolio = ref(null)
+const isTravelPortfolioLoading = ref(false)
+let travelPortfolioPromise = null
 const travelRates = ref([])
 const travelCategories = ref({ ...fallbackCategories })
 const communityFeed = ref([])
@@ -802,6 +804,16 @@ watch(
 )
 
 watch(
+  isMyPhotosTab,
+  (visible) => {
+    if (visible) {
+      loadTravelPortfolio()
+    }
+  },
+  { immediate: true },
+)
+
+watch(
   () => [props.route, props.integratedPhotoMode],
   ([route, integratedPhotoMode]) => {
     const allowedTabs = photoAlbumTabChoices.value.map((item) => item.key)
@@ -965,7 +977,7 @@ function collectCurrencyCodes() {
   if (travelPlan.value?.homeCurrency) codes.add(String(travelPlan.value.homeCurrency).toUpperCase())
   ;(travelPlan.value?.budgetItems ?? []).forEach((item) => codes.add(String(item.currencyCode || 'KRW').toUpperCase()))
   ;(travelPlan.value?.records ?? []).forEach((item) => codes.add(String(item.currencyCode || 'KRW').toUpperCase()))
-  ;(travelPortfolio.value?.plans ?? []).forEach((item) => codes.add(String(item.homeCurrency || 'KRW').toUpperCase()))
+  ;(travelPlans.value ?? []).forEach((item) => codes.add(String(item.homeCurrency || 'KRW').toUpperCase()))
   return [...codes]
 }
 
@@ -1359,6 +1371,27 @@ async function handleChangeSharedExhibitPage(page) {
   await loadSharedExhibits('', page)
 }
 
+async function loadTravelPortfolio(force = false) {
+  if (!force && travelPortfolio.value) {
+    return travelPortfolio.value
+  }
+  if (travelPortfolioPromise) {
+    return travelPortfolioPromise
+  }
+
+  isTravelPortfolioLoading.value = true
+  travelPortfolioPromise = fetchTravelPortfolio()
+    .then((value) => {
+      travelPortfolio.value = value
+      return value
+    })
+    .finally(() => {
+      travelPortfolioPromise = null
+      isTravelPortfolioLoading.value = false
+    })
+  return travelPortfolioPromise
+}
+
 async function loadTravelRates() {
   try {
     travelRates.value = await fetchTravelExchangeRates(collectCurrencyCodes())
@@ -1370,8 +1403,10 @@ async function loadTravelRates() {
 async function refreshTravelData(preferredPlanId = selectedPlanId.value, includeCommunity = props.route === 'photo-album') {
   isLoading.value = true
   try {
-    await loadTravelCategoriesSafe()
-    const plans = await fetchTravelPlans()
+    const [, plans] = await Promise.all([
+      loadTravelCategoriesSafe(),
+      fetchTravelPlans(),
+    ])
     travelPlans.value = plans
     const requestedPlanId = String(preferredPlanId || '').trim()
     const currentPlanId = String(selectedPlanId.value || '').trim()
@@ -1386,12 +1421,17 @@ async function refreshTravelData(preferredPlanId = selectedPlanId.value, include
     }
 
     selectedPlanId.value = nextPlanId
-    travelPlan.value = selectedPlanId.value ? await fetchTravelPlan(selectedPlanId.value) : null
-    await loadTravelPlanShares(selectedPlanId.value)
-    travelPortfolio.value = await fetchTravelPortfolio()
-    await loadTravelRates()
-    if (includeCommunity) await loadTravelCommunityFeed()
-    if (shouldLoadSharedExhibits.value) await loadSharedExhibits(selectedSharedExhibitId.value)
+    const [selectedPlan] = await Promise.all([
+      selectedPlanId.value ? fetchTravelPlan(selectedPlanId.value) : Promise.resolve(null),
+      loadTravelPlanShares(selectedPlanId.value),
+    ])
+    travelPlan.value = selectedPlan
+    await Promise.all([
+      loadTravelRates(),
+      includeCommunity ? loadTravelCommunityFeed() : Promise.resolve(),
+      shouldLoadSharedExhibits.value ? loadSharedExhibits(selectedSharedExhibitId.value) : Promise.resolve(),
+      isMyPhotosTab.value ? loadTravelPortfolio(true) : Promise.resolve(),
+    ])
     if (!travelPlan.value) {
       resetPlanForm()
       resetBudgetForm()
@@ -2510,7 +2550,7 @@ async function openPortfolioMemoryEditor(payload) {
         <small v-if="integratedPhotoMode" class="field__hint">사진 업로드와 기록 편집은 여행 로그에서 하고, 여기서는 지도와 사진첩 중심으로 다시 모아 봅니다.</small>
       </section>
       <TravelMemoryPanel v-if="showAlbumUploadTab && albumTab === 'upload'" :travel-plan="travelPlan" :category-options="memoryCategoryOptions" :is-submitting="isSubmitting" :active-submit="activeSubmit" :refresh-key="memoryRefreshKey" :focus-request="memoryFocusRequest" :upload-progress="memoryUploadProgress" @save-memory="handleSaveMemory" @delete-memory="handleDeleteMemory" @delete-media="handleDeleteMedia" />
-      <TravelMyPhotosWorkspace v-else-if="albumTab === 'my-photos'" :portfolio="travelPortfolio" :plans="travelPlans" :is-loading="isLoading" :focus-request="externalPhotoFocusRequest" @open-memory-editor="openPortfolioMemoryEditor" />
+      <TravelMyPhotosWorkspace v-else-if="albumTab === 'my-photos'" :portfolio="travelPortfolio" :plans="travelPlans" :is-loading="isLoading || isTravelPortfolioLoading" :focus-request="externalPhotoFocusRequest" @open-memory-editor="openPortfolioMemoryEditor" />
       <div v-else-if="albumTab === 'gallery'" class="workspace-stack">
         <section class="panel panel--map-fill"><div class="panel__header"><div><h2>사진첩 지도</h2><p>선택한 여행의 사진 기록이 위치별로 묶여 큰 지도에 표시됩니다.</p></div><span class="panel__badge">{{ photoAlbumPhotoCount }}장</span></div><TravelMapPanel :markers="photoAlbumMarkers" :selected-point="null" :enable-pick-location="false" :enable-draw-route="false" :view-key="travelPlan?.id || 'photo-album-map'" hint-title="사진 핀 보기" hint-text="여행 기록에 연결된 사진을 위치별로 묶어 보여줍니다." /></section>
         <section class="panel">

@@ -8,7 +8,7 @@ import {
   fetchNotifications,
   login,
   logout as logoutRequest,
-} from './lib/api'
+} from './lib/sessionApi'
 
 const AdminWorkspace = defineAsyncComponent(() => import('./components/AdminWorkspace.vue'))
 const HouseholdWorkspace = defineAsyncComponent(() => import('./components/HouseholdWorkspace.vue'))
@@ -242,6 +242,8 @@ const layoutModeOptions = [
 
 let inviteRequestSequence = 0
 let notificationPollTimer = null
+let notificationPollGeneration = 0
+let notificationPollInFlight = false
 let notificationToastTimer = null
 
 function resolveRouteState(hash) {
@@ -561,18 +563,65 @@ async function refreshNotificationUnreadCount(options = {}) {
   }
 }
 
+function scheduleNotificationPoll(generation, delay = NOTIFICATION_POLL_INTERVAL_MS) {
+  if (
+    generation !== notificationPollGeneration
+    || !currentUser.value
+    || document.visibilityState === 'hidden'
+  ) {
+    return
+  }
+  notificationPollTimer = window.setTimeout(async () => {
+    notificationPollTimer = null
+    if (generation !== notificationPollGeneration) {
+      return
+    }
+    if (notificationPollInFlight) {
+      scheduleNotificationPoll(generation)
+      return
+    }
+    notificationPollInFlight = true
+    try {
+      await refreshNotificationUnreadCount({ notify: true })
+    } finally {
+      if (generation === notificationPollGeneration) {
+        notificationPollInFlight = false
+        scheduleNotificationPoll(generation)
+      }
+    }
+  }, delay)
+}
+
 function startNotificationPolling() {
   stopNotificationPolling()
+  if (!currentUser.value || document.visibilityState === 'hidden') {
+    return
+  }
+  const generation = notificationPollGeneration
+  notificationPollInFlight = true
   refreshNotificationUnreadCount({ notify: false })
-  notificationPollTimer = window.setInterval(() => {
-    refreshNotificationUnreadCount({ notify: true })
-  }, NOTIFICATION_POLL_INTERVAL_MS)
+    .finally(() => {
+      if (generation === notificationPollGeneration) {
+        notificationPollInFlight = false
+        scheduleNotificationPoll(generation)
+      }
+    })
 }
 
 function stopNotificationPolling() {
+  notificationPollGeneration += 1
+  notificationPollInFlight = false
   if (notificationPollTimer) {
-    window.clearInterval(notificationPollTimer)
+    window.clearTimeout(notificationPollTimer)
     notificationPollTimer = null
+  }
+}
+
+function handleNotificationVisibilityChange() {
+  if (document.visibilityState === 'hidden') {
+    stopNotificationPolling()
+  } else if (currentUser.value) {
+    startNotificationPolling()
   }
 }
 
@@ -851,6 +900,7 @@ onMounted(() => {
   window.addEventListener('beforeunload', handleBeforeUnload)
   window.addEventListener(ROUTE_LEAVE_GUARD_EVENT, handleRouteLeaveGuardChange)
   document.addEventListener('pointerdown', handleDocumentPointerDown)
+  document.addEventListener('visibilitychange', handleNotificationVisibilityChange)
   restoreSession()
 })
 
@@ -859,6 +909,7 @@ onBeforeUnmount(() => {
   window.removeEventListener('beforeunload', handleBeforeUnload)
   window.removeEventListener(ROUTE_LEAVE_GUARD_EVENT, handleRouteLeaveGuardChange)
   document.removeEventListener('pointerdown', handleDocumentPointerDown)
+  document.removeEventListener('visibilitychange', handleNotificationVisibilityChange)
   stopNotificationPolling()
   clearNotificationToast()
 })

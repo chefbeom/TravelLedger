@@ -9,6 +9,7 @@ import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
@@ -18,7 +19,13 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 @Entity
-@Table(name = "travel_media_assets")
+@Table(
+        name = "travel_media_assets",
+        indexes = {
+                @Index(name = "idx_travel_media_plan_type_uploaded", columnList = "plan_id, media_type, uploaded_at, id"),
+                @Index(name = "idx_travel_media_record_uploaded", columnList = "record_id, uploaded_at, id")
+        }
+)
 @Getter
 @Setter
 @NoArgsConstructor

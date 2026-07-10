@@ -54,6 +54,8 @@ import org.springframework.web.multipart.MultipartFile;
 @Transactional(readOnly = true)
 public class LedgerExcelImportService {
 
+    private static final long MAX_EXCEL_FILE_SIZE_BYTES = 20L * 1024L * 1024L;
+
     private static final DataFormatter DATA_FORMATTER = new DataFormatter(Locale.KOREA);
     private static final Pattern DIGIT_PATTERN = Pattern.compile("[^0-9.\\-]");
     private static final Pattern MONTH_SHEET_PATTERN = Pattern.compile("^[0-9]{1,2}월$");
@@ -159,6 +161,10 @@ public class LedgerExcelImportService {
     private void validateFile(MultipartFile file) {
         if (file == null || file.isEmpty()) {
             throw new BadRequestException("Please upload an Excel file.");
+        }
+
+        if (file.getSize() > MAX_EXCEL_FILE_SIZE_BYTES) {
+            throw new BadRequestException("Excel files must not exceed 20 MB.");
         }
 
         String fileName = Optional.ofNullable(file.getOriginalFilename()).orElse("").toLowerCase(Locale.ROOT);

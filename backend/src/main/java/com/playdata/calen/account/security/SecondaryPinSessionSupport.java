@@ -27,9 +27,9 @@ public class SecondaryPinSessionSupport {
     private final SecureRandom secureRandom = new SecureRandom();
 
     public SecondaryPinSessionSupport(
-            @Value("${app.security.session-seal-key:${JWT_KEY:calen-session-seal-key-change-me}}") String sealKey
+            @Value("${app.security.session-seal-key:}") String sealKey
     ) {
-        this.secretKey = new SecretKeySpec(deriveKey(sealKey), "AES");
+        this.secretKey = new SecretKeySpec(deriveKey(SecuritySecretSupport.resolve(sealKey, "secondary-pin-session")), "AES");
     }
 
     public void storeVerifiedSecondaryPin(HttpServletRequest request, String secondaryPin) {

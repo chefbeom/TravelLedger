@@ -459,7 +459,6 @@ function startTravelEntryFromSelectedDate() {
       <div>
         <span class="panel__eyebrow">TRAVEL LEDGER</span>
         <h2>여행 가계부</h2>
-        <p>여행 기간의 지출을 일반 가계부 데이터 안에서 따로 모아 보고, 새 여행 지출도 같은 입력 흐름으로 기록합니다.</p>
       </div>
       <span class="panel__badge">{{ statsRangeLabel }}</span>
     </div>

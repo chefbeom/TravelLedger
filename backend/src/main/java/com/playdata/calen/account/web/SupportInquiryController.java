@@ -4,6 +4,7 @@ import com.playdata.calen.account.dto.SupportInquiryPageResponse;
 import com.playdata.calen.account.dto.SupportInquiryResponse;
 import com.playdata.calen.account.security.AppUserPrincipal;
 import com.playdata.calen.account.service.SupportInquiryService;
+import java.nio.charset.StandardCharsets;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.Resource;
 import org.springframework.http.ContentDisposition;
@@ -64,8 +65,14 @@ public class SupportInquiryController {
         return ResponseEntity.ok()
                 .header(
                         HttpHeaders.CONTENT_DISPOSITION,
-                        ContentDisposition.inline().filename(payload.fileName()).build().toString()
+                        ContentDisposition.inline()
+                                .filename(payload.fileName(), StandardCharsets.UTF_8)
+                                .build()
+                                .toString()
                 )
+                .header("X-Content-Type-Options", "nosniff")
+                .header(HttpHeaders.CACHE_CONTROL, "private, no-store")
+                .header("Content-Security-Policy", "sandbox")
                 .contentType(mediaType)
                 .body(payload.resource());
     }

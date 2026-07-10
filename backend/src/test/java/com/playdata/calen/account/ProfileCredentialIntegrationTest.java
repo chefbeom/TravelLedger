@@ -23,6 +23,7 @@ import org.springframework.test.web.servlet.MvcResult;
 
 @SpringBootTest(properties = {
         "app.seed.enabled=true",
+        "app.seed.allow-insecure-default-credentials=true",
         "spring.datasource.url=jdbc:h2:mem:profile-credential-test-${random.uuid};MODE=MySQL;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE",
         "spring.datasource.driver-class-name=org.h2.Driver",
         "spring.datasource.username=sa",
@@ -37,6 +38,29 @@ class ProfileCredentialIntegrationTest {
 
     @Autowired
     private ObjectMapper objectMapper;
+
+    @Test
+    void loginRotatesAnExistingSessionId() throws Exception {
+        MockHttpSession preLoginSession = new MockHttpSession();
+        String preLoginSessionId = preLoginSession.getId();
+
+        MvcResult result = mockMvc.perform(post("/api/auth/login")
+                        .session(preLoginSession)
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of(
+                                "loginId", "hana",
+                                "password", "test1234",
+                                "secondaryPin", "12345678",
+                                "rememberDevice", false
+                        ))))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        MockHttpSession authenticatedSession = (MockHttpSession) result.getRequest().getSession(false);
+        assertThat(authenticatedSession).isNotNull();
+        assertThat(authenticatedSession.getId()).isNotEqualTo(preLoginSessionId);
+    }
 
     @Test
     void verifySecondaryPinEndpointRequiresCorrectPin() throws Exception {
@@ -105,7 +129,7 @@ class ProfileCredentialIntegrationTest {
         assertThat(rememberMeCookie.isHttpOnly()).isTrue();
         assertThat(rememberMeCookie.getPath()).isEqualTo("/");
         assertThat(rememberMeCookie.getMaxAge()).isPositive();
-        assertThat(rememberMeCookie.getSecure()).isFalse();
+        assertThat(rememberMeCookie.getSecure()).isTrue();
     }
     @Test
     void passwordChangeRevokesRememberMeTokens() throws Exception {

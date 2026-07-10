@@ -24,6 +24,7 @@ public class AppUserService {
     private final AppUserRepository appUserRepository;
     private final AccountSetupService accountSetupService;
     private final PasswordEncoder passwordEncoder;
+    private final SecondaryPinAttemptService secondaryPinAttemptService;
 
     public AppUser getRequiredUser(Long userId) {
         return appUserRepository.findById(userId)
@@ -90,11 +91,22 @@ public class AppUserService {
     }
 
     public void ensureSecondaryPinMatches(AppUser user, String secondaryPinRaw) {
-        String secondaryPin = normalizeSecondaryPin(secondaryPinRaw);
+        Long userId = user != null ? user.getId() : null;
+        secondaryPinAttemptService.ensureAllowed(userId);
+
+        String secondaryPin;
+        try {
+            secondaryPin = normalizeSecondaryPin(secondaryPinRaw);
+        } catch (BadRequestException exception) {
+            secondaryPinAttemptService.recordFailure(userId);
+            throw exception;
+        }
         if (!StringUtils.hasText(user.getSecondaryPinHash())
                 || !passwordEncoder.matches(secondaryPin, user.getSecondaryPinHash())) {
+            secondaryPinAttemptService.recordFailure(userId);
             throw new SecondaryPinMismatchException();
         }
+        secondaryPinAttemptService.recordSuccess(userId);
     }
 
     public void verifySecondaryPin(Long userId, String secondaryPinRaw) {

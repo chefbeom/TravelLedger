@@ -19,6 +19,8 @@ import {
 } from '../lib/api'
 import { DASHBOARD_GRID_COLUMNS } from '../features/palette/types'
 import { buildThumbnailUrl, THUMBNAIL_VARIANTS } from '../lib/mediaPreview'
+import TravelMiniLocationMap from './TravelMiniLocationMap.vue'
+import { formatDateTime } from '../lib/uiFormat'
 
 const props = defineProps({
   currentUser: {
@@ -223,6 +225,10 @@ const photoFrameSettings = reactive({
   randomInterval: 'refresh',
   loading: false,
   error: '',
+})
+const photoFrameDetail = reactive({
+  open: false,
+  photo: null,
 })
 
 const userStorageId = computed(() => props.currentUser?.id || props.currentUser?.loginId || 'anonymous')
@@ -460,6 +466,15 @@ function collectDrivePhotoItems(items) {
         thumbnailUrl,
         openUrl: originalUrl,
         parentId: item.parentId == null ? '' : String(item.parentId),
+        date: item.lastModifyDate || item.uploadDate || '',
+        time: '',
+        travelType: '드라이브 사진',
+        location: [item.country, item.region, item.placeName].filter(Boolean).join(' · '),
+        latitude: item.latitude ?? null,
+        longitude: item.longitude ?? null,
+        gpsLatitude: item.gpsLatitude ?? null,
+        gpsLongitude: item.gpsLongitude ?? null,
+        uploadedAt: item.uploadDate || item.lastModifyDate || '',
         updatedAt: item.lastModifyDate || item.uploadDate || '',
       }
     })
@@ -492,8 +507,14 @@ function collectTravelPhotoItems() {
       thumbnailUrl,
       openUrl: contentUrl,
       date: item.expenseDate || String(item.uploadedAt || '').slice(0, 10) || plan.startDate || '',
+      time: item.expenseTime || '',
       travelType: item.recordType === 'MEMORY' ? '여행 기록' : '여행 사진',
       location,
+      latitude: item.latitude ?? null,
+      longitude: item.longitude ?? null,
+      gpsLatitude: item.gpsLatitude ?? null,
+      gpsLongitude: item.gpsLongitude ?? null,
+      uploadedAt: item.uploadedAt || '',
       updatedAt: item.uploadedAt || item.expenseDate || plan.updatedAt || plan.startDate || '',
     })
   })
@@ -710,7 +731,55 @@ function photoFrameSourceLabel(photo) {
   return photo ? `${photo.source} · ${photo.title}` : '사진 선택'
 }
 
+function photoFrameDetailRecordedAt(photo) {
+  if (!photo?.date) {
+    return ''
+  }
+  return formatDateTime(photo.date, photo.time) || photo.date
+}
+
+function photoFrameDetailUploadedAt(photo) {
+  const value = String(photo?.uploadedAt || photo?.updatedAt || '')
+  if (!value) {
+    return ''
+  }
+  const [date, time = ''] = value.split('T')
+  return formatDateTime(date, time)
+}
+
+function photoFrameDetailLocation(photo) {
+  return String(photo?.location || '').trim() || '위치 정보 없음'
+}
+
+function photoFrameDetailLatitude(photo) {
+  return photo?.gpsLatitude ?? photo?.latitude ?? null
+}
+
+function photoFrameDetailLongitude(photo) {
+  return photo?.gpsLongitude ?? photo?.longitude ?? null
+}
+
+function openPhotoFrameDetail(photo) {
+  if (!photo) {
+    return
+  }
+  photoFrameSettings.open = false
+  photoFrameDetail.photo = photo
+  photoFrameDetail.open = true
+}
+
+function closePhotoFrameDetail() {
+  photoFrameDetail.open = false
+  photoFrameDetail.photo = null
+}
+
+function openPhotoFrameTravelMap() {
+  closePhotoFrameDetail()
+  emit('navigate', 'travel')
+}
 async function openPhotoFrameSettings(palette) {
+  photoFrameDetail.open = false
+  photoFrameDetail.photo = null
   const options = normalizePhotoFrameOptions(palette?.options)
   photoFrameSettings.open = true
   photoFrameSettings.paletteId = String(palette?.id || '')
@@ -1792,7 +1861,7 @@ onBeforeUnmount(() => {
                       class="main-palette__photo-hero"
                       type="button"
                       data-no-drag="true"
-                      @click="openPhotoFrameSettings(palette)"
+                      @click="openPhotoFrameDetail(photoFrameHeroFor(palette))"
                     >
                       <img :src="photoFrameDashboardImageUrl(photoFrameHeroFor(palette))" :alt="photoFrameHeroFor(palette).title" loading="lazy" decoding="async" />
                       <div class="main-palette__photo-caption">
@@ -1930,6 +1999,62 @@ onBeforeUnmount(() => {
         <button class="main-dashboard__primary" type="button" @click="toggleEditMode">편집 완료</button>
       </template>
     </aside>
+    <div v-if="photoFrameDetail.open && photoFrameDetail.photo" class="main-photo-frame-modal main-photo-frame-detail-modal" data-no-drag="true" @click.self="closePhotoFrameDetail">
+      <section class="main-photo-frame-modal__dialog main-photo-frame-detail-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="main-photo-frame-detail-title">
+        <header class="main-photo-frame-modal__header">
+          <div>
+            <span>사진 액자</span>
+            <h2 id="main-photo-frame-detail-title">{{ photoFrameDetail.photo.title || '사진 상세' }}</h2>
+          </div>
+          <button type="button" @click="closePhotoFrameDetail">닫기</button>
+        </header>
+
+        <div class="main-photo-frame-detail-modal__body">
+          <figure class="main-photo-frame-detail-modal__figure">
+            <img :src="photoFrameDashboardImageUrl(photoFrameDetail.photo)" :alt="photoFrameDetail.photo.title || '사진'" decoding="async" />
+            <figcaption>{{ photoFrameDetail.photo.title || '사진' }}</figcaption>
+          </figure>
+
+          <aside class="main-photo-frame-detail-modal__info">
+            <dl class="main-photo-frame-detail-modal__metadata">
+              <div>
+                <dt>사진</dt>
+                <dd>{{ photoFrameDetail.photo.title || '-' }}</dd>
+              </div>
+              <div>
+                <dt>출처</dt>
+                <dd>{{ photoFrameDetail.photo.source || '드라이브' }}</dd>
+              </div>
+              <div>
+                <dt>여행</dt>
+                <dd>{{ photoFrameDetail.photo.sourceType === 'travel' ? (photoFrameDetail.photo.source || '여행') : '여행 연결 없음' }}</dd>
+              </div>
+              <div>
+                <dt>기록 시간</dt>
+                <dd>{{ photoFrameDetailRecordedAt(photoFrameDetail.photo) || '기록 시간 없음' }}</dd>
+              </div>
+              <div>
+                <dt>업로드 시간</dt>
+                <dd>{{ photoFrameDetailUploadedAt(photoFrameDetail.photo) || '업로드 시간 없음' }}</dd>
+              </div>
+              <div>
+                <dt>위치</dt>
+                <dd>{{ photoFrameDetailLocation(photoFrameDetail.photo) }}</dd>
+              </div>
+            </dl>
+            <TravelMiniLocationMap
+              :latitude="photoFrameDetailLatitude(photoFrameDetail.photo)"
+              :longitude="photoFrameDetailLongitude(photoFrameDetail.photo)"
+              :title="photoFrameDetailLocation(photoFrameDetail.photo)"
+            />
+            <div class="main-photo-frame-detail-modal__actions">
+              <button v-if="photoFrameDetail.photo.sourceType === 'travel'" type="button" @click="openPhotoFrameTravelMap">여행 지도 열기</button>
+              <button type="button" @click="closePhotoFrameDetail">닫기</button>
+            </div>
+          </aside>
+        </div>
+      </section>
+    </div>
     <div v-if="photoFrameSettings.open" class="main-photo-frame-modal" data-no-drag="true" @click.self="closePhotoFrameSettings">
       <section class="main-photo-frame-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="main-photo-frame-title">
         <header class="main-photo-frame-modal__header">
@@ -2715,13 +2840,112 @@ onBeforeUnmount(() => {
   color: #fecaca;
 }
 
+.main-photo-frame-detail-modal__dialog {
+  width: min(1100px, 100%);
+}
+
+.main-photo-frame-detail-modal__body {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: minmax(0, 1.2fr) minmax(280px, 0.8fr);
+  min-width: 0;
+}
+
+.main-photo-frame-detail-modal__figure {
+  background: #020617;
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  min-width: 0;
+  padding: 12px;
+}
+
+.main-photo-frame-detail-modal__figure img {
+  display: block;
+  max-height: min(68vh, 720px);
+  min-height: 0;
+  object-fit: contain;
+  width: 100%;
+}
+
+.main-photo-frame-detail-modal__figure figcaption {
+  color: #dbeafe;
+  font-size: 0.82rem;
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+
+.main-photo-frame-detail-modal__info {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+.main-photo-frame-detail-modal__metadata {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+
+.main-photo-frame-detail-modal__metadata > div {
+  background: #0b1220;
+  border: 1px solid #334155;
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 10px 12px;
+}
+
+.main-photo-frame-detail-modal__metadata dt {
+  color: #8fdcc6;
+  font-size: 0.72rem;
+  font-weight: 900;
+}
+
+.main-photo-frame-detail-modal__metadata dd {
+  color: #f8fafc;
+  font-size: 0.88rem;
+  font-weight: 800;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.main-photo-frame-detail-modal__info .travel-mini-location-map {
+  min-height: 190px;
+}
+
+.main-photo-frame-detail-modal__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.main-photo-frame-detail-modal__actions button {
+  background: #0b1220;
+  border: 1px solid #334155;
+  color: #f8fafc;
+  cursor: pointer;
+  font-weight: 900;
+  min-height: 40px;
+  padding: 0 16px;
+}
+
+.main-photo-frame-detail-modal__actions button:first-child {
+  background: #047857;
+  border-color: #34d399;
+}
 @media (max-width: 860px) {
   .main-photo-frame-modal {
     padding: 12px;
   }
 
-  .main-photo-frame-modal__body {
+  .main-photo-frame-modal__body,
+  .main-photo-frame-detail-modal__body {
     grid-template-columns: 1fr;
+  }
+
+  .main-photo-frame-detail-modal__figure img {
+    max-height: 46vh;
   }
 
   .main-photo-frame-modal__dialog {

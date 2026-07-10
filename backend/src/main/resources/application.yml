@@ -49,6 +49,11 @@ server:
       charset: UTF-8
       enabled: true
       force: true
+    session:
+      cookie:
+        http-only: true
+        secure: ${SESSION_COOKIE_SECURE:true}
+        same-site: lax
 
 management:
   endpoints:
@@ -66,8 +71,12 @@ app:
     legacy-updaters:
       enabled: ${APP_SCHEMA_LEGACY_UPDATERS_ENABLED:true}
   security:
-    remember-me-key: ${JWT_KEY:calen-remember-me-key}
+    remember-me-key: ${JWT_KEY:}
+    session-seal-key: ${SESSION_SEAL_KEY:${JWT_KEY:}}
+    public-media-key: ${PUBLIC_MEDIA_KEY:${JWT_KEY:}}
     remember-me-token-validity-seconds: 2592000
+    remember-me-secure-cookie: ${REMEMBER_ME_SECURE_COOKIE:true}
+    csrf-secure-cookie: ${CSRF_COOKIE_SECURE:true}
   jwt:
     key: ${JWT_KEY:}
     expire: ${JWT_EXPIRE:300000000}
@@ -112,7 +121,7 @@ app:
       max-tokens: ${APP_LEDGER_AI_MAX_TOKENS:4096}
       connect-timeout: ${APP_LEDGER_AI_CONNECT_TIMEOUT:3s}
       read-timeout: ${APP_LEDGER_AI_READ_TIMEOUT:600s}
-      enforce-provider-url-allowlist: ${APP_LEDGER_AI_ENFORCE_PROVIDER_URL_ALLOWLIST:false}
+      enforce-provider-url-allowlist: ${APP_LEDGER_AI_ENFORCE_PROVIDER_URL_ALLOWLIST:true}
       allowed-provider-hosts: "${APP_LEDGER_AI_ALLOWED_PROVIDER_HOSTS:localhost,127.0.0.1,::1}"
       history-retention-enabled: ${APP_LEDGER_AI_HISTORY_RETENTION_ENABLED:false}
       history-retention-days: ${APP_LEDGER_AI_HISTORY_RETENTION_DAYS:180}
@@ -136,6 +145,7 @@ app:
     media-object-prefix: ${FAMILY_MEDIA_OBJECT_PREFIX:family-media}
   seed:
     enabled: ${APP_SEED_ENABLED:false}
+    allow-insecure-default-credentials: ${APP_SEED_ALLOW_INSECURE_DEFAULT_CREDENTIALS:false}
   support:
     attachment-storage-path: ${SUPPORT_ATTACHMENT_STORAGE_PATH:${user.dir}/uploads/support-inquiries}
   data-ops:

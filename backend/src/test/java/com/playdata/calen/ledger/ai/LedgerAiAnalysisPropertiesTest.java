@@ -35,10 +35,33 @@ class LedgerAiAnalysisPropertiesTest {
     void allowsAnyProviderHostWhenAllowlistIsNotEnforced() {
         LedgerAiAnalysisProperties properties = new LedgerAiAnalysisProperties();
         properties.setEnabled(true);
+        properties.setEnforceProviderUrlAllowlist(false);
         properties.setLmStudioBaseUrl("http://169.254.169.254/latest/meta-data");
 
         assertThat(properties.isLmStudioConfigured()).isTrue();
         assertThat(properties.isConfigured()).isTrue();
+    }
+
+    @Test
+    void rejectsNonHttpAndCredentialBearingProviderUrlsEvenWithoutAllowlist() {
+        LedgerAiAnalysisProperties properties = new LedgerAiAnalysisProperties();
+        properties.setEnforceProviderUrlAllowlist(false);
+
+        assertThat(properties.isProviderUrlAllowed("file:///etc/passwd")).isFalse();
+        assertThat(properties.isProviderUrlAllowed("ftp://localhost/resource")).isFalse();
+        assertThat(properties.isProviderUrlAllowed("http://user:password@localhost:1234")).isFalse();
+    }
+
+    @Test
+    void rejectsHostOverridingLmStudioEndpointPaths() {
+        LedgerAiAnalysisProperties properties = new LedgerAiAnalysisProperties();
+        properties.setLmStudioChatPath("//169.254.169.254/latest/meta-data");
+        properties.setLmStudioModelsPath("https://169.254.169.254/models");
+
+        assertThat(properties.hasSafeLmStudioEndpointPaths()).isFalse();
+        assertThat(properties.normalizedLmStudioChatPath()).isEqualTo("/v1/chat/completions");
+        assertThat(properties.normalizedLmStudioModelsPath()).isEqualTo("/v1/models");
+        assertThat(properties.isLmStudioConfigured()).isFalse();
     }
 
     @Test

@@ -113,9 +113,12 @@ public class SecurityConfig {
     }
 
     @Bean
-    public CsrfTokenRepository csrfTokenRepository() {
+    public CsrfTokenRepository csrfTokenRepository(
+            @Value("${app.security.csrf-secure-cookie:true}") boolean secureCookie
+    ) {
         CookieCsrfTokenRepository repository = CookieCsrfTokenRepository.withHttpOnlyFalse();
         repository.setCookiePath("/");
+        repository.setCookieCustomizer(cookie -> cookie.secure(secureCookie).sameSite("Lax"));
         return repository;
     }
 
@@ -172,12 +175,13 @@ public class SecurityConfig {
     public PersistentTokenBasedRememberMeServices rememberMeServices(
             UserDetailsService userDetailsService,
             PersistentTokenRepository persistentTokenRepository,
-            @Value("${app.security.remember-me-key}") String rememberMeKey,
+            @Value("${app.security.remember-me-key:}") String rememberMeKey,
             @Value("${app.security.remember-me-token-validity-seconds:2592000}") int tokenValiditySeconds,
-            @Value("${app.security.remember-me-secure-cookie:false}") boolean rememberMeSecureCookie
+            @Value("${app.security.remember-me-secure-cookie:true}") boolean rememberMeSecureCookie
     ) {
+        String resolvedRememberMeKey = SecuritySecretSupport.resolve(rememberMeKey, "remember-me");
         PersistentTokenBasedRememberMeServices services = new PersistentTokenBasedRememberMeServices(
-                rememberMeKey,
+                resolvedRememberMeKey,
                 userDetailsService,
                 persistentTokenRepository
         ) {

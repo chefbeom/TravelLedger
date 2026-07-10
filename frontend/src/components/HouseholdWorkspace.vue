@@ -1656,6 +1656,56 @@ function collectReceiptOcrTextCandidates(suggestion = {}, context = {}) {
     .filter(Boolean)
 }
 
+const RECEIPT_INCOME_ENTRY_HINTS = [
+  '\uAE09\uC5EC', '\uC6D4\uAE09', '\uC785\uAE08 \uBC1B\uC74C', '\uC785\uAE08\uB418\uC5C8', '\uD658\uBD88 \uC644\uB8CC', '\uD658\uAE08',
+  '\uBC30\uB2F9\uAE08', '\uC774\uC790 \uC218\uC775', 'salary', 'income', 'deposit received', 'credit received', 'refund', 'cashback',
+]
+
+const RECEIPT_EXPENSE_ENTRY_HINTS = [
+  '\uAD6C\uB9E4', '\uC8FC\uBB38', '\uACB0\uC81C', '\uC0C1\uD488\uAE08\uC561', '\uBC30\uC1A1\uBE44', '\uC601\uC218\uC99D', '\uCE74\uB4DC \uC2B9\uC778',
+  '\uCCAD\uAD6C', '\uB0A9\uBD80', '\uCD9C\uAE08', 'payment', 'purchase', 'order', 'paid', 'sales slip', 'invoice', 'charged',
+]
+
+const RECEIPT_EXPENSE_DOCUMENT_HINTS = [
+  '\uC8FC\uBB38 \uC815\uBCF4', '\uC8FC\uBB38\uC77C\uC790', '\uC8FC\uBB38 \uC0C1\uD488', '\uC0C1\uD488\uAE08\uC561', '\uAD6C\uB9E4\uD655\uC815',
+  '\uACB0\uC81C\uC644\uB8CC', '\uACB0\uC81C \uAE08\uC561', 'order info', 'order date', 'product amount', 'purchase confirmed',
+  'payment completed', 'sales slip',
+]
+
+function normalizeReceiptEntryTypeEvidence(value) {
+  return String(value ?? '').toLowerCase().replace(/\s+/g, ' ').trim()
+}
+
+function hasReceiptEntryTypeHint(evidence, hints) {
+  return Boolean(evidence) && hints.some((hint) => evidence.includes(hint.toLowerCase()))
+}
+
+function resolveReceiptSuggestionEntryType(suggestion = {}, context = {}) {
+  const entryEvidence = normalizeReceiptEntryTypeEvidence([
+    suggestion.title,
+    suggestion.memo,
+    suggestion.categoryGroupName,
+    suggestion.categoryDetailName,
+    suggestion.categoryText,
+  ].filter(Boolean).join(' '))
+  if (hasReceiptEntryTypeHint(entryEvidence, RECEIPT_INCOME_ENTRY_HINTS)) {
+    return 'INCOME'
+  }
+  if (hasReceiptEntryTypeHint(entryEvidence, RECEIPT_EXPENSE_ENTRY_HINTS)) {
+    return 'EXPENSE'
+  }
+
+  const documentEvidence = normalizeReceiptEntryTypeEvidence(context.rawText)
+  const documentType = normalizeOcrDocumentType(context.documentType || suggestion.documentType)
+  if (
+    hasReceiptEntryTypeHint(documentEvidence, RECEIPT_EXPENSE_DOCUMENT_HINTS)
+    || documentType === 'RECEIPT'
+    || documentType === 'PAYMENT_CAPTURE'
+  ) {
+    return 'EXPENSE'
+  }
+  return suggestion.entryType === 'INCOME' ? 'INCOME' : 'EXPENSE'
+}
 function resolveReceiptSuggestionDate(suggestion = {}, context = {}) {
   const direct = parseReceiptOcrDateText(suggestion.entryDate)
   if (direct) return direct
@@ -2903,7 +2953,7 @@ function setReceiptOcrDocumentType(documentType) {
 }
 
 function normalizeOcrSuggestion(suggestion = {}, context = {}) {
-  const entryType = suggestion.entryType === 'INCOME' ? 'INCOME' : 'EXPENSE'
+  const entryType = resolveReceiptSuggestionEntryType(suggestion, context)
   const category = resolveReceiptSuggestionCategory(suggestion, entryType, context)
   return {
     entryDate: resolveReceiptSuggestionDate(suggestion, context),
@@ -2924,7 +2974,10 @@ function normalizeOcrSuggestion(suggestion = {}, context = {}) {
 }
 function attachReceiptOcrSuggestionMeta(suggestion, item, entryIndex) {
   return {
-    ...normalizeOcrSuggestion(suggestion, { rawText: item.rawText }),
+    ...normalizeOcrSuggestion(suggestion, {
+      rawText: item.rawText,
+      documentType: item.documentType,
+    }),
     analysisId: item.analysisId || null,
     clientRequestId: item.clientRequestId || null,
     analysisStatus: item.analysisStatus || null,
@@ -4895,7 +4948,6 @@ async function activatePayment(paymentId) {
       <div class="panel__header">
         <div>
           <h2>가계부 전체 기능</h2>
-          <p>입력, 달력, 통계, 검색, 가져오기, 분류 관리를 한 화면에서 사용합니다.</p>
         </div>
         <span class="panel__badge">{{ isLoading ? '불러오는 중' : '준비됨' }}</span>
       </div>
@@ -4903,7 +4955,6 @@ async function activatePayment(paymentId) {
       <div class="household-anchor-toolbar">
         <div class="household-anchor-toolbar__meta">
           <strong>기준 날짜</strong>
-          <span>달력, 입력, 통계 화면이 이 날짜를 기준으로 움직입니다.</span>
         </div>
         <div class="household-anchor-toolbar__actions">
           <label class="field">

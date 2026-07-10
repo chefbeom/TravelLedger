@@ -8,14 +8,12 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import java.time.LocalDate;
-import java.time.ZoneId;
-import java.time.format.DateTimeFormatter;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -30,6 +28,7 @@ import org.springframework.test.web.servlet.MvcResult;
 
 @SpringBootTest(properties = {
         "app.seed.enabled=true",
+        "app.seed.allow-insecure-default-credentials=true",
         "spring.datasource.url=jdbc:h2:mem:support-inquiry-test;MODE=MySQL;DB_CLOSE_ON_EXIT=FALSE",
         "spring.datasource.driver-class-name=org.h2.Driver",
         "spring.datasource.username=sa",
@@ -81,7 +80,10 @@ class SupportInquiryIntegrationTest {
         assertThat(inquiryId).isPositive();
 
         mockMvc.perform(get("/api/support/inquiries/{inquiryId}/attachment", inquiryId).session(userSession))
-                .andExpect(status().isOk());
+                .andExpect(status().isOk())
+                .andExpect(header().string("X-Content-Type-Options", "nosniff"))
+                .andExpect(header().string("Cache-Control", "private, no-store"))
+                .andExpect(header().string("Content-Security-Policy", "sandbox"));
 
         mockMvc.perform(put("/api/admin/support-inquiries/{inquiryId}/reply", inquiryId)
                         .session(adminSession)
@@ -236,15 +238,11 @@ class SupportInquiryIntegrationTest {
     }
 
     private void verifyAdminAccess(MockHttpSession session) throws Exception {
-        String code = String.valueOf(
-                19990515 + Integer.parseInt(LocalDate.now(ZoneId.of("Asia/Seoul")).format(DateTimeFormatter.BASIC_ISO_DATE))
-        );
-
         mockMvc.perform(post("/api/admin/access/verify")
                         .session(session)
                         .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(Map.of("code", code))))
+                        .content(objectMapper.writeValueAsString(Map.of("code", "12345678"))))
                 .andExpect(status().isNoContent());
     }
 }

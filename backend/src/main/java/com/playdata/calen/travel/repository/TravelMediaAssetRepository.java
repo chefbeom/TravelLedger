@@ -30,10 +30,15 @@ public interface TravelMediaAssetRepository extends JpaRepository<TravelMediaAss
                    asset.caption as caption,
                    asset.uploadedAt as uploadedAt,
                    asset.record.expenseDate as expenseDate,
+                   asset.record.expenseTime as expenseTime,
                    asset.record.title as title,
                    asset.record.country as country,
                    asset.record.region as region,
-                   asset.record.placeName as placeName
+                   asset.record.placeName as placeName,
+                   asset.record.latitude as latitude,
+                   asset.record.longitude as longitude,
+                   asset.gpsLatitude as gpsLatitude,
+                   asset.gpsLongitude as gpsLongitude
             from TravelMediaAsset asset
             where asset.plan.owner.id = :ownerId
               and asset.mediaType = :mediaType
@@ -107,6 +112,8 @@ public interface TravelMediaAssetRepository extends JpaRepository<TravelMediaAss
 
         java.time.LocalDate getExpenseDate();
 
+        java.time.LocalTime getExpenseTime();
+
         String getTitle();
 
         String getCountry();
@@ -114,6 +121,14 @@ public interface TravelMediaAssetRepository extends JpaRepository<TravelMediaAss
         String getRegion();
 
         String getPlaceName();
+
+        java.math.BigDecimal getLatitude();
+
+        java.math.BigDecimal getLongitude();
+
+        java.math.BigDecimal getGpsLatitude();
+
+        java.math.BigDecimal getGpsLongitude();
     }
 
     interface PlanMediaAggregate {

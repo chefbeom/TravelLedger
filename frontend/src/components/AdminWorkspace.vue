@@ -442,7 +442,7 @@ function handleAdminAccessRequired(error) {
   }
   state.adminAccessReady = true
   state.adminAccessVerified = false
-  state.adminAccessError = '관리자 페이지 접근을 위해 3차 비밀번호를 입력해 주세요.'
+  state.adminAccessError = '관리자 페이지 접근을 위해 2차 비밀번호를 다시 입력해 주세요.'
   state.loading = false
   state.loadingLoginLogs = false
   state.loadingOpsControl = false
@@ -1150,19 +1150,19 @@ onBeforeUnmount(() => {
         <div class="travel-modal__header">
           <div>
             <h2>관리자 추가 인증</h2>
-            <p>관리자 페이지를 열려면 8자리 3차 비밀번호를 입력해야 합니다.</p>
+            <p>관리자 페이지를 열려면 로그인에 사용하는 8자리 2차 비밀번호를 다시 입력해야 합니다.</p>
           </div>
         </div>
         <form class="travel-modal__body" @submit.prevent="handleVerifyAdminAccess">
           <div v-if="state.adminAccessError" class="feedback feedback--error">{{ state.adminAccessError }}</div>
           <label class="field">
-            <span class="field__label">3차 비밀번호</span>
+            <span class="field__label">2차 비밀번호 재확인</span>
             <input
               v-model="state.adminAccessCode"
               type="password"
               inputmode="numeric"
               maxlength="8"
-              autocomplete="one-time-code"
+              autocomplete="off"
               placeholder="숫자 8자리"
               :disabled="state.verifyingAdminAccess"
             />

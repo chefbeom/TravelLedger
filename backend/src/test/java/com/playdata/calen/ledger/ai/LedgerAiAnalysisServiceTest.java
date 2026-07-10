@@ -98,6 +98,7 @@ class LedgerAiAnalysisServiceTest {
         properties.setEnabled(true);
         properties.setProvider("lmstudio");
         properties.setLmStudioBaseUrl("http://172.18.240.1:1234");
+        properties.setAllowedProviderHosts("172.18.240.1,127.0.0.1,n8n.example.internal,lmstudio.example.internal");
         properties.setWorkflowUrl("http://127.0.0.1:5678/webhook/travelledger-ledger-ai");
         properties.setModel("gemma4:e12b");
 

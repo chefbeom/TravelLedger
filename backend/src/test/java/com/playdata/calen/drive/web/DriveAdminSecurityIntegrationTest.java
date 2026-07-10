@@ -14,9 +14,7 @@ import com.playdata.calen.account.domain.LoginAuditLog;
 import com.playdata.calen.account.domain.LoginAuditStatus;
 import com.playdata.calen.account.repository.LoginAuditLogRepository;
 import com.playdata.calen.account.security.AppUserPrincipal;
-import java.time.LocalDate;
-import java.time.ZoneId;
-import java.time.format.DateTimeFormatter;
+import java.time.Instant;
 import java.util.Comparator;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
@@ -29,6 +27,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 @SpringBootTest(properties = {
         "app.seed.enabled=true",
+        "app.seed.allow-insecure-default-credentials=true",
         "spring.datasource.url=jdbc:h2:mem:drive-admin-security-test;MODE=MySQL;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE",
         "spring.datasource.driver-class-name=org.h2.Driver",
         "spring.datasource.username=sa",
@@ -38,7 +37,7 @@ import org.springframework.test.web.servlet.MockMvc;
 class DriveAdminSecurityIntegrationTest {
 
     private static final String VERIFIED_ADMIN_USER_ID_KEY = "VERIFIED_ADMIN_USER_ID";
-    private static final String VERIFIED_ADMIN_DATE_KEY = "VERIFIED_ADMIN_DATE";
+    private static final String VERIFIED_ADMIN_AT_KEY = "VERIFIED_ADMIN_AT";
 
     @Autowired
     private MockMvc mockMvc;
@@ -145,11 +144,7 @@ class DriveAdminSecurityIntegrationTest {
     private MockHttpSession verifiedSession(Long userId) {
         MockHttpSession session = new MockHttpSession();
         session.setAttribute(VERIFIED_ADMIN_USER_ID_KEY, userId);
-        session.setAttribute(VERIFIED_ADMIN_DATE_KEY, currentDateString());
+        session.setAttribute(VERIFIED_ADMIN_AT_KEY, Instant.now());
         return session;
-    }
-
-    private String currentDateString() {
-        return LocalDate.now(ZoneId.of("Asia/Seoul")).format(DateTimeFormatter.BASIC_ISO_DATE);
     }
 }

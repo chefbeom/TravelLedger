@@ -320,10 +320,15 @@ public class TravelService {
                         media.getUploadedAt(),
                         "/api/travel/media/" + media.getId() + "/content",
                         media.getExpenseDate(),
+                        media.getExpenseTime(),
                         media.getTitle(),
                         media.getCountry(),
                         media.getRegion(),
-                        media.getPlaceName()
+                        media.getPlaceName(),
+                        media.getLatitude(),
+                        media.getLongitude(),
+                        media.getGpsLatitude(),
+                        media.getGpsLongitude()
                 ))
                 .toList();
     }

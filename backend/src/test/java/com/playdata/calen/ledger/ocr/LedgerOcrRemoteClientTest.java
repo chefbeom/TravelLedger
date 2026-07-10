@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.playdata.calen.ledger.ai.LedgerAiAnalysisProperties;
+import com.playdata.calen.ledger.domain.EntryType;
 import com.playdata.calen.ledger.ocr.LedgerOcrRemoteClient.RemoteAnalyzeResponse;
 import com.playdata.calen.ledger.ocr.LedgerOcrRemoteClient.RemoteParsedResult;
 import java.time.LocalDate;
@@ -216,5 +217,79 @@ class LedgerOcrRemoteClientTest {
                 );
         assertThat(response.parsedEntries()).extracting(RemoteParsedResult::entryTime)
                 .containsExactly(null, null, null);
+    }
+
+    @Test
+    void buildAnalyzeResponseCorrectsShoppingOrdersMisclassifiedAsIncome() {
+        LedgerOcrRemoteClient client = new LedgerOcrRemoteClient(new LedgerAiAnalysisProperties(), new ObjectMapper());
+        String responseBody = """
+                {
+                  "ok": true,
+                  "documentType": "AUTO",
+                  "rawText": "주문 정보 최근 주문 3건 주문일자 주문 상품정보 상품금액 배송비 주문상태 구매확정",
+                  "entries": [
+                    {
+                      "date": "2026-04-23",
+                      "entryType": "INCOME",
+                      "title": "비바스 내추럴99% 시카 천연샴푸1000g_2개",
+                      "memo": "상품금액 25,020원 / 구매확정",
+                      "amount": 25020,
+                      "warnings": []
+                    },
+                    {
+                      "date": "2026-01-23",
+                      "entryType": "INCOME",
+                      "title": "초강력 무선 에어건 Aero X10 130000rpm",
+                      "memo": "상품금액 37,370원 / 구매확정",
+                      "amount": 37370,
+                      "warnings": []
+                    }
+                  ],
+                  "warnings": []
+                }
+                """;
+
+        RemoteAnalyzeResponse response = client.buildAnalyzeResponse(responseBody, "AUTO", System.nanoTime());
+
+        assertThat(response.parsedEntries()).extracting(RemoteParsedResult::entryType)
+                .containsExactly(EntryType.EXPENSE, EntryType.EXPENSE);
+        assertThat(response.parsedEntries().get(0).warnings())
+                .anySatisfy(warning -> assertThat(warning).contains("거래 구분").contains("지출"));
+    }
+
+    @Test
+    void buildAnalyzeResponseClassifiesMixedIncomeAndPurchaseRowsIndependently() {
+        LedgerOcrRemoteClient client = new LedgerOcrRemoteClient(new LedgerAiAnalysisProperties(), new ObjectMapper());
+        String responseBody = """
+                {
+                  "ok": true,
+                  "documentType": "AUTO",
+                  "rawText": "주문 정보 주문일자 상품금액 구매확정 / 7월 급여 입금되었습니다 3,000,000원",
+                  "entries": [
+                    {
+                      "date": "2026-07-10",
+                      "entryType": "INCOME",
+                      "title": "7월 급여",
+                      "memo": "급여 입금되었습니다",
+                      "amount": 3000000,
+                      "warnings": []
+                    },
+                    {
+                      "date": "2026-04-23",
+                      "entryType": "INCOME",
+                      "title": "비바스 내추럴99% 시카 천연샴푸1000g_2개",
+                      "memo": "25,020원",
+                      "amount": 25020,
+                      "warnings": []
+                    }
+                  ],
+                  "warnings": []
+                }
+                """;
+
+        RemoteAnalyzeResponse response = client.buildAnalyzeResponse(responseBody, "AUTO", System.nanoTime());
+
+        assertThat(response.parsedEntries()).extracting(RemoteParsedResult::entryType)
+                .containsExactly(EntryType.INCOME, EntryType.EXPENSE);
     }
 }

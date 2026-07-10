@@ -25,7 +25,10 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 
 @Configuration
 @RequiredArgsConstructor
-@ConditionalOnProperty(name = "app.seed.enabled", havingValue = "true")
+@ConditionalOnProperty(
+        name = {"app.seed.enabled", "app.seed.allow-insecure-default-credentials"},
+        havingValue = "true"
+)
 public class DataInitializer {
 
     private final AppUserRepository appUserRepository;

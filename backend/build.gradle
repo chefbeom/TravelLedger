@@ -33,6 +33,7 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-security'
     implementation 'io.lettuce:lettuce-core'
     implementation 'io.minio:minio:8.5.17'
+    implementation 'org.bouncycastle:bcprov-jdk18on:1.84'
     implementation 'com.drewnoakes:metadata-extractor:2.19.0'
     implementation 'org.apache.poi:poi-ooxml:5.4.1'
     implementation 'net.lingala.zip4j:zip4j:2.11.5'

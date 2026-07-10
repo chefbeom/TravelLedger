@@ -51,6 +51,7 @@ public class LedgerOcrRemoteClient {
     private static final String YEAR_INFERRED_WARNING = "\uC5F0\uB3C4\uAC00 \uC5C6\uB294 \uB0A0\uC9DC\uB97C \uD604\uC7AC \uC5F0\uB3C4\uB85C \uBCF4\uC815\uD588\uC2B5\uB2C8\uB2E4.";
     private static final String ROW_DATE_CORRECTED_WARNING = "OCR \uD589 \uAE30\uC900\uC73C\uB85C \uAC70\uB798\uC77C\uC744 \uBCF4\uC815\uD588\uC2B5\uB2C8\uB2E4.";
     private static final String ROW_TIME_CLEARED_WARNING = "OCR \uD589\uC5D0 \uC2DC\uAC04 \uADFC\uAC70\uAC00 \uC5C6\uC5B4 \uAC70\uB798 \uC2DC\uAC04\uC744 \uBE44\uC6E0\uC2B5\uB2C8\uB2E4.";
+    private static final String ENTRY_TYPE_CORRECTED_WARNING = "\uAD6C\uB9E4/\uACB0\uC81C \uBB38\uB9E5\uC744 \uAE30\uC900\uC73C\uB85C \uAC70\uB798 \uAD6C\uBD84\uC744 \uC9C0\uCD9C\uB85C \uBCF4\uC815\uD588\uC2B5\uB2C8\uB2E4.";
     private static final List<String> DATE_TEXT_FIELDS = List.of(
             "date", "entryDate", "transactionDate", "paymentDate", "orderDate", "purchaseDate", "approvalDate",
             "transactionDateTime", "paymentDateTime", "orderDateTime",
@@ -222,6 +223,13 @@ public class LedgerOcrRemoteClient {
                         - For shopping order-history rows, amount comes from 상품금액/상품금액(수량)/상품금액(부가)/주문금액 cell of that same row.
                         - For Naver Pay/payment cards, amount comes from the final paid amount displayed in the same card/row, not voucher face value.
                         - For physical receipts, normally create one entry for the final total and put products in items/memo unless OCR rows clearly represent separate payment transactions.
+
+                        Entry type rules:
+                        - Purchases, shopping orders, card approvals, receipts, paid subscriptions, bills, and payment-completed rows are EXPENSE.
+                        - Use INCOME only when the same row explicitly proves that the user received money, such as salary, incoming transfer, interest, dividend, cashback, or refund received.
+                        - A product amount, order amount, total, or positive number does not mean income.
+                        - When evidence is ambiguous, default to EXPENSE. Never label a purchase/order row as INCOME.
+                        - Decide entryType independently for every row and never copy it from a neighboring row.
 
                         Title/memo/category rules:
                         - Title should be platform/merchant plus product/service when visible, e.g. "네이버페이 : 웹툰·시리즈 쿠키 59개". If platform is unclear, use product/service only.
@@ -416,6 +424,8 @@ public class LedgerOcrRemoteClient {
                 firstEntry = mergeRootWarnings(firstEntry, rootWarnings);
                 entries = List.of(firstEntry);
             }
+            entries = normalizeEntryTypes(entries, resolvedDocumentType, rawText);
+            firstEntry = entries.isEmpty() ? null : entries.get(0);
             long llmMs = Math.max(0, Math.round((System.nanoTime() - startedAt) / 1_000_000.0));
             Map<String, Object> timing = Map.of(
                     "llmMs", llmMs,
@@ -425,6 +435,90 @@ public class LedgerOcrRemoteClient {
         } catch (JsonProcessingException exception) {
             throw new BadRequestException("AI 이미지 분석 응답을 JSON으로 해석하지 못했습니다. 관리자 화면에서 모델이 JSON만 반환하도록 설정해 주세요.");
         }
+    }
+
+    private List<RemoteParsedResult> normalizeEntryTypes(
+            List<RemoteParsedResult> entries,
+            String documentType,
+            String rawText
+    ) {
+        if (entries == null || entries.isEmpty()) {
+            return List.of();
+        }
+        return entries.stream()
+                .filter(Objects::nonNull)
+                .map(entry -> copyWithEntryType(entry, resolveEntryType(entry, documentType, rawText)))
+                .toList();
+    }
+
+    private EntryType resolveEntryType(RemoteParsedResult entry, String documentType, String rawText) {
+        String entryEvidence = normalizeEntryTypeEvidence(String.join(" ",
+                safeText(entry.title()),
+                safeText(entry.memo()),
+                safeText(entry.vendor()),
+                safeText(entry.categoryGroupName()),
+                safeText(entry.categoryDetailName()),
+                safeText(entry.categoryText()),
+                entry.lineItems() == null ? "" : entry.lineItems().stream()
+                        .filter(Objects::nonNull)
+                        .map(RemoteLineItem::itemName)
+                        .filter(this::hasText)
+                        .reduce("", (left, right) -> left + " " + right)
+        ));
+        if (containsAny(entryEvidence, List.of(
+                "\uAE09\uC5EC", "\uC6D4\uAE09", "\uC785\uAE08 \uBC1B\uC74C", "\uC785\uAE08\uB418\uC5C8", "\uD658\uBD88 \uC644\uB8CC", "\uD658\uAE09",
+                "\uBC30\uB2F9\uAE08", "\uC774\uC790 \uC218\uC775", "salary", "income", "deposit received", "credit received", "refund", "cashback"
+        ))) {
+            return EntryType.INCOME;
+        }
+        if (containsAny(entryEvidence, List.of(
+                "\uAD6C\uB9E4", "\uC8FC\uBB38", "\uACB0\uC81C", "\uC0C1\uD488\uAE08\uC561", "\uBC30\uC1A1\uBE44", "\uC601\uC218\uC99D", "\uCE74\uB4DC \uC2B9\uC778", "\uCCAD\uAD6C", "\uB0A9\uBD80", "\uCD9C\uAE08",
+                "payment", "purchase", "order", "paid", "sales slip", "invoice", "charged"
+        ))) {
+            return EntryType.EXPENSE;
+        }
+
+        String documentEvidence = normalizeEntryTypeEvidence(rawText);
+        boolean shoppingOrPaymentDocument = containsAny(documentEvidence, List.of(
+                "\uC8FC\uBB38 \uC815\uBCF4", "\uC8FC\uBB38\uC77C\uC790", "\uC8FC\uBB38 \uC0C1\uD488", "\uC0C1\uD488\uAE08\uC561", "\uAD6C\uB9E4\uD655\uC815", "\uACB0\uC81C\uC644\uB8CC", "\uACB0\uC81C \uAE08\uC561",
+                "order info", "order date", "product amount", "purchase confirmed", "payment completed", "sales slip"
+        ));
+        String normalizedDocumentType = normalizeDocumentType(documentType);
+        if (shoppingOrPaymentDocument
+                || "RECEIPT".equals(normalizedDocumentType)
+                || "PAYMENT_CAPTURE".equals(normalizedDocumentType)) {
+            return EntryType.EXPENSE;
+        }
+        return entry.entryType() == EntryType.INCOME ? EntryType.INCOME : EntryType.EXPENSE;
+    }
+
+    private RemoteParsedResult copyWithEntryType(RemoteParsedResult entry, EntryType entryType) {
+        List<String> warnings = new ArrayList<>();
+        if (entry.warnings() != null) {
+            warnings.addAll(entry.warnings());
+        }
+        if (entry.entryType() == EntryType.INCOME
+                && entryType == EntryType.EXPENSE
+                && !warnings.contains(ENTRY_TYPE_CORRECTED_WARNING)) {
+            warnings.add(ENTRY_TYPE_CORRECTED_WARNING);
+        }
+        return new RemoteParsedResult(
+                entry.entryDate(), entry.entryTime(), entryType, entry.title(), entry.memo(), entry.amount(),
+                entry.vendor(), entry.paymentMethodText(), entry.categoryGroupName(), entry.categoryDetailName(),
+                entry.categoryText(), entry.lineItems(), entry.confidence(), warnings
+        );
+    }
+
+    private String normalizeEntryTypeEvidence(String value) {
+        return safeText(value).toLowerCase(Locale.ROOT).replaceAll("\\s+", " ").trim();
+    }
+
+    private boolean containsAny(String value, List<String> candidates) {
+        return hasText(value) && candidates.stream().anyMatch(value::contains);
+    }
+
+    private String safeText(String value) {
+        return value == null ? "" : value;
     }
 
     private List<RemoteParsedResult> normalizeEntryTemporalValues(JsonNode entriesNode, List<RemoteParsedResult> entries, String rawText) {

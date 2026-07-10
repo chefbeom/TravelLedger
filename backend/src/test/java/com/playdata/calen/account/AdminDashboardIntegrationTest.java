@@ -28,6 +28,7 @@ import org.springframework.test.web.servlet.MvcResult;
 
 @SpringBootTest(properties = {
         "app.seed.enabled=true",
+        "app.seed.allow-insecure-default-credentials=true",
         "spring.datasource.url=jdbc:h2:mem:admin-test;MODE=MySQL;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE",
         "spring.datasource.driver-class-name=org.h2.Driver",
         "spring.datasource.username=sa",
@@ -41,6 +42,36 @@ class AdminDashboardIntegrationTest {
 
     @Autowired
     private ObjectMapper objectMapper;
+
+    @Test
+    void adminAdditionalAuthenticationRequiresSecondaryPinInsteadOfPredictableDateCode() throws Exception {
+        MockHttpSession adminSession = login("admin", "test1234", "12345678");
+        String legacyDateCode = String.valueOf(
+                19990515 + Integer.parseInt(LocalDate.now(ZoneId.of("Asia/Seoul")).format(DateTimeFormatter.BASIC_ISO_DATE))
+        );
+
+        mockMvc.perform(post("/api/admin/access/verify")
+                        .session(adminSession)
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of("code", legacyDateCode))))
+                .andExpect(status().isUnauthorized());
+
+        mockMvc.perform(get("/api/admin/access/status").session(adminSession))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.verified").value(false));
+
+        mockMvc.perform(post("/api/admin/access/verify")
+                        .session(adminSession)
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of("code", "12345678"))))
+                .andExpect(status().isNoContent());
+
+        mockMvc.perform(get("/api/admin/access/status").session(adminSession))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.verified").value(true));
+    }
 
     @Test
     void adminCanReadDashboardButRegularUserCannot() throws Exception {
@@ -67,7 +98,7 @@ class AdminDashboardIntegrationTest {
     void adminAccessVerificationRequiresCsrfAndAdminRole() throws Exception {
         MockHttpSession adminSession = login("admin", "test1234", "12345678");
         MockHttpSession userSession = login("hana", "test1234", "12345678");
-        String code = adminVerificationCode();
+        String code = "12345678";
 
         mockMvc.perform(post("/api/admin/access/verify")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -313,19 +344,11 @@ class AdminDashboardIntegrationTest {
     }
 
     private void verifyAdminAccess(MockHttpSession session) throws Exception {
-        String code = adminVerificationCode();
-
         mockMvc.perform(post("/api/admin/access/verify")
                         .session(session)
                         .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(Map.of("code", code))))
+                        .content(objectMapper.writeValueAsString(Map.of("code", "12345678"))))
                 .andExpect(status().isNoContent());
-    }
-
-    private String adminVerificationCode() {
-        return String.valueOf(
-                19990515 + Integer.parseInt(LocalDate.now(ZoneId.of("Asia/Seoul")).format(DateTimeFormatter.BASIC_ISO_DATE))
-        );
     }
 }

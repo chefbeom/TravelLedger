@@ -51,6 +51,9 @@ public class DriveProfileController {
         DriveService.DriveFilePayload payload = driveProfileService.loadProfileImage(currentUser.userId());
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, "inline")
+                .header("X-Content-Type-Options", "nosniff")
+                .header("Content-Security-Policy", "sandbox")
+                .header(HttpHeaders.CACHE_CONTROL, "private, no-store")
                 .contentLength(payload.contentLength())
                 .contentType(MediaType.parseMediaType(payload.contentType()))
                 .body(payload.bytes());

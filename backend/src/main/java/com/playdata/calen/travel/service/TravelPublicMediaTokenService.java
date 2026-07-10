@@ -1,5 +1,7 @@
 package com.playdata.calen.travel.service;
 
+import com.playdata.calen.account.security.SecuritySecretSupport;
+
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.security.MessageDigest;
@@ -16,9 +18,9 @@ public class TravelPublicMediaTokenService {
     private final byte[] secretKey;
 
     public TravelPublicMediaTokenService(
-            @Value("${app.security.public-media-key:${JWT_KEY:calen-public-media-key-change-me}}") String secret
+            @Value("${app.security.public-media-key:}") String secret
     ) {
-        this.secretKey = secret.getBytes(StandardCharsets.UTF_8);
+        this.secretKey = SecuritySecretSupport.resolve(secret, "travel-public-media").getBytes(StandardCharsets.UTF_8);
     }
 
     public String issueToken(Long mediaId) {

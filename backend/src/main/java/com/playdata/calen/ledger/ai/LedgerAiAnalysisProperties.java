@@ -25,7 +25,7 @@ public class LedgerAiAnalysisProperties {
     private int maxTokens = 4096;
     private Duration connectTimeout = Duration.ofSeconds(3);
     private Duration readTimeout = Duration.ofMinutes(10);
-    private boolean enforceProviderUrlAllowlist = false;
+    private boolean enforceProviderUrlAllowlist = true;
     private String allowedProviderHosts = "localhost,127.0.0.1,::1";
 
     public boolean isEnabled() {
@@ -100,7 +100,7 @@ public class LedgerAiAnalysisProperties {
         if (lmStudioModelsPath == null || lmStudioModelsPath.isBlank()) {
             return "/v1/models";
         }
-        return lmStudioModelsPath.startsWith("/") ? lmStudioModelsPath : "/" + lmStudioModelsPath;
+        return normalizeRelativeEndpointPath(lmStudioModelsPath, "/v1/models");
     }
 
     public String getLmStudioChatPath() {
@@ -115,7 +115,7 @@ public class LedgerAiAnalysisProperties {
         if (lmStudioChatPath == null || lmStudioChatPath.isBlank()) {
             return "/v1/chat/completions";
         }
-        return lmStudioChatPath.startsWith("/") ? lmStudioChatPath : "/" + lmStudioChatPath;
+        return normalizeRelativeEndpointPath(lmStudioChatPath, "/v1/chat/completions");
     }
 
     public String getLmStudioApiKey() {
@@ -183,7 +183,9 @@ public class LedgerAiAnalysisProperties {
     }
 
     public boolean isLmStudioConfigured() {
-        return hasText(lmStudioBaseUrl) && isProviderUrlAllowed(lmStudioBaseUrl);
+        return hasText(lmStudioBaseUrl)
+                && isProviderUrlAllowed(lmStudioBaseUrl)
+                && hasSafeLmStudioEndpointPaths();
     }
 
     public boolean isLmStudioModelAuto() {
@@ -213,7 +215,10 @@ public class LedgerAiAnalysisProperties {
                 return "LM Studio URL is missing. Set APP_LEDGER_AI_LMSTUDIO_BASE_URL.";
             }
             if (!isProviderUrlAllowed(lmStudioBaseUrl)) {
-                return "LM Studio host is not in the AI provider allowlist. Check APP_LEDGER_AI_ALLOWED_PROVIDER_HOSTS.";
+                return "LM Studio URL must use HTTP(S), and its host must be in the AI provider allowlist (APP_LEDGER_AI_ALLOWED_PROVIDER_HOSTS).";
+            }
+            if (!hasSafeLmStudioEndpointPaths()) {
+                return "LM Studio chat and models endpoints must be relative paths on the configured server.";
             }
             if (isLmStudioModelAuto()) {
                 return "LM Studio AI analysis is ready. The model will be selected from "
@@ -233,13 +238,15 @@ public class LedgerAiAnalysisProperties {
         return "n8n AI analysis is ready.";
     }
     public boolean isProviderUrlAllowed(String value) {
+        URI providerUri = parseProviderUri(value);
+        if (providerUri == null) {
+            return false;
+        }
         if (!enforceProviderUrlAllowlist) {
             return true;
         }
-        String host = normalizeHost(extractHost(value));
-        if (!hasText(host)) {
-            return false;
-        }
+
+        String host = normalizeHost(providerUri.getHost());
         for (String allowedHost : safeText(allowedProviderHosts).split(",")) {
             if (host.equals(normalizeHost(allowedHost))) {
                 return true;
@@ -248,14 +255,53 @@ public class LedgerAiAnalysisProperties {
         return false;
     }
 
-    private String extractHost(String value) {
+    public boolean hasSafeLmStudioEndpointPaths() {
+        return isSafeRelativeEndpointPath(lmStudioChatPath)
+                && isSafeRelativeEndpointPath(lmStudioModelsPath);
+    }
+
+    private URI parseProviderUri(String value) {
         if (!hasText(value)) {
-            return "";
+            return null;
         }
         try {
-            return new URI(value.trim()).getHost();
+            URI uri = new URI(value.trim());
+            String scheme = safeText(uri.getScheme()).toLowerCase(Locale.ROOT);
+            if (!("http".equals(scheme) || "https".equals(scheme))
+                    || !hasText(uri.getHost())
+                    || hasText(uri.getUserInfo())) {
+                return null;
+            }
+            return uri;
         } catch (URISyntaxException exception) {
-            return "";
+            return null;
+        }
+    }
+
+    private String normalizeRelativeEndpointPath(String value, String fallback) {
+        if (!isSafeRelativeEndpointPath(value)) {
+            return fallback;
+        }
+        String path = value.trim();
+        return path.startsWith("/") ? path : "/" + path;
+    }
+
+    private boolean isSafeRelativeEndpointPath(String value) {
+        String path = safeText(value).trim();
+        if (!hasText(path)
+                || path.startsWith("//")
+                || path.contains("\\")
+                || path.contains("?")
+                || path.contains("#")
+                || path.indexOf('\r') >= 0
+                || path.indexOf('\n') >= 0) {
+            return false;
+        }
+        try {
+            URI uri = new URI(path);
+            return !uri.isAbsolute() && uri.getRawAuthority() == null;
+        } catch (URISyntaxException exception) {
+            return false;
         }
     }
 

@@ -2,19 +2,21 @@ package com.playdata.calen.account.service;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpSession;
-import java.time.LocalDate;
-import java.time.ZoneId;
-import java.time.format.DateTimeFormatter;
+import java.time.Duration;
+import java.time.Instant;
+import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 
 @Service
+@RequiredArgsConstructor
 public class AdminPageAccessService {
 
     private static final String VERIFIED_ADMIN_USER_ID_KEY = "VERIFIED_ADMIN_USER_ID";
-    private static final String VERIFIED_ADMIN_DATE_KEY = "VERIFIED_ADMIN_DATE";
-    private static final int ADMIN_CODE_BASE = 19990515;
-    private static final ZoneId KST = ZoneId.of("Asia/Seoul");
+    private static final String VERIFIED_ADMIN_AT_KEY = "VERIFIED_ADMIN_AT";
+    private static final Duration VERIFICATION_TTL = Duration.ofMinutes(30);
+
+    private final AppUserService appUserService;
 
     public boolean isVerified(HttpServletRequest request, Long userId) {
         HttpSession session = request.getSession(false);
@@ -23,37 +25,26 @@ public class AdminPageAccessService {
         }
 
         Object verifiedUserId = session.getAttribute(VERIFIED_ADMIN_USER_ID_KEY);
-        Object verifiedDate = session.getAttribute(VERIFIED_ADMIN_DATE_KEY);
-        String today = currentDateString();
+        Object verifiedAt = session.getAttribute(VERIFIED_ADMIN_AT_KEY);
 
         return userId != null
                 && verifiedUserId instanceof Long storedUserId
                 && userId.equals(storedUserId)
-                && today.equals(verifiedDate);
+                && verifiedAt instanceof Instant verifiedInstant
+                && verifiedInstant.plus(VERIFICATION_TTL).isAfter(Instant.now());
     }
 
-    public void verify(HttpServletRequest request, Long userId, String code) {
-        if (!expectedCode().equals(code != null ? code.trim() : "")) {
-            throw new AccessDeniedException("관리자 추가 인증 코드가 올바르지 않습니다.");
-        }
+    public void verify(HttpServletRequest request, Long userId, String secondaryPin) {
+        appUserService.verifySecondaryPin(userId, secondaryPin);
 
         HttpSession session = request.getSession(true);
         session.setAttribute(VERIFIED_ADMIN_USER_ID_KEY, userId);
-        session.setAttribute(VERIFIED_ADMIN_DATE_KEY, currentDateString());
+        session.setAttribute(VERIFIED_ADMIN_AT_KEY, Instant.now());
     }
 
     public void requireVerified(HttpServletRequest request, Long userId) {
         if (!isVerified(request, userId)) {
-            throw new AccessDeniedException("관리자 추가 인증이 필요합니다.");
+            throw new AccessDeniedException("Administrator verification is required.");
         }
-    }
-
-    private String expectedCode() {
-        int today = Integer.parseInt(currentDateString());
-        return String.valueOf(ADMIN_CODE_BASE + today);
-    }
-
-    private String currentDateString() {
-        return LocalDate.now(KST).format(DateTimeFormatter.BASIC_ISO_DATE);
     }
 }

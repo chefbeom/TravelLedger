@@ -1290,10 +1290,5 @@ watch(
         <slot name="fullscreen-overlay" :is-fullscreen="isFullscreen" />
       </div>
     </div>
-
-    <div class="travel-map__hint">
-      <strong>클러스터 지도 사용법</strong>
-      <span>확대와 축소를 해도 군집은 다시 묶이거나 풀리지 않습니다. 군집 핀을 누르면 오른쪽 패널에서 포함 사진을, 핀 보기에서는 기록 썸네일 핀을 바로 확인할 수 있습니다.</span>
-    </div>
   </div>
 </template>

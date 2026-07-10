@@ -6,11 +6,13 @@ import { formatCompactNumber } from '../lib/format'
 import { resolveRange, shiftRange, summarizeEntries } from '../lib/analytics'
 import { useTableSelection } from '../lib/tableSelection'
 import { fetchLayoutSetting, saveLayoutSetting } from '../lib/api'
+import HouseholdTransactionSheet from './HouseholdTransactionSheet.vue'
 
 const CALENDAR_SCALE_KEY = 'calen-household-calendar-scale-preset'
 const CALENDAR_HIGHLIGHT_KEY = 'calen-household-calendar-highlight-mode'
 const CALENDAR_AGGREGATE_PANEL_ENABLED_KEY = 'calen-household-calendar-aggregate-panel-enabled'
 const CALENDAR_RECEIPT_OCR_PANEL_ENABLED_KEY = 'calen-household-calendar-receipt-ocr-panel-enabled'
+const CALENDAR_TRANSACTION_SHEET_VIEW_MODE_KEY = 'calen-household-transaction-sheet-view-mode'
 const CALENDAR_PANEL_LAYOUT_STORAGE_KEY = 'calen-household-calendar-panel-layout:v2'
 const CALENDAR_PANEL_LAYOUT_SCOPE = 'household-calendar'
 const CALENDAR_PANEL_LAYOUT_VERSION = 2
@@ -64,6 +66,10 @@ const timeValueOptions = Array.from({ length: 24 * 60 }, (_, index) => {
 const timePresetListId = 'household-time-presets'
 const SELECTED_DAY_ENTRY_PAGE_SIZE = 1000
 const SELECTED_DAY_VISIBLE_ROWS = 5
+const transactionSheetViewModes = [
+  { value: 'inline', label: '페이지에 함께 보기', description: '달력 화면 아래에서 거래 시트를 확인합니다.' },
+  { value: 'modal', label: '모달창으로 보기', description: '현재 선택한 날짜의 거래 시트를 모달에서 확인합니다.' },
+]
 
 const aggregateWidgetKinds = [
   { value: 'NONE', label: '사용 안 함' },
@@ -321,6 +327,9 @@ const selectedDaySort = ref('ASC')
 const selectedDayEntryFilter = ref('ALL')
 const selectedDayAmountMode = ref('KRW')
 const selectedDayEntryPage = ref(0)
+const transactionSheetViewMode = ref('inline')
+const isTransactionSheetModalOpen = ref(false)
+const isTransactionSheetSettingsOpen = ref(false)
 const calendarScalePreset = ref('default')
 const calendarWeekMode = ref('month')
 const calendarPreviousWeekOffset = ref(1)
@@ -1114,7 +1123,10 @@ const calendarLayoutPanels = computed(() => {
   const panels = calendarPanelDefinitions.map((definition) => ({
     ...definition,
     ...calendarPanelLayout.value.find((item) => item.id === definition.id),
-  })).filter((panel) => panel.id !== 'aggregate' || isAggregatePanelEnabled.value)
+  })).filter((panel) => (
+    (panel.id !== 'aggregate' || isAggregatePanelEnabled.value)
+    && (panel.id !== 'sheet' || transactionSheetViewMode.value === 'inline' || isLayoutEditMode.value)
+  ))
 
   return expandAggregateEditPanelLayout(panels)
 })
@@ -1256,6 +1268,15 @@ watch(isAggregatePanelEnabled, () => {
 
 watch(isReceiptOcrPanelEnabled, () => {
   persistCalendarViewPreferences()
+  refreshCalendarMeasurements()
+})
+
+watch(transactionSheetViewMode, (value) => {
+  if (value !== 'modal') {
+    isTransactionSheetModalOpen.value = false
+  }
+  persistCalendarViewPreferences()
+  queueLayoutGridRebuild()
   refreshCalendarMeasurements()
 })
 
@@ -1520,7 +1541,12 @@ function calendarViewPreferencePayload() {
     highlightMode: calendarHighlightMode.value,
     aggregatePanelEnabled: isAggregatePanelEnabled.value,
     receiptOcrPanelEnabled: isReceiptOcrPanelEnabled.value,
+    transactionSheetViewMode: transactionSheetViewMode.value,
   }
+}
+
+function normalizeTransactionSheetViewMode(value) {
+  return transactionSheetViewModes.some((mode) => mode.value === value) ? value : 'inline'
 }
 
 function normalizeCalendarViewPreferences(payload) {
@@ -1537,6 +1563,7 @@ function normalizeCalendarViewPreferences(payload) {
     highlightMode,
     aggregatePanelEnabled: payload.aggregatePanelEnabled !== false,
     receiptOcrPanelEnabled: payload.receiptOcrPanelEnabled !== false,
+    transactionSheetViewMode: normalizeTransactionSheetViewMode(payload.transactionSheetViewMode),
   }
 }
 
@@ -1549,6 +1576,7 @@ function applyCalendarViewPreferences(preferences) {
   calendarHighlightMode.value = preferences.highlightMode
   isAggregatePanelEnabled.value = preferences.aggregatePanelEnabled
   isReceiptOcrPanelEnabled.value = preferences.receiptOcrPanelEnabled
+  transactionSheetViewMode.value = preferences.transactionSheetViewMode
 }
 
 function persistCalendarViewPreferencesLocal() {
@@ -1560,6 +1588,7 @@ function persistCalendarViewPreferencesLocal() {
   window.localStorage.setItem(CALENDAR_HIGHLIGHT_KEY, calendarHighlightMode.value)
   window.localStorage.setItem(CALENDAR_AGGREGATE_PANEL_ENABLED_KEY, isAggregatePanelEnabled.value ? 'true' : 'false')
   window.localStorage.setItem(CALENDAR_RECEIPT_OCR_PANEL_ENABLED_KEY, isReceiptOcrPanelEnabled.value ? 'true' : 'false')
+  window.localStorage.setItem(CALENDAR_TRANSACTION_SHEET_VIEW_MODE_KEY, transactionSheetViewMode.value)
 }
 
 function scheduleCalendarViewPreferencesRemotePersist(payload = calendarViewPreferencePayload()) {
@@ -1613,6 +1642,7 @@ function hydrateCalendarViewPreferencesFromLocal() {
   const savedHighlight = window.localStorage.getItem(CALENDAR_HIGHLIGHT_KEY)
   const savedAggregatePanelEnabled = window.localStorage.getItem(CALENDAR_AGGREGATE_PANEL_ENABLED_KEY)
   const savedReceiptOcrPanelEnabled = window.localStorage.getItem(CALENDAR_RECEIPT_OCR_PANEL_ENABLED_KEY)
+  const savedTransactionSheetViewMode = window.localStorage.getItem(CALENDAR_TRANSACTION_SHEET_VIEW_MODE_KEY)
 
   if (savedScale) {
     calendarScalePreset.value = normalizePresetKey(calendarDisplayModes, savedScale, 'default')
@@ -1630,6 +1660,7 @@ function hydrateCalendarViewPreferencesFromLocal() {
   if (savedReceiptOcrPanelEnabled) {
     isReceiptOcrPanelEnabled.value = savedReceiptOcrPanelEnabled !== 'false'
   }
+  transactionSheetViewMode.value = normalizeTransactionSheetViewMode(savedTransactionSheetViewMode)
 
   persistCalendarViewPreferencesLocal()
   nextTick(() => {
@@ -3189,7 +3220,8 @@ function handleSelectDay(day) {
 
 async function handleSelectDayAndScroll(day) {
   selectCalendarDay(day)
-  await scrollToPanelElement(ledgerSheetScrollTargetRef.value || ledgerSheetRef.value)
+  await nextTick()
+  await openTransactionSheet()
 }
 
 function clearCalendarDayLongPress() {
@@ -3285,11 +3317,37 @@ async function scrollToEntryEditor() {
   focusEntryEditorControl()
 }
 
-async function scrollToLedgerSheet() {
+function openTransactionSheetSettings() {
+  isTransactionSheetSettingsOpen.value = true
+}
+
+function closeTransactionSheetSettings() {
+  isTransactionSheetSettingsOpen.value = false
+}
+
+function setTransactionSheetViewMode(value) {
+  transactionSheetViewMode.value = normalizeTransactionSheetViewMode(value)
+}
+
+function closeTransactionSheetModal() {
+  isTransactionSheetModalOpen.value = false
+}
+
+async function openTransactionSheet() {
+  if (transactionSheetViewMode.value === 'modal') {
+    isTransactionSheetModalOpen.value = true
+    await nextTick()
+    return
+  }
   await scrollToPanelElement(ledgerSheetScrollTargetRef.value || ledgerSheetRef.value)
 }
 
+async function scrollToLedgerSheet() {
+  await openTransactionSheet()
+}
+
 async function handleSheetEditEntry(entry) {
+  closeTransactionSheetModal()
   emit('edit-entry', entry)
   await nextTick()
   await scrollToEntryEditor()
@@ -3455,6 +3513,13 @@ defineExpose({
             >
               {{ mode.label }}
             </button>
+          </div>
+        </div>
+        <div class="calendar-size-toolbar__block calendar-size-toolbar__block--sheet">
+          <span class="calendar-size-toolbar__label">거래 시트</span>
+          <div class="calendar-size-toggle">
+            <button type="button" class="calendar-size-toggle__button is-active" @click="openTransactionSheet">거래 시트 열기</button>
+            <button type="button" class="calendar-size-toggle__button" @click="openTransactionSheetSettings">거래 시트 설정</button>
           </div>
         </div>
         <strong class="calendar-size-toolbar__hint">
@@ -4241,115 +4306,32 @@ defineExpose({
               </template>
 
               <template v-else-if="panel.id === 'sheet'">
-                <section ref="ledgerSheetRef" class="panel household-sheet-panel">
-      <div class="panel__header">
-        <div>
-          <h2>{{ formatShortDate(selectedDate) }} 거래 시트</h2>
-          <p>달력에서 고른 날짜의 거래만 모아서 바로 수정하거나 삭제할 수 있습니다.</p>
-        </div>
-        <div class="household-sheet-header">
-          <span class="panel__badge">{{ selectedDateCountLabel }}</span>
-          <div v-if="hasSelectedForeignEntries" class="scope-toggle">
-            <button type="button" class="button" :class="{ 'button--primary': selectedDayAmountMode === 'KRW' }" @click="selectedDayAmountMode = 'KRW'">원화</button>
-            <button type="button" class="button" :class="{ 'button--primary': selectedDayAmountMode === 'FOREIGN' }" @click="selectedDayAmountMode = 'FOREIGN'">외화</button>
-          </div>
-          <div class="scope-toggle">
-            <button type="button" class="button" :class="{ 'button--primary': selectedDayEntryFilter === 'ALL' }" @click="selectedDayEntryFilter = 'ALL'">전체</button>
-            <button type="button" class="button" :class="{ 'button--primary': selectedDayEntryFilter === 'INCOME' }" @click="selectedDayEntryFilter = 'INCOME'">수입</button>
-            <button type="button" class="button" :class="{ 'button--primary': selectedDayEntryFilter === 'EXPENSE' }" @click="selectedDayEntryFilter = 'EXPENSE'">지출</button>
-          </div>
-          <div class="scope-toggle">
-            <button type="button" class="button" :class="{ 'button--primary': selectedDaySort === 'ASC' }" @click="selectedDaySort = 'ASC'">시간 오름차순</button>
-            <button type="button" class="button" :class="{ 'button--primary': selectedDaySort === 'DESC' }" @click="selectedDaySort = 'DESC'">시간 내림차순</button>
-          </div>
-        </div>
-      </div>
-
-      <div
-        class="sheet-table-wrap household-sheet-table-wrap"
-        :class="{ 'household-sheet-table-wrap--scroll': normalizedSelectedDateEntries.length > SELECTED_DAY_VISIBLE_ROWS }"
-      >
-        <table class="sheet-table household-sheet-table">
-          <colgroup>
-            <col class="household-sheet-col household-sheet-col--select" />
-            <col class="household-sheet-col household-sheet-col--time" />
-            <col class="household-sheet-col household-sheet-col--type" />
-            <col class="household-sheet-col household-sheet-col--title" />
-            <col class="household-sheet-col household-sheet-col--category" />
-            <col class="household-sheet-col household-sheet-col--payment" />
-            <col class="household-sheet-col household-sheet-col--amount" />
-            <col v-if="hasSelectedMemoColumn" class="household-sheet-col household-sheet-col--memo" />
-            <col class="household-sheet-col household-sheet-col--actions" />
-          </colgroup>
-          <thead>
-            <tr>
-              <th class="sheet-table__select">
-                <input
-                  class="sheet-table__checkbox"
-                  type="checkbox"
-                  :checked="selectedDayEntrySelection.allVisibleSelected"
-                  :indeterminate.prop="selectedDayEntrySelection.someVisibleSelected"
-                  @change="selectedDayEntrySelection.toggleAllVisible()"
+                <HouseholdTransactionSheet
+                  ref="ledgerSheetRef"
+                  :selected-date-label="formatShortDate(selectedDate)"
+                  :count-label="selectedDateCountLabel"
+                  :entries="pagedNormalizedSelectedDateEntries"
+                  :total-entry-count="normalizedSelectedDateEntries.length"
+                  :has-memo-column="hasSelectedMemoColumn"
+                  :has-foreign-entries="hasSelectedForeignEntries"
+                  :amount-mode="selectedDayAmountMode"
+                  :entry-filter="selectedDayEntryFilter"
+                  :sort="selectedDaySort"
+                  :selection="selectedDayEntrySelection"
+                  :page="selectedDayEntryPage"
+                  :page-count="selectedDayEntryPageCount"
+                  :format-time="formatTime"
+                  :format-payment-method="formatPaymentMethodForSheet"
+                  :format-amount-main="formatSheetAmountMain"
+                  :format-amount-sub="formatSheetAmountSub"
+                  @update:amount-mode="selectedDayAmountMode = $event"
+                  @update:entry-filter="selectedDayEntryFilter = $event"
+                  @update:sort="selectedDaySort = $event"
+                  @update:page="selectedDayEntryPage = $event"
+                  @edit-entry="handleSheetEditEntry"
+                  @delete-entry="emit('delete-entry', $event)"
+                  @open-settings="openTransactionSheetSettings"
                 />
-              </th>
-              <th>시간</th>
-              <th>구분</th>
-              <th>제목</th>
-              <th>카테고리</th>
-              <th>결제수단</th>
-              <th>금액</th>
-              <th v-if="hasSelectedMemoColumn">메모</th>
-              <th>작업</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="entry in pagedNormalizedSelectedDateEntries" :key="entry.id">
-              <td class="sheet-table__select">
-                <input
-                  class="sheet-table__checkbox"
-                  type="checkbox"
-                  :checked="selectedDayEntrySelection.isSelected(entry)"
-                  @change="selectedDayEntrySelection.toggleItem(entry)"
-                />
-              </td>
-              <td>{{ formatTime(entry.entryTime) }}</td>
-              <td>
-                <span :class="['chip', entry.entryType === 'INCOME' ? 'chip--income' : 'chip--expense']">
-                  {{ entry.entryType === 'INCOME' ? '수입' : '지출' }}
-                </span>
-              </td>
-              <td class="sheet-table__title">{{ entry.title }}</td>
-              <td class="sheet-table__category">
-                {{ entry.categoryGroupName }}
-                <template v-if="entry.categoryDetailName"> / {{ entry.categoryDetailName }}</template>
-              </td>
-              <td>{{ formatPaymentMethodForSheet(entry) }}</td>
-              <td :class="['sheet-table__amount', entry.entryType === 'INCOME' ? 'is-income' : 'is-expense']">
-                <span class="sheet-table__amount-stack">
-                  <span class="sheet-table__amount-main">{{ formatSheetAmountMain(entry) }}</span>
-                  <small v-if="formatSheetAmountSub(entry)" class="sheet-table__amount-sub">{{ formatSheetAmountSub(entry) }}</small>
-                </span>
-              </td>
-              <td v-if="hasSelectedMemoColumn" class="sheet-table__memo">{{ entry.visibleMemo || '-' }}</td>
-              <td class="sheet-table__actions">
-                <div class="sheet-table__actions-inner">
-                  <button type="button" class="button button--ghost" @click="handleSheetEditEntry(entry)">수정</button>
-                  <button type="button" class="button button--danger" @click="emit('delete-entry', entry)">삭제</button>
-                </div>
-              </td>
-            </tr>
-            <tr v-if="!normalizedSelectedDateEntries.length">
-              <td :colspan="hasSelectedMemoColumn ? 9 : 8" class="sheet-table__empty">선택한 날짜에는 거래가 없습니다.</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-      <div v-if="normalizedSelectedDateEntries.length > SELECTED_DAY_ENTRY_PAGE_SIZE" class="panel__actions">
-        <button class="button button--ghost" type="button" :disabled="selectedDayEntryPage <= 0" @click="selectedDayEntryPage -= 1">이전</button>
-        <span>{{ selectedDayEntryPage + 1 }} / {{ selectedDayEntryPageCount }}</span>
-        <button class="button button--ghost" type="button" :disabled="selectedDayEntryPage + 1 >= selectedDayEntryPageCount" @click="selectedDayEntryPage += 1">다음</button>
-      </div>
-    </section>
               </template>
             </div>
           </div>
@@ -4357,6 +4339,83 @@ defineExpose({
       </div>
     </section>
 
+        <Teleport to="body">
+          <div
+            v-if="isTransactionSheetModalOpen"
+            class="transaction-sheet-modal"
+            data-no-drag="true"
+            @click.self="closeTransactionSheetModal"
+          >
+            <HouseholdTransactionSheet
+              class="transaction-sheet-modal__dialog"
+              role="dialog"
+              aria-modal="true"
+              aria-label="거래 시트"
+              :selected-date-label="formatShortDate(selectedDate)"
+              :count-label="selectedDateCountLabel"
+              :entries="pagedNormalizedSelectedDateEntries"
+              :total-entry-count="normalizedSelectedDateEntries.length"
+              :has-memo-column="hasSelectedMemoColumn"
+              :has-foreign-entries="hasSelectedForeignEntries"
+              :amount-mode="selectedDayAmountMode"
+              :entry-filter="selectedDayEntryFilter"
+              :sort="selectedDaySort"
+              :selection="selectedDayEntrySelection"
+              :page="selectedDayEntryPage"
+              :page-count="selectedDayEntryPageCount"
+              :format-time="formatTime"
+              :format-payment-method="formatPaymentMethodForSheet"
+              :format-amount-main="formatSheetAmountMain"
+              :format-amount-sub="formatSheetAmountSub"
+              modal
+              @update:amount-mode="selectedDayAmountMode = $event"
+              @update:entry-filter="selectedDayEntryFilter = $event"
+              @update:sort="selectedDaySort = $event"
+              @update:page="selectedDayEntryPage = $event"
+              @edit-entry="handleSheetEditEntry"
+              @delete-entry="emit('delete-entry', $event)"
+              @open-settings="openTransactionSheetSettings"
+              @close="closeTransactionSheetModal"
+            />
+          </div>
+        </Teleport>
+
+        <Teleport to="body">
+          <div
+            v-if="isTransactionSheetSettingsOpen"
+            class="transaction-sheet-settings-modal"
+            data-no-drag="true"
+            @click.self="closeTransactionSheetSettings"
+          >
+            <section class="transaction-sheet-settings-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="transaction-sheet-settings-title">
+              <header class="transaction-sheet-settings-modal__header">
+                <div>
+                  <span>거래 시트</span>
+                  <h2 id="transaction-sheet-settings-title">거래 시트 보기 설정</h2>
+                </div>
+                <button type="button" class="button button--ghost" @click="closeTransactionSheetSettings">닫기</button>
+              </header>
+              <div class="transaction-sheet-settings-modal__options" role="radiogroup" aria-label="거래 시트 표시 방식">
+                <button
+                  v-for="mode in transactionSheetViewModes"
+                  :key="mode.value"
+                  type="button"
+                  :class="['transaction-sheet-settings-modal__option', { 'is-active': transactionSheetViewMode === mode.value }]"
+                  role="radio"
+                  :aria-checked="transactionSheetViewMode === mode.value"
+                  @click="setTransactionSheetViewMode(mode.value)"
+                >
+                  <strong>{{ mode.label }}</strong>
+                  <span>{{ mode.description }}</span>
+                </button>
+              </div>
+              <footer class="transaction-sheet-settings-modal__actions">
+                <span>선택한 표시 방식은 바로 저장됩니다.</span>
+                <button type="button" class="button button--primary" @click="closeTransactionSheetSettings">확인</button>
+              </footer>
+            </section>
+          </div>
+        </Teleport>
         <div
       v-if="receiptOcr?.isOpen"
       class="receipt-ocr-modal"

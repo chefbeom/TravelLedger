@@ -266,6 +266,8 @@ public class DriveFileController {
         byte[] bytes = payload.bytes() != null ? payload.bytes() : new byte[0];
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, disposition.toString())
+                .header("X-Content-Type-Options", "nosniff")
+                .header("Content-Security-Policy", "sandbox")
                 .contentLength(bytes.length)
                 .contentType(resolveMediaType(payload.contentType()))
                 .body(bytes);
@@ -326,6 +328,7 @@ public class DriveFileController {
                 .cacheControl(cacheControl)
                 .eTag(payload.eTag())
                 .lastModified(payload.lastModifiedEpochMillis())
+                .header("X-Content-Type-Options", "nosniff")
                 .contentType(MediaType.parseMediaType(payload.contentType()))
                 .body(payload.bytes());
     }
@@ -336,9 +339,13 @@ public class DriveFileController {
             return false;
         }
         String normalized = contentType.toLowerCase();
-        return normalized.startsWith("image/")
-                || normalized.startsWith("video/")
-                || normalized.startsWith("text/")
+        return normalized.equals("image/jpeg")
+                || normalized.equals("image/png")
+                || normalized.equals("image/gif")
+                || normalized.equals("image/webp")
+                || normalized.equals("image/bmp")
+                || normalized.equals("video/mp4")
+                || normalized.equals("video/quicktime")
                 || normalized.equals("application/pdf");
     }
 

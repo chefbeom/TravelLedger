@@ -11,10 +11,14 @@ services:
       DB_URL: ${DB_URL:-jdbc:mariadb://10.0.0.2:3306/calen?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Seoul}
       DB_DRIVER: ${DB_DRIVER:-org.mariadb.jdbc.Driver}
       DB_ID: ${DB_USER:-calen}
-      DB_PASS: ${DB_PASSWORD:-calen1234}
-      JWT_KEY: ${JWT_KEY:-change-me-remember-me-key}
+      DB_PASS: ${DB_PASSWORD:?DB_PASSWORD must be set}
+      JWT_KEY: ${JWT_KEY:?JWT_KEY must be set}
       JWT_EXPIRE: ${JWT_EXPIRE:-300000000}
       APP_SEED_ENABLED: ${APP_SEED_ENABLED:-false}
+      APP_SEED_ALLOW_INSECURE_DEFAULT_CREDENTIALS: ${APP_SEED_ALLOW_INSECURE_DEFAULT_CREDENTIALS:-false}
+      SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE:-true}
+      REMEMBER_ME_SECURE_COOKIE: ${REMEMBER_ME_SECURE_COOKIE:-true}
+      CSRF_COOKIE_SECURE: ${CSRF_COOKIE_SECURE:-true}
       JPA_SHOW_SQL: ${JPA_SHOW_SQL:-false}
       JPA_FORMAT_SQL: ${JPA_FORMAT_SQL:-false}
       DB_MIGRATION_ENABLED: ${DB_MIGRATION_ENABLED:-false}
@@ -25,7 +29,7 @@ services:
       MINIO_API: ${MINIO_API:-${MINIO_API_INTERNAL_URL:-http://10.0.0.2:9000}}
       MINIO_PUBLIC_API: ${MINIO_PUBLIC_API:-${MINIO_API_PUBLIC_URL:-}}
       MINIO_NAME: ${MINIO_NAME:-minioadmin}
-      MINIO_SECRET: ${MINIO_SECRET:-change-me-minio-password}
+      MINIO_SECRET: ${MINIO_SECRET:?MINIO_SECRET must be set}
       MINIO_CLOUD_BUCKET: ${MINIO_CLOUD_BUCKET:-budgetjourneybucket}
       MINIO_WORKSPACE_BUCKET: ${MINIO_WORKSPACE_BUCKET:-calen-workspace}
       MINIO_PRESIGNED_URL_EXPIRY_SECONDS: ${MINIO_PRESIGNED_URL_EXPIRY_SECONDS:-6000}

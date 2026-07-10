@@ -52,6 +52,8 @@ import org.springframework.web.multipart.MultipartFile;
 @Transactional(readOnly = true)
 public class LedgerAiExcelImportService {
 
+    private static final long MAX_EXCEL_FILE_SIZE_BYTES = 20L * 1024L * 1024L;
+
     private static final DataFormatter DATA_FORMATTER = new DataFormatter(Locale.KOREA);
     private static final Pattern DIGIT_PATTERN = Pattern.compile("[^0-9.\\-]");
     private static final int MAX_WORKBOOK_ROWS = 260;
@@ -90,6 +92,9 @@ public class LedgerAiExcelImportService {
     private void validateFile(MultipartFile file) {
         if (file == null || file.isEmpty()) {
             throw new BadRequestException("AI로 분석할 Excel 파일을 업로드해 주세요.");
+        }
+        if (file.getSize() > MAX_EXCEL_FILE_SIZE_BYTES) {
+            throw new BadRequestException("Excel files must not exceed 20 MB.");
         }
         String fileName = defaultFileName(file).toLowerCase(Locale.ROOT);
         if (!(fileName.endsWith(".xlsx") || fileName.endsWith(".xls"))) {

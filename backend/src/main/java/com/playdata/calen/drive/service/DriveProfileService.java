@@ -9,6 +9,14 @@ import com.playdata.calen.drive.domain.DriveProfileSettings;
 import com.playdata.calen.drive.dto.DriveDtos;
 import com.playdata.calen.drive.repository.DriveItemRepository;
 import com.playdata.calen.drive.repository.DriveProfileSettingsRepository;
+import java.awt.image.BufferedImage;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.util.Iterator;
+import javax.imageio.ImageIO;
+import javax.imageio.ImageReader;
+import javax.imageio.stream.ImageInputStream;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -18,6 +26,8 @@ import org.springframework.web.multipart.MultipartFile;
 @Service
 @Transactional(readOnly = true)
 public class DriveProfileService {
+
+    private static final long MAX_PROFILE_IMAGE_SIZE_BYTES = 5L * 1024L * 1024L;
 
     private final AppUserRepository appUserRepository;
     private final DriveProfileSettingsRepository driveProfileSettingsRepository;
@@ -84,18 +94,35 @@ public class DriveProfileService {
             throw new BadRequestException("업로드할 이미지를 선택해 주세요.");
         }
 
-        String contentType = image.getContentType() == null ? "" : image.getContentType().trim().toLowerCase();
-        if (!contentType.startsWith("image/")) {
-            throw new BadRequestException("프로필 이미지는 이미지 파일만 업로드할 수 있습니다.");
+        if (image.getSize() > MAX_PROFILE_IMAGE_SIZE_BYTES) {
+            throw new BadRequestException("Profile images must not exceed 5 MB.");
         }
+
+        String contentType = image.getContentType() == null ? "" : image.getContentType().trim().toLowerCase();
+        if (!(MediaType.IMAGE_PNG_VALUE.equals(contentType)
+                || MediaType.IMAGE_JPEG_VALUE.equals(contentType)
+                || MediaType.IMAGE_GIF_VALUE.equals(contentType))) {
+            throw new BadRequestException("Only PNG, JPEG, and GIF profile images are supported.");
+        }
+
+        byte[] imageBytes;
+        try {
+            imageBytes = image.getBytes();
+        } catch (Exception exception) {
+            throw new BadRequestException("Could not read the profile image.");
+        }
+        if (!hasAllowedImageSignature(contentType, imageBytes)) {
+            throw new BadRequestException("Profile image content does not match its declared image type.");
+        }
+        byte[] sanitizedImageBytes = sanitizeProfileImage(imageBytes);
 
         AppUser user = getUser(userId);
         DriveProfileSettings settings = getOrCreateSettings(user);
         String objectKey = driveStorageService.buildProfileImageObjectKey(userId);
         try {
-            driveStorageService.uploadObject(objectKey, image.getBytes(), image.getContentType());
+            driveStorageService.uploadObject(objectKey, sanitizedImageBytes, MediaType.IMAGE_PNG_VALUE);
         } catch (Exception exception) {
-            throw new BadRequestException("프로필 이미지를 저장하지 못했습니다.");
+            throw new BadRequestException("Could not store the profile image.");
         }
         settings.setProfileImagePath(objectKey);
         return toSettingsResponse(user, settings);
@@ -146,6 +173,71 @@ public class DriveProfileService {
                 .createdAt(settings.getCreatedAt())
                 .updatedAt(settings.getUpdatedAt())
                 .build();
+    }
+
+    private byte[] sanitizeProfileImage(byte[] sourceBytes) {
+        try (ImageInputStream imageInput = ImageIO.createImageInputStream(new ByteArrayInputStream(sourceBytes))) {
+            Iterator<ImageReader> readers = ImageIO.getImageReaders(imageInput);
+            if (!readers.hasNext()) {
+                throw new BadRequestException("Profile image data could not be decoded.");
+            }
+
+            ImageReader reader = readers.next();
+            try {
+                reader.setInput(imageInput, true, true);
+                int width = reader.getWidth(0);
+                int height = reader.getHeight(0);
+                long pixelCount = (long) width * height;
+                if (width <= 0 || height <= 0 || width > 4096 || height > 4096 || pixelCount > 16_000_000L) {
+                    throw new BadRequestException("Profile image dimensions are too large.");
+                }
+
+                BufferedImage image = reader.read(0);
+                ByteArrayOutputStream output = new ByteArrayOutputStream();
+                if (image == null || !ImageIO.write(image, "png", output)) {
+                    throw new BadRequestException("Profile image data could not be converted.");
+                }
+                return output.toByteArray();
+            } finally {
+                reader.dispose();
+            }
+        } catch (IOException exception) {
+            throw new BadRequestException("Profile image data could not be decoded.");
+        }
+    }
+
+    private boolean hasAllowedImageSignature(String contentType, byte[] bytes) {
+        if (bytes == null) {
+            return false;
+        }
+        return switch (contentType) {
+            case MediaType.IMAGE_PNG_VALUE -> bytes.length >= 8
+                    && unsigned(bytes[0]) == 0x89
+                    && bytes[1] == 0x50
+                    && bytes[2] == 0x4E
+                    && bytes[3] == 0x47
+                    && bytes[4] == 0x0D
+                    && bytes[5] == 0x0A
+                    && bytes[6] == 0x1A
+                    && bytes[7] == 0x0A;
+            case MediaType.IMAGE_JPEG_VALUE -> bytes.length >= 3
+                    && unsigned(bytes[0]) == 0xFF
+                    && unsigned(bytes[1]) == 0xD8
+                    && unsigned(bytes[2]) == 0xFF;
+            case MediaType.IMAGE_GIF_VALUE -> bytes.length >= 6
+                    && bytes[0] == 'G'
+                    && bytes[1] == 'I'
+                    && bytes[2] == 'F'
+                    && bytes[3] == '8'
+                    && (bytes[4] == '7' || bytes[4] == '9')
+                    && bytes[5] == 'a';
+
+            default -> false;
+        };
+    }
+
+    private int unsigned(byte value) {
+        return value & 0xFF;
     }
 
     private AppUser getUser(Long userId) {

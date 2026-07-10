@@ -11,8 +11,8 @@ services:
       TZ: ${TZ:-Asia/Seoul}
       MARIADB_DATABASE: ${DB_NAME:-calen}
       MARIADB_USER: ${DB_USER:-calen}
-      MARIADB_PASSWORD: ${DB_PASSWORD:-calen1234}
-      MARIADB_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-change-me-db-root-password}
+      MARIADB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD must be set}
+      MARIADB_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:?DB_ROOT_PASSWORD must be set}
     volumes:
       - mariadb-data:/var/lib/mysql
     networks:
@@ -31,7 +31,7 @@ services:
     environment:
       TZ: ${TZ:-Asia/Seoul}
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-change-me-minio-password}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD must be set}
       MINIO_BROWSER_REDIRECT_URL: ${MINIO_CONSOLE_EXTERNAL_URL:-http://localhost:9001}
     ports:
       - "${MINIO_API_EXTERNAL_PORT:-9000}:9000"
@@ -57,7 +57,7 @@ services:
       - /bin/sh
       - -c
       - |
-        until mc alias set local ${MINIO_API_INTERNAL_URL:-http://minio:9000} ${MINIO_ROOT_USER:-minioadmin} ${MINIO_ROOT_PASSWORD:-change-me-minio-password}; do
+        until mc alias set local ${MINIO_API_INTERNAL_URL:-http://minio:9000} ${MINIO_ROOT_USER:-minioadmin} ${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD must be set}; do
           echo "Waiting for MinIO..."
           sleep 2
         done
@@ -80,14 +80,18 @@ services:
       DB_URL: jdbc:mariadb://${DB_INTERNAL_HOST:-mariadb}:${DB_INTERNAL_PORT:-3306}/${DB_NAME:-calen}?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Seoul
       DB_DRIVER: org.mariadb.jdbc.Driver
       DB_ID: ${DB_USER:-calen}
-      DB_PASS: ${DB_PASSWORD:-calen1234}
-      JWT_KEY: ${JWT_KEY:-change-me-remember-me-key}
-      APP_SEED_ENABLED: ${APP_SEED_ENABLED:-true}
+      DB_PASS: ${DB_PASSWORD:?DB_PASSWORD must be set}
+      JWT_KEY: ${JWT_KEY:?JWT_KEY must be set}
+      APP_SEED_ENABLED: ${APP_SEED_ENABLED:-false}
+      APP_SEED_ALLOW_INSECURE_DEFAULT_CREDENTIALS: ${APP_SEED_ALLOW_INSECURE_DEFAULT_CREDENTIALS:-false}
+      SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE:-false}
+      REMEMBER_ME_SECURE_COOKIE: ${REMEMBER_ME_SECURE_COOKIE:-false}
+      CSRF_COOKIE_SECURE: ${CSRF_COOKIE_SECURE:-false}
       H2_CONSOLE_ENABLED: ${H2_CONSOLE_ENABLED:-false}
       MINIO_API: ${MINIO_API_INTERNAL_URL:-http://minio:9000}
       MINIO_PUBLIC_API: ${MINIO_PUBLIC_API:-${MINIO_API_PUBLIC_URL:-http://localhost:9000}}
       MINIO_NAME: ${MINIO_ROOT_USER:-minioadmin}
-      MINIO_SECRET: ${MINIO_ROOT_PASSWORD:-change-me-minio-password}
+      MINIO_SECRET: ${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD must be set}
       MINIO_CLOUD_BUCKET: ${MINIO_CLOUD_BUCKET:-budgetjourneybucket}
       MINIO_WORKSPACE_BUCKET: ${MINIO_WORKSPACE_BUCKET:-calen-workspace}
       TRAVEL_EXCHANGE_RATE_BASE_URL: ${TRAVEL_EXCHANGE_RATE_BASE_URL:-https://api.frankfurter.dev/v1}
@@ -111,7 +115,7 @@ services:
       APP_LEDGER_AI_MAX_TOKENS: ${APP_LEDGER_AI_MAX_TOKENS:-4096}
       APP_LEDGER_AI_CONNECT_TIMEOUT: ${APP_LEDGER_AI_CONNECT_TIMEOUT:-3s}
       APP_LEDGER_AI_READ_TIMEOUT: ${APP_LEDGER_AI_READ_TIMEOUT:-120s}
-      APP_LEDGER_AI_ENFORCE_PROVIDER_URL_ALLOWLIST: ${APP_LEDGER_AI_ENFORCE_PROVIDER_URL_ALLOWLIST:-false}
+      APP_LEDGER_AI_ENFORCE_PROVIDER_URL_ALLOWLIST: ${APP_LEDGER_AI_ENFORCE_PROVIDER_URL_ALLOWLIST:-true}
       APP_LEDGER_AI_ALLOWED_PROVIDER_HOSTS: ${APP_LEDGER_AI_ALLOWED_PROVIDER_HOSTS:-localhost,127.0.0.1,::1}
       APP_LEDGER_AI_WORKFLOW_URL: ${APP_LEDGER_AI_WORKFLOW_URL:-}
       APP_LEDGER_AI_API_KEY: ${APP_LEDGER_AI_API_KEY:-}

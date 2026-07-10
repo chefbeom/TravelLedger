@@ -101,6 +101,22 @@ const ROUTE_LEAVE_GUARD_EVENT = 'calen-route-leave-guard'
 const DEFAULT_ROUTE_LEAVE_GUARD_MESSAGE = '페이지를 벗어나면 작성 중인 내용이 사라질 수 있습니다.'
 const NOTIFICATION_POLL_INTERVAL_MS = 15000
 const NOTIFICATION_TOAST_DURATION_MS = 3000
+const MOBILE_MODAL_SCROLL_LOCK_QUERY = '(max-width: 760px), (hover: none) and (pointer: coarse)'
+const MODAL_SCROLL_LOCK_SELECTOR = [
+  '[role="dialog"][aria-modal="true"]',
+  '.travel-modal',
+  '.receipt-ocr-modal',
+  '.ai-result-modal',
+  '.profile-security-modal',
+  '.profile-privacy-modal',
+  '.admin-ops-modal',
+  '.admin-support-modal',
+  '.admin-access-control-modal',
+  '.global-notification-modal',
+  '.main-photo-frame-modal',
+  '.public-map-share-photo-modal',
+  '.drive-preview-modal',
+].join(', ')
 
 const routeMeta = {
   notifications: {
@@ -182,6 +198,11 @@ const notificationToast = reactive({
   title: '',
   message: '',
 })
+let mobileModalObserver = null
+let mobileModalScrollLockActive = false
+let mobileModalScrollY = 0
+let mobileModalScrollSyncQueued = false
+let mobileModalScrollRestore = null
 const notificationSignalVisible = computed(() => Boolean(currentUser.value && (notificationUnreadCount.value || notificationToast.visible)))
 const inviteToken = ref(initialRouteState.token)
 const householdInitialTab = ref('')
@@ -890,6 +911,75 @@ watch(activeRoute, (route) => {
     refreshNotificationUnreadCount()
   }
 })
+function isMobileModalScrollLockRequired() {
+  return typeof window !== 'undefined'
+    && window.matchMedia(MOBILE_MODAL_SCROLL_LOCK_QUERY).matches
+    && Boolean(document.querySelector(MODAL_SCROLL_LOCK_SELECTOR))
+}
+
+function lockMobileModalBackgroundScroll() {
+  if (mobileModalScrollLockActive || typeof document === 'undefined') {
+    return
+  }
+
+  const root = document.documentElement
+  const body = document.body
+  mobileModalScrollY = window.scrollY || root.scrollTop || 0
+  mobileModalScrollRestore = {
+    rootOverflow: root.style.overflow,
+    bodyPosition: body.style.position,
+    bodyTop: body.style.top,
+    bodyLeft: body.style.left,
+    bodyRight: body.style.right,
+    bodyWidth: body.style.width,
+    bodyOverflow: body.style.overflow,
+  }
+  root.style.overflow = 'hidden'
+  body.style.position = 'fixed'
+  body.style.top = `-${mobileModalScrollY}px`
+  body.style.left = '0'
+  body.style.right = '0'
+  body.style.width = '100%'
+  body.style.overflow = 'hidden'
+  mobileModalScrollLockActive = true
+}
+
+function unlockMobileModalBackgroundScroll() {
+  if (!mobileModalScrollLockActive || typeof document === 'undefined') {
+    return
+  }
+
+  const root = document.documentElement
+  const body = document.body
+  const restore = mobileModalScrollRestore || {}
+  root.style.overflow = restore.rootOverflow || ''
+  body.style.position = restore.bodyPosition || ''
+  body.style.top = restore.bodyTop || ''
+  body.style.left = restore.bodyLeft || ''
+  body.style.right = restore.bodyRight || ''
+  body.style.width = restore.bodyWidth || ''
+  body.style.overflow = restore.bodyOverflow || ''
+  mobileModalScrollLockActive = false
+  mobileModalScrollRestore = null
+  window.scrollTo(0, mobileModalScrollY)
+}
+
+function syncMobileModalBackgroundScroll() {
+  mobileModalScrollSyncQueued = false
+  if (isMobileModalScrollLockRequired()) {
+    lockMobileModalBackgroundScroll()
+    return
+  }
+  unlockMobileModalBackgroundScroll()
+}
+
+function queueMobileModalBackgroundScrollSync() {
+  if (mobileModalScrollSyncQueued || typeof window === 'undefined') {
+    return
+  }
+  mobileModalScrollSyncQueued = true
+  window.requestAnimationFrame(syncMobileModalBackgroundScroll)
+}
 onMounted(() => {
   if (typeof window !== 'undefined') {
     applyLayoutMode(resolveInitialLayoutMode(), false)
@@ -901,6 +991,18 @@ onMounted(() => {
   window.addEventListener(ROUTE_LEAVE_GUARD_EVENT, handleRouteLeaveGuardChange)
   document.addEventListener('pointerdown', handleDocumentPointerDown)
   document.addEventListener('visibilitychange', handleNotificationVisibilityChange)
+  window.addEventListener('resize', queueMobileModalBackgroundScrollSync)
+  window.addEventListener('orientationchange', queueMobileModalBackgroundScrollSync)
+  if (typeof MutationObserver !== 'undefined') {
+    mobileModalObserver = new MutationObserver(queueMobileModalBackgroundScrollSync)
+    mobileModalObserver.observe(document.body, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ['class', 'role', 'aria-modal'],
+    })
+  }
+  queueMobileModalBackgroundScrollSync()
   restoreSession()
 })
 
@@ -910,6 +1012,11 @@ onBeforeUnmount(() => {
   window.removeEventListener(ROUTE_LEAVE_GUARD_EVENT, handleRouteLeaveGuardChange)
   document.removeEventListener('pointerdown', handleDocumentPointerDown)
   document.removeEventListener('visibilitychange', handleNotificationVisibilityChange)
+  window.removeEventListener('resize', queueMobileModalBackgroundScrollSync)
+  window.removeEventListener('orientationchange', queueMobileModalBackgroundScrollSync)
+  mobileModalObserver?.disconnect()
+  mobileModalObserver = null
+  unlockMobileModalBackgroundScroll()
   stopNotificationPolling()
   clearNotificationToast()
 })

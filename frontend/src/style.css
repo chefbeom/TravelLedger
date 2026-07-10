@@ -29013,6 +29013,65 @@ button.button--primary,
   white-space: nowrap !important;
 }
 
+.receipt-ocr-workspace--history:not(.receipt-ocr-workspace--history-detail) {
+  min-height: 0 !important;
+  overflow: hidden !important;
+}
+
+.receipt-ocr-workspace--history:not(.receipt-ocr-workspace--history-detail) .receipt-ocr-history {
+  align-content: start !important;
+  display: grid !important;
+  gap: 12px !important;
+  min-height: 0 !important;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+  padding-right: 8px !important;
+  scrollbar-gutter: stable !important;
+}
+
+.receipt-ocr-workspace--history:not(.receipt-ocr-workspace--history-detail) .receipt-ocr-history__list--index {
+  max-height: none !important;
+  overflow: visible !important;
+  padding-bottom: 0 !important;
+}
+
+.receipt-ocr-history__pagination {
+  align-items: center !important;
+  display: flex !important;
+  flex-wrap: wrap !important;
+  gap: 8px !important;
+  justify-content: flex-start !important;
+  margin-top: 2px !important;
+  padding: 0 0 4px !important;
+}
+
+.receipt-ocr-history__pagination .button {
+  min-width: 64px !important;
+}
+
+.receipt-ocr-history__pagination span {
+  color: var(--text-muted, var(--text-soft)) !important;
+  font-size: 0.9rem !important;
+  font-weight: 800 !important;
+}
+/* Keep the OCR history body in the remaining modal height. The safety row is hidden,
+   so the visible dialog layout has exactly three rows: header, navigation, content. */
+.receipt-ocr-modal__dialog {
+  grid-template-rows: auto auto minmax(0, 1fr) !important;
+}
+
+.receipt-ocr-workspace--history:not(.receipt-ocr-workspace--history-detail) .receipt-ocr-history {
+  max-height: 100% !important;
+  overscroll-behavior: contain !important;
+  padding-bottom: 12px !important;
+}
+
+.receipt-ocr-history__pagination {
+  inset: auto !important;
+  position: static !important;
+  z-index: auto !important;
+}
+
 @media (max-width: 900px) {
   .receipt-ocr-history__list--index .receipt-ocr-history__item {
     grid-template-columns: minmax(0, 1fr) !important;
@@ -30038,5 +30097,161 @@ button.button--primary,
     width: 38px;
     height: 38px;
     font-size: 26px;
+  }
+}
+
+/* Household transaction sheet view mode: inline or modal. */
+.transaction-sheet-modal,
+.transaction-sheet-settings-modal {
+  align-items: center;
+  background: rgba(2, 6, 23, 0.7);
+  display: grid;
+  inset: 0;
+  justify-items: center;
+  padding: clamp(12px, 2vw, 24px);
+  position: fixed;
+  z-index: 130;
+}
+
+.transaction-sheet-modal {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.transaction-sheet-modal__dialog {
+  box-sizing: border-box;
+  margin: 0;
+  max-height: min(920px, calc(100dvh - 32px));
+  max-width: 1500px;
+  min-width: 0;
+  overflow: hidden;
+  width: min(1500px, calc(100vw - 32px));
+}
+
+.transaction-sheet-modal__dialog .household-sheet-panel__header {
+  align-items: flex-start;
+  gap: 14px;
+}
+
+.transaction-sheet-modal__dialog .household-sheet-header {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.transaction-sheet-modal__dialog .household-sheet-table-wrap {
+  min-height: 0;
+}
+
+.transaction-sheet-modal__dialog .household-sheet-table-wrap--scroll {
+  max-height: min(620px, calc(100dvh - 250px));
+  overscroll-behavior: contain;
+}
+
+.transaction-sheet-settings-modal {
+  overscroll-behavior: contain;
+}
+
+.transaction-sheet-settings-modal__dialog {
+  background: var(--panel-bg, #1e293b);
+  border: 1px solid var(--panel-border, #475569);
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.45);
+  box-sizing: border-box;
+  display: grid;
+  gap: 18px;
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
+  padding: clamp(18px, 2.4vw, 28px);
+  width: min(620px, calc(100vw - 32px));
+}
+
+.transaction-sheet-settings-modal__header,
+.transaction-sheet-settings-modal__actions {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.transaction-sheet-settings-modal__header > div {
+  display: grid;
+  gap: 4px;
+}
+
+.transaction-sheet-settings-modal__header span {
+  color: var(--brand, #86efac);
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+
+.transaction-sheet-settings-modal__header h2 {
+  margin: 0;
+}
+
+.transaction-sheet-settings-modal__options {
+  display: grid;
+  gap: 10px;
+}
+
+.transaction-sheet-settings-modal__option {
+  background: var(--field-bg, #111827);
+  border: 1px solid var(--field-border, #475569);
+  color: var(--text, #f8fafc);
+  cursor: pointer;
+  display: grid;
+  gap: 5px;
+  min-height: 84px;
+  padding: 16px;
+  text-align: left;
+}
+
+.transaction-sheet-settings-modal__option strong {
+  font-size: 0.98rem;
+}
+
+.transaction-sheet-settings-modal__option span,
+.transaction-sheet-settings-modal__actions > span {
+  color: var(--text-soft, #cbd5e1);
+  font-size: 0.86rem;
+  line-height: 1.45;
+}
+
+.transaction-sheet-settings-modal__option.is-active {
+  background: rgba(16, 185, 129, 0.14);
+  border-color: #34d399;
+  box-shadow: inset 0 0 0 1px rgba(134, 239, 172, 0.38);
+}
+
+@media (max-width: 760px) {
+  .transaction-sheet-modal,
+  .transaction-sheet-settings-modal {
+    align-items: stretch;
+    padding: 10px;
+  }
+
+  .transaction-sheet-modal__dialog {
+    max-height: calc(100dvh - 20px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    width: 100%;
+  }
+
+  .transaction-sheet-modal__dialog .household-sheet-panel__header,
+  .transaction-sheet-settings-modal__header,
+  .transaction-sheet-settings-modal__actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .transaction-sheet-modal__dialog .household-sheet-header {
+    justify-content: flex-start;
+  }
+
+  .transaction-sheet-modal__dialog .household-sheet-table-wrap--scroll {
+    max-height: none;
+  }
+
+  .transaction-sheet-settings-modal__dialog {
+    max-height: calc(100dvh - 20px);
+    width: 100%;
   }
 }

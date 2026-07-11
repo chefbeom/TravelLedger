@@ -417,9 +417,36 @@ function goPrevAiServerStep() {
 }
 
 function applyAiControlPresetByKey(key) {
+  const preset = state.aiControlPresets.find((item) => item.key === key)
+  if (!preset) {
+    return
+  }
+
   state.aiControlPresetKey = key
+  state.aiServerDraftName = preset.title || preset.model || 'AI 서버'
   applyAiControlPreset()
-  state.opsControlMessage = '선택한 서버 설정을 불러왔습니다. 변경 내용을 적용하려면 저장을 누르세요.'
+  state.aiServerWizardStep = 1
+  state.opsControlModalView = 'add'
+  state.opsControlMessage = '선택한 서버 설정을 편집 화면으로 불러왔습니다. 필요한 내용을 확인한 뒤 저장하세요.'
+}
+
+function deleteAiControlPreset(key) {
+  const preset = state.aiControlPresets.find((item) => item.key === key)
+  if (!preset) {
+    return
+  }
+
+  const title = preset.title || preset.model || 'AI 서버'
+  if (!window.confirm(`"${title}" 서버 프리셋을 목록에서 삭제할까요?\n현재 적용 중인 AI 서버 설정은 변경되지 않습니다.`)) {
+    return
+  }
+
+  state.aiControlPresets = state.aiControlPresets.filter((item) => item.key !== key)
+  if (state.aiControlPresetKey === key) {
+    state.aiControlPresetKey = ''
+  }
+  persistAiControlPresets()
+  state.opsControlMessage = '서버 프리셋을 목록에서 삭제했습니다.'
 }
 
 function syncSelection(preferredId = state.selectedSupportInquiryId) {
@@ -903,6 +930,12 @@ function applyAiControlPreset() {
   state.aiControlForm.openAiBaseUrl = preset.openAiBaseUrl || 'https://api.openai.com'
   state.aiControlForm.openAiChatPath = preset.openAiChatPath || '/v1/chat/completions'
   state.aiControlForm.openAiModelsPath = preset.openAiModelsPath || '/v1/models'
+  state.aiControlForm.apiKey = ''
+  state.aiControlForm.lmStudioApiKey = ''
+  state.aiControlForm.openAiApiKey = ''
+  state.aiControlForm.clearApiKey = false
+  state.aiControlForm.clearLmStudioApiKey = false
+  state.aiControlForm.clearOpenAiApiKey = false
   state.aiServerEditorOpen = true
 }
 
@@ -1682,7 +1715,10 @@ onBeforeUnmount(() => {
                     <span>{{ preset.provider || 'lmstudio' }} · {{ preset.model || 'auto' }}</span>
                     <small>{{ preset.lmStudioBaseUrl || preset.workflowUrl || '-' }}</small>
                   </div>
-                  <button class="button button--ghost" type="button" @click="applyAiControlPresetByKey(preset.key)">불러오기</button>
+                  <div class="admin-ops-server-row__actions">
+                    <button class="button button--ghost" type="button" @click="applyAiControlPresetByKey(preset.key)">불러오기</button>
+                    <button class="button button--danger" type="button" @click="deleteAiControlPreset(preset.key)">삭제</button>
+                  </div>
                 </article>
               </div>
 

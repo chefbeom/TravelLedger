@@ -8,6 +8,9 @@ export const NOTIFICATION_CATEGORY_OPTIONS = [
   { key: 'account', label: '계정 및 개인정보' },
   { key: 'system', label: '운영 및 백업' },
 ]
+const NOTIFICATION_CATEGORY_LABELS = Object.fromEntries(
+  NOTIFICATION_CATEGORY_OPTIONS.map(({ key, label }) => [key, label]),
+)
 
 export function createDefaultNotificationPreferences() {
   return {

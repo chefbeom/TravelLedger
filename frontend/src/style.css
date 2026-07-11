@@ -16945,6 +16945,11 @@ textarea {
   min-width: 0;
   display: grid;
   gap: 5px;
+}.admin-ops-server-row__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
 }
 
 .admin-ops-server-row strong,

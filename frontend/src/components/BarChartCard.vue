@@ -40,15 +40,17 @@ const maxValue = computed(() => {
   return Math.max(...props.items.map((item) => Number(item.value ?? 0)), 1)
 })
 
-const trackHeight = 164
+const maxBarFillPercent = 88
 
 function getHeight(item) {
   const value = Number(item.value ?? 0)
   if (value <= 0) {
-    return '0px'
+    return '0%'
   }
 
-  return `${Math.max(8, Math.round((value / maxValue.value) * trackHeight))}px`
+  // The track height changes by density and viewport. Keep the tallest bar
+  // below the top edge using the track's own height rather than a fixed pixel value.
+  return `${Math.max(6, Math.min(maxBarFillPercent, (value / maxValue.value) * maxBarFillPercent))}%`
 }
 
 function formatDisplayValue(item) {

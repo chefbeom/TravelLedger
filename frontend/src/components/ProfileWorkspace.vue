@@ -664,14 +664,15 @@ async function handlePrivacyExport() {
               <p class="support-inquiry-content">{{ inquiry.content }}</p>
 
               <div v-if="inquiry.attachmentUrl" class="support-inquiry-attachment profile-inquiry-attachment">
-                <img
-                  v-if="inquiry.attachmentContentType?.startsWith('image/')"
-                  :src="buildThumbnailUrl(inquiry.attachmentUrl)"
-                  :alt="inquiry.attachmentFileName || inquiry.title"
-                  loading="lazy"
-                  decoding="async"
-                  class="support-inquiry-preview profile-inquiry-preview"
-                />
+                <div v-if="inquiry.attachmentContentType?.startsWith('image/')" class="profile-inquiry-preview-frame">
+                  <img
+                    :src="buildThumbnailUrl(inquiry.attachmentUrl)"
+                    :alt="inquiry.attachmentFileName || inquiry.title"
+                    loading="lazy"
+                    decoding="async"
+                    class="support-inquiry-preview profile-inquiry-preview"
+                  />
+                </div>
                 <div class="profile-inquiry-attachment__meta">
                   <strong>{{ inquiry.attachmentFileName || '첨부 파일' }}</strong>
                   <a class="button button--ghost profile-inquiry-attachment__button" :href="inquiry.attachmentUrl" target="_blank" rel="noreferrer">첨부 파일 보기</a>

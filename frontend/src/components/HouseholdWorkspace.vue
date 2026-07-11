@@ -62,7 +62,7 @@ import {
 } from '../lib/api'
 import {
   buildCalendarWeeks,
-  formatCurrency,
+  formatCurrency as formatKrwCurrency,
   formatCurrencyByCode,
   formatFullDate,
   formatDateRange,
@@ -111,6 +111,9 @@ const compareUnitLabels = {
   YEAR: '연간',
 }
 
+function formatCurrency(value) {
+  return formatKrwCurrency(value)
+}
 const today = toIsoDate(new Date())
 const quickAmountButtons = [10000, 30000, 50000, 100000]
 const foreignCurrencyOptions = ['USD', 'JPY', 'EUR', 'CNY', 'GBP', 'AUD', 'CAD', 'HKD', 'SGD', 'THB', 'PHP', 'VND', 'TWD']

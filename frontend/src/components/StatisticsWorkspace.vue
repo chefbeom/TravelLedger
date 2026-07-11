@@ -2107,7 +2107,67 @@ watch(
     flex-direction: column;
   }
 }
-</style>
+
+:global(:root:not([data-theme='toss'])) .ledger-ai-modal {
+  background: rgba(15, 23, 42, 0.42);
+}
+
+:global(:root:not([data-theme='toss'])) .ledger-ai-modal__dialog {
+  border-color: #b9c8d5;
+  background: #ffffff;
+  color: #14271e;
+  box-shadow: 0 24px 80px rgba(15, 23, 42, 0.22);
+}
+
+:global(:root:not([data-theme='toss'])) .ledger-ai-modal__header h2,
+:global(:root:not([data-theme='toss'])) .ledger-ai-modal__dialog strong,
+:global(:root:not([data-theme='toss'])) .ledger-ai-modal__dialog .field__label,
+:global(:root:not([data-theme='toss'])) .ledger-ai-modal__dialog .ledger-ai-switch {
+  color: #123326;
+  -webkit-text-fill-color: #123326;
+}
+
+:global(:root:not([data-theme='toss'])) .ledger-ai-modal__eyebrow {
+  color: #087a4e;
+  -webkit-text-fill-color: #087a4e;
+}
+
+:global(:root:not([data-theme='toss'])) .ledger-ai-modal__nav,
+:global(:root:not([data-theme='toss'])) .ledger-ai-modal__empty,
+:global(:root:not([data-theme='toss'])) .ledger-ai-focus-summary,
+:global(:root:not([data-theme='toss'])) .ledger-ai-result-preview,
+:global(:root:not([data-theme='toss'])) .ledger-ai-focus-editor,
+:global(:root:not([data-theme='toss'])) .ledger-ai-focus-presets article {
+  border-color: #cad7e1;
+  background: #f5f8fb;
+  color: #18362a;
+}
+
+:global(:root:not([data-theme='toss'])) .ledger-ai-modal__nav-button,
+:global(:root:not([data-theme='toss'])) .ledger-ai-modal__dialog input,
+:global(:root:not([data-theme='toss'])) .ledger-ai-modal__dialog select,
+:global(:root:not([data-theme='toss'])) .ledger-ai-modal__dialog textarea {
+  border-color: #b9c8d5;
+  background: #ffffff;
+  color: #163127;
+  -webkit-text-fill-color: #163127;
+}
+
+:global(:root:not([data-theme='toss'])) .ledger-ai-modal__nav-button.is-active {
+  border-color: #087a4e;
+  background: #087a4e;
+  color: #ffffff;
+  -webkit-text-fill-color: #ffffff;
+}
+
+:global(:root:not([data-theme='toss'])) .ledger-ai-modal__empty,
+:global(:root:not([data-theme='toss'])) .ledger-ai-focus-summary span,
+:global(:root:not([data-theme='toss'])) .ledger-ai-result-preview small,
+:global(:root:not([data-theme='toss'])) .ledger-ai-modal__dialog p,
+:global(:root:not([data-theme='toss'])) .ledger-ai-modal__dialog small {
+  color: #496257;
+  -webkit-text-fill-color: #496257;
+}</style>
 
 <template>
   <div class="workspace-stack">

@@ -1381,6 +1381,7 @@ onBeforeUnmount(() => {
           v-if="currentUser"
           ref="petCompanionRef"
           :notification="notificationToast"
+          :error-message="errorMessage"
           @open-notifications="openNotificationModal"
         />
 

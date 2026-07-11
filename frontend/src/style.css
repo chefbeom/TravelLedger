@@ -31743,3 +31743,47 @@ button.button--primary,
   justify-self: start;
   width: fit-content;
 }
+/* Support inquiry attachment frames must bound original image dimensions. */
+.profile-inquiry-body {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.profile-inquiry-attachment {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.profile-inquiry-preview-frame {
+  width: min(260px, 100%);
+  height: 160px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+}
+
+.profile-inquiry-preview-frame .profile-inquiry-preview {
+  display: block;
+  width: 100% !important;
+  min-width: 0;
+  max-width: none !important;
+  height: 100% !important;
+  min-height: 0;
+  max-height: none !important;
+  object-fit: cover !important;
+  border: 0;
+  border-radius: 0;
+}
+
+.profile-inquiry-reply {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 720px) {
+  .profile-inquiry-preview-frame {
+    width: 100%;
+    height: 180px;
+  }
+}

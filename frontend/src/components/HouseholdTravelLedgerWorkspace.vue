@@ -545,6 +545,7 @@ function startTravelEntryFromSelectedDate() {
               class="household-travel-ledger__date-card"
               :class="{
                 'household-travel-ledger__date-card--muted': !day.inTravelRange,
+                'household-travel-ledger__date-card--in-range': day.inTravelRange,
                 'household-travel-ledger__date-card--active': selectedTravelDate === day.date,
               }"
               type="button"

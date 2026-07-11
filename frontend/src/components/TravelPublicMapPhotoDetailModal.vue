@@ -46,7 +46,7 @@ const THUMB_LIST_LABEL = '\uD074\uB7EC\uC2A4\uD130 \uC0AC\uC9C4 \uBAA9\uB85D'
 </script>
 
 <template>
-  <div class="public-map-share-photo-modal" role="dialog" aria-modal="true" aria-labelledby="public-map-share-photo-modal-title" @click.self="emit('close')">
+  <div class="public-map-share-photo-modal" role="dialog" aria-modal="true" aria-labelledby="public-map-share-photo-modal-title" @keydown.esc="emit('close')">
     <article class="public-map-share-photo-modal__panel">
       <header class="public-map-share-photo-modal__header">
         <div>

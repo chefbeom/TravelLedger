@@ -21,6 +21,10 @@ const props = defineProps({
     type: Object,
     required: true,
   },
+  embedded: {
+    type: Boolean,
+    default: false,
+  },
 })
 
 const PAGE_SIZE = 5
@@ -488,10 +492,10 @@ async function handlePrivacyExport() {
 </script>
 
 <template>
-  <section class="workspace-stack profile-workspace">
+  <section :class="['workspace-stack', 'profile-workspace', { 'profile-workspace--embedded': embedded }]">
     <section class="panel profile-section-navigation">
       <div class="panel__header profile-section-navigation__header">
-        <h2>프로필</h2>
+        <h2 v-if="!embedded">프로필</h2>
         <nav class="profile-section-tabs" role="tablist" aria-label="프로필 기능">
           <button
             class="button button--ghost"
@@ -693,7 +697,7 @@ async function handlePrivacyExport() {
         </div>
       </section>
     </section>
-    <div v-if="privacy.modalVisible" class="travel-modal" @click.self="closePrivacyManagementModal">
+    <div v-if="privacy.modalVisible" class="travel-modal" @keydown.esc="closePrivacyManagementModal">
       <div class="travel-modal__dialog profile-privacy-modal" data-testid="privacy-management-dialog" role="dialog" aria-modal="true" aria-labelledby="privacy-management-title">
         <div class="travel-modal__header">
           <div>
@@ -763,7 +767,7 @@ async function handlePrivacyExport() {
         </div>
       </div>
     </div>
-    <div v-if="privacy.exportGateVisible" class="travel-modal" @click.self="closePrivacyExportGate">
+    <div v-if="privacy.exportGateVisible" class="travel-modal" @keydown.esc="closePrivacyExportGate">
       <div class="travel-modal__dialog profile-security-modal" data-testid="privacy-export-dialog" role="dialog" aria-modal="true" aria-labelledby="privacy-export-title">
         <div class="travel-modal__header">
           <div>
@@ -802,7 +806,7 @@ async function handlePrivacyExport() {
       </div>
     </div>
 
-    <div v-if="security.gateVisible" class="travel-modal" @click.self="closeSecurityModal">
+    <div v-if="security.gateVisible" class="travel-modal" @keydown.esc="closeSecurityModal">
       <div class="travel-modal__dialog profile-security-modal" role="dialog" aria-modal="true" aria-labelledby="security-gate-title">
         <div class="travel-modal__header">
           <div>
@@ -829,7 +833,7 @@ async function handlePrivacyExport() {
       </div>
     </div>
 
-    <div v-if="security.changeVisible" class="travel-modal" @click.self="closeSecurityModal">
+    <div v-if="security.changeVisible" class="travel-modal" @keydown.esc="closeSecurityModal">
       <div class="travel-modal__dialog profile-security-modal" role="dialog" aria-modal="true" aria-labelledby="security-change-title">
         <div class="travel-modal__header">
           <div>

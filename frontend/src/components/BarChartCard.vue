@@ -22,6 +22,14 @@ const props = defineProps({
     type: String,
     default: '표시할 데이터가 없습니다.',
   },
+  dense: {
+    type: Boolean,
+    default: false,
+  },
+  valueFormatter: {
+    type: Function,
+    default: null,
+  },
 })
 
 const maxValue = computed(() => {
@@ -42,6 +50,13 @@ function getHeight(item) {
 
   return `${Math.max(8, Math.round((value / maxValue.value) * trackHeight))}px`
 }
+
+function formatDisplayValue(item) {
+  if (typeof props.valueFormatter === 'function') {
+    return props.valueFormatter(item.value, item)
+  }
+  return props.formatValue(item.value, item)
+}
 </script>
 
 <template>
@@ -53,9 +68,9 @@ function getHeight(item) {
       </div>
     </div>
 
-    <div v-if="items.length" class="bar-chart">
+    <div v-if="items.length" :class="['bar-chart', { 'bar-chart--dense': dense }]">
       <article v-for="(item, index) in items" :key="`${item.label}-${index}`" class="bar-chart__item">
-        <div class="bar-chart__value">{{ formatValue(item.value, item) }}</div>
+        <div class="bar-chart__value" :title="formatValue(item.value, item)">{{ formatDisplayValue(item) }}</div>
         <div class="bar-chart__track">
           <span
             class="bar-chart__bar"

@@ -710,7 +710,7 @@ function shouldLoadStatisticsForTab(tab = householdTab.value) {
 }
 
 function shouldLoadOverviewForTab(tab = householdTab.value) {
-  return resolveHouseholdStatisticsRoute(tab) === 'stats-overview'
+  return ['stats-overview', 'stats-insights', 'stats-compare'].includes(resolveHouseholdStatisticsRoute(tab))
 }
 
 function shouldLoadBreakdownsForTab(tab = householdTab.value) {
@@ -718,7 +718,7 @@ function shouldLoadBreakdownsForTab(tab = householdTab.value) {
 }
 
 function shouldLoadComparisonRowsForTab(tab = householdTab.value) {
-  return resolveHouseholdStatisticsRoute(tab) === 'stats-overview'
+  return ['stats-overview', 'stats-insights', 'stats-compare'].includes(resolveHouseholdStatisticsRoute(tab))
 }
 
 function shouldLoadStatisticsEntriesForTab(tab = householdTab.value) {
@@ -2628,7 +2628,7 @@ async function loadPastComparisons() {
         from: previousRange.from,
         to: previousRange.to,
         overview: previousOverview,
-        deltaExpense: Number(previousOverview.expense || 0) - Number(currentOverview.expense || 0),
+        deltaExpense: Number(currentOverview.expense || 0) - Number(previousOverview.expense || 0),
       }
     }),
   )
@@ -5237,8 +5237,7 @@ async function activatePayment(paymentId) {
 
     <div
       v-if="classificationDeleteModal.isOpen"
-      class="travel-modal classification-delete-modal"
-      @click.self="resetClassificationDeleteModal"
+      class="travel-modal classification-delete-modal" @keydown.esc="resetClassificationDeleteModal"
     >
       <section class="travel-modal__dialog classification-delete-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="classification-delete-title">
         <div class="travel-modal__header">
@@ -5368,7 +5367,7 @@ async function activatePayment(paymentId) {
       </button>
     </div>
 
-    <div v-if="ledgerChangeHistory.isOpen" class="travel-modal ledger-history-modal" @click.self="closeLedgerChangeHistoryModal">
+    <div v-if="ledgerChangeHistory.isOpen" class="travel-modal ledger-history-modal" @keydown.esc="closeLedgerChangeHistoryModal">
       <section class="travel-modal__dialog ledger-history-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="ledger-history-title">
         <div class="travel-modal__header ledger-history-modal__header">
           <div>

@@ -1999,7 +1999,7 @@ onBeforeUnmount(() => {
         <button class="main-dashboard__primary" type="button" @click="toggleEditMode">편집 완료</button>
       </template>
     </aside>
-    <div v-if="photoFrameDetail.open && photoFrameDetail.photo" class="main-photo-frame-modal main-photo-frame-detail-modal" data-no-drag="true" @click.self="closePhotoFrameDetail">
+    <div v-if="photoFrameDetail.open && photoFrameDetail.photo" class="main-photo-frame-modal main-photo-frame-detail-modal" data-no-drag="true" @keydown.esc="closePhotoFrameDetail">
       <section class="main-photo-frame-modal__dialog main-photo-frame-detail-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="main-photo-frame-detail-title">
         <header class="main-photo-frame-modal__header">
           <div>
@@ -2055,7 +2055,7 @@ onBeforeUnmount(() => {
         </div>
       </section>
     </div>
-    <div v-if="photoFrameSettings.open" class="main-photo-frame-modal" data-no-drag="true" @click.self="closePhotoFrameSettings">
+    <div v-if="photoFrameSettings.open" class="main-photo-frame-modal" data-no-drag="true" @keydown.esc="closePhotoFrameSettings">
       <section class="main-photo-frame-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="main-photo-frame-title">
         <header class="main-photo-frame-modal__header">
           <div>

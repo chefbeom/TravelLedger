@@ -470,7 +470,7 @@ watch(
       <p v-else class="panel__empty">조건에 맞는 여행 사진이 없습니다.</p>
     </section>
 
-    <div v-if="selectedPhoto" class="travel-modal travel-my-photos__modal-backdrop" @click.self="closePhoto">
+    <div v-if="selectedPhoto" class="travel-modal travel-my-photos__modal-backdrop" @keydown.esc="closePhoto">
       <section class="travel-modal__dialog travel-my-photos__modal" role="dialog" aria-modal="true">
         <div class="travel-modal__header">
           <div>

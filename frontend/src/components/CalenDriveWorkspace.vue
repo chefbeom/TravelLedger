@@ -3263,7 +3263,7 @@ onBeforeUnmount(() => {
           </section>
         </section>
 
-        <div v-if="previewDialog.open && previewDialog.item" class="travel-modal drive-preview-modal" @click.self="closePreviewDialog">
+        <div v-if="previewDialog.open && previewDialog.item" class="travel-modal drive-preview-modal" @keydown.esc="closePreviewDialog">
           <div class="travel-modal__dialog drive-preview-modal__dialog">
             <div class="travel-modal__header">
               <div>
@@ -3303,7 +3303,7 @@ onBeforeUnmount(() => {
           </div>
         </div>
 
-        <div v-if="uploadProgress.open" class="travel-modal" @click.self>
+        <div v-if="uploadProgress.open" class="travel-modal">
           <div class="travel-modal__dialog drive-progress-modal">
             <div class="travel-modal__header">
               <div>
@@ -3322,7 +3322,7 @@ onBeforeUnmount(() => {
           </div>
         </div>
 
-        <div v-if="folderDialog.open" class="travel-modal" @click.self="closeFolderDialog">
+        <div v-if="folderDialog.open" class="travel-modal" @keydown.esc="closeFolderDialog">
           <div class="travel-modal__dialog drive-folder-modal">
             <div class="travel-modal__header">
               <div>
@@ -3389,7 +3389,7 @@ onBeforeUnmount(() => {
           </div>
         </div>
 
-        <div v-if="moveDialog.open" class="travel-modal" @click.self="closeMoveDialog">
+        <div v-if="moveDialog.open" class="travel-modal" @keydown.esc="closeMoveDialog">
           <div class="travel-modal__dialog drive-move-modal">
             <div class="travel-modal__header">
               <div>
@@ -3446,7 +3446,7 @@ onBeforeUnmount(() => {
           </div>
         </div>
 
-        <div v-if="sharedSaveDialog.open" class="travel-modal" @click.self="closeSharedSaveDialog">
+        <div v-if="sharedSaveDialog.open" class="travel-modal" @keydown.esc="closeSharedSaveDialog">
           <div class="travel-modal__dialog drive-shared-save-modal">
             <div class="travel-modal__header">
               <div>
@@ -3507,7 +3507,7 @@ onBeforeUnmount(() => {
           </div>
         </div>
 
-        <div v-if="shareDialog.open" class="travel-modal" @click.self="closeShareDialog">
+        <div v-if="shareDialog.open" class="travel-modal" @keydown.esc="closeShareDialog">
           <div class="travel-modal__dialog drive-share-modal">
             <div class="travel-modal__header">
               <div>
@@ -3668,7 +3668,7 @@ onBeforeUnmount(() => {
           </button>
         </div>
 
-        <div v-if="versionDrawer.open" class="drive-version-overlay" data-testid="drive-version-overlay" @click.self="closeDriveVersionDrawer">
+        <div v-if="versionDrawer.open" class="drive-version-overlay" data-testid="drive-version-overlay" @keydown.esc="closeDriveVersionDrawer">
           <aside class="drive-version-drawer" data-testid="drive-version-drawer" role="dialog" aria-modal="true" aria-labelledby="drive-version-title">
             <header class="drive-version-drawer__header">
               <div>

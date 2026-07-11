@@ -1540,7 +1540,7 @@ onBeforeUnmount(() => {
         </div>
       </section>
 
-      <div v-if="state.opsControlModalOpen" class="travel-modal admin-ops-modal" @click.self="closeOpsControlModal">
+      <div v-if="state.opsControlModalOpen" class="travel-modal admin-ops-modal" @keydown.esc="closeOpsControlModal">
         <div class="travel-modal__dialog admin-ops-modal__dialog">
           <div class="travel-modal__header admin-ops-modal__header">
             <div>
@@ -1839,7 +1839,7 @@ onBeforeUnmount(() => {
         </div>
       </div>
 
-      <div v-if="state.supportModalOpen" class="travel-modal admin-support-modal" @click.self="closeSupportModal">
+      <div v-if="state.supportModalOpen" class="travel-modal admin-support-modal" @keydown.esc="closeSupportModal">
         <div class="travel-modal__dialog admin-support-modal__dialog">
           <div class="travel-modal__header admin-support-modal__header">
             <div>
@@ -2017,7 +2017,7 @@ onBeforeUnmount(() => {
         </div>
       </div>
 
-      <div v-if="state.accessModalOpen" class="travel-modal admin-access-control-modal" @click.self="closeAccessModal">
+      <div v-if="state.accessModalOpen" class="travel-modal admin-access-control-modal" @keydown.esc="closeAccessModal">
         <div class="travel-modal__dialog admin-access-control-modal__dialog">
           <div class="travel-modal__header admin-access-control-modal__header">
             <div>

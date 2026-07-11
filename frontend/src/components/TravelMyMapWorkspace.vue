@@ -1197,7 +1197,7 @@ watch(planFilterOptions, (options) => {
 
       <p v-else class="panel__empty">현재 보기 기준에 맞는 경로가 없습니다.</p>
     </section>
-    <div v-if="shareDialog.open" class="travel-modal travel-map-share-modal" @click.self="closeShareDialog">
+    <div v-if="shareDialog.open" class="travel-modal travel-map-share-modal" @keydown.esc="closeShareDialog">
       <div class="travel-modal__dialog travel-map-share-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="travel-map-share-title">
         <div class="travel-modal__header">
           <div>

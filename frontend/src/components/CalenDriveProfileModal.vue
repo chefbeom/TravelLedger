@@ -236,7 +236,7 @@ watch(
 </script>
 
 <template>
-  <div v-if="open" class="travel-modal" @click.self="emit('close')">
+  <div v-if="open" class="travel-modal" @keydown.esc="emit('close')">
     <div class="travel-modal__dialog drive-profile-modal">
       <div class="travel-modal__header">
         <div>

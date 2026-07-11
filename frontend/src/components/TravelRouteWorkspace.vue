@@ -67,6 +67,7 @@ const gpxFileNames = ref([])
 const gpxSelectedFiles = ref([])
 const activeDayDate = ref('')
 const highlightedDraftIndex = ref(-1)
+const showRecordPins = ref(false)
 const editingRouteId = ref(null)
 const focusedRouteId = ref('')
 const appliedRouteFocusToken = ref('')
@@ -368,6 +369,7 @@ watch(
   () => {
     initializeDaySelection()
     resetDraft()
+    showRecordPins.value = false
   },
   { immediate: true },
 )
@@ -1158,7 +1160,7 @@ function routeSummary(route) {
       </div>
 
       <TravelMapPanel
-        :markers="routeMapMarkers"
+        :markers="showRecordPins ? routeMapMarkers : []"
         :routes="mapRoutes"
         :draft-path="draftPoints"
         :draft-path-color-hex="draft.lineColorHex"
@@ -1177,7 +1179,23 @@ function routeSummary(route) {
         @move-draft-point="handleMoveDraftPoint"
         @select-draft-point="focusDraftPoint"
         @select-marker="focusRoutePointFromMarker"
-      />
+      >
+        <template #toolbar>
+          <div class="travel-map__toolbar-group">
+            <span class="travel-map__toolbar-label">장소 핀</span>
+            <button
+              class="travel-map__toolbar-button"
+              :class="{ 'is-active': showRecordPins }"
+              type="button"
+              :aria-pressed="showRecordPins"
+              :disabled="!routeMapMarkers.length"
+              @click="showRecordPins = !showRecordPins"
+            >
+              {{ showRecordPins ? '숨김' : `표시 ${routeMapMarkers.length}개` }}
+            </button>
+          </div>
+        </template>
+      </TravelMapPanel>
 
       <div class="travel-route-map-footer">
         <article class="travel-route-focus-card">

@@ -179,10 +179,48 @@ const comparisonChartItems = computed(() =>
   props.comparisonRows.slice(-8).map((row, index) => ({
     label: row.label,
     value: Number(row.expense ?? 0),
-    caption: `수입 ${props.formatCurrency(row.income)}`,
     color: chartPalette[index % chartPalette.length],
   })),
 )
+
+function formatCompactCurrency(value) {
+  const amount = Number(value ?? 0)
+  if (!Number.isFinite(amount)) {
+    return props.formatCurrency(0)
+  }
+  const sign = amount < 0 ? '-' : ''
+  const absolute = Math.abs(amount)
+  if (absolute >= 100000000) {
+    return `${sign}₩${(absolute / 100000000).toFixed(absolute >= 1000000000 ? 1 : 0)}억`
+  }
+  if (absolute >= 10000) {
+    return `${sign}₩${Math.round(absolute / 10000)}만`
+  }
+  if (absolute >= 1000) {
+    return `${sign}₩${Math.round(absolute / 1000)}천`
+  }
+  return props.formatCurrency(amount)
+}
+
+const analysisScope = computed(() => {
+  const overview = props.statsCards.find((card) => card.key === 'selected')?.overview
+    ?? props.statsCards[0]?.overview
+    ?? {}
+  const rows = props.comparisonRows ?? []
+  const latest = rows.at(-1)
+  const previous = rows.at(-2)
+  const latestExpense = Number(latest?.expense ?? 0)
+  const previousExpense = Number(previous?.expense ?? 0)
+  return {
+    expense: Number(overview.expense ?? 0),
+    income: Number(overview.income ?? 0),
+    balance: Number(overview.balance ?? 0),
+    entryCount: Number(overview.entryCount ?? 0),
+    expenseDelta: latest && previous ? latestExpense - previousExpense : null,
+    hasComparison: Boolean(latest && previous),
+  }
+})
+
 const searchResultSelection = useTableSelection(computed(() => props.searchResults))
 const trashResultSelection = useTableSelection(computed(() => props.trashResults))
 const editingSearchEntryId = ref(null)
@@ -2138,6 +2176,8 @@ watch(
           title="구간별 지출 추이"
           :items="comparisonChartItems"
           :format-value="formatCurrency"
+          dense
+          :value-formatter="formatCompactCurrency"
           empty-text="비교할 지출 데이터가 없습니다."
         />
         <DonutChartCard
@@ -2465,7 +2505,7 @@ watch(
                       <button type="button" class="button button--ghost" @click="startSearchEntryEdit(entry)">수정</button>
                       <button type="button" class="button button--ghost" @click="emit('move-search-entry', entry)">이동</button>
 </template>
-                    <button type="button" class="button button--ghost" @click="emit('delete-search-entry', entry)">삭제</button>
+                    <button type="button" class="button button--danger" @click="emit('delete-search-entry', entry)">삭제</button>
                   </div>
                   <p v-if="editingSearchEntryId === entry.id && searchEditErrors.length" class="stats-search-edit__hint">
                     {{ searchEditErrors.join(', ') }} 값을 확인해 주세요.
@@ -2598,6 +2638,31 @@ watch(
 </template>
 
     <template v-else-if="route === 'stats-insights'">
+      <section class="analysis-context">
+        <div class="analysis-context__heading">
+          <span>분석 기준</span>
+          <strong>{{ statsRangeLabel }}</strong>
+        </div>
+        <div class="analysis-context__metrics">
+          <div>
+            <span>지출</span>
+            <strong class="is-expense">{{ formatCurrency(analysisScope.expense) }}</strong>
+            <small>{{ analysisScope.entryCount }}건</small>
+          </div>
+          <div>
+            <span>수입</span>
+            <strong class="is-income">{{ formatCurrency(analysisScope.income) }}</strong>
+          </div>
+          <div>
+            <span>순액</span>
+            <strong>{{ formatCurrency(analysisScope.balance) }}</strong>
+          </div>
+        </div>
+        <div v-if="analysisScope.hasComparison" :class="['analysis-context__delta', { 'analysis-context__delta--increase': analysisScope.expenseDelta > 0, 'analysis-context__delta--decrease': analysisScope.expenseDelta < 0 }]">
+          <span>직전 구간 대비 지출</span>
+          <strong>{{ analysisScope.expenseDelta > 0 ? '+' : '' }}{{ formatCurrency(analysisScope.expenseDelta) }}</strong>
+        </div>
+      </section>
       <section class="insight-grid">
         <article class="panel insight-card">
           <p class="insight-card__label">하루 중 지출이 가장 많은 시간대</p>
@@ -2638,24 +2703,32 @@ watch(
           title="시간대별 지출"
           :items="hourlyChartItems"
           :format-value="formatCurrency"
+          dense
+          :value-formatter="formatCompactCurrency"
           empty-text="시간 정보가 있는 지출이 없습니다."
         />
         <BarChartCard
           title="요일별 지출"
           :items="weekdayChartItems"
           :format-value="formatCurrency"
+          dense
+          :value-formatter="formatCompactCurrency"
           empty-text="요일별 지출 데이터가 없습니다."
         />
         <BarChartCard
           title="주차별 지출"
           :items="weekOfMonthChartItems"
           :format-value="formatCurrency"
+          dense
+          :value-formatter="formatCompactCurrency"
           empty-text="주차별 지출 데이터가 없습니다."
         />
         <BarChartCard
           title="월별 지출"
           :items="monthOfYearChartItems"
           :format-value="formatCurrency"
+          dense
+          :value-formatter="formatCompactCurrency"
           empty-text="월별 지출 데이터가 없습니다."
         />
       </section>
@@ -2698,6 +2771,50 @@ watch(
       </section>
 </template>
     <template v-else-if="route === 'stats-compare'">
+      <section class="analysis-context">
+        <div class="analysis-context__heading">
+          <span>분석 기준</span>
+          <strong>{{ statsRangeLabel }}</strong>
+        </div>
+        <div class="analysis-context__metrics">
+          <div>
+            <span>지출</span>
+            <strong class="is-expense">{{ formatCurrency(analysisScope.expense) }}</strong>
+            <small>{{ analysisScope.entryCount }}건</small>
+          </div>
+          <div>
+            <span>수입</span>
+            <strong class="is-income">{{ formatCurrency(analysisScope.income) }}</strong>
+          </div>
+          <div>
+            <span>순액</span>
+            <strong>{{ formatCurrency(analysisScope.balance) }}</strong>
+          </div>
+        </div>
+        <div v-if="analysisScope.hasComparison" :class="['analysis-context__delta', { 'analysis-context__delta--increase': analysisScope.expenseDelta > 0, 'analysis-context__delta--decrease': analysisScope.expenseDelta < 0 }]">
+          <span>직전 구간 대비 지출</span>
+          <strong>{{ analysisScope.expenseDelta > 0 ? '+' : '' }}{{ formatCurrency(analysisScope.expenseDelta) }}</strong>
+        </div>
+      </section>
+      <section class="chart-grid chart-grid--compare">
+        <BarChartCard
+          title="구간별 지출 비교"
+          :items="comparisonChartItems"
+          :format-value="formatCurrency"
+          :value-formatter="formatCompactCurrency"
+          dense
+          empty-text="비교할 지출 데이터가 없습니다."
+        />
+        <section class="panel analysis-compare-table">
+          <div class="panel__header">
+            <div>
+              <h2>기간별 증감</h2>
+            </div>
+            <span class="panel__badge">{{ comparisonBadge }}</span>
+          </div>
+          <ComparisonTable :rows="comparisonRows" />
+        </section>
+      </section>
       <section class="panel">
         <div class="panel__header">
           <div>
@@ -2730,7 +2847,7 @@ watch(
   </div>
 
   <Teleport to="body">
-    <div v-if="aiAnalysisModalOpen" class="ledger-ai-modal" @click.self="closeAiAnalysisModal" @wheel.stop>
+    <div v-if="aiAnalysisModalOpen" class="ledger-ai-modal" @keydown.esc="closeAiAnalysisModal" @wheel.stop>
       <section class="ledger-ai-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="ledger-ai-modal-title">
         <header class="ledger-ai-modal__header">
           <div>
@@ -2766,7 +2883,7 @@ watch(
     </div>
   </Teleport>
   <Teleport to="body">
-    <div v-if="aiResultModalOpen && aiHasResult" class="ai-result-modal" @click.self="closeAiResultModal">
+    <div v-if="aiResultModalOpen && aiHasResult" class="ai-result-modal" @keydown.esc="closeAiResultModal">
       <section class="ai-result-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="ai-result-modal-title">
         <header class="ai-result-modal__header">
           <div>

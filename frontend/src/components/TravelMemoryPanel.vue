@@ -56,6 +56,7 @@ const props = defineProps({
 const emit = defineEmits(['save-memory', 'delete-memory', 'delete-media'])
 
 const activeDayDate = ref('')
+const showGpxRoutes = ref(false)
 
 function resolveDefaultMemoryDate() {
   return activeDayDate.value || props.travelPlan?.startDate || todayIso()
@@ -385,6 +386,16 @@ const mapMarkers = computed(() =>
     }),
 )
 
+const mapRoutes = computed(() =>
+  (props.travelPlan?.routeSegments ?? [])
+    .filter((route) => !activeDayDate.value || route.routeDate === activeDayDate.value)
+    .map((route) => ({
+      ...route,
+      lineColorHex: route.lineColorHex || route.planColorHex || props.travelPlan?.colorHex || '#3182F6',
+      lineStyle: route.lineStyle || 'SOLID',
+    })),
+)
+
 const editingPhotos = computed(() => memoryMediaMap.value.get(String(editingMemoryId.value)) ?? [])
 
 const pendingLocationLabel = computed(() => {
@@ -398,6 +409,7 @@ watch(
     clearPendingPoint()
     isEditorOpen.value = false
     activeDayDate.value = ''
+    showGpxRoutes.value = false
     queuedCategory.value = '장소'
     locationFilter.country = ''
     locationFilter.region = ''
@@ -1079,6 +1091,7 @@ function submitMemory() {
 
       <TravelMapPanel
         :markers="mapMarkers"
+        :routes="showGpxRoutes ? mapRoutes : []"
         :selected-point="selectedPoint"
         :enable-pick-location="true"
         :enable-draw-route="false"
@@ -1109,6 +1122,19 @@ function submitMemory() {
               {{ preset.label }}
             </button>
           </div>
+        <div class="travel-map__toolbar-group">
+          <span class="travel-map__toolbar-label">GPX 경로</span>
+          <button
+            class="travel-map__toolbar-button"
+            :class="{ 'is-active': showGpxRoutes }"
+            type="button"
+            :aria-pressed="showGpxRoutes"
+            :disabled="!mapRoutes.length"
+            @click="showGpxRoutes = !showGpxRoutes"
+          >
+            {{ showGpxRoutes ? '숨김' : `표시 ${mapRoutes.length}개` }}
+          </button>
+        </div>
         </template>
       </TravelMapPanel>
 
@@ -1247,7 +1273,7 @@ function submitMemory() {
       </div>
     </section>
 
-    <div v-if="isEditorOpen" class="travel-modal" @click.self="closeEditor">
+    <div v-if="isEditorOpen" class="travel-modal" @keydown.esc="closeEditor">
       <div class="travel-modal__dialog">
         <div class="travel-modal__header">
           <div>

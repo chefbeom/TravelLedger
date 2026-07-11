@@ -26,6 +26,7 @@ const NotificationCenterWorkspace = defineAsyncComponent(() => import('./compone
 const ProfileWorkspace = defineAsyncComponent(() => import('./components/ProfileWorkspace.vue'))
 const TravelWorkspace = defineAsyncComponent(() => import('./components/TravelWorkspace.vue'))
 const TravelPublicMapShareWorkspace = defineAsyncComponent(() => import('./components/TravelPublicMapShareWorkspace.vue'))
+const PetCompanion = defineAsyncComponent(() => import('./components/PetCompanion.vue'))
 
 const legacyFeatureItems = [
   {
@@ -117,6 +118,7 @@ const MODAL_SCROLL_LOCK_SELECTOR = [
   '.ai-result-modal',
   '.profile-security-modal',
   '.profile-privacy-modal',
+  '.profile-workspace-modal',
   '.admin-ops-modal',
   '.admin-support-modal',
   '.admin-access-control-modal',
@@ -195,10 +197,13 @@ const isSubmitting = ref(false)
 const activeSubmit = ref('')
 const successMessage = ref('')
 const errorMessage = ref('')
-const activeRoute = ref(initialRouteState.route)
+const initialProfileModalOpen = initialRouteState.route === 'profile'
+const activeRoute = ref(initialProfileModalOpen ? 'launcher' : initialRouteState.route)
 const notificationUnreadCount = ref(0)
 const notificationUnreadBadgeLabel = computed(() => (notificationUnreadCount.value > 99 ? '99+' : String(notificationUnreadCount.value)))
 const notificationModalOpen = ref(false)
+const profileModalOpen = ref(initialProfileModalOpen)
+const petCompanionRef = ref(null)
 const latestUnreadNotificationId = ref(null)
 const notificationToast = reactive({
   visible: false,
@@ -340,6 +345,11 @@ function setFeedback(message = '', error = '') {
 
 function applyHashRoute(hash) {
   const routeState = resolveRouteState(hash)
+  if (routeState.route === 'profile') {
+    profileModalOpen.value = true
+    return
+  }
+  profileModalOpen.value = false
   activeRoute.value = routeState.route
   inviteToken.value = routeState.token
 }
@@ -686,6 +696,10 @@ function handleNotificationVisibilityChange() {
   }
 }
 
+function openPetManager() {
+  petCompanionRef.value?.openManager()
+}
+
 function openNotificationModal() {
   notificationModalOpen.value = true
   clearNotificationToast()
@@ -733,11 +747,27 @@ function handleNotificationUnreadCountChange(value) {
   setNotificationUnreadCount(value)
   refreshNotificationUnreadCount({ notify: false })
 }
+function openProfileModal() {
+  profileModalOpen.value = true
+}
+
+function closeProfileModal() {
+  profileModalOpen.value = false
+  if (resolveRouteState(window.location.hash).route === 'profile') {
+    window.location.hash = activeRoute.value
+  }
+}
+
 function navigate(route, options = {}) {
   const nextRoute = normalizedRouteMeta[route] ? route : 'launcher'
+  if (nextRoute === 'profile') {
+    openProfileModal()
+    return
+  }
   if (nextRoute !== activeRoute.value && !confirmRouteLeaveIfNeeded()) {
     return
   }
+  profileModalOpen.value = false
   householdInitialTab.value = nextRoute === 'household' ? (options.householdTab || '') : ''
   activeRoute.value = nextRoute
   inviteToken.value = ''
@@ -1017,6 +1047,44 @@ function syncMobileModalBackgroundScroll() {
   unlockMobileModalBackgroundScroll()
 }
 
+const MODAL_ESCAPE_SELECTOR = [
+  '.travel-modal',
+  '.ledger-ai-modal',
+  '.ai-result-modal',
+  '.main-photo-frame-modal',
+  '.public-map-share-photo-modal',
+  '.drive-version-overlay',
+].join(',')
+
+function isVisibleModal(element) {
+  const style = window.getComputedStyle(element)
+  return style.display !== 'none' && style.visibility !== 'hidden'
+}
+
+function handleGlobalModalEscape(event) {
+  if (event.key !== 'Escape' || event.defaultPrevented) {
+    return
+  }
+
+  const modal = [...document.querySelectorAll(MODAL_ESCAPE_SELECTOR)]
+    .filter(isVisibleModal)
+    .at(-1)
+  if (!modal) {
+    return
+  }
+
+  const closeAction = [...modal.querySelectorAll('button')].find((button) => {
+    const label = String(button.getAttribute('aria-label') || button.textContent || '').trim()
+    return !button.disabled && /^(닫기|취소)$/.test(label)
+  })
+  if (!closeAction) {
+    return
+  }
+
+  event.preventDefault()
+  event.stopImmediatePropagation()
+  closeAction.click()
+}
 function queueMobileModalBackgroundScrollSync() {
   if (mobileModalScrollSyncQueued || typeof window === 'undefined') {
     return
@@ -1034,6 +1102,7 @@ onMounted(() => {
   window.addEventListener('beforeunload', handleBeforeUnload)
   window.addEventListener(ROUTE_LEAVE_GUARD_EVENT, handleRouteLeaveGuardChange)
   document.addEventListener('pointerdown', handleDocumentPointerDown)
+  document.addEventListener('keydown', handleGlobalModalEscape, true)
   document.addEventListener('visibilitychange', handleNotificationVisibilityChange)
   window.addEventListener('resize', queueMobileModalBackgroundScrollSync)
   window.addEventListener('orientationchange', queueMobileModalBackgroundScrollSync)
@@ -1055,6 +1124,7 @@ onBeforeUnmount(() => {
   window.removeEventListener('beforeunload', handleBeforeUnload)
   window.removeEventListener(ROUTE_LEAVE_GUARD_EVENT, handleRouteLeaveGuardChange)
   document.removeEventListener('pointerdown', handleDocumentPointerDown)
+  document.removeEventListener('keydown', handleGlobalModalEscape, true)
   document.removeEventListener('visibilitychange', handleNotificationVisibilityChange)
   window.removeEventListener('resize', queueMobileModalBackgroundScrollSync)
   window.removeEventListener('orientationchange', queueMobileModalBackgroundScrollSync)
@@ -1265,9 +1335,11 @@ onBeforeUnmount(() => {
           >
             <span>알림</span>
             <span v-if="notificationPreferences.enabled && notificationUnreadCount" class="topbar__notification-badge" aria-label="읽지 않은 알림" aria-live="polite">{{ notificationUnreadBadgeLabel }}</span>
-          </button></nav>
+          </button>
+            <button class="topbar__nav-button" type="button" @click="openPetManager">펫</button>
+          </nav>
           <div class="topbar__actions">
-            <button v-if="activeRoute !== 'profile'" class="button button--ghost" @click="navigate('profile')">프로필</button>
+            <button v-if="!profileModalOpen" class="button button--ghost" @click="openProfileModal">프로필</button>
             <button class="button button--ghost" @click="handleLogout">로그아웃</button>
           </div>
         </header>
@@ -1283,7 +1355,7 @@ onBeforeUnmount(() => {
           />
         </div>
         <AdminWorkspace v-else-if="activeRoute === 'admin'" :current-user="currentUser" @exit-admin-access="navigate('launcher')" />
-        <ProfileWorkspace v-else-if="activeRoute === 'profile'" :current-user="currentUser" />
+
         <HouseholdWorkspace
           v-else-if="activeRoute === 'household'"
           :current-user="currentUser"
@@ -1305,6 +1377,13 @@ onBeforeUnmount(() => {
           @record-focus-consumed="clearTravelRecordFocusRequest"
         />
 
+        <PetCompanion
+          v-if="currentUser"
+          ref="petCompanionRef"
+          :notification="notificationToast"
+          @open-notifications="openNotificationModal"
+        />
+
         <button
           v-if="notificationSignalVisible"
           class="global-notification-signal"
@@ -1320,7 +1399,20 @@ onBeforeUnmount(() => {
           </span>
         </button>
 
-        <div v-if="notificationModalOpen" class="travel-modal global-notification-modal" @click.self="closeNotificationModal">
+        <div v-if="profileModalOpen" class="travel-modal profile-workspace-modal" @keydown.esc="closeProfileModal">
+          <section class="travel-modal__dialog profile-workspace-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="profile-modal-title">
+            <header class="travel-modal__header profile-workspace-modal__header">
+              <div>
+                <h2 id="profile-modal-title">프로필</h2>
+              </div>
+              <button class="button button--ghost" type="button" @click="closeProfileModal">닫기</button>
+            </header>
+            <div class="travel-modal__body profile-workspace-modal__body">
+              <ProfileWorkspace :current-user="currentUser" embedded />
+            </div>
+          </section>
+        </div>
+        <div v-if="notificationModalOpen" class="travel-modal global-notification-modal" @keydown.esc="closeNotificationModal">
           <div class="travel-modal__dialog global-notification-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="global-notification-title">
             <div class="travel-modal__header global-notification-modal__header">
               <div>

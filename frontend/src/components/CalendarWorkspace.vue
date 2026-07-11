@@ -2932,6 +2932,35 @@ function sampleAggregateChartPointItems(items, maxPoints = 12) {
   }
   return selected
 }
+
+function getAggregateChartPreviewLabelCount(card) {
+  const width = normalizeAggregateGridSpan(card?.config?.layoutW, 2, 4)
+  if (width <= 2) return 2
+  if (width === 3) return 3
+  return 4
+}
+
+function formatAggregateChartCompactAmount(value) {
+  const amount = Number(value || 0)
+  const absoluteAmount = Math.abs(amount)
+  const sign = amount < 0 ? '-' : ''
+  if (absoluteAmount >= 10000) {
+    const maximumFractionDigits = absoluteAmount >= 1000000 ? 0 : 1
+    return `${sign}${new Intl.NumberFormat('ko-KR', { maximumFractionDigits }).format(absoluteAmount / 10000)}만`
+  }
+  return `${sign}${formatCompactNumber(absoluteAmount)}`
+}
+
+function formatAggregateChartHeadline(value, card) {
+  const width = normalizeAggregateGridSpan(card?.config?.layoutW, 2, 4)
+  return width <= 2 ? `₩${formatAggregateChartCompactAmount(value)}` : formatCurrency(value)
+}
+
+function formatAggregateChartPreviewNumber(value, card) {
+  const width = normalizeAggregateGridSpan(card?.config?.layoutW, 2, 4)
+  return width <= 3 ? formatAggregateChartCompactAmount(value) : formatCompactNumber(value)
+}
+
 function buildMonthlyCumulativeChartData(entries, range, overview, options = {}) {
   const period = options.period || 'MONTH'
   const showIncome = options.showIncome !== false
@@ -4066,7 +4095,7 @@ defineExpose({
                 <small>이 슬롯은 저장 후 화면에서 숨김 처리됩니다.</small>
               </template>
               <template v-else-if="card.chart">
-                <strong>{{ formatCurrency(card.chart.headlineAmount) }}</strong>
+                <strong>{{ formatAggregateChartHeadline(card.chart.headlineAmount, card) }}</strong>
                 <small class="household-aggregate-card__chart-caption"><span>{{ card.chart.rangeLabel }}</span><span>{{ card.chart.headlineCaption }}</span></small>
               </template>
               <template v-else-if="card.goal">
@@ -4105,8 +4134,8 @@ defineExpose({
                   <circle v-for="(point, pointIndex) in sampleAggregateChartPointItems(card.config.showExpenseCumulative ? card.chart.expensePointItems : [], 8)" :key="`preview-current-expense-${point.date}-${pointIndex}`" :cx="point.x" :cy="point.y" r="3.7" class="household-aggregate-chart__point household-aggregate-chart__point--expense household-aggregate-chart__point--current" />
                   <circle v-for="(point, pointIndex) in sampleAggregateChartPointItems(card.config.comparePreviousPeriod && card.config.showIncomeCumulative ? card.chart.previousIncomePointItems : [], 8)" :key="`preview-previous-income-${point.date}-${pointIndex}`" :cx="point.x" :cy="point.y" r="3.5" class="household-aggregate-chart__point household-aggregate-chart__point--previous" />
                   <circle v-for="(point, pointIndex) in sampleAggregateChartPointItems(card.config.comparePreviousPeriod && card.config.showExpenseCumulative ? card.chart.previousExpensePointItems : [], 8)" :key="`preview-previous-expense-${point.date}-${pointIndex}`" :cx="point.x" :cy="point.y" r="3.5" class="household-aggregate-chart__point household-aggregate-chart__point--previous" />
-                  <text v-for="(point, pointIndex) in sampleAggregateChartPointItems(card.config.showIncomeCumulative ? card.chart.incomePointItems : [], 4)" :key="`preview-income-label-${point.date}-${pointIndex}`" :x="Math.min(Math.max(point.x, AGGREGATE_CHART_VALUE_LABEL_MIN_X), AGGREGATE_CHART_VALUE_LABEL_MAX_X)" :y="Math.max(14, point.y - 8)" text-anchor="middle" class="household-aggregate-chart__value-label household-aggregate-chart__value-label--preview household-aggregate-chart__value-label--income">{{ formatCompactNumber(point.amount) }}</text>
-                  <text v-for="(point, pointIndex) in sampleAggregateChartPointItems(card.config.showExpenseCumulative ? card.chart.expensePointItems : [], 4)" :key="`preview-expense-label-${point.date}-${pointIndex}`" :x="Math.min(Math.max(point.x, AGGREGATE_CHART_VALUE_LABEL_MIN_X), AGGREGATE_CHART_VALUE_LABEL_MAX_X)" :y="Math.min(108, point.y + 14)" text-anchor="middle" class="household-aggregate-chart__value-label household-aggregate-chart__value-label--preview household-aggregate-chart__value-label--expense">{{ formatCompactNumber(point.amount) }}</text>
+                  <text v-for="(point, pointIndex) in sampleAggregateChartPointItems(card.config.showIncomeCumulative ? card.chart.incomePointItems : [], getAggregateChartPreviewLabelCount(card))" :key="`preview-income-label-${point.date}-${pointIndex}`" :x="Math.min(Math.max(point.x, AGGREGATE_CHART_VALUE_LABEL_MIN_X), AGGREGATE_CHART_VALUE_LABEL_MAX_X)" :y="Math.max(14, point.y - 8)" text-anchor="middle" class="household-aggregate-chart__value-label household-aggregate-chart__value-label--preview household-aggregate-chart__value-label--income">{{ formatAggregateChartPreviewNumber(point.amount, card) }}</text>
+                  <text v-for="(point, pointIndex) in sampleAggregateChartPointItems(card.config.showExpenseCumulative ? card.chart.expensePointItems : [], getAggregateChartPreviewLabelCount(card))" :key="`preview-expense-label-${point.date}-${pointIndex}`" :x="Math.min(Math.max(point.x, AGGREGATE_CHART_VALUE_LABEL_MIN_X), AGGREGATE_CHART_VALUE_LABEL_MAX_X)" :y="Math.min(104, point.y + 12)" text-anchor="middle" class="household-aggregate-chart__value-label household-aggregate-chart__value-label--preview household-aggregate-chart__value-label--expense">{{ formatAggregateChartPreviewNumber(point.amount, card) }}</text>
                 </svg>
               </div>
               <div class="household-aggregate-chart__legend household-aggregate-chart__legend--preview">
@@ -4144,8 +4173,7 @@ defineExpose({
         class="household-aggregate-chart-modal"
         role="dialog"
         aria-modal="true"
-        aria-label="누적 그래프 상세 보기"
-        @click.self="closeAggregateChartDetail"
+        aria-label="누적 그래프 상세 보기" @keydown.esc="closeAggregateChartDetail"
       >
         <section class="household-aggregate-chart-modal__panel">
           <header class="household-aggregate-chart-modal__header">
@@ -4343,8 +4371,7 @@ defineExpose({
           <div
             v-if="isTransactionSheetModalOpen"
             class="transaction-sheet-modal"
-            data-no-drag="true"
-            @click.self="closeTransactionSheetModal"
+            data-no-drag="true" @keydown.esc="closeTransactionSheetModal"
           >
             <HouseholdTransactionSheet
               class="transaction-sheet-modal__dialog"
@@ -4384,8 +4411,7 @@ defineExpose({
           <div
             v-if="isTransactionSheetSettingsOpen"
             class="transaction-sheet-settings-modal"
-            data-no-drag="true"
-            @click.self="closeTransactionSheetSettings"
+            data-no-drag="true" @keydown.esc="closeTransactionSheetSettings"
           >
             <section class="transaction-sheet-settings-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="transaction-sheet-settings-title">
               <header class="transaction-sheet-settings-modal__header">
@@ -4419,11 +4445,10 @@ defineExpose({
         <div
       v-if="receiptOcr?.isOpen"
       class="receipt-ocr-modal"
-      data-no-drag="true"
-      @click.self="closeReceiptOcrModal"
+      data-no-drag="true" @keydown.esc="closeReceiptOcrModal"
       @wheel="handleReceiptOcrModalWheel"
     >
-      <section class="receipt-ocr-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="receipt-ocr-modal-title">
+      <section :class="['receipt-ocr-modal__dialog', { 'receipt-ocr-modal__dialog--review-list': receiptOcrView !== 'rules' && receiptVisibleReviewItems.length, 'receipt-ocr-modal__dialog--history-detail': isReceiptHistoryDetailOpen }]" role="dialog" aria-modal="true" aria-labelledby="receipt-ocr-modal-title">
         <header class="receipt-ocr-modal__header">
           <div>
             <p class="receipt-ocr-modal__eyebrow">거래 이미지 AI 분석</p>

@@ -29,6 +29,11 @@
   --surface-panel: var(--surface);
   --surface-elevated: #ffffff;
   --surface-soft-strong: #eff3f8;
+  --panel: var(--surface);
+  --panel-bg: var(--surface-panel);
+  --panel-border: var(--line);
+  --brand-readable-strong: #0f6b52;
+  --danger: #d92d4a;
   --bg-gradient: var(--bg);
   --interactive-contrast-bg: #111827;
   --interactive-contrast-text: #ffffff;
@@ -8769,6 +8774,11 @@ textarea {
   --surface-elevated: linear-gradient(180deg, var(--toss-surface-elevated-start, #181d26) 0%, var(--toss-surface-elevated-end, #121720) 100%);
   --surface-soft: var(--toss-surface-soft, #1a202b);
   --surface-soft-strong: var(--toss-surface-soft-strong, #232b38);
+  --panel: #151922;
+  --panel-bg: var(--surface-elevated);
+  --panel-border: var(--toss-line, #2a3240);
+  --brand-readable-strong: #a7f3d0;
+  --danger: #ff8b9b;
   --line: var(--toss-line, #2a3240);
   --text: #f3f5fa;
   --text-soft: var(--toss-text-soft, #b0bacb);
@@ -31055,4 +31065,681 @@ button.button--primary,
   .profile-section-tabs .button:last-child {
     grid-column: auto;
   }
+}
+/* Household aggregate: preserve chart readability when all six widgets are active. */
+.household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-card {
+  container-type: inline-size;
+}
+
+.household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-card__eyebrow {
+  font-size: clamp(0.72rem, 1.75cqi, 0.9rem) !important;
+  line-height: 1.28 !important;
+}
+
+.household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-card__copy strong {
+  font-size: clamp(0.95rem, 2.35cqi, 1.48rem) !important;
+  letter-spacing: -0.035em !important;
+  min-width: 0;
+}
+
+.household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-card__copy small {
+  font-size: clamp(0.68rem, 1.55cqi, 0.82rem) !important;
+}
+
+.household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-card--chart[data-aggregate-width='2'] {
+  grid-template-columns: minmax(104px, 30%) minmax(0, 70%) !important;
+}
+
+.household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-card--chart[data-aggregate-width='3'] {
+  grid-template-columns: minmax(128px, 26%) minmax(0, 74%) !important;
+}
+
+.household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-card--chart[data-aggregate-width='2'] .household-aggregate-card__copy,
+.household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-card--chart[data-aggregate-width='3'] .household-aggregate-card__copy {
+  padding-right: 9px !important;
+}
+
+.household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-card--chart[data-aggregate-width='2'] .household-aggregate-card__copy strong {
+  font-size: clamp(0.92rem, 4.5cqi, 1.08rem) !important;
+}
+
+.household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-card--chart[data-aggregate-width='2'] .household-aggregate-card__chart-caption span:last-child {
+  display: none !important;
+}
+
+.household-aggregate-card--chart[data-aggregate-width='2'] .household-aggregate-chart__value-label--preview {
+  font-size: 7.2px !important;
+  stroke-width: 2.2px !important;
+}
+
+.household-aggregate-card--chart[data-aggregate-width='3'] .household-aggregate-chart__value-label--preview {
+  font-size: 8.2px !important;
+  stroke-width: 2.4px !important;
+}
+
+@media (max-width: 720px) {
+  .household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-card--chart[data-aggregate-width='2'],
+  .household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-card--chart[data-aggregate-width='3'] {
+    grid-template-columns: minmax(0, 1fr) !important;
+    grid-template-rows: auto minmax(0, 1fr) !important;
+  }
+
+  .household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-card--chart[data-aggregate-width='2'] .household-aggregate-card__copy,
+  .household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-card--chart[data-aggregate-width='3'] .household-aggregate-card__copy {
+    border-right: 0 !important;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.18) !important;
+    padding: 0 0 8px !important;
+  }
+}
+
+/* Month calendar: selected-day ring stays inside the cell at outer edges. */
+.calendar__day--selected,
+.calendar__day[aria-selected='true'] {
+  isolation: isolate;
+  outline: 0 !important;
+  position: relative;
+  z-index: 2;
+}
+
+:root:not([data-theme='toss']) .calendar__day--selected,
+:root:not([data-theme='toss']) .calendar__day[aria-selected='true'] {
+  box-shadow: inset 0 0 0 3px rgba(16, 185, 129, 0.68) !important;
+}
+
+[data-theme='toss'] .calendar__day--selected,
+[data-theme='toss'] .calendar__day[aria-selected='true'] {
+  box-shadow: inset 0 0 0 3px rgba(149, 235, 171, 0.78) !important;
+}
+
+/* Travel ledger: make dates inside the selected trip range immediately scannable. */
+.household-travel-ledger__date-card--in-range {
+  position: relative;
+  border-color: color-mix(in srgb, var(--accent) 48%, var(--line));
+  background: color-mix(in srgb, var(--surface-soft) 78%, var(--accent) 22%);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 22%, transparent);
+}
+
+.household-travel-ledger__date-card--in-range::before {
+  position: absolute;
+  inset: 0 10px auto;
+  height: 3px;
+  border-radius: 0 0 999px 999px;
+  background: var(--accent);
+  content: '';
+}
+
+.household-travel-ledger__date-card--in-range .household-travel-ledger__date-card-head span,
+.household-travel-ledger__date-card--in-range .household-travel-ledger__date-card-head small {
+  color: color-mix(in srgb, var(--text) 80%, var(--accent));
+}
+
+.household-travel-ledger__date-card--in-range strong {
+  color: var(--accent);
+  font-size: 1.08rem;
+}
+
+.household-travel-ledger__date-card--in-range.household-travel-ledger__date-card--active {
+  border-color: color-mix(in srgb, var(--accent) 76%, white);
+  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--accent) 66%, transparent), 0 8px 18px color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+/* Ledger analytics: shared range context and dense charts. */
+.analysis-context {
+  display: grid;
+  grid-template-columns: minmax(180px, 0.8fr) minmax(0, 1.6fr) minmax(180px, 0.8fr);
+  gap: 14px;
+  align-items: stretch;
+  margin-bottom: 18px;
+  padding: 16px;
+  border: 1px solid color-mix(in srgb, var(--line) 68%, var(--blue));
+  border-radius: 14px;
+  background: linear-gradient(115deg, color-mix(in srgb, var(--surface-soft) 90%, var(--blue)), var(--surface-soft));
+}
+
+.analysis-context__heading,
+.analysis-context__metrics > div,
+.analysis-context__delta {
+  min-width: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+}
+
+.analysis-context__heading,
+.analysis-context__delta {
+  display: grid;
+  align-content: center;
+  gap: 5px;
+}
+
+.analysis-context__heading > span,
+.analysis-context__delta > span,
+.analysis-context__metrics span,
+.analysis-context__metrics small {
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.analysis-context__heading strong,
+.analysis-context__delta strong,
+.analysis-context__metrics strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: clamp(1rem, 1.45vw, 1.3rem);
+}
+
+.analysis-context__metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.analysis-context__metrics > div {
+  display: grid;
+  gap: 5px;
+}
+
+.analysis-context__delta--increase strong {
+  color: var(--expense);
+}
+
+.analysis-context__delta--decrease strong {
+  color: var(--income);
+}
+
+.chart-grid--compare {
+  grid-template-columns: minmax(0, 1.1fr) minmax(340px, 0.9fr);
+  align-items: stretch;
+  margin-bottom: 18px;
+}
+
+.analysis-compare-table {
+  min-width: 0;
+}
+
+.bar-chart__track {
+  border: 1px solid var(--line);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--surface-soft) 92%, var(--line)), var(--surface));
+}
+
+.bar-chart--dense {
+  grid-template-columns: repeat(auto-fit, minmax(56px, 1fr));
+  gap: 10px;
+  min-height: 224px;
+}
+
+.bar-chart--dense .bar-chart__item {
+  gap: 6px;
+}
+
+.bar-chart--dense .bar-chart__value {
+  min-height: 1.2em;
+  overflow: hidden;
+  color: var(--text-soft);
+  font-size: clamp(0.7rem, 0.9vw, 0.82rem);
+  font-variant-numeric: tabular-nums;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bar-chart--dense .bar-chart__track {
+  height: 134px;
+  padding: 6px;
+  border-radius: 12px;
+}
+
+.bar-chart--dense .bar-chart__bar {
+  max-width: 34px;
+  border-radius: 10px 10px 5px 5px;
+  box-shadow: 0 5px 14px color-mix(in srgb, var(--blue) 20%, transparent);
+}
+
+.bar-chart--dense .bar-chart__label {
+  overflow: hidden;
+  font-size: clamp(0.72rem, 0.9vw, 0.84rem);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bar-chart--dense .bar-chart__caption {
+  display: none;
+}
+
+@media (max-width: 1280px) {
+  .chart-grid--compare {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 720px) {
+  .analysis-context {
+    grid-template-columns: 1fr;
+    padding: 12px;
+  }
+
+  .analysis-context__metrics {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .analysis-context__heading strong,
+  .analysis-context__delta strong,
+  .analysis-context__metrics strong {
+    font-size: 0.96rem;
+  }
+
+  .bar-chart--dense {
+    grid-template-columns: repeat(auto-fit, minmax(46px, 1fr));
+    gap: 7px;
+    min-height: 196px;
+  }
+
+  .bar-chart--dense .bar-chart__track {
+    height: 112px;
+    padding: 4px;
+  }
+}
+/* Receipt OCR: keep the detail header and review list in one vertical flow. */
+.receipt-ocr-modal__dialog--review-list {
+  display: flex !important;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.receipt-ocr-modal__dialog--review-list > .receipt-ocr-modal__header,
+.receipt-ocr-modal__dialog--review-list > .receipt-ocr-modal__nav,
+.receipt-ocr-modal__dialog--review-list > .receipt-ocr-workspace {
+  flex: 0 0 auto;
+}
+
+.receipt-ocr-modal__dialog--review-list > .receipt-ocr-modal__list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto !important;
+  overscroll-behavior: contain;
+  position: relative;
+  z-index: 1;
+}
+
+.receipt-ocr-modal__dialog--history-detail > .receipt-ocr-workspace--history-detail {
+  max-height: min(34vh, 220px);
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+/* Profile is a focused workspace modal, not a route-sized page. */
+.profile-workspace-modal__dialog {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  width: min(1320px, calc(100vw - 48px));
+  max-height: calc(100dvh - 48px);
+  overflow: hidden;
+}
+
+.profile-workspace-modal__header {
+  align-items: center;
+  margin-bottom: 14px;
+}
+
+.profile-workspace-modal__body {
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding-right: 4px;
+}
+
+.profile-workspace--embedded {
+  gap: 14px;
+  min-width: 0;
+}
+
+.profile-workspace--embedded .profile-section-navigation {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.profile-workspace--embedded .profile-section-navigation__header {
+  justify-content: flex-start;
+}
+
+.profile-workspace--embedded .profile-section-tabs {
+  justify-content: flex-start;
+}
+
+@media (max-width: 760px) {
+  .profile-workspace-modal {
+    padding: 10px;
+  }
+
+  .profile-workspace-modal__dialog {
+    width: 100%;
+    max-height: calc(100dvh - 20px);
+    padding: 16px;
+    border-radius: 18px;
+  }
+
+  .profile-workspace-modal__body {
+    padding-right: 2px;
+  }
+}
+/* Light theme: restore clear surface boundaries across workspaces and palettes. */
+:root:not([data-theme='toss']) {
+  --line: #c6d0dc;
+  --field-border: #b7c4d2;
+  --entry-section-border: #c5d0dc;
+  --calendar-panel-border: #b9c6d4;
+  --calendar-section-border: #c7d2de;
+  --calendar-day-border: rgba(71, 85, 105, 0.32);
+  --household-anchor-border: rgba(71, 85, 105, 0.34);
+  --map-canvas-border: rgba(71, 85, 105, 0.42);
+  --map-toolbar-border: rgba(71, 85, 105, 0.38);
+  --map-control-border: rgba(71, 85, 105, 0.42);
+}
+
+:root:not([data-theme='toss']) .panel,
+:root:not([data-theme='toss']) .panel-card,
+:root:not([data-theme='toss']) .summary-card,
+:root:not([data-theme='toss']) .auth-card,
+:root:not([data-theme='toss']) .launcher-card,
+:root:not([data-theme='toss']) .feature-card,
+:root:not([data-theme='toss']) .sheet-table-wrap,
+:root:not([data-theme='toss']) .calendar,
+:root:not([data-theme='toss']) .calendar__day,
+:root:not([data-theme='toss']) .drive-dashboard__card,
+:root:not([data-theme='toss']) .drive-file-card {
+  border-color: var(--line) !important;
+}
+
+:root:not([data-theme='toss']) .button--ghost,
+:root:not([data-theme='toss']) .button--secondary,
+:root:not([data-theme='toss']) .chip,
+:root:not([data-theme='toss']) .toggle-chip,
+:root:not([data-theme='toss']) .preset-chip {
+  border-color: var(--field-border) !important;
+}
+
+:root:not([data-theme='toss']) .main-dashboard {
+  --dash-line: rgba(34, 61, 77, 0.28);
+  --dash-strong-line: rgba(21, 74, 74, 0.4);
+  --dash-tile-bg: #f2f6f5;
+  border: 1px solid rgba(34, 61, 77, 0.2);
+}
+
+:root:not([data-theme='toss']) .main-dashboard__overview-card,
+:root:not([data-theme='toss']) .main-dashboard__header {
+  border: 1px solid var(--dash-strong-line) !important;
+  box-shadow: 0 8px 20px rgba(18, 54, 51, 0.08) !important;
+}
+
+:root:not([data-theme='toss']) .main-dashboard__palette-zone {
+  border: 1px solid var(--dash-line) !important;
+  border-radius: 20px;
+  padding: 8px !important;
+}
+
+:root:not([data-theme='toss']) .main-dashboard .main-palette {
+  border: 1px solid var(--dash-strong-line) !important;
+  box-shadow: 0 6px 16px rgba(18, 54, 51, 0.07) !important;
+}
+
+:root:not([data-theme='toss']) .main-dashboard .main-palette__head {
+  border-bottom: 1px solid var(--dash-line) !important;
+}
+
+:root:not([data-theme='toss']) .main-dashboard .main-palette__metric,
+:root:not([data-theme='toss']) .main-dashboard .main-palette__single-metric,
+:root:not([data-theme='toss']) .main-dashboard .main-palette__feature-link,
+:root:not([data-theme='toss']) .main-dashboard .main-palette__quick-action,
+:root:not([data-theme='toss']) .main-dashboard .main-palette__photo-frame,
+:root:not([data-theme='toss']) .main-dashboard .main-palette__photo-empty,
+:root:not([data-theme='toss']) .main-dashboard .main-palette__payment,
+:root:not([data-theme='toss']) .main-dashboard .main-palette__compare,
+:root:not([data-theme='toss']) .main-dashboard .main-palette__quick-form,
+:root:not([data-theme='toss']) .main-dashboard .main-palette__list,
+:root:not([data-theme='toss']) .main-dashboard .main-palette__recent-files {
+  border: 1px solid var(--dash-line) !important;
+}
+
+:root:not([data-theme='toss']) .main-dashboard .main-palette__payment select,
+:root:not([data-theme='toss']) .main-dashboard .main-palette__quick-form input,
+:root:not([data-theme='toss']) .main-dashboard .main-palette__quick-form select,
+:root:not([data-theme='toss']) .main-dashboard .main-palette__quick-buttons button,
+:root:not([data-theme='toss']) .main-dashboard .main-palette__settings-button {
+  border: 1px solid var(--dash-line) !important;
+}
+
+/* Theme bridge: admin control surfaces use light tokens in light theme, dark tokens in dark theme. */
+:root:not([data-theme='toss']) .admin-workspace {
+  background:
+    radial-gradient(circle at 12% 10%, rgba(16, 185, 129, 0.13), transparent 34%),
+    radial-gradient(circle at 88% 0%, rgba(45, 212, 191, 0.11), transparent 36%),
+    linear-gradient(135deg, #f5fbf8, #e8f3ed 48%, #edf7f5);
+  border-color: #a7c9bb;
+  box-shadow: 0 24px 64px rgba(25, 74, 59, 0.14), inset 0 1px 0 rgba(255, 255, 255, 0.82);
+}
+
+:root:not([data-theme='toss']) .admin-command-center {
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.96), rgba(239, 248, 244, 0.98)),
+    radial-gradient(circle at top right, rgba(16, 185, 129, 0.16), transparent 35%);
+  border-color: #a7c9bb;
+  box-shadow: 0 16px 38px rgba(25, 74, 59, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.88);
+}
+
+:root:not([data-theme='toss']) .admin-command-center__header h2,
+:root:not([data-theme='toss']) .admin-command-card > strong,
+:root:not([data-theme='toss']) .admin-empty-state strong,
+:root:not([data-theme='toss']) .admin-workspace,
+:root:not([data-theme='toss']) .admin-workspace .panel,
+:root:not([data-theme='toss']) .admin-workspace .support-inquiry-card,
+:root:not([data-theme='toss']) .admin-workspace .summary-card,
+:root:not([data-theme='toss']) .admin-workspace .sheet-table,
+:root:not([data-theme='toss']) .admin-workspace .sheet-table td,
+:root:not([data-theme='toss']) .admin-workspace .sheet-table th,
+:root:not([data-theme='toss']) .admin-workspace .panel__header h2,
+:root:not([data-theme='toss']) .admin-workspace .panel__header h3,
+:root:not([data-theme='toss']) .admin-workspace .support-inquiry-reply__header strong,
+:root:not([data-theme='toss']) .admin-workspace .support-inquiry-meta strong,
+:root:not([data-theme='toss']) .admin-workspace .field__label,
+:root:not([data-theme='toss']) .admin-workspace .summary-card strong,
+:root:not([data-theme='toss']) .admin-workspace .sheet-table__title,
+:root:not([data-theme='toss']) .admin-workspace .sheet-table__category {
+  color: var(--text);
+}
+
+:root:not([data-theme='toss']) .admin-command-center__header p,
+:root:not([data-theme='toss']) .admin-empty-state p,
+:root:not([data-theme='toss']) .admin-command-card > p,
+:root:not([data-theme='toss']) .admin-command-card__meta small,
+:root:not([data-theme='toss']) .admin-workspace .panel__header p,
+:root:not([data-theme='toss']) .admin-workspace .support-inquiry-reply__header small,
+:root:not([data-theme='toss']) .admin-workspace .field__hint,
+:root:not([data-theme='toss']) .admin-workspace .form-hint,
+:root:not([data-theme='toss']) .admin-workspace .summary-card span,
+:root:not([data-theme='toss']) .admin-workspace .summary-card small,
+:root:not([data-theme='toss']) .admin-workspace .sheet-table__empty,
+:root:not([data-theme='toss']) .admin-workspace .panel__empty {
+  color: var(--text-soft);
+}
+
+:root:not([data-theme='toss']) .admin-command-center__eyebrow,
+:root:not([data-theme='toss']) .admin-command-card > span,
+:root:not([data-theme='toss']) .admin-ai-current span {
+  color: #0f6b52;
+}
+
+:root:not([data-theme='toss']) .admin-command-center__eyebrow {
+  background: rgba(16, 185, 129, 0.12);
+  border-color: rgba(15, 107, 82, 0.3);
+}
+
+:root:not([data-theme='toss']) .admin-command-card,
+:root:not([data-theme='toss']) .admin-workspace .summary-card,
+:root:not([data-theme='toss']) .admin-workspace .support-inquiry-card,
+:root:not([data-theme='toss']) .admin-workspace .sheet-table-wrap {
+  background: var(--surface);
+  border-color: var(--line);
+  box-shadow: 0 10px 24px rgba(25, 74, 59, 0.08);
+}
+
+:root:not([data-theme='toss']) .admin-command-card:hover,
+:root:not([data-theme='toss']) .admin-command-card.is-active {
+  border-color: #319a78;
+  box-shadow: 0 14px 30px rgba(16, 120, 88, 0.14), inset 0 0 0 1px rgba(16, 120, 88, 0.1);
+}
+
+:root:not([data-theme='toss']) .admin-command-card__meta,
+:root:not([data-theme='toss']) .admin-ai-current,
+:root:not([data-theme='toss']) .admin-ai-enable-row {
+  background: #edf8f3;
+  border-color: #aad5c3;
+}
+
+:root:not([data-theme='toss']) .admin-command-card__meta b,
+:root:not([data-theme='toss']) .admin-ai-current strong {
+  color: #0d6a50;
+}
+
+:root:not([data-theme='toss']) .admin-panel-section,
+:root:not([data-theme='toss']) .admin-empty-state {
+  background: var(--surface-panel);
+  border-color: #a7c9bb;
+  box-shadow: 0 14px 30px rgba(25, 74, 59, 0.08);
+}
+
+:root:not([data-theme='toss']) .admin-workspace .sheet-table th {
+  background: #e8f5ef;
+  color: #0f6b52;
+}
+
+:root:not([data-theme='toss']) .admin-workspace .sheet-table td {
+  border-color: var(--line);
+}
+
+:root:not([data-theme='toss']) .admin-workspace .field input,
+:root:not([data-theme='toss']) .admin-workspace .field select,
+:root:not([data-theme='toss']) .admin-workspace textarea {
+  background: var(--field-bg);
+  border-color: var(--field-border);
+  color: var(--text);
+}
+
+:root:not([data-theme='toss']) .admin-workspace .field input::placeholder,
+:root:not([data-theme='toss']) .admin-workspace textarea::placeholder {
+  color: var(--text-muted);
+}
+
+:root:not([data-theme='toss']) .admin-workspace select option {
+  background: var(--surface);
+  color: var(--text);
+}
+
+:root:not([data-theme='toss']) .admin-ops-action-card,
+:root:not([data-theme='toss']) .admin-support-tab,
+:root:not([data-theme='toss']) .admin-access-control-card,
+:root:not([data-theme='toss']) .admin-ops-server-row,
+:root:not([data-theme='toss']) .admin-support-row {
+  background: var(--surface-soft);
+  border-color: var(--line);
+  color: var(--text);
+}
+
+:root:not([data-theme='toss']) .admin-ops-action-card strong,
+:root:not([data-theme='toss']) .admin-support-tab strong,
+:root:not([data-theme='toss']) .admin-access-control-card strong,
+:root:not([data-theme='toss']) .admin-ops-current-server strong {
+  color: var(--text);
+}
+
+:root:not([data-theme='toss']) .admin-ops-action-card small,
+:root:not([data-theme='toss']) .admin-ops-modal__empty p,
+:root:not([data-theme='toss']) .admin-ops-current-server small,
+:root:not([data-theme='toss']) .admin-ops-server-row small,
+:root:not([data-theme='toss']) .admin-ops-server-row span,
+:root:not([data-theme='toss']) .admin-support-tab small,
+:root:not([data-theme='toss']) .admin-support-row small,
+:root:not([data-theme='toss']) .admin-support-list-panel__header p,
+:root:not([data-theme='toss']) .admin-access-control-card small {
+  color: var(--text-soft);
+}
+
+:root:not([data-theme='toss']) .admin-ops-action-card:hover,
+:root:not([data-theme='toss']) .admin-ops-action-card.is-active,
+:root:not([data-theme='toss']) .admin-support-tab:hover,
+:root:not([data-theme='toss']) .admin-support-tab.is-active,
+:root:not([data-theme='toss']) .admin-access-control-card:hover,
+:root:not([data-theme='toss']) .admin-access-control-card.is-active,
+:root:not([data-theme='toss']) .admin-support-row:hover,
+:root:not([data-theme='toss']) .admin-support-row.is-selected {
+  background: #e7f7f0;
+  border-color: #319a78;
+}
+
+:root:not([data-theme='toss']) .admin-ops-modal__empty,
+:root:not([data-theme='toss']) .admin-ops-panel,
+:root:not([data-theme='toss']) .admin-support-list-panel,
+:root:not([data-theme='toss']) .admin-support-detail-panel,
+:root:not([data-theme='toss']) .admin-access-control-panel {
+  background: var(--surface);
+  border-color: var(--line);
+}
+
+:root:not([data-theme='toss']) .admin-ops-current-server {
+  background: #e7f7f0;
+  border-color: #aad5c3;
+}
+
+:root:not([data-theme='toss']) .admin-ops-current-server span,
+:root:not([data-theme='toss']) .admin-support-tab span,
+:root:not([data-theme='toss']) .admin-access-control-card span {
+  color: #0f6b52;
+}
+
+:root:not([data-theme='toss']) .admin-ops-step-indicator span {
+  background: var(--field-bg-muted);
+  border-color: var(--field-border);
+  color: var(--text-soft);
+}
+
+:root:not([data-theme='toss']) .admin-ops-step-indicator span.is-active {
+  background: #dff5eb;
+  border-color: #319a78;
+  color: #0c6049;
+}
+
+:root:not([data-theme='toss']) .entry-type-pill--neutral {
+  background: rgba(59, 130, 246, 0.12);
+  border-color: rgba(37, 99, 235, 0.32);
+  color: #1d4ed8;
+}
+/* Light map clusters: count badge must stay visible above photo and overlay layers. */
+:root:not([data-theme='toss']) .travel-cluster-pin {
+  isolation: isolate;
+}
+
+:root:not([data-theme='toss']) .travel-cluster-pin .travel-cluster-pin__count {
+  z-index: 6;
+  min-width: 30px;
+  height: 30px;
+  padding-inline: 8px;
+  border: 2px solid rgba(15, 107, 82, 0.72) !important;
+  background: rgba(255, 255, 255, 0.98) !important;
+  color: #073b2b !important;
+  -webkit-text-fill-color: #073b2b !important;
+  font-size: 0.84rem;
+  font-weight: 900;
+  line-height: 1;
+  opacity: 1 !important;
+  text-shadow: none !important;
+  box-shadow: 0 3px 10px rgba(6, 49, 36, 0.26) !important;
+}
+/* GPX trip label: keep chip width to its text instead of stretching across title grid. */
+.travel-route-plan-card__title > .chip {
+  justify-self: start;
+  width: fit-content;
 }

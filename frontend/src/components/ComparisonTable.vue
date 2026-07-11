@@ -50,7 +50,7 @@ function formatChangeRate(value) {
           <td>{{ row.label }}</td>
           <td class="is-income">{{ formatCurrency(row.income) }}</td>
           <td class="is-expense">{{ formatCurrency(row.expense) }}</td>
-          <td :class="row.changeRate === null ? '' : (row.changeRate >= 0 ? 'is-income' : 'is-expense')">
+          <td :class="row.changeRate === null ? '' : (row.changeRate >= 0 ? 'is-expense' : 'is-income')">
             {{ formatChangeRate(row.changeRate) }}
           </td>
         </tr>

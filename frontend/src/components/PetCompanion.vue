@@ -417,6 +417,11 @@ function keepPetInViewport() {
 
 watch(() => settings.size, keepPetInViewport)
 watch(settings, persistSettings, { deep: true })
+watch(reaction, (nextReaction) => {
+  if (nextReaction === 'idle') {
+    spriteFrame.value = 0
+  }
+})
 
 watch(
   () => props.notification?.id,
@@ -451,7 +456,7 @@ watch(
 )
 onMounted(() => {
   frameTimer = window.setInterval(() => {
-    if (settings.enabled && currentPet.value.kind === 'sprite') {
+    if (settings.enabled && currentPet.value.kind === 'sprite' && reaction.value !== 'idle') {
       spriteFrame.value = (spriteFrame.value + 1) % PET_FRAME_RATE
     }
   }, Math.round(1000 / PET_FRAME_RATE))
@@ -598,7 +603,7 @@ defineExpose({ openManager })
 .pet-companion__avatar { position: relative; display: grid; width: var(--pet-size, 100px); height: calc(var(--pet-size, 100px) + 14px); padding: 0; border: 0; background: transparent; cursor: grab; place-items: center; }
 .pet-companion__avatar img, .pet-companion__sprite { display: block; width: var(--pet-size, 100px); height: var(--pet-size, 100px); object-fit: contain; filter: drop-shadow(0 5px 9px rgba(0,0,0,.3)); }
 .pet-companion__sprite { background-repeat: no-repeat; background-size: 800% 1100%; image-rendering: pixelated; transform-origin: 50% 78%; will-change: background-position, transform; }
-.pet-companion__dock--idle .pet-companion__sprite { animation: pet-yuna-idle-look-24 1.2s steps(24, end) infinite; }
+.pet-companion__dock--idle .pet-companion__sprite { animation: pet-yuna-idle-look 2.8s ease-in-out infinite; }
 .pet-companion__animal-sprite { transform-origin: 50% 75%; will-change: transform; }
 .pet-companion__name { position: absolute; bottom: 0; padding: 3px 8px; border: 1px solid color-mix(in srgb, var(--accent, #21b891) 55%, transparent); border-radius: 999px; background: color-mix(in srgb, var(--panel, #162131) 92%, transparent); color: var(--text, #f7fbff); font-size: 12px; font-weight: 800; white-space: nowrap; }
 .pet-companion__dock--idle .pet-companion__animal-sprite { animation: pet-animal-idle-24 1s steps(24, end) infinite; }
@@ -631,7 +636,7 @@ defineExpose({ openManager })
 .pet-manager-size { display: grid; gap: 5px; font-weight: 750; }
 .pet-manager-size select { min-height: 38px; border: 1px solid var(--panel-border, #34455f); border-radius: 7px; background: var(--input-bg, #111c2b); color: var(--text, #f7fbff); font: inherit; padding: 0 10px; }
 .pet-manager-modal__settings .button { margin-top: 8px; }
-@keyframes pet-yuna-idle-look-24 { 0%,100% { transform: translateY(0) rotate(0) } 20% { transform: translateY(-2px) rotate(-3deg) } 40% { transform: translateY(0) rotate(2deg) } 60% { transform: translateY(-2px) rotate(4deg) } 80% { transform: translateY(0) rotate(-2deg) } }
+@keyframes pet-yuna-idle-look { 0%,100% { transform: translateY(0) rotate(0) } 25% { transform: translateY(-1px) rotate(-1.4deg) } 50% { transform: translateY(0) rotate(1.1deg) } 75% { transform: translateY(-1px) rotate(-1.2deg) } }
 @keyframes pet-yuna-greet { 0%,100% { transform: rotate(0) scale(1) } 40% { transform: rotate(-7deg) scale(1.07) } 70% { transform: rotate(7deg) scale(1.07) } }
 @keyframes pet-alert { 0%,100% { transform: translateX(0) } 35% { transform: translateX(-5px) } 70% { transform: translateX(5px) } }
 @keyframes pet-picked { 0%,100% { transform: translateY(0) scale(1) } 45% { transform: translateY(-8px) scale(1.08) } }

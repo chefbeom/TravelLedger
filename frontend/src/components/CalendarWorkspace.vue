@@ -2953,7 +2953,7 @@ function formatAggregateChartCompactAmount(value) {
 
 function formatAggregateChartHeadline(value, card) {
   const width = normalizeAggregateGridSpan(card?.config?.layoutW, 2, 4)
-  return width <= 2 ? `₩${formatAggregateChartCompactAmount(value)}` : formatCurrency(value)
+  return width <= 2 ? `₩${formatAggregateChartCompactAmount(value)}` : props.formatCurrency(value)
 }
 
 function formatAggregateChartPreviewNumber(value, card) {

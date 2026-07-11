@@ -2104,6 +2104,22 @@ async function loadStatisticsData({ route = resolveHouseholdStatisticsRoute() } 
   }
 }
 
+async function loadHouseholdAnalysisRouteData(route = householdAnalysisRoute.value) {
+  if (!isHouseholdAnalysisRoute(route)) {
+    return
+  }
+
+  if (route === 'stats-ai') {
+    await Promise.all([
+      loadAiAnalysisStatus(),
+      loadAiAnalysisHistory(aiAnalysisHistoryPage.value?.page ?? 0),
+    ])
+    return
+  }
+
+  await loadStatisticsData({ route })
+}
+
 function normalizeAiOptionalDate(value) {
   const text = String(value ?? '').trim()
   return text || null

@@ -1051,6 +1051,7 @@ const MODAL_ESCAPE_SELECTOR = [
   '.travel-modal',
   '.ledger-ai-modal',
   '.ai-result-modal',
+  '.receipt-ocr-modal',
   '.main-photo-frame-modal',
   '.public-map-share-photo-modal',
   '.drive-version-overlay',
@@ -1073,7 +1074,7 @@ function handleGlobalModalEscape(event) {
     return
   }
 
-  const closeAction = [...modal.querySelectorAll('button')].find((button) => {
+  const closeAction = modal.querySelector('[data-modal-close]') || [...modal.querySelectorAll('button')].find((button) => {
     const label = String(button.getAttribute('aria-label') || button.textContent || '').trim()
     return !button.disabled && /^(닫기|취소)$/.test(label)
   })

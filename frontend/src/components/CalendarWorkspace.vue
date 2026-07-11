@@ -4454,7 +4454,7 @@ defineExpose({
             <p class="receipt-ocr-modal__eyebrow">거래 이미지 AI 분석</p>
             <h2 id="receipt-ocr-modal-title">이미지 분석 및 검수</h2>
           </div>
-          <button type="button" class="button button--ghost" @click="closeReceiptOcrModal">닫기</button>
+          <button type="button" class="button button--ghost" data-modal-close @click="closeReceiptOcrModal">닫기</button>
         </header>
 
         <nav class="receipt-ocr-modal__nav" aria-label="이미지 분석 메뉴">

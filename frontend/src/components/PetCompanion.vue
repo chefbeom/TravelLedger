@@ -7,7 +7,6 @@ import bomiImageUrl from '../assets/pets/bomi-dog.webp'
 const PET_STORAGE_KEY = 'calen-pet-companion:v1'
 const PET_MARGIN = 12
 const PET_SIZES = [100, 150, 200, 250, 300]
-const PET_FRAME_RATE = 24
 const PET_DIALOGUES = {
   yuna: {
     lines: ['오늘은 어떤 기록을 살펴볼까요?', '잠깐 창밖을 보고 있었어요.', '천천히 해도 괜찮아요.', '잘하고 있어요. 조금만 더 해볼까요?', '필요한 알림은 제가 챙길게요.', '오늘의 가계부도 깔끔하게 정리해 봐요.', '휴식도 계획의 일부예요.', '다음 일정이 궁금하면 눌러 주세요.', '작은 기록이 모여 큰 도움이 돼요.', '집중하고 계시네요. 멋져요.', '제가 옆에서 조용히 지켜볼게요.', '한 번 더 확인하면 더 정확해져요.', '알림이 오면 바로 알려드릴게요.', '무리하지 말고 천천히 이어가요.', '오늘도 좋은 하루가 될 거예요.'],
@@ -126,7 +125,6 @@ const isQuickOpen = ref(false)
 const isManagerOpen = ref(false)
 const reaction = ref('idle')
 const petFacing = ref('right')
-const spriteFrame = ref(0)
 const speechText = ref('')
 const speechVisible = ref(false)
 const petElement = ref(null)
@@ -142,7 +140,6 @@ const dragState = reactive({
 let reactionTimer = null
 let speechTimer = null
 let walkTimer = null
-let frameTimer = null
 let idleTalkTimer = null
 let walkResetTimer = null
 
@@ -174,16 +171,10 @@ function resolveYunaSpriteRow() {
   return 0
 }
 
-const yunaSpriteStyle = computed(() => {
-  const frame = spriteFrame.value % 8
-  const x = `${(frame / 7) * 100}%`
-  const y = `${resolveYunaSpriteRow() * 10}%`
-  return {
-    backgroundImage: `url(${currentPet.value.asset})`,
-    backgroundPosition: `${x} ${y}`,
-  }
-})
-
+const yunaSpriteStyle = computed(() => ({
+  backgroundImage: `url(${currentPet.value.asset})`,
+  backgroundPosition: `0% ${resolveYunaSpriteRow() * 10}%`,
+}))
 const animalMotionStyle = computed(() => ({
   '--pet-facing-scale': petFacing.value === 'left' ? '-1' : '1',
 }))
@@ -417,11 +408,6 @@ function keepPetInViewport() {
 
 watch(() => settings.size, keepPetInViewport)
 watch(settings, persistSettings, { deep: true })
-watch(reaction, (nextReaction) => {
-  if (nextReaction === 'idle') {
-    spriteFrame.value = 0
-  }
-})
 
 watch(
   () => props.notification?.id,
@@ -455,11 +441,6 @@ watch(
   },
 )
 onMounted(() => {
-  frameTimer = window.setInterval(() => {
-    if (settings.enabled && currentPet.value.kind === 'sprite' && reaction.value !== 'idle') {
-      spriteFrame.value = (spriteFrame.value + 1) % PET_FRAME_RATE
-    }
-  }, Math.round(1000 / PET_FRAME_RATE))
   walkTimer = window.setInterval(movePetAutonomously, 9000)
   idleTalkTimer = window.setInterval(maybeTalkToUser, 30000)
 })
@@ -468,10 +449,6 @@ onBeforeUnmount(() => {
   if (walkTimer) {
     window.clearInterval(walkTimer)
     walkTimer = null
-  }
-  if (frameTimer) {
-    window.clearInterval(frameTimer)
-    frameTimer = null
   }
   if (idleTalkTimer) {
     window.clearInterval(idleTalkTimer)

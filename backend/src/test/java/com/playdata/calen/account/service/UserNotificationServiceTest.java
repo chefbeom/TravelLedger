@@ -29,11 +29,17 @@ class UserNotificationServiceTest {
     @Mock
     private UserNotificationRepository userNotificationRepository;
 
+    @Mock
+    private UserNotificationPreferenceService userNotificationPreferenceService;
+
     private UserNotificationService userNotificationService;
 
     @BeforeEach
     void setUp() {
-        userNotificationService = new UserNotificationService(userNotificationRepository);
+        userNotificationService = new UserNotificationService(
+                userNotificationRepository,
+                userNotificationPreferenceService
+        );
     }
 
     @Test

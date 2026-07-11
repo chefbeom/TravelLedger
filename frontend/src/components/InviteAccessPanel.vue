@@ -16,22 +16,14 @@ defineProps({
     type: Boolean,
     default: false,
   },
-  feedbackMessage: {
-    type: String,
-    default: '',
-  },
-  errorMessage: {
-    type: String,
-    default: '',
-  },
 })
 
 const emit = defineEmits(['change-expiry', 'create-invite', 'copy-invite'])
 
 const expiryOptions = [
-  { value: 24, label: '24 hours' },
-  { value: 72, label: '72 hours' },
-  { value: 168, label: '7 days' },
+  { value: 24, label: '24시간' },
+  { value: 72, label: '72시간' },
+  { value: 168, label: '7일' },
 ]
 
 function formatDateTime(value) {
@@ -44,7 +36,7 @@ function formatDateTime(value) {
     return String(value)
   }
 
-  return new Intl.DateTimeFormat('en-US', {
+  return new Intl.DateTimeFormat('ko-KR', {
     dateStyle: 'medium',
     timeStyle: 'short',
   }).format(normalized)
@@ -52,22 +44,18 @@ function formatDateTime(value) {
 </script>
 
 <template>
-  <section class="panel invite-panel" aria-labelledby="invite-panel-title">
-    <div class="panel__header">
-      <div>
-        <h2 id="invite-panel-title">Create invite link</h2>
-        <p>Create a time-limited invite link. Anyone with the link can create an account until it expires.</p>
-      </div>
-      <span class="panel__badge">Invite access</span>
+  <section class="panel invite-panel invite-panel--compact" aria-labelledby="invite-panel-title">
+    <div class="panel__header invite-panel__header">
+      <h2 id="invite-panel-title">초대 링크 생성</h2>
     </div>
 
     <div class="invite-panel__controls">
       <label class="field">
-        <span class="field__label">Link expiry</span>
+        <span class="field__label">유효 기간</span>
         <select
           :value="expiresInHours"
           :disabled="isCreating"
-          aria-label="Invite link expiry"
+          aria-label="초대 링크 유효 기간"
           @change="emit('change-expiry', Number($event.target.value))"
         >
           <option v-for="option in expiryOptions" :key="option.value" :value="option.value">
@@ -78,23 +66,20 @@ function formatDateTime(value) {
 
       <div class="invite-panel__actions">
         <button class="button button--primary" type="button" :disabled="isCreating" @click="emit('create-invite')">
-          {{ isCreating ? 'Creating...' : 'Create invite link' }}
+          {{ isCreating ? '생성 중...' : '초대 링크 생성' }}
         </button>
         <button class="button button--ghost" type="button" :disabled="!generatedLink" @click="emit('copy-invite')">
-          Copy link
+          복사
         </button>
       </div>
     </div>
 
     <div v-if="generatedLink" class="invite-panel__result" role="status" aria-live="polite">
       <label class="field field--full">
-        <span class="field__label">Generated link</span>
-        <input :value="generatedLink" readonly aria-label="Generated invite link" />
+        <span class="field__label">생성된 링크</span>
+        <input :value="generatedLink" readonly aria-label="생성된 초대 링크" />
       </label>
-      <p class="invite-panel__meta">Expires at: {{ formatDateTime(generatedExpiresAt) }}</p>
+      <p class="invite-panel__meta">만료 시각: {{ formatDateTime(generatedExpiresAt) }}</p>
     </div>
-
-    <div v-if="feedbackMessage" class="feedback feedback--success" role="status" aria-live="polite">{{ feedbackMessage }}</div>
-    <div v-if="errorMessage" class="feedback feedback--error" role="alert">{{ errorMessage }}</div>
   </section>
 </template>

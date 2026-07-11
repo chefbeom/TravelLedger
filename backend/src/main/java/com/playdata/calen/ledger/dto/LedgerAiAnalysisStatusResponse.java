@@ -7,6 +7,7 @@ public record LedgerAiAnalysisStatusResponse(
         boolean workflowConfigured,
         boolean apiKeyConfigured,
         boolean lmStudioConfigured,
+        boolean openAiConfigured,
         String model,
         String message
 ) {

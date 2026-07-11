@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, reactive, ref } from 'vue'
 import { buildThumbnailUrl } from '../lib/mediaPreview'
 import {
   changeProfilePassword,
@@ -25,9 +25,11 @@ const props = defineProps({
 
 const PAGE_SIZE = 5
 const attachmentInput = ref(null)
+const activeProfileSection = ref('account')
+const activeSupportSection = ref('create')
 
 const state = reactive({
-  loading: true,
+  loading: false,
   sending: false,
   errorMessage: '',
   successMessage: '',
@@ -39,6 +41,7 @@ const state = reactive({
     totalPages: 0,
   },
   expandedInquiryId: null,
+  historyLoaded: false,
 })
 
 const form = reactive({
@@ -246,6 +249,17 @@ function handleAttachmentChange(event) {
   form.attachment = event.target.files?.[0] ?? null
 }
 
+function selectProfileSection(section) {
+  activeProfileSection.value = section
+}
+
+async function selectSupportSection(section) {
+  activeSupportSection.value = section
+  if (section === 'history' && !state.historyLoaded && !state.loading) {
+    await loadInquiries(0)
+  }
+}
+
 function toggleInquiry(inquiryId) {
   state.expandedInquiryId = state.expandedInquiryId === inquiryId ? null : inquiryId
 }
@@ -280,6 +294,7 @@ async function loadInquiries(page = state.pageInfo.page, preferredId = state.exp
     }
 
     syncExpandedInquiry(preferredId)
+    state.historyLoaded = true
   } catch (error) {
     state.errorMessage = error.message
   } finally {
@@ -310,6 +325,8 @@ async function handleSubmitInquiry() {
     const createdInquiry = await createSupportInquiry(formData)
     state.successMessage = '문의가 관리자에게 전송되었습니다.'
     resetForm()
+    activeProfileSection.value = 'support'
+    activeSupportSection.value = 'history'
     await loadInquiries(0, createdInquiry.id)
   } catch (error) {
     state.errorMessage = error.message
@@ -468,18 +485,54 @@ async function handlePrivacyExport() {
   }
 }
 
-onMounted(() => {
-  loadInquiries(0)
-})
 </script>
 
 <template>
   <section class="workspace-stack profile-workspace">
-    <section class="panel">
+    <section class="panel profile-section-navigation">
+      <div class="panel__header profile-section-navigation__header">
+        <h2>프로필</h2>
+        <nav class="profile-section-tabs" role="tablist" aria-label="프로필 기능">
+          <button
+            class="button button--ghost"
+            :class="{ 'is-active': activeProfileSection === 'account' }"
+            type="button"
+            role="tab"
+            :aria-selected="activeProfileSection === 'account'"
+            @click="selectProfileSection('account')"
+          >
+            계정 및 보안
+          </button>
+          <button
+            class="button button--ghost"
+            :class="{ 'is-active': activeProfileSection === 'privacy' }"
+            type="button"
+            role="tab"
+            :aria-selected="activeProfileSection === 'privacy'"
+            @click="selectProfileSection('privacy')"
+          >
+            개인정보 관리
+          </button>
+          <button
+            class="button button--ghost"
+            :class="{ 'is-active': activeProfileSection === 'support' }"
+            type="button"
+            role="tab"
+            :aria-selected="activeProfileSection === 'support'"
+            @click="selectProfileSection('support')"
+          >
+            고객 지원
+          </button>
+        </nav>
+      </div>
+    </section>
+
+    <div v-if="state.successMessage" class="feedback feedback--success">{{ state.successMessage }}</div>
+    <div v-if="state.errorMessage" class="feedback feedback--error">{{ state.errorMessage }}</div>
+
+    <section v-if="activeProfileSection === 'account'" class="panel profile-section-panel">
       <div class="panel__header">
-        <div>
-          <h2>프로필</h2>
-        </div>
+        <h2>계정 정보</h2>
       </div>
       <div class="summary-grid profile-summary-grid">
         <article class="summary-card">
@@ -501,14 +554,9 @@ onMounted(() => {
       </div>
     </section>
 
-    <div v-if="state.successMessage" class="feedback feedback--success">{{ state.successMessage }}</div>
-    <div v-if="state.errorMessage" class="feedback feedback--error">{{ state.errorMessage }}</div>
-
-    <section class="panel profile-privacy-panel" aria-labelledby="privacy-panel-title">
+    <section v-if="activeProfileSection === 'privacy'" class="panel profile-privacy-panel profile-section-panel" aria-labelledby="privacy-panel-title">
       <div class="panel__header">
-        <div>
-          <h2 id="privacy-panel-title">개인정보 관리</h2>
-        </div>
+        <h2 id="privacy-panel-title">개인정보 관리</h2>
         <div class="profile-privacy-panel__actions">
           <span class="panel__badge">로그인 + 2차 PIN 보호</span>
           <button class="button button--primary" data-testid="privacy-management-open" type="button" :disabled="isPrivacyBusy" @click="openPrivacyManagementModal">
@@ -521,9 +569,9 @@ onMounted(() => {
         <div>
           <strong>내 데이터 다운로드</strong>
           <p>가계부 CSV와 내보내기 메타데이터를 2차 PIN으로 암호화된 ZIP 파일로 다운로드합니다.</p>
-          <small>현재 압축 파일에는 가계부 CSV와 안전한 목록 정보만 포함됩니다. 사진과 파일 원본은 추후 비동기 내보내기 작업이 필요합니다.</small>
+          <small>현재 압축 파일에는 가계부 CSV와 안전한 목록 정보만 포함됩니다.</small>
         </div>
-        <div class="privacy-export-card__range" aria-label="Export date range">
+        <div class="privacy-export-card__range" aria-label="내보내기 날짜 범위">
           <label class="field">
             <span class="field__label">시작일</span>
             <input v-model="privacy.exportFrom" data-testid="privacy-export-from" type="date" :disabled="isPrivacyBusy" />
@@ -539,94 +587,112 @@ onMounted(() => {
       </div>
 
       <div class="privacy-management-card" data-testid="privacy-management-card">
-        <div>
-          <strong>민감 작업은 검증 후 실행</strong>
-        </div>
-        <button class="button button--ghost" type="button" :disabled="isPrivacyBusy" @click="openPrivacyManagementModal">개인정보 관리 열기</button>
+        <strong>민감 데이터 정리 및 접근 제어</strong>
+        <button class="button button--ghost" type="button" :disabled="isPrivacyBusy" @click="openPrivacyManagementModal">관리 열기</button>
       </div>
     </section>
 
-    <section class="panel">
-      <div class="panel__header">
-        <div>
+    <section v-if="activeProfileSection === 'support'" class="profile-support-area" aria-label="고객 지원">
+      <nav class="profile-support-tabs" role="tablist" aria-label="문의 기능">
+        <button
+          class="button button--ghost"
+          :class="{ 'is-active': activeSupportSection === 'create' }"
+          type="button"
+          role="tab"
+          :aria-selected="activeSupportSection === 'create'"
+          @click="selectSupportSection('create')"
+        >
+          문의 보내기
+        </button>
+        <button
+          class="button button--ghost"
+          :class="{ 'is-active': activeSupportSection === 'history' }"
+          type="button"
+          role="tab"
+          :aria-selected="activeSupportSection === 'history'"
+          @click="selectSupportSection('history')"
+        >
+          내 문의 내역
+        </button>
+      </nav>
+
+      <section v-if="activeSupportSection === 'create'" class="panel profile-section-panel">
+        <div class="panel__header">
           <h2>문의 보내기</h2>
         </div>
-      </div>
 
-      <form class="stack-form" @submit.prevent="handleSubmitInquiry">
-        <input v-model="form.title" type="text" maxlength="140" placeholder="문의 제목" :disabled="state.sending" />
-        <textarea v-model="form.content" rows="6" placeholder="문제 상황이나 요청 내용을 입력해 주세요." :disabled="state.sending" />
-        <input ref="attachmentInput" type="file" accept="image/*" :disabled="state.sending" @change="handleAttachmentChange" />
-        <p class="field__hint">첨부 파일은 선택 사항입니다.</p>
-        <button class="button button--primary" type="submit" :disabled="state.sending">
-          {{ state.sending ? '전송 중...' : '문의 보내기' }}
-        </button>
-      </form>
-    </section>
-
-    <section class="panel">
-      <div class="panel__header">
-        <div>
-          <h2>내 문의 내역</h2>
-        </div>
-        <button class="button button--ghost" type="button" :disabled="state.loading" @click="loadInquiries(state.pageInfo.page)">
-          {{ state.loading ? '불러오는 중...' : '새로고침' }}
-        </button>
-      </div>
-
-      <p v-if="state.loading" class="panel__empty">문의 내역을 불러오는 중입니다.</p>
-      <div v-else-if="state.inquiries.length" class="support-inquiry-list support-inquiry-list--compact profile-inquiry-list">
-        <article v-for="inquiry in state.inquiries" :key="inquiry.id" class="support-inquiry-card support-inquiry-card--compact profile-inquiry-card">
-          <button class="support-inquiry-row" type="button" @click="toggleInquiry(inquiry.id)">
-            <div class="support-inquiry-row__summary">
-              <strong class="support-inquiry-row__title">{{ inquiry.title }}</strong>
-              <span :class="['entry-type-pill', inquiry.status === 'ANSWERED' ? 'entry-type-pill--income' : 'entry-type-pill--expense']">
-                {{ statusLabel[inquiry.status] ?? inquiry.status }}
-              </span>
-            </div>
-            <div class="support-inquiry-row__meta">
-              <small>{{ formatDateTime(inquiry.createdAt) }}</small>
-              <span class="support-inquiry-row__toggle">{{ state.expandedInquiryId === inquiry.id ? '접기' : '열기' }}</span>
-            </div>
+        <form class="stack-form" @submit.prevent="handleSubmitInquiry">
+          <input v-model="form.title" type="text" maxlength="140" placeholder="문의 제목" :disabled="state.sending" />
+          <textarea v-model="form.content" rows="6" placeholder="문제 상황이나 요청 내용을 입력해 주세요." :disabled="state.sending" />
+          <input ref="attachmentInput" type="file" accept="image/*" :disabled="state.sending" @change="handleAttachmentChange" />
+          <p class="field__hint">첨부 파일은 선택 사항입니다.</p>
+          <button class="button button--primary" type="submit" :disabled="state.sending">
+            {{ state.sending ? '전송 중...' : '문의 보내기' }}
           </button>
+        </form>
+      </section>
 
-          <div v-if="state.expandedInquiryId === inquiry.id" class="support-inquiry-row__body profile-inquiry-body">
-            <p class="support-inquiry-content">{{ inquiry.content }}</p>
+      <section v-else class="panel profile-section-panel">
+        <div class="panel__header">
+          <h2>내 문의 내역</h2>
+          <button class="button button--ghost" type="button" :disabled="state.loading" @click="loadInquiries(state.pageInfo.page)">
+            {{ state.loading ? '불러오는 중...' : '새로고침' }}
+          </button>
+        </div>
 
-            <div v-if="inquiry.attachmentUrl" class="support-inquiry-attachment profile-inquiry-attachment">
-              <img
-                v-if="inquiry.attachmentContentType?.startsWith('image/')"
-                :src="buildThumbnailUrl(inquiry.attachmentUrl)"
-                :alt="inquiry.attachmentFileName || inquiry.title"
-                loading="lazy"
-                decoding="async"
-                class="support-inquiry-preview profile-inquiry-preview"
-              />
-              <div class="profile-inquiry-attachment__meta">
-                <strong>{{ inquiry.attachmentFileName || '첨부 파일' }}</strong>
-                <a class="button button--ghost profile-inquiry-attachment__button" :href="inquiry.attachmentUrl" target="_blank" rel="noreferrer">첨부 파일 보기</a>
+        <p v-if="state.loading" class="panel__empty">문의 내역을 불러오는 중입니다.</p>
+        <div v-else-if="state.inquiries.length" class="support-inquiry-list support-inquiry-list--compact profile-inquiry-list">
+          <article v-for="inquiry in state.inquiries" :key="inquiry.id" class="support-inquiry-card support-inquiry-card--compact profile-inquiry-card">
+            <button class="support-inquiry-row" type="button" @click="toggleInquiry(inquiry.id)">
+              <div class="support-inquiry-row__summary">
+                <strong class="support-inquiry-row__title">{{ inquiry.title }}</strong>
+                <span :class="['entry-type-pill', inquiry.status === 'ANSWERED' ? 'entry-type-pill--income' : 'entry-type-pill--expense']">
+                  {{ statusLabel[inquiry.status] ?? inquiry.status }}
+                </span>
+              </div>
+              <div class="support-inquiry-row__meta">
+                <small>{{ formatDateTime(inquiry.createdAt) }}</small>
+                <span class="support-inquiry-row__toggle">{{ state.expandedInquiryId === inquiry.id ? '접기' : '열기' }}</span>
+              </div>
+            </button>
+
+            <div v-if="state.expandedInquiryId === inquiry.id" class="support-inquiry-row__body profile-inquiry-body">
+              <p class="support-inquiry-content">{{ inquiry.content }}</p>
+
+              <div v-if="inquiry.attachmentUrl" class="support-inquiry-attachment profile-inquiry-attachment">
+                <img
+                  v-if="inquiry.attachmentContentType?.startsWith('image/')"
+                  :src="buildThumbnailUrl(inquiry.attachmentUrl)"
+                  :alt="inquiry.attachmentFileName || inquiry.title"
+                  loading="lazy"
+                  decoding="async"
+                  class="support-inquiry-preview profile-inquiry-preview"
+                />
+                <div class="profile-inquiry-attachment__meta">
+                  <strong>{{ inquiry.attachmentFileName || '첨부 파일' }}</strong>
+                  <a class="button button--ghost profile-inquiry-attachment__button" :href="inquiry.attachmentUrl" target="_blank" rel="noreferrer">첨부 파일 보기</a>
+                </div>
+              </div>
+
+              <div v-if="inquiry.replyContent" class="support-inquiry-reply profile-inquiry-reply">
+                <div class="support-inquiry-reply__header">
+                  <strong>관리자 답변</strong>
+                  <small>{{ inquiry.repliedByDisplayName || inquiry.repliedByLoginId || '관리자' }} · {{ formatDateTime(inquiry.repliedAt) }}</small>
+                </div>
+                <p>{{ inquiry.replyContent }}</p>
               </div>
             </div>
+          </article>
+        </div>
+        <p v-else class="panel__empty">아직 등록한 문의가 없습니다.</p>
 
-            <div v-if="inquiry.replyContent" class="support-inquiry-reply profile-inquiry-reply">
-              <div class="support-inquiry-reply__header">
-                <strong>관리자 답변</strong>
-                <small>{{ inquiry.repliedByDisplayName || inquiry.repliedByLoginId || '관리자' }} - {{ formatDateTime(inquiry.repliedAt) }}</small>
-              </div>
-              <p>{{ inquiry.replyContent }}</p>
-            </div>
-          </div>
-        </article>
-      </div>
-      <p v-else class="panel__empty">아직 등록된 문의가 없습니다.</p>
-
-      <div v-if="!state.loading && state.pageInfo.totalElements > 0" class="panel__actions">
-        <button class="button button--ghost" type="button" :disabled="state.pageInfo.page <= 0" @click="changePage(state.pageInfo.page - 1)">이전</button>
-        <span>{{ state.pageInfo.page + 1 }} / {{ pageCount }}</span>
-        <button class="button button--ghost" type="button" :disabled="state.pageInfo.page + 1 >= pageCount" @click="changePage(state.pageInfo.page + 1)">다음</button>
-      </div>
+        <div v-if="!state.loading && state.pageInfo.totalElements > 0" class="panel__actions">
+          <button class="button button--ghost" type="button" :disabled="state.pageInfo.page <= 0" @click="changePage(state.pageInfo.page - 1)">이전</button>
+          <span>{{ state.pageInfo.page + 1 }} / {{ pageCount }}</span>
+          <button class="button button--ghost" type="button" :disabled="state.pageInfo.page + 1 >= pageCount" @click="changePage(state.pageInfo.page + 1)">다음</button>
+        </div>
+      </section>
     </section>
-
     <div v-if="privacy.modalVisible" class="travel-modal" @click.self="closePrivacyManagementModal">
       <div class="travel-modal__dialog profile-privacy-modal" data-testid="privacy-management-dialog" role="dialog" aria-modal="true" aria-labelledby="privacy-management-title">
         <div class="travel-modal__header">

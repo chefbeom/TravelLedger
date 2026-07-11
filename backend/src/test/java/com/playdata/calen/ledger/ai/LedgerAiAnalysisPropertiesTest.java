@@ -114,4 +114,41 @@ class LedgerAiAnalysisPropertiesTest {
         assertThat(properties.isProviderUrlAllowed(properties.getLmStudioBaseUrl())).isFalse();
         assertThat(properties.isConfigured()).isFalse();
     }
+
+    @Test
+    void configuresOpenAiWithOfficialApiHostAndExplicitModel() {
+        LedgerAiAnalysisProperties properties = new LedgerAiAnalysisProperties();
+        properties.setEnabled(true);
+        properties.setProvider("openai");
+        properties.setAllowedProviderHosts("api.openai.com");
+        properties.setOpenAiBaseUrl("https://api.openai.com");
+        properties.setOpenAiApiKey("test-openai-key");
+        properties.setModel("gpt-4.1-mini");
+
+        assertThat(properties.provider()).isEqualTo(LedgerAiProvider.OPENAI);
+        assertThat(properties.isOpenAiConfigured()).isTrue();
+        assertThat(properties.isConfigured()).isTrue();
+        assertThat(properties.activeOpenAiCompatibleBaseUrl()).isEqualTo("https://api.openai.com");
+        assertThat(properties.activeOpenAiCompatibleChatPath()).isEqualTo("/v1/chat/completions");
+        assertThat(properties.activeOpenAiCompatibleModelsPath()).isEqualTo("/v1/models");
+        assertThat(properties.openAiCompatibleProviderLabel()).isEqualTo("OpenAI API");
+    }
+
+    @Test
+    void requiresAnOpenAiApiKeyAndExplicitModel() {
+        LedgerAiAnalysisProperties properties = new LedgerAiAnalysisProperties();
+        properties.setEnabled(true);
+        properties.setProvider("openai");
+        properties.setAllowedProviderHosts("api.openai.com");
+        properties.setOpenAiBaseUrl("https://api.openai.com");
+        properties.setModel("auto");
+
+        assertThat(properties.isOpenAiConfigured()).isFalse();
+        assertThat(properties.statusMessage()).contains("API key");
+
+        properties.setOpenAiApiKey("test-openai-key");
+
+        assertThat(properties.isOpenAiConfigured()).isFalse();
+        assertThat(properties.statusMessage()).contains("model is required");
+    }
 }

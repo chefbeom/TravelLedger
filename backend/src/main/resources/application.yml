@@ -117,12 +117,16 @@ app:
       lm-studio-chat-path: ${APP_LEDGER_AI_LMSTUDIO_CHAT_PATH:/v1/chat/completions}
       lm-studio-models-path: ${APP_LEDGER_AI_LMSTUDIO_MODELS_PATH:/v1/models}
       lm-studio-api-key: ${APP_LEDGER_AI_LMSTUDIO_API_KEY:}
+      open-ai-base-url: ${APP_LEDGER_AI_OPENAI_BASE_URL:https://api.openai.com}
+      open-ai-chat-path: ${APP_LEDGER_AI_OPENAI_CHAT_PATH:/v1/chat/completions}
+      open-ai-models-path: ${APP_LEDGER_AI_OPENAI_MODELS_PATH:/v1/models}
+      open-ai-api-key: ${APP_LEDGER_AI_OPENAI_API_KEY:}
       temperature: ${APP_LEDGER_AI_TEMPERATURE:0.2}
       max-tokens: ${APP_LEDGER_AI_MAX_TOKENS:4096}
       connect-timeout: ${APP_LEDGER_AI_CONNECT_TIMEOUT:3s}
       read-timeout: ${APP_LEDGER_AI_READ_TIMEOUT:600s}
       enforce-provider-url-allowlist: ${APP_LEDGER_AI_ENFORCE_PROVIDER_URL_ALLOWLIST:true}
-      allowed-provider-hosts: "${APP_LEDGER_AI_ALLOWED_PROVIDER_HOSTS:localhost,127.0.0.1,::1}"
+      allowed-provider-hosts: "${APP_LEDGER_AI_ALLOWED_PROVIDER_HOSTS:localhost,127.0.0.1,::1,api.openai.com}"
       history-retention-enabled: ${APP_LEDGER_AI_HISTORY_RETENTION_ENABLED:false}
       history-retention-days: ${APP_LEDGER_AI_HISTORY_RETENTION_DAYS:180}
       history-retention-cron: ${APP_LEDGER_AI_HISTORY_RETENTION_CRON:0 15 3 * * *}
@@ -159,5 +163,3 @@ app:
     db-backup-cron: ${DATA_OPS_DB_BACKUP_CRON:0 0 0 * * *}
     minio-backup-enabled: ${DATA_OPS_MINIO_BACKUP_ENABLED:false}
     minio-backup-cron: ${DATA_OPS_MINIO_BACKUP_CRON:0 30 0 * * *}
-
-

@@ -1,10 +1,21 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import {
+  fetchLayoutSetting,
   fetchNotifications,
   markAllNotificationsRead,
   markNotificationRead,
+  saveLayoutSetting,
 } from '../lib/api'
+import {
+  NOTIFICATION_CATEGORY_OPTIONS,
+  NOTIFICATION_PREFERENCE_SCOPE,
+  NOTIFICATION_PREFERENCE_VERSION,
+  createDefaultNotificationPreferences,
+  normalizeNotificationPreferences,
+  notificationCategoryLabel,
+  resolveNotificationCategory,
+} from '../lib/notificationPreferences'
 
 const props = defineProps({
   embedded: {
@@ -13,7 +24,7 @@ const props = defineProps({
   },
 })
 
-const emit = defineEmits(['unread-count-change', 'open-target'])
+const emit = defineEmits(['unread-count-change', 'open-target', 'preferences-change'])
 
 const PAGE_SIZE_OPTIONS = [10, 20, 50]
 const DEFAULT_PAGE_SIZE = 10
@@ -22,24 +33,33 @@ const notifications = ref([])
 const unreadCount = ref(0)
 const pageInfo = ref({ page: 0, size: DEFAULT_PAGE_SIZE, totalElements: 0, totalPages: 0 })
 const unreadOnly = ref(false)
+const notificationPreferences = ref(createDefaultNotificationPreferences())
 const isLoading = ref(false)
 const isMutating = ref(false)
+const isPreferencesOpen = ref(false)
+const isPreferencesLoading = ref(false)
+const isPreferencesSaving = ref(false)
 const errorMessage = ref('')
+const preferenceErrorMessage = ref('')
 
-const emptyMessage = computed(() => (unreadOnly.value ? '읽지 않은 알림이 없습니다.' : '아직 도착한 알림이 없습니다.'))
+const emptyMessage = computed(() => (
+  unreadOnly.value ? '읽지 않은 알림이 없습니다.' : '표시할 알림이 없습니다.'
+))
 const pageCount = computed(() => Math.max(1, Number(pageInfo.value.totalPages || 0)))
 const hasNotifications = computed(() => Number(pageInfo.value.totalElements || 0) > 0)
 const pageRangeLabel = computed(() => {
   const total = Number(pageInfo.value.totalElements || 0)
-  if (!total) {
-    return '표시할 알림 없음'
-  }
+  if (!total) return '표시할 알림 없음'
 
   const size = Math.max(1, Number(pageInfo.value.size || DEFAULT_PAGE_SIZE))
   const start = Number(pageInfo.value.page || 0) * size + 1
   const end = Math.min(start + notifications.value.length - 1, total)
   return `${start}~${end} / 총 ${total}건`
 })
+
+function clonePreferences(value) {
+  return JSON.parse(JSON.stringify(normalizeNotificationPreferences(value)))
+}
 
 function formatDateTime(value) {
   if (!value) return ''
@@ -57,32 +77,124 @@ function notificationTone(type) {
   const normalized = String(type || '').toUpperCase()
   if (normalized.includes('FAILED') || normalized.includes('ERROR') || normalized.includes('BACKUP')) return 'danger'
   if (normalized.includes('SHARED') || normalized.includes('SHARE')) return 'share'
-  if (normalized.includes('AI')) return 'ai'
-  if (normalized.includes('SUCCESS') || normalized.includes('DONE')) return 'success'
+  if (normalized.includes('AI') || normalized.includes('OCR')) return 'ai'
+  if (normalized.includes('SUCCESS') || normalized.includes('DONE') || normalized.includes('REACHED')) return 'success'
   return 'default'
 }
 
-function notificationTypeLabel(type) {
-  const normalized = String(type || '').toUpperCase()
-  if (normalized.includes('AI')) return 'AI'
-  if (normalized.includes('OCR')) return 'OCR'
-  if (normalized.includes('BACKUP')) return '백업'
-  if (normalized.includes('RESTORE')) return '복구'
-  if (normalized.includes('SHARED') || normalized.includes('SHARE')) return '공유'
-  if (normalized.includes('DRIVE') || normalized.includes('FILE')) return '드라이브'
-  if (normalized.includes('TRAVEL')) return '여행'
-  if (normalized.includes('BUDGET')) return '예산'
-  if (normalized.includes('SECURITY') || normalized.includes('LOGIN')) return '보안'
-  if (normalized.includes('SYSTEM')) return '시스템'
-  return '알림'
+function notificationTargetLabel(targetUrl) {
+  const target = String(targetUrl || '')
+  if (target.startsWith('/calendar')) return '가계부 · 이미지 분석 및 검수'
+  if (target.startsWith('/statistics')) return '가계부 분석 · AI 분석'
+  if (target.startsWith('/household')) return '가계부 · 목표 관리'
+  if (target.startsWith('/travel-money')) return '여행 · 여행 가계부'
+  if (target.startsWith('/travel')) return '여행'
+  if (target.startsWith('/drive')) return '드라이브 · 공유 파일'
+  if (target.startsWith('/profile')) return '프로필 · 개인정보 관리'
+  if (target.startsWith('/admin')) return '관리자 · 운영 관리'
+  return '알림 센터'
+}
+
+function notificationInfo(notification) {
+  const type = String(notification?.type || '').toUpperCase()
+  const category = resolveNotificationCategory(type)
+  let source = notificationCategoryLabel(type)
+  let event = '상태 알림'
+
+  if (type.includes('AI_IMAGE_ANALYSIS_FAILED')) {
+    source = '가계부 · 이미지 분석'
+    event = '분석 실패'
+  } else if (type.includes('AI_ANALYSIS_DONE')) {
+    source = '가계부 분석 · AI 분석'
+    event = '분석 완료'
+  } else if (type.includes('AI_OR_OCR_FAILED')) {
+    source = '가계부 분석 · AI 분석'
+    event = '분석 실패'
+  } else if (type.includes('SHARED_FILE_RECEIVED')) {
+    source = '드라이브 · 파일 공유'
+    event = '공유 파일 도착'
+  } else if (type.includes('TRAVEL_REMINDER')) {
+    source = '여행 · 일정'
+    event = '출발 일정 알림'
+  } else if (type.includes('TRAVEL_BUDGET')) {
+    source = '여행 · 가계부'
+    event = '예산 초과'
+  } else if (type.includes('HOUSEHOLD_GOAL')) {
+    source = '가계부 · 목표'
+    event = '목표 달성'
+  } else if (type.includes('PRIVACY_EXPORT')) {
+    source = '프로필 · 개인정보'
+    event = '데이터 내보내기 완료'
+  } else if (type.includes('PRIVACY_ACTION')) {
+    source = '프로필 · 개인정보'
+    event = '개인정보 정리 완료'
+  } else if (type.includes('BACKUP')) {
+    source = '관리자 · 백업'
+    event = '백업 확인 필요'
+  }
+
+  return { category, source, event, target: notificationTargetLabel(notification?.targetUrl) }
 }
 
 function clampPage(page) {
   const numericPage = Number(page || 0)
-  if (!Number.isFinite(numericPage)) {
-    return 0
-  }
+  if (!Number.isFinite(numericPage)) return 0
   return Math.min(Math.max(Math.trunc(numericPage), 0), pageCount.value - 1)
+}
+
+async function loadNotificationPreferences() {
+  isPreferencesLoading.value = true
+  preferenceErrorMessage.value = ''
+  try {
+    const response = await fetchLayoutSetting(NOTIFICATION_PREFERENCE_SCOPE)
+    notificationPreferences.value = normalizeNotificationPreferences(response?.payload)
+  } catch {
+    notificationPreferences.value = createDefaultNotificationPreferences()
+    preferenceErrorMessage.value = '알림 설정을 불러오지 못했습니다.'
+  } finally {
+    isPreferencesLoading.value = false
+    emit('preferences-change', clonePreferences(notificationPreferences.value))
+  }
+}
+
+async function updateNotificationPreferences(mutator) {
+  if (isPreferencesSaving.value || isPreferencesLoading.value) return
+
+  const previous = clonePreferences(notificationPreferences.value)
+  const next = clonePreferences(notificationPreferences.value)
+  mutator(next)
+  notificationPreferences.value = next
+  preferenceErrorMessage.value = ''
+  emit('preferences-change', clonePreferences(next))
+  isPreferencesSaving.value = true
+
+  try {
+    const response = await saveLayoutSetting(
+      NOTIFICATION_PREFERENCE_SCOPE,
+      next,
+      NOTIFICATION_PREFERENCE_VERSION,
+    )
+    notificationPreferences.value = normalizeNotificationPreferences(response?.payload || next)
+    emit('preferences-change', clonePreferences(notificationPreferences.value))
+  } catch (error) {
+    notificationPreferences.value = previous
+    emit('preferences-change', clonePreferences(previous))
+    preferenceErrorMessage.value = error?.message || '알림 설정을 저장하지 못했습니다.'
+  } finally {
+    isPreferencesSaving.value = false
+  }
+}
+
+function changeNotificationEnabled(event) {
+  updateNotificationPreferences((next) => {
+    next.enabled = Boolean(event?.target?.checked)
+  })
+}
+
+function changeNotificationCategory(category, event) {
+  updateNotificationPreferences((next) => {
+    next.categories[category] = Boolean(event?.target?.checked)
+  })
 }
 
 async function loadNotifications(page = pageInfo.value.page || 0) {
@@ -121,9 +233,7 @@ async function loadNotifications(page = pageInfo.value.page || 0) {
 
 async function changePage(page) {
   const nextPage = clampPage(page)
-  if (nextPage === pageInfo.value.page || isLoading.value) {
-    return
-  }
+  if (nextPage === pageInfo.value.page || isLoading.value) return
   await loadNotifications(nextPage)
 }
 
@@ -154,9 +264,7 @@ async function markRead(notification) {
         : item
     ))
     setUnreadCount(response?.unreadCount ?? Math.max(0, unreadCount.value - 1))
-    if (unreadOnly.value) {
-      await loadNotifications(pageInfo.value.page)
-    }
+    if (unreadOnly.value) await loadNotifications(pageInfo.value.page)
   } catch (error) {
     errorMessage.value = error?.message || '알림을 읽음 처리하지 못했습니다.'
   } finally {
@@ -191,7 +299,9 @@ function openTarget(notification) {
   emit('open-target', target)
 }
 
-onMounted(() => loadNotifications(0))
+onMounted(async () => {
+  await Promise.all([loadNotificationPreferences(), loadNotifications(0)])
+})
 </script>
 
 <template>
@@ -200,10 +310,50 @@ onMounted(() => loadNotifications(0))
       <div class="panel__header notification-hero__header">
         <div>
           <p class="panel__eyebrow">알림 센터</p>
-          <h2>운영, AI, OCR, 공유 알림</h2>
+          <h2>새 알림 {{ unreadCount }}건</h2>
         </div>
-        <span class="panel__badge notification-hero__badge">읽지 않음 {{ unreadCount }}건</span>
+        <button
+          class="button button--ghost notification-settings-button"
+          type="button"
+          :aria-expanded="isPreferencesOpen"
+          @click="isPreferencesOpen = !isPreferencesOpen"
+        >
+          알림 설정
+        </button>
       </div>
+
+      <section v-if="isPreferencesOpen" class="notification-preferences" aria-label="알림 수신 설정">
+        <div class="notification-preferences__header">
+          <strong>알림 수신</strong>
+          <label class="notification-preferences__master">
+            <input
+              type="checkbox"
+              :checked="notificationPreferences.enabled"
+              :disabled="isPreferencesLoading || isPreferencesSaving"
+              @change="changeNotificationEnabled"
+            >
+            <span>{{ notificationPreferences.enabled ? '켜짐' : '꺼짐' }}</span>
+          </label>
+        </div>
+        <div class="notification-preferences__categories">
+          <label
+            v-for="option in NOTIFICATION_CATEGORY_OPTIONS"
+            :key="option.key"
+            class="notification-preferences__option"
+            :class="{ 'notification-preferences__option--disabled': !notificationPreferences.enabled }"
+          >
+            <input
+              type="checkbox"
+              :checked="notificationPreferences.categories[option.key]"
+              :disabled="!notificationPreferences.enabled || isPreferencesLoading || isPreferencesSaving"
+              @change="changeNotificationCategory(option.key, $event)"
+            >
+            <span>{{ option.label }}</span>
+          </label>
+        </div>
+        <p v-if="preferenceErrorMessage" class="notification-preferences__error">{{ preferenceErrorMessage }}</p>
+      </section>
+
       <div class="notification-toolbar">
         <div class="notification-toolbar__filters">
           <button class="button button--ghost" type="button" :disabled="isLoading" @click="toggleUnreadOnly">
@@ -242,10 +392,15 @@ onMounted(() => loadNotifications(0))
           </div>
           <div class="notification-card__body">
             <div class="notification-card__meta">
-              <span>{{ notificationTypeLabel(notification.type) }}</span>
+              <span class="notification-card__source">{{ notificationInfo(notification).source }}</span>
+              <span class="notification-card__event">{{ notificationInfo(notification).event }}</span>
               <span>{{ formatDateTime(notification.createdAt) }}</span>
             </div>
             <h3>{{ notification.title || '알림' }}</h3>
+            <div class="notification-card__context">
+              <span>알림 대상</span>
+              <strong>{{ notificationInfo(notification).target }}</strong>
+            </div>
             <p>{{ notification.message || '알림 내용이 없습니다.' }}</p>
             <div class="notification-card__actions">
               <button v-if="notification.targetUrl" class="button button--ghost" type="button" @click="openTarget(notification)">

@@ -32,4 +32,22 @@ class LedgerAiAnalysisStatusServiceTest {
                 .doesNotContain("lmstudio-secret-token")
                 .doesNotContain("n8n-secret-token");
     }
+
+    @Test
+    void getStatusReportsOpenAiReadinessWithoutExposingItsSecret() {
+        LedgerAiAnalysisProperties properties = new LedgerAiAnalysisProperties();
+        properties.setEnabled(true);
+        properties.setProvider("openai");
+        properties.setAllowedProviderHosts("api.openai.com");
+        properties.setOpenAiBaseUrl("https://api.openai.com");
+        properties.setOpenAiApiKey("openai-secret-token");
+        properties.setModel("gpt-4.1-mini");
+
+        LedgerAiAnalysisStatusResponse response = new LedgerAiAnalysisStatusService(properties).getStatus();
+
+        assertThat(response.configured()).isTrue();
+        assertThat(response.provider()).isEqualTo("openai");
+        assertThat(response.openAiConfigured()).isTrue();
+        assertThat(response.toString()).doesNotContain("https://api.openai.com").doesNotContain("openai-secret-token");
+    }
 }

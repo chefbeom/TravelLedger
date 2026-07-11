@@ -18,6 +18,7 @@ public class LedgerAiAnalysisStatusService {
                 properties.isWorkflowConfigured(),
                 properties.isApiKeyConfigured(),
                 properties.isLmStudioConfigured(),
+                properties.isOpenAiConfigured(),
                 properties.getModel(),
                 properties.statusMessage()
         );

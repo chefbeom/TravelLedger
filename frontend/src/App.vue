@@ -9,6 +9,14 @@ import {
   login,
   logout as logoutRequest,
 } from './lib/sessionApi'
+import { fetchLayoutSetting } from './lib/api'
+import {
+  NOTIFICATION_PREFERENCE_SCOPE,
+  createDefaultNotificationPreferences,
+  isNotificationEnabled,
+  normalizeNotificationPreferences,
+  notificationCategoryLabel,
+} from './lib/notificationPreferences'
 
 const AdminWorkspace = defineAsyncComponent(() => import('./components/AdminWorkspace.vue'))
 const HouseholdWorkspace = defineAsyncComponent(() => import('./components/HouseholdWorkspace.vue'))
@@ -197,13 +205,19 @@ const notificationToast = reactive({
   id: '',
   title: '',
   message: '',
+  category: '',
 })
+const notificationPreferences = ref(createDefaultNotificationPreferences())
 let mobileModalObserver = null
 let mobileModalScrollLockActive = false
 let mobileModalScrollY = 0
 let mobileModalScrollSyncQueued = false
 let mobileModalScrollRestore = null
-const notificationSignalVisible = computed(() => Boolean(currentUser.value && (notificationUnreadCount.value || notificationToast.visible)))
+const notificationSignalVisible = computed(() => Boolean(
+  currentUser.value
+  && notificationPreferences.value.enabled
+  && (notificationUnreadCount.value || notificationToast.visible),
+))
 const inviteToken = ref(initialRouteState.token)
 const householdInitialTab = ref('')
 const travelRecordFocusRequest = ref(null)
@@ -535,6 +549,28 @@ function setNotificationUnreadCount(value) {
   notificationUnreadCount.value = Math.max(0, Number(value || 0))
 }
 
+function applyNotificationPreferences(value) {
+  notificationPreferences.value = normalizeNotificationPreferences(value)
+  if (!notificationPreferences.value.enabled) {
+    clearNotificationToast()
+  }
+}
+
+async function loadNotificationPreferences() {
+  try {
+    const response = await fetchLayoutSetting(NOTIFICATION_PREFERENCE_SCOPE)
+    if (currentUser.value) {
+      applyNotificationPreferences(response?.payload)
+    }
+  } catch {
+    applyNotificationPreferences(createDefaultNotificationPreferences())
+  }
+}
+
+function handleNotificationPreferencesChange(value) {
+  applyNotificationPreferences(value)
+}
+
 function clearNotificationToast() {
   if (notificationToastTimer) {
     window.clearTimeout(notificationToastTimer)
@@ -544,10 +580,14 @@ function clearNotificationToast() {
 }
 
 function showNotificationToast(notification) {
+  if (!isNotificationEnabled(notificationPreferences.value, notification?.type)) {
+    return
+  }
   const title = String(notification?.title || '새 알림').trim() || '새 알림'
   notificationToast.id = String(notification?.id || '')
   notificationToast.title = title
   notificationToast.message = String(notification?.message || '').trim()
+  notificationToast.category = notificationCategoryLabel(notification?.type)
   notificationToast.visible = true
   if (notificationToastTimer) {
     window.clearTimeout(notificationToastTimer)
@@ -894,14 +934,18 @@ watch([currentUser, activeRoute], ([user, route]) => {
   }
 }, { immediate: true })
 
-watch(currentUser, (user) => {
+watch(currentUser, async (user) => {
   if (user) {
-    startNotificationPolling()
+    await loadNotificationPreferences()
+    if (currentUser.value) {
+      startNotificationPolling()
+    }
   } else {
     stopNotificationPolling()
     setNotificationUnreadCount(0)
     latestUnreadNotificationId.value = null
     notificationModalOpen.value = false
+    notificationPreferences.value = createDefaultNotificationPreferences()
     clearNotificationToast()
   }
 })
@@ -1220,7 +1264,7 @@ onBeforeUnmount(() => {
             @click="openNotificationModal"
           >
             <span>알림</span>
-            <span v-if="notificationUnreadCount" class="topbar__notification-badge" aria-label="읽지 않은 알림" aria-live="polite">{{ notificationUnreadBadgeLabel }}</span>
+            <span v-if="notificationPreferences.enabled && notificationUnreadCount" class="topbar__notification-badge" aria-label="읽지 않은 알림" aria-live="polite">{{ notificationUnreadBadgeLabel }}</span>
           </button></nav>
           <div class="topbar__actions">
             <button v-if="activeRoute !== 'profile'" class="button button--ghost" @click="navigate('profile')">프로필</button>
@@ -1250,6 +1294,7 @@ onBeforeUnmount(() => {
         <NotificationCenterWorkspace
           v-else-if="activeRoute === 'notifications'"
           @unread-count-change="handleNotificationUnreadCountChange"
+          @preferences-change="handleNotificationPreferencesChange"
           @open-target="handleNotificationTargetOpen"
         />
         <TravelWorkspace
@@ -1270,7 +1315,7 @@ onBeforeUnmount(() => {
           <span class="global-notification-signal__icon" aria-hidden="true">✉</span>
           <span v-if="notificationUnreadCount" class="global-notification-signal__badge">{{ notificationUnreadBadgeLabel }}</span>
           <span v-if="notificationToast.visible" class="global-notification-signal__toast" role="status" aria-live="polite">
-            <small>새 알림</small>
+            <small>새 알림 · {{ notificationToast.category }}</small>
             <strong>{{ notificationToast.title }}</strong>
           </span>
         </button>
@@ -1287,6 +1332,7 @@ onBeforeUnmount(() => {
             <NotificationCenterWorkspace
               embedded
               @unread-count-change="handleNotificationUnreadCountChange"
+              @preferences-change="handleNotificationPreferencesChange"
               @open-target="handleNotificationTargetOpen"
             />
           </div>

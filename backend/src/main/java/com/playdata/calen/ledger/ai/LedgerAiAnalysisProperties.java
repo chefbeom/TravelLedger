@@ -21,12 +21,16 @@ public class LedgerAiAnalysisProperties {
     private String lmStudioModelsPath = "/v1/models";
     private String lmStudioChatPath = "/v1/chat/completions";
     private String lmStudioApiKey = "";
+    private String openAiBaseUrl = "https://api.openai.com";
+    private String openAiModelsPath = "/v1/models";
+    private String openAiChatPath = "/v1/chat/completions";
+    private String openAiApiKey = "";
     private double temperature = 0.2;
     private int maxTokens = 4096;
     private Duration connectTimeout = Duration.ofSeconds(3);
     private Duration readTimeout = Duration.ofMinutes(10);
     private boolean enforceProviderUrlAllowlist = true;
-    private String allowedProviderHosts = "localhost,127.0.0.1,::1";
+    private String allowedProviderHosts = "localhost,127.0.0.1,::1,api.openai.com";
 
     public boolean isEnabled() {
         return enabled;
@@ -126,6 +130,52 @@ public class LedgerAiAnalysisProperties {
         this.lmStudioApiKey = lmStudioApiKey;
     }
 
+    public String getOpenAiBaseUrl() {
+        return openAiBaseUrl;
+    }
+
+    public void setOpenAiBaseUrl(String openAiBaseUrl) {
+        this.openAiBaseUrl = openAiBaseUrl;
+    }
+
+    public String getOpenAiModelsPath() {
+        return openAiModelsPath;
+    }
+
+    public void setOpenAiModelsPath(String openAiModelsPath) {
+        this.openAiModelsPath = openAiModelsPath;
+    }
+
+    public String normalizedOpenAiModelsPath() {
+        if (openAiModelsPath == null || openAiModelsPath.isBlank()) {
+            return "/v1/models";
+        }
+        return normalizeRelativeEndpointPath(openAiModelsPath, "/v1/models");
+    }
+
+    public String getOpenAiChatPath() {
+        return openAiChatPath;
+    }
+
+    public void setOpenAiChatPath(String openAiChatPath) {
+        this.openAiChatPath = openAiChatPath;
+    }
+
+    public String normalizedOpenAiChatPath() {
+        if (openAiChatPath == null || openAiChatPath.isBlank()) {
+            return "/v1/chat/completions";
+        }
+        return normalizeRelativeEndpointPath(openAiChatPath, "/v1/chat/completions");
+    }
+
+    public String getOpenAiApiKey() {
+        return openAiApiKey;
+    }
+
+    public void setOpenAiApiKey(String openAiApiKey) {
+        this.openAiApiKey = openAiApiKey;
+    }
+
     public double getTemperature() {
         return temperature;
     }
@@ -188,7 +238,19 @@ public class LedgerAiAnalysisProperties {
                 && hasSafeLmStudioEndpointPaths();
     }
 
+    public boolean isOpenAiConfigured() {
+        return hasText(openAiBaseUrl)
+                && isProviderUrlAllowed(openAiBaseUrl)
+                && hasSafeOpenAiEndpointPaths()
+                && hasText(openAiApiKey)
+                && !isOpenAiModelAuto();
+    }
+
     public boolean isLmStudioModelAuto() {
+        return !hasText(model) || "auto".equalsIgnoreCase(model.trim());
+    }
+
+    public boolean isOpenAiModelAuto() {
         return !hasText(model) || "auto".equalsIgnoreCase(model.trim());
     }
 
@@ -196,14 +258,43 @@ public class LedgerAiAnalysisProperties {
         return isLmStudioModelAuto() ? "" : model.trim();
     }
 
+    public String normalizedOpenAiModel() {
+        return isOpenAiModelAuto() ? "" : model.trim();
+    }
+
+    public String activeOpenAiCompatibleBaseUrl() {
+        return provider() == LedgerAiProvider.OPENAI ? openAiBaseUrl : lmStudioBaseUrl;
+    }
+
+    public String activeOpenAiCompatibleModelsPath() {
+        return provider() == LedgerAiProvider.OPENAI ? normalizedOpenAiModelsPath() : normalizedLmStudioModelsPath();
+    }
+
+    public String activeOpenAiCompatibleChatPath() {
+        return provider() == LedgerAiProvider.OPENAI ? normalizedOpenAiChatPath() : normalizedLmStudioChatPath();
+    }
+
+    public String activeOpenAiCompatibleApiKey() {
+        return provider() == LedgerAiProvider.OPENAI ? openAiApiKey : lmStudioApiKey;
+    }
+
+    public String activeOpenAiCompatibleModel() {
+        return provider() == LedgerAiProvider.OPENAI ? normalizedOpenAiModel() : normalizedLmStudioModel();
+    }
+
+    public String openAiCompatibleProviderLabel() {
+        return provider() == LedgerAiProvider.OPENAI ? "OpenAI API" : "LM Studio";
+    }
+
     public boolean isConfigured() {
         if (!enabled) {
             return false;
         }
-        if (provider() == LedgerAiProvider.LMSTUDIO) {
-            return isLmStudioConfigured();
-        }
-        return isWorkflowConfigured();
+        return switch (provider()) {
+            case LMSTUDIO -> isLmStudioConfigured();
+            case OPENAI -> isOpenAiConfigured();
+            case N8N -> isWorkflowConfigured();
+        };
     }
 
     public String statusMessage() {
@@ -225,6 +316,24 @@ public class LedgerAiAnalysisProperties {
                         + normalizedLmStudioModelsPath() + ".";
             }
             return "LM Studio AI analysis is ready.";
+        }
+        if (provider() == LedgerAiProvider.OPENAI) {
+            if (!hasText(openAiBaseUrl)) {
+                return "OpenAI API base URL is missing. Set APP_LEDGER_AI_OPENAI_BASE_URL.";
+            }
+            if (!isProviderUrlAllowed(openAiBaseUrl)) {
+                return "OpenAI API URL must use HTTP(S), and its host must be in the AI provider allowlist (APP_LEDGER_AI_ALLOWED_PROVIDER_HOSTS).";
+            }
+            if (!hasSafeOpenAiEndpointPaths()) {
+                return "OpenAI API chat and models endpoints must be relative paths on the configured server.";
+            }
+            if (!hasText(openAiApiKey)) {
+                return "OpenAI API key is missing. Set APP_LEDGER_AI_OPENAI_API_KEY.";
+            }
+            if (isOpenAiModelAuto()) {
+                return "OpenAI API model is required. Set APP_LEDGER_AI_MODEL.";
+            }
+            return "OpenAI API analysis is ready.";
         }
         if (!hasText(workflowUrl)) {
             return "n8n webhook URL is missing. Set APP_LEDGER_AI_WORKFLOW_URL.";
@@ -258,6 +367,11 @@ public class LedgerAiAnalysisProperties {
     public boolean hasSafeLmStudioEndpointPaths() {
         return isSafeRelativeEndpointPath(lmStudioChatPath)
                 && isSafeRelativeEndpointPath(lmStudioModelsPath);
+    }
+
+    public boolean hasSafeOpenAiEndpointPaths() {
+        return isSafeRelativeEndpointPath(openAiChatPath)
+                && isSafeRelativeEndpointPath(openAiModelsPath);
     }
 
     private URI parseProviderUri(String value) {

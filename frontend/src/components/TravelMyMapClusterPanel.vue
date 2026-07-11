@@ -1290,5 +1290,8 @@ watch(
         <slot name="fullscreen-overlay" :is-fullscreen="isFullscreen" />
       </div>
     </div>
+    <div v-if="isFullscreen" class="travel-map__fullscreen-dialog" @click.stop>
+      <slot name="fullscreen-dialog" :is-fullscreen="isFullscreen" />
+    </div>
   </div>
 </template>

@@ -100,6 +100,20 @@ public class AdminOpsControlService {
         } else if (request.lmStudioApiKey() != null && hasText(request.lmStudioApiKey())) {
             aiProperties.setLmStudioApiKey(request.lmStudioApiKey().trim());
         }
+        if (request.openAiBaseUrl() != null) {
+            aiProperties.setOpenAiBaseUrl(requireHttpUrl(request.openAiBaseUrl(), "OpenAI API URL"));
+        }
+        if (request.openAiChatPath() != null) {
+            aiProperties.setOpenAiChatPath(normalizePath(request.openAiChatPath(), "OpenAI chat path"));
+        }
+        if (request.openAiModelsPath() != null) {
+            aiProperties.setOpenAiModelsPath(normalizePath(request.openAiModelsPath(), "OpenAI models path"));
+        }
+        if (Boolean.TRUE.equals(request.clearOpenAiApiKey())) {
+            aiProperties.setOpenAiApiKey("");
+        } else if (request.openAiApiKey() != null && hasText(request.openAiApiKey())) {
+            aiProperties.setOpenAiApiKey(request.openAiApiKey().trim());
+        }
         if (request.temperature() != null) {
             double value = request.temperature();
             if (value < 0D || value > 2D) {
@@ -159,6 +173,10 @@ public class AdminOpsControlService {
                 aiProperties.normalizedLmStudioChatPath(),
                 aiProperties.normalizedLmStudioModelsPath(),
                 hasText(aiProperties.getLmStudioApiKey()),
+                aiProperties.getOpenAiBaseUrl(),
+                aiProperties.normalizedOpenAiChatPath(),
+                aiProperties.normalizedOpenAiModelsPath(),
+                hasText(aiProperties.getOpenAiApiKey()),
                 aiProperties.getTemperature(),
                 aiProperties.getMaxTokens(),
                 Math.max(0L, aiProperties.getConnectTimeout().toSeconds()),
@@ -173,13 +191,19 @@ public class AdminOpsControlService {
     private AdminAiServerStatusResponse probeAiServer() {
         long started = System.nanoTime();
         if (!aiProperties.isEnabled()) {
-            return new AdminAiServerStatusResponse(false, aiProperties.getProvider(), aiProperties.getLmStudioBaseUrl(), aiProperties.normalizedLmStudioModelsPath(), 0L, List.of(), "AI is disabled.");
+            return new AdminAiServerStatusResponse(false, aiProperties.getProvider(), aiProperties.activeOpenAiCompatibleBaseUrl(), aiProperties.activeOpenAiCompatibleModelsPath(), 0L, List.of(), "AI is disabled.");
         }
-        if (aiProperties.provider() != LedgerAiProvider.LMSTUDIO) {
+        if (aiProperties.provider() == LedgerAiProvider.N8N) {
             return probeN8nStatus(started);
         }
-        if (!hasText(aiProperties.getLmStudioBaseUrl())) {
-            return new AdminAiServerStatusResponse(false, aiProperties.getProvider(), aiProperties.getLmStudioBaseUrl(), aiProperties.normalizedLmStudioModelsPath(), 0L, List.of(), "LM Studio URL is not configured.");
+        if (!hasText(aiProperties.activeOpenAiCompatibleBaseUrl())) {
+            return new AdminAiServerStatusResponse(false, aiProperties.getProvider(), aiProperties.activeOpenAiCompatibleBaseUrl(), aiProperties.activeOpenAiCompatibleModelsPath(), 0L, List.of(), aiProperties.openAiCompatibleProviderLabel() + " URL is not configured.");
+        }
+        if (!aiProperties.isProviderUrlAllowed(aiProperties.activeOpenAiCompatibleBaseUrl())) {
+            return new AdminAiServerStatusResponse(false, aiProperties.getProvider(), aiProperties.activeOpenAiCompatibleBaseUrl(), aiProperties.activeOpenAiCompatibleModelsPath(), 0L, List.of(), aiProperties.statusMessage());
+        }
+        if (aiProperties.provider() == LedgerAiProvider.OPENAI && !hasText(aiProperties.activeOpenAiCompatibleApiKey())) {
+            return new AdminAiServerStatusResponse(false, aiProperties.getProvider(), aiProperties.activeOpenAiCompatibleBaseUrl(), aiProperties.activeOpenAiCompatibleModelsPath(), 0L, List.of(), "OpenAI API key is not configured.");
         }
 
         try {
@@ -187,22 +211,22 @@ public class AdminOpsControlService {
             requestFactory.setConnectTimeout(aiProperties.getConnectTimeout());
             requestFactory.setReadTimeout(Duration.ofSeconds(Math.min(Math.max(aiProperties.getReadTimeout().toSeconds(), 3L), 15L)));
             RestClient client = RestClient.builder()
-                    .baseUrl(aiProperties.getLmStudioBaseUrl())
+                    .baseUrl(aiProperties.activeOpenAiCompatibleBaseUrl())
                     .requestFactory(requestFactory)
                     .build();
             RestClient.RequestHeadersSpec<?> request = client.get()
-                    .uri(aiProperties.normalizedLmStudioModelsPath())
+                    .uri(aiProperties.activeOpenAiCompatibleModelsPath())
                     .accept(MediaType.APPLICATION_JSON);
-            if (hasText(aiProperties.getLmStudioApiKey())) {
-                request = request.header("Authorization", "Bearer " + aiProperties.getLmStudioApiKey());
+            if (hasText(aiProperties.activeOpenAiCompatibleApiKey())) {
+                request = request.header("Authorization", "Bearer " + aiProperties.activeOpenAiCompatibleApiKey());
             }
             String body = request.retrieve().body(String.class);
             List<String> models = extractModels(body);
             long elapsedMillis = (System.nanoTime() - started) / 1_000_000L;
-            return new AdminAiServerStatusResponse(true, aiProperties.getProvider(), aiProperties.getLmStudioBaseUrl(), aiProperties.normalizedLmStudioModelsPath(), elapsedMillis, models, models.isEmpty() ? "AI server responded, but model list is empty." : "AI server responded normally.");
+            return new AdminAiServerStatusResponse(true, aiProperties.getProvider(), aiProperties.activeOpenAiCompatibleBaseUrl(), aiProperties.activeOpenAiCompatibleModelsPath(), elapsedMillis, models, models.isEmpty() ? "AI server responded, but model list is empty." : "AI server responded normally.");
         } catch (RuntimeException exception) {
             long elapsedMillis = (System.nanoTime() - started) / 1_000_000L;
-            return new AdminAiServerStatusResponse(false, aiProperties.getProvider(), aiProperties.getLmStudioBaseUrl(), aiProperties.normalizedLmStudioModelsPath(), elapsedMillis, List.of(), safeMessage(exception));
+            return new AdminAiServerStatusResponse(false, aiProperties.getProvider(), aiProperties.activeOpenAiCompatibleBaseUrl(), aiProperties.activeOpenAiCompatibleModelsPath(), elapsedMillis, List.of(), safeMessage(exception));
         }
     }
 
@@ -316,6 +340,9 @@ public class AdminOpsControlService {
         applyText(settings, "ai.lmstudio-base-url", aiProperties::setLmStudioBaseUrl);
         applyText(settings, "ai.lmstudio-chat-path", aiProperties::setLmStudioChatPath);
         applyText(settings, "ai.lmstudio-models-path", aiProperties::setLmStudioModelsPath);
+        applyText(settings, "ai.openai-base-url", aiProperties::setOpenAiBaseUrl);
+        applyText(settings, "ai.openai-chat-path", aiProperties::setOpenAiChatPath);
+        applyText(settings, "ai.openai-models-path", aiProperties::setOpenAiModelsPath);
         applyDouble(settings, "ai.temperature", aiProperties::setTemperature);
         applyInteger(settings, "ai.max-tokens", aiProperties::setMaxTokens);
         applyDurationSeconds(settings, "ai.connect-timeout-seconds", aiProperties::setConnectTimeout);
@@ -335,6 +362,9 @@ public class AdminOpsControlService {
             persistSetting("ai.lmstudio-base-url", aiProperties.getLmStudioBaseUrl());
             persistSetting("ai.lmstudio-chat-path", aiProperties.getLmStudioChatPath());
             persistSetting("ai.lmstudio-models-path", aiProperties.getLmStudioModelsPath());
+            persistSetting("ai.openai-base-url", aiProperties.getOpenAiBaseUrl());
+            persistSetting("ai.openai-chat-path", aiProperties.getOpenAiChatPath());
+            persistSetting("ai.openai-models-path", aiProperties.getOpenAiModelsPath());
             persistSetting("ai.temperature", Double.toString(aiProperties.getTemperature()));
             persistSetting("ai.max-tokens", Integer.toString(aiProperties.getMaxTokens()));
             persistSetting("ai.connect-timeout-seconds", Long.toString(aiProperties.getConnectTimeout().toSeconds()));
@@ -462,9 +492,10 @@ public class AdminOpsControlService {
     private String normalizeProvider(String value) {
         String provider = value == null ? "" : value.trim().toLowerCase(java.util.Locale.ROOT);
         return switch (provider) {
-            case "lmstudio", "lm-studio", "lm_studio", "openai", "openai-compatible" -> "lmstudio";
+            case "lmstudio", "lm-studio", "lm_studio", "openai-compatible" -> "lmstudio";
+            case "openai", "openai-api", "chatgpt" -> "openai";
             case "n8n" -> "n8n";
-            default -> throw new BadRequestException("AI provider must be lmstudio or n8n.");
+            default -> throw new BadRequestException("AI provider must be lmstudio, openai, or n8n.");
         };
     }
     private String defaultText(String value, String fallback) {

@@ -43,6 +43,7 @@ public class UserNotificationService {
     );
 
     private final UserNotificationRepository userNotificationRepository;
+    private final UserNotificationPreferenceService userNotificationPreferenceService;
 
     public UserNotificationPageResponse getNotifications(Long userId, Boolean unreadOnly, Integer page, Integer size) {
         Pageable pageable = PageRequest.of(
@@ -85,6 +86,9 @@ public class UserNotificationService {
             String targetUrl,
             String metadataJson
     ) {
+        if (!userNotificationPreferenceService.isSystemNotificationEnabled(userId, type)) {
+            return null;
+        }
         return createNotification(userId, new UserNotificationCreateRequest(
                 type,
                 title,

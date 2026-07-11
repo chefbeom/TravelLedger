@@ -38,7 +38,7 @@ public class LedgerAiLmStudioClient {
             requestFactory.setReadTimeout(properties.getReadTimeout());
 
             RestClient restClient = RestClient.builder()
-                    .baseUrl(properties.getLmStudioBaseUrl())
+                    .baseUrl(properties.activeOpenAiCompatibleBaseUrl())
                     .requestFactory(requestFactory)
                     .build();
             String model = resolveModel(restClient);
@@ -47,19 +47,19 @@ public class LedgerAiLmStudioClient {
 
             String content = extractAssistantContent(responseBody);
             LedgerAiRemoteResponse response = parseAssistantContent(content);
-            LedgerAiRemoteResponse validated = LedgerAiRemoteResponseValidator.requireUsable(response, "LM Studio");
-            recordExternalWorkflow(workflowTimer, "ledger-ai-lmstudio", "success");
+            LedgerAiRemoteResponse validated = LedgerAiRemoteResponseValidator.requireUsable(response, providerLabel());
+            recordExternalWorkflow(workflowTimer, workflowName(), "success");
             return validated;
 
         } catch (BadRequestException exception) {
-            recordExternalWorkflow(workflowTimer, "ledger-ai-lmstudio", "failure");
+            recordExternalWorkflow(workflowTimer, workflowName(), "failure");
             throw exception;
         } catch (RestClientException exception) {
-            recordExternalWorkflow(workflowTimer, "ledger-ai-lmstudio", "failure");
-            throw new BadRequestException("Cannot connect to LM Studio AI server. Check APP_LEDGER_AI_LMSTUDIO_BASE_URL and the LM Studio server status.");
+            recordExternalWorkflow(workflowTimer, workflowName(), "failure");
+            throw new BadRequestException("Cannot connect to " + providerLabel() + " AI server. Check its URL, API key, and server status.");
         } catch (JsonProcessingException exception) {
-            recordExternalWorkflow(workflowTimer, "ledger-ai-lmstudio", "failure");
-            throw new BadRequestException("LM Studio AI response could not be parsed as JSON analysis. Check that the model returns JSON only.");
+            recordExternalWorkflow(workflowTimer, workflowName(), "failure");
+            throw new BadRequestException(providerLabel() + " AI response could not be parsed as JSON analysis. Check that the model returns JSON only.");
         }
     }
 
@@ -76,12 +76,12 @@ public class LedgerAiLmStudioClient {
 
     private String executeChatRequest(RestClient restClient, ObjectNode requestBody) {
         RestClient.RequestBodySpec request = restClient.post()
-                .uri(properties.normalizedLmStudioChatPath())
+                .uri(properties.activeOpenAiCompatibleChatPath())
                 .contentType(MediaType.APPLICATION_JSON)
                 .accept(MediaType.APPLICATION_JSON);
 
-        if (hasText(properties.getLmStudioApiKey())) {
-            request.header("Authorization", "Bearer " + properties.getLmStudioApiKey());
+        if (hasText(properties.activeOpenAiCompatibleApiKey())) {
+            request.header("Authorization", "Bearer " + properties.activeOpenAiCompatibleApiKey());
         }
 
         return request.body(requestBody)
@@ -228,16 +228,16 @@ public class LedgerAiLmStudioClient {
     }
 
     private String resolveModel(RestClient restClient) {
-        String configuredModel = properties.normalizedLmStudioModel();
+        String configuredModel = properties.activeOpenAiCompatibleModel();
         if (hasText(configuredModel)) {
             return configuredModel;
         }
 
         RestClient.RequestHeadersSpec<?> request = restClient.get()
-                .uri(properties.normalizedLmStudioModelsPath())
+                .uri(properties.activeOpenAiCompatibleModelsPath())
                 .accept(MediaType.APPLICATION_JSON);
-        if (hasText(properties.getLmStudioApiKey())) {
-            request = request.header("Authorization", "Bearer " + properties.getLmStudioApiKey());
+        if (hasText(properties.activeOpenAiCompatibleApiKey())) {
+            request = request.header("Authorization", "Bearer " + properties.activeOpenAiCompatibleApiKey());
         }
 
         String responseBody = request.retrieve().body(String.class);
@@ -246,7 +246,7 @@ public class LedgerAiLmStudioClient {
 
     private String extractFirstModelId(String responseBody) {
         if (!hasText(responseBody)) {
-            throw new BadRequestException("LM Studio model list is empty. Load a model in LM Studio first.");
+            throw new BadRequestException(providerLabel() + " model list is empty. Configure a model before trying again.");
         }
         try {
             JsonNode root = objectMapper.readTree(responseBody);
@@ -270,10 +270,10 @@ public class LedgerAiLmStudioClient {
                 return rootArrayModel;
             }
         } catch (JsonProcessingException exception) {
-            throw new BadRequestException("LM Studio model list could not be parsed as JSON.");
+            throw new BadRequestException(providerLabel() + " model list could not be parsed as JSON.");
         }
 
-        throw new BadRequestException("No loaded LM Studio model was found. Load a model and try again.");
+        throw new BadRequestException("No usable " + providerLabel() + " model was found. Configure a model and try again.");
     }
 
     private String firstModelIdFromArray(JsonNode node) {
@@ -308,7 +308,7 @@ public class LedgerAiLmStudioClient {
 
     private String extractAssistantContent(String responseBody) throws JsonProcessingException {
         if (!hasText(responseBody)) {
-            throw new BadRequestException("LM Studio AI server returned an empty response.");
+            throw new BadRequestException(providerLabel() + " AI server returned an empty response.");
         }
         JsonNode root = objectMapper.readTree(responseBody);
         if (root.isTextual() && hasText(root.asText())) {
@@ -358,7 +358,7 @@ public class LedgerAiLmStudioClient {
         if (root.has("report") || root.has("summary") || root.has("highlights") || root.has("recommendations")) {
             return responseBody;
         }
-        throw new BadRequestException("LM Studio AI response could not be parsed as JSON analysis. Check that the model returns JSON only.");
+        throw new BadRequestException(providerLabel() + " AI response could not be parsed as JSON analysis. Check that the model returns JSON only.");
     }
 
     private LedgerAiRemoteResponse parseAssistantContent(String content) throws JsonProcessingException {
@@ -445,9 +445,17 @@ public class LedgerAiLmStudioClient {
         int start = trimmed.indexOf('{');
         int end = trimmed.lastIndexOf('}');
         if (start < 0 || end <= start) {
-            throw new BadRequestException("LM Studio AI response could not be parsed as JSON analysis. Check that the model returns JSON only.");
+            throw new BadRequestException(providerLabel() + " AI response could not be parsed as JSON analysis. Check that the model returns JSON only.");
         }
         return trimmed.substring(start, end + 1);
+    }
+
+    private String providerLabel() {
+        return properties.openAiCompatibleProviderLabel();
+    }
+
+    private String workflowName() {
+        return properties.provider() == LedgerAiProvider.OPENAI ? "ledger-ai-openai" : "ledger-ai-lmstudio";
     }
 
     private Timer.Sample startExternalWorkflowTimer() {

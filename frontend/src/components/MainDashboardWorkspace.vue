@@ -2775,22 +2775,29 @@ onBeforeUnmount(() => {
 
 .main-photo-frame-modal__photo-grid {
   display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(118px, 1fr));
+  grid-auto-rows: 176px;
+  align-content: start;
   gap: 10px;
-  grid-template-columns: repeat(auto-fill, minmax(128px, 1fr));
   max-height: 460px;
   min-width: 0;
   overflow: auto;
+  padding: 2px;
 }
 
 .main-photo-frame-modal__photo-grid button {
-  background: #111827;
-  border: 1px solid #334155;
-  color: #e5edf7;
-  cursor: pointer;
   display: grid;
+  grid-template-rows: minmax(0, 1fr) auto auto;
   gap: 7px;
   min-width: 0;
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
   padding: 8px;
+  border: 1px solid #334155;
+  background: #111827;
+  color: #e5edf7;
+  cursor: pointer;
   text-align: left;
 }
 
@@ -2800,14 +2807,22 @@ onBeforeUnmount(() => {
 }
 
 .main-photo-frame-modal__photo-grid img {
-  aspect-ratio: 4 / 3;
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  height: 100%;
+  min-height: 0;
+  max-height: 100%;
+  border-radius: 6px;
   background: #020617;
   object-fit: cover;
-  width: 100%;
+  object-position: center;
 }
 
 .main-photo-frame-modal__photo-grid span,
 .main-photo-frame-modal__photo-grid small {
+  display: block;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

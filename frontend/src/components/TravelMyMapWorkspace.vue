@@ -1117,6 +1117,8 @@ watch(planFilterOptions, (options) => {
             @load-more="handleLoadMoreClusterPhotos"
             @clear="clearSelection"
           />
+        </template>
+        <template #fullscreen-dialog="{ isFullscreen }">
           <TravelPhotoLightbox
             v-if="isFullscreen && lightboxPhoto"
             :photo="lightboxPhoto"

@@ -91,8 +91,14 @@ const state = reactive({
     lmStudioModelsPath: '/v1/models',
     lmStudioApiKey: '',
     clearLmStudioApiKey: false,
+    openAiBaseUrl: 'https://api.openai.com',
+    openAiChatPath: '/v1/chat/completions',
+    openAiModelsPath: '/v1/models',
+    openAiApiKey: '',
+    clearOpenAiApiKey: false,
     apiKeyConfigured: false,
     lmStudioApiKeyConfigured: false,
+    openAiApiKeyConfigured: false,
     temperature: 0.2,
     maxTokens: 4096,
     connectTimeoutSeconds: 3,
@@ -337,19 +343,69 @@ function startAiServerAdd() {
 }
 
 function buildCurrentAiServerName() {
-  const provider = state.aiControlForm.provider === 'n8n' ? 'n8n' : 'LM Studio'
   const model = state.aiControlForm.model || 'auto'
-  return `${provider} - ${model}`
+  return `${currentAiProviderLabel()} - ${model}`
 }
 
-function currentAiServerAddress() {
-  return state.aiControlForm.provider === 'n8n'
-    ? (state.aiControlForm.workflowUrl || '-')
-    : (state.aiControlForm.lmStudioBaseUrl || '-')
+function isOpenAiCompatibleProvider(provider = state.aiControlForm.provider) {
+  return provider === 'lmstudio' || provider === 'openai'
 }
 
-function currentAiProviderLabel() {
-  return state.aiControlForm.provider === 'n8n' ? 'n8n' : 'LM Studio'
+function currentAiServerAddress(source = state.aiControlForm) {
+  if (source.provider === 'n8n') {
+    return source.workflowUrl || '-'
+  }
+  if (source.provider === 'openai') {
+    return source.openAiBaseUrl || '-'
+  }
+  return source.lmStudioBaseUrl || '-'
+}
+
+function hasAiServerAddress(source = state.aiControlForm) {
+  if (source.provider === 'n8n') {
+    return Boolean(source.workflowUrl?.trim())
+  }
+  if (source.provider === 'openai') {
+    return Boolean(source.openAiBaseUrl?.trim())
+  }
+  return Boolean(source.lmStudioBaseUrl?.trim())
+}
+
+function currentAiProviderLabel(provider = state.aiControlForm.provider) {
+  if (provider === 'openai') {
+    return 'OpenAI API'
+  }
+  return provider === 'n8n' ? 'n8n' : 'LM Studio'
+}
+
+function addAllowedProviderHost(host) {
+  const values = String(state.aiControlForm.allowedProviderHosts || '')
+    .split(',')
+    .map((value) => value.trim())
+    .filter(Boolean)
+  if (!values.some((value) => value.toLowerCase() === host.toLowerCase())) {
+    values.push(host)
+    state.aiControlForm.allowedProviderHosts = values.join(',')
+  }
+}
+
+function handleAiProviderChange() {
+  if (state.aiControlForm.provider !== 'openai') {
+    return
+  }
+  if (!state.aiControlForm.openAiBaseUrl) {
+    state.aiControlForm.openAiBaseUrl = 'https://api.openai.com'
+  }
+  if (!state.aiControlForm.openAiChatPath) {
+    state.aiControlForm.openAiChatPath = '/v1/chat/completions'
+  }
+  if (!state.aiControlForm.openAiModelsPath) {
+    state.aiControlForm.openAiModelsPath = '/v1/models'
+  }
+  if (!state.aiControlForm.model || state.aiControlForm.model.trim().toLowerCase() === 'auto') {
+    state.aiControlForm.model = 'gpt-4.1-mini'
+  }
+  addAllowedProviderHost('api.openai.com')
 }
 
 function goNextAiServerStep() {
@@ -745,14 +801,29 @@ function formatFileSize(bytes) {
   return `${value >= 10 || unitIndex === 0 ? value.toFixed(0) : value.toFixed(1)} ${units[unitIndex]}`
 }
 
+function aiControlPresetAddress(preset) {
+  return preset?.provider === 'openai'
+    ? preset.openAiBaseUrl
+    : (preset?.lmStudioBaseUrl || preset?.workflowUrl || '')
+}
+
 function aiControlPresetKeyFor(preset) {
-  return [preset.provider, preset.model, preset.lmStudioBaseUrl, preset.lmStudioChatPath, preset.lmStudioModelsPath].join('|')
+  return [
+    preset.provider,
+    preset.model,
+    preset.lmStudioBaseUrl,
+    preset.lmStudioChatPath,
+    preset.lmStudioModelsPath,
+    preset.openAiBaseUrl,
+    preset.openAiChatPath,
+    preset.openAiModelsPath,
+  ].join('|')
 }
 
 function readAiControlPresets() {
   try {
     const parsed = JSON.parse(localStorage.getItem(AI_CONTROL_PRESETS_STORAGE_KEY) || '[]')
-    return Array.isArray(parsed) ? parsed.filter((item) => item && item.key && item.lmStudioBaseUrl).slice(0, 12) : []
+    return Array.isArray(parsed) ? parsed.filter((item) => item && item.key && aiControlPresetAddress(item)).slice(0, 12) : []
   } catch {
     return []
   }
@@ -767,7 +838,7 @@ function loadAiControlPresets() {
 }
 
 function rememberAiControlPreset(source = state.aiControlForm) {
-  if ((source.provider || 'lmstudio') !== 'lmstudio' || !source.lmStudioBaseUrl) {
+  if (!isOpenAiCompatibleProvider(source.provider) || !hasAiServerAddress(source)) {
     return
   }
   const preset = {
@@ -777,6 +848,9 @@ function rememberAiControlPreset(source = state.aiControlForm) {
     lmStudioBaseUrl: source.lmStudioBaseUrl,
     lmStudioChatPath: source.lmStudioChatPath || '/v1/chat/completions',
     lmStudioModelsPath: source.lmStudioModelsPath || '/v1/models',
+    openAiBaseUrl: source.openAiBaseUrl || 'https://api.openai.com',
+    openAiChatPath: source.openAiChatPath || '/v1/chat/completions',
+    openAiModelsPath: source.openAiModelsPath || '/v1/models',
     savedAt: new Date().toISOString(),
   }
   preset.key = aiControlPresetKeyFor(preset)
@@ -826,12 +900,15 @@ function applyAiControlPreset() {
   state.aiControlForm.lmStudioBaseUrl = preset.lmStudioBaseUrl || ''
   state.aiControlForm.lmStudioChatPath = preset.lmStudioChatPath || '/v1/chat/completions'
   state.aiControlForm.lmStudioModelsPath = preset.lmStudioModelsPath || '/v1/models'
+  state.aiControlForm.openAiBaseUrl = preset.openAiBaseUrl || 'https://api.openai.com'
+  state.aiControlForm.openAiChatPath = preset.openAiChatPath || '/v1/chat/completions'
+  state.aiControlForm.openAiModelsPath = preset.openAiModelsPath || '/v1/models'
   state.aiServerEditorOpen = true
 }
 
 function formatAiControlPreset(preset) {
   const saved = preset.savedAt ? formatDateTime(preset.savedAt) : '저장 시각 없음'
-  return `${preset.title || preset.model || 'AI 서버'} · ${preset.model || 'auto'} · ${preset.lmStudioBaseUrl || preset.workflowUrl || '-'} · ${saved}`
+  return `${preset.title || preset.model || 'AI 서버'} · ${preset.model || 'auto'} · ${aiControlPresetAddress(preset) || '-'} · ${saved}`
 }
 function syncAiControlForm(control = state.opsControl) {
   const ai = control?.ai
@@ -851,8 +928,14 @@ function syncAiControlForm(control = state.opsControl) {
     lmStudioModelsPath: ai.lmStudioModelsPath || '/v1/models',
     lmStudioApiKey: '',
     clearLmStudioApiKey: false,
+    openAiBaseUrl: ai.openAiBaseUrl || 'https://api.openai.com',
+    openAiChatPath: ai.openAiChatPath || '/v1/chat/completions',
+    openAiModelsPath: ai.openAiModelsPath || '/v1/models',
+    openAiApiKey: '',
+    clearOpenAiApiKey: false,
     apiKeyConfigured: Boolean(ai.apiKeyConfigured),
     lmStudioApiKeyConfigured: Boolean(ai.lmStudioApiKeyConfigured),
+    openAiApiKeyConfigured: Boolean(ai.openAiApiKeyConfigured),
     temperature: Number(ai.temperature ?? 0.2),
     maxTokens: Number(ai.maxTokens ?? 4096),
     connectTimeoutSeconds: Number(ai.connectTimeoutSeconds ?? 3),
@@ -915,6 +998,9 @@ async function handleSaveAiControl() {
       lmStudioBaseUrl: state.aiControlForm.lmStudioBaseUrl,
       lmStudioChatPath: state.aiControlForm.lmStudioChatPath,
       lmStudioModelsPath: state.aiControlForm.lmStudioModelsPath,
+      openAiBaseUrl: state.aiControlForm.openAiBaseUrl,
+      openAiChatPath: state.aiControlForm.openAiChatPath,
+      openAiModelsPath: state.aiControlForm.openAiModelsPath,
       temperature: Number(state.aiControlForm.temperature),
       maxTokens: Number(state.aiControlForm.maxTokens),
       connectTimeoutSeconds: Number(state.aiControlForm.connectTimeoutSeconds),
@@ -931,6 +1017,11 @@ async function handleSaveAiControl() {
       payload.clearLmStudioApiKey = true
     } else if (state.aiControlForm.lmStudioApiKey?.trim()) {
       payload.lmStudioApiKey = state.aiControlForm.lmStudioApiKey.trim()
+    }
+    if (state.aiControlForm.clearOpenAiApiKey) {
+      payload.clearOpenAiApiKey = true
+    } else if (state.aiControlForm.openAiApiKey?.trim()) {
+      payload.openAiApiKey = state.aiControlForm.openAiApiKey.trim()
     }
     state.opsControl = await updateAdminAiControl(payload)
     syncAiControlForm()
@@ -1623,8 +1714,9 @@ onBeforeUnmount(() => {
                   </label>
                   <label class="field">
                     <span class="field__label">제공자</span>
-                    <select v-model="state.aiControlForm.provider">
+                    <select v-model="state.aiControlForm.provider" @change="handleAiProviderChange">
                       <option value="lmstudio">LM Studio</option>
+                      <option value="openai">OpenAI API</option>
                       <option value="n8n">n8n</option>
                     </select>
                   </label>
@@ -1635,6 +1727,10 @@ onBeforeUnmount(() => {
                   <label v-if="state.aiControlForm.provider === 'lmstudio'" class="field admin-ai-field-grid__wide">
                     <span class="field__label">서버 주소</span>
                     <input v-model="state.aiControlForm.lmStudioBaseUrl" placeholder="http://100.x.x.x:1234" />
+                  </label>
+                  <label v-else-if="state.aiControlForm.provider === 'openai'" class="field admin-ai-field-grid__wide">
+                    <span class="field__label">OpenAI API 주소</span>
+                    <input v-model="state.aiControlForm.openAiBaseUrl" placeholder="https://api.openai.com" />
                   </label>
                   <label v-else class="field admin-ai-field-grid__wide">
                     <span class="field__label">서버 주소 / n8n Webhook URL</span>
@@ -1663,6 +1759,24 @@ onBeforeUnmount(() => {
                     <label class="field field--inline admin-ai-field-grid__wide">
                       <input v-model="state.aiControlForm.clearLmStudioApiKey" type="checkbox" />
                       <span class="field__label">LM Studio API key 삭제</span>
+                    </label>
+                  </template>
+                  <template v-else-if="state.aiControlForm.provider === 'openai'">
+                    <label class="field">
+                      <span class="field__label">Chat Completions path</span>
+                      <input v-model="state.aiControlForm.openAiChatPath" placeholder="/v1/chat/completions" />
+                    </label>
+                    <label class="field">
+                      <span class="field__label">Models path</span>
+                      <input v-model="state.aiControlForm.openAiModelsPath" placeholder="/v1/models" />
+                    </label>
+                    <label class="field admin-ai-field-grid__wide">
+                      <span class="field__label">OpenAI API key</span>
+                      <input v-model="state.aiControlForm.openAiApiKey" type="password" autocomplete="new-password" :disabled="state.aiControlForm.clearOpenAiApiKey" :placeholder="state.aiControlForm.openAiApiKeyConfigured ? '설정됨 - 변경할 때만 입력' : '필수 입력'" />
+                    </label>
+                    <label class="field field--inline admin-ai-field-grid__wide">
+                      <input v-model="state.aiControlForm.clearOpenAiApiKey" type="checkbox" />
+                      <span class="field__label">OpenAI API key 제거</span>
                     </label>
                   </template>
                   <template v-else>
@@ -1931,7 +2045,7 @@ onBeforeUnmount(() => {
               </button>
             </div>
 
-            <section v-if="state.accessModalView === 'invite'" class="admin-access-control-panel">
+            <section v-if="state.accessModalView === 'invite'" class="admin-access-control-panel admin-access-control-panel--invite">
               <div class="admin-access-invite-grid">
                 <InviteAccessPanel
                   :expires-in-hours="state.inviteManager.expiresInHours"
@@ -2228,8 +2342,9 @@ onBeforeUnmount(() => {
             <div class="admin-ai-field-grid">
               <label class="field">
                 <span class="field__label">Provider</span>
-                <select v-model="state.aiControlForm.provider">
+                <select v-model="state.aiControlForm.provider" @change="handleAiProviderChange">
                   <option value="lmstudio">LM Studio</option>
+                  <option value="openai">OpenAI API</option>
                   <option value="n8n">n8n</option>
                 </select>
               </label>
@@ -2253,6 +2368,28 @@ onBeforeUnmount(() => {
                 <span class="field__label">LM Studio API key 변경</span>
                 <input v-model="state.aiControlForm.lmStudioApiKey" type="password" autocomplete="new-password" :disabled="state.aiControlForm.clearLmStudioApiKey" :placeholder="state.aiControlForm.lmStudioApiKeyConfigured ? '설정됨 - 변경할 때만 입력' : '미설정'" />
               </label>
+              <template v-if="state.aiControlForm.provider === 'openai'">
+                <label class="field admin-ai-field-grid__wide">
+                  <span class="field__label">OpenAI API 주소</span>
+                  <input v-model="state.aiControlForm.openAiBaseUrl" placeholder="https://api.openai.com" />
+                </label>
+                <label class="field">
+                  <span class="field__label">Chat Completions path</span>
+                  <input v-model="state.aiControlForm.openAiChatPath" placeholder="/v1/chat/completions" />
+                </label>
+                <label class="field">
+                  <span class="field__label">Models path</span>
+                  <input v-model="state.aiControlForm.openAiModelsPath" placeholder="/v1/models" />
+                </label>
+                <label class="field admin-ai-field-grid__wide">
+                  <span class="field__label">OpenAI API key 변경</span>
+                  <input v-model="state.aiControlForm.openAiApiKey" type="password" autocomplete="new-password" :disabled="state.aiControlForm.clearOpenAiApiKey" :placeholder="state.aiControlForm.openAiApiKeyConfigured ? '설정됨 - 변경할 때만 입력' : '필수 입력'" />
+                </label>
+                <label class="field field--inline admin-ai-field-grid__wide">
+                  <input v-model="state.aiControlForm.clearOpenAiApiKey" type="checkbox" />
+                  <span class="field__label">OpenAI API key 삭제</span>
+                </label>
+              </template>
               <label class="field field--inline admin-ai-field-grid__wide">
                 <input v-model="state.aiControlForm.clearLmStudioApiKey" type="checkbox" />
                 <span class="field__label">LM Studio API key 삭제</span>

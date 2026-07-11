@@ -3,7 +3,6 @@ import { computed, defineAsyncComponent, onMounted, ref, watch } from 'vue'
 import { fetchTravelPortfolio } from '../lib/api'
 const TravelHubWorkspace = defineAsyncComponent(() => import('./TravelHubWorkspace.vue'))
 const TravelMyMapWorkspace = defineAsyncComponent(() => import('./TravelMyMapWorkspace.vue'))
-const TravelPublicTripsWorkspace = defineAsyncComponent(() => import('./TravelPublicTripsWorkspace.vue'))
 
 const props = defineProps({
   route: {
@@ -60,13 +59,6 @@ const travelModes = [
     badge: 'PHOTO',
     actionLabel: '사진 보기',
   },
-  {
-    key: 'share',
-    label: '여행 공유',
-    meta: '공개/선택 공유',
-    badge: 'SHARE',
-    actionLabel: '공유 관리',
-  },
 ]
 
 const travelRecordSummary = computed(() => {
@@ -81,7 +73,6 @@ const travelRecordSummary = computed(() => {
     memories: readCount(portfolio.memoryRecordCount, memoryRecords.length),
     photos: readCount(portfolio.mediaItemCount, mediaItems.length),
     routes: readCount(portfolio.routeSegmentCount, routeSegments.length),
-    shared: memoryRecords.filter((record) => Boolean(record.sharedWithCommunity)).length,
   }
 })
 
@@ -106,8 +97,6 @@ function getModeMetric(modeKey) {
       return `경로 ${summary.routes}개`
     case 'photos':
       return `사진 ${summary.photos}장`
-    case 'share':
-      return `공유 ${summary.shared}건`
     default:
       return ''
   }
@@ -144,7 +133,9 @@ function applyRouteState(route) {
       hubInitialLogTab.value = 'overview'
       break
     case 'public-trips':
-      primaryTab.value = 'share'
+      primaryTab.value = 'map'
+      hubRoute.value = 'travel-log'
+      hubInitialLogTab.value = 'overview'
       break
     case 'travel-money':
       primaryTab.value = 'finance'
@@ -225,10 +216,6 @@ function openPhotos(focusRequest = null) {
   }
 }
 
-function openShare() {
-  primaryTab.value = 'share'
-}
-
 function openMode(mode) {
   switch (mode) {
     case 'finance':
@@ -242,9 +229,6 @@ function openMode(mode) {
       break
     case 'photos':
       openPhotos()
-      break
-    case 'share':
-      openShare()
       break
     case 'map':
     default:
@@ -261,13 +245,8 @@ function handleRequestOpenFinance() {
   openFinance()
 }
 
-function handleRequestOpenPublicTrips() {
-  openShare()
-}
-
 const isHubVisible = computed(() =>
-  primaryTab.value !== 'share'
-  && primaryTab.value !== 'map'
+  primaryTab.value !== 'map'
   && (primaryTab.value !== 'finance' || financeLegacyOpen.value)
 )
 const isIntegratedPhotoMode = computed(() => primaryTab.value === 'photos')
@@ -365,20 +344,6 @@ onMounted(loadTravelSummary)
       />
     </div>
 
-    <div v-if="primaryTab === 'share'" class="workspace-stack">
-      <TravelHubWorkspace
-        route="travel-share"
-        :integrated-mode="true"
-        :external-memory-focus-request="hubPlaceFocusRequest"
-        :external-photo-focus-request="hubPhotoFocusRequest"
-        :external-route-focus-request="hubRouteFocusRequest"
-        @request-open-finance="handleRequestOpenFinance"
-        @request-open-log="handleRequestOpenLog"
-        @request-open-public-trips="handleRequestOpenPublicTrips"
-      />
-      <TravelPublicTripsWorkspace :active="primaryTab === 'share'" />
-    </div>
-
     <section v-if="primaryTab === 'finance' && !financeLegacyOpen" class="panel travel-finance-bridge">
       <div class="panel__header">
         <div>
@@ -425,7 +390,6 @@ onMounted(loadTravelSummary)
         :external-route-focus-request="hubRouteFocusRequest"
         @request-open-finance="handleRequestOpenFinance"
         @request-open-log="handleRequestOpenLog"
-        @request-open-public-trips="handleRequestOpenPublicTrips"
         @record-focus-consumed="emit('record-focus-consumed', $event)"
       />
     </div>

@@ -6,6 +6,7 @@ import {
 } from '../lib/api'
 import { formatDate, formatTime, safeNumber } from '../lib/uiFormat'
 import TravelMyMapClusterPanel from './TravelMyMapClusterPanel.vue'
+import TravelPublicMapPhotoDetailModal from './TravelPublicMapPhotoDetailModal.vue'
 
 const CLUSTER_PHOTO_PAGE_SIZE = 36
 
@@ -29,6 +30,7 @@ const selectedClusterPage = ref(0)
 const photoModalOpen = ref(false)
 const displayMode = ref('cluster')
 const mapFitRequestKey = ref(0)
+const isMapFullscreen = ref(false)
 
 const overview = computed(() => share.value?.overview ?? null)
 const markers = computed(() => overview.value?.markers ?? [])
@@ -181,6 +183,10 @@ function closePhotoModal() {
   clearSelection()
 }
 
+function handleMapFullscreenChange(nextValue) {
+  isMapFullscreen.value = Boolean(nextValue)
+}
+
 async function selectAdjacentPhoto(offset) {
   if (isDetailLoading.value) {
     return
@@ -284,69 +290,44 @@ onMounted(() => {
         @select-marker="handleSelectMarker"
         @select-photo-pin="handleSelectPhotoPin"
         @preview-cluster="handleSelectCluster"
+        @fullscreen-change="handleMapFullscreenChange"
         @clear-selection="clearSelection"
-      />
+      >
+        <template #fullscreen-dialog="{ isFullscreen }">
+          <TravelPublicMapPhotoDetailModal
+            v-if="isFullscreen && photoModalOpen"
+            :title="photoModalTitle"
+            :meta="photoModalMeta"
+            :photo="selectedPhoto"
+            :photos="selectedPhotos"
+            :current-photo-id="selectedPhotoId"
+            :is-loading="isDetailLoading"
+            :error-message="detailErrorMessage"
+            :can-navigate="canNavigatePhotos"
+            @close="closePhotoModal"
+            @previous-photo="selectAdjacentPhoto(-1)"
+            @next-photo="selectAdjacentPhoto(1)"
+            @select-photo="selectedPhotoId = $event.id"
+          />
+        </template>
+      </TravelMyMapClusterPanel>
     </section>
 
-    <div v-if="photoModalOpen" class="public-map-share-photo-modal" role="dialog" aria-modal="true" aria-labelledby="public-map-share-photo-modal-title" @click.self="closePhotoModal">
-      <article class="public-map-share-photo-modal__panel">
-        <header class="public-map-share-photo-modal__header">
-          <div>
-            <span class="panel__eyebrow">PHOTO DETAIL</span>
-            <h2 id="public-map-share-photo-modal-title">{{ photoModalTitle }}</h2>
-            <p v-if="photoModalMeta">{{ photoModalMeta }}</p>
-          </div>
-          <div class="public-map-share-photo-modal__header-actions">
-            <button v-if="canNavigatePhotos" class="button button--secondary" type="button" @click="selectAdjacentPhoto(-1)">이전 사진</button>
-            <button v-if="canNavigatePhotos" class="button button--secondary" type="button" @click="selectAdjacentPhoto(1)">다음 사진</button>
-            <button class="button button--ghost" type="button" @click="closePhotoModal">닫기</button>
-          </div>
-        </header>
 
-        <p v-if="detailErrorMessage" class="panel__empty">{{ detailErrorMessage }}</p>
-        <p v-else-if="isDetailLoading" class="panel__empty">사진 정보를 불러오는 중입니다...</p>
-        <div v-else-if="selectedPhoto?.contentUrl" class="public-map-share-photo-modal__body">
-          <button
-            v-if="canNavigatePhotos"
-            class="public-map-share-photo-modal__nav public-map-share-photo-modal__nav--prev"
-            type="button"
-            aria-label="이전 사진"
-            @click="selectAdjacentPhoto(-1)"
-          >
-            ‹
-          </button>
-          <figure class="public-map-share-photo-modal__figure">
-            <img :src="selectedPhoto.contentUrl" :alt="selectedPhoto.title || selectedPhoto.originalFileName || '여행 사진'" />
-            <figcaption>
-              <strong>{{ selectedPhoto.placeName || selectedPhoto.title || selectedPhoto.originalFileName || '여행 사진' }}</strong>
-              <span>{{ selectedPhoto.region || selectedPhoto.country || selectedPhoto.planName || '' }}</span>
-            </figcaption>
-          </figure>
-          <button
-            v-if="canNavigatePhotos"
-            class="public-map-share-photo-modal__nav public-map-share-photo-modal__nav--next"
-            type="button"
-            aria-label="다음 사진"
-            @click="selectAdjacentPhoto(1)"
-          >
-            ›
-          </button>
-        </div>
-        <p v-else class="panel__empty">표시할 사진 상세가 없습니다.</p>
-
-        <div v-if="!isDetailLoading && !detailErrorMessage && selectedPhotos.length > 1" class="public-map-share-photo-modal__thumbs" aria-label="클러스터 사진 목록">
-          <button
-            v-for="photo in selectedPhotos"
-            :key="photo.id"
-            class="public-map-share-photo-modal__thumb"
-            :class="{ 'is-active': String(photo.id) === String(selectedPhotoId) }"
-            type="button"
-            @click="selectedPhotoId = photo.id"
-          >
-            <img :src="photo.contentUrl" :alt="photo.title || photo.originalFileName || '여행 사진'" />
-          </button>
-        </div>
-      </article>
-    </div>
+    <TravelPublicMapPhotoDetailModal
+      v-if="photoModalOpen && !isMapFullscreen"
+      :title="photoModalTitle"
+      :meta="photoModalMeta"
+      :photo="selectedPhoto"
+      :photos="selectedPhotos"
+      :current-photo-id="selectedPhotoId"
+      :is-loading="isDetailLoading"
+      :error-message="detailErrorMessage"
+      :can-navigate="canNavigatePhotos"
+      @close="closePhotoModal"
+      @previous-photo="selectAdjacentPhoto(-1)"
+      @next-photo="selectAdjacentPhoto(1)"
+      @select-photo="selectedPhotoId = $event.id"
+    />
   </main>
 </template>

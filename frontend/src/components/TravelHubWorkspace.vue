@@ -238,18 +238,20 @@ const photoAlbumGroupMode = ref('all')
 
 const allowedLogTabs = new Set(['overview', 'memories', 'routes'])
 const allowedMoneyTabs = new Set(['planner', 'budget', 'records', 'stats'])
+// Legacy member/community sharing is retired. Public map URLs use a separate route.
+const LEGACY_TRAVEL_SHARING_ENABLED = false
 
 const planStatusOptions = computed(() => travelCategories.value.planStatuses?.length ? travelCategories.value.planStatuses : fallbackCategories.planStatuses)
 const budgetCategoryOptions = computed(() => travelCategories.value.budgetCategories?.length ? travelCategories.value.budgetCategories : fallbackCategories.budgetCategories)
 const expenseCategoryOptions = computed(() => travelCategories.value.expenseCategories?.length ? travelCategories.value.expenseCategories : fallbackCategories.expenseCategories)
 const memoryCategoryOptions = computed(() => travelCategories.value.memoryCategories?.length ? travelCategories.value.memoryCategories : fallbackCategories.memoryCategories)
 const requiresExplicitPlanSelection = computed(() =>
-  (props.route === 'travel-log' || props.route === 'photo-album' || props.route === 'travel-share')
+  (props.route === 'travel-log' || props.route === 'photo-album')
   && (!props.integratedMode || !travelPlans.value.length)
 )
-const isSharedExhibitTab = computed(() => props.route === 'travel-share' || (props.route === 'photo-album' && albumTab.value === 'shared'))
+const isSharedExhibitTab = computed(() => LEGACY_TRAVEL_SHARING_ENABLED && (props.route === 'travel-share' || (props.route === 'photo-album' && albumTab.value === 'shared')))
 const isMyPhotosTab = computed(() => props.route === 'photo-album' && albumTab.value === 'my-photos')
-const hasSharedExhibits = computed(() => sharedExhibitSummaries.value.length > 0)
+const hasSharedExhibits = computed(() => LEGACY_TRAVEL_SHARING_ENABLED && sharedExhibitSummaries.value.length > 0)
 const showAlbumUploadTab = computed(() => !props.integratedPhotoMode)
 const photoAlbumTabChoices = computed(() => (
   props.integratedPhotoMode
@@ -261,8 +263,6 @@ const photoAlbumTabChoices = computed(() => (
         { key: 'upload', label: '업로드와 기록' },
         { key: 'my-photos', label: '내 사진' },
         { key: 'gallery', label: '지도 갤러리' },
-        { key: 'shared', label: '공유 전시' },
-        { key: 'community', label: '커뮤니티' },
       ]
 ))
 const showPlanGate = computed(() =>
@@ -300,7 +300,7 @@ const selectedShareTargets = computed(() => {
 const canShareToSelectedTargets = computed(() =>
   canShareTravelPlan.value && selectedShareTargets.value.length > 0,
 )
-const shouldLoadSharedExhibits = computed(() => props.route === 'photo-album' || props.route === 'travel-share')
+const shouldLoadSharedExhibits = computed(() => LEGACY_TRAVEL_SHARING_ENABLED && (props.route === 'photo-album' || props.route === 'travel-share'))
 const emptyTravelPlanMessage = computed(() => {
   if (isMyPhotosTab.value) {
     return '내 사진 탭에서는 여행을 선택하지 않아도 지금까지 업로드한 사진을 전체 기준으로 볼 수 있습니다.'
@@ -1423,12 +1423,12 @@ async function refreshTravelData(preferredPlanId = selectedPlanId.value, include
     selectedPlanId.value = nextPlanId
     const [selectedPlan] = await Promise.all([
       selectedPlanId.value ? fetchTravelPlan(selectedPlanId.value) : Promise.resolve(null),
-      loadTravelPlanShares(selectedPlanId.value),
+      LEGACY_TRAVEL_SHARING_ENABLED ? loadTravelPlanShares(selectedPlanId.value) : Promise.resolve(),
     ])
     travelPlan.value = selectedPlan
     await Promise.all([
       loadTravelRates(),
-      includeCommunity ? loadTravelCommunityFeed() : Promise.resolve(),
+      LEGACY_TRAVEL_SHARING_ENABLED && includeCommunity ? loadTravelCommunityFeed() : Promise.resolve(),
       shouldLoadSharedExhibits.value ? loadSharedExhibits(selectedSharedExhibitId.value) : Promise.resolve(),
       isMyPhotosTab.value ? loadTravelPortfolio(true) : Promise.resolve(),
     ])
@@ -1468,7 +1468,7 @@ async function handleSelectSharedExhibit(shareId) {
 watch(
   () => props.route,
   async (route, previousRoute) => {
-    if (!props.integratedMode && route !== previousRoute && (route === 'travel-log' || route === 'photo-album' || route === 'travel-share')) {
+    if (!props.integratedMode && route !== previousRoute && (route === 'travel-log' || route === 'photo-album')) {
       selectedPlanId.value = ''
       travelPlan.value = null
       memoryFocusRequest.value = null
@@ -2347,7 +2347,7 @@ async function openPortfolioMemoryEditor(payload) {
       </div>
     </template>
 
-    <template v-else-if="route === 'travel-share'">
+    <template v-else-if="LEGACY_TRAVEL_SHARING_ENABLED && route === 'travel-share'">
       <section class="panel">
         <div class="panel__header">
           <div>
@@ -2599,8 +2599,8 @@ async function openPortfolioMemoryEditor(payload) {
           <p v-else class="panel__empty">사진첩에 표시할 사진이 아직 없습니다.</p>
         </section>
       </div>
-      <TravelSharedExhibitWorkspace v-else-if="albumTab === 'shared'" :exhibits="sharedExhibitSummaries" :exhibit-page="sharedExhibitPage" :exhibit-page-count="sharedExhibitPageCount" :exhibit-total="sharedExhibitTotal" :selected-exhibit-id="selectedSharedExhibitId" :selected-exhibit="selectedSharedExhibit" :is-loading="isLoading" @select-exhibit="handleSelectSharedExhibit" @change-exhibit-page="handleChangeSharedExhibitPage" />
-      <TravelCommunityWorkspace v-else :travel-plan="travelPlan" :community-feed="communityFeed" :community-page="communityFeedPage" :community-page-count="communityFeedPageCount" :community-total="communityFeedTotal" @change-community-page="handleChangeCommunityFeedPage" />
+      <TravelSharedExhibitWorkspace v-else-if="LEGACY_TRAVEL_SHARING_ENABLED && albumTab === 'shared'" :exhibits="sharedExhibitSummaries" :exhibit-page="sharedExhibitPage" :exhibit-page-count="sharedExhibitPageCount" :exhibit-total="sharedExhibitTotal" :selected-exhibit-id="selectedSharedExhibitId" :selected-exhibit="selectedSharedExhibit" :is-loading="isLoading" @select-exhibit="handleSelectSharedExhibit" @change-exhibit-page="handleChangeSharedExhibitPage" />
+      <TravelCommunityWorkspace v-else-if="LEGACY_TRAVEL_SHARING_ENABLED && albumTab === 'community'" :travel-plan="travelPlan" :community-feed="communityFeed" :community-page="communityFeedPage" :community-page-count="communityFeedPageCount" :community-total="communityFeedTotal" @change-community-page="handleChangeCommunityFeedPage" />
     </template>
     </template>
   </div>

@@ -13,7 +13,7 @@ public class LedgerAiRemoteClientRouter implements LedgerAiRemoteClient {
 
     @Override
     public LedgerAiRemoteResponse analyze(Object payload) {
-        if (properties.provider() == LedgerAiProvider.LMSTUDIO) {
+        if (properties.provider() == LedgerAiProvider.LMSTUDIO || properties.provider() == LedgerAiProvider.OPENAI) {
             return lmStudioClient.analyze(payload);
         }
         return n8nClient.analyze(payload);

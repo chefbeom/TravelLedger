@@ -31,6 +31,8 @@ public class HouseholdAggregatePreferenceService {
     private static final Set<String> ALLOWED_KINDS = Set.of("NONE", "TOTAL", "PAYMENT_METHOD", "MONTHLY_CUMULATIVE_CHART", "MONTHLY_GOAL");
     private static final Set<String> ALLOWED_PERIODS = Set.of("YEAR", "QUARTER", "MONTH", "WEEK", "DAY");
     private static final Set<String> ALLOWED_AMOUNT_TYPES = Set.of("NET", "INCOME", "EXPENSE");
+    private static final Set<String> ALLOWED_TEXT_SIZES = Set.of("SMALL", "MEDIUM", "LARGE");
+    private static final Set<String> ALLOWED_TEXT_COLORS = Set.of("DEFAULT", "MINT", "SKY", "GOLD", "PINK");
 
     private final AppUserRepository appUserRepository;
     private final PaymentMethodRepository paymentMethodRepository;
@@ -74,7 +76,7 @@ public class HouseholdAggregatePreferenceService {
 
     private StoredWidget toStoredWidget(HouseholdAggregateWidgetRequest widget) {
         if (widget == null) {
-            return new StoredWidget(null, null, null, null, null, null, null, null, null, null, null, null, null, null);
+            return new StoredWidget(null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null);
         }
 
         return new StoredWidget(
@@ -91,7 +93,9 @@ public class HouseholdAggregatePreferenceService {
                 widget.layoutY(),
                 widget.layoutW(),
                 widget.layoutH(),
-                widget.layoutOrder()
+                widget.layoutOrder(),
+                widget.textSize(),
+                widget.textColor()
         );
     }
 
@@ -138,7 +142,9 @@ public class HouseholdAggregatePreferenceService {
                                 widget.layoutY(),
                                 widget.layoutW(),
                                 widget.layoutH(),
-                                widget.layoutOrder()
+                                widget.layoutOrder(),
+                                widget.textSize(),
+                                widget.textColor()
                         ))
                         .toList()
         );
@@ -164,6 +170,8 @@ public class HouseholdAggregatePreferenceService {
             String amountType = requestedAmountType != null && ALLOWED_AMOUNT_TYPES.contains(requestedAmountType)
                     ? requestedAmountType
                     : baseWidget.amountType();
+            String textSize = normalizeAllowedValue(requestedWidget.textSize(), ALLOWED_TEXT_SIZES, baseWidget.textSize());
+            String textColor = normalizeAllowedValue(requestedWidget.textColor(), ALLOWED_TEXT_COLORS, baseWidget.textColor());
             Long paymentMethodId = null;
             Long monthlyExpenseTarget = normalizePositiveAmount(requestedWidget.monthlyExpenseTarget());
             Long singleExpenseLimit = normalizePositiveAmount(requestedWidget.singleExpenseLimit());
@@ -239,7 +247,9 @@ public class HouseholdAggregatePreferenceService {
                     layoutY,
                     layoutW,
                     layoutH,
-                    layoutOrder
+                    layoutOrder,
+                    textSize,
+                    textColor
             ));
         }
 
@@ -285,7 +295,9 @@ public class HouseholdAggregatePreferenceService {
                     slot[1],
                     width,
                     height,
-                    normalizeLayoutOrder(widget.layoutOrder(), index + 1)
+                    normalizeLayoutOrder(widget.layoutOrder(), index + 1),
+                    widget.textSize(),
+                    widget.textColor()
             );
         }
 
@@ -334,6 +346,10 @@ public class HouseholdAggregatePreferenceService {
         return value;
     }
 
+    private String normalizeAllowedValue(String value, Set<String> allowedValues, String fallback) {
+        return value != null && allowedValues.contains(value) ? value : fallback;
+    }
+
     private Integer normalizeGridPosition(Integer value, Integer fallback, int max) {
         int candidate = value != null ? value : (fallback != null ? fallback : 1);
         return Math.min(max, Math.max(1, candidate));
@@ -355,12 +371,12 @@ public class HouseholdAggregatePreferenceService {
 
     private List<StoredWidget> buildDefaultWidgets() {
         return List.of(
-                new StoredWidget("TOTAL", "MONTH", null, "EXPENSE", null, null, null, null, null, 1, 1, 1, 1, 1),
-                new StoredWidget("MONTHLY_GOAL", "MONTH", null, "EXPENSE", null, null, null, null, null, 2, 1, 1, 1, 2),
-                new StoredWidget("PAYMENT_METHOD", "MONTH", null, "EXPENSE", null, null, null, null, null, 3, 1, 1, 1, 3),
-                new StoredWidget("MONTHLY_CUMULATIVE_CHART", "MONTH", null, "NET", null, null, true, true, false, 4, 1, 2, 1, 4),
-                new StoredWidget("NONE", "MONTH", null, "EXPENSE", null, null, null, null, null, 6, 1, 1, 1, 5),
-                new StoredWidget("NONE", "MONTH", null, "EXPENSE", null, null, null, null, null, 7, 1, 1, 1, 6)
+                new StoredWidget("TOTAL", "MONTH", null, "EXPENSE", null, null, null, null, null, 1, 1, 1, 1, 1, "MEDIUM", "DEFAULT"),
+                new StoredWidget("MONTHLY_GOAL", "MONTH", null, "EXPENSE", null, null, null, null, null, 2, 1, 1, 1, 2, "MEDIUM", "DEFAULT"),
+                new StoredWidget("PAYMENT_METHOD", "MONTH", null, "EXPENSE", null, null, null, null, null, 3, 1, 1, 1, 3, "MEDIUM", "DEFAULT"),
+                new StoredWidget("MONTHLY_CUMULATIVE_CHART", "MONTH", null, "NET", null, null, true, true, false, 4, 1, 2, 1, 4, "MEDIUM", "DEFAULT"),
+                new StoredWidget("NONE", "MONTH", null, "EXPENSE", null, null, null, null, null, 6, 1, 1, 1, 5, "MEDIUM", "DEFAULT"),
+                new StoredWidget("NONE", "MONTH", null, "EXPENSE", null, null, null, null, null, 7, 1, 1, 1, 6, "MEDIUM", "DEFAULT")
         );
     }
 
@@ -378,7 +394,9 @@ public class HouseholdAggregatePreferenceService {
             Integer layoutY,
             Integer layoutW,
             Integer layoutH,
-            Integer layoutOrder
+            Integer layoutOrder,
+            String textSize,
+            String textColor
     ) {
     }
 }

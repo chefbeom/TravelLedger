@@ -1,12 +1,14 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import yunaSpriteUrl from '../assets/pets/yuna-spritesheet.webp'
+import yunaWalkRightStripUrl from '../assets/pets/yuna-walk-right-strip.png'
 import momoImageUrl from '../assets/pets/momo-cat.webp'
 import bomiImageUrl from '../assets/pets/bomi-dog.webp'
 
 const PET_STORAGE_KEY = 'calen-pet-companion:v1'
 const PET_MARGIN = 12
 const PET_SIZES = [100, 150, 200, 250, 300]
+const YUNA_WALK_FRAME_RATE = 12
 const PET_DIALOGUES = {
   yuna: {
     lines: ['오늘은 어떤 기록을 살펴볼까요?', '잠깐 창밖을 보고 있었어요.', '천천히 해도 괜찮아요.', '잘하고 있어요. 조금만 더 해볼까요?', '필요한 알림은 제가 챙길게요.', '오늘의 가계부도 깔끔하게 정리해 봐요.', '휴식도 계획의 일부예요.', '다음 일정이 궁금하면 눌러 주세요.', '작은 기록이 모여 큰 도움이 돼요.', '집중하고 계시네요. 멋져요.', '제가 옆에서 조용히 지켜볼게요.', '한 번 더 확인하면 더 정확해져요.', '알림이 오면 바로 알려드릴게요.', '무리하지 말고 천천히 이어가요.', '오늘도 좋은 하루가 될 거예요.'],
@@ -15,6 +17,15 @@ const PET_DIALOGUES = {
     interact: '무슨 일이에요? 제가 도와드릴게요.',
     alert: '새 알림이에요. 같이 확인해 볼까요?',
     error: '문제가 생겼어요. 내용을 같이 확인해 볼까요?',
+    navigation: {
+      menu: '메뉴로 이동했어요. 원하는 기능을 골라 볼까요?',
+      household: '가계부를 열었어요. 오늘 기록을 차분히 살펴봐요.',
+      travel: '여행 기록으로 갈게요. 추억을 함께 찾아봐요.',
+      drive: '드라이브예요. 파일을 깔끔하게 정리해 봐요.',
+      admin: '관리자 화면이에요. 중요한 설정은 한 번 더 확인해요.',
+      notifications: '알림 센터를 열었어요. 새 소식을 확인해 볼까요?',
+      pet: '펫 관리예요. 저와 친구들의 설정을 바꿀 수 있어요.',
+    },
   },
   momo: {
     lines: ['야옹, 오늘은 무엇을 정리할까요?', '햇볕 좋은 자리를 찾았어요.', '기록이 늘어나는 건 좋은 일이에요.', '야옹, 알림은 제가 먼저 볼게요.', '잠깐 스트레칭할 시간이에요.', '궁금한 항목이 있으면 눌러 봐요.', '제가 옆에서 조용히 기다릴게요.', '오늘도 차분하게 해내고 있어요.', '작은 변화도 놓치지 않을게요.', '야옹, 잠깐 쉬어가도 괜찮아요.', '새로운 소식 냄새가 나요.', '기록을 확인하면 마음이 편해져요.', '제 꼬리가 살랑살랑 기분 좋아요.', '다음 할 일을 같이 살펴봐요.', '필요하면 저를 불러 주세요.'],
@@ -23,6 +34,15 @@ const PET_DIALOGUES = {
     interact: '야옹, 쓰다듬어 줘서 기분이 좋아요.',
     alert: '야옹, 새 알림이 왔어요!',
     error: '야옹, 문제가 생겼어요. 확인이 필요해요.',
+    navigation: {
+      menu: '야옹, 메뉴 냄새가 나요. 무엇을 골라 볼까요?',
+      household: '야옹, 가계부 기록을 함께 살펴봐요.',
+      travel: '여행으로 가요. 새로운 풍경이 기다리고 있어요.',
+      drive: '드라이브예요. 파일을 차분히 정리해요.',
+      admin: '관리자 화면이에요. 중요한 건 꼼꼼히 봐야 해요.',
+      notifications: '야옹, 알림 센터예요. 새 소식을 확인해요.',
+      pet: '야옹, 펫 관리에서 제 설정도 바꿀 수 있어요.',
+    },
   },
   bomi: {
     lines: ['멍멍, 오늘도 함께해요!', '꼬리를 흔들며 기다리고 있었어요.', '기록을 잘 살펴보고 있어요.', '새 알림이 오면 바로 달려갈게요.', '멍멍, 잠깐 쉬어도 좋아요.', '오늘 일정도 순조롭게 진행 중이에요.', '제가 옆에서 응원할게요!', '작은 지출도 잘 확인해 봐요.', '다음 할 일을 알려 주세요.', '멍멍, 좋은 냄새가 나는 하루예요.', '천천히 해도 끝까지 같이 갈게요.', '기록이 깔끔하면 기분이 좋아요.', '필요하면 제 이름을 불러 주세요.', '오늘도 정말 잘하고 있어요.', '알림을 놓치지 않게 지켜볼게요.'],
@@ -31,6 +51,15 @@ const PET_DIALOGUES = {
     interact: '멍멍! 쓰다듬어 줘서 신나요.',
     alert: '멍멍, 새 알림이 도착했어요!',
     error: '멍멍, 문제가 생겼어요. 같이 확인해요.',
+    navigation: {
+      menu: '멍멍, 메뉴로 왔어요! 무엇을 해볼까요?',
+      household: '멍멍, 가계부로 왔어요. 기록을 같이 확인해요!',
+      travel: '여행으로 출발해요! 추억을 찾아볼까요?',
+      drive: '드라이브예요! 파일 정리도 제가 응원할게요.',
+      admin: '관리자 화면이에요. 중요한 설정은 조심조심!',
+      notifications: '멍멍, 알림 센터예요! 새 소식이 있어요.',
+      pet: '멍멍, 펫 관리예요! 제 설정도 확인해 주세요.',
+    },
   },
 }
 
@@ -53,6 +82,7 @@ const PETS = [
     name: 'Yuna',
     kind: 'sprite',
     asset: yunaSpriteUrl,
+    walkAsset: yunaWalkRightStripUrl,
     description: '긴 흑발 일본 여고생 청춘 캐릭터. 차분하게 알림을 알려줍니다.',
     greeting: '오늘 알림은 제가 챙길게요.',
     petLine: '좋아요. 잠깐 쉬었다가 다시 이어가요.',
@@ -125,6 +155,7 @@ const isQuickOpen = ref(false)
 const isManagerOpen = ref(false)
 const reaction = ref('idle')
 const petFacing = ref('right')
+const yunaWalkFrame = ref(0)
 const speechText = ref('')
 const speechVisible = ref(false)
 const petElement = ref(null)
@@ -141,6 +172,7 @@ let reactionTimer = null
 let speechTimer = null
 let walkTimer = null
 let idleTalkTimer = null
+let yunaWalkFrameTimer = null
 let walkResetTimer = null
 
 const currentPet = computed(() => PETS.find((pet) => pet.id === settings.selectedPetId) || PETS[0])
@@ -171,10 +203,20 @@ function resolveYunaSpriteRow() {
   return 0
 }
 
-const yunaSpriteStyle = computed(() => ({
-  backgroundImage: `url(${currentPet.value.asset})`,
-  backgroundPosition: `0% ${resolveYunaSpriteRow() * 10}%`,
-}))
+const isYunaWalking = computed(() => currentPet.value.kind === 'sprite' && reaction.value === 'walk')
+
+const yunaSpriteStyle = computed(() => {
+  const walking = isYunaWalking.value
+  const frame = walking ? yunaWalkFrame.value % 8 : 0
+  const horizontalPosition = walking ? `${(frame / 7) * 100}%` : '0%'
+
+  return {
+    backgroundImage: `url(${walking ? currentPet.value.walkAsset : currentPet.value.asset})`,
+    backgroundPosition: walking ? `${horizontalPosition} 0%` : `0% ${resolveYunaSpriteRow() * 10}%`,
+    backgroundSize: walking ? '800% 100%' : undefined,
+    '--yuna-facing-scale': petFacing.value === 'left' ? '-1' : '1',
+  }
+})
 const animalMotionStyle = computed(() => ({
   '--pet-facing-scale': petFacing.value === 'left' ? '-1' : '1',
 }))
@@ -253,6 +295,15 @@ function react(nextReaction = 'happy', message = '', duration = 3600) {
   }, Math.max(900, duration))
 }
 
+function announceNavigation(destination) {
+  if (!settings.enabled) {
+    return
+  }
+
+  const navigation = currentPetDialogue.value?.navigation || {}
+  react('happy', navigation[destination] || getPetDialogue('interact', currentPet.value.greeting), 2800)
+}
+
 function handleAvatarClick() {
   if (dragState.moved) {
     dragState.moved = false
@@ -276,6 +327,7 @@ function openNotificationCenter() {
 
 function openManager() {
   isQuickOpen.value = false
+  announceNavigation('pet')
   isManagerOpen.value = true
 }
 
@@ -408,6 +460,11 @@ function keepPetInViewport() {
 
 watch(() => settings.size, keepPetInViewport)
 watch(settings, persistSettings, { deep: true })
+watch(reaction, (nextReaction) => {
+  if (nextReaction !== 'walk') {
+    yunaWalkFrame.value = 0
+  }
+})
 
 watch(
   () => props.notification?.id,
@@ -441,6 +498,11 @@ watch(
   },
 )
 onMounted(() => {
+  yunaWalkFrameTimer = window.setInterval(() => {
+    if (settings.enabled && isYunaWalking.value) {
+      yunaWalkFrame.value = (yunaWalkFrame.value + 1) % 8
+    }
+  }, Math.round(1000 / YUNA_WALK_FRAME_RATE))
   walkTimer = window.setInterval(movePetAutonomously, 9000)
   idleTalkTimer = window.setInterval(maybeTalkToUser, 30000)
 })
@@ -454,6 +516,10 @@ onBeforeUnmount(() => {
     window.clearInterval(idleTalkTimer)
     idleTalkTimer = null
   }
+  if (yunaWalkFrameTimer) {
+    window.clearInterval(yunaWalkFrameTimer)
+    yunaWalkFrameTimer = null
+  }
   if (walkResetTimer) {
     window.clearTimeout(walkResetTimer)
     walkResetTimer = null
@@ -463,7 +529,7 @@ onBeforeUnmount(() => {
   }
 })
 
-defineExpose({ openManager })
+defineExpose({ announceNavigation, openManager })
 </script>
 
 <template>
@@ -579,7 +645,7 @@ defineExpose({ openManager })
 .pet-companion__dock.is-dragging { cursor: grabbing; }
 .pet-companion__avatar { position: relative; display: grid; width: var(--pet-size, 100px); height: calc(var(--pet-size, 100px) + 14px); padding: 0; border: 0; background: transparent; cursor: grab; place-items: center; }
 .pet-companion__avatar img, .pet-companion__sprite { display: block; width: var(--pet-size, 100px); height: var(--pet-size, 100px); object-fit: contain; filter: drop-shadow(0 5px 9px rgba(0,0,0,.3)); }
-.pet-companion__sprite { background-repeat: no-repeat; background-size: 800% 1100%; image-rendering: pixelated; transform-origin: 50% 78%; will-change: background-position, transform; }
+.pet-companion__sprite { background-repeat: no-repeat; background-size: 800% 1100%; image-rendering: pixelated; transform: scaleX(var(--yuna-facing-scale, 1)); transform-origin: 50% 78%; will-change: background-position, transform; }
 .pet-companion__dock--idle .pet-companion__sprite { animation: pet-yuna-idle-look 2.8s ease-in-out infinite; }
 .pet-companion__animal-sprite { transform-origin: 50% 75%; will-change: transform; }
 .pet-companion__name { position: absolute; bottom: 0; padding: 3px 8px; border: 1px solid color-mix(in srgb, var(--accent, #21b891) 55%, transparent); border-radius: 999px; background: color-mix(in srgb, var(--panel, #162131) 92%, transparent); color: var(--text, #f7fbff); font-size: 12px; font-weight: 800; white-space: nowrap; }
@@ -613,7 +679,7 @@ defineExpose({ openManager })
 .pet-manager-size { display: grid; gap: 5px; font-weight: 750; }
 .pet-manager-size select { min-height: 38px; border: 1px solid var(--panel-border, #34455f); border-radius: 7px; background: var(--input-bg, #111c2b); color: var(--text, #f7fbff); font: inherit; padding: 0 10px; }
 .pet-manager-modal__settings .button { margin-top: 8px; }
-@keyframes pet-yuna-idle-look { 0%,100% { transform: translateY(0) rotate(0) } 25% { transform: translateY(-1px) rotate(-1.4deg) } 50% { transform: translateY(0) rotate(1.1deg) } 75% { transform: translateY(-1px) rotate(-1.2deg) } }
+@keyframes pet-yuna-idle-look { 0%,100% { transform: scaleX(var(--yuna-facing-scale, 1)) translateY(0) rotate(0) } 25% { transform: scaleX(var(--yuna-facing-scale, 1)) translateY(-1px) rotate(-1.4deg) } 50% { transform: scaleX(var(--yuna-facing-scale, 1)) translateY(0) rotate(1.1deg) } 75% { transform: scaleX(var(--yuna-facing-scale, 1)) translateY(-1px) rotate(-1.2deg) } }
 @keyframes pet-yuna-greet { 0%,100% { transform: rotate(0) scale(1) } 40% { transform: rotate(-7deg) scale(1.07) } 70% { transform: rotate(7deg) scale(1.07) } }
 @keyframes pet-alert { 0%,100% { transform: translateX(0) } 35% { transform: translateX(-5px) } 70% { transform: translateX(5px) } }
 @keyframes pet-picked { 0%,100% { transform: translateY(0) scale(1) } 45% { transform: translateY(-8px) scale(1.08) } }

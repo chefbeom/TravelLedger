@@ -105,6 +105,20 @@ const aggregateWidgetSizeOptions = [
   { value: '4x1', label: '4칸', width: 4, height: 1 },
 ]
 
+const aggregateWidgetTextSizeOptions = [
+  { value: 'SMALL', label: '\uC791\uAC8C' },
+  { value: 'MEDIUM', label: '\uAE30\uBCF8' },
+  { value: 'LARGE', label: '\uD06C\uAC8C' },
+]
+
+const aggregateWidgetTextColorOptions = [
+  { value: 'DEFAULT', label: '\uAE30\uBCF8' },
+  { value: 'MINT', label: '\uBBFC\uD2B8' },
+  { value: 'SKY', label: '\uD558\uB298' },
+  { value: 'GOLD', label: '\uC624\uB80C\uC9C0' },
+  { value: 'PINK', label: '\uD551\uD06C' },
+]
+
 const calendarPanelDefinitions = [
   {
     id: 'aggregate',
@@ -2256,6 +2270,8 @@ function createDefaultAggregateConfigs() {
     showIncomeCumulative: true,
     showExpenseCumulative: true,
     comparePreviousPeriod: false,
+    textSize: 'MEDIUM',
+    textColor: 'DEFAULT',
     layoutY: 1,
     layoutW: 1,
     layoutH: 1,
@@ -2278,6 +2294,14 @@ function normalizeAggregateFlag(value, fallback = false) {
   if (value === true || value === 'true') return true
   if (value === false || value === 'false') return false
   return Boolean(fallback)
+}
+
+function normalizeAggregateTextSize(value, fallback = 'MEDIUM') {
+  return aggregateWidgetTextSizeOptions.some((item) => item.value === value) ? value : fallback
+}
+
+function normalizeAggregateTextColor(value, fallback = 'DEFAULT') {
+  return aggregateWidgetTextColorOptions.some((item) => item.value === value) ? value : fallback
 }
 
 function normalizeAggregateGridSpan(value, fallback = aggregateDefaultWidgetWidth, max = aggregateGridColumnCount) {
@@ -2506,6 +2530,8 @@ function normalizeAggregateConfigs(configs) {
     let showIncomeCumulative = normalizeAggregateFlag(current.showIncomeCumulative, baseConfig.showIncomeCumulative)
     let showExpenseCumulative = normalizeAggregateFlag(current.showExpenseCumulative, baseConfig.showExpenseCumulative)
     let comparePreviousPeriod = normalizeAggregateFlag(current.comparePreviousPeriod, baseConfig.comparePreviousPeriod)
+    const textSize = normalizeAggregateTextSize(current.textSize, baseConfig.textSize)
+    const textColor = normalizeAggregateTextColor(current.textColor, baseConfig.textColor)
     let layoutW = normalizeAggregateGridSpan(current.layoutW ?? baseConfig.layoutW, baseConfig.layoutW, aggregateGridColumnCount)
     let layoutH = normalizeAggregateGridSpan(current.layoutH ?? baseConfig.layoutH, baseConfig.layoutH, aggregateGridRowCount)
     let layoutX = normalizeAggregateGridPosition(current.layoutX ?? baseConfig.layoutX, baseConfig.layoutX, getAggregateMaxColumnForWidth(layoutW))
@@ -2546,7 +2572,7 @@ function normalizeAggregateConfigs(configs) {
     layoutY = normalizeAggregateGridPosition(layoutY, baseConfig.layoutY, getAggregateMaxRowForHeight(layoutH))
     layoutOrder = normalizeAggregateLayoutOrder(layoutOrder, baseConfig.layoutOrder ?? index + 1)
 
-    return { id: current.id || baseConfig.id, kind, period, paymentMethodId, amountType, monthlyExpenseTarget, singleExpenseLimit, showIncomeCumulative, showExpenseCumulative, comparePreviousPeriod, layoutX, layoutY, layoutW, layoutH, layoutOrder }
+    return { id: current.id || baseConfig.id, kind, period, paymentMethodId, amountType, monthlyExpenseTarget, singleExpenseLimit, showIncomeCumulative, showExpenseCumulative, comparePreviousPeriod, textSize, textColor, layoutX, layoutY, layoutW, layoutH, layoutOrder }
   })
 
   return packAggregateGridConfigs(orderAggregateConfigs(normalizedConfigs))
@@ -2659,7 +2685,7 @@ function cancelAggregateEdit() {
 function saveAggregateWidgetConfigs() {
   emit(
     'save-aggregate-widget-configs',
-    normalizeAggregateConfigs(aggregateWidgetDraftConfigs.value).slice(0, aggregateWidgetMaxCount).map(({ kind, period, paymentMethodId, amountType, monthlyExpenseTarget, singleExpenseLimit, showIncomeCumulative, showExpenseCumulative, comparePreviousPeriod, layoutX, layoutY, layoutW }, configIndex) => {
+    normalizeAggregateConfigs(aggregateWidgetDraftConfigs.value).slice(0, aggregateWidgetMaxCount).map(({ kind, period, paymentMethodId, amountType, monthlyExpenseTarget, singleExpenseLimit, showIncomeCumulative, showExpenseCumulative, comparePreviousPeriod, textSize, textColor, layoutX, layoutY, layoutW }, configIndex) => {
       const normalizedWidth = kind === 'MONTHLY_CUMULATIVE_CHART'
         ? Math.min(4, Math.max(2, normalizeAggregateGridSpan(layoutW, 2, 4)))
         : aggregateDefaultWidgetWidth
@@ -2678,6 +2704,8 @@ function saveAggregateWidgetConfigs() {
         showIncomeCumulative: kind === 'MONTHLY_CUMULATIVE_CHART' ? Boolean(showIncomeCumulative) : true,
         showExpenseCumulative: kind === 'MONTHLY_CUMULATIVE_CHART' ? Boolean(showExpenseCumulative) : true,
         comparePreviousPeriod: kind === 'MONTHLY_CUMULATIVE_CHART' ? Boolean(comparePreviousPeriod) : false,
+        textSize: normalizeAggregateTextSize(textSize),
+        textColor: normalizeAggregateTextColor(textColor),
         layoutX: normalizeAggregateGridPosition(layoutX, 1, getAggregateMaxColumnForWidth(normalizedWidth)),
         layoutY: normalizeAggregateGridPosition(layoutY, 1, getAggregateMaxRowForHeight(normalizedHeight)),
         layoutW: normalizedWidth,
@@ -4009,6 +4037,8 @@ defineExpose({
             :data-aggregate-y="card.config.layoutY"
             :data-aggregate-width="card.config.layoutW"
             :data-aggregate-height="card.config.layoutH"
+            :data-aggregate-text-size="normalizeAggregateTextSize(card.config.textSize)"
+            :data-aggregate-text-color="normalizeAggregateTextColor(card.config.textColor)"
             :data-aggregate-index="card.index"
           >
             <div v-if="isAggregateEditMode" class="household-aggregate-order-controls" aria-label="집계 순서 변경">
@@ -4051,6 +4081,25 @@ defineExpose({
               </label>
               </div>
 
+            <div v-if="isAggregateEditMode && card.config.kind !== 'NONE'" class="household-aggregate-text-settings">
+              <span class="household-aggregate-text-settings__title">&#44544;&#51088; &#54364;&#49884;</span>
+              <label class="field household-aggregate-card__field">
+                <span class="field__label">&#44544;&#51088; &#53356;&#44592;</span>
+                <select :value="normalizeAggregateTextSize(card.config.textSize)" @change="updateAggregateWidget(card.index, 'textSize', $event.target.value)">
+                  <option v-for="option in aggregateWidgetTextSizeOptions" :key="option.value" :value="option.value">
+                    {{ option.label }}
+                  </option>
+                </select>
+              </label>
+              <label class="field household-aggregate-card__field">
+                <span class="field__label">&#44544;&#51088; &#49353;&#49345;</span>
+                <select :value="normalizeAggregateTextColor(card.config.textColor)" @change="updateAggregateWidget(card.index, 'textColor', $event.target.value)">
+                  <option v-for="option in aggregateWidgetTextColorOptions" :key="option.value" :value="option.value">
+                    {{ option.label }}
+                  </option>
+                </select>
+              </label>
+            </div>
 
             <label v-if="isAggregateEditMode && card.config.kind === 'PAYMENT_METHOD'" class="field household-aggregate-card__field">
               <span class="field__label">결제수단</span>

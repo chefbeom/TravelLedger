@@ -14,6 +14,8 @@ public record HouseholdAggregateWidgetResponse(
         Integer layoutY,
         Integer layoutW,
         Integer layoutH,
-        Integer layoutOrder
+        Integer layoutOrder,
+        String textSize,
+        String textColor
 ) {
 }

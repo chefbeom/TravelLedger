@@ -127,7 +127,7 @@ class HouseholdAggregatePreferenceServiceTest {
                 .thenReturn(List.of(paymentMethod));
 
         var response = service.savePreferences(1L, new HouseholdAggregatePreferencesRequest(List.of(
-                new HouseholdAggregateWidgetRequest("PAYMENT_METHOD", "YEAR", 7L, "EXPENSE", null, null, null, null, null, 1, 1, 1, 1, 1)
+                new HouseholdAggregateWidgetRequest("PAYMENT_METHOD", "YEAR", 7L, "EXPENSE", null, null, null, null, null, 1, 1, 1, 1, 1, "LARGE", "MINT")
         )));
 
         assertThat(response.widgets()).hasSize(6);
@@ -137,6 +137,8 @@ class HouseholdAggregatePreferenceServiceTest {
         assertThat(response.widgets().get(0).amountType()).isEqualTo("EXPENSE");
         assertThat(response.widgets().get(0).layoutW()).isEqualTo(1);
         assertThat(response.widgets().get(0).layoutH()).isEqualTo(1);
+        assertThat(response.widgets().get(0).textSize()).isEqualTo("LARGE");
+        assertThat(response.widgets().get(0).textColor()).isEqualTo("MINT");
     }
 
     @Test
@@ -154,10 +156,10 @@ class HouseholdAggregatePreferenceServiceTest {
                 .thenReturn(List.of());
 
         var response = service.savePreferences(1L, new HouseholdAggregatePreferencesRequest(List.of(
-                new HouseholdAggregateWidgetRequest("TOTAL", "MONTH", null, "NET", null, null, null, null, null, 1, 1, 1, 1, 3),
-                new HouseholdAggregateWidgetRequest("MONTHLY_CUMULATIVE_CHART", "MONTH", null, "NET", null, null, true, true, true, 2, 1, 4, 1, 1),
-                new HouseholdAggregateWidgetRequest("MONTHLY_GOAL", "MONTH", null, "EXPENSE", 400000L, 100000L, null, null, null, 1, 1, 2, 1, 2),
-                new HouseholdAggregateWidgetRequest("NONE", "DAY", null, "NET", null, null, null, null, null, 3, 1, 3, 2, 4)
+                new HouseholdAggregateWidgetRequest("TOTAL", "MONTH", null, "NET", null, null, null, null, null, 1, 1, 1, 1, 3, null, null),
+                new HouseholdAggregateWidgetRequest("MONTHLY_CUMULATIVE_CHART", "MONTH", null, "NET", null, null, true, true, true, 2, 1, 4, 1, 1, null, null),
+                new HouseholdAggregateWidgetRequest("MONTHLY_GOAL", "MONTH", null, "EXPENSE", 400000L, 100000L, null, null, null, 1, 1, 2, 1, 2, null, null),
+                new HouseholdAggregateWidgetRequest("NONE", "DAY", null, "NET", null, null, null, null, null, 3, 1, 3, 2, 4, null, null)
         )));
 
         assertThat(response.widgets()).hasSize(6);

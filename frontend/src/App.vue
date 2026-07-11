@@ -702,10 +702,10 @@ function openPetManager() {
 
 function openNotificationModal() {
   notificationModalOpen.value = true
+  petCompanionRef.value?.announceNavigation('notifications')
   clearNotificationToast()
   refreshNotificationUnreadCount({ notify: false })
 }
-
 function closeNotificationModal() {
   notificationModalOpen.value = false
   refreshNotificationUnreadCount({ notify: false })
@@ -760,11 +760,12 @@ function closeProfileModal() {
 
 function navigate(route, options = {}) {
   const nextRoute = normalizedRouteMeta[route] ? route : 'launcher'
+  const previousRoute = activeRoute.value
   if (nextRoute === 'profile') {
     openProfileModal()
     return
   }
-  if (nextRoute !== activeRoute.value && !confirmRouteLeaveIfNeeded()) {
+  if (nextRoute !== previousRoute && !confirmRouteLeaveIfNeeded()) {
     return
   }
   profileModalOpen.value = false
@@ -772,8 +773,25 @@ function navigate(route, options = {}) {
   activeRoute.value = nextRoute
   inviteToken.value = ''
   window.location.hash = nextRoute
-}
 
+  if (nextRoute !== previousRoute) {
+    const petDestination = {
+      launcher: 'menu',
+      household: 'household',
+      travel: 'travel',
+      'travel-money': 'travel',
+      'travel-log': 'travel',
+      'photo-album': 'travel',
+      'my-map': 'travel',
+      'public-trips': 'travel',
+      drive: 'drive',
+      admin: 'admin',
+    }[nextRoute]
+    if (petDestination) {
+      petCompanionRef.value?.announceNavigation(petDestination)
+    }
+  }
+}
 function navigateHouseholdTravelLedger() {
   navigate('household', { householdTab: 'travel-ledger' })
 }

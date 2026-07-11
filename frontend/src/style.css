@@ -31792,3 +31792,95 @@ button.button--primary,
     height: 180px;
   }
 }
+/* Household aggregate: per-widget display text settings. */
+.household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-card[data-aggregate-text-size='SMALL'] .household-aggregate-card__eyebrow {
+  font-size: clamp(0.64rem, 1.45cqi, 0.78rem) !important;
+}
+
+.household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-card[data-aggregate-text-size='SMALL'] .household-aggregate-card__copy strong {
+  font-size: clamp(0.82rem, 2.02cqi, 1.25rem) !important;
+}
+
+.household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-card[data-aggregate-text-size='SMALL'] .household-aggregate-card__copy small,
+.household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-card[data-aggregate-text-size='SMALL'] .household-aggregate-card__meta,
+.household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-card[data-aggregate-text-size='SMALL'] .household-aggregate-goal__stats {
+  font-size: clamp(0.6rem, 1.28cqi, 0.72rem) !important;
+}
+
+.household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-card[data-aggregate-text-size='LARGE'] .household-aggregate-card__eyebrow {
+  font-size: clamp(0.8rem, 2cqi, 1.02rem) !important;
+}
+
+.household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-card[data-aggregate-text-size='LARGE'] .household-aggregate-card__copy strong {
+  font-size: clamp(1.08rem, 2.8cqi, 1.72rem) !important;
+}
+
+.household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-card[data-aggregate-text-size='LARGE'] .household-aggregate-card__copy small,
+.household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-card[data-aggregate-text-size='LARGE'] .household-aggregate-card__meta,
+.household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-card[data-aggregate-text-size='LARGE'] .household-aggregate-goal__stats {
+  font-size: clamp(0.74rem, 1.82cqi, 0.94rem) !important;
+}
+
+.household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-card[data-aggregate-text-color='MINT'],
+.household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-card[data-aggregate-text-color='SKY'],
+.household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-card[data-aggregate-text-color='GOLD'],
+.household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-card[data-aggregate-text-color='PINK'] {
+  --aggregate-display-text-color: #86efac;
+}
+
+.household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-card[data-aggregate-text-color='SKY'] {
+  --aggregate-display-text-color: #7dd3fc;
+}
+
+.household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-card[data-aggregate-text-color='GOLD'] {
+  --aggregate-display-text-color: #fcd34d;
+}
+
+.household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-card[data-aggregate-text-color='PINK'] {
+  --aggregate-display-text-color: #f9a8d4;
+}
+
+:root[data-theme='toss'] .household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-card[data-aggregate-text-color='MINT'] {
+  --aggregate-display-text-color: #047857;
+}
+
+:root[data-theme='toss'] .household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-card[data-aggregate-text-color='SKY'] {
+  --aggregate-display-text-color: #0369a1;
+}
+
+:root[data-theme='toss'] .household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-card[data-aggregate-text-color='GOLD'] {
+  --aggregate-display-text-color: #a16207;
+}
+
+:root[data-theme='toss'] .household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-card[data-aggregate-text-color='PINK'] {
+  --aggregate-display-text-color: #be185d;
+}
+
+.household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-card[data-aggregate-text-color]:not([data-aggregate-text-color='DEFAULT']) .household-aggregate-card__eyebrow,
+.household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-card[data-aggregate-text-color]:not([data-aggregate-text-color='DEFAULT']) .household-aggregate-card__copy strong,
+.household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-card[data-aggregate-text-color]:not([data-aggregate-text-color='DEFAULT']) .household-aggregate-card__copy small,
+.household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-card[data-aggregate-text-color]:not([data-aggregate-text-color='DEFAULT']) .household-aggregate-card__meta,
+.household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-card[data-aggregate-text-color]:not([data-aggregate-text-color='DEFAULT']) .household-aggregate-goal__stats {
+  color: var(--aggregate-display-text-color) !important;
+}
+
+.household-aggregate-panel--editing .household-aggregate-text-settings {
+  border: 1px solid rgba(91, 214, 178, 0.28) !important;
+  border-radius: 8px !important;
+  display: grid !important;
+  gap: 6px !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  margin-top: 6px !important;
+  padding: 8px !important;
+}
+
+.household-aggregate-panel--editing .household-aggregate-text-settings__title {
+  color: var(--text) !important;
+  font-size: 0.75rem !important;
+  font-weight: 800 !important;
+  grid-column: 1 / -1;
+}
+
+.household-aggregate-panel--editing .household-aggregate-text-settings .household-aggregate-card__field {
+  min-width: 0 !important;
+}

@@ -218,6 +218,11 @@ export function updateAdminAiControl(payload) {
     body: JSON.stringify(payload),
   })
 }
+export function deleteAdminAiControlPresetSecret(presetKey) {
+  return request(`/admin/ops-control/ai/preset-secret?presetKey=${encodeURIComponent(presetKey)}`, {
+    method: 'DELETE',
+  })
+}
 export function updateAdminDataStorageControl(payload) {
   return request('/admin/ops-control/data-storage', {
     method: 'PATCH',

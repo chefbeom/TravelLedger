@@ -3,6 +3,7 @@ package com.playdata.calen.account.service;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.playdata.calen.account.dto.AdminAiControlResponse;
+import com.playdata.calen.account.security.AdminOpsSecretCipher;
 import com.playdata.calen.account.dto.AdminAiControlUpdateRequest;
 import com.playdata.calen.account.dto.AdminAiServerStatusResponse;
 import com.playdata.calen.account.dto.AdminDataServerStatusResponse;
@@ -14,9 +15,13 @@ import com.playdata.calen.common.config.MinioProperties;
 import com.playdata.calen.ledger.ai.LedgerAiAnalysisProperties;
 import com.playdata.calen.ledger.ai.LedgerAiProvider;
 import java.net.URI;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Optional;
 import jakarta.annotation.PostConstruct;
 import java.util.ArrayList;
 import java.util.List;
@@ -33,12 +38,17 @@ import org.springframework.web.client.RestClient;
 public class AdminOpsControlService {
 
     private static final String SETTINGS_TABLE = "admin_ops_control_settings";
+    private static final String AI_API_KEY_ENCRYPTED = "ai.api-key.encrypted";
+    private static final String AI_LMSTUDIO_API_KEY_ENCRYPTED = "ai.lmstudio-api-key.encrypted";
+    private static final String AI_OPENAI_API_KEY_ENCRYPTED = "ai.openai-api-key.encrypted";
+    private static final String AI_PRESET_SECRET_PREFIX = "ai.preset.";
 
     private final LedgerAiAnalysisProperties aiProperties;
     private final MinioProperties minioProperties;
     private final MinioBackupArchiveService minioBackupArchiveService;
     private final JdbcTemplate jdbcTemplate;
     private final ObjectMapper objectMapper;
+    private final AdminOpsSecretCipher adminOpsSecretCipher;
     private volatile String persistenceMessage = "설정 저장소 상태를 아직 확인하지 않았습니다.";
 
     @PostConstruct
@@ -81,11 +91,7 @@ public class AdminOpsControlService {
         if (request.apiKeyHeader() != null) {
             aiProperties.setApiKeyHeader(defaultText(request.apiKeyHeader(), "X-TravelLedger-AI-Key"));
         }
-        if (Boolean.TRUE.equals(request.clearApiKey())) {
-            aiProperties.setApiKey("");
-        } else if (request.apiKey() != null && hasText(request.apiKey())) {
-            aiProperties.setApiKey(request.apiKey().trim());
-        }
+
         if (request.lmStudioBaseUrl() != null) {
             aiProperties.setLmStudioBaseUrl(requireHttpUrl(request.lmStudioBaseUrl(), "LM Studio URL"));
         }
@@ -95,11 +101,7 @@ public class AdminOpsControlService {
         if (request.lmStudioModelsPath() != null) {
             aiProperties.setLmStudioModelsPath(normalizePath(request.lmStudioModelsPath(), "models path"));
         }
-        if (Boolean.TRUE.equals(request.clearLmStudioApiKey())) {
-            aiProperties.setLmStudioApiKey("");
-        } else if (request.lmStudioApiKey() != null && hasText(request.lmStudioApiKey())) {
-            aiProperties.setLmStudioApiKey(request.lmStudioApiKey().trim());
-        }
+
         if (request.openAiBaseUrl() != null) {
             aiProperties.setOpenAiBaseUrl(requireHttpUrl(request.openAiBaseUrl(), "OpenAI API URL"));
         }
@@ -109,11 +111,8 @@ public class AdminOpsControlService {
         if (request.openAiModelsPath() != null) {
             aiProperties.setOpenAiModelsPath(normalizePath(request.openAiModelsPath(), "OpenAI models path"));
         }
-        if (Boolean.TRUE.equals(request.clearOpenAiApiKey())) {
-            aiProperties.setOpenAiApiKey("");
-        } else if (request.openAiApiKey() != null && hasText(request.openAiApiKey())) {
-            aiProperties.setOpenAiApiKey(request.openAiApiKey().trim());
-        }
+        applyAiSecrets(request);
+
         if (request.temperature() != null) {
             double value = request.temperature();
             if (value < 0D || value > 2D) {
@@ -140,7 +139,7 @@ public class AdminOpsControlService {
         if (request.allowedProviderHosts() != null) {
             aiProperties.setAllowedProviderHosts(request.allowedProviderHosts().trim());
         }
-        persistRuntimeSettings();
+        persistRuntimeSettings(request.presetKey());
         return getSnapshot();
     }
 
@@ -161,6 +160,121 @@ public class AdminOpsControlService {
         return getSnapshot();
     }
 
+    private void applyAiSecrets(AdminAiControlUpdateRequest request) {
+        String presetKey = normalizePresetKey(request.presetKey());
+        applySecret(request.clearApiKey(), request.apiKey(), request.reuseExistingSecrets(), presetKey, "api-key", aiProperties::setApiKey);
+        applySecret(request.clearLmStudioApiKey(), request.lmStudioApiKey(), request.reuseExistingSecrets(), presetKey, "lmstudio-api-key", aiProperties::setLmStudioApiKey);
+        applySecret(request.clearOpenAiApiKey(), request.openAiApiKey(), request.reuseExistingSecrets(), presetKey, "openai-api-key", aiProperties::setOpenAiApiKey);
+    }
+
+    private void applySecret(
+            Boolean clearRequested,
+            String suppliedValue,
+            Boolean reuseExistingSecret,
+            String presetKey,
+            String secretType,
+            java.util.function.Consumer<String> setter
+    ) {
+        if (Boolean.TRUE.equals(clearRequested)) {
+            setter.accept("");
+            return;
+        }
+        if (hasText(suppliedValue)) {
+            setter.accept(suppliedValue.trim());
+            return;
+        }
+        if (Boolean.TRUE.equals(reuseExistingSecret)) {
+            return;
+        }
+        if (presetKey != null) {
+            setter.accept(readPresetSecret(presetKey, secretType).orElse(""));
+        }
+    }
+
+    private Optional<String> readPresetSecret(String presetKey, String secretType) {
+        return readEncryptedSetting(presetSecretSettingKey(presetKey, secretType));
+    }
+
+    private void persistPresetSecrets(String rawPresetKey) {
+        String presetKey = normalizePresetKey(rawPresetKey);
+        if (presetKey == null) {
+            return;
+        }
+        persistEncryptedSetting(presetSecretSettingKey(presetKey, "api-key"), aiProperties.getApiKey());
+        persistEncryptedSetting(presetSecretSettingKey(presetKey, "lmstudio-api-key"), aiProperties.getLmStudioApiKey());
+        persistEncryptedSetting(presetSecretSettingKey(presetKey, "openai-api-key"), aiProperties.getOpenAiApiKey());
+    }
+
+    public void deletePresetSecrets(String rawPresetKey) {
+        String presetKey = normalizePresetKey(rawPresetKey);
+        if (presetKey == null) {
+            return;
+        }
+        deleteSetting(presetSecretSettingKey(presetKey, "api-key"));
+        deleteSetting(presetSecretSettingKey(presetKey, "lmstudio-api-key"));
+        deleteSetting(presetSecretSettingKey(presetKey, "openai-api-key"));
+    }
+
+    private void restoreEncryptedSetting(Map<String, String> settings, String settingKey, java.util.function.Consumer<String> setter) {
+        String encrypted = settings.get(settingKey);
+        if (encrypted == null || encrypted.isBlank()) {
+            return;
+        }
+        adminOpsSecretCipher.decrypt(encrypted).ifPresent(setter);
+    }
+
+    private Optional<String> readEncryptedSetting(String settingKey) {
+        try {
+            String encrypted = jdbcTemplate.query(
+                    "select setting_value from " + SETTINGS_TABLE + " where setting_key = ?",
+                    resultSet -> resultSet.next() ? resultSet.getString(1) : null,
+                    settingKey
+            );
+            return adminOpsSecretCipher.decrypt(encrypted);
+        } catch (RuntimeException exception) {
+            return Optional.empty();
+        }
+    }
+
+    private void persistEncryptedSetting(String settingKey, String plaintext) {
+        if (!hasText(plaintext)) {
+            deleteSetting(settingKey);
+            return;
+        }
+        persistSetting(settingKey, adminOpsSecretCipher.encrypt(plaintext.trim()));
+    }
+
+    private void deleteSetting(String settingKey) {
+        jdbcTemplate.update("delete from " + SETTINGS_TABLE + " where setting_key = ?", settingKey);
+    }
+
+    private String normalizePresetKey(String value) {
+        if (!hasText(value)) {
+            return null;
+        }
+        String normalized = value.trim();
+        if (normalized.length() > 2048) {
+            throw new BadRequestException("AI server preset key is too long.");
+        }
+        return normalized;
+    }
+
+    private String presetSecretSettingKey(String presetKey, String secretType) {
+        return AI_PRESET_SECRET_PREFIX + sha256(presetKey) + "." + secretType;
+    }
+
+    private String sha256(String value) {
+        try {
+            byte[] digest = MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8));
+            StringBuilder result = new StringBuilder(digest.length * 2);
+            for (byte item : digest) {
+                result.append(String.format("%02x", item));
+            }
+            return result.toString();
+        } catch (NoSuchAlgorithmException exception) {
+            throw new IllegalStateException("SHA-256 is unavailable.", exception);
+        }
+    }
     private AdminAiControlResponse aiControl() {
         return new AdminAiControlResponse(
                 aiProperties.isEnabled(),
@@ -349,10 +463,17 @@ public class AdminOpsControlService {
         applyDurationSeconds(settings, "ai.read-timeout-seconds", aiProperties::setReadTimeout);
         applyBoolean(settings, "ai.enforce-provider-url-allowlist", aiProperties::setEnforceProviderUrlAllowlist);
         applyText(settings, "ai.allowed-provider-hosts", aiProperties::setAllowedProviderHosts);
+        restoreEncryptedSetting(settings, AI_API_KEY_ENCRYPTED, aiProperties::setApiKey);
+        restoreEncryptedSetting(settings, AI_LMSTUDIO_API_KEY_ENCRYPTED, aiProperties::setLmStudioApiKey);
+        restoreEncryptedSetting(settings, AI_OPENAI_API_KEY_ENCRYPTED, aiProperties::setOpenAiApiKey);
         applyLong(settings, "minio.storage-capacity-bytes", minioProperties::setStorageCapacityBytes);
     }
 
     private void persistRuntimeSettings() {
+        persistRuntimeSettings(null);
+    }
+
+    private void persistRuntimeSettings(String presetKey) {
         try {
             persistSetting("ai.enabled", Boolean.toString(aiProperties.isEnabled()));
             persistSetting("ai.provider", aiProperties.getProvider());
@@ -371,6 +492,10 @@ public class AdminOpsControlService {
             persistSetting("ai.read-timeout-seconds", Long.toString(aiProperties.getReadTimeout().toSeconds()));
             persistSetting("ai.enforce-provider-url-allowlist", Boolean.toString(aiProperties.isEnforceProviderUrlAllowlist()));
             persistSetting("ai.allowed-provider-hosts", aiProperties.getAllowedProviderHosts());
+            persistEncryptedSetting(AI_API_KEY_ENCRYPTED, aiProperties.getApiKey());
+            persistEncryptedSetting(AI_LMSTUDIO_API_KEY_ENCRYPTED, aiProperties.getLmStudioApiKey());
+            persistEncryptedSetting(AI_OPENAI_API_KEY_ENCRYPTED, aiProperties.getOpenAiApiKey());
+            persistPresetSecrets(presetKey);
             persistSetting("minio.storage-capacity-bytes", Long.toString(minioProperties.getStorageCapacityBytes()));
             persistenceMessage = "설정이 저장되었습니다.";
         } catch (RuntimeException exception) {

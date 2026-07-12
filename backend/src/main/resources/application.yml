@@ -73,6 +73,7 @@ app:
   security:
     remember-me-key: ${JWT_KEY:}
     session-seal-key: ${SESSION_SEAL_KEY:${JWT_KEY:}}
+    ops-control-seal-key: ${OPS_CONTROL_SEAL_KEY:${JWT_KEY:}}
     public-media-key: ${PUBLIC_MEDIA_KEY:${JWT_KEY:}}
     remember-me-token-validity-seconds: 2592000
     remember-me-secure-cookie: ${REMEMBER_ME_SECURE_COOKIE:true}

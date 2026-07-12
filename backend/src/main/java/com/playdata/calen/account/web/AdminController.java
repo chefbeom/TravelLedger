@@ -109,6 +109,15 @@ public class AdminController {
         return response;
     }
 
+    @DeleteMapping("/ops-control/ai/preset-secret")
+    public void deleteAiPresetSecret(
+            @AuthenticationPrincipal AppUserPrincipal currentUser,
+            HttpServletRequest httpRequest,
+            @RequestParam String presetKey
+    ) {
+        adminOpsControlService.deletePresetSecrets(presetKey);
+        recordAdminAction(currentUser, httpRequest, "AI_CONTROL_PRESET_SECRET_DELETE");
+    }
     @PatchMapping("/ops-control/data-storage")
     public AdminOpsControlResponse updateDataStorageControl(
             @AuthenticationPrincipal AppUserPrincipal currentUser,

@@ -6,6 +6,7 @@ import {
   archiveAdminSupportInquiry,
   createAdminDataBackup,
   createAdminMinioBackup,
+  deleteAdminAiControlPresetSecret,
   createInvite,
   downloadAdminDataBackup,
   deleteAdminSupportInquiry,
@@ -73,6 +74,7 @@ const state = reactive({
   activeAdminPanel: '',
   aiControlPresets: [],
   aiControlPresetKey: '',
+  aiControlPreserveCurrentSecret: false,
   aiServerStatusOpen: false,
   aiServerEditorOpen: false,
   loadingOpsControl: false,
@@ -338,6 +340,7 @@ function selectOpsControlModalView(view) {
 }
 
 function startAiServerAdd() {
+  state.aiControlPreserveCurrentSecret = false
   state.aiServerDraftName = buildCurrentAiServerName()
   selectOpsControlModalView('add')
 }
@@ -390,6 +393,7 @@ function addAllowedProviderHost(host) {
 }
 
 function handleAiProviderChange() {
+  state.aiControlPreserveCurrentSecret = false
   if (state.aiControlForm.provider !== 'openai') {
     return
   }
@@ -430,25 +434,32 @@ function applyAiControlPresetByKey(key) {
   state.opsControlMessage = '선택한 서버 설정을 편집 화면으로 불러왔습니다. 필요한 내용을 확인한 뒤 저장하세요.'
 }
 
-function deleteAiControlPreset(key) {
+async function deleteAiControlPreset(key) {
   const preset = state.aiControlPresets.find((item) => item.key === key)
   if (!preset) {
     return
   }
 
   const title = preset.title || preset.model || 'AI 서버'
-  if (!window.confirm(`"${title}" 서버 프리셋을 목록에서 삭제할까요?\n현재 적용 중인 AI 서버 설정은 변경되지 않습니다.`)) {
+  if (!window.confirm('"' + title + '" 서버 프리셋과 암호화된 API 키를 삭제할까요?\n현재 적용 중인 AI 서버 설정은 변경되지 않습니다.')) {
     return
   }
 
-  state.aiControlPresets = state.aiControlPresets.filter((item) => item.key !== key)
-  if (state.aiControlPresetKey === key) {
-    state.aiControlPresetKey = ''
+  state.opsControlError = ''
+  try {
+    await deleteAdminAiControlPresetSecret(key)
+    state.aiControlPresets = state.aiControlPresets.filter((item) => item.key !== key)
+    if (state.aiControlPresetKey === key) {
+      state.aiControlPresetKey = ''
+    }
+    persistAiControlPresets()
+    state.opsControlMessage = '서버 프리셋과 서버에 암호화 저장된 API 키를 삭제했습니다.'
+  } catch (error) {
+    if (!handleAdminAccessRequired(error)) {
+      state.opsControlError = error.message || '서버 프리셋의 암호화 API 키를 삭제하지 못했습니다.'
+    }
   }
-  persistAiControlPresets()
-  state.opsControlMessage = '서버 프리셋을 목록에서 삭제했습니다.'
 }
-
 function syncSelection(preferredId = state.selectedSupportInquiryId) {
   state.supportPages.pending = clampPage(state.supportPages.pending, pendingSupportInquiries.value.length)
   state.supportPages.processing = clampPage(state.supportPages.processing, processingSupportInquiries.value.length)
@@ -838,6 +849,7 @@ function aiControlPresetKeyFor(preset) {
   return [
     preset.provider,
     preset.model,
+    preset.workflowUrl,
     preset.lmStudioBaseUrl,
     preset.lmStudioChatPath,
     preset.lmStudioModelsPath,
@@ -847,10 +859,52 @@ function aiControlPresetKeyFor(preset) {
   ].join('|')
 }
 
+function providerCredentialConfigured(source = state.aiControlForm) {
+  if (source.provider === 'openai') {
+    return Boolean(source.openAiApiKeyConfigured)
+  }
+  if (source.provider === 'n8n') {
+    return Boolean(source.apiKeyConfigured)
+  }
+  return Boolean(source.lmStudioApiKeyConfigured)
+}
+
+function buildAiControlPreset(source = state.aiControlForm) {
+  if (!hasAiServerAddress(source)) {
+    return null
+  }
+
+  const preset = {
+    title: state.aiServerDraftName || source.title || buildCurrentAiServerName(),
+    provider: source.provider || 'lmstudio',
+    model: source.model || 'auto',
+    workflowUrl: source.workflowUrl || '',
+    lmStudioBaseUrl: source.lmStudioBaseUrl || '',
+    lmStudioChatPath: source.lmStudioChatPath || '/v1/chat/completions',
+    lmStudioModelsPath: source.lmStudioModelsPath || '/v1/models',
+    openAiBaseUrl: source.openAiBaseUrl || 'https://api.openai.com',
+    openAiChatPath: source.openAiChatPath || '/v1/chat/completions',
+    openAiModelsPath: source.openAiModelsPath || '/v1/models',
+    credentialConfigured: providerCredentialConfigured(source),
+    savedAt: new Date().toISOString(),
+  }
+  preset.key = aiControlPresetKeyFor(preset)
+  return preset
+}
+
 function readAiControlPresets() {
   try {
     const parsed = JSON.parse(localStorage.getItem(AI_CONTROL_PRESETS_STORAGE_KEY) || '[]')
-    return Array.isArray(parsed) ? parsed.filter((item) => item && item.key && aiControlPresetAddress(item)).slice(0, 12) : []
+    return Array.isArray(parsed)
+      ? parsed
+          .filter((item) => item && aiControlPresetAddress(item))
+          .map((item) => ({
+            ...item,
+            key: aiControlPresetKeyFor(item),
+            credentialConfigured: Boolean(item.credentialConfigured),
+          }))
+          .slice(0, 12)
+      : []
   } catch {
     return []
   }
@@ -865,28 +919,31 @@ function loadAiControlPresets() {
 }
 
 function rememberAiControlPreset(source = state.aiControlForm) {
-  if (!isOpenAiCompatibleProvider(source.provider) || !hasAiServerAddress(source)) {
+  const preset = buildAiControlPreset(source)
+  if (!preset) {
     return
   }
-  const preset = {
-    title: state.aiServerDraftName || source.title || buildCurrentAiServerName(),
-    provider: source.provider || 'lmstudio',
-    model: source.model || 'auto',
-    lmStudioBaseUrl: source.lmStudioBaseUrl,
-    lmStudioChatPath: source.lmStudioChatPath || '/v1/chat/completions',
-    lmStudioModelsPath: source.lmStudioModelsPath || '/v1/models',
-    openAiBaseUrl: source.openAiBaseUrl || 'https://api.openai.com',
-    openAiChatPath: source.openAiChatPath || '/v1/chat/completions',
-    openAiModelsPath: source.openAiModelsPath || '/v1/models',
-    savedAt: new Date().toISOString(),
-  }
-  preset.key = aiControlPresetKeyFor(preset)
   state.aiControlPresets = [preset, ...state.aiControlPresets.filter((item) => item.key !== preset.key)].slice(0, 12)
   state.aiControlPresetKey = preset.key
   persistAiControlPresets()
 }
 
+function activeAiControlPresetKey() {
+  return buildAiControlPreset(state.aiControlForm)?.key || ''
+}
 
+function isAiControlPresetActive(preset) {
+  return Boolean(preset?.key && preset.key === activeAiControlPresetKey())
+}
+
+function activeAiControlPresetTitle() {
+  const preset = state.aiControlPresets.find((item) => isAiControlPresetActive(item))
+  return preset?.title || preset?.model || ''
+}
+
+function isPresetCredentialConfigured(preset) {
+  return Boolean(preset?.credentialConfigured)
+}
 function toggleAiServerStatusPanel() {
   state.aiServerStatusOpen = !state.aiServerStatusOpen
 }
@@ -922,8 +979,12 @@ function applyAiControlPreset() {
   if (!preset) {
     return
   }
+  const reuseCurrentSecret = isAiControlPresetActive(preset) && providerCredentialConfigured(state.aiControlForm)
+  const credentialConfigured = isPresetCredentialConfigured(preset) || reuseCurrentSecret
+  state.aiControlPreserveCurrentSecret = reuseCurrentSecret
   state.aiControlForm.provider = preset.provider || 'lmstudio'
   state.aiControlForm.model = preset.model || 'auto'
+  state.aiControlForm.workflowUrl = preset.workflowUrl || ''
   state.aiControlForm.lmStudioBaseUrl = preset.lmStudioBaseUrl || ''
   state.aiControlForm.lmStudioChatPath = preset.lmStudioChatPath || '/v1/chat/completions'
   state.aiControlForm.lmStudioModelsPath = preset.lmStudioModelsPath || '/v1/models'
@@ -933,6 +994,9 @@ function applyAiControlPreset() {
   state.aiControlForm.apiKey = ''
   state.aiControlForm.lmStudioApiKey = ''
   state.aiControlForm.openAiApiKey = ''
+  state.aiControlForm.apiKeyConfigured = preset.provider === 'n8n' && credentialConfigured
+  state.aiControlForm.lmStudioApiKeyConfigured = preset.provider === 'lmstudio' && credentialConfigured
+  state.aiControlForm.openAiApiKeyConfigured = preset.provider === 'openai' && credentialConfigured
   state.aiControlForm.clearApiKey = false
   state.aiControlForm.clearLmStudioApiKey = false
   state.aiControlForm.clearOpenAiApiKey = false
@@ -1022,6 +1086,7 @@ async function handleSaveAiControl() {
   state.opsControlMessage = ''
 
   try {
+    const pendingPreset = buildAiControlPreset()
     const payload = {
       enabled: Boolean(state.aiControlForm.enabled),
       provider: state.aiControlForm.provider,
@@ -1040,6 +1105,8 @@ async function handleSaveAiControl() {
       readTimeoutSeconds: Number(state.aiControlForm.readTimeoutSeconds),
       enforceProviderUrlAllowlist: Boolean(state.aiControlForm.enforceProviderUrlAllowlist),
       allowedProviderHosts: state.aiControlForm.allowedProviderHosts,
+      presetKey: pendingPreset?.key || undefined,
+      reuseExistingSecrets: Boolean(state.aiControlPreserveCurrentSecret),
     }
     if (state.aiControlForm.clearApiKey) {
       payload.clearApiKey = true
@@ -1060,6 +1127,7 @@ async function handleSaveAiControl() {
     syncAiControlForm()
     syncDataControlForm()
     markOpsControlChecked()
+    state.aiControlPreserveCurrentSecret = false
     rememberAiControlPreset()
     state.opsControlMessage = 'AI 설정이 적용되었습니다. 설정 저장소 상태를 확인하세요.'
   } catch (error) {
@@ -1699,6 +1767,7 @@ onBeforeUnmount(() => {
                 <span>현재 적용 서버</span>
                 <strong>{{ currentAiProviderLabel() }} · {{ state.aiControlForm.model || 'auto' }}</strong>
                 <small>{{ currentAiServerAddress() }}</small>
+                <small v-if="activeAiControlPresetTitle()" class="admin-ops-current-server__preset">{{ activeAiControlPresetTitle() }} 설정 사용 중</small>
                 <label class="field field--inline admin-ai-enable-row">
                   <input v-model="state.aiControlForm.enabled" type="checkbox" />
                   <span class="field__label">AI 분석 사용</span>
@@ -1709,11 +1778,15 @@ onBeforeUnmount(() => {
                 <article v-if="!state.aiControlPresets.length" class="admin-ops-server-row admin-ops-server-row--empty">
                   <strong>저장된 서버 프리셋이 없습니다.</strong>
                 </article>
-                <article v-for="preset in state.aiControlPresets" :key="preset.key" class="admin-ops-server-row">
+                <article v-for="preset in state.aiControlPresets" :key="preset.key" class="admin-ops-server-row" :class="{ 'is-active': isAiControlPresetActive(preset) }">
                   <div>
-                    <strong>{{ preset.title || preset.model || 'AI 서버' }}</strong>
+                    <strong>
+                      {{ preset.title || preset.model || 'AI 서버' }}
+                      <span v-if="isAiControlPresetActive(preset)" class="admin-ops-server-row__active">현재 사용 중</span>
+                    </strong>
                     <span>{{ preset.provider || 'lmstudio' }} · {{ preset.model || 'auto' }}</span>
-                    <small>{{ preset.lmStudioBaseUrl || preset.workflowUrl || '-' }}</small>
+                    <small>{{ aiControlPresetAddress(preset) || '-' }}</small>
+                    <small>{{ isPresetCredentialConfigured(preset) ? 'API 키 암호화 저장됨' : 'API 키 미저장' }}</small>
                   </div>
                   <div class="admin-ops-server-row__actions">
                     <button class="button button--ghost" type="button" @click="applyAiControlPresetByKey(preset.key)">불러오기</button>
@@ -1791,6 +1864,7 @@ onBeforeUnmount(() => {
                     <label class="field admin-ai-field-grid__wide">
                       <span class="field__label">LM Studio API key</span>
                       <input v-model="state.aiControlForm.lmStudioApiKey" type="password" autocomplete="new-password" :disabled="state.aiControlForm.clearLmStudioApiKey" :placeholder="state.aiControlForm.lmStudioApiKeyConfigured ? '설정됨 - 변경할 때만 입력' : '미설정'" />
+                      <small v-if="state.aiControlForm.lmStudioApiKeyConfigured" class="admin-ai-secret-status">서버에 암호화 저장됨. 다시 입력하지 않아도 저장 시 재사용됩니다.</small>
                     </label>
                     <label class="field field--inline admin-ai-field-grid__wide">
                       <input v-model="state.aiControlForm.clearLmStudioApiKey" type="checkbox" />
@@ -1809,6 +1883,7 @@ onBeforeUnmount(() => {
                     <label class="field admin-ai-field-grid__wide">
                       <span class="field__label">OpenAI API key</span>
                       <input v-model="state.aiControlForm.openAiApiKey" type="password" autocomplete="new-password" :disabled="state.aiControlForm.clearOpenAiApiKey" :placeholder="state.aiControlForm.openAiApiKeyConfigured ? '설정됨 - 변경할 때만 입력' : '필수 입력'" />
+                      <small v-if="state.aiControlForm.openAiApiKeyConfigured" class="admin-ai-secret-status">서버에 암호화 저장됨. 다시 입력하지 않아도 저장 시 재사용됩니다.</small>
                     </label>
                     <label class="field field--inline admin-ai-field-grid__wide">
                       <input v-model="state.aiControlForm.clearOpenAiApiKey" type="checkbox" />
@@ -1827,6 +1902,7 @@ onBeforeUnmount(() => {
                     <label class="field">
                       <span class="field__label">n8n API key</span>
                       <input v-model="state.aiControlForm.apiKey" type="password" autocomplete="new-password" :disabled="state.aiControlForm.clearApiKey" :placeholder="state.aiControlForm.apiKeyConfigured ? '설정됨 - 변경할 때만 입력' : '미설정'" />
+                      <small v-if="state.aiControlForm.apiKeyConfigured" class="admin-ai-secret-status">서버에 암호화 저장됨. 다시 입력하지 않아도 저장 시 재사용됩니다.</small>
                     </label>
                     <label class="field field--inline admin-ai-field-grid__wide">
                       <input v-model="state.aiControlForm.clearApiKey" type="checkbox" />
@@ -2403,6 +2479,7 @@ onBeforeUnmount(() => {
               <label class="field admin-ai-field-grid__wide">
                 <span class="field__label">LM Studio API key 변경</span>
                 <input v-model="state.aiControlForm.lmStudioApiKey" type="password" autocomplete="new-password" :disabled="state.aiControlForm.clearLmStudioApiKey" :placeholder="state.aiControlForm.lmStudioApiKeyConfigured ? '설정됨 - 변경할 때만 입력' : '미설정'" />
+                      <small v-if="state.aiControlForm.lmStudioApiKeyConfigured" class="admin-ai-secret-status">서버에 암호화 저장됨. 다시 입력하지 않아도 저장 시 재사용됩니다.</small>
               </label>
               <template v-if="state.aiControlForm.provider === 'openai'">
                 <label class="field admin-ai-field-grid__wide">
@@ -2420,6 +2497,7 @@ onBeforeUnmount(() => {
                 <label class="field admin-ai-field-grid__wide">
                   <span class="field__label">OpenAI API key 변경</span>
                   <input v-model="state.aiControlForm.openAiApiKey" type="password" autocomplete="new-password" :disabled="state.aiControlForm.clearOpenAiApiKey" :placeholder="state.aiControlForm.openAiApiKeyConfigured ? '설정됨 - 변경할 때만 입력' : '필수 입력'" />
+                      <small v-if="state.aiControlForm.openAiApiKeyConfigured" class="admin-ai-secret-status">서버에 암호화 저장됨. 다시 입력하지 않아도 저장 시 재사용됩니다.</small>
                 </label>
                 <label class="field field--inline admin-ai-field-grid__wide">
                   <input v-model="state.aiControlForm.clearOpenAiApiKey" type="checkbox" />
@@ -2441,6 +2519,7 @@ onBeforeUnmount(() => {
               <label class="field">
                 <span class="field__label">n8n API key 변경</span>
                 <input v-model="state.aiControlForm.apiKey" type="password" autocomplete="new-password" :disabled="state.aiControlForm.clearApiKey" :placeholder="state.aiControlForm.apiKeyConfigured ? '설정됨 - 변경할 때만 입력' : '미설정'" />
+                      <small v-if="state.aiControlForm.apiKeyConfigured" class="admin-ai-secret-status">서버에 암호화 저장됨. 다시 입력하지 않아도 저장 시 재사용됩니다.</small>
               </label>
               <label class="field field--inline admin-ai-field-grid__wide">
                 <input v-model="state.aiControlForm.clearApiKey" type="checkbox" />

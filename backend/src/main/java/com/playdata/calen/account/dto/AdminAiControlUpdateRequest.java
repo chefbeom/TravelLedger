@@ -23,6 +23,8 @@ public record AdminAiControlUpdateRequest(
         Long connectTimeoutSeconds,
         Long readTimeoutSeconds,
         Boolean enforceProviderUrlAllowlist,
-        String allowedProviderHosts
+        String allowedProviderHosts,
+        String presetKey,
+        Boolean reuseExistingSecrets
 ) {
 }

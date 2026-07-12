@@ -32596,3 +32596,38 @@ button.button--primary,
   color: var(--modal-text) !important;
   box-shadow: var(--modal-shadow) !important;
 }
+/* Saved AI server presets expose status without revealing credential values. */
+.admin-ops-server-row.is-active {
+  border-color: var(--brand-strong);
+  background: var(--brand-soft);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--brand-strong) 28%, transparent);
+}
+
+.admin-ops-current-server__preset,
+.admin-ops-server-row__active,
+.admin-ai-secret-status {
+  color: var(--brand-readable-strong) !important;
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.admin-ops-server-row__active {
+  display: inline-flex;
+  width: fit-content;
+  margin-left: 8px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: var(--brand-soft);
+  border: 1px solid color-mix(in srgb, var(--brand-strong) 42%, transparent);
+}
+
+:root[data-theme='toss'] .admin-ops-server-row.is-active {
+  background: rgba(16, 185, 129, 0.15);
+  border-color: rgba(110, 231, 183, 0.7);
+}
+
+:root[data-theme='toss'] .admin-ops-current-server__preset,
+:root[data-theme='toss'] .admin-ops-server-row__active,
+:root[data-theme='toss'] .admin-ai-secret-status {
+  color: #a7f3d0 !important;
+}

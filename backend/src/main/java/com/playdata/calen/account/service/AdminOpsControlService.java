@@ -3,6 +3,7 @@ package com.playdata.calen.account.service;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.playdata.calen.account.dto.AdminAiControlResponse;
+import com.playdata.calen.account.dto.AdminAiFeatureConfigResponse;
 import com.playdata.calen.account.security.AdminOpsSecretCipher;
 import com.playdata.calen.account.dto.AdminAiControlUpdateRequest;
 import com.playdata.calen.account.dto.AdminAiServerStatusResponse;
@@ -14,6 +15,9 @@ import com.playdata.calen.common.exception.BadRequestException;
 import com.playdata.calen.common.config.MinioProperties;
 import com.playdata.calen.ledger.ai.LedgerAiAnalysisProperties;
 import com.playdata.calen.ledger.ai.LedgerAiProvider;
+import com.playdata.calen.ledger.ai.LedgerAiFeature;
+import com.playdata.calen.ledger.ai.LedgerAiFeatureConfig;
+import com.playdata.calen.ledger.ai.LedgerAiFeatureSettings;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -75,6 +79,9 @@ public class AdminOpsControlService {
     public AdminOpsControlResponse updateAi(AdminAiControlUpdateRequest request) {
         if (request == null) {
             throw new BadRequestException("AI control request is empty.");
+        }
+        if (hasText(request.targetFeature())) {
+            return updateFeatureAi(request, LedgerAiFeature.from(request.targetFeature()));
         }
         if (request.enabled() != null) {
             aiProperties.setEnabled(request.enabled());
@@ -143,6 +150,127 @@ public class AdminOpsControlService {
         return getSnapshot();
     }
 
+    private AdminOpsControlResponse updateFeatureAi(AdminAiControlUpdateRequest request, LedgerAiFeature feature) {
+        if (request.enabled() != null) {
+            aiProperties.setEnabled(request.enabled());
+        }
+        applySharedAiSafetySettings(request);
+        LedgerAiProvider provider = normalizeFeatureProvider(request.provider());
+        LedgerAiFeatureSettings settings = feature == LedgerAiFeature.IMAGE_ANALYSIS
+                ? aiProperties.getImage() : aiProperties.getLedger();
+        settings.setProvider(provider.name().toLowerCase(java.util.Locale.ROOT));
+        if (request.model() != null) {
+            settings.setModel(request.model().trim());
+        }
+        String baseUrl = featureBaseUrl(request, provider);
+        if (baseUrl != null) {
+            settings.setBaseUrl(requireHttpUrl(baseUrl, providerLabel(provider) + " URL"));
+        }
+        String chatPath = featureChatPath(request, provider);
+        if (chatPath != null) {
+            settings.setChatPath(normalizePath(chatPath, "chat path"));
+        }
+        String modelsPath = featureModelsPath(request, provider);
+        if (modelsPath != null) {
+            settings.setModelsPath(normalizePath(modelsPath, "models path"));
+        }
+        if (request.temperature() != null) {
+            double value = request.temperature();
+            if (value < 0D || value > 2D) {
+                throw new BadRequestException("temperature must be between 0 and 2.");
+            }
+            settings.setTemperature(value);
+        }
+        if (request.maxTokens() != null) {
+            int value = request.maxTokens();
+            if (value < 128 || value > 8192) {
+                throw new BadRequestException("max tokens must be between 128 and 8192.");
+            }
+            settings.setMaxTokens(value);
+        }
+        applyFeatureSecret(request, provider, settings);
+        persistRuntimeSettings(request.presetKey());
+        return getSnapshot();
+    }
+
+    private void applySharedAiSafetySettings(AdminAiControlUpdateRequest request) {
+        if (request.connectTimeoutSeconds() != null) {
+            aiProperties.setConnectTimeout(seconds(request.connectTimeoutSeconds(), "connection timeout"));
+        }
+        if (request.readTimeoutSeconds() != null) {
+            aiProperties.setReadTimeout(seconds(request.readTimeoutSeconds(), "response timeout"));
+        }
+        if (request.enforceProviderUrlAllowlist() != null) {
+            aiProperties.setEnforceProviderUrlAllowlist(request.enforceProviderUrlAllowlist());
+        }
+        if (request.allowedProviderHosts() != null) {
+            aiProperties.setAllowedProviderHosts(request.allowedProviderHosts().trim());
+        }
+    }
+
+    private LedgerAiProvider normalizeFeatureProvider(String value) {
+        LedgerAiProvider provider = LedgerAiProvider.from(value);
+        if (provider == LedgerAiProvider.N8N) {
+            throw new BadRequestException("AI feature provider must be OpenAI API, LM Studio, or Ollama.");
+        }
+        return provider;
+    }
+
+    private String featureBaseUrl(AdminAiControlUpdateRequest request, LedgerAiProvider provider) {
+        return switch (provider) {
+            case OPENAI -> request.openAiBaseUrl();
+            case LMSTUDIO -> request.lmStudioBaseUrl();
+            case OLLAMA -> request.ollamaBaseUrl();
+            case N8N -> null;
+        };
+    }
+
+    private String featureChatPath(AdminAiControlUpdateRequest request, LedgerAiProvider provider) {
+        return switch (provider) {
+            case OPENAI -> request.openAiChatPath();
+            case LMSTUDIO -> request.lmStudioChatPath();
+            case OLLAMA -> request.ollamaChatPath();
+            case N8N -> null;
+        };
+    }
+
+    private String featureModelsPath(AdminAiControlUpdateRequest request, LedgerAiProvider provider) {
+        return switch (provider) {
+            case OPENAI -> request.openAiModelsPath();
+            case LMSTUDIO -> request.lmStudioModelsPath();
+            case OLLAMA -> request.ollamaModelsPath();
+            case N8N -> null;
+        };
+    }
+
+    private void applyFeatureSecret(AdminAiControlUpdateRequest request, LedgerAiProvider provider, LedgerAiFeatureSettings settings) {
+        Boolean clear = switch (provider) {
+            case OPENAI -> request.clearOpenAiApiKey();
+            case LMSTUDIO -> request.clearLmStudioApiKey();
+            case OLLAMA -> request.clearOllamaApiKey();
+            case N8N -> false;
+        };
+        String supplied = switch (provider) {
+            case OPENAI -> request.openAiApiKey();
+            case LMSTUDIO -> request.lmStudioApiKey();
+            case OLLAMA -> request.ollamaApiKey();
+            case N8N -> "";
+        };
+        if (Boolean.TRUE.equals(clear)) {
+            settings.setApiKey("");
+        } else if (hasText(supplied)) {
+            settings.setApiKey(supplied.trim());
+        }
+    }
+
+    private String providerLabel(LedgerAiProvider provider) {
+        return switch (provider) {
+            case OPENAI -> "OpenAI API";
+            case LMSTUDIO -> "LM Studio";
+            case OLLAMA -> "Ollama";
+            case N8N -> "n8n";
+        };
+    }
     @Transactional
     public AdminOpsControlResponse updateDataStorage(AdminDataStorageControlUpdateRequest request) {
         if (request == null || request.minioStorageCapacityBytes() == null) {
@@ -298,26 +426,47 @@ public class AdminOpsControlService {
                 aiProperties.isEnforceProviderUrlAllowlist(),
                 aiProperties.getAllowedProviderHosts(),
                 aiProperties.isConfigured(),
-                aiProperties.statusMessage()
+                aiProperties.statusMessage(),
+                featureAiControl(LedgerAiFeature.LEDGER_ANALYSIS),
+                featureAiControl(LedgerAiFeature.IMAGE_ANALYSIS)
+        );
+    }
+
+    private AdminAiFeatureConfigResponse featureAiControl(LedgerAiFeature feature) {
+        LedgerAiFeatureConfig config = aiProperties.featureConfig(feature);
+        boolean configured = aiProperties.isFeatureConfigured(feature);
+        String featureLabel = feature == LedgerAiFeature.IMAGE_ANALYSIS ? "이미지 분석" : "가계부 AI 분석";
+        String message = configured
+                ? featureLabel + " 서버 설정이 준비되었습니다."
+                : featureLabel + " 서버의 주소, 모델, API 키(필요한 경우)를 확인하세요.";
+        return new AdminAiFeatureConfigResponse(
+                feature.settingKey(),
+                config.provider().name().toLowerCase(java.util.Locale.ROOT),
+                config.model(),
+                config.baseUrl(),
+                config.chatPath(),
+                config.modelsPath(),
+                hasText(config.apiKey()),
+                config.temperature(),
+                config.maxTokens(),
+                configured,
+                message
         );
     }
 
     private AdminAiServerStatusResponse probeAiServer() {
         long started = System.nanoTime();
+        LedgerAiFeature feature = LedgerAiFeature.LEDGER_ANALYSIS;
+        LedgerAiFeatureConfig config = aiProperties.featureConfig(feature);
+        String provider = config.provider().name().toLowerCase(java.util.Locale.ROOT);
         if (!aiProperties.isEnabled()) {
-            return new AdminAiServerStatusResponse(false, aiProperties.getProvider(), aiProperties.activeOpenAiCompatibleBaseUrl(), aiProperties.activeOpenAiCompatibleModelsPath(), 0L, List.of(), "AI is disabled.");
+            return new AdminAiServerStatusResponse(false, provider, config.baseUrl(), config.modelsPath(), 0L, List.of(), "AI is disabled.");
         }
-        if (aiProperties.provider() == LedgerAiProvider.N8N) {
-            return probeN8nStatus(started);
-        }
-        if (!hasText(aiProperties.activeOpenAiCompatibleBaseUrl())) {
-            return new AdminAiServerStatusResponse(false, aiProperties.getProvider(), aiProperties.activeOpenAiCompatibleBaseUrl(), aiProperties.activeOpenAiCompatibleModelsPath(), 0L, List.of(), aiProperties.openAiCompatibleProviderLabel() + " URL is not configured.");
-        }
-        if (!aiProperties.isProviderUrlAllowed(aiProperties.activeOpenAiCompatibleBaseUrl())) {
-            return new AdminAiServerStatusResponse(false, aiProperties.getProvider(), aiProperties.activeOpenAiCompatibleBaseUrl(), aiProperties.activeOpenAiCompatibleModelsPath(), 0L, List.of(), aiProperties.statusMessage());
-        }
-        if (aiProperties.provider() == LedgerAiProvider.OPENAI && !hasText(aiProperties.activeOpenAiCompatibleApiKey())) {
-            return new AdminAiServerStatusResponse(false, aiProperties.getProvider(), aiProperties.activeOpenAiCompatibleBaseUrl(), aiProperties.activeOpenAiCompatibleModelsPath(), 0L, List.of(), "OpenAI API key is not configured.");
+        if (!aiProperties.isFeatureConfigured(feature)) {
+            String message = config.provider() == LedgerAiProvider.OPENAI && !hasText(config.apiKey())
+                    ? "OpenAI API key is not configured."
+                    : "Ledger AI analysis server settings are incomplete or blocked by the provider host allowlist.";
+            return new AdminAiServerStatusResponse(false, provider, config.baseUrl(), config.modelsPath(), 0L, List.of(), message);
         }
 
         try {
@@ -325,25 +474,25 @@ public class AdminOpsControlService {
             requestFactory.setConnectTimeout(aiProperties.getConnectTimeout());
             requestFactory.setReadTimeout(Duration.ofSeconds(Math.min(Math.max(aiProperties.getReadTimeout().toSeconds(), 3L), 15L)));
             RestClient client = RestClient.builder()
-                    .baseUrl(aiProperties.activeOpenAiCompatibleBaseUrl())
+                    .baseUrl(config.baseUrl())
                     .requestFactory(requestFactory)
                     .build();
             RestClient.RequestHeadersSpec<?> request = client.get()
-                    .uri(aiProperties.activeOpenAiCompatibleModelsPath())
+                    .uri(config.modelsPath())
                     .accept(MediaType.APPLICATION_JSON);
-            if (hasText(aiProperties.activeOpenAiCompatibleApiKey())) {
-                request = request.header("Authorization", "Bearer " + aiProperties.activeOpenAiCompatibleApiKey());
+            if (hasText(config.apiKey())) {
+                request = request.header("Authorization", "Bearer " + config.apiKey());
             }
             String body = request.retrieve().body(String.class);
             List<String> models = extractModels(body);
             long elapsedMillis = (System.nanoTime() - started) / 1_000_000L;
-            return new AdminAiServerStatusResponse(true, aiProperties.getProvider(), aiProperties.activeOpenAiCompatibleBaseUrl(), aiProperties.activeOpenAiCompatibleModelsPath(), elapsedMillis, models, models.isEmpty() ? "AI server responded, but model list is empty." : "AI server responded normally.");
+            return new AdminAiServerStatusResponse(true, provider, config.baseUrl(), config.modelsPath(), elapsedMillis, models,
+                    models.isEmpty() ? "Ledger AI server responded, but model list is empty." : "Ledger AI server responded normally.");
         } catch (RuntimeException exception) {
             long elapsedMillis = (System.nanoTime() - started) / 1_000_000L;
-            return new AdminAiServerStatusResponse(false, aiProperties.getProvider(), aiProperties.activeOpenAiCompatibleBaseUrl(), aiProperties.activeOpenAiCompatibleModelsPath(), elapsedMillis, List.of(), safeMessage(exception));
+            return new AdminAiServerStatusResponse(false, provider, config.baseUrl(), config.modelsPath(), elapsedMillis, List.of(), safeMessage(exception));
         }
     }
-
     private AdminAiServerStatusResponse probeN8nStatus(long started) {
         long elapsedMillis = (System.nanoTime() - started) / 1_000_000L;
         if (!hasText(aiProperties.getWorkflowUrl())) {
@@ -466,9 +615,38 @@ public class AdminOpsControlService {
         restoreEncryptedSetting(settings, AI_API_KEY_ENCRYPTED, aiProperties::setApiKey);
         restoreEncryptedSetting(settings, AI_LMSTUDIO_API_KEY_ENCRYPTED, aiProperties::setLmStudioApiKey);
         restoreEncryptedSetting(settings, AI_OPENAI_API_KEY_ENCRYPTED, aiProperties::setOpenAiApiKey);
+        restoreFeatureSettings(settings, LedgerAiFeature.LEDGER_ANALYSIS, aiProperties.getLedger());
+        restoreFeatureSettings(settings, LedgerAiFeature.IMAGE_ANALYSIS, aiProperties.getImage());
         applyLong(settings, "minio.storage-capacity-bytes", minioProperties::setStorageCapacityBytes);
     }
 
+    private void restoreFeatureSettings(Map<String, String> settings, LedgerAiFeature feature, LedgerAiFeatureSettings target) {
+        String prefix = featureSettingPrefix(feature);
+        applyText(settings, prefix + "provider", target::setProvider);
+        applyText(settings, prefix + "model", target::setModel);
+        applyText(settings, prefix + "base-url", target::setBaseUrl);
+        applyText(settings, prefix + "chat-path", target::setChatPath);
+        applyText(settings, prefix + "models-path", target::setModelsPath);
+        applyDouble(settings, prefix + "temperature", target::setTemperature);
+        applyInteger(settings, prefix + "max-tokens", target::setMaxTokens);
+        restoreEncryptedSetting(settings, prefix + "api-key.encrypted", target::setApiKey);
+    }
+
+    private void persistFeatureSettings(LedgerAiFeature feature, LedgerAiFeatureSettings source) {
+        String prefix = featureSettingPrefix(feature);
+        persistSetting(prefix + "provider", source.getProvider());
+        persistSetting(prefix + "model", source.getModel());
+        persistSetting(prefix + "base-url", source.getBaseUrl());
+        persistSetting(prefix + "chat-path", source.getChatPath());
+        persistSetting(prefix + "models-path", source.getModelsPath());
+        persistSetting(prefix + "temperature", source.getTemperature() == null ? "" : Double.toString(source.getTemperature()));
+        persistSetting(prefix + "max-tokens", source.getMaxTokens() == null ? "" : Integer.toString(source.getMaxTokens()));
+        persistEncryptedSetting(prefix + "api-key.encrypted", source.getApiKey());
+    }
+
+    private String featureSettingPrefix(LedgerAiFeature feature) {
+        return "ai.feature." + feature.settingKey() + ".";
+    }
     private void persistRuntimeSettings() {
         persistRuntimeSettings(null);
     }
@@ -495,6 +673,8 @@ public class AdminOpsControlService {
             persistEncryptedSetting(AI_API_KEY_ENCRYPTED, aiProperties.getApiKey());
             persistEncryptedSetting(AI_LMSTUDIO_API_KEY_ENCRYPTED, aiProperties.getLmStudioApiKey());
             persistEncryptedSetting(AI_OPENAI_API_KEY_ENCRYPTED, aiProperties.getOpenAiApiKey());
+            persistFeatureSettings(LedgerAiFeature.LEDGER_ANALYSIS, aiProperties.getLedger());
+            persistFeatureSettings(LedgerAiFeature.IMAGE_ANALYSIS, aiProperties.getImage());
             persistPresetSecrets(presetKey);
             persistSetting("minio.storage-capacity-bytes", Long.toString(minioProperties.getStorageCapacityBytes()));
             persistenceMessage = "설정이 저장되었습니다.";
@@ -619,8 +799,9 @@ public class AdminOpsControlService {
         return switch (provider) {
             case "lmstudio", "lm-studio", "lm_studio", "openai-compatible" -> "lmstudio";
             case "openai", "openai-api", "chatgpt" -> "openai";
+            case "ollama" -> "ollama";
             case "n8n" -> "n8n";
-            default -> throw new BadRequestException("AI provider must be lmstudio, openai, or n8n.");
+            default -> throw new BadRequestException("AI provider must be lmstudio, openai, ollama, or n8n.");
         };
     }
     private String defaultText(String value, String fallback) {

@@ -11,16 +11,18 @@ public class LedgerAiAnalysisStatusService {
     private final LedgerAiAnalysisProperties properties;
 
     public LedgerAiAnalysisStatusResponse getStatus() {
+        LedgerAiFeatureConfig config = properties.featureConfig(LedgerAiFeature.LEDGER_ANALYSIS);
+        boolean configured = properties.isFeatureConfigured(LedgerAiFeature.LEDGER_ANALYSIS);
         return new LedgerAiAnalysisStatusResponse(
                 properties.isEnabled(),
-                properties.isConfigured(),
-                properties.getProvider(),
-                properties.isWorkflowConfigured(),
-                properties.isApiKeyConfigured(),
-                properties.isLmStudioConfigured(),
-                properties.isOpenAiConfigured(),
-                properties.getModel(),
-                properties.statusMessage()
+                configured,
+                config.provider().name().toLowerCase(java.util.Locale.ROOT),
+                false,
+                config.apiKey() != null && !config.apiKey().isBlank(),
+                config.provider() == LedgerAiProvider.LMSTUDIO && configured,
+                config.provider() == LedgerAiProvider.OPENAI && configured,
+                config.model(),
+                properties.featureStatusMessage(LedgerAiFeature.LEDGER_ANALYSIS)
         );
     }
 }

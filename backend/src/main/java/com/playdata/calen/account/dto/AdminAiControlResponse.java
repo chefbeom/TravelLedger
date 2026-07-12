@@ -22,6 +22,8 @@ public record AdminAiControlResponse(
         boolean enforceProviderUrlAllowlist,
         String allowedProviderHosts,
         boolean configured,
-        String statusMessage
+        String statusMessage,
+        AdminAiFeatureConfigResponse ledgerAnalysis,
+        AdminAiFeatureConfigResponse imageAnalysis
 ) {
 }

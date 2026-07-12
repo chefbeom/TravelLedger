@@ -31,6 +31,8 @@ public class LedgerAiAnalysisProperties {
     private Duration readTimeout = Duration.ofMinutes(10);
     private boolean enforceProviderUrlAllowlist = true;
     private String allowedProviderHosts = "localhost,127.0.0.1,::1,api.openai.com";
+    private LedgerAiFeatureSettings ledger = new LedgerAiFeatureSettings();
+    private LedgerAiFeatureSettings image = new LedgerAiFeatureSettings();
 
     public boolean isEnabled() {
         return enabled;
@@ -224,6 +226,116 @@ public class LedgerAiAnalysisProperties {
         this.allowedProviderHosts = allowedProviderHosts;
     }
 
+    public LedgerAiFeatureSettings getLedger() {
+        return ledger;
+    }
+
+    public void setLedger(LedgerAiFeatureSettings ledger) {
+        this.ledger = ledger == null ? new LedgerAiFeatureSettings() : ledger;
+    }
+
+    public LedgerAiFeatureSettings getImage() {
+        return image;
+    }
+
+    public void setImage(LedgerAiFeatureSettings image) {
+        this.image = image == null ? new LedgerAiFeatureSettings() : image;
+    }
+
+    /**
+     * Feature profiles fall back to the legacy global properties so existing
+     * deployments keep working until an administrator saves a feature profile.
+     */
+    public LedgerAiFeatureConfig featureConfig(LedgerAiFeature feature) {
+        LedgerAiFeatureSettings settings = feature == LedgerAiFeature.IMAGE_ANALYSIS ? image : ledger;
+        LedgerAiProvider selectedProvider = hasText(settings.getProvider()) ? LedgerAiProvider.from(settings.getProvider()) : provider();
+        String baseUrl = firstNonBlank(settings.getBaseUrl(), legacyBaseUrl(selectedProvider));
+        String chatPath = normalizeRelativeEndpointPath(firstNonBlank(settings.getChatPath(), defaultChatPath(selectedProvider)), defaultChatPath(selectedProvider));
+        String modelsPath = normalizeRelativeEndpointPath(firstNonBlank(settings.getModelsPath(), defaultModelsPath(selectedProvider)), defaultModelsPath(selectedProvider));
+        String selectedModel = firstNonBlank(settings.getModel(), legacyModel(selectedProvider));
+        String selectedApiKey = firstNonBlank(settings.getApiKey(), legacyApiKey(selectedProvider));
+        double selectedTemperature = settings.getTemperature() == null ? temperature : settings.getTemperature();
+        int selectedMaxTokens = settings.getMaxTokens() == null ? maxTokens : settings.getMaxTokens();
+        return new LedgerAiFeatureConfig(selectedProvider, selectedModel, baseUrl, chatPath, modelsPath,
+                selectedApiKey, selectedTemperature, selectedMaxTokens);
+    }
+
+    public boolean isFeatureConfigured(LedgerAiFeature feature) {
+        if (!enabled) {
+            return false;
+        }
+        LedgerAiFeatureConfig config = featureConfig(feature);
+        if (config.provider() == LedgerAiProvider.N8N) {
+            return false;
+        }
+        if (!hasText(config.baseUrl()) || !isProviderUrlAllowed(config.baseUrl())
+                || !isSafeRelativeEndpointPath(config.chatPath()) || !isSafeRelativeEndpointPath(config.modelsPath())) {
+            return false;
+        }
+        if (config.provider() == LedgerAiProvider.OPENAI) {
+            return hasText(config.apiKey()) && hasText(config.model()) && !"auto".equalsIgnoreCase(config.model().trim());
+        }
+        return true;
+    }
+
+    public String featureStatusMessage(LedgerAiFeature feature) {
+        String label = feature == LedgerAiFeature.IMAGE_ANALYSIS ? "Image analysis" : "Ledger AI analysis";
+        if (!enabled) {
+            return label + " is disabled.";
+        }
+        LedgerAiFeatureConfig config = featureConfig(feature);
+        if (!hasText(config.baseUrl()) || !isProviderUrlAllowed(config.baseUrl())) {
+            return label + " server URL must use HTTP(S) and an allowed host.";
+        }
+        if (!isSafeRelativeEndpointPath(config.chatPath()) || !isSafeRelativeEndpointPath(config.modelsPath())) {
+            return label + " chat and models paths must be safe relative paths.";
+        }
+        if (config.provider() == LedgerAiProvider.OPENAI) {
+            if (!hasText(config.apiKey())) {
+                return label + " OpenAI API key is missing.";
+            }
+            if (!hasText(config.model()) || "auto".equalsIgnoreCase(config.model().trim())) {
+                return label + " OpenAI model is required.";
+            }
+        }
+        if (config.provider() == LedgerAiProvider.N8N) {
+            return label + " does not support n8n. Choose OpenAI API, LM Studio, or Ollama.";
+        }
+        return label + " server settings are ready.";
+    }
+
+    private String legacyBaseUrl(LedgerAiProvider selectedProvider) {
+        return switch (selectedProvider) {
+            case OPENAI -> openAiBaseUrl;
+            case OLLAMA -> "http://localhost:11434";
+            case LMSTUDIO -> lmStudioBaseUrl;
+            case N8N -> workflowUrl;
+        };
+    }
+
+    private String legacyModel(LedgerAiProvider selectedProvider) {
+        return selectedProvider == LedgerAiProvider.N8N ? "" : model;
+    }
+
+    private String legacyApiKey(LedgerAiProvider selectedProvider) {
+        return switch (selectedProvider) {
+            case OPENAI -> openAiApiKey;
+            case LMSTUDIO -> lmStudioApiKey;
+            default -> "";
+        };
+    }
+
+    private String defaultChatPath(LedgerAiProvider selectedProvider) {
+        return selectedProvider == LedgerAiProvider.OLLAMA ? "/api/chat" : "/v1/chat/completions";
+    }
+
+    private String defaultModelsPath(LedgerAiProvider selectedProvider) {
+        return selectedProvider == LedgerAiProvider.OLLAMA ? "/api/tags" : "/v1/models";
+    }
+
+    private String firstNonBlank(String primary, String fallback) {
+        return hasText(primary) ? primary.trim() : fallback;
+    }
     public boolean isWorkflowConfigured() {
         return hasText(workflowUrl) && isProviderUrlAllowed(workflowUrl);
     }
@@ -262,28 +374,40 @@ public class LedgerAiAnalysisProperties {
         return isOpenAiModelAuto() ? "" : model.trim();
     }
 
-    public String activeOpenAiCompatibleBaseUrl() {
-        return provider() == LedgerAiProvider.OPENAI ? openAiBaseUrl : lmStudioBaseUrl;
+public String activeOpenAiCompatibleBaseUrl() {
+        return switch (provider()) {
+            case OPENAI -> openAiBaseUrl;
+            case OLLAMA -> featureConfig(LedgerAiFeature.LEDGER_ANALYSIS).baseUrl();
+            default -> lmStudioBaseUrl;
+        };
     }
 
-    public String activeOpenAiCompatibleModelsPath() {
-        return provider() == LedgerAiProvider.OPENAI ? normalizedOpenAiModelsPath() : normalizedLmStudioModelsPath();
+public String activeOpenAiCompatibleModelsPath() {
+        return provider() == LedgerAiProvider.OLLAMA ? featureConfig(LedgerAiFeature.LEDGER_ANALYSIS).modelsPath()
+                : provider() == LedgerAiProvider.OPENAI ? normalizedOpenAiModelsPath() : normalizedLmStudioModelsPath();
     }
 
-    public String activeOpenAiCompatibleChatPath() {
-        return provider() == LedgerAiProvider.OPENAI ? normalizedOpenAiChatPath() : normalizedLmStudioChatPath();
+public String activeOpenAiCompatibleChatPath() {
+        return provider() == LedgerAiProvider.OLLAMA ? featureConfig(LedgerAiFeature.LEDGER_ANALYSIS).chatPath()
+                : provider() == LedgerAiProvider.OPENAI ? normalizedOpenAiChatPath() : normalizedLmStudioChatPath();
     }
 
-    public String activeOpenAiCompatibleApiKey() {
-        return provider() == LedgerAiProvider.OPENAI ? openAiApiKey : lmStudioApiKey;
+public String activeOpenAiCompatibleApiKey() {
+        return provider() == LedgerAiProvider.OLLAMA ? featureConfig(LedgerAiFeature.LEDGER_ANALYSIS).apiKey()
+                : provider() == LedgerAiProvider.OPENAI ? openAiApiKey : lmStudioApiKey;
     }
 
-    public String activeOpenAiCompatibleModel() {
-        return provider() == LedgerAiProvider.OPENAI ? normalizedOpenAiModel() : normalizedLmStudioModel();
+public String activeOpenAiCompatibleModel() {
+        return provider() == LedgerAiProvider.OLLAMA ? featureConfig(LedgerAiFeature.LEDGER_ANALYSIS).model()
+                : provider() == LedgerAiProvider.OPENAI ? normalizedOpenAiModel() : normalizedLmStudioModel();
     }
 
-    public String openAiCompatibleProviderLabel() {
-        return provider() == LedgerAiProvider.OPENAI ? "OpenAI API" : "LM Studio";
+public String openAiCompatibleProviderLabel() {
+        return switch (provider()) {
+            case OPENAI -> "OpenAI API";
+            case OLLAMA -> "Ollama";
+            default -> "LM Studio";
+        };
     }
 
     public boolean isConfigured() {
@@ -293,6 +417,7 @@ public class LedgerAiAnalysisProperties {
         return switch (provider()) {
             case LMSTUDIO -> isLmStudioConfigured();
             case OPENAI -> isOpenAiConfigured();
+            case OLLAMA -> isFeatureConfigured(LedgerAiFeature.LEDGER_ANALYSIS);
             case N8N -> isWorkflowConfigured();
         };
     }
@@ -316,6 +441,16 @@ public class LedgerAiAnalysisProperties {
                         + normalizedLmStudioModelsPath() + ".";
             }
             return "LM Studio AI analysis is ready.";
+        }
+        if (provider() == LedgerAiProvider.OLLAMA) {
+            LedgerAiFeatureConfig config = featureConfig(LedgerAiFeature.LEDGER_ANALYSIS);
+            if (!hasText(config.baseUrl()) || !isProviderUrlAllowed(config.baseUrl())) {
+                return "Ollama URL must use HTTP(S) and an allowed host.";
+            }
+            if (!isSafeRelativeEndpointPath(config.chatPath()) || !isSafeRelativeEndpointPath(config.modelsPath())) {
+                return "Ollama chat and models endpoints must be relative paths.";
+            }
+            return "Ollama AI analysis is ready.";
         }
         if (provider() == LedgerAiProvider.OPENAI) {
             if (!hasText(openAiBaseUrl)) {

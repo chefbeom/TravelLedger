@@ -8,6 +8,7 @@ import com.playdata.calen.account.service.UserNotificationService;
 import com.playdata.calen.common.exception.BadRequestException;
 import com.playdata.calen.common.exception.NotFoundException;
 import com.playdata.calen.ledger.ai.LedgerAiAnalysisProperties;
+import com.playdata.calen.ledger.ai.LedgerAiFeature;
 import com.playdata.calen.ledger.domain.CategoryDetail;
 import com.playdata.calen.ledger.domain.CategoryGroup;
 import com.playdata.calen.ledger.domain.EntryType;
@@ -1074,8 +1075,8 @@ public class LedgerOcrService {
     }
 
     private void validateReady() {
-        if (!aiProperties.isConfigured() || !aiProperties.isLmStudioConfigured()) {
-            throw new BadRequestException("AI 이미지 분석 기능이 꺼져 있거나 서버 설정이 누락되었습니다.");
+        if (!aiProperties.isFeatureConfigured(LedgerAiFeature.IMAGE_ANALYSIS)) {
+            throw new BadRequestException(aiProperties.featureStatusMessage(LedgerAiFeature.IMAGE_ANALYSIS));
         }
     }
 

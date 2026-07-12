@@ -5,7 +5,8 @@ import java.util.Locale;
 public enum LedgerAiProvider {
     N8N,
     LMSTUDIO,
-    OPENAI;
+    OPENAI,
+    OLLAMA;
 
     public static LedgerAiProvider from(String value) {
         if (value == null || value.isBlank()) {
@@ -14,6 +15,7 @@ public enum LedgerAiProvider {
         return switch (value.trim().toLowerCase(Locale.ROOT)) {
             case "lmstudio", "lm-studio", "lm_studio", "openai-compatible" -> LMSTUDIO;
             case "openai", "openai-api", "chatgpt" -> OPENAI;
+            case "ollama" -> OLLAMA;
             default -> N8N;
         };
     }

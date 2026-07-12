@@ -16,6 +16,8 @@ import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.playdata.calen.common.exception.BadRequestException;
 import com.playdata.calen.ledger.ai.LedgerAiAnalysisProperties;
+import com.playdata.calen.ledger.ai.LedgerAiFeature;
+import com.playdata.calen.ledger.ai.LedgerAiFeatureConfig;
 import com.playdata.calen.ledger.domain.EntryType;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -70,7 +72,8 @@ public class LedgerOcrRemoteClient {
     private MeterRegistry meterRegistry;
 
     public RemoteAnalyzeResponse analyze(MultipartFile file, String documentType, String userPrompt) {
-        String workflow = "ledger-ai-image-lmstudio";
+        LedgerAiFeatureConfig config = aiProperties.featureConfig(LedgerAiFeature.IMAGE_ANALYSIS);
+        String workflow = "ledger-ai-image-" + config.provider().name().toLowerCase(Locale.ROOT);
         Timer.Sample workflowTimer = startExternalWorkflowTimer();
         long startedAt = System.nanoTime();
         try {
@@ -79,12 +82,12 @@ public class LedgerOcrRemoteClient {
             requestFactory.setReadTimeout(aiProperties.getReadTimeout());
 
             RestClient restClient = RestClient.builder()
-                    .baseUrl(aiProperties.getLmStudioBaseUrl())
+                    .baseUrl(config.baseUrl())
                     .requestFactory(requestFactory)
                     .build();
-            String model = resolveLmStudioModel(restClient);
-            ObjectNode ocrBody = buildLmStudioOcrRequest(file, documentType, model);
-            String ocrResponseBody = postLmStudioChat(restClient, ocrBody);
+            String model = resolveLmStudioModel(restClient, config);
+            ObjectNode ocrBody = buildLmStudioOcrRequest(file, documentType, model, config);
+            String ocrResponseBody = postLmStudioChat(restClient, ocrBody, config);
             JsonNode ocrRoot = readAssistantJsonObject(ocrResponseBody);
             if (ocrRoot.has("ok") && !ocrRoot.path("ok").asBoolean(true)) {
                 throw new BadRequestException(firstNonBlank(
@@ -93,8 +96,8 @@ public class LedgerOcrRemoteClient {
                 ));
             }
 
-            ObjectNode body = buildLmStudioStructuringRequest(model, documentType, userPrompt, ocrRoot);
-            String responseBody = postLmStudioChat(restClient, body);
+            ObjectNode body = buildLmStudioStructuringRequest(model, documentType, userPrompt, ocrRoot, config);
+            String responseBody = postLmStudioChat(restClient, body, config);
             if (!hasText(responseBody)) {
                 throw new BadRequestException("AI 이미지 분석 서버가 빈 응답을 반환했습니다.");
             }
@@ -115,13 +118,13 @@ public class LedgerOcrRemoteClient {
         }
     }
 
-    private String postLmStudioChat(RestClient restClient, ObjectNode body) {
+    private String postLmStudioChat(RestClient restClient, ObjectNode body, LedgerAiFeatureConfig config) {
         RestClient.RequestBodySpec request = restClient.post()
-                .uri(aiProperties.normalizedLmStudioChatPath())
+                .uri(config.chatPath())
                 .contentType(MediaType.APPLICATION_JSON)
                 .accept(MediaType.APPLICATION_JSON);
-        if (hasText(aiProperties.getLmStudioApiKey())) {
-            request.header("Authorization", "Bearer " + aiProperties.getLmStudioApiKey());
+        if (hasText(config.apiKey())) {
+            request.header("Authorization", "Bearer " + config.apiKey());
         }
         String responseBody = request.body(body).retrieve().body(String.class);
         if (!hasText(responseBody)) {
@@ -134,9 +137,9 @@ public class LedgerOcrRemoteClient {
         return objectMapper.readTree(extractJsonObject(extractAssistantContent(responseBody)));
     }
 
-    private ObjectNode buildLmStudioOcrRequest(MultipartFile file, String documentType, String model) throws IOException {
-        ObjectNode root = baseLmStudioChatRequest(model, Math.min(aiProperties.getTemperature(), 0.05));
-        applyOcrJsonSchemaResponseFormat(root);
+    private ObjectNode buildLmStudioOcrRequest(MultipartFile file, String documentType, String model, LedgerAiFeatureConfig config) throws IOException {
+        ObjectNode root = baseLmStudioChatRequest(model, Math.min(config.temperature(), 0.05), config);
+        applyOcrJsonSchemaResponseFormat(root, config);
 
         ArrayNode messages = root.putArray("messages");
         messages.addObject()
@@ -182,23 +185,26 @@ public class LedgerOcrRemoteClient {
                         }
                         """);
 
-        ArrayNode userContent = objectMapper.createArrayNode();
-        userContent.addObject()
-                .put("type", "text")
-                .put("text", "OCR this ledger image only. Image type hint: " + normalizeDocumentType(documentType) + ". Current server year: " + LocalDate.now().getYear() + ". Return JSON only.");
-        ObjectNode imageContent = userContent.addObject();
-        imageContent.put("type", "image_url");
-        imageContent.putObject("image_url")
-                .put("url", toDataUrl(file));
+        String ocrPrompt = "OCR this ledger image only. Image type hint: " + normalizeDocumentType(documentType)
+                + ". Current server year: " + LocalDate.now().getYear() + ". Return JSON only.";
         ObjectNode userMessage = messages.addObject();
         userMessage.put("role", "user");
-        userMessage.set("content", userContent);
-        return root;
+        if (config.usesOllama()) {
+            userMessage.put("content", ocrPrompt);
+            userMessage.putArray("images").add(Base64.getEncoder().encodeToString(file.getBytes()));
+        } else {
+            ArrayNode userContent = objectMapper.createArrayNode();
+            userContent.addObject().put("type", "text").put("text", ocrPrompt);
+            ObjectNode imageContent = userContent.addObject();
+            imageContent.put("type", "image_url");
+            imageContent.putObject("image_url").put("url", toDataUrl(file));
+            userMessage.set("content", userContent);
+        }        return root;
     }
 
-    private ObjectNode buildLmStudioStructuringRequest(String model, String documentType, String userPrompt, JsonNode ocrRoot) throws JsonProcessingException {
-        ObjectNode root = baseLmStudioChatRequest(model, Math.min(aiProperties.getTemperature(), 0.10));
-        applyJsonSchemaResponseFormat(root);
+    private ObjectNode buildLmStudioStructuringRequest(String model, String documentType, String userPrompt, JsonNode ocrRoot, LedgerAiFeatureConfig config) throws JsonProcessingException {
+        ObjectNode root = baseLmStudioChatRequest(model, Math.min(config.temperature(), 0.10), config);
+        applyJsonSchemaResponseFormat(root, config);
 
         ArrayNode messages = root.putArray("messages");
         messages.addObject()
@@ -256,15 +262,25 @@ public class LedgerOcrRemoteClient {
         return root;
     }
 
-    private ObjectNode baseLmStudioChatRequest(String model, double temperature) {
+    private ObjectNode baseLmStudioChatRequest(String model, double temperature, LedgerAiFeatureConfig config) {
         ObjectNode root = objectMapper.createObjectNode();
         root.put("model", model);
         root.put("temperature", temperature);
-        root.put("max_tokens", Math.max(aiProperties.getMaxTokens(), 4096));
+        if (config.usesOllama()) {
+            root.put("format", "json");
+            ObjectNode options = root.putObject("options");
+            options.put("temperature", temperature);
+            options.put("num_predict", Math.max(config.maxTokens(), 4096));
+        } else {
+            root.put("max_tokens", Math.max(config.maxTokens(), 4096));
+        }
         root.put("stream", false);
         return root;
     }
-    private void applyOcrJsonSchemaResponseFormat(ObjectNode root) {
+    private void applyOcrJsonSchemaResponseFormat(ObjectNode root, LedgerAiFeatureConfig config) {
+        if (config.usesOllama()) {
+            return;
+        }
         ObjectNode responseFormat = root.putObject("response_format");
         responseFormat.put("type", "json_schema");
         ObjectNode jsonSchema = responseFormat.putObject("json_schema");
@@ -313,7 +329,10 @@ public class LedgerOcrRemoteClient {
         warnings.put("type", "array");
         warnings.putObject("items").put("type", "string");
     }
-    private void applyJsonSchemaResponseFormat(ObjectNode root) {
+    private void applyJsonSchemaResponseFormat(ObjectNode root, LedgerAiFeatureConfig config) {
+        if (config.usesOllama()) {
+            return;
+        }
         ObjectNode responseFormat = root.putObject("response_format");
         responseFormat.put("type", "json_schema");
         ObjectNode jsonSchema = responseFormat.putObject("json_schema");
@@ -976,6 +995,10 @@ public class LedgerOcrRemoteClient {
                 return builder.toString();
             }
         }
+        JsonNode messageContent = root.path("message").path("content");
+        if (messageContent.isTextual() && hasText(messageContent.asText(""))) {
+            return messageContent.asText("");
+        }
         return responseBody;
     }
 
@@ -1022,16 +1045,16 @@ public class LedgerOcrRemoteClient {
         return end > start ? normalized.substring(start, end + 1) : normalized;
     }
 
-    private String resolveLmStudioModel(RestClient restClient) throws JsonProcessingException {
-        String configuredModel = aiProperties.normalizedLmStudioModel();
+    private String resolveLmStudioModel(RestClient restClient, LedgerAiFeatureConfig config) throws JsonProcessingException {
+        String configuredModel = hasText(config.model()) && !"auto".equalsIgnoreCase(config.model().trim()) ? config.model().trim() : "";
         if (hasText(configuredModel)) {
             return configuredModel;
         }
         RestClient.RequestHeadersSpec<?> request = restClient.get()
-                .uri(aiProperties.normalizedLmStudioModelsPath())
+                .uri(config.modelsPath())
                 .accept(MediaType.APPLICATION_JSON);
-        if (hasText(aiProperties.getLmStudioApiKey())) {
-            request = request.header("Authorization", "Bearer " + aiProperties.getLmStudioApiKey());
+        if (hasText(config.apiKey())) {
+            request = request.header("Authorization", "Bearer " + config.apiKey());
         }
         JsonNode root = objectMapper.readTree(request.retrieve().body(String.class));
         String model = firstModelId(root.path("data"));

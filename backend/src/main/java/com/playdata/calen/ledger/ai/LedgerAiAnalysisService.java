@@ -87,8 +87,8 @@ public class LedgerAiAnalysisService {
     @Transactional(noRollbackFor = RuntimeException.class)
     public LedgerAiAnalysisResponse analyze(Long userId, LedgerAiAnalysisRequest request) {
         AppUser owner = appUserService.getRequiredUser(userId);
-        if (!properties.isConfigured()) {
-            throw new BadRequestException(properties.statusMessage());
+        if (!properties.isFeatureConfigured(LedgerAiFeature.LEDGER_ANALYSIS)) {
+            throw new BadRequestException(properties.featureStatusMessage(LedgerAiFeature.LEDGER_ANALYSIS));
         }
 
         AnalysisPlan plan = resolvePlan(request);

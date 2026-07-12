@@ -16986,6 +16986,25 @@ textarea {
   background: rgba(13, 148, 136, 0.34);
 }
 
+.admin-ai-feature-target {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--border, rgba(148, 163, 184, 0.35));
+  border-radius: 8px;
+  background: var(--surface-subtle, rgba(15, 23, 42, 0.45));
+}
+
+.admin-ai-feature-target > span {
+  font-weight: 800;
+}
+
+.admin-ai-feature-target small {
+  flex: 1 1 240px;
+  color: var(--text-muted, #94a3b8);
+}
 .admin-ops-wizard {
   display: grid;
   gap: 18px;
@@ -17297,6 +17316,13 @@ textarea {
     grid-template-columns: 1fr;
   }
 
+  .admin-ai-feature-target {
+    align-items: stretch;
+  }
+
+  .admin-ai-feature-target .button {
+    flex: 1 1 180px;
+  }
   .admin-ops-step-indicator {
     justify-content: flex-start;
   }

@@ -292,4 +292,25 @@ class LedgerOcrRemoteClientTest {
         assertThat(response.parsedEntries()).extracting(RemoteParsedResult::entryType)
                 .containsExactly(EntryType.INCOME, EntryType.EXPENSE);
     }
+    @Test
+    void buildAnalyzeResponseReadsOllamaMessageContent() {
+        LedgerOcrRemoteClient client = new LedgerOcrRemoteClient(new LedgerAiAnalysisProperties(), new ObjectMapper());
+        String responseBody = """
+                {
+                  "model": "llama3.2-vision",
+                  "message": {
+                    "role": "assistant",
+                    "content": "{\\"ok\\":true,\\"documentType\\":\\"AUTO\\",\\"rawText\\":\\"Ollama capture\\",\\"entries\\":[{\\"entryType\\":\\"EXPENSE\\",\\"title\\":\\"Coffee\\",\\"amount\\":4900,\\"items\\":[],\\"warnings\\":[]}],\\"warnings\\":[]}"
+                  }
+                }
+                """;
+
+        RemoteAnalyzeResponse response = client.buildAnalyzeResponse(responseBody, "AUTO", System.nanoTime());
+
+        assertThat(response.parsedEntries()).singleElement().satisfies(entry -> {
+            assertThat(entry.title()).isEqualTo("Coffee");
+            assertThat(entry.amount()).isEqualByComparingTo("4900");
+            assertThat(entry.entryType()).isEqualTo(EntryType.EXPENSE);
+        });
+    }
 }

@@ -151,4 +151,44 @@ class LedgerAiAnalysisPropertiesTest {
         assertThat(properties.isOpenAiConfigured()).isFalse();
         assertThat(properties.statusMessage()).contains("model is required");
     }
+    @Test
+    void resolvesLedgerAndImageProfilesIndependently() {
+        LedgerAiAnalysisProperties properties = new LedgerAiAnalysisProperties();
+        properties.setAllowedProviderHosts("api.openai.com,ollama.local");
+
+        properties.getLedger().setProvider("openai");
+        properties.getLedger().setBaseUrl("https://api.openai.com");
+        properties.getLedger().setModel("gpt-4.1-mini");
+        properties.getLedger().setApiKey("ledger-key");
+
+        properties.getImage().setProvider("ollama");
+        properties.getImage().setBaseUrl("http://ollama.local:11434");
+        properties.getImage().setModel("llama3.2-vision");
+
+        LedgerAiFeatureConfig ledger = properties.featureConfig(LedgerAiFeature.LEDGER_ANALYSIS);
+        LedgerAiFeatureConfig image = properties.featureConfig(LedgerAiFeature.IMAGE_ANALYSIS);
+
+        assertThat(ledger.provider()).isEqualTo(LedgerAiProvider.OPENAI);
+        assertThat(ledger.baseUrl()).isEqualTo("https://api.openai.com");
+        assertThat(ledger.apiKey()).isEqualTo("ledger-key");
+        assertThat(image.provider()).isEqualTo(LedgerAiProvider.OLLAMA);
+        assertThat(image.chatPath()).isEqualTo("/api/chat");
+        assertThat(image.modelsPath()).isEqualTo("/api/tags");
+        assertThat(properties.isFeatureConfigured(LedgerAiFeature.LEDGER_ANALYSIS)).isTrue();
+        assertThat(properties.isFeatureConfigured(LedgerAiFeature.IMAGE_ANALYSIS)).isTrue();
+    }
+
+    @Test
+    void featureProfileFallsBackToLegacySettingsUntilConfigured() {
+        LedgerAiAnalysisProperties properties = new LedgerAiAnalysisProperties();
+        properties.setProvider("lmstudio");
+        properties.setLmStudioBaseUrl("http://localhost:1234");
+        properties.setModel("qwen2.5-vl");
+
+        LedgerAiFeatureConfig image = properties.featureConfig(LedgerAiFeature.IMAGE_ANALYSIS);
+
+        assertThat(image.provider()).isEqualTo(LedgerAiProvider.LMSTUDIO);
+        assertThat(image.baseUrl()).isEqualTo("http://localhost:1234");
+        assertThat(image.model()).isEqualTo("qwen2.5-vl");
+    }
 }

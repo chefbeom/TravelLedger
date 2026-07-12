@@ -74,6 +74,7 @@ const state = reactive({
   activeAdminPanel: '',
   aiControlPresets: [],
   aiControlPresetKey: '',
+  aiTargetFeature: 'ledger',
   aiControlPreserveCurrentSecret: false,
   aiServerStatusOpen: false,
   aiServerEditorOpen: false,
@@ -98,9 +99,15 @@ const state = reactive({
     openAiModelsPath: '/v1/models',
     openAiApiKey: '',
     clearOpenAiApiKey: false,
+    ollamaBaseUrl: 'http://localhost:11434',
+    ollamaChatPath: '/api/chat',
+    ollamaModelsPath: '/api/tags',
+    ollamaApiKey: '',
+    clearOllamaApiKey: false,
     apiKeyConfigured: false,
     lmStudioApiKeyConfigured: false,
     openAiApiKeyConfigured: false,
+    ollamaApiKeyConfigured: false,
     temperature: 0.2,
     maxTokens: 4096,
     connectTimeoutSeconds: 3,
@@ -355,29 +362,22 @@ function isOpenAiCompatibleProvider(provider = state.aiControlForm.provider) {
 }
 
 function currentAiServerAddress(source = state.aiControlForm) {
-  if (source.provider === 'n8n') {
-    return source.workflowUrl || '-'
-  }
-  if (source.provider === 'openai') {
-    return source.openAiBaseUrl || '-'
-  }
+  if (source.provider === 'n8n') return source.workflowUrl || '-'
+  if (source.provider === 'openai') return source.openAiBaseUrl || '-'
+  if (source.provider === 'ollama') return source.ollamaBaseUrl || '-'
   return source.lmStudioBaseUrl || '-'
 }
 
 function hasAiServerAddress(source = state.aiControlForm) {
-  if (source.provider === 'n8n') {
-    return Boolean(source.workflowUrl?.trim())
-  }
-  if (source.provider === 'openai') {
-    return Boolean(source.openAiBaseUrl?.trim())
-  }
+  if (source.provider === 'n8n') return Boolean(source.workflowUrl?.trim())
+  if (source.provider === 'openai') return Boolean(source.openAiBaseUrl?.trim())
+  if (source.provider === 'ollama') return Boolean(source.ollamaBaseUrl?.trim())
   return Boolean(source.lmStudioBaseUrl?.trim())
 }
 
 function currentAiProviderLabel(provider = state.aiControlForm.provider) {
-  if (provider === 'openai') {
-    return 'OpenAI API'
-  }
+  if (provider === 'openai') return 'OpenAI API'
+  if (provider === 'ollama') return 'Ollama'
   return provider === 'n8n' ? 'n8n' : 'LM Studio'
 }
 
@@ -394,18 +394,18 @@ function addAllowedProviderHost(host) {
 
 function handleAiProviderChange() {
   state.aiControlPreserveCurrentSecret = false
-  if (state.aiControlForm.provider !== 'openai') {
+  if (state.aiControlForm.provider === 'ollama') {
+    state.aiControlForm.ollamaBaseUrl ||= 'http://localhost:11434'
+    state.aiControlForm.ollamaChatPath ||= '/api/chat'
+    state.aiControlForm.ollamaModelsPath ||= '/api/tags'
+    state.aiControlForm.model = state.aiControlForm.model || 'llama3.2-vision'
+    addAllowedProviderHost('localhost')
     return
   }
-  if (!state.aiControlForm.openAiBaseUrl) {
-    state.aiControlForm.openAiBaseUrl = 'https://api.openai.com'
-  }
-  if (!state.aiControlForm.openAiChatPath) {
-    state.aiControlForm.openAiChatPath = '/v1/chat/completions'
-  }
-  if (!state.aiControlForm.openAiModelsPath) {
-    state.aiControlForm.openAiModelsPath = '/v1/models'
-  }
+  if (state.aiControlForm.provider !== 'openai') return
+  state.aiControlForm.openAiBaseUrl ||= 'https://api.openai.com'
+  state.aiControlForm.openAiChatPath ||= '/v1/chat/completions'
+  state.aiControlForm.openAiModelsPath ||= '/v1/models'
   if (!state.aiControlForm.model || state.aiControlForm.model.trim().toLowerCase() === 'auto') {
     state.aiControlForm.model = 'gpt-4.1-mini'
   }
@@ -840,13 +840,14 @@ function formatFileSize(bytes) {
 }
 
 function aiControlPresetAddress(preset) {
-  return preset?.provider === 'openai'
-    ? preset.openAiBaseUrl
-    : (preset?.lmStudioBaseUrl || preset?.workflowUrl || '')
+  if (preset?.provider === 'openai') return preset.openAiBaseUrl || ''
+  if (preset?.provider === 'ollama') return preset.ollamaBaseUrl || ''
+  return preset?.lmStudioBaseUrl || preset?.workflowUrl || ''
 }
 
 function aiControlPresetKeyFor(preset) {
   return [
+    preset.targetFeature || 'ledger',
     preset.provider,
     preset.model,
     preset.workflowUrl,
@@ -856,26 +857,24 @@ function aiControlPresetKeyFor(preset) {
     preset.openAiBaseUrl,
     preset.openAiChatPath,
     preset.openAiModelsPath,
+    preset.ollamaBaseUrl,
+    preset.ollamaChatPath,
+    preset.ollamaModelsPath,
   ].join('|')
 }
 
 function providerCredentialConfigured(source = state.aiControlForm) {
-  if (source.provider === 'openai') {
-    return Boolean(source.openAiApiKeyConfigured)
-  }
-  if (source.provider === 'n8n') {
-    return Boolean(source.apiKeyConfigured)
-  }
+  if (source.provider === 'openai') return Boolean(source.openAiApiKeyConfigured)
+  if (source.provider === 'ollama') return Boolean(source.ollamaApiKeyConfigured)
+  if (source.provider === 'n8n') return Boolean(source.apiKeyConfigured)
   return Boolean(source.lmStudioApiKeyConfigured)
 }
 
 function buildAiControlPreset(source = state.aiControlForm) {
-  if (!hasAiServerAddress(source)) {
-    return null
-  }
-
+  if (!hasAiServerAddress(source)) return null
   const preset = {
     title: state.aiServerDraftName || source.title || buildCurrentAiServerName(),
+    targetFeature: state.aiTargetFeature,
     provider: source.provider || 'lmstudio',
     model: source.model || 'auto',
     workflowUrl: source.workflowUrl || '',
@@ -885,13 +884,15 @@ function buildAiControlPreset(source = state.aiControlForm) {
     openAiBaseUrl: source.openAiBaseUrl || 'https://api.openai.com',
     openAiChatPath: source.openAiChatPath || '/v1/chat/completions',
     openAiModelsPath: source.openAiModelsPath || '/v1/models',
+    ollamaBaseUrl: source.ollamaBaseUrl || 'http://localhost:11434',
+    ollamaChatPath: source.ollamaChatPath || '/api/chat',
+    ollamaModelsPath: source.ollamaModelsPath || '/api/tags',
     credentialConfigured: providerCredentialConfigured(source),
     savedAt: new Date().toISOString(),
   }
   preset.key = aiControlPresetKeyFor(preset)
   return preset
 }
-
 function readAiControlPresets() {
   try {
     const parsed = JSON.parse(localStorage.getItem(AI_CONTROL_PRESETS_STORAGE_KEY) || '[]')
@@ -976,12 +977,14 @@ function formatAiServerModelList(models) {
 }
 function applyAiControlPreset() {
   const preset = state.aiControlPresets.find((item) => item.key === state.aiControlPresetKey)
-  if (!preset) {
-    return
-  }
-  const reuseCurrentSecret = isAiControlPresetActive(preset) && providerCredentialConfigured(state.aiControlForm)
+  if (!preset) return
+  const targetFeature = preset.targetFeature === 'image' ? 'image' : 'ledger'
+  const reuseCurrentSecret = isAiControlPresetActive(preset)
+    && state.aiTargetFeature === targetFeature
+    && providerCredentialConfigured(state.aiControlForm)
   const credentialConfigured = isPresetCredentialConfigured(preset) || reuseCurrentSecret
   state.aiControlPreserveCurrentSecret = reuseCurrentSecret
+  state.aiTargetFeature = targetFeature
   state.aiControlForm.provider = preset.provider || 'lmstudio'
   state.aiControlForm.model = preset.model || 'auto'
   state.aiControlForm.workflowUrl = preset.workflowUrl || ''
@@ -991,57 +994,92 @@ function applyAiControlPreset() {
   state.aiControlForm.openAiBaseUrl = preset.openAiBaseUrl || 'https://api.openai.com'
   state.aiControlForm.openAiChatPath = preset.openAiChatPath || '/v1/chat/completions'
   state.aiControlForm.openAiModelsPath = preset.openAiModelsPath || '/v1/models'
+  state.aiControlForm.ollamaBaseUrl = preset.ollamaBaseUrl || 'http://localhost:11434'
+  state.aiControlForm.ollamaChatPath = preset.ollamaChatPath || '/api/chat'
+  state.aiControlForm.ollamaModelsPath = preset.ollamaModelsPath || '/api/tags'
   state.aiControlForm.apiKey = ''
   state.aiControlForm.lmStudioApiKey = ''
   state.aiControlForm.openAiApiKey = ''
+  state.aiControlForm.ollamaApiKey = ''
   state.aiControlForm.apiKeyConfigured = preset.provider === 'n8n' && credentialConfigured
   state.aiControlForm.lmStudioApiKeyConfigured = preset.provider === 'lmstudio' && credentialConfigured
   state.aiControlForm.openAiApiKeyConfigured = preset.provider === 'openai' && credentialConfigured
+  state.aiControlForm.ollamaApiKeyConfigured = preset.provider === 'ollama' && credentialConfigured
   state.aiControlForm.clearApiKey = false
   state.aiControlForm.clearLmStudioApiKey = false
   state.aiControlForm.clearOpenAiApiKey = false
+  state.aiControlForm.clearOllamaApiKey = false
   state.aiServerEditorOpen = true
 }
-
 function formatAiControlPreset(preset) {
   const saved = preset.savedAt ? formatDateTime(preset.savedAt) : '저장 시각 없음'
   return `${preset.title || preset.model || 'AI 서버'} · ${preset.model || 'auto'} · ${aiControlPresetAddress(preset) || '-'} · ${saved}`
 }
+function activeAiFeatureConfig(control = state.opsControl) {
+  const ai = control?.ai
+  if (!ai) {
+    return null
+  }
+  return state.aiTargetFeature === 'image' ? ai.imageAnalysis : ai.ledgerAnalysis
+}
+
+function selectAiTargetFeature(feature) {
+  state.aiTargetFeature = feature === 'image' ? 'image' : 'ledger'
+  state.aiControlPresetKey = ''
+  state.aiControlPreserveCurrentSecret = false
+  syncAiControlForm()
+}
+
+function aiFeatureLabel(feature = state.aiTargetFeature) {
+  return feature === 'image' ? '이미지 분석 / OCR' : '가계부 AI 분석'
+}
+
 function syncAiControlForm(control = state.opsControl) {
   const ai = control?.ai
   if (!ai) {
     return
   }
+  const feature = activeAiFeatureConfig(control)
+  const provider = feature?.provider || ai.provider || 'lmstudio'
+  const baseUrl = feature?.baseUrl || ''
+  const chatPath = feature?.chatPath || (provider === 'ollama' ? '/api/chat' : '/v1/chat/completions')
+  const modelsPath = feature?.modelsPath || (provider === 'ollama' ? '/api/tags' : '/v1/models')
+  const keyConfigured = Boolean(feature?.apiKeyConfigured)
   state.aiControlForm = {
     enabled: Boolean(ai.enabled),
-    provider: ai.provider || 'lmstudio',
-    model: ai.model || '',
+    provider,
+    model: feature?.model || ai.model || '',
     workflowUrl: ai.workflowUrl || '',
     apiKeyHeader: ai.apiKeyHeader || 'X-TravelLedger-AI-Key',
     apiKey: '',
     clearApiKey: false,
-    lmStudioBaseUrl: ai.lmStudioBaseUrl || '',
-    lmStudioChatPath: ai.lmStudioChatPath || '/v1/chat/completions',
-    lmStudioModelsPath: ai.lmStudioModelsPath || '/v1/models',
+    lmStudioBaseUrl: provider === 'lmstudio' ? baseUrl : '',
+    lmStudioChatPath: provider === 'lmstudio' ? chatPath : '/v1/chat/completions',
+    lmStudioModelsPath: provider === 'lmstudio' ? modelsPath : '/v1/models',
     lmStudioApiKey: '',
     clearLmStudioApiKey: false,
-    openAiBaseUrl: ai.openAiBaseUrl || 'https://api.openai.com',
-    openAiChatPath: ai.openAiChatPath || '/v1/chat/completions',
-    openAiModelsPath: ai.openAiModelsPath || '/v1/models',
+    openAiBaseUrl: provider === 'openai' ? baseUrl : 'https://api.openai.com',
+    openAiChatPath: provider === 'openai' ? chatPath : '/v1/chat/completions',
+    openAiModelsPath: provider === 'openai' ? modelsPath : '/v1/models',
     openAiApiKey: '',
     clearOpenAiApiKey: false,
+    ollamaBaseUrl: provider === 'ollama' ? baseUrl : 'http://localhost:11434',
+    ollamaChatPath: provider === 'ollama' ? chatPath : '/api/chat',
+    ollamaModelsPath: provider === 'ollama' ? modelsPath : '/api/tags',
+    ollamaApiKey: '',
+    clearOllamaApiKey: false,
     apiKeyConfigured: Boolean(ai.apiKeyConfigured),
-    lmStudioApiKeyConfigured: Boolean(ai.lmStudioApiKeyConfigured),
-    openAiApiKeyConfigured: Boolean(ai.openAiApiKeyConfigured),
-    temperature: Number(ai.temperature ?? 0.2),
-    maxTokens: Number(ai.maxTokens ?? 4096),
+    lmStudioApiKeyConfigured: provider === 'lmstudio' && keyConfigured,
+    openAiApiKeyConfigured: provider === 'openai' && keyConfigured,
+    ollamaApiKeyConfigured: provider === 'ollama' && keyConfigured,
+    temperature: Number(feature?.temperature ?? ai.temperature ?? 0.2),
+    maxTokens: Number(feature?.maxTokens ?? ai.maxTokens ?? 4096),
     connectTimeoutSeconds: Number(ai.connectTimeoutSeconds ?? 3),
     readTimeoutSeconds: Number(ai.readTimeoutSeconds ?? 120),
     enforceProviderUrlAllowlist: Boolean(ai.enforceProviderUrlAllowlist),
     allowedProviderHosts: ai.allowedProviderHosts || '',
   }
 }
-
 function syncDataControlForm(control = state.opsControl) {
   const capacityBytes = Number(control?.dataServer?.minioStorage?.capacityBytes ?? 0)
   state.dataControlForm = {
@@ -1089,6 +1127,7 @@ async function handleSaveAiControl() {
     const pendingPreset = buildAiControlPreset()
     const payload = {
       enabled: Boolean(state.aiControlForm.enabled),
+      targetFeature: state.aiTargetFeature,
       provider: state.aiControlForm.provider,
       model: state.aiControlForm.model,
       workflowUrl: state.aiControlForm.workflowUrl,
@@ -1099,6 +1138,9 @@ async function handleSaveAiControl() {
       openAiBaseUrl: state.aiControlForm.openAiBaseUrl,
       openAiChatPath: state.aiControlForm.openAiChatPath,
       openAiModelsPath: state.aiControlForm.openAiModelsPath,
+      ollamaBaseUrl: state.aiControlForm.ollamaBaseUrl,
+      ollamaChatPath: state.aiControlForm.ollamaChatPath,
+      ollamaModelsPath: state.aiControlForm.ollamaModelsPath,
       temperature: Number(state.aiControlForm.temperature),
       maxTokens: Number(state.aiControlForm.maxTokens),
       connectTimeoutSeconds: Number(state.aiControlForm.connectTimeoutSeconds),
@@ -1117,6 +1159,11 @@ async function handleSaveAiControl() {
       payload.clearLmStudioApiKey = true
     } else if (state.aiControlForm.lmStudioApiKey?.trim()) {
       payload.lmStudioApiKey = state.aiControlForm.lmStudioApiKey.trim()
+    }
+    if (state.aiControlForm.clearOllamaApiKey) {
+      payload.clearOllamaApiKey = true
+    } else if (state.aiControlForm.ollamaApiKey?.trim()) {
+      payload.ollamaApiKey = state.aiControlForm.ollamaApiKey.trim()
     }
     if (state.aiControlForm.clearOpenAiApiKey) {
       payload.clearOpenAiApiKey = true
@@ -1816,6 +1863,12 @@ onBeforeUnmount(() => {
               </div>
 
               <form class="admin-ops-wizard" @submit.prevent="handleSaveAiControl">
+                <div class="admin-ai-feature-target" role="group" aria-label="AI 기능별 서버 선택">
+                  <span>적용 기능</span>
+                  <button type="button" :class="['button', { 'button--primary': state.aiTargetFeature === 'ledger' }]" @click="selectAiTargetFeature('ledger')">가계부 AI 분석</button>
+                  <button type="button" :class="['button', { 'button--primary': state.aiTargetFeature === 'image' }]" @click="selectAiTargetFeature('image')">이미지 분석 / OCR</button>
+                  <small>{{ aiFeatureLabel() }} 전용 서버 설정을 저장합니다.</small>
+                </div>
                 <div v-if="state.aiServerWizardStep === 1" class="admin-ai-field-grid">
                   <label class="field admin-ai-field-grid__wide">
                     <span class="field__label">서버 이름</span>
@@ -1826,7 +1879,7 @@ onBeforeUnmount(() => {
                     <select v-model="state.aiControlForm.provider" @change="handleAiProviderChange">
                       <option value="lmstudio">LM Studio</option>
                       <option value="openai">OpenAI API</option>
-                      <option value="n8n">n8n</option>
+                  <option value="ollama">Ollama</option>
                     </select>
                   </label>
                   <label class="field">
@@ -1841,7 +1894,11 @@ onBeforeUnmount(() => {
                     <span class="field__label">OpenAI API 주소</span>
                     <input v-model="state.aiControlForm.openAiBaseUrl" placeholder="https://api.openai.com" />
                   </label>
-                  <label v-else class="field admin-ai-field-grid__wide">
+                                    <label v-if="state.aiControlForm.provider === 'ollama'" class="field admin-ai-field-grid__wide">
+                    <span class="field__label">Ollama 주소</span>
+                    <input v-model="state.aiControlForm.ollamaBaseUrl" placeholder="http://127.0.0.1:11434" />
+                  </label>
+                  <label v-else-if="state.aiControlForm.provider === 'n8n'" class="field admin-ai-field-grid__wide">
                     <span class="field__label">서버 주소 / n8n Webhook URL</span>
                     <input v-model="state.aiControlForm.workflowUrl" placeholder="https://n8n.example.com/webhook/..." />
                   </label>
@@ -1890,7 +1947,25 @@ onBeforeUnmount(() => {
                       <span class="field__label">OpenAI API key 제거</span>
                     </label>
                   </template>
-                  <template v-else>
+                                    <template v-else-if="state.aiControlForm.provider === 'ollama'">
+                    <label class="field">
+                      <span class="field__label">Ollama Chat path</span>
+                      <input v-model="state.aiControlForm.ollamaChatPath" placeholder="/api/chat" />
+                    </label>
+                    <label class="field">
+                      <span class="field__label">Ollama Models path</span>
+                      <input v-model="state.aiControlForm.ollamaModelsPath" placeholder="/api/tags" />
+                    </label>
+                    <label class="field admin-ai-field-grid__wide">
+                      <span class="field__label">Ollama API key (프록시 사용 시 선택)</span>
+                      <input v-model="state.aiControlForm.ollamaApiKey" type="password" autocomplete="new-password" :disabled="state.aiControlForm.clearOllamaApiKey" :placeholder="state.aiControlForm.ollamaApiKeyConfigured ? '설정됨 - 변경할 때만 입력' : '일반 Ollama는 비워도 됩니다'" />
+                      <small v-if="state.aiControlForm.ollamaApiKeyConfigured" class="admin-ai-secret-status">서버에 암호화 저장됨.</small>
+                    </label>
+                    <label class="field field--inline admin-ai-field-grid__wide">
+                      <input v-model="state.aiControlForm.clearOllamaApiKey" type="checkbox" />
+                      <span class="field__label">Ollama API key 삭제</span>
+                    </label>
+                  </template>                  <template v-else>
                     <label class="field admin-ai-field-grid__wide">
                       <span class="field__label">n8n Webhook URL</span>
                       <input v-model="state.aiControlForm.workflowUrl" placeholder="https://n8n.example.com/webhook/..." />
@@ -2457,7 +2532,7 @@ onBeforeUnmount(() => {
                 <select v-model="state.aiControlForm.provider" @change="handleAiProviderChange">
                   <option value="lmstudio">LM Studio</option>
                   <option value="openai">OpenAI API</option>
-                  <option value="n8n">n8n</option>
+                  <option value="ollama">Ollama</option>
                 </select>
               </label>
               <label class="field">

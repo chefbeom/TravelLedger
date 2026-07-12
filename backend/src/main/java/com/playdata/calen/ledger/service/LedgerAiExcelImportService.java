@@ -8,6 +8,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.playdata.calen.account.service.AppUserService;
 import com.playdata.calen.common.exception.BadRequestException;
 import com.playdata.calen.ledger.ai.LedgerAiAnalysisProperties;
+import com.playdata.calen.ledger.ai.LedgerAiFeature;
 import com.playdata.calen.ledger.ai.LedgerAiProvider;
 import com.playdata.calen.ledger.domain.CategoryDetail;
 import com.playdata.calen.ledger.domain.CategoryGroup;
@@ -103,8 +104,8 @@ public class LedgerAiExcelImportService {
     }
 
     private void validateAiReady() {
-        if (!aiProperties.isConfigured()) {
-            throw new BadRequestException("AI Excel 가져오기를 사용하려면 관리자 페이지에서 AI provider 설정을 먼저 완료해 주세요.");
+        if (!aiProperties.isFeatureConfigured(LedgerAiFeature.LEDGER_ANALYSIS)) {
+            throw new BadRequestException(aiProperties.featureStatusMessage(LedgerAiFeature.LEDGER_ANALYSIS));
         }
     }
 

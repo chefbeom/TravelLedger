@@ -69,7 +69,8 @@ public class AdminOpsControlService {
     public AdminOpsControlResponse getSnapshot() {
         return new AdminOpsControlResponse(
                 aiControl(),
-                probeAiServer(),
+                probeAiServer(LedgerAiFeature.LEDGER_ANALYSIS),
+                probeAiServer(LedgerAiFeature.IMAGE_ANALYSIS),
                 probeDataServer(),
                 persistenceMessage
         );
@@ -454,18 +455,18 @@ public class AdminOpsControlService {
         );
     }
 
-    private AdminAiServerStatusResponse probeAiServer() {
+    private AdminAiServerStatusResponse probeAiServer(LedgerAiFeature feature) {
         long started = System.nanoTime();
-        LedgerAiFeature feature = LedgerAiFeature.LEDGER_ANALYSIS;
         LedgerAiFeatureConfig config = aiProperties.featureConfig(feature);
         String provider = config.provider().name().toLowerCase(java.util.Locale.ROOT);
+        String featureLabel = feature == LedgerAiFeature.IMAGE_ANALYSIS ? "Image analysis" : "Ledger AI analysis";
         if (!aiProperties.isEnabled()) {
-            return new AdminAiServerStatusResponse(false, provider, config.baseUrl(), config.modelsPath(), 0L, List.of(), "AI is disabled.");
+            return new AdminAiServerStatusResponse(false, provider, config.baseUrl(), config.modelsPath(), 0L, List.of(), featureLabel + " is disabled.");
         }
         if (!aiProperties.isFeatureConfigured(feature)) {
             String message = config.provider() == LedgerAiProvider.OPENAI && !hasText(config.apiKey())
                     ? "OpenAI API key is not configured."
-                    : "Ledger AI analysis server settings are incomplete or blocked by the provider host allowlist.";
+                    : featureLabel + " server settings are incomplete or blocked by the provider host allowlist.";
             return new AdminAiServerStatusResponse(false, provider, config.baseUrl(), config.modelsPath(), 0L, List.of(), message);
         }
 
@@ -487,7 +488,7 @@ public class AdminOpsControlService {
             List<String> models = extractModels(body);
             long elapsedMillis = (System.nanoTime() - started) / 1_000_000L;
             return new AdminAiServerStatusResponse(true, provider, config.baseUrl(), config.modelsPath(), elapsedMillis, models,
-                    models.isEmpty() ? "Ledger AI server responded, but model list is empty." : "Ledger AI server responded normally.");
+                    models.isEmpty() ? featureLabel + " server responded, but model list is empty." : featureLabel + " server responded normally.");
         } catch (RuntimeException exception) {
             long elapsedMillis = (System.nanoTime() - started) / 1_000_000L;
             return new AdminAiServerStatusResponse(false, provider, config.baseUrl(), config.modelsPath(), elapsedMillis, List.of(), safeMessage(exception));

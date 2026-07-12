@@ -16986,6 +16986,41 @@ textarea {
   background: rgba(13, 148, 136, 0.34);
 }
 
+.admin-ai-feature-status-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.admin-ai-feature-status-card {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--border, rgba(148, 163, 184, 0.35));
+  border-radius: 8px;
+  background: var(--surface-subtle, rgba(15, 23, 42, 0.45));
+}
+
+.admin-ai-feature-status-card.is-active {
+  border-color: var(--accent, #14b8a6);
+  box-shadow: inset 0 0 0 1px var(--accent, #14b8a6);
+}
+
+.admin-ai-feature-status-card strong,
+.admin-ai-feature-status-card small {
+  overflow-wrap: anywhere;
+}
+
+.admin-ai-feature-status-card small {
+  color: var(--text-muted, #94a3b8);
+}
+
+.admin-ai-feature-status-card small.is-healthy {
+  color: var(--success, #16a34a);
+  font-weight: 800;
+}
 .admin-ai-feature-target {
   display: flex;
   flex-wrap: wrap;
@@ -32748,4 +32783,9 @@ button.button--primary,
   background: var(--surface);
   color: var(--text);
   border-color: var(--line);
+}
+@media (max-width: 760px) {
+  .admin-ai-feature-status-grid {
+    grid-template-columns: 1fr;
+  }
 }

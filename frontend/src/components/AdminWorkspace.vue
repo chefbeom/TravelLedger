@@ -1015,12 +1015,34 @@ function formatAiControlPreset(preset) {
   const saved = preset.savedAt ? formatDateTime(preset.savedAt) : '저장 시각 없음'
   return `${preset.title || preset.model || 'AI 서버'} · ${preset.model || 'auto'} · ${aiControlPresetAddress(preset) || '-'} · ${saved}`
 }
-function activeAiFeatureConfig(control = state.opsControl) {
+function aiFeatureConfigFor(feature, control = state.opsControl) {
   const ai = control?.ai
   if (!ai) {
     return null
   }
-  return state.aiTargetFeature === 'image' ? ai.imageAnalysis : ai.ledgerAnalysis
+  return feature === 'image' ? ai.imageAnalysis : ai.ledgerAnalysis
+}
+
+function activeAiFeatureConfig(control = state.opsControl) {
+  return aiFeatureConfigFor(state.aiTargetFeature, control)
+}
+
+function aiFeatureServerStatusFor(feature, control = state.opsControl) {
+  return feature === 'image' ? control?.imageAiServer : control?.aiServer
+}
+
+function aiFeatureProviderLabel(feature) {
+  const provider = aiFeatureConfigFor(feature)?.provider
+  if (provider === 'openai') return 'OpenAI API'
+  if (provider === 'ollama') return 'Ollama'
+  if (provider === 'lmstudio') return 'LM Studio'
+  return '-'
+}
+
+function aiFeatureServerStateLabel(feature) {
+  const status = aiFeatureServerStatusFor(feature)
+  if (!status) return '점검 전'
+  return status.reachable ? '정상 연결' : '확인 필요'
 }
 
 function selectAiTargetFeature(feature) {
@@ -1748,10 +1770,10 @@ onBeforeUnmount(() => {
                 <article class="summary-card">
                   <span>AI 기능</span>
                   <strong>{{ state.opsControl?.ai?.enabled ? '켜짐' : '꺼짐' }}</strong>
-                  <small>{{ state.opsControl?.ai?.statusMessage || '-' }}</small>
+                  <small>가계부 AI: {{ aiFeatureServerStateLabel('ledger') }} · 이미지 OCR: {{ aiFeatureServerStateLabel('image') }}</small>
                 </article>
                 <article class="summary-card">
-                  <span>AI 서버</span>
+                  <span>가계부 AI 서버</span>
                   <strong>{{ state.opsControl?.aiServer?.reachable ? '정상' : '확인 필요' }}</strong>
                   <small>{{ state.opsControl?.aiServer?.message || '-' }}</small>
                 </article>
@@ -1766,6 +1788,16 @@ onBeforeUnmount(() => {
                   <small>{{ formatPercent(state.opsControl?.dataServer?.minioStorage?.usedPercent || 0) }} 사용</small>
                 </article>
               </div>
+              <div class="admin-ai-feature-status-grid admin-ai-feature-status-grid--probe">
+                <article v-for="feature in ['ledger', 'image']" :key="feature" class="admin-ai-feature-status-card">
+                  <span>{{ aiFeatureLabel(feature) }}</span>
+                  <strong>{{ aiFeatureServerStateLabel(feature) }}</strong>
+                  <small>{{ aiFeatureProviderLabel(feature) }} · {{ aiFeatureConfigFor(feature)?.model || '모델 미설정' }}</small>
+                  <small>{{ aiFeatureServerStatusFor(feature)?.baseUrl || aiFeatureConfigFor(feature)?.baseUrl || '서버 주소 미설정' }}</small>
+                  <small>{{ aiFeatureServerStatusFor(feature)?.message || '테스트 연결 전' }}</small>
+                </article>
+              </div>
+
               <div class="sheet-table-wrap">
                 <table class="sheet-table">
                   <thead>
@@ -1778,7 +1810,7 @@ onBeforeUnmount(() => {
                   </thead>
                   <tbody>
                     <tr>
-                      <td>AI 서버</td>
+                      <td>가계부 AI 서버</td>
                       <td>{{ state.opsControl?.aiServer?.reachable ? '정상' : '확인 필요' }}</td>
                       <td>{{ state.opsControl?.aiServer?.baseUrl || '-' }} {{ state.opsControl?.aiServer?.modelsPath || '' }}</td>
                       <td>{{ state.opsControl?.aiServer?.latencyMillis || 0 }} ms / {{ formatAiServerModelList(state.opsControl?.aiServer?.models) }}</td>
@@ -1808,6 +1840,15 @@ onBeforeUnmount(() => {
                 <button class="button button--ghost" type="button" :disabled="state.loadingOpsControl" @click="loadOpsControl">
                   {{ state.loadingOpsControl ? '조회 중...' : '현재 설정 조회' }}
                 </button>
+              </div>
+
+              <div class="admin-ai-feature-status-grid">
+                <article v-for="feature in ['ledger', 'image']" :key="feature" class="admin-ai-feature-status-card" :class="{ 'is-active': state.aiTargetFeature === feature }">
+                  <span>{{ aiFeatureLabel(feature) }}</span>
+                  <strong>{{ aiFeatureProviderLabel(feature) }} · {{ aiFeatureConfigFor(feature)?.model || '모델 미설정' }}</strong>
+                  <small>{{ aiFeatureConfigFor(feature)?.baseUrl || '서버 주소 미설정' }}</small>
+                  <small :class="{ 'is-healthy': aiFeatureServerStatusFor(feature)?.reachable }">{{ aiFeatureServerStateLabel(feature) }}</small>
+                </article>
               </div>
 
               <div class="admin-ops-current-server">
@@ -2476,10 +2517,10 @@ onBeforeUnmount(() => {
           <article class="summary-card">
             <span>AI 기능</span>
             <strong>{{ state.opsControl?.ai?.enabled ? '켜짐' : '꺼짐' }}</strong>
-            <small>{{ state.opsControl?.ai?.statusMessage || '-' }}</small>
+            <small>가계부 AI: {{ aiFeatureServerStateLabel('ledger') }} · 이미지 OCR: {{ aiFeatureServerStateLabel('image') }}</small>
           </article>
           <article class="summary-card">
-            <span>AI 서버</span>
+            <span>가계부 AI 서버</span>
             <strong>{{ state.opsControl?.aiServer?.reachable ? '정상' : '확인 필요' }}</strong>
             <small>{{ state.opsControl?.aiServer?.message || '-' }}</small>
           </article>
@@ -2680,7 +2721,7 @@ onBeforeUnmount(() => {
             </thead>
             <tbody>
               <tr>
-                <td>AI 서버</td>
+                <td>가계부 AI 서버</td>
                 <td>{{ state.opsControl?.aiServer?.reachable ? '정상' : '확인 필요' }}</td>
                 <td>{{ state.opsControl?.aiServer?.baseUrl || '-' }} {{ state.opsControl?.aiServer?.modelsPath || '' }}</td>
                 <td>{{ state.opsControl?.aiServer?.latencyMillis || 0 }} ms / {{ state.opsControl?.aiServer?.models?.join(', ') || '모델 없음' }}</td>

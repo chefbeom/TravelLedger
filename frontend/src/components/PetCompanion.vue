@@ -304,6 +304,26 @@ function announceNavigation(destination) {
   react('happy', navigation[destination] || getPetDialogue('interact', currentPet.value.greeting), 2800)
 }
 
+function announceAnalysisComplete(payload = {}) {
+  if (!settings.enabled) {
+    return
+  }
+
+  const task = String(payload?.task || '').trim().toLowerCase()
+  const entryCount = Math.max(0, Number(payload?.entryCount) || 0)
+  const prefix = currentPet.value.id === 'momo'
+    ? '야옹, '
+    : currentPet.value.id === 'bomi'
+      ? '멍멍, '
+      : ''
+  const message = task === 'image'
+    ? `${prefix}AI 이미지 분석이 완료됐어요.${entryCount ? ` 검수 거래 ${entryCount}건을 확인해 주세요.` : ' 결과를 확인해 주세요.'}`
+    : `${prefix}AI 가계부 분석이 완료됐어요. 결과를 확인해 주세요.`
+
+  isQuickOpen.value = false
+  react('alert', message, 5200)
+  speakAloud(message)
+}
 function handleAvatarClick() {
   if (dragState.moved) {
     dragState.moved = false
@@ -529,7 +549,7 @@ onBeforeUnmount(() => {
   }
 })
 
-defineExpose({ announceNavigation, openManager })
+defineExpose({ announceAnalysisComplete, announceNavigation, openManager })
 </script>
 
 <template>

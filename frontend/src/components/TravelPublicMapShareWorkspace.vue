@@ -31,6 +31,7 @@ const photoModalOpen = ref(false)
 const displayMode = ref('cluster')
 const mapFitRequestKey = ref(0)
 const isMapFullscreen = ref(false)
+let clusterDetailRequestSequence = 0
 
 const overview = computed(() => share.value?.overview ?? null)
 const markers = computed(() => overview.value?.markers ?? [])
@@ -51,17 +52,27 @@ const selectedPhoto = computed(() => (
   selectedPhotos.value.find((photo) => String(photo.id) === String(selectedPhotoId.value))
   ?? selectedRepresentativePhoto.value
 ))
-const selectedPhotoIndex = computed(() => selectedPhotos.value.findIndex((photo) => String(photo.id) === String(selectedPhotoId.value)))
-const selectedTotalPhotoCount = computed(() => selectedClusterDetail.value?.totalPhotoCount ?? selectedClusterSummary.value?.photoCount ?? selectedPhotos.value.length)
-const canNavigatePhotos = computed(() => selectedTotalPhotoCount.value > 1)
-const photoModalTitle = computed(() => selectedClusterSummary.value?.title || selectedPhoto.value?.placeName || selectedPhoto.value?.title || selectedPhoto.value?.originalFileName || '여행 사진')
+const displayedPhotoSequence = computed(() => {
+  const seenMediaIds = new Set()
+  return photoPins.value.filter((pin) => {
+    const mediaId = String(pin?.mediaId ?? '').trim()
+    const clusterId = String(pin?.clusterId ?? '').trim()
+    if (!mediaId || !clusterId || seenMediaIds.has(mediaId)) {
+      return false
+    }
+    seenMediaIds.add(mediaId)
+    return true
+  })
+})
+const canNavigatePhotos = computed(() => displayedPhotoSequence.value.length > 1)
+const photoModalTitle = computed(() => selectedPhoto.value?.placeName || selectedPhoto.value?.title || selectedPhoto.value?.originalFileName || selectedClusterSummary.value?.title || '여행 사진')
 const photoModalMeta = computed(() => {
   const photo = selectedPhoto.value
   const cluster = selectedClusterSummary.value
-  const date = formatDate(cluster?.memoryDate || photo?.expenseDate || photo?.memoryDate)
-  const time = formatTime(cluster?.memoryTime || photo?.expenseTime || photo?.memoryTime)
+  const date = formatDate(photo?.expenseDate || photo?.memoryDate || cluster?.memoryDate)
+  const time = formatTime(photo?.expenseTime || photo?.memoryTime || cluster?.memoryTime)
   return [
-    cluster?.planName || photo?.planName,
+    photo?.planName || cluster?.planName,
     [date, time].filter(Boolean).join(' '),
     photo?.placeName || photo?.region || photo?.country,
   ].filter(Boolean).join(' · ')
@@ -108,6 +119,7 @@ async function loadShare({ autoSelect = false } = {}) {
 }
 
 async function loadClusterDetail(clusterId, preferredPhotoId = null, page = 0, preferredIndex = null) {
+  const requestSequence = ++clusterDetailRequestSequence
   if (!clusterId) {
     selectedClusterDetail.value = null
     selectedPhotoId.value = null
@@ -123,6 +135,9 @@ async function loadClusterDetail(clusterId, preferredPhotoId = null, page = 0, p
       size: CLUSTER_PHOTO_PAGE_SIZE,
       focusMediaId: page === 0 ? preferredPhotoId : null,
     })
+    if (requestSequence !== clusterDetailRequestSequence) {
+      return
+    }
     const pagePhotos = detail?.photos ?? []
     selectedClusterDetail.value = detail
     selectedClusterPage.value = detail?.page ?? page
@@ -130,15 +145,19 @@ async function loadClusterDetail(clusterId, preferredPhotoId = null, page = 0, p
       ? pagePhotos[preferredIndex].id
       : preferredPhotoId ?? detail?.representativeMediaId ?? pagePhotos[0]?.id ?? null
   } catch (error) {
+    if (requestSequence !== clusterDetailRequestSequence) {
+      return
+    }
     selectedClusterDetail.value = null
     selectedPhotoId.value = null
     selectedClusterPage.value = 0
     setDetailError(error.message || '사진 상세 정보를 불러오지 못했습니다.')
   } finally {
-    isDetailLoading.value = false
+    if (requestSequence === clusterDetailRequestSequence) {
+      isDetailLoading.value = false
+    }
   }
 }
-
 async function handleSelectCluster(cluster) {
   if (!cluster?.id) {
     clearSelection()
@@ -171,6 +190,8 @@ function handleSelectMarker(marker) {
 }
 
 function clearSelection() {
+  clusterDetailRequestSequence += 1
+  isDetailLoading.value = false
   selectedClusterSummary.value = null
   selectedClusterDetail.value = null
   selectedPhotoId.value = null
@@ -191,24 +212,37 @@ async function selectAdjacentPhoto(offset) {
   if (isDetailLoading.value) {
     return
   }
-  const total = selectedTotalPhotoCount.value
-  if (total <= 1) {
+
+  const sequence = displayedPhotoSequence.value
+  if (sequence.length <= 1) {
     return
   }
 
-  const currentPage = selectedClusterDetail.value?.page ?? selectedClusterPage.value ?? 0
-  const pageSize = selectedClusterDetail.value?.size ?? CLUSTER_PHOTO_PAGE_SIZE
-  const currentIndex = selectedPhotoIndex.value >= 0 ? selectedPhotoIndex.value : 0
-  const targetGlobalIndex = (currentPage * pageSize + currentIndex + offset + total) % total
-  const targetPage = Math.floor(targetGlobalIndex / pageSize)
-  const targetIndex = targetGlobalIndex % pageSize
-
-  if (targetPage !== currentPage) {
-    await loadClusterDetail(selectedClusterSummary.value?.id ?? selectedClusterDetail.value?.id, null, targetPage, targetIndex)
+  const currentMediaId = String(selectedPhotoId.value ?? selectedClusterSummary.value?.representativeMediaId ?? '')
+  const currentIndex = sequence.findIndex((pin) => String(pin.mediaId) === currentMediaId)
+  const normalizedCurrentIndex = currentIndex >= 0 ? currentIndex : 0
+  const targetIndex = (normalizedCurrentIndex + offset + sequence.length) % sequence.length
+  const targetPin = sequence[targetIndex]
+  if (!targetPin) {
     return
   }
 
-  selectedPhotoId.value = selectedPhotos.value[targetIndex]?.id ?? selectedPhotoId.value
+  const targetPhoto = selectedPhotos.value.find((photo) => String(photo.id) === String(targetPin.mediaId))
+  const currentClusterId = String(selectedClusterDetail.value?.id ?? selectedClusterSummary.value?.id ?? '')
+  if (String(targetPin.clusterId) === currentClusterId && targetPhoto) {
+    selectedPhotoId.value = targetPhoto.id
+    return
+  }
+
+  const targetCluster = photoClusters.value.find((cluster) => String(cluster.id) === String(targetPin.clusterId))
+  if (!targetCluster) {
+    return
+  }
+
+  selectedClusterSummary.value = targetCluster
+  selectedMarkerId.value = null
+  photoModalOpen.value = true
+  await loadClusterDetail(targetPin.clusterId, targetPin.mediaId)
 }
 function formatDateRange(start, end) {
   const startText = formatDate(start)

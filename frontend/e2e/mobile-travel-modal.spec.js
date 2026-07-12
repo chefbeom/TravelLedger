@@ -79,6 +79,192 @@ test('mobile modal guard locks and restores background scroll in the app shell',
     bodyPosition: document.body.style.position,
   }))).toEqual({ rootOverflow: '', bodyPosition: '' })
 })
+test('public shared map photo modal stays stable while the full image loads', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'chromium-mobile', 'Runs only against the mobile Playwright project.')
+
+  const imageBytes = Buffer.from(
+    'iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAFUlEQVR42mNkYGD4z8DAwMDAxAADAAANHQEDasKb6QAAAABJRU5ErkJggg==',
+    'base64',
+  )
+  const photos = [
+    {
+      id: 101,
+      planId: 1,
+      planName: '모바일 여행',
+      originalFileName: 'photo-1.png',
+      contentType: 'image/png',
+      contentUrl: '/test-photo-1.png',
+      expenseDate: '2026-07-12',
+      expenseTime: '14:41:00',
+      title: 'Sengen-dori Street',
+      country: '일본',
+      region: '도쿄',
+      placeName: 'Sengen-dori Street',
+    },
+    {
+      id: 102,
+      planId: 1,
+      planName: '모바일 여행',
+      originalFileName: 'photo-2.png',
+      contentType: 'image/png',
+      contentUrl: '/test-photo-2.png',
+      expenseDate: '2026-07-12',
+      expenseTime: '14:42:00',
+      title: 'Second photo',
+      country: '일본',
+      region: '도쿄',
+      placeName: 'Second place',
+    },    {
+      id: 201,
+      planId: 1,
+      planName: '모바일 여행',
+      originalFileName: 'photo-3.png',
+      contentType: 'image/png',
+      contentUrl: '/test-photo-3.png',
+      expenseDate: '2026-07-13',
+      expenseTime: '09:10:00',
+      title: 'Third photo',
+      country: '일본',
+      region: '요코하마',
+      placeName: 'Third place',
+    },
+  ]
+
+  await page.route('**/api/auth/me', (route) => route.fulfill({ status: 401, contentType: 'application/json', body: '{}' }))
+  await page.route('**/api/travel/public/map-shares/mobile-photo-stability**', async (route) => {
+    const url = new URL(route.request().url())
+    if (url.pathname.includes('/photo-clusters/')) {
+      const clusterId = Number(url.pathname.split('/').at(-1))
+      const clusterPhotos = clusterId === 10 ? photos.slice(0, 2) : photos.slice(2)
+      await new Promise((resolve) => setTimeout(resolve, 120))
+      await route.fulfill({
+        contentType: 'application/json',
+        body: JSON.stringify({
+          id: clusterId,
+          representativeMediaId: clusterPhotos[0].id,
+          representativePhoto: clusterPhotos[0],
+          photos: clusterPhotos,
+          page: 0,
+          size: 36,
+          totalPhotoCount: clusterPhotos.length,
+          hasNext: false,
+        }),
+      })
+      return
+    }
+
+    await route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({
+        token: 'mobile-photo-stability',
+        title: '모바일 공유 지도',
+        ownerDisplayName: '테스터',
+        createdAt: '2026-07-12T14:40:00',
+        overview: {
+          includedPlanCount: 1,
+          markers: [],
+          photoPins: [
+            { mediaId: 101, clusterId: 10, latitude: 35.6812, longitude: 139.7671, photoUrl: '/test-photo-1.png' },
+            { mediaId: 102, clusterId: 10, latitude: 35.68121, longitude: 139.76711, photoUrl: '/test-photo-2.png' },
+            { mediaId: 201, clusterId: 20, latitude: 35.6912, longitude: 139.7771, photoUrl: '/test-photo-3.png' },
+          ],
+          routes: [],
+          photoClusters: [
+            {
+              id: 10,
+              representativeMediaId: 101,
+              planId: 1,
+              planName: '모바일 여행',
+              planColorHex: '#16A34A',
+              memoryDate: '2026-07-12',
+              memoryTime: '14:41:00',
+              title: 'Sengen-dori Street',
+              country: '일본',
+              region: '도쿄',
+              placeName: 'Sengen-dori Street',
+              latitude: 35.6812,
+              longitude: 139.7671,
+              photoCount: 2,
+              memoryCount: 1,
+              representativePhotoUrl: '/test-photo-1.png',
+            },
+            {
+              id: 20,
+              representativeMediaId: 201,
+              planId: 1,
+              planName: '모바일 여행',
+              planColorHex: '#16A34A',
+              memoryDate: '2026-07-13',
+              memoryTime: '09:10:00',
+              title: 'Third photo',
+              country: '일본',
+              region: '요코하마',
+              placeName: 'Third place',
+              latitude: 35.6912,
+              longitude: 139.7771,
+              photoCount: 1,
+              memoryCount: 1,
+              representativePhotoUrl: '/test-photo-3.png',
+            },
+          ],
+        },
+      }),
+    })
+  })
+  await page.route('**/test-photo-*.png*', async (route) => {
+    const url = new URL(route.request().url())
+    if (!url.searchParams.has('thumbnail')) {
+      await new Promise((resolve) => setTimeout(resolve, 700))
+    }
+    await route.fulfill({ status: 200, contentType: 'image/png', body: imageBytes })
+  })
+
+  const pageErrors = []
+  page.on('pageerror', (error) => pageErrors.push(error.message))
+  await page.goto('/#travel-share/mobile-photo-stability')
+
+  const cluster = page.locator('.travel-cluster-pin').first()
+  await expect(cluster).toBeVisible()
+  await cluster.tap()
+
+  const dialog = page.locator('.public-map-share-photo-modal')
+  const panel = page.locator('.public-map-share-photo-modal__panel')
+  await expect(dialog).toBeVisible()
+  await expect(panel).toBeVisible()
+  await page.evaluate(() => document.documentElement.removeAttribute('data-theme'))
+  const lightThemeColors = await panel.evaluate((element) => {
+    const title = element.querySelector('h2')
+    const meta = element.querySelector('.public-map-share-photo-modal__header p')
+    const closeButton = element.querySelector('.public-map-share-photo-modal__header-actions .button')
+    return {
+      panelBackground: getComputedStyle(element).backgroundColor,
+      title: getComputedStyle(title).color,
+      meta: getComputedStyle(meta).color,
+      closeButton: getComputedStyle(closeButton).color,
+    }
+  })
+  expect(lightThemeColors).toEqual({
+    panelBackground: 'rgb(255, 255, 255)',
+    title: 'rgb(25, 31, 40)',
+    meta: 'rgb(78, 89, 104)',
+    closeButton: 'rgb(25, 31, 40)',
+  })
+  const loadingHeight = await panel.evaluate((element) => element.getBoundingClientRect().height)
+  await expect(page.locator('.public-map-share-photo-modal__image-state--loading')).toBeVisible()
+  await expect(page.locator('.public-map-share-photo-modal__media > img')).toBeVisible()
+  const loadedHeight = await panel.evaluate((element) => element.getBoundingClientRect().height)
+
+  expect(Math.abs(loadedHeight - loadingHeight)).toBeLessThanOrEqual(1)
+
+  const nextPhotoButton = page.locator('.public-map-share-photo-modal__nav--next')
+  await nextPhotoButton.tap()
+  await expect(page.locator('.public-map-share-photo-modal__header h2')).toHaveText('Second place')
+  await nextPhotoButton.tap()
+  await expect(page.locator('.public-map-share-photo-modal__header h2')).toHaveText('Third place')
+  await expect(page.locator('.public-map-share-photo-modal__header p')).toContainText('2026-07-13')
+  await expect(page.locator('.public-map-share-photo-modal__media > img')).toHaveAttribute('src', '/test-photo-3.png')
+  expect(pageErrors).toEqual([])
+})
 test.describe('mobile travel map and modal interactions', () => {
   test.beforeEach(async ({ page }, testInfo) => {
     requireMobileTravelFixture(testInfo)

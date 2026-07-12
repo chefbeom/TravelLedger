@@ -101,7 +101,7 @@ const props = defineProps({
   },
 })
 
-const emit = defineEmits(['open-travel-record-location'])
+const emit = defineEmits(['open-travel-record-location', 'ai-analysis-complete'])
 
 const compareUnitLabels = {
   DAY: '일간',
@@ -122,6 +122,8 @@ const SEARCH_PAGE_SIZE = 100
 const SEARCH_OTHER_FILTER_VALUE = '__OTHER__'
 const AI_HISTORY_PAGE_SIZE = 8
 const RECEIPT_OCR_PROMPT_RULES_KEY = 'calen-household-receipt-ocr-prompt-rules:v1'
+const RECEIPT_OCR_PROMPT_RULE_PRESETS_KEY = 'calen-household-receipt-ocr-prompt-rule-presets:v2'
+const RECEIPT_OCR_PROMPT_RULE_PRESET_LIMIT = 5
 const RECEIPT_OCR_REQUEST_PROMPT_LAST_KEY = 'calen-household-receipt-ocr-request-prompt-last:v1'
 const RECEIPT_OCR_REQUEST_PROMPT_HISTORY_KEY = 'calen-household-receipt-ocr-request-prompt-history:v1'
 const RECEIPT_OCR_APPLIED_ENTRY_MARKERS_KEY = 'calen-household-receipt-ocr-applied-entry-markers:v1'
@@ -151,29 +153,63 @@ const householdAnalysisTabs = [
   { key: 'stats-compare', label: '비교' },
   { key: 'stats-ai', label: 'AI 분석' },
 ]
-function loadReceiptOcrPromptRules() {
-  if (typeof window === 'undefined') {
-    return ''
-  }
-  try {
-    return window.localStorage.getItem(RECEIPT_OCR_PROMPT_RULES_KEY) || ''
-  } catch (error) {
-    console.warn('Failed to load receipt OCR prompt rules', error)
-    return ''
+function createReceiptPromptRulePresetId() {
+  return globalThis.crypto?.randomUUID?.()
+    || `prompt-rule-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
+}
+
+function normalizeReceiptPromptRulePreset(preset, index = 0) {
+  const prompt = normalizeReceiptPrompt(preset?.prompt, 3000)
+  const name = String(preset?.name || `프리셋 ${index + 1}`).trim().slice(0, 40) || `프리셋 ${index + 1}`
+  return {
+    id: String(preset?.id || createReceiptPromptRulePresetId()),
+    name,
+    prompt,
   }
 }
 
-function saveReceiptOcrPromptRules(value) {
+function saveReceiptOcrPromptRulePresetState(state) {
   if (typeof window === 'undefined') {
     return
   }
   try {
-    window.localStorage.setItem(RECEIPT_OCR_PROMPT_RULES_KEY, value || '')
+    window.localStorage.setItem(RECEIPT_OCR_PROMPT_RULE_PRESETS_KEY, JSON.stringify(state))
   } catch (error) {
-    console.warn('Failed to save receipt OCR prompt rules', error)
+    console.warn('Failed to save receipt OCR prompt rule presets', error)
   }
 }
 
+function loadReceiptOcrPromptRulePresetState() {
+  if (typeof window === 'undefined') {
+    return { presets: [], activePresetId: '' }
+  }
+  try {
+    const stored = JSON.parse(window.localStorage.getItem(RECEIPT_OCR_PROMPT_RULE_PRESETS_KEY) || 'null')
+    const presets = Array.isArray(stored?.presets)
+      ? stored.presets.slice(0, RECEIPT_OCR_PROMPT_RULE_PRESET_LIMIT).map(normalizeReceiptPromptRulePreset)
+      : []
+    if (presets.length) {
+      const activePresetId = presets.some((preset) => preset.id === stored?.activePresetId)
+        ? stored.activePresetId
+        : presets[0].id
+      return { presets, activePresetId }
+    }
+
+    const legacyPrompt = normalizeReceiptPrompt(window.localStorage.getItem(RECEIPT_OCR_PROMPT_RULES_KEY) || '', 3000)
+    if (!legacyPrompt) {
+      return { presets: [], activePresetId: '' }
+    }
+    const legacyPreset = normalizeReceiptPromptRulePreset({ name: '기존 규칙', prompt: legacyPrompt })
+    const migratedState = { presets: [legacyPreset], activePresetId: legacyPreset.id }
+    saveReceiptOcrPromptRulePresetState(migratedState)
+    return migratedState
+  } catch (error) {
+    console.warn('Failed to load receipt OCR prompt rule presets', error)
+    return { presets: [], activePresetId: '' }
+  }
+}
+
+const initialReceiptPromptRulePresetState = loadReceiptOcrPromptRulePresetState()
 function loadReceiptOcrRequestPromptLast() {
   if (typeof window === 'undefined') {
     return ''
@@ -394,7 +430,11 @@ const receiptOcr = reactive({
   rerunPromptEnabled: false,
   rerunPrompt: '',
   promptRulesEnabled: true,
-  promptRules: loadReceiptOcrPromptRules(),
+  promptRulePresets: initialReceiptPromptRulePresetState.presets,
+  activePromptRulePresetId: initialReceiptPromptRulePresetState.activePresetId,
+  promptRules: initialReceiptPromptRulePresetState.presets.find(
+    (preset) => preset.id === initialReceiptPromptRulePresetState.activePresetId,
+  )?.prompt || '',
   isAnalyzing: false,
   pendingCount: 0,
   batchTotalCount: 0,
@@ -2289,6 +2329,7 @@ async function requestAiAnalysis() {
     aiAnalysis.value = await analyzeLedgerSpending(payload)
     aiAnalysisStale.value = false
     await loadAiAnalysisHistory()
+    emit('ai-analysis-complete', { task: 'ledger' })
   } catch (error) {
     const message = error.message || 'AI 분석 요청을 처리하지 못했습니다.'
     if (aiAnalysis.value) {
@@ -2338,6 +2379,7 @@ async function rerunAiAnalysis(historyId) {
     aiAnalysis.value = await rerunLedgerAiAnalysis(historyId)
     aiAnalysisStale.value = false
     await loadAiAnalysisHistory(aiAnalysisHistoryPage.value?.page ?? 0)
+    emit('ai-analysis-complete', { task: 'ledger' })
   } catch (error) {
     const message = error.message || 'AI 분석 재요청을 처리하지 못했습니다.'
     if (aiAnalysis.value) {
@@ -2895,20 +2937,93 @@ function setReceiptRerunPrompt(value) {
   receiptOcr.rerunPrompt = normalizeReceiptPrompt(value)
 }
 
+function persistReceiptPromptRulePresets() {
+  saveReceiptOcrPromptRulePresetState({
+    presets: receiptOcr.promptRulePresets,
+    activePresetId: receiptOcr.activePromptRulePresetId,
+  })
+}
+
+function getActiveReceiptPromptRulePreset() {
+  return receiptOcr.promptRulePresets.find(
+    (preset) => preset.id === receiptOcr.activePromptRulePresetId,
+  ) || null
+}
+
+function syncActiveReceiptPromptRulePreset() {
+  const activePreset = getActiveReceiptPromptRulePreset()
+  receiptOcr.promptRules = activePreset?.prompt || ''
+}
+
 function setReceiptPromptRulesEnabled(value) {
   receiptOcr.promptRulesEnabled = Boolean(value)
 }
 
+function addReceiptPromptRulePreset() {
+  if (receiptOcr.promptRulePresets.length >= RECEIPT_OCR_PROMPT_RULE_PRESET_LIMIT) {
+    setFeedback('', `프롬프트 프리셋은 최대 ${RECEIPT_OCR_PROMPT_RULE_PRESET_LIMIT}개까지 저장할 수 있습니다.`)
+    return
+  }
+  const preset = normalizeReceiptPromptRulePreset({
+    name: `프리셋 ${receiptOcr.promptRulePresets.length + 1}`,
+    prompt: '',
+  })
+  receiptOcr.promptRulePresets.push(preset)
+  receiptOcr.activePromptRulePresetId = preset.id
+  receiptOcr.promptRulesEnabled = true
+  syncActiveReceiptPromptRulePreset()
+  persistReceiptPromptRulePresets()
+}
+
+function selectReceiptPromptRulePreset(presetId) {
+  const normalizedId = String(presetId || '')
+  if (!receiptOcr.promptRulePresets.some((preset) => preset.id === normalizedId)) {
+    return
+  }
+  receiptOcr.activePromptRulePresetId = normalizedId
+  syncActiveReceiptPromptRulePreset()
+  persistReceiptPromptRulePresets()
+}
+
+function setReceiptPromptRulePresetName(value) {
+  const activePreset = getActiveReceiptPromptRulePreset()
+  if (!activePreset) {
+    return
+  }
+  activePreset.name = String(value || '').trimStart().slice(0, 40)
+  persistReceiptPromptRulePresets()
+}
+
+function deleteReceiptPromptRulePreset(presetId) {
+  const normalizedId = String(presetId || '')
+  const nextPresets = receiptOcr.promptRulePresets.filter((preset) => preset.id !== normalizedId)
+  if (nextPresets.length === receiptOcr.promptRulePresets.length) {
+    return
+  }
+  receiptOcr.promptRulePresets = nextPresets
+  if (receiptOcr.activePromptRulePresetId === normalizedId) {
+    receiptOcr.activePromptRulePresetId = nextPresets[0]?.id || ''
+  }
+  syncActiveReceiptPromptRulePreset()
+  persistReceiptPromptRulePresets()
+}
+
 function setReceiptPromptRules(value) {
+  const activePreset = getActiveReceiptPromptRulePreset()
+  if (!activePreset) {
+    return
+  }
   const normalized = normalizeReceiptPrompt(value, 3000)
+  activePreset.prompt = normalized
   receiptOcr.promptRules = normalized
-  saveReceiptOcrPromptRules(normalized)
+  persistReceiptPromptRulePresets()
 }
 
 function buildReceiptOcrPrompt(requestPrompt = '') {
   const parts = []
-  if (receiptOcr.promptRulesEnabled && receiptOcr.promptRules) {
-    parts.push(`[나만의 프롬프트 규칙]\n${receiptOcr.promptRules}`)
+  const activePreset = getActiveReceiptPromptRulePreset()
+  if (receiptOcr.promptRulesEnabled && activePreset?.prompt) {
+    parts.push(`[나만의 프롬프트 규칙: ${activePreset.name || '이름 없음'}]\n${activePreset.prompt}`)
   }
   const normalizedRequestPrompt = normalizeReceiptPrompt(requestPrompt)
   if (normalizedRequestPrompt) {
@@ -3568,6 +3683,7 @@ async function analyzeReceiptFile(file, documentType, existingItem = null, promp
     item.categoryText = result?.categoryText || ''
     item.timing = result?.timing || null
     updateLegacyReceiptOcrFields(result, item.suggestedEntries[0] || null, item.fileName)
+    emit('ai-analysis-complete', { task: 'image', entryCount: item.suggestedEntries.length })
     setFeedback('거래 이미지 분석이 완료되었습니다. 결과를 확인한 뒤 입력칸에 적용해 주세요.')
   } catch (error) {
     if (!isReceiptOcrItemActive(item)) {
@@ -5088,6 +5204,10 @@ async function activatePayment(paymentId) {
       @set-receipt-rerun-prompt-enabled="setReceiptRerunPromptEnabled"
       @set-receipt-rerun-prompt="setReceiptRerunPrompt"
       @set-receipt-prompt-rules-enabled="setReceiptPromptRulesEnabled"
+      @add-receipt-prompt-rule-preset="addReceiptPromptRulePreset"
+      @select-receipt-prompt-rule-preset="selectReceiptPromptRulePreset"
+      @set-receipt-prompt-rule-preset-name="setReceiptPromptRulePresetName"
+      @delete-receipt-prompt-rule-preset="deleteReceiptPromptRulePreset"
       @set-receipt-prompt-rules="setReceiptPromptRules"
       @update:amount-input="handleAmountInput"
       @update:time-enabled="updateTimeEnabled"

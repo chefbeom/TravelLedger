@@ -10,6 +10,11 @@ const modalFixtures = [
   ['transaction-sheet-settings-modal', 'transaction-sheet-settings-modal__dialog'],
   ['main-photo-frame-modal', 'main-photo-frame-modal__dialog'],
   ['public-map-share-photo-modal', 'public-map-share-photo-modal__panel'],
+  ['admin-ops-modal', 'admin-ops-modal__dialog'],
+  ['admin-support-modal', 'admin-support-modal__dialog'],
+  ['admin-access-control-modal', 'admin-access-control-modal__dialog'],
+  ['global-notification-modal', 'global-notification-modal__dialog'],
+  ['profile-workspace-modal', 'profile-workspace-modal__dialog'],
 ]
 
 async function renderModalFixture(page, overlayClass, panelClass) {
@@ -101,4 +106,32 @@ test('AI result window stays above the analysis manager modal', () => {
 
   expect(managerLayer).toBeGreaterThan(0)
   expect(resultLayer).toBeGreaterThan(managerLayer)
+})
+test('global Escape closes the topmost accessible modal', async ({ page }) => {
+  await page.goto('/')
+  await expect(page.locator('#app')).toBeVisible()
+
+  await page.evaluate(() => {
+    const lower = document.createElement('section')
+    lower.className = 'travel-modal'
+    lower.style.zIndex = '100'
+    lower.innerHTML = '<button data-modal-close type="button">닫기</button>'
+
+    const upper = document.createElement('section')
+    upper.setAttribute('role', 'dialog')
+    upper.setAttribute('aria-modal', 'true')
+    upper.style.zIndex = '200'
+    upper.innerHTML = '<button data-modal-close type="button">닫기</button>'
+
+    lower.querySelector('button').addEventListener('click', () => lower.remove())
+    upper.querySelector('button').addEventListener('click', () => upper.remove())
+    document.body.append(lower, upper)
+  })
+
+  await page.keyboard.press('Escape')
+  await expect(page.getByRole('dialog')).toHaveCount(0)
+  await expect(page.locator('.travel-modal')).toHaveCount(1)
+
+  await page.keyboard.press('Escape')
+  await expect(page.locator('.travel-modal')).toHaveCount(0)
 })

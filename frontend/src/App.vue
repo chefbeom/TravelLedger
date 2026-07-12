@@ -115,6 +115,8 @@ const MODAL_SCROLL_LOCK_SELECTOR = [
   '[role="dialog"][aria-modal="true"]',
   '.travel-modal',
   '.receipt-ocr-modal',
+  '.transaction-sheet-modal',
+  '.transaction-sheet-settings-modal',
   '.ai-result-modal',
   '.profile-security-modal',
   '.profile-privacy-modal',
@@ -700,6 +702,9 @@ function openPetManager() {
   petCompanionRef.value?.openManager()
 }
 
+function handlePetAiAnalysisComplete(payload) {
+  petCompanionRef.value?.announceAnalysisComplete(payload)
+}
 function openNotificationModal() {
   notificationModalOpen.value = true
   petCompanionRef.value?.announceNavigation('notifications')
@@ -1070,9 +1075,12 @@ const MODAL_ESCAPE_SELECTOR = [
   '.ledger-ai-modal',
   '.ai-result-modal',
   '.receipt-ocr-modal',
+  '.transaction-sheet-modal',
+  '.transaction-sheet-settings-modal',
   '.main-photo-frame-modal',
   '.public-map-share-photo-modal',
   '.drive-version-overlay',
+  '[role="dialog"][aria-modal="true"]',
 ].join(',')
 
 function isVisibleModal(element) {
@@ -1080,13 +1088,19 @@ function isVisibleModal(element) {
   return style.display !== 'none' && style.visibility !== 'hidden'
 }
 
+function modalStackOrder(element) {
+  const value = Number.parseInt(window.getComputedStyle(element).zIndex, 10)
+  return Number.isFinite(value) ? value : 0
+}
+
 function handleGlobalModalEscape(event) {
-  if (event.key !== 'Escape' || event.defaultPrevented) {
+  if (event.key !== 'Escape') {
     return
   }
 
   const modal = [...document.querySelectorAll(MODAL_ESCAPE_SELECTOR)]
     .filter(isVisibleModal)
+    .sort((left, right) => modalStackOrder(left) - modalStackOrder(right))
     .at(-1)
   if (!modal) {
     return
@@ -1380,6 +1394,7 @@ onBeforeUnmount(() => {
           :current-user="currentUser"
           :initial-tab="householdInitialTab"
           @open-travel-record-location="navigateTravelRecordLocation"
+          @ai-analysis-complete="handlePetAiAnalysisComplete"
         />
         <CalenDriveWorkspace v-else-if="activeRoute === 'drive'" :current-user="currentUser" />
         <NotificationCenterWorkspace

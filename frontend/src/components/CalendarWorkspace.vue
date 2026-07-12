@@ -311,7 +311,12 @@ const emit = defineEmits([
   'set-receipt-rerun-prompt-enabled',
   'set-receipt-rerun-prompt',
   'set-receipt-prompt-rules-enabled',
+  'add-receipt-prompt-rule-preset',
+  'select-receipt-prompt-rule-preset',
+  'set-receipt-prompt-rule-preset-name',
+  'delete-receipt-prompt-rule-preset',
   'set-receipt-prompt-rules',
+  'update-receipt-item-prompt',
   'select-receipt-files',
   'start-receipt-analysis',
   'analyze-receipt',
@@ -586,6 +591,26 @@ function updateReceiptRerunPrompt(event) {
 
 function updateReceiptPromptRulesEnabled(event) {
   emit('set-receipt-prompt-rules-enabled', event.target.checked)
+}
+
+function addReceiptPromptRulePreset() {
+  emit('add-receipt-prompt-rule-preset')
+}
+
+function selectReceiptPromptRulePreset(event) {
+  emit('select-receipt-prompt-rule-preset', event.target.value)
+}
+
+function updateReceiptPromptRulePresetName(event) {
+  emit('set-receipt-prompt-rule-preset-name', event.target.value)
+}
+
+function deleteReceiptPromptRulePreset() {
+  const preset = receiptActivePromptRulePreset.value
+  if (!preset || !window.confirm(`'${preset.name || '이름 없음'}' 프리셋을 삭제할까요?`)) {
+    return
+  }
+  emit('delete-receipt-prompt-rule-preset', preset.id)
 }
 
 function updateReceiptPromptRules(event) {
@@ -1054,6 +1079,15 @@ const hasReceiptSelectedItems = computed(() => receiptSelectedItems.value.length
 const receiptPromptHistory = computed(() => (
   Array.isArray(props.receiptOcr?.requestPromptHistory) ? props.receiptOcr.requestPromptHistory : []
 ))
+const receiptPromptRulePresets = computed(() => (
+  Array.isArray(props.receiptOcr?.promptRulePresets) ? props.receiptOcr.promptRulePresets : []
+))
+const receiptActivePromptRulePreset = computed(() => (
+  receiptPromptRulePresets.value.find(
+    (preset) => preset.id === props.receiptOcr?.activePromptRulePresetId,
+  ) || null
+))
+const canAddReceiptPromptRulePreset = computed(() => receiptPromptRulePresets.value.length < 5)
 const receiptCompletedItems = computed(() => receiptReviewItems.value.filter((item) => item.status === 'done' || item.fromHistory))
 const receiptHistoryDetailAnalysisId = computed(() => String(props.receiptOcr?.historyDetailAnalysisId || ''))
 const receiptHistoryDetailHistory = computed(() => (
@@ -4468,7 +4502,7 @@ defineExpose({
                   <span>거래 시트</span>
                   <h2 id="transaction-sheet-settings-title">거래 시트 보기 설정</h2>
                 </div>
-                <button type="button" class="button button--ghost" @click="closeTransactionSheetSettings">닫기</button>
+                <button type="button" class="button button--ghost" data-modal-close @click="closeTransactionSheetSettings">닫기</button>
               </header>
               <div class="transaction-sheet-settings-modal__options" role="radiogroup" aria-label="거래 시트 표시 방식">
                 <button
@@ -4766,21 +4800,77 @@ defineExpose({
         </section>
         <section v-else-if="receiptOcrView === 'rules'" class="receipt-ocr-workspace receipt-ocr-workspace--rules">
           <div class="receipt-ocr-prompt-box receipt-ocr-prompt-box--rules">
-            <label class="receipt-ocr-toggle">
-              <input
-                type="checkbox"
-                :checked="receiptOcr?.promptRulesEnabled"
-                @change="updateReceiptPromptRulesEnabled"
-              />
-              <span>나만의 프롬프트 규칙 사용</span>
-            </label>
-            <textarea
-              :value="receiptOcr?.promptRules || ''"
-              rows="12"
-              placeholder="예: 네이버페이 결제 내역은 제목을 '네이버페이 : 상품명' 형식으로 정리한다. 메모에는 원문 상태, 상품명, 상세 금액, 날짜/시간을 보이는 그대로 남긴다. 결제수단은 카드/계좌가 명시된 경우에만 채운다."
-              @input="updateReceiptPromptRules"
-            ></textarea>
-            <p class="receipt-ocr-prompt-box__hint">저장된 규칙은 새 분석과 재요청에 함께 참고됩니다.</p>
+            <div class="receipt-ocr-rule-presets__header">
+              <label class="receipt-ocr-toggle">
+                <input
+                  type="checkbox"
+                  :checked="receiptOcr?.promptRulesEnabled"
+                  :disabled="!receiptActivePromptRulePreset"
+                  @change="updateReceiptPromptRulesEnabled"
+                />
+                <span>선택한 프롬프트 규칙 사용</span>
+              </label>
+              <span class="receipt-ocr-rule-presets__count">{{ receiptPromptRulePresets.length }}/5개</span>
+            </div>
+
+            <div class="receipt-ocr-rule-presets__toolbar">
+              <label class="receipt-ocr-rule-presets__select">
+                <span>사용할 프리셋</span>
+                <select
+                  :value="receiptOcr?.activePromptRulePresetId || ''"
+                  :disabled="!receiptPromptRulePresets.length"
+                  @change="selectReceiptPromptRulePreset"
+                >
+                  <option v-if="!receiptPromptRulePresets.length" value="">저장된 프리셋 없음</option>
+                  <option v-for="preset in receiptPromptRulePresets" :key="preset.id" :value="preset.id">
+                    {{ preset.name || '이름 없음' }}
+                  </option>
+                </select>
+              </label>
+              <button
+                class="button"
+                type="button"
+                :disabled="!canAddReceiptPromptRulePreset"
+                @click="addReceiptPromptRulePreset"
+              >
+                새 프리셋
+              </button>
+            </div>
+
+            <template v-if="receiptActivePromptRulePreset">
+              <div class="receipt-ocr-rule-presets__editor-header">
+                <label class="receipt-ocr-rule-presets__name">
+                  <span>프리셋 이름</span>
+                  <input
+                    :value="receiptActivePromptRulePreset.name"
+                    maxlength="40"
+                    placeholder="프리셋 이름"
+                    @input="updateReceiptPromptRulePresetName"
+                  />
+                </label>
+                <button class="button button--danger" type="button" @click="deleteReceiptPromptRulePreset">삭제</button>
+              </div>
+              <label class="receipt-ocr-rule-presets__content">
+                <span>프롬프트 규칙</span>
+                <textarea
+                  :value="receiptActivePromptRulePreset.prompt || ''"
+                  rows="12"
+                  maxlength="3000"
+                  placeholder="예: 네이버페이 결제 내역은 제목을 '네이버페이 : 상품명' 형식으로 정리한다. 메모에는 원문 상태, 상품명, 상세 금액, 날짜/시간을 보이는 그대로 남긴다. 결제수단은 카드/계좌가 명시된 경우에만 채운다."
+                  @input="updateReceiptPromptRules"
+                ></textarea>
+              </label>
+              <p class="receipt-ocr-prompt-box__hint">
+                현재 선택한 프리셋 하나만 새 분석과 재요청에 적용됩니다.
+              </p>
+            </template>
+            <div v-else class="receipt-ocr-rule-presets__empty">
+              <strong>저장된 프리셋이 없습니다.</strong>
+              <span>새 프리셋을 추가해 규칙을 작성하세요.</span>
+            </div>
+            <p v-if="!canAddReceiptPromptRulePreset" class="receipt-ocr-prompt-box__hint">
+              최대 5개까지 저장할 수 있습니다. 새로 추가하려면 기존 프리셋을 수정하거나 삭제하세요.
+            </p>
           </div>
         </section>
 

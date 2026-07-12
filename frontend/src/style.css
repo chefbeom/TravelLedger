@@ -28548,6 +28548,88 @@ button.button--primary,
   margin: 0;
 }
 
+.receipt-ocr-rule-presets__header,
+.receipt-ocr-rule-presets__toolbar,
+.receipt-ocr-rule-presets__editor-header {
+  align-items: end;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+  min-width: 0;
+}
+
+.receipt-ocr-rule-presets__count {
+  background: var(--modal-surface-muted, rgba(121, 142, 171, 0.18));
+  border: 1px solid var(--modal-border, rgba(121, 142, 171, 0.28));
+  border-radius: 999px;
+  color: var(--modal-text-soft, var(--text-muted));
+  flex: 0 0 auto;
+  font-size: 0.82rem;
+  font-weight: 800;
+  padding: 0.3rem 0.65rem;
+}
+
+.receipt-ocr-rule-presets__select,
+.receipt-ocr-rule-presets__name,
+.receipt-ocr-rule-presets__content {
+  color: var(--modal-text, var(--text-primary));
+  display: grid;
+  font-size: 0.86rem;
+  font-weight: 800;
+  gap: 6px;
+  min-width: 0;
+}
+
+.receipt-ocr-rule-presets__select,
+.receipt-ocr-rule-presets__name {
+  flex: 1 1 auto;
+}
+
+.receipt-ocr-rule-presets__select select,
+.receipt-ocr-rule-presets__name input {
+  background: var(--modal-surface, rgba(9, 17, 28, 0.95));
+  border: 1px solid var(--modal-border, rgba(121, 142, 171, 0.32));
+  border-radius: 10px;
+  box-sizing: border-box;
+  color: var(--modal-text, var(--text-primary));
+  min-height: 42px;
+  min-width: 0;
+  padding: 0.65rem 0.8rem;
+  width: 100%;
+}
+
+.receipt-ocr-rule-presets__toolbar .button,
+.receipt-ocr-rule-presets__editor-header .button {
+  flex: 0 0 auto;
+  min-height: 42px;
+}
+
+.receipt-ocr-rule-presets__empty {
+  align-items: center;
+  border: 1px dashed var(--modal-border, rgba(121, 142, 171, 0.35));
+  border-radius: 10px;
+  color: var(--modal-text-soft, var(--text-muted));
+  display: grid;
+  gap: 4px;
+  justify-items: center;
+  min-height: 150px;
+  padding: 1rem;
+  text-align: center;
+}
+
+@media (max-width: 720px) {
+  .receipt-ocr-rule-presets__toolbar,
+  .receipt-ocr-rule-presets__editor-header {
+    align-items: stretch;
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .receipt-ocr-rule-presets__toolbar .button,
+  .receipt-ocr-rule-presets__editor-header .button {
+    width: 100%;
+  }
+}
 .receipt-ocr-review-entry__actions {
   align-items: center;
   display: flex;
@@ -32630,4 +32712,14 @@ button.button--primary,
 :root[data-theme='toss'] .admin-ops-server-row__active,
 :root[data-theme='toss'] .admin-ai-secret-status {
   color: #a7f3d0 !important;
+}
+/* Every modal panel owns its theme contract instead of relying on a wrapper class. */
+.admin-ops-modal__dialog,
+.admin-support-modal__dialog,
+.admin-access-control-modal__dialog,
+.global-notification-modal__dialog,
+.profile-workspace-modal__dialog {
+  background: var(--surface);
+  color: var(--text);
+  border-color: var(--line);
 }

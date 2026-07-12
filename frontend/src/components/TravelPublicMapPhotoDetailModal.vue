@@ -1,5 +1,8 @@
 <script setup>
-defineProps({
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { buildThumbnailUrl, THUMBNAIL_VARIANTS } from '../lib/mediaPreview'
+
+const props = defineProps({
   title: {
     type: String,
     default: '',
@@ -43,6 +46,73 @@ const CLOSE_LABEL = '\uB2EB\uAE30'
 const LOADING_LABEL = '\uC0AC\uC9C4 \uC815\uBCF4\uB97C \uBD88\uB7EC\uC624\uB294 \uC911\uC785\uB2C8\uB2E4...'
 const EMPTY_LABEL = '\uD45C\uC2DC\uD560 \uC0AC\uC9C4 \uC0C1\uC138\uAC00 \uC5C6\uC2B5\uB2C8\uB2E4.'
 const THUMB_LIST_LABEL = '\uD074\uB7EC\uC2A4\uD130 \uC0AC\uC9C4 \uBAA9\uB85D'
+const IMAGE_LOADING_LABEL = '\uC0AC\uC9C4\uC744 \uC900\uBE44\uD558\uB294 \uC911\uC785\uB2C8\uB2E4...'
+const IMAGE_ERROR_LABEL = '\uC0AC\uC9C4\uC744 \uD45C\uC2DC\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.'
+
+const activePhotoUrl = computed(() => String(props.photo?.contentUrl || '').trim())
+const displayedImageUrl = ref('')
+const isImagePreparing = ref(false)
+const imageLoadFailed = ref(false)
+let imageLoadSequence = 0
+let pendingImage = null
+
+function thumbnailUrl(item) {
+  return buildThumbnailUrl(item?.contentUrl, THUMBNAIL_VARIANTS.mini)
+}
+
+function cancelPendingImage() {
+  imageLoadSequence += 1
+  if (pendingImage) {
+    pendingImage.onload = null
+    pendingImage.onerror = null
+    pendingImage = null
+  }
+}
+
+function prepareImage(url) {
+  cancelPendingImage()
+  imageLoadFailed.value = false
+
+  if (!url) {
+    displayedImageUrl.value = ''
+    isImagePreparing.value = false
+    return
+  }
+
+  const sequence = imageLoadSequence
+  const image = new Image()
+  pendingImage = image
+  isImagePreparing.value = true
+  image.decoding = 'async'
+  image.fetchPriority = 'high'
+  image.onload = async () => {
+    try {
+      await image.decode?.()
+    } catch {
+      // The load event already confirms that the browser can render the image.
+    }
+    if (sequence !== imageLoadSequence) {
+      return
+    }
+    displayedImageUrl.value = url
+    isImagePreparing.value = false
+    pendingImage = null
+  }
+  image.onerror = () => {
+    if (sequence !== imageLoadSequence) {
+      return
+    }
+    displayedImageUrl.value = ''
+    isImagePreparing.value = false
+    imageLoadFailed.value = true
+    pendingImage = null
+  }
+  image.src = url
+}
+
+watch(activePhotoUrl, prepareImage, { immediate: true })
+
+onBeforeUnmount(cancelPendingImage)
 </script>
 
 <template>
@@ -62,7 +132,6 @@ const THUMB_LIST_LABEL = '\uD074\uB7EC\uC2A4\uD130 \uC0AC\uC9C4 \uBAA9\uB85D'
       </header>
 
       <p v-if="errorMessage" class="panel__empty">{{ errorMessage }}</p>
-      <p v-else-if="isLoading" class="panel__empty">{{ LOADING_LABEL }}</p>
       <div v-else-if="photo?.contentUrl" class="public-map-share-photo-modal__body">
         <button
           v-if="canNavigate"
@@ -74,7 +143,32 @@ const THUMB_LIST_LABEL = '\uD074\uB7EC\uC2A4\uD130 \uC0AC\uC9C4 \uBAA9\uB85D'
           <span aria-hidden="true">&lsaquo;</span>
         </button>
         <figure class="public-map-share-photo-modal__figure">
-          <img :src="photo.contentUrl" :alt="photo.title || photo.originalFileName || DEFAULT_PHOTO_LABEL" />
+          <div class="public-map-share-photo-modal__media">
+            <img
+              v-if="displayedImageUrl"
+              :src="displayedImageUrl"
+              :alt="photo.title || photo.originalFileName || DEFAULT_PHOTO_LABEL"
+              decoding="async"
+              fetchpriority="high"
+            />
+            <div
+              v-if="isImagePreparing && !displayedImageUrl"
+              class="public-map-share-photo-modal__image-state public-map-share-photo-modal__image-state--loading"
+              role="status"
+            >
+              {{ IMAGE_LOADING_LABEL }}
+            </div>
+            <div
+              v-else-if="imageLoadFailed"
+              class="public-map-share-photo-modal__image-state"
+              role="alert"
+            >
+              {{ IMAGE_ERROR_LABEL }}
+            </div>
+            <span v-if="isImagePreparing && displayedImageUrl" class="public-map-share-photo-modal__loading-badge">
+              {{ IMAGE_LOADING_LABEL }}
+            </span>
+          </div>
           <figcaption>
             <strong>{{ photo.placeName || photo.title || photo.originalFileName || DEFAULT_PHOTO_LABEL }}</strong>
             <span>{{ photo.region || photo.country || photo.planName || '' }}</span>
@@ -90,9 +184,10 @@ const THUMB_LIST_LABEL = '\uD074\uB7EC\uC2A4\uD130 \uC0AC\uC9C4 \uBAA9\uB85D'
           <span aria-hidden="true">&rsaquo;</span>
         </button>
       </div>
+      <p v-else-if="isLoading" class="panel__empty">{{ LOADING_LABEL }}</p>
       <p v-else class="panel__empty">{{ EMPTY_LABEL }}</p>
 
-      <div v-if="!isLoading && !errorMessage && photos.length > 1" class="public-map-share-photo-modal__thumbs" :aria-label="THUMB_LIST_LABEL">
+      <div v-if="!errorMessage && photos.length > 1" class="public-map-share-photo-modal__thumbs" :aria-label="THUMB_LIST_LABEL">
         <button
           v-for="item in photos"
           :key="item.id"
@@ -101,7 +196,12 @@ const THUMB_LIST_LABEL = '\uD074\uB7EC\uC2A4\uD130 \uC0AC\uC9C4 \uBAA9\uB85D'
           type="button"
           @click="emit('select-photo', item)"
         >
-          <img :src="item.contentUrl" :alt="item.title || item.originalFileName || DEFAULT_PHOTO_LABEL" />
+          <img
+            :src="thumbnailUrl(item)"
+            :alt="item.title || item.originalFileName || DEFAULT_PHOTO_LABEL"
+            loading="lazy"
+            decoding="async"
+          />
         </button>
       </div>
     </article>

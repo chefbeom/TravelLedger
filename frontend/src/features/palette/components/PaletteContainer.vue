@@ -144,84 +144,89 @@ onBeforeUnmount(() => {
         <button type="button" @click="toolsOpen = false">닫기</button>
       </div>
 
-      <label class="palette-dashboard__field">
-        <span>프리셋</span>
-        <select :value="store.currentPresetId" @change="store.setPreset(Number($event.target.value))">
-          <option v-for="preset in store.presets" :key="preset.id" :value="preset.id">
-            {{ preset.name }}
-          </option>
-        </select>
-      </label>
-
-      <div class="palette-dashboard__preset-info">
-        <span>{{ store.currentPreset?.name }}</span>
-        <strong>{{ store.visiblePalettes.length }}개 표시</strong>
-      </div>
-
-      <button v-if="!store.isEditMode" class="palette-dashboard__primary" type="button" @click="startEditMode">
-        편집 시작
-      </button>
-
-      <template v-else>
+      <div class="palette-dashboard__tools-body">
         <label class="palette-dashboard__field">
-          <span>팔레트 추가</span>
-          <select v-model="selectedTemplateId">
-            <option v-for="template in store.availableTemplates" :key="template.id" :value="template.id">
-              {{ template.label }}
+          <span>프리셋</span>
+          <select :value="store.currentPresetId" @change="store.setPreset(Number($event.target.value))">
+            <option v-for="preset in store.presets" :key="preset.id" :value="preset.id">
+              {{ preset.name }}
             </option>
           </select>
         </label>
-        <button class="palette-dashboard__secondary" type="button" @click="handleAddPalette">
-          추가
-        </button>
-        <div v-if="recentFlowPalettes.length" class="palette-dashboard__option-panel">
-          <span>최근 흐름 설정</span>
-          <div v-for="palette in recentFlowPalettes" :key="palette.id" class="palette-dashboard__option-card">
-            <small>{{ hiddenPaletteTitle(palette) }}</small>
-            <label class="palette-dashboard__field">
-              <span>표시 기준</span>
-              <select
-                :value="palette.options?.entryType || 'EXPENSE'"
-                @change="updateRecentFlowPalette(palette, { entryType: $event.target.value })"
-              >
-                <option value="EXPENSE">지출</option>
-                <option value="INCOME">수입</option>
-              </select>
-            </label>
-            <label class="palette-dashboard__field">
-              <span>표시 개수</span>
-              <select
-                :value="palette.options?.limit || 8"
-                @change="updateRecentFlowPalette(palette, { limit: Number($event.target.value) })"
-              >
-                <option v-for="limit in recentFlowLimits" :key="limit" :value="limit">
-                  {{ limit }}개
-                </option>
-              </select>
-            </label>
-          </div>
+
+        <div class="palette-dashboard__preset-info">
+          <span>{{ store.currentPreset?.name }}</span>
+          <strong>{{ store.visiblePalettes.length }}개 표시</strong>
         </div>
 
-        <div class="palette-dashboard__hidden">
-          <span>숨긴 팔레트</span>
-          <button
-            v-for="palette in store.hiddenPalettes"
-            :key="palette.id"
-            type="button"
-            @click="store.restorePalette(palette.id)"
-          >
-            {{ hiddenPaletteTitle(palette) }}
+        <template v-if="store.isEditMode">
+          <label class="palette-dashboard__field">
+            <span>팔레트 추가</span>
+            <select v-model="selectedTemplateId">
+              <option v-for="template in store.availableTemplates" :key="template.id" :value="template.id">
+                {{ template.label }}
+              </option>
+            </select>
+          </label>
+          <button class="palette-dashboard__secondary" type="button" @click="handleAddPalette">
+            추가
           </button>
-          <small v-if="!store.hiddenPalettes.length">숨긴 팔레트가 없습니다.</small>
-        </div>
+          <div v-if="recentFlowPalettes.length" class="palette-dashboard__option-panel">
+            <span>최근 흐름 설정</span>
+            <div v-for="palette in recentFlowPalettes" :key="palette.id" class="palette-dashboard__option-card">
+              <small>{{ hiddenPaletteTitle(palette) }}</small>
+              <label class="palette-dashboard__field">
+                <span>표시 기준</span>
+                <select
+                  :value="palette.options?.entryType || 'EXPENSE'"
+                  @change="updateRecentFlowPalette(palette, { entryType: $event.target.value })"
+                >
+                  <option value="EXPENSE">지출</option>
+                  <option value="INCOME">수입</option>
+                </select>
+              </label>
+              <label class="palette-dashboard__field">
+                <span>표시 개수</span>
+                <select
+                  :value="palette.options?.limit || 8"
+                  @change="updateRecentFlowPalette(palette, { limit: Number($event.target.value) })"
+                >
+                  <option v-for="limit in recentFlowLimits" :key="limit" :value="limit">
+                    {{ limit }}개
+                  </option>
+                </select>
+              </label>
+            </div>
+          </div>
 
-        <button class="palette-dashboard__secondary" type="button" @click="handleResetPreset">
-          현재 프리셋 초기화
+          <div class="palette-dashboard__hidden">
+            <span>숨긴 팔레트</span>
+            <button
+              v-for="palette in store.hiddenPalettes"
+              :key="palette.id"
+              type="button"
+              @click="store.restorePalette(palette.id)"
+            >
+              {{ hiddenPaletteTitle(palette) }}
+            </button>
+            <small v-if="!store.hiddenPalettes.length">숨긴 팔레트가 없습니다.</small>
+          </div>
+        </template>
+      </div>
+
+      <div class="palette-dashboard__tools-footer">
+        <button v-if="!store.isEditMode" class="palette-dashboard__primary" type="button" @click="startEditMode">
+          편집 시작
         </button>
-        <button class="palette-dashboard__primary" type="button" @click="finishEditMode">
-          편집 완료
-        </button>
-      </template>
+        <template v-else>
+          <button class="palette-dashboard__secondary" type="button" @click="handleResetPreset">
+            초기화
+          </button>
+          <button class="palette-dashboard__primary" type="button" @click="finishEditMode">
+            저장 및 완료
+          </button>
+        </template>
+      </div>
     </aside>
   </section>
 </template>
@@ -317,13 +322,41 @@ onBeforeUnmount(() => {
   box-shadow: 0 18px 40px rgba(0, 83, 77, 0.14);
   display: grid;
   gap: 12px;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  max-height: calc(100vh - 36px);
+  max-height: calc(100dvh - 36px);
   max-width: calc(100vw - 36px);
+  overflow: hidden;
   padding: 14px;
   position: fixed;
   right: 18px;
-  top: calc(50% + 46px);
+  top: 50%;
+  transform: translateY(-50%);
   width: 280px;
   z-index: 41;
+}
+
+.palette-dashboard__tools-body {
+  display: grid;
+  gap: 12px;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 4px;
+  scrollbar-gutter: stable;
+}
+
+.palette-dashboard__tools-footer {
+  align-items: center;
+  border-top: 1px solid var(--household-dash-line);
+  display: flex;
+  gap: 8px;
+  padding-top: 12px;
+}
+
+.palette-dashboard__tools-footer > button {
+  flex: 1 1 0;
 }
 
 .palette-dashboard__tools-head {
@@ -527,6 +560,8 @@ onBeforeUnmount(() => {
   }
 
   .palette-dashboard__tools {
+    max-height: calc(100vh - 24px);
+    max-height: calc(100dvh - 24px);
     right: 12px;
     width: min(280px, calc(100vw - 24px));
   }

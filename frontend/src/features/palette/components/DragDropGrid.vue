@@ -50,23 +50,6 @@ const gridShellStyle = computed(() => ({
   '--palette-grid-gap': `${PALETTE_GRID_GAP}px`,
   '--palette-grid-margin': `${PALETTE_GRID_MARGIN}px`,
 }))
-const keyboardMoveItems = computed(() => renderItems.value.map((item) => {
-  const span = getSpanBySize(item.config.size)
-  const position = item.config.position ?? { x: 0, y: 0 }
-  const maxX = Math.max(0, DASHBOARD_GRID_COLUMNS - span.w)
-  const x = Math.min(maxX, Math.max(0, Number(position.x ?? 0)))
-  const y = Math.max(0, Number(position.y ?? 0))
-
-  return {
-    id: item.config.id,
-    title: item.title || item.definition?.label || item.config.id,
-    x,
-    y,
-    canMoveUp: y > 0,
-    canMoveLeft: x > 0,
-    canMoveRight: x < maxX,
-  }
-}))
 
 let grid = null
 let resizeObserver = null
@@ -150,30 +133,6 @@ function readSnapshot() {
   }).filter((patch) => patch.id)
 }
 
-function movePaletteByKeyboard(id, deltaX, deltaY) {
-  const palette = props.palettes.find((candidate) => String(candidate.id) === String(id))
-  if (!palette) {
-    return
-  }
-
-  const span = getSpanBySize(palette.size)
-  const currentPosition = palette.position ?? { x: 0, y: 0 }
-  const maxX = Math.max(0, DASHBOARD_GRID_COLUMNS - span.w)
-  const nextPosition = {
-    x: Math.min(maxX, Math.max(0, Number(currentPosition.x ?? 0) + deltaX)),
-    y: Math.max(0, Number(currentPosition.y ?? 0) + deltaY),
-  }
-
-  if (nextPosition.x === currentPosition.x && nextPosition.y === currentPosition.y) {
-    return
-  }
-
-  emit('apply-layout-patches', [{
-    id: palette.id,
-    position: nextPosition,
-    size: palette.size,
-  }])
-}
 
 function handleDragStart(event, element) {
   dragStartLayout = new Map(props.palettes.map((palette) => [String(palette.id), {
@@ -322,29 +281,6 @@ watch(layoutKey, () => {
 
 <template>
   <div class="palette-grid-shell" :class="{ 'palette-grid-shell--editing': editMode }" :style="gridShellStyle">
-    <section
-      v-if="editMode"
-      class="palette-grid-keyboard-controls"
-      aria-label="Keyboard dashboard layout controls"
-      data-no-drag="true"
-    >
-      <p class="palette-grid-keyboard-controls__hint">
-        Keyboard alternative for dashboard layout: move each widget one grid step without pointer drag.
-      </p>
-      <div
-        v-for="item in keyboardMoveItems"
-        :key="item.id"
-        class="palette-grid-keyboard-controls__row"
-      >
-        <span class="palette-grid-keyboard-controls__title">{{ item.title }}</span>
-        <div class="palette-grid-keyboard-controls__actions">
-          <button type="button" :disabled="!item.canMoveUp" :aria-label="`Move ${item.title} up`" @click="movePaletteByKeyboard(item.id, 0, -1)">Up</button>
-          <button type="button" :disabled="!item.canMoveLeft" :aria-label="`Move ${item.title} left`" @click="movePaletteByKeyboard(item.id, -1, 0)">Left</button>
-          <button type="button" :aria-label="`Move ${item.title} down`" @click="movePaletteByKeyboard(item.id, 0, 1)">Down</button>
-          <button type="button" :disabled="!item.canMoveRight" :aria-label="`Move ${item.title} right`" @click="movePaletteByKeyboard(item.id, 1, 0)">Right</button>
-        </div>
-      </div>
-    </section>
 
     <div v-if="editMode" class="palette-grid-guide" aria-hidden="true">
       <span v-for="index in guideCellCount" :key="index"></span>
@@ -415,76 +351,6 @@ watch(layoutKey, () => {
   border: 1px dashed var(--grid-guide-border);
   box-sizing: border-box;
   min-width: 0;
-}
-
-.palette-grid-keyboard-controls {
-  display: grid;
-  gap: 10px;
-  margin-bottom: 12px;
-  padding: 12px;
-  border: 1px solid var(--line);
-  border-radius: 16px;
-  background: var(--surface-soft);
-}
-
-.palette-grid-keyboard-controls__hint {
-  margin: 0;
-  color: var(--text-soft);
-  font-size: 0.88rem;
-  font-weight: 700;
-}
-
-.palette-grid-keyboard-controls__row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 10px;
-  align-items: center;
-}
-
-.palette-grid-keyboard-controls__title {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-weight: 800;
-}
-
-.palette-grid-keyboard-controls__actions {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 6px;
-}
-
-.palette-grid-keyboard-controls__actions button {
-  min-height: 36px;
-  padding: 0 10px;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  background: var(--surface-panel);
-  color: var(--text);
-  font: inherit;
-  font-size: 0.78rem;
-  font-weight: 800;
-}
-
-.palette-grid-keyboard-controls__actions button:disabled {
-  cursor: not-allowed;
-  opacity: 0.42;
-}
-
-@media (max-width: 640px) {
-  .palette-grid-keyboard-controls__row {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .palette-grid-keyboard-controls__actions {
-    justify-content: stretch;
-  }
-
-  .palette-grid-keyboard-controls__actions button {
-    flex: 1 1 72px;
-  }
 }
 
 

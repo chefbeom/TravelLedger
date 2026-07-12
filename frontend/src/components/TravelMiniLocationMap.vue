@@ -16,6 +16,10 @@ const props = defineProps({
     type: String,
     default: '사진 위치',
   },
+  interactive: {
+    type: Boolean,
+    default: false,
+  },
 })
 
 const mapElement = ref(null)
@@ -50,13 +54,14 @@ async function renderMap() {
   if (!mapInstance) {
     mapInstance = L.map(mapElement.value, {
       attributionControl: false,
-      zoomControl: false,
-      dragging: false,
+      zoomControl: props.interactive,
+      dragging: props.interactive,
       scrollWheelZoom: false,
-      doubleClickZoom: false,
-      boxZoom: false,
-      keyboard: false,
-      tap: false,
+      doubleClickZoom: props.interactive,
+      boxZoom: props.interactive,
+      keyboard: props.interactive,
+      tap: props.interactive,
+      touchZoom: props.interactive,
       preferCanvas: true,
     }).setView(point.value, 15)
 
@@ -84,6 +89,8 @@ async function renderMap() {
   locationLayer.bindTooltip(props.title, {
     permanent: false,
     direction: 'top',
+    opacity: 0.96,
+    className: 'travel-mini-location-map__tooltip',
   })
 
   requestAnimationFrame(() => mapInstance?.invalidateSize(false))
@@ -95,6 +102,14 @@ onBeforeUnmount(destroyMap)
 watch(
   () => [props.latitude, props.longitude, props.title],
   renderMap,
+)
+
+watch(
+  () => props.interactive,
+  () => {
+    destroyMap()
+    renderMap()
+  },
 )
 </script>
 

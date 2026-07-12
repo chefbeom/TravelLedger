@@ -46,7 +46,7 @@ function updatePage(offset) {
       <div class="household-sheet-header">
         <span class="panel__badge">{{ countLabel }}</span>
         <button type="button" class="button button--secondary" @click="emit('open-settings')">거래 시트 설정</button>
-        <button v-if="modal" type="button" class="button button--ghost" @click="emit('close')">닫기</button>
+        <button v-if="modal" type="button" class="button button--ghost" data-modal-close @click="emit('close')">닫기</button>
         <div v-if="hasForeignEntries" class="scope-toggle">
           <button type="button" class="button" :class="{ 'button--primary': amountMode === 'KRW' }" @click="emit('update:amount-mode', 'KRW')">원화</button>
           <button type="button" class="button" :class="{ 'button--primary': amountMode === 'FOREIGN' }" @click="emit('update:amount-mode', 'FOREIGN')">외화</button>

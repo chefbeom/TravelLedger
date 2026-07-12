@@ -2046,6 +2046,7 @@ onBeforeUnmount(() => {
               :latitude="photoFrameDetailLatitude(photoFrameDetail.photo)"
               :longitude="photoFrameDetailLongitude(photoFrameDetail.photo)"
               :title="photoFrameDetailLocation(photoFrameDetail.photo)"
+              interactive
             />
             <div class="main-photo-frame-detail-modal__actions">
               <button v-if="photoFrameDetail.photo.sourceType === 'travel'" type="button" @click="openPhotoFrameTravelMap">여행 지도 열기</button>

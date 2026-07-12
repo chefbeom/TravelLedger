@@ -207,6 +207,16 @@ class LedgerAiRemoteResponseValidatorTest {
     }
 
     @Test
+    void rejectsKoreanProviderOutputClaimingLedgerMutation() {
+        LedgerAiRemoteResponse response = responseWithSummary(
+                "\uAC70\uB798 \uBD84\uB958\uB97C \uC790\uB3D9\uC73C\uB85C \uC218\uC815\uD588\uC2B5\uB2C8\uB2E4."
+        );
+
+        assertThatThrownBy(() -> LedgerAiRemoteResponseValidator.requireUsable(response, "LM Studio"))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessage("LM Studio AI analysis response claimed ledger data was changed.");
+    }
+    @Test
     void rejectsEmptySuccessResponse() {
         LedgerAiRemoteResponse response = new LedgerAiRemoteResponse(
                 true,

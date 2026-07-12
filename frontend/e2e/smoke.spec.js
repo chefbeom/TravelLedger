@@ -177,7 +177,6 @@ async function signIn(page, role = 'user') {
 
 function annotateFlow(testInfo, flow) {
   const evidence = flowEvidence[flow.name]
-  annotateFlow(testInfo, flow)
   testInfo.annotations.push({ type: 'acceptance-criteria', description: evidence.acceptance })
   testInfo.annotations.push({ type: 'next-automation', description: evidence.nextAutomation })
 }

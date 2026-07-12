@@ -3,7 +3,7 @@ $ErrorActionPreference = 'Stop'
 
 $baselinePath = 'docs/security_baseline_checklist.md'
 $ciPath = '.github/workflows/ci.yml'
- = 'backend/src/test/java/com/playdata/calen/account/SupportInquiryIntegrationTest.java'
+$supportInquiryTestPath = 'backend/src/test/java/com/playdata/calen/account/SupportInquiryIntegrationTest.java'
 $findings = [System.Collections.Generic.List[string]]::new()
 
 foreach ($path in @($baselinePath, $ciPath, $supportInquiryTestPath)) {
@@ -22,8 +22,8 @@ function Assert-ContainsAll([string]$Label, [string]$Content, [string[]]$Needles
 
 if ($findings.Count -eq 0) {
     $baseline = Get-Content -LiteralPath $baselinePath -Raw
-     = Get-Content -LiteralPath  -Raw
-     = Get-Content -LiteralPath  -Raw
+    $ci = Get-Content -LiteralPath $ciPath -Raw
+    $supportInquiryTest = Get-Content -LiteralPath $supportInquiryTestPath -Raw
 
     Assert-ContainsAll 'Security baseline sections' $baseline @(
         '# Security Baseline Checklist',

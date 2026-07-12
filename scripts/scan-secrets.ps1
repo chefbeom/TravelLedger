@@ -16,7 +16,7 @@ $tokenPatterns = @(
     @{ Name = 'JWT token'; Regex = 'eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}' }
 )
 
-$sensitiveAssignmentPattern = [regex]'(?im)^\s*(?:export\s+)?[A-Z0-9_]*(?:API_KEY|SECRET|TOKEN|PASSWORD|PRIVATE_KEY|JWT_KEY|ACCESS_KEY|CREDENTIAL|PASSPHRASE)[A-Z0-9_]*\s*[:=]\s*["'']?([^"''\s#]+)'
+$sensitiveAssignmentPattern = [regex]'(?m)^[ \t]*(?:export[ \t]+)?(?<name>[A-Z][A-Z0-9_]*(?:API_KEY|SECRET|TOKEN|PASSWORD|PRIVATE_KEY|JWT_KEY|ACCESS_KEY|CREDENTIAL|PASSPHRASE))[ \t]*[:=][ \t]*["'']?(?<value>[^"''\s#]+)'
 $placeholderPattern = [regex]'(?i)(^$|example|placeholder|change-?me|replace-?me|your-|dummy|test|local|dev|sample|fixture|^\$\{|^\$\(|^%|^<.*>$)'
 $excludedPathPatterns = @(
     '^\.git/',
@@ -41,6 +41,10 @@ function Test-ExcludedPath([string] $Path) {
     return $false
 }
 
+function Test-SensitiveAssignmentFile([string] $Path) {
+    $fileName = [System.IO.Path]::GetFileName($Path)
+    return $fileName -like '.env*' -or $fileName -match '\.(env|properties|ya?ml|ps1|sh)$'
+}
 function Get-LineNumber([string] $Content, [int] $Index) {
     if ($Index -le 0) {
         return 1
@@ -80,10 +84,12 @@ foreach ($file in $trackedFiles) {
         }
     }
 
-    foreach ($match in $sensitiveAssignmentPattern.Matches($content)) {
-        $value = $match.Groups[1].Value.Trim().Trim('"', "'")
-        if (-not $placeholderPattern.IsMatch($value)) {
-            Add-Finding $findings $file (Get-LineNumber $content $match.Index) 'Sensitive environment assignment'
+    if (Test-SensitiveAssignmentFile $file) {
+        foreach ($match in $sensitiveAssignmentPattern.Matches($content)) {
+            $value = $match.Groups['value'].Value.Trim().Trim('"', "'")
+            if (-not $placeholderPattern.IsMatch($value)) {
+                Add-Finding $findings $file (Get-LineNumber $content $match.Index) 'Sensitive environment assignment'
+            }
         }
     }
 }

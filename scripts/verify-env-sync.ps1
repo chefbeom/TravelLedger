@@ -28,7 +28,7 @@ $requiredGroups = [ordered]@{
         'DB_URL', 'DB_DRIVER', 'DB_SERVER', 'DB_ID', 'DB_PASS',
         'JPA_SHOW_SQL', 'JPA_FORMAT_SQL', 'H2_CONSOLE_ENABLED',
         'DB_MIGRATION_ENABLED', 'DB_MIGRATION_BASELINE_ON_MIGRATE',
-        'DB_MIGRATION_BASELINE_VERSION', 'DB_MIGRATION_VALIDATE_ON_MIGRATE',
+        'DB_MIGRATION_BASELINE_VERSION', 'DB_MIGRATION_VALIDATE_ON_MIGRATE', 'JPA_DEFAULT_BATCH_FETCH_SIZE',
         'APP_SCHEMA_LEGACY_UPDATERS_ENABLED'
     )
     'object-storage-and-presigned-url' = @(
@@ -36,7 +36,8 @@ $requiredGroups = [ordered]@{
         'MINIO_CLOUD_BUCKET', 'MINIO_WORKSPACE_BUCKET',
         'MINIO_PRESIGNED_URL_EXPIRY_SECONDS', 'MINIO_STORAGE_CAPACITY_BYTES'
     )
-    'auth-session-and-seed' = @('JWT_KEY', 'JWT_EXPIRE', 'APP_SEED_ENABLED')
+    'auth-session-and-seed' = @('JWT_KEY', 'JWT_EXPIRE', 'SESSION_SEAL_KEY', 'OPS_CONTROL_SEAL_KEY', 'PUBLIC_MEDIA_KEY',
+        'SESSION_COOKIE_SECURE', 'REMEMBER_ME_SECURE_COOKIE', 'CSRF_COOKIE_SECURE', 'APP_SEED_ENABLED', 'APP_SEED_ALLOW_INSECURE_DEFAULT_CREDENTIALS')
     'travel-integrations-and-media' = @(
         'TRAVEL_EXCHANGE_RATE_BASE_URL', 'TRAVEL_EXCHANGE_RATE_CACHE_MINUTES',
         'TRAVEL_REVERSE_GEOCODE_BASE_URL', 'TRAVEL_REVERSE_GEOCODE_USER_AGENT',
@@ -57,6 +58,7 @@ $requiredGroups = [ordered]@{
         'APP_LEDGER_AI_API_KEY', 'APP_LEDGER_AI_API_KEY_HEADER', 'APP_LEDGER_AI_MODEL',
         'APP_LEDGER_AI_LMSTUDIO_BASE_URL', 'APP_LEDGER_AI_LMSTUDIO_CHAT_PATH',
         'APP_LEDGER_AI_LMSTUDIO_MODELS_PATH', 'APP_LEDGER_AI_LMSTUDIO_API_KEY',
+        'APP_LEDGER_AI_OPENAI_BASE_URL', 'APP_LEDGER_AI_OPENAI_CHAT_PATH', 'APP_LEDGER_AI_OPENAI_MODELS_PATH', 'APP_LEDGER_AI_OPENAI_API_KEY',
         'APP_LEDGER_AI_TEMPERATURE', 'APP_LEDGER_AI_MAX_TOKENS',
         'APP_LEDGER_AI_CONNECT_TIMEOUT', 'APP_LEDGER_AI_READ_TIMEOUT',
         'APP_LEDGER_AI_ENFORCE_PROVIDER_URL_ALLOWLIST', 'APP_LEDGER_AI_ALLOWED_PROVIDER_HOSTS',
@@ -102,11 +104,11 @@ $allowedExtraPatterns = @(
 
 $valueRules = @(
     @{ Name = 'APP_LEDGER_AI_MODEL'; Type = 'equals'; Value = 'auto' },
-    @{ Name = 'APP_LEDGER_AI_LMSTUDIO_BASE_URL'; Type = 'equals'; Value = 'http://172.18.240.1:1234' },
+    @{ Name = 'APP_LEDGER_AI_LMSTUDIO_BASE_URL'; Type = 'equals'; Value = 'http://your-lm-studio-host:1234' },
     @{ Name = 'APP_LEDGER_AI_LMSTUDIO_CHAT_PATH'; Type = 'equals'; Value = '/api/v1/chat' },
     @{ Name = 'APP_LEDGER_AI_LMSTUDIO_MODELS_PATH'; Type = 'equals'; Value = '/api/v1/models' },
     @{ Name = 'APP_LEDGER_AI_API_KEY_HEADER'; Type = 'equals'; Value = 'X-TravelLedger-AI-Key' },
-    @{ Name = 'APP_LEDGER_AI_ALLOWED_PROVIDER_HOSTS'; Type = 'contains'; Value = '172.18.240.1' },
+    @{ Name = 'APP_LEDGER_AI_ALLOWED_PROVIDER_HOSTS'; Type = 'contains'; Value = 'your-lm-studio-host' },
     @{ Name = 'MINIO_PRESIGNED_URL_EXPIRY_SECONDS'; Type = 'integer-max'; Value = 604800 }
 )
 
@@ -122,6 +124,9 @@ $allowedSecretExampleValues = @(
     'change-me-db-root-password',
     'change-me-minio-password',
     'change-me-remember-me-key',
+    'change-me-session-seal-key',
+    'change-me-ops-control-seal-key',
+    'change-me-public-media-key',
     'change-me-ocr-api-key',
     'change-me-ledger-ai-api-key',
     'change-me-cache-password',

@@ -10,7 +10,7 @@ This contract keeps committed source, documentation, workflow files, and checked
 | --- | --- |
 | Git-tracked files | `scripts/scan-secrets.ps1` scans `git ls-files` so the gate follows the repository state rather than local ignored files. |
 | Token-shaped values | The scanner blocks high-risk patterns for AWS, GitHub, GitLab, npm, OpenAI-style, Google, Stripe, SendGrid, Slack, JWT, and private-key material. |
-| Sensitive assignments | Variables containing `API_KEY`, `SECRET`, `TOKEN`, `PASSWORD`, `PRIVATE_KEY`, `JWT_KEY`, `ACCESS_KEY`, `CREDENTIAL`, or `PASSPHRASE` must use placeholders in committed files. |
+| Sensitive assignments | Uppercase environment/configuration variables containing `API_KEY`, `SECRET`, `TOKEN`, `PASSWORD`, `PRIVATE_KEY`, `JWT_KEY`, `ACCESS_KEY`, `CREDENTIAL`, or `PASSPHRASE` must use placeholders in committed environment, YAML/properties, and deployment-script files. Source identifiers and prose are covered by token-shaped patterns, not assignment matching. |
 | Placeholder values | Examples must be obviously non-secret: `change-me`, `replace-me`, `placeholder`, `dummy`, `sample`, `fixture`, `local`, `dev`, shell expansion, or angle-bracket placeholders. |
 | Generated/vendor paths | Build output, dependency folders, Git metadata, Gradle output, and run logs remain excluded from this lightweight repo gate. |
 

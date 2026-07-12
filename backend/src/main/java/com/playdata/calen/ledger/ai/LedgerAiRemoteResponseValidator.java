@@ -39,6 +39,14 @@ public final class LedgerAiRemoteResponseValidator {
                     + "(created|updated|deleted|modified|saved|categorized|reclassified))"
     );
 
+    private static final Pattern KOREAN_MUTATION_CLAIM_PATTERN = Pattern.compile(
+            "(?:(?:\uAC70\uB798|\uAC00\uACC4\uBD80|\uC9C0\uCD9C|\uC218\uC785).{0,60}"
+                    + "(?:\uC0DD\uC131|\uC218\uC815|\uC0AD\uC81C|\uC800\uC7A5|\uBD84\uB958|\uC7AC\uBD84\uB958).{0,20}"
+                    + "(?:\uD588\uC2B5\uB2C8\uB2E4|\uD558\uC600\uC2B5\uB2C8\uB2E4|\uB418\uC5C8\uC2B5\uB2C8\uB2E4|\uC644\uB8CC\uB418\uC5C8\uC2B5\uB2C8\uB2E4|\uB428)"
+                    + "|(?:\uC0DD\uC131|\uC218\uC815|\uC0AD\uC81C|\uC800\uC7A5|\uBD84\uB958|\uC7AC\uBD84\uB958).{0,60}"
+                    + "(?:\uAC70\uB798|\uAC00\uACC4\uBD80|\uC9C0\uCD9C|\uC218\uC785).{0,20}"
+                    + "(?:\uD588\uC2B5\uB2C8\uB2E4|\uD558\uC600\uC2B5\uB2C8\uB2E4|\uB418\uC5C8\uC2B5\uB2C8\uB2E4|\uC644\uB8CC\uB418\uC5C8\uC2B5\uB2C8\uB2E4|\uB428))"
+    );
     private LedgerAiRemoteResponseValidator() {
     }
 
@@ -72,7 +80,7 @@ public final class LedgerAiRemoteResponseValidator {
             if (PROMPT_INJECTION_ECHO_PATTERN.matcher(value).find()) {
                 throw new BadRequestException(provider + PROMPT_INJECTION_MESSAGE);
             }
-            if (ENGLISH_MUTATION_CLAIM_PATTERN.matcher(value).find()) {
+            if (ENGLISH_MUTATION_CLAIM_PATTERN.matcher(value).find() || KOREAN_MUTATION_CLAIM_PATTERN.matcher(value).find()) {
                 throw new BadRequestException(provider + MUTATION_CLAIM_MESSAGE);
             }
         }

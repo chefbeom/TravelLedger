@@ -31825,37 +31825,36 @@ button.button--primary,
 .household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-card[data-aggregate-text-color='SKY'],
 .household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-card[data-aggregate-text-color='GOLD'],
 .household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-card[data-aggregate-text-color='PINK'] {
-  --aggregate-display-text-color: #86efac;
-}
-
-.household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-card[data-aggregate-text-color='SKY'] {
-  --aggregate-display-text-color: #7dd3fc;
-}
-
-.household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-card[data-aggregate-text-color='GOLD'] {
-  --aggregate-display-text-color: #fcd34d;
-}
-
-.household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-card[data-aggregate-text-color='PINK'] {
-  --aggregate-display-text-color: #f9a8d4;
-}
-
-:root[data-theme='toss'] .household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-card[data-aggregate-text-color='MINT'] {
   --aggregate-display-text-color: #047857;
 }
 
-:root[data-theme='toss'] .household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-card[data-aggregate-text-color='SKY'] {
+.household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-card[data-aggregate-text-color='SKY'] {
   --aggregate-display-text-color: #0369a1;
 }
 
-:root[data-theme='toss'] .household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-card[data-aggregate-text-color='GOLD'] {
+.household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-card[data-aggregate-text-color='GOLD'] {
   --aggregate-display-text-color: #a16207;
 }
 
-:root[data-theme='toss'] .household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-card[data-aggregate-text-color='PINK'] {
+.household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-card[data-aggregate-text-color='PINK'] {
   --aggregate-display-text-color: #be185d;
 }
 
+:root[data-theme='toss'] .household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-card[data-aggregate-text-color='MINT'] {
+  --aggregate-display-text-color: #86efac;
+}
+
+:root[data-theme='toss'] .household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-card[data-aggregate-text-color='SKY'] {
+  --aggregate-display-text-color: #7dd3fc;
+}
+
+:root[data-theme='toss'] .household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-card[data-aggregate-text-color='GOLD'] {
+  --aggregate-display-text-color: #fcd34d;
+}
+
+:root[data-theme='toss'] .household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-card[data-aggregate-text-color='PINK'] {
+  --aggregate-display-text-color: #f9a8d4;
+}
 .household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-card[data-aggregate-text-color]:not([data-aggregate-text-color='DEFAULT']) .household-aggregate-card__eyebrow,
 .household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-card[data-aggregate-text-color]:not([data-aggregate-text-color='DEFAULT']) .household-aggregate-card__copy strong,
 .household-aggregate-panel:not(.household-aggregate-panel--editing) .household-aggregate-card[data-aggregate-text-color]:not([data-aggregate-text-color='DEFAULT']) .household-aggregate-card__copy small,
@@ -31883,4 +31882,717 @@ button.button--primary,
 
 .household-aggregate-panel--editing .household-aggregate-text-settings .household-aggregate-card__field {
   min-width: 0 !important;
+}
+/* Public shared-map photo modal stability. */
+.public-map-share-photo-modal__panel {
+  height: min(900px, calc(100dvh - 32px));
+}
+
+.public-map-share-photo-modal__body {
+  overflow: hidden;
+  contain: layout paint;
+}
+
+.public-map-share-photo-modal__figure {
+  grid-template-rows: minmax(0, 1fr) auto;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+}
+
+.public-map-share-photo-modal__media {
+  position: relative;
+  display: grid;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  place-items: center;
+  overflow: hidden;
+  border-radius: 18px;
+  background: #0f172a;
+  isolation: isolate;
+}
+
+.public-map-share-photo-modal__figure .public-map-share-photo-modal__media > img {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  max-width: none;
+  max-height: none;
+  object-fit: contain;
+}
+
+.public-map-share-photo-modal__image-state {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 12px;
+  padding: 20px;
+  background: #0f172a;
+  color: #cbd5e1;
+  text-align: center;
+}
+
+.public-map-share-photo-modal__image-state--loading::before {
+  width: 34px;
+  height: 34px;
+  border: 3px solid rgba(148, 163, 184, 0.28);
+  border-top-color: #86efac;
+  border-radius: 50%;
+  content: '';
+  animation: public-map-photo-loading 0.8s linear infinite;
+}
+
+.public-map-share-photo-modal__loading-badge {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  padding: 7px 10px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.88);
+  color: #e2e8f0;
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+@keyframes public-map-photo-loading {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (max-width: 760px) {
+  .public-map-share-photo-modal {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+
+  .public-map-share-photo-modal__panel {
+    height: calc(100dvh - 20px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .public-map-share-photo-modal__image-state--loading::before {
+    animation: none;
+  }
+}
+
+/* Public shared-map photo modal theme contrast. */
+:root:not([data-theme='toss']) .public-map-share-photo-modal {
+  background: rgba(15, 23, 42, 0.5);
+}
+
+:root:not([data-theme='toss']) .public-map-share-photo-modal__panel {
+  border-color: rgba(15, 23, 42, 0.2);
+  background: #ffffff;
+  color: #191f28;
+  box-shadow: 0 28px 80px rgba(15, 23, 42, 0.28);
+}
+
+:root:not([data-theme='toss']) .public-map-share-photo-modal__header h2,
+:root:not([data-theme='toss']) .public-map-share-photo-modal__figure figcaption strong {
+  color: #191f28 !important;
+}
+
+:root:not([data-theme='toss']) .public-map-share-photo-modal__header p,
+:root:not([data-theme='toss']) .public-map-share-photo-modal__figure figcaption span,
+:root:not([data-theme='toss']) .public-map-share-photo-modal .panel__empty {
+  color: #4e5968 !important;
+}
+
+:root:not([data-theme='toss']) .public-map-share-photo-modal .panel__eyebrow {
+  color: #047857 !important;
+}
+
+:root:not([data-theme='toss']) .public-map-share-photo-modal__header-actions .button {
+  border-color: rgba(15, 23, 42, 0.22);
+  background: #ffffff;
+  color: #191f28 !important;
+}
+
+:root:not([data-theme='toss']) .public-map-share-photo-modal__header-actions .button:hover,
+:root:not([data-theme='toss']) .public-map-share-photo-modal__header-actions .button:focus-visible {
+  border-color: #047857;
+  background: #ecfdf5;
+  color: #065f46 !important;
+}
+
+:root:not([data-theme='toss']) .public-map-share-photo-modal__thumbs {
+  border-top-color: rgba(15, 23, 42, 0.16);
+}
+/* Interactive photo-frame location map. */
+.main-photo-frame-detail-modal__info .travel-mini-location-map .leaflet-control-zoom {
+  overflow: hidden;
+  border: 1px solid rgba(15, 23, 42, 0.24);
+  border-radius: 10px;
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.2);
+}
+
+.main-photo-frame-detail-modal__info .travel-mini-location-map .leaflet-control-zoom a {
+  border-color: rgba(15, 23, 42, 0.16);
+  background: var(--surface, #ffffff);
+  color: var(--text, #191f28);
+  font-weight: 900;
+}
+
+.main-photo-frame-detail-modal__info .travel-mini-location-map .leaflet-control-zoom a:hover,
+.main-photo-frame-detail-modal__info .travel-mini-location-map .leaflet-control-zoom a:focus-visible {
+  background: var(--surface-soft, #ecfdf5);
+  color: var(--brand-readable-strong, #065f46);
+}
+
+.travel-mini-location-map__tooltip {
+  max-width: min(260px, 70vw);
+  padding: 7px 10px;
+  border: 1px solid rgba(52, 211, 153, 0.72);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.94);
+  color: #f8fafc;
+  font-size: 0.78rem;
+  font-weight: 800;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+  white-space: normal;
+  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.28);
+}
+
+.travel-mini-location-map__tooltip.leaflet-tooltip-top::before {
+  border-top-color: rgba(15, 23, 42, 0.94);
+}
+/* Light-theme household calendar interactive and aggregate chart surfaces. */
+:root:not([data-theme='toss']) .household-calendar-control-panel .calendar-size-toggle__button.is-active {
+  border-color: #0b7d52 !important;
+  background: #0b7d52 !important;
+  color: #ffffff !important;
+  -webkit-text-fill-color: #ffffff !important;
+  box-shadow: 0 8px 18px rgba(11, 125, 82, 0.22);
+}
+
+:root:not([data-theme='toss']) .household-calendar-control-panel .calendar-size-toggle__button.is-active * {
+  color: inherit !important;
+  -webkit-text-fill-color: currentColor !important;
+}
+
+:root:not([data-theme='toss']) .household-aggregate-card--chart {
+  border-color: #cbd8d3 !important;
+  background:
+    radial-gradient(circle at 18% 12%, rgba(16, 185, 129, 0.12), transparent 36%),
+    linear-gradient(145deg, #ffffff, #f5faf8) !important;
+  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.08) !important;
+}
+
+:root:not([data-theme='toss']) .household-aggregate-card--chart .household-aggregate-card__copy {
+  border-bottom-color: rgba(15, 118, 110, 0.16) !important;
+}
+
+:root:not([data-theme='toss']) .household-aggregate-card--chart .household-aggregate-chart,
+:root:not([data-theme='toss']) .household-aggregate-card--chart .household-aggregate-chart--preview {
+  border-color: rgba(15, 118, 110, 0.28) !important;
+  background:
+    linear-gradient(180deg, rgba(100, 116, 139, 0.08) 0 1px, transparent 1px) 0 0 / 100% 24px,
+    linear-gradient(90deg, rgba(100, 116, 139, 0.06) 0 1px, transparent 1px) 0 0 / 42px 100%,
+    linear-gradient(180deg, rgba(236, 253, 245, 0.96), rgba(248, 250, 252, 0.98)) !important;
+  box-shadow: inset 0 1px 0 #ffffff, 0 10px 24px rgba(15, 23, 42, 0.08) !important;
+}
+
+:root:not([data-theme='toss']) .household-aggregate-chart__axis {
+  stroke: rgba(71, 85, 105, 0.62) !important;
+}
+
+:root:not([data-theme='toss']) .household-aggregate-chart__grid line,
+:root:not([data-theme='toss']) .household-aggregate-chart__preview-grid line {
+  stroke: rgba(71, 85, 105, 0.2) !important;
+}
+
+:root:not([data-theme='toss']) .household-aggregate-chart__axis-labels text {
+  fill: #475569 !important;
+  stroke: rgba(255, 255, 255, 0.92) !important;
+}
+
+:root:not([data-theme='toss']) .household-aggregate-chart__area--income {
+  fill: rgba(5, 150, 105, 0.14) !important;
+}
+
+:root:not([data-theme='toss']) .household-aggregate-chart__area--expense {
+  fill: rgba(225, 29, 72, 0.1) !important;
+}
+
+:root:not([data-theme='toss']) .household-aggregate-chart__line--income {
+  stroke: #059669 !important;
+}
+
+:root:not([data-theme='toss']) .household-aggregate-chart__line--expense {
+  stroke: #e11d48 !important;
+}
+
+:root:not([data-theme='toss']) .household-aggregate-chart__line--previous {
+  stroke: #64748b !important;
+}
+
+:root:not([data-theme='toss']) .household-aggregate-chart__point,
+:root:not([data-theme='toss']) .household-aggregate-chart__point--current,
+:root:not([data-theme='toss']) .household-aggregate-chart__point--previous {
+  fill: #ffffff !important;
+}
+
+:root:not([data-theme='toss']) .household-aggregate-chart__point--income {
+  stroke: #059669 !important;
+}
+
+:root:not([data-theme='toss']) .household-aggregate-chart__point--expense {
+  stroke: #e11d48 !important;
+}
+
+:root:not([data-theme='toss']) .household-aggregate-chart__point--previous {
+  stroke: #64748b !important;
+}
+
+:root:not([data-theme='toss']) .household-aggregate-chart__value-label {
+  fill: #334155 !important;
+  stroke: rgba(255, 255, 255, 0.96) !important;
+}
+
+:root:not([data-theme='toss']) .household-aggregate-chart__value-label--current {
+  fill: #047857 !important;
+}
+
+:root:not([data-theme='toss']) .household-aggregate-chart__value-label--previous {
+  fill: #475569 !important;
+}
+/* Photo-frame detail and settings modal theme bridge. */
+:root:not([data-theme='toss']) .main-photo-frame-modal {
+  --photo-frame-surface: #ffffff;
+  --photo-frame-surface-soft: #f7f9fc;
+  --photo-frame-control: #ffffff;
+  --photo-frame-border: #cbd5e1;
+  --photo-frame-border-strong: #94a3b8;
+  --photo-frame-text: #191f28;
+  --photo-frame-muted: #4e5968;
+  --photo-frame-accent: #047857;
+  --photo-frame-danger: #b42318;
+  --photo-frame-media: #0f172a;
+  --photo-frame-media-text: #f8fafc;
+  --photo-frame-primary: #047857;
+  --photo-frame-primary-border: #10b981;
+  background: rgba(15, 23, 42, 0.48) !important;
+}
+
+:root[data-theme='toss'] .main-photo-frame-modal {
+  --photo-frame-surface: #111b2a;
+  --photo-frame-surface-soft: #0b1220;
+  --photo-frame-control: #111827;
+  --photo-frame-border: #334155;
+  --photo-frame-border-strong: #475569;
+  --photo-frame-text: #f8fafc;
+  --photo-frame-muted: #cbd5e1;
+  --photo-frame-accent: #8fdcc6;
+  --photo-frame-danger: #fecaca;
+  --photo-frame-media: #020617;
+  --photo-frame-media-text: #f8fafc;
+  --photo-frame-primary: #047857;
+  --photo-frame-primary-border: #34d399;
+  background: rgba(2, 6, 23, 0.68) !important;
+}
+
+.main-photo-frame-modal__dialog {
+  border-color: var(--photo-frame-border) !important;
+  background: var(--photo-frame-surface) !important;
+  color: var(--photo-frame-text) !important;
+  -webkit-text-fill-color: var(--photo-frame-text) !important;
+  box-shadow: 0 24px 70px rgba(15, 23, 42, 0.28) !important;
+}
+
+.main-photo-frame-modal__header h2,
+.main-photo-frame-modal__preview-head strong,
+.main-photo-frame-modal__photo-grid span,
+.main-photo-frame-detail-modal__metadata dd {
+  color: var(--photo-frame-text) !important;
+  -webkit-text-fill-color: var(--photo-frame-text) !important;
+}
+
+.main-photo-frame-modal__header span,
+.main-photo-frame-modal__form label span,
+.main-photo-frame-detail-modal__metadata dt,
+.main-photo-frame-modal__photo-grid small {
+  color: var(--photo-frame-accent) !important;
+  -webkit-text-fill-color: var(--photo-frame-accent) !important;
+}
+
+.main-photo-frame-modal__header button,
+.main-photo-frame-modal__footer button,
+.main-photo-frame-detail-modal__actions button {
+  border-color: var(--photo-frame-border) !important;
+  background: var(--photo-frame-surface-soft) !important;
+  color: var(--photo-frame-text) !important;
+  -webkit-text-fill-color: var(--photo-frame-text) !important;
+}
+
+.main-photo-frame-modal__form,
+.main-photo-frame-modal__preview,
+.main-photo-frame-detail-modal__metadata > div {
+  border-color: var(--photo-frame-border) !important;
+  background: var(--photo-frame-surface-soft) !important;
+  color: var(--photo-frame-text) !important;
+}
+
+.main-photo-frame-modal__form select,
+.main-photo-frame-modal__photo-grid button {
+  border-color: var(--photo-frame-border-strong) !important;
+  background: var(--photo-frame-control) !important;
+  color: var(--photo-frame-text) !important;
+  -webkit-text-fill-color: var(--photo-frame-text) !important;
+}
+
+.main-photo-frame-modal__photo-grid button.is-selected {
+  border-color: var(--photo-frame-primary-border) !important;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--photo-frame-primary-border) 42%, transparent) !important;
+}
+
+.main-photo-frame-modal__photo-grid img,
+.main-photo-frame-detail-modal__figure {
+  background: var(--photo-frame-media) !important;
+}
+
+.main-photo-frame-detail-modal__figure figcaption {
+  color: var(--photo-frame-media-text) !important;
+  -webkit-text-fill-color: var(--photo-frame-media-text) !important;
+}
+
+.main-photo-frame-modal__empty,
+.main-photo-frame-modal__state {
+  border-color: var(--photo-frame-border-strong) !important;
+  color: var(--photo-frame-muted) !important;
+  -webkit-text-fill-color: var(--photo-frame-muted) !important;
+}
+
+.main-photo-frame-modal__error {
+  color: var(--photo-frame-danger) !important;
+  -webkit-text-fill-color: var(--photo-frame-danger) !important;
+}
+
+.main-photo-frame-modal__footer .main-dashboard__primary,
+.main-photo-frame-detail-modal__actions button:first-child {
+  border-color: var(--photo-frame-primary-border) !important;
+  background: var(--photo-frame-primary) !important;
+  color: #ffffff !important;
+  -webkit-text-fill-color: #ffffff !important;
+}
+
+/* Global modal theme bridge. Keep every dialog on the active application theme. */
+:root:not([data-theme='toss']) {
+  --modal-overlay: rgba(15, 23, 42, 0.48);
+  --modal-surface: #ffffff;
+  --modal-surface-soft: #f7f9fc;
+  --modal-surface-muted: #eef3f8;
+  --modal-field: #ffffff;
+  --modal-border: #cbd5e1;
+  --modal-border-strong: #94a3b8;
+  --modal-text: #191f28;
+  --modal-text-soft: #4e5968;
+  --modal-text-muted: #6b7280;
+  --modal-accent: #047857;
+  --modal-danger: #b42318;
+  --modal-shadow: 0 24px 70px rgba(15, 23, 42, 0.24);
+}
+
+:root[data-theme='toss'] {
+  --modal-overlay: rgba(2, 6, 23, 0.72);
+  --modal-surface: #151922;
+  --modal-surface-soft: #1a202b;
+  --modal-surface-muted: #232b38;
+  --modal-field: #111821;
+  --modal-border: #344054;
+  --modal-border-strong: #526079;
+  --modal-text: #f3f5fa;
+  --modal-text-soft: #b0bacb;
+  --modal-text-muted: #8f9bb0;
+  --modal-accent: #86efac;
+  --modal-danger: #ff9aa7;
+  --modal-shadow: 0 28px 80px rgba(0, 0, 0, 0.5);
+}
+
+:root .travel-modal,
+:root .receipt-ocr-modal,
+:root .ledger-ai-modal,
+:root .ai-result-modal,
+:root .household-aggregate-chart-modal,
+:root .transaction-sheet-modal,
+:root .transaction-sheet-settings-modal,
+:root .main-photo-frame-modal,
+:root .public-map-share-photo-modal,
+:root .drive-version-overlay {
+  background-color: var(--modal-overlay) !important;
+}
+
+:root .travel-modal__dialog,
+:root .receipt-ocr-modal__dialog,
+:root .ledger-ai-modal__dialog,
+:root .ai-result-modal__dialog,
+:root .household-aggregate-chart-modal__panel,
+:root .transaction-sheet-modal__dialog,
+:root .transaction-sheet-settings-modal__dialog,
+:root .main-photo-frame-modal__dialog,
+:root .public-map-share-photo-modal__panel,
+:root .travel-progress-modal__dialog {
+  border-color: var(--modal-border) !important;
+  color: var(--modal-text) !important;
+  box-shadow: var(--modal-shadow) !important;
+}
+
+:root .travel-modal__dialog,
+:root .receipt-ocr-modal__dialog,
+:root .ledger-ai-modal__dialog,
+:root .ai-result-modal__dialog,
+:root .household-aggregate-chart-modal__panel,
+:root .transaction-sheet-modal__dialog,
+:root .transaction-sheet-settings-modal__dialog,
+:root .main-photo-frame-modal__dialog,
+:root .public-map-share-photo-modal__panel,
+:root .travel-progress-modal__dialog {
+  background: var(--modal-surface) !important;
+}
+
+:root :is(
+  .travel-modal__dialog,
+  .receipt-ocr-modal__dialog,
+  .ledger-ai-modal__dialog,
+  .ai-result-modal__dialog,
+  .household-aggregate-chart-modal__panel,
+  .transaction-sheet-modal__dialog,
+  .transaction-sheet-settings-modal__dialog,
+  .main-photo-frame-modal__dialog,
+  .public-map-share-photo-modal__panel
+) :is(h1, h2, h3, h4, legend, .field__label) {
+  color: var(--modal-text) !important;
+  -webkit-text-fill-color: var(--modal-text) !important;
+}
+
+:root :is(
+  .travel-modal__dialog,
+  .receipt-ocr-modal__dialog,
+  .ledger-ai-modal__dialog,
+  .ai-result-modal__dialog,
+  .household-aggregate-chart-modal__panel,
+  .transaction-sheet-modal__dialog,
+  .transaction-sheet-settings-modal__dialog,
+  .main-photo-frame-modal__dialog,
+  .public-map-share-photo-modal__panel
+) :is(input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='color']):not([type='file']), select, textarea) {
+  border-color: var(--modal-border) !important;
+  background: var(--modal-field) !important;
+  color: var(--modal-text) !important;
+  -webkit-text-fill-color: var(--modal-text) !important;
+  color-scheme: light;
+}
+
+:root[data-theme='toss'] :is(
+  .travel-modal__dialog,
+  .receipt-ocr-modal__dialog,
+  .ledger-ai-modal__dialog,
+  .ai-result-modal__dialog,
+  .household-aggregate-chart-modal__panel,
+  .transaction-sheet-modal__dialog,
+  .transaction-sheet-settings-modal__dialog,
+  .main-photo-frame-modal__dialog,
+  .public-map-share-photo-modal__panel
+) :is(input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='color']):not([type='file']), select, textarea) {
+  color-scheme: dark;
+}
+
+:root :is(
+  .travel-modal__dialog,
+  .receipt-ocr-modal__dialog,
+  .ledger-ai-modal__dialog,
+  .ai-result-modal__dialog,
+  .transaction-sheet-modal__dialog,
+  .transaction-sheet-settings-modal__dialog,
+  .main-photo-frame-modal__dialog
+) :is(.panel, .panel--compact, .sheet-table-wrap, .table-scroll) {
+  border-color: var(--modal-border) !important;
+  background: var(--modal-surface-soft) !important;
+  color: var(--modal-text) !important;
+}
+
+:root :is(
+  .travel-modal__dialog,
+  .receipt-ocr-modal__dialog,
+  .ledger-ai-modal__dialog,
+  .ai-result-modal__dialog,
+  .transaction-sheet-modal__dialog,
+  .transaction-sheet-settings-modal__dialog
+) :is(th, .sheet-table__head) {
+  border-color: var(--modal-border) !important;
+  background: var(--modal-surface-muted) !important;
+  color: var(--modal-text) !important;
+}
+
+:root :is(
+  .travel-modal__dialog,
+  .receipt-ocr-modal__dialog,
+  .ledger-ai-modal__dialog,
+  .ai-result-modal__dialog,
+  .transaction-sheet-modal__dialog,
+  .transaction-sheet-settings-modal__dialog
+) td {
+  border-color: var(--modal-border) !important;
+  color: var(--modal-text-soft) !important;
+}
+
+/* OCR history was introduced with dark-only row colors; map those rows to the modal theme. */
+.receipt-ocr-history-detail__header,
+.receipt-ocr-detail-tools,
+.receipt-ocr-history__list--index .receipt-ocr-history__item {
+  border-color: var(--modal-border) !important;
+  background: var(--modal-surface-soft) !important;
+  color: var(--modal-text) !important;
+}
+
+.receipt-ocr-history__list--index .receipt-ocr-history__item > div:first-child {
+  border-color: var(--modal-border) !important;
+}
+
+.receipt-ocr-history__list--index .receipt-ocr-history__item :is(strong, span, small) {
+  border-color: var(--modal-border) !important;
+  background: var(--modal-field) !important;
+}
+
+.receipt-ocr-history__list--index .receipt-ocr-history__item strong,
+.receipt-ocr-history-detail__header strong,
+.receipt-ocr-detail-tools__copy strong {
+  color: var(--modal-text) !important;
+  -webkit-text-fill-color: var(--modal-text) !important;
+}
+
+.receipt-ocr-history__list--index .receipt-ocr-history__item :is(span, small),
+.receipt-ocr-history-detail__header span,
+.receipt-ocr-detail-tools__copy span,
+.receipt-ocr-history__pagination span {
+  color: var(--modal-text-soft) !important;
+  -webkit-text-fill-color: var(--modal-text-soft) !important;
+}
+
+.receipt-ocr-history__list--index .receipt-ocr-history__item:hover:not(.is-disabled) {
+  border-color: color-mix(in srgb, var(--modal-accent) 48%, var(--modal-border)) !important;
+  background: color-mix(in srgb, var(--modal-accent) 8%, var(--modal-surface-soft)) !important;
+}
+
+/* Independent analysis dialogs do not inherit the travel modal surface. */
+.ledger-ai-modal__nav,
+.ledger-ai-modal__empty,
+.ledger-ai-focus-summary,
+.ledger-ai-result-preview,
+.ledger-ai-focus-editor,
+.ledger-ai-focus-presets article,
+.ai-result-modal__body,
+.ai-result-card-grid article {
+  border-color: var(--modal-border) !important;
+  background: var(--modal-surface-soft) !important;
+  color: var(--modal-text) !important;
+}
+
+.ledger-ai-modal__nav-button:not(.is-active),
+.ai-result-modal__actions .button:not(.button--primary):not(.button--danger) {
+  border-color: var(--modal-border) !important;
+  background: var(--modal-field) !important;
+  color: var(--modal-text) !important;
+  -webkit-text-fill-color: var(--modal-text) !important;
+}
+
+.ai-result-modal__header p,
+.ai-result-modal__body p,
+.ai-result-modal__body small,
+.ledger-ai-modal__empty,
+.ledger-ai-result-preview small {
+  color: var(--modal-text-soft) !important;
+  -webkit-text-fill-color: var(--modal-text-soft) !important;
+}
+
+/* Aggregate chart dialog uses a dark chart canvas but a themed shell and summaries. */
+.household-aggregate-chart-modal__summary span,
+.household-aggregate-chart-modal__selected,
+.household-aggregate-chart-modal__legend {
+  border-color: var(--modal-border) !important;
+  background: var(--modal-surface-soft) !important;
+  color: var(--modal-text) !important;
+}
+
+.household-aggregate-chart-modal__header p,
+.household-aggregate-chart-modal__selected p,
+.household-aggregate-chart-modal__selected span {
+  color: var(--modal-text-soft) !important;
+  -webkit-text-fill-color: var(--modal-text-soft) !important;
+}
+
+:root:not([data-theme='toss']) .household-aggregate-chart-modal__canvas {
+  border-color: #a7cdbf !important;
+  background:
+    linear-gradient(180deg, rgba(100, 116, 139, 0.1) 0 1px, transparent 1px) 0 0 / 100% 34px,
+    linear-gradient(90deg, rgba(100, 116, 139, 0.08) 0 1px, transparent 1px) 0 0 / 56px 100%,
+    linear-gradient(160deg, #f8fafc, #edf8f3) !important;
+}
+
+/* Media viewers intentionally retain a dark canvas while their surrounding dialog follows the theme. */
+.travel-my-photos__modal-photo-frame,
+.travel-lightbox__body,
+.drive-preview-modal__body,
+.public-map-share-photo-modal__media,
+.main-photo-frame-detail-modal__figure {
+  background: #0b1020 !important;
+}
+.receipt-ocr-modal__nav-button:not(.is-active),
+.receipt-ocr-prompt-box {
+  border-color: var(--modal-border) !important;
+  background: var(--modal-surface-soft) !important;
+  color: var(--modal-text) !important;
+  -webkit-text-fill-color: var(--modal-text) !important;
+}
+
+.receipt-ocr-toggle,
+.receipt-ocr-prompt-box__hint {
+  color: var(--modal-text-soft) !important;
+  -webkit-text-fill-color: var(--modal-text-soft) !important;
+}
+
+.receipt-ocr-history__list--index .receipt-ocr-history__usage-badge.is-used,
+.receipt-ocr-history__list--index .receipt-ocr-history__usage-badge.is-complete {
+  border-color: color-mix(in srgb, var(--modal-accent) 32%, var(--modal-border)) !important;
+  background: color-mix(in srgb, var(--modal-accent) 14%, var(--modal-surface-soft)) !important;
+  color: var(--modal-accent) !important;
+  -webkit-text-fill-color: var(--modal-accent) !important;
+}
+
+/* Theme-specific specificity guard for legacy modal backgrounds. */
+:root:not([data-theme='toss']) :is(
+  .travel-modal__dialog,
+  .receipt-ocr-modal__dialog,
+  .ledger-ai-modal__dialog,
+  .ai-result-modal__dialog,
+  .household-aggregate-chart-modal__panel,
+  .transaction-sheet-modal__dialog,
+  .transaction-sheet-settings-modal__dialog,
+  .main-photo-frame-modal__dialog,
+  .public-map-share-photo-modal__panel,
+  .travel-progress-modal__dialog
+),
+:root[data-theme='toss'] :is(
+  .travel-modal__dialog,
+  .receipt-ocr-modal__dialog,
+  .ledger-ai-modal__dialog,
+  .ai-result-modal__dialog,
+  .household-aggregate-chart-modal__panel,
+  .transaction-sheet-modal__dialog,
+  .transaction-sheet-settings-modal__dialog,
+  .main-photo-frame-modal__dialog,
+  .public-map-share-photo-modal__panel,
+  .travel-progress-modal__dialog
+) {
+  border-color: var(--modal-border) !important;
+  background: var(--modal-surface) !important;
+  color: var(--modal-text) !important;
+  box-shadow: var(--modal-shadow) !important;
 }

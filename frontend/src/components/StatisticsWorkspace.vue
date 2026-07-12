@@ -382,6 +382,9 @@ const aiPrintableCards = computed(() => [
 const hasStaleAiResult = computed(() => Boolean(props.aiAnalysisStale && props.aiAnalysis))
 const aiResultModalOpen = ref(false)
 const aiAnalysisModalOpen = ref(false)
+const aiResultCloseLabel = computed(() => (
+  aiAnalysisModalOpen.value ? '분석 기록으로 돌아가기' : '닫기'
+))
 const aiAnalysisModalView = ref('')
 const pendingAiHistoryPrintId = ref(null)
 const aiProgressStartedAt = ref(0)
@@ -1955,7 +1958,7 @@ watch(
 .ai-result-modal {
   position: fixed;
   inset: 0;
-  z-index: 1000;
+  z-index: 1400;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1965,8 +1968,8 @@ watch(
 }
 
 .ai-result-modal__dialog {
-  width: min(1120px, 100%);
-  max-height: 80vh;
+  width: min(1240px, 100%);
+  max-height: calc(100dvh - 48px);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -2011,6 +2014,7 @@ watch(
 
 .ai-result-modal__body {
   overflow: auto;
+  overscroll-behavior: contain;
   padding: 24px;
 }
 
@@ -2907,7 +2911,7 @@ watch(
   </div>
 
   <Teleport to="body">
-    <div v-if="aiAnalysisModalOpen" class="ledger-ai-modal" @keydown.esc="closeAiAnalysisModal" @wheel.stop>
+    <div v-if="aiAnalysisModalOpen" v-show="!aiResultModalOpen" class="ledger-ai-modal" @keydown.esc="closeAiAnalysisModal" @wheel.stop>
       <section class="ledger-ai-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="ledger-ai-modal-title">
         <header class="ledger-ai-modal__header">
           <div>
@@ -2953,7 +2957,7 @@ watch(
           </div>
           <div class="ai-result-modal__actions">
             <button class="button button--secondary" type="button" @click="printAiAnalysisReport">PDF 저장/인쇄</button>
-            <button class="button" type="button" @click="closeAiResultModal">닫기</button>
+            <button class="button" type="button" @click="closeAiResultModal">{{ aiResultCloseLabel }}</button>
           </div>
         </header>
         <div class="ai-result-modal__body">

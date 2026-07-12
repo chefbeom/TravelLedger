@@ -116,7 +116,7 @@ onBeforeUnmount(cancelPendingImage)
 </script>
 
 <template>
-  <div class="public-map-share-photo-modal" role="dialog" aria-modal="true" aria-labelledby="public-map-share-photo-modal-title" @keydown.esc="emit('close')">
+  <div class="public-map-share-photo-modal" role="dialog" aria-modal="true" aria-labelledby="public-map-share-photo-modal-title" @pointerdown.stop @pointerup.stop @touchstart.stop @touchend.stop @click.stop @keydown.esc="emit('close')">
     <article class="public-map-share-photo-modal__panel">
       <header class="public-map-share-photo-modal__header">
         <div>

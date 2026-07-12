@@ -147,7 +147,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div v-if="activePhoto" class="travel-modal travel-modal--lightbox" @keydown.esc="emit('close')">
+  <div v-if="activePhoto" class="travel-modal travel-modal--lightbox" @pointerdown.stop @pointerup.stop @touchstart.stop @touchend.stop @click.stop @keydown.esc="emit('close')">
     <div class="travel-modal__dialog travel-lightbox">
       <div class="travel-modal__header">
         <div>

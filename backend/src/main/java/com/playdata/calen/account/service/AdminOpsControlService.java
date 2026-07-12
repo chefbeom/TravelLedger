@@ -191,6 +191,7 @@ public class AdminOpsControlService {
         }
         applyFeatureSecret(request, provider, settings);
         persistRuntimeSettings(request.presetKey());
+        persistFeaturePresetSecret(request.presetKey(), provider, settings.getApiKey());
         return getSnapshot();
     }
 
@@ -259,9 +260,38 @@ public class AdminOpsControlService {
         };
         if (Boolean.TRUE.equals(clear)) {
             settings.setApiKey("");
-        } else if (hasText(supplied)) {
-            settings.setApiKey(supplied.trim());
+            return;
         }
+        if (hasText(supplied)) {
+            settings.setApiKey(supplied.trim());
+            return;
+        }
+
+        String presetKey = normalizePresetKey(request.presetKey());
+        if (presetKey != null) {
+            settings.setApiKey(readPresetSecret(presetKey, featureSecretType(provider)).orElse(""));
+            return;
+        }
+        if (!Boolean.TRUE.equals(request.reuseExistingSecrets())) {
+            settings.setApiKey("");
+        }
+    }
+
+    private void persistFeaturePresetSecret(String rawPresetKey, LedgerAiProvider provider, String value) {
+        String presetKey = normalizePresetKey(rawPresetKey);
+        if (presetKey == null) {
+            return;
+        }
+        persistEncryptedSetting(presetSecretSettingKey(presetKey, featureSecretType(provider)), value);
+    }
+
+    private String featureSecretType(LedgerAiProvider provider) {
+        return switch (provider) {
+            case OPENAI -> "openai-api-key";
+            case LMSTUDIO -> "lmstudio-api-key";
+            case OLLAMA -> "ollama-api-key";
+            case N8N -> "api-key";
+        };
     }
 
     private String providerLabel(LedgerAiProvider provider) {

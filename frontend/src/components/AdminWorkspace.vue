@@ -38,6 +38,8 @@ const emit = defineEmits(['exit-admin-access'])
 
 const PAGE_SIZE = 10
 const AI_CONTROL_PRESETS_STORAGE_KEY = 'travelledger:admin-ai-control-presets:v1'
+const AI_CONTROL_CANDIDATES_STORAGE_KEY = 'travelledger:admin-ai-control-candidates:v1'
+const AI_CONTROL_CANDIDATE_LIMIT = 3
 
 const state = reactive({
   loading: true,
@@ -74,6 +76,9 @@ const state = reactive({
   activeAdminPanel: '',
   aiControlPresets: [],
   aiControlPresetKey: '',
+  aiCandidateServerKeys: [],
+  aiCandidateServerPickerKey: '',
+  aiFeatureConnections: { ledger: '', image: '' },
   aiTargetFeature: 'ledger',
   aiControlPreserveCurrentSecret: false,
   aiServerStatusOpen: false,
@@ -449,6 +454,7 @@ async function deleteAiControlPreset(key) {
   try {
     await deleteAdminAiControlPresetSecret(key)
     state.aiControlPresets = state.aiControlPresets.filter((item) => item.key !== key)
+    removeAiCandidateServer(key)
     if (state.aiControlPresetKey === key) {
       state.aiControlPresetKey = ''
     }
@@ -887,6 +893,12 @@ function buildAiControlPreset(source = state.aiControlForm) {
     ollamaBaseUrl: source.ollamaBaseUrl || 'http://localhost:11434',
     ollamaChatPath: source.ollamaChatPath || '/api/chat',
     ollamaModelsPath: source.ollamaModelsPath || '/api/tags',
+    temperature: Number(source.temperature ?? 0.2),
+    maxTokens: Number(source.maxTokens ?? 4096),
+    connectTimeoutSeconds: Number(source.connectTimeoutSeconds ?? 3),
+    readTimeoutSeconds: Number(source.readTimeoutSeconds ?? 120),
+    enforceProviderUrlAllowlist: Boolean(source.enforceProviderUrlAllowlist),
+    allowedProviderHosts: source.allowedProviderHosts || '',
     credentialConfigured: providerCredentialConfigured(source),
     savedAt: new Date().toISOString(),
   }
@@ -917,6 +929,7 @@ function persistAiControlPresets() {
 
 function loadAiControlPresets() {
   state.aiControlPresets = readAiControlPresets()
+  loadAiCandidateServers()
 }
 
 function rememberAiControlPreset(source = state.aiControlForm) {
@@ -927,6 +940,7 @@ function rememberAiControlPreset(source = state.aiControlForm) {
   state.aiControlPresets = [preset, ...state.aiControlPresets.filter((item) => item.key !== preset.key)].slice(0, 12)
   state.aiControlPresetKey = preset.key
   persistAiControlPresets()
+  loadAiCandidateServers()
 }
 
 function activeAiControlPresetKey() {
@@ -944,6 +958,186 @@ function activeAiControlPresetTitle() {
 
 function isPresetCredentialConfigured(preset) {
   return Boolean(preset?.credentialConfigured)
+}
+const candidateAiControlPresets = computed(() => state.aiCandidateServerKeys
+  .map((key) => state.aiControlPresets.find((preset) => preset.key === key))
+  .filter((preset) => isFeatureCompatibleAiPreset(preset)),
+)
+
+const availableAiControlPresets = computed(() => state.aiControlPresets
+  .filter((preset) => isFeatureCompatibleAiPreset(preset))
+  .filter((preset) => !state.aiCandidateServerKeys.includes(preset.key)),
+)
+
+function isFeatureCompatibleAiPreset(preset) {
+  return ['lmstudio', 'openai', 'ollama'].includes(String(preset?.provider || '').toLowerCase())
+}
+
+function normalizeAiCandidateServerKeys(keys) {
+  const availableKeys = new Set(state.aiControlPresets
+    .filter((preset) => isFeatureCompatibleAiPreset(preset))
+    .map((preset) => preset.key))
+  const normalized = Array.isArray(keys) ? keys.map((key) => String(key || '').trim()) : []
+  return [...new Set(normalized.filter((key) => availableKeys.has(key)))].slice(0, AI_CONTROL_CANDIDATE_LIMIT)
+}
+
+function readAiCandidateServerKeys() {
+  try {
+    return JSON.parse(localStorage.getItem(AI_CONTROL_CANDIDATES_STORAGE_KEY) || '[]')
+  } catch {
+    return []
+  }
+}
+
+function persistAiCandidateServerKeys() {
+  localStorage.setItem(AI_CONTROL_CANDIDATES_STORAGE_KEY, JSON.stringify(state.aiCandidateServerKeys))
+}
+
+function loadAiCandidateServers() {
+  state.aiCandidateServerKeys = normalizeAiCandidateServerKeys(readAiCandidateServerKeys())
+  if (!state.aiCandidateServerPickerKey || state.aiCandidateServerKeys.includes(state.aiCandidateServerPickerKey)) {
+    state.aiCandidateServerPickerKey = availableAiControlPresets.value[0]?.key || ''
+  }
+}
+
+function aiServerPresetSignature(source) {
+  const provider = String(source?.provider || '').toLowerCase()
+  const baseUrl = aiControlPresetAddress(source)
+  const chatPath = provider === 'ollama'
+    ? source?.ollamaChatPath
+    : provider === 'openai'
+      ? source?.openAiChatPath
+      : source?.lmStudioChatPath
+  const modelsPath = provider === 'ollama'
+    ? source?.ollamaModelsPath
+    : provider === 'openai'
+      ? source?.openAiModelsPath
+      : source?.lmStudioModelsPath
+  return [provider, source?.model || '', baseUrl || '', chatPath || '', modelsPath || ''].join('|')
+}
+
+function aiFeatureConfigSignature(feature) {
+  const config = aiFeatureConfigFor(feature)
+  if (!config) {
+    return ''
+  }
+  return [config.provider || '', config.model || '', config.baseUrl || '', config.chatPath || '', config.modelsPath || ''].join('|')
+}
+
+function syncAiFeatureConnections() {
+  for (const feature of ['ledger', 'image']) {
+    const signature = aiFeatureConfigSignature(feature)
+    const matched = candidateAiControlPresets.value.find((preset) => aiServerPresetSignature(preset) === signature)
+    state.aiFeatureConnections[feature] = matched?.key || ''
+  }
+}
+
+function candidateAiPresetForFeature(feature) {
+  const key = state.aiFeatureConnections[feature]
+  return candidateAiControlPresets.value.find((preset) => preset.key === key) || null
+}
+
+function addAiCandidateServer() {
+  const key = state.aiCandidateServerPickerKey
+  if (!key) {
+    state.opsControlError = '후보로 등록할 서버를 선택하세요.'
+    return
+  }
+  if (state.aiCandidateServerKeys.includes(key)) {
+    state.opsControlError = '이미 후보 서버에 등록된 서버입니다.'
+    return
+  }
+  if (state.aiCandidateServerKeys.length >= AI_CONTROL_CANDIDATE_LIMIT) {
+    state.opsControlError = `후보 서버는 최대 ${AI_CONTROL_CANDIDATE_LIMIT}개까지 등록할 수 있습니다.`
+    return
+  }
+  state.opsControlError = ''
+  state.aiCandidateServerKeys = [...state.aiCandidateServerKeys, key]
+  persistAiCandidateServerKeys()
+  state.aiCandidateServerPickerKey = availableAiControlPresets.value[0]?.key || ''
+}
+
+function removeAiCandidateServer(key) {
+  state.aiCandidateServerKeys = state.aiCandidateServerKeys.filter((candidateKey) => candidateKey !== key)
+  for (const feature of ['ledger', 'image']) {
+    if (state.aiFeatureConnections[feature] === key) {
+      state.aiFeatureConnections[feature] = ''
+    }
+  }
+  persistAiCandidateServerKeys()
+  if (!state.aiCandidateServerPickerKey) {
+    state.aiCandidateServerPickerKey = availableAiControlPresets.value[0]?.key || ''
+  }
+}
+
+function connectAiFeatureToCandidate(feature, key) {
+  if (!candidateAiControlPresets.value.some((preset) => preset.key === key)) {
+    return
+  }
+  state.aiFeatureConnections[feature] = key
+}
+
+function clearAiFeatureConnection(feature) {
+  state.aiFeatureConnections[feature] = ''
+}
+
+function buildAiFeatureConnectionPayload(preset, feature) {
+  const source = state.aiControlForm
+  return {
+    enabled: Boolean(state.opsControl?.ai?.enabled ?? source.enabled),
+    targetFeature: feature,
+    provider: preset.provider,
+    model: preset.model || 'auto',
+    lmStudioBaseUrl: preset.lmStudioBaseUrl || '',
+    lmStudioChatPath: preset.lmStudioChatPath || '/v1/chat/completions',
+    lmStudioModelsPath: preset.lmStudioModelsPath || '/v1/models',
+    openAiBaseUrl: preset.openAiBaseUrl || 'https://api.openai.com',
+    openAiChatPath: preset.openAiChatPath || '/v1/chat/completions',
+    openAiModelsPath: preset.openAiModelsPath || '/v1/models',
+    ollamaBaseUrl: preset.ollamaBaseUrl || 'http://localhost:11434',
+    ollamaChatPath: preset.ollamaChatPath || '/api/chat',
+    ollamaModelsPath: preset.ollamaModelsPath || '/api/tags',
+    temperature: Number(preset.temperature ?? source.temperature),
+    maxTokens: Number(preset.maxTokens ?? source.maxTokens),
+    connectTimeoutSeconds: Number(source.connectTimeoutSeconds),
+    readTimeoutSeconds: Number(source.readTimeoutSeconds),
+    enforceProviderUrlAllowlist: Boolean(source.enforceProviderUrlAllowlist),
+    allowedProviderHosts: source.allowedProviderHosts,
+    presetKey: preset.key,
+    reuseExistingSecrets: false,
+  }
+}
+
+async function saveAiFeatureConnections() {
+  const connections = ['ledger', 'image']
+    .map((feature) => ({ feature, preset: candidateAiPresetForFeature(feature) }))
+    .filter((connection) => connection.preset)
+
+  if (!connections.length) {
+    state.opsControlError = '저장할 기능별 후보 서버 연결을 선택하세요.'
+    return
+  }
+
+  state.savingAiControl = true
+  state.opsControlError = ''
+  state.opsControlMessage = ''
+  const activeFeature = state.aiTargetFeature
+  try {
+    for (const connection of connections) {
+      state.opsControl = await updateAdminAiControl(buildAiFeatureConnectionPayload(connection.preset, connection.feature))
+    }
+    state.aiTargetFeature = activeFeature
+    syncAiControlForm()
+    syncAiFeatureConnections()
+    markOpsControlChecked()
+    state.opsControlMessage = '기능별 AI 서버 연결이 저장되었습니다.'
+  } catch (error) {
+    if (!handleAdminAccessRequired(error)) {
+      state.opsControlError = error.message || '기능별 AI 서버 연결을 저장하지 못했습니다.'
+    }
+  } finally {
+    state.savingAiControl = false
+  }
 }
 function toggleAiServerStatusPanel() {
   state.aiServerStatusOpen = !state.aiServerStatusOpen
@@ -1129,6 +1323,7 @@ async function loadOpsControl() {
   try {
     state.opsControl = await fetchAdminOpsControl()
     syncAiControlForm()
+    syncAiFeatureConnections()
     syncDataControlForm()
     markOpsControlChecked()
   } catch (error) {
@@ -1832,65 +2027,110 @@ onBeforeUnmount(() => {
               </div>
             </section>
 
-            <section v-else-if="state.opsControlModalView === 'list'" class="admin-ops-panel">
+            <section v-else-if="state.opsControlModalView === 'list'" class="admin-ops-panel admin-ai-routing">
               <div class="panel__header">
                 <div>
-                  <h3>서버 리스트 조회 및 서버 변경</h3>
+                  <h3>후보 서버 연결</h3>
+                  <p>후보 서버 등록은 바로가기만 관리합니다. 아래 기능 연결을 저장해야 실제 분석 서버가 바뀝니다.</p>
                 </div>
                 <button class="button button--ghost" type="button" :disabled="state.loadingOpsControl" @click="loadOpsControl">
                   {{ state.loadingOpsControl ? '조회 중...' : '현재 설정 조회' }}
                 </button>
               </div>
 
-              <div class="admin-ai-feature-status-grid">
-                <article v-for="feature in ['ledger', 'image']" :key="feature" class="admin-ai-feature-status-card" :class="{ 'is-active': state.aiTargetFeature === feature }">
-                  <span>{{ aiFeatureLabel(feature) }}</span>
-                  <strong>{{ aiFeatureProviderLabel(feature) }} · {{ aiFeatureConfigFor(feature)?.model || '모델 미설정' }}</strong>
-                  <small>{{ aiFeatureConfigFor(feature)?.baseUrl || '서버 주소 미설정' }}</small>
-                  <small :class="{ 'is-healthy': aiFeatureServerStatusFor(feature)?.reachable }">{{ aiFeatureServerStateLabel(feature) }}</small>
-                </article>
-              </div>
+              <section class="admin-ai-routing__candidate-add" aria-labelledby="candidate-server-title">
+                <div>
+                  <strong id="candidate-server-title">후보 서버</strong>
+                  <small>자주 전환할 서버를 최대 3개까지 등록할 수 있습니다.</small>
+                </div>
+                <div class="admin-ai-routing__candidate-add-controls">
+                  <select v-model="state.aiCandidateServerPickerKey" aria-label="후보로 등록할 서버">
+                    <option value="">등록할 서버 선택</option>
+                    <option v-for="preset in availableAiControlPresets" :key="preset.key" :value="preset.key">
+                      {{ preset.title || preset.model || 'AI 서버' }} · {{ preset.provider }}
+                    </option>
+                  </select>
+                  <button class="button button--secondary" type="button" :disabled="!state.aiCandidateServerPickerKey || state.aiCandidateServerKeys.length >= 3" @click="addAiCandidateServer">후보 추가</button>
+                  <button class="button button--ghost" type="button" @click="startAiServerAdd">새 서버 등록</button>
+                </div>
+              </section>
 
-              <div class="admin-ops-current-server">
-                <span>현재 적용 서버</span>
-                <strong>{{ currentAiProviderLabel() }} · {{ state.aiControlForm.model || 'auto' }}</strong>
-                <small>{{ currentAiServerAddress() }}</small>
-                <small v-if="activeAiControlPresetTitle()" class="admin-ops-current-server__preset">{{ activeAiControlPresetTitle() }} 설정 사용 중</small>
-                <label class="field field--inline admin-ai-enable-row">
-                  <input v-model="state.aiControlForm.enabled" type="checkbox" />
-                  <span class="field__label">AI 분석 사용</span>
-                </label>
-              </div>
-
-              <div class="admin-ops-server-list">
-                <article v-if="!state.aiControlPresets.length" class="admin-ops-server-row admin-ops-server-row--empty">
-                  <strong>저장된 서버 프리셋이 없습니다.</strong>
+              <section class="admin-ai-routing__candidates" aria-label="후보 서버 목록">
+                <article v-if="!candidateAiControlPresets.length" class="admin-ai-routing__empty">
+                  <strong>등록된 후보 서버가 없습니다.</strong>
+                  <span>등록 서버 중 자주 사용할 서버를 후보로 추가하세요.</span>
                 </article>
-                <article v-for="preset in state.aiControlPresets" :key="preset.key" class="admin-ops-server-row" :class="{ 'is-active': isAiControlPresetActive(preset) }">
+                <article v-for="preset in candidateAiControlPresets" :key="preset.key" class="admin-ai-routing__candidate-card">
                   <div>
-                    <strong>
-                      {{ preset.title || preset.model || 'AI 서버' }}
-                      <span v-if="isAiControlPresetActive(preset)" class="admin-ops-server-row__active">현재 사용 중</span>
-                    </strong>
-                    <span>{{ preset.provider || 'lmstudio' }} · {{ preset.model || 'auto' }}</span>
-                    <small>{{ aiControlPresetAddress(preset) || '-' }}</small>
-                    <small>{{ isPresetCredentialConfigured(preset) ? 'API 키 암호화 저장됨' : 'API 키 미저장' }}</small>
+                    <span class="admin-ai-routing__candidate-index">후보 {{ state.aiCandidateServerKeys.indexOf(preset.key) + 1 }}</span>
+                    <strong>{{ preset.title || preset.model || 'AI 서버' }}</strong>
+                    <small>{{ currentAiProviderLabel(preset.provider) }} · {{ preset.model || 'auto' }}</small>
+                    <small>{{ aiControlPresetAddress(preset) || '서버 주소 미설정' }}</small>
+                    <small>{{ isPresetCredentialConfigured(preset) ? 'API 키 암호화 저장됨' : 'API 키 미설정' }}</small>
                   </div>
-                  <div class="admin-ops-server-row__actions">
-                    <button class="button button--ghost" type="button" @click="applyAiControlPresetByKey(preset.key)">불러오기</button>
-                    <button class="button button--danger" type="button" @click="deleteAiControlPreset(preset.key)">삭제</button>
+                  <div class="admin-ai-routing__candidate-actions">
+                    <button class="button button--ghost" type="button" @click="applyAiControlPresetByKey(preset.key)">편집</button>
+                    <button class="button button--danger" type="button" @click="removeAiCandidateServer(preset.key)">후보 해제</button>
                   </div>
                 </article>
-              </div>
+              </section>
 
-              <div class="panel__actions">
-                <button class="button button--secondary" type="button" @click="startAiServerAdd">새 서버 추가</button>
-                <button class="button button--primary" type="button" :disabled="state.savingAiControl" @click="handleSaveAiControl">
-                  {{ state.savingAiControl ? '저장 중...' : '불러온 설정 저장' }}
+              <section class="admin-ai-routing__board" aria-labelledby="feature-routing-title">
+                <div class="admin-ai-routing__board-header">
+                  <div>
+                    <h4 id="feature-routing-title">AI 기능별 서버 연결</h4>
+                    <p>각 기능에서 사용할 후보 서버 하나를 선택하세요.</p>
+                  </div>
+                  <span>{{ candidateAiControlPresets.length }}/3 후보</span>
+                </div>
+                <article v-for="feature in ['ledger', 'image']" :key="feature" class="admin-ai-routing__feature-row" :class="{ 'is-connected': candidateAiPresetForFeature(feature) }">
+                  <div class="admin-ai-routing__feature-node">
+                    <span>{{ feature === 'image' ? 'IMAGE / OCR' : 'LEDGER AI' }}</span>
+                    <strong>{{ aiFeatureLabel(feature) }}</strong>
+                    <small>{{ aiFeatureConfigFor(feature)?.model || '현재 연결 없음' }}</small>
+                  </div>
+                  <div class="admin-ai-routing__line" aria-hidden="true">
+                    <i></i>
+                    <b>{{ candidateAiPresetForFeature(feature) ? '연결됨' : '선택 필요' }}</b>
+                  </div>
+                  <div class="admin-ai-routing__server-options">
+                    <button v-for="preset in candidateAiControlPresets" :key="preset.key" type="button" class="admin-ai-routing__server-node" :class="{ 'is-selected': state.aiFeatureConnections[feature] === preset.key }" @click="connectAiFeatureToCandidate(feature, preset.key)">
+                      <strong>{{ preset.title || preset.model || 'AI 서버' }}</strong>
+                      <span>{{ currentAiProviderLabel(preset.provider) }} · {{ preset.model || 'auto' }}</span>
+                    </button>
+                    <button v-if="state.aiFeatureConnections[feature]" type="button" class="button button--ghost admin-ai-routing__clear" @click="clearAiFeatureConnection(feature)">연결 해제</button>
+                    <span v-else-if="!candidateAiControlPresets.length" class="admin-ai-routing__no-candidate">후보 서버를 먼저 추가하세요.</span>
+                  </div>
+                </article>
+              </section>
+
+              <details class="admin-ai-routing__registry">
+                <summary>전체 등록 서버 관리 ({{ state.aiControlPresets.length }}개)</summary>
+                <div class="admin-ops-server-list">
+                  <article v-if="!state.aiControlPresets.length" class="admin-ops-server-row admin-ops-server-row--empty">
+                    <strong>등록된 서버가 없습니다.</strong>
+                  </article>
+                  <article v-for="preset in state.aiControlPresets" :key="preset.key" class="admin-ops-server-row" :class="{ 'is-active': state.aiCandidateServerKeys.includes(preset.key) }">
+                    <div>
+                      <strong>{{ preset.title || preset.model || 'AI 서버' }}</strong>
+                      <span>{{ currentAiProviderLabel(preset.provider) }} · {{ preset.model || 'auto' }}</span>
+                      <small>{{ aiControlPresetAddress(preset) || '-' }}</small>
+                    </div>
+                    <div class="admin-ops-server-row__actions">
+                      <button class="button button--ghost" type="button" @click="applyAiControlPresetByKey(preset.key)">편집</button>
+                      <button class="button button--danger" type="button" @click="deleteAiControlPreset(preset.key)">삭제</button>
+                    </div>
+                  </article>
+                </div>
+              </details>
+
+              <div class="panel__actions admin-ai-routing__save-actions">
+                <span>후보를 추가하거나 변경해도 저장 전에는 실제 AI 서버 설정이 바뀌지 않습니다.</span>
+                <button class="button button--primary" type="button" :disabled="state.savingAiControl || !Object.values(state.aiFeatureConnections).some(Boolean)" @click="saveAiFeatureConnections">
+                  {{ state.savingAiControl ? '저장 중...' : '기능별 연결 저장' }}
                 </button>
               </div>
             </section>
-
             <section v-else-if="state.opsControlModalView === 'add'" class="admin-ops-panel">
               <div class="panel__header">
                 <div>

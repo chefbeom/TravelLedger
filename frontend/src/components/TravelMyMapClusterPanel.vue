@@ -1290,7 +1290,7 @@ watch(
         <slot name="fullscreen-overlay" :is-fullscreen="isFullscreen" />
       </div>
     </div>
-    <div v-if="isFullscreen" class="travel-map__fullscreen-dialog" @click.stop>
+    <div v-if="isFullscreen" class="travel-map__fullscreen-dialog" @pointerdown.stop @pointerup.stop @touchstart.stop @touchend.stop @click.stop>
       <slot name="fullscreen-dialog" :is-fullscreen="isFullscreen" />
     </div>
   </div>

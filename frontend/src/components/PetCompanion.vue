@@ -680,25 +680,25 @@ defineExpose({ announceAnalysisComplete, announceNavigation, openManager })
 .pet-companion__dock--walk .pet-companion__animal-sprite { animation: pet-animal-walk-24 .8s steps(24, end) infinite; }
 .pet-companion__speech { position: absolute; right: 0; bottom: calc(var(--pet-size, 100px) + 22px); width: min(255px, calc(100vw - 28px)); margin: 0; padding: 10px 12px; border: 1px solid color-mix(in srgb, var(--accent, #21b891) 60%, transparent); border-radius: 12px; background: var(--panel, #162131); box-shadow: 0 11px 30px rgba(0,0,0,.25); color: var(--text, #f7fbff); font-size: 13px; line-height: 1.45; }
 .pet-companion__quick-actions { position: absolute; right: 0; bottom: calc(var(--pet-size, 100px) + 24px); display: grid; gap: 5px; width: 132px; padding: 7px; border: 1px solid var(--panel-border, #34455f); border-radius: 10px; background: var(--panel, #162131); box-shadow: 0 12px 30px rgba(0,0,0,.24); }
-.pet-companion__quick-actions button, .pet-manager-modal button { min-height: 34px; border: 1px solid var(--panel-border, #34455f); border-radius: 7px; background: var(--input-bg, #111c2b); color: var(--text, #f7fbff); font: inherit; font-weight: 750; cursor: pointer; }
+.pet-companion__quick-actions button, .pet-manager-modal button { min-height: 34px; border: 1px solid var(--field-border, var(--panel-border, #34455f)); border-radius: 7px; background: var(--field-bg, var(--panel, #162131)); color: var(--text, #f7fbff); font: inherit; font-weight: 750; cursor: pointer; }
 .pet-companion__quick-actions button:hover, .pet-manager-modal button:hover { border-color: var(--accent, #21b891); }
 .pet-manager-modal { z-index: 1360; }
 .pet-manager-modal__dialog { width: min(900px, calc(100vw - 32px)); max-height: min(760px, calc(100dvh - 32px)); overflow: auto; }
-.pet-manager-modal__body { display: grid; grid-template-columns: minmax(0, 1fr) 250px; gap: 16px; padding: 18px; }
+.pet-manager-modal__body { display: grid; grid-template-columns: minmax(0, 1fr) minmax(260px, 300px); gap: 16px; padding: 18px; }
 .pet-manager-modal__pets { display: grid; gap: 9px; }
-.pet-manager-card { display: grid; grid-template-columns: 64px minmax(0, 1fr) auto; align-items: center; gap: 11px; min-height: 78px; padding: 8px; text-align: left; }
-.pet-manager-card.is-active { border-color: var(--accent, #21b891); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent, #21b891) 45%, transparent); }
+.pet-manager-card { display: grid; grid-template-columns: 64px minmax(0, 1fr) auto; align-items: center; gap: 11px; min-height: 78px; padding: 10px 12px; text-align: left; background: var(--field-bg, var(--panel, #162131)) !important; }
+.pet-manager-card.is-active { border-color: var(--accent, #21b891); background: color-mix(in srgb, var(--field-bg, var(--panel, #162131)) 88%, var(--accent, #21b891) 12%) !important; box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent, #21b891) 45%, transparent); }
 .pet-manager-card img, .pet-manager-card__sprite { width: 58px; height: 58px; object-fit: contain; background-repeat: no-repeat; background-position: 0 0; background-size: 800% 1100%; image-rendering: pixelated; }
 .pet-manager-card__copy { min-width: 0; }
 .pet-manager-card__copy strong, .pet-manager-card__copy small { display: block; }
-.pet-manager-card__copy small { margin-top: 3px; color: var(--muted, #a4b4c7); line-height: 1.35; }
+.pet-manager-card__copy small { margin-top: 3px; color: var(--text-soft, #a4b4c7); line-height: 1.35; }
 .pet-manager-card__state { color: var(--accent, #21b891); font-size: 12px; white-space: nowrap; }
-.pet-manager-modal__settings { display: grid; align-content: start; gap: 10px; padding: 14px; border: 1px solid var(--panel-border, #34455f); border-radius: 9px; background: color-mix(in srgb, var(--panel, #162131) 80%, var(--accent, #21b891) 5%); }
-.pet-manager-toggle { display: flex; gap: 9px; align-items: center; font-weight: 750; }
-.pet-manager-toggle input { accent-color: var(--accent, #21b891); }
-.pet-manager-size { display: grid; gap: 5px; font-weight: 750; }
-.pet-manager-size select { min-height: 38px; border: 1px solid var(--panel-border, #34455f); border-radius: 7px; background: var(--input-bg, #111c2b); color: var(--text, #f7fbff); font: inherit; padding: 0 10px; }
-.pet-manager-modal__settings .button { margin-top: 8px; }
+.pet-manager-modal__settings { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-content: start; gap: 8px; padding: 14px; border: 1px solid var(--field-border, var(--panel-border, #34455f)); border-radius: 10px; background: color-mix(in srgb, var(--surface-soft, var(--panel, #162131)) 92%, var(--accent, #21b891) 8%); }
+.pet-manager-toggle { display: grid; grid-template-columns: 18px minmax(0, 1fr); gap: 8px; align-items: center; min-height: 46px; padding: 8px 9px; border: 1px solid var(--field-border, var(--panel-border, #34455f)); border-radius: 8px; background: var(--field-bg, var(--panel, #162131)); color: var(--text, #f7fbff); font-size: 13px; font-weight: 750; line-height: 1.3; }
+.pet-manager-toggle input { inline-size: 18px; block-size: 18px; margin: 0; accent-color: var(--accent, #21b891); }
+.pet-manager-size { display: grid; grid-column: 1 / -1; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 8px; min-height: 46px; padding: 8px 9px; border: 1px solid var(--field-border, var(--panel-border, #34455f)); border-radius: 8px; background: var(--field-bg, var(--panel, #162131)); color: var(--text, #f7fbff); font-size: 13px; font-weight: 750; }
+.pet-manager-size select { min-height: 32px; border: 1px solid var(--field-border, var(--panel-border, #34455f)); border-radius: 6px; background: var(--field-bg, var(--panel, #162131)); color: var(--text, #f7fbff); font: inherit; padding: 0 8px; }
+.pet-manager-modal__settings .button { grid-column: 1 / -1; justify-self: end; min-height: 34px; margin-top: 2px; padding-inline: 12px; }
 @keyframes pet-yuna-idle-look { 0%,100% { transform: scaleX(var(--yuna-facing-scale, 1)) translateY(0) rotate(0) } 25% { transform: scaleX(var(--yuna-facing-scale, 1)) translateY(-1px) rotate(-1.4deg) } 50% { transform: scaleX(var(--yuna-facing-scale, 1)) translateY(0) rotate(1.1deg) } 75% { transform: scaleX(var(--yuna-facing-scale, 1)) translateY(-1px) rotate(-1.2deg) } }
 @keyframes pet-yuna-greet { 0%,100% { transform: rotate(0) scale(1) } 40% { transform: rotate(-7deg) scale(1.07) } 70% { transform: rotate(7deg) scale(1.07) } }
 @keyframes pet-alert { 0%,100% { transform: translateX(0) } 35% { transform: translateX(-5px) } 70% { transform: translateX(5px) } }
@@ -712,6 +712,9 @@ defineExpose({ announceAnalysisComplete, announceNavigation, openManager })
   .pet-companion__dock { right: 8px; bottom: calc(8px + env(safe-area-inset-bottom)); transform: scale(.9); transform-origin: bottom right; }
   .pet-manager-modal__dialog { width: calc(100vw - 16px); max-height: calc(100dvh - 16px); }
   .pet-manager-modal__body { grid-template-columns: 1fr; padding: 14px; }
+  .pet-manager-modal__settings { grid-template-columns: 1fr; }
+  .pet-manager-size { grid-column: auto; }
+  .pet-manager-modal__settings .button { grid-column: auto; width: 100%; }
   .pet-manager-card { grid-template-columns: 52px minmax(0, 1fr) auto; min-height: 68px; }
   .pet-manager-card img, .pet-manager-card__sprite { width: 48px; height: 48px; }
 }

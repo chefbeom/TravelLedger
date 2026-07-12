@@ -2633,7 +2633,7 @@ button {
 
 .travel-record-switcher__grid {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 10px;
 }
 
@@ -12866,7 +12866,8 @@ textarea {
   pointer-events: none;
 }
 
-.travel-map__fullscreen-dialog > * {
+.travel-map__fullscreen-dialog > .travel-modal,
+.travel-map__fullscreen-dialog > .public-map-share-photo-modal {
   pointer-events: auto;
 }
 
@@ -17039,6 +17040,301 @@ textarea {
 .admin-ai-feature-target small {
   flex: 1 1 240px;
   color: var(--text-muted, #94a3b8);
+}
+/* Candidate servers are shortcuts; only the routing save action changes live AI settings. */
+.admin-ai-routing {
+  --routing-border: color-mix(in srgb, var(--line) 74%, var(--brand) 26%);
+  --routing-surface: color-mix(in srgb, var(--surface-soft) 86%, var(--brand-soft) 14%);
+  --routing-active: color-mix(in srgb, var(--brand-soft) 64%, var(--surface) 36%);
+}
+
+.admin-ai-routing .panel__header p,
+.admin-ai-routing__candidate-add small,
+.admin-ai-routing__candidate-card small,
+.admin-ai-routing__board-header p,
+.admin-ai-routing__feature-node small,
+.admin-ai-routing__server-node span,
+.admin-ai-routing__empty span,
+.admin-ai-routing__save-actions > span,
+.admin-ai-routing__no-candidate {
+  color: var(--text-soft);
+}
+
+.admin-ai-routing__candidate-add,
+.admin-ai-routing__candidates,
+.admin-ai-routing__board,
+.admin-ai-routing__registry {
+  border: 1px solid var(--routing-border);
+  border-radius: 14px;
+  background: var(--routing-surface);
+}
+
+.admin-ai-routing__candidate-add {
+  display: grid;
+  grid-template-columns: minmax(180px, 0.72fr) minmax(0, 1.5fr);
+  gap: 16px;
+  align-items: end;
+  padding: 14px;
+}
+
+.admin-ai-routing__candidate-add > div:first-child,
+.admin-ai-routing__candidate-card > div:first-child,
+.admin-ai-routing__board-header > div,
+.admin-ai-routing__feature-node {
+  display: grid;
+  gap: 4px;
+}
+
+.admin-ai-routing__candidate-add strong,
+.admin-ai-routing__board h4,
+.admin-ai-routing__feature-node strong {
+  color: var(--text);
+}
+
+.admin-ai-routing__candidate-add-controls {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) auto auto;
+  gap: 8px;
+}
+
+.admin-ai-routing__candidate-add-controls select {
+  min-width: 0;
+}
+
+.admin-ai-routing__candidates {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 10px;
+  padding: 12px;
+}
+
+.admin-ai-routing__candidate-card {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  padding: 13px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+}
+
+.admin-ai-routing__candidate-card strong,
+.admin-ai-routing__candidate-card small {
+  overflow-wrap: anywhere;
+}
+
+.admin-ai-routing__candidate-index {
+  width: fit-content;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--brand-soft);
+  color: var(--brand-readable-strong);
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.admin-ai-routing__candidate-actions {
+  display: grid;
+  gap: 6px;
+}
+
+.admin-ai-routing__empty {
+  grid-column: 1 / -1;
+  min-height: 86px;
+  display: grid;
+  place-content: center;
+  gap: 5px;
+  text-align: center;
+}
+
+.admin-ai-routing__board {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+}
+
+.admin-ai-routing__board-header {
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+  align-items: start;
+}
+
+.admin-ai-routing__board-header h4,
+.admin-ai-routing__board-header p {
+  margin: 0;
+}
+
+.admin-ai-routing__board-header > span {
+  flex: 0 0 auto;
+  padding: 4px 9px;
+  border-radius: 999px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  color: var(--text-soft);
+  font-size: 0.8rem;
+  font-weight: 800;
+}
+
+.admin-ai-routing__feature-row {
+  display: grid;
+  grid-template-columns: minmax(170px, 0.72fr) minmax(100px, 0.35fr) minmax(0, 1.5fr);
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border: 1px dashed var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+}
+
+.admin-ai-routing__feature-row.is-connected {
+  border-style: solid;
+  border-color: color-mix(in srgb, var(--brand) 60%, var(--line) 40%);
+  background: var(--routing-active);
+}
+
+.admin-ai-routing__feature-node {
+  min-width: 0;
+  padding: 11px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface-soft);
+}
+
+.admin-ai-routing__feature-node span {
+  color: var(--brand-readable-strong);
+  font-size: 0.73rem;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+}
+
+.admin-ai-routing__line {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(14px, 1fr) auto;
+  gap: 6px;
+  align-items: center;
+}
+
+.admin-ai-routing__line i {
+  height: 2px;
+  display: block;
+  background: var(--line);
+}
+
+.admin-ai-routing__feature-row.is-connected .admin-ai-routing__line i {
+  background: var(--brand);
+}
+
+.admin-ai-routing__line b {
+  padding: 3px 7px;
+  border-radius: 999px;
+  background: var(--surface-soft);
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  white-space: nowrap;
+}
+
+.admin-ai-routing__feature-row.is-connected .admin-ai-routing__line b {
+  color: var(--brand-readable-strong);
+  background: var(--brand-soft);
+}
+
+.admin-ai-routing__server-options {
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: 8px;
+}
+
+.admin-ai-routing__server-node {
+  min-width: 138px;
+  flex: 1 1 150px;
+  display: grid;
+  gap: 4px;
+  align-content: center;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.admin-ai-routing__server-node:hover,
+.admin-ai-routing__server-node:focus-visible {
+  border-color: var(--brand);
+  outline: none;
+}
+
+.admin-ai-routing__server-node.is-selected {
+  border-color: var(--brand);
+  box-shadow: inset 0 0 0 1px var(--brand);
+  background: var(--brand-soft);
+}
+
+.admin-ai-routing__server-node strong,
+.admin-ai-routing__server-node span {
+  overflow-wrap: anywhere;
+}
+
+.admin-ai-routing__clear {
+  align-self: center;
+}
+
+.admin-ai-routing__registry {
+  padding: 4px 14px 14px;
+}
+
+.admin-ai-routing__registry summary {
+  padding: 10px 0;
+  color: var(--text);
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.admin-ai-routing__save-actions {
+  align-items: center;
+}
+
+.admin-ai-routing__save-actions > span {
+  flex: 1 1 320px;
+  max-width: 680px;
+  font-size: 0.9rem;
+}
+
+@media (max-width: 860px) {
+  .admin-ai-routing__candidate-add,
+  .admin-ai-routing__feature-row {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-ai-routing__line {
+    grid-template-columns: minmax(14px, 1fr) auto;
+  }
+}
+
+@media (max-width: 620px) {
+  .admin-ai-routing__candidate-add-controls,
+  .admin-ai-routing__candidate-card {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-ai-routing__candidate-actions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .admin-ai-routing__board-header {
+    display: grid;
+  }
+
+  .admin-ai-routing__save-actions .button {
+    width: 100%;
+  }
 }
 .admin-ops-wizard {
   display: grid;
@@ -24769,7 +25065,7 @@ button.button--primary,
 
 .travel-route-plan-card__summary {
   display: grid;
-  grid-template-columns: minmax(220px, 1.3fr) minmax(220px, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) minmax(330px, 360px) minmax(240px, 280px);
   align-items: center;
   gap: 16px;
   padding: 18px;
@@ -24777,11 +25073,13 @@ button.button--primary,
 
 .travel-route-plan-card__title {
   display: grid;
+  min-width: 0;
   gap: 7px;
 }
 
 .travel-route-plan-card__title h3 {
   margin: 0;
+  overflow-wrap: anywhere;
   color: #f8fafc;
   font-size: 1.08rem;
 }
@@ -24792,10 +25090,12 @@ button.button--primary,
 }
 
 .travel-route-plan-card__stats {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: max-content;
+  align-items: center;
   gap: 8px;
-  justify-content: flex-start;
+  min-width: 0;
 }
 
 .travel-route-plan-card__stats span {
@@ -24805,6 +25105,16 @@ button.button--primary,
   color: #dffbe8;
   font-weight: 800;
   padding: 8px 12px;
+  white-space: nowrap;
+}
+
+.travel-route-plan-card__summary > .button {
+  justify-self: stretch;
+  min-width: 0;
+  min-height: 44px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .travel-route-plan-card__details {
@@ -32787,5 +33097,35 @@ button.button--primary,
 @media (max-width: 760px) {
   .admin-ai-feature-status-grid {
     grid-template-columns: 1fr;
+  }
+}
+/* Mobile fullscreen-map photo dialogs must own touch input and avoid backdrop filter repaint loops. */
+.travel-map__fullscreen-dialog {
+  isolation: isolate;
+  contain: layout paint;
+}
+
+.travel-map__fullscreen-dialog .travel-modal,
+.travel-map__fullscreen-dialog .public-map-share-photo-modal {
+  overscroll-behavior: contain;
+  touch-action: manipulation;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+.travel-map__fullscreen-dialog .travel-modal__dialog,
+.travel-map__fullscreen-dialog .public-map-share-photo-modal__panel {
+  transform: translateZ(0);
+  -webkit-transform: translateZ(0);
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+
+@media (max-width: 760px) {
+  .travel-map:fullscreen .travel-map__fullscreen-dialog .travel-modal,
+  .travel-map:-webkit-full-screen .travel-map__fullscreen-dialog .travel-modal,
+  .travel-map:fullscreen .travel-map__fullscreen-dialog .public-map-share-photo-modal,
+  .travel-map:-webkit-full-screen .travel-map__fullscreen-dialog .public-map-share-photo-modal {
+    background: rgba(2, 6, 23, 0.82);
   }
 }

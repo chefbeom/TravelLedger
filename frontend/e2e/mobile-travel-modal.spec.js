@@ -223,6 +223,11 @@ test('public shared map photo modal stays stable while the full image loads', as
   page.on('pageerror', (error) => pageErrors.push(error.message))
   await page.goto('/#travel-share/mobile-photo-stability')
 
+  const fullscreenButton = page.locator('.travel-map__toolbar-group:last-child .travel-map__toolbar-button').last()
+  await expect(fullscreenButton).toBeVisible()
+  await fullscreenButton.tap()
+  await expect.poll(() => page.evaluate(() => Boolean(document.fullscreenElement))).toBeTruthy()
+
   const cluster = page.locator('.travel-cluster-pin').first()
   await expect(cluster).toBeVisible()
   await cluster.tap()

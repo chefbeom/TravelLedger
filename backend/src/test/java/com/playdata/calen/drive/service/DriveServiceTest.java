@@ -35,6 +35,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.core.io.ByteArrayResource;
+import org.springframework.data.domain.PageImpl;
 
 @ExtendWith(MockitoExtension.class)
 class DriveServiceTest {
@@ -181,7 +182,8 @@ class DriveServiceTest {
         DriveItem newerFile = item(1L, owner, DriveItemType.FILE, "z-latest.pdf", 200L, 20);
 
         when(appUserRepository.findById(1L)).thenReturn(Optional.of(owner));
-        when(driveItemRepository.findAllByOwner_Id(1L)).thenReturn(List.of(newerFile, oldFolder));
+        when(driveItemRepository.findAll(org.mockito.ArgumentMatchers.<org.springframework.data.jpa.domain.Specification<DriveItem>>any(), org.mockito.ArgumentMatchers.<org.springframework.data.domain.Pageable>any())).thenReturn(new PageImpl<>(List.of(oldFolder, newerFile)));
+        when(driveItemRepository.findAvailableExtensionsByOwnerId(1L, DriveItemType.FILE)).thenReturn(List.of("pdf"));
 
         DriveService service = newService();
 
@@ -210,7 +212,8 @@ class DriveServiceTest {
         DriveItem aFolder = item(3L, owner, DriveItemType.FOLDER, "Archive", 0L, 10);
 
         when(appUserRepository.findById(1L)).thenReturn(Optional.of(owner));
-        when(driveItemRepository.findAllByOwner_Id(1L)).thenReturn(List.of(file, zFolder, aFolder));
+        when(driveItemRepository.findAll(org.mockito.ArgumentMatchers.<org.springframework.data.jpa.domain.Specification<DriveItem>>any(), org.mockito.ArgumentMatchers.<org.springframework.data.domain.Pageable>any())).thenReturn(new PageImpl<>(List.of(aFolder, zFolder, file)));
+        when(driveItemRepository.findAvailableExtensionsByOwnerId(1L, DriveItemType.FILE)).thenReturn(List.of("txt"));
 
         DriveService service = newService();
 
@@ -235,7 +238,8 @@ class DriveServiceTest {
         nestedFile.setParent(tripsFolder);
 
         when(appUserRepository.findById(1L)).thenReturn(Optional.of(owner));
-        when(driveItemRepository.findAllByOwner_Id(1L)).thenReturn(List.of(tripsFolder, nestedFile));
+        when(driveItemRepository.findAll(org.mockito.ArgumentMatchers.<org.springframework.data.jpa.domain.Specification<DriveItem>>any(), org.mockito.ArgumentMatchers.<org.springframework.data.domain.Pageable>any())).thenReturn(new PageImpl<>(List.of(nestedFile)));
+        when(driveItemRepository.findAvailableExtensionsByOwnerId(1L, DriveItemType.FILE)).thenReturn(List.of("pdf"));
 
         DriveService service = newService();
 
@@ -255,6 +259,25 @@ class DriveServiceTest {
         assertThat(response.fileList().get(0).folderPath()).isEqualTo("내 드라이브 / Trips");
     }
 
+    @Test
+    void listPageCapsRequestedPageSizeAndUsesRepositoryPaging() {
+        AppUser owner = owner();
+        DriveItem file = item(1L, owner, DriveItemType.FILE, "report.pdf", 100L, 10);
+        when(appUserRepository.findById(1L)).thenReturn(Optional.of(owner));
+        when(driveItemRepository.findAll(org.mockito.ArgumentMatchers.<org.springframework.data.jpa.domain.Specification<DriveItem>>any(), org.mockito.ArgumentMatchers.<org.springframework.data.domain.Pageable>any())).thenReturn(new PageImpl<>(List.of(file)));
+        when(driveItemRepository.findAvailableExtensionsByOwnerId(1L, DriveItemType.FILE)).thenReturn(List.of("pdf"));
+
+        DriveDtos.FileListPageResponse response = newService().listPage(
+                1L,
+                DriveDtos.ListPageRequest.builder().page(0).size(1000).build()
+        );
+
+        ArgumentCaptor<org.springframework.data.domain.Pageable> pageableCaptor =
+                ArgumentCaptor.forClass(org.springframework.data.domain.Pageable.class);
+        verify(driveItemRepository).findAll(org.mockito.ArgumentMatchers.<org.springframework.data.jpa.domain.Specification<DriveItem>>any(), pageableCaptor.capture());
+        assertThat(pageableCaptor.getValue().getPageSize()).isEqualTo(100);
+        assertThat(response.currentSize()).isEqualTo(100);
+    }
     @Test
     void renameRejectsFileInsideLockedFolder() {
         AppUser owner = owner();

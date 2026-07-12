@@ -41,6 +41,6 @@ public class DriveUploadController {
             @AuthenticationPrincipal AppUserPrincipal currentUser,
             @RequestBody DriveDtos.UploadAbortRequest request
     ) {
-        return driveStorageService.abortUpload(request);
+        return driveStorageService.abortUpload(currentUser.userId(), request);
     }
 }

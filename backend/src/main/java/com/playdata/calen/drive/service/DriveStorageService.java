@@ -120,8 +120,10 @@ public class DriveStorageService {
                 .build();
     }
 
-    public DriveDtos.ActionResponse abortUpload(DriveDtos.UploadAbortRequest request) {
-        ensureStorageConfigured();
+    public DriveDtos.ActionResponse abortUpload(Long ownerId, DriveDtos.UploadAbortRequest request) {
+        if (ownerId == null || ownerId <= 0) {
+            throw new BadRequestException("Upload owner is invalid.");
+        }
         List<String> targets = new ArrayList<>();
         if (request != null) {
             if (StringUtils.hasText(request.finalObjectKey())) {
@@ -131,11 +133,22 @@ public class DriveStorageService {
                 targets.addAll(request.chunkObjectKeys().stream().filter(StringUtils::hasText).toList());
             }
         }
+        ensureObjectKeysOwnedBy(ownerId, targets);
+        ensureStorageConfigured();
         deleteObjects(targets);
         return DriveDtos.ActionResponse.builder()
                 .action("abort-upload")
                 .affectedCount(targets.size())
                 .build();
+    }
+
+    private void ensureObjectKeysOwnedBy(Long ownerId, List<String> objectKeys) {
+        String expectedPrefix = "drive/" + ownerId + "/";
+        boolean hasForeignObject = objectKeys.stream()
+                .anyMatch(objectKey -> !objectKey.startsWith(expectedPrefix));
+        if (hasForeignObject) {
+            throw new BadRequestException("Upload object key is outside the current user drive scope.");
+        }
     }
 
     public byte[] loadObjectBytes(String objectKey) {

@@ -29,6 +29,11 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -40,6 +45,8 @@ public class DriveService {
 
     private static final int DEFAULT_PHOTO_FILE_LIMIT = 1200;
     private static final int MAX_PHOTO_FILE_LIMIT = 5000;
+    private static final int DEFAULT_LIST_PAGE_SIZE = 30;
+    private static final int MAX_LIST_PAGE_SIZE = 100;
 
     private final DriveItemRepository driveItemRepository;
     private final DriveItemVersionRepository driveItemVersionRepository;
@@ -120,41 +127,28 @@ public class DriveService {
 
     public DriveDtos.FileListPageResponse listPage(Long userId, DriveDtos.ListPageRequest request) {
         AppUser owner = getOwner(userId);
-        List<DriveItem> allItems = driveItemRepository.findAllByOwner_Id(owner.getId());
         Long parentId = request != null ? request.parentId() : null;
         int page = Math.max(0, request != null && request.page() != null ? request.page() : 0);
-        int size = Math.max(1, request != null && request.size() != null ? request.size() : 30);
+        int size = Math.min(MAX_LIST_PAGE_SIZE, Math.max(1,
+                request != null && request.size() != null ? request.size() : DEFAULT_LIST_PAGE_SIZE));
         String searchQuery = request != null ? request.searchQuery() : null;
         String extensionFilter = request != null ? request.extensionFilter() : null;
         String statusFilter = request != null ? request.statusFilter() : null;
         String sortOption = request != null ? request.sortOption() : null;
         boolean hasSearchQuery = StringUtils.hasText(searchQuery);
 
-        List<DriveItem> filteredItems = allItems.stream()
-                .filter(item -> hasSearchQuery || matchParent(item, parentId))
-                .filter(item -> matchSearch(item, searchQuery))
-                .filter(item -> matchExtension(item, extensionFilter))
-                .filter(item -> matchStatus(item, statusFilter))
-                .sorted(resolveComparator(sortOption))
-                .toList();
-
-        int fromIndex = Math.min(page * size, filteredItems.size());
-        int toIndex = Math.min(fromIndex + size, filteredItems.size());
-        List<DriveItem> pagedItems = filteredItems.subList(fromIndex, toIndex);
+        Pageable pageable = PageRequest.of(page, size, resolvePageSort(sortOption));
+        Page<DriveItem> resultPage = driveItemRepository.findAll(
+                buildListSpecification(owner.getId(), parentId, searchQuery, extensionFilter, statusFilter),
+                pageable
+        );
 
         return DriveDtos.FileListPageResponse.builder()
-                .fileList(pagedItems.stream().map(this::toItemResponse).toList())
+                .fileList(resultPage.getContent().stream().map(this::toItemResponse).toList())
                 .breadcrumbs(hasSearchQuery ? List.of() : buildBreadcrumbs(resolveParentFolder(owner.getId(), parentId)))
-                .availableExtensions(allItems.stream()
-                        .filter(DriveItem::isFile)
-                        .map(DriveItem::getExtension)
-                        .filter(StringUtils::hasText)
-                        .map(value -> value.toLowerCase(Locale.ROOT))
-                        .distinct()
-                        .sorted()
-                        .toList())
-                .totalPage((int) Math.ceil((double) filteredItems.size() / size))
-                .totalCount(filteredItems.size())
+                .availableExtensions(driveItemRepository.findAvailableExtensionsByOwnerId(owner.getId(), DriveItemType.FILE))
+                .totalPage(resultPage.getTotalPages())
+                .totalCount(resultPage.getTotalElements())
                 .currentPage(page)
                 .currentSize(size)
                 .build();
@@ -604,37 +598,75 @@ public class DriveService {
         }
         return false;
     }
-    private boolean matchParent(DriveItem item, Long parentId) {
-        Long itemParentId = item.getParent() != null ? item.getParent().getId() : null;
-        return Objects.equals(itemParentId, parentId);
-    }
-
-    private boolean matchSearch(DriveItem item, String searchQuery) {
-        if (!StringUtils.hasText(searchQuery)) {
-            return true;
-        }
-        return item.getOriginalName().toLowerCase(Locale.ROOT).contains(searchQuery.trim().toLowerCase(Locale.ROOT));
-    }
-
-    private boolean matchExtension(DriveItem item, String extensionFilter) {
-        if (!StringUtils.hasText(extensionFilter) || item.isFolder()) {
-            return true;
-        }
-        return extensionFilter.trim().equalsIgnoreCase(item.getExtension());
-    }
-
-    private boolean matchStatus(DriveItem item, String statusFilter) {
-        if (!StringUtils.hasText(statusFilter)) {
-            return !item.isTrashed();
-        }
-        return switch (statusFilter.trim().toLowerCase(Locale.ROOT)) {
-            case "trash" -> item.isTrashed();
-            case "shared" -> item.isSharedFile() && !item.isTrashed();
-            case "all" -> true;
-            default -> !item.isTrashed();
+    private Specification<DriveItem> buildListSpecification(
+            Long ownerId,
+            Long parentId,
+            String searchQuery,
+            String extensionFilter,
+            String statusFilter
+    ) {
+        boolean hasSearchQuery = StringUtils.hasText(searchQuery);
+        return (root, query, criteriaBuilder) -> {
+            List<jakarta.persistence.criteria.Predicate> predicates = new ArrayList<>();
+            predicates.add(criteriaBuilder.equal(root.get("owner").get("id"), ownerId));
+            if (!hasSearchQuery) {
+                predicates.add(parentId == null
+                        ? criteriaBuilder.isNull(root.get("parent"))
+                        : criteriaBuilder.equal(root.get("parent").get("id"), parentId));
+            } else {
+                String normalizedQuery = escapeLikePattern(searchQuery.trim().toLowerCase(Locale.ROOT));
+                predicates.add(criteriaBuilder.like(
+                        criteriaBuilder.lower(root.get("originalName")),
+                        "%" + normalizedQuery + "%",
+                        '\\'
+                ));
+            }
+            if (StringUtils.hasText(extensionFilter)) {
+                predicates.add(criteriaBuilder.or(
+                        criteriaBuilder.equal(root.get("itemType"), DriveItemType.FOLDER),
+                        criteriaBuilder.equal(
+                                criteriaBuilder.lower(root.get("extension")),
+                                extensionFilter.trim().toLowerCase(Locale.ROOT)
+                        )
+                ));
+            }
+            if (!StringUtils.hasText(statusFilter)) {
+                predicates.add(criteriaBuilder.isFalse(root.get("trashed")));
+            } else {
+                switch (statusFilter.trim().toLowerCase(Locale.ROOT)) {
+                    case "trash" -> predicates.add(criteriaBuilder.isTrue(root.get("trashed")));
+                    case "shared" -> {
+                        predicates.add(criteriaBuilder.isTrue(root.get("sharedFile")));
+                        predicates.add(criteriaBuilder.isFalse(root.get("trashed")));
+                    }
+                    case "all" -> { }
+                    default -> predicates.add(criteriaBuilder.isFalse(root.get("trashed")));
+                }
+            }
+            return criteriaBuilder.and(predicates.toArray(jakarta.persistence.criteria.Predicate[]::new));
         };
     }
 
+    private Sort resolvePageSort(String sortOption) {
+        Sort.Order folderFirst = new Sort.Order(Sort.Direction.DESC, "itemType");
+        Sort.Order nameAscending = new Sort.Order(Sort.Direction.ASC, "originalName").ignoreCase();
+        if (!StringUtils.hasText(sortOption)) {
+            return Sort.by(folderFirst, nameAscending, new Sort.Order(Sort.Direction.ASC, "id"));
+        }
+        return switch (sortOption.trim().toLowerCase(Locale.ROOT)) {
+            case "recent" -> Sort.by(folderFirst, new Sort.Order(Sort.Direction.DESC, "lastModifiedAt"), nameAscending,
+                    new Sort.Order(Sort.Direction.ASC, "id"));
+            case "oldest" -> Sort.by(folderFirst, new Sort.Order(Sort.Direction.ASC, "uploadedAt"), nameAscending,
+                    new Sort.Order(Sort.Direction.ASC, "id"));
+            case "size" -> Sort.by(folderFirst, new Sort.Order(Sort.Direction.DESC, "fileSize"), nameAscending,
+                    new Sort.Order(Sort.Direction.ASC, "id"));
+            default -> Sort.by(folderFirst, nameAscending, new Sort.Order(Sort.Direction.ASC, "id"));
+        };
+    }
+
+    private String escapeLikePattern(String value) {
+        return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_");
+    }
     private Comparator<DriveItem> resolveComparator(String sortOption) {
         Comparator<DriveItem> folderFirst = Comparator.comparingInt(item -> item.isFolder() ? 0 : 1);
         Comparator<DriveItem> nameAsc = Comparator.comparing(

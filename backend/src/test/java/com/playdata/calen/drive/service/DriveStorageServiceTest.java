@@ -77,6 +77,20 @@ class DriveStorageServiceTest {
 
 
     @Test
+    void abortUploadRejectsObjectKeyOutsideOwnerScopeBeforeStorageAccess() {
+        DriveStorageService service = newService();
+        DriveDtos.UploadAbortRequest request = DriveDtos.UploadAbortRequest.builder()
+                .finalObjectKey("travel-media/2/foreign.png")
+                .build();
+
+        assertThatThrownBy(() -> service.abortUpload(1L, request))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessage("Upload object key is outside the current user drive scope.");
+
+        verify(minioClientProvider, never()).getIfAvailable();
+    }
+
+    @Test
     void initUploadGeneratesPresignedUrlWithoutBucketProbe() throws Exception {
         DriveStorageService service = newService();
         DriveDtos.UploadInitRequest request = DriveDtos.UploadInitRequest.builder()

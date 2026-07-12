@@ -23,8 +23,10 @@ import java.util.List;
 import java.util.Optional;
 import javax.imageio.ImageIO;
 import javax.imageio.IIOImage;
+import javax.imageio.ImageReader;
 import javax.imageio.ImageWriteParam;
 import javax.imageio.ImageWriter;
+import javax.imageio.stream.ImageInputStream;
 import javax.imageio.stream.ImageOutputStream;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.io.Resource;
@@ -37,6 +39,8 @@ public class ImageThumbnailService {
     private static final int DEFAULT_WIDTH = PreparedThumbnailProfile.PREVIEW.width();
     private static final int MIN_WIDTH = 64;
     private static final int MAX_WIDTH = 1280;
+    private static final int MAX_SOURCE_BYTES = 64 * 1024 * 1024;
+    private static final long MAX_SOURCE_PIXELS = 40_000_000L;
     private static final String CACHE_DIRECTORY_NAME = "calen-thumbnail-cache";
     private static final HexFormat HEX_FORMAT = HexFormat.of();
 
@@ -64,7 +68,11 @@ public class ImageThumbnailService {
         }
 
         try (InputStream inputStream = resource.getInputStream()) {
-            byte[] sourceBytes = inputStream.readAllBytes();
+            byte[] sourceBytes = readBoundedSourceBytes(inputStream);
+            if (sourceBytes == null) {
+                log.warn("Skipping oversized image thumbnail source.");
+                return Optional.empty();
+            }
             Optional<PreparedThumbnailContent> generated = createPreparedThumbnails(sourceBytes, contentType, List.of(width)).stream()
                     .findFirst();
             if (generated.isEmpty()) {
@@ -81,12 +89,13 @@ public class ImageThumbnailService {
     }
 
     public List<PreparedThumbnailContent> createPreparedThumbnails(byte[] sourceBytes, String contentType, List<Integer> requestedWidths) {
-        if (sourceBytes == null || sourceBytes.length == 0 || contentType == null || !contentType.startsWith("image/") || requestedWidths == null || requestedWidths.isEmpty()) {
+        if (sourceBytes == null || sourceBytes.length == 0 || sourceBytes.length > MAX_SOURCE_BYTES
+                || contentType == null || !contentType.startsWith("image/") || requestedWidths == null || requestedWidths.isEmpty()) {
             return List.of();
         }
 
         try {
-            BufferedImage sourceImage = ImageIO.read(new ByteArrayInputStream(sourceBytes));
+            BufferedImage sourceImage = readSafeImage(sourceBytes);
             if (sourceImage == null) {
                 return List.of();
             }
@@ -121,6 +130,32 @@ public class ImageThumbnailService {
         } catch (IOException exception) {
             log.debug("Failed to create prepared thumbnails.", exception);
             return List.of();
+        }
+    }
+
+    private byte[] readBoundedSourceBytes(InputStream inputStream) throws IOException {
+        byte[] sourceBytes = inputStream.readNBytes(MAX_SOURCE_BYTES + 1);
+        return sourceBytes.length > MAX_SOURCE_BYTES ? null : sourceBytes;
+    }
+
+    private BufferedImage readSafeImage(byte[] sourceBytes) throws IOException {
+        try (ImageInputStream imageInput = ImageIO.createImageInputStream(new ByteArrayInputStream(sourceBytes))) {
+            Iterator<ImageReader> readers = ImageIO.getImageReaders(imageInput);
+            if (!readers.hasNext()) {
+                return null;
+            }
+            ImageReader reader = readers.next();
+            try {
+                reader.setInput(imageInput, true, true);
+                long pixelCount = (long) reader.getWidth(0) * reader.getHeight(0);
+                if (pixelCount <= 0 || pixelCount > MAX_SOURCE_PIXELS) {
+                    log.warn("Skipping image thumbnail with unsafe pixel count: {}", pixelCount);
+                    return null;
+                }
+                return reader.read(0);
+            } finally {
+                reader.dispose();
+            }
         }
     }
 

@@ -2020,25 +2020,25 @@ onBeforeUnmount(() => {
               <p v-if="state.opsControlCheckedAt" class="field__hint">최근 점검: {{ formatOpsControlCheckedAt(state.opsControlCheckedAt) }}</p>
               <p v-if="state.opsControl?.persistenceMessage" class="field__hint">설정 저장소: {{ state.opsControl.persistenceMessage }}</p>
               <div class="summary-grid admin-ops-status-grid">
-                <article class="summary-card">
-                  <span>AI 기능</span>
-                  <strong>{{ state.opsControl?.ai?.enabled ? '켜짐' : '꺼짐' }}</strong>
-                  <small>가계부 · 이미지/OCR · 엑셀 추출 기능별 서버를 별도 점검합니다.</small>
+                <article class="summary-card admin-ops-status-card">
+                  <span class="admin-ops-status-card__label">AI 기능</span>
+                  <strong class="admin-ops-status-card__value">{{ state.opsControl?.ai?.enabled ? '켜짐' : '꺼짐' }}</strong>
+                  <small class="admin-ops-status-card__hint">가계부, 이미지/OCR, 엑셀 추출 기능별 서버를 별도 점검합니다.</small>
                 </article>
-                <article class="summary-card">
-                  <span>AI 서버 연결</span>
-                  <strong>{{ reachableAiFeatureCount() }}/3 정상</strong>
-                  <small>가계부: {{ aiFeatureServerStateLabel('ledger') }} · 이미지: {{ aiFeatureServerStateLabel('image') }} · 엑셀: {{ aiFeatureServerStateLabel('excel') }}</small>
+                <article class="summary-card admin-ops-status-card">
+                  <span class="admin-ops-status-card__label">AI 서버 연결</span>
+                  <strong class="admin-ops-status-card__value">{{ reachableAiFeatureCount() }} / 3 정상</strong>
+                  <small class="admin-ops-status-card__hint">가계부: {{ aiFeatureServerStateLabel('ledger') }}<br>이미지/OCR: {{ aiFeatureServerStateLabel('image') }}<br>엑셀: {{ aiFeatureServerStateLabel('excel') }}</small>
                 </article>
-                <article class="summary-card">
-                  <span>DB 서버</span>
-                  <strong>{{ state.opsControl?.dataServer?.databaseReachable ? '정상' : '확인 필요' }}</strong>
-                  <small>{{ state.opsControl?.dataServer?.databaseHost || '-' }}</small>
+                <article class="summary-card admin-ops-status-card">
+                  <span class="admin-ops-status-card__label">DB 서버</span>
+                  <strong class="admin-ops-status-card__value">{{ state.opsControl?.dataServer?.databaseReachable ? '정상' : '확인 필요' }}</strong>
+                  <small class="admin-ops-status-card__hint">{{ state.opsControl?.dataServer?.databaseHost || '-' }}</small>
                 </article>
-                <article class="summary-card">
-                  <span>MinIO 여유</span>
-                  <strong>{{ formatFileSize(state.opsControl?.dataServer?.minioStorage?.remainingBytes || 0) }}</strong>
-                  <small>{{ formatPercent(state.opsControl?.dataServer?.minioStorage?.usedPercent || 0) }} 사용</small>
+                <article class="summary-card admin-ops-status-card">
+                  <span class="admin-ops-status-card__label">MinIO 여유</span>
+                  <strong class="admin-ops-status-card__value">{{ formatFileSize(state.opsControl?.dataServer?.minioStorage?.remainingBytes || 0) }}</strong>
+                  <small class="admin-ops-status-card__hint">{{ formatPercent(state.opsControl?.dataServer?.minioStorage?.usedPercent || 0) }} 사용</small>
                 </article>
               </div>
               <div class="admin-ai-feature-status-grid admin-ai-feature-status-grid--probe">

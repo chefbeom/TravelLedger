@@ -16906,6 +16906,36 @@ textarea {
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
+.admin-ops-status-card {
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  align-content: start;
+  gap: 8px;
+}
+
+.admin-ops-status-card__label,
+.admin-ops-status-card__value,
+.admin-ops-status-card__hint {
+  display: block;
+  min-width: 0;
+}
+
+.admin-ops-status-card__label,
+.admin-ops-status-card__hint {
+  color: var(--text-muted, #94a3b8);
+}
+
+.admin-ops-status-card__value {
+  font-size: 1.1rem;
+  line-height: 1.3;
+}
+
+.admin-ops-status-card__hint {
+  font-size: 0.82rem;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
 .admin-ops-current-server {
   display: grid;
   gap: 8px;
@@ -16994,6 +17024,10 @@ textarea {
   margin-bottom: 14px;
 }
 
+.admin-ai-feature-status-grid--probe {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
 .admin-ai-feature-status-card {
   display: grid;
   gap: 5px;
@@ -17015,6 +17049,8 @@ textarea {
 }
 
 .admin-ai-feature-status-card small {
+  display: block;
+  line-height: 1.45;
   color: var(--text-muted, #94a3b8);
 }
 
@@ -30039,21 +30075,39 @@ button.button--primary,
   word-break: break-word;
 }
 
+.admin-ops-panel .sheet-table {
+  table-layout: fixed;
+}
+
+.admin-ops-panel .sheet-table th,
+.admin-ops-panel .sheet-table td {
+  min-width: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  vertical-align: top;
+  line-height: 1.45;
+}
+
 .admin-ops-panel .sheet-table th:nth-child(1),
 .admin-ops-panel .sheet-table td:nth-child(1) {
-  width: 14%;
+  width: 21%;
 }
 
 .admin-ops-panel .sheet-table th:nth-child(2),
 .admin-ops-panel .sheet-table td:nth-child(2) {
-  width: 12%;
+  width: 13%;
 }
 
 .admin-ops-panel .sheet-table th:nth-child(3),
-.admin-ops-panel .sheet-table td:nth-child(3),
+.admin-ops-panel .sheet-table td:nth-child(3) {
+  width: 34%;
+}
+
 .admin-ops-panel .sheet-table th:nth-child(4),
 .admin-ops-panel .sheet-table td:nth-child(4) {
-  width: 37%;
+  width: 32%;
+  text-align: right;
 }
 
 :root[data-layout-mode='mobile'] .travel-my-map-header__actions .button,

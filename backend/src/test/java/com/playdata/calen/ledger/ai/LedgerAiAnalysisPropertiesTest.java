@@ -154,7 +154,7 @@ class LedgerAiAnalysisPropertiesTest {
     @Test
     void resolvesLedgerAndImageProfilesIndependently() {
         LedgerAiAnalysisProperties properties = new LedgerAiAnalysisProperties();
-        properties.setAllowedProviderHosts("api.openai.com,ollama.local");
+        properties.setAllowedProviderHosts("api.openai.com,ollama.local,lmstudio.local");
 
         properties.getLedger().setProvider("openai");
         properties.getLedger().setBaseUrl("https://api.openai.com");
@@ -165,8 +165,13 @@ class LedgerAiAnalysisPropertiesTest {
         properties.getImage().setBaseUrl("http://ollama.local:11434");
         properties.getImage().setModel("llama3.2-vision");
 
+        properties.getExcel().setProvider("lmstudio");
+        properties.getExcel().setBaseUrl("http://lmstudio.local:1234");
+        properties.getExcel().setModel("qwen2.5");
+
         LedgerAiFeatureConfig ledger = properties.featureConfig(LedgerAiFeature.LEDGER_ANALYSIS);
         LedgerAiFeatureConfig image = properties.featureConfig(LedgerAiFeature.IMAGE_ANALYSIS);
+        LedgerAiFeatureConfig excel = properties.featureConfig(LedgerAiFeature.EXCEL_IMPORT);
 
         assertThat(ledger.provider()).isEqualTo(LedgerAiProvider.OPENAI);
         assertThat(ledger.baseUrl()).isEqualTo("https://api.openai.com");
@@ -174,8 +179,42 @@ class LedgerAiAnalysisPropertiesTest {
         assertThat(image.provider()).isEqualTo(LedgerAiProvider.OLLAMA);
         assertThat(image.chatPath()).isEqualTo("/api/chat");
         assertThat(image.modelsPath()).isEqualTo("/api/tags");
+        assertThat(excel.provider()).isEqualTo(LedgerAiProvider.LMSTUDIO);
+        assertThat(excel.chatPath()).isEqualTo("/v1/chat/completions");
+        assertThat(excel.modelsPath()).isEqualTo("/v1/models");
         assertThat(properties.isFeatureConfigured(LedgerAiFeature.LEDGER_ANALYSIS)).isTrue();
         assertThat(properties.isFeatureConfigured(LedgerAiFeature.IMAGE_ANALYSIS)).isTrue();
+        assertThat(properties.isFeatureConfigured(LedgerAiFeature.EXCEL_IMPORT)).isTrue();
+    }
+
+    @Test
+    void resolvesExcelProfilesForOpenAiAndOllama() {
+        LedgerAiAnalysisProperties properties = new LedgerAiAnalysisProperties();
+        properties.setAllowedProviderHosts("api.openai.com,ollama.local");
+
+        properties.getExcel().setProvider("openai");
+        properties.getExcel().setBaseUrl("https://api.openai.com");
+        properties.getExcel().setModel("gpt-4.1-mini");
+        properties.getExcel().setApiKey("excel-openai-key");
+
+        LedgerAiFeatureConfig openAi = properties.featureConfig(LedgerAiFeature.EXCEL_IMPORT);
+
+        assertThat(openAi.provider()).isEqualTo(LedgerAiProvider.OPENAI);
+        assertThat(openAi.chatPath()).isEqualTo("/v1/chat/completions");
+        assertThat(openAi.modelsPath()).isEqualTo("/v1/models");
+        assertThat(properties.isFeatureConfigured(LedgerAiFeature.EXCEL_IMPORT)).isTrue();
+
+        properties.getExcel().setProvider("ollama");
+        properties.getExcel().setBaseUrl("http://ollama.local:11434");
+        properties.getExcel().setModel("qwen2.5");
+        properties.getExcel().setApiKey("");
+
+        LedgerAiFeatureConfig ollama = properties.featureConfig(LedgerAiFeature.EXCEL_IMPORT);
+
+        assertThat(ollama.provider()).isEqualTo(LedgerAiProvider.OLLAMA);
+        assertThat(ollama.chatPath()).isEqualTo("/api/chat");
+        assertThat(ollama.modelsPath()).isEqualTo("/api/tags");
+        assertThat(properties.isFeatureConfigured(LedgerAiFeature.EXCEL_IMPORT)).isTrue();
     }
 
     @Test

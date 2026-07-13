@@ -1,5 +1,8 @@
 package com.playdata.calen.account.dto;
 
+import java.util.List;
+import java.util.Map;
+
 public record AdminAiControlResponse(
         boolean enabled,
         String provider,
@@ -24,6 +27,10 @@ public record AdminAiControlResponse(
         boolean configured,
         String statusMessage,
         AdminAiFeatureConfigResponse ledgerAnalysis,
-        AdminAiFeatureConfigResponse imageAnalysis
+        AdminAiFeatureConfigResponse imageAnalysis,
+        AdminAiFeatureConfigResponse excelImport,
+        List<AdminAiServerCandidateResponse> candidateServers,
+        Map<String, String> featureConnections,
+        boolean routingConfigured
 ) {
 }

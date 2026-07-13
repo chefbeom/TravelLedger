@@ -9,6 +9,7 @@ import com.playdata.calen.account.service.AppUserService;
 import com.playdata.calen.common.exception.BadRequestException;
 import com.playdata.calen.ledger.ai.LedgerAiAnalysisProperties;
 import com.playdata.calen.ledger.ai.LedgerAiFeature;
+import com.playdata.calen.ledger.ai.LedgerAiFeatureConfig;
 import com.playdata.calen.ledger.ai.LedgerAiProvider;
 import com.playdata.calen.ledger.domain.CategoryDetail;
 import com.playdata.calen.ledger.domain.CategoryGroup;
@@ -104,8 +105,8 @@ public class LedgerAiExcelImportService {
     }
 
     private void validateAiReady() {
-        if (!aiProperties.isFeatureConfigured(LedgerAiFeature.LEDGER_ANALYSIS)) {
-            throw new BadRequestException(aiProperties.featureStatusMessage(LedgerAiFeature.LEDGER_ANALYSIS));
+        if (!aiProperties.isFeatureConfigured(LedgerAiFeature.EXCEL_IMPORT)) {
+            throw new BadRequestException(aiProperties.featureStatusMessage(LedgerAiFeature.EXCEL_IMPORT));
         }
     }
 
@@ -237,62 +238,43 @@ public class LedgerAiExcelImportService {
 
     private String requestAiExtraction(ObjectNode payload) {
         try {
-            if (aiProperties.provider() == LedgerAiProvider.LMSTUDIO) {
-                return requestLmStudioExtraction(payload);
+            LedgerAiFeatureConfig config = aiProperties.featureConfig(LedgerAiFeature.EXCEL_IMPORT);
+            SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
+            requestFactory.setConnectTimeout(aiProperties.getConnectTimeout());
+            requestFactory.setReadTimeout(aiProperties.getReadTimeout());
+            RestClient restClient = RestClient.builder()
+                    .baseUrl(config.baseUrl())
+                    .requestFactory(requestFactory)
+                    .build();
+            String model = resolveModel(restClient, config);
+            ObjectNode body = buildChatRequest(payload, model, config);
+            RestClient.RequestBodySpec request = restClient.post()
+                    .uri(config.chatPath())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .accept(MediaType.APPLICATION_JSON);
+            if (hasText(config.apiKey())) {
+                request.header("Authorization", "Bearer " + config.apiKey());
             }
-            return requestN8nExtraction(payload);
+            return request.body(body).retrieve().body(String.class);
         } catch (RestClientException | JsonProcessingException exception) {
-            throw new BadRequestException("AI Excel 가져오기 서버 응답을 처리하지 못했습니다. AI 서버 상태와 JSON 응답 설정을 확인해 주세요.");
+            throw new BadRequestException("AI Excel import server response could not be processed. Check the configured server and JSON response settings.");
         }
     }
 
-    private String requestLmStudioExtraction(ObjectNode payload) throws JsonProcessingException {
-        SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
-        requestFactory.setConnectTimeout(aiProperties.getConnectTimeout());
-        requestFactory.setReadTimeout(aiProperties.getReadTimeout());
-        RestClient restClient = RestClient.builder()
-                .baseUrl(aiProperties.getLmStudioBaseUrl())
-                .requestFactory(requestFactory)
-                .build();
-        String model = resolveLmStudioModel(restClient);
-        ObjectNode body = buildLmStudioChatRequest(payload, model);
-        RestClient.RequestBodySpec request = restClient.post()
-                .uri(aiProperties.normalizedLmStudioChatPath())
-                .contentType(MediaType.APPLICATION_JSON)
-                .accept(MediaType.APPLICATION_JSON);
-        if (hasText(aiProperties.getLmStudioApiKey())) {
-            request.header("Authorization", "Bearer " + aiProperties.getLmStudioApiKey());
-        }
-        return request.body(body).retrieve().body(String.class);
-    }
-
-    private String requestN8nExtraction(ObjectNode payload) {
-        SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
-        requestFactory.setConnectTimeout(aiProperties.getConnectTimeout());
-        requestFactory.setReadTimeout(aiProperties.getReadTimeout());
-        RestClient restClient = RestClient.builder().requestFactory(requestFactory).build();
-        ObjectNode body = objectMapper.createObjectNode();
-        body.put("task", "ledger_excel_import");
-        body.set("payload", payload);
-        body.set("contract", buildAiOutputContract());
-        RestClient.RequestBodySpec request = restClient.post()
-                .uri(aiProperties.getWorkflowUrl())
-                .contentType(MediaType.APPLICATION_JSON)
-                .accept(MediaType.APPLICATION_JSON);
-        if (hasText(aiProperties.getApiKey())) {
-            request.header(aiProperties.getApiKeyHeader(), aiProperties.getApiKey());
-        }
-        return request.body(body).retrieve().body(String.class);
-    }
-
-    private ObjectNode buildLmStudioChatRequest(ObjectNode payload, String model) throws JsonProcessingException {
+    private ObjectNode buildChatRequest(ObjectNode payload, String model, LedgerAiFeatureConfig config) throws JsonProcessingException {
         ObjectNode root = objectMapper.createObjectNode();
         root.put("model", model);
-        root.put("temperature", Math.min(aiProperties.getTemperature(), 0.2));
-        root.put("max_tokens", Math.max(aiProperties.getMaxTokens(), MIN_EXCEL_RESPONSE_TOKENS));
         root.put("stream", false);
-        ObjectNode responseFormat = root.putObject("response_format");
-        responseFormat.put("type", "json_object");
+        if (config.provider() == LedgerAiProvider.OLLAMA) {
+            root.put("format", "json");
+            ObjectNode options = root.putObject("options");
+            options.put("temperature", Math.min(config.temperature(), 0.2));
+            options.put("num_predict", Math.max(config.maxTokens(), MIN_EXCEL_RESPONSE_TOKENS));
+        } else {
+            root.put("temperature", Math.min(config.temperature(), 0.2));
+            root.put("max_tokens", Math.max(config.maxTokens(), MIN_EXCEL_RESPONSE_TOKENS));
+            root.putObject("response_format").put("type", "json_object");
+        }
 
         ArrayNode messages = root.putArray("messages");
         messages.addObject()
@@ -330,34 +312,26 @@ public class LedgerAiExcelImportService {
         return root;
     }
 
-    private ObjectNode buildAiOutputContract() {
-        ObjectNode contract = objectMapper.createObjectNode();
-        contract.put("response", "Return JSON object with notes[] and rows[]. No insert is allowed.");
-        contract.set("row", buildTargetSchema());
-        return contract;
-    }
-
-    private String resolveLmStudioModel(RestClient restClient) throws JsonProcessingException {
-        String configuredModel = aiProperties.normalizedLmStudioModel();
-        if (hasText(configuredModel)) {
-            return configuredModel;
+    private String resolveModel(RestClient restClient, LedgerAiFeatureConfig config) throws JsonProcessingException {
+        String configuredModel = config.model();
+        if (hasText(configuredModel) && !"auto".equalsIgnoreCase(configuredModel.trim())) {
+            return configuredModel.trim();
         }
         RestClient.RequestHeadersSpec<?> request = restClient.get()
-                .uri(aiProperties.normalizedLmStudioModelsPath())
+                .uri(config.modelsPath())
                 .accept(MediaType.APPLICATION_JSON);
-        if (hasText(aiProperties.getLmStudioApiKey())) {
-            request = request.header("Authorization", "Bearer " + aiProperties.getLmStudioApiKey());
+        if (hasText(config.apiKey())) {
+            request = request.header("Authorization", "Bearer " + config.apiKey());
         }
         JsonNode root = objectMapper.readTree(request.retrieve().body(String.class));
         String model = firstModelId(root.path("data"));
         if (!hasText(model)) model = firstModelId(root.path("models"));
         if (!hasText(model)) model = firstModelId(root);
         if (!hasText(model)) {
-            throw new BadRequestException("LM Studio에 로드된 모델이 없습니다. 모델을 먼저 로드해 주세요.");
+            throw new BadRequestException("No AI model is configured or available for Excel import.");
         }
         return model;
     }
-
     private String firstModelId(JsonNode node) {
         if (node == null || node.isMissingNode() || node.isNull()) return "";
         if (node.isTextual()) return node.asText("");
@@ -449,16 +423,17 @@ public class LedgerAiExcelImportService {
     private String extractAssistantContent(String responseBody) throws JsonProcessingException {
         JsonNode root = objectMapper.readTree(responseBody);
         if (root.has("rows")) return responseBody;
+        String content = root.path("message").path("content").asText("");
+        if (hasText(content)) return content;
         JsonNode choices = root.path("choices");
         if (choices.isArray() && !choices.isEmpty()) {
-            String content = choices.get(0).path("message").path("content").asText("");
+            content = choices.get(0).path("message").path("content").asText("");
             if (hasText(content)) return content;
             content = choices.get(0).path("text").asText("");
             if (hasText(content)) return content;
         }
-        String content = root.path("content").asText("");
-        if (hasText(content)) return content;
-        content = root.path("response").asText("");
+        content = root.path("content").asText("");
+        if (hasText(content)) return content;        content = root.path("response").asText("");
         if (hasText(content)) return content;
         return responseBody;
     }

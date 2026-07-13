@@ -10,6 +10,7 @@ public class LedgerAiFeatureSettings {
     private String apiKey = "";
     private Double temperature;
     private Integer maxTokens;
+    private boolean enabled = true;
 
     public String getProvider() { return provider; }
     public void setProvider(String provider) { this.provider = provider; }
@@ -27,4 +28,6 @@ public class LedgerAiFeatureSettings {
     public void setTemperature(Double temperature) { this.temperature = temperature; }
     public Integer getMaxTokens() { return maxTokens; }
     public void setMaxTokens(Integer maxTokens) { this.maxTokens = maxTokens; }
+    public boolean isEnabled() { return enabled; }
+    public void setEnabled(boolean enabled) { this.enabled = enabled; }
 }

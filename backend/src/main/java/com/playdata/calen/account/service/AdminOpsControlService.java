@@ -3,6 +3,9 @@ package com.playdata.calen.account.service;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.playdata.calen.account.dto.AdminAiControlResponse;
+import com.playdata.calen.account.dto.AdminAiRoutingUpdateRequest;
+import com.playdata.calen.account.dto.AdminAiServerCandidateRequest;
+import com.playdata.calen.account.dto.AdminAiServerCandidateResponse;
 import com.playdata.calen.account.dto.AdminAiFeatureConfigResponse;
 import com.playdata.calen.account.security.AdminOpsSecretCipher;
 import com.playdata.calen.account.dto.AdminAiControlUpdateRequest;
@@ -46,6 +49,10 @@ public class AdminOpsControlService {
     private static final String AI_LMSTUDIO_API_KEY_ENCRYPTED = "ai.lmstudio-api-key.encrypted";
     private static final String AI_OPENAI_API_KEY_ENCRYPTED = "ai.openai-api-key.encrypted";
     private static final String AI_PRESET_SECRET_PREFIX = "ai.preset.";
+    private static final String AI_ROUTING_CANDIDATE_PREFIX = "ai.routing.candidate.";
+    private static final String AI_ROUTING_CONNECTION_PREFIX = "ai.routing.connection.";
+    private static final String AI_ROUTING_CONFIGURED = "ai.routing.configured";
+    private static final int AI_ROUTING_CANDIDATE_LIMIT = 3;
 
     private final LedgerAiAnalysisProperties aiProperties;
     private final MinioProperties minioProperties;
@@ -71,6 +78,7 @@ public class AdminOpsControlService {
                 aiControl(),
                 probeAiServer(LedgerAiFeature.LEDGER_ANALYSIS),
                 probeAiServer(LedgerAiFeature.IMAGE_ANALYSIS),
+                probeAiServer(LedgerAiFeature.EXCEL_IMPORT),
                 probeDataServer(),
                 persistenceMessage
         );
@@ -151,14 +159,142 @@ public class AdminOpsControlService {
         return getSnapshot();
     }
 
+    @Transactional
+    public AdminOpsControlResponse updateAiRouting(AdminAiRoutingUpdateRequest request) {
+        if (request == null) {
+            throw new BadRequestException("AI routing request is empty.");
+        }
+
+        List<AdminAiServerCandidateRequest> candidates = normalizeRoutingCandidates(request.candidates());
+        Map<String, AdminAiServerCandidateRequest> candidateByKey = new LinkedHashMap<>();
+        for (AdminAiServerCandidateRequest candidate : candidates) {
+            candidateByKey.put(candidate.presetKey(), candidate);
+        }
+        Map<String, String> connections = normalizeRoutingConnections(request.featureConnections(), candidateByKey);
+
+        persistRoutingCandidates(candidates);
+        persistSetting(AI_ROUTING_CONFIGURED, "true");
+        for (LedgerAiFeature feature : List.of(
+                LedgerAiFeature.LEDGER_ANALYSIS,
+                LedgerAiFeature.IMAGE_ANALYSIS,
+                LedgerAiFeature.EXCEL_IMPORT
+        )) {
+            String presetKey = connections.get(feature.settingKey());
+            applyRoutingFeature(feature, presetKey == null ? null : candidateByKey.get(presetKey));
+            persistSetting(routingConnectionSettingKey(feature), presetKey == null ? "" : presetKey);
+        }
+        persistenceMessage = "Settings saved.";
+        return getSnapshot();
+    }
+
+    private List<AdminAiServerCandidateRequest> normalizeRoutingCandidates(List<AdminAiServerCandidateRequest> requested) {
+        List<AdminAiServerCandidateRequest> result = new ArrayList<>();
+        if (requested == null) {
+            return result;
+        }
+        if (requested.size() > AI_ROUTING_CANDIDATE_LIMIT) {
+            throw new BadRequestException("AI routing supports up to three candidate servers.");
+        }
+        Map<String, Boolean> keys = new LinkedHashMap<>();
+        for (AdminAiServerCandidateRequest candidate : requested) {
+            if (candidate == null) {
+                throw new BadRequestException("AI routing candidate is invalid.");
+            }
+            AdminAiServerCandidateRequest normalized = normalizeRoutingCandidate(candidate);
+            if (keys.putIfAbsent(normalized.presetKey(), Boolean.TRUE) != null) {
+                throw new BadRequestException("AI routing candidate keys must be unique.");
+            }
+            result.add(normalized);
+        }
+        return result;
+    }
+
+    private AdminAiServerCandidateRequest normalizeRoutingCandidate(AdminAiServerCandidateRequest candidate) {
+        String presetKey = normalizePresetKey(candidate.presetKey());
+        if (presetKey == null) {
+            throw new BadRequestException("AI routing candidate key is required.");
+        }
+        LedgerAiProvider provider = normalizeFeatureProvider(candidate.provider());
+        String title = requireText(candidate.title(), "AI routing candidate name", 120);
+        String model = requireText(candidate.model(), "AI routing candidate model", 200);
+        String baseUrl = requireHttpUrl(candidate.baseUrl(), providerLabel(provider) + " URL");
+        if (!hasText(baseUrl)) {
+            throw new BadRequestException(providerLabel(provider) + " URL is required.");
+        }
+        String chatPath = normalizePath(candidate.chatPath(), "chat path");
+        String modelsPath = normalizePath(candidate.modelsPath(), "models path");
+        double temperature = candidate.temperature() == null ? aiProperties.getTemperature() : candidate.temperature();
+        if (temperature < 0D || temperature > 2D) {
+            throw new BadRequestException("temperature must be between 0 and 2.");
+        }
+        int maxTokens = candidate.maxTokens() == null ? aiProperties.getMaxTokens() : candidate.maxTokens();
+        if (maxTokens < 128 || maxTokens > 8192) {
+            throw new BadRequestException("max tokens must be between 128 and 8192.");
+        }
+        return new AdminAiServerCandidateRequest(
+                presetKey,
+                title,
+                provider.name().toLowerCase(java.util.Locale.ROOT),
+                model,
+                baseUrl,
+                chatPath,
+                modelsPath,
+                temperature,
+                maxTokens
+        );
+    }
+
+    private Map<String, String> normalizeRoutingConnections(
+            Map<String, String> requested,
+            Map<String, AdminAiServerCandidateRequest> candidates
+    ) {
+        Map<String, String> result = new LinkedHashMap<>();
+        for (LedgerAiFeature feature : List.of(
+                LedgerAiFeature.LEDGER_ANALYSIS,
+                LedgerAiFeature.IMAGE_ANALYSIS,
+                LedgerAiFeature.EXCEL_IMPORT
+        )) {
+            String raw = requested == null ? null : requested.get(feature.settingKey());
+            String presetKey = hasText(raw) ? raw.trim() : "";
+            if (hasText(presetKey) && !candidates.containsKey(presetKey)) {
+                throw new BadRequestException(featureLabel(feature) + " must be connected to a candidate server.");
+            }
+            result.put(feature.settingKey(), presetKey);
+        }
+        return result;
+    }
+
+    private void applyRoutingFeature(LedgerAiFeature feature, AdminAiServerCandidateRequest candidate) {
+        LedgerAiFeatureSettings settings = aiProperties.featureSettings(feature);
+        if (candidate == null) {
+            settings.setEnabled(false);
+            persistFeatureSettings(feature, settings);
+            return;
+        }
+        LedgerAiProvider provider = normalizeFeatureProvider(candidate.provider());
+        settings.setEnabled(true);
+        settings.setProvider(provider.name().toLowerCase(java.util.Locale.ROOT));
+        settings.setModel(candidate.model());
+        settings.setBaseUrl(candidate.baseUrl());
+        settings.setChatPath(candidate.chatPath());
+        settings.setModelsPath(candidate.modelsPath());
+        settings.setTemperature(candidate.temperature());
+        settings.setMaxTokens(candidate.maxTokens());
+        settings.setApiKey(readPresetSecret(candidate.presetKey(), featureSecretType(provider)).orElse(""));
+        persistFeatureSettings(feature, settings);
+    }
     private AdminOpsControlResponse updateFeatureAi(AdminAiControlUpdateRequest request, LedgerAiFeature feature) {
         if (request.enabled() != null) {
             aiProperties.setEnabled(request.enabled());
         }
         applySharedAiSafetySettings(request);
         LedgerAiProvider provider = normalizeFeatureProvider(request.provider());
-        LedgerAiFeatureSettings settings = feature == LedgerAiFeature.IMAGE_ANALYSIS
-                ? aiProperties.getImage() : aiProperties.getLedger();
+        LedgerAiFeatureSettings settings = switch (feature) {
+            case LEDGER_ANALYSIS -> aiProperties.getLedger();
+            case IMAGE_ANALYSIS -> aiProperties.getImage();
+            case EXCEL_IMPORT -> aiProperties.getExcel();
+        };
+        settings.setEnabled(true);
         settings.setProvider(provider.name().toLowerCase(java.util.Locale.ROOT));
         if (request.model() != null) {
             settings.setModel(request.model().trim());
@@ -192,6 +328,7 @@ public class AdminOpsControlService {
         applyFeatureSecret(request, provider, settings);
         persistRuntimeSettings(request.presetKey());
         persistFeaturePresetSecret(request.presetKey(), provider, settings.getApiKey());
+        deleteSetting(routingConnectionSettingKey(feature));
         return getSnapshot();
     }
 
@@ -372,6 +509,7 @@ public class AdminOpsControlService {
         deleteSetting(presetSecretSettingKey(presetKey, "api-key"));
         deleteSetting(presetSecretSettingKey(presetKey, "lmstudio-api-key"));
         deleteSetting(presetSecretSettingKey(presetKey, "openai-api-key"));
+        deleteSetting(presetSecretSettingKey(presetKey, "ollama-api-key"));
     }
 
     private void restoreEncryptedSetting(Map<String, String> settings, String settingKey, java.util.function.Consumer<String> setter) {
@@ -422,6 +560,114 @@ public class AdminOpsControlService {
         return AI_PRESET_SECRET_PREFIX + sha256(presetKey) + "." + secretType;
     }
 
+    private void persistRoutingCandidates(List<AdminAiServerCandidateRequest> candidates) {
+        for (int index = 0; index < AI_ROUTING_CANDIDATE_LIMIT; index++) {
+            String key = routingCandidateSettingKey(index);
+            if (index < candidates.size()) {
+                persistSetting(key, serializeRoutingCandidate(candidates.get(index)));
+            } else {
+                deleteSetting(key);
+            }
+        }
+    }
+
+    private List<AdminAiServerCandidateRequest> routingCandidates() {
+        List<AdminAiServerCandidateRequest> result = new ArrayList<>();
+        for (int index = 0; index < AI_ROUTING_CANDIDATE_LIMIT; index++) {
+            readSetting(routingCandidateSettingKey(index))
+                    .flatMap(this::deserializeRoutingCandidate)
+                    .ifPresent(result::add);
+        }
+        return result;
+    }
+
+    private List<AdminAiServerCandidateResponse> routingCandidateResponses() {
+        return routingCandidates().stream()
+                .map(candidate -> {
+                    LedgerAiProvider provider = normalizeFeatureProvider(candidate.provider());
+                    boolean apiKeyConfigured = readPresetSecret(candidate.presetKey(), featureSecretType(provider))
+                            .map(this::hasText)
+                            .orElse(false);
+                    return new AdminAiServerCandidateResponse(
+                            candidate.presetKey(),
+                            candidate.title(),
+                            candidate.provider(),
+                            candidate.model(),
+                            candidate.baseUrl(),
+                            candidate.chatPath(),
+                            candidate.modelsPath(),
+                            candidate.temperature(),
+                            candidate.maxTokens(),
+                            apiKeyConfigured
+                    );
+                })
+                .toList();
+    }
+
+    private Map<String, String> routingConnections() {
+        Map<String, String> result = new LinkedHashMap<>();
+        for (LedgerAiFeature feature : List.of(
+                LedgerAiFeature.LEDGER_ANALYSIS,
+                LedgerAiFeature.IMAGE_ANALYSIS,
+                LedgerAiFeature.EXCEL_IMPORT
+        )) {
+            result.put(feature.settingKey(), readSetting(routingConnectionSettingKey(feature)).orElse(""));
+        }
+        return result;
+    }
+
+    private boolean routingConfigured() {
+        return readSetting(AI_ROUTING_CONFIGURED).map(Boolean::parseBoolean).orElse(false);
+    }
+
+    private String serializeRoutingCandidate(AdminAiServerCandidateRequest candidate) {
+        try {
+            return objectMapper.writeValueAsString(candidate);
+        } catch (Exception exception) {
+            throw new IllegalStateException("Unable to save AI routing candidate.", exception);
+        }
+    }
+
+    private Optional<AdminAiServerCandidateRequest> deserializeRoutingCandidate(String value) {
+        try {
+            AdminAiServerCandidateRequest candidate = objectMapper.readValue(value, AdminAiServerCandidateRequest.class);
+            return Optional.of(normalizeRoutingCandidate(candidate));
+        } catch (Exception exception) {
+            return Optional.empty();
+        }
+    }
+
+    private Optional<String> readSetting(String settingKey) {
+        try {
+            String value = jdbcTemplate.query(
+                    "select setting_value from " + SETTINGS_TABLE + " where setting_key = ?",
+                    resultSet -> resultSet.next() ? resultSet.getString(1) : null,
+                    settingKey
+            );
+            return Optional.ofNullable(value);
+        } catch (RuntimeException exception) {
+            return Optional.empty();
+        }
+    }
+
+    private String routingCandidateSettingKey(int index) {
+        return AI_ROUTING_CANDIDATE_PREFIX + index;
+    }
+
+    private String routingConnectionSettingKey(LedgerAiFeature feature) {
+        return AI_ROUTING_CONNECTION_PREFIX + feature.settingKey();
+    }
+
+    private String requireText(String raw, String label, int maximumLength) {
+        if (!hasText(raw)) {
+            throw new BadRequestException(label + " is required.");
+        }
+        String value = raw.trim();
+        if (value.length() > maximumLength) {
+            throw new BadRequestException(label + " is too long.");
+        }
+        return value;
+    }
     private String sha256(String value) {
         try {
             byte[] digest = MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8));
@@ -459,17 +705,18 @@ public class AdminOpsControlService {
                 aiProperties.isConfigured(),
                 aiProperties.statusMessage(),
                 featureAiControl(LedgerAiFeature.LEDGER_ANALYSIS),
-                featureAiControl(LedgerAiFeature.IMAGE_ANALYSIS)
+                featureAiControl(LedgerAiFeature.IMAGE_ANALYSIS),
+                featureAiControl(LedgerAiFeature.EXCEL_IMPORT),
+                routingCandidateResponses(),
+                routingConnections(),
+                routingConfigured()
         );
     }
 
     private AdminAiFeatureConfigResponse featureAiControl(LedgerAiFeature feature) {
         LedgerAiFeatureConfig config = aiProperties.featureConfig(feature);
         boolean configured = aiProperties.isFeatureConfigured(feature);
-        String featureLabel = feature == LedgerAiFeature.IMAGE_ANALYSIS ? "이미지 분석" : "가계부 AI 분석";
-        String message = configured
-                ? featureLabel + " 서버 설정이 준비되었습니다."
-                : featureLabel + " 서버의 주소, 모델, API 키(필요한 경우)를 확인하세요.";
+        String message = aiProperties.featureStatusMessage(feature);
         return new AdminAiFeatureConfigResponse(
                 feature.settingKey(),
                 config.provider().name().toLowerCase(java.util.Locale.ROOT),
@@ -480,16 +727,24 @@ public class AdminOpsControlService {
                 hasText(config.apiKey()),
                 config.temperature(),
                 config.maxTokens(),
+                aiProperties.featureSettings(feature).isEnabled(),
                 configured,
                 message
         );
     }
 
+    private String featureLabel(LedgerAiFeature feature) {
+        return switch (feature) {
+            case LEDGER_ANALYSIS -> "Ledger AI analysis";
+            case IMAGE_ANALYSIS -> "Image analysis";
+            case EXCEL_IMPORT -> "Excel AI import";
+        };
+    }
     private AdminAiServerStatusResponse probeAiServer(LedgerAiFeature feature) {
         long started = System.nanoTime();
         LedgerAiFeatureConfig config = aiProperties.featureConfig(feature);
         String provider = config.provider().name().toLowerCase(java.util.Locale.ROOT);
-        String featureLabel = feature == LedgerAiFeature.IMAGE_ANALYSIS ? "Image analysis" : "Ledger AI analysis";
+        String featureLabel = featureLabel(feature);
         if (!aiProperties.isEnabled()) {
             return new AdminAiServerStatusResponse(false, provider, config.baseUrl(), config.modelsPath(), 0L, List.of(), featureLabel + " is disabled.");
         }
@@ -648,6 +903,7 @@ public class AdminOpsControlService {
         restoreEncryptedSetting(settings, AI_OPENAI_API_KEY_ENCRYPTED, aiProperties::setOpenAiApiKey);
         restoreFeatureSettings(settings, LedgerAiFeature.LEDGER_ANALYSIS, aiProperties.getLedger());
         restoreFeatureSettings(settings, LedgerAiFeature.IMAGE_ANALYSIS, aiProperties.getImage());
+        restoreFeatureSettings(settings, LedgerAiFeature.EXCEL_IMPORT, aiProperties.getExcel());
         applyLong(settings, "minio.storage-capacity-bytes", minioProperties::setStorageCapacityBytes);
     }
 
@@ -660,6 +916,7 @@ public class AdminOpsControlService {
         applyText(settings, prefix + "models-path", target::setModelsPath);
         applyDouble(settings, prefix + "temperature", target::setTemperature);
         applyInteger(settings, prefix + "max-tokens", target::setMaxTokens);
+        applyBoolean(settings, prefix + "enabled", target::setEnabled);
         restoreEncryptedSetting(settings, prefix + "api-key.encrypted", target::setApiKey);
     }
 
@@ -672,6 +929,7 @@ public class AdminOpsControlService {
         persistSetting(prefix + "models-path", source.getModelsPath());
         persistSetting(prefix + "temperature", source.getTemperature() == null ? "" : Double.toString(source.getTemperature()));
         persistSetting(prefix + "max-tokens", source.getMaxTokens() == null ? "" : Integer.toString(source.getMaxTokens()));
+        persistSetting(prefix + "enabled", Boolean.toString(source.isEnabled()));
         persistEncryptedSetting(prefix + "api-key.encrypted", source.getApiKey());
     }
 
@@ -706,6 +964,7 @@ public class AdminOpsControlService {
             persistEncryptedSetting(AI_OPENAI_API_KEY_ENCRYPTED, aiProperties.getOpenAiApiKey());
             persistFeatureSettings(LedgerAiFeature.LEDGER_ANALYSIS, aiProperties.getLedger());
             persistFeatureSettings(LedgerAiFeature.IMAGE_ANALYSIS, aiProperties.getImage());
+            persistFeatureSettings(LedgerAiFeature.EXCEL_IMPORT, aiProperties.getExcel());
             persistPresetSecrets(presetKey);
             persistSetting("minio.storage-capacity-bytes", Long.toString(minioProperties.getStorageCapacityBytes()));
             persistenceMessage = "설정이 저장되었습니다.";

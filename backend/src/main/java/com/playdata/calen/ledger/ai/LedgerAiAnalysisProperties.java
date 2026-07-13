@@ -33,6 +33,7 @@ public class LedgerAiAnalysisProperties {
     private String allowedProviderHosts = "localhost,127.0.0.1,::1,api.openai.com";
     private LedgerAiFeatureSettings ledger = new LedgerAiFeatureSettings();
     private LedgerAiFeatureSettings image = new LedgerAiFeatureSettings();
+    private LedgerAiFeatureSettings excel = new LedgerAiFeatureSettings();
 
     public boolean isEnabled() {
         return enabled;
@@ -242,12 +243,28 @@ public class LedgerAiAnalysisProperties {
         this.image = image == null ? new LedgerAiFeatureSettings() : image;
     }
 
+    public LedgerAiFeatureSettings getExcel() {
+        return excel;
+    }
+
+    public void setExcel(LedgerAiFeatureSettings excel) {
+        this.excel = excel == null ? new LedgerAiFeatureSettings() : excel;
+    }
+
     /**
      * Feature profiles fall back to the legacy global properties so existing
      * deployments keep working until an administrator saves a feature profile.
      */
+    public LedgerAiFeatureSettings featureSettings(LedgerAiFeature feature) {
+        return switch (feature) {
+            case LEDGER_ANALYSIS -> ledger;
+            case IMAGE_ANALYSIS -> image;
+            case EXCEL_IMPORT -> excel;
+        };
+    }
+
     public LedgerAiFeatureConfig featureConfig(LedgerAiFeature feature) {
-        LedgerAiFeatureSettings settings = feature == LedgerAiFeature.IMAGE_ANALYSIS ? image : ledger;
+        LedgerAiFeatureSettings settings = featureSettings(feature);
         LedgerAiProvider selectedProvider = hasText(settings.getProvider()) ? LedgerAiProvider.from(settings.getProvider()) : provider();
         String baseUrl = firstNonBlank(settings.getBaseUrl(), legacyBaseUrl(selectedProvider));
         String chatPath = normalizeRelativeEndpointPath(firstNonBlank(settings.getChatPath(), defaultChatPath(selectedProvider)), defaultChatPath(selectedProvider));
@@ -261,7 +278,7 @@ public class LedgerAiAnalysisProperties {
     }
 
     public boolean isFeatureConfigured(LedgerAiFeature feature) {
-        if (!enabled) {
+        if (!enabled || !featureSettings(feature).isEnabled()) {
             return false;
         }
         LedgerAiFeatureConfig config = featureConfig(feature);
@@ -279,9 +296,16 @@ public class LedgerAiAnalysisProperties {
     }
 
     public String featureStatusMessage(LedgerAiFeature feature) {
-        String label = feature == LedgerAiFeature.IMAGE_ANALYSIS ? "Image analysis" : "Ledger AI analysis";
+        String label = switch (feature) {
+            case LEDGER_ANALYSIS -> "Ledger AI analysis";
+            case IMAGE_ANALYSIS -> "Image analysis";
+            case EXCEL_IMPORT -> "Excel AI import";
+        };
         if (!enabled) {
             return label + " is disabled.";
+        }
+        if (!featureSettings(feature).isEnabled()) {
+            return label + " is disconnected.";
         }
         LedgerAiFeatureConfig config = featureConfig(feature);
         if (!hasText(config.baseUrl()) || !isProviderUrlAllowed(config.baseUrl())) {

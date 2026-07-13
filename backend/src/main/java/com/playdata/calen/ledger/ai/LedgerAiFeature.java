@@ -4,7 +4,8 @@ import java.util.Locale;
 
 public enum LedgerAiFeature {
     LEDGER_ANALYSIS("ledger"),
-    IMAGE_ANALYSIS("image");
+    IMAGE_ANALYSIS("image"),
+    EXCEL_IMPORT("excel");
 
     private final String settingKey;
 
@@ -22,6 +23,7 @@ public enum LedgerAiFeature {
         }
         return switch (value.trim().toLowerCase(Locale.ROOT)) {
             case "image", "image-analysis", "ocr", "receipt" -> IMAGE_ANALYSIS;
+            case "excel", "excel-import", "spreadsheet" -> EXCEL_IMPORT;
             default -> LEDGER_ANALYSIS;
         };
     }

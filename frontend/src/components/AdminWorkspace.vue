@@ -21,6 +21,7 @@ import {
   restoreAdminUploadedBackup,
   unlockBlockedIp,
   updateAdminAiControl,
+  updateAdminAiRouting,
   updateAdminDataStorageControl,
   updateAdminSupportInquiryStatus,
   updateAdminUserActive,
@@ -78,7 +79,7 @@ const state = reactive({
   aiControlPresetKey: '',
   aiCandidateServerKeys: [],
   aiCandidateServerPickerKey: '',
-  aiFeatureConnections: { ledger: '', image: '' },
+  aiFeatureConnections: { ledger: '', image: '', excel: '' },
   aiTargetFeature: 'ledger',
   aiControlPreserveCurrentSecret: false,
   aiServerStatusOpen: false,
@@ -913,7 +914,7 @@ function readAiControlPresets() {
           .filter((item) => item && aiControlPresetAddress(item))
           .map((item) => ({
             ...item,
-            key: aiControlPresetKeyFor(item),
+            key: String(item.key || "").trim() || aiControlPresetKeyFor(item),
             credentialConfigured: Boolean(item.credentialConfigured),
           }))
           .slice(0, 12)
@@ -1025,13 +1026,67 @@ function aiFeatureConfigSignature(feature) {
 }
 
 function syncAiFeatureConnections() {
-  for (const feature of ['ledger', 'image']) {
+  for (const feature of ['ledger', 'image', 'excel']) {
     const signature = aiFeatureConfigSignature(feature)
     const matched = candidateAiControlPresets.value.find((preset) => aiServerPresetSignature(preset) === signature)
     state.aiFeatureConnections[feature] = matched?.key || ''
   }
 }
 
+function serverRoutingCandidateToPreset(candidate) {
+  const provider = String(candidate?.provider || 'lmstudio').toLowerCase()
+  const baseUrl = candidate?.baseUrl || ''
+  const chatPath = candidate?.chatPath || (provider === 'ollama' ? '/api/chat' : '/v1/chat/completions')
+  const modelsPath = candidate?.modelsPath || (provider === 'ollama' ? '/api/tags' : '/v1/models')
+  return {
+    key: String(candidate?.presetKey || '').trim(),
+    title: candidate?.title || candidate?.model || 'AI server',
+    targetFeature: 'ledger',
+    provider,
+    model: candidate?.model || 'auto',
+    workflowUrl: '',
+    lmStudioBaseUrl: provider === 'lmstudio' ? baseUrl : '',
+    lmStudioChatPath: provider === 'lmstudio' ? chatPath : '/v1/chat/completions',
+    lmStudioModelsPath: provider === 'lmstudio' ? modelsPath : '/v1/models',
+    openAiBaseUrl: provider === 'openai' ? baseUrl : '',
+    openAiChatPath: provider === 'openai' ? chatPath : '/v1/chat/completions',
+    openAiModelsPath: provider === 'openai' ? modelsPath : '/v1/models',
+    ollamaBaseUrl: provider === 'ollama' ? baseUrl : '',
+    ollamaChatPath: provider === 'ollama' ? chatPath : '/api/chat',
+    ollamaModelsPath: provider === 'ollama' ? modelsPath : '/api/tags',
+    temperature: Number(candidate?.temperature ?? 0.2),
+    maxTokens: Number(candidate?.maxTokens ?? 4096),
+    credentialConfigured: Boolean(candidate?.apiKeyConfigured),
+    savedAt: new Date().toISOString(),
+  }
+}
+
+function syncAiRoutingFromServer() {
+  const routing = state.opsControl?.ai
+  if (!routing?.routingConfigured) {
+    syncAiFeatureConnections()
+    return
+  }
+
+  const savedCandidates = Array.isArray(routing.candidateServers)
+    ? routing.candidateServers.map(serverRoutingCandidateToPreset).filter((preset) => preset.key)
+    : []
+  const savedKeys = new Set(savedCandidates.map((preset) => preset.key))
+  state.aiControlPresets = [
+    ...savedCandidates,
+    ...state.aiControlPresets.filter((preset) => !savedKeys.has(preset.key)),
+  ].slice(0, 12)
+  state.aiCandidateServerKeys = savedCandidates.map((preset) => preset.key)
+  state.aiFeatureConnections = {
+    ledger: '',
+    image: '',
+    excel: '',
+    ...(routing.featureConnections || {}),
+  }
+  persistAiControlPresets()
+  persistAiCandidateServerKeys()
+  state.aiCandidateServerPickerKey = availableAiControlPresets.value[0]?.key || ''
+}
 function candidateAiPresetForFeature(feature) {
   const key = state.aiFeatureConnections[feature]
   return candidateAiControlPresets.value.find((preset) => preset.key === key) || null
@@ -1059,7 +1114,7 @@ function addAiCandidateServer() {
 
 function removeAiCandidateServer(key) {
   state.aiCandidateServerKeys = state.aiCandidateServerKeys.filter((candidateKey) => candidateKey !== key)
-  for (const feature of ['ledger', 'image']) {
+  for (const feature of ['ledger', 'image', 'excel']) {
     if (state.aiFeatureConnections[feature] === key) {
       state.aiFeatureConnections[feature] = ''
     }
@@ -1081,59 +1136,49 @@ function clearAiFeatureConnection(feature) {
   state.aiFeatureConnections[feature] = ''
 }
 
-function buildAiFeatureConnectionPayload(preset, feature) {
-  const source = state.aiControlForm
+function buildAiRoutingCandidatePayload(preset) {
+  const provider = String(preset.provider || 'lmstudio').toLowerCase()
+  const chatPath = provider === 'ollama'
+    ? preset.ollamaChatPath
+    : provider === 'openai'
+      ? preset.openAiChatPath
+      : preset.lmStudioChatPath
+  const modelsPath = provider === 'ollama'
+    ? preset.ollamaModelsPath
+    : provider === 'openai'
+      ? preset.openAiModelsPath
+      : preset.lmStudioModelsPath
   return {
-    enabled: Boolean(state.opsControl?.ai?.enabled ?? source.enabled),
-    targetFeature: feature,
-    provider: preset.provider,
-    model: preset.model || 'auto',
-    lmStudioBaseUrl: preset.lmStudioBaseUrl || '',
-    lmStudioChatPath: preset.lmStudioChatPath || '/v1/chat/completions',
-    lmStudioModelsPath: preset.lmStudioModelsPath || '/v1/models',
-    openAiBaseUrl: preset.openAiBaseUrl || 'https://api.openai.com',
-    openAiChatPath: preset.openAiChatPath || '/v1/chat/completions',
-    openAiModelsPath: preset.openAiModelsPath || '/v1/models',
-    ollamaBaseUrl: preset.ollamaBaseUrl || 'http://localhost:11434',
-    ollamaChatPath: preset.ollamaChatPath || '/api/chat',
-    ollamaModelsPath: preset.ollamaModelsPath || '/api/tags',
-    temperature: Number(preset.temperature ?? source.temperature),
-    maxTokens: Number(preset.maxTokens ?? source.maxTokens),
-    connectTimeoutSeconds: Number(source.connectTimeoutSeconds),
-    readTimeoutSeconds: Number(source.readTimeoutSeconds),
-    enforceProviderUrlAllowlist: Boolean(source.enforceProviderUrlAllowlist),
-    allowedProviderHosts: source.allowedProviderHosts,
     presetKey: preset.key,
-    reuseExistingSecrets: false,
+    title: preset.title || preset.model || 'AI server',
+    provider,
+    model: preset.model || 'auto',
+    baseUrl: aiControlPresetAddress(preset),
+    chatPath: chatPath || (provider === 'ollama' ? '/api/chat' : '/v1/chat/completions'),
+    modelsPath: modelsPath || (provider === 'ollama' ? '/api/tags' : '/v1/models'),
+    temperature: Number(preset.temperature ?? state.aiControlForm.temperature ?? 0.2),
+    maxTokens: Number(preset.maxTokens ?? state.aiControlForm.maxTokens ?? 4096),
   }
 }
 
 async function saveAiFeatureConnections() {
-  const connections = ['ledger', 'image']
-    .map((feature) => ({ feature, preset: candidateAiPresetForFeature(feature) }))
-    .filter((connection) => connection.preset)
-
-  if (!connections.length) {
-    state.opsControlError = '저장할 기능별 후보 서버 연결을 선택하세요.'
-    return
-  }
-
   state.savingAiControl = true
   state.opsControlError = ''
   state.opsControlMessage = ''
   const activeFeature = state.aiTargetFeature
   try {
-    for (const connection of connections) {
-      state.opsControl = await updateAdminAiControl(buildAiFeatureConnectionPayload(connection.preset, connection.feature))
-    }
+    state.opsControl = await updateAdminAiRouting({
+      candidates: candidateAiControlPresets.value.map(buildAiRoutingCandidatePayload),
+      featureConnections: { ...state.aiFeatureConnections },
+    })
     state.aiTargetFeature = activeFeature
     syncAiControlForm()
-    syncAiFeatureConnections()
+    syncAiRoutingFromServer()
     markOpsControlChecked()
-    state.opsControlMessage = '기능별 AI 서버 연결이 저장되었습니다.'
+    state.opsControlMessage = '후보 서버와 기능 연결을 저장했습니다.'
   } catch (error) {
     if (!handleAdminAccessRequired(error)) {
-      state.opsControlError = error.message || '기능별 AI 서버 연결을 저장하지 못했습니다.'
+      state.opsControlError = error.message || '후보 서버와 기능 연결을 저장하지 못했습니다.'
     }
   } finally {
     state.savingAiControl = false
@@ -1172,7 +1217,7 @@ function formatAiServerModelList(models) {
 function applyAiControlPreset() {
   const preset = state.aiControlPresets.find((item) => item.key === state.aiControlPresetKey)
   if (!preset) return
-  const targetFeature = preset.targetFeature === 'image' ? 'image' : 'ledger'
+  const targetFeature = ['ledger', 'image', 'excel'].includes(preset.targetFeature) ? preset.targetFeature : 'ledger'
   const reuseCurrentSecret = isAiControlPresetActive(preset)
     && state.aiTargetFeature === targetFeature
     && providerCredentialConfigured(state.aiControlForm)
@@ -1214,7 +1259,9 @@ function aiFeatureConfigFor(feature, control = state.opsControl) {
   if (!ai) {
     return null
   }
-  return feature === 'image' ? ai.imageAnalysis : ai.ledgerAnalysis
+  if (feature === 'image') return ai.imageAnalysis
+  if (feature === 'excel') return ai.excelImport
+  return ai.ledgerAnalysis
 }
 
 function activeAiFeatureConfig(control = state.opsControl) {
@@ -1222,7 +1269,9 @@ function activeAiFeatureConfig(control = state.opsControl) {
 }
 
 function aiFeatureServerStatusFor(feature, control = state.opsControl) {
-  return feature === 'image' ? control?.imageAiServer : control?.aiServer
+  if (feature === 'image') return control?.imageAiServer
+  if (feature === 'excel') return control?.excelAiServer
+  return control?.aiServer
 }
 
 function aiFeatureProviderLabel(feature) {
@@ -1239,15 +1288,23 @@ function aiFeatureServerStateLabel(feature) {
   return status.reachable ? '정상 연결' : '확인 필요'
 }
 
+function reachableAiFeatureCount() {
+  return ['ledger', 'image', 'excel']
+    .filter((feature) => aiFeatureServerStatusFor(feature)?.reachable)
+    .length
+}
+
 function selectAiTargetFeature(feature) {
-  state.aiTargetFeature = feature === 'image' ? 'image' : 'ledger'
+  state.aiTargetFeature = ['ledger', 'image', 'excel'].includes(feature) ? feature : 'ledger'
   state.aiControlPresetKey = ''
   state.aiControlPreserveCurrentSecret = false
   syncAiControlForm()
 }
 
 function aiFeatureLabel(feature = state.aiTargetFeature) {
-  return feature === 'image' ? '이미지 분석 / OCR' : '가계부 AI 분석'
+  if (feature === 'image') return '이미지 분석 / OCR'
+  if (feature === 'excel') return 'AI 엑셀 추출'
+  return '가계부 AI 분석'
 }
 
 function syncAiControlForm(control = state.opsControl) {
@@ -1323,7 +1380,7 @@ async function loadOpsControl() {
   try {
     state.opsControl = await fetchAdminOpsControl()
     syncAiControlForm()
-    syncAiFeatureConnections()
+    syncAiRoutingFromServer()
     syncDataControlForm()
     markOpsControlChecked()
   } catch (error) {
@@ -1389,6 +1446,7 @@ async function handleSaveAiControl() {
     }
     state.opsControl = await updateAdminAiControl(payload)
     syncAiControlForm()
+    syncAiRoutingFromServer()
     syncDataControlForm()
     markOpsControlChecked()
     state.aiControlPreserveCurrentSecret = false
@@ -1965,12 +2023,12 @@ onBeforeUnmount(() => {
                 <article class="summary-card">
                   <span>AI 기능</span>
                   <strong>{{ state.opsControl?.ai?.enabled ? '켜짐' : '꺼짐' }}</strong>
-                  <small>가계부 AI: {{ aiFeatureServerStateLabel('ledger') }} · 이미지 OCR: {{ aiFeatureServerStateLabel('image') }}</small>
+                  <small>가계부 · 이미지/OCR · 엑셀 추출 기능별 서버를 별도 점검합니다.</small>
                 </article>
                 <article class="summary-card">
-                  <span>가계부 AI 서버</span>
-                  <strong>{{ state.opsControl?.aiServer?.reachable ? '정상' : '확인 필요' }}</strong>
-                  <small>{{ state.opsControl?.aiServer?.message || '-' }}</small>
+                  <span>AI 서버 연결</span>
+                  <strong>{{ reachableAiFeatureCount() }}/3 정상</strong>
+                  <small>가계부: {{ aiFeatureServerStateLabel('ledger') }} · 이미지: {{ aiFeatureServerStateLabel('image') }} · 엑셀: {{ aiFeatureServerStateLabel('excel') }}</small>
                 </article>
                 <article class="summary-card">
                   <span>DB 서버</span>
@@ -1984,7 +2042,7 @@ onBeforeUnmount(() => {
                 </article>
               </div>
               <div class="admin-ai-feature-status-grid admin-ai-feature-status-grid--probe">
-                <article v-for="feature in ['ledger', 'image']" :key="feature" class="admin-ai-feature-status-card">
+                <article v-for="feature in ['ledger', 'image', 'excel']" :key="feature" class="admin-ai-feature-status-card">
                   <span>{{ aiFeatureLabel(feature) }}</span>
                   <strong>{{ aiFeatureServerStateLabel(feature) }}</strong>
                   <small>{{ aiFeatureProviderLabel(feature) }} · {{ aiFeatureConfigFor(feature)?.model || '모델 미설정' }}</small>
@@ -2004,11 +2062,11 @@ onBeforeUnmount(() => {
                     </tr>
                   </thead>
                   <tbody>
-                    <tr>
-                      <td>가계부 AI 서버</td>
-                      <td>{{ state.opsControl?.aiServer?.reachable ? '정상' : '확인 필요' }}</td>
-                      <td>{{ state.opsControl?.aiServer?.baseUrl || '-' }} {{ state.opsControl?.aiServer?.modelsPath || '' }}</td>
-                      <td>{{ state.opsControl?.aiServer?.latencyMillis || 0 }} ms / {{ formatAiServerModelList(state.opsControl?.aiServer?.models) }}</td>
+                    <tr v-for="feature in ['ledger', 'image', 'excel']" :key="feature">
+                      <td>{{ aiFeatureLabel(feature) }} 서버</td>
+                      <td>{{ aiFeatureServerStateLabel(feature) }}</td>
+                      <td>{{ aiFeatureServerStatusFor(feature)?.baseUrl || aiFeatureConfigFor(feature)?.baseUrl || '-' }} {{ aiFeatureServerStatusFor(feature)?.modelsPath || aiFeatureConfigFor(feature)?.modelsPath || '' }}</td>
+                      <td>{{ aiFeatureServerStatusFor(feature)?.latencyMillis || 0 }} ms / {{ formatAiServerModelList(aiFeatureServerStatusFor(feature)?.models) }}</td>
                     </tr>
                     <tr>
                       <td>DB 서버</td>
@@ -2083,9 +2141,9 @@ onBeforeUnmount(() => {
                   </div>
                   <span>{{ candidateAiControlPresets.length }}/3 후보</span>
                 </div>
-                <article v-for="feature in ['ledger', 'image']" :key="feature" class="admin-ai-routing__feature-row" :class="{ 'is-connected': candidateAiPresetForFeature(feature) }">
+                <article v-for="feature in ['ledger', 'image', 'excel']" :key="feature" class="admin-ai-routing__feature-row" :class="{ 'is-connected': candidateAiPresetForFeature(feature) }">
                   <div class="admin-ai-routing__feature-node">
-                    <span>{{ feature === 'image' ? 'IMAGE / OCR' : 'LEDGER AI' }}</span>
+                    <span>{{ feature === 'image' ? 'IMAGE / OCR' : feature === 'excel' ? 'EXCEL IMPORT' : 'LEDGER AI' }}</span>
                     <strong>{{ aiFeatureLabel(feature) }}</strong>
                     <small>{{ aiFeatureConfigFor(feature)?.model || '현재 연결 없음' }}</small>
                   </div>
@@ -2126,7 +2184,7 @@ onBeforeUnmount(() => {
 
               <div class="panel__actions admin-ai-routing__save-actions">
                 <span>후보를 추가하거나 변경해도 저장 전에는 실제 AI 서버 설정이 바뀌지 않습니다.</span>
-                <button class="button button--primary" type="button" :disabled="state.savingAiControl || !Object.values(state.aiFeatureConnections).some(Boolean)" @click="saveAiFeatureConnections">
+                <button class="button button--primary" type="button" :disabled="state.savingAiControl" @click="saveAiFeatureConnections">
                   {{ state.savingAiControl ? '저장 중...' : '기능별 연결 저장' }}
                 </button>
               </div>
@@ -2148,6 +2206,7 @@ onBeforeUnmount(() => {
                   <span>적용 기능</span>
                   <button type="button" :class="['button', { 'button--primary': state.aiTargetFeature === 'ledger' }]" @click="selectAiTargetFeature('ledger')">가계부 AI 분석</button>
                   <button type="button" :class="['button', { 'button--primary': state.aiTargetFeature === 'image' }]" @click="selectAiTargetFeature('image')">이미지 분석 / OCR</button>
+                  <button type="button" :class="['button', { 'button--primary': state.aiTargetFeature === 'excel' }]" @click="selectAiTargetFeature('excel')">AI 엑셀 추출</button>
                   <small>{{ aiFeatureLabel() }} 전용 서버 설정을 저장합니다.</small>
                 </div>
                 <div v-if="state.aiServerWizardStep === 1" class="admin-ai-field-grid">

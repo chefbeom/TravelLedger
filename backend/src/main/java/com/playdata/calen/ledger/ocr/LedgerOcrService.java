@@ -75,7 +75,8 @@ public class LedgerOcrService {
     private static final int MAX_STYLE_MEMO_LENGTH = 140;
     private static final int MAX_CATEGORY_CRITERIA_GROUPS = 80;
     private static final int MAX_CATEGORY_CRITERIA_DETAILS_PER_GROUP = 12;
-    private static final int MAX_CATEGORY_CRITERIA_NAME_LENGTH = 40;
+    private static final int MAX_CATEGORY_CRITERIA_NAME_LENGTH = 40;    private static final String EXISTING_ENTRY_STYLE_MODE_LATEST_OVERALL = "LATEST_OVERALL";
+    private static final String EXISTING_ENTRY_STYLE_MODE_WORKING_DATE = "WORKING_DATE";
     private static final String UNCATEGORIZED_CATEGORY_NAME = "\uBBF8\uBD84\uB958";
     private static final List<String> ALLOWED_IMAGE_EXTENSIONS = List.of(".jpg", ".jpeg", ".png", ".webp", ".bmp");
     private static final byte[] PNG_SIGNATURE = new byte[] {(byte) 0x89, 'P', 'N', 'G', '\r', '\n', 0x1A, '\n'};
@@ -92,6 +93,7 @@ public class LedgerOcrService {
             Pattern.compile("(?i)(?:payment\\s*amount|paid\\s*price)[^0-9]{0,40}([0-9]{1,3}(?:,[0-9]{3})+|[0-9]{4,9})\\s*(?:원|KRW)?")
     );
     private static final Pattern EXPLICIT_CURRENCY_AMOUNT_PATTERN = Pattern.compile("(?i)(?:[₩￦]\\s*|KRW\\s*)?([0-9]{1,3}(?:,[0-9]{3})+|[0-9]{4,9})\\s*(?:원|KRW)");
+    private static final Pattern ISO_CURRENCY_CODE_PATTERN = Pattern.compile("^[A-Z]{3}$");
     private final AppUserService appUserService;
     private final LedgerOcrProperties properties;
     private final LedgerAiAnalysisProperties aiProperties;
@@ -116,6 +118,19 @@ public class LedgerOcrService {
     private final ConcurrentMap<Long, Future<?>> imageAnalysisTasks = new ConcurrentHashMap<>();
 
     public LedgerOcrAnalyzeResponse startAnalyze(Long userId, MultipartFile file, String documentType, String clientRequestId, String prompt, boolean useExistingEntryStyle) {
+        return startAnalyze(userId, file, documentType, clientRequestId, prompt, useExistingEntryStyle, null, null);
+    }
+
+    public LedgerOcrAnalyzeResponse startAnalyze(
+            Long userId,
+            MultipartFile file,
+            String documentType,
+            String clientRequestId,
+            String prompt,
+            boolean useExistingEntryStyle,
+            String existingEntryStyleMode,
+            LocalDate existingEntryStyleReferenceDate
+    ) {
         AppUser owner = appUserService.getRequiredUser(userId);
         try {
             validateReady();
@@ -124,7 +139,10 @@ public class LedgerOcrService {
             String normalizedDocumentType = normalizeDocumentType(documentType);
             String normalizedClientRequestId = normalizeClientRequestId(clientRequestId);
             String normalizedUserPrompt = normalizeUserPrompt(prompt);
-            String effectiveUserPrompt = buildEffectiveUserPrompt(owner.getId(), normalizedUserPrompt, useExistingEntryStyle);
+            String effectiveUserPrompt = buildEffectiveUserPrompt(
+                    owner.getId(), normalizedUserPrompt, useExistingEntryStyle,
+                    existingEntryStyleMode, existingEntryStyleReferenceDate
+            );
             byte[] fileBytes = file.getBytes();
             MultipartFile backgroundFile = new StoredImageMultipartFile(
                     "file",
@@ -148,6 +166,18 @@ public class LedgerOcrService {
             String prompt,
             boolean useExistingEntryStyle
     ) {
+        return startReanalyzeHistoryImage(userId, historyId, documentType, prompt, useExistingEntryStyle, null, null);
+    }
+
+    public LedgerOcrAnalyzeResponse startReanalyzeHistoryImage(
+            Long userId,
+            Long historyId,
+            String documentType,
+            String prompt,
+            boolean useExistingEntryStyle,
+            String existingEntryStyleMode,
+            LocalDate existingEntryStyleReferenceDate
+    ) {
         AppUser owner = appUserService.getRequiredUser(userId);
         LedgerImageAnalysisRequest history = imageAnalysisRequestRepository.findByIdAndOwnerId(historyId, owner.getId())
                 .orElseThrow(() -> new BadRequestException("Image analysis history was not found."));
@@ -160,7 +190,10 @@ public class LedgerOcrService {
                 firstNonBlank(history.getContentType(), storedImage.contentType(), "application/octet-stream"),
                 storedImage.bytes()
         );
-        return startAnalyze(owner.getId(), storedFile, effectiveDocumentType, clientRequestId, prompt, useExistingEntryStyle);
+        return startAnalyze(
+                owner.getId(), storedFile, effectiveDocumentType, clientRequestId, prompt,
+                useExistingEntryStyle, existingEntryStyleMode, existingEntryStyleReferenceDate
+        );
     }
 
     public LedgerOcrAnalyzeResponse analyze(Long userId, MultipartFile file, String documentType, String clientRequestId, String prompt) {
@@ -168,6 +201,19 @@ public class LedgerOcrService {
     }
 
     public LedgerOcrAnalyzeResponse analyze(Long userId, MultipartFile file, String documentType, String clientRequestId, String prompt, boolean useExistingEntryStyle) {
+        return analyze(userId, file, documentType, clientRequestId, prompt, useExistingEntryStyle, null, null);
+    }
+
+    public LedgerOcrAnalyzeResponse analyze(
+            Long userId,
+            MultipartFile file,
+            String documentType,
+            String clientRequestId,
+            String prompt,
+            boolean useExistingEntryStyle,
+            String existingEntryStyleMode,
+            LocalDate existingEntryStyleReferenceDate
+    ) {
         AppUser owner = appUserService.getRequiredUser(userId);
         Timer.Sample ocrRequestTimer = startOcrRequestTimer();
         LedgerImageAnalysisRequest history = null;
@@ -179,7 +225,10 @@ public class LedgerOcrService {
             String normalizedDocumentType = normalizeDocumentType(documentType);
             String normalizedClientRequestId = normalizeClientRequestId(clientRequestId);
             String normalizedUserPrompt = normalizeUserPrompt(prompt);
-            String effectiveUserPrompt = buildEffectiveUserPrompt(owner.getId(), normalizedUserPrompt, useExistingEntryStyle);
+            String effectiveUserPrompt = buildEffectiveUserPrompt(
+                    owner.getId(), normalizedUserPrompt, useExistingEntryStyle,
+                    existingEntryStyleMode, existingEntryStyleReferenceDate
+            );
             history = createImageAnalysisRequest(owner, file, normalizedDocumentType, normalizedClientRequestId);
             storeImageForHistory(owner.getId(), history, file);
             RemoteAnalyzeResponse remoteResponse = remoteClient.analyze(file, normalizedDocumentType, effectiveUserPrompt);
@@ -428,6 +477,18 @@ public class LedgerOcrService {
             String prompt,
             boolean useExistingEntryStyle
     ) {
+        return reanalyzeHistoryImage(userId, historyId, documentType, prompt, useExistingEntryStyle, null, null);
+    }
+
+    public LedgerOcrAnalyzeResponse reanalyzeHistoryImage(
+            Long userId,
+            Long historyId,
+            String documentType,
+            String prompt,
+            boolean useExistingEntryStyle,
+            String existingEntryStyleMode,
+            LocalDate existingEntryStyleReferenceDate
+    ) {
         AppUser owner = appUserService.getRequiredUser(userId);
         LedgerImageAnalysisRequest history = imageAnalysisRequestRepository.findByIdAndOwnerId(historyId, owner.getId())
                 .orElseThrow(() -> new BadRequestException("Image analysis history was not found."));
@@ -440,7 +501,10 @@ public class LedgerOcrService {
                 firstNonBlank(history.getContentType(), storedImage.contentType(), "application/octet-stream"),
                 storedImage.bytes()
         );
-        return analyze(owner.getId(), storedFile, effectiveDocumentType, clientRequestId, prompt, useExistingEntryStyle);
+        return analyze(
+                owner.getId(), storedFile, effectiveDocumentType, clientRequestId, prompt,
+                useExistingEntryStyle, existingEntryStyleMode, existingEntryStyleReferenceDate
+        );
     }
 
     public LedgerOcrImageStorageService.StoredImageContent getHistoryImage(Long userId, Long historyId) {
@@ -777,12 +841,22 @@ public class LedgerOcrService {
         return normalized.isBlank() ? null : limit(normalized, MAX_USER_PROMPT_LENGTH);
     }
 
-    private String buildEffectiveUserPrompt(Long ownerId, String userPrompt, boolean useExistingEntryStyle) {
+    private String buildEffectiveUserPrompt(
+            Long ownerId,
+            String userPrompt,
+            boolean useExistingEntryStyle,
+            String existingEntryStyleMode,
+            LocalDate existingEntryStyleReferenceDate
+    ) {
         List<String> sections = new ArrayList<>();
         addIfPresent(sections, userPrompt);
         addIfPresent(sections, buildCategoryCriteriaPrompt(ownerId));
         if (useExistingEntryStyle) {
-            addIfPresent(sections, buildExistingEntryStylePrompt(ownerId));
+            addIfPresent(sections, buildExistingEntryStylePrompt(
+                    ownerId,
+                    normalizeExistingEntryStyleMode(existingEntryStyleMode),
+                    existingEntryStyleReferenceDate
+            ));
         }
         return combinePromptSections(sections);
     }
@@ -905,16 +979,23 @@ public class LedgerOcrService {
         return names;
     }
 
-    private String buildExistingEntryStylePrompt(Long ownerId) {
+    private String buildExistingEntryStylePrompt(
+            Long ownerId,
+            String existingEntryStyleMode,
+            LocalDate existingEntryStyleReferenceDate
+    ) {
         if (ownerId == null) {
             return null;
         }
         List<ExistingEntryStyleAggregate> examples;
         try {
-            examples = ledgerEntryRepository.findRecentEntriesForOcrStyle(
-                    ownerId,
-                    PageRequest.of(0, EXISTING_ENTRY_STYLE_EXAMPLE_LIMIT)
-            );
+            Pageable examplePage = PageRequest.of(0, EXISTING_ENTRY_STYLE_EXAMPLE_LIMIT);
+            examples = EXISTING_ENTRY_STYLE_MODE_WORKING_DATE.equals(existingEntryStyleMode)
+                    && existingEntryStyleReferenceDate != null
+                    ? ledgerEntryRepository.findRecentEntriesForOcrStyleOnOrBefore(
+                            ownerId, existingEntryStyleReferenceDate, examplePage
+                    )
+                    : ledgerEntryRepository.findRecentEntriesForOcrStyle(ownerId, examplePage);
         } catch (RuntimeException exception) {
             log.warn("Failed to load existing ledger entry style examples for OCR prompt: userId={}", ownerId, exception);
             return null;
@@ -942,6 +1023,13 @@ public class LedgerOcrService {
                 + String.join("\n", lines);
     }
 
+    private String normalizeExistingEntryStyleMode(String existingEntryStyleMode) {
+        if (isPresent(existingEntryStyleMode)
+                && EXISTING_ENTRY_STYLE_MODE_WORKING_DATE.equalsIgnoreCase(existingEntryStyleMode.trim())) {
+            return EXISTING_ENTRY_STYLE_MODE_WORKING_DATE;
+        }
+        return EXISTING_ENTRY_STYLE_MODE_LATEST_OVERALL;
+    }
     private String formatExistingEntryStyleExample(ExistingEntryStyleAggregate example, int index) {
         if (example == null || !isPresent(example.getTitle())) {
             return null;
@@ -1335,6 +1423,8 @@ public class LedgerOcrService {
         LocalDate entryDate = parsed == null ? null : parsed.entryDate();
         LocalTime entryTime = parsed == null ? null : parsed.entryTime();
         BigDecimal amount = resolveOcrAmount(parsed, lineItems);
+        String foreignCurrencyCode = resolveForeignCurrencyCode(parsed);
+        BigDecimal foreignAmount = resolveForeignAmount(parsed, foreignCurrencyCode, amount);
         String title = limit(normalizeOcrTitle(parsed, lineItems, paymentCapturePlatform), 120);
         String memo = limit(buildMemo(parsed, lineItems), MAX_TEXT_LENGTH);
         ResolvedOcrCategory category = resolveOcrCategory(owner, entryType, parsed);
@@ -1345,6 +1435,8 @@ public class LedgerOcrService {
                 title,
                 memo,
                 amount,
+                foreignCurrencyCode,
+                foreignAmount,
                 entryType,
                 category.groupId(),
                 category.groupName(),
@@ -1355,6 +1447,28 @@ public class LedgerOcrService {
         );
     }
 
+
+    private String resolveForeignCurrencyCode(RemoteParsedResult parsed) {
+        if (parsed == null || !isPresent(parsed.currencyCode())) {
+            return null;
+        }
+        String currencyCode = parsed.currencyCode().trim().toUpperCase(Locale.ROOT);
+        if (!ISO_CURRENCY_CODE_PATTERN.matcher(currencyCode).matches() || "KRW".equals(currencyCode)) {
+            return null;
+        }
+        return currencyCode;
+    }
+
+    private BigDecimal resolveForeignAmount(RemoteParsedResult parsed, String foreignCurrencyCode, BigDecimal resolvedAmount) {
+        if (parsed == null || foreignCurrencyCode == null) {
+            return null;
+        }
+        BigDecimal explicitForeignAmount = positiveAmount(parsed.foreignAmount());
+        if (explicitForeignAmount != null) {
+            return explicitForeignAmount;
+        }
+        return positiveAmount(resolvedAmount);
+    }
     private BigDecimal resolveOcrAmount(RemoteParsedResult parsed, List<LedgerOcrLineItemResponse> lineItems) {
         if (parsed == null) {
             return null;

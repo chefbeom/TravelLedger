@@ -359,6 +359,31 @@ public interface LedgerEntryRepository extends JpaRepository<LedgerEntry, Long> 
             Pageable pageable
     );
     @Query("""
+            select
+                entry.entryDate as entryDate,
+                entry.entryTime as entryTime,
+                entry.entryType as entryType,
+                entry.title as title,
+                entry.memo as memo,
+                entry.amount as amount,
+                categoryGroup.name as categoryGroupName,
+                categoryDetail.name as categoryDetailName,
+                paymentMethod.name as paymentMethodName
+            from LedgerEntry entry
+            join entry.categoryGroup categoryGroup
+            left join entry.categoryDetail categoryDetail
+            join entry.paymentMethod paymentMethod
+            where entry.owner.id = :userId
+              and entry.deletedAt is null
+              and entry.entryDate <= :referenceDate
+            order by entry.entryDate desc, entry.id desc
+            """)
+    List<ExistingEntryStyleAggregate> findRecentEntriesForOcrStyleOnOrBefore(
+            @Param("userId") Long userId,
+            @Param("referenceDate") LocalDate referenceDate,
+            Pageable pageable
+    );
+    @Query("""
             select coalesce(sum(entry.amount), 0)
             from LedgerEntry entry
             where entry.deletedAt is null

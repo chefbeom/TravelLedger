@@ -20,7 +20,7 @@ import {
   restoreAdminDataBackup,
   restoreAdminUploadedBackup,
   unlockBlockedIp,
-  updateAdminAiControl,
+  saveAdminAiServerProfile,
   updateAdminAiRouting,
   updateAdminDataStorageControl,
   updateAdminSupportInquiryStatus,
@@ -355,6 +355,7 @@ function selectOpsControlModalView(view) {
 function startAiServerAdd() {
   state.aiControlPreserveCurrentSecret = false
   state.aiServerDraftName = buildCurrentAiServerName()
+  state.aiControlPresetKey = ''
   selectOpsControlModalView('add')
 }
 
@@ -852,9 +853,8 @@ function aiControlPresetAddress(preset) {
   return preset?.lmStudioBaseUrl || preset?.workflowUrl || ''
 }
 
-function aiControlPresetKeyFor(preset) {
+function legacyAiControlPresetKeyFor(preset) {
   return [
-    preset.targetFeature || 'ledger',
     preset.provider,
     preset.model,
     preset.workflowUrl,
@@ -870,6 +870,13 @@ function aiControlPresetKeyFor(preset) {
   ].join('|')
 }
 
+function createAiControlPresetKey() {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID()
+  }
+  return `ai-server-${Date.now()}-${Math.random().toString(36).slice(2)}`
+}
+
 function providerCredentialConfigured(source = state.aiControlForm) {
   if (source.provider === 'openai') return Boolean(source.openAiApiKeyConfigured)
   if (source.provider === 'ollama') return Boolean(source.ollamaApiKeyConfigured)
@@ -881,7 +888,6 @@ function buildAiControlPreset(source = state.aiControlForm) {
   if (!hasAiServerAddress(source)) return null
   const preset = {
     title: state.aiServerDraftName || source.title || buildCurrentAiServerName(),
-    targetFeature: state.aiTargetFeature,
     provider: source.provider || 'lmstudio',
     model: source.model || 'auto',
     workflowUrl: source.workflowUrl || '',
@@ -903,27 +909,37 @@ function buildAiControlPreset(source = state.aiControlForm) {
     credentialConfigured: providerCredentialConfigured(source),
     savedAt: new Date().toISOString(),
   }
-  preset.key = aiControlPresetKeyFor(preset)
+  preset.key = String(state.aiControlPresetKey || '').trim() || createAiControlPresetKey()
   return preset
 }
 function readAiControlPresets() {
   try {
     const parsed = JSON.parse(localStorage.getItem(AI_CONTROL_PRESETS_STORAGE_KEY) || '[]')
-    return Array.isArray(parsed)
-      ? parsed
-          .filter((item) => item && aiControlPresetAddress(item))
-          .map((item) => ({
-            ...item,
-            key: String(item.key || "").trim() || aiControlPresetKeyFor(item),
-            credentialConfigured: Boolean(item.credentialConfigured),
-          }))
-          .slice(0, 12)
-      : []
+    if (!Array.isArray(parsed)) return []
+
+    const usedKeys = new Set()
+    return parsed
+      .filter((item) => item && aiControlPresetAddress(item))
+      .map((item) => {
+        const legacyKey = legacyAiControlPresetKeyFor(item)
+        let key = String(item.key || '').trim() || legacyKey
+        // Legacy profiles used the endpoint/model as their key. Keep duplicate
+        // endpoints independent so credentials cannot overwrite each other.
+        if (usedKeys.has(key)) {
+          key = createAiControlPresetKey()
+        }
+        usedKeys.add(key)
+        return {
+          ...item,
+          key,
+          credentialConfigured: Boolean(item.credentialConfigured),
+        }
+      })
+      .slice(0, 12)
   } catch {
     return []
   }
 }
-
 function persistAiControlPresets() {
   localStorage.setItem(AI_CONTROL_PRESETS_STORAGE_KEY, JSON.stringify(state.aiControlPresets.slice(0, 12)))
 }
@@ -945,7 +961,7 @@ function rememberAiControlPreset(source = state.aiControlForm) {
 }
 
 function activeAiControlPresetKey() {
-  return buildAiControlPreset(state.aiControlForm)?.key || ''
+  return String(state.aiControlPresetKey || '').trim()
 }
 
 function isAiControlPresetActive(preset) {
@@ -1217,13 +1233,10 @@ function formatAiServerModelList(models) {
 function applyAiControlPreset() {
   const preset = state.aiControlPresets.find((item) => item.key === state.aiControlPresetKey)
   if (!preset) return
-  const targetFeature = ['ledger', 'image', 'excel'].includes(preset.targetFeature) ? preset.targetFeature : 'ledger'
   const reuseCurrentSecret = isAiControlPresetActive(preset)
-    && state.aiTargetFeature === targetFeature
     && providerCredentialConfigured(state.aiControlForm)
   const credentialConfigured = isPresetCredentialConfigured(preset) || reuseCurrentSecret
   state.aiControlPreserveCurrentSecret = reuseCurrentSecret
-  state.aiTargetFeature = targetFeature
   state.aiControlForm.provider = preset.provider || 'lmstudio'
   state.aiControlForm.model = preset.model || 'auto'
   state.aiControlForm.workflowUrl = preset.workflowUrl || ''
@@ -1399,59 +1412,22 @@ async function handleSaveAiControl() {
 
   try {
     const pendingPreset = buildAiControlPreset()
-    const payload = {
-      enabled: Boolean(state.aiControlForm.enabled),
-      targetFeature: state.aiTargetFeature,
+    if (!pendingPreset) {
+      throw new Error('서버 프로필 저장에 실패했습니다.')
+    }
+    await saveAdminAiServerProfile({
+      presetKey: pendingPreset.key,
       provider: state.aiControlForm.provider,
-      model: state.aiControlForm.model,
-      workflowUrl: state.aiControlForm.workflowUrl,
-      apiKeyHeader: state.aiControlForm.apiKeyHeader,
-      lmStudioBaseUrl: state.aiControlForm.lmStudioBaseUrl,
-      lmStudioChatPath: state.aiControlForm.lmStudioChatPath,
-      lmStudioModelsPath: state.aiControlForm.lmStudioModelsPath,
-      openAiBaseUrl: state.aiControlForm.openAiBaseUrl,
-      openAiChatPath: state.aiControlForm.openAiChatPath,
-      openAiModelsPath: state.aiControlForm.openAiModelsPath,
-      ollamaBaseUrl: state.aiControlForm.ollamaBaseUrl,
-      ollamaChatPath: state.aiControlForm.ollamaChatPath,
-      ollamaModelsPath: state.aiControlForm.ollamaModelsPath,
-      temperature: Number(state.aiControlForm.temperature),
-      maxTokens: Number(state.aiControlForm.maxTokens),
-      connectTimeoutSeconds: Number(state.aiControlForm.connectTimeoutSeconds),
-      readTimeoutSeconds: Number(state.aiControlForm.readTimeoutSeconds),
-      enforceProviderUrlAllowlist: Boolean(state.aiControlForm.enforceProviderUrlAllowlist),
-      allowedProviderHosts: state.aiControlForm.allowedProviderHosts,
-      presetKey: pendingPreset?.key || undefined,
-      reuseExistingSecrets: Boolean(state.aiControlPreserveCurrentSecret),
-    }
-    if (state.aiControlForm.clearApiKey) {
-      payload.clearApiKey = true
-    } else if (state.aiControlForm.apiKey?.trim()) {
-      payload.apiKey = state.aiControlForm.apiKey.trim()
-    }
-    if (state.aiControlForm.clearLmStudioApiKey) {
-      payload.clearLmStudioApiKey = true
-    } else if (state.aiControlForm.lmStudioApiKey?.trim()) {
-      payload.lmStudioApiKey = state.aiControlForm.lmStudioApiKey.trim()
-    }
-    if (state.aiControlForm.clearOllamaApiKey) {
-      payload.clearOllamaApiKey = true
-    } else if (state.aiControlForm.ollamaApiKey?.trim()) {
-      payload.ollamaApiKey = state.aiControlForm.ollamaApiKey.trim()
-    }
-    if (state.aiControlForm.clearOpenAiApiKey) {
-      payload.clearOpenAiApiKey = true
-    } else if (state.aiControlForm.openAiApiKey?.trim()) {
-      payload.openAiApiKey = state.aiControlForm.openAiApiKey.trim()
-    }
-    state.opsControl = await updateAdminAiControl(payload)
-    syncAiControlForm()
-    syncAiRoutingFromServer()
-    syncDataControlForm()
-    markOpsControlChecked()
+      clearLmStudioApiKey: Boolean(state.aiControlForm.clearLmStudioApiKey),
+      clearOpenAiApiKey: Boolean(state.aiControlForm.clearOpenAiApiKey),
+      clearOllamaApiKey: Boolean(state.aiControlForm.clearOllamaApiKey),
+      lmStudioApiKey: state.aiControlForm.lmStudioApiKey?.trim() || undefined,
+      openAiApiKey: state.aiControlForm.openAiApiKey?.trim() || undefined,
+      ollamaApiKey: state.aiControlForm.ollamaApiKey?.trim() || undefined,
+    })
     state.aiControlPreserveCurrentSecret = false
     rememberAiControlPreset()
-    state.opsControlMessage = 'AI 설정이 적용되었습니다. 설정 저장소 상태를 확인하세요.'
+    state.opsControlMessage = '서버 프로필을 저장했습니다. 후보 등록과 기능 연결을 저장하면 실제 분석 서버가 변경됩니다.'
   } catch (error) {
     if (!handleAdminAccessRequired(error)) {
       state.opsControlError = error.message || 'AI 설정을 저장하지 못했습니다.'
@@ -2202,13 +2178,9 @@ onBeforeUnmount(() => {
               </div>
 
               <form class="admin-ops-wizard" @submit.prevent="handleSaveAiControl">
-                <div class="admin-ai-feature-target" role="group" aria-label="AI 기능별 서버 선택">
-                  <span>적용 기능</span>
-                  <button type="button" :class="['button', { 'button--primary': state.aiTargetFeature === 'ledger' }]" @click="selectAiTargetFeature('ledger')">가계부 AI 분석</button>
-                  <button type="button" :class="['button', { 'button--primary': state.aiTargetFeature === 'image' }]" @click="selectAiTargetFeature('image')">이미지 분석 / OCR</button>
-                  <button type="button" :class="['button', { 'button--primary': state.aiTargetFeature === 'excel' }]" @click="selectAiTargetFeature('excel')">AI 엑셀 추출</button>
-                  <small>{{ aiFeatureLabel() }} 전용 서버 설정을 저장합니다.</small>
-                </div>
+                <p class="admin-ai-profile-note">
+                  서버 프로필을 저장해도 실제 분석 서버는 변경되지 않습니다. 후보 서버 등록 후 기능 연결을 저장하세요.
+                </p>
                 <div v-if="state.aiServerWizardStep === 1" class="admin-ai-field-grid">
                   <label class="field admin-ai-field-grid__wide">
                     <span class="field__label">서버 이름</span>

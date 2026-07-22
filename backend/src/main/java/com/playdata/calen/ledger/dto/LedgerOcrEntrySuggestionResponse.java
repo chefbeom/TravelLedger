@@ -13,6 +13,8 @@ public record LedgerOcrEntrySuggestionResponse(
         String title,
         String memo,
         BigDecimal amount,
+        String foreignCurrencyCode,
+        BigDecimal foreignAmount,
         EntryType entryType,
         Long categoryGroupId,
         String categoryGroupName,

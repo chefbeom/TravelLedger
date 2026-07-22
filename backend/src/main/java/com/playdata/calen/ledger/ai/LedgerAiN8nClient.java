@@ -17,11 +17,19 @@ import org.springframework.web.client.RestClientException;
 public class LedgerAiN8nClient {
 
     private final LedgerAiAnalysisProperties properties;
+    private final LedgerAiRequestQueue requestQueue;
 
     @Autowired(required = false)
     private MeterRegistry meterRegistry;
 
     public LedgerAiRemoteResponse analyze(Object payload) {
+        return requestQueue.execute(
+                properties.featureConfig(LedgerAiFeature.LEDGER_ANALYSIS),
+                () -> analyzeSerialized(payload)
+        );
+    }
+
+    private LedgerAiRemoteResponse analyzeSerialized(Object payload) {
         Timer.Sample workflowTimer = startExternalWorkflowTimer();
         try {
             SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();

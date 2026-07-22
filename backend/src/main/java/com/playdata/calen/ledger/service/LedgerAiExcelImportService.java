@@ -11,6 +11,7 @@ import com.playdata.calen.ledger.ai.LedgerAiAnalysisProperties;
 import com.playdata.calen.ledger.ai.LedgerAiFeature;
 import com.playdata.calen.ledger.ai.LedgerAiFeatureConfig;
 import com.playdata.calen.ledger.ai.LedgerAiProvider;
+import com.playdata.calen.ledger.ai.LedgerAiRequestQueue;
 import com.playdata.calen.ledger.domain.CategoryDetail;
 import com.playdata.calen.ledger.domain.CategoryGroup;
 import com.playdata.calen.ledger.domain.EntryType;
@@ -77,6 +78,7 @@ public class LedgerAiExcelImportService {
 
     private final AppUserService appUserService;
     private final LedgerAiAnalysisProperties aiProperties;
+    private final LedgerAiRequestQueue requestQueue;
     private final ObjectMapper objectMapper;
     private final CategoryGroupRepository categoryGroupRepository;
     private final CategoryDetailRepository categoryDetailRepository;
@@ -302,7 +304,7 @@ public class LedgerAiExcelImportService {
         if (hasText(config.apiKey())) {
             request.header("Authorization", "Bearer " + config.apiKey());
         }
-        return request.body(body).retrieve().body(String.class);
+        return requestQueue.execute(config, () -> request.body(body).retrieve().body(String.class));
     }
 
     private boolean isJsonResponseFormatRejected(RestClientResponseException exception) {

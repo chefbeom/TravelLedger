@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.playdata.calen.ledger.ai.LedgerAiAnalysisProperties;
+import com.playdata.calen.ledger.ai.LedgerAiRequestQueue;
 import com.playdata.calen.ledger.domain.EntryType;
 import com.playdata.calen.ledger.ocr.LedgerOcrRemoteClient.RemoteAnalyzeResponse;
 import com.playdata.calen.ledger.ocr.LedgerOcrRemoteClient.RemoteParsedResult;
@@ -15,7 +16,7 @@ class LedgerOcrRemoteClientTest {
 
     @Test
     void buildAnalyzeResponseInfersCurrentYearAndTimeFromMonthDayTimeText() {
-        LedgerOcrRemoteClient client = new LedgerOcrRemoteClient(new LedgerAiAnalysisProperties(), new ObjectMapper());
+        LedgerOcrRemoteClient client = new LedgerOcrRemoteClient(new LedgerAiAnalysisProperties(), new LedgerAiRequestQueue(), new ObjectMapper());
         String responseBody = """
                 {
                   "ok": true,
@@ -53,7 +54,7 @@ class LedgerOcrRemoteClientTest {
 
     @Test
     void buildAnalyzeResponseInfersDateAndTimeFromRawTextWhenEntryFieldsAreMissing() {
-        LedgerOcrRemoteClient client = new LedgerOcrRemoteClient(new LedgerAiAnalysisProperties(), new ObjectMapper());
+        LedgerOcrRemoteClient client = new LedgerOcrRemoteClient(new LedgerAiAnalysisProperties(), new LedgerAiRequestQueue(), new ObjectMapper());
         String responseBody = """
                 {
                   "ok": true,
@@ -89,7 +90,7 @@ class LedgerOcrRemoteClientTest {
 
     @Test
     void buildAnalyzeResponseCorrectsCopiedDateFromAdjacentOrderRows() {
-        LedgerOcrRemoteClient client = new LedgerOcrRemoteClient(new LedgerAiAnalysisProperties(), new ObjectMapper());
+        LedgerOcrRemoteClient client = new LedgerOcrRemoteClient(new LedgerAiAnalysisProperties(), new LedgerAiRequestQueue(), new ObjectMapper());
         String responseBody = """
                 {
                   "ok": true,
@@ -132,7 +133,7 @@ class LedgerOcrRemoteClientTest {
 
     @Test
     void buildAnalyzeResponseMapsSalesSlipProductNameAliasToLineItemName() {
-        LedgerOcrRemoteClient client = new LedgerOcrRemoteClient(new LedgerAiAnalysisProperties(), new ObjectMapper());
+        LedgerOcrRemoteClient client = new LedgerOcrRemoteClient(new LedgerAiAnalysisProperties(), new LedgerAiRequestQueue(), new ObjectMapper());
         String responseBody = """
                 {
                   "ok": true,
@@ -171,7 +172,7 @@ class LedgerOcrRemoteClientTest {
 
     @Test
     void buildAnalyzeResponseUsesMatchingRawTextRowDateForMultipleEntries() {
-        LedgerOcrRemoteClient client = new LedgerOcrRemoteClient(new LedgerAiAnalysisProperties(), new ObjectMapper());
+        LedgerOcrRemoteClient client = new LedgerOcrRemoteClient(new LedgerAiAnalysisProperties(), new LedgerAiRequestQueue(), new ObjectMapper());
         String responseBody = """
                 {
                   "ok": true,
@@ -221,7 +222,7 @@ class LedgerOcrRemoteClientTest {
 
     @Test
     void buildAnalyzeResponseCorrectsShoppingOrdersMisclassifiedAsIncome() {
-        LedgerOcrRemoteClient client = new LedgerOcrRemoteClient(new LedgerAiAnalysisProperties(), new ObjectMapper());
+        LedgerOcrRemoteClient client = new LedgerOcrRemoteClient(new LedgerAiAnalysisProperties(), new LedgerAiRequestQueue(), new ObjectMapper());
         String responseBody = """
                 {
                   "ok": true,
@@ -259,7 +260,7 @@ class LedgerOcrRemoteClientTest {
 
     @Test
     void buildAnalyzeResponseClassifiesMixedIncomeAndPurchaseRowsIndependently() {
-        LedgerOcrRemoteClient client = new LedgerOcrRemoteClient(new LedgerAiAnalysisProperties(), new ObjectMapper());
+        LedgerOcrRemoteClient client = new LedgerOcrRemoteClient(new LedgerAiAnalysisProperties(), new LedgerAiRequestQueue(), new ObjectMapper());
         String responseBody = """
                 {
                   "ok": true,
@@ -294,7 +295,7 @@ class LedgerOcrRemoteClientTest {
     }
     @Test
     void buildAnalyzeResponseReadsOllamaMessageContent() {
-        LedgerOcrRemoteClient client = new LedgerOcrRemoteClient(new LedgerAiAnalysisProperties(), new ObjectMapper());
+        LedgerOcrRemoteClient client = new LedgerOcrRemoteClient(new LedgerAiAnalysisProperties(), new LedgerAiRequestQueue(), new ObjectMapper());
         String responseBody = """
                 {
                   "model": "llama3.2-vision",

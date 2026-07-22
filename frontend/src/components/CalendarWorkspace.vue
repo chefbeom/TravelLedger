@@ -307,7 +307,7 @@ const emit = defineEmits([
   'set-receipt-ocr-view',
   'set-receipt-request-prompt-enabled',
   'set-receipt-request-prompt',
-  'set-receipt-existing-entry-style-enabled',
+    'set-receipt-existing-entry-style-mode',
   'set-receipt-rerun-prompt-enabled',
   'set-receipt-rerun-prompt',
   'set-receipt-prompt-rules-enabled',
@@ -575,9 +575,14 @@ function updateReceiptExistingEntryStyleEnabled(event) {
   emit('set-receipt-existing-entry-style-enabled', event.target.checked)
 }
 
+function updateReceiptExistingEntryStyleMode(event) {
+  emit('set-receipt-existing-entry-style-mode', event.target.value)
+}
+
 function startReceiptAnalysis() {
   emit('start-receipt-analysis', {
     useExistingEntryStyle: Boolean(props.receiptOcr?.useExistingEntryStyle),
+    existingEntryStyleMode: props.receiptOcr?.existingEntryStyleMode || 'LATEST_OVERALL',
   })
 }
 
@@ -635,6 +640,7 @@ function requestReceiptRerun(item) {
     item,
     prompt: props.receiptOcr?.rerunPromptEnabled ? props.receiptOcr?.rerunPrompt : '',
     useExistingEntryStyle: Boolean(props.receiptOcr?.useExistingEntryStyle),
+    existingEntryStyleMode: props.receiptOcr?.existingEntryStyleMode || 'LATEST_OVERALL',
   })
 }
 
@@ -4605,6 +4611,13 @@ defineExpose({
                 />
                 <span>기존 입력 보정</span>
               </label>
+              <label v-if="receiptOcr?.useExistingEntryStyle" class="receipt-ocr-existing-style-mode">
+                <span>보정 기준</span>
+                <select :value="receiptOcr?.existingEntryStyleMode || 'LATEST_OVERALL'" @change="updateReceiptExistingEntryStyleMode">
+                  <option value="LATEST_OVERALL">전체 최신 기록</option>
+                  <option value="WORKING_DATE">현재 작업 날짜 이전</option>
+                </select>
+              </label>
               <button type="button" class="button button--secondary" title="저장된 이미지 파일을 선택합니다." @click="openReceiptFilePicker">
                 파일에서 선택
               </button>
@@ -4674,6 +4687,13 @@ defineExpose({
                     @change="updateReceiptExistingEntryStyleEnabled"
                   />
                   <span>기존 입력 보정</span>
+                </label>
+                <label v-if="receiptOcr?.useExistingEntryStyle" class="receipt-ocr-existing-style-mode">
+                  <span>보정 기준</span>
+                  <select :value="receiptOcr?.existingEntryStyleMode || 'LATEST_OVERALL'" @change="updateReceiptExistingEntryStyleMode">
+                    <option value="LATEST_OVERALL">전체 최신 기록</option>
+                    <option value="WORKING_DATE">현재 작업 날짜 이전</option>
+                  </select>
                 </label>
                 <label class="receipt-ocr-toggle receipt-ocr-toggle--compact">
                   <input

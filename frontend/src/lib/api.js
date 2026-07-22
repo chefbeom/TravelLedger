@@ -218,6 +218,12 @@ export function updateAdminAiControl(payload) {
     body: JSON.stringify(payload),
   })
 }
+export function saveAdminAiServerProfile(payload) {
+  return request('/admin/ops-control/ai/preset', {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  })
+}
 export function updateAdminAiRouting(payload) {
   return request('/admin/ops-control/ai/routing', {
     method: 'PATCH',
@@ -630,6 +636,12 @@ export function analyzeLedgerReceipt(file, options = {}) {
   }
   if (options.useExistingEntryStyle) {
     formData.append('useExistingEntryStyle', 'true')
+    if (options.existingEntryStyleMode) {
+      formData.append('existingEntryStyleMode', options.existingEntryStyleMode)
+    }
+    if (options.existingEntryStyleReferenceDate) {
+      formData.append('existingEntryStyleReferenceDate', options.existingEntryStyleReferenceDate)
+    }
   }
 
   return request('/ledger/image-analysis/analyze', {
@@ -660,6 +672,12 @@ export function rerunLedgerImageAnalysisHistory(historyId, options = {}) {
   }
   if (options.useExistingEntryStyle) {
     formData.append('useExistingEntryStyle', 'true')
+    if (options.existingEntryStyleMode) {
+      formData.append('existingEntryStyleMode', options.existingEntryStyleMode)
+    }
+    if (options.existingEntryStyleReferenceDate) {
+      formData.append('existingEntryStyleReferenceDate', options.existingEntryStyleReferenceDate)
+    }
   }
   return request(`/ledger/image-analysis/history/${encodeURIComponent(historyId)}/rerun`, {
     method: 'POST',

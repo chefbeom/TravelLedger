@@ -7,6 +7,7 @@ import com.playdata.calen.ledger.dto.LedgerOcrAnalyzeResponse;
 import com.playdata.calen.ledger.ocr.LedgerOcrImageStorageService;
 import com.playdata.calen.ledger.ocr.LedgerOcrService;
 import java.nio.charset.StandardCharsets;
+import java.time.LocalDate;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -39,9 +40,14 @@ public class LedgerOcrController {
             @RequestParam(name = "documentType", defaultValue = "AUTO") String documentType,
             @RequestParam(name = "clientRequestId", required = false) String clientRequestId,
             @RequestParam(name = "prompt", required = false) String prompt,
-            @RequestParam(name = "useExistingEntryStyle", defaultValue = "false") boolean useExistingEntryStyle
+            @RequestParam(name = "useExistingEntryStyle", defaultValue = "false") boolean useExistingEntryStyle,
+            @RequestParam(name = "existingEntryStyleMode", required = false) String existingEntryStyleMode,
+            @RequestParam(name = "existingEntryStyleReferenceDate", required = false) LocalDate existingEntryStyleReferenceDate
     ) {
-        return ledgerOcrService.startAnalyze(currentUser.userId(), file, documentType, clientRequestId, prompt, useExistingEntryStyle);
+        return ledgerOcrService.startAnalyze(
+                currentUser.userId(), file, documentType, clientRequestId, prompt,
+                useExistingEntryStyle, existingEntryStyleMode, existingEntryStyleReferenceDate
+        );
     }
 
     @GetMapping("/history")
@@ -99,9 +105,14 @@ public class LedgerOcrController {
             @PathVariable Long historyId,
             @RequestParam(name = "documentType", required = false) String documentType,
             @RequestParam(name = "prompt", required = false) String prompt,
-            @RequestParam(name = "useExistingEntryStyle", defaultValue = "false") boolean useExistingEntryStyle
+            @RequestParam(name = "useExistingEntryStyle", defaultValue = "false") boolean useExistingEntryStyle,
+            @RequestParam(name = "existingEntryStyleMode", required = false) String existingEntryStyleMode,
+            @RequestParam(name = "existingEntryStyleReferenceDate", required = false) LocalDate existingEntryStyleReferenceDate
     ) {
-        return ledgerOcrService.startReanalyzeHistoryImage(currentUser.userId(), historyId, documentType, prompt, useExistingEntryStyle);
+        return ledgerOcrService.startReanalyzeHistoryImage(
+                currentUser.userId(), historyId, documentType, prompt,
+                useExistingEntryStyle, existingEntryStyleMode, existingEntryStyleReferenceDate
+        );
     }
 
     private MediaType parseMediaType(String contentType) {

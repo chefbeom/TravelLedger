@@ -26,11 +26,19 @@ public class LedgerAiLmStudioClient {
 
     private final LedgerAiAnalysisProperties properties;
     private final ObjectMapper objectMapper;
+    private final LedgerAiRequestQueue requestQueue;
 
     @Autowired(required = false)
     private MeterRegistry meterRegistry;
 
     public LedgerAiRemoteResponse analyze(Object payload) {
+        return requestQueue.execute(
+                properties.featureConfig(LedgerAiFeature.LEDGER_ANALYSIS),
+                () -> analyzeSerialized(payload)
+        );
+    }
+
+    private LedgerAiRemoteResponse analyzeSerialized(Object payload) {
         Timer.Sample workflowTimer = startExternalWorkflowTimer();
         try {
             LedgerAiFeatureConfig config = properties.featureConfig(LedgerAiFeature.LEDGER_ANALYSIS);

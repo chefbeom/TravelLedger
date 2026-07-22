@@ -13,7 +13,8 @@ class LedgerAiLmStudioClientTest {
     private final LedgerAiAnalysisProperties properties = new LedgerAiAnalysisProperties();
     private final LedgerAiLmStudioClient client = new LedgerAiLmStudioClient(
             properties,
-            new ObjectMapper().findAndRegisterModules()
+            new ObjectMapper().findAndRegisterModules(),
+            new LedgerAiRequestQueue()
     );
 
     @Test

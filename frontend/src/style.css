@@ -16803,6 +16803,12 @@ textarea {
   border: 1px solid rgba(110, 231, 183, 0.18);
 }
 
+.admin-ai-profile-note {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.84rem;
+  line-height: 1.45;
+}
 .admin-ops-modal {
   z-index: 1320;
   align-items: center;
@@ -29166,6 +29172,23 @@ button.button--primary,
   overflow: hidden !important;
 }
 
+.receipt-ocr-existing-style-mode {
+  align-items: center;
+  display: inline-flex;
+  gap: 8px;
+  min-width: 0;
+}
+
+.receipt-ocr-existing-style-mode > span {
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+
+.receipt-ocr-existing-style-mode select {
+  max-width: 190px;
+  min-width: 148px;
+}
 .receipt-ocr-existing-style-toggle span {
   min-width: 0 !important;
   overflow: hidden !important;

@@ -427,6 +427,7 @@ const receiptOcr = reactive({
   requestPrompt: loadReceiptOcrRequestPromptLast(),
   requestPromptHistory: loadReceiptOcrRequestPromptHistory(),
   useExistingEntryStyle: false,
+  existingEntryStyleMode: 'LATEST_OVERALL',
   rerunPromptEnabled: false,
   rerunPrompt: '',
   promptRulesEnabled: true,
@@ -2929,6 +2930,10 @@ function setReceiptExistingEntryStyleEnabled(value) {
   receiptOcr.useExistingEntryStyle = Boolean(value)
 }
 
+function setReceiptExistingEntryStyleMode(value) {
+  receiptOcr.existingEntryStyleMode = value === 'WORKING_DATE' ? 'WORKING_DATE' : 'LATEST_OVERALL'
+}
+
 function setReceiptRerunPromptEnabled(value) {
   receiptOcr.rerunPromptEnabled = Boolean(value)
 }
@@ -3096,6 +3101,10 @@ function normalizeOcrSuggestion(suggestion = {}, context = {}) {
     memo: suggestion.memo || '',
     amount: suggestion.amount !== null && suggestion.amount !== undefined && suggestion.amount !== ''
       ? String(Number(suggestion.amount || 0))
+      : '',
+    foreignCurrencyCode: normalizeForeignCurrencyCode(suggestion.foreignCurrencyCode || suggestion.currencyCode),
+    foreignAmount: suggestion.foreignAmount !== null && suggestion.foreignAmount !== undefined && suggestion.foreignAmount !== ''
+      ? String(Number(suggestion.foreignAmount || 0))
       : '',
     entryType,
     categoryGroupId: category.categoryGroupId,
@@ -3628,7 +3637,7 @@ function updateLegacyReceiptOcrFields(result, firstSuggestion, fileName) {
   receiptOcr.timing = result?.timing || null
 }
 
-async function analyzeReceiptFile(file, documentType, existingItem = null, prompt = '', useExistingEntryStyle = false) {
+async function analyzeReceiptFile(file, documentType, existingItem = null, prompt = '', useExistingEntryStyle = false, existingEntryStyleMode = 'LATEST_OVERALL') {
   const item = existingItem || createReceiptOcrItem(file, documentType)
   if (!existingItem) {
     receiptOcr.items.unshift(item)
@@ -3639,7 +3648,15 @@ async function analyzeReceiptFile(file, documentType, existingItem = null, promp
   syncReceiptOcrBusyState()
 
   try {
-    let result = await analyzeLedgerReceipt(file, { documentType, clientRequestId: item.clientRequestId, prompt, useExistingEntryStyle, signal: item.abortController.signal })
+    let result = await analyzeLedgerReceipt(file, {
+      documentType,
+      clientRequestId: item.clientRequestId,
+      prompt,
+      useExistingEntryStyle,
+      existingEntryStyleMode,
+      existingEntryStyleReferenceDate: entryForm.entryDate || null,
+      signal: item.abortController.signal,
+    })
     if (!isReceiptOcrItemActive(item)) {
       if (result?.analysisId) {
         try {
@@ -3748,6 +3765,7 @@ async function startSelectedReceiptOcrAnalysis(payload = {}) {
   }
   const fallbackPrompt = payload?.prompt || ''
   const useExistingEntryStyle = Boolean(payload?.useExistingEntryStyle ?? receiptOcr.useExistingEntryStyle)
+  const existingEntryStyleMode = payload?.existingEntryStyleMode === 'WORKING_DATE' ? 'WORKING_DATE' : receiptOcr.existingEntryStyleMode
   receiptOcr.isOpen = true
   receiptOcr.activeView = 'analyze'
   receiptOcr.error = ''
@@ -3772,7 +3790,7 @@ async function startSelectedReceiptOcrAnalysis(payload = {}) {
       rememberReceiptOcrRequestPrompt(itemPrompt)
     }
     const prompt = buildReceiptOcrPrompt(itemPrompt)
-    await analyzeReceiptFile(item.sourceFile, normalizeOcrDocumentType(item.documentType || receiptOcr.documentType), item, prompt, useExistingEntryStyle)
+    await analyzeReceiptFile(item.sourceFile, normalizeOcrDocumentType(item.documentType || receiptOcr.documentType), item, prompt, useExistingEntryStyle, existingEntryStyleMode)
     receiptOcr.batchCompletedCount = Math.min(receiptOcr.batchCompletedCount + 1, receiptOcr.batchTotalCount)
     syncReceiptOcrBusyState()
   }
@@ -3799,6 +3817,7 @@ async function analyzeReceiptImage(payload) {
   const documentType = files.length > 1 ? 'AUTO' : requestedDocumentType
   const prompt = buildReceiptOcrPrompt(payload?.prompt)
   const useExistingEntryStyle = Boolean(payload?.useExistingEntryStyle ?? receiptOcr.useExistingEntryStyle)
+  const existingEntryStyleMode = payload?.existingEntryStyleMode === 'WORKING_DATE' ? 'WORKING_DATE' : receiptOcr.existingEntryStyleMode
   receiptOcr.documentType = documentType
   receiptOcr.isOpen = true
   receiptOcr.activeView = 'analyze'
@@ -3815,7 +3834,7 @@ async function analyzeReceiptImage(payload) {
   syncReceiptOcrBusyState()
   for (const { file, item } of queue) {
     if (isReceiptOcrItemActive(item)) {
-      await analyzeReceiptFile(file, documentType, item, prompt, useExistingEntryStyle)
+      await analyzeReceiptFile(file, documentType, item, prompt, useExistingEntryStyle, existingEntryStyleMode)
     }
   }
   if (queue.some(({ item }) => item.status === 'done')) {
@@ -3838,6 +3857,7 @@ async function rerunReceiptOcrItem(payload = {}) {
     rememberReceiptOcrRequestPrompt(requestPrompt)
   }
   const useExistingEntryStyle = Boolean(payload?.useExistingEntryStyle ?? receiptOcr.useExistingEntryStyle)
+  const existingEntryStyleMode = payload?.existingEntryStyleMode === 'WORKING_DATE' ? 'WORKING_DATE' : receiptOcr.existingEntryStyleMode
   const documentType = normalizeOcrDocumentType(item.documentType || receiptOcr.documentType)
   const prompt = buildReceiptOcrPrompt(requestPrompt)
 
@@ -3848,7 +3868,7 @@ async function rerunReceiptOcrItem(payload = {}) {
     receiptOcr.activeView = 'analyze'
     receiptOcr.historyDetailAnalysisId = ''
     syncReceiptOcrBusyState()
-    await analyzeReceiptFile(sourceFile, documentType, nextItem, prompt, useExistingEntryStyle)
+    await analyzeReceiptFile(sourceFile, documentType, nextItem, prompt, useExistingEntryStyle, existingEntryStyleMode)
     if (nextItem.status === 'done') {
       receiptOcr.activeView = 'history'
       receiptOcr.historyDetailAnalysisId = nextItem.analysisId ? String(nextItem.analysisId) : ''
@@ -3871,6 +3891,8 @@ async function rerunReceiptOcrItem(payload = {}) {
       documentType,
       prompt,
       useExistingEntryStyle,
+      existingEntryStyleMode,
+      existingEntryStyleReferenceDate: entryForm.entryDate || null,
       signal: nextItem.abortController.signal,
     })
     if (!isReceiptOcrItemActive(nextItem)) {
@@ -3947,22 +3969,26 @@ async function rerunReceiptOcrItem(payload = {}) {
 }
 function buildReceiptOcrAppliedSnapshot(suggestion = {}) {
   const normalizedSuggestion = normalizeOcrSuggestion(suggestion)
-  const amount = normalizedSuggestion.amount !== ''
-    ? String(Number(normalizedSuggestion.amount || 0))
-    : entryForm.amount
+  const amount = normalizedSuggestion.foreignCurrencyCode
+    ? String(Number(entryForm.amount || 0))
+    : normalizedSuggestion.amount !== ''
+      ? String(Number(normalizedSuggestion.amount || 0))
+      : entryForm.amount
   return {
     entryDate: normalizedSuggestion.entryDate || entryForm.entryDate,
     entryTime: normalizedSuggestion.entryTime ? normalizeEntryTimePayload(normalizedSuggestion.entryTime) : '',
     title: normalizedSuggestion.title || entryForm.title,
     memo: normalizedSuggestion.memo || entryForm.memo,
     amount,
+    currencyMode: normalizedSuggestion.foreignCurrencyCode ? 'FOREIGN' : 'KRW',
+    foreignCurrencyCode: normalizedSuggestion.foreignCurrencyCode || 'USD',
+    foreignAmount: normalizedSuggestion.foreignAmount || '',
     entryType: normalizedSuggestion.entryType || 'EXPENSE',
     categoryGroupId: normalizedSuggestion.categoryGroupId || entryForm.categoryGroupId,
     categoryDetailId: normalizedSuggestion.categoryDetailId || entryForm.categoryDetailId,
     paymentMethodId: normalizedSuggestion.paymentMethodId || entryForm.paymentMethodId,
   }
 }
-
 function isReceiptOcrAppliedSnapshotCurrent(snapshot = receiptOcr.lastAppliedSnapshot) {
   if (!snapshot) return false
   const currentEntryTime = isEntryTimeEnabled.value ? normalizeEntryTimePayload(entryForm.entryTime) : ''
@@ -3971,12 +3997,14 @@ function isReceiptOcrAppliedSnapshotCurrent(snapshot = receiptOcr.lastAppliedSna
     && String(entryForm.title || '') === String(snapshot.title || '')
     && String(entryForm.memo || '') === String(snapshot.memo || '')
     && String(entryForm.amount || '') === String(snapshot.amount || '')
+    && String(entryForm.currencyMode || 'KRW') === String(snapshot.currencyMode || 'KRW')
+    && String(entryForm.foreignCurrencyCode || '') === String(snapshot.foreignCurrencyCode || '')
+    && String(entryForm.foreignAmount || '') === String(snapshot.foreignAmount || '')
     && String(entryForm.entryType || '') === String(snapshot.entryType || '')
     && String(entryForm.categoryGroupId || '') === String(snapshot.categoryGroupId || '')
     && String(entryForm.categoryDetailId || '') === String(snapshot.categoryDetailId || '')
     && String(entryForm.paymentMethodId || '') === String(snapshot.paymentMethodId || '')
 }
-
 function recordReceiptOcrAppliedEntryMarker(analysisId, entryIndex) {
   const normalizedAnalysisId = String(analysisId || '').trim()
   const normalizedEntryIndex = Number(entryIndex)
@@ -4040,35 +4068,51 @@ function cancelReceiptOcrAppliedSuggestion() {
   clearReceiptOcrAppliedMarker()
 }
 
-function buildReceiptOcrDirectEntryPayload(suggestion = {}) {
+async function buildReceiptOcrDirectEntryPayload(suggestion = {}) {
   const normalizedSuggestion = normalizeOcrSuggestion(suggestion)
   const entryType = normalizedSuggestion.entryType === 'INCOME' ? 'INCOME' : 'EXPENSE'
-  const amount = Number(normalizedSuggestion.amount || 0)
+  const foreignCurrencyCode = normalizedSuggestion.foreignCurrencyCode && normalizedSuggestion.foreignCurrencyCode !== 'KRW'
+    ? normalizedSuggestion.foreignCurrencyCode
+    : null
+  const foreignAmount = foreignCurrencyCode
+    ? Number(normalizedSuggestion.foreignAmount || normalizedSuggestion.amount || 0)
+    : null
+  const sourceAmount = foreignCurrencyCode ? foreignAmount : Number(normalizedSuggestion.amount || 0)
   const categoryGroupId = normalizedSuggestion.categoryGroupId
   if (!String(normalizedSuggestion.title || '').trim()) {
     throw new Error('제목을 확인해 주세요.')
   }
-  if (!Number.isFinite(amount) || amount <= 0) {
+  if (!Number.isFinite(sourceAmount) || sourceAmount <= 0) {
     throw new Error('금액을 확인해 주세요.')
   }
   if (!categoryGroupId) {
     throw new Error('대분류를 선택해 주세요.')
   }
-  const paymentMethodId = entryType === 'INCOME'
-    ? null
-    : normalizedSuggestion.paymentMethodId
+  const paymentMethodId = entryType === 'INCOME' ? null : normalizedSuggestion.paymentMethodId
   if (entryType === 'EXPENSE' && !paymentMethodId) {
     throw new Error('지출 거래의 결제수단을 선택해 주세요.')
   }
+  const entryDate = normalizedSuggestion.entryDate || entryForm.entryDate
+  const entryTime = normalizedSuggestion.entryTime ? normalizeEntryTimePayload(normalizedSuggestion.entryTime) : '00:00'
+  let amount = sourceAmount
+  let exchangeRateToKrw = null
+  if (foreignCurrencyCode) {
+    const quote = await fetchLedgerExchangeRate(foreignCurrencyCode, entryDate, `${entryDate}T${entryTime}:00`)
+    exchangeRateToKrw = Number(quote?.rateToKrw || 0)
+    if (!Number.isFinite(exchangeRateToKrw) || exchangeRateToKrw <= 0) {
+      throw new Error('외화 환율을 조회하지 못했습니다. 날짜와 통화를 확인해 주세요.')
+    }
+    amount = Math.round(foreignAmount * exchangeRateToKrw)
+  }
   return {
-    entryDate: normalizedSuggestion.entryDate || entryForm.entryDate,
-    entryTime: normalizedSuggestion.entryTime ? normalizeEntryTimePayload(normalizedSuggestion.entryTime) : '00:00',
+    entryDate,
+    entryTime,
     title: String(normalizedSuggestion.title || '').trim(),
     memo: String(normalizedSuggestion.memo || '').trim() || null,
     amount,
-    foreignCurrencyCode: null,
-    foreignAmount: null,
-    exchangeRateToKrw: null,
+    foreignCurrencyCode,
+    foreignAmount,
+    exchangeRateToKrw,
     entryType,
     categoryGroupId: Number(categoryGroupId),
     categoryDetailId: normalizedSuggestion.categoryDetailId ? Number(normalizedSuggestion.categoryDetailId) : null,
@@ -4086,10 +4130,10 @@ function buildReceiptOcrSubmittedSnapshot(payload) {
     memo: payload.memo || '',
     amount: String(Number(payload.amount || 0)),
     amountInput: String(Number(payload.amount || 0)),
-    currencyMode: 'KRW',
-    foreignCurrencyCode: 'USD',
-    foreignAmount: '',
-    exchangeRateToKrw: '',
+    currencyMode: payload.foreignCurrencyCode ? 'FOREIGN' : 'KRW',
+    foreignCurrencyCode: payload.foreignCurrencyCode || 'USD',
+    foreignAmount: payload.foreignAmount != null ? String(Number(payload.foreignAmount || 0)) : '',
+    exchangeRateToKrw: payload.exchangeRateToKrw != null ? String(Number(payload.exchangeRateToKrw || 0)) : '',
     exchangeRateDate: '',
     exchangeRateProvider: '',
     entryType: payload.entryType || 'EXPENSE',
@@ -4101,7 +4145,6 @@ function buildReceiptOcrSubmittedSnapshot(payload) {
     isTimeEnabled: hasEntryTimeValue(payload.entryTime),
   }
 }
-
 function markReceiptOcrReviewEntryApprovedLocally(analysisId, reviewItemId, entryIndex, entryId) {
   const normalizedIndex = Number(entryIndex)
   if (!analysisId || !Number.isInteger(normalizedIndex) || normalizedIndex < 0) {
@@ -4199,7 +4242,7 @@ async function approveReceiptOcrSuggestion(suggestion = receiptOcr.suggestedEntr
   activeSubmit.value = 'receipt-approval'
   setFeedback()
   try {
-    const payload = buildReceiptOcrDirectEntryPayload(suggestion)
+    const payload = await buildReceiptOcrDirectEntryPayload(suggestion)
     const createdEntry = await createEntry(payload)
     undoableEntryAction.value = {
       type: 'create',
@@ -4242,7 +4285,6 @@ async function applyReceiptOcrSuggestion(suggestion = receiptOcr.suggestedEntry)
   receiptOcr.lastAppliedReviewItemId = suggestion.reviewItemId || null
   receiptOcr.lastAppliedReviewEntryIndex = Number.isFinite(Number(suggestion.reviewEntryIndex)) ? Number(suggestion.reviewEntryIndex) : null
   receiptOcr.lastAppliedMode = 'form'
-  receiptOcr.lastAppliedSnapshot = buildReceiptOcrAppliedSnapshot(normalizedSuggestion)
   recordReceiptOcrAppliedEntryMarker(receiptOcr.lastAppliedAnalysisId, receiptOcr.lastAppliedReviewEntryIndex)
 
   editingEntryId.value = null
@@ -4253,13 +4295,21 @@ async function applyReceiptOcrSuggestion(suggestion = receiptOcr.suggestedEntry)
   entryForm.title = normalizedSuggestion.title || entryForm.title
   entryForm.memo = normalizedSuggestion.memo || entryForm.memo
   entryForm.entryType = normalizedSuggestion.entryType || 'EXPENSE'
-  entryForm.currencyMode = 'KRW'
   clearForeignExchangeFields()
-
-  if (normalizedSuggestion.amount !== '') {
-    const nextAmount = String(Number(normalizedSuggestion.amount || 0))
-    amountInput.value = nextAmount
-    entryForm.amount = nextAmount
+  if (normalizedSuggestion.foreignCurrencyCode && normalizedSuggestion.foreignCurrencyCode !== 'KRW') {
+    entryForm.currencyMode = 'FOREIGN'
+    entryForm.foreignCurrencyCode = normalizedSuggestion.foreignCurrencyCode
+    entryForm.foreignAmount = normalizedSuggestion.foreignAmount || normalizedSuggestion.amount
+    entryForm.amount = ''
+    amountInput.value = ''
+    await loadForeignExchangeRate({ force: true })
+  } else {
+    entryForm.currencyMode = 'KRW'
+    if (normalizedSuggestion.amount !== '') {
+      const nextAmount = String(Number(normalizedSuggestion.amount || 0))
+      amountInput.value = nextAmount
+      entryForm.amount = nextAmount
+    }
   }
 
   entryForm.categoryGroupId = normalizedSuggestion.categoryGroupId || entryForm.categoryGroupId
@@ -4270,6 +4320,7 @@ async function applyReceiptOcrSuggestion(suggestion = receiptOcr.suggestedEntry)
 
   isEntryTimeEnabled.value = hasEntryTimeValue(normalizedSuggestion.entryTime)
   syncEntryDefaults({ preferLatest: false, force: false })
+  receiptOcr.lastAppliedSnapshot = buildReceiptOcrAppliedSnapshot(normalizedSuggestion)
 
   receiptOcr.isOpen = false
   receiptOcr.activeView = ''
@@ -5201,6 +5252,7 @@ async function activatePayment(paymentId) {
       @set-receipt-request-prompt-enabled="setReceiptRequestPromptEnabled"
       @set-receipt-request-prompt="setReceiptRequestPrompt"
       @set-receipt-existing-entry-style-enabled="setReceiptExistingEntryStyleEnabled"
+      @set-receipt-existing-entry-style-mode="setReceiptExistingEntryStyleMode"
       @set-receipt-rerun-prompt-enabled="setReceiptRerunPromptEnabled"
       @set-receipt-rerun-prompt="setReceiptRerunPrompt"
       @set-receipt-prompt-rules-enabled="setReceiptPromptRulesEnabled"

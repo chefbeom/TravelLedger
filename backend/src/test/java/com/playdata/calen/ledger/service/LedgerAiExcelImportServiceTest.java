@@ -7,6 +7,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.playdata.calen.account.service.AppUserService;
 import com.playdata.calen.ledger.ai.LedgerAiAnalysisProperties;
+import com.playdata.calen.ledger.ai.LedgerAiRequestQueue;
 import com.playdata.calen.ledger.dto.LedgerExcelPreviewResponse;
 import com.playdata.calen.ledger.repository.CategoryDetailRepository;
 import com.playdata.calen.ledger.repository.CategoryGroupRepository;
@@ -29,6 +30,7 @@ class LedgerAiExcelImportServiceTest {
     private final LedgerAiExcelImportService service = new LedgerAiExcelImportService(
             Mockito.mock(AppUserService.class),
             new LedgerAiAnalysisProperties(),
+            new LedgerAiRequestQueue(),
             objectMapper,
             categoryGroupRepository,
             categoryDetailRepository,

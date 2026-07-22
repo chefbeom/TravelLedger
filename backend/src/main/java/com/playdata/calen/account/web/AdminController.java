@@ -6,6 +6,7 @@ import com.playdata.calen.account.dto.AdminDataStorageControlUpdateRequest;
 import com.playdata.calen.account.dto.AdminLoginAuditPageResponse;
 import com.playdata.calen.account.dto.AdminAiControlUpdateRequest;
 import com.playdata.calen.account.dto.AdminAiRoutingUpdateRequest;
+import com.playdata.calen.account.dto.AdminAiServerProfileSecretUpdateRequest;
 import com.playdata.calen.account.dto.AdminOpsControlResponse;
 import com.playdata.calen.account.dto.SupportInquiryArchiveRequest;
 import com.playdata.calen.account.dto.SupportInquiryReplyRequest;
@@ -122,6 +123,17 @@ public class AdminController {
                 httpRequest,
                 "AI_ROUTING_UPDATE:candidates=" + response.ai().candidateServers().size()
         );
+        return response;
+    }
+
+    @PatchMapping("/ops-control/ai/preset")
+    public AdminOpsControlResponse updateAiServerProfileSecret(
+            @AuthenticationPrincipal AppUserPrincipal currentUser,
+            HttpServletRequest httpRequest,
+            @RequestBody AdminAiServerProfileSecretUpdateRequest request
+    ) {
+        AdminOpsControlResponse response = adminOpsControlService.updateAiServerProfileSecret(request);
+        recordAdminAction(currentUser, httpRequest, "AI_CONTROL_PRESET_SECRET_UPDATE");
         return response;
     }
 

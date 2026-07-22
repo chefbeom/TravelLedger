@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.playdata.calen.account.dto.AdminAiControlResponse;
 import com.playdata.calen.account.dto.AdminAiRoutingUpdateRequest;
+import com.playdata.calen.account.dto.AdminAiServerProfileSecretUpdateRequest;
 import com.playdata.calen.account.dto.AdminAiServerCandidateRequest;
 import com.playdata.calen.account.dto.AdminAiServerCandidateResponse;
 import com.playdata.calen.account.dto.AdminAiFeatureConfigResponse;
@@ -184,6 +185,43 @@ public class AdminOpsControlService {
             persistSetting(routingConnectionSettingKey(feature), presetKey == null ? "" : presetKey);
         }
         persistenceMessage = "Settings saved.";
+        return getSnapshot();
+    }
+
+    /**
+     * Stores one reusable server-profile credential without changing feature routing.
+     * Profiles are separated by their opaque key, not endpoint or model, so the
+     * same server can legitimately be registered with different API credentials.
+     */
+    @Transactional
+    public AdminOpsControlResponse updateAiServerProfileSecret(AdminAiServerProfileSecretUpdateRequest request) {
+        if (request == null) {
+            throw new BadRequestException("AI server profile request is empty.");
+        }
+        String presetKey = normalizePresetKey(request.presetKey());
+        if (presetKey == null) {
+            throw new BadRequestException("AI server profile key is required.");
+        }
+        LedgerAiProvider provider = normalizeFeatureProvider(request.provider());
+        String secret = switch (provider) {
+            case OPENAI -> request.openAiApiKey();
+            case LMSTUDIO -> request.lmStudioApiKey();
+            case OLLAMA -> request.ollamaApiKey();
+            case N8N -> null;
+        };
+        Boolean clearSecret = switch (provider) {
+            case OPENAI -> request.clearOpenAiApiKey();
+            case LMSTUDIO -> request.clearLmStudioApiKey();
+            case OLLAMA -> request.clearOllamaApiKey();
+            case N8N -> false;
+        };
+        String settingKey = presetSecretSettingKey(presetKey, featureSecretType(provider));
+        if (Boolean.TRUE.equals(clearSecret)) {
+            deleteSetting(settingKey);
+        } else if (hasText(secret)) {
+            persistEncryptedSetting(settingKey, secret.trim());
+        }
+        persistenceMessage = "AI server profile saved.";
         return getSnapshot();
     }
 

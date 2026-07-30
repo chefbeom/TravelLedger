@@ -3909,6 +3909,18 @@ onBeforeUnmount(() => {
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
+/* Four household metrics should use the palette's full height when it grows. */
+.main-palette--compact.main-palette--household-summary:not(.main-palette--w-1) .main-palette__metric-grid,
+.main-palette--tall.main-palette--household-summary .main-palette__metric-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-rows: repeat(2, minmax(0, 1fr));
+}
+
+.main-palette--wide.main-palette--household-summary:not(.main-palette--tall):not(.main-palette--compact) .main-palette__metric-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-rows: minmax(0, 1fr);
+}
+
 .main-palette--wide.main-palette--household-payment .main-palette__payment,
 .main-palette--wide.main-palette--drive-capacity .main-palette__capacity {
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);

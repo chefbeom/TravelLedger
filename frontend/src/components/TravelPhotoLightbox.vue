@@ -46,6 +46,40 @@ const CURRENT_REPRESENTATIVE_LABEL = '\uD604\uC7AC \uB300\uD45C \uC0AC\uC9C4'
 const SET_REPRESENTATIVE_LABEL = '\uB300\uD45C \uC9C0\uC815'
 const UPDATING_REPRESENTATIVE_LABEL = '\uBCC0\uACBD \uC911...'
 
+function getTimelineTimestamp(photo) {
+  const date = String(photo?.expenseDate ?? '').trim()
+  const time = String(photo?.expenseTime ?? '').trim()
+
+  if (date) {
+    const timestamp = Date.parse(`${date}T${time || '00:00:00'}`)
+    if (!Number.isNaN(timestamp)) {
+      return timestamp
+    }
+  }
+
+  const uploadedTimestamp = Date.parse(String(photo?.uploadedAt ?? ''))
+  return Number.isNaN(uploadedTimestamp) ? null : uploadedTimestamp
+}
+
+function comparePhotosByTimeline(left, right) {
+  const leftTimestamp = getTimelineTimestamp(left)
+  const rightTimestamp = getTimelineTimestamp(right)
+
+  if (leftTimestamp != null && rightTimestamp != null && leftTimestamp !== rightTimestamp) {
+    return leftTimestamp - rightTimestamp
+  }
+  if (leftTimestamp != null) {
+    return -1
+  }
+  if (rightTimestamp != null) {
+    return 1
+  }
+
+  return String(left?.id ?? '').localeCompare(String(right?.id ?? ''), undefined, { numeric: true })
+}
+
+const timelinePhotos = computed(() => [...props.photos].sort(comparePhotosByTimeline))
+
 const activePhoto = computed(() => {
   if (!props.photo) {
     return null
@@ -55,7 +89,7 @@ const activePhoto = computed(() => {
     return props.photo
   }
 
-  return props.photos.find((item) => String(item?.id) === String(props.currentPhotoId)) ?? props.photo
+  return timelinePhotos.value.find((item) => String(item?.id) === String(props.currentPhotoId)) ?? props.photo
 })
 
 const locationLabel = computed(() =>
@@ -67,7 +101,7 @@ const currentIndex = computed(() => {
     return -1
   }
 
-  return props.photos.findIndex((item) => String(item?.id) === String(activePhoto.value.id))
+  return timelinePhotos.value.findIndex((item) => String(item?.id) === String(activePhoto.value.id))
 })
 
 const previousPhoto = computed(() => {
@@ -75,15 +109,15 @@ const previousPhoto = computed(() => {
     return null
   }
 
-  return props.photos[currentIndex.value - 1] ?? null
+  return timelinePhotos.value[currentIndex.value - 1] ?? null
 })
 
 const nextPhoto = computed(() => {
-  if (currentIndex.value < 0 || currentIndex.value >= props.photos.length - 1) {
+  if (currentIndex.value < 0 || currentIndex.value >= timelinePhotos.value.length - 1) {
     return null
   }
 
-  return props.photos[currentIndex.value + 1] ?? null
+  return timelinePhotos.value[currentIndex.value + 1] ?? null
 })
 
 const isCurrentRepresentative = computed(() =>

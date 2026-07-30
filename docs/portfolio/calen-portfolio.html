@@ -1,0 +1,552 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Calen: calendar-ledger, AI review, travel records, drive workspace portfolio">
+  <title>Calen | Calendar Ledger & Travel Workspace</title>
+  <style>
+    :root {
+      --ink: #eaf4ef;
+      --muted: #b2c1bd;
+      --soft: #91a5a0;
+      --surface: #15231f;
+      --surface-2: #1d2d28;
+      --surface-3: #233832;
+      --line: rgba(166, 224, 198, .22);
+      --brand: #58d68d;
+      --brand-dark: #0c7f55;
+      --accent: #64a8ff;
+      --warning: #f1b85b;
+      --danger: #ff8293;
+      --shadow: 0 24px 70px rgba(0, 0, 0, .28);
+      --sans: Inter, Pretendard, "Noto Sans KR", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at 8% 4%, rgba(88, 214, 141, .18), transparent 28rem),
+        radial-gradient(circle at 96% 2%, rgba(100, 168, 255, .14), transparent 26rem),
+        #0d1714;
+      font-family: var(--sans);
+      line-height: 1.72;
+      letter-spacing: 0;
+    }
+
+    a { color: #a5d8ff; }
+    img { display: block; max-width: 100%; }
+    .page { width: min(1180px, calc(100% - 40px)); margin: 0 auto; }
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      margin: 0 0 12px;
+      padding: 5px 10px;
+      border: 1px solid rgba(88, 214, 141, .42);
+      border-radius: 999px;
+      color: #bff6d3;
+      background: rgba(30, 95, 66, .36);
+      font-weight: 800;
+      font-size: .76rem;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+    .eyebrow::before { content: "●"; color: var(--brand); font-size: .65rem; }
+    .hero { padding: 72px 0 44px; }
+    .hero-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1.25fr) minmax(300px, .75fr);
+      gap: 28px;
+      align-items: stretch;
+    }
+    h1, h2, h3, p { margin-top: 0; }
+    h1 {
+      max-width: 900px;
+      margin-bottom: 18px;
+      font-size: clamp(2.55rem, 7vw, 5.65rem);
+      line-height: .98;
+      letter-spacing: 0;
+    }
+    h1 em { color: var(--brand); font-style: normal; }
+    .hero-copy { max-width: 780px; color: var(--muted); font-size: 1.08rem; }
+    .hero-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 28px; }
+    .button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 42px;
+      padding: 9px 15px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      color: var(--ink);
+      background: rgba(13, 27, 23, .45);
+      font-size: .91rem;
+      font-weight: 800;
+      text-decoration: none;
+    }
+    .button--primary {
+      color: #062316;
+      border-color: #81efad;
+      background: var(--brand);
+    }
+    .hero-card, .panel, .callout {
+      border: 1px solid var(--line);
+      background: linear-gradient(150deg, rgba(37, 56, 49, .92), rgba(18, 30, 26, .94));
+      box-shadow: var(--shadow);
+    }
+    .hero-card { padding: 25px; border-radius: 18px; }
+    .hero-card h2 { margin-bottom: 15px; font-size: 1.15rem; }
+    .metric-list { display: grid; gap: 12px; margin: 0; }
+    .metric {
+      display: grid;
+      grid-template-columns: 45px 1fr;
+      gap: 10px;
+      align-items: center;
+      padding: 12px 0;
+      border-top: 1px solid rgba(202, 239, 216, .12);
+    }
+    .metric:first-child { border-top: 0; padding-top: 0; }
+    .metric b { display: block; color: #c8f8d8; font-size: 1.02rem; }
+    .metric small { display: block; color: var(--muted); line-height: 1.45; }
+    .metric-number { color: var(--brand); font-weight: 900; font-size: 1.45rem; text-align: center; }
+    .chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; padding: 0; list-style: none; }
+    .chip {
+      padding: 4px 9px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      color: #d8f2e1;
+      background: rgba(10, 26, 21, .45);
+      font-size: .78rem;
+      font-weight: 750;
+    }
+    .toc {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      padding: 16px 0 8px;
+      border-top: 1px solid var(--line);
+    }
+    .toc a { color: var(--muted); font-size: .86rem; text-decoration: none; }
+    section { padding: 58px 0 0; scroll-margin-top: 25px; }
+    .section-heading { max-width: 790px; margin-bottom: 24px; }
+    .section-heading h2 { margin-bottom: 9px; font-size: clamp(1.75rem, 3vw, 2.55rem); line-height: 1.15; }
+    .section-heading p { margin-bottom: 0; color: var(--muted); }
+    .two-col { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+    .three-col { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+    .panel { padding: 23px; border-radius: 14px; }
+    .panel h3 { margin-bottom: 9px; font-size: 1.12rem; }
+    .panel p:last-child { margin-bottom: 0; }
+    .panel p, .panel li { color: var(--muted); }
+    .flow {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+      counter-reset: flow;
+    }
+    .flow-card {
+      position: relative;
+      min-height: 164px;
+      padding: 48px 17px 17px;
+      border: 1px solid var(--line);
+      border-radius: 13px;
+      background: rgba(21, 39, 33, .65);
+    }
+    .flow-card::before {
+      position: absolute; top: 14px; left: 16px;
+      counter-increment: flow;
+      content: "0" counter(flow);
+      color: var(--brand);
+      font-size: .77rem;
+      font-weight: 900;
+      letter-spacing: .09em;
+    }
+    .flow-card h3 { font-size: 1rem; }
+    .flow-card p { margin-bottom: 0; color: var(--muted); font-size: .92rem; }
+    .architecture {
+      overflow: hidden;
+      padding: 25px;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background:
+        linear-gradient(90deg, rgba(93, 168, 255, .05) 1px, transparent 1px) 0 0 / 36px 36px,
+        linear-gradient(rgba(93, 168, 255, .05) 1px, transparent 1px) 0 0 / 36px 36px,
+        #102019;
+    }
+    .architecture-note { margin: 0 0 20px; color: var(--muted); font-size: .91rem; }
+    .arch-lane { display: grid; grid-template-columns: 1fr 42px 1fr 42px 1.28fr; gap: 12px; align-items: center; }
+    .arch-lane + .arch-lane { margin-top: 16px; }
+    .arch-node {
+      min-width: 0;
+      padding: 15px;
+      border: 1px solid rgba(152, 219, 179, .35);
+      border-radius: 12px;
+      background: rgba(23, 47, 38, .94);
+    }
+    .arch-node--store { background: rgba(30, 43, 59, .94); border-color: rgba(123, 180, 255, .42); }
+    .arch-node--remote { background: rgba(69, 44, 28, .88); border-color: rgba(255, 199, 109, .44); }
+    .arch-node strong { display: block; margin-bottom: 3px; }
+    .arch-node small { display: block; color: var(--muted); line-height: 1.45; }
+    .arch-arrow { color: #93ddb0; font-size: 1.55rem; text-align: center; }
+    .arch-data { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+    .arch-data .arch-node { min-height: 94px; }
+    .tech-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
+    .tech-card {
+      min-width: 0;
+      padding: 18px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: rgba(25, 42, 35, .72);
+    }
+    .tech-card__head { display: flex; gap: 11px; align-items: center; margin-bottom: 10px; }
+    .tech-card__head img { width: 30px; height: 30px; object-fit: contain; }
+    .tech-card h3 { margin: 0; font-size: 1rem; }
+    .tech-card p { margin-bottom: 0; color: var(--muted); font-size: .89rem; }
+    .challenge { display: grid; grid-template-columns: 165px 1fr; gap: 20px; padding: 20px 0; border-top: 1px solid var(--line); }
+    .challenge:first-child { border-top: 0; padding-top: 0; }
+    .challenge h3 { margin-bottom: 0; font-size: 1rem; }
+    .challenge p { margin-bottom: 8px; color: var(--muted); }
+    .challenge p:last-child { margin-bottom: 0; }
+    .label { color: #c6f8d6; font-size: .78rem; font-weight: 850; letter-spacing: .08em; text-transform: uppercase; }
+    .evidence { color: #c5d4ce; }
+    .gallery { display: grid; grid-template-columns: 1.08fr .92fr; gap: 18px; }
+    figure { margin: 0; overflow: hidden; border: 1px solid var(--line); border-radius: 14px; background: #0f1b17; }
+    figure img { width: 100%; height: 100%; object-fit: cover; }
+    figure:first-child { grid-row: span 2; min-height: 460px; }
+    figure:not(:first-child) { min-height: 220px; }
+    figcaption { padding: 11px 13px; color: var(--muted); font-size: .84rem; }
+    .qa { display: grid; gap: 13px; }
+    details {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: rgba(23, 43, 35, .72);
+      overflow: hidden;
+    }
+    details[open] { background: rgba(28, 54, 43, .88); }
+    summary {
+      position: relative;
+      padding: 18px 50px 18px 18px;
+      cursor: pointer;
+      list-style: none;
+      font-weight: 850;
+    }
+    summary::-webkit-details-marker { display: none; }
+    summary::after { content: "+"; position: absolute; right: 18px; top: 13px; color: var(--brand); font-size: 1.55rem; font-weight: 400; }
+    details[open] summary::after { content: "−"; }
+    .answer { padding: 0 18px 18px; color: var(--muted); }
+    .answer p:last-child { margin-bottom: 0; }
+    .conclusion {
+      margin-top: 14px;
+      padding: 11px 13px;
+      border-left: 3px solid var(--brand);
+      border-radius: 0 8px 8px 0;
+      color: #d8f7e3;
+      background: rgba(14, 103, 63, .25);
+    }
+    .callout { padding: 22px; border-radius: 14px; }
+    .callout h2 { margin-bottom: 8px; }
+    .callout p { margin-bottom: 0; color: var(--muted); }
+    footer { padding: 44px 0 70px; color: var(--soft); font-size: .86rem; }
+    .muted { color: var(--muted); }
+    .stack { display: grid; gap: 12px; }
+    .bullet-list { margin: 0; padding-left: 19px; }
+    .bullet-list li + li { margin-top: 7px; }
+    @media (max-width: 920px) {
+      .hero-grid, .two-col, .gallery { grid-template-columns: 1fr; }
+      .three-col, .tech-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .flow { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      figure:first-child { grid-row: auto; min-height: 0; }
+      figure:not(:first-child) { min-height: 0; }
+      .arch-lane { grid-template-columns: 1fr; }
+      .arch-arrow { transform: rotate(90deg); }
+      .arch-data { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 580px) {
+      .page { width: min(100% - 24px, 1180px); }
+      .hero { padding-top: 42px; }
+      .three-col, .tech-grid, .flow { grid-template-columns: 1fr; }
+      .challenge { grid-template-columns: 1fr; gap: 8px; }
+      .architecture, .panel { padding: 17px; }
+      h1 { font-size: clamp(2.55rem, 14vw, 4.15rem); }
+    }
+    @media print {
+      body { background: #fff; color: #15241e; }
+      .hero-card, .panel, .callout, .tech-card, .flow-card, .architecture, details, figure { box-shadow: none; color: #15241e; background: #fff; }
+      .muted, .panel p, .panel li, .answer, .challenge p, .tech-card p, .architecture-note, .arch-node small, figcaption { color: #42534b; }
+      .arch-node { background: #eff8f2; }
+      .arch-node--store { background: #edf4fd; }
+      .arch-node--remote { background: #fff7e9; }
+      a { color: #056a43; }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <header class="hero">
+      <div class="hero-grid">
+        <div>
+          <span class="eyebrow">Portfolio Case Study</span>
+          <h1><em>Calen</em><br>일상 데이터가<br>이어지는 개인 워크스페이스</h1>
+          <p class="hero-copy">
+            Calen은 달력 가계부, AI 검수, 여행 기록, 사진·파일 보관을 분리된 도구가 아니라 하나의 개인 데이터 흐름으로 연결한 웹 애플리케이션입니다.
+            AI는 입력을 대신 결정하지 않고 검수 가능한 초안을 만들며, 사용자가 확인한 거래만 실제 가계부에 반영하도록 설계했습니다.
+          </p>
+          <div class="hero-actions">
+            <a class="button button--primary" href="#architecture">시스템 아키텍처</a>
+            <a class="button" href="#qa">예상 Q&amp;A</a>
+            <a class="button" href="#screens">실제 화면</a>
+          </div>
+        </div>
+        <aside class="hero-card" aria-label="프로젝트 요약">
+          <h2>Project Snapshot</h2>
+          <div class="metric-list">
+            <div class="metric"><span class="metric-number">01</span><div><b>검수 우선 AI</b><small>AI 결과는 제안이며, 승인 전에는 원본 가계부 데이터를 변경하지 않습니다.</small></div></div>
+            <div class="metric"><span class="metric-number">02</span><div><b>연결된 여행 기록</b><small>장소, GPX, EXIF 사진, 공유 지도를 여행 단위로 연결합니다.</small></div></div>
+            <div class="metric"><span class="metric-number">03</span><div><b>운영 가능한 설정</b><small>기능별 AI 서버, 상태 점검, 암호화 API 키 저장, 알림과 관리 흐름을 제공합니다.</small></div></div>
+          </div>
+        </aside>
+      </div>
+      <nav class="toc" aria-label="문서 목차">
+        <a href="#context">문제와 설계 배경</a><a href="#flows">핵심 흐름</a><a href="#architecture">아키텍처</a>
+        <a href="#stack">기술 스택</a><a href="#challenges">개발 이슈</a><a href="#benefits">기대 효과</a>
+        <a href="#screens">화면 캡처</a><a href="#qa">예상 Q&amp;A</a>
+      </nav>
+    </header>
+
+    <section id="context">
+      <div class="section-heading">
+        <span class="eyebrow">Why Calen</span>
+        <h2>지출, 여행, 사진을 따로 기록하면 맥락이 사라진다</h2>
+        <p>기존 개인 기록은 가계부 앱, 사진 앱, 지도, 파일 저장소로 흩어지기 쉽습니다. Calen은 “언제, 어디서, 무엇에 썼는가”를 연결하되, 자동화가 사용자의 기록을 덮어쓰지 않도록 통제 지점을 남기는 데서 출발했습니다.</p>
+      </div>
+      <div class="two-col">
+        <article class="panel">
+          <h3>설계 목표</h3>
+          <ul class="bullet-list">
+            <li>달력 기반으로 거래를 빠르게 입력·수정하고 월별 흐름을 즉시 확인한다.</li>
+            <li>영수증·결제 캡처·거래내역을 AI가 구조화하되, 사람이 확인한 항목만 저장한다.</li>
+            <li>여행의 장소, GPX 이동 경로, 사진, 환율·지출을 같은 시간축에서 관리한다.</li>
+            <li>사진과 파일은 드라이브로 보관하면서 여행 기록은 참조로 연결해 중복을 줄인다.</li>
+          </ul>
+        </article>
+        <article class="panel">
+          <h3>설계 원칙</h3>
+          <ul class="bullet-list">
+            <li><strong>Human-in-the-loop:</strong> AI는 초안 생성과 보정에만 관여한다.</li>
+            <li><strong>Traceable:</strong> 분석 요청, 결과, 사용 여부, 원본 이미지 참조를 분리해 확인 가능하게 한다.</li>
+            <li><strong>Feature-scoped:</strong> 가계부 분석, 이미지/OCR, 엑셀 가져오기에 서로 다른 AI 서버를 배정할 수 있다.</li>
+            <li><strong>Read-only sharing:</strong> 여행 공개 URL은 선택한 범위의 데이터를 읽기 전용으로 제공한다.</li>
+          </ul>
+        </article>
+      </div>
+    </section>
+
+    <section id="flows">
+      <div class="section-heading">
+        <span class="eyebrow">Core Workflows</span>
+        <h2>단순 기능 모음이 아닌, 검수 가능한 데이터 흐름</h2>
+        <p>각 기능은 입력, 제안, 검수, 확정의 단계를 갖습니다. 특히 AI를 쓰는 흐름에서 “분석 결과”와 “실제 저장”을 분리한 것이 핵심입니다.</p>
+      </div>
+      <div class="flow">
+        <article class="flow-card"><h3>달력 가계부</h3><p>날짜 선택, 빠른 거래 입력, 거래 시트 편집, 결제수단·분류 관리, 조합식 검색을 하나의 월간 흐름으로 제공합니다.</p></article>
+        <article class="flow-card"><h3>AI 이미지 검수</h3><p>이미지 업로드와 요청 생성 후, OCR·구조화 결과를 검수 거래로 표시합니다. 날짜·시간·금액·분류를 직접 수정한 뒤 승인합니다.</p></article>
+        <article class="flow-card"><h3>AI 엑셀 가져오기</h3><p>서버가 Apache POI로 파일의 셀 값을 읽고, 행 단위 원본 데이터에 식별자를 부여한 뒤 AI가 가계부 JSON 초안을 만듭니다.</p></article>
+        <article class="flow-card"><h3>여행 기록과 공유</h3><p>여행별 장소 핀, GPX, EXIF 사진, 여행 가계부를 연결합니다. 공개 시에는 제외할 장소·사진·경로를 선택할 수 있습니다.</p></article>
+      </div>
+    </section>
+
+    <section id="architecture">
+      <div class="section-heading">
+        <span class="eyebrow">System Architecture</span>
+        <h2>컨테이너 기반의 웹·데이터·AI 연동 구조</h2>
+        <p>Docker Compose의 기본 실행 구성은 프론트엔드, Spring Boot 백엔드, MariaDB 11.4, MinIO로 구성됩니다. Redis는 코드에서 캐시·재연결 처리를 위해 사용하며, 배포 환경에 따라 별도 서비스로 붙일 수 있습니다.</p>
+      </div>
+      <div class="architecture">
+        <p class="architecture-note">실제 Docker Compose 구성: <code>frontend</code> → <code>backend</code> → <code>mariadb:11.4</code> / <code>minio/minio</code>. AI와 OCR은 설정된 원격 또는 로컬 서비스로 연결됩니다.</p>
+        <div class="arch-lane">
+          <div class="arch-node"><strong>Browser UI</strong><small>Vue 3 · Pinia · Vite<br>Calendar, Dashboard, Travel, Admin</small></div>
+          <div class="arch-arrow">→</div>
+          <div class="arch-node"><strong>Spring Boot API</strong><small>Java 17 · Security · JPA · Validation<br>검수·권한·상태 전이·API 라우팅</small></div>
+          <div class="arch-arrow">→</div>
+          <div class="arch-node arch-node--remote"><strong>AI / OCR Providers</strong><small>OpenAI API · LM Studio · Ollama<br>기능별 서버 설정 · 요청 큐 · 제한 시간</small></div>
+        </div>
+        <div class="arch-lane">
+          <div class="arch-node"><strong>Observability</strong><small>Actuator · Prometheus registry<br>헬스체크 및 운영 상태 확인</small></div>
+          <div class="arch-arrow">↔</div>
+          <div class="arch-node"><strong>Service Layer</strong><small>가계부 · 여행 · 드라이브 · 공개 지도 · 알림<br>Flyway 기반 스키마 관리</small></div>
+          <div class="arch-arrow">→</div>
+          <div class="arch-data">
+            <div class="arch-node arch-node--store"><strong>MariaDB</strong><small>거래·여행·권한·분석 이력</small></div>
+            <div class="arch-node arch-node--store"><strong>MinIO</strong><small>사진·GPX·OCR 원본·썸네일</small></div>
+            <div class="arch-node arch-node--store"><strong>Redis</strong><small>캐시·역지오코딩·연결 복원<br><em>배포 환경에 따라 별도 구성</em></small></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="stack">
+      <div class="section-heading">
+        <span class="eyebrow">Tech Decisions</span>
+        <h2>기능의 성격에 맞춰 선택한 기술</h2>
+        <p>아래는 의존성 및 배포 설정에 실제 포함된 기술을 중심으로 정리한 것입니다. 로고는 시각적 식별을 위한 기술 로고이며, 서비스 구현은 각 공식 문서의 라이선스와 사용 조건을 따릅니다.</p>
+      </div>
+      <div class="tech-grid">
+        <article class="tech-card"><div class="tech-card__head"><img src="https://cdn.simpleicons.org/vuedotjs/42B883" alt="Vue logo"><h3>Vue 3 + Vite</h3></div><p>화면 상태와 컴포넌트 경계를 빠르게 구성하고, Vite의 개발·빌드 경험으로 화면 수가 많은 개인 워크스페이스를 관리합니다.</p></article>
+        <article class="tech-card"><div class="tech-card__head"><img src="https://cdn.simpleicons.org/springboot/6DB33F" alt="Spring Boot logo"><h3>Spring Boot 3.5</h3></div><p>인증, 검증, 트랜잭션, API, 헬스체크를 표준적인 서버 계층으로 묶습니다. Java 17 기반으로 도메인 로직과 상태 전이를 명시합니다.</p></article>
+        <article class="tech-card"><div class="tech-card__head"><img src="https://cdn.simpleicons.org/mariadb/003545" alt="MariaDB logo"><h3>MariaDB 11.4</h3></div><p>거래·분류·여행·공유·분석 요청 같은 관계형 데이터를 JPA와 Flyway 마이그레이션으로 일관되게 관리합니다.</p></article>
+        <article class="tech-card"><div class="tech-card__head"><img src="https://cdn.simpleicons.org/minio/C72E49" alt="MinIO logo"><h3>MinIO Object Storage</h3></div><p>사진, GPX, OCR 원본 및 썸네일을 DB 본문과 분리합니다. 대용량 바이너리는 객체 스토리지에 두고 메타데이터로 연결합니다.</p></article>
+        <article class="tech-card"><div class="tech-card__head"><img src="https://cdn.simpleicons.org/redis/DC382D" alt="Redis logo"><h3>Redis + Lettuce</h3></div><p>반복 조회되는 외부 지오코딩 결과 등을 캐시하고, 클라이언트 재연결·백오프를 통해 외부 의존성의 일시적 실패를 완화합니다.</p></article>
+        <article class="tech-card"><div class="tech-card__head"><img src="https://cdn.simpleicons.org/leaflet/199900" alt="Leaflet logo"><h3>Leaflet + EXIF</h3></div><p>사진 GPS와 장소·GPX를 지도 위에서 읽을 수 있게 합니다. 클러스터·공개 지도·사진 상세 흐름을 여행 정보와 연결합니다.</p></article>
+        <article class="tech-card"><div class="tech-card__head"><img src="https://cdn.simpleicons.org/apache/CB2133" alt="Apache logo"><h3>Apache POI</h3></div><p>엑셀 파일을 AI 서버로 보내지 않고 프로젝트 서버에서 셀 데이터로 읽습니다. 원본 행을 보존한 채 AI 정리 후보를 만들기 위한 기반입니다.</p></article>
+        <article class="tech-card"><div class="tech-card__head"><img src="https://cdn.simpleicons.org/docker/2496ED" alt="Docker logo"><h3>Docker Compose</h3></div><p>프론트엔드·백엔드·MariaDB·MinIO를 서비스 단위로 실행하고 healthcheck와 내부 네트워크로 로컬·서버 구성을 반복 가능하게 만듭니다.</p></article>
+      </div>
+    </section>
+
+    <section id="challenges">
+      <div class="section-heading">
+        <span class="eyebrow">Engineering Notes</span>
+        <h2>개발 중 마주한 문제와 해결 방향</h2>
+        <p>기능이 늘어나는 과정에서 사용성, 신뢰성, 데이터 안전성이 서로 충돌했습니다. 아래 내용은 실제 구현에서 다룬 문제를 과장 없이 정리한 것입니다.</p>
+      </div>
+      <div class="panel stack">
+        <article class="challenge"><div><span class="label">01. AI 신뢰성</span><h3>AI가 맞혀도 저장은 틀릴 수 있다</h3></div><div><p>결제 캡처와 주문 목록은 같은 이미지에 여러 거래가 섞이고, OCR은 날짜·금액·행 순서를 잘못 읽을 수 있습니다. 특히 한 행의 날짜가 다음 행에 덮이는 문제, 최종 결제금액과 세부 금액이 혼동되는 문제가 발생할 수 있습니다.</p><p class="evidence"><strong>대응:</strong> 분석 요청·원본 이미지·제안 거래를 분리하고, AI 응답은 구조화된 후보로만 반환합니다. 사용자는 날짜·시간·금액·분류·메모를 수정하고 “승인 후 기입”해야 최종 거래가 생성됩니다.</p></div></article>
+        <article class="challenge"><div><span class="label">02. AI 인프라</span><h3>서버마다 기능과 응답 특성이 다르다</h3></div><div><p>로컬 LM Studio, OpenAI 호환 API, Ollama는 엔드포인트·인증·모델·처리 시간이 다릅니다. 한 서버에 긴 OCR 요청과 분석 요청이 동시에 들어오면 응답이 섞이거나 취소된 화면과 서버 추론 상태가 어긋날 수 있습니다.</p><p class="evidence"><strong>대응:</strong> 가계부 분석, 이미지/OCR, 엑셀 가져오기를 기능별 설정으로 분리하고 요청 큐를 둡니다. 주소 allowlist, 연결·응답 제한 시간, 서버 상태 점검, 암호화 저장 API 키를 관리자 설정에서 관리합니다.</p></div></article>
+        <article class="challenge"><div><span class="label">03. 미디어 보존</span><h3>새로고침 뒤에도 검수 근거가 남아야 한다</h3></div><div><p>브라우저 blob URL에만 이미지를 두면 페이지를 떠난 뒤 재검수할 수 없습니다. 여행 사진·GPX·OCR 이미지도 중복 저장하면 비용과 정합성 문제가 커집니다.</p><p class="evidence"><strong>대응:</strong> MinIO에 원본과 썸네일을 저장하고, 도메인 데이터는 객체 키와 메타데이터를 참조합니다. 여행과 드라이브는 파일 자체를 복제하기보다 연결하는 구조를 사용합니다.</p></div></article>
+        <article class="challenge"><div><span class="label">04. 모바일 지도</span><h3>전체화면 지도와 상세 모달의 이벤트 충돌</h3></div><div><p>모바일 브라우저에서 지도 전체화면, 클러스터 클릭, 사진 상세 오버레이가 겹치면 터치가 전달되지 않거나 화면이 깜빡이는 문제가 생길 수 있습니다.</p><p class="evidence"><strong>대응:</strong> 지도·모달의 레이어 순서와 포인터 이벤트를 분리하고, 사진 상세는 현재 지도에 표시된 사진 목록을 기준으로 이전·다음 이동하도록 개선했습니다. 모달은 배경 클릭·드래그로 닫히지 않고 닫기 버튼 또는 Esc로 종료합니다.</p></div></article>
+        <article class="challenge"><div><span class="label">05. 테마 일관성</span><h3>다크/라이트 모드에서 읽기 어려운 UI</h3></div><div><p>복잡한 대시보드, 지도, 관리자 모달은 배경·경계·텍스트 토큰이 개별적으로 남아 있으면 테마 전환 시 대비가 무너집니다.</p><p class="evidence"><strong>대응:</strong> 모달·팔레트·표·사진 상세에 공통 토큰을 적용하고, 화면별 예외 색상을 줄였습니다. 단, 브라우저·지도 타일의 외부 스타일 영향은 계속 회귀 테스트가 필요한 영역입니다.</p></div></article>
+      </div>
+    </section>
+
+    <section id="benefits">
+      <div class="section-heading">
+        <span class="eyebrow">Expected Impact</span>
+        <h2>사용자에게 남는 것은 “자동화”보다 “확인 가능한 기록”</h2>
+      </div>
+      <div class="three-col">
+        <article class="panel"><h3>입력 시간 단축</h3><p>캡처·영수증·엑셀을 거래 후보로 변환해 수작업 입력을 줄입니다. 단, 자동 저장을 하지 않아 오류가 나도 원본 장부를 바로 훼손하지 않습니다.</p></article>
+        <article class="panel"><h3>여행 맥락 보존</h3><p>사진만 남기거나 지출만 남기는 대신, 장소·경로·사진·여행 가계부를 연결해 나중에 “어디서 쓴 비용인지” 되짚을 수 있습니다.</p></article>
+        <article class="panel"><h3>운영 선택권</h3><p>사용 환경에 따라 로컬 모델, OpenAI 호환 서버, Ollama를 기능별로 선택할 수 있습니다. 단일 벤더나 단일 모델에만 묶이지 않도록 한 구조입니다.</p></article>
+      </div>
+    </section>
+
+    <section id="screens">
+      <div class="section-heading">
+        <span class="eyebrow">Product Screens</span>
+        <h2>실제 구현 화면</h2>
+        <p>아래 이미지는 프로젝트에 포함된 화면 캡처입니다. 이 HTML 파일과 같은 <code>docs/portfolio</code> 폴더에 두면 로컬에서도 표시됩니다.</p>
+      </div>
+      <div class="gallery">
+        <figure>
+          <img src="./dashboard-overview.png" alt="Calen 가계부 대시보드 화면">
+          <figcaption>가계부 대시보드: 월별 요약, 결제수단 사용액, 사용자 설정 집계, 사진 액자</figcaption>
+        </figure>
+        <figure>
+          <img src="./ai-ocr-review.png" alt="AI OCR 거래 검수 화면">
+          <figcaption>AI 이미지 분석: OCR 결과를 거래 후보로 검수·수정·승인하는 흐름</figcaption>
+        </figure>
+        <figure>
+          <img src="./travel-map-share.png" alt="공개 여행 지도 공유 화면">
+          <figcaption>여행 공유: 선택 범위의 지도·사진·경로를 읽기 전용 URL로 제공</figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <section id="qa">
+      <div class="section-heading">
+        <span class="eyebrow">Interview Q&amp;A</span>
+        <h2>예상 질문과 답변</h2>
+        <p>답변은 현재 프로젝트의 구조와 구현 범위를 기준으로 작성했습니다. 구현하지 않은 부분은 계획 또는 한계로 명시합니다.</p>
+      </div>
+      <div class="qa">
+        <details open>
+          <summary>Q1. 왜 가계부, 여행, 드라이브를 한 프로젝트에 결합했나요?</summary>
+          <div class="answer">
+            <p>개인 데이터는 기능별로 분리되어 있어도 실제 사용 맥락에서는 연결됩니다. 여행 중 발생한 지출은 여행 일정, 방문 장소, 결제 증빙, 사진과 함께 봐야 의미가 생깁니다. 가계부만 보면 “언제 얼마를 썼는지”는 알 수 있지만, 여행 기록과 연결하면 “어떤 이동·방문·사진과 관련된 비용인지”까지 이해할 수 있습니다.</p>
+            <p>다만 모든 데이터를 한 테이블에 넣는 방식은 선택하지 않았습니다. 거래, 여행, 미디어, GPX, 드라이브는 각 도메인으로 관리하고 관계와 객체 참조로 연결합니다. 그래서 가계부 조회와 여행 지도 기능이 서로의 모델을 과도하게 침범하지 않으면서도 필요한 맥락은 연결할 수 있습니다.</p>
+            <p class="conclusion"><strong>결론:</strong> 기능을 억지로 합친 것이 아니라, 사용자에게 분산되어 있던 “기록의 맥락”을 연결하기 위해 도메인은 분리하고 경험은 연결했습니다.</p>
+          </div>
+        </details>
+        <details>
+          <summary>Q2. AI 결과를 바로 가계부 DB에 저장하지 않는 이유는 무엇인가요?</summary>
+          <div class="answer">
+            <p>이미지 OCR과 언어 모델은 빠르게 후보를 만들 수 있지만, 날짜가 다른 행으로 전파되거나 상품 금액과 총 결제금액을 혼동하는 오류가 실제로 발생할 수 있습니다. 특히 한 장의 주문 내역에 여러 거래가 있거나 작은 글씨에 시간이 표시된 경우, “대략 맞는” 결과는 충분하지 않습니다. 가계부는 나중에 통계·예산·세무성 확인의 기반이 되므로 잘못 저장된 값의 비용이 큽니다.</p>
+            <p>따라서 Calen은 요청 이력과 AI 추출 결과를 별도 상태로 보관하고, 화면에서 거래 후보를 수정한 뒤 승인 후 기입해야 실제 거래 생성이 일어나도록 구성했습니다. 엑셀도 파일 원본을 AI에 직접 보내지 않고 서버가 셀을 읽어 원본 행 식별자와 함께 후보를 만들며, 사용자는 미리보기를 검수합니다.</p>
+            <p class="conclusion"><strong>결론:</strong> AI를 자동 입력기가 아니라 검수 가능한 보조 도구로 제한해, 편의성과 데이터 신뢰성을 함께 확보했습니다.</p>
+          </div>
+        </details>
+        <details>
+          <summary>Q3. 이미지 분석의 OCR과 AI 분석은 어떻게 분리되어 있나요?</summary>
+          <div class="answer">
+            <p>이미지 분석은 업로드된 원본을 객체 스토리지에 저장하고, 선택된 이미지 분석 서버로 전달해 구조화된 결과 후보를 받는 흐름입니다. 구현에는 OCR 전문 문구·행 단위 거래 분리·날짜와 시간 보정·기존 활성 분류 및 결제수단 참조가 포함됩니다. 결과에는 금액, 일시, 제목, 분류, 메모, 결제수단 후보 같은 거래 필드가 포함될 수 있지만 최종 확정은 사용자 검수 단계가 담당합니다.</p>
+            <p>실무적으로 OCR 텍스트와 LLM 해석은 모두 틀릴 수 있습니다. 그래서 원본 이미지와 추출 텍스트, 검수 후보를 함께 보관하고, 사용자에게 어느 단계에서 오류가 발생했는지 확인할 수 있는 근거를 남깁니다. 요청이 여러 개일 때는 큐를 통해 한 서버에 무분별하게 동시에 요청하지 않도록 했습니다.</p>
+            <p class="conclusion"><strong>결론:</strong> 단순한 “이미지 → 저장” 자동화가 아니라, 근거를 남기는 “이미지 → 후보 → 검수 → 저장” 파이프라인입니다.</p>
+          </div>
+        </details>
+        <details>
+          <summary>Q4. AI 서버를 여러 종류로 지원하는 이유와 기능별 분리의 장점은 무엇인가요?</summary>
+          <div class="answer">
+            <p>이미지/OCR, 가계부 분석, 엑셀 구조화는 필요한 모델 역량과 처리 시간이 다릅니다. 로컬 환경에서는 LM Studio나 Ollama를 쓰고, 외부 API 또는 OpenAI 호환 게이트웨이를 쓰는 환경도 있을 수 있습니다. 한 서버 장애가 모든 AI 기능을 멈추게 하거나, 무거운 이미지 분석이 가계부 분석까지 지연시키는 구조는 피해야 합니다.</p>
+            <p>Calen은 가계부 분석, 이미지 분석/OCR, AI 엑셀 가져오기를 기능별 설정으로 둡니다. 관리자는 후보 서버를 바로가기처럼 관리하고, 후보 등록만으로는 실제 동작 서버가 바뀌지 않으며, 기능과 서버를 연결하고 저장해야 반영됩니다. API 키는 관리 설정에서 암호화 저장하며, 허용 호스트·상대 경로·연결/응답 제한 시간을 검증합니다.</p>
+            <p class="conclusion"><strong>결론:</strong> 다중 제공자 지원의 목적은 “AI를 많이 붙이는 것”이 아니라, 기능별 요구와 운영 환경에 맞춰 장애 범위와 선택권을 분리하는 것입니다.</p>
+          </div>
+        </details>
+        <details>
+          <summary>Q5. AI 엑셀 가져오기는 파일을 AI에 업로드하나요?</summary>
+          <div class="answer">
+            <p>아니요. 구현 의도는 프로젝트 서버가 Apache POI로 <code>.xlsx</code> 또는 <code>.xls</code>의 셀을 직접 읽고, 각 행에 sourceRow 같은 식별 정보를 붙인 원본 데이터만 AI에 전달하는 것입니다. AI는 해당 셀 값이 날짜, 금액, 거래 제목, 분류 후보 중 무엇인지 판단해 가계부 후보 JSON을 만들고, 서버는 날짜·금액·분류·결제수단을 검증한 뒤 미리보기로 반환합니다.</p>
+            <p>이 방식은 파일 바이너리나 Base64를 외부 모델에 넘기지 않아 전송 범위를 줄이고, AI가 원본에 없던 거래를 임의로 만들었는지 sourceRow 기반으로 추적할 수 있게 합니다. 사용자는 미리보기에서 수정하고 선택한 항목만 최종 커밋합니다.</p>
+            <p class="conclusion"><strong>결론:</strong> 엑셀 AI 가져오기는 “파일 해석을 외주화”하는 기능이 아니라, 서버가 읽은 행 데이터를 안전하게 재조립하는 검수 워크플로입니다.</p>
+          </div>
+        </details>
+        <details>
+          <summary>Q6. 여행 공유 URL은 어떤 보안 모델로 동작하나요?</summary>
+          <div class="answer">
+            <p>여행 공유는 회원 간 편집 권한을 주는 기존 공유와 달리, 공개 토큰 URL을 통해 선택한 지도 데이터를 읽기 전용으로 보여주는 시나리오를 지원합니다. 공개 시 장소, 사진, 경로를 선택적으로 제외할 수 있고, 공개 조회용 API는 토큰 범위의 지도 데이터·클러스터·미디어 콘텐츠만 제공하도록 분리되어 있습니다.</p>
+            <p>공유 URL은 접근 자체를 허용하는 토큰이므로 링크를 받은 사람이 볼 수 있다는 점을 전제로 합니다. 따라서 민감한 위치나 사진은 공유 전에 제외해야 하고, 운영 환경에서는 HTTPS, 충분히 긴 예측 불가능한 토큰, 회수·만료 정책, 로그 모니터링을 함께 강화해야 합니다.</p>
+            <p class="conclusion"><strong>결론:</strong> 공개 지도는 편집 공유가 아닌 범위 제한 읽기 전용 공유이며, 링크 관리와 공유 범위 선택이 핵심 보안 통제입니다.</p>
+          </div>
+        </details>
+        <details>
+          <summary>Q7. MinIO와 MariaDB를 분리한 이유는 무엇인가요?</summary>
+          <div class="answer">
+            <p>사진·GPX·OCR 원본은 용량이 크고 스트리밍, 썸네일, 삭제 수명주기 등 파일 중심 처리가 필요합니다. 반면 거래·분류·분석 상태·사용자·공유 설정은 조인, 제약, 트랜잭션이 중요한 관계형 데이터입니다. 둘을 한 저장소에 같이 넣으면 DB 백업·쿼리·복구 비용이 커지고, 객체 파일의 수명주기도 관리하기 어렵습니다.</p>
+            <p>Calen은 MinIO에 바이너리를 저장하고 MariaDB에는 객체 키·메타데이터·도메인 관계를 둡니다. Docker Compose에서도 MinIO와 MariaDB의 볼륨·healthcheck를 분리해 백엔드가 스토리지 준비 후 기동하도록 구성했습니다.</p>
+            <p class="conclusion"><strong>결론:</strong> 파일과 관계 데이터를 분리함으로써 미디어 확장성과 장부 데이터의 정합성을 각각의 방식으로 관리합니다.</p>
+          </div>
+        </details>
+        <details>
+          <summary>Q8. Redis는 어디에 쓰이며, 없어도 프로젝트가 동작하나요?</summary>
+          <div class="answer">
+            <p>코드에서는 Lettuce 기반 Redis 클라이언트를 사용해 여행 역지오코딩처럼 반복되는 외부 조회 결과를 캐시하고, 연결이 일시적으로 끊겼을 때 재연결과 백오프를 다룹니다. 이는 동일 좌표·유사한 요청을 매번 외부 API로 보내는 비용과 지연을 줄이는 데 유용합니다.</p>
+            <p>다만 현재 기본 Docker Compose의 핵심 서비스는 프론트엔드·백엔드·MariaDB·MinIO이며, Redis는 배포 환경에서 별도 서비스로 제공할 수 있는 선택적 의존성입니다. 따라서 Redis가 필수 영속 데이터 저장소가 되지 않도록 설계하고, 캐시 미사용 또는 장애 시에도 핵심 기록 데이터는 MariaDB와 MinIO에서 보존되는 방향을 유지해야 합니다.</p>
+            <p class="conclusion"><strong>결론:</strong> Redis는 성능과 외부 호출 안정성을 위한 보조 계층이며, 원본 데이터의 단일 저장소가 아닙니다.</p>
+          </div>
+        </details>
+        <details>
+          <summary>Q9. 이 프로젝트의 가장 큰 기술적 위험과 다음 개선 우선순위는 무엇인가요?</summary>
+          <div class="answer">
+            <p>가장 큰 위험은 비결정적인 AI 응답과 외부 서비스의 지연입니다. 모델의 JSON 형식 준수, OCR 정확도, 네트워크 타임아웃, 긴 요청 취소 처리, 동시 요청 순서가 사용자 경험과 데이터 품질에 직접 영향을 줍니다. 지도 라이브러리·모바일 브라우저·외부 지도 타일은 화면별 회귀 가능성도 큽니다.</p>
+            <p>다음 우선순위는 기능별 AI 요청을 독립 작업으로 추적하는 내구성 있는 비동기 작업 모델, 서버별 속도·오류·큐 길이 관측, AI 결과의 자동 검증 테스트 확대, 공유 토큰의 만료·회수·감사 로그 강화, 모바일 지도와 모달에 대한 실제 기기 회귀 테스트 자동화입니다.</p>
+            <p class="conclusion"><strong>결론:</strong> 다음 단계의 핵심은 기능을 더 늘리는 것이 아니라, AI·지도·공유처럼 외부 의존성이 큰 흐름을 측정 가능하고 복구 가능한 운영 모델로 다지는 것입니다.</p>
+          </div>
+        </details>
+      </div>
+    </section>
+
+    <section>
+      <div class="callout">
+        <h2>블로그 게시 메모</h2>
+        <p>이 파일은 인라인 CSS만 사용한 정적 HTML입니다. 화면 캡처는 <code>dashboard-overview.png</code>, <code>ai-ocr-review.png</code>, <code>travel-map-share.png</code>를 HTML과 같은 경로에 함께 올리면 표시됩니다. 블로그가 외부 이미지 경로를 차단한다면 해당 3개 파일을 블로그 이미지 저장소에 업로드한 뒤 <code>src</code>만 교체하면 됩니다.</p>
+      </div>
+    </section>
+
+    <footer>
+      <p><strong>Calen Portfolio</strong> · Calendar ledger, AI review, travel memory and file workspace.</p>
+      <p>문서 기준: 프로젝트 소스의 Docker Compose, Gradle, frontend package 설정 및 구현된 화면 자산. 작성일: 2026-07-22.</p>
+    </footer>
+  </main>
+</body>
+</html>

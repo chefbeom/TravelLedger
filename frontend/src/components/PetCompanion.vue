@@ -79,11 +79,11 @@ const emit = defineEmits(['open-notifications'])
 const PETS = [
   {
     id: 'yuna',
-    name: 'Yuna',
+    name: '유나',
     kind: 'sprite',
     asset: yunaSpriteUrl,
     walkAsset: yunaWalkRightStripUrl,
-    description: '긴 흑발 일본 여고생 청춘 캐릭터. 차분하게 알림을 알려줍니다.',
+    description: '알림과 안내를 도와주는 펫입니다.',
     greeting: '오늘 알림은 제가 챙길게요.',
     petLine: '좋아요. 잠깐 쉬었다가 다시 이어가요.',
   },
@@ -92,7 +92,7 @@ const PETS = [
     name: '모모',
     kind: 'image',
     asset: momoImageUrl,
-    description: '흰 털 70%, 검은 무늬 30%의 반응 빠른 고양이 펫입니다.',
+    description: '알림을 알려주는 고양이 펫입니다.',
     greeting: '새 소식이 오면 바로 알려드릴게요.',
     petLine: '쓰다듬어 주셔서 기분이 좋아요.',
   },
@@ -101,7 +101,7 @@ const PETS = [
     name: '보미',
     kind: 'image',
     asset: bomiImageUrl,
-    description: '친근한 강아지 알림 도우미입니다.',
+    description: '알림을 알려주는 강아지 펫입니다.',
     greeting: '알림을 놓치지 않게 도와드릴게요.',
     petLine: '좋아요. 다음 알림도 잘 지켜볼게요.',
   },
@@ -114,7 +114,7 @@ function clampPosition(value, min, max) {
 function createDefaultSettings() {
   return {
     enabled: true,
-    selectedPetId: 'yuna',
+    selectedPetId: 'momo',
     size: 100,
     autoWalk: false,
     showSpeech: true,

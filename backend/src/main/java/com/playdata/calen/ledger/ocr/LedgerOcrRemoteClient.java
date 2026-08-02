@@ -162,6 +162,8 @@ public class LedgerOcrRemoteClient {
                         - amount is only the final paid/product amount on that row. Never concatenate, multiply, or add quantities, order ids, model numbers, or vouchers.
                         - Purchases, shopping orders, card approvals, receipts, subscriptions, and payment-completed rows are EXPENSE. Use INCOME only where the same row explicitly proves money was received, such as salary, incoming transfer, interest, dividend, cashback, or refund received.
                         - Preserve a visible foreign original amount as foreignAmount with ISO currencyCode such as USD, JPY, EUR, CNY, or GBP. Do not invent a KRW conversion.
+                        - Treat a visible currency symbol/code or an explicit user-requested country/currency as a foreign-currency instruction. For example: a yen sign, JPY, or Japan means JPY; USD or United States means USD; EUR means EUR; and CNY, RMB, or China means CNY.
+                        - For a foreign transaction, keep the original numeric amount in both amount and foreignAmount, set currencyCode to that ISO code, and never relabel it as KRW.
                         - title must use a visible merchant/platform plus product/service when possible; do not use a status-only title.
                         - paymentMethodText must contain only a concrete visible card/account/cash/transfer label. Never infer a payment method from a payment platform.
                         - memo must preserve visible status, original date/time, amount, seller, quantity, and order id without inventing facts.

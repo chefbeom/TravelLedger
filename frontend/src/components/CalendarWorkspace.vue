@@ -5058,14 +5058,35 @@ defineExpose({
                             @input="updateReceiptReviewEntry(item.id, entryIndex, 'entryTime', $event.target.value)"
                           />
                         </label>
+                        <div v-if="entry.foreignCurrencyCode && Number(entry.foreignAmount || entry.amount) > 0" class="receipt-ocr-review-entry__storage field field--full">
+                          <span class="field__label">&#51200;&#51109; &#48169;&#49885;</span>
+                          <div class="receipt-ocr-review-entry__storage-options">
+                            <label>
+                              <input type="checkbox" :checked="entry.storageMode === 'KRW'" @change="updateReceiptReviewEntry(item.id, entryIndex, 'storageMode', 'KRW')" />
+                              <span>&#50896;&#54868;&#47196; &#51200;&#51109;</span>
+                            </label>
+                            <label>
+                              <input type="checkbox" :checked="entry.storageMode === 'FOREIGN'" @change="updateReceiptReviewEntry(item.id, entryIndex, 'storageMode', 'FOREIGN')" />
+                              <span>&#50808;&#54868;&#47196; &#51200;&#51109;</span>
+                            </label>
+                          </div>
+                          <small>&#50808;&#54868;&#47196; &#51200;&#51109;&#54616;&#47732; &#50896;&#44552;&#50529;&#44284; &#54872;&#50984; &#44592;&#51456; &#50896;&#54868; &#54872;&#49328;&#50529;&#51012; &#54632;&#44760; &#51200;&#51109;&#54633;&#45768;&#45796;&#46;</small>
+                        </div>
+                        <label v-if="entry.storageMode === 'FOREIGN'" class="field receipt-ocr-review-entry__field--currency">
+                          <span class="field__label">&#50808;&#54868; &#53685;&#54868;</span>
+                          <select :value="entry.foreignCurrencyCode" @change="updateReceiptReviewEntry(item.id, entryIndex, 'foreignCurrencyCode', $event.target.value)">
+                            <option v-if="!foreignCurrencyOptions.includes(entry.foreignCurrencyCode)" :value="entry.foreignCurrencyCode">{{ entry.foreignCurrencyCode }}</option>
+                            <option v-for="currency in foreignCurrencyOptions" :key="currency" :value="currency">{{ currency }}</option>
+                          </select>
+                        </label>
                         <label class="field receipt-ocr-review-entry__field--amount">
                           <span class="field__label">금액</span>
                           <input
-                            :value="entry.amount"
+                            :value="entry.storageMode === 'FOREIGN' ? entry.foreignAmount : entry.amount"
                             type="number"
                             min="0"
                             step="100"
-                            @input="updateReceiptReviewEntry(item.id, entryIndex, 'amount', $event.target.value)"
+                            @input="updateReceiptReviewEntry(item.id, entryIndex, entry.storageMode === 'FOREIGN' ? 'foreignAmount' : 'amount', $event.target.value)"
                           />
                         </label>
                         <label class="field receipt-ocr-review-entry__field--category">
@@ -5161,6 +5182,36 @@ defineExpose({
   color: #f7c56b;
   font-size: 0.82rem;
   font-weight: 700;
+}
+.receipt-ocr-review-entry__storage {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.receipt-ocr-review-entry__storage-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 0.9rem;
+}
+
+.receipt-ocr-review-entry__storage-options label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: var(--text);
+  font-size: 0.86rem;
+  font-weight: 800;
+}
+
+.receipt-ocr-review-entry__storage input {
+  width: auto;
+  min-height: auto;
+  margin: 0;
+}
+
+.receipt-ocr-review-entry__storage small {
+  color: var(--text-soft);
+  font-size: 0.78rem;
 }
 </style>
 

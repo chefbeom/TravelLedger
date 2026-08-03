@@ -40,7 +40,7 @@ const emit = defineEmits(['exit-admin-access'])
 const PAGE_SIZE = 10
 const AI_CONTROL_PRESETS_STORAGE_KEY = 'travelledger:admin-ai-control-presets:v1'
 const AI_CONTROL_CANDIDATES_STORAGE_KEY = 'travelledger:admin-ai-control-candidates:v1'
-const AI_CONTROL_CANDIDATE_LIMIT = 3
+const AI_CONTROL_CANDIDATE_LIMIT = 6
 
 const state = reactive({
   loading: true,
@@ -2075,7 +2075,7 @@ onBeforeUnmount(() => {
               <section class="admin-ai-routing__candidate-add" aria-labelledby="candidate-server-title">
                 <div>
                   <strong id="candidate-server-title">후보 서버</strong>
-                  <small>자주 전환할 서버를 최대 3개까지 등록할 수 있습니다.</small>
+                  <small>자주 전환할 서버를 최대 {{ AI_CONTROL_CANDIDATE_LIMIT }}개까지 등록할 수 있습니다.</small>
                 </div>
                 <div class="admin-ai-routing__candidate-add-controls">
                   <select v-model="state.aiCandidateServerPickerKey" aria-label="후보로 등록할 서버">
@@ -2084,7 +2084,7 @@ onBeforeUnmount(() => {
                       {{ preset.title || preset.model || 'AI 서버' }} · {{ preset.provider }}
                     </option>
                   </select>
-                  <button class="button button--secondary" type="button" :disabled="!state.aiCandidateServerPickerKey || state.aiCandidateServerKeys.length >= 3" @click="addAiCandidateServer">후보 추가</button>
+                  <button class="button button--secondary" type="button" :disabled="!state.aiCandidateServerPickerKey || state.aiCandidateServerKeys.length >= AI_CONTROL_CANDIDATE_LIMIT" @click="addAiCandidateServer">후보 추가</button>
                   <button class="button button--ghost" type="button" @click="startAiServerAdd">새 서버 등록</button>
                 </div>
               </section>
@@ -2115,7 +2115,7 @@ onBeforeUnmount(() => {
                     <h4 id="feature-routing-title">AI 기능별 서버 연결</h4>
                     <p>각 기능에서 사용할 후보 서버 하나를 선택하세요.</p>
                   </div>
-                  <span>{{ candidateAiControlPresets.length }}/3 후보</span>
+                  <span>{{ candidateAiControlPresets.length }}/{{ AI_CONTROL_CANDIDATE_LIMIT }} 후보</span>
                 </div>
                 <article v-for="feature in ['ledger', 'image', 'excel']" :key="feature" class="admin-ai-routing__feature-row" :class="{ 'is-connected': candidateAiPresetForFeature(feature) }">
                   <div class="admin-ai-routing__feature-node">

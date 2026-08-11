@@ -117,6 +117,21 @@ function formatCurrency(value) {
 const today = toIsoDate(new Date())
 const quickAmountButtons = [10000, 30000, 50000, 100000]
 const foreignCurrencyOptions = ['USD', 'JPY', 'EUR', 'CNY', 'GBP', 'AUD', 'CAD', 'HKD', 'SGD', 'THB', 'PHP', 'VND', 'TWD']
+const OCR_FOREIGN_CURRENCY_HINTS = [
+  { code: 'CNY', tokens: ['cny', 'cn\u00A5', 'rmb', 'renminbi', '\uC704\uC548', '\uC911\uAD6D', 'china'] },
+  { code: 'JPY', tokens: ['jpy', '\uFFE5', '\u00A5', 'yen', '\uC5D4\uD654', '\uC77C\uBCF8', 'japan'] },
+  { code: 'USD', tokens: ['usd', 'us$', '$', '\uB2EC\uB7EC', '\uBBF8\uAD6D', 'united states', 'usa'] },
+  { code: 'EUR', tokens: ['eur', '\u20AC', 'euro', '\uC720\uB85C', '\uC720\uB7FD', 'europe'] },
+  { code: 'GBP', tokens: ['gbp', '\u00A3', 'pound', '\uD30C\uC6B4\uB4DC', '\uC601\uAD6D', 'united kingdom', 'britain'] },
+  { code: 'AUD', tokens: ['aud', 'a$', 'australian dollar', '\uD638\uC8FC', 'australia'] },
+  { code: 'CAD', tokens: ['cad', 'c$', 'canadian dollar', '\uCE90\uB098\uB2E4', 'canada'] },
+  { code: 'HKD', tokens: ['hkd', 'hk$', 'hong kong dollar', '\uD64D\uCF69', 'hong kong'] },
+  { code: 'SGD', tokens: ['sgd', 's$', 'singapore dollar', '\uC2F1\uAC00\uD3EC\uB974', 'singapore'] },
+  { code: 'THB', tokens: ['thb', '\u0E3F', 'baht', '\uBC14\uD2B8', '\uD0DC\uAD6D', 'thailand'] },
+  { code: 'PHP', tokens: ['php', '\u20B1', 'philippine peso', '\uD398\uC18C', '\uD544\uB9AC\uD540', 'philippines'] },
+  { code: 'VND', tokens: ['vnd', '\u20AB', 'dong', '\uBCA0\uD2B8\uB0A8', 'vietnam'] },
+  { code: 'TWD', tokens: ['twd', 'nt$', 'new taiwan dollar', '\uB300\uB9CC', 'taiwan'] },
+]
 const FOREIGN_EXCHANGE_DEBOUNCE_MS = 180
 const SEARCH_PAGE_SIZE = 100
 const SEARCH_OTHER_FILTER_VALUE = '__OTHER__'
@@ -1697,9 +1712,26 @@ function collectReceiptOcrTextCandidates(suggestion = {}, context = {}) {
     suggestion.categoryText,
     suggestion.rawText,
     context.rawText,
+    context.requestPrompt,
+    context.analysisPrompt,
   ]
     .map((value) => String(value ?? '').trim())
     .filter(Boolean)
+}
+
+function normalizeOcrAmount(value) {
+  const amount = Number(value)
+  return Number.isFinite(amount) && amount > 0 ? String(amount) : ''
+}
+
+function inferReceiptOcrForeignCurrencyCode(suggestion = {}, context = {}) {
+  const declaredCurrencyCode = normalizeForeignCurrencyCode(suggestion.foreignCurrencyCode || suggestion.currencyCode)
+  if (declaredCurrencyCode && declaredCurrencyCode !== 'KRW') {
+    return declaredCurrencyCode
+  }
+
+  const evidence = collectReceiptOcrTextCandidates(suggestion, context).join('\n').toLowerCase()
+  return OCR_FOREIGN_CURRENCY_HINTS.find(({ tokens }) => tokens.some((token) => evidence.includes(token.toLowerCase())))?.code || ''
 }
 
 const RECEIPT_INCOME_ENTRY_HINTS = [
@@ -3163,18 +3195,19 @@ function setReceiptOcrDocumentType(documentType) {
 function normalizeOcrSuggestion(suggestion = {}, context = {}) {
   const entryType = resolveReceiptSuggestionEntryType(suggestion, context)
   const category = resolveReceiptSuggestionCategory(suggestion, entryType, context)
+  const foreignCurrencyCode = inferReceiptOcrForeignCurrencyCode(suggestion, context)
+  const amount = normalizeOcrAmount(suggestion.amount)
+  const foreignAmount = normalizeOcrAmount(suggestion.foreignAmount) || (foreignCurrencyCode ? amount : '')
+  const canStoreForeign = Boolean(foreignCurrencyCode && foreignCurrencyCode !== 'KRW' && Number(foreignAmount) > 0)
   return {
     entryDate: resolveReceiptSuggestionDate(suggestion, context),
     entryTime: resolveReceiptSuggestionTime(suggestion, context),
     title: suggestion.title || '',
     memo: suggestion.memo || '',
-    amount: suggestion.amount !== null && suggestion.amount !== undefined && suggestion.amount !== ''
-      ? String(Number(suggestion.amount || 0))
-      : '',
-    foreignCurrencyCode: normalizeForeignCurrencyCode(suggestion.foreignCurrencyCode || suggestion.currencyCode),
-    foreignAmount: suggestion.foreignAmount !== null && suggestion.foreignAmount !== undefined && suggestion.foreignAmount !== ''
-      ? String(Number(suggestion.foreignAmount || 0))
-      : '',
+    amount,
+    foreignCurrencyCode,
+    foreignAmount,
+    storageMode: canStoreForeign && String(suggestion.storageMode || '').toUpperCase() !== 'KRW' ? 'FOREIGN' : 'KRW',
     entryType,
     categoryGroupId: category.categoryGroupId,
     categoryGroupName: category.categoryGroupName,
@@ -3184,11 +3217,21 @@ function normalizeOcrSuggestion(suggestion = {}, context = {}) {
     paymentMethodName: suggestion.paymentMethodName || '',
   }
 }
+
+function hasReceiptOcrForeignAmount(suggestion = {}) {
+  const foreignCurrencyCode = inferReceiptOcrForeignCurrencyCode(suggestion)
+  const foreignAmount = suggestion.foreignAmount ?? suggestion.amount
+  const amount = Number(foreignAmount)
+  return Boolean(foreignCurrencyCode && foreignCurrencyCode !== 'KRW' && Number.isFinite(amount) && amount > 0)
+}
+
 function attachReceiptOcrSuggestionMeta(suggestion, item, entryIndex) {
   return {
     ...normalizeOcrSuggestion(suggestion, {
       rawText: item.rawText,
       documentType: item.documentType,
+      requestPrompt: item.requestPrompt,
+      analysisPrompt: item.analysisPrompt,
     }),
     analysisId: item.analysisId || null,
     clientRequestId: item.clientRequestId || null,
@@ -3209,6 +3252,8 @@ function createReceiptOcrItem(file, documentType) {
     status: 'queued',
     error: '',
     rawText: '',
+    requestPrompt: '',
+    analysisPrompt: '',
     suggestedEntries: [],
     lineItems: [],
     warnings: [],
@@ -3239,6 +3284,8 @@ function createReceiptOcrStoredImageItem(sourceItem, documentType) {
     status: 'queued',
     error: '',
     rawText: '',
+    requestPrompt: '',
+    analysisPrompt: '',
     suggestedEntries: [],
     lineItems: [],
     warnings: [],
@@ -3317,7 +3364,29 @@ function updateReceiptOcrReviewEntry({ itemId, entryIndex, field, value }) {
     return
   }
 
-  entry[field] = value
+  if (field === 'storageMode') {
+    entry.storageMode = value === 'FOREIGN' && hasReceiptOcrForeignAmount(entry) ? 'FOREIGN' : 'KRW'
+    return
+  }
+
+  if (field === 'foreignCurrencyCode') {
+    entry.foreignCurrencyCode = normalizeForeignCurrencyCode(value)
+    entry.foreignAmount = normalizeOcrAmount(entry.foreignAmount) || normalizeOcrAmount(entry.amount)
+    entry.storageMode = hasReceiptOcrForeignAmount(entry) ? 'FOREIGN' : 'KRW'
+    return
+  }
+
+  if (field === 'foreignAmount') {
+    const normalizedAmount = normalizeOcrAmount(value)
+    entry.foreignAmount = normalizedAmount
+    entry.amount = normalizedAmount
+    return
+  }
+
+  entry[field] = field === 'amount' ? normalizeOcrAmount(value) : value
+  if (field === 'amount' && entry.storageMode === 'FOREIGN') {
+    entry.foreignAmount = entry.amount
+  }
 
   if (field === 'entryType') {
     entry.entryType = value === 'INCOME' ? 'INCOME' : 'EXPENSE'
@@ -3713,6 +3782,7 @@ async function analyzeReceiptFile(file, documentType, existingItem = null, promp
   }
   item.status = 'analyzing'
   item.analysisStatus = 'PROCESSING'
+  item.analysisPrompt = prompt
   item.abortController = new AbortController()
   syncReceiptOcrBusyState()
 
@@ -4038,7 +4108,8 @@ async function rerunReceiptOcrItem(payload = {}) {
 }
 function buildReceiptOcrAppliedSnapshot(suggestion = {}) {
   const normalizedSuggestion = normalizeOcrSuggestion(suggestion)
-  const amount = normalizedSuggestion.foreignCurrencyCode
+  const savesForeignCurrency = normalizedSuggestion.storageMode === 'FOREIGN' && hasReceiptOcrForeignAmount(normalizedSuggestion)
+  const amount = savesForeignCurrency
     ? String(Number(entryForm.amount || 0))
     : normalizedSuggestion.amount !== ''
       ? String(Number(normalizedSuggestion.amount || 0))
@@ -4049,9 +4120,9 @@ function buildReceiptOcrAppliedSnapshot(suggestion = {}) {
     title: normalizedSuggestion.title || entryForm.title,
     memo: normalizedSuggestion.memo || entryForm.memo,
     amount,
-    currencyMode: normalizedSuggestion.foreignCurrencyCode ? 'FOREIGN' : 'KRW',
-    foreignCurrencyCode: normalizedSuggestion.foreignCurrencyCode || 'USD',
-    foreignAmount: normalizedSuggestion.foreignAmount || '',
+    currencyMode: savesForeignCurrency ? 'FOREIGN' : 'KRW',
+    foreignCurrencyCode: savesForeignCurrency ? normalizedSuggestion.foreignCurrencyCode : 'USD',
+    foreignAmount: savesForeignCurrency ? normalizedSuggestion.foreignAmount : '',
     entryType: normalizedSuggestion.entryType || 'EXPENSE',
     categoryGroupId: normalizedSuggestion.categoryGroupId || entryForm.categoryGroupId,
     categoryDetailId: normalizedSuggestion.categoryDetailId || entryForm.categoryDetailId,
@@ -4140,7 +4211,8 @@ function cancelReceiptOcrAppliedSuggestion() {
 async function buildReceiptOcrDirectEntryPayload(suggestion = {}) {
   const normalizedSuggestion = normalizeOcrSuggestion(suggestion)
   const entryType = normalizedSuggestion.entryType === 'INCOME' ? 'INCOME' : 'EXPENSE'
-  const foreignCurrencyCode = normalizedSuggestion.foreignCurrencyCode && normalizedSuggestion.foreignCurrencyCode !== 'KRW'
+  const savesForeignCurrency = normalizedSuggestion.storageMode === 'FOREIGN' && hasReceiptOcrForeignAmount(normalizedSuggestion)
+  const foreignCurrencyCode = savesForeignCurrency && normalizedSuggestion.foreignCurrencyCode && normalizedSuggestion.foreignCurrencyCode !== 'KRW'
     ? normalizedSuggestion.foreignCurrencyCode
     : null
   const foreignAmount = foreignCurrencyCode
@@ -4365,7 +4437,7 @@ async function applyReceiptOcrSuggestion(suggestion = receiptOcr.suggestedEntry)
   entryForm.memo = normalizedSuggestion.memo || entryForm.memo
   entryForm.entryType = normalizedSuggestion.entryType || 'EXPENSE'
   clearForeignExchangeFields()
-  if (normalizedSuggestion.foreignCurrencyCode && normalizedSuggestion.foreignCurrencyCode !== 'KRW') {
+  if (normalizedSuggestion.storageMode === 'FOREIGN' && hasReceiptOcrForeignAmount(normalizedSuggestion)) {
     entryForm.currencyMode = 'FOREIGN'
     entryForm.foreignCurrencyCode = normalizedSuggestion.foreignCurrencyCode
     entryForm.foreignAmount = normalizedSuggestion.foreignAmount || normalizedSuggestion.amount

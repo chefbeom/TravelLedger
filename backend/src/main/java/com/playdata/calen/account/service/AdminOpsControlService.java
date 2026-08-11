@@ -53,7 +53,7 @@ public class AdminOpsControlService {
     private static final String AI_ROUTING_CANDIDATE_PREFIX = "ai.routing.candidate.";
     private static final String AI_ROUTING_CONNECTION_PREFIX = "ai.routing.connection.";
     private static final String AI_ROUTING_CONFIGURED = "ai.routing.configured";
-    private static final int AI_ROUTING_CANDIDATE_LIMIT = 3;
+    private static final int AI_ROUTING_CANDIDATE_LIMIT = 6;
 
     private final LedgerAiAnalysisProperties aiProperties;
     private final MinioProperties minioProperties;
@@ -231,7 +231,7 @@ public class AdminOpsControlService {
             return result;
         }
         if (requested.size() > AI_ROUTING_CANDIDATE_LIMIT) {
-            throw new BadRequestException("AI routing supports up to three candidate servers.");
+            throw new BadRequestException("AI routing supports up to six candidate servers.");
         }
         Map<String, Boolean> keys = new LinkedHashMap<>();
         for (AdminAiServerCandidateRequest candidate : requested) {

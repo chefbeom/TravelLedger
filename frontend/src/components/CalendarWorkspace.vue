@@ -2894,11 +2894,14 @@ function aggregateChartGridY(ratio) {
   return Number((AGGREGATE_CHART_TOP_PADDING + aggregateChartDrawableHeight() * (1 - safeRatio)).toFixed(1))
 }
 
-function buildChartPointItems(dailyItems, key, maxAmount, seriesLabel, periodLabel = '') {
+function buildChartPointItems(dailyItems, key, maxAmount, seriesLabel, periodLabel = '', xDomainDates = dailyItems.chartDomainDates || dailyItems) {
+  const domain = Array.isArray(xDomainDates) && xDomainDates.length ? xDomainDates : dailyItems
+  const domainIndexByDate = new Map(domain.map((date, index) => [date, index]))
   return dailyItems.map((item, index) => {
     const amount = Number(item[key]) || 0
     const previousAmount = index > 0 ? Number(dailyItems[index - 1]?.[key]) || 0 : 0
-    const x = chartXForIndex(index, dailyItems.length)
+    const domainIndex = domainIndexByDate.get(item.date) ?? index
+    const x = chartXForIndex(domainIndex, domain.length)
     const y = chartYForAmount(amount, maxAmount)
     return { key: `${periodLabel || 'current'}-${item.date}-${key}`, date: item.date, xLabel: item.date.slice(5).replace('-', '/'), day: Number(item.date.slice(-2)), series: key, seriesLabel, amount, dailyAmount: amount - previousAmount, x: Number(x.toFixed(1)), y: Number(y.toFixed(1)) }
   })
@@ -2925,6 +2928,35 @@ function chartTickLabel(date, period) {
   return date.slice(5).replace('-', '/')
 }
 
+function estimateAggregateChartTextWidth(text, fontSize = 7.4) {
+  return Math.max(12, String(text || '').length * fontSize * 0.56 + 6)
+}
+
+function resolveAggregateChartDateTickCollisions(ticks) {
+  const list = Array.isArray(ticks) ? ticks : []
+  const visible = []
+  const lastKey = list.at(-1)?.key
+  list.forEach((tick) => {
+    const previous = visible.at(-1)
+    if (!previous) {
+      visible.push(tick)
+      return
+    }
+
+    const requiredGap = (estimateAggregateChartTextWidth(previous.label, 7) + estimateAggregateChartTextWidth(tick.label, 7)) / 2 + 6
+    if (tick.x - previous.x >= requiredGap) {
+      visible.push(tick)
+      return
+    }
+
+    if (tick.key === lastKey && visible.length > 1) {
+      visible.pop()
+      visible.push(tick)
+    }
+  })
+  return visible
+}
+
 function buildChartDateTicks(dailyItems, period) {
   if (!dailyItems.length) return []
   const indexes = []
@@ -2944,10 +2976,11 @@ function buildChartDateTicks(dailyItems, period) {
     indexes.push(0)
   }
   indexes.push(dailyItems.length - 1)
-  return Array.from(new Set(indexes)).filter((index) => index >= 0 && index < dailyItems.length).map((index) => {
+  const ticks = Array.from(new Set(indexes)).filter((index) => index >= 0 && index < dailyItems.length).map((index) => {
     const item = dailyItems[index]
     return { key: item.date, label: chartTickLabel(item.date, period), x: Number(chartXForIndex(index, dailyItems.length).toFixed(1)) }
   })
+  return resolveAggregateChartDateTickCollisions(ticks)
 }
 
 function buildChartAmountTicks(maxAmount) {
@@ -3057,6 +3090,111 @@ function getAggregateChartPreviewLabelCount(card) {
   return 4
 }
 
+function sampleAggregateChartLabelPointItems(items, maxPoints = 8) {
+  const sampled = sampleAggregateChartPointItems(items, maxPoints)
+  if (sampled.length <= 1) return sampled
+  const selected = []
+  sampled.forEach((point, index) => {
+    const previous = selected.at(-1)
+    const isLast = index === sampled.length - 1
+    if (!previous || previous.amount !== point.amount || isLast) {
+      selected.push(point)
+    }
+  })
+  return selected
+}
+
+function buildAggregateChartLabelItems(card, mode = 'detail') {
+  const chart = card?.chart
+  if (!chart) return []
+  const isPreview = mode === 'preview'
+  const maxPoints = isPreview ? getAggregateChartPreviewLabelCount(card) : 8
+  const candidates = []
+  const addCandidates = (items, seriesClass, amountFormatter, yOffset) => {
+    sampleAggregateChartLabelPointItems(items, maxPoints).forEach((point) => {
+      if (!isPreview && aggregateChartSelectedPoint.value?.key === point.key) return
+      const text = amountFormatter(point.amount)
+      candidates.push({
+        key: `${mode}-${seriesClass}-${point.key}`,
+        point,
+        seriesClass,
+        text,
+        x: point.x,
+        y: point.y + yOffset,
+      })
+    })
+  }
+
+  if (isPreview) {
+    if (card.config.showIncomeCumulative) {
+      addCandidates(card.chart.incomePointItems, 'income', (amount) => formatAggregateChartPreviewNumber(amount, card), -9)
+    }
+    if (card.config.showExpenseCumulative) {
+      addCandidates(card.chart.expensePointItems, 'expense', (amount) => formatAggregateChartPreviewNumber(amount, card), 11)
+    }
+  } else {
+    if (card.config.comparePreviousPeriod && card.config.showExpenseCumulative) {
+      addCandidates(card.chart.previousExpensePointItems, 'previous', (amount) => formatCompactNumber(amount), -9)
+    }
+    if (card.config.showExpenseCumulative) {
+      addCandidates(card.chart.expensePointItems, 'current', (amount) => formatCompactNumber(amount), 11)
+    }
+  }
+
+  const fontSize = isPreview ? 10 : 7.4
+  const minX = AGGREGATE_CHART_VALUE_LABEL_MIN_X
+  const maxX = AGGREGATE_CHART_VALUE_LABEL_MAX_X
+  const minY = AGGREGATE_CHART_TOP_PADDING + 6
+  const maxY = AGGREGATE_CHART_BASELINE_Y - 6
+  const placed = []
+  const yOffsets = [0, -12, 12, -24, 24, -36, 36]
+  candidates.sort((left, right) => left.x - right.x || left.y - right.y || left.key.localeCompare(right.key))
+
+  return candidates.flatMap((candidate) => {
+    const width = estimateAggregateChartTextWidth(candidate.text, fontSize)
+    const x = clamp(candidate.x, minX, maxX)
+    for (const offset of yOffsets) {
+      const y = clamp(candidate.y + offset, minY, maxY)
+      const rect = {
+        left: x - width / 2 - 3,
+        right: x + width / 2 + 3,
+        top: y - 5,
+        bottom: y + 5,
+      }
+      const overlaps = placed.some((previous) => (
+        rect.left < previous.right
+        && rect.right > previous.left
+        && rect.top < previous.bottom
+        && rect.bottom > previous.top
+      ))
+      if (!overlaps) {
+        placed.push(rect)
+        return [{ ...candidate, x: Number(x.toFixed(1)), y: Number(y.toFixed(1)) }]
+      }
+    }
+    return []
+  })
+}
+
+function resolveAggregateChartVisibleRange(range, today = todayIso) {
+  if (!range?.from || !range?.to || today < range.from || today >= range.to) return range
+  return { ...range, to: today }
+}
+
+function aggregateChartCrosshairLabel(point) {
+  if (!point) return { x: 0, y: 0, anchor: 'start', text: '' }
+  const alignEnd = point.x >= AGGREGATE_CHART_WIDTH * 0.7
+  const x = alignEnd
+    ? Math.max(AGGREGATE_CHART_HORIZONTAL_PADDING + 8, point.x - 8)
+    : Math.min(AGGREGATE_CHART_CROSSHAIR_LABEL_MAX_X, point.x + 8)
+  return {
+    x: Number(x.toFixed(1)),
+    y: Number(clamp(point.y - 8, AGGREGATE_CHART_TOP_PADDING + 8, AGGREGATE_CHART_BASELINE_Y - 8).toFixed(1)),
+    anchor: alignEnd ? 'end' : 'start',
+    text: `${point.xLabel} / ${formatCompactNumber(point.amount)}`,
+  }
+}
+
 function formatAggregateChartCompactAmount(value) {
   const amount = Number(value || 0)
   const absoluteAmount = Math.abs(amount)
@@ -3082,10 +3220,14 @@ function buildMonthlyCumulativeChartData(entries, range, overview, options = {})
   const period = options.period || 'MONTH'
   const showIncome = options.showIncome !== false
   const showExpense = options.showExpense !== false
-  const currentDates = listDateRange(range.from, range.to, period === 'YEAR' ? 370 : 120)
+  const currentDomainDates = listDateRange(range.from, range.to, period === 'YEAR' ? 370 : 120)
+  const visibleRange = resolveAggregateChartVisibleRange(range)
+  const currentDates = listDateRange(visibleRange.from, visibleRange.to, period === 'YEAR' ? 370 : 120)
   const currentItems = summarizeEntriesByDate(entries, currentDates)
+  currentItems.chartDomainDates = currentDomainDates
   const previousDates = options.previousRange ? listDateRange(options.previousRange.from, options.previousRange.to, period === 'YEAR' ? 370 : 120) : []
   const previousItems = options.previousEntries ? summarizeEntriesByDate(options.previousEntries, previousDates) : []
+  previousItems.chartDomainDates = previousDates
   const incomeTotal = currentItems.at(-1)?.income || 0
   const expenseTotal = currentItems.at(-1)?.expense || 0
   const maxAmount = resolveAggregateChartMaxAmount(currentItems, previousItems, {
@@ -3104,9 +3246,9 @@ function buildMonthlyCumulativeChartData(entries, range, overview, options = {})
     .map((point) => ({ ...point, seriesLabel: `${comparisonLabel} 지출`, comparisonLabel, comparisonScope: 'previous' }))
   const headline = buildChartHeadline(showIncome, showExpense, incomeTotal, expenseTotal)
   return {
-    rangeLabel: `${range.from.slice(5).replace('-', '/')} ~ ${range.to.slice(5).replace('-', '/')}`,
+    rangeLabel: `${visibleRange.from.slice(5).replace('-', '/')} ~ ${visibleRange.to.slice(5).replace('-', '/')}`,
     previousRangeLabel: options.previousRange ? `${options.previousRange.from.slice(5).replace('-', '/')} ~ ${options.previousRange.to.slice(5).replace('-', '/')}` : '',
-    hasEntries: Number(overview.entryCount || 0) > 0,
+    hasEntries: entries.some((entry) => currentDates.includes(entry.entryDate)),
     incomeTotal,
     expenseTotal,
     maxAmount,
@@ -3120,7 +3262,7 @@ function buildMonthlyCumulativeChartData(entries, range, overview, options = {})
     previousExpensePoints: buildChartPoints(previousExpensePointItems),
     incomeAreaPoints: buildChartAreaPoints(incomePointItems),
     expenseAreaPoints: buildChartAreaPoints(expensePointItems),
-    dateTicks: buildChartDateTicks(currentItems, period),
+    dateTicks: buildChartDateTicks(currentDomainDates.map((date) => ({ date })), period),
     amountTicks: buildChartAmountTicks(maxAmount),
     maxAmountLabel: formatCompactNumber(maxAmount),
     netTotal: incomeTotal - expenseTotal,
@@ -4283,8 +4425,7 @@ defineExpose({
                   <circle v-for="(point, pointIndex) in sampleAggregateChartPointItems(card.config.showExpenseCumulative ? card.chart.expensePointItems : [], 8)" :key="`preview-current-expense-${point.date}-${pointIndex}`" :cx="point.x" :cy="point.y" r="3.7" class="household-aggregate-chart__point household-aggregate-chart__point--expense household-aggregate-chart__point--current" />
                   <circle v-for="(point, pointIndex) in sampleAggregateChartPointItems(card.config.comparePreviousPeriod && card.config.showIncomeCumulative ? card.chart.previousIncomePointItems : [], 8)" :key="`preview-previous-income-${point.date}-${pointIndex}`" :cx="point.x" :cy="point.y" r="3.5" class="household-aggregate-chart__point household-aggregate-chart__point--previous" />
                   <circle v-for="(point, pointIndex) in sampleAggregateChartPointItems(card.config.comparePreviousPeriod && card.config.showExpenseCumulative ? card.chart.previousExpensePointItems : [], 8)" :key="`preview-previous-expense-${point.date}-${pointIndex}`" :cx="point.x" :cy="point.y" r="3.5" class="household-aggregate-chart__point household-aggregate-chart__point--previous" />
-                  <text v-for="(point, pointIndex) in sampleAggregateChartPointItems(card.config.showIncomeCumulative ? card.chart.incomePointItems : [], getAggregateChartPreviewLabelCount(card))" :key="`preview-income-label-${point.date}-${pointIndex}`" :x="Math.min(Math.max(point.x, AGGREGATE_CHART_VALUE_LABEL_MIN_X), AGGREGATE_CHART_VALUE_LABEL_MAX_X)" :y="Math.max(14, point.y - 8)" text-anchor="middle" class="household-aggregate-chart__value-label household-aggregate-chart__value-label--preview household-aggregate-chart__value-label--income">{{ formatAggregateChartPreviewNumber(point.amount, card) }}</text>
-                  <text v-for="(point, pointIndex) in sampleAggregateChartPointItems(card.config.showExpenseCumulative ? card.chart.expensePointItems : [], getAggregateChartPreviewLabelCount(card))" :key="`preview-expense-label-${point.date}-${pointIndex}`" :x="Math.min(Math.max(point.x, AGGREGATE_CHART_VALUE_LABEL_MIN_X), AGGREGATE_CHART_VALUE_LABEL_MAX_X)" :y="Math.min(AGGREGATE_CHART_BASELINE_Y - 4, point.y + 12)" text-anchor="middle" class="household-aggregate-chart__value-label household-aggregate-chart__value-label--preview household-aggregate-chart__value-label--expense">{{ formatAggregateChartPreviewNumber(point.amount, card) }}</text>
+                  <text v-for="(label, labelIndex) in buildAggregateChartLabelItems(card, 'preview')" :key="label.key || labelIndex" :x="label.x" :y="label.y" text-anchor="middle" :class="['household-aggregate-chart__value-label', 'household-aggregate-chart__value-label--preview', `household-aggregate-chart__value-label--${label.seriesClass}`]">{{ label.text }}</text>
                 </svg>
               </div>
               <div class="household-aggregate-chart__legend household-aggregate-chart__legend--preview">
@@ -4364,13 +4505,12 @@ defineExpose({
               <circle v-for="(point, pointIndex) in sampleAggregateChartPointItems(aggregateChartDetailCard.config.comparePreviousPeriod && aggregateChartDetailCard.config.showExpenseCumulative ? aggregateChartDetailCard.chart.previousExpensePointItems : [], 14)" :key="`detail-previous-expense-${point.date}-${pointIndex}`" :cx="point.x" :cy="point.y" r="4.4" class="household-aggregate-chart__point household-aggregate-chart__point--previous household-aggregate-chart__point--interactive" tabindex="0" @click.stop="selectAggregateChartPoint(point)" @keydown.enter.prevent="selectAggregateChartPoint(point)" @keydown.space.prevent="selectAggregateChartPoint(point)" />
               <circle v-for="(point, pointIndex) in sampleAggregateChartPointItems(aggregateChartDetailCard.config.showIncomeCumulative ? aggregateChartDetailCard.chart.incomePointItems : [], 14)" :key="`detail-current-income-${point.date}-${pointIndex}`" :cx="point.x" :cy="point.y" r="4.8" class="household-aggregate-chart__point household-aggregate-chart__point--income household-aggregate-chart__point--current household-aggregate-chart__point--interactive" tabindex="0" @click.stop="selectAggregateChartPoint(point)" @keydown.enter.prevent="selectAggregateChartPoint(point)" @keydown.space.prevent="selectAggregateChartPoint(point)" />
               <circle v-for="(point, pointIndex) in sampleAggregateChartPointItems(aggregateChartDetailCard.config.showExpenseCumulative ? aggregateChartDetailCard.chart.expensePointItems : [], 14)" :key="`detail-current-expense-${point.date}-${pointIndex}`" :cx="point.x" :cy="point.y" r="4.8" class="household-aggregate-chart__point household-aggregate-chart__point--expense household-aggregate-chart__point--current household-aggregate-chart__point--interactive" tabindex="0" @click.stop="selectAggregateChartPoint(point)" @keydown.enter.prevent="selectAggregateChartPoint(point)" @keydown.space.prevent="selectAggregateChartPoint(point)" />
-              <text v-for="(point, pointIndex) in sampleAggregateChartPointItems(aggregateChartDetailCard.config.comparePreviousPeriod && aggregateChartDetailCard.config.showExpenseCumulative ? aggregateChartDetailCard.chart.previousExpensePointItems : [], 8)" :key="`detail-previous-expense-label-${point.date}-${pointIndex}`" :x="Math.min(Math.max(point.x, AGGREGATE_CHART_VALUE_LABEL_MIN_X), AGGREGATE_CHART_VALUE_LABEL_MAX_X)" :y="Math.max(16, point.y - 8)" text-anchor="middle" class="household-aggregate-chart__value-label household-aggregate-chart__value-label--previous">{{ formatCompactNumber(point.amount) }}</text>
-              <text v-for="(point, pointIndex) in sampleAggregateChartPointItems(aggregateChartDetailCard.config.showExpenseCumulative ? aggregateChartDetailCard.chart.expensePointItems : [], 8)" :key="`detail-current-expense-label-${point.date}-${pointIndex}`" :x="Math.min(Math.max(point.x, AGGREGATE_CHART_VALUE_LABEL_MIN_X), AGGREGATE_CHART_VALUE_LABEL_MAX_X)" :y="Math.max(16, point.y + 12)" text-anchor="middle" class="household-aggregate-chart__value-label household-aggregate-chart__value-label--current">{{ formatCompactNumber(point.amount) }}</text>
+              <text v-for="(label, labelIndex) in buildAggregateChartLabelItems(aggregateChartDetailCard, 'detail')" :key="label.key || labelIndex" :x="label.x" :y="label.y" text-anchor="middle" :class="['household-aggregate-chart__value-label', `household-aggregate-chart__value-label--${label.seriesClass}`]">{{ label.text }}</text>
               <g v-if="aggregateChartSelectedPoint" class="household-aggregate-chart__crosshair" aria-hidden="true">
                 <line :x1="aggregateChartSelectedPoint.x" :x2="aggregateChartSelectedPoint.x" :y1="AGGREGATE_CHART_TOP_PADDING" :y2="AGGREGATE_CHART_BASELINE_Y" />
                 <line :x1="AGGREGATE_CHART_HORIZONTAL_PADDING" :x2="AGGREGATE_CHART_AXIS_END_X" :y1="aggregateChartSelectedPoint.y" :y2="aggregateChartSelectedPoint.y" />
                 <circle :cx="aggregateChartSelectedPoint.x" :cy="aggregateChartSelectedPoint.y" r="7" />
-                <text :x="Math.min(aggregateChartSelectedPoint.x + 8, AGGREGATE_CHART_CROSSHAIR_LABEL_MAX_X)" :y="Math.max(aggregateChartSelectedPoint.y - 8, 18)">{{ aggregateChartSelectedPoint.xLabel }} · {{ formatCompactNumber(aggregateChartSelectedPoint.amount) }}</text>
+                <text :x="aggregateChartCrosshairLabel(aggregateChartSelectedPoint).x" :y="aggregateChartCrosshairLabel(aggregateChartSelectedPoint).y" :text-anchor="aggregateChartCrosshairLabel(aggregateChartSelectedPoint).anchor">{{ aggregateChartCrosshairLabel(aggregateChartSelectedPoint).text }}</text>
               </g>
             </svg>
           </div>
@@ -5274,6 +5414,3 @@ defineExpose({
   font-size: 0.78rem;
 }
 </style>
-
-
-

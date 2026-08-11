@@ -2824,6 +2824,7 @@ function listDateRange(from, to, maxDays = 370) {
 
 const aggregateChartDetailCard = ref(null)
 const aggregateChartSelectedPoint = ref(null)
+const aggregateChartMaxAmountDraft = ref('')
 
 const AGGREGATE_CHART_WIDTH = 448
 const AGGREGATE_CHART_HEIGHT = 200
@@ -3015,12 +3016,42 @@ function findDefaultAggregateChartPoint(card) {
 function openAggregateChartDetail(card) {
   if (!card?.chart) return
   aggregateChartDetailCard.value = card
+  const configuredMaxAmount = normalizeAggregateChartMaxAmount(card.config.chartMaxAmount)
+  aggregateChartMaxAmountDraft.value = configuredMaxAmount > 0 ? String(configuredMaxAmount) : ''
   aggregateChartSelectedPoint.value = findDefaultAggregateChartPoint(card)
 }
 
 function closeAggregateChartDetail() {
   aggregateChartDetailCard.value = null
   aggregateChartSelectedPoint.value = null
+  aggregateChartMaxAmountDraft.value = ''
+}
+
+function applyAggregateChartMaxAmount() {
+  const detailCard = aggregateChartDetailCard.value
+  if (!detailCard?.chart) return
+
+  const normalizedMaxAmount = normalizeAggregateChartMaxAmount(aggregateChartMaxAmountDraft.value)
+  aggregateChartMaxAmountDraft.value = normalizedMaxAmount > 0 ? String(normalizedMaxAmount) : ''
+  const selectedPoint = aggregateChartSelectedPoint.value
+  const nextCard = buildAggregateCard({
+    ...detailCard.config,
+    chartMaxAmount: normalizedMaxAmount,
+  }, detailCard.index)
+  aggregateChartDetailCard.value = nextCard
+  aggregateChartSelectedPoint.value = selectedPoint
+    ? visibleAggregateChartPoints(nextCard).find((point) => point.key === selectedPoint.key) || findDefaultAggregateChartPoint(nextCard)
+    : findDefaultAggregateChartPoint(nextCard)
+
+  const configs = normalizeAggregateConfigs(props.aggregateWidgetConfigs)
+  const targetIndex = configs.findIndex((config) => config.id === detailCard.config.id)
+  const resolvedIndex = targetIndex >= 0 ? targetIndex : detailCard.index
+  const nextConfigs = configs.map((config, index) => (
+    index === resolvedIndex
+      ? { ...config, chartMaxAmount: normalizedMaxAmount }
+      : config
+  ))
+  emit('save-aggregate-widget-configs', serializeAggregateWidgetConfigs(nextConfigs))
 }
 
 function selectAggregateChartPoint(point) {
@@ -3274,6 +3305,10 @@ function buildMonthlyCumulativeChartData(entries, range, overview, options = {})
     aggregateChartDataMax(comparisonItems, showIncome, showExpense),
   )
   const comparisonLabel = aggregateChartComparisonLabel(period)
+  const previousIncomeTotal = previousItems.at(-1)?.income || 0
+  const previousExpenseTotal = previousItems.at(-1)?.expense || 0
+  const previousSummaryAmount = showExpense ? previousExpenseTotal : previousIncomeTotal
+  const previousSummaryLabel = comparisonLabel + ' ' + (showExpense ? '\uC9C0\uCD9C' : '\uC218\uC785')
   const incomePointItems = buildChartPointItems(currentItems, 'income', scaleMaxAmount, '현재 수입')
     .map((point) => ({ ...point, seriesLabel: '현재 수입', comparisonLabel: '현재', comparisonScope: 'current' }))
   const expensePointItems = buildChartPointItems(currentItems, 'expense', scaleMaxAmount, '현재 지출')
@@ -3289,6 +3324,10 @@ function buildMonthlyCumulativeChartData(entries, range, overview, options = {})
     hasEntries: entries.some((entry) => currentDates.includes(entry.entryDate)),
     incomeTotal,
     expenseTotal,
+    previousIncomeTotal,
+    previousExpenseTotal,
+    previousSummaryAmount,
+    previousSummaryLabel,
     maxAmount: axisMaxAmount,
     targetLineY: targetAmount > 0 && visibleDataMax > targetAmount
       ? Number(chartYForAmount(targetAmount, scaleMaxAmount).toFixed(1))
@@ -4512,7 +4551,6 @@ defineExpose({
             <div>
               <span class="household-aggregate-chart-modal__eyebrow">CUMULATIVE FLOW</span>
               <h3>{{ aggregateChartDetailCard.title }}</h3>
-              <p>{{ aggregateChartDetailCard.chart.rangeLabel }} · X축 시간 / Y축 금액 · 마우스를 움직이면 기준 십자선이 표시됩니다.</p>
             </div>
             <button type="button" class="button button--secondary" @click="closeAggregateChartDetail">닫기</button>
           </header>
@@ -4522,6 +4560,16 @@ defineExpose({
             <span v-if="aggregateChartDetailCard.config.showExpenseCumulative" class="household-aggregate-chart-modal__metric household-aggregate-chart-modal__metric--expense">지출 누적 <strong>{{ formatCurrency(aggregateChartDetailCard.chart.expenseTotal) }}</strong></span>
             <span class="household-aggregate-chart-modal__metric">최대 축 금액 <strong>{{ aggregateChartDetailCard.chart.maxAmountLabel }}</strong></span>
             <span class="household-aggregate-chart-modal__metric">순흐름 <strong>{{ formatCurrency(aggregateChartDetailCard.chart.netTotal) }}</strong></span>
+          </div>
+            <span class="household-aggregate-chart-modal__metric household-aggregate-chart-modal__metric--previous">{{ aggregateChartDetailCard.chart.previousSummaryLabel }} <strong>{{ formatCurrency(aggregateChartDetailCard.chart.previousSummaryAmount) }}</strong></span>
+
+          <div class="household-aggregate-chart-modal__controls">
+            <label class="field household-aggregate-chart-modal__max-field">
+              <span class="field__label">Y&#52629; &#47785;&#54364; &#44552;&#50529;</span>
+              <input v-model="aggregateChartMaxAmountDraft" type="number" min="0" step="10000" inputmode="numeric" placeholder="&#51088;&#46041;" @keydown.enter.prevent="applyAggregateChartMaxAmount">
+            </label>
+            <small class="household-aggregate-chart-modal__controls-hint">&#48708;&#50864;&#47732; &#45572;&#51201; &#45936;&#51060;&#53552;&#47484; &#44592;&#51456;&#51004;&#47196; &#52629;&#51060; &#51088;&#46041; &#44228;&#49328;&#46104;&#47728;, &#47785;&#54364;&#47484; &#52488;&#44284;&#54616;&#47732; &#44552;&#50529; &#52629;&#51060; &#54869;&#51109;&#46104;&#44256; &#51216;&#49440;&#51060; &#45208;&#53440;&#45225;&#45768;&#45796;.</small>
+            <button type="button" class="button button--secondary" @click="applyAggregateChartMaxAmount">&#51201;&#50857;</button>
           </div>
 
           <div class="household-aggregate-chart-modal__canvas">

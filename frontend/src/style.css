@@ -33399,3 +33399,134 @@ button.button--primary,
 .household-aggregate-chart--preview .household-aggregate-chart__target-line {
   stroke-width: 0.9;
 }
+/* Cumulative chart detail modal: keep every section in normal flow at desktop widths. */
+.household-aggregate-chart-modal__header > div > p {
+  display: none !important;
+}
+
+.household-aggregate-chart-modal__controls {
+  align-items: flex-end;
+  background: rgba(15, 23, 42, 0.48);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 16px;
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  padding: 12px 14px;
+}
+
+.household-aggregate-chart-modal__controls .household-aggregate-chart-modal__max-field {
+  flex: 1 1 240px;
+  gap: 6px;
+  margin: 0;
+  min-width: min(100%, 240px);
+}
+
+.household-aggregate-chart-modal__controls input {
+  max-width: 320px;
+  width: 100%;
+}
+
+.household-aggregate-chart-modal__controls-hint {
+  align-self: center;
+  color: var(--text-soft);
+  flex: 1 1 300px;
+  line-height: 1.5;
+  min-width: 0;
+}
+
+.household-aggregate-chart-modal__controls > .button {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.household-aggregate-chart-modal__metric--previous::before {
+  background: linear-gradient(90deg, #aab4c5, rgba(170, 180, 197, 0.12));
+}
+
+@media (min-width: 721px) {
+  .household-aggregate-chart-modal {
+    align-items: center !important;
+    box-sizing: border-box !important;
+    overflow-y: auto !important;
+  }
+
+  .household-aggregate-chart-modal__panel {
+    box-sizing: border-box !important;
+    display: flex !important;
+    flex-direction: column !important;
+    max-height: calc(100vh - 24px) !important;
+    max-height: calc(100dvh - 24px) !important;
+    min-height: 0 !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    width: min(100%, 1440px) !important;
+  }
+
+  .household-aggregate-chart-modal__header,
+  .household-aggregate-chart-modal__summary,
+  .household-aggregate-chart-modal__controls,
+  .household-aggregate-chart-modal__canvas,
+  .household-aggregate-chart-modal__legend,
+  .household-aggregate-chart-modal__selected {
+    flex: 0 0 auto !important;
+    min-width: 0 !important;
+  }
+
+  .household-aggregate-chart-modal__summary {
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  }
+
+  .household-aggregate-chart-modal__metric {
+    min-width: 0 !important;
+    overflow: hidden;
+    overflow-wrap: anywhere;
+  }
+
+  .household-aggregate-chart-modal__canvas {
+    aspect-ratio: 448 / 200 !important;
+    display: block !important;
+    flex: 0 0 auto !important;
+    height: auto !important;
+    max-height: none !important;
+    min-height: 320px !important;
+    overflow: hidden !important;
+    place-items: initial !important;
+  }
+
+  .household-aggregate-chart-modal__canvas svg {
+    aspect-ratio: auto !important;
+    display: block !important;
+    height: 100% !important;
+    max-height: none !important;
+    min-height: 0 !important;
+    width: 100% !important;
+  }
+}
+
+@media (min-width: 721px) and (max-width: 1100px) {
+  .household-aggregate-chart-modal__summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+
+@media (max-width: 720px) {
+  .household-aggregate-chart-modal__controls {
+    align-items: stretch;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .household-aggregate-chart-modal__controls .household-aggregate-chart-modal__max-field,
+  .household-aggregate-chart-modal__controls input,
+  .household-aggregate-chart-modal__controls > .button {
+    max-width: none;
+    min-width: 0;
+    width: 100%;
+  }
+
+  .household-aggregate-chart-modal__controls-hint {
+    align-self: auto;
+  }
+}

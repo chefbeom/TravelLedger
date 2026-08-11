@@ -33247,3 +33247,145 @@ button.button--primary,
     aspect-ratio: 1.8 / 1 !important;
   }
 }
+/* Mobile cumulative chart guard: keep the graph in flow and preserve readable SVG coordinates. */
+.household-aggregate-chart-modal__panel {
+  box-sizing: border-box !important;
+  min-width: 0 !important;
+}
+
+.household-aggregate-chart-modal__canvas {
+  box-sizing: border-box !important;
+  min-width: 0 !important;
+}
+
+.household-aggregate-chart__crosshair-label-bg {
+  fill: rgba(2, 6, 23, 0.94);
+  stroke: rgba(255, 255, 255, 0.72);
+  stroke-width: 0.8;
+  vector-effect: non-scaling-stroke;
+}
+
+.household-aggregate-chart__crosshair line {
+  stroke: rgba(255, 255, 255, 0.82) !important;
+  stroke-width: 1.25 !important;
+}
+
+.household-aggregate-chart__crosshair circle {
+  fill: #ffffff !important;
+  stroke: #0f172a !important;
+  stroke-width: 2.2 !important;
+  filter: drop-shadow(0 1px 4px rgba(0, 0, 0, 0.62));
+}
+
+.household-aggregate-chart__crosshair text {
+  dominant-baseline: middle;
+  fill: #ffffff !important;
+  font-size: 7.8px !important;
+  font-weight: 950;
+  letter-spacing: -0.01em;
+  paint-order: stroke;
+  stroke: rgba(2, 6, 23, 0.96) !important;
+  stroke-width: 2.8px !important;
+}
+
+.household-aggregate-chart-modal__canvas .household-aggregate-chart__point--interactive:hover,
+.household-aggregate-chart-modal__canvas .household-aggregate-chart__point--interactive:focus-visible,
+.household-aggregate-chart-modal__canvas .household-aggregate-chart__point--interactive.is-selected {
+  fill: #ffffff !important;
+  filter: drop-shadow(0 0 5px rgba(255, 255, 255, 0.86)) drop-shadow(0 2px 5px rgba(0, 0, 0, 0.68)) !important;
+  r: 6.6 !important;
+  stroke: #0f172a !important;
+  stroke-width: 3.2 !important;
+}
+
+@media (max-width: 720px) {
+  .household-aggregate-chart-modal {
+    align-items: flex-start !important;
+    overflow-y: auto !important;
+    padding: 8px !important;
+  }
+
+  .household-aggregate-chart-modal__panel {
+    display: flex !important;
+    flex: 0 0 auto !important;
+    flex-direction: column !important;
+    gap: 12px !important;
+    max-height: calc(100dvh - 16px) !important;
+    max-width: none !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    padding: 12px !important;
+    width: 100% !important;
+  }
+
+  .household-aggregate-chart-modal__header,
+  .household-aggregate-chart-modal__summary,
+  .household-aggregate-chart-modal__canvas,
+  .household-aggregate-chart-modal__legend,
+  .household-aggregate-chart-modal__selected {
+    flex: 0 0 auto !important;
+    min-width: 0 !important;
+  }
+
+  .household-aggregate-chart-modal__header > div,
+  .household-aggregate-chart-modal__header h3,
+  .household-aggregate-chart-modal__header p,
+  .household-aggregate-chart-modal__selected p {
+    min-width: 0 !important;
+    overflow-wrap: anywhere !important;
+  }
+
+  .household-aggregate-chart-modal__canvas {
+    aspect-ratio: auto !important;
+    display: block !important;
+    height: auto !important;
+    max-width: 100% !important;
+    min-height: 0 !important;
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+    padding: 8px !important;
+    place-items: initial !important;
+    scrollbar-width: thin;
+    touch-action: pan-x;
+  }
+
+  .household-aggregate-chart-modal__canvas svg {
+    aspect-ratio: 448 / 200 !important;
+    display: block !important;
+    height: 200px !important;
+    max-height: none !important;
+    min-height: 200px !important;
+    min-width: 448px !important;
+    width: 448px !important;
+  }
+
+  .household-aggregate-chart-modal__legend {
+    align-items: flex-start !important;
+    display: flex !important;
+    flex-wrap: wrap !important;
+    gap: 8px 14px !important;
+    line-height: 1.4 !important;
+    overflow: visible !important;
+  }
+
+  .household-aggregate-chart-modal__selected {
+    overflow: visible !important;
+    position: relative !important;
+    z-index: 1 !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .household-aggregate-chart-modal {
+    padding: 6px !important;
+  }
+
+  .household-aggregate-chart-modal__panel {
+    border-radius: 16px !important;
+    padding: 10px !important;
+  }
+
+  .household-aggregate-chart-modal__summary {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+}

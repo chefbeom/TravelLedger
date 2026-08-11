@@ -2835,7 +2835,6 @@ const AGGREGATE_CHART_AXIS_END_X = AGGREGATE_CHART_WIDTH - AGGREGATE_CHART_RIGHT
 const AGGREGATE_CHART_VALUE_LABEL_MIN_X = AGGREGATE_CHART_HORIZONTAL_PADDING + 14
 const AGGREGATE_CHART_VALUE_LABEL_MAX_X = AGGREGATE_CHART_WIDTH - AGGREGATE_CHART_HORIZONTAL_PADDING
 const AGGREGATE_CHART_TIME_LABEL_X = AGGREGATE_CHART_WIDTH - 34
-const AGGREGATE_CHART_CROSSHAIR_LABEL_MAX_X = AGGREGATE_CHART_WIDTH - 70
 const AGGREGATE_CHART_TIME_LABEL_Y = AGGREGATE_CHART_HEIGHT - 6
 
 function aggregateChartDrawableWidth() {
@@ -3030,8 +3029,9 @@ function selectAggregateChartNearestPoint(event, card) {
   const points = visibleAggregateChartPoints(card)
   if (!points.length || !event?.currentTarget) return
   const rect = event.currentTarget.getBoundingClientRect()
-  if (!rect.width) return
-  const x = ((event.clientX - rect.left) / rect.width) * AGGREGATE_CHART_WIDTH
+  const clientX = Number(event.clientX)
+  if (!rect.width || !Number.isFinite(clientX)) return
+  const x = clamp(((clientX - rect.left) / rect.width) * AGGREGATE_CHART_WIDTH, 0, AGGREGATE_CHART_WIDTH)
   const nearest = points.reduce((best, point) => (!best || Math.abs(point.x - x) < Math.abs(best.x - x) ? point : best), null)
   if (nearest) aggregateChartSelectedPoint.value = nearest
 }
@@ -3182,16 +3182,44 @@ function resolveAggregateChartVisibleRange(range, today = todayIso) {
 }
 
 function aggregateChartCrosshairLabel(point) {
-  if (!point) return { x: 0, y: 0, anchor: 'start', text: '' }
+  if (!point) {
+    return {
+      x: 0,
+      y: 0,
+      anchor: 'start',
+      text: '',
+      backgroundX: 0,
+      backgroundY: 0,
+      backgroundWidth: 0,
+      backgroundHeight: 0,
+    }
+  }
+  const text = `${point.xLabel} / ${formatCompactNumber(point.amount)}`
+  const textWidth = estimateAggregateChartTextWidth(text, 7.8)
+  const horizontalPadding = 5
+  const backgroundHeight = 16
+  const backgroundWidth = textWidth + (horizontalPadding * 2)
   const alignEnd = point.x >= AGGREGATE_CHART_WIDTH * 0.7
+  const backgroundLeft = clamp(
+    alignEnd
+      ? point.x - 8 - textWidth - horizontalPadding
+      : point.x + 8 - horizontalPadding,
+    AGGREGATE_CHART_HORIZONTAL_PADDING + 2,
+    AGGREGATE_CHART_AXIS_END_X - backgroundWidth - 2,
+  )
   const x = alignEnd
-    ? Math.max(AGGREGATE_CHART_HORIZONTAL_PADDING + 8, point.x - 8)
-    : Math.min(AGGREGATE_CHART_CROSSHAIR_LABEL_MAX_X, point.x + 8)
+    ? backgroundLeft + backgroundWidth - horizontalPadding
+    : backgroundLeft + horizontalPadding
+  const y = Number(clamp(point.y - 8, AGGREGATE_CHART_TOP_PADDING + 10, AGGREGATE_CHART_BASELINE_Y - 8).toFixed(1))
   return {
     x: Number(x.toFixed(1)),
-    y: Number(clamp(point.y - 8, AGGREGATE_CHART_TOP_PADDING + 8, AGGREGATE_CHART_BASELINE_Y - 8).toFixed(1)),
+    y,
     anchor: alignEnd ? 'end' : 'start',
-    text: `${point.xLabel} / ${formatCompactNumber(point.amount)}`,
+    text,
+    backgroundX: Number(backgroundLeft.toFixed(1)),
+    backgroundY: Number((y - (backgroundHeight / 2)).toFixed(1)),
+    backgroundWidth: Number(backgroundWidth.toFixed(1)),
+    backgroundHeight,
   }
 }
 
@@ -4510,7 +4538,8 @@ defineExpose({
                 <line :x1="aggregateChartSelectedPoint.x" :x2="aggregateChartSelectedPoint.x" :y1="AGGREGATE_CHART_TOP_PADDING" :y2="AGGREGATE_CHART_BASELINE_Y" />
                 <line :x1="AGGREGATE_CHART_HORIZONTAL_PADDING" :x2="AGGREGATE_CHART_AXIS_END_X" :y1="aggregateChartSelectedPoint.y" :y2="aggregateChartSelectedPoint.y" />
                 <circle :cx="aggregateChartSelectedPoint.x" :cy="aggregateChartSelectedPoint.y" r="7" />
-                <text :x="aggregateChartCrosshairLabel(aggregateChartSelectedPoint).x" :y="aggregateChartCrosshairLabel(aggregateChartSelectedPoint).y" :text-anchor="aggregateChartCrosshairLabel(aggregateChartSelectedPoint).anchor">{{ aggregateChartCrosshairLabel(aggregateChartSelectedPoint).text }}</text>
+                <rect :x="aggregateChartCrosshairLabel(aggregateChartSelectedPoint).backgroundX" :y="aggregateChartCrosshairLabel(aggregateChartSelectedPoint).backgroundY" :width="aggregateChartCrosshairLabel(aggregateChartSelectedPoint).backgroundWidth" :height="aggregateChartCrosshairLabel(aggregateChartSelectedPoint).backgroundHeight" rx="4" class="household-aggregate-chart__crosshair-label-bg" />
+                <text :x="aggregateChartCrosshairLabel(aggregateChartSelectedPoint).x" :y="aggregateChartCrosshairLabel(aggregateChartSelectedPoint).y" :text-anchor="aggregateChartCrosshairLabel(aggregateChartSelectedPoint).anchor" dominant-baseline="middle">{{ aggregateChartCrosshairLabel(aggregateChartSelectedPoint).text }}</text>
               </g>
             </svg>
           </div>

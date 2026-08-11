@@ -40,6 +40,34 @@ class LedgerAiLmStudioClientTest {
     }
 
     @Test
+    void extractsAllModelsInStableOrderForAutoFallback() {
+        java.util.List<String> modelIds = ReflectionTestUtils.invokeMethod(
+                client,
+                "extractModelIds",
+                "{\"data\":[{\"id\":\"busy-model\"},{\"id\":\"backup-model\"},{\"id\":\"busy-model\"}]}"
+        );
+
+        assertThat(modelIds).containsExactly("busy-model", "backup-model");
+    }
+
+    @Test
+    void recognizesModelCapacityErrorAndExplainsFallback() {
+        Boolean capacity = ReflectionTestUtils.invokeMethod(
+                client,
+                "isModelCapacityError",
+                "Selected model is at capacity. Please try a different model."
+        );
+        BadRequestException failure = ReflectionTestUtils.invokeMethod(
+                client,
+                "modelCapacityFailure",
+                java.util.List.of("busy-model", "backup-model")
+        );
+
+        assertThat(capacity).isTrue();
+        assertThat(failure).hasMessageContaining("All available LM Studio models are at capacity");
+    }
+
+    @Test
     void rejectsEmptyModelListWithoutLeakingProviderSecrets() {
         properties.setLmStudioBaseUrl("http://secret-lmstudio.internal:1234");
         properties.setLmStudioApiKey("lmstudio-secret-token");

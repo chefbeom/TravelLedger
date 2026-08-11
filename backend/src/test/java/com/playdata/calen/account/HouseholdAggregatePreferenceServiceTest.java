@@ -127,7 +127,7 @@ class HouseholdAggregatePreferenceServiceTest {
                 .thenReturn(List.of(paymentMethod));
 
         var response = service.savePreferences(1L, new HouseholdAggregatePreferencesRequest(List.of(
-                new HouseholdAggregateWidgetRequest("PAYMENT_METHOD", "YEAR", 7L, "EXPENSE", null, null, null, null, null, 1, 1, 1, 1, 1, "LARGE", "MINT")
+                new HouseholdAggregateWidgetRequest("PAYMENT_METHOD", "YEAR", 7L, "EXPENSE", null, null, null, null, null, null, 1, 1, 1, 1, 1, "LARGE", "MINT")
         )));
 
         assertThat(response.widgets()).hasSize(6);
@@ -156,10 +156,10 @@ class HouseholdAggregatePreferenceServiceTest {
                 .thenReturn(List.of());
 
         var response = service.savePreferences(1L, new HouseholdAggregatePreferencesRequest(List.of(
-                new HouseholdAggregateWidgetRequest("TOTAL", "MONTH", null, "NET", null, null, null, null, null, 1, 1, 1, 1, 3, null, null),
-                new HouseholdAggregateWidgetRequest("MONTHLY_CUMULATIVE_CHART", "MONTH", null, "NET", null, null, true, true, true, 2, 1, 4, 1, 1, null, null),
-                new HouseholdAggregateWidgetRequest("MONTHLY_GOAL", "MONTH", null, "EXPENSE", 400000L, 100000L, null, null, null, 1, 1, 2, 1, 2, null, null),
-                new HouseholdAggregateWidgetRequest("NONE", "DAY", null, "NET", null, null, null, null, null, 3, 1, 3, 2, 4, null, null)
+                new HouseholdAggregateWidgetRequest("TOTAL", "MONTH", null, "NET", null, null, null, null, null, null, 1, 1, 1, 1, 3, null, null),
+                new HouseholdAggregateWidgetRequest("MONTHLY_CUMULATIVE_CHART", "MONTH", null, "NET", null, null, true, true, true, 750000L, 2, 1, 4, 1, 1, null, null),
+                new HouseholdAggregateWidgetRequest("MONTHLY_GOAL", "MONTH", null, "EXPENSE", 400000L, 100000L, null, null, null, null, 1, 1, 2, 1, 2, null, null),
+                new HouseholdAggregateWidgetRequest("NONE", "DAY", null, "NET", null, null, null, null, null, null, 3, 1, 3, 2, 4, null, null)
         )));
 
         assertThat(response.widgets()).hasSize(6);
@@ -170,6 +170,7 @@ class HouseholdAggregatePreferenceServiceTest {
         assertThat(response.widgets().get(0).layoutOrder()).isEqualTo(3);
         assertThat(response.widgets().get(1).layoutX()).isEqualTo(2);
         assertThat(response.widgets().get(1).layoutW()).isEqualTo(4);
+        assertThat(response.widgets().get(1).chartMaxAmount()).isEqualTo(750000L);
         assertThat(response.widgets().get(1).layoutH()).isEqualTo(1);
         assertThat(response.widgets().get(1).layoutOrder()).isEqualTo(1);
         assertThat(response.widgets().get(2).layoutX()).isEqualTo(1);

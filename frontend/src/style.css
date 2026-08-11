@@ -33206,3 +33206,44 @@ button.button--primary,
     background: rgba(2, 6, 23, 0.82);
   }
 }
+/* Cumulative chart uses the available canvas ratio instead of a short fixed viewBox. */
+.household-aggregate-chart-modal__canvas {
+  aspect-ratio: 16 / 7 !important;
+  height: auto !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+}
+.household-aggregate-chart-modal__canvas svg {
+  aspect-ratio: 16 / 7 !important;
+  height: auto !important;
+  max-height: none !important;
+  min-height: 0 !important;
+  width: 100% !important;
+}
+.household-aggregate-card--chart .household-aggregate-chart--preview {
+  height: auto !important;
+  max-height: none !important;
+  min-height: 136px !important;
+}
+.household-aggregate-card--chart .household-aggregate-chart--preview svg {
+  height: auto !important;
+  max-height: none !important;
+  min-height: 0 !important;
+  width: 100% !important;
+}
+.household-aggregate-chart-options__max-field {
+  flex: 1 1 220px;
+  min-width: min(100%, 220px);
+}
+.household-aggregate-chart-options__max-field small {
+  color: var(--text-soft);
+  font-size: 0.75rem;
+}
+@media (max-width: 720px) {
+  .household-aggregate-chart-modal__canvas {
+    aspect-ratio: 1.8 / 1 !important;
+  }
+  .household-aggregate-chart-modal__canvas svg {
+    aspect-ratio: 1.8 / 1 !important;
+  }
+}

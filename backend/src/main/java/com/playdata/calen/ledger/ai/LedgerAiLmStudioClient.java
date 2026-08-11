@@ -6,6 +6,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.playdata.calen.common.exception.BadRequestException;
+import java.util.LinkedHashSet;
+import java.util.List;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
@@ -50,15 +52,33 @@ public class LedgerAiLmStudioClient {
                     .baseUrl(config.baseUrl())
                     .requestFactory(requestFactory)
                     .build();
-            String model = resolveModel(restClient, config);
-
-            String responseBody = requestChatCompletion(restClient, payload, model, config);
-
-            String content = extractAssistantContent(responseBody);
-            LedgerAiRemoteResponse response = parseAssistantContent(content);
-            LedgerAiRemoteResponse validated = LedgerAiRemoteResponseValidator.requireUsable(response, providerLabel());
-            recordExternalWorkflow(workflowTimer, workflowName(), "success");
-            return validated;
+            List<String> modelCandidates = resolveModelCandidates(restClient, config);
+            BadRequestException capacityFailure = null;
+            for (String model : modelCandidates) {
+                try {
+                    String responseBody = requestChatCompletion(restClient, payload, model, config);
+                    String content = extractAssistantContent(responseBody);
+                    LedgerAiRemoteResponse response = parseAssistantContent(content);
+                    LedgerAiRemoteResponse validated = LedgerAiRemoteResponseValidator.requireUsable(response, providerLabel());
+                    recordExternalWorkflow(workflowTimer, workflowName(), "success");
+                    return validated;
+                } catch (RestClientResponseException exception) {
+                    String failureMessage = exception.getMessage() + " " + exception.getResponseBodyAsString();
+                    if (!isModelCapacityError(failureMessage)) {
+                        throw exception;
+                    }
+                    capacityFailure = modelCapacityFailure(modelCandidates);
+                } catch (BadRequestException exception) {
+                    if (!isModelCapacityError(exception.getMessage())) {
+                        throw exception;
+                    }
+                    capacityFailure = modelCapacityFailure(modelCandidates);
+                }
+            }
+            if (capacityFailure != null) {
+                throw capacityFailure;
+            }
+            throw new BadRequestException(providerLabel() + " AI request did not produce a response.");
 
         } catch (BadRequestException exception) {
             recordExternalWorkflow(workflowTimer, workflowName(), "failure");
@@ -257,10 +277,28 @@ public class LedgerAiLmStudioClient {
                 || message.contains("invalid_request");
     }
 
-    private String resolveModel(RestClient restClient, LedgerAiFeatureConfig config) {
+    private boolean isModelCapacityError(String message) {
+        if (message == null) {
+            return false;
+        }
+        String normalized = message.toLowerCase(java.util.Locale.ROOT);
+        return normalized.contains("selected model is at capacity")
+                || normalized.contains("model is at capacity")
+                || normalized.contains("try a different model")
+                || normalized.contains("model capacity");
+    }
+
+    private BadRequestException modelCapacityFailure(List<String> modelCandidates) {
+        if (modelCandidates.size() > 1) {
+            return new BadRequestException("All available LM Studio models are at capacity. Try again later or configure a different model.");
+        }
+        return new BadRequestException("Selected LM Studio model is at capacity. Try again later or configure a different model.");
+    }
+
+    private List<String> resolveModelCandidates(RestClient restClient, LedgerAiFeatureConfig config) {
         String configuredModel = normalizeModel(config.model());
         if (hasText(configuredModel)) {
-            return configuredModel;
+            return List.of(configuredModel);
         }
 
         RestClient.RequestHeadersSpec<?> request = restClient.get()
@@ -271,33 +309,25 @@ public class LedgerAiLmStudioClient {
         }
 
         String responseBody = request.retrieve().body(String.class);
-        return extractFirstModelId(responseBody);
+        return extractModelIds(responseBody);
     }
 
     private String extractFirstModelId(String responseBody) {
+        return extractModelIds(responseBody).get(0);
+    }
+
+    private List<String> extractModelIds(String responseBody) {
         if (!hasText(responseBody)) {
             throw new BadRequestException(providerLabel() + " model list is empty. Configure a model before trying again.");
         }
         try {
             JsonNode root = objectMapper.readTree(responseBody);
-            String directModel = modelIdFrom(root);
-            if (hasText(directModel)) {
-                return directModel;
-            }
-
-            String dataModel = firstModelIdFromArray(root.path("data"));
-            if (hasText(dataModel)) {
-                return dataModel;
-            }
-
-            String modelsModel = firstModelIdFromArray(root.path("models"));
-            if (hasText(modelsModel)) {
-                return modelsModel;
-            }
-
-            String rootArrayModel = firstModelIdFromArray(root);
-            if (hasText(rootArrayModel)) {
-                return rootArrayModel;
+            LinkedHashSet<String> modelIds = new LinkedHashSet<>();
+            addModelIds(modelIds, root.path("data"));
+            addModelIds(modelIds, root.path("models"));
+            addModelIds(modelIds, root);
+            if (!modelIds.isEmpty()) {
+                return List.copyOf(modelIds);
             }
         } catch (JsonProcessingException exception) {
             throw new BadRequestException(providerLabel() + " model list could not be parsed as JSON.");
@@ -306,17 +336,20 @@ public class LedgerAiLmStudioClient {
         throw new BadRequestException("No usable " + providerLabel() + " model was found. Configure a model and try again.");
     }
 
-    private String firstModelIdFromArray(JsonNode node) {
-        if (!node.isArray()) {
-            return "";
+    private void addModelIds(LinkedHashSet<String> modelIds, JsonNode node) {
+        if (node == null || node.isMissingNode() || node.isNull()) {
+            return;
         }
-        for (JsonNode item : node) {
-            String modelId = modelIdFrom(item);
-            if (hasText(modelId)) {
-                return modelId;
+        if (node.isArray()) {
+            for (JsonNode item : node) {
+                addModelIds(modelIds, item);
             }
+            return;
         }
-        return "";
+        String modelId = modelIdFrom(node);
+        if (hasText(modelId)) {
+            modelIds.add(modelId.trim());
+        }
     }
 
     private String modelIdFrom(JsonNode node) {

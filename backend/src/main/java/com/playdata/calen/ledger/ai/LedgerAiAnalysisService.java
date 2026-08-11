@@ -44,12 +44,17 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import io.micrometer.core.instrument.Timer;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.core.task.TaskExecutor;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
@@ -80,8 +85,69 @@ public class LedgerAiAnalysisService {
 
     private final Map<String, Object> inFlightAnalysisLocks = new ConcurrentHashMap<>();
 
+    @Autowired(required = false)
+    @Qualifier("ledgerAiTaskExecutor")
+    private TaskExecutor ledgerAiTaskExecutor;
+
     public LedgerAiAnalysisStatusResponse getStatus() {
         return statusService.getStatus();
+    }
+
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    public LedgerAiAnalysisHistoryDetailResponse startAnalyze(Long userId, LedgerAiAnalysisRequest request) {
+        AppUser owner = appUserService.getRequiredUser(userId);
+        if (!properties.isFeatureConfigured(LedgerAiFeature.LEDGER_ANALYSIS)) {
+            throw new BadRequestException(properties.featureStatusMessage(LedgerAiFeature.LEDGER_ANALYSIS));
+        }
+
+        AnalysisPlan plan = resolvePlan(request);
+        if (!aiText.hasText(plan.focusPrompt())) {
+            LocalDateTime duplicateSince = LocalDateTime.now().minus(DUPLICATE_SUPPRESSION_WINDOW);
+            Optional<LedgerAiAnalysisHistory> processingHistory = findLatestMatchingProcessingAnalysis(
+                    userId,
+                    plan,
+                    duplicateSince
+            );
+            if (processingHistory.isPresent()) {
+                return new LedgerAiAnalysisHistoryDetailResponse(toSummary(processingHistory.get()), null);
+            }
+            Optional<LedgerAiAnalysisHistory> reusableHistory = findLatestMatchingAnalysis(
+                    userId,
+                    plan,
+                    duplicateSince
+            );
+            if (reusableHistory.isPresent()) {
+                LedgerAiAnalysisResponse reusableResponse = readReusableStoredHistoryResult(reusableHistory.get());
+                if (reusableResponse != null) {
+                    return new LedgerAiAnalysisHistoryDetailResponse(toSummary(reusableHistory.get()), reusableResponse);
+                }
+            }
+        }
+
+        LedgerAiAnalysisHistory history = baseHistory(owner, plan);
+        history.setStatus(LedgerAiAnalysisStatus.PROCESSING);
+        history.setSummary("AI analysis is processing.");
+        history = historyRepository.save(history);
+        submitAnalysisTask(userId, history.getId(), plan);
+        return new LedgerAiAnalysisHistoryDetailResponse(toSummary(history), null);
+    }
+
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    public LedgerAiAnalysisHistoryDetailResponse startRerun(Long userId, Long historyId) {
+        LedgerAiAnalysisHistory history = historyRepository.findByIdAndOwnerId(historyId, userId)
+                .orElseThrow(() -> new NotFoundException("AI analysis history was not found."));
+        return startAnalyze(userId, new LedgerAiAnalysisRequest(
+                history.getMode(),
+                history.getPeriodType(),
+                history.getComparisonPreset(),
+                history.getToDate(),
+                history.getFromDate(),
+                history.getToDate(),
+                history.getCompareFromDate(),
+                history.getCompareToDate(),
+                null,
+                null
+        ));
     }
 
     @Transactional(noRollbackFor = RuntimeException.class)
@@ -124,10 +190,11 @@ public class LedgerAiAnalysisService {
             history.setSummary(aiText.safeText(remote.summary()));
             history.setRequestPayloadJson(aiJsonCodec.write(payload));
             history = historyRepository.save(history);
-            aiNotifications.notifyCompleted(userId, history);
 
             LedgerAiAnalysisResponse response = buildResponse(history.getId(), plan, dataset, remote);
             history.setResultJson(aiJsonCodec.write(response));
+            historyRepository.save(history);
+            aiNotifications.notifyCompleted(userId, history);
             return response;
         } catch (RuntimeException exception) {
             if (!aiRequestRecorded) {
@@ -143,6 +210,75 @@ public class LedgerAiAnalysisService {
             throw exception;
         }
     }
+
+    private void submitAnalysisTask(Long userId, Long historyId, AnalysisPlan plan) {
+        Runnable task = () -> processAnalysisInBackground(userId, historyId, plan);
+        try {
+            if (ledgerAiTaskExecutor == null) {
+                Thread thread = new Thread(task, "ledger-ai-fallback-" + historyId);
+                thread.setDaemon(true);
+                thread.start();
+            } else {
+                ledgerAiTaskExecutor.execute(task);
+            }
+        } catch (RuntimeException exception) {
+            markAnalysisFailed(userId, historyId, exception);
+            throw new BadRequestException("AI analysis task could not be started.");
+        }
+    }
+
+    private void processAnalysisInBackground(Long userId, Long historyId, AnalysisPlan plan) {
+        LedgerAiAnalysisHistory history = historyRepository.findByIdAndOwnerId(historyId, userId).orElse(null);
+        if (history == null || history.getStatus() != LedgerAiAnalysisStatus.PROCESSING) {
+            return;
+        }
+
+        AnalysisDataset dataset = null;
+        LedgerAiN8nPayload payload = null;
+        Timer.Sample aiRequestTimer = null;
+        boolean aiRequestRecorded = false;
+        try {
+            dataset = buildDataset(userId, plan);
+            payload = buildPayload(plan, dataset);
+            history.setRequestPayloadJson(aiJsonCodec.write(payload));
+            historyRepository.save(history);
+
+            aiRequestTimer = aiMetrics.startAiRequestTimer();
+            LedgerAiRemoteResponse remote = remoteClient.analyze(payload);
+            aiMetrics.recordAiRequest(aiRequestTimer, "success");
+            aiRequestRecorded = true;
+
+            LedgerAiAnalysisResponse response = buildResponse(history.getId(), plan, dataset, remote);
+            history.setStatus(LedgerAiAnalysisStatus.COMPLETED);
+            history.setSummary(aiText.safeText(remote.summary()));
+            history.setResultJson(aiJsonCodec.write(response));
+            historyRepository.save(history);
+            aiNotifications.notifyCompleted(userId, history);
+        } catch (RuntimeException exception) {
+            if (aiRequestTimer != null && !aiRequestRecorded) {
+                aiMetrics.recordAiRequest(aiRequestTimer, "failure");
+            }
+            history.setStatus(LedgerAiAnalysisStatus.FAILED);
+            history.setSummary("AI analysis failed.");
+            history.setErrorMessage(aiText.redactSensitiveText(exception.getMessage(), 500));
+            if (payload != null) {
+                history.setRequestPayloadJson(aiJsonCodec.write(payload));
+            }
+            historyRepository.save(history);
+            aiNotifications.notifyFailed(userId, history);
+        }
+    }
+
+    private void markAnalysisFailed(Long userId, Long historyId, RuntimeException exception) {
+        historyRepository.findByIdAndOwnerId(historyId, userId).ifPresent(history -> {
+            history.setStatus(LedgerAiAnalysisStatus.FAILED);
+            history.setSummary("AI analysis failed.");
+            history.setErrorMessage(aiText.redactSensitiveText(exception.getMessage(), 500));
+            historyRepository.save(history);
+            aiNotifications.notifyFailed(userId, history);
+        });
+    }
+
     public LedgerAiAnalysisHistoryPageResponse getHistories(
             Long userId,
             LedgerAiAnalysisMode mode,
@@ -259,6 +395,9 @@ public class LedgerAiAnalysisService {
         if (history == null) {
             return null;
         }
+        if (history.getStatus() == LedgerAiAnalysisStatus.PROCESSING) {
+            return null;
+        }
         if (history.getStatus() != LedgerAiAnalysisStatus.COMPLETED || !aiText.hasText(history.getResultJson())) {
             return buildUnreadableHistoryResult(history, "저장된 AI 분석 결과가 없습니다. 재분석을 실행해 주세요.");
         }
@@ -341,6 +480,26 @@ public class LedgerAiAnalysisService {
         return historyRepository.findLatestMatchingCompletedAnalysis(
                 userId,
                 LedgerAiAnalysisStatus.COMPLETED,
+                aiMetrics.providerLabel(),
+                properties.getModel(),
+                plan.mode(),
+                plan.periodType(),
+                plan.primaryRange().from(),
+                plan.primaryRange().to(),
+                plan.comparisonRange() == null ? null : plan.comparisonRange().from(),
+                plan.comparisonRange() == null ? null : plan.comparisonRange().to(),
+                createdAfter
+        );
+    }
+
+    private Optional<LedgerAiAnalysisHistory> findLatestMatchingProcessingAnalysis(
+            Long userId,
+            AnalysisPlan plan,
+            LocalDateTime createdAfter
+    ) {
+        return historyRepository.findLatestMatchingProcessingAnalysis(
+                userId,
+                LedgerAiAnalysisStatus.PROCESSING,
                 aiMetrics.providerLabel(),
                 properties.getModel(),
                 plan.mode(),

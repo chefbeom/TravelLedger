@@ -29,6 +29,7 @@ import com.playdata.calen.ledger.dto.CategoryBreakdownItemResponse;
 import com.playdata.calen.ledger.dto.LedgerAiAnalysisReportResponse;
 import com.playdata.calen.ledger.dto.LedgerAiAnalysisRequest;
 import com.playdata.calen.ledger.dto.LedgerAiAnalysisResponse;
+import com.playdata.calen.ledger.dto.LedgerAiAnalysisHistoryDetailResponse;
 import com.playdata.calen.ledger.dto.LedgerAiAnalysisStatusResponse;
 import com.playdata.calen.ledger.dto.OverviewResponse;
 import com.playdata.calen.ledger.dto.PaymentBreakdownItemResponse;
@@ -57,6 +58,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.data.domain.Pageable;
+import org.springframework.test.util.ReflectionTestUtils;
 
 @ExtendWith(MockitoExtension.class)
 class LedgerAiAnalysisServiceTest {
@@ -183,6 +185,61 @@ class LedgerAiAnalysisServiceTest {
     }
 
     @Test
+    void startAnalyzeReturnsProcessingAndCompletesInBackground() {
+        stubUser();
+        stubNoReusableHistory();
+        stubMonthlyDataset();
+        when(remoteClient.analyze(any())).thenReturn(remoteResponse());
+
+        AtomicReference<LedgerAiAnalysisHistory> savedHistory = new AtomicReference<>();
+        AtomicReference<Runnable> submittedTask = new AtomicReference<>();
+        when(historyRepository.save(any())).thenAnswer(invocation -> {
+            LedgerAiAnalysisHistory history = withId(invocation.getArgument(0), 144L);
+            savedHistory.set(history);
+            return history;
+        });
+        when(historyRepository.findByIdAndOwnerId(144L, USER_ID))
+                .thenAnswer(invocation -> Optional.ofNullable(savedHistory.get()));
+        ReflectionTestUtils.setField(
+                service,
+                "ledgerAiTaskExecutor",
+                (org.springframework.core.task.TaskExecutor) submittedTask::set
+        );
+
+        LedgerAiAnalysisHistoryDetailResponse response = service.startAnalyze(USER_ID, monthlyRequest());
+
+        assertThat(response.history().id()).isEqualTo(144L);
+        assertThat(response.history().status()).isEqualTo(LedgerAiAnalysisStatus.PROCESSING);
+        assertThat(response.result()).isNull();
+        verify(remoteClient, never()).analyze(any());
+        assertThat(submittedTask.get()).isNotNull();
+
+        submittedTask.get().run();
+
+        assertThat(savedHistory.get().getStatus()).isEqualTo(LedgerAiAnalysisStatus.COMPLETED);
+        assertThat(savedHistory.get().getResultJson()).contains("Reduce dining out");
+        verify(remoteClient).analyze(any());
+    }
+
+    @Test
+    void startAnalyzeReusesRecentProcessingHistoryInsteadOfQueueingAnotherRequest() {
+        stubUser();
+        LedgerAiAnalysisHistory processingHistory = completedHistory(145L, null);
+        processingHistory.setStatus(LedgerAiAnalysisStatus.PROCESSING);
+        when(historyRepository.findLatestMatchingProcessingAnalysis(
+                any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any()
+        )).thenReturn(Optional.of(processingHistory));
+
+        LedgerAiAnalysisHistoryDetailResponse response = service.startAnalyze(USER_ID, monthlyRequest());
+
+        assertThat(response.history().id()).isEqualTo(145L);
+        assertThat(response.history().status()).isEqualTo(LedgerAiAnalysisStatus.PROCESSING);
+        assertThat(response.result()).isNull();
+        verify(historyRepository, never()).save(any());
+        verify(remoteClient, never()).analyze(any());
+    }
+
+    @Test
     void analyzeKeepsPromptInjectionLikeLedgerTextAsData() {
         stubUser();
         stubNoReusableHistory();
@@ -259,8 +316,8 @@ class LedgerAiAnalysisServiceTest {
         assertThat(payload.outputContract()).contains("JSON only");
 
         ArgumentCaptor<LedgerAiAnalysisHistory> historyCaptor = ArgumentCaptor.forClass(LedgerAiAnalysisHistory.class);
-        verify(historyRepository).save(historyCaptor.capture());
-        LedgerAiAnalysisHistory history = historyCaptor.getValue();
+        verify(historyRepository, times(2)).save(historyCaptor.capture());
+        LedgerAiAnalysisHistory history = historyCaptor.getAllValues().get(1);
         assertThat(history.getStatus()).isEqualTo(LedgerAiAnalysisStatus.COMPLETED);
         assertThat(history.getProvider()).isEqualTo("lmstudio");
         assertThat(history.getTitle()).isEqualTo("AI period analysis - 2026-06-01 ~ 2026-06-30");

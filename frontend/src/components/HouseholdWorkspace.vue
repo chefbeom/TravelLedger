@@ -121,6 +121,8 @@ const FOREIGN_EXCHANGE_DEBOUNCE_MS = 180
 const SEARCH_PAGE_SIZE = 100
 const SEARCH_OTHER_FILTER_VALUE = '__OTHER__'
 const AI_HISTORY_PAGE_SIZE = 8
+const LEDGER_AI_ANALYSIS_POLL_INTERVAL_MS = 2000
+const LEDGER_AI_ANALYSIS_POLL_ATTEMPTS = 360
 const RECEIPT_OCR_PROMPT_RULES_KEY = 'calen-household-receipt-ocr-prompt-rules:v1'
 const RECEIPT_OCR_PROMPT_RULE_PRESETS_KEY = 'calen-household-receipt-ocr-prompt-rule-presets:v2'
 const RECEIPT_OCR_PROMPT_RULE_PRESET_LIMIT = 5
@@ -2072,7 +2074,7 @@ function buildCalendarAggregateEntryRange(configs = aggregateWidgetConfigs.value
     const currentRange = resolveAggregateWidgetDataRange(widget)
     ranges.push(currentRange)
 
-    if (kind === 'MONTHLY_CUMULATIVE_CHART' && widget?.comparePreviousPeriod) {
+    if (kind === 'MONTHLY_CUMULATIVE_CHART') {
       ranges.push(shiftRange(calendarAnchorDate.value, period, calendarAnchorDate.value, calendarAnchorDate.value, 1))
     }
   })
@@ -2248,6 +2250,52 @@ function buildAiAnalysisHistoryParams(page = 0) {
   return params
 }
 
+function normalizeLedgerAiAnalysisStatus(value) {
+  return String(value ?? '').trim().toUpperCase()
+}
+
+function sleepLedgerAiAnalysisPoll(milliseconds) {
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, milliseconds)
+  })
+}
+
+async function waitForLedgerAiAnalysisResult(initialDetail) {
+  if (initialDetail?.historyId && !initialDetail?.history) {
+    return initialDetail
+  }
+
+  const initialStatus = normalizeLedgerAiAnalysisStatus(initialDetail?.history?.status)
+  if (initialStatus === 'COMPLETED' && initialDetail?.result) {
+    return initialDetail.result
+  }
+
+  const historyId = initialDetail?.history?.id
+  if (!historyId) {
+    if (initialStatus === 'FAILED') {
+      throw new Error(initialDetail?.history?.errorMessage || 'AI analysis failed.')
+    }
+    throw new Error('AI analysis did not return a history id.')
+  }
+
+  for (let attempt = 0; attempt < LEDGER_AI_ANALYSIS_POLL_ATTEMPTS; attempt += 1) {
+    const detail = attempt === 0 ? initialDetail : await fetchLedgerAiAnalysisHistory(historyId)
+    const status = normalizeLedgerAiAnalysisStatus(detail?.history?.status)
+    if (status === 'COMPLETED' && detail?.result) {
+      return detail.result
+    }
+    if (status === 'FAILED') {
+      throw new Error(detail?.history?.errorMessage || 'AI analysis failed.')
+    }
+    if (attempt < LEDGER_AI_ANALYSIS_POLL_ATTEMPTS - 1) {
+      await sleepLedgerAiAnalysisPoll(LEDGER_AI_ANALYSIS_POLL_INTERVAL_MS)
+    }
+  }
+
+  const pendingError = new Error('AI analysis is still processing. Check the analysis history again later.')
+  pendingError.pending = true
+  throw pendingError
+}
 async function loadAiAnalysisStatus() {
   try {
     aiAnalysisStatus.value = await fetchLedgerAiAnalysisStatus()
@@ -2284,10 +2332,17 @@ async function loadLatestAiAnalysis() {
       await loadAiAnalysisStatus()
     }
     const detail = await fetchLatestLedgerAiAnalysis(buildAiAnalysisPayload())
-    if (detail?.result) {
+    const status = normalizeLedgerAiAnalysisStatus(detail?.history?.status)
+    if (status === 'COMPLETED' && detail?.result) {
       aiAnalysis.value = detail.result
       aiAnalysisStale.value = false
       syncAiAnalysisControls(detail.history)
+    } else if (status === 'PROCESSING') {
+      aiAnalysis.value = null
+      aiAnalysisError.value = 'AI analysis is still processing. Check the analysis history again later.'
+    } else if (status === 'FAILED') {
+      aiAnalysis.value = null
+      aiAnalysisError.value = detail?.history?.errorMessage || 'AI analysis failed.'
     } else {
       aiAnalysisError.value = '같은 조건으로 저장된 AI 분석 기록이 없습니다.'
     }
@@ -2306,9 +2361,15 @@ async function openAiAnalysisHistory(historyId) {
   aiAnalysisError.value = ''
   try {
     const detail = await fetchLedgerAiAnalysisHistory(historyId)
-    aiAnalysis.value = detail?.result ?? null
+    const status = normalizeLedgerAiAnalysisStatus(detail?.history?.status)
+    aiAnalysis.value = status === 'COMPLETED' ? detail?.result ?? null : null
     aiAnalysisStale.value = false
     syncAiAnalysisControls(detail?.history)
+    if (status === 'PROCESSING') {
+      aiAnalysisError.value = 'AI analysis is still processing. Check the analysis history again later.'
+    } else if (status === 'FAILED') {
+      aiAnalysisError.value = detail?.history?.errorMessage || 'AI analysis failed.'
+    }
   } catch (error) {
     aiAnalysisError.value = error.message || 'AI 분석 기록을 열지 못했습니다.'
   } finally {
@@ -2327,13 +2388,17 @@ async function requestAiAnalysis() {
       await loadAiAnalysisStatus()
     }
     const payload = buildAiAnalysisPayload()
-    aiAnalysis.value = await analyzeLedgerSpending(payload)
+    const detail = await analyzeLedgerSpending(payload)
+    aiAnalysis.value = await waitForLedgerAiAnalysisResult(detail)
     aiAnalysisStale.value = false
     await loadAiAnalysisHistory()
     emit('ai-analysis-complete', { task: 'ledger' })
   } catch (error) {
     const message = error.message || 'AI 분석 요청을 처리하지 못했습니다.'
-    if (aiAnalysis.value) {
+    if (error?.pending) {
+      aiAnalysisStale.value = hadPreviousResult
+      aiAnalysisError.value = error.message
+    } else if (aiAnalysis.value) {
       aiAnalysisStale.value = true
       aiAnalysisError.value = `새 분석 요청에 실패했습니다. 아래는 이전 저장/표시 결과입니다. (${message})`
     } else {
@@ -2377,13 +2442,17 @@ async function rerunAiAnalysis(historyId) {
   aiAnalysisStale.value = hadPreviousResult
   setFeedback()
   try {
-    aiAnalysis.value = await rerunLedgerAiAnalysis(historyId)
+    const detail = await rerunLedgerAiAnalysis(historyId)
+    aiAnalysis.value = await waitForLedgerAiAnalysisResult(detail)
     aiAnalysisStale.value = false
     await loadAiAnalysisHistory(aiAnalysisHistoryPage.value?.page ?? 0)
     emit('ai-analysis-complete', { task: 'ledger' })
   } catch (error) {
     const message = error.message || 'AI 분석 재요청을 처리하지 못했습니다.'
-    if (aiAnalysis.value) {
+    if (error?.pending) {
+      aiAnalysisStale.value = hadPreviousResult
+      aiAnalysisError.value = error.message
+    } else if (aiAnalysis.value) {
       aiAnalysisStale.value = true
       aiAnalysisError.value = `AI 재분석 요청에 실패했습니다. 아래는 이전 저장/표시 결과입니다. (${message})`
     } else {

@@ -486,6 +486,9 @@ function formatAiStatus(status) {
   if (status === 'COMPLETED') {
     return '완료'
   }
+  if (status === 'PROCESSING') {
+    return '\ucc98\ub9ac \uc911'
+  }
   if (status === 'FAILED') {
     return '실패'
   }
@@ -1885,6 +1888,11 @@ watch(
   border-color: rgba(250, 204, 21, 0.42);
   background: rgba(250, 204, 21, 0.12);
   color: #fde68a;
+}
+.ai-history-status--processing {
+  border-color: rgba(167, 243, 181, 0.45);
+  background: rgba(167, 243, 181, 0.16);
+  color: #bbf7d0;
 }
 .ai-history-status--running {
   border-color: rgba(167, 243, 181, 0.45);

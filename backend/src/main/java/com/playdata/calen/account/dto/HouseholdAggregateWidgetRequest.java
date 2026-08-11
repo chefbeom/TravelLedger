@@ -10,6 +10,7 @@ public record HouseholdAggregateWidgetRequest(
         Boolean showIncomeCumulative,
         Boolean showExpenseCumulative,
         Boolean comparePreviousPeriod,
+        Long chartMaxAmount,
         Integer layoutX,
         Integer layoutY,
         Integer layoutW,

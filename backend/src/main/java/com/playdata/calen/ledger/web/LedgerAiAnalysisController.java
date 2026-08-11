@@ -8,7 +8,6 @@ import com.playdata.calen.ledger.dto.LedgerAiAnalysisHistoryDeleteResponse;
 import com.playdata.calen.ledger.dto.LedgerAiAnalysisHistoryDetailResponse;
 import com.playdata.calen.ledger.dto.LedgerAiAnalysisHistoryPageResponse;
 import com.playdata.calen.ledger.dto.LedgerAiAnalysisRequest;
-import com.playdata.calen.ledger.dto.LedgerAiAnalysisResponse;
 import com.playdata.calen.ledger.dto.LedgerAiAnalysisStatusResponse;
 import jakarta.validation.Valid;
 import java.time.LocalDate;
@@ -82,11 +81,11 @@ public class LedgerAiAnalysisController {
     }
 
     @PostMapping("/history/{historyId}/rerun")
-    public LedgerAiAnalysisResponse rerun(
+    public LedgerAiAnalysisHistoryDetailResponse rerun(
             @AuthenticationPrincipal AppUserPrincipal currentUser,
             @PathVariable Long historyId
     ) {
-        return ledgerAiAnalysisService.rerun(currentUser.userId(), historyId);
+        return ledgerAiAnalysisService.startRerun(currentUser.userId(), historyId);
     }
 
     @PostMapping("/latest")
@@ -98,10 +97,10 @@ public class LedgerAiAnalysisController {
     }
 
     @PostMapping
-    public LedgerAiAnalysisResponse analyze(
+    public LedgerAiAnalysisHistoryDetailResponse analyze(
             @AuthenticationPrincipal AppUserPrincipal currentUser,
             @Valid @RequestBody LedgerAiAnalysisRequest request
     ) {
-        return ledgerAiAnalysisService.analyze(currentUser.userId(), request);
+        return ledgerAiAnalysisService.startAnalyze(currentUser.userId(), request);
     }
 }

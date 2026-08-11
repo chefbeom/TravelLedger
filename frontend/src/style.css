@@ -33389,3 +33389,13 @@ button.button--primary,
     grid-template-columns: minmax(0, 1fr) !important;
   }
 }
+.household-aggregate-chart__target-line {
+  stroke: rgba(251, 191, 36, 0.92);
+  stroke-dasharray: 5 4;
+  stroke-width: 1.2;
+  vector-effect: non-scaling-stroke;
+}
+
+.household-aggregate-chart--preview .household-aggregate-chart__target-line {
+  stroke-width: 0.9;
+}

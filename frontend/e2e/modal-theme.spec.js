@@ -33,7 +33,8 @@ async function renderModalFixture(page, overlayClass, panelClass) {
       <div class="public-map-share-photo-modal__media">Media</div>
     `
     overlayElement.append(panelElement)
-    document.body.append(overlayElement)
+    const host = document.querySelector('.app-shell') || document.body
+    host.append(overlayElement)
   }, { overlayClass, panelClass })
 }
 
@@ -47,6 +48,7 @@ async function modalColors(page, panelClass) {
     return {
       panelBackground: read(panel)?.backgroundColor,
       panelColor: read(panel)?.color,
+      panelRadius: read(panel)?.borderRadius,
       inputBackground: read(input)?.backgroundColor,
       inputColor: read(input)?.color,
       headingColor: read(heading)?.color,
@@ -84,17 +86,19 @@ test('representative modal surfaces follow light and dark theme tokens', async (
 
     await page.evaluate(() => document.documentElement.removeAttribute('data-theme'))
     await expect.poll(() => modalColors(page, panelClass), { message: panelClass }).toMatchObject({
-      panelBackground: 'rgb(255, 255, 255)',
-      inputBackground: 'rgb(255, 255, 255)',
-      mediaBackground: 'rgb(11, 16, 32)',
+      panelBackground: 'rgb(244, 241, 232)',
+      inputBackground: 'rgb(250, 248, 242)',
+      mediaBackground: 'rgb(52, 78, 65)',
+      panelRadius: '0px',
     })
     expectReadable(await modalColors(page, panelClass))
 
     await page.evaluate(() => document.documentElement.setAttribute('data-theme', 'toss'))
     await expect.poll(() => modalColors(page, panelClass), { message: panelClass }).toMatchObject({
-      panelBackground: 'rgb(21, 25, 34)',
-      inputBackground: 'rgb(17, 24, 33)',
-      mediaBackground: 'rgb(11, 16, 32)',
+      panelBackground: 'rgb(58, 90, 64)',
+      inputBackground: 'rgb(52, 78, 65)',
+      mediaBackground: 'rgb(52, 78, 65)',
+      panelRadius: '0px',
     })
     expectReadable(await modalColors(page, panelClass))
   }

@@ -33530,3 +33530,713 @@ button.button--primary,
     align-self: auto;
   }
 }
+
+/* Calen visual system: angular forest palette with light/dark parity. */
+:root:not([data-theme="toss"]) {
+  color-scheme: light;
+  --dust-grey: #dad7cd;
+  --dry-sage: #a3b18a;
+  --fern: #588157;
+  --hunter-green: #3a5a40;
+  --pine-teal: #344e41;
+  --bg: #dad7cd;
+  --surface: #f4f1e8;
+  --surface-panel: #f4f1e8;
+  --surface-elevated: #faf8f2;
+  --surface-soft: #ebe8dd;
+  --surface-soft-strong: #e2dfd2;
+  --surface-muted: #d4d1c5;
+  --surface-strong: #c5c9b6;
+  --surface-subtle: #f9f7f0;
+  --panel: #f4f1e8;
+  --panel-bg: #f4f1e8;
+  --panel-border: #a3b18a;
+  --line: #a3b18a;
+  --border: #a3b18a;
+  --border-soft: rgba(58, 90, 64, 0.22);
+  --text: #344e41;
+  --text-main: #344e41;
+  --text-primary: #344e41;
+  --text-secondary: #3a5a40;
+  --text-soft: #3a5a40;
+  --text-muted: #588157;
+  --muted: #588157;
+  --brand: #588157;
+  --brand-strong: #3a5a40;
+  --brand-soft: rgba(88, 129, 87, 0.16);
+  --brand-surface: #e7ecdf;
+  --brand-readable: #3a5a40;
+  --brand-readable-strong: #344e41;
+  --blue: #588157;
+  --blue-soft: rgba(88, 129, 87, 0.16);
+  --accent: #588157;
+  --accent-strong: #3a5a40;
+  --income: #588157;
+  --expense: #3a5a40;
+  --success: #588157;
+  --danger: #3a5a40;
+  --shadow: 0 12px 32px rgba(52, 78, 65, 0.12);
+  --shadow-strong: 0 18px 44px rgba(52, 78, 65, 0.2);
+  --bg-gradient: linear-gradient(180deg, #dad7cd 0%, #e8e5da 52%, #f4f1e8 100%);
+  --interactive-contrast-bg: #3a5a40;
+  --interactive-contrast-text: #dad7cd;
+  --field-bg: #faf8f2;
+  --field-bg-muted: #ebe8dd;
+  --field-border: #a3b18a;
+  --field-focus-border: #588157;
+  --field-focus-shadow: 0 0 0 3px rgba(88, 129, 87, 0.2);
+  --control-bg: #ebe8dd;
+  --control-bg-hover: #dad7cd;
+  --focus-ring: #588157;
+  --focus-ring-shadow: rgba(88, 129, 87, 0.22);
+  --modal-overlay: rgba(52, 78, 65, 0.52);
+  --modal-surface: #f4f1e8;
+  --modal-surface-soft: #ebe8dd;
+  --modal-surface-muted: #dad7cd;
+  --modal-field: #faf8f2;
+  --modal-border: #a3b18a;
+  --modal-border-strong: #588157;
+  --modal-text: #344e41;
+  --modal-text-soft: #3a5a40;
+  --modal-text-muted: #588157;
+  --modal-accent: #588157;
+  --modal-danger: #3a5a40;
+  --modal-shadow: 0 24px 70px rgba(52, 78, 65, 0.24);
+  --toss-bg: #344e41;
+  --toss-surface: #3a5a40;
+  --toss-line: #588157;
+  --toss-text-soft: #a3b18a;
+  --toss-text-muted: #a3b18a;
+}
+
+:root[data-theme="toss"] {
+  color-scheme: dark;
+  --dust-grey: #dad7cd;
+  --dry-sage: #a3b18a;
+  --fern: #588157;
+  --hunter-green: #3a5a40;
+  --pine-teal: #344e41;
+  --bg: var(--toss-bg, #344e41);
+  --surface: var(--toss-surface, #3a5a40);
+  --surface-panel: var(--toss-surface-panel-start, #3a5a40);
+  --surface-elevated: var(--toss-surface-elevated-start, #344e41);
+  --surface-soft: var(--toss-surface-soft, #465f49);
+  --surface-soft-strong: var(--toss-surface-soft-strong, #588157);
+  --surface-muted: var(--toss-surface-soft, #2f493b);
+  --surface-strong: var(--toss-surface-soft-strong, #6a845f);
+  --surface-subtle: var(--toss-surface-elevated-end, #405945);
+  --panel: var(--toss-surface, #3a5a40);
+  --panel-bg: var(--toss-surface, #3a5a40);
+  --panel-border: var(--toss-line, #588157);
+  --line: var(--toss-line, #588157);
+  --border: var(--toss-line, #588157);
+  --border-soft: rgba(163, 177, 138, 0.3);
+  --text: #dad7cd;
+  --text-main: #dad7cd;
+  --text-primary: #dad7cd;
+  --text-secondary: var(--toss-text-soft, #a3b18a);
+  --text-soft: var(--toss-text-soft, #a3b18a);
+  --text-muted: var(--toss-text-muted, #a3b18a);
+  --muted: var(--toss-text-muted, #a3b18a);
+  --brand: #a3b18a;
+  --brand-strong: #588157;
+  --brand-soft: rgba(163, 177, 138, 0.18);
+  --brand-surface: var(--toss-surface-soft, #465f49);
+  --brand-readable: #dad7cd;
+  --brand-readable-strong: #dad7cd;
+  --blue: #a3b18a;
+  --blue-soft: rgba(163, 177, 138, 0.18);
+  --accent: #a3b18a;
+  --accent-strong: #588157;
+  --income: #a3b18a;
+  --expense: #dad7cd;
+  --success: #a3b18a;
+  --danger: #dad7cd;
+  --shadow: 0 16px 40px rgba(20, 34, 25, 0.36);
+  --shadow-strong: 0 22px 54px rgba(20, 34, 25, 0.52);
+  --bg-gradient: linear-gradient(180deg, var(--toss-bg, #344e41) 0%, var(--toss-bg-gradient-mid, #3a5a40) 52%, var(--toss-bg-gradient-end, #2f493b) 100%);
+  --interactive-contrast-bg: #a3b18a;
+  --interactive-contrast-text: #344e41;
+  --field-bg: var(--toss-bg, #344e41);
+  --field-bg-muted: var(--toss-surface-soft, #2f493b);
+  --field-border: var(--toss-line, #588157);
+  --field-focus-border: var(--toss-text-soft, #a3b18a);
+  --field-focus-shadow: 0 0 0 3px rgba(163, 177, 138, 0.22);
+  --control-bg: var(--toss-surface-soft, #465f49);
+  --control-bg-hover: var(--toss-surface-soft-strong, #588157);
+  --focus-ring: #a3b18a;
+  --focus-ring-shadow: rgba(163, 177, 138, 0.24);
+  --modal-overlay: rgba(20, 34, 25, 0.78);
+  --modal-surface: var(--toss-surface, #3a5a40);
+  --modal-surface-soft: var(--toss-surface-soft, #465f49);
+  --modal-surface-muted: var(--toss-bg, #344e41);
+  --modal-field: var(--toss-bg, #344e41);
+  --modal-border: var(--toss-line, #588157);
+  --modal-border-strong: var(--toss-text-soft, #a3b18a);
+  --modal-text: #dad7cd;
+  --modal-text-soft: var(--toss-text-soft, #a3b18a);
+  --modal-text-muted: var(--toss-text-muted, #a3b18a);
+  --modal-accent: #a3b18a;
+  --modal-danger: #dad7cd;
+  --modal-shadow: 0 28px 80px rgba(20, 34, 25, 0.56);
+  --toss-bg: #344e41;
+  --toss-surface: #3a5a40;
+  --toss-line: #588157;
+  --toss-text-soft: #a3b18a;
+  --toss-text-muted: #a3b18a;
+  --toss-surface-panel-start: rgba(58, 90, 64, 0.98);
+  --toss-surface-panel-end: rgba(52, 78, 65, 0.98);
+  --toss-surface-elevated-start: #465f49;
+  --toss-surface-elevated-end: #344e41;
+  --toss-surface-soft: #465f49;
+  --toss-surface-soft-strong: #588157;
+  --toss-bg-gradient-mid: #344e41;
+  --toss-bg-gradient-end: #2f493b;
+}
+
+html,
+body,
+#app,
+.app-shell {
+  background: var(--bg) !important;
+  color: var(--text) !important;
+  transition: background-color 180ms ease, color 180ms ease;
+}
+
+.app-shell::before {
+  background: var(--bg-gradient) !important;
+}
+
+/* Page-specific token bridges keep travel, dashboard, and palette views in sync. */
+.main-dashboard {
+  --dash-bg: var(--surface) !important;
+  --dash-card: var(--surface-panel) !important;
+  --dash-ink: var(--text) !important;
+  --dash-muted: var(--text-soft) !important;
+  --dash-line: var(--line) !important;
+  --dash-strong-line: var(--brand-strong) !important;
+  --dash-panel: var(--surface-panel) !important;
+  --dash-control-bg: var(--field-bg) !important;
+  --dash-control-hover: var(--control-bg-hover) !important;
+  --dash-tile-bg: var(--surface-soft) !important;
+  --dash-track-bg: var(--brand-soft) !important;
+  --dash-teal: var(--fern) !important;
+  --dash-teal-strong: var(--hunter-green) !important;
+  --dash-teal-soft: var(--brand-soft) !important;
+  --dash-mint: var(--dry-sage) !important;
+  --dash-mint-soft: var(--brand-soft) !important;
+  --dash-lime: var(--dry-sage) !important;
+  --dash-lime-soft: var(--brand-soft) !important;
+  --dash-amber: var(--dry-sage) !important;
+  --dash-amber-soft: var(--brand-soft) !important;
+  --dash-coral: var(--fern) !important;
+  --dash-coral-soft: var(--brand-soft) !important;
+  --dash-positive: var(--fern) !important;
+  --dash-negative: var(--hunter-green) !important;
+  --dash-popover-shadow: var(--shadow) !important;
+  --dash-card-radius: 0px !important;
+  --household-dash-bg: var(--surface) !important;
+  --household-dash-card: var(--surface-panel) !important;
+  --household-dash-ink: var(--text) !important;
+  --household-dash-muted: var(--text-soft) !important;
+  --household-dash-line: var(--line) !important;
+  --household-dash-teal: var(--fern) !important;
+  --household-dash-teal-strong: var(--hunter-green) !important;
+  --household-dash-tile: var(--surface-soft) !important;
+  --household-dash-track: var(--brand-soft) !important;
+  --household-dash-positive: var(--fern) !important;
+  --household-dash-negative: var(--hunter-green) !important;
+}
+
+.travel-unified-shell,
+.travel-public-app {
+  --travel-ocean: var(--fern) !important;
+  --travel-ocean-strong: var(--hunter-green) !important;
+  --travel-ocean-deep: var(--pine-teal) !important;
+  --travel-mint: var(--dry-sage) !important;
+  --travel-mint-soft: var(--brand-soft) !important;
+  --travel-lime: var(--dry-sage) !important;
+  --travel-lime-soft: var(--brand-soft) !important;
+  --travel-coral: var(--fern) !important;
+  --travel-coral-soft: var(--brand-soft) !important;
+  --travel-sky: var(--dry-sage) !important;
+  --travel-ink: var(--text) !important;
+  --travel-muted: var(--text-soft) !important;
+  --travel-line: var(--line) !important;
+  --travel-strong-line: var(--brand-strong) !important;
+  --travel-card: var(--surface-panel) !important;
+  --travel-card-solid: var(--surface-panel) !important;
+  --travel-card-soft: var(--surface-soft) !important;
+  --travel-control: var(--field-bg) !important;
+  --travel-control-hover: var(--control-bg-hover) !important;
+  --travel-shadow: var(--shadow) !important;
+  --travel-shadow-strong: var(--shadow-strong) !important;
+}
+
+/* Flatten the application chrome while keeping the chart geometry and media pixels intact. */
+.app-shell,
+.app-shell *,
+[role="dialog"],
+[role="dialog"] * {
+  border-radius: 0 !important;
+}
+
+.app-shell :where(.panel, .panel-card, .summary-card, .auth-card, .auth-copy, .launcher-card, .feature-card, .sidebar, .sidebar__user, .main-dashboard, .main-palette, .main-dashboard__overview-card, .main-dashboard__header, .main-dashboard__palette-zone, .household-calendar-layout-board, .household-calendar-layout-panel-shell > .panel, .household-aggregate-card, .household-aggregate-empty, .receipt-ocr-panel, .drive-dashboard__card, .drive-file-card, .family-category-card, .family-album-focus, .admin-workspace, .admin-command-center, .admin-command-card, .support-inquiry-card) {
+  background: var(--surface-panel) !important;
+  border-color: var(--line) !important;
+  box-shadow: var(--shadow) !important;
+  color: var(--text) !important;
+}
+
+.app-shell :where(.panel__header h2, .panel__header h3, .topbar h1, .sidebar__brand strong, .summary-card strong, .field__label, .main-dashboard h1, .main-dashboard h2, .main-dashboard h3, .main-palette strong) {
+  color: var(--text) !important;
+  -webkit-text-fill-color: var(--text) !important;
+}
+
+.app-shell :where(.panel__header p, .panel__empty, .field__hint, .sidebar__brand span, .sidebar__user span, .summary-card span, .summary-card small, .main-dashboard p, .main-dashboard small, .main-palette span, .main-palette small) {
+  color: var(--text-soft) !important;
+  -webkit-text-fill-color: var(--text-soft) !important;
+}
+
+.app-shell :where(button, .button, [role="button"]) {
+  border-color: var(--line) !important;
+  background: var(--surface-soft) !important;
+  box-shadow: none !important;
+  color: var(--text) !important;
+  -webkit-text-fill-color: var(--text) !important;
+}
+
+.app-shell :where(button, .button, [role="button"]):hover,
+.app-shell :where(button, .button, [role="button"]):focus-visible {
+  border-color: var(--fern) !important;
+  background: var(--control-bg-hover) !important;
+}
+
+.app-shell :where(.button--primary, .main-dashboard__primary, .button--active, .is-active, .sidebar__link--active, .toggle-chip--active) {
+  border-color: var(--fern) !important;
+  background: var(--fern) !important;
+  color: var(--dust-grey) !important;
+  -webkit-text-fill-color: var(--dust-grey) !important;
+}
+
+.app-shell :where(.button--danger, .feedback--error) {
+  border-color: var(--hunter-green) !important;
+  background: var(--hunter-green) !important;
+  color: var(--dust-grey) !important;
+  -webkit-text-fill-color: var(--dust-grey) !important;
+}
+
+.app-shell :where(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]), select, textarea) {
+  border-color: var(--field-border) !important;
+  background: var(--field-bg) !important;
+  color: var(--text) !important;
+  -webkit-text-fill-color: var(--text) !important;
+}
+
+.app-shell :where(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"])):focus,
+.app-shell :where(select, textarea):focus {
+  border-color: var(--field-focus-border) !important;
+  box-shadow: var(--field-focus-shadow) !important;
+}
+
+.app-shell :where(input, select, textarea)::placeholder {
+  color: var(--text-muted) !important;
+  -webkit-text-fill-color: var(--text-muted) !important;
+}
+
+.app-shell a {
+  color: var(--fern);
+}
+
+.theme-toggle,
+.theme-degree-panel {
+  border-color: var(--line) !important;
+  background: var(--surface-panel) !important;
+  color: var(--text) !important;
+  box-shadow: var(--shadow) !important;
+}
+
+:where(.travel-modal, .receipt-ocr-modal, .ledger-ai-modal, .ai-result-modal, .household-aggregate-chart-modal, .transaction-sheet-modal, .transaction-sheet-settings-modal, .main-photo-frame-modal, .public-map-share-photo-modal, .drive-preview-overlay, .profile-workspace-modal, .admin-ops-modal, .admin-support-modal, .admin-access-control-modal, .global-notification-modal) {
+  background: var(--modal-overlay) !important;
+}
+
+:where(.travel-modal__dialog, .receipt-ocr-modal__dialog, .ledger-ai-modal__dialog, .ai-result-modal__dialog, .household-aggregate-chart-modal__panel, .transaction-sheet-modal__dialog, .transaction-sheet-settings-modal__dialog, .main-photo-frame-modal__dialog, .public-map-share-photo-modal__panel, .drive-preview-modal__dialog, .profile-workspace-modal__dialog, .admin-ops-modal__dialog, .admin-support-modal__dialog, .admin-access-control-modal__dialog, .global-notification-modal__dialog) {
+  background: var(--modal-surface) !important;
+  border-color: var(--modal-border) !important;
+  box-shadow: var(--modal-shadow) !important;
+  color: var(--modal-text) !important;
+}
+
+.main-photo-frame-modal,
+.main-photo-frame-modal__dialog {
+  --photo-frame-surface: var(--modal-surface) !important;
+  --photo-frame-surface-soft: var(--modal-surface-soft) !important;
+  --photo-frame-control: var(--modal-field) !important;
+  --photo-frame-border: var(--modal-border) !important;
+  --photo-frame-border-strong: var(--modal-border-strong) !important;
+  --photo-frame-text: var(--modal-text) !important;
+  --photo-frame-muted: var(--modal-text-soft) !important;
+  --photo-frame-accent: var(--modal-accent) !important;
+  --photo-frame-primary: var(--fern) !important;
+  --photo-frame-primary-border: var(--dry-sage) !important;
+  --photo-frame-media: var(--pine-teal) !important;
+  --photo-frame-media-text: var(--dust-grey) !important;
+}
+
+.household-aggregate-chart__point--income { stroke: var(--dry-sage) !important; }
+.household-aggregate-chart__point--expense { stroke: var(--fern) !important; }
+.household-aggregate-chart__line--income { stroke: var(--dry-sage) !important; }
+.household-aggregate-chart__line--expense { stroke: var(--fern) !important; }
+.household-aggregate-chart__point--previous { stroke: var(--pine-teal) !important; }
+.household-aggregate-chart__line--previous { stroke: var(--pine-teal) !important; }
+.household-aggregate-chart__target-line { stroke: var(--hunter-green) !important; }
+.household-aggregate-chart__value-label--current { fill: var(--fern) !important; }
+.household-aggregate-chart__value-label--previous { fill: var(--pine-teal) !important; }
+.household-aggregate-chart__detail-button {
+  border-color: var(--fern) !important;
+  background: var(--surface-soft) !important;
+  color: var(--text) !important;
+}
+
+/* Keep the palette visible in public/standalone travel shells as well. */
+.travel-unified-shell,
+.travel-public-app,
+.travel-modal__dialog,
+.public-map-share-photo-modal__panel {
+  border-color: var(--line) !important;
+  color: var(--text) !important;
+}
+
+::selection {
+  background: var(--fern);
+  color: var(--dust-grey);
+}
+/* Calen final priority guard: replace legacy high-specificity theme colors. */
+html body .app-shell.app-shell :is(
+  .panel,
+  .panel-card,
+  .summary-card,
+  .auth-card,
+  .auth-copy,
+  .launcher-card,
+  .feature-card,
+  .sidebar,
+  .sidebar__user,
+  .main-dashboard,
+  .main-palette,
+  .main-dashboard__overview-card,
+  .main-dashboard__header,
+  .main-dashboard__palette-zone,
+  .household-calendar-layout-board,
+  .household-aggregate-card,
+  .household-aggregate-empty,
+  .receipt-ocr-panel,
+  .drive-dashboard__card,
+  .drive-details-panel,
+  .drive-file-card,
+  .family-category-card,
+  .family-album-focus,
+  .admin-workspace,
+  .admin-command-center,
+  .admin-command-card,
+  .support-inquiry-card,
+  .notification-hero,
+  .notification-toolbar,
+  .notification-list-panel,
+  .notification-card,
+  .privacy-export-card,
+  .privacy-management-card,
+  .privacy-action-card,
+  .travel-plan-card,
+  .travel-media-card,
+  .travel-pending-card,
+  .drive-version-drawer,
+  .travel-public-map-drawer,
+  .drive-context-menu,
+  .household-data-actions__menu,
+  .travel-map__popup,
+  .travel-cluster-popup,
+  .leaflet-popup-content-wrapper
+) {
+  background: var(--surface-panel) !important;
+  border-color: var(--line) !important;
+  box-shadow: var(--shadow) !important;
+  color: var(--text) !important;
+  -webkit-text-fill-color: var(--text) !important;
+}
+
+html body .app-shell.app-shell :is(
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6,
+  strong,
+  .field__label,
+  .panel__eyebrow
+) {
+  color: var(--text) !important;
+  -webkit-text-fill-color: var(--text) !important;
+}
+
+html body .app-shell.app-shell :is(
+  p,
+  small,
+  .field__hint,
+  .form-hint,
+  .muted,
+  .text-muted,
+  .panel__empty
+) {
+  color: var(--text-soft) !important;
+  -webkit-text-fill-color: var(--text-soft) !important;
+}
+
+html body .app-shell.app-shell :is(button, .button, [role="button"]) {
+  border-color: var(--line) !important;
+  background: var(--surface-soft) !important;
+  box-shadow: none !important;
+  color: var(--text) !important;
+  -webkit-text-fill-color: var(--text) !important;
+}
+
+html body .app-shell.app-shell :is(button, .button, [role="button"]):hover,
+html body .app-shell.app-shell :is(button, .button, [role="button"]):focus-visible {
+  border-color: var(--fern) !important;
+  background: var(--control-bg-hover) !important;
+}
+
+html body .app-shell.app-shell :is(
+  .button--primary,
+  .main-dashboard__primary,
+  .button--active,
+  .is-active,
+  .sidebar__link--active,
+  .toggle-chip--active,
+  .topbar__nav-button--active
+) {
+  border-color: var(--fern) !important;
+  background: var(--fern) !important;
+  color: var(--dust-grey) !important;
+  -webkit-text-fill-color: var(--dust-grey) !important;
+}
+
+html body .app-shell.app-shell :is(.button--danger, .feedback--error) {
+  border-color: var(--hunter-green) !important;
+  background: var(--hunter-green) !important;
+  color: var(--dust-grey) !important;
+  -webkit-text-fill-color: var(--dust-grey) !important;
+}
+
+html body .app-shell.app-shell :is(
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]),
+  select,
+  textarea
+) {
+  border-color: var(--field-border) !important;
+  background: var(--field-bg) !important;
+  color: var(--text) !important;
+  -webkit-text-fill-color: var(--text) !important;
+}
+
+html body .app-shell.app-shell :is(
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]),
+  select,
+  textarea
+)::placeholder {
+  color: var(--text-muted) !important;
+  -webkit-text-fill-color: var(--text-muted) !important;
+}
+
+html body .app-shell.app-shell :is(
+  .travel-modal,
+  .travel-progress-modal,
+  .receipt-ocr-modal,
+  .ledger-ai-modal,
+  .ai-result-modal,
+  .household-aggregate-chart-modal,
+  .transaction-sheet-modal,
+  .transaction-sheet-settings-modal,
+  .main-photo-frame-modal,
+  .public-map-share-photo-modal,
+  .drive-preview-overlay,
+  .profile-workspace-modal,
+  .admin-ops-modal,
+  .admin-support-modal,
+  .admin-access-control-modal,
+  .global-notification-modal
+) {
+  background: var(--modal-overlay) !important;
+}
+
+html body .app-shell.app-shell.app-shell :is(
+  .travel-modal__dialog,
+  .travel-progress-modal__dialog,
+  .receipt-ocr-modal__dialog,
+  .ledger-ai-modal__dialog,
+  .ai-result-modal__dialog,
+  .household-aggregate-chart-modal__panel,
+  .transaction-sheet-modal__dialog,
+  .transaction-sheet-settings-modal__dialog,
+  .main-photo-frame-modal__dialog,
+  .public-map-share-photo-modal__panel,
+  .drive-preview-modal__dialog,
+  .profile-workspace-modal__dialog,
+  .admin-ops-modal__dialog,
+  .admin-support-modal__dialog,
+  .admin-access-control-modal__dialog,
+  .global-notification-modal__dialog,
+  .travel-map-share-modal__dialog
+) {
+  background: var(--modal-surface) !important;
+  border-color: var(--modal-border) !important;
+  box-shadow: var(--modal-shadow) !important;
+  color: var(--modal-text) !important;
+  -webkit-text-fill-color: var(--modal-text) !important;
+}
+
+html body .app-shell.app-shell.app-shell :is(
+  .travel-modal__dialog,
+  .travel-progress-modal__dialog,
+  .receipt-ocr-modal__dialog,
+  .ledger-ai-modal__dialog,
+  .ai-result-modal__dialog,
+  .household-aggregate-chart-modal__panel,
+  .transaction-sheet-modal__dialog,
+  .transaction-sheet-settings-modal__dialog,
+  .main-photo-frame-modal__dialog,
+  .public-map-share-photo-modal__panel,
+  .drive-preview-modal__dialog,
+  .profile-workspace-modal__dialog,
+  .admin-ops-modal__dialog,
+  .admin-support-modal__dialog,
+  .admin-access-control-modal__dialog,
+  .global-notification-modal__dialog,
+  .travel-map-share-modal__dialog
+) :is(h1, h2, h3, h4, h5, h6, strong, .field__label) {
+  color: var(--modal-text) !important;
+  -webkit-text-fill-color: var(--modal-text) !important;
+}
+
+html body .app-shell.app-shell.app-shell :is(
+  .travel-modal__dialog,
+  .travel-progress-modal__dialog,
+  .receipt-ocr-modal__dialog,
+  .ledger-ai-modal__dialog,
+  .ai-result-modal__dialog,
+  .household-aggregate-chart-modal__panel,
+  .transaction-sheet-modal__dialog,
+  .transaction-sheet-settings-modal__dialog,
+  .main-photo-frame-modal__dialog,
+  .public-map-share-photo-modal__panel,
+  .drive-preview-modal__dialog,
+  .profile-workspace-modal__dialog,
+  .admin-ops-modal__dialog,
+  .admin-support-modal__dialog,
+  .admin-access-control-modal__dialog,
+  .global-notification-modal__dialog,
+  .travel-map-share-modal__dialog
+) :is(p, span, small, label, .field__hint, .form-hint, .panel__empty) {
+  color: var(--modal-text-soft) !important;
+  -webkit-text-fill-color: var(--modal-text-soft) !important;
+}
+
+html body .app-shell.app-shell.app-shell :is(
+  .travel-modal__dialog,
+  .travel-progress-modal__dialog,
+  .receipt-ocr-modal__dialog,
+  .ledger-ai-modal__dialog,
+  .ai-result-modal__dialog,
+  .household-aggregate-chart-modal__panel,
+  .transaction-sheet-modal__dialog,
+  .transaction-sheet-settings-modal__dialog,
+  .main-photo-frame-modal__dialog,
+  .public-map-share-photo-modal__panel,
+  .drive-preview-modal__dialog,
+  .profile-workspace-modal__dialog,
+  .admin-ops-modal__dialog,
+  .admin-support-modal__dialog,
+  .admin-access-control-modal__dialog,
+  .global-notification-modal__dialog,
+  .travel-map-share-modal__dialog
+) :is(
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]),
+  select,
+  textarea
+) {
+  border-color: var(--modal-border) !important;
+  background: var(--modal-field) !important;
+  color: var(--modal-text) !important;
+  -webkit-text-fill-color: var(--modal-text) !important;
+}
+
+html body .app-shell.app-shell.app-shell :is(
+  .travel-modal__dialog,
+  .travel-progress-modal__dialog,
+  .receipt-ocr-modal__dialog,
+  .ledger-ai-modal__dialog,
+  .ai-result-modal__dialog,
+  .household-aggregate-chart-modal__panel,
+  .transaction-sheet-modal__dialog,
+  .transaction-sheet-settings-modal__dialog,
+  .main-photo-frame-modal__dialog,
+  .public-map-share-photo-modal__panel,
+  .drive-preview-modal__dialog,
+  .profile-workspace-modal__dialog,
+  .admin-ops-modal__dialog,
+  .admin-support-modal__dialog,
+  .admin-access-control-modal__dialog,
+  .global-notification-modal__dialog,
+  .travel-map-share-modal__dialog
+) :is(button, .button, a, .chip, .toggle-chip) {
+  border-color: var(--modal-border) !important;
+  background: var(--modal-surface-soft) !important;
+  color: var(--modal-text) !important;
+  -webkit-text-fill-color: var(--modal-text) !important;
+}
+
+html body .app-shell.app-shell.app-shell :is(
+  .travel-modal__dialog,
+  .travel-progress-modal__dialog,
+  .receipt-ocr-modal__dialog,
+  .ledger-ai-modal__dialog,
+  .ai-result-modal__dialog,
+  .household-aggregate-chart-modal__panel,
+  .transaction-sheet-modal__dialog,
+  .transaction-sheet-settings-modal__dialog,
+  .main-photo-frame-modal__dialog,
+  .public-map-share-photo-modal__panel,
+  .drive-preview-modal__dialog,
+  .profile-workspace-modal__dialog,
+  .admin-ops-modal__dialog,
+  .admin-support-modal__dialog,
+  .admin-access-control-modal__dialog,
+  .global-notification-modal__dialog,
+  .travel-map-share-modal__dialog
+) :is(.button--primary, button[type="submit"], .button--active, .is-active) {
+  border-color: var(--modal-border-strong) !important;
+  background: var(--fern) !important;
+  color: var(--dust-grey) !important;
+  -webkit-text-fill-color: var(--dust-grey) !important;
+}
+
+html body .app-shell.app-shell.app-shell :is(
+  .public-map-share-photo-modal__media,
+  .public-map-share-photo-modal__image-state,
+  .main-photo-frame-modal__preview,
+  .main-photo-frame-detail-modal__figure
+) {
+  border-color: var(--modal-border) !important;
+  background: var(--pine-teal) !important;
+  color: var(--dust-grey) !important;
+  -webkit-text-fill-color: var(--dust-grey) !important;
+}
+
+html body .app-shell.app-shell :is(.theme-toggle, .theme-degree-panel) {
+  border-color: var(--line) !important;
+  background: var(--surface-panel) !important;
+  box-shadow: var(--shadow) !important;
+  color: var(--text) !important;
+  -webkit-text-fill-color: var(--text) !important;
+}

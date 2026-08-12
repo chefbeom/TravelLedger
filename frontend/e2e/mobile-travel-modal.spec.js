@@ -249,10 +249,10 @@ test('public shared map photo modal stays stable while the full image loads', as
     }
   })
   expect(lightThemeColors).toEqual({
-    panelBackground: 'rgb(255, 255, 255)',
-    title: 'rgb(25, 31, 40)',
-    meta: 'rgb(78, 89, 104)',
-    closeButton: 'rgb(25, 31, 40)',
+    panelBackground: 'rgb(244, 241, 232)',
+    title: 'rgb(52, 78, 65)',
+    meta: 'rgb(58, 90, 64)',
+    closeButton: 'rgb(52, 78, 65)',
   })
   const loadingHeight = await panel.evaluate((element) => element.getBoundingClientRect().height)
   await expect(page.locator('.public-map-share-photo-modal__image-state--loading')).toBeVisible()

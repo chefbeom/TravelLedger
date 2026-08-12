@@ -256,6 +256,7 @@ const inviteForm = reactive({
 })
 
 const travelRouteKeys = new Set(['travel', 'travel-money', 'travel-log', 'photo-album', 'my-map', 'public-trips'])
+const travelHeaderRouteKeys = new Set(['travel', 'travel-money', 'travel-log', 'my-map', 'public-trips'])
 const pageMeta = computed(() => {
   const routeKey = travelRouteKeys.has(activeRoute.value) ? 'travel' : activeRoute.value
   return normalizedRouteMeta[routeKey] || normalizedRouteMeta.launcher
@@ -401,25 +402,25 @@ function buildTossThemePalette(degree) {
   const ratio = clampThemeDegree(degree) / 100
 
   return {
-    '--toss-bg': mixHexColor('#3a5a40', '#344e41', ratio),
-    '--toss-surface': mixHexColor('#588157', '#3a5a40', ratio),
-    '--toss-surface-panel-start': mixRgbaColor([88, 129, 87, 0.98], [58, 90, 64, 0.98], ratio),
-    '--toss-surface-panel-end': mixRgbaColor([70, 108, 75, 0.98], [52, 78, 65, 0.98], ratio),
-    '--toss-surface-elevated-start': mixHexColor('#6a845f', '#465f49', ratio),
-    '--toss-surface-elevated-end': mixHexColor('#588157', '#344e41', ratio),
-    '--toss-surface-soft': mixHexColor('#6a845f', '#465f49', ratio),
-    '--toss-surface-soft-strong': mixHexColor('#7b906f', '#588157', ratio),
-    '--toss-line': mixHexColor('#a3b18a', '#588157', ratio),
-    '--toss-text-soft': mixHexColor('#dad7cd', '#a3b18a', ratio),
-    '--toss-text-muted': mixHexColor('#a3b18a', '#a3b18a', ratio),
-    '--toss-bg-glow': mixRgbaColor([163, 177, 138, 0.08], [88, 129, 87, 0.14], ratio),
-    '--toss-bg-gradient-mid': mixHexColor('#3a5a40', '#344e41', ratio),
-    '--toss-bg-gradient-end': mixHexColor('#344e41', '#2f493b', ratio),
-    '--toss-theme-toggle-bg': mixRgbaColor([70, 95, 73, 0.94], [52, 78, 65, 0.96], ratio),
-    '--toss-theme-toggle-border': mixRgbaColor([163, 177, 138, 0.3], [88, 129, 87, 0.34], ratio),
-    '--toss-theme-toggle-text': mixHexColor('#dad7cd', '#dad7cd', ratio),
-    '--toss-calendar-size-toggle-bg': mixRgbaColor([70, 95, 73, 0.94], [52, 78, 65, 0.96], ratio),
-    '--toss-resize-panel-bg': mixRgbaColor([58, 90, 64, 0.96], [47, 73, 59, 0.98], ratio),
+    '--toss-bg': mixHexColor('#151a1c', '#0b0f10', ratio),
+    '--toss-surface': mixHexColor('#1d2427', '#111618', ratio),
+    '--toss-surface-panel-start': mixRgbaColor([35, 44, 47, 0.98], [23, 29, 32, 0.98], ratio),
+    '--toss-surface-panel-end': mixRgbaColor([27, 34, 37, 0.98], [18, 23, 25, 0.98], ratio),
+    '--toss-surface-elevated-start': mixHexColor('#2a3437', '#1b2225', ratio),
+    '--toss-surface-elevated-end': mixHexColor('#20292c', '#141a1c', ratio),
+    '--toss-surface-soft': mixHexColor('#263033', '#1b2325', ratio),
+    '--toss-surface-soft-strong': mixHexColor('#303b3e', '#232d30', ratio),
+    '--toss-line': mixHexColor('#4a595d', '#344347', ratio),
+    '--toss-text-soft': mixHexColor('#d1d9da', '#aeb9bb', ratio),
+    '--toss-text-muted': mixHexColor('#909da0', '#6e7b7f', ratio),
+    '--toss-bg-glow': mixRgbaColor([52, 78, 65, 0.035], [58, 90, 64, 0.06], ratio),
+    '--toss-bg-gradient-mid': mixHexColor('#111719', '#0e1315', ratio),
+    '--toss-bg-gradient-end': mixHexColor('#0d1113', '#080b0c', ratio),
+    '--toss-theme-toggle-bg': mixRgbaColor([31, 39, 42, 0.96], [18, 24, 26, 0.98], ratio),
+    '--toss-theme-toggle-border': mixRgbaColor([114, 167, 127, 0.32], [88, 129, 87, 0.38], ratio),
+    '--toss-theme-toggle-text': mixHexColor('#e4ecec', '#d6dfdf', ratio),
+    '--toss-calendar-size-toggle-bg': mixRgbaColor([31, 39, 42, 0.96], [18, 24, 26, 0.98], ratio),
+    '--toss-resize-panel-bg': mixRgbaColor([29, 38, 41, 0.96], [16, 22, 24, 0.98], ratio),
   }
 }
 
@@ -824,7 +825,7 @@ function clearTravelRecordFocusRequest(payload = {}) {
 
 function isHeaderNavActive(route) {
   if (route === 'travel') {
-    return travelRouteKeys.has(activeRoute.value)
+    return travelHeaderRouteKeys.has(activeRoute.value)
   }
   return activeRoute.value === route
 }

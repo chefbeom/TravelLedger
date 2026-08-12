@@ -35285,3 +35285,1278 @@ html body .app-shell .main-shell--standalone .topbar__nav-button--active {
 html body .app-shell .main-shell--standalone .topbar__nav-button--admin {
   border-left: 1px solid var(--dash-border) !important;
 }
+/* Household dashboard visual language: use the ledger workspace treatment on the main dashboard. */
+html body .app-shell .main-shell--standalone .main-dashboard {
+  --dash-bg: #edf1ec !important;
+  --dash-card: #fbfcf8 !important;
+  --dash-ink: #344e41 !important;
+  --dash-muted: #64756b !important;
+  --dash-line: rgba(58, 90, 64, 0.28) !important;
+  --dash-strong-line: rgba(58, 90, 64, 0.45) !important;
+  --dash-panel: #f5f7f2 !important;
+  --dash-control-bg: #dad7cd !important;
+  --dash-control-hover: #a3b18a !important;
+  --dash-tile-bg: #eef2ec !important;
+  --dash-track-bg: rgba(58, 90, 64, 0.16) !important;
+  --dash-teal: #588157 !important;
+  --dash-teal-strong: #3a5a40 !important;
+  --dash-teal-soft: #e3ece1 !important;
+  --dash-mint: #a3b18a !important;
+  --dash-mint-soft: #eef3df !important;
+  --dash-lime: #a3b18a !important;
+  --dash-lime-soft: #edf4cc !important;
+  --dash-amber: #9b7b35 !important;
+  --dash-amber-soft: #f5edcf !important;
+  --dash-coral: #bd654e !important;
+  --dash-coral-soft: #f7dfd7 !important;
+  --dash-positive: #3f754d !important;
+  --dash-negative: #b65745 !important;
+  --dash-button-ink: #dad7cd !important;
+  background: var(--dash-bg) !important;
+  border: 1px solid var(--dash-strong-line) !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  color: var(--dash-ink) !important;
+  gap: 14px !important;
+  padding: 14px !important;
+}
+
+html body .app-shell .main-shell--standalone .main-dashboard__overview,
+html body .app-shell .main-shell--standalone .main-dashboard__overview-cards {
+  gap: 10px !important;
+}
+
+html body .app-shell .main-shell--standalone .main-dashboard__overview-card {
+  background: var(--dash-card) !important;
+  border: 1px solid var(--dash-line) !important;
+  border-left: 3px solid var(--dash-teal) !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  color: var(--dash-ink) !important;
+  min-height: 124px !important;
+  padding: 16px !important;
+}
+
+html body .app-shell .main-shell--standalone .main-dashboard__overview-card.is-mint {
+  border-left-color: var(--dash-mint) !important;
+}
+
+html body .app-shell .main-shell--standalone .main-dashboard__overview-card.is-positive {
+  border-left-color: var(--dash-lime) !important;
+}
+
+html body .app-shell .main-shell--standalone .main-dashboard__overview-card.is-negative {
+  border-left-color: var(--dash-coral) !important;
+}
+
+html body .app-shell .main-shell--standalone .main-dashboard__overview-card.is-teal {
+  border-left-color: var(--dash-teal-strong) !important;
+}
+
+html body .app-shell .main-shell--standalone .main-dashboard__overview-card span {
+  color: var(--dash-teal-strong) !important;
+}
+
+html body .app-shell .main-shell--standalone .main-dashboard__overview-card strong {
+  color: var(--dash-ink) !important;
+  font-size: clamp(1.35rem, 2.3vw, 1.95rem) !important;
+  font-weight: 900 !important;
+}
+
+html body .app-shell .main-shell--standalone .main-dashboard__overview-card small,
+html body .app-shell .main-shell--standalone .main-dashboard__overview-card p {
+  color: var(--dash-muted) !important;
+}
+
+html body .app-shell .main-shell--standalone .main-dashboard__palette-zone {
+  background: transparent !important;
+  border: 0 !important;
+  padding: 0 !important;
+}
+
+html body .app-shell .main-shell--standalone .main-palette {
+  background: var(--dash-card) !important;
+  border: 1px solid var(--dash-strong-line) !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  color: var(--dash-ink) !important;
+}
+
+html body .app-shell .main-shell--standalone .main-palette__head {
+  background: var(--dash-panel) !important;
+  border-bottom: 1px solid var(--dash-line) !important;
+  min-height: 42px !important;
+  padding: 10px 12px !important;
+}
+
+html body .app-shell .main-shell--standalone .main-palette__head strong,
+html body .app-shell .main-shell--standalone .main-dashboard__eyebrow,
+html body .app-shell .main-shell--standalone .main-dashboard__field span,
+html body .app-shell .main-shell--standalone .main-dashboard__hidden > span {
+  color: var(--dash-teal-strong) !important;
+}
+
+html body .app-shell .main-shell--standalone .main-palette__body {
+  background: var(--dash-card) !important;
+  padding: 12px !important;
+}
+
+html body .app-shell .main-shell--standalone .main-palette__metric,
+html body .app-shell .main-shell--standalone .main-palette__single-metric,
+html body .app-shell .main-shell--standalone .main-palette__feature-link,
+html body .app-shell .main-shell--standalone .main-palette__quick-action,
+html body .app-shell .main-shell--standalone .main-palette__photo-empty {
+  background: var(--dash-tile-bg) !important;
+  border: 1px solid var(--dash-line) !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  color: var(--dash-ink) !important;
+}
+
+html body .app-shell .main-shell--standalone .main-palette__metric.is-positive,
+html body .app-shell .main-shell--standalone .main-palette__single-metric.is-positive {
+  border-left: 3px solid var(--dash-positive) !important;
+}
+
+html body .app-shell .main-shell--standalone .main-palette__metric.is-negative,
+html body .app-shell .main-shell--standalone .main-palette__single-metric.is-negative {
+  border-left: 3px solid var(--dash-negative) !important;
+}
+
+html body .app-shell .main-shell--standalone .main-palette__metric span,
+html body .app-shell .main-shell--standalone .main-palette__single-metric span,
+html body .app-shell .main-shell--standalone .main-palette__single-metric small,
+html body .app-shell .main-shell--standalone .main-palette__compare-label span,
+html body .app-shell .main-shell--standalone .main-palette__compare-row small,
+html body .app-shell .main-shell--standalone .main-palette__quick-action span,
+html body .app-shell .main-shell--standalone .main-palette__recent-file small,
+html body .app-shell .main-shell--standalone .main-palette__list-row span {
+  color: var(--dash-muted) !important;
+}
+
+html body .app-shell .main-shell--standalone .main-palette__metric strong,
+html body .app-shell .main-shell--standalone .main-palette__single-metric strong,
+html body .app-shell .main-shell--standalone .main-palette__feature-link strong,
+html body .app-shell .main-shell--standalone .main-palette__quick-action strong,
+html body .app-shell .main-shell--standalone .main-palette__recent-file strong,
+html body .app-shell .main-shell--standalone .main-palette__list-row strong {
+  color: var(--dash-ink) !important;
+}
+
+html body .app-shell .main-shell--standalone .main-palette__metric.is-positive strong,
+html body .app-shell .main-shell--standalone .main-palette__single-metric.is-positive strong {
+  color: var(--dash-positive) !important;
+}
+
+html body .app-shell .main-shell--standalone .main-palette__metric.is-negative strong,
+html body .app-shell .main-shell--standalone .main-palette__single-metric.is-negative strong {
+  color: var(--dash-negative) !important;
+}
+
+html body .app-shell .main-shell--standalone .main-palette__list-row,
+html body .app-shell .main-shell--standalone .main-palette__recent-file {
+  border-top-color: var(--dash-line) !important;
+}
+
+html body .app-shell .main-shell--standalone .main-palette__bar,
+html body .app-shell .main-shell--standalone .main-palette__capacity-track {
+  background: var(--dash-track-bg) !important;
+  border-radius: 0 !important;
+}
+
+html body .app-shell .main-shell--standalone .main-palette__bar span,
+html body .app-shell .main-shell--standalone .main-palette__capacity-track span {
+  background: var(--dash-teal) !important;
+  border-radius: 0 !important;
+}
+
+html body .app-shell .main-shell--standalone .main-palette--photo-frame,
+html body .app-shell .main-shell--standalone .main-palette--drive-capacity {
+  background: var(--dash-card) !important;
+}
+
+html body .app-shell .main-shell--standalone .main-palette__photo-hero {
+  background: var(--dash-teal-strong) !important;
+  border: 1px solid var(--dash-strong-line) !important;
+  border-radius: 0 !important;
+}
+
+html body .app-shell .main-shell--standalone .main-palette__photo-caption span,
+html body .app-shell .main-shell--standalone .main-palette__photo-caption strong,
+html body .app-shell .main-shell--standalone .main-palette__photo-caption small {
+  background: rgba(52, 78, 65, 0.92) !important;
+  border-left: 3px solid var(--dash-teal) !important;
+  border-radius: 0 !important;
+  color: #dad7cd !important;
+}
+
+html body .app-shell .main-shell--standalone .main-palette__photo-caption span {
+  color: #a3b18a !important;
+}
+
+html body .app-shell .main-shell--standalone .main-palette__photo-empty {
+  border-style: dashed !important;
+}
+
+html body .app-shell .main-shell--standalone .main-dashboard :is(
+  .main-palette__settings-button,
+  .main-palette__actions button,
+  .main-palette__payment select,
+  .main-palette__quick-form input,
+  .main-palette__quick-form select,
+  .main-palette__quick-buttons button,
+  .main-palette__inline-action,
+  .main-dashboard__tools-head button,
+  .main-dashboard__tools button,
+  .main-dashboard__field select,
+  .main-dashboard__secondary,
+  .main-dashboard__hidden button
+) {
+  background: var(--dash-control-bg) !important;
+  border: 1px solid var(--dash-strong-line) !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  color: var(--dash-ink) !important;
+  -webkit-text-fill-color: var(--dash-ink) !important;
+  cursor: pointer;
+}
+
+html body .app-shell .main-shell--standalone .main-dashboard :is(
+  .main-palette__settings-button,
+  .main-palette__actions button,
+  .main-palette__payment select,
+  .main-palette__quick-form input,
+  .main-palette__quick-form select,
+  .main-palette__quick-buttons button,
+  .main-palette__inline-action,
+  .main-dashboard__tools-head button,
+  .main-dashboard__tools button,
+  .main-dashboard__field select,
+  .main-dashboard__secondary,
+  .main-dashboard__hidden button,
+  .main-palette__feature-link,
+  .main-palette__quick-action,
+  .main-palette__photo-empty
+):hover,
+html body .app-shell .main-shell--standalone .main-dashboard :is(
+  .main-palette__settings-button,
+  .main-palette__actions button,
+  .main-palette__payment select,
+  .main-palette__quick-form input,
+  .main-palette__quick-form select,
+  .main-palette__quick-buttons button,
+  .main-palette__inline-action,
+  .main-dashboard__tools-head button,
+  .main-dashboard__tools button,
+  .main-dashboard__field select,
+  .main-dashboard__secondary,
+  .main-dashboard__hidden button,
+  .main-palette__feature-link,
+  .main-palette__quick-action,
+  .main-palette__photo-empty
+):focus-visible {
+  background: var(--dash-control-hover) !important;
+  border-color: var(--dash-teal-strong) !important;
+  color: var(--dash-ink) !important;
+  -webkit-text-fill-color: var(--dash-ink) !important;
+}
+
+html body .app-shell .main-shell--standalone .main-dashboard :is(
+  .main-palette__feature-link,
+  .main-palette__quick-action,
+  .main-palette__photo-empty
+) {
+  cursor: pointer;
+  text-align: left;
+}
+
+html body .app-shell .main-shell--standalone .main-dashboard :is(
+  .button--primary,
+  .main-dashboard__primary,
+  .main-dashboard__floating-button
+) {
+  background: var(--dash-teal-strong) !important;
+  border: 1px solid var(--dash-teal-strong) !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  color: var(--dash-button-ink) !important;
+  -webkit-text-fill-color: var(--dash-button-ink) !important;
+  font-weight: 900 !important;
+}
+
+html body .app-shell .main-shell--standalone .main-dashboard :is(
+  .button--primary,
+  .main-dashboard__primary,
+  .main-dashboard__floating-button
+):hover,
+html body .app-shell .main-shell--standalone .main-dashboard :is(
+  .button--primary,
+  .main-dashboard__primary,
+  .main-dashboard__floating-button
+):focus-visible {
+  background: var(--dash-teal) !important;
+  border-color: var(--dash-teal-strong) !important;
+  color: var(--dash-button-ink) !important;
+  -webkit-text-fill-color: var(--dash-button-ink) !important;
+}
+
+html body .app-shell .main-shell--standalone .main-dashboard__floating-button {
+  bottom: 22px !important;
+  right: 22px !important;
+  top: auto !important;
+  transform: none !important;
+}
+
+html body .app-shell .main-shell--standalone .main-dashboard__floating-button.is-active {
+  background: var(--dash-lime) !important;
+  border-color: var(--dash-teal-strong) !important;
+  color: var(--dash-ink) !important;
+  -webkit-text-fill-color: var(--dash-ink) !important;
+}
+
+html body .app-shell .main-shell--standalone .main-dashboard__tools {
+  background: var(--dash-panel) !important;
+  border: 1px solid var(--dash-strong-line) !important;
+  border-radius: 0 !important;
+  box-shadow: 0 12px 28px rgba(52, 78, 65, 0.16) !important;
+  color: var(--dash-ink) !important;
+}
+
+html body .app-shell .main-shell--standalone .main-dashboard__tools strong,
+html body .app-shell .main-shell--standalone .main-dashboard__tools span {
+  color: var(--dash-ink) !important;
+}
+
+html[data-theme='toss'] body .app-shell .main-shell--standalone .main-dashboard {
+  --dash-bg: #111b16 !important;
+  --dash-card: #19261f !important;
+  --dash-ink: #dad7cd !important;
+  --dash-muted: #a3b18a !important;
+  --dash-line: rgba(163, 177, 138, 0.25) !important;
+  --dash-strong-line: rgba(163, 177, 138, 0.46) !important;
+  --dash-panel: #17231c !important;
+  --dash-control-bg: #24332a !important;
+  --dash-control-hover: #3a5a40 !important;
+  --dash-tile-bg: #1e2d25 !important;
+  --dash-track-bg: rgba(163, 177, 138, 0.2) !important;
+  --dash-teal: #a3b18a !important;
+  --dash-teal-strong: #588157 !important;
+  --dash-teal-soft: #21382d !important;
+  --dash-mint: #a3b18a !important;
+  --dash-mint-soft: #22362a !important;
+  --dash-lime: #a3b18a !important;
+  --dash-lime-soft: #293722 !important;
+  --dash-amber: #d2b66a !important;
+  --dash-amber-soft: #3b3320 !important;
+  --dash-coral: #df8b76 !important;
+  --dash-coral-soft: #3d2924 !important;
+  --dash-positive: #a3c18c !important;
+  --dash-negative: #e09a84 !important;
+  --dash-button-ink: #f2f3e9 !important;
+  background: var(--dash-bg) !important;
+  border-color: var(--dash-strong-line) !important;
+  color: var(--dash-ink) !important;
+}
+
+html[data-theme='toss'] body .app-shell .main-shell--standalone .main-dashboard__tools {
+  box-shadow: 0 16px 34px rgba(0, 0, 0, 0.36) !important;
+}
+
+html[data-theme='toss'] body .app-shell .main-shell--standalone .main-dashboard :is(
+  .main-palette__payment select,
+  .main-palette__quick-form input,
+  .main-palette__quick-form select,
+  .main-dashboard__field select
+) {
+  color-scheme: dark;
+}
+/* Dark dashboard surface guard: the reference palette must win over legacy theme overrides. */
+html[data-theme='toss'] body .app-shell .main-shell--standalone .main-dashboard .main-palette {
+  background: #19261f !important;
+  border-color: rgba(163, 177, 138, 0.46) !important;
+  color: #dad7cd !important;
+  box-shadow: none !important;
+}
+
+html[data-theme='toss'] body .app-shell .main-shell--standalone .main-dashboard .main-palette__head {
+  background: #17231c !important;
+  border-bottom-color: rgba(163, 177, 138, 0.25) !important;
+}
+
+html[data-theme='toss'] body .app-shell .main-shell--standalone .main-dashboard .main-palette__body {
+  background: #19261f !important;
+}
+
+html[data-theme='toss'] body .app-shell .main-shell--standalone .main-dashboard .main-palette__metric,
+html[data-theme='toss'] body .app-shell .main-shell--standalone .main-dashboard .main-palette__single-metric,
+html[data-theme='toss'] body .app-shell .main-shell--standalone .main-dashboard .main-palette__feature-link,
+html[data-theme='toss'] body .app-shell .main-shell--standalone .main-dashboard .main-palette__quick-action,
+html[data-theme='toss'] body .app-shell .main-shell--standalone .main-dashboard .main-palette__photo-empty {
+  background: #1e2d25 !important;
+  border-color: rgba(163, 177, 138, 0.25) !important;
+  color: #dad7cd !important;
+}
+/* Dark dashboard paint guard: block legacy background shorthands. */
+html[data-theme='toss'] body .app-shell .main-shell--standalone .main-dashboard .main-palette {
+  background-color: #19261f !important;
+  background-image: none !important;
+  border: 1px solid rgba(163, 177, 138, 0.46) !important;
+}
+
+html[data-theme='toss'] body .app-shell .main-shell--standalone .main-dashboard .main-palette__head {
+  background-color: #17231c !important;
+  background-image: none !important;
+  border-bottom: 1px solid rgba(163, 177, 138, 0.25) !important;
+}
+
+html[data-theme='toss'] body .app-shell .main-shell--standalone .main-dashboard .main-palette__body {
+  background-color: #19261f !important;
+  background-image: none !important;
+}
+
+html[data-theme='toss'] body .app-shell .main-shell--standalone .main-dashboard .main-palette__metric,
+html[data-theme='toss'] body .app-shell .main-shell--standalone .main-dashboard .main-palette__single-metric,
+html[data-theme='toss'] body .app-shell .main-shell--standalone .main-dashboard .main-palette__feature-link,
+html[data-theme='toss'] body .app-shell .main-shell--standalone .main-dashboard .main-palette__quick-action,
+html[data-theme='toss'] body .app-shell .main-shell--standalone .main-dashboard .main-palette__photo-empty {
+  background-color: #1e2d25 !important;
+  background-image: none !important;
+  border: 1px solid rgba(163, 177, 138, 0.25) !important;
+}
+/* TravelLedger dark system: one neutral surface hierarchy for every workspace. */
+html[data-theme='toss'] {
+  color-scheme: dark;
+
+  --dark-bg: var(--toss-bg, #0b0f10);
+  --dark-surface: var(--toss-surface, #111618);
+  --dark-surface-raised: var(--toss-surface-panel-end, #121719);
+  --dark-card: var(--toss-surface-elevated-end, #141a1c);
+  --dark-card-hover: var(--toss-surface-soft-strong, #232d30);
+  --dark-control: var(--toss-surface-soft, #1b2325);
+  --dark-control-hover: var(--toss-surface-soft-strong, #232d30);
+  --dark-line: var(--toss-line, #344347);
+  --dark-line-strong: rgba(150, 166, 169, 0.38);
+  --dark-text: #f1f4f3;
+  --dark-text-soft: var(--toss-text-soft, #b7c1c2);
+  --dark-text-muted: var(--toss-text-muted, #7d898c);
+  --dark-accent: #78b984;
+  --dark-accent-strong: #3a5a40;
+  --dark-accent-hover: #588157;
+  --dark-accent-soft: rgba(120, 185, 132, 0.14);
+  --dark-income: #86c79b;
+  --dark-expense: #e88776;
+  --dark-warning: #d2b66a;
+  --dark-overlay: rgba(4, 7, 8, 0.78);
+  --dark-shadow: 0 20px 50px rgba(0, 0, 0, 0.34);
+  --dark-modal: #171f22;
+  --dark-modal-soft: #202a2d;
+  --dark-field: #151e21;
+  --dark-focus: #9bd3a3;
+  --dark-focus-soft: rgba(155, 211, 163, 0.22);
+
+  --bg: var(--dark-bg) !important;
+  --surface: var(--dark-surface) !important;
+  --surface-panel: var(--dark-surface-raised) !important;
+  --surface-elevated: var(--dark-card) !important;
+  --surface-soft: var(--dark-control) !important;
+  --surface-soft-strong: var(--dark-control-hover) !important;
+  --panel: var(--dark-surface) !important;
+  --panel-bg: var(--dark-surface-raised) !important;
+  --panel-border: var(--dark-line) !important;
+  --line: var(--dark-line) !important;
+  --text: var(--dark-text) !important;
+  --text-soft: var(--dark-text-soft) !important;
+  --text-muted: var(--dark-text-muted) !important;
+  --brand: var(--dark-accent) !important;
+  --brand-strong: var(--dark-accent-hover) !important;
+  --brand-soft: var(--dark-accent-soft) !important;
+  --blue: var(--dark-accent) !important;
+  --blue-soft: var(--dark-accent-soft) !important;
+  --income: var(--dark-income) !important;
+  --expense: var(--dark-expense) !important;
+  --field-bg: var(--dark-field) !important;
+  --field-bg-muted: var(--dark-surface) !important;
+  --field-border: var(--dark-line-strong) !important;
+  --field-focus-border: var(--dark-focus) !important;
+  --field-focus-shadow: 0 0 0 3px var(--dark-focus-soft) !important;
+  --control-bg: var(--dark-control) !important;
+  --control-bg-hover: var(--dark-control-hover) !important;
+  --modal-overlay: var(--dark-overlay) !important;
+  --modal-surface: var(--dark-modal) !important;
+  --modal-surface-soft: var(--dark-modal-soft) !important;
+  --modal-field: var(--dark-field) !important;
+  --modal-border: var(--dark-line-strong) !important;
+  --modal-border-strong: var(--dark-accent) !important;
+  --modal-text: var(--dark-text) !important;
+  --modal-text-soft: var(--dark-text-soft) !important;
+  --modal-shadow: var(--dark-shadow) !important;
+  --focus-ring: var(--dark-focus) !important;
+  --focus-ring-shadow: var(--dark-focus-soft) !important;
+  --bg-gradient: var(--dark-bg) !important;
+
+  --map-canvas-bg: linear-gradient(180deg, #171f22, #0f1517) !important;
+  --map-canvas-border: rgba(82, 100, 104, 0.62) !important;
+  --map-toolbar-bg: rgba(20, 27, 29, 0.94) !important;
+  --map-toolbar-border: rgba(82, 100, 104, 0.62) !important;
+  --map-control-bg: rgba(25, 33, 36, 0.98) !important;
+  --map-control-border: rgba(82, 100, 104, 0.7) !important;
+  --map-control-text: #eef3f2 !important;
+  --grid-guide-bg: rgba(125, 191, 136, 0.06) !important;
+  --grid-guide-border: rgba(125, 191, 136, 0.16) !important;
+}
+
+html[data-theme='toss'] body,
+html[data-theme='toss'] body #app,
+html[data-theme='toss'] body .app-shell {
+  background: var(--dark-bg) !important;
+  background-color: var(--dark-bg) !important;
+  background-image: none !important;
+  color: var(--dark-text) !important;
+}
+
+html[data-theme='toss'] body .app-shell::before {
+  background: var(--dark-bg) !important;
+  background-image: none !important;
+  opacity: 1 !important;
+}
+
+html[data-theme='toss'] body .app-shell :is(
+  .main-shell--standalone,
+  .workspace-stack,
+  .main-dashboard__palette-zone,
+  .household-calendar-layout-board,
+  .calendar-board,
+  .travel-unified-shell,
+  .travel-public-app,
+  .travel-public-update
+) {
+  background: var(--dark-surface) !important;
+  background-color: var(--dark-surface) !important;
+  background-image: none !important;
+  border-color: var(--dark-line) !important;
+  color: var(--dark-text) !important;
+}
+
+html[data-theme='toss'] body .app-shell :is(
+  .topbar,
+  .sidebar,
+  .sidebar__user,
+  .sidebar__logout,
+  .panel__header,
+  .main-palette__head,
+  .main-dashboard__tools,
+  .travel-public-app__header
+) {
+  background: var(--dark-surface-raised) !important;
+  background-color: var(--dark-surface-raised) !important;
+  background-image: none !important;
+  border-color: var(--dark-line) !important;
+  color: var(--dark-text) !important;
+}
+
+html[data-theme='toss'] body .app-shell :is(
+  .panel,
+  .panel-card,
+  .summary-card,
+  .auth-card,
+  .auth-copy,
+  .launcher-card,
+  .feature-card,
+  .household-aggregate-card,
+  .household-aggregate-empty,
+  .receipt-ocr-panel,
+  .drive-dashboard__card,
+  .drive-details-panel,
+  .drive-file-card,
+  .family-category-card,
+  .family-album-focus,
+  .admin-workspace,
+  .admin-command-center,
+  .admin-command-card,
+  .support-inquiry-card,
+  .notification-hero,
+  .notification-toolbar,
+  .notification-list-panel,
+  .notification-card,
+  .privacy-export-card,
+  .privacy-management-card,
+  .privacy-action-card,
+  .travel-plan-card,
+  .travel-media-card,
+  .travel-pending-card,
+  .travel-public-card,
+  .main-palette,
+  .main-palette__metric,
+  .main-palette__single-metric,
+  .main-palette__feature-link,
+  .main-palette__quick-action,
+  .main-palette__photo-empty,
+  .main-dashboard__overview-card
+) {
+  background: var(--dark-card) !important;
+  background-color: var(--dark-card) !important;
+  background-image: none !important;
+  border-color: var(--dark-line) !important;
+  box-shadow: none !important;
+  color: var(--dark-text) !important;
+}
+
+html[data-theme='toss'] body .app-shell :is(
+  .main-palette__body,
+  .main-dashboard__overview,
+  .household-calendar-layout-panel-shell,
+  .calendar-section,
+  .travel-atlas,
+  .drive-dashboard__grid,
+  .admin-command-grid,
+  .notification-list,
+  .support-inquiry-list
+) {
+  background: var(--dark-surface-raised) !important;
+  background-color: var(--dark-surface-raised) !important;
+  background-image: none !important;
+  border-color: var(--dark-line) !important;
+  color: var(--dark-text) !important;
+}
+
+html[data-theme='toss'] body .app-shell :is(
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6,
+  strong,
+  b,
+  th,
+  dt,
+  .panel__title,
+  .section-title,
+  .main-palette__title
+) {
+  color: var(--dark-text) !important;
+}
+
+html[data-theme='toss'] body .app-shell :is(
+  p,
+  small,
+  label,
+  caption,
+  dd,
+  .panel__description,
+  .section-description,
+  .main-palette__subtitle,
+  .muted,
+  .text-muted
+) {
+  color: var(--dark-text-soft) !important;
+}
+
+html[data-theme='toss'] body .app-shell a {
+  color: var(--dark-accent) !important;
+}
+
+html[data-theme='toss'] body .app-shell :is(
+  button,
+  .button,
+  [role='button'],
+  input,
+  select,
+  textarea
+):not(.main-palette__photo-hero):not(.travel-photo-card-button):not(.travel-photo-preview-button):not(.main-photo-frame-modal__preview):not(.main-photo-frame-detail-modal__figure) {
+  background: var(--dark-control) !important;
+  background-color: var(--dark-control) !important;
+  background-image: none !important;
+  border-color: var(--dark-line-strong) !important;
+  color: var(--dark-text) !important;
+  -webkit-text-fill-color: var(--dark-text) !important;
+  box-shadow: none !important;
+}
+
+html[data-theme='toss'] body .app-shell :is(
+  input,
+  select,
+  textarea
+)::placeholder {
+  color: var(--dark-text-muted) !important;
+  -webkit-text-fill-color: var(--dark-text-muted) !important;
+}
+
+html[data-theme='toss'] body .app-shell :is(
+  button,
+  .button,
+  [role='button']
+):not(.main-palette__photo-hero):not(.travel-photo-card-button):not(.travel-photo-preview-button):not(.main-photo-frame-modal__preview):not(.main-photo-frame-detail-modal__figure):hover {
+  background: var(--dark-control-hover) !important;
+  background-color: var(--dark-control-hover) !important;
+  border-color: var(--dark-accent) !important;
+  color: var(--dark-text) !important;
+}
+
+html[data-theme='toss'] body .app-shell :is(
+  button,
+  .button,
+  [role='button'],
+  input,
+  select,
+  textarea,
+  a
+):focus-visible {
+  outline: 2px solid var(--dark-focus) !important;
+  outline-offset: 2px;
+  box-shadow: 0 0 0 3px var(--dark-focus-soft) !important;
+}
+
+html[data-theme='toss'] body .app-shell :is(
+  .is-active,
+  .is-selected,
+  .selected,
+  [aria-selected='true']
+) {
+  background: var(--dark-accent-soft) !important;
+  background-color: var(--dark-accent-soft) !important;
+  background-image: none !important;
+  border-color: var(--dark-accent) !important;
+  color: var(--dark-text) !important;
+}
+
+html[data-theme='toss'] body .app-shell :is(
+  .button--primary,
+  .button.primary,
+  button[type='submit'],
+  .main-dashboard__primary,
+  .sidebar__link--active,
+  .toggle-chip--active,
+  .primary-action,
+  .confirm-action,
+  .save-action
+) {
+  background: var(--dark-accent-strong) !important;
+  background-color: var(--dark-accent-strong) !important;
+  background-image: none !important;
+  border-color: var(--dark-accent) !important;
+  color: #f4f7f4 !important;
+  -webkit-text-fill-color: #f4f7f4 !important;
+}
+
+html[data-theme='toss'] body .app-shell :is(
+  .button--primary,
+  .button.primary,
+  button[type='submit'],
+  .main-dashboard__primary,
+  .sidebar__link--active,
+  .toggle-chip--active,
+  .primary-action,
+  .confirm-action,
+  .save-action
+):hover {
+  background: var(--dark-accent-hover) !important;
+  background-color: var(--dark-accent-hover) !important;
+  border-color: var(--dark-focus) !important;
+}
+
+html[data-theme='toss'] body .app-shell :is(
+  .button--danger,
+  .danger,
+  .danger-action,
+  .delete-action,
+  [data-tone='danger']
+) {
+  background: #4c2827 !important;
+  background-color: #4c2827 !important;
+  border-color: #b96558 !important;
+  color: #ffd9d3 !important;
+  -webkit-text-fill-color: #ffd9d3 !important;
+}
+
+html[data-theme='toss'] body .app-shell :is(
+  .topbar__nav-button,
+  .travel-public-app__nav-button
+) {
+  background: transparent !important;
+  background-color: transparent !important;
+  background-image: none !important;
+  border: 0 !important;
+  border-bottom: 2px solid transparent !important;
+  border-radius: 0 !important;
+  color: var(--dark-text-soft) !important;
+  -webkit-text-fill-color: var(--dark-text-soft) !important;
+}
+
+html[data-theme='toss'] body .app-shell :is(
+  .topbar__nav-button:hover,
+  .travel-public-app__nav-button:hover
+) {
+  background: var(--dark-accent-soft) !important;
+  background-color: var(--dark-accent-soft) !important;
+  border-bottom-color: var(--dark-accent) !important;
+  color: var(--dark-text) !important;
+}
+
+html[data-theme='toss'] body .app-shell :is(
+  .topbar__nav-button--active,
+  .topbar__nav-button[aria-current='page'],
+  .travel-public-app__nav-button--active,
+  .travel-public-app__nav-button[aria-current='page']
+) {
+  background: transparent !important;
+  background-color: transparent !important;
+  border-bottom-color: var(--dark-accent) !important;
+  color: var(--dark-text) !important;
+  -webkit-text-fill-color: var(--dark-text) !important;
+}
+
+html[data-theme='toss'] body .app-shell :is(
+  .sheet-table-wrap,
+  .comparison-table-wrap,
+  .sheet-table,
+  .comparison-table,
+  table
+) {
+  background: var(--dark-surface-raised) !important;
+  background-color: var(--dark-surface-raised) !important;
+  background-image: none !important;
+  border-color: var(--dark-line) !important;
+  color: var(--dark-text) !important;
+}
+
+html[data-theme='toss'] body .app-shell :is(
+  .sheet-table th,
+  .sheet-table td,
+  .comparison-table th,
+  .comparison-table td,
+  table th,
+  table td
+) {
+  background: transparent !important;
+  background-color: transparent !important;
+  border-color: var(--dark-line) !important;
+  color: var(--dark-text-soft) !important;
+}
+
+html[data-theme='toss'] body .app-shell :is(
+  .sheet-table tr:hover,
+  .comparison-table tr:hover,
+  table tr:hover
+) {
+  background: var(--dark-accent-soft) !important;
+  background-color: var(--dark-accent-soft) !important;
+}
+
+html[data-theme='toss'] body .app-shell :is(
+  .modal-backdrop,
+  .modal-overlay,
+  .dialog-backdrop,
+  .overlay
+) {
+  background: var(--dark-overlay) !important;
+  background-color: var(--dark-overlay) !important;
+  background-image: none !important;
+}
+
+html[data-theme='toss'] body .app-shell :is(
+  .modal,
+  .modal-card,
+  .modal-dialog,
+  .modal-shell,
+  .dialog,
+  [role='dialog']
+) {
+  background: var(--dark-modal) !important;
+  background-color: var(--dark-modal) !important;
+  background-image: none !important;
+  border-color: var(--dark-line-strong) !important;
+  box-shadow: var(--dark-shadow) !important;
+  color: var(--dark-text) !important;
+}
+
+html[data-theme='toss'] body .app-shell :is(
+  .modal,
+  .modal-card,
+  .modal-dialog,
+  .modal-shell,
+  .dialog,
+  [role='dialog']
+) :is(
+  .panel,
+  .panel-card,
+  section,
+  .modal__body,
+  .modal-body,
+  .modal__header,
+  .modal__footer
+) {
+  background: transparent !important;
+  background-color: transparent !important;
+  background-image: none !important;
+  border-color: var(--dark-line) !important;
+  color: var(--dark-text) !important;
+}
+
+html[data-theme='toss'] body .app-shell :is(
+  .modal,
+  .modal-card,
+  .modal-dialog,
+  .modal-shell,
+  .dialog,
+  [role='dialog']
+) :is(
+  button,
+  .button,
+  input,
+  select,
+  textarea
+) {
+  background: var(--dark-modal-soft) !important;
+  background-color: var(--dark-modal-soft) !important;
+  background-image: none !important;
+  border-color: var(--dark-line-strong) !important;
+  color: var(--dark-text) !important;
+  -webkit-text-fill-color: var(--dark-text) !important;
+}
+
+html[data-theme='toss'] body .app-shell :is(
+  .modal,
+  .modal-card,
+  .modal-dialog,
+  .modal-shell,
+  .dialog,
+  [role='dialog']
+) :is(
+  button[type='submit'],
+  .button--primary,
+  .primary-action,
+  .confirm-action,
+  .save-action
+) {
+  background: var(--dark-accent-strong) !important;
+  background-color: var(--dark-accent-strong) !important;
+  border-color: var(--dark-accent) !important;
+  color: #f4f7f4 !important;
+  -webkit-text-fill-color: #f4f7f4 !important;
+}
+
+html[data-theme='toss'] body .app-shell :is(
+  .panel__badge,
+  .notification-card__status,
+  .topbar__notification-badge,
+  .chip,
+  .tag,
+  .badge,
+  .status-badge
+) {
+  background: var(--dark-accent-soft) !important;
+  background-color: var(--dark-accent-soft) !important;
+  border-color: rgba(120, 185, 132, 0.34) !important;
+  color: var(--dark-accent) !important;
+  -webkit-text-fill-color: var(--dark-accent) !important;
+}
+
+html[data-theme='toss'] body .app-shell :is(
+  .income,
+  .is-income,
+  .amount--income,
+  .text-income,
+  .positive,
+  .is-positive,
+  .success
+) {
+  color: var(--dark-income) !important;
+  -webkit-text-fill-color: var(--dark-income) !important;
+}
+
+html[data-theme='toss'] body .app-shell :is(
+  .expense,
+  .is-expense,
+  .amount--expense,
+  .text-expense,
+  .negative,
+  .is-negative,
+  .error
+) {
+  color: var(--dark-expense) !important;
+  -webkit-text-fill-color: var(--dark-expense) !important;
+}
+
+html[data-theme='toss'] body .app-shell :is(
+  .main-shell--standalone .main-dashboard
+) {
+  --dash-bg: var(--dark-surface) !important;
+  --dash-card: var(--dark-card) !important;
+  --dash-ink: var(--dark-text) !important;
+  --dash-muted: var(--dark-text-soft) !important;
+  --dash-line: var(--dark-line) !important;
+  --dash-strong-line: var(--dark-line-strong) !important;
+  --dash-panel: var(--dark-surface-raised) !important;
+  --dash-control-bg: var(--dark-control) !important;
+  --dash-control-hover: var(--dark-control-hover) !important;
+  --dash-tile-bg: var(--dark-surface-raised) !important;
+  --dash-track-bg: var(--dark-accent-soft) !important;
+  --dash-teal: var(--dark-accent) !important;
+  --dash-teal-strong: var(--dark-accent-strong) !important;
+  --dash-teal-soft: var(--dark-accent-soft) !important;
+  --dash-mint: var(--dark-income) !important;
+  --dash-mint-soft: rgba(134, 199, 155, 0.12) !important;
+  --dash-lime: var(--dark-warning) !important;
+  --dash-lime-soft: rgba(210, 182, 106, 0.12) !important;
+  --dash-coral: var(--dark-expense) !important;
+  --dash-coral-soft: rgba(232, 135, 118, 0.12) !important;
+  --dash-positive: var(--dark-income) !important;
+  --dash-negative: var(--dark-expense) !important;
+  --dash-button-ink: var(--dark-text) !important;
+  background: var(--dark-surface) !important;
+  background-color: var(--dark-surface) !important;
+  background-image: none !important;
+  color: var(--dark-text) !important;
+}
+
+html[data-theme='toss'] body .app-shell .main-shell--standalone .main-dashboard :is(
+  .main-palette,
+  .main-palette__body
+) {
+  background: var(--dark-card) !important;
+  background-color: var(--dark-card) !important;
+  background-image: none !important;
+  border-color: var(--dark-line) !important;
+}
+
+html[data-theme='toss'] body .app-shell .main-shell--standalone .main-dashboard :is(
+  .main-palette__head,
+  .main-dashboard__tools
+) {
+  background: var(--dark-surface-raised) !important;
+  background-color: var(--dark-surface-raised) !important;
+  background-image: none !important;
+  border-color: var(--dark-line) !important;
+}
+
+html[data-theme='toss'] body .app-shell .main-shell--standalone .main-dashboard :is(
+  .main-palette__metric,
+  .main-palette__single-metric,
+  .main-palette__feature-link,
+  .main-palette__quick-action,
+  .main-palette__photo-empty,
+  .main-dashboard__overview-card
+) {
+  background: var(--dark-card) !important;
+  background-color: var(--dark-card) !important;
+  background-image: none !important;
+  border-color: var(--dark-line) !important;
+  color: var(--dark-text) !important;
+}
+
+html[data-theme='toss'] body .app-shell :is(
+  .travel-unified-shell,
+  .travel-public-app,
+  .travel-public-update,
+  .drive-dashboard,
+  .admin-workspace,
+  .support-workspace,
+  .notification-workspace
+) {
+  --travel-bg: var(--dark-surface) !important;
+  --travel-surface: var(--dark-surface-raised) !important;
+  --travel-card: var(--dark-card) !important;
+  --travel-card-solid: var(--dark-card) !important;
+  --travel-control: var(--dark-control) !important;
+  --travel-control-hover: var(--dark-control-hover) !important;
+  --travel-line: var(--dark-line) !important;
+  --travel-ink: var(--dark-text) !important;
+  --travel-muted: var(--dark-text-soft) !important;
+  --travel-accent: var(--dark-accent) !important;
+  --travel-accent-strong: var(--dark-accent-strong) !important;
+  --travel-accent-soft: var(--dark-accent-soft) !important;
+}
+
+html[data-theme='toss'] body .app-shell :is(
+  .main-palette__photo-hero,
+  .travel-photo-card-button,
+  .travel-photo-preview-button,
+  .main-photo-frame-modal__preview,
+  .main-photo-frame-detail-modal__figure,
+  .leaflet-container,
+  .map-canvas,
+  .travel-map__canvas
+) {
+  border-color: var(--dark-line) !important;
+  background-color: #0a0e0f !important;
+  color: var(--dark-text) !important;
+}
+
+html[data-theme='toss'] body .app-shell :is(
+  .main-palette__photo-hero,
+  .travel-photo-card-button,
+  .travel-photo-preview-button,
+  .main-photo-frame-modal__preview,
+  .main-photo-frame-detail-modal__figure
+) img {
+  border-color: var(--dark-line) !important;
+}
+
+html[data-theme='toss'] ::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+html[data-theme='toss'] ::-webkit-scrollbar-track {
+  background: var(--dark-bg) !important;
+}
+
+html[data-theme='toss'] ::-webkit-scrollbar-thumb {
+  background: var(--dark-control-hover) !important;
+  border: 2px solid var(--dark-bg) !important;
+}
+
+html[data-theme='toss'] ::-webkit-scrollbar-thumb:hover {
+  background: var(--dark-accent-strong) !important;
+}
+/* TravelLedger dark media canvas: keep image content intact while removing legacy green fill. */
+html[data-theme='toss'] body .app-shell :is(
+  .public-map-share-photo-modal__media,
+  .public-map-share-photo-modal__image-state,
+  .travel-my-photos__modal-photo-frame,
+  .travel-lightbox__body,
+  .drive-preview-modal__body,
+  .main-photo-frame-detail-modal__figure
+) {
+  background: var(--dark-modal-soft) !important;
+  background-color: var(--dark-modal-soft) !important;
+  border-color: var(--dark-line) !important;
+  color: var(--dark-text-soft) !important;
+}
+/* TravelLedger dark media canvas priority guard: neutralize legacy modal paint. */
+html[data-theme='toss'] body .app-shell.app-shell.app-shell :is(
+  .public-map-share-photo-modal__media,
+  .public-map-share-photo-modal__image-state,
+  .travel-my-photos__modal-photo-frame,
+  .travel-lightbox__body,
+  .drive-preview-modal__body,
+  .main-photo-frame-detail-modal__figure
+) {
+  background: var(--dark-modal-soft) !important;
+  background-color: var(--dark-modal-soft) !important;
+  border-color: var(--dark-line) !important;
+  color: var(--dark-text-soft) !important;
+}
+/* TravelLedger dark token fallback: neutral defaults for manual theme activation. */
+html[data-theme='toss'] {
+  --toss-bg: #0b0f10;
+  --toss-surface: #111618;
+  --toss-surface-panel-start: rgba(23, 29, 32, 0.98);
+  --toss-surface-panel-end: rgba(18, 23, 25, 0.98);
+  --toss-surface-elevated-start: #1b2225;
+  --toss-surface-elevated-end: #141a1c;
+  --toss-surface-soft: #1b2325;
+  --toss-surface-soft-strong: #232d30;
+  --toss-line: #344347;
+  --toss-text-soft: #b7c1c2;
+  --toss-text-muted: #7d898c;
+  --toss-bg-glow: rgba(76, 118, 86, 0.05);
+  --toss-bg-gradient-mid: #0e1315;
+  --toss-bg-gradient-end: #080b0c;
+  --toss-theme-toggle-bg: rgba(18, 24, 26, 0.98);
+  --toss-theme-toggle-border: rgba(120, 185, 132, 0.38);
+  --toss-theme-toggle-text: #d6dfdf;
+  --toss-calendar-size-toggle-bg: rgba(18, 24, 26, 0.98);
+  --toss-resize-panel-bg: rgba(16, 22, 24, 0.98);
+}
+/* TravelLedger dark token priority fallback: outrank the legacy :root theme block. */
+:root[data-theme='toss'] {
+  --toss-bg: #0b0f10;
+  --toss-surface: #111618;
+  --toss-surface-panel-start: rgba(23, 29, 32, 0.98);
+  --toss-surface-panel-end: rgba(18, 23, 25, 0.98);
+  --toss-surface-elevated-start: #1b2225;
+  --toss-surface-elevated-end: #141a1c;
+  --toss-surface-soft: #1b2325;
+  --toss-surface-soft-strong: #232d30;
+  --toss-line: #344347;
+  --toss-text-soft: #b7c1c2;
+  --toss-text-muted: #7d898c;
+  --toss-bg-glow: rgba(76, 118, 86, 0.05);
+  --toss-bg-gradient-mid: #0e1315;
+  --toss-bg-gradient-end: #080b0c;
+  --toss-theme-toggle-bg: rgba(18, 24, 26, 0.98);
+  --toss-theme-toggle-border: rgba(120, 185, 132, 0.38);
+  --toss-theme-toggle-text: #d6dfdf;
+  --toss-calendar-size-toggle-bg: rgba(18, 24, 26, 0.98);
+  --toss-resize-panel-bg: rgba(16, 22, 24, 0.98);
+}
+/* TravelLedger dark core aliases: make legacy --bg consumers follow the neutral root. */
+:root[data-theme='toss'] {
+  --bg: var(--dark-bg) !important;
+  --surface: var(--dark-surface) !important;
+  --surface-panel: var(--dark-surface-raised) !important;
+  --surface-elevated: var(--dark-card) !important;
+  --surface-soft: var(--dark-control) !important;
+  --surface-soft-strong: var(--dark-control-hover) !important;
+  --panel: var(--dark-surface) !important;
+  --panel-bg: var(--dark-surface-raised) !important;
+  --panel-border: var(--dark-line) !important;
+  --line: var(--dark-line) !important;
+  --border: var(--dark-line) !important;
+  --border-soft: rgba(150, 166, 169, 0.18) !important;
+  --text: var(--dark-text) !important;
+  --text-main: var(--dark-text) !important;
+  --text-primary: var(--dark-text) !important;
+  --text-secondary: var(--dark-text-soft) !important;
+  --text-soft: var(--dark-text-soft) !important;
+  --text-muted: var(--dark-text-muted) !important;
+  --muted: var(--dark-text-muted) !important;
+  --brand: var(--dark-accent) !important;
+  --brand-strong: var(--dark-accent-hover) !important;
+  --brand-soft: var(--dark-accent-soft) !important;
+  --blue: var(--dark-accent) !important;
+  --blue-soft: var(--dark-accent-soft) !important;
+  --accent: var(--dark-accent) !important;
+  --accent-strong: var(--dark-accent-strong) !important;
+  --income: var(--dark-income) !important;
+  --expense: var(--dark-expense) !important;
+  --success: var(--dark-income) !important;
+  --danger: var(--dark-expense) !important;
+  --bg-gradient: var(--dark-bg) !important;
+  --interactive-contrast-bg: var(--dark-accent-strong) !important;
+  --interactive-contrast-text: var(--dark-text) !important;
+  --field-bg: var(--dark-field) !important;
+  --field-bg-muted: var(--dark-surface) !important;
+  --field-border: var(--dark-line-strong) !important;
+  --field-focus-border: var(--dark-focus) !important;
+  --field-focus-shadow: 0 0 0 3px var(--dark-focus-soft) !important;
+  --control-bg: var(--dark-control) !important;
+  --control-bg-hover: var(--dark-control-hover) !important;
+  --focus-ring: var(--dark-focus) !important;
+  --focus-ring-shadow: var(--dark-focus-soft) !important;
+  --modal-overlay: var(--dark-overlay) !important;
+  --modal-surface: var(--dark-modal) !important;
+  --modal-surface-soft: var(--dark-modal-soft) !important;
+  --modal-surface-muted: var(--dark-surface) !important;
+  --modal-field: var(--dark-field) !important;
+  --modal-border: var(--dark-line-strong) !important;
+  --modal-border-strong: var(--dark-accent) !important;
+  --modal-text: var(--dark-text) !important;
+  --modal-text-soft: var(--dark-text-soft) !important;
+  --modal-text-muted: var(--dark-text-muted) !important;
+  --modal-accent: var(--dark-accent) !important;
+  --modal-danger: var(--dark-expense) !important;
+  --modal-shadow: var(--dark-shadow) !important;
+}
+
+/* Primary actions stay green while ordinary controls remain neutral. */
+html[data-theme='toss'] body .app-shell :is(
+  .button--primary,
+  .button.primary,
+  button[type='submit'],
+  .main-dashboard__primary,
+  .sidebar__link--active,
+  .toggle-chip--active,
+  .primary-action,
+  .confirm-action,
+  .save-action
+):not(.main-palette__photo-hero):not(.travel-photo-card-button):not(.travel-photo-preview-button):not(.main-photo-frame-modal__preview):not(.main-photo-frame-detail-modal__figure) {
+  background: var(--dark-accent-strong) !important;
+  background-color: var(--dark-accent-strong) !important;
+  background-image: none !important;
+  border-color: var(--dark-accent) !important;
+  color: #f4f7f4 !important;
+  -webkit-text-fill-color: #f4f7f4 !important;
+}

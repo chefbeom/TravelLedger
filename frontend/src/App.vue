@@ -1363,6 +1363,7 @@ onBeforeUnmount(() => {
               :key="item.key"
               class="topbar__nav-button"
               :class="{ 'topbar__nav-button--active': isHeaderNavActive(item.key), 'topbar__nav-button--admin': item.key === 'admin' }"
+              :aria-current="isHeaderNavActive(item.key) ? 'page' : undefined"
               type="button"
               @click="navigate(item.key)"
             >
@@ -1371,6 +1372,7 @@ onBeforeUnmount(() => {
                     <button
             type="button"
             :class="['topbar__nav-button', 'topbar__nav-button--notifications', { 'topbar__nav-button--active': activeRoute === 'notifications' || notificationModalOpen }]"
+            :aria-current="activeRoute === 'notifications' || notificationModalOpen ? 'page' : undefined"
             @click="openNotificationModal"
           >
             <span>알림</span>

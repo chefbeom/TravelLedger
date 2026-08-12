@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onBeforeUnmount, onMounted } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { formatDateTime } from '../lib/uiFormat'
 
 const props = defineProps({
@@ -92,6 +92,57 @@ const activePhoto = computed(() => {
   return timelinePhotos.value.find((item) => String(item?.id) === String(props.currentPhotoId)) ?? props.photo
 })
 
+const activePhotoUrl = computed(() => String(activePhoto.value?.contentUrl ?? '').trim())
+const displayedImageUrl = ref('')
+const isImagePreparing = ref(false)
+let imageRequestId = 0
+
+async function prepareImage(url) {
+  const requestId = ++imageRequestId
+
+  if (!url) {
+    displayedImageUrl.value = ''
+    isImagePreparing.value = false
+    return
+  }
+
+  if (url === displayedImageUrl.value) {
+    isImagePreparing.value = false
+    return
+  }
+
+  isImagePreparing.value = true
+  const image = new Image()
+  image.decoding = 'async'
+  image.fetchPriority = 'high'
+
+  image.onload = async () => {
+    try {
+      await image.decode?.()
+    } catch {
+      // Some browsers reject decode for already-renderable cached images.
+    }
+
+    if (requestId !== imageRequestId) {
+      return
+    }
+
+    // Keep the existing photo visible until the replacement has fully decoded.
+    displayedImageUrl.value = url
+    isImagePreparing.value = false
+  }
+
+  image.onerror = () => {
+    if (requestId === imageRequestId) {
+      isImagePreparing.value = false
+    }
+  }
+
+  image.src = url
+}
+
+watch(activePhotoUrl, prepareImage, { immediate: true })
+
 const locationLabel = computed(() =>
   [activePhoto.value?.country, activePhoto.value?.region, activePhoto.value?.placeName].filter(Boolean).join(' / ') || LOCATION_EMPTY_LABEL,
 )
@@ -153,6 +204,7 @@ function handleKeydown(event) {
     event.preventDefault()
     event.stopPropagation()
     event.stopImmediatePropagation?.()
+    event.returnValue = false
     emit('close')
     return
   }
@@ -176,19 +228,20 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  imageRequestId += 1
   window.removeEventListener('keydown', handleKeydown, { capture: true })
 })
 </script>
 
 <template>
-  <div v-if="activePhoto" class="travel-modal travel-modal--lightbox" @pointerdown.stop @pointerup.stop @touchstart.stop @touchend.stop @click.stop @keydown.esc="emit('close')">
+  <div v-if="activePhoto" class="travel-modal travel-modal--lightbox" data-map-photo-detail="true" @pointerdown.stop @pointerup.stop @touchstart.stop @touchend.stop @click.stop @keydown.esc="emit('close')">
     <div class="travel-modal__dialog travel-lightbox">
       <div class="travel-modal__header">
         <div>
           <h2>{{ activePhoto.title || activePhoto.originalFileName || DEFAULT_TITLE }}</h2>
           <p>{{ formatDateTime(activePhoto.expenseDate, activePhoto.expenseTime) }}</p>
         </div>
-        <button class="button button--ghost" type="button" @click="emit('close')">{{ CLOSE_LABEL }}</button>
+        <button class="button button--ghost" type="button" data-modal-close @click="emit('close')">{{ CLOSE_LABEL }}</button>
       </div>
 
       <div class="travel-lightbox__body">
@@ -201,10 +254,16 @@ onBeforeUnmount(() => {
         >
           <span aria-hidden="true">&lsaquo;</span>
         </button>
+        <div v-if="isImagePreparing && !displayedImageUrl" class="travel-lightbox__image-state" role="status">
+          사진을 준비하고 있습니다.
+        </div>
         <img
+          v-if="displayedImageUrl"
           class="travel-lightbox__image"
-          :src="activePhoto.contentUrl"
+          :src="displayedImageUrl"
           :alt="activePhoto.title || activePhoto.originalFileName || 'travel photo'"
+          decoding="async"
+          fetchpriority="high"
         />
         <button
           v-if="nextPhoto"

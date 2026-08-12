@@ -103,6 +103,7 @@ let mapRenderFrame = 0
 let mapRenderTimer = 0
 let mapResizeFrame = 0
 let mapResizeTimer = 0
+let suppressViewportClusterRenderUntil = 0
 let popupOpenSequence = 0
 let suppressNextMapBackgroundClick = false
 
@@ -632,15 +633,27 @@ function queueMapResize() {
 
   const resize = () => {
     mapResizeFrame = 0
-    mapInstance?.invalidateSize(false)
-    scheduleRenderClusters(0)
+
+    // Mobile browser chrome can resize the visual viewport repeatedly while
+    // scrolling. Refresh Leaflet without rebuilding every photo marker.
+    suppressViewportClusterRenderUntil = Date.now() + (isTouchMapDevice() ? 420 : 180)
+    mapInstance?.invalidateSize({
+      animate: false,
+      pan: false,
+      debounceMoveend: true,
+    })
+  }
+
+  const delay = isTouchMapDevice() ? 140 : 0
+  if (delay) {
+    mapResizeTimer = setTimeout(() => {
+      mapResizeTimer = 0
+      mapResizeFrame = requestAnimationFrame(resize)
+    }, delay)
+    return
   }
 
   mapResizeFrame = requestAnimationFrame(resize)
-  mapResizeTimer = setTimeout(() => {
-    mapResizeTimer = 0
-    resize()
-  }, isTouchMapDevice() ? 180 : 120)
 }
 
 function cancelQueuedMapResize() {
@@ -1058,7 +1071,7 @@ function renderMap({ shouldFit = false } = {}) {
   }
 
   renderClusters()
-  requestAnimationFrame(() => mapInstance?.invalidateSize(false))
+  queueMapResize()
 }
 
 function resolveInitialCenter() {
@@ -1118,6 +1131,11 @@ function handleViewportStart() {
 function handleViewportEnd() {
   isMapMoving.value = false
   zoomLabel.value = mapInstance?.getZoom() ?? DEFAULT_ZOOM
+
+  if (Date.now() < suppressViewportClusterRenderUntil) {
+    return
+  }
+
   scheduleRenderClusters(0)
 }
 
@@ -1142,8 +1160,30 @@ function handleFullscreenChange() {
   queueMapResize()
 }
 
+function handleFullscreenEscape(event) {
+  if (event.key !== 'Escape' || !isFullscreen.value) {
+    return
+  }
+
+  const photoDetail = mapRootElement.value?.querySelector(
+    '.travel-map__fullscreen-dialog [data-map-photo-detail="true"]',
+  )
+  const closeAction = photoDetail?.querySelector('[data-modal-close]')
+  if (!closeAction || closeAction.disabled) {
+    return
+  }
+
+  // A nested photo detail is the most recently opened layer. Close it first
+  // and keep the map fullscreen until the next Escape press.
+  event.preventDefault()
+  event.stopImmediatePropagation?.()
+  event.returnValue = false
+  closeAction.click()
+}
+
 onMounted(() => {
   document.addEventListener('fullscreenchange', handleFullscreenChange)
+  window.addEventListener('keydown', handleFullscreenEscape, { capture: true })
 
   mapInstance = L.map(mapElement.value, {
     ...createMapOptions({
@@ -1184,6 +1224,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   document.removeEventListener('fullscreenchange', handleFullscreenChange)
+  window.removeEventListener('keydown', handleFullscreenEscape, { capture: true })
   cancelQueuedMapResize()
 
   if (mapInstance) {

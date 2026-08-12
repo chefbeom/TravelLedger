@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { buildThumbnailUrl, THUMBNAIL_VARIANTS } from '../lib/mediaPreview'
 
 const props = defineProps({
@@ -112,11 +112,30 @@ function prepareImage(url) {
 
 watch(activePhotoUrl, prepareImage, { immediate: true })
 
-onBeforeUnmount(cancelPendingImage)
+function handleKeydown(event) {
+  if (event.key !== 'Escape') {
+    return
+  }
+
+  event.preventDefault()
+  event.stopPropagation()
+  event.stopImmediatePropagation?.()
+  event.returnValue = false
+  emit('close')
+}
+
+onMounted(() => {
+  window.addEventListener('keydown', handleKeydown, { capture: true })
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', handleKeydown, { capture: true })
+  cancelPendingImage()
+})
 </script>
 
 <template>
-  <div class="public-map-share-photo-modal" role="dialog" aria-modal="true" aria-labelledby="public-map-share-photo-modal-title" @pointerdown.stop @pointerup.stop @touchstart.stop @touchend.stop @click.stop @keydown.esc="emit('close')">
+  <div class="public-map-share-photo-modal" data-map-photo-detail="true" role="dialog" aria-modal="true" aria-labelledby="public-map-share-photo-modal-title" @pointerdown.stop @pointerup.stop @touchstart.stop @touchend.stop @click.stop @keydown.esc="emit('close')">
     <article class="public-map-share-photo-modal__panel">
       <header class="public-map-share-photo-modal__header">
         <div>
@@ -127,7 +146,7 @@ onBeforeUnmount(cancelPendingImage)
         <div class="public-map-share-photo-modal__header-actions">
           <button v-if="canNavigate" class="button button--secondary" type="button" @click="emit('previous-photo')">{{ PREVIOUS_PHOTO_LABEL }}</button>
           <button v-if="canNavigate" class="button button--secondary" type="button" @click="emit('next-photo')">{{ NEXT_PHOTO_LABEL }}</button>
-          <button class="button button--ghost" type="button" @click="emit('close')">{{ CLOSE_LABEL }}</button>
+          <button class="button button--ghost" type="button" data-modal-close @click="emit('close')">{{ CLOSE_LABEL }}</button>
         </div>
       </header>
 

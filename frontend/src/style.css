@@ -17941,7 +17941,8 @@ textarea {
 .app-shell[data-layout-mode='mobile'] .travel-map__canvas,
 :root[data-layout-mode='mobile'] .travel-map--expanded .travel-map__canvas,
 .app-shell[data-layout-mode='mobile'] .travel-map--expanded .travel-map__canvas {
-  min-height: clamp(360px, 66dvh, 620px);
+  min-height: clamp(360px, 66vh, 620px);
+  min-height: clamp(360px, 66svh, 620px);
 }
 
 :root[data-layout-mode='mobile'] .travel-map__toolbar-button,
@@ -36715,4 +36716,57 @@ html[data-theme='toss'] body .app-shell.app-shell.app-shell .main-shell--standal
   border-bottom: 2px solid #78b984 !important;
   color: #f1f4f3 !important;
   -webkit-text-fill-color: #f1f4f3 !important;
+}
+
+/* Keep the app navigation above Leaflet panes while the page scrolls. */
+html body .app-shell .main-shell--standalone > .topbar {
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+  isolation: isolate;
+}
+/* Mobile photo detail stability: keep the modal and decoded image on a fixed visual layer. */
+.travel-lightbox__image-state {
+  display: grid;
+  min-height: 240px;
+  place-items: center;
+  padding: 24px;
+  color: var(--modal-text, #f8fafc);
+  text-align: center;
+}
+
+@media (hover: none) and (pointer: coarse), (max-width: 760px) {
+  .travel-modal--lightbox,
+  .public-map-share-photo-modal {
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+  }
+
+  .travel-modal--lightbox .travel-modal__dialog,
+  .public-map-share-photo-modal__panel {
+    max-height: calc(100svh - 20px) !important;
+    transform: translateZ(0);
+    -webkit-transform: translateZ(0);
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+  }
+
+  .travel-modal--lightbox .travel-lightbox__body,
+  .public-map-share-photo-modal__media {
+    contain: paint;
+    transform: translateZ(0);
+    -webkit-transform: translateZ(0);
+  }
+
+  .travel-modal--lightbox .travel-lightbox__image {
+    max-height: 66svh;
+    transform: translateZ(0);
+    -webkit-transform: translateZ(0);
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+  }
+
+  .public-map-share-photo-modal__panel {
+    height: calc(100svh - 20px) !important;
+  }
 }

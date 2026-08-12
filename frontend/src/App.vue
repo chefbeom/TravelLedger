@@ -1011,9 +1011,20 @@ watch(activeRoute, (route) => {
   }
 })
 function isMobileModalScrollLockRequired() {
+  const modal = typeof document === 'undefined'
+    ? null
+    : document.querySelector(MODAL_SCROLL_LOCK_SELECTOR)
+  const fullscreenMap = typeof document === 'undefined'
+    ? null
+    : document.fullscreenElement?.closest?.('.travel-map')
+
   return typeof window !== 'undefined'
     && window.matchMedia(MOBILE_MODAL_SCROLL_LOCK_QUERY).matches
-    && Boolean(document.querySelector(MODAL_SCROLL_LOCK_SELECTOR))
+    && Boolean(modal)
+    // A photo detail dialog inside a fullscreen map does not need to lock the
+    // page behind it. On mobile, fixing the body here changes the visual
+    // viewport repeatedly and makes the rendered photo flash.
+    && !(fullscreenMap && modal && fullscreenMap.contains(modal))
 }
 
 function lockMobileModalBackgroundScroll() {

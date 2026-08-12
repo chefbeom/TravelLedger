@@ -1345,7 +1345,7 @@ onBeforeUnmount(() => {
     </template>
 
     <template v-else>
-      <div class="main-shell main-shell--standalone">
+      <div class="main-shell main-shell--standalone" :class="{ 'main-shell--dashboard': activeRoute === 'launcher' }">
         <header class="topbar">
           <div class="topbar__copy">
             <div class="topbar__identity" aria-label="TravelLedger">

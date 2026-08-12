@@ -34264,23 +34264,6 @@ html body .app-shell .main-shell--standalone .main-dashboard {
   --dash-accent-soft: rgba(58, 90, 64, 0.1) !important;
 }
 
-html[data-theme="toss"] body .app-shell .main-shell--standalone .main-dashboard {
-  --dash-bg: #0f1715 !important;
-  --dash-surface: #15201d !important;
-  --dash-surface-2: #1a2824 !important;
-  --dash-card: #1d2e29 !important;
-  --dash-card-hover: #243833 !important;
-  --dash-border: rgba(180, 210, 198, 0.13) !important;
-  --dash-border-soft: rgba(180, 210, 198, 0.08) !important;
-  --dash-text: #f1f5f3 !important;
-  --dash-muted: #97aaa3 !important;
-  --dash-muted-2: #6f837b !important;
-  --dash-primary: #72a77f !important;
-  --dash-primary-strong: #8cbc96 !important;
-  --dash-income: #73b9a0 !important;
-  --dash-expense: #d28b6f !important;
-  --dash-warning: #c9ae6a !important;
-  --dash-accent-soft: rgba(114, 167, 127, 0.14) !important;
 html body .app-shell .main-shell--standalone {
   --dash-bg: #eef2ef;
   --dash-surface: #f5f8f5;
@@ -35045,4 +35028,234 @@ html body .app-shell .main-shell--standalone .main-dashboard :is(button, select,
     display: none;
   }
 }
+
+html[data-theme='toss'],
+html[data-theme='toss'] body {
+  background: #0f1715 !important;
+  color: #f1f5f3 !important;
+}
+
+/* Dashboard concept shell: the home route keeps the brand and navigation as the primary header. */
+html body .app-shell .main-shell--dashboard .topbar__copy {
+  display: block !important;
+  flex: 0 0 auto;
+  min-width: auto !important;
+}
+
+html body .app-shell .main-shell--dashboard .topbar__identity {
+  display: block !important;
+  min-width: 0 !important;
+}
+
+html body .app-shell .main-shell--dashboard .topbar__brand {
+  display: inline-block;
+}
+
+html body .app-shell .main-shell--dashboard .topbar__context,
+html body .app-shell .main-shell--dashboard .topbar__eyebrow,
+html body .app-shell .main-shell--dashboard .topbar__title,
+html body .app-shell .main-shell--dashboard .topbar__description {
+  display: none !important;
+}
+
+html body .app-shell .main-shell--dashboard .main-dashboard {
+  margin-inline: auto;
+  width: min(100%, 1200px);
+}
+
+@media (max-width: 760px) {
+  html body .app-shell .main-shell--dashboard .topbar__copy {
+    flex: 1 1 auto;
+  }
+
+  html body .app-shell .main-shell--dashboard .main-dashboard {
+    width: 100%;
+  }
+}
+
+/* Dark reference pass: keep the home dashboard on the supplied green-charcoal scale. */
+html[data-theme='toss'] body .app-shell .main-shell--standalone,
+html[data-theme='toss'] body .app-shell .main-shell--standalone .main-dashboard {
+  --dash-bg: #0f1715 !important;
+  --dash-surface: #15201d !important;
+  --dash-surface-2: #1a2824 !important;
+  --dash-card: #1d2e29 !important;
+  --dash-card-hover: #243833 !important;
+  --dash-border: rgba(180, 210, 198, 0.13) !important;
+  --dash-border-soft: rgba(180, 210, 198, 0.08) !important;
+  --dash-text: #f1f5f3 !important;
+  --dash-muted: #97aaa3 !important;
+  --dash-muted-2: #6f837b !important;
+  --dash-primary: #72a77f !important;
+  --dash-primary-strong: #8cbc96 !important;
+  --dash-income: #73b9a0 !important;
+  --dash-expense: #d28b6f !important;
+  --dash-warning: #c9ae6a !important;
+  --dash-accent-soft: rgba(114, 167, 127, 0.14) !important;
+}
+
+html[data-theme='toss'] body .app-shell,
+html[data-theme='toss'] body .app-shell .main-shell--standalone {
+  background: var(--dash-bg) !important;
+  color: var(--dash-text) !important;
+}
+
+html[data-theme='toss'] body .app-shell .main-shell--standalone .topbar {
+  background: var(--dash-bg) !important;
+  border: 0 !important;
+  border-bottom: 1px solid var(--dash-border) !important;
+  box-shadow: none !important;
+  color: var(--dash-text) !important;
+}
+
+html[data-theme='toss'] body .app-shell .main-shell--standalone .topbar__brand {
+  color: var(--dash-primary-strong) !important;
+}
+
+html[data-theme='toss'] body .app-shell .main-shell--standalone .topbar__context,
+html[data-theme='toss'] body .app-shell .main-shell--standalone .topbar__eyebrow,
+html[data-theme='toss'] body .app-shell .main-shell--standalone .topbar__description,
+html[data-theme='toss'] body .app-shell .main-shell--standalone .topbar__nav-button {
+  color: var(--dash-muted) !important;
+}
+
+html[data-theme='toss'] body .app-shell .main-shell--standalone .topbar__nav-button {
+  background: transparent !important;
+  border: 0 !important;
+  border-bottom: 2px solid transparent !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+
+html[data-theme='toss'] body .app-shell .main-shell--standalone .topbar__nav-button:hover,
+html[data-theme='toss'] body .app-shell .main-shell--standalone .topbar__nav-button:focus-visible,
+html[data-theme='toss'] body .app-shell .main-shell--standalone .topbar__nav-button--active {
+  background: transparent !important;
+  border-bottom-color: var(--dash-primary) !important;
+  color: var(--dash-text) !important;
+}
+
+html[data-theme='toss'] body .app-shell .main-shell--standalone .topbar__actions .button {
+  background: transparent !important;
+  border: 1px solid var(--dash-border) !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  color: var(--dash-muted) !important;
+}
+
+html[data-theme='toss'] body .app-shell .main-shell--standalone .topbar__actions .button:hover,
+html[data-theme='toss'] body .app-shell .main-shell--standalone .topbar__actions .button:focus-visible {
+  background: var(--dash-card-hover) !important;
+  border-color: var(--dash-primary) !important;
+  color: var(--dash-text) !important;
+}
+
+html[data-theme='toss'] body .app-shell .main-shell--standalone .main-dashboard {
+  background: transparent !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  color: var(--dash-text) !important;
+}
+
+html[data-theme='toss'] body .app-shell .main-shell--standalone .main-dashboard__overview-card,
+html[data-theme='toss'] body .app-shell .main-shell--standalone .main-palette {
+  background: var(--dash-card) !important;
+  border: 1px solid var(--dash-border) !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  color: var(--dash-text) !important;
+}
+
+html[data-theme='toss'] body .app-shell .main-shell--standalone .main-dashboard__overview-card:hover,
+html[data-theme='toss'] body .app-shell .main-shell--standalone .main-palette:hover {
+  background: var(--dash-card-hover) !important;
+  border-color: var(--dash-primary) !important;
+}
+
+html[data-theme='toss'] body .app-shell .main-shell--standalone .main-dashboard__overview-card span,
+html[data-theme='toss'] body .app-shell .main-shell--standalone .main-dashboard__overview-card small,
+html[data-theme='toss'] body .app-shell .main-shell--standalone .main-dashboard__overview-card p,
+html[data-theme='toss'] body .app-shell .main-shell--standalone .main-palette__metric span,
+html[data-theme='toss'] body .app-shell .main-shell--standalone .main-palette__single-metric span,
+html[data-theme='toss'] body .app-shell .main-shell--standalone .main-palette__single-metric small,
+html[data-theme='toss'] body .app-shell .main-shell--standalone .main-palette__compare-label span,
+html[data-theme='toss'] body .app-shell .main-shell--standalone .main-palette__compare-row small,
+html[data-theme='toss'] body .app-shell .main-shell--standalone .main-palette__quick-action span,
+html[data-theme='toss'] body .app-shell .main-shell--standalone .main-palette__recent-file small,
+html[data-theme='toss'] body .app-shell .main-shell--standalone .main-palette__empty {
+  color: var(--dash-muted) !important;
+}
+
+html[data-theme='toss'] body .app-shell .main-shell--standalone .main-palette__head strong,
+html[data-theme='toss'] body .app-shell .main-shell--standalone .main-dashboard__overview-card strong,
+html[data-theme='toss'] body .app-shell .main-shell--standalone .main-palette__metric strong,
+html[data-theme='toss'] body .app-shell .main-shell--standalone .main-palette__single-metric strong,
+html[data-theme='toss'] body .app-shell .main-shell--standalone .main-palette__compare-label strong,
+html[data-theme='toss'] body .app-shell .main-shell--standalone .main-palette__feature-link strong,
+html[data-theme='toss'] body .app-shell .main-shell--standalone .main-palette__quick-action strong,
+html[data-theme='toss'] body .app-shell .main-shell--standalone .main-palette__recent-file strong,
+html[data-theme='toss'] body .app-shell .main-shell--standalone .main-palette__list-row strong {
+  color: var(--dash-text) !important;
+  font-variant-numeric: tabular-nums;
+}
+
+html[data-theme='toss'] body .app-shell .main-shell--standalone .main-dashboard__overview-card.is-positive,
+html[data-theme='toss'] body .app-shell .main-shell--standalone .main-dashboard__overview-card.is-negative,
+html[data-theme='toss'] body .app-shell .main-shell--standalone .main-dashboard__overview-card.is-teal,
+html[data-theme='toss'] body .app-shell .main-shell--standalone .main-dashboard__overview-card.is-mint {
+  background: var(--dash-card) !important;
+  border-left-color: var(--dash-primary) !important;
+}
+
+html[data-theme='toss'] body .app-shell .main-shell--standalone .main-dashboard__overview-card.is-negative,
+html[data-theme='toss'] body .app-shell .main-shell--standalone .main-palette__metric.is-negative,
+html[data-theme='toss'] body .app-shell .main-shell--standalone .main-palette__single-metric.is-negative {
+  border-left-color: var(--dash-expense) !important;
+}
+
+html[data-theme='toss'] body .app-shell .main-shell--standalone .main-dashboard__overview-card.is-positive,
+html[data-theme='toss'] body .app-shell .main-shell--standalone .main-palette__metric.is-positive,
+html[data-theme='toss'] body .app-shell .main-shell--standalone .main-palette__single-metric.is-positive {
+  border-left-color: var(--dash-income) !important;
+}
+
+html[data-theme='toss'] body .app-shell .main-shell--standalone .main-palette__metric,
+html[data-theme='toss'] body .app-shell .main-shell--standalone .main-palette__single-metric,
+html[data-theme='toss'] body .app-shell .main-shell--standalone .main-palette__quick-action,
+html[data-theme='toss'] body .app-shell .main-shell--standalone .main-palette__feature-link,
+html[data-theme='toss'] body .app-shell .main-shell--standalone .main-palette__photo-empty {
+  background: var(--dash-surface-2) !important;
+  border-color: var(--dash-border-soft) !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+
+html[data-theme='toss'] body .app-shell .main-shell--standalone .main-palette__head,
+html[data-theme='toss'] body .app-shell .main-shell--standalone .main-palette__body {
+  background: var(--dash-card) !important;
+}
+
+html[data-theme='toss'] body .app-shell .main-shell--standalone .main-palette__head {
+  border-bottom-color: var(--dash-border-soft) !important;
+}
+
+html[data-theme='toss'] body .app-shell .main-shell--standalone .main-palette__photo-hero {
+  background: var(--dash-surface-2) !important;
+  border-radius: 0 !important;
+}
+
+html[data-theme='toss'] body .app-shell .main-shell--standalone .main-palette__photo-caption span,
+html[data-theme='toss'] body .app-shell .main-shell--standalone .main-palette__photo-caption strong,
+html[data-theme='toss'] body .app-shell .main-shell--standalone .main-palette__photo-caption small {
+  background: rgba(15, 23, 21, 0.9) !important;
+  border-left-color: var(--dash-primary) !important;
+  border-radius: 0 !important;
+  color: var(--dash-text) !important;
+}
+
+
+html[data-theme='toss'] body {
+  background-color: #0f1715 !important;
+  background-image: none !important;
 }

@@ -34240,3 +34240,809 @@ html body .app-shell.app-shell :is(.theme-toggle, .theme-degree-panel) {
   color: var(--text) !important;
   -webkit-text-fill-color: var(--text) !important;
 }
+/* TravelLedger dashboard refinement: aligned with the supplied concept layout. */
+html body .app-shell .main-shell--standalone {
+  border: 0 !important;
+  box-shadow: none !important;
+}
+html body .app-shell .main-shell--standalone .main-dashboard {
+  --dash-bg: #eef2ef !important;
+  --dash-surface: #f5f8f5 !important;
+  --dash-surface-2: #e9f0eb !important;
+  --dash-card: #ffffff !important;
+  --dash-card-hover: #f3f8f4 !important;
+  --dash-border: rgba(52, 78, 65, 0.16) !important;
+  --dash-border-soft: rgba(52, 78, 65, 0.09) !important;
+  --dash-text: #20332a !important;
+  --dash-muted: #63766d !important;
+  --dash-muted-2: #788a82 !important;
+  --dash-primary: #3a5a40 !important;
+  --dash-primary-strong: #588157 !important;
+  --dash-income: #3f8a6f !important;
+  --dash-expense: #b7654d !important;
+  --dash-warning: #917b3f !important;
+  --dash-accent-soft: rgba(58, 90, 64, 0.1) !important;
+}
+
+html[data-theme="toss"] body .app-shell .main-shell--standalone .main-dashboard {
+  --dash-bg: #0f1715 !important;
+  --dash-surface: #15201d !important;
+  --dash-surface-2: #1a2824 !important;
+  --dash-card: #1d2e29 !important;
+  --dash-card-hover: #243833 !important;
+  --dash-border: rgba(180, 210, 198, 0.13) !important;
+  --dash-border-soft: rgba(180, 210, 198, 0.08) !important;
+  --dash-text: #f1f5f3 !important;
+  --dash-muted: #97aaa3 !important;
+  --dash-muted-2: #6f837b !important;
+  --dash-primary: #72a77f !important;
+  --dash-primary-strong: #8cbc96 !important;
+  --dash-income: #73b9a0 !important;
+  --dash-expense: #d28b6f !important;
+  --dash-warning: #c9ae6a !important;
+  --dash-accent-soft: rgba(114, 167, 127, 0.14) !important;
+html body .app-shell .main-shell--standalone {
+  --dash-bg: #eef2ef;
+  --dash-surface: #f5f8f5;
+  --dash-surface-2: #e9f0eb;
+  --dash-card: #ffffff;
+  --dash-card-hover: #f3f8f4;
+  --dash-border: rgba(52, 78, 65, 0.16);
+  --dash-border-soft: rgba(52, 78, 65, 0.09);
+  --dash-text: #20332a;
+  --dash-muted: #63766d;
+  --dash-muted-2: #788a82;
+  --dash-primary: #3a5a40;
+  --dash-primary-strong: #588157;
+  --dash-income: #3f8a6f;
+  --dash-expense: #b7654d;
+  --dash-warning: #917b3f;
+  --dash-accent-soft: rgba(58, 90, 64, 0.1);
+  background: var(--dash-bg) !important;
+  color: var(--dash-text) !important;
+  gap: 0 !important;
+  isolation: isolate;
+  padding: 0 0 40px !important;
+}
+
+html[data-theme="toss"] body .app-shell .main-shell--standalone {
+  --dash-bg: #0f1715;
+  --dash-surface: #15201d;
+  --dash-surface-2: #1a2824;
+  --dash-card: #1d2e29;
+  --dash-card-hover: #243833;
+  --dash-border: rgba(180, 210, 198, 0.13);
+  --dash-border-soft: rgba(180, 210, 198, 0.08);
+  --dash-text: #f1f5f3;
+  --dash-muted: #97aaa3;
+  --dash-muted-2: #6f837b;
+  --dash-primary: #72a77f;
+  --dash-primary-strong: #8cbc96;
+  --dash-income: #73b9a0;
+  --dash-expense: #d28b6f;
+  --dash-warning: #c9ae6a;
+  --dash-accent-soft: rgba(114, 167, 127, 0.14);
+}
+
+html body .app-shell .main-shell--standalone .topbar {
+  align-items: center !important;
+  background: var(--dash-surface) !important;
+  border: 0 !important;
+  border-bottom: 1px solid var(--dash-border) !important;
+  box-shadow: none !important;
+  gap: 24px !important;
+  min-height: 64px !important;
+  padding: 10px 28px !important;
+  position: sticky;
+  top: 0;
+  z-index: 30;
+}
+
+html body .app-shell .main-shell--standalone .topbar__copy {
+  align-items: baseline;
+  column-gap: 12px;
+  display: grid !important;
+  grid-template-columns: auto minmax(0, 1fr);
+  min-width: min(360px, 32vw);
+  row-gap: 2px;
+}
+
+html body .app-shell .main-shell--standalone .topbar__identity {
+  align-self: center;
+  display: flex;
+  flex-direction: column;
+  grid-row: 1 / span 3;
+  min-width: 150px;
+}
+
+html body .app-shell .main-shell--standalone .topbar__brand {
+  color: var(--dash-primary-strong) !important;
+  font-size: 1rem;
+  font-weight: 850;
+  letter-spacing: -0.04em;
+  line-height: 1;
+}
+
+html body .app-shell .main-shell--standalone .topbar__context {
+  color: var(--dash-muted-2) !important;
+  font-size: 0.58rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  margin-top: 5px;
+  white-space: nowrap;
+}
+
+html body .app-shell .main-shell--standalone .topbar__eyebrow {
+  color: var(--dash-muted-2) !important;
+  font-size: 0.66rem !important;
+  font-weight: 800 !important;
+  grid-column: 2;
+  letter-spacing: 0.05em;
+  margin: 0 !important;
+  text-transform: uppercase;
+}
+
+html body .app-shell .main-shell--standalone .topbar__title {
+  color: var(--dash-text) !important;
+  font-size: 1.08rem !important;
+  font-weight: 800 !important;
+  grid-column: 2;
+  letter-spacing: -0.03em;
+  line-height: 1.15 !important;
+  margin: 0 !important;
+}
+
+html body .app-shell .main-shell--standalone .topbar__description {
+  color: var(--dash-muted) !important;
+  font-size: 0.68rem;
+  grid-column: 2;
+  line-height: 1.35;
+  margin: 0;
+  max-width: 34rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+html body .app-shell .main-shell--standalone .topbar__nav {
+  align-items: stretch !important;
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  flex: 1 1 auto !important;
+  gap: 2px !important;
+  height: 44px !important;
+  justify-content: flex-start !important;
+  min-width: 0;
+  overflow-x: auto;
+  padding: 0 !important;
+}
+
+html body .app-shell .main-shell--standalone .topbar__nav-button {
+  align-items: center;
+  background: transparent !important;
+  border: 0 !important;
+  border-bottom: 2px solid transparent !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  color: var(--dash-muted) !important;
+  display: inline-flex;
+  flex: 0 0 auto;
+  font-size: 0.8rem !important;
+  font-weight: 750 !important;
+  justify-content: center;
+  min-height: 44px !important;
+  padding: 0 11px !important;
+  white-space: nowrap;
+}
+
+html body .app-shell .main-shell--standalone .topbar__nav-button:hover,
+html body .app-shell .main-shell--standalone .topbar__nav-button:focus-visible {
+  background: var(--dash-accent-soft) !important;
+  border-bottom-color: var(--dash-primary) !important;
+  color: var(--dash-text) !important;
+}
+
+html body .app-shell .main-shell--standalone .topbar__nav-button--active {
+  background: var(--dash-accent-soft) !important;
+  border-bottom-color: var(--dash-primary) !important;
+  color: var(--dash-text) !important;
+}
+
+html body .app-shell .main-shell--standalone .topbar__nav-button--admin {
+  border-left: 1px solid var(--dash-border) !important;
+  margin-left: 8px;
+  padding-left: 16px !important;
+}
+
+html body .app-shell .main-shell--standalone .topbar__notification-badge {
+  background: var(--dash-expense) !important;
+  border-radius: 0 !important;
+  color: #fff !important;
+  font-size: 0.62rem;
+  margin-left: 5px;
+  padding: 2px 4px;
+}
+
+html body .app-shell .main-shell--standalone .topbar__actions {
+  align-items: center;
+  display: flex;
+  flex: 0 0 auto;
+  gap: 4px !important;
+}
+
+html body .app-shell .main-shell--standalone .topbar__actions .button {
+  background: transparent !important;
+  border: 1px solid var(--dash-border) !important;
+  border-radius: 0 !important;
+  color: var(--dash-muted) !important;
+  font-size: 0.72rem !important;
+  min-height: 32px !important;
+  padding: 0 10px !important;
+}
+
+html body .app-shell .main-shell--standalone .topbar__actions .button:hover,
+html body .app-shell .main-shell--standalone .topbar__actions .button:focus-visible {
+  background: var(--dash-card-hover) !important;
+  border-color: var(--dash-primary) !important;
+  color: var(--dash-text) !important;
+}
+
+html body .app-shell .main-shell--standalone .main-dashboard {
+  background: transparent !important;
+  color: var(--dash-text) !important;
+  display: grid;
+  gap: 16px !important;
+  min-width: 0;
+  padding: 24px 28px 0 !important;
+}
+
+html body .app-shell .main-shell--standalone .main-dashboard__overview {
+  gap: 12px !important;
+}
+
+html body .app-shell .main-shell--standalone .main-dashboard__overview-cards {
+  display: grid;
+  gap: 12px !important;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  min-width: 0;
+}
+
+html body .app-shell .main-shell--standalone .main-dashboard__overview-card {
+  background: var(--dash-card) !important;
+  border: 1px solid var(--dash-border) !important;
+  border-left: 2px solid var(--dash-primary) !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  display: flex !important;
+  flex-direction: column;
+  gap: 0 !important;
+  justify-content: space-between;
+  min-height: 132px !important;
+  padding: 16px !important;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+html body .app-shell .main-shell--standalone .main-dashboard__overview-card:hover {
+  background: var(--dash-card-hover) !important;
+}
+
+html body .app-shell .main-shell--standalone .main-dashboard__overview-card.is-negative {
+  border-left-color: var(--dash-expense) !important;
+}
+
+html body .app-shell .main-shell--standalone .main-dashboard__overview-card.is-positive,
+html body .app-shell .main-shell--standalone .main-dashboard__overview-card.is-teal,
+html body .app-shell .main-shell--standalone .main-dashboard__overview-card.is-mint {
+  border-left-color: var(--dash-income) !important;
+}
+
+html body .app-shell .main-shell--standalone .main-dashboard__overview-card span {
+  color: var(--dash-muted-2) !important;
+  font-size: 0.66rem !important;
+  font-weight: 850 !important;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+html body .app-shell .main-shell--standalone .main-dashboard__overview-card strong {
+  color: var(--dash-text) !important;
+  font-size: clamp(1.55rem, 2.2vw, 1.95rem) !important;
+  font-variant-numeric: tabular-nums;
+  font-weight: 850 !important;
+  letter-spacing: -0.04em;
+  line-height: 1.12;
+  margin: 8px 0 4px;
+}
+
+html body .app-shell .main-shell--standalone .main-dashboard__overview-card small {
+  color: var(--dash-muted) !important;
+  font-size: 0.78rem !important;
+  font-weight: 700 !important;
+}
+
+html body .app-shell .main-shell--standalone .main-dashboard__overview-card p {
+  color: var(--dash-muted-2) !important;
+  font-size: 0.68rem !important;
+  font-weight: 650 !important;
+  line-height: 1.4;
+  margin: 10px 0 0 !important;
+}
+
+html body .app-shell .main-shell--standalone .main-dashboard__palette-zone {
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  min-width: 0;
+  padding: 0 !important;
+}
+
+html body .app-shell .main-shell--standalone .main-dashboard__grid {
+  min-width: 0;
+  width: 100%;
+}
+
+html body .app-shell .main-shell--standalone .main-dashboard__grid-guide {
+  grid-template-columns: repeat(9, minmax(0, 1fr));
+  opacity: 0.75;
+}
+
+html body .app-shell .main-shell--standalone .main-palette {
+  background: var(--dash-surface) !important;
+  border: 1px solid var(--dash-border) !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  color: var(--dash-text) !important;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+html body .app-shell .main-shell--standalone .main-palette:hover {
+  background: var(--dash-card) !important;
+  border-color: var(--dash-primary) !important;
+}
+
+html body .app-shell .main-shell--standalone .main-palette__head {
+  background: var(--dash-surface) !important;
+  border-bottom: 1px solid var(--dash-border-soft) !important;
+  min-height: 42px !important;
+  padding: 10px 14px !important;
+}
+
+html body .app-shell .main-shell--standalone .main-palette__head strong {
+  color: var(--dash-text) !important;
+  font-size: 0.76rem !important;
+  font-weight: 800 !important;
+  letter-spacing: 0.01em;
+}
+
+html body .app-shell .main-shell--standalone .main-palette__head-actions {
+  gap: 4px !important;
+}
+
+html body .app-shell .main-shell--standalone .main-palette__body {
+  background: var(--dash-surface) !important;
+  min-height: 0;
+  padding: 12px !important;
+}
+
+html body .app-shell .main-shell--standalone .main-palette__metric,
+html body .app-shell .main-shell--standalone .main-palette__single-metric {
+  background: var(--dash-surface-2) !important;
+  border: 0 !important;
+  border-left: 2px solid transparent !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  color: var(--dash-text) !important;
+  padding: 12px !important;
+}
+
+html body .app-shell .main-shell--standalone .main-palette__metric.is-positive,
+html body .app-shell .main-shell--standalone .main-palette__single-metric.is-positive {
+  border-left-color: var(--dash-income) !important;
+}
+
+html body .app-shell .main-shell--standalone .main-palette__metric.is-negative,
+html body .app-shell .main-shell--standalone .main-palette__single-metric.is-negative {
+  border-left-color: var(--dash-expense) !important;
+}
+
+html body .app-shell .main-shell--standalone .main-palette__metric.is-balance,
+html body .app-shell .main-shell--standalone .main-palette__single-metric.is-balance {
+  border-left-color: var(--dash-primary) !important;
+}
+
+html body .app-shell .main-shell--standalone .main-palette__metric span,
+html body .app-shell .main-shell--standalone .main-palette__single-metric span,
+html body .app-shell .main-shell--standalone .main-palette__compare-label span,
+html body .app-shell .main-shell--standalone .main-palette__compare-row small {
+  color: var(--dash-muted-2) !important;
+  font-size: 0.7rem !important;
+}
+
+html body .app-shell .main-shell--standalone .main-palette__metric strong,
+html body .app-shell .main-shell--standalone .main-palette__single-metric strong,
+html body .app-shell .main-shell--standalone .main-palette__compare-label strong {
+  color: var(--dash-text) !important;
+  font-size: clamp(1.12rem, 1.8vw, 1.35rem) !important;
+  font-variant-numeric: tabular-nums;
+  font-weight: 850 !important;
+  letter-spacing: -0.03em;
+  line-height: 1.15;
+}
+
+html body .app-shell .main-shell--standalone .main-palette__metric.is-negative strong,
+html body .app-shell .main-shell--standalone .main-palette__single-metric.is-negative strong {
+  color: var(--dash-expense) !important;
+}
+
+html body .app-shell .main-shell--standalone .main-palette__metric.is-positive strong,
+html body .app-shell .main-shell--standalone .main-palette__single-metric.is-positive strong {
+  color: var(--dash-income) !important;
+}
+
+html body .app-shell .main-shell--standalone .main-palette__metric small,
+html body .app-shell .main-shell--standalone .main-palette__single-metric small {
+  color: var(--dash-muted) !important;
+  font-size: 0.68rem !important;
+  line-height: 1.35;
+}
+
+html body .app-shell .main-shell--standalone .main-palette__payment {
+  display: grid;
+  gap: 8px;
+  height: 100%;
+}
+
+html body .app-shell .main-shell--standalone .main-palette__payment select,
+html body .app-shell .main-shell--standalone .main-palette__settings-button,
+html body .app-shell .main-shell--standalone .main-palette__actions button,
+html body .app-shell .main-shell--standalone .main-palette__quick-form input,
+html body .app-shell .main-shell--standalone .main-palette__quick-form select,
+html body .app-shell .main-shell--standalone .main-palette__quick-buttons button,
+html body .app-shell .main-shell--standalone .main-palette__inline-action {
+  background: var(--dash-surface-2) !important;
+  border: 1px solid var(--dash-border) !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  color: var(--dash-text) !important;
+  font-size: 0.72rem !important;
+  min-height: 32px !important;
+}
+
+html body .app-shell .main-shell--standalone .main-palette__settings-button,
+html body .app-shell .main-shell--standalone .main-palette__actions button,
+html body .app-shell .main-shell--standalone .main-palette__quick-buttons button,
+html body .app-shell .main-shell--standalone .main-palette__inline-action {
+  cursor: pointer;
+  padding: 0 9px !important;
+}
+
+html body .app-shell .main-shell--standalone .main-palette__payment select,
+html body .app-shell .main-shell--standalone .main-palette__quick-form input,
+html body .app-shell .main-shell--standalone .main-palette__quick-form select {
+  padding: 0 9px !important;
+  width: 100%;
+}
+
+html body .app-shell .main-shell--standalone .main-palette__settings-button:hover,
+html body .app-shell .main-shell--standalone .main-palette__actions button:hover,
+html body .app-shell .main-shell--standalone .main-palette__quick-buttons button:hover,
+html body .app-shell .main-shell--standalone .main-palette__inline-action:hover {
+  background: var(--dash-card-hover) !important;
+  border-color: var(--dash-primary) !important;
+}
+
+html body .app-shell .main-shell--standalone .main-palette__compare {
+  display: grid;
+  gap: 10px;
+}
+
+html body .app-shell .main-shell--standalone .main-palette__bar {
+  background: var(--dash-border-soft) !important;
+  height: 7px !important;
+}
+
+html body .app-shell .main-shell--standalone .main-palette__bar span {
+  background: var(--dash-expense) !important;
+}
+
+html body .app-shell .main-shell--standalone .main-palette__list-row,
+html body .app-shell .main-shell--standalone .main-palette__recent-file {
+  border-top: 1px solid var(--dash-border-soft) !important;
+}
+
+html body .app-shell .main-shell--standalone .main-palette__list-row span,
+html body .app-shell .main-shell--standalone .main-palette__recent-file strong {
+  color: var(--dash-text) !important;
+}
+
+html body .app-shell .main-shell--standalone .main-palette__list-row strong,
+html body .app-shell .main-shell--standalone .main-palette__recent-file small {
+  color: var(--dash-muted) !important;
+}
+
+html body .app-shell .main-shell--standalone .main-palette__quick-action,
+html body .app-shell .main-shell--standalone .main-palette__feature-link,
+html body .app-shell .main-shell--standalone .main-palette__photo-empty {
+  background: var(--dash-surface-2) !important;
+  border: 1px solid var(--dash-border-soft) !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  color: var(--dash-text) !important;
+}
+
+html body .app-shell .main-shell--standalone .main-palette__quick-action:hover,
+html body .app-shell .main-shell--standalone .main-palette__feature-link:hover,
+html body .app-shell .main-shell--standalone .main-palette__photo-empty:hover {
+  background: var(--dash-card-hover) !important;
+  border-color: var(--dash-primary) !important;
+}
+
+html body .app-shell .main-shell--standalone .main-palette__quick-action strong,
+html body .app-shell .main-shell--standalone .main-palette__feature-link strong {
+  color: var(--dash-text) !important;
+  font-size: 0.78rem !important;
+}
+
+html body .app-shell .main-shell--standalone .main-palette__quick-action span,
+html body .app-shell .main-shell--standalone .main-palette__feature-link span {
+  color: var(--dash-muted-2) !important;
+  font-size: 0.66rem !important;
+}
+
+html body .app-shell .main-shell--standalone .main-palette__feature-link span {
+  color: var(--dash-primary-strong) !important;
+}
+
+html body .app-shell .main-shell--standalone .main-palette__photo-frame {
+  min-height: 0;
+}
+
+html body .app-shell .main-shell--standalone .main-palette__photo-hero {
+  background: var(--dash-surface-2) !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  min-height: 0;
+}
+
+html body .app-shell .main-shell--standalone .main-palette__photo-hero img {
+  filter: saturate(0.9) contrast(0.96);
+  object-fit: cover;
+}
+
+html body .app-shell .main-shell--standalone .main-palette__photo-caption {
+  bottom: 10px;
+  gap: 4px;
+  left: 10px;
+  max-width: calc(100% - 20px);
+  right: 10px;
+}
+
+html body .app-shell .main-shell--standalone .main-palette__photo-caption span,
+html body .app-shell .main-shell--standalone .main-palette__photo-caption strong,
+html body .app-shell .main-shell--standalone .main-palette__photo-caption small {
+  background: rgba(15, 23, 21, 0.88) !important;
+  border: 0 !important;
+  border-left: 2px solid var(--dash-primary) !important;
+  border-radius: 0 !important;
+  color: var(--dash-text) !important;
+  line-height: 1.35;
+  padding: 4px 8px !important;
+}
+
+html body .app-shell .main-shell--standalone .main-palette__photo-caption span {
+  color: var(--dash-primary-strong) !important;
+  font-size: 0.62rem !important;
+  font-weight: 800 !important;
+}
+
+html body .app-shell .main-shell--standalone .main-palette__photo-caption strong {
+  font-size: 0.82rem !important;
+  font-weight: 800 !important;
+}
+
+html body .app-shell .main-shell--standalone .main-palette__photo-caption small {
+  color: #dbe7e1 !important;
+  font-size: 0.66rem !important;
+  max-width: 100%;
+  white-space: normal;
+}
+
+html body .app-shell .main-shell--standalone .main-palette__photo-empty {
+  align-content: center;
+  display: grid;
+  gap: 8px;
+  height: 100%;
+  padding: 16px;
+  text-align: left;
+}
+
+html body .app-shell .main-shell--standalone .main-palette__photo-empty strong {
+  color: var(--dash-text) !important;
+  font-size: 0.88rem !important;
+}
+
+html body .app-shell .main-shell--standalone .main-palette__photo-empty span {
+  color: var(--dash-muted) !important;
+  font-size: 0.72rem !important;
+  line-height: 1.45;
+}
+
+html body .app-shell .main-shell--standalone .main-palette__capacity-track {
+  background: var(--dash-border-soft) !important;
+  height: 8px !important;
+  margin-top: 12px;
+  overflow: hidden;
+}
+
+html body .app-shell .main-shell--standalone .main-palette__capacity-track span {
+  background: var(--dash-primary) !important;
+  display: block;
+  height: 100%;
+}
+
+html body .app-shell .main-shell--standalone .main-palette__recent-file {
+  align-items: center;
+  background: transparent !important;
+  border-left: 0 !important;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: 30px minmax(0, 1fr) auto;
+  min-height: 40px;
+  padding: 7px 0 !important;
+}
+
+html body .app-shell .main-shell--standalone .main-palette__recent-file img,
+html body .app-shell .main-shell--standalone .main-palette__file-icon {
+  background: var(--dash-surface-2) !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  color: var(--dash-primary-strong) !important;
+  height: 30px;
+  object-fit: cover;
+  width: 30px;
+}
+
+html body .app-shell .main-shell--standalone .main-palette__recent-file strong {
+  font-size: 0.72rem !important;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+html body .app-shell .main-shell--standalone .main-palette__recent-file small {
+  font-size: 0.64rem !important;
+  white-space: nowrap;
+}
+
+html body .app-shell .main-shell--standalone .main-palette__empty {
+  color: var(--dash-muted) !important;
+  font-size: 0.72rem !important;
+}
+
+html body .app-shell .main-shell--standalone .main-dashboard :is(button, select, input, textarea):focus-visible {
+  box-shadow: 0 0 0 2px var(--dash-accent-soft) !important;
+  outline: 1px solid var(--dash-primary) !important;
+  outline-offset: 1px;
+}
+
+@media (max-width: 1100px) {
+  html body .app-shell .main-shell--standalone .main-dashboard {
+    padding: 20px 24px 0 !important;
+  }
+
+  html body .app-shell .main-shell--standalone .main-dashboard__overview-cards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  html body .app-shell .main-shell--standalone .topbar__copy {
+    min-width: 260px;
+  }
+
+  html body .app-shell .main-shell--standalone .topbar {
+    gap: 16px !important;
+    padding-inline: 24px !important;
+  }
+}
+
+@media (max-width: 760px) {
+  html body .app-shell .main-shell--standalone .topbar {
+    align-items: flex-start !important;
+    flex-wrap: wrap;
+    gap: 10px !important;
+    min-height: 0 !important;
+    padding: 12px 16px !important;
+  }
+
+  html body .app-shell .main-shell--standalone .topbar__copy {
+    flex: 1 1 calc(100% - 104px);
+    min-width: 0;
+  }
+
+  html body .app-shell .main-shell--standalone .topbar__identity {
+    min-width: 118px;
+  }
+
+  html body .app-shell .main-shell--standalone .topbar__context {
+    font-size: 0.5rem;
+  }
+
+  html body .app-shell .main-shell--standalone .topbar__description {
+    display: none;
+  }
+
+  html body .app-shell .main-shell--standalone .topbar__nav {
+    flex-basis: 100%;
+    height: 40px !important;
+    order: 3;
+    width: 100%;
+  }
+
+  html body .app-shell .main-shell--standalone .topbar__nav-button {
+    font-size: 0.72rem !important;
+    min-height: 40px !important;
+    padding: 0 9px !important;
+  }
+
+  html body .app-shell .main-shell--standalone .topbar__actions .button {
+    min-height: 30px !important;
+    padding: 0 8px !important;
+  }
+
+  html body .app-shell .main-shell--standalone .main-dashboard {
+    gap: 12px !important;
+    padding: 16px 16px 0 !important;
+  }
+
+  html body .app-shell .main-shell--standalone .main-dashboard__overview-cards {
+    grid-template-columns: 1fr;
+  }
+
+  html body .app-shell .main-shell--standalone .main-dashboard__grid-guide {
+    display: none !important;
+  }
+
+  html body .app-shell .main-shell--standalone .main-palette__body {
+    padding: 10px !important;
+  }
+
+  html body .app-shell .main-shell--standalone .main-palette__metric-grid {
+    gap: 8px !important;
+  }
+
+  html body .app-shell .main-shell--standalone .main-palette__quick-actions,
+  html body .app-shell .main-shell--standalone .main-palette__feature-links {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 460px) {
+  html body .app-shell .main-shell--standalone .main-dashboard {
+    padding-inline: 10px !important;
+  }
+
+  html body .app-shell .main-shell--standalone .main-dashboard__overview-card {
+    min-height: 116px !important;
+    padding: 14px !important;
+  }
+
+  html body .app-shell .main-shell--standalone .main-dashboard__overview-card strong {
+    font-size: 1.45rem !important;
+  }
+
+  html body .app-shell .main-shell--standalone .main-palette__metric-grid,
+  html body .app-shell .main-shell--standalone .main-palette__quick-actions,
+  html body .app-shell .main-shell--standalone .main-palette__feature-links {
+    grid-template-columns: 1fr;
+  }
+
+  html body .app-shell .main-shell--standalone .main-palette__recent-file {
+    grid-template-columns: 28px minmax(0, 1fr);
+  }
+
+  html body .app-shell .main-shell--standalone .main-palette__recent-file small {
+    display: none;
+  }
+}
+}

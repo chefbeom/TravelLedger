@@ -80,11 +80,11 @@ const defaultSizeByType = {
   'quick-entry': '3x3',
   'travel-summary': '3x2',
   'drive-summary': '3x2',
-  'photo-frame': '3x3',
+  'photo-frame': '4x3',
   'drive-capacity': '3x2',
   'drive-recent-files': '3x2',
   'quick-actions': '3x2',
-  'feature-links': '3x2',
+  'feature-links': '2x2',
 }
 
 const minSpanByType = {
@@ -134,8 +134,8 @@ const defaultPalettes = [
   { id: 'main-drive-summary', type: 'drive-summary', size: '3x2', position: { x: 0, y: 7 }, visible: true, options: {} },
   { id: 'main-drive-recent-files', type: 'drive-recent-files', size: '3x2', position: { x: 3, y: 7 }, visible: true, options: {} },
   { id: 'main-drive-capacity', type: 'drive-capacity', size: '3x2', position: { x: 6, y: 7 }, visible: true, options: {} },
-  { id: 'main-photo-frame', type: 'photo-frame', size: '3x3', position: { x: 0, y: 9 }, visible: true, options: {} },
-  { id: 'main-feature-links', type: 'feature-links', size: '3x2', position: { x: 3, y: 9 }, visible: true, options: {} },
+  { id: 'main-photo-frame', type: 'photo-frame', size: '4x3', position: { x: 0, y: 9 }, visible: true, options: {} },
+  { id: 'main-feature-links', type: 'feature-links', size: '2x2', position: { x: 4, y: 9 }, visible: true, options: {} },
   { id: 'main-quick-actions', type: 'quick-actions', size: '3x2', position: { x: 6, y: 9 }, visible: true, options: {} },
 ]
 
@@ -1249,11 +1249,12 @@ function compareMax(rows) {
 function updateCellHeight() {
   const width = gridElement.value?.clientWidth || gridElement.value?.parentElement?.clientWidth || 0
   if (!width || !grid) return
+  const columns = Math.max(1, Number(grid.getColumn?.() || DASHBOARD_GRID_COLUMNS))
   const rawCellWidth = (
     width
     - (MAIN_DASHBOARD_GRID_MARGIN * 2)
-    - ((DASHBOARD_GRID_COLUMNS - 1) * MAIN_DASHBOARD_GRID_GAP)
-  ) / DASHBOARD_GRID_COLUMNS
+    - ((columns - 1) * MAIN_DASHBOARD_GRID_GAP)
+  ) / columns
   const nextHeight = Math.round(Math.max(112, Math.min(168, rawCellWidth * 0.96)))
   cellHeight.value = nextHeight
   grid.cellHeight(nextHeight)
@@ -1327,6 +1328,14 @@ function initGrid() {
   destroyGrid()
   grid = GridStack.init({
     column: DASHBOARD_GRID_COLUMNS,
+    columnOpts: {
+      columnMax: DASHBOARD_GRID_COLUMNS,
+      breakpointForWindow: true,
+      breakpoints: [
+        { w: 720, c: 3, layout: 'moveScale' },
+        { w: 520, c: 1, layout: 'list' },
+      ],
+    },
     margin: MAIN_DASHBOARD_GRID_MARGIN,
     cellHeight: cellHeight.value,
     disableResize: !isEditMode.value,

@@ -274,6 +274,7 @@ const headerNavItems = computed(() => {
   if (currentUser.value?.admin) {
     items.push({ key: 'admin', label: '관리자' })
   }
+  items.splice(4, 0, { key: 'photo-album', label: 'ALBUM' })
   return items
 })
 const themeDegreeDisplay = computed(() => `${themeDegree.value}%`)
@@ -1347,15 +1348,20 @@ onBeforeUnmount(() => {
       <div class="main-shell main-shell--standalone">
         <header class="topbar">
           <div class="topbar__copy">
+            <div class="topbar__identity" aria-label="TravelLedger">
+              <span class="topbar__brand">TRAVELLEDGER</span>
+              <span class="topbar__context">PERSONAL DATA PLATFORM</span>
+            </div>
             <p class="topbar__eyebrow">{{ pageMeta.title }}</p>
-            <h1>초대 링크로 계정을 만들고 바로 로그인할 수 있습니다.</h1>
+            <h1 class="topbar__title">{{ activeRoute === "launcher" ? "Dashboard" : pageMeta.title }}</h1>
+            <p class="topbar__description">{{ pageMeta.description }}</p>
           </div>
           <nav class="topbar__nav" aria-label="주요 기능">
             <button
               v-for="item in headerNavItems"
               :key="item.key"
               class="topbar__nav-button"
-              :class="{ 'topbar__nav-button--active': isHeaderNavActive(item.key) }"
+              :class="{ 'topbar__nav-button--active': isHeaderNavActive(item.key), 'topbar__nav-button--admin': item.key === 'admin' }"
               type="button"
               @click="navigate(item.key)"
             >

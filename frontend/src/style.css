@@ -36560,3 +36560,20 @@ html[data-theme='toss'] body .app-shell :is(
   color: #f4f7f4 !important;
   -webkit-text-fill-color: #f4f7f4 !important;
 }
+
+/* Home dashboard canvas: let the palette use the full standalone shell width. */
+html body .app-shell .main-shell--dashboard .main-dashboard {
+  box-sizing: border-box;
+  inline-size: 100% !important;
+  max-inline-size: none !important;
+  margin-inline: 0 !important;
+}
+
+html body .app-shell .main-shell--dashboard .main-dashboard__overview,
+html body .app-shell .main-shell--dashboard .main-dashboard__palette-zone,
+html body .app-shell .main-shell--dashboard .main-dashboard__grid {
+  box-sizing: border-box;
+  inline-size: 100% !important;
+  max-inline-size: none !important;
+  min-inline-size: 0;
+}

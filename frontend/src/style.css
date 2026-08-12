@@ -35259,3 +35259,29 @@ html[data-theme='toss'] body {
   background-color: #0f1715 !important;
   background-image: none !important;
 }
+/* Keep every top-level tab, including the dashboard menu, on the same active state. */
+html body .app-shell .main-shell--standalone .topbar__nav-button {
+  background: transparent !important;
+  border: 0 !important;
+  border-bottom: 2px solid transparent !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  color: var(--dash-muted) !important;
+  -webkit-text-fill-color: var(--dash-muted) !important;
+}
+
+html body .app-shell .main-shell--standalone .topbar__nav-button:hover,
+html body .app-shell .main-shell--standalone .topbar__nav-button:focus-visible,
+html body .app-shell .main-shell--standalone .topbar__nav-button--active {
+  background: transparent !important;
+  border: 0 !important;
+  border-bottom: 2px solid var(--dash-primary) !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  color: var(--dash-text) !important;
+  -webkit-text-fill-color: var(--dash-text) !important;
+}
+
+html body .app-shell .main-shell--standalone .topbar__nav-button--admin {
+  border-left: 1px solid var(--dash-border) !important;
+}

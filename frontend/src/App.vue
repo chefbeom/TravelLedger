@@ -105,7 +105,7 @@ const THEME_STORAGE_KEY = 'calen-theme-mode'
 const THEME_DEGREE_STORAGE_KEY = 'calen-theme-degree'
 const LAYOUT_MODE_STORAGE_KEY = 'calen-layout-mode'
 const MOBILE_LAYOUT_QUERY = '(max-width: 760px)'
-const DEFAULT_TOSS_DEGREE = 100
+const DEFAULT_TOSS_DEGREE = 0
 const ROUTE_LEAVE_GUARD_EVENT = 'calen-route-leave-guard'
 const DEFAULT_ROUTE_LEAVE_GUARD_MESSAGE = '페이지를 벗어나면 작성 중인 내용이 사라질 수 있습니다.'
 const NOTIFICATION_POLL_INTERVAL_MS = 15000
@@ -232,8 +232,6 @@ const inviteInfo = ref(null)
 const isInviteLoading = ref(false)
 const themeMode = ref('default')
 const themeDegree = ref(DEFAULT_TOSS_DEGREE)
-const themeDegreePanelOpen = ref(false)
-const themeSwitcherRef = ref(null)
 const layoutMode = ref('desktop')
 const routeLeaveGuard = reactive({
   active: false,
@@ -262,23 +260,29 @@ const pageMeta = computed(() => {
   return normalizedRouteMeta[routeKey] || normalizedRouteMeta.launcher
 })
 const isTossTheme = computed(() => themeMode.value === 'toss')
-const launcherItems = computed(() => (
-  currentUser.value?.admin ? [...normalizedFeatureItems, normalizedAdminFeatureItem] : normalizedFeatureItems
-))
+const launcherItems = computed(() => {
+  const featureItems = currentUser.value?.admin
+    ? normalizedFeatureItems
+    : normalizedFeatureItems.filter((item) => item.key !== 'drive')
+  return currentUser.value?.admin
+    ? [...featureItems, normalizedAdminFeatureItem]
+    : featureItems
+})
 const headerNavItems = computed(() => {
   const items = [
     { key: 'launcher', label: '메뉴' },
     { key: 'household', label: '가계부' },
     { key: 'travel', label: '여행' },
-    { key: 'drive', label: '드라이브' },
   ]
+  if (currentUser.value?.admin) {
+    items.push({ key: 'drive', label: '드라이브' })
+  }
+  items.push({ key: 'photo-album', label: 'ALBUM' })
   if (currentUser.value?.admin) {
     items.push({ key: 'admin', label: '관리자' })
   }
-  items.splice(4, 0, { key: 'photo-album', label: 'ALBUM' })
   return items
 })
-const themeDegreeDisplay = computed(() => `${themeDegree.value}%`)
 const layoutModeOptions = [
   { value: 'mobile', label: '모바일' },
   { value: 'desktop', label: '데스크톱' },
@@ -347,8 +351,27 @@ function setFeedback(message = '', error = '') {
   errorMessage.value = error
 }
 
+function isDriveRouteAllowed(user = currentUser.value) {
+  return Boolean(user?.admin)
+}
+
+function redirectFromRestrictedDriveRoute() {
+  if (activeRoute.value !== 'launcher') {
+    activeRoute.value = 'launcher'
+  }
+  inviteToken.value = ''
+  if (typeof window !== 'undefined' && window.location.hash !== '#launcher') {
+    window.location.hash = 'launcher'
+  }
+  setFeedback('', '드라이브는 관리자만 사용할 수 있습니다.')
+}
+
 function applyHashRoute(hash) {
   const routeState = resolveRouteState(hash)
+  if (routeState.route === 'drive' && currentUser.value && !isDriveRouteAllowed()) {
+    redirectFromRestrictedDriveRoute()
+    return
+  }
   if (routeState.route === 'profile') {
     profileModalOpen.value = true
     return
@@ -358,13 +381,8 @@ function applyHashRoute(hash) {
   inviteToken.value = routeState.token
 }
 
-function clampThemeDegree(value) {
-  const numeric = Number(value)
-  if (!Number.isFinite(numeric)) {
-    return DEFAULT_TOSS_DEGREE
-  }
-
-  return Math.min(100, Math.max(0, Math.round(numeric)))
+function clampThemeDegree() {
+  return DEFAULT_TOSS_DEGREE
 }
 
 function mixChannel(start, end, ratio) {
@@ -451,7 +469,6 @@ function applyTheme(mode) {
       applyThemeDegree(themeDegree.value)
     } else {
       document.documentElement.removeAttribute('data-theme')
-      themeDegreePanelOpen.value = false
     }
   }
 
@@ -503,29 +520,7 @@ function toggleTheme() {
   applyTheme(isTossTheme.value ? 'default' : 'toss')
 }
 
-function toggleThemeDegreePanel() {
-  if (!isTossTheme.value) {
-    return
-  }
 
-  themeDegreePanelOpen.value = !themeDegreePanelOpen.value
-}
-
-function handleThemeDegreeInput(event) {
-  applyThemeDegree(event.target.value)
-}
-
-function handleDocumentPointerDown(event) {
-  if (!themeDegreePanelOpen.value) {
-    return
-  }
-
-  if (themeSwitcherRef.value?.contains(event.target)) {
-    return
-  }
-
-  themeDegreePanelOpen.value = false
-}
 
 function buildCurrentHashRoute() {
   if (activeRoute.value === 'invite' && inviteToken.value) {
@@ -768,6 +763,10 @@ function closeProfileModal() {
 function navigate(route, options = {}) {
   const nextRoute = normalizedRouteMeta[route] ? route : 'launcher'
   const previousRoute = activeRoute.value
+  if (nextRoute === 'drive' && !isDriveRouteAllowed()) {
+    redirectFromRestrictedDriveRoute()
+    return
+  }
   if (nextRoute === 'profile') {
     openProfileModal()
     return
@@ -986,6 +985,10 @@ watch([activeRoute, inviteToken], ([route, token]) => {
 watch([currentUser, activeRoute], ([user, route]) => {
   if (route === 'admin' && !(user && user.admin)) {
     navigate('launcher')
+    return
+  }
+  if (route === 'drive' && user && !user.admin) {
+    redirectFromRestrictedDriveRoute()
   }
 }, { immediate: true })
 
@@ -1147,7 +1150,6 @@ onMounted(() => {
   window.addEventListener('hashchange', handleHashChange)
   window.addEventListener('beforeunload', handleBeforeUnload)
   window.addEventListener(ROUTE_LEAVE_GUARD_EVENT, handleRouteLeaveGuardChange)
-  document.addEventListener('pointerdown', handleDocumentPointerDown)
   document.addEventListener('keydown', handleGlobalModalEscape, true)
   document.addEventListener('visibilitychange', handleNotificationVisibilityChange)
   window.addEventListener('resize', queueMobileModalBackgroundScrollSync)
@@ -1169,7 +1171,6 @@ onBeforeUnmount(() => {
   window.removeEventListener('hashchange', handleHashChange)
   window.removeEventListener('beforeunload', handleBeforeUnload)
   window.removeEventListener(ROUTE_LEAVE_GUARD_EVENT, handleRouteLeaveGuardChange)
-  document.removeEventListener('pointerdown', handleDocumentPointerDown)
   document.removeEventListener('keydown', handleGlobalModalEscape, true)
   document.removeEventListener('visibilitychange', handleNotificationVisibilityChange)
   window.removeEventListener('resize', queueMobileModalBackgroundScrollSync)
@@ -1184,7 +1185,7 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="app-shell" :data-layout-mode="layoutMode">
-    <div ref="themeSwitcherRef" class="theme-switcher">
+    <div class="theme-switcher">
       <div class="theme-switcher__actions">
         <div class="layout-mode-toggle" role="group" aria-label="보기 환경 전환">
           <button
@@ -1203,34 +1204,20 @@ onBeforeUnmount(() => {
           {{ isTossTheme ? '기본 테마' : '다크 테마' }}
         </button>
         <button
-          v-if="isTossTheme"
           class="theme-toggle theme-toggle--degree"
+          :class="{ 'theme-toggle--degree-placeholder': !isTossTheme }"
           type="button"
-          @click.stop="toggleThemeDegreePanel"
+          :disabled="!isTossTheme"
+          :aria-hidden="!isTossTheme"
+          :tabindex="isTossTheme ? 0 : -1"
+          aria-label="다크 강도 0% 고정"
         >
-          다크 강도 {{ themeDegreeDisplay }}
+          다크 강도 0%
         </button>
       </div>
 
-      <div v-if="isTossTheme && themeDegreePanelOpen" class="theme-degree-panel">
-        <div class="theme-degree-panel__header">
-          <strong>다크 강도</strong>
-          <span>{{ themeDegreeDisplay }}</span>
-        </div>
-        <input
-          class="theme-degree-panel__slider"
-          type="range"
-          min="0"
-          max="100"
-          step="1"
-          :value="themeDegree"
-          @input="handleThemeDegreeInput"
-        />
-        <div class="theme-degree-panel__labels">
-          <span>일반 다크</span>
-          <span>강하게</span>
-        </div>
-      </div>
+
+
     </div>
 
     <button v-if="false" class="theme-toggle" type="button" @click="toggleTheme">
@@ -1416,7 +1403,7 @@ onBeforeUnmount(() => {
           @open-travel-record-location="navigateTravelRecordLocation"
           @ai-analysis-complete="handlePetAiAnalysisComplete"
         />
-        <CalenDriveWorkspace v-else-if="activeRoute === 'drive'" :current-user="currentUser" />
+        <CalenDriveWorkspace v-else-if="activeRoute === 'drive' && currentUser?.admin" :current-user="currentUser" />
         <NotificationCenterWorkspace
           v-else-if="activeRoute === 'notifications'"
           @unread-count-change="handleNotificationUnreadCountChange"

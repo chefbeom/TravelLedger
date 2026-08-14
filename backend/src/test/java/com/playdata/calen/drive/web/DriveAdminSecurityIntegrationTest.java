@@ -108,6 +108,23 @@ class DriveAdminSecurityIntegrationTest {
 
 
     @Test
+    void regularUsersCannotUseDriveManagementButCanReadTravelLinkedPhotoEndpoints() throws Exception {
+        AppUserPrincipal regularUser = principal(1L, "regular-probe", AppUserRole.USER);
+
+        mockMvc.perform(get("/api/file/list").with(user(regularUser)))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(get("/api/file/folders").with(user(regularUser)))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(get("/api/file/photos").with(user(regularUser)))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(get("/api/file/travel-folders").with(user(regularUser)))
+                .andExpect(status().isOk());
+    }
+
+    @Test
     void administratorUserStatusMutationRequiresCsrfAndRecordsSafeAuditDetail() throws Exception {
         AppUserPrincipal admin = principal(1L, "admin", AppUserRole.ADMIN);
 

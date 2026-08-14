@@ -8,6 +8,7 @@ import {
   fetchCompare,
   fetchDashboard,
   fetchDriveFolderDestinations,
+  fetchTravelDriveFolderDestinations,
   fetchDriveHomeSummary,
   fetchDrivePhotos,
   fetchDriveRecentFiles,
@@ -52,6 +53,8 @@ const PHOTO_FRAME_RANDOM_INTERVAL_OPTIONS = [
   { value: '30000', label: '30초' },
   { value: '60000', label: '1분' },
 ]
+
+const DRIVE_PALETTE_TYPES = new Set(['drive-summary', 'drive-capacity', 'drive-recent-files'])
 
 const paletteTemplates = [
   { id: 'household-summary', type: 'household-summary', label: '가계부 종합', options: {} },
@@ -235,8 +238,19 @@ const userStorageId = computed(() => props.currentUser?.id || props.currentUser?
 const storageKey = computed(() => `calen-main-dashboard-palettes:${MAIN_DASHBOARD_STORAGE_VERSION}:${userStorageId.value}:${MAIN_DASHBOARD_SCOPE}`)
 const paymentSelectionStorageKey = computed(() => `calen-main-dashboard-payment:${PAYMENT_SELECTION_STORAGE_VERSION}:${userStorageId.value}`)
 const summaryCacheStorageKey = computed(() => `calen-main-dashboard-summary:${SUMMARY_CACHE_STORAGE_VERSION}:${userStorageId.value}`)
-const visiblePalettes = computed(() => palettes.value.filter((palette) => palette.visible !== false))
-const hiddenPalettes = computed(() => palettes.value.filter((palette) => palette.visible === false))
+const isDriveAdmin = computed(() => Boolean(props.currentUser?.admin))
+const isDrivePalette = (palette) => DRIVE_PALETTE_TYPES.has(palette?.type)
+const visiblePalettes = computed(() => palettes.value.filter((palette) => (
+  palette.visible !== false && (isDriveAdmin.value || !isDrivePalette(palette))
+)))
+const hiddenPalettes = computed(() => palettes.value.filter((palette) => (
+  palette.visible === false && (isDriveAdmin.value || !isDrivePalette(palette))
+)))
+const availablePaletteTemplates = computed(() => (
+  isDriveAdmin.value
+    ? paletteTemplates
+    : paletteTemplates.filter((template) => !DRIVE_PALETTE_TYPES.has(template.type))
+))
 const layoutKey = computed(() =>
   visiblePalettes.value
     .map((palette) => `${palette.id}:${palette.position?.x ?? 0}:${palette.position?.y ?? 0}:${palette.size}:${palette.visible}`)
@@ -255,10 +269,12 @@ const mainDashboardGridStyle = computed(() => ({
   '--main-dashboard-grid-gap': `${MAIN_DASHBOARD_GRID_GAP}px`,
   '--main-dashboard-grid-margin': `${MAIN_DASHBOARD_GRID_MARGIN}px`,
 }))
-const featureItems = computed(() => props.items.map((item) => ({
-  ...item,
-  ...(featureCopy[item.key] ?? {}),
-})))
+const featureItems = computed(() => props.items
+  .filter((item) => isDriveAdmin.value || item.key !== 'drive')
+  .map((item) => ({
+    ...item,
+    ...(featureCopy[item.key] ?? {}),
+  })))
 const quickGroups = computed(() => categories.value.filter((group) => group.entryType === quickEntry.entryType))
 const quickDetails = computed(() => {
   const group = categories.value.find((item) => String(item.id) === String(quickEntry.categoryGroupId))
@@ -307,12 +323,30 @@ const travelSummary = computed(() => {
   }
 })
 const recentTravelPlans = computed(() => travelPlans.value.slice(0, 3))
-const allRecentDriveFiles = computed(() => (
-  driveRecentFileItems.value.length
+const allRecentDriveFiles = computed(() => {
+  if (!isDriveAdmin.value) {
+    return []
+  }
+  return driveRecentFileItems.value.length
     ? driveRecentFileItems.value
     : (driveSummary.value?.recentFiles ?? [])
-))
+})
 const recentDriveFiles = computed(() => allRecentDriveFiles.value.slice(0, 5))
+const accessibleDrivePhotoFileItems = computed(() => (
+  isDriveAdmin.value
+    ? drivePhotoFileItems.value
+    : drivePhotoFileItems.value.filter((item) => (
+      ['TRAVEL_MEDIA', 'TRAVEL_GPX'].includes(String(item?.sourceType || '').toUpperCase())
+    ))
+))
+const accessibleDriveFolderItems = computed(() => (
+  isDriveAdmin.value
+    ? driveFolderItems.value
+    : driveFolderItems.value.filter((folder) => (
+      folder?.systemManaged
+      && String(folder?.sourceType || '').toUpperCase().startsWith('TRAVEL_')
+    ))
+))
 const driveCapacity = computed(() => {
   const usedBytes = Number(driveSummary.value?.usedBytes ?? driveSummary.value?.driveUsedBytes ?? 0)
   const totalBytes = Number(
@@ -329,7 +363,7 @@ const driveCapacity = computed(() => {
   }
 })
 const allDrivePhotoItems = computed(() => collectDrivePhotoItems(
-  drivePhotoFileItems.value.length ? drivePhotoFileItems.value : allRecentDriveFiles.value,
+  accessibleDrivePhotoFileItems.value.length ? accessibleDrivePhotoFileItems.value : allRecentDriveFiles.value,
 ))
 const allTravelPhotoItems = computed(() => collectTravelPhotoItems())
 const photoFrameItems = computed(() => [
@@ -337,19 +371,24 @@ const photoFrameItems = computed(() => [
   ...allTravelPhotoItems.value,
 ])
 const photoFrameSettingsPhotos = computed(() => photoFramePhotosForOptions(photoFrameSettings))
-const quickActionItems = computed(() => [
-  { key: 'household', label: '가계부 입력', meta: '달력/대시보드', route: 'household' },
-  { key: 'travel', label: '여행 기록', meta: '예산/사진/지도', route: 'travel' },
-  { key: 'drive', label: '파일 저장', meta: '드라이브 열기', route: 'drive' },
-  { key: 'launcher', label: '메인으로', meta: '종합 보기', route: 'launcher' },
-])
+const quickActionItems = computed(() => {
+  const items = [
+    { key: 'household', label: '가계부 입력', meta: '달력/대시보드', route: 'household' },
+    { key: 'travel', label: '여행 기록', meta: '예산/사진/지도', route: 'travel' },
+    { key: 'launcher', label: '메인으로', meta: '종합 보기', route: 'launcher' },
+  ]
+  if (isDriveAdmin.value) {
+    items.splice(2, 0, { key: 'drive', label: '파일 저장', meta: '드라이브 열기', route: 'drive' })
+  }
+  return items
+})
 const dashboardOverviewCards = computed(() => {
   const month = quickStat('month')
   const week = quickStat('week')
   const monthBalance = Number(month.balance ?? 0)
   const travel = travelSummary.value
   const drive = driveCapacity.value
-  return [
+  const cards = [
     {
       key: 'month-balance',
       eyebrow: 'HOUSEHOLD',
@@ -374,7 +413,9 @@ const dashboardOverviewCards = computed(() => {
       meta: `여행 ${formatNumber(travel.planCount)}개 · 기록 ${formatNumber(travel.recordCount)}건`,
       tone: 'teal',
     },
-    {
+  ]
+  if (isDriveAdmin.value) {
+    cards.push({
       key: 'drive-capacity',
       eyebrow: 'DRIVE',
       label: '드라이브 저장',
@@ -383,10 +424,10 @@ const dashboardOverviewCards = computed(() => {
         ? `${drive.percent}% 사용 · 최근 파일 ${formatNumber(recentDriveFiles.value.length)}개`
         : `최근 파일 ${formatNumber(recentDriveFiles.value.length)}개`,
       tone: 'mint',
-    },
-  ]
+    })
+  }
+  return cards
 })
-
 function todayIso() {
   const now = new Date()
   const offset = now.getTimezoneOffset() * 60000
@@ -791,9 +832,12 @@ async function openPhotoFrameSettings(palette) {
   photoFrameSettings.sort = options.sort
   photoFrameSettings.randomInterval = options.randomInterval
   photoFrameSettings.error = ''
-  if (!driveFolderItems.value.length) {
+  if (!driveFolderItems.value.length || !isDriveAdmin.value) {
     try {
-      driveFolderItems.value = await fetchDriveFolderDestinations()
+      const folderRequest = isDriveAdmin.value
+        ? fetchDriveFolderDestinations()
+        : fetchTravelDriveFolderDestinations()
+      driveFolderItems.value = await folderRequest
     } catch (error) {
       photoFrameSettings.error = error.message || '드라이브 폴더를 불러오지 못했습니다.'
     }
@@ -1403,7 +1447,8 @@ function removePalette(id) {
 }
 
 function addPalette() {
-  const template = paletteTemplates.find((item) => item.id === selectedTemplateId.value) ?? paletteTemplates[0]
+  const template = availablePaletteTemplates.value.find((item) => item.id === selectedTemplateId.value)
+    ?? availablePaletteTemplates.value[0]
   const size = defaultSizeFor(template)
   const nextPalette = {
     id: createPaletteId(template.id),
@@ -1557,7 +1602,7 @@ async function loadSummaries() {
   loading.value = true
   errorMessage.value = ''
   const anchorDate = todayIso()
-  const results = await Promise.all([
+  const requests = [
     settleSummaryRequest(loadId, fetchDashboard(anchorDate), (value) => {
       householdDashboard.value = value
     }),
@@ -1567,14 +1612,6 @@ async function loadSummaries() {
         plans: value ?? [],
       }
     }),
-
-    settleSummaryRequest(loadId, fetchDriveHomeSummary(), (value) => {
-      driveSummary.value = value
-    }),
-    settleSummaryRequest(loadId, fetchDriveRecentFiles(), (value) => {
-      driveRecentFileItems.value = value ?? []
-    }),
-
     settleSummaryRequest(loadId, fetchCompare(anchorDate, 'WEEK', 2), (value) => {
       weekCompareRows.value = value ?? []
     }),
@@ -1589,8 +1626,20 @@ async function loadSummaries() {
       paymentMethods.value = value ?? []
       syncQuickEntryDefaults()
     }),
-  ])
+  ]
 
+  if (isDriveAdmin.value) {
+    requests.push(
+      settleSummaryRequest(loadId, fetchDriveHomeSummary(), (value) => {
+        driveSummary.value = value
+      }),
+      settleSummaryRequest(loadId, fetchDriveRecentFiles(), (value) => {
+        driveRecentFileItems.value = value ?? []
+      }),
+    )
+  }
+
+  const results = await Promise.all(requests)
   if (loadId === summaryLoadSequence) {
     syncQuickEntryDefaults()
 
@@ -1984,7 +2033,7 @@ onBeforeUnmount(() => {
         <label class="main-dashboard__field">
           <span>팔레트 추가</span>
           <select v-model="selectedTemplateId">
-            <option v-for="template in paletteTemplates" :key="template.id" :value="template.id">
+            <option v-for="template in availablePaletteTemplates" :key="template.id" :value="template.id">
               {{ template.label }}
             </option>
           </select>
@@ -2092,7 +2141,7 @@ onBeforeUnmount(() => {
               <span>드라이브 폴더</span>
               <select v-model="photoFrameSettings.driveFolderId" @change="handlePhotoFrameFolderChange">
                 <option value="">폴더 선택</option>
-                <option v-for="folder in driveFolderItems" :key="folder.id" :value="String(folder.id)">
+                <option v-for="folder in accessibleDriveFolderItems" :key="folder.id" :value="String(folder.id)">
                   {{ folder.name || folder.folderName || folder.path || '폴더' }}
                 </option>
               </select>

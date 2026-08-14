@@ -2824,7 +2824,24 @@ function listDateRange(from, to, maxDays = 370) {
 
 const aggregateChartDetailCard = ref(null)
 const aggregateChartSelectedPoint = ref(null)
+const aggregateChartHoveredPoint = ref(null)
+const aggregateChartActivePoint = computed(() => aggregateChartSelectedPoint.value || aggregateChartHoveredPoint.value)
 const aggregateChartMaxAmountDraft = ref('')
+
+const aggregateChartSelectedExpenseEntries = computed(() => {
+  const point = aggregateChartSelectedPoint.value
+  const chart = aggregateChartDetailCard.value?.chart
+  if (!point || !chart) return []
+  const sourceEntries = point.comparisonScope === 'previous' ? chart.previousEntries : chart.currentEntries
+  return (Array.isArray(sourceEntries) ? sourceEntries : [])
+    .filter((entry) => (
+      entry?.entryDate === point.date
+      && entry?.entryType !== 'INCOME'
+      && Number(summarizeEntries([entry]).expense || 0) > 0
+    ))
+    .slice()
+    .sort((left, right) => String(left.entryTime || '99:99').localeCompare(String(right.entryTime || '99:99')))
+})
 
 const AGGREGATE_CHART_WIDTH = 448
 const AGGREGATE_CHART_HEIGHT = 200
@@ -3006,24 +3023,19 @@ function visibleAggregateChartPoints(card) {
   return points
 }
 
-function findDefaultAggregateChartPoint(card) {
-  const points = []
-  if (card?.config?.showIncomeCumulative) points.push(...(card.chart?.incomePointItems || []))
-  if (card?.config?.showExpenseCumulative) points.push(...(card.chart?.expensePointItems || []))
-  return points.length ? points[points.length - 1] : null
-}
-
 function openAggregateChartDetail(card) {
   if (!card?.chart) return
   aggregateChartDetailCard.value = card
   const configuredMaxAmount = normalizeAggregateChartMaxAmount(card.config.chartMaxAmount)
   aggregateChartMaxAmountDraft.value = configuredMaxAmount > 0 ? String(configuredMaxAmount) : ''
-  aggregateChartSelectedPoint.value = findDefaultAggregateChartPoint(card)
+  aggregateChartSelectedPoint.value = null
+  aggregateChartHoveredPoint.value = null
 }
 
 function closeAggregateChartDetail() {
   aggregateChartDetailCard.value = null
   aggregateChartSelectedPoint.value = null
+  aggregateChartHoveredPoint.value = null
   aggregateChartMaxAmountDraft.value = ''
 }
 
@@ -3040,8 +3052,9 @@ function applyAggregateChartMaxAmount() {
   }, detailCard.index)
   aggregateChartDetailCard.value = nextCard
   aggregateChartSelectedPoint.value = selectedPoint
-    ? visibleAggregateChartPoints(nextCard).find((point) => point.key === selectedPoint.key) || findDefaultAggregateChartPoint(nextCard)
-    : findDefaultAggregateChartPoint(nextCard)
+    ? visibleAggregateChartPoints(nextCard).find((point) => point.key === selectedPoint.key) || null
+    : null
+  aggregateChartHoveredPoint.value = null
 
   const configs = normalizeAggregateConfigs(props.aggregateWidgetConfigs)
   const targetIndex = configs.findIndex((config) => config.id === detailCard.config.id)
@@ -3055,18 +3068,34 @@ function applyAggregateChartMaxAmount() {
 }
 
 function selectAggregateChartPoint(point) {
-  aggregateChartSelectedPoint.value = point
+  aggregateChartSelectedPoint.value = point || null
+  aggregateChartHoveredPoint.value = null
 }
 
-function selectAggregateChartNearestPoint(event, card) {
+function resolveAggregateChartNearestPoint(event, card) {
   const points = visibleAggregateChartPoints(card)
-  if (!points.length || !event?.currentTarget) return
+  if (!points.length || !event?.currentTarget) return null
   const rect = event.currentTarget.getBoundingClientRect()
   const clientX = Number(event.clientX)
-  if (!rect.width || !Number.isFinite(clientX)) return
+  if (!rect.width || !Number.isFinite(clientX)) return null
   const x = clamp(((clientX - rect.left) / rect.width) * AGGREGATE_CHART_WIDTH, 0, AGGREGATE_CHART_WIDTH)
-  const nearest = points.reduce((best, point) => (!best || Math.abs(point.x - x) < Math.abs(best.x - x) ? point : best), null)
-  if (nearest) aggregateChartSelectedPoint.value = nearest
+  return points.reduce((best, point) => (!best || Math.abs(point.x - x) < Math.abs(best.x - x) ? point : best), null)
+}
+
+function selectAggregateChartNearestPoint(event, card, pin = false) {
+  const nearest = resolveAggregateChartNearestPoint(event, card)
+  if (!nearest) return
+  if (pin) {
+    selectAggregateChartPoint(nearest)
+    return
+  }
+  if (!aggregateChartSelectedPoint.value) {
+    aggregateChartHoveredPoint.value = nearest
+  }
+}
+
+function clearAggregateChartHover() {
+  aggregateChartHoveredPoint.value = null
 }
 
 function summarizeEntriesByDate(entries, dateItems) {
@@ -3145,7 +3174,7 @@ function buildAggregateChartLabelItems(card, mode = 'detail') {
   const candidates = []
   const addCandidates = (items, seriesClass, amountFormatter, yOffset) => {
     sampleAggregateChartLabelPointItems(items, maxPoints).forEach((point) => {
-      if (!isPreview && aggregateChartSelectedPoint.value?.key === point.key) return
+      if (!isPreview && aggregateChartActivePoint.value?.key === point.key) return
       const text = amountFormatter(point.amount)
       candidates.push({
         key: `${mode}-${seriesClass}-${point.key}`,
@@ -3350,6 +3379,8 @@ function buildMonthlyCumulativeChartData(entries, range, overview, options = {})
     headlineCaption: headline.caption,
     comparePreviousPeriod: Boolean(options.comparePreviousPeriod),
     comparisonLabel,
+    currentEntries: entries,
+    previousEntries: options.previousEntries || [],
   }
 }
 function buildMonthlyGoalData(config, entries, overview) {
@@ -4560,12 +4591,12 @@ defineExpose({
             <span v-if="aggregateChartDetailCard.config.showExpenseCumulative" class="household-aggregate-chart-modal__metric household-aggregate-chart-modal__metric--expense">지출 누적 <strong>{{ formatCurrency(aggregateChartDetailCard.chart.expenseTotal) }}</strong></span>
             <span class="household-aggregate-chart-modal__metric">최대 축 금액 <strong>{{ aggregateChartDetailCard.chart.maxAmountLabel }}</strong></span>
             <span class="household-aggregate-chart-modal__metric">순흐름 <strong>{{ formatCurrency(aggregateChartDetailCard.chart.netTotal) }}</strong></span>
+            <span class="household-aggregate-chart-modal__metric household-aggregate-chart-modal__metric--previous">지난달 사용금액 <strong>{{ formatCurrency(aggregateChartDetailCard.chart.previousExpenseTotal) }}</strong></span>
           </div>
-            <span class="household-aggregate-chart-modal__metric household-aggregate-chart-modal__metric--previous">{{ aggregateChartDetailCard.chart.previousSummaryLabel }} <strong>{{ formatCurrency(aggregateChartDetailCard.chart.previousSummaryAmount) }}</strong></span>
 
           <div class="household-aggregate-chart-modal__controls">
             <label class="field household-aggregate-chart-modal__max-field">
-              <span class="field__label">Y&#52629; &#47785;&#54364; &#44552;&#50529;</span>
+              <span class="field__label">&#51060;&#48264;&#45804; &#47785;&#54364; &#44552;&#50529;</span>
               <input v-model="aggregateChartMaxAmountDraft" type="number" min="0" step="10000" inputmode="numeric" placeholder="&#51088;&#46041;" @keydown.enter.prevent="applyAggregateChartMaxAmount">
             </label>
             <small class="household-aggregate-chart-modal__controls-hint">&#48708;&#50864;&#47732; &#45572;&#51201; &#45936;&#51060;&#53552;&#47484; &#44592;&#51456;&#51004;&#47196; &#52629;&#51060; &#51088;&#46041; &#44228;&#49328;&#46104;&#47728;, &#47785;&#54364;&#47484; &#52488;&#44284;&#54616;&#47732; &#44552;&#50529; &#52629;&#51060; &#54869;&#51109;&#46104;&#44256; &#51216;&#49440;&#51060; &#45208;&#53440;&#45225;&#45768;&#45796;.</small>
@@ -4573,7 +4604,7 @@ defineExpose({
           </div>
 
           <div class="household-aggregate-chart-modal__canvas">
-            <svg :viewBox="`0 0 ${AGGREGATE_CHART_WIDTH} ${AGGREGATE_CHART_HEIGHT}`" preserveAspectRatio="xMidYMid meet" role="img" aria-label="누적 수입과 지출 상세 그래프" @mousemove="selectAggregateChartNearestPoint($event, aggregateChartDetailCard)" @click="selectAggregateChartNearestPoint($event, aggregateChartDetailCard)">
+            <svg :viewBox="`0 0 ${AGGREGATE_CHART_WIDTH} ${AGGREGATE_CHART_HEIGHT}`" preserveAspectRatio="xMidYMid meet" role="img" aria-label="누적 수입과 지출 상세 그래프" @mousemove="selectAggregateChartNearestPoint($event, aggregateChartDetailCard)" @mouseleave="clearAggregateChartHover" @click="selectAggregateChartNearestPoint($event, aggregateChartDetailCard, true)">
               <g class="household-aggregate-chart__grid" aria-hidden="true">
                 <line v-for="tick in aggregateChartDetailCard.chart.amountTicks" :key="`detail-amount-${tick.key}`" :x1="AGGREGATE_CHART_HORIZONTAL_PADDING" :x2="AGGREGATE_CHART_AXIS_END_X" :y1="tick.y" :y2="tick.y" />
               </g>
@@ -4597,12 +4628,12 @@ defineExpose({
               <circle v-for="(point, pointIndex) in sampleAggregateChartPointItems(aggregateChartDetailCard.config.showIncomeCumulative ? aggregateChartDetailCard.chart.incomePointItems : [], 14)" :key="`detail-current-income-${point.date}-${pointIndex}`" :cx="point.x" :cy="point.y" r="4.8" class="household-aggregate-chart__point household-aggregate-chart__point--income household-aggregate-chart__point--current household-aggregate-chart__point--interactive" tabindex="0" @click.stop="selectAggregateChartPoint(point)" @keydown.enter.prevent="selectAggregateChartPoint(point)" @keydown.space.prevent="selectAggregateChartPoint(point)" />
               <circle v-for="(point, pointIndex) in sampleAggregateChartPointItems(aggregateChartDetailCard.config.showExpenseCumulative ? aggregateChartDetailCard.chart.expensePointItems : [], 14)" :key="`detail-current-expense-${point.date}-${pointIndex}`" :cx="point.x" :cy="point.y" r="4.8" class="household-aggregate-chart__point household-aggregate-chart__point--expense household-aggregate-chart__point--current household-aggregate-chart__point--interactive" tabindex="0" @click.stop="selectAggregateChartPoint(point)" @keydown.enter.prevent="selectAggregateChartPoint(point)" @keydown.space.prevent="selectAggregateChartPoint(point)" />
               <text v-for="(label, labelIndex) in buildAggregateChartLabelItems(aggregateChartDetailCard, 'detail')" :key="label.key || labelIndex" :x="label.x" :y="label.y" text-anchor="middle" :class="['household-aggregate-chart__value-label', `household-aggregate-chart__value-label--${label.seriesClass}`]">{{ label.text }}</text>
-              <g v-if="aggregateChartSelectedPoint" class="household-aggregate-chart__crosshair" aria-hidden="true">
-                <line :x1="aggregateChartSelectedPoint.x" :x2="aggregateChartSelectedPoint.x" :y1="AGGREGATE_CHART_TOP_PADDING" :y2="AGGREGATE_CHART_BASELINE_Y" />
-                <line :x1="AGGREGATE_CHART_HORIZONTAL_PADDING" :x2="AGGREGATE_CHART_AXIS_END_X" :y1="aggregateChartSelectedPoint.y" :y2="aggregateChartSelectedPoint.y" />
-                <circle :cx="aggregateChartSelectedPoint.x" :cy="aggregateChartSelectedPoint.y" r="7" />
-                <rect :x="aggregateChartCrosshairLabel(aggregateChartSelectedPoint).backgroundX" :y="aggregateChartCrosshairLabel(aggregateChartSelectedPoint).backgroundY" :width="aggregateChartCrosshairLabel(aggregateChartSelectedPoint).backgroundWidth" :height="aggregateChartCrosshairLabel(aggregateChartSelectedPoint).backgroundHeight" rx="4" class="household-aggregate-chart__crosshair-label-bg" />
-                <text :x="aggregateChartCrosshairLabel(aggregateChartSelectedPoint).x" :y="aggregateChartCrosshairLabel(aggregateChartSelectedPoint).y" :text-anchor="aggregateChartCrosshairLabel(aggregateChartSelectedPoint).anchor" dominant-baseline="middle">{{ aggregateChartCrosshairLabel(aggregateChartSelectedPoint).text }}</text>
+              <g v-if="aggregateChartActivePoint" class="household-aggregate-chart__crosshair" aria-hidden="true">
+                <line :x1="aggregateChartActivePoint.x" :x2="aggregateChartActivePoint.x" :y1="AGGREGATE_CHART_TOP_PADDING" :y2="AGGREGATE_CHART_BASELINE_Y" />
+                <line :x1="AGGREGATE_CHART_HORIZONTAL_PADDING" :x2="AGGREGATE_CHART_AXIS_END_X" :y1="aggregateChartActivePoint.y" :y2="aggregateChartActivePoint.y" />
+                <circle :cx="aggregateChartActivePoint.x" :cy="aggregateChartActivePoint.y" r="7" />
+                <rect :x="aggregateChartCrosshairLabel(aggregateChartActivePoint).backgroundX" :y="aggregateChartCrosshairLabel(aggregateChartActivePoint).backgroundY" :width="aggregateChartCrosshairLabel(aggregateChartActivePoint).backgroundWidth" :height="aggregateChartCrosshairLabel(aggregateChartActivePoint).backgroundHeight" rx="4" class="household-aggregate-chart__crosshair-label-bg" />
+                <text :x="aggregateChartCrosshairLabel(aggregateChartActivePoint).x" :y="aggregateChartCrosshairLabel(aggregateChartActivePoint).y" :text-anchor="aggregateChartCrosshairLabel(aggregateChartActivePoint).anchor" dominant-baseline="middle">{{ aggregateChartCrosshairLabel(aggregateChartActivePoint).text }}</text>
               </g>
             </svg>
           </div>
@@ -4613,11 +4644,36 @@ defineExpose({
             <span v-if="aggregateChartDetailCard.config.comparePreviousPeriod"><i class="previous"></i>지난 기간 비교 {{ aggregateChartDetailCard.chart.previousRangeLabel }}</span>
           </div>
 
-          <aside v-if="aggregateChartSelectedPoint" class="household-aggregate-chart-modal__selected">
-            <span>{{ aggregateChartSelectedPoint.date }} · {{ aggregateChartSelectedPoint.seriesLabel }}</span>
-            <strong>{{ formatCurrency(aggregateChartSelectedPoint.amount) }}</strong>
-            <p>마우스가 가리키는 X축 시간과 Y축 금액의 교차점입니다. 해당 시점의 누적 {{ aggregateChartSelectedPoint.seriesLabel }} 금액은 {{ formatCurrency(aggregateChartSelectedPoint.amount) }}이고, 직전 날짜 대비 증가분은 {{ formatCurrency(aggregateChartSelectedPoint.dailyAmount) }}입니다.</p>
+          <aside v-if="aggregateChartActivePoint" class="household-aggregate-chart-modal__selected">
+            <span>{{ aggregateChartActivePoint.date }} · {{ aggregateChartActivePoint.seriesLabel }}</span>
+            <strong>{{ formatCurrency(aggregateChartActivePoint.amount) }}</strong>
+            <p>마우스가 가리키는 X축 시간과 Y축 금액의 교차점입니다. 해당 시점의 누적 {{ aggregateChartActivePoint.seriesLabel }} 금액은 {{ formatCurrency(aggregateChartActivePoint.amount) }}이고, 직전 날짜 대비 증가분은 {{ formatCurrency(aggregateChartActivePoint.dailyAmount) }}입니다.</p>
           </aside>
+          <section v-if="aggregateChartSelectedPoint" class="household-aggregate-chart-modal__transactions">
+            <header class="household-aggregate-chart-modal__transactions-header">
+              <div>
+                <span class="household-aggregate-chart-modal__eyebrow">EXPENSES</span>
+                <strong>{{ formatShortDate(aggregateChartSelectedPoint.date) }} · 지출 내역</strong>
+              </div>
+              <span class="household-aggregate-chart-modal__transactions-count">{{ aggregateChartSelectedExpenseEntries.length }}건</span>
+            </header>
+            <ul v-if="aggregateChartSelectedExpenseEntries.length" class="household-aggregate-chart-modal__transactions-list">
+              <li v-for="(entry, entryIndex) in aggregateChartSelectedExpenseEntries" :key="entry.id || entryIndex">
+                <div>
+                  <strong>{{ entry.title || '지출' }}</strong>
+                  <small>
+                    <template v-if="entry.entryTime && entry.entryTime !== '00:00'">{{ formatTime(entry.entryTime) }}</template>
+                    <template v-if="entry.categoryGroupName || entry.categoryDetailName">
+                      <span v-if="entry.entryTime && entry.entryTime !== '00:00'"> · </span>
+                      {{ entry.categoryGroupName || '' }}<template v-if="entry.categoryDetailName"> / {{ entry.categoryDetailName }}</template>
+                    </template>
+                  </small>
+                </div>
+                <strong class="household-aggregate-chart-modal__transaction-amount">{{ formatCurrency(Math.abs(Number(entry.amount || 0))) }}</strong>
+              </li>
+            </ul>
+            <p v-else class="household-aggregate-chart-modal__transactions-empty">해당 날짜에 지출 내역이 없습니다.</p>
+          </section>
         </section>
       </div>
 
@@ -4656,6 +4712,7 @@ defineExpose({
                     'calendar__day--active': isExpenseHighlighted(day),
                     'calendar__day--income': isIncomeHighlighted(day),
                     'calendar__day--selected': selectedDate === day.date,
+                    'calendar__day--today': day.date === todayIso,
                   },
                 ]"
                 role="button"

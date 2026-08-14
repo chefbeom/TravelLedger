@@ -35,6 +35,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.http.MediaType;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -125,6 +126,26 @@ public class DriveService {
                 .toList();
     }
 
+    public List<DriveDtos.FolderDestinationResponse> listTravelFolderDestinations(Long userId) {
+        AppUser owner = getOwner(userId);
+        return driveItemRepository.findAllByOwner_Id(owner.getId()).stream()
+                .filter(DriveItem::isFolder)
+                .filter(item -> !item.isTrashed())
+                .filter(DriveItem::isSystemManaged)
+                .filter(item -> item.getSourceType() != null && item.getSourceType().startsWith("TRAVEL_"))
+                .sorted(Comparator.comparing(this::buildFolderPath, String.CASE_INSENSITIVE_ORDER))
+                .map(folder -> DriveDtos.FolderDestinationResponse.builder()
+                        .id(folder.getId())
+                        .fileOriginName(folder.getOriginalName())
+                        .parentId(folder.getParent() != null ? folder.getParent().getId() : null)
+                        .path(buildFolderPath(folder))
+                        .lockedFile(folder.isLockedFile())
+                        .systemManaged(folder.isSystemManaged())
+                        .sourceType(folder.getSourceType())
+                        .sourceReference(folder.getSourceReference())
+                        .build())
+                .toList();
+    }
     public DriveDtos.FileListPageResponse listPage(Long userId, DriveDtos.ListPageRequest request) {
         AppUser owner = getOwner(userId);
         Long parentId = request != null ? request.parentId() : null;
@@ -178,6 +199,16 @@ public class DriveService {
     }
 
     public List<DriveDtos.FileItemResponse> getPhotoFiles(Long userId, Long parentId, String sortOption, Integer size) {
+        return getPhotoFiles(userId, parentId, sortOption, size, true);
+    }
+
+    public List<DriveDtos.FileItemResponse> getPhotoFiles(
+            Long userId,
+            Long parentId,
+            String sortOption,
+            Integer size,
+            boolean includeUnlinked
+    ) {
         AppUser owner = getOwner(userId);
         DriveItem parent = parentId == null ? null : resolveParentFolder(owner.getId(), parentId);
         int limit = Math.min(Math.max(size == null ? DEFAULT_PHOTO_FILE_LIMIT : size, 1), MAX_PHOTO_FILE_LIMIT);
@@ -185,13 +216,13 @@ public class DriveService {
                 .filter(DriveItem::isFile)
                 .filter(item -> !item.isTrashed())
                 .filter(this::isImageItem)
+                .filter(item -> includeUnlinked || isTravelLinkedFile(item))
                 .filter(item -> parent == null || isInsideFolder(item, parent))
                 .sorted(resolveComparator(sortOption))
                 .limit(limit)
                 .map(this::toItemResponse)
                 .toList();
     }
-
     public List<DriveDtos.FileItemResponse> getTrashItems(Long userId) {
         return driveItemRepository.findAllByOwner_IdAndTrashedTrueOrderByDeletedAtDesc(getOwner(userId).getId()).stream()
                 .map(this::toItemResponse)
@@ -414,6 +445,12 @@ public class DriveService {
                 .orElseThrow(() -> new NotFoundException("드라이브 항목을 찾지 못했습니다."));
     }
 
+    public void requireTravelLinkedFile(Long userId, Long fileId) {
+        DriveItem item = getOwnedFile(userId, fileId);
+        if (!isTravelLinkedFile(item)) {
+            throw new AccessDeniedException("Only travel-linked files can be accessed.");
+        }
+    }
     public DriveItem getOwnedFile(Long userId, Long fileId) {
         DriveItem item = getOwnedItem(userId, fileId);
         if (!item.isFile()) {

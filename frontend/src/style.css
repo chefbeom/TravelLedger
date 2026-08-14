@@ -36770,3 +36770,380 @@ html body .app-shell .main-shell--standalone > .topbar {
     height: calc(100svh - 20px) !important;
   }
 }
+/* Photo-frame caption contrast: keep text readable against any image in both themes. */
+html:not([data-theme='toss']) body .app-shell .main-shell--standalone .main-palette__photo-caption span,
+html:not([data-theme='toss']) body .app-shell .main-shell--standalone .main-palette__photo-caption strong,
+html:not([data-theme='toss']) body .app-shell .main-shell--standalone .main-palette__photo-caption small {
+  background: rgba(255, 255, 255, 0.95) !important;
+  background-image: none !important;
+  border: 1px solid rgba(58, 90, 64, 0.42) !important;
+  border-left: 3px solid #3a5a40 !important;
+  border-radius: 0 !important;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.28) !important;
+  color: #20332a !important;
+  -webkit-text-fill-color: #20332a !important;
+  text-shadow: none !important;
+}
+
+html:not([data-theme='toss']) body .app-shell .main-shell--standalone .main-palette__photo-caption span {
+  color: #3a5a40 !important;
+  -webkit-text-fill-color: #3a5a40 !important;
+}
+
+html:not([data-theme='toss']) body .app-shell .main-shell--standalone .main-palette__photo-caption small {
+  color: #344e41 !important;
+  -webkit-text-fill-color: #344e41 !important;
+}
+
+html[data-theme='toss'] body .app-shell .main-shell--standalone .main-palette__photo-caption span,
+html[data-theme='toss'] body .app-shell .main-shell--standalone .main-palette__photo-caption strong,
+html[data-theme='toss'] body .app-shell .main-shell--standalone .main-palette__photo-caption small {
+  background: rgba(8, 16, 13, 0.95) !important;
+  background-image: none !important;
+  border: 1px solid rgba(163, 177, 138, 0.48) !important;
+  border-left: 3px solid #a3b18a !important;
+  border-radius: 0 !important;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.48) !important;
+  color: #f3f5ed !important;
+  -webkit-text-fill-color: #f3f5ed !important;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.72) !important;
+}
+
+html[data-theme='toss'] body .app-shell .main-shell--standalone .main-palette__photo-caption span {
+  color: #a3b18a !important;
+  -webkit-text-fill-color: #a3b18a !important;
+}
+
+html[data-theme='toss'] body .app-shell .main-shell--standalone .main-palette__photo-caption small {
+  color: #dad7cd !important;
+  -webkit-text-fill-color: #dad7cd !important;
+}
+/* Keep the theme control in a fixed slot while the dark-strength indicator is hidden in light mode. */
+.theme-toggle--degree {
+  white-space: nowrap;
+}
+
+.theme-toggle--degree:disabled {
+  cursor: default;
+  opacity: 1;
+}
+
+.theme-toggle--degree-placeholder {
+  visibility: hidden;
+  pointer-events: none;
+}
+/* Pet artwork uses transparent pixels; keep the global button theme from painting a backdrop behind it. */
+html body .app-shell.app-shell .pet-companion__avatar,
+html body .app-shell.app-shell .pet-companion__avatar:hover {
+  background: transparent !important;
+  background-color: transparent !important;
+  background-image: none !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+html body .app-shell.app-shell .pet-companion__avatar:focus-visible {
+  background: transparent !important;
+  background-color: transparent !important;
+  border-color: transparent !important;
+  outline: 3px solid var(--focus-ring) !important;
+  outline-offset: 3px;
+  box-shadow: 0 0 0 6px var(--focus-ring-shadow) !important;
+}
+/* Monthly cumulative chart interaction and target contrast. */
+.household-aggregate-chart__target-line {
+  stroke-dasharray: 9 5 !important;
+  stroke-linecap: round;
+  stroke-width: 3 !important;
+  opacity: 1 !important;
+  vector-effect: non-scaling-stroke;
+}
+
+.household-aggregate-chart--preview .household-aggregate-chart__target-line {
+  stroke-width: 2 !important;
+}
+
+html:not([data-theme='toss']) .household-aggregate-chart__target-line {
+  stroke: #a16207 !important;
+}
+
+html[data-theme='toss'] .household-aggregate-chart__target-line {
+  stroke: #f4d35e !important;
+}
+
+.household-aggregate-chart-modal__summary {
+  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+}
+
+.household-aggregate-chart-modal__transactions {
+  display: grid;
+  gap: 10px;
+  border: 1px solid var(--modal-border, rgba(148, 163, 184, 0.24));
+  background: var(--modal-surface-soft, rgba(15, 23, 42, 0.58));
+  color: var(--modal-text, var(--text));
+  padding: 14px;
+}
+
+.household-aggregate-chart-modal__transactions-header {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.household-aggregate-chart-modal__transactions-header > div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.household-aggregate-chart-modal__transactions-header strong {
+  overflow-wrap: anywhere;
+}
+
+.household-aggregate-chart-modal__transactions-count {
+  flex: 0 0 auto;
+  color: var(--modal-text-soft, var(--text-soft));
+  font-size: 0.86rem;
+  font-weight: 900;
+}
+
+.household-aggregate-chart-modal__transactions-list {
+  display: grid;
+  gap: 0;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.household-aggregate-chart-modal__transactions-list li {
+  align-items: center;
+  border-top: 1px solid var(--modal-border, rgba(148, 163, 184, 0.18));
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  min-width: 0;
+  padding: 10px 0;
+}
+
+.household-aggregate-chart-modal__transactions-list li > div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.household-aggregate-chart-modal__transactions-list li strong,
+.household-aggregate-chart-modal__transactions-list li small {
+  overflow-wrap: anywhere;
+}
+
+.household-aggregate-chart-modal__transactions-list li small,
+.household-aggregate-chart-modal__transactions-empty {
+  color: var(--modal-text-soft, var(--text-soft));
+  margin: 0;
+}
+
+.household-aggregate-chart-modal__transaction-amount {
+  color: #b45309 !important;
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+html[data-theme='toss'] .household-aggregate-chart-modal__transaction-amount {
+  color: #ff9b7a !important;
+}
+
+html:not([data-theme='toss']) .household-aggregate-chart-modal__metric--previous::before {
+  background: linear-gradient(90deg, #b45309, rgba(180, 83, 9, 0.16)) !important;
+}
+
+html[data-theme='toss'] .household-aggregate-chart-modal__metric--previous::before {
+  background: linear-gradient(90deg, #a3b18a, rgba(163, 177, 138, 0.16)) !important;
+}
+
+@media (max-width: 1100px) {
+  .household-aggregate-chart-modal__summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+
+@media (max-width: 720px) {
+  .household-aggregate-chart-modal__summary {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .household-aggregate-chart-modal__transactions-list li {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 5px;
+  }
+
+  .household-aggregate-chart-modal__transaction-amount {
+    align-self: flex-end;
+  }
+}
+
+/* Dark text-surface audit: prevent duplicate backgrounds behind panel headings. */
+html[data-theme='toss'] body .app-shell .panel > .panel__header {
+  background: transparent !important;
+  background-color: transparent !important;
+  background-image: none !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+
+html[data-theme='toss'] body .app-shell .household-calendar-layout-toolbar--inline {
+  background: transparent !important;
+  background-color: transparent !important;
+  background-image: none !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+}
+
+html[data-theme='toss'] body .app-shell :is(
+  .panel > .panel__header h1,
+  .panel > .panel__header h2,
+  .panel > .panel__header h3,
+  .panel > .panel__header h4,
+  .panel > .panel__header h5,
+  .panel > .panel__header h6,
+  .panel > .panel__header strong,
+  .panel > .panel__header span:not(.panel__badge),
+  .household-entry-panel__heading h2,
+  .household-aggregate-header h2
+) {
+  background: transparent !important;
+  background-color: transparent !important;
+  background-image: none !important;
+}
+
+html[data-theme='toss'] body .app-shell .household-calendar-layout-toolbar__status {
+  background: transparent !important;
+  background-color: transparent !important;
+  background-image: none !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+  color: var(--dark-text) !important;
+  -webkit-text-fill-color: var(--dark-text) !important;
+}
+
+html[data-theme='toss'] body .app-shell .household-calendar-layout-toolbar__status strong {
+  color: var(--dark-text) !important;
+  -webkit-text-fill-color: var(--dark-text) !important;
+}
+
+html[data-theme='toss'] body .app-shell .household-calendar-layout-toolbar__status span {
+  color: var(--dark-text-soft) !important;
+  -webkit-text-fill-color: var(--dark-text-soft) !important;
+}
+
+html[data-theme='toss'] body .app-shell .household-entry-panel__date-badge {
+  background: var(--dark-accent-soft) !important;
+  border-color: var(--dark-accent) !important;
+  color: var(--dark-accent) !important;
+  -webkit-text-fill-color: var(--dark-accent) !important;
+}
+
+/* Calendar selected-day emphasis: keep the focus ring inside edge cells. */
+.calendar__day--selected,
+.calendar__day[aria-selected='true'] {
+  isolation: isolate;
+  position: relative;
+  z-index: 3;
+  outline: 0 !important;
+  border-width: 2px !important;
+}
+
+.calendar__day--selected::after,
+.calendar__day[aria-selected='true']::after {
+  position: absolute;
+  inset: 4px;
+  z-index: 1;
+  border: 2px solid transparent;
+  border-radius: 12px;
+  box-shadow: inset 0 0 0 1px transparent;
+  content: '';
+  pointer-events: none;
+}
+
+.calendar__day--selected .calendar__day-stamp,
+.calendar__day[aria-selected='true'] .calendar__day-stamp,
+.calendar__day--selected .calendar__day-head,
+.calendar__day[aria-selected='true'] .calendar__day-head {
+  position: relative;
+  z-index: 2;
+}
+
+.calendar__day--selected .calendar__day-stamp strong,
+.calendar__day[aria-selected='true'] .calendar__day-stamp strong {
+  position: relative;
+  z-index: 3;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2.1em;
+  min-height: 2.1em;
+  padding: 0.18em 0.42em;
+  border-radius: 8px;
+  font-weight: 900;
+  line-height: 1;
+}
+
+:root:not([data-theme='toss']) .calendar__day--selected,
+:root:not([data-theme='toss']) .calendar__day[aria-selected='true'] {
+  background: linear-gradient(180deg, rgba(231, 253, 242, 0.99), rgba(201, 244, 221, 0.98)) !important;
+  border-color: #047857 !important;
+  box-shadow:
+    inset 0 0 0 3px rgba(4, 120, 87, 0.3),
+    inset 0 0 0 5px rgba(255, 255, 255, 0.64),
+    0 7px 16px rgba(4, 120, 87, 0.18) !important;
+}
+
+:root:not([data-theme='toss']) .calendar__day--selected::after,
+:root:not([data-theme='toss']) .calendar__day[aria-selected='true']::after {
+  border-color: rgba(4, 120, 87, 0.78);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.7);
+}
+
+:root:not([data-theme='toss']) .calendar__day--selected .calendar__day-stamp strong,
+:root:not([data-theme='toss']) .calendar__day[aria-selected='true'] .calendar__day-stamp strong {
+  background: #047857;
+  color: #ffffff !important;
+  -webkit-text-fill-color: #ffffff !important;
+  box-shadow: 0 4px 10px rgba(4, 120, 87, 0.24);
+}
+
+:root:not([data-theme='toss']) .calendar__day--today:not(.calendar__day--selected) {
+  border-color: rgba(4, 120, 87, 0.82) !important;
+  box-shadow: inset 0 0 0 2px rgba(4, 120, 87, 0.46) !important;
+}
+
+[data-theme='toss'] .calendar__day--selected,
+[data-theme='toss'] .calendar__day[aria-selected='true'] {
+  background: linear-gradient(180deg, rgba(39, 70, 57, 0.99), rgba(26, 48, 40, 0.99)) !important;
+  border-color: #95ebab !important;
+  box-shadow:
+    inset 0 0 0 3px rgba(149, 235, 171, 0.34),
+    inset 0 0 0 5px rgba(11, 15, 16, 0.46),
+    0 0 18px rgba(95, 211, 111, 0.24) !important;
+}
+
+[data-theme='toss'] .calendar__day--selected::after,
+[data-theme='toss'] .calendar__day[aria-selected='true']::after {
+  border-color: rgba(149, 235, 171, 0.9);
+  box-shadow: inset 0 0 0 1px rgba(11, 15, 16, 0.72);
+}
+
+[data-theme='toss'] .calendar__day--selected .calendar__day-stamp strong,
+[data-theme='toss'] .calendar__day[aria-selected='true'] .calendar__day-stamp strong {
+  background: #95ebab;
+  color: #0b0f10 !important;
+  -webkit-text-fill-color: #0b0f10 !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.34);
+}
+
+[data-theme='toss'] .calendar__day--today:not(.calendar__day--selected) {
+  border-color: rgba(149, 235, 171, 0.88) !important;
+  box-shadow: inset 0 0 0 2px rgba(149, 235, 171, 0.48) !important;
+}

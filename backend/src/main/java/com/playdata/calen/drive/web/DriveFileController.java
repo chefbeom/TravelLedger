@@ -17,6 +17,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
@@ -38,11 +39,13 @@ public class DriveFileController {
     private final DriveDownloadLinkService driveDownloadLinkService;
 
     @GetMapping("/list")
+    @PreAuthorize("hasRole('ADMIN')")
     public List<DriveDtos.FileItemResponse> list(@AuthenticationPrincipal AppUserPrincipal currentUser) {
         return driveService.list(currentUser.userId());
     }
 
     @GetMapping("/list/page")
+    @PreAuthorize("hasRole('ADMIN')")
     public DriveDtos.FileListPageResponse listPage(
             @AuthenticationPrincipal AppUserPrincipal currentUser,
             @ModelAttribute DriveDtos.ListPageRequest request
@@ -51,16 +54,25 @@ public class DriveFileController {
     }
 
     @GetMapping("/home-summary")
+    @PreAuthorize("hasRole('ADMIN')")
     public DriveDtos.HomeSummaryResponse getHomeSummary(@AuthenticationPrincipal AppUserPrincipal currentUser) {
         return driveService.getHomeSummary(currentUser.userId());
     }
 
     @GetMapping("/folders")
+    @PreAuthorize("hasRole('ADMIN')")
     public List<DriveDtos.FolderDestinationResponse> getFolders(@AuthenticationPrincipal AppUserPrincipal currentUser) {
         return driveService.listFolderDestinations(currentUser.userId());
     }
 
+    @GetMapping("/travel-folders")
+    public List<DriveDtos.FolderDestinationResponse> getTravelFolders(
+            @AuthenticationPrincipal AppUserPrincipal currentUser
+    ) {
+        return driveService.listTravelFolderDestinations(currentUser.userId());
+    }
     @GetMapping("/recent")
+    @PreAuthorize("hasRole('ADMIN')")
     public List<DriveDtos.FileItemResponse> getRecent(@AuthenticationPrincipal AppUserPrincipal currentUser) {
         return driveService.getRecentFiles(currentUser.userId());
     }
@@ -72,15 +84,17 @@ public class DriveFileController {
             @RequestParam(defaultValue = "recent") String sortOption,
             @RequestParam(defaultValue = "200") Integer size
     ) {
-        return driveService.getPhotoFiles(currentUser.userId(), parentId, sortOption, size);
+        return driveService.getPhotoFiles(currentUser.userId(), parentId, sortOption, size, currentUser.isAdmin());
     }
 
     @GetMapping("/trash")
+    @PreAuthorize("hasRole('ADMIN')")
     public List<DriveDtos.FileItemResponse> getTrash(@AuthenticationPrincipal AppUserPrincipal currentUser) {
         return driveService.getTrashItems(currentUser.userId());
     }
 
     @GetMapping("/{fileId}/versions")
+    @PreAuthorize("hasRole('ADMIN')")
     public List<DriveDtos.FileVersionResponse> listFileVersions(
             @AuthenticationPrincipal AppUserPrincipal currentUser,
             @PathVariable Long fileId
@@ -89,6 +103,7 @@ public class DriveFileController {
     }
 
     @PatchMapping("/{fileId}/versions/{versionId}/restore")
+    @PreAuthorize("hasRole('ADMIN')")
     public DriveDtos.FileItemResponse restoreFileVersion(
             @AuthenticationPrincipal AppUserPrincipal currentUser,
             @PathVariable Long fileId,
@@ -101,10 +116,14 @@ public class DriveFileController {
             @AuthenticationPrincipal AppUserPrincipal currentUser,
             @PathVariable Long fileId
     ) {
+        if (!currentUser.isAdmin()) {
+            driveService.requireTravelLinkedFile(currentUser.userId(), fileId);
+        }
         return buildDownloadResponse(driveService.downloadFile(currentUser.userId(), fileId));
     }
 
     @GetMapping("/{fileId}/download-link")
+    @PreAuthorize("hasRole('ADMIN')")
     public DriveDtos.DownloadUrlResponse getDownloadLink(
             @AuthenticationPrincipal AppUserPrincipal currentUser,
             @PathVariable Long fileId
@@ -115,6 +134,7 @@ public class DriveFileController {
     }
 
     @PostMapping("/{fileId}/download-links")
+    @PreAuthorize("hasRole('ADMIN')")
     public DriveDtos.DownloadLinkResponse createDownloadLink(
             @AuthenticationPrincipal AppUserPrincipal currentUser,
             @PathVariable Long fileId,
@@ -124,6 +144,7 @@ public class DriveFileController {
     }
 
     @GetMapping("/{fileId}/download-links")
+    @PreAuthorize("hasRole('ADMIN')")
     public List<DriveDtos.DownloadLinkResponse> listDownloadLinks(
             @AuthenticationPrincipal AppUserPrincipal currentUser,
             @PathVariable Long fileId
@@ -132,6 +153,7 @@ public class DriveFileController {
     }
 
     @GetMapping("/download-links/{linkId}/access-logs")
+    @PreAuthorize("hasRole('ADMIN')")
     public List<DriveDtos.DownloadLinkAccessLogResponse> listDownloadLinkAccessLogs(
             @AuthenticationPrincipal AppUserPrincipal currentUser,
             @PathVariable Long linkId
@@ -140,6 +162,7 @@ public class DriveFileController {
     }
 
     @DeleteMapping("/download-links/{linkId}")
+    @PreAuthorize("hasRole('ADMIN')")
     public DriveDtos.DownloadLinkResponse revokeDownloadLink(
             @AuthenticationPrincipal AppUserPrincipal currentUser,
             @PathVariable Long linkId
@@ -153,6 +176,7 @@ public class DriveFileController {
     }
 
     @PostMapping("/download")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<byte[]> downloadBatch(
             @AuthenticationPrincipal AppUserPrincipal currentUser,
             @RequestBody DriveDtos.DownloadBatchRequest request
@@ -169,10 +193,14 @@ public class DriveFileController {
             @PathVariable Long fileId,
             @RequestHeader(value = HttpHeaders.IF_NONE_MATCH, required = false) String ifNoneMatch
     ) {
+        if (!currentUser.isAdmin()) {
+            driveService.requireTravelLinkedFile(currentUser.userId(), fileId);
+        }
         return buildThumbnailResponse(driveService.loadOwnedThumbnail(currentUser.userId(), fileId, 320), ifNoneMatch);
     }
 
     @PostMapping("/folder")
+    @PreAuthorize("hasRole('ADMIN')")
     public DriveDtos.FileItemResponse createFolder(
             @AuthenticationPrincipal AppUserPrincipal currentUser,
             @RequestBody DriveDtos.FolderRequest request
@@ -181,6 +209,7 @@ public class DriveFileController {
     }
 
     @PatchMapping("/{fileId}/trash")
+    @PreAuthorize("hasRole('ADMIN')")
     public DriveDtos.ActionResponse moveToTrash(
             @AuthenticationPrincipal AppUserPrincipal currentUser,
             @PathVariable Long fileId
@@ -189,6 +218,7 @@ public class DriveFileController {
     }
 
     @PatchMapping("/{fileId}/restore")
+    @PreAuthorize("hasRole('ADMIN')")
     public DriveDtos.ActionResponse restore(
             @AuthenticationPrincipal AppUserPrincipal currentUser,
             @PathVariable Long fileId
@@ -197,6 +227,7 @@ public class DriveFileController {
     }
 
     @DeleteMapping("/{fileId}")
+    @PreAuthorize("hasRole('ADMIN')")
     public DriveDtos.ActionResponse delete(
             @AuthenticationPrincipal AppUserPrincipal currentUser,
             @PathVariable Long fileId
@@ -205,11 +236,13 @@ public class DriveFileController {
     }
 
     @DeleteMapping("/trash")
+    @PreAuthorize("hasRole('ADMIN')")
     public DriveDtos.ActionResponse clearTrash(@AuthenticationPrincipal AppUserPrincipal currentUser) {
         return driveService.clearTrash(currentUser.userId());
     }
 
     @PatchMapping("/{fileId}/move")
+    @PreAuthorize("hasRole('ADMIN')")
     public DriveDtos.ActionResponse moveSingle(
             @AuthenticationPrincipal AppUserPrincipal currentUser,
             @PathVariable Long fileId,
@@ -219,6 +252,7 @@ public class DriveFileController {
     }
 
     @PatchMapping("/{fileId}/rename")
+    @PreAuthorize("hasRole('ADMIN')")
     public DriveDtos.FileItemResponse rename(
             @AuthenticationPrincipal AppUserPrincipal currentUser,
             @PathVariable Long fileId,
@@ -228,6 +262,7 @@ public class DriveFileController {
     }
 
     @PatchMapping("/{fileId}/lock")
+    @PreAuthorize("hasRole('ADMIN')")
     public DriveDtos.FileItemResponse updateLock(
             @AuthenticationPrincipal AppUserPrincipal currentUser,
             @PathVariable Long fileId,
@@ -237,6 +272,7 @@ public class DriveFileController {
     }
 
     @PatchMapping("/move")
+    @PreAuthorize("hasRole('ADMIN')")
     public DriveDtos.ActionResponse moveBatch(
             @AuthenticationPrincipal AppUserPrincipal currentUser,
             @RequestBody DriveDtos.MoveBatchRequest request
@@ -249,6 +285,7 @@ public class DriveFileController {
     }
 
     @PatchMapping("/restore")
+    @PreAuthorize("hasRole('ADMIN')")
     public DriveDtos.ActionResponse restoreBatch(
             @AuthenticationPrincipal AppUserPrincipal currentUser,
             @RequestBody DriveDtos.RestoreBatchRequest request

@@ -157,11 +157,15 @@ function openFinance() {
   financeLegacyOpen.value = false
 }
 
-function openFinanceEditor() {
+function openFinanceEditor(initialMoneyTab = 'records') {
   primaryTab.value = 'finance'
   hubRoute.value = 'travel-money'
-  hubInitialMoneyTab.value = 'records'
+  hubInitialMoneyTab.value = initialMoneyTab
   financeLegacyOpen.value = true
+}
+
+function openTravelManager() {
+  openFinanceEditor('planner')
 }
 
 function openMemories(clearPlaceFocus = true) {
@@ -288,7 +292,7 @@ onMounted(loadTravelSummary)
 
 <template>
   <div class="workspace-stack travel-unified-shell">
-    <section class="panel travel-record-switcher">
+    <section v-if="primaryTab !== 'map'" class="panel travel-record-switcher">
       <div class="panel__header">
         <div>
           <h2>여행 기록</h2>
@@ -341,6 +345,7 @@ onMounted(loadTravelSummary)
         @open-memories="openMemories"
         @open-routes="openRoutes"
         @open-photos="openPhotos"
+        @open-travel-manager="openTravelManager"
       />
     </div>
 

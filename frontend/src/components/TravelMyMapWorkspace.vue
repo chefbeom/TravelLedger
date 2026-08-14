@@ -23,7 +23,7 @@ const props = defineProps({
   },
 })
 
-const emit = defineEmits(['open-memories', 'open-routes', 'open-photos'])
+const emit = defineEmits(['open-travel-manager', 'open-memories', 'open-routes', 'open-photos'])
 
 const isLoading = ref(false)
 const isDetailLoading = ref(false)
@@ -969,6 +969,7 @@ watch(planFilterOptions, (options) => {
           <h2>내 여행 지도</h2>
         </div>
         <div class="travel-my-map-header__actions">
+          <button class="button button--secondary" type="button" @click="emit('open-travel-manager')">여행 관리</button>
           <button class="button button--primary" type="button" @click="emit('open-memories')">장소 기록 추가</button>
           <button class="button button--secondary" type="button" @click="emit('open-routes')">GPX 경로 추가</button>
           <button class="button button--ghost" type="button" @click="emit('open-photos')">사진첩 열기</button>
@@ -1143,7 +1144,8 @@ watch(planFilterOptions, (options) => {
     <section class="panel travel-route-plan-panel">
       <div class="panel__header travel-my-map-header">
         <div>
-          <h2>여행별 GPX 경로</h2>
+          <h2>여행별 구분</h2>
+          <p>여행별 GPX 경로를 묶어서 확인합니다.</p>
         </div>
         <div class="travel-my-map-header__actions">
           <span class="panel__badge">{{ routePlanGroups.length }}개 여행 · {{ visibleRoutes.length }}개 경로</span>

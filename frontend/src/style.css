@@ -194,47 +194,6 @@ button {
   backdrop-filter: blur(16px);
   box-shadow: var(--shadow);
 }
-
-.theme-toggle--degree {
-  padding-inline: 14px;
-}
-
-.theme-degree-panel {
-  width: min(280px, calc(100vw - 32px));
-  display: grid;
-  gap: 14px;
-  padding: 16px 18px;
-  border: 1px solid var(--line);
-  border-radius: 20px;
-  background: rgba(255, 255, 255, 0.92);
-  box-shadow: var(--shadow);
-  backdrop-filter: blur(18px);
-}
-
-.theme-degree-panel__header,
-.theme-degree-panel__labels {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.theme-degree-panel__header strong {
-  font-size: 0.96rem;
-}
-
-.theme-degree-panel__header span,
-.theme-degree-panel__labels span {
-  color: var(--text-soft);
-  font-size: 0.88rem;
-  font-weight: 700;
-}
-
-.theme-degree-panel__slider {
-  width: 100%;
-  accent-color: var(--blue);
-}
-
 .app-layout {
   display: grid;
   grid-template-columns: 280px minmax(0, 1fr);
@@ -8845,10 +8804,6 @@ textarea {
   color: var(--toss-theme-toggle-text, #dce7ff);
 }
 
-:root[data-theme='toss'] .theme-degree-panel {
-  background: rgba(20, 25, 34, 0.96);
-  border-color: rgba(78, 95, 125, 0.44);
-}
 
 :root[data-theme='toss'] .sidebar,
 :root[data-theme='toss'] .panel,
@@ -14323,9 +14278,6 @@ textarea {
   font-size: 0.78rem;
 }
 
-:root[data-layout-mode='mobile'] .theme-degree-panel {
-  width: min(100%, calc(100vw - 20px));
-}
 
 :root[data-layout-mode='mobile'] .auth-shell,
 :root[data-layout-mode='mobile'] .main-shell--standalone {
@@ -33849,8 +33801,7 @@ body,
   color: var(--fern);
 }
 
-.theme-toggle,
-.theme-degree-panel {
+.theme-toggle {
   border-color: var(--line) !important;
   background: var(--surface-panel) !important;
   color: var(--text) !important;
@@ -34234,7 +34185,7 @@ html body .app-shell.app-shell.app-shell :is(
   -webkit-text-fill-color: var(--dust-grey) !important;
 }
 
-html body .app-shell.app-shell :is(.theme-toggle, .theme-degree-panel) {
+html body .app-shell.app-shell .theme-toggle {
   border-color: var(--line) !important;
   background: var(--surface-panel) !important;
   box-shadow: var(--shadow) !important;
@@ -36817,20 +36768,6 @@ html[data-theme='toss'] body .app-shell .main-shell--standalone .main-palette__p
 html[data-theme='toss'] body .app-shell .main-shell--standalone .main-palette__photo-caption small {
   color: #dad7cd !important;
   -webkit-text-fill-color: #dad7cd !important;
-}
-/* Keep the theme control in a fixed slot while the dark-strength indicator is hidden in light mode. */
-.theme-toggle--degree {
-  white-space: nowrap;
-}
-
-.theme-toggle--degree:disabled {
-  cursor: default;
-  opacity: 1;
-}
-
-.theme-toggle--degree-placeholder {
-  visibility: hidden;
-  pointer-events: none;
 }
 /* Pet artwork uses transparent pixels; keep the global button theme from painting a backdrop behind it. */
 html body .app-shell.app-shell .pet-companion__avatar,

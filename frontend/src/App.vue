@@ -102,10 +102,8 @@ const adminFeatureItem = {
 }
 
 const THEME_STORAGE_KEY = 'calen-theme-mode'
-const THEME_DEGREE_STORAGE_KEY = 'calen-theme-degree'
 const LAYOUT_MODE_STORAGE_KEY = 'calen-layout-mode'
 const MOBILE_LAYOUT_QUERY = '(max-width: 760px)'
-const DEFAULT_TOSS_DEGREE = 0
 const ROUTE_LEAVE_GUARD_EVENT = 'calen-route-leave-guard'
 const DEFAULT_ROUTE_LEAVE_GUARD_MESSAGE = '페이지를 벗어나면 작성 중인 내용이 사라질 수 있습니다.'
 const NOTIFICATION_POLL_INTERVAL_MS = 15000
@@ -231,7 +229,6 @@ const travelRecordFocusRequest = ref(null)
 const inviteInfo = ref(null)
 const isInviteLoading = ref(false)
 const themeMode = ref('default')
-const themeDegree = ref(DEFAULT_TOSS_DEGREE)
 const layoutMode = ref('desktop')
 const routeLeaveGuard = reactive({
   active: false,
@@ -381,82 +378,37 @@ function applyHashRoute(hash) {
   inviteToken.value = routeState.token
 }
 
-function clampThemeDegree() {
-  return DEFAULT_TOSS_DEGREE
-}
-
-function mixChannel(start, end, ratio) {
-  return Math.round(start + (end - start) * ratio)
-}
-
-function mixHexColor(start, end, ratio) {
-  const normalizedStart = start.replace('#', '')
-  const normalizedEnd = end.replace('#', '')
-  const startRgb = [
-    parseInt(normalizedStart.slice(0, 2), 16),
-    parseInt(normalizedStart.slice(2, 4), 16),
-    parseInt(normalizedStart.slice(4, 6), 16),
-  ]
-  const endRgb = [
-    parseInt(normalizedEnd.slice(0, 2), 16),
-    parseInt(normalizedEnd.slice(2, 4), 16),
-    parseInt(normalizedEnd.slice(4, 6), 16),
-  ]
-  const mixed = startRgb.map((channel, index) => mixChannel(channel, endRgb[index], ratio))
-  return `rgb(${mixed[0]}, ${mixed[1]}, ${mixed[2]})`
-}
-
-function mixRgbaColor(start, end, ratio) {
-  const mixed = start.map((channel, index) => (
-    index === 3
-      ? channel + (end[index] - channel) * ratio
-      : mixChannel(channel, end[index], ratio)
-  ))
-
-  return `rgba(${mixed[0]}, ${mixed[1]}, ${mixed[2]}, ${mixed[3].toFixed(3)})`
-}
-
-function buildTossThemePalette(degree) {
-  const ratio = clampThemeDegree(degree) / 100
-
-  return {
-    '--toss-bg': mixHexColor('#151a1c', '#0b0f10', ratio),
-    '--toss-surface': mixHexColor('#1d2427', '#111618', ratio),
-    '--toss-surface-panel-start': mixRgbaColor([35, 44, 47, 0.98], [23, 29, 32, 0.98], ratio),
-    '--toss-surface-panel-end': mixRgbaColor([27, 34, 37, 0.98], [18, 23, 25, 0.98], ratio),
-    '--toss-surface-elevated-start': mixHexColor('#2a3437', '#1b2225', ratio),
-    '--toss-surface-elevated-end': mixHexColor('#20292c', '#141a1c', ratio),
-    '--toss-surface-soft': mixHexColor('#263033', '#1b2325', ratio),
-    '--toss-surface-soft-strong': mixHexColor('#303b3e', '#232d30', ratio),
-    '--toss-line': mixHexColor('#4a595d', '#344347', ratio),
-    '--toss-text-soft': mixHexColor('#d1d9da', '#aeb9bb', ratio),
-    '--toss-text-muted': mixHexColor('#909da0', '#6e7b7f', ratio),
-    '--toss-bg-glow': mixRgbaColor([52, 78, 65, 0.035], [58, 90, 64, 0.06], ratio),
-    '--toss-bg-gradient-mid': mixHexColor('#111719', '#0e1315', ratio),
-    '--toss-bg-gradient-end': mixHexColor('#0d1113', '#080b0c', ratio),
-    '--toss-theme-toggle-bg': mixRgbaColor([31, 39, 42, 0.96], [18, 24, 26, 0.98], ratio),
-    '--toss-theme-toggle-border': mixRgbaColor([114, 167, 127, 0.32], [88, 129, 87, 0.38], ratio),
-    '--toss-theme-toggle-text': mixHexColor('#e4ecec', '#d6dfdf', ratio),
-    '--toss-calendar-size-toggle-bg': mixRgbaColor([31, 39, 42, 0.96], [18, 24, 26, 0.98], ratio),
-    '--toss-resize-panel-bg': mixRgbaColor([29, 38, 41, 0.96], [16, 22, 24, 0.98], ratio),
-  }
-}
-
-function applyThemeDegree(degree) {
-  const normalized = clampThemeDegree(degree)
-  themeDegree.value = normalized
-
-  if (typeof document !== 'undefined') {
-    const rootStyle = document.documentElement.style
-    const palette = buildTossThemePalette(normalized)
-    Object.entries(palette).forEach(([key, value]) => {
-      rootStyle.setProperty(key, value)
-    })
+function applyTossThemePalette() {
+  if (typeof document === 'undefined') {
+    return
   }
 
-  if (typeof window !== 'undefined') {
-    window.localStorage.setItem(THEME_DEGREE_STORAGE_KEY, String(normalized))
+  const palette = {
+    '--toss-bg': '#151a1c',
+    '--toss-surface': '#1d2427',
+    '--toss-surface-panel-start': 'rgba(35, 44, 47, 0.980)',
+    '--toss-surface-panel-end': 'rgba(27, 34, 37, 0.980)',
+    '--toss-surface-elevated-start': '#2a3437',
+    '--toss-surface-elevated-end': '#20292c',
+    '--toss-surface-soft': '#263033',
+    '--toss-surface-soft-strong': '#303b3e',
+    '--toss-line': '#4a595d',
+    '--toss-text-soft': '#d1d9da',
+    '--toss-text-muted': '#909da0',
+    '--toss-bg-glow': 'rgba(52, 78, 65, 0.035)',
+    '--toss-bg-gradient-mid': '#111719',
+    '--toss-bg-gradient-end': '#0d1113',
+    '--toss-theme-toggle-bg': 'rgba(31, 39, 42, 0.960)',
+    '--toss-theme-toggle-border': 'rgba(114, 167, 127, 0.320)',
+    '--toss-theme-toggle-text': '#e4ecec',
+    '--toss-calendar-size-toggle-bg': 'rgba(31, 39, 42, 0.960)',
+    '--toss-resize-panel-bg': 'rgba(29, 38, 41, 0.960)',
   }
+
+  const rootStyle = document.documentElement.style
+  Object.entries(palette).forEach(([key, value]) => {
+    rootStyle.setProperty(key, value)
+  })
 }
 
 function applyTheme(mode) {
@@ -466,7 +418,7 @@ function applyTheme(mode) {
   if (typeof document !== 'undefined') {
     if (normalized === 'toss') {
       document.documentElement.setAttribute('data-theme', 'toss')
-      applyThemeDegree(themeDegree.value)
+      applyTossThemePalette()
     } else {
       document.documentElement.removeAttribute('data-theme')
     }
@@ -1144,7 +1096,6 @@ function queueMobileModalBackgroundScrollSync() {
 onMounted(() => {
   if (typeof window !== 'undefined') {
     applyLayoutMode(resolveInitialLayoutMode(), false)
-    themeDegree.value = clampThemeDegree(window.localStorage.getItem(THEME_DEGREE_STORAGE_KEY) ?? DEFAULT_TOSS_DEGREE)
     applyTheme(window.localStorage.getItem(THEME_STORAGE_KEY) || 'default')
   }
   window.addEventListener('hashchange', handleHashChange)
@@ -1202,17 +1153,6 @@ onBeforeUnmount(() => {
         </div>
         <button class="theme-toggle" type="button" @click="toggleTheme">
           {{ isTossTheme ? '기본 테마' : '다크 테마' }}
-        </button>
-        <button
-          class="theme-toggle theme-toggle--degree"
-          :class="{ 'theme-toggle--degree-placeholder': !isTossTheme }"
-          type="button"
-          :disabled="!isTossTheme"
-          :aria-hidden="!isTossTheme"
-          :tabindex="isTossTheme ? 0 : -1"
-          aria-label="다크 강도 0% 고정"
-        >
-          다크 강도 0%
         </button>
       </div>
 

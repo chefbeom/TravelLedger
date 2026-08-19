@@ -11,6 +11,7 @@ import com.playdata.calen.account.service.AdminPageAccessService;
 import com.playdata.calen.account.service.AdminOpsControlService;
 import com.playdata.calen.account.service.AdminService;
 import com.playdata.calen.account.service.LoginAuditLogService;
+import com.playdata.calen.account.service.RegistrationPolicyService;
 import com.playdata.calen.account.service.SupportInquiryService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -39,6 +40,9 @@ class AdminControllerAuditDetailTest {
 
     @Mock
     private LoginAuditLogService loginAuditLogService;
+
+    @Mock
+    private RegistrationPolicyService registrationPolicyService;
 
     @Test
     void restoreAuditDetailUsesBackupBaseFileNameOnly() {
@@ -91,7 +95,8 @@ class AdminControllerAuditDetailTest {
                 adminPageAccessService,
                 adminOpsControlService,
                 supportInquiryService,
-                loginAuditLogService
+                loginAuditLogService,
+                registrationPolicyService
         );
     }
 

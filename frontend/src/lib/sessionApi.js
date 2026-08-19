@@ -110,6 +110,17 @@ export function fetchCurrentUser() {
   return request('/auth/me')
 }
 
+export function fetchRegistrationOptions() {
+  return request('/auth/registration-options')
+}
+
+export function register(payload) {
+  return request('/auth/register', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+}
+
 export function login(payload) {
   return request('/auth/login', {
     method: 'POST',

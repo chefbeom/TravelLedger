@@ -13,6 +13,7 @@ import {
   fetchAdminAccessStatus,
   fetchAdminDataManagement,
   fetchAdminDashboard,
+  fetchAdminRegistrationPolicy,
   fetchAdminLoginAuditLogs,
   fetchAdminOpsControl,
   fetchAdminSupportInquiries,
@@ -23,6 +24,7 @@ import {
   saveAdminAiServerProfile,
   updateAdminAiRouting,
   updateAdminDataStorageControl,
+  updateAdminRegistrationPolicy,
   updateAdminSupportInquiryStatus,
   updateAdminUserActive,
   verifyAdminAccess,
@@ -132,6 +134,13 @@ const state = reactive({
   userPage: 0,
   accessModalOpen: false,
   accessModalView: 'invite',
+  registrationPolicy: null,
+  loadingRegistrationPolicy: false,
+  savingRegistrationPolicy: false,
+  registrationPolicyMessage: '',
+  registrationPolicyForm: {
+    publicRegistrationEnabled: false,
+  },
   recentInvites: [],
   invitePage: 0,
   supportInquiries: [],
@@ -263,6 +272,11 @@ const accessModalOptions = computed(() => [
     key: 'invite',
     label: '초대 링크 생성',
     count: state.recentInvites.length,
+  },
+  {
+    key: 'registration',
+    label: '가입 정책',
+    countLabel: state.registrationPolicy?.publicRegistrationEnabled ? '공개 가입' : '초대 전용',
   },
   {
     key: 'blocked',
@@ -611,13 +625,15 @@ function handleAdminAccessKeydown(event) {
 
 async function loadDashboard() {
   state.loading = true
+  state.loadingRegistrationPolicy = true
   state.errorMessage = ''
 
   try {
-    const [dashboard, supportInquiries, loginLogPage] = await Promise.all([
+    const [dashboard, supportInquiries, loginLogPage, registrationPolicy] = await Promise.all([
       fetchAdminDashboard(),
       fetchAdminSupportInquiries(),
       fetchAdminLoginAuditLogs(0),
+      fetchAdminRegistrationPolicy(),
     ])
 
     state.summary = dashboard.summary
@@ -627,6 +643,8 @@ async function loadDashboard() {
     state.users = dashboard.users ?? []
     state.recentInvites = dashboard.recentInvites ?? []
     state.supportInquiries = supportInquiries ?? []
+    state.registrationPolicy = registrationPolicy
+    state.registrationPolicyForm.publicRegistrationEnabled = Boolean(registrationPolicy?.publicRegistrationEnabled)
     state.blockedIpPage = clampPage(state.blockedIpPage, state.blockedIps.length)
     state.userPage = clampPage(state.userPage, state.users.length)
     state.invitePage = clampPage(state.invitePage, state.recentInvites.length)
@@ -638,6 +656,7 @@ async function loadDashboard() {
     }
   } finally {
     state.loading = false
+    state.loadingRegistrationPolicy = false
   }
 }
 
@@ -715,6 +734,27 @@ async function handleCreateInvite() {
     }
   } finally {
     state.creatingInvite = false
+  }
+}
+
+async function handleSaveRegistrationPolicy() {
+  state.savingRegistrationPolicy = true
+  state.registrationPolicyMessage = ''
+  state.errorMessage = ''
+
+  try {
+    const response = await updateAdminRegistrationPolicy(state.registrationPolicyForm.publicRegistrationEnabled)
+    state.registrationPolicy = response
+    state.registrationPolicyForm.publicRegistrationEnabled = Boolean(response?.publicRegistrationEnabled)
+    state.registrationPolicyMessage = response?.publicRegistrationEnabled
+      ? '공개 회원가입을 켰습니다. 회원가입 페이지에서 새 계정을 만들 수 있습니다.'
+      : '공개 회원가입을 껐습니다. 이제 초대 링크로만 가입할 수 있습니다.'
+  } catch (error) {
+    if (!handleAdminAccessRequired(error)) {
+      state.errorMessage = error.message
+    }
+  } finally {
+    state.savingRegistrationPolicy = false
   }
 }
 
@@ -2540,7 +2580,7 @@ onBeforeUnmount(() => {
                 @click="selectAccessModalView(option.key)"
               >
                 <strong>{{ option.label }}</strong>
-                <span>{{ option.count }}건</span>
+                <span>{{ option.countLabel ?? `${option.count}건` }}</span>
               </button>
             </div>
 
@@ -2597,6 +2637,34 @@ onBeforeUnmount(() => {
                     <button class="button button--ghost" type="button" :disabled="state.invitePage + 1 >= invitePageCount" @click="state.invitePage += 1">다음</button>
                   </div>
                 </div>
+              </div>
+            </section>
+
+            <section v-else-if="state.accessModalView === 'registration'" class="admin-access-control-panel">
+              <div class="support-inquiry-card">
+                <div class="panel__header">
+                  <div>
+                    <h3>가입 정책</h3>
+                  </div>
+                  <span :class="['entry-type-pill', state.registrationPolicy?.publicRegistrationEnabled ? 'entry-type-pill--income' : 'entry-type-pill--expense']">
+                    {{ state.registrationPolicy?.publicRegistrationEnabled ? '공개 가입' : '초대 전용' }}
+                  </span>
+                </div>
+                <p v-if="state.loadingRegistrationPolicy" class="form-hint">가입 정책을 불러오는 중입니다...</p>
+                <template v-else>
+                  <p class="form-hint">공개 가입을 끄면 관리자 초대 링크로만 가입할 수 있습니다. 이미 생성한 초대 링크와 기존 계정에는 영향을 주지 않습니다.</p>
+                  <label class="field field--inline">
+                    <input v-model="state.registrationPolicyForm.publicRegistrationEnabled" type="checkbox" :disabled="state.savingRegistrationPolicy" />
+                    <span class="field__label">공개 회원가입 허용</span>
+                  </label>
+                  <p class="form-hint">소셜 로그인 제공자는 아직 연결되지 않았습니다. 이후 제공자를 추가해도 이 공개 가입 정책을 함께 적용합니다.</p>
+                  <div class="panel__actions">
+                    <button class="button button--primary" type="button" :disabled="state.savingRegistrationPolicy" @click="handleSaveRegistrationPolicy">
+                      {{ state.savingRegistrationPolicy ? '저장 중...' : '가입 정책 저장' }}
+                    </button>
+                  </div>
+                  <p v-if="state.registrationPolicyMessage" class="feedback feedback--success" role="status">{{ state.registrationPolicyMessage }}</p>
+                </template>
               </div>
             </section>
 

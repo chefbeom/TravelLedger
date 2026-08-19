@@ -2,10 +2,12 @@ package com.playdata.calen.account.web;
 
 import com.playdata.calen.account.dto.AppUserResponse;
 import com.playdata.calen.account.dto.AuthLoginRequest;
+import com.playdata.calen.account.dto.AuthRegisterRequest;
 import com.playdata.calen.account.dto.ProfilePasswordChangeRequest;
 import com.playdata.calen.account.dto.ProfilePrivacyAccessVerifyRequest;
 import com.playdata.calen.account.dto.ProfileSecondaryPinChangeRequest;
 import com.playdata.calen.account.dto.ProfileSecondaryPinVerifyRequest;
+import com.playdata.calen.account.dto.PublicRegistrationOptionsResponse;
 import com.playdata.calen.account.domain.AppUser;
 import com.playdata.calen.account.domain.LoginAuditStatus;
 import com.playdata.calen.account.security.AppUserPrincipal;
@@ -13,6 +15,7 @@ import com.playdata.calen.account.security.SecondaryPinSessionSupport;
 import com.playdata.calen.account.service.AppUserService;
 import com.playdata.calen.account.service.LoginAuditLogService;
 import com.playdata.calen.account.service.LoginAttemptService;
+import com.playdata.calen.account.service.RegistrationPolicyService;
 import com.playdata.calen.common.exception.TooManyRequestsException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -46,6 +49,7 @@ public class AuthController {
     private final AppUserService appUserService;
     private final LoginAttemptService loginAttemptService;
     private final LoginAuditLogService loginAuditLogService;
+    private final RegistrationPolicyService registrationPolicyService;
     private final AuthenticationManager authenticationManager;
     private final SecurityContextRepository securityContextRepository;
     private final PersistentTokenBasedRememberMeServices rememberMeServices;
@@ -59,6 +63,11 @@ public class AuthController {
                 "parameterName", csrfToken.getParameterName(),
                 "token", csrfToken.getToken()
         );
+    }
+
+    @GetMapping("/registration-options")
+    public PublicRegistrationOptionsResponse registrationOptions() {
+        return registrationPolicyService.getPublicOptions();
     }
 
     @PostMapping("/login")
@@ -128,6 +137,35 @@ public class AuthController {
         signIn(authentication, request.rememberDevice(), httpRequest, httpResponse);
         secondaryPinSessionSupport.storeVerifiedSecondaryPin(httpRequest, normalizedSecondaryPin);
         return appUserService.toResponse(authenticatedUser);
+    }
+
+    @PostMapping("/register")
+    @org.springframework.web.bind.annotation.ResponseStatus(HttpStatus.CREATED)
+    public AppUserResponse register(
+            @Valid @RequestBody AuthRegisterRequest request,
+            HttpServletRequest httpRequest,
+            HttpServletResponse httpResponse
+    ) {
+        registrationPolicyService.requirePublicRegistrationEnabled();
+
+        AppUser createdUser = appUserService.registerUser(
+                request.loginId(),
+                request.displayName(),
+                request.password(),
+                request.secondaryPin()
+        );
+        Authentication authentication = authenticate(createdUser.getLoginId(), request.password());
+        signIn(authentication, request.rememberDevice(), httpRequest, httpResponse);
+        secondaryPinSessionSupport.storeVerifiedSecondaryPin(httpRequest, request.secondaryPin().trim());
+        loginAuditLogService.record(
+                createdUser.getLoginId(),
+                resolveClientIp(httpRequest),
+                httpRequest.getHeader("User-Agent"),
+                LoginAuditStatus.SUCCESS,
+                "공개 회원가입 후 로그인 성공",
+                createdUser
+        );
+        return appUserService.toResponse(createdUser);
     }
 
     @GetMapping("/me")

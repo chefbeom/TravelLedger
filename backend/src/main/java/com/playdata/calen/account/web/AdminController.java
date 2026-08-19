@@ -8,6 +8,8 @@ import com.playdata.calen.account.dto.AdminAiControlUpdateRequest;
 import com.playdata.calen.account.dto.AdminAiRoutingUpdateRequest;
 import com.playdata.calen.account.dto.AdminAiServerProfileSecretUpdateRequest;
 import com.playdata.calen.account.dto.AdminOpsControlResponse;
+import com.playdata.calen.account.dto.AdminRegistrationPolicyUpdateRequest;
+import com.playdata.calen.account.dto.PublicRegistrationOptionsResponse;
 import com.playdata.calen.account.dto.SupportInquiryArchiveRequest;
 import com.playdata.calen.account.dto.SupportInquiryReplyRequest;
 import com.playdata.calen.account.dto.SupportInquiryResponse;
@@ -22,6 +24,7 @@ import com.playdata.calen.account.service.AdminService;
 import com.playdata.calen.account.service.AdminPageAccessService;
 import com.playdata.calen.account.service.AdminOpsControlService;
 import com.playdata.calen.account.service.LoginAuditLogService;
+import com.playdata.calen.account.service.RegistrationPolicyService;
 import com.playdata.calen.account.service.SupportInquiryService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
@@ -60,6 +63,7 @@ public class AdminController {
     private final AdminOpsControlService adminOpsControlService;
     private final SupportInquiryService supportInquiryService;
     private final LoginAuditLogService loginAuditLogService;
+    private final RegistrationPolicyService registrationPolicyService;
 
     public AdminController(
             AdminService adminService,
@@ -67,7 +71,8 @@ public class AdminController {
             AdminPageAccessService adminPageAccessService,
             AdminOpsControlService adminOpsControlService,
             SupportInquiryService supportInquiryService,
-            LoginAuditLogService loginAuditLogService
+            LoginAuditLogService loginAuditLogService,
+            RegistrationPolicyService registrationPolicyService
     ) {
         this.adminService = adminService;
         this.adminDataManagementService = adminDataManagementService;
@@ -75,6 +80,7 @@ public class AdminController {
         this.adminOpsControlService = adminOpsControlService;
         this.supportInquiryService = supportInquiryService;
         this.loginAuditLogService = loginAuditLogService;
+        this.registrationPolicyService = registrationPolicyService;
     }
 
     @ModelAttribute
@@ -88,6 +94,26 @@ public class AdminController {
     @GetMapping("/dashboard")
     public AdminDashboardResponse getDashboard() {
         return adminService.getDashboard();
+    }
+
+    @GetMapping("/registration-policy")
+    public PublicRegistrationOptionsResponse getRegistrationPolicy() {
+        return registrationPolicyService.getPublicOptions();
+    }
+
+    @PutMapping("/registration-policy")
+    public PublicRegistrationOptionsResponse updateRegistrationPolicy(
+            @AuthenticationPrincipal AppUserPrincipal currentUser,
+            HttpServletRequest httpRequest,
+            @RequestBody AdminRegistrationPolicyUpdateRequest request
+    ) {
+        PublicRegistrationOptionsResponse response = registrationPolicyService.updatePublicRegistration(request.publicRegistrationEnabled());
+        recordAdminAction(
+                currentUser,
+                httpRequest,
+                "REGISTRATION_POLICY_UPDATE:publicRegistrationEnabled=" + response.publicRegistrationEnabled()
+        );
+        return response;
     }
 
     @GetMapping("/data-management")

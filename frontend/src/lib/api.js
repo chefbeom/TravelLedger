@@ -204,6 +204,17 @@ export function fetchAdminDashboard() {
   return request('/admin/dashboard')
 }
 
+export function fetchAdminRegistrationPolicy() {
+  return request('/admin/registration-policy')
+}
+
+export function updateAdminRegistrationPolicy(publicRegistrationEnabled) {
+  return request('/admin/registration-policy', {
+    method: 'PUT',
+    body: JSON.stringify({ publicRegistrationEnabled }),
+  })
+}
+
 export function fetchAdminDataManagement() {
   return request('/admin/data-management')
 }

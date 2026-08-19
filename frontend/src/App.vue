@@ -6,8 +6,10 @@ import {
   fetchCurrentUser,
   fetchInvite,
   fetchNotifications,
+  fetchRegistrationOptions,
   login,
   logout as logoutRequest,
+  register,
 } from './lib/sessionApi'
 import { fetchLayoutSetting } from './lib/api'
 import {
@@ -27,6 +29,7 @@ const ProfileWorkspace = defineAsyncComponent(() => import('./components/Profile
 const TravelWorkspace = defineAsyncComponent(() => import('./components/TravelWorkspace.vue'))
 const TravelPublicMapShareWorkspace = defineAsyncComponent(() => import('./components/TravelPublicMapShareWorkspace.vue'))
 const PetCompanion = defineAsyncComponent(() => import('./components/PetCompanion.vue'))
+const PublicRegistrationWorkspace = defineAsyncComponent(() => import('./components/PublicRegistrationWorkspace.vue'))
 
 const legacyFeatureItems = [
   {
@@ -181,6 +184,10 @@ const routeMeta = {
     title: '초대 링크 가입',
     description: '초대 링크로 계정을 만들 수 있습니다.',
   },
+  signup: {
+    title: '회원가입',
+    description: '공개 가입 정책이 켜진 경우 새 계정을 만들 수 있습니다.',
+  },
 }
 
 const correctedFeatureItems = featureItems
@@ -228,6 +235,8 @@ const householdInitialTab = ref('')
 const travelRecordFocusRequest = ref(null)
 const inviteInfo = ref(null)
 const isInviteLoading = ref(false)
+const registrationOptions = ref({ publicRegistrationEnabled: false, socialLoginProviders: [] })
+const isRegistrationOptionsLoading = ref(false)
 const themeMode = ref('default')
 const layoutMode = ref('desktop')
 const routeLeaveGuard = reactive({
@@ -807,6 +816,21 @@ async function restoreSession() {
   }
 }
 
+async function loadRegistrationOptions() {
+  isRegistrationOptionsLoading.value = true
+  try {
+    const response = await fetchRegistrationOptions()
+    registrationOptions.value = {
+      publicRegistrationEnabled: Boolean(response?.publicRegistrationEnabled),
+      socialLoginProviders: Array.isArray(response?.socialLoginProviders) ? response.socialLoginProviders : [],
+    }
+  } catch {
+    registrationOptions.value = { publicRegistrationEnabled: false, socialLoginProviders: [] }
+  } finally {
+    isRegistrationOptionsLoading.value = false
+  }
+}
+
 async function loadInviteDetails(token) {
   const requestId = ++inviteRequestSequence
 
@@ -858,6 +882,29 @@ async function handleLogin() {
     setFeedback('로그인되었습니다.')
   } catch (error) {
     setFeedback('', error.message)
+  } finally {
+    isSubmitting.value = false
+    activeSubmit.value = ''
+  }
+}
+
+async function handlePublicRegistration(payload) {
+  if (!registrationOptions.value.publicRegistrationEnabled) {
+    setFeedback('', '현재는 초대 링크로만 가입할 수 있습니다.')
+    return
+  }
+
+  isSubmitting.value = true
+  activeSubmit.value = 'register'
+  setFeedback()
+
+  try {
+    currentUser.value = await register(payload)
+    navigate('launcher')
+    setFeedback('회원가입이 완료되어 로그인했습니다.')
+  } catch (error) {
+    setFeedback('', error.message)
+    await loadRegistrationOptions()
   } finally {
     isSubmitting.value = false
     activeSubmit.value = ''
@@ -1115,6 +1162,7 @@ onMounted(() => {
     })
   }
   queueMobileModalBackgroundScrollSync()
+  loadRegistrationOptions()
   restoreSession()
 })
 
@@ -1244,6 +1292,18 @@ onBeforeUnmount(() => {
       <div v-if="errorMessage" class="feedback feedback--error auth-feedback">{{ errorMessage }}</div>
     </template>
 
+    <template v-else-if="activeRoute === 'signup'">
+      <PublicRegistrationWorkspace
+        :options="registrationOptions"
+        :loading="isRegistrationOptionsLoading"
+        :submitting="isSubmitting && activeSubmit === 'register'"
+        @register="handlePublicRegistration"
+        @go-login="navigate('launcher')"
+      />
+      <div v-if="successMessage" class="feedback feedback--success auth-feedback">{{ successMessage }}</div>
+      <div v-if="errorMessage" class="feedback feedback--error auth-feedback">{{ errorMessage }}</div>
+    </template>
+
     <template v-else-if="!currentUser">
       <section class="auth-shell">
 
@@ -1270,10 +1330,18 @@ onBeforeUnmount(() => {
           </article>
 
           <article class="auth-card">
-            <h2>초대 상태</h2>
+            <h2>가입 안내</h2>
             <div class="stack-form stack-form--readonly">
-              <p>초대 정보가 아직 없습니다.</p>
-              <p>가입하려면 기존 사용자가 관리자 화면에서 1회용 초대 링크 생성을 요청해 주세요.</p>
+              <p v-if="isRegistrationOptionsLoading">가입 방법을 확인하는 중입니다...</p>
+              <template v-else-if="registrationOptions.publicRegistrationEnabled">
+                <p>현재 공개 회원가입이 열려 있습니다.</p>
+                <p>초대 링크 없이도 새 계정을 만들 수 있습니다.</p>
+                <button class="button button--ghost" type="button" @click="navigate('signup')">회원가입</button>
+              </template>
+              <template v-else>
+                <p>현재는 초대 링크로만 가입할 수 있습니다.</p>
+                <p>가입하려면 기존 사용자가 관리자 화면에서 1회용 초대 링크 생성을 요청해 주세요.</p>
+              </template>
             </div>
           </article>
         </div>

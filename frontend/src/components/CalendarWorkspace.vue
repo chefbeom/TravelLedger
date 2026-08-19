@@ -8,17 +8,20 @@ import { useTableSelection } from '../lib/tableSelection'
 import { fetchLayoutSetting, saveLayoutSetting } from '../lib/api'
 import HouseholdTransactionSheet from './HouseholdTransactionSheet.vue'
 
-const CALENDAR_SCALE_KEY = 'calen-household-calendar-scale-preset'
-const CALENDAR_HIGHLIGHT_KEY = 'calen-household-calendar-highlight-mode'
-const CALENDAR_AGGREGATE_PANEL_ENABLED_KEY = 'calen-household-calendar-aggregate-panel-enabled'
-const CALENDAR_RECEIPT_OCR_PANEL_ENABLED_KEY = 'calen-household-calendar-receipt-ocr-panel-enabled'
-const CALENDAR_TRANSACTION_SHEET_VIEW_MODE_KEY = 'calen-household-transaction-sheet-view-mode'
+const CALENDAR_VIEW_PREFERENCE_STORAGE_PREFIX = 'calen-household-calendar-view:v2'
 const CALENDAR_PANEL_LAYOUT_STORAGE_KEY = 'calen-household-calendar-panel-layout:v2'
 const CALENDAR_PANEL_LAYOUT_SCOPE = 'household-calendar'
 const CALENDAR_PANEL_LAYOUT_VERSION = 2
 const CALENDAR_VIEW_PREFERENCE_SCOPE = 'household-calendar-view'
 const CALENDAR_VIEW_PREFERENCE_VERSION = 1
 const DEFAULT_CALENDAR_HIGHLIGHT_MODE = 'net'
+const DEFAULT_CALENDAR_VIEW_PREFERENCES = Object.freeze({
+  scalePreset: 'default',
+  highlightMode: DEFAULT_CALENDAR_HIGHLIGHT_MODE,
+  aggregatePanelEnabled: true,
+  receiptOcrPanelEnabled: true,
+  transactionSheetViewMode: 'inline',
+})
 const CALENDAR_LAYOUT_GRID_COLUMNS = 9
 const CALENDAR_LAYOUT_GRID_MARGIN = 4
 const CALENDAR_LAYOUT_GRID_GAP = CALENDAR_LAYOUT_GRID_MARGIN * 2
@@ -1050,6 +1053,7 @@ const pagedNormalizedSelectedDateEntries = computed(() => {
 const selectedDayEntrySelection = useTableSelection(pagedNormalizedSelectedDateEntries)
 const userStorageId = computed(() => props.currentUser?.id || props.currentUser?.loginId || 'anonymous')
 const calendarPanelLayoutStorageKey = computed(() => `${CALENDAR_PANEL_LAYOUT_STORAGE_KEY}:${userStorageId.value}`)
+const calendarViewPreferenceStorageKey = computed(() => `${CALENDAR_VIEW_PREFERENCE_STORAGE_PREFIX}:${userStorageId.value}`)
 
 const hasSelectedMemoColumn = computed(() => normalizedSelectedDateEntries.value.some((entry) => entry.visibleMemo))
 const hasSelectedForeignEntries = computed(() =>
@@ -1599,6 +1603,10 @@ function calendarViewPreferencePayload() {
   }
 }
 
+function defaultCalendarViewPreferences() {
+  return { ...DEFAULT_CALENDAR_VIEW_PREFERENCES }
+}
+
 function normalizeTransactionSheetViewMode(value) {
   return transactionSheetViewModes.some((mode) => mode.value === value) ? value : 'inline'
 }
@@ -1638,11 +1646,10 @@ function persistCalendarViewPreferencesLocal() {
     return
   }
 
-  window.localStorage.setItem(CALENDAR_SCALE_KEY, calendarScalePreset.value)
-  window.localStorage.setItem(CALENDAR_HIGHLIGHT_KEY, calendarHighlightMode.value)
-  window.localStorage.setItem(CALENDAR_AGGREGATE_PANEL_ENABLED_KEY, isAggregatePanelEnabled.value ? 'true' : 'false')
-  window.localStorage.setItem(CALENDAR_RECEIPT_OCR_PANEL_ENABLED_KEY, isReceiptOcrPanelEnabled.value ? 'true' : 'false')
-  window.localStorage.setItem(CALENDAR_TRANSACTION_SHEET_VIEW_MODE_KEY, transactionSheetViewMode.value)
+  window.localStorage.setItem(
+    calendarViewPreferenceStorageKey.value,
+    JSON.stringify(calendarViewPreferencePayload()),
+  )
 }
 
 function scheduleCalendarViewPreferencesRemotePersist(payload = calendarViewPreferencePayload()) {
@@ -1692,29 +1699,16 @@ function hydrateCalendarViewPreferencesFromLocal() {
   viewPreferenceChangedDuringRemoteHydration = false
   isApplyingCalendarViewPreferences = true
 
-  const savedScale = window.localStorage.getItem(CALENDAR_SCALE_KEY)
-  const savedHighlight = window.localStorage.getItem(CALENDAR_HIGHLIGHT_KEY)
-  const savedAggregatePanelEnabled = window.localStorage.getItem(CALENDAR_AGGREGATE_PANEL_ENABLED_KEY)
-  const savedReceiptOcrPanelEnabled = window.localStorage.getItem(CALENDAR_RECEIPT_OCR_PANEL_ENABLED_KEY)
-  const savedTransactionSheetViewMode = window.localStorage.getItem(CALENDAR_TRANSACTION_SHEET_VIEW_MODE_KEY)
-
-  if (savedScale) {
-    calendarScalePreset.value = normalizePresetKey(calendarDisplayModes, savedScale, 'default')
+  let preferences = defaultCalendarViewPreferences()
+  try {
+    const raw = window.localStorage.getItem(calendarViewPreferenceStorageKey.value)
+    const parsed = raw ? JSON.parse(raw) : null
+    preferences = normalizeCalendarViewPreferences(parsed) ?? preferences
+  } catch {
+    // An invalid per-user cache should never affect the first-use baseline.
   }
 
-  if (savedHighlight && calendarHighlightModes.some((item) => item.key === savedHighlight)) {
-    calendarHighlightMode.value = savedHighlight
-  } else {
-    calendarHighlightMode.value = DEFAULT_CALENDAR_HIGHLIGHT_MODE
-  }
-
-  if (savedAggregatePanelEnabled) {
-    isAggregatePanelEnabled.value = savedAggregatePanelEnabled !== 'false'
-  }
-  if (savedReceiptOcrPanelEnabled) {
-    isReceiptOcrPanelEnabled.value = savedReceiptOcrPanelEnabled !== 'false'
-  }
-  transactionSheetViewMode.value = normalizeTransactionSheetViewMode(savedTransactionSheetViewMode)
+  applyCalendarViewPreferences(preferences)
 
   persistCalendarViewPreferencesLocal()
   nextTick(() => {
@@ -1855,7 +1849,6 @@ function hydrateCalendarPanelLayout() {
   }
 
   const savedLayout = window.localStorage.getItem(calendarPanelLayoutStorageKey.value)
-    || window.localStorage.getItem(CALENDAR_PANEL_LAYOUT_STORAGE_KEY)
   if (!savedLayout) {
     calendarPanelLayout.value = createDefaultCalendarPanelLayout()
     hydrateRemoteCalendarPanelLayout(layoutRemoteHydrationSequence, null)

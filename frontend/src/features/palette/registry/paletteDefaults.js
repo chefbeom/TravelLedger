@@ -80,12 +80,11 @@ export function createDefaultPalettePresets() {
       id: 3,
       name: '기본',
       palettes: [
-        { id: 'preset3-today', type: 'kpi', size: '1x1', position: { x: 0, y: 0 }, visible: true, options: { variant: 'today' } },
-        { id: 'preset3-week', type: 'kpi', size: '1x1', position: { x: 1, y: 0 }, visible: true, options: { variant: 'week' } },
-        { id: 'preset3-month', type: 'kpi', size: '2x2', position: { x: 2, y: 0 }, visible: true, options: { variant: 'month' } },
-        { id: 'preset3-calendar', type: 'calendar', size: '3x3', position: { x: 4, y: 0 }, visible: true, options: {} },
-        { id: 'preset3-balance', type: 'kpi', size: '3x2', position: { x: 0, y: 2 }, visible: true, options: { variant: 'incomeExpense' } },
-        { id: 'preset3-recent', type: 'kpi', size: '2x2', position: { x: 7, y: 0 }, visible: true, options: { variant: 'recentFlow', entryType: 'EXPENSE', limit: 8 } },
+        // New accounts start with the three panels used most often: calendar,
+        // current spending flow, and the monthly income/expense balance.
+        { id: 'preset3-calendar', type: 'calendar', size: '3x3', position: { x: 0, y: 0 }, visible: true, options: {} },
+        { id: 'preset3-recent', type: 'kpi', size: '4x3', position: { x: 3, y: 0 }, visible: true, options: { variant: 'recentFlow', entryType: 'EXPENSE', limit: 8 } },
+        { id: 'preset3-balance', type: 'kpi', size: '2x3', position: { x: 7, y: 0 }, visible: true, options: { variant: 'incomeExpense' } },
       ],
     },
   ]

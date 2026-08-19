@@ -124,22 +124,12 @@ const fallbackMinSpan = { w: 2, h: 2 }
 const fallbackMaxSpan = { w: 6, h: 5 }
 
 const defaultPalettes = [
-  { id: 'main-household-summary', type: 'household-summary', size: '3x2', position: { x: 0, y: 0 }, visible: true, options: {} },
-  { id: 'main-month-expense', type: 'household-metric', size: '2x2', position: { x: 3, y: 0 }, visible: true, options: { metric: 'monthExpense' } },
-  { id: 'main-month-income', type: 'household-metric', size: '2x2', position: { x: 5, y: 0 }, visible: true, options: { metric: 'monthIncome' } },
-  { id: 'main-week-expense', type: 'household-metric', size: '2x2', position: { x: 7, y: 0 }, visible: true, options: { metric: 'weekExpense' } },
-  { id: 'main-week-income', type: 'household-metric', size: '2x2', position: { x: 0, y: 2 }, visible: true, options: { metric: 'weekIncome' } },
-  { id: 'main-quick-entry', type: 'quick-entry', size: '3x3', position: { x: 2, y: 2 }, visible: true, options: {} },
-  { id: 'main-payment', type: 'household-payment', size: '3x2', position: { x: 5, y: 2 }, visible: true, options: {} },
-  { id: 'main-week-compare', type: 'household-compare', size: '3x2', position: { x: 0, y: 5 }, visible: true, options: { period: 'week' } },
-  { id: 'main-month-compare', type: 'household-compare', size: '3x2', position: { x: 3, y: 5 }, visible: true, options: { period: 'month' } },
-  { id: 'main-travel-summary', type: 'travel-summary', size: '3x2', position: { x: 6, y: 5 }, visible: true, options: {} },
-  { id: 'main-drive-summary', type: 'drive-summary', size: '3x2', position: { x: 0, y: 7 }, visible: true, options: {} },
-  { id: 'main-drive-recent-files', type: 'drive-recent-files', size: '3x2', position: { x: 3, y: 7 }, visible: true, options: {} },
-  { id: 'main-drive-capacity', type: 'drive-capacity', size: '3x2', position: { x: 6, y: 7 }, visible: true, options: {} },
-  { id: 'main-photo-frame', type: 'photo-frame', size: '4x3', position: { x: 0, y: 9 }, visible: true, options: {} },
-  { id: 'main-feature-links', type: 'feature-links', size: '2x2', position: { x: 4, y: 9 }, visible: true, options: {} },
-  { id: 'main-quick-actions', type: 'quick-actions', size: '3x2', position: { x: 6, y: 9 }, visible: true, options: {} },
+  // First-use baseline: monthly cash flow at left, overall household totals beneath,
+  // and a single photo frame at right. Additional palettes remain available in edit mode.
+  { id: 'main-month-expense', type: 'household-metric', size: '3x2', position: { x: 0, y: 0 }, visible: true, options: { metric: 'monthExpense' } },
+  { id: 'main-month-income', type: 'household-metric', size: '3x2', position: { x: 3, y: 0 }, visible: true, options: { metric: 'monthIncome' } },
+  { id: 'main-household-summary', type: 'household-summary', size: '6x3', position: { x: 0, y: 2 }, visible: true, options: {} },
+  { id: 'main-photo-frame', type: 'photo-frame', size: '6x5', position: { x: 6, y: 0 }, visible: true, options: {} },
 ]
 
 const metricDefinitions = {

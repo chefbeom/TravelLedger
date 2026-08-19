@@ -36,10 +36,11 @@ const props = defineProps({
 
 const emit = defineEmits(['navigate'])
 
-const MAIN_DASHBOARD_STORAGE_VERSION = 'v6'
+const MAIN_DASHBOARD_STORAGE_VERSION = 'v7'
+const LEGACY_MAIN_DASHBOARD_STORAGE_VERSION = 'v6'
 const MAIN_DASHBOARD_SCOPE = 'main'
 const MAIN_DASHBOARD_LAYOUT_SCOPE = 'main-dashboard'
-const MAIN_DASHBOARD_LAYOUT_VERSION = 6
+const MAIN_DASHBOARD_LAYOUT_VERSION = 7
 const PAYMENT_SELECTION_STORAGE_VERSION = 'v1'
 const SUMMARY_CACHE_STORAGE_VERSION = 'v2'
 const MAIN_DASHBOARD_GRID_MARGIN = 4
@@ -126,10 +127,32 @@ const fallbackMaxSpan = { w: 6, h: 5 }
 const defaultPalettes = [
   // First-use baseline: monthly cash flow at left, overall household totals beneath,
   // and a single photo frame at right. Additional palettes remain available in edit mode.
-  { id: 'main-month-expense', type: 'household-metric', size: '3x2', position: { x: 0, y: 0 }, visible: true, options: { metric: 'monthExpense' } },
-  { id: 'main-month-income', type: 'household-metric', size: '3x2', position: { x: 3, y: 0 }, visible: true, options: { metric: 'monthIncome' } },
-  { id: 'main-household-summary', type: 'household-summary', size: '6x3', position: { x: 0, y: 2 }, visible: true, options: {} },
-  { id: 'main-photo-frame', type: 'photo-frame', size: '6x5', position: { x: 6, y: 0 }, visible: true, options: {} },
+  { id: 'main-month-expense', type: 'household-metric', size: '2x2', position: { x: 0, y: 0 }, visible: true, options: { metric: 'monthExpense' } },
+  { id: 'main-month-income', type: 'household-metric', size: '3x2', position: { x: 2, y: 0 }, visible: true, options: { metric: 'monthIncome' } },
+  { id: 'main-household-summary', type: 'household-summary', size: '5x3', position: { x: 0, y: 2 }, visible: true, options: {} },
+  { id: 'main-photo-frame', type: 'photo-frame', size: '4x5', position: { x: 5, y: 0 }, visible: true, options: {} },
+]
+
+const RECOMMENDED_MAIN_DASHBOARD_PRESET = Object.freeze({
+  id: 'recommended-main-dashboard',
+  label: '\uCD94\uCC9C \uAE30\uBCF8 \uD504\uB9AC\uC14B',
+  actionLabel: '\uCD94\uCC9C \uAE30\uBCF8 \uD504\uB9AC\uC14B \uC801\uC6A9',
+  confirmationMessage: '\uCD94\uCC9C \uAE30\uBCF8 \uD504\uB9AC\uC14B\uC744 \uC801\uC6A9\uD560\uAE4C\uC694? \uD604\uC7AC \uD314\uB808\uD2B8 \uBC30\uCE58\uB294 \uBC14\uB010 \uAE30\uBCF8 \uAD6C\uC131\uC73C\uB85C \uAD50\uCCB4\uB429\uB2C8\uB2E4.',
+  palettes: defaultPalettes,
+})
+
+const LEGACY_MAIN_DASHBOARD_DEFAULT_LAYOUT = [
+  { id: 'main-month-expense', size: '3x2', position: { x: 0, y: 0 } },
+  { id: 'main-month-income', size: '3x2', position: { x: 3, y: 0 } },
+  { id: 'main-household-summary', size: '6x3', position: { x: 0, y: 2 } },
+  { id: 'main-photo-frame', size: '6x5', position: { x: 6, y: 0 } },
+]
+
+const NORMALIZED_LEGACY_MAIN_DASHBOARD_DEFAULT_LAYOUT = [
+  { id: 'main-month-expense', size: '3x2', position: { x: 0, y: 0 } },
+  { id: 'main-month-income', size: '3x2', position: { x: 3, y: 0 } },
+  { id: 'main-household-summary', size: '6x3', position: { x: 0, y: 2 } },
+  { id: 'main-photo-frame', size: '6x5', position: { x: 3, y: 5 } },
 ]
 
 const metricDefinitions = {
@@ -226,6 +249,7 @@ const photoFrameDetail = reactive({
 
 const userStorageId = computed(() => props.currentUser?.id || props.currentUser?.loginId || 'anonymous')
 const storageKey = computed(() => `calen-main-dashboard-palettes:${MAIN_DASHBOARD_STORAGE_VERSION}:${userStorageId.value}:${MAIN_DASHBOARD_SCOPE}`)
+const legacyStorageKey = computed(() => `calen-main-dashboard-palettes:${LEGACY_MAIN_DASHBOARD_STORAGE_VERSION}:${userStorageId.value}:${MAIN_DASHBOARD_SCOPE}`)
 const paymentSelectionStorageKey = computed(() => `calen-main-dashboard-payment:${PAYMENT_SELECTION_STORAGE_VERSION}:${userStorageId.value}`)
 const summaryCacheStorageKey = computed(() => `calen-main-dashboard-summary:${SUMMARY_CACHE_STORAGE_VERSION}:${userStorageId.value}`)
 const isDriveAdmin = computed(() => Boolean(props.currentUser?.admin))
@@ -1009,6 +1033,25 @@ function normalizeMainPalettes(value) {
   })
 }
 
+function matchesMainPaletteLayout(paletteList, expectedLayout) {
+  if (!Array.isArray(paletteList) || paletteList.length !== expectedLayout.length) return false
+  const palettesById = new Map(paletteList.map((palette) => [String(palette?.id ?? ''), palette]))
+  return expectedLayout.every((expected) => {
+    const palette = palettesById.get(expected.id)
+    return Boolean(
+      palette
+      && palette.size === expected.size
+      && Number(palette.position?.x) === expected.position.x
+      && Number(palette.position?.y) === expected.position.y,
+    )
+  })
+}
+
+function isLegacyMainDashboardDefaultLayout(paletteList) {
+  return matchesMainPaletteLayout(paletteList, LEGACY_MAIN_DASHBOARD_DEFAULT_LAYOUT)
+    || matchesMainPaletteLayout(normalizeMainPalettes(paletteList), NORMALIZED_LEGACY_MAIN_DASHBOARD_DEFAULT_LAYOUT)
+}
+
 function applyMainLayoutPatches(paletteList, patches) {
   const patchMap = new Map((patches ?? []).map((patch) => [String(patch.id), patch]))
   return normalizeMainPalettes((paletteList ?? []).map((palette) => {
@@ -1047,17 +1090,24 @@ function hydratePalettes() {
 
   try {
     const raw = window.localStorage.getItem(storageKey.value)
-    if (!raw) {
+    const legacyRaw = raw ? null : window.localStorage.getItem(legacyStorageKey.value)
+    if (!raw && !legacyRaw) {
       palettes.value = normalizeMainPalettes(clone(defaultPalettes))
-      hydrateRemotePalettes(paletteRemoteHydrationSequence, null)
+      persistPalettesLocal()
+      hydrateRemotePalettes(paletteRemoteHydrationSequence, palettePayload())
       return
     }
-    const parsed = JSON.parse(raw)
-    palettes.value = normalizeMainPalettes(Array.isArray(parsed?.palettes) ? parsed.palettes : defaultPalettes)
+    const parsed = JSON.parse(raw ?? legacyRaw)
+    const restoredPalettes = Array.isArray(parsed?.palettes) ? parsed.palettes : defaultPalettes
+    palettes.value = legacyRaw && isLegacyMainDashboardDefaultLayout(restoredPalettes)
+      ? normalizeMainPalettes(clone(RECOMMENDED_MAIN_DASHBOARD_PRESET.palettes))
+      : normalizeMainPalettes(restoredPalettes)
+    persistPalettesLocal()
     hydrateRemotePalettes(paletteRemoteHydrationSequence, palettePayload())
   } catch {
     palettes.value = normalizeMainPalettes(clone(defaultPalettes))
-    hydrateRemotePalettes(paletteRemoteHydrationSequence, null)
+    persistPalettesLocal()
+    hydrateRemotePalettes(paletteRemoteHydrationSequence, palettePayload())
   }
 }
 
@@ -1109,9 +1159,23 @@ async function hydrateRemotePalettes(sequence, fallbackPayload) {
       return
     }
 
-    if (applyPalettePayload(response?.payload)) {
-      persistPalettesLocal()
-      return
+    const remotePalettes = response?.payload?.palettes
+    if (Array.isArray(remotePalettes)) {
+      const remoteVersion = Number(response?.version ?? 1) || 1
+      if (remoteVersion < MAIN_DASHBOARD_LAYOUT_VERSION && isLegacyMainDashboardDefaultLayout(remotePalettes)) {
+        palettes.value = normalizeMainPalettes(clone(RECOMMENDED_MAIN_DASHBOARD_PRESET.palettes))
+        persistPalettesLocal()
+        await saveLayoutSetting(MAIN_DASHBOARD_LAYOUT_SCOPE, palettePayload(), MAIN_DASHBOARD_LAYOUT_VERSION)
+        return
+      }
+
+      if (applyPalettePayload(response.payload)) {
+        persistPalettesLocal()
+        if (remoteVersion < MAIN_DASHBOARD_LAYOUT_VERSION) {
+          await saveLayoutSetting(MAIN_DASHBOARD_LAYOUT_SCOPE, palettePayload(), MAIN_DASHBOARD_LAYOUT_VERSION)
+        }
+        return
+      }
     }
 
     if (fallbackPayload) {
@@ -1452,9 +1516,9 @@ function addPalette() {
   persistPalettes()
 }
 
-function resetPalettes() {
-  if (!window.confirm('메인 대시보드 팔레트 배치를 초기화할까요?')) return
-  palettes.value = normalizeMainPalettes(clone(defaultPalettes))
+function applyRecommendedPalettePreset() {
+  if (!window.confirm(RECOMMENDED_MAIN_DASHBOARD_PRESET.confirmationMessage)) return
+  palettes.value = normalizeMainPalettes(clone(RECOMMENDED_MAIN_DASHBOARD_PRESET.palettes))
   persistPalettes()
 }
 
@@ -2015,9 +2079,14 @@ onBeforeUnmount(() => {
         <button type="button" @click="toolsOpen = false">닫기</button>
       </div>
 
-      <button v-if="!isEditMode" class="main-dashboard__primary" type="button" @click="toggleEditMode">
+      <template v-if="!isEditMode">
+        <button class="main-dashboard__primary" type="button" @click="toggleEditMode">
         편집 시작
-      </button>
+        </button>
+        <button class="main-dashboard__secondary" type="button" @click="applyRecommendedPalettePreset">
+          {{ RECOMMENDED_MAIN_DASHBOARD_PRESET.actionLabel }}
+        </button>
+      </template>
 
       <template v-else>
         <label class="main-dashboard__field">
@@ -2043,7 +2112,9 @@ onBeforeUnmount(() => {
           <small v-if="!hiddenPalettes.length">숨긴 팔레트가 없습니다.</small>
         </div>
 
-        <button class="main-dashboard__secondary" type="button" @click="resetPalettes">초기화</button>
+        <button class="main-dashboard__secondary" type="button" @click="applyRecommendedPalettePreset">
+          {{ RECOMMENDED_MAIN_DASHBOARD_PRESET.actionLabel }}
+        </button>
         <button class="main-dashboard__primary" type="button" @click="toggleEditMode">편집 완료</button>
       </template>
     </aside>

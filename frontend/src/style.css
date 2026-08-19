@@ -2467,6 +2467,159 @@ button {
   gap: 10px;
 }
 
+.travel-setup-workflow {
+  display: grid;
+  gap: 20px;
+}
+
+.travel-setup-workflow__header,
+.travel-setup-workflow__stage-header {
+  align-items: flex-start;
+}
+
+.travel-setup-workflow__header-actions,
+.travel-setup-workflow__toolbar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.travel-setup-workflow__toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 0;
+  background: var(--surface-soft);
+}
+
+.travel-setup-workflow__steps {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.travel-setup-workflow__step {
+  display: grid;
+  min-width: 0;
+  gap: 5px;
+  padding: 13px 14px;
+  border: 1px solid var(--line);
+  border-radius: 0;
+  background: var(--surface-soft);
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.travel-setup-workflow__step:hover:not(:disabled),
+.travel-setup-workflow__step--active {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--surface-soft) 84%, var(--accent) 16%);
+}
+
+.travel-setup-workflow__step:disabled {
+  opacity: 0.52;
+  cursor: not-allowed;
+}
+
+.travel-setup-workflow__step span,
+.travel-setup-workflow__stage-header span,
+.travel-setup-workflow__complete > div:first-child > span {
+  color: var(--accent);
+  font-size: 0.72rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+}
+
+.travel-setup-workflow__step strong {
+  overflow-wrap: anywhere;
+}
+
+.travel-setup-workflow__step small,
+.travel-setup-workflow__stage-header p,
+.travel-setup-workflow__complete p,
+.travel-setup-workflow__empty p {
+  color: var(--text-soft);
+  line-height: 1.45;
+}
+
+.travel-setup-workflow__stage,
+.travel-setup-workflow__complete,
+.travel-setup-workflow__empty {
+  display: grid;
+  gap: 18px;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 0;
+  background: color-mix(in srgb, var(--surface) 90%, var(--accent) 10%);
+}
+
+.travel-setup-workflow__stage-header {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.travel-setup-workflow__stage-header > div,
+.travel-setup-workflow__complete > div:first-child {
+  display: grid;
+  gap: 6px;
+}
+
+.travel-setup-workflow__stage-header h3,
+.travel-setup-workflow__complete h3,
+.travel-setup-workflow__empty h3 {
+  margin: 0;
+}
+
+.travel-setup-workflow__stage-header p,
+.travel-setup-workflow__complete p,
+.travel-setup-workflow__empty p {
+  margin: 0;
+}
+
+.travel-setup-workflow__stage-actions {
+  margin-top: 2px;
+}
+
+.travel-setup-workflow__empty {
+  justify-items: start;
+  min-height: 180px;
+  align-content: center;
+}
+
+@media (max-width: 840px) {
+  .travel-setup-workflow__steps {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 620px) {
+  .travel-setup-workflow__toolbar,
+  .travel-setup-workflow__header,
+  .travel-setup-workflow__stage-header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .travel-setup-workflow__header-actions,
+  .travel-setup-workflow__toolbar-actions,
+  .travel-setup-workflow__stage-header > .button {
+    width: 100%;
+  }
+
+  .travel-setup-workflow__header-actions .button,
+  .travel-setup-workflow__toolbar-actions .button,
+  .travel-setup-workflow__stage-header > .button {
+    justify-content: center;
+  }
+}
 .travel-plan-banner {
   display: flex;
   flex-wrap: wrap;

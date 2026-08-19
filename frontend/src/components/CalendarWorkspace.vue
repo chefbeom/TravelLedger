@@ -8,24 +8,29 @@ import { useTableSelection } from '../lib/tableSelection'
 import { fetchLayoutSetting, saveLayoutSetting } from '../lib/api'
 import HouseholdTransactionSheet from './HouseholdTransactionSheet.vue'
 
-const CALENDAR_VIEW_PREFERENCE_STORAGE_PREFIX = 'calen-household-calendar-view:v2'
-const CALENDAR_PANEL_LAYOUT_STORAGE_KEY = 'calen-household-calendar-panel-layout:v2'
+const CALENDAR_VIEW_PREFERENCE_STORAGE_PREFIX = 'calen-household-calendar-view:v3'
+const LEGACY_CALENDAR_VIEW_PREFERENCE_STORAGE_PREFIX = 'calen-household-calendar-view:v2'
+const CALENDAR_PANEL_LAYOUT_STORAGE_KEY = 'calen-household-calendar-panel-layout:v3'
+const LEGACY_CALENDAR_PANEL_LAYOUT_STORAGE_KEY = 'calen-household-calendar-panel-layout:v2'
 const CALENDAR_PANEL_LAYOUT_SCOPE = 'household-calendar'
-const CALENDAR_PANEL_LAYOUT_VERSION = 2
+const CALENDAR_PANEL_LAYOUT_VERSION = 3
 const CALENDAR_VIEW_PREFERENCE_SCOPE = 'household-calendar-view'
-const CALENDAR_VIEW_PREFERENCE_VERSION = 1
+const CALENDAR_VIEW_PREFERENCE_VERSION = 2
 const DEFAULT_CALENDAR_HIGHLIGHT_MODE = 'net'
 const DEFAULT_CALENDAR_VIEW_PREFERENCES = Object.freeze({
   scalePreset: 'default',
   highlightMode: DEFAULT_CALENDAR_HIGHLIGHT_MODE,
   aggregatePanelEnabled: true,
   receiptOcrPanelEnabled: true,
-  transactionSheetViewMode: 'inline',
+  transactionSheetViewMode: 'modal',
 })
 const CALENDAR_LAYOUT_GRID_COLUMNS = 9
 const CALENDAR_LAYOUT_GRID_MARGIN = 4
 const CALENDAR_LAYOUT_GRID_GAP = CALENDAR_LAYOUT_GRID_MARGIN * 2
 const CALENDAR_AGGREGATE_PANEL_ROWS = 2
+const CALENDAR_RECOMMENDED_GRID_ROWS = 8
+const CALENDAR_RECOMMENDED_CONTENT_ROWS = CALENDAR_RECOMMENDED_GRID_ROWS - CALENDAR_AGGREGATE_PANEL_ROWS
+const RECOMMENDED_CALENDAR_PRESET_LABEL = '\uCD94\uCC9C \uAE30\uBCF8 \uBC30\uCE58 (9\u00D78)'
 const CALENDAR_AGGREGATE_EDIT_PANEL_ROWS = 4
 const LEGACY_CALENDAR_AGGREGATE_PANEL_ROWS = 6
 const REMOTE_LAYOUT_SAVE_DELAY_MS = 800
@@ -133,7 +138,7 @@ const calendarPanelDefinitions = [
   },
   {
     id: 'calendar',
-    defaultLayout: { x: 0, y: CALENDAR_AGGREGATE_PANEL_ROWS, w: 6, h: 5 },
+    defaultLayout: { x: 0, y: CALENDAR_AGGREGATE_PANEL_ROWS, w: 6, h: CALENDAR_RECOMMENDED_CONTENT_ROWS },
     minW: 4,
     maxW: 9,
     minH: 3,
@@ -141,7 +146,7 @@ const calendarPanelDefinitions = [
   },
   {
     id: 'quick-entry',
-    defaultLayout: { x: 6, y: CALENDAR_AGGREGATE_PANEL_ROWS, w: 3, h: 5 },
+    defaultLayout: { x: 6, y: CALENDAR_AGGREGATE_PANEL_ROWS, w: 3, h: CALENDAR_RECOMMENDED_CONTENT_ROWS },
     minW: 2,
     maxW: 5,
     minH: 3,
@@ -149,13 +154,21 @@ const calendarPanelDefinitions = [
   },
   {
     id: 'sheet',
-    defaultLayout: { x: 0, y: CALENDAR_AGGREGATE_PANEL_ROWS + 5, w: 9, h: 3 },
+    defaultLayout: { x: 0, y: CALENDAR_RECOMMENDED_GRID_ROWS, w: 9, h: 3 },
     minW: 4,
     maxW: 9,
     minH: 2,
     maxH: 6,
   },
 ]
+
+const LEGACY_CALENDAR_DEFAULT_LAYOUT = [
+  { id: 'aggregate', x: 0, y: 0, w: 9, h: CALENDAR_AGGREGATE_PANEL_ROWS },
+  { id: 'calendar', x: 0, y: CALENDAR_AGGREGATE_PANEL_ROWS, w: 6, h: 5 },
+  { id: 'quick-entry', x: 6, y: CALENDAR_AGGREGATE_PANEL_ROWS, w: 3, h: 5 },
+  { id: 'sheet', x: 0, y: CALENDAR_AGGREGATE_PANEL_ROWS + 5, w: 9, h: 3 },
+]
+
 const props = defineProps({
   currentUser: {
     type: Object,
@@ -349,7 +362,7 @@ const selectedDaySort = ref('ASC')
 const selectedDayEntryFilter = ref('ALL')
 const selectedDayAmountMode = ref('KRW')
 const selectedDayEntryPage = ref(0)
-const transactionSheetViewMode = ref('inline')
+const transactionSheetViewMode = ref(DEFAULT_CALENDAR_VIEW_PREFERENCES.transactionSheetViewMode)
 const isTransactionSheetModalOpen = ref(false)
 const isTransactionSheetSettingsOpen = ref(false)
 const calendarScalePreset = ref('default')
@@ -1053,7 +1066,9 @@ const pagedNormalizedSelectedDateEntries = computed(() => {
 const selectedDayEntrySelection = useTableSelection(pagedNormalizedSelectedDateEntries)
 const userStorageId = computed(() => props.currentUser?.id || props.currentUser?.loginId || 'anonymous')
 const calendarPanelLayoutStorageKey = computed(() => `${CALENDAR_PANEL_LAYOUT_STORAGE_KEY}:${userStorageId.value}`)
+const legacyCalendarPanelLayoutStorageKey = computed(() => `${LEGACY_CALENDAR_PANEL_LAYOUT_STORAGE_KEY}:${userStorageId.value}`)
 const calendarViewPreferenceStorageKey = computed(() => `${CALENDAR_VIEW_PREFERENCE_STORAGE_PREFIX}:${userStorageId.value}`)
+const legacyCalendarViewPreferenceStorageKey = computed(() => `${LEGACY_CALENDAR_VIEW_PREFERENCE_STORAGE_PREFIX}:${userStorageId.value}`)
 
 const hasSelectedMemoColumn = computed(() => normalizedSelectedDateEntries.value.some((entry) => entry.visibleMemo))
 const hasSelectedForeignEntries = computed(() =>
@@ -1608,7 +1623,7 @@ function defaultCalendarViewPreferences() {
 }
 
 function normalizeTransactionSheetViewMode(value) {
-  return transactionSheetViewModes.some((mode) => mode.value === value) ? value : 'inline'
+  return transactionSheetViewModes.some((mode) => mode.value === value) ? value : DEFAULT_CALENDAR_VIEW_PREFERENCES.transactionSheetViewMode
 }
 
 function normalizeCalendarViewPreferences(payload) {
@@ -1627,6 +1642,14 @@ function normalizeCalendarViewPreferences(payload) {
     receiptOcrPanelEnabled: payload.receiptOcrPanelEnabled !== false,
     transactionSheetViewMode: normalizeTransactionSheetViewMode(payload.transactionSheetViewMode),
   }
+}
+
+function isLegacyDefaultCalendarViewPreferences(preferences) {
+  return preferences.scalePreset === 'default'
+    && preferences.highlightMode === DEFAULT_CALENDAR_HIGHLIGHT_MODE
+    && preferences.aggregatePanelEnabled
+    && preferences.receiptOcrPanelEnabled
+    && preferences.transactionSheetViewMode === 'inline'
 }
 
 function applyCalendarViewPreferences(preferences) {
@@ -1702,8 +1725,12 @@ function hydrateCalendarViewPreferencesFromLocal() {
   let preferences = defaultCalendarViewPreferences()
   try {
     const raw = window.localStorage.getItem(calendarViewPreferenceStorageKey.value)
-    const parsed = raw ? JSON.parse(raw) : null
-    preferences = normalizeCalendarViewPreferences(parsed) ?? preferences
+    const legacyRaw = raw ? null : window.localStorage.getItem(legacyCalendarViewPreferenceStorageKey.value)
+    const parsed = raw || legacyRaw ? JSON.parse(raw ?? legacyRaw) : null
+    const restoredPreferences = normalizeCalendarViewPreferences(parsed)
+    preferences = legacyRaw && restoredPreferences && isLegacyDefaultCalendarViewPreferences(restoredPreferences)
+      ? defaultCalendarViewPreferences()
+      : restoredPreferences ?? preferences
   } catch {
     // An invalid per-user cache should never affect the first-use baseline.
   }
@@ -1727,12 +1754,26 @@ async function hydrateRemoteCalendarViewPreferences(sequence, fallbackPayload) {
 
     const preferences = normalizeCalendarViewPreferences(response?.payload)
     if (preferences) {
+      const remoteVersion = Number(response?.version ?? 1) || 1
+      const nextPreferences = (
+        remoteVersion < CALENDAR_VIEW_PREFERENCE_VERSION
+        && isLegacyDefaultCalendarViewPreferences(preferences)
+      )
+        ? defaultCalendarViewPreferences()
+        : preferences
       isApplyingCalendarViewPreferences = true
-      applyCalendarViewPreferences(preferences)
+      applyCalendarViewPreferences(nextPreferences)
       persistCalendarViewPreferencesLocal()
       nextTick(() => {
         isApplyingCalendarViewPreferences = false
       })
+      if (remoteVersion < CALENDAR_VIEW_PREFERENCE_VERSION) {
+        await saveLayoutSetting(
+          CALENDAR_VIEW_PREFERENCE_SCOPE,
+          calendarViewPreferencePayload(),
+          CALENDAR_VIEW_PREFERENCE_VERSION,
+        )
+      }
       return
     }
 
@@ -1840,6 +1881,25 @@ function normalizeCalendarPanelLayout(layouts) {
   return normalized
 }
 
+function matchesCalendarPanelLayout(layout, expectedLayout) {
+  if (!Array.isArray(layout) || layout.length !== expectedLayout.length) return false
+  const panelsById = new Map(layout.map((panel) => [String(panel?.id ?? ''), panel]))
+  return expectedLayout.every((expected) => {
+    const panel = panelsById.get(expected.id)
+    return Boolean(
+      panel
+      && Number(panel.x) === expected.x
+      && Number(panel.y) === expected.y
+      && Number(panel.w) === expected.w
+      && Number(panel.h) === expected.h,
+    )
+  })
+}
+
+function isLegacyCalendarDefaultLayout(layout) {
+  return matchesCalendarPanelLayout(layout, LEGACY_CALENDAR_DEFAULT_LAYOUT)
+}
+
 function hydrateCalendarPanelLayout() {
   layoutRemoteHydrationSequence += 1
   layoutChangedDuringRemoteHydration = false
@@ -1849,25 +1909,41 @@ function hydrateCalendarPanelLayout() {
   }
 
   const savedLayout = window.localStorage.getItem(calendarPanelLayoutStorageKey.value)
-  if (!savedLayout) {
-    calendarPanelLayout.value = createDefaultCalendarPanelLayout()
-    hydrateRemoteCalendarPanelLayout(layoutRemoteHydrationSequence, null)
+  const legacySavedLayout = savedLayout ? null : window.localStorage.getItem(legacyCalendarPanelLayoutStorageKey.value)
+  const storedLayout = savedLayout ?? legacySavedLayout
+  const isLegacyStorage = !savedLayout && Boolean(legacySavedLayout)
+  if (!storedLayout) {
+    const recommendedLayout = createDefaultCalendarPanelLayout()
+    calendarPanelLayout.value = recommendedLayout
+    persistCalendarPanelLayoutLocal()
+    hydrateRemoteCalendarPanelLayout(layoutRemoteHydrationSequence, clone(recommendedLayout))
     return
   }
 
   try {
-    const restoredLayout = parseStoredCalendarPanelLayout(savedLayout)
+    const restoredLayout = parseStoredCalendarPanelLayout(storedLayout)
     if (!restoredLayout) {
       throw new Error('Invalid calendar panel layout cache.')
     }
+    if (isLegacyStorage && isLegacyCalendarDefaultLayout(restoredLayout.layout)) {
+      const recommendedLayout = createDefaultCalendarPanelLayout()
+      calendarPanelLayout.value = recommendedLayout
+      calendarPanelLayoutLocalSavedAt = 0
+      persistCalendarPanelLayoutLocal()
+      hydrateRemoteCalendarPanelLayout(layoutRemoteHydrationSequence, clone(recommendedLayout))
+      return
+    }
+
     calendarPanelLayout.value = normalizeCalendarPanelLayout(restoredLayout.layout)
     calendarPanelLayoutLocalSavedAt = restoredLayout.savedAt
     persistCalendarPanelLayoutLocal(restoredLayout.savedAt)
-    hydrateRemoteCalendarPanelLayout(layoutRemoteHydrationSequence, clone(calendarPanelLayout.value))
+    hydrateRemoteCalendarPanelLayout(layoutRemoteHydrationSequence, clone(calendarPanelLayout.value), { preferLocal: true })
   } catch (_error) {
-    calendarPanelLayout.value = createDefaultCalendarPanelLayout()
+    const recommendedLayout = createDefaultCalendarPanelLayout()
+    calendarPanelLayout.value = recommendedLayout
     calendarPanelLayoutLocalSavedAt = 0
-    hydrateRemoteCalendarPanelLayout(layoutRemoteHydrationSequence, null)
+    persistCalendarPanelLayoutLocal()
+    hydrateRemoteCalendarPanelLayout(layoutRemoteHydrationSequence, clone(recommendedLayout))
   }
 }
 
@@ -1927,7 +2003,7 @@ function persistCalendarPanelLayout({ immediate = false } = {}) {
   scheduleCalendarPanelLayoutRemotePersist(payload)
 }
 
-async function hydrateRemoteCalendarPanelLayout(sequence, fallbackLayout) {
+async function hydrateRemoteCalendarPanelLayout(sequence, fallbackLayout, { preferLocal = false } = {}) {
   try {
     const response = await fetchLayoutSetting(CALENDAR_PANEL_LAYOUT_SCOPE)
     if (sequence !== layoutRemoteHydrationSequence || layoutChangedDuringRemoteHydration) {
@@ -1936,15 +2012,10 @@ async function hydrateRemoteCalendarPanelLayout(sequence, fallbackLayout) {
 
     if (Array.isArray(response?.payload)) {
       const remoteVersion = Number(response.version ?? 1) || 1
-      if (remoteVersion < CALENDAR_PANEL_LAYOUT_VERSION) {
-        const nextLayout = fallbackLayout ?? clone(calendarPanelLayout.value)
-        await saveLayoutSetting(CALENDAR_PANEL_LAYOUT_SCOPE, nextLayout, CALENDAR_PANEL_LAYOUT_VERSION)
-        return
-      }
-
       const remoteUpdatedAt = parseRemoteUpdatedAt(response.updatedAt)
       if (
-        fallbackLayout
+        preferLocal
+        && fallbackLayout
         && calendarPanelLayoutLocalSavedAt > 0
         && remoteUpdatedAt > 0
         && calendarPanelLayoutLocalSavedAt > remoteUpdatedAt
@@ -1953,8 +2024,20 @@ async function hydrateRemoteCalendarPanelLayout(sequence, fallbackLayout) {
         return
       }
 
+      if (remoteVersion < CALENDAR_PANEL_LAYOUT_VERSION && isLegacyCalendarDefaultLayout(response.payload)) {
+        const recommendedLayout = createDefaultCalendarPanelLayout()
+        calendarPanelLayout.value = recommendedLayout
+        persistCalendarPanelLayoutLocal()
+        await saveLayoutSetting(CALENDAR_PANEL_LAYOUT_SCOPE, clone(recommendedLayout), CALENDAR_PANEL_LAYOUT_VERSION)
+        refreshCalendarMeasurements()
+        return
+      }
+
       calendarPanelLayout.value = normalizeCalendarPanelLayout(response.payload)
       persistCalendarPanelLayoutLocal(remoteUpdatedAt || Date.now())
+      if (remoteVersion < CALENDAR_PANEL_LAYOUT_VERSION) {
+        await saveLayoutSetting(CALENDAR_PANEL_LAYOUT_SCOPE, clone(calendarPanelLayout.value), CALENDAR_PANEL_LAYOUT_VERSION)
+      }
       refreshCalendarMeasurements()
       return
     }
@@ -1967,9 +2050,17 @@ async function hydrateRemoteCalendarPanelLayout(sequence, fallbackLayout) {
   }
 }
 
-function resetCalendarPanelLayout() {
+function applyRecommendedCalendarPreset() {
   calendarPanelLayout.value = createDefaultCalendarPanelLayout()
-  persistCalendarPanelLayout()
+  viewPreferenceChangedDuringRemoteHydration = true
+  isApplyingCalendarViewPreferences = true
+  applyCalendarViewPreferences(defaultCalendarViewPreferences())
+  persistCalendarPanelLayout({ immediate: true })
+  persistCalendarViewPreferencesLocal()
+  saveCalendarViewPreferencesRemoteNow(calendarViewPreferencePayload())
+  nextTick(() => {
+    isApplyingCalendarViewPreferences = false
+  })
   refreshCalendarMeasurements()
 }
 
@@ -3812,8 +3903,8 @@ defineExpose({
               <button v-if="isLayoutEditMode" type="button" class="button button--secondary" @click="toggleReceiptOcrPanelEnabled">
                 {{ isReceiptOcrPanelEnabled ? '자동입력 숨기기' : '자동입력 보이기' }}
               </button>
-              <button type="button" class="button button--secondary" @click="resetCalendarPanelLayout">
-                기본 배치
+              <button type="button" class="button button--secondary" @click="applyRecommendedCalendarPreset">
+                {{ RECOMMENDED_CALENDAR_PRESET_LABEL }}
               </button>
               <button type="button" class="button button--primary" :disabled="isMobileLayoutMode" @click="toggleLayoutEditMode">
                 {{ isLayoutEditMode ? '배치 완료' : '배치 편집' }}

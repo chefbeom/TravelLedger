@@ -18,6 +18,8 @@ const props = defineProps({
 const emit = defineEmits(['open-household-travel-ledger', 'record-focus-consumed'])
 
 const primaryTab = ref('map')
+const workflowMode = ref('')
+const workflowStartStep = ref(1)
 const hubRoute = ref('travel-log')
 const hubInitialLogTab = ref('overview')
 const hubInitialMoneyTab = ref('records')
@@ -25,6 +27,7 @@ const financeLegacyOpen = ref(false)
 const travelPortfolio = ref(null)
 const travelSummaryLoading = ref(false)
 const travelSummaryError = ref('')
+const travelSummaryLoaded = ref(false)
 const hubPlaceFocusRequest = ref(null)
 const hubPhotoFocusRequest = ref(null)
 const hubRouteFocusRequest = ref(null)
@@ -76,6 +79,11 @@ const travelRecordSummary = computed(() => {
   }
 })
 
+const hasTravelPlans = computed(() => {
+  const plans = Array.isArray(travelPortfolio.value?.plans) ? travelPortfolio.value.plans : []
+  return plans.length > 0 || travelRecordSummary.value.plans > 0
+})
+
 const travelSummaryText = computed(() => {
   const summary = travelRecordSummary.value
   return `여행 ${summary.plans}개 · 장소 기록 ${summary.memories}건 · 사진 ${summary.photos}장 · GPX ${summary.routes}개`
@@ -107,35 +115,41 @@ async function loadTravelSummary() {
   travelSummaryError.value = ''
   try {
     travelPortfolio.value = await fetchTravelPortfolio()
+    if (props.route === 'travel-log') {
+      openTravelSetup({ mode: hasTravelPlans.value ? 'edit' : 'create', step: hasTravelPlans.value ? 2 : 1 })
+    } else if (['travel', 'my-map'].includes(props.route) && !hasTravelPlans.value) {
+      openTravelSetup({ mode: 'create', step: 1 })
+    }
   } catch (error) {
     travelSummaryError.value = error.message || '여행 요약을 불러오지 못했습니다.'
   } finally {
     travelSummaryLoading.value = false
+    travelSummaryLoaded.value = true
   }
 }
-
 function applyRouteState(route) {
   financeLegacyOpen.value = false
+  workflowMode.value = ''
   switch (route) {
-    case 'travel-log':
-      primaryTab.value = 'memories'
-      hubRoute.value = 'travel-log'
-      hubInitialLogTab.value = 'memories'
+    case 'travel-log': {
+      const hasPlans = hasTravelPlans.value
+      openTravelSetup({ mode: hasPlans ? 'edit' : 'create', step: hasPlans ? 2 : 1 })
       break
+    }
     case 'photo-album':
       primaryTab.value = 'photos'
       hubRoute.value = 'photo-album'
       break
     case 'my-map':
     case 'travel':
-      primaryTab.value = 'map'
-      hubRoute.value = 'travel-log'
-      hubInitialLogTab.value = 'overview'
+      if (travelSummaryLoaded.value && !hasTravelPlans.value) {
+        openTravelSetup({ mode: 'create', step: 1 })
+      } else {
+        openMap()
+      }
       break
     case 'public-trips':
-      primaryTab.value = 'map'
-      hubRoute.value = 'travel-log'
-      hubInitialLogTab.value = 'overview'
+      openMap()
       break
     case 'travel-money':
       primaryTab.value = 'finance'
@@ -143,14 +157,23 @@ function applyRouteState(route) {
       hubInitialMoneyTab.value = 'records'
       break
     default:
-      primaryTab.value = 'map'
-      hubRoute.value = 'travel-log'
-      hubInitialLogTab.value = 'overview'
+      openMap()
       break
   }
 }
+function openTravelSetup({ mode = 'edit', step = 1 } = {}) {
+  const hasPlans = hasTravelPlans.value
+  const normalizedStep = [1, 2, 3, 4].includes(Number(step)) ? Number(step) : 1
+  primaryTab.value = 'setup'
+  hubRoute.value = 'travel-log'
+  hubInitialLogTab.value = 'overview'
+  financeLegacyOpen.value = false
+  workflowMode.value = mode === 'edit' && hasPlans ? 'edit' : 'create'
+  workflowStartStep.value = hasPlans ? normalizedStep : 1
+}
 
 function openFinance() {
+  workflowMode.value = ''
   primaryTab.value = 'finance'
   hubRoute.value = 'travel-money'
   hubInitialMoneyTab.value = 'records'
@@ -158,6 +181,7 @@ function openFinance() {
 }
 
 function openFinanceEditor(initialMoneyTab = 'records') {
+  workflowMode.value = ''
   primaryTab.value = 'finance'
   hubRoute.value = 'travel-money'
   hubInitialMoneyTab.value = initialMoneyTab
@@ -165,13 +189,10 @@ function openFinanceEditor(initialMoneyTab = 'records') {
 }
 
 function openTravelManager() {
-  openFinanceEditor('planner')
+  openTravelSetup({ mode: hasTravelPlans.value ? 'edit' : 'create', step: 1 })
 }
 
 function openMemories(clearPlaceFocus = true) {
-  primaryTab.value = 'memories'
-  hubRoute.value = 'travel-log'
-  hubInitialLogTab.value = 'memories'
   if (clearPlaceFocus) {
     hubPlaceFocusRequest.value = {
       type: 'place',
@@ -182,12 +203,10 @@ function openMemories(clearPlaceFocus = true) {
       placeName: '',
     }
   }
+  openTravelSetup({ mode: hasTravelPlans.value ? 'edit' : 'create', step: 2 })
 }
 
 function openRoutes(focusRequest = null) {
-  primaryTab.value = 'routes'
-  hubRoute.value = 'travel-log'
-  hubInitialLogTab.value = 'routes'
   if (focusRequest) {
     hubRouteFocusRequest.value = {
       type: 'route',
@@ -197,17 +216,17 @@ function openRoutes(focusRequest = null) {
       routeDate: focusRequest.routeDate || '',
     }
   }
+  openTravelSetup({ mode: hasTravelPlans.value ? 'edit' : 'create', step: 3 })
 }
 
 function openMap() {
+  workflowMode.value = ''
   primaryTab.value = 'map'
   hubRoute.value = 'travel-log'
   hubInitialLogTab.value = 'overview'
 }
 
 function openPhotos(focusRequest = null) {
-  primaryTab.value = 'photos'
-  hubRoute.value = 'photo-album'
   if (focusRequest) {
     hubPhotoFocusRequest.value = {
       type: 'photo',
@@ -218,8 +237,18 @@ function openPhotos(focusRequest = null) {
       placeName: focusRequest.placeName || '',
     }
   }
+  openTravelSetup({ mode: hasTravelPlans.value ? 'edit' : 'create', step: 2 })
 }
 
+async function handleWorkflowComplete() {
+  await loadTravelSummary()
+  openMap()
+}
+
+async function closeTravelSetup() {
+  await loadTravelSummary()
+  openMap()
+}
 function openMode(mode) {
   switch (mode) {
     case 'finance':
@@ -249,10 +278,13 @@ function handleRequestOpenFinance() {
   openFinance()
 }
 
-const isHubVisible = computed(() =>
-  primaryTab.value !== 'map'
-  && (primaryTab.value !== 'finance' || financeLegacyOpen.value)
-)
+const isHubVisible = computed(() => (
+  primaryTab.value === 'setup'
+  || (
+    primaryTab.value !== 'map'
+    && (primaryTab.value !== 'finance' || financeLegacyOpen.value)
+  )
+))
 const isIntegratedPhotoMode = computed(() => primaryTab.value === 'photos')
 const shouldMountHub = ref(false)
 
@@ -292,7 +324,7 @@ onMounted(loadTravelSummary)
 
 <template>
   <div class="workspace-stack travel-unified-shell">
-    <section v-if="primaryTab !== 'map'" class="panel travel-record-switcher">
+    <section v-if="primaryTab !== 'map' && primaryTab !== 'setup'" class="panel travel-record-switcher">
       <div class="panel__header">
         <div>
           <h2>여행 기록</h2>
@@ -389,12 +421,16 @@ onMounted(loadTravelSummary)
         :integrated-photo-mode="isIntegratedPhotoMode"
         :initial-log-tab="hubInitialLogTab"
         :initial-money-tab="hubInitialMoneyTab"
+        :workflow-mode="workflowMode"
+        :workflow-start-step="workflowStartStep"
         :external-record-focus-request="recordFocusRequest"
         :external-memory-focus-request="hubPlaceFocusRequest"
         :external-photo-focus-request="hubPhotoFocusRequest"
         :external-route-focus-request="hubRouteFocusRequest"
         @request-open-finance="handleRequestOpenFinance"
         @request-open-log="handleRequestOpenLog"
+        @workflow-complete="handleWorkflowComplete"
+        @workflow-close="closeTravelSetup"
         @record-focus-consumed="emit('record-focus-consumed', $event)"
       />
     </div>

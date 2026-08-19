@@ -37084,3 +37084,34 @@ html[data-theme='toss'] body .app-shell .household-entry-panel__date-badge {
   border-color: rgba(149, 235, 171, 0.88) !important;
   box-shadow: inset 0 0 0 2px rgba(149, 235, 171, 0.48) !important;
 }
+
+/* Calendar selected-day: one square outer ring with room at the grid edges. */
+.household-calendar-panel--content-only .calendar-scale-content {
+  box-sizing: border-box;
+  padding: 3px;
+}
+
+.calendar__day--selected,
+.calendar__day[aria-selected='true'] {
+  border-color: transparent !important;
+  border-radius: 0 !important;
+  border-width: 1px !important;
+  box-shadow: none !important;
+  outline: 2px solid transparent !important;
+  outline-offset: 1px;
+}
+
+.calendar__day--selected::after,
+.calendar__day[aria-selected='true']::after {
+  content: none !important;
+}
+
+:root:not([data-theme='toss']) .calendar__day--selected,
+:root:not([data-theme='toss']) .calendar__day[aria-selected='true'] {
+  outline-color: #047857 !important;
+}
+
+[data-theme='toss'] .calendar__day--selected,
+[data-theme='toss'] .calendar__day[aria-selected='true'] {
+  outline-color: #95ebab !important;
+}

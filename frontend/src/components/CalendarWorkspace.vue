@@ -18,7 +18,7 @@ const CALENDAR_VIEW_PREFERENCE_SCOPE = 'household-calendar-view'
 const CALENDAR_VIEW_PREFERENCE_VERSION = 2
 const DEFAULT_CALENDAR_HIGHLIGHT_MODE = 'net'
 const DEFAULT_CALENDAR_VIEW_PREFERENCES = Object.freeze({
-  scalePreset: 'default',
+  scalePreset: 'fit',
   highlightMode: DEFAULT_CALENDAR_HIGHLIGHT_MODE,
   aggregatePanelEnabled: true,
   receiptOcrPanelEnabled: true,
@@ -365,7 +365,7 @@ const selectedDayEntryPage = ref(0)
 const transactionSheetViewMode = ref(DEFAULT_CALENDAR_VIEW_PREFERENCES.transactionSheetViewMode)
 const isTransactionSheetModalOpen = ref(false)
 const isTransactionSheetSettingsOpen = ref(false)
-const calendarScalePreset = ref('default')
+const calendarScalePreset = ref(DEFAULT_CALENDAR_VIEW_PREFERENCES.scalePreset)
 const calendarWeekMode = ref('month')
 const calendarPreviousWeekOffset = ref(1)
 const calendarHighlightMode = ref(DEFAULT_CALENDAR_HIGHLIGHT_MODE)
@@ -1636,7 +1636,7 @@ function normalizeCalendarViewPreferences(payload) {
     : DEFAULT_CALENDAR_HIGHLIGHT_MODE
 
   return {
-    scalePreset: normalizePresetKey(calendarDisplayModes, payload.scalePreset, 'default'),
+    scalePreset: normalizePresetKey(calendarDisplayModes, payload.scalePreset, DEFAULT_CALENDAR_VIEW_PREFERENCES.scalePreset),
     highlightMode,
     aggregatePanelEnabled: payload.aggregatePanelEnabled !== false,
     receiptOcrPanelEnabled: payload.receiptOcrPanelEnabled !== false,
@@ -2249,6 +2249,9 @@ function toggleLayoutEditMode() {
   }
 
   if (isLayoutEditMode.value) {
+    if (isAggregateEditMode.value) {
+      cancelAggregateEdit()
+    }
     const snapshot = readLayoutGridSnapshot()
     if (snapshot.length) {
       applyCalendarPanelLayout(snapshot, { immediate: true })
@@ -3879,7 +3882,21 @@ defineExpose({
 
 <template>
   <div class="workspace-stack household-calendar-workspace" @keydown.capture="handleWorkspaceKeydown">
+    <div v-if="!isLayoutEditMode" class="household-calendar-layout-edit-launcher">
+      <button
+        type="button"
+        class="button button--secondary"
+        aria-controls="household-calendar-layout-editor"
+        :aria-expanded="false"
+        :disabled="isMobileLayoutMode"
+        @click="toggleLayoutEditMode"
+      >
+        배치 편집 켜기
+      </button>
+    </div>
     <section
+      v-if="isLayoutEditMode"
+      id="household-calendar-layout-editor"
       :class="[
         'panel household-calendar-control-panel household-calendar-layout',
         { 'household-calendar-layout--amount-only': isAmountOnlyCalendar },
@@ -3893,21 +3910,27 @@ defineExpose({
           <span class="panel__badge">{{ anchorDate.slice(0, 7) }}</span>
           <div class="household-calendar-layout-toolbar household-calendar-layout-toolbar--inline" data-no-drag="true">
             <div class="household-calendar-layout-toolbar__status">
-              <strong>달력 배치</strong>
-              <span>{{ isLayoutEditMode ? '편집 중' : '고정됨' }}</span>
+              <strong>배치 편집</strong>
+              <span>{{ isLayoutEditMode ? '켜짐 · 카드를 드래그해서 크기와 위치를 수정할 수 있습니다.' : '꺼짐 · 추천 기본 배치(9×8)가 고정됩니다.' }}</span>
             </div>
             <div class="household-calendar-layout-toolbar__actions">
               <button type="button" class="button button--secondary" @click="toggleAggregatePanelEnabled">
                 {{ isAggregatePanelEnabled ? '집계 숨기기' : '집계 보이기' }}
               </button>
-              <button v-if="isLayoutEditMode" type="button" class="button button--secondary" @click="toggleReceiptOcrPanelEnabled">
+              <button type="button" class="button button--secondary" @click="toggleReceiptOcrPanelEnabled">
                 {{ isReceiptOcrPanelEnabled ? '자동입력 숨기기' : '자동입력 보이기' }}
               </button>
               <button type="button" class="button button--secondary" @click="applyRecommendedCalendarPreset">
                 {{ RECOMMENDED_CALENDAR_PRESET_LABEL }}
               </button>
-              <button type="button" class="button button--primary" :disabled="isMobileLayoutMode" @click="toggleLayoutEditMode">
-                {{ isLayoutEditMode ? '배치 완료' : '배치 편집' }}
+              <button
+                type="button"
+                class="button button--primary"
+                aria-pressed="true"
+                :disabled="isMobileLayoutMode"
+                @click="toggleLayoutEditMode"
+              >
+                배치 편집 끄기
               </button>
             </div>
           </div>

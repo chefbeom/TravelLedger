@@ -9675,6 +9675,11 @@ textarea {
   min-width: 0;
 }
 
+.household-calendar-layout-edit-launcher {
+  display: flex;
+  justify-content: flex-end;
+}
+
 .household-calendar-control-panel {
   margin: 0;
 }

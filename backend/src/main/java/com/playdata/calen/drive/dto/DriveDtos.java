@@ -388,10 +388,7 @@ public final class DriveDtos {
             String displayName,
             String localeCode,
             String regionCode,
-            Boolean marketingOptIn,
-            Boolean privateProfile,
-            Boolean emailNotification,
-            Boolean securityNotification
+            Boolean privateProfile
     ) {
     }
 
@@ -404,10 +401,7 @@ public final class DriveDtos {
             Boolean active,
             String localeCode,
             String regionCode,
-            Boolean marketingOptIn,
             Boolean privateProfile,
-            Boolean emailNotification,
-            Boolean securityNotification,
             String profileImageUrl,
             Long driveUsedBytes,
             Long driveFileCount,

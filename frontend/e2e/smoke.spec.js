@@ -10,7 +10,7 @@ const roleEnvPrefix = {
   admin: 'E2E_ADMIN',
 }
 
-const dedicatedFlowNames = new Set(['Login and session', 'Notification center'])
+const dedicatedFlowNames = new Set(['Login and session'])
 
 const flowEvidence = {
   'Login and session': {
@@ -44,10 +44,6 @@ const flowEvidence = {
   'AI analysis advisory': {
     acceptance: 'Advisory copy, provider failure UI, schema-safe response rendering, and no direct ledger mutation must pass.',
     nextAutomation: 'Add stubbed AI success, timeout, schema failure, and prompt-injection fixture responses.',
-  },
-  'Notification center': {
-    acceptance: 'Owner-scoped notification API shape, visible center UI, unread count, filters, and read-all affordance must pass.',
-    nextAutomation: 'Seed cross-user notifications and assert owner isolation plus read/read-all state transitions.',
   },
 }
 const p0Flows = [
@@ -115,13 +111,6 @@ const p0Flows = [
     providerMode: 'stubbed',
     risk: 'AI advisory wording, failure handling, and no autonomous mutations.',
   },
-  {
-    name: 'Notification center',
-    route: '/#/notifications',
-    role: 'user',
-    env: [...USER_ENV, 'E2E_NOTIFICATION_SMOKE_READY'],
-    risk: 'Owner-scoped notification visibility and unread/read-all behavior.',
-  },
 ]
 
 function env(name) {
@@ -188,15 +177,6 @@ async function expectRenderedApp(page) {
     { message: 'The Vue app shell should render visible text.' },
   ).toBeGreaterThan(10)
 }
-async function expectNotificationCenterWorkspace(page, expectedUnreadCount) {
-  const workspace = page.locator('.notification-center')
-  await expect(workspace.getByText('Notification center')).toBeVisible()
-  await expect(workspace.getByRole('heading', { name: 'Operations, AI, OCR, and sharing updates' })).toBeVisible()
-  await expect(workspace.getByText('Review user-scoped events from AI analysis, OCR, backups, and shared files in one place.')).toBeVisible()
-  await expect(workspace.getByRole('button', { name: /Unread only|Show all/ })).toBeVisible()
-  await expect(workspace.getByRole('button', { name: 'Mark all read' })).toBeVisible()
-  await expect(workspace.getByText(`${expectedUnreadCount} unread`)).toBeVisible()
-}
 
 test('P0 scenario inventory matches release checklist', () => {
   expect(p0Flows.map((flow) => flow.name)).toEqual([
@@ -208,12 +188,16 @@ test('P0 scenario inventory matches release checklist', () => {
     'CalenDrive share',
     'Admin backup action',
     'AI analysis advisory',
-    'Notification center',
   ])
   for (const flow of p0Flows) {
     expect(flowEvidence[flow.name]?.acceptance).toBeTruthy()
     expect(flowEvidence[flow.name]?.nextAutomation).toBeTruthy()
   }
+})
+
+test('P0 E2E metadata excludes operational secrets', () => {
+  const evidence = JSON.stringify({ flowEvidence, p0Flows })
+  expect(evidence).not.toMatch(/api[_-]?key|access[_-]?token|presigned|public[_-]?token|rawPrompt|providerResponse/i)
 })
 
 test('public app shell loads without authenticated fixtures', async ({ page }) => {
@@ -248,29 +232,6 @@ test('P0 Login and session smoke', async ({ page }, testInfo) => {
 })
 
 
-test('P1 Notification center API and UI smoke', async ({ page }, testInfo) => {
-  const flow = p0Flows.find((candidate) => candidate.name === 'Notification center')
-  requireEnv(flow.env)
-
-  annotateFlow(testInfo, flow)
-  testInfo.annotations.push({
-    type: 'automation-stage',
-    description: 'Verifies owner-scoped notification API shape plus the visible notification center heading, filters, read-all affordance, and unread count badge.',
-  })
-
-  await signIn(page, flow.role)
-
-  const notificationsResponse = await page.request.get('/api/notifications?size=20')
-  expect(notificationsResponse.ok(), 'Notification list API should be available to the signed-in user.').toBeTruthy()
-  const notificationsPayload = await notificationsResponse.json()
-  expect(Array.isArray(notificationsPayload.content), 'Notification response content should be an array.').toBeTruthy()
-  expect(Number.isFinite(Number(notificationsPayload.unreadCount)), 'Notification response should include a numeric unreadCount.').toBeTruthy()
-  expect(String(JSON.stringify(notificationsPayload))).not.toMatch(/api[_-]?key|access[_-]?token|presigned|public[_-]?token|rawPrompt|providerResponse/i)
-
-  await page.goto(flow.route)
-  await expectRenderedApp(page)
-  await expectNotificationCenterWorkspace(page, Number(notificationsPayload.unreadCount || 0))
-})
 for (const flow of p0Flows.filter((candidate) => !dedicatedFlowNames.has(candidate.name))) {
   test(`P0 ${flow.name} fixture gate and workspace checkpoint`, async ({ page }, testInfo) => {
     requireEnv(flow.env)

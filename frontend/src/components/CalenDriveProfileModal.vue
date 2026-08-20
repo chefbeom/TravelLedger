@@ -26,7 +26,7 @@ const emit = defineEmits(['close', 'updated'])
 const tabs = [
   { id: 'profile', label: '기본 프로필', icon: '프' },
   { id: 'security', label: '계정 보안', icon: '보' },
-  { id: 'notif', label: '알림 설정', icon: '알' },
+  { id: 'privacy', label: '개인정보', icon: '개' },
   { id: 'region', label: '언어·지역', icon: '지' },
   { id: 'storage', label: '저장소 현황', icon: '용' },
 ]
@@ -46,10 +46,7 @@ const settings = reactive({
   active: true,
   localeCode: 'KO',
   regionCode: 'KR',
-  marketingOptIn: true,
   privateProfile: false,
-  emailNotification: true,
-  securityNotification: true,
   profileImageUrl: '',
   driveUsedBytes: 0,
   driveFileCount: 0,
@@ -123,10 +120,7 @@ async function handleSaveProfile() {
       displayName: settings.displayName,
       localeCode: settings.localeCode,
       regionCode: settings.regionCode,
-      marketingOptIn: settings.marketingOptIn,
       privateProfile: settings.privateProfile,
-      emailNotification: settings.emailNotification,
-      securityNotification: settings.securityNotification,
     })
     Object.assign(settings, response || {})
     setMessages('CalenDrive 프로필 설정을 저장했습니다.')
@@ -368,27 +362,15 @@ watch(
                 </div>
               </section>
 
-              <section v-else-if="activeTab === 'notif'" class="panel panel--compact drive-profile-modal__section">
+              <section v-else-if="activeTab === 'privacy'" class="panel panel--compact drive-profile-modal__section">
                 <div class="panel__header">
                   <div>
-                    <h3>알림 설정</h3>
-                    <p>현재 구현되어 있는 마케팅, 이메일, 보안 알림과 비공개 프로필 설정을 그대로 묶었습니다.</p>
+                    <h3>개인정보</h3>
+                    <p>프로필 공개 범위와 계정 정보 노출 설정을 관리합니다.</p>
                   </div>
                 </div>
 
                 <div class="drive-profile-modal__stack">
-                  <label class="checkbox-row">
-                    <input v-model="settings.marketingOptIn" type="checkbox" />
-                    <span>마케팅 정보 수신</span>
-                  </label>
-                  <label class="checkbox-row">
-                    <input v-model="settings.emailNotification" type="checkbox" />
-                    <span>이메일 알림 수신</span>
-                  </label>
-                  <label class="checkbox-row">
-                    <input v-model="settings.securityNotification" type="checkbox" />
-                    <span>보안 알림 수신</span>
-                  </label>
                   <label class="checkbox-row">
                     <input v-model="settings.privateProfile" type="checkbox" />
                     <span>비공개 프로필 모드</span>

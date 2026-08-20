@@ -1,7 +1,7 @@
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-$planPath$planPath = 'docs/service_decomposition_plan.md'
+$planPath = 'docs/service_decomposition_plan.md'
 $statusServicePath = 'backend/src/main/java/com/playdata/calen/ledger/ai/LedgerAiAnalysisStatusService.java'
 $statusServiceTestPath = 'backend/src/test/java/com/playdata/calen/ledger/ai/LedgerAiAnalysisStatusServiceTest.java'
 $reportMergerPath = 'backend/src/main/java/com/playdata/calen/ledger/ai/LedgerAiAnalysisReportMerger.java'
@@ -71,7 +71,7 @@ foreach ($service in $trackedServices) {
 
     foreach ($section in $service.RequiredSections) {
         if (-not $content.Contains($section)) {
-            $findings.Add("Service decomposition plan missing section for $name: $section") | Out-Null
+            $findings.Add("Service decomposition plan missing section for ${name}: $section") | Out-Null
         }
     }
 }
@@ -108,7 +108,6 @@ $requiredBoundarySnippets = @(
     'Decomposition Ratchet Rules',
     'LedgerAiAnalysisStatusService',
     'LedgerAiAnalysisMetrics',
-    'LedgerAiAnalysisNotifications',
     'LedgerAiAnalysisJsonCodec',
     'LedgerAiAnalysisTextSanitizer',
     'LedgerAiAnalysisPayloadBuilder',

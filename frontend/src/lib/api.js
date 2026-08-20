@@ -1689,22 +1689,6 @@ export function uploadDriveProfileImage(file) {
   })
 }
 
-export function fetchNotifications(params = {}) {
-  const url = buildUrl('/notifications', params)
-  return request(url.startsWith(API_BASE) ? url.slice(API_BASE.length) || '/notifications' : url)
-}
-
-export function markNotificationRead(notificationId) {
-  return request(`/notifications/${notificationId}/read`, {
-    method: 'PATCH',
-  })
-}
-
-export function markAllNotificationsRead() {
-  return request('/notifications/read-all', {
-    method: 'PATCH',
-  })
-}
 export function deletePrivacyAiAnalysisHistory() {
   return request('/privacy/ai-analysis-history', {
     method: 'DELETE',

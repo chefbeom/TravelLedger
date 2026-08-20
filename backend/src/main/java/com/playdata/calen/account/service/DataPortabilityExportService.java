@@ -26,7 +26,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import net.lingala.zip4j.ZipFile;
 import net.lingala.zip4j.model.ZipParameters;
 import net.lingala.zip4j.model.enums.CompressionLevel;
@@ -35,7 +34,6 @@ import net.lingala.zip4j.model.enums.EncryptionMethod;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-@Slf4j
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
@@ -49,7 +47,6 @@ public class DataPortabilityExportService {
     private final DriveItemRepository driveItemRepository;
     private final TravelMediaAssetRepository travelMediaAssetRepository;
     private final FamilyMediaAssetRepository familyMediaAssetRepository;
-    private final UserNotificationService userNotificationService;
     private final ObjectMapper objectMapper;
 
     @Transactional
@@ -77,38 +74,12 @@ public class DataPortabilityExportService {
                 ), secondaryPin),
                 "application/zip"
         );
-        notifyPrivacyExportCompleted(userId, from, to);
         return archive;
     }
 
 
-    private void notifyPrivacyExportCompleted(Long userId, LocalDate from, LocalDate to) {
-        try {
-            userNotificationService.createSystemNotification(
-                    userId,
-                    "PRIVACY_EXPORT_DONE",
-                    "Data export ready",
-                    "Your protected data export archive is ready. Keep the downloaded file and secondary PIN private.",
-                    "/profile?privacy=1",
-                    privacyExportMetadata(from, to)
-            );
-        } catch (RuntimeException exception) {
-            log.warn("Failed to create privacy export notification: userId={}", userId, exception);
-        }
-    }
 
-    private String privacyExportMetadata(LocalDate from, LocalDate to) {
-        return "{\"status\":\"ready\",\"dateRangeLabel\":\"" + dateRangeLabel(from, to) + "\",\"archiveScope\":\"ledger_csv_and_safe_manifests\"}";
-    }
 
-    private String dateRangeLabel(LocalDate from, LocalDate to) {
-        if (from == null && to == null) {
-            return "all";
-        }
-        String fromText = from == null ? "start" : from.toString();
-        String toText = to == null ? "today" : to.toString();
-        return fromText + ".." + toText;
-    }
     private byte[] buildMetadata(
             AppUser user,
             LedgerEntryService.LedgerCsvExport ledgerExport,

@@ -10,7 +10,6 @@ import static org.mockito.Mockito.when;
 
 import com.playdata.calen.account.domain.AppUser;
 import com.playdata.calen.account.repository.AppUserRepository;
-import com.playdata.calen.account.service.UserNotificationService;
 import com.playdata.calen.common.exception.BadRequestException;
 import com.playdata.calen.common.exception.NotFoundException;
 import com.playdata.calen.common.media.ImageThumbnailService;
@@ -49,9 +48,6 @@ class DriveShareServiceTest {
 
     @Mock
     private ImageThumbnailService imageThumbnailService;
-
-    @Mock
-    private UserNotificationService userNotificationService;
 
     @Mock
     private DriveDownloadLinkAccessLogService driveDownloadLinkAccessLogService;
@@ -235,7 +231,6 @@ class DriveShareServiceTest {
                 driveStorageService,
                 driveService,
                 imageThumbnailService,
-                userNotificationService,
                 driveDownloadLinkAccessLogService
         );
     }

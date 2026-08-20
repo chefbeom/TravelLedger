@@ -34,14 +34,14 @@ flowchart TD
 
 | Invariant | Required behavior |
 | --- | --- |
-| Validate before external calls | OCR upload validation must finish before `LedgerOcrRemoteClient.analyze`; invalid uploads must not notify users or call remote OCR. |
+| Validate before external calls | OCR upload validation must finish before `LedgerOcrRemoteClient.analyze`; invalid uploads must not call remote OCR. |
 | Validate before presign | Drive and travel upload preparation must reject known extension/content-type mismatches before generating presigned upload URLs. |
 | Validate before object stat | Travel presigned completion must validate owner/plan/record object-key scope and reject ambiguous path segments before MinIO `statObject`. |
 | Validate direct upload bytes | OCR, support attachments, family album, and direct travel uploads must inspect binary signatures for supported image types when backend receives bytes. |
 | Size limits stay explicit | OCR and support already have explicit limits; drive, travel, and family media must define per-feature limits before large-upload release. |
 | Storage path confinement | Local storage paths must normalize under feature roots; object keys must include owner or owner-derived scope and avoid raw path traversal segments. |
 | Image processing fails closed | Thumbnail decode/persist failures must not create a trusted thumbnail record, leak stack traces, or return original private bytes as a thumbnail fallback. |
-| Metadata is safe | Queue payloads, logs, manifests, and notifications must not include raw presigned URLs, public tokens, API keys, secondary PINs, full filesystem paths, raw EXIF/GPS payloads, or OCR provider credentials. |
+| Metadata is safe | Queue payloads, logs, manifests, and audit output must not include raw presigned URLs, public tokens, API keys, secondary PINs, full filesystem paths, raw EXIF/GPS payloads, or OCR provider credentials. |
 | User action remains explicit | Upload/OCR preview output can suggest ledger data, but must not mutate ledger entries until the user confirms the resulting transaction. |
 
 ## Implementation anchors
@@ -49,7 +49,7 @@ flowchart TD
 | Area | Evidence to preserve |
 | --- | --- |
 | OCR invalid upload guard | `LedgerOcrService.validateFile`, `normalizeContentType`, `resolveImageExtension`, `isAllowedImageContentType`, `hasAllowedImageSignature`, and `readImageHeader`. |
-| OCR no remote call tests | `LedgerOcrServiceTest.analyzeRejectsEmptyFileBeforeRemoteCallOrNotification`, `analyzeRejectsOversizedFileBeforeRemoteCall`, `analyzeRejectsImageExtensionWithNonImageMimeBeforeRemoteCall`, `analyzeRejectsImageMimeWithNonImageExtensionBeforeRemoteCall`, `analyzeRejectsMismatchedImageMimeAndExtensionBeforeRemoteCall`, `analyzeRejectsFakeImageBytesBeforeRemoteCall`, and `analyzeRecordsInvalidFileMetricWhenUploadValidationFails`. |
+| OCR no remote call tests | `LedgerOcrServiceTest.analyzeRejectsEmptyFileBeforeRemoteCall`, `analyzeRejectsOversizedFileBeforeRemoteCall`, `analyzeRejectsImageExtensionWithNonImageMimeBeforeRemoteCall`, `analyzeRejectsImageMimeWithNonImageExtensionBeforeRemoteCall`, `analyzeRejectsMismatchedImageMimeAndExtensionBeforeRemoteCall`, `analyzeRejectsFakeImageBytesBeforeRemoteCall`, and `analyzeRecordsInvalidFileMetricWhenUploadValidationFails`. |
 | Drive presign guard | `DriveStorageService.prepareUploadRequest`, `normalizeContentType`, `validateContentTypeMatchesExtension`, `EXTENSION_CONTENT_TYPES`, and `GENERIC_CONTENT_TYPES`. |
 | Drive tests | `DriveStorageServiceTest.initUploadRejectsKnownExtensionContentTypeMismatchBeforeStorageAccess`, `initUploadRejectsNullRequestBeforeStorageAccess`, and `initUploadAllowsGenericOctetStreamForKnownExtension`. |
 | Travel presign completion guard | `TravelMediaStorageService.validateUploadCandidates`, `validateUploadCandidate`, `validateObjectKey`, `validatePreparedThumbnailCandidates`, `validateCompletedPreparedThumbnailCandidates`, and `verifyUploadedObject`. |

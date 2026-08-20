@@ -144,8 +144,3 @@ export function acceptInvite(payload) {
     body: JSON.stringify(payload),
   })
 }
-
-export function fetchNotifications(params = {}) {
-  const url = buildUrl('/notifications', params)
-  return request(url.slice(API_BASE.length) || '/notifications')
-}

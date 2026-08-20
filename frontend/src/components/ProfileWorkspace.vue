@@ -574,6 +574,7 @@ async function handlePrivacyExport() {
           <strong>내 데이터 다운로드</strong>
           <p>가계부 CSV와 내보내기 메타데이터를 2차 PIN으로 암호화된 ZIP 파일로 다운로드합니다.</p>
           <small>현재 압축 파일에는 가계부 CSV와 안전한 목록 정보만 포함됩니다.</small>
+          <small>사진과 파일 원본은 향후 비동기 내보내기 기능에서 제공됩니다.</small>
         </div>
         <div class="privacy-export-card__range" aria-label="내보내기 날짜 범위">
           <label class="field">

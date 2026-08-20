@@ -1,4 +1,4 @@
-﻿$ErrorActionPreference = 'Stop'
+$ErrorActionPreference = 'Stop'
 
 function Read-RequiredFile([string]$Path) {
     if (-not (Test-Path -LiteralPath $Path)) {
@@ -43,10 +43,7 @@ Assert-ContainsAll 'docs/data_portability.md' $contract @(
     'manifest/drive-items.json',
     'manifest/travel-media.json',
     'manifest/family-media.json',
-    'PRIVACY_EXPORT_DONE',
-    'Data export ready',
-    'dateRangeLabel',
-    'ledger_csv_and_safe_manifests',
+    'ledger_csv_metadata_and_file_manifests',
     'object storage paths',
     'presigned URLs',
     'raw latitude/longitude',
@@ -57,8 +54,6 @@ Assert-ContainsAll 'docs/data_portability.md' $contract @(
     'privacy-data-export-card',
     'privacy-export-secondary-pin',
     'manifest-only archive explanation',
-    'PRIVACY_EXPORT_DONE',
-    'Export notification',
     'personal data platform',
     'full data export',
     'Photo/file archive',
@@ -91,24 +86,15 @@ Assert-ContainsAll 'DataPortabilityExportService' $service @(
     'manifest/drive-items.json',
     'manifest/travel-media.json',
     'manifest/family-media.json',
-    'PRIVACY_EXPORT_DONE',
-    'Data export ready',
-    'dateRangeLabel',
-    'ledger_csv_and_safe_manifests',
-    'excludedFields',
-    'storagePath',
-    'publicLink',
-    'temporaryDownloadLink',
+    'ledger_csv_metadata_and_file_manifests',
+    'omittedSensitiveData',
+    'storedObjectPathsIncluded',
+    'publicLinksIncluded',
+    'temporary download URL',
     'hasGpsMetadata',
     'createPasswordProtectedZip',
     'setEncryptFiles(true)',
-    'private final UserNotificationService userNotificationService',
-    'notifyPrivacyExportCompleted(userId, from, to)',
-    'userNotificationService.createSystemNotification(',
-    '"PRIVACY_EXPORT_DONE"',
-    'privacyExportMetadata(from, to)',
-    'dateRangeLabel(from, to)',
-    'ledger_csv_and_safe_manifests'
+    'ledger_csv_metadata_and_file_manifests'
 )
 
 Assert-ContainsAll 'DataPortabilityExportServiceTest' $serviceTest @(
@@ -119,10 +105,7 @@ Assert-ContainsAll 'DataPortabilityExportServiceTest' $serviceTest @(
     'manifest/drive-items.json',
     'manifest/travel-media.json',
     'manifest/family-media.json',
-    'PRIVACY_EXPORT_DONE',
-    'Data export ready',
-    'dateRangeLabel',
-    'ledger_csv_and_safe_manifests'
+    'ledger_csv_metadata_and_file_manifests'
 )
 
 Assert-ContainsAll 'PrivacyControllerIntegrationTest' $integrationTest @(
@@ -143,8 +126,8 @@ Assert-ContainsAll 'ProfileWorkspace.vue' $profileWorkspace @(
     'data-testid="privacy-export-dialog"',
     'data-testid="privacy-export-secondary-pin"',
     'privacy-action-result',
-    'Current archive includes ledger CSV and safe manifests only',
-    'binary photos/files require a future async export job',
+    '현재 압축 파일에는 가계부 CSV와 안전한 목록 정보만 포함됩니다.',
+    '사진과 파일 원본은 향후 비동기 내보내기 기능에서 제공됩니다.',
     'aria-live="assertive"'
 )
 

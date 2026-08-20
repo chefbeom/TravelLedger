@@ -10,7 +10,6 @@ import static org.mockito.Mockito.when;
 
 import com.playdata.calen.account.dto.PrivacyCleanupResponse;
 import com.playdata.calen.account.service.PrivacyManagementService;
-import com.playdata.calen.account.service.UserNotificationService;
 import com.playdata.calen.drive.repository.DriveDownloadLinkRepository;
 import com.playdata.calen.ledger.repository.LedgerAiAnalysisHistoryRepository;
 import com.playdata.calen.travel.repository.TravelExpenseRecordRepository;
@@ -44,9 +43,6 @@ class PrivacyManagementServiceTest {
     @Mock
     private TravelMediaAssetRepository travelMediaAssetRepository;
 
-    @Mock
-    private UserNotificationService userNotificationService;
-
     private PrivacyManagementService service;
 
     @BeforeEach
@@ -56,8 +52,7 @@ class PrivacyManagementServiceTest {
                 driveDownloadLinkRepository,
                 travelPlanRepository,
                 travelExpenseRecordRepository,
-                travelMediaAssetRepository,
-                userNotificationService
+                travelMediaAssetRepository
         );
     }
 
@@ -70,7 +65,7 @@ class PrivacyManagementServiceTest {
 
         ArgumentCaptor<LocalDateTime> processedAtCaptor = ArgumentCaptor.forClass(LocalDateTime.class);
         verify(driveDownloadLinkRepository).revokeAllActiveByOwnerId(eq(USER_ID), processedAtCaptor.capture());
-        verifyNoInteractions(ledgerAiAnalysisHistoryRepository, travelPlanRepository, travelExpenseRecordRepository, travelMediaAssetRepository, userNotificationService);
+        verifyNoInteractions(ledgerAiAnalysisHistoryRepository, travelPlanRepository, travelExpenseRecordRepository, travelMediaAssetRepository);
 
         assertThat(response.aiAnalysisHistoriesDeleted()).isZero();
         assertThat(response.publicDownloadLinksRevoked()).isEqualTo(2);
@@ -89,7 +84,7 @@ class PrivacyManagementServiceTest {
 
         verify(travelPlanRepository).revokePublicSharingByOwnerId(USER_ID);
         verify(travelExpenseRecordRepository).revokeCommunitySharingByOwnerId(USER_ID);
-        verifyNoInteractions(ledgerAiAnalysisHistoryRepository, driveDownloadLinkRepository, travelMediaAssetRepository, userNotificationService);
+        verifyNoInteractions(ledgerAiAnalysisHistoryRepository, driveDownloadLinkRepository, travelMediaAssetRepository);
 
         assertThat(response.aiAnalysisHistoriesDeleted()).isZero();
         assertThat(response.publicDownloadLinksRevoked()).isZero();
@@ -105,7 +100,7 @@ class PrivacyManagementServiceTest {
         PrivacyCleanupResponse response = service.removePhotoLocationMetadata(USER_ID);
 
         verify(travelMediaAssetRepository).clearGpsMetadataByPlanOwnerId(USER_ID);
-        verifyNoInteractions(ledgerAiAnalysisHistoryRepository, driveDownloadLinkRepository, travelPlanRepository, travelExpenseRecordRepository, userNotificationService);
+        verifyNoInteractions(ledgerAiAnalysisHistoryRepository, driveDownloadLinkRepository, travelPlanRepository, travelExpenseRecordRepository);
 
         assertThat(response.aiAnalysisHistoriesDeleted()).isZero();
         assertThat(response.publicDownloadLinksRevoked()).isZero();
@@ -131,14 +126,6 @@ class PrivacyManagementServiceTest {
         verify(travelPlanRepository).revokePublicSharingByOwnerId(USER_ID);
         verify(travelExpenseRecordRepository).revokeCommunitySharingByOwnerId(USER_ID);
         verify(travelMediaAssetRepository).clearGpsMetadataByPlanOwnerId(USER_ID);
-        verify(userNotificationService).createSystemNotification(
-                eq(USER_ID),
-                eq("PRIVACY_ACTION_DONE"),
-                eq("Privacy cleanup complete"),
-                contains("Sensitive derived data cleanup finished"),
-                eq("/profile?privacy=1"),
-                eq("{\"action\":\"cleanup\",\"aiAnalysisHistoriesDeleted\":3,\"publicDownloadLinksRevoked\":5,\"travelPublicMediaSharesRevoked\":6,\"photoLocationMetadataRemoved\":7}")
-        );
 
         assertThat(response.aiAnalysisHistoriesDeleted()).isEqualTo(3);
         assertThat(response.publicDownloadLinksRevoked()).isEqualTo(5);

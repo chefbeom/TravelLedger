@@ -64,7 +64,7 @@ flowchart TD
 
 ## Release gate
 
-The `public-share-authorization-contract` CI job must pass before promoting changes that affect Drive public links, direct Drive share permissions, public-link access logs, presigned download URL resolution, Travel public media URLs, Travel shared exhibits, privacy revocation, or notification/data-export surfaces that mention shared files or media.
+The `public-share-authorization-contract` CI job must pass before promoting changes that affect Drive public links, direct Drive share permissions, public-link access logs, presigned download URL resolution, Travel public media URLs, Travel shared exhibits, privacy revocation, or data-export surfaces that mention shared files or media.
 
 A release is not ready if any of these are true:
 
@@ -90,7 +90,7 @@ A release is not ready if any of these are true:
 | Public media expiry | Add optional expiration/revocation for Travel public media tokens or public plan media URLs; until then, `app.security.public-media-key` rotation is the emergency revocation path. |
 | Token rotation runbook | Changing `app.security.public-media-key` invalidates existing Travel public media URLs because tokens are HMACs over media id plus the configured secret; rotate during incident response, redeploy all app nodes with the same new key, and ask owners to regenerate public/community links as needed. |
 | Abuse controls | Add rate limiting and alerting for repeated invalid public tokens by bounded fingerprint/status. |
-| Share notification hardening | Keep notification metadata relative-link-only and free of raw tokens/presigned URLs. |
+| Share metadata hardening | Keep stored share metadata free of raw tokens and presigned URLs. |
 
 ## Test backlog
 

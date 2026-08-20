@@ -72,17 +72,8 @@ public class DriveProfileService {
         if (StringUtils.hasText(request.regionCode())) {
             settings.setRegionCode(request.regionCode().trim().toUpperCase());
         }
-        if (request.marketingOptIn() != null) {
-            settings.setMarketingOptIn(request.marketingOptIn());
-        }
         if (request.privateProfile() != null) {
             settings.setPrivateProfile(request.privateProfile());
-        }
-        if (request.emailNotification() != null) {
-            settings.setEmailNotification(request.emailNotification());
-        }
-        if (request.securityNotification() != null) {
-            settings.setSecurityNotification(request.securityNotification());
         }
 
         return toSettingsResponse(user, settings);
@@ -161,10 +152,7 @@ public class DriveProfileService {
                 .active(user.isActive())
                 .localeCode(settings.getLocaleCode())
                 .regionCode(settings.getRegionCode())
-                .marketingOptIn(settings.isMarketingOptIn())
                 .privateProfile(settings.isPrivateProfile())
-                .emailNotification(settings.isEmailNotification())
-                .securityNotification(settings.isSecurityNotification())
                 .profileImageUrl(StringUtils.hasText(settings.getProfileImagePath())
                         ? "/api/feater/settings/me/profile-image"
                         : null)

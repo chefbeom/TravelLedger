@@ -41,8 +41,7 @@ if ($findings.Count -eq 0) {
         'Travel photo upload',
         'CalenDrive share',
         'Admin backup action',
-        'AI analysis advisory',
-        'Notification center'
+        'AI analysis advisory'
     )
     foreach ($flow in $requiredFlows) {
         if (-not $checklist.Contains($flow)) {
@@ -193,10 +192,6 @@ if ($findings.Count -eq 0) {
         '/api/auth/me',
         '/api/auth/logout',
         'fixture gate and workspace checkpoint',
-        'P1 Notification center API and UI smoke',
-        '/api/notifications?size=20',
-        'expectNotificationCenterWorkspace',
-        'E2E_NOTIFICATION_SMOKE_READY',
         'not.toMatch(/api[_-]?key|access[_-]?token|presigned|public[_-]?token|rawPrompt|providerResponse/i)'
     )) {
         if (-not $playwrightSmoke.Contains($snippet)) {

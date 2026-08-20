@@ -44,7 +44,6 @@ $requiredJobs = @(
     'ledger-anomaly-contract',
     'travel-story-export-contract',
     'household-budget-goals-contract',
-    'notification-center-contract',
     'drive-file-versioning-contract',
     'data-portability-contract',
     'pwa-mobile-baseline',
@@ -78,7 +77,7 @@ Assert-Contains 'docs/project_improvement_roadmap.md' $roadmap 'scripts/verify-c
 Assert-Contains 'scripts/verify-security-baseline-checklist.ps1' $securityVerifier 'CI-01'
 Assert-Contains 'scripts/verify-security-baseline-checklist.ps1' $securityVerifier 'scripts/verify-ci-workflow-contract.ps1'
 
-$gluedKeyPattern = [regex]'(?m)^\s*(run|uses|name|shell|with|if|timeout-minutes|working-directory):.*\s{2,}[A-Za-z0-9_-]+:\s*$'
+$gluedKeyPattern = [regex]'(?m)^[ \t]*(run|uses|name|shell|with|if|timeout-minutes|working-directory):.*[ \t]{2,}[A-Za-z0-9_-]+:[ \t]*$'
 foreach ($match in $gluedKeyPattern.Matches($ci)) {
     $findings.Add('Possible glued YAML key in .github/workflows/ci.yml: ' + $match.Value.Trim()) | Out-Null
 }

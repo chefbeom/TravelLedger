@@ -12,9 +12,9 @@ This contract keeps the GitHub Actions workflow reviewable as security, migratio
 | CI workflow integrity | `ci-workflow-contract` |
 | Runtime/config/schema | `config-sync`, `migration-discipline`, `backup-rehearsal-runbook` |
 | Security baseline | `security-baseline-checklist`, `backend-security-tests` |
-| Admin/share/upload/privacy | `admin-audit-contract`, `public-share-authorization-contract`, `file-upload-security-contract`, `privacy-control-contract` |
+| Admin/share/upload/privacy | `admin-audit-contract`, `public-share-authorization-contract`, `media-processing-contract`, `file-upload-security-contract`, `privacy-control-contract` |
 | AI/ledger product safety | `ai-provider-safety-contract`, `ledger-ai-coach-contract`, `ledger-classification-contract`, `ledger-anomaly-contract` |
-| Travel/household/notifications/data | `travel-story-export-contract`, `household-budget-goals-contract`, `notification-center-contract`, `drive-file-versioning-contract`, `data-portability-contract` |
+| Travel/household/data | `travel-story-export-contract`, `household-budget-goals-contract`, `drive-file-versioning-contract`, `data-portability-contract` |
 | UX/mobile/frontend | `pwa-mobile-baseline`, `accessibility-mobile-checklist`, `frontend-build`, `frontend-e2e-smoke-checklist` |
 | Observability/maintainability | `observability-alerts`, `service-decomposition-plan`, `backend-test` |
 | Final gate | `release-gate` |

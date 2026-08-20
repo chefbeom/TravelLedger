@@ -240,16 +240,6 @@ jobs:
       - name: Verify household budget and shared goals contract
         shell: pwsh
         run: ./scripts/verify-household-budget-goals-contract.ps1
-  notification-center-contract:
-    name: Notification center contract
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Verify notification center contract
-        shell: pwsh
-        run: ./scripts/verify-notification-center-contract.ps1
   drive-file-versioning-contract:
     name: Drive file versioning contract
     runs-on: ubuntu-latest
@@ -401,7 +391,6 @@ jobs:
       - ledger-anomaly-contract
       - travel-story-export-contract
       - household-budget-goals-contract
-      - notification-center-contract
       - drive-file-versioning-contract
       - data-portability-contract
       - pwa-mobile-baseline
@@ -436,7 +425,6 @@ jobs:
             [ledger-anomaly-contract]="${{ needs['ledger-anomaly-contract'].result }}"
             [travel-story-export-contract]="${{ needs['travel-story-export-contract'].result }}"
             [household-budget-goals-contract]="${{ needs['household-budget-goals-contract'].result }}"
-            [notification-center-contract]="${{ needs['notification-center-contract'].result }}"
             [drive-file-versioning-contract]="${{ needs['drive-file-versioning-contract'].result }}"
             [data-portability-contract]="${{ needs['data-portability-contract'].result }}"
             [pwa-mobile-baseline]="${{ needs['pwa-mobile-baseline'].result }}"

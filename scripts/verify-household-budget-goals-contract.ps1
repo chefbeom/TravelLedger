@@ -1,4 +1,4 @@
-﻿Set-StrictMode -Version Latest
+Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $contractPath = 'docs/household_budget_goals.md'
@@ -51,26 +51,26 @@ if ($findings.Count -eq 0) {
         }
     }
 
-    foreach ($phrase in @('owner-scoped or membership-scoped', 'explicit membership/grant rows', 'explicit CSRF-protected mutation', 'non-visible member data', 'Notification producers must use bounded metadata', 'optimistic locking', 'Goal progress does not include another user', 'Owner-scoped personal household goals',
+    foreach ($phrase in @('owner-scoped or membership-scoped', 'explicit membership/grant rows', 'explicit CSRF-protected mutation', 'non-visible member data', 'optimistic locking', 'Goal progress does not include another user', 'owner-scoped personal household goals',
         'family budgets',
         'shared savings goals',
         'travel savings goals',
         'member spending ratio',
         'Family feature modules',
         'aggregate amounts/percentages',
-        'idempotency keys', 'V20260630_014__household_goals.sql', 'GOAL_PROGRESS')) {
+        'idempotency keys', 'V20260630_014__household_goals.sql')) {
         if (-not $contract.Contains($phrase)) {
             $findings.Add("Household budget/goals contract missing required phrase: $phrase") | Out-Null
         }
     }
 
-    foreach ($snippet in @('MAX_WIDGETS = 4', 'ALLOWED_KINDS', 'ALLOWED_PERIODS', 'ALLOWED_AMOUNT_TYPES', 'getRequiredActiveUser(userId)', 'user.setHouseholdAggregateSettingsJson', 'paymentMethodRepository.findAllByOwnerIdAndActiveTrueOrderByDisplayOrderAscIdAsc(userId)', 'buildDefaultWidgets')) {
+    foreach ($snippet in @('MAX_WIDGETS = 6', 'ALLOWED_KINDS', 'ALLOWED_PERIODS', 'ALLOWED_AMOUNT_TYPES', 'getRequiredActiveUser(userId)', 'user.setHouseholdAggregateSettingsJson', 'paymentMethodRepository.findAllByOwnerIdAndActiveTrueOrderByDisplayOrderAscIdAsc(userId)', 'buildDefaultWidgets')) {
         if (-not $aggregateService.Contains($snippet)) {
             $findings.Add("HouseholdAggregatePreferenceService missing scoped widget snippet: $snippet") | Out-Null
         }
     }
 
-    foreach ($snippet in @('getPreferences_handlesLegacyOrSparseStoredWidgets', 'findAllByOwnerIdAndActiveTrueOrderByDisplayOrderAscIdAsc(1L)', 'response.widgets()).hasSize(4)', 'paymentMethodId()).isEqualTo(7L)')) {
+    foreach ($snippet in @('getPreferences_handlesLegacyOrSparseStoredWidgets', 'findAllByOwnerIdAndActiveTrueOrderByDisplayOrderAscIdAsc(1L)', 'response.widgets()).hasSize(6)', 'paymentMethodId()).isEqualTo(7L)')) {
         if (-not $aggregateTest.Contains($snippet)) {
             $findings.Add("HouseholdAggregatePreferenceServiceTest missing evidence snippet: $snippet") | Out-Null
         }

@@ -1,8 +1,6 @@
 package com.playdata.calen.account;
 
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -11,10 +9,8 @@ import com.playdata.calen.account.domain.HouseholdGoal;
 import com.playdata.calen.account.domain.HouseholdGoalStatus;
 import com.playdata.calen.account.dto.HouseholdGoalRequest;
 import com.playdata.calen.account.repository.HouseholdGoalRepository;
-import com.playdata.calen.account.repository.UserNotificationRepository;
 import com.playdata.calen.account.service.AppUserService;
 import com.playdata.calen.account.service.HouseholdGoalService;
-import com.playdata.calen.account.service.UserNotificationService;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.Optional;
@@ -35,26 +31,18 @@ class HouseholdGoalServiceTest {
     @Mock
     private HouseholdGoalRepository householdGoalRepository;
 
-    @Mock
-    private UserNotificationRepository userNotificationRepository;
-
-    @Mock
-    private UserNotificationService userNotificationService;
-
     private HouseholdGoalService service;
 
     @BeforeEach
     void setUp() {
         service = new HouseholdGoalService(
                 appUserService,
-                householdGoalRepository,
-                userNotificationRepository,
-                userNotificationService
+                householdGoalRepository
         );
     }
 
     @Test
-    void createGoalNotifiesOwnerWhenProgressReachesTargetWithBoundedMetadata() {
+    void createGoalPersistsOwnerScopedGoalAtTarget() {
         AppUser owner = owner();
         when(appUserService.getRequiredUser(USER_ID)).thenReturn(owner);
         when(householdGoalRepository.save(any(HouseholdGoal.class))).thenAnswer(invocation -> {
@@ -62,12 +50,6 @@ class HouseholdGoalServiceTest {
             goal.setId(99L);
             return goal;
         });
-        when(userNotificationRepository.existsByOwnerIdAndTypeAndTargetUrlAndReadAtIsNull(
-                USER_ID,
-                "GOAL_PROGRESS",
-                "/household?tab=goals&goalId=99"
-        )).thenReturn(false);
-
         service.createGoal(USER_ID, new HouseholdGoalRequest(
                 "Emergency fund",
                 new BigDecimal("100000.00"),
@@ -76,18 +58,11 @@ class HouseholdGoalServiceTest {
                 null
         ));
 
-        verify(userNotificationService).createSystemNotification(
-                eq(USER_ID),
-                eq("GOAL_PROGRESS"),
-                eq("Household goal reached"),
-                eq("A household goal reached its target. Review the goal before making any ledger or settlement changes."),
-                eq("/household?tab=goals&goalId=99"),
-                eq("{\"goalId\":99,\"status\":\"achieved\",\"progressBucket\":\"100_plus\",\"visibility\":\"owner\"}")
-        );
+        verify(householdGoalRepository).save(any(HouseholdGoal.class));
     }
 
     @Test
-    void archiveGoalUsesOwnerScopedLookupWithoutGoalProgressNotification() {
+    void archiveGoalUsesOwnerScopedLookup() {
         HouseholdGoal goal = new HouseholdGoal();
         goal.setId(99L);
         goal.setOwner(owner());
@@ -101,14 +76,6 @@ class HouseholdGoalServiceTest {
         service.archiveGoal(USER_ID, 99L);
 
         verify(householdGoalRepository).findByIdAndOwnerId(99L, USER_ID);
-        verify(userNotificationService, never()).createSystemNotification(
-                any(),
-                any(),
-                any(),
-                any(),
-                any(),
-                any()
-        );
     }
 
     private AppUser owner() {

@@ -81,7 +81,6 @@ public class LedgerAiAnalysisService {
     private final LedgerAiAnalysisTextSanitizer aiText;
     private final LedgerAiAnalysisPayloadBuilder aiPayloadBuilder;
     private final LedgerAiAnalysisReportMerger aiReportMerger;
-    private final LedgerAiAnalysisNotifications aiNotifications;
 
     private final Map<String, Object> inFlightAnalysisLocks = new ConcurrentHashMap<>();
 
@@ -194,7 +193,6 @@ public class LedgerAiAnalysisService {
             LedgerAiAnalysisResponse response = buildResponse(history.getId(), plan, dataset, remote);
             history.setResultJson(aiJsonCodec.write(response));
             historyRepository.save(history);
-            aiNotifications.notifyCompleted(userId, history);
             return response;
         } catch (RuntimeException exception) {
             if (!aiRequestRecorded) {
@@ -206,7 +204,6 @@ public class LedgerAiAnalysisService {
             failedHistory.setErrorMessage(aiText.redactSensitiveText(exception.getMessage(), 500));
             failedHistory.setRequestPayloadJson(aiJsonCodec.write(payload));
             failedHistory = historyRepository.save(failedHistory);
-            aiNotifications.notifyFailed(userId, failedHistory);
             throw exception;
         }
     }
@@ -253,7 +250,6 @@ public class LedgerAiAnalysisService {
             history.setSummary(aiText.safeText(remote.summary()));
             history.setResultJson(aiJsonCodec.write(response));
             historyRepository.save(history);
-            aiNotifications.notifyCompleted(userId, history);
         } catch (RuntimeException exception) {
             if (aiRequestTimer != null && !aiRequestRecorded) {
                 aiMetrics.recordAiRequest(aiRequestTimer, "failure");
@@ -265,7 +261,6 @@ public class LedgerAiAnalysisService {
                 history.setRequestPayloadJson(aiJsonCodec.write(payload));
             }
             historyRepository.save(history);
-            aiNotifications.notifyFailed(userId, history);
         }
     }
 
@@ -275,7 +270,6 @@ public class LedgerAiAnalysisService {
             history.setSummary("AI analysis failed.");
             history.setErrorMessage(aiText.redactSensitiveText(exception.getMessage(), 500));
             historyRepository.save(history);
-            aiNotifications.notifyFailed(userId, history);
         });
     }
 
@@ -1039,7 +1033,7 @@ public class LedgerAiAnalysisService {
         recurringCandidates.stream().filter(this::isRecurringVariableCandidate).findFirst().ifPresent(item -> directions.add("관리 수단: " + item.title() + " 같은 반복성 변동비는 월 상한액과 결제 횟수 제한을 함께 설정하고, 초과 시 다음 달로 미루는 규칙을 두세요."));
         if (totalExpense.compareTo(BigDecimal.ZERO) > 0) {
             BigDecimal alertLine = totalExpense.multiply(BigDecimal.valueOf(0.8)).setScale(0, RoundingMode.HALF_UP);
-            directions.add("점검 수단: 다음 분석 기간에는 총지출이 " + formatWon(alertLine) + "에 도달하면 중간 점검 알림을 띄우고, 월말 PDF 보고서에서 예산 초과 원인을 확인하세요.");
+            directions.add("점검 수단: 다음 분석 기간에는 총지출이 " + formatWon(alertLine) + "에 도달하면 중간 점검을 하고, 월말 PDF 보고서에서 예산 초과 원인을 확인하세요.");
         }
         return directions;
     }

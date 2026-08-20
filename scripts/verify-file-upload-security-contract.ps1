@@ -53,7 +53,7 @@ Assert-ContainsAll 'docs/file_upload_security_contract.md' $contract @(
 
 Assert-ContainsAll 'LedgerOcrService' $ocrService @(
     'private void validateFile(MultipartFile file)',
-    'Receipt image exceeds the OCR upload size limit.',
+    '거래 이미지가 AI 분석 업로드 제한 용량을 초과했습니다.',
     'Only image files can be analyzed.',
     'normalizeContentType',
     'resolveImageExtension',
@@ -65,7 +65,7 @@ Assert-ContainsAll 'LedgerOcrService' $ocrService @(
 )
 
 Assert-ContainsAll 'LedgerOcrServiceTest' $ocrTest @(
-    'analyzeRejectsEmptyFileBeforeRemoteCallOrNotification',
+    'analyzeRejectsEmptyFileBeforeRemoteCall',
     'analyzeRejectsOversizedFileBeforeRemoteCall',
     'analyzeRejectsImageExtensionWithNonImageMimeBeforeRemoteCall',
     'analyzeRejectsImageMimeWithNonImageExtensionBeforeRemoteCall',

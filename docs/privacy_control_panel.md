@@ -1,4 +1,4 @@
-﻿# Privacy Control Panel Backend Slice
+# Privacy Control Panel Backend Slice
 
 Updated: 2026-06-30
 
@@ -25,7 +25,7 @@ This document records the backend and UI contract for user-facing privacy contro
 | Revoke all shared links | Call `DELETE /api/privacy/public-download-links` and `DELETE /api/privacy/travel-public-media-shares`, or include both through `POST /api/privacy/cleanup`. | Explain that Drive public links are revoked while owner audit metadata remains, and Travel public media visibility is disabled so stateless URLs stop working. | Show counts for `publicDownloadLinksRevoked` and `travelPublicMediaSharesRevoked`. |
 | Delete AI analysis history | Call `DELETE /api/privacy/ai-analysis-history` or AI-screen bulk deletion. | Explain the action is permanent and does not delete the source ledger entries. | Show `aiAnalysisHistoriesDeleted` count and refresh AI history state. |
 | Remove photo location metadata | Call `DELETE /api/privacy/photo-location-metadata` or include it through combined cleanup. | Explain that derived GPS latitude/longitude and extraction timestamp are cleared while the media item remains. | Show `photoLocationMetadataRemoved` count and keep photo/media records accessible. |
-| Sensitive cleanup | Call `POST /api/privacy/cleanup`. | Present a single review screen listing AI history deletion, Drive link revocation, Travel media-share revocation, and photo GPS cleanup before submit. | Show all returned counts, `processedAt`, and a bounded `PRIVACY_ACTION_DONE` notification. |
+| Sensitive cleanup | Call `POST /api/privacy/cleanup`. | Present a single review screen listing AI history deletion, Drive link revocation, Travel media-share revocation, and photo GPS cleanup before submit. | Show all returned counts and `processedAt` directly in the privacy workspace. |
 
 Screen requirements:
 

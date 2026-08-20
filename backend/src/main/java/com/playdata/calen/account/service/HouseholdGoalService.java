@@ -6,30 +6,24 @@ import com.playdata.calen.account.domain.HouseholdGoalStatus;
 import com.playdata.calen.account.dto.HouseholdGoalRequest;
 import com.playdata.calen.account.dto.HouseholdGoalResponse;
 import com.playdata.calen.account.repository.HouseholdGoalRepository;
-import com.playdata.calen.account.repository.UserNotificationRepository;
 import com.playdata.calen.common.exception.BadRequestException;
 import com.playdata.calen.common.exception.NotFoundException;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-@Slf4j
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class HouseholdGoalService {
 
-    private static final String NOTIFICATION_TYPE = "GOAL_PROGRESS";
     private static final BigDecimal ZERO = BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
 
     private final AppUserService appUserService;
     private final HouseholdGoalRepository householdGoalRepository;
-    private final UserNotificationRepository userNotificationRepository;
-    private final UserNotificationService userNotificationService;
 
     public List<HouseholdGoalResponse> getGoals(Long userId, boolean includeArchived) {
         appUserService.getRequiredUser(userId);
@@ -46,7 +40,6 @@ public class HouseholdGoalService {
         goal.setOwner(owner);
         apply(goal, request);
         HouseholdGoal saved = householdGoalRepository.save(goal);
-        notifyGoalReachedIfNeeded(saved);
         return toResponse(saved);
     }
 
@@ -56,7 +49,6 @@ public class HouseholdGoalService {
         HouseholdGoal goal = householdGoalRepository.findByIdAndOwnerId(goalId, userId)
                 .orElseThrow(() -> new NotFoundException("Household goal was not found."));
         apply(goal, request);
-        notifyGoalReachedIfNeeded(goal);
         return toResponse(goal);
     }
 
@@ -110,35 +102,7 @@ public class HouseholdGoalService {
         return HouseholdGoalStatus.ACTIVE;
     }
 
-    private void notifyGoalReachedIfNeeded(HouseholdGoal goal) {
-        if (goal.getId() == null || goal.getOwner() == null || goal.getOwner().getId() == null) {
-            return;
-        }
-        if (goal.getStatus() != HouseholdGoalStatus.ACHIEVED) {
-            return;
-        }
-        Long ownerId = goal.getOwner().getId();
-        String targetUrl = "/household?tab=goals&goalId=" + goal.getId();
-        if (userNotificationRepository.existsByOwnerIdAndTypeAndTargetUrlAndReadAtIsNull(ownerId, NOTIFICATION_TYPE, targetUrl)) {
-            return;
-        }
-        try {
-            userNotificationService.createSystemNotification(
-                    ownerId,
-                    NOTIFICATION_TYPE,
-                    "Household goal reached",
-                    "A household goal reached its target. Review the goal before making any ledger or settlement changes.",
-                    targetUrl,
-                    goalProgressMetadata(goal.getId())
-            );
-        } catch (RuntimeException exception) {
-            log.warn("Failed to create household goal notification: goalId={}, ownerId={}", goal.getId(), ownerId, exception);
-        }
-    }
 
-    private String goalProgressMetadata(Long goalId) {
-        return "{\"goalId\":" + goalId + ",\"status\":\"achieved\",\"progressBucket\":\"100_plus\",\"visibility\":\"owner\"}";
-    }
 
     private HouseholdGoalResponse toResponse(HouseholdGoal goal) {
         return new HouseholdGoalResponse(

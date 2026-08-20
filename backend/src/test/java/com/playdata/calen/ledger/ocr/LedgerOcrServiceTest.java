@@ -14,7 +14,6 @@ import static org.mockito.Mockito.when;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.playdata.calen.account.domain.AppUser;
 import com.playdata.calen.account.service.AppUserService;
-import com.playdata.calen.account.service.UserNotificationService;
 import com.playdata.calen.common.exception.BadRequestException;
 import com.playdata.calen.ledger.ai.LedgerAiAnalysisProperties;
 import com.playdata.calen.ledger.domain.CategoryDetail;
@@ -65,9 +64,6 @@ class LedgerOcrServiceTest {
     private LedgerOcrRemoteClient remoteClient;
 
     @Mock
-    private UserNotificationService userNotificationService;
-
-    @Mock
     private LedgerImageAnalysisRequestRepository imageAnalysisRequestRepository;
 
     @Mock
@@ -102,8 +98,7 @@ class LedgerOcrServiceTest {
                 categoryGroupRepository,
                 categoryDetailRepository,
                 ledgerEntryRepository,
-                new ObjectMapper(),
-                userNotificationService
+                new ObjectMapper()
         );
     }
 
@@ -141,7 +136,7 @@ class LedgerOcrServiceTest {
         assertThat((FutureTask<?>) executor.queuedTasks.get(0)).isCancelled();
     }
     @Test
-    void analyzeRejectsEmptyFileBeforeRemoteCallOrNotification() {
+    void analyzeRejectsEmptyFileBeforeRemoteCall() {
         stubUser();
         MockMultipartFile file = new MockMultipartFile(
                 "file",
@@ -153,7 +148,7 @@ class LedgerOcrServiceTest {
         assertThatThrownBy(() -> service.analyze(USER_ID, file, "RECEIPT", null, null))
                 .isInstanceOf(BadRequestException.class);
 
-        verifyNoInteractions(remoteClient, userNotificationService);
+        verifyNoInteractions(remoteClient);
     }
 
     @Test
@@ -233,7 +228,7 @@ class LedgerOcrServiceTest {
         assertThatThrownBy(() -> service.analyze(USER_ID, file, "RECEIPT", null, null))
                 .isInstanceOf(BadRequestException.class);
 
-        verifyNoInteractions(remoteClient, userNotificationService);
+        verifyNoInteractions(remoteClient);
     }
 
     @Test
@@ -259,37 +254,6 @@ class LedgerOcrServiceTest {
         verifyNoInteractions(remoteClient);
     }
 
-    @Test
-    void analyzeCreatesBoundedNotificationForRemoteFailureWithoutMaskingOriginalError() {
-        stubUser();
-        MockMultipartFile file = validJpeg("receipt.jpg");
-        stubHistoryPersistence(99L);
-        when(remoteClient.analyze(file, "RECEIPT", null))
-                .thenThrow(new BadRequestException("OCR analysis server is unavailable. Check the OCR service and network."));
-        doThrow(new IllegalStateException("notification unavailable"))
-                .when(userNotificationService)
-                .createSystemNotification(
-                        eq(USER_ID),
-                        eq("AI_IMAGE_ANALYSIS_FAILED"),
-                        anyString(),
-                        anyString(),
-                        eq("/calendar?receiptOcr=1"),
-                        eq("{\"reason\":\"bad_request\"}")
-                );
-
-        assertThatThrownBy(() -> service.analyze(USER_ID, file, "RECEIPT", "ocr-test-request", null))
-                .isInstanceOf(BadRequestException.class)
-                .hasMessage("OCR analysis server is unavailable. Check the OCR service and network.");
-
-        verify(userNotificationService).createSystemNotification(
-                eq(USER_ID),
-                eq("AI_IMAGE_ANALYSIS_FAILED"),
-                anyString(),
-                anyString(),
-                eq("/calendar?receiptOcr=1"),
-                eq("{\"reason\":\"bad_request\"}")
-        );
-    }
 
     @Test
     void analyzeReturnsOneSuggestionPerVisibleNaverPayPaymentRow() {

@@ -16,7 +16,6 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.playdata.calen.account.domain.AppUser;
 import com.playdata.calen.account.service.AppUserService;
-import com.playdata.calen.account.service.UserNotificationService;
 import com.playdata.calen.common.exception.BadRequestException;
 import com.playdata.calen.common.exception.NotFoundException;
 import com.playdata.calen.ledger.domain.EntryType;
@@ -84,9 +83,6 @@ class LedgerAiAnalysisServiceTest {
     private LedgerAiRemoteClient remoteClient;
 
     @Mock
-    private UserNotificationService userNotificationService;
-
-    @Mock
     private ObjectProvider<MeterRegistry> meterRegistryProvider;
 
     private ObjectMapper objectMapper;
@@ -116,8 +112,7 @@ class LedgerAiAnalysisServiceTest {
                 new LedgerAiAnalysisJsonCodec(objectMapper),
                 new LedgerAiAnalysisTextSanitizer(),
                 new LedgerAiAnalysisPayloadBuilder(new LedgerAiAnalysisTextSanitizer()),
-                new LedgerAiAnalysisReportMerger(new LedgerAiAnalysisTextSanitizer()),
-                new LedgerAiAnalysisNotifications(userNotificationService)
+                new LedgerAiAnalysisReportMerger(new LedgerAiAnalysisTextSanitizer())
         );
     }
 

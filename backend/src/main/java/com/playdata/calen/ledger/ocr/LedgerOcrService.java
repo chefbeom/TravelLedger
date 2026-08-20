@@ -4,7 +4,6 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.playdata.calen.account.domain.AppUser;
 import com.playdata.calen.account.service.AppUserService;
-import com.playdata.calen.account.service.UserNotificationService;
 import com.playdata.calen.common.exception.BadRequestException;
 import com.playdata.calen.common.exception.NotFoundException;
 import com.playdata.calen.ledger.ai.LedgerAiAnalysisProperties;
@@ -103,7 +102,6 @@ public class LedgerOcrService {
     private final CategoryDetailRepository categoryDetailRepository;
     private final LedgerEntryRepository ledgerEntryRepository;
     private final ObjectMapper objectMapper;
-    private final UserNotificationService userNotificationService;
 
     @Autowired(required = false)
     private MeterRegistry meterRegistry;
@@ -289,7 +287,6 @@ public class LedgerOcrService {
             }
             String failureReason = ocrFailureReason(exception);
             recordOcrRequest(ocrRequestTimer, "failure", failureReason);
-            notifyOcrFailure(userId, failureReason);
             throw exception;
         }
     }
@@ -396,7 +393,6 @@ public class LedgerOcrService {
             failImageAnalysisRequest(history, exception);
             String failureReason = ocrFailureReason(exception);
             recordOcrRequest(ocrRequestTimer, "failure", failureReason);
-            notifyOcrFailure(userId, failureReason);
             log.warn("Ledger image analysis background task failed: historyId={}", historyId, exception);
         }
     }
@@ -768,23 +764,6 @@ public class LedgerOcrService {
         } catch (JsonProcessingException exception) {
             log.warn("Failed to deserialize ledger image analysis response history", exception);
             return null;
-        }
-    }
-    private void notifyOcrFailure(Long userId, String failureReason) {
-        if ("invalid_file".equals(failureReason)) {
-            return;
-        }
-        try {
-            userNotificationService.createSystemNotification(
-                    userId,
-                    "AI_IMAGE_ANALYSIS_FAILED",
-                    "AI 이미지 분석 실패",
-                    "거래 이미지 분석을 완료하지 못했습니다. AI 서버 상태를 확인하거나 잠시 후 다시 시도해 주세요.",
-                    "/calendar?receiptOcr=1",
-                    "{\"reason\":\"" + failureReason + "\"}"
-            );
-        } catch (RuntimeException exception) {
-            log.warn("Failed to create ledger image analysis notification: userId={}, reason={}", userId, failureReason, exception);
         }
     }
 

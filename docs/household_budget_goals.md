@@ -1,4 +1,4 @@
-﻿# Household Budget and Shared Goals Contract
+# Household Budget and Shared Goals Contract
 
 Updated: 2026-06-30
 
@@ -57,18 +57,17 @@ flowchart TD
 | Member invitations, removals, permission changes, and destructive goal changes require CSRF-protected explicit actions. | Household collaboration is account/security-sensitive. |
 | Goal exports must exclude operational secrets and non-visible member data. | Data portability should preserve trust without leaking other users' records. |
 | Dismissed/archived goals should remain auditable through safe metadata. | Avoids silent loss of financial collaboration context. |
-| Notification producers must use bounded metadata only. | Budget/goal notifications should not include raw ledger titles, private notes, tokens, or account secrets. |
 | Multi-member write conflicts need deterministic resolution or optimistic locking before shared editing ships. | Avoids overwriting family contribution decisions. |
 | Member spending ratios must remain aggregate until a member explicitly shares item-level ledger detail. | Keeps family analytics from becoming involuntary surveillance. |
 | Shared savings and travel savings goals require explicit contribution records, idempotency keys, and safe audit metadata. | Prevents duplicate progress, unclear ownership, and hidden ledger mutations. |
-| Family budget alerts must show the scope, period, source, and confidence of the summary. | Users need to understand whether a card is personal, shared, travel-linked, or estimated. |
+| Family budget views must show the scope, period, source, and confidence of the summary. | Users need to understand whether a card is personal, shared, travel-linked, or estimated. |
 
 ## Current implementation anchors
 
 | Anchor | Evidence |
 | --- | --- |
-| `HouseholdAggregatePreferenceService` | Stores up to 4 widgets on the current active user, normalizes kind/period/amount type, and validates payment methods by owner. |
-| `HouseholdGoalService` / `HouseholdGoalServiceTest` | Lists, creates, updates, and archives owner-scoped personal goals; emits bounded `GOAL_PROGRESS` notifications when a goal reaches target; suppresses duplicate unread notifications by target URL. |
+| `HouseholdAggregatePreferenceService` | Stores up to 6 widgets on the current active user, normalizes kind/period/amount type, and validates payment methods by owner. |
+| `HouseholdGoalService` / `HouseholdGoalServiceTest` | Lists, creates, updates, and archives owner-scoped personal goals; tracks status changes. |
 | `V20260630_014__household_goals.sql` / `HouseholdGoalSchemaUpdater` | Flyway now creates the `household_goals` table with owner/status and owner/due-date indexes; the runtime updater remains only as a documented transition fallback until staging Flyway evidence allows retirement. |
 | `HouseholdAggregatePreferenceServiceTest` | Covers legacy/sparse widget normalization and owner-scoped active payment method validation. |
 | `HouseholdWorkspace.vue` | Loads/saves household aggregate preferences and connects household travel-ledger UI to current user's travel plans and entries. |
@@ -78,13 +77,13 @@ flowchart TD
 
 ## Release gate
 
-Before promoting a change that adds household budgets, shared goals, shared savings goals, travel savings goals, member spending ratios, goal contributions, household member permissions, goal notifications, or goal export/import:
+Before promoting a change that adds household budgets, shared goals, shared savings goals, travel savings goals, member spending ratios, goal contributions, household member permissions, or goal export/import:
 
 1. Confirm budget/goal list/detail APIs are owner-scoped or membership-scoped.
 2. Confirm category, payment method, ledger entry, travel plan, and contribution references are validated against current-user visibility.
 3. Confirm progress displays are read-only summaries unless the user performs an explicit CSRF-protected mutation.
 4. Confirm member invitation/removal/permission changes have focused authorization tests.
-5. Confirm data export and notification payloads exclude non-visible member details, raw ledger notes, storage paths, public tokens, presigned URLs, API keys, secondary PINs, and operational secrets.
+5. Confirm data exports exclude non-visible member details, raw ledger notes, storage paths, public tokens, presigned URLs, API keys, secondary PINs, and operational secrets.
 6. Confirm member spending ratios expose only aggregate amounts/percentages unless every item-level source is explicitly shared by the owner.
 7. Confirm shared savings and travel savings contributions use idempotency keys or duplicate-submission protection before progress is stored.
 8. Confirm shared editing has an optimistic-locking or deterministic conflict strategy before multi-member mutations ship.
@@ -92,7 +91,7 @@ Before promoting a change that adds household budgets, shared goals, shared savi
 
 ## CI contract
 
-The `household-budget-goals-contract` GitHub Actions job must run `scripts/verify-household-budget-goals-contract.ps1`. The release gate must include that job so future family-budget and shared-goal changes cannot bypass owner/member visibility, explicit mutation, export-safety, or notification-safety rules.
+The `household-budget-goals-contract` GitHub Actions job must run `scripts/verify-household-budget-goals-contract.ps1`. The release gate must include that job so future family-budget and shared-goal changes cannot bypass owner/member visibility, explicit mutation, export-safety rules.
 
 ## Next slices
 
@@ -108,15 +107,13 @@ The `household-budget-goals-contract` GitHub Actions job must run `scripts/verif
 | Membership/permission model | Define viewer/editor/admin permission levels and invitation/revocation flow. |
 | Goal dashboard widgets | Add progress cards to Household using existing aggregate widget patterns. |
 | Member spending ratio | Add aggregate-only member share cards for visible members, categories, and periods after explicit sharing. |
-| Notifications | `GOAL_PROGRESS` now fires for owner-scoped goal completion with bounded goalId/status/progressBucket/visibility metadata; future shared notifications must keep the same boundary. |
 
 ## Test backlog
 
-- User A cannot list, edit, contribute to, export, or receive notifications for User B's private budget/goal.
+- User A cannot list, edit, contribute to, or export User B's private budget/goal.
 - Member-scoped users can see only the fields their permission allows.
 - Goal progress does not include another user's ledger entries unless that user explicitly contributes or shares them.
 - Contribution create/update/delete requires authentication and CSRF.
 - Goal archive/delete is explicit and leaves safe metadata for audit/debug.
 - Export excludes non-visible member data, public tokens, storage paths, presigned URLs, raw ledger notes, API keys, secondary PINs, and operational secrets.
-- Notification payloads contain goal IDs/counts/status labels only, not raw private ledger details; current `GOAL_PROGRESS` metadata is limited to goalId/status/progressBucket/visibility.
 

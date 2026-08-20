@@ -41,17 +41,21 @@ public class DriveProfileSettings {
     @Column(nullable = false, length = 10)
     private String regionCode = "KR";
 
-    @Column(nullable = false)
-    private boolean marketingOptIn = true;
+    /**
+     * Legacy non-null columns retained so existing databases remain readable without deleting user settings.
+     * The application no longer exposes or consumes these values.
+     */
+    @Column(name = "marketing_opt_in", nullable = false)
+    private boolean legacyMarketingOptIn = true;
 
     @Column(nullable = false)
     private boolean privateProfile = false;
 
-    @Column(nullable = false)
-    private boolean emailNotification = true;
+    @Column(name = "email_notification", nullable = false)
+    private boolean legacyEmailDeliveryEnabled = true;
 
-    @Column(nullable = false)
-    private boolean securityNotification = true;
+    @Column(name = "security_notification", nullable = false)
+    private boolean legacySecurityDeliveryEnabled = true;
 
     @Column(length = 600)
     private String profileImagePath;

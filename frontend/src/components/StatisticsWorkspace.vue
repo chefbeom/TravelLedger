@@ -592,7 +592,7 @@ function buildAiImprovementDirectionItems() {
   if (aiFixedReportItems.value[0]) {
     generated.push(`관리 수단: ${aiFixedReportItems.value[0]} 항목은 유지/보류/해지 후보로 나누고, 사용 빈도와 월 금액을 함께 기록하세요.`)
   }
-  generated.push('점검 수단: 예산 알림, 자동 분류 규칙, 비정기 지출 태그, 월말 PDF 보고서를 함께 사용해 다음 기간 개선 여부를 확인하세요.')
+  generated.push('점검 수단: 예산 목표, 자동 분류 규칙, 비정기 지출 태그, 월말 PDF 보고서를 함께 사용해 다음 기간 개선 여부를 확인하세요.')
   return dedupeAiItems([...explicit, ...generated])
 }
 function buildAiFocusMetricCards() {

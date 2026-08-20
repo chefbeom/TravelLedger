@@ -14705,199 +14705,6 @@ textarea {
     overflow-x: auto;
   }
 }
-.notification-center {
-  gap: 1.25rem;
-}
-
-.notification-hero {
-  display: grid;
-  gap: 0.75rem;
-  padding: 1.4rem;
-  border: 1px solid rgba(22, 31, 54, 0.1);
-  border-radius: 1.25rem;
-  background:
-    radial-gradient(circle at top left, rgba(78, 124, 255, 0.16), transparent 32%),
-    linear-gradient(135deg, rgba(255, 255, 255, 0.96), rgba(243, 248, 255, 0.9));
-  box-shadow: 0 18px 45px rgba(28, 44, 74, 0.08);
-}
-
-.notification-hero__eyebrow {
-  margin: 0;
-  font-size: 0.78rem;
-  font-weight: 800;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: #3d63dd;
-}
-
-.notification-hero h2 {
-  margin: 0;
-  font-size: clamp(1.6rem, 3vw, 2.35rem);
-  color: #16213a;
-}
-
-.notification-hero__summary {
-  margin: 0;
-  max-width: 44rem;
-  color: #5d6780;
-  line-height: 1.7;
-}
-
-.notification-toolbar,
-.notification-list-panel {
-  border: 1px solid rgba(22, 31, 54, 0.1);
-  border-radius: 1.1rem;
-  background: rgba(255, 255, 255, 0.92);
-  box-shadow: 0 16px 36px rgba(28, 44, 74, 0.07);
-}
-
-.notification-toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  padding: 1rem;
-  flex-wrap: wrap;
-}
-
-.notification-toolbar__filters,
-.notification-toolbar__actions,
-.notification-card__actions {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  flex-wrap: wrap;
-}
-
-.notification-toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.45rem;
-  color: #39435c;
-  font-weight: 700;
-}
-
-.notification-error {
-  margin: 0;
-  color: #b42318;
-  font-weight: 700;
-}
-
-.notification-list-panel {
-  display: grid;
-  gap: 0.8rem;
-  padding: 1rem;
-}
-
-.notification-empty {
-  padding: 2rem;
-  text-align: center;
-  color: #697389;
-  font-weight: 700;
-}
-
-.notification-card {
-  display: grid;
-  gap: 0.85rem;
-  padding: 1rem;
-  border: 1px solid rgba(22, 31, 54, 0.09);
-  border-radius: 1rem;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 255, 0.95));
-}
-
-.notification-card--unread {
-  border-color: rgba(61, 99, 221, 0.32);
-  box-shadow: inset 4px 0 0 #3d63dd;
-}
-
-.notification-card__header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 1rem;
-}
-
-.notification-card__title {
-  margin: 0.25rem 0 0;
-  color: #16213a;
-  font-size: 1.05rem;
-}
-
-.notification-card__message {
-  margin: 0;
-  color: #4f5b73;
-  line-height: 1.65;
-}
-
-.notification-card__meta {
-  display: flex;
-  gap: 0.65rem;
-  flex-wrap: wrap;
-  color: #707b90;
-  font-size: 0.86rem;
-}
-
-.notification-card__status {
-  display: inline-flex;
-  align-items: center;
-  border-radius: 999px;
-  padding: 0.28rem 0.62rem;
-  background: #eef2ff;
-  color: #3151c9;
-  font-size: 0.75rem;
-  font-weight: 800;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
-
-.notification-card__status--read {
-  background: #eff4f1;
-  color: #607163;
-}
-
-.notification-card__tone {
-  width: max-content;
-  border-radius: 999px;
-  padding: 0.24rem 0.58rem;
-  background: #f0f5ff;
-  color: #3358cc;
-  font-size: 0.74rem;
-  font-weight: 800;
-  text-transform: uppercase;
-}
-
-.notification-card__tone--warning {
-  background: #fff4dc;
-  color: #946200;
-}
-
-.notification-card__tone--danger {
-  background: #ffe8e5;
-  color: #ba1a1a;
-}
-
-.notification-card__tone--success {
-  background: #e8f7ed;
-  color: #1a7f42;
-}
-
-@media (max-width: 720px) {
-  .notification-toolbar,
-  .notification-card__header {
-    align-items: stretch;
-    flex-direction: column;
-  }
-
-  .notification-toolbar__actions,
-  .notification-card__actions {
-    width: 100%;
-  }
-
-  .notification-toolbar__actions .button,
-  .notification-card__actions .button {
-    flex: 1 1 auto;
-  }
-}
 .profile-privacy-panel {
   display: grid;
   gap: 1rem;
@@ -15185,147 +14992,6 @@ textarea {
   .drive-version-card .button,
   .drive-version-launcher .button {
     width: 100%;
-  }
-}
-
-.topbar__nav-button--notifications {
-  position: relative;
-  gap: 0.45rem;
-}
-
-.topbar__notification-badge {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 1.35rem;
-  height: 1.35rem;
-  padding: 0 0.35rem;
-  border-radius: 999px;
-  background: #e11d48;
-  color: #fff;
-  font-size: 0.72rem;
-  font-weight: 800;
-  line-height: 1;
-  box-shadow: 0 8px 16px rgba(225, 29, 72, 0.28);
-}
-
-.global-notification-signal {
-  position: fixed;
-  right: 1.4rem;
-  bottom: 1.4rem;
-  z-index: 1180;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.7rem;
-  max-width: min(28rem, calc(100vw - 2rem));
-  padding: 0.55rem;
-  border: 1px solid rgba(95, 211, 111, 0.34);
-  border-radius: 999px;
-  background: rgba(15, 23, 42, 0.92);
-  color: #fff;
-  box-shadow: 0 18px 42px rgba(15, 23, 42, 0.34);
-  cursor: pointer;
-}
-
-.global-notification-signal__icon {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex: 0 0 auto;
-  width: 2.6rem;
-  height: 2.6rem;
-  border-radius: 999px;
-  background: linear-gradient(135deg, #5fd36f, #2f8dff);
-  color: #fff;
-  font-size: 1.2rem;
-  font-weight: 900;
-}
-
-.global-notification-signal__badge {
-  position: absolute;
-  top: 0.25rem;
-  right: 0.25rem;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 1.25rem;
-  height: 1.25rem;
-  padding: 0 0.34rem;
-  border: 2px solid rgba(15, 23, 42, 0.92);
-  border-radius: 999px;
-  background: #e11d48;
-  color: #fff;
-  font-size: 0.68rem;
-  font-weight: 900;
-  line-height: 1;
-}
-
-.global-notification-signal__toast {
-  display: grid;
-  gap: 0.15rem;
-  min-width: 0;
-  max-width: 20rem;
-  padding: 0.12rem 0.65rem 0.12rem 0.1rem;
-  text-align: left;
-}
-
-.global-notification-signal__toast small {
-  color: rgba(255, 255, 255, 0.72);
-  font-size: 0.72rem;
-  font-weight: 800;
-}
-
-.global-notification-signal__toast strong {
-  overflow: hidden;
-  color: #fff;
-  font-size: 0.95rem;
-  font-weight: 900;
-  line-height: 1.3;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.global-notification-modal {
-  z-index: 1300;
-}
-
-.global-notification-modal__dialog {
-  width: min(74rem, calc(100vw - 2rem));
-  padding: 1.25rem;
-}
-
-.notification-center--embedded {
-  gap: 1rem;
-}
-
-.notification-center--embedded .notification-hero,
-.notification-center--embedded .notification-list-panel {
-  margin: 0;
-}
-
-.notification-center--embedded .notification-hero {
-  padding: 1rem;
-}
-
-.notification-center--embedded .notification-list-panel {
-  max-height: min(58vh, 38rem);
-  overflow: auto;
-}
-
-@media (max-width: 640px) {
-  .global-notification-signal {
-    right: 0.75rem;
-    bottom: 0.75rem;
-    max-width: calc(100vw - 1.5rem);
-  }
-
-  .global-notification-signal__toast {
-    max-width: calc(100vw - 6rem);
-  }
-
-  .global-notification-modal__dialog {
-    padding: 1rem;
   }
 }
 
@@ -18073,72 +17739,6 @@ textarea {
     max-height: 180px;
   }
 }
-.notification-page-size {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.45rem;
-  color: #39435c;
-  font-weight: 800;
-}
-
-.notification-page-size select {
-  min-height: 38px;
-  border: 1px solid rgba(22, 31, 54, 0.14);
-  border-radius: 999px;
-  padding: 0 0.9rem;
-  background: rgba(255, 255, 255, 0.94);
-  color: #16213a;
-  font: inherit;
-  font-weight: 800;
-}
-
-.notification-page-summary {
-  color: #5d6780;
-  font-size: 0.9rem;
-  font-weight: 800;
-}
-
-.notification-pagination {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.8rem;
-  padding-top: 0.4rem;
-  color: #39435c;
-  font-weight: 900;
-}
-
-.notification-pagination span {
-  min-width: 5.5rem;
-  text-align: center;
-}
-
-.notification-card__body {
-  min-width: 0;
-}
-
-.notification-card h3,
-.notification-card p {
-  overflow-wrap: anywhere;
-}
-
-@media (max-width: 720px) {
-  .notification-page-size,
-  .notification-page-size select,
-  .notification-page-summary,
-  .notification-pagination,
-  .notification-pagination .button {
-    width: 100%;
-  }
-
-  .notification-pagination {
-    flex-wrap: wrap;
-  }
-
-  .notification-pagination span {
-    order: -1;
-  }
-}
 /* Default theme contrast safety net for light dialogs and cards */
 :root:not([data-theme='toss']) .travel-modal__dialog,
 :root:not([data-theme='toss']) .receipt-ocr-modal__dialog,
@@ -18208,10 +17808,6 @@ textarea {
 :root:not([data-theme='toss']) .auth-copy,
 :root:not([data-theme='toss']) .launcher-card,
 :root:not([data-theme='toss']) .feature-card,
-:root:not([data-theme='toss']) .notification-hero,
-:root:not([data-theme='toss']) .notification-toolbar,
-:root:not([data-theme='toss']) .notification-list-panel,
-:root:not([data-theme='toss']) .notification-card,
 :root:not([data-theme='toss']) .privacy-export-card,
 :root:not([data-theme='toss']) .privacy-management-card,
 :root:not([data-theme='toss']) .privacy-action-card,
@@ -18238,8 +17834,6 @@ textarea {
 :root:not([data-theme='toss']) .auth-copy h1,
 :root:not([data-theme='toss']) .launcher-card strong,
 :root:not([data-theme='toss']) .feature-card strong,
-:root:not([data-theme='toss']) .notification-hero h2,
-:root:not([data-theme='toss']) .notification-card h3,
 :root:not([data-theme='toss']) .privacy-export-card strong,
 :root:not([data-theme='toss']) .privacy-action-card strong,
 :root:not([data-theme='toss']) .profile-security-modal h1,
@@ -18268,9 +17862,6 @@ textarea {
 :root:not([data-theme='toss']) .auth-copy p,
 :root:not([data-theme='toss']) .launcher-card span,
 :root:not([data-theme='toss']) .feature-card span,
-:root:not([data-theme='toss']) .notification-hero p,
-:root:not([data-theme='toss']) .notification-card p,
-:root:not([data-theme='toss']) .notification-card__meta,
 :root:not([data-theme='toss']) .privacy-export-card small,
 :root:not([data-theme='toss']) .privacy-action-card small,
 :root:not([data-theme='toss']) .profile-security-modal p,
@@ -18294,10 +17885,6 @@ textarea {
   color: var(--text-soft, #4e5968) !important;
 }
 
-:root[data-theme='toss'] .notification-hero,
-:root[data-theme='toss'] .notification-toolbar,
-:root[data-theme='toss'] .notification-list-panel,
-:root[data-theme='toss'] .notification-card,
 :root[data-theme='toss'] .privacy-export-card,
 :root[data-theme='toss'] .privacy-management-card,
 :root[data-theme='toss'] .privacy-action-card,
@@ -18321,8 +17908,6 @@ textarea {
   color: var(--text, #f3f5fa) !important;
 }
 
-:root[data-theme='toss'] .notification-hero h2,
-:root[data-theme='toss'] .notification-card h3,
 :root[data-theme='toss'] .privacy-export-card strong,
 :root[data-theme='toss'] .privacy-action-card strong,
 :root[data-theme='toss'] .profile-security-modal h1,
@@ -18347,11 +17932,6 @@ textarea {
   color: var(--text, #f3f5fa) !important;
 }
 
-:root[data-theme='toss'] .notification-hero p,
-:root[data-theme='toss'] .notification-card p,
-:root[data-theme='toss'] .notification-card__meta,
-:root[data-theme='toss'] .notification-page-summary,
-:root[data-theme='toss'] .notification-page-size,
 :root[data-theme='toss'] .privacy-export-card small,
 :root[data-theme='toss'] .privacy-action-card small,
 :root[data-theme='toss'] .profile-security-modal p,
@@ -18375,7 +17955,6 @@ textarea {
   color: var(--text-soft, #b0bacb) !important;
 }
 
-:root[data-theme='toss'] .notification-page-size select,
 :root[data-theme='toss'] .travel-modal__dialog input,
 :root[data-theme='toss'] .travel-modal__dialog select,
 :root[data-theme='toss'] .travel-modal__dialog textarea,
@@ -18390,7 +17969,6 @@ textarea {
   color: var(--text, #f3f5fa) !important;
 }
 
-:root[data-theme='toss'] .notification-card__status,
 :root[data-theme='toss'] .panel__badge,
 :root[data-theme='toss'] .chip--neutral {
   color: var(--text, #f3f5fa) !important;
@@ -18409,20 +17987,16 @@ textarea {
 }
 
 :root:not([data-theme='toss']) .panel__eyebrow,
-:root:not([data-theme='toss']) .notification-hero__eyebrow,
 :root:not([data-theme='toss']) .travel-map__toolbar-label,
 :root:not([data-theme='toss']) .travel-cluster-popup__action,
 :root:not([data-theme='toss']) .travel-record-switcher__card em,
 :root:not([data-theme='toss']) .travel-ledger-card em,
 :root:not([data-theme='toss']) .profile-privacy-panel .panel__badge,
-:root:not([data-theme='toss']) .notification-card__tone,
 :root:not([data-theme='toss']) .chip--neutral {
   color: var(--brand-readable, #047857) !important;
 }
 
-:root:not([data-theme='toss']) .panel__badge,
-:root:not([data-theme='toss']) .notification-card__status,
-:root:not([data-theme='toss']) .topbar__notification-badge {
+:root:not([data-theme='toss']) .panel__badge {
   background: rgba(4, 120, 87, 0.12) !important;
   color: var(--brand-readable-strong, #065f46) !important;
   border-color: rgba(4, 120, 87, 0.22) !important;
@@ -18433,8 +18007,7 @@ textarea {
 :root:not([data-theme='toss']) .topbar__nav-button,
 :root:not([data-theme='toss']) .layout-mode-toggle__button,
 :root:not([data-theme='toss']) .theme-toggle,
-:root:not([data-theme='toss']) .travel-map__toolbar-button,
-:root:not([data-theme='toss']) .notification-page-size select {
+:root:not([data-theme='toss']) .travel-map__toolbar-button {
   color: var(--text, #191f28) !important;
 }
 
@@ -18467,7 +18040,6 @@ textarea {
 }
 
 :root[data-theme='toss'] .panel__eyebrow,
-:root[data-theme='toss'] .notification-hero__eyebrow,
 :root[data-theme='toss'] .travel-map__toolbar-label,
 :root[data-theme='toss'] .travel-cluster-popup__action,
 :root[data-theme='toss'] .travel-record-switcher__card em,
@@ -18502,8 +18074,7 @@ textarea {
 :root[data-theme='toss'] .topbar__nav-button,
 :root[data-theme='toss'] .layout-mode-toggle__button,
 :root[data-theme='toss'] .theme-toggle,
-:root[data-theme='toss'] .travel-map__toolbar-button,
-:root[data-theme='toss'] .notification-page-size select {
+:root[data-theme='toss'] .travel-map__toolbar-button {
   color: var(--text, #f3f5fa) !important;
 }
 
@@ -18514,9 +18085,7 @@ textarea {
   color: #ffffff !important;
 }
 
-:root[data-theme='toss'] .panel__badge,
-:root[data-theme='toss'] .notification-card__status,
-:root[data-theme='toss'] .topbar__notification-badge {
+:root[data-theme='toss'] .panel__badge {
   background: rgba(134, 239, 172, 0.14) !important;
   color: var(--brand-readable-strong, #bbf7d0) !important;
   border-color: rgba(134, 239, 172, 0.22) !important;
@@ -18573,7 +18142,6 @@ textarea {
   color: var(--link-readable, #2563eb) !important;
 }
 
-:root:not([data-theme='toss']) .notification-empty,
 :root:not([data-theme='toss']) .panel__empty,
 :root:not([data-theme='toss']) .drive-details-panel__empty,
 :root:not([data-theme='toss']) .receipt-ocr-modal__empty,
@@ -18625,7 +18193,6 @@ textarea {
   color: var(--link-readable, #9fc0ff) !important;
 }
 
-:root[data-theme='toss'] .notification-empty,
 :root[data-theme='toss'] .panel__empty,
 :root[data-theme='toss'] .drive-details-panel__empty,
 :root[data-theme='toss'] .receipt-ocr-modal__empty,
@@ -19394,7 +18961,6 @@ textarea {
 :root:not([data-theme='toss']) .support-inquiry-row,
 :root:not([data-theme='toss']) .support-inquiry-reply,
 :root:not([data-theme='toss']) .drive-details-panel,
-:root:not([data-theme='toss']) .notification-card,
 :root:not([data-theme='toss']) .privacy-result-list {
   color: #13231d !important;
 }
@@ -19408,7 +18974,6 @@ textarea {
 :root:not([data-theme='toss']) .support-inquiry-row__title,
 :root:not([data-theme='toss']) .drive-details-panel__head strong,
 :root:not([data-theme='toss']) .drive-details-panel__meta dt,
-:root:not([data-theme='toss']) .notification-card__title,
 :root:not([data-theme='toss']) .privacy-result-list strong,
 :root:not([data-theme='toss']) .privacy-result-list dt {
   color: #0b2f22 !important;
@@ -19431,8 +18996,6 @@ textarea {
 :root:not([data-theme='toss']) .drive-details-panel__head span,
 :root:not([data-theme='toss']) .drive-details-panel__meta dd,
 :root:not([data-theme='toss']) .drive-details-panel__empty,
-:root:not([data-theme='toss']) .notification-card__message,
-:root:not([data-theme='toss']) .notification-card__meta,
 :root:not([data-theme='toss']) .privacy-result-list dd {
   color: #3f5148 !important;
   -webkit-text-fill-color: #3f5148 !important;
@@ -19448,7 +19011,6 @@ textarea {
 :root[data-theme='toss'] .support-inquiry-row,
 :root[data-theme='toss'] .support-inquiry-reply,
 :root[data-theme='toss'] .drive-details-panel,
-:root[data-theme='toss'] .notification-card,
 :root[data-theme='toss'] .privacy-result-list {
   color: #eefaf1 !important;
 }
@@ -19462,7 +19024,6 @@ textarea {
 :root[data-theme='toss'] .support-inquiry-row__title,
 :root[data-theme='toss'] .drive-details-panel__head strong,
 :root[data-theme='toss'] .drive-details-panel__meta dt,
-:root[data-theme='toss'] .notification-card__title,
 :root[data-theme='toss'] .privacy-result-list strong,
 :root[data-theme='toss'] .privacy-result-list dt {
   color: #f6fff8 !important;
@@ -19486,8 +19047,6 @@ textarea {
 :root[data-theme='toss'] .drive-details-panel__head span,
 :root[data-theme='toss'] .drive-details-panel__meta dd,
 :root[data-theme='toss'] .drive-details-panel__empty,
-:root[data-theme='toss'] .notification-card__message,
-:root[data-theme='toss'] .notification-card__meta,
 :root[data-theme='toss'] .privacy-result-list dd {
   color: #cbdace !important;
   -webkit-text-fill-color: #cbdace !important;
@@ -19504,7 +19063,6 @@ textarea {
 .support-inquiry-preview,
 .support-inquiry-row__title,
 .drive-details-panel__meta dd,
-.notification-card__message,
 .privacy-result-list dd {
   white-space: normal !important;
   overflow: visible !important;
@@ -19523,9 +19081,6 @@ textarea {
 :root:not([data-theme='toss']) .catalog__status,
 :root:not([data-theme='toss']) .entry-type-pill,
 :root:not([data-theme='toss']) .drive-lock-badge,
-:root:not([data-theme='toss']) .notification-card__status,
-:root:not([data-theme='toss']) .notification-card__tone,
-:root:not([data-theme='toss']) .topbar__notification-badge,
 :root:not([data-theme='toss']) .ai-history-status,
 :root:not([data-theme='toss']) .ai-analysis-status,
 :root:not([data-theme='toss']) .receipt-ocr-review-card__status,
@@ -19543,7 +19098,6 @@ textarea {
 }
 
 :root:not([data-theme='toss']) .button--primary .panel__badge,
-:root:not([data-theme='toss']) .topbar__notification-badge,
 :root:not([data-theme='toss']) .travel-public-rail__badge,
 :root:not([data-theme='toss']) .travel-cluster-pin__count,
 :root:not([data-theme='toss']) .travel-map__thumb-pin span,
@@ -19553,8 +19107,7 @@ textarea {
 :root:not([data-theme='toss']) .chip--expense,
 :root:not([data-theme='toss']) .toggle-chip--active,
 :root:not([data-theme='toss']) .preset-chip--active,
-:root:not([data-theme='toss']) .travel-color-chip--active,
-:root:not([data-theme='toss']) .notification-card__status--read {
+:root:not([data-theme='toss']) .travel-color-chip--active {
   color: #ffffff !important;
   -webkit-text-fill-color: #ffffff !important;
   text-shadow: 0 1px 1px rgba(0, 0, 0, 0.24) !important;
@@ -19570,9 +19123,6 @@ textarea {
 :root[data-theme='toss'] .catalog__status,
 :root[data-theme='toss'] .entry-type-pill,
 :root[data-theme='toss'] .drive-lock-badge,
-:root[data-theme='toss'] .notification-card__status,
-:root[data-theme='toss'] .notification-card__tone,
-:root[data-theme='toss'] .topbar__notification-badge,
 :root[data-theme='toss'] .ai-history-status,
 :root[data-theme='toss'] .ai-analysis-status,
 :root[data-theme='toss'] .receipt-ocr-review-card__status,
@@ -19597,8 +19147,6 @@ textarea {
 .catalog-chip,
 .entry-type-pill,
 .drive-lock-badge,
-.notification-card__status,
-.notification-card__tone,
 .ai-history-status,
 .ai-analysis-status,
 .receipt-ocr-review-card__status,
@@ -19619,8 +19167,6 @@ textarea {
 :root:not([data-theme='toss']) .travel-copy-feedback,
 :root:not([data-theme='toss']) .household-travel-ledger__connection-error,
 :root:not([data-theme='toss']) .travel-map__search-message,
-:root:not([data-theme='toss']) .notification-error,
-:root:not([data-theme='toss']) .notification-empty,
 :root:not([data-theme='toss']) .admin-empty-state,
 :root:not([data-theme='toss']) .admin-empty-state p,
 :root:not([data-theme='toss']) .travel-public-empty,
@@ -19651,8 +19197,7 @@ textarea {
 
 :root:not([data-theme='toss']) .feedback--error,
 :root:not([data-theme='toss']) .receipt-ocr-panel__message--error,
-:root:not([data-theme='toss']) .receipt-ocr-review-card__message--error,
-:root:not([data-theme='toss']) .notification-error {
+:root:not([data-theme='toss']) .receipt-ocr-review-card__message--error {
   background: #fff1f2 !important;
   border-color: rgba(190, 18, 60, 0.28) !important;
   color: #8a1230 !important;
@@ -19675,8 +19220,6 @@ textarea {
 :root[data-theme='toss'] .travel-copy-feedback,
 :root[data-theme='toss'] .household-travel-ledger__connection-error,
 :root[data-theme='toss'] .travel-map__search-message,
-:root[data-theme='toss'] .notification-error,
-:root[data-theme='toss'] .notification-empty,
 :root[data-theme='toss'] .admin-empty-state,
 :root[data-theme='toss'] .admin-empty-state p,
 :root[data-theme='toss'] .travel-public-empty,
@@ -19707,8 +19250,7 @@ textarea {
 
 :root[data-theme='toss'] .feedback--error,
 :root[data-theme='toss'] .receipt-ocr-panel__message--error,
-:root[data-theme='toss'] .receipt-ocr-review-card__message--error,
-:root[data-theme='toss'] .notification-error {
+:root[data-theme='toss'] .receipt-ocr-review-card__message--error {
   background: rgba(127, 29, 29, 0.34) !important;
   border-color: rgba(252, 165, 165, 0.34) !important;
   color: #fecaca !important;
@@ -19731,8 +19273,6 @@ textarea {
 .travel-copy-feedback,
 .household-travel-ledger__connection-error,
 .travel-map__search-message,
-.notification-error,
-.notification-empty,
 .admin-empty-state,
 .travel-public-empty,
 .travel-public-story-empty,
@@ -19957,7 +19497,6 @@ textarea {
 :root[data-layout-mode='mobile'] .panel__badge,
 :root[data-layout-mode='mobile'] .chip,
 :root[data-layout-mode='mobile'] .entry-type-pill,
-:root[data-layout-mode='mobile'] .notification-card__meta,
 :root[data-layout-mode='mobile'] .ai-result-modal__eyebrow,
 :root[data-layout-mode='mobile'] .drive-lock-badge {
   font-size: max(0.75rem, 12px) !important;
@@ -19986,7 +19525,6 @@ textarea {
 .panel__badge,
 .chip,
 .entry-type-pill,
-.notification-card__meta,
 .ai-result-modal__eyebrow,
 .drive-lock-badge,
 .receipt-ocr-review-card__status,
@@ -20149,7 +19687,6 @@ textarea {
 :root:not([data-theme='toss']) .travel-media-card--selected,
 :root:not([data-theme='toss']) .travel-my-photos__card--selected,
 :root:not([data-theme='toss']) .family-media-card--selected,
-:root:not([data-theme='toss']) .notification-card--unread,
 :root:not([data-theme='toss']) .main-dashboard__floating-button.is-active,
 :root:not([data-theme='toss']) .travel-map__toolbar-button.is-active,
 :root:not([data-theme='toss']) .travel-public-chip--active {
@@ -20167,7 +19704,6 @@ textarea {
 :root:not([data-theme='toss']) .travel-media-card--selected *,
 :root:not([data-theme='toss']) .travel-my-photos__card--selected *,
 :root:not([data-theme='toss']) .family-media-card--selected *,
-:root:not([data-theme='toss']) .notification-card--unread *,
 :root:not([data-theme='toss']) .main-dashboard__floating-button.is-active *,
 :root:not([data-theme='toss']) .travel-map__toolbar-button.is-active *,
 :root:not([data-theme='toss']) .travel-public-chip--active * {
@@ -20185,7 +19721,6 @@ textarea {
 [data-theme='toss'] .travel-media-card--selected,
 [data-theme='toss'] .travel-my-photos__card--selected,
 [data-theme='toss'] .family-media-card--selected,
-[data-theme='toss'] .notification-card--unread,
 [data-theme='toss'] .main-dashboard__floating-button.is-active,
 [data-theme='toss'] .travel-map__toolbar-button.is-active,
 [data-theme='toss'] .travel-public-chip--active {
@@ -20203,7 +19738,6 @@ textarea {
 [data-theme='toss'] .travel-media-card--selected *,
 [data-theme='toss'] .travel-my-photos__card--selected *,
 [data-theme='toss'] .family-media-card--selected *,
-[data-theme='toss'] .notification-card--unread *,
 [data-theme='toss'] .main-dashboard__floating-button.is-active *,
 [data-theme='toss'] .travel-map__toolbar-button.is-active *,
 [data-theme='toss'] .travel-public-chip--active * {
@@ -20638,8 +20172,6 @@ textarea {
 :root:not([data-theme='toss']) .chip,
 :root:not([data-theme='toss']) .catalog-chip,
 :root:not([data-theme='toss']) .entry-type-pill,
-:root:not([data-theme='toss']) .notification-card__status,
-:root:not([data-theme='toss']) .notification-card__tone,
 :root:not([data-theme='toss']) .ai-history-status,
 :root:not([data-theme='toss']) .ai-analysis-status,
 :root:not([data-theme='toss']) .drive-lock-badge,
@@ -20662,8 +20194,6 @@ textarea {
 :root:not([data-theme='toss']) .chip *,
 :root:not([data-theme='toss']) .catalog-chip *,
 :root:not([data-theme='toss']) .entry-type-pill *,
-:root:not([data-theme='toss']) .notification-card__status *,
-:root:not([data-theme='toss']) .notification-card__tone *,
 :root:not([data-theme='toss']) .ai-history-status *,
 :root:not([data-theme='toss']) .ai-analysis-status *,
 :root:not([data-theme='toss']) .drive-lock-badge *,
@@ -20685,8 +20215,6 @@ textarea {
 [data-theme='toss'] .chip,
 [data-theme='toss'] .catalog-chip,
 [data-theme='toss'] .entry-type-pill,
-[data-theme='toss'] .notification-card__status,
-[data-theme='toss'] .notification-card__tone,
 [data-theme='toss'] .ai-history-status,
 [data-theme='toss'] .ai-analysis-status,
 [data-theme='toss'] .drive-lock-badge,
@@ -20709,8 +20237,6 @@ textarea {
 [data-theme='toss'] .chip *,
 [data-theme='toss'] .catalog-chip *,
 [data-theme='toss'] .entry-type-pill *,
-[data-theme='toss'] .notification-card__status *,
-[data-theme='toss'] .notification-card__tone *,
 [data-theme='toss'] .ai-history-status *,
 [data-theme='toss'] .ai-analysis-status *,
 [data-theme='toss'] .drive-lock-badge *,
@@ -20730,7 +20256,6 @@ textarea {
 
 :root:not([data-theme='toss']) .entry-type-pill--income,
 :root:not([data-theme='toss']) .status--success,
-:root:not([data-theme='toss']) .notification-card__status--success,
 :root:not([data-theme='toss']) .feedback--success,
 :root:not([data-theme='toss']) .chip--success {
   color: #064e3b !important;
@@ -20739,7 +20264,6 @@ textarea {
 
 :root:not([data-theme='toss']) .entry-type-pill--expense,
 :root:not([data-theme='toss']) .status--error,
-:root:not([data-theme='toss']) .notification-card__status--error,
 :root:not([data-theme='toss']) .feedback--error,
 :root:not([data-theme='toss']) .chip--danger {
   color: #8f1d2c !important;
@@ -20748,7 +20272,6 @@ textarea {
 
 [data-theme='toss'] .entry-type-pill--income,
 [data-theme='toss'] .status--success,
-[data-theme='toss'] .notification-card__status--success,
 [data-theme='toss'] .feedback--success,
 [data-theme='toss'] .chip--success {
   color: #bff7ce !important;
@@ -20757,7 +20280,6 @@ textarea {
 
 [data-theme='toss'] .entry-type-pill--expense,
 [data-theme='toss'] .status--error,
-[data-theme='toss'] .notification-card__status--error,
 [data-theme='toss'] .feedback--error,
 [data-theme='toss'] .chip--danger {
   color: #ffc4cc !important;
@@ -21168,7 +20690,6 @@ textarea {
   .sheet-table,
   .comparison-table,
   .ledger-history-list,
-  .notification-card,
   .drive-details-panel,
   .travel-public-app,
   .travel-public-card,
@@ -21227,8 +20748,7 @@ textarea {
   .panel__badge,
   .chip,
   .ai-history-status,
-  .ai-analysis-status,
-  .notification-card__status {
+  .ai-analysis-status {
     background: #ffffff !important;
     border: 1px solid #6b7280 !important;
     color: #111827 !important;
@@ -21262,7 +20782,6 @@ textarea {
   .sheet-table,
   .comparison-table,
   .ledger-history-list,
-  .notification-card,
   .drive-details-panel,
   .travel-public-app,
   .travel-public-card,
@@ -21305,7 +20824,6 @@ textarea {
   .chip,
   .panel__badge,
   .entry-type-pill,
-  .notification-card__status,
   .ai-history-status,
   .ai-analysis-status {
     color: CanvasText !important;
@@ -21777,8 +21295,6 @@ textarea {
 :root:not([data-theme='toss']) .panel__badge::after,
 :root:not([data-theme='toss']) .entry-type-pill::before,
 :root:not([data-theme='toss']) .entry-type-pill::after,
-:root:not([data-theme='toss']) .notification-card__status::before,
-:root:not([data-theme='toss']) .notification-card__status::after,
 :root:not([data-theme='toss']) .ai-history-status::before,
 :root:not([data-theme='toss']) .ai-history-status::after,
 :root:not([data-theme='toss']) .ai-analysis-status::before,
@@ -21813,8 +21329,6 @@ textarea {
 [data-theme='toss'] .panel__badge::after,
 [data-theme='toss'] .entry-type-pill::before,
 [data-theme='toss'] .entry-type-pill::after,
-[data-theme='toss'] .notification-card__status::before,
-[data-theme='toss'] .notification-card__status::after,
 [data-theme='toss'] .ai-history-status::before,
 [data-theme='toss'] .ai-history-status::after,
 [data-theme='toss'] .ai-analysis-status::before,
@@ -21876,8 +21390,6 @@ textarea {
   .panel__badge::after,
   .entry-type-pill::before,
   .entry-type-pill::after,
-  .notification-card__status::before,
-  .notification-card__status::after,
   .ai-history-status::before,
   .ai-history-status::after,
   .ai-analysis-status::before,
@@ -22296,7 +21808,6 @@ textarea {
 :root:not([data-theme='toss']) .ledger-history-list .meta,
 :root:not([data-theme='toss']) .support-inquiry-table small,
 :root:not([data-theme='toss']) .support-inquiry-table .meta,
-:root:not([data-theme='toss']) .notification-card__meta,
 :root:not([data-theme='toss']) .drive-file-card__meta,
 :root:not([data-theme='toss']) .drive-table__meta,
 :root:not([data-theme='toss']) .travel-plan-card__meta,
@@ -22331,7 +21842,6 @@ textarea {
 [data-theme='toss'] .ledger-history-list .meta,
 [data-theme='toss'] .support-inquiry-table small,
 [data-theme='toss'] .support-inquiry-table .meta,
-[data-theme='toss'] .notification-card__meta,
 [data-theme='toss'] .drive-file-card__meta,
 [data-theme='toss'] .drive-table__meta,
 [data-theme='toss'] .travel-plan-card__meta,
@@ -22425,7 +21935,6 @@ textarea {
   .sheet-table small,
   .comparison-table small,
   .ledger-history-list small,
-  .notification-card__meta,
   .drive-file-card__meta,
   .travel-plan-card__meta,
   .travel-public-trip-card__meta,
@@ -30174,7 +29683,6 @@ button.button--primary,
 .admin-ops-modal__body,
 .admin-support-modal__body,
 .admin-access-control-modal__body,
-.global-notification-modal__dialog,
 .main-photo-frame-modal__dialog {
   overflow-x: hidden;
 }
@@ -31483,154 +30991,6 @@ button.button--primary,
 
   .admin-access-recent-card {
     min-height: 360px;
-  }
-}
-/* Notification center: make origin, event, and target scannable without hiding the list. */
-.notification-settings-button {
-  flex: 0 0 auto;
-}
-
-.notification-preferences {
-  display: grid;
-  gap: 0.8rem;
-  padding: 0.9rem 1rem;
-  border: 1px solid var(--line, rgba(148, 163, 184, 0.34));
-  border-radius: 0.8rem;
-  background: color-mix(in srgb, var(--panel, #172233) 88%, var(--brand, #10b981));
-}
-
-.notification-preferences__header,
-.notification-preferences__master,
-.notification-preferences__option,
-.notification-card__context {
-  display: flex;
-  align-items: center;
-}
-
-.notification-preferences__header {
-  justify-content: space-between;
-  gap: 1rem;
-}
-
-.notification-preferences__master,
-.notification-preferences__option {
-  gap: 0.5rem;
-  font-weight: 750;
-}
-
-.notification-preferences__master input,
-.notification-preferences__option input {
-  inline-size: 1rem;
-  block-size: 1rem;
-  accent-color: var(--brand, #10b981);
-}
-
-.notification-preferences__categories {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 0.55rem;
-}
-
-.notification-preferences__option {
-  min-inline-size: 0;
-  padding: 0.62rem 0.72rem;
-  border: 1px solid var(--line, rgba(148, 163, 184, 0.34));
-  border-radius: 0.55rem;
-  background: color-mix(in srgb, var(--panel, #172233) 94%, transparent);
-  overflow-wrap: anywhere;
-}
-
-.notification-preferences__option--disabled {
-  opacity: 0.56;
-}
-
-.notification-preferences__error {
-  margin: 0;
-  color: var(--danger, #ef6a7a);
-  font-size: 0.84rem;
-  font-weight: 700;
-}
-
-.notification-card {
-  grid-template-columns: auto minmax(0, 1fr);
-  align-items: start;
-}
-
-.notification-card__status {
-  align-self: start;
-  white-space: nowrap;
-}
-
-.notification-card__meta {
-  align-items: center;
-  gap: 0.45rem;
-}
-
-.notification-card__source,
-.notification-card__event {
-  display: inline-flex;
-  align-items: center;
-  min-block-size: 1.55rem;
-  padding: 0.1rem 0.5rem;
-  border-radius: 999px;
-  font-size: 0.76rem;
-  font-weight: 800;
-  line-height: 1.25;
-}
-
-.notification-card__source {
-  background: color-mix(in srgb, var(--brand, #10b981) 18%, transparent);
-  color: var(--brand-readable-strong, #bbf7d0);
-}
-
-.notification-card__event {
-  border: 1px solid var(--line, rgba(148, 163, 184, 0.38));
-  color: var(--text-soft, #cbd5e1);
-}
-
-.notification-card__context {
-  inline-size: fit-content;
-  max-inline-size: 100%;
-  gap: 0.5rem;
-  margin: 0.45rem 0;
-  padding: 0.35rem 0.55rem;
-  border-left: 2px solid var(--brand, #10b981);
-  background: color-mix(in srgb, var(--brand, #10b981) 8%, transparent);
-  font-size: 0.86rem;
-}
-
-.notification-card__context span {
-  flex: 0 0 auto;
-  color: var(--text-soft, #cbd5e1);
-  font-weight: 700;
-}
-
-.notification-card__context strong {
-  min-inline-size: 0;
-  overflow-wrap: anywhere;
-}
-
-@media (max-width: 900px) {
-  .notification-preferences__categories {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
-@media (max-width: 640px) {
-  .notification-preferences__categories {
-    grid-template-columns: 1fr;
-  }
-
-  .notification-card {
-    grid-template-columns: 1fr;
-  }
-
-  .notification-card__status {
-    justify-self: start;
-  }
-
-  .notification-card__context {
-    inline-size: 100%;
   }
 }
 /* Profile section switcher keeps account, privacy, and support workflows separate. */
@@ -33271,7 +32631,6 @@ button.button--primary,
 .admin-ops-modal__dialog,
 .admin-support-modal__dialog,
 .admin-access-control-modal__dialog,
-.global-notification-modal__dialog,
 .profile-workspace-modal__dialog {
   background: var(--surface);
   color: var(--text);
@@ -33961,11 +33320,11 @@ body,
   box-shadow: var(--shadow) !important;
 }
 
-:where(.travel-modal, .receipt-ocr-modal, .ledger-ai-modal, .ai-result-modal, .household-aggregate-chart-modal, .transaction-sheet-modal, .transaction-sheet-settings-modal, .main-photo-frame-modal, .public-map-share-photo-modal, .drive-preview-overlay, .profile-workspace-modal, .admin-ops-modal, .admin-support-modal, .admin-access-control-modal, .global-notification-modal) {
+:where(.travel-modal, .receipt-ocr-modal, .ledger-ai-modal, .ai-result-modal, .household-aggregate-chart-modal, .transaction-sheet-modal, .transaction-sheet-settings-modal, .main-photo-frame-modal, .public-map-share-photo-modal, .drive-preview-overlay, .profile-workspace-modal, .admin-ops-modal, .admin-support-modal, .admin-access-control-modal) {
   background: var(--modal-overlay) !important;
 }
 
-:where(.travel-modal__dialog, .receipt-ocr-modal__dialog, .ledger-ai-modal__dialog, .ai-result-modal__dialog, .household-aggregate-chart-modal__panel, .transaction-sheet-modal__dialog, .transaction-sheet-settings-modal__dialog, .main-photo-frame-modal__dialog, .public-map-share-photo-modal__panel, .drive-preview-modal__dialog, .profile-workspace-modal__dialog, .admin-ops-modal__dialog, .admin-support-modal__dialog, .admin-access-control-modal__dialog, .global-notification-modal__dialog) {
+:where(.travel-modal__dialog, .receipt-ocr-modal__dialog, .ledger-ai-modal__dialog, .ai-result-modal__dialog, .household-aggregate-chart-modal__panel, .transaction-sheet-modal__dialog, .transaction-sheet-settings-modal__dialog, .main-photo-frame-modal__dialog, .public-map-share-photo-modal__panel, .drive-preview-modal__dialog, .profile-workspace-modal__dialog, .admin-ops-modal__dialog, .admin-support-modal__dialog, .admin-access-control-modal__dialog) {
   background: var(--modal-surface) !important;
   border-color: var(--modal-border) !important;
   box-shadow: var(--modal-shadow) !important;
@@ -34045,10 +33404,6 @@ html body .app-shell.app-shell :is(
   .admin-command-center,
   .admin-command-card,
   .support-inquiry-card,
-  .notification-hero,
-  .notification-toolbar,
-  .notification-list-panel,
-  .notification-card,
   .privacy-export-card,
   .privacy-management-card,
   .privacy-action-card,
@@ -34169,8 +33524,7 @@ html body .app-shell.app-shell :is(
   .profile-workspace-modal,
   .admin-ops-modal,
   .admin-support-modal,
-  .admin-access-control-modal,
-  .global-notification-modal
+  .admin-access-control-modal
 ) {
   background: var(--modal-overlay) !important;
 }
@@ -34191,7 +33545,6 @@ html body .app-shell.app-shell.app-shell :is(
   .admin-ops-modal__dialog,
   .admin-support-modal__dialog,
   .admin-access-control-modal__dialog,
-  .global-notification-modal__dialog,
   .travel-map-share-modal__dialog
 ) {
   background: var(--modal-surface) !important;
@@ -34217,7 +33570,6 @@ html body .app-shell.app-shell.app-shell :is(
   .admin-ops-modal__dialog,
   .admin-support-modal__dialog,
   .admin-access-control-modal__dialog,
-  .global-notification-modal__dialog,
   .travel-map-share-modal__dialog
 ) :is(h1, h2, h3, h4, h5, h6, strong, .field__label) {
   color: var(--modal-text) !important;
@@ -34240,7 +33592,6 @@ html body .app-shell.app-shell.app-shell :is(
   .admin-ops-modal__dialog,
   .admin-support-modal__dialog,
   .admin-access-control-modal__dialog,
-  .global-notification-modal__dialog,
   .travel-map-share-modal__dialog
 ) :is(p, span, small, label, .field__hint, .form-hint, .panel__empty) {
   color: var(--modal-text-soft) !important;
@@ -34263,7 +33614,6 @@ html body .app-shell.app-shell.app-shell :is(
   .admin-ops-modal__dialog,
   .admin-support-modal__dialog,
   .admin-access-control-modal__dialog,
-  .global-notification-modal__dialog,
   .travel-map-share-modal__dialog
 ) :is(
   input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]),
@@ -34292,7 +33642,6 @@ html body .app-shell.app-shell.app-shell :is(
   .admin-ops-modal__dialog,
   .admin-support-modal__dialog,
   .admin-access-control-modal__dialog,
-  .global-notification-modal__dialog,
   .travel-map-share-modal__dialog
 ) :is(button, .button, a, .chip, .toggle-chip) {
   border-color: var(--modal-border) !important;
@@ -34317,7 +33666,6 @@ html body .app-shell.app-shell.app-shell :is(
   .admin-ops-modal__dialog,
   .admin-support-modal__dialog,
   .admin-access-control-modal__dialog,
-  .global-notification-modal__dialog,
   .travel-map-share-modal__dialog
 ) :is(.button--primary, button[type="submit"], .button--active, .is-active) {
   border-color: var(--modal-border-strong) !important;
@@ -34541,15 +33889,6 @@ html body .app-shell .main-shell--standalone .topbar__nav-button--admin {
   border-left: 1px solid var(--dash-border) !important;
   margin-left: 8px;
   padding-left: 16px !important;
-}
-
-html body .app-shell .main-shell--standalone .topbar__notification-badge {
-  background: var(--dash-expense) !important;
-  border-radius: 0 !important;
-  color: #fff !important;
-  font-size: 0.62rem;
-  margin-left: 5px;
-  padding: 2px 4px;
 }
 
 html body .app-shell .main-shell--standalone .topbar__actions {
@@ -35979,10 +35318,6 @@ html[data-theme='toss'] body .app-shell :is(
   .admin-command-center,
   .admin-command-card,
   .support-inquiry-card,
-  .notification-hero,
-  .notification-toolbar,
-  .notification-list-panel,
-  .notification-card,
   .privacy-export-card,
   .privacy-management-card,
   .privacy-action-card,
@@ -36014,7 +35349,6 @@ html[data-theme='toss'] body .app-shell :is(
   .travel-atlas,
   .drive-dashboard__grid,
   .admin-command-grid,
-  .notification-list,
   .support-inquiry-list
 ) {
   background: var(--dark-surface-raised) !important;
@@ -36343,8 +35677,6 @@ html[data-theme='toss'] body .app-shell :is(
 
 html[data-theme='toss'] body .app-shell :is(
   .panel__badge,
-  .notification-card__status,
-  .topbar__notification-badge,
   .chip,
   .tag,
   .badge,
@@ -36456,8 +35788,7 @@ html[data-theme='toss'] body .app-shell :is(
   .travel-public-update,
   .drive-dashboard,
   .admin-workspace,
-  .support-workspace,
-  .notification-workspace
+  .support-workspace
 ) {
   --travel-bg: var(--dark-surface) !important;
   --travel-surface: var(--dark-surface-raised) !important;
@@ -36922,12 +36253,28 @@ html[data-theme='toss'] body .app-shell .main-shell--standalone .main-palette__p
   color: #dad7cd !important;
   -webkit-text-fill-color: #dad7cd !important;
 }
-/* Pet artwork uses transparent pixels; keep the global button theme from painting a backdrop behind it. */
+/* Pet artwork uses transparent pixels; keep global theme layers from painting a backdrop behind it. */
+html body .app-shell.app-shell .pet-companion__dock,
 html body .app-shell.app-shell .pet-companion__avatar,
-html body .app-shell.app-shell .pet-companion__avatar:hover {
+html body .app-shell.app-shell .pet-companion__avatar:hover,
+html body .app-shell.app-shell .pet-companion__avatar:active {
   background: transparent !important;
   background-color: transparent !important;
   background-image: none !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+html body .app-shell.app-shell .pet-companion__dock::before,
+html body .app-shell.app-shell .pet-companion__dock::after,
+html body .app-shell.app-shell .pet-companion__avatar::before,
+html body .app-shell.app-shell .pet-companion__avatar::after {
+  content: none !important;
+  display: none !important;
+}
+
+html body .app-shell.app-shell .pet-companion__animal-sprite {
+  background-color: transparent !important;
   border: 0 !important;
   box-shadow: none !important;
 }
@@ -36940,6 +36287,7 @@ html body .app-shell.app-shell .pet-companion__avatar:focus-visible {
   outline-offset: 3px;
   box-shadow: 0 0 0 6px var(--focus-ring-shadow) !important;
 }
+
 /* Monthly cumulative chart interaction and target contrast. */
 .household-aggregate-chart__target-line {
   stroke-dasharray: 9 5 !important;

@@ -13,7 +13,6 @@ const modalFixtures = [
   ['admin-ops-modal', 'admin-ops-modal__dialog'],
   ['admin-support-modal', 'admin-support-modal__dialog'],
   ['admin-access-control-modal', 'admin-access-control-modal__dialog'],
-  ['global-notification-modal', 'global-notification-modal__dialog'],
   ['profile-workspace-modal', 'profile-workspace-modal__dialog'],
 ]
 

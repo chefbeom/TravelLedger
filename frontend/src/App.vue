@@ -5,26 +5,15 @@ import {
   acceptInvite,
   fetchCurrentUser,
   fetchInvite,
-  fetchNotifications,
   fetchRegistrationOptions,
   login,
   logout as logoutRequest,
   register,
 } from './lib/sessionApi'
-import { fetchLayoutSetting } from './lib/api'
-import {
-  NOTIFICATION_PREFERENCE_SCOPE,
-  createDefaultNotificationPreferences,
-  isNotificationEnabled,
-  normalizeNotificationPreferences,
-  notificationCategoryLabel,
-} from './lib/notificationPreferences'
-
 const AdminWorkspace = defineAsyncComponent(() => import('./components/AdminWorkspace.vue'))
 const HouseholdWorkspace = defineAsyncComponent(() => import('./components/HouseholdWorkspace.vue'))
 const MainDashboardWorkspace = defineAsyncComponent(() => import('./components/MainDashboardWorkspace.vue'))
 const CalenDriveWorkspace = defineAsyncComponent(() => import('./components/CalenDriveWorkspace.vue'))
-const NotificationCenterWorkspace = defineAsyncComponent(() => import('./components/NotificationCenterWorkspace.vue'))
 const ProfileWorkspace = defineAsyncComponent(() => import('./components/ProfileWorkspace.vue'))
 const TravelWorkspace = defineAsyncComponent(() => import('./components/TravelWorkspace.vue'))
 const TravelPublicMapShareWorkspace = defineAsyncComponent(() => import('./components/TravelPublicMapShareWorkspace.vue'))
@@ -109,8 +98,6 @@ const LAYOUT_MODE_STORAGE_KEY = 'calen-layout-mode'
 const MOBILE_LAYOUT_QUERY = '(max-width: 760px)'
 const ROUTE_LEAVE_GUARD_EVENT = 'calen-route-leave-guard'
 const DEFAULT_ROUTE_LEAVE_GUARD_MESSAGE = '페이지를 벗어나면 작성 중인 내용이 사라질 수 있습니다.'
-const NOTIFICATION_POLL_INTERVAL_MS = 15000
-const NOTIFICATION_TOAST_DURATION_MS = 3000
 const MOBILE_MODAL_SCROLL_LOCK_QUERY = '(max-width: 760px), (hover: none) and (pointer: coarse)'
 const MODAL_SCROLL_LOCK_SELECTOR = [
   '[role="dialog"][aria-modal="true"]',
@@ -125,17 +112,12 @@ const MODAL_SCROLL_LOCK_SELECTOR = [
   '.admin-ops-modal',
   '.admin-support-modal',
   '.admin-access-control-modal',
-  '.global-notification-modal',
   '.main-photo-frame-modal',
   '.public-map-share-photo-modal',
   '.drive-preview-modal',
 ].join(', ')
 
 const routeMeta = {
-  notifications: {
-    title: '알림 센터',
-    description: 'AI, OCR, 백업, 공유, 여행, 예산 알림을 한곳에서 확인합니다.',
-  },
   launcher: {
     title: '기능 선택',
     description: '오늘 사용할 기능 영역을 선택하세요.',
@@ -206,30 +188,13 @@ const successMessage = ref('')
 const errorMessage = ref('')
 const initialProfileModalOpen = initialRouteState.route === 'profile'
 const activeRoute = ref(initialProfileModalOpen ? 'launcher' : initialRouteState.route)
-const notificationUnreadCount = ref(0)
-const notificationUnreadBadgeLabel = computed(() => (notificationUnreadCount.value > 99 ? '99+' : String(notificationUnreadCount.value)))
-const notificationModalOpen = ref(false)
 const profileModalOpen = ref(initialProfileModalOpen)
 const petCompanionRef = ref(null)
-const latestUnreadNotificationId = ref(null)
-const notificationToast = reactive({
-  visible: false,
-  id: '',
-  title: '',
-  message: '',
-  category: '',
-})
-const notificationPreferences = ref(createDefaultNotificationPreferences())
 let mobileModalObserver = null
 let mobileModalScrollLockActive = false
 let mobileModalScrollY = 0
 let mobileModalScrollSyncQueued = false
 let mobileModalScrollRestore = null
-const notificationSignalVisible = computed(() => Boolean(
-  currentUser.value
-  && notificationPreferences.value.enabled
-  && (notificationUnreadCount.value || notificationToast.visible),
-))
 const inviteToken = ref(initialRouteState.token)
 const householdInitialTab = ref('')
 const travelRecordFocusRequest = ref(null)
@@ -295,10 +260,6 @@ const layoutModeOptions = [
 ]
 
 let inviteRequestSequence = 0
-let notificationPollTimer = null
-let notificationPollGeneration = 0
-let notificationPollInFlight = false
-let notificationToastTimer = null
 
 function resolveRouteState(hash) {
   const route = String(hash || '').replace(/^#/, '').trim()
@@ -515,200 +476,12 @@ function handleBeforeUnload(event) {
   event.returnValue = ''
 }
 
-function setNotificationUnreadCount(value) {
-  notificationUnreadCount.value = Math.max(0, Number(value || 0))
-}
-
-function applyNotificationPreferences(value) {
-  notificationPreferences.value = normalizeNotificationPreferences(value)
-  if (!notificationPreferences.value.enabled) {
-    clearNotificationToast()
-  }
-}
-
-async function loadNotificationPreferences() {
-  try {
-    const response = await fetchLayoutSetting(NOTIFICATION_PREFERENCE_SCOPE)
-    if (currentUser.value) {
-      applyNotificationPreferences(response?.payload)
-    }
-  } catch {
-    applyNotificationPreferences(createDefaultNotificationPreferences())
-  }
-}
-
-function handleNotificationPreferencesChange(value) {
-  applyNotificationPreferences(value)
-}
-
-function clearNotificationToast() {
-  if (notificationToastTimer) {
-    window.clearTimeout(notificationToastTimer)
-    notificationToastTimer = null
-  }
-  notificationToast.visible = false
-}
-
-function showNotificationToast(notification) {
-  if (!isNotificationEnabled(notificationPreferences.value, notification?.type)) {
-    return
-  }
-  const title = String(notification?.title || '새 알림').trim() || '새 알림'
-  notificationToast.id = String(notification?.id || '')
-  notificationToast.title = title
-  notificationToast.message = String(notification?.message || '').trim()
-  notificationToast.category = notificationCategoryLabel(notification?.type)
-  notificationToast.visible = true
-  if (notificationToastTimer) {
-    window.clearTimeout(notificationToastTimer)
-  }
-  notificationToastTimer = window.setTimeout(() => {
-    notificationToast.visible = false
-    notificationToastTimer = null
-  }, NOTIFICATION_TOAST_DURATION_MS)
-}
-
-async function refreshNotificationUnreadCount(options = {}) {
-  if (!currentUser.value) {
-    setNotificationUnreadCount(0)
-    latestUnreadNotificationId.value = null
-    clearNotificationToast()
-    return
-  }
-
-  try {
-    const response = await fetchNotifications({ page: 0, size: 5, unreadOnly: 'true' })
-    const unreadNotifications = Array.isArray(response?.content) ? response.content : []
-    const latestNotification = unreadNotifications[0] || null
-    const latestId = latestNotification?.id != null ? String(latestNotification.id) : ''
-    const previousId = latestUnreadNotificationId.value
-    const shouldNotify = Boolean(options.notify && !notificationModalOpen.value && activeRoute.value !== 'notifications')
-
-    setNotificationUnreadCount(response?.unreadCount)
-    if (shouldNotify && previousId !== null && latestId && latestId !== previousId) {
-      showNotificationToast(latestNotification)
-    }
-    latestUnreadNotificationId.value = latestId || ''
-  } catch (error) {
-    setNotificationUnreadCount(0)
-  }
-}
-
-function scheduleNotificationPoll(generation, delay = NOTIFICATION_POLL_INTERVAL_MS) {
-  if (
-    generation !== notificationPollGeneration
-    || !currentUser.value
-    || document.visibilityState === 'hidden'
-  ) {
-    return
-  }
-  notificationPollTimer = window.setTimeout(async () => {
-    notificationPollTimer = null
-    if (generation !== notificationPollGeneration) {
-      return
-    }
-    if (notificationPollInFlight) {
-      scheduleNotificationPoll(generation)
-      return
-    }
-    notificationPollInFlight = true
-    try {
-      await refreshNotificationUnreadCount({ notify: true })
-    } finally {
-      if (generation === notificationPollGeneration) {
-        notificationPollInFlight = false
-        scheduleNotificationPoll(generation)
-      }
-    }
-  }, delay)
-}
-
-function startNotificationPolling() {
-  stopNotificationPolling()
-  if (!currentUser.value || document.visibilityState === 'hidden') {
-    return
-  }
-  const generation = notificationPollGeneration
-  notificationPollInFlight = true
-  refreshNotificationUnreadCount({ notify: false })
-    .finally(() => {
-      if (generation === notificationPollGeneration) {
-        notificationPollInFlight = false
-        scheduleNotificationPoll(generation)
-      }
-    })
-}
-
-function stopNotificationPolling() {
-  notificationPollGeneration += 1
-  notificationPollInFlight = false
-  if (notificationPollTimer) {
-    window.clearTimeout(notificationPollTimer)
-    notificationPollTimer = null
-  }
-}
-
-function handleNotificationVisibilityChange() {
-  if (document.visibilityState === 'hidden') {
-    stopNotificationPolling()
-  } else if (currentUser.value) {
-    startNotificationPolling()
-  }
-}
-
 function openPetManager() {
   petCompanionRef.value?.openManager()
 }
 
 function handlePetAiAnalysisComplete(payload) {
   petCompanionRef.value?.announceAnalysisComplete(payload)
-}
-function openNotificationModal() {
-  notificationModalOpen.value = true
-  petCompanionRef.value?.announceNavigation('notifications')
-  clearNotificationToast()
-  refreshNotificationUnreadCount({ notify: false })
-}
-function closeNotificationModal() {
-  notificationModalOpen.value = false
-  refreshNotificationUnreadCount({ notify: false })
-}
-
-function resolveNotificationTargetRoute(target) {
-  const rawTarget = String(target || '').trim()
-  if (!rawTarget.startsWith('/')) {
-    return null
-  }
-
-  const url = new URL(rawTarget, window.location.origin)
-  const route = url.pathname.replace(/^\/+/, '') || 'launcher'
-  if (route === 'household') {
-    return { route, options: { householdTab: url.searchParams.get('tab') || '' } }
-  }
-  if (route === 'travel-money' || route === 'travel-log' || route === 'photo-album' || route === 'family-album' || route === 'my-map') {
-    return { route, options: {} }
-  }
-  if (normalizedRouteMeta[route]) {
-    return { route, options: {} }
-  }
-  return null
-}
-
-function handleNotificationTargetOpen(target) {
-  const resolvedTarget = resolveNotificationTargetRoute(target)
-  closeNotificationModal()
-  if (resolvedTarget) {
-    navigate(resolvedTarget.route, resolvedTarget.options)
-    return
-  }
-  if (String(target || '').startsWith('/')) {
-    window.location.assign(target)
-  }
-}
-
-function handleNotificationUnreadCountChange(value) {
-  setNotificationUnreadCount(value)
-  refreshNotificationUnreadCount({ notify: false })
 }
 function openProfileModal() {
   profileModalOpen.value = true
@@ -991,27 +764,6 @@ watch([currentUser, activeRoute], ([user, route]) => {
   }
 }, { immediate: true })
 
-watch(currentUser, async (user) => {
-  if (user) {
-    await loadNotificationPreferences()
-    if (currentUser.value) {
-      startNotificationPolling()
-    }
-  } else {
-    stopNotificationPolling()
-    setNotificationUnreadCount(0)
-    latestUnreadNotificationId.value = null
-    notificationModalOpen.value = false
-    notificationPreferences.value = createDefaultNotificationPreferences()
-    clearNotificationToast()
-  }
-})
-
-watch(activeRoute, (route) => {
-  if (route === 'notifications') {
-    refreshNotificationUnreadCount()
-  }
-})
 function isMobileModalScrollLockRequired() {
   const modal = typeof document === 'undefined'
     ? null
@@ -1149,7 +901,6 @@ onMounted(() => {
   window.addEventListener('beforeunload', handleBeforeUnload)
   window.addEventListener(ROUTE_LEAVE_GUARD_EVENT, handleRouteLeaveGuardChange)
   document.addEventListener('keydown', handleGlobalModalEscape, true)
-  document.addEventListener('visibilitychange', handleNotificationVisibilityChange)
   window.addEventListener('resize', queueMobileModalBackgroundScrollSync)
   window.addEventListener('orientationchange', queueMobileModalBackgroundScrollSync)
   if (typeof MutationObserver !== 'undefined') {
@@ -1171,14 +922,11 @@ onBeforeUnmount(() => {
   window.removeEventListener('beforeunload', handleBeforeUnload)
   window.removeEventListener(ROUTE_LEAVE_GUARD_EVENT, handleRouteLeaveGuardChange)
   document.removeEventListener('keydown', handleGlobalModalEscape, true)
-  document.removeEventListener('visibilitychange', handleNotificationVisibilityChange)
   window.removeEventListener('resize', queueMobileModalBackgroundScrollSync)
   window.removeEventListener('orientationchange', queueMobileModalBackgroundScrollSync)
   mobileModalObserver?.disconnect()
   mobileModalObserver = null
   unlockMobileModalBackgroundScroll()
-  stopNotificationPolling()
-  clearNotificationToast()
 })
 </script>
 
@@ -1375,15 +1123,6 @@ onBeforeUnmount(() => {
             >
               {{ item.label }}
             </button>
-                    <button
-            type="button"
-            :class="['topbar__nav-button', 'topbar__nav-button--notifications', { 'topbar__nav-button--active': activeRoute === 'notifications' || notificationModalOpen }]"
-            :aria-current="activeRoute === 'notifications' || notificationModalOpen ? 'page' : undefined"
-            @click="openNotificationModal"
-          >
-            <span>알림</span>
-            <span v-if="notificationPreferences.enabled && notificationUnreadCount" class="topbar__notification-badge" aria-label="읽지 않은 알림" aria-live="polite">{{ notificationUnreadBadgeLabel }}</span>
-          </button>
             <button class="topbar__nav-button" type="button" @click="openPetManager">펫</button>
           </nav>
           <div class="topbar__actions">
@@ -1412,12 +1151,6 @@ onBeforeUnmount(() => {
           @ai-analysis-complete="handlePetAiAnalysisComplete"
         />
         <CalenDriveWorkspace v-else-if="activeRoute === 'drive' && currentUser?.admin" :current-user="currentUser" />
-        <NotificationCenterWorkspace
-          v-else-if="activeRoute === 'notifications'"
-          @unread-count-change="handleNotificationUnreadCountChange"
-          @preferences-change="handleNotificationPreferencesChange"
-          @open-target="handleNotificationTargetOpen"
-        />
         <TravelWorkspace
           v-else-if="travelRouteKeys.has(activeRoute)"
           :route="activeRoute"
@@ -1429,26 +1162,9 @@ onBeforeUnmount(() => {
         <PetCompanion
           v-if="currentUser"
           ref="petCompanionRef"
-          :notification="notificationToast"
           :error-message="errorMessage"
-          @open-notifications="openNotificationModal"
+          :is-admin="Boolean(currentUser?.admin)"
         />
-
-        <button
-          v-if="notificationSignalVisible"
-          class="global-notification-signal"
-          type="button"
-          aria-label="알림 센터 열기"
-          @click="openNotificationModal"
-        >
-          <span class="global-notification-signal__icon" aria-hidden="true">✉</span>
-          <span v-if="notificationUnreadCount" class="global-notification-signal__badge">{{ notificationUnreadBadgeLabel }}</span>
-          <span v-if="notificationToast.visible" class="global-notification-signal__toast" role="status" aria-live="polite">
-            <small>새 알림 · {{ notificationToast.category }}</small>
-            <strong>{{ notificationToast.title }}</strong>
-          </span>
-        </button>
-
         <div v-if="profileModalOpen" class="travel-modal profile-workspace-modal" @keydown.esc="closeProfileModal">
           <section class="travel-modal__dialog profile-workspace-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="profile-modal-title">
             <header class="travel-modal__header profile-workspace-modal__header">
@@ -1461,23 +1177,6 @@ onBeforeUnmount(() => {
               <ProfileWorkspace :current-user="currentUser" embedded />
             </div>
           </section>
-        </div>
-        <div v-if="notificationModalOpen" class="travel-modal global-notification-modal" @keydown.esc="closeNotificationModal">
-          <div class="travel-modal__dialog global-notification-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="global-notification-title">
-            <div class="travel-modal__header global-notification-modal__header">
-              <div>
-                <h2 id="global-notification-title">알림 센터</h2>
-                <p>새 알림을 확인하고 관련 화면으로 바로 이동할 수 있습니다.</p>
-              </div>
-              <button class="button button--ghost" type="button" @click="closeNotificationModal">닫기</button>
-            </div>
-            <NotificationCenterWorkspace
-              embedded
-              @unread-count-change="handleNotificationUnreadCountChange"
-              @preferences-change="handleNotificationPreferencesChange"
-              @open-target="handleNotificationTargetOpen"
-            />
-          </div>
         </div>
       </div>
     </template>

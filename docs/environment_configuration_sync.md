@@ -22,6 +22,8 @@ The data-only OCI stack is intentionally not checked against Spring placeholders
 ## Operational notes
 
 - `docker-compose.oci.app.yml` now prefers explicit Spring env names such as `DB_URL`, `DB_ID`, `MINIO_API`, `MINIO_NAME`, and `MINIO_SECRET` instead of relying only on compose-specific aliases.
+- `OPS_CONTROL_SEAL_KEY` must be supplied to every backend Compose service and must remain stable across redeploys. It is the envelope-encryption key for administrator AI credentials stored in `admin_ops_control_settings`; keep it in OCI Vault or an equivalent root-only secret source, never in Git.
+- If an older deployment stored administrator AI credentials while `OPS_CONTROL_SEAL_KEY` was omitted, the backend can read ciphertext created from the legacy `JWT_KEY` during migration. Keep the old `JWT_KEY` available for the first rollout, then use the dedicated seal key for all new writes and rotate it only through an explicit re-encryption procedure.
 - Keep `APP_LEDGER_AI_ENFORCE_PROVIDER_URL_ALLOWLIST=true` in production and set `APP_LEDGER_AI_ALLOWED_PROVIDER_HOSTS` to the exact LM Studio or n8n hosts.
 - Keep `APP_LEDGER_AI_HISTORY_RETENTION_ENABLED=false` until an explicit AI history retention window is approved; then set `APP_LEDGER_AI_HISTORY_RETENTION_DAYS`, cron, and zone together.
 - Keep `MINIO_STORAGE_CAPACITY_BYTES` positive in production if MinIO usage alerts should fire.

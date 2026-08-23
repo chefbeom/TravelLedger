@@ -152,6 +152,24 @@ function Add-Finding {
 
 $findings = New-Object System.Collections.Generic.List[string]
 
+$requiredComposeFiles = @(
+    'docker-compose.yml',
+    'docker-compose.oci.yml',
+    'docker-compose.oci.app.yml'
+)
+$requiredOpsSealMapping = '(?m)^\s+OPS_CONTROL_SEAL_KEY:\s+\$\{OPS_CONTROL_SEAL_KEY:\?OPS_CONTROL_SEAL_KEY must be set\}'
+foreach ($relativeComposePath in $requiredComposeFiles) {
+    $composePath = Join-Path $repoRoot $relativeComposePath
+    if (-not (Test-Path -LiteralPath $composePath)) {
+        Add-Finding $findings "Required Compose file is missing: $relativeComposePath"
+        continue
+    }
+    $composeText = Get-Content -Raw -LiteralPath $composePath
+    if ($composeText -notmatch $requiredOpsSealMapping) {
+        Add-Finding $findings "$relativeComposePath must pass OPS_CONTROL_SEAL_KEY as a required backend environment variable."
+    }
+}
+
 foreach ($groupName in $requiredGroups.Keys) {
     foreach ($name in $requiredGroups[$groupName]) {
         if ($requiredVars -notcontains $name) {

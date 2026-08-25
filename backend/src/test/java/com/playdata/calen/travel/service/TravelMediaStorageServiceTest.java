@@ -3,6 +3,8 @@ package com.playdata.calen.travel.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
@@ -159,6 +161,34 @@ class TravelMediaStorageServiceTest {
 
         verifyNoInteractions(minioClient);
     }
+
+    @Test
+    void preparePresignedUploadUsesPublicClientUrlWithoutRewritingIt() throws Exception {
+        MinioClient internalMinioClient = mock(MinioClient.class);
+        MinioClient publicMinioClient = mock(MinioClient.class);
+        TravelMediaStorageService service = createPresignedStorageService(internalMinioClient, publicMinioClient);
+        String publicUrl = "https://storage.example.com/minio/travel-bucket/travel-media/1/2/3/receipt.pdf?X-Amz-Signature=public";
+        when(publicMinioClient.getPresignedObjectUrl(org.mockito.ArgumentMatchers.any()))
+                .thenReturn(publicUrl);
+
+        List<TravelMediaStorageService.PresignedUpload> uploads = service.preparePresignedUploads(
+                1L,
+                2L,
+                3L,
+                List.of(new TravelMediaStorageService.UploadCandidate(
+                        "receipt.pdf",
+                        "application/pdf",
+                        128L,
+                        List.of()
+                ))
+        );
+
+        assertThat(uploads).singleElement().extracting(TravelMediaStorageService.PresignedUpload::uploadUrl)
+                .isEqualTo(publicUrl);
+        verify(publicMinioClient).getPresignedObjectUrl(org.mockito.ArgumentMatchers.any());
+        verify(internalMinioClient, never()).getPresignedObjectUrl(org.mockito.ArgumentMatchers.any());
+    }
+
     private TravelMediaStorageService createLocalStorageService() {
         @SuppressWarnings("unchecked")
         ObjectProvider<MinioClient> minioProvider = mock(ObjectProvider.class);
@@ -168,17 +198,29 @@ class TravelMediaStorageServiceTest {
                 "travel-media",
                 false,
                 minioProvider,
+                minioProvider,
                 new MinioProperties(),
                 new com.playdata.calen.common.media.ImageThumbnailService()
         );
     }
 
     private TravelMediaStorageService createPresignedStorageService(MinioClient minioClient) {
+        return createPresignedStorageService(minioClient, minioClient);
+    }
+
+    private TravelMediaStorageService createPresignedStorageService(
+            MinioClient internalMinioClient,
+            MinioClient publicMinioClient
+    ) {
         @SuppressWarnings("unchecked")
         ObjectProvider<MinioClient> minioProvider = mock(ObjectProvider.class);
-        when(minioProvider.getIfAvailable()).thenReturn(minioClient);
+        @SuppressWarnings("unchecked")
+        ObjectProvider<MinioClient> publicMinioProvider = mock(ObjectProvider.class);
+        when(minioProvider.getIfAvailable()).thenReturn(internalMinioClient);
+        when(publicMinioProvider.getIfAvailable()).thenReturn(publicMinioClient);
         MinioProperties minioProperties = new MinioProperties();
         minioProperties.setEndpoint("http://localhost:9000");
+        minioProperties.setPublicEndpoint("https://storage.example.com/minio");
         minioProperties.setAccessKey("access-key");
         minioProperties.setSecretKey("secret-key");
         minioProperties.setBucket_cloud("travel-bucket");
@@ -187,6 +229,7 @@ class TravelMediaStorageServiceTest {
                 "travel-media",
                 true,
                 minioProvider,
+                publicMinioProvider,
                 minioProperties,
                 new com.playdata.calen.common.media.ImageThumbnailService()
         );

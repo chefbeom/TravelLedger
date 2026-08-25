@@ -16,8 +16,6 @@ import io.minio.errors.ErrorResponseException;
 import io.minio.http.Method;
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
-import java.net.URI;
-import java.net.URISyntaxException;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -27,14 +25,13 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
 @Service
-@RequiredArgsConstructor
 @Slf4j
 public class DriveStorageService {
 
@@ -67,7 +64,18 @@ public class DriveStorageService {
     private static final String STORAGE_UNAVAILABLE_MESSAGE = "드라이브 저장소에 연결할 수 없습니다. 관리자 페이지에서 MinIO 상태와 환경변수를 확인해 주세요.";
 
     private final ObjectProvider<MinioClient> minioClientProvider;
+    private final ObjectProvider<MinioClient> presignedMinioClientProvider;
     private final MinioProperties minioProperties;
+
+    public DriveStorageService(
+            ObjectProvider<MinioClient> minioClientProvider,
+            @Qualifier("minioPresignedClient") ObjectProvider<MinioClient> presignedMinioClientProvider,
+            MinioProperties minioProperties
+    ) {
+        this.minioClientProvider = minioClientProvider;
+        this.presignedMinioClientProvider = presignedMinioClientProvider;
+        this.minioProperties = minioProperties;
+    }
 
     public List<DriveDtos.UploadChunkResponse> initUpload(Long ownerId, List<DriveDtos.UploadInitRequest> requests) {
         if (ownerId == null || ownerId <= 0 || requests == null || requests.isEmpty()) {
@@ -269,14 +277,14 @@ public class DriveStorageService {
     public String generateDownloadUrl(String objectKey) {
         ensureStorageConfigured();
         try {
-            return rewritePublicUrl(minioClient().getPresignedObjectUrl(
+            return presignedMinioClient().getPresignedObjectUrl(
                     GetPresignedObjectUrlArgs.builder()
                             .method(Method.GET)
                             .bucket(resolveBucket())
                             .object(objectKey)
                             .expiry(minioProperties.getPresignedUrlExpirySeconds())
                             .build()
-            ));
+            );
         } catch (Exception exception) {
             log.error("Failed to generate drive download URL. bucket={}, objectKey={}", resolveBucket(), objectKey, exception);
             throw new BadRequestException("다운로드 링크를 만들지 못했습니다.");
@@ -295,7 +303,7 @@ public class DriveStorageService {
             if (!extraQueryParams.isEmpty()) {
                 argsBuilder.extraQueryParams(extraQueryParams);
             }
-            return rewritePublicUrl(minioClient().getPresignedObjectUrl(argsBuilder.build()));
+            return presignedMinioClient().getPresignedObjectUrl(argsBuilder.build());
         } catch (Exception exception) {
             log.error("Failed to generate drive download URL. bucket={}, objectKey={}", resolveBucket(), objectKey, exception);
             throw new BadRequestException("Could not create a download link.");
@@ -330,6 +338,14 @@ public class DriveStorageService {
         return client;
     }
 
+    private MinioClient presignedMinioClient() {
+        MinioClient client = presignedMinioClientProvider.getIfAvailable();
+        if (client == null || !StringUtils.hasText(minioProperties.getPublicEndpoint())) {
+            throw new ServiceUnavailableException(STORAGE_NOT_CONFIGURED_MESSAGE);
+        }
+        return client;
+    }
+
     private void ensureStorageConfigured() {
         if (!supportsStorage()) {
             throw new ServiceUnavailableException(STORAGE_NOT_CONFIGURED_MESSAGE);
@@ -345,14 +361,14 @@ public class DriveStorageService {
     }
     private String generateUploadUrl(String objectKey) {
         try {
-            return rewritePublicUrl(minioClient().getPresignedObjectUrl(
+            return presignedMinioClient().getPresignedObjectUrl(
                     GetPresignedObjectUrlArgs.builder()
                             .method(Method.PUT)
                             .bucket(resolveBucket())
                             .object(objectKey)
                             .expiry(minioProperties.getPresignedUrlExpirySeconds())
                             .build()
-            ));
+            );
         } catch (Exception exception) {
             log.error("Failed to generate drive upload URL. bucket={}, objectKey={}", resolveBucket(), objectKey, exception);
             throw new ServiceUnavailableException(STORAGE_UNAVAILABLE_MESSAGE);
@@ -383,41 +399,6 @@ public class DriveStorageService {
         }
         String encodedName = URLEncoder.encode(fileName, StandardCharsets.UTF_8).replace("+", "%20");
         return "attachment; filename=\"" + asciiName + "\"; filename*=UTF-8''" + encodedName;
-    }
-
-    private String rewritePublicUrl(String sourceUrl) {
-        String publicEndpoint = minioProperties.getPublicEndpoint();
-        if (!StringUtils.hasText(publicEndpoint) || !StringUtils.hasText(sourceUrl)) {
-            return sourceUrl;
-        }
-
-        try {
-            URI publicBase = URI.create(publicEndpoint);
-            URI signedUrl = URI.create(sourceUrl);
-            String mergedPath = mergePath(publicBase.getPath(), signedUrl.getPath());
-            return new URI(
-                    publicBase.getScheme(),
-                    publicBase.getUserInfo(),
-                    publicBase.getHost(),
-                    publicBase.getPort(),
-                    mergedPath,
-                    signedUrl.getQuery(),
-                    signedUrl.getFragment()
-            ).toString();
-        } catch (IllegalArgumentException | URISyntaxException exception) {
-            return sourceUrl;
-        }
-    }
-
-    private String mergePath(String basePath, String signedPath) {
-        String normalizedBase = StringUtils.hasText(basePath) && !"/".equals(basePath)
-                ? basePath.replaceAll("/+$", "")
-                : "";
-        String normalizedSigned = StringUtils.hasText(signedPath) ? signedPath : "";
-        if (!normalizedSigned.startsWith("/")) {
-            normalizedSigned = "/" + normalizedSigned;
-        }
-        return normalizedBase + normalizedSigned;
     }
 
     private String normalizeOriginName(String value) {

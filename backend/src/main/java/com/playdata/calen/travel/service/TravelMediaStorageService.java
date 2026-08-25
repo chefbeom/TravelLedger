@@ -14,7 +14,6 @@ import io.minio.StatObjectResponse;
 import io.minio.http.Method;
 import java.io.IOException;
 import java.io.InputStream;
-import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -25,6 +24,7 @@ import java.util.Set;
 import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.AbstractResource;
 import org.springframework.core.io.Resource;
@@ -55,6 +55,7 @@ public class TravelMediaStorageService {
     private final Path rootPath;
     private final String mediaObjectPrefix;
     private final MinioClient minioClient;
+    private final MinioClient presignedMinioClient;
     private final MinioProperties minioProperties;
     private final boolean presignedUploadEnabled;
     private final ImageThumbnailService imageThumbnailService;
@@ -64,6 +65,7 @@ public class TravelMediaStorageService {
             @Value("${app.travel.media-object-prefix:travel-media}") String mediaObjectPrefix,
             @Value("${app.travel.presigned-upload-enabled:false}") boolean presignedUploadEnabled,
             ObjectProvider<MinioClient> minioClientProvider,
+            @Qualifier("minioPresignedClient") ObjectProvider<MinioClient> presignedMinioClientProvider,
             MinioProperties minioProperties,
             ImageThumbnailService imageThumbnailService
     ) {
@@ -71,6 +73,7 @@ public class TravelMediaStorageService {
         this.mediaObjectPrefix = normalizeObjectPrefix(mediaObjectPrefix);
         this.presignedUploadEnabled = presignedUploadEnabled;
         this.minioClient = minioClientProvider.getIfAvailable();
+        this.presignedMinioClient = presignedMinioClientProvider.getIfAvailable();
         this.minioProperties = minioProperties;
         this.imageThumbnailService = imageThumbnailService;
     }
@@ -118,7 +121,7 @@ public class TravelMediaStorageService {
     }
 
     public boolean supportsPresignedUpload() {
-        return presignedUploadEnabled && isMinioEnabled();
+        return presignedUploadEnabled && isMinioEnabled() && isPresignedMinioEnabled();
     }
 
     public boolean canExposeToDrive(String storagePath) {
@@ -580,14 +583,14 @@ public class TravelMediaStorageService {
         String objectKey = buildMinioObjectKey(ownerId, planId, recordId, storedFileName);
 
         try {
-            String uploadUrl = rewritePublicUploadUrl(minioClient.getPresignedObjectUrl(
+            String uploadUrl = presignedMinioClient.getPresignedObjectUrl(
                     GetPresignedObjectUrlArgs.builder()
                             .method(Method.PUT)
                             .bucket(minioProperties.getBucket_cloud())
                             .object(objectKey)
                             .expiry(minioProperties.getPresignedUrlExpirySeconds())
                             .build()
-            ));
+            );
 
             return new PresignedUpload(
                     "PUT",
@@ -622,14 +625,14 @@ public class TravelMediaStorageService {
                             .orElseThrow(() -> new BadRequestException("Prepared thumbnail upload is incomplete."));
                     String objectKey = buildThumbnailStoragePath(originalObjectKey, originalContentType, spec.width());
                     try {
-                        String uploadUrl = rewritePublicUploadUrl(minioClient.getPresignedObjectUrl(
+                        String uploadUrl = presignedMinioClient.getPresignedObjectUrl(
                                 GetPresignedObjectUrlArgs.builder()
                                         .method(Method.PUT)
                                         .bucket(minioProperties.getBucket_cloud())
                                         .object(objectKey)
                                         .expiry(minioProperties.getPresignedUrlExpirySeconds())
                                         .build()
-                        ));
+                        );
                         return new PresignedThumbnailUpload(
                                 spec.key(),
                                 "PUT",
@@ -651,6 +654,11 @@ public class TravelMediaStorageService {
                 && StringUtils.hasText(minioProperties.getAccessKey())
                 && StringUtils.hasText(minioProperties.getSecretKey())
                 && StringUtils.hasText(minioProperties.getBucket_cloud());
+    }
+
+    private boolean isPresignedMinioEnabled() {
+        return presignedMinioClient != null
+                && StringUtils.hasText(minioProperties.getPublicEndpoint());
     }
 
     private boolean isMinioObject(String storagePath) {
@@ -849,41 +857,6 @@ public class TravelMediaStorageService {
                 .replaceAll("^/+", "")
                 .replaceAll("/+$", "")
                 .replaceAll("/+", "/");
-    }
-
-    private String rewritePublicUploadUrl(String uploadUrl) {
-        String publicEndpoint = minioProperties.getPublicEndpoint();
-        if (!StringUtils.hasText(publicEndpoint) || !StringUtils.hasText(uploadUrl)) {
-            return uploadUrl;
-        }
-
-        try {
-            URI publicBase = URI.create(publicEndpoint);
-            URI signedUrl = URI.create(uploadUrl);
-            String mergedPath = mergePath(publicBase.getPath(), signedUrl.getPath());
-            return new URI(
-                    publicBase.getScheme(),
-                    publicBase.getUserInfo(),
-                    publicBase.getHost(),
-                    publicBase.getPort(),
-                    mergedPath,
-                    signedUrl.getQuery(),
-                    signedUrl.getFragment()
-            ).toString();
-        } catch (IllegalArgumentException | java.net.URISyntaxException exception) {
-            return uploadUrl;
-        }
-    }
-
-    private String mergePath(String basePath, String signedPath) {
-        String normalizedBase = StringUtils.hasText(basePath) && !"/".equals(basePath)
-                ? basePath.replaceAll("/+$", "")
-                : "";
-        String normalizedSigned = StringUtils.hasText(signedPath) ? signedPath : "";
-        if (!normalizedSigned.startsWith("/")) {
-            normalizedSigned = "/" + normalizedSigned;
-        }
-        return normalizedBase + normalizedSigned;
     }
 
     private String resolveAllowedContentType(String originalFileName, String contentType) {

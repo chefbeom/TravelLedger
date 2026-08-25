@@ -29,7 +29,13 @@ class DriveStorageServiceTest {
     private ObjectProvider<MinioClient> minioClientProvider;
 
     @Mock
+    private ObjectProvider<MinioClient> presignedMinioClientProvider;
+
+    @Mock
     private MinioClient minioClient;
+
+    @Mock
+    private MinioClient presignedMinioClient;
 
     @Test
     void initUploadRejectsKnownExtensionContentTypeMismatchBeforeStorageAccess() {
@@ -100,14 +106,32 @@ class DriveStorageServiceTest {
                 .fileSize(100L)
                 .build();
         when(minioClientProvider.getIfAvailable()).thenReturn(minioClient);
-        when(minioClient.getPresignedObjectUrl(any(GetPresignedObjectUrlArgs.class)))
-                .thenReturn("http://minio:9000/drive-bucket/drive/1/family.png?X-Amz-Signature=test");
+        when(presignedMinioClientProvider.getIfAvailable()).thenReturn(presignedMinioClient);
+        when(presignedMinioClient.getPresignedObjectUrl(any(GetPresignedObjectUrlArgs.class)))
+                .thenReturn("https://storage.example.com/minio/drive-bucket/drive/1/family.png?X-Amz-Signature=public");
 
         List<DriveDtos.UploadChunkResponse> responses = service.initUpload(1L, List.of(request));
 
         assertThat(responses).hasSize(1);
-        assertThat(responses.get(0).presignedUploadUrl()).contains("X-Amz-Signature=test");
+        assertThat(responses.get(0).presignedUploadUrl())
+                .isEqualTo("https://storage.example.com/minio/drive-bucket/drive/1/family.png?X-Amz-Signature=public");
         verify(minioClient, never()).bucketExists(any(BucketExistsArgs.class));
+        verify(presignedMinioClient).getPresignedObjectUrl(any(GetPresignedObjectUrlArgs.class));
+        verify(minioClient, never()).getPresignedObjectUrl(any(GetPresignedObjectUrlArgs.class));
+    }
+
+    @Test
+    void generateDownloadUrlUsesPublicClientUrlWithoutRewritingIt() throws Exception {
+        DriveStorageService service = newService();
+        when(minioClientProvider.getIfAvailable()).thenReturn(minioClient);
+        when(presignedMinioClientProvider.getIfAvailable()).thenReturn(presignedMinioClient);
+        String publicUrl = "https://storage.example.com/minio/drive-bucket/drive/1/family.png?X-Amz-Signature=download";
+        when(presignedMinioClient.getPresignedObjectUrl(any(GetPresignedObjectUrlArgs.class)))
+                .thenReturn(publicUrl);
+
+        assertThat(service.generateDownloadUrl("drive/1/family.png")).isEqualTo(publicUrl);
+        verify(presignedMinioClient).getPresignedObjectUrl(any(GetPresignedObjectUrlArgs.class));
+        verify(minioClient, never()).getPresignedObjectUrl(any(GetPresignedObjectUrlArgs.class));
     }
 
     @Test
@@ -123,9 +147,10 @@ class DriveStorageServiceTest {
     private DriveStorageService newService() {
         MinioProperties properties = new MinioProperties();
         properties.setEndpoint("http://minio:9000");
+        properties.setPublicEndpoint("https://storage.example.com/minio");
         properties.setAccessKey("access");
         properties.setSecretKey("secret");
         properties.setBucket_cloud("drive-bucket");
-        return new DriveStorageService(minioClientProvider, properties);
+        return new DriveStorageService(minioClientProvider, presignedMinioClientProvider, properties);
     }
 }

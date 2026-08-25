@@ -76,7 +76,7 @@ const PETS = [
     kind: 'sprite',
     asset: yunaSpriteUrl,
     walkAsset: yunaWalkRightStripUrl,
-    description: '기록과 안내를 도와주는 펫입니다.',
+    description: '관리자만 누릴 수 있는 도우미 입니다.',
     greeting: '오늘 기록도 함께 살펴봐요.',
     petLine: '좋아요. 잠깐 쉬었다가 다시 이어가요.',
   },

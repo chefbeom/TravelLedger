@@ -11,7 +11,6 @@ import javax.crypto.Cipher;
 import javax.crypto.SecretKey;
 import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
@@ -23,38 +22,15 @@ public class AdminOpsSecretCipher {
     private static final int IV_LENGTH = 12;
 
     private final SecretKey secretKey;
-    private final SecretKey legacySecretKey;
     private final SecureRandom secureRandom = new SecureRandom();
 
-    @Autowired
     public AdminOpsSecretCipher(
-            @Value("${OPS_CONTROL_SEAL_KEY:}") String sealKey,
-            @Value("${JWT_KEY:}") String legacyJwtKey
+            @Value("${app.security.ops-control-seal-key:}") String sealKey
     ) {
-        this(sealKey, legacyJwtKey, true);
-    }
-
-    public AdminOpsSecretCipher(String sealKey) {
-        this(sealKey, "", false);
-    }
-
-    AdminOpsSecretCipher(String sealKey, String legacyJwtKey, boolean allowLegacyKey) {
-        String configuredSealKey = normalize(sealKey);
-        String configuredLegacyJwtKey = normalize(legacyJwtKey);
-        String primaryKeySource = configuredSealKey.isBlank() ? configuredLegacyJwtKey : configuredSealKey;
         this.secretKey = new SecretKeySpec(
-                deriveKey(SecuritySecretSupport.resolve(primaryKeySource, "admin-ops-control")),
+                deriveKey(SecuritySecretSupport.resolve(sealKey, "admin-ops-control")),
                 "AES"
         );
-        this.legacySecretKey = allowLegacyKey
-                && !configuredSealKey.isBlank()
-                && !configuredLegacyJwtKey.isBlank()
-                && !configuredSealKey.equals(configuredLegacyJwtKey)
-                ? new SecretKeySpec(
-                        deriveKey(SecuritySecretSupport.resolve(configuredLegacyJwtKey, "admin-ops-control")),
-                        "AES"
-                )
-                : null;
     }
 
     public String encrypt(String plaintext) {
@@ -92,30 +68,14 @@ public class AdminOpsSecretCipher {
             byte[] iv = Base64.getUrlDecoder().decode(parts[0]);
             byte[] encrypted = Base64.getUrlDecoder().decode(parts[1]);
 
-            Optional<String> decrypted = decryptWithKey(iv, encrypted, secretKey);
-            if (decrypted.isPresent()) {
-                return decrypted;
-            }
-            return legacySecretKey == null ? Optional.empty() : decryptWithKey(iv, encrypted, legacySecretKey);
-        } catch (IllegalArgumentException exception) {
-            return Optional.empty();
-        }
-    }
-
-    private Optional<String> decryptWithKey(byte[] iv, byte[] encrypted, SecretKey key) {
-        try {
             Cipher cipher = Cipher.getInstance(CIPHER_ALGORITHM);
-            cipher.init(Cipher.DECRYPT_MODE, key, new GCMParameterSpec(GCM_TAG_LENGTH, iv));
+            cipher.init(Cipher.DECRYPT_MODE, secretKey, new GCMParameterSpec(GCM_TAG_LENGTH, iv));
             byte[] decrypted = cipher.doFinal(encrypted);
             String plaintext = new String(decrypted, StandardCharsets.UTF_8);
             return plaintext.isBlank() ? Optional.empty() : Optional.of(plaintext);
-        } catch (GeneralSecurityException exception) {
+        } catch (IllegalArgumentException | GeneralSecurityException exception) {
             return Optional.empty();
         }
-    }
-
-    private String normalize(String value) {
-        return value == null ? "" : value.trim();
     }
 
     private byte[] deriveKey(String sealKey) {

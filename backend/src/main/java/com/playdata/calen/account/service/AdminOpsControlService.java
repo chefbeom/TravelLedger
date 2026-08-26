@@ -71,7 +71,6 @@ public class AdminOpsControlService {
             persistenceMessage = "설정 저장소가 준비되었습니다.";
         } catch (RuntimeException exception) {
             persistenceMessage = "설정 저장소를 준비하지 못했습니다. 변경값은 현재 실행 중인 서버에만 반영될 수 있습니다.";
-            throw new IllegalStateException("Unable to initialize persisted administrator settings.", exception);
         }
     }
 
@@ -551,37 +550,12 @@ public class AdminOpsControlService {
         deleteSetting(presetSecretSettingKey(presetKey, "ollama-api-key"));
     }
 
-    private boolean restoreEncryptedSetting(Map<String, String> settings, String settingKey, java.util.function.Consumer<String> setter) {
+    private void restoreEncryptedSetting(Map<String, String> settings, String settingKey, java.util.function.Consumer<String> setter) {
         String encrypted = settings.get(settingKey);
         if (encrypted == null || encrypted.isBlank()) {
-            return true;
+            return;
         }
-        Optional<String> decrypted = adminOpsSecretCipher.decrypt(encrypted);
-        if (decrypted.isEmpty()) {
-            return false;
-        }
-        setter.accept(decrypted.get());
-        return true;
-    }
-
-    private boolean encryptedSettingsAreValid(Map<String, String> settings) {
-        for (Map.Entry<String, String> entry : settings.entrySet()) {
-            if (!isEncryptedSettingKey(entry.getKey()) || entry.getValue() == null || entry.getValue().isBlank()) {
-                continue;
-            }
-            if (adminOpsSecretCipher.decrypt(entry.getValue()).isEmpty()) {
-                return false;
-            }
-        }
-        return true;
-    }
-
-    private boolean isEncryptedSettingKey(String settingKey) {
-        return settingKey.equals(AI_API_KEY_ENCRYPTED)
-                || settingKey.equals(AI_LMSTUDIO_API_KEY_ENCRYPTED)
-                || settingKey.equals(AI_OPENAI_API_KEY_ENCRYPTED)
-                || (settingKey.startsWith("ai.feature.") && settingKey.endsWith(".api-key.encrypted"))
-                || settingKey.startsWith(AI_PRESET_SECRET_PREFIX);
+        adminOpsSecretCipher.decrypt(encrypted).ifPresent(setter);
     }
 
     private Optional<String> readEncryptedSetting(String settingKey) {
@@ -593,7 +567,7 @@ public class AdminOpsControlService {
             );
             return adminOpsSecretCipher.decrypt(encrypted);
         } catch (RuntimeException exception) {
-            throw new IllegalStateException("Unable to read persisted administrator setting.", exception);
+            return Optional.empty();
         }
     }
 
@@ -962,20 +936,16 @@ public class AdminOpsControlService {
         applyDurationSeconds(settings, "ai.read-timeout-seconds", aiProperties::setReadTimeout);
         applyBoolean(settings, "ai.enforce-provider-url-allowlist", aiProperties::setEnforceProviderUrlAllowlist);
         applyText(settings, "ai.allowed-provider-hosts", aiProperties::setAllowedProviderHosts);
-        boolean secretsRestored = true;
-        secretsRestored &= restoreEncryptedSetting(settings, AI_API_KEY_ENCRYPTED, aiProperties::setApiKey);
-        secretsRestored &= restoreEncryptedSetting(settings, AI_LMSTUDIO_API_KEY_ENCRYPTED, aiProperties::setLmStudioApiKey);
-        secretsRestored &= restoreEncryptedSetting(settings, AI_OPENAI_API_KEY_ENCRYPTED, aiProperties::setOpenAiApiKey);
-        secretsRestored &= restoreFeatureSettings(settings, LedgerAiFeature.LEDGER_ANALYSIS, aiProperties.getLedger());
-        secretsRestored &= restoreFeatureSettings(settings, LedgerAiFeature.IMAGE_ANALYSIS, aiProperties.getImage());
-        secretsRestored &= restoreFeatureSettings(settings, LedgerAiFeature.EXCEL_IMPORT, aiProperties.getExcel());
-        if (!secretsRestored || !encryptedSettingsAreValid(settings)) {
-            throw new IllegalStateException("Unable to decrypt persisted administrator AI credentials. Keep OPS_CONTROL_SEAL_KEY stable.");
-        }
+        restoreEncryptedSetting(settings, AI_API_KEY_ENCRYPTED, aiProperties::setApiKey);
+        restoreEncryptedSetting(settings, AI_LMSTUDIO_API_KEY_ENCRYPTED, aiProperties::setLmStudioApiKey);
+        restoreEncryptedSetting(settings, AI_OPENAI_API_KEY_ENCRYPTED, aiProperties::setOpenAiApiKey);
+        restoreFeatureSettings(settings, LedgerAiFeature.LEDGER_ANALYSIS, aiProperties.getLedger());
+        restoreFeatureSettings(settings, LedgerAiFeature.IMAGE_ANALYSIS, aiProperties.getImage());
+        restoreFeatureSettings(settings, LedgerAiFeature.EXCEL_IMPORT, aiProperties.getExcel());
         applyLong(settings, "minio.storage-capacity-bytes", minioProperties::setStorageCapacityBytes);
     }
 
-    private boolean restoreFeatureSettings(Map<String, String> settings, LedgerAiFeature feature, LedgerAiFeatureSettings target) {
+    private void restoreFeatureSettings(Map<String, String> settings, LedgerAiFeature feature, LedgerAiFeatureSettings target) {
         String prefix = featureSettingPrefix(feature);
         applyText(settings, prefix + "provider", target::setProvider);
         applyText(settings, prefix + "model", target::setModel);
@@ -985,7 +955,7 @@ public class AdminOpsControlService {
         applyDouble(settings, prefix + "temperature", target::setTemperature);
         applyInteger(settings, prefix + "max-tokens", target::setMaxTokens);
         applyBoolean(settings, prefix + "enabled", target::setEnabled);
-        return restoreEncryptedSetting(settings, prefix + "api-key.encrypted", target::setApiKey);
+        restoreEncryptedSetting(settings, prefix + "api-key.encrypted", target::setApiKey);
     }
 
     private void persistFeatureSettings(LedgerAiFeature feature, LedgerAiFeatureSettings source) {
@@ -1038,7 +1008,6 @@ public class AdminOpsControlService {
             persistenceMessage = "설정이 저장되었습니다.";
         } catch (RuntimeException exception) {
             persistenceMessage = "설정 저장소에 저장하지 못했습니다. 변경값은 현재 실행 중인 서버에만 반영되었습니다.";
-            throw new IllegalStateException("Unable to persist administrator settings.", exception);
         }
     }
 

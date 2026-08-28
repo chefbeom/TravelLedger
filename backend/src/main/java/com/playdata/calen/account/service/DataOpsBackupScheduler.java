@@ -20,10 +20,10 @@ public class DataOpsBackupScheduler {
     @Value("${app.data-ops.minio-backup-enabled:false}")
     private boolean minioBackupEnabled;
 
-    @Value("${app.data-ops.db-backup-cron:0 0 0 * * *}")
+    @Value("${app.data-ops.db-backup-cron:0 0 6 * * *}")
     private String databaseBackupCron;
 
-    @Value("${app.data-ops.minio-backup-cron:0 30 0 * * *}")
+    @Value("${app.data-ops.minio-backup-cron:0 30 6 * * *}")
     private String minioBackupCron;
 
     @Value("${app.data-ops.backup-zone:Asia/Seoul}")
@@ -41,7 +41,7 @@ public class DataOpsBackupScheduler {
         );
     }
 
-    @Scheduled(cron = "${app.data-ops.db-backup-cron:0 0 0 * * *}", zone = "${app.data-ops.backup-zone:Asia/Seoul}")
+    @Scheduled(cron = "${app.data-ops.db-backup-cron:0 0 6 * * *}", zone = "${app.data-ops.backup-zone:Asia/Seoul}")
     public void runScheduledDatabaseBackup() {
         if (!databaseBackupEnabled) {
             return;
@@ -55,7 +55,7 @@ public class DataOpsBackupScheduler {
         }
     }
 
-    @Scheduled(cron = "${app.data-ops.minio-backup-cron:0 30 0 * * *}", zone = "${app.data-ops.backup-zone:Asia/Seoul}")
+    @Scheduled(cron = "${app.data-ops.minio-backup-cron:0 30 6 * * *}", zone = "${app.data-ops.backup-zone:Asia/Seoul}")
     public void runScheduledMinioBackup() {
         if (!minioBackupEnabled) {
             return;

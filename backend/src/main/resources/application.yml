@@ -158,9 +158,12 @@ app:
     backup-remote-name: ${DATA_OPS_BACKUP_REMOTE_NAME:db-backup}
     backup-remote-dir: ${DATA_OPS_BACKUP_REMOTE_DIR:calen-db-backups}
     minio-backup-remote-dir: ${DATA_OPS_MINIO_BACKUP_REMOTE_DIR:calen-minio-backups}
+    archive-remote-dir: ${DATA_OPS_ARCHIVE_REMOTE_DIR:calen-archive}
+    secondary-backup-enabled: ${DATA_OPS_SECONDARY_BACKUP_ENABLED:false}
+    secondary-backup-dir: ${DATA_OPS_SECONDARY_BACKUP_DIR:/opt/calen-backup-hdd}
     rclone-config-path: ${DATA_OPS_RCLONE_CONFIG_PATH:/app/.config/rclone/rclone.conf}
     backup-zone: ${DATA_OPS_BACKUP_ZONE:Asia/Seoul}
     db-backup-enabled: ${DATA_OPS_DB_BACKUP_ENABLED:false}
-    db-backup-cron: ${DATA_OPS_DB_BACKUP_CRON:0 0 0 * * *}
+    db-backup-cron: ${DATA_OPS_DB_BACKUP_CRON:0 0 6 * * *}
     minio-backup-enabled: ${DATA_OPS_MINIO_BACKUP_ENABLED:false}
-    minio-backup-cron: ${DATA_OPS_MINIO_BACKUP_CRON:0 30 0 * * *}
+    minio-backup-cron: ${DATA_OPS_MINIO_BACKUP_CRON:0 30 6 * * *}

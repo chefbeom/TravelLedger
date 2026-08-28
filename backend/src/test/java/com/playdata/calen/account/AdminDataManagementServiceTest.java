@@ -129,6 +129,7 @@ class AdminDataManagementServiceTest {
         ReflectionTestUtils.setField(service, "backupRemoteName", "db-backup");
         ReflectionTestUtils.setField(service, "backupRemoteDir", "calen-db-backups");
         ReflectionTestUtils.setField(service, "minioBackupRemoteDir", "calen-minio-backups");
+        ReflectionTestUtils.setField(service, "archiveRemoteDir", "calen-archive");
         ReflectionTestUtils.setField(service, "rcloneConfigPath", rcloneConfig.toString());
 
         when(appUserRepository.count()).thenReturn(3L);
@@ -214,7 +215,7 @@ class AdminDataManagementServiceTest {
     }
 
     @Test
-    void createManualBackupKeepsLocalBackupWhenDriveIsRateLimited() throws Exception {
+    void createManualBackupKeepsLocalBackupWhenDriveQuotaError() throws Exception {
         doAnswer(invocation -> {
             Path outputFile = invocation.getArgument(1, Path.class);
             Files.createDirectories(outputFile.getParent());
@@ -225,14 +226,19 @@ class AdminDataManagementServiceTest {
         when(commandRunner.run(any())).thenReturn(new CommandResult(
                 1,
                 "",
-                "googleapi: Error 403: RATE_LIMIT_EXCEEDED"
+                "googleapi: Error 403: quota"
         ));
 
-        AdminBackupFileResponse response = service.createManualBackup();
+        org.junit.jupiter.api.Assertions.assertThrows(
+                com.playdata.calen.common.exception.BadRequestException.class,
+                service::createManualBackup
+        );
 
-        Path createdBackup = tempDir.resolve("files").resolve(response.fileName());
-        assertThat(Files.exists(createdBackup)).isTrue();
-        assertThat(response.fileName()).endsWith(".sql.gz");
+        try (java.util.stream.Stream<Path> files = Files.list(tempDir.resolve("files"))) {
+            List<Path> localFiles = files.toList();
+            assertThat(localFiles).hasSize(1);
+            assertThat(localFiles.get(0).getFileName().toString()).endsWith(".sql.gz");
+        }
     }
 
     @Test
@@ -254,8 +260,32 @@ class AdminDataManagementServiceTest {
     }
 
     @Test
+    void createManualBackupCopiesToDatedSecondaryDirectory() throws Exception {
+        ReflectionTestUtils.setField(service, "secondaryBackupEnabled", true);
+        Path secondaryDirectory = tempDir.resolve("secondary-backup");
+        ReflectionTestUtils.setField(service, "secondaryBackupDir", secondaryDirectory.toString());
+
+        doAnswer(invocation -> {
+            Path outputFile = invocation.getArgument(1, Path.class);
+            Files.createDirectories(outputFile.getParent());
+            Files.writeString(outputFile, "backup");
+            return null;
+        }).when(commandRunner).runDumpToGzip(any(), any());
+
+        when(commandRunner.run(any())).thenReturn(new CommandResult(0, "", ""));
+
+        AdminBackupFileResponse response = service.createManualBackup();
+
+        try (java.util.stream.Stream<Path> files = Files.walk(secondaryDirectory)) {
+            assertThat(files.filter(Files::isRegularFile)
+                    .anyMatch(path -> path.getFileName().toString().equals(response.fileName()))).isTrue();
+        }
+        assertThat(Files.exists(tempDir.resolve("files").resolve(response.fileName()))).isFalse();
+    }
+    @Test
     void createBackupAndRestoreUseExpectedCommands() {
         when(commandRunner.run(any()))
+                .thenReturn(new CommandResult(0, "", ""))
                 .thenReturn(new CommandResult(0, "", ""))
                 .thenReturn(new CommandResult(0, "", ""));
         when(jdbcTemplate.queryForList(any(String.class), org.mockito.ArgumentMatchers.eq(String.class), any()))
@@ -275,6 +305,17 @@ class AdminDataManagementServiceTest {
                         && command.get(4).contains(tempDir.toString())
                         && command.get(4).endsWith(".sql.gz")
                         && command.get(5).startsWith("db-backup:calen-db-backups/calen-")
+                        && command.get(5).endsWith(".sql.gz")
+        ));
+        verify(commandRunner).run(argThat(command ->
+                command.size() == 6
+                        && "rclone".equals(command.get(0))
+                        && "--config".equals(command.get(1))
+                        && rcloneConfig.toString().equals(command.get(2))
+                        && "copyto".equals(command.get(3))
+                        && command.get(4).contains(tempDir.toString())
+                        && command.get(4).endsWith(".sql.gz")
+                        && command.get(5).startsWith("db-backup:calen-archive/")
                         && command.get(5).endsWith(".sql.gz")
         ));
         verify(commandRunner).run(argThat(command ->
@@ -322,6 +363,17 @@ class AdminDataManagementServiceTest {
                         && command.get(4).contains("minio-files")
                         && command.get(4).endsWith(".zip")
                         && command.get(5).startsWith("db-backup:calen-minio-backups/calen-minio-")
+                        && command.get(5).endsWith(".zip")
+        ));
+        verify(commandRunner).run(argThat(command ->
+                command.size() == 6
+                        && "rclone".equals(command.get(0))
+                        && "--config".equals(command.get(1))
+                        && rcloneConfig.toString().equals(command.get(2))
+                        && "copyto".equals(command.get(3))
+                        && command.get(4).contains("minio-files")
+                        && command.get(4).endsWith(".zip")
+                        && command.get(5).startsWith("db-backup:calen-archive/")
                         && command.get(5).endsWith(".zip")
         ));
     }

@@ -158,6 +158,11 @@ app:
   support:
     attachment-storage-path: ${SUPPORT_ATTACHMENT_STORAGE_PATH:${user.dir}/uploads/support-inquiries}
   data-ops:
+    execution-mode: ${DATA_OPS_BACKUP_EXECUTION_MODE:local}
+    agent-url: ${DATA_OPS_BACKUP_AGENT_URL:}
+    agent-token: ${DATA_OPS_BACKUP_AGENT_TOKEN:}
+    agent-connect-timeout: ${DATA_OPS_BACKUP_AGENT_CONNECT_TIMEOUT:5s}
+    agent-read-timeout: ${DATA_OPS_BACKUP_AGENT_READ_TIMEOUT:60s}
     backup-workdir: ${DATA_OPS_BACKUP_WORKDIR:/opt/calen-backup}
     backup-remote-name: ${DATA_OPS_BACKUP_REMOTE_NAME:db-backup}
     backup-remote-dir: ${DATA_OPS_BACKUP_REMOTE_DIR:calen-db-backups}

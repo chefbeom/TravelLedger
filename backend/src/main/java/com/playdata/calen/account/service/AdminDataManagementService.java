@@ -66,6 +66,7 @@ import java.util.stream.Stream;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.env.Environment;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
@@ -157,12 +158,22 @@ public class AdminDataManagementService {
     @Value("${app.data-ops.rclone-config-path:/app/.config/rclone-host/rclone.conf}")
     private String rcloneConfigPath = "/app/.config/rclone-host/rclone.conf";
 
+    private String backupExecutionMode = "local";
+
+    @Autowired(required = false)
+    private RemoteBackupAgentClient remoteBackupAgentClient;
+
     private final ReentrantLock operationLock = new ReentrantLock();
     private final AtomicReference<String> runningOperation = new AtomicReference<>(DEFAULT_OPERATION_LABEL);
 
     @Autowired(required = false)
     void setRedisStateService(RedisStateService redisStateService) {
         this.redisStateService = redisStateService;
+    }
+
+    @Autowired
+    void setBackupExecutionMode(Environment environment) {
+        this.backupExecutionMode = environment.getProperty("app.data-ops.execution-mode", "local");
     }
 
     public record PreparedBackupDownload(Path path, String fileName, long sizeBytes) {
@@ -173,10 +184,14 @@ public class AdminDataManagementService {
         String backupsError = null;
         List<AdminBackupFileResponse> minioBackups = mergeBackupLists(loadCachedMinioBackups(), listLocalMinioBackups());
         String minioBackupsError = null;
-        AdminMinioStorageSummaryResponse minioStorage = minioBackupArchiveService.getSummary();
+        AdminMinioStorageSummaryResponse minioStorage = isRemoteExecutionMode()
+                ? remoteMinioStorageSummary()
+                : minioBackupArchiveService.getSummary();
 
         try {
-            backups = mergeBackupLists(listBackups(), listLocalBackups());
+            backups = isRemoteExecutionMode()
+                    ? listBackups()
+                    : mergeBackupLists(listBackups(), listLocalBackups());
             persistBackupCache(backups);
         } catch (BadRequestException exception) {
             if (backups.isEmpty()) {
@@ -185,7 +200,9 @@ public class AdminDataManagementService {
         }
 
         try {
-            minioBackups = mergeBackupLists(listMinioBackups(), listLocalMinioBackups());
+            minioBackups = isRemoteExecutionMode()
+                    ? listMinioBackups()
+                    : mergeBackupLists(listMinioBackups(), listLocalMinioBackups());
             persistMinioBackupCache(minioBackups);
         } catch (BadRequestException exception) {
             if (minioBackups.isEmpty()) {
@@ -208,6 +225,11 @@ public class AdminDataManagementService {
     public AdminBackupFileResponse createManualBackup() {
         try {
             return runExclusive("backup", () -> {
+                if (isRemoteExecutionMode()) {
+                    AdminBackupFileResponse response = remoteBackupAgent().createMariaDbBackup();
+                    recordBackupRun("db", "success");
+                    return response;
+                }
                 DatabaseCommandTarget target = parseDataSourceUrl();
                 LocalDateTime createdAt = LocalDateTime.now(KST);
                 Path outputFile = localBackupDirectory().resolve(
@@ -239,6 +261,11 @@ public class AdminDataManagementService {
     public AdminBackupFileResponse createManualMinioBackup() {
         try {
             return runExclusive("minio-backup", () -> {
+                if (isRemoteExecutionMode()) {
+                    AdminBackupFileResponse response = remoteBackupAgent().createMinioBackup();
+                    recordBackupRun("minio", "success");
+                    return response;
+                }
                 LocalDateTime createdAt = LocalDateTime.now(KST);
                 Path outputFile = localMinioBackupDirectory().resolve(
                         "calen-minio-" + createdAt.format(BACKUP_FILE_FORMATTER) + ".zip"
@@ -286,6 +313,10 @@ public class AdminDataManagementService {
     public void restoreBackup(String fileName) {
         validateBackupFileName(fileName);
         runExclusive("restore", () -> {
+            if (isRemoteExecutionMode()) {
+                remoteBackupAgent().restoreMariaDb(fileName);
+                return null;
+            }
             DatabaseCommandTarget target = parseDataSourceUrl();
             Path restoreDirectory = prepareOperationDirectory("restore");
             Path downloadedFile = restoreDirectory.resolve(fileName);
@@ -451,6 +482,9 @@ public class AdminDataManagementService {
     }
 
     private List<AdminBackupFileResponse> listBackups() {
+        if (isRemoteExecutionMode()) {
+            return remoteBackupAgent().listBackups("mariadb");
+        }
         String resolvedRcloneConfig = resolveRcloneConfigPath();
         CommandResult result = runRcloneListCommand(List.of(
                 "rclone",
@@ -488,6 +522,9 @@ public class AdminDataManagementService {
     }
 
     private List<AdminBackupFileResponse> listMinioBackups() {
+        if (isRemoteExecutionMode()) {
+            return remoteBackupAgent().listBackups("minio");
+        }
         String resolvedRcloneConfig = resolveRcloneConfigPath();
         CommandResult result = runRcloneListCommand(List.of(
                 "rclone",
@@ -1018,6 +1055,30 @@ public class AdminDataManagementService {
         if (fileName == null || !fileName.matches("[A-Za-z0-9._-]+\\.sql\\.gz")) {
             throw new BadRequestException("복구할 백업 파일 이름이 올바르지 않습니다.");
         }
+    }
+
+    private boolean isRemoteExecutionMode() {
+        return "remote".equalsIgnoreCase(backupExecutionMode);
+    }
+
+    private RemoteBackupAgentClient remoteBackupAgent() {
+        if (remoteBackupAgentClient == null) {
+            throw new BadRequestException("원격 백업 에이전트가 준비되지 않았습니다.");
+        }
+        return remoteBackupAgentClient;
+    }
+
+    private AdminMinioStorageSummaryResponse remoteMinioStorageSummary() {
+        return new AdminMinioStorageSummaryResponse(
+                false,
+                "",
+                0L,
+                0L,
+                0L,
+                0L,
+                0D,
+                "MinIO 저장소 요약은 원격 백업 에이전트가 관리합니다."
+        );
     }
 
     private String remoteDirectory() {

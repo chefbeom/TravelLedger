@@ -5,6 +5,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -20,6 +22,7 @@ import com.playdata.calen.account.service.CommandResult;
 import com.playdata.calen.account.service.LoginAttemptService;
 import com.playdata.calen.account.service.MinioBackupArchiveService;
 import com.playdata.calen.account.service.RestoreMaintenanceService;
+import com.playdata.calen.account.service.RemoteBackupAgentClient;
 import com.playdata.calen.account.service.SystemCommandRunner;
 import com.playdata.calen.account.repository.AccountInviteRepository;
 import com.playdata.calen.account.repository.AppUserRepository;
@@ -86,6 +89,7 @@ class AdminDataManagementServiceTest {
     @Mock private MinioBackupArchiveService minioBackupArchiveService;
     @Mock private SystemCommandRunner commandRunner;
     @Mock private JdbcTemplate jdbcTemplate;
+    @Mock private RemoteBackupAgentClient remoteBackupAgentClient;
 
     private AdminDataManagementService service;
     private Path tempDir;
@@ -202,6 +206,26 @@ class AdminDataManagementServiceTest {
         assertThat(response.backups().get(0).fileName()).isEqualTo("calen-2026-03-31-120000.sql.gz");
         assertThat(response.backupsError()).isNull();
         assertThat(response.minioStorage().bucketName()).isEqualTo("budgetjourneybucket");
+    }
+
+    @Test
+    void remoteModeDelegatesBackupAndRestoreWithoutRunningLocalCommands() {
+        ReflectionTestUtils.setField(service, "backupExecutionMode", "remote");
+        ReflectionTestUtils.setField(service, "remoteBackupAgentClient", remoteBackupAgentClient);
+        AdminBackupFileResponse backup = new AdminBackupFileResponse(
+                "calen-2026-08-29-060000.sql.gz", 1234L, "2026-08-29T06:00:00+09:00"
+        );
+        when(remoteBackupAgentClient.createMariaDbBackup()).thenReturn(backup);
+
+        assertThat(service.createManualBackup()).isEqualTo(backup);
+
+        service.restoreBackup("calen-2026-08-29-060000.sql.gz");
+
+        verify(remoteBackupAgentClient).createMariaDbBackup();
+        verify(remoteBackupAgentClient).restoreMariaDb("calen-2026-08-29-060000.sql.gz");
+        verify(commandRunner, never()).runDumpToGzip(any(), any());
+        verify(commandRunner, never()).runGzipImport(any(), any());
+        verify(minioBackupArchiveService, never()).writeBackupArchive(any());
     }
 
     @Test

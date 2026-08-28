@@ -60,3 +60,31 @@ There is currently no MinIO restore endpoint and no Redis backup/restore contrac
 - Never run `docker compose down -v` on a production data stack during this migration.
 
 After deployment, run one manual DB backup and one manual MinIO backup, verify local/secondary/flat/date destinations, then verify that the administrator list contains only `.sql.gz` or `.zip` artifacts.
+
+## Remote backup agent mode
+
+Production app instances can delegate all backup ownership to the personal data server by setting
+DATA_OPS_BACKUP_EXECUTION_MODE to remote. In this mode the application does not run MariaDB
+dump, MinIO archive, or rclone commands for administrator backup operations and does not fall
+back to the local implementation. The app scheduler remains disabled by default; the remote
+agent owns its own 06:00 KST MariaDB and 06:30 KST MinIO schedule.
+
+The bearer token is an external secret and must be supplied through
+DATA_OPS_BACKUP_AGENT_TOKEN. It must never be committed, logged, or returned by the app.
+DATA_OPS_BACKUP_AGENT_URL, DATA_OPS_BACKUP_AGENT_CONNECT_TIMEOUT, and
+DATA_OPS_BACKUP_AGENT_READ_TIMEOUT complete the client configuration. Local mode remains
+available for development and backward compatibility.
+
+The app-to-agent contract is:
+
+- POST /v1/backups/mariadb returns one JSON object with fileName, sizeBytes, and modifiedAt.
+- POST /v1/backups/minio returns the same object shape for a ZIP artifact.
+- GET /v1/backups?service=mariadb or service=minio returns
+  { "backups": [ { "fileName": "...", "sizeBytes": 123, "modifiedAt": "..." } ] }.
+- POST /v1/restores/mariadb accepts { "fileName": "calen-YYYY-MM-DD-HHmmss.sql.gz" }
+  and returns any successful 2xx response.
+
+The app validates artifact names using the existing safe patterns and maps the response to
+the existing administrator DTO. Non-2xx responses, missing configuration, invalid response
+metadata, and connection/timeouts are failures. The existing administrator endpoints and
+destructive database restore behavior are unchanged; only their execution owner changes.

@@ -39,16 +39,21 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.attribute.FileTime;
+import java.security.MessageDigest;
+import java.time.LocalDate;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -72,7 +77,7 @@ public class AdminDataManagementService {
 
     private static final ZoneId KST = ZoneId.of("Asia/Seoul");
     private static final DateTimeFormatter BACKUP_FILE_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd-HHmmss");
-    private static final DateTimeFormatter BACKUP_ARCHIVE_DIRECTORY_FORMATTER = DateTimeFormatter.ofPattern("yyyy/MM/dd");
+    private static final DateTimeFormatter BACKUP_DATE_PATH_FORMATTER = DateTimeFormatter.ofPattern("yyyy/MM/dd");
     private static final DateTimeFormatter DISPLAY_DATE_TIME_FORMATTER = DateTimeFormatter.ISO_LOCAL_DATE_TIME;
     private static final String DEFAULT_OPERATION_LABEL = "idle";
     private static final String BACKUP_CACHE_FILE = "backup-manifest.json";
@@ -138,16 +143,19 @@ public class AdminDataManagementService {
     private String minioBackupRemoteDir;
 
     @Value("${app.data-ops.archive-remote-dir:calen-archive}")
-    private String archiveRemoteDir;
+    private String archiveRemoteDir = "calen-archive";
+
+    @Value("${app.data-ops.project-key:calen}")
+    private String projectKey = "calen";
 
     @Value("${app.data-ops.secondary-backup-enabled:false}")
     private boolean secondaryBackupEnabled;
 
-    @Value("${app.data-ops.secondary-backup-dir:/opt/calen-backup-hdd}")
-    private String secondaryBackupDir;
+    @Value("${app.data-ops.secondary-backup-dir:}")
+    private String secondaryBackupDir = "";
 
-    @Value("${app.data-ops.rclone-config-path:/app/.config/rclone/rclone.conf}")
-    private String rcloneConfigPath;
+    @Value("${app.data-ops.rclone-config-path:/app/.config/rclone-host/rclone.conf}")
+    private String rcloneConfigPath = "/app/.config/rclone-host/rclone.conf";
 
     private final ReentrantLock operationLock = new ReentrantLock();
     private final AtomicReference<String> runningOperation = new AtomicReference<>(DEFAULT_OPERATION_LABEL);
@@ -201,25 +209,24 @@ public class AdminDataManagementService {
         try {
             return runExclusive("backup", () -> {
                 DatabaseCommandTarget target = parseDataSourceUrl();
-                LocalDateTime backupTime = LocalDateTime.now(KST);
+                LocalDateTime createdAt = LocalDateTime.now(KST);
                 Path outputFile = localBackupDirectory().resolve(
-                        "calen-" + backupTime.format(BACKUP_FILE_FORMATTER) + ".sql.gz"
+                        "calen-" + createdAt.format(BACKUP_FILE_FORMATTER) + ".sql.gz"
                 );
 
                 commandRunner.runDumpToGzip(buildDumpCommand(target), outputFile);
                 long sizeBytes = fileSize(outputFile);
-                String fileName = outputFile.getFileName().toString();
-
-                copyToSecondaryBackup(outputFile, fileName, backupTime);
-                uploadBackup(outputFile, fileName, backupTime);
+                Path checksumFile = createChecksumFile(outputFile);
+                copyToSecondaryBackup(outputFile, checksumFile, createdAt.toLocalDate());
+                uploadBackup(outputFile, checksumFile, outputFile.getFileName().toString(), createdAt.toLocalDate());
 
                 AdminBackupFileResponse response = new AdminBackupFileResponse(
-                        fileName,
+                        outputFile.getFileName().toString(),
                         sizeBytes,
-                        DISPLAY_DATE_TIME_FORMATTER.format(backupTime)
+                        DISPLAY_DATE_TIME_FORMATTER.format(createdAt)
                 );
                 updateBackupCache(response);
-                deleteLocalFileAfterSuccessfulUpload(outputFile, true);
+                deleteLocalFilesAfterSuccessfulUpload(outputFile, checksumFile);
                 recordBackupRun("db", "success");
                 return response;
             });
@@ -232,25 +239,24 @@ public class AdminDataManagementService {
     public AdminBackupFileResponse createManualMinioBackup() {
         try {
             return runExclusive("minio-backup", () -> {
-                LocalDateTime backupTime = LocalDateTime.now(KST);
+                LocalDateTime createdAt = LocalDateTime.now(KST);
                 Path outputFile = localMinioBackupDirectory().resolve(
-                        "calen-minio-" + backupTime.format(BACKUP_FILE_FORMATTER) + ".zip"
+                        "calen-minio-" + createdAt.format(BACKUP_FILE_FORMATTER) + ".zip"
                 );
 
                 minioBackupArchiveService.writeBackupArchive(outputFile);
                 long sizeBytes = fileSize(outputFile);
-                String fileName = outputFile.getFileName().toString();
-
-                copyToSecondaryBackup(outputFile, fileName, backupTime);
-                uploadMinioBackup(outputFile, fileName, backupTime);
+                Path checksumFile = createChecksumFile(outputFile);
+                copyToSecondaryBackup(outputFile, checksumFile, createdAt.toLocalDate());
+                uploadMinioBackup(outputFile, checksumFile, outputFile.getFileName().toString(), createdAt.toLocalDate());
 
                 AdminBackupFileResponse response = new AdminBackupFileResponse(
-                        fileName,
+                        outputFile.getFileName().toString(),
                         sizeBytes,
-                        DISPLAY_DATE_TIME_FORMATTER.format(backupTime)
+                        DISPLAY_DATE_TIME_FORMATTER.format(createdAt)
                 );
                 updateMinioBackupCache(response);
-                deleteLocalFileAfterSuccessfulUpload(outputFile, true);
+                deleteLocalFilesAfterSuccessfulUpload(outputFile, checksumFile);
                 recordBackupRun("minio", "success");
                 return response;
             });
@@ -464,8 +470,12 @@ public class AdminDataManagementService {
             JsonNode root = objectMapper.readTree(result.stdout());
             List<AdminBackupFileResponse> backups = new ArrayList<>();
             for (JsonNode node : root) {
+                String fileName = node.path("Name").asText();
+                if (!fileName.matches("[A-Za-z0-9._-]+\\.sql\\.gz")) {
+                    continue;
+                }
                 backups.add(new AdminBackupFileResponse(
-                        node.path("Name").asText(),
+                        fileName,
                         node.path("Size").asLong(),
                         node.path("ModTime").asText()
                 ));
@@ -497,8 +507,12 @@ public class AdminDataManagementService {
             JsonNode root = objectMapper.readTree(result.stdout());
             List<AdminBackupFileResponse> backups = new ArrayList<>();
             for (JsonNode node : root) {
+                String fileName = node.path("Name").asText();
+                if (!fileName.matches("[A-Za-z0-9._-]+\\.zip")) {
+                    continue;
+                }
                 backups.add(new AdminBackupFileResponse(
-                        node.path("Name").asText(),
+                        fileName,
                         node.path("Size").asLong(),
                         node.path("ModTime").asText()
                 ));
@@ -577,80 +591,92 @@ public class AdminDataManagementService {
                 .toList();
     }
 
-    private void uploadBackup(Path localFile, String fileName, LocalDateTime backupTime) {
+    private void uploadBackup(Path localFile, Path checksumFile, String fileName, LocalDate backupDate) {
         String resolvedRcloneConfig = resolveRcloneConfigPath();
-        uploadToRemote(localFile, remoteDirectory() + "/" + fileName, resolvedRcloneConfig,
-                "Google Drive 백업 업로드에 실패했습니다.");
-        uploadToRemote(localFile, archiveRemoteDirectory(backupTime) + "/" + fileName, resolvedRcloneConfig,
-                "날짜별 Google Drive 백업 보관에 실패했습니다.");
+        String flatTarget = remoteDirectory() + "/" + fileName;
+        String datedTarget = datedArchiveRemoteDirectory(backupDate) + "/" + fileName;
+        uploadToRemote(resolvedRcloneConfig, localFile, flatTarget, "Google Drive 백업 업로드에 실패했습니다.");
+        uploadToRemote(resolvedRcloneConfig, localFile, datedTarget, "날짜별 Google Drive 백업 업로드에 실패했습니다.");
+        uploadToRemote(resolvedRcloneConfig, checksumFile, flatTarget + ".sha256", "Google Drive 백업 checksum 업로드에 실패했습니다.");
+        uploadToRemote(resolvedRcloneConfig, checksumFile, datedTarget + ".sha256", "날짜별 Google Drive 백업 checksum 업로드에 실패했습니다.");
     }
 
-    private void uploadMinioBackup(Path localFile, String fileName, LocalDateTime backupTime) {
+    private void uploadMinioBackup(Path localFile, Path checksumFile, String fileName, LocalDate backupDate) {
         String resolvedRcloneConfig = resolveRcloneConfigPath();
-        uploadToRemote(localFile, minioRemoteDirectory() + "/" + fileName, resolvedRcloneConfig,
-                "Google Drive MinIO 백업 업로드에 실패했습니다.");
-        uploadToRemote(localFile, archiveRemoteDirectory(backupTime) + "/" + fileName, resolvedRcloneConfig,
-                "날짜별 Google Drive MinIO 백업 보관에 실패했습니다.");
+        String flatTarget = minioRemoteDirectory() + "/" + fileName;
+        String datedTarget = datedArchiveRemoteDirectory(backupDate) + "/" + fileName;
+        uploadToRemote(resolvedRcloneConfig, localFile, flatTarget, "Google Drive MinIO 백업 업로드에 실패했습니다.");
+        uploadToRemote(resolvedRcloneConfig, localFile, datedTarget, "날짜별 Google Drive MinIO 백업 업로드에 실패했습니다.");
+        uploadToRemote(resolvedRcloneConfig, checksumFile, flatTarget + ".sha256", "Google Drive MinIO 백업 checksum 업로드에 실패했습니다.");
+        uploadToRemote(resolvedRcloneConfig, checksumFile, datedTarget + ".sha256", "날짜별 Google Drive MinIO 백업 checksum 업로드에 실패했습니다.");
     }
 
-    private void uploadToRemote(Path localFile, String remotePath, String resolvedRcloneConfig, String failureMessage) {
+    private void uploadToRemote(String resolvedRcloneConfig, Path localFile, String remoteTarget, String failureMessage) {
         runRcloneCommand(List.of(
                 "rclone",
                 "--config",
                 resolvedRcloneConfig,
                 "copyto",
                 localFile.toString(),
-                remotePath
+                remoteTarget
         ), failureMessage);
     }
 
-    private void copyToSecondaryBackup(Path localFile, String fileName, LocalDateTime backupTime) {
+    private Path createChecksumFile(Path source) {
+        Path checksumFile = source.resolveSibling(source.getFileName() + ".sha256");
+        try (InputStream input = Files.newInputStream(source)) {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] buffer = new byte[8192];
+            int read;
+            while ((read = input.read(buffer)) >= 0) {
+                if (read > 0) {
+                    digest.update(buffer, 0, read);
+                }
+            }
+            Files.writeString(
+                    checksumFile,
+                    HexFormat.of().formatHex(digest.digest()) + "  " + source.getFileName() + System.lineSeparator(),
+                    StandardCharsets.UTF_8
+            );
+            return checksumFile;
+        } catch (Exception exception) {
+            throw new BadRequestException("백업 checksum을 생성하지 못했습니다.");
+        }
+    }
+
+    private void copyToSecondaryBackup(Path source, Path checksumFile, LocalDate backupDate) {
         if (!secondaryBackupEnabled) {
             return;
         }
-
-        Path datedDirectory = Path.of(secondaryBackupDir)
-                .resolve(backupTime.format(BACKUP_ARCHIVE_DIRECTORY_FORMATTER))
-                .normalize();
-        Path targetFile = datedDirectory.resolve(fileName).normalize();
-        if (!targetFile.getParent().equals(datedDirectory)) {
-            throw new BadRequestException("보조 백업 경로가 올바르지 않습니다.");
+        if (!StringUtils.hasText(secondaryBackupDir)) {
+            throw new BadRequestException("보조 백업 경로가 설정되지 않았습니다.");
         }
 
         try {
-            Files.createDirectories(datedDirectory);
-            if (Files.exists(targetFile)) {
-                if (!Files.isRegularFile(targetFile)
-                        || Files.size(targetFile) != Files.size(localFile)
-                        || Files.mismatch(targetFile, localFile) != -1L) {
-                    throw new IOException("같은 이름의 보조 백업 파일 내용이 다릅니다.");
-                }
-                return;
-            }
-
-            Path temporaryFile = Files.createTempFile(datedDirectory, "." + fileName + ".", ".part");
-            try {
-                Files.copy(localFile, temporaryFile, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.COPY_ATTRIBUTES);
-                try {
-                    Files.move(temporaryFile, targetFile, StandardCopyOption.ATOMIC_MOVE);
-                } catch (java.nio.file.AtomicMoveNotSupportedException ignored) {
-                    Files.move(temporaryFile, targetFile);
-                }
-            } finally {
-                Files.deleteIfExists(temporaryFile);
-            }
-        } catch (IOException exception) {
-            throw new BadRequestException("보조 HDD 백업 저장에 실패했습니다.");
+            Path root = Path.of(secondaryBackupDir.trim()).toAbsolutePath().normalize();
+            Path dateDirectory = root.resolve(normalizedProjectKey())
+                    .resolve(backupDate.format(BACKUP_DATE_PATH_FORMATTER));
+            Files.createDirectories(dateDirectory);
+            copyAppendOnly(source, dateDirectory.resolve(source.getFileName()));
+            copyAppendOnly(checksumFile, dateDirectory.resolve(checksumFile.getFileName()));
+        } catch (FileAlreadyExistsException exception) {
+            throw new BadRequestException("보조 백업 파일이 이미 존재합니다.");
+        } catch (Exception exception) {
+            throw new BadRequestException("보조 백업 저장에 실패했습니다.");
         }
     }
-    private void deleteLocalFileAfterSuccessfulUpload(Path localFile, boolean uploaded) {
-        if (!uploaded) {
-            return;
-        }
-        try {
-            Files.deleteIfExists(localFile);
-        } catch (IOException ignored) {
-            // Cleanup failure should not invalidate an already uploaded backup.
+
+    private void copyAppendOnly(Path source, Path target) throws IOException {
+        Files.copy(source, target, StandardCopyOption.COPY_ATTRIBUTES);
+    }
+
+    private void deleteLocalFilesAfterSuccessfulUpload(Path... localFiles) {
+        for (Path localFile : localFiles) {
+            try {
+                Files.deleteIfExists(localFile);
+            } catch (IOException ignored) {
+                // Cleanup failure should not invalidate an already uploaded backup.
+            }
         }
     }
 
@@ -843,13 +869,6 @@ public class AdminDataManagementService {
                 || normalized.contains("couldn't find root directory id");
     }
 
-    private boolean isDriveQuotaFallbackMessage(String message) {
-        String normalized = message == null ? "" : message.toLowerCase();
-        return normalized.contains("google drive api")
-                || normalized.contains("quota")
-                || normalized.contains("rate");
-    }
-
     private void sleepRetryDelay(long delayMillis) {
         try {
             Thread.sleep(delayMillis);
@@ -1005,12 +1024,27 @@ public class AdminDataManagementService {
         return backupRemoteName + ":" + backupRemoteDir;
     }
 
+    private String datedArchiveRemoteDirectory(LocalDate backupDate) {
+        if (!StringUtils.hasText(archiveRemoteDir)) {
+            throw new BadRequestException("날짜별 Google Drive 백업 경로가 설정되지 않았습니다.");
+        }
+        String normalizedRoot = archiveRemoteDir.trim().replaceAll("^/+|/+$", "");
+        if (normalizedRoot.isEmpty()) {
+            throw new BadRequestException("날짜별 Google Drive 백업 경로가 설정되지 않았습니다.");
+        }
+        return backupRemoteName + ":" + normalizedRoot + "/" + normalizedProjectKey()
+                + "/" + backupDate.format(BACKUP_DATE_PATH_FORMATTER);
+    }
+
+    private String normalizedProjectKey() {
+        if (!StringUtils.hasText(projectKey) || !projectKey.trim().matches("[A-Za-z0-9._-]+")) {
+            throw new BadRequestException("프로젝트 백업 키가 올바르게 설정되지 않았습니다.");
+        }
+        return projectKey.trim();
+    }
+
     private String minioRemoteDirectory() {
         return backupRemoteName + ":" + minioBackupRemoteDir;
-    }
-    private String archiveRemoteDirectory(LocalDateTime backupTime) {
-        return backupRemoteName + ":" + archiveRemoteDir + "/"
-                + backupTime.format(BACKUP_ARCHIVE_DIRECTORY_FORMATTER);
     }
 
     private long fileSize(Path file) {

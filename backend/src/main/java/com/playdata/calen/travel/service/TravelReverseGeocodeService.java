@@ -3,9 +3,9 @@ package com.playdata.calen.travel.service;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.playdata.calen.common.cache.RedisConnectionSupport;
 import com.playdata.calen.travel.dto.TravelReverseGeocodeResponse;
 import io.lettuce.core.RedisClient;
-import io.lettuce.core.RedisURI;
 import io.lettuce.core.api.StatefulRedisConnection;
 import io.lettuce.core.api.sync.RedisCommands;
 import jakarta.annotation.PostConstruct;
@@ -51,6 +51,12 @@ public class TravelReverseGeocodeService {
     @Value("${app.redis.cache.password:}")
     private String redisCachePassword;
 
+    @Value("${app.redis.cache.username:}")
+    private String redisCacheUsername;
+
+    @Value("${app.redis.cache.key-prefix:}")
+    private String redisCacheKeyPrefix;
+
     @Value("${app.redis.cache.database:0}")
     private int redisCacheDatabase;
 
@@ -76,20 +82,10 @@ public class TravelReverseGeocodeService {
             return;
         }
 
-        RedisURI.Builder redisUriBuilder = RedisURI.builder()
-                .withHost(redisCacheHost.trim())
-                .withPort(redisCachePort)
-                .withDatabase(redisCacheDatabase)
-                .withTimeout(Duration.ofSeconds(3));
-
-        if (StringUtils.hasText(redisCachePassword)) {
-            redisUriBuilder.withPassword(redisCachePassword.toCharArray());
-        }
-        if (redisCacheSsl) {
-            redisUriBuilder.withSsl(true);
-        }
-
-        redisClient = RedisClient.create(redisUriBuilder.build());
+        redisClient = RedisClient.create(RedisConnectionSupport.buildUri(
+                redisCacheHost, redisCachePort, redisCacheDatabase,
+                redisCacheUsername, redisCachePassword, redisCacheSsl
+        ));
         tryConnectRedis(false);
     }
 
@@ -120,7 +116,7 @@ public class TravelReverseGeocodeService {
         }
 
         try {
-            String cachedValue = commands.get(cacheKey);
+            String cachedValue = commands.get(RedisConnectionSupport.key(redisCacheKeyPrefix, cacheKey));
             if (!StringUtils.hasText(cachedValue)) {
                 return null;
             }
@@ -139,7 +135,7 @@ public class TravelReverseGeocodeService {
 
         try {
             long ttlSeconds = Math.max(60L, reverseGeocodeCacheTtlHours * 3600L);
-            commands.setex(cacheKey, ttlSeconds, objectMapper.writeValueAsString(response));
+            commands.setex(RedisConnectionSupport.key(redisCacheKeyPrefix, cacheKey), ttlSeconds, objectMapper.writeValueAsString(response));
         } catch (JsonProcessingException ignored) {
             // Ignore cache serialization failures.
         } catch (Exception ignored) {

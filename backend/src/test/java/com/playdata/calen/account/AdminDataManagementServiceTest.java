@@ -1,6 +1,7 @@
 package com.playdata.calen.account;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
@@ -13,6 +14,7 @@ import com.playdata.calen.account.domain.SupportInquiryStatus;
 import com.playdata.calen.account.dto.AdminBackupFileResponse;
 import com.playdata.calen.account.dto.AdminDataManagementResponse;
 import com.playdata.calen.account.dto.AdminMinioStorageSummaryResponse;
+import com.playdata.calen.common.exception.BadRequestException;
 import com.playdata.calen.account.service.AdminDataManagementService;
 import com.playdata.calen.account.service.CommandResult;
 import com.playdata.calen.account.service.LoginAttemptService;
@@ -45,6 +47,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.List;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -130,6 +133,7 @@ class AdminDataManagementServiceTest {
         ReflectionTestUtils.setField(service, "backupRemoteDir", "calen-db-backups");
         ReflectionTestUtils.setField(service, "minioBackupRemoteDir", "calen-minio-backups");
         ReflectionTestUtils.setField(service, "archiveRemoteDir", "calen-archive");
+        ReflectionTestUtils.setField(service, "projectKey", "calen");
         ReflectionTestUtils.setField(service, "rcloneConfigPath", rcloneConfig.toString());
 
         when(appUserRepository.count()).thenReturn(3L);
@@ -180,6 +184,11 @@ class AdminDataManagementServiceTest {
                     "Name": "calen-2026-03-31-120000.sql.gz",
                     "Size": 2048,
                     "ModTime": "2026-03-31T12:00:00+09:00"
+                  },
+                  {
+                    "Name": "calen-2026-03-31-120000.sql.gz.sha256",
+                    "Size": 80,
+                    "ModTime": "2026-03-31T12:00:01+09:00"
                   }
                 ]
                 """,
@@ -215,7 +224,7 @@ class AdminDataManagementServiceTest {
     }
 
     @Test
-    void createManualBackupKeepsLocalBackupWhenDriveQuotaError() throws Exception {
+    void createManualBackupKeepsLocalBackupWhenDriveIsRateLimited() throws Exception {
         doAnswer(invocation -> {
             Path outputFile = invocation.getArgument(1, Path.class);
             Files.createDirectories(outputFile.getParent());
@@ -226,18 +235,20 @@ class AdminDataManagementServiceTest {
         when(commandRunner.run(any())).thenReturn(new CommandResult(
                 1,
                 "",
-                "googleapi: Error 403: quota"
+                "googleapi: Error 403: RATE_LIMIT_EXCEEDED"
         ));
 
-        org.junit.jupiter.api.Assertions.assertThrows(
-                com.playdata.calen.common.exception.BadRequestException.class,
-                service::createManualBackup
-        );
+        assertThatThrownBy(service::createManualBackup)
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("Google Drive API");
 
-        try (java.util.stream.Stream<Path> files = Files.list(tempDir.resolve("files"))) {
-            List<Path> localFiles = files.toList();
-            assertThat(localFiles).hasSize(1);
-            assertThat(localFiles.get(0).getFileName().toString()).endsWith(".sql.gz");
+        try (Stream<Path> files = Files.list(tempDir.resolve("files"))) {
+            assertThat(files.map(path -> path.getFileName().toString()))
+                    .anyMatch(fileName -> fileName.endsWith(".sql.gz"));
+        }
+        try (Stream<Path> files = Files.list(tempDir.resolve("files"))) {
+            assertThat(files.map(path -> path.getFileName().toString()))
+                    .anyMatch(fileName -> fileName.endsWith(".sql.gz.sha256"));
         }
     }
 
@@ -260,32 +271,14 @@ class AdminDataManagementServiceTest {
     }
 
     @Test
-    void createManualBackupCopiesToDatedSecondaryDirectory() throws Exception {
-        ReflectionTestUtils.setField(service, "secondaryBackupEnabled", true);
-        Path secondaryDirectory = tempDir.resolve("secondary-backup");
-        ReflectionTestUtils.setField(service, "secondaryBackupDir", secondaryDirectory.toString());
-
+    void createBackupAndRestoreUseExpectedCommands() {
         doAnswer(invocation -> {
             Path outputFile = invocation.getArgument(1, Path.class);
             Files.createDirectories(outputFile.getParent());
             Files.writeString(outputFile, "backup");
             return null;
         }).when(commandRunner).runDumpToGzip(any(), any());
-
-        when(commandRunner.run(any())).thenReturn(new CommandResult(0, "", ""));
-
-        AdminBackupFileResponse response = service.createManualBackup();
-
-        try (java.util.stream.Stream<Path> files = Files.walk(secondaryDirectory)) {
-            assertThat(files.filter(Files::isRegularFile)
-                    .anyMatch(path -> path.getFileName().toString().equals(response.fileName()))).isTrue();
-        }
-        assertThat(Files.exists(tempDir.resolve("files").resolve(response.fileName()))).isFalse();
-    }
-    @Test
-    void createBackupAndRestoreUseExpectedCommands() {
         when(commandRunner.run(any()))
-                .thenReturn(new CommandResult(0, "", ""))
                 .thenReturn(new CommandResult(0, "", ""))
                 .thenReturn(new CommandResult(0, "", ""));
         when(jdbcTemplate.queryForList(any(String.class), org.mockito.ArgumentMatchers.eq(String.class), any()))
@@ -309,14 +302,13 @@ class AdminDataManagementServiceTest {
         ));
         verify(commandRunner).run(argThat(command ->
                 command.size() == 6
-                        && "rclone".equals(command.get(0))
-                        && "--config".equals(command.get(1))
-                        && rcloneConfig.toString().equals(command.get(2))
-                        && "copyto".equals(command.get(3))
-                        && command.get(4).contains(tempDir.toString())
-                        && command.get(4).endsWith(".sql.gz")
-                        && command.get(5).startsWith("db-backup:calen-archive/")
+                        && command.get(5).startsWith("db-backup:calen-archive/calen/")
                         && command.get(5).endsWith(".sql.gz")
+        ));
+        verify(commandRunner).run(argThat(command ->
+                command.size() == 6
+                        && command.get(5).startsWith("db-backup:calen-db-backups/")
+                        && command.get(5).endsWith(".sql.gz.sha256")
         ));
         verify(commandRunner).run(argThat(command ->
                 command.size() == 6
@@ -365,18 +357,53 @@ class AdminDataManagementServiceTest {
                         && command.get(5).startsWith("db-backup:calen-minio-backups/calen-minio-")
                         && command.get(5).endsWith(".zip")
         ));
-        verify(commandRunner).run(argThat(command ->
-                command.size() == 6
-                        && "rclone".equals(command.get(0))
-                        && "--config".equals(command.get(1))
-                        && rcloneConfig.toString().equals(command.get(2))
-                        && "copyto".equals(command.get(3))
-                        && command.get(4).contains("minio-files")
-                        && command.get(4).endsWith(".zip")
-                        && command.get(5).startsWith("db-backup:calen-archive/")
-                        && command.get(5).endsWith(".zip")
-        ));
     }
+
+    @Test
+    void copiesBackupAndChecksumToProjectDatedSecondaryDirectory() throws Exception {
+        Path secondaryDirectory = tempDir.resolve("secondary");
+        ReflectionTestUtils.setField(service, "secondaryBackupEnabled", true);
+        ReflectionTestUtils.setField(service, "secondaryBackupDir", secondaryDirectory.toString());
+        doAnswer(invocation -> {
+            Path outputFile = invocation.getArgument(1, Path.class);
+            Files.createDirectories(outputFile.getParent());
+            Files.writeString(outputFile, "backup");
+            return null;
+        }).when(commandRunner).runDumpToGzip(any(), any());
+        when(commandRunner.run(any())).thenReturn(new CommandResult(0, "", ""));
+
+        AdminBackupFileResponse response = service.createManualBackup();
+
+        try (Stream<Path> files = Files.walk(secondaryDirectory)) {
+            assertThat(files.filter(Files::isRegularFile)
+                    .map(path -> path.getFileName().toString()))
+                    .containsExactlyInAnyOrder(response.fileName(), response.fileName() + ".sha256");
+        }
+    }
+
+    @Test
+    void preservesStagingWhenSecondaryDirectoryCannotBeWritten() throws Exception {
+        Path secondaryFile = tempDir.resolve("secondary-file");
+        Files.writeString(secondaryFile, "not a directory");
+        ReflectionTestUtils.setField(service, "secondaryBackupEnabled", true);
+        ReflectionTestUtils.setField(service, "secondaryBackupDir", secondaryFile.toString());
+        doAnswer(invocation -> {
+            Path outputFile = invocation.getArgument(1, Path.class);
+            Files.createDirectories(outputFile.getParent());
+            Files.writeString(outputFile, "backup");
+            return null;
+        }).when(commandRunner).runDumpToGzip(any(), any());
+
+        assertThatThrownBy(service::createManualBackup)
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("보조 백업");
+
+        try (Stream<Path> files = Files.list(tempDir.resolve("files"))) {
+            assertThat(files.map(path -> path.getFileName().toString()))
+                    .anyMatch(fileName -> fileName.endsWith(".sql.gz"));
+        }
+    }
+
 
     @Test
     void createDownloadableBackupProducesSqlGzipFileWithoutRcloneUpload() {

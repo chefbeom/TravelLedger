@@ -4,8 +4,8 @@ spring:
   datasource:
     url: ${DB_URL:jdbc:h2:mem:calen;MODE=MySQL;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE}
     driver-class-name: ${DB_DRIVER:${DB_SERVER:org.h2.Driver}}
-    username: ${DB_ID:sa}
-    password: ${DB_PASS:}
+    username: ${DB_ID:${DB_USER:sa}}
+    password: ${DB_PASS:${DB_PASSWORD:}}
   jpa:
     open-in-view: false
     hibernate:
@@ -33,11 +33,11 @@ spring:
       max-request-size: 1GB
 
 minio:
-  endpoint: ${MINIO_API:}
+  endpoint: ${MINIO_API:${MINIO_API_INTERNAL_URL:}}
   public-endpoint: ${MINIO_PUBLIC_API:}
-  access-key: ${MINIO_NAME:}
-  secret-key: ${MINIO_SECRET:}
-  bucket_cloud: ${MINIO_CLOUD_BUCKET:budgetjourneybucket}
+  access-key: ${MINIO_NAME:${MINIO_ACCESS_KEY:}}
+  secret-key: ${MINIO_SECRET:${MINIO_SECRET_KEY:}}
+  bucket_cloud: ${MINIO_CLOUD_BUCKET:${MINIO_BUCKET:budgetjourneybucket}}
   bucket_work: ${MINIO_WORKSPACE_BUCKET:}
   presigned-url-expiry-seconds: ${MINIO_PRESIGNED_URL_EXPIRY_SECONDS:6000}
   storage-capacity-bytes: ${MINIO_STORAGE_CAPACITY_BYTES:0}
@@ -137,12 +137,16 @@ app:
       host: ${REDIS_CACHE_HOST:}
       port: ${REDIS_CACHE_PORT:6379}
       password: ${REDIS_CACHE_PASSWORD:}
+      username: ${REDIS_CACHE_USERNAME:}
+      key-prefix: ${REDIS_CACHE_KEY_PREFIX:}
       database: ${REDIS_CACHE_DATABASE:0}
       ssl: ${REDIS_CACHE_SSL:false}
     state:
       host: ${REDIS_STATE_HOST:}
       port: ${REDIS_STATE_PORT:6379}
       password: ${REDIS_STATE_PASSWORD:}
+      username: ${REDIS_STATE_USERNAME:}
+      key-prefix: ${REDIS_STATE_KEY_PREFIX:}
       database: ${REDIS_STATE_DATABASE:0}
       ssl: ${REDIS_STATE_SSL:false}
   family:
@@ -159,9 +163,10 @@ app:
     backup-remote-dir: ${DATA_OPS_BACKUP_REMOTE_DIR:calen-db-backups}
     minio-backup-remote-dir: ${DATA_OPS_MINIO_BACKUP_REMOTE_DIR:calen-minio-backups}
     archive-remote-dir: ${DATA_OPS_ARCHIVE_REMOTE_DIR:calen-archive}
+    project-key: ${DATA_OPS_PROJECT_KEY:calen}
     secondary-backup-enabled: ${DATA_OPS_SECONDARY_BACKUP_ENABLED:false}
     secondary-backup-dir: ${DATA_OPS_SECONDARY_BACKUP_DIR:/opt/calen-backup-hdd}
-    rclone-config-path: ${DATA_OPS_RCLONE_CONFIG_PATH:/app/.config/rclone/rclone.conf}
+    rclone-config-path: ${DATA_OPS_RCLONE_CONFIG_PATH:/app/.config/rclone-host/rclone.conf}
     backup-zone: ${DATA_OPS_BACKUP_ZONE:Asia/Seoul}
     db-backup-enabled: ${DATA_OPS_DB_BACKUP_ENABLED:false}
     db-backup-cron: ${DATA_OPS_DB_BACKUP_CRON:0 0 6 * * *}

@@ -3,7 +3,6 @@ package com.playdata.calen.common.cache;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.lettuce.core.RedisClient;
-import io.lettuce.core.RedisURI;
 import io.lettuce.core.api.StatefulRedisConnection;
 import io.lettuce.core.api.sync.RedisCommands;
 import io.micrometer.core.instrument.Gauge;
@@ -43,6 +42,12 @@ public class RedisCacheService {
     @Value("${app.redis.cache.password:}")
     private String redisCachePassword;
 
+    @Value("${app.redis.cache.username:}")
+    private String redisCacheUsername;
+
+    @Value("${app.redis.cache.key-prefix:}")
+    private String redisCacheKeyPrefix;
+
     @Value("${app.redis.cache.database:0}")
     private int redisCacheDatabase;
 
@@ -63,20 +68,10 @@ public class RedisCacheService {
 
         registerRedisAvailabilityGauge();
 
-        RedisURI.Builder redisUriBuilder = RedisURI.builder()
-                .withHost(redisCacheHost.trim())
-                .withPort(redisCachePort)
-                .withDatabase(redisCacheDatabase)
-                .withTimeout(Duration.ofSeconds(3));
-
-        if (StringUtils.hasText(redisCachePassword)) {
-            redisUriBuilder.withPassword(redisCachePassword.toCharArray());
-        }
-        if (redisCacheSsl) {
-            redisUriBuilder.withSsl(true);
-        }
-
-        redisClient = RedisClient.create(redisUriBuilder.build());
+        redisClient = RedisClient.create(RedisConnectionSupport.buildUri(
+                redisCacheHost, redisCachePort, redisCacheDatabase,
+                redisCacheUsername, redisCachePassword, redisCacheSsl
+        ));
         tryConnectRedis(false);
     }
 
@@ -95,7 +90,7 @@ public class RedisCacheService {
         }
 
         try {
-            String cachedValue = commands.get(key);
+            String cachedValue = commands.get(RedisConnectionSupport.key(redisCacheKeyPrefix, key));
             if (!StringUtils.hasText(cachedValue)) {
                 return null;
             }
@@ -113,7 +108,7 @@ public class RedisCacheService {
         }
 
         try {
-            String cachedValue = commands.get(key);
+            String cachedValue = commands.get(RedisConnectionSupport.key(redisCacheKeyPrefix, key));
             if (!StringUtils.hasText(cachedValue)) {
                 return null;
             }
@@ -131,7 +126,7 @@ public class RedisCacheService {
         }
 
         try {
-            commands.setex(key, Math.max(1L, ttl.getSeconds()), objectMapper.writeValueAsString(value));
+            commands.setex(RedisConnectionSupport.key(redisCacheKeyPrefix, key), Math.max(1L, ttl.getSeconds()), objectMapper.writeValueAsString(value));
         } catch (Exception ignored) {
             markRedisUnavailable();
         }
@@ -144,7 +139,7 @@ public class RedisCacheService {
         }
 
         try {
-            return commands.del(keys);
+            return commands.del(RedisConnectionSupport.keys(redisCacheKeyPrefix, keys));
         } catch (Exception ignored) {
             markRedisUnavailable();
             return -1L;

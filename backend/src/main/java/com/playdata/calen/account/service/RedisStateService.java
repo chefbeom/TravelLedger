@@ -1,8 +1,8 @@
 package com.playdata.calen.account.service;
 
+import com.playdata.calen.common.cache.RedisConnectionSupport;
 import io.lettuce.core.KeyScanCursor;
 import io.lettuce.core.RedisClient;
-import io.lettuce.core.RedisURI;
 import io.lettuce.core.ScanArgs;
 import io.lettuce.core.ScanCursor;
 import io.lettuce.core.SetArgs;
@@ -38,6 +38,12 @@ public class RedisStateService {
     @Value("${app.redis.state.password:}")
     private String redisStatePassword;
 
+    @Value("${app.redis.state.username:}")
+    private String redisStateUsername;
+
+    @Value("${app.redis.state.key-prefix:}")
+    private String redisStateKeyPrefix;
+
     @Value("${app.redis.state.database:0}")
     private int redisStateDatabase;
 
@@ -66,20 +72,10 @@ public class RedisStateService {
 
         registerRedisAvailabilityGauge();
 
-        RedisURI.Builder redisUriBuilder = RedisURI.builder()
-                .withHost(redisStateHost.trim())
-                .withPort(redisStatePort)
-                .withDatabase(redisStateDatabase)
-                .withTimeout(Duration.ofSeconds(3));
-
-        if (StringUtils.hasText(redisStatePassword)) {
-            redisUriBuilder.withPassword(redisStatePassword.toCharArray());
-        }
-        if (redisStateSsl) {
-            redisUriBuilder.withSsl(true);
-        }
-
-        redisClient = RedisClient.create(redisUriBuilder.build());
+        redisClient = RedisClient.create(RedisConnectionSupport.buildUri(
+                redisStateHost, redisStatePort, redisStateDatabase,
+                redisStateUsername, redisStatePassword, redisStateSsl
+        ));
         tryConnectRedis(false);
     }
 
@@ -98,7 +94,7 @@ public class RedisStateService {
         }
 
         try {
-            return commands.get(key);
+            return commands.get(RedisConnectionSupport.key(redisStateKeyPrefix, key));
         } catch (Exception ignored) {
             markRedisUnavailable();
             return null;
@@ -112,7 +108,7 @@ public class RedisStateService {
         }
 
         try {
-            commands.setex(key, ttl.getSeconds(), value);
+            commands.setex(RedisConnectionSupport.key(redisStateKeyPrefix, key), ttl.getSeconds(), value);
         } catch (Exception ignored) {
             markRedisUnavailable();
         }
@@ -125,7 +121,7 @@ public class RedisStateService {
         }
 
         try {
-            return commands.set(key, value, SetArgs.Builder.nx().ex(ttl.getSeconds())) != null;
+            return commands.set(RedisConnectionSupport.key(redisStateKeyPrefix, key), value, SetArgs.Builder.nx().ex(ttl.getSeconds())) != null;
         } catch (Exception ignored) {
             markRedisUnavailable();
             return null;
@@ -139,11 +135,11 @@ public class RedisStateService {
         }
 
         try {
-            String currentValue = commands.get(key);
+            String currentValue = commands.get(RedisConnectionSupport.key(redisStateKeyPrefix, key));
             if (!expectedValue.equals(currentValue)) {
                 return false;
             }
-            return commands.del(key) > 0;
+            return commands.del(RedisConnectionSupport.key(redisStateKeyPrefix, key)) > 0;
         } catch (Exception ignored) {
             markRedisUnavailable();
             return null;
@@ -157,9 +153,9 @@ public class RedisStateService {
         }
 
         try {
-            long nextValue = commands.incr(key);
+            long nextValue = commands.incr(RedisConnectionSupport.key(redisStateKeyPrefix, key));
             if (nextValue == 1L) {
-                commands.expire(key, ttlIfNew.getSeconds());
+                commands.expire(RedisConnectionSupport.key(redisStateKeyPrefix, key), ttlIfNew.getSeconds());
             }
             return nextValue;
         } catch (Exception ignored) {
@@ -175,7 +171,7 @@ public class RedisStateService {
         }
 
         try {
-            return commands.del(keys);
+            return commands.del(RedisConnectionSupport.keys(redisStateKeyPrefix, keys));
         } catch (Exception ignored) {
             markRedisUnavailable();
             return -1L;
@@ -191,11 +187,13 @@ public class RedisStateService {
         try {
             List<String> keys = new ArrayList<>();
             ScanCursor cursor = ScanCursor.INITIAL;
-            ScanArgs scanArgs = ScanArgs.Builder.matches(pattern).limit(200);
+            ScanArgs scanArgs = ScanArgs.Builder.matches(RedisConnectionSupport.pattern(redisStateKeyPrefix, pattern)).limit(200);
 
             do {
                 KeyScanCursor<String> nextCursor = commands.scan(cursor, scanArgs);
-                keys.addAll(nextCursor.getKeys());
+                nextCursor.getKeys().stream()
+                        .map(key -> RedisConnectionSupport.stripPrefix(redisStateKeyPrefix, key))
+                        .forEach(keys::add);
                 cursor = nextCursor;
             } while (!cursor.isFinished());
 

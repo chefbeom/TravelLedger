@@ -21,13 +21,13 @@ public class DataOpsBackupScheduler {
     private boolean minioBackupEnabled;
 
     @Value("${app.data-ops.db-backup-cron:0 0 6 * * *}")
-    private String databaseBackupCron;
+    private String databaseBackupCron = "0 0 6 * * *";
 
     @Value("${app.data-ops.minio-backup-cron:0 30 6 * * *}")
-    private String minioBackupCron;
+    private String minioBackupCron = "0 30 6 * * *";
 
     @Value("${app.data-ops.backup-zone:Asia/Seoul}")
-    private String backupZone;
+    private String backupZone = "Asia/Seoul";
 
     @PostConstruct
     void logSchedulerConfiguration() {

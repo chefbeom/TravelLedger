@@ -8,10 +8,10 @@ services:
     restart: unless-stopped
     environment:
       TZ: ${TZ:-Asia/Seoul}
-      DB_URL: ${DB_URL:-jdbc:mariadb://10.0.0.2:3306/calen?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Seoul}
+      DB_URL: ${DB_URL:-jdbc:mariadb://${DB_HOST:-10.0.0.2}:${DB_PORT:-3306}/${DB_NAME:-calen}?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Seoul}
       DB_DRIVER: ${DB_DRIVER:-org.mariadb.jdbc.Driver}
-      DB_ID: ${DB_USER:-calen}
-      DB_PASS: ${DB_PASSWORD:?DB_PASSWORD must be set}
+      DB_ID: ${DB_ID:-${DB_USER:-calen}}
+      DB_PASS: ${DB_PASS:-${DB_PASSWORD:?DB_PASSWORD must be set}}
       JWT_KEY: ${JWT_KEY:?JWT_KEY must be set}
       OPS_CONTROL_SEAL_KEY: ${OPS_CONTROL_SEAL_KEY:?OPS_CONTROL_SEAL_KEY must be set}
       JWT_EXPIRE: ${JWT_EXPIRE:-300000000}
@@ -29,9 +29,9 @@ services:
       H2_CONSOLE_ENABLED: ${H2_CONSOLE_ENABLED:-false}
       MINIO_API: ${MINIO_API:-${MINIO_API_INTERNAL_URL:-http://10.0.0.2:9000}}
       MINIO_PUBLIC_API: ${MINIO_PUBLIC_API:-${MINIO_API_PUBLIC_URL:-}}
-      MINIO_NAME: ${MINIO_NAME:-minioadmin}
-      MINIO_SECRET: ${MINIO_SECRET:?MINIO_SECRET must be set}
-      MINIO_CLOUD_BUCKET: ${MINIO_CLOUD_BUCKET:-budgetjourneybucket}
+      MINIO_NAME: ${MINIO_NAME:-${MINIO_ACCESS_KEY:-minioadmin}}
+      MINIO_SECRET: ${MINIO_SECRET:-${MINIO_SECRET_KEY:?MINIO_SECRET_KEY must be set}}
+      MINIO_CLOUD_BUCKET: ${MINIO_CLOUD_BUCKET:-${MINIO_BUCKET:-budgetjourneybucket}}
       MINIO_WORKSPACE_BUCKET: ${MINIO_WORKSPACE_BUCKET:-calen-workspace}
       MINIO_PRESIGNED_URL_EXPIRY_SECONDS: ${MINIO_PRESIGNED_URL_EXPIRY_SECONDS:-6000}
       MINIO_STORAGE_CAPACITY_BYTES: ${MINIO_STORAGE_CAPACITY_BYTES:-0}
@@ -80,11 +80,15 @@ services:
       REDIS_CACHE_HOST: ${REDIS_CACHE_HOST:-}
       REDIS_CACHE_PORT: ${REDIS_CACHE_PORT:-6379}
       REDIS_CACHE_PASSWORD: ${REDIS_CACHE_PASSWORD:-}
+      REDIS_CACHE_USERNAME: ${REDIS_CACHE_USERNAME:-}
+      REDIS_CACHE_KEY_PREFIX: ${REDIS_CACHE_KEY_PREFIX:-}
       REDIS_CACHE_DATABASE: ${REDIS_CACHE_DATABASE:-0}
       REDIS_CACHE_SSL: ${REDIS_CACHE_SSL:-false}
       REDIS_STATE_HOST: ${REDIS_STATE_HOST:-}
       REDIS_STATE_PORT: ${REDIS_STATE_PORT:-6379}
       REDIS_STATE_PASSWORD: ${REDIS_STATE_PASSWORD:-}
+      REDIS_STATE_USERNAME: ${REDIS_STATE_USERNAME:-}
+      REDIS_STATE_KEY_PREFIX: ${REDIS_STATE_KEY_PREFIX:-}
       REDIS_STATE_DATABASE: ${REDIS_STATE_DATABASE:-0}
       REDIS_STATE_SSL: ${REDIS_STATE_SSL:-false}
       DATA_OPS_BACKUP_WORKDIR: ${DATA_OPS_BACKUP_WORKDIR:-/opt/calen-backup}
@@ -92,6 +96,7 @@ services:
       DATA_OPS_BACKUP_REMOTE_DIR: ${DATA_OPS_BACKUP_REMOTE_DIR:-calen-db-backups}
       DATA_OPS_MINIO_BACKUP_REMOTE_DIR: ${DATA_OPS_MINIO_BACKUP_REMOTE_DIR:-calen-minio-backups}
       DATA_OPS_ARCHIVE_REMOTE_DIR: ${DATA_OPS_ARCHIVE_REMOTE_DIR:-calen-archive}
+      DATA_OPS_PROJECT_KEY: ${DATA_OPS_PROJECT_KEY:-calen}
       DATA_OPS_SECONDARY_BACKUP_ENABLED: ${DATA_OPS_SECONDARY_BACKUP_ENABLED:-false}
       DATA_OPS_SECONDARY_BACKUP_DIR: ${DATA_OPS_SECONDARY_BACKUP_DIR:-/opt/calen-backup-hdd}
       DATA_OPS_BACKUP_ZONE: ${DATA_OPS_BACKUP_ZONE:-Asia/Seoul}
@@ -99,7 +104,7 @@ services:
       DATA_OPS_DB_BACKUP_CRON: ${DATA_OPS_DB_BACKUP_CRON:-0 0 6 * * *}
       DATA_OPS_MINIO_BACKUP_ENABLED: ${DATA_OPS_MINIO_BACKUP_ENABLED:-true}
       DATA_OPS_MINIO_BACKUP_CRON: ${DATA_OPS_MINIO_BACKUP_CRON:-0 30 6 * * *}
-      DATA_OPS_RCLONE_CONFIG_PATH: ${DATA_OPS_RCLONE_CONFIG_PATH:-/app/.config/rclone/rclone.conf}
+      DATA_OPS_RCLONE_CONFIG_PATH: ${DATA_OPS_RCLONE_CONFIG_PATH:-/app/.config/rclone-host/rclone.conf}
       DATA_OPS_RCLONE_CONFIG_HOST_CONTAINER_PATH: /app/.config/rclone-host
     ports:
       - "${OCI_BACKEND_BIND_HOST:-127.0.0.1}:${OCI_BACKEND_BIND_PORT:-8080}:8080"
@@ -107,7 +112,7 @@ services:
       - backend-uploads:/app/uploads
       - ${DATA_OPS_BACKUP_HOST_PATH:-/opt/calen-backup}:/opt/calen-backup
       - ${DATA_OPS_SECONDARY_BACKUP_HOST_PATH:-/mnt/calen-backup-hdd}:/opt/calen-backup-hdd
-      - ${DATA_OPS_RCLONE_CONFIG_HOST_PATH:-/home/ubuntu/.config/rclone}:/app/.config/rclone:ro
+      - ${DATA_OPS_RCLONE_CONFIG_HOST_PATH:-/home/ubuntu/.config/rclone}:/app/.config/rclone-host:ro
     networks:
       - calen-app
     healthcheck:

@@ -97,6 +97,27 @@ MINIO_API_INTERNAL_URL=<data server internal minio url>
 MINIO_PUBLIC_API=<public minio url>
 ```
 
+The backend also accepts the tenant-oriented names below. Set these in the app server environment using the data server address reachable over Tailscale or the private network:
+
+```env
+DB_HOST=<data-server-address>
+DB_PORT=3306
+DB_NAME=<db name>
+DB_USER=<login id>
+DB_PASSWORD=<password>
+MINIO_API_INTERNAL_URL=<data server internal minio url>
+MINIO_ACCESS_KEY=<login id>
+MINIO_SECRET_KEY=<password>
+MINIO_BUCKET=<bucket name>
+DATA_OPS_PROJECT_KEY=<project slug>
+REDIS_CACHE_USERNAME=<redis acl user>
+REDIS_CACHE_KEY_PREFIX=<project slug>:
+REDIS_STATE_USERNAME=<redis acl user>
+REDIS_STATE_KEY_PREFIX=<project slug>:
+```
+
+Explicit app variables (`DB_URL`, `DB_ID`, `DB_PASS`, `MINIO_API`, `MINIO_NAME`, `MINIO_SECRET`, and `MINIO_CLOUD_BUCKET`) take precedence over these aliases. Keep passwords and access keys only in the untracked deployment environment; never commit them.
+
 ## CORS for a new frontend domain
 
 If the new project uploads directly to the shared MinIO public API, its frontend origin must also be added to the MinIO Nginx CORS allowlist.

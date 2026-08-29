@@ -19,6 +19,11 @@ import com.playdata.calen.familyalbum.dto.FamilyCategoryMemberResponse;
 import com.playdata.calen.familyalbum.dto.FamilyCategoryResponse;
 import com.playdata.calen.familyalbum.dto.FamilyMediaPageResponse;
 import com.playdata.calen.familyalbum.dto.FamilyMediaResponse;
+import com.playdata.calen.familyalbum.dto.FamilyMediaUploadAbortRequest;
+import com.playdata.calen.familyalbum.dto.FamilyMediaUploadCompleteRequest;
+import com.playdata.calen.familyalbum.dto.FamilyMediaUploadPrepareRequest;
+import com.playdata.calen.familyalbum.dto.FamilyMediaUploadPrepareResponse;
+import com.playdata.calen.familyalbum.dto.FamilyMediaUploadTargetResponse;
 import com.playdata.calen.familyalbum.dto.FamilyUserSearchResponse;
 import com.playdata.calen.familyalbum.repository.FamilyAlbumItemRepository;
 import com.playdata.calen.familyalbum.repository.FamilyAlbumRepository;
@@ -241,6 +246,79 @@ public class FamilyAlbumService {
     }
 
     @Transactional
+    public FamilyMediaUploadPrepareResponse prepareMediaUpload(
+            Long userId,
+            Long categoryId,
+            FamilyMediaUploadPrepareRequest request
+    ) {
+        appUserService.getRequiredUser(userId);
+        FamilyCategory category = getAccessibleCategory(userId, categoryId);
+        List<FamilyMediaUploadTargetResponse> uploads = familyMediaStorageService
+                .preparePresignedUploads(
+                        userId,
+                        category.getId(),
+                        request.files().stream()
+                                .map(file -> new FamilyMediaStorageService.FamilyMediaUploadCandidate(
+                                        file.originalFileName(),
+                                        file.contentType(),
+                                        file.fileSize()
+                                ))
+                                .toList()
+                )
+                .stream()
+                .map(file -> new FamilyMediaUploadTargetResponse(
+                        file.method(),
+                        file.uploadUrl(),
+                        file.objectKey(),
+                        file.storedFileName(),
+                        file.originalFileName(),
+                        file.contentType(),
+                        file.fileSize(),
+                        file.mediaType()
+                ))
+                .toList();
+        return new FamilyMediaUploadPrepareResponse("PRESIGNED", uploads);
+    }
+
+    @Transactional
+    public List<FamilyMediaResponse> completeMediaUpload(
+            Long userId,
+            Long categoryId,
+            FamilyMediaUploadCompleteRequest request
+    ) {
+        AppUser owner = appUserService.getRequiredUser(userId);
+        FamilyCategory category = getAccessibleCategory(userId, categoryId);
+        String normalizedCaption = normalizeOptionalText(request.caption(), 240);
+        LocalDateTime now = LocalDateTime.now();
+
+        List<FamilyMediaAsset> savedAssets = request.files().stream()
+                .map(file -> familyMediaStorageService.completePresignedUpload(
+                        userId,
+                        category.getId(),
+                        new FamilyMediaStorageService.CompletedFamilyMediaUpload(
+                                file.objectKey(),
+                                file.originalFileName(),
+                                file.contentType(),
+                                file.fileSize()
+                        )
+                ))
+                .map(stored -> createMediaAsset(owner, category, normalizedCaption, stored, now))
+                .map(familyMediaAssetRepository::save)
+                .sorted(mediaComparator())
+                .toList();
+        return savedAssets.stream().map(this::toMediaResponse).toList();
+    }
+
+    public void abortMediaUpload(
+            Long userId,
+            Long categoryId,
+            FamilyMediaUploadAbortRequest request
+    ) {
+        getAccessibleCategory(userId, categoryId);
+        familyMediaStorageService.abortPresignedUploads(userId, categoryId, request.objectKeys());
+    }
+
+
     public FamilyAlbumResponse createAlbum(Long userId, FamilyAlbumCreateRequest request) {
         AppUser owner = appUserService.getRequiredUser(userId);
         FamilyCategory category = getAccessibleCategory(userId, request.categoryId());
@@ -297,6 +375,30 @@ public class FamilyAlbumService {
                 media.getContentType()
         );
     }
+
+    private FamilyMediaAsset createMediaAsset(
+            AppUser owner,
+            FamilyCategory category,
+            String caption,
+            FamilyMediaStorageService.StoredFamilyMedia stored,
+            LocalDateTime now
+    ) {
+        FamilyMediaAsset asset = new FamilyMediaAsset();
+        asset.setCategory(category);
+        asset.setOwner(owner);
+        asset.setMediaType(stored.mediaType());
+        asset.setOriginalFileName(stored.originalFileName());
+        asset.setStoredFileName(stored.storedFileName());
+        asset.setStoragePath(stored.storagePath());
+        asset.setContentType(stored.contentType());
+        asset.setFileSize(stored.fileSize());
+        asset.setCaption(caption);
+        asset.setShared(true);
+        asset.setUploadedAt(now);
+        asset.setCapturedAt(now);
+        return asset;
+    }
+
 
     private FamilyMediaAsset createMediaAsset(
             AppUser owner,

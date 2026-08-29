@@ -1362,16 +1362,53 @@ export function updateTravelRoute(routeId, payload) {
   })
 }
 
-export function uploadTravelRouteGpxFiles(routeId, files) {
-  const formData = new FormData()
-  ;(files ?? []).forEach((file) => {
-    formData.append('files', file)
+export async function uploadTravelRouteGpxFiles(routeId, files) {
+  const selectedFiles = [...(files ?? [])].filter(Boolean)
+  if (!selectedFiles.length) {
+    return []
+  }
+
+  const prepared = await request(`/travel/routes/${routeId}/gpx-files/presign`, {
+    method: 'POST',
+    body: JSON.stringify({
+      files: selectedFiles.map((file) => ({
+        originalFileName: file.name,
+        contentType: 'application/gpx+xml',
+        fileSize: file.size,
+      })),
+    }),
   })
 
-  return request(`/travel/routes/${routeId}/gpx-files`, {
-    method: 'POST',
-    body: formData,
-  })
+  if (prepared?.uploadMode !== 'PRESIGNED' || !Array.isArray(prepared.uploads)
+    || prepared.uploads.length !== selectedFiles.length) {
+    throw new Error('Presigned GPX upload is unavailable.')
+  }
+
+  try {
+    await Promise.all(prepared.uploads.map((target, index) =>
+      uploadPresignedTravelMediaFile(target, selectedFiles[index]),
+    ))
+
+    return await request(`/travel/routes/${routeId}/gpx-files/complete`, {
+      method: 'POST',
+      body: JSON.stringify({
+        files: prepared.uploads.map((target) => ({
+          objectKey: target.objectKey,
+          originalFileName: target.originalFileName,
+          contentType: target.contentType,
+          fileSize: target.fileSize,
+        })),
+      }),
+    })
+  } catch (error) {
+    await request(`/travel/routes/${routeId}/gpx-files/abort`, {
+      method: 'POST',
+      body: JSON.stringify({
+        objectKeys: prepared.uploads.map((target) => target.objectKey),
+      }),
+    }).catch(() => {})
+    throw error
+  }
 }
 
 export function deleteTravelRoute(routeId) {
@@ -1403,20 +1440,54 @@ export function createFamilyCategory(payload) {
   })
 }
 
-export function uploadFamilyMedia(categoryId, files, caption = '') {
-  const formData = new FormData()
-  formData.append('categoryId', String(categoryId))
-  if (caption) {
-    formData.append('caption', caption)
+export async function uploadFamilyMedia(categoryId, files, caption = '') {
+  const selectedFiles = [...(files ?? [])].filter(Boolean)
+  if (!selectedFiles.length) {
+    return []
   }
-  ;(files ?? []).forEach((file) => {
-    formData.append('files', file)
+
+  const prepared = await request(`/family-album/media/presign?categoryId=${encodeURIComponent(categoryId)}`, {
+    method: 'POST',
+    body: JSON.stringify({
+      files: selectedFiles.map((file) => ({
+        originalFileName: file.name,
+        contentType: resolveUploadContentType(file),
+        fileSize: file.size,
+      })),
+    }),
   })
 
-  return request('/family-album/media', {
-    method: 'POST',
-    body: formData,
-  })
+  if (prepared?.uploadMode !== 'PRESIGNED' || !Array.isArray(prepared.uploads)
+    || prepared.uploads.length !== selectedFiles.length) {
+    throw new Error('Presigned family media upload is unavailable.')
+  }
+
+  try {
+    await Promise.all(prepared.uploads.map((target, index) =>
+      uploadPresignedTravelMediaFile(target, selectedFiles[index]),
+    ))
+
+    return await request(`/family-album/media/complete?categoryId=${encodeURIComponent(categoryId)}`, {
+      method: 'POST',
+      body: JSON.stringify({
+        caption,
+        files: prepared.uploads.map((target) => ({
+          objectKey: target.objectKey,
+          originalFileName: target.originalFileName,
+          contentType: target.contentType,
+          fileSize: target.fileSize,
+        })),
+      }),
+    })
+  } catch (error) {
+    await request(`/family-album/media/abort?categoryId=${encodeURIComponent(categoryId)}`, {
+      method: 'POST',
+      body: JSON.stringify({
+        objectKeys: prepared.uploads.map((target) => target.objectKey),
+      }),
+    }).catch(() => {})
+    throw error
+  }
 }
 
 export function createFamilyAlbum(payload) {

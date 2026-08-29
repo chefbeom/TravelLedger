@@ -189,6 +189,35 @@ class TravelMediaStorageServiceTest {
         verify(internalMinioClient, never()).getPresignedObjectUrl(org.mockito.ArgumentMatchers.any());
     }
 
+    @Test
+    void preparePresignedRouteGpxUploadUsesPublicClientUrl() throws Exception {
+        MinioClient internalMinioClient = mock(MinioClient.class);
+        MinioClient publicMinioClient = mock(MinioClient.class);
+        TravelMediaStorageService service = createPresignedStorageService(internalMinioClient, publicMinioClient);
+        String publicUrl = "https://storage.example.com/minio/travel-bucket/travel-media/1/2/routes/7/route.gpx?signature=public";
+        when(publicMinioClient.getPresignedObjectUrl(org.mockito.ArgumentMatchers.any()))
+                .thenReturn(publicUrl);
+
+        List<TravelMediaStorageService.PresignedRouteGpxUpload> uploads =
+                service.preparePresignedRouteGpxUploads(
+                        1L,
+                        2L,
+                        7L,
+                        List.of(new TravelMediaStorageService.RouteGpxUploadCandidate(
+                                "route.gpx",
+                                "application/gpx+xml",
+                                256L
+                        ))
+                );
+
+        assertThat(uploads).singleElement()
+                .extracting(TravelMediaStorageService.PresignedRouteGpxUpload::uploadUrl)
+                .isEqualTo(publicUrl);
+        verify(publicMinioClient).getPresignedObjectUrl(org.mockito.ArgumentMatchers.any());
+        verify(internalMinioClient, never()).getPresignedObjectUrl(org.mockito.ArgumentMatchers.any());
+    }
+
+
     private TravelMediaStorageService createLocalStorageService() {
         @SuppressWarnings("unchecked")
         ObjectProvider<MinioClient> minioProvider = mock(ObjectProvider.class);

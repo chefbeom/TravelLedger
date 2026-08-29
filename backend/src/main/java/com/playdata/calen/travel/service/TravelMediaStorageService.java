@@ -120,6 +120,115 @@ public class TravelMediaStorageService {
         return storeToLocal(sourceBytes, originalFileName, storedFileName, localStoragePath, "application/gpx+xml");
     }
 
+    public List<PresignedRouteGpxUpload> preparePresignedRouteGpxUploads(
+            Long ownerId,
+            Long planId,
+            Long routeId,
+            List<RouteGpxUploadCandidate> files
+    ) {
+        if (!supportsPresignedUpload()) {
+            throw new BadRequestException("MinIO presigned upload is not available.");
+        }
+        if (files == null || files.isEmpty()) {
+            throw new BadRequestException("Select at least one GPX file.");
+        }
+
+        return files.stream()
+                .map(file -> createPresignedRouteGpxUpload(ownerId, planId, routeId, file))
+                .toList();
+    }
+
+    public StoredTravelMedia completePresignedRouteGpxUpload(
+            Long ownerId,
+            Long planId,
+            Long routeId,
+            CompletedRouteGpxUpload upload
+    ) {
+        if (!supportsPresignedUpload()) {
+            throw new BadRequestException("MinIO presigned upload is not available.");
+        }
+
+        validateRouteGpxMetadata(upload.originalFileName(), upload.fileSize());
+        String contentType = StringUtils.hasText(upload.contentType())
+                ? upload.contentType()
+                : "application/gpx+xml";
+        validateRouteGpxObjectKey(ownerId, planId, routeId, upload.objectKey());
+
+        try {
+            StatObjectResponse stat = verifyUploadedObject(upload.objectKey(), upload.fileSize());
+            return new StoredTravelMedia(
+                    upload.originalFileName(),
+                    extractObjectName(upload.objectKey()),
+                    upload.objectKey(),
+                    contentType,
+                    stat.size()
+            );
+        } catch (BadRequestException exception) {
+            throw exception;
+        } catch (Exception exception) {
+            throw new BadRequestException(buildStorageErrorMessage("Failed to verify GPX upload."));
+        }
+    }
+
+    public void abortPresignedRouteGpxUploads(
+            Long ownerId,
+            Long planId,
+            Long routeId,
+            List<String> objectKeys
+    ) {
+        if (objectKeys == null || objectKeys.isEmpty()) {
+            return;
+        }
+
+        objectKeys.forEach(objectKey -> {
+            validateRouteGpxObjectKey(ownerId, planId, routeId, objectKey);
+            try {
+                if (isMinioEnabled()) {
+                    minioClient.removeObject(
+                            RemoveObjectArgs.builder()
+                                    .bucket(minioProperties.getBucket_cloud())
+                                    .object(objectKey)
+                                    .build()
+                    );
+                }
+            } catch (Exception ignored) {
+                // Best-effort cleanup for aborted uploads.
+            }
+        });
+    }
+
+    private PresignedRouteGpxUpload createPresignedRouteGpxUpload(
+            Long ownerId,
+            Long planId,
+            Long routeId,
+            RouteGpxUploadCandidate file
+    ) {
+        validateRouteGpxMetadata(file.originalFileName(), file.fileSize());
+        String storedFileName = UUID.randomUUID() + "-" + sanitizeFileName(file.originalFileName());
+        String objectKey = buildRouteMinioObjectKey(ownerId, planId, routeId, storedFileName);
+
+        try {
+            String uploadUrl = presignedMinioClient.getPresignedObjectUrl(
+                    GetPresignedObjectUrlArgs.builder()
+                            .method(Method.PUT)
+                            .bucket(minioProperties.getBucket_cloud())
+                            .object(objectKey)
+                            .expiry(minioProperties.getPresignedUrlExpirySeconds())
+                            .build()
+            );
+            return new PresignedRouteGpxUpload(
+                    "PUT",
+                    uploadUrl,
+                    objectKey,
+                    storedFileName,
+                    file.originalFileName(),
+                    "application/gpx+xml",
+                    file.fileSize()
+            );
+        } catch (Exception exception) {
+            throw new BadRequestException(buildStorageErrorMessage("Failed to generate upload URL."));
+        }
+    }
     public boolean supportsPresignedUpload() {
         return presignedUploadEnabled && isMinioEnabled() && isPresignedMinioEnabled();
     }
@@ -438,6 +547,20 @@ public class TravelMediaStorageService {
         return verifiedContentType;
     }
 
+    private void validateRouteGpxMetadata(String originalFileName, long fileSize) {
+        if (!StringUtils.hasText(originalFileName)) {
+            throw new BadRequestException("GPX file name is required.");
+        }
+        if (fileSize <= 0) {
+            throw new BadRequestException("Select a GPX file to upload.");
+        }
+        if (fileSize > MAX_GPX_FILE_SIZE) {
+            throw new BadRequestException("GPX files up to 10MB are allowed.");
+        }
+        if (!GPX_FILE_EXTENSIONS.contains(extractExtension(originalFileName))) {
+            throw new BadRequestException("Only .gpx files are allowed.");
+        }
+    }
     private void validateRouteGpxFile(MultipartFile file) {
         if (file == null || file.isEmpty()) {
             throw new BadRequestException("Select a GPX file to upload.");
@@ -771,6 +894,25 @@ public class TravelMediaStorageService {
         validatePreparedThumbnailCandidates(candidates, originalContentType);
     }
 
+    private void validateRouteGpxObjectKey(Long ownerId, Long planId, Long routeId, String objectKey) {
+        if (!StringUtils.hasText(objectKey)) {
+            throw new BadRequestException("Object key is required.");
+        }
+        String normalizedObjectKey = objectKey.trim().replace('\\', '/');
+        String expectedPrefix = String.join(
+                "/",
+                mediaObjectPrefix,
+                String.valueOf(ownerId),
+                String.valueOf(planId),
+                "routes",
+                String.valueOf(routeId)
+        ) + "/";
+        if (!objectKey.equals(normalizedObjectKey)
+                || hasUnsafeObjectKeySegments(normalizedObjectKey)
+                || !normalizedObjectKey.startsWith(expectedPrefix)) {
+            throw new BadRequestException("Invalid uploaded file path.");
+        }
+    }
     private void validateObjectKey(Long ownerId, Long planId, Long recordId, String objectKey) {
         if (!StringUtils.hasText(objectKey)) {
             throw new BadRequestException("Object key is required.");
@@ -1029,6 +1171,31 @@ public class TravelMediaStorageService {
         }
     }
 
+    public record RouteGpxUploadCandidate(
+            String originalFileName,
+            String contentType,
+            long fileSize
+    ) {
+    }
+
+    public record CompletedRouteGpxUpload(
+            String objectKey,
+            String originalFileName,
+            String contentType,
+            long fileSize
+    ) {
+    }
+
+    public record PresignedRouteGpxUpload(
+            String method,
+            String uploadUrl,
+            String objectKey,
+            String storedFileName,
+            String originalFileName,
+            String contentType,
+            long fileSize
+    ) {
+    }
     public record StoredTravelMedia(
             String originalFileName,
             String storedFileName,

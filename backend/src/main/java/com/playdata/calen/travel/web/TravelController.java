@@ -35,6 +35,10 @@ import com.playdata.calen.travel.dto.TravelPortfolioResponse;
 import com.playdata.calen.travel.dto.TravelPublicTripsOverviewResponse;
 import com.playdata.calen.travel.dto.TravelPublicMapShareResponse;
 import com.playdata.calen.travel.dto.TravelReverseGeocodeResponse;
+import com.playdata.calen.travel.dto.TravelRouteGpxUploadAbortRequest;
+import com.playdata.calen.travel.dto.TravelRouteGpxUploadCompleteRequest;
+import com.playdata.calen.travel.dto.TravelRouteGpxUploadPrepareRequest;
+import com.playdata.calen.travel.dto.TravelRouteGpxUploadPrepareResponse;
 import com.playdata.calen.travel.dto.TravelRouteSegmentRequest;
 import com.playdata.calen.travel.dto.TravelRouteSegmentResponse;
 import com.playdata.calen.travel.dto.TravelShareGroupRequest;
@@ -331,6 +335,34 @@ public class TravelController {
     ) {
         return travelService.uploadRouteGpxFiles(currentUser.userId(), routeId, files);
     }
+
+    @PostMapping("/routes/{routeId}/gpx-files/presign")
+    public TravelRouteGpxUploadPrepareResponse prepareRouteGpxUpload(
+            @AuthenticationPrincipal AppUserPrincipal currentUser,
+            @PathVariable Long routeId,
+            @Valid @RequestBody TravelRouteGpxUploadPrepareRequest request
+    ) {
+        return travelService.prepareRouteGpxUpload(currentUser.userId(), routeId, request);
+    }
+
+    @PostMapping("/routes/{routeId}/gpx-files/complete")
+    public TravelRouteSegmentResponse completeRouteGpxUpload(
+            @AuthenticationPrincipal AppUserPrincipal currentUser,
+            @PathVariable Long routeId,
+            @Valid @RequestBody TravelRouteGpxUploadCompleteRequest request
+    ) {
+        return travelService.completeRouteGpxUpload(currentUser.userId(), routeId, request);
+    }
+
+    @PostMapping("/routes/{routeId}/gpx-files/abort")
+    public void abortRouteGpxUpload(
+            @AuthenticationPrincipal AppUserPrincipal currentUser,
+            @PathVariable Long routeId,
+            @Valid @RequestBody TravelRouteGpxUploadAbortRequest request
+    ) {
+        travelService.abortRouteGpxUpload(currentUser.userId(), routeId, request);
+    }
+
 
     @DeleteMapping("/routes/{routeId}")
     public void deleteRouteSegment(

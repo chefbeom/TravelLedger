@@ -65,6 +65,11 @@ import com.playdata.calen.travel.dto.TravelPublicMapShareResponse;
 import com.playdata.calen.travel.dto.TravelPublicPhotoPinResponse;
 import com.playdata.calen.travel.dto.TravelPublicTripSummaryResponse;
 import com.playdata.calen.travel.dto.TravelPublicTripsOverviewResponse;
+import com.playdata.calen.travel.dto.TravelRouteGpxUploadAbortRequest;
+import com.playdata.calen.travel.dto.TravelRouteGpxUploadCompleteRequest;
+import com.playdata.calen.travel.dto.TravelRouteGpxUploadPrepareRequest;
+import com.playdata.calen.travel.dto.TravelRouteGpxUploadPrepareResponse;
+import com.playdata.calen.travel.dto.TravelRouteGpxUploadTargetResponse;
 import com.playdata.calen.travel.dto.TravelRoutePointRequest;
 import com.playdata.calen.travel.dto.TravelRoutePointResponse;
 import com.playdata.calen.travel.dto.TravelRouteSegmentRequest;
@@ -1220,6 +1225,110 @@ public class TravelService {
         return response;
     }
 
+    public TravelRouteGpxUploadPrepareResponse prepareRouteGpxUpload(
+            Long userId,
+            Long routeId,
+            TravelRouteGpxUploadPrepareRequest request
+    ) {
+        TravelRouteSegment routeSegment = travelRouteSegmentRepository.findByIdAndPlanOwnerId(routeId, userId)
+                .orElseThrow(() -> new NotFoundException("Travel route not found."));
+        if (!travelMediaStorageService.supportsPresignedUpload()) {
+            throw new BadRequestException("Travel GPX uploads require presigned object storage.");
+        }
+
+        List<TravelRouteGpxUploadTargetResponse> uploads = travelMediaStorageService
+                .preparePresignedRouteGpxUploads(
+                        userId,
+                        routeSegment.getPlan().getId(),
+                        routeSegment.getId(),
+                        request.files().stream()
+                                .map(file -> new TravelMediaStorageService.RouteGpxUploadCandidate(
+                                        file.originalFileName(),
+                                        file.contentType(),
+                                        file.fileSize()
+                                ))
+                                .toList()
+                )
+                .stream()
+                .map(file -> new TravelRouteGpxUploadTargetResponse(
+                        file.method(),
+                        file.uploadUrl(),
+                        file.objectKey(),
+                        file.storedFileName(),
+                        file.originalFileName(),
+                        file.contentType(),
+                        file.fileSize()
+                ))
+                .toList();
+        return new TravelRouteGpxUploadPrepareResponse("PRESIGNED", uploads);
+    }
+
+    @Transactional
+    public TravelRouteSegmentResponse completeRouteGpxUpload(
+            Long userId,
+            Long routeId,
+            TravelRouteGpxUploadCompleteRequest request
+    ) {
+        TravelRouteSegment routeSegment = travelRouteSegmentRepository.findByIdAndPlanOwnerId(routeId, userId)
+                .orElseThrow(() -> new NotFoundException("Travel route not found."));
+        if (!travelMediaStorageService.supportsPresignedUpload()) {
+            throw new BadRequestException("Travel GPX uploads require presigned object storage.");
+        }
+
+        List<TravelMediaStorageService.StoredTravelMedia> storedFiles = request.files().stream()
+                .map(file -> travelMediaStorageService.completePresignedRouteGpxUpload(
+                        userId,
+                        routeSegment.getPlan().getId(),
+                        routeSegment.getId(),
+                        new TravelMediaStorageService.CompletedRouteGpxUpload(
+                                file.objectKey(),
+                                file.originalFileName(),
+                                file.contentType(),
+                                file.fileSize()
+                        )
+                ))
+                .toList();
+
+        travelDriveLinkService.removeRouteGpxLinks(routeSegment);
+        deleteRouteGpxFilesQuietly(routeSegment);
+
+        List<RouteGpxFile> routeFiles = storedFiles.stream()
+                .map(storedFile -> new RouteGpxFile(
+                        storedFile.originalFileName(),
+                        storedFile.storagePath(),
+                        storedFile.contentType(),
+                        storedFile.fileSize()
+                ))
+                .toList();
+        routeSegment.setSourceType(TravelRouteSourceType.GPX);
+        routeSegment.setGpxFilesJson(serializeRouteGpxFiles(routeFiles));
+        travelDriveLinkService.replaceRouteGpxLinks(routeSegment, routeFiles.stream()
+                .map(file -> new TravelDriveLinkService.TravelLinkedFile(
+                        file.originalFileName(),
+                        file.storagePath(),
+                        file.contentType(),
+                        file.fileSize()
+                ))
+                .toList());
+        TravelRouteSegmentResponse response = toRouteSegmentResponse(routeSegment);
+        invalidateTravelSummaryCaches(userId);
+        return response;
+    }
+
+    public void abortRouteGpxUpload(
+            Long userId,
+            Long routeId,
+            TravelRouteGpxUploadAbortRequest request
+    ) {
+        TravelRouteSegment routeSegment = travelRouteSegmentRepository.findByIdAndPlanOwnerId(routeId, userId)
+                .orElseThrow(() -> new NotFoundException("Travel route not found."));
+        travelMediaStorageService.abortPresignedRouteGpxUploads(
+                userId,
+                routeSegment.getPlan().getId(),
+                routeSegment.getId(),
+                request.objectKeys()
+        );
+    }
     @Transactional
     public void deleteRouteSegment(Long userId, Long routeId) {
         TravelRouteSegment routeSegment = travelRouteSegmentRepository.findByIdAndPlanOwnerId(routeId, userId)

@@ -8,6 +8,10 @@ import com.playdata.calen.familyalbum.dto.FamilyAlbumResponse;
 import com.playdata.calen.familyalbum.dto.FamilyCategoryCreateRequest;
 import com.playdata.calen.familyalbum.dto.FamilyCategoryResponse;
 import com.playdata.calen.familyalbum.dto.FamilyMediaResponse;
+import com.playdata.calen.familyalbum.dto.FamilyMediaUploadAbortRequest;
+import com.playdata.calen.familyalbum.dto.FamilyMediaUploadCompleteRequest;
+import com.playdata.calen.familyalbum.dto.FamilyMediaUploadPrepareRequest;
+import com.playdata.calen.familyalbum.dto.FamilyMediaUploadPrepareResponse;
 import com.playdata.calen.familyalbum.dto.FamilyUserSearchResponse;
 import com.playdata.calen.familyalbum.service.FamilyAlbumService;
 import com.playdata.calen.familyalbum.service.FamilyMediaStorageService;
@@ -88,6 +92,34 @@ public class FamilyAlbumController {
     ) {
         return familyAlbumService.uploadMedia(currentUser.userId(), categoryId, caption, files);
     }
+
+    @PostMapping("/media/presign")
+    public FamilyMediaUploadPrepareResponse prepareMediaUpload(
+            @AuthenticationPrincipal AppUserPrincipal currentUser,
+            @RequestParam Long categoryId,
+            @Valid @RequestBody FamilyMediaUploadPrepareRequest request
+    ) {
+        return familyAlbumService.prepareMediaUpload(currentUser.userId(), categoryId, request);
+    }
+
+    @PostMapping("/media/complete")
+    public List<FamilyMediaResponse> completeMediaUpload(
+            @AuthenticationPrincipal AppUserPrincipal currentUser,
+            @RequestParam Long categoryId,
+            @Valid @RequestBody FamilyMediaUploadCompleteRequest request
+    ) {
+        return familyAlbumService.completeMediaUpload(currentUser.userId(), categoryId, request);
+    }
+
+    @PostMapping("/media/abort")
+    public void abortMediaUpload(
+            @AuthenticationPrincipal AppUserPrincipal currentUser,
+            @RequestParam Long categoryId,
+            @Valid @RequestBody FamilyMediaUploadAbortRequest request
+    ) {
+        familyAlbumService.abortMediaUpload(currentUser.userId(), categoryId, request);
+    }
+
 
     @PostMapping("/albums")
     public FamilyAlbumResponse createAlbum(

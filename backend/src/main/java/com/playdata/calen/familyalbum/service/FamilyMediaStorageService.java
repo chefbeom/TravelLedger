@@ -6,7 +6,9 @@ import com.playdata.calen.common.media.ImageThumbnailService;
 import com.playdata.calen.common.media.PreparedThumbnailProfile;
 import com.playdata.calen.familyalbum.domain.FamilyMediaType;
 import io.minio.GetObjectArgs;
+import io.minio.GetPresignedObjectUrlArgs;
 import io.minio.MinioClient;
+import io.minio.http.Method;
 import io.minio.PutObjectArgs;
 import io.minio.RemoveObjectArgs;
 import io.minio.StatObjectArgs;
@@ -23,6 +25,7 @@ import java.util.Locale;
 import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.AbstractResource;
 import org.springframework.core.io.Resource;
@@ -42,6 +45,7 @@ public class FamilyMediaStorageService {
     private final Path rootPath;
     private final String mediaObjectPrefix;
     private final MinioClient minioClient;
+    private final MinioClient presignedMinioClient;
     private final MinioProperties minioProperties;
     private final ImageThumbnailService imageThumbnailService;
 
@@ -49,12 +53,14 @@ public class FamilyMediaStorageService {
             @Value("${app.family.media-storage-path}") String mediaStoragePath,
             @Value("${app.family.media-object-prefix:family-media}") String mediaObjectPrefix,
             ObjectProvider<MinioClient> minioClientProvider,
+            @Qualifier("minioPresignedClient") ObjectProvider<MinioClient> presignedMinioClientProvider,
             MinioProperties minioProperties,
             ImageThumbnailService imageThumbnailService
     ) {
         this.rootPath = Paths.get(mediaStoragePath).toAbsolutePath().normalize();
         this.mediaObjectPrefix = normalizeObjectPrefix(mediaObjectPrefix);
         this.minioClient = minioClientProvider.getIfAvailable();
+        this.presignedMinioClient = presignedMinioClientProvider.getIfAvailable();
         this.minioProperties = minioProperties;
         this.imageThumbnailService = imageThumbnailService;
     }
@@ -80,6 +86,136 @@ public class FamilyMediaStorageService {
         return storeToLocal(file, originalFileName, storedFileName, localStoragePath, detectedUpload, imageSourceBytes);
     }
 
+    public List<PresignedFamilyMediaUpload> preparePresignedUploads(
+            Long ownerId,
+            Long categoryId,
+            List<FamilyMediaUploadCandidate> files
+    ) {
+        if (!isPresignedMinioEnabled()) {
+            throw new BadRequestException("Family media uploads require presigned object storage.");
+        }
+        if (files == null || files.isEmpty()) {
+            throw new BadRequestException("Select a file to upload.");
+        }
+
+        return files.stream()
+                .map(file -> createPresignedUpload(ownerId, categoryId, file))
+                .toList();
+    }
+
+    public StoredFamilyMedia completePresignedUpload(
+            Long ownerId,
+            Long categoryId,
+            CompletedFamilyMediaUpload upload
+    ) {
+        if (!isPresignedMinioEnabled()) {
+            throw new BadRequestException("Family media uploads require presigned object storage.");
+        }
+
+        DetectedUpload detectedUpload = validateUploadMetadata(
+                upload.originalFileName(),
+                upload.contentType(),
+                upload.fileSize()
+        );
+        validateObjectKey(ownerId, categoryId, upload.objectKey());
+
+        try {
+            StatObjectResponse stat = minioClient.statObject(
+                    StatObjectArgs.builder()
+                            .bucket(minioProperties.getBucket_cloud())
+                            .object(upload.objectKey())
+                            .build()
+            );
+            if (stat.size() != upload.fileSize()) {
+                throw new BadRequestException("Uploaded file verification failed.");
+            }
+            verifyUploadedBinarySignature(upload.objectKey(), detectedUpload.contentType());
+            prepareDerivedThumbnails(upload.objectKey(), detectedUpload.contentType());
+
+            return new StoredFamilyMedia(
+                    upload.originalFileName(),
+                    upload.objectKey().substring(upload.objectKey().lastIndexOf('/') + 1),
+                    upload.objectKey(),
+                    detectedUpload.contentType(),
+                    stat.size(),
+                    detectedUpload.mediaType()
+            );
+        } catch (BadRequestException exception) {
+            throw exception;
+        } catch (Exception exception) {
+            throw new BadRequestException("Failed to verify uploaded file.");
+        }
+    }
+
+    public void abortPresignedUploads(Long ownerId, Long categoryId, List<String> objectKeys) {
+        if (objectKeys == null || objectKeys.isEmpty()) {
+            return;
+        }
+
+        objectKeys.forEach(objectKey -> {
+            validateObjectKey(ownerId, categoryId, objectKey);
+            try {
+                minioClient.removeObject(
+                        RemoveObjectArgs.builder()
+                                .bucket(minioProperties.getBucket_cloud())
+                                .object(objectKey)
+                                .build()
+                );
+            } catch (Exception ignored) {
+                // Best-effort cleanup for aborted uploads.
+            }
+        });
+    }
+
+    private void verifyUploadedBinarySignature(String objectKey, String contentType) throws Exception {
+        try (InputStream inputStream = minioClient.getObject(
+                GetObjectArgs.builder()
+                        .bucket(minioProperties.getBucket_cloud())
+                        .object(objectKey)
+                        .build()
+        )) {
+            if (!matchesSignature(readHeader(inputStream), contentType)) {
+                throw new BadRequestException("Uploaded file contents do not match the file type.");
+            }
+        }
+    }
+
+    private PresignedFamilyMediaUpload createPresignedUpload(
+            Long ownerId,
+            Long categoryId,
+            FamilyMediaUploadCandidate file
+    ) {
+        DetectedUpload detectedUpload = validateUploadMetadata(
+                file.originalFileName(),
+                file.contentType(),
+                file.fileSize()
+        );
+        String storedFileName = UUID.randomUUID() + "-" + sanitizeFileName(file.originalFileName());
+        String objectKey = buildMinioObjectKey(ownerId, categoryId, storedFileName);
+
+        try {
+            String uploadUrl = presignedMinioClient.getPresignedObjectUrl(
+                    GetPresignedObjectUrlArgs.builder()
+                            .method(Method.PUT)
+                            .bucket(minioProperties.getBucket_cloud())
+                            .object(objectKey)
+                            .expiry(minioProperties.getPresignedUrlExpirySeconds())
+                            .build()
+            );
+            return new PresignedFamilyMediaUpload(
+                    "PUT",
+                    uploadUrl,
+                    objectKey,
+                    storedFileName,
+                    file.originalFileName(),
+                    detectedUpload.contentType(),
+                    file.fileSize(),
+                    detectedUpload.mediaType().name()
+            );
+        } catch (Exception exception) {
+            throw new BadRequestException("Failed to generate upload URL.");
+        }
+    }
     public Resource loadAsResource(String storagePath) {
         if (!StringUtils.hasText(storagePath)) {
             throw new BadRequestException("File path is empty.");
@@ -276,6 +412,39 @@ public class FamilyMediaStorageService {
             // Keep cleanup resilient.
         }
     }
+
+    private DetectedUpload validateUploadMetadata(
+            String originalFileName,
+            String contentType,
+            long fileSize
+    ) {
+        if (!StringUtils.hasText(originalFileName)) {
+            throw new BadRequestException("File name is required.");
+        }
+        if (fileSize <= 0 || fileSize > MAX_FILE_SIZE) {
+            throw new BadRequestException("Photos and videos up to 30MB are allowed.");
+        }
+        return detectUpload(contentType, originalFileName);
+    }
+
+    private void validateObjectKey(Long ownerId, Long categoryId, String objectKey) {
+        if (!StringUtils.hasText(objectKey)) {
+            throw new BadRequestException("Object key is required.");
+        }
+        String normalizedObjectKey = objectKey.trim().replace('\\', '/');
+        String expectedPrefix = String.join(
+                "/",
+                mediaObjectPrefix,
+                String.valueOf(ownerId),
+                String.valueOf(categoryId)
+        ) + "/";
+        if (!objectKey.equals(normalizedObjectKey)
+                || normalizedObjectKey.contains("..")
+                || !normalizedObjectKey.startsWith(expectedPrefix)) {
+            throw new BadRequestException("Invalid uploaded file path.");
+        }
+    }
+
 
     private DetectedUpload validateFile(MultipartFile file) {
         if (file == null || file.isEmpty()) {
@@ -519,6 +688,12 @@ public class FamilyMediaStorageService {
                 && StringUtils.hasText(minioProperties.getBucket_cloud());
     }
 
+    private boolean isPresignedMinioEnabled() {
+        return presignedMinioClient != null
+                && StringUtils.hasText(minioProperties.getPublicEndpoint())
+                && StringUtils.hasText(minioProperties.getBucket_cloud());
+    }
+
     private boolean isMinioObject(String storagePath) {
         return storagePath.startsWith(mediaObjectPrefix + "/");
     }
@@ -567,6 +742,34 @@ public class FamilyMediaStorageService {
 
         return fileName.substring(dotIndex + 1).trim().toLowerCase(Locale.ROOT);
     }
+
+    public record FamilyMediaUploadCandidate(
+            String originalFileName,
+            String contentType,
+            long fileSize
+    ) {
+    }
+
+    public record CompletedFamilyMediaUpload(
+            String objectKey,
+            String originalFileName,
+            String contentType,
+            long fileSize
+    ) {
+    }
+
+    public record PresignedFamilyMediaUpload(
+            String method,
+            String uploadUrl,
+            String objectKey,
+            String storedFileName,
+            String originalFileName,
+            String contentType,
+            long fileSize,
+            String mediaType
+    ) {
+    }
+
 
     public record StoredFamilyMedia(
             String originalFileName,

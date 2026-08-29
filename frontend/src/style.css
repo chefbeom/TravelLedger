@@ -8491,6 +8491,14 @@ textarea {
   margin-bottom: 18px;
 }
 
+.travel-modal__header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
 .travel-modal__header h2 {
   margin: 0 0 6px;
 }

@@ -31,6 +31,7 @@ const travelSummaryLoaded = ref(false)
 const hubPlaceFocusRequest = ref(null)
 const hubPhotoFocusRequest = ref(null)
 const hubRouteFocusRequest = ref(null)
+const hubRecordFocusRequest = ref(null)
 const appliedRecordFocusToken = ref('')
 
 const travelModes = [
@@ -206,6 +207,33 @@ function openMemories(clearPlaceFocus = true) {
   openTravelSetup({ mode: hasTravelPlans.value ? 'edit' : 'create', step: 2 })
 }
 
+function openPhotoEditor(photo) {
+  if (!photo?.recordId || !photo?.planId) {
+    return
+  }
+
+  hubRecordFocusRequest.value = null
+  if (String(photo.recordType || '').toUpperCase() === 'MEMORY') {
+    hubPlaceFocusRequest.value = {
+      type: 'memory',
+      id: String(photo.recordId),
+      planId: String(photo.planId),
+      token: Date.now(),
+    }
+    openMemories(false)
+    return
+  }
+
+  hubPlaceFocusRequest.value = null
+  hubRecordFocusRequest.value = {
+    type: 'record',
+    recordId: String(photo.recordId),
+    planId: String(photo.planId),
+    token: Date.now(),
+  }
+  openFinanceEditor()
+}
+
 function openRoutes(focusRequest = null) {
   if (focusRequest) {
     hubRouteFocusRequest.value = {
@@ -378,6 +406,7 @@ onMounted(loadTravelSummary)
         @open-routes="openRoutes"
         @open-photos="openPhotos"
         @open-travel-manager="openTravelManager"
+        @open-photo-editor="openPhotoEditor"
       />
     </div>
 
@@ -423,7 +452,7 @@ onMounted(loadTravelSummary)
         :initial-money-tab="hubInitialMoneyTab"
         :workflow-mode="workflowMode"
         :workflow-start-step="workflowStartStep"
-        :external-record-focus-request="recordFocusRequest"
+        :external-record-focus-request="hubRecordFocusRequest || recordFocusRequest"
         :external-memory-focus-request="hubPlaceFocusRequest"
         :external-photo-focus-request="hubPhotoFocusRequest"
         :external-route-focus-request="hubRouteFocusRequest"

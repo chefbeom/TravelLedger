@@ -31,9 +31,13 @@ const props = defineProps({
     type: [String, Number],
     default: null,
   },
+  showEditAction: {
+    type: Boolean,
+    default: false,
+  },
 })
 
-const emit = defineEmits(['close', 'select-photo', 'set-representative'])
+const emit = defineEmits(['close', 'select-photo', 'set-representative', 'edit-photo'])
 
 const DEFAULT_TITLE = '\uC0AC\uC9C4 \uBCF4\uAE30'
 const CLOSE_LABEL = '\uB2EB\uAE30'
@@ -45,6 +49,7 @@ const NEXT_PHOTO_LABEL = '\uB2E4\uC74C \uC0AC\uC9C4'
 const CURRENT_REPRESENTATIVE_LABEL = '\uD604\uC7AC \uB300\uD45C \uC0AC\uC9C4'
 const SET_REPRESENTATIVE_LABEL = '\uB300\uD45C \uC9C0\uC815'
 const UPDATING_REPRESENTATIVE_LABEL = '\uBCC0\uACBD \uC911...'
+const EDIT_LABEL = '\uC218\uC815'
 
 function getTimelineTimestamp(photo) {
   const date = String(photo?.expenseDate ?? '').trim()
@@ -198,6 +203,14 @@ function handleSetRepresentative() {
 
   emit('set-representative', activePhoto.value)
 }
+function handleEditPhoto() {
+  if (!activePhoto.value?.recordId || !props.showEditAction) {
+    return
+  }
+
+  emit('edit-photo', activePhoto.value)
+}
+
 
 function handleKeydown(event) {
   if (event.key === 'Escape') {
@@ -241,7 +254,17 @@ onBeforeUnmount(() => {
           <h2>{{ activePhoto.title || activePhoto.originalFileName || DEFAULT_TITLE }}</h2>
           <p>{{ formatDateTime(activePhoto.expenseDate, activePhoto.expenseTime) }}</p>
         </div>
-        <button class="button button--ghost" type="button" data-modal-close @click="emit('close')">{{ CLOSE_LABEL }}</button>
+        <div class="travel-modal__header-actions">
+          <button
+            v-if="showEditAction && activePhoto.recordId"
+            class="button button--secondary"
+            type="button"
+            @click="handleEditPhoto"
+          >
+            {{ EDIT_LABEL }}
+          </button>
+          <button class="button button--ghost" type="button" data-modal-close @click="emit('close')">{{ CLOSE_LABEL }}</button>
+        </div>
       </div>
 
       <div class="travel-lightbox__body">

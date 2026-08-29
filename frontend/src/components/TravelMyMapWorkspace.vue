@@ -23,7 +23,7 @@ const props = defineProps({
   },
 })
 
-const emit = defineEmits(['open-travel-manager', 'open-memories', 'open-routes', 'open-photos'])
+const emit = defineEmits(['open-travel-manager', 'open-memories', 'open-routes', 'open-photos', 'open-photo-editor'])
 
 const isLoading = ref(false)
 const isDetailLoading = ref(false)
@@ -142,6 +142,7 @@ function normalizeGlobalLightboxPhoto(photoPin) {
     clusterId: photoPin.clusterId,
     recordId: photoPin.recordId,
     planId: photoPin.planId,
+    recordType: 'MEMORY',
     planName: photoPin.planName,
     planColorHex: photoPin.planColorHex,
     originalFileName: photoPin.title || null,
@@ -368,6 +369,15 @@ function handleSelectLightboxPhoto(photo) {
     selectedPhotoId.value = photo.id
   }
 }
+function handleEditPhoto(photo) {
+  if (!photo?.recordId) {
+    return
+  }
+
+  lightboxPhoto.value = null
+  emit('open-photo-editor', photo)
+}
+
 
 async function handlePreviewClusterFromMap(item) {
   if (!item) {
@@ -1127,9 +1137,11 @@ watch(planFilterOptions, (options) => {
             :representative-media-id="selectedClusterDetail?.representativeMediaId ?? null"
             :is-representative-saving="isRepresentativeSaving"
             :representative-updating-id="representativeUpdatingId"
+            :show-edit-action="true"
             @close="lightboxPhoto = null"
             @select-photo="handleSelectLightboxPhoto"
             @set-representative="handleUpdateRepresentative"
+            @edit-photo="handleEditPhoto"
           />
         </template>
       </TravelMyMapClusterPanel>
@@ -1318,9 +1330,11 @@ watch(planFilterOptions, (options) => {
       :representative-media-id="selectedClusterDetail?.representativeMediaId ?? null"
       :is-representative-saving="isRepresentativeSaving"
       :representative-updating-id="representativeUpdatingId"
+      :show-edit-action="true"
       @close="lightboxPhoto = null"
       @select-photo="handleSelectLightboxPhoto"
       @set-representative="handleUpdateRepresentative"
+      @edit-photo="handleEditPhoto"
     />
   </div>
 </template>

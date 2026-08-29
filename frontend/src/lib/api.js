@@ -1808,3 +1808,37 @@ export function downloadPrivacyDataExport({ from, to } = {}) {
     body: JSON.stringify(payload),
   })
 }
+
+export function fetchRecurringLedgerRules() {
+  return request('/recurring-ledger/rules')
+}
+
+export function createRecurringLedgerRule(payload) {
+  return request('/recurring-ledger/rules', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+}
+
+export function updateRecurringLedgerRule(id, payload) {
+  return request('/recurring-ledger/rules/' + id, {
+    method: 'PUT',
+    body: JSON.stringify(payload),
+  })
+}
+
+export function fetchRecurringLedgerOccurrences() {
+  return request('/recurring-ledger/occurrences/pending')
+}
+
+export function approveRecurringLedgerOccurrence(id) {
+  return request('/recurring-ledger/occurrences/' + id + '/approve', {
+    method: 'POST',
+  })
+}
+
+export function skipRecurringLedgerOccurrence(id) {
+  return request('/recurring-ledger/occurrences/' + id + '/skip', {
+    method: 'POST',
+  })
+}

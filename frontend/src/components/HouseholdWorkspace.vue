@@ -84,6 +84,7 @@ import {
 } from '../lib/analytics'
 import PaletteContainer from '../features/palette/components/PaletteContainer.vue'
 import CalendarWorkspace from './CalendarWorkspace.vue'
+import RecurringLedgerWorkspace from './RecurringLedgerWorkspace.vue'
 
 const HouseholdTravelLedgerWorkspace = defineAsyncComponent(() => import('./HouseholdTravelLedgerWorkspace.vue'))
 const LedgerImportWorkspace = defineAsyncComponent(() => import('./LedgerImportWorkspace.vue'))
@@ -157,6 +158,7 @@ const householdAnalysisRouteKeys = ['stats-overview', 'stats-insights', 'stats-c
 const householdDirectTabKeys = [
   'dashboard',
   'calendar',
+  'recurring-ledger',
   'travel-ledger',
   'ledger-analysis',
   'stats-search',
@@ -5295,6 +5297,7 @@ async function activatePayment(paymentId) {
       <div class="scope-toggle scope-toggle--wrap">
         <button class="button" :class="{ 'button--primary': householdTab === 'dashboard' }" @click="setHouseholdTab('dashboard')">대시보드</button>
         <button class="button" :class="{ 'button--primary': householdTab === 'calendar' }" @click="setHouseholdTab('calendar')">달력 가계부</button>
+        <button class="button" :class="{ 'button--primary': householdTab === 'recurring-ledger' }" @click="setHouseholdTab('recurring-ledger')">정기결제</button>
         <button class="button" :class="{ 'button--primary': householdTab === 'travel-ledger' }" @click="setHouseholdTab('travel-ledger')">여행 가계부</button>
         <button class="button" :class="{ 'button--primary': householdTab === 'ledger-analysis' }" @click="setHouseholdTab('ledger-analysis')">가계부 분석</button>
         <button class="button" :class="{ 'button--primary': householdTab === 'stats-search' }" @click="setHouseholdTab('stats-search')">검색</button>
@@ -5346,6 +5349,14 @@ async function activatePayment(paymentId) {
       :anchor-date="calendarAnchorDate"
       :entries="sortedMonthEntries"
       :is-loading="isLoading"
+    />
+
+    <RecurringLedgerWorkspace
+      v-else-if="householdTab === 'recurring-ledger'"
+      :category-groups="categories"
+      :payment-methods="paymentMethods"
+      :format-currency="formatCurrency"
+      @entries-changed="refreshLedgerViews"
     />
 
     <CalendarWorkspace

@@ -99,6 +99,10 @@ app:
     media-object-prefix: ${TRAVEL_MEDIA_OBJECT_PREFIX:travel-media}
     presigned-upload-enabled: ${TRAVEL_PRESIGNED_UPLOAD_ENABLED:false}
   ledger:
+    recurring:
+      enabled: ${APP_LEDGER_RECURRING_ENABLED:true}
+      cron: ${APP_LEDGER_RECURRING_CRON:0 5 0 * * *}
+      zone: ${APP_LEDGER_RECURRING_ZONE:Asia/Seoul}
     ocr:
       enabled: ${LEDGER_OCR_ENABLED:false}
       base-url: ${LEDGER_OCR_BASE_URL:}

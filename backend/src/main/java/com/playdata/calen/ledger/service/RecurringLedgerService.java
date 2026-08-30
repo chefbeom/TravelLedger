@@ -78,6 +78,17 @@ public class RecurringLedgerService {
         rule.setActive(false);
     }
 
+    @Transactional
+    public void deleteRule(Long userId, Long ruleId) {
+        RecurringLedgerRule rule = ruleRepository.findByIdAndOwnerId(ruleId, userId)
+                .orElseThrow(() -> new NotFoundException("정기 입출금 규칙을 찾을 수 없습니다."));
+        if (rule.isActive()) {
+            throw new BadRequestException("사용 중인 정기 입출금은 먼저 일시정지해 주세요.");
+        }
+        occurrenceRepository.deleteAllByRuleId(ruleId);
+        ruleRepository.delete(rule);
+    }
+
     public List<RecurringLedgerOccurrenceResponse> listPendingOccurrences(Long userId) {
         appUserService.getRequiredUser(userId);
         return occurrenceRepository.findAllByRuleOwnerIdAndStatusOrderByScheduledDateAscIdAsc(

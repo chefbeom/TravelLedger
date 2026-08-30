@@ -25,6 +25,7 @@
 - `POST /api/recurring-ledger/rules`
 - `PUT /api/recurring-ledger/rules/{ruleId}`
 - `DELETE /api/recurring-ledger/rules/{ruleId}`: 규칙을 삭제하지 않고 일시정지한다.
+- `DELETE /api/recurring-ledger/rules/{ruleId}/permanent`: 일시정지된 규칙과 연결된 반복 처리 기록을 영구 삭제한다. 이미 가계부에 등록된 거래는 삭제하지 않으며, 사용 중인 규칙은 먼저 일시정지해야 한다.
 - `GET /api/recurring-ledger/occurrences/pending`
 - `POST /api/recurring-ledger/occurrences/{occurrenceId}/approve`
 - `POST /api/recurring-ledger/occurrences/{occurrenceId}/skip`

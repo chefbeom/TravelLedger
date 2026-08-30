@@ -3,6 +3,7 @@ import { computed, onMounted, reactive, ref, watch } from 'vue'
 import {
   approveRecurringLedgerOccurrence,
   createRecurringLedgerRule,
+  deleteRecurringLedgerRule,
   fetchRecurringLedgerOccurrences,
   fetchRecurringLedgerRules,
   skipRecurringLedgerOccurrence,
@@ -352,6 +353,33 @@ async function toggleRule(rule) {
   }
 }
 
+async function deleteRule(rule) {
+  if (rule.active) {
+    setMessage('', '먼저 일시정지한 정기 입출금만 삭제할 수 있습니다.')
+    return
+  }
+  if (!window.confirm('"' + rule.title + '" 정기 입출금을 삭제할까요? 반복 처리 기록도 함께 삭제됩니다. 이미 가계부에 등록된 거래는 삭제되지 않습니다.')) {
+    return
+  }
+
+  isSubmitting.value = true
+  action.value = 'delete-' + rule.id
+  setMessage()
+  try {
+    await deleteRecurringLedgerRule(rule.id)
+    if (editingRuleId.value === rule.id) {
+      resetForm()
+    }
+    await loadAll()
+    setMessage('정기 입출금과 반복 처리 기록을 삭제했습니다. 이미 등록된 가계부 거래는 유지됩니다.')
+  } catch (error) {
+    setMessage('', error.message || '정기 입출금을 삭제하지 못했습니다.')
+  } finally {
+    isSubmitting.value = false
+    action.value = ''
+  }
+}
+
 async function approveOccurrence(occurrence) {
   isSubmitting.value = true
   action.value = 'approve-' + occurrence.id
@@ -642,6 +670,15 @@ function formatRuleSchedule(rule) {
                 <button class="button" type="button" :disabled="isSubmitting" @click="toggleRule(rule)">
                   {{ isSubmitting && action === 'toggle-' + rule.id ? '변경 중...' : rule.active ? '일시정지' : '다시 사용' }}
                 </button>
+                <button
+                  v-if="!rule.active"
+                  class="button button--danger"
+                  type="button"
+                  :disabled="isSubmitting"
+                  @click="deleteRule(rule)"
+                >
+                  {{ isSubmitting && action === 'delete-' + rule.id ? '삭제 중...' : '삭제' }}
+                </button>
               </div>
             </article>
           </div>
@@ -680,23 +717,25 @@ function formatRuleSchedule(rule) {
 
 .recurring-ledger-mode {
   display: grid;
-  gap: 0.55rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem;
   margin: 0;
-  padding: 0.85rem;
+  padding: 0.55rem 0.65rem 0.65rem;
   border: 1px solid var(--line);
   background: var(--surface-soft);
 }
 
 .recurring-ledger-mode legend {
+  grid-column: 1 / -1;
   padding: 0 0.25rem;
 }
 
 .recurring-ledger-mode__option {
   display: flex;
-  gap: 0.65rem;
-  align-items: flex-start;
-  min-height: var(--touch-target-min);
-  padding: 0.55rem;
+  gap: 0.5rem;
+  align-items: center;
+  min-height: 0;
+  padding: 0.45rem 0.55rem;
   border: 1px solid transparent;
   cursor: pointer;
 }
@@ -707,11 +746,14 @@ function formatRuleSchedule(rule) {
 }
 
 .recurring-ledger-mode__option span {
-  display: grid;
-  gap: 0.1rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.1rem 0.45rem;
 }
 
 .recurring-ledger-mode__option small {
+  flex-basis: 100%;
   color: var(--text-soft);
 }
 
@@ -788,6 +830,14 @@ function formatRuleSchedule(rule) {
   .recurring-ledger-field-grid + .recurring-ledger-field-grid,
   .recurring-ledger-field-grid--schedule {
     grid-template-columns: 1fr;
+  }
+
+  .recurring-ledger-mode {
+    grid-template-columns: 1fr;
+  }
+
+  .recurring-ledger-mode legend {
+    grid-column: auto;
   }
 
   .recurring-ledger-item {

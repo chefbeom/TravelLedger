@@ -1827,6 +1827,12 @@ export function updateRecurringLedgerRule(id, payload) {
   })
 }
 
+export function deleteRecurringLedgerRule(id) {
+  return request('/recurring-ledger/rules/' + id + '/permanent', {
+    method: 'DELETE',
+  })
+}
+
 export function fetchRecurringLedgerOccurrences() {
   return request('/recurring-ledger/occurrences/pending')
 }

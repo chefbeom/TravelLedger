@@ -57,6 +57,14 @@ public class RecurringLedgerController {
         recurringLedgerService.deactivateRule(currentUser.userId(), ruleId);
     }
 
+    @DeleteMapping("/rules/{ruleId}/permanent")
+    public void deleteRule(
+            @AuthenticationPrincipal AppUserPrincipal currentUser,
+            @PathVariable Long ruleId
+    ) {
+        recurringLedgerService.deleteRule(currentUser.userId(), ruleId);
+    }
+
     @GetMapping("/occurrences/pending")
     public List<RecurringLedgerOccurrenceResponse> listPendingOccurrences(
             @AuthenticationPrincipal AppUserPrincipal currentUser

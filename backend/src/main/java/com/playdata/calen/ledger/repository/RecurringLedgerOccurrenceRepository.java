@@ -17,4 +17,6 @@ public interface RecurringLedgerOccurrenceRepository extends JpaRepository<Recur
     );
 
     Optional<RecurringLedgerOccurrence> findByIdAndRuleOwnerId(Long id, Long ownerId);
+
+    void deleteAllByRuleId(Long ruleId);
 }

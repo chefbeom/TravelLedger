@@ -859,6 +859,26 @@ button {
   gap: 12px;
 }
 
+.entry-editor__amount-controls {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  min-width: 0;
+}
+
+.entry-editor__amount-controls .entry-type-toggle,
+.entry-editor__amount-controls .entry-currency-toggle {
+  flex: 0 0 auto;
+}
+
+.entry-recurring-inline-button {
+  flex: 0 1 auto;
+  min-height: 44px;
+  margin-left: auto;
+  white-space: nowrap;
+}
+
 .entry-editor__fields {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -9683,10 +9703,7 @@ textarea {
   min-width: 0;
 }
 
-.household-calendar-layout-edit-launcher {
-  display: flex;
-  justify-content: flex-end;
-}
+
 
 .household-calendar-control-panel {
   margin: 0;
@@ -13342,24 +13359,38 @@ textarea {
 }
 
 .travel-lightbox {
-  max-width: min(1040px, 92vw);
+  max-width: min(1180px, 94vw);
 }
 
 .travel-lightbox__body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 0.42fr);
+  gap: 18px;
+  align-items: stretch;
+  min-height: 0;
+  overflow: visible;
+  background: transparent;
+}
+
+.travel-lightbox__media {
   position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
+  min-width: 0;
   min-height: 320px;
-  border-radius: 24px;
+  max-height: min(72vh, 760px);
   overflow: hidden;
+  padding: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  border-radius: 18px;
   background: rgba(2, 6, 23, 0.88);
 }
 
 .travel-lightbox__image {
   display: block;
   max-width: 100%;
-  max-height: 72vh;
+  max-height: min(68vh, 720px);
   object-fit: contain;
   image-orientation: from-image;
 }
@@ -13394,21 +13425,59 @@ textarea {
   right: 18px;
 }
 
-.travel-lightbox__meta {
+.travel-lightbox__info {
   display: grid;
-  gap: 0.35rem;
+  grid-template-rows: auto minmax(180px, auto) auto;
+  gap: 12px;
+  align-content: start;
+  min-width: 0;
+}
+
+.travel-lightbox__details {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+
+.travel-lightbox__details > div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--line, rgba(148, 163, 184, 0.24));
+  border-radius: 12px;
+  background: var(--surface-soft, rgba(15, 23, 42, 0.48));
+}
+
+.travel-lightbox__details dt {
+  color: var(--text-soft, #94a3b8);
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.travel-lightbox__details dd {
+  margin: 0;
+  color: var(--text, #f8fafc);
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.travel-lightbox__info .travel-mini-location-map {
+  width: 100%;
+  min-height: 180px;
+  height: 220px;
+  border-radius: 14px;
+}
+
+.travel-lightbox__info-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
 }
 
 .travel-lightbox__actions {
-  margin-top: 0.6rem;
-}
-
-.travel-lightbox__meta strong {
-  color: var(--color-text-primary);
-}
-
-.travel-lightbox__meta small {
-  color: var(--color-text-secondary);
+  margin-top: 0;
 }
 
 @media (max-width: 960px) {
@@ -13429,7 +13498,21 @@ textarea {
   }
 
   .travel-lightbox__body {
+    grid-template-columns: 1fr;
     min-height: 240px;
+  }
+
+  .travel-lightbox__media {
+    min-height: 240px;
+    max-height: none;
+  }
+
+  .travel-lightbox__info {
+    grid-template-rows: auto auto auto;
+  }
+
+  .travel-lightbox__info .travel-mini-location-map {
+    height: 180px;
   }
 
   .travel-lightbox__nav {
@@ -14134,7 +14217,7 @@ textarea {
 
 :root[data-theme='toss'] .travel-my-photos__detail-image-button img,
 :root[data-theme='toss'] .travel-my-photos__modal-photo-frame,
-:root[data-theme='toss'] .travel-lightbox__body {
+:root[data-theme='toss'] .travel-lightbox__media {
   background: #0c1118;
 }
 
@@ -32547,7 +32630,7 @@ button.button--primary,
 
 /* Media viewers intentionally retain a dark canvas while their surrounding dialog follows the theme. */
 .travel-my-photos__modal-photo-frame,
-.travel-lightbox__body,
+.travel-lightbox__media,
 .drive-preview-modal__body,
 .public-map-share-photo-modal__media,
 .main-photo-frame-detail-modal__figure {
@@ -35864,7 +35947,7 @@ html[data-theme='toss'] body .app-shell :is(
   .public-map-share-photo-modal__media,
   .public-map-share-photo-modal__image-state,
   .travel-my-photos__modal-photo-frame,
-  .travel-lightbox__body,
+  .travel-lightbox__media,
   .drive-preview-modal__body,
   .main-photo-frame-detail-modal__figure
 ) {
@@ -35878,7 +35961,7 @@ html[data-theme='toss'] body .app-shell.app-shell.app-shell :is(
   .public-map-share-photo-modal__media,
   .public-map-share-photo-modal__image-state,
   .travel-my-photos__modal-photo-frame,
-  .travel-lightbox__body,
+  .travel-lightbox__media,
   .drive-preview-modal__body,
   .main-photo-frame-detail-modal__figure
 ) {
@@ -36199,7 +36282,7 @@ html body .app-shell .main-shell--standalone > .topbar {
     -webkit-backface-visibility: hidden;
   }
 
-  .travel-modal--lightbox .travel-lightbox__body,
+  .travel-modal--lightbox .travel-lightbox__media,
   .public-map-share-photo-modal__media {
     contain: paint;
     transform: translateZ(0);

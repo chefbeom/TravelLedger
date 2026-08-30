@@ -145,6 +145,7 @@ const RECEIPT_OCR_PROMPT_RULE_PRESET_LIMIT = 5
 const RECEIPT_OCR_REQUEST_PROMPT_LAST_KEY = 'calen-household-receipt-ocr-request-prompt-last:v1'
 const RECEIPT_OCR_REQUEST_PROMPT_HISTORY_KEY = 'calen-household-receipt-ocr-request-prompt-history:v1'
 const RECEIPT_OCR_APPLIED_ENTRY_MARKERS_KEY = 'calen-household-receipt-ocr-applied-entry-markers:v1'
+const LAST_USED_ENTRY_DEFAULTS_KEY = 'calen-household-last-used-entry-defaults:v1'
 const RECEIPT_OCR_REQUEST_PROMPT_HISTORY_LIMIT = 5
 const csvExportOptions = [
   { value: 'ALL', label: '전체 데이터' },
@@ -326,6 +327,63 @@ function saveReceiptOcrAppliedEntryMarkers(items) {
     console.warn('Failed to save receipt OCR applied entry markers', error)
   }
 }
+
+function normalizeLastUsedEntryDefaults(value) {
+  const normalizeEntryType = (entryType) => {
+    const source = value?.[entryType] || {}
+    return {
+      paymentMethodId: String(source.paymentMethodId ?? ''),
+      categoryGroupId: String(source.categoryGroupId ?? ''),
+      categoryDetailId: String(source.categoryDetailId ?? ''),
+    }
+  }
+
+  return {
+    EXPENSE: normalizeEntryType('EXPENSE'),
+    INCOME: normalizeEntryType('INCOME'),
+  }
+}
+
+function resolveLastUsedEntryDefaultsStorageKey() {
+  const identity = props.currentUser?.id ?? props.currentUser?.loginId ?? props.currentUser?.username ?? 'anonymous'
+  return LAST_USED_ENTRY_DEFAULTS_KEY + ':' + encodeURIComponent(String(identity))
+}
+
+function loadLastUsedEntryDefaults() {
+  if (typeof window === 'undefined') {
+    return null
+  }
+
+  try {
+    const stored = JSON.parse(window.localStorage.getItem(resolveLastUsedEntryDefaultsStorageKey()) || 'null')
+    return stored && typeof stored === 'object' ? normalizeLastUsedEntryDefaults(stored) : null
+  } catch (error) {
+    console.warn('Failed to load last-used ledger entry defaults', error)
+    return null
+  }
+}
+
+function saveLastUsedEntryDefaultsFromEntry(entry = entryForm) {
+  const entryType = entry?.entryType === 'INCOME' ? 'INCOME' : 'EXPENSE'
+  const next = normalizeLastUsedEntryDefaults(lastUsedEntryDefaults.value || {})
+  next[entryType] = {
+    paymentMethodId: entryType === 'EXPENSE' ? String(entry?.paymentMethodId ?? '') : '',
+    categoryGroupId: String(entry?.categoryGroupId ?? ''),
+    categoryDetailId: String(entry?.categoryDetailId ?? ''),
+  }
+  lastUsedEntryDefaults.value = next
+
+  if (typeof window === 'undefined') {
+    return
+  }
+
+  try {
+    window.localStorage.setItem(resolveLastUsedEntryDefaultsStorageKey(), JSON.stringify(next))
+  } catch (error) {
+    console.warn('Failed to save last-used ledger entry defaults', error)
+  }
+}
+
 const isLoading = ref(false)
 const isSubmitting = ref(false)
 const activeSubmit = ref('')
@@ -543,6 +601,8 @@ const entryForm = reactive({
   travelRecordId: '',
 })
 
+const lastUsedEntryDefaults = ref(loadLastUsedEntryDefaults())
+
 const householdTravelPlanForm = reactive({
   name: '',
   destination: '',
@@ -749,6 +809,8 @@ function openRecurringLedgerFromEntry(prefill = {}) {
     setFeedback('', '정기결제로 등록하려면 현재 거래 입력에 제목과 금액을 먼저 입력해 주세요.')
     return
   }
+
+  saveLastUsedEntryDefaultsFromEntry(prefill)
 
   recurringLedgerPrefill.value = {
     entryDate: prefill.entryDate || calendarAnchorDate.value || today,
@@ -1112,12 +1174,41 @@ function resolveReceiptSuggestionCategory(suggestion = {}, entryType = 'EXPENSE'
     categoryDetailId,
     categoryDetailName: detail?.name || suggestion.categoryDetailName || '',
   }
-}function resolveDefaultPaymentMethodId(latestEntry) {
+}function resolveDefaultPaymentMethodId(latestEntry, lastUsedEntry = null) {
+  const lastUsedPaymentMethodId = lastUsedEntry?.paymentMethodId != null ? String(lastUsedEntry.paymentMethodId) : ''
+  if (lastUsedPaymentMethodId && paymentMethods.value.some((item) => String(item.id) === lastUsedPaymentMethodId)) {
+    return lastUsedPaymentMethodId
+  }
+
   const latestPaymentMethodId = latestEntry?.paymentMethodId != null ? String(latestEntry.paymentMethodId) : ''
   if (latestPaymentMethodId && paymentMethods.value.some((item) => String(item.id) === latestPaymentMethodId)) {
     return latestPaymentMethodId
   }
   return paymentMethods.value[0] ? String(paymentMethods.value[0].id) : ''
+}
+
+function resolveDefaultGroupIdFromLastUsed(entryType, latestEntry, lastUsedEntry) {
+  const groups = getGroupsForType(entryType)
+  const lastUsedGroupId = lastUsedEntry?.categoryGroupId != null ? String(lastUsedEntry.categoryGroupId) : ''
+  if (lastUsedGroupId && groups.some((item) => String(item.id) === lastUsedGroupId)) {
+    return lastUsedGroupId
+  }
+  return resolveDefaultGroupId(entryType, latestEntry)
+}
+
+function resolveDefaultDetailIdFromLastUsed(groupId, latestEntry, lastUsedEntry, entryType = entryForm.entryType) {
+  const details = getDetailsForGroupId(groupId, entryType)
+  const lastUsedGroupId = lastUsedEntry?.categoryGroupId != null ? String(lastUsedEntry.categoryGroupId) : ''
+  if (lastUsedGroupId && lastUsedGroupId === String(groupId)) {
+    const lastUsedDetailId = String(lastUsedEntry?.categoryDetailId ?? '')
+    if (!lastUsedDetailId) {
+      return ''
+    }
+    if (details.some((item) => String(item.id) === lastUsedDetailId)) {
+      return lastUsedDetailId
+    }
+  }
+  return resolveDefaultDetailId(groupId, latestEntry, entryType)
 }
 
 function isEntryFormEmptyForDefaults() {
@@ -1845,11 +1936,12 @@ function sanitizeAmountInput(value) {
 function syncEntryDefaults({ preferLatest = true, force = false } = {}) {
   const entryType = entryForm.entryType || 'EXPENSE'
   const latestEntry = preferLatest ? getLatestEntryForType(entryType) : null
+  const lastUsedEntry = lastUsedEntryDefaults.value?.[entryType] ?? null
   const groups = getGroupsForType(entryType)
   const currentGroupValid = groups.some((item) => String(item.id) === String(entryForm.categoryGroupId))
 
   if (force || !currentGroupValid) {
-    entryForm.categoryGroupId = resolveDefaultGroupId(entryType, latestEntry)
+    entryForm.categoryGroupId = resolveDefaultGroupIdFromLastUsed(entryType, latestEntry, lastUsedEntry)
   }
 
   const details = getDetailsForGroupId(entryForm.categoryGroupId, entryType)
@@ -1858,7 +1950,7 @@ function syncEntryDefaults({ preferLatest = true, force = false } = {}) {
     : details.length === 0
 
   if (force || !currentDetailValid) {
-    entryForm.categoryDetailId = resolveDefaultDetailId(entryForm.categoryGroupId, latestEntry)
+    entryForm.categoryDetailId = resolveDefaultDetailIdFromLastUsed(entryForm.categoryGroupId, latestEntry, lastUsedEntry, entryType)
   }
 
   if (entryType === 'INCOME') {
@@ -1866,7 +1958,7 @@ function syncEntryDefaults({ preferLatest = true, force = false } = {}) {
   } else {
     const currentPaymentMethodValid = paymentMethods.value.some((item) => String(item.id) === String(entryForm.paymentMethodId))
     if (force || !currentPaymentMethodValid) {
-      entryForm.paymentMethodId = resolveDefaultPaymentMethodId(latestEntry)
+      entryForm.paymentMethodId = resolveDefaultPaymentMethodId(latestEntry, lastUsedEntry)
     }
   }
 
@@ -4773,6 +4865,7 @@ async function submitEntry() {
       }
       setFeedback('가계부 내역을 등록했습니다.')
     }
+    saveLastUsedEntryDefaultsFromEntry(entryForm)
     await refreshLedgerViews()
     await refreshOpenLedgerChangeHistory()
     resetEntryForm({ entryDate: submittedSnapshot.entryDate })

@@ -1,6 +1,7 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { formatDateTime } from '../lib/uiFormat'
+import TravelMiniLocationMap from './TravelMiniLocationMap.vue'
 
 const props = defineProps({
   photo: {
@@ -43,7 +44,12 @@ const DEFAULT_TITLE = '\uC0AC\uC9C4 \uBCF4\uAE30'
 const CLOSE_LABEL = '\uB2EB\uAE30'
 const DEFAULT_PHOTO_LABEL = '\uC0AC\uC9C4'
 const LOCATION_EMPTY_LABEL = '\uC704\uCE58 \uC815\uBCF4 \uC5C6\uC74C'
-const UPLOADED_BY_PREFIX = '\uC5C5\uB85C\uB4DC '
+
+const PHOTO_INFO_EMPTY_LABEL = '\uC815\uBCF4 \uC5C6\uC74C'
+const TRAVEL_EMPTY_LABEL = '\uC5EC\uD589 \uBBF8\uC9C0\uC815'
+const SOURCE_EMPTY_LABEL = '\uC5EC\uD589 \uAE30\uB85D'
+const RECORDED_AT_EMPTY_LABEL = '\uAE30\uB85D \uC2DC\uAC04 \uC5C6\uC74C'
+const UPLOADED_AT_EMPTY_LABEL = '\uC5C5\uB85C\uB4DC \uC2DC\uAC04 \uC5C6\uC74C'
 const PREVIOUS_PHOTO_LABEL = '\uC774\uC804 \uC0AC\uC9C4'
 const NEXT_PHOTO_LABEL = '\uB2E4\uC74C \uC0AC\uC9C4'
 const CURRENT_REPRESENTATIVE_LABEL = '\uD604\uC7AC \uB300\uD45C \uC0AC\uC9C4'
@@ -152,6 +158,55 @@ const locationLabel = computed(() =>
   [activePhoto.value?.country, activePhoto.value?.region, activePhoto.value?.placeName].filter(Boolean).join(' / ') || LOCATION_EMPTY_LABEL,
 )
 
+function formatUploadedAt(value) {
+  const normalized = String(value ?? '').trim()
+  if (!normalized) {
+    return UPLOADED_AT_EMPTY_LABEL
+  }
+
+  const [datePart, rawTimePart = ''] = normalized.split('T')
+  const timePart = rawTimePart.replace(/Z$/, '').slice(0, 8)
+  return formatDateTime(datePart, timePart) || normalized.replace('T', ' ').replace(/Z$/, '')
+}
+
+function resolveCoordinate(primary, fallback) {
+  const primaryValue = Number(primary)
+  if (Number.isFinite(primaryValue)) {
+    return primaryValue
+  }
+
+  const fallbackValue = Number(fallback)
+  return Number.isFinite(fallbackValue) ? fallbackValue : null
+}
+
+const photoFileName = computed(() =>
+  String(activePhoto.value?.originalFileName || activePhoto.value?.title || DEFAULT_PHOTO_LABEL),
+)
+
+const travelName = computed(() =>
+  String(activePhoto.value?.planName || TRAVEL_EMPTY_LABEL),
+)
+
+const sourceLabel = computed(() =>
+  String(activePhoto.value?.planName || SOURCE_EMPTY_LABEL),
+)
+
+const recordedAtLabel = computed(() =>
+  formatDateTime(activePhoto.value?.expenseDate, activePhoto.value?.expenseTime) || RECORDED_AT_EMPTY_LABEL,
+)
+
+const uploadedAtLabel = computed(() => formatUploadedAt(activePhoto.value?.uploadedAt))
+
+const mapLatitude = computed(() =>
+  resolveCoordinate(activePhoto.value?.latitude, activePhoto.value?.gpsLatitude),
+)
+
+const mapLongitude = computed(() =>
+  resolveCoordinate(activePhoto.value?.longitude, activePhoto.value?.gpsLongitude),
+)
+
+const photoCaption = computed(() => String(activePhoto.value?.caption ?? '').trim())
+
 const currentIndex = computed(() => {
   if (!activePhoto.value?.id) {
     return -1
@@ -252,7 +307,7 @@ onBeforeUnmount(() => {
       <div class="travel-modal__header">
         <div>
           <h2>{{ activePhoto.title || activePhoto.originalFileName || DEFAULT_TITLE }}</h2>
-          <p>{{ formatDateTime(activePhoto.expenseDate, activePhoto.expenseTime) }}</p>
+          <p>{{ recordedAtLabel }}</p>
         </div>
         <div class="travel-modal__header-actions">
           <button
@@ -268,57 +323,99 @@ onBeforeUnmount(() => {
       </div>
 
       <div class="travel-lightbox__body">
-        <button
-          v-if="previousPhoto"
-          class="travel-lightbox__nav travel-lightbox__nav--prev"
-          type="button"
-          :aria-label="PREVIOUS_PHOTO_LABEL"
-          @click="selectPreviousPhoto"
-        >
-          <span aria-hidden="true">&lsaquo;</span>
-        </button>
-        <div v-if="isImagePreparing && !displayedImageUrl" class="travel-lightbox__image-state" role="status">
-          사진을 준비하고 있습니다.
-        </div>
-        <img
-          v-if="displayedImageUrl"
-          class="travel-lightbox__image"
-          :src="displayedImageUrl"
-          :alt="activePhoto.title || activePhoto.originalFileName || 'travel photo'"
-          decoding="async"
-          fetchpriority="high"
-        />
-        <button
-          v-if="nextPhoto"
-          class="travel-lightbox__nav travel-lightbox__nav--next"
-          type="button"
-          :aria-label="NEXT_PHOTO_LABEL"
-          @click="selectNextPhoto"
-        >
-          <span aria-hidden="true">&rsaquo;</span>
-        </button>
-      </div>
-
-      <div class="travel-lightbox__meta">
-        <strong>{{ activePhoto.caption || activePhoto.originalFileName || DEFAULT_PHOTO_LABEL }}</strong>
-        <small>{{ locationLabel }}</small>
-        <small v-if="activePhoto.uploadedBy">{{ UPLOADED_BY_PREFIX }}{{ activePhoto.uploadedBy }}</small>
-        <div v-if="showRepresentativeAction" class="travel-lightbox__actions">
+        <div class="travel-lightbox__media">
           <button
-            class="button button--primary"
+            v-if="previousPhoto"
+            class="travel-lightbox__nav travel-lightbox__nav--prev"
             type="button"
-            :disabled="isRepresentativeSaving || isCurrentRepresentative"
-            @click="handleSetRepresentative"
+            :aria-label="PREVIOUS_PHOTO_LABEL"
+            @click="selectPreviousPhoto"
           >
-            {{
-              representativeUpdatingId === activePhoto.id
-                ? UPDATING_REPRESENTATIVE_LABEL
-                : isCurrentRepresentative
-                  ? CURRENT_REPRESENTATIVE_LABEL
-                  : SET_REPRESENTATIVE_LABEL
-            }}
+            <span aria-hidden="true">&lsaquo;</span>
+          </button>
+          <div v-if="isImagePreparing && !displayedImageUrl" class="travel-lightbox__image-state" role="status">
+            사진을 준비하고 있습니다.
+          </div>
+          <img
+            v-if="displayedImageUrl"
+            class="travel-lightbox__image"
+            :src="displayedImageUrl"
+            :alt="activePhoto.title || activePhoto.originalFileName || 'travel photo'"
+            decoding="async"
+            fetchpriority="high"
+          />
+          <button
+            v-if="nextPhoto"
+            class="travel-lightbox__nav travel-lightbox__nav--next"
+            type="button"
+            :aria-label="NEXT_PHOTO_LABEL"
+            @click="selectNextPhoto"
+          >
+            <span aria-hidden="true">&rsaquo;</span>
           </button>
         </div>
+
+        <aside class="travel-lightbox__info" aria-label="사진 정보">
+          <dl class="travel-lightbox__details">
+            <div>
+              <dt>사진</dt>
+              <dd>{{ photoFileName || PHOTO_INFO_EMPTY_LABEL }}</dd>
+            </div>
+            <div>
+              <dt>출처</dt>
+              <dd>{{ sourceLabel }}</dd>
+            </div>
+            <div>
+              <dt>여행</dt>
+              <dd>{{ travelName }}</dd>
+            </div>
+            <div>
+              <dt>기록 시간</dt>
+              <dd>{{ recordedAtLabel }}</dd>
+            </div>
+            <div>
+              <dt>업로드 시간</dt>
+              <dd>{{ uploadedAtLabel }}</dd>
+            </div>
+            <div>
+              <dt>위치</dt>
+              <dd>{{ locationLabel }}</dd>
+            </div>
+            <div v-if="activePhoto.uploadedBy">
+              <dt>업로드 사용자</dt>
+              <dd>{{ activePhoto.uploadedBy }}</dd>
+            </div>
+            <div v-if="photoCaption && photoCaption !== photoFileName">
+              <dt>설명</dt>
+              <dd>{{ photoCaption }}</dd>
+            </div>
+          </dl>
+
+          <TravelMiniLocationMap
+            :latitude="mapLatitude"
+            :longitude="mapLongitude"
+            :title="photoFileName"
+          />
+
+          <div v-if="showRepresentativeAction" class="travel-lightbox__info-actions">
+            <div class="travel-lightbox__actions">
+              <button
+                class="button button--primary"
+                type="button"
+                :disabled="isRepresentativeSaving || isCurrentRepresentative"
+                @click="handleSetRepresentative"
+              >
+                {{
+                  representativeUpdatingId === activePhoto.id
+                    ? UPDATING_REPRESENTATIVE_LABEL
+                    : isCurrentRepresentative
+                      ? CURRENT_REPRESENTATIVE_LABEL
+                      : SET_REPRESENTATIVE_LABEL
+                }}
+              </button>
+            </div>
+          </div>
+        </aside>
       </div>
     </div>
   </div>

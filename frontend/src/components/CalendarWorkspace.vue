@@ -3897,18 +3897,7 @@ defineExpose({
 
 <template>
   <div class="workspace-stack household-calendar-workspace" @keydown.capture="handleWorkspaceKeydown">
-    <div v-if="!isLayoutEditMode" class="household-calendar-layout-edit-launcher">
-      <button
-        type="button"
-        class="button button--secondary"
-        aria-controls="household-calendar-layout-editor"
-        :aria-expanded="false"
-        :disabled="isMobileLayoutMode"
-        @click="toggleLayoutEditMode"
-      >
-        배치 편집 켜기
-      </button>
-    </div>
+
     <section
       v-if="isLayoutEditMode"
       id="household-calendar-layout-editor"
@@ -4147,37 +4136,48 @@ defineExpose({
 
         <div class="entry-editor">
           <div class="entry-editor__amount">
-            <div class="entry-type-toggle">
-              <button
-                type="button"
-                :class="['toggle-chip', { 'toggle-chip--active': entryForm.entryType === 'EXPENSE' }]"
-                @click="entryForm.entryType = 'EXPENSE'"
-              >
-                지출
-              </button>
-              <button
-                type="button"
-                :class="['toggle-chip', { 'toggle-chip--active': entryForm.entryType === 'INCOME' }]"
-                @click="entryForm.entryType = 'INCOME'"
-              >
-                수입
-              </button>
-            </div>
+            <div class="entry-editor__amount-controls">
+              <div class="entry-type-toggle">
+                <button
+                  type="button"
+                  :class="['toggle-chip', { 'toggle-chip--active': entryForm.entryType === 'EXPENSE' }]"
+                  @click="entryForm.entryType = 'EXPENSE'"
+                >
+                  지출
+                </button>
+                <button
+                  type="button"
+                  :class="['toggle-chip', { 'toggle-chip--active': entryForm.entryType === 'INCOME' }]"
+                  @click="entryForm.entryType = 'INCOME'"
+                >
+                  수입
+                </button>
+              </div>
 
-            <div class="entry-currency-toggle" role="group" aria-label="통화 입력 방식">
+              <div class="entry-currency-toggle" role="group" aria-label="통화 입력 방식">
+                <button
+                  type="button"
+                  :class="['toggle-chip', { 'toggle-chip--active': entryForm.currencyMode !== 'FOREIGN' }]"
+                  @click="entryForm.currencyMode = 'KRW'"
+                >
+                  원화
+                </button>
+                <button
+                  type="button"
+                  :class="['toggle-chip', { 'toggle-chip--active': entryForm.currencyMode === 'FOREIGN' }]"
+                  @click="entryForm.currencyMode = 'FOREIGN'"
+                >
+                  외화
+                </button>
+              </div>
+
               <button
                 type="button"
-                :class="['toggle-chip', { 'toggle-chip--active': entryForm.currencyMode !== 'FOREIGN' }]"
-                @click="entryForm.currencyMode = 'KRW'"
+                class="button button--secondary entry-recurring-inline-button"
+                :disabled="isSubmitting"
+                @click="requestRecurringLedgerRegistration"
               >
-                원화
-              </button>
-              <button
-                type="button"
-                :class="['toggle-chip', { 'toggle-chip--active': entryForm.currencyMode === 'FOREIGN' }]"
-                @click="entryForm.currencyMode = 'FOREIGN'"
-              >
-                외화
+                정기결제로 등록
               </button>
             </div>
 
@@ -4424,14 +4424,7 @@ defineExpose({
                   : '거래 등록'
             }}
           </button>
-          <button
-            type="button"
-            class="button button--secondary"
-            :disabled="isSubmitting"
-            @click="requestRecurringLedgerRegistration"
-          >
-            정기결제로 등록
-          </button>
+
           <button
             v-if="canUndoLastEntryAction"
             type="button"
@@ -4483,6 +4476,17 @@ defineExpose({
               @click="startAggregateEdit"
             >
               수정
+            </button>
+            <button
+              v-if="!isLayoutEditMode"
+              type="button"
+              class="button button--secondary"
+              aria-controls="household-calendar-layout-editor"
+              :aria-expanded="false"
+              :disabled="isMobileLayoutMode"
+              @click="toggleLayoutEditMode"
+            >
+              배치 편집 켜기
             </button>
           </div>
         </div>

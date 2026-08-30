@@ -348,6 +348,7 @@ const emit = defineEmits([
   'cancel-receipt-history',
   'delete-receipt-history',
   'submit-entry',
+  'register-recurring',
   'undo-entry-action',
   'edit-entry',
   'delete-entry',
@@ -356,6 +357,20 @@ const emit = defineEmits([
   'change-anchor-month',
   'save-aggregate-widget-configs',
 ])
+
+function requestRecurringLedgerRegistration() {
+  const entry = props.entryForm || {}
+  emit('register-recurring', {
+    entryDate: entry.entryDate,
+    title: entry.title,
+    memo: entry.memo,
+    amount: entry.amount,
+    entryType: entry.entryType,
+    categoryGroupId: entry.categoryGroupId,
+    categoryDetailId: entry.categoryDetailId,
+    paymentMethodId: entry.paymentMethodId,
+  })
+}
 
 const selectedDate = ref(props.anchorDate)
 const selectedDaySort = ref('ASC')
@@ -4408,6 +4423,14 @@ defineExpose({
                   ? '거래 수정'
                   : '거래 등록'
             }}
+          </button>
+          <button
+            type="button"
+            class="button button--secondary"
+            :disabled="isSubmitting"
+            @click="requestRecurringLedgerRegistration"
+          >
+            정기결제로 등록
           </button>
           <button
             v-if="canUndoLastEntryAction"

@@ -333,6 +333,7 @@ const feedback = ref('')
 const errorMessage = ref('')
 const undoableEntryAction = ref(null)
 const householdTab = ref('dashboard')
+const recurringLedgerPrefill = ref(null)
 const householdAnalysisRoute = ref('stats-overview')
 const householdAnchorDate = ref(today)
 const calendarAnchorDate = householdAnchorDate
@@ -726,6 +727,9 @@ function resolveHouseholdStatisticsRoute(tab = householdTab.value) {
 
 function setHouseholdTab(tab) {
   const nextTab = String(tab || '').trim()
+  if (nextTab !== 'recurring-ledger') {
+    recurringLedgerPrefill.value = null
+  }
   if (isHouseholdAnalysisRoute(nextTab)) {
     householdAnalysisRoute.value = nextTab
     householdTab.value = 'ledger-analysis'
@@ -736,6 +740,31 @@ function setHouseholdTab(tab) {
     return
   }
   householdTab.value = householdDirectTabKeys.includes(nextTab) ? nextTab : 'dashboard'
+}
+
+function openRecurringLedgerFromEntry(prefill = {}) {
+  const title = String(prefill.title || '').trim()
+  const amount = Number(prefill.amount)
+  if (!title || !Number.isFinite(amount) || amount <= 0) {
+    setFeedback('', '정기결제로 등록하려면 현재 거래 입력에 제목과 금액을 먼저 입력해 주세요.')
+    return
+  }
+
+  recurringLedgerPrefill.value = {
+    entryDate: prefill.entryDate || calendarAnchorDate.value || today,
+    title,
+    memo: String(prefill.memo || ''),
+    amount,
+    entryType: prefill.entryType === 'INCOME' ? 'INCOME' : 'EXPENSE',
+    categoryGroupId: prefill.categoryGroupId ?? '',
+    categoryDetailId: prefill.categoryDetailId ?? '',
+    paymentMethodId: prefill.paymentMethodId ?? '',
+  }
+  setHouseholdTab('recurring-ledger')
+}
+
+function consumeRecurringLedgerPrefill() {
+  recurringLedgerPrefill.value = null
 }
 
 function setHouseholdAnalysisRoute(tab) {
@@ -5356,7 +5385,9 @@ async function activatePayment(paymentId) {
       :category-groups="categories"
       :payment-methods="paymentMethods"
       :format-currency="formatCurrency"
+      :prefill="recurringLedgerPrefill"
       @entries-changed="refreshLedgerViews"
+      @prefill-applied="consumeRecurringLedgerPrefill"
     />
 
     <CalendarWorkspace
@@ -5435,6 +5466,7 @@ async function activatePayment(paymentId) {
       @cancel-receipt-history="cancelReceiptOcrHistory"
       @delete-receipt-history="deleteReceiptOcrHistory"
       @submit-entry="submitEntry"
+      @register-recurring="openRecurringLedgerFromEntry"
       @undo-entry-action="undoLastEntryAction"
       @edit-entry="fillEntryForm"
       @delete-entry="removeEntry"

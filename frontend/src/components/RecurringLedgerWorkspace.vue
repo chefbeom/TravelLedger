@@ -18,6 +18,10 @@ const props = defineProps({
     type: Array,
     default: () => [],
   },
+  prefill: {
+    type: Object,
+    default: null,
+  },
   formatCurrency: {
     type: Function,
     default: (value) => new Intl.NumberFormat('ko-KR', {
@@ -28,7 +32,7 @@ const props = defineProps({
   },
 })
 
-const emit = defineEmits(['entries-changed'])
+const emit = defineEmits(['entries-changed', 'prefill-applied'])
 
 function getToday() {
   const date = new Date()
@@ -136,6 +140,54 @@ async function loadAll() {
     isLoading.value = false
   }
 }
+
+function applyPrefill(prefill = {}) {
+  const startDate = String(prefill.entryDate || getToday()).slice(0, 10)
+  const parsedDay = Number(startDate.slice(8, 10))
+  const entryType = prefill.entryType === 'INCOME' ? 'INCOME' : 'EXPENSE'
+  const amount = Number(prefill.amount)
+
+  Object.assign(form, {
+    title: String(prefill.title || ''),
+    memo: String(prefill.memo || ''),
+    amount: Number.isFinite(amount) && amount > 0 ? String(amount) : '',
+    entryType,
+    scheduleType: 'MONTHLY_DATE',
+    monthInterval: 1,
+    dayOfMonth: Number.isInteger(parsedDay) && parsedDay >= 1 && parsedDay <= 31 ? parsedDay : 1,
+    intervalDays: 1,
+    startDate,
+    endDate: '',
+    mode: 'CONFIRM',
+    categoryGroupId: prefill.categoryGroupId != null ? String(prefill.categoryGroupId) : '',
+    categoryDetailId: prefill.categoryDetailId != null ? String(prefill.categoryDetailId) : '',
+    paymentMethodId: entryType === 'EXPENSE' && prefill.paymentMethodId != null
+      ? String(prefill.paymentMethodId)
+      : '',
+    active: true,
+  })
+  editingRuleId.value = null
+  syncSelections()
+  setMessage('현재 거래 입력값을 정기 결제 초안으로 불러왔습니다. 반복 주기와 세부값을 확인한 뒤 등록해 주세요.')
+  emit('prefill-applied')
+}
+
+onMounted(async () => {
+  await loadAll()
+  if (props.prefill) {
+    applyPrefill(props.prefill)
+  }
+})
+
+watch(
+  () => props.prefill,
+  (prefill) => {
+    if (prefill) {
+      applyPrefill(prefill)
+    }
+  },
+  { deep: true },
+)
 
 function buildFormPayload() {
   return {
@@ -270,6 +322,13 @@ function editRule(rule) {
   })
   editingRuleId.value = rule.id
   syncSelections()
+}
+
+function copyRule(rule) {
+  editRule(rule)
+  editingRuleId.value = null
+  form.active = true
+  setMessage('기존 정기 입출금 내용을 새 등록 초안으로 복사했습니다. 반복 주기와 세부값을 확인해 주세요.')
 }
 
 function cancelEdit() {
@@ -579,6 +638,7 @@ function formatRuleSchedule(rule) {
               </div>
               <div class="recurring-ledger-item__actions">
                 <button class="button button--secondary" type="button" :disabled="isSubmitting" @click="editRule(rule)">수정</button>
+                <button class="button button--secondary" type="button" :disabled="isSubmitting" @click="copyRule(rule)">복사해서 새 등록</button>
                 <button class="button" type="button" :disabled="isSubmitting" @click="toggleRule(rule)">
                   {{ isSubmitting && action === 'toggle-' + rule.id ? '변경 중...' : rule.active ? '일시정지' : '다시 사용' }}
                 </button>

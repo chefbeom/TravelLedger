@@ -51,6 +51,54 @@ const action = ref('')
 const errorMessage = ref('')
 const feedback = ref('')
 const editingRuleId = ref(null)
+const RECURRING_RULES_PAGE_SIZE = 5
+const ruleFilter = ref('ALL')
+const rulePage = ref(1)
+
+const filteredRules = computed(() => {
+  if (ruleFilter.value === 'INCOME' || ruleFilter.value === 'EXPENSE') {
+    return rules.value.filter((rule) => rule.entryType === ruleFilter.value)
+  }
+  return rules.value
+})
+
+const totalRulePages = computed(() => Math.max(1, Math.ceil(filteredRules.value.length / RECURRING_RULES_PAGE_SIZE)))
+const paginatedRules = computed(() => {
+  const start = (rulePage.value - 1) * RECURRING_RULES_PAGE_SIZE
+  return filteredRules.value.slice(start, start + RECURRING_RULES_PAGE_SIZE)
+})
+const ruleFilterOptions = computed(() => [
+  { value: 'ALL', label: '전체', count: rules.value.length },
+  { value: 'INCOME', label: '입금만 보기', count: rules.value.filter((rule) => rule.entryType === 'INCOME').length },
+  { value: 'EXPENSE', label: '출금만 보기', count: rules.value.filter((rule) => rule.entryType === 'EXPENSE').length },
+])
+const recurringTotals = computed(() => rules.value.reduce((totals, rule) => {
+  const amount = Number(rule.amount)
+  if (!Number.isFinite(amount)) {
+    return totals
+  }
+  if (rule.entryType === 'INCOME') {
+    totals.income += amount
+  } else {
+    totals.expense += amount
+  }
+  return totals
+}, { income: 0, expense: 0 }))
+
+const rulePageSummary = computed(() => {
+  if (!filteredRules.value.length) {
+    return '0건'
+  }
+  const start = (rulePage.value - 1) * RECURRING_RULES_PAGE_SIZE + 1
+  const end = Math.min(rulePage.value * RECURRING_RULES_PAGE_SIZE, filteredRules.value.length)
+  return `${start}-${end}건 / ${filteredRules.value.length}건`
+})
+
+watch(totalRulePages, (pageCount) => {
+  if (rulePage.value > pageCount) {
+    rulePage.value = pageCount
+  }
+})
 
 const form = reactive({
   title: '',
@@ -119,6 +167,18 @@ function resetForm() {
 function setMessage(message = '', error = '') {
   feedback.value = message
   errorMessage.value = error
+}
+
+function selectRuleFilter(filter) {
+  if (!['ALL', 'INCOME', 'EXPENSE'].includes(filter)) {
+    return
+  }
+  ruleFilter.value = filter
+  rulePage.value = 1
+}
+
+function moveRulePage(page) {
+  rulePage.value = Math.min(Math.max(Number(page) || 1, 1), totalRulePages.value)
 }
 
 async function loadRules() {
@@ -421,6 +481,10 @@ function entryTypeLabel(entryType) {
   return entryType === 'INCOME' ? '수입' : '지출'
 }
 
+function entryTypeClass(entryType) {
+  return entryType === 'INCOME' ? 'recurring-ledger-item--income' : 'recurring-ledger-item--expense'
+}
+
 function modeLabel(mode) {
   return mode === 'AUTO' ? '자동 등록' : '확인 후 등록'
 }
@@ -616,7 +680,7 @@ function formatRuleSchedule(rule) {
             <span class="panel__badge">{{ pendingOccurrences.length }}건</span>
           </div>
           <div class="recurring-ledger-list">
-            <article v-for="occurrence in pendingOccurrences" :key="occurrence.id" class="recurring-ledger-item recurring-ledger-item--pending">
+            <article v-for="occurrence in pendingOccurrences" :key="occurrence.id" :class="['recurring-ledger-item', 'recurring-ledger-item--pending', entryTypeClass(occurrence.entryType)]">
               <div>
                 <div class="recurring-ledger-item__title">
                   <strong>{{ occurrence.ruleTitle }}</strong>
@@ -641,16 +705,55 @@ function formatRuleSchedule(rule) {
             <span class="panel__badge">{{ rules.length }}건</span>
           </div>
 
+          <div class="recurring-ledger-totals" data-testid="recurring-rule-totals" aria-label="정기 입출금 등록 금액 합계">
+            <article class="recurring-ledger-total-card recurring-ledger-total-card--income">
+              <span>정기 입금 총액</span>
+              <strong>{{ formatAmount(recurringTotals.income) }}</strong>
+              <small>등록된 입금 규칙 금액 합계</small>
+            </article>
+            <article class="recurring-ledger-total-card recurring-ledger-total-card--expense">
+              <span>정기 출금 총액</span>
+              <strong>{{ formatAmount(recurringTotals.expense) }}</strong>
+              <small>등록된 출금 규칙 금액 합계</small>
+            </article>
+          </div>
+          <p class="recurring-ledger-totals__hint">일시정지된 규칙을 포함한 등록 금액 합계이며, 반복 주기에 따른 월 환산값은 아닙니다.</p>
+
+          <div class="recurring-ledger-filter-bar" data-testid="recurring-rule-filters">
+            <span class="recurring-ledger-filter-bar__label">입출금 구분</span>
+            <div class="recurring-ledger-filter-bar__options" role="group" aria-label="정기 입출금 필터">
+              <button
+                v-for="option in ruleFilterOptions"
+                :key="option.value"
+                type="button"
+                class="button button--secondary recurring-ledger-filter"
+                :class="[
+                  { 'recurring-ledger-filter--active': ruleFilter === option.value },
+                  option.value === 'INCOME' ? 'recurring-ledger-filter--income' : '',
+                  option.value === 'EXPENSE' ? 'recurring-ledger-filter--expense' : '',
+                ]"
+                :aria-pressed="ruleFilter === option.value"
+                :disabled="isLoading"
+                @click="selectRuleFilter(option.value)"
+              >
+                {{ option.label }} <span>{{ option.count }}</span>
+              </button>
+            </div>
+            <span class="recurring-ledger-filter-bar__summary">{{ rulePageSummary }}</span>
+          </div>
+
           <div v-if="isLoading" class="panel__empty">불러오는 중...</div>
           <div v-else-if="!rules.length" class="panel__empty">
             아직 등록된 정기 입출금이 없습니다. 왼쪽에서 첫 규칙을 등록해 보세요.
           </div>
+          <div v-else-if="!filteredRules.length" class="panel__empty">
+            선택한 구분의 정기 입출금이 없습니다.
+          </div>
           <div v-else class="recurring-ledger-list">
             <article
-              v-for="rule in rules"
+              v-for="rule in paginatedRules"
               :key="rule.id"
-              class="recurring-ledger-item"
-              :class="{ 'recurring-ledger-item--inactive': !rule.active }"
+              :class="['recurring-ledger-item', entryTypeClass(rule.entryType), { 'recurring-ledger-item--inactive': !rule.active }]"
             >
               <div>
                 <div class="recurring-ledger-item__title">
@@ -681,6 +784,25 @@ function formatRuleSchedule(rule) {
                 </button>
               </div>
             </article>
+          </div>
+          <div v-if="filteredRules.length && totalRulePages > 1" class="recurring-ledger-pagination" data-testid="recurring-rule-pagination">
+            <button
+              class="button button--secondary"
+              type="button"
+              :disabled="rulePage <= 1"
+              @click="moveRulePage(rulePage - 1)"
+            >
+              이전
+            </button>
+            <span aria-live="polite">{{ rulePage }} / {{ totalRulePages }} 페이지</span>
+            <button
+              class="button button--secondary"
+              type="button"
+              :disabled="rulePage >= totalRulePages"
+              @click="moveRulePage(rulePage + 1)"
+            >
+              다음
+            </button>
           </div>
         </section>
       </div>
@@ -778,6 +900,121 @@ function formatRuleSchedule(rule) {
   gap: 0.65rem;
 }
 
+.recurring-ledger-filter-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+  margin-bottom: 0.85rem;
+  padding: 0.65rem;
+  border: 1px solid var(--line);
+  background: var(--surface-soft);
+}
+
+.recurring-ledger-filter-bar__label {
+  color: var(--text-soft);
+  font-size: 0.82rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.recurring-ledger-filter-bar__options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.recurring-ledger-filter {
+  min-height: 36px;
+  padding: 0.35rem 0.65rem;
+}
+
+.recurring-ledger-filter span {
+  color: var(--text-muted);
+  font-size: 0.76rem;
+}
+
+.recurring-ledger-filter--active {
+  border-color: var(--brand);
+  background: var(--brand-soft);
+  color: var(--brand-strong);
+}
+
+.recurring-ledger-filter--active span {
+  color: inherit;
+}
+
+.recurring-ledger-filter--income.recurring-ledger-filter--active {
+  border-color: var(--income);
+  background: color-mix(in srgb, var(--income) 12%, var(--surface-soft));
+  color: var(--income);
+}
+
+.recurring-ledger-filter--expense.recurring-ledger-filter--active {
+  border-color: var(--expense);
+  background: color-mix(in srgb, var(--expense) 12%, var(--surface-soft));
+  color: var(--expense);
+}
+
+.recurring-ledger-filter-bar__summary {
+  margin-left: auto;
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.recurring-ledger-totals {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.65rem;
+  margin-bottom: 0.45rem;
+}
+
+.recurring-ledger-total-card {
+  display: grid;
+  gap: 0.25rem;
+  min-width: 0;
+  padding: 0.75rem 0.85rem;
+  border: 1px solid var(--line);
+  border-inline-start-width: 4px;
+  background: var(--surface-soft);
+}
+
+.recurring-ledger-total-card--income {
+  border-inline-start-color: var(--income);
+}
+
+.recurring-ledger-total-card--expense {
+  border-inline-start-color: var(--expense);
+}
+
+.recurring-ledger-total-card span,
+.recurring-ledger-total-card small {
+  color: var(--text-soft);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.recurring-ledger-total-card strong {
+  font-size: 1.2rem;
+  line-height: 1.2;
+}
+
+.recurring-ledger-total-card--income strong {
+  color: var(--income);
+}
+
+.recurring-ledger-total-card--expense strong {
+  color: var(--expense);
+}
+
+.recurring-ledger-totals__hint {
+  margin: 0 0 0.75rem;
+  color: var(--text-muted);
+  font-size: 0.76rem;
+}
+
 .recurring-ledger-item {
   display: flex;
   justify-content: space-between;
@@ -791,6 +1028,16 @@ function formatRuleSchedule(rule) {
 .recurring-ledger-item--pending {
   border-color: color-mix(in srgb, var(--brand) 55%, var(--line));
   background: color-mix(in srgb, var(--brand-soft) 50%, var(--surface-soft));
+}
+
+.recurring-ledger-item--income {
+  border-inline-start: 4px solid var(--income);
+  background: color-mix(in srgb, var(--income) 8%, var(--surface-soft));
+}
+
+.recurring-ledger-item--expense {
+  border-inline-start: 4px solid var(--expense);
+  background: color-mix(in srgb, var(--expense) 8%, var(--surface-soft));
 }
 
 .recurring-ledger-item--inactive {
@@ -813,6 +1060,22 @@ function formatRuleSchedule(rule) {
 
 .recurring-ledger-item small {
   color: var(--text-muted);
+}
+
+.recurring-ledger-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  margin-top: 0.9rem;
+}
+
+.recurring-ledger-pagination span {
+  min-width: 7rem;
+  color: var(--text-soft);
+  font-size: 0.82rem;
+  font-weight: 800;
+  text-align: center;
 }
 
 @media (max-width: 900px) {
@@ -843,6 +1106,15 @@ function formatRuleSchedule(rule) {
   .recurring-ledger-item {
     align-items: stretch;
     flex-direction: column;
+  }
+}
+@media (max-width: 620px) {
+  .recurring-ledger-totals {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .recurring-ledger-filter-bar__summary {
+    margin-left: 0;
   }
 }
 </style>

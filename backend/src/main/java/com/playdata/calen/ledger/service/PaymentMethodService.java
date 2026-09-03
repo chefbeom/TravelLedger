@@ -9,13 +9,19 @@ import com.playdata.calen.ledger.domain.PaymentMethod;
 import com.playdata.calen.ledger.dto.PaymentMethodRequest;
 import com.playdata.calen.ledger.dto.PaymentMethodResponse;
 import com.playdata.calen.ledger.domain.PaymentMethodKind;
+import com.playdata.calen.ledger.dto.DisplayOrderRequest;
 import com.playdata.calen.ledger.dto.LedgerClassificationDeleteRequest;
 import com.playdata.calen.ledger.dto.LedgerClassificationUsageEntryResponse;
 import com.playdata.calen.ledger.dto.LedgerClassificationUsageResponse;
 import com.playdata.calen.ledger.repository.LedgerEntryRepository;
 import com.playdata.calen.ledger.repository.PaymentMethodRepository;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -50,6 +56,21 @@ public class PaymentMethodService {
                         .thenComparing(PaymentMethod::getId))
                 .map(this::toResponse)
                 .toList();
+    }
+
+    @Transactional
+    public List<PaymentMethodResponse> reorder(Long userId, DisplayOrderRequest request) {
+        appUserService.getRequiredUser(userId);
+        List<PaymentMethod> paymentMethods = paymentMethodRepository.findAllByOwnerIdOrderByDisplayOrderAscIdAsc(userId);
+        List<Long> orderedIds = request == null ? null : request.orderedIds();
+        validateExactOrder(orderedIds, paymentMethods.stream().map(PaymentMethod::getId).toList());
+
+        Map<Long, PaymentMethod> paymentMethodsById = paymentMethods.stream()
+                .collect(Collectors.toMap(PaymentMethod::getId, Function.identity()));
+        for (int index = 0; index < orderedIds.size(); index++) {
+            paymentMethodsById.get(orderedIds.get(index)).setDisplayOrder(index);
+        }
+        return getPaymentMethods(userId, true);
     }
 
     @Transactional
@@ -184,5 +205,18 @@ public class PaymentMethodService {
 
     private String normalizeName(String name) {
         return name == null ? "" : name.trim();
+    }
+
+    private void validateExactOrder(List<Long> orderedIds, List<Long> expectedIds) {
+        if (orderedIds == null || orderedIds.isEmpty()) {
+            throw new BadRequestException("순서 목록은 비어 있을 수 없습니다.");
+        }
+        Set<Long> requestedIds = new HashSet<>(orderedIds);
+        Set<Long> existingIds = new HashSet<>(expectedIds);
+        if (orderedIds.size() != expectedIds.size()
+                || requestedIds.size() != orderedIds.size()
+                || !requestedIds.equals(existingIds)) {
+            throw new BadRequestException("내 계정의 모든 결제수단을 포함한 순서 목록이 필요합니다.");
+        }
     }
 }

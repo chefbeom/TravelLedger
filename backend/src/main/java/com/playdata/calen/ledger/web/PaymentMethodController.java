@@ -3,6 +3,7 @@ package com.playdata.calen.ledger.web;
 import com.playdata.calen.account.security.AppUserPrincipal;
 import com.playdata.calen.ledger.dto.LedgerClassificationDeleteRequest;
 import com.playdata.calen.ledger.dto.LedgerClassificationUsageResponse;
+import com.playdata.calen.ledger.dto.DisplayOrderRequest;
 import com.playdata.calen.ledger.dto.PaymentMethodRequest;
 import com.playdata.calen.ledger.dto.PaymentMethodResponse;
 import com.playdata.calen.ledger.service.PaymentMethodService;
@@ -15,6 +16,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -33,6 +35,14 @@ public class PaymentMethodController {
             @RequestParam(defaultValue = "false") boolean includeInactive
     ) {
         return paymentMethodService.getPaymentMethods(currentUser.userId(), includeInactive);
+    }
+
+    @PutMapping("/order")
+    public List<PaymentMethodResponse> reorder(
+            @AuthenticationPrincipal AppUserPrincipal currentUser,
+            @Valid @RequestBody DisplayOrderRequest request
+    ) {
+        return paymentMethodService.reorder(currentUser.userId(), request);
     }
 
     @PostMapping

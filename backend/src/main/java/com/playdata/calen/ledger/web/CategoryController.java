@@ -6,6 +6,7 @@ import com.playdata.calen.ledger.dto.CategoryDetailRequest;
 import com.playdata.calen.ledger.dto.CategoryDetailResponse;
 import com.playdata.calen.ledger.dto.CategoryGroupRequest;
 import com.playdata.calen.ledger.dto.CategoryGroupResponse;
+import com.playdata.calen.ledger.dto.DisplayOrderRequest;
 import com.playdata.calen.ledger.dto.LedgerClassificationDeleteRequest;
 import com.playdata.calen.ledger.dto.LedgerClassificationUsageResponse;
 import com.playdata.calen.ledger.service.CategoryService;
@@ -18,6 +19,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -37,6 +39,23 @@ public class CategoryController {
             @RequestParam(defaultValue = "false") boolean includeInactive
     ) {
         return categoryService.getCategories(currentUser.userId(), entryType, includeInactive);
+    }
+
+    @PutMapping("/groups/order")
+    public List<CategoryGroupResponse> reorderGroups(
+            @AuthenticationPrincipal AppUserPrincipal currentUser,
+            @Valid @RequestBody DisplayOrderRequest request
+    ) {
+        return categoryService.reorderGroups(currentUser.userId(), request);
+    }
+
+    @PutMapping("/groups/{groupId}/details/order")
+    public List<CategoryDetailResponse> reorderDetails(
+            @AuthenticationPrincipal AppUserPrincipal currentUser,
+            @PathVariable Long groupId,
+            @Valid @RequestBody DisplayOrderRequest request
+    ) {
+        return categoryService.reorderDetails(currentUser.userId(), groupId, request);
     }
 
     @PostMapping("/groups")

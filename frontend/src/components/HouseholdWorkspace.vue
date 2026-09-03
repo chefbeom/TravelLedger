@@ -55,6 +55,9 @@ import {
   rerunLedgerImageAnalysisHistory,
   linkLedgerEntryToTravelRecord,
   fetchPaymentMethods,
+  reorderCategoryDetails,
+  reorderCategoryGroups,
+  reorderPaymentMethods,
   restoreEntry,
   restoreLedgerEntryHistory,
   saveHouseholdAggregatePreferences,
@@ -5291,6 +5294,48 @@ async function createPayment() {
   }
 }
 
+async function saveClassificationOrder(type, payload) {
+  if (!payload?.orderedIds?.length || isSubmitting.value) {
+    return
+  }
+
+  isSubmitting.value = true
+  activeSubmit.value = `order-${type}`
+  setFeedback()
+  try {
+    if (type === 'groups') {
+      await reorderCategoryGroups(payload.orderedIds)
+    } else if (type === 'details') {
+      await reorderCategoryDetails(payload.groupId, payload.orderedIds)
+    } else {
+      await reorderPaymentMethods(payload.orderedIds)
+    }
+    await Promise.all([
+      loadMetadata(),
+      refreshLedgerViews(),
+      type === 'payments' ? loadAggregatePreferences() : Promise.resolve(),
+    ])
+    setFeedback('표시 순서를 저장했습니다.')
+  } catch (error) {
+    setFeedback('', error.message)
+  } finally {
+    isSubmitting.value = false
+    activeSubmit.value = ''
+  }
+}
+
+function reorderGroups(payload) {
+  return saveClassificationOrder('groups', payload)
+}
+
+function reorderDetails(payload) {
+  return saveClassificationOrder('details', payload)
+}
+
+function reorderPayments(payload) {
+  return saveClassificationOrder('payments', payload)
+}
+
 async function deactivateGroup(groupId) {
   isSubmitting.value = true
   activeSubmit.value = 'group'
@@ -5698,6 +5743,9 @@ async function activatePayment(paymentId) {
       @activate-group="activateGroup"
       @activate-detail="activateDetail"
       @activate-payment="activatePayment"
+      @reorder-groups="reorderGroups"
+      @reorder-details="reorderDetails"
+      @reorder-payments="reorderPayments"
       @delete-group="openGroupDelete"
       @delete-detail="openDetailDelete"
       @delete-payment="openPaymentDelete"

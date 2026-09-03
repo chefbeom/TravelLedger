@@ -50,6 +50,9 @@ const emit = defineEmits([
   'activate-group',
   'activate-detail',
   'activate-payment',
+  'reorder-groups',
+  'reorder-details',
+  'reorder-payments',
   'delete-group',
   'delete-detail',
   'delete-payment',
@@ -101,6 +104,52 @@ function emitDetailToggle(detail) {
 function emitPaymentToggle(payment) {
   emit(isActive(payment) ? 'deactivate-payment' : 'activate-payment', payment.id)
 }
+
+function moveItem(items, itemId, direction) {
+  const nextItems = Array.isArray(items) ? [...items] : []
+  const currentIndex = nextItems.findIndex((item) => String(item.id) === String(itemId))
+  const targetIndex = currentIndex + direction
+  if (currentIndex < 0 || targetIndex < 0 || targetIndex >= nextItems.length) {
+    return null
+  }
+
+  const [item] = nextItems.splice(currentIndex, 1)
+  nextItems.splice(targetIndex, 0, item)
+  return nextItems
+}
+
+function isFirstItem(items, itemId) {
+  return !Array.isArray(items) || items.findIndex((item) => String(item.id) === String(itemId)) <= 0
+}
+
+function isLastItem(items, itemId) {
+  if (!Array.isArray(items)) {
+    return true
+  }
+  const currentIndex = items.findIndex((item) => String(item.id) === String(itemId))
+  return currentIndex < 0 || currentIndex === items.length - 1
+}
+
+function moveGroup(group, direction) {
+  const nextItems = moveItem(catalogCategories.value, group.id, direction)
+  if (nextItems) {
+    emit('reorder-groups', { orderedIds: nextItems.map((item) => item.id) })
+  }
+}
+
+function moveDetail(group, detail, direction) {
+  const nextItems = moveItem(group.details, detail.id, direction)
+  if (nextItems) {
+    emit('reorder-details', { groupId: group.id, orderedIds: nextItems.map((item) => item.id) })
+  }
+}
+
+function movePayment(payment, direction) {
+  const nextItems = moveItem(catalogPaymentMethods.value, payment.id, direction)
+  if (nextItems) {
+    emit('reorder-payments', { orderedIds: nextItems.map((item) => item.id) })
+  }
+}
 </script>
 
 <template>
@@ -108,7 +157,10 @@ function emitPaymentToggle(payment) {
     <div class="panel__header">
       <div>
         <h2>분류 관리</h2>
-        <p>수입/지출 카테고리와 결제수단을 계정별로 정리합니다.</p>
+        <p>
+          수입/지출 카테고리와 결제수단을 계정별로 정리합니다.
+          <template v-if="isEditMode"> 위·아래 버튼으로 표시 순서를 바꾸면 즉시 저장됩니다.</template>
+        </p>
       </div>
       <button class="button button--ghost management-edit-toggle" type="button" @click="toggleEditMode">
         {{ editModeLabel }}
@@ -179,6 +231,27 @@ function emitPaymentToggle(payment) {
             <span v-if="!isActive(group)" class="catalog__status">숨김</span>
           </strong>
           <div v-if="isEditMode" class="catalog__actions">
+            <div class="catalog__order-actions" aria-label="대분류 표시 순서 조정">
+              <span class="catalog__order-label">순서</span>
+              <button
+                class="button button--ghost catalog__order-button"
+                type="button"
+                :disabled="isSubmitting || isFirstItem(catalogCategories, group.id)"
+                :aria-label="`${group.name} 위로 이동`"
+                @click="moveGroup(group, -1)"
+              >
+                ↑
+              </button>
+              <button
+                class="button button--ghost catalog__order-button"
+                type="button"
+                :disabled="isSubmitting || isLastItem(catalogCategories, group.id)"
+                :aria-label="`${group.name} 아래로 이동`"
+                @click="moveGroup(group, 1)"
+              >
+                ↓
+              </button>
+            </div>
             <button
               class="button button--ghost"
               type="button"
@@ -207,6 +280,24 @@ function emitPaymentToggle(payment) {
                 :class="{ 'catalog-chip--inactive': !isActive(detail) }"
               >
                 <span>{{ detail.name }}</span>
+                <button
+                  class="catalog-chip__action catalog-chip__order"
+                  type="button"
+                  :disabled="isSubmitting || isFirstItem(group.details, detail.id)"
+                  :aria-label="`${detail.name} 위로 이동`"
+                  @click="moveDetail(group, detail, -1)"
+                >
+                  ↑
+                </button>
+                <button
+                  class="catalog-chip__action catalog-chip__order"
+                  type="button"
+                  :disabled="isSubmitting || isLastItem(group.details, detail.id)"
+                  :aria-label="`${detail.name} 아래로 이동`"
+                  @click="moveDetail(group, detail, 1)"
+                >
+                  ↓
+                </button>
                 <button
                   class="catalog-chip__action"
                   type="button"
@@ -256,6 +347,24 @@ function emitPaymentToggle(payment) {
                 :class="{ 'catalog-chip--inactive': !isActive(payment) }"
               >
                 <span>{{ payment.name }} / {{ paymentKindLabel(payment.kind) }}</span>
+                <button
+                  class="catalog-chip__action catalog-chip__order"
+                  type="button"
+                  :disabled="isSubmitting || isFirstItem(catalogPaymentMethods, payment.id)"
+                  :aria-label="`${payment.name} 위로 이동`"
+                  @click="movePayment(payment, -1)"
+                >
+                  ↑
+                </button>
+                <button
+                  class="catalog-chip__action catalog-chip__order"
+                  type="button"
+                  :disabled="isSubmitting || isLastItem(catalogPaymentMethods, payment.id)"
+                  :aria-label="`${payment.name} 아래로 이동`"
+                  @click="movePayment(payment, 1)"
+                >
+                  ↓
+                </button>
                 <button
                   class="catalog-chip__action"
                   type="button"

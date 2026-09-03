@@ -741,6 +741,20 @@ export function createCategoryDetail(payload) {
   })
 }
 
+export function reorderCategoryGroups(orderedIds) {
+  return request('/categories/groups/order', {
+    method: 'PUT',
+    body: JSON.stringify({ orderedIds }),
+  })
+}
+
+export function reorderCategoryDetails(groupId, orderedIds) {
+  return request(`/categories/groups/${groupId}/details/order`, {
+    method: 'PUT',
+    body: JSON.stringify({ orderedIds }),
+  })
+}
+
 export function deactivateCategoryGroup(id) {
   return request(`/categories/groups/${id}`, { method: 'DELETE' })
 }
@@ -811,6 +825,13 @@ export function createPaymentMethod(payload) {
   return request('/payment-methods', {
     method: 'POST',
     body: JSON.stringify(payload),
+  })
+}
+
+export function reorderPaymentMethods(orderedIds) {
+  return request('/payment-methods/order', {
+    method: 'PUT',
+    body: JSON.stringify({ orderedIds }),
   })
 }
 

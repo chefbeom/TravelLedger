@@ -12,6 +12,7 @@ import com.playdata.calen.ledger.dto.CategoryDetailRequest;
 import com.playdata.calen.ledger.dto.CategoryDetailResponse;
 import com.playdata.calen.ledger.dto.CategoryGroupRequest;
 import com.playdata.calen.ledger.dto.CategoryGroupResponse;
+import com.playdata.calen.ledger.dto.DisplayOrderRequest;
 import com.playdata.calen.ledger.dto.LedgerClassificationDeleteRequest;
 import com.playdata.calen.ledger.dto.LedgerClassificationUsageEntryResponse;
 import com.playdata.calen.ledger.dto.LedgerClassificationUsageResponse;
@@ -19,7 +20,12 @@ import com.playdata.calen.ledger.repository.CategoryDetailRepository;
 import com.playdata.calen.ledger.repository.CategoryGroupRepository;
 import com.playdata.calen.ledger.repository.LedgerEntryRepository;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -61,6 +67,40 @@ public class CategoryService {
                         .thenComparing(CategoryGroup::getDisplayOrder)
                         .thenComparing(CategoryGroup::getId))
                 .map(group -> toGroupResponse(group, includeInactive))
+                .toList();
+    }
+
+    @Transactional
+    public List<CategoryGroupResponse> reorderGroups(Long userId, DisplayOrderRequest request) {
+        appUserService.getRequiredUser(userId);
+        List<CategoryGroup> groups = categoryGroupRepository.findAllByOwnerIdOrderByDisplayOrderAscIdAsc(userId);
+        List<Long> orderedIds = request == null ? null : request.orderedIds();
+        validateExactOrder(orderedIds, groups.stream().map(CategoryGroup::getId).toList(), "대분류");
+
+        Map<Long, CategoryGroup> groupsById = groups.stream()
+                .collect(Collectors.toMap(CategoryGroup::getId, Function.identity()));
+        for (int index = 0; index < orderedIds.size(); index++) {
+            groupsById.get(orderedIds.get(index)).setDisplayOrder(index);
+        }
+        return getCategories(userId, null, true);
+    }
+
+    @Transactional
+    public List<CategoryDetailResponse> reorderDetails(Long userId, Long groupId, DisplayOrderRequest request) {
+        categoryGroupRepository.findByIdAndOwnerId(groupId, userId)
+                .orElseThrow(() -> new NotFoundException("대분류를 찾을 수 없습니다."));
+        List<CategoryDetail> details = categoryDetailRepository.findAllByGroupIdOrderByDisplayOrderAscIdAsc(groupId);
+        List<Long> orderedIds = request == null ? null : request.orderedIds();
+        validateExactOrder(orderedIds, details.stream().map(CategoryDetail::getId).toList(), "소분류");
+
+        Map<Long, CategoryDetail> detailsById = details.stream()
+                .collect(Collectors.toMap(CategoryDetail::getId, Function.identity()));
+        for (int index = 0; index < orderedIds.size(); index++) {
+            detailsById.get(orderedIds.get(index)).setDisplayOrder(index);
+        }
+        return details.stream()
+                .sorted(Comparator.comparing(CategoryDetail::getDisplayOrder).thenComparing(CategoryDetail::getId))
+                .map(this::toDetailResponse)
                 .toList();
     }
 
@@ -325,5 +365,18 @@ public class CategoryService {
 
     private String normalizeName(String name) {
         return name == null ? "" : name.trim();
+    }
+
+    private void validateExactOrder(List<Long> orderedIds, List<Long> expectedIds, String label) {
+        if (orderedIds == null || orderedIds.isEmpty()) {
+            throw new BadRequestException("순서 목록은 비어 있을 수 없습니다.");
+        }
+        Set<Long> requestedIds = new HashSet<>(orderedIds);
+        Set<Long> existingIds = new HashSet<>(expectedIds);
+        if (orderedIds.size() != expectedIds.size()
+                || requestedIds.size() != orderedIds.size()
+                || !requestedIds.equals(existingIds)) {
+            throw new BadRequestException("내 계정의 모든 " + label + "를 포함한 순서 목록이 필요합니다.");
+        }
     }
 }

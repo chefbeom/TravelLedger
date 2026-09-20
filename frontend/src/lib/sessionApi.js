@@ -121,6 +121,27 @@ export function register(payload) {
   })
 }
 
+export function verifyEmail(payload) {
+  return request('/auth/email-verification/verify', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+}
+
+export function resendEmailVerification(payload) {
+  return request('/auth/email-verification/resend', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+}
+
+export function completeKakaoRegistration(payload) {
+  return request('/auth/oauth/kakao/complete', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+}
+
 export function login(payload) {
   return request('/auth/login', {
     method: 'POST',

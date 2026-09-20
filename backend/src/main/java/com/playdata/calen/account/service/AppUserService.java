@@ -8,6 +8,7 @@ import com.playdata.calen.account.security.SecondaryPinMismatchException;
 import com.playdata.calen.common.exception.BadRequestException;
 import com.playdata.calen.common.exception.NotFoundException;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
@@ -37,6 +38,10 @@ public class AppUserService {
                 .filter(AppUser::isActive);
     }
 
+    public Optional<AppUser> findUserByEmail(String emailRaw) {
+        return appUserRepository.findByEmailIgnoreCase(normalizeEmailFormat(emailRaw));
+    }
+
     public List<AppUser> searchActiveUsersForSharing(Long currentUserId, String query, int limit) {
         String normalizedQuery = query != null ? query.trim() : "";
         if (!StringUtils.hasText(normalizedQuery)) {
@@ -64,30 +69,56 @@ public class AppUserService {
             String secondaryPinRaw,
             AppUserRole role
     ) {
-        String loginId = loginIdRaw.trim();
-        String displayName = displayNameRaw.trim();
-        String password = passwordRaw.trim();
-        String secondaryPin = normalizeSecondaryPin(secondaryPinRaw);
-        AppUserRole normalizedRole = role != null ? role : AppUserRole.USER;
+        return createUser(
+                loginIdRaw,
+                displayNameRaw,
+                null,
+                passwordRaw,
+                secondaryPinRaw,
+                role,
+                true,
+                true
+        );
+    }
 
-        if (appUserRepository.existsByLoginId(loginId)) {
-            throw new BadRequestException("사용할 수 없는 로그인 ID입니다.");
-        }
-        if (password.length() < 8) {
-            throw new BadRequestException("비밀번호는 8자 이상이어야 합니다.");
-        }
+    @Transactional
+    public AppUser registerPendingEmailUser(
+            String loginIdRaw,
+            String displayNameRaw,
+            String emailRaw,
+            String passwordRaw,
+            String secondaryPinRaw
+    ) {
+        return createUser(
+                loginIdRaw,
+                displayNameRaw,
+                emailRaw,
+                passwordRaw,
+                secondaryPinRaw,
+                AppUserRole.USER,
+                false,
+                false
+        );
+    }
 
-        AppUser user = new AppUser();
-        user.setLoginId(loginId);
-        user.setDisplayName(displayName);
-        user.setPasswordHash(passwordEncoder.encode(password));
-        user.setSecondaryPinHash(passwordEncoder.encode(secondaryPin));
-        user.setRole(normalizedRole);
-        user.setActive(true);
-
-        AppUser savedUser = appUserRepository.save(user);
-        accountSetupService.initializeDefaults(savedUser);
-        return savedUser;
+    @Transactional
+    public AppUser registerVerifiedEmailUser(
+            String loginIdRaw,
+            String displayNameRaw,
+            String emailRaw,
+            String passwordRaw,
+            String secondaryPinRaw
+    ) {
+        return createUser(
+                loginIdRaw,
+                displayNameRaw,
+                emailRaw,
+                passwordRaw,
+                secondaryPinRaw,
+                AppUserRole.USER,
+                true,
+                true
+        );
     }
 
     public void ensureSecondaryPinMatches(AppUser user, String secondaryPinRaw) {
@@ -170,5 +201,70 @@ public class AppUserService {
             throw new BadRequestException("2차 비밀번호는 숫자 8자리여야 합니다.");
         }
         return secondaryPin;
+    }
+
+    private AppUser createUser(
+            String loginIdRaw,
+            String displayNameRaw,
+            String emailRaw,
+            String passwordRaw,
+            String secondaryPinRaw,
+            AppUserRole role,
+            boolean active,
+            boolean emailVerified
+    ) {
+        String loginId = normalizeRequired(loginIdRaw, "로그인 ID는 필수입니다.", 60);
+        String displayName = normalizeRequired(displayNameRaw, "표시 이름은 필수입니다.", 80);
+        String password = passwordRaw != null ? passwordRaw.trim() : "";
+        String secondaryPin = normalizeSecondaryPin(secondaryPinRaw);
+        String email = emailRaw == null ? null : normalizeRegistrationEmail(emailRaw);
+        AppUserRole normalizedRole = role != null ? role : AppUserRole.USER;
+
+        if (appUserRepository.existsByLoginId(loginId)) {
+            throw new BadRequestException("사용할 수 없는 로그인 ID입니다.");
+        }
+        if (password.length() < 8) {
+            throw new BadRequestException("비밀번호는 8자 이상이어야 합니다.");
+        }
+
+        AppUser user = new AppUser();
+        user.setLoginId(loginId);
+        user.setDisplayName(displayName);
+        user.setEmail(email);
+        user.setPasswordHash(passwordEncoder.encode(password));
+        user.setSecondaryPinHash(passwordEncoder.encode(secondaryPin));
+        user.setRole(normalizedRole);
+        user.setActive(active);
+        user.setEmailVerified(emailVerified);
+
+        AppUser savedUser = appUserRepository.save(user);
+        if (active && emailVerified) {
+            accountSetupService.initializeDefaults(savedUser);
+        }
+        return savedUser;
+    }
+
+    private String normalizeRegistrationEmail(String emailRaw) {
+        String email = normalizeEmailFormat(emailRaw);
+        if (appUserRepository.existsByEmailIgnoreCase(email)) {
+            throw new BadRequestException("이미 사용 중인 이메일입니다.");
+        }
+        return email;
+    }
+
+    private String normalizeEmailFormat(String emailRaw) {
+        String email = emailRaw != null ? emailRaw.trim().toLowerCase(Locale.ROOT) : "";
+        if (email.length() > 254 || !email.matches("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$")) {
+            throw new BadRequestException("올바른 이메일 주소를 입력해 주세요.");
+        }
+        return email;
+    }
+
+    private String normalizeRequired(String valueRaw, String message, int maxLength) {
+        String value = valueRaw != null ? valueRaw.trim() : "";
+        if (!StringUtils.hasText(value) || value.length() > maxLength) {
+            throw new BadRequestException(message);
+        }
+        return value;
     }
 }

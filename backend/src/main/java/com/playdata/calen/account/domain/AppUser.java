@@ -30,6 +30,9 @@ public class AppUser {
     @Column(nullable = false, length = 80)
     private String displayName;
 
+    @Column(length = 254, unique = true)
+    private String email;
+
     @Column(nullable = false, length = 100)
     private String passwordHash;
 
@@ -46,4 +49,7 @@ public class AppUser {
 
     @Column(nullable = false)
     private boolean active = true;
+
+    @Column(nullable = false)
+    private boolean emailVerified = true;
 }

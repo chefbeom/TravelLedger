@@ -16,7 +16,7 @@ public class AppUserDetailsService implements UserDetailsService {
     @Override
     public UserDetails loadUserByUsername(String username) {
         return appUserRepository.findByLoginId(username)
-                .filter(user -> user.isActive())
+                .filter(user -> user.isActive() && user.isEmailVerified())
                 .map(AppUserPrincipal::from)
                 .orElseThrow(() -> new UsernameNotFoundException("사용자 계정을 찾을 수 없습니다."));
     }

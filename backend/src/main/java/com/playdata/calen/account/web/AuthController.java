@@ -1,8 +1,14 @@
 package com.playdata.calen.account.web;
 
 import com.playdata.calen.account.dto.AppUserResponse;
+import com.playdata.calen.account.dto.AuthKakaoRegistrationRequest;
 import com.playdata.calen.account.dto.AuthLoginRequest;
 import com.playdata.calen.account.dto.AuthRegisterRequest;
+import com.playdata.calen.account.dto.EmailVerificationRequest;
+import com.playdata.calen.account.dto.EmailVerificationResendRequest;
+import com.playdata.calen.account.dto.EmailVerificationResendResponse;
+import com.playdata.calen.account.dto.EmailVerificationResultResponse;
+import com.playdata.calen.account.dto.EmailVerificationStartResponse;
 import com.playdata.calen.account.dto.ProfilePasswordChangeRequest;
 import com.playdata.calen.account.dto.ProfilePrivacyAccessVerifyRequest;
 import com.playdata.calen.account.dto.ProfileSecondaryPinChangeRequest;
@@ -10,17 +16,30 @@ import com.playdata.calen.account.dto.ProfileSecondaryPinVerifyRequest;
 import com.playdata.calen.account.dto.PublicRegistrationOptionsResponse;
 import com.playdata.calen.account.domain.AppUser;
 import com.playdata.calen.account.domain.LoginAuditStatus;
+import com.playdata.calen.account.domain.SocialLoginProvider;
 import com.playdata.calen.account.security.AppUserPrincipal;
 import com.playdata.calen.account.security.SecondaryPinSessionSupport;
 import com.playdata.calen.account.service.AppUserService;
+import com.playdata.calen.account.service.EmailVerificationService;
 import com.playdata.calen.account.service.LoginAuditLogService;
 import com.playdata.calen.account.service.LoginAttemptService;
 import com.playdata.calen.account.service.RegistrationPolicyService;
+import com.playdata.calen.account.service.SocialAccountService;
+import com.playdata.calen.account.social.KakaoIdentity;
+import com.playdata.calen.account.social.KakaoOAuthClient;
+import com.playdata.calen.account.social.KakaoOAuthProperties;
+import com.playdata.calen.account.social.KakaoPendingRegistration;
 import com.playdata.calen.common.exception.TooManyRequestsException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import jakarta.servlet.http.HttpSession;
 import jakarta.validation.Valid;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.SecureRandom;
 import java.util.Map;
+import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -37,6 +56,7 @@ import org.springframework.security.web.csrf.CsrfToken;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -46,7 +66,13 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class AuthController {
 
+    private static final String KAKAO_STATE_SESSION_KEY = "CALEN_KAKAO_OAUTH_STATE";
+    private static final String KAKAO_STATE_CREATED_SESSION_KEY = "CALEN_KAKAO_OAUTH_STATE_CREATED";
+    private static final String KAKAO_PENDING_SESSION_KEY = "CALEN_KAKAO_PENDING_REGISTRATION";
+    private static final long KAKAO_STATE_VALIDITY_MILLIS = 5 * 60 * 1000L;
+
     private final AppUserService appUserService;
+    private final EmailVerificationService emailVerificationService;
     private final LoginAttemptService loginAttemptService;
     private final LoginAuditLogService loginAuditLogService;
     private final RegistrationPolicyService registrationPolicyService;
@@ -55,6 +81,10 @@ public class AuthController {
     private final PersistentTokenBasedRememberMeServices rememberMeServices;
     private final PersistentTokenRepository persistentTokenRepository;
     private final SecondaryPinSessionSupport secondaryPinSessionSupport;
+    private final KakaoOAuthClient kakaoOAuthClient;
+    private final KakaoOAuthProperties kakaoOAuthProperties;
+    private final SocialAccountService socialAccountService;
+    private final SecureRandom secureRandom = new SecureRandom();
 
     @GetMapping("/csrf")
     public Map<String, String> csrf(CsrfToken csrfToken) {
@@ -140,20 +170,118 @@ public class AuthController {
     }
 
     @PostMapping("/register")
-    @org.springframework.web.bind.annotation.ResponseStatus(HttpStatus.CREATED)
-    public AppUserResponse register(
-            @Valid @RequestBody AuthRegisterRequest request,
+    @org.springframework.web.bind.annotation.ResponseStatus(HttpStatus.ACCEPTED)
+    public EmailVerificationStartResponse register(@Valid @RequestBody AuthRegisterRequest request) {
+        registrationPolicyService.requirePublicRegistrationEnabled();
+        return emailVerificationService.start(request);
+    }
+
+    @PostMapping("/email-verification/verify")
+    public EmailVerificationResultResponse verifyEmail(
+            @Valid @RequestBody EmailVerificationRequest request
+    ) {
+        return emailVerificationService.verify(request.token());
+    }
+
+    @PostMapping("/email-verification/resend")
+    public EmailVerificationResendResponse resendEmail(
+            @Valid @RequestBody EmailVerificationResendRequest request
+    ) {
+        return emailVerificationService.resend(request);
+    }
+
+    @GetMapping("/oauth/kakao/start")
+    public void startKakaoLogin(
+            HttpServletRequest httpRequest,
+            HttpServletResponse httpResponse
+    ) throws IOException {
+        String state = createOAuthState();
+        HttpSession session = httpRequest.getSession(true);
+        session.setAttribute(KAKAO_STATE_SESSION_KEY, state);
+        session.setAttribute(KAKAO_STATE_CREATED_SESSION_KEY, System.currentTimeMillis());
+        httpResponse.sendRedirect(kakaoOAuthClient.authorizationUrl(state));
+    }
+
+    @GetMapping("/oauth/kakao/callback")
+    public void kakaoCallback(
+            @RequestParam(required = false) String code,
+            @RequestParam(required = false) String state,
+            @RequestParam(required = false) String error,
+            HttpServletRequest httpRequest,
+            HttpServletResponse httpResponse
+    ) throws IOException {
+        if (!consumeOAuthState(httpRequest, state) || error != null || code == null || code.isBlank()) {
+            redirectToFrontend(httpResponse, "signup");
+            return;
+        }
+
+        try {
+            KakaoIdentity identity = kakaoOAuthClient.fetchIdentity(code);
+            Optional<AppUser> linkedUser = socialAccountService.findActiveUser(
+                    SocialLoginProvider.KAKAO,
+                    identity.providerUserId()
+            );
+            if (linkedUser.isPresent()) {
+                AppUser user = linkedUser.get();
+                Authentication authentication = authenticatedPrincipal(user);
+                signIn(authentication, false, httpRequest, httpResponse);
+                loginAuditLogService.record(
+                        user.getLoginId(),
+                        resolveClientIp(httpRequest),
+                        httpRequest.getHeader("User-Agent"),
+                        LoginAuditStatus.SUCCESS,
+                        "카카오 로그인 성공",
+                        user
+                );
+                redirectToFrontend(httpResponse, "launcher");
+                return;
+            }
+
+            if (!registrationPolicyService.isPublicRegistrationEnabled()
+                    || appUserService.findUserByEmail(identity.email()).isPresent()) {
+                redirectToFrontend(httpResponse, "signup");
+                return;
+            }
+
+            httpRequest.getSession(true).setAttribute(
+                    KAKAO_PENDING_SESSION_KEY,
+                    new KakaoPendingRegistration(identity.providerUserId(), identity.email(), identity.displayName())
+            );
+            redirectToFrontend(httpResponse, "oauth/kakao/complete");
+        } catch (RuntimeException exception) {
+            redirectToFrontend(httpResponse, "signup");
+        }
+    }
+
+    @PostMapping("/oauth/kakao/complete")
+    public AppUserResponse completeKakaoRegistration(
+            @Valid @RequestBody AuthKakaoRegistrationRequest request,
             HttpServletRequest httpRequest,
             HttpServletResponse httpResponse
     ) {
         registrationPolicyService.requirePublicRegistrationEnabled();
+        HttpSession session = httpRequest.getSession(false);
+        if (session == null || !(session.getAttribute(KAKAO_PENDING_SESSION_KEY) instanceof KakaoPendingRegistration pending)) {
+            throw new org.springframework.web.server.ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "카카오 가입 세션이 만료되었습니다. 다시 시도해 주세요."
+            );
+        }
 
-        AppUser createdUser = appUserService.registerUser(
+        KakaoIdentity identity = new KakaoIdentity(
+                pending.providerUserId(),
+                pending.email(),
+                pending.displayName(),
+                true
+        );
+        AppUser createdUser = socialAccountService.registerKakaoUser(
+                identity,
                 request.loginId(),
                 request.displayName(),
                 request.password(),
                 request.secondaryPin()
         );
+        session.removeAttribute(KAKAO_PENDING_SESSION_KEY);
         Authentication authentication = authenticate(createdUser.getLoginId(), request.password());
         signIn(authentication, request.rememberDevice(), httpRequest, httpResponse);
         secondaryPinSessionSupport.storeVerifiedSecondaryPin(httpRequest, request.secondaryPin().trim());
@@ -162,7 +290,7 @@ public class AuthController {
                 resolveClientIp(httpRequest),
                 httpRequest.getHeader("User-Agent"),
                 LoginAuditStatus.SUCCESS,
-                "공개 회원가입 후 로그인 성공",
+                "카카오 가입 후 로그인 성공",
                 createdUser
         );
         return appUserService.toResponse(createdUser);
@@ -259,6 +387,51 @@ public class AuthController {
         return authenticationManager.authenticate(
                 UsernamePasswordAuthenticationToken.unauthenticated(loginId.trim(), password)
         );
+    }
+
+    private Authentication authenticatedPrincipal(AppUser user) {
+        AppUserPrincipal principal = AppUserPrincipal.from(user);
+        return UsernamePasswordAuthenticationToken.authenticated(
+                principal,
+                null,
+                principal.getAuthorities()
+        );
+    }
+
+    private String createOAuthState() {
+        byte[] bytes = new byte[32];
+        secureRandom.nextBytes(bytes);
+        return java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
+    }
+
+    private boolean consumeOAuthState(HttpServletRequest request, String state) {
+        HttpSession session = request.getSession(false);
+        if (session == null) {
+            return false;
+        }
+        Object expectedState = session.getAttribute(KAKAO_STATE_SESSION_KEY);
+        Object createdAt = session.getAttribute(KAKAO_STATE_CREATED_SESSION_KEY);
+        session.removeAttribute(KAKAO_STATE_SESSION_KEY);
+        session.removeAttribute(KAKAO_STATE_CREATED_SESSION_KEY);
+        if (!(expectedState instanceof String expected)
+                || !(createdAt instanceof Number created)
+                || state == null
+                || System.currentTimeMillis() - created.longValue() > KAKAO_STATE_VALIDITY_MILLIS) {
+            return false;
+        }
+        return MessageDigest.isEqual(
+                expected.getBytes(StandardCharsets.UTF_8),
+                state.getBytes(StandardCharsets.UTF_8)
+        );
+    }
+
+    private void redirectToFrontend(HttpServletResponse response, String route) throws IOException {
+        String baseUrl = kakaoOAuthProperties.getFrontendBaseUrl();
+        if (baseUrl == null || baseUrl.isBlank()) {
+            response.sendError(HttpStatus.SERVICE_UNAVAILABLE.value());
+            return;
+        }
+        response.sendRedirect(baseUrl.trim().replaceAll("/+$", "") + "/#" + route);
     }
 
     private Long requireAuthenticatedUserId(Authentication authentication) {

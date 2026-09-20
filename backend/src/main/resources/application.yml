@@ -6,6 +6,17 @@ spring:
     driver-class-name: ${DB_DRIVER:${DB_SERVER:org.h2.Driver}}
     username: ${DB_ID:${DB_USER:sa}}
     password: ${DB_PASS:${DB_PASSWORD:}}
+  mail:
+    host: ${MAIL_HOST:}
+    port: ${MAIL_PORT:587}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+    properties:
+      mail.smtp.auth: ${MAIL_SMTP_AUTH:true}
+      mail.smtp.starttls.enable: ${MAIL_SMTP_STARTTLS_ENABLE:true}
+      mail.smtp.connectiontimeout: ${MAIL_SMTP_CONNECTION_TIMEOUT:5000}
+      mail.smtp.timeout: ${MAIL_SMTP_TIMEOUT:10000}
+      mail.smtp.writetimeout: ${MAIL_SMTP_WRITE_TIMEOUT:10000}
   jpa:
     open-in-view: false
     hibernate:
@@ -78,6 +89,23 @@ app:
     remember-me-token-validity-seconds: 2592000
     remember-me-secure-cookie: ${REMEMBER_ME_SECURE_COOKIE:true}
     csrf-secure-cookie: ${CSRF_COOKIE_SECURE:true}
+  auth:
+    email-verification:
+      enabled: ${APP_AUTH_EMAIL_VERIFICATION_ENABLED:true}
+      base-url: ${APP_AUTH_EMAIL_VERIFICATION_BASE_URL:}
+      token-validity: ${APP_AUTH_EMAIL_VERIFICATION_TOKEN_VALIDITY:30m}
+      from: ${APP_AUTH_EMAIL_VERIFICATION_FROM:${MAIL_FROM:}}
+    kakao:
+      enabled: ${APP_AUTH_KAKAO_ENABLED:false}
+      client-id: ${KAKAO_CLIENT_ID:}
+      client-secret: ${KAKAO_CLIENT_SECRET:}
+      redirect-uri: ${KAKAO_REDIRECT_URI:}
+      frontend-base-url: ${KAKAO_FRONTEND_BASE_URL:}
+      authorization-uri: ${KAKAO_AUTHORIZATION_URI:https://kauth.kakao.com/oauth/authorize}
+      token-uri: ${KAKAO_TOKEN_URI:https://kauth.kakao.com/oauth/token}
+      user-info-uri: ${KAKAO_USER_INFO_URI:https://kapi.kakao.com/v2/user/me}
+      connect-timeout: ${APP_AUTH_KAKAO_CONNECT_TIMEOUT:5s}
+      read-timeout: ${APP_AUTH_KAKAO_READ_TIMEOUT:10s}
   jwt:
     key: ${JWT_KEY:}
     expire: ${JWT_EXPIRE:300000000}

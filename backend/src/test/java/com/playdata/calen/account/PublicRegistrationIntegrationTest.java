@@ -12,15 +12,20 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.playdata.calen.account.domain.AppUserRole;
 import com.playdata.calen.account.repository.AppUserRepository;
+import java.time.Duration;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
+import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Primary;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
+import com.playdata.calen.account.service.EmailVerificationSender;
 
 @SpringBootTest(properties = {
         "app.seed.enabled=true",
@@ -28,9 +33,11 @@ import org.springframework.test.web.servlet.MvcResult;
         "spring.datasource.url=jdbc:h2:mem:registration-policy-test;MODE=MySQL;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE",
         "spring.datasource.driver-class-name=org.h2.Driver",
         "spring.datasource.username=sa",
-        "spring.datasource.password="
+        "spring.datasource.password=",
+        "app.auth.email-verification.base-url=https://app.example.test"
 })
 @AutoConfigureMockMvc
+@org.springframework.context.annotation.Import(PublicRegistrationIntegrationTest.TestEmailVerificationConfiguration.class)
 class PublicRegistrationIntegrationTest {
 
     @Autowired
@@ -41,6 +48,9 @@ class PublicRegistrationIntegrationTest {
 
     @Autowired
     private AppUserRepository appUserRepository;
+
+    @Autowired
+    private CapturingEmailVerificationSender emailVerificationSender;
 
     @Test
     void adminCanTogglePublicRegistrationWhileInvitationSignupRemainsAvailable() throws Exception {
@@ -68,11 +78,19 @@ class PublicRegistrationIntegrationTest {
                 .andExpect(jsonPath("$.publicRegistrationEnabled").value(true));
 
         mockMvc.perform(publicRegistration("public-user"))
-                .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.loginId").value("public-user"))
-                .andExpect(jsonPath("$.admin").value(false));
+                .andExpect(status().isAccepted())
+                .andExpect(jsonPath("$.verificationRequired").value(true));
+        String verificationToken = emailVerificationSender.lastVerificationUrl
+                .substring(emailVerificationSender.lastVerificationUrl.indexOf("#verify-email/") + "#verify-email/".length());
+        mockMvc.perform(post("/api/auth/email-verification/verify")
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of("token", verificationToken))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.verified").value(true));
         assertThat(appUserRepository.findByLoginId("public-user").orElseThrow().getRole())
                 .isEqualTo(AppUserRole.USER);
+        assertThat(appUserRepository.findByLoginId("public-user").orElseThrow().isActive()).isTrue();
 
         mockMvc.perform(put("/api/admin/registration-policy")
                         .session(adminSession)
@@ -107,6 +125,7 @@ class PublicRegistrationIntegrationTest {
                 .content(objectMapper.writeValueAsString(Map.of(
                         "loginId", loginId,
                         "displayName", "Public User",
+                        "email", loginId + "@example.com",
                         "password", "strongpass1",
                         "secondaryPin", "23456789",
                         "rememberDevice", false
@@ -147,5 +166,25 @@ class PublicRegistrationIntegrationTest {
                 .andReturn();
         JsonNode body = objectMapper.readTree(result.getResponse().getContentAsString());
         return body.get("token").asText();
+    }
+
+    @TestConfiguration(proxyBeanMethods = false)
+    static class TestEmailVerificationConfiguration {
+
+        @Bean
+        @Primary
+        CapturingEmailVerificationSender emailVerificationSender() {
+            return new CapturingEmailVerificationSender();
+        }
+    }
+
+    static class CapturingEmailVerificationSender implements EmailVerificationSender {
+
+        private String lastVerificationUrl;
+
+        @Override
+        public void send(String email, String verificationUrl, Duration validity) {
+            lastVerificationUrl = verificationUrl;
+        }
     }
 }

@@ -27,6 +27,10 @@ public interface AppUserRepository extends JpaRepository<AppUser, Long> {
 
     Optional<AppUser> findByLoginId(String loginId);
 
+    Optional<AppUser> findByEmailIgnoreCase(String email);
+
+    boolean existsByEmailIgnoreCase(String email);
+
     @Query("""
             select user
             from AppUser user

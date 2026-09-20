@@ -3,12 +3,14 @@ import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, reactive, r
 import PinPadInput from './components/PinPadInput.vue'
 import {
   acceptInvite,
+  completeKakaoRegistration,
   fetchCurrentUser,
   fetchInvite,
   fetchRegistrationOptions,
   login,
   logout as logoutRequest,
   register,
+  resendEmailVerification,
 } from './lib/sessionApi'
 const AdminWorkspace = defineAsyncComponent(() => import('./components/AdminWorkspace.vue'))
 const HouseholdWorkspace = defineAsyncComponent(() => import('./components/HouseholdWorkspace.vue'))
@@ -19,6 +21,8 @@ const TravelWorkspace = defineAsyncComponent(() => import('./components/TravelWo
 const TravelPublicMapShareWorkspace = defineAsyncComponent(() => import('./components/TravelPublicMapShareWorkspace.vue'))
 const PetCompanion = defineAsyncComponent(() => import('./components/PetCompanion.vue'))
 const PublicRegistrationWorkspace = defineAsyncComponent(() => import('./components/PublicRegistrationWorkspace.vue'))
+const EmailVerificationWorkspace = defineAsyncComponent(() => import('./components/EmailVerificationWorkspace.vue'))
+const KakaoRegistrationWorkspace = defineAsyncComponent(() => import('./components/KakaoRegistrationWorkspace.vue'))
 
 const legacyFeatureItems = [
   {
@@ -170,6 +174,14 @@ const routeMeta = {
     title: '회원가입',
     description: '공개 가입 정책이 켜진 경우 새 계정을 만들 수 있습니다.',
   },
+  'verify-email': {
+    title: '이메일 인증',
+    description: '이메일 인증을 완료해 계정을 활성화합니다.',
+  },
+  'kakao-complete': {
+    title: '카카오 회원가입',
+    description: '카카오 계정과 TravelLedger 계정을 연결합니다.',
+  },
 }
 
 const correctedFeatureItems = featureItems
@@ -202,6 +214,7 @@ const inviteInfo = ref(null)
 const isInviteLoading = ref(false)
 const registrationOptions = ref({ publicRegistrationEnabled: false, socialLoginProviders: [] })
 const isRegistrationOptionsLoading = ref(false)
+const registrationVerificationRequested = ref(false)
 const themeMode = ref('default')
 const layoutMode = ref('desktop')
 const routeLeaveGuard = reactive({
@@ -274,6 +287,20 @@ function resolveRouteState(hash) {
     return {
       route: 'travel-share',
       token: decodeURIComponent(route.slice('travel-share/'.length)).trim(),
+    }
+  }
+
+  if (route.toLowerCase().startsWith('verify-email/')) {
+    return {
+      route: 'verify-email',
+      token: decodeURIComponent(route.slice('verify-email/'.length)).trim(),
+    }
+  }
+
+  if (route.toLowerCase() === 'oauth/kakao/complete') {
+    return {
+      route: 'kakao-complete',
+      token: '',
     }
   }
 
@@ -672,12 +699,54 @@ async function handlePublicRegistration(payload) {
   setFeedback()
 
   try {
-    currentUser.value = await register(payload)
-    navigate('launcher')
-    setFeedback('회원가입이 완료되어 로그인했습니다.')
+    await register(payload)
+    registrationVerificationRequested.value = true
+    setFeedback('인증 메일을 보냈습니다. 이메일의 링크를 열어 가입을 완료해 주세요.')
   } catch (error) {
     setFeedback('', error.message)
     await loadRegistrationOptions()
+  } finally {
+    isSubmitting.value = false
+    activeSubmit.value = ''
+  }
+}
+
+async function handleResendEmailVerification(email) {
+  if (!email) {
+    setFeedback('', '이메일을 입력해 주세요.')
+    return
+  }
+  isSubmitting.value = true
+  activeSubmit.value = 'resend-email'
+  setFeedback()
+  try {
+    await resendEmailVerification({ email })
+    setFeedback('인증 메일 재전송 요청을 처리했습니다.')
+  } catch (error) {
+    setFeedback('', error.message)
+  } finally {
+    isSubmitting.value = false
+    activeSubmit.value = ''
+  }
+}
+
+function handleSocialLogin(provider) {
+  if (provider !== 'KAKAO') {
+    return
+  }
+  window.location.assign('/api/auth/oauth/kakao/start')
+}
+
+async function handleKakaoRegistration(payload) {
+  isSubmitting.value = true
+  activeSubmit.value = 'kakao'
+  setFeedback()
+  try {
+    currentUser.value = await completeKakaoRegistration(payload)
+    navigate('launcher')
+    setFeedback('카카오 계정으로 가입하고 로그인했습니다.')
+  } catch (error) {
+    setFeedback('', error.message)
   } finally {
     isSubmitting.value = false
     activeSubmit.value = ''
@@ -1040,12 +1109,35 @@ onBeforeUnmount(() => {
       <div v-if="errorMessage" class="feedback feedback--error auth-feedback">{{ errorMessage }}</div>
     </template>
 
+    <template v-else-if="activeRoute === 'verify-email'">
+      <EmailVerificationWorkspace
+        :token="inviteToken"
+        @go-login="navigate('launcher')"
+        @go-signup="navigate('signup')"
+      />
+      <div v-if="successMessage" class="feedback feedback--success auth-feedback">{{ successMessage }}</div>
+      <div v-if="errorMessage" class="feedback feedback--error auth-feedback">{{ errorMessage }}</div>
+    </template>
+
+    <template v-else-if="activeRoute === 'kakao-complete'">
+      <KakaoRegistrationWorkspace
+        :submitting="isSubmitting && activeSubmit === 'kakao'"
+        @complete="handleKakaoRegistration"
+        @go-login="navigate('launcher')"
+      />
+      <div v-if="successMessage" class="feedback feedback--success auth-feedback">{{ successMessage }}</div>
+      <div v-if="errorMessage" class="feedback feedback--error auth-feedback">{{ errorMessage }}</div>
+    </template>
+
     <template v-else-if="activeRoute === 'signup'">
       <PublicRegistrationWorkspace
         :options="registrationOptions"
         :loading="isRegistrationOptionsLoading"
         :submitting="isSubmitting && activeSubmit === 'register'"
+        :verification-requested="registrationVerificationRequested"
         @register="handlePublicRegistration"
+        @resend-email="handleResendEmailVerification"
+        @social-login="handleSocialLogin"
         @go-login="navigate('launcher')"
       />
       <div v-if="successMessage" class="feedback feedback--success auth-feedback">{{ successMessage }}</div>
@@ -1073,6 +1165,15 @@ onBeforeUnmount(() => {
               </label>
               <button class="button button--primary" type="submit" :disabled="isSubmitting">
                 {{ isSubmitting && activeSubmit === 'login' ? '로그인 중...' : '로그인' }}
+              </button>
+              <button
+                v-if="registrationOptions.socialLoginProviders.includes('KAKAO')"
+                class="button button--ghost"
+                type="button"
+                :disabled="isSubmitting"
+                @click="handleSocialLogin('KAKAO')"
+              >
+                카카오로 계속
               </button>
             </form>
           </article>

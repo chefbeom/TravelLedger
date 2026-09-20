@@ -1,6 +1,7 @@
 package com.playdata.calen.account.service;
 
 import com.playdata.calen.account.dto.PublicRegistrationOptionsResponse;
+import com.playdata.calen.account.social.KakaoOAuthProperties;
 import jakarta.annotation.PostConstruct;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -21,6 +22,7 @@ public class RegistrationPolicyService {
     private static final String PUBLIC_REGISTRATION_ENABLED = "public-registration-enabled";
 
     private final JdbcTemplate jdbcTemplate;
+    private final KakaoOAuthProperties kakaoOAuthProperties;
     private volatile boolean publicRegistrationEnabled;
 
     @PostConstruct
@@ -36,7 +38,14 @@ public class RegistrationPolicyService {
     }
 
     public PublicRegistrationOptionsResponse getPublicOptions() {
-        return new PublicRegistrationOptionsResponse(publicRegistrationEnabled, List.of());
+        List<String> socialProviders = kakaoOAuthProperties.isConfigured()
+                ? List.of("KAKAO")
+                : List.of();
+        return new PublicRegistrationOptionsResponse(publicRegistrationEnabled, socialProviders);
+    }
+
+    public boolean isPublicRegistrationEnabled() {
+        return publicRegistrationEnabled;
     }
 
     @Transactional

@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 
 const props = defineProps({
   categories: {
@@ -59,13 +59,43 @@ const emit = defineEmits([
 ])
 
 const isEditMode = ref(false)
+const workingCategories = ref([])
+const workingPaymentMethods = ref([])
+const dragState = reactive({
+  type: '',
+  sourceId: '',
+  sourceGroupId: '',
+  overKey: '',
+  position: '',
+})
+
+function cloneCategories(categories = []) {
+  return categories.map((group) => ({
+    ...group,
+    details: Array.isArray(group.details)
+      ? group.details.map((detail) => ({ ...detail }))
+      : [],
+  }))
+}
+
+function clonePaymentMethods(paymentMethods = []) {
+  return paymentMethods.map((payment) => ({ ...payment }))
+}
+
+watch(() => props.managementCategories, (categories) => {
+  workingCategories.value = cloneCategories(categories)
+}, { immediate: true, deep: true })
+
+watch(() => props.managementPaymentMethods, (paymentMethods) => {
+  workingPaymentMethods.value = clonePaymentMethods(paymentMethods)
+}, { immediate: true, deep: true })
 
 const catalogCategories = computed(() => (
-  isEditMode.value ? props.managementCategories : props.categories
+  isEditMode.value ? workingCategories.value : props.categories
 ))
 
 const catalogPaymentMethods = computed(() => (
-  isEditMode.value ? props.managementPaymentMethods : props.paymentMethods
+  isEditMode.value ? workingPaymentMethods.value : props.paymentMethods
 ))
 
 const editModeLabel = computed(() => (isEditMode.value ? '수정 끝내기' : '분류 수정하기'))
@@ -90,6 +120,11 @@ function paymentKindLabel(kind) {
 }
 
 function toggleEditMode() {
+  if (!isEditMode.value) {
+    workingCategories.value = cloneCategories(props.managementCategories)
+    workingPaymentMethods.value = clonePaymentMethods(props.managementPaymentMethods)
+  }
+  finishDrag()
   isEditMode.value = !isEditMode.value
 }
 
@@ -105,50 +140,112 @@ function emitPaymentToggle(payment) {
   emit(isActive(payment) ? 'deactivate-payment' : 'activate-payment', payment.id)
 }
 
-function moveItem(items, itemId, direction) {
-  const nextItems = Array.isArray(items) ? [...items] : []
-  const currentIndex = nextItems.findIndex((item) => String(item.id) === String(itemId))
-  const targetIndex = currentIndex + direction
-  if (currentIndex < 0 || targetIndex < 0 || targetIndex >= nextItems.length) {
+function finishDrag() {
+  dragState.type = ''
+  dragState.sourceId = ''
+  dragState.sourceGroupId = ''
+  dragState.overKey = ''
+  dragState.position = ''
+}
+
+function startDrag(event, type, itemId, groupId = '') {
+  if (!isEditMode.value || props.isSubmitting) {
+    event.preventDefault()
+    return
+  }
+
+  dragState.type = type
+  dragState.sourceId = String(itemId)
+  dragState.sourceGroupId = groupId == null ? '' : String(groupId)
+  dragState.overKey = ''
+  dragState.position = ''
+  if (event.dataTransfer) {
+    event.dataTransfer.effectAllowed = 'move'
+    event.dataTransfer.setData('text/plain', `${type}:${dragState.sourceId}`)
+  }
+}
+
+function dropKey(type, itemId, groupId = '') {
+  return `${type}:${groupId == null ? '' : String(groupId)}:${String(itemId)}`
+}
+
+function updateDropTarget(event, type, itemId, groupId = '') {
+  if (dragState.type !== type || (type === 'details' && dragState.sourceGroupId !== String(groupId))) {
+    return
+  }
+
+  const rect = event.currentTarget.getBoundingClientRect()
+  const axisValue = type === 'groups' ? event.clientY : event.clientX
+  const axisStart = type === 'groups' ? rect.top : rect.left
+  const axisSize = type === 'groups' ? rect.height : rect.width
+  dragState.overKey = dropKey(type, itemId, groupId)
+  dragState.position = axisValue < axisStart + (axisSize / 2) ? 'before' : 'after'
+  if (event.dataTransfer) {
+    event.dataTransfer.dropEffect = 'move'
+  }
+}
+
+function isDropTarget(type, itemId, position, groupId = '') {
+  return dragState.type === type
+    && dragState.overKey === dropKey(type, itemId, groupId)
+    && dragState.position === position
+}
+
+function reorderByDrop(items, sourceId, targetId, position) {
+  const currentItems = Array.isArray(items) ? [...items] : []
+  const sourceIndex = currentItems.findIndex((item) => String(item.id) === String(sourceId))
+  const targetIndex = currentItems.findIndex((item) => String(item.id) === String(targetId))
+  if (sourceIndex < 0 || targetIndex < 0 || sourceIndex === targetIndex) {
     return null
   }
 
-  const [item] = nextItems.splice(currentIndex, 1)
-  nextItems.splice(targetIndex, 0, item)
-  return nextItems
+  const [source] = currentItems.splice(sourceIndex, 1)
+  const nextTargetIndex = currentItems.findIndex((item) => String(item.id) === String(targetId))
+  const insertIndex = position === 'after' ? nextTargetIndex + 1 : nextTargetIndex
+  currentItems.splice(insertIndex, 0, source)
+  return currentItems
 }
 
-function isFirstItem(items, itemId) {
-  return !Array.isArray(items) || items.findIndex((item) => String(item.id) === String(itemId)) <= 0
-}
-
-function isLastItem(items, itemId) {
-  if (!Array.isArray(items)) {
-    return true
+function dropGroup(group) {
+  if (dragState.type !== 'groups') {
+    return
   }
-  const currentIndex = items.findIndex((item) => String(item.id) === String(itemId))
-  return currentIndex < 0 || currentIndex === items.length - 1
-}
-
-function moveGroup(group, direction) {
-  const nextItems = moveItem(catalogCategories.value, group.id, direction)
+  const nextItems = reorderByDrop(catalogCategories.value, dragState.sourceId, group.id, dragState.position)
   if (nextItems) {
+    workingCategories.value = cloneCategories(nextItems)
     emit('reorder-groups', { orderedIds: nextItems.map((item) => item.id) })
   }
+  finishDrag()
 }
 
-function moveDetail(group, detail, direction) {
-  const nextItems = moveItem(group.details, detail.id, direction)
-  if (nextItems) {
-    emit('reorder-details', { groupId: group.id, orderedIds: nextItems.map((item) => item.id) })
+function dropDetail(group, detail) {
+  if (dragState.type !== 'details' || dragState.sourceGroupId !== String(group.id)) {
+    if (dragState.type !== 'details') {
+      return
+    }
+    finishDrag()
+    return
   }
+  const nextDetails = reorderByDrop(group.details, dragState.sourceId, detail.id, dragState.position)
+  if (nextDetails) {
+    workingCategories.value = workingCategories.value.map((item) => (
+      String(item.id) === String(group.id) ? { ...item, details: nextDetails } : item
+    ))
+    emit('reorder-details', { groupId: group.id, orderedIds: nextDetails.map((item) => item.id) })
+  }
+  finishDrag()
 }
 
-function movePayment(payment, direction) {
-  const nextItems = moveItem(catalogPaymentMethods.value, payment.id, direction)
+function dropPayment(payment) {
+  if (dragState.type !== 'payments') {
+    return
+  }
+  const nextItems = reorderByDrop(catalogPaymentMethods.value, dragState.sourceId, payment.id, dragState.position)
   if (nextItems) {
+    workingPaymentMethods.value = clonePaymentMethods(nextItems)
     emit('reorder-payments', { orderedIds: nextItems.map((item) => item.id) })
   }
+  finishDrag()
 }
 </script>
 
@@ -159,7 +256,7 @@ function movePayment(payment, direction) {
         <h2>분류 관리</h2>
         <p>
           수입/지출 카테고리와 결제수단을 계정별로 정리합니다.
-          <template v-if="isEditMode"> 위·아래 버튼으로 표시 순서를 바꾸면 즉시 저장됩니다.</template>
+          <template v-if="isEditMode"> ⠿ 핸들을 잡고 원하는 위치에 놓으면 표시 순서가 즉시 저장됩니다.</template>
         </p>
       </div>
       <button class="button button--ghost management-edit-toggle" type="button" @click="toggleEditMode">
@@ -223,35 +320,34 @@ function movePayment(payment, direction) {
         v-for="group in catalogCategories"
         :key="group.id"
         class="catalog__group"
-        :class="{ 'catalog__group--inactive': !isActive(group) }"
+        :class="{
+          'catalog__group--inactive': !isActive(group),
+          'catalog__group--dragging': dragState.type === 'groups' && dragState.sourceId === String(group.id),
+          'catalog__group--drop-before': isDropTarget('groups', group.id, 'before'),
+          'catalog__group--drop-after': isDropTarget('groups', group.id, 'after'),
+        }"
+        @dragover.prevent="updateDropTarget($event, 'groups', group.id)"
+        @drop.prevent="dropGroup(group)"
       >
         <div class="catalog__head">
           <strong class="catalog__title">
+            <span
+              v-if="isEditMode"
+              class="catalog-drag-handle"
+              draggable="true"
+              role="button"
+              tabindex="0"
+              :aria-label="`${group.name} 대분류 순서 이동`"
+              title="잡고 원하는 위치에 놓으세요"
+              @dragstart="startDrag($event, 'groups', group.id)"
+              @dragend="finishDrag"
+            >
+              ⠿
+            </span>
             {{ entryTypeLabel(group.entryType) }} / {{ group.name }}
             <span v-if="!isActive(group)" class="catalog__status">숨김</span>
           </strong>
           <div v-if="isEditMode" class="catalog__actions">
-            <div class="catalog__order-actions" aria-label="대분류 표시 순서 조정">
-              <span class="catalog__order-label">순서</span>
-              <button
-                class="button button--ghost catalog__order-button"
-                type="button"
-                :disabled="isSubmitting || isFirstItem(catalogCategories, group.id)"
-                :aria-label="`${group.name} 위로 이동`"
-                @click="moveGroup(group, -1)"
-              >
-                ↑
-              </button>
-              <button
-                class="button button--ghost catalog__order-button"
-                type="button"
-                :disabled="isSubmitting || isLastItem(catalogCategories, group.id)"
-                :aria-label="`${group.name} 아래로 이동`"
-                @click="moveGroup(group, 1)"
-              >
-                ↓
-              </button>
-            </div>
             <button
               class="button button--ghost"
               type="button"
@@ -270,51 +366,55 @@ function movePayment(payment, direction) {
             </button>
           </div>
         </div>
-        <div class="catalog__chips">
+        <div class="catalog__chips" :class="{ 'catalog__chips--editable': isEditMode }">
           <template v-if="group.details?.length">
             <template v-if="isEditMode">
-              <span
+              <div
                 v-for="detail in group.details"
                 :key="detail.id"
-                class="chip chip--neutral catalog-chip catalog-chip--editable"
-                :class="{ 'catalog-chip--inactive': !isActive(detail) }"
+                class="catalog__sortable-item"
+                :class="{
+                  'catalog__sortable-item--inactive': !isActive(detail),
+                  'catalog__sortable-item--dragging': dragState.type === 'details' && dragState.sourceId === String(detail.id),
+                  'catalog__sortable-item--drop-before': isDropTarget('details', detail.id, 'before', group.id),
+                  'catalog__sortable-item--drop-after': isDropTarget('details', detail.id, 'after', group.id),
+                }"
+                @dragover.prevent="updateDropTarget($event, 'details', detail.id, group.id)"
+                @drop.prevent="dropDetail(group, detail)"
               >
-                <span>{{ detail.name }}</span>
-                <button
-                  class="catalog-chip__action catalog-chip__order"
-                  type="button"
-                  :disabled="isSubmitting || isFirstItem(group.details, detail.id)"
-                  :aria-label="`${detail.name} 위로 이동`"
-                  @click="moveDetail(group, detail, -1)"
+                <span
+                  class="catalog-drag-handle"
+                  draggable="true"
+                  role="button"
+                  tabindex="0"
+                  :aria-label="`${detail.name} 소분류 순서 이동`"
+                  title="잡고 원하는 위치에 놓으세요"
+                  @dragstart="startDrag($event, 'details', detail.id, group.id)"
+                  @dragend="finishDrag"
                 >
-                  ↑
-                </button>
-                <button
-                  class="catalog-chip__action catalog-chip__order"
-                  type="button"
-                  :disabled="isSubmitting || isLastItem(group.details, detail.id)"
-                  :aria-label="`${detail.name} 아래로 이동`"
-                  @click="moveDetail(group, detail, 1)"
-                >
-                  ↓
-                </button>
-                <button
-                  class="catalog-chip__action"
-                  type="button"
-                  :disabled="isSubmitting"
-                  @click="emitDetailToggle(detail)"
-                >
-                  {{ isActive(detail) ? '숨김' : '복구' }}
-                </button>
-                <button
-                  class="catalog-chip__action catalog-chip__action--danger"
-                  type="button"
-                  :disabled="isSubmitting"
-                  @click="emit('delete-detail', { detail, group })"
-                >
-                  삭제
-                </button>
-              </span>
+                  ⠿
+                </span>
+                <span class="catalog__sortable-name">{{ detail.name }}</span>
+                <span v-if="!isActive(detail)" class="catalog__status">숨김</span>
+                <div class="catalog__sortable-actions">
+                  <button
+                    class="catalog-chip__action"
+                    type="button"
+                    :disabled="isSubmitting"
+                    @click="emitDetailToggle(detail)"
+                  >
+                    {{ isActive(detail) ? '숨김' : '복구' }}
+                  </button>
+                  <button
+                    class="catalog-chip__action catalog-chip__action--danger"
+                    type="button"
+                    :disabled="isSubmitting"
+                    @click="emit('delete-detail', { detail, group })"
+                  >
+                    삭제
+                  </button>
+                </div>
+              </div>
             </template>
             <template v-else>
               <span
@@ -337,51 +437,55 @@ function movePayment(payment, direction) {
         <div class="catalog__head">
           <strong>결제수단</strong>
         </div>
-        <div class="catalog__chips">
+        <div class="catalog__chips" :class="{ 'catalog__chips--editable': isEditMode }">
           <template v-if="catalogPaymentMethods.length">
             <template v-if="isEditMode">
-              <span
+              <div
                 v-for="payment in catalogPaymentMethods"
                 :key="payment.id"
-                class="chip chip--neutral catalog-chip catalog-chip--editable"
-                :class="{ 'catalog-chip--inactive': !isActive(payment) }"
+                class="catalog__sortable-item"
+                :class="{
+                  'catalog__sortable-item--inactive': !isActive(payment),
+                  'catalog__sortable-item--dragging': dragState.type === 'payments' && dragState.sourceId === String(payment.id),
+                  'catalog__sortable-item--drop-before': isDropTarget('payments', payment.id, 'before'),
+                  'catalog__sortable-item--drop-after': isDropTarget('payments', payment.id, 'after'),
+                }"
+                @dragover.prevent="updateDropTarget($event, 'payments', payment.id)"
+                @drop.prevent="dropPayment(payment)"
               >
-                <span>{{ payment.name }} / {{ paymentKindLabel(payment.kind) }}</span>
-                <button
-                  class="catalog-chip__action catalog-chip__order"
-                  type="button"
-                  :disabled="isSubmitting || isFirstItem(catalogPaymentMethods, payment.id)"
-                  :aria-label="`${payment.name} 위로 이동`"
-                  @click="movePayment(payment, -1)"
+                <span
+                  class="catalog-drag-handle"
+                  draggable="true"
+                  role="button"
+                  tabindex="0"
+                  :aria-label="`${payment.name} 결제수단 순서 이동`"
+                  title="잡고 원하는 위치에 놓으세요"
+                  @dragstart="startDrag($event, 'payments', payment.id)"
+                  @dragend="finishDrag"
                 >
-                  ↑
-                </button>
-                <button
-                  class="catalog-chip__action catalog-chip__order"
-                  type="button"
-                  :disabled="isSubmitting || isLastItem(catalogPaymentMethods, payment.id)"
-                  :aria-label="`${payment.name} 아래로 이동`"
-                  @click="movePayment(payment, 1)"
-                >
-                  ↓
-                </button>
-                <button
-                  class="catalog-chip__action"
-                  type="button"
-                  :disabled="isSubmitting"
-                  @click="emitPaymentToggle(payment)"
-                >
-                  {{ isActive(payment) ? '숨김' : '복구' }}
-                </button>
-                <button
-                  class="catalog-chip__action catalog-chip__action--danger"
-                  type="button"
-                  :disabled="isSubmitting"
-                  @click="emit('delete-payment', payment)"
-                >
-                  삭제
-                </button>
-              </span>
+                  ⠿
+                </span>
+                <span class="catalog__sortable-name">{{ payment.name }} / {{ paymentKindLabel(payment.kind) }}</span>
+                <span v-if="!isActive(payment)" class="catalog__status">숨김</span>
+                <div class="catalog__sortable-actions">
+                  <button
+                    class="catalog-chip__action"
+                    type="button"
+                    :disabled="isSubmitting"
+                    @click="emitPaymentToggle(payment)"
+                  >
+                    {{ isActive(payment) ? '숨김' : '복구' }}
+                  </button>
+                  <button
+                    class="catalog-chip__action catalog-chip__action--danger"
+                    type="button"
+                    :disabled="isSubmitting"
+                    @click="emit('delete-payment', payment)"
+                  >
+                    삭제
+                  </button>
+                </div>
+              </div>
             </template>
             <template v-else>
               <span

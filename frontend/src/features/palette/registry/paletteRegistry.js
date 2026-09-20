@@ -43,6 +43,12 @@ function entryTitle(entry) {
   return entry.title || entry.categoryDetailName || entry.categoryName || entry.paymentMethodName || '거래'
 }
 
+function recentFlowDetails(entry) {
+  const entryDate = entry.entryDate || entry.date || entry.transactionDate || entry.localDate || '날짜 미지정'
+  const paymentMethod = entry.paymentMethodName || '결제수단 미지정'
+  return `${entryDate} · ${paymentMethod}`
+}
+
 function quickStat(context, key) {
   return (context.dashboard?.quickStats ?? []).find((item) => item.key === key)?.overview ?? null
 }
@@ -115,10 +121,12 @@ function buildRecentFlowKpi(context, options = {}) {
     eyebrow: flowLabel,
     hideTitle: true,
     value: latestEntry ? formatCurrency(latestEntry.amount) : '-',
-    meta: latestEntry ? '최신순 거래' : `${flowLabel} 없음`,
+    meta: latestEntry ? `${entryTitle(latestEntry)} · ${recentFlowDetails(latestEntry)}` : `${flowLabel} 없음`,
     tone: entryType === 'INCOME' ? 'positive' : 'negative',
     rows: recentEntries.map((entry) => ({
+      id: entry.id ?? `${entryTimestamp(entry)}-${entryTitle(entry)}`,
       label: entryTitle(entry),
+      meta: recentFlowDetails(entry),
       value: formatCurrency(entry.amount),
       tone: entry.entryType === 'INCOME' ? 'positive' : 'negative',
     })),

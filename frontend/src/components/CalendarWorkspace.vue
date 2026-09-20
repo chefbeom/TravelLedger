@@ -391,6 +391,7 @@ const isLayoutEditMode = ref(false)
 const isMobileLayoutMode = ref(false)
 const quickEntryPanelRef = ref(null)
 const ledgerSheetRef = ref(null)
+const aggregatePanelRef = ref(null)
 const quickEntryScrollTargetRef = ref(null)
 const ledgerSheetScrollTargetRef = ref(null)
 const calendarShellRef = ref(null)
@@ -2878,6 +2879,17 @@ function toggleAggregatePanelEnabled() {
   }
 }
 
+async function restoreAggregatePanel() {
+  if (isAggregatePanelEnabled.value) {
+    return
+  }
+
+  isAggregatePanelEnabled.value = true
+  await nextTick()
+  await waitForLayoutFrame()
+  await scrollToPanelElement(aggregatePanelRef.value)
+}
+
 function getAggregateRange(period) {
   const anchorMonthPrefix = String(props.anchorDate || '').slice(0, 7)
   const selectedMonthPrefix = String(selectedDate.value || '').slice(0, 7)
@@ -4049,6 +4061,20 @@ defineExpose({
     </section>
 
     <section
+      v-if="!isAggregatePanelEnabled"
+      class="panel household-calendar-aggregate-recovery"
+      aria-live="polite"
+    >
+      <div>
+        <strong>사용자 설정 집계가 숨겨져 있습니다.</strong>
+        <span>저장한 집계 카드와 설정은 유지됩니다.</span>
+      </div>
+      <button type="button" class="button button--secondary" @click="restoreAggregatePanel">
+        집계 다시 보이기
+      </button>
+    </section>
+
+    <section
       class="household-calendar-layout-board"
       :class="{
         'household-calendar-layout-board--editing': isLayoutEditMode && !isMobileLayoutMode,
@@ -4441,6 +4467,7 @@ defineExpose({
 
               <template v-else-if="panel.id === 'aggregate'">
                 <section
+                  ref="aggregatePanelRef"
                   class="panel household-quickstats-panel household-aggregate-panel"
                   :class="{ 'household-aggregate-panel--editing': isAggregateEditMode }"
                 >
@@ -4493,7 +4520,7 @@ defineExpose({
         <div v-if="!isAggregatePanelEnabled" class="household-aggregate-empty household-aggregate-empty--off">
           <strong>사용자 설정 집계가 꺼져 있습니다.</strong>
           <span>저장된 집계 구성은 유지되며, 다시 켜면 같은 항목을 바로 볼 수 있습니다.</span>
-          <button type="button" class="button button--secondary" @click="toggleAggregatePanelEnabled">집계 보이기</button>
+          <button type="button" class="button button--secondary" @click="restoreAggregatePanel">집계 보이기</button>
         </div>
         <div v-else-if="!aggregateSettingsReady" class="household-aggregate-empty">
           <strong>집계 설정을 불러오는 중입니다.</strong>

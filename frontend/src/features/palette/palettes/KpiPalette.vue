@@ -31,8 +31,11 @@ const canShowBars = computed(() => ['3x2', '3x3'].includes(props.config.size))
     </div>
 
     <div v-if="!isCompact && rows.length" class="kpi-palette__rows">
-      <div v-for="row in rows" :key="`${row.label}-${row.value}`" class="kpi-palette__row">
-        <span>{{ row.label }}</span>
+      <div v-for="row in rows" :key="row.id ?? `${row.label}-${row.value}`" class="kpi-palette__row">
+        <div class="kpi-palette__row-copy">
+          <span :title="row.label">{{ row.label }}</span>
+          <small v-if="row.meta" :title="row.meta">{{ row.meta }}</small>
+        </div>
         <strong :class="`is-${row.tone || 'neutral'}`">{{ row.value }}</strong>
       </div>
     </div>
@@ -152,6 +155,23 @@ const canShowBars = computed(() => ['3x2', '3x3'].includes(props.config.size))
   justify-content: space-between;
   min-width: 0;
   padding-top: 5px;
+}
+
+.kpi-palette__row-copy {
+  display: grid;
+  flex: 1 1 auto;
+  gap: 2px;
+  min-width: 0;
+}
+
+.kpi-palette__row-copy small {
+  color: var(--household-dash-muted, #6b7280);
+  font-size: 0.68rem;
+  line-height: 1.2;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .kpi-palette__row span,

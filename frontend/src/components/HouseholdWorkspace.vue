@@ -5317,6 +5317,7 @@ async function saveClassificationOrder(type, payload) {
     ])
     setFeedback('표시 순서를 저장했습니다.')
   } catch (error) {
+    await loadMetadata().catch(() => {})
     setFeedback('', error.message)
   } finally {
     isSubmitting.value = false

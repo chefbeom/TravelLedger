@@ -20,6 +20,8 @@ public interface LedgerEntryRepository extends JpaRepository<LedgerEntry, Long> 
 
     long countByDeletedAtIsNotNull();
 
+    long countByOwnerIdAndDeletedAtIsNullAndEntryDateBetween(Long ownerId, LocalDate from, LocalDate to);
+
     List<LedgerEntry> findAllByOwnerIdAndDeletedAtIsNullOrderByEntryDateAscIdAsc(Long ownerId);
 
     List<LedgerEntry> findAllByOwnerIdAndDeletedAtIsNullAndEntryDateBetweenOrderByEntryDateAscIdAsc(Long ownerId, LocalDate from, LocalDate to);

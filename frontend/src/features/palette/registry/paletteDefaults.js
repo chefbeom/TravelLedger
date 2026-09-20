@@ -42,6 +42,14 @@ export const paletteTemplates = [
     options: { variant: 'recentFlow', entryType: 'EXPENSE', limit: 8 },
   },
   {
+    id: 'weekly-digest',
+    type: 'weekly-digest',
+    label: 'AI 주간 지출 브리핑',
+    defaultSize: '4x2',
+    options: { autoEnabled: false },
+  },
+
+  {
     id: 'calendar-month',
     type: 'calendar',
     label: '월 달력',

@@ -483,6 +483,16 @@ export function fetchLatestLedgerAiAnalysis(payload) {
   })
 }
 
+export function fetchLatestWeeklySpendingDigest() {
+  return request('/statistics/ai-analysis/weekly-digest/latest')
+}
+
+export function requestWeeklySpendingDigest() {
+  return request('/statistics/ai-analysis/weekly-digest/run', {
+    method: 'POST',
+  })
+}
+
 export function deleteLedgerAiAnalysisHistory(historyId) {
   return request(`/statistics/ai-analysis/history/${encodeURIComponent(historyId)}`, {
     method: 'DELETE',

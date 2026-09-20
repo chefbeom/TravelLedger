@@ -4,6 +4,7 @@ import com.playdata.calen.ledger.domain.LedgerAiAnalysisHistory;
 import com.playdata.calen.ledger.domain.LedgerAiAnalysisMode;
 import com.playdata.calen.ledger.domain.LedgerAiAnalysisPeriod;
 import com.playdata.calen.ledger.domain.LedgerAiAnalysisStatus;
+import com.playdata.calen.ledger.domain.LedgerAiComparisonPreset;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Optional;
@@ -63,6 +64,17 @@ public interface LedgerAiAnalysisHistoryRepository extends JpaRepository<LedgerA
     );
 
     Optional<LedgerAiAnalysisHistory> findByIdAndOwnerId(Long id, Long ownerId);
+
+    Optional<LedgerAiAnalysisHistory> findTopByOwnerIdAndModeAndPeriodTypeAndComparisonPresetAndFromDateAndToDateAndCompareFromDateAndCompareToDateOrderByCreatedAtDescIdDesc(
+            Long ownerId,
+            LedgerAiAnalysisMode mode,
+            LedgerAiAnalysisPeriod periodType,
+            LedgerAiComparisonPreset comparisonPreset,
+            LocalDate fromDate,
+            LocalDate toDate,
+            LocalDate compareFromDate,
+            LocalDate compareToDate
+    );
 
     long countByOwnerId(Long ownerId);
 

@@ -23,6 +23,20 @@ public class LedgerAiAnalysisPayloadBuilder {
                 .toList();
     }
 
+    public List<LedgerAiAnalysisService.ExpenseEntryPayload> providerWeeklyDigestEntries(
+            List<LedgerAiAnalysisService.ExpenseEntryPayload> entries,
+            int limit
+    ) {
+        return entries.stream()
+                .sorted(java.util.Comparator.comparing(
+                        LedgerAiAnalysisService.ExpenseEntryPayload::amount,
+                        java.util.Comparator.nullsLast(java.util.Comparator.reverseOrder())
+                ))
+                .limit(Math.max(0, limit))
+                .map(entry -> sanitizeProviderExpenseEntry(entry, false))
+                .toList();
+    }
+
     public List<LedgerAiAnalysisService.RecurringExpenseCandidatePayload> providerRecurringCandidates(
             List<LedgerAiAnalysisService.RecurringExpenseCandidatePayload> candidates
     ) {
@@ -63,10 +77,17 @@ public class LedgerAiAnalysisPayloadBuilder {
     private LedgerAiAnalysisService.ExpenseEntryPayload sanitizeProviderExpenseEntry(
             LedgerAiAnalysisService.ExpenseEntryPayload entry
     ) {
+        return sanitizeProviderExpenseEntry(entry, true);
+    }
+
+    private LedgerAiAnalysisService.ExpenseEntryPayload sanitizeProviderExpenseEntry(
+            LedgerAiAnalysisService.ExpenseEntryPayload entry,
+            boolean includeMemo
+    ) {
         return new LedgerAiAnalysisService.ExpenseEntryPayload(
                 entry.entryDate(),
                 aiText.limitText(entry.title(), PROVIDER_TEXT_LIMIT),
-                aiText.limitText(entry.memo(), PROVIDER_MEMO_LIMIT),
+                includeMemo ? aiText.limitText(entry.memo(), PROVIDER_MEMO_LIMIT) : null,
                 entry.amount(),
                 aiText.limitText(entry.categoryGroupName(), PROVIDER_TEXT_LIMIT),
                 aiText.limitText(entry.categoryDetailName(), PROVIDER_TEXT_LIMIT),

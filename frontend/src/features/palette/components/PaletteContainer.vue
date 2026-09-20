@@ -43,6 +43,7 @@ const recentFlowLimits = [5, 6, 7, 8, 9, 10]
 const recentFlowPalettes = computed(() => store.visiblePalettes.filter((palette) => (
   palette.type === 'kpi' && palette.options?.variant === 'recentFlow'
 )))
+const weeklyDigestPalettes = computed(() => (store.currentPreset?.palettes ?? []).filter((palette) => palette.type === 'weekly-digest'))
 
 const userStorageId = computed(() => props.currentUser?.id || props.currentUser?.loginId || 'anonymous')
 const paletteContext = computed(() => ({
@@ -97,6 +98,10 @@ function handleResetPreset() {
 
 function updateRecentFlowPalette(palette, patch) {
   store.updatePaletteOptions(palette.id, patch)
+}
+
+function updateWeeklyDigestPalette(palette, event) {
+  store.updatePaletteOptions(palette.id, { autoEnabled: event.target.checked })
 }
 
 function hiddenPaletteTitle(palette) {
@@ -196,6 +201,24 @@ onBeforeUnmount(() => {
                   </option>
                 </select>
               </label>
+            </div>
+          </div>
+
+          <div v-if="weeklyDigestPalettes.length" class="palette-dashboard__option-panel">
+            <span>AI 주간 지출 브리핑</span>
+            <div v-for="palette in weeklyDigestPalettes" :key="palette.id" class="palette-dashboard__option-card">
+              <small>{{ hiddenPaletteTitle(palette) }}</small>
+              <label class="palette-dashboard__toggle">
+                <input
+                  type="checkbox"
+                  :checked="palette.options?.autoEnabled === true"
+                  @change="updateWeeklyDigestPalette(palette, $event)"
+                >
+                <span>매주 월요일 자동 생성</span>
+              </label>
+              <small class="palette-dashboard__visibility-note">
+                {{ palette.visible === false ? '숨긴 팔레트는 자동 실행되지 않습니다.' : '대시보드 표시 중이라 자동 실행 대상입니다.' }}
+              </small>
             </div>
           </div>
 
@@ -455,6 +478,29 @@ onBeforeUnmount(() => {
   gap: 8px;
   padding: 10px;
 }
+.palette-dashboard__toggle {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+}
+
+.palette-dashboard__toggle input {
+  accent-color: var(--household-dash-teal);
+  margin: 0;
+}
+
+.palette-dashboard__toggle span {
+  color: var(--household-dash-ink);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.palette-dashboard__option-card .palette-dashboard__visibility-note {
+  color: var(--household-dash-muted);
+  font-size: 0.68rem;
+  font-weight: 500;
+}
+
 .palette-dashboard__hidden {
   display: grid;
   gap: 6px;

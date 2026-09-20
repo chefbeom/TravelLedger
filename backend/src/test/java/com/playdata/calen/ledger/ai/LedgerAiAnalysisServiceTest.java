@@ -22,6 +22,7 @@ import com.playdata.calen.ledger.domain.EntryType;
 import com.playdata.calen.ledger.domain.LedgerAiAnalysisHistory;
 import com.playdata.calen.ledger.domain.LedgerAiAnalysisMode;
 import com.playdata.calen.ledger.domain.LedgerAiAnalysisPeriod;
+import com.playdata.calen.ledger.domain.LedgerAiComparisonPreset;
 import com.playdata.calen.ledger.domain.LedgerAiAnalysisStatus;
 import com.playdata.calen.ledger.domain.PaymentMethodKind;
 import com.playdata.calen.ledger.dto.CategoryBreakdownItemResponse;
@@ -41,6 +42,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CountDownLatch;
@@ -491,6 +493,43 @@ class LedgerAiAnalysisServiceTest {
                 .doesNotContain("lmstudio-secret-token")
                 .doesNotContain("http://lmstudio.example.internal:1234/v1");
     }
+    @Test
+    void weeklyDigestLimitsProviderDataButRetainsFullPeriodTotals() {
+        stubUser();
+        stubWeeklyDigestDataset();
+        when(remoteClient.analyze(any())).thenReturn(remoteResponse());
+        when(historyRepository.save(any())).thenAnswer(invocation -> withId(invocation.getArgument(0), 98L));
+
+        LedgerAiAnalysisResponse response = service.analyze(
+                USER_ID,
+                WeeklySpendingDigestService.weeklyRequest(JUNE_18)
+        );
+
+        assertThat(response.totalExpense()).isEqualByComparingTo("325000");
+        assertThat(response.compareTotalExpense()).isEqualByComparingTo("600000");
+        ArgumentCaptor<LedgerAiAnalysisService.LedgerAiN8nPayload> payloadCaptor =
+                ArgumentCaptor.forClass(LedgerAiAnalysisService.LedgerAiN8nPayload.class);
+        verify(remoteClient).analyze(payloadCaptor.capture());
+        LedgerAiAnalysisService.LedgerAiN8nPayload payload = payloadCaptor.getValue();
+
+        assertThat(payload.comparisonPreset()).isEqualTo(LedgerAiComparisonPreset.WEEKLY_DIGEST);
+        assertThat(payload.expenseEntries()).hasSize(20);
+        assertThat(payload.expenseEntries().get(0).amount()).isEqualByComparingTo("25000");
+        assertThat(payload.comparisonExpenseEntries()).hasSize(20);
+        assertThat(payload.comparisonExpenseEntries().get(0).amount()).isEqualByComparingTo("48000");
+        assertThat(payload.expenseEntries()).allSatisfy(entry -> assertThat(entry.memo()).isNull());
+        assertThat(payload.comparisonExpenseEntries()).allSatisfy(entry -> assertThat(entry.memo()).isNull());
+        assertThat(payload.topExpenses()).isEmpty();
+        assertThat(payload.recurringExpenseCandidates()).isEmpty();
+        verify(ledgerEntryRepository, never()).findTopExpenseEntriesForAiAnalysis(
+                eq(USER_ID), any(LocalDate.class), any(LocalDate.class), eq(EntryType.EXPENSE), any(Pageable.class));
+        assertThat(payload.payloadMinimization().expenseEntryTotalCount()).isEqualTo(25);
+        assertThat(payload.payloadMinimization().expenseEntrySentCount()).isEqualTo(20);
+        assertThat(payload.payloadMinimization().comparisonExpenseEntryTotalCount()).isEqualTo(24);
+        assertThat(payload.payloadMinimization().comparisonExpenseEntrySentCount()).isEqualTo(20);
+        assertThat(payload.focusPrompt()).contains("concise Korean weekly spending brief");
+    }
+
     private void stubUser() {
         AppUser user = new AppUser();
         user.setId(USER_ID);
@@ -504,6 +543,52 @@ class LedgerAiAnalysisServiceTest {
         when(historyRepository.findLatestMatchingCompletedAnalysis(
                 any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any()
         )).thenReturn(Optional.empty());
+    }
+
+    private void stubWeeklyDigestDataset() {
+        LocalDate currentFrom = LocalDate.of(2026, 6, 8);
+        LocalDate currentTo = LocalDate.of(2026, 6, 14);
+        LocalDate compareFrom = LocalDate.of(2026, 6, 1);
+        LocalDate compareTo = LocalDate.of(2026, 6, 7);
+
+        when(statisticsService.getOverview(USER_ID, currentFrom, currentTo)).thenReturn(new OverviewResponse(
+                currentFrom, currentTo, BigDecimal.ZERO, new BigDecimal("325000"), new BigDecimal("-325000"), 25
+        ));
+        when(statisticsService.getOverview(USER_ID, compareFrom, compareTo)).thenReturn(new OverviewResponse(
+                compareFrom, compareTo, BigDecimal.ZERO, new BigDecimal("600000"), new BigDecimal("-600000"), 24
+        ));
+        when(statisticsService.getCategoryBreakdown(USER_ID, currentFrom, currentTo, EntryType.EXPENSE))
+                .thenReturn(List.of(new CategoryBreakdownItemResponse("Expense", "Shopping", new BigDecimal("325000"), 25)));
+        when(statisticsService.getCategoryBreakdown(USER_ID, compareFrom, compareTo, EntryType.EXPENSE))
+                .thenReturn(List.of(new CategoryBreakdownItemResponse("Expense", "Shopping", new BigDecimal("600000"), 24)));
+        when(statisticsService.getPaymentBreakdown(USER_ID, currentFrom, currentTo))
+                .thenReturn(List.of(new PaymentBreakdownItemResponse("Main card", PaymentMethodKind.CARD, new BigDecimal("325000"), 25)));
+        when(statisticsService.getPaymentBreakdown(USER_ID, compareFrom, compareTo))
+                .thenReturn(List.of(new PaymentBreakdownItemResponse("Main card", PaymentMethodKind.CARD, new BigDecimal("600000"), 24)));
+        when(statisticsService.compare(eq(USER_ID), eq(currentTo), any(), anyInt())).thenReturn(List.of());
+
+        List<LedgerEntryRepository.AiExpenseEntryAggregate> currentEntries = new ArrayList<>();
+        for (int index = 1; index <= 25; index++) {
+            currentEntries.add(expenseEntry(
+                    currentFrom.plusDays((index - 1) % 7),
+                    "Current purchase " + index,
+                    "private note",
+                    String.valueOf(index * 1000)
+            ));
+        }
+        List<LedgerEntryRepository.AiExpenseEntryAggregate> comparisonEntries = new ArrayList<>();
+        for (int index = 1; index <= 24; index++) {
+            comparisonEntries.add(expenseEntry(
+                    compareFrom.plusDays((index - 1) % 7),
+                    "Previous purchase " + index,
+                    "private note",
+                    String.valueOf(index * 2000)
+            ));
+        }
+        when(ledgerEntryRepository.findExpenseEntriesForAiAnalysis(USER_ID, currentFrom, currentTo, EntryType.EXPENSE))
+                .thenReturn(currentEntries);
+        when(ledgerEntryRepository.findExpenseEntriesForAiAnalysis(USER_ID, compareFrom, compareTo, EntryType.EXPENSE))
+                .thenReturn(comparisonEntries);
     }
 
     private void stubMonthlyDataset() {

@@ -65,6 +65,7 @@ public class LedgerAiAnalysisService {
     private static final int TOP_EXPENSE_LIMIT = 20;
     private static final int PROVIDER_EXPENSE_ENTRY_LIMIT = 200;
     private static final int PROVIDER_COMPARISON_ENTRY_LIMIT = 120;
+    private static final int WEEKLY_DIGEST_PROVIDER_ENTRY_LIMIT = 20;
     private static final int MAX_HISTORY_PAGE_SIZE = 50;
     private static final long MAX_CUSTOM_RANGE_DAYS = 366;
     private static final Duration DUPLICATE_SUPPRESSION_WINDOW = Duration.ofMinutes(5);
@@ -526,7 +527,9 @@ public class LedgerAiAnalysisService {
                 ).stream()
                 .map(this::toExpensePayload)
                 .toList();
-        List<ExpenseEntryPayload> topExpenses = ledgerEntryRepository.findTopExpenseEntriesForAiAnalysis(
+        List<ExpenseEntryPayload> topExpenses = plan.comparisonPreset() == LedgerAiComparisonPreset.WEEKLY_DIGEST
+                ? List.of()
+                : ledgerEntryRepository.findTopExpenseEntriesForAiAnalysis(
                         userId,
                         primary.from(),
                         primary.to(),
@@ -569,10 +572,19 @@ public class LedgerAiAnalysisService {
     }
 
     private LedgerAiN8nPayload buildPayload(AnalysisPlan plan, AnalysisDataset dataset) {
-        List<ExpenseEntryPayload> providerExpenseEntries = aiPayloadBuilder.providerExpenseEntries(dataset.expenseEntries(), PROVIDER_EXPENSE_ENTRY_LIMIT);
-        List<ExpenseEntryPayload> providerTopExpenses = aiPayloadBuilder.providerExpenseEntries(dataset.topExpenses(), TOP_EXPENSE_LIMIT);
-        List<ExpenseEntryPayload> providerComparisonExpenseEntries = aiPayloadBuilder.providerExpenseEntries(dataset.comparisonExpenseEntries(), PROVIDER_COMPARISON_ENTRY_LIMIT);
-        List<RecurringExpenseCandidatePayload> providerRecurringCandidates = aiPayloadBuilder.providerRecurringCandidates(buildRecurringExpenseCandidates(dataset.expenseEntries()));
+        boolean weeklyDigest = plan.comparisonPreset() == LedgerAiComparisonPreset.WEEKLY_DIGEST;
+        List<ExpenseEntryPayload> providerExpenseEntries = weeklyDigest
+                ? aiPayloadBuilder.providerWeeklyDigestEntries(dataset.expenseEntries(), WEEKLY_DIGEST_PROVIDER_ENTRY_LIMIT)
+                : aiPayloadBuilder.providerExpenseEntries(dataset.expenseEntries(), PROVIDER_EXPENSE_ENTRY_LIMIT);
+        List<ExpenseEntryPayload> providerTopExpenses = weeklyDigest
+                ? List.of()
+                : aiPayloadBuilder.providerExpenseEntries(dataset.topExpenses(), TOP_EXPENSE_LIMIT);
+        List<ExpenseEntryPayload> providerComparisonExpenseEntries = weeklyDigest
+                ? aiPayloadBuilder.providerWeeklyDigestEntries(dataset.comparisonExpenseEntries(), WEEKLY_DIGEST_PROVIDER_ENTRY_LIMIT)
+                : aiPayloadBuilder.providerExpenseEntries(dataset.comparisonExpenseEntries(), PROVIDER_COMPARISON_ENTRY_LIMIT);
+        List<RecurringExpenseCandidatePayload> providerRecurringCandidates = weeklyDigest
+                ? List.of()
+                : aiPayloadBuilder.providerRecurringCandidates(buildRecurringExpenseCandidates(dataset.expenseEntries()));
 
         return new LedgerAiN8nPayload(
                 "travelledger.ledger-ai-analysis.v2",
@@ -687,7 +699,7 @@ public class LedgerAiAnalysisService {
 
     private ComparisonRanges resolveComparisonRanges(LedgerAiComparisonPreset preset, LocalDate anchor, LedgerAiAnalysisRequest request) {
         return switch (preset) {
-            case PREVIOUS_WEEK -> {
+            case PREVIOUS_WEEK, WEEKLY_DIGEST -> {
                 LocalDate thisWeekStart = anchor.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
                 LocalDate primaryStart = thisWeekStart.minusWeeks(1);
                 DateRange primary = new DateRange(primaryStart, primaryStart.plusDays(6));
@@ -766,6 +778,9 @@ public class LedgerAiAnalysisService {
     private String buildTitle(AnalysisPlan plan) {
         String range = plan.primaryRange().from() + " ~ " + plan.primaryRange().to();
         if (plan.mode() == LedgerAiAnalysisMode.COMPARISON && plan.comparisonRange() != null) {
+            if (plan.comparisonPreset() == LedgerAiComparisonPreset.WEEKLY_DIGEST) {
+                return "AI weekly spending digest - " + range + " vs " + plan.comparisonRange().from() + " ~ " + plan.comparisonRange().to();
+            }
             return "AI comparison analysis - " + range + " vs " + plan.comparisonRange().from() + " ~ " + plan.comparisonRange().to();
         }
         return "AI period analysis - " + range;

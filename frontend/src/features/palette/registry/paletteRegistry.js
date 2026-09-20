@@ -1,5 +1,6 @@
 import CalendarPalette from '../palettes/CalendarPalette.vue'
 import KpiPalette from '../palettes/KpiPalette.vue'
+import WeeklySpendingDigestPalette from '../palettes/WeeklySpendingDigestPalette.vue'
 import { getSpanBySize } from '../utils/paletteLayout'
 
 function formatCurrency(value) {
@@ -135,6 +136,20 @@ const kpiVariantTitles = {
 }
 
 export const paletteRegistry = {
+  'weekly-digest': {
+    type: 'weekly-digest',
+    label: 'AI 주간 지출 브리핑',
+    supportedSizes: ['3x2', '4x2', '3x3', '4x3'],
+    defaultSize: '4x2',
+    spanBySize: getSpanBySize,
+    component: WeeklySpendingDigestPalette,
+    getTitle() {
+      return 'AI 주간 지출 브리핑'
+    },
+    getPaletteData(config) {
+      return { autoEnabled: config.options?.autoEnabled === true }
+    },
+  },
   kpi: {
     type: 'kpi',
     label: 'KPI',

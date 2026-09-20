@@ -42,6 +42,25 @@ class LedgerAiAnalysisPayloadBuilderTest {
     }
 
     @Test
+    void weeklyDigestKeepsAtMostTwentyHighestTransactionsWithoutMemos() {
+        List<LedgerAiAnalysisService.ExpenseEntryPayload> entries = new ArrayList<>();
+        for (int day = 1; day <= 25; day++) {
+            entries.add(new LedgerAiAnalysisService.ExpenseEntryPayload(
+                    LocalDate.of(2026, 7, day), "Purchase " + day, "private memo",
+                    BigDecimal.valueOf(day * 1000L), "Shopping", "General", "Card"
+            ));
+        }
+
+        List<LedgerAiAnalysisService.ExpenseEntryPayload> providerEntries =
+                builder.providerWeeklyDigestEntries(entries, 20);
+
+        assertThat(providerEntries).hasSize(20);
+        assertThat(providerEntries.get(0).amount()).isEqualByComparingTo("25000");
+        assertThat(providerEntries.get(19).amount()).isEqualByComparingTo("6000");
+        assertThat(providerEntries).allSatisfy(entry -> assertThat(entry.memo()).isNull());
+    }
+
+    @Test
     void limitsRecurringCandidateTextWithoutChangingCountsOrDates() {
         LedgerAiAnalysisService.RecurringExpenseCandidatePayload candidate = new LedgerAiAnalysisService.RecurringExpenseCandidatePayload(
                 "S".repeat(120),

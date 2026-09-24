@@ -82,6 +82,7 @@ public class SecurityConfig {
                             "/api/auth/me",
                             "/api/auth/logout",
                             "/api/auth/registration-options",
+                            "/api/travel/public/login-map-preview",
                             "/api/auth/register",
                             "/api/auth/email-verification/verify",
                             "/api/auth/email-verification/resend",

@@ -10,6 +10,12 @@ import com.playdata.calen.ledger.service.LedgerTravelBridgeService;
 import com.playdata.calen.travel.domain.TravelPlan;
 import com.playdata.calen.travel.domain.TravelPlanShare;
 import com.playdata.calen.travel.domain.TravelPlanStatus;
+import com.playdata.calen.travel.domain.TravelExpenseRecord;
+import com.playdata.calen.travel.domain.TravelMapShareLink;
+import com.playdata.calen.travel.domain.TravelRecordType;
+import com.playdata.calen.travel.domain.TravelRouteSegment;
+import com.playdata.calen.travel.domain.TravelRouteSourceType;
+import com.playdata.calen.travel.dto.TravelLoginMapPreviewResponse;
 import com.playdata.calen.travel.dto.TravelSharedExhibitPageResponse;
 import com.playdata.calen.travel.repository.TravelBudgetItemRepository;
 import com.playdata.calen.travel.repository.TravelExpenseRecordRepository;
@@ -23,6 +29,7 @@ import com.playdata.calen.travel.repository.TravelRouteSegmentRepository;
 import com.playdata.calen.travel.repository.TravelShareGroupMemberRepository;
 import com.playdata.calen.travel.repository.TravelShareGroupRepository;
 import java.time.LocalDate;
+import java.math.BigDecimal;
 import java.util.Optional;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.BeforeEach;
@@ -38,6 +45,7 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 class TravelServiceShareVisibilityTest {
@@ -46,6 +54,10 @@ class TravelServiceShareVisibilityTest {
     private TravelPlanRepository travelPlanRepository;
     private TravelBudgetItemRepository travelBudgetItemRepository;
     private TravelPlanShareRepository travelPlanShareRepository;
+    private TravelExpenseRecordRepository travelExpenseRecordRepository;
+    private TravelMapShareLinkRepository travelMapShareLinkRepository;
+    private TravelRouteSegmentRepository travelRouteSegmentRepository;
+    private TravelMediaAssetRepository travelMediaAssetRepository;
     private TravelService service;
 
     @BeforeEach
@@ -53,12 +65,12 @@ class TravelServiceShareVisibilityTest {
         appUserService = mock(AppUserService.class);
         travelPlanRepository = mock(TravelPlanRepository.class);
         travelBudgetItemRepository = mock(TravelBudgetItemRepository.class);
-        TravelExpenseRecordRepository travelExpenseRecordRepository = mock(TravelExpenseRecordRepository.class);
-        TravelMediaAssetRepository travelMediaAssetRepository = mock(TravelMediaAssetRepository.class);
-        TravelMapShareLinkRepository travelMapShareLinkRepository = mock(TravelMapShareLinkRepository.class);
+        travelExpenseRecordRepository = mock(TravelExpenseRecordRepository.class);
+        travelMediaAssetRepository = mock(TravelMediaAssetRepository.class);
+        travelMapShareLinkRepository = mock(TravelMapShareLinkRepository.class);
         TravelPhotoClusterRepository travelPhotoClusterRepository = mock(TravelPhotoClusterRepository.class);
         TravelPhotoClusterMemberRepository travelPhotoClusterMemberRepository = mock(TravelPhotoClusterMemberRepository.class);
-        TravelRouteSegmentRepository travelRouteSegmentRepository = mock(TravelRouteSegmentRepository.class);
+        travelRouteSegmentRepository = mock(TravelRouteSegmentRepository.class);
         travelPlanShareRepository = mock(TravelPlanShareRepository.class);
         TravelShareGroupRepository travelShareGroupRepository = mock(TravelShareGroupRepository.class);
         TravelShareGroupMemberRepository travelShareGroupMemberRepository = mock(TravelShareGroupMemberRepository.class);
@@ -108,6 +120,57 @@ class TravelServiceShareVisibilityTest {
         assertThrows(BadRequestException.class, () -> service.updatePlanPublicShare(7L, 10L, true));
         assertFalse(Boolean.TRUE.equals(plan.getPublicShared()));
         assertNull(plan.getPublicSharedAt());
+    }
+
+    @Test
+    void loginMapPreviewUsesOnlySelectedShareScopeAndReturnsRoundedCoordinatesWithoutLoadingPhotos() {
+        Long ownerId = 7L;
+        Long planId = 10L;
+        String token = "public-share-token-123456";
+        TravelPlan selectedPlan = plan(planId, ownerId, TravelPlanStatus.COMPLETED);
+        TravelMapShareLink shareLink = new TravelMapShareLink();
+        shareLink.setOwner(user(ownerId));
+        shareLink.setToken(token);
+        shareLink.setPlanIdsJson("[10]");
+        shareLink.setExcludedRecordIdsJson("[]");
+        shareLink.setExcludedMediaIdsJson("[]");
+        shareLink.setExcludedRouteIdsJson("[]");
+
+        TravelExpenseRecord memory = new TravelExpenseRecord();
+        memory.setId(91L);
+        memory.setPlan(selectedPlan);
+        memory.setRecordType(TravelRecordType.MEMORY);
+        memory.setExpenseDate(LocalDate.of(2026, 4, 1));
+        memory.setCategory("Private category");
+        memory.setTitle("Private place name");
+        memory.setLatitude(new BigDecimal("35.123456"));
+        memory.setLongitude(new BigDecimal("129.987654"));
+
+        TravelRouteSegment route = new TravelRouteSegment();
+        route.setId(72L);
+        route.setPlan(selectedPlan);
+        route.setRouteDate(LocalDate.of(2026, 4, 1));
+        route.setTitle("Private route name");
+        route.setSourceType(TravelRouteSourceType.MANUAL);
+        route.setRoutePathJson("[{\"latitude\":35.100111,\"longitude\":129.900111,\"label\":\"private label\"},{\"latitude\":35.200222,\"longitude\":129.800222,\"label\":\"private label\"}]");
+
+        when(travelMapShareLinkRepository.findByTokenAndActiveTrue(token)).thenReturn(Optional.of(shareLink));
+        when(travelPlanRepository.findAllById(java.util.List.of(planId))).thenReturn(java.util.List.of(selectedPlan));
+        when(travelExpenseRecordRepository.findAllByPlanIdInAndRecordType(java.util.List.of(planId), TravelRecordType.MEMORY))
+                .thenReturn(java.util.List.of(memory));
+        when(travelRouteSegmentRepository.findAllByPlanIdInOrderByRouteDateDescIdDesc(java.util.List.of(planId)))
+                .thenReturn(java.util.List.of(route));
+
+        TravelLoginMapPreviewResponse response = service.getTravelMapShareLoginPreview(token);
+
+        assertTrue(response.enabled());
+        assertTrue(response.markers().size() == 1);
+        assertTrue(response.markers().get(0).latitude().compareTo(new BigDecimal("35.123")) == 0);
+        assertTrue(response.markers().get(0).longitude().compareTo(new BigDecimal("129.988")) == 0);
+        assertTrue(response.routes().size() == 1);
+        assertTrue(response.routes().get(0).points().size() == 2);
+        assertTrue(response.routes().get(0).points().get(0).latitude().compareTo(new BigDecimal("35.1")) == 0);
+        verifyNoInteractions(travelMediaAssetRepository);
     }
 
     @Test

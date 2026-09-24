@@ -8,6 +8,7 @@ import static org.mockito.Mockito.when;
 import com.playdata.calen.account.domain.AppUserRole;
 import com.playdata.calen.account.security.AppUserPrincipal;
 import com.playdata.calen.travel.service.TravelMediaStorageService;
+import com.playdata.calen.travel.service.TravelLoginMapPreviewService;
 import com.playdata.calen.travel.service.TravelReverseGeocodeService;
 import com.playdata.calen.travel.service.TravelService;
 import java.nio.charset.StandardCharsets;
@@ -23,9 +24,11 @@ class TravelControllerTest {
     void shouldReturnThumbnailContentWhenPreparedThumbnailIsMissing() {
         TravelService travelService = mock(TravelService.class);
         TravelMediaStorageService travelMediaStorageService = mock(TravelMediaStorageService.class);
+        TravelLoginMapPreviewService travelLoginMapPreviewService = mock(TravelLoginMapPreviewService.class);
         TravelReverseGeocodeService travelReverseGeocodeService = mock(TravelReverseGeocodeService.class);
         TravelController controller = new TravelController(
                 travelService,
+                travelLoginMapPreviewService,
                 travelMediaStorageService,
                 travelReverseGeocodeService
         );

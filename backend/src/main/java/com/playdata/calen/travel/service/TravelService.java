@@ -53,6 +53,10 @@ import com.playdata.calen.travel.dto.TravelMemoryRecordRequest;
 import com.playdata.calen.travel.dto.TravelMemoryRecordResponse;
 import com.playdata.calen.travel.dto.TravelMapShareLinkRequest;
 import com.playdata.calen.travel.dto.TravelMapShareLinkResponse;
+import com.playdata.calen.travel.dto.TravelLoginMapPreviewMarkerResponse;
+import com.playdata.calen.travel.dto.TravelLoginMapPreviewPointResponse;
+import com.playdata.calen.travel.dto.TravelLoginMapPreviewResponse;
+import com.playdata.calen.travel.dto.TravelLoginMapPreviewRouteResponse;
 import com.playdata.calen.travel.dto.TravelPhotoFrameMediaResponse;
 import com.playdata.calen.travel.dto.TravelPlanDetailResponse;
 import com.playdata.calen.travel.dto.TravelPlanPublicShareResponse;
@@ -142,6 +146,9 @@ public class TravelService {
     private static final int DEFAULT_MY_MAP_CLUSTER_PHOTO_PAGE_SIZE = 12;
     private static final int MAX_MY_MAP_CLUSTER_PHOTO_PAGE_SIZE = 36;
     private static final int MAX_STORED_ROUTE_POINTS = 900;
+    private static final int MAX_LOGIN_PREVIEW_MARKERS = 80;
+    private static final int MAX_LOGIN_PREVIEW_ROUTES = 12;
+    private static final int MAX_LOGIN_PREVIEW_POINTS_PER_ROUTE = 160;
     private static final int MY_MAP_NEARBY_MARKER_COUNT = 10;
     private static final int DEFAULT_ROUTE_PATH_CHAR_BUDGET = 12000;
     private static final int MIN_ROUTE_PATH_CHAR_BUDGET = 220;
@@ -573,6 +580,95 @@ public class TravelService {
                 shareLink.getCreatedAt(),
                 buildTravelMapShareOverview(shareLink, scope)
         );
+    }
+
+    /**
+     * Builds a bounded, privacy-reduced projection for the public login page without loading
+     * photos, thumbnails, or photo clusters from the full share response.
+     */
+    public TravelLoginMapPreviewResponse getTravelMapShareLoginPreview(String token) {
+        TravelMapShareLink shareLink = getRequiredActiveTravelMapShareLink(token);
+        TravelMapShareScope scope = readTravelMapShareScope(shareLink);
+        List<Long> planIds = loadVisibleTravelMapSharePlanIds(shareLink, scope);
+        if (planIds.isEmpty()) {
+            return emptyTravelLoginMapPreview();
+        }
+
+        List<TravelLoginMapPreviewMarkerResponse> markers = travelExpenseRecordRepository
+                .findAllByPlanIdInAndRecordType(planIds, TravelRecordType.MEMORY).stream()
+                .filter(this::hasCoordinates)
+                .filter(record -> !scope.excludedRecordIds().contains(record.getId()))
+                .sorted(RECORD_ORDER)
+                .limit(MAX_LOGIN_PREVIEW_MARKERS)
+                .map(record -> new TravelLoginMapPreviewMarkerResponse(
+                        0,
+                        roundLoginPreviewCoordinate(record.getLatitude()),
+                        roundLoginPreviewCoordinate(record.getLongitude())
+                ))
+                .toList();
+        List<TravelLoginMapPreviewMarkerResponse> numberedMarkers = new ArrayList<>(markers.size());
+        for (int index = 0; index < markers.size(); index += 1) {
+            TravelLoginMapPreviewMarkerResponse marker = markers.get(index);
+            numberedMarkers.add(new TravelLoginMapPreviewMarkerResponse(index + 1, marker.latitude(), marker.longitude()));
+        }
+
+        List<TravelRouteSegment> visibleRoutes = travelRouteSegmentRepository
+                .findAllByPlanIdInOrderByRouteDateDescIdDesc(planIds).stream()
+                .filter(route -> !scope.excludedRouteIds().contains(route.getId()))
+                .sorted(ROUTE_ORDER)
+                .limit(MAX_LOGIN_PREVIEW_ROUTES)
+                .toList();
+        List<TravelLoginMapPreviewRouteResponse> routes = new ArrayList<>();
+        for (TravelRouteSegment route : visibleRoutes) {
+            List<TravelLoginMapPreviewPointResponse> points = sampleLoginPreviewRoute(resolveRoutePoints(route));
+            if (points.size() >= 2) {
+                routes.add(new TravelLoginMapPreviewRouteResponse(routes.size() + 1, points));
+            }
+        }
+
+        return new TravelLoginMapPreviewResponse(
+                true,
+                "여행 기록 미리보기",
+                numberedMarkers.size(),
+                routes.size(),
+                numberedMarkers,
+                routes
+        );
+    }
+
+    private List<TravelLoginMapPreviewPointResponse> sampleLoginPreviewRoute(List<TravelRoutePointResponse> source) {
+        List<TravelRoutePointResponse> valid = source.stream()
+                .filter(point -> point != null && point.latitude() != null && point.longitude() != null)
+                .toList();
+        if (valid.size() < 2) {
+            return List.of();
+        }
+        int stride = Math.max(1, (int) Math.ceil((double) valid.size() / MAX_LOGIN_PREVIEW_POINTS_PER_ROUTE));
+        List<TravelLoginMapPreviewPointResponse> result = new ArrayList<>();
+        for (int index = 0; index < valid.size(); index += stride) {
+            TravelRoutePointResponse point = valid.get(index);
+            result.add(new TravelLoginMapPreviewPointResponse(
+                    roundLoginPreviewCoordinate(point.latitude()),
+                    roundLoginPreviewCoordinate(point.longitude())
+            ));
+        }
+        TravelRoutePointResponse last = valid.get(valid.size() - 1);
+        TravelLoginMapPreviewPointResponse roundedLast = new TravelLoginMapPreviewPointResponse(
+                roundLoginPreviewCoordinate(last.latitude()),
+                roundLoginPreviewCoordinate(last.longitude())
+        );
+        if (!result.get(result.size() - 1).equals(roundedLast)) {
+            result.add(roundedLast);
+        }
+        return result;
+    }
+
+    private BigDecimal roundLoginPreviewCoordinate(BigDecimal coordinate) {
+        return coordinate.setScale(3, RoundingMode.HALF_UP).stripTrailingZeros();
+    }
+
+    private TravelLoginMapPreviewResponse emptyTravelLoginMapPreview() {
+        return new TravelLoginMapPreviewResponse(false, "여행 기록 미리보기", 0, 0, List.of(), List.of());
     }
 
     public TravelMyMapPhotoClusterPageResponse getTravelMapSharePhotoCluster(

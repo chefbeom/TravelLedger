@@ -23,6 +23,7 @@ import com.playdata.calen.travel.dto.TravelMemoryRecordRequest;
 import com.playdata.calen.travel.dto.TravelMemoryRecordResponse;
 import com.playdata.calen.travel.dto.TravelMapShareLinkRequest;
 import com.playdata.calen.travel.dto.TravelMapShareLinkResponse;
+import com.playdata.calen.travel.dto.TravelLoginMapPreviewResponse;
 import com.playdata.calen.travel.dto.TravelPhotoFrameMediaResponse;
 import com.playdata.calen.travel.dto.TravelPlanDetailResponse;
 import com.playdata.calen.travel.dto.TravelPlanPublicShareRequest;
@@ -49,6 +50,7 @@ import com.playdata.calen.travel.dto.TravelSharedExhibitPageResponse;
 import com.playdata.calen.travel.dto.TravelSharedExhibitSummaryResponse;
 import com.playdata.calen.travel.service.TravelMediaStorageService;
 import com.playdata.calen.travel.service.TravelService;
+import com.playdata.calen.travel.service.TravelLoginMapPreviewService;
 import com.playdata.calen.travel.service.TravelReverseGeocodeService;
 import jakarta.validation.Valid;
 import java.io.IOException;
@@ -58,6 +60,7 @@ import lombok.extern.slf4j.Slf4j;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.http.ContentDisposition;
+import org.springframework.http.CacheControl;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -81,6 +84,7 @@ import org.springframework.web.multipart.MultipartFile;
 public class TravelController {
 
     private final TravelService travelService;
+    private final TravelLoginMapPreviewService travelLoginMapPreviewService;
     private final TravelMediaStorageService travelMediaStorageService;
     private final TravelReverseGeocodeService travelReverseGeocodeService;
 
@@ -190,6 +194,13 @@ public class TravelController {
     @GetMapping("/public-trips")
     public TravelPublicTripsOverviewResponse getPublicTrips(@AuthenticationPrincipal AppUserPrincipal currentUser) {
         return travelService.getPublicTripsOverview(currentUser.userId());
+    }
+
+    @GetMapping("/public/login-map-preview")
+    public ResponseEntity<TravelLoginMapPreviewResponse> getLoginMapPreview() {
+        return ResponseEntity.ok()
+                .cacheControl(CacheControl.noStore())
+                .body(travelLoginMapPreviewService.getPublicPreview());
     }
 
     @GetMapping("/public-trips/photo-clusters/{clusterId}")

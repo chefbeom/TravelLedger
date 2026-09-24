@@ -13,6 +13,7 @@ import {
   fetchAdminAccessStatus,
   fetchAdminDataManagement,
   fetchAdminDashboard,
+  fetchAdminLoginMapPreview,
   fetchAdminRegistrationPolicy,
   fetchAdminLoginAuditLogs,
   fetchAdminOpsControl,
@@ -24,6 +25,7 @@ import {
   saveAdminAiServerProfile,
   updateAdminAiRouting,
   updateAdminDataStorageControl,
+  updateAdminLoginMapPreview,
   updateAdminRegistrationPolicy,
   updateAdminSupportInquiryStatus,
   updateAdminUserActive,
@@ -140,6 +142,14 @@ const state = reactive({
   registrationPolicyMessage: '',
   registrationPolicyForm: {
     publicRegistrationEnabled: false,
+  },
+  loginMapPreview: null,
+  loadingLoginMapPreview: false,
+  savingLoginMapPreview: false,
+  loginMapPreviewMessage: '',
+  loginMapPreviewForm: {
+    enabled: false,
+    shareLinkOrToken: '',
   },
   recentInvites: [],
   invitePage: 0,
@@ -626,14 +636,16 @@ function handleAdminAccessKeydown(event) {
 async function loadDashboard() {
   state.loading = true
   state.loadingRegistrationPolicy = true
+  state.loadingLoginMapPreview = true
   state.errorMessage = ''
 
   try {
-    const [dashboard, supportInquiries, loginLogPage, registrationPolicy] = await Promise.all([
+    const [dashboard, supportInquiries, loginLogPage, registrationPolicy, loginMapPreview] = await Promise.all([
       fetchAdminDashboard(),
       fetchAdminSupportInquiries(),
       fetchAdminLoginAuditLogs(0),
       fetchAdminRegistrationPolicy(),
+      fetchAdminLoginMapPreview(),
     ])
 
     state.summary = dashboard.summary
@@ -645,6 +657,8 @@ async function loadDashboard() {
     state.supportInquiries = supportInquiries ?? []
     state.registrationPolicy = registrationPolicy
     state.registrationPolicyForm.publicRegistrationEnabled = Boolean(registrationPolicy?.publicRegistrationEnabled)
+    state.loginMapPreview = loginMapPreview
+    state.loginMapPreviewForm.enabled = Boolean(loginMapPreview?.enabled)
     state.blockedIpPage = clampPage(state.blockedIpPage, state.blockedIps.length)
     state.userPage = clampPage(state.userPage, state.users.length)
     state.invitePage = clampPage(state.invitePage, state.recentInvites.length)
@@ -657,6 +671,7 @@ async function loadDashboard() {
   } finally {
     state.loading = false
     state.loadingRegistrationPolicy = false
+    state.loadingLoginMapPreview = false
   }
 }
 
@@ -755,6 +770,56 @@ async function handleSaveRegistrationPolicy() {
     }
   } finally {
     state.savingRegistrationPolicy = false
+  }
+}
+
+async function handleSaveLoginMapPreview() {
+  state.savingLoginMapPreview = true
+  state.loginMapPreviewMessage = ''
+  state.errorMessage = ''
+
+  try {
+    const response = await updateAdminLoginMapPreview({
+      enabled: state.loginMapPreviewForm.enabled,
+      shareLinkOrToken: state.loginMapPreviewForm.shareLinkOrToken.trim(),
+      clearShareLink: false,
+    })
+    state.loginMapPreview = response
+    state.loginMapPreviewForm.enabled = Boolean(response?.enabled)
+    state.loginMapPreviewForm.shareLinkOrToken = ''
+    state.loginMapPreviewMessage = response?.enabled
+      ? '로그인 화면에 선택한 여행 지도를 표시합니다.'
+      : '로그인 화면 지도 표시를 껐습니다.'
+  } catch (error) {
+    if (!handleAdminAccessRequired(error)) {
+      state.errorMessage = error.message
+    }
+  } finally {
+    state.savingLoginMapPreview = false
+  }
+}
+
+async function handleClearLoginMapPreview() {
+  state.savingLoginMapPreview = true
+  state.loginMapPreviewMessage = ''
+  state.errorMessage = ''
+
+  try {
+    const response = await updateAdminLoginMapPreview({
+      enabled: false,
+      shareLinkOrToken: '',
+      clearShareLink: true,
+    })
+    state.loginMapPreview = response
+    state.loginMapPreviewForm.enabled = false
+    state.loginMapPreviewForm.shareLinkOrToken = ''
+    state.loginMapPreviewMessage = '로그인 화면 공개 지도 연결을 해제했습니다.'
+  } catch (error) {
+    if (!handleAdminAccessRequired(error)) {
+      state.errorMessage = error.message
+    }
+  } finally {
+    state.savingLoginMapPreview = false
   }
 }
 
@@ -2664,6 +2729,49 @@ onBeforeUnmount(() => {
                     </button>
                   </div>
                   <p v-if="state.registrationPolicyMessage" class="feedback feedback--success" role="status">{{ state.registrationPolicyMessage }}</p>
+                </template>
+              </div>
+              <div class="support-inquiry-card admin-login-map-preview-card">
+                <div class="panel__header">
+                  <div>
+                    <h3>로그인 화면 여행 지도</h3>
+                    <p class="form-hint">기존 공개 지도 공유 링크 중 하나를 로그인 전 미리보기로 연결합니다.</p>
+                  </div>
+                  <span :class="['entry-type-pill', state.loginMapPreview?.enabled ? 'entry-type-pill--income' : 'entry-type-pill--expense']">
+                    {{ state.loginMapPreview?.enabled ? '표시 중' : state.loginMapPreview?.configured ? '연결됨 · 숨김' : '미설정' }}
+                  </span>
+                </div>
+                <p v-if="state.loadingLoginMapPreview" class="form-hint">공개 지도 설정을 불러오는 중입니다...</p>
+                <template v-else>
+                  <p class="form-hint admin-login-map-preview-card__warning">
+                    로그인 화면은 누구나 볼 수 있습니다. 미리보기에는 선택한 공유 범위의 경로가 표시되며, 사진·장소명·날짜·사용자 정보는 보내지 않고 좌표는 약 100m 단위로 반올림합니다. 원본 공유 링크도 별도로 계속 유효해 링크 방문자는 상세 공유 지도를 볼 수 있으니, 공유 링크를 만들 때 집·숙소 등 민감한 경로를 제외했는지 확인하세요.
+                  </p>
+                  <label class="field field--inline">
+                    <input v-model="state.loginMapPreviewForm.enabled" type="checkbox" :disabled="state.savingLoginMapPreview" />
+                    <span class="field__label">로그인 화면에 지도 표시</span>
+                  </label>
+                  <label class="field">
+                    <span class="field__label">여행 지도 공유 링크 또는 토큰</span>
+                    <input
+                      v-model="state.loginMapPreviewForm.shareLinkOrToken"
+                      type="text"
+                      autocomplete="off"
+                      autocapitalize="off"
+                      spellcheck="false"
+                      placeholder="여행 지도 공유 링크를 붙여넣기 (선택 시 교체)"
+                      :disabled="state.savingLoginMapPreview"
+                    />
+                  </label>
+                  <p class="form-hint">링크는 여행 &gt; 내 지도에서 공개 범위를 확인해 만든 공유 링크를 붙여넣으세요. 저장 후 토큰은 다시 화면에 표시되지 않습니다.</p>
+                  <div class="panel__actions">
+                    <button class="button button--primary" type="button" :disabled="state.savingLoginMapPreview" @click="handleSaveLoginMapPreview">
+                      {{ state.savingLoginMapPreview ? '저장 중...' : '지도 미리보기 저장' }}
+                    </button>
+                    <button class="button button--ghost" type="button" :disabled="state.savingLoginMapPreview || !state.loginMapPreview?.configured" @click="handleClearLoginMapPreview">
+                      링크 해제
+                    </button>
+                  </div>
+                  <p v-if="state.loginMapPreviewMessage" class="feedback feedback--success" role="status">{{ state.loginMapPreviewMessage }}</p>
                 </template>
               </div>
             </section>

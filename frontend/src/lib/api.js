@@ -215,6 +215,17 @@ export function updateAdminRegistrationPolicy(publicRegistrationEnabled) {
   })
 }
 
+export function fetchAdminLoginMapPreview() {
+  return request('/admin/login-map-preview')
+}
+
+export function updateAdminLoginMapPreview(payload) {
+  return request('/admin/login-map-preview', {
+    method: 'PUT',
+    body: JSON.stringify(payload),
+  })
+}
+
 export function fetchAdminDataManagement() {
   return request('/admin/data-management')
 }
@@ -937,6 +948,10 @@ export function createTravelMapShare(payload) {
 
 export function fetchTravelPublicMapShare(token) {
   return request(`/travel/public/map-shares/${encodeURIComponent(token)}`)
+}
+
+export function fetchTravelLoginMapPreview() {
+  return request('/travel/public/login-map-preview')
 }
 
 export function fetchTravelPublicMapSharePhotoCluster(token, clusterId, params = {}) {

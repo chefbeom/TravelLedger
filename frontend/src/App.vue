@@ -19,6 +19,7 @@ const CalenDriveWorkspace = defineAsyncComponent(() => import('./components/Cale
 const ProfileWorkspace = defineAsyncComponent(() => import('./components/ProfileWorkspace.vue'))
 const TravelWorkspace = defineAsyncComponent(() => import('./components/TravelWorkspace.vue'))
 const TravelPublicMapShareWorkspace = defineAsyncComponent(() => import('./components/TravelPublicMapShareWorkspace.vue'))
+const LoginTravelMapPreview = defineAsyncComponent(() => import('./components/LoginTravelMapPreview.vue'))
 const PetCompanion = defineAsyncComponent(() => import('./components/PetCompanion.vue'))
 const PublicRegistrationWorkspace = defineAsyncComponent(() => import('./components/PublicRegistrationWorkspace.vue'))
 const EmailVerificationWorkspace = defineAsyncComponent(() => import('./components/EmailVerificationWorkspace.vue'))
@@ -1145,54 +1146,64 @@ onBeforeUnmount(() => {
     </template>
 
     <template v-else-if="!currentUser">
-      <section class="auth-shell">
-
-        <div class="auth-grid">
-          <article class="auth-card">
-            <h2>로그인</h2>
-            <form class="stack-form" @submit.prevent="handleLogin">
-              <input v-model="loginForm.loginId" type="text" placeholder="로그인 ID" autocomplete="username" />
-              <input v-model="loginForm.password" type="password" placeholder="비밀번호" autocomplete="current-password" />
-              <PinPadInput
-                v-model="loginForm.secondaryPin"
-                label="2차 비밀번호"
-                hint="보안을 위해 숫자 8자리 이상을 입력해 주세요."
-                :disabled="isSubmitting"
-              />
-              <label class="checkbox-row">
-                <input v-model="loginForm.rememberDevice" type="checkbox" />
-                <span>이 기기에서 로그인 상태 유지</span>
-              </label>
-              <button class="button button--primary" type="submit" :disabled="isSubmitting">
-                {{ isSubmitting && activeSubmit === 'login' ? '로그인 중...' : '로그인' }}
-              </button>
-              <button
-                v-if="registrationOptions.socialLoginProviders.includes('KAKAO')"
-                class="button button--ghost"
-                type="button"
-                :disabled="isSubmitting"
-                @click="handleSocialLogin('KAKAO')"
-              >
-                카카오로 계속
-              </button>
-            </form>
-          </article>
-
-          <article class="auth-card">
-            <h2>가입 안내</h2>
-            <div class="stack-form stack-form--readonly">
-              <p v-if="isRegistrationOptionsLoading">가입 방법을 확인하는 중입니다...</p>
-              <template v-else-if="registrationOptions.publicRegistrationEnabled">
-                <p>현재 공개 회원가입이 열려 있습니다.</p>
-                <p>초대 링크 없이도 새 계정을 만들 수 있습니다.</p>
-                <button class="button button--ghost" type="button" @click="navigate('signup')">회원가입</button>
-              </template>
-              <template v-else>
-                <p>현재는 초대 링크로만 가입할 수 있습니다.</p>
-                <p>가입하려면 기존 사용자가 관리자 화면에서 1회용 초대 링크 생성을 요청해 주세요.</p>
-              </template>
+      <section class="auth-shell auth-shell--travel-preview">
+        <LoginTravelMapPreview />
+        <div class="auth-travel-panel">
+          <div class="auth-travel-brand">
+            <span class="auth-travel-brand__mark">TL</span>
+            <div>
+              <span class="auth-travel-brand__eyebrow">PERSONAL DATA PLATFORM</span>
+              <h1>TravelLedger</h1>
+              <p>여행과 일상의 기록을 나만의 지도로.</p>
             </div>
-          </article>
+          </div>
+          <div class="auth-grid">
+            <article class="auth-card">
+              <h2>로그인</h2>
+              <form class="stack-form" @submit.prevent="handleLogin">
+                <input v-model="loginForm.loginId" type="text" placeholder="로그인 ID" autocomplete="username" />
+                <input v-model="loginForm.password" type="password" placeholder="비밀번호" autocomplete="current-password" />
+                <PinPadInput
+                  v-model="loginForm.secondaryPin"
+                  label="2차 비밀번호"
+                  hint="보안을 위해 숫자 8자리 이상을 입력해 주세요."
+                  :disabled="isSubmitting"
+                />
+                <label class="checkbox-row">
+                  <input v-model="loginForm.rememberDevice" type="checkbox" />
+                  <span>이 기기에서 로그인 상태 유지</span>
+                </label>
+                <button class="button button--primary" type="submit" :disabled="isSubmitting">
+                  {{ isSubmitting && activeSubmit === 'login' ? '로그인 중...' : '로그인' }}
+                </button>
+                <button
+                  v-if="registrationOptions.socialLoginProviders.includes('KAKAO')"
+                  class="button button--ghost"
+                  type="button"
+                  :disabled="isSubmitting"
+                  @click="handleSocialLogin('KAKAO')"
+                >
+                  카카오로 계속
+                </button>
+              </form>
+            </article>
+
+            <article class="auth-card">
+              <h2>가입 안내</h2>
+              <div class="stack-form stack-form--readonly">
+                <p v-if="isRegistrationOptionsLoading">가입 방법을 확인하는 중입니다...</p>
+                <template v-else-if="registrationOptions.publicRegistrationEnabled">
+                  <p>현재 공개 회원가입이 열려 있습니다.</p>
+                  <p>초대 링크 없이도 새 계정을 만들 수 있습니다.</p>
+                  <button class="button button--ghost" type="button" @click="navigate('signup')">회원가입</button>
+                </template>
+                <template v-else>
+                  <p>현재는 초대 링크로만 가입할 수 있습니다.</p>
+                  <p>가입하려면 기존 사용자가 관리자 화면에서 1회용 초대 링크 생성을 요청해 주세요.</p>
+                </template>
+              </div>
+            </article>
+          </div>
         </div>
       </section>
 

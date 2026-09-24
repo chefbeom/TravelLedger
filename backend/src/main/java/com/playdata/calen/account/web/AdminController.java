@@ -26,6 +26,9 @@ import com.playdata.calen.account.service.AdminOpsControlService;
 import com.playdata.calen.account.service.LoginAuditLogService;
 import com.playdata.calen.account.service.RegistrationPolicyService;
 import com.playdata.calen.account.service.SupportInquiryService;
+import com.playdata.calen.travel.dto.AdminLoginMapPreviewResponse;
+import com.playdata.calen.travel.dto.AdminLoginMapPreviewUpdateRequest;
+import com.playdata.calen.travel.service.TravelLoginMapPreviewService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import java.io.IOException;
@@ -64,6 +67,7 @@ public class AdminController {
     private final SupportInquiryService supportInquiryService;
     private final LoginAuditLogService loginAuditLogService;
     private final RegistrationPolicyService registrationPolicyService;
+    private final TravelLoginMapPreviewService travelLoginMapPreviewService;
 
     public AdminController(
             AdminService adminService,
@@ -72,7 +76,8 @@ public class AdminController {
             AdminOpsControlService adminOpsControlService,
             SupportInquiryService supportInquiryService,
             LoginAuditLogService loginAuditLogService,
-            RegistrationPolicyService registrationPolicyService
+            RegistrationPolicyService registrationPolicyService,
+            TravelLoginMapPreviewService travelLoginMapPreviewService
     ) {
         this.adminService = adminService;
         this.adminDataManagementService = adminDataManagementService;
@@ -81,6 +86,7 @@ public class AdminController {
         this.supportInquiryService = supportInquiryService;
         this.loginAuditLogService = loginAuditLogService;
         this.registrationPolicyService = registrationPolicyService;
+        this.travelLoginMapPreviewService = travelLoginMapPreviewService;
     }
 
     @ModelAttribute
@@ -113,6 +119,23 @@ public class AdminController {
                 httpRequest,
                 "REGISTRATION_POLICY_UPDATE:publicRegistrationEnabled=" + response.publicRegistrationEnabled()
         );
+        return response;
+    }
+
+    @GetMapping("/login-map-preview")
+    public AdminLoginMapPreviewResponse getLoginMapPreviewSettings() {
+        return travelLoginMapPreviewService.getAdminSettings();
+    }
+
+    @PutMapping("/login-map-preview")
+    public AdminLoginMapPreviewResponse updateLoginMapPreviewSettings(
+            @AuthenticationPrincipal AppUserPrincipal currentUser,
+            HttpServletRequest httpRequest,
+            @Valid @RequestBody AdminLoginMapPreviewUpdateRequest request
+    ) {
+        AdminLoginMapPreviewResponse response = travelLoginMapPreviewService.updateAdminSettings(request);
+        recordAdminAction(currentUser, httpRequest,
+                "LOGIN_MAP_PREVIEW_UPDATE:enabled=" + response.enabled() + ",configured=" + response.configured());
         return response;
     }
 

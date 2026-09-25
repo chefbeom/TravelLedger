@@ -203,6 +203,12 @@ public class TravelController {
                 .body(travelLoginMapPreviewService.getPublicPreview());
     }
 
+    @GetMapping("/public/login-map-preview/markers/{markerNumber}/thumbnail")
+    public ResponseEntity<?> getLoginMapPreviewMarkerThumbnail(@PathVariable int markerNumber) {
+        TravelService.MediaDownload download = travelLoginMapPreviewService.getPublicMarkerThumbnail(markerNumber);
+        return buildThumbnailOnlyResponse(download, 320);
+    }
+
     @GetMapping("/public-trips/photo-clusters/{clusterId}")
     public TravelMyMapPhotoClusterPageResponse getPublicTripPhotoCluster(
             @AuthenticationPrincipal AppUserPrincipal currentUser,
@@ -589,6 +595,21 @@ public class TravelController {
                 .header(HttpHeaders.CONTENT_DISPOSITION, disposition.toString())
                 .header("X-Content-Type-Options", "nosniff")
                 .body(originalResource);
+    }
+
+    private ResponseEntity<?> buildThumbnailOnlyResponse(TravelService.MediaDownload download, Integer width) {
+        byte[] thumbnailBytes = loadThumbnailBytes(download, width);
+        if (thumbnailBytes == null) {
+            return ResponseEntity.notFound()
+                    .cacheControl(CacheControl.noStore())
+                    .build();
+        }
+        return ResponseEntity.ok()
+                .cacheControl(CacheControl.noStore())
+                .contentType(MediaType.parseMediaType(resolveThumbnailContentType(download.contentType())))
+                .contentLength(thumbnailBytes.length)
+                .header("X-Content-Type-Options", "nosniff")
+                .body(new ByteArrayResource(thumbnailBytes));
     }
 
     private byte[] loadThumbnailBytes(TravelService.MediaDownload download, Integer width) {

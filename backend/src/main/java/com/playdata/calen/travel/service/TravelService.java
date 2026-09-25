@@ -583,8 +583,8 @@ public class TravelService {
     }
 
     /**
-     * Builds a bounded, privacy-reduced projection for the public login page without loading
-     * photos, thumbnails, or photo clusters from the full share response.
+     * Builds a bounded, privacy-reduced projection for the public login page. It resolves only
+     * visible photo metadata for proxy thumbnail URLs and never loads photo bytes or clusters.
      */
     public TravelLoginMapPreviewResponse getTravelMapShareLoginPreview(String token) {
         TravelMapShareLink shareLink = getRequiredActiveTravelMapShareLink(token);
@@ -594,22 +594,31 @@ public class TravelService {
             return emptyTravelLoginMapPreview();
         }
 
-        List<TravelLoginMapPreviewMarkerResponse> markers = travelExpenseRecordRepository
-                .findAllByPlanIdInAndRecordType(planIds, TravelRecordType.MEMORY).stream()
-                .filter(this::hasCoordinates)
-                .filter(record -> !scope.excludedRecordIds().contains(record.getId()))
-                .sorted(RECORD_ORDER)
-                .limit(MAX_LOGIN_PREVIEW_MARKERS)
-                .map(record -> new TravelLoginMapPreviewMarkerResponse(
-                        0,
-                        roundLoginPreviewCoordinate(record.getLatitude()),
-                        roundLoginPreviewCoordinate(record.getLongitude())
-                ))
-                .toList();
-        List<TravelLoginMapPreviewMarkerResponse> numberedMarkers = new ArrayList<>(markers.size());
-        for (int index = 0; index < markers.size(); index += 1) {
-            TravelLoginMapPreviewMarkerResponse marker = markers.get(index);
-            numberedMarkers.add(new TravelLoginMapPreviewMarkerResponse(index + 1, marker.latitude(), marker.longitude()));
+        List<TravelExpenseRecord> visibleMarkers = loadTravelMapShareLoginPreviewMarkers(planIds, scope);
+        Set<Long> visiblePlanIds = new HashSet<>(planIds);
+        Map<Long, Long> photoIdByRecordId = visibleMarkers.isEmpty()
+                ? Map.of()
+                : travelMediaAssetRepository.findAllByRecordIdInOrderByUploadedAtDescIdDesc(
+                                visibleMarkers.stream().map(TravelExpenseRecord::getId).toList()
+                        ).stream()
+                        .filter(asset -> isVisibleTravelMapShareMedia(asset, visiblePlanIds, scope))
+                        .collect(Collectors.toMap(
+                                asset -> asset.getRecord().getId(),
+                                TravelMediaAsset::getId,
+                                (existing, ignored) -> existing
+                        ));
+
+        List<TravelLoginMapPreviewMarkerResponse> numberedMarkers = new ArrayList<>(visibleMarkers.size());
+        for (int index = 0; index < visibleMarkers.size(); index += 1) {
+            TravelExpenseRecord record = visibleMarkers.get(index);
+            int markerNumber = index + 1;
+            Long photoId = photoIdByRecordId.get(record.getId());
+            numberedMarkers.add(new TravelLoginMapPreviewMarkerResponse(
+                    markerNumber,
+                    roundLoginPreviewCoordinate(record.getLatitude()),
+                    roundLoginPreviewCoordinate(record.getLongitude()),
+                    photoId == null ? null : "/api/travel/public/login-map-preview/markers/" + markerNumber + "/thumbnail"
+            ));
         }
 
         List<TravelRouteSegment> visibleRoutes = travelRouteSegmentRepository
@@ -634,6 +643,47 @@ public class TravelService {
                 numberedMarkers,
                 routes
         );
+    }
+
+    public MediaDownload getTravelMapShareLoginPreviewMarkerMediaDownload(String token, int markerNumber) {
+        if (markerNumber < 1 || markerNumber > MAX_LOGIN_PREVIEW_MARKERS) {
+            throw new NotFoundException("Login map preview thumbnail not found.");
+        }
+
+        TravelMapShareLink shareLink = getRequiredActiveTravelMapShareLink(token);
+        TravelMapShareScope scope = readTravelMapShareScope(shareLink);
+        List<Long> planIds = loadVisibleTravelMapSharePlanIds(shareLink, scope);
+        if (planIds.isEmpty()) {
+            throw new NotFoundException("Login map preview thumbnail not found.");
+        }
+        List<TravelExpenseRecord> visibleMarkers = loadTravelMapShareLoginPreviewMarkers(planIds, scope);
+        if (visibleMarkers.size() < markerNumber) {
+            throw new NotFoundException("Login map preview thumbnail not found.");
+        }
+
+        TravelExpenseRecord marker = visibleMarkers.get(markerNumber - 1);
+        Set<Long> visiblePlanIds = new HashSet<>(planIds);
+        TravelMediaAsset photo = travelMediaAssetRepository
+                .findAllByRecordIdInOrderByUploadedAtDescIdDesc(List.of(marker.getId())).stream()
+                .filter(asset -> isVisibleTravelMapShareMedia(asset, visiblePlanIds, scope))
+                .findFirst()
+                .orElseThrow(() -> new NotFoundException("Login map preview thumbnail not found."));
+        return new MediaDownload(photo.getStoragePath(), photo.getContentType(), photo.getOriginalFileName());
+    }
+
+    private List<TravelExpenseRecord> loadTravelMapShareLoginPreviewMarkers(
+            List<Long> planIds,
+            TravelMapShareScope scope
+    ) {
+        if (planIds == null || planIds.isEmpty()) {
+            return List.of();
+        }
+        return travelExpenseRecordRepository.findAllByPlanIdInAndRecordType(planIds, TravelRecordType.MEMORY).stream()
+                .filter(this::hasCoordinates)
+                .filter(record -> !scope.excludedRecordIds().contains(record.getId()))
+                .sorted(RECORD_ORDER)
+                .limit(MAX_LOGIN_PREVIEW_MARKERS)
+                .toList();
     }
 
     private List<TravelLoginMapPreviewPointResponse> sampleLoginPreviewRoute(List<TravelRoutePointResponse> source) {

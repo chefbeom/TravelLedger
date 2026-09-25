@@ -1,6 +1,7 @@
 package com.playdata.calen.travel.service;
 
 import com.playdata.calen.common.exception.BadRequestException;
+import com.playdata.calen.common.exception.NotFoundException;
 import com.playdata.calen.travel.dto.AdminLoginMapPreviewResponse;
 import com.playdata.calen.travel.dto.AdminLoginMapPreviewUpdateRequest;
 import com.playdata.calen.travel.dto.TravelLoginMapPreviewResponse;
@@ -122,6 +123,14 @@ public class TravelLoginMapPreviewService {
             log.warn("Configured login travel map preview is unavailable; hiding preview data.");
             return emptyPreview();
         }
+    }
+
+    public TravelService.MediaDownload getPublicMarkerThumbnail(int markerNumber) {
+        String configuredToken = shareToken;
+        if (!enabled || configuredToken == null || configuredToken.isBlank()) {
+            throw new NotFoundException("Login map preview thumbnail not found.");
+        }
+        return travelService.getTravelMapShareLoginPreviewMarkerMediaDownload(configuredToken, markerNumber);
     }
 
     private String extractShareToken(String value) {

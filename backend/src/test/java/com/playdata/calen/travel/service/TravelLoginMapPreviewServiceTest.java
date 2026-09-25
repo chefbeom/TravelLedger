@@ -2,6 +2,7 @@ package com.playdata.calen.travel.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.any;
@@ -15,6 +16,7 @@ import com.playdata.calen.travel.dto.TravelLoginMapPreviewResponse;
 import com.playdata.calen.travel.dto.TravelLoginMapPreviewMarkerResponse;
 import com.playdata.calen.travel.dto.TravelLoginMapPreviewPointResponse;
 import com.playdata.calen.travel.dto.TravelLoginMapPreviewRouteResponse;
+import com.playdata.calen.common.exception.NotFoundException;
 import java.math.BigDecimal;
 import java.util.List;
 import com.playdata.calen.common.exception.BadRequestException;
@@ -60,7 +62,12 @@ class TravelLoginMapPreviewServiceTest {
                 "여행 기록 미리보기",
                 1,
                 1,
-                List.of(new TravelLoginMapPreviewMarkerResponse(1, new BigDecimal("35.123"), new BigDecimal("129.988"))),
+                List.of(new TravelLoginMapPreviewMarkerResponse(
+                        1,
+                        new BigDecimal("35.123"),
+                        new BigDecimal("129.988"),
+                        "/api/travel/public/login-map-preview/markers/1/thumbnail"
+                )),
                 List.of(new TravelLoginMapPreviewRouteResponse(1, List.of(
                         new TravelLoginMapPreviewPointResponse(new BigDecimal("35.1"), new BigDecimal("129.9")),
                         new TravelLoginMapPreviewPointResponse(new BigDecimal("35.2"), new BigDecimal("129.8"))
@@ -75,6 +82,8 @@ class TravelLoginMapPreviewServiceTest {
         assertEquals(1, response.markerCount());
         assertEquals(new BigDecimal("35.123"), response.markers().get(0).latitude());
         assertEquals(new BigDecimal("129.988"), response.markers().get(0).longitude());
+        assertEquals("/api/travel/public/login-map-preview/markers/1/thumbnail", response.markers().get(0).thumbnailUrl());
+        org.junit.jupiter.api.Assertions.assertFalse(response.markers().get(0).thumbnailUrl().contains("public-share-token"));
         assertEquals(1, response.routeCount());
         assertEquals(2, response.routes().get(0).points().size());
         assertEquals(new BigDecimal("35.1"), response.routes().get(0).points().get(0).latitude());
@@ -129,7 +138,7 @@ class TravelLoginMapPreviewServiceTest {
         ReflectionTestUtils.setField(service, "shareToken", null);
         when(travelService.getTravelMapShareLoginPreview(token)).thenReturn(
                 new TravelLoginMapPreviewResponse(true, "여행 기록 미리보기", 1, 0,
-                        List.of(new TravelLoginMapPreviewMarkerResponse(1, BigDecimal.ONE, BigDecimal.ONE)),
+                        List.of(new TravelLoginMapPreviewMarkerResponse(1, BigDecimal.ONE, BigDecimal.ONE, null)),
                         List.of())
         );
 
@@ -142,5 +151,26 @@ class TravelLoginMapPreviewServiceTest {
         assertTrue(status.enabled());
         assertTrue(status.configured());
         assertFalse(status.toString().contains(token));
+    }
+
+    @Test
+    void markerThumbnailRequiresEnabledPreviewAndDelegatesUsingStoredShareToken() {
+        String token = "public-share-token-123456";
+        ReflectionTestUtils.setField(service, "enabled", true);
+        ReflectionTestUtils.setField(service, "shareToken", token);
+        TravelService.MediaDownload expected = new TravelService.MediaDownload("object/photo.jpg", "image/jpeg", "photo.jpg");
+        when(travelService.getTravelMapShareLoginPreviewMarkerMediaDownload(token, 2)).thenReturn(expected);
+
+        assertEquals(expected, service.getPublicMarkerThumbnail(2));
+        verify(travelService).getTravelMapShareLoginPreviewMarkerMediaDownload(token, 2);
+    }
+
+    @Test
+    void markerThumbnailIsUnavailableWhenPreviewIsDisabled() {
+        ReflectionTestUtils.setField(service, "enabled", false);
+        ReflectionTestUtils.setField(service, "shareToken", "public-share-token-123456");
+
+        assertThrows(NotFoundException.class, () -> service.getPublicMarkerThumbnail(2));
+        verifyNoInteractions(travelService);
     }
 }

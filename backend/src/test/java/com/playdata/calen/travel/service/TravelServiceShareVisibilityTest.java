@@ -11,6 +11,8 @@ import com.playdata.calen.travel.domain.TravelPlan;
 import com.playdata.calen.travel.domain.TravelPlanShare;
 import com.playdata.calen.travel.domain.TravelPlanStatus;
 import com.playdata.calen.travel.domain.TravelExpenseRecord;
+import com.playdata.calen.travel.domain.TravelMediaAsset;
+import com.playdata.calen.travel.domain.TravelMediaType;
 import com.playdata.calen.travel.domain.TravelMapShareLink;
 import com.playdata.calen.travel.domain.TravelRecordType;
 import com.playdata.calen.travel.domain.TravelRouteSegment;
@@ -44,6 +46,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -123,7 +126,7 @@ class TravelServiceShareVisibilityTest {
     }
 
     @Test
-    void loginMapPreviewUsesOnlySelectedShareScopeAndReturnsRoundedCoordinatesWithoutLoadingPhotos() {
+    void loginMapPreviewUsesOnlySelectedShareScopeAndReturnsRoundedCoordinatesAndScopedThumbnailProxy() {
         Long ownerId = 7L;
         Long planId = 10L;
         String token = "public-share-token-123456";
@@ -133,7 +136,7 @@ class TravelServiceShareVisibilityTest {
         shareLink.setToken(token);
         shareLink.setPlanIdsJson("[10]");
         shareLink.setExcludedRecordIdsJson("[]");
-        shareLink.setExcludedMediaIdsJson("[]");
+        shareLink.setExcludedMediaIdsJson("[301]");
         shareLink.setExcludedRouteIdsJson("[]");
 
         TravelExpenseRecord memory = new TravelExpenseRecord();
@@ -145,6 +148,9 @@ class TravelServiceShareVisibilityTest {
         memory.setTitle("Private place name");
         memory.setLatitude(new BigDecimal("35.123456"));
         memory.setLongitude(new BigDecimal("129.987654"));
+
+        TravelMediaAsset excludedPhoto = photo(301L, selectedPlan, memory, "private/excluded.jpg");
+        TravelMediaAsset visiblePhoto = photo(302L, selectedPlan, memory, "private/visible.jpg");
 
         TravelRouteSegment route = new TravelRouteSegment();
         route.setId(72L);
@@ -158,6 +164,8 @@ class TravelServiceShareVisibilityTest {
         when(travelPlanRepository.findAllById(java.util.List.of(planId))).thenReturn(java.util.List.of(selectedPlan));
         when(travelExpenseRecordRepository.findAllByPlanIdInAndRecordType(java.util.List.of(planId), TravelRecordType.MEMORY))
                 .thenReturn(java.util.List.of(memory));
+        when(travelMediaAssetRepository.findAllByRecordIdInOrderByUploadedAtDescIdDesc(java.util.List.of(91L)))
+                .thenReturn(java.util.List.of(excludedPhoto, visiblePhoto));
         when(travelRouteSegmentRepository.findAllByPlanIdInOrderByRouteDateDescIdDesc(java.util.List.of(planId)))
                 .thenReturn(java.util.List.of(route));
 
@@ -167,10 +175,17 @@ class TravelServiceShareVisibilityTest {
         assertTrue(response.markers().size() == 1);
         assertTrue(response.markers().get(0).latitude().compareTo(new BigDecimal("35.123")) == 0);
         assertTrue(response.markers().get(0).longitude().compareTo(new BigDecimal("129.988")) == 0);
+        assertTrue(response.markers().get(0).thumbnailUrl().endsWith("/markers/1/thumbnail"));
+        assertFalse(response.markers().get(0).thumbnailUrl().contains(token));
+        assertFalse(response.markers().get(0).thumbnailUrl().contains("302"));
         assertTrue(response.routes().size() == 1);
         assertTrue(response.routes().get(0).points().size() == 2);
         assertTrue(response.routes().get(0).points().get(0).latitude().compareTo(new BigDecimal("35.1")) == 0);
-        verifyNoInteractions(travelMediaAssetRepository);
+        TravelService.MediaDownload thumbnail = service.getTravelMapShareLoginPreviewMarkerMediaDownload(token, 1);
+        assertTrue(thumbnail.storagePath().equals("private/visible.jpg"));
+        assertThrows(NotFoundException.class, () -> service.getTravelMapShareLoginPreviewMarkerMediaDownload(token, 2));
+        verify(travelMediaAssetRepository, times(2))
+                .findAllByRecordIdInOrderByUploadedAtDescIdDesc(java.util.List.of(91L));
     }
 
     @Test
@@ -233,6 +248,19 @@ class TravelServiceShareVisibilityTest {
         plan.setStatus(status);
         plan.setPublicShared(false);
         return plan;
+    }
+
+    private TravelMediaAsset photo(Long id, TravelPlan plan, TravelExpenseRecord record, String path) {
+        TravelMediaAsset asset = new TravelMediaAsset();
+        asset.setId(id);
+        asset.setPlan(plan);
+        asset.setRecord(record);
+        asset.setMediaType(TravelMediaType.PHOTO);
+        asset.setOriginalFileName(path.substring(path.lastIndexOf('/') + 1));
+        asset.setStoragePath(path);
+        asset.setContentType("image/jpeg");
+        asset.setFileSize(10L);
+        return asset;
     }
 
     private AppUser user(Long id) {

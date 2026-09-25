@@ -45,6 +45,30 @@ function renderPreview() {
     if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
       continue
     }
+    const popup = document.createElement('div')
+    popup.className = 'login-map-preview__popup'
+    const label = document.createElement('strong')
+    label.textContent = `여행 지점 ${marker.number}`
+    popup.appendChild(label)
+    if (marker.thumbnailUrl) {
+      const thumbnail = document.createElement('img')
+      thumbnail.className = 'login-map-preview__popup-thumbnail'
+      thumbnail.src = marker.thumbnailUrl
+      thumbnail.alt = `여행 지점 ${marker.number} 사진 미리보기`
+      thumbnail.loading = 'lazy'
+      thumbnail.decoding = 'async'
+      thumbnail.addEventListener('error', () => {
+        const fallback = document.createElement('span')
+        fallback.textContent = '썸네일을 불러오지 못했습니다.'
+        thumbnail.replaceWith(fallback)
+      }, { once: true })
+      popup.appendChild(thumbnail)
+    } else {
+      const empty = document.createElement('span')
+      empty.textContent = '연결된 사진이 없습니다.'
+      popup.appendChild(empty)
+    }
+
     L.circleMarker([latitude, longitude], {
       radius: 7,
       color: '#f4fff9',
@@ -52,7 +76,7 @@ function renderPreview() {
       fillColor: '#168b68',
       fillOpacity: 1,
     })
-      .bindPopup(`여행 지점 ${marker.number}`)
+      .bindPopup(popup)
       .addTo(featureLayer)
   }
 
@@ -89,9 +113,9 @@ onMounted(() => {
     tap: true,
   }).setView(DEFAULT_CENTER, DEFAULT_ZOOM)
 
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
-    attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
-    subdomains: 'abcd',
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '&copy; OpenStreetMap contributors',
+    subdomains: ['a', 'b', 'c'],
     maxZoom: 19,
   }).addTo(map)
   L.control.zoom({ position: 'bottomright' }).addTo(map)
@@ -140,7 +164,6 @@ onBeforeUnmount(() => {
       <span class="login-map-preview__privacy">공개 선택된 경로만 표시</span>
       <span class="login-map-preview__attribution">
         © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap</a>
-        · <a href="https://carto.com/attributions" target="_blank" rel="noreferrer">CARTO</a>
       </span>
     </div>
   </section>
@@ -305,6 +328,20 @@ onBeforeUnmount(() => {
 :deep(.leaflet-popup-content-wrapper),
 :deep(.leaflet-popup-tip) {
   border-radius: 0;
+}
+
+:deep(.login-map-preview__popup) {
+  display: grid;
+  gap: 7px;
+  min-width: 150px;
+  color: #253a35;
+}
+
+:deep(.login-map-preview__popup-thumbnail) {
+  display: block;
+  width: min(220px, 62vw);
+  height: 138px;
+  object-fit: cover;
 }
 
 @media (max-width: 760px) {

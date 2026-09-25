@@ -5,6 +5,7 @@ import java.math.BigDecimal;
 public record TravelLoginMapPreviewMarkerResponse(
         int number,
         BigDecimal latitude,
-        BigDecimal longitude
+        BigDecimal longitude,
+        String thumbnailUrl
 ) {
 }

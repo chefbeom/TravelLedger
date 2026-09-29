@@ -371,25 +371,17 @@ export function buildTravelJourneyRoutePhotoDistances(path, photos = [], maximum
   ))
 }
 
-export function getTravelJourneyRouteOverviewZoom(photoDistances = [], photoIndex = 0) {
-  const distances = Array.isArray(photoDistances) ? photoDistances : []
-  const index = Number(photoIndex)
-  if (!Number.isInteger(index) || index < 0 || index + 1 >= distances.length) {
-    return null
+export function getTravelJourneyViewportOverviewZoom({ current, next, currentZoom, minZoom, width, height, project }) {
+  const horizontalLimit = Math.max(1, width / 2 - 80)
+  const verticalLimit = Math.max(1, height / 2 - 80)
+  let zoom = currentZoom
+  while (zoom > minZoom) {
+    const from = project(current, zoom)
+    const to = project(next, zoom)
+    if (Math.abs(to.x - from.x) <= horizontalLimit && Math.abs(to.y - from.y) <= verticalLimit) break
+    zoom = Math.max(minZoom, zoom - 0.5)
   }
-
-  const currentDistance = Number(distances[index])
-  const nextDistance = Number(distances[index + 1])
-  if (!Number.isFinite(currentDistance) || !Number.isFinite(nextDistance)) {
-    return null
-  }
-
-  const gapMeters = Math.max(0, nextDistance - currentDistance)
-  if (gapMeters < 15_000) {
-    return null
-  }
-
-  return Math.max(4, Math.min(12, 15 - Math.ceil(Math.log2(gapMeters / 5_000))))
+  return zoom
 }
 
 export function getTravelJourneyRouteDistanceAtElapsed(path, photoDistances = [], elapsedMs = 0, intervalMs = 4000) {

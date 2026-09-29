@@ -6,7 +6,7 @@ import {
   buildTravelRoutePlaybackPath,
   findNextTravelJourneyDay,
   getTravelJourneyRouteDistanceAtElapsed,
-  getTravelJourneyRouteOverviewZoom,
+  getTravelJourneyViewportOverviewZoom,
   getTravelRoutePosition,
   matchesTravelJourneyDay,
   sortTravelJourneyPhotos,
@@ -157,9 +157,14 @@ test('route photo anchors stay ordered and interpolate photos without usable rou
   assert.ok(distances[3] > distances[2])
 })
 
-test('long photo gaps use a wider map zoom based on travel distance', () => {
-  assert.equal(getTravelJourneyRouteOverviewZoom([0, 14_999], 0), null)
-  assert.equal(getTravelJourneyRouteOverviewZoom([0, 15_000], 0), 12)
-  assert.equal(getTravelJourneyRouteOverviewZoom([0, 500_000], 0), 8)
-  assert.equal(getTravelJourneyRouteOverviewZoom([0, 10_000], 1), null)
+test('journey overview zoom fits both pins in the visible viewport', () => {
+  const project = (point, zoom) => ({ x: point.x * 2 ** zoom, y: point.y * 2 ** zoom })
+  const options = {
+    current: { x: 0, y: 0 }, next: { x: 1, y: 0.5 },
+    currentZoom: 10, minZoom: 2, width: 800, height: 600, project,
+  }
+  assert.equal(getTravelJourneyViewportOverviewZoom(options), 8)
+  assert.equal(getTravelJourneyViewportOverviewZoom({ ...options, next: { x: 0.1, y: 0.1 } }), 10)
+  assert.equal(getTravelJourneyViewportOverviewZoom({ ...options, next: { x: 1000, y: 1000 } }), 2)
+  assert.equal(getTravelJourneyViewportOverviewZoom({ ...options, width: 500 }), 7)
 })

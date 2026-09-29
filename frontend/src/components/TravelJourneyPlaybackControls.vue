@@ -93,10 +93,11 @@ function handleRouteFollowChange(event) {
           :checked="props.routeFollowEnabled"
           @change="handleRouteFollowChange"
         />
-        <span>사진 재생과 함께 직접 그린 경로·GPX 경로를 모두 따라가기</span>
+        <span class="travel-journey-route-toggle__switch" aria-hidden="true"><span></span></span>
+        <span class="travel-journey-route-toggle__label">경로 따라가기</span>
       </label>
       <small v-if="routeCount" class="travel-journey-route-controls__hint">
-        사진 재생 간격에 맞춰 함께 이동합니다. 경로에 시각 정보가 없어 여러 경로는 가까운 끝점 순으로 잇는 근사 재생입니다.
+        사진과 같은 간격으로 이동합니다. 경로 시각 정보가 없어 이동은 근사 방식입니다.
       </small>
     </section>
   </section>

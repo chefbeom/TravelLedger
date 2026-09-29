@@ -11,7 +11,6 @@ import {
   buildTravelRoutePlaybackPath,
   findNextTravelJourneyDay,
   getTravelJourneyRouteDistanceAtElapsed,
-  getTravelJourneyRouteOverviewZoom,
   getTravelRoutePosition,
   matchesTravelJourneyDay,
   sortTravelJourneyPhotos,
@@ -52,7 +51,8 @@ const journeyTransitionCountdown = ref(0)
 const journeyRouteDistanceMeters = ref(0)
 const journeyPlaybackElapsedMs = ref(0)
 const journeyRouteAutoZoomPending = ref(false)
-const journeyRouteOverviewZoom = ref(null)
+const journeyLegPreparing = ref(false)
+const mapPanelRef = ref(null)
 const mapFocusTarget = ref(null)
 let clusterDetailRequestSequence = 0
 let journeyPlaybackTimer = null
@@ -60,7 +60,6 @@ let journeyPlaybackSequence = 0
 let journeyRouteFollowTimer = null
 let journeyRouteFollowSequence = 0
 let journeyPlaybackStartedAt = 0
-let journeyRouteZoomTransitionUntil = 0
 let mapFocusSequence = 0
 
 const overview = computed(() => share.value?.overview ?? null)
@@ -328,6 +327,8 @@ function pauseJourneyPlayback() {
     journeyPlaybackElapsedMs.value += Math.max(0, performance.now() - journeyPlaybackStartedAt)
   }
   journeyPlaybackStartedAt = 0
+  journeyLegPreparing.value = false
+  mapPanelRef.value?.cancelJourneyLeg()
   journeyPlaybackSequence += 1
   isJourneyPlaying.value = false
   journeyTransitionCountdown.value = 0
@@ -364,61 +365,43 @@ function focusMapAtJourneyPhoto(photo, options = {}) {
   focusMapAtCoordinate(rawLatitude, rawLongitude, { autoZoom: true, ...options })
 }
 
-function prepareJourneyRoutePhotoView(photoIndex, { initial = false, position = null } = {}) {
-  const path = journeyRoutePath.value
-  if (!journeyRouteFollowEnabled.value || !path.isPlayable) {
-    return false
+async function prepareJourneyPhotoLeg(sequence, { focusCurrent = true } = {}) {
+  if (!isJourneyPlaying.value || sequence !== journeyPlaybackSequence) return
+
+  pauseJourneyRoutePlayback()
+  journeyLegPreparing.value = true
+  journeyPlaybackStartedAt = 0
+  const currentPin = journeyPhotoPins.value[journeyPhotoIndex.value]
+  const nextPin = journeyPhotoPins.value[journeyPhotoIndex.value + 1]
+  let currentPoint = currentPin
+  if (!focusCurrent && journeyRouteFollowEnabled.value && journeyRoutePath.value.isPlayable) {
+    const distance = getTravelJourneyRouteDistanceAtElapsed(
+      journeyRoutePath.value,
+      journeyRoutePhotoDistances.value,
+      journeyPlaybackElapsedMs.value,
+      journeySpeedSeconds.value * 1000,
+    )
+    currentPoint = getTravelRoutePosition(journeyRoutePath.value, distance) ?? currentPin
   }
 
-  const photoDistance = journeyRoutePhotoDistances.value[photoIndex] ?? journeyRouteDistanceMeters.value
-  const targetPosition = position ?? getTravelRoutePosition(path, photoDistance)
-  if (!targetPosition) {
-    return false
+  let result
+  try {
+    result = await mapPanelRef.value?.prepareJourneyLeg(currentPoint, nextPin, { focusCurrent })
+  } catch {
+    if (sequence === journeyPlaybackSequence) focusMapAtJourneyPhoto(currentPin)
   }
+  if (!isJourneyPlaying.value || sequence !== journeyPlaybackSequence || result?.cancelled) return
 
-  const overviewZoom = getTravelJourneyRouteOverviewZoom(journeyRoutePhotoDistances.value, photoIndex)
-  if (overviewZoom != null) {
-    const previousOverviewZoom = journeyRouteOverviewZoom.value
-    journeyRouteOverviewZoom.value = previousOverviewZoom == null
-      ? overviewZoom
-      : Math.min(previousOverviewZoom, overviewZoom)
-    journeyRouteAutoZoomPending.value = false
-    if (previousOverviewZoom == null || journeyRouteOverviewZoom.value < previousOverviewZoom) {
-      focusMapAtCoordinate(targetPosition.latitude, targetPosition.longitude, {
-        zoom: journeyRouteOverviewZoom.value,
-        duration: 0.75,
-      })
-      journeyRouteZoomTransitionUntil = performance.now() + 750
-    }
-    return true
-  }
-
-  if (journeyRouteOverviewZoom.value != null) {
-    journeyRouteOverviewZoom.value = null
-    journeyRouteAutoZoomPending.value = false
-    focusMapAtCoordinate(targetPosition.latitude, targetPosition.longitude, {
-      autoZoom: true,
-      duration: 0.7,
-    })
-    journeyRouteZoomTransitionUntil = performance.now() + 700
-    return true
-  }
-
-  if (initial) {
-    journeyRouteAutoZoomPending.value = false
-    focusMapAtCoordinate(targetPosition.latitude, targetPosition.longitude, {
-      autoZoom: true,
-      duration: 0.85,
-    })
-    journeyRouteZoomTransitionUntil = performance.now() + 850
-  } else {
-    journeyRouteAutoZoomPending.value = true
-  }
-  return true
+  journeyLegPreparing.value = false
+  journeyRouteAutoZoomPending.value = false
+  journeyPlaybackStartedAt = performance.now()
+  scheduleJourneyRouteFollow(sequence)
+  scheduleNextJourneyPhoto(sequence)
 }
 
 function scheduleNextJourneyPhoto(sequence) {
-  if (!isJourneyPlaying.value || sequence !== journeyPlaybackSequence) {
+  if (!isJourneyPlaying.value || journeyLegPreparing.value || !journeyPlaybackStartedAt
+    || sequence !== journeyPlaybackSequence) {
     return
   }
   if (journeyPlaybackTimer !== null) {
@@ -436,7 +419,7 @@ function scheduleNextJourneyPhoto(sequence) {
       targetElapsedMs,
       journeyPlaybackElapsedMs.value + Math.max(0, performance.now() - journeyPlaybackStartedAt),
     )
-    journeyPlaybackStartedAt = performance.now()
+    journeyPlaybackStartedAt = 0
     const nextIndex = journeyPhotoIndex.value + 1
     if (nextIndex >= journeyPhotoPins.value.length) {
       if (journeyTransitionDay.value) {
@@ -450,16 +433,8 @@ function scheduleNextJourneyPhoto(sequence) {
       return
     }
 
-    const pin = journeyPhotoPins.value[nextIndex]
     journeyPhotoIndex.value = nextIndex
-    if (journeyRouteFollowEnabled.value && journeyRoutePath.value.isPlayable) {
-      if (!prepareJourneyRoutePhotoView(nextIndex)) {
-        journeyRouteAutoZoomPending.value = true
-      }
-    } else {
-      focusMapAtJourneyPhoto(pin, { autoZoom: true, duration: 0.65 })
-    }
-    scheduleNextJourneyPhoto(sequence)
+    await prepareJourneyPhotoLeg(sequence)
   }, delayMs)
 }
 
@@ -491,29 +466,20 @@ function scheduleJourneyDayTransition(sequence) {
     journeyPlaybackElapsedMs.value = 0
     journeyRouteDistanceMeters.value = 0
     journeyRouteAutoZoomPending.value = false
-    journeyRouteOverviewZoom.value = null
-    journeyRouteZoomTransitionUntil = 0
     displayMode.value = 'pin'
     clearJourneyPlaybackDetails()
-    journeyPlaybackStartedAt = performance.now()
+    journeyPlaybackStartedAt = 0
     await nextTick()
     if (!isJourneyPlaying.value || sequence !== journeyPlaybackSequence) {
       return
     }
 
-    const firstPin = journeyPhotoPins.value[0]
-    if (!firstPin) {
+    if (!journeyPhotoPins.value[0]) {
       scheduleJourneyDayTransition(sequence)
       return
     }
     journeyPhotoIndex.value = 0
-    if (journeyRouteFollowEnabled.value && journeyRoutePath.value.isPlayable) {
-      prepareJourneyRoutePhotoView(0, { initial: true })
-    } else {
-      focusMapAtJourneyPhoto(firstPin, { autoZoom: true, duration: 1.1 })
-    }
-    scheduleJourneyRouteFollow(sequence)
-    scheduleNextJourneyPhoto(sequence)
+    await prepareJourneyPhotoLeg(sequence)
   }
   journeyPlaybackTimer = setTimeout(tick, 1000)
 }
@@ -536,30 +502,10 @@ async function toggleJourneyPlayback() {
     journeyPlaybackElapsedMs.value = 0
   }
   isJourneyPlaying.value = true
-  journeyPlaybackStartedAt = performance.now()
+  journeyPlaybackStartedAt = 0
   journeyPlaybackSequence += 1
   const sequence = journeyPlaybackSequence
-  if (journeyRouteFollowEnabled.value && journeyRoutePath.value.isPlayable) {
-    const elapsed = journeyPlaybackElapsedMs.value
-    const routeDistance = getTravelJourneyRouteDistanceAtElapsed(
-      journeyRoutePath.value,
-      journeyRoutePhotoDistances.value,
-      elapsed,
-      journeySpeedSeconds.value * 1000,
-    )
-    const position = getTravelRoutePosition(journeyRoutePath.value, routeDistance)
-    if (position) {
-      if (canResume) {
-        focusMapAtCoordinate(position.latitude, position.longitude, { keepZoom: true, duration: 0.65 })
-      } else {
-        prepareJourneyRoutePhotoView(journeyPhotoIndex.value, { initial: true, position })
-      }
-    }
-  } else {
-    focusMapAtJourneyPhoto(journeyPhotoPins.value[journeyPhotoIndex.value], { autoZoom: true, duration: 0.65 })
-  }
-  scheduleJourneyRouteFollow(sequence)
-  scheduleNextJourneyPhoto(sequence)
+  await prepareJourneyPhotoLeg(sequence, { focusCurrent: !canResume })
 }
 
 function setJourneyPlaybackSpeed(value) {
@@ -581,7 +527,7 @@ function setJourneyPlaybackSpeed(value) {
     journeyPlaybackStartedAt = performance.now()
   }
   journeySpeedSeconds.value = nextSpeed
-  if (isJourneyPlaying.value && !journeyTransitionCountdown.value) {
+  if (isJourneyPlaying.value && !journeyTransitionCountdown.value && !journeyLegPreparing.value) {
     if (journeyPlaybackTimer !== null) clearTimeout(journeyPlaybackTimer)
     scheduleNextJourneyPhoto(journeyPlaybackSequence)
     pauseJourneyRoutePlayback()
@@ -600,8 +546,6 @@ function handleJourneyDayChange(dayKey) {
   journeyPlaybackElapsedMs.value = 0
   journeyRouteDistanceMeters.value = 0
   journeyRouteAutoZoomPending.value = false
-  journeyRouteOverviewZoom.value = null
-  journeyRouteZoomTransitionUntil = 0
   clearSelection()
   if (nextKey) {
     displayMode.value = 'pin'
@@ -630,20 +574,11 @@ function clearJourneyPlaybackDetails() {
 
 function scheduleJourneyRouteFollow(sequence, routeSequence = journeyRouteFollowSequence) {
   const path = journeyRoutePath.value
-  if (!isJourneyPlaying.value || !journeyRouteFollowEnabled.value
+  if (!isJourneyPlaying.value || journeyLegPreparing.value || !journeyPlaybackStartedAt
+    || !journeyRouteFollowEnabled.value
     || sequence !== journeyPlaybackSequence || routeSequence !== journeyRouteFollowSequence || !path.isPlayable) {
     return
   }
-
-  const zoomTransitionRemainingMs = journeyRouteZoomTransitionUntil - performance.now()
-  if (zoomTransitionRemainingMs > 0) {
-    journeyRouteFollowTimer = setTimeout(() => {
-      journeyRouteFollowTimer = null
-      scheduleJourneyRouteFollow(sequence, routeSequence)
-    }, Math.min(140, zoomTransitionRemainingMs))
-    return
-  }
-  journeyRouteZoomTransitionUntil = 0
 
   const intervalMs = journeySpeedSeconds.value * 1000
   const elapsedMs = journeyPlaybackElapsedMs.value + Math.max(0, performance.now() - journeyPlaybackStartedAt)
@@ -684,8 +619,10 @@ function setJourneyRouteFollowEnabled(value) {
   }
   pauseJourneyRoutePlayback()
   journeyRouteFollowEnabled.value = shouldFollow
+  if (journeyLegPreparing.value) return
   if (isJourneyPlaying.value && shouldFollow) {
-    const elapsed = journeyPlaybackElapsedMs.value + Math.max(0, performance.now() - journeyPlaybackStartedAt)
+    const elapsed = journeyPlaybackElapsedMs.value + (journeyPlaybackStartedAt
+      ? Math.max(0, performance.now() - journeyPlaybackStartedAt) : 0)
     const distance = getTravelJourneyRouteDistanceAtElapsed(
       journeyRoutePath.value,
       journeyRoutePhotoDistances.value,
@@ -694,17 +631,14 @@ function setJourneyRouteFollowEnabled(value) {
     )
     const position = getTravelRoutePosition(journeyRoutePath.value, distance)
     if (position) {
-      prepareJourneyRoutePhotoView(Math.max(0, journeyPhotoIndex.value), { position })
+      focusMapAtCoordinate(position.latitude, position.longitude, { keepZoom: true, duration: 0.5 })
     }
     scheduleJourneyRouteFollow(journeyPlaybackSequence)
   } else if (!shouldFollow) {
-    const wasOverview = journeyRouteOverviewZoom.value != null
-    journeyRouteOverviewZoom.value = null
-    journeyRouteZoomTransitionUntil = 0
     journeyRouteAutoZoomPending.value = false
     const activePin = journeyPhotoPins.value[journeyPhotoIndex.value]
     if (activePin) {
-      focusMapAtJourneyPhoto(activePin, { keepZoom: !wasOverview, autoZoom: wasOverview, duration: 0.5 })
+      focusMapAtJourneyPhoto(activePin, { autoZoom: true, duration: 0.5 })
     }
   }
 }
@@ -860,6 +794,7 @@ onBeforeUnmount(() => {
       <p v-else-if="isLoading" class="panel__empty">공유 지도를 불러오는 중입니다...</p>
       <TravelMyMapClusterPanel
         v-else
+        ref="mapPanelRef"
         :photo-clusters="mapPhotoClusters"
         :photo-pins="mapPhotoPins"
         :markers="mapMarkers"

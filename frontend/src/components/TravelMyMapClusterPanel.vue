@@ -3,6 +3,7 @@ import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { buildThumbnailUrl, THUMBNAIL_VARIANTS } from '../lib/mediaPreview'
+import { getTravelJourneyViewportOverviewZoom } from '../lib/travelJourney'
 import { formatDate, formatTime } from '../lib/uiFormat'
 
 const DEFAULT_CENTER = [37.5547, 126.9706]
@@ -118,6 +119,8 @@ let mapResizeTimer = 0
 let suppressViewportClusterRenderUntil = 0
 let popupOpenSequence = 0
 let suppressNextMapBackgroundClick = false
+let journeyLegSequence = 0
+let isPreparingJourneyLeg = false
 
 function isTouchMapDevice() {
   if (typeof window === 'undefined') {
@@ -911,21 +914,17 @@ function createPopupContentLegacy(aggregate) {
 function buildRecordMarkerIcon(marker, active) {
   const colorHex = normalizeColorHex(marker?.planColorHex, '#3182F6')
   const label = escapeHtml(String(marker?.category || marker?.title || marker?.placeName || '핀').slice(0, 2))
-  const photoUrl = marker?.photoUrl ? buildThumbnailUrl(marker.photoUrl, THUMBNAIL_VARIANTS.pin) : ''
 
   return L.divIcon({
     className: 'travel-map__icon-root',
-    html: `
-      <div
-        class="travel-map__thumb-pin travel-map__thumb-pin--memory${active ? ' is-active' : ''}"
-        style="--marker-color:${colorHex};${photoUrl ? `background-image:url('${escapeHtml(photoUrl)}')` : ''}"
-      >
-        ${photoUrl ? '' : `<span>${label}</span>`}
-      </div>
-    `,
-    iconSize: [50, 62],
-    iconAnchor: [25, 58],
-    popupAnchor: [0, -28],
+    html: `<svg class="travel-map-pin-glyph travel-map-pin-glyph--record${active ? ' is-active' : ''}" viewBox="0 0 44 52" style="--map-pin-color:${colorHex}" aria-hidden="true" focusable="false">
+      <path class="travel-map-pin-glyph__shape" d="M22 1.5C10.7 1.5 1.5 10.3 1.5 21.1c0 12.1 16.4 27.6 19.2 30.1a1.9 1.9 0 0 0 2.6 0c2.8-2.5 19.2-18 19.2-30.1C42.5 10.3 33.3 1.5 22 1.5Z" />
+      <circle class="travel-map-pin-glyph__center" cx="22" cy="20.5" r="9.5" />
+      <text class="travel-map-pin-glyph__label" x="22" y="24" text-anchor="middle">${label}</text>
+    </svg>`,
+    iconSize: [44, 52],
+    iconAnchor: [22, 50],
+    popupAnchor: [0, -46],
   })
 }
 
@@ -948,33 +947,22 @@ function buildClusterIcon(aggregate, active) {
     return buildRecordMarkerIcon(aggregate?.representative, active)
   }
 
-  const shouldUsePhotoThumbnail = !aggregate?.isPhotoPin && props.displayMode !== 'pin' && aggregate?.representative?.representativePhotoUrl
-  const photoUrl = shouldUsePhotoThumbnail
-    ? buildThumbnailUrl(aggregate.representative.representativePhotoUrl, THUMBNAIL_VARIANTS.pin)
-    : ''
-  const markerSize = aggregate?.isPhotoPin ? 44 : aggregate?.isAggregate ? 68 : 60
   const clusterCount = aggregate?.photoCount || 0
   const colorHex = normalizeColorHex(aggregate?.representative?.planColorHex, '#3182F6')
   const markerBody = aggregate?.isPhotoPin
-    ? `<svg class="travel-cluster-pin__glyph" viewBox="0 0 44 52" aria-hidden="true" focusable="false">
-        <path d="M22 1.5C10.7 1.5 1.5 10.3 1.5 21.1c0 12.1 16.4 27.6 19.2 30.1a1.9 1.9 0 0 0 2.6 0c2.8-2.5 19.2-18 19.2-30.1C42.5 10.3 33.3 1.5 22 1.5Z" />
-        <circle cx="22" cy="20.5" r="7.2" />
-      </svg>`
-    : `<span class="travel-cluster-pin__count">${formatCompactCount(clusterCount)}</span>`
+    ? '<circle class="travel-map-pin-glyph__center" cx="22" cy="20.5" r="7.2" />'
+    : `<circle class="travel-map-pin-glyph__center travel-map-pin-glyph__center--count" cx="22" cy="20.5" r="10" />
+       <text class="travel-map-pin-glyph__count" x="22" y="24" text-anchor="middle">${escapeHtml(formatCompactCount(clusterCount))}</text>`
 
   return L.divIcon({
     className: 'travel-map__icon-root',
-    html: `
-      <div
-        class="travel-cluster-pin${aggregate?.isAggregate ? ' is-aggregate' : ''}${aggregate?.isClientCluster ? ' is-client-cluster' : ''}${aggregate?.isPhotoPin ? ' is-photo-pin' : ''}${active ? ' is-active' : ''}"
-        style="--cluster-color:${colorHex};${photoUrl ? `background-image:url('${escapeHtml(photoUrl)}')` : ''}"
-      >
-        ${markerBody}
-      </div>
-    `,
-    iconSize: aggregate?.isPhotoPin ? [44, 52] : [markerSize, markerSize],
-    iconAnchor: aggregate?.isPhotoPin ? [22, 50] : [Math.round(markerSize / 2), markerSize - 6],
-    popupAnchor: aggregate?.isPhotoPin ? [0, -46] : [0, -markerSize + 16],
+    html: `<svg class="travel-map-pin-glyph${aggregate?.isPhotoPin ? ' travel-map-pin-glyph--photo' : ' travel-map-pin-glyph--cluster'}${active ? ' is-active' : ''}" viewBox="0 0 44 52" style="--map-pin-color:${colorHex}" aria-hidden="true" focusable="false">
+      <path class="travel-map-pin-glyph__shape" d="M22 1.5C10.7 1.5 1.5 10.3 1.5 21.1c0 12.1 16.4 27.6 19.2 30.1a1.9 1.9 0 0 0 2.6 0c2.8-2.5 19.2-18 19.2-30.1C42.5 10.3 33.3 1.5 22 1.5Z" />
+      ${markerBody}
+    </svg>`,
+    iconSize: [44, 52],
+    iconAnchor: [22, 50],
+    popupAnchor: [0, -46],
   })
 }
 
@@ -1043,7 +1031,10 @@ function renderClusters() {
       bubblingMouseEvents: false,
     })
 
-    marker.bindPopup(() => createPopupContent(aggregate))
+    marker.bindPopup(() => createPopupContent(aggregate), {
+      autoPan: !props.journeyPlaybackActive,
+      keepInView: false,
+    })
 
     marker.on('click', (event) => {
       if (event?.originalEvent) {
@@ -1191,6 +1182,118 @@ function resolveJourneyFocusZoom(latitude, longitude) {
   return Math.min(20, 15 + Math.ceil(Math.log2(nearbyCount)))
 }
 
+function journeyLatLng(point) {
+  if (point?.latitude == null || point?.longitude == null) return null
+  const latitude = Number(point?.latitude)
+  const longitude = Number(point?.longitude)
+  return Number.isFinite(latitude) && Number.isFinite(longitude)
+    ? L.latLng(latitude, longitude)
+    : null
+}
+
+function isJourneyPointVisible(point) {
+  if (!mapInstance) return false
+  const size = mapInstance.getSize()
+  const pixel = mapInstance.latLngToContainerPoint(point)
+  const padding = 64
+  return pixel.x >= padding && pixel.x <= size.x - padding
+    && pixel.y >= padding && pixel.y <= size.y - padding
+}
+
+function resolveJourneyOverviewZoom(current, next) {
+  const size = mapInstance.getSize()
+  return getTravelJourneyViewportOverviewZoom({
+    current,
+    next,
+    currentZoom: mapInstance.getZoom(),
+    minZoom: mapInstance.getMinZoom(),
+    width: size.x,
+    height: size.y,
+    project: (point, zoom) => mapInstance.project(point, zoom),
+  })
+}
+
+function waitForJourneyMapMove(target, zoom, duration, sequence) {
+  return new Promise((resolve) => {
+    const map = mapInstance
+    if (!map || sequence !== journeyLegSequence) {
+      resolve(false)
+      return
+    }
+    if (map.getCenter().distanceTo(target) < 2 && Math.abs(map.getZoom() - zoom) < 0.05) {
+      resolve(true)
+      return
+    }
+
+    let timeoutId = null
+    const finish = () => {
+      map.off('moveend', finish)
+      clearTimeout(timeoutId)
+      resolve(sequence === journeyLegSequence && map === mapInstance)
+    }
+    map.once('moveend', finish)
+    timeoutId = setTimeout(finish, duration * 1000 + 500)
+    map.flyTo(target, zoom, { animate: true, duration })
+  })
+}
+
+function waitForJourneyTiles(sequence) {
+  return new Promise((resolve) => {
+    const layer = tileLayer
+    if (!layer?.isLoading?.() || sequence !== journeyLegSequence) {
+      resolve()
+      return
+    }
+
+    let timeoutId = null
+    const finish = () => {
+      layer.off('load', finish)
+      clearTimeout(timeoutId)
+      resolve()
+    }
+    layer.once('load', finish)
+    timeoutId = setTimeout(finish, 1500)
+  })
+}
+
+async function prepareJourneyLeg(currentPoint, nextPoint, { focusCurrent = true } = {}) {
+  const current = journeyLatLng(currentPoint)
+  if (!mapInstance || !current) return { overview: false }
+
+  const sequence = ++journeyLegSequence
+  isPreparingJourneyLeg = true
+  mapInstance.stop()
+  try {
+    if (focusCurrent) {
+      const zoom = resolveJourneyFocusZoom(current.lat, current.lng)
+      if (!await waitForJourneyMapMove(current, zoom, 0.65, sequence)) return { cancelled: true }
+      await waitForJourneyTiles(sequence)
+    }
+    if (sequence !== journeyLegSequence || !mapInstance) return { cancelled: true }
+
+    const next = journeyLatLng(nextPoint)
+    if (!next || isJourneyPointVisible(next)) return { overview: false }
+
+    const zoom = resolveJourneyOverviewZoom(current, next)
+    if (!await waitForJourneyMapMove(current, zoom, 0.85, sequence)) return { cancelled: true }
+    await nextTick()
+    await waitForJourneyTiles(sequence)
+    await new Promise((resolve) => setTimeout(resolve, 300))
+    if (sequence !== journeyLegSequence || !mapInstance) return { cancelled: true }
+    return { overview: true, zoom }
+  } finally {
+    if (sequence === journeyLegSequence) isPreparingJourneyLeg = false
+  }
+}
+
+function cancelJourneyLeg() {
+  journeyLegSequence += 1
+  isPreparingJourneyLeg = false
+  mapInstance?.stop()
+}
+
+defineExpose({ prepareJourneyLeg, cancelJourneyLeg })
+
 function handleMapBackgroundClick() {
   if (suppressNextMapBackgroundClick) {
     suppressNextMapBackgroundClick = false
@@ -1275,6 +1378,7 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  cancelJourneyLeg()
   document.removeEventListener('fullscreenchange', handleFullscreenChange)
   window.removeEventListener('keydown', handleFullscreenEscape, { capture: true })
   cancelQueuedMapResize()
@@ -1382,7 +1486,7 @@ watch(
     }
 
     await nextTick()
-    if (!mapInstance) {
+    if (!mapInstance || isPreparingJourneyLeg) {
       return
     }
 

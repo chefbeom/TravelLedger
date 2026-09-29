@@ -37378,3 +37378,271 @@ html[data-theme='toss'] body .app-shell .household-entry-panel__date-badge {
     justify-content: flex-start;
   }
 }
+
+/* Fullscreen map controls share one floating panel; Leaflet owns no separate pin tile. */
+.travel-map .leaflet-div-icon.travel-map__icon-root {
+  background: transparent !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  outline: 0 !important;
+}
+
+.travel-map__zoom-button {
+  min-width: 38px;
+  min-height: 36px;
+  padding: 4px 10px;
+  font-size: 1.15rem;
+  line-height: 1;
+}
+
+.travel-map__toolbar-group--journey {
+  display: block;
+  min-width: 0;
+}
+
+.travel-map__toolbar-group--journey > * {
+  width: 100%;
+}
+
+.travel-map__toolbar-group--journey .travel-journey-controls--panel {
+  width: 100%;
+  max-height: none;
+  overflow: visible;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: #f8fafc;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
+.travel-map:fullscreen > .travel-map__toolbar,
+.travel-map:-webkit-full-screen > .travel-map__toolbar,
+.travel-map:fullscreen.travel-map--public > .travel-map__toolbar,
+.travel-map:-webkit-full-screen.travel-map--public > .travel-map__toolbar {
+  top: 50%;
+  right: 16px;
+  bottom: auto;
+  left: auto;
+  display: flex;
+  flex-direction: column;
+  flex-wrap: nowrap;
+  align-items: stretch;
+  justify-content: flex-start;
+  gap: 10px;
+  width: min(360px, calc(100% - 32px));
+  max-width: min(360px, calc(100% - 32px));
+  max-height: calc(100dvh - 32px);
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: 14px;
+  border: 1px solid rgba(226, 232, 240, 0.3);
+  border-radius: 10px;
+  background: rgba(15, 23, 42, 0.94);
+  box-shadow: 0 18px 50px rgba(2, 6, 23, 0.42);
+  backdrop-filter: blur(16px);
+  transform: translateY(-50%);
+  box-sizing: border-box;
+}
+
+.travel-map:fullscreen .travel-map__toolbar-group,
+.travel-map:-webkit-full-screen .travel-map__toolbar-group {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
+.travel-map:fullscreen .travel-map__toolbar-group:nth-child(2),
+.travel-map:-webkit-full-screen .travel-map__toolbar-group:nth-child(2) {
+  display: grid !important;
+  justify-content: stretch;
+  gap: 3px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(226, 232, 240, 0.18);
+}
+
+.travel-map:fullscreen .travel-map__toolbar-group--journey,
+.travel-map:-webkit-full-screen .travel-map__toolbar-group--journey {
+  display: block;
+  padding-block: 2px 8px;
+  border-bottom: 1px solid rgba(226, 232, 240, 0.18);
+}
+
+.travel-map:fullscreen .travel-map__toolbar-group--journey .travel-journey-controls__heading,
+.travel-map:-webkit-full-screen .travel-map__toolbar-group--journey .travel-journey-controls__heading {
+  margin-bottom: 2px;
+}
+
+.travel-map:fullscreen .travel-map__toolbar-group--journey .travel-journey-controls__day-field select,
+.travel-map:-webkit-full-screen .travel-map__toolbar-group--journey .travel-journey-controls__day-field select,
+.travel-map:fullscreen .travel-map__toolbar-group--journey .travel-journey-route-controls select,
+.travel-map:-webkit-full-screen .travel-map__toolbar-group--journey .travel-journey-route-controls select {
+  width: 100%;
+  max-width: 100%;
+  text-overflow: ellipsis;
+}
+
+.travel-map:fullscreen .travel-map__toolbar-group--journey .travel-journey-controls__hint,
+.travel-map:-webkit-full-screen .travel-map__toolbar-group--journey .travel-journey-controls__hint {
+  display: block;
+  margin-top: 6px;
+  font-size: 0.72rem;
+}
+
+.travel-map:fullscreen .travel-map__toolbar-group--journey .travel-journey-controls__actions,
+.travel-map:-webkit-full-screen .travel-map__toolbar-group--journey .travel-journey-controls__actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, auto);
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.travel-map:fullscreen .travel-map__toolbar-group--journey .travel-journey-controls__actions > .button,
+.travel-map:-webkit-full-screen .travel-map__toolbar-group--journey .travel-journey-controls__actions > .button {
+  min-width: 0;
+  padding-inline: 9px;
+  white-space: nowrap;
+}
+
+.travel-map:fullscreen .travel-journey-controls__speed,
+.travel-map:-webkit-full-screen .travel-journey-controls__speed {
+  min-width: 0;
+  gap: 5px;
+}
+
+.travel-map:fullscreen .travel-journey-controls__speed select,
+.travel-map:-webkit-full-screen .travel-journey-controls__speed select {
+  min-width: 86px;
+  max-width: 132px;
+}
+
+.travel-journey-route-controls {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(226, 232, 240, 0.18);
+}
+
+.travel-journey-route-controls__heading,
+.travel-journey-route-controls__actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.travel-journey-route-controls__heading strong {
+  color: #f8fafc;
+  font-size: 0.84rem;
+}
+
+.travel-journey-route-controls__heading strong span {
+  margin-left: 4px;
+  color: #a7f3d0;
+  font-size: 0.68rem;
+}
+
+.travel-journey-route-controls__heading small,
+.travel-journey-route-controls__empty,
+.travel-journey-route-controls__hint {
+  color: #cbd5e1;
+  font-size: 0.72rem;
+  line-height: 1.4;
+}
+
+.travel-journey-route-controls__empty,
+.travel-journey-route-controls__hint {
+  margin: 0;
+}
+
+.travel-journey-route-controls__route-field {
+  display: grid;
+  gap: 5px;
+}
+
+.travel-journey-route-controls__actions > .button {
+  min-width: 0;
+  white-space: nowrap;
+}
+
+.travel-map:fullscreen .travel-map__overlay,
+.travel-map:-webkit-full-screen .travel-map__overlay {
+  inset: 0;
+  display: block;
+  overflow: visible;
+}
+
+.travel-map:fullscreen .travel-map-inspector--fullscreen,
+.travel-map:-webkit-full-screen .travel-map-inspector--fullscreen {
+  position: absolute;
+  top: 16px;
+  right: auto;
+  bottom: auto;
+  left: 16px;
+  width: min(360px, calc(100vw - 400px));
+  height: min(56dvh, 560px);
+  max-height: calc(100dvh - 32px);
+  justify-self: start;
+}
+
+@media (max-width: 760px) {
+  .travel-map:fullscreen > .travel-map__toolbar,
+  .travel-map:-webkit-full-screen > .travel-map__toolbar,
+  .travel-map:fullscreen.travel-map--public > .travel-map__toolbar,
+  .travel-map:-webkit-full-screen.travel-map--public > .travel-map__toolbar {
+    right: 8px;
+    width: min(360px, calc(52vw - 12px));
+    max-width: min(360px, calc(52vw - 12px));
+    max-height: calc(100dvh - 16px);
+    padding: 9px;
+  }
+
+  .travel-map:fullscreen .travel-map-inspector--fullscreen,
+  .travel-map:-webkit-full-screen .travel-map-inspector--fullscreen {
+    top: 8px;
+    left: 8px;
+    width: min(360px, calc(48vw - 12px));
+    height: min(56dvh, 380px);
+    max-height: calc(100dvh - 16px);
+  }
+
+  .travel-map:fullscreen .travel-map__toolbar-label,
+  .travel-map:-webkit-full-screen .travel-map__toolbar-label,
+  .travel-map:fullscreen .travel-cluster-map__legend,
+  .travel-map:-webkit-full-screen .travel-cluster-map__legend {
+    font-size: 0.68rem;
+  }
+
+  .travel-map:fullscreen .travel-journey-controls__actions,
+  .travel-map:-webkit-full-screen .travel-journey-controls__actions {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .travel-map:fullscreen .travel-journey-controls__speed,
+  .travel-map:-webkit-full-screen .travel-journey-controls__speed {
+    justify-content: space-between;
+  }
+
+  .travel-map:fullscreen .travel-journey-route-controls__actions,
+  .travel-map:-webkit-full-screen .travel-journey-route-controls__actions {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .travel-map:fullscreen .travel-journey-route-controls__actions .travel-journey-controls__speed,
+  .travel-map:-webkit-full-screen .travel-journey-route-controls__actions .travel-journey-controls__speed {
+    justify-content: space-between;
+  }
+}

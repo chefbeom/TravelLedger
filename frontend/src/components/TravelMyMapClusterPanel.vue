@@ -57,6 +57,10 @@ const props = defineProps({
     type: [String, Number],
     default: null,
   },
+  journeyPhotoId: {
+    type: [String, Number],
+    default: null,
+  },
   selectedMarkerId: {
     type: [String, Number],
     default: null,
@@ -370,6 +374,7 @@ function isSelectedAggregate(aggregate) {
 
   if (aggregate?.isPhotoPin) {
     return String(aggregate.representative?.mediaId) === String(props.selectedPhotoId)
+      || (props.journeyPhotoId != null && String(aggregate.representative?.mediaId) === String(props.journeyPhotoId))
   }
 
   return String(aggregate?.representative?.id) === String(props.selectedClusterId)
@@ -1147,6 +1152,14 @@ function handleZoomEnd() {
   handleViewportEnd()
 }
 
+function zoomMap(direction) {
+  if (direction > 0) {
+    mapInstance?.zoomIn()
+  } else {
+    mapInstance?.zoomOut()
+  }
+}
+
 function handleMapBackgroundClick() {
   if (suppressNextMapBackgroundClick) {
     suppressNextMapBackgroundClick = false
@@ -1191,6 +1204,7 @@ onMounted(() => {
 
   mapInstance = L.map(mapElement.value, {
     ...createMapOptions({
+      zoomControl: false,
       preferCanvas: true,
       zoomAnimation: true,
       markerZoomAnimation: true,
@@ -1273,6 +1287,11 @@ watch(
 )
 
 watch(
+  () => props.journeyPhotoId,
+  () => scheduleRenderClusters(0),
+)
+
+watch(
   () => props.active,
   async (value) => {
     if (!value || !mapInstance) {
@@ -1298,8 +1317,15 @@ watch(
 )
 
 watch(
-  () => [props.focusTarget?.requestId, props.focusTarget?.latitude, props.focusTarget?.longitude],
-  async ([requestId, rawLatitude, rawLongitude]) => {
+  () => [
+    props.focusTarget?.requestId,
+    props.focusTarget?.latitude,
+    props.focusTarget?.longitude,
+    props.focusTarget?.keepZoom,
+    props.focusTarget?.zoom,
+    props.focusTarget?.duration,
+  ],
+  async ([requestId, rawLatitude, rawLongitude, keepZoom, rawZoom, rawDuration]) => {
     if (requestId == null || rawLatitude == null || rawLongitude == null || !mapInstance) {
       return
     }
@@ -1315,8 +1341,17 @@ watch(
       return
     }
 
-    const targetZoom = Math.min(18, Math.max(mapInstance.getZoom(), 15))
-    mapInstance.flyTo([latitude, longitude], targetZoom, { animate: true, duration: 0.8 })
+    const targetZoom = Number.isFinite(Number(rawZoom))
+      ? Math.max(2, Math.min(18, Number(rawZoom)))
+      : keepZoom
+        ? mapInstance.getZoom()
+        : Math.min(18, Math.max(mapInstance.getZoom(), 15))
+    const duration = Number.isFinite(Number(rawDuration)) ? Math.max(0.05, Number(rawDuration)) : 0.8
+    if (keepZoom) {
+      mapInstance.panTo([latitude, longitude], { animate: true, duration, easeLinearity: 0.2 })
+      return
+    }
+    mapInstance.flyTo([latitude, longitude], targetZoom, { animate: true, duration })
   },
 )
 </script>
@@ -1333,8 +1368,10 @@ watch(
   >
     <div class="travel-map__toolbar" @click.stop>
       <div class="travel-map__toolbar-group">
-        <span class="travel-map__toolbar-label">줌 단계</span>
+        <span class="travel-map__toolbar-label">지도 확대</span>
+        <button class="travel-map__toolbar-button travel-map__zoom-button" type="button" aria-label="지도 축소" @click="zoomMap(-1)">−</button>
         <strong class="travel-cluster-map__zoom">{{ zoomLabel }}</strong>
+        <button class="travel-map__toolbar-button travel-map__zoom-button" type="button" aria-label="지도 확대" @click="zoomMap(1)">+</button>
       </div>
 
       <div class="travel-map__toolbar-group">
@@ -1349,6 +1386,10 @@ watch(
         <button class="travel-map__toolbar-button" type="button" @click="toggleFullscreen">
           {{ isFullscreen ? '전체 화면 종료' : '전체 화면' }}
         </button>
+      </div>
+
+      <div v-if="isFullscreen" class="travel-map__toolbar-group travel-map__toolbar-group--journey">
+        <slot name="fullscreen-controls" :is-fullscreen="isFullscreen" />
       </div>
     </div>
 

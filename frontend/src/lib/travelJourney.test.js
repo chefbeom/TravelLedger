@@ -1,6 +1,12 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { buildTravelJourneyDays, matchesTravelJourneyDay, sortTravelJourneyPhotos } from './travelJourney.js'
+import {
+  buildTravelJourneyDays,
+  buildTravelRoutePlaybackPath,
+  getTravelRoutePosition,
+  matchesTravelJourneyDay,
+  sortTravelJourneyPhotos,
+} from './travelJourney.js'
 
 test('journey days are numbered chronologically per travel plan', () => {
   const days = buildTravelJourneyDays([
@@ -41,4 +47,36 @@ test('photo playback order uses recorded date and time with stable media id tie-
   ])
 
   assert.deepEqual(sorted.map((photo) => photo.mediaId), [2, 3, 9])
+})
+
+test('route playback path filters invalid and duplicate GPS points and calculates distance', () => {
+  const path = buildTravelRoutePlaybackPath({
+    points: [
+      { latitude: 0, longitude: 0 },
+      { latitude: 0, longitude: 0 },
+      { latitude: 0, longitude: 1 },
+      { latitude: 100, longitude: 2 },
+    ],
+  })
+
+  assert.equal(path.isPlayable, true)
+  assert.equal(path.points.length, 2)
+  assert.ok(path.totalDistanceKm > 111 && path.totalDistanceKm < 112)
+})
+
+test('route position follows distance and clamps to route endpoints', () => {
+  const path = buildTravelRoutePlaybackPath({
+    points: [
+      { latitude: 0, longitude: 0 },
+      { latitude: 0, longitude: 1 },
+      { latitude: 1, longitude: 1 },
+    ],
+  })
+
+  assert.deepEqual(getTravelRoutePosition(path, -1), { latitude: 0, longitude: 0 })
+  assert.deepEqual(getTravelRoutePosition(path, path.totalDistanceMeters), { latitude: 1, longitude: 1 })
+  const midpoint = getTravelRoutePosition(path, path.totalDistanceMeters / 2)
+  assert.ok(Math.abs(midpoint.latitude) < 0.001)
+  assert.ok(Math.abs(midpoint.longitude - 1) < 0.001)
+  assert.equal(getTravelRoutePosition(buildTravelRoutePlaybackPath({ points: [] }), 0), null)
 })

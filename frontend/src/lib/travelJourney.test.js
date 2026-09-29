@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import {
   buildTravelJourneyDays,
   buildTravelRoutePlaybackPath,
+  findNextTravelJourneyDay,
   getTravelRoutePosition,
   matchesTravelJourneyDay,
   sortTravelJourneyPhotos,
@@ -37,6 +38,20 @@ test('day matching scopes photos, markers, and routes to both plan and date', ()
   assert.equal(matchesTravelJourneyDay({ planId: 7, routeDate: '2026-09-01' }, day), true)
   assert.equal(matchesTravelJourneyDay({ planId: 8, memoryDate: '2026-09-01' }, day), false)
   assert.equal(matchesTravelJourneyDay({ planId: 7, memoryDate: '2026-09-02' }, day), false)
+})
+
+test('next journey day stays in the same trip and skips days without photos', () => {
+  const days = buildTravelJourneyDays([
+    { mediaId: 1, planId: 7, planName: '여행', memoryDate: '2026-09-01', photoUrl: '/1.jpg' },
+    { mediaId: 2, planId: 8, planName: '다른 여행', memoryDate: '2026-09-02', photoUrl: '/2.jpg' },
+    { mediaId: 3, planId: 7, planName: '여행', memoryDate: '2026-09-03', photoUrl: '/3.jpg' },
+  ], [
+    { planId: 7, planName: '여행', routeDate: '2026-09-02' },
+  ])
+  const firstDay = days.find((day) => day.planId === 7 && day.date === '2026-09-01')
+
+  assert.equal(findNextTravelJourneyDay(days, firstDay.key)?.date, '2026-09-03')
+  assert.equal(findNextTravelJourneyDay(days, days.find((day) => day.planId === 8).key), null)
 })
 
 test('photo playback order uses recorded date and time with stable media id tie-break', () => {
@@ -79,4 +94,26 @@ test('route position follows distance and clamps to route endpoints', () => {
   assert.ok(Math.abs(midpoint.latitude) < 0.001)
   assert.ok(Math.abs(midpoint.longitude - 1) < 0.001)
   assert.equal(getTravelRoutePosition(buildTravelRoutePlaybackPath({ points: [] }), 0), null)
+})
+
+test('combined route itinerary deduplicates identical GPX and hand-drawn tracks', () => {
+  const route = { points: [{ latitude: 0, longitude: 0 }, { latitude: 0, longitude: 1 }] }
+  const combined = buildTravelRoutePlaybackPath([route, { points: [...route.points].reverse() }])
+  const single = buildTravelRoutePlaybackPath(route)
+
+  assert.equal(combined.isPlayable, true)
+  assert.equal(combined.points.length, 2)
+  assert.equal(combined.totalDistanceMeters, single.totalDistanceMeters)
+})
+
+test('combined route itinerary starts nearest to the first journey photo and connects route legs', () => {
+  const combined = buildTravelRoutePlaybackPath([
+    { points: [{ latitude: 0, longitude: 0 }, { latitude: 0, longitude: 1 }] },
+    { points: [{ latitude: 0, longitude: 2 }, { latitude: 0, longitude: 1.1 }] },
+  ], { latitude: 0, longitude: 2 })
+
+  assert.equal(combined.isPlayable, true)
+  assert.deepEqual(getTravelRoutePosition(combined, 0), { latitude: 0, longitude: 2 })
+  assert.equal(combined.points.length, 4)
+  assert.ok(combined.totalDistanceMeters > 220_000)
 })

@@ -88,6 +88,22 @@ export function matchesTravelJourneyDay(item, day) {
   return itemPlanId == null && resolvePlanName(item) === day.planName
 }
 
+export function findNextTravelJourneyDay(days = [], currentDayKey) {
+  const currentDay = days.find((day) => day?.key === currentDayKey)
+  if (!currentDay) {
+    return null
+  }
+
+  return [...days]
+    .filter((day) => {
+      const samePlan = currentDay.planId != null
+        ? day?.planId != null && String(day.planId) === String(currentDay.planId)
+        : day?.planId == null && day?.planName === currentDay.planName
+      return samePlan && String(day?.date ?? '').localeCompare(currentDay.date) > 0 && Number(day?.photoCount || 0) > 0
+    })
+    .sort((left, right) => String(left.date).localeCompare(String(right.date)))[0] ?? null
+}
+
 export function sortTravelJourneyPhotos(photoPins = []) {
   return [...photoPins].sort((left, right) => {
     const leftDateTime = `${normalizeDate(left?.memoryDate ?? left?.expenseDate)} ${normalizeText(left?.memoryTime ?? left?.expenseTime)}`
@@ -119,25 +135,112 @@ function distanceBetweenCoordinates(left, right) {
   return 6_371_000 * 2 * Math.atan2(Math.sqrt(haversine), Math.sqrt(1 - haversine))
 }
 
-export function buildTravelRoutePlaybackPath(route) {
-  const points = []
-  let distanceMeters = 0
-
-  ;(Array.isArray(route?.points) ? route.points : []).forEach((source) => {
-    const point = normalizeRouteCoordinate(source)
-    if (!point) {
-      return
-    }
-    const previous = points.at(-1)
-    if (previous) {
-      const segmentMeters = distanceBetweenCoordinates(previous, point)
-      if (segmentMeters < 0.1) {
+export function buildTravelRoutePlaybackPath(routeOrRoutes, startCoordinate = null) {
+  const routes = Array.isArray(routeOrRoutes) ? routeOrRoutes : [routeOrRoutes]
+  const candidates = routes.map((route) => {
+    const points = []
+    let distanceMeters = 0
+    ;(Array.isArray(route?.points) ? route.points : []).forEach((source) => {
+      const point = normalizeRouteCoordinate(source)
+      if (!point) {
         return
       }
-      distanceMeters += segmentMeters
+      const previous = points.at(-1)
+      if (previous) {
+        const segmentMeters = distanceBetweenCoordinates(previous, point)
+        if (segmentMeters < 0.1) {
+          return
+        }
+        distanceMeters += segmentMeters
+      }
+      points.push({ ...point, distanceMeters })
+    })
+    return { points, totalDistanceMeters: distanceMeters }
+  }).filter((path) => path.points.length >= 2 && path.totalDistanceMeters > 0)
+
+  // A manually drawn segment and a GPX segment can describe the same route.
+  // Ignore exact overlaps so the combined journey doesn't replay them twice.
+  const seenPaths = new Set()
+  const uniqueCandidates = candidates.filter((path) => {
+    const coordinates = path.points.map(({ latitude, longitude }) => `${latitude.toFixed(5)},${longitude.toFixed(5)}`)
+    const forward = coordinates.join('|')
+    const reverse = [...coordinates].reverse().join('|')
+    const signature = forward < reverse ? forward : reverse
+    if (seenPaths.has(signature)) {
+      return false
     }
-    points.push({ ...point, distanceMeters })
+    seenPaths.add(signature)
+    return true
   })
+
+  const points = []
+  let distanceMeters = 0
+  let current = null
+  const remaining = [...uniqueCandidates]
+  while (remaining.length) {
+    let selectedIndex = 0
+    let selectedReversed = false
+    let shortestDistance = Number.POSITIVE_INFINITY
+    if (current) {
+      remaining.forEach((candidate, index) => {
+        const startDistance = distanceBetweenCoordinates(current, candidate.points[0])
+        const endDistance = distanceBetweenCoordinates(current, candidate.points.at(-1))
+        if (startDistance < shortestDistance) {
+          selectedIndex = index
+          selectedReversed = false
+          shortestDistance = startDistance
+        }
+        if (endDistance < shortestDistance) {
+          selectedIndex = index
+          selectedReversed = true
+          shortestDistance = endDistance
+        }
+      })
+    } else if (startCoordinate) {
+      const start = normalizeRouteCoordinate(startCoordinate)
+      if (start) {
+        remaining.forEach((candidate, index) => {
+          const startDistance = distanceBetweenCoordinates(start, candidate.points[0])
+          const endDistance = distanceBetweenCoordinates(start, candidate.points.at(-1))
+          if (startDistance < shortestDistance) {
+            selectedIndex = index
+            selectedReversed = false
+            shortestDistance = startDistance
+          }
+          if (endDistance < shortestDistance) {
+            selectedIndex = index
+            selectedReversed = true
+            shortestDistance = endDistance
+          }
+        })
+      }
+    }
+
+    const [candidate] = remaining.splice(selectedIndex, 1)
+    const leg = selectedReversed ? [...candidate.points].reverse() : candidate.points
+    const firstPoint = leg[0]
+    if (current) {
+      const connectorDistance = distanceBetweenCoordinates(current, firstPoint)
+      if (connectorDistance >= 0.1) {
+        distanceMeters += connectorDistance
+        points.push({ ...firstPoint, distanceMeters })
+      }
+    } else {
+      points.push({ ...firstPoint, distanceMeters })
+    }
+    current = firstPoint
+
+    leg.slice(1).forEach((point) => {
+      const segmentDistance = distanceBetweenCoordinates(current, point)
+      if (segmentDistance < 0.1) {
+        return
+      }
+      distanceMeters += segmentDistance
+      points.push({ ...point, distanceMeters })
+      current = point
+    })
+    current = points.at(-1) ?? current
+  }
 
   return {
     points,

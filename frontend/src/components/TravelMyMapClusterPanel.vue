@@ -61,6 +61,10 @@ const props = defineProps({
     type: [String, Number],
     default: null,
   },
+  journeyPlaybackActive: {
+    type: Boolean,
+    default: false,
+  },
   selectedMarkerId: {
     type: [String, Number],
     default: null,
@@ -952,7 +956,10 @@ function buildClusterIcon(aggregate, active) {
   const clusterCount = aggregate?.photoCount || 0
   const colorHex = normalizeColorHex(aggregate?.representative?.planColorHex, '#3182F6')
   const markerBody = aggregate?.isPhotoPin
-    ? '<span class="travel-cluster-pin__dot" aria-hidden="true"></span>'
+    ? `<svg class="travel-cluster-pin__glyph" viewBox="0 0 44 52" aria-hidden="true" focusable="false">
+        <path d="M22 1.5C10.7 1.5 1.5 10.3 1.5 21.1c0 12.1 16.4 27.6 19.2 30.1a1.9 1.9 0 0 0 2.6 0c2.8-2.5 19.2-18 19.2-30.1C42.5 10.3 33.3 1.5 22 1.5Z" />
+        <circle cx="22" cy="20.5" r="7.2" />
+      </svg>`
     : `<span class="travel-cluster-pin__count">${formatCompactCount(clusterCount)}</span>`
 
   return L.divIcon({
@@ -1160,6 +1167,30 @@ function zoomMap(direction) {
   }
 }
 
+function resolveJourneyFocusZoom(latitude, longitude) {
+  const photoItems = props.displayMode === 'cluster' ? props.photoClusters : props.photoPins
+  const nearbyItems = [...(photoItems ?? []), ...(props.markers ?? [])]
+  const origin = mapInstance?.project([latitude, longitude], 15)
+  if (!origin) {
+    return 15
+  }
+
+  const nearbyCount = nearbyItems.reduce((count, item) => {
+    const itemLatitude = Number(item?.latitude)
+    const itemLongitude = Number(item?.longitude)
+    if (!Number.isFinite(itemLatitude) || !Number.isFinite(itemLongitude)) {
+      return count
+    }
+    const point = mapInstance.project([itemLatitude, itemLongitude], 15)
+    return origin.distanceTo(point) <= 96 ? count + 1 : count
+  }, 0)
+
+  if (nearbyCount <= 1) {
+    return 15
+  }
+  return Math.min(20, 15 + Math.ceil(Math.log2(nearbyCount)))
+}
+
 function handleMapBackgroundClick() {
   if (suppressNextMapBackgroundClick) {
     suppressNextMapBackgroundClick = false
@@ -1205,6 +1236,7 @@ onMounted(() => {
   mapInstance = L.map(mapElement.value, {
     ...createMapOptions({
       zoomControl: false,
+      maxZoom: 20,
       preferCanvas: true,
       zoomAnimation: true,
       markerZoomAnimation: true,
@@ -1225,6 +1257,8 @@ onMounted(() => {
     updateWhenIdle: true,
     keepBuffer: 3,
     detectRetina: provider.detectRetina,
+    maxNativeZoom: 19,
+    maxZoom: 20,
   }).addTo(mapInstance)
 
   markerLayer = L.layerGroup().addTo(mapInstance)
@@ -1287,8 +1321,18 @@ watch(
 )
 
 watch(
-  () => props.journeyPhotoId,
-  () => scheduleRenderClusters(0),
+  () => [props.journeyPhotoId, props.journeyPlaybackActive],
+  ([mediaId, isPlaying], [previousMediaId, wasPlaying] = []) => {
+    if (mediaId == null || mediaId === '') {
+      return
+    }
+    if (String(mediaId) === String(previousMediaId) && (!isPlaying || wasPlaying)) {
+      return
+    }
+    pendingPopupMarkerKey = `photo-${String(mediaId)}`
+    popupOpenSequence += 1
+    scheduleRenderClusters(0)
+  },
 )
 
 watch(
@@ -1322,10 +1366,11 @@ watch(
     props.focusTarget?.latitude,
     props.focusTarget?.longitude,
     props.focusTarget?.keepZoom,
+    props.focusTarget?.autoZoom,
     props.focusTarget?.zoom,
     props.focusTarget?.duration,
   ],
-  async ([requestId, rawLatitude, rawLongitude, keepZoom, rawZoom, rawDuration]) => {
+  async ([requestId, rawLatitude, rawLongitude, keepZoom, autoZoom, rawZoom, rawDuration]) => {
     if (requestId == null || rawLatitude == null || rawLongitude == null || !mapInstance) {
       return
     }
@@ -1342,10 +1387,12 @@ watch(
     }
 
     const targetZoom = Number.isFinite(Number(rawZoom))
-      ? Math.max(2, Math.min(18, Number(rawZoom)))
+      ? Math.max(2, Math.min(20, Number(rawZoom)))
       : keepZoom
         ? mapInstance.getZoom()
-        : Math.min(18, Math.max(mapInstance.getZoom(), 15))
+        : autoZoom
+          ? resolveJourneyFocusZoom(latitude, longitude)
+          : Math.min(20, Math.max(mapInstance.getZoom(), 15))
     const duration = Number.isFinite(Number(rawDuration)) ? Math.max(0.05, Number(rawDuration)) : 0.8
     if (keepZoom) {
       mapInstance.panTo([latitude, longitude], { animate: true, duration, easeLinearity: 0.2 })

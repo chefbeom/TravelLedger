@@ -37577,6 +37577,43 @@ html[data-theme='toss'] body .app-shell .household-entry-panel__date-badge {
   white-space: nowrap;
 }
 
+.travel-journey-transition {
+  display: grid;
+  gap: 3px;
+  margin: 0;
+  padding: 9px 10px;
+  border: 1px solid rgba(110, 231, 183, 0.56);
+  background: rgba(16, 185, 129, 0.14);
+  color: #ecfdf5;
+  text-align: center;
+}
+
+.travel-journey-transition strong {
+  font-size: 0.82rem;
+}
+
+.travel-journey-transition span {
+  color: #a7f3d0;
+  font-size: 0.76rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.travel-journey-route-toggle {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  color: #f8fafc;
+  font-size: 0.76rem;
+  line-height: 1.4;
+  cursor: pointer;
+}
+
+.travel-journey-route-toggle input {
+  flex: 0 0 auto;
+  margin: 2px 0 0;
+  accent-color: #34d399;
+}
+
 .travel-map:fullscreen .travel-map__overlay,
 .travel-map:-webkit-full-screen .travel-map__overlay {
   inset: 0;
@@ -37645,4 +37682,64 @@ html[data-theme='toss'] body .app-shell .household-entry-panel__date-badge {
   .travel-map:-webkit-full-screen .travel-journey-route-controls__actions .travel-journey-controls__speed {
     justify-content: space-between;
   }
+}
+
+/* Photo pins use a vector pin silhouette; keep the Leaflet wrapper transparent in every theme. */
+.travel-map .leaflet-marker-icon.travel-map__icon-root,
+.travel-map .leaflet-div-icon.travel-map__icon-root {
+  background: transparent !important;
+  background-color: transparent !important;
+  background-image: none !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  filter: none !important;
+  outline: 0 !important;
+}
+
+.travel-map .travel-cluster-pin.is-photo-pin {
+  display: block !important;
+  width: 44px !important;
+  height: 52px !important;
+  overflow: visible !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  background-color: transparent !important;
+  background-image: none !important;
+  box-shadow: none !important;
+  filter: none !important;
+  transform: none !important;
+}
+
+.travel-map .travel-cluster-pin.is-photo-pin::before,
+.travel-map .travel-cluster-pin.is-photo-pin::after {
+  display: none !important;
+  content: none !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  filter: none !important;
+}
+
+.travel-map .travel-cluster-pin__glyph {
+  display: block;
+  width: 44px;
+  height: 52px;
+  overflow: visible;
+  background: none;
+  filter: none;
+}
+
+.travel-map .travel-cluster-pin__glyph path {
+  fill: var(--cluster-color, #10b981);
+  stroke: rgba(255, 255, 255, 0.96);
+  stroke-width: 2.5px;
+  vector-effect: non-scaling-stroke;
+}
+
+.travel-map .travel-cluster-pin__glyph circle {
+  fill: #fff;
+  stroke: var(--cluster-color, #10b981);
+  stroke-width: 2px;
+  vector-effect: non-scaling-stroke;
 }

@@ -37038,7 +37038,7 @@ html[data-theme='toss'] body .app-shell .household-entry-panel__date-badge {
 }
 
 .auth-card--travel-login .pin-pad__grid {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 7px;
 }
 

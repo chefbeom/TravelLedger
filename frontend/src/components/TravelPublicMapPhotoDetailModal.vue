@@ -1,6 +1,7 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { buildThumbnailUrl, THUMBNAIL_VARIANTS } from '../lib/mediaPreview'
+import TravelJourneyPlaybackControls from './TravelJourneyPlaybackControls.vue'
 
 const props = defineProps({
   title: {
@@ -35,9 +36,13 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
+  playbackState: {
+    type: Object,
+    default: null,
+  },
 })
 
-const emit = defineEmits(['close', 'previous-photo', 'next-photo', 'select-photo'])
+const emit = defineEmits(['close', 'previous-photo', 'next-photo', 'select-photo', 'toggle-journey-playback', 'journey-speed-change'])
 
 const DEFAULT_PHOTO_LABEL = '\uC5EC\uD589 \uC0AC\uC9C4'
 const PREVIOUS_PHOTO_LABEL = '\uC774\uC804 \uC0AC\uC9C4'
@@ -149,6 +154,21 @@ onBeforeUnmount(() => {
           <button class="button button--ghost" type="button" data-modal-close @click="emit('close')">{{ CLOSE_LABEL }}</button>
         </div>
       </header>
+
+      <TravelJourneyPlaybackControls
+        v-if="playbackState"
+        class="public-map-share-photo-modal__journey-controls"
+        variant="inline"
+        :show-day-selector="false"
+        :is-playing="playbackState.isPlaying"
+        :photo-index="playbackState.photoIndex"
+        :photo-count="playbackState.photoCount"
+        :speed-seconds="playbackState.speedSeconds"
+        :is-busy="playbackState.isBusy"
+        :has-completed="playbackState.hasCompleted"
+        @toggle="emit('toggle-journey-playback')"
+        @speed-change="emit('journey-speed-change', $event)"
+      />
 
       <p v-if="errorMessage" class="panel__empty">{{ errorMessage }}</p>
       <div v-else-if="photo?.contentUrl" class="public-map-share-photo-modal__body">

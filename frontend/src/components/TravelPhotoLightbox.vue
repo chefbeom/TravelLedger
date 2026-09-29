@@ -1,6 +1,7 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { formatDateTime } from '../lib/uiFormat'
+import TravelJourneyPlaybackControls from './TravelJourneyPlaybackControls.vue'
 import TravelMiniLocationMap from './TravelMiniLocationMap.vue'
 
 const props = defineProps({
@@ -36,9 +37,13 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
+  playbackState: {
+    type: Object,
+    default: null,
+  },
 })
 
-const emit = defineEmits(['close', 'select-photo', 'set-representative', 'edit-photo'])
+const emit = defineEmits(['close', 'select-photo', 'set-representative', 'edit-photo', 'toggle-journey-playback', 'journey-speed-change'])
 
 const DEFAULT_TITLE = '\uC0AC\uC9C4 \uBCF4\uAE30'
 const CLOSE_LABEL = '\uB2EB\uAE30'
@@ -321,6 +326,21 @@ onBeforeUnmount(() => {
           <button class="button button--ghost" type="button" data-modal-close @click="emit('close')">{{ CLOSE_LABEL }}</button>
         </div>
       </div>
+
+      <TravelJourneyPlaybackControls
+        v-if="playbackState"
+        class="travel-lightbox__journey-controls"
+        variant="inline"
+        :show-day-selector="false"
+        :is-playing="playbackState.isPlaying"
+        :photo-index="playbackState.photoIndex"
+        :photo-count="playbackState.photoCount"
+        :speed-seconds="playbackState.speedSeconds"
+        :is-busy="playbackState.isBusy"
+        :has-completed="playbackState.hasCompleted"
+        @toggle="emit('toggle-journey-playback')"
+        @speed-change="emit('journey-speed-change', $event)"
+      />
 
       <div class="travel-lightbox__body">
         <div class="travel-lightbox__media">

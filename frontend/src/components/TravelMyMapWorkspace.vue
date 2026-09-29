@@ -1,5 +1,5 @@
 <script setup>
-import { computed, defineAsyncComponent, onMounted, reactive, ref, watch } from 'vue'
+import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import {
   createTravelMapShare,
   fetchTravelMyMapOverview,
@@ -7,7 +7,9 @@ import {
   updateTravelMyMapPhotoClusterRepresentative,
 } from '../lib/api'
 import { formatDate, safeNumber } from '../lib/uiFormat'
+import { buildTravelJourneyDays, matchesTravelJourneyDay, sortTravelJourneyPhotos } from '../lib/travelJourney'
 import TravelMyMapClusterPanel from './TravelMyMapClusterPanel.vue'
+import TravelJourneyPlaybackControls from './TravelJourneyPlaybackControls.vue'
 
 const TravelMyMapInspectorPanels = defineAsyncComponent(() => import('./TravelMyMapInspectorPanels.vue'))
 const TravelPhotoLightbox = defineAsyncComponent(() => import('./TravelPhotoLightbox.vue'))
@@ -48,6 +50,15 @@ const selectedPlanFilterKeys = ref([])
 const selectedCountryKey = ref('all')
 const selectedRegionKey = ref('all')
 const mapFitRequestKey = ref(0)
+const selectedJourneyDayKey = ref('')
+const journeyPhotoIndex = ref(-1)
+const journeySpeedSeconds = ref(4)
+const isJourneyPlaying = ref(false)
+const mapFocusTarget = ref(null)
+let journeyPlaybackTimer = null
+let journeyPlaybackSequence = 0
+let mapFocusSequence = 0
+let clusterDetailRequestSequence = 0
 const shareDialog = reactive({
   open: false,
   title: '',
@@ -189,16 +200,18 @@ async function loadClusterDetail(
     focusMediaId = preferredPhotoId,
   } = {},
 ) {
+  const requestSequence = ++clusterDetailRequestSequence
   if (!clusterId) {
     selectedClusterDetail.value = null
     selectedPhotoId.value = null
-    return
+    return null
   }
 
   const isLoadMore = append && page > 0
   if (isLoadMore) {
     isClusterPhotosLoadingMore.value = true
   } else {
+    isClusterPhotosLoadingMore.value = false
     isDetailLoading.value = true
   }
   setDetailError('')
@@ -209,6 +222,9 @@ async function loadClusterDetail(
       size: CLUSTER_PHOTO_PAGE_SIZE,
       focusMediaId,
     })
+    if (requestSequence !== clusterDetailRequestSequence) {
+      return null
+    }
 
     const nextDetail = append && selectedClusterDetail.value?.id === detail?.id
       ? {
@@ -219,17 +235,23 @@ async function loadClusterDetail(
 
     selectedClusterDetail.value = nextDetail
     applySelectedPhoto(nextDetail, preferredPhotoId)
+    return nextDetail
   } catch (error) {
-    if (!isLoadMore) {
+    if (requestSequence === clusterDetailRequestSequence && !isLoadMore) {
       selectedClusterDetail.value = null
       selectedPhotoId.value = null
     }
-    setDetailError(error.message)
+    if (requestSequence === clusterDetailRequestSequence) {
+      setDetailError(error.message)
+    }
+    return null
   } finally {
-    if (isLoadMore) {
-      isClusterPhotosLoadingMore.value = false
-    } else {
-      isDetailLoading.value = false
+    if (requestSequence === clusterDetailRequestSequence) {
+      if (isLoadMore) {
+        isClusterPhotosLoadingMore.value = false
+      } else {
+        isDetailLoading.value = false
+      }
     }
   }
 }
@@ -287,6 +309,7 @@ async function handleSelectCluster(cluster) {
     return
   }
 
+  pauseJourneyPlayback()
   const clusterChanged = String(selectedClusterSummary.value?.id ?? '') !== String(cluster.id)
   selectedMarkerId.value = null
   selectedClusterSummary.value = cluster
@@ -300,8 +323,17 @@ async function handleSelectCluster(cluster) {
 
 async function handleSelectPhotoPin(pin, options = {}) {
   if (!pin?.clusterId) {
-    return
+    return null
   }
+
+  if (!options.fromJourneyPlayback) {
+    pauseJourneyPlayback()
+  }
+  const journeyIndex = journeyPhotoPins.value.findIndex((item) => String(item.mediaId) === String(pin.mediaId))
+  if (journeyIndex >= 0) {
+    journeyPhotoIndex.value = journeyIndex
+  }
+  focusMapAtJourneyPhoto(pin)
 
   const clusterChanged = String(selectedClusterSummary.value?.id ?? '') !== String(pin.clusterId)
   const nextCluster = photoClusters.value.find((cluster) => String(cluster.id) === String(pin.clusterId))
@@ -315,15 +347,27 @@ async function handleSelectPhotoPin(pin, options = {}) {
     detailRecoveryClusterId.value = null
   }
   selectedPhotoId.value = pin.mediaId ?? null
-  await loadClusterDetail(pin.clusterId, pin.mediaId, {
+  const loadedDetail = await loadClusterDetail(pin.clusterId, pin.mediaId, {
     page: 0,
     append: false,
     focusMediaId: pin.mediaId,
   })
 
-  if (options.openPreview) {
-    openPhotoLightbox(selectedPhoto.value || selectedClusterRepresentativePhoto.value, { scope: LIGHTBOX_SCOPE_GLOBAL })
+  if (!loadedDetail || String(selectedPhoto.value?.id ?? '') !== String(pin.mediaId)) {
+    return null
   }
+
+  if (options.openPreview) {
+    const photo = selectedPhoto.value || selectedClusterRepresentativePhoto.value
+    const selectedJourneyPin = journeyPhotoPins.value[journeyPhotoIndex.value]
+    const playbackPhotoIsStillCurrent = String(selectedJourneyPin?.mediaId ?? '') === String(pin.mediaId)
+    if (!options.fromJourneyPlayback || playbackPhotoIsStillCurrent) {
+      openPhotoLightbox(photo, { scope: LIGHTBOX_SCOPE_GLOBAL })
+    }
+    return photo
+  }
+
+  return selectedPhoto.value
 }
 
 function handleSelectMarker(marker) {
@@ -331,6 +375,11 @@ function handleSelectMarker(marker) {
     return
   }
 
+  pauseJourneyPlayback()
+  clusterDetailRequestSequence += 1
+  isDetailLoading.value = false
+  isClusterPhotosLoadingMore.value = false
+  journeyPhotoIndex.value = -1
   selectedMarkerId.value = marker.id
 }
 
@@ -339,6 +388,7 @@ function handleSelectPhoto(photo) {
     return
   }
 
+  pauseJourneyPlayback()
   selectedPhotoId.value = photo.id
 }
 
@@ -348,9 +398,12 @@ function openPhotoLightbox(photo = selectedPhoto.value, { scope = LIGHTBOX_SCOPE
   }
 
   lightboxScope.value = scope
+  const globalPhotos = sortPhotosByTime(mergeLightboxPhotos(allMapPhotosInTimeOrder.value, [photo]))
   lightboxPhotos.value = scope === LIGHTBOX_SCOPE_CLUSTER
     ? sortPhotosByTime(mergeLightboxPhotos(selectedClusterPhotosInTimeOrder.value, [photo]))
-    : sortPhotosByTime(mergeLightboxPhotos(allMapPhotosInTimeOrder.value, [photo]))
+    : selectedJourneyDay.value
+      ? globalPhotos.filter((item) => matchesTravelJourneyDay(item, selectedJourneyDay.value))
+      : globalPhotos
   lightboxPhoto.value = photo
 
   if (scope === LIGHTBOX_SCOPE_CLUSTER && photo?.id) {
@@ -363,10 +416,16 @@ function handleSelectLightboxPhoto(photo) {
     return
   }
 
+  pauseJourneyPlayback()
   lightboxPhoto.value = photo
-
-  if (lightboxScope.value === LIGHTBOX_SCOPE_CLUSTER && photo?.id) {
+  if (photo?.id) {
     selectedPhotoId.value = photo.id
+    const pin = visiblePhotoPins.value.find((item) => String(item.mediaId) === String(photo.id))
+    const journeyIndex = journeyPhotoPins.value.findIndex((item) => String(item.mediaId) === String(photo.id))
+    if (journeyIndex >= 0) {
+      journeyPhotoIndex.value = journeyIndex
+    }
+    focusMapAtJourneyPhoto(pin ?? photo)
   }
 }
 function handleEditPhoto(photo) {
@@ -374,6 +433,7 @@ function handleEditPhoto(photo) {
     return
   }
 
+  pauseJourneyPlayback()
   lightboxPhoto.value = null
   emit('open-photo-editor', photo)
 }
@@ -407,9 +467,160 @@ async function handleLoadMoreClusterPhotos() {
 
 function handleMapFullscreenChange(nextValue) {
   isMapFullscreen.value = Boolean(nextValue)
+  if (!isMapFullscreen.value) {
+    pauseJourneyPlayback()
+    lightboxPhoto.value = null
+  }
+}
+
+function closeJourneyPhoto() {
+  pauseJourneyPlayback()
+  lightboxPhoto.value = null
+}
+
+function pauseJourneyPlayback() {
+  if (journeyPlaybackTimer !== null) {
+    clearTimeout(journeyPlaybackTimer)
+    journeyPlaybackTimer = null
+  }
+  journeyPlaybackSequence += 1
+  isJourneyPlaying.value = false
+}
+
+function focusMapAtJourneyPhoto(photo) {
+  const rawLatitude = photo?.latitude ?? photo?.gpsLatitude
+  const rawLongitude = photo?.longitude ?? photo?.gpsLongitude
+  if (rawLatitude == null || rawLongitude == null) {
+    return
+  }
+
+  const latitude = Number(rawLatitude)
+  const longitude = Number(rawLongitude)
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+    return
+  }
+
+  mapFocusSequence += 1
+  mapFocusTarget.value = { requestId: mapFocusSequence, latitude, longitude }
+}
+
+function scheduleNextJourneyPhoto(sequence) {
+  if (!isJourneyPlaying.value || sequence !== journeyPlaybackSequence) {
+    return
+  }
+
+  if (journeyPlaybackTimer !== null) {
+    clearTimeout(journeyPlaybackTimer)
+  }
+  journeyPlaybackTimer = setTimeout(async () => {
+    journeyPlaybackTimer = null
+    if (!isJourneyPlaying.value || sequence !== journeyPlaybackSequence) {
+      return
+    }
+
+    const nextIndex = journeyPhotoIndex.value + 1
+    if (nextIndex >= journeyPhotoPins.value.length) {
+      isJourneyPlaying.value = false
+      journeyPlaybackSequence += 1
+      return
+    }
+
+    const pin = journeyPhotoPins.value[nextIndex]
+    journeyPhotoIndex.value = nextIndex
+    focusMapAtJourneyPhoto(pin)
+    const loadedPhoto = await handleSelectPhotoPin(pin, {
+      openPreview: true,
+      fromJourneyPlayback: true,
+    })
+    if (!loadedPhoto) {
+      if (isJourneyPlaying.value && sequence === journeyPlaybackSequence) {
+        pauseJourneyPlayback()
+      }
+      return
+    }
+    scheduleNextJourneyPhoto(sequence)
+  }, journeySpeedSeconds.value * 1000)
+}
+
+async function toggleJourneyPlayback() {
+  if (isJourneyPlaying.value) {
+    pauseJourneyPlayback()
+    return
+  }
+
+  if (!selectedJourneyDay.value || !journeyPhotoPins.value.length) {
+    return
+  }
+
+  const canResume = journeyPhotoIndex.value >= 0
+    && journeyPhotoIndex.value < journeyPhotoPins.value.length - 1
+  if (!canResume) {
+    journeyPhotoIndex.value = 0
+  }
+
+  isJourneyPlaying.value = true
+  journeyPlaybackSequence += 1
+  const sequence = journeyPlaybackSequence
+  if (canResume) {
+    scheduleNextJourneyPhoto(sequence)
+    return
+  }
+
+  const firstPin = journeyPhotoPins.value[0]
+  focusMapAtJourneyPhoto(firstPin)
+  const loadedPhoto = await handleSelectPhotoPin(firstPin, {
+    openPreview: true,
+    fromJourneyPlayback: true,
+  })
+  if (!loadedPhoto) {
+    if (isJourneyPlaying.value && sequence === journeyPlaybackSequence) {
+      pauseJourneyPlayback()
+    }
+    return
+  }
+  scheduleNextJourneyPhoto(sequence)
+}
+
+function setJourneyPlaybackSpeed(value) {
+  const nextSpeed = Number(value)
+  if (![2, 4, 6, 8, 10].includes(nextSpeed)) {
+    return
+  }
+  journeySpeedSeconds.value = nextSpeed
+  if (isJourneyPlaying.value && !isDetailLoading.value) {
+    scheduleNextJourneyPhoto(journeyPlaybackSequence)
+  }
+}
+
+function handleJourneyDayChange(dayKey) {
+  const nextKey = String(dayKey ?? '')
+  if (nextKey === selectedJourneyDayKey.value) {
+    return
+  }
+  pauseJourneyPlayback()
+  selectedJourneyDayKey.value = nextKey
+  journeyPhotoIndex.value = -1
+  lightboxPhoto.value = null
+  clearSelection()
+  if (nextKey) {
+    viewMode.value = 'pin'
+  }
+  mapFitRequestKey.value += 1
+}
+
+function setMapViewMode(mode) {
+  if (mode === 'cluster' && selectedJourneyDayKey.value) {
+    handleJourneyDayChange('')
+  }
+  viewMode.value = mode === 'pin' ? 'pin' : 'cluster'
 }
 
 function clearSelection() {
+  pauseJourneyPlayback()
+  clusterDetailRequestSequence += 1
+  isDetailLoading.value = false
+  isClusterPhotosLoadingMore.value = false
+  journeyPhotoIndex.value = -1
   selectedClusterSummary.value = null
   selectedClusterDetail.value = null
   selectedPhotoId.value = null
@@ -595,6 +806,35 @@ const visiblePhotoClusters = computed(() => photoClusters.value.filter(itemMatch
 const visiblePhotoPins = computed(() => photoPins.value.filter(itemMatchesMapFilters))
 const visibleMarkers = computed(() => markers.value.filter(itemMatchesMapFilters))
 const visibleRoutes = computed(() => routes.value.filter(itemMatchesMapFilters))
+const journeyDays = computed(() => buildTravelJourneyDays(
+  visiblePhotoPins.value,
+  [...visibleMarkers.value, ...visibleRoutes.value],
+))
+const selectedJourneyDay = computed(() => journeyDays.value.find((day) => day.key === selectedJourneyDayKey.value) ?? null)
+const journeyPhotoPins = computed(() => selectedJourneyDay.value
+  ? sortTravelJourneyPhotos(visiblePhotoPins.value.filter((pin) => matchesTravelJourneyDay(pin, selectedJourneyDay.value)))
+  : [])
+const mapPhotoClusters = computed(() => selectedJourneyDay.value ? [] : visiblePhotoClusters.value)
+const mapPhotoPins = computed(() => selectedJourneyDay.value ? journeyPhotoPins.value : visiblePhotoPins.value)
+const mapMarkers = computed(() => selectedJourneyDay.value
+  ? visibleMarkers.value.filter((marker) => matchesTravelJourneyDay(marker, selectedJourneyDay.value))
+  : visibleMarkers.value)
+const mapRoutes = computed(() => selectedJourneyDay.value
+  ? visibleRoutes.value.filter((route) => matchesTravelJourneyDay(route, selectedJourneyDay.value))
+  : visibleRoutes.value)
+const mapDisplayMode = computed(() => selectedJourneyDay.value ? 'pin' : viewMode.value)
+const journeyPlaybackState = computed(() => (
+  selectedJourneyDay.value && isMapFullscreen.value
+    ? {
+        isPlaying: isJourneyPlaying.value,
+        photoIndex: journeyPhotoIndex.value,
+        photoCount: journeyPhotoPins.value.length,
+        speedSeconds: journeySpeedSeconds.value,
+        isBusy: isDetailLoading.value,
+        hasCompleted: !isJourneyPlaying.value && journeyPhotoIndex.value === journeyPhotoPins.value.length - 1,
+      }
+    : null
+))
 const visiblePlanCount = computed(() => {
   const keys = new Set()
   ;[...visiblePhotoPins.value, ...visibleMarkers.value, ...visibleRoutes.value, ...visiblePhotoClusters.value].forEach((item) => {
@@ -923,6 +1163,11 @@ onMounted(async () => {
   await loadOverview({ autoSelect: false, reloadDetail: false })
 })
 
+onBeforeUnmount(() => {
+  pauseJourneyPlayback()
+  clusterDetailRequestSequence += 1
+})
+
 watch(
   () => [selectedClusterSummary.value?.id, selectedClusterDetail.value?.id, isDetailLoading.value],
   async ([summaryId, detailId, loading]) => {
@@ -966,6 +1211,12 @@ watch(planFilterOptions, (options) => {
   const nextKeys = selectedPlanFilterKeys.value.filter((key) => availableKeys.has(String(key)))
   if (nextKeys.length !== selectedPlanFilterKeys.value.length) {
     selectedPlanFilterKeys.value = nextKeys
+  }
+})
+
+watch(journeyDays, (days) => {
+  if (selectedJourneyDayKey.value && !days.some((day) => day.key === selectedJourneyDayKey.value)) {
+    handleJourneyDayChange('')
   }
 })
 </script>
@@ -1062,17 +1313,17 @@ watch(planFilterOptions, (options) => {
         <div class="travel-map-mode-switch">
           <button
             class="travel-map__toolbar-button"
-            :class="{ 'is-active': viewMode === 'cluster' }"
+            :class="{ 'is-active': mapDisplayMode === 'cluster' }"
             type="button"
-            @click="viewMode = 'cluster'"
+            @click="setMapViewMode('cluster')"
           >
             클러스터 보기
           </button>
           <button
             class="travel-map__toolbar-button"
-            :class="{ 'is-active': viewMode === 'pin' }"
+            :class="{ 'is-active': mapDisplayMode === 'pin' }"
             type="button"
-            @click="viewMode = 'pin'"
+            @click="setMapViewMode('pin')"
           >
             핀 보기
           </button>
@@ -1083,16 +1334,17 @@ watch(planFilterOptions, (options) => {
       <p v-else-if="isLoading" class="panel__empty">사진 지도 데이터를 불러오는 중입니다...</p>
       <TravelMyMapClusterPanel
         v-else
-        :photo-clusters="visiblePhotoClusters"
-        :photo-pins="visiblePhotoPins"
-        :markers="visibleMarkers"
-        :routes="visibleRoutes"
+        :photo-clusters="mapPhotoClusters"
+        :photo-pins="mapPhotoPins"
+        :markers="mapMarkers"
+        :routes="mapRoutes"
         :active="props.active"
-        :display-mode="viewMode"
+        :display-mode="mapDisplayMode"
         :selected-cluster-id="selectedClusterSummary?.id ?? null"
         :selected-photo-id="selectedPhotoId ?? null"
         :selected-marker-id="selectedMarkerId ?? null"
         :fit-request-key="mapFitRequestKey"
+        :focus-target="mapFocusTarget"
         @select-cluster="handleSelectCluster"
         @select-marker="handleSelectMarker"
         @select-photo-pin="handleSelectPhotoPin"
@@ -1101,6 +1353,20 @@ watch(planFilterOptions, (options) => {
         @clear-selection="clearSelection"
       >
         <template #fullscreen-overlay="{ isFullscreen }">
+          <TravelJourneyPlaybackControls
+            v-if="isFullscreen"
+            :days="journeyDays"
+            :selected-day-key="selectedJourneyDayKey"
+            :is-playing="isJourneyPlaying"
+            :photo-index="journeyPhotoIndex"
+            :photo-count="journeyPhotoPins.length"
+            :speed-seconds="journeySpeedSeconds"
+            :is-busy="isDetailLoading"
+            :has-completed="journeyPhotoIndex === journeyPhotoPins.length - 1 && journeyPhotoPins.length > 0"
+            @select-day="handleJourneyDayChange"
+            @toggle="toggleJourneyPlayback"
+            @speed-change="setJourneyPlaybackSpeed"
+          />
           <TravelMyMapInspectorPanels
             v-if="isFullscreen && shouldShowFullscreenInspector"
             :summary="selectedClusterSummary"
@@ -1138,10 +1404,13 @@ watch(planFilterOptions, (options) => {
             :is-representative-saving="isRepresentativeSaving"
             :representative-updating-id="representativeUpdatingId"
             :show-edit-action="true"
-            @close="lightboxPhoto = null"
+            :playback-state="journeyPlaybackState"
+            @close="closeJourneyPhoto"
             @select-photo="handleSelectLightboxPhoto"
             @set-representative="handleUpdateRepresentative"
             @edit-photo="handleEditPhoto"
+            @toggle-journey-playback="toggleJourneyPlayback"
+            @journey-speed-change="setJourneyPlaybackSpeed"
           />
         </template>
       </TravelMyMapClusterPanel>
@@ -1331,7 +1600,7 @@ watch(planFilterOptions, (options) => {
       :is-representative-saving="isRepresentativeSaving"
       :representative-updating-id="representativeUpdatingId"
       :show-edit-action="true"
-      @close="lightboxPhoto = null"
+      @close="closeJourneyPhoto"
       @select-photo="handleSelectLightboxPhoto"
       @set-representative="handleUpdateRepresentative"
       @edit-photo="handleEditPhoto"

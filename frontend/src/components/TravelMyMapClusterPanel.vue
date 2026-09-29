@@ -73,6 +73,10 @@ const props = defineProps({
     type: [Number, String],
     default: 0,
   },
+  focusTarget: {
+    type: Object,
+    default: null,
+  },
 })
 
 const emit = defineEmits([
@@ -1290,6 +1294,29 @@ watch(
 
     fitToAll({ animate: true })
     queueMapResize()
+  },
+)
+
+watch(
+  () => [props.focusTarget?.requestId, props.focusTarget?.latitude, props.focusTarget?.longitude],
+  async ([requestId, rawLatitude, rawLongitude]) => {
+    if (requestId == null || rawLatitude == null || rawLongitude == null || !mapInstance) {
+      return
+    }
+
+    const latitude = Number(rawLatitude)
+    const longitude = Number(rawLongitude)
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+      return
+    }
+
+    await nextTick()
+    if (!mapInstance) {
+      return
+    }
+
+    const targetZoom = Math.min(18, Math.max(mapInstance.getZoom(), 15))
+    mapInstance.flyTo([latitude, longitude], targetZoom, { animate: true, duration: 0.8 })
   },
 )
 </script>

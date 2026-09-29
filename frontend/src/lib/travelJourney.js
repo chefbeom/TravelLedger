@@ -135,6 +135,50 @@ function distanceBetweenCoordinates(left, right) {
   return 6_371_000 * 2 * Math.atan2(Math.sqrt(haversine), Math.sqrt(1 - haversine))
 }
 
+function projectCoordinateToTravelPath(path, coordinate, minimumDistanceMeters = 0) {
+  const target = normalizeRouteCoordinate(coordinate)
+  const points = path?.points
+  if (!target || !Array.isArray(points) || points.length < 2) {
+    return null
+  }
+
+  let nearest = null
+  let nearestAfterMinimum = null
+  for (let index = 1; index < points.length; index += 1) {
+    const start = points[index - 1]
+    const end = points[index]
+    const meanLatitude = ((start.latitude + end.latitude + target.latitude) / 3) * (Math.PI / 180)
+    const longitudeScale = 111_320 * Math.cos(meanLatitude)
+    const latitudeScale = 110_574
+    const segmentX = (end.longitude - start.longitude) * longitudeScale
+    const segmentY = (end.latitude - start.latitude) * latitudeScale
+    const targetX = (target.longitude - start.longitude) * longitudeScale
+    const targetY = (target.latitude - start.latitude) * latitudeScale
+    const segmentLengthSquared = (segmentX ** 2) + (segmentY ** 2)
+    const ratio = segmentLengthSquared > 0
+      ? Math.max(0, Math.min(1, ((targetX * segmentX) + (targetY * segmentY)) / segmentLengthSquared))
+      : 0
+    const projected = {
+      latitude: start.latitude + ((end.latitude - start.latitude) * ratio),
+      longitude: start.longitude + ((end.longitude - start.longitude) * ratio),
+      distanceMeters: start.distanceMeters + ((end.distanceMeters - start.distanceMeters) * ratio),
+    }
+    const candidate = {
+      ...projected,
+      distanceFromRouteMeters: distanceBetweenCoordinates(target, projected),
+    }
+    if (!nearest || candidate.distanceFromRouteMeters < nearest.distanceFromRouteMeters) {
+      nearest = candidate
+    }
+    if (candidate.distanceMeters + 0.01 >= minimumDistanceMeters
+      && (!nearestAfterMinimum || candidate.distanceFromRouteMeters < nearestAfterMinimum.distanceFromRouteMeters)) {
+      nearestAfterMinimum = candidate
+    }
+  }
+
+  return nearestAfterMinimum ?? nearest
+}
+
 export function buildTravelRoutePlaybackPath(routeOrRoutes, startCoordinate = null) {
   const routes = Array.isArray(routeOrRoutes) ? routeOrRoutes : [routeOrRoutes]
   const candidates = routes.map((route) => {
@@ -242,12 +286,129 @@ export function buildTravelRoutePlaybackPath(routeOrRoutes, startCoordinate = nu
     current = points.at(-1) ?? current
   }
 
-  return {
+  let path = {
     points,
     totalDistanceMeters: distanceMeters,
     totalDistanceKm: distanceMeters / 1000,
     isPlayable: points.length >= 2 && distanceMeters > 0,
   }
+
+  // Start the playback at the first photo's location on the route, not at a
+  // distant route endpoint, so the opening photo and moving camera agree.
+  const startProjection = projectCoordinateToTravelPath(path, startCoordinate)
+  if (startProjection && startProjection.distanceMeters > 0.5
+    && path.totalDistanceMeters - startProjection.distanceMeters > 0.5) {
+    const trimmedPoints = [{
+      latitude: startProjection.latitude,
+      longitude: startProjection.longitude,
+      distanceMeters: 0,
+    }]
+    path.points.forEach((point) => {
+      if (point.distanceMeters > startProjection.distanceMeters + 0.05) {
+        trimmedPoints.push({ ...point, distanceMeters: point.distanceMeters - startProjection.distanceMeters })
+      }
+    })
+    distanceMeters = path.totalDistanceMeters - startProjection.distanceMeters
+    path = {
+      points: trimmedPoints,
+      totalDistanceMeters: distanceMeters,
+      totalDistanceKm: distanceMeters / 1000,
+      isPlayable: trimmedPoints.length >= 2 && distanceMeters > 0,
+    }
+  }
+
+  return path
+}
+
+export function buildTravelJourneyRoutePhotoDistances(path, photos = [], maximumMatchDistanceMeters = 2500) {
+  const photoCount = Array.isArray(photos) ? photos.length : 0
+  if (!photoCount || !path?.isPlayable || !(path.totalDistanceMeters > 0)) {
+    return []
+  }
+
+  const matchedDistances = []
+  let lastMatchedDistance = 0
+  photos.forEach((photo) => {
+    const coordinate = {
+      latitude: photo?.latitude ?? photo?.gpsLatitude ?? photo?.lat,
+      longitude: photo?.longitude ?? photo?.gpsLongitude ?? photo?.lng ?? photo?.lon,
+    }
+    const projection = projectCoordinateToTravelPath(path, coordinate, lastMatchedDistance)
+    if (projection && projection.distanceFromRouteMeters <= maximumMatchDistanceMeters) {
+      lastMatchedDistance = Math.max(lastMatchedDistance, projection.distanceMeters)
+      matchedDistances.push(lastMatchedDistance)
+    } else {
+      matchedDistances.push(null)
+    }
+  })
+
+  if (!matchedDistances.some((distance) => distance != null)) {
+    if (photoCount === 1) {
+      return [0]
+    }
+    return matchedDistances.map((_, index) => path.totalDistanceMeters * index / (photoCount - 1))
+  }
+
+  matchedDistances.forEach((distance, index) => {
+    if (distance != null) {
+      return
+    }
+    let previousIndex = index - 1
+    while (previousIndex >= 0 && matchedDistances[previousIndex] == null) previousIndex -= 1
+    let nextIndex = index + 1
+    while (nextIndex < photoCount && matchedDistances[nextIndex] == null) nextIndex += 1
+    const leftIndex = previousIndex >= 0 ? previousIndex : -1
+    const rightIndex = nextIndex < photoCount ? nextIndex : photoCount
+    const leftDistance = previousIndex >= 0 ? matchedDistances[previousIndex] : 0
+    const rightDistance = nextIndex < photoCount ? matchedDistances[nextIndex] : path.totalDistanceMeters
+    const progress = (index - leftIndex) / (rightIndex - leftIndex)
+    matchedDistances[index] = leftDistance + ((rightDistance - leftDistance) * progress)
+  })
+
+  return matchedDistances.map((distance, index) => Math.max(
+    index > 0 ? matchedDistances[index - 1] : 0,
+    Math.min(path.totalDistanceMeters, Number(distance) || 0),
+  ))
+}
+
+export function getTravelJourneyRouteOverviewZoom(photoDistances = [], photoIndex = 0) {
+  const distances = Array.isArray(photoDistances) ? photoDistances : []
+  const index = Number(photoIndex)
+  if (!Number.isInteger(index) || index < 0 || index + 1 >= distances.length) {
+    return null
+  }
+
+  const currentDistance = Number(distances[index])
+  const nextDistance = Number(distances[index + 1])
+  if (!Number.isFinite(currentDistance) || !Number.isFinite(nextDistance)) {
+    return null
+  }
+
+  const gapMeters = Math.max(0, nextDistance - currentDistance)
+  if (gapMeters < 15_000) {
+    return null
+  }
+
+  return Math.max(4, Math.min(12, 15 - Math.ceil(Math.log2(gapMeters / 5_000))))
+}
+
+export function getTravelJourneyRouteDistanceAtElapsed(path, photoDistances = [], elapsedMs = 0, intervalMs = 4000) {
+  const totalDistance = Number(path?.totalDistanceMeters)
+  const distances = Array.isArray(photoDistances) ? photoDistances : []
+  if (!path?.isPlayable || !(totalDistance > 0) || !distances.length) {
+    return 0
+  }
+
+  const interval = Math.max(1, Number(intervalMs) || 1)
+  const elapsed = Math.max(0, Math.min(Number(elapsedMs) || 0, distances.length * interval))
+  const segmentIndex = Math.min(distances.length - 1, Math.floor(elapsed / interval))
+  const segmentProgress = Math.max(0, Math.min(1, (elapsed - (segmentIndex * interval)) / interval))
+  const startDistance = Math.max(0, Math.min(totalDistance, Number(distances[segmentIndex]) || 0))
+  const endDistance = segmentIndex + 1 < distances.length
+    ? Math.max(startDistance, Math.min(totalDistance, Number(distances[segmentIndex + 1]) || 0))
+    : totalDistance
+
+  return startDistance + ((endDistance - startDistance) * segmentProgress)
 }
 
 export function getTravelRoutePosition(path, distanceMeters) {

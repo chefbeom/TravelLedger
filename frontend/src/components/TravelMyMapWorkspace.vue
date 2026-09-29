@@ -9,8 +9,11 @@ import {
 import { formatDate, safeNumber } from '../lib/uiFormat'
 import {
   buildTravelJourneyDays,
+  buildTravelJourneyRoutePhotoDistances,
   buildTravelRoutePlaybackPath,
   findNextTravelJourneyDay,
+  getTravelJourneyRouteDistanceAtElapsed,
+  getTravelJourneyRouteOverviewZoom,
   getTravelRoutePosition,
   matchesTravelJourneyDay,
   sortTravelJourneyPhotos,
@@ -66,12 +69,14 @@ const journeyTransitionCountdown = ref(0)
 const journeyRouteDistanceMeters = ref(0)
 const journeyPlaybackElapsedMs = ref(0)
 const journeyRouteAutoZoomPending = ref(false)
+const journeyRouteOverviewZoom = ref(null)
 const mapFocusTarget = ref(null)
 let journeyPlaybackTimer = null
 let journeyPlaybackSequence = 0
 let journeyRouteFollowTimer = null
 let journeyRouteFollowSequence = 0
 let journeyPlaybackStartedAt = 0
+let journeyRouteZoomTransitionUntil = 0
 let mapFocusSequence = 0
 let clusterDetailRequestSequence = 0
 const shareDialog = reactive({
@@ -519,7 +524,12 @@ function pauseJourneyPlayback() {
   pauseJourneyRoutePlayback()
 }
 
-function focusMapAtCoordinate(latitudeValue, longitudeValue, { keepZoom = false, autoZoom = false, duration = 0.8 } = {}) {
+function focusMapAtCoordinate(latitudeValue, longitudeValue, {
+  keepZoom = false,
+  autoZoom = false,
+  zoom,
+  duration = 0.8,
+} = {}) {
   const latitude = Number(latitudeValue)
   const longitude = Number(longitudeValue)
   if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
@@ -527,7 +537,11 @@ function focusMapAtCoordinate(latitudeValue, longitudeValue, { keepZoom = false,
   }
 
   mapFocusSequence += 1
-  mapFocusTarget.value = { requestId: mapFocusSequence, latitude, longitude, keepZoom, autoZoom, duration }
+  const focusTarget = { requestId: mapFocusSequence, latitude, longitude, keepZoom, autoZoom, duration }
+  if (zoom != null) {
+    focusTarget.zoom = zoom
+  }
+  mapFocusTarget.value = focusTarget
 }
 
 function focusMapAtJourneyPhoto(photo, options = {}) {
@@ -538,6 +552,59 @@ function focusMapAtJourneyPhoto(photo, options = {}) {
   }
 
   focusMapAtCoordinate(rawLatitude, rawLongitude, { autoZoom: true, ...options })
+}
+
+function prepareJourneyRoutePhotoView(photoIndex, { initial = false, position = null } = {}) {
+  const path = journeyRoutePath.value
+  if (!journeyRouteFollowEnabled.value || !path.isPlayable) {
+    return false
+  }
+
+  const photoDistance = journeyRoutePhotoDistances.value[photoIndex] ?? journeyRouteDistanceMeters.value
+  const targetPosition = position ?? getTravelRoutePosition(path, photoDistance)
+  if (!targetPosition) {
+    return false
+  }
+
+  const overviewZoom = getTravelJourneyRouteOverviewZoom(journeyRoutePhotoDistances.value, photoIndex)
+  if (overviewZoom != null) {
+    const previousOverviewZoom = journeyRouteOverviewZoom.value
+    journeyRouteOverviewZoom.value = previousOverviewZoom == null
+      ? overviewZoom
+      : Math.min(previousOverviewZoom, overviewZoom)
+    journeyRouteAutoZoomPending.value = false
+    if (previousOverviewZoom == null || journeyRouteOverviewZoom.value < previousOverviewZoom) {
+      focusMapAtCoordinate(targetPosition.latitude, targetPosition.longitude, {
+        zoom: journeyRouteOverviewZoom.value,
+        duration: 0.75,
+      })
+      journeyRouteZoomTransitionUntil = performance.now() + 750
+    }
+    return true
+  }
+
+  if (journeyRouteOverviewZoom.value != null) {
+    journeyRouteOverviewZoom.value = null
+    journeyRouteAutoZoomPending.value = false
+    focusMapAtCoordinate(targetPosition.latitude, targetPosition.longitude, {
+      autoZoom: true,
+      duration: 0.7,
+    })
+    journeyRouteZoomTransitionUntil = performance.now() + 700
+    return true
+  }
+
+  if (initial) {
+    journeyRouteAutoZoomPending.value = false
+    focusMapAtCoordinate(targetPosition.latitude, targetPosition.longitude, {
+      autoZoom: true,
+      duration: 0.85,
+    })
+    journeyRouteZoomTransitionUntil = performance.now() + 850
+  } else {
+    journeyRouteAutoZoomPending.value = true
+  }
+  return true
 }
 
 function scheduleNextJourneyPhoto(sequence) {
@@ -579,7 +646,9 @@ function scheduleNextJourneyPhoto(sequence) {
     const pin = journeyPhotoPins.value[nextIndex]
     journeyPhotoIndex.value = nextIndex
     if (journeyRouteFollowEnabled.value && journeyRoutePath.value.isPlayable) {
-      journeyRouteAutoZoomPending.value = true
+      if (!prepareJourneyRoutePhotoView(nextIndex)) {
+        journeyRouteAutoZoomPending.value = true
+      }
     } else {
       focusMapAtJourneyPhoto(pin, { autoZoom: true, duration: 0.65 })
     }
@@ -615,6 +684,8 @@ function scheduleJourneyDayTransition(sequence) {
     journeyPlaybackElapsedMs.value = 0
     journeyRouteDistanceMeters.value = 0
     journeyRouteAutoZoomPending.value = false
+    journeyRouteOverviewZoom.value = null
+    journeyRouteZoomTransitionUntil = 0
     viewMode.value = 'pin'
     clearJourneyPlaybackDetails()
     journeyPlaybackStartedAt = performance.now()
@@ -630,8 +701,7 @@ function scheduleJourneyDayTransition(sequence) {
     }
     journeyPhotoIndex.value = 0
     if (journeyRouteFollowEnabled.value && journeyRoutePath.value.isPlayable) {
-      const routeStart = journeyRoutePath.value.points[0]
-      focusMapAtCoordinate(routeStart.latitude, routeStart.longitude, { autoZoom: true, duration: 1.1 })
+      prepareJourneyRoutePhotoView(0, { initial: true })
     } else {
       focusMapAtJourneyPhoto(firstPin, { autoZoom: true, duration: 1.1 })
     }
@@ -666,14 +736,19 @@ async function toggleJourneyPlayback() {
   const sequence = journeyPlaybackSequence
   if (journeyRouteFollowEnabled.value && journeyRoutePath.value.isPlayable) {
     const elapsed = journeyPlaybackElapsedMs.value
-    const duration = Math.max(1000, journeyPhotoPins.value.length * journeySpeedSeconds.value * 1000)
-    const position = getTravelRoutePosition(journeyRoutePath.value, journeyRoutePath.value.totalDistanceMeters * Math.min(1, elapsed / duration))
+    const routeDistance = getTravelJourneyRouteDistanceAtElapsed(
+      journeyRoutePath.value,
+      journeyRoutePhotoDistances.value,
+      elapsed,
+      journeySpeedSeconds.value * 1000,
+    )
+    const position = getTravelRoutePosition(journeyRoutePath.value, routeDistance)
     if (position) {
-      focusMapAtCoordinate(position.latitude, position.longitude, {
-        keepZoom: canResume,
-        autoZoom: !canResume,
-        duration: 0.65,
-      })
+      if (canResume) {
+        focusMapAtCoordinate(position.latitude, position.longitude, { keepZoom: true, duration: 0.65 })
+      } else {
+        prepareJourneyRoutePhotoView(journeyPhotoIndex.value, { initial: true, position })
+      }
     }
   } else {
     focusMapAtJourneyPhoto(journeyPhotoPins.value[journeyPhotoIndex.value], { autoZoom: true, duration: 0.65 })
@@ -687,13 +762,15 @@ function setJourneyPlaybackSpeed(value) {
   if (![2, 4, 6, 8, 10].includes(nextSpeed)) {
     return
   }
-  const oldDuration = Math.max(1, journeyPhotoPins.value.length * journeySpeedSeconds.value * 1000)
+  const oldInterval = Math.max(1, journeySpeedSeconds.value * 1000)
+  const nextInterval = nextSpeed * 1000
   const elapsed = journeyPlaybackElapsedMs.value + (isJourneyPlaying.value && journeyPlaybackStartedAt
     ? Math.max(0, performance.now() - journeyPlaybackStartedAt)
     : 0)
   if (journeyPhotoPins.value.length) {
-    const progress = Math.min(1, elapsed / oldDuration)
-    journeyPlaybackElapsedMs.value = progress * journeyPhotoPins.value.length * nextSpeed * 1000
+    const completedIntervals = Math.floor(elapsed / oldInterval)
+    const intervalProgress = (elapsed - (completedIntervals * oldInterval)) / oldInterval
+    journeyPlaybackElapsedMs.value = (completedIntervals + intervalProgress) * nextInterval
   }
   if (isJourneyPlaying.value && journeyPlaybackStartedAt) {
     journeyPlaybackStartedAt = performance.now()
@@ -718,6 +795,8 @@ function handleJourneyDayChange(dayKey) {
   journeyPlaybackElapsedMs.value = 0
   journeyRouteDistanceMeters.value = 0
   journeyRouteAutoZoomPending.value = false
+  journeyRouteOverviewZoom.value = null
+  journeyRouteZoomTransitionUntil = 0
   lightboxPhoto.value = null
   clearSelection()
   if (nextKey) {
@@ -754,10 +833,25 @@ function scheduleJourneyRouteFollow(sequence, routeSequence = journeyRouteFollow
     return
   }
 
-  const durationMs = Math.max(1000, journeyPhotoPins.value.length * journeySpeedSeconds.value * 1000)
+  const zoomTransitionRemainingMs = journeyRouteZoomTransitionUntil - performance.now()
+  if (zoomTransitionRemainingMs > 0) {
+    journeyRouteFollowTimer = setTimeout(() => {
+      journeyRouteFollowTimer = null
+      scheduleJourneyRouteFollow(sequence, routeSequence)
+    }, Math.min(140, zoomTransitionRemainingMs))
+    return
+  }
+  journeyRouteZoomTransitionUntil = 0
+
+  const intervalMs = journeySpeedSeconds.value * 1000
   const elapsedMs = journeyPlaybackElapsedMs.value + Math.max(0, performance.now() - journeyPlaybackStartedAt)
-  const progress = Math.max(0, Math.min(1, elapsedMs / durationMs))
-  const nextDistance = path.totalDistanceMeters * progress
+  const totalDurationMs = Math.max(intervalMs, journeyPhotoPins.value.length * intervalMs)
+  const nextDistance = getTravelJourneyRouteDistanceAtElapsed(
+    path,
+    journeyRoutePhotoDistances.value,
+    elapsedMs,
+    intervalMs,
+  )
   journeyRouteDistanceMeters.value = nextDistance
   const position = getTravelRoutePosition(path, nextDistance)
   if (position) {
@@ -770,7 +864,7 @@ function scheduleJourneyRouteFollow(sequence, routeSequence = journeyRouteFollow
     journeyRouteAutoZoomPending.value = false
   }
 
-  if (progress >= 1 || !isJourneyPlaying.value) {
+  if (elapsedMs >= totalDurationMs || !isJourneyPlaying.value) {
     journeyRouteFollowTimer = null
     return
   }
@@ -789,12 +883,26 @@ function setJourneyRouteFollowEnabled(value) {
   pauseJourneyRoutePlayback()
   journeyRouteFollowEnabled.value = shouldFollow
   if (isJourneyPlaying.value && shouldFollow) {
-    journeyRouteAutoZoomPending.value = true
+    const elapsed = journeyPlaybackElapsedMs.value + Math.max(0, performance.now() - journeyPlaybackStartedAt)
+    const distance = getTravelJourneyRouteDistanceAtElapsed(
+      journeyRoutePath.value,
+      journeyRoutePhotoDistances.value,
+      elapsed,
+      journeySpeedSeconds.value * 1000,
+    )
+    const position = getTravelRoutePosition(journeyRoutePath.value, distance)
+    if (position) {
+      prepareJourneyRoutePhotoView(Math.max(0, journeyPhotoIndex.value), { position })
+    }
     scheduleJourneyRouteFollow(journeyPlaybackSequence)
   } else if (!shouldFollow) {
+    const wasOverview = journeyRouteOverviewZoom.value != null
+    journeyRouteOverviewZoom.value = null
+    journeyRouteZoomTransitionUntil = 0
+    journeyRouteAutoZoomPending.value = false
     const activePin = journeyPhotoPins.value[journeyPhotoIndex.value]
     if (activePin) {
-      focusMapAtJourneyPhoto(activePin, { keepZoom: true, duration: 0.35 })
+      focusMapAtJourneyPhoto(activePin, { keepZoom: !wasOverview, autoZoom: wasOverview, duration: 0.5 })
     }
   }
 }
@@ -1012,6 +1120,10 @@ const journeyRoutes = computed(() => selectedJourneyDay.value
 const journeyRoutePath = computed(() => buildTravelRoutePlaybackPath(
   journeyRoutes.value,
   journeyPhotoPins.value[0] ?? null,
+))
+const journeyRoutePhotoDistances = computed(() => buildTravelJourneyRoutePhotoDistances(
+  journeyRoutePath.value,
+  journeyPhotoPins.value,
 ))
 const journeyRouteCount = computed(() => journeyRoutes.value
   .filter((route) => buildTravelRoutePlaybackPath(route).isPlayable).length)

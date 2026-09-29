@@ -2,8 +2,11 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
   buildTravelJourneyDays,
+  buildTravelJourneyRoutePhotoDistances,
   buildTravelRoutePlaybackPath,
   findNextTravelJourneyDay,
+  getTravelJourneyRouteDistanceAtElapsed,
+  getTravelJourneyRouteOverviewZoom,
   getTravelRoutePosition,
   matchesTravelJourneyDay,
   sortTravelJourneyPhotos,
@@ -116,4 +119,47 @@ test('combined route itinerary starts nearest to the first journey photo and con
   assert.deepEqual(getTravelRoutePosition(combined, 0), { latitude: 0, longitude: 2 })
   assert.equal(combined.points.length, 4)
   assert.ok(combined.totalDistanceMeters > 220_000)
+})
+
+test('route playback starts at the first photo and reaches each photo location at its display change', () => {
+  const photos = [
+    { latitude: 0, longitude: 0.005 },
+    { latitude: 0, longitude: 0.01 },
+    { latitude: 0, longitude: 0.015 },
+  ]
+  const path = buildTravelRoutePlaybackPath({
+    points: [{ latitude: 0, longitude: 0 }, { latitude: 0, longitude: 0.02 }],
+  }, photos[0])
+  const photoDistances = buildTravelJourneyRoutePhotoDistances(path, photos)
+
+  assert.ok(Math.abs(getTravelRoutePosition(path, 0).longitude - photos[0].longitude) < 0.00001)
+  assert.ok(Math.abs(photoDistances[1] - path.totalDistanceMeters / 3) < 2)
+  assert.ok(Math.abs(getTravelJourneyRouteDistanceAtElapsed(path, photoDistances, 1000, 1000) - photoDistances[1]) < 0.01)
+  assert.ok(Math.abs(getTravelJourneyRouteDistanceAtElapsed(path, photoDistances, 2000, 1000) - photoDistances[2]) < 0.01)
+  assert.equal(getTravelJourneyRouteDistanceAtElapsed(path, photoDistances, 3000, 1000), path.totalDistanceMeters)
+})
+
+test('route photo anchors stay ordered and interpolate photos without usable route coordinates', () => {
+  const path = buildTravelRoutePlaybackPath({
+    points: [{ latitude: 0, longitude: 0 }, { latitude: 0, longitude: 0.02 }],
+  })
+  const distances = buildTravelJourneyRoutePhotoDistances(path, [
+    { latitude: 0, longitude: 0.004 },
+    { mediaId: 2 },
+    { gpsLatitude: 0, gpsLongitude: 0.012 },
+    { latitude: 1, longitude: 1 },
+  ])
+
+  assert.equal(distances.length, 4)
+  assert.ok(distances.every((distance, index) => distance >= 0 && distance <= path.totalDistanceMeters
+    && (index === 0 || distance >= distances[index - 1])))
+  assert.ok(distances[1] > distances[0] && distances[1] < distances[2])
+  assert.ok(distances[3] > distances[2])
+})
+
+test('long photo gaps use a wider map zoom based on travel distance', () => {
+  assert.equal(getTravelJourneyRouteOverviewZoom([0, 14_999], 0), null)
+  assert.equal(getTravelJourneyRouteOverviewZoom([0, 15_000], 0), 12)
+  assert.equal(getTravelJourneyRouteOverviewZoom([0, 500_000], 0), 8)
+  assert.equal(getTravelJourneyRouteOverviewZoom([0, 10_000], 1), null)
 })

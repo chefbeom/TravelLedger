@@ -219,6 +219,13 @@ public class TravelService {
     private final TravelPhotoGpsMetadataService travelPhotoGpsMetadataService;
     private final TravelPhotoClusterService travelPhotoClusterService;
     private final TravelMyMapPhotoClusterSnapshotService travelMyMapPhotoClusterSnapshotService;
+    private final com.playdata.calen.common.cache.SingleFlight summaryFlights = new com.playdata.calen.common.cache.SingleFlight();
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private org.springframework.transaction.PlatformTransactionManager summaryTransactionManager;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private TravelClusterRefreshCoordinator clusterRefreshCoordinator;
     private final TravelPublicMediaTokenService travelPublicMediaTokenService;
     private final RedisCacheService redisCacheService;
     private final LedgerTravelBridgeService ledgerTravelBridgeService;
@@ -232,7 +239,8 @@ public class TravelService {
     private long travelMediaDownloadCacheTtlSeconds;
 
     private volatile Integer routePathCharBudget;
-    private final ConcurrentMap<OwnedMediaDownloadCacheKey, CachedMediaDownloadEntry> ownedMediaDownloadCache = new ConcurrentHashMap<>();
+    private final com.playdata.calen.common.cache.BoundedExpiringCache<OwnedMediaDownloadCacheKey, CachedMediaDownloadEntry> ownedMediaDownloadCache =
+            new com.playdata.calen.common.cache.BoundedExpiringCache<>(4096);
 
     private record RoutePathPayload(
             String format,
@@ -282,7 +290,12 @@ public class TravelService {
             Map<Long, TravelMediaAsset> mediaAssetById
     ) {
     }
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.NOT_SUPPORTED)
     public List<TravelPlanSummaryResponse> getPlans(Long userId) {
+        return summaryFlights.execute(buildPlansCacheKey(userId), () -> inSummaryTransaction(true, () -> loadPlans(userId)));
+    }
+
+    private List<TravelPlanSummaryResponse> loadPlans(Long userId) {
         appUserService.getRequiredUser(userId);
 
         List<TravelPlanSummaryResponse> cachedPlans = redisCacheService.get(buildPlansCacheKey(userId), TRAVEL_PLAN_SUMMARIES_TYPE);
@@ -356,7 +369,12 @@ public class TravelService {
         return toPlanDetail(plan, budgetItems, records, memoryRecords, mediaItems, routeSegments);
     }
 
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.NOT_SUPPORTED)
     public TravelPortfolioResponse getPortfolio(Long userId) {
+        return summaryFlights.execute(buildPortfolioCacheKey(userId), () -> inSummaryTransaction(true, () -> loadPortfolio(userId)));
+    }
+
+    private TravelPortfolioResponse loadPortfolio(Long userId) {
         appUserService.getRequiredUser(userId);
 
         TravelPortfolioResponse cachedPortfolio = redisCacheService.get(buildPortfolioCacheKey(userId), TravelPortfolioResponse.class);
@@ -434,11 +452,23 @@ public class TravelService {
         return response;
     }
 
-    @Transactional
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.NOT_SUPPORTED)
     public TravelMyMapOverviewResponse getMyMapOverview(Long userId) {
+        return summaryFlights.execute(buildMyMapOverviewCacheKey(userId), () -> {
+            Long generation = clusterRefreshCoordinator == null ? null : clusterRefreshCoordinator.ensureCurrent(userId);
+            return inSummaryTransaction(false, () -> loadMyMapOverview(userId, generation));
+        });
+    }
+
+    private TravelMyMapOverviewResponse loadMyMapOverview(Long userId, Long generation) {
         appUserService.getRequiredUser(userId);
 
-        TravelMyMapOverviewResponse cachedOverview = redisCacheService.get(buildMyMapOverviewCacheKey(userId), TravelMyMapOverviewResponse.class);
+        TravelMyMapOverviewResponse cachedOverview;
+        if (generation == null) cachedOverview = redisCacheService.get(buildMyMapOverviewCacheKey(userId), TravelMyMapOverviewResponse.class);
+        else {
+            VersionedMapOverview cached = redisCacheService.get(buildMyMapOverviewCacheKey(userId), VersionedMapOverview.class);
+            cachedOverview = cached != null && cached.generation() == generation ? cached.overview() : null;
+        }
         if (cachedOverview != null) {
             return cachedOverview;
         }
@@ -460,7 +490,7 @@ public class TravelService {
                                 asset -> "/api/travel/media/" + asset.getId() + "/content",
                                 (existing, ignored) -> existing
                         ));
-        TravelMyMapPhotoClusterSnapshot photoClusterSnapshot = getOrBuildMyMapPhotoClusterSnapshot(userId);
+        TravelMyMapPhotoClusterSnapshot photoClusterSnapshot = getOrBuildMyMapPhotoClusterSnapshot(userId, generation);
         List<TravelRouteSegment> routeSegments = travelRouteSegmentRepository.findAllByPlanOwnerIdOrderByRouteDateDescIdDesc(userId).stream()
                 .sorted(ROUTE_ORDER)
                 .toList();
@@ -477,9 +507,11 @@ public class TravelService {
                 photoClusterSnapshot.pins(),
                 routeSegments.stream().map(this::toMyMapRouteResponse).toList()
         );
-        cacheTravelSummary(buildMyMapOverviewCacheKey(userId), response);
+        cacheTravelSummary(buildMyMapOverviewCacheKey(userId), generation == null ? response : new VersionedMapOverview(generation, response));
         return response;
     }
+
+    private record VersionedMapOverview(long generation, TravelMyMapOverviewResponse overview) { }
 
     public TravelMyMapMarkerDetailBundleResponse getMyMapMarkerDetailBundle(Long userId, Long markerId) {
         appUserService.getRequiredUser(userId);
@@ -491,13 +523,7 @@ public class TravelService {
             throw new BadRequestException("Location coordinates are required for map detail loading.");
         }
 
-        List<TravelExpenseRecord> nearbyRecords = travelExpenseRecordRepository
-                .findAllByPlanOwnerIdAndRecordTypeAndLatitudeIsNotNullAndLongitudeIsNotNull(userId, TravelRecordType.MEMORY)
-                .stream()
-                .filter(record -> !record.getId().equals(selectedRecord.getId()))
-                .sorted(Comparator.comparingDouble(record -> calculateDistanceMeters(selectedRecord, record)))
-                .limit(MY_MAP_NEARBY_MARKER_COUNT)
-                .toList();
+        List<TravelExpenseRecord> nearbyRecords = findNearestMemories(userId, selectedRecord);
 
         List<TravelExpenseRecord> bundleRecords = new ArrayList<>();
         bundleRecords.add(selectedRecord);
@@ -518,7 +544,27 @@ public class TravelService {
         );
     }
 
-    @Transactional
+    private List<TravelExpenseRecord> findNearestMemories(Long userId, TravelExpenseRecord selected) {
+        double latitude = selected.getLatitude().doubleValue();
+        double longitude = selected.getLongitude().doubleValue();
+        double radius = 100d;
+        while (true) {
+            GeoBounds bounds = GeoBounds.around(latitude, longitude, radius);
+            List<TravelExpenseRecord> candidates = travelExpenseRecordRepository.findNearestMemoryCandidates(
+                    userId, TravelRecordType.MEMORY, selected.getId(), latitude, longitude,
+                    bounds.minLatitude(), bounds.maxLatitude(), bounds.minLongitude(), bounds.maxLongitude(),
+                    bounds.allLongitudes(), bounds.crossesDateLine(),
+                    org.springframework.data.domain.PageRequest.of(0, MY_MAP_NEARBY_MARKER_COUNT));
+            candidates = candidates.stream().sorted(Comparator.comparingDouble(record -> calculateDistanceMeters(selected, record))).toList();
+            if (radius >= Math.PI * 6_371_000d || (candidates.size() >= MY_MAP_NEARBY_MARKER_COUNT
+                    && calculateDistanceMeters(selected, candidates.get(MY_MAP_NEARBY_MARKER_COUNT - 1)) <= radius)) {
+                return candidates;
+            }
+            radius = Math.min(Math.PI * 6_371_000d, radius * 10);
+        }
+    }
+
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.NOT_SUPPORTED)
     public TravelMyMapPhotoClusterPageResponse getMyMapPhotoClusterDetail(
             Long userId,
             Long clusterId,
@@ -526,10 +572,27 @@ public class TravelService {
             Integer size,
             Long focusMediaId
     ) {
+        if (clusterRefreshCoordinator != null) clusterRefreshCoordinator.ensureCurrent(userId);
+        return inSummaryTransaction(true, () -> loadMyMapPhotoClusterPage(userId, clusterId, page, size, focusMediaId));
+    }
+
+    private TravelMyMapPhotoClusterPageResponse loadMyMapPhotoClusterPage(Long userId, Long clusterId, Integer page, Integer size, Long focusMediaId) {
         appUserService.getRequiredUser(userId);
 
-        TravelMyMapPhotoClusterDetailResponse cluster = resolveMyMapPhotoClusterDetail(userId, clusterId);
-        return toMyMapPhotoClusterPageResponse(cluster, page, size, focusMediaId);
+        TravelPhotoCluster cluster = travelPhotoClusterRepository.findByIdAndOwnerId(clusterId, userId)
+                .orElseThrow(() -> new NotFoundException("Photo cluster not found."));
+        int normalizedPage = Math.max(0, page == null ? 0 : page);
+        int normalizedSize = Math.min(MAX_MY_MAP_CLUSTER_PHOTO_PAGE_SIZE, Math.max(1, size == null ? DEFAULT_MY_MAP_CLUSTER_PHOTO_PAGE_SIZE : size));
+        var photos = travelMediaAssetRepository.findClusterPhotoPage(userId, clusterId,
+                normalizedPage == 0 ? focusMediaId : null, cluster.getRepresentativeMediaId(), PageRequest.of(normalizedPage, normalizedSize));
+        Map<Long, TravelMediaAsset> representative = travelMediaAssetRepository.findAllByIdIn(List.of(cluster.getRepresentativeMediaId()))
+                .stream().filter(asset -> userId.equals(asset.getPlan().getOwner().getId()))
+                .collect(Collectors.toMap(TravelMediaAsset::getId, Function.identity()));
+        var header = toStoredMyMapPhotoClusterDetailResponse(cluster, List.of(), representative);
+        return new TravelMyMapPhotoClusterPageResponse(header.id(), header.representativeMediaId(), header.representativeRecordId(),
+                header.latitude(), header.longitude(), header.photoCount(), header.memoryCount(), header.maxDistanceMeters(),
+                header.representativeOverride(), header.representativePhoto(), photos.getContent().stream().map(this::toMediaResponse).toList(),
+                normalizedPage, normalizedSize, Math.toIntExact(photos.getTotalElements()), photos.hasNext());
     }
 
     @Transactional
@@ -751,9 +814,10 @@ public class TravelService {
         }
         return new MediaDownload(mediaAsset.getStoragePath(), mediaAsset.getContentType(), mediaAsset.getOriginalFileName());
     }
-    @Transactional
+    @Transactional(isolation = org.springframework.transaction.annotation.Isolation.READ_COMMITTED)
     public TravelMyMapPhotoClusterPageResponse updateMyMapPhotoClusterRepresentative(Long userId, Long clusterId, Long mediaId) {
         appUserService.getRequiredUser(userId);
+        if (clusterRefreshCoordinator != null) clusterRefreshCoordinator.lockManualRefresh(userId);
 
         TravelMyMapPhotoClusterDetailResponse cluster = resolveMyMapPhotoClusterDetail(userId, clusterId);
         List<TravelMediaResponse> clusterPhotos = cluster.photos() == null ? List.of() : cluster.photos();
@@ -782,9 +846,11 @@ public class TravelService {
                         .toList()
         );
         invalidateTravelSummaryCaches(userId);
-        TravelMyMapPhotoClusterSnapshot refreshedSnapshot = refreshMyMapPhotoClusterSnapshot(userId);
-        TravelMyMapPhotoClusterDetailResponse refreshedCluster = refreshedSnapshot.findDetail(clusterId)
-                .or(() -> refreshedSnapshot.findDetailContainingMedia(mediaId))
+        refreshMyMapPhotoClusterSnapshotNow(userId);
+        requestPhotoClusterRefresh(userId);
+        TravelMyMapPhotoClusterDetailResponse refreshedCluster = loadStoredPhotoClusterDetail(userId, clusterId)
+                .or(() -> travelPhotoClusterMemberRepository.findFirstByOwnerIdAndMediaId(userId, mediaId)
+                        .flatMap(member -> loadStoredPhotoClusterDetail(userId, member.getClusterId())))
                 .orElseThrow(() -> new NotFoundException("Photo cluster not found."));
         return toMyMapPhotoClusterPageResponse(
                 refreshedCluster,
@@ -795,10 +861,21 @@ public class TravelService {
     }
 
     private TravelMyMapPhotoClusterDetailResponse resolveMyMapPhotoClusterDetail(Long userId, Long clusterId) {
-        TravelMyMapPhotoClusterSnapshot snapshot = getOrBuildMyMapPhotoClusterSnapshot(userId);
-        return snapshot.findDetail(clusterId)
-                .or(() -> refreshMyMapPhotoClusterSnapshot(userId).findDetail(clusterId))
+        return loadStoredPhotoClusterDetail(userId, clusterId)
+                .or(() -> { refreshMyMapPhotoClusterSnapshot(userId); return loadStoredPhotoClusterDetail(userId, clusterId); })
                 .orElseThrow(() -> new NotFoundException("Photo cluster not found."));
+    }
+
+    private java.util.Optional<TravelMyMapPhotoClusterDetailResponse> loadStoredPhotoClusterDetail(Long userId, Long clusterId) {
+        return travelPhotoClusterRepository.findByIdAndOwnerId(clusterId, userId).map(cluster -> {
+            var members = travelPhotoClusterMemberRepository.findAllByOwnerIdAndClusterIdInOrderByClusterIdAscSortOrderAsc(userId, List.of(clusterId));
+            Set<Long> ids = members.stream().map(TravelPhotoClusterMember::getMediaId).collect(Collectors.toSet());
+            ids.add(cluster.getRepresentativeMediaId());
+            var assets = travelMediaAssetRepository.findAllByIdIn(ids).stream()
+                    .filter(asset -> userId.equals(asset.getPlan().getOwner().getId()))
+                    .collect(Collectors.toMap(TravelMediaAsset::getId, Function.identity()));
+            return toStoredMyMapPhotoClusterDetailResponse(cluster, members, assets);
+        });
     }
 
     public TravelCategoryCatalogResponse getCategoryCatalog(Long userId) {
@@ -1776,20 +1853,64 @@ public class TravelService {
                 .orElseThrow(() -> new NotFoundException("Public travel photo cluster not found."));
     }
 
-    private TravelMyMapPhotoClusterSnapshot getOrBuildMyMapPhotoClusterSnapshot(Long userId) {
-        TravelMyMapPhotoClusterSnapshot snapshot = travelMyMapPhotoClusterSnapshotService.get(userId);
+    private TravelMyMapPhotoClusterSnapshot getOrBuildMyMapPhotoClusterSnapshot(Long userId, Long generation) {
+        TravelMyMapPhotoClusterSnapshot snapshot = generation == null ? travelMyMapPhotoClusterSnapshotService.get(userId)
+                : travelMyMapPhotoClusterSnapshotService.get(userId, generation);
         if (snapshot != null) {
             return snapshot;
         }
         snapshot = loadStoredMyMapPhotoClusterSnapshot(userId);
+        if (snapshot == null && generation != null) snapshot = new TravelMyMapPhotoClusterSnapshot(0, 0, List.of(), List.of(), List.of());
         if (snapshot != null) {
-            travelMyMapPhotoClusterSnapshotService.save(userId, snapshot);
+            if (generation == null) travelMyMapPhotoClusterSnapshotService.save(userId, snapshot);
+            else travelMyMapPhotoClusterSnapshotService.save(userId, generation, snapshot);
             return snapshot;
         }
         return refreshMyMapPhotoClusterSnapshot(userId);
     }
 
     private TravelMyMapPhotoClusterSnapshot refreshMyMapPhotoClusterSnapshot(Long userId) {
+        if (clusterRefreshCoordinator != null) {
+            requestPhotoClusterRefresh(userId);
+            return new TravelMyMapPhotoClusterSnapshot(0, 0, List.of(), List.of(), List.of());
+        }
+        return refreshMyMapPhotoClusterSnapshotNow(userId);
+    }
+
+    private void requestPhotoClusterRefresh(Long userId) {
+        if (clusterRefreshCoordinator == null) return;
+        if (org.springframework.transaction.support.TransactionSynchronizationManager.isSynchronizationActive()) {
+            PhotoRefreshSynchronization synchronization = org.springframework.transaction.support.TransactionSynchronizationManager.getSynchronizations()
+                    .stream().filter(PhotoRefreshSynchronization.class::isInstance).map(PhotoRefreshSynchronization.class::cast)
+                    .findFirst().orElse(null);
+            if (synchronization == null) {
+                synchronization = new PhotoRefreshSynchronization();
+                org.springframework.transaction.support.TransactionSynchronizationManager.registerSynchronization(synchronization);
+            }
+            if (synchronization.owners.add(userId)) clusterRefreshCoordinator.markDirtyInCurrentTransaction(userId);
+        } else clusterRefreshCoordinator.markDirty(userId);
+    }
+
+    private final class PhotoRefreshSynchronization implements org.springframework.transaction.support.TransactionSynchronization {
+        private final Set<Long> owners = new HashSet<>();
+        @Override public void afterCommit() { owners.forEach(clusterRefreshCoordinator::dispatch); }
+    }
+
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.NOT_SUPPORTED)
+    public List<TravelPhotoClusterService.PhotoCluster> computeFreshPhotoClusters(Long userId) {
+        var points = inSummaryTransaction(true, () -> getMyMapPhotoMediaItems(userId).stream().map(this::toPhotoClusterPoint).toList());
+        return travelPhotoClusterService.cluster(points);
+    }
+
+    @Transactional
+    public void applyFreshPhotoClusters(Long userId, List<TravelPhotoClusterService.PhotoCluster> clusters) {
+        persistMyMapPhotoClusters(userId, clusters);
+        travelMyMapPhotoClusterSnapshotService.delete(userId);
+        invalidateTravelSummaryCaches(userId);
+        invalidateAfterCommit(() -> travelMyMapPhotoClusterSnapshotService.delete(userId));
+    }
+
+    private TravelMyMapPhotoClusterSnapshot refreshMyMapPhotoClusterSnapshotNow(Long userId) {
         List<TravelMediaAsset> photoMediaItems = getMyMapPhotoMediaItems(userId);
         List<TravelPhotoClusterService.PhotoCluster> photoClusters = buildMyMapPhotoClusters(photoMediaItems);
         persistMyMapPhotoClusters(userId, photoClusters);
@@ -1797,7 +1918,11 @@ public class TravelService {
         if (snapshot == null) {
             snapshot = new TravelMyMapPhotoClusterSnapshot(0, 0, List.of(), List.of(), List.of());
         }
-        travelMyMapPhotoClusterSnapshotService.save(userId, snapshot);
+        if (clusterRefreshCoordinator == null) travelMyMapPhotoClusterSnapshotService.save(userId, snapshot);
+        else {
+            travelMyMapPhotoClusterSnapshotService.delete(userId);
+            invalidateAfterCommit(() -> travelMyMapPhotoClusterSnapshotService.delete(userId));
+        }
         return snapshot;
     }
 
@@ -1807,41 +1932,14 @@ public class TravelService {
             return null;
         }
 
-        List<Long> clusterIds = storedClusters.stream()
-                .map(TravelPhotoCluster::getId)
-                .toList();
-        List<TravelPhotoClusterMember> storedMembers = travelPhotoClusterMemberRepository
-                .findAllByOwnerIdAndClusterIdInOrderByClusterIdAscSortOrderAsc(userId, clusterIds);
-        Map<Long, List<TravelPhotoClusterMember>> membersByClusterId = storedMembers.stream()
-                .collect(Collectors.groupingBy(TravelPhotoClusterMember::getClusterId));
-        Map<Long, TravelPhotoCluster> clusterById = storedClusters.stream()
-                .collect(Collectors.toMap(TravelPhotoCluster::getId, Function.identity()));
-        Map<Long, TravelMediaAsset> mediaAssetById = travelMediaAssetRepository.findAllByIdIn(
-                        storedMembers.stream()
-                                .map(TravelPhotoClusterMember::getMediaId)
-                                .distinct()
-                                .toList()
-                ).stream()
-                .collect(Collectors.toMap(TravelMediaAsset::getId, Function.identity()));
-
         List<TravelMyMapPhotoClusterSummaryResponse> summaries = storedClusters.stream()
                 .map(this::toStoredMyMapPhotoClusterSummaryResponse)
                 .toList();
-        List<TravelMyMapPhotoClusterDetailResponse> details = storedClusters.stream()
-                .map(cluster -> toStoredMyMapPhotoClusterDetailResponse(
-                        cluster,
-                        membersByClusterId.getOrDefault(cluster.getId(), List.of()),
-                        mediaAssetById
-                ))
-                .toList();
-        List<TravelMyMapPhotoPinResponse> pins = storedMembers.stream()
-                .map(member -> toStoredMyMapPhotoPinResponse(
-                        member,
-                        mediaAssetById.get(member.getMediaId()),
-                        clusterById.get(member.getClusterId())
-                ))
-                .filter(java.util.Objects::nonNull)
-                .toList();
+        List<TravelMyMapPhotoPinResponse> pins = travelPhotoClusterMemberRepository.findMapPins(userId).stream()
+                .map(pin -> new TravelMyMapPhotoPinResponse(pin.mediaId(), pin.clusterId(), pin.recordId(), pin.planId(),
+                        pin.planName(), normalizeColorHex(pin.planColorHex()), pin.memoryDate(), pin.memoryTime(), pin.category(),
+                        pin.title(), pin.country(), pin.region(), pin.placeName(), pin.latitude(), pin.longitude(), pin.photoUrl(),
+                        pin.representative(), pin.representativeOverride())).toList();
 
         int photoMarkerCount = storedClusters.stream()
                 .map(TravelPhotoCluster::getPhotoCount)
@@ -1853,34 +1951,68 @@ public class TravelService {
                 photoMarkerCount,
                 storedClusters.size(),
                 summaries,
-                details,
+                List.of(),
                 pins
         );
     }
 
     private void persistMyMapPhotoClusters(Long userId, List<TravelPhotoClusterService.PhotoCluster> photoClusters) {
-        travelPhotoClusterMemberRepository.deleteAllByOwnerId(userId);
-        travelPhotoClusterRepository.deleteAllByOwnerId(userId);
-
-        if (photoClusters == null || photoClusters.isEmpty()) {
-            return;
-        }
-
-        List<TravelPhotoCluster> clusterEntities = photoClusters.stream()
-                .map(cluster -> toStoredPhotoCluster(userId, cluster))
-                .toList();
-        travelPhotoClusterRepository.saveAll(clusterEntities);
-
+        List<TravelPhotoClusterService.PhotoCluster> desired = photoClusters == null ? List.of() : photoClusters;
+        Map<Long, TravelPhotoCluster> existing = travelPhotoClusterRepository
+                .findAllByOwnerIdOrderByMemoryDateDescMemoryTimeDescIdDesc(userId).stream()
+                .collect(Collectors.toMap(TravelPhotoCluster::getId, Function.identity()));
+        Map<Long, List<Long>> existingMembers = travelPhotoClusterMemberRepository
+                .findAllByOwnerIdOrderByClusterIdAscSortOrderAsc(userId).stream()
+                .collect(Collectors.groupingBy(TravelPhotoClusterMember::getClusterId,
+                        Collectors.mapping(TravelPhotoClusterMember::getMediaId, Collectors.toList())));
+        Set<Long> desiredIds = desired.stream().map(TravelPhotoClusterService.PhotoCluster::id).collect(Collectors.toSet());
+        List<Long> removed = existing.keySet().stream().filter(id -> !desiredIds.contains(id)).toList();
+        List<Long> changedMemberships = new ArrayList<>(removed);
+        List<TravelPhotoCluster> changedClusters = new ArrayList<>();
         List<TravelPhotoClusterMember> memberEntities = new ArrayList<>();
-        for (TravelPhotoClusterService.PhotoCluster cluster : photoClusters) {
+        for (TravelPhotoClusterService.PhotoCluster cluster : desired) {
+            TravelPhotoCluster next = toStoredPhotoCluster(userId, cluster);
+            TravelPhotoCluster previous = existing.get(cluster.id());
+            if (previous == null) {
+                changedClusters.add(next);
+            } else if (!photoClusterContent(previous).equals(photoClusterContent(next))) {
+                org.springframework.beans.BeanUtils.copyProperties(next, previous, "id", "ownerId");
+                changedClusters.add(previous);
+            }
             List<TravelPhotoClusterService.PhotoPoint> members = cluster.members() == null ? List.of() : cluster.members();
-            for (int index = 0; index < members.size(); index += 1) {
-                memberEntities.add(toStoredPhotoClusterMember(userId, cluster.id(), members.get(index).mediaId(), index));
+            List<Long> mediaIds = members.stream().map(TravelPhotoClusterService.PhotoPoint::mediaId).toList();
+            if (!mediaIds.equals(existingMembers.getOrDefault(cluster.id(), List.of()))) {
+                changedMemberships.add(cluster.id());
+                for (int index = 0; index < members.size(); index++) {
+                    memberEntities.add(toStoredPhotoClusterMember(userId, cluster.id(), members.get(index).mediaId(), index));
+                }
             }
         }
+        for (int offset = 0; offset < changedMemberships.size(); offset += 256) {
+            travelPhotoClusterMemberRepository.deleteByOwnerIdAndClusterIds(userId,
+                    changedMemberships.subList(offset, Math.min(offset + 256, changedMemberships.size())));
+        }
+        for (int offset = 0; offset < removed.size(); offset += 256) {
+            travelPhotoClusterRepository.deleteByOwnerIdAndClusterIds(userId,
+                    removed.subList(offset, Math.min(offset + 256, removed.size())));
+        }
+        if (!changedClusters.isEmpty()) travelPhotoClusterRepository.saveAll(changedClusters);
         if (!memberEntities.isEmpty()) {
             travelPhotoClusterMemberRepository.saveAll(memberEntities);
         }
+    }
+
+    private List<Object> photoClusterContent(TravelPhotoCluster cluster) {
+        return java.util.Arrays.asList(cluster.getRepresentativeMediaId(), cluster.getRepresentativeRecordId(),
+                cluster.getPlanId(), cluster.getPlanName(), cluster.getPlanColorHex(), cluster.getMemoryDate(),
+                cluster.getMemoryTime(), cluster.getCategory(), cluster.getTitle(), cluster.getCountry(),
+                cluster.getRegion(), cluster.getPlaceName(), normalizeDecimal(cluster.getLatitude()),
+                normalizeDecimal(cluster.getLongitude()), cluster.getPhotoCount(), cluster.getMemoryCount(),
+                normalizeDecimal(cluster.getMaxDistanceMeters()), cluster.getRepresentativeOverride());
+    }
+
+    private BigDecimal normalizeDecimal(BigDecimal value) {
+        return value == null ? null : value.stripTrailingZeros();
     }
 
     private TravelPhotoCluster toStoredPhotoCluster(Long userId, TravelPhotoClusterService.PhotoCluster cluster) {
@@ -2295,7 +2427,15 @@ public class TravelService {
         if (ttl.isZero() || ttl.isNegative()) {
             return;
         }
-        redisCacheService.set(cacheKey, response, ttl);
+        summaryFlights.publishIfCurrent(cacheKey, () -> redisCacheService.set(cacheKey, response, ttl));
+    }
+
+    private <T> T inSummaryTransaction(boolean readOnly, java.util.function.Supplier<T> loader) {
+        if (summaryTransactionManager == null) return loader.get();
+        org.springframework.transaction.support.TransactionTemplate template =
+                new org.springframework.transaction.support.TransactionTemplate(summaryTransactionManager);
+        template.setReadOnly(readOnly);
+        return template.execute(status -> loader.get());
     }
 
     private MediaDownload getCachedOwnedMediaDownload(Long userId, Long mediaId) {
@@ -2323,7 +2463,7 @@ public class TravelService {
         long expiresAtEpochMilli = System.currentTimeMillis() + ttl.toMillis();
         ownedMediaDownloadCache.put(
                 new OwnedMediaDownloadCacheKey(userId, mediaId),
-                new CachedMediaDownloadEntry(download, expiresAtEpochMilli)
+                new CachedMediaDownloadEntry(download, expiresAtEpochMilli), ttl
         );
     }
 
@@ -2331,17 +2471,39 @@ public class TravelService {
         ownedMediaDownloadCache.remove(new OwnedMediaDownloadCacheKey(userId, mediaId));
     }
 
+    @org.springframework.scheduling.annotation.Scheduled(fixedDelay = 60000)
+    void evictExpiredOwnedMediaDownloads() {
+        ownedMediaDownloadCache.evictExpired();
+    }
+
     private void invalidateTravelSummaryCaches(Long userId) {
-        redisCacheService.delete(
+        String[] keys = {
                 buildPlansCacheKey(userId),
                 buildPortfolioCacheKey(userId),
                 buildMyMapOverviewCacheKey(userId),
                 PUBLIC_TRIPS_OVERVIEW_CACHE_KEY
-        );
+        };
+        invalidateSummaryKeys(keys);
+        invalidateAfterCommit(() -> invalidateSummaryKeys(keys));
     }
 
     private void invalidatePublicTravelCache() {
         redisCacheService.delete(PUBLIC_TRIPS_OVERVIEW_CACHE_KEY);
+        invalidateAfterCommit(() -> redisCacheService.delete(PUBLIC_TRIPS_OVERVIEW_CACHE_KEY));
+    }
+
+    private void invalidateSummaryKeys(String[] keys) {
+        for (String key : keys) summaryFlights.invalidate(key);
+        redisCacheService.delete(keys);
+    }
+
+    private void invalidateAfterCommit(Runnable invalidation) {
+        if (org.springframework.transaction.support.TransactionSynchronizationManager.isSynchronizationActive()) {
+            org.springframework.transaction.support.TransactionSynchronizationManager.registerSynchronization(
+                    new org.springframework.transaction.support.TransactionSynchronization() {
+                        @Override public void afterCommit() { invalidation.run(); }
+                    });
+        }
     }
 
     private Duration resolveTravelSummaryCacheTtl() {

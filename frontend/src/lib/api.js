@@ -1,3 +1,5 @@
+import { createRequestCoordinator } from './requestCoordinator.js'
+
 const API_BASE = '/api'
 const CSRF_COOKIE_NAME = 'XSRF-TOKEN'
 const CSRF_HEADER_NAME = 'X-XSRF-TOKEN'
@@ -129,7 +131,7 @@ async function mapWithConcurrency(items, concurrency, worker) {
   return results
 }
 
-async function request(path, options = {}) {
+async function performRequest(path, options = {}) {
   const isFormData = typeof FormData !== 'undefined' && options.body instanceof FormData
   const method = String(options.method || 'GET').toUpperCase()
   const needsCsrf = !['GET', 'HEAD', 'OPTIONS', 'TRACE'].includes(method)
@@ -175,6 +177,8 @@ async function request(path, options = {}) {
 
   return JSON.parse(text)
 }
+
+const request = createRequestCoordinator(performRequest)
 
 export function fetchCurrentUser() {
   return request('/auth/me')
@@ -890,10 +894,18 @@ export async function previewLedgerAiExcelImport(file) {
   const formData = new FormData()
   formData.append('file', file)
 
-  return request('/entries/imports/excel/preview-ai', {
+  const job = await request('/entries/imports/excel/preview-ai/jobs', {
     method: 'POST',
     body: formData,
   })
+  const deadline = Date.now() + 30 * 60 * 1000
+  while (Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 2000))
+    const status = await request(`/entries/imports/excel/preview-ai/jobs/${encodeURIComponent(job.jobId)}`)
+    if (status.status === 'COMPLETED') return status.result
+    if (status.status === 'FAILED') throw new Error(status.errorMessage || 'Excel AI 분석에 실패했습니다.')
+  }
+  throw new Error(`Excel 분석이 지연되고 있습니다. 작업 번호: ${job.jobId}`)
 }
 export function commitLedgerExcelImport(rows) {
   return request('/entries/imports/excel/commit', {

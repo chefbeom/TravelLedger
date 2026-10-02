@@ -274,15 +274,9 @@ public class DriveShareService {
 
         DriveItem item = validateSharedFileForDownload(share, userId, metadata);
         ensureDownloadAllowed(share, userId, metadata);
-        byte[] bytes = driveStorageService.loadObjectBytes(item.getStoragePath());
         item.setLastAccessedAt(LocalDateTime.now());
         recordDirectShareAccess(share, userId, "success", metadata);
-        return new DriveService.DriveFilePayload(
-                bytes,
-                resolveContentType(item.getExtension()),
-                item.getOriginalName(),
-                item.getFileSize()
-        );
+        return driveService.createFilePayload(item);
     }
 
     @Transactional

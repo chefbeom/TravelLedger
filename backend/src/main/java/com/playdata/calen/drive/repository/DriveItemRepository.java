@@ -29,6 +29,36 @@ public interface DriveItemRepository extends JpaRepository<DriveItem, Long>, Jpa
 
     List<DriveItem> findAllByOwner_Id(Long ownerId);
 
+    @EntityGraph(attributePaths = "parent")
+    List<DriveItem> findAllByOwner_IdAndParent_Id(Long ownerId, Long parentId);
+
+    List<DriveItem> findAllByOwner_IdAndParent_IdInAndItemType(Long ownerId, List<Long> parentIds, DriveItemType itemType);
+
+    @EntityGraph(attributePaths = "parent")
+    List<DriveItem> findAllByOwner_IdOrderByLastModifiedAtDescIdDesc(Long ownerId, Pageable pageable);
+
+    @EntityGraph(attributePaths = "parent")
+    List<DriveItem> findAllByOwner_IdAndItemTypeAndTrashedFalseOrderByLastModifiedAtDescIdDesc(
+            Long ownerId, DriveItemType itemType, Pageable pageable);
+
+    @Query("select count(item) as itemCount, "
+            + "sum(case when item.itemType = com.playdata.calen.drive.domain.DriveItemType.FILE then 1 else 0 end) as fileCount, "
+            + "sum(case when item.itemType = com.playdata.calen.drive.domain.DriveItemType.FOLDER then 1 else 0 end) as folderCount, "
+            + "sum(case when item.sharedFile = true then 1 else 0 end) as sharedCount, "
+            + "sum(case when item.trashed = true then 1 else 0 end) as trashCount, "
+            + "sum(case when item.itemType = com.playdata.calen.drive.domain.DriveItemType.FILE then item.fileSize else 0 end) as usedBytes "
+            + "from DriveItem item where item.owner.id = :ownerId")
+    HomeAggregate aggregateHome(@Param("ownerId") Long ownerId);
+
+    interface HomeAggregate {
+        Long getItemCount();
+        Long getFileCount();
+        Long getFolderCount();
+        Long getSharedCount();
+        Long getTrashCount();
+        Long getUsedBytes();
+    }
+
     List<DriveItem> findAllByOwner_IdOrderByLastModifiedAtDesc(Long ownerId);
 
     List<DriveItem> findAllByOwner_IdAndTrashedTrueOrderByDeletedAtDesc(Long ownerId);

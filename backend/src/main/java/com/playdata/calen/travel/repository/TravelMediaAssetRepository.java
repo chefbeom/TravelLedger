@@ -15,6 +15,22 @@ import org.springframework.data.repository.query.Param;
 
 public interface TravelMediaAssetRepository extends JpaRepository<TravelMediaAsset, Long> {
 
+    @EntityGraph(attributePaths = {"plan", "record", "record.plan", "uploadedBy"})
+    @Query(value = """
+            select asset from TravelMediaAsset asset join TravelPhotoClusterMember member on member.mediaId = asset.id
+            where member.ownerId = :ownerId and member.clusterId = :clusterId and asset.plan.owner.id = :ownerId
+            order by case when asset.id = :focusId then 0 else 1 end,
+                     case when asset.id = :representativeId then 0 else 1 end,
+                     case when asset.record.expenseDate is null then 1 else 0 end, asset.record.expenseDate desc,
+                     case when asset.record.expenseTime is null then 1 else 0 end, asset.record.expenseTime desc,
+                     case when asset.uploadedAt is null then 1 else 0 end, asset.uploadedAt desc, asset.id desc
+            """, countQuery = """
+            select count(asset) from TravelMediaAsset asset join TravelPhotoClusterMember member on member.mediaId = asset.id
+            where member.ownerId = :ownerId and member.clusterId = :clusterId and asset.plan.owner.id = :ownerId
+            """)
+    Page<TravelMediaAsset> findClusterPhotoPage(@Param("ownerId") Long ownerId, @Param("clusterId") Long clusterId,
+            @Param("focusId") Long focusId, @Param("representativeId") Long representativeId, Pageable pageable);
+
     @EntityGraph(attributePaths = {"plan", "record", "uploadedBy"})
     List<TravelMediaAsset> findAllByPlanIdAndPlanOwnerIdOrderByUploadedAtDescIdDesc(Long planId, Long ownerId);
 

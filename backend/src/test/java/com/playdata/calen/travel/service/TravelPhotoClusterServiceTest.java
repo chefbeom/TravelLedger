@@ -136,6 +136,33 @@ class TravelPhotoClusterServiceTest {
         );
     }
 
+    @Test
+    void spatialCandidatesPreserveConnectionsAcrossDateLineAndNearPole() {
+        var time = LocalDateTime.of(2026, 4, 4, 10, 0);
+        for (List<TravelPhotoClusterService.PhotoPoint> points : List.of(
+                List.of(point(1L, 0, 179.99999, false, time), point(2L, 0, -179.99999, false, time)),
+                List.of(point(1L, 89.99999, 90, false, time), point(2L, 89.99999, -90, false, time)))) {
+            List<?> components = org.springframework.test.util.ReflectionTestUtils.invokeMethod(
+                    clusterService, "buildConnectedComponents", points, 5d);
+            assertThat(components).hasSize(1);
+        }
+    }
+
+    @Test
+    void handlesTenThousandSparseAndDensePhotosWithinBoundedTime() {
+        org.junit.jupiter.api.Assertions.assertTimeoutPreemptively(java.time.Duration.ofSeconds(15), () -> {
+            var time = LocalDateTime.of(2026, 4, 4, 10, 0);
+            var sparse = new java.util.ArrayList<TravelPhotoClusterService.PhotoPoint>();
+            var dense = new java.util.ArrayList<TravelPhotoClusterService.PhotoPoint>();
+            for (long id = 1; id <= 10000; id++) {
+                sparse.add(point(id, 0.001 * id, 127, false, time));
+                dense.add(point(id, 37.5, 127, false, time));
+            }
+            assertThat(clusterService.cluster(sparse)).hasSize(10000);
+            assertThat(clusterService.cluster(dense)).hasSize(1);
+        });
+    }
+
     private double toLatitudeDegrees(double meters) {
         return meters / 111_320d;
     }

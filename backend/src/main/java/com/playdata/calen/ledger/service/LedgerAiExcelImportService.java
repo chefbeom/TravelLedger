@@ -49,6 +49,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestClientResponseException;
@@ -56,12 +57,10 @@ import org.springframework.web.multipart.MultipartFile;
 
 @Service
 @RequiredArgsConstructor
-@Transactional(readOnly = true)
 public class LedgerAiExcelImportService {
 
     private static final long MAX_EXCEL_FILE_SIZE_BYTES = 20L * 1024L * 1024L;
 
-    private static final DataFormatter DATA_FORMATTER = new DataFormatter(Locale.KOREA);
     private static final Pattern DIGIT_PATTERN = Pattern.compile("[^0-9.\\-]");
     private static final int MAX_WORKBOOK_ROWS = 260;
     private static final int MAX_CELLS_PER_ROW = 28;
@@ -84,18 +83,33 @@ public class LedgerAiExcelImportService {
     private final CategoryDetailRepository categoryDetailRepository;
     private final PaymentMethodRepository paymentMethodRepository;
 
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public LedgerExcelPreviewResponse preview(Long userId, MultipartFile file) {
+        return analyzePreparedInput(prepareInput(userId, file));
+    }
+
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    public String prepareInput(Long userId, MultipartFile file) {
         appUserService.getRequiredUser(userId);
         validateFile(file);
         validateAiReady();
 
+        WorkbookPayload workbookPayload;
         try (InputStream inputStream = file.getInputStream(); Workbook workbook = WorkbookFactory.create(inputStream)) {
-            WorkbookPayload workbookPayload = buildWorkbookPayload(userId, defaultFileName(file), workbook);
-            String aiResponseBody = requestAiExtraction(workbookPayload.payload());
-            return buildPreviewResponse(workbookPayload, aiResponseBody);
+            workbookPayload = buildWorkbookPayload(userId, defaultFileName(file), workbook);
         } catch (IOException exception) {
             throw new BadRequestException("AI Excel import failed to read the Excel file.");
         }
+        try { return objectMapper.writeValueAsString(workbookPayload); }
+        catch (JsonProcessingException failure) { throw new BadRequestException("Excel 분석 입력을 저장할 수 없습니다."); }
+    }
+
+    public LedgerExcelPreviewResponse analyzePreparedInput(String preparedInput) {
+        WorkbookPayload workbookPayload;
+        try { workbookPayload = objectMapper.readValue(preparedInput, WorkbookPayload.class); }
+        catch (JsonProcessingException failure) { throw new BadRequestException("Excel 분석 입력을 복구할 수 없습니다."); }
+        String aiResponseBody = requestAiExtraction(workbookPayload.payload());
+        return buildPreviewResponse(workbookPayload, aiResponseBody);
     }
 
     private void validateFile(MultipartFile file) {
@@ -118,6 +132,7 @@ public class LedgerAiExcelImportService {
     }
 
     private WorkbookPayload buildWorkbookPayload(Long userId, String fileName, Workbook workbook) {
+        DataFormatter formatter = new DataFormatter(Locale.KOREA);
         KnownLedgerChoices knownChoices = loadKnownLedgerChoices(userId);
         ObjectNode payload = objectMapper.createObjectNode();
         payload.put("task", "ledger_excel_import");
@@ -145,7 +160,7 @@ public class LedgerAiExcelImportService {
 
             for (int rowIndex = 0; rowIndex <= sheet.getLastRowNum() && includedRows < MAX_WORKBOOK_ROWS; rowIndex++) {
                 Row row = sheet.getRow(rowIndex);
-                List<String> cells = readRowCells(row);
+                List<String> cells = readRowCells(row, formatter);
                 if (cells.isEmpty()) {
                     skippedRows++;
                     continue;
@@ -211,15 +226,19 @@ public class LedgerAiExcelImportService {
                 .toList();
         Map<String, Set<String>> categoryDetailsByGroup = new LinkedHashMap<>();
         ArrayNode categoriesPayload = objectMapper.createArrayNode();
-        categoryGroupRepository.findAllByOwnerIdAndActiveTrueOrderByDisplayOrderAscIdAsc(userId).stream()
+        var groups = categoryGroupRepository.findAllByOwnerIdAndActiveTrueOrderByDisplayOrderAscIdAsc(userId).stream()
                 .filter(group -> hasText(group.getName()))
                 .limit(120)
-                .forEach(group -> {
+                .toList();
+        Map<Long, List<CategoryDetail>> details = groups.isEmpty() ? Map.of()
+                : categoryDetailRepository.findAllByGroupIdInOrderByDisplayOrderAscIdAsc(groups.stream().map(group -> group.getId()).toList())
+                .stream().collect(java.util.stream.Collectors.groupingBy(detail -> detail.getGroup().getId()));
+        groups.forEach(group -> {
                     ObjectNode groupNode = categoriesPayload.addObject();
                     groupNode.put("entryType", group.getEntryType() == null ? "EXPENSE" : group.getEntryType().name());
                     groupNode.put("categoryGroupName", group.getName());
                     ArrayNode detailsNode = groupNode.putArray("details");
-                    Set<String> detailNames = categoryDetailRepository.findAllByGroupIdOrderByDisplayOrderAscIdAsc(group.getId()).stream()
+                    Set<String> detailNames = details.getOrDefault(group.getId(), List.of()).stream()
                             .map(CategoryDetail::getName)
                             .filter(this::hasText)
                             .limit(40)
@@ -236,7 +255,7 @@ public class LedgerAiExcelImportService {
                 categoriesPayload
         );
     }
-    private List<String> readRowCells(Row row) {
+    private List<String> readRowCells(Row row, DataFormatter formatter) {
         if (row == null || row.getLastCellNum() < 0) {
             return List.of();
         }
@@ -244,7 +263,7 @@ public class LedgerAiExcelImportService {
         boolean hasText = false;
         int lastCell = Math.min(row.getLastCellNum(), MAX_CELLS_PER_ROW);
         for (int cellIndex = 0; cellIndex < lastCell; cellIndex++) {
-            String value = readCellText(row.getCell(cellIndex));
+            String value = readCellText(row.getCell(cellIndex), formatter);
             if (!value.isBlank()) {
                 hasText = true;
             }
@@ -256,14 +275,14 @@ public class LedgerAiExcelImportService {
         return hasText ? cells : List.of();
     }
 
-    private String readCellText(Cell cell) {
+    private String readCellText(Cell cell, DataFormatter formatter) {
         if (cell == null) {
             return "";
         }
         if (cell.getCellType() == org.apache.poi.ss.usermodel.CellType.NUMERIC && DateUtil.isCellDateFormatted(cell)) {
             return DateUtil.getLocalDateTime(cell.getNumericCellValue()).toLocalDate().toString();
         }
-        return DATA_FORMATTER.formatCellValue(cell).replaceAll("\\R+", " ").trim();
+        return formatter.formatCellValue(cell).replaceAll("\\R+", " ").trim();
     }
 
     private String requestAiExtraction(ObjectNode payload) {

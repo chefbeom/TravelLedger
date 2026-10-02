@@ -96,16 +96,9 @@ public class DriveDownloadLinkService {
     public DriveService.DriveFilePayload downloadByToken(String token, AccessMetadata metadata) {
         DriveDownloadLink link = resolveAvailableDownloadLink(token, metadata);
         DriveItem item = link.getItem();
-        byte[] bytes = driveStorageService.loadObjectBytes(item.getStoragePath());
-        String contentType = driveService.resolveContentType(item.getExtension());
         recordPublicDownloadLinkRequest("success");
         recordPublicDownloadLinkAccess(link, token, "success", metadata);
-        return new DriveService.DriveFilePayload(
-                bytes,
-                contentType,
-                item.getOriginalName(),
-                item.getFileSize()
-        );
+        return driveService.createFilePayload(item);
     }
 
     @Transactional

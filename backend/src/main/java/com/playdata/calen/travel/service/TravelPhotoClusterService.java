@@ -9,6 +9,9 @@ import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
@@ -48,6 +51,15 @@ public class TravelPhotoClusterService {
     private List<List<PhotoPoint>> buildConnectedComponents(List<PhotoPoint> points, double distanceThresholdMeters) {
         List<List<PhotoPoint>> clusters = new ArrayList<>();
         boolean[] visited = new boolean[points.size()];
+        // Earth-centered Cartesian cells avoid latitude/pole/dateline special cases.
+        // Chord distance cannot exceed surface distance, so a neighbor within the
+        // threshold must be in the same cell or one of its 26 adjacent cells.
+        GridCell[] cells = new GridCell[points.size()];
+        Map<GridCell, Set<Integer>> candidatesByCell = new HashMap<>();
+        for (int index = 0; index < points.size(); index++) {
+            cells[index] = gridCell(points.get(index), distanceThresholdMeters * (1.0d + 1e-9d));
+            candidatesByCell.computeIfAbsent(cells[index], ignored -> new LinkedHashSet<>()).add(index);
+        }
 
         for (int index = 0; index < points.size(); index += 1) {
             if (visited[index]) {
@@ -57,6 +69,7 @@ public class TravelPhotoClusterService {
             ArrayDeque<Integer> queue = new ArrayDeque<>();
             queue.add(index);
             visited[index] = true;
+            removeSpatialCandidate(candidatesByCell, cells[index], index);
 
             List<PhotoPoint> cluster = new ArrayList<>();
             while (!queue.isEmpty()) {
@@ -64,12 +77,12 @@ public class TravelPhotoClusterService {
                 PhotoPoint currentPoint = points.get(currentIndex);
                 cluster.add(currentPoint);
 
-                for (int candidateIndex = 0; candidateIndex < points.size(); candidateIndex += 1) {
-                    if (visited[candidateIndex]) {
-                        continue;
-                    }
+                List<Integer> nearby = nearbyCandidates(candidatesByCell, cells[currentIndex]);
+                nearby.sort(Integer::compareTo);
+                for (int candidateIndex : nearby) {
                     if (calculateDistanceMeters(currentPoint, points.get(candidateIndex)) <= distanceThresholdMeters) {
                         visited[candidateIndex] = true;
+                        removeSpatialCandidate(candidatesByCell, cells[candidateIndex], candidateIndex);
                         queue.add(candidateIndex);
                     }
                 }
@@ -80,6 +93,39 @@ public class TravelPhotoClusterService {
 
         return clusters;
     }
+
+    private GridCell gridCell(PhotoPoint point, double cellSize) {
+        double latitude = Math.toRadians(point.latitude().doubleValue());
+        double longitude = Math.toRadians(point.longitude().doubleValue());
+        double radius = 6_371_000d;
+        double cosLatitude = Math.cos(latitude);
+        return new GridCell(
+                (long) Math.floor(radius * cosLatitude * Math.cos(longitude) / cellSize),
+                (long) Math.floor(radius * cosLatitude * Math.sin(longitude) / cellSize),
+                (long) Math.floor(radius * Math.sin(latitude) / cellSize));
+    }
+
+    private List<Integer> nearbyCandidates(Map<GridCell, Set<Integer>> candidates, GridCell cell) {
+        List<Integer> result = new ArrayList<>();
+        for (int x = -1; x <= 1; x++) {
+            for (int y = -1; y <= 1; y++) {
+                for (int z = -1; z <= 1; z++) {
+                    Set<Integer> bucket = candidates.get(new GridCell(cell.x() + x, cell.y() + y, cell.z() + z));
+                    if (bucket != null) result.addAll(bucket);
+                }
+            }
+        }
+        return result;
+    }
+
+    private void removeSpatialCandidate(Map<GridCell, Set<Integer>> candidates, GridCell cell, int index) {
+        Set<Integer> bucket = candidates.get(cell);
+        if (bucket == null) return;
+        bucket.remove(index);
+        if (bucket.isEmpty()) candidates.remove(cell);
+    }
+
+    private record GridCell(long x, long y, long z) {}
 
     private void splitOversizedCluster(List<PhotoPoint> points, List<List<PhotoPoint>> sink) {
         if (points == null || points.isEmpty()) {

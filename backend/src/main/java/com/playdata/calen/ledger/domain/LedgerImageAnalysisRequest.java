@@ -22,7 +22,8 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 @Entity
-@Table(name = "ledger_image_analysis_requests", indexes = {
+@Table(name = "ledger_image_analysis_requests", uniqueConstraints =
+        @jakarta.persistence.UniqueConstraint(name = "uk_ledger_image_owner_client", columnNames = {"owner_id", "client_request_id"}), indexes = {
         @Index(name = "idx_ledger_image_analysis_owner_created", columnList = "owner_id, created_at, id"),
         @Index(name = "idx_ledger_image_analysis_owner_status", columnList = "owner_id, status, created_at"),
         @Index(name = "idx_ledger_image_analysis_owner_type", columnList = "owner_id, document_type, created_at"),
@@ -36,6 +37,9 @@ public class LedgerImageAnalysisRequest {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+
+    @jakarta.persistence.Version
+    private Long version;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "owner_id", nullable = false)
@@ -62,6 +66,9 @@ public class LedgerImageAnalysisRequest {
 
     @Column(name = "image_object_key", length = 600)
     private String imageObjectKey;
+
+    @Lob @Column(name = "effective_prompt", columnDefinition = "LONGTEXT")
+    private String effectivePrompt;
 
     @Column(name = "image_stored_at")
     private LocalDateTime imageStoredAt;

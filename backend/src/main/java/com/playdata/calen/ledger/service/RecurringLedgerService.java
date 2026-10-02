@@ -33,10 +33,14 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
+@lombok.extern.slf4j.Slf4j
 @Transactional(readOnly = true)
 public class RecurringLedgerService {
 
     private static final ZoneId DEFAULT_ZONE = ZoneId.of("Asia/Seoul");
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private org.springframework.transaction.PlatformTransactionManager batchTransactionManager;
 
     private final AppUserService appUserService;
     private final RecurringLedgerRuleRepository ruleRepository;
@@ -121,11 +125,39 @@ public class RecurringLedgerService {
         return toOccurrenceResponse(occurrence);
     }
 
-    @Transactional
-    public synchronized int processDueDate(LocalDate date) {
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.NOT_SUPPORTED)
+    public int processDueDate(LocalDate date) {
         LocalDate targetDate = date != null ? date : today();
         int processedCount = 0;
-        for (RecurringLedgerRule rule : ruleRepository.findAllByActiveTrueAndStartDateLessThanEqual(targetDate)) {
+        long cursor = 0L;
+        while (true) {
+            List<Long> ids = ruleRepository.findDueCandidateIds(targetDate, cursor,
+                    org.springframework.data.domain.PageRequest.of(0, 100));
+            if (ids.isEmpty()) break;
+            for (Long id : ids) {
+                try {
+                    if (batchTransactionManager == null) {
+                        processedCount += processRule(id, targetDate);
+                    } else {
+                        org.springframework.transaction.support.TransactionTemplate transaction =
+                                new org.springframework.transaction.support.TransactionTemplate(batchTransactionManager);
+                        transaction.setPropagationBehavior(org.springframework.transaction.TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+                        Integer count = transaction.execute(status -> processRule(id, targetDate));
+                        processedCount += count == null ? 0 : count;
+                    }
+                } catch (RuntimeException failure) {
+                    log.warn("Recurring ledger rule failed: ruleId={}", id, failure);
+                }
+            }
+            cursor = ids.get(ids.size() - 1);
+        }
+        return processedCount;
+    }
+
+    private int processRule(Long ruleId, LocalDate targetDate) {
+            // The database lock serializes this rule across all application instances.
+            RecurringLedgerRule rule = ruleRepository.findByIdForUpdate(ruleId).orElse(null);
+            if (rule == null || !rule.isActive()) return 0;
             if (!RecurringLedgerSchedule.isDue(
                     scheduleTypeOf(rule),
                     rule.getDayOfMonth(),
@@ -135,7 +167,7 @@ public class RecurringLedgerService {
                     rule.getEndDate(),
                     targetDate
             )) {
-                continue;
+                return 0;
             }
 
             RecurringLedgerOccurrence occurrence = occurrenceRepository
@@ -143,12 +175,11 @@ public class RecurringLedgerService {
                     .orElseGet(() -> createPendingOccurrence(rule, targetDate));
 
             if (occurrence.getStatus() != RecurringLedgerOccurrenceStatus.PENDING) {
-                continue;
+                return 0;
             }
 
             if (occurrence.getMode() == RecurringLedgerMode.CONFIRM) {
-                processedCount++;
-                continue;
+                return 1;
             }
 
             LedgerEntryResponse createdEntry = ledgerEntryService.create(
@@ -159,9 +190,7 @@ public class RecurringLedgerService {
             occurrence.setStatus(RecurringLedgerOccurrenceStatus.CREATED);
             occurrence.setProcessedAt(now());
             occurrenceRepository.save(occurrence);
-            processedCount++;
-        }
-        return processedCount;
+            return 1;
     }
 
     private RecurringLedgerOccurrence getPendingOccurrence(Long userId, Long occurrenceId) {

@@ -44,6 +44,7 @@ class LedgerAiExcelImportServiceTest {
             Object workbookPayload = ReflectionTestUtils.invokeMethod(
                     service, "buildWorkbookPayload", 7L, "ledger.xlsx", workbook
             );
+            workbookPayload = objectMapper.readValue(objectMapper.writeValueAsString(workbookPayload), workbookPayload.getClass());
             JsonNode payload = payloadOf(workbookPayload);
             assertThat(payload.at("/sheets/0/rows/1/sourceId").asText()).isEqualTo("sheet-0-row-2");
 

@@ -76,7 +76,6 @@ flowchart LR
     B --> R[(Redis)]
     B --> M[(MinIO)]
 
-    B --> OCR[FastAPI + PaddleOCR]
     B --> AI1[LM Studio]
     B --> AI2[OpenAI 호환 API]
     B --> AI3[Ollama]
@@ -92,22 +91,28 @@ sequenceDiagram
     participant U as 사용자
     participant UI as Vue 검수 화면
     participant API as Spring Boot
-    participant OCR as OCR 서비스
-    participant LLM as 선택된 AI 서버
+    participant Q as 이미지 분석 워커
+    participant LLM as 선택된 멀티모달 AI 서버
     participant DB as MariaDB / MinIO
 
     U->>UI: 이미지 선택 후 분석 요청
     UI->>API: 업로드와 분석 요청 생성
-    API->>DB: 미디어 참조와 요청 상태 저장
-    API->>OCR: 이미지 텍스트 추출
-    OCR-->>API: OCR 텍스트
-    API->>LLM: 구조화 거래 JSON 요청
-    LLM-->>API: 거래 후보
-    API->>DB: 검수 후보와 결과 상태 저장
-    API-->>UI: 편집 가능한 검수 데이터 반환
+    API->>DB: 원본 이미지와 PROCESSING 이력 저장
+    API->>Q: 백그라운드 분석 작업 접수
+    API-->>UI: 작업 ID와 PROCESSING 상태 반환
+    Q->>LLM: 이미지와 거래 추출 규칙 전송
+    LLM-->>Q: 인식 텍스트와 거래 후보 JSON
+    Q->>DB: 검수 후보와 COMPLETED 상태 저장
+    loop 완료될 때까지 상태 조회
+        UI->>API: 분석 이력 조회
+        API->>DB: 상태와 결과 조회
+        API-->>UI: 상태 또는 편집 가능한 검수 데이터 반환
+    end
     U->>UI: 후보 승인
     UI->>API: 가계부 거래 생성
 ```
+
+현재 이미지 분석은 멀티모달 LLM에 이미지를 직접 보내 문자 읽기와 거래 항목 추출을 한 번의 추론 요청으로 수행한다. `PaddleOCR/`는 별도 실행형 OCR 서비스 코드이며 현재 백엔드 이미지 분석 API에서 호출하지 않는다. 예전 `LEDGER_OCR_BASE_URL`·`LEDGER_OCR_WORKFLOW_URL` 설정은 남아 있지만, 실제 AI 서버는 이미지 분석 기능의 AI 설정으로 선택한다.
 
 ## 설계와 구현에서 집중한 점
 
@@ -185,6 +190,8 @@ docs/portfolio/ README 화면 캡처
 ## 상세 문서
 
 - [아키텍처](docs/architecture.md)
+- [성능 개선 구현 및 검증](docs/performance_improvement_progress.md)
+- [성능 개선 운영 적용 안내](docs/performance_improvement_deployment.md)
 - [AI 공급자 안전 계약](docs/ai_provider_safety_contract.md)
 - [보안 기준 체크리스트](docs/security_baseline_checklist.md)
 - [공개 공유 권한 설계](docs/public_share_authorization_contract.md)

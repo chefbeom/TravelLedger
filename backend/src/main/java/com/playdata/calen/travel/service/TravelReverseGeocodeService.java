@@ -39,6 +39,9 @@ public class TravelReverseGeocodeService {
     @Value("${app.travel.reverse-geocode-request-min-interval-ms:1200}")
     private long reverseGeocodeRequestMinIntervalMs;
 
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.playdata.calen.common.jobs.WorkLeaseService workLeases;
+
     @Value("${app.travel.reverse-geocode-cache-ttl-hours:24}")
     private long reverseGeocodeCacheTtlHours;
 
@@ -73,7 +76,11 @@ public class TravelReverseGeocodeService {
 
     @PostConstruct
     void initialize() {
+        org.springframework.http.client.SimpleClientHttpRequestFactory requestFactory = new org.springframework.http.client.SimpleClientHttpRequestFactory();
+        requestFactory.setConnectTimeout(Duration.ofSeconds(3));
+        requestFactory.setReadTimeout(Duration.ofSeconds(5));
         restClient = restClientBuilder
+                .requestFactory(requestFactory)
                 .defaultHeader("User-Agent", reverseGeocodeUserAgent)
                 .defaultHeader("Accept-Language", "ko,en")
                 .build();
@@ -105,7 +112,7 @@ public class TravelReverseGeocodeService {
         }
 
         TravelReverseGeocodeResponse resolved = fetchFromProvider(latitude, longitude);
-        writeCache(cacheKey, resolved);
+        if (resolved != null && !resolved.isEmpty()) writeCache(cacheKey, resolved);
         return resolved;
     }
 
@@ -182,6 +189,7 @@ public class TravelReverseGeocodeService {
 
             return new TravelReverseGeocodeResponse(country, region, placeName);
         } catch (Exception ignored) {
+            if (ignored instanceof InterruptedException) Thread.currentThread().interrupt();
             return TravelReverseGeocodeResponse.empty();
         }
     }
@@ -196,6 +204,13 @@ public class TravelReverseGeocodeService {
         long waitMs = reverseGeocodeRequestMinIntervalMs - elapsed;
         if (waitMs > 0) {
             Thread.sleep(waitMs);
+        }
+        if (workLeases != null) {
+            String provider = java.net.URI.create(reverseGeocodeBaseUrl).getHost();
+            String key = "geocode-provider:" + provider;
+            while (!workLeases.tryReserveInterval(key, Duration.ofMillis(reverseGeocodeRequestMinIntervalMs))) {
+                Thread.sleep(Math.min(500L, reverseGeocodeRequestMinIntervalMs));
+            }
         }
         lastProviderRequestAt = System.currentTimeMillis();
     }

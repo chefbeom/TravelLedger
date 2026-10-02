@@ -59,8 +59,17 @@ public class StatisticsService {
                 EntryType.EXPENSE
         );
 
+        return buildCalendar(from, to, dailyAmounts);
+    }
+
+    private List<CalendarSummaryItemResponse> buildCalendar(
+            LocalDate from, LocalDate to, List<LedgerEntryRepository.DailyAmountAggregate> dailyAmounts
+    ) {
         List<CalendarSummaryItemResponse> responses = new ArrayList<>();
         int rowIndex = 0;
+        while (rowIndex < dailyAmounts.size() && dailyAmounts.get(rowIndex).getEntryDate().isBefore(from)) {
+            rowIndex++;
+        }
         LocalDate cursor = from;
         while (!cursor.isAfter(to)) {
             LedgerEntryRepository.DailyAmountAggregate dailyAmount = null;
@@ -142,6 +151,7 @@ public class StatisticsService {
     }
 
     public DashboardResponse getDashboard(Long userId, LocalDate anchorDate) {
+        appUserService.getRequiredUser(userId);
         LocalDate anchor = anchorDate == null ? LocalDate.now() : anchorDate;
         LocalDate weekStart = anchor.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
         LocalDate weekEnd = anchor.with(TemporalAdjusters.nextOrSame(DayOfWeek.SUNDAY));
@@ -149,23 +159,45 @@ public class StatisticsService {
         LocalDate monthEnd = anchor.withDayOfMonth(anchor.lengthOfMonth());
         LocalDate yearStart = anchor.withDayOfYear(1);
         LocalDate yearEnd = anchor.withDayOfYear(anchor.lengthOfYear());
+        List<PeriodWindow> months = buildWindows(anchor, ComparisonUnit.MONTH, 12);
+        LocalDate from = java.util.stream.Stream.of(yearStart, weekStart, months.get(0).startDate())
+                .min(LocalDate::compareTo).orElseThrow();
+        LocalDate to = yearEnd.isAfter(weekEnd) ? yearEnd : weekEnd;
+        // One bounded daily aggregate supplies all overlapping dashboard periods.
+        List<LedgerEntryRepository.DailyAmountAggregate> dailyAmounts =
+                ledgerEntryRepository.aggregateDailyAmountsByOwnerIdAndDateRange(
+                        userId, from, to, EntryType.INCOME, EntryType.EXPENSE);
 
         List<DashboardCardResponse> quickStats = List.of(
-                new DashboardCardResponse("day", "오늘", getOverview(userId, anchor, anchor)),
-                new DashboardCardResponse("week", "이번 주", getOverview(userId, weekStart, weekEnd)),
-                new DashboardCardResponse("month", "이번 달", getOverview(userId, monthStart, monthEnd)),
-                new DashboardCardResponse("year", "올해", getOverview(userId, yearStart, yearEnd))
+                new DashboardCardResponse("day", "오늘", overviewFromDays(anchor, anchor, dailyAmounts)),
+                new DashboardCardResponse("week", "이번 주", overviewFromDays(weekStart, weekEnd, dailyAmounts)),
+                new DashboardCardResponse("month", "이번 달", overviewFromDays(monthStart, monthEnd, dailyAmounts)),
+                new DashboardCardResponse("year", "올해", overviewFromDays(yearStart, yearEnd, dailyAmounts))
         );
+        List<PeriodComparisonItemResponse> monthlyComparison = months.stream().map(window -> {
+            PeriodTotals totals = sumDailyAmounts(dailyAmounts, window.startDate(), window.endDate());
+            return new PeriodComparisonItemResponse(window.label(), window.startDate(), window.endDate(),
+                    totals.income(), totals.expense(), totals.income().subtract(totals.expense()));
+        }).toList();
 
         return new DashboardResponse(
                 anchor,
                 quickStats,
-                getCalendar(userId, monthStart, monthEnd),
+                buildCalendar(monthStart, monthEnd, dailyAmounts),
                 getCategoryBreakdown(userId, monthStart, monthEnd, EntryType.EXPENSE),
                 getPaymentBreakdown(userId, monthStart, monthEnd),
-                compare(userId, anchor, ComparisonUnit.MONTH, 12),
+                monthlyComparison,
                 ledgerEntryService.getRecentEntries(userId)
         );
+    }
+
+    private OverviewResponse overviewFromDays(LocalDate from, LocalDate to,
+            List<LedgerEntryRepository.DailyAmountAggregate> days) {
+        PeriodTotals totals = sumDailyAmounts(days, from, to);
+        long count = days.stream().filter(row -> !row.getEntryDate().isBefore(from) && !row.getEntryDate().isAfter(to))
+                .mapToLong(LedgerEntryRepository.DailyAmountAggregate::getEntryCount).sum();
+        return new OverviewResponse(from, to, totals.income(), totals.expense(),
+                totals.income().subtract(totals.expense()), count);
     }
 
     private OverviewResponse buildOverview(LocalDate from, LocalDate to, LedgerEntryRepository.LedgerAmountAggregate aggregate) {

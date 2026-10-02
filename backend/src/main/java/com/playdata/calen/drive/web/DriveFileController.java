@@ -112,7 +112,7 @@ public class DriveFileController {
         return driveService.restoreFileVersion(currentUser.userId(), fileId, versionId);
     }
     @GetMapping("/{fileId}/download")
-    public ResponseEntity<byte[]> download(
+    public ResponseEntity<org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody> download(
             @AuthenticationPrincipal AppUserPrincipal currentUser,
             @PathVariable Long fileId
     ) {
@@ -171,13 +171,13 @@ public class DriveFileController {
     }
 
     @GetMapping("/public-download/{token}")
-    public ResponseEntity<byte[]> publicDownload(@PathVariable String token, HttpServletRequest request) {
+    public ResponseEntity<org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody> publicDownload(@PathVariable String token, HttpServletRequest request) {
         return buildDownloadResponse(driveDownloadLinkService.downloadByToken(token, toAccessMetadata(request)));
     }
 
     @PostMapping("/download")
     @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<byte[]> downloadBatch(
+    public ResponseEntity<org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody> downloadBatch(
             @AuthenticationPrincipal AppUserPrincipal currentUser,
             @RequestBody DriveDtos.DownloadBatchRequest request
     ) {
@@ -293,21 +293,20 @@ public class DriveFileController {
         return driveService.restoreItemsFromTrash(currentUser.userId(), request != null ? request.fileIds() : null);
     }
 
-    private ResponseEntity<byte[]> buildDownloadResponse(DriveService.DriveFilePayload payload) {
+    private ResponseEntity<org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody> buildDownloadResponse(DriveService.DriveFilePayload payload) {
         ContentDisposition disposition = (isInlinePreviewContent(payload.contentType())
                 ? ContentDisposition.inline()
                 : ContentDisposition.attachment())
                 .filename(payload.fileName(), StandardCharsets.UTF_8)
                 .build();
 
-        byte[] bytes = payload.bytes() != null ? payload.bytes() : new byte[0];
-        return ResponseEntity.ok()
+        ResponseEntity.BodyBuilder response = ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, disposition.toString())
                 .header("X-Content-Type-Options", "nosniff")
                 .header("Content-Security-Policy", "sandbox")
-                .contentLength(bytes.length)
-                .contentType(resolveMediaType(payload.contentType()))
-                .body(bytes);
+                .contentType(resolveMediaType(payload.contentType()));
+        if (payload.contentLength() >= 0L) response.contentLength(payload.contentLength());
+        return response.body(payload.body());
     }
 
     private DriveDownloadLinkAccessLogService.AccessMetadata toAccessMetadata(HttpServletRequest request) {

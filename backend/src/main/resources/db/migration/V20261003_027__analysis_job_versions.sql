@@ -1,0 +1,3 @@
+ALTER TABLE ledger_image_analysis_requests ADD COLUMN IF NOT EXISTS version BIGINT NOT NULL DEFAULT 0;
+ALTER TABLE ledger_ai_analysis_histories ADD COLUMN IF NOT EXISTS version BIGINT NOT NULL DEFAULT 0;
+ALTER TABLE ledger_excel_analysis_jobs ADD COLUMN IF NOT EXISTS version BIGINT NOT NULL DEFAULT 0;

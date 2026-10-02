@@ -44,7 +44,6 @@ class DriveDownloadLinkServiceTest {
         DriveDownloadLink link = activeLink();
 
         when(driveDownloadLinkRepository.findByToken("public-token")).thenReturn(Optional.of(link));
-        when(driveStorageService.loadObjectBytes("drive/file.txt")).thenReturn(new byte[] {1, 2, 3});
 
         DriveDownloadLinkService service = newService();
 

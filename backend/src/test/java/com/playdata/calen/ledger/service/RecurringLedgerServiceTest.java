@@ -190,7 +190,8 @@ class RecurringLedgerServiceTest {
             LocalDate date,
             AtomicReference<RecurringLedgerOccurrence> storedOccurrence
     ) {
-        when(ruleRepository.findAllByActiveTrueAndStartDateLessThanEqual(date)).thenReturn(List.of(rule));
+        when(ruleRepository.findDueCandidateIds(eq(date), eq(0L), any())).thenReturn(List.of(rule.getId()));
+        when(ruleRepository.findByIdForUpdate(rule.getId())).thenReturn(Optional.of(rule));
         when(occurrenceRepository.findByRuleIdAndScheduledDate(rule.getId(), date))
                 .thenAnswer(invocation -> Optional.ofNullable(storedOccurrence.get()));
         when(occurrenceRepository.saveAndFlush(any())).thenAnswer(invocation -> {

@@ -83,10 +83,17 @@ import org.springframework.web.multipart.MultipartFile;
 @Slf4j
 public class TravelController {
 
+    @org.springframework.beans.factory.annotation.Autowired
+    @org.springframework.beans.factory.annotation.Qualifier("travelMapReadExecutor")
+    private org.springframework.core.task.TaskExecutor mapReadExecutor;
+
     private final TravelService travelService;
     private final TravelLoginMapPreviewService travelLoginMapPreviewService;
     private final TravelMediaStorageService travelMediaStorageService;
     private final TravelReverseGeocodeService travelReverseGeocodeService;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.playdata.calen.travel.service.TravelReverseGeocodeDispatcher travelReverseGeocodeDispatcher;
 
     @GetMapping("/plans")
     public List<TravelPlanSummaryResponse> getPlans(@AuthenticationPrincipal AppUserPrincipal currentUser) {
@@ -112,8 +119,8 @@ public class TravelController {
     }
 
     @GetMapping("/my-map")
-    public TravelMyMapOverviewResponse getMyMapOverview(@AuthenticationPrincipal AppUserPrincipal currentUser) {
-        return travelService.getMyMapOverview(currentUser.userId());
+    public java.util.concurrent.CompletableFuture<TravelMyMapOverviewResponse> getMyMapOverview(@AuthenticationPrincipal AppUserPrincipal currentUser) {
+        return java.util.concurrent.CompletableFuture.supplyAsync(() -> travelService.getMyMapOverview(currentUser.userId()), mapReadExecutor);
     }
 
     @GetMapping("/my-map/markers/{markerId}")
@@ -125,14 +132,15 @@ public class TravelController {
     }
 
     @GetMapping("/my-map/photo-clusters/{clusterId}")
-    public TravelMyMapPhotoClusterPageResponse getMyMapPhotoCluster(
+    public java.util.concurrent.CompletableFuture<TravelMyMapPhotoClusterPageResponse> getMyMapPhotoCluster(
             @AuthenticationPrincipal AppUserPrincipal currentUser,
             @PathVariable Long clusterId,
             @RequestParam(name = "page", defaultValue = "0") Integer page,
             @RequestParam(name = "size", defaultValue = "12") Integer size,
             @RequestParam(name = "focusMediaId", required = false) Long focusMediaId
     ) {
-        return travelService.getMyMapPhotoClusterDetail(currentUser.userId(), clusterId, page, size, focusMediaId);
+        return java.util.concurrent.CompletableFuture.supplyAsync(
+                () -> travelService.getMyMapPhotoClusterDetail(currentUser.userId(), clusterId, page, size, focusMediaId), mapReadExecutor);
     }
 
     @PostMapping("/map-shares")
@@ -169,12 +177,12 @@ public class TravelController {
     }
 
     @GetMapping("/geocode/reverse")
-    public TravelReverseGeocodeResponse reverseGeocode(
+    public java.util.concurrent.CompletableFuture<TravelReverseGeocodeResponse> reverseGeocode(
             @AuthenticationPrincipal AppUserPrincipal currentUser,
             @RequestParam("lat") double latitude,
             @RequestParam("lon") double longitude
     ) {
-        return travelReverseGeocodeService.reverseGeocode(latitude, longitude);
+        return travelReverseGeocodeDispatcher.reverseGeocode(latitude, longitude);
     }
 
     @GetMapping("/categories")

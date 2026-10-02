@@ -120,7 +120,7 @@ public class DriveShareController {
     }
 
     @GetMapping("/shared/{fileId}/download")
-    public ResponseEntity<byte[]> downloadSharedFile(
+    public ResponseEntity<org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody> downloadSharedFile(
             @AuthenticationPrincipal AppUserPrincipal currentUser,
             @PathVariable Long fileId,
             @RequestHeader(value = "X-Forwarded-For", required = false) String forwardedFor,
@@ -178,19 +178,18 @@ public class DriveShareController {
         return null;
     }
 
-    private ResponseEntity<byte[]> buildDownloadResponse(DriveService.DriveFilePayload payload) {
+    private ResponseEntity<org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody> buildDownloadResponse(DriveService.DriveFilePayload payload) {
         ContentDisposition disposition = (isInlinePreviewContent(payload.contentType())
                 ? ContentDisposition.inline()
                 : ContentDisposition.attachment())
                 .filename(payload.fileName(), StandardCharsets.UTF_8)
                 .build();
 
-        byte[] bytes = payload.bytes() != null ? payload.bytes() : new byte[0];
-        return ResponseEntity.ok()
+        ResponseEntity.BodyBuilder response = ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, disposition.toString())
-                .contentLength(bytes.length)
-                .contentType(resolveMediaType(payload.contentType()))
-                .body(bytes);
+                .contentType(resolveMediaType(payload.contentType()));
+        if (payload.contentLength() >= 0L) response.contentLength(payload.contentLength());
+        return response.body(payload.body());
     }
 
     private boolean isInlinePreviewContent(String contentType) {

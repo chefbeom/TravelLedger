@@ -15,6 +15,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.playdata.calen.account.domain.AppUser;
 import com.playdata.calen.account.service.AppUserService;
 import com.playdata.calen.common.exception.BadRequestException;
+import com.playdata.calen.common.exception.TooManyRequestsException;
 import com.playdata.calen.ledger.ai.LedgerAiAnalysisProperties;
 import com.playdata.calen.ledger.domain.CategoryDetail;
 import com.playdata.calen.ledger.domain.CategoryGroup;
@@ -32,6 +33,8 @@ import com.playdata.calen.ledger.repository.LedgerEntryRepository;
 import com.playdata.calen.ledger.repository.LedgerEntryRepository.ExistingEntryStyleAggregate;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.math.BigDecimal;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.ArrayList;
@@ -118,7 +121,12 @@ class LedgerOcrServiceTest {
 
         LedgerOcrAnalyzeResponse response = service.startAnalyze(
                 USER_ID,
-                validJpeg("receipt.jpg"),
+                new MockMultipartFile("file", "receipt.jpg", "image/jpeg", new byte[]{(byte) 0xff, (byte) 0xd8, (byte) 0xff, 0}) {
+                    @Override
+                    public byte[] getBytes() {
+                        throw new AssertionError("Queued uploads must not be copied into a byte array");
+                    }
+                },
                 "AUTO",
                 "client-1",
                 "",
@@ -129,11 +137,84 @@ class LedgerOcrServiceTest {
         assertThat(response.clientRequestId()).isEqualTo("client-1");
         assertThat(response.analysisStatus()).isEqualTo("PROCESSING");
         assertThat(executor.queuedTasks).hasSize(1);
+        Map<?, ?> pending = (Map<?, ?>) ReflectionTestUtils.getField(service, "pendingImageAnalyses");
+        assertThat(pending.get(USER_ID)).isEqualTo(1);
         verify(remoteClient, never()).analyze(any(), anyString(), anyString());
 
         when(imageAnalysisRequestRepository.findByIdAndOwnerId(42L, USER_ID)).thenReturn(Optional.of(savedHistory.get()));
         assertThat(service.cancelHistory(USER_ID, 42L).status()).isEqualTo("CANCELLED");
         assertThat((FutureTask<?>) executor.queuedTasks.get(0)).isCancelled();
+        assertThat(pending).isEmpty();
+    }
+
+    @Test
+    void storedImageIsLoadedOnlyWhenWorkerRuns() throws Exception {
+        stubUser();
+        LedgerImageAnalysisRequest history = new LedgerImageAnalysisRequest();
+        history.setId(42L);
+        history.setOwner(appUserService.getRequiredUser(USER_ID));
+        when(imageAnalysisRequestRepository.save(any(LedgerImageAnalysisRequest.class))).thenAnswer(invocation -> {
+            LedgerImageAnalysisRequest saved = invocation.getArgument(0);
+            saved.setId(42L);
+            return saved;
+        });
+        LedgerOcrImageStorageService storage = org.mockito.Mockito.mock(LedgerOcrImageStorageService.class);
+        when(storage.supportsStorage()).thenReturn(true);
+        when(storage.store(eq(USER_ID), eq(42L), any())).thenReturn(
+                new LedgerOcrImageStorageService.StoredImage("image-key", java.time.LocalDateTime.now()));
+        CapturingTaskExecutor executor = new CapturingTaskExecutor();
+        ReflectionTestUtils.setField(service, "imageStorageService", storage);
+        ReflectionTestUtils.setField(service, "ledgerOcrTaskExecutor", executor);
+        service.startAnalyze(USER_ID, validJpeg("receipt.jpg"), "AUTO", "stored-1", "", false);
+        verify(storage, never()).load(anyString(), any(), any());
+        ArgumentCaptor<LedgerImageAnalysisRequest> saved = ArgumentCaptor.forClass(LedgerImageAnalysisRequest.class);
+        verify(imageAnalysisRequestRepository, org.mockito.Mockito.atLeastOnce()).save(saved.capture());
+        history = saved.getValue();
+        when(imageAnalysisRequestRepository.findByIdAndOwnerId(42L, USER_ID)).thenReturn(Optional.of(history));
+        when(storage.load("image-key", history.getFileName(), history.getContentType())).thenReturn(
+                new LedgerOcrImageStorageService.StoredImageContent(new byte[]{1, 2}, "image/jpeg", "receipt.jpg"));
+        when(remoteClient.analyze(any(), eq("AUTO"), any())).thenThrow(new BadRequestException("test failure"));
+        executor.queuedTasks.get(0).run();
+        verify(storage).load("image-key", history.getFileName(), history.getContentType());
+        assertThat((Map<?, ?>) ReflectionTestUtils.getField(service, "pendingImageAnalyses")).isEmpty();
+    }
+
+    @Test
+    void pendingLimitRejectsBeforeQueueingAndCancellationRestoresAdmission() {
+        stubUser();
+        LedgerOcrProperties properties = (LedgerOcrProperties) ReflectionTestUtils.getField(service, "properties");
+        properties.setMaxPendingPerUser(1);
+        AtomicReference<LedgerImageAnalysisRequest> savedHistory = new AtomicReference<>();
+        when(imageAnalysisRequestRepository.save(any(LedgerImageAnalysisRequest.class))).thenAnswer(invocation -> {
+            LedgerImageAnalysisRequest saved = invocation.getArgument(0);
+            saved.setId(42L);
+            savedHistory.set(saved);
+            return saved;
+        });
+        CapturingTaskExecutor executor = new CapturingTaskExecutor();
+        ReflectionTestUtils.setField(service, "ledgerOcrTaskExecutor", executor);
+        service.startAnalyze(USER_ID, validJpeg("receipt.jpg"), "AUTO", "first", "", false);
+        assertThatThrownBy(() -> service.startAnalyze(USER_ID, validJpeg("receipt.jpg"), "AUTO", "second", "", false))
+                .isInstanceOf(TooManyRequestsException.class);
+        assertThat(executor.queuedTasks).hasSize(1);
+        when(imageAnalysisRequestRepository.findByIdAndOwnerId(42L, USER_ID)).thenReturn(Optional.of(savedHistory.get()));
+        service.cancelHistory(USER_ID, 42L);
+        assertThat((Map<?, ?>) ReflectionTestUtils.getField(service, "pendingImageAnalyses")).isEmpty();
+    }
+
+    @Test
+    void temporaryInputIsRemovedWhenQueuedTaskIsCancelled() throws Exception {
+        Path path = ReflectionTestUtils.invokeMethod(service, "spoolImage", validJpeg("receipt.jpg"));
+        assertThat(path).exists();
+        LedgerImageAnalysisRequest history = new LedgerImageAnalysisRequest();
+        history.setId(42L);
+        CapturingTaskExecutor executor = new CapturingTaskExecutor();
+        ReflectionTestUtils.setField(service, "ledgerOcrTaskExecutor", executor);
+        ReflectionTestUtils.invokeMethod(service, "reserveImageAnalysis", USER_ID);
+        ReflectionTestUtils.invokeMethod(service, "submitImageAnalysisTask", USER_ID, history, path, "AUTO", "");
+        ((FutureTask<?>) executor.queuedTasks.get(0)).cancel(true);
+        assertThat(Files.exists(path)).isFalse();
+        assertThat((Map<?, ?>) ReflectionTestUtils.getField(service, "pendingImageAnalyses")).isEmpty();
     }
     @Test
     void analyzeRejectsEmptyFileBeforeRemoteCall() {

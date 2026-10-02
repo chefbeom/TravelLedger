@@ -1,5 +1,6 @@
 package com.playdata.calen.common.cache;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.lettuce.core.RedisClient;
@@ -10,6 +11,11 @@ import io.micrometer.core.instrument.MeterRegistry;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import java.time.Duration;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -27,6 +33,12 @@ public class RedisCacheService {
     private final ObjectMapper objectMapper;
     private final Object redisMonitor = new Object();
     private final AtomicInteger redisConnectionAvailable = new AtomicInteger(0);
+    private final AtomicBoolean reconnecting = new AtomicBoolean();
+    private final ExecutorService reconnectExecutor = Executors.newSingleThreadExecutor(task -> {
+        Thread thread = new Thread(task, "redis-cache-reconnect");
+        thread.setDaemon(true);
+        return thread;
+    });
 
     @Autowired(required = false)
     private MeterRegistry meterRegistry;
@@ -54,10 +66,11 @@ public class RedisCacheService {
     @Value("${app.redis.cache.ssl:false}")
     private boolean redisCacheSsl;
 
-    private RedisClient redisClient;
-    private StatefulRedisConnection<String, String> redisConnection;
-    private RedisCommands<String, String> redisCommands;
-    private long nextRedisReconnectAt = 0L;
+    private volatile RedisClient redisClient;
+    private volatile StatefulRedisConnection<String, String> redisConnection;
+    private volatile RedisCommands<String, String> redisCommands;
+    private volatile long nextRedisReconnectAt = 0L;
+    private volatile boolean stopped;
     private int redisReconnectFailures = 0;
 
     @PostConstruct
@@ -72,12 +85,22 @@ public class RedisCacheService {
                 redisCacheHost, redisCachePort, redisCacheDatabase,
                 redisCacheUsername, redisCachePassword, redisCacheSsl
         ));
-        tryConnectRedis(false);
+        requestReconnect();
     }
 
     @PreDestroy
     void shutdown() {
-        closeRedisConnection();
+        stopped = true;
+        reconnectExecutor.shutdown();
+        try {
+            if (!reconnectExecutor.awaitTermination(10, TimeUnit.SECONDS)) {
+                reconnectExecutor.shutdownNow();
+            }
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            reconnectExecutor.shutdownNow();
+        }
+        closeQuietly(detachConnection());
         if (redisClient != null) {
             redisClient.shutdown();
         }
@@ -95,8 +118,10 @@ public class RedisCacheService {
                 return null;
             }
             return objectMapper.readValue(cachedValue, valueType);
+        } catch (JsonProcessingException ignored) {
+            return null;
         } catch (Exception ignored) {
-            markRedisUnavailable();
+            markRedisUnavailable(commands);
             return null;
         }
     }
@@ -113,8 +138,10 @@ public class RedisCacheService {
                 return null;
             }
             return objectMapper.readValue(cachedValue, valueType);
+        } catch (JsonProcessingException ignored) {
+            return null;
         } catch (Exception ignored) {
-            markRedisUnavailable();
+            markRedisUnavailable(commands);
             return null;
         }
     }
@@ -127,8 +154,10 @@ public class RedisCacheService {
 
         try {
             commands.setex(RedisConnectionSupport.key(redisCacheKeyPrefix, key), Math.max(1L, ttl.getSeconds()), objectMapper.writeValueAsString(value));
+        } catch (JsonProcessingException ignored) {
+            // An incompatible cache value must not disable a healthy Redis connection.
         } catch (Exception ignored) {
-            markRedisUnavailable();
+            markRedisUnavailable(commands);
         }
     }
 
@@ -141,7 +170,7 @@ public class RedisCacheService {
         try {
             return commands.del(RedisConnectionSupport.keys(redisCacheKeyPrefix, keys));
         } catch (Exception ignored) {
-            markRedisUnavailable();
+            markRedisUnavailable(commands);
             return -1L;
         }
     }
@@ -152,65 +181,71 @@ public class RedisCacheService {
                 return redisCommands;
             }
         }
-
-        tryConnectRedis(false);
-
-        synchronized (redisMonitor) {
-            if (redisCommands != null && redisConnection != null && redisConnection.isOpen()) {
-                return redisCommands;
-            }
-            return null;
-        }
+        requestReconnect();
+        return null;
     }
 
-    private void tryConnectRedis(boolean force) {
-        if (redisClient == null) {
+    private void requestReconnect() {
+        if (stopped || redisClient == null || System.currentTimeMillis() < nextRedisReconnectAt
+                || !reconnecting.compareAndSet(false, true)) {
             return;
         }
-
-        long now = System.currentTimeMillis();
-        synchronized (redisMonitor) {
-            if (redisCommands != null && redisConnection != null && redisConnection.isOpen()) {
-                return;
-            }
-            if (!force && now < nextRedisReconnectAt) {
-                return;
-            }
-
-            closeRedisConnection();
-
-            try {
-                redisConnection = redisClient.connect();
-                redisCommands = redisConnection.sync();
-                redisConnectionAvailable.set(1);
-                redisReconnectFailures = 0;
-                nextRedisReconnectAt = 0L;
-            } catch (Exception ignored) {
-                redisConnectionAvailable.set(0);
-                redisCommands = null;
-                redisConnection = null;
-                redisReconnectFailures = Math.min(redisReconnectFailures + 1, 10);
-                long backoffMultiplier = 1L << Math.max(0, redisReconnectFailures - 1);
-                long backoff = Math.min(
-                        REDIS_RECONNECT_MIN_BACKOFF_MS * backoffMultiplier,
-                        REDIS_RECONNECT_MAX_BACKOFF_MS
-                );
-                nextRedisReconnectAt = now + backoff;
-            }
+        try {
+            reconnectExecutor.execute(this::connectInBackground);
+        } catch (RejectedExecutionException ignored) {
+            reconnecting.set(false);
         }
     }
 
-    private void markRedisUnavailable() {
-        synchronized (redisMonitor) {
-            closeRedisConnection();
-            redisReconnectFailures = Math.min(redisReconnectFailures + 1, 10);
-            long backoffMultiplier = 1L << Math.max(0, redisReconnectFailures - 1);
-            long backoff = Math.min(
-                    REDIS_RECONNECT_MIN_BACKOFF_MS * backoffMultiplier,
-                    REDIS_RECONNECT_MAX_BACKOFF_MS
-            );
-            nextRedisReconnectAt = System.currentTimeMillis() + backoff;
+    private void connectInBackground() {
+        StatefulRedisConnection<String, String> candidate = null;
+        try {
+            if (stopped) return;
+            closeQuietly(detachConnection());
+            // Network connect/close must never hold the monitor used by HTTP requests.
+            candidate = redisClient.connect();
+            candidate.setTimeout(Duration.ofMillis(500));
+            RedisCommands<String, String> commands = candidate.sync();
+            synchronized (redisMonitor) {
+                if (!stopped) {
+                    redisConnection = candidate;
+                    redisCommands = commands;
+                    candidate = null;
+                    redisConnectionAvailable.set(1);
+                    redisReconnectFailures = 0;
+                    nextRedisReconnectAt = 0L;
+                }
+            }
+        } catch (Exception ignored) {
+            synchronized (redisMonitor) {
+                scheduleBackoff();
+            }
+        } finally {
+            closeQuietly(candidate);
+            reconnecting.set(false);
         }
+    }
+
+    private void markRedisUnavailable(RedisCommands<String, String> failedCommands) {
+        StatefulRedisConnection<String, String> failedConnection;
+        synchronized (redisMonitor) {
+            if (redisCommands != failedCommands) return;
+            failedConnection = detachConnection();
+            scheduleBackoff();
+        }
+        try {
+            reconnectExecutor.execute(() -> closeQuietly(failedConnection));
+        } catch (RejectedExecutionException ignored) {
+            // Shutdown owns the Redis client and closes all remaining channels.
+        }
+    }
+
+    private void scheduleBackoff() {
+        redisConnectionAvailable.set(0);
+        redisReconnectFailures = Math.min(redisReconnectFailures + 1, 10);
+        long multiplier = 1L << Math.max(0, redisReconnectFailures - 1);
+        nextRedisReconnectAt = System.currentTimeMillis()
+                + Math.min(REDIS_RECONNECT_MIN_BACKOFF_MS * multiplier, REDIS_RECONNECT_MAX_BACKOFF_MS);
     }
 
     private void registerRedisAvailabilityGauge() {
@@ -224,12 +259,22 @@ public class RedisCacheService {
         redisAvailabilityGaugeRegistered = true;
     }
 
-    private void closeRedisConnection() {
-        if (redisConnection != null) {
-            redisConnection.close();
+    private StatefulRedisConnection<String, String> detachConnection() {
+        synchronized (redisMonitor) {
+            StatefulRedisConnection<String, String> previous = redisConnection;
+            redisConnectionAvailable.set(0);
+            redisConnection = null;
+            redisCommands = null;
+            return previous;
         }
-        redisConnectionAvailable.set(0);
-        redisConnection = null;
-        redisCommands = null;
+    }
+
+    private void closeQuietly(StatefulRedisConnection<String, String> connection) {
+        if (connection == null) return;
+        try {
+            connection.close();
+        } catch (Exception ignored) {
+            // Cache availability must not prevent application shutdown or reconnect.
+        }
     }
 }

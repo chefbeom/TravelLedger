@@ -237,6 +237,24 @@ class LedgerAiAnalysisServiceTest {
     }
 
     @Test
+    void crossInstanceAdmissionReusesCommittedJobOrRejectsWithoutCreatingDuplicate() {
+        stubUser();
+        var leases = org.mockito.Mockito.mock(com.playdata.calen.common.jobs.WorkLeaseService.class);
+        ReflectionTestUtils.setField(service, "workLeases", leases);
+        var history = completedHistory(145L, null);
+        history.setStatus(LedgerAiAnalysisStatus.PROCESSING);
+        when(historyRepository.findLatestMatchingProcessingAnalysis(
+                any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any()))
+                .thenReturn(Optional.of(history), Optional.empty());
+
+        assertThat(service.startAnalyze(USER_ID, monthlyRequest()).history().id()).isEqualTo(145L);
+        assertThatThrownBy(() -> service.startAnalyze(USER_ID, monthlyRequest()))
+                .isInstanceOf(com.playdata.calen.common.exception.TooManyRequestsException.class);
+        verify(historyRepository, never()).save(any());
+        verifyNoInteractions(remoteClient);
+    }
+
+    @Test
     void analyzeKeepsPromptInjectionLikeLedgerTextAsData() {
         stubUser();
         stubNoReusableHistory();

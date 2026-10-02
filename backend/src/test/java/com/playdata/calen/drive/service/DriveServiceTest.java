@@ -347,9 +347,9 @@ class DriveServiceTest {
         when(appUserRepository.findById(1L)).thenReturn(Optional.of(owner));
         when(driveItemRepository.findByIdAndOwner_Id(2L, 1L)).thenReturn(Optional.of(folder));
         when(driveItemRepository.findByIdAndOwner_Id(4L, 1L)).thenReturn(Optional.of(rootFile));
-        when(driveItemRepository.findAllByOwner_Id(1L)).thenReturn(List.of(folder, nestedFile, rootFile));
-        when(driveStorageService.loadObjectBytes("drive/tokyo.txt")).thenReturn("nested".getBytes(StandardCharsets.UTF_8));
-        when(driveStorageService.loadObjectBytes("drive/root.txt")).thenReturn("root".getBytes(StandardCharsets.UTF_8));
+        when(driveItemRepository.findAllByOwner_IdAndParent_Id(1L, 2L)).thenReturn(List.of(nestedFile));
+        when(driveStorageService.openObjectStream("drive/tokyo.txt")).thenReturn(new ByteArrayInputStream("nested".getBytes(StandardCharsets.UTF_8)));
+        when(driveStorageService.openObjectStream("drive/root.txt")).thenReturn(new ByteArrayInputStream("root".getBytes(StandardCharsets.UTF_8)));
 
         DriveService service = newService();
 
@@ -357,6 +357,8 @@ class DriveServiceTest {
 
         assertThat(payload.contentType()).isEqualTo("application/zip");
         assertThat(payload.fileName()).isEqualTo("calendrive-selection.zip");
+        verify(driveStorageService, never()).openObjectStream(any());
+        verify(driveItemRepository, never()).findAllByOwner_Id(any());
         assertThat(readZipEntries(payload.bytes()))
                 .containsEntry("Trips/tokyo.txt", "nested")
                 .containsEntry("root.txt", "root");

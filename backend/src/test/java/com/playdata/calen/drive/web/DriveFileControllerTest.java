@@ -36,7 +36,7 @@ class DriveFileControllerTest {
                 )
         );
 
-        ResponseEntity<byte[]> response = controller.download(principal, 10L);
+        ResponseEntity<?> response = controller.download(principal, 10L);
 
         assertThat(response.getHeaders().getContentDisposition().getType()).isEqualTo("attachment");
         assertThat(response.getHeaders().getFirst("X-Content-Type-Options")).isEqualTo("nosniff");
@@ -49,9 +49,22 @@ class DriveFileControllerTest {
                 new DriveService.DriveFilePayload(new byte[] {1, 2, 3}, "image/png", "photo.png", 3L)
         );
 
-        ResponseEntity<byte[]> response = controller.download(principal, 11L);
+        ResponseEntity<?> response = controller.download(principal, 11L);
 
         assertThat(response.getHeaders().getContentDisposition().getType()).isEqualTo("inline");
         assertThat(response.getHeaders().getFirst("X-Content-Type-Options")).isEqualTo("nosniff");
+    }
+
+    @Test
+    void publicDownloadStreamsThroughMvcAsyncDispatch() throws Exception {
+        when(driveDownloadLinkService.downloadByToken(org.mockito.ArgumentMatchers.eq("token"), org.mockito.ArgumentMatchers.any()))
+                .thenReturn(new DriveService.DriveFilePayload(output -> output.write(new byte[] {1, 2, 3}), "image/png", "photo.png", 3L));
+        var mvc = org.springframework.test.web.servlet.setup.MockMvcBuilders.standaloneSetup(controller).build();
+        var pending = mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/file/public-download/token"))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.request().asyncStarted()).andReturn();
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.asyncDispatch(pending))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.content().bytes(new byte[] {1, 2, 3}))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.header().string("Content-Length", "3"));
     }
 }

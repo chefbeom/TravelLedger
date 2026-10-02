@@ -11,7 +11,9 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 @Entity
-@Table(name = "travel_photo_cluster_members")
+@Table(name = "travel_photo_cluster_members", indexes = {
+        @jakarta.persistence.Index(name = "idx_cluster_members_owner_cluster_order", columnList = "owner_id, cluster_id, sort_order"),
+        @jakarta.persistence.Index(name = "idx_cluster_members_owner_media", columnList = "owner_id, media_id")})
 @Getter
 @Setter
 @NoArgsConstructor

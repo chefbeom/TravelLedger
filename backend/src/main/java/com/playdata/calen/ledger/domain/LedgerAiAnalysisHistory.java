@@ -36,6 +36,9 @@ public class LedgerAiAnalysisHistory {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @jakarta.persistence.Version
+    private Long version;
+
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "owner_id", nullable = false)
     private AppUser owner;
@@ -86,6 +89,9 @@ public class LedgerAiAnalysisHistory {
     @Lob
     @Column(name = "request_payload_json", columnDefinition = "LONGTEXT")
     private String requestPayloadJson;
+
+    @Column(name = "focus_prompt", length = 500)
+    private String focusPrompt;
 
     @Lob
     @Column(name = "result_json", columnDefinition = "LONGTEXT")

@@ -24,6 +24,20 @@ public class TravelMyMapPhotoClusterSnapshotService {
         return redisCacheService.get(buildCacheKey(userId), TravelMyMapPhotoClusterSnapshot.class);
     }
 
+    public TravelMyMapPhotoClusterSnapshot get(Long userId, long generation) {
+        VersionedSnapshot cached = redisCacheService.get(buildCacheKey(userId), VersionedSnapshot.class);
+        return cached != null && cached.generation() == generation ? cached.snapshot() : null;
+    }
+
+    public void save(Long userId, long generation, TravelMyMapPhotoClusterSnapshot snapshot) {
+        Duration ttl = resolveSnapshotTtl();
+        if (!ttl.isZero() && !ttl.isNegative()) {
+            redisCacheService.set(buildCacheKey(userId), new VersionedSnapshot(generation, snapshot), ttl);
+        }
+    }
+
+    public record VersionedSnapshot(long generation, TravelMyMapPhotoClusterSnapshot snapshot) { }
+
     public void save(Long userId, TravelMyMapPhotoClusterSnapshot snapshot) {
         if (userId == null || snapshot == null) {
             return;

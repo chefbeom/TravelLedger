@@ -84,7 +84,12 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(TooManyRequestsException.class)
     public ResponseEntity<Map<String, Object>> handleTooManyRequests(TooManyRequestsException exception) {
         log.warn("Too many requests: {}", exception.getMessage());
-        return buildResponse(HttpStatus.TOO_MANY_REQUESTS, exception.getMessage(), null);
+        ResponseEntity<Map<String, Object>> response = buildResponse(HttpStatus.TOO_MANY_REQUESTS, exception.getMessage(), null);
+        if (exception.getRetryAfterSeconds() == null) return response;
+        return ResponseEntity.status(response.getStatusCode())
+                .headers(response.getHeaders())
+                .header("Retry-After", String.valueOf(Math.max(1, exception.getRetryAfterSeconds())))
+                .body(response.getBody());
     }
 
 
@@ -92,6 +97,14 @@ public class GlobalExceptionHandler {
     public ResponseEntity<Map<String, Object>> handleServiceUnavailable(ServiceUnavailableException exception) {
         log.error("Service unavailable: {}", exception.getMessage());
         return buildResponse(HttpStatus.SERVICE_UNAVAILABLE, exception.getMessage(), null);
+    }
+
+    @ExceptionHandler(org.springframework.core.task.TaskRejectedException.class)
+    public ResponseEntity<Map<String, Object>> handleTaskRejected(org.springframework.core.task.TaskRejectedException exception) {
+        ResponseEntity<Map<String, Object>> response = buildResponse(HttpStatus.SERVICE_UNAVAILABLE,
+                "서버의 처리 작업이 많습니다. 잠시 후 다시 시도해 주세요.", null);
+        return ResponseEntity.status(response.getStatusCode()).headers(response.getHeaders())
+                .header("Retry-After", "30").body(response.getBody());
     }
     @ExceptionHandler(NoResourceFoundException.class)
     public ResponseEntity<Map<String, Object>> handleNoResourceFound(NoResourceFoundException exception) {

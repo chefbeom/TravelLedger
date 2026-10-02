@@ -1,6 +1,15 @@
 spring:
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration
+      - org.springframework.boot.autoconfigure.data.redis.RedisRepositoriesAutoConfiguration
+      - org.springframework.boot.autoconfigure.session.SessionAutoConfiguration
   application:
     name: calen-backend
+  task:
+    scheduling:
+      pool:
+        size: 4
   datasource:
     url: ${DB_URL:jdbc:h2:mem:calen;MODE=MySQL;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE}
     driver-class-name: ${DB_DRIVER:${DB_SERVER:org.h2.Driver}}
@@ -67,6 +76,10 @@ server:
         same-site: lax
 
 management:
+  metrics:
+    distribution:
+      percentiles-histogram:
+        http.server.requests: ${APP_HTTP_METRICS_HISTOGRAM_ENABLED:true}
   endpoints:
     web:
       exposure:
@@ -78,6 +91,17 @@ management:
       show-details: never
 
 app:
+  http:
+    map-workers: ${APP_HTTP_MAP_WORKERS:4}
+    map-queue-capacity: ${APP_HTTP_MAP_QUEUE_CAPACITY:32}
+    async:
+      workers: ${APP_HTTP_ASYNC_WORKERS:8}
+      queue-capacity: ${APP_HTTP_ASYNC_QUEUE_CAPACITY:64}
+      timeout-millis: ${APP_HTTP_ASYNC_TIMEOUT_MILLIS:600000}
+  drive:
+    download:
+      max-zip-files: ${DRIVE_MAX_ZIP_FILES:2000}
+      max-zip-bytes: ${DRIVE_MAX_ZIP_BYTES:2147483648}
   schema:
     legacy-updaters:
       enabled: ${APP_SCHEMA_LEGACY_UPDATERS_ENABLED:true}
@@ -110,6 +134,7 @@ app:
     key: ${JWT_KEY:}
     expire: ${JWT_EXPIRE:300000000}
   travel:
+    reverse-geocode-queue-capacity: ${TRAVEL_REVERSE_GEOCODE_QUEUE_CAPACITY:16}
     exchange-rate-base-url: ${TRAVEL_EXCHANGE_RATE_BASE_URL:https://api.frankfurter.dev/v1}
     exchange-rate-cache-minutes: ${TRAVEL_EXCHANGE_RATE_CACHE_MINUTES:30}
     reverse-geocode-base-url: ${TRAVEL_REVERSE_GEOCODE_BASE_URL:https://nominatim.openstreetmap.org/reverse}
@@ -139,8 +164,13 @@ app:
       connect-timeout: ${LEDGER_OCR_CONNECT_TIMEOUT:3s}
       read-timeout: ${LEDGER_OCR_READ_TIMEOUT:90s}
       max-file-size: ${LEDGER_OCR_MAX_FILE_SIZE:10MB}
+      max-pending-per-user: ${LEDGER_OCR_MAX_PENDING_PER_USER:5}
+      workers: ${LEDGER_OCR_WORKERS:1}
+      queue-capacity: ${LEDGER_OCR_QUEUE_CAPACITY:100}
     ai:
       enabled: ${APP_LEDGER_AI_ENABLED:true}
+      workers: ${APP_LEDGER_AI_WORKERS:1}
+      queue-capacity: ${APP_LEDGER_AI_QUEUE_CAPACITY:100}
       provider: ${APP_LEDGER_AI_PROVIDER:lmstudio}
       workflow-url: ${APP_LEDGER_AI_WORKFLOW_URL:}
       api-key: ${APP_LEDGER_AI_API_KEY:}
@@ -158,6 +188,10 @@ app:
       max-tokens: ${APP_LEDGER_AI_MAX_TOKENS:4096}
       connect-timeout: ${APP_LEDGER_AI_CONNECT_TIMEOUT:3s}
       read-timeout: ${APP_LEDGER_AI_READ_TIMEOUT:600s}
+      requests:
+        max-concurrent: ${APP_LEDGER_AI_MAX_CONCURRENT:1}
+        max-waiting: ${APP_LEDGER_AI_MAX_WAITING:20}
+        wait-timeout: ${APP_LEDGER_AI_WAIT_TIMEOUT:30s}
       enforce-provider-url-allowlist: ${APP_LEDGER_AI_ENFORCE_PROVIDER_URL_ALLOWLIST:true}
       allowed-provider-hosts: "${APP_LEDGER_AI_ALLOWED_PROVIDER_HOSTS:localhost,127.0.0.1,::1,api.openai.com}"
       history-retention-enabled: ${APP_LEDGER_AI_HISTORY_RETENTION_ENABLED:false}
@@ -181,6 +215,8 @@ app:
       key-prefix: ${REDIS_STATE_KEY_PREFIX:}
       database: ${REDIS_STATE_DATABASE:0}
       ssl: ${REDIS_STATE_SSL:false}
+  session:
+    shared-enabled: ${APP_SHARED_SESSION_ENABLED:false}
   family:
     media-storage-path: ${FAMILY_MEDIA_STORAGE_PATH:${user.dir}/uploads/family-media}
     media-object-prefix: ${FAMILY_MEDIA_OBJECT_PREFIX:family-media}

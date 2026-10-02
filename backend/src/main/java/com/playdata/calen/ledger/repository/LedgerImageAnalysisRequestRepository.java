@@ -13,4 +13,8 @@ public interface LedgerImageAnalysisRequestRepository extends JpaRepository<Ledg
     Optional<LedgerImageAnalysisRequest> findByIdAndOwnerId(Long id, Long ownerId);
 
     Optional<LedgerImageAnalysisRequest> findByClientRequestIdAndOwnerId(String clientRequestId, Long ownerId);
+
+    @org.springframework.data.jpa.repository.EntityGraph(attributePaths = "owner")
+    java.util.List<LedgerImageAnalysisRequest> findAllByStatusAndCreatedAtBeforeAndIdGreaterThanOrderByIdAsc(
+            com.playdata.calen.ledger.domain.LedgerImageAnalysisStatus status, java.time.LocalDateTime before, Long afterId, Pageable pageable);
 }

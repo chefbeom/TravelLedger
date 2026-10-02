@@ -83,11 +83,16 @@ public class LedgerAiAnalysisService {
     private final LedgerAiAnalysisPayloadBuilder aiPayloadBuilder;
     private final LedgerAiAnalysisReportMerger aiReportMerger;
 
-    private final Map<String, Object> inFlightAnalysisLocks = new ConcurrentHashMap<>();
 
     @Autowired(required = false)
     @Qualifier("ledgerAiTaskExecutor")
     private TaskExecutor ledgerAiTaskExecutor;
+    private final com.playdata.calen.common.cache.SingleFlight analysisAdmissions = new com.playdata.calen.common.cache.SingleFlight();
+    private final java.util.concurrent.ConcurrentMap<Long, java.util.concurrent.FutureTask<Void>> analysisTasks = new ConcurrentHashMap<>();
+    private final java.util.concurrent.ConcurrentMap<Long, Integer> pendingAnalyses = new ConcurrentHashMap<>();
+
+    @Autowired(required = false)
+    private com.playdata.calen.common.jobs.WorkLeaseService workLeases;
 
     public LedgerAiAnalysisStatusResponse getStatus() {
         return statusService.getStatus();
@@ -95,12 +100,34 @@ public class LedgerAiAnalysisService {
 
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public LedgerAiAnalysisHistoryDetailResponse startAnalyze(Long userId, LedgerAiAnalysisRequest request) {
+        AnalysisPlan plan = resolvePlan(request);
+        return analysisAdmissions.execute(analysisInFlightKey(userId, plan, normalizeClientRequestId(request.clientRequestId())),
+                () -> startResolvedAnalysis(userId, plan));
+    }
+
+    private LedgerAiAnalysisHistoryDetailResponse startResolvedAnalysis(Long userId, AnalysisPlan plan) {
         AppUser owner = appUserService.getRequiredUser(userId);
         if (!properties.isFeatureConfigured(LedgerAiFeature.LEDGER_ANALYSIS)) {
             throw new BadRequestException(properties.featureStatusMessage(LedgerAiFeature.LEDGER_ANALYSIS));
         }
 
-        AnalysisPlan plan = resolvePlan(request);
+        if (workLeases == null) return startAdmittedAnalysis(owner, userId, plan);
+        String admissionKey = "analysis-admission:" + org.springframework.util.DigestUtils.md5DigestAsHex(
+                (userId + ":" + plan).getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        try (var admission = workLeases.tryAcquire(admissionKey, Duration.ofMinutes(2))) {
+            if (admission == null) {
+                if (!aiText.hasText(plan.focusPrompt())) {
+                    var processing = findLatestMatchingProcessingAnalysis(userId, plan,
+                            LocalDateTime.now().minus(DUPLICATE_SUPPRESSION_WINDOW));
+                    if (processing.isPresent()) return new LedgerAiAnalysisHistoryDetailResponse(toSummary(processing.get()), null);
+                }
+                throw new com.playdata.calen.common.exception.TooManyRequestsException("AI 분석 요청을 접수 중입니다. 잠시 후 다시 시도해 주세요.", 1);
+            }
+            return startAdmittedAnalysis(owner, userId, plan);
+        }
+    }
+
+    private LedgerAiAnalysisHistoryDetailResponse startAdmittedAnalysis(AppUser owner, Long userId, AnalysisPlan plan) {
         if (!aiText.hasText(plan.focusPrompt())) {
             LocalDateTime duplicateSince = LocalDateTime.now().minus(DUPLICATE_SUPPRESSION_WINDOW);
             Optional<LedgerAiAnalysisHistory> processingHistory = findLatestMatchingProcessingAnalysis(
@@ -128,7 +155,8 @@ public class LedgerAiAnalysisService {
         history.setStatus(LedgerAiAnalysisStatus.PROCESSING);
         history.setSummary("AI analysis is processing.");
         history = historyRepository.save(history);
-        submitAnalysisTask(userId, history.getId(), plan);
+        try { submitAnalysisTask(userId, history.getId(), plan); }
+        catch (RuntimeException failure) { markAnalysisFailed(userId, history.getId(), failure); throw failure; }
         return new LedgerAiAnalysisHistoryDetailResponse(toSummary(history), null);
     }
 
@@ -150,7 +178,7 @@ public class LedgerAiAnalysisService {
         ));
     }
 
-    @Transactional(noRollbackFor = RuntimeException.class)
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public LedgerAiAnalysisResponse analyze(Long userId, LedgerAiAnalysisRequest request) {
         AppUser owner = appUserService.getRequiredUser(userId);
         if (!properties.isFeatureConfigured(LedgerAiFeature.LEDGER_ANALYSIS)) {
@@ -160,14 +188,7 @@ public class LedgerAiAnalysisService {
         AnalysisPlan plan = resolvePlan(request);
         String clientRequestId = normalizeClientRequestId(request.clientRequestId());
         String inFlightKey = analysisInFlightKey(userId, plan, clientRequestId);
-        Object lock = inFlightAnalysisLocks.computeIfAbsent(inFlightKey, ignored -> new Object());
-        try {
-            synchronized (lock) {
-                return analyzeResolvedPlan(owner, userId, plan);
-            }
-        } finally {
-            inFlightAnalysisLocks.remove(inFlightKey, lock);
-        }
+        return analysisAdmissions.execute("sync:" + inFlightKey, () -> analyzeResolvedPlan(owner, userId, plan));
     }
 
     private LedgerAiAnalysisResponse analyzeResolvedPlan(AppUser owner, Long userId, AnalysisPlan plan) {
@@ -210,22 +231,80 @@ public class LedgerAiAnalysisService {
     }
 
     private void submitAnalysisTask(Long userId, Long historyId, AnalysisPlan plan) {
-        Runnable task = () -> processAnalysisInBackground(userId, historyId, plan);
+        submitAnalysisTask(userId, historyId, plan, false);
+    }
+
+    private void submitAnalysisTask(Long userId, Long historyId, AnalysisPlan plan, boolean recovering) {
+        pendingAnalyses.compute(userId, (id, count) -> {
+            if (count != null && count >= 5) throw new com.playdata.calen.common.exception.TooManyRequestsException("진행 중인 AI 분석이 많습니다. 잠시 후 다시 시도해 주세요.", 30);
+            return count == null ? 1 : count + 1;
+        });
+        com.playdata.calen.common.jobs.WorkLeaseService.Lease lease;
         try {
-            if (ledgerAiTaskExecutor == null) {
-                Thread thread = new Thread(task, "ledger-ai-fallback-" + historyId);
-                thread.setDaemon(true);
-                thread.start();
-            } else {
-                ledgerAiTaskExecutor.execute(task);
+            lease = workLeases == null ? null : workLeases.tryAcquire("analysis-job:" + historyId, Duration.ofMinutes(2));
+        } catch (RuntimeException failure) {
+            releasePendingAnalysis(userId);
+            throw failure;
+        }
+        if (workLeases != null && lease == null) { releasePendingAnalysis(userId); return; }
+        java.util.concurrent.FutureTask<Void> task = new java.util.concurrent.FutureTask<>(() -> {
+            if (lease == null || lease.isValid()) processAnalysisInBackground(userId, historyId, plan, lease);
+        }, null) {
+            @Override protected void done() {
+                analysisTasks.remove(historyId, this);
+                releasePendingAnalysis(userId);
+                if (lease != null) lease.close();
             }
+        };
+        if (analysisTasks.putIfAbsent(historyId, task) != null) { task.cancel(false); return; }
+        try {
+            if (ledgerAiTaskExecutor == null) throw new com.playdata.calen.common.exception.ServiceUnavailableException("AI 작업 실행기가 준비되지 않았습니다.");
+            ledgerAiTaskExecutor.execute(task);
         } catch (RuntimeException exception) {
-            markAnalysisFailed(userId, historyId, exception);
-            throw new BadRequestException("AI analysis task could not be started.");
+            task.cancel(false);
+            if (!recovering) markAnalysisFailed(userId, historyId, exception);
+            throw new com.playdata.calen.common.exception.TooManyRequestsException("AI 분석 대기열이 가득 찼습니다. 잠시 후 다시 시도해 주세요.", 30);
         }
     }
 
-    private void processAnalysisInBackground(Long userId, Long historyId, AnalysisPlan plan) {
+    private void releasePendingAnalysis(Long userId) {
+        pendingAnalyses.computeIfPresent(userId, (id, count) -> count <= 1 ? null : count - 1);
+    }
+
+    @org.springframework.scheduling.annotation.Scheduled(fixedDelay = 60000, initialDelay = 60000)
+    void recoverAnalysisJobs() {
+        if (workLeases == null || ledgerAiTaskExecutor == null) return;
+        long cursor = analysisRecoveryCursor;
+        for (int batch = 0; batch < 5; batch++) {
+        var histories = historyRepository.findAllByStatusAndCreatedAtBeforeAndIdGreaterThanOrderByIdAsc(
+                LedgerAiAnalysisStatus.PROCESSING, LocalDateTime.now().minusMinutes(1), cursor, PageRequest.of(0, 100));
+        if (histories.isEmpty()) { analysisRecoveryCursor = 0; return; }
+        cursor = histories.get(histories.size() - 1).getId();
+        for (LedgerAiAnalysisHistory history : histories) {
+            analysisRecoveryCursor = history.getId();
+            if (analysisTasks.containsKey(history.getId())) continue;
+            if (pendingAnalyses.getOrDefault(history.getOwner().getId(), 0) >= 5) continue;
+            if (history.getFocusPrompt() == null) {
+                try (var lease = workLeases.tryAcquire("analysis-job:" + history.getId(), Duration.ofMinutes(2))) {
+                    if (lease != null) markAnalysisFailed(history.getOwner().getId(), history.getId(),
+                            new BadRequestException("이전 서버의 분석 요청은 복구할 수 없습니다. 다시 분석해 주세요."));
+                }
+                continue;
+            }
+            AnalysisPlan plan = new AnalysisPlan(history.getMode(), history.getPeriodType(), history.getComparisonPreset(),
+                    new DateRange(history.getFromDate(), history.getToDate()), history.getCompareFromDate() == null ? null
+                    : new DateRange(history.getCompareFromDate(), history.getCompareToDate()), history.getFocusPrompt());
+            try { submitAnalysisTask(history.getOwner().getId(), history.getId(), plan, true); }
+            catch (com.playdata.calen.common.exception.TooManyRequestsException capacity) { return; }
+        }
+        if (histories.size() < 100) { analysisRecoveryCursor = 0; return; }
+        }
+    }
+
+    private volatile long analysisRecoveryCursor;
+
+    private void processAnalysisInBackground(Long userId, Long historyId, AnalysisPlan plan,
+            com.playdata.calen.common.jobs.WorkLeaseService.Lease lease) {
         LedgerAiAnalysisHistory history = historyRepository.findByIdAndOwnerId(historyId, userId).orElse(null);
         if (history == null || history.getStatus() != LedgerAiAnalysisStatus.PROCESSING) {
             return;
@@ -243,6 +322,8 @@ public class LedgerAiAnalysisService {
 
             aiRequestTimer = aiMetrics.startAiRequestTimer();
             LedgerAiRemoteResponse remote = remoteClient.analyze(payload);
+            if (lease != null && !lease.isValid()) return;
+            if (historyRepository.findByIdAndOwnerId(historyId, userId).isEmpty()) return;
             aiMetrics.recordAiRequest(aiRequestTimer, "success");
             aiRequestRecorded = true;
 
@@ -252,6 +333,7 @@ public class LedgerAiAnalysisService {
             history.setResultJson(aiJsonCodec.write(response));
             historyRepository.save(history);
         } catch (RuntimeException exception) {
+            if (lease != null && !lease.isValid()) return;
             if (aiRequestTimer != null && !aiRequestRecorded) {
                 aiMetrics.recordAiRequest(aiRequestTimer, "failure");
             }
@@ -267,6 +349,7 @@ public class LedgerAiAnalysisService {
 
     private void markAnalysisFailed(Long userId, Long historyId, RuntimeException exception) {
         historyRepository.findByIdAndOwnerId(historyId, userId).ifPresent(history -> {
+            if (history.getStatus() != LedgerAiAnalysisStatus.PROCESSING) return;
             history.setStatus(LedgerAiAnalysisStatus.FAILED);
             history.setSummary("AI analysis failed.");
             history.setErrorMessage(aiText.redactSensitiveText(exception.getMessage(), 500));
@@ -760,6 +843,7 @@ public class LedgerAiAnalysisService {
     private LedgerAiAnalysisHistory baseHistory(AppUser owner, AnalysisPlan plan) {
         LedgerAiAnalysisHistory history = new LedgerAiAnalysisHistory();
         history.setOwner(owner);
+        history.setFocusPrompt(plan.focusPrompt() == null ? "" : plan.focusPrompt());
         history.setMode(plan.mode());
         history.setPeriodType(plan.periodType());
         history.setComparisonPreset(plan.comparisonPreset());

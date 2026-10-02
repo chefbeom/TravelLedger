@@ -57,6 +57,28 @@ public interface TravelExpenseRecordRepository extends JpaRepository<TravelExpen
             TravelRecordType recordType
     );
 
+    @EntityGraph(attributePaths = "plan")
+    @Query("""
+            select record from TravelExpenseRecord record
+            where record.plan.owner.id = :ownerId and record.recordType = :recordType
+              and record.id <> :excludedId
+              and record.longitude is not null
+              and record.latitude between :minLat and :maxLat
+              and (:allLongitudes = true
+                   or (:crossesDateLine = false and record.longitude between :minLon and :maxLon)
+                   or (:crossesDateLine = true and (record.longitude >= :minLon or record.longitude <= :maxLon)))
+            order by (power(sin(radians(record.latitude - :latitude) / 2), 2)
+                + cos(radians(:latitude)) * cos(radians(record.latitude))
+                  * power(sin(radians(record.longitude - :longitude) / 2), 2)) asc, record.id asc
+            """)
+    List<TravelExpenseRecord> findNearestMemoryCandidates(
+            @Param("ownerId") Long ownerId, @Param("recordType") TravelRecordType recordType,
+            @Param("excludedId") Long excludedId, @Param("latitude") double latitude, @Param("longitude") double longitude,
+            @Param("minLat") double minLat, @Param("maxLat") double maxLat,
+            @Param("minLon") double minLon, @Param("maxLon") double maxLon,
+            @Param("allLongitudes") boolean allLongitudes, @Param("crossesDateLine") boolean crossesDateLine,
+            Pageable pageable);
+
     @Query("""
             select record.plan.id as planId,
                    coalesce(sum(case when record.recordType = :ledgerType then record.amountKrw else 0 end), 0) as actualTotalKrw,

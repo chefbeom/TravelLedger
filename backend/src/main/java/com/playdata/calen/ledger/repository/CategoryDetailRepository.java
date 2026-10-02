@@ -7,6 +7,9 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface CategoryDetailRepository extends JpaRepository<CategoryDetail, Long> {
 
+    @org.springframework.data.jpa.repository.EntityGraph(attributePaths = "group")
+    List<CategoryDetail> findAllByGroupIdInOrderByDisplayOrderAscIdAsc(java.util.Collection<Long> groupIds);
+
     List<CategoryDetail> findAllByGroupIdOrderByDisplayOrderAscIdAsc(Long groupId);
 
     List<CategoryDetail> findAllByGroupIdAndActiveTrueOrderByDisplayOrderAscIdAsc(Long groupId);

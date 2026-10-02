@@ -24,6 +24,21 @@ public class LedgerExcelImportController {
     private final LedgerExcelImportService ledgerExcelImportService;
     private final LedgerAiExcelImportService ledgerAiExcelImportService;
 
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.playdata.calen.ledger.service.LedgerAiExcelJobService excelJobs;
+
+    @PostMapping("/preview-ai/jobs")
+    public org.springframework.http.ResponseEntity<com.playdata.calen.ledger.service.LedgerAiExcelJobService.JobResponse> startAiPreview(
+            @AuthenticationPrincipal AppUserPrincipal currentUser, @RequestParam("file") MultipartFile file) {
+        return org.springframework.http.ResponseEntity.accepted().body(excelJobs.start(currentUser.userId(), file));
+    }
+
+    @org.springframework.web.bind.annotation.GetMapping("/preview-ai/jobs/{jobId}")
+    public com.playdata.calen.ledger.service.LedgerAiExcelJobService.JobResponse aiPreviewStatus(
+            @AuthenticationPrincipal AppUserPrincipal currentUser, @org.springframework.web.bind.annotation.PathVariable String jobId) {
+        return excelJobs.get(currentUser.userId(), jobId);
+    }
+
     @PostMapping("/preview")
     public LedgerExcelPreviewResponse preview(
             @AuthenticationPrincipal AppUserPrincipal currentUser,

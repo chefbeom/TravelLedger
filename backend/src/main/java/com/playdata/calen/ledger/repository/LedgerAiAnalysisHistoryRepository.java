@@ -17,6 +17,10 @@ import org.springframework.data.repository.query.Param;
 
 public interface LedgerAiAnalysisHistoryRepository extends JpaRepository<LedgerAiAnalysisHistory, Long> {
 
+    @org.springframework.data.jpa.repository.EntityGraph(attributePaths = "owner")
+    java.util.List<LedgerAiAnalysisHistory> findAllByStatusAndCreatedAtBeforeAndIdGreaterThanOrderByIdAsc(
+            LedgerAiAnalysisStatus status, LocalDateTime before, Long afterId, Pageable pageable);
+
     @Query("""
             select history
             from LedgerAiAnalysisHistory history

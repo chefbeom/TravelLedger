@@ -5,6 +5,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.playdata.calen.account.domain.AppUser;
 import com.playdata.calen.account.service.AppUserService;
 import com.playdata.calen.common.exception.BadRequestException;
+import com.playdata.calen.common.exception.ServiceUnavailableException;
+import com.playdata.calen.common.exception.TooManyRequestsException;
 import com.playdata.calen.common.exception.NotFoundException;
 import com.playdata.calen.ledger.ai.LedgerAiAnalysisProperties;
 import com.playdata.calen.ledger.ai.LedgerAiFeature;
@@ -31,6 +33,9 @@ import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.io.InputStream;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -114,11 +119,18 @@ public class LedgerOcrService {
     private ThreadPoolTaskExecutor ledgerOcrTaskExecutor;
 
     private final ConcurrentMap<Long, Future<?>> imageAnalysisTasks = new ConcurrentHashMap<>();
+    private final ConcurrentMap<Long, Integer> pendingImageAnalyses = new ConcurrentHashMap<>();
+    private final com.playdata.calen.common.cache.SingleFlight imageAdmissions = new com.playdata.calen.common.cache.SingleFlight();
 
+    @Autowired(required = false)
+    private com.playdata.calen.common.jobs.WorkLeaseService workLeases;
+
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.NOT_SUPPORTED)
     public LedgerOcrAnalyzeResponse startAnalyze(Long userId, MultipartFile file, String documentType, String clientRequestId, String prompt, boolean useExistingEntryStyle) {
         return startAnalyze(userId, file, documentType, clientRequestId, prompt, useExistingEntryStyle, null, null);
     }
 
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.NOT_SUPPORTED)
     public LedgerOcrAnalyzeResponse startAnalyze(
             Long userId,
             MultipartFile file,
@@ -129,10 +141,31 @@ public class LedgerOcrService {
             String existingEntryStyleMode,
             LocalDate existingEntryStyleReferenceDate
     ) {
+        String id = normalizeClientRequestId(clientRequestId);
+        String key = "image:" + userId + ":" + (id == null ? java.util.UUID.randomUUID() : id);
+        return imageAdmissions.execute(key, () -> startImageAnalysis(userId, file, documentType, id, prompt,
+                useExistingEntryStyle, existingEntryStyleMode, existingEntryStyleReferenceDate));
+    }
+
+    private LedgerOcrAnalyzeResponse startImageAnalysis(Long userId, MultipartFile file, String documentType,
+            String clientRequestId, String prompt, boolean useExistingEntryStyle,
+            String existingEntryStyleMode, LocalDate existingEntryStyleReferenceDate) {
         AppUser owner = appUserService.getRequiredUser(userId);
+        if (clientRequestId != null) {
+            var existing = imageAnalysisRequestRepository.findByClientRequestIdAndOwnerId(clientRequestId, userId);
+            if (existing.isPresent()) return existingAnalyzeResponse(existing.get());
+        }
+        LedgerImageAnalysisRequest history = null;
+        Path temporaryImage = null;
+        boolean admissionOwned = false;
         try {
             validateReady();
             validateFile(file);
+            if (ledgerOcrTaskExecutor == null) {
+                throw new ServiceUnavailableException("이미지 분석 작업 실행기가 준비되지 않았습니다.");
+            }
+            reserveImageAnalysis(owner.getId());
+            admissionOwned = true;
 
             String normalizedDocumentType = normalizeDocumentType(documentType);
             String normalizedClientRequestId = normalizeClientRequestId(clientRequestId);
@@ -141,20 +174,39 @@ public class LedgerOcrService {
                     owner.getId(), normalizedUserPrompt, useExistingEntryStyle,
                     existingEntryStyleMode, existingEntryStyleReferenceDate
             );
-            byte[] fileBytes = file.getBytes();
-            MultipartFile backgroundFile = new StoredImageMultipartFile(
-                    "file",
-                    firstNonBlank(file.getOriginalFilename(), "ocr-image"),
-                    firstNonBlank(file.getContentType(), "application/octet-stream"),
-                    fileBytes
-            );
-            LedgerImageAnalysisRequest history = createImageAnalysisRequest(owner, backgroundFile, normalizedDocumentType, normalizedClientRequestId);
-            storeImageForHistory(owner.getId(), history, backgroundFile);
-            submitImageAnalysisTask(owner.getId(), history, backgroundFile, normalizedDocumentType, effectiveUserPrompt);
+            history = createImageAnalysisRequest(owner, file, normalizedDocumentType, normalizedClientRequestId);
+            history.setEffectivePrompt(effectiveUserPrompt == null ? "" : effectiveUserPrompt);
+            imageAnalysisRequestRepository.save(history);
+            storeImageForHistory(owner.getId(), history, file);
+            if (!hasStoredImage(history)) temporaryImage = spoolImage(file);
+            // The task owns admission and cleanup from this point, including rejection.
+            admissionOwned = false;
+            submitImageAnalysisTask(owner.getId(), history, temporaryImage, normalizedDocumentType, effectiveUserPrompt);
             return processingAnalyzeResponse(history);
         } catch (IOException exception) {
+            failImageAnalysisRequest(history, new BadRequestException("Image file could not be read."));
             throw new BadRequestException("Image file could not be read.");
+        } catch (org.springframework.dao.DataIntegrityViolationException duplicate) {
+            if (clientRequestId != null) {
+                var existing = imageAnalysisRequestRepository.findByClientRequestIdAndOwnerId(clientRequestId, userId);
+                if (existing.isPresent()) return existingAnalyzeResponse(existing.get());
+            }
+            throw duplicate;
+        } catch (RuntimeException failure) {
+            failImageAnalysisRequest(history, failure);
+            throw failure;
+        } finally {
+            if (admissionOwned) {
+                releaseImageAnalysis(owner.getId());
+                deleteTemporaryImage(temporaryImage);
+            }
         }
+    }
+
+    private LedgerOcrAnalyzeResponse existingAnalyzeResponse(LedgerImageAnalysisRequest history) {
+        LedgerOcrAnalyzeResponse response = readResponseJson(history.getResultJson());
+        if (response != null) return response;
+        return processingAnalyzeResponse(history);
     }
 
     public LedgerOcrAnalyzeResponse startReanalyzeHistoryImage(
@@ -294,41 +346,100 @@ public class LedgerOcrService {
     private void submitImageAnalysisTask(
             Long userId,
             LedgerImageAnalysisRequest history,
-            MultipartFile file,
+            Path temporaryImage,
             String normalizedDocumentType,
             String effectiveUserPrompt
     ) {
+        submitImageAnalysisTask(userId, history, temporaryImage, normalizedDocumentType, effectiveUserPrompt, false);
+    }
+
+    private void submitImageAnalysisTask(Long userId, LedgerImageAnalysisRequest history, Path temporaryImage,
+            String normalizedDocumentType, String effectiveUserPrompt, boolean recovering) {
         Long historyId = history.getId();
-        FutureTask<Void> task = new FutureTask<>(() -> {
-            try {
-                processImageAnalysisInBackground(userId, historyId, file, normalizedDocumentType, effectiveUserPrompt);
-            } finally {
-                imageAnalysisTasks.remove(historyId);
-            }
-        }, null);
-        imageAnalysisTasks.put(historyId, task);
+        com.playdata.calen.common.jobs.WorkLeaseService.Lease jobLease;
         try {
-            if (ledgerOcrTaskExecutor == null) {
-                Thread thread = new Thread(task, "ledger-ocr-fallback-" + historyId);
-                thread.setDaemon(true);
-                thread.start();
-            } else {
-                ledgerOcrTaskExecutor.execute(task);
+            jobLease = workLeases == null ? null
+                    : workLeases.tryAcquire("image-job:" + historyId, java.time.Duration.ofMinutes(2));
+        } catch (RuntimeException failure) {
+            releaseImageAnalysis(userId);
+            deleteTemporaryImage(temporaryImage);
+            throw failure;
+        }
+        if (workLeases != null && jobLease == null) {
+            releaseImageAnalysis(userId);
+            deleteTemporaryImage(temporaryImage);
+            return;
+        }
+        FutureTask<Void> task = new FutureTask<>(() -> {
+            if (jobLease != null && !jobLease.isValid()) return;
+            processImageAnalysisInBackground(userId, historyId, temporaryImage, normalizedDocumentType, effectiveUserPrompt, jobLease);
+        }, null) {
+            @Override
+            protected void done() {
+                imageAnalysisTasks.remove(historyId, this);
+                releaseImageAnalysis(userId);
+                deleteTemporaryImage(temporaryImage);
+                if (jobLease != null) jobLease.close();
             }
+        };
+        if (imageAnalysisTasks.putIfAbsent(historyId, task) != null) {
+            task.cancel(false);
+            return;
+        }
+        try {
+            ledgerOcrTaskExecutor.execute(task);
         } catch (RuntimeException exception) {
             imageAnalysisTasks.remove(historyId, task);
             task.cancel(true);
-            failImageAnalysisRequest(history, exception);
-            throw new BadRequestException("Image analysis task could not be started.");
+            if (!recovering) failImageAnalysisRequest(history, exception);
+            throw new TooManyRequestsException("이미지 분석 대기열이 가득 찼습니다. 잠시 후 다시 시도해 주세요.", 30);
         }
     }
+
+    @org.springframework.scheduling.annotation.Scheduled(fixedDelay = 60000, initialDelay = 60000)
+    void recoverImageJobs() {
+        if (ledgerOcrTaskExecutor == null || workLeases == null) return;
+        long cursor = imageRecoveryCursor;
+        for (int batch = 0; batch < 5; batch++) {
+        var histories = imageAnalysisRequestRepository.findAllByStatusAndCreatedAtBeforeAndIdGreaterThanOrderByIdAsc(
+                LedgerImageAnalysisStatus.PROCESSING, LocalDateTime.now().minusMinutes(1), cursor, PageRequest.of(0, 100));
+        if (histories.isEmpty()) { imageRecoveryCursor = 0; return; }
+        cursor = histories.get(histories.size() - 1).getId();
+        for (LedgerImageAnalysisRequest history : histories) {
+            imageRecoveryCursor = history.getId();
+            if (imageAnalysisTasks.containsKey(history.getId())) continue;
+            if (!hasStoredImage(history) || history.getEffectivePrompt() == null) {
+                // Legacy jobs and temporary-only uploads cannot be reconstructed after restart.
+                try (var lease = workLeases.tryAcquire("image-job:" + history.getId(), java.time.Duration.ofMinutes(30))) {
+                    if (lease != null) failImageAnalysisRequest(history,
+                            new BadRequestException("서버 재시작으로 입력을 복구할 수 없습니다. 이미지를 다시 분석해 주세요."));
+                }
+                continue;
+            }
+            boolean reserved = false;
+            try {
+                reserveImageAnalysis(history.getOwner().getId());
+                reserved = true;
+                submitImageAnalysisTask(history.getOwner().getId(), history, null, history.getDocumentType(), history.getEffectivePrompt(), true);
+            } catch (TooManyRequestsException capacity) {
+                // Admission has no task cleanup when reservation itself failed.
+                if (!reserved) continue;
+                return;
+            }
+        }
+        if (histories.size() < 100) { imageRecoveryCursor = 0; return; }
+        }
+    }
+
+    private volatile long imageRecoveryCursor;
 
     private void processImageAnalysisInBackground(
             Long userId,
             Long historyId,
-            MultipartFile file,
+            Path temporaryImage,
             String normalizedDocumentType,
-            String effectiveUserPrompt
+            String effectiveUserPrompt,
+            com.playdata.calen.common.jobs.WorkLeaseService.Lease jobLease
     ) {
         Timer.Sample ocrRequestTimer = startOcrRequestTimer();
         LedgerImageAnalysisRequest history = imageAnalysisRequestRepository.findByIdAndOwnerId(historyId, userId).orElse(null);
@@ -339,7 +450,9 @@ public class LedgerOcrService {
 
         try {
             AppUser owner = appUserService.getRequiredUser(userId);
+            MultipartFile file = loadImageAnalysisInput(history, temporaryImage);
             RemoteAnalyzeResponse remoteResponse = remoteClient.analyze(file, normalizedDocumentType, effectiveUserPrompt);
+            if (jobLease != null && !jobLease.isValid()) return;
             String paymentCapturePlatform = resolvePaymentCapturePlatform(
                     firstNonBlank(remoteResponse.documentType(), normalizedDocumentType),
                     effectiveUserPrompt,
@@ -401,7 +514,7 @@ public class LedgerOcrService {
         return new LedgerOcrAnalyzeResponse(
                 history.getId(),
                 history.getClientRequestId(),
-                LedgerImageAnalysisStatus.PROCESSING.name(),
+                history.getStatus().name(),
                 history.getDocumentType(),
                 "",
                 null,
@@ -497,7 +610,7 @@ public class LedgerOcrService {
                 firstNonBlank(history.getContentType(), storedImage.contentType(), "application/octet-stream"),
                 storedImage.bytes()
         );
-        return analyze(
+        return startAnalyze(
                 owner.getId(), storedFile, effectiveDocumentType, clientRequestId, prompt,
                 useExistingEntryStyle, existingEntryStyleMode, existingEntryStyleReferenceDate
         );
@@ -608,6 +721,55 @@ public class LedgerOcrService {
         Future<?> task = imageAnalysisTasks.remove(historyId);
         if (task != null) {
             task.cancel(true);
+            if (task instanceof Runnable queuedTask && ledgerOcrTaskExecutor != null && ledgerOcrTaskExecutor.isRunning()) {
+                ledgerOcrTaskExecutor.getThreadPoolExecutor().remove(queuedTask);
+            }
+        }
+    }
+
+    private void reserveImageAnalysis(Long userId) {
+        pendingImageAnalyses.compute(userId, (id, count) -> {
+            int pending = count == null ? 0 : count;
+            if (pending >= properties.getMaxPendingPerUser()) {
+                throw new TooManyRequestsException("진행 중인 이미지 분석이 많습니다. 완료 후 다시 시도해 주세요.", 30);
+            }
+            return pending + 1;
+        });
+    }
+
+    private void releaseImageAnalysis(Long userId) {
+        pendingImageAnalyses.computeIfPresent(userId, (id, count) -> count > 1 ? count - 1 : null);
+    }
+
+    private Path spoolImage(MultipartFile file) throws IOException {
+        Path path = Files.createTempFile("calen-image-analysis-", ".upload");
+        try (java.io.InputStream input = file.getInputStream()) {
+            Files.copy(input, path, StandardCopyOption.REPLACE_EXISTING);
+            return path;
+        } catch (IOException | RuntimeException exception) {
+            deleteTemporaryImage(path);
+            throw exception;
+        }
+    }
+
+    private MultipartFile loadImageAnalysisInput(LedgerImageAnalysisRequest history, Path temporaryImage) {
+        if (temporaryImage == null) {
+            LedgerOcrImageStorageService.StoredImageContent image = loadStoredHistoryImage(history);
+            return new StoredImageMultipartFile("file", image.fileName(), image.contentType(), image.bytes());
+        }
+        try {
+            return new StoredImageMultipartFile("file", history.getFileName(), history.getContentType(), Files.readAllBytes(temporaryImage));
+        } catch (IOException exception) {
+            throw new BadRequestException("Queued image file could not be read.");
+        }
+    }
+
+    private void deleteTemporaryImage(Path path) {
+        if (path == null) return;
+        try {
+            Files.deleteIfExists(path);
+        } catch (IOException exception) {
+            log.warn("Could not remove temporary image analysis input", exception);
         }
     }
     private void storeImageForHistory(Long ownerId, LedgerImageAnalysisRequest history, MultipartFile file) {
@@ -669,6 +831,7 @@ public class LedgerOcrService {
     }
 
     private void failImageAnalysisRequest(LedgerImageAnalysisRequest history, RuntimeException exception) {
+        if (history == null || history.getId() == null) return;
         LedgerImageAnalysisRequest currentHistory = imageAnalysisRequestRepository.findById(history.getId()).orElse(history);
         if (currentHistory.getStatus() == LedgerImageAnalysisStatus.CANCELLED) {
             return;

@@ -17,10 +17,13 @@ import com.playdata.calen.travel.service.TravelDriveLinkService;
 import com.playdata.calen.travel.service.TravelMediaStorageService;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
+import java.util.ArrayDeque;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
@@ -39,6 +42,8 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 
 @Service
 @Transactional(readOnly = true)
@@ -48,6 +53,11 @@ public class DriveService {
     private static final int MAX_PHOTO_FILE_LIMIT = 5000;
     private static final int DEFAULT_LIST_PAGE_SIZE = 30;
     private static final int MAX_LIST_PAGE_SIZE = 100;
+
+    @Value("${app.drive.download.max-zip-files:2000}")
+    private int maxZipFiles = 2000;
+    @Value("${app.drive.download.max-zip-bytes:2147483648}")
+    private long maxZipBytes = 2L * 1024 * 1024 * 1024;
 
     private final DriveItemRepository driveItemRepository;
     private final DriveItemVersionRepository driveItemVersionRepository;
@@ -177,23 +187,22 @@ public class DriveService {
 
     public DriveDtos.HomeSummaryResponse getHomeSummary(Long userId) {
         AppUser owner = getOwner(userId);
-        List<DriveItem> items = driveItemRepository.findAllByOwner_IdOrderByLastModifiedAtDesc(owner.getId());
+        DriveItemRepository.HomeAggregate summary = driveItemRepository.aggregateHome(owner.getId());
+        List<DriveItem> recent = driveItemRepository.findAllByOwner_IdOrderByLastModifiedAtDescIdDesc(owner.getId(), PageRequest.of(0, 8));
         return DriveDtos.HomeSummaryResponse.builder()
-                .driveItemCount(items.size())
-                .fileCount(items.stream().filter(DriveItem::isFile).count())
-                .folderCount(items.stream().filter(DriveItem::isFolder).count())
-                .sharedCount(items.stream().filter(DriveItem::isSharedFile).count())
-                .trashCount(items.stream().filter(DriveItem::isTrashed).count())
-                .usedBytes(items.stream().filter(DriveItem::isFile).mapToLong(DriveItem::getFileSize).sum())
-                .recentFiles(items.stream().limit(8).map(this::toItemResponse).toList())
+                .driveItemCount(summary == null ? 0L : zeroIfNull(summary.getItemCount()))
+                .fileCount(summary == null ? 0L : zeroIfNull(summary.getFileCount()))
+                .folderCount(summary == null ? 0L : zeroIfNull(summary.getFolderCount()))
+                .sharedCount(summary == null ? 0L : zeroIfNull(summary.getSharedCount()))
+                .trashCount(summary == null ? 0L : zeroIfNull(summary.getTrashCount()))
+                .usedBytes(summary == null ? 0L : zeroIfNull(summary.getUsedBytes()))
+                .recentFiles(recent.stream().map(this::toItemResponse).toList())
                 .build();
     }
 
     public List<DriveDtos.FileItemResponse> getRecentFiles(Long userId) {
-        return driveItemRepository.findAllByOwner_IdOrderByLastModifiedAtDesc(getOwner(userId).getId()).stream()
-                .filter(DriveItem::isFile)
-                .filter(item -> !item.isTrashed())
-                .limit(30)
+        return driveItemRepository.findAllByOwner_IdAndItemTypeAndTrashedFalseOrderByLastModifiedAtDescIdDesc(
+                getOwner(userId).getId(), DriveItemType.FILE, PageRequest.of(0, 30)).stream()
                 .map(this::toItemResponse)
                 .toList();
     }
@@ -212,16 +221,37 @@ public class DriveService {
         AppUser owner = getOwner(userId);
         DriveItem parent = parentId == null ? null : resolveParentFolder(owner.getId(), parentId);
         int limit = Math.min(Math.max(size == null ? DEFAULT_PHOTO_FILE_LIMIT : size, 1), MAX_PHOTO_FILE_LIMIT);
-        return driveItemRepository.findAllByOwner_Id(owner.getId()).stream()
-                .filter(DriveItem::isFile)
-                .filter(item -> !item.isTrashed())
-                .filter(this::isImageItem)
-                .filter(item -> includeUnlinked || isTravelLinkedFile(item))
-                .filter(item -> parent == null || isInsideFolder(item, parent))
-                .sorted(resolveComparator(sortOption))
-                .limit(limit)
+        Set<Long> folderIds = parent == null ? Set.of() : descendantFolderIds(owner.getId(), parent.getId());
+        Specification<DriveItem> photos = (root, query, criteria) -> {
+            List<jakarta.persistence.criteria.Predicate> predicates = new ArrayList<>();
+            predicates.add(criteria.equal(root.get("owner").get("id"), owner.getId()));
+            predicates.add(criteria.equal(root.get("itemType"), DriveItemType.FILE));
+            predicates.add(criteria.isFalse(root.get("trashed")));
+            predicates.add(criteria.lower(root.get("extension")).in("jpg", "jpeg", "png", "gif", "webp", "bmp"));
+            if (!includeUnlinked) predicates.add(root.get("sourceType").in(
+                    TravelDriveLinkService.SOURCE_TRAVEL_MEDIA, TravelDriveLinkService.SOURCE_TRAVEL_GPX));
+            if (parent != null) predicates.add(root.get("parent").get("id").in(folderIds));
+            return criteria.and(predicates.toArray(jakarta.persistence.criteria.Predicate[]::new));
+        };
+        return driveItemRepository.findAll(photos, PageRequest.of(0, limit, resolvePageSort(sortOption)))
+                .getContent().stream()
                 .map(this::toItemResponse)
                 .toList();
+    }
+
+    private Set<Long> descendantFolderIds(Long ownerId, Long rootFolderId) {
+        Set<Long> folderIds = new HashSet<>();
+        ArrayDeque<Long> pending = new ArrayDeque<>();
+        folderIds.add(rootFolderId);
+        pending.add(rootFolderId);
+        while (!pending.isEmpty()) {
+            List<Long> parents = new ArrayList<>();
+            while (!pending.isEmpty() && parents.size() < 256) parents.add(pending.removeFirst());
+            for (DriveItem folder : driveItemRepository.findAllByOwner_IdAndParent_IdInAndItemType(ownerId, parents, DriveItemType.FOLDER)) {
+                if (folderIds.add(folder.getId())) pending.addLast(folder.getId());
+            }
+        }
+        return folderIds;
     }
     public List<DriveDtos.FileItemResponse> getTrashItems(Long userId) {
         return driveItemRepository.findAllByOwner_IdAndTrashedTrueOrderByDeletedAtDesc(getOwner(userId).getId()).stream()
@@ -354,11 +384,18 @@ public class DriveService {
         return DriveDtos.ActionResponse.builder().action("restore").affectedCount(affected).build();
     }
 
+    @Transactional
     public DriveFilePayload downloadFile(Long userId, Long fileId) {
         DriveItem item = getOwnedFile(userId, fileId);
-        byte[] bytes = loadFileBytes(item);
         item.setLastAccessedAt(LocalDateTime.now());
-        return new DriveFilePayload(bytes, resolveContentType(item.getExtension()), item.getOriginalName(), item.getFileSize());
+        return createFilePayload(item);
+    }
+
+    public DriveFilePayload createFilePayload(DriveItem item) {
+        FileStreamSource source = fileStreamSource(item);
+        return new DriveFilePayload(output -> {
+            try (InputStream input = openFileStream(source)) { input.transferTo(output); }
+        }, resolveContentType(item.getExtension()), item.getOriginalName(), item.getFileSize());
     }
 
     @Transactional
@@ -387,12 +424,21 @@ public class DriveService {
             throw new BadRequestException("The selected folders do not contain downloadable files.");
         }
 
-        byte[] zipBytes = buildZipBytes(zipSources);
+        long totalBytes = 0L;
+        List<ZipStreamSource> streams = new ArrayList<>();
+        for (ZipSource source : zipSources) {
+            long size = Math.max(0L, source.item().getFileSize());
+            if (size > maxZipBytes - totalBytes) throw new BadRequestException("ZIP download exceeds the allowed total size.");
+            totalBytes += size;
+            streams.add(new ZipStreamSource(fileStreamSource(source.item()), source.entryName()));
+            source.item().setLastAccessedAt(LocalDateTime.now());
+        }
+        List<ZipStreamSource> immutableSources = List.copyOf(streams);
         return new DriveFilePayload(
-                zipBytes,
+                output -> writeZip(immutableSources, output),
                 "application/zip",
                 buildZipFileName(roots),
-                zipBytes.length
+                -1L
         );
     }
 
@@ -494,7 +540,23 @@ public class DriveService {
                 .build();
     }
 
-    public record DriveFilePayload(byte[] bytes, String contentType, String fileName, long contentLength) {}
+    public record DriveFilePayload(StreamingResponseBody body, String contentType, String fileName, long contentLength) {
+        public DriveFilePayload(byte[] bytes, String contentType, String fileName, long contentLength) {
+            this(output -> output.write(bytes == null ? new byte[0] : bytes), contentType, fileName, contentLength);
+        }
+
+        // Compatibility for small in-memory payloads and existing unit fixtures.
+        // HTTP download controllers use body() directly, never this method.
+        public byte[] bytes() {
+            ByteArrayOutputStream output = new ByteArrayOutputStream();
+            try { body.writeTo(output); }
+            catch (IOException exception) { throw new BadRequestException("File could not be read."); }
+            return output.toByteArray();
+        }
+    }
+
+    private record FileStreamSource(String storagePath, boolean travelLinked) {}
+    private record ZipStreamSource(FileStreamSource source, String entryName) {}
 
     private DriveDtos.FileVersionResponse toVersionResponse(DriveItemVersion version) {
         return DriveDtos.FileVersionResponse.builder()
@@ -835,10 +897,11 @@ public class DriveService {
             Set<Long> includedFileIds,
             List<ZipSource> zipSources
     ) {
-        if (current.isTrashed()) {
+        if (current.isTrashed() || !includedFileIds.add(current.getId())) {
             return;
         }
-        if (current.isFile() && includedFileIds.add(current.getId())) {
+        if (current.isFile()) {
+            if (zipSources.size() >= maxZipFiles) throw new BadRequestException("Too many files selected for ZIP download.");
             zipSources.add(new ZipSource(current, buildZipEntryName(root, current, zipSources)));
             return;
         }
@@ -847,20 +910,34 @@ public class DriveService {
         }
     }
 
-    private byte[] buildZipBytes(List<ZipSource> zipSources) {
-        ByteArrayOutputStream buffer = new ByteArrayOutputStream();
-        try (ZipOutputStream zip = new ZipOutputStream(buffer, StandardCharsets.UTF_8)) {
-            for (ZipSource source : zipSources) {
+    private void writeZip(List<ZipStreamSource> zipSources, OutputStream output) throws IOException {
+        long streamedBytes = 0L;
+        byte[] buffer = new byte[64 * 1024];
+        try (ZipOutputStream zip = new ZipOutputStream(output, StandardCharsets.UTF_8)) {
+            for (ZipStreamSource source : zipSources) {
                 ZipEntry entry = new ZipEntry(source.entryName());
                 zip.putNextEntry(entry);
-                zip.write(loadFileBytes(source.item()));
+                try (InputStream input = openFileStream(source.source())) {
+                    int count;
+                    while ((count = input.read(buffer)) != -1) {
+                        if (count > maxZipBytes - streamedBytes) throw new IOException("ZIP download exceeds the allowed total size.");
+                        streamedBytes += count;
+                        zip.write(buffer, 0, count);
+                    }
+                }
                 zip.closeEntry();
-                source.item().setLastAccessedAt(LocalDateTime.now());
             }
-        } catch (IOException exception) {
-            throw new BadRequestException("Failed to create a download archive.");
         }
-        return buffer.toByteArray();
+    }
+
+    private FileStreamSource fileStreamSource(DriveItem item) {
+        return new FileStreamSource(item.getStoragePath(), isTravelLinkedFile(item));
+    }
+
+    private InputStream openFileStream(FileStreamSource source) throws IOException {
+        return source.travelLinked()
+                ? travelMediaStorageService.loadAsResource(source.storagePath()).getInputStream()
+                : driveStorageService.openObjectStream(source.storagePath());
     }
 
     private String buildZipEntryName(DriveItem root, DriveItem file, List<ZipSource> existingSources) {
@@ -920,10 +997,11 @@ public class DriveService {
     }
 
     private List<DriveItem> childrenOf(DriveItem item) {
-        return driveItemRepository.findAllByOwner_Id(item.getOwner().getId()).stream()
-                .filter(candidate -> candidate.getParent() != null)
-                .filter(candidate -> Objects.equals(candidate.getParent().getId(), item.getId()))
-                .toList();
+        return driveItemRepository.findAllByOwner_IdAndParent_Id(item.getOwner().getId(), item.getId());
+    }
+
+    private long zeroIfNull(Long value) {
+        return value == null ? 0L : value;
     }
 
     private void deleteFileVersions(List<DriveItem> items) {

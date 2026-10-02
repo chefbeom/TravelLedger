@@ -172,6 +172,16 @@ public class DriveStorageService {
         }
     }
 
+    public InputStream openObjectStream(String objectKey) {
+        ensureStorageConfigured();
+        try {
+            return minioClient().getObject(GetObjectArgs.builder()
+                    .bucket(resolveBucket()).object(objectKey).build());
+        } catch (Exception exception) {
+            throw new BadRequestException("파일을 불러오지 못했습니다.");
+        }
+    }
+
     public long resolveObjectSize(String objectKey) {
         ensureStorageConfigured();
         try {

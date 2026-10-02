@@ -16,6 +16,7 @@ public interface RecurringLedgerOccurrenceRepository extends JpaRepository<Recur
             RecurringLedgerOccurrenceStatus status
     );
 
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
     Optional<RecurringLedgerOccurrence> findByIdAndRuleOwnerId(Long id, Long ownerId);
 
     void deleteAllByRuleId(Long ruleId);

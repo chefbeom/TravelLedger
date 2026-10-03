@@ -61,6 +61,7 @@ public class RecordSharingService {
 
     @Transactional
     public List<RecordShareDtos.Response> create(Long userId, RecordShareDtos.Create request) {
+        String shareMemo = normalizeShareMemo(request.shareMemo());
         AppUser sender = users.getRequiredUser(userId);
         TravelShareGroup group = requireGroup(request.groupId(), userId);
         // Serialize requests for the same source, including requests sent through different groups.
@@ -102,6 +103,7 @@ public class RecordSharingService {
             share.setRecipient(recipient);
             share.setTitle(title);
             share.setSnapshotJson(snapshot);
+            share.setShareMemo(shareMemo);
             share.setStatus(RecordShareStatus.PENDING);
             share.setCreatedAt(LocalDateTime.now());
             share.setRespondedAt(null);
@@ -221,6 +223,11 @@ public class RecordSharingService {
         share.setRespondedAt(LocalDateTime.now());
     }
     private NotFoundException notFound() { return new NotFoundException("접근 가능한 기록 공유 요청을 찾을 수 없습니다."); }
+    private String normalizeShareMemo(String memo) {
+        if (memo == null) return null;
+        if (memo.length() > 500) throw new BadRequestException("공유 메모는 500자까지 입력할 수 있습니다.");
+        return memo.isBlank() ? null : memo.strip();
+    }
     private RecordShareDtos.Response toResponse(RecordShare share) {
         LedgerEntryResponse snapshot = null;
         if (share.getSnapshotJson() != null) {
@@ -229,6 +236,7 @@ public class RecordSharingService {
         }
         return new RecordShareDtos.Response(share.getId(), share.getGroupId(), share.getGroupName(), share.getKind(), share.getSourceId(),
                 share.getSender().getId(), share.getSender().getDisplayName(), share.getRecipient().getId(), share.getRecipient().getDisplayName(),
-                share.getStatus(), share.getTitle(), snapshot, share.getImportedLedgerEntryId(), share.getCreatedAt(), share.getRespondedAt());
+                share.getStatus(), share.getTitle(), snapshot, share.getImportedLedgerEntryId(), share.getCreatedAt(), share.getRespondedAt(),
+                share.getShareMemo());
     }
 }

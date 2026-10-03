@@ -59,6 +59,27 @@ class RecordShareRepositoryTest {
                 .isInstanceOf(DataIntegrityViolationException.class);
     }
 
+    @Test void shareMemoPersistsAcrossReloadAndIsReturnedInInboxAndSentLists() {
+        AppUser sender = user("sender"), receiver = user("receiver");
+        var group = group(sender, receiver);
+        var request = share(sender, receiver, group.getId(), 1L, RecordShareKind.LEDGER);
+        String memo = "카드 사용 내역\n" + "가".repeat(491);
+        assertThat(memo).hasSize(500);
+        request.setShareMemo(memo);
+        var legacyRequest = share(sender, receiver, group.getId(), 2L, RecordShareKind.LEDGER);
+        em.flush(); em.clear();
+
+        assertThat(repository.findById(request.getId()).orElseThrow().getShareMemo()).isEqualTo(memo);
+        assertThat(repository.findById(legacyRequest.getId()).orElseThrow().getShareMemo()).isNull();
+        for (boolean sent : List.of(false, true)) {
+            Long viewerId = sent ? sender.getId() : receiver.getId();
+            var list = repository.findRequests(viewerId, RecordShareKind.LEDGER, sent, null,
+                    List.of(group.getId()), PageRequest.of(0, 10));
+            assertThat(list.getContent()).filteredOn(item -> item.getId().equals(request.getId()))
+                    .extracting(RecordShare::getShareMemo).containsExactly(memo);
+        }
+    }
+
     @Test void departedSenderRequestsDisappearFromInboxAndNotificationCount() {
         AppUser sender = user("sender"), receiver = user("receiver");
         var group = group(receiver, sender);

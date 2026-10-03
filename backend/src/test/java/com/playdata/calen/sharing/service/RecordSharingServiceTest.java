@@ -69,8 +69,74 @@ class RecordSharingServiceTest {
         assertThat(response).hasSize(1);
         assertThat(response.get(0).status()).isEqualTo(RecordShareStatus.PENDING);
         assertThat(response.get(0).ledger().title()).isEqualTo("공유 시점 기록");
+        assertThat(response.get(0).shareMemo()).isNull();
         verify(ledger, never()).create(anyLong(), any());
         verify(shares).save(any());
+    }
+
+    @Test void storesShareMemoForEachSelectedRecipientSeparatelyFromTheLedgerSnapshot() throws Exception {
+        when(entityManager.find(LedgerEntry.class, 100L, LockModeType.PESSIMISTIC_WRITE)).thenReturn(source(sender));
+        when(ledger.getEntryForSharing(1L, 100L)).thenReturn(snapshot());
+        when(users.getRequiredUser(3L)).thenReturn(user(3L));
+        when(members.existsByGroupIdAndMemberId(5L, 3L)).thenReturn(true);
+        when(shares.save(any())).thenAnswer(call -> { RecordShare share = call.getArgument(0); share.setId(share.getRecipient().getId() + 10); return share; });
+
+        var response = service.create(1L, new RecordShareDtos.Create(5L, RecordShareKind.LEDGER, 100L, List.of(2L, 3L),
+                "  당신 카드로 결제했어요.\n식비로 등록해 주세요.  "));
+
+        assertThat(response).hasSize(2).allSatisfy(item -> {
+            assertThat(item.shareMemo()).isEqualTo("당신 카드로 결제했어요.\n식비로 등록해 주세요.");
+            assertThat(item.ledger().memo()).isEqualTo("메모");
+        });
+        var captor = ArgumentCaptor.forClass(RecordShare.class);
+        verify(shares, times(2)).save(captor.capture());
+        assertThat(captor.getAllValues()).extracting(item -> item.getRecipient().getId()).containsExactly(2L, 3L);
+        assertThat(captor.getAllValues()).extracting(RecordShare::getShareMemo).containsOnly("당신 카드로 결제했어요.\n식비로 등록해 주세요.");
+        verify(ledger, never()).create(anyLong(), any());
+    }
+
+    @Test void blankMemoIsOptionalAndStoredAsNull() throws Exception {
+        when(entityManager.find(LedgerEntry.class, 100L, LockModeType.PESSIMISTIC_WRITE)).thenReturn(source(sender));
+        when(ledger.getEntryForSharing(1L, 100L)).thenReturn(snapshot());
+        when(shares.save(any())).thenAnswer(call -> call.getArgument(0));
+        var response = service.create(1L, new RecordShareDtos.Create(5L, RecordShareKind.LEDGER, 100L, List.of(2L), " \n\t "));
+        assertThat(response.get(0).shareMemo()).isNull();
+    }
+
+    @Test void rejectsOversizedShareMemoBeforeAnyWrite() {
+        assertThatThrownBy(() -> service.create(1L, new RecordShareDtos.Create(5L, RecordShareKind.LEDGER, 100L, List.of(2L), "가".repeat(501))))
+                .isInstanceOf(BadRequestException.class).hasMessage("공유 메모는 500자까지 입력할 수 있습니다.");
+        verifyNoInteractions(entityManager, shares, ledger);
+    }
+
+    @Test void retryDoesNotOverwritePendingShareMemoOrSnapshot() throws Exception {
+        RecordShare pending = share(RecordShareKind.LEDGER);
+        pending.setShareMemo("먼저 남긴 메모");
+        pending.setSnapshotJson(mapper.writeValueAsString(snapshot()));
+        when(entityManager.find(LedgerEntry.class, 100L, LockModeType.PESSIMISTIC_WRITE)).thenReturn(source(sender));
+        when(ledger.getEntryForSharing(1L, 100L)).thenReturn(snapshot());
+        when(shares.findLockedByKindAndSourceIdAndRecipientId(RecordShareKind.LEDGER, 100L, 2L)).thenReturn(Optional.of(pending));
+
+        var response = service.create(1L, new RecordShareDtos.Create(5L, RecordShareKind.LEDGER, 100L, List.of(2L), "새 메모"));
+        assertThat(response.get(0).shareMemo()).isEqualTo("먼저 남긴 메모");
+        verify(shares, never()).save(any());
+    }
+
+    @Test void reSharingCanceledRequestReplacesItsMemoIncludingClearingAnOldMemo() throws Exception {
+        RecordShare canceled = share(RecordShareKind.LEDGER);
+        canceled.setStatus(RecordShareStatus.CANCELED);
+        canceled.setShareMemo("이전 요청의 메모");
+        when(entityManager.find(LedgerEntry.class, 100L, LockModeType.PESSIMISTIC_WRITE)).thenReturn(source(sender));
+        when(ledger.getEntryForSharing(1L, 100L)).thenReturn(snapshot());
+        when(shares.findLockedByKindAndSourceIdAndRecipientId(RecordShareKind.LEDGER, 100L, 2L)).thenReturn(Optional.of(canceled));
+        when(shares.save(canceled)).thenReturn(canceled);
+
+        var first = service.create(1L, new RecordShareDtos.Create(5L, RecordShareKind.LEDGER, 100L, List.of(2L), "새 요청의 메모"));
+        assertThat(first.get(0).shareMemo()).isEqualTo("새 요청의 메모");
+        canceled.setStatus(RecordShareStatus.REJECTED);
+        var second = service.create(1L, new RecordShareDtos.Create(5L, RecordShareKind.LEDGER, 100L, List.of(2L)));
+        assertThat(second.get(0).shareMemo()).isNull();
+        assertThat(second.get(0).status()).isEqualTo(RecordShareStatus.PENDING);
     }
 
     @Test void rejectsSomeoneElsesSource() {
@@ -91,6 +157,7 @@ class RecordSharingServiceTest {
 
     @Test void acceptsEditedCopyOnceAndStripsSenderTravelLinks() throws Exception {
         RecordShare share = share(RecordShareKind.LEDGER);
+        share.setShareMemo("당신 카드로 결제했어요.");
         share.setSnapshotJson(mapper.writeValueAsString(snapshot()));
         when(shares.findLockedById(9L)).thenReturn(Optional.of(share));
         when(ledger.getEntryForSharing(1L, 100L)).thenReturn(snapshot());
@@ -103,6 +170,8 @@ class RecordSharingServiceTest {
         var captor = ArgumentCaptor.forClass(LedgerEntryRequest.class);
         verify(ledger, times(1)).create(eq(2L), captor.capture());
         assertThat(captor.getValue().title()).isEqualTo("수정한 제목");
+        assertThat(captor.getValue().memo()).isEqualTo("메모");
+        assertThat(first.shareMemo()).isEqualTo("당신 카드로 결제했어요.");
         assertThat(captor.getValue().categoryGroupId()).isEqualTo(22L);
         assertThat(captor.getValue().paymentMethodId()).isEqualTo(24L);
         assertThat(captor.getValue().travelPlanId()).isNull();
@@ -170,6 +239,7 @@ class RecordSharingServiceTest {
 
     @Test void resharePreservesAnAlreadyAcceptedLedgerAcrossGroups() throws Exception {
         RecordShare accepted = share(RecordShareKind.LEDGER);
+        accepted.setShareMemo("승인한 요청의 메모");
         accepted.setStatus(RecordShareStatus.ACCEPTED);
         accepted.setImportedLedgerEntryId(300L);
         TravelShareGroup nextGroup = new TravelShareGroup();
@@ -180,11 +250,12 @@ class RecordSharingServiceTest {
         when(ledger.getEntryForSharing(1L, 100L)).thenReturn(snapshot());
         when(shares.findLockedByKindAndSourceIdAndRecipientId(RecordShareKind.LEDGER, 100L, 2L)).thenReturn(Optional.of(accepted));
 
-        var result = service.create(1L, new RecordShareDtos.Create(6L, RecordShareKind.LEDGER, 100L, List.of(2L)));
+        var result = service.create(1L, new RecordShareDtos.Create(6L, RecordShareKind.LEDGER, 100L, List.of(2L), "변경 시도"));
 
         assertThat(result.get(0).status()).isEqualTo(RecordShareStatus.ACCEPTED);
         assertThat(result.get(0).groupId()).isEqualTo(5L);
         assertThat(result.get(0).importedLedgerEntryId()).isEqualTo(300L);
+        assertThat(result.get(0).shareMemo()).isEqualTo("승인한 요청의 메모");
         verify(shares, never()).save(any());
         verify(ledger, never()).create(any(), any());
     }

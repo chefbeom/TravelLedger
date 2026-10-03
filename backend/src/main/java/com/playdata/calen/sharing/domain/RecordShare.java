@@ -34,6 +34,8 @@ public class RecordShare {
     private String title;
     @Lob @Column(columnDefinition = "TEXT")
     private String snapshotJson;
+    @Column(length = 500)
+    private String shareMemo;
     // No foreign key: independently imported entries survive source/group removal.
     private Long importedLedgerEntryId;
     @Column(nullable = false)

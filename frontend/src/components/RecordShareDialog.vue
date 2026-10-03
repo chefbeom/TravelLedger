@@ -7,6 +7,7 @@ const emit = defineEmits(['close', 'shared'])
 const groups = ref([])
 const groupId = ref('')
 const selected = ref([])
+const shareMemo = ref('')
 const busy = ref(false)
 const error = ref('')
 const group = computed(() => groups.value.find((item) => String(item.id) === String(groupId.value)))
@@ -25,10 +26,14 @@ async function submit() {
     error.value = '공유할 그룹과 받는 사람을 선택해 주세요. 한 번에 최대 50명까지 선택할 수 있습니다.'
     return
   }
+  if (shareMemo.value.length > 500) {
+    error.value = '공유 메모는 500자까지 입력할 수 있습니다.'
+    return
+  }
   busy.value = true
   error.value = ''
   try {
-    await createRecordShare({ kind: props.kind, sourceId: props.source.id, groupId: Number(groupId.value), recipientIds: selectedRecipients.value.map((member) => member.userId) })
+    await createRecordShare({ kind: props.kind, sourceId: props.source.id, groupId: Number(groupId.value), recipientIds: selectedRecipients.value.map((member) => member.userId), shareMemo: shareMemo.value.trim() || null })
     window.dispatchEvent(new Event('record-shares-changed'))
     emit('shared')
   } catch (ex) { error.value = ex.message }
@@ -55,6 +60,12 @@ async function submit() {
           <p v-if="!recipients.length" class="panel__empty">선택할 다른 멤버가 없습니다. 공유 그룹 관리에서 멤버를 추가해 주세요.</p>
           <p v-if="recipients.length > 50" class="record-share-hint">한 번에 최대 50명까지 선택할 수 있습니다.</p>
         </section>
+        <label v-if="kind === 'LEDGER'" class="field record-share-memo-field">
+          <span>공유 메모 (선택)</span>
+          <textarea v-model="shareMemo" maxlength="500" rows="3" :disabled="busy" placeholder="예: 당신 카드로 결제한 저녁 식사예요." aria-label="공유 메모 (선택)" aria-describedby="share-memo-help share-memo-count" />
+          <small id="share-memo-help" class="record-share-hint">선택한 받는 사람에게 전달됩니다. 거래 메모와 별도로 표시되며, 내 가계부에 자동으로 복사되지 않습니다.</small>
+          <small id="share-memo-count" class="record-share-memo-count">{{ shareMemo.length }} / 500자</small>
+        </label>
         <p v-if="error" role="alert">{{ error }}</p>
         <p v-if="selectedRecipients.length" class="record-share-hint" aria-live="polite">받는 사람: {{ selectedRecipients.map((member) => `${member.displayName} (${member.loginId})`).join(', ') }}</p>
         <button class="button button--primary" type="submit" :disabled="busy || !group || !selectedRecipients.length">{{ busy ? '처리 중…' : `${selectedRecipients.length}명에게 공유 요청` }}</button>

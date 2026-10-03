@@ -4,7 +4,7 @@ const snapshot = { id: 100, entryDate: '2026-10-03', title: '공유한 저녁 �
 const group = { id: 5, name: '가족', ownerId: 1, members: [{ userId: 1, loginId: 'test-sender', displayName: '보낸 사람', self: false }, { userId: 2, loginId: 'test-receiver', displayName: '받는 사람', self: true }] }
 
 async function fixture(page, kind = 'LEDGER', root = false, options = {}) {
-  const state = { status: 'PENDING', writes: [], reads: [], groups: options.groups ?? [group], layouts: {}, entries: options.entries ?? [] }
+  const state = { status: 'PENDING', writes: [], reads: [], groups: options.groups ?? [group], layouts: {}, entries: options.entries ?? [], shareMemo: options.shareMemo ?? null }
   await page.route(/^https?:\/\/(?!127\.0\.0\.1|localhost)/, (route) => route.abort())
   await page.route('**/api/**', async (route) => {
     const req = route.request()
@@ -17,8 +17,12 @@ async function fixture(page, kind = 'LEDGER', root = false, options = {}) {
     if (req.method() === 'POST') {
       state.writes.push({ path, body: req.postDataJSON() })
       if (path.endsWith('accept-ledger') || path.endsWith('accept-travel')) state.status = 'ACCEPTED'
+      if (path === '/api/record-shares') {
+        if (options.failShareOnce && state.writes.filter((item) => item.path === path).length === 1) return route.fulfill({ status: 503, json: { message: '일시적으로 공유할 수 없습니다. 다시 시도해 주세요.' } })
+        state.shareMemo = req.postDataJSON().shareMemo ?? null
+      }
     } else state.reads.push(path)
-    const item = { id: 9, groupId: 5, groupName: '가족', kind, sourceId: 100, senderId: 1, senderName: '보낸 사람', recipientId: 2, recipientName: '받는 사람', title: kind === 'LEDGER' ? snapshot.title : '함께한 여행', ledger: kind === 'LEDGER' ? snapshot : null, status: state.status, createdAt: '2026-10-03T09:00:00', importedLedgerEntryId: state.status === 'ACCEPTED' && kind === 'LEDGER' ? 300 : null }
+    const item = { id: 9, groupId: 5, groupName: '가족', kind, sourceId: 100, senderId: 1, senderName: '보낸 사람', recipientId: 2, recipientName: '받는 사람', title: kind === 'LEDGER' ? snapshot.title : '함께한 여행', ledger: kind === 'LEDGER' ? snapshot : null, status: state.status, createdAt: '2026-10-03T09:00:00', importedLedgerEntryId: state.status === 'ACCEPTED' && kind === 'LEDGER' ? 300 : null, shareMemo: state.shareMemo }
     let body = {}
     if (path === '/api/auth/me') return route.fulfill(root ? { json: { id: 2, loginId: 'test-receiver', displayName: '받는 사람', active: true, admin: false } } : { status: 401, json: { message: 'test session' } })
     if (path === '/api/auth/csrf') body = { token: 'test-only-csrf' }
@@ -124,7 +128,86 @@ test('share dialog sends only selected members and excludes self', async ({ page
   await dialog.getByRole('checkbox').check()
   await dialog.getByRole('button', { name: '1명에게 공유 요청', exact: true }).click()
   await expect.poll(() => state.writes.length).toBe(1)
-  expect(state.writes[0].body).toEqual({ kind: 'LEDGER', sourceId: 100, groupId: 5, recipientIds: [1] })
+  expect(state.writes[0].body).toEqual({ kind: 'LEDGER', sourceId: 100, groupId: 5, recipientIds: [1], shareMemo: null })
+})
+
+async function openShareDialog(page) {
+  await page.evaluate(async () => {
+    const { createApp } = await import('/node_modules/.vite/deps/vue.js')
+    const { default: Component } = await import('/src/components/RecordShareDialog.vue')
+    const host = document.createElement('div'); document.body.appendChild(host)
+    createApp(Component, { kind: 'LEDGER', source: { id: 100, title: '공유한 저녁 식사' } }).mount(host)
+  })
+  return page.getByRole('dialog', { name: '기록 공유', exact: true })
+}
+
+test('share memo sends with selected recipients, counts characters and preserves a failed draft', async ({ page }, testInfo) => {
+  const state = await fixture(page, 'LEDGER', false, { groups: [ownedGroup], failShareOnce: true })
+  const dialog = await openShareDialog(page)
+  const input = dialog.getByLabel('공유 메모 (선택)', { exact: true })
+  await expect(input).toHaveAttribute('maxlength', '500')
+  await expect(dialog.getByText('0 / 500자', { exact: true })).toBeVisible()
+  const memo = '  당신 카드로 결제했어요.\n식비로 등록해 주세요.  '
+  await input.fill(memo)
+  await dialog.getByLabel('친구 하나 (test-friend-a)에게 공유').check()
+  await expect(dialog.getByText(`${memo.length} / 500자`, { exact: true })).toBeVisible()
+  await dialog.getByRole('button', { name: '1명에게 공유 요청', exact: true }).click()
+  await expect(dialog.getByRole('alert')).toContainText('다시 시도해 주세요.')
+  await expect(input).toHaveValue(memo)
+  await expect(dialog.getByLabel('친구 하나 (test-friend-a)에게 공유')).toBeChecked()
+  await dialog.screenshot({ path: testInfo.outputPath('share-memo-draft.png') })
+  await dialog.getByRole('button', { name: '1명에게 공유 요청', exact: true }).click()
+  await expect.poll(() => state.writes.length).toBe(2)
+  expect(state.writes[1].body).toEqual({ kind: 'LEDGER', sourceId: 100, groupId: 6, recipientIds: [3], shareMemo: memo.trim() })
+  expect(state.writes[1].body).not.toHaveProperty('memo')
+  await expect(dialog.getByRole('alert')).toHaveCount(0)
+})
+
+test('share memo is visible in received, sent and confirmation views without changing the transaction memo', async ({ page }, testInfo) => {
+  const memo = '당신 카드로 결제했어요.\n<img src=x onerror=alert(1)>\n' + '긴 메모'.repeat(45)
+  const state = await fixture(page, 'LEDGER', false, { shareMemo: memo })
+  const card = page.locator('.record-share-card')
+  await expect(card.getByRole('region', { name: '공유 메모', exact: true })).toBeVisible()
+  await expect(card.locator('.record-share-note p')).toHaveText(memo)
+  await expect(card.locator('.record-share-note img')).toHaveCount(0)
+  await expect(card.locator('.record-share-note p')).toHaveCSS('white-space', 'pre-wrap')
+  for (const theme of ['default', 'toss']) {
+    await page.evaluate((value) => { document.documentElement.dataset.theme = value }, theme)
+    await expect(card.getByRole('region', { name: '공유 메모', exact: true })).toBeVisible()
+    expect(await card.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(true)
+    await card.screenshot({ path: testInfo.outputPath(`share-memo-card-${theme}.png`) })
+  }
+  await page.getByRole('button', { name: '보낸 기록', exact: true }).click()
+  await expect(card.locator('.record-share-note p')).toHaveText(memo)
+  await page.getByRole('button', { name: '받은 기록', exact: true }).click()
+  await page.getByRole('button', { name: '확인 후 내 가계부에 기록', exact: true }).click()
+  const dialog = page.getByRole('dialog', { name: '확인 후 내 가계부에 기록', exact: true })
+  await expect(dialog.locator('.record-share-note p')).toHaveText(memo)
+  await expect(dialog.getByLabel('메모', { exact: true })).toHaveValue(snapshot.memo)
+  await dialog.screenshot({ path: testInfo.outputPath('share-memo-confirmation.png') })
+  await dialog.getByRole('button', { name: '내 가계부에 등록', exact: true }).click()
+  await expect(dialog).toHaveCount(0)
+  expect(state.writes[0].body.memo).toBe(snapshot.memo)
+  expect(state.writes[0].body).not.toHaveProperty('shareMemo')
+  await page.getByLabel('처리 상태').selectOption('ACCEPTED')
+  await expect(card.locator('.record-share-note p')).toHaveText(memo)
+})
+
+test('optional blank share memo sends null and a 500-character memo can be shared', async ({ page }) => {
+  const state = await fixture(page)
+  const dialog = await openShareDialog(page)
+  const input = dialog.getByLabel('공유 메모 (선택)', { exact: true })
+  await dialog.getByRole('checkbox').check()
+  await input.fill(' \n ')
+  await dialog.getByRole('button', { name: '1명에게 공유 요청', exact: true }).click()
+  await expect.poll(() => state.writes.length).toBe(1)
+  expect(state.writes[0].body.shareMemo).toBeNull()
+  await input.fill('가'.repeat(500))
+  await expect(dialog.getByText('500 / 500자', { exact: true })).toBeVisible()
+  await dialog.getByRole('button', { name: '1명에게 공유 요청', exact: true }).click()
+  await expect.poll(() => state.writes.length).toBe(2)
+  expect(state.writes[1].body.shareMemo).toHaveLength(500)
+  await expect(page.locator('.record-share-note')).toHaveCount(0)
 })
 
 const friendA = { userId: 3, loginId: 'test-friend-a', displayName: '친구 하나', self: false }
@@ -235,7 +318,7 @@ test('recipient selection starts empty, resets across groups and shares only the
   await dialog.getByRole('checkbox', { name: '친구 둘 (test-friend-b)에게 공유', exact: true }).check()
   await dialog.getByRole('button', { name: '1명에게 공유 요청', exact: true }).click()
   await expect.poll(() => state.writes.length).toBe(1)
-  expect(state.writes[0].body).toEqual({ kind: 'LEDGER', sourceId: 100, groupId: 6, recipientIds: [4] })
+  expect(state.writes[0].body).toEqual({ kind: 'LEDGER', sourceId: 100, groupId: 6, recipientIds: [4], shareMemo: null })
 })
 
 test('transaction sheet keeps edit, share and delete reachable beside long memos', async ({ page }, testInfo) => {

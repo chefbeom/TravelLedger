@@ -1,11 +1,11 @@
 <script setup>
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { buildThumbnailUrl, THUMBNAIL_VARIANTS } from '../lib/mediaPreview'
 import { getTravelJourneyFocusZoom, getTravelJourneyViewportOverviewZoom } from '../lib/travelJourney'
 import { buildTravelMapPhotoGroups } from '../lib/travelMapPhotoGroups'
-import { formatDate, formatTime } from '../lib/uiFormat'
+import TravelMapPhotoPreview from './TravelMapPhotoPreview.vue'
 
 const DEFAULT_CENTER = [37.5547, 126.9706]
 const DEFAULT_ZOOM = 11
@@ -103,6 +103,17 @@ const mapElement = ref(null)
 const isFullscreen = ref(false)
 const isMapMoving = ref(false)
 const zoomLabel = ref(DEFAULT_ZOOM)
+const previewAggregate = shallowRef(null)
+const previewPhoto = computed(() => {
+  const aggregate = previewAggregate.value
+  if (!aggregate) return null
+  const photos = aggregate.isClientCluster
+    ? aggregate.members.flatMap((member) => member.photoMembers ?? [])
+    : (aggregate.photoMembers ?? [])
+  const activeId = props.journeyPlaybackActive ? props.journeyPhotoId : (props.selectedPhotoId ?? props.journeyPhotoId)
+  return photos.find((photo) => activeId != null && String(photo.mediaId) === String(activeId))
+    ?? aggregate.representative
+})
 
 let mapInstance = null
 let markerLayer = null
@@ -112,19 +123,19 @@ let tileLayer = null
 let hasFittedInitialView = false
 let hasFittedDataView = false
 let renderedMarkers = new Map()
-let pendingPopupMarkerKey = null
+let renderedAggregates = new Map()
+let pendingPreviewMarkerKey = null
 let mapRenderFrame = 0
 let mapRenderTimer = 0
 let mapResizeFrame = 0
 let mapResizeTimer = 0
 let suppressViewportClusterRenderUntil = 0
-let popupOpenSequence = 0
+let previewOpenSequence = 0
 let suppressNextMapBackgroundClick = false
 let journeyLegSequence = 0
 let isPreparingJourneyLeg = false
-let journeyPopup = null
-let journeyPopupPhotoId = null
-let dismissedJourneyPopupPhotoId = null
+let mapResizeObserver = null
+let dismissedJourneyPreviewPhotoId = null
 
 function isTouchMapDevice() {
   if (typeof window === 'undefined') {
@@ -150,75 +161,48 @@ function createMapOptions(extra = {}) {
   }
 }
 
-function appendPopupImage(root, sourceUrl, alt, variant = THUMBNAIL_VARIANTS.mini) {
-  if (!sourceUrl) {
-    return
-  }
-
-  const image = document.createElement('img')
-  let hasTriedOriginal = false
-
-  image.className = 'travel-cluster-popup__image'
-  image.src = buildThumbnailUrl(sourceUrl, variant)
-  image.alt = alt || '여행 사진'
-  image.loading = 'eager'
-  image.fetchPriority = 'high'
-  image.decoding = 'async'
-  image.addEventListener('error', () => {
-    if (!hasTriedOriginal && sourceUrl) {
-      hasTriedOriginal = true
-      image.src = sourceUrl
-      return
-    }
-
-    image.remove()
-  })
-
-  root.appendChild(image)
-}
-
-function scheduleMarkerPopup(markerKey, remainingAttempts = 6, sequence = popupOpenSequence) {
+function scheduleMarkerPreview(markerKey, remainingAttempts = 6, sequence = previewOpenSequence) {
   const normalizedKey = String(markerKey ?? '')
   if (!normalizedKey) {
     return
   }
 
   requestAnimationFrame(() => {
-    if (sequence !== popupOpenSequence) {
+    if (sequence !== previewOpenSequence) {
       return
     }
 
-    if (props.journeyPlaybackActive && syncJourneyPopup()) {
-      pendingPopupMarkerKey = null
+    if (props.journeyPlaybackActive && syncJourneyPreview()) {
+      pendingPreviewMarkerKey = null
       return
     }
 
     const marker = renderedMarkers.get(normalizedKey)
     if (marker && mapInstance?.hasLayer(marker)) {
-      pendingPopupMarkerKey = null
-      marker.openPopup()
+      pendingPreviewMarkerKey = null
+      previewAggregate.value = renderedAggregates.get(normalizedKey) ?? previewAggregate.value
       return
     }
 
     if (remainingAttempts > 0) {
-      scheduleMarkerPopup(normalizedKey, remainingAttempts - 1)
+      scheduleMarkerPreview(normalizedKey, remainingAttempts - 1)
     }
   })
 }
 
-function requestMarkerPopup(markerKey) {
+function requestMarkerPreview(markerKey) {
   const normalizedKey = String(markerKey ?? '')
   if (!normalizedKey) {
     return
   }
 
-  pendingPopupMarkerKey = normalizedKey
-  popupOpenSequence += 1
+  pendingPreviewMarkerKey = normalizedKey
+  previewOpenSequence += 1
 }
 
-function clearPendingPopupRequest() {
-  pendingPopupMarkerKey = null
-  popupOpenSequence += 1
+function clearPendingPreviewRequest() {
+  pendingPreviewMarkerKey = null
+  previewOpenSequence += 1
 }
 
 function suppressMapBackgroundClickOnce() {
@@ -573,7 +557,7 @@ function focusClientCluster(aggregate) {
     return
   }
 
-  clearPendingPopupRequest()
+  clearPendingPreviewRequest()
   mapInstance.closePopup()
 
   const bounds = collectAggregateBounds(aggregate)
@@ -645,15 +629,26 @@ function queueMapResize() {
 
   const resize = () => {
     mapResizeFrame = 0
+    const map = mapInstance
+    if (!map) return
+    const center = previewAggregate.value && !props.journeyPlaybackActive
+      ? L.latLng(previewAggregate.value.latitude, previewAggregate.value.longitude)
+      : map.getCenter()
+    const zoom = map.getZoom()
 
     // Mobile browser chrome can resize the visual viewport repeatedly while
     // scrolling. Refresh Leaflet without rebuilding every photo marker.
     suppressViewportClusterRenderUntil = Date.now() + (isTouchMapDevice() ? 420 : 180)
-    mapInstance?.invalidateSize({
+    map.invalidateSize({
       animate: false,
-      pan: false,
+      pan: true,
       debounceMoveend: true,
     })
+    if (previewAggregate.value && !props.journeyPlaybackActive) {
+      // Fullscreen/window resize may run Leaflet's own resize first. Reapply
+      // the selected position so its anchor is centered in the actual canvas.
+      map.setView(center, zoom, { animate: false })
+    }
   }
 
   const delay = isTouchMapDevice() ? 140 : 0
@@ -731,186 +726,6 @@ function fitToAll({ animate = true } = {}) {
     duration: SMOOTH_ZOOM_DURATION,
     easeLinearity: 0.2,
   })
-}
-
-function resolveAggregateOwnerLabel(aggregate) {
-  const source = aggregate?.representative ?? aggregate
-  return source?.sharedByDisplayName || source?.ownerDisplayName || source?.uploadedBy || ''
-}
-
-function appendOwnerLabel(copy, aggregate) {
-  const ownerLabel = resolveAggregateOwnerLabel(aggregate)
-  if (!ownerLabel) {
-    return
-  }
-
-  const owner = document.createElement('span')
-  owner.textContent = `공유자 ${ownerLabel}`
-  copy.appendChild(owner)
-}
-
-function createPopupContent(aggregate) {
-  if (aggregate?.isRecordPin) {
-    return createPopupContentLegacy(aggregate)
-  }
-
-  // Keep the active journey photo in the popup, not the group's first photo.
-  const photos = aggregate.isClientCluster
-    ? aggregate.members.flatMap((member) => member.photoMembers ?? [])
-    : (aggregate.photoMembers ?? [])
-  const activePhotoId = props.journeyPlaybackActive ? props.journeyPhotoId : (props.selectedPhotoId ?? props.journeyPhotoId)
-  const activePhoto = photos.find((photo) => String(photo.mediaId) === String(activePhotoId))
-  if (activePhoto) aggregate = { ...aggregate, representative: activePhoto }
-
-  const root = document.createElement('button')
-  root.type = 'button'
-  root.className = 'travel-cluster-popup travel-cluster-popup--actionable'
-  let lastActivatedAt = 0
-  const activatePreview = (event) => {
-    const now = Date.now()
-    if (now - lastActivatedAt < 350) {
-      return
-    }
-    lastActivatedAt = now
-
-    event.preventDefault()
-    event.stopPropagation()
-    suppressMapBackgroundClickOnce()
-    emit('preview-cluster', aggregate?.representative)
-  }
-  root.addEventListener('click', activatePreview)
-  root.addEventListener('touchend', activatePreview, { passive: false })
-  L.DomEvent.disableClickPropagation(root)
-
-  const photoUrl = aggregate?.representative?.representativePhotoUrl
-  if (photoUrl) {
-    appendPopupImage(root, photoUrl, aggregate?.representative?.title || aggregate?.representative?.placeName || '여행 사진')
-  }
-
-  const copy = document.createElement('div')
-  copy.className = 'travel-cluster-popup__copy'
-
-  const title = document.createElement('strong')
-  title.textContent = aggregate?.representative?.title || aggregate?.representative?.placeName || '사진 클러스터'
-  copy.appendChild(title)
-  appendOwnerLabel(copy, aggregate)
-
-  const locationLabel = [aggregate?.representative?.country, aggregate?.representative?.region, aggregate?.representative?.placeName]
-    .filter(Boolean)
-    .join(' / ')
-  if (locationLabel) {
-    const location = document.createElement('span')
-    location.textContent = locationLabel
-    copy.appendChild(location)
-  }
-
-  const dateLabel = [formatDate(aggregate?.representative?.memoryDate), formatTime(aggregate?.representative?.memoryTime)]
-    .filter((value) => value && value !== '-')
-    .join(' ')
-  if (dateLabel) {
-    const date = document.createElement('span')
-    date.textContent = dateLabel
-    copy.appendChild(date)
-  }
-
-  const count = document.createElement('span')
-  count.textContent = `사진 ${aggregate?.photoCount || 0}장 / 기록 ${aggregate?.memoryCount || aggregate?.representative?.memoryCount || 0}건`
-  copy.appendChild(count)
-
-  const action = document.createElement('span')
-  action.className = 'travel-cluster-popup__action'
-  action.textContent = '팝업을 누르면 큰 사진을 바로 볼 수 있습니다.'
-  copy.appendChild(action)
-
-  root.appendChild(copy)
-  return root
-}
-
-function createPopupContentLegacy(aggregate) {
-  if (aggregate?.isRecordPin) {
-    const root = document.createElement('div')
-    root.className = 'travel-cluster-popup'
-
-    if (aggregate?.representative?.photoUrl) {
-      appendPopupImage(root, aggregate.representative.photoUrl, aggregate?.representative?.title || aggregate?.representative?.placeName || '기록 사진')
-    }
-
-    const copy = document.createElement('div')
-    copy.className = 'travel-cluster-popup__copy'
-
-    const title = document.createElement('strong')
-    title.textContent = aggregate?.representative?.title || aggregate?.representative?.placeName || '기록 핀'
-    copy.appendChild(title)
-    appendOwnerLabel(copy, aggregate)
-
-    const locationLabel = [aggregate?.representative?.country, aggregate?.representative?.region, aggregate?.representative?.placeName]
-      .filter(Boolean)
-      .join(' / ')
-    if (locationLabel) {
-      const location = document.createElement('span')
-      location.textContent = locationLabel
-      copy.appendChild(location)
-    }
-
-    const dateLabel = [formatDate(aggregate?.representative?.memoryDate), formatTime(aggregate?.representative?.memoryTime)]
-      .filter((value) => value && value !== '-')
-      .join(' ')
-    if (dateLabel) {
-      const date = document.createElement('span')
-      date.textContent = dateLabel
-      copy.appendChild(date)
-    }
-
-    const count = document.createElement('span')
-    count.textContent = '기록 1건'
-    copy.appendChild(count)
-
-    root.appendChild(copy)
-    return root
-  }
-
-  const root = document.createElement('div')
-  root.className = 'travel-cluster-popup'
-
-  const photoUrl = aggregate?.representative?.representativePhotoUrl
-  if (photoUrl) {
-    appendPopupImage(root, photoUrl, aggregate?.representative?.title || aggregate?.representative?.placeName || '여행 사진')
-  }
-
-  const copy = document.createElement('div')
-  copy.className = 'travel-cluster-popup__copy'
-
-  const title = document.createElement('strong')
-  title.textContent = aggregate?.representative?.title || aggregate?.representative?.placeName || '사진 클러스터'
-  copy.appendChild(title)
-  appendOwnerLabel(copy, aggregate)
-
-  const locationLabel = [aggregate?.representative?.country, aggregate?.representative?.region, aggregate?.representative?.placeName]
-    .filter(Boolean)
-    .join(' / ')
-  if (locationLabel) {
-    const location = document.createElement('span')
-    location.textContent = locationLabel
-    copy.appendChild(location)
-  }
-
-  const dateLabel = [formatDate(aggregate?.representative?.memoryDate), formatTime(aggregate?.representative?.memoryTime)]
-    .filter((value) => value && value !== '-')
-    .join(' ')
-  if (dateLabel) {
-    const date = document.createElement('span')
-    date.textContent = dateLabel
-    copy.appendChild(date)
-  }
-
-  const count = document.createElement('span')
-  count.textContent = aggregate?.isPhotoPin
-    ? '사진 1장'
-    : `사진 ${aggregate?.photoCount || 0}장 / 기록 ${aggregate?.memoryCount || aggregate?.representative?.memoryCount || 0}건`
-  copy.appendChild(count)
-
-  root.appendChild(copy)
-  return root
 }
 
 function buildRecordMarkerIcon(marker, active) {
@@ -1024,40 +839,45 @@ function renderRoutes() {
   })
 }
 
-function closeJourneyPopup({ resetDismissal = false } = {}) {
-  const popup = journeyPopup
-  journeyPopup = null
-  journeyPopupPhotoId = null
-  popup?.remove()
-  if (resetDismissal) dismissedJourneyPopupPhotoId = null
+function closeMapPreview({ resetDismissal = false } = {}) {
+  previewAggregate.value = null
+  if (resetDismissal) dismissedJourneyPreviewPhotoId = null
 }
 
-function syncJourneyPopup() {
+function syncJourneyPreview() {
   if (!mapInstance || !props.journeyPlaybackActive || props.journeyPhotoId == null) return false
   const mediaId = String(props.journeyPhotoId)
-  if (dismissedJourneyPopupPhotoId === mediaId) return true
-  if (journeyPopupPhotoId === mediaId && mapInstance.hasLayer(journeyPopup)) return true
-
+  if (dismissedJourneyPreviewPhotoId === mediaId) return true
   const group = renderablePhotoItems.value.find((item) => item.photoMembers.some((photo) => String(photo.mediaId) === mediaId))
   const photo = group?.photoMembers.find((item) => String(item.mediaId) === mediaId)
   if (!photo) return false
-
-  closeJourneyPopup()
-  // Standalone popup: rebuilding viewport markers must not remove the current
-  // photo card on every moveend/route-follow tick during its display interval.
-  const popup = L.popup({ autoPan: false, keepInView: false, closeOnClick: false, offset: [0, -46] })
-    .setLatLng([photo.latitude, photo.longitude])
-    .setContent(createPopupContent(group))
-  journeyPopup = popup
-  journeyPopupPhotoId = mediaId
-  popup.on('remove', () => {
-    if (journeyPopup !== popup) return
-    dismissedJourneyPopupPhotoId = mediaId
-    journeyPopup = null
-    journeyPopupPhotoId = null
-  })
-  popup.openOn(mapInstance)
+  // The preview lives outside Leaflet's layers, so route pans and marker
+  // rebuilding cannot remove it during the current photo's interval.
+  previewAggregate.value = group
   return true
+}
+
+function dismissMapPreview() {
+  clearPendingPreviewRequest()
+  if (props.journeyPlaybackActive && props.journeyPhotoId != null) {
+    dismissedJourneyPreviewPhotoId = String(props.journeyPhotoId)
+  } else {
+    emit('clear-selection')
+  }
+  previewAggregate.value = null
+}
+
+function openPreviewPhoto() {
+  if (previewPhoto.value) emit('preview-cluster', previewPhoto.value)
+}
+
+async function centerPreviewAggregate(aggregate) {
+  await nextTick()
+  if (!mapInstance || previewAggregate.value !== aggregate) return
+  mapInstance.invalidateSize({ animate: false, pan: true })
+  mapInstance.panTo([aggregate.latitude, aggregate.longitude], {
+    animate: true, duration: SMOOTH_ZOOM_DURATION, easeLinearity: 0.2,
+  })
 }
 
 function renderClusters() {
@@ -1068,6 +888,7 @@ function renderClusters() {
   cancelScheduledClusterRender()
   markerLayer.clearLayers()
   renderedMarkers = new Map()
+  renderedAggregates = new Map()
 
   const aggregates = buildViewportAggregates(resolveRenderableItems())
   let selectedMarkerKey = null
@@ -1083,11 +904,6 @@ function renderClusters() {
       bubblingMouseEvents: false,
     })
 
-    marker.bindPopup(() => createPopupContent(aggregate), {
-      autoPan: !props.journeyPlaybackActive,
-      keepInView: false,
-    })
-
     marker.on('click', (event) => {
       if (event?.originalEvent) {
         L.DomEvent.stopPropagation(event.originalEvent)
@@ -1095,25 +911,27 @@ function renderClusters() {
       }
 
       suppressMapBackgroundClickOnce()
-      marker.openPopup()
-      requestMarkerPopup(aggregate.markerKey)
+      previewAggregate.value = aggregate
+      requestMarkerPreview(aggregate.markerKey)
       selectRepresentativeAggregate(aggregate)
+      centerPreviewAggregate(aggregate)
       scheduleRenderClusters(0)
     })
     renderedMarkers.set(String(aggregate.markerKey), marker)
+    renderedAggregates.set(String(aggregate.markerKey), aggregate)
 
     marker.addTo(markerLayer)
   })
 
-  if (props.journeyPlaybackActive && syncJourneyPopup()) {
-    pendingPopupMarkerKey = null
-  } else if (pendingPopupMarkerKey) {
-    const normalizedPendingKey = String(pendingPopupMarkerKey)
+  if (props.journeyPlaybackActive && syncJourneyPreview()) {
+    pendingPreviewMarkerKey = null
+  } else if (pendingPreviewMarkerKey) {
+    const normalizedPendingKey = String(pendingPreviewMarkerKey)
     if (renderedMarkers.has(normalizedPendingKey)) {
-      scheduleMarkerPopup(normalizedPendingKey, 6, popupOpenSequence)
+      scheduleMarkerPreview(normalizedPendingKey, 6, previewOpenSequence)
     } else if (selectedMarkerKey) {
-      pendingPopupMarkerKey = selectedMarkerKey
-      scheduleMarkerPopup(selectedMarkerKey, 6, popupOpenSequence)
+      pendingPreviewMarkerKey = selectedMarkerKey
+      scheduleMarkerPreview(selectedMarkerKey, 6, previewOpenSequence)
     }
   }
 }
@@ -1304,6 +1122,9 @@ async function prepareJourneyLeg(currentPoint, nextPoint, { focusCurrent = true 
   isPreparingJourneyLeg = true
   mapInstance.stop()
   try {
+    await nextTick()
+    if (sequence !== journeyLegSequence || !mapInstance) return { cancelled: true }
+    mapInstance.invalidateSize({ animate: false, pan: true })
     if (focusCurrent) {
       const zoom = resolveJourneyFocusZoom(current.lat, current.lng)
       if (!await waitForJourneyMapMove(current, zoom, 0.65, sequence)) return { cancelled: true }
@@ -1340,11 +1161,11 @@ function handleMapBackgroundClick() {
     return
   }
 
-  clearPendingPopupRequest()
+  clearPendingPreviewRequest()
   if (props.journeyPlaybackActive && props.journeyPhotoId != null) {
-    dismissedJourneyPopupPhotoId = String(props.journeyPhotoId)
+    dismissedJourneyPreviewPhotoId = String(props.journeyPhotoId)
   }
-  closeJourneyPopup()
+  closeMapPreview()
   mapInstance?.closePopup()
   emit('clear-selection')
 }
@@ -1419,15 +1240,20 @@ onMounted(() => {
   emit('fullscreen-change', isFullscreen.value)
   renderMap({ shouldFit: true })
   mapInstance.whenReady(() => queueMapResize())
+  if (typeof ResizeObserver !== 'undefined') {
+    mapResizeObserver = new ResizeObserver(() => queueMapResize())
+    mapResizeObserver.observe(mapElement.value)
+  }
 })
 
 onBeforeUnmount(() => {
   cancelJourneyLeg()
+  mapResizeObserver?.disconnect()
   document.removeEventListener('fullscreenchange', handleFullscreenChange)
   window.removeEventListener('keydown', handleFullscreenEscape, { capture: true })
   cancelQueuedMapResize()
 
-  closeJourneyPopup({ resetDismissal: true })
+  closeMapPreview({ resetDismissal: true })
   if (mapInstance) {
     cancelScheduledClusterRender()
     mapInstance.off('movestart zoomstart', handleViewportStart)
@@ -1458,14 +1284,13 @@ watch(
   ],
   ([mode, selectedKey], [previousMode, previousSelectedKey] = []) => {
     if (selectedKey === 'photo-' || selectedKey === 'cluster-') {
-      clearPendingPopupRequest()
+      clearPendingPreviewRequest()
       if (!props.journeyPlaybackActive) {
-        closeJourneyPopup()
+        closeMapPreview()
         mapInstance?.closePopup()
       }
     } else if (mode !== previousMode || selectedKey !== previousSelectedKey) {
-      if (!props.journeyPlaybackActive) closeJourneyPopup()
-      pendingPopupMarkerKey = selectedKey
+      pendingPreviewMarkerKey = selectedKey
     }
 
     scheduleRenderClusters(0)
@@ -1477,15 +1302,16 @@ watch(
   () => [props.journeyPhotoId, props.journeyPlaybackActive],
   ([mediaId, isPlaying], [previousMediaId, wasPlaying] = []) => {
     if (mediaId == null || mediaId === '') {
-      closeJourneyPopup({ resetDismissal: true })
+      closeMapPreview({ resetDismissal: true })
       return
     }
     if (String(mediaId) === String(previousMediaId) && (!isPlaying || wasPlaying)) {
       return
     }
-    closeJourneyPopup({ resetDismissal: true })
-    pendingPopupMarkerKey = `photo-${String(mediaId)}`
-    popupOpenSequence += 1
+    dismissedJourneyPreviewPhotoId = null
+    if (isPlaying) syncJourneyPreview()
+    pendingPreviewMarkerKey = `photo-${String(mediaId)}`
+    previewOpenSequence += 1
     scheduleRenderClusters(0)
   },
 )
@@ -1540,6 +1366,7 @@ watch(
     if (!mapInstance || isPreparingJourneyLeg) {
       return
     }
+    mapInstance.invalidateSize({ animate: false, pan: true })
 
     const targetZoom = Number.isFinite(Number(rawZoom))
       ? Math.max(2, Math.min(20, Number(rawZoom)))
@@ -1566,6 +1393,7 @@ watch(
       'travel-map--fullscreen': isFullscreen,
       'travel-map--moving': isMapMoving,
       'travel-map--public': props.tileProvider === 'publicLight',
+      'travel-map--has-preview': Boolean(previewPhoto),
     }"
   >
     <div class="travel-map__toolbar" @click.stop>
@@ -1596,9 +1424,18 @@ watch(
     </div>
 
     <div class="travel-map__stage">
+      <aside v-if="previewPhoto" class="travel-map__preview" @click.stop @pointerdown.stop @touchstart.stop>
+        <TravelMapPhotoPreview
+          :photo="previewPhoto"
+          :photo-count="previewAggregate.photoCount"
+          :memory-count="previewAggregate.memoryCount || previewPhoto.memoryCount || 0"
+          @open="openPreviewPhoto"
+          @close="dismissMapPreview"
+        />
+      </aside>
       <div ref="mapElement" class="travel-map__canvas" />
       <div v-if="isFullscreen" class="travel-map__overlay" @click.stop>
-        <slot name="fullscreen-overlay" :is-fullscreen="isFullscreen" />
+        <slot name="fullscreen-overlay" :is-fullscreen="isFullscreen" :has-preview="Boolean(previewPhoto)" />
       </div>
     </div>
     <div v-if="isFullscreen" class="travel-map__fullscreen-dialog" @pointerdown.stop @pointerup.stop @touchstart.stop @touchend.stop @click.stop>

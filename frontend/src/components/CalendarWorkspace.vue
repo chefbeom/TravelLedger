@@ -23,6 +23,7 @@ const DEFAULT_CALENDAR_VIEW_PREFERENCES = Object.freeze({
   aggregatePanelEnabled: true,
   receiptOcrPanelEnabled: true,
   transactionSheetViewMode: 'modal',
+  shareAfterSaveEnabled: false,
 })
 const CALENDAR_LAYOUT_GRID_COLUMNS = 9
 const CALENDAR_LAYOUT_GRID_MARGIN = 4
@@ -382,6 +383,8 @@ const selectedDayEntryPage = ref(0)
 const transactionSheetViewMode = ref(DEFAULT_CALENDAR_VIEW_PREFERENCES.transactionSheetViewMode)
 const isTransactionSheetModalOpen = ref(false)
 const isTransactionSheetSettingsOpen = ref(false)
+const isQuickEntrySettingsOpen = ref(false)
+const isShareAfterSaveEnabled = ref(DEFAULT_CALENDAR_VIEW_PREFERENCES.shareAfterSaveEnabled)
 const calendarScalePreset = ref(DEFAULT_CALENDAR_VIEW_PREFERENCES.scalePreset)
 const calendarWeekMode = ref('month')
 const calendarPreviousWeekOffset = ref(1)
@@ -1350,6 +1353,7 @@ watch(
 watch(calendarScalePreset, persistCalendarViewPreferences)
 
 watch(calendarHighlightMode, persistCalendarViewPreferences)
+watch(isShareAfterSaveEnabled, persistCalendarViewPreferences)
 
 watch(isAggregatePanelEnabled, () => {
   persistCalendarViewPreferences()
@@ -1633,6 +1637,7 @@ function calendarViewPreferencePayload() {
     aggregatePanelEnabled: isAggregatePanelEnabled.value,
     receiptOcrPanelEnabled: isReceiptOcrPanelEnabled.value,
     transactionSheetViewMode: transactionSheetViewMode.value,
+    shareAfterSaveEnabled: isShareAfterSaveEnabled.value,
   }
 }
 
@@ -1659,6 +1664,7 @@ function normalizeCalendarViewPreferences(payload) {
     aggregatePanelEnabled: payload.aggregatePanelEnabled !== false,
     receiptOcrPanelEnabled: payload.receiptOcrPanelEnabled !== false,
     transactionSheetViewMode: normalizeTransactionSheetViewMode(payload.transactionSheetViewMode),
+    shareAfterSaveEnabled: payload.shareAfterSaveEnabled === true,
   }
 }
 
@@ -1667,6 +1673,7 @@ function isLegacyDefaultCalendarViewPreferences(preferences) {
     && preferences.highlightMode === DEFAULT_CALENDAR_HIGHLIGHT_MODE
     && preferences.aggregatePanelEnabled
     && preferences.receiptOcrPanelEnabled
+    && !preferences.shareAfterSaveEnabled
     && preferences.transactionSheetViewMode === 'inline'
 }
 
@@ -1680,6 +1687,7 @@ function applyCalendarViewPreferences(preferences) {
   isAggregatePanelEnabled.value = preferences.aggregatePanelEnabled
   isReceiptOcrPanelEnabled.value = preferences.receiptOcrPanelEnabled
   transactionSheetViewMode.value = preferences.transactionSheetViewMode
+  isShareAfterSaveEnabled.value = preferences.shareAfterSaveEnabled
 }
 
 function persistCalendarViewPreferencesLocal() {
@@ -4141,7 +4149,13 @@ defineExpose({
             <h2>{{ isEditingEntry ? '거래 수정' : '빠른 거래 입력' }}</h2>
           </div>
           <span class="panel__badge household-entry-panel__date-badge">{{ formatIsoDate(entryForm.entryDate) }}</span>
+          <button type="button" class="button button--ghost household-entry-settings-button" data-no-drag="true" :aria-expanded="isQuickEntrySettingsOpen" aria-controls="quick-entry-sharing-settings" @click="isQuickEntrySettingsOpen = !isQuickEntrySettingsOpen">입력 설정</button>
         </div>
+
+        <section v-if="isQuickEntrySettingsOpen" id="quick-entry-sharing-settings" class="household-entry-settings" data-no-drag="true" aria-label="빠른 거래 입력 설정">
+          <label class="household-entry-settings__toggle"><input v-model="isShareAfterSaveEnabled" type="checkbox" /><span>등록 후 공유 버튼 표시</span></label>
+          <p>기본은 거래 등록만 합니다. 저장한 내역의 ‘공유’ 버튼으로 받는 사람을 선택할 수 있습니다. 이 옵션을 켜도 자동으로 공유되지는 않습니다.</p>
+        </section>
 
         <section v-if="isReceiptOcrPanelEnabled" class="receipt-ocr-panel receipt-ocr-panel--launcher" data-no-drag="true">
           <div class="receipt-ocr-panel__header">
@@ -4457,7 +4471,7 @@ defineExpose({
                   : '거래 등록'
             }}
           </button>
-          <button type="button" class="button button--ghost" :disabled="isSubmitting" @click="emit('submit-entry-share')">{{ isEditingEntry ? '수정 후 공유' : '등록 후 공유' }}</button>
+          <button v-if="isShareAfterSaveEnabled" type="button" class="button button--ghost" :disabled="isSubmitting" @click="emit('submit-entry-share')">{{ isEditingEntry ? '수정 후 공유' : '등록 후 공유' }}</button>
 
           <button
             v-if="canUndoLastEntryAction"

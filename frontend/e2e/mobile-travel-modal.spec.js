@@ -223,14 +223,18 @@ test('public shared map photo modal stays stable while the full image loads', as
   page.on('pageerror', (error) => pageErrors.push(error.message))
   await page.goto('/#travel-share/mobile-photo-stability')
 
-  const fullscreenButton = page.locator('.travel-map__toolbar-group:last-child .travel-map__toolbar-button').last()
+  const fullscreenButton = page.getByRole('button', { name: '전체 화면', exact: true })
   await expect(fullscreenButton).toBeVisible()
   await fullscreenButton.tap()
   await expect.poll(() => page.evaluate(() => Boolean(document.fullscreenElement))).toBeTruthy()
 
-  const cluster = page.locator('.travel-cluster-pin').first()
+  const cluster = page.locator('.travel-map-photo-cluster').first()
   await expect(cluster).toBeVisible()
   await cluster.tap()
+  const preview = page.getByRole('region', { name: '선택한 여행 사진 미리보기', exact: true })
+  await expect(preview).toBeVisible()
+  await expect(page.locator('.public-map-share-photo-modal')).toHaveCount(0)
+  await preview.getByRole('button', { name: '사진 크게 보기', exact: true }).tap()
 
   const dialog = page.locator('.public-map-share-photo-modal')
   const panel = page.locator('.public-map-share-photo-modal__panel')

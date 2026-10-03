@@ -705,7 +705,7 @@ async function toggleJourneyPlayback() {
 
 function setJourneyPlaybackSpeed(value) {
   const nextSpeed = Number(value)
-  if (![2, 4, 6, 8, 10].includes(nextSpeed)) {
+  if (![1, 2, 3, 4, 5].includes(nextSpeed)) {
     return
   }
   const oldInterval = Math.max(1, journeySpeedSeconds.value * 1000)
@@ -1635,9 +1635,9 @@ watch(journeyRoutePath, (path) => {
             @route-follow-change="setJourneyRouteFollowEnabled"
           />
         </template>
-        <template #fullscreen-overlay="{ isFullscreen }">
+        <template #fullscreen-overlay="{ isFullscreen, hasPreview }">
           <TravelMyMapInspectorPanels
-            v-if="isFullscreen && shouldShowFullscreenInspector"
+            v-if="isFullscreen && shouldShowFullscreenInspector && !hasPreview"
             :summary="selectedClusterSummary"
             :detail="selectedClusterDetail"
             :selected-photo="selectedPhoto"

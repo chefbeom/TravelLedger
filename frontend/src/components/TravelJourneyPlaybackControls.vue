@@ -24,7 +24,8 @@ function handleDayChange(event) {
 }
 
 function handleSpeedChange(event) {
-  emit('speed-change', Number(event.target.value))
+  const seconds = Number(event.target.value)
+  if (Number.isInteger(seconds) && seconds >= 1 && seconds <= 5) emit('speed-change', seconds)
 }
 
 function handleRouteFollowChange(event) {
@@ -59,14 +60,25 @@ function handleRouteFollowChange(event) {
         {{ isPlaying ? '일시정지' : hasCompleted ? '처음부터 재생' : '재생' }}
       </button>
       <label class="travel-journey-controls__speed">
-        <span>사진·경로 간격</span>
-        <select :value="speedSeconds" @change="handleSpeedChange">
-          <option :value="2">2초</option>
-          <option :value="4">4초</option>
-          <option :value="6">6초</option>
-          <option :value="8">8초</option>
-          <option :value="10">10초</option>
-        </select>
+        <span class="travel-journey-controls__speed-heading">
+          <span>사진·경로 간격</span>
+          <output>{{ speedSeconds }}초</output>
+        </span>
+        <input
+          class="travel-journey-controls__slider"
+          type="range"
+          min="1"
+          max="5"
+          step="1"
+          :value="speedSeconds"
+          :style="{ '--journey-speed-progress': `${(speedSeconds - 1) * 25}%` }"
+          aria-label="여정 재생 간격"
+          :aria-valuetext="`${speedSeconds}초`"
+          @input="handleSpeedChange"
+        />
+        <span class="travel-journey-controls__speed-ticks" aria-hidden="true">
+          <span v-for="seconds in 5" :key="seconds" :class="{ 'is-selected': seconds === speedSeconds }">{{ seconds }}</span>
+        </span>
       </label>
     </div>
 

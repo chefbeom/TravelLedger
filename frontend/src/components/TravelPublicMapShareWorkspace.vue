@@ -242,7 +242,7 @@ async function loadClusterDetail(clusterId, preferredPhotoId = null, page = 0, p
     }
   }
 }
-async function handleSelectCluster(cluster) {
+async function handleSelectCluster(cluster, options = {}) {
   if (!cluster?.id) {
     clearSelection()
     return
@@ -251,7 +251,7 @@ async function handleSelectCluster(cluster) {
   pauseJourneyRoutePlayback()
   selectedClusterSummary.value = cluster
   selectedMarkerId.value = null
-  photoModalOpen.value = true
+  photoModalOpen.value = Boolean(options.openPreview)
   await loadClusterDetail(cluster.id, cluster.representativeMediaId)
 }
 
@@ -274,7 +274,7 @@ async function handleSelectPhotoPin(pin, options = {}) {
   const cluster = photoClusters.value.find((candidate) => String(candidate.id) === String(pin.clusterId))
   selectedClusterSummary.value = cluster ?? selectedClusterSummary.value
   selectedMarkerId.value = null
-  photoModalOpen.value = true
+  photoModalOpen.value = Boolean(options.openPreview)
   await loadClusterDetail(pin.clusterId, pin.mediaId)
   return selectedPhoto.value
 }
@@ -510,7 +510,7 @@ async function toggleJourneyPlayback() {
 
 function setJourneyPlaybackSpeed(value) {
   const nextSpeed = Number(value)
-  if (![2, 4, 6, 8, 10].includes(nextSpeed)) {
+  if (![1, 2, 3, 4, 5].includes(nextSpeed)) {
     return
   }
   const oldInterval = Math.max(1, journeySpeedSeconds.value * 1000)
@@ -651,7 +651,7 @@ function setMapDisplayMode(mode) {
 }
 
 function handlePreviewClusterFromMap(item) {
-  return item?.clusterId ? handleSelectPhotoPin(item) : handleSelectCluster(item)
+  return item?.clusterId ? handleSelectPhotoPin(item, { openPreview: true }) : handleSelectCluster(item, { openPreview: true })
 }
 
 function handleSelectDetailPhoto(photo) {

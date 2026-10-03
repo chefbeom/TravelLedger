@@ -135,25 +135,29 @@ test('journey card survives zoom, route-like pans and marker redraws until the n
   const popup = page.locator('.travel-map__preview .travel-map-preview__open')
   await expect(popup.locator('strong')).toHaveText('Photo 2')
   await expect(page.locator('.travel-cluster-map__zoom')).toHaveText('15')
+  const pinCard = page.getByRole('region', { name: '선택한 핀 정보', exact: true })
+  await expect(pinCard.locator('strong')).toHaveText('Photo 2')
 
   const retained = await page.evaluate(async () => {
     const card = document.querySelector('.travel-map__preview .travel-map-preview__open')
+    const pinCard = document.querySelector('.travel-map-pin-popup .travel-map-preview__open')
     let removed = false
-    const observer = new MutationObserver(() => { if (!card.isConnected) removed = true })
-    observer.observe(document.querySelector('.travel-map__preview'), { childList: true, subtree: true })
+    const observer = new MutationObserver(() => { if (!card.isConnected || !pinCard.isConnected) removed = true })
+    observer.observe(document.querySelector('#map-display-test .travel-map__stage'), { childList: true, subtree: true })
     for (let i = 0; i < 8; i += 1) {
       window.mapDisplayFixture.focusTarget = { requestId: i + 2, latitude: 35.6812 + i * 0.00004, longitude: 139.7671, keepZoom: true, duration: 0.05 }
       if (i === 3) window.dispatchEvent(new Event('resize'))
       await new Promise((resolve) => setTimeout(resolve, 180))
-      if (!card.isConnected) removed = true
+      if (!card.isConnected || !pinCard.isConnected) removed = true
     }
     await new Promise((resolve) => setTimeout(resolve, 500))
     observer.disconnect()
-    return !removed && card.isConnected && card.querySelector('strong').textContent === 'Photo 2'
+    return !removed && card.isConnected && pinCard.isConnected && card.querySelector('strong').textContent === 'Photo 2' && pinCard.querySelector('strong').textContent === 'Photo 2'
   })
   expect(retained).toBeTruthy()
   await page.evaluate(() => { window.mapDisplayFixture.journeyPhotoId = 3 })
   await expect(popup.locator('strong')).toHaveText(['Photo 3'])
+  await expect(pinCard.locator('strong')).toHaveText('Photo 3')
 
   // Explicit dismissal must not be undone by a later moveend/redraw.
   await page.locator('.travel-map-preview__header button').focus()
@@ -162,6 +166,7 @@ test('journey card survives zoom, route-like pans and marker redraws until the n
     window.mapDisplayFixture.focusTarget = { requestId: 20, latitude: 35.6813, longitude: 139.7672, keepZoom: true, duration: 0.1 }
   })
   await expect(popup).toHaveCount(0)
+  await expect(pinCard).toHaveCount(0)
   await expect.poll(() => page.evaluate(() => document.querySelector('.travel-cluster-map__zoom')?.textContent)).toBe('15')
   await page.evaluate(() => { window.mapDisplayFixture.journeyPhotoId = 2 })
   await expect(popup.locator('strong')).toHaveText('Photo 2')
@@ -232,15 +237,18 @@ async function expectPreviewMapLayout(page, isMobile) {
     const stage = document.querySelector('#map-display-test .travel-map__stage').getBoundingClientRect()
     const preview = document.querySelector('.travel-map__preview').getBoundingClientRect()
     const canvas = document.querySelector('#map-display-test .travel-map__canvas').getBoundingClientRect()
-    return { stage: { width: stage.width }, preview: { x: preview.x, width: preview.width, y: preview.y }, canvas: { x: canvas.x, width: canvas.width, bottom: canvas.bottom } }
+    return { stage: { width: stage.width }, preview: { x: preview.x, width: preview.width, y: preview.y, bottom: preview.bottom, position: getComputedStyle(document.querySelector('.travel-map__preview')).position }, canvas: { x: canvas.x, y: canvas.y, width: canvas.width, bottom: canvas.bottom } }
   })
+  expect(Math.abs(layout.canvas.width - layout.stage.width)).toBeLessThan(2)
+  expect(layout.preview.position).toBe('absolute')
+  expect(layout.preview.y).toBeGreaterThanOrEqual(layout.canvas.y)
+  expect(layout.preview.bottom).toBeLessThanOrEqual(layout.canvas.bottom)
   if (isMobile) {
-    expect(Math.abs(layout.canvas.width - layout.stage.width)).toBeLessThan(2)
-    expect(layout.preview.y).toBeGreaterThanOrEqual(layout.canvas.bottom - 1)
+    expect(layout.preview.width).toBeLessThan(layout.canvas.width)
+    expect(layout.preview.y).toBeLessThan(layout.canvas.bottom)
   } else {
-    expect(Math.abs(layout.preview.width - layout.stage.width / 4)).toBeLessThan(2)
-    expect(Math.abs(layout.canvas.width - layout.stage.width * 3 / 4)).toBeLessThan(2)
-    expect(Math.abs(layout.canvas.x - layout.preview.x - layout.preview.width)).toBeLessThan(2)
+    expect(layout.preview.width).toBeLessThanOrEqual(380)
+    expect(layout.preview.x).toBeGreaterThan(layout.canvas.x)
   }
   await expect.poll(() => page.evaluate(() => {
     const canvas = document.querySelector('#map-display-test .travel-map__canvas').getBoundingClientRect()
@@ -257,10 +265,25 @@ async function expectPreviewMapLayout(page, isMobile) {
     const hit = document.elementFromPoint(pin.x + pin.width / 2, pin.y + pin.height / 2)
     return Boolean(hit && marker.contains(hit))
   })).toBe(true)
+  const card = page.getByRole('region', { name: '선택한 핀 정보', exact: true })
+  await expect(card).toBeVisible()
+  await expect(card.locator('strong')).toHaveText('Photo 1')
+  await expect(card.locator('strong')).toBeVisible()
+  expect((await card.locator('.travel-map-preview__copy').boundingBox()).width).toBeGreaterThan(100)
+  await expect(card.locator('img')).toHaveAttribute('src', /thumbnail=true.*w=240/)
+  await expect.poll(() => page.evaluate(() => {
+    const marker = document.querySelector('.leaflet-marker-icon[title^="Photo 1"]')
+    const popup = document.querySelector('.travel-map-pin-popup')
+    if (!marker || !popup) return 9999
+    const pin = marker.getBoundingClientRect()
+    const tip = popup.querySelector('.leaflet-popup-tip-container').getBoundingClientRect()
+    const style = getComputedStyle(marker)
+    return Math.abs(tip.x + tip.width / 2 - (pin.x - parseFloat(style.marginLeft)))
+  })).toBeLessThan(4)
 }
 
 for (const kind of ['private', 'public']) {
-  test(`${kind} pin and cluster open a larger preview beside a centered map`, async ({ page, isMobile }, testInfo) => {
+  test(`${kind} pin and cluster open floating preview and anchored card over a full-width map`, async ({ page, isMobile }, testInfo) => {
     const fixture = await mountMap(page, kind)
     for (const mode of ['cluster', 'pin']) {
       if (mode === 'pin') await page.getByRole('button', { name: kind === 'private' ? '핀 보기' : '핀', exact: true }).click()
@@ -283,13 +306,19 @@ for (const kind of ['private', 'public']) {
       for (const theme of ['default', 'toss']) {
         await page.evaluate((value) => document.documentElement.dataset.theme = value, theme)
         await expect(preview.locator('strong')).toHaveCSS('-webkit-text-fill-color', await preview.locator('strong').evaluate((element) => getComputedStyle(element).color))
+        const card = page.getByRole('region', { name: '선택한 핀 정보', exact: true })
+        await expect(card.locator('strong')).toHaveCSS('-webkit-text-fill-color', await card.locator('strong').evaluate((element) => getComputedStyle(element).color))
       }
-      await page.locator('#map-display-test .travel-map').screenshot({ path: testInfo.outputPath(`${mode}-split-preview.png`) })
+      await page.locator('#map-display-test .travel-map').screenshot({ path: testInfo.outputPath(`${mode}-floating-preview.png`) })
       await preview.getByRole('button', { name: '사진 크게 보기', exact: true }).click()
       await expect(page.locator('[data-map-photo-detail="true"]')).toBeVisible()
-      await page.locator('[data-map-photo-detail="true"] [data-modal-close]').click()
+      await page.keyboard.press('Escape')
+      await expect(page.locator('[data-map-photo-detail="true"]')).toHaveCount(0)
+      expect(await page.evaluate(() => Boolean(document.fullscreenElement))).toBe(true)
+      await expect(preview).toBeVisible()
       await preview.getByRole('button', { name: '사진 미리보기 닫기', exact: true }).click()
       await expect(preview).toHaveCount(0)
+      await expect(page.locator('.travel-map-pin-popup')).toHaveCount(0)
       await expect.poll(() => page.evaluate(() => {
         const canvas = document.querySelector('#map-display-test .travel-map__canvas').getBoundingClientRect()
         const stage = document.querySelector('#map-display-test .travel-map__stage').getBoundingClientRect()
@@ -297,6 +326,47 @@ for (const kind of ['private', 'public']) {
       })).toBeLessThan(2)
       await page.getByRole('button', { name: '전체 화면 종료', exact: true }).click()
     }
+    expect(fixture.errors).toEqual([])
+  })
+
+  test(`${kind} floating preview closes on outside click or Escape and pin card opens photo detail`, async ({ page }) => {
+    const fixture = await mountMap(page, kind)
+    const pin = page.locator('.leaflet-marker-icon[title^="Photo 1"]')
+    const preview = page.getByRole('region', { name: '선택한 여행 사진 미리보기', exact: true })
+    const card = page.getByRole('region', { name: '선택한 핀 정보', exact: true })
+    await pin.click()
+    await expect(preview).toBeVisible()
+    await expect(card).toBeVisible()
+    await page.keyboard.press('Escape')
+    await expect(preview).toHaveCount(0)
+    await expect(card).toHaveCount(0)
+    await pin.click()
+    await expect(preview).toBeVisible()
+    const canvas = page.locator('#map-display-test .travel-map__canvas')
+    const box = await canvas.boundingBox()
+    await page.mouse.move(box.x + box.width * 0.9, box.y + box.height * 0.3)
+    await page.mouse.down()
+    await page.mouse.move(box.x + box.width * 0.8, box.y + box.height * 0.36, { steps: 12 })
+    await page.mouse.up()
+    await expect(preview).toBeVisible()
+    await expect(card).toBeVisible()
+    await canvas.click({ position: { x: box.width * 0.95, y: box.height * 0.1 } })
+    await expect(preview).toHaveCount(0)
+    await expect(card).toHaveCount(0)
+    await pin.click()
+    await expect(card).toBeVisible()
+    await page.locator('.travel-map-pin-popup .leaflet-popup-close-button').click()
+    await expect(preview).toHaveCount(0)
+    await expect(card).toHaveCount(0)
+    await pin.click()
+    await expect(card).toBeVisible()
+    await card.getByRole('button', { name: '핀 사진 크게 보기', exact: true }).click()
+    await expect(page.locator('[data-map-photo-detail="true"]')).toBeVisible()
+    await page.locator('[data-map-photo-detail="true"] [data-modal-close]').click()
+    await expect(preview).toBeVisible()
+    // Clicking outside the whole map also dismisses the floating preview.
+    await page.locator('#map-display-test').click({ position: { x: 2, y: 2 } })
+    await expect(preview).toHaveCount(0)
     expect(fixture.errors).toEqual([])
   })
 }

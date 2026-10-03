@@ -14,7 +14,6 @@ const VIEWPORT_RENDER_DEBOUNCE_MS = 80
 const CLIENT_CLUSTER_MIN_SIZE = 2
 const CLIENT_CLUSTER_MAX_ZOOM = 17
 const SMOOTH_ZOOM_DURATION = 0.45
-const MAP_BACKGROUND_CLICK_SUPPRESS_MS = 450
 const TILE_PROVIDERS = {
   osm: {
     url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
@@ -104,6 +103,7 @@ const isFullscreen = ref(false)
 const isMapMoving = ref(false)
 const zoomLabel = ref(DEFAULT_ZOOM)
 const previewAggregate = shallowRef(null)
+const pinPopupContent = shallowRef(null)
 const previewPhoto = computed(() => {
   const aggregate = previewAggregate.value
   if (!aggregate) return null
@@ -131,11 +131,11 @@ let mapResizeFrame = 0
 let mapResizeTimer = 0
 let suppressViewportClusterRenderUntil = 0
 let previewOpenSequence = 0
-let suppressNextMapBackgroundClick = false
 let journeyLegSequence = 0
 let isPreparingJourneyLeg = false
 let mapResizeObserver = null
 let dismissedJourneyPreviewPhotoId = null
+let pinPopup = null
 
 function isTouchMapDevice() {
   if (typeof window === 'undefined') {
@@ -203,13 +203,6 @@ function requestMarkerPreview(markerKey) {
 function clearPendingPreviewRequest() {
   pendingPreviewMarkerKey = null
   previewOpenSequence += 1
-}
-
-function suppressMapBackgroundClickOnce() {
-  suppressNextMapBackgroundClick = true
-  setTimeout(() => {
-    suppressNextMapBackgroundClick = false
-  }, MAP_BACKGROUND_CLICK_SUPPRESS_MS)
 }
 
 function normalizeColorHex(value, fallback = '#3182F6') {
@@ -841,7 +834,41 @@ function renderRoutes() {
 
 function closeMapPreview({ resetDismissal = false } = {}) {
   previewAggregate.value = null
+  pinPopup?.remove()
   if (resetDismissal) dismissedJourneyPreviewPhotoId = null
+}
+
+async function syncPinPopup() {
+  const photo = previewPhoto.value
+  const aggregate = previewAggregate.value
+  if (!photo || !aggregate || !mapInstance) {
+    pinPopup?.remove()
+    return
+  }
+  if (!pinPopup) {
+    const content = document.createElement('div')
+    L.DomEvent.disableClickPropagation(content)
+    L.DomEvent.disableScrollPropagation(content)
+    pinPopupContent.value = content
+    // A standalone popup survives marker-layer rebuilding during playback.
+    // Vue renders the content with Teleport; record text is never injected as HTML.
+    pinPopup = L.popup({
+      className: 'travel-map-pin-popup',
+      autoPan: false,
+      closeOnClick: false,
+      maxWidth: 260,
+      minWidth: 220,
+      offset: [0, -46],
+    }).setContent(content)
+    pinPopup.on('remove', () => {
+      if (previewPhoto.value) dismissMapPreview()
+    })
+  }
+  const position = props.journeyPlaybackActive ? photo : aggregate
+  pinPopup.setLatLng([position.latitude, position.longitude])
+  if (!mapInstance.hasLayer(pinPopup)) pinPopup.openOn(mapInstance)
+  await nextTick()
+  if (previewPhoto.value && mapInstance?.hasLayer(pinPopup)) pinPopup.update()
 }
 
 function syncJourneyPreview() {
@@ -864,7 +891,7 @@ function dismissMapPreview() {
   } else {
     emit('clear-selection')
   }
-  previewAggregate.value = null
+  closeMapPreview()
 }
 
 function openPreviewPhoto() {
@@ -910,7 +937,6 @@ function renderClusters() {
         L.DomEvent.preventDefault(event.originalEvent)
       }
 
-      suppressMapBackgroundClickOnce()
       previewAggregate.value = aggregate
       requestMarkerPreview(aggregate.markerKey)
       selectRepresentativeAggregate(aggregate)
@@ -1156,11 +1182,6 @@ function cancelJourneyLeg() {
 defineExpose({ prepareJourneyLeg, cancelJourneyLeg })
 
 function handleMapBackgroundClick() {
-  if (suppressNextMapBackgroundClick) {
-    suppressNextMapBackgroundClick = false
-    return
-  }
-
   clearPendingPreviewRequest()
   if (props.journeyPlaybackActive && props.journeyPhotoId != null) {
     dismissedJourneyPreviewPhotoId = String(props.journeyPhotoId)
@@ -1170,6 +1191,19 @@ function handleMapBackgroundClick() {
   emit('clear-selection')
 }
 
+function handleCanvasBackgroundClick(event) {
+  if (event.target?.closest?.('.leaflet-marker-icon, .leaflet-popup, .leaflet-control, .leaflet-interactive')) return
+  if (mapInstance?.dragging?.moved()) return
+  handleMapBackgroundClick()
+}
+
+function handleOutsidePreviewPointer(event) {
+  // Photo details may be teleported outside the map in non-fullscreen mode.
+  // Closing that newer layer must not also dismiss the underlying preview.
+  if (event.target?.closest?.('[data-map-photo-detail="true"]')) return
+  if (props.active && previewPhoto.value && !mapRootElement.value?.contains(event.target)) dismissMapPreview()
+}
+
 function handleFullscreenChange() {
   syncFullscreenState()
   emit('fullscreen-change', isFullscreen.value)
@@ -1177,28 +1211,30 @@ function handleFullscreenChange() {
 }
 
 function handleFullscreenEscape(event) {
-  if (event.key !== 'Escape' || !isFullscreen.value) {
+  if (event.key !== 'Escape' || !props.active) {
     return
   }
 
-  const photoDetail = mapRootElement.value?.querySelector(
-    '.travel-map__fullscreen-dialog [data-map-photo-detail="true"]',
-  )
+  const photoDetail = document.querySelector('[data-map-photo-detail="true"]')
   const closeAction = photoDetail?.querySelector('[data-modal-close]')
-  if (!closeAction || closeAction.disabled) {
-    return
+  if (photoDetail) {
+    if (!isFullscreen.value || !closeAction || closeAction.disabled) return
+    // Close the nested detail before the map preview or fullscreen itself.
+    event.preventDefault()
+    event.stopImmediatePropagation?.()
+    event.returnValue = false
+    closeAction.click()
+  } else if (previewPhoto.value) {
+    event.preventDefault()
+    event.stopImmediatePropagation?.()
+    event.returnValue = false
+    dismissMapPreview()
   }
-
-  // A nested photo detail is the most recently opened layer. Close it first
-  // and keep the map fullscreen until the next Escape press.
-  event.preventDefault()
-  event.stopImmediatePropagation?.()
-  event.returnValue = false
-  closeAction.click()
 }
 
 onMounted(() => {
   document.addEventListener('fullscreenchange', handleFullscreenChange)
+  document.addEventListener('pointerdown', handleOutsidePreviewPointer)
   window.addEventListener('keydown', handleFullscreenEscape, { capture: true })
 
   mapInstance = L.map(mapElement.value, {
@@ -1235,7 +1271,6 @@ onMounted(() => {
   mapInstance.on('movestart zoomstart', handleViewportStart)
   mapInstance.on('moveend', handleViewportEnd)
   mapInstance.on('zoomend', handleZoomEnd)
-  mapInstance.on('click', handleMapBackgroundClick)
   zoomLabel.value = mapInstance.getZoom()
   emit('fullscreen-change', isFullscreen.value)
   renderMap({ shouldFit: true })
@@ -1250,6 +1285,7 @@ onBeforeUnmount(() => {
   cancelJourneyLeg()
   mapResizeObserver?.disconnect()
   document.removeEventListener('fullscreenchange', handleFullscreenChange)
+  document.removeEventListener('pointerdown', handleOutsidePreviewPointer)
   window.removeEventListener('keydown', handleFullscreenEscape, { capture: true })
   cancelQueuedMapResize()
 
@@ -1259,14 +1295,17 @@ onBeforeUnmount(() => {
     mapInstance.off('movestart zoomstart', handleViewportStart)
     mapInstance.off('moveend', handleViewportEnd)
     mapInstance.off('zoomend', handleZoomEnd)
-    mapInstance.off('click', handleMapBackgroundClick)
     mapInstance.remove()
     mapInstance = null
   }
 
   tileLayer = null
   routeRenderer = null
+  pinPopup = null
+  pinPopupContent.value = null
 })
+
+watch([previewPhoto, previewAggregate, () => props.journeyPlaybackActive], syncPinPopup, { flush: 'post' })
 
 watch(
   () => [props.photoClusters, props.photoPins, props.markers, props.routes, props.displayMode],
@@ -1433,7 +1472,16 @@ watch(
           @close="dismissMapPreview"
         />
       </aside>
-      <div ref="mapElement" class="travel-map__canvas" />
+      <div ref="mapElement" class="travel-map__canvas" @click="handleCanvasBackgroundClick" />
+      <Teleport v-if="previewPhoto && pinPopupContent" :to="pinPopupContent">
+        <TravelMapPhotoPreview
+          compact
+          :photo="previewPhoto"
+          :photo-count="previewAggregate.photoCount"
+          :memory-count="previewAggregate.memoryCount || previewPhoto.memoryCount || 0"
+          @open="openPreviewPhoto"
+        />
+      </Teleport>
       <div v-if="isFullscreen" class="travel-map__overlay" @click.stop>
         <slot name="fullscreen-overlay" :is-fullscreen="isFullscreen" :has-preview="Boolean(previewPhoto)" />
       </div>

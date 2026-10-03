@@ -38147,32 +38147,25 @@ html body .app-shell .travel-map .travel-map__icon-root .travel-map-pin-glyph {
   font-size: 12px;
 }
 
-/* Reserve real space for the preview: Leaflet's center is the remaining 3/4,
-   not the center of a full-width map underneath an overlay. */
-.travel-map.travel-map--has-preview > .travel-map__stage {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 3fr);
-  touch-action: auto;
-}
-.travel-map.travel-map--has-preview > .travel-map__stage > .travel-map__canvas {
-  position: relative !important;
-  inset: auto !important;
-  grid-column: 2;
-  grid-row: 1;
-  width: 100%;
-  min-width: 0;
-}
+/* Floating preview: do not take a column away from the actual map canvas. */
 .travel-map__preview {
+  position: absolute;
+  z-index: 650;
+  left: 16px;
+  top: 50%;
+  width: clamp(240px, 25%, 380px);
+  max-height: calc(100% - 32px);
+  transform: translateY(-50%);
   box-sizing: border-box;
-  grid-column: 1;
-  grid-row: 1;
   display: flex;
   align-items: center;
   min-width: 0;
   min-height: 0;
-  padding: 16px;
+  padding: 12px;
   background: var(--panel-bg);
-  border-right: 1px solid var(--line);
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  box-shadow: 0 12px 32px rgb(0 0 0 / 24%);
   overflow: auto;
   touch-action: pan-y;
 }
@@ -38222,22 +38215,37 @@ html body .app-shell .travel-map .travel-map-preview__empty { color: var(--text)
 .travel-map-preview__empty { display: grid; place-items: center; min-height: 180px; padding: 16px; }
 .travel-map-preview__hint { margin-top: 5px; }
 
+/* The smaller, geographically anchored card is independent of marker layers. */
+html body .app-shell .travel-map .travel-map-pin-popup .leaflet-popup-content-wrapper,
+html body .app-shell .travel-map .travel-map-pin-popup .leaflet-popup-tip {
+  background: var(--panel-bg) !important;
+  border-radius: 2px;
+}
+.travel-map .travel-map-pin-popup .leaflet-popup-content {
+  width: 246px !important;
+  max-width: calc(100vw - 58px);
+  margin: 12px 16px 10px 10px;
+}
+html body .app-shell .travel-map .travel-map-preview--compact .travel-map-preview__open {
+  grid-template-columns: 80px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  background: var(--panel-bg) !important;
+}
+.travel-map-preview--compact .travel-map-preview__image { height: 80px; max-height: 80px; aspect-ratio: 1; object-fit: cover; }
+.travel-map-preview--compact .travel-map-preview__empty { min-height: 80px; padding: 4px; }
+.travel-map-preview--compact .travel-map-preview__copy { padding: 0; gap: 3px; }
+html body .app-shell .travel-map .travel-map-preview--compact .travel-map-preview__copy strong { font-size: 0.8rem; }
+html body .app-shell .travel-map .travel-map-preview--compact .travel-map-preview__copy span { font-size: 0.7rem; }
+.travel-map-preview--compact .travel-map-preview__copy > * { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+
 @media (max-width: 760px) {
-  .travel-map.travel-map--has-preview > .travel-map__stage {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: minmax(320px, 1fr) auto;
-  }
-  .travel-map.travel-map--has-preview > .travel-map__stage > .travel-map__canvas { grid-column: 1; min-height: 320px; }
-  .travel-map__preview { grid-column: 1; grid-row: 2; max-height: 36dvh; padding: 10px; border-right: 0; border-top: 1px solid var(--line); }
+  .travel-map__preview { top: auto; bottom: 8px; left: 8px; width: calc(100% - 16px); max-height: min(32dvh, 240px); transform: none; padding: 10px; }
   .travel-map-preview__header { margin-bottom: 6px; }
-  html body .app-shell .travel-map .travel-map-preview__open { grid-template-columns: minmax(0, 1fr) minmax(0, 1.6fr); align-items: center; gap: 8px; }
-  .travel-map-preview__image { height: 140px; max-height: 24dvh; aspect-ratio: auto; }
-  .travel-map-preview__copy { gap: 4px; padding: 6px; }
-  .travel-map-preview__empty { min-height: 140px; padding: 6px; }
-  .travel-map.travel-map--has-preview:fullscreen > .travel-map__stage,
-  .travel-map.travel-map--has-preview:-webkit-full-screen > .travel-map__stage { grid-template-rows: minmax(0, 1fr) auto; }
-  .travel-map.travel-map--has-preview:fullscreen > .travel-map__stage > .travel-map__canvas,
-  .travel-map.travel-map--has-preview:-webkit-full-screen > .travel-map__stage > .travel-map__canvas { min-height: 0; }
+  html body .app-shell .travel-map .travel-map__preview .travel-map-preview__open { grid-template-columns: minmax(0, 1fr) minmax(0, 1.6fr); align-items: center; gap: 8px; }
+  .travel-map__preview .travel-map-preview__image { height: 140px; max-height: 24dvh; aspect-ratio: auto; }
+  .travel-map__preview .travel-map-preview__copy { gap: 4px; padding: 6px; }
+  .travel-map__preview .travel-map-preview__empty { min-height: 140px; padding: 6px; }
   .travel-map.travel-map--has-preview:fullscreen > .travel-map__toolbar,
   .travel-map.travel-map--has-preview:-webkit-full-screen > .travel-map__toolbar { top: 8px; right: 8px; bottom: auto; max-height: 24dvh; }
 }

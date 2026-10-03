@@ -49,6 +49,8 @@ import {
 import { reverseGeocode } from '../lib/photoMetadata'
 import { buildThumbnailUrl } from '../lib/mediaPreview'
 import { useTableSelection } from '../lib/tableSelection'
+import RecordShareDialog from './RecordShareDialog.vue'
+const planToShare = ref(null)
 const TravelCommunityWorkspace = defineAsyncComponent(() => import('./TravelCommunityWorkspace.vue'))
 const TravelMapPanel = defineAsyncComponent(() => import('./TravelMapPanel.vue'))
 const TravelMemoryPanel = defineAsyncComponent(() => import('./TravelMemoryPanel.vue'))
@@ -2167,6 +2169,7 @@ async function openPortfolioMemoryEditor(payload) {
   <div class="workspace-stack">
     <div v-if="feedback" class="feedback feedback--success">{{ feedback }}</div>
     <div v-if="errorMessage" class="feedback feedback--error">{{ errorMessage }}</div>
+    <RecordShareDialog v-if="planToShare" kind="TRAVEL" :source="planToShare" @close="planToShare = null" @shared="planToShare = null; setFeedback('여행 공유 요청을 보냈습니다.')" />
 
     <template v-if="isTravelSetupWorkflow">
       <section class="panel travel-setup-workflow">
@@ -2350,6 +2353,7 @@ async function openPortfolioMemoryEditor(payload) {
           <button class="button button--ghost" type="button" :disabled="isLoading" @click="refreshTravelData(selectedPlanId, route === 'photo-album')">여행 목록 새로고침</button>
           <button class="button button--secondary" type="button" @click="route === 'travel-money' ? resetPlanForm() : handleOpenTravelPlanner()">{{ route === 'travel-money' ? '새 여행 만들기' : '새 여행 만들기 화면 열기' }}</button>
           <button class="button button--ghost" type="button" :disabled="!travelPlan" @click="fillPlanForm(travelPlan)">선택 여행 수정</button>
+          <button class="button button--ghost" type="button" :disabled="!travelPlan" @click="planToShare = travelPlan">그룹에 여행 공유</button>
         </div>
       </div>
 

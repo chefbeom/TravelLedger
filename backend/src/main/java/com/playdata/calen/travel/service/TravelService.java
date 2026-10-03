@@ -1231,6 +1231,24 @@ public class TravelService {
         );
     }
 
+    // Caller must verify an accepted, current group share before using these methods.
+    public TravelSharedExhibitDetailResponse getRecordSharedPlanDetail(Long ownerId, Long planId, Long shareId) {
+        TravelPlan plan = getRequiredPlan(ownerId, planId);
+        TravelPlanDetailResponse detail = toPlanDetail(plan, getPlanBudgetItems(ownerId, planId),
+                getPlanRecords(ownerId, planId), getPlanMemoryRecords(ownerId, planId),
+                getPlanMedia(ownerId, planId), getPlanRoutes(ownerId, planId),
+                asset -> "/api/travel/record-shares/" + shareId + "/media/" + asset.getId() + "/content");
+        return new TravelSharedExhibitDetailResponse(shareId, plan.getOwner().getLoginId(), plan.getOwner().getDisplayName(), null, detail);
+    }
+
+    public MediaDownload getRecordSharedMediaDownload(Long ownerId, Long planId, Long mediaId) {
+        getRequiredPlan(ownerId, planId);
+        TravelMediaAsset asset = travelMediaAssetRepository.findById(mediaId)
+                .orElseThrow(() -> new NotFoundException("Shared travel media not found."));
+        if (!asset.getPlan().getId().equals(planId)) throw new NotFoundException("Shared travel media not found.");
+        return new MediaDownload(asset.getStoragePath(), asset.getContentType(), asset.getOriginalFileName());
+    }
+
     @Transactional
     public TravelPlanSummaryResponse createPlan(Long userId, TravelPlanRequest request) {
         TravelPlan plan = new TravelPlan();

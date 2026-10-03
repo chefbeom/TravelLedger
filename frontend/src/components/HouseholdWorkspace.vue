@@ -88,6 +88,12 @@ import {
 import PaletteContainer from '../features/palette/components/PaletteContainer.vue'
 import CalendarWorkspace from './CalendarWorkspace.vue'
 import RecurringLedgerWorkspace from './RecurringLedgerWorkspace.vue'
+import RecordShareDialog from './RecordShareDialog.vue'
+import { useRecordShareNotifications } from '../lib/useRecordShareNotifications'
+
+const RecordSharingWorkspace = defineAsyncComponent(() => import('./RecordSharingWorkspace.vue'))
+const entryToShare = ref(null)
+const { shareCounts } = useRecordShareNotifications()
 
 const HouseholdTravelLedgerWorkspace = defineAsyncComponent(() => import('./HouseholdTravelLedgerWorkspace.vue'))
 const LedgerImportWorkspace = defineAsyncComponent(() => import('./LedgerImportWorkspace.vue'))
@@ -163,6 +169,7 @@ const householdDirectTabKeys = [
   'dashboard',
   'calendar',
   'recurring-ledger',
+  'record-shares',
   'travel-ledger',
   'ledger-analysis',
   'stats-search',
@@ -4825,7 +4832,7 @@ async function updateAggregatePreferences(widgets) {
   }
 }
 
-async function submitEntry() {
+async function submitEntry(shareAfterSave = false) {
   isSubmitting.value = true
   activeSubmit.value = 'entry'
   setFeedback()
@@ -4843,13 +4850,14 @@ async function submitEntry() {
     }
     const submittedSnapshot = buildEntryFormSnapshot()
     const submittedPayload = buildEntryPayload()
+    let savedEntry
     if (editingEntryId.value) {
       const rollbackEntry = monthEntries.value.find((entry) => entry.id === editingEntryId.value)
         ?? statsEntries.value.find((entry) => entry.id === editingEntryId.value)
         ?? dashboard.value.recentEntries?.find((entry) => entry.id === editingEntryId.value)
       const rollbackPayload = buildEntryPayloadFromEntry(rollbackEntry)
       const rollbackSnapshot = buildEntryFormSnapshotFromEntry(rollbackEntry)
-      await updateEntry(editingEntryId.value, submittedPayload)
+      savedEntry = await updateEntry(editingEntryId.value, submittedPayload)
       undoableEntryAction.value = rollbackPayload
         ? {
             type: 'update',
@@ -4861,6 +4869,7 @@ async function submitEntry() {
       setFeedback('가계부 내역을 수정했습니다.')
     } else {
       const createdEntry = await createEntry(submittedPayload)
+      savedEntry = createdEntry
       undoableEntryAction.value = {
         type: 'create',
         entryId: createdEntry?.id ?? null,
@@ -4872,6 +4881,7 @@ async function submitEntry() {
     await refreshLedgerViews()
     await refreshOpenLedgerChangeHistory()
     resetEntryForm({ entryDate: submittedSnapshot.entryDate })
+    if (shareAfterSave && savedEntry?.id) entryToShare.value = savedEntry
   } catch (error) {
     setFeedback('', error.message)
   } finally {
@@ -5436,6 +5446,7 @@ async function activatePayment(paymentId) {
 
 <template>
   <div class="workspace-stack">
+    <RecordShareDialog v-if="entryToShare" kind="LEDGER" :source="entryToShare" @close="entryToShare = null" @shared="entryToShare = null; setFeedback('가계부 공유 요청을 보냈습니다.')" />
     <div v-if="feedback" class="feedback feedback--success feedback--actionable">
       <span>{{ feedback }}</span>
     </div>
@@ -5466,6 +5477,7 @@ async function activatePayment(paymentId) {
         <button class="button" :class="{ 'button--primary': householdTab === 'dashboard' }" @click="setHouseholdTab('dashboard')">대시보드</button>
         <button class="button" :class="{ 'button--primary': householdTab === 'calendar' }" @click="setHouseholdTab('calendar')">달력 가계부</button>
         <button class="button" :class="{ 'button--primary': householdTab === 'recurring-ledger' }" @click="setHouseholdTab('recurring-ledger')">정기결제</button>
+        <button class="button" :class="{ 'button--primary': householdTab === 'record-shares' }" @click="setHouseholdTab('record-shares')">기록 공유<span v-if="shareCounts.ledger" class="record-share-badge" :aria-label="`승인 대기 ${shareCounts.ledger}건`">{{ shareCounts.ledger }}</span></button>
         <button class="button" :class="{ 'button--primary': householdTab === 'travel-ledger' }" @click="setHouseholdTab('travel-ledger')">여행 가계부</button>
         <button class="button" :class="{ 'button--primary': householdTab === 'ledger-analysis' }" @click="setHouseholdTab('ledger-analysis')">가계부 분석</button>
         <button class="button" :class="{ 'button--primary': householdTab === 'stats-search' }" @click="setHouseholdTab('stats-search')">검색</button>
@@ -5518,6 +5530,8 @@ async function activatePayment(paymentId) {
       :entries="sortedMonthEntries"
       :is-loading="isLoading"
     />
+
+    <RecordSharingWorkspace v-else-if="householdTab === 'record-shares'" kind="LEDGER" @imported="refreshLedgerViews" />
 
     <RecurringLedgerWorkspace
       v-else-if="householdTab === 'recurring-ledger'"
@@ -5605,6 +5619,8 @@ async function activatePayment(paymentId) {
       @cancel-receipt-history="cancelReceiptOcrHistory"
       @delete-receipt-history="deleteReceiptOcrHistory"
       @submit-entry="submitEntry"
+      @submit-entry-share="submitEntry(true)"
+      @share-entry="entryToShare = $event"
       @register-recurring="openRecurringLedgerFromEntry"
       @undo-entry-action="undoLastEntryAction"
       @edit-entry="fillEntryForm"

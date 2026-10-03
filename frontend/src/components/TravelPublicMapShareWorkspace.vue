@@ -650,6 +650,10 @@ function setMapDisplayMode(mode) {
   displayMode.value = mode === 'pin' ? 'pin' : 'cluster'
 }
 
+function handlePreviewClusterFromMap(item) {
+  return item?.clusterId ? handleSelectPhotoPin(item) : handleSelectCluster(item)
+}
+
 function handleSelectDetailPhoto(photo) {
   if (!photo?.id) {
     return
@@ -812,7 +816,7 @@ onBeforeUnmount(() => {
         @select-cluster="handleSelectCluster"
         @select-marker="handleSelectMarker"
         @select-photo-pin="handleSelectPhotoPin"
-        @preview-cluster="handleSelectCluster"
+        @preview-cluster="handlePreviewClusterFromMap"
         @fullscreen-change="handleMapFullscreenChange"
         @clear-selection="clearSelection"
       >

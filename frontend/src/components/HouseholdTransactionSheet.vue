@@ -25,6 +25,7 @@ const emit = defineEmits([
   'update:sort',
   'update:page',
   'edit-entry',
+  'share-entry',
   'delete-entry',
   'open-settings',
   'close',
@@ -129,6 +130,7 @@ function updatePage(offset) {
             <td class="sheet-table__actions">
               <div class="sheet-table__actions-inner">
                 <button type="button" class="button button--ghost" @click="emit('edit-entry', entry)">수정</button>
+                <button type="button" class="button button--ghost" @click="emit('share-entry', entry)">공유</button>
                 <button type="button" class="button button--danger" @click="emit('delete-entry', entry)">삭제</button>
               </div>
             </td>

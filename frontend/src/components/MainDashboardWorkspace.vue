@@ -1353,7 +1353,10 @@ function updateCellHeight() {
     - (MAIN_DASHBOARD_GRID_MARGIN * 2)
     - ((columns - 1) * MAIN_DASHBOARD_GRID_GAP)
   ) / columns
-  const nextHeight = Math.round(Math.max(112, Math.min(168, rawCellWidth * 0.96)))
+  // Keep palette cells proportional across browser zoom and OS display scales.
+  // The previous 112-168px clamp changed the width/height ratio on FHD screens
+  // with different CSS viewport widths, making saved layouts look distorted.
+  const nextHeight = Math.round(Math.max(96, Math.min(224, rawCellWidth * 0.96)))
   cellHeight.value = nextHeight
   grid.cellHeight(nextHeight)
 }

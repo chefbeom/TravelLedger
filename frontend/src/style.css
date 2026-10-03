@@ -33472,7 +33472,7 @@ body,
   -webkit-text-fill-color: var(--text-soft) !important;
 }
 
-.app-shell :where(button, .button, [role="button"]) {
+.app-shell :where(button, .button, [role="button"]):where(:not(.leaflet-marker-icon)) {
   border-color: var(--line) !important;
   background: var(--surface-soft) !important;
   box-shadow: none !important;
@@ -33480,8 +33480,8 @@ body,
   -webkit-text-fill-color: var(--text) !important;
 }
 
-.app-shell :where(button, .button, [role="button"]):hover,
-.app-shell :where(button, .button, [role="button"]):focus-visible {
+.app-shell :where(button, .button, [role="button"]):where(:not(.leaflet-marker-icon)):hover,
+.app-shell :where(button, .button, [role="button"]):where(:not(.leaflet-marker-icon)):focus-visible {
   border-color: var(--fern) !important;
   background: var(--control-bg-hover) !important;
 }
@@ -33662,7 +33662,7 @@ html body .app-shell.app-shell :is(
   -webkit-text-fill-color: var(--text-soft) !important;
 }
 
-html body .app-shell.app-shell :is(button, .button, [role="button"]) {
+html body .app-shell.app-shell :is(button, .button, [role="button"]):where(:not(.leaflet-marker-icon)) {
   border-color: var(--line) !important;
   background: var(--surface-soft) !important;
   box-shadow: none !important;
@@ -33670,8 +33670,8 @@ html body .app-shell.app-shell :is(button, .button, [role="button"]) {
   -webkit-text-fill-color: var(--text) !important;
 }
 
-html body .app-shell.app-shell :is(button, .button, [role="button"]):hover,
-html body .app-shell.app-shell :is(button, .button, [role="button"]):focus-visible {
+html body .app-shell.app-shell :is(button, .button, [role="button"]):where(:not(.leaflet-marker-icon)):hover,
+html body .app-shell.app-shell :is(button, .button, [role="button"]):where(:not(.leaflet-marker-icon)):focus-visible {
   border-color: var(--fern) !important;
   background: var(--control-bg-hover) !important;
 }
@@ -35611,7 +35611,7 @@ html[data-theme='toss'] body .app-shell :is(
   input,
   select,
   textarea
-):not(.main-palette__photo-hero):not(.travel-photo-card-button):not(.travel-photo-preview-button):not(.main-photo-frame-modal__preview):not(.main-photo-frame-detail-modal__figure):not(.pet-companion__avatar) {
+):not(.main-palette__photo-hero):not(.travel-photo-card-button):not(.travel-photo-preview-button):not(.main-photo-frame-modal__preview):not(.main-photo-frame-detail-modal__figure):not(.pet-companion__avatar):where(:not(.leaflet-marker-icon)) {
   background: var(--dark-control) !important;
   background-color: var(--dark-control) !important;
   background-image: none !important;
@@ -35634,7 +35634,7 @@ html[data-theme='toss'] body .app-shell :is(
   button,
   .button,
   [role='button']
-):not(.main-palette__photo-hero):not(.travel-photo-card-button):not(.travel-photo-preview-button):not(.main-photo-frame-modal__preview):not(.main-photo-frame-detail-modal__figure):not(.pet-companion__avatar):hover {
+):not(.main-palette__photo-hero):not(.travel-photo-card-button):not(.travel-photo-preview-button):not(.main-photo-frame-modal__preview):not(.main-photo-frame-detail-modal__figure):not(.pet-companion__avatar):where(:not(.leaflet-marker-icon)):hover {
   background: var(--dark-control-hover) !important;
   background-color: var(--dark-control-hover) !important;
   border-color: var(--dark-accent) !important;
@@ -37701,11 +37701,14 @@ html[data-theme='toss'] body .app-shell .household-entry-panel__date-badge {
   .travel-map:-webkit-full-screen > .travel-map__toolbar,
   .travel-map:fullscreen.travel-map--public > .travel-map__toolbar,
   .travel-map:-webkit-full-screen.travel-map--public > .travel-map__toolbar {
+    top: auto;
     right: 8px;
-    width: min(360px, calc(52vw - 12px));
-    max-width: min(360px, calc(52vw - 12px));
-    max-height: calc(100dvh - 16px);
+    bottom: 8px;
+    width: calc(100% - 16px);
+    max-width: calc(100% - 16px);
+    max-height: min(32dvh, 280px);
     padding: 9px;
+    transform: none;
   }
 
   .travel-map:fullscreen .travel-map-inspector--fullscreen,
@@ -37724,14 +37727,23 @@ html[data-theme='toss'] body .app-shell .household-entry-panel__date-badge {
     font-size: 0.68rem;
   }
 
-  .travel-map:fullscreen .travel-journey-controls__actions,
-  .travel-map:-webkit-full-screen .travel-journey-controls__actions {
+  .travel-map:fullscreen .travel-map__toolbar-group--journey .travel-journey-controls__actions,
+  .travel-map:-webkit-full-screen .travel-map__toolbar-group--journey .travel-journey-controls__actions {
     grid-template-columns: minmax(0, 1fr);
   }
 
   .travel-map:fullscreen .travel-journey-controls__speed,
   .travel-map:-webkit-full-screen .travel-journey-controls__speed {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
     justify-content: space-between;
+  }
+
+  .travel-map:fullscreen .travel-journey-controls__speed select,
+  .travel-map:-webkit-full-screen .travel-journey-controls__speed select {
+    min-width: 0;
+    width: 100%;
+    max-width: 100%;
   }
 
   .travel-map:fullscreen .travel-journey-route-controls__actions,
@@ -37876,4 +37888,95 @@ html[data-theme='toss'] body .app-shell .household-entry-panel__date-badge {
 
 .travel-map .travel-map-pin-glyph__label {
   font-size: 8px;
+}
+/* Approval-based record sharing */
+.record-share-toolbar, .record-share-members, .record-share-card__actions { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
+.record-share-toolbar { margin-bottom: 16px; }
+.record-share-toolbar .field { flex: 1 1 180px; max-width: 360px; }
+.record-share-list { display: grid; gap: 12px; }
+.record-share-card { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 16px; border: 1px solid var(--line); }
+.record-share-card > div:first-child { min-width: 0; overflow-wrap: anywhere; }
+.record-share-card h3, .record-share-card p { margin: 6px 0; }
+.record-share-card__actions { flex-shrink: 0; }
+.record-share-groups summary { cursor: pointer; font-weight: 700; }
+.record-share-group-form { display: grid; gap: 12px; margin-top: 20px; }
+.record-share-member { display: flex; align-items: center; gap: 10px; padding: 12px; border: 1px solid var(--line); }
+.record-share-member input { width: 18px; height: 18px; flex: 0 0 18px; }
+.record-share-member small { display: block; }
+.record-share-modal { position: fixed; inset: 0; z-index: 2400; display: grid; place-items: center; padding: 20px; background: rgb(0 0 0 / 65%); }
+.record-share-modal__dialog { width: min(620px, 100%); max-height: calc(100dvh - 40px); overflow-y: auto; display: grid; gap: 14px; }
+.record-share-modal__dialog > .panel__header { display: flex; flex-direction: row; align-items: center; gap: 12px; }
+.record-share-modal__dialog > .panel__header h2 { flex: 1; min-width: 0; font-size: clamp(17px, 3vw, 20px); }
+.record-share-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.record-share-error { color: #e46e65; overflow-wrap: anywhere; }
+.record-share-badge { display: inline-flex; align-items: center; justify-content: center; min-width: 20px; padding: 2px 6px; margin-left: 6px; border-radius: 10px; background: #ba343b; color: white; font-size: 12px; }
+@media (max-width: 640px) { .record-share-card { align-items: stretch; flex-direction: column; } .record-share-form-grid { grid-template-columns: 1fr; } .record-share-modal { padding: 10px; } }
+
+/* Photo cluster mode is a thumbnail; pin mode keeps the transparent vector glyph. */
+/* Leaflet assigns role=button. Override the app-shell button theme at its real
+   specificity, including hover/focus/selected states, without changing its map transform. */
+html body .app-shell .travel-map .leaflet-marker-icon.travel-map__icon-root,
+html body .app-shell .travel-map .travel-map__icon-root .travel-map-pin-glyph {
+  background: transparent !important;
+  background-color: transparent !important;
+  background-image: none !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  filter: none !important;
+  padding: 0 !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+}
+.travel-map .travel-map-photo-cluster {
+  position: relative;
+  display: grid !important;
+  place-items: center;
+  box-sizing: border-box;
+  width: 60px !important;
+  height: 60px !important;
+  overflow: hidden !important;
+  border: 2px solid #fff !important;
+  border-radius: 2px !important;
+  background: var(--color-surface-elevated, #253337) !important;
+  box-shadow: none !important;
+  filter: none !important;
+  transform: none !important;
+}
+.travel-map .travel-map-photo-cluster::before,
+.travel-map .travel-map-photo-cluster::after {
+  display: none !important;
+  content: none !important;
+}
+.travel-map .travel-map-photo-cluster.is-active {
+  border-color: var(--map-cluster-color, #3182f6) !important;
+}
+.travel-map .travel-map-photo-cluster__image {
+  display: block;
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover;
+  opacity: 1 !important;
+}
+.travel-map .travel-map-photo-cluster__count {
+  position: absolute;
+  right: 3px;
+  bottom: 3px;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 4px;
+  border-radius: 2px;
+  background: rgb(8 20 16 / 85%) !important;
+  color: #fff !important;
+  -webkit-text-fill-color: #fff !important;
+  font-size: 11px !important;
+  font-weight: 800;
+  line-height: 1;
+  text-shadow: none !important;
+}
+.travel-map .travel-map-photo-cluster__placeholder {
+  color: var(--color-text-primary, #fff);
+  font-size: 12px;
 }

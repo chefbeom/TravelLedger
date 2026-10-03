@@ -453,12 +453,10 @@ function applyLayoutMode(mode, persist = true) {
 
     const viewportMeta = document.querySelector('meta[name="viewport"]')
     if (viewportMeta) {
-      viewportMeta.setAttribute(
-        'content',
-        normalized === 'desktop'
-          ? 'width=1280, initial-scale=1.0'
-          : 'width=device-width, initial-scale=1.0',
-      )
+      // Keep the layout tied to the actual device viewport in both modes.
+      // A fixed 1280px desktop viewport caused the same dashboard to render
+      // at different physical scales on displays with different pixel ratios.
+      viewportMeta.setAttribute('content', 'width=device-width, initial-scale=1.0')
     }
   }
 

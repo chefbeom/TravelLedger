@@ -1,6 +1,9 @@
 <script setup>
 import { computed, defineAsyncComponent, onMounted, ref, watch } from 'vue'
 import { fetchTravelPortfolio } from '../lib/api'
+import { useRecordShareNotifications } from '../lib/useRecordShareNotifications'
+const RecordSharingWorkspace = defineAsyncComponent(() => import('./RecordSharingWorkspace.vue'))
+const { shareCounts } = useRecordShareNotifications()
 const TravelHubWorkspace = defineAsyncComponent(() => import('./TravelHubWorkspace.vue'))
 const TravelMyMapWorkspace = defineAsyncComponent(() => import('./TravelMyMapWorkspace.vue'))
 
@@ -310,6 +313,7 @@ const isHubVisible = computed(() => (
   primaryTab.value === 'setup'
   || (
     primaryTab.value !== 'map'
+    && primaryTab.value !== 'record-shares'
     && (primaryTab.value !== 'finance' || financeLegacyOpen.value)
   )
 ))
@@ -358,7 +362,7 @@ onMounted(loadTravelSummary)
           <h2>여행 기록</h2>
           <p>지도, 방문 장소, GPX 경로, 사진첩을 중심으로 여행을 정리합니다.</p>
         </div>
-        <span class="panel__badge">기록 중심</span>
+        <button class="button" :class="{ 'button--primary': primaryTab === 'record-shares' }" @click="primaryTab = 'record-shares'; workflowMode = ''">공유받은 여행<span v-if="shareCounts.travel" class="record-share-badge" :aria-label="`승인 대기 ${shareCounts.travel}건`">{{ shareCounts.travel }}</span></button>
       </div>
       <div class="travel-record-switcher__grid">
         <button
@@ -398,6 +402,8 @@ onMounted(loadTravelSummary)
         </div>
       </div>
     </section>
+
+    <RecordSharingWorkspace v-if="primaryTab === 'record-shares'" kind="TRAVEL" />
 
     <div v-show="primaryTab === 'map'" class="workspace-stack">
       <TravelMyMapWorkspace

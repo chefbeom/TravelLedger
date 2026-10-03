@@ -617,6 +617,33 @@ export function createEntry(payload) {
   })
 }
 
+export function fetchRecordShareGroups() {
+  return request('/record-shares/groups')
+}
+
+export function fetchRecordShareCounts() {
+  return request('/record-shares/counts')
+}
+
+export function fetchRecordShares(params) {
+  return request(buildUrl('/record-shares', params).replace(API_BASE, ''))
+}
+
+export function createRecordShare(payload) {
+  return request('/record-shares', { method: 'POST', body: JSON.stringify(payload) })
+}
+
+export function respondToRecordShare(id, action, payload) {
+  return request(`/record-shares/${id}/${action}`, {
+    method: 'POST',
+    ...(payload ? { body: JSON.stringify(payload) } : {}),
+  })
+}
+
+export function fetchRecordSharedTravel(id) {
+  return request(`/record-shares/${id}/travel`)
+}
+
 export function updateEntry(id, payload) {
   return request(`/entries/${id}`, {
     method: 'PUT',

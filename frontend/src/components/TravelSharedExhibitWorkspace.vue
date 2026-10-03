@@ -5,6 +5,7 @@ import { formatDate, formatDateTime } from '../lib/uiFormat'
 import TravelOverviewWorkspace from './TravelOverviewWorkspace.vue'
 
 const props = defineProps({
+  embedded: { type: Boolean, default: false },
   exhibits: {
     type: Array,
     default: () => [],
@@ -108,7 +109,7 @@ function goToExhibitPage(page) {
 
 <template>
   <div class="workspace-stack">
-    <section class="panel">
+    <section v-if="!embedded" class="panel">
       <div class="panel__header">
         <div>
           <h2>공유 전시</h2>
@@ -158,7 +159,7 @@ function goToExhibitPage(page) {
       <div class="panel__header">
         <div>
           <h2>{{ selectedExhibit.travelPlan.name }}</h2>
-          <p>{{ selectedExhibit.sharedByDisplayName }} ({{ selectedExhibit.sharedByLoginId }}) 님이 공유한 완성 여행입니다. 이 화면은 읽기 전용입니다.</p>
+          <p>{{ selectedExhibit.sharedByDisplayName }} ({{ selectedExhibit.sharedByLoginId }}) 님이 공유한 여행입니다. 이 화면은 읽기 전용입니다.</p>
         </div>
         <span class="panel__badge">{{ formatDateTime(selectedExhibit.sharedAt) }}</span>
       </div>

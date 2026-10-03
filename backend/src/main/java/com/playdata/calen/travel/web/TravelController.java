@@ -1,6 +1,7 @@
 package com.playdata.calen.travel.web;
 
 import com.playdata.calen.account.security.AppUserPrincipal;
+import com.playdata.calen.sharing.service.RecordSharingService;
 import com.playdata.calen.ledger.dto.LedgerEntryResponse;
 import com.playdata.calen.travel.domain.TravelMediaType;
 import com.playdata.calen.travel.dto.TravelBudgetItemRequest;
@@ -91,6 +92,7 @@ public class TravelController {
     private final TravelLoginMapPreviewService travelLoginMapPreviewService;
     private final TravelMediaStorageService travelMediaStorageService;
     private final TravelReverseGeocodeService travelReverseGeocodeService;
+    private final RecordSharingService recordSharingService;
 
     @org.springframework.beans.factory.annotation.Autowired
     private com.playdata.calen.travel.service.TravelReverseGeocodeDispatcher travelReverseGeocodeDispatcher;
@@ -578,6 +580,19 @@ public class TravelController {
     ) {
         TravelService.MediaDownload download = travelService.getSharedExhibitMediaDownload(currentUser.userId(), shareId, mediaId);
         return buildMediaResponse(download, thumbnail, width);
+    }
+
+    @GetMapping("/record-shares/{shareId}/media/{mediaId}/content")
+    public ResponseEntity<?> downloadRecordSharedMedia(@AuthenticationPrincipal AppUserPrincipal currentUser,
+            @PathVariable Long shareId, @PathVariable Long mediaId,
+            @RequestParam(name = "thumbnail", defaultValue = "false") boolean thumbnail,
+            @RequestParam(name = "w", required = false) Integer width) {
+        var download = recordSharingService.getTravelMedia(currentUser.userId(), shareId, mediaId);
+        var response = buildMediaResponse(download, thumbnail, width);
+        HttpHeaders headers = new HttpHeaders();
+        headers.putAll(response.getHeaders());
+        headers.setCacheControl("private, no-store");
+        return ResponseEntity.status(response.getStatusCode()).headers(headers).body(response.getBody());
     }
 
     private ResponseEntity<?> buildMediaResponse(TravelService.MediaDownload download, boolean thumbnail, Integer width) {

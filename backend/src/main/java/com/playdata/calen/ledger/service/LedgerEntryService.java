@@ -638,6 +638,11 @@ public class LedgerEntryService {
         return toChangeHistoryDetail(restoreHistory != null ? restoreHistory : history);
     }
 
+    public LedgerEntryResponse getEntryForSharing(Long userId, Long entryId) {
+        return toResponse(ledgerEntryRepository.findByIdAndOwnerIdAndDeletedAtIsNull(entryId, userId)
+                .orElseThrow(() -> new NotFoundException("거래를 찾을 수 없습니다.")));
+    }
+
     @Transactional
     public LedgerEntryResponse create(Long userId, LedgerEntryRequest request) {
         AppUser owner = appUserService.getRequiredUser(userId);

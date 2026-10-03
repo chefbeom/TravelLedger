@@ -371,6 +371,30 @@ export function buildTravelJourneyRoutePhotoDistances(path, photos = [], maximum
   ))
 }
 
+export function getTravelJourneyFocusZoom({ latitude, longitude, locations = [], project }) {
+  const baseZoom = 15
+  if (latitude == null || longitude == null || !Number.isFinite(Number(latitude))
+    || !Number.isFinite(Number(longitude)) || typeof project !== 'function') return baseZoom
+
+  const origin = project([Number(latitude), Number(longitude)], baseZoom)
+  const nearbyLocations = new Set()
+  locations.forEach((location) => {
+    if (location?.latitude == null || location?.longitude == null) return
+    const lat = Number(location.latitude)
+    const lng = Number(location.longitude)
+    if (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) return
+    const point = project([lat, lng], baseZoom)
+    if (Math.hypot(point.x - origin.x, point.y - origin.y) <= 96) {
+      nearbyLocations.add(`${lat.toFixed(6)}:${lng.toFixed(6)}`)
+    }
+  })
+
+  // Grouped photos don't need street-level zoom to separate every image.
+  // Keep the surrounding area visible; manual zoom can still go up to 20.
+  if (nearbyLocations.size <= 1) return baseZoom
+  return Math.min(16, baseZoom + Math.ceil(Math.log2(nearbyLocations.size)) * 0.5)
+}
+
 export function getTravelJourneyViewportOverviewZoom({ current, next, currentZoom, minZoom, width, height, project }) {
   const horizontalLimit = Math.max(1, width / 2 - 80)
   const verticalLimit = Math.max(1, height / 2 - 80)

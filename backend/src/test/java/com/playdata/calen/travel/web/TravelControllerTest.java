@@ -8,6 +8,7 @@ import static org.mockito.Mockito.when;
 
 import com.playdata.calen.account.domain.AppUserRole;
 import com.playdata.calen.account.security.AppUserPrincipal;
+import com.playdata.calen.sharing.service.RecordSharingService;
 import com.playdata.calen.travel.service.TravelMediaStorageService;
 import com.playdata.calen.travel.service.TravelLoginMapPreviewService;
 import com.playdata.calen.travel.service.TravelReverseGeocodeService;
@@ -22,6 +23,22 @@ import org.springframework.http.ResponseEntity;
 class TravelControllerTest {
 
     @Test
+    void groupSharedThumbnailIsPrivateAndDoesNotBypassShareAuthorization() {
+        var sharing = mock(RecordSharingService.class);
+        var storage = mock(TravelMediaStorageService.class);
+        var controller = new TravelController(mock(TravelService.class), mock(TravelLoginMapPreviewService.class),
+                storage, mock(TravelReverseGeocodeService.class), sharing);
+        var user = new AppUserPrincipal(2L, "test-receiver", "Receiver", "", AppUserRole.USER, true);
+        var download = new TravelService.MediaDownload("test-only/photo.jpg", "image/jpeg", "photo.jpg");
+        when(sharing.getTravelMedia(2L, 9L, 7L)).thenReturn(download);
+        when(storage.loadThumbnail(download.storagePath(), download.contentType(), 320))
+                .thenReturn(new TravelMediaStorageService.PreparedThumbnail(new ByteArrayResource(new byte[]{1}), "image/jpeg"));
+        var response = controller.downloadRecordSharedMedia(user, 9L, 7L, true, 320);
+        assertThat(response.getHeaders().getCacheControl()).isEqualTo("private, no-store");
+        verify(sharing).getTravelMedia(2L, 9L, 7L);
+    }
+
+    @Test
     void loginMapPinThumbnailReturnsOnlyCachedSafeThumbnailBytes() {
         TravelService travelService = mock(TravelService.class);
         TravelMediaStorageService travelMediaStorageService = mock(TravelMediaStorageService.class);
@@ -31,7 +48,8 @@ class TravelControllerTest {
                 travelService,
                 travelLoginMapPreviewService,
                 travelMediaStorageService,
-                travelReverseGeocodeService
+                travelReverseGeocodeService,
+                mock(RecordSharingService.class)
         );
         TravelService.MediaDownload download = new TravelService.MediaDownload(
                 "travel-media/1/2/photo.jpg",
@@ -64,7 +82,8 @@ class TravelControllerTest {
                 travelService,
                 travelLoginMapPreviewService,
                 travelMediaStorageService,
-                travelReverseGeocodeService
+                travelReverseGeocodeService,
+                mock(RecordSharingService.class)
         );
         TravelService.MediaDownload download = new TravelService.MediaDownload(
                 "travel-media/1/2/photo.jpg",
@@ -90,7 +109,8 @@ class TravelControllerTest {
                 travelService,
                 travelLoginMapPreviewService,
                 travelMediaStorageService,
-                travelReverseGeocodeService
+                travelReverseGeocodeService,
+                mock(RecordSharingService.class)
         );
         AppUserPrincipal currentUser = new AppUserPrincipal(
                 1L,

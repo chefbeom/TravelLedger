@@ -1,9 +1,10 @@
 <script setup>
-import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { buildThumbnailUrl, THUMBNAIL_VARIANTS } from '../lib/mediaPreview'
-import { getTravelJourneyViewportOverviewZoom } from '../lib/travelJourney'
+import { getTravelJourneyFocusZoom, getTravelJourneyViewportOverviewZoom } from '../lib/travelJourney'
+import { buildTravelMapPhotoGroups } from '../lib/travelMapPhotoGroups'
 import { formatDate, formatTime } from '../lib/uiFormat'
 
 const DEFAULT_CENTER = [37.5547, 126.9706]
@@ -121,6 +122,9 @@ let popupOpenSequence = 0
 let suppressNextMapBackgroundClick = false
 let journeyLegSequence = 0
 let isPreparingJourneyLeg = false
+let journeyPopup = null
+let journeyPopupPhotoId = null
+let dismissedJourneyPopupPhotoId = null
 
 function isTouchMapDevice() {
   if (typeof window === 'undefined') {
@@ -181,6 +185,11 @@ function scheduleMarkerPopup(markerKey, remainingAttempts = 6, sequence = popupO
 
   requestAnimationFrame(() => {
     if (sequence !== popupOpenSequence) {
+      return
+    }
+
+    if (props.journeyPlaybackActive && syncJourneyPopup()) {
+      pendingPopupMarkerKey = null
       return
     }
 
@@ -316,36 +325,6 @@ function buildPolylineOptions(colorHex, lineStyle) {
   }
 }
 
-function buildRenderClusters(clusters) {
-  return (clusters ?? []).map(normalizeCluster).filter(Boolean).map((cluster) => ({
-    id: `cluster-${cluster.id}`,
-    markerKey: `cluster-${cluster.id}`,
-    isAggregate: Number(cluster.photoCount || 0) > 1,
-    isPhotoPin: false,
-    isRecordPin: false,
-    representative: cluster,
-    latitude: cluster.latitude,
-    longitude: cluster.longitude,
-    photoCount: Number(cluster.photoCount || 0),
-    memoryCount: Number(cluster.memoryCount || 0),
-  }))
-}
-
-function buildRenderPins(pins) {
-  return (pins ?? []).map(normalizePhotoPin).filter(Boolean).map((pin) => ({
-    id: `photo-${pin.mediaId}`,
-    markerKey: `photo-${pin.mediaId}`,
-    isAggregate: false,
-    isPhotoPin: true,
-    representative: pin,
-    members: [pin],
-    latitude: pin.latitude,
-    longitude: pin.longitude,
-    photoCount: 1,
-    bounds: [[pin.latitude, pin.longitude]],
-  }))
-}
-
 function buildRenderMarkers(markers) {
   return (markers ?? []).map(normalizeRecordMarker).filter(Boolean).map((marker) => ({
     id: `marker-${marker.markerId}`,
@@ -362,12 +341,30 @@ function buildRenderMarkers(markers) {
   }))
 }
 
-function resolveRenderableItems() {
-  if (props.displayMode === 'pin') {
-    return buildRenderPins(props.photoPins)
-  }
+const renderablePhotoItems = computed(() => buildTravelMapPhotoGroups(props.photoClusters, props.photoPins).map((group) => ({
+    id: group.key,
+    markerKey: group.key,
+    isAggregate: group.photoCount > 1,
+    isPhotoPin: !group.cluster,
+    isRecordPin: false,
+    representative: group.cluster ? normalizeCluster(group.cluster) : normalizePhotoPin(group.representative),
+    photoMembers: group.photos.map(normalizePhotoPin).filter(Boolean),
+    latitude: group.latitude,
+    longitude: group.longitude,
+    photoCount: group.photoCount,
+    memoryCount: group.memoryCount,
+    bounds: group.photos.length
+      ? group.photos.map((photo) => [Number(photo.latitude), Number(photo.longitude)])
+      : [[group.latitude, group.longitude]],
+  })))
 
-  return buildRenderClusters(props.photoClusters)
+function resolveRenderableItems() {
+  if (!props.journeyPlaybackActive) return renderablePhotoItems.value
+  return renderablePhotoItems.value.map((group) => {
+    const photo = group.photoMembers.find((item) => String(item.mediaId) === String(props.journeyPhotoId))
+    // A location group's centroid may be outside the view of its active photo.
+    return photo ? { ...group, latitude: photo.latitude, longitude: photo.longitude } : group
+  })
 }
 
 function isSelectedAggregate(aggregate) {
@@ -389,7 +386,10 @@ function isSelectedAggregate(aggregate) {
 
 function aggregateContainsSelection(aggregate) {
   if (!aggregate?.isClientCluster) {
-    return isSelectedAggregate(aggregate)
+    return isSelectedAggregate(aggregate) || (aggregate.photoMembers ?? []).some((photo) => (
+      String(photo.mediaId) === String(props.selectedPhotoId)
+      || (props.journeyPhotoId != null && String(photo.mediaId) === String(props.journeyPhotoId))
+    ))
   }
 
   return (aggregate.members ?? []).some((member) => aggregateContainsSelection(member))
@@ -540,10 +540,6 @@ function buildViewportAggregates(items) {
 
   const paddedBounds = getPaddedMapBounds()
   const visibleItems = items.filter((item) => isAggregateInBounds(item, paddedBounds))
-  if (props.displayMode === 'pin') {
-    return visibleItems
-  }
-
   const cellSize = resolveClientClusterCellSize()
   if (!cellSize) {
     return visibleItems
@@ -758,6 +754,14 @@ function createPopupContent(aggregate) {
     return createPopupContentLegacy(aggregate)
   }
 
+  // Keep the active journey photo in the popup, not the group's first photo.
+  const photos = aggregate.isClientCluster
+    ? aggregate.members.flatMap((member) => member.photoMembers ?? [])
+    : (aggregate.photoMembers ?? [])
+  const activePhotoId = props.journeyPlaybackActive ? props.journeyPhotoId : (props.selectedPhotoId ?? props.journeyPhotoId)
+  const activePhoto = photos.find((photo) => String(photo.mediaId) === String(activePhotoId))
+  if (activePhoto) aggregate = { ...aggregate, representative: activePhoto }
+
   const root = document.createElement('button')
   root.type = 'button'
   root.className = 'travel-cluster-popup travel-cluster-popup--actionable'
@@ -810,9 +814,7 @@ function createPopupContent(aggregate) {
   }
 
   const count = document.createElement('span')
-  count.textContent = aggregate?.isPhotoPin
-    ? '사진 1장'
-    : `사진 ${aggregate?.photoCount || 0}장 / 기록 ${aggregate?.memoryCount || aggregate?.representative?.memoryCount || 0}건`
+  count.textContent = `사진 ${aggregate?.photoCount || 0}장 / 기록 ${aggregate?.memoryCount || aggregate?.representative?.memoryCount || 0}건`
   copy.appendChild(count)
 
   const action = document.createElement('span')
@@ -949,7 +951,20 @@ function buildClusterIcon(aggregate, active) {
 
   const clusterCount = aggregate?.photoCount || 0
   const colorHex = normalizeColorHex(aggregate?.representative?.planColorHex, '#3182F6')
-  const markerBody = aggregate?.isPhotoPin
+  if (props.displayMode === 'cluster') {
+    const photoUrl = aggregate?.representative?.representativePhotoUrl || aggregate?.representative?.photoUrl
+    const image = photoUrl
+      ? `<img class="travel-map-photo-cluster__image" src="${escapeHtml(buildThumbnailUrl(photoUrl, THUMBNAIL_VARIANTS.pin))}" alt="" decoding="async" draggable="false" />`
+      : '<span class="travel-map-photo-cluster__placeholder">사진</span>'
+    return L.divIcon({
+      className: 'travel-map__icon-root travel-map__photo-icon-root',
+      html: `<div class="travel-cluster-pin travel-map-photo-cluster${active ? ' is-active' : ''}" style="--map-cluster-color:${colorHex}">${image}<span class="travel-map-photo-cluster__count">${escapeHtml(formatCompactCount(clusterCount))}</span></div>`,
+      iconSize: [60, 60],
+      iconAnchor: [30, 30],
+      popupAnchor: [0, -28],
+    })
+  }
+  const markerBody = aggregate?.isPhotoPin && clusterCount === 1
     ? '<circle class="travel-map-pin-glyph__center" cx="22" cy="20.5" r="7.2" />'
     : `<circle class="travel-map-pin-glyph__center travel-map-pin-glyph__center--count" cx="22" cy="20.5" r="10" />
        <text class="travel-map-pin-glyph__count" x="22" y="24" text-anchor="middle">${escapeHtml(formatCompactCount(clusterCount))}</text>`
@@ -1009,6 +1024,42 @@ function renderRoutes() {
   })
 }
 
+function closeJourneyPopup({ resetDismissal = false } = {}) {
+  const popup = journeyPopup
+  journeyPopup = null
+  journeyPopupPhotoId = null
+  popup?.remove()
+  if (resetDismissal) dismissedJourneyPopupPhotoId = null
+}
+
+function syncJourneyPopup() {
+  if (!mapInstance || !props.journeyPlaybackActive || props.journeyPhotoId == null) return false
+  const mediaId = String(props.journeyPhotoId)
+  if (dismissedJourneyPopupPhotoId === mediaId) return true
+  if (journeyPopupPhotoId === mediaId && mapInstance.hasLayer(journeyPopup)) return true
+
+  const group = renderablePhotoItems.value.find((item) => item.photoMembers.some((photo) => String(photo.mediaId) === mediaId))
+  const photo = group?.photoMembers.find((item) => String(item.mediaId) === mediaId)
+  if (!photo) return false
+
+  closeJourneyPopup()
+  // Standalone popup: rebuilding viewport markers must not remove the current
+  // photo card on every moveend/route-follow tick during its display interval.
+  const popup = L.popup({ autoPan: false, keepInView: false, closeOnClick: false, offset: [0, -46] })
+    .setLatLng([photo.latitude, photo.longitude])
+    .setContent(createPopupContent(group))
+  journeyPopup = popup
+  journeyPopupPhotoId = mediaId
+  popup.on('remove', () => {
+    if (journeyPopup !== popup) return
+    dismissedJourneyPopupPhotoId = mediaId
+    journeyPopup = null
+    journeyPopupPhotoId = null
+  })
+  popup.openOn(mapInstance)
+  return true
+}
+
 function renderClusters() {
   if (!mapInstance || !markerLayer) {
     return
@@ -1028,6 +1079,7 @@ function renderClusters() {
 
     const marker = L.marker([aggregate.latitude, aggregate.longitude], {
       icon: buildClusterIcon(aggregate, containsSelected),
+      title: `${aggregate.representative?.title || aggregate.representative?.placeName || '여행 사진'} · 사진 ${aggregate.photoCount}장`,
       bubblingMouseEvents: false,
     })
 
@@ -1053,7 +1105,9 @@ function renderClusters() {
     marker.addTo(markerLayer)
   })
 
-  if (pendingPopupMarkerKey) {
+  if (props.journeyPlaybackActive && syncJourneyPopup()) {
+    pendingPopupMarkerKey = null
+  } else if (pendingPopupMarkerKey) {
     const normalizedPendingKey = String(pendingPopupMarkerKey)
     if (renderedMarkers.has(normalizedPendingKey)) {
       scheduleMarkerPopup(normalizedPendingKey, 6, popupOpenSequence)
@@ -1140,6 +1194,7 @@ function handleViewportEnd() {
   zoomLabel.value = mapInstance?.getZoom() ?? DEFAULT_ZOOM
 
   if (Date.now() < suppressViewportClusterRenderUntil) {
+    scheduleRenderClusters(suppressViewportClusterRenderUntil - Date.now())
     return
   }
 
@@ -1159,27 +1214,12 @@ function zoomMap(direction) {
 }
 
 function resolveJourneyFocusZoom(latitude, longitude) {
-  const photoItems = props.displayMode === 'cluster' ? props.photoClusters : props.photoPins
-  const nearbyItems = [...(photoItems ?? []), ...(props.markers ?? [])]
-  const origin = mapInstance?.project([latitude, longitude], 15)
-  if (!origin) {
-    return 15
-  }
-
-  const nearbyCount = nearbyItems.reduce((count, item) => {
-    const itemLatitude = Number(item?.latitude)
-    const itemLongitude = Number(item?.longitude)
-    if (!Number.isFinite(itemLatitude) || !Number.isFinite(itemLongitude)) {
-      return count
-    }
-    const point = mapInstance.project([itemLatitude, itemLongitude], 15)
-    return origin.distanceTo(point) <= 96 ? count + 1 : count
-  }, 0)
-
-  if (nearbyCount <= 1) {
-    return 15
-  }
-  return Math.min(20, 15 + Math.ceil(Math.log2(nearbyCount)))
+  return getTravelJourneyFocusZoom({
+    latitude,
+    longitude,
+    locations: [...renderablePhotoItems.value, ...(props.markers ?? [])],
+    project: mapInstance ? (point, zoom) => mapInstance.project(point, zoom) : null,
+  })
 }
 
 function journeyLatLng(point) {
@@ -1301,6 +1341,10 @@ function handleMapBackgroundClick() {
   }
 
   clearPendingPopupRequest()
+  if (props.journeyPlaybackActive && props.journeyPhotoId != null) {
+    dismissedJourneyPopupPhotoId = String(props.journeyPhotoId)
+  }
+  closeJourneyPopup()
   mapInstance?.closePopup()
   emit('clear-selection')
 }
@@ -1383,6 +1427,7 @@ onBeforeUnmount(() => {
   window.removeEventListener('keydown', handleFullscreenEscape, { capture: true })
   cancelQueuedMapResize()
 
+  closeJourneyPopup({ resetDismissal: true })
   if (mapInstance) {
     cancelScheduledClusterRender()
     mapInstance.off('movestart zoomstart', handleViewportStart)
@@ -1407,15 +1452,19 @@ watch(
 watch(
   () => [
     props.displayMode,
-    props.displayMode === 'pin'
-      ? `photo-${String(props.selectedPhotoId ?? '')}`
+    props.selectedPhotoId != null
+      ? `photo-${String(props.selectedPhotoId)}`
       : `cluster-${String(props.selectedClusterId ?? '')}`,
   ],
   ([mode, selectedKey], [previousMode, previousSelectedKey] = []) => {
     if (selectedKey === 'photo-' || selectedKey === 'cluster-') {
       clearPendingPopupRequest()
-      mapInstance?.closePopup()
+      if (!props.journeyPlaybackActive) {
+        closeJourneyPopup()
+        mapInstance?.closePopup()
+      }
     } else if (mode !== previousMode || selectedKey !== previousSelectedKey) {
+      if (!props.journeyPlaybackActive) closeJourneyPopup()
       pendingPopupMarkerKey = selectedKey
     }
 
@@ -1428,11 +1477,13 @@ watch(
   () => [props.journeyPhotoId, props.journeyPlaybackActive],
   ([mediaId, isPlaying], [previousMediaId, wasPlaying] = []) => {
     if (mediaId == null || mediaId === '') {
+      closeJourneyPopup({ resetDismissal: true })
       return
     }
     if (String(mediaId) === String(previousMediaId) && (!isPlaying || wasPlaying)) {
       return
     }
+    closeJourneyPopup({ resetDismissal: true })
     pendingPopupMarkerKey = `photo-${String(mediaId)}`
     popupOpenSequence += 1
     scheduleRenderClusters(0)
@@ -1528,7 +1579,7 @@ watch(
       <div class="travel-map__toolbar-group">
         <span class="travel-map__toolbar-label">클러스터 기준</span>
         <small class="travel-cluster-map__legend">
-          {{ props.displayMode === 'pin' ? '핀 보기: 현재 화면 안의 개별 사진 핀 표시' : '군집 보기: 서버에서 계산한 고정 군집 유지' }}
+          {{ props.displayMode === 'pin' ? '핀 보기: 가까운 사진을 개수 표시 핀으로 묶음' : '클러스터 보기: 위치별 대표 사진 썸네일 표시' }}
         </small>
       </div>
 

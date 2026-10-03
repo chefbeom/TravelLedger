@@ -1,0 +1,20 @@
+CREATE TABLE IF NOT EXISTS record_shares (
+    id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    group_id BIGINT NOT NULL,
+    group_name VARCHAR(80) NOT NULL,
+    kind VARCHAR(20) NOT NULL,
+    source_id BIGINT NOT NULL,
+    sender_id BIGINT NOT NULL,
+    recipient_id BIGINT NOT NULL,
+    status VARCHAR(20) NOT NULL,
+    title VARCHAR(120) NOT NULL,
+    snapshot_json TEXT,
+    imported_ledger_entry_id BIGINT,
+    created_at DATETIME(6) NOT NULL,
+    responded_at DATETIME(6),
+    CONSTRAINT uk_record_share_source_recipient UNIQUE (kind, source_id, recipient_id),
+    CONSTRAINT fk_record_share_sender FOREIGN KEY (sender_id) REFERENCES app_users(id),
+    CONSTRAINT fk_record_share_recipient FOREIGN KEY (recipient_id) REFERENCES app_users(id),
+    INDEX idx_record_share_inbox (recipient_id, kind, status, created_at),
+    INDEX idx_record_share_sent (sender_id, kind, created_at)
+);

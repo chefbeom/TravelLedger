@@ -348,6 +348,8 @@ const emit = defineEmits([
   'cancel-receipt-history',
   'delete-receipt-history',
   'submit-entry',
+  'submit-entry-share',
+  'share-entry',
   'register-recurring',
   'undo-entry-action',
   'edit-entry',
@@ -3872,6 +3874,11 @@ async function handleSheetEditEntry(entry) {
   await scrollToEntryEditor()
 }
 
+function handleSheetShareEntry(entry) {
+  closeTransactionSheetModal()
+  emit('share-entry', entry)
+}
+
 function setSelectedDate(value) {
   selectedDate.value = value
 }
@@ -4450,6 +4457,7 @@ defineExpose({
                   : '거래 등록'
             }}
           </button>
+          <button type="button" class="button button--ghost" :disabled="isSubmitting" @click="emit('submit-entry-share')">{{ isEditingEntry ? '수정 후 공유' : '등록 후 공유' }}</button>
 
           <button
             v-if="canUndoLastEntryAction"
@@ -4956,6 +4964,7 @@ defineExpose({
                   @update:sort="selectedDaySort = $event"
                   @update:page="selectedDayEntryPage = $event"
                   @edit-entry="handleSheetEditEntry"
+                  @share-entry="handleSheetShareEntry"
                   @delete-entry="emit('delete-entry', $event)"
                   @open-settings="openTransactionSheetSettings"
                 />
@@ -4999,6 +5008,7 @@ defineExpose({
               @update:sort="selectedDaySort = $event"
               @update:page="selectedDayEntryPage = $event"
               @edit-entry="handleSheetEditEntry"
+              @share-entry="handleSheetShareEntry"
               @delete-entry="emit('delete-entry', $event)"
               @open-settings="openTransactionSheetSettings"
               @close="closeTransactionSheetModal"

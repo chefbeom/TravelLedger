@@ -5,6 +5,7 @@ import 'leaflet/dist/leaflet.css'
 import { buildThumbnailUrl, THUMBNAIL_VARIANTS } from '../lib/mediaPreview'
 import { getTravelJourneyFocusZoom, getTravelJourneyViewportOverviewZoom } from '../lib/travelJourney'
 import { buildTravelMapPhotoGroups } from '../lib/travelMapPhotoGroups'
+import { clampTravelMapPreviewSize } from '../lib/travelMapPreviewSize'
 import TravelMapPhotoPreview from './TravelMapPhotoPreview.vue'
 
 const DEFAULT_CENTER = [37.5547, 126.9706]
@@ -100,9 +101,21 @@ const emit = defineEmits([
 const mapRootElement = ref(null)
 const mapElement = ref(null)
 const isFullscreen = ref(false)
+const fullscreenToggleElement = ref(null)
 const isMapMoving = ref(false)
 const zoomLabel = ref(DEFAULT_ZOOM)
 const previewAggregate = shallowRef(null)
+const previewElement = ref(null)
+const preferredPreviewSize = shallowRef(null)
+const previewBounds = shallowRef({ width: 0, height: 0, compact: false })
+const isPreviewResizing = ref(false)
+const previewSize = computed(() => preferredPreviewSize.value && previewBounds.value.width > 0
+  ? clampTravelMapPreviewSize(preferredPreviewSize.value, previewBounds.value)
+  : null)
+const previewStyle = computed(() => previewSize.value ? {
+  '--map-preview-width': `${previewSize.value.width}px`,
+  '--map-preview-height': `${previewSize.value.height}px`,
+} : {})
 const pinPopupContent = shallowRef(null)
 const previewPhoto = computed(() => {
   const aggregate = previewAggregate.value
@@ -136,6 +149,8 @@ let isPreparingJourneyLeg = false
 let mapResizeObserver = null
 let dismissedJourneyPreviewPhotoId = null
 let pinPopup = null
+let fullscreenScrollPosition = null
+let previewResizeSession = null
 
 function isTouchMapDevice() {
   if (typeof window === 'undefined') {
@@ -833,9 +848,79 @@ function renderRoutes() {
 }
 
 function closeMapPreview({ resetDismissal = false } = {}) {
+  endPreviewResize()
   previewAggregate.value = null
   pinPopup?.remove()
   if (resetDismissal) dismissedJourneyPreviewPhotoId = null
+}
+
+function updatePreviewBounds() {
+  const stage = mapElement.value?.parentElement
+  if (!stage) return
+  previewBounds.value = {
+    width: stage.clientWidth,
+    height: stage.clientHeight,
+    compact: window.matchMedia('(max-width: 760px)').matches,
+  }
+}
+
+function startPreviewResize(event) {
+  if (event.button !== 0 || previewResizeSession || !previewElement.value) return
+  event.preventDefault()
+  event.stopPropagation()
+  updatePreviewBounds()
+  const rect = previewElement.value.getBoundingClientRect()
+  const handle = event.currentTarget
+  previewResizeSession = {
+    pointerId: event.pointerId, handle, x: event.clientX, y: event.clientY,
+    width: rect.width, height: rect.height, compact: previewBounds.value.compact,
+  }
+  preferredPreviewSize.value = clampTravelMapPreviewSize(rect, previewBounds.value)
+  isPreviewResizing.value = true
+  handle.setPointerCapture(event.pointerId)
+}
+
+function movePreviewResize(event) {
+  const session = previewResizeSession
+  if (!session || session.pointerId !== event.pointerId) return
+  event.preventDefault()
+  event.stopPropagation()
+  updatePreviewBounds()
+  // Desktop is centered vertically; its lower corner travels by half the height
+  // change. The compact panel is bottom-anchored, so resize from its top corner.
+  preferredPreviewSize.value = clampTravelMapPreviewSize({
+    width: session.width + event.clientX - session.x,
+    height: session.height + (event.clientY - session.y) * (session.compact ? -1 : 2),
+  }, previewBounds.value)
+}
+
+function endPreviewResize(event) {
+  const session = previewResizeSession
+  if (!session || (event && event.pointerId !== session.pointerId)) return
+  previewResizeSession = null
+  isPreviewResizing.value = false
+  if (session.handle.hasPointerCapture(session.pointerId)) session.handle.releasePointerCapture(session.pointerId)
+}
+
+function resetPreviewSize() {
+  endPreviewResize()
+  preferredPreviewSize.value = null
+}
+
+function handlePreviewResizeKey(event) {
+  if (event.key === 'Home') {
+    event.preventDefault()
+    event.stopPropagation()
+    resetPreviewSize()
+    return
+  }
+  const delta = { ArrowLeft: [-16, 0], ArrowRight: [16, 0], ArrowUp: [0, -16], ArrowDown: [0, 16] }[event.key]
+  if (!delta || !previewElement.value) return
+  event.preventDefault()
+  event.stopPropagation()
+  updatePreviewBounds()
+  const rect = previewElement.value.getBoundingClientRect()
+  preferredPreviewSize.value = clampTravelMapPreviewSize({ width: rect.width + delta[0], height: rect.height + delta[1] }, previewBounds.value)
 }
 
 async function syncPinPopup() {
@@ -1004,28 +1089,30 @@ function resolveInitialCenter() {
   return firstRoutePoint || DEFAULT_CENTER
 }
 
-function syncFullscreenState() {
-  isFullscreen.value = document.fullscreenElement === mapRootElement.value
+async function setFullscreen(value, { restoreFocus = true } = {}) {
+  if (isFullscreen.value === value) return
+  // Native fullscreen reserves Escape for the browser, independently of
+  // preventDefault. Use a viewport-filling app layer to close one layer at a time
+  // without requiring Keyboard Lock permission or re-entering native fullscreen.
+  if (value) fullscreenScrollPosition = { left: window.scrollX, top: window.scrollY }
+  isFullscreen.value = value
+  emit('fullscreen-change', value)
+  await nextTick()
+  if (isFullscreen.value !== value) return
+  updatePreviewBounds()
+  queueMapResize()
+  if (value) mapRootElement.value?.focus({ preventScroll: true })
+  else {
+    if (restoreFocus) {
+      if (fullscreenScrollPosition) window.scrollTo({ ...fullscreenScrollPosition, behavior: 'instant' })
+      fullscreenToggleElement.value?.focus({ preventScroll: true })
+    }
+    fullscreenScrollPosition = null
+  }
 }
 
-async function toggleFullscreen() {
-  const element = mapRootElement.value
-  if (!element || typeof element.requestFullscreen !== 'function') {
-    return
-  }
-
-  try {
-    if (document.fullscreenElement === element) {
-      await document.exitFullscreen()
-    } else {
-      await element.requestFullscreen()
-    }
-  } catch (error) {
-    console.error('Failed to toggle my-map fullscreen.', error)
-  } finally {
-    syncFullscreenState()
-    queueMapResize()
-  }
+function toggleFullscreen() {
+  setFullscreen(!isFullscreen.value)
 }
 
 function handleViewportStart() {
@@ -1204,36 +1291,56 @@ function handleOutsidePreviewPointer(event) {
   if (props.active && previewPhoto.value && !mapRootElement.value?.contains(event.target)) dismissMapPreview()
 }
 
-function handleFullscreenChange() {
-  syncFullscreenState()
-  emit('fullscreen-change', isFullscreen.value)
-  queueMapResize()
-}
-
 function handleFullscreenEscape(event) {
-  if (event.key !== 'Escape' || !props.active) {
+  if (!props.active) return
+  if (event.key === 'Tab' && isFullscreen.value) {
+    const scope = mapRootElement.value?.querySelector('[data-map-photo-detail="true"]') || mapRootElement.value
+    const actions = [...(scope?.querySelectorAll('button, a[href], input, select, textarea, [tabindex]') ?? [])]
+      .filter((element) => !element.matches(':disabled') && element.tabIndex >= 0 && element.getClientRects().length > 0)
+    const first = actions[0]
+    const last = actions.at(-1)
+    const focused = document.activeElement
+    if (!first || !actions.includes(focused) || (event.shiftKey && focused === first) || (!event.shiftKey && focused === last)) {
+      event.preventDefault()
+      event.stopImmediatePropagation?.()
+      const target = (event.shiftKey ? last : first) || mapRootElement.value
+      target?.focus({ preventScroll: true })
+    }
+    return
+  }
+  if (event.key !== 'Escape') {
     return
   }
 
   const photoDetail = document.querySelector('[data-map-photo-detail="true"]')
   const closeAction = photoDetail?.querySelector('[data-modal-close]')
+  const consumeEscape = () => {
+    event.preventDefault()
+    event.stopImmediatePropagation?.()
+    event.returnValue = false
+  }
+  if (event.repeat && (isFullscreen.value || previewPhoto.value)) {
+    consumeEscape()
+    return
+  }
   if (photoDetail) {
-    if (!isFullscreen.value || !closeAction || closeAction.disabled) return
+    if (!isFullscreen.value || !mapRootElement.value?.contains(photoDetail)) return
     // Close the nested detail before the map preview or fullscreen itself.
-    event.preventDefault()
-    event.stopImmediatePropagation?.()
-    event.returnValue = false
-    closeAction.click()
+    consumeEscape()
+    if (closeAction && !closeAction.disabled) closeAction.click()
   } else if (previewPhoto.value) {
-    event.preventDefault()
-    event.stopImmediatePropagation?.()
-    event.returnValue = false
+    consumeEscape()
     dismissMapPreview()
+  } else if (isFullscreen.value && (props.selectedClusterId != null || props.selectedPhotoId != null || props.selectedMarkerId != null)) {
+    consumeEscape()
+    emit('clear-selection')
+  } else if (isFullscreen.value) {
+    consumeEscape()
+    setFullscreen(false)
   }
 }
 
 onMounted(() => {
-  document.addEventListener('fullscreenchange', handleFullscreenChange)
   document.addEventListener('pointerdown', handleOutsidePreviewPointer)
   window.addEventListener('keydown', handleFullscreenEscape, { capture: true })
 
@@ -1275,8 +1382,12 @@ onMounted(() => {
   emit('fullscreen-change', isFullscreen.value)
   renderMap({ shouldFit: true })
   mapInstance.whenReady(() => queueMapResize())
+  updatePreviewBounds()
   if (typeof ResizeObserver !== 'undefined') {
-    mapResizeObserver = new ResizeObserver(() => queueMapResize())
+    mapResizeObserver = new ResizeObserver(() => {
+      updatePreviewBounds()
+      queueMapResize()
+    })
     mapResizeObserver.observe(mapElement.value)
   }
 })
@@ -1284,7 +1395,6 @@ onMounted(() => {
 onBeforeUnmount(() => {
   cancelJourneyLeg()
   mapResizeObserver?.disconnect()
-  document.removeEventListener('fullscreenchange', handleFullscreenChange)
   document.removeEventListener('pointerdown', handleOutsidePreviewPointer)
   window.removeEventListener('keydown', handleFullscreenEscape, { capture: true })
   cancelQueuedMapResize()
@@ -1358,7 +1468,12 @@ watch(
 watch(
   () => props.active,
   async (value) => {
-    if (!value || !mapInstance) {
+    if (!value) {
+      endPreviewResize()
+      await setFullscreen(false, { restoreFocus: false })
+      return
+    }
+    if (!mapInstance) {
       return
     }
 
@@ -1428,6 +1543,10 @@ watch(
   <div
     ref="mapRootElement"
     class="travel-map"
+    :role="isFullscreen ? 'dialog' : undefined"
+    :aria-modal="isFullscreen ? 'true' : undefined"
+    :aria-label="isFullscreen ? '여행 지도 전체 화면' : undefined"
+    tabindex="-1"
     :class="{
       'travel-map--fullscreen': isFullscreen,
       'travel-map--moving': isMapMoving,
@@ -1452,7 +1571,7 @@ watch(
 
       <div class="travel-map__toolbar-group">
         <button class="travel-map__toolbar-button" type="button" @click="fitToAll">전체 보기</button>
-        <button class="travel-map__toolbar-button" type="button" @click="toggleFullscreen">
+        <button ref="fullscreenToggleElement" class="travel-map__toolbar-button" type="button" :aria-expanded="isFullscreen" @click="toggleFullscreen">
           {{ isFullscreen ? '전체 화면 종료' : '전체 화면' }}
         </button>
       </div>
@@ -1460,17 +1579,36 @@ watch(
       <div v-if="isFullscreen" class="travel-map__toolbar-group travel-map__toolbar-group--journey">
         <slot name="fullscreen-controls" :is-fullscreen="isFullscreen" />
       </div>
+      <small v-if="isFullscreen" class="travel-map__escape-hint">Esc: 사진 상세 → 미리보기 → 전체 화면 순서로 닫기</small>
     </div>
 
     <div class="travel-map__stage">
-      <aside v-if="previewPhoto" class="travel-map__preview" @click.stop @pointerdown.stop @touchstart.stop>
+      <aside v-if="previewPhoto" ref="previewElement" class="travel-map__preview" :class="{ 'travel-map__preview--sized': Boolean(previewSize), 'travel-map__preview--resizing': isPreviewResizing }" :style="previewStyle" @click.stop @pointerdown.stop @touchstart.stop>
         <TravelMapPhotoPreview
+          resizable
           :photo="previewPhoto"
+          :preview-width="previewSize?.width || 0"
           :photo-count="previewAggregate.photoCount"
           :memory-count="previewAggregate.memoryCount || previewPhoto.memoryCount || 0"
           @open="openPreviewPhoto"
           @close="dismissMapPreview"
+          @reset-size="resetPreviewSize"
         />
+        <button
+          class="travel-map__preview-resize"
+          type="button"
+          aria-label="미리보기 크기 조절"
+          title="드래그 또는 방향키로 크기 조절 · Home으로 초기화"
+          @pointerdown="startPreviewResize"
+          @pointermove="movePreviewResize"
+          @pointerup="endPreviewResize"
+          @pointercancel="endPreviewResize"
+          @lostpointercapture="endPreviewResize"
+          @keydown="handlePreviewResizeKey"
+          @click.stop.prevent
+        >
+          <span aria-hidden="true">⤡</span>
+        </button>
       </aside>
       <div ref="mapElement" class="travel-map__canvas" @click="handleCanvasBackgroundClick" />
       <Teleport v-if="previewPhoto && pinPopupContent" :to="pinPopupContent">

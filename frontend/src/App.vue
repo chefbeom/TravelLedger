@@ -838,7 +838,7 @@ function isMobileModalScrollLockRequired() {
     : document.querySelector(MODAL_SCROLL_LOCK_SELECTOR)
   const fullscreenMap = typeof document === 'undefined'
     ? null
-    : document.fullscreenElement?.closest?.('.travel-map')
+    : document.querySelector('.travel-map--fullscreen')
 
   return typeof window !== 'undefined'
     && window.matchMedia(MOBILE_MODAL_SCROLL_LOCK_QUERY).matches

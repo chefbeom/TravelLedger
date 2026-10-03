@@ -226,7 +226,7 @@ test('public shared map photo modal stays stable while the full image loads', as
   const fullscreenButton = page.getByRole('button', { name: '전체 화면', exact: true })
   await expect(fullscreenButton).toBeVisible()
   await fullscreenButton.tap()
-  await expect.poll(() => page.evaluate(() => Boolean(document.fullscreenElement))).toBeTruthy()
+  await expect(page.getByRole('dialog', { name: '여행 지도 전체 화면', exact: true })).toBeVisible()
 
   const cluster = page.locator('.travel-map-photo-cluster').first()
   await expect(cluster).toBeVisible()
@@ -272,6 +272,10 @@ test('public shared map photo modal stays stable while the full image loads', as
   await expect(page.locator('.public-map-share-photo-modal__header h2')).toHaveText('Third place')
   await expect(page.locator('.public-map-share-photo-modal__header p')).toContainText('2026-07-13')
   await expect(page.locator('.public-map-share-photo-modal__media > img')).toHaveAttribute('src', '/test-photo-3.png')
+  await page.keyboard.press('Escape')
+  await expect(dialog).toHaveCount(0)
+  await expect(page.getByRole('dialog', { name: '여행 지도 전체 화면', exact: true })).toBeVisible()
+  await expect(preview).toBeVisible()
   expect(pageErrors).toEqual([])
 })
 test.describe('mobile travel map and modal interactions', () => {

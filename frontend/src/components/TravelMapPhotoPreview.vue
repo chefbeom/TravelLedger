@@ -8,11 +8,14 @@ const props = defineProps({
   photoCount: { type: Number, default: 0 },
   memoryCount: { type: Number, default: 0 },
   compact: { type: Boolean, default: false },
+  resizable: { type: Boolean, default: false },
+  previewWidth: { type: Number, default: 0 },
 })
-const emit = defineEmits(['open', 'close'])
+const emit = defineEmits(['open', 'close', 'reset-size'])
 const imageFallback = ref(0)
 const sourceUrl = computed(() => props.photo.representativePhotoUrl || props.photo.photoUrl || props.photo.contentUrl || '')
-const imageUrl = computed(() => imageFallback.value === 1 ? sourceUrl.value : buildThumbnailUrl(sourceUrl.value, props.compact ? THUMBNAIL_VARIANTS.mini : THUMBNAIL_VARIANTS.preview))
+const thumbnailVariant = computed(() => props.compact ? THUMBNAIL_VARIANTS.mini : props.previewWidth > 480 ? THUMBNAIL_VARIANTS.detail : THUMBNAIL_VARIANTS.preview)
+const imageUrl = computed(() => imageFallback.value === 1 ? sourceUrl.value : buildThumbnailUrl(sourceUrl.value, thumbnailVariant.value))
 const title = computed(() => props.photo.title || props.photo.placeName || props.photo.originalFileName || '여행 사진')
 const location = computed(() => [props.photo.country, props.photo.region, props.photo.placeName].filter(Boolean).join(' / '))
 const capturedAt = computed(() => [
@@ -21,14 +24,17 @@ const capturedAt = computed(() => [
 ].filter((value) => value && value !== '-').join(' '))
 const owner = computed(() => props.photo.sharedByDisplayName || props.photo.ownerDisplayName || props.photo.uploadedBy || '')
 
-watch(sourceUrl, () => { imageFallback.value = 0 })
+watch([sourceUrl, thumbnailVariant], () => { imageFallback.value = 0 })
 </script>
 
 <template>
   <section :class="['travel-map-preview', { 'travel-map-preview--compact': compact }]" :aria-label="compact ? '선택한 핀 정보' : '선택한 여행 사진 미리보기'">
     <header v-if="!compact" class="travel-map-preview__header">
       <span>사진 미리보기</span>
-      <button class="button button--secondary" type="button" aria-label="사진 미리보기 닫기" @click="emit('close')">×</button>
+      <div class="travel-map-preview__header-actions">
+        <button v-if="resizable" class="button button--secondary" type="button" aria-label="미리보기 크기 초기화" @click="emit('reset-size')">기본 크기</button>
+        <button class="button button--secondary" type="button" aria-label="사진 미리보기 닫기" @click="emit('close')">×</button>
+      </div>
     </header>
     <button class="travel-map-preview__open" type="button" :aria-label="compact ? '핀 사진 크게 보기' : '사진 크게 보기'" @click="emit('open')">
       <img v-if="sourceUrl && imageFallback < 2" class="travel-map-preview__image" :src="imageUrl" :alt="title" loading="eager" decoding="async" @error="imageFallback++" />

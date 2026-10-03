@@ -45,7 +45,7 @@ async function mountMap(page, kind = 'panel', day = false) {
   const fixture = await mockMap(page)
   await page.evaluate(async ({ kind, day, clusters, photos }) => {
     const { createApp, h, reactive } = await import('/node_modules/.vite/deps/vue.js')
-    const file = kind === 'private' ? 'TravelMyMapWorkspace' : kind === 'public' ? 'TravelPublicMapShareWorkspace' : 'TravelMyMapClusterPanel'
+    const file = kind === 'private' ? 'TravelMyMapWorkspace' : kind === 'public' ? 'TravelPublicMapShareWorkspace' : kind === 'editor' ? 'TravelMapPanel' : 'TravelMyMapClusterPanel'
     const { default: Component } = await import(`/src/components/${file}.vue`)
     document.querySelector('#app').style.display = 'none'
     const host = document.createElement('div')
@@ -56,15 +56,39 @@ async function mountMap(page, kind = 'panel', day = false) {
       createApp(Component, kind === 'public' ? { token: 'grouped-photos' } : { active: true }).mount(host)
       return
     }
-    const state = reactive({ photoClusters: day ? [] : clusters, photoPins: photos, displayMode: day ? 'pin' : 'cluster', selectedPhotoId: null, journeyPhotoId: null, journeyPlaybackActive: false, focusTarget: null })
+    const state = reactive({ active: true, photoClusters: day ? [] : clusters, photoPins: photos, displayMode: day ? 'pin' : 'cluster', selectedPhotoId: null, journeyPhotoId: null, journeyPlaybackActive: false, focusTarget: null })
     window.mapDisplayFixture = state
     window.mapDisplayPreviewEvents = []
-    createApp({ render: () => h(Component, { ...state, onPreviewCluster: (item) => window.mapDisplayPreviewEvents.push(item.mediaId ?? item.id) }) }).mount(host)
+    window.mapDisplayApp = createApp({ render: () => h(Component, { ...state, onPreviewCluster: (item) => window.mapDisplayPreviewEvents.push(item.mediaId ?? item.id) }) })
+    window.mapDisplayApp.mount(host)
   }, { kind, day, clusters, photos })
   return fixture
 }
 
 const markerSelector = '.leaflet-marker-pane .leaflet-marker-icon'
+
+async function dragPreviewSize(page, handle, dx, dy, isMobile) {
+  const box = await handle.boundingBox()
+  const x = box.x + box.width / 2
+  const y = box.y + box.height / 2
+  if (isMobile) {
+    const session = await page.context().newCDPSession(page)
+    try {
+      await session.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y }] })
+      for (let step = 1; step <= 12; step++) {
+        await session.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: x + dx * step / 12, y: y + dy * step / 12 }] })
+      }
+      await session.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
+    } finally {
+      await session.detach()
+    }
+  } else {
+    await page.mouse.move(x, y)
+    await page.mouse.down()
+    await page.mouse.move(x + dx, y + dy, { steps: 12 })
+    await page.mouse.up()
+  }
+}
 
 for (const kind of ['private', 'public']) {
   test(`${kind} travel map restores thumbnails and switches to grouped count pins`, async ({ page }, testInfo) => {
@@ -160,8 +184,8 @@ test('journey card survives zoom, route-like pans and marker redraws until the n
   await expect(pinCard.locator('strong')).toHaveText('Photo 3')
 
   // Explicit dismissal must not be undone by a later moveend/redraw.
-  await page.locator('.travel-map-preview__header button').focus()
-  await page.locator('.travel-map-preview__header button').press('Enter')
+  await page.getByRole('button', { name: '사진 미리보기 닫기', exact: true }).focus()
+  await page.getByRole('button', { name: '사진 미리보기 닫기', exact: true }).press('Enter')
   await page.evaluate(() => {
     window.mapDisplayFixture.focusTarget = { requestId: 20, latitude: 35.6813, longitude: 139.7672, keepZoom: true, duration: 0.1 }
   })
@@ -247,7 +271,7 @@ async function expectPreviewMapLayout(page, isMobile) {
     expect(layout.preview.width).toBeLessThan(layout.canvas.width)
     expect(layout.preview.y).toBeLessThan(layout.canvas.bottom)
   } else {
-    expect(layout.preview.width).toBeLessThanOrEqual(380)
+    expect(layout.preview.width).toBeLessThanOrEqual(440)
     expect(layout.preview.x).toBeGreaterThan(layout.canvas.x)
   }
   await expect.poll(() => page.evaluate(() => {
@@ -314,7 +338,7 @@ for (const kind of ['private', 'public']) {
       await expect(page.locator('[data-map-photo-detail="true"]')).toBeVisible()
       await page.keyboard.press('Escape')
       await expect(page.locator('[data-map-photo-detail="true"]')).toHaveCount(0)
-      expect(await page.evaluate(() => Boolean(document.fullscreenElement))).toBe(true)
+      await expect(page.getByRole('dialog', { name: '여행 지도 전체 화면', exact: true })).toBeVisible()
       await expect(preview).toBeVisible()
       await preview.getByRole('button', { name: '사진 미리보기 닫기', exact: true }).click()
       await expect(preview).toHaveCount(0)
@@ -326,6 +350,97 @@ for (const kind of ['private', 'public']) {
       })).toBeLessThan(2)
       await page.getByRole('button', { name: '전체 화면 종료', exact: true }).click()
     }
+    expect(fixture.errors).toEqual([])
+  })
+
+  test(`${kind} preview resizes by dragging or keyboard and keeps its size after reopening`, async ({ page, isMobile }, testInfo) => {
+    const fixture = await mountMap(page, kind)
+    await page.getByRole('button', { name: '전체 화면', exact: true }).click()
+    await page.locator('.leaflet-marker-icon[title^="Photo 1"]').click()
+    const map = page.locator('#map-display-test .travel-map')
+    const frame = page.locator('.travel-map__preview')
+    const preview = page.getByRole('region', { name: '선택한 여행 사진 미리보기', exact: true })
+    const handle = page.getByRole('button', { name: '미리보기 크기 조절', exact: true })
+    await expect(preview).toBeVisible()
+    await expect(map).not.toHaveClass(/travel-map--moving/)
+    const initial = await frame.boundingBox()
+    const zoom = await page.locator('.travel-cluster-map__zoom').textContent()
+    await dragPreviewSize(page, handle, isMobile ? -30 : 180, isMobile ? -90 : 60, isMobile)
+    await expect(frame).toHaveClass(/travel-map__preview--sized/)
+    await expect(frame).not.toHaveClass(/travel-map__preview--resizing/)
+    const resized = await frame.boundingBox()
+    expect(resized.height).toBeGreaterThan(initial.height + 60)
+    if (isMobile) expect(resized.width).toBeLessThan(initial.width)
+    else {
+      expect(resized.width).toBeGreaterThan(initial.width + 150)
+      await expect(preview.locator('img')).toHaveAttribute('src', /thumbnail=true.*w=960/)
+    }
+    await expect(page.locator('.travel-cluster-map__zoom')).toHaveText(zoom)
+    await expect(page.locator('[data-map-photo-detail="true"]')).toHaveCount(0)
+    await expect(page.getByRole('region', { name: '선택한 핀 정보', exact: true })).toBeVisible()
+    await map.screenshot({ path: testInfo.outputPath('resizable-preview.png') })
+    await preview.getByRole('button', { name: '사진 미리보기 닫기', exact: true }).click()
+    await page.locator('.leaflet-marker-icon[title^="Photo 1"]').click()
+    await expect(preview).toBeVisible()
+    expect(Math.abs((await frame.boundingBox()).width - resized.width)).toBeLessThan(2)
+    expect(Math.abs((await frame.boundingBox()).height - resized.height)).toBeLessThan(2)
+    await handle.focus()
+    await handle.press('ArrowDown')
+    expect((await frame.boundingBox()).height).toBeGreaterThan(resized.height + 10)
+    await handle.press('ArrowRight')
+    expect((await frame.boundingBox()).width).toBeGreaterThan(resized.width + 10)
+    const preferred = await frame.boundingBox()
+    await page.setViewportSize({ width: 350, height: 420 })
+    await expect.poll(async () => {
+      const size = await frame.boundingBox()
+      return size.x >= 0 && size.y >= 0 && size.x + size.width <= 350 && size.y + size.height <= 420
+    }).toBe(true)
+    await page.setViewportSize(isMobile ? { width: 390, height: 844 } : { width: 1440, height: 900 })
+    await expect.poll(async () => Math.abs((await frame.boundingBox()).height - preferred.height)).toBeLessThan(2)
+    await preview.getByRole('button', { name: '미리보기 크기 초기화', exact: true }).click()
+    await expect(frame).not.toHaveClass(/travel-map__preview--sized/)
+    expect(Math.abs((await frame.boundingBox()).width - initial.width)).toBeLessThan(2)
+    expect(fixture.errors).toEqual([])
+  })
+
+  test(`${kind} Escape closes one layer at a time without leaving the expanded map`, async ({ page }) => {
+    const fixture = await mountMap(page, kind)
+    const map = page.getByRole('dialog', { name: '여행 지도 전체 화면', exact: true })
+    const rootOverflow = await page.evaluate(() => getComputedStyle(document.documentElement).overflow)
+    await page.getByRole('button', { name: '전체 화면', exact: true }).click()
+    await expect(map).toBeVisible()
+    await expect(map).toHaveCSS('position', 'fixed')
+    const bounds = await map.boundingBox()
+    expect(bounds.x).toBe(0)
+    expect(bounds.y).toBe(0)
+    expect(bounds.width).toBe(page.viewportSize().width)
+    expect(bounds.height).toBe(page.viewportSize().height)
+    // No native fullscreen means a real browser Escape cannot forcibly exit it.
+    expect(await page.evaluate(() => document.fullscreenElement)).toBeNull()
+    expect(await page.evaluate(() => getComputedStyle(document.documentElement).overflow)).toBe('hidden')
+    await page.locator('.leaflet-marker-icon[title^="Photo 1"]').click()
+    const preview = page.getByRole('region', { name: '선택한 여행 사진 미리보기', exact: true })
+    const card = page.getByRole('region', { name: '선택한 핀 정보', exact: true })
+    await expect(preview).toBeVisible()
+    await preview.getByRole('button', { name: '사진 크게 보기', exact: true }).click()
+    await expect(page.locator('[data-map-photo-detail="true"]')).toBeVisible()
+    await page.keyboard.press('Escape')
+    await expect(page.locator('[data-map-photo-detail="true"]')).toHaveCount(0)
+    await expect(preview).toBeVisible()
+    await expect(card).toBeVisible()
+    await expect(map).toBeVisible()
+    // Holding Escape must not peel multiple layers after the detail closes.
+    await page.evaluate(() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', repeat: true, cancelable: true })))
+    await expect(preview).toBeVisible()
+    await expect(map).toBeVisible()
+    await page.keyboard.press('Escape')
+    await expect(preview).toHaveCount(0)
+    await expect(card).toHaveCount(0)
+    await expect(map).toBeVisible()
+    await page.keyboard.press('Escape')
+    await expect(map).toHaveCount(0)
+    await expect(page.getByRole('button', { name: '전체 화면', exact: true })).toBeFocused()
+    expect(await page.evaluate(() => getComputedStyle(document.documentElement).overflow)).toBe(rootOverflow)
     expect(fixture.errors).toEqual([])
   })
 
@@ -370,6 +485,85 @@ for (const kind of ['private', 'public']) {
     expect(fixture.errors).toEqual([])
   })
 }
+
+test('expanded map contains keyboard focus and releases scroll lock on deactivation and unmount', async ({ page }) => {
+  const fixture = await mountMap(page)
+  const map = page.getByRole('dialog', { name: '여행 지도 전체 화면', exact: true })
+  const rootOverflow = await page.evaluate(() => getComputedStyle(document.documentElement).overflow)
+  await page.getByRole('button', { name: '전체 화면', exact: true }).click()
+  await expect(map).toBeFocused()
+  await page.keyboard.press('Shift+Tab')
+  await expect(map.locator('.leaflet-control-attribution a').last()).toBeFocused()
+  await page.keyboard.press('Tab')
+  await expect(map.getByRole('button', { name: '지도 축소', exact: true })).toBeFocused()
+  await page.evaluate(() => { window.mapDisplayFixture.active = false })
+  await expect(map).toHaveCount(0)
+  expect(await page.evaluate(() => getComputedStyle(document.documentElement).overflow)).toBe(rootOverflow)
+  await page.evaluate(() => { window.mapDisplayFixture.active = true })
+  await page.evaluate(() => {
+    document.querySelector('#map-display-test').style.minHeight = '3000px'
+    window.scrollTo({ top: 240, behavior: 'instant' })
+    const button = [...document.querySelectorAll('#map-display-test button')].find((item) => item.textContent.trim() === '전체 화면')
+    button.click()
+  })
+  await expect(map).toBeVisible()
+  // A fixed layer can change the underlying document's scroll range. Exit
+  // should restore the original position even if it changed while expanded.
+  await page.evaluate(() => window.scrollTo({ top: 0, behavior: 'instant' }))
+  await page.keyboard.press('Escape')
+  await expect(map).toHaveCount(0)
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(240)
+  await page.evaluate(() => {
+    const button = [...document.querySelectorAll('#map-display-test button')].find((item) => item.textContent.trim() === '전체 화면')
+    button.click()
+  })
+  await expect(map).toBeVisible()
+  await page.evaluate(() => { window.mapDisplayApp.unmount() })
+  await expect(map).toHaveCount(0)
+  expect(await page.evaluate(() => getComputedStyle(document.documentElement).overflow)).toBe(rootOverflow)
+  expect(fixture.errors).toEqual([])
+})
+
+test('resized journey preview survives photo changes and Home resets its size', async ({ page }) => {
+  const fixture = await mountMap(page, 'panel', true)
+  await page.getByRole('button', { name: '전체 화면', exact: true }).click()
+  await page.evaluate(() => {
+    window.mapDisplayFixture.journeyPlaybackActive = true
+    window.mapDisplayFixture.journeyPhotoId = 2
+  })
+  const frame = page.locator('.travel-map__preview')
+  const preview = page.getByRole('region', { name: '선택한 여행 사진 미리보기', exact: true })
+  const handle = page.getByRole('button', { name: '미리보기 크기 조절', exact: true })
+  await expect(preview.locator('strong')).toHaveText('Photo 2')
+  const initial = await frame.boundingBox()
+  await handle.focus()
+  await handle.press('ArrowDown')
+  await handle.press('ArrowRight')
+  const resized = await frame.boundingBox()
+  await page.evaluate(() => { window.mapDisplayFixture.journeyPhotoId = 3 })
+  await expect(preview.locator('strong')).toHaveText('Photo 3')
+  expect(Math.abs((await frame.boundingBox()).width - resized.width)).toBeLessThan(1)
+  expect(Math.abs((await frame.boundingBox()).height - resized.height)).toBeLessThan(1)
+  await handle.press('Home')
+  await expect(frame).not.toHaveClass(/travel-map__preview--sized/)
+  expect(Math.abs((await frame.boundingBox()).width - initial.width)).toBeLessThan(1)
+  expect(fixture.errors).toEqual([])
+})
+
+test('route editor native fullscreen keeps its existing sizing and exit control', async ({ page }) => {
+  const fixture = await mountMap(page, 'editor')
+  await page.getByRole('button', { name: '전체 화면', exact: true }).click()
+  await expect.poll(() => page.evaluate(() => Boolean(document.fullscreenElement))).toBe(true)
+  const map = page.locator('#map-display-test .travel-map--fullscreen')
+  await expect(map).toBeVisible()
+  const bounds = await map.boundingBox()
+  expect(bounds.width).toBe(page.viewportSize().width)
+  expect(bounds.height).toBe(page.viewportSize().height)
+  await map.getByRole('button', { name: '전체 화면 종료', exact: true }).click()
+  await expect.poll(() => page.evaluate(() => document.fullscreenElement)).toBeNull()
+  await expect(map).toHaveCount(0)
+  expect(fixture.errors).toEqual([])
+})
 
 test('preview falls back safely when a thumbnail fails and resets for the next photo', async ({ page }) => {
   const fixture = await mountMap(page, 'panel', true)

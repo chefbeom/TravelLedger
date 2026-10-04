@@ -174,10 +174,9 @@ public class LedgerOcrService {
                     owner.getId(), normalizedUserPrompt, useExistingEntryStyle,
                     existingEntryStyleMode, existingEntryStyleReferenceDate
             );
-            history = createImageAnalysisRequest(owner, file, normalizedDocumentType, normalizedClientRequestId);
-            history.setEffectivePrompt(effectiveUserPrompt == null ? "" : effectiveUserPrompt);
-            imageAnalysisRequestRepository.save(history);
-            storeImageForHistory(owner.getId(), history, file);
+            history = createImageAnalysisRequest(owner, file, normalizedDocumentType, normalizedClientRequestId, effectiveUserPrompt);
+            history = storeImageForHistory(owner.getId(), history, file);
+            if (history.getStatus() != LedgerImageAnalysisStatus.PROCESSING) return existingAnalyzeResponse(history);
             if (!hasStoredImage(history)) temporaryImage = spoolImage(file);
             // The task owns admission and cleanup from this point, including rejection.
             admissionOwned = false;
@@ -279,8 +278,8 @@ public class LedgerOcrService {
                     owner.getId(), normalizedUserPrompt, useExistingEntryStyle,
                     existingEntryStyleMode, existingEntryStyleReferenceDate
             );
-            history = createImageAnalysisRequest(owner, file, normalizedDocumentType, normalizedClientRequestId);
-            storeImageForHistory(owner.getId(), history, file);
+            history = createImageAnalysisRequest(owner, file, normalizedDocumentType, normalizedClientRequestId, effectiveUserPrompt);
+            history = storeImageForHistory(owner.getId(), history, file);
             RemoteAnalyzeResponse remoteResponse = remoteClient.analyze(file, normalizedDocumentType, effectiveUserPrompt);
             String paymentCapturePlatform = resolvePaymentCapturePlatform(
                     firstNonBlank(remoteResponse.documentType(), normalizedDocumentType),
@@ -380,6 +379,13 @@ public class LedgerOcrService {
                 releaseImageAnalysis(userId);
                 deleteTemporaryImage(temporaryImage);
                 if (jobLease != null) jobLease.close();
+                if (!isCancelled()) {
+                    try { get(); }
+                    catch (java.util.concurrent.ExecutionException failure) {
+                        log.error("Ledger image worker exited unexpectedly: historyId={}, failureType={}",
+                                historyId, failure.getCause().getClass().getSimpleName());
+                    } catch (InterruptedException interrupted) { Thread.currentThread().interrupt(); }
+                }
             }
         };
         if (imageAnalysisTasks.putIfAbsent(historyId, task) != null) {
@@ -443,7 +449,7 @@ public class LedgerOcrService {
     ) {
         Timer.Sample ocrRequestTimer = startOcrRequestTimer();
         LedgerImageAnalysisRequest history = imageAnalysisRequestRepository.findByIdAndOwnerId(historyId, userId).orElse(null);
-        if (history == null || history.getStatus() == LedgerImageAnalysisStatus.CANCELLED) {
+        if (history == null || history.getStatus() != LedgerImageAnalysisStatus.PROCESSING) {
             recordOcrRequest(ocrRequestTimer, "cancelled", "cancelled");
             return;
         }
@@ -503,10 +509,10 @@ public class LedgerOcrService {
             completeImageAnalysisRequest(history, response);
             recordOcrRequest(ocrRequestTimer, "success", "none");
         } catch (RuntimeException exception) {
-            failImageAnalysisRequest(history, exception);
             String failureReason = ocrFailureReason(exception);
             recordOcrRequest(ocrRequestTimer, "failure", failureReason);
-            log.warn("Ledger image analysis background task failed: historyId={}", historyId, exception);
+            log.warn("Ledger image analysis failed: historyId={}, failureType={}", historyId, exception.getClass().getSimpleName());
+            if (jobLease == null || jobLease.isValid()) failImageAnalysisRequest(history, exception);
         }
     }
 
@@ -704,15 +710,16 @@ public class LedgerOcrService {
                 .toList();
     }
     private LedgerImageAnalysisHistoryResponse cancelHistoryRecord(LedgerImageAnalysisRequest history) {
-        cancelRunningImageAnalysis(history.getId());
         if (history.getStatus() != LedgerImageAnalysisStatus.PROCESSING) {
             return toHistoryResponse(history);
         }
-        history.setStatus(LedgerImageAnalysisStatus.CANCELLED);
-        history.setCancelledAt(LocalDateTime.now());
-        history.setSummary("사용자가 이미지 분석 요청을 취소했습니다.");
-        imageAnalysisRequestRepository.save(history);
-        return toHistoryResponse(history);
+        // Persist cancellation before interrupting the worker, so its failure cannot win the race.
+        int cancelled = imageAnalysisRequestRepository.cancelProcessing(history.getId(), history.getOwner().getId(),
+                "사용자가 이미지 분석 요청을 취소했습니다.", LocalDateTime.now());
+        if (cancelled > 0) cancelRunningImageAnalysis(history.getId());
+        return imageAnalysisRequestRepository.findByIdAndOwnerId(history.getId(), history.getOwner().getId())
+                .map(this::toHistoryResponse)
+                .orElseThrow(() -> new NotFoundException("이미지 분석 기록을 찾을 수 없습니다."));
     }
     private void cancelRunningImageAnalysis(Long historyId) {
         if (historyId == null) {
@@ -772,14 +779,21 @@ public class LedgerOcrService {
             log.warn("Could not remove temporary image analysis input", exception);
         }
     }
-    private void storeImageForHistory(Long ownerId, LedgerImageAnalysisRequest history, MultipartFile file) {
+    private LedgerImageAnalysisRequest storeImageForHistory(Long ownerId, LedgerImageAnalysisRequest history, MultipartFile file) {
         if (history == null || imageStorageService == null || !imageStorageService.supportsStorage()) {
-            return;
+            return history;
         }
         LedgerOcrImageStorageService.StoredImage storedImage = imageStorageService.store(ownerId, history.getId(), file);
-        history.setImageObjectKey(storedImage.objectKey());
-        history.setImageStoredAt(storedImage.storedAt());
-        imageAnalysisRequestRepository.save(history);
+        // Uploading can take long enough for another request to cancel this job. Attach only
+        // the input reference, without merging the old version or overwriting its status.
+        int attached = imageAnalysisRequestRepository.attachStoredImage(history.getId(), ownerId,
+                storedImage.objectKey(), storedImage.storedAt());
+        if (attached == 0) {
+            imageStorageService.delete(storedImage.objectKey());
+            throw new NotFoundException("이미지 분석 기록을 찾을 수 없습니다.");
+        }
+        return imageAnalysisRequestRepository.findByIdAndOwnerId(history.getId(), ownerId)
+                .orElseThrow(() -> new NotFoundException("이미지 분석 기록을 찾을 수 없습니다."));
     }
 
     private LedgerOcrImageStorageService.StoredImageContent loadStoredHistoryImage(LedgerImageAnalysisRequest history) {
@@ -803,12 +817,14 @@ public class LedgerOcrService {
         return "/api/ledger/image-analysis/history/" + history.getId() + "/image";
     }
 
-    private LedgerImageAnalysisRequest createImageAnalysisRequest(AppUser owner, MultipartFile file, String documentType, String clientRequestId) {
+    private LedgerImageAnalysisRequest createImageAnalysisRequest(AppUser owner, MultipartFile file, String documentType,
+            String clientRequestId, String effectivePrompt) {
         LedgerImageAnalysisRequest history = new LedgerImageAnalysisRequest();
         history.setOwner(owner);
         history.setStatus(LedgerImageAnalysisStatus.PROCESSING);
         history.setDocumentType(documentType);
         history.setClientRequestId(clientRequestId);
+        history.setEffectivePrompt(effectivePrompt == null ? "" : effectivePrompt);
         history.setFileName(limit(file.getOriginalFilename(), 260));
         history.setContentType(limit(file.getContentType(), 120));
         history.setFileSizeBytes(file.getSize());
@@ -817,30 +833,15 @@ public class LedgerOcrService {
     }
 
     private void completeImageAnalysisRequest(LedgerImageAnalysisRequest history, LedgerOcrAnalyzeResponse response) {
-        LedgerImageAnalysisRequest currentHistory = imageAnalysisRequestRepository.findById(history.getId()).orElse(history);
-        if (currentHistory.getStatus() == LedgerImageAnalysisStatus.CANCELLED) {
-            return;
-        }
-        currentHistory.setStatus(LedgerImageAnalysisStatus.COMPLETED);
-        currentHistory.setCompletedAt(LocalDateTime.now());
-        currentHistory.setDocumentType(normalizeDocumentType(firstNonBlank(response.documentType(), currentHistory.getDocumentType())));
-        currentHistory.setRawText(response.rawText());
-        currentHistory.setSummary(limit(summarizeResponse(response), 500));
-        currentHistory.setResultJson(writeResponseJson(response));
-        imageAnalysisRequestRepository.save(currentHistory);
+        imageAnalysisRequestRepository.completeProcessing(history.getId(), history.getOwner().getId(),
+                normalizeDocumentType(firstNonBlank(response.documentType(), history.getDocumentType())),
+                response.rawText(), limit(summarizeResponse(response), 500), writeResponseJson(response), LocalDateTime.now());
     }
 
     private void failImageAnalysisRequest(LedgerImageAnalysisRequest history, RuntimeException exception) {
         if (history == null || history.getId() == null) return;
-        LedgerImageAnalysisRequest currentHistory = imageAnalysisRequestRepository.findById(history.getId()).orElse(history);
-        if (currentHistory.getStatus() == LedgerImageAnalysisStatus.CANCELLED) {
-            return;
-        }
-        currentHistory.setStatus(LedgerImageAnalysisStatus.FAILED);
-        currentHistory.setCompletedAt(LocalDateTime.now());
-        currentHistory.setErrorMessage(limit(exception.getMessage(), 1000));
-        currentHistory.setSummary("AI 이미지 분석 요청에 실패했습니다.");
-        imageAnalysisRequestRepository.save(currentHistory);
+        imageAnalysisRequestRepository.failProcessing(history.getId(), history.getOwner().getId(),
+                limit(exception.getMessage(), 1000), "AI 이미지 분석 요청에 실패했습니다.", LocalDateTime.now());
     }
 
     private LedgerImageAnalysisHistoryResponse toHistoryResponse(LedgerImageAnalysisRequest history) {
@@ -913,8 +914,7 @@ public class LedgerOcrService {
         try {
             return objectMapper.writeValueAsString(response);
         } catch (JsonProcessingException exception) {
-            log.warn("Failed to serialize ledger image analysis response: analysisId={}", response.analysisId(), exception);
-            return "";
+            throw new IllegalStateException("이미지 분석 결과를 저장할 수 없습니다. 다시 분석해 주세요.", exception);
         }
     }
 

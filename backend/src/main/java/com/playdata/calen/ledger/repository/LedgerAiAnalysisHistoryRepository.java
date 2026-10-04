@@ -10,10 +10,13 @@ import java.time.LocalDateTime;
 import java.util.Optional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Limit;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 
 public interface LedgerAiAnalysisHistoryRepository extends JpaRepository<LedgerAiAnalysisHistory, Long> {
 
@@ -68,6 +71,42 @@ public interface LedgerAiAnalysisHistoryRepository extends JpaRepository<LedgerA
     );
 
     Optional<LedgerAiAnalysisHistory> findByIdAndOwnerId(Long id, Long ownerId);
+
+    // A fresh transaction also allows recovery to finalize jobs from a read-only scan.
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+            update LedgerAiAnalysisHistory history
+            set history.requestPayloadJson = :payload, history.version = history.version + 1
+            where history.id = :id and history.owner.id = :ownerId
+              and history.status = com.playdata.calen.ledger.domain.LedgerAiAnalysisStatus.PROCESSING
+            """)
+    int saveProcessingPayload(@Param("id") Long id, @Param("ownerId") Long ownerId, @Param("payload") String payload);
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+            update LedgerAiAnalysisHistory history
+            set history.status = com.playdata.calen.ledger.domain.LedgerAiAnalysisStatus.COMPLETED,
+                history.version = history.version + 1, history.summary = :summary,
+                history.resultJson = :resultJson, history.errorMessage = null
+            where history.id = :id and history.owner.id = :ownerId
+              and history.status = com.playdata.calen.ledger.domain.LedgerAiAnalysisStatus.PROCESSING
+            """)
+    int completeProcessing(@Param("id") Long id, @Param("ownerId") Long ownerId,
+            @Param("summary") String summary, @Param("resultJson") String resultJson);
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+            update LedgerAiAnalysisHistory history
+            set history.status = com.playdata.calen.ledger.domain.LedgerAiAnalysisStatus.FAILED,
+                history.version = history.version + 1, history.summary = 'AI analysis failed.',
+                history.errorMessage = :errorMessage
+            where history.id = :id and history.owner.id = :ownerId
+              and history.status = com.playdata.calen.ledger.domain.LedgerAiAnalysisStatus.PROCESSING
+            """)
+    int failProcessing(@Param("id") Long id, @Param("ownerId") Long ownerId, @Param("errorMessage") String errorMessage);
 
     Optional<LedgerAiAnalysisHistory> findTopByOwnerIdAndModeAndPeriodTypeAndComparisonPresetAndFromDateAndToDateAndCompareFromDateAndCompareToDateOrderByCreatedAtDescIdDesc(
             Long ownerId,
@@ -128,7 +167,8 @@ public interface LedgerAiAnalysisHistoryRepository extends JpaRepository<LedgerA
             @Param("toDate") LocalDate toDate,
             @Param("compareFromDate") LocalDate compareFromDate,
             @Param("compareToDate") LocalDate compareToDate,
-            @Param("createdAfter") LocalDateTime createdAfter
+            @Param("createdAfter") LocalDateTime createdAfter,
+            Limit limit
     );
 
 
@@ -159,7 +199,8 @@ public interface LedgerAiAnalysisHistoryRepository extends JpaRepository<LedgerA
             @Param("toDate") LocalDate toDate,
             @Param("compareFromDate") LocalDate compareFromDate,
             @Param("compareToDate") LocalDate compareToDate,
-            @Param("createdAfter") LocalDateTime createdAfter
+            @Param("createdAfter") LocalDateTime createdAfter,
+            Limit limit
     );
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("delete from LedgerAiAnalysisHistory history where history.owner.id = :ownerId")

@@ -101,7 +101,7 @@ class LedgerOcrServiceTest {
                 categoryGroupRepository,
                 categoryDetailRepository,
                 ledgerEntryRepository,
-                new ObjectMapper()
+                new ObjectMapper().findAndRegisterModules()
         );
     }
 
@@ -142,6 +142,7 @@ class LedgerOcrServiceTest {
         verify(remoteClient, never()).analyze(any(), anyString(), anyString());
 
         when(imageAnalysisRequestRepository.findByIdAndOwnerId(42L, USER_ID)).thenReturn(Optional.of(savedHistory.get()));
+        stubCancellation(savedHistory.get());
         assertThat(service.cancelHistory(USER_ID, 42L).status()).isEqualTo("CANCELLED");
         assertThat((FutureTask<?>) executor.queuedTasks.get(0)).isCancelled();
         assertThat(pending).isEmpty();
@@ -150,14 +151,24 @@ class LedgerOcrServiceTest {
     @Test
     void storedImageIsLoadedOnlyWhenWorkerRuns() throws Exception {
         stubUser();
+        AtomicReference<LedgerImageAnalysisRequest> persisted = new AtomicReference<>();
         LedgerImageAnalysisRequest history = new LedgerImageAnalysisRequest();
         history.setId(42L);
         history.setOwner(appUserService.getRequiredUser(USER_ID));
         when(imageAnalysisRequestRepository.save(any(LedgerImageAnalysisRequest.class))).thenAnswer(invocation -> {
             LedgerImageAnalysisRequest saved = invocation.getArgument(0);
             saved.setId(42L);
+            persisted.set(saved);
             return saved;
         });
+        when(imageAnalysisRequestRepository.attachStoredImage(eq(42L), eq(USER_ID), eq("image-key"), any()))
+                .thenAnswer(invocation -> {
+                    persisted.get().setImageObjectKey(invocation.getArgument(2));
+                    persisted.get().setImageStoredAt(invocation.getArgument(3));
+                    return 1;
+                });
+        when(imageAnalysisRequestRepository.findByIdAndOwnerId(42L, USER_ID))
+                .thenAnswer(invocation -> Optional.of(persisted.get()));
         LedgerOcrImageStorageService storage = org.mockito.Mockito.mock(LedgerOcrImageStorageService.class);
         when(storage.supportsStorage()).thenReturn(true);
         when(storage.store(eq(USER_ID), eq(42L), any())).thenReturn(
@@ -198,6 +209,7 @@ class LedgerOcrServiceTest {
                 .isInstanceOf(TooManyRequestsException.class);
         assertThat(executor.queuedTasks).hasSize(1);
         when(imageAnalysisRequestRepository.findByIdAndOwnerId(42L, USER_ID)).thenReturn(Optional.of(savedHistory.get()));
+        stubCancellation(savedHistory.get());
         service.cancelHistory(USER_ID, 42L);
         assertThat((Map<?, ?>) ReflectionTestUtils.getField(service, "pendingImageAnalyses")).isEmpty();
     }
@@ -744,6 +756,16 @@ class LedgerOcrServiceTest {
                     return request;
                 });
         when(imageAnalysisRequestRepository.findById(id)).thenReturn(Optional.empty());
+    }
+
+    private void stubCancellation(LedgerImageAnalysisRequest history) {
+        when(imageAnalysisRequestRepository.cancelProcessing(eq(history.getId()), eq(USER_ID), any(), any()))
+                .thenAnswer(invocation -> {
+                    history.setStatus(com.playdata.calen.ledger.domain.LedgerImageAnalysisStatus.CANCELLED);
+                    history.setCancelledAt(invocation.getArgument(3));
+                    history.setSummary(invocation.getArgument(2));
+                    return 1;
+                });
     }
 
     private MockMultipartFile validJpeg(String fileName) {

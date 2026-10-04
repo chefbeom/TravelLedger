@@ -197,6 +197,7 @@ class LedgerAiAnalysisServiceTest {
         });
         when(historyRepository.findByIdAndOwnerId(144L, USER_ID))
                 .thenAnswer(invocation -> Optional.ofNullable(savedHistory.get()));
+        when(historyRepository.saveProcessingPayload(eq(144L), eq(USER_ID), any())).thenReturn(1);
         ReflectionTestUtils.setField(
                 service,
                 "ledgerAiTaskExecutor",
@@ -213,8 +214,10 @@ class LedgerAiAnalysisServiceTest {
 
         submittedTask.get().run();
 
-        assertThat(savedHistory.get().getStatus()).isEqualTo(LedgerAiAnalysisStatus.COMPLETED);
-        assertThat(savedHistory.get().getResultJson()).contains("Reduce dining out");
+        ArgumentCaptor<String> result = ArgumentCaptor.forClass(String.class);
+        verify(historyRepository).completeProcessing(eq(144L), eq(USER_ID), eq("remote summary"), result.capture());
+        assertThat(result.getValue()).contains("Reduce dining out");
+        verify(historyRepository, never()).failProcessing(any(), any(), any());
         verify(remoteClient).analyze(any());
     }
 
@@ -224,7 +227,7 @@ class LedgerAiAnalysisServiceTest {
         LedgerAiAnalysisHistory processingHistory = completedHistory(145L, null);
         processingHistory.setStatus(LedgerAiAnalysisStatus.PROCESSING);
         when(historyRepository.findLatestMatchingProcessingAnalysis(
-                any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any()
+                any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any()
         )).thenReturn(Optional.of(processingHistory));
 
         LedgerAiAnalysisHistoryDetailResponse response = service.startAnalyze(USER_ID, monthlyRequest());
@@ -244,7 +247,7 @@ class LedgerAiAnalysisServiceTest {
         var history = completedHistory(145L, null);
         history.setStatus(LedgerAiAnalysisStatus.PROCESSING);
         when(historyRepository.findLatestMatchingProcessingAnalysis(
-                any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any()))
+                any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any()))
                 .thenReturn(Optional.of(history), Optional.empty());
 
         assertThat(service.startAnalyze(USER_ID, monthlyRequest()).history().id()).isEqualTo(145L);
@@ -311,7 +314,8 @@ class LedgerAiAnalysisServiceTest {
                 eq(JUNE_30),
                 isNull(),
                 isNull(),
-                createdAfterCaptor.capture()
+                createdAfterCaptor.capture(),
+                any(org.springframework.data.domain.Limit.class)
         );
         assertThat(createdAfterCaptor.getValue()).isNotNull();
 
@@ -382,7 +386,7 @@ class LedgerAiAnalysisServiceTest {
         LedgerAiAnalysisResponse cachedResponse = cachedResponse(77L);
         LedgerAiAnalysisHistory reusableHistory = completedHistory(77L, objectMapper.writeValueAsString(cachedResponse));
         when(historyRepository.findLatestMatchingCompletedAnalysis(
-                any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any()
+                any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any()
         )).thenReturn(Optional.of(reusableHistory));
 
         LedgerAiAnalysisResponse response = service.analyze(USER_ID, monthlyRequest());
@@ -419,7 +423,7 @@ class LedgerAiAnalysisServiceTest {
         CountDownLatch releaseRemote = new CountDownLatch(1);
         AtomicReference<LedgerAiAnalysisHistory> savedCompletedHistory = new AtomicReference<>();
         when(historyRepository.findLatestMatchingCompletedAnalysis(
-                any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any()
+                any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any()
         )).thenAnswer(invocation -> {
             LedgerAiAnalysisHistory history = savedCompletedHistory.get();
             return history == null || history.getResultJson() == null ? Optional.empty() : Optional.of(history);
@@ -559,7 +563,7 @@ class LedgerAiAnalysisServiceTest {
 
     private void stubNoReusableHistory() {
         when(historyRepository.findLatestMatchingCompletedAnalysis(
-                any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any()
+                any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any()
         )).thenReturn(Optional.empty());
     }
 

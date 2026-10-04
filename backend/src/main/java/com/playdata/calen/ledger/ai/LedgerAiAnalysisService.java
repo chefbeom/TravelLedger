@@ -51,13 +51,16 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.core.task.TaskExecutor;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Limit;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
+@Slf4j
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class LedgerAiAnalysisService {
@@ -254,6 +257,13 @@ public class LedgerAiAnalysisService {
                 analysisTasks.remove(historyId, this);
                 releasePendingAnalysis(userId);
                 if (lease != null) lease.close();
+                if (!isCancelled()) {
+                    try { get(); }
+                    catch (java.util.concurrent.ExecutionException failure) {
+                        log.error("Ledger AI worker exited unexpectedly: historyId={}, failureType={}",
+                                historyId, failure.getCause().getClass().getSimpleName());
+                    } catch (InterruptedException interrupted) { Thread.currentThread().interrupt(); }
+                }
             }
         };
         if (analysisTasks.putIfAbsent(historyId, task) != null) { task.cancel(false); return; }
@@ -317,44 +327,29 @@ public class LedgerAiAnalysisService {
         try {
             dataset = buildDataset(userId, plan);
             payload = buildPayload(plan, dataset);
-            history.setRequestPayloadJson(aiJsonCodec.write(payload));
-            historyRepository.save(history);
+            if (historyRepository.saveProcessingPayload(historyId, userId, aiJsonCodec.write(payload)) == 0) return;
 
             aiRequestTimer = aiMetrics.startAiRequestTimer();
             LedgerAiRemoteResponse remote = remoteClient.analyze(payload);
             if (lease != null && !lease.isValid()) return;
-            if (historyRepository.findByIdAndOwnerId(historyId, userId).isEmpty()) return;
-            aiMetrics.recordAiRequest(aiRequestTimer, "success");
+            LedgerAiAnalysisResponse response = buildResponse(historyId, plan, dataset, remote);
+            int completed = historyRepository.completeProcessing(historyId, userId,
+                    aiText.safeText(remote.summary()), aiJsonCodec.write(response));
+            aiMetrics.recordAiRequest(aiRequestTimer, completed > 0 ? "success" : "discarded");
             aiRequestRecorded = true;
-
-            LedgerAiAnalysisResponse response = buildResponse(history.getId(), plan, dataset, remote);
-            history.setStatus(LedgerAiAnalysisStatus.COMPLETED);
-            history.setSummary(aiText.safeText(remote.summary()));
-            history.setResultJson(aiJsonCodec.write(response));
-            historyRepository.save(history);
         } catch (RuntimeException exception) {
             if (lease != null && !lease.isValid()) return;
             if (aiRequestTimer != null && !aiRequestRecorded) {
                 aiMetrics.recordAiRequest(aiRequestTimer, "failure");
             }
-            history.setStatus(LedgerAiAnalysisStatus.FAILED);
-            history.setSummary("AI analysis failed.");
-            history.setErrorMessage(aiText.redactSensitiveText(exception.getMessage(), 500));
-            if (payload != null) {
-                history.setRequestPayloadJson(aiJsonCodec.write(payload));
-            }
-            historyRepository.save(history);
+            // Never reuse the pre-inference entity here: its version may already have changed.
+            markAnalysisFailed(userId, historyId, exception);
+            log.warn("Ledger AI analysis failed: historyId={}, failureType={}", historyId, exception.getClass().getSimpleName());
         }
     }
 
     private void markAnalysisFailed(Long userId, Long historyId, RuntimeException exception) {
-        historyRepository.findByIdAndOwnerId(historyId, userId).ifPresent(history -> {
-            if (history.getStatus() != LedgerAiAnalysisStatus.PROCESSING) return;
-            history.setStatus(LedgerAiAnalysisStatus.FAILED);
-            history.setSummary("AI analysis failed.");
-            history.setErrorMessage(aiText.redactSensitiveText(exception.getMessage(), 500));
-            historyRepository.save(history);
-        });
+        historyRepository.failProcessing(historyId, userId, aiText.redactSensitiveText(exception.getMessage(), 500));
     }
 
     public LedgerAiAnalysisHistoryPageResponse getHistories(
@@ -566,7 +561,8 @@ public class LedgerAiAnalysisService {
                 plan.primaryRange().to(),
                 plan.comparisonRange() == null ? null : plan.comparisonRange().from(),
                 plan.comparisonRange() == null ? null : plan.comparisonRange().to(),
-                createdAfter
+                createdAfter,
+                Limit.of(1)
         );
     }
 
@@ -586,7 +582,8 @@ public class LedgerAiAnalysisService {
                 plan.primaryRange().to(),
                 plan.comparisonRange() == null ? null : plan.comparisonRange().from(),
                 plan.comparisonRange() == null ? null : plan.comparisonRange().to(),
-                createdAfter
+                createdAfter,
+                Limit.of(1)
         );
     }
 

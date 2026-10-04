@@ -95,7 +95,7 @@ test('representative modal surfaces follow light and dark theme tokens', async (
     await page.evaluate(() => document.documentElement.setAttribute('data-theme', 'toss'))
     await expect.poll(() => modalColors(page, panelClass), { message: panelClass }).toMatchObject({
       panelBackground: 'rgb(23, 31, 34)',
-      inputBackground: 'rgb(21, 30, 33)',
+      inputBackground: 'rgb(27, 35, 37)',
       mediaBackground: 'rgb(32, 42, 45)',
       panelRadius: '0px',
     })

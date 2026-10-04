@@ -1,6 +1,7 @@
 <script setup>
 import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import PinPadInput from './components/PinPadInput.vue'
+import { MOBILE_LAYOUT_QUERY, resolveLayoutMode } from './lib/responsiveLayout'
 import {
   acceptInvite,
   completeKakaoRegistration,
@@ -100,7 +101,6 @@ const adminFeatureItem = {
 
 const THEME_STORAGE_KEY = 'calen-theme-mode'
 const LAYOUT_MODE_STORAGE_KEY = 'calen-layout-mode'
-const MOBILE_LAYOUT_QUERY = '(max-width: 760px)'
 const ROUTE_LEAVE_GUARD_EVENT = 'calen-route-leave-guard'
 const DEFAULT_ROUTE_LEAVE_GUARD_MESSAGE = '페이지를 벗어나면 작성 중인 내용이 사라질 수 있습니다.'
 const MOBILE_MODAL_SCROLL_LOCK_QUERY = '(max-width: 760px), (hover: none) and (pointer: coarse)'
@@ -218,6 +218,7 @@ const isRegistrationOptionsLoading = ref(false)
 const registrationVerificationRequested = ref(false)
 const themeMode = ref('default')
 const layoutMode = ref('desktop')
+const layoutPreference = ref('auto')
 const routeLeaveGuard = reactive({
   active: false,
   message: DEFAULT_ROUTE_LEAVE_GUARD_MESSAGE,
@@ -269,6 +270,7 @@ const headerNavItems = computed(() => {
   return items
 })
 const layoutModeOptions = [
+  { value: 'auto', label: '자동' },
   { value: 'mobile', label: '모바일' },
   { value: 'desktop', label: '데스크톱' },
 ]
@@ -437,14 +439,15 @@ function resolveInitialLayoutMode() {
   }
 
   const storedMode = window.localStorage.getItem(LAYOUT_MODE_STORAGE_KEY)
-  if (storedMode === 'mobile' || storedMode === 'desktop') {
-    return storedMode
-  }
-
-  return window.matchMedia?.(MOBILE_LAYOUT_QUERY).matches ? 'mobile' : 'desktop'
+  return resolveLayoutMode(storedMode, Boolean(window.matchMedia?.(MOBILE_LAYOUT_QUERY).matches))
 }
 
 function applyLayoutMode(mode, persist = true) {
+  if (mode === 'auto') {
+    window.localStorage.removeItem(LAYOUT_MODE_STORAGE_KEY)
+    applyLayoutMode(resolveInitialLayoutMode(), false)
+    return
+  }
   const normalized = normalizeLayoutMode(mode)
   layoutMode.value = normalized
 
@@ -463,7 +466,16 @@ function applyLayoutMode(mode, persist = true) {
   if (persist && typeof window !== 'undefined') {
     window.localStorage.setItem(LAYOUT_MODE_STORAGE_KEY, normalized)
   }
+  const preference = typeof window !== 'undefined' ? window.localStorage.getItem(LAYOUT_MODE_STORAGE_KEY) : null
+  layoutPreference.value = preference === 'mobile' || preference === 'desktop' ? preference : 'auto'
 }
+function syncAutomaticLayoutMode() {
+  const preference = window.localStorage.getItem(LAYOUT_MODE_STORAGE_KEY)
+  if (preference !== 'mobile' && preference !== 'desktop') {
+    applyLayoutMode(resolveInitialLayoutMode(), false)
+  }
+}
+let layoutMediaQuery = null
 function toggleTheme() {
   applyTheme(isTossTheme.value ? 'default' : 'toss')
 }
@@ -964,6 +976,8 @@ onMounted(() => {
   if (typeof window !== 'undefined') {
     applyLayoutMode(resolveInitialLayoutMode(), false)
     applyTheme(window.localStorage.getItem(THEME_STORAGE_KEY) || 'default')
+    layoutMediaQuery = window.matchMedia(MOBILE_LAYOUT_QUERY)
+    layoutMediaQuery.addEventListener('change', syncAutomaticLayoutMode)
   }
   window.addEventListener('hashchange', handleHashChange)
   window.addEventListener('beforeunload', handleBeforeUnload)
@@ -986,6 +1000,7 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  layoutMediaQuery?.removeEventListener('change', syncAutomaticLayoutMode)
   window.removeEventListener('hashchange', handleHashChange)
   window.removeEventListener('beforeunload', handleBeforeUnload)
   window.removeEventListener(ROUTE_LEAVE_GUARD_EVENT, handleRouteLeaveGuardChange)
@@ -1007,9 +1022,9 @@ onBeforeUnmount(() => {
             v-for="option in layoutModeOptions"
             :key="option.value"
             class="layout-mode-toggle__button"
-            :class="{ 'layout-mode-toggle__button--active': layoutMode === option.value }"
+            :class="{ 'layout-mode-toggle__button--active': layoutPreference === option.value }"
             type="button"
-            :aria-pressed="layoutMode === option.value"
+            :aria-pressed="layoutPreference === option.value"
             @click="applyLayoutMode(option.value)"
           >
             {{ option.label }}

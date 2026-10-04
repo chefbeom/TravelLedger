@@ -1613,8 +1613,10 @@ watch(journeyRoutePath, (path) => {
         @fullscreen-change="handleMapFullscreenChange"
         @clear-selection="clearSelection"
       >
-        <template #fullscreen-controls="{ isFullscreen }">
+        <template #fullscreen-controls="{ isFullscreen, settingsOpen }">
           <TravelJourneyPlaybackControls
+            :show-settings-toggle="false"
+            :settings-expanded="settingsOpen"
             v-if="isFullscreen"
             :days="journeyDays"
             :selected-day-key="selectedJourneyDayKey"

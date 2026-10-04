@@ -5,6 +5,9 @@ import vue from '@vitejs/plugin-vue'
 export default defineConfig({
   plugins: [vue()],
   server: {
+    // Playwright writes locked videos and trace HTML while Vite is running.
+    // They are test output, not sources to watch or hot-reload into the app.
+    watch: { ignored: ['**/artifacts/**', '**/test-results/**', '**/playwright-report/**'] },
     proxy: {
       '/api': {
         target: 'http://localhost:8080',

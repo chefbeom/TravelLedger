@@ -52,15 +52,18 @@ function updatePage(offset) {
           <button type="button" class="button" :class="{ 'button--primary': amountMode === 'KRW' }" @click="emit('update:amount-mode', 'KRW')">원화</button>
           <button type="button" class="button" :class="{ 'button--primary': amountMode === 'FOREIGN' }" @click="emit('update:amount-mode', 'FOREIGN')">외화</button>
         </div>
-        <div class="scope-toggle">
-          <button type="button" class="button" :class="{ 'button--primary': entryFilter === 'ALL' }" @click="emit('update:entry-filter', 'ALL')">전체</button>
-          <button type="button" class="button" :class="{ 'button--primary': entryFilter === 'INCOME' }" @click="emit('update:entry-filter', 'INCOME')">수입</button>
-          <button type="button" class="button" :class="{ 'button--primary': entryFilter === 'EXPENSE' }" @click="emit('update:entry-filter', 'EXPENSE')">지출</button>
-        </div>
-        <div class="scope-toggle">
-          <button type="button" class="button" :class="{ 'button--primary': sort === 'ASC' }" @click="emit('update:sort', 'ASC')">시간 오름차순</button>
-          <button type="button" class="button" :class="{ 'button--primary': sort === 'DESC' }" @click="emit('update:sort', 'DESC')">시간 내림차순</button>
-        </div>
+        <label class="household-sheet-filter">
+          <span>거래 구분</span>
+          <select aria-label="거래 구분" :value="entryFilter" @change="emit('update:entry-filter', $event.target.value)">
+            <option value="ALL">전체</option><option value="INCOME">수입</option><option value="EXPENSE">지출</option>
+          </select>
+        </label>
+        <label class="household-sheet-filter">
+          <span>시간 정렬</span>
+          <select aria-label="시간 정렬" :value="sort" @change="emit('update:sort', $event.target.value)">
+            <option value="ASC">오름차순</option><option value="DESC">내림차순</option>
+          </select>
+        </label>
       </div>
     </div>
 
@@ -126,7 +129,13 @@ function updatePage(offset) {
                 <small v-if="formatAmountSub(entry)" class="sheet-table__amount-sub">{{ formatAmountSub(entry) }}</small>
               </span>
             </td>
-            <td v-if="hasMemoColumn" class="sheet-table__memo">{{ entry.visibleMemo || '-' }}</td>
+            <td v-if="hasMemoColumn" class="sheet-table__memo">
+              <details v-if="(entry.visibleMemo || '').length > 80" class="household-sheet-memo">
+                <summary><span>{{ entry.visibleMemo }}</span><small>메모 펼치기 / 접기</small></summary>
+                <p>{{ entry.visibleMemo }}</p>
+              </details>
+              <span v-else>{{ entry.visibleMemo || '-' }}</span>
+            </td>
             <td class="sheet-table__actions">
               <div class="sheet-table__actions-inner">
                 <button type="button" class="button button--ghost" @click="emit('edit-entry', entry)">수정</button>

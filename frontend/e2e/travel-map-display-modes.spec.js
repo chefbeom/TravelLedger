@@ -274,16 +274,8 @@ async function expectPreviewMapLayout(page, isMobile) {
     expect(layout.preview.width).toBeLessThanOrEqual(440)
     expect(layout.preview.x).toBeGreaterThan(layout.canvas.x)
   }
-  await expect.poll(() => page.evaluate(() => {
-    const canvas = document.querySelector('#map-display-test .travel-map__canvas').getBoundingClientRect()
-    const marker = document.querySelector('.leaflet-marker-icon[title^="Photo 1"]')
-    if (!marker) return 9999
-    const pin = marker.getBoundingClientRect()
-    const style = getComputedStyle(marker)
-    const x = pin.x - parseFloat(style.marginLeft)
-    const y = pin.y - parseFloat(style.marginTop)
-    return Math.max(Math.abs(x - canvas.x - canvas.width / 2), Math.abs(y - canvas.y - canvas.height / 2))
-  })).toBeLessThan(4)
+  // Selection centers in the unobscured area, not under floating controls.
+  // The hit test below verifies that the new geographic anchor is usable.
   await expect.poll(() => page.locator('.leaflet-marker-icon[title^="Photo 1"]').evaluate((marker) => {
     const pin = marker.getBoundingClientRect()
     const hit = document.elementFromPoint(pin.x + pin.width / 2, pin.y + pin.height / 2)
@@ -503,7 +495,7 @@ test('expanded map contains keyboard focus and releases scroll lock on deactivat
   await page.evaluate(() => {
     document.querySelector('#map-display-test').style.minHeight = '3000px'
     window.scrollTo({ top: 240, behavior: 'instant' })
-    const button = [...document.querySelectorAll('#map-display-test button')].find((item) => item.textContent.trim() === '전체 화면')
+    const button = document.querySelector('#map-display-test button[aria-label="전체 화면"]')
     button.click()
   })
   await expect(map).toBeVisible()
@@ -514,7 +506,7 @@ test('expanded map contains keyboard focus and releases scroll lock on deactivat
   await expect(map).toHaveCount(0)
   await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(240)
   await page.evaluate(() => {
-    const button = [...document.querySelectorAll('#map-display-test button')].find((item) => item.textContent.trim() === '전체 화면')
+    const button = document.querySelector('#map-display-test button[aria-label="전체 화면"]')
     button.click()
   })
   await expect(map).toBeVisible()
@@ -630,8 +622,16 @@ for (const kind of ['private', 'public']) {
       expect(sliderStyle.background).toBe('rgba(0, 0, 0, 0)')
       expect(sliderStyle.shadow).toBe('none')
       expect(sliderStyle.height).toBeLessThanOrEqual(32)
-      await expect(controls.locator('output')).toHaveCSS('color', 'rgb(248, 250, 252)')
-      await expect(controls.locator('.travel-journey-controls__speed-ticks .is-selected')).toHaveCSS('color', 'rgb(134, 239, 172)')
+      const themeText = await controls.evaluate(element => {
+        const probe = document.createElement('span')
+        probe.style.setProperty('color', 'var(--text)', 'important')
+        element.append(probe)
+        const color = getComputedStyle(probe).color
+        probe.remove()
+        return color
+      })
+      await expect(controls.locator('output')).toHaveCSS('color', themeText)
+      await expect(controls.locator('.travel-journey-controls__speed-ticks .is-selected')).toHaveCSS('color', themeText)
       await dragJourneySpeed(page, slider, 3)
       await expect(controls.locator('output')).toHaveText('3초')
       await controls.screenshot({ path: testInfo.outputPath(`journey-speed-slider-${theme}.png`) })

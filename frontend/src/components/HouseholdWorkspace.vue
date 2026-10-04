@@ -5518,6 +5518,11 @@ async function activatePayment(paymentId) {
         </div>
         <button class="button" :class="{ 'button--primary': householdTab === 'management' }" @click="setHouseholdTab('management')">분류 관리</button>
       </div>
+      <nav class="household-inline-tools" aria-label="가계부 빠른 이동">
+        <button class="button button--ghost" type="button" @click="scrollHouseholdToTop">위로</button>
+        <button class="button button--ghost" type="button" @click="scrollHouseholdToBottom">아래로</button>
+        <button class="button button--ghost" type="button" @click="openLedgerChangeHistoryModal">변경 이력</button>
+      </nav>
     </section>
 
     <PaletteContainer

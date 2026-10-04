@@ -6,6 +6,7 @@ import { buildThumbnailUrl, THUMBNAIL_VARIANTS } from '../lib/mediaPreview'
 import { getTravelJourneyFocusZoom, getTravelJourneyViewportOverviewZoom } from '../lib/travelJourney'
 import { buildTravelMapPhotoGroups } from '../lib/travelMapPhotoGroups'
 import { clampTravelMapPreviewSize } from '../lib/travelMapPreviewSize'
+import { getTravelMapUsableRect } from '../lib/travelMapViewport'
 import TravelMapPhotoPreview from './TravelMapPhotoPreview.vue'
 
 const DEFAULT_CENTER = [37.5547, 126.9706]
@@ -102,6 +103,8 @@ const mapRootElement = ref(null)
 const mapElement = ref(null)
 const isFullscreen = ref(false)
 const fullscreenToggleElement = ref(null)
+const toolbarElement = ref(null)
+const mapSettingsOpen = ref(false)
 const isMapMoving = ref(false)
 const zoomLabel = ref(DEFAULT_ZOOM)
 const previewAggregate = shallowRef(null)
@@ -151,6 +154,8 @@ let dismissedJourneyPreviewPhotoId = null
 let pinPopup = null
 let fullscreenScrollPosition = null
 let previewResizeSession = null
+let lastUsableMapSize = ''
+let observedPreviewElement = null
 
 function isTouchMapDevice() {
   if (typeof window === 'undefined') {
@@ -572,7 +577,7 @@ function focusClientCluster(aggregate) {
   if (bounds.length > 1) {
     const nextZoom = Math.min((mapInstance.getZoom() ?? DEFAULT_ZOOM) + 3, 18)
     mapInstance.fitBounds(bounds, {
-      padding: [48, 48],
+      ...getMapFitPadding(48),
       maxZoom: nextZoom,
       animate: true,
       duration: SMOOTH_ZOOM_DURATION,
@@ -643,6 +648,10 @@ function queueMapResize() {
       ? L.latLng(previewAggregate.value.latitude, previewAggregate.value.longitude)
       : map.getCenter()
     const zoom = map.getZoom()
+    const usable = getUsableMapRect()
+    const sizeKey = [mapElement.value.clientWidth, mapElement.value.clientHeight, usable.left, usable.top, usable.right, usable.bottom].join(':')
+    const layoutChanged = sizeKey !== lastUsableMapSize
+    lastUsableMapSize = sizeKey
 
     // Mobile browser chrome can resize the visual viewport repeatedly while
     // scrolling. Refresh Leaflet without rebuilding every photo marker.
@@ -652,10 +661,13 @@ function queueMapResize() {
       pan: true,
       debounceMoveend: true,
     })
+    updatePinPopupLayout()
     if (previewAggregate.value && !props.journeyPlaybackActive) {
       // Fullscreen/window resize may run Leaflet's own resize first. Reapply
       // the selected position so its anchor is centered in the actual canvas.
-      map.setView(center, zoom, { animate: false })
+      map.setView(getUnobscuredCenter(center, zoom, true), zoom, { animate: false })
+    } else if (layoutChanged && !props.focusTarget?.requestId && !props.journeyPlaybackActive && !isPreparingJourneyLeg) {
+      fitToAll({ animate: false })
     }
   }
 
@@ -712,6 +724,36 @@ function collectBounds() {
   return points
 }
 
+function getUsableMapRect() {
+  const canvas = mapElement.value?.getBoundingClientRect()
+  if (!canvas) return { left: 0, top: 0, right: 1, bottom: 1 }
+  const overlays = [toolbarElement.value, previewElement.value].filter(Boolean).map(element => {
+    const rect = element.getBoundingClientRect()
+    return { left: rect.left - canvas.left - 8, top: rect.top - canvas.top - 8, right: rect.right - canvas.left + 8, bottom: rect.bottom - canvas.top + 8 }
+  })
+  return getTravelMapUsableRect(canvas.width, canvas.height, overlays)
+}
+
+function getMapFitPadding(margin = 32) {
+  const size = mapInstance.getSize()
+  const rect = getUsableMapRect()
+  const padding = Math.min(margin, (rect.right - rect.left) / 5, (rect.bottom - rect.top) / 5)
+  return { paddingTopLeft: [rect.left + padding, rect.top + padding], paddingBottomRight: [size.x - rect.right + padding, size.y - rect.bottom + padding] }
+}
+
+function getUnobscuredCenter(target, zoom, withPopup = false) {
+  const size = mapInstance.getSize()
+  const rect = getUsableMapRect()
+  const popupElement = pinPopup?.getElement()
+  // Leaflet's bottom margin is outside offsetHeight but still shifts the
+  // popup above its anchor. Include it when reserving room for a short canvas.
+  const popupMargin = popupElement ? parseFloat(getComputedStyle(popupElement).marginBottom) || 0 : 20
+  const popupHeight = withPopup ? (popupElement?.offsetHeight || 118) + popupMargin + 46 : 0
+  const desired = L.point((rect.left + rect.right) / 2,
+    Math.min(rect.bottom - 8, (rect.top + rect.bottom + popupHeight) / 2))
+  return mapInstance.unproject(mapInstance.project(target, zoom).add(size.divideBy(2).subtract(desired)), zoom)
+}
+
 function fitToAll({ animate = true } = {}) {
   if (!mapInstance) {
     return
@@ -728,7 +770,7 @@ function fitToAll({ animate = true } = {}) {
   }
 
   mapInstance.fitBounds(bounds, {
-    padding: [40, 40],
+    ...getMapFitPadding(),
     maxZoom: 16,
     animate,
     duration: SMOOTH_ZOOM_DURATION,
@@ -857,11 +899,12 @@ function closeMapPreview({ resetDismissal = false } = {}) {
 function updatePreviewBounds() {
   const stage = mapElement.value?.parentElement
   if (!stage) return
-  previewBounds.value = {
+  const bounds = {
     width: stage.clientWidth,
     height: stage.clientHeight,
-    compact: window.matchMedia('(max-width: 760px)').matches,
+    compact: window.matchMedia('(max-width: 760px), (max-width: 1100px) and (max-height: 500px), (max-width: 1100px) and (pointer: coarse)').matches,
   }
+  if (Object.keys(bounds).some(key => bounds[key] !== previewBounds.value[key])) previewBounds.value = bounds
 }
 
 function startPreviewResize(event) {
@@ -953,7 +996,16 @@ async function syncPinPopup() {
   pinPopup.setLatLng([position.latitude, position.longitude])
   if (!mapInstance.hasLayer(pinPopup)) pinPopup.openOn(mapInstance)
   await nextTick()
-  if (previewPhoto.value && mapInstance?.hasLayer(pinPopup)) pinPopup.update()
+  updatePinPopupLayout()
+}
+
+function updatePinPopupLayout() {
+  if (previewPhoto.value && pinPopup && mapInstance?.hasLayer(pinPopup)) {
+    const usable = getUsableMapRect()
+    const element = pinPopup.getElement()
+    if (element) element.style.setProperty('--map-popup-max-height', `${Math.max(40, usable.bottom - usable.top - 122)}px`)
+    pinPopup.update()
+  }
 }
 
 function syncJourneyPreview() {
@@ -987,7 +1039,7 @@ async function centerPreviewAggregate(aggregate) {
   await nextTick()
   if (!mapInstance || previewAggregate.value !== aggregate) return
   mapInstance.invalidateSize({ animate: false, pan: true })
-  mapInstance.panTo([aggregate.latitude, aggregate.longitude], {
+  mapInstance.panTo(getUnobscuredCenter(L.latLng(aggregate.latitude, aggregate.longitude), mapInstance.getZoom(), true), {
     animate: true, duration: SMOOTH_ZOOM_DURATION, easeLinearity: 0.2,
   })
 }
@@ -1164,22 +1216,22 @@ function journeyLatLng(point) {
 
 function isJourneyPointVisible(point) {
   if (!mapInstance) return false
-  const size = mapInstance.getSize()
   const pixel = mapInstance.latLngToContainerPoint(point)
+  const rect = getUsableMapRect()
   const padding = 64
-  return pixel.x >= padding && pixel.x <= size.x - padding
-    && pixel.y >= padding && pixel.y <= size.y - padding
+  return pixel.x >= rect.left + padding && pixel.x <= rect.right - padding
+    && pixel.y >= rect.top + padding && pixel.y <= rect.bottom - padding
 }
 
 function resolveJourneyOverviewZoom(current, next) {
-  const size = mapInstance.getSize()
+  const rect = getUsableMapRect()
   return getTravelJourneyViewportOverviewZoom({
     current,
     next,
     currentZoom: mapInstance.getZoom(),
     minZoom: mapInstance.getMinZoom(),
-    width: size.x,
-    height: size.y,
+    width: rect.right - rect.left,
+    height: rect.bottom - rect.top,
     project: (point, zoom) => mapInstance.project(point, zoom),
   })
 }
@@ -1191,20 +1243,26 @@ function waitForJourneyMapMove(target, zoom, duration, sequence) {
       resolve(false)
       return
     }
-    if (map.getCenter().distanceTo(target) < 2 && Math.abs(map.getZoom() - zoom) < 0.05) {
+    const center = getUnobscuredCenter(target, zoom, Boolean(previewPhoto.value))
+    if (map.getCenter().distanceTo(center) < 2 && Math.abs(map.getZoom() - zoom) < 0.05) {
       resolve(true)
       return
     }
 
     let timeoutId = null
     const finish = () => {
-      map.off('moveend', finish)
+      map.off('moveend', onMoveEnd)
       clearTimeout(timeoutId)
       resolve(sequence === journeyLegSequence && map === mapInstance)
     }
-    map.once('moveend', finish)
+    const onMoveEnd = () => {
+      // invalidateSize can also emit moveend; do not start the photo interval
+      // until the requested camera move, not an unrelated resize, has finished.
+      if (Math.abs(map.getZoom() - zoom) < 0.05 && map.getCenter().distanceTo(center) < 3) finish()
+    }
+    map.on('moveend', onMoveEnd)
     timeoutId = setTimeout(finish, duration * 1000 + 500)
-    map.flyTo(target, zoom, { animate: true, duration })
+    map.flyTo(center, zoom, { animate: true, duration })
   })
 }
 
@@ -1296,7 +1354,8 @@ function handleFullscreenEscape(event) {
   if (event.key === 'Tab' && isFullscreen.value) {
     const scope = mapRootElement.value?.querySelector('[data-map-photo-detail="true"]') || mapRootElement.value
     const actions = [...(scope?.querySelectorAll('button, a[href], input, select, textarea, [tabindex]') ?? [])]
-      .filter((element) => !element.matches(':disabled') && element.tabIndex >= 0 && element.getClientRects().length > 0)
+      .filter((element) => !element.matches(':disabled') && element.tabIndex >= 0 && element.getClientRects().length > 0
+        && (!element.closest('details:not([open])') || element.matches('summary')))
     const first = actions[0]
     const last = actions.at(-1)
     const focused = document.activeElement
@@ -1389,6 +1448,7 @@ onMounted(() => {
       queueMapResize()
     })
     mapResizeObserver.observe(mapElement.value)
+    mapResizeObserver.observe(toolbarElement.value)
   }
 })
 
@@ -1416,6 +1476,16 @@ onBeforeUnmount(() => {
 })
 
 watch([previewPhoto, previewAggregate, () => props.journeyPlaybackActive], syncPinPopup, { flush: 'post' })
+watch([previewPhoto, previewSize, mapSettingsOpen], async () => {
+  await nextTick()
+  updatePreviewBounds()
+  if (observedPreviewElement !== previewElement.value) {
+    if (observedPreviewElement) mapResizeObserver?.unobserve(observedPreviewElement)
+    observedPreviewElement = previewElement.value
+    if (observedPreviewElement) mapResizeObserver?.observe(observedPreviewElement)
+  }
+  queueMapResize()
+}, { flush: 'post' })
 
 watch(
   () => [props.photoClusters, props.photoPins, props.markers, props.routes, props.displayMode],
@@ -1531,10 +1601,10 @@ watch(
           : Math.min(20, Math.max(mapInstance.getZoom(), 15))
     const duration = Number.isFinite(Number(rawDuration)) ? Math.max(0.05, Number(rawDuration)) : 0.8
     if (keepZoom) {
-      mapInstance.panTo([latitude, longitude], { animate: true, duration, easeLinearity: 0.2 })
+      mapInstance.panTo(getUnobscuredCenter(L.latLng(latitude, longitude), targetZoom, Boolean(previewPhoto.value)), { animate: true, duration, easeLinearity: 0.2 })
       return
     }
-    mapInstance.flyTo([latitude, longitude], targetZoom, { animate: true, duration })
+    mapInstance.flyTo(getUnobscuredCenter(L.latLng(latitude, longitude), targetZoom, Boolean(previewPhoto.value)), targetZoom, { animate: true, duration })
   },
 )
 </script>
@@ -1554,32 +1624,31 @@ watch(
       'travel-map--has-preview': Boolean(previewPhoto),
     }"
   >
-    <div class="travel-map__toolbar" @click.stop>
-      <div class="travel-map__toolbar-group">
+    <div ref="toolbarElement" class="travel-map__toolbar" @click.stop>
+      <div class="travel-map__toolbar-group travel-map__toolbar-group--navigation">
         <span class="travel-map__toolbar-label">지도 확대</span>
         <button class="travel-map__toolbar-button travel-map__zoom-button" type="button" aria-label="지도 축소" @click="zoomMap(-1)">−</button>
         <strong class="travel-cluster-map__zoom">{{ zoomLabel }}</strong>
         <button class="travel-map__toolbar-button travel-map__zoom-button" type="button" aria-label="지도 확대" @click="zoomMap(1)">+</button>
+        <button class="travel-map__toolbar-button" type="button" @click="fitToAll">전체 보기</button>
+        <button ref="fullscreenToggleElement" class="travel-map__toolbar-button" type="button" :aria-label="isFullscreen ? '전체 화면 종료' : '전체 화면'" :aria-expanded="isFullscreen" @click="toggleFullscreen">
+          <span class="travel-map__fullscreen-label">{{ isFullscreen ? '전체 화면 종료' : '전체 화면' }}</span>
+          <span class="travel-map__fullscreen-short" aria-hidden="true">{{ isFullscreen ? '나가기' : '전체 화면' }}</span>
+        </button>
+        <button class="travel-map__toolbar-button" type="button" :aria-expanded="mapSettingsOpen" aria-label="지도 설정" @click="mapSettingsOpen = !mapSettingsOpen">설정</button>
       </div>
 
-      <div class="travel-map__toolbar-group">
+      <div v-if="mapSettingsOpen" class="travel-map__toolbar-group travel-map__toolbar-group--settings">
         <span class="travel-map__toolbar-label">클러스터 기준</span>
         <small class="travel-cluster-map__legend">
           {{ props.displayMode === 'pin' ? '핀 보기: 가까운 사진을 개수 표시 핀으로 묶음' : '클러스터 보기: 위치별 대표 사진 썸네일 표시' }}
         </small>
       </div>
 
-      <div class="travel-map__toolbar-group">
-        <button class="travel-map__toolbar-button" type="button" @click="fitToAll">전체 보기</button>
-        <button ref="fullscreenToggleElement" class="travel-map__toolbar-button" type="button" :aria-expanded="isFullscreen" @click="toggleFullscreen">
-          {{ isFullscreen ? '전체 화면 종료' : '전체 화면' }}
-        </button>
-      </div>
-
       <div v-if="isFullscreen" class="travel-map__toolbar-group travel-map__toolbar-group--journey">
-        <slot name="fullscreen-controls" :is-fullscreen="isFullscreen" />
+        <slot name="fullscreen-controls" :is-fullscreen="isFullscreen" :settings-open="mapSettingsOpen" />
       </div>
-      <small v-if="isFullscreen" class="travel-map__escape-hint">Esc: 사진 상세 → 미리보기 → 전체 화면 순서로 닫기</small>
+      <small v-if="isFullscreen && mapSettingsOpen" class="travel-map__escape-hint">Esc: 사진 상세 → 미리보기 → 전체 화면 순서로 닫기</small>
     </div>
 
     <div class="travel-map__stage">

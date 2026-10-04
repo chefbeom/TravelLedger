@@ -1,0 +1,140 @@
+/* Scoped follow-up to the mobile audit. Keep layout and theme states together. */
+html body .app-shell.app-shell :is(button, .button, [role='button']):where(:not(.leaflet-marker-icon)):is(:hover, :focus-visible) {
+  color: var(--text) !important;
+  -webkit-text-fill-color: var(--text) !important;
+}
+html body .app-shell.app-shell :is(.button--primary, .button--active, .is-active, .sidebar__link--active, .toggle-chip--active, .topbar__nav-button--active):where(:not(.leaflet-marker-icon)),
+html body .app-shell.app-shell :is(.button--primary, .button--active, .is-active, .sidebar__link--active, .toggle-chip--active, .topbar__nav-button--active):where(:not(.leaflet-marker-icon)):is(:hover, :focus-visible) {
+  background: #35533d !important;
+  color: #fff !important;
+  -webkit-text-fill-color: #fff !important;
+}
+html body .app-shell.app-shell .button--danger,
+html body .app-shell.app-shell .button--danger:is(:hover, :focus-visible) {
+  background: #8c3036 !important;
+  color: #fff !important;
+  -webkit-text-fill-color: #fff !important;
+}
+/* Modal guards have higher specificity than the general button rules. */
+html body .household-sheet-panel.household-sheet-panel .sheet-table__actions-inner .button.button--danger,
+html body .household-sheet-panel.household-sheet-panel .sheet-table__actions-inner .button.button--danger:is(:hover, :focus-visible) {
+  background: #8c3036 !important;
+  color: #fff !important;
+  -webkit-text-fill-color: #fff !important;
+}
+
+.household-inline-tools { display: none; }
+.household-sheet-panel { container: household-sheet / inline-size; }
+.household-sheet-filter { display: grid; gap: 2px; min-width: 0; font-size: 12px; }
+.household-sheet-filter select { min-width: 0; min-height: 40px; }
+.household-sheet-memo { min-width: 0; width: 100%; text-align: left; }
+.household-sheet-memo summary { cursor: pointer; }
+.household-sheet-memo summary span { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+.household-sheet-memo summary small { display: block; margin-top: 4px; font-size: 12px; text-decoration: underline; }
+.household-sheet-memo[open] summary span { display: none; }
+.household-sheet-memo p { margin: 6px 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+/* No sticky column may cover the adjacent amount/memo. Wide sheets scroll. */
+html body .household-sheet-panel .household-sheet-table-wrap { overflow-x: auto !important; }
+.household-sheet-panel .sheet-table :is(th:last-child, td.sheet-table__actions) { position: static; box-shadow: none; }
+
+@container household-sheet (max-width: 1000px) {
+  .household-sheet-panel__header { display: grid !important; gap: 8px !important; margin-bottom: 8px !important; max-height: none !important; overflow: visible !important; }
+  .household-sheet-panel__header h2 { margin: 0; font-size: 17px !important; }
+  .household-sheet-panel__header p { display: none; }
+  .household-sheet-header { display: grid !important; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px !important; width: 100%; }
+  .household-sheet-header > .panel__badge { display: none; }
+  .household-sheet-header > .scope-toggle { grid-column: 1 / -1; display: flex; }
+  .household-sheet-header .button { min-height: 40px !important; padding: 6px 8px !important; font-size: 13px; }
+  .household-sheet-filter > span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  .household-sheet-table { display: block !important; min-width: 0 !important; width: 100% !important; }
+  .household-sheet-table :is(colgroup, thead) { display: none !important; }
+  .household-sheet-table tbody { display: grid !important; gap: 10px !important; }
+  html body .household-sheet-panel.household-sheet-panel .household-sheet-table tr { display: grid !important; grid-template-columns: minmax(0, 1fr) !important; padding: 10px !important; width: 100% !important; border: 1px solid var(--line) !important; border-radius: 2px !important; background: var(--panel-bg) !important; box-sizing: border-box; }
+  .household-sheet-panel .sheet-table td { display: flex !important; align-items: flex-start !important; justify-content: space-between !important; gap: 10px !important; padding: 5px 0 !important; width: 100% !important; min-width: 0 !important; height: auto !important; border: 0 !important; white-space: normal !important; overflow-wrap: anywhere; overflow: visible !important; text-align: right !important; box-sizing: border-box; }
+  .household-sheet-panel .sheet-table td::before { flex: 0 0 70px; text-align: left; font-size: 12px; color: var(--text-soft); }
+  .household-sheet-panel .sheet-table td:nth-child(2)::before { content: '시간' !important; }
+  .household-sheet-panel .sheet-table td:nth-child(3)::before { content: '구분' !important; }
+  .household-sheet-panel .sheet-table td.sheet-table__title::before { content: '제목' !important; }
+  .household-sheet-panel .sheet-table td.sheet-table__category::before { content: '카테고리' !important; }
+  .household-sheet-panel .sheet-table td:nth-child(6)::before { content: '결제수단' !important; }
+  .household-sheet-panel .sheet-table td.sheet-table__amount::before { content: '금액' !important; }
+  .household-sheet-panel .sheet-table td.sheet-table__memo::before { content: '메모' !important; }
+  .household-sheet-panel .sheet-table td.sheet-table__select { display: none !important; }
+  .household-sheet-panel .sheet-table td.sheet-table__actions { display: block !important; position: static; }
+  .household-sheet-panel .sheet-table td.sheet-table__empty { justify-content: center !important; }
+  .household-sheet-panel .sheet-table td.sheet-table__empty::before { content: none !important; }
+  .household-sheet-panel .sheet-table__actions-inner { min-width: 0 !important; grid-template-columns: repeat(3, minmax(0, 1fr)) !important; }
+  .household-sheet-panel .sheet-table__actions-inner .button { min-height: 44px !important; }
+}
+
+.travel-map__fullscreen-short { display: none; }
+.travel-map .travel-journey-controls__settings { min-height: 0 !important; margin: 0 !important; padding: 0 !important; border: 0 !important; background: transparent !important; }
+.travel-map .travel-journey-controls__settings--controlled:not([open]) { display: none; }
+.travel-journey-controls__settings > summary { cursor: pointer; padding: 4px 0; font-size: 12px; line-height: 1.4; }
+.travel-journey-controls__settings[open] { padding-bottom: 4px; }
+html body .app-shell .travel-map.travel-map--fullscreen > .travel-map__toolbar {
+  background: var(--panel-bg);
+  border-color: var(--line);
+  border-radius: 2px;
+}
+html body .app-shell .travel-map .travel-map__toolbar :is(strong, small, output, summary, .travel-map__toolbar-label, .travel-journey-controls__speed-heading > span, .travel-journey-controls__speed-ticks > span) {
+  color: var(--text) !important;
+  -webkit-text-fill-color: var(--text) !important;
+}
+.travel-map.travel-map--fullscreen .travel-map__toolbar-group--navigation { flex-wrap: wrap; align-items: center; gap: 6px; }
+.travel-map.travel-map--fullscreen .travel-map__toolbar-group--navigation .travel-map__toolbar-label { width: 100%; }
+.travel-map.travel-map--fullscreen .travel-map__toolbar-group--journey { border: 0; padding-bottom: 0; }
+.travel-map .travel-map-pin-popup .leaflet-popup-content { max-height: var(--map-popup-max-height, 240px); overflow-y: auto; overscroll-behavior: contain; }
+
+@media (max-width: 760px), (max-width: 1100px) and (max-height: 500px), (max-width: 1100px) and (pointer: coarse) {
+  html body .app-shell .theme-switcher { position: static !important; width: auto; max-width: 100%; margin: 0 0 8px; padding: 4px; transform: none; }
+  html body .app-shell .theme-switcher__actions { justify-content: flex-end; gap: 6px; }
+  html body .app-shell .theme-switcher :is(button, .layout-mode-toggle__button) { min-height: 40px; padding: 6px 8px; font-size: 12px; }
+  html body .app-shell .household-floating-tools { display: none; }
+  .household-inline-tools { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+  .household-inline-tools .button { flex: 1; min-height: 40px; padding: 6px; font-size: 13px; }
+  html body .app-shell .pet-companion__dock { position: relative !important; top: auto !important; left: auto !important; right: auto !important; bottom: auto !important; margin: 12px auto; transform: none !important; }
+  html body .app-shell .entry-date-field__today { min-width: 44px; min-height: 40px; padding: 6px; }
+  .entry-date-control { grid-template-columns: 40px minmax(0, 1fr) 40px; }
+  html body .app-shell .entry-date-control__step { width: 40px; min-height: 44px; }
+  html body .transaction-sheet-modal__dialog { display: flex; flex-direction: column; height: calc(100dvh - 24px) !important; max-height: calc(100dvh - 24px) !important; padding: 12px !important; overflow: hidden !important; }
+  html body .transaction-sheet-modal__dialog > .household-sheet-panel__header { flex: 0 0 auto; max-height: none; overflow: visible; }
+  html body .transaction-sheet-modal__dialog .household-sheet-table-wrap { flex: 1 1 auto; min-height: 0 !important; max-height: none !important; overflow: auto !important; }
+
+  /* On phones the controller gets its own row. Leaflet only owns the remaining
+     canvas, so fit/pan and hit testing use the same real coordinate space. */
+  html body .app-shell .travel-map.travel-map--fullscreen { display: flex; flex-direction: column; }
+  html body .app-shell .travel-map.travel-map--fullscreen > .travel-map__toolbar { position: relative; top: auto; right: auto; bottom: auto; left: auto; transform: none; width: 100%; max-width: 100%; max-height: 50dvh; flex: 0 0 auto; gap: 4px; padding: 6px max(8px, env(safe-area-inset-right)) 6px max(8px, env(safe-area-inset-left)); border: 0; border-bottom: 1px solid var(--line); box-shadow: none; overflow-y: auto; }
+  html body .app-shell .travel-map.travel-map--fullscreen .travel-map__stage { position: relative; inset: auto; flex: 1 1 auto; min-height: 0 !important; height: auto; }
+  html body .app-shell .travel-map.travel-map--fullscreen .travel-map__canvas { min-height: 0 !important; height: 100%; }
+  html body .app-shell .travel-map.travel-map--fullscreen .travel-map__toolbar-group--navigation { display: grid !important; grid-template-columns: 32px 32px 32px minmax(0, 1fr) minmax(0, 1fr) 40px; gap: 4px; }
+  .travel-map .travel-cluster-map__zoom { white-space: nowrap; font-size: 12px; text-align: center; }
+  .travel-map.travel-map--fullscreen .travel-map__toolbar-group--navigation > .travel-map__toolbar-label { display: none; }
+  .travel-map.travel-map--fullscreen .travel-map__toolbar-button { min-width: 0; min-height: 36px; padding: 4px; font-size: 12px; white-space: nowrap; }
+  .travel-map__fullscreen-label { display: none; }
+  .travel-map__fullscreen-short { display: inline; }
+  .travel-map.travel-map--fullscreen .travel-journey-controls { gap: 4px; padding: 0; }
+  .travel-map.travel-map--fullscreen .travel-journey-controls__heading { display: none; }
+  .travel-map.travel-map--fullscreen .travel-journey-controls__day-field { gap: 0; }
+  .travel-map.travel-map--fullscreen .travel-journey-controls__day-field > span { display: none; }
+  .travel-map.travel-map--fullscreen .travel-journey-controls__day-field select { min-height: 38px; padding: 4px 8px; }
+  html body .app-shell .travel-map.travel-map--fullscreen .travel-map__toolbar-group--journey .travel-journey-controls__actions { display: grid; grid-template-columns: 84px minmax(0, 1fr); gap: 8px; align-items: center; }
+  .travel-map.travel-map--fullscreen .travel-journey-controls__actions > .button { min-height: 44px; padding: 4px 8px; font-size: 13px; }
+  .travel-map.travel-map--fullscreen .travel-journey-controls__speed { gap: 0; }
+  .travel-map.travel-map--fullscreen .travel-journey-controls__speed-ticks { display: none; }
+  .travel-map.travel-map--fullscreen .travel-journey-controls__settings > summary { padding: 2px 0; }
+  html body .app-shell .travel-map.travel-map--fullscreen .travel-map__preview { top: auto; bottom: 8px; left: 8px; max-height: min(30dvh, 200px); padding: 6px 8px 8px; }
+  .travel-map__preview .travel-map-preview__image { height: 100px; max-height: 16dvh; }
+  .travel-map__preview--sized .travel-map-preview__image { height: 100%; max-height: none; }
+  html body .app-shell .travel-map.travel-map--fullscreen .travel-map__preview--sized { max-height: calc(100% - 16px); }
+  .travel-map__preview .travel-map-preview__copy { gap: 2px; padding: 2px; }
+  .travel-map__preview .travel-map-preview__hint { display: none; }
+}
+
+@media (max-height: 500px) and (max-width: 1100px) {
+  html body .app-shell .travel-map.travel-map--fullscreen .travel-map__preview:not(.travel-map__preview--sized) { max-height: 96px; }
+  .travel-map__preview:not(.travel-map__preview--sized) .travel-map-preview__header { margin-bottom: 2px; }
+  .travel-map__preview:not(.travel-map__preview--sized) .travel-map-preview__image { height: 48px; }
+  .travel-map__preview:not(.travel-map__preview--sized) .travel-map-preview__copy > span:nth-of-type(n+2) { display: none; }
+  html body .app-shell .travel-map.travel-map--fullscreen .travel-journey-controls__settings:not([open]) > summary { font-size: 11px; padding: 0; }
+}

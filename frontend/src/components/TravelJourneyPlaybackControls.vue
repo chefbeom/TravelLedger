@@ -3,6 +3,8 @@ const props = defineProps({
   days: { type: Array, default: () => [] },
   selectedDayKey: { type: String, default: '' },
   showDaySelector: { type: Boolean, default: true },
+  showSettingsToggle: { type: Boolean, default: true },
+  settingsExpanded: { type: Boolean, default: false },
   variant: { type: String, default: 'panel' },
   isPlaying: { type: Boolean, default: false },
   photoIndex: { type: Number, default: -1 },
@@ -47,7 +49,7 @@ function handleRouteFollowChange(event) {
 
     <label v-if="showDaySelector" class="travel-journey-controls__day-field">
       <span>여행 날짜</span>
-      <select :value="selectedDayKey" :disabled="!days.length" @change="handleDayChange">
+      <select aria-label="여행 날짜" :value="selectedDayKey" :disabled="!days.length" @change="handleDayChange">
         <option value="">날짜를 선택하세요</option>
         <option v-for="day in days" :key="day.key" :value="day.key">
           {{ day.label }} · 사진 {{ day.photoCount }}장
@@ -87,30 +89,33 @@ function handleRouteFollowChange(event) {
       <span>{{ transitionCountdown }}초 후 이어 재생합니다</span>
     </p>
 
-    <small v-if="showDaySelector" class="travel-journey-controls__hint">
-      사진 핀을 따라 이동하며, 핀을 눌러 상세 내용을 열 수 있습니다. 날짜가 끝나면 다음 날로 이어집니다.
-    </small>
-
-    <section v-if="showDaySelector" class="travel-journey-route-controls" aria-label="여정과 경로 동시 재생">
-      <div class="travel-journey-route-controls__heading">
-        <strong>경로 동시 따라가기 <span>실험 기능</span></strong>
-        <small v-if="routeCount">{{ routeCount }}개 경로 · {{ routeDistanceKm.toFixed(1) }} km</small>
-      </div>
-      <p v-if="!routeCount" class="travel-journey-route-controls__empty">
-        선택한 날짜에 GPS 경로가 없습니다.
-      </p>
-      <label v-else class="travel-journey-route-toggle">
-        <input
-          type="checkbox"
-          :checked="props.routeFollowEnabled"
-          @change="handleRouteFollowChange"
-        />
-        <span class="travel-journey-route-toggle__switch" aria-hidden="true"><span></span></span>
-        <span class="travel-journey-route-toggle__label">경로 따라가기</span>
-      </label>
-      <small v-if="routeCount" class="travel-journey-route-controls__hint">
-        사진과 같은 간격으로 이동합니다. 경로 시각 정보가 없어 이동은 근사 방식입니다.
+    <details v-if="showDaySelector" class="travel-journey-controls__settings" :class="{ 'travel-journey-controls__settings--controlled': !showSettingsToggle }" :open="settingsExpanded">
+      <summary v-if="showSettingsToggle">경로·재생 안내</summary>
+      <small class="travel-journey-controls__hint">
+        사진 핀을 따라 이동하며, 핀을 눌러 상세 내용을 열 수 있습니다. 날짜가 끝나면 다음 날로 이어집니다.
       </small>
-    </section>
+
+      <section class="travel-journey-route-controls" aria-label="여정과 경로 동시 재생">
+        <div class="travel-journey-route-controls__heading">
+          <strong>경로 동시 따라가기 <span>실험 기능</span></strong>
+          <small v-if="routeCount">{{ routeCount }}개 경로 · {{ routeDistanceKm.toFixed(1) }} km</small>
+        </div>
+        <p v-if="!routeCount" class="travel-journey-route-controls__empty">
+          선택한 날짜에 GPS 경로가 없습니다.
+        </p>
+        <label v-else class="travel-journey-route-toggle">
+          <input
+            type="checkbox"
+            :checked="props.routeFollowEnabled"
+            @change="handleRouteFollowChange"
+          />
+          <span class="travel-journey-route-toggle__switch" aria-hidden="true"><span></span></span>
+          <span class="travel-journey-route-toggle__label">경로 따라가기</span>
+        </label>
+        <small v-if="routeCount" class="travel-journey-route-controls__hint">
+          사진과 같은 간격으로 이동합니다. 경로 시각 정보가 없어 이동은 근사 방식입니다.
+        </small>
+      </section>
+    </details>
   </section>
 </template>

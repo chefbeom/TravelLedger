@@ -91,6 +91,22 @@ management:
       show-details: never
 
 app:
+  embedding:
+    enabled: ${APP_EMBEDDING_ENABLED:false}
+    base-url: ${APP_EMBEDDING_BASE_URL:}
+    api-key: ${APP_EMBEDDING_API_KEY:}
+    connect-timeout: ${APP_EMBEDDING_CONNECT_TIMEOUT:5s}
+    read-timeout: ${APP_EMBEDDING_READ_TIMEOUT:180s}
+    batch-size: ${APP_EMBEDDING_BATCH_SIZE:4}
+    sync:
+      capture-enabled: ${APP_EMBEDDING_CAPTURE_ENABLED:false}
+      poll-interval: ${APP_EMBEDDING_SYNC_POLL_INTERVAL:5s}
+      lease-duration: ${APP_EMBEDDING_SYNC_LEASE_DURATION:15m}
+      max-attempts: ${APP_EMBEDDING_SYNC_MAX_ATTEMPTS:8}
+      retry-base-delay: ${APP_EMBEDDING_SYNC_RETRY_BASE_DELAY:10s}
+      retry-max-delay: ${APP_EMBEDDING_SYNC_RETRY_MAX_DELAY:15m}
+      recovery-delay: ${APP_EMBEDDING_SYNC_RECOVERY_DELAY:1m}
+      reconcile-interval: ${APP_EMBEDDING_SYNC_RECONCILE_INTERVAL:24h}
   http:
     map-workers: ${APP_HTTP_MAP_WORKERS:4}
     map-queue-capacity: ${APP_HTTP_MAP_QUEUE_CAPACITY:32}

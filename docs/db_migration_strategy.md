@@ -30,6 +30,7 @@ Updated: 2026-06-30
 | `V20260630_012__ledger_entry_operational_fields.sql` | Ledger entry foreign-currency/travel-link fields and ledger/category/payment lookup indexes previously enforced by startup DDL. |
 | `V20260630_013__ledger_ai_analysis_history_base.sql` | Ledger AI analysis history base table, provider column compatibility, and owner/range/mode/provider indexes previously enforced by startup DDL plus provider migration. |
 | `V20260630_014__household_goals.sql` | Owner-scoped household goal table and owner/status plus owner/due-date indexes previously enforced by startup DDL. |
+| `V20261006_032__ledger_embedding_sync_jobs.sql` | Durable ledger embedding outbox, revision/claim/retry metadata, ready/expired-claim indexes. No source FK, payload, startup DDL or data backfill. |
 
 ## Legacy Schema Updater Inventory
 
@@ -78,6 +79,7 @@ Retire one legacy updater at a time. Removing one requires: a versioned migratio
 | `V20260630_012__ledger_entry_operational_fields.sql` | Ledger create/search/import, foreign-currency display, travel expense linkage, and category/payment lookup flows run after Flyway applies the field/index migration. | Restore the pre-migration DB backup if ledger field/index migration fails; dropping foreign-currency/travel-link fields loses enriched ledger metadata. | Fully overlaps `LedgerEntrySchemaUpdater`; updater remains until staging Flyway startup evidence permits deletion. |
 | `V20260630_013__ledger_ai_analysis_history_base.sql` | AI analysis save/list/detail/delete, latest matching reuse, retention cleanup, and provider/model history queries run after Flyway applies the base table/index migration. | Restore the pre-migration DB backup if AI history migration fails; dropping the table loses advisory analysis history and failure records. | Fully overlaps `LedgerAiAnalysisSchemaUpdater`; updater remains until staging Flyway startup and provider migration ordering evidence permits deletion. |
 | `V20260630_014__household_goals.sql` | Household goal create/list/update/archive paths run after Flyway applies the table/index migration. | Restore the pre-migration DB backup if goal migration fails; dropping the table loses personal goal progress and archived goal metadata. | Fully overlaps `HouseholdGoalSchemaUpdater`; updater remains until staging Flyway startup and household goal smoke evidence permits deletion. |
+| `V20261006_032__ledger_embedding_sync_jobs.sql` | Pending rehearsal; compile only on 2026-10-06. Before promotion, verify MariaDB capture/rollback, bulk trash delete, claim/recovery, concurrent changes and API failure paths as described in `docs/embedding_automatic_sync.md`. No tests or DB changes run in this implementation step. | Disable API and capture before app rollback; preserve outbox/tombstones and DB backup. Do not drop pending work. App rollback does not undo remote points; plan authorized reconciliation separately. | New Flyway-only table; no legacy updater added, changed or retired. Required before capture/API enablement; `ddl-auto=update` does not create this JDBC-managed table. |
 
 ## Operating Rules
 

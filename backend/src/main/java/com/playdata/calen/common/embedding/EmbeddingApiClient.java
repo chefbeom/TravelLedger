@@ -166,6 +166,8 @@ public class EmbeddingApiClient {
 
     private static RestClient createRestClient(EmbeddingProperties properties) {
         HttpClient httpClient = HttpClient.newBuilder()
+                // Avoid h2c upgrades for compatibility with the HTTP/1.1 Uvicorn receiver.
+                .version(HttpClient.Version.HTTP_1_1)
                 .connectTimeout(properties.getConnectTimeout())
                 .followRedirects(HttpClient.Redirect.NEVER)
                 .build();

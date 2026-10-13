@@ -17,14 +17,15 @@ public final class RecordMapDtos {
         @NotNull LocalDate date, LocalTime time) {}
     public record TravelImportRequest(@NotNull @Positive Long recordId, @Size(max=100) List<@NotNull @Positive Long> collectionIds) {}
     public record ShareRequest(boolean includeVisits, @Min(1) @Max(365) int expiresInDays) {}
-    public record CollectionView(Long id, String name, String memo, String colorHex) {}
+    public record CollectionView(Long id, String name, String memo, String colorHex, long placeCount, boolean shared) {}
     public record PlaceView(Long id, String name, String memo, String country, String region, Double latitude,
         Double longitude, boolean visited, long visitCount, Long sourceTravelRecordId, List<Long> collectionIds) {}
     public record PhotoView(String id, String name, String photoUrl) {}
     public record VisitView(String id, Long placeId, String title, String memo, LocalDate date, LocalTime time,
         Long travelPlanId, String travelPlanName, List<PhotoView> photos) {}
     public record Overview(List<CollectionView> collections, List<PlaceView> places, List<VisitView> visits,
-        long totalPlaces, int page, int totalPages, boolean visitsLimited, boolean readOnly, boolean visitsIncluded, String title) {}
+        long totalPlaces, int page, int totalPages, boolean visitsLimited, boolean readOnly, boolean visitsIncluded, String title, boolean placesLimited) {}
+    public record LocationView(String name, String displayName, String country, String region, double latitude, double longitude) {}
     public record TravelCandidate(Long id, Long planId, String planName, String title, LocalDate date,
         String country, String region, Double latitude, Double longitude) {}
     public record ShareView(Long id, boolean active, boolean includeVisits, LocalDateTime expiresAt, String token) {}

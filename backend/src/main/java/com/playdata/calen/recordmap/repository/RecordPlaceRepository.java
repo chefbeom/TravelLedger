@@ -20,9 +20,24 @@ public interface RecordPlaceRepository extends JpaRepository<RecordPlace, Long> 
         and ((:fromDate is null and :toDate is null)
             or exists (select v.id from PlaceVisit v where v.place.id = p.id and (:fromDate is null or v.visitDate >= :fromDate) and (:toDate is null or v.visitDate <= :toDate))
             or exists (select t.id from TravelExpenseRecord t where t.id = p.sourceTravelRecordId and t.plan.owner.id = :ownerId and (:fromDate is null or t.expenseDate >= :fromDate) and (:toDate is null or t.expenseDate <= :toDate)))
+        and (:search is null or lower(p.name) like :search escape '!'
+            or lower(coalesce(p.country, '')) like :search escape '!'
+            or lower(coalesce(p.region, '')) like :search escape '!'
+            or (:privateFields = true and (lower(coalesce(p.memo, '')) like :search escape '!'
+                or exists (select v.id from PlaceVisit v where v.place.id = p.id and v.ownerId = :ownerId
+                    and (:fromDate is null or v.visitDate >= :fromDate) and (:toDate is null or v.visitDate <= :toDate)
+                    and (lower(v.title) like :search escape '!' or lower(coalesce(v.memo, '')) like :search escape '!'))
+                or exists (select t.id from TravelExpenseRecord t where t.id = p.sourceTravelRecordId and t.plan.owner.id = :ownerId
+                    and (:fromDate is null or t.expenseDate >= :fromDate) and (:toDate is null or t.expenseDate <= :toDate)
+                    and (lower(t.title) like :search escape '!' or lower(coalesce(t.memo, '')) like :search escape '!')))))
         """)
     Page<RecordPlace> findVisible(@Param("ownerId") Long ownerId, @Param("collectionId") Long collectionId,
-        @Param("state") String state, @Param("fromDate") LocalDate fromDate, @Param("toDate") LocalDate toDate, Pageable pageable);
+        @Param("state") String state, @Param("fromDate") LocalDate fromDate, @Param("toDate") LocalDate toDate,
+        @Param("search") String search, @Param("privateFields") boolean privateFields, Pageable pageable);
+
+    interface CollectionCount { Long getCollectionId(); long getTotal(); }
+    @Query("select c.id as collectionId, count(p.id) as total from RecordPlace p join p.collections c where p.ownerId = :owner and c.ownerId = :owner group by c.id")
+    java.util.List<CollectionCount> countCollections(@Param("owner") Long owner);
 
     @Modifying @Query(value = "delete from record_map_collection_places where collection_id = :id", nativeQuery = true)
     void detachCollection(@Param("id") Long id);

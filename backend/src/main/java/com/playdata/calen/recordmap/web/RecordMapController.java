@@ -22,14 +22,20 @@ public class RecordMapController {
     private final RecordMapMediaService media;
     private final RecordMapShareService sharing;
     private final TravelMediaStorageService storage;
+    private final RecordMapLocationSearchService locations;
 
-    @GetMapping("/overview")
+    @GetMapping({"/overview", "/map"})
     public ResponseEntity<Overview> overview(@AuthenticationPrincipal AppUserPrincipal user,
         @RequestParam(required=false) Long collectionId, @RequestParam(defaultValue="ALL") String state,
         @RequestParam(required=false) @DateTimeFormat(iso=DateTimeFormat.ISO.DATE) LocalDate from,
         @RequestParam(required=false) @DateTimeFormat(iso=DateTimeFormat.ISO.DATE) LocalDate to,
-        @RequestParam(defaultValue="0") int page) {
-        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(service.overview(user.userId(), collectionId, state, from, to, page));
+        @RequestParam(defaultValue="0") int page, @RequestParam(defaultValue="") String q,
+        @RequestParam(defaultValue="100") int size, jakarta.servlet.http.HttpServletRequest request) {
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(service.query(user.userId(), collectionId, state, from, to, page, q, size, request.getRequestURI().endsWith("/map")));
+    }
+    @GetMapping("/locations/search")
+    public ResponseEntity<List<LocationView>> searchLocations(@RequestParam String q) {
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(locations.search(q));
     }
     @PostMapping("/places")
     public Map<String, Long> createPlace(@AuthenticationPrincipal AppUserPrincipal user, @Valid @RequestBody PlaceRequest body) {
@@ -96,12 +102,13 @@ public class RecordMapController {
     @DeleteMapping("/shares/{id}") @ResponseStatus(HttpStatus.NO_CONTENT)
     public void revoke(@AuthenticationPrincipal AppUserPrincipal user, @PathVariable Long id) { sharing.revoke(user.userId(), id); }
 
-    @GetMapping("/public/{token}")
+    @GetMapping({"/public/{token}", "/public/{token}/map"})
     public ResponseEntity<Overview> publicOverview(@PathVariable String token, @RequestParam(defaultValue="ALL") String state,
         @RequestParam(required=false) @DateTimeFormat(iso=DateTimeFormat.ISO.DATE) LocalDate from,
         @RequestParam(required=false) @DateTimeFormat(iso=DateTimeFormat.ISO.DATE) LocalDate to,
-        @RequestParam(defaultValue="0") int page) {
-        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(service.sharedOverview(token, state, from, to, page));
+        @RequestParam(defaultValue="0") int page, @RequestParam(defaultValue="") String q,
+        @RequestParam(defaultValue="100") int size, jakarta.servlet.http.HttpServletRequest request) {
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(service.sharedQuery(token, state, from, to, page, q, size, request.getRequestURI().endsWith("/map")));
     }
     @GetMapping("/public/{token}/photos/{id}/content")
     public ResponseEntity<Resource> sharedPhoto(@PathVariable String token, @PathVariable Long id,

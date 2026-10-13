@@ -40,6 +40,50 @@ class RecordMapIntegrationTest {
     @Autowired AppUserRepository users;
     @Autowired RecordMapShareRepository shares;
     @Autowired TravelExpenseRecordRepository travelRecords;
+    @Autowired com.playdata.calen.recordmap.repository.RecordPlaceRepository places;
+    @Autowired com.playdata.calen.recordmap.repository.PlaceCollectionRepository collections;
+
+    @Test @org.springframework.transaction.annotation.Transactional
+    void searchCoversAllPagesWhileMapAndListHaveIndependentBounds() throws Exception {
+        long c = collection("hana", "search-pages");
+        var group = collections.findById(c).orElseThrow();
+        List<com.playdata.calen.recordmap.domain.RecordPlace> rows = new ArrayList<>();
+        for (int i=0; i<516; i++) {
+            var p = new com.playdata.calen.recordmap.domain.RecordPlace();
+            p.setOwnerId(group.getOwnerId()); p.setName(i==0 ? "Older unique bookstore" : "page-place-"+i);
+            p.setMemo("private-page-note-"+i); p.setLatitude(37.55); p.setLongitude(126.97); p.getCollections().add(group); rows.add(p);
+        }
+        places.saveAllAndFlush(rows);
+        mvc.perform(get("/api/record-map/overview").with(as("hana")).param("collectionId",""+c).param("size","30").param("page","1"))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.places.length()").value(30)).andExpect(jsonPath("$.totalPlaces").value(516)).andExpect(jsonPath("$.page").value(1));
+        mvc.perform(get("/api/record-map/map").with(as("hana")).param("collectionId",""+c).param("page","5"))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.places.length()").value(500)).andExpect(jsonPath("$.placesLimited").value(true)).andExpect(jsonPath("$.page").value(0));
+        mvc.perform(get("/api/record-map/overview").with(as("hana")).param("collectionId",""+c).param("q","OLDER UNIQUE"))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.totalPlaces").value(1)).andExpect(jsonPath("$.places[0].name").value("Older unique bookstore"));
+        mvc.perform(get("/api/record-map/overview").with(as("hana")).param("q","x".repeat(101))).andExpect(status().isBadRequest());
+        mvc.perform(get("/api/record-map/overview").with(as("hana")).param("size","501")).andExpect(status().isBadRequest());
+    }
+
+    @Test @org.springframework.transaction.annotation.Transactional
+    void publicSearchCannotInferHiddenMemosAndWildcardsAreLiteral() throws Exception {
+        long c = collection("hana", "search-privacy");
+        long p = postJson("hana", "/api/record-map/places", Map.of("name","100% cafe", "memo","hidden-needle", "latitude",37.55,"longitude",126.97,"collectionIds",List.of(c))).path("id").asLong();
+        visit("hana", p, "2026-10-13");
+        postJson("minsu", "/api/record-map/places", Map.of("name","100% other owner", "memo","hidden-needle", "latitude",37.55,"longitude",126.97));
+        String token = postJson("hana", "/api/record-map/collections/"+c+"/shares", Map.of("includeVisits",false,"expiresInDays",7)).path("token").asText();
+        for (String path : List.of("/api/record-map/public/"+token, "/api/record-map/public/"+token+"/map")) {
+            mvc.perform(get(path).param("q","hidden-needle")).andExpect(status().isOk()).andExpect(jsonPath("$.totalPlaces").value(0));
+            mvc.perform(get(path).param("q","private visit")).andExpect(status().isOk()).andExpect(jsonPath("$.totalPlaces").value(0));
+            mvc.perform(get(path).param("q","%" )).andExpect(status().isOk()).andExpect(jsonPath("$.totalPlaces").value(1));
+        }
+        mvc.perform(get("/api/record-map/overview").with(as("hana")).param("collectionId",""+c).param("q","hidden-needle"))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.totalPlaces").value(1));
+        String withRecords = postJson("hana", "/api/record-map/collections/"+c+"/shares", Map.of("includeVisits",true,"expiresInDays",7)).path("token").asText();
+        mvc.perform(get("/api/record-map/public/"+withRecords+"/map").param("q","private visit"))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.totalPlaces").value(1));
+        mvc.perform(get("/api/record-map/map").with(as("minsu")).param("collectionId",""+c)).andExpect(status().isNotFound());
+        mvc.perform(get("/api/record-map/locations/search").param("q","Seoul")).andExpect(status().isUnauthorized());
+    }
 
     @Test void membershipDeletionPreservesVisitsAndVisitStateIsDerived() throws Exception {
         long a = collection("hana", "food");

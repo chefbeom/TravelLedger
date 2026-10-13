@@ -1,5 +1,5 @@
 <script setup>
-import { computed, nextTick, onBeforeUnmount, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { recordMapApi as api } from '../lib/recordMapApi'
 import { buildRecordMapData, buildRecordMapJourney } from '../lib/recordMap'
 import { extractPhotoMetadata } from '../lib/photoMetadata'
@@ -9,14 +9,22 @@ import TravelMyMapClusterPanel from './TravelMyMapClusterPanel.vue'
 import TravelMapPanel from './TravelMapPanel.vue'
 import RecordMapDialog from './RecordMapDialog.vue'
 import RecordMapPlaybackControls from './RecordMapPlaybackControls.vue'
+import RecordMapSidebar from './RecordMapSidebar.vue'
 
 const props = defineProps({ token: { type: String, default: '' }, publicView: Boolean })
 const emit = defineEmits(['open-travel'])
 const readOnly = computed(() => props.publicView || Boolean(props.token))
 const snapshot = ref({ places: [], collections: [], visits: [], totalPlaces: 0, totalPages: 0 })
-const filters = reactive({ collectionId: '', state: 'ALL', from: '', to: '', page: 0 })
+const listSnapshot = ref({ places: [], collections: [], visits: [], totalPlaces: 0, totalPages: 0 })
+const filters = reactive({ collectionId: '', state: 'ALL', from: '', to: '', q: '', page: 0 })
 const loading = ref(false), busy = ref(false), error = ref(''), feedback = ref('')
-const view = ref('map'), displayMode = ref('cluster'), pickMode = ref(false)
+const view = ref('places'), displayMode = ref('cluster'), pickMode = ref(false)
+const compact = ref(window.matchMedia('(max-width: 760px)').matches), sidebarOpen = ref(!compact.value)
+const searchMode = ref('saved'), searchText = ref(''), locationResults = ref([]), locationLoading = ref(false), locationMessage = ref(''), foundLocation = ref(null)
+const frameRef = ref(null), frameHeight = ref(620), listLoading = ref(false)
+const mapActionsAnchor = ref(null)
+const sidebarActionsAnchor = ref(null)
+const actionsTarget = computed(() => compact.value && sidebarOpen.value ? sidebarActionsAnchor.value || mapActionsAnchor.value : mapActionsAnchor.value)
 const selectedPlaceId = ref(null), selectedPhotoId = ref(null), selectedMarkerId = ref(null)
 const mapRef = ref(null), focusTarget = ref(null), fitKey = ref(0)
 const modal = ref(''), dirty = ref(false), photoInput = ref(null)
@@ -28,10 +36,22 @@ const detailVisits = ref([]), detailPage = ref(0), detailHasMore = ref(false), d
 const candidates = ref({ content: [], number: 0, totalPages: 0 }), candidateCollections = ref([])
 const shareCollectionId = ref(''), shareList = ref([]), includeVisits = ref(false), expiresDays = ref(7), shareUrl = ref(''), newestShareId = ref(null)
 const playbackDay = ref(''), playing = ref(false), speed = ref(4), playIndex = ref(-1), countdown = ref(0), nextDate = ref('')
-let requestSequence = 0, detailSequence = 0, playbackSequence = 0, timer = null, releaseWait = null, focusSequence = 0, metadataSequence = 0
+let requestSequence = 0, listSequence = 0, locationSequence = 0, detailSequence = 0, playbackSequence = 0, timer = null, releaseWait = null, focusSequence = 0, metadataSequence = 0
+let searchTimer = null, locationAbort = null, frameObserver = null
 
-const selectedPlace = computed(() => snapshot.value.places.find(p => p.id === selectedPlaceId.value) || null)
-const data = computed(() => buildRecordMapData(snapshot.value))
+const allPlaces = computed(() => [...new Map([...snapshot.value.places, ...listSnapshot.value.places].map(p => [p.id, p])).values()])
+const selectedPlace = computed(() => allPlaces.value.find(p => p.id === selectedPlaceId.value) || null)
+const mapSnapshot = computed(() => {
+  const extra = selectedPlace.value && !snapshot.value.places.some(p => p.id === selectedPlaceId.value)
+  return extra ? { ...snapshot.value, places: [...snapshot.value.places, selectedPlace.value], visits: [...snapshot.value.visits, ...listSnapshot.value.visits.filter(v => v.placeId === selectedPlaceId.value)] } : snapshot.value
+})
+const data = computed(() => {
+  const result = buildRecordMapData(mapSnapshot.value)
+  if (foundLocation.value) result.markers.push({ ...foundLocation.value, id: 'location:preview', title: foundLocation.value.name, recordMap: true, planName: '찾은 위치', planColorHex: '#357CCB' })
+  return result
+})
+const listPlaces = computed(() => listSnapshot.value.places.map(p => ({ ...p, thumbnail: thumbnail(p.id) })))
+const diaryVisits = computed(() => [...listSnapshot.value.visits].sort((a,b) => (b.date+(b.time||'')).localeCompare(a.date+(a.time||''))))
 const journey = computed(() => buildRecordMapJourney(snapshot.value, playbackDay.value))
 const days = computed(() => [...new Set(snapshot.value.visits.map(v => v.date).filter(Boolean))].sort())
 const activeStep = computed(() => journey.value[playIndex.value] || null)
@@ -43,35 +63,110 @@ const dialogTitle = computed(() => ({ place: placeForm.id ? '장소 수정' : '�
 
 async function load() {
   const sequence = ++requestSequence
+  ++listSequence
   stopPlayback(); playIndex.value = -1
   loading.value = true
   error.value = ''
   try {
     if (readOnly.value && !props.token) throw new Error('공유 주소가 올바르지 않습니다.')
-    const result = await api.overview({ ...filters, collectionId: readOnly.value ? null : filters.collectionId }, props.token)
+    const params = { ...filters, size: 30, collectionId: readOnly.value ? null : filters.collectionId }
+    const [result, list] = await Promise.all([api.map({ ...params, page: undefined }, props.token), api.overview(params, props.token)])
     if (sequence !== requestSequence) return
     snapshot.value = result
-    if (!result.places.some(p => p.id === selectedPlaceId.value)) selectedPlaceId.value = null
+    listSnapshot.value = list
+    if (!allPlaces.value.some(p => p.id === selectedPlaceId.value)) selectedPlaceId.value = null
     fitKey.value++
   } catch (e) {
     if (sequence !== requestSequence) return
     error.value = e.message
     if (readOnly.value && [401, 403, 404].includes(e.status)) {
-      snapshot.value = { places: [], collections: [], visits: [], totalPlaces: 0, totalPages: 0 }
-      selectedPlaceId.value = null; selectedPhotoId.value = null; selectedMarkerId.value = null
-      modal.value = ''; selectedPhoto.value = null; detailVisits.value = []; detailSequence++
+      clearSharedData()
     }
   }
   finally { if (sequence === requestSequence) loading.value = false }
 }
+function clearSharedData() {
+  stopPlayback(); requestSequence++; listSequence++
+  snapshot.value = { places: [], collections: [], visits: [], totalPlaces: 0, totalPages: 0 }
+  listSnapshot.value = { ...snapshot.value }; foundLocation.value = null
+  selectedPlaceId.value = null; selectedPhotoId.value = null; selectedMarkerId.value = null
+  modal.value = ''; selectedPhoto.value = null; detailVisits.value = []; detailSequence++
+  loading.value = false; listLoading.value = false
+}
+async function loadList() {
+  const sequence = ++listSequence, filterSequence = requestSequence
+  listLoading.value = true
+  try {
+    const result = await api.overview({ ...filters, size: 30, collectionId: readOnly.value ? null : filters.collectionId }, props.token)
+    if (sequence === listSequence && filterSequence === requestSequence) listSnapshot.value = result
+  } catch (e) {
+    if (sequence !== listSequence || filterSequence !== requestSequence) return
+    error.value = e.message
+    if (readOnly.value && [401,403,404].includes(e.status)) clearSharedData()
+  } finally { if (sequence === listSequence) listLoading.value = false }
+}
+function thumbnail(id) {
+  const photo = [...listSnapshot.value.visits, ...snapshot.value.visits].find(v => v.placeId === id && v.photos?.length)?.photos[0]
+  return photo ? buildThumbnailUrl(photo.photoUrl, 'mini') : ''
+}
+function updateSearch(text) {
+  searchText.value = text; clearTimeout(searchTimer)
+  if (searchMode.value === 'saved') searchTimer = setTimeout(() => { filters.q = text.trim() }, 300)
+}
+function changeSearchMode(mode) {
+  clearTimeout(searchTimer); locationAbort?.abort(); locationSequence++
+  searchMode.value = mode; searchText.value = mode === 'saved' ? filters.q : ''
+  locationResults.value = []; locationMessage.value = ''; locationLoading.value = false; foundLocation.value = null
+}
+async function submitSearch() {
+  clearTimeout(searchTimer)
+  if (searchMode.value === 'saved') { filters.q = searchText.value.trim(); sidebarOpen.value = true; return }
+  if (readOnly.value || locationLoading.value) return
+  const sequence = ++locationSequence
+  locationAbort?.abort(); locationAbort = new AbortController()
+  locationLoading.value = true; locationMessage.value = ''; locationResults.value = []; foundLocation.value = null
+  try {
+    const rows = await api.searchLocations(searchText.value, { signal: locationAbort.signal })
+    if (sequence !== locationSequence) return
+    locationResults.value = rows; locationMessage.value = rows.length ? '결과를 눌러 위치를 확인한 뒤 저장하세요.' : '검색 결과가 없습니다.'
+    sidebarOpen.value = true
+  } catch (e) { if (sequence === locationSequence && e.name !== 'AbortError') locationMessage.value = e.message }
+  finally { if (sequence === locationSequence) locationLoading.value = false }
+}
+function focusLocation(location) {
+  stopPlayback(); foundLocation.value = location; selectedPlaceId.value = null; selectedPhotoId.value = null; selectedMarkerId.value = 'location:preview'
+  if (compact.value) sidebarOpen.value = false
+  focusTarget.value = { requestId: ++focusSequence, ...location, zoom: 15, duration: .8 }
+}
+function saveLocation(location) { beginPlace(location); placeForm.name = location.name; placeForm.country = location.country; placeForm.region = location.region }
+function selectCollection(id) { filters.collectionId = String(id || ''); view.value = 'places'; sidebarOpen.value = true }
+function setFilter(key, value) { filters[key] = value }
+function switchTab(tab) { view.value = tab; sidebarOpen.value = true }
+function refreshFrame() {
+  compact.value = window.matchMedia('(max-width: 760px)').matches
+  if (frameRef.value) frameHeight.value = Math.max(280, window.innerHeight - frameRef.value.getBoundingClientRect().top - 12)
+}
+watch(() => sidebarOpen.value, async open => {
+  // Automatic collapse on a place click must not replace its explicit zoom
+  // with a keepZoom pan while that camera transition is still starting.
+  if (!open) return
+  await nextTick()
+  if (selectedPlace.value) focusTarget.value = { requestId: ++focusSequence, ...selectedPlace.value, keepZoom: true, duration: .35 }
+})
+onMounted(() => {
+  refreshFrame(); requestAnimationFrame(refreshFrame); window.addEventListener('resize', refreshFrame); window.addEventListener('scroll', refreshFrame, { passive:true })
+  frameObserver = new ResizeObserver(refreshFrame)
+  if (frameRef.value) { frameObserver.observe(frameRef.value); frameObserver.observe(frameRef.value.parentElement) }
+})
 watch(() => props.token, () => {
   snapshot.value = { places: [], collections: [], visits: [], totalPlaces: 0, totalPages: 0 }
+  listSnapshot.value = { ...snapshot.value }; foundLocation.value = null
   selectedPlaceId.value = null; selectedPhotoId.value = null; selectedMarkerId.value = null
   modal.value = ''; selectedPhoto.value = null; detailVisits.value = []; detailSequence++
   filters.page = 0; load()
 }, { immediate: true })
-watch(() => [filters.collectionId, filters.state, filters.from, filters.to], () => { filters.page = 0; playIndex.value = -1; load() })
-watch(() => filters.page, () => { playIndex.value = -1; load() })
+watch(() => [filters.collectionId, filters.state, filters.from, filters.to, filters.q], () => { filters.page = 0; foundLocation.value = null; playIndex.value = -1; load() })
+watch(() => filters.page, () => { if (!loading.value) loadList() })
 watch(dirty, value => window.dispatchEvent(new CustomEvent('calen-route-leave-guard', { detail: { active: value, message: '작성 중인 장소·방문 기록을 저장하지 않고 나갈까요?' } })))
 
 async function act(action) {
@@ -167,13 +262,14 @@ function savePlace() {
       await uploadPending(visit.id)
     }
     dirty.value = false; modal.value = ''; await load()
-    selectedPlaceId.value = result.id; feedback.value = '장소와 기록을 저장했습니다.'
+    foundLocation.value = null; selectedPlaceId.value = result.id
+    feedback.value = allPlaces.value.some(p => p.id === result.id) ? '장소와 기록을 저장했습니다.' : '저장했습니다. 현재 검색·필터 조건을 바꾸면 저장한 장소를 확인할 수 있습니다.'
   })
 }
 function beginVisit(visit = null) {
   stopPlayback(); error.value = ''; dirty.value = false
-  if (!snapshot.value.places.length) { beginPlace(null, true); return }
-  resetVisit(visit?.placeId || selectedPlaceId.value || snapshot.value.places[0].id)
+  if (!allPlaces.value.length) { beginPlace(null, true); return }
+  resetVisit(visit?.placeId || selectedPlaceId.value || allPlaces.value[0].id)
   if (visit) Object.assign(visitForm, { id: Number(visit.id.split(':')[1]), placeId: visit.placeId, title: visit.title, memo: visit.memo || '', date: visit.date, time: visit.time || '' })
   modal.value = 'visit'
 }
@@ -213,18 +309,26 @@ function deletePhoto(photo) {
 function selectPlace(item) {
   stopPlayback()
   const id = item?.recordMapPlaceId ?? item?.placeId ?? Number(String(item?.id || item?.clusterId || '').split(':').at(-1))
-  if (!snapshot.value.places.some(p => p.id === Number(id))) return
+  if (!allPlaces.value.some(p => p.id === Number(id))) return
   if (selectedPlaceId.value !== Number(id)) { detailVisits.value = []; detailSequence++ }
   selectedPlaceId.value = Number(id)
   selectedPhotoId.value = item.mediaId || item.representativeMediaId || null
   selectedMarkerId.value = selectedPhotoId.value ? null : 'place:' + id
+  if (compact.value) sidebarOpen.value = false
+  nextTick(() => {
+    const card = frameRef.value?.querySelector(`[data-place-id="${Number(id)}"]`)
+    const container = card?.closest('.record-map-sidebar__body')
+    if (!card || !container) return
+    const row = card.getBoundingClientRect(), bounds = container.getBoundingClientRect()
+    if (row.top < bounds.top || row.bottom > bounds.bottom) container.scrollBy({ top: row.top - bounds.top, behavior: 'smooth' })
+  })
 }
 function focusPlace(place) {
   stopPlayback(); selectedPlaceId.value = place.id; selectedMarkerId.value = 'place:' + place.id
   const pin = data.value.photoPins.find(p => p.recordMapPlaceId === place.id)
   selectedPhotoId.value = pin?.mediaId || null
   focusTarget.value = { requestId: ++focusSequence, latitude: place.latitude, longitude: place.longitude, zoom: 15, duration: .8 }
-  view.value = 'map'
+  if (compact.value) sidebarOpen.value = false
 }
 async function openDetail(place) {
   if (!place) return
@@ -247,6 +351,7 @@ function openPhoto(photo, visit = null) {
   selectedPhoto.value = { ...photo, visit }; modal.value = 'photo'
 }
 function mapPreviewOpen(photo) {
+  if (photo.id === 'location:preview' && foundLocation.value) { saveLocation(foundLocation.value); return }
   selectPlace(photo)
   const visit = snapshot.value.visits.find(v => v.photos?.some(p => p.id === (photo.mediaId ?? photo.representativeMediaId)))
   const picture = visit?.photos?.find(p => p.id === (photo.mediaId ?? photo.representativeMediaId))
@@ -345,7 +450,8 @@ function setSpeed(seconds) { const resume = playing.value; stopPlayback(); speed
 function leaveGuard(event) { if (dirty.value) { event.preventDefault(); event.returnValue = '' } }
 window.addEventListener('beforeunload', leaveGuard)
 onBeforeUnmount(() => {
-  requestSequence++; detailSequence++; metadataSequence++; stopPlayback()
+  requestSequence++; listSequence++; locationSequence++; detailSequence++; metadataSequence++; stopPlayback()
+  clearTimeout(searchTimer); locationAbort?.abort(); frameObserver?.disconnect(); window.removeEventListener('resize', refreshFrame); window.removeEventListener('scroll', refreshFrame)
   window.removeEventListener('beforeunload', leaveGuard)
   window.dispatchEvent(new CustomEvent('calen-route-leave-guard', { detail: { active: false } }))
 })
@@ -354,8 +460,8 @@ onBeforeUnmount(() => {
 <template>
   <div class="workspace-stack record-map-workspace">
     <header class="panel record-map-header">
-      <div><span class="panel__eyebrow">RECORD MAP</span><h2>{{ snapshot.title || '기록 지도' }}</h2><p>{{ readOnly ? '공유가 허용된 장소와 기록을 읽기 전용으로 살펴보세요.' : '가고 싶은 곳을 저장하고, 다녀온 날의 사진과 이야기를 남겨보세요.' }}</p></div>
-      <div v-if="!readOnly" class="record-map-actions">
+      <div><h2>{{ snapshot.title || '기록 지도' }}</h2><span v-if="readOnly" class="record-map-note">공유된 자료 · 읽기 전용</span></div>
+      <Teleport :to="actionsTarget || 'body'" :disabled="!actionsTarget"><details v-if="!readOnly" class="record-map-add"><summary class="button button--primary">＋ 추가·관리</summary><div class="record-map-add__menu" @click="$event.target.closest('button') && ($event.currentTarget.closest('details').open = false)">
         <button class="button button--primary" @click="beginPlace()" :disabled="busy">장소 저장</button>
         <button class="button" @click="photoInput.click()" :disabled="busy">사진으로 기록</button>
         <button class="button" @click="beginVisit()" :disabled="busy">방문 기록 남기기</button>
@@ -363,29 +469,34 @@ onBeforeUnmount(() => {
         <button class="button" @click="beginTravelImport">여행 장소 가져오기</button>
         <button class="button" :disabled="!snapshot.collections.length" @click="beginShare">모음 공유</button>
         <input ref="photoInput" type="file" accept="image/*" multiple hidden @change="photoPicked" />
-      </div>
+      </div></details></Teleport>
     </header>
     <p v-if="error" class="feedback feedback--error" role="alert">{{ error }}</p>
     <p v-if="feedback" class="feedback feedback--success" role="status">{{ feedback }}</p>
-    <section class="panel record-map-filters" aria-label="기록 지도 조회 조건">
-      <label>장소 모음<select v-model="filters.collectionId" :disabled="readOnly || busy"><option value="">전체 장소</option><option v-for="c in snapshot.collections" :key="c.id" :value="String(c.id)">{{ c.name }}</option></select></label>
-      <label>방문 상태<select v-model="filters.state" :disabled="busy"><option value="ALL">전체</option><option value="WANTED">가고 싶은 곳</option><option value="VISITED">방문한 곳</option></select></label>
-      <label v-if="!readOnly || snapshot.visitsIncluded">기록 시작일<input v-model="filters.from" type="date" :disabled="busy" /></label>
-      <label v-if="!readOnly || snapshot.visitsIncluded">기록 종료일<input v-model="filters.to" type="date" :disabled="busy" /></label>
-      <div class="record-map-actions"><button class="button" @click="view = 'map'">지도</button><button class="button" @click="view = 'places'">장소 목록</button><button class="button" @click="view = 'diary'">일상 기록</button><button class="button" @click="load" :disabled="loading">새로고침</button></div>
-    </section>
-    <p v-if="loading" role="status">기록을 불러오는 중입니다.</p>
-    <p v-if="snapshot.visitsLimited" class="record-map-note">지도 재생에는 최근 방문 기록 200건과 연결된 여행 사진 최대 1,000장이 표시됩니다. 날짜 범위를 좁히거나 장소 상세에서 이전 방문 기록을 확인하세요.</p>
-
-    <TravelMyMapClusterPanel v-show="view === 'map'" ref="mapRef" :active="view === 'map'" show-embedded-controls include-record-markers :markers="data.markers" :photo-pins="data.photoPins" :photo-clusters="data.photoClusters"
+    <div ref="frameRef" class="record-map-frame" :style="{ '--record-map-height': frameHeight + 'px' }">
+    <TravelMyMapClusterPanel ref="mapRef" active workspace-layout include-record-markers :workspace-sidebar-open="sidebarOpen" :overlay-revision="String(sidebarOpen) + view + String(compact)" :markers="data.markers" :photo-pins="data.photoPins" :photo-clusters="data.photoClusters"
       :display-mode="displayMode" :fit-request-key="fitKey" :focus-target="focusTarget" :selected-marker-id="selectedMarkerId" :selected-photo-id="selectedPhotoId"
       :selected-cluster-id="selectedPlaceId ? 'place:' + selectedPlaceId : null" :journey-photo-id="activeStep?.mediaId" :journey-playback-active="playing"
       :enable-pick-location="pickMode && !readOnly" @pick-location="pickPoint" @select-marker="selectPlace" @select-cluster="selectPlace" @select-photo-pin="selectPlace" @preview-cluster="mapPreviewOpen" @clear-selection="selectedPlaceId = null; selectedPhotoId = null; selectedMarkerId = null">
-      <template #fullscreen-controls>
-        <div class="record-map-floating-actions"><button class="button" @click="displayMode = displayMode === 'cluster' ? 'pin' : 'cluster'">{{ displayMode === 'cluster' ? '핀 보기' : '썸네일 보기' }}</button><button v-if="!readOnly" class="button" :aria-pressed="pickMode" @click="pickMode = !pickMode">{{ pickMode ? '핀 위치를 눌러 주세요' : '지도에 핀 찍기' }}</button><button class="button" v-if="selectedPlace" @click="openDetail(selectedPlace)">선택 장소 자세히</button></div>
+      <template #navigation="controls">
+        <nav class="record-map-tools" aria-label="지도 도구 모음">
+          <div v-if="!readOnly" ref="mapActionsAnchor"></div>
+          <div class="record-map-tools__zoom"><button class="button" type="button" aria-label="지도 축소" @click="controls.zoomOut">−</button><strong class="travel-cluster-map__zoom">{{ controls.zoom }}</strong><button class="button" type="button" aria-label="지도 확대" @click="controls.zoomIn">＋</button></div>
+          <button class="button" type="button" @click="controls.fitAll">전체 보기</button><button class="button" type="button" @click="controls.toggleFullscreen">{{ controls.isFullscreen ? '전체 화면 종료' : '전체 화면' }}</button>
+          <details><summary>표시 설정</summary><div class="record-map-tools__settings"><button class="button" @click="displayMode = displayMode === 'cluster' ? 'pin' : 'cluster'">{{ displayMode === 'cluster' ? '핀 보기' : '썸네일 보기' }}</button><button v-if="!readOnly" class="button" :aria-pressed="pickMode" @click="pickMode = !pickMode">{{ pickMode ? '핀 위치를 눌러 주세요' : '지도에 핀 찍기' }}</button><button class="button" @click="load" :disabled="loading">새로고침</button></div></details>
+        </nav>
+      </template>
+      <template #workspace-overlays>
+        <RecordMapSidebar :open="sidebarOpen" :tab="view" :read-only="readOnly" :busy="busy" :loading="loading || listLoading" :filters="filters" :snapshot="listSnapshot" :places="listPlaces" :visits="diaryVisits" :selected="selectedPlace"
+          :search-mode="searchMode" :search-text="searchText" :locations="locationResults" :location-loading="locationLoading" :location-message="locationMessage"
+          @toggle="sidebarOpen = !sidebarOpen" @tab="switchTab" @search-text="updateSearch" @search-mode="changeSearchMode" @search="submitSearch" @filter="setFilter" @collection="selectCollection" @select="focusPlace" @detail="openDetail" @photo="openPhoto" @location="focusLocation" @save-location="saveLocation" @page="filters.page = $event" @collections="beginCollections" @share="beginShare"><template #actions><div v-if="!readOnly" ref="sidebarActionsAnchor"></div></template></RecordMapSidebar>
+        <div class="record-map-playbar" :class="{ 'with-sidebar': sidebarOpen || compact }" data-map-overlay @click.stop @pointerdown.stop @wheel.stop>
         <RecordMapPlaybackControls :days="days" :day="playbackDay" :playing="playing" :speed="speed" :index="playIndex" :total="journey.length" :busy="loading || busy" :countdown="countdown" :next-date="nextDate" @day="setDay" @toggle="play" @speed="setSpeed" />
+        <details v-if="snapshot.visitsLimited || snapshot.placesLimited" class="record-map-limits"><summary>표시 범위 안내</summary><span v-if="snapshot.placesLimited">지도는 검색 조건의 최근 장소 최대 500개를 표시합니다. 검색·필터로 범위를 좁히세요.</span><span v-if="snapshot.visitsLimited">재생은 최근 방문 200건과 연결된 여행 사진 최대 1,000장 기준입니다. 이전 기록은 장소 상세에서 확인하세요.</span></details>
+        </div>
       </template>
     </TravelMyMapClusterPanel>
+    </div>
         <RecordMapDialog v-if="modal" :open="Boolean(modal)" :title="dialogTitle" :busy="busy" @close="closeDialog">
           <p v-if="error" class="feedback feedback--error" role="alert">{{ error }}</p>
           <p v-if="feedback" class="feedback feedback--success" role="status">{{ feedback }}</p>
@@ -394,7 +505,7 @@ onBeforeUnmount(() => {
             <label class="field">장소 이름<input v-model="placeForm.name" required maxlength="160" placeholder="예: 성수동 A식당" /></label>
             <div class="record-map-form-grid"><label class="field">국가<input v-model="placeForm.country" maxlength="80" /></label><label class="field">지역<input v-model="placeForm.region" maxlength="120" /></label></div>
             <p class="record-map-note">지도를 클릭해 장소를 선택하거나 좌표를 입력하세요.</p>
-            <TravelMapPanel :markers="[]" :zoom-animation="false" :selected-point="placeForm.latitude !== '' && placeForm.longitude !== '' ? { latitude: Number(placeForm.latitude), longitude: Number(placeForm.longitude) } : null" initial-map-size="compact" @pick-location="pickPoint" />
+            <TravelMapPanel :markers="[]" :zoom-animation="false" :location-search="api.searchLocations" :selected-point="placeForm.latitude !== '' && placeForm.longitude !== '' ? { latitude: Number(placeForm.latitude), longitude: Number(placeForm.longitude) } : null" initial-map-size="compact" @pick-location="pickPoint" />
             <div class="record-map-form-grid"><label class="field">위도<input v-model="placeForm.latitude" required type="number" step="any" min="-90" max="90" /></label><label class="field">경도<input v-model="placeForm.longitude" required type="number" step="any" min="-180" max="180" /></label></div>
             <button type="button" class="button" :disabled="gpsLoading" @click="useGps">{{ gpsLoading ? '위치 확인 중' : '현재 위치 사용' }}</button>
             <label class="field">장소 메모<textarea v-model="placeForm.memo" maxlength="2000" rows="3" /></label>
@@ -413,7 +524,7 @@ onBeforeUnmount(() => {
           </form>
 
           <form v-else-if="modal === 'visit'" class="record-map-form" @submit.prevent="saveVisit" @input="dirty = true">
-            <label class="field">방문 장소<select v-model="visitForm.placeId" :disabled="Boolean(visitForm.id)" required><option v-for="p in snapshot.places" :key="p.id" :value="p.id">{{ p.name }}</option></select></label>
+            <label class="field">방문 장소<select v-model="visitForm.placeId" :disabled="Boolean(visitForm.id)" required><option v-for="p in allPlaces" :key="p.id" :value="p.id">{{ p.name }}</option></select></label>
             <label class="field">제목<input v-model="visitForm.title" maxlength="160" placeholder="이날의 방문 기록" /></label>
             <div class="record-map-form-grid"><label class="field">날짜<input v-model="visitForm.date" type="date" required /></label><label class="field">시간 · 선택<input v-model="visitForm.time" type="time" /></label></div>
             <label class="field">메모<textarea v-model="visitForm.memo" maxlength="4000" rows="5" /></label>
@@ -469,22 +580,72 @@ onBeforeUnmount(() => {
           </div>
         </RecordMapDialog>
 
-    <section v-if="view === 'places'" class="panel record-map-place-grid">
-      <article v-for="place in snapshot.places" :key="place.id"><span class="record-map-state" :class="{ 'is-visited': place.visited }">{{ place.visited ? '방문한 곳' : '가고 싶은 곳' }}</span><h3>{{ place.name }}</h3><p>{{ [place.country, place.region].filter(Boolean).join(' · ') }}</p><p>{{ place.visitCount }}번 기록 · {{ place.collectionIds.map(id => snapshot.collections.find(c => c.id === id)?.name).filter(Boolean).join(', ') || '모음 미지정' }}</p><div class="record-map-actions"><button class="button" @click="focusPlace(place)">지도에서 보기</button><button class="button" @click="openDetail(place)">방문 기록 보기</button></div></article>
-    </section>
-    <section v-if="view === 'diary'" class="panel record-map-diary">
-      <article v-for="visit in [...snapshot.visits].sort((a,b) => (b.date + (b.time || '')).localeCompare(a.date + (a.time || '')))" :key="visit.id"><header><strong>{{ visit.title }}</strong><span>{{ visit.date }} {{ visit.time?.slice(0,5) }} · {{ snapshot.places.find(p => p.id === visit.placeId)?.name }}</span></header><p class="record-map-memo">{{ visit.memo }}</p><div class="record-map-photo-grid"><button v-for="photo in visit.photos" :key="photo.id" type="button" @click="selectedPlaceId = visit.placeId; openPhoto(photo, visit)"><img :src="buildThumbnailUrl(photo.photoUrl, 'mini')" :alt="photo.name" loading="lazy" /></button></div><button class="button" @click="openDetail(snapshot.places.find(p => p.id === visit.placeId))">장소·방문 기록 자세히</button></article>
-      <p v-if="!snapshot.visits.length">날짜가 있는 방문 기록이 없습니다. 장소에 첫 방문을 남겨보세요.</p>
-    </section>
-    <p v-if="!snapshot.places.length && !loading" class="panel record-map-empty">{{ readOnly ? '공유된 모음에 현재 조건과 일치하는 장소가 없습니다.' : '아직 이 조건의 장소가 없습니다. 장소를 저장하거나 사진으로 첫 기록을 남겨보세요.' }}</p>
-    <footer class="record-map-pagination"><span>장소 {{ snapshot.totalPlaces }}개 · {{ filters.page + 1 }} / {{ Math.max(1, snapshot.totalPages) }}페이지</span><button class="button" :disabled="filters.page <= 0 || loading" @click="filters.page--">이전</button><button class="button" :disabled="filters.page + 1 >= snapshot.totalPages || loading" @click="filters.page++">다음</button></footer>
   </div>
 </template>
 
 <style scoped>
 :global(body:has(.record-map-workspace .travel-map--fullscreen) .pet-companion) { display: none !important; }
-.record-map-header { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 18px; }
+:global(body:has(.record-map-workspace .travel-map--fullscreen) .theme-switcher) { display:none !important; }
+.record-map-workspace > .feedback { margin:0; padding:6px 10px; font-size:.8rem; }
+.record-map-workspace { gap:8px; }
+.record-map-header { display: flex; flex-wrap: wrap; align-items:center; justify-content: space-between; gap: 8px; padding:10px 14px; }
 .record-map-header h2 { margin: 5px 0; } .record-map-header p { margin: 0; }
+.record-map-header h2 { font-size:1.1rem; }
+.record-map-add { position:relative; z-index:1100; }
+.record-map-add summary { cursor:pointer; list-style:none; font-size:.78rem; padding:7px 4px; }
+:global(html body .app-shell .record-map-workspace .travel-map .record-map-tools .record-map-add summary.button--primary) { background:#365b45 !important; color:#fff !important; -webkit-text-fill-color:#fff !important; text-shadow:none !important; }
+:global(html body .app-shell .record-map-workspace .travel-map .record-map-sidebar .record-map-sidebar__header .record-map-add summary.button--primary) { background:#365b45 !important; color:#fff !important; -webkit-text-fill-color:#fff !important; text-shadow:none !important; font-size:12px !important; padding:6px !important; }
+:global(html body .app-shell .record-map-workspace .travel-map .record-map-sidebar .record-map-search button.button[type="submit"]) { background:var(--panel-bg) !important; color:var(--text) !important; -webkit-text-fill-color:var(--text) !important; text-shadow:none !important; }
+.record-map-add__menu { position:absolute; top:calc(100% + 6px); right:0; width:200px; max-height:50dvh; overflow-y:auto; display:grid; gap:4px; padding:8px; border:1px solid var(--line); background:var(--panel-bg); box-shadow:0 6px 24px #0003; }
+.record-map-add__menu .button { text-align:left; width:100%; }
+.record-map-frame { position:relative; width:100%; min-width:0; height:var(--record-map-height); }
+.record-map-frame :deep(.travel-map--record-workspace) { position:relative; display:block !important; margin:0; padding:0; width:100%; height:100%; min-width:0; border:1px solid var(--line); overflow:hidden; box-sizing:border-box; }
+.record-map-frame :deep(.travel-map--record-workspace.travel-map--fullscreen) { position:fixed; width:100vw; height:100dvh; }
+.record-map-frame :deep(.travel-map--record-workspace > .travel-map__toolbar) { position:absolute !important; z-index:1002; top:12px !important; right:12px !important; bottom:auto !important; left:auto !important; width:auto !important; max-width:none !important; max-height:none !important; height:auto !important; margin:0; padding:0 !important; border:0 !important; background:transparent !important; transform:none !important; overflow:visible !important; }
+.record-map-frame :deep(.travel-map--record-workspace .travel-map__stage) { position:relative; width:100%; height:100% !important; min-height:0 !important; padding:0; }
+.record-map-frame :deep(.travel-map--record-workspace .travel-map__canvas) { height:100% !important; min-height:0 !important; width:100%; }
+.record-map-tools { display:grid; gap:5px; width:92px; padding:8px; box-sizing:border-box; background:var(--panel-bg); color:var(--text); border:1px solid var(--line); box-shadow:0 4px 16px #0003; }
+.record-map-tools .button { padding:7px 4px !important; min-height:36px !important; min-width:0 !important; max-width:100% !important; width:100%; box-sizing:border-box; font-size:.78rem !important; }
+.record-map-tools__zoom { display:grid; grid-template-columns:1fr auto 1fr; align-items:center; gap:3px; }
+.record-map-tools__zoom .travel-cluster-map__zoom { min-width:20px; font-size:.8rem; }
+.record-map-tools summary { cursor:pointer; text-align:center; padding:8px 0; font-size:.78rem; }
+.record-map-tools__settings { display:grid; gap:5px; }
+.record-map-playbar { position:absolute; z-index:1001; bottom:12px; left:12px; right:128px; padding:10px 12px; background:var(--panel-bg); color:var(--text); border:1px solid var(--line); box-shadow:0 4px 16px #0003; }
+.record-map-playbar.with-sidebar { left:364px; }
+.record-map-playbar :deep(.record-map-playback) { padding:0; margin:0; border:0; grid-template-columns:minmax(120px,1fr) minmax(120px,1fr) minmax(190px,1.5fr); align-items:center; gap:10px; }
+.record-map-playbar :deep(.record-map-playback > strong) { display:grid; gap:4px; font-size:.85rem; }
+.record-map-playbar :deep(.record-map-playback select) { min-height:32px; padding:5px; }
+.record-map-playbar :deep(.record-map-playback .button) { min-height:36px; padding:6px 9px; }
+.record-map-playbar :deep(.record-map-playback input[type="range"]) { height:20px; }
+.record-map-limits { margin-top:6px; font-size:.75rem; }
+.record-map-limits span { display:block; padding:4px; }
+@media(max-width:1100px) { .record-map-playbar { right:12px; } .record-map-playbar :deep(.record-map-playback) { grid-template-columns:1fr 1fr; } .record-map-playbar :deep(.record-map-playback > strong) { grid-column:1/-1; display:flex; } }
+@media(max-width:760px) {
+  :global(body:has(.record-map-workspace) .app-shell) { padding-top:0 !important; }
+  :global(body:has(.record-map-workspace) .theme-switcher) { position:static !important; padding:4px 8px !important; margin:0 !important; min-height:0 !important; justify-content:flex-end; }
+  :global(body:has(.record-map-workspace) .theme-switcher button) { min-height:30px !important; padding:4px 7px !important; font-size:11px !important; }
+  :global(body:has(.record-map-workspace) .topbar) { display:flex !important; flex-wrap:wrap; gap:4px !important; padding:6px 8px !important; min-height:0 !important; }
+  :global(body:has(.record-map-workspace) .topbar__copy) { flex:1; min-width:0; }
+  :global(body:has(.record-map-workspace) .topbar__copy :is(.topbar__eyebrow,.topbar__title,.topbar__description,.topbar__context)) { display:none !important; }
+  :global(body:has(.record-map-workspace) .topbar__brand) { font-size:14px !important; }
+  :global(body:has(.record-map-workspace) .topbar__actions) { width:auto !important; gap:4px !important; }
+  :global(body:has(.record-map-workspace) .topbar__actions .button) { min-height:30px !important; min-width:0 !important; padding:4px 7px !important; font-size:11px !important; }
+  :global(body:has(.record-map-workspace) .topbar__nav) { width:100% !important; gap:3px !important; padding:0 !important; }
+  :global(body:has(.record-map-workspace) .topbar__nav-button) { min-height:34px !important; padding:5px 8px !important; font-size:12px !important; }
+  :global(body:has(.record-map-workspace) .record-map-mode-switch) { gap:5px; padding:6px 8px !important; }
+  :global(body:has(.record-map-workspace) .record-map-mode-switch .button) { min-height:34px !important; font-size:12px !important; padding:5px 8px !important; }
+  .record-map-frame :deep(.travel-map--record-workspace > .travel-map__toolbar) { top:8px !important; right:8px !important; left:8px !important; }
+  .record-map-frame :deep(.travel-map--record-workspace.travel-map--sidebar-expanded > .travel-map__toolbar) { display:none !important; }
+  .record-map-tools { width:100%; padding:5px; grid-template-columns:repeat(4,minmax(0,1fr)); }
+  .record-map-tools__zoom { grid-column:span 2; }
+  .record-map-tools > button:nth-of-type(2), .record-map-tools > details { grid-column:span 2; }
+  .record-map-tools .button { min-height:36px; }
+  .record-map-playbar, .record-map-playbar.with-sidebar { bottom:8px; left:8px; right:8px; padding:6px 8px; }
+  .record-map-playbar :deep(.record-map-playback) { grid-template-columns:1fr 1.3fr; gap:4px 8px; }
+  .record-map-playbar :deep(.record-map-playback > strong) { grid-column:1/-1; font-size:.75rem; }
+  .record-map-playbar :deep(.record-map-playback label) { font-size:.72rem; gap:2px; }
+  .record-map-playbar :deep(.record-map-playback__row) { gap:6px; }
+}
 .record-map-actions, .record-map-floating-actions { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
 .record-map-actions > *, .record-map-floating-actions > * { flex-shrink: 0; }
 .record-map-filters { display: flex; gap: 12px; flex-wrap: wrap; align-items: end; }

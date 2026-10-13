@@ -32,22 +32,38 @@ public class RecordMapService {
     public Overview overview(Long owner, Long collectionId, String state, LocalDate from, LocalDate to, int page) {
         users.getRequiredUser(owner);
         if (collectionId != null) ownedCollection(owner, collectionId);
-        return buildOverview(owner, collectionId, state, from, to, page, null, true);
+        return buildOverview(owner, collectionId, state, from, to, page, null, true, "", 100, false);
     }
 
     public Overview sharedOverview(String token, String state, LocalDate from, LocalDate to, int page) {
         RecordMapShare share = sharing.resolve(token);
         if (!share.isIncludeVisits() && (from != null || to != null)) throw new BadRequestException("방문 기록을 공유하지 않은 지도에서는 날짜를 조회할 수 없습니다.");
-        return buildOverview(share.getOwnerId(), share.getCollection().getId(), state, from, to, page, token, share.isIncludeVisits());
+        return buildOverview(share.getOwnerId(), share.getCollection().getId(), state, from, to, page, token, share.isIncludeVisits(), "", 100, false);
+    }
+
+    public Overview query(Long owner, Long collectionId, String state, LocalDate from, LocalDate to, int page, String query, int size, boolean map) {
+        users.getRequiredUser(owner);
+        if (collectionId != null) ownedCollection(owner, collectionId);
+        return buildOverview(owner, collectionId, state, from, to, page, null, true, query, size, map);
+    }
+
+    public Overview sharedQuery(String token, String state, LocalDate from, LocalDate to, int page, String query, int size, boolean map) {
+        RecordMapShare share = sharing.resolve(token);
+        if (!share.isIncludeVisits() && (from != null || to != null)) throw new BadRequestException("방문 기록을 공유하지 않은 지도에서는 날짜를 조회할 수 없습니다.");
+        return buildOverview(share.getOwnerId(), share.getCollection().getId(), state, from, to, page, token, share.isIncludeVisits(), query, size, map);
     }
 
     private Overview buildOverview(Long owner, Long collectionId, String state, LocalDate from, LocalDate to,
-            int page, String token, boolean includeVisits) {
+            int page, String token, boolean includeVisits, String query, int size, boolean map) {
         if (!Set.of("ALL", "WANTED", "VISITED").contains(state)) throw new BadRequestException("방문 상태를 확인해 주세요.");
         if (from != null && to != null && from.isAfter(to)) throw new BadRequestException("조회 시작일은 종료일보다 늦을 수 없습니다.");
         if (page < 0) throw new BadRequestException("페이지를 확인해 주세요.");
+        if (size < 1 || size > 100) throw new BadRequestException("목록 크기는 1~100개로 선택해 주세요.");
+        String keyword = query == null ? "" : query.trim();
+        if (keyword.length() > 100) throw new BadRequestException("검색어는 100자 이하로 입력해 주세요.");
+        String search = keyword.isEmpty() ? null : "%" + keyword.toLowerCase(Locale.ROOT).replace("!", "!!").replace("%", "!%").replace("_", "!_") + "%";
         var result = places.findVisible(owner, collectionId, state, from, to,
-            PageRequest.of(page, 100, Sort.by(Sort.Direction.DESC, "updatedAt", "id")));
+            search, token == null || includeVisits, PageRequest.of(map ? 0 : page, map ? 500 : size, Sort.by(Sort.Direction.DESC, "updatedAt", "id")));
         List<RecordPlace> entries = result.getContent();
         List<Long> ids = entries.stream().map(RecordPlace::getId).toList();
         Map<Long, Long> counts = ids.isEmpty() ? Map.of() : visits.countVisits(owner, ids).stream()
@@ -88,11 +104,14 @@ public class RecordMapService {
                 includeVisits ? count : 0, token == null ? p.getSourceTravelRecordId() : null,
                 p.getCollections().stream().map(PlaceCollection::getId).filter(id -> token == null || id.equals(collectionId)).toList());
         }).toList();
+        Map<Long, Long> collectionCounts = token == null ? places.countCollections(owner).stream()
+            .collect(Collectors.toMap(RecordPlaceRepository.CollectionCount::getCollectionId, RecordPlaceRepository.CollectionCount::getTotal)) : Map.of();
+        Set<Long> sharedIds = token == null ? new HashSet<>(shares.findActiveCollectionIds(owner, LocalDateTime.now())) : Set.of();
         List<CollectionView> collectionViews = token == null
-            ? collections.findAllByOwnerIdOrderByCreatedAtDescIdDesc(owner).stream().map(this::collectionView).toList()
-            : List.of(new CollectionView(collectionId, ownedCollection(owner, collectionId).getName(), null, ownedCollection(owner, collectionId).getColorHex()));
-        return new Overview(collectionViews, placeViews, visitViews, result.getTotalElements(), page,
-            result.getTotalPages(), limited, token != null, includeVisits, token == null ? "기록 지도" : collectionViews.get(0).name());
+            ? collections.findAllByOwnerIdOrderByCreatedAtDescIdDesc(owner).stream().map(c -> new CollectionView(c.getId(), c.getName(), c.getMemo(), c.getColorHex(), collectionCounts.getOrDefault(c.getId(), 0L), sharedIds.contains(c.getId()))).toList()
+            : List.of(new CollectionView(collectionId, ownedCollection(owner, collectionId).getName(), null, ownedCollection(owner, collectionId).getColorHex(), result.getTotalElements(), true));
+        return new Overview(collectionViews, placeViews, visitViews, result.getTotalElements(), map ? 0 : page,
+            result.getTotalPages(), limited, token != null, includeVisits, token == null ? "기록 지도" : collectionViews.get(0).name(), map && result.getTotalElements() > 500);
     }
 
     public List<VisitView> placeVisits(Long owner, Long placeId, int page) {
@@ -194,7 +213,7 @@ public class RecordMapService {
         for (Long id : ids == null ? List.<Long>of() : ids) result.add(ownedCollection(owner, id));
         return result;
     }
-    private CollectionView collectionView(PlaceCollection c) { return new CollectionView(c.getId(), c.getName(), c.getMemo(), c.getColorHex()); }
+    private CollectionView collectionView(PlaceCollection c) { return new CollectionView(c.getId(), c.getName(), c.getMemo(), c.getColorHex(), 0, false); }
     private VisitView visitView(PlaceVisit v, List<PlacePhoto> items, String token) {
         return new VisitView("visit:" + v.getId(), v.getPlace().getId(), v.getTitle(), v.getMemo(), v.getVisitDate(), v.getVisitTime(),
             null, null, items.stream().map(p -> new PhotoView("photo:" + p.getId(), p.getOriginalName(),

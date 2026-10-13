@@ -10,6 +10,8 @@ function query(params) {
 const json = (method, body) => ({ method, body: JSON.stringify(body) })
 export const recordMapApi = {
   overview: (params, token = '') => requestRecordMap((token ? '/public/' + encodeURIComponent(token) : '/overview') + query(params)),
+  map: (params, token = '') => requestRecordMap((token ? '/public/' + encodeURIComponent(token) + '/map' : '/map') + query(params)),
+  searchLocations: (q, options = {}) => requestRecordMap('/locations/search' + query({ q }), options),
   place: (id, body) => requestRecordMap('/places' + (id ? '/' + id : ''), json(id ? 'PUT' : 'POST', body)),
   deletePlace: (id) => requestRecordMap('/places/' + id, { method: 'DELETE' }),
   collection: (id, body) => requestRecordMap('/collections' + (id ? '/' + id : ''), json(id ? 'PUT' : 'POST', body)),

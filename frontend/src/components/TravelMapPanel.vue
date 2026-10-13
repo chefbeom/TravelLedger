@@ -102,6 +102,7 @@ const props = defineProps({
     default: 'default',
   },
   zoomAnimation: { type: Boolean, default: true },
+  locationSearch: { type: Function, default: null },
   autoFit: {
     type: Boolean,
     default: true,
@@ -676,7 +677,7 @@ async function submitSearch() {
   searchResults.value = []
 
   try {
-    const response = await fetch(
+    const response = props.locationSearch ? null : await fetch(
       `https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&limit=6&q=${encodeURIComponent(query)}`,
       {
         headers: {
@@ -686,13 +687,13 @@ async function submitSearch() {
       },
     )
 
-    if (!response.ok) {
+    if (response && !response.ok) {
       throw new Error('검색 요청에 실패했습니다.')
     }
 
-    const payload = await response.json()
+    const payload = props.locationSearch ? await props.locationSearch(query, { signal: searchAbortController?.signal }) : await response.json()
     searchResults.value = (Array.isArray(payload) ? payload : [])
-      .map((item) => buildSearchLocationResult(item, query))
+      .map((item, index) => item.latitude != null ? { ...item, id: 'location:' + index } : buildSearchLocationResult(item, query))
       .filter((item) => Number.isFinite(item.latitude) && Number.isFinite(item.longitude))
 
     searchStatus.value = 'done'

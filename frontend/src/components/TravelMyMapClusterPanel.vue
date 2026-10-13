@@ -91,6 +91,9 @@ const props = defineProps({
   enablePickLocation: { type: Boolean, default: false },
   showEmbeddedControls: { type: Boolean, default: false },
   includeRecordMarkers: { type: Boolean, default: false },
+  workspaceLayout: { type: Boolean, default: false },
+  workspaceSidebarOpen: { type: Boolean, default: false },
+  overlayRevision: { type: String, default: '' },
 })
 
 const emit = defineEmits([
@@ -741,7 +744,7 @@ function collectBounds() {
 function getUsableMapRect() {
   const canvas = mapElement.value?.getBoundingClientRect()
   if (!canvas) return { left: 0, top: 0, right: 1, bottom: 1 }
-  const overlays = [toolbarElement.value, previewElement.value].filter(Boolean).map(element => {
+  const overlays = [toolbarElement.value, previewElement.value, ...(mapRootElement.value?.querySelectorAll('[data-map-overlay]') || [])].filter(element => element?.getClientRects().length).map(element => {
     const rect = element.getBoundingClientRect()
     return { left: rect.left - canvas.left - 8, top: rect.top - canvas.top - 8, right: rect.right - canvas.left + 8, bottom: rect.bottom - canvas.top + 8 }
   })
@@ -1361,6 +1364,12 @@ async function focusJourneyRecord(point, zoom = 16) {
 }
 defineExpose({ prepareJourneyLeg, cancelJourneyLeg, previewRecordMarker, focusJourneyRecord })
 
+watch(() => props.overlayRevision, async () => {
+  await nextTick()
+  updatePreviewBounds()
+  updatePinPopupLayout()
+})
+
 function handleMapBackgroundClick() {
   clearPendingPreviewRequest()
   if (props.journeyPlaybackActive && props.journeyPhotoId != null) {
@@ -1402,7 +1411,7 @@ function handleFullscreenEscape(event) {
   if (document.querySelector('dialog[open][data-map-photo-detail="true"]')) return
   if (event.key === 'Tab' && isFullscreen.value) {
     const scope = mapRootElement.value?.querySelector('[data-map-photo-detail="true"]') || mapRootElement.value
-    const actions = [...(scope?.querySelectorAll('button, a[href], input, select, textarea, [tabindex]') ?? [])]
+    const actions = [...(scope?.querySelectorAll('button, a[href], input, select, textarea, [tabindex]' + (props.workspaceLayout ? ', summary' : '')) ?? [])]
       .filter((element) => !element.matches(':disabled') && element.tabIndex >= 0 && element.getClientRects().length > 0
         && (!element.closest('details:not([open])') || element.matches('summary')))
     const first = actions[0]
@@ -1456,6 +1465,7 @@ onMounted(() => {
     ...createMapOptions({
       zoomControl: false,
       maxZoom: 20,
+      ...(props.workspaceLayout ? { minZoom: 2 } : {}),
       preferCanvas: true,
       zoomAnimation: true,
       markerZoomAnimation: true,
@@ -1674,10 +1684,13 @@ watch(
       'travel-map--moving': isMapMoving,
       'travel-map--public': props.tileProvider === 'publicLight',
       'travel-map--has-preview': Boolean(previewPhoto),
+      'travel-map--record-workspace': props.workspaceLayout,
+      'travel-map--sidebar-expanded': props.workspaceLayout && props.workspaceSidebarOpen,
     }"
   >
     <div ref="toolbarElement" class="travel-map__toolbar" @click.stop>
-      <div class="travel-map__toolbar-group travel-map__toolbar-group--navigation">
+      <slot v-if="props.workspaceLayout" name="navigation" :zoom="zoomLabel" :zoom-in="() => zoomMap(1)" :zoom-out="() => zoomMap(-1)" :fit-all="fitToAll" :toggle-fullscreen="toggleFullscreen" :is-fullscreen="isFullscreen" />
+      <div v-else class="travel-map__toolbar-group travel-map__toolbar-group--navigation">
         <span class="travel-map__toolbar-label">지도 확대</span>
         <button class="travel-map__toolbar-button travel-map__zoom-button" type="button" aria-label="지도 축소" @click="zoomMap(-1)">−</button>
         <strong class="travel-cluster-map__zoom">{{ zoomLabel }}</strong>
@@ -1690,21 +1703,22 @@ watch(
         <button class="travel-map__toolbar-button" type="button" :aria-expanded="mapSettingsOpen" aria-label="지도 설정" @click="mapSettingsOpen = !mapSettingsOpen">설정</button>
       </div>
 
-      <div v-if="mapSettingsOpen" class="travel-map__toolbar-group travel-map__toolbar-group--settings">
+      <div v-if="mapSettingsOpen && !props.workspaceLayout" class="travel-map__toolbar-group travel-map__toolbar-group--settings">
         <span class="travel-map__toolbar-label">클러스터 기준</span>
         <small class="travel-cluster-map__legend">
           {{ props.displayMode === 'pin' ? '핀 보기: 가까운 사진을 개수 표시 핀으로 묶음' : '클러스터 보기: 위치별 대표 사진 썸네일 표시' }}
         </small>
       </div>
 
-      <div v-if="isFullscreen || props.showEmbeddedControls" class="travel-map__toolbar-group travel-map__toolbar-group--journey">
+      <div v-if="!props.workspaceLayout && (isFullscreen || props.showEmbeddedControls)" class="travel-map__toolbar-group travel-map__toolbar-group--journey">
         <slot name="fullscreen-controls" :is-fullscreen="isFullscreen" :settings-open="mapSettingsOpen" />
       </div>
       <small v-if="isFullscreen && mapSettingsOpen" class="travel-map__escape-hint">Esc: 사진 상세 → 미리보기 → 전체 화면 순서로 닫기</small>
     </div>
 
     <div class="travel-map__stage">
-      <aside v-if="previewPhoto" ref="previewElement" class="travel-map__preview" :class="{ 'travel-map__preview--sized': Boolean(previewSize), 'travel-map__preview--resizing': isPreviewResizing }" :style="previewStyle" @click.stop @pointerdown.stop @touchstart.stop>
+      <slot v-if="props.workspaceLayout" name="workspace-overlays" :is-fullscreen="isFullscreen" />
+      <aside v-if="previewPhoto && !props.workspaceLayout" ref="previewElement" class="travel-map__preview" :class="{ 'travel-map__preview--sized': Boolean(previewSize), 'travel-map__preview--resizing': isPreviewResizing }" :style="previewStyle" @click.stop @pointerdown.stop @touchstart.stop>
         <TravelMapPhotoPreview
           resizable
           :photo="previewPhoto"

@@ -18,7 +18,8 @@ const HouseholdWorkspace = defineAsyncComponent(() => import('./components/House
 const MainDashboardWorkspace = defineAsyncComponent(() => import('./components/MainDashboardWorkspace.vue'))
 const CalenDriveWorkspace = defineAsyncComponent(() => import('./components/CalenDriveWorkspace.vue'))
 const ProfileWorkspace = defineAsyncComponent(() => import('./components/ProfileWorkspace.vue'))
-const TravelWorkspace = defineAsyncComponent(() => import('./components/TravelWorkspace.vue'))
+const TravelWorkspace = defineAsyncComponent(() => import('./components/RecordMapHubWorkspace.vue'))
+const RecordMapWorkspace = defineAsyncComponent(() => import('./components/RecordMapWorkspace.vue'))
 const TravelPublicMapShareWorkspace = defineAsyncComponent(() => import('./components/TravelPublicMapShareWorkspace.vue'))
 const LoginTravelMapPreview = defineAsyncComponent(() => import('./components/LoginTravelMapPreview.vue'))
 const PetCompanion = defineAsyncComponent(() => import('./components/PetCompanion.vue'))
@@ -81,8 +82,8 @@ const featureItems = [
   {
     key: 'travel',
     number: '2',
-    title: '여행',
-    description: '여행 기록, 방문지, GPX 경로, 예산, 사진을 한곳에서 관리합니다.',
+    title: '기록·지도',
+    description: '일상 기록과 장소 모음을 지도에 남기고, 기존 여행·경로·예산도 관리합니다.',
   },
   {
     key: 'drive',
@@ -132,8 +133,12 @@ const routeMeta = {
     description: '가계부, 통계, 검색, 입력 기능을 관리합니다.',
   },
   travel: {
-    title: '여행',
-    description: '여행 경로, 방문지, 예산, 사진을 관리합니다.',
+    title: '기록·지도',
+    description: '일상 기록, 장소 모음, 여행 경로와 사진을 관리합니다.',
+  },
+  'record-map-share': {
+    title: '공유된 기록 지도',
+    description: '공개가 허용된 모음의 장소와 기록을 읽기 전용으로 봅니다.',
   },
   drive: {
     title: 'CalenDrive',
@@ -258,7 +263,7 @@ const headerNavItems = computed(() => {
   const items = [
     { key: 'launcher', label: '메뉴' },
     { key: 'household', label: '가계부' },
-    { key: 'travel', label: '여행' },
+    { key: 'travel', label: '기록·지도' },
   ]
   if (currentUser.value?.admin) {
     items.push({ key: 'drive', label: '드라이브' })
@@ -279,6 +284,12 @@ let inviteRequestSequence = 0
 
 function resolveRouteState(hash) {
   const route = String(hash || '').replace(/^#/, '').trim()
+  if (route.toLowerCase().startsWith('record-map-share/')) {
+    return {
+      route: 'record-map-share',
+      token: decodeURIComponent(route.slice('record-map-share/'.length)).trim(),
+    }
+  }
   if (route.toLowerCase().startsWith('invite/')) {
     return {
       route: 'invite',
@@ -488,6 +499,9 @@ function buildCurrentHashRoute() {
   }
   if (activeRoute.value === 'travel-share' && inviteToken.value) {
     return `travel-share/${encodeURIComponent(inviteToken.value)}`
+  }
+  if (activeRoute.value === 'record-map-share' && inviteToken.value) {
+    return `record-map-share/${encodeURIComponent(inviteToken.value)}`
   }
   return activeRoute.value || 'launcher'
 }
@@ -1044,6 +1058,10 @@ onBeforeUnmount(() => {
     </button>
 
     <div v-if="!authChecked" class="loading-overlay">인증 확인 중입니다...</div>
+
+    <template v-else-if="activeRoute === 'record-map-share'">
+      <RecordMapWorkspace :token="inviteToken" public-view />
+    </template>
 
     <template v-else-if="activeRoute === 'travel-share'">
       <TravelPublicMapShareWorkspace :token="inviteToken" />

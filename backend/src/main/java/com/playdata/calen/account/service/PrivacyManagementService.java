@@ -3,6 +3,7 @@ package com.playdata.calen.account.service;
 import com.playdata.calen.account.dto.PrivacyCleanupResponse;
 import com.playdata.calen.drive.repository.DriveDownloadLinkRepository;
 import com.playdata.calen.ledger.repository.LedgerAiAnalysisHistoryRepository;
+import com.playdata.calen.recordmap.repository.RecordMapShareRepository;
 import com.playdata.calen.travel.repository.TravelExpenseRecordRepository;
 import com.playdata.calen.travel.repository.TravelMediaAssetRepository;
 import com.playdata.calen.travel.repository.TravelPlanRepository;
@@ -21,6 +22,7 @@ public class PrivacyManagementService {
     private final TravelPlanRepository travelPlanRepository;
     private final TravelExpenseRecordRepository travelExpenseRecordRepository;
     private final TravelMediaAssetRepository travelMediaAssetRepository;
+    private final RecordMapShareRepository recordMapShareRepository;
 
     public PrivacyCleanupResponse deleteAiAnalysisHistories(Long userId) {
         LocalDateTime processedAt = LocalDateTime.now();
@@ -60,6 +62,7 @@ public class PrivacyManagementService {
     private int revokeTravelPublicMediaSurfaces(Long userId) {
         int publicPlansRevoked = travelPlanRepository.revokePublicSharingByOwnerId(userId);
         int communityRecordsRevoked = travelExpenseRecordRepository.revokeCommunitySharingByOwnerId(userId);
-        return publicPlansRevoked + communityRecordsRevoked;
+        int recordMapLinksRevoked = recordMapShareRepository.revokeAllActiveByOwnerId(userId);
+        return publicPlansRevoked + communityRecordsRevoked + recordMapLinksRevoked;
     }
 }

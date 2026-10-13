@@ -11,11 +11,22 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 public interface TravelExpenseRecordRepository extends JpaRepository<TravelExpenseRecord, Long> {
+    @EntityGraph(attributePaths = "plan")
+    @Query("select r from TravelExpenseRecord r where r.plan.owner.id = :owner and r.latitude is not null and r.longitude is not null order by r.expenseDate desc, r.id desc")
+    org.springframework.data.domain.Page<TravelExpenseRecord> findRecordMapCandidates(@Param("owner") Long owner, Pageable pageable);
+
+    @Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @Query("select r from TravelExpenseRecord r where r.id = :id and r.plan.owner.id = :owner")
+    Optional<TravelExpenseRecord> lockRecordMapSource(@Param("id") Long id, @Param("owner") Long owner);
+
+    @EntityGraph(attributePaths = "plan")
+    List<TravelExpenseRecord> findAllByIdInAndPlanOwnerId(Collection<Long> ids, Long ownerId);
 
     @Query("""
             select coalesce(sum(record.amountKrw), 0)

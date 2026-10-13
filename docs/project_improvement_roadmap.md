@@ -105,6 +105,7 @@ These items are already tracked as release contracts rather than loose ideas. Ke
 | Automation | Purpose |
 | --- | --- |
 | `.github/workflows/ci.yml` | Runs reusable secret scan, config sync, backend tests, and frontend build on push/PR. |
+| `scripts/verify-public-share-authorization-contract.ps1` | Checks owner-scoped public/direct sharing, media token validation, privacy revocation evidence, and the public-share-authorization-contract CI gate. |
 | `scripts/verify-env-sync.ps1` | Fails when Spring env placeholders drift from checked env examples, required operational groups, `docs/env_configuration_contract.md`, secret placeholder rules, LM Studio endpoint defaults, production AI allowlist defaults, or compose-only allowlist. |
 | `scripts/scan-secrets.ps1` | Fails CI on high-risk token patterns or non-placeholder sensitive env assignments. |
 | `scripts/verify-secret-scan-contract.ps1` | Fails CI if high-risk secret gates, scanner patterns, placeholder policy, security baseline coverage, roadmap coverage, or release-gate wiring drift. |

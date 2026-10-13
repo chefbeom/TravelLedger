@@ -101,6 +101,7 @@ const props = defineProps({
     type: String,
     default: 'default',
   },
+  zoomAnimation: { type: Boolean, default: true },
   autoFit: {
     type: Boolean,
     default: true,
@@ -160,6 +161,8 @@ function createMapOptions() {
 
   return {
     zoomControl: true,
+    zoomAnimation: props.zoomAnimation,
+    markerZoomAnimation: props.zoomAnimation,
     scrollWheelZoom: !touchDevice,
     dragging: true,
     touchZoom: 'center',
@@ -1092,7 +1095,7 @@ watch(viewportMode, (mode) => {
   <div ref="mapRootElement" class="travel-map" :class="[`travel-map--${mapSize}`, { 'travel-map--fullscreen': isFullscreen }]">
     <div class="travel-map__toolbar" @click.stop>
       <div class="travel-map__search">
-        <form class="travel-map__search-form" @submit.prevent="submitSearch">
+        <form class="travel-map__search-form" @submit.stop.prevent="submitSearch">
           <input
             v-model="searchQuery"
             class="travel-map__search-input"

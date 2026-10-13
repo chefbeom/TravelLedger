@@ -14,6 +14,9 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 public interface TravelMediaAssetRepository extends JpaRepository<TravelMediaAsset, Long> {
+    @EntityGraph(attributePaths = {"plan", "record"})
+    @Query("select a from TravelMediaAsset a where a.plan.owner.id = :owner and a.record.id in :recordIds and a.mediaType = com.playdata.calen.travel.domain.TravelMediaType.PHOTO order by a.uploadedAt desc, a.id desc")
+    List<TravelMediaAsset> findRecordMapPhotos(@Param("owner") Long owner, @Param("recordIds") Collection<Long> recordIds, Pageable pageable);
 
     @EntityGraph(attributePaths = {"plan", "record", "record.plan", "uploadedBy"})
     @Query(value = """

@@ -172,7 +172,7 @@ Assert-ContainsAll 'TravelService public share checks' $travelService @(
 )
 
 Assert-ContainsAll 'TravelPlanUserScopeIntegrationTest' $travelIntegrationTest @(
-    'PUBLIC_MEDIA_TOKEN_PATTERN',
+    'PUBLIC_MEDIA_URL_PATTERN.matcher(heroPhotoUrl)',
     '/api/travel/public/media/{mediaId}/content',
     'invalid-token',
     '/api/travel/shared-exhibits/{shareId}/media/{mediaId}/content'

@@ -76,6 +76,7 @@ public class SecurityConfig {
                 .securityContext(context -> context.securityContextRepository(securityContextRepository))
                 .rememberMe(remember -> remember.rememberMeServices(rememberMeServices))
                 .authorizeHttpRequests(auth -> {
+                    auth.requestMatchers(org.springframework.http.HttpMethod.GET, "/api/record-map/public/**").permitAll();
                     auth.requestMatchers(
                             "/api/auth/csrf",
                             "/api/auth/login",

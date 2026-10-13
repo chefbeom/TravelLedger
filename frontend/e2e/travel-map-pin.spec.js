@@ -1,6 +1,8 @@
 import { expect, test } from '@playwright/test'
 
 test('journey pin has no square background in dark or light theme', async ({ page }) => {
+  await page.route(/^https?:\/\/(?!127\.0\.0\.1|localhost)/, route => route.abort())
+  await page.route('**/api/**', route => route.fulfill({ status: 401, json: { message: 'test-only fixture' } }))
   await page.goto('/')
   await page.evaluate(() => {
     const map = document.createElement('div')

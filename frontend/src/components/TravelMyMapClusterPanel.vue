@@ -88,6 +88,9 @@ const props = defineProps({
     type: Object,
     default: null,
   },
+  enablePickLocation: { type: Boolean, default: false },
+  showEmbeddedControls: { type: Boolean, default: false },
+  includeRecordMarkers: { type: Boolean, default: false },
 })
 
 const emit = defineEmits([
@@ -97,6 +100,7 @@ const emit = defineEmits([
   'preview-cluster',
   'fullscreen-change',
   'clear-selection',
+  'pick-location',
 ])
 
 const mapRootElement = ref(null)
@@ -285,7 +289,7 @@ function normalizeRecordMarker(marker) {
     latitude,
     longitude,
     photoCount: 0,
-    memoryCount: 1,
+    memoryCount: marker.recordMap ? Number(marker.memoryCount || 0) : 1,
     photoUrl: marker?.photoUrl || '',
   }
 }
@@ -334,6 +338,7 @@ function buildRenderMarkers(markers) {
     latitude: marker.latitude,
     longitude: marker.longitude,
     photoCount: 0,
+    memoryCount: marker.memoryCount,
     bounds: [[marker.latitude, marker.longitude]],
   }))
 }
@@ -356,8 +361,12 @@ const renderablePhotoItems = computed(() => buildTravelMapPhotoGroups(props.phot
   })))
 
 function resolveRenderableItems() {
-  if (!props.journeyPlaybackActive) return renderablePhotoItems.value
-  return renderablePhotoItems.value.map((group) => {
+  const items = props.includeRecordMarkers
+    ? [...renderablePhotoItems.value, ...buildRenderMarkers(props.markers)]
+    : renderablePhotoItems.value
+  if (!props.journeyPlaybackActive) return items
+  return items.map((group) => {
+    if (group.isRecordPin) return group
     const photo = group.photoMembers.find((item) => String(item.mediaId) === String(props.journeyPhotoId))
     // A location group's centroid may be outside the view of its active photo.
     return photo ? { ...group, latitude: photo.latitude, longitude: photo.longitude } : group
@@ -501,6 +510,7 @@ function buildClientCluster(items, cellKey) {
   const latitude = items.reduce((sum, item) => sum + Number(item.latitude || 0), 0) / items.length
   const longitude = items.reduce((sum, item) => sum + Number(item.longitude || 0), 0) / items.length
   const photoCount = items.reduce((sum, item) => sum + Number(item.photoCount || 0), 0)
+  const placeCount = new Set(items.map(item => item.representative?.recordMapPlaceId).filter(id => id != null)).size
   const memoryCount = items.reduce(
     (sum, item) => sum + Number(item.memoryCount || item.representative?.memoryCount || (item.isPhotoPin ? 1 : 0)),
     0,
@@ -525,6 +535,7 @@ function buildClientCluster(items, cellKey) {
     latitude,
     longitude,
     photoCount,
+    placeCount,
     memoryCount,
     bounds,
   }
@@ -700,6 +711,9 @@ function resolveTileProvider() {
 
 function collectBounds() {
   const points = []
+  if (props.includeRecordMarkers) {
+    buildRenderMarkers(props.markers).forEach(marker => points.push([marker.latitude, marker.longitude]))
+  }
 
   const entries = props.displayMode === 'pin' ? props.photoPins : props.photoClusters
   const normalizer = props.displayMode === 'pin' ? normalizePhotoPin : normalizeCluster
@@ -814,9 +828,9 @@ function buildClusterIcon(aggregate, active) {
     return buildRecordMarkerIcon(aggregate?.representative, active)
   }
 
-  const clusterCount = aggregate?.photoCount || 0
+  const clusterCount = aggregate?.photoCount || aggregate?.placeCount || 0
   const colorHex = normalizeColorHex(aggregate?.representative?.planColorHex, '#3182F6')
-  if (props.displayMode === 'cluster') {
+  if (props.displayMode === 'cluster' && !(aggregate?.representative?.recordMap && !aggregate?.photoCount)) {
     const photoUrl = aggregate?.representative?.representativePhotoUrl || aggregate?.representative?.photoUrl
     const image = photoUrl
       ? `<img class="travel-map-photo-cluster__image" src="${escapeHtml(buildThumbnailUrl(photoUrl, THUMBNAIL_VARIANTS.pin))}" alt="" decoding="async" draggable="false" />`
@@ -1125,6 +1139,10 @@ function resolveInitialCenter() {
   if (firstPhotoEntry) {
     return [firstPhotoEntry.latitude, firstPhotoEntry.longitude]
   }
+  if (props.includeRecordMarkers) {
+    const firstMarker = buildRenderMarkers(props.markers)[0]
+    if (firstMarker) return [firstMarker.latitude, firstMarker.longitude]
+  }
 
   const firstRoutePoint = (props.routes ?? [])
     .flatMap((route) => route.points ?? [])
@@ -1324,7 +1342,24 @@ function cancelJourneyLeg() {
   mapInstance?.stop()
 }
 
-defineExpose({ prepareJourneyLeg, cancelJourneyLeg })
+function previewRecordMarker(marker) {
+  clearPendingPreviewRequest()
+  previewAggregate.value = buildRenderMarkers([marker])[0] || null
+}
+async function focusJourneyRecord(point, zoom = 16) {
+  const target = journeyLatLng(point)
+  if (!target || !mapInstance) return false
+  const sequence = ++journeyLegSequence
+  isPreparingJourneyLeg = true
+  try {
+    if (!await waitForJourneyMapMove(target, zoom, 0.8, sequence)) return false
+    await waitForJourneyTiles(sequence)
+    return sequence === journeyLegSequence
+  } finally {
+    if (sequence === journeyLegSequence) isPreparingJourneyLeg = false
+  }
+}
+defineExpose({ prepareJourneyLeg, cancelJourneyLeg, previewRecordMarker, focusJourneyRecord })
 
 function handleMapBackgroundClick() {
   clearPendingPreviewRequest()
@@ -1338,9 +1373,21 @@ function handleMapBackgroundClick() {
 
 function handleCanvasBackgroundClick(event) {
   if (event.target?.closest?.('.leaflet-marker-icon, .leaflet-popup, .leaflet-control, .leaflet-interactive')) return
-  if (mapInstance?.dragging?.moved()) return
+  // Leaflet's moved flag may remain set after touch/mouse emulation. Track the
+  // current gesture, so an actual new tap is not mistaken for the previous drag.
+  if (event.detail > 0 && canvasPointerGesture?.moved) return
   handleMapBackgroundClick()
 }
+
+let canvasPointerGesture = null
+function beginCanvasPointer(event) {
+  canvasPointerGesture = { pointerId: event.pointerId, x: event.clientX, y: event.clientY, moved: false }
+}
+function moveCanvasPointer(event) {
+  const gesture = canvasPointerGesture
+  if (gesture && (gesture.pointerId !== event.pointerId || Math.hypot(event.clientX - gesture.x, event.clientY - gesture.y) > 3)) gesture.moved = true
+}
+function cancelCanvasPointer() { if (canvasPointerGesture) canvasPointerGesture.moved = true }
 
 function handleOutsidePreviewPointer(event) {
   // Photo details may be teleported outside the map in non-fullscreen mode.
@@ -1351,6 +1398,8 @@ function handleOutsidePreviewPointer(event) {
 
 function handleFullscreenEscape(event) {
   if (!props.active) return
+  // Native record-map dialogs own focus and Escape even above app fullscreen.
+  if (document.querySelector('dialog[open][data-map-photo-detail="true"]')) return
   if (event.key === 'Tab' && isFullscreen.value) {
     const scope = mapRootElement.value?.querySelector('[data-map-photo-detail="true"]') || mapRootElement.value
     const actions = [...(scope?.querySelectorAll('button, a[href], input, select, textarea, [tabindex]') ?? [])]
@@ -1437,6 +1486,9 @@ onMounted(() => {
   mapInstance.on('movestart zoomstart', handleViewportStart)
   mapInstance.on('moveend', handleViewportEnd)
   mapInstance.on('zoomend', handleZoomEnd)
+  mapInstance.on('click', event => {
+    if (props.enablePickLocation) emit('pick-location', { latitude: event.latlng.lat, longitude: event.latlng.lng })
+  })
   zoomLabel.value = mapInstance.getZoom()
   emit('fullscreen-change', isFullscreen.value)
   renderMap({ shouldFit: true })
@@ -1488,7 +1540,7 @@ watch([previewPhoto, previewSize, mapSettingsOpen], async () => {
 }, { flush: 'post' })
 
 watch(
-  () => [props.photoClusters, props.photoPins, props.markers, props.routes, props.displayMode],
+  () => [props.photoClusters, props.photoPins, props.markers, props.routes, props.displayMode, props.includeRecordMarkers],
   () => {
     renderMap()
   },
@@ -1645,7 +1697,7 @@ watch(
         </small>
       </div>
 
-      <div v-if="isFullscreen" class="travel-map__toolbar-group travel-map__toolbar-group--journey">
+      <div v-if="isFullscreen || props.showEmbeddedControls" class="travel-map__toolbar-group travel-map__toolbar-group--journey">
         <slot name="fullscreen-controls" :is-fullscreen="isFullscreen" :settings-open="mapSettingsOpen" />
       </div>
       <small v-if="isFullscreen && mapSettingsOpen" class="travel-map__escape-hint">Esc: 사진 상세 → 미리보기 → 전체 화면 순서로 닫기</small>
@@ -1679,7 +1731,7 @@ watch(
           <span aria-hidden="true">⤡</span>
         </button>
       </aside>
-      <div ref="mapElement" class="travel-map__canvas" @click="handleCanvasBackgroundClick" />
+      <div ref="mapElement" class="travel-map__canvas" @pointerdown="beginCanvasPointer" @pointermove="moveCanvasPointer" @pointercancel="cancelCanvasPointer" @click="handleCanvasBackgroundClick" />
       <Teleport v-if="previewPhoto && pinPopupContent" :to="pinPopupContent">
         <TravelMapPhotoPreview
           compact

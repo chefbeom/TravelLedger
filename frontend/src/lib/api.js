@@ -180,6 +180,10 @@ async function performRequest(path, options = {}) {
 
 const request = createRequestCoordinator(performRequest)
 
+export function requestRecordMap(path, options = {}) {
+  return request(`/record-map${path}`, options)
+}
+
 export function fetchCurrentUser() {
   return request('/auth/me')
 }

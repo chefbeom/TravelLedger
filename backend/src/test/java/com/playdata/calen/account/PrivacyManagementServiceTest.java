@@ -12,6 +12,7 @@ import com.playdata.calen.account.dto.PrivacyCleanupResponse;
 import com.playdata.calen.account.service.PrivacyManagementService;
 import com.playdata.calen.drive.repository.DriveDownloadLinkRepository;
 import com.playdata.calen.ledger.repository.LedgerAiAnalysisHistoryRepository;
+import com.playdata.calen.recordmap.repository.RecordMapShareRepository;
 import com.playdata.calen.travel.repository.TravelExpenseRecordRepository;
 import com.playdata.calen.travel.repository.TravelMediaAssetRepository;
 import com.playdata.calen.travel.repository.TravelPlanRepository;
@@ -43,6 +44,9 @@ class PrivacyManagementServiceTest {
     @Mock
     private TravelMediaAssetRepository travelMediaAssetRepository;
 
+    @Mock
+    private RecordMapShareRepository recordMapShareRepository;
+
     private PrivacyManagementService service;
 
     @BeforeEach
@@ -52,7 +56,8 @@ class PrivacyManagementServiceTest {
                 driveDownloadLinkRepository,
                 travelPlanRepository,
                 travelExpenseRecordRepository,
-                travelMediaAssetRepository
+                travelMediaAssetRepository,
+                recordMapShareRepository
         );
     }
 
@@ -79,16 +84,18 @@ class PrivacyManagementServiceTest {
     void revokeTravelPublicMediaSharesScopesPlanAndCommunityRecordUpdatesToCurrentOwner() {
         when(travelPlanRepository.revokePublicSharingByOwnerId(USER_ID)).thenReturn(2);
         when(travelExpenseRecordRepository.revokeCommunitySharingByOwnerId(USER_ID)).thenReturn(3);
+        when(recordMapShareRepository.revokeAllActiveByOwnerId(USER_ID)).thenReturn(1);
 
         PrivacyCleanupResponse response = service.revokeTravelPublicMediaShares(USER_ID);
 
         verify(travelPlanRepository).revokePublicSharingByOwnerId(USER_ID);
         verify(travelExpenseRecordRepository).revokeCommunitySharingByOwnerId(USER_ID);
+        verify(recordMapShareRepository).revokeAllActiveByOwnerId(USER_ID);
         verifyNoInteractions(ledgerAiAnalysisHistoryRepository, driveDownloadLinkRepository, travelMediaAssetRepository);
 
         assertThat(response.aiAnalysisHistoriesDeleted()).isZero();
         assertThat(response.publicDownloadLinksRevoked()).isZero();
-        assertThat(response.travelPublicMediaSharesRevoked()).isEqualTo(5);
+        assertThat(response.travelPublicMediaSharesRevoked()).isEqualTo(6);
         assertThat(response.photoLocationMetadataRemoved()).isZero();
         assertThat(response.processedAt()).isNotNull();
     }

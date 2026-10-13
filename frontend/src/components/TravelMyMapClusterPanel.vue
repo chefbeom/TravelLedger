@@ -557,8 +557,11 @@ function buildViewportAggregates(items) {
   }
 
   const groups = new Map()
+  // Search candidates must remain individually identifiable even beside a saved
+  // photo cluster. Their numbered pins map directly to the search-result list.
+  const independent = visibleItems.filter(item => item.representative?.recordMapLocation)
 
-  visibleItems.forEach((item) => {
+  visibleItems.filter(item => !item.representative?.recordMapLocation).forEach((item) => {
     const point = mapInstance.latLngToLayerPoint([item.latitude, item.longitude])
     const key = `${Math.floor(point.x / cellSize)}:${Math.floor(point.y / cellSize)}`
     const group = groups.get(key) ?? []
@@ -566,7 +569,7 @@ function buildViewportAggregates(items) {
     groups.set(key, group)
   })
 
-  const aggregates = []
+  const aggregates = [...independent]
   groups.forEach((group, key) => {
     if (group.length < CLIENT_CLUSTER_MIN_SIZE) {
       aggregates.push(...group)
@@ -797,7 +800,7 @@ function fitToAll({ animate = true } = {}) {
 
 function buildRecordMarkerIcon(marker, active) {
   const colorHex = normalizeColorHex(marker?.planColorHex, '#3182F6')
-  const label = escapeHtml(String(marker?.category || marker?.title || marker?.placeName || '핀').slice(0, 2))
+  const label = escapeHtml(String(marker?.searchResultNumber || marker?.category || marker?.title || marker?.placeName || '핀').slice(0, 2))
 
   return L.divIcon({
     className: 'travel-map__icon-root',
@@ -1081,8 +1084,11 @@ function renderClusters() {
 
     const marker = L.marker([aggregate.latitude, aggregate.longitude], {
       icon: buildClusterIcon(aggregate, containsSelected),
-      title: `${aggregate.representative?.title || aggregate.representative?.placeName || '여행 사진'} · 사진 ${aggregate.photoCount}장`,
+      title: aggregate.representative?.recordMapLocation
+        ? `검색 후보 ${aggregate.representative.searchResultNumber} · ${aggregate.representative.title}`
+        : `${aggregate.representative?.title || aggregate.representative?.placeName || '여행 사진'} · 사진 ${aggregate.photoCount}장`,
       bubblingMouseEvents: false,
+      zIndexOffset: aggregate.representative?.recordMapLocation && aggregate.representative.searchResultFocused ? 1000 : 0,
     })
 
     marker.on('click', (event) => {
@@ -1557,14 +1563,11 @@ watch(
 )
 
 watch(
-  () => [
-    props.displayMode,
-    props.selectedPhotoId != null
-      ? `photo-${String(props.selectedPhotoId)}`
-      : `cluster-${String(props.selectedClusterId ?? '')}`,
-  ],
+  () => [props.displayMode, props.selectedPhotoId != null ? `photo-${String(props.selectedPhotoId)}`
+    : props.selectedClusterId != null ? `cluster-${String(props.selectedClusterId)}`
+      : props.selectedMarkerId != null ? `marker-${String(props.selectedMarkerId)}` : ''],
   ([mode, selectedKey], [previousMode, previousSelectedKey] = []) => {
-    if (selectedKey === 'photo-' || selectedKey === 'cluster-') {
+    if (!selectedKey) {
       clearPendingPreviewRequest()
       if (!props.journeyPlaybackActive) {
         closeMapPreview()
@@ -1636,8 +1639,9 @@ watch(
     props.focusTarget?.autoZoom,
     props.focusTarget?.zoom,
     props.focusTarget?.duration,
+    props.focusTarget?.showPreview,
   ],
-  async ([requestId, rawLatitude, rawLongitude, keepZoom, autoZoom, rawZoom, rawDuration]) => {
+  async ([requestId, rawLatitude, rawLongitude, keepZoom, autoZoom, rawZoom, rawDuration, showPreview]) => {
     if (requestId == null || rawLatitude == null || rawLongitude == null || !mapInstance) {
       return
     }
@@ -1663,10 +1667,10 @@ watch(
           : Math.min(20, Math.max(mapInstance.getZoom(), 15))
     const duration = Number.isFinite(Number(rawDuration)) ? Math.max(0.05, Number(rawDuration)) : 0.8
     if (keepZoom) {
-      mapInstance.panTo(getUnobscuredCenter(L.latLng(latitude, longitude), targetZoom, Boolean(previewPhoto.value)), { animate: true, duration, easeLinearity: 0.2 })
+      mapInstance.panTo(getUnobscuredCenter(L.latLng(latitude, longitude), targetZoom, showPreview || Boolean(previewPhoto.value)), { animate: true, duration, easeLinearity: 0.2 })
       return
     }
-    mapInstance.flyTo(getUnobscuredCenter(L.latLng(latitude, longitude), targetZoom, Boolean(previewPhoto.value)), targetZoom, { animate: true, duration })
+    mapInstance.flyTo(getUnobscuredCenter(L.latLng(latitude, longitude), targetZoom, showPreview || Boolean(previewPhoto.value)), targetZoom, { animate: true, duration })
   },
 )
 </script>

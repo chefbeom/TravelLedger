@@ -17,7 +17,8 @@ const sourceUrl = computed(() => props.photo.representativePhotoUrl || props.pho
 const thumbnailVariant = computed(() => props.compact ? THUMBNAIL_VARIANTS.mini : props.previewWidth > 480 ? THUMBNAIL_VARIANTS.detail : THUMBNAIL_VARIANTS.preview)
 const imageUrl = computed(() => imageFallback.value === 1 ? sourceUrl.value : buildThumbnailUrl(sourceUrl.value, thumbnailVariant.value))
 const title = computed(() => props.photo.title || props.photo.placeName || props.photo.originalFileName || '여행 사진')
-const location = computed(() => [props.photo.country, props.photo.region, props.photo.placeName].filter(Boolean).join(' / '))
+const location = computed(() => props.photo.recordMapLocation ? props.photo.displayName
+  : [props.photo.country, props.photo.region, props.photo.placeName].filter(Boolean).join(' / '))
 const capturedAt = computed(() => [
   formatDate(props.photo.memoryDate || props.photo.expenseDate),
   formatTime(props.photo.memoryTime || props.photo.expenseTime),
@@ -28,7 +29,7 @@ watch([sourceUrl, thumbnailVariant], () => { imageFallback.value = 0 })
 </script>
 
 <template>
-  <section :class="['travel-map-preview', { 'travel-map-preview--compact': compact }]" :aria-label="compact ? '선택한 핀 정보' : '선택한 여행 사진 미리보기'">
+  <section :class="['travel-map-preview', { 'travel-map-preview--compact': compact, 'travel-map-preview--location': photo.recordMapLocation }]" :aria-label="compact ? '선택한 핀 정보' : '선택한 여행 사진 미리보기'">
     <header v-if="!compact" class="travel-map-preview__header">
       <span>{{ photo.recordMap && !sourceUrl ? '장소 미리보기' : '사진 미리보기' }}</span>
       <div class="travel-map-preview__header-actions">
@@ -36,17 +37,22 @@ watch([sourceUrl, thumbnailVariant], () => { imageFallback.value = 0 })
         <button class="button button--secondary" type="button" aria-label="사진 미리보기 닫기" @click="emit('close')">×</button>
       </div>
     </header>
-    <button class="travel-map-preview__open" type="button" :aria-label="compact ? '핀 사진 크게 보기' : '사진 크게 보기'" @click="emit('open')">
+    <button class="travel-map-preview__open" type="button" :aria-label="photo.recordMapLocation ? '이 위치 저장' : compact ? '핀 사진 크게 보기' : '사진 크게 보기'" @click="emit('open')">
       <img v-if="sourceUrl && imageFallback < 2" class="travel-map-preview__image" :src="imageUrl" :alt="title" loading="eager" decoding="async" @error="imageFallback++" />
-      <span v-else class="travel-map-preview__empty">{{ photo.recordMap && !sourceUrl ? '사진 없는 장소 기록' : '사진 미리보기를 불러올 수 없습니다.' }}</span>
+      <span v-else-if="!photo.recordMapLocation" class="travel-map-preview__empty">{{ photo.recordMap && !sourceUrl ? '사진 없는 장소 기록' : '사진 미리보기를 불러올 수 없습니다.' }}</span>
       <span class="travel-map-preview__copy">
         <strong>{{ title }}</strong>
         <span v-if="location">{{ location }}</span>
         <span v-if="capturedAt">{{ capturedAt }}</span>
         <span v-if="owner && !compact">공유자 {{ owner }}</span>
-        <span>사진 {{ photoCount }}장 / 기록 {{ memoryCount }}건</span>
+        <template v-if="photo.recordMapLocation"><span>검색 후보 {{ photo.searchResultNumber }} · 저장 전</span><span>{{ Number(photo.latitude).toFixed(5) }}, {{ Number(photo.longitude).toFixed(5) }}</span><span class="travel-map-preview__hint">이 위치 저장</span></template>
+        <span v-else>사진 {{ photoCount }}장 / 기록 {{ memoryCount }}건</span>
         <span v-if="!compact" class="travel-map-preview__hint">{{ photo.recordMap && !sourceUrl ? '누르면 방문 기록을 확인할 수 있습니다.' : '사진을 누르면 크게 볼 수 있습니다.' }}</span>
       </span>
     </button>
   </section>
 </template>
+<style scoped>
+:global(html body .app-shell .travel-map .travel-map-preview--location.travel-map-preview--compact .travel-map-preview__open) { grid-template-columns:minmax(0,1fr) !important; }
+.travel-map-preview--location .travel-map-preview__copy { width:100%; min-width:0; }
+</style>

@@ -54,7 +54,7 @@ async function mock(page, state, authenticated = true) {
     if (path === '/api/auth/csrf') return route.fulfill({ json: { token: 'test-only-csrf' } })
     if (path === '/api/auth/registration-options') return route.fulfill({ json: { publicRegistrationEnabled: false, socialLoginProviders: [] } })
     if (path === '/api/record-map/overview' || path === '/api/record-map/map') return route.fulfill({ json: overview(state, url) })
-    if (path === '/api/record-map/locations/search') return route.fulfill({ json: [{ name:'서울역', displayName:'서울역, 서울, 대한민국', latitude:37.556, longitude:126.971, country:'대한민국', region:'서울' }] })
+    if (path === '/api/record-map/locations/search') return route.fulfill({ json: state.locationResultsByQuery?.[url.searchParams.get('q')] ?? state.locationResults ?? [{ name:'서울역', displayName:'서울역, 서울, 대한민국', latitude:37.556, longitude:126.971, country:'대한민국', region:'서울' }] })
     if (path.includes('/content')) return route.fulfill({ contentType: 'image/png', body: png })
     if (path === '/api/record-map/places' && method === 'POST') {
       const id = Math.max(0, ...state.places.map(p => p.id)) + 1
@@ -110,6 +110,7 @@ async function mock(page, state, authenticated = true) {
     }
     if (path === '/api/travel/my-map') return route.fulfill({ json: { includedPlanCount: 0, markers: [], routes: [], photoPins: [], photoClusters: [] } })
     if (path === '/api/record-shares/counts') return route.fulfill({ json: { ledger: 0, travel: 0 } })
+    if (path === '/api/travel/portfolio') return route.fulfill({ json:{ includedPlanCount:1,plans:[{id:90,name:'테스트 여행'}],memoryRecords:[],routeSegments:[],mediaItems:[] } })
     if (/preferences|pet|statistics|recent|groups|plans|photos/.test(path)) return route.fulfill({ json: [] })
     return route.fulfill({ json: {} })
   })
@@ -187,27 +188,28 @@ test('a dated visit and photo can be added to an existing bookmark', async ({ pa
   expect(state.errors).toEqual([])
 })
 
-test('dated playback pauses, resumes, changes days and includes a no-photo visit', async ({ page }, testInfo) => {
+test('record maps never expose travel playback and share the actual travel map theme', async ({ page }, testInfo) => {
   const state = fixture(true)
   await mock(page, state)
   await page.goto('/#travel')
-  await page.getByLabel('기록 재생 간격', { exact: true }).focus()
-  await page.getByLabel('기록 재생 간격', { exact: true }).press('Home')
-  await page.getByLabel('기록 재생 간격', { exact: true }).press('Tab')
-  await page.getByRole('button', { name: '재생', exact: true }).click()
-  const preview = page.locator('.leaflet-popup .travel-map-preview')
-  await expect(preview.locator('strong')).toHaveText('첫날 사진')
-  await page.getByRole('button', { name: '일시정지', exact: true }).click()
-  await expect(preview.locator('strong')).toHaveText('첫날 사진')
-  await expect(page.getByRole('button', { name: '다시 재생', exact: true })).toBeVisible()
-  await page.getByRole('button', { name: '다시 재생', exact: true }).click()
-  await expect(page.locator('.record-map-playback')).toContainText('2026-10-13 이어보기', { timeout: 12_000 })
-  await expect(preview.locator('strong')).toHaveText('다음날 사진', { timeout: 18_000 })
-  await expect(page.locator('.travel-cluster-map__zoom')).toHaveText('16')
-  await expect(preview.locator('strong')).toHaveText('사진 없는 산책', { timeout: 10_000 })
-  await expect(page.getByText('현재 지도에 표시된 기록 재생이 끝났습니다.', { exact: true })).toBeVisible()
+  await expect(page.locator('.record-map-playback, .record-map-playbar')).toHaveCount(0)
+  await page.getByRole('button', { name:'전체 화면', exact:true }).click()
+  await expect(page.locator('.record-map-playback, .record-map-playbar')).toHaveCount(0)
+  await page.getByRole('button', { name:'전체 화면 종료', exact:true }).click()
+  for (const theme of ['default','toss']) {
+    await page.evaluate(theme => document.documentElement.dataset.theme = theme, theme)
+    const expectedFilter = await page.evaluate(theme => getComputedStyle(document.documentElement).getPropertyValue('--travel-map-tile-filter-' + (theme === 'toss' ? 'dark' : 'light')).trim(), theme)
+    await expect.poll(() => page.locator('.record-map-frame .leaflet-tile-pane').evaluate(node => getComputedStyle(node).filter)).toBe(expectedFilter)
+    const recordFilter = await page.locator('.record-map-frame .leaflet-tile-pane').evaluate(node => getComputedStyle(node).filter)
+    await page.getByRole('button', { name:'여행 · 일정 · 경로', exact:true }).click()
+    await expect(page.locator('.travel-unified-shell .travel-map__canvas').first()).toBeVisible()
+    const travelFilter = await page.locator('.travel-unified-shell .leaflet-tile-pane').first().evaluate(node => getComputedStyle(node).filter)
+    expect(recordFilter).toBe(travelFilter)
+    await page.getByRole('button', { name:'일상 기록 · 장소 모음', exact:true }).click()
+    await expect(page.locator('.record-map-frame .travel-map__canvas')).toBeVisible()
+  }
   expect(state.requests.some(r => r.method !== 'GET' && r.path.startsWith('/api/record-map'))).toBe(false)
-  await page.locator('.travel-map').screenshot({ path: testInfo.outputPath('record-playback.png') })
+  await page.locator('.travel-map').screenshot({ path: testInfo.outputPath('record-map-matching-dark-theme.png') })
   expect(state.errors).toEqual([])
 })
 
@@ -395,6 +397,9 @@ test('location lookup is explicit and saving requires confirmation', async ({pag
   await page.getByRole('button',{name:'지도 검색',exact:true}).click()
   const result=page.locator('.record-map-sidebar .record-map-list-card').filter({hasText:'서울역'})
   await expect(result).toHaveCount(1)
+  await expect(page.locator('.leaflet-marker-pane .leaflet-marker-icon[title="검색 후보 1 · 서울역"]')).toBeVisible()
+  await expect(page.locator('.leaflet-popup .travel-map-preview')).toContainText('서울역')
+  if (await page.getByRole('button',{name:'목록 열기',exact:true}).isVisible()) await page.getByRole('button',{name:'목록 열기',exact:true}).click()
   await result.locator('.record-map-list-card__main').click()
   expect(state.requests.some(r=>r.path==='/api/record-map/places'&&r.method==='POST')).toBe(false)
   if (await page.getByRole('button',{name:'목록 열기',exact:true}).isVisible()) await page.getByRole('button',{name:'목록 열기',exact:true}).click()
@@ -419,7 +424,7 @@ test('map overlays fit the viewport in FHD and compact mobile and remain inside 
     const canvas=await page.locator('.record-map-frame .travel-map__canvas').boundingBox()
     expect(canvas.height).toBeGreaterThan(300)
     expect(canvas.y+canvas.height).toBeLessThanOrEqual(size.height+1)
-    for(const selector of ['.record-map-sidebar','.record-map-tools','.record-map-playbar']) {
+    for(const selector of ['.record-map-sidebar','.record-map-tools']) {
       if (selector==='.record-map-tools' && size.width<=760) { await expect(page.locator(selector)).not.toBeVisible(); continue }
       const rect=await page.locator(selector).boundingBox()
       expect(rect.x).toBeGreaterThanOrEqual(canvas.x); expect(rect.x+rect.width).toBeLessThanOrEqual(canvas.x+canvas.width+1)
@@ -438,4 +443,109 @@ test('map overlays fit the viewport in FHD and compact mobile and remain inside 
     await page.getByRole('button',{name:'전체 화면 종료',exact:true}).click()
     expect(state.errors).toEqual([])
   }
+})
+
+test('numbered search pins and real related exits remain visible, selectable and save only on confirmation', async ({page},testInfo)=>{
+  const state=fixture()
+  state.locationResults=[
+    { name:'우장산역',displayName:'서울 강서구 우장산역',latitude:37.548,longitude:126.836,country:'대한민국',region:'서울' },
+    { name:'우장산역 2번 출구',displayName:'서울 강서구 우장산역 2번 출구',latitude:37.5481,longitude:126.8361,country:'대한민국',region:'서울' },
+  ]
+  await mock(page,state); await page.goto('/#travel'); await tab(page,'장소 목록')
+  await page.getByRole('button',{name:'새 위치 찾기',exact:true}).click()
+  const input=page.getByRole('searchbox',{name:'주소·지역 검색',exact:true})
+  await input.fill('우장산역'); await input.press('Enter')
+  const markers=page.locator('.leaflet-marker-pane .leaflet-marker-icon')
+  await expect(markers).toHaveCount(2)
+  await expect(page.locator('.travel-map-pin-glyph__label')).toHaveText(['1','2'])
+  const popup=page.locator('.leaflet-popup .travel-map-preview')
+  await expect(popup).toContainText('우장산역')
+  await expect(popup).toContainText('검색 후보 1 · 저장 전')
+  await expect(page.locator('[data-location-id="location:0"]')).toHaveClass(/is-selected/)
+  await page.locator('.travel-map').screenshot({path:testInfo.outputPath('automatic-candidate-pins.png')})
+  if (await page.getByRole('button',{name:'목록 열기',exact:true}).isVisible()) await page.getByRole('button',{name:'목록 열기',exact:true}).click()
+  await page.getByRole('button',{name:'우장산역 2번 출구 지도에서 보기',exact:true}).click()
+  await expect(popup.locator('strong')).toHaveText('우장산역 2번 출구')
+  await expect(popup).toContainText('37.54810, 126.83610')
+  await expect(page.locator('.record-map-tools .travel-cluster-map__zoom')).toHaveText('15')
+  if(await page.getByRole('button',{name:'목록 접기',exact:true}).isVisible()) await page.getByRole('button',{name:'목록 접기',exact:true}).click()
+  await page.getByRole('button',{name:'전체 화면',exact:true}).click()
+  await expect(popup.locator('strong')).toHaveText('우장산역 2번 출구')
+  await page.locator('.travel-map').screenshot({path:testInfo.outputPath('related-exit-popup.png')})
+  await page.locator('.leaflet-popup-close-button').click()
+  await expect(popup).not.toBeVisible()
+  await expect(page.locator('.travel-map')).toHaveClass(/travel-map--fullscreen/)
+  await expect(markers).toHaveCount(2)
+  await page.locator('.leaflet-marker-icon[title="검색 후보 2 · 우장산역 2번 출구"]').click()
+  await expect(popup.locator('strong')).toHaveText('우장산역 2번 출구')
+  await popup.getByRole('button',{name:'이 위치 저장',exact:true}).click()
+  const dialog=page.getByRole('dialog',{name:'장소 저장',exact:true})
+  await expect(dialog.getByLabel('위도',{exact:true})).toHaveValue('37.5481')
+  expect(state.places).toHaveLength(0)
+  await page.keyboard.press('Escape')
+  await page.getByRole('button',{name:'목록 열기',exact:true}).click()
+  const reads=state.requests.filter(r=>r.path==='/api/record-map/locations/search').length
+  await input.fill('우장산역2')
+  const cached=page.getByRole('group',{name:'연관 장소 후보',exact:true})
+  await expect(cached).toContainText('우장산역 2번 출구')
+  await cached.getByRole('button',{name:'우장산역 2번 출구',exact:true}).click()
+  await expect(popup.locator('strong')).toHaveText('우장산역 2번 출구')
+  expect(state.requests.filter(r=>r.path==='/api/record-map/locations/search')).toHaveLength(reads)
+  expect(state.requests.some(r=>r.path==='/api/record-map/places'&&r.method==='POST')).toBe(false)
+  expect(state.errors).toEqual([])
+})
+
+test('related keyword refinement is explicit and an empty search clears old pins and popup', async ({page})=>{
+  const state=fixture()
+  state.locationResultsByQuery={
+    '우장산역':[{name:'우장산역',displayName:'서울 강서구',latitude:37.548,longitude:126.836}],
+    '우장산역 출구':[],
+  }
+  await mock(page,state); await page.goto('/#travel'); await tab(page,'장소 목록')
+  await page.getByRole('button',{name:'새 위치 찾기',exact:true}).click()
+  await page.getByRole('searchbox',{name:'주소·지역 검색',exact:true}).fill('우장산역')
+  expect(state.requests.filter(r=>r.path==='/api/record-map/locations/search')).toHaveLength(0)
+  await page.getByRole('button',{name:'지도 검색',exact:true}).click()
+  await expect(page.locator('.leaflet-popup .travel-map-preview')).toContainText('우장산역')
+  if (await page.getByRole('button',{name:'목록 열기',exact:true}).isVisible()) await page.getByRole('button',{name:'목록 열기',exact:true}).click()
+  await page.getByRole('button',{name:'우장산역 출구 검색',exact:true}).click()
+  await expect(page.locator('.record-map-sidebar')).toContainText('검색 결과가 없습니다.')
+  await expect(page.locator('.leaflet-marker-pane .leaflet-marker-icon')).toHaveCount(0)
+  await expect(page.locator('.leaflet-popup .travel-map-preview')).not.toBeVisible()
+  expect(state.requests.filter(r=>r.path==='/api/record-map/locations/search').map(r=>r.params.q)).toEqual(['우장산역','우장산역 출구'])
+  expect(state.errors).toEqual([])
+})
+
+test('a superseded location search cannot restore stale pins or popup', async ({page})=>{
+  const state=fixture(); await mock(page,state)
+  let release, started=false, finished
+  const delayed=new Promise(resolve=>release=resolve)
+  const completed=new Promise(resolve=>finished=resolve)
+  await page.route('**/api/record-map/locations/search?*',async route=>{
+    const query=new URL(route.request().url()).searchParams.get('q')
+    if(query==='이전 위치') {
+      started=true
+      await delayed
+      try { await route.fulfill({json:[{name:'이전 위치',latitude:37.5,longitude:126.9}]}) } catch { /* The browser aborted this obsolete request. */ }
+      finally { finished() }
+    } else await route.fulfill({json:[{name:'현재 위치',displayName:'현재 위치 주소',latitude:37.55,longitude:126.95}]})
+  })
+  await page.goto('/#travel'); await tab(page,'장소 목록')
+  await page.getByRole('button',{name:'새 위치 찾기',exact:true}).click()
+  const input=page.getByRole('searchbox',{name:'주소·지역 검색',exact:true})
+  try {
+    await input.fill('이전 위치'); await input.press('Enter')
+    await expect.poll(()=>started).toBe(true)
+    await input.fill('현재 위치'); await input.press('Enter')
+    const popup=page.locator('.leaflet-popup .travel-map-preview')
+    await expect(popup.locator('strong')).toHaveText('현재 위치')
+    release(); await completed
+    await expect(popup.locator('strong')).toHaveText('현재 위치')
+    await expect(page.locator('.leaflet-marker-icon[title*="이전 위치"]')).toHaveCount(0)
+    if(await page.getByRole('button',{name:'목록 열기',exact:true}).isVisible()) await page.getByRole('button',{name:'목록 열기',exact:true}).click()
+    await page.getByRole('button',{name:'내 장소 검색',exact:true}).click()
+    await expect(page.locator('.leaflet-marker-pane .leaflet-marker-icon')).toHaveCount(0)
+    await expect(popup).not.toBeVisible()
+    expect(state.errors).toEqual([])
+  } finally { release() }
 })

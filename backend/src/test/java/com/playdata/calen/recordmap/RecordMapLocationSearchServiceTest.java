@@ -32,7 +32,7 @@ class RecordMapLocationSearchServiceTest {
         server.createContext("/search", exchange -> {
             requests.incrementAndGet();
             assertThat(exchange.getRequestHeaders().getFirst("User-Agent")).isEqualTo("TravelLedger/test");
-            assertThat(exchange.getRequestURI().getQuery()).contains("limit=6");
+            assertThat(exchange.getRequestURI().getQuery()).contains("limit=10", "namedetails=1", "entrances=1");
             byte[] bytes=response.getBytes(StandardCharsets.UTF_8);
             exchange.getResponseHeaders().set("Content-Type","application/json"); exchange.sendResponseHeaders(status,bytes.length);
             exchange.getResponseBody().write(bytes); exchange.close();
@@ -63,7 +63,28 @@ class RecordMapLocationSearchServiceTest {
     }
     @Test void invalidCoordinatesAreDiscardedAndResultsAreCapped() {
         response="[{\"name\":\"bad\",\"lat\":\"91\",\"lon\":\"0\"}," +
-            String.join(",",java.util.Collections.nCopies(8,"{\"name\":\"valid\",\"lat\":\"37\",\"lon\":\"127\"}"))+"]";
-        assertThat(service.search("address")).hasSize(6).allMatch(row -> row.name().equals("valid"));
+            java.util.stream.IntStream.range(0,12).mapToObj(i -> "{\"name\":\"valid " + i + "\",\"lat\":\"37\",\"lon\":\"127\"}").collect(java.util.stream.Collectors.joining(","))+"]";
+        assertThat(service.search("address")).hasSize(10).allMatch(row -> row.name().startsWith("valid"));
+    }
+    @Test void relatedEntrancesUseProviderCoordinatesAndDuplicatesAndPrivateEntrancesAreExcluded() {
+        response="""
+            [{"name":"우장산역","display_name":"서울 강서구 우장산역","lat":"37.548","lon":"126.836",
+              "address":{"country":"대한민국","city":"서울"}, "entrances":[
+                {"lat":"37.5481","lon":"126.8361","type":"exit","extratags":{"ref":"2"}},
+                {"lat":"37.5481","lon":"126.8361","type":"exit","extratags":{"ref":"2"}},
+                {"lat":"37.5482","lon":"126.8362","type":"yes","extratags":{"access":"private","ref":"3"}},
+                {"lat":"91","lon":"126","type":"exit","extratags":{"ref":"4"}}
+              ]}, {"name":"우장산역","display_name":"duplicate","lat":"37.548","lon":"126.836"}]
+            """;
+        var results=service.search("우장산역");
+        assertThat(results).extracting("name").containsExactly("우장산역","우장산역 2번 출구");
+        assertThat(results.get(1).latitude()).isEqualTo(37.5481).isNotEqualTo(results.get(0).latitude());
+        assertThat(requests.get()).isEqualTo(1);
+    }
+    @Test void unregisteredExitsAreNeverInventedAndAlternateNamesAreAccepted() {
+        response="""
+            [{"name":"","namedetails":{"name:ko":"우장산역"},"lat":"37.548","lon":"126.836"}]
+            """;
+        assertThat(service.search("우장산역")).hasSize(1).first().extracting("name").isEqualTo("우장산역");
     }
 }

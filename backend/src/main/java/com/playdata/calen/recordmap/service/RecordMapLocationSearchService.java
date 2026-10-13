@@ -21,6 +21,7 @@ import org.springframework.web.util.UriComponentsBuilder;
 /** Explicit address lookups only. No owner records/memos are sent upstream. */
 @Service
 public class RecordMapLocationSearchService {
+    private static final int MAX_RESULTS = 10;
     private final RestClient client;
     private final ObjectMapper json;
     private final WorkLeaseService leases;
@@ -58,7 +59,8 @@ public class RecordMapLocationSearchService {
             // Same DB-backed provider key as reverse geocoding, across all backend instances.
             if (!leases.tryReserveInterval("geocode-provider:" + endpoint.getHost(), interval)) throw new ServiceUnavailableException("위치 검색 간격을 두고 다시 검색해 주세요.");
             URI uri = UriComponentsBuilder.fromUri(endpoint).queryParam("format", "jsonv2").queryParam("addressdetails", "1")
-                .queryParam("limit", "6").queryParam("q", query).build().encode().toUri();
+                .queryParam("namedetails", "1").queryParam("entrances", "1")
+                .queryParam("limit", MAX_RESULTS).queryParam("q", query).build().encode().toUri();
             List<LocationView> result = client.get().uri(uri).exchange((request, response) -> {
                 if (!response.getStatusCode().is2xxSuccessful()) throw new ServiceUnavailableException("위치 검색 서버에 연결하지 못했습니다. 잠시 후 다시 시도해 주세요.");
                 byte[] body = response.getBody().readNBytes(65537);
@@ -76,21 +78,54 @@ public class RecordMapLocationSearchService {
     private List<LocationView> parse(JsonNode data) {
         if (data == null || !data.isArray()) return List.of();
         List<LocationView> result = new ArrayList<>();
+        List<LocationView> entrances = new ArrayList<>();
+        Set<String> seen = new HashSet<>();
+        Set<String> seenEntrances = new HashSet<>();
         for (JsonNode row : data) {
-            if (result.size() == 6) break;
+            if (result.size() == MAX_RESULTS) break;
             double lat = row.path("lat").asDouble(Double.NaN), lon = row.path("lon").asDouble(Double.NaN);
             if (!Double.isFinite(lat) || !Double.isFinite(lon) || Math.abs(lat)>90 || Math.abs(lon)>180) continue;
             JsonNode address = row.path("address");
             String display = text(row, "display_name", 500);
             String name = text(row, "name", 160);
+            if (name.isBlank()) name = firstText(row.path("namedetails"), 160, "name:ko", "name", "official_name");
             if (name.isBlank()) name = display.substring(0, Math.min(160, display.length()));
             if (name.isBlank()) continue;
             String region = text(address, "city", 120);
             if (region.isBlank()) region = text(address, "town", 120);
             if (region.isBlank()) region = text(address, "state", 120);
-            result.add(new LocationView(name, display, text(address, "country", 80), region, lat, lon));
+            String country = text(address, "country", 80);
+            addUnique(result, seen, new LocationView(name, display, country, region, lat, lon));
+            // Only offer entrances that the provider actually returned. Never
+            // synthesize numbered exits or reuse the station centroid for them.
+            if (row.path("entrances").isArray()) for (JsonNode entrance : row.path("entrances")) {
+                if (entrances.size() == MAX_RESULTS) break;
+                String type = text(entrance, "type", 30);
+                JsonNode tags = entrance.path("extratags");
+                if (Set.of("service", "emergency", "no").contains(type)
+                    || Set.of("private", "no", "delivery").contains(text(tags, "access", 30))) continue;
+                double entranceLat = entrance.path("lat").asDouble(Double.NaN), entranceLon = entrance.path("lon").asDouble(Double.NaN);
+                if (!Double.isFinite(entranceLat) || !Double.isFinite(entranceLon) || Math.abs(entranceLat)>90 || Math.abs(entranceLon)>180) continue;
+                String entranceName = firstText(tags, 160, "name:ko", "name");
+                if (entranceName.isBlank()) {
+                    String ref = firstText(tags, 30, "ref", "local_ref");
+                    String suffix = ref.matches("[0-9]{1,3}") ? ref + "번 출구"
+                        : !ref.isBlank() ? ref + " 출입구" : "main".equals(type) ? "정문" : "exit".equals(type) ? "출구" : "출입구";
+                    entranceName = (name + " " + suffix).substring(0, Math.min(160, name.length() + 1 + suffix.length()));
+                }
+                addUnique(entrances, seenEntrances, new LocationView(entranceName, entranceName + " · " + display, country, region, entranceLat, entranceLon));
+            }
         }
+        for (LocationView entrance : entrances) { if (result.size() == MAX_RESULTS) break; addUnique(result, seen, entrance); }
         return result;
+    }
+    private void addUnique(List<LocationView> result, Set<String> seen, LocationView row) {
+        String key = row.name().toLowerCase(Locale.ROOT) + ":" + row.latitude() + ":" + row.longitude();
+        if (seen.add(key)) result.add(row);
+    }
+    private String firstText(JsonNode row, int max, String... fields) {
+        for (String field : fields) { String value = text(row, field, max); if (!value.isBlank()) return value; }
+        return "";
     }
     private String text(JsonNode row, String field, int max) {
         String value = row.path(field).asText("").strip();

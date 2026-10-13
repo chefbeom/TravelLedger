@@ -43,6 +43,8 @@
   --map-canvas-bg: linear-gradient(180deg, #eef3f8 0%, #e8eef5 100%);
   --map-canvas-border: rgba(148, 163, 184, 0.36);
   --map-tile-filter: saturate(0.78) contrast(0.94) brightness(1.03);
+  --travel-map-tile-filter-light: saturate(0.82) contrast(0.94) brightness(1.03);
+  --travel-map-tile-filter-dark: saturate(0.72) contrast(0.9) brightness(0.76);
   --map-toolbar-bg: rgba(255, 255, 255, 0.9);
   --map-toolbar-border: rgba(148, 163, 184, 0.34);
   --map-toolbar-shadow: 0 16px 30px rgba(15, 23, 42, 0.12);
@@ -13692,7 +13694,7 @@ body:has(.travel-map--fullscreen) {
   --field-focus-shadow: 0 0 0 3px rgba(0, 121, 107, 0.12);
   --map-canvas-bg: linear-gradient(180deg, #edf7f3 0%, #e4f0ec 100%);
   --map-canvas-border: rgba(0, 121, 107, 0.22);
-  --map-tile-filter: saturate(0.82) contrast(0.94) brightness(1.03);
+  --map-tile-filter: var(--travel-map-tile-filter-light);
   --map-toolbar-bg: rgba(255, 255, 255, 0.9);
   --map-toolbar-border: rgba(0, 121, 107, 0.2);
   --map-toolbar-shadow: 0 16px 34px rgba(6, 57, 53, 0.14);
@@ -14281,7 +14283,7 @@ body:has(.travel-map--fullscreen) {
   --field-focus-shadow: 0 0 0 3px rgba(120, 201, 192, 0.14);
   --map-canvas-bg: linear-gradient(180deg, #18232c 0%, #131c25 100%);
   --map-canvas-border: rgba(120, 201, 192, 0.2);
-  --map-tile-filter: saturate(0.72) contrast(0.9) brightness(0.76);
+  --map-tile-filter: var(--travel-map-tile-filter-dark);
   --map-toolbar-bg: rgba(25, 33, 43, 0.9);
   --map-toolbar-border: rgba(120, 201, 192, 0.18);
   --map-toolbar-shadow: 0 18px 36px rgba(0, 0, 0, 0.3);

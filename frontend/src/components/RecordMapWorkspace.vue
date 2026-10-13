@@ -1,14 +1,14 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { recordMapApi as api } from '../lib/recordMapApi'
-import { buildRecordMapData, buildRecordMapJourney } from '../lib/recordMap'
+import { buildRecordMapData } from '../lib/recordMap'
+import { locationSuggestions, normalizeLocationResults, relatedLocationQueries } from '../lib/recordMapLocationSearch'
 import { extractPhotoMetadata } from '../lib/photoMetadata'
 import { buildThumbnailUrl } from '../lib/mediaPreview'
 import { todayIso } from '../lib/uiFormat'
 import TravelMyMapClusterPanel from './TravelMyMapClusterPanel.vue'
 import TravelMapPanel from './TravelMapPanel.vue'
 import RecordMapDialog from './RecordMapDialog.vue'
-import RecordMapPlaybackControls from './RecordMapPlaybackControls.vue'
 import RecordMapSidebar from './RecordMapSidebar.vue'
 
 const props = defineProps({ token: { type: String, default: '' }, publicView: Boolean })
@@ -21,6 +21,7 @@ const loading = ref(false), busy = ref(false), error = ref(''), feedback = ref('
 const view = ref('places'), displayMode = ref('cluster'), pickMode = ref(false)
 const compact = ref(window.matchMedia('(max-width: 760px)').matches), sidebarOpen = ref(!compact.value)
 const searchMode = ref('saved'), searchText = ref(''), locationResults = ref([]), locationLoading = ref(false), locationMessage = ref(''), foundLocation = ref(null)
+const locationHistory = ref([]), lastLocationQuery = ref('')
 const frameRef = ref(null), frameHeight = ref(620), listLoading = ref(false)
 const mapActionsAnchor = ref(null)
 const sidebarActionsAnchor = ref(null)
@@ -35,8 +36,7 @@ const collectionForm = reactive({ id: null, name: '', memo: '', colorHex: '#009E
 const detailVisits = ref([]), detailPage = ref(0), detailHasMore = ref(false), detailLoading = ref(false)
 const candidates = ref({ content: [], number: 0, totalPages: 0 }), candidateCollections = ref([])
 const shareCollectionId = ref(''), shareList = ref([]), includeVisits = ref(false), expiresDays = ref(7), shareUrl = ref(''), newestShareId = ref(null)
-const playbackDay = ref(''), playing = ref(false), speed = ref(4), playIndex = ref(-1), countdown = ref(0), nextDate = ref('')
-let requestSequence = 0, listSequence = 0, locationSequence = 0, detailSequence = 0, playbackSequence = 0, timer = null, releaseWait = null, focusSequence = 0, metadataSequence = 0
+let requestSequence = 0, listSequence = 0, locationSequence = 0, detailSequence = 0, focusSequence = 0, metadataSequence = 0
 let searchTimer = null, locationAbort = null, frameObserver = null
 
 const allPlaces = computed(() => [...new Map([...snapshot.value.places, ...listSnapshot.value.places].map(p => [p.id, p])).values()])
@@ -47,14 +47,17 @@ const mapSnapshot = computed(() => {
 })
 const data = computed(() => {
   const result = buildRecordMapData(mapSnapshot.value)
-  if (foundLocation.value) result.markers.push({ ...foundLocation.value, id: 'location:preview', title: foundLocation.value.name, recordMap: true, planName: '찾은 위치', planColorHex: '#357CCB' })
+  if (searchMode.value === 'location') result.markers.push(...locationResults.value.map((location, index) => ({ ...location,
+    title: location.name, placeName: location.name, recordMap: true, recordMapLocation: true, searchResultNumber: index + 1,
+    searchResultFocused: foundLocation.value?.id === location.id,
+    planName: '검색 후보 · 저장 전', planColorHex: '#357CCB' })))
   return result
 })
 const listPlaces = computed(() => listSnapshot.value.places.map(p => ({ ...p, thumbnail: thumbnail(p.id) })))
 const diaryVisits = computed(() => [...listSnapshot.value.visits].sort((a,b) => (b.date+(b.time||'')).localeCompare(a.date+(a.time||''))))
-const journey = computed(() => buildRecordMapJourney(snapshot.value, playbackDay.value))
-const days = computed(() => [...new Set(snapshot.value.visits.map(v => v.date).filter(Boolean))].sort())
-const activeStep = computed(() => journey.value[playIndex.value] || null)
+const suggestions = computed(() => searchMode.value === 'location' && searchText.value.trim() !== lastLocationQuery.value
+  ? locationSuggestions(searchText.value, locationHistory.value) : [])
+const relatedQueries = computed(() => searchMode.value === 'location' ? relatedLocationQueries(searchText.value) : [])
 const photoSequence = computed(() => (detailVisits.value.some(v => v.placeId === selectedPlaceId.value) ? detailVisits.value.filter(v => v.placeId === selectedPlaceId.value) : snapshot.value.visits.filter(v => v.placeId === selectedPlaceId.value))
   .flatMap(v => (v.photos || []).map(p => ({ ...p, visit: v }))))
 const activePhotoIndex = computed(() => photoSequence.value.findIndex(p => p.id === selectedPhoto.value?.id))
@@ -64,7 +67,6 @@ const dialogTitle = computed(() => ({ place: placeForm.id ? '장소 수정' : '�
 async function load() {
   const sequence = ++requestSequence
   ++listSequence
-  stopPlayback(); playIndex.value = -1
   loading.value = true
   error.value = ''
   try {
@@ -86,9 +88,10 @@ async function load() {
   finally { if (sequence === requestSequence) loading.value = false }
 }
 function clearSharedData() {
-  stopPlayback(); requestSequence++; listSequence++
+  requestSequence++; listSequence++
+  locationAbort?.abort(); locationSequence++; locationLoading.value = false
   snapshot.value = { places: [], collections: [], visits: [], totalPlaces: 0, totalPages: 0 }
-  listSnapshot.value = { ...snapshot.value }; foundLocation.value = null
+  listSnapshot.value = { ...snapshot.value }; clearLocationResults(); locationHistory.value = []; lastLocationQuery.value = ''
   selectedPlaceId.value = null; selectedPhotoId.value = null; selectedMarkerId.value = null
   modal.value = ''; selectedPhoto.value = null; detailVisits.value = []; detailSequence++
   loading.value = false; listLoading.value = false
@@ -112,11 +115,17 @@ function thumbnail(id) {
 function updateSearch(text) {
   searchText.value = text; clearTimeout(searchTimer)
   if (searchMode.value === 'saved') searchTimer = setTimeout(() => { filters.q = text.trim() }, 300)
+  else { locationAbort?.abort(); locationSequence++; locationLoading.value = false; clearLocationResults() }
+}
+function clearLocationResults() {
+  locationResults.value = []; locationMessage.value = ''; foundLocation.value = null
+  if (String(selectedMarkerId.value || '').startsWith('location:')) selectedMarkerId.value = null
 }
 function changeSearchMode(mode) {
   clearTimeout(searchTimer); locationAbort?.abort(); locationSequence++
   searchMode.value = mode; searchText.value = mode === 'saved' ? filters.q : ''
-  locationResults.value = []; locationMessage.value = ''; locationLoading.value = false; foundLocation.value = null
+  clearLocationResults(); locationLoading.value = false
+  if (mode === 'saved') fitKey.value++
 }
 async function submitSearch() {
   clearTimeout(searchTimer)
@@ -124,20 +133,31 @@ async function submitSearch() {
   if (readOnly.value || locationLoading.value) return
   const sequence = ++locationSequence
   locationAbort?.abort(); locationAbort = new AbortController()
-  locationLoading.value = true; locationMessage.value = ''; locationResults.value = []; foundLocation.value = null
+  const query = searchText.value.trim()
+  locationLoading.value = true; clearLocationResults()
   try {
-    const rows = await api.searchLocations(searchText.value, { signal: locationAbort.signal })
+    const rows = normalizeLocationResults(await api.searchLocations(query, { signal: locationAbort.signal }))
     if (sequence !== locationSequence) return
-    locationResults.value = rows; locationMessage.value = rows.length ? '결과를 눌러 위치를 확인한 뒤 저장하세요.' : '검색 결과가 없습니다.'
+    locationResults.value = rows; lastLocationQuery.value = query
+    locationHistory.value = [...rows, ...locationHistory.value].slice(0, 40)
+    locationMessage.value = rows.length ? `검색 후보 ${rows.length}개 · 지도 핀의 번호와 목록을 함께 확인하세요.` : '검색 결과가 없습니다. 출구·상호 정보가 없으면 상세 주소나 주변 지역을 함께 검색해 주세요.'
     sidebarOpen.value = true
+    await nextTick()
+    if (sequence === locationSequence && rows.length) focusLocation(rows[0], compact.value)
   } catch (e) { if (sequence === locationSequence && e.name !== 'AbortError') locationMessage.value = e.message }
   finally { if (sequence === locationSequence) locationLoading.value = false }
 }
-function focusLocation(location) {
-  stopPlayback(); foundLocation.value = location; selectedPlaceId.value = null; selectedPhotoId.value = null; selectedMarkerId.value = 'location:preview'
-  if (compact.value) sidebarOpen.value = false
-  focusTarget.value = { requestId: ++focusSequence, ...location, zoom: 15, duration: .8 }
+function focusLocation(location, collapse = true) {
+  // Suggestions reuse already fetched coordinates without an upstream request.
+  const existing = locationResults.value.find(row => row.name === location.name && row.latitude === location.latitude && row.longitude === location.longitude)
+  if (!existing) locationResults.value = normalizeLocationResults([location, ...locationResults.value])
+  const target = existing || locationResults.value[0]
+  if (!target) return
+  foundLocation.value = target; selectedPlaceId.value = null; selectedPhotoId.value = null; selectedMarkerId.value = target.id
+  if (compact.value && collapse) sidebarOpen.value = false
+  focusTarget.value = { requestId: ++focusSequence, ...target, zoom: 15, duration: .8, showPreview: true }
 }
+function searchRelated(query) { searchText.value = query; submitSearch() }
 function saveLocation(location) { beginPlace(location); placeForm.name = location.name; placeForm.country = location.country; placeForm.region = location.region }
 function selectCollection(id) { filters.collectionId = String(id || ''); view.value = 'places'; sidebarOpen.value = true }
 function setFilter(key, value) { filters[key] = value }
@@ -151,7 +171,9 @@ watch(() => sidebarOpen.value, async open => {
   // with a keepZoom pan while that camera transition is still starting.
   if (!open) return
   await nextTick()
-  if (selectedPlace.value) focusTarget.value = { requestId: ++focusSequence, ...selectedPlace.value, keepZoom: true, duration: .35 }
+  if (!sidebarOpen.value) return
+  const target = foundLocation.value || selectedPlace.value
+  if (target) focusTarget.value = { requestId: ++focusSequence, ...target, keepZoom: true, duration: .35 }
 })
 onMounted(() => {
   refreshFrame(); requestAnimationFrame(refreshFrame); window.addEventListener('resize', refreshFrame); window.addEventListener('scroll', refreshFrame, { passive:true })
@@ -159,13 +181,14 @@ onMounted(() => {
   if (frameRef.value) { frameObserver.observe(frameRef.value); frameObserver.observe(frameRef.value.parentElement) }
 })
 watch(() => props.token, () => {
+  clearTimeout(searchTimer); locationAbort?.abort(); locationSequence++; locationLoading.value = false; searchText.value = ''
   snapshot.value = { places: [], collections: [], visits: [], totalPlaces: 0, totalPages: 0 }
-  listSnapshot.value = { ...snapshot.value }; foundLocation.value = null
+  listSnapshot.value = { ...snapshot.value }; clearLocationResults(); locationHistory.value = []; lastLocationQuery.value = ''; searchMode.value = 'saved'
   selectedPlaceId.value = null; selectedPhotoId.value = null; selectedMarkerId.value = null
   modal.value = ''; selectedPhoto.value = null; detailVisits.value = []; detailSequence++
   filters.page = 0; load()
 }, { immediate: true })
-watch(() => [filters.collectionId, filters.state, filters.from, filters.to, filters.q], () => { filters.page = 0; foundLocation.value = null; playIndex.value = -1; load() })
+watch(() => [filters.collectionId, filters.state, filters.from, filters.to, filters.q], () => { filters.page = 0; foundLocation.value = null; load() })
 watch(() => filters.page, () => { if (!loading.value) loadList() })
 watch(dirty, value => window.dispatchEvent(new CustomEvent('calen-route-leave-guard', { detail: { active: value, message: '작성 중인 장소·방문 기록을 저장하지 않고 나갈까요?' } })))
 
@@ -181,13 +204,13 @@ function resetVisit(placeId = null) {
   photosPending.value = []
 }
 function beginPlace(point = null, recordNow = false) {
-  stopPlayback(); metadataSequence++; metadataLoading.value = false; gpsLoading.value = false; dirty.value = false; error.value = ''
+  metadataSequence++; metadataLoading.value = false; gpsLoading.value = false; dirty.value = false; error.value = ''
   Object.assign(placeForm, { id: null, name: '', memo: '', country: '', region: '', latitude: point?.latitude ?? '', longitude: point?.longitude ?? '',
     visited: false, collectionIds: defaultCollections(), recordNow, sourceTravelRecordId: null })
   resetVisit(); modal.value = 'place'; pickMode.value = false
 }
 function editPlace(place) {
-  stopPlayback(); metadataSequence++; metadataLoading.value = false; gpsLoading.value = false; dirty.value = false
+  metadataSequence++; metadataLoading.value = false; gpsLoading.value = false; dirty.value = false
   Object.assign(placeForm, { ...place, recordNow: false, collectionIds: [...place.collectionIds] })
   resetVisit(place.id); modal.value = 'place'
 }
@@ -262,12 +285,12 @@ function savePlace() {
       await uploadPending(visit.id)
     }
     dirty.value = false; modal.value = ''; await load()
-    foundLocation.value = null; selectedPlaceId.value = result.id
+    clearLocationResults(); selectedPlaceId.value = result.id
     feedback.value = allPlaces.value.some(p => p.id === result.id) ? '장소와 기록을 저장했습니다.' : '저장했습니다. 현재 검색·필터 조건을 바꾸면 저장한 장소를 확인할 수 있습니다.'
   })
 }
 function beginVisit(visit = null) {
-  stopPlayback(); error.value = ''; dirty.value = false
+  error.value = ''; dirty.value = false
   if (!allPlaces.value.length) { beginPlace(null, true); return }
   resetVisit(visit?.placeId || selectedPlaceId.value || allPlaces.value[0].id)
   if (visit) Object.assign(visitForm, { id: Number(visit.id.split(':')[1]), placeId: visit.placeId, title: visit.title, memo: visit.memo || '', date: visit.date, time: visit.time || '' })
@@ -283,7 +306,7 @@ function saveVisit() {
     dirty.value = false; modal.value = ''; await load(); feedback.value = '방문 기록을 저장했습니다.'
   })
 }
-function beginCollections() { stopPlayback(); dirty.value = false; Object.assign(collectionForm, { id: null, name: '', memo: '', colorHex: '#009E8C' }); modal.value = 'collection' }
+function beginCollections() { dirty.value = false; Object.assign(collectionForm, { id: null, name: '', memo: '', colorHex: '#009E8C' }); modal.value = 'collection' }
 function saveCollection() {
   act(async () => {
     await api.collection(collectionForm.id, { name: collectionForm.name, memo: collectionForm.memo, colorHex: collectionForm.colorHex })
@@ -307,7 +330,7 @@ function deletePhoto(photo) {
   act(async () => { await api.deletePhoto(Number(photo.id.split(':')[1])); await load(); await loadDetail(detailPage.value); modal.value = 'detail' })
 }
 function selectPlace(item) {
-  stopPlayback()
+  if (item?.recordMapLocation) { focusLocation(item); return }
   const id = item?.recordMapPlaceId ?? item?.placeId ?? Number(String(item?.id || item?.clusterId || '').split(':').at(-1))
   if (!allPlaces.value.some(p => p.id === Number(id))) return
   if (selectedPlaceId.value !== Number(id)) { detailVisits.value = []; detailSequence++ }
@@ -324,15 +347,15 @@ function selectPlace(item) {
   })
 }
 function focusPlace(place) {
-  stopPlayback(); selectedPlaceId.value = place.id; selectedMarkerId.value = 'place:' + place.id
+  selectedPlaceId.value = place.id; selectedMarkerId.value = 'place:' + place.id
   const pin = data.value.photoPins.find(p => p.recordMapPlaceId === place.id)
   selectedPhotoId.value = pin?.mediaId || null
-  focusTarget.value = { requestId: ++focusSequence, latitude: place.latitude, longitude: place.longitude, zoom: 15, duration: .8 }
+  focusTarget.value = { requestId: ++focusSequence, latitude: place.latitude, longitude: place.longitude, zoom: 15, duration: .8, showPreview: true }
   if (compact.value) sidebarOpen.value = false
 }
 async function openDetail(place) {
   if (!place) return
-  stopPlayback(); dirty.value = false; detailVisits.value = []; selectedPlaceId.value = place.id; modal.value = 'detail'; await loadDetail(0)
+  dirty.value = false; detailVisits.value = []; selectedPlaceId.value = place.id; modal.value = 'detail'; await loadDetail(0)
 }
 async function loadDetail(page) {
   const id = selectedPlaceId.value, sequence = ++detailSequence
@@ -346,12 +369,11 @@ async function loadDetail(page) {
   } catch (e) { error.value = e.message } finally { if (sequence === detailSequence) detailLoading.value = false }
 }
 function openPhoto(photo, visit = null) {
-  stopPlayback()
   if (visit) selectedPlaceId.value = visit.placeId
   selectedPhoto.value = { ...photo, visit }; modal.value = 'photo'
 }
 function mapPreviewOpen(photo) {
-  if (photo.id === 'location:preview' && foundLocation.value) { saveLocation(foundLocation.value); return }
+  if (photo.recordMapLocation) { saveLocation(photo); return }
   selectPlace(photo)
   const visit = snapshot.value.visits.find(v => v.photos?.some(p => p.id === (photo.mediaId ?? photo.representativeMediaId)))
   const picture = visit?.photos?.find(p => p.id === (photo.mediaId ?? photo.representativeMediaId))
@@ -370,7 +392,7 @@ function closeDialog() {
   if (modal.value === 'detail') loadDetail(0)
 }
 async function beginTravelImport() {
-  stopPlayback(); dirty.value = false; candidateCollections.value = defaultCollections(); modal.value = 'travel'; await loadCandidates(0)
+  dirty.value = false; candidateCollections.value = defaultCollections(); modal.value = 'travel'; await loadCandidates(0)
 }
 async function loadCandidates(page) {
   try { candidates.value = await api.candidates(page) } catch (e) { error.value = e.message }
@@ -379,7 +401,7 @@ function importTravel(item) {
   act(async () => { const result = await api.importTravel(item.id, candidateCollections.value); modal.value = ''; await load(); selectedPlaceId.value = result.id; feedback.value = '여행 원본을 유지하며 장소를 연결했습니다.' })
 }
 async function beginShare() {
-  stopPlayback(); dirty.value = false; shareUrl.value = ''; includeVisits.value = false
+  dirty.value = false; shareUrl.value = ''; includeVisits.value = false
   shareCollectionId.value = filters.collectionId || String(snapshot.value.collections[0]?.id || '')
   modal.value = 'share'; await loadShares()
 }
@@ -404,53 +426,10 @@ async function copyShare() {
   try { await navigator.clipboard.writeText(shareUrl.value); feedback.value = '공유 주소를 복사했습니다.' } catch { error.value = '주소를 선택해 직접 복사해 주세요.' }
 }
 
-function wait(ms) {
-  return new Promise(resolve => {
-    releaseWait = resolve
-    timer = window.setTimeout(() => { timer = null; releaseWait = null; resolve() }, ms)
-  })
-}
-function stopPlayback() {
-  playing.value = false; playbackSequence++; countdown.value = 0
-  if (timer) window.clearTimeout(timer)
-  timer = null; releaseWait?.(); releaseWait = null; mapRef.value?.cancelJourneyLeg?.()
-}
-async function play() {
-  if (playing.value) { stopPlayback(); return }
-  if (!journey.value.length) return
-  view.value = 'map'; playing.value = true
-  const sequence = ++playbackSequence
-  let index = playIndex.value < 0 || playIndex.value >= journey.value.length - 1 ? 0 : playIndex.value
-  const steps = [...journey.value]
-  for (; index < steps.length && playing.value && sequence === playbackSequence; index++) {
-    const step = steps[index]
-    if (index > 0 && steps[index - 1].date !== step.date) {
-      nextDate.value = step.date
-      for (let n = 3; n > 0 && sequence === playbackSequence; n--) { countdown.value = n; await wait(1000) }
-      countdown.value = 0
-    }
-    if (sequence !== playbackSequence) return
-    if (index > 0) await mapRef.value?.prepareJourneyLeg?.(steps[index - 1], step, { focusCurrent: false })
-    if (sequence !== playbackSequence) return
-    playIndex.value = index; selectedPlaceId.value = step.placeId; selectedPhotoId.value = step.mediaId; selectedMarkerId.value = step.markerId
-    await nextTick()
-    if (!step.mediaId) {
-      const place = selectedPlace.value
-      mapRef.value?.previewRecordMarker?.({ ...place, id: step.markerId, recordMap: true, recordMapPlaceId: step.placeId,
-        title: step.title, memoryDate: step.date, memoryTime: step.time, memoryCount: 1, photoUrl: '' })
-    }
-    await mapRef.value?.focusJourneyRecord?.(step, 16)
-    if (sequence !== playbackSequence) return
-    await wait(speed.value * 1000)
-  }
-  if (sequence === playbackSequence) { playing.value = false; feedback.value = '현재 지도에 표시된 기록 재생이 끝났습니다.' }
-}
-function setDay(day) { stopPlayback(); playbackDay.value = day; playIndex.value = -1 }
-function setSpeed(seconds) { const resume = playing.value; stopPlayback(); speed.value = seconds; if (resume) play() }
 function leaveGuard(event) { if (dirty.value) { event.preventDefault(); event.returnValue = '' } }
 window.addEventListener('beforeunload', leaveGuard)
 onBeforeUnmount(() => {
-  requestSequence++; listSequence++; locationSequence++; detailSequence++; metadataSequence++; stopPlayback()
+  requestSequence++; listSequence++; locationSequence++; detailSequence++; metadataSequence++
   clearTimeout(searchTimer); locationAbort?.abort(); frameObserver?.disconnect(); window.removeEventListener('resize', refreshFrame); window.removeEventListener('scroll', refreshFrame)
   window.removeEventListener('beforeunload', leaveGuard)
   window.dispatchEvent(new CustomEvent('calen-route-leave-guard', { detail: { active: false } }))
@@ -476,7 +455,7 @@ onBeforeUnmount(() => {
     <div ref="frameRef" class="record-map-frame" :style="{ '--record-map-height': frameHeight + 'px' }">
     <TravelMyMapClusterPanel ref="mapRef" active workspace-layout include-record-markers :workspace-sidebar-open="sidebarOpen" :overlay-revision="String(sidebarOpen) + view + String(compact)" :markers="data.markers" :photo-pins="data.photoPins" :photo-clusters="data.photoClusters"
       :display-mode="displayMode" :fit-request-key="fitKey" :focus-target="focusTarget" :selected-marker-id="selectedMarkerId" :selected-photo-id="selectedPhotoId"
-      :selected-cluster-id="selectedPlaceId ? 'place:' + selectedPlaceId : null" :journey-photo-id="activeStep?.mediaId" :journey-playback-active="playing"
+      :selected-cluster-id="selectedPlaceId ? 'place:' + selectedPlaceId : null"
       :enable-pick-location="pickMode && !readOnly" @pick-location="pickPoint" @select-marker="selectPlace" @select-cluster="selectPlace" @select-photo-pin="selectPlace" @preview-cluster="mapPreviewOpen" @clear-selection="selectedPlaceId = null; selectedPhotoId = null; selectedMarkerId = null">
       <template #navigation="controls">
         <nav class="record-map-tools" aria-label="지도 도구 모음">
@@ -489,11 +468,8 @@ onBeforeUnmount(() => {
       <template #workspace-overlays>
         <RecordMapSidebar :open="sidebarOpen" :tab="view" :read-only="readOnly" :busy="busy" :loading="loading || listLoading" :filters="filters" :snapshot="listSnapshot" :places="listPlaces" :visits="diaryVisits" :selected="selectedPlace"
           :search-mode="searchMode" :search-text="searchText" :locations="locationResults" :location-loading="locationLoading" :location-message="locationMessage"
-          @toggle="sidebarOpen = !sidebarOpen" @tab="switchTab" @search-text="updateSearch" @search-mode="changeSearchMode" @search="submitSearch" @filter="setFilter" @collection="selectCollection" @select="focusPlace" @detail="openDetail" @photo="openPhoto" @location="focusLocation" @save-location="saveLocation" @page="filters.page = $event" @collections="beginCollections" @share="beginShare"><template #actions><div v-if="!readOnly" ref="sidebarActionsAnchor"></div></template></RecordMapSidebar>
-        <div class="record-map-playbar" :class="{ 'with-sidebar': sidebarOpen || compact }" data-map-overlay @click.stop @pointerdown.stop @wheel.stop>
-        <RecordMapPlaybackControls :days="days" :day="playbackDay" :playing="playing" :speed="speed" :index="playIndex" :total="journey.length" :busy="loading || busy" :countdown="countdown" :next-date="nextDate" @day="setDay" @toggle="play" @speed="setSpeed" />
-        <details v-if="snapshot.visitsLimited || snapshot.placesLimited" class="record-map-limits"><summary>표시 범위 안내</summary><span v-if="snapshot.placesLimited">지도는 검색 조건의 최근 장소 최대 500개를 표시합니다. 검색·필터로 범위를 좁히세요.</span><span v-if="snapshot.visitsLimited">재생은 최근 방문 200건과 연결된 여행 사진 최대 1,000장 기준입니다. 이전 기록은 장소 상세에서 확인하세요.</span></details>
-        </div>
+          :selected-location-id="foundLocation?.id" :suggestions="suggestions" :related-queries="relatedQueries" :map-limits="snapshot"
+          @toggle="sidebarOpen = !sidebarOpen" @tab="switchTab" @search-text="updateSearch" @search-mode="changeSearchMode" @search="submitSearch" @filter="setFilter" @collection="selectCollection" @select="focusPlace" @detail="openDetail" @photo="openPhoto" @location="focusLocation" @save-location="saveLocation" @related="searchRelated" @page="filters.page = $event" @collections="beginCollections" @share="beginShare"><template #actions><div v-if="!readOnly" ref="sidebarActionsAnchor"></div></template></RecordMapSidebar>
       </template>
     </TravelMyMapClusterPanel>
     </div>
@@ -598,6 +574,8 @@ onBeforeUnmount(() => {
 :global(html body .app-shell .record-map-workspace .travel-map .record-map-sidebar .record-map-search button.button[type="submit"]) { background:var(--panel-bg) !important; color:var(--text) !important; -webkit-text-fill-color:var(--text) !important; text-shadow:none !important; }
 .record-map-add__menu { position:absolute; top:calc(100% + 6px); right:0; width:200px; max-height:50dvh; overflow-y:auto; display:grid; gap:4px; padding:8px; border:1px solid var(--line); background:var(--panel-bg); box-shadow:0 6px 24px #0003; }
 .record-map-add__menu .button { text-align:left; width:100%; }
+.record-map-workspace { --map-tile-filter:var(--travel-map-tile-filter-light); }
+:global(:root[data-theme='toss'] .record-map-workspace) { --map-tile-filter:var(--travel-map-tile-filter-dark); }
 .record-map-frame { position:relative; width:100%; min-width:0; height:var(--record-map-height); }
 .record-map-frame :deep(.travel-map--record-workspace) { position:relative; display:block !important; margin:0; padding:0; width:100%; height:100%; min-width:0; border:1px solid var(--line); overflow:hidden; box-sizing:border-box; }
 .record-map-frame :deep(.travel-map--record-workspace.travel-map--fullscreen) { position:fixed; width:100vw; height:100dvh; }
@@ -610,16 +588,6 @@ onBeforeUnmount(() => {
 .record-map-tools__zoom .travel-cluster-map__zoom { min-width:20px; font-size:.8rem; }
 .record-map-tools summary { cursor:pointer; text-align:center; padding:8px 0; font-size:.78rem; }
 .record-map-tools__settings { display:grid; gap:5px; }
-.record-map-playbar { position:absolute; z-index:1001; bottom:12px; left:12px; right:128px; padding:10px 12px; background:var(--panel-bg); color:var(--text); border:1px solid var(--line); box-shadow:0 4px 16px #0003; }
-.record-map-playbar.with-sidebar { left:364px; }
-.record-map-playbar :deep(.record-map-playback) { padding:0; margin:0; border:0; grid-template-columns:minmax(120px,1fr) minmax(120px,1fr) minmax(190px,1.5fr); align-items:center; gap:10px; }
-.record-map-playbar :deep(.record-map-playback > strong) { display:grid; gap:4px; font-size:.85rem; }
-.record-map-playbar :deep(.record-map-playback select) { min-height:32px; padding:5px; }
-.record-map-playbar :deep(.record-map-playback .button) { min-height:36px; padding:6px 9px; }
-.record-map-playbar :deep(.record-map-playback input[type="range"]) { height:20px; }
-.record-map-limits { margin-top:6px; font-size:.75rem; }
-.record-map-limits span { display:block; padding:4px; }
-@media(max-width:1100px) { .record-map-playbar { right:12px; } .record-map-playbar :deep(.record-map-playback) { grid-template-columns:1fr 1fr; } .record-map-playbar :deep(.record-map-playback > strong) { grid-column:1/-1; display:flex; } }
 @media(max-width:760px) {
   :global(body:has(.record-map-workspace) .app-shell) { padding-top:0 !important; }
   :global(body:has(.record-map-workspace) .theme-switcher) { position:static !important; padding:4px 8px !important; margin:0 !important; min-height:0 !important; justify-content:flex-end; }
@@ -629,7 +597,9 @@ onBeforeUnmount(() => {
   :global(body:has(.record-map-workspace) .topbar__copy :is(.topbar__eyebrow,.topbar__title,.topbar__description,.topbar__context)) { display:none !important; }
   :global(body:has(.record-map-workspace) .topbar__brand) { font-size:14px !important; }
   :global(body:has(.record-map-workspace) .topbar__actions) { width:auto !important; gap:4px !important; }
+  :global(html body:has(.record-map-workspace) .app-shell .topbar__actions) { display:flex !important; flex-direction:row !important; flex-wrap:nowrap !important; }
   :global(body:has(.record-map-workspace) .topbar__actions .button) { min-height:30px !important; min-width:0 !important; padding:4px 7px !important; font-size:11px !important; }
+  :global(html body:has(.record-map-workspace) .app-shell .topbar__actions .button) { width:auto !important; flex:0 0 auto !important; }
   :global(body:has(.record-map-workspace) .topbar__nav) { width:100% !important; gap:3px !important; padding:0 !important; }
   :global(body:has(.record-map-workspace) .topbar__nav-button) { min-height:34px !important; padding:5px 8px !important; font-size:12px !important; }
   :global(body:has(.record-map-workspace) .record-map-mode-switch) { gap:5px; padding:6px 8px !important; }
@@ -640,11 +610,8 @@ onBeforeUnmount(() => {
   .record-map-tools__zoom { grid-column:span 2; }
   .record-map-tools > button:nth-of-type(2), .record-map-tools > details { grid-column:span 2; }
   .record-map-tools .button { min-height:36px; }
-  .record-map-playbar, .record-map-playbar.with-sidebar { bottom:8px; left:8px; right:8px; padding:6px 8px; }
-  .record-map-playbar :deep(.record-map-playback) { grid-template-columns:1fr 1.3fr; gap:4px 8px; }
-  .record-map-playbar :deep(.record-map-playback > strong) { grid-column:1/-1; font-size:.75rem; }
-  .record-map-playbar :deep(.record-map-playback label) { font-size:.72rem; gap:2px; }
-  .record-map-playbar :deep(.record-map-playback__row) { gap:6px; }
+  .record-map-header { padding:6px 10px !important; min-height:0 !important; }
+  .record-map-header h2 { margin:0 !important; font-size:1rem !important; }
 }
 .record-map-actions, .record-map-floating-actions { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
 .record-map-actions > *, .record-map-floating-actions > * { flex-shrink: 0; }

@@ -3,28 +3,32 @@ import { computed } from 'vue'
 import { buildThumbnailUrl } from '../lib/mediaPreview'
 const props = defineProps({ open: Boolean, tab: String, readOnly: Boolean, busy: Boolean, loading: Boolean,
   filters: Object, snapshot: Object, places: Array, visits: Array, selected: Object,
-  searchMode: String, searchText: String, locations: Array, locationLoading: Boolean, locationMessage: String })
-const emit = defineEmits(['toggle', 'tab', 'search-text', 'search-mode', 'search', 'filter', 'collection', 'select', 'detail', 'photo', 'location', 'save-location', 'page', 'collections', 'share'])
+  searchMode: String, searchText: String, locations: Array, locationLoading: Boolean, locationMessage: String,
+  selectedLocationId: String, suggestions: Array, relatedQueries: Array, mapLimits: Object })
+const emit = defineEmits(['toggle', 'tab', 'search-text', 'search-mode', 'search', 'filter', 'collection', 'select', 'detail', 'photo', 'location', 'save-location', 'related', 'page', 'collections', 'share'])
 const hasVisits = computed(() => !props.readOnly || props.snapshot?.visitsIncluded)
 const page = computed(() => Number(props.filters?.page || 0))
 function filter(key, event) { emit('filter', key, event.target.value) }
 </script>
 <template>
   <aside class="record-map-sidebar" :class="{ 'is-open': open }" aria-label="장소와 기록 목록" data-map-overlay @click.stop @pointerdown.stop @wheel.stop>
-    <header class="record-map-sidebar__header"><strong>{{ readOnly ? '공유 장소와 기록' : '내 장소와 기록' }}</strong><div class="record-map-sidebar__actions"><slot name="actions" /><button class="button" type="button" :aria-expanded="open" :aria-label="open ? '목록 접기' : '목록 열기'" @click="emit('toggle')">{{ open ? '접기' : '목록' }}</button></div></header>
+    <header class="record-map-sidebar__header"><strong>{{ readOnly ? '공유 장소와 기록' : '내 장소와 기록' }}</strong><div class="record-map-sidebar__actions"><slot name="actions" /><button class="button" type="button" :aria-expanded="open" :aria-label="open ? '목록 접기' : '목록 열기'" @click="emit('toggle')">{{ open ? '접기' : searchMode === 'location' && locations?.length ? '후보 ' + locations.length : '목록' }}</button></div></header>
     <div class="record-map-search-modes" v-if="!readOnly"><button type="button" :aria-pressed="searchMode === 'saved'" @click="emit('search-mode', 'saved')">내 장소 검색</button><button type="button" :aria-pressed="searchMode === 'location'" @click="emit('search-mode', 'location')">새 위치 찾기</button></div>
     <form class="record-map-search" @submit.stop.prevent="emit('search')">
-      <input :value="searchText" maxlength="100" type="search" :aria-label="searchMode === 'location' ? '주소·지역 검색' : '저장 장소 검색'" :placeholder="searchMode === 'location' ? '주소·지역을 입력하세요' : '장소명·지역·기록 검색'" @input="emit('search-text', $event.target.value)" />
+      <input :value="searchText" maxlength="100" type="search" autocomplete="off" :aria-label="searchMode === 'location' ? '주소·지역 검색' : '저장 장소 검색'" :placeholder="searchMode === 'location' ? '장소명·역·출구·주소 검색' : '장소명·지역·기록 검색'" @input="emit('search-text', $event.target.value)" />
       <button type="submit" class="button" :disabled="locationLoading || busy" aria-label="지도 검색">검색</button>
     </form>
     <div v-show="open" class="record-map-sidebar__body">
       <template v-if="searchMode === 'location'">
-        <p class="record-map-sidebar__hint">입력한 주소·지역만 위치 검색 제공자에게 전달됩니다. 저장 자료와 메모는 전송하지 않습니다.</p>
+        <p class="record-map-sidebar__hint">검색 버튼을 누르면 입력한 장소명·주소만 제공자에게 전달됩니다. 지도 핀은 저장 전 미리보기입니다.</p>
+        <div v-if="suggestions?.length" class="record-map-suggestions" role="group" aria-label="연관 장소 후보"><strong>조회했던 연관 후보</strong><button v-for="item in suggestions" :key="item.name" type="button" @click="emit('location', item)">{{ item.name }}</button></div>
+        <div v-if="relatedQueries?.length" class="record-map-suggestions" role="group" aria-label="연관 검색어"><strong>검색어 좁히기</strong><button v-for="query in relatedQueries" :key="query" type="button" :disabled="locationLoading" :aria-label="query + ' 검색'" @click="emit('related', query)">{{ query }}</button></div>
         <p v-if="locationLoading || locationMessage" role="status">{{ locationLoading ? '위치를 찾는 중입니다…' : locationMessage }}</p>
-        <article v-for="(location, index) in locations" :key="index" class="record-map-list-card">
-          <button type="button" class="record-map-list-card__main" @click="emit('location', location)"><span class="record-map-list-card__copy"><strong>{{ location.name }}</strong><span>{{ location.displayName }}</span></span></button>
+        <article v-for="(location, index) in locations" :key="location.id" class="record-map-list-card" :class="{ 'is-selected': selectedLocationId === location.id }" :data-location-id="location.id">
+          <button type="button" class="record-map-list-card__main" :aria-pressed="selectedLocationId === location.id" :aria-label="location.name + ' 지도에서 보기'" @click="emit('location', location)"><span class="record-map-location-number" aria-hidden="true">{{ index + 1 }}</span><span class="record-map-list-card__copy"><strong>{{ location.name }}</strong><span>{{ location.displayName }}</span><span v-if="selectedLocationId === location.id">선택한 위치 · {{ location.latitude.toFixed(5) }}, {{ location.longitude.toFixed(5) }}</span></span></button>
           <button class="button" type="button" @click="emit('save-location', location)">이 위치 저장</button>
         </article>
+        <p class="record-map-sidebar__hint">출입구 후보는 제공자에 이름·좌표가 등록된 경우에만 표시합니다. 등록되지 않은 출구 위치를 임의로 만들지 않습니다.</p>
         <p class="record-map-sidebar__hint">위치 검색 © OpenStreetMap contributors · <a href="https://operations.osmfoundation.org/policies/nominatim/" target="_blank" rel="noopener noreferrer">사용 정책</a></p>
       </template>
       <template v-else>
@@ -61,6 +65,7 @@ function filter(key, event) { emit('filter', key, event.target.value) }
           <p v-if="!places.length && !loading" class="record-map-empty">{{ readOnly ? '공유 범위에서 일치하는 장소가 없습니다.' : '일치하는 장소가 없습니다. 검색·필터를 바꾸거나 새 장소를 저장하세요.' }}</p>
         </section>
         <footer v-if="tab !== 'collections'" class="record-map-sidebar__pagination"><span>장소 {{ snapshot.totalPlaces || 0 }}개 · {{ page + 1 }} / {{ Math.max(1, snapshot.totalPages || 0) }}</span><div><button class="button" type="button" :disabled="page <= 0 || loading" @click="emit('page', page-1)">이전</button><button class="button" type="button" :disabled="page+1 >= snapshot.totalPages || loading" @click="emit('page', page+1)">다음</button></div></footer>
+        <details v-if="mapLimits?.visitsLimited || mapLimits?.placesLimited" class="record-map-sidebar__hint"><summary>표시 범위 안내</summary><p v-if="mapLimits.placesLimited">지도는 최근 장소 최대 500개를 표시합니다. 검색·필터로 범위를 좁히세요.</p><p v-if="mapLimits.visitsLimited">최근 방문 200건과 연결 여행 사진 최대 1,000장을 표시합니다. 이전 기록은 장소 상세에서 확인하세요.</p></details>
       </template>
     </div>
   </aside>
@@ -75,7 +80,11 @@ function filter(key, event) { emit('filter', key, event.target.value) }
 .record-map-search input { flex:1; min-width:0; width:0; min-height:38px; padding:8px; border:1px solid var(--line); background:var(--input-bg,var(--panel-bg)); color:var(--text); }
 .record-map-search .button { padding:7px 10px; min-height:38px; }
 .record-map-search-modes button, .record-map-sidebar__tabs button { flex:1; padding:8px 3px; min-width:0; border:1px solid var(--line); background:transparent; color:var(--text); font:inherit; font-size:.82rem; cursor:pointer; }
-button[aria-pressed="true"] { background:var(--accent-soft,#009e8c22); border-color:var(--accent,#009E8C); font-weight:700; }
+.record-map-search-modes button[aria-pressed="true"], .record-map-sidebar__tabs button[aria-pressed="true"] { background:var(--accent-soft,#009e8c22); border-color:var(--accent,#009E8C); font-weight:700; }
+.record-map-location-number { flex-shrink:0; display:grid; place-items:center; width:24px; height:24px; background:#357ccb; color:#fff; font-size:.8rem; font-weight:700; }
+.record-map-suggestions { display:flex; align-items:center; gap:5px; flex-wrap:wrap; font-size:.78rem; }
+.record-map-suggestions strong { width:100%; }
+.record-map-suggestions button { padding:6px 8px; min-height:32px; border:1px solid var(--line); background:var(--panel-bg); color:var(--text); font:inherit; text-align:left; cursor:pointer; }
 .record-map-sidebar__body { flex:1; min-height:0; overflow-y:auto; overscroll-behavior:contain; display:flex; flex-direction:column; gap:10px; scrollbar-gutter:stable; }
 .record-map-sidebar :is(button,input,select) { box-sizing:border-box; min-width:0 !important; max-width:100% !important; }
 .record-map-sidebar__body :is(input,select) { width:100%; min-width:0; min-height:36px; box-sizing:border-box; }
@@ -104,12 +113,12 @@ button[aria-pressed="true"] { background:var(--accent-soft,#009e8c22); border-co
 .record-map-sidebar__hint, .record-map-empty { font-size:.78rem; line-height:1.6; margin:0; }
 .record-map-sidebar :is(button,input,select,summary):focus-visible { outline:2px solid var(--accent,#009E8C); outline-offset:2px; }
 @media(max-width:760px) {
-  .record-map-sidebar { top:auto; bottom:112px; left:8px; right:8px; width:auto; max-width:none; max-height:55%; padding:8px; gap:5px; }
-  .record-map-sidebar.is-open { top:8px; bottom:112px; height:auto; max-height:none; }
+  .record-map-sidebar { top:auto; bottom:8px; left:8px; right:8px; width:auto; max-width:none; max-height:55%; padding:8px; gap:5px; }
+  .record-map-sidebar.is-open { bottom:8px; height:auto; max-height:70%; }
   .record-map-sidebar:not(.is-open) .record-map-search-modes { display:none; }
   .record-map-sidebar:not(.is-open) .record-map-sidebar__header { position:absolute; right:8px; top:8px; }
   .record-map-sidebar:not(.is-open) .record-map-sidebar__header strong { display:none; }
-  .record-map-sidebar:not(.is-open) .record-map-search { padding-right:45px; }
+  .record-map-sidebar:not(.is-open) .record-map-search { padding-right:65px; }
   .record-map-sidebar__header strong { font-size:.85rem; }
   .record-map-sidebar__header .button { min-height:36px !important; padding:5px 7px !important; font-size:12px !important; }
   .record-map-sidebar__tabs button { min-height:36px !important; }

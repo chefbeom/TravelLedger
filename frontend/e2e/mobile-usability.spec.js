@@ -79,9 +79,74 @@ function contrast(foreground, background) {
   return (Math.max(a, b) + .05) / (Math.min(a, b) + .05)
 }
 
+async function expectAggregateHeaderLayout(header, stacked) {
+  const geometry = await header.evaluate(element => {
+    const heading = element.querySelector('h2')
+    const actions = element.querySelector('.household-aggregate-header__actions')
+    const range = document.createRange()
+    range.selectNodeContents(heading)
+    const rect = node => {
+      const { left, right, top, bottom, width, height } = node.getBoundingClientRect()
+      return { left, right, top, bottom, width, height }
+    }
+    return {
+      header: rect(element), heading: rect(heading), actions: rect(actions),
+      textLines: range.getClientRects().length,
+      clipped: heading.scrollWidth > heading.clientWidth + 1,
+      controls: [...actions.children].map(rect),
+    }
+  })
+  expect(geometry.heading.width, 'Title must not be squeezed into a character-wide column').toBeGreaterThan(150)
+  expect(geometry.textLines, 'Title must remain on one readable line').toBe(1)
+  expect(geometry.clipped, 'Title must not be clipped or ellipsized').toBe(false)
+  if (stacked) expect(geometry.heading.bottom).toBeLessThanOrEqual(geometry.actions.top + 1)
+  else expect(geometry.heading.right).toBeLessThanOrEqual(geometry.actions.left + 1)
+  for (const control of geometry.controls) {
+    expect(control.left).toBeGreaterThanOrEqual(geometry.header.left - 1)
+    expect(control.right).toBeLessThanOrEqual(geometry.header.right + 1)
+    expect(control.top).toBeGreaterThanOrEqual(geometry.actions.top - 1)
+    expect(control.bottom).toBeLessThanOrEqual(geometry.actions.bottom + 1)
+  }
+  for (let i = 0; i < geometry.controls.length; i++) {
+    for (let j = i + 1; j < geometry.controls.length; j++) {
+      const a = geometry.controls[i], b = geometry.controls[j]
+      const area = Math.max(0, Math.min(a.right, b.right) - Math.max(a.left, b.left)) * Math.max(0, Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top))
+      expect(area, 'Header controls must not overlap').toBeLessThanOrEqual(1)
+    }
+  }
+}
+
 for (const [width, height] of sizes) {
   test.describe(`mobile usability ${width}x${height}`, () => {
     test.use({ viewport: { width, height }, hasTouch: true, isMobile: true })
+
+    test('aggregate header keeps title and edit controls readable', async ({ page }, testInfo) => {
+      const errors = await mock(page)
+      await page.goto('/#household')
+      await expect(page.locator('html')).toHaveAttribute('data-layout-mode', 'mobile')
+      await page.getByRole('button', { name: '달력 가계부', exact: true }).tap()
+      const header = page.locator('.household-aggregate-header')
+      await expect(header.getByRole('heading', { name: '사용자 설정 집계', exact: true })).toBeVisible()
+      const edit = header.getByRole('button', { name: '수정', exact: true })
+      await expect(edit).toBeEnabled()
+      for (const theme of ['default', 'toss']) {
+        await page.evaluate(theme => document.documentElement.dataset.theme = theme, theme)
+        await expectAggregateHeaderLayout(header, true)
+        if (width === 390 && height === 844) await header.screenshot({ path: testInfo.outputPath(`${theme}-aggregate-header.png`) })
+        await edit.scrollIntoViewIfNeeded()
+        await expect.poll(() => canTouch(edit)).toBe(true)
+        await edit.tap()
+        await expect(header.getByRole('button', { name: '저장', exact: true })).toBeVisible()
+        await expectAggregateHeaderLayout(header, true)
+        const cancel = header.getByRole('button', { name: '취소', exact: true })
+        await cancel.scrollIntoViewIfNeeded()
+        await expect.poll(() => canTouch(cancel)).toBe(true)
+        if (width === 390 && height === 844) await header.screenshot({ path: testInfo.outputPath(`${theme}-aggregate-edit-header.png`) })
+        await cancel.tap()
+        await expect(edit).toBeVisible()
+      }
+      expect(errors).toEqual([])
+    })
 
     test('ledger controls and full amounts are reachable without covered buttons', async ({ page }, testInfo) => {
       const errors = await mock(page)
@@ -180,6 +245,23 @@ for (const [width, height] of sizes) {
     }
   })
 }
+
+test.describe('desktop aggregate header', () => {
+  test.use({ viewport: { width: 1440, height: 900 }, hasTouch: false, isMobile: false })
+  test('aggregate header preserves desktop horizontal layout', async ({ page }) => {
+    const errors = await mock(page)
+    await page.goto('/#household')
+    await expect(page.locator('html')).toHaveAttribute('data-layout-mode', 'desktop')
+    await page.getByRole('button', { name: '달력 가계부', exact: true }).click()
+    const header = page.locator('.household-aggregate-header')
+    await expect(header.getByRole('button', { name: '수정', exact: true })).toBeEnabled()
+    for (const theme of ['default', 'toss']) {
+      await page.evaluate(theme => document.documentElement.dataset.theme = theme, theme)
+      await expectAggregateHeaderLayout(header, false)
+    }
+    expect(errors).toEqual([])
+  })
+})
 
 test.describe('touch layout preference', () => {
   test.use({ hasTouch: true, isMobile: true })

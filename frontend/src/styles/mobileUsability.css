@@ -37,6 +37,41 @@ html body .household-sheet-panel.household-sheet-panel .sheet-table__actions-inn
 html body .household-sheet-panel .household-sheet-table-wrap { overflow-x: auto !important; }
 .household-sheet-panel .sheet-table :is(th:last-child, td.sheet-table__actions) { position: static; box-shadow: none; }
 
+/* Mobile actions already use the full width. Give the title its own row rather
+   than letting the legacy horizontal header squeeze it into a single character. */
+html[data-layout-mode='mobile'] body .app-shell .household-aggregate-header {
+  align-items: stretch !important;
+  flex-direction: column !important;
+  gap: 10px !important;
+}
+html[data-layout-mode='mobile'] body .app-shell .household-aggregate-header > div:first-child {
+  flex: 0 0 auto;
+  min-width: 0;
+  width: 100%;
+}
+html[data-layout-mode='mobile'] body .app-shell .household-aggregate-header h2 {
+  max-width: 100%;
+  overflow: visible;
+  overflow-wrap: normal !important;
+  white-space: normal !important;
+  word-break: keep-all;
+}
+html[data-layout-mode='mobile'] body .app-shell .household-aggregate-header__actions {
+  flex-wrap: wrap !important;
+  gap: 8px !important;
+  justify-content: flex-start !important;
+  margin-left: 0 !important;
+  min-width: 0;
+  max-width: 100%;
+  width: 100%;
+}
+html[data-layout-mode='mobile'] body .app-shell .household-aggregate-header__actions .button {
+  flex: 1 1 120px;
+  min-width: 0;
+  max-width: 100%;
+  width: auto;
+}
+
 @container household-sheet (max-width: 1000px) {
   .household-sheet-panel__header { display: grid !important; gap: 8px !important; margin-bottom: 8px !important; max-height: none !important; overflow: visible !important; }
   .household-sheet-panel__header h2 { margin: 0; font-size: 17px !important; }

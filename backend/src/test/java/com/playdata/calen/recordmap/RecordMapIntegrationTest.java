@@ -1,6 +1,7 @@
 package com.playdata.calen.recordmap;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
@@ -9,11 +10,19 @@ import com.fasterxml.jackson.databind.*;
 import com.playdata.calen.account.repository.AppUserRepository;
 import com.playdata.calen.account.security.AppUserPrincipal;
 import com.playdata.calen.recordmap.repository.RecordMapShareRepository;
+import com.playdata.calen.recordmap.repository.PlacePhotoRepository;
+import com.playdata.calen.recordmap.repository.PlaceVisitRepository;
+import com.playdata.calen.recordmap.application.port.in.WriteRecordMapUseCase;
+import com.playdata.calen.recordmap.application.port.out.RecordMapCatalogPort;
+import com.playdata.calen.recordmap.domain.model.RecordMapWriteData.TravelImport;
+import com.playdata.calen.recordmap.service.RecordMapMediaService;
+import com.playdata.calen.travel.service.TravelMediaStorageService;
 import com.playdata.calen.travel.repository.TravelExpenseRecordRepository;
 import java.time.LocalDateTime;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
 import java.util.*;
+import java.util.concurrent.*;
 import javax.imageio.ImageIO;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -24,6 +33,9 @@ import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.web.servlet.*;
 import org.springframework.test.web.servlet.request.RequestPostProcessor;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.IllegalTransactionStateException;
+import org.springframework.transaction.support.TransactionTemplate;
 
 @SpringBootTest(properties = {
     "app.seed.enabled=true", "app.seed.allow-insecure-default-credentials=true",
@@ -42,6 +54,155 @@ class RecordMapIntegrationTest {
     @Autowired TravelExpenseRecordRepository travelRecords;
     @Autowired com.playdata.calen.recordmap.repository.RecordPlaceRepository places;
     @Autowired com.playdata.calen.recordmap.repository.PlaceCollectionRepository collections;
+    @Autowired PlaceVisitRepository visits;
+    @Autowired PlacePhotoRepository photos;
+    @Autowired WriteRecordMapUseCase writes;
+    @Autowired RecordMapCatalogPort catalog;
+    @Autowired com.playdata.calen.recordmap.application.port.out.RecordMapReadAccessPort readAccess;
+    @Autowired com.playdata.calen.recordmap.application.port.out.RecordMapQueryPort queryPort;
+    @Autowired com.playdata.calen.travel.repository.TravelMediaAssetRepository travelPhotos;
+    @Autowired RecordMapMediaService media;
+    @Autowired TravelMediaStorageService storage;
+    @Autowired PlatformTransactionManager transactions;
+
+    @Test void outputAdapterRejectsCallsWithoutTheUseCaseTransaction() {
+        assertThatThrownBy(() -> catalog.requireOwnedPlace(userId("hana"), 123L))
+            .isInstanceOf(IllegalTransactionStateException.class);
+        assertThatThrownBy(() -> readAccess.owned(userId("hana"), null))
+            .isInstanceOf(IllegalTransactionStateException.class);
+        assertThatThrownBy(() -> queryPort.collection(userId("hana"), 123L))
+            .isInstanceOf(IllegalTransactionStateException.class);
+    }
+
+    @Test @org.springframework.transaction.annotation.Transactional
+    void boundedReadProjectionPreservesImportedPrivacyPhotoUrlsAndVisitLimits() throws Exception {
+        long owner = userId("hana"), collection = collection("hana", "read projection"), other = collection("hana", "private other collection");
+        long recordId = travelMemory();
+        var original = travelRecords.findById(recordId).orElseThrow();
+        original.setMemo("hidden original diary needle");
+        long placeId = writes.importTravel(owner, new TravelImport(recordId, List.of(collection, other)));
+        var place = places.findById(placeId).orElseThrow();
+        List<com.playdata.calen.recordmap.domain.PlaceVisit> visitRows = new ArrayList<>();
+        for (int i = 0; i < 201; i++) {
+            var visit = new com.playdata.calen.recordmap.domain.PlaceVisit();
+            visit.setOwnerId(owner); visit.setPlace(place); visit.setTitle("private visit " + i);
+            visit.setMemo("hidden visit diary needle"); visit.setVisitDate(java.time.LocalDate.of(2026, 10, 13));
+            visitRows.add(visit);
+        }
+        visits.saveAllAndFlush(visitRows);
+        List<com.playdata.calen.travel.domain.TravelMediaAsset> assets = new ArrayList<>();
+        for (int i = 0; i < 1001; i++) {
+            var photo = new com.playdata.calen.travel.domain.TravelMediaAsset();
+            photo.setPlan(original.getPlan()); photo.setRecord(original); photo.setUploadedBy(users.getReferenceById(owner));
+            photo.setOriginalFileName("metadata-only-" + i + ".jpg"); photo.setStoredFileName("metadata-only-" + i + ".jpg");
+            photo.setStoragePath("test-metadata-only/" + i); photo.setContentType("image/jpeg"); photo.setFileSize(1L);
+            photo.setUploadedAt(LocalDateTime.of(2026, 10, 13, 12, 0).plusSeconds(i));
+            assets.add(photo);
+        }
+        travelPhotos.saveAllAndFlush(assets); // Metadata only: no physical files or external storage are created.
+        String hiddenToken = postJson("hana", "/api/record-map/collections/"+collection+"/shares", Map.of("includeVisits", false, "expiresInDays", 7)).path("token").asText();
+        mvc.perform(get("/api/record-map/public/"+hiddenToken+"/map"))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.visits.length()").value(0))
+            .andExpect(jsonPath("$.places[0].visited").value(true)).andExpect(jsonPath("$.places[0].visitCount").value(0))
+            .andExpect(jsonPath("$.places[0].sourceTravelRecordId").doesNotExist())
+            .andExpect(jsonPath("$.places[0].collectionIds.length()").value(1))
+            .andExpect(jsonPath("$.places[0].collectionIds[0]").value(collection));
+        for (String needle : List.of("hidden original diary needle", "hidden visit diary needle")) {
+            mvc.perform(get("/api/record-map/public/"+hiddenToken+"/map").param("q", needle))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.totalPlaces").value(0));
+            mvc.perform(get("/api/record-map/overview").with(as("hana")).param("collectionId", ""+collection).param("q", needle))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.totalPlaces").value(1));
+        }
+        String withVisits = postJson("hana", "/api/record-map/collections/"+collection+"/shares", Map.of("includeVisits", true, "expiresInDays", 7)).path("token").asText();
+        long newestPhoto = assets.get(1000).getId();
+        mvc.perform(get("/api/record-map/public/"+withVisits+"/map"))
+            .andExpect(status().isOk()).andExpect(header().string("Cache-Control", "no-store"))
+            .andExpect(jsonPath("$.visitsLimited").value(true)).andExpect(jsonPath("$.visits.length()").value(201))
+            .andExpect(jsonPath("$.visits[200].id").value("travel:"+recordId))
+            .andExpect(jsonPath("$.visits[200].photos.length()").value(1000))
+            .andExpect(jsonPath("$.visits[200].photos[0].photoUrl").value("/api/record-map/public/"+withVisits+"/travel-photos/"+newestPhoto+"/content"))
+            .andExpect(jsonPath("$.places[0].visitCount").value(202));
+        mvc.perform(get("/api/record-map/map").with(as("hana")).param("collectionId", ""+collection))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.visits[200].photos[0].photoUrl").value("/api/travel/media/"+newestPhoto+"/content"))
+            .andExpect(jsonPath("$.places[0].sourceTravelRecordId").value(recordId));
+    }
+
+    @Test void failedEditCannotReplaceFieldsOrCrossOwnerMemberships() throws Exception {
+        long own = collection("hana", "kept-membership");
+        long foreign = collection("minsu", "forbidden-membership");
+        long place = place("hana", List.of(own));
+        var update = new LinkedHashMap<>(placeBody(List.of(own, foreign)));
+        update.put("name", "must roll back"); update.put("latitude", 35.0);
+        mvc.perform(put("/api/record-map/places/{id}", place).with(as("hana")).with(csrf())
+            .contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(update))).andExpect(status().isNotFound());
+        new TransactionTemplate(transactions).executeWithoutResult(tx -> {
+            var saved = places.findById(place).orElseThrow();
+            assertThat(saved.getName()).isEqualTo("Cafe");
+            assertThat(saved.getLatitude()).isEqualTo(37.55);
+            assertThat(saved.getCollections()).extracting(c -> c.getId()).containsExactly(own);
+        });
+        long visit = visit("hana", place, "2026-10-13");
+        long anotherPlace = place("hana", List.of());
+        mvc.perform(put("/api/record-map/places/{place}/visits/{id}", anotherPlace, visit).with(as("hana")).with(csrf())
+            .contentType(MediaType.APPLICATION_JSON).content("{\"title\":\"not moved\",\"date\":\"2026-10-14\"}"))
+            .andExpect(status().isNotFound());
+        assertThat(visits.findById(visit).orElseThrow().getTitle()).isEqualTo("visit");
+    }
+
+    @Test void deletingVisitKeepsFilesUntilCommitAndRollbackRestoresRows() throws Exception {
+        long place = place("hana", List.of());
+        long visit = visit("hana", place, "2026-10-13");
+        long photo = upload("hana", visit);
+        var source = media.getOwned(userId("hana"), photo);
+        var resource = storage.loadAsResource(source.path());
+        assertThat(resource.exists()).isTrue();
+        var transaction = new TransactionTemplate(transactions);
+        transaction.executeWithoutResult(tx -> {
+            writes.deleteVisit(userId("hana"), visit);
+            visits.flush();
+            assertThat(visits.existsById(visit)).isFalse();
+            assertThat(photos.existsById(photo)).isFalse();
+            assertThat(resource.exists()).isTrue();
+            tx.setRollbackOnly();
+        });
+        assertThat(visits.existsById(visit)).isTrue();
+        assertThat(photos.existsById(photo)).isTrue();
+        assertThat(resource.exists()).isTrue();
+        transaction.executeWithoutResult(tx -> {
+            writes.deleteVisit(userId("hana"), visit);
+            assertThat(resource.exists()).isTrue();
+        });
+        assertThat(visits.existsById(visit)).isFalse();
+        assertThat(photos.existsById(photo)).isFalse();
+        assertThat(resource.exists()).isFalse();
+    }
+
+    @Test void concurrentTravelImportsMergeMembershipsAndReimportPreservesUserEdits() throws Exception {
+        long owner = userId("hana");
+        long record = travelMemory();
+        long a = collection("hana", "concurrent-import-a"), b = collection("hana", "concurrent-import-b");
+        var start = new CountDownLatch(1);
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        long place;
+        try {
+            Future<Long> first = executor.submit(() -> { start.await(); return writes.importTravel(owner, new TravelImport(record, List.of(a))); });
+            Future<Long> second = executor.submit(() -> { start.await(); return writes.importTravel(owner, new TravelImport(record, List.of(b))); });
+            start.countDown();
+            place = first.get(15, TimeUnit.SECONDS);
+            assertThat(second.get(15, TimeUnit.SECONDS)).isEqualTo(place);
+        } finally { executor.shutdownNow(); }
+        new TransactionTemplate(transactions).executeWithoutResult(tx -> {
+            var imported = places.findById(place).orElseThrow();
+            assertThat(imported.getCollections()).extracting(c -> c.getId()).containsExactlyInAnyOrder(a, b);
+            imported.setName("my edited place"); imported.setMemo("my private note"); imported.setLatitude(36.0);
+        });
+        assertThat(writes.importTravel(owner, new TravelImport(record, List.of(a)))).isEqualTo(place);
+        var kept = places.findById(place).orElseThrow();
+        assertThat(kept.getName()).isEqualTo("my edited place");
+        assertThat(kept.getMemo()).isEqualTo("my private note");
+        assertThat(kept.getLatitude()).isEqualTo(36.0);
+        assertThat(travelRecords.findById(record).orElseThrow().getTitle()).isEqualTo("original cafe");
+    }
 
     @Test @org.springframework.transaction.annotation.Transactional
     void searchCoversAllPagesWhileMapAndListHaveIndependentBounds() throws Exception {
@@ -211,6 +372,14 @@ class RecordMapIntegrationTest {
     }
 
     private RequestPostProcessor as(String login) { return user(AppUserPrincipal.from(users.findByLoginId(login).orElseThrow())); }
+    private long userId(String login) { return users.findByLoginId(login).orElseThrow().getId(); }
+    private long travelMemory() throws Exception {
+        long plan = postJson("hana", "/api/travel/plans", Map.of("name", "import source", "destination", "Japan",
+            "startDate", "2026-10-10", "endDate", "2026-10-13", "homeCurrency", "KRW", "headCount", 1,
+            "status", "COMPLETED", "colorHex", "#009E8C")).path("id").asLong();
+        return postJson("hana", "/api/travel/plans/"+plan+"/memories", Map.of("memoryDate", "2026-10-13", "category", "장소",
+            "title", "original cafe", "country", "Japan", "region", "Osaka", "placeName", "Cafe", "latitude", 34.5, "longitude", 135.5)).path("id").asLong();
+    }
     private JsonNode postJson(String login, String path, Object body) throws Exception {
         return json.readTree(mvc.perform(post(path).with(as(login)).with(csrf()).contentType(MediaType.APPLICATION_JSON)
             .content(json.writeValueAsString(body))).andExpect(status().isOk()).andReturn().getResponse().getContentAsString());

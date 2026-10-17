@@ -1,11 +1,11 @@
 package com.playdata.calen.ledger.ai;
 
-final class LedgerAiOutputContract {
+public final class LedgerAiOutputContract {
 
     private LedgerAiOutputContract() {
     }
 
-    static String text() {
+    public static String text() {
         return """
                 JSON only. Return this exact structure:
                 {

@@ -5,6 +5,9 @@ import com.playdata.calen.common.exception.NotFoundException;
 import com.playdata.calen.travel.dto.AdminLoginMapPreviewResponse;
 import com.playdata.calen.travel.dto.AdminLoginMapPreviewUpdateRequest;
 import com.playdata.calen.travel.dto.TravelLoginMapPreviewResponse;
+import com.playdata.calen.travel.application.port.in.TravelMapLinksUseCase;
+import com.playdata.calen.travel.adapter.support.TravelMapLinkMapper;
+import com.playdata.calen.travel.domain.model.TravelMediaData.Download;
 import jakarta.annotation.PostConstruct;
 import java.util.List;
 import java.util.regex.Matcher;
@@ -27,7 +30,7 @@ public class TravelLoginMapPreviewService {
     private static final Pattern SHARE_URL_TOKEN_PATTERN = Pattern.compile("(?:^|[#/])travel-share/([A-Za-z0-9_-]{16,80})(?:$|[/?#])");
 
     private final JdbcTemplate jdbcTemplate;
-    private final TravelService travelService;
+    private final TravelMapLinksUseCase mapLinks;
 
     private volatile boolean enabled;
     private volatile String shareToken;
@@ -75,7 +78,7 @@ public class TravelLoginMapPreviewService {
         if (!suppliedLink.isEmpty()) {
             nextToken = extractShareToken(suppliedLink);
             try {
-                TravelLoginMapPreviewResponse preview = travelService.getTravelMapShareLoginPreview(nextToken);
+                TravelLoginMapPreviewResponse preview = TravelMapLinkMapper.preview(mapLinks.preview(nextToken));
                 if (!preview.enabled()) {
                     throw new BadRequestException("공유 링크에 로그인 미리보기로 표시할 여행 기록이 없습니다.");
                 }
@@ -117,7 +120,7 @@ public class TravelLoginMapPreviewService {
         }
 
         try {
-            return travelService.getTravelMapShareLoginPreview(configuredToken);
+            return TravelMapLinkMapper.preview(mapLinks.preview(configuredToken));
         } catch (RuntimeException exception) {
             // A revoked or stale share must never break sign-in or reveal details in the public response.
             log.warn("Configured login travel map preview is unavailable; hiding preview data.");
@@ -125,12 +128,12 @@ public class TravelLoginMapPreviewService {
         }
     }
 
-    public TravelService.MediaDownload getPublicMarkerThumbnail(int markerNumber) {
+    public Download getPublicMarkerThumbnail(int markerNumber) {
         String configuredToken = shareToken;
         if (!enabled || configuredToken == null || configuredToken.isBlank()) {
             throw new NotFoundException("Login map preview thumbnail not found.");
         }
-        return travelService.getTravelMapShareLoginPreviewMarkerMediaDownload(configuredToken, markerNumber);
+        return mapLinks.previewMedia(configuredToken, markerNumber);
     }
 
     private String extractShareToken(String value) {

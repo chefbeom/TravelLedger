@@ -1,4 +1,4 @@
-﻿# CalenDrive File Versioning Contract
+# CalenDrive File Versioning Contract
 
 Updated: 2026-06-30
 

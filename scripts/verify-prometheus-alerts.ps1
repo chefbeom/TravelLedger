@@ -35,7 +35,7 @@ if ($findings.Count -eq 0) {
     }
 
     $monitoringCompose = Get-Content -LiteralPath $monitoringComposePath -Raw
-    foreach ($snippet in @('alertmanager:', 'prom/alertmanager', '9093:9093', './deploy/oci/monitoring/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro')) {
+    foreach ($snippet in @('alertmanager:', 'prom/alertmanager', '${ALERTMANAGER_BIND_HOST:-127.0.0.1}:${ALERTMANAGER_PORT:-9093}:9093', './deploy/oci/monitoring/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro')) {
         if (-not $monitoringCompose.Contains($snippet)) {
             $findings.Add("Monitoring compose missing Alertmanager snippet: $snippet") | Out-Null
         }
@@ -108,16 +108,16 @@ if ($findings.Count -eq 0) {
 
     foreach ($ruleFile in $ruleFiles) {
         $content = Get-Content -LiteralPath $ruleFile.FullName -Raw
-        $matches = [regex]::Matches($content, '(?m)^\s*-\s*alert:\s*(?<name>[A-Za-z][A-Za-z0-9_]*)\s*$')
-        if ($matches.Count -eq 0) {
+        $alertMatches = [regex]::Matches($content, '(?m)^[ \t]*-[ \t]*alert:[ \t]*(?<name>[A-Za-z][A-Za-z0-9_]*)[ \t]*\r?$')
+        if ($alertMatches.Count -eq 0) {
             $findings.Add("$($ruleFile.FullName): no alert rules found") | Out-Null
             continue
         }
 
-        for ($index = 0; $index -lt $matches.Count; $index += 1) {
-            $match = $matches[$index]
+        for ($index = 0; $index -lt $alertMatches.Count; $index += 1) {
+            $match = $alertMatches[$index]
             $name = $match.Groups['name'].Value
-            $end = if ($index + 1 -lt $matches.Count) { $matches[$index + 1].Index } else { $content.Length }
+            $end = if ($index + 1 -lt $alertMatches.Count) { $alertMatches[$index + 1].Index } else { $content.Length }
             $block = $content.Substring($match.Index, $end - $match.Index)
 
             if ($alertNames.ContainsKey($name)) {

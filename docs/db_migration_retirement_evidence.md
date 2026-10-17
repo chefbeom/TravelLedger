@@ -1,6 +1,6 @@
 # DB Migration Retirement Evidence
 
-Updated: 2026-06-30
+Updated: 2026-10-11
 
 This ledger separates Flyway overlap from permission to delete legacy startup schema updaters. A `*SchemaUpdater` may be removed only after its row is moved from `Pending` to `Ready`, the evidence fields are filled with real staging results, the Ready evidence bundle is concrete, and `scripts/verify-db-migrations.ps1` plus the release checklist are updated in the same change.
 
@@ -29,6 +29,8 @@ Ready rows must include concrete evidence references and cannot keep `TBD` place
 | Pending | `TravelPhotoClusterSchemaUpdater` | `V20260630_011__travel_photo_cluster_tables.sql` | Map photo cluster rebuild, marker detail, cluster detail, and member ordering. | Blocked: staging Flyway startup proof, Flyway history proof, smoke evidence, and rollback/restore evidence are not recorded yet. | TBD |
 | Pending | `TravelRouteSchemaUpdater` | `V20260630_008__travel_route_segment_fields.sql` | Travel route create/edit, route map display, GPX attachment, and GPX readback. | Blocked: staging Flyway startup proof, Flyway history proof, smoke evidence, and rollback/restore evidence are not recorded yet. | TBD |
 | Pending | `HouseholdGoalSchemaUpdater` | `V20260630_014__household_goals.sql` | Household goal create, list, update, and archive. | Blocked: staging Flyway startup proof, Flyway history proof, smoke evidence, and rollback/restore evidence are not recorded yet. | TBD |
+| Pending | `LedgerImageAnalysisRequestSchemaUpdater` | `V20261003_024__image_job_recovery.sql`, `V20261003_027__analysis_job_versions.sql`; base-table migration still required | `ledger_image_analysis_requests` create, recovery, optimistic version update, and history reads. | Blocked: add a Flyway bootstrap for the base table, then record staging startup, history, smoke, and rollback evidence. | TBD |
+| Pending | `TravelMapShareLinkSchemaUpdater` | `travel_map_share_links`: No matching Flyway migration exists yet; create one before retirement. | Travel map share-link create, list, update, revoke, and token-based read. | Blocked: add a Flyway table migration, then record Flyway-only startup, share-flow smoke, and rollback evidence. | TBD |
 
 ## Retirement procedure
 
@@ -42,4 +44,4 @@ Ready rows must include concrete evidence references and cannot keep `TBD` place
 
 ## Current status
 
-All seven legacy updaters have Flyway overlap, but none are marked `Ready` here. Deleting any updater before real staging evidence is recorded should be treated as a release blocker.
+Nine legacy updaters are tracked; some have partial Flyway overlap and none are marked `Ready` here. Deleting any updater before real staging evidence is recorded should be treated as a release blocker.

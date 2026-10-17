@@ -1,5 +1,12 @@
 package com.playdata.calen.ledger.ocr;
 
+import com.playdata.calen.ledger.application.port.in.StoreLedgerImageInputUseCase;
+import com.playdata.calen.ledger.domain.model.LedgerImageStorageData;
+import com.playdata.calen.ledger.application.port.out.LedgerImageStoragePort;
+
+import com.playdata.calen.ledger.application.port.out.LedgerImageExtractionPort;
+import com.playdata.calen.ledger.adapter.in.image.MultipartLedgerImageContent;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -23,9 +30,9 @@ import com.playdata.calen.ledger.domain.EntryType;
 import com.playdata.calen.ledger.domain.LedgerImageAnalysisRequest;
 import com.playdata.calen.ledger.dto.LedgerOcrEntrySuggestionResponse;
 import com.playdata.calen.ledger.dto.LedgerOcrAnalyzeResponse;
-import com.playdata.calen.ledger.ocr.LedgerOcrRemoteClient.RemoteAnalyzeResponse;
-import com.playdata.calen.ledger.ocr.LedgerOcrRemoteClient.RemoteLineItem;
-import com.playdata.calen.ledger.ocr.LedgerOcrRemoteClient.RemoteParsedResult;
+import com.playdata.calen.ledger.domain.model.LedgerImageData.ImageExtraction;
+import com.playdata.calen.ledger.domain.model.LedgerImageData.ImageLineItem;
+import com.playdata.calen.ledger.domain.model.LedgerImageData.ParsedImageEntry;
 import com.playdata.calen.ledger.repository.CategoryDetailRepository;
 import com.playdata.calen.ledger.repository.CategoryGroupRepository;
 import com.playdata.calen.ledger.repository.LedgerImageAnalysisRequestRepository;
@@ -64,7 +71,7 @@ class LedgerOcrServiceTest {
     private AppUserService appUserService;
 
     @Mock
-    private LedgerOcrRemoteClient remoteClient;
+    private LedgerImageExtractionPort remoteClient;
 
     @Mock
     private LedgerImageAnalysisRequestRepository imageAnalysisRequestRepository;
@@ -101,7 +108,10 @@ class LedgerOcrServiceTest {
                 categoryGroupRepository,
                 categoryDetailRepository,
                 ledgerEntryRepository,
-                new ObjectMapper().findAndRegisterModules()
+                new ObjectMapper().findAndRegisterModules(),
+                new com.playdata.calen.ledger.application.service.FinalizeLedgerAiJobService(
+                        new com.playdata.calen.ledger.adapter.out.persistence.JpaLedgerAiJobStateAdapter(null, imageAnalysisRequestRepository, null)),
+                org.mockito.Mockito.mock(StoreLedgerImageInputUseCase.class)
         );
     }
 
@@ -169,12 +179,12 @@ class LedgerOcrServiceTest {
                 });
         when(imageAnalysisRequestRepository.findByIdAndOwnerId(42L, USER_ID))
                 .thenAnswer(invocation -> Optional.of(persisted.get()));
-        LedgerOcrImageStorageService storage = org.mockito.Mockito.mock(LedgerOcrImageStorageService.class);
+        LedgerImageStoragePort storage = org.mockito.Mockito.mock(LedgerImageStoragePort.class);
         when(storage.supportsStorage()).thenReturn(true);
         when(storage.store(eq(USER_ID), eq(42L), any())).thenReturn(
-                new LedgerOcrImageStorageService.StoredImage("image-key", java.time.LocalDateTime.now()));
+                new LedgerImageStorageData.StoredImage("image-key", java.time.LocalDateTime.now()));
         CapturingTaskExecutor executor = new CapturingTaskExecutor();
-        ReflectionTestUtils.setField(service, "imageStorageService", storage);
+        installStorage(storage);
         ReflectionTestUtils.setField(service, "ledgerOcrTaskExecutor", executor);
         service.startAnalyze(USER_ID, validJpeg("receipt.jpg"), "AUTO", "stored-1", "", false);
         verify(storage, never()).load(anyString(), any(), any());
@@ -183,7 +193,7 @@ class LedgerOcrServiceTest {
         history = saved.getValue();
         when(imageAnalysisRequestRepository.findByIdAndOwnerId(42L, USER_ID)).thenReturn(Optional.of(history));
         when(storage.load("image-key", history.getFileName(), history.getContentType())).thenReturn(
-                new LedgerOcrImageStorageService.StoredImageContent(new byte[]{1, 2}, "image/jpeg", "receipt.jpg"));
+                new LedgerImageStorageData.StoredImageContent(new byte[]{1, 2}, "image/jpeg", "receipt.jpg"));
         when(remoteClient.analyze(any(), eq("AUTO"), any())).thenThrow(new BadRequestException("test failure"));
         executor.queuedTasks.get(0).run();
         verify(storage).load("image-key", history.getFileName(), history.getContentType());
@@ -359,14 +369,14 @@ class LedgerOcrServiceTest {
                 .thenReturn(Optional.of(hobby));
         when(categoryDetailRepository.findFirstByGroupIdAndNameIgnoreCaseOrderByIdAsc(10L, "콘텐츠"))
                 .thenReturn(Optional.of(content));
-        List<RemoteParsedResult> entries = List.of(
+        List<ParsedImageEntry> entries = List.of(
                 naverPayEntry("네이버페이 : 웹툰·시리즈 쿠키 59개", "결제완료 / 7. 5. 15:15 결제", "웹툰·시리즈 쿠키 59개", "4900", LocalDate.of(2026, 7, 5), LocalTime.of(15, 15)),
                 naverPayEntry("네이버페이 : 메가MGC커피 모바일금액권 1만원권", "구매확정완료 / 7. 4. 18:32 결제", "메가MGC커피 모바일금액권 1만원권", "8730", LocalDate.of(2026, 7, 4), LocalTime.of(18, 32)),
                 naverPayEntry("네이버페이 : 메가MGC커피 모바일금액권 3만원권", "구매확정완료 / 7. 4. 18:32 결제", "메가MGC커피 모바일금액권 3만원권", "27000", LocalDate.of(2026, 7, 4), LocalTime.of(18, 32)),
                 naverPayEntry("네이버페이 : 노브랜드버거 모바일금액권 1만원권", "구매확정완료 / 7. 4. 18:29 결제", "노브랜드버거 모바일금액권 1만원권", "7300", LocalDate.of(2026, 7, 4), LocalTime.of(18, 29))
         );
-        when(remoteClient.analyze(file, "PAYMENT_CAPTURE", null))
-                .thenReturn(new RemoteAnalyzeResponse(true, null, "PAYMENT_CAPTURE", "네이버페이 결제내역 4건", entries.get(0), entries, Map.of()));
+        when(remoteClient.analyze(new MultipartLedgerImageContent(file), "PAYMENT_CAPTURE", null))
+                .thenReturn(new ImageExtraction(true, null, "PAYMENT_CAPTURE", "네이버페이 결제내역 4건", entries.get(0), entries, Map.of()));
 
         List<LedgerOcrEntrySuggestionResponse> suggestions = service.analyze(USER_ID, file, "PAYMENT_CAPTURE", "naver-pay-4", null)
                 .suggestedEntries();
@@ -410,7 +420,7 @@ class LedgerOcrServiceTest {
         String itemName = "\uBA54\uAC00MGC\uCEE4\uD53C \uBAA8\uBC14\uC77C\uCFE0\uD3F0 1\uB9CC\uC6D0\uAD8C";
         String noisyTitle = "[EVENT] " + itemName + " \uAD6C\uB9E4\uD655\uC815\uC804\uC6D4";
         String memo = "\uAD6C\uB9E4\uD655\uC815\uC644\uB8CC / 7. 4. 18:32 \uACB0\uC81C";
-        RemoteParsedResult parsed = new RemoteParsedResult(
+        ParsedImageEntry parsed = new ParsedImageEntry(
                 LocalDate.of(2026, 7, 4),
                 LocalTime.of(18, 32),
                 EntryType.EXPENSE,
@@ -422,12 +432,12 @@ class LedgerOcrServiceTest {
                 "",
                 "",
                 "",
-                List.of(new RemoteLineItem(itemName, BigDecimal.ONE, "", new BigDecimal("8730"))),
+                List.of(new ImageLineItem(itemName, BigDecimal.ONE, "", new BigDecimal("8730"))),
                 0.82,
                 List.of()
         );
-        when(remoteClient.analyze(file, "PAYMENT_CAPTURE", prompt))
-                .thenReturn(new RemoteAnalyzeResponse(true, null, "PAYMENT_CAPTURE", itemName + " 8,730\uC6D0", parsed, List.of(parsed), Map.of()));
+        when(remoteClient.analyze(new MultipartLedgerImageContent(file), "PAYMENT_CAPTURE", prompt))
+                .thenReturn(new ImageExtraction(true, null, "PAYMENT_CAPTURE", itemName + " 8,730\uC6D0", parsed, List.of(parsed), Map.of()));
 
         LedgerOcrEntrySuggestionResponse suggestion = service.analyze(USER_ID, file, "PAYMENT_CAPTURE", "naver-pay-prompt", prompt)
                 .suggestedEntries()
@@ -455,7 +465,7 @@ class LedgerOcrServiceTest {
                 .thenReturn(List.of(uncategorized));
         when(categoryDetailRepository.findFirstByGroupIdAndNameIgnoreCaseOrderByIdAsc(99L, "정기결제"))
                 .thenReturn(Optional.empty());
-        RemoteParsedResult parsed = new RemoteParsedResult(
+        ParsedImageEntry parsed = new ParsedImageEntry(
                 LocalDate.of(2026, 7, 5),
                 LocalTime.of(15, 15),
                 EntryType.EXPENSE,
@@ -467,12 +477,12 @@ class LedgerOcrServiceTest {
                 "구독",
                 "정기결제",
                 "",
-                List.of(new RemoteLineItem("웹툰·시리즈 쿠키 59개", BigDecimal.ONE, "건", new BigDecimal("4900"))),
+                List.of(new ImageLineItem("웹툰·시리즈 쿠키 59개", BigDecimal.ONE, "건", new BigDecimal("4900"))),
                 0.82,
                 List.of()
         );
-        when(remoteClient.analyze(file, "PAYMENT_CAPTURE", null))
-                .thenReturn(new RemoteAnalyzeResponse(true, null, "PAYMENT_CAPTURE", "네이버페이 결제내역", parsed, List.of(parsed), Map.of()));
+        when(remoteClient.analyze(new MultipartLedgerImageContent(file), "PAYMENT_CAPTURE", null))
+                .thenReturn(new ImageExtraction(true, null, "PAYMENT_CAPTURE", "네이버페이 결제내역", parsed, List.of(parsed), Map.of()));
 
         LedgerOcrEntrySuggestionResponse suggestion = service.analyze(USER_ID, file, "PAYMENT_CAPTURE", "uncategorized", null)
                 .suggestedEntries()
@@ -501,13 +511,13 @@ class LedgerOcrServiceTest {
         );
         when(ledgerEntryRepository.findRecentEntriesForOcrStyle(eq(USER_ID), any()))
                 .thenReturn(List.of(existingExample));
-        when(remoteClient.analyze(eq(file), eq("PAYMENT_CAPTURE"), any()))
-                .thenReturn(new RemoteAnalyzeResponse(true, null, "PAYMENT_CAPTURE", "", null, List.of(), Map.of()));
+        when(remoteClient.analyze(eq(new MultipartLedgerImageContent(file)), eq("PAYMENT_CAPTURE"), any()))
+                .thenReturn(new ImageExtraction(true, null, "PAYMENT_CAPTURE", "", null, List.of(), Map.of()));
 
         service.analyze(USER_ID, file, "PAYMENT_CAPTURE", "style-on", "쿠팡 캡처입니다.", true);
 
         ArgumentCaptor<String> promptCaptor = ArgumentCaptor.forClass(String.class);
-        verify(remoteClient).analyze(eq(file), eq("PAYMENT_CAPTURE"), promptCaptor.capture());
+        verify(remoteClient).analyze(eq(new MultipartLedgerImageContent(file)), eq("PAYMENT_CAPTURE"), promptCaptor.capture());
         assertThat(promptCaptor.getValue())
                 .contains("쿠팡 캡처입니다.")
                 .contains("현재 입력데이터 기반 데이터 추출 보정")
@@ -537,13 +547,13 @@ class LedgerOcrServiceTest {
                 .thenReturn(List.of(game));
         when(categoryDetailRepository.findAllByGroupIdAndActiveTrueOrderByDisplayOrderAscIdAsc(33L))
                 .thenReturn(List.of());
-        when(remoteClient.analyze(eq(file), eq("PAYMENT_CAPTURE"), any()))
-                .thenReturn(new RemoteAnalyzeResponse(true, null, "PAYMENT_CAPTURE", "", null, List.of(), Map.of()));
+        when(remoteClient.analyze(eq(new MultipartLedgerImageContent(file)), eq("PAYMENT_CAPTURE"), any()))
+                .thenReturn(new ImageExtraction(true, null, "PAYMENT_CAPTURE", "", null, List.of(), Map.of()));
 
         service.analyze(USER_ID, file, "PAYMENT_CAPTURE", "category-criteria", "네이버페이 캡처입니다.", false);
 
         ArgumentCaptor<String> promptCaptor = ArgumentCaptor.forClass(String.class);
-        verify(remoteClient).analyze(eq(file), eq("PAYMENT_CAPTURE"), promptCaptor.capture());
+        verify(remoteClient).analyze(eq(new MultipartLedgerImageContent(file)), eq("PAYMENT_CAPTURE"), promptCaptor.capture());
         assertThat(promptCaptor.getValue())
                 .contains("네이버페이 캡처입니다.")
                 .contains("현재 사용자 분류 기준")
@@ -559,13 +569,13 @@ class LedgerOcrServiceTest {
         stubUser();
         MockMultipartFile file = validJpeg("style-context-disabled.jpg");
         stubHistoryPersistence(105L);
-        when(remoteClient.analyze(file, "PAYMENT_CAPTURE", "사용자 요청"))
-                .thenReturn(new RemoteAnalyzeResponse(true, null, "PAYMENT_CAPTURE", "", null, List.of(), Map.of()));
+        when(remoteClient.analyze(new MultipartLedgerImageContent(file), "PAYMENT_CAPTURE", "사용자 요청"))
+                .thenReturn(new ImageExtraction(true, null, "PAYMENT_CAPTURE", "", null, List.of(), Map.of()));
 
         service.analyze(USER_ID, file, "PAYMENT_CAPTURE", "style-off", "사용자 요청", false);
 
         verify(ledgerEntryRepository, never()).findRecentEntriesForOcrStyle(any(), any());
-        verify(remoteClient).analyze(file, "PAYMENT_CAPTURE", "사용자 요청");
+        verify(remoteClient).analyze(new MultipartLedgerImageContent(file), "PAYMENT_CAPTURE", "사용자 요청");
     }
 
     @Test
@@ -580,7 +590,7 @@ class LedgerOcrServiceTest {
         String itemName = "비바스 내추럴99% 시카 천연샴푸 1000g_2개";
         String memo = itemName
                 + " / 주문일자: 2026-04-23 / 상품금액(부가): 25,020원 / 주문처(판매자): 해두엔 / 구매확정";
-        RemoteParsedResult parsed = new RemoteParsedResult(
+        ParsedImageEntry parsed = new ParsedImageEntry(
                 LocalDate.of(2026, 4, 23),
                 LocalTime.of(15, 34),
                 EntryType.EXPENSE,
@@ -592,12 +602,12 @@ class LedgerOcrServiceTest {
                 "",
                 "",
                 "",
-                List.of(new RemoteLineItem(itemName, new BigDecimal("2"), "개", new BigDecimal("25020"))),
+                List.of(new ImageLineItem(itemName, new BigDecimal("2"), "개", new BigDecimal("25020"))),
                 0.77,
                 List.of()
         );
-        when(remoteClient.analyze(file, "PAYMENT_CAPTURE", null))
-                .thenReturn(new RemoteAnalyzeResponse(true, null, "PAYMENT_CAPTURE", memo, parsed, List.of(parsed), Map.of()));
+        when(remoteClient.analyze(new MultipartLedgerImageContent(file), "PAYMENT_CAPTURE", null))
+                .thenReturn(new ImageExtraction(true, null, "PAYMENT_CAPTURE", memo, parsed, List.of(parsed), Map.of()));
 
         LedgerOcrEntrySuggestionResponse suggestion = service.analyze(USER_ID, file, "PAYMENT_CAPTURE", "order-history", null)
                 .suggestedEntries()
@@ -618,7 +628,7 @@ class LedgerOcrServiceTest {
 
         String itemName = "비바스 내추럴99% 시카 천연샴푸 1000g_2개";
         String memo = itemName + " x2개(25,020원) / 주문일자: 2026-04-23 / 주문처(판매자): 해두엔 / 구매확정";
-        RemoteParsedResult parsed = new RemoteParsedResult(
+        ParsedImageEntry parsed = new ParsedImageEntry(
                 LocalDate.of(2026, 4, 23),
                 LocalTime.of(15, 34),
                 EntryType.EXPENSE,
@@ -630,12 +640,12 @@ class LedgerOcrServiceTest {
                 "",
                 "",
                 "",
-                List.of(new RemoteLineItem(itemName, new BigDecimal("2"), "개", new BigDecimal("25020"))),
+                List.of(new ImageLineItem(itemName, new BigDecimal("2"), "개", new BigDecimal("25020"))),
                 0.77,
                 List.of()
         );
-        when(remoteClient.analyze(file, "PAYMENT_CAPTURE", null))
-                .thenReturn(new RemoteAnalyzeResponse(true, null, "PAYMENT_CAPTURE", memo, parsed, List.of(parsed), Map.of()));
+        when(remoteClient.analyze(new MultipartLedgerImageContent(file), "PAYMENT_CAPTURE", null))
+                .thenReturn(new ImageExtraction(true, null, "PAYMENT_CAPTURE", memo, parsed, List.of(parsed), Map.of()));
 
         LedgerOcrEntrySuggestionResponse suggestion = service.analyze(USER_ID, file, "PAYMENT_CAPTURE", "order-history-unlabeled", null)
                 .suggestedEntries()
@@ -658,7 +668,7 @@ class LedgerOcrServiceTest {
         String secondItem = "초강력 무선 에어건 Aero X10 130000rpm";
         String memo = firstItem + " / 상품금액(부가): 25,020원 / 주문처(판매자): 해두엔 / 구매확정\n"
                 + secondItem + " / 상품금액(부가): 37,370원 / 주문처(판매자): 은큰 / 구매확정";
-        RemoteParsedResult parsed = new RemoteParsedResult(
+        ParsedImageEntry parsed = new ParsedImageEntry(
                 LocalDate.of(2026, 1, 23),
                 null,
                 EntryType.EXPENSE,
@@ -674,8 +684,8 @@ class LedgerOcrServiceTest {
                 0.71,
                 List.of()
         );
-        when(remoteClient.analyze(file, "PAYMENT_CAPTURE", null))
-                .thenReturn(new RemoteAnalyzeResponse(true, null, "PAYMENT_CAPTURE", memo, parsed, List.of(parsed), Map.of()));
+        when(remoteClient.analyze(new MultipartLedgerImageContent(file), "PAYMENT_CAPTURE", null))
+                .thenReturn(new ImageExtraction(true, null, "PAYMENT_CAPTURE", memo, parsed, List.of(parsed), Map.of()));
 
         LedgerOcrEntrySuggestionResponse suggestion = service.analyze(USER_ID, file, "PAYMENT_CAPTURE", "order-history-multiple-rows", null)
                 .suggestedEntries()
@@ -692,7 +702,7 @@ class LedgerOcrServiceTest {
         CategoryGroup uncategorized = categoryGroup(20L, user, UNCATEGORIZED, EntryType.EXPENSE, true);
         when(categoryGroupRepository.findAllByOwnerIdAndEntryTypeOrderByDisplayOrderAscIdAsc(USER_ID, EntryType.EXPENSE))
                 .thenReturn(List.of(uncategorized));
-        RemoteParsedResult parsed = new RemoteParsedResult(
+        ParsedImageEntry parsed = new ParsedImageEntry(
                 LocalDate.of(2026, 6, 24),
                 LocalTime.of(15, 15),
                 EntryType.EXPENSE,
@@ -704,12 +714,12 @@ class LedgerOcrServiceTest {
                 "",
                 "",
                 "",
-                List.of(new RemoteLineItem("Lost Ark 80,000 Royal Crystal", BigDecimal.ONE, "item", new BigDecimal("80000"))),
+                List.of(new ImageLineItem("Lost Ark 80,000 Royal Crystal", BigDecimal.ONE, "item", new BigDecimal("80000"))),
                 0.9,
                 List.of()
         );
-        when(remoteClient.analyze(file, "RECEIPT", null))
-                .thenReturn(new RemoteAnalyzeResponse(true, null, "RECEIPT", "SALES SLIP ITEM Lost Ark 80,000 Royal Crystal", parsed, List.of(parsed), Map.of()));
+        when(remoteClient.analyze(new MultipartLedgerImageContent(file), "RECEIPT", null))
+                .thenReturn(new ImageExtraction(true, null, "RECEIPT", "SALES SLIP ITEM Lost Ark 80,000 Royal Crystal", parsed, List.of(parsed), Map.of()));
 
         LedgerOcrEntrySuggestionResponse suggestion = service.analyze(USER_ID, file, "RECEIPT", "sales-slip-item", null)
                 .suggestedEntry();
@@ -720,7 +730,7 @@ class LedgerOcrServiceTest {
         assertThat(suggestion.entryTime()).isEqualTo(LocalTime.of(15, 15));
         assertThat(suggestion.memo()).contains("Lost Ark 80,000 Royal Crystal", "80,000");
     }
-    private RemoteParsedResult naverPayEntry(
+    private ParsedImageEntry naverPayEntry(
             String title,
             String memo,
             String itemName,
@@ -728,7 +738,7 @@ class LedgerOcrServiceTest {
             LocalDate date,
             LocalTime time
     ) {
-        return new RemoteParsedResult(
+        return new ParsedImageEntry(
                 date,
                 time,
                 EntryType.EXPENSE,
@@ -740,7 +750,7 @@ class LedgerOcrServiceTest {
                 "취미",
                 "콘텐츠",
                 "",
-                List.of(new RemoteLineItem(itemName, BigDecimal.ONE, "건", new BigDecimal(amount))),
+                List.of(new ImageLineItem(itemName, BigDecimal.ONE, "건", new BigDecimal(amount))),
                 0.9,
                 List.of()
         );
@@ -825,6 +835,49 @@ class LedgerOcrServiceTest {
             queuedTasks.add(task);
         }
     }
+    @Test void anotherOwnersImageIsNeverLoaded() {
+        stubUser(); var storage=org.mockito.Mockito.mock(LedgerImageStoragePort.class); installStorage(storage);
+        assertThatThrownBy(() -> service.getHistoryImage(USER_ID,42L)).isInstanceOf(BadRequestException.class);
+        org.mockito.Mockito.verifyNoInteractions(storage);
+    }
+
+    @Test void processingHistoryCannotDeleteItsImageOrRow() {
+        var user=stubUser(); var history=new LedgerImageAnalysisRequest(); history.setId(42L); history.setOwner(user);
+        history.setImageObjectKey("fixture/input");
+        when(imageAnalysisRequestRepository.findByIdAndOwnerId(42L,USER_ID)).thenReturn(Optional.of(history));
+        var storage=org.mockito.Mockito.mock(LedgerImageStoragePort.class); installStorage(storage);
+        assertThatThrownBy(() -> service.deleteHistory(USER_ID,42L)).isInstanceOf(BadRequestException.class).hasMessageContaining("Cancel it first");
+        org.mockito.Mockito.verifyNoInteractions(storage); verify(imageAnalysisRequestRepository,never()).delete(any(LedgerImageAnalysisRequest.class));
+    }
+
+    @Test void completedHistoryKeepsStorageBeforeDatabaseDeletionOrdering() {
+        var user=stubUser(); var history=new LedgerImageAnalysisRequest(); history.setId(42L); history.setOwner(user);
+        history.setStatus(com.playdata.calen.ledger.domain.LedgerImageAnalysisStatus.COMPLETED); history.setImageObjectKey("fixture/input");
+        when(imageAnalysisRequestRepository.findByIdAndOwnerId(42L,USER_ID)).thenReturn(Optional.of(history));
+        var storage=org.mockito.Mockito.mock(LedgerImageStoragePort.class); installStorage(storage);
+        assertThat(service.deleteHistory(USER_ID,42L).deletedCount()).isEqualTo(1);
+        var order=org.mockito.Mockito.inOrder(storage,imageAnalysisRequestRepository);
+        order.verify(storage).delete("fixture/input"); order.verify(imageAnalysisRequestRepository).delete(history);
+    }
+
+    @Test void storageDeleteFailureDoesNotDeleteTheHistoryRow() {
+        var user=stubUser(); var history=new LedgerImageAnalysisRequest(); history.setId(42L); history.setOwner(user);
+        history.setStatus(com.playdata.calen.ledger.domain.LedgerImageAnalysisStatus.COMPLETED); history.setImageObjectKey("fixture/input");
+        when(imageAnalysisRequestRepository.findByIdAndOwnerId(42L,USER_ID)).thenReturn(Optional.of(history));
+        var storage=org.mockito.Mockito.mock(LedgerImageStoragePort.class); installStorage(storage);
+        var failure=new com.playdata.calen.common.exception.ServiceUnavailableException("fixture storage unavailable");
+        org.mockito.Mockito.doThrow(failure).when(storage).delete("fixture/input");
+        assertThatThrownBy(() -> service.deleteHistory(USER_ID,42L)).isSameAs(failure);
+        verify(imageAnalysisRequestRepository,never()).delete(any(LedgerImageAnalysisRequest.class));
+    }
+
+    private void installStorage(LedgerImageStoragePort storage) {
+        ReflectionTestUtils.setField(service,"imageStorageService",storage);
+        ReflectionTestUtils.setField(service,"imageInputWriter",
+                new com.playdata.calen.ledger.application.service.StoreLedgerImageInputService(storage,
+                        new com.playdata.calen.ledger.adapter.out.persistence.JpaLedgerImageInputReferenceAdapter(imageAnalysisRequestRepository)));
+    }
+
     private AppUser stubUser() {
         AppUser user = new AppUser();
         user.setId(USER_ID);

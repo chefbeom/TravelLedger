@@ -1,4 +1,4 @@
-﻿Set-StrictMode -Version Latest
+Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $manifestPath = 'frontend/public/manifest.webmanifest'
@@ -112,7 +112,7 @@ Require-Snippets 'Accessibility/mobile checklist' $accessibility @(
     'Drive/share/file upload',
     'Maps and travel media',
     'AI/OCR result review',
-    'Focus returns to the trigger',
+    'return-focus evidence',
     '360x640',
     '44x44 CSS px'
 )
@@ -145,7 +145,9 @@ $calendarWorkspace = Read-TextIfExists $calendarWorkspacePath
 Require-Snippets 'CalendarWorkspace mobile capture' $calendarWorkspace @(
     'receiptFileInputRef',
     'handleReceiptFileChange',
-    'accept="image/*" capture="environment"'
+    'receiptCameraInputRef',
+    'accept="image/*"',
+    'capture="environment"'
 )
 
 $familyAlbumWorkspace = Read-TextIfExists $familyAlbumWorkspacePath
@@ -185,10 +187,7 @@ Require-Snippets 'CI workflow' $ci @(
     'pwa-mobile-baseline:',
     './scripts/verify-pwa-mobile-baseline.ps1',
     '- pwa-mobile-baseline',
-    '[pwa-mobile-baseline]="${{ needs[''pwa-mobile-baseline',
-    'IndexedDB draft tray',
-    'manual retry/delete',
-    'offline drafts never cache API data''].result }}"'
+    '[pwa-mobile-baseline]="${{ needs[''pwa-mobile-baseline''].result }}"'
 )
 
 if ($findings.Count -gt 0) {

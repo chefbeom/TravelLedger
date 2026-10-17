@@ -4992,13 +4992,6 @@ async function bulkUpdateSearchEntries(payload) {
   }
 }
 
-async function deleteEntryFromSearch(entry) {
-  if (!window.confirm(`'${entry.title}' 내역을 휴지통으로 이동할까요?`)) {
-    return
-  }
-  await removeEntry(entry)
-}
-
 async function restoreEntryFromTrash(entry) {
   isSubmitting.value = true
   activeSubmit.value = 'entry-restore'
@@ -5039,6 +5032,13 @@ async function emptyTrash() {
 }
 
 async function removeEntry(entry) {
+  if (!entry?.id || isSubmitting.value) {
+    return
+  }
+  if (!window.confirm(`'${entry.title || '선택한 거래'}' 내역을 삭제하고 휴지통으로 이동할까요?`)) {
+    return
+  }
+
   isSubmitting.value = true
   activeSubmit.value = 'entry-delete'
   setFeedback()
@@ -5728,7 +5728,7 @@ async function activatePayment(paymentId) {
       @move-search-entry="moveEntryFromSearch"
       @save-search-entry="saveEntryFromSearch"
       @bulk-update-search-entries="bulkUpdateSearchEntries"
-      @delete-search-entry="deleteEntryFromSearch"
+      @delete-search-entry="removeEntry"
       @restore-trash-entry="restoreEntryFromTrash"
       @empty-trash="emptyTrash"
       @request-ai-analysis="requestAiAnalysis"

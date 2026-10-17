@@ -26,8 +26,12 @@ class TravelControllerTest {
     void groupSharedThumbnailIsPrivateAndDoesNotBypassShareAuthorization() {
         var sharing = mock(RecordSharingService.class);
         var storage = mock(TravelMediaStorageService.class);
-        var controller = new TravelController(mock(TravelService.class), mock(TravelLoginMapPreviewService.class),
-                storage, mock(TravelReverseGeocodeService.class), sharing);
+        var controller = new TravelController(
+                mock(TravelLoginMapPreviewService.class),
+                new com.playdata.calen.travel.adapter.in.web.TravelMediaHttpResponses(storage),
+                mock(TravelReverseGeocodeService.class),
+                sharing
+        );
         var user = new AppUserPrincipal(2L, "test-receiver", "Receiver", "", AppUserRole.USER, true);
         var download = new TravelService.MediaDownload("test-only/photo.jpg", "image/jpeg", "photo.jpg");
         when(sharing.getTravelMedia(2L, 9L, 7L)).thenReturn(download);
@@ -45,13 +49,12 @@ class TravelControllerTest {
         TravelLoginMapPreviewService travelLoginMapPreviewService = mock(TravelLoginMapPreviewService.class);
         TravelReverseGeocodeService travelReverseGeocodeService = mock(TravelReverseGeocodeService.class);
         TravelController controller = new TravelController(
-                travelService,
                 travelLoginMapPreviewService,
-                travelMediaStorageService,
+                new com.playdata.calen.travel.adapter.in.web.TravelMediaHttpResponses(travelMediaStorageService),
                 travelReverseGeocodeService,
                 mock(RecordSharingService.class)
         );
-        TravelService.MediaDownload download = new TravelService.MediaDownload(
+        com.playdata.calen.travel.domain.model.TravelMediaData.Download download = new com.playdata.calen.travel.domain.model.TravelMediaData.Download(
                 "travel-media/1/2/photo.jpg",
                 "image/jpeg",
                 "photo.jpg"
@@ -79,13 +82,12 @@ class TravelControllerTest {
         TravelLoginMapPreviewService travelLoginMapPreviewService = mock(TravelLoginMapPreviewService.class);
         TravelReverseGeocodeService travelReverseGeocodeService = mock(TravelReverseGeocodeService.class);
         TravelController controller = new TravelController(
-                travelService,
                 travelLoginMapPreviewService,
-                travelMediaStorageService,
+                new com.playdata.calen.travel.adapter.in.web.TravelMediaHttpResponses(travelMediaStorageService),
                 travelReverseGeocodeService,
                 mock(RecordSharingService.class)
         );
-        TravelService.MediaDownload download = new TravelService.MediaDownload(
+        com.playdata.calen.travel.domain.model.TravelMediaData.Download download = new com.playdata.calen.travel.domain.model.TravelMediaData.Download(
                 "travel-media/1/2/photo.jpg",
                 "image/jpeg",
                 "photo.jpg"
@@ -106,9 +108,8 @@ class TravelControllerTest {
         TravelLoginMapPreviewService travelLoginMapPreviewService = mock(TravelLoginMapPreviewService.class);
         TravelReverseGeocodeService travelReverseGeocodeService = mock(TravelReverseGeocodeService.class);
         TravelController controller = new TravelController(
-                travelService,
                 travelLoginMapPreviewService,
-                travelMediaStorageService,
+                new com.playdata.calen.travel.adapter.in.web.TravelMediaHttpResponses(travelMediaStorageService),
                 travelReverseGeocodeService,
                 mock(RecordSharingService.class)
         );
@@ -120,18 +121,22 @@ class TravelControllerTest {
                 AppUserRole.USER,
                 true
         );
-        TravelService.MediaDownload download = new TravelService.MediaDownload(
+        com.playdata.calen.travel.domain.model.TravelMediaData.Download download = new com.playdata.calen.travel.domain.model.TravelMediaData.Download(
                 "travel-media/1/2/photo.jpg",
                 "image/jpeg",
                 "photo.jpg"
         );
         ByteArrayResource originalResource = new ByteArrayResource("image-bytes".getBytes(StandardCharsets.UTF_8));
 
-        when(travelService.getMediaDownload(1L, 7L)).thenReturn(download);
+        var ownedMedia = mock(com.playdata.calen.travel.application.port.in.ManageOwnedTravelMediaUseCase.class);
+        var ownedController = new com.playdata.calen.travel.adapter.in.web.OwnedTravelMediaController(ownedMedia,
+                new com.playdata.calen.travel.adapter.in.web.TravelMediaHttpResponses(travelMediaStorageService));
+        when(ownedMedia.download(1L, 7L)).thenReturn(new com.playdata.calen.travel.domain.model.TravelMediaData.Download(
+                download.storagePath(), download.contentType(), download.fileName()));
         when(travelMediaStorageService.loadThumbnail(download.storagePath(), download.contentType(), 480))
                 .thenReturn(new TravelMediaStorageService.PreparedThumbnail(originalResource, "image/jpeg"));
 
-        ResponseEntity<?> response = controller.downloadMedia(currentUser, 7L, true, 480);
+        ResponseEntity<?> response = ownedController.download(currentUser, 7L, true, 480);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getHeaders().getContentType()).isEqualTo(MediaType.IMAGE_JPEG);
@@ -139,7 +144,7 @@ class TravelControllerTest {
         assertThat(response.getBody()).isInstanceOf(ByteArrayResource.class);
         assertThat(((ByteArrayResource) response.getBody()).getByteArray())
                 .isEqualTo("image-bytes".getBytes(StandardCharsets.UTF_8));
-        verify(travelService).getMediaDownload(1L, 7L);
+        verify(ownedMedia).download(1L, 7L);
         verify(travelMediaStorageService).loadThumbnail(download.storagePath(), download.contentType(), 480);
     }
 }

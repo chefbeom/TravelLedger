@@ -1,5 +1,7 @@
 package com.playdata.calen.ledger.ai;
 
+import com.playdata.calen.ledger.domain.model.LedgerAnalysisData.Result;
+
 import com.playdata.calen.ledger.dto.LedgerAiAnalysisReportResponse;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -7,12 +9,12 @@ import org.springframework.stereotype.Component;
 
 @Component
 @RequiredArgsConstructor
-class LedgerAiAnalysisReportMerger {
+public class LedgerAiAnalysisReportMerger {
 
     private final LedgerAiAnalysisTextSanitizer aiText;
 
-    LedgerAiAnalysisReportResponse merge(LedgerAiAnalysisReportResponse fallback, LedgerAiRemoteResponse remote) {
-        LedgerAiAnalysisReportResponse remoteReport = remote.report();
+    public LedgerAiAnalysisReportResponse merge(LedgerAiAnalysisReportResponse fallback, Result remote) {
+        var remoteReport = remote.report();
         return new LedgerAiAnalysisReportResponse(
                 firstNonBlank(remoteReport == null ? null : remoteReport.keySummary(), firstNonBlank(remote.summary(), fallback.keySummary())),
                 firstNonBlank(remoteReport == null ? null : remoteReport.fullReport(), fallback.fullReport()),

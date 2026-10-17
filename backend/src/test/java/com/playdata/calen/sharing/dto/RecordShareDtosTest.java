@@ -16,7 +16,18 @@ class RecordShareDtosTest {
                 {"groupId":5,"kind":"LEDGER","sourceId":100,"recipientIds":[2]}
                 """, RecordShareDtos.Create.class);
         assertThat(request.shareMemo()).isNull();
+        assertThat(request.ledgerOverride()).isNull();
         assertThat(request.recipientIds()).containsExactly(2L);
+    }
+
+    @Test void validatesEditedLedgerFieldsRecursivelyWithoutRequiringAnOverrideForLegacyRequests() {
+        var invalidDraft = new com.playdata.calen.ledger.dto.LedgerEntryRequest(null,null," ",null,java.math.BigDecimal.ZERO,
+                null,null,null,null,null,null,null,null,null);
+        try (var factory = Validation.buildDefaultValidatorFactory()) {
+            var violations = factory.getValidator().validate(new RecordShareDtos.Create(5L,RecordShareKind.LEDGER,100L,List.of(2L),null,invalidDraft));
+            assertThat(violations).extracting(item -> item.getPropertyPath().toString())
+                    .contains("ledgerOverride.entryDate","ledgerOverride.title","ledgerOverride.amount","ledgerOverride.entryType","ledgerOverride.categoryGroupId");
+        }
     }
 
     @Test void validatesOptionalMemoAndRejectsOverTheLimit() throws Exception {

@@ -4,7 +4,7 @@ import com.playdata.calen.account.security.AppUserPrincipal;
 import com.playdata.calen.ledger.dto.LedgerImageAnalysisHistoryResponse;
 import com.playdata.calen.ledger.dto.LedgerImageAnalysisHistoryDeleteResponse;
 import com.playdata.calen.ledger.dto.LedgerOcrAnalyzeResponse;
-import com.playdata.calen.ledger.ocr.LedgerOcrImageStorageService;
+import com.playdata.calen.ledger.domain.model.LedgerImageStorageData;
 import com.playdata.calen.ledger.ocr.LedgerOcrService;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
@@ -88,7 +88,7 @@ public class LedgerOcrController {
             @AuthenticationPrincipal AppUserPrincipal currentUser,
             @PathVariable Long historyId
     ) {
-        LedgerOcrImageStorageService.StoredImageContent image = ledgerOcrService.getHistoryImage(currentUser.userId(), historyId);
+        LedgerImageStorageData.StoredImageContent image = ledgerOcrService.getHistoryImage(currentUser.userId(), historyId);
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(parseMediaType(image.contentType()));
         headers.setContentDisposition(ContentDisposition.inline()

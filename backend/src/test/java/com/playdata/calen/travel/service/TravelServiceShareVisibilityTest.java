@@ -1,12 +1,14 @@
 package com.playdata.calen.travel.service;
 
+import com.playdata.calen.travel.domain.policy.TravelPhotoClusterPolicy;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.playdata.calen.account.domain.AppUser;
 import com.playdata.calen.account.service.AppUserService;
 import com.playdata.calen.common.cache.RedisCacheService;
 import com.playdata.calen.common.exception.BadRequestException;
 import com.playdata.calen.common.exception.NotFoundException;
-import com.playdata.calen.ledger.service.LedgerTravelBridgeService;
+import com.playdata.calen.ledger.application.port.in.ReflectTravelLedgerUseCase;
 import com.playdata.calen.travel.domain.TravelPlan;
 import com.playdata.calen.travel.domain.TravelPlanShare;
 import com.playdata.calen.travel.domain.TravelPlanStatus;
@@ -23,8 +25,6 @@ import com.playdata.calen.travel.repository.TravelBudgetItemRepository;
 import com.playdata.calen.travel.repository.TravelExpenseRecordRepository;
 import com.playdata.calen.travel.repository.TravelMediaAssetRepository;
 import com.playdata.calen.travel.repository.TravelMapShareLinkRepository;
-import com.playdata.calen.travel.repository.TravelPhotoClusterMemberRepository;
-import com.playdata.calen.travel.repository.TravelPhotoClusterRepository;
 import com.playdata.calen.travel.repository.TravelPlanRepository;
 import com.playdata.calen.travel.repository.TravelPlanShareRepository;
 import com.playdata.calen.travel.repository.TravelRouteSegmentRepository;
@@ -71,8 +71,6 @@ class TravelServiceShareVisibilityTest {
         travelExpenseRecordRepository = mock(TravelExpenseRecordRepository.class);
         travelMediaAssetRepository = mock(TravelMediaAssetRepository.class);
         travelMapShareLinkRepository = mock(TravelMapShareLinkRepository.class);
-        TravelPhotoClusterRepository travelPhotoClusterRepository = mock(TravelPhotoClusterRepository.class);
-        TravelPhotoClusterMemberRepository travelPhotoClusterMemberRepository = mock(TravelPhotoClusterMemberRepository.class);
         travelRouteSegmentRepository = mock(TravelRouteSegmentRepository.class);
         travelPlanShareRepository = mock(TravelPlanShareRepository.class);
         TravelShareGroupRepository travelShareGroupRepository = mock(TravelShareGroupRepository.class);
@@ -81,37 +79,42 @@ class TravelServiceShareVisibilityTest {
         TravelMediaStorageService travelMediaStorageService = mock(TravelMediaStorageService.class);
         TravelDriveLinkService travelDriveLinkService = mock(TravelDriveLinkService.class);
         TravelPhotoGpsMetadataService travelPhotoGpsMetadataService = mock(TravelPhotoGpsMetadataService.class);
-        TravelPhotoClusterService travelPhotoClusterService = mock(TravelPhotoClusterService.class);
+        TravelPhotoClusterPolicy travelPhotoClusterPolicy = mock(TravelPhotoClusterPolicy.class);
         TravelMyMapPhotoClusterSnapshotService travelMyMapPhotoClusterSnapshotService = mock(TravelMyMapPhotoClusterSnapshotService.class);
         TravelPublicMediaTokenService travelPublicMediaTokenService = mock(TravelPublicMediaTokenService.class);
         RedisCacheService redisCacheService = mock(RedisCacheService.class);
-        LedgerTravelBridgeService ledgerTravelBridgeService = mock(LedgerTravelBridgeService.class);
+        ReflectTravelLedgerUseCase ledgerTravelBridgeService = mock(ReflectTravelLedgerUseCase.class);
         DataSource dataSource = mock(DataSource.class);
 
         service = new TravelService(
-                appUserService,
-                travelPlanRepository,
-                travelBudgetItemRepository,
-                travelExpenseRecordRepository,
-                travelMediaAssetRepository,
-                travelMapShareLinkRepository,
-                travelPhotoClusterRepository,
-                travelPhotoClusterMemberRepository,
-                travelRouteSegmentRepository,
-                travelPlanShareRepository,
-                travelShareGroupRepository,
-                travelShareGroupMemberRepository,
-                exchangeRateService,
-                travelMediaStorageService,
-                travelDriveLinkService,
-                travelPhotoGpsMetadataService,
-                travelPhotoClusterService,
-                travelMyMapPhotoClusterSnapshotService,
-                travelPublicMediaTokenService,
-                redisCacheService,
+                mock(com.playdata.calen.travel.application.port.in.ReadTravelReferenceUseCase.class),
                 ledgerTravelBridgeService,
-                new ObjectMapper(),
-                dataSource
+                mock(com.playdata.calen.travel.application.port.in.WriteTravelBudgetUseCase.class),
+                mock(com.playdata.calen.travel.application.port.in.WriteTravelPlanUseCase.class),
+                mock(com.playdata.calen.travel.application.port.in.WriteTravelRecordUseCase.class),
+                mock(com.playdata.calen.travel.application.port.in.ManageTravelPhotoClustersUseCase.class),
+                mock(com.playdata.calen.travel.application.port.in.WriteTravelRouteUseCase.class),
+                mock(com.playdata.calen.travel.application.port.in.ManageTravelRouteFilesUseCase.class),
+                mock(com.playdata.calen.travel.application.port.in.ManageOwnedTravelMediaUseCase.class),
+                new com.playdata.calen.travel.application.service.ManageTravelSharingService(
+                        new com.playdata.calen.travel.adapter.out.persistence.JpaTravelSharingAdapter(appUserService,
+                                mock(com.playdata.calen.account.repository.AppUserRepository.class), travelPlanRepository, travelPlanShareRepository,
+                                travelShareGroupRepository, travelShareGroupMemberRepository),
+                        new com.playdata.calen.travel.adapter.out.cache.TravelSummaryCache(redisCacheService)),
+                new com.playdata.calen.travel.application.service.ReadTravelExhibitsService(
+                        new com.playdata.calen.travel.adapter.out.persistence.JpaTravelExhibitReadAdapter(appUserService, travelPlanRepository,
+                                travelPlanShareRepository, travelBudgetItemRepository, travelExpenseRecordRepository, travelMediaAssetRepository,
+                                travelRouteSegmentRepository, new com.playdata.calen.travel.adapter.out.route.TravelRoutePayloadAdapter(new ObjectMapper(), dataSource, travelMediaStorageService)),
+                        new com.playdata.calen.travel.adapter.out.security.TravelPublicMediaTokenAdapter(travelPublicMediaTokenService)),
+                mock(com.playdata.calen.travel.application.port.in.ReadOwnedTravelMapUseCase.class),
+                new com.playdata.calen.travel.application.service.TravelMapLinksService(
+                        new com.playdata.calen.travel.adapter.out.persistence.JpaTravelMapLinkAdapter(appUserService,
+                                mock(com.playdata.calen.account.repository.AppUserRepository.class), travelMapShareLinkRepository,
+                                travelPlanRepository, travelExpenseRecordRepository, travelMediaAssetRepository, travelRouteSegmentRepository, new ObjectMapper()),
+                        mock(com.playdata.calen.travel.application.port.out.TravelMapLinkRuntimePort.class),
+                        new com.playdata.calen.travel.adapter.out.route.TravelRoutePayloadAdapter(new ObjectMapper(), dataSource, travelMediaStorageService), travelPhotoClusterPolicy),
+                mock(com.playdata.calen.travel.application.port.in.ReadTravelAtlasUseCase.class),
+                mock(com.playdata.calen.travel.application.port.in.ReadOwnedTravelPlansUseCase.class)
         );
     }
 
@@ -119,6 +122,7 @@ class TravelServiceShareVisibilityTest {
     void rejectsPublicSharingForIncompletePlan() {
         TravelPlan plan = plan(10L, 7L, TravelPlanStatus.PLANNED);
         when(travelPlanRepository.findByIdAndOwnerId(10L, 7L)).thenReturn(Optional.of(plan));
+        when(travelPlanRepository.getReferenceById(10L)).thenReturn(plan);
 
         assertThrows(BadRequestException.class, () -> service.updatePlanPublicShare(7L, 10L, true));
         assertFalse(Boolean.TRUE.equals(plan.getPublicShared()));
@@ -193,6 +197,7 @@ class TravelServiceShareVisibilityTest {
         TravelPlan plan = plan(10L, 7L, TravelPlanStatus.PLANNED);
         plan.setPublicShared(true);
         when(travelPlanRepository.findByIdAndOwnerId(10L, 7L)).thenReturn(Optional.of(plan));
+        when(travelPlanRepository.getReferenceById(10L)).thenReturn(plan);
 
         service.updatePlanPublicShare(7L, 10L, false);
 

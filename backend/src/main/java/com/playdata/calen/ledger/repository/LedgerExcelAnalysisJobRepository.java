@@ -12,6 +12,24 @@ import org.springframework.data.repository.query.Param;
 public interface LedgerExcelAnalysisJobRepository extends JpaRepository<LedgerExcelAnalysisJob, String> {
     Optional<LedgerExcelAnalysisJob> findByIdAndOwnerId(String id, Long ownerId);
     long countByOwnerIdAndStatus(Long ownerId, String status);
+    @org.springframework.transaction.annotation.Transactional(propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW)
+    @org.springframework.data.jpa.repository.Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+            update LedgerExcelAnalysisJob j
+            set j.status = 'COMPLETED', j.version = j.version + 1, j.resultJson = :result,
+                j.inputJson = null, j.errorMessage = null
+            where j.id = :id and j.ownerId = :ownerId and j.status = 'PROCESSING' and j.version = :version
+            """)
+    int completeProcessing(@Param("id") String id, @Param("ownerId") Long ownerId, @Param("version") Long version, @Param("result") String result);
+
+    @org.springframework.transaction.annotation.Transactional(propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW)
+    @org.springframework.data.jpa.repository.Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+            update LedgerExcelAnalysisJob j
+            set j.status = 'FAILED', j.version = j.version + 1, j.inputJson = null, j.errorMessage = :error
+            where j.id = :id and j.ownerId = :ownerId and j.status = 'PROCESSING' and j.version = :version
+            """)
+    int failProcessing(@Param("id") String id, @Param("ownerId") Long ownerId, @Param("version") Long version, @Param("error") String error);
     @Query("""
             select j from LedgerExcelAnalysisJob j
             where j.status = :status and j.createdAt < :before

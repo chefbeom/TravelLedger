@@ -6,11 +6,12 @@ import com.playdata.calen.account.domain.AppUser;
 import com.playdata.calen.account.service.AppUserService;
 import com.playdata.calen.common.exception.BadRequestException;
 import com.playdata.calen.common.exception.NotFoundException;
-import com.playdata.calen.ledger.domain.LedgerEntry;
 import com.playdata.calen.ledger.dto.LedgerEntryRequest;
 import com.playdata.calen.ledger.dto.LedgerEntryResponse;
 import com.playdata.calen.ledger.service.LedgerEntryService;
 import com.playdata.calen.sharing.domain.*;
+import com.playdata.calen.sharing.adapter.support.RecordShareContractMapper;
+import com.playdata.calen.sharing.application.port.in.CreateRecordShareUseCase;
 import com.playdata.calen.sharing.dto.RecordShareDtos;
 import com.playdata.calen.sharing.repository.RecordShareRepository;
 import com.playdata.calen.travel.domain.*;
@@ -18,8 +19,6 @@ import com.playdata.calen.travel.dto.TravelSharedExhibitDetailResponse;
 import com.playdata.calen.travel.repository.TravelShareGroupMemberRepository;
 import com.playdata.calen.travel.repository.TravelShareGroupRepository;
 import com.playdata.calen.travel.service.TravelService;
-import jakarta.persistence.EntityManager;
-import jakarta.persistence.LockModeType;
 import java.time.LocalDateTime;
 import java.util.*;
 import lombok.RequiredArgsConstructor;
@@ -37,7 +36,7 @@ public class RecordSharingService {
     private final LedgerEntryService ledger;
     private final TravelService travel;
     private final ObjectMapper mapper;
-    private final EntityManager entityManager;
+    private final CreateRecordShareUseCase creation;
 
     public List<RecordShareDtos.Group> getGroups(Long userId) {
         users.getRequiredUser(userId);
@@ -61,55 +60,10 @@ public class RecordSharingService {
 
     @Transactional
     public List<RecordShareDtos.Response> create(Long userId, RecordShareDtos.Create request) {
-        String shareMemo = normalizeShareMemo(request.shareMemo());
-        AppUser sender = users.getRequiredUser(userId);
-        TravelShareGroup group = requireGroup(request.groupId(), userId);
-        // Serialize requests for the same source, including requests sent through different groups.
-        Object source = request.kind() == RecordShareKind.LEDGER
-                ? entityManager.find(LedgerEntry.class, request.sourceId(), LockModeType.PESSIMISTIC_WRITE)
-                : entityManager.find(TravelPlan.class, request.sourceId(), LockModeType.PESSIMISTIC_WRITE);
-        String title;
-        String snapshot = null;
-        if (source instanceof LedgerEntry entry && entry.getOwner().getId().equals(userId) && entry.getDeletedAt() == null) {
-            var response = ledger.getEntryForSharing(userId, request.sourceId());
-            title = response.title();
-            try { snapshot = mapper.writeValueAsString(response); }
-            catch (JsonProcessingException ex) { throw new IllegalStateException("Unable to prepare record share."); }
-        } else if (source instanceof TravelPlan plan && plan.getOwner().getId().equals(userId)) {
-            title = plan.getName();
-        } else {
-            throw new NotFoundException("공유할 본인 기록을 찾을 수 없습니다.");
-        }
-        List<RecordShareDtos.Response> result = new ArrayList<>();
-        for (Long recipientId : new LinkedHashSet<>(request.recipientIds())) {
-            if (userId.equals(recipientId)) throw new BadRequestException("본인에게 기록을 공유할 수 없습니다.");
-            requireGroup(group.getId(), recipientId);
-            AppUser recipient = users.getRequiredUser(recipientId);
-            // An approval locks this same row. Read its latest committed state
-            // under the lock so a concurrent re-share cannot undo acceptance.
-            RecordShare share = shares.findLockedByKindAndSourceIdAndRecipientId(request.kind(), request.sourceId(), recipientId).orElseGet(RecordShare::new);
-            boolean importedLedger = request.kind() == RecordShareKind.LEDGER && share.getStatus() == RecordShareStatus.ACCEPTED;
-            boolean existingGroupRequest = share.getId() != null && Objects.equals(share.getGroupId(), group.getId())
-                    && (share.getStatus() == RecordShareStatus.PENDING || share.getStatus() == RecordShareStatus.ACCEPTED);
-            if (importedLedger || existingGroupRequest) {
-                result.add(toResponse(share));
-                continue;
-            }
-            share.setGroupId(group.getId());
-            share.setGroupName(group.getName());
-            share.setKind(request.kind());
-            share.setSourceId(request.sourceId());
-            share.setSender(sender);
-            share.setRecipient(recipient);
-            share.setTitle(title);
-            share.setSnapshotJson(snapshot);
-            share.setShareMemo(shareMemo);
-            share.setStatus(RecordShareStatus.PENDING);
-            share.setCreatedAt(LocalDateTime.now());
-            share.setRespondedAt(null);
-            result.add(toResponse(shares.save(share)));
-        }
-        return result;
+        // Compatibility entry point for existing internal callers. HTTP creation
+        // calls the same input port directly; business rules have only one owner.
+        return creation.create(userId, RecordShareContractMapper.command(request)).stream()
+                .map(RecordShareContractMapper::response).toList();
     }
 
     public RecordShareDtos.Page list(Long userId, RecordShareKind kind, boolean sent, RecordShareStatus status, int page, int size) {
@@ -223,11 +177,6 @@ public class RecordSharingService {
         share.setRespondedAt(LocalDateTime.now());
     }
     private NotFoundException notFound() { return new NotFoundException("접근 가능한 기록 공유 요청을 찾을 수 없습니다."); }
-    private String normalizeShareMemo(String memo) {
-        if (memo == null) return null;
-        if (memo.length() > 500) throw new BadRequestException("공유 메모는 500자까지 입력할 수 있습니다.");
-        return memo.isBlank() ? null : memo.strip();
-    }
     private RecordShareDtos.Response toResponse(RecordShare share) {
         LedgerEntryResponse snapshot = null;
         if (share.getSnapshotJson() != null) {

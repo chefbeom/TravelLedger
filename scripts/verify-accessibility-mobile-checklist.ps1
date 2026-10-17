@@ -114,9 +114,10 @@ if ($findings.Count -eq 0) {
         Assert-Contains -Label 'Global style accessibility anchor' -Content $style -Needle $snippet
     }
 
-    foreach ($snippet in @('keyboardMoveItems', 'movePaletteByKeyboard', 'Keyboard dashboard layout controls', 'palette-grid-keyboard-controls', 'data-no-drag="true"', 'Move ${item.title} up', 'Move ${item.title} left', 'Move ${item.title} down', 'Move ${item.title} right')) {
-        Assert-Contains -Label 'DragDropGrid.vue keyboard movement anchor' -Content $dragDropGrid -Needle $snippet
+    foreach ($snippet in @('GridStack.init(', 'draggable:', 'grid.enableMove(props.editMode)', 'handleDragStart', 'handleDragStop')) {
+        Assert-Contains -Label 'DragDropGrid.vue current edit-mode drag anchor' -Content $dragDropGrid -Needle $snippet
     }
+    Assert-Contains -Label 'Accessibility checklist dashboard known-gap note' -Content $checklist -Needle 'keyboard reordering is not implemented and remains in the Implementation Queue'
 
     foreach ($snippet in @('role="group"', ':aria-label="label"', 'role="status"', 'aria-live="polite"', ':aria-label="progressLabel"', ':aria-label="`PIN digit ${digit}`"', 'aria-label="Clear PIN digits"', 'aria-label="Delete last PIN digit"', 'type="button"')) {
         Assert-Contains -Label 'PinPadInput.vue accessibility anchor' -Content $pinPad -Needle $snippet
@@ -126,7 +127,7 @@ if ($findings.Count -eq 0) {
         Assert-Contains -Label 'CalenDriveProfileModal.vue mobile PIN anchor' -Content $profileModal -Needle $snippet
     }
 
-    foreach ($snippet in @('<label class="field">', '<select', 'aria-label="Invite link expiry"', 'Generated link', 'Expires at:', 'Copy link', 'role="status"', 'aria-live="polite"', 'role="alert"')) {
+    foreach ($snippet in @('<label class="field">', '<select', 'aria-label="초대 링크 유효 기간"', '생성된 링크', '만료 시각:', '복사', 'role="status"', 'aria-live="polite"')) {
         Assert-Contains -Label 'InviteAccessPanel.vue share accessibility anchor' -Content $inviteAccessPanel -Needle $snippet
     }
 

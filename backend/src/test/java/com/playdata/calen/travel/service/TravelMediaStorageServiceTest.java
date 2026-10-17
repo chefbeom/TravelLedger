@@ -218,6 +218,45 @@ class TravelMediaStorageServiceTest {
     }
 
 
+    @Test
+    void completePresignedGpxRejectsForeignOwnerPlanRouteAndAmbiguousKeysBeforeStat() throws Exception {
+        MinioClient client=mock(MinioClient.class);
+        TravelMediaStorageService service=createPresignedStorageService(client);
+        for(String key:List.of("travel-media/99/2/routes/7/route.gpx","travel-media/1/99/routes/7/route.gpx",
+                "travel-media/1/2/routes/99/route.gpx","travel-media/1/2/route.gpx","travel-media/1/2/routes/7/../route.gpx",
+                "travel-media/1/2/routes/7//route.gpx"," travel-media/1/2/routes/7/route.gpx","travel-media/1/2/routes/7/./route.gpx")) {
+            assertThatThrownBy(()->service.completePresignedRouteGpxUpload(1L,2L,7L,
+                    new TravelMediaStorageService.CompletedRouteGpxUpload(key,"route.gpx","application/gpx+xml",1)))
+                    .isInstanceOf(com.playdata.calen.common.exception.BadRequestException.class).hasMessage("Invalid uploaded file path.");
+        }
+        verify(client,never()).statObject(org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    void abortPresignedGpxKeepsOwnerScopeAndExistingBestEffortSequentialOrder() throws Exception {
+        MinioClient client=mock(MinioClient.class);
+        TravelMediaStorageService service=createPresignedStorageService(client);
+        service.abortPresignedRouteGpxUploads(1L,2L,7L,null);
+        assertThatThrownBy(()->service.abortPresignedRouteGpxUploads(1L,2L,7L,List.of(
+                "travel-media/1/2/routes/7/valid.gpx","travel-media/2/2/routes/7/foreign.gpx")))
+                .hasMessage("Invalid uploaded file path.");
+        verify(client).removeObject(org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    void gpxPortBridgeKeepsValidationBeforeLazyReadAndExistingIoErrorTranslation() throws Exception {
+        TravelMediaStorageService service=createLocalStorageService();
+        var adapter=new com.playdata.calen.travel.adapter.out.storage.TravelRouteUploadAdapter(service);
+        var input=mock(com.playdata.calen.travel.application.port.out.TravelRouteUploadPort.Upload.class);
+        when(input.fileName()).thenReturn("not-gpx.png");when(input.size()).thenReturn(1L);
+        when(input.bytes()).thenThrow(new java.io.IOException("synthetic read failure"));
+        assertThatThrownBy(()->adapter.store(1L,2L,7L,input)).hasMessage("Only .gpx files are allowed.");
+        verify(input,never()).bytes();
+        when(input.fileName()).thenReturn("route.gpx");
+        assertThatThrownBy(()->adapter.store(1L,2L,7L,input)).hasMessage("Failed to read the uploaded file.");
+        verify(input).bytes();
+    }
+
     private TravelMediaStorageService createLocalStorageService() {
         @SuppressWarnings("unchecked")
         ObjectProvider<MinioClient> minioProvider = mock(ObjectProvider.class);

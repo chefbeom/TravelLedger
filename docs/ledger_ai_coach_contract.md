@@ -43,6 +43,7 @@ The coach should move beyond a monthly summary by rendering four review cards pl
 | --- | --- |
 | `LedgerAiAnalysisReportResponse` | Keeps `abnormalSpending`, `subscriptions`, `fixedExpenses`, `improvementActions`, and `comparisonFocus` as safe list fields. |
 | `LedgerAiAnalysisService` | Merges remote/fallback report fields into highlights, warnings, recommendations, unusual spending, fixed-cost insights, next-period forecast, and habit assessment. |
+| `LedgerLocalReportPolicy` / `LedgerLocalReportMapper` | Builds deterministic local fallback/grouping from the full caller dataset, not the capped provider request. Preserves existing wording, rounding, raw-key display and recurring top-ten rules; the DTO boundary keeps stored v2 JSON unchanged. |
 | `LedgerAiRemoteResponseValidator` | Rejects secret-like output, prompt-injection echoes, empty usable output, and mutation claims before accepted analysis is stored. |
 | `LedgerAiAnalysisServiceTest` | Covers provider payload boundary, duplicate suppression, safe failure history, and advice-only output contract. |
 | `LedgerAiRemoteResponseValidatorTest` | Covers invalid provider output and unsafe output rejection. |

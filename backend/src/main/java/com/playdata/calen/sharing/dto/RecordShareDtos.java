@@ -1,9 +1,11 @@
 package com.playdata.calen.sharing.dto;
 
 import com.playdata.calen.ledger.dto.LedgerEntryResponse;
+import com.playdata.calen.ledger.dto.LedgerEntryRequest;
 import com.playdata.calen.sharing.domain.RecordShareKind;
 import com.playdata.calen.sharing.domain.RecordShareStatus;
 import jakarta.validation.constraints.*;
+import jakarta.validation.Valid;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -12,9 +14,13 @@ public final class RecordShareDtos {
     public record Create(@NotNull @Positive Long groupId, @NotNull RecordShareKind kind,
                          @NotNull @Positive Long sourceId,
                          @NotEmpty @Size(max = 50) List<@NotNull @Positive Long> recipientIds,
-                         @Size(max = 500, message = "공유 메모는 500자까지 입력할 수 있습니다.") String shareMemo) {
+                         @Size(max = 500, message = "공유 메모는 500자까지 입력할 수 있습니다.") String shareMemo,
+                         @Valid LedgerEntryRequest ledgerOverride) {
         public Create(Long groupId, RecordShareKind kind, Long sourceId, List<Long> recipientIds) {
-            this(groupId, kind, sourceId, recipientIds, null);
+            this(groupId, kind, sourceId, recipientIds, null, null);
+        }
+        public Create(Long groupId, RecordShareKind kind, Long sourceId, List<Long> recipientIds, String shareMemo) {
+            this(groupId, kind, sourceId, recipientIds, shareMemo, null);
         }
     }
     public record Member(Long userId, String loginId, String displayName, boolean self) {}

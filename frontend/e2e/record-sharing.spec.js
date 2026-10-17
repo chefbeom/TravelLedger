@@ -4,7 +4,9 @@ const snapshot = { id: 100, entryDate: '2026-10-03', title: '공유한 저녁 �
 const group = { id: 5, name: '가족', ownerId: 1, members: [{ userId: 1, loginId: 'test-sender', displayName: '보낸 사람', self: false }, { userId: 2, loginId: 'test-receiver', displayName: '받는 사람', self: true }] }
 
 async function fixture(page, kind = 'LEDGER', root = false, options = {}) {
-  const state = { status: 'PENDING', writes: [], reads: [], groups: options.groups ?? [group], layouts: {}, entries: options.entries ?? [], shareMemo: options.shareMemo ?? null }
+  const state = { status: 'PENDING', writes: [], reads: [], groups: options.groups ?? [group], layouts: {}, entries: options.entries ?? [], shareMemo: options.shareMemo ?? null,
+    sharedSnapshot:{...snapshot}, categories:options.categories ?? [{ id: 101, name: '식비', entryType: 'EXPENSE', active: true, details: [{ id: 102, name: '외식', active: true }] }],
+    payments:options.payments ?? [{ id: 103, name: '가족 카드', active: true }] }
   await page.route(/^https?:\/\/(?!127\.0\.0\.1|localhost)/, (route) => route.abort())
   await page.route('**/api/**', async (route) => {
     const req = route.request()
@@ -20,9 +22,14 @@ async function fixture(page, kind = 'LEDGER', root = false, options = {}) {
       if (path === '/api/record-shares') {
         if (options.failShareOnce && state.writes.filter((item) => item.path === path).length === 1) return route.fulfill({ status: 503, json: { message: '일시적으로 공유할 수 없습니다. 다시 시도해 주세요.' } })
         state.shareMemo = req.postDataJSON().shareMemo ?? null
+        if (req.postDataJSON().ledgerOverride) {
+          const edited=req.postDataJSON().ledgerOverride, category=state.categories.find(item=>item.id===edited.categoryGroupId)
+          state.sharedSnapshot={...snapshot,...edited,categoryGroupName:category?.name,categoryDetailName:category?.details?.find(item=>item.id===edited.categoryDetailId)?.name,
+            paymentMethodName:edited.entryType==='INCOME'?'-':state.payments.find(item=>item.id===edited.paymentMethodId)?.name}
+        }
       }
     } else state.reads.push(path)
-    const item = { id: 9, groupId: 5, groupName: '가족', kind, sourceId: 100, senderId: 1, senderName: '보낸 사람', recipientId: 2, recipientName: '받는 사람', title: kind === 'LEDGER' ? snapshot.title : '함께한 여행', ledger: kind === 'LEDGER' ? snapshot : null, status: state.status, createdAt: '2026-10-03T09:00:00', importedLedgerEntryId: state.status === 'ACCEPTED' && kind === 'LEDGER' ? 300 : null, shareMemo: state.shareMemo }
+    const item = { id: 9, groupId: 5, groupName: '가족', kind, sourceId: 100, senderId: 1, senderName: '보낸 사람', recipientId: 2, recipientName: '받는 사람', title: kind === 'LEDGER' ? state.sharedSnapshot.title : '함께한 여행', ledger: kind === 'LEDGER' ? state.sharedSnapshot : null, status: state.status, createdAt: '2026-10-03T09:00:00', importedLedgerEntryId: state.status === 'ACCEPTED' && kind === 'LEDGER' ? 300 : null, shareMemo: state.shareMemo }
     let body = {}
     if (path === '/api/auth/me') return route.fulfill(root ? { json: { id: 2, loginId: 'test-receiver', displayName: '받는 사람', active: true, admin: false } } : { status: 401, json: { message: 'test session' } })
     if (path === '/api/auth/csrf') body = { token: 'test-only-csrf' }
@@ -40,8 +47,8 @@ async function fixture(page, kind = 'LEDGER', root = false, options = {}) {
       const items = url.searchParams.get('status') && url.searchParams.get('status') !== state.status ? [] : [item]
       body = { items, page: 0, size: 10, totalElements: items.length, totalPages: items.length ? 1 : 0 }
     }
-    else if (path.startsWith('/api/categories')) body = [{ id: 101, name: '식비', entryType: 'EXPENSE', active: true, details: [{ id: 102, name: '외식', active: true }] }]
-    else if (path.startsWith('/api/payment-methods')) body = [{ id: 103, name: '가족 카드', active: true }]
+    else if (path.startsWith('/api/categories')) body = state.categories
+    else if (path.startsWith('/api/payment-methods')) body = state.payments
     else if (path === '/api/entries' && req.method() === 'POST') {
       body = { ...req.postDataJSON(), id: 200 + state.entries.length, categoryGroupName: '식비', categoryDetailName: '외식', paymentMethodName: '가족 카드' }
       state.entries = [...state.entries, body]
@@ -131,13 +138,14 @@ test('share dialog sends only selected members and excludes self', async ({ page
   expect(state.writes[0].body).toEqual({ kind: 'LEDGER', sourceId: 100, groupId: 5, recipientIds: [1], shareMemo: null })
 })
 
-async function openShareDialog(page) {
-  await page.evaluate(async () => {
+async function openShareDialog(page, source = snapshot, kind = 'LEDGER') {
+  await page.evaluate(async ({source,kind}) => {
     const { createApp } = await import('/node_modules/.vite/deps/vue.js')
     const { default: Component } = await import('/src/components/RecordShareDialog.vue')
     const host = document.createElement('div'); document.body.appendChild(host)
-    createApp(Component, { kind: 'LEDGER', source: { id: 100, title: '공유한 저녁 식사' } }).mount(host)
-  })
+    window.senderShareSource=source
+    const app=createApp(Component, { kind, source, onClose:()=>app.unmount() }); app.mount(host)
+  }, {source,kind})
   return page.getByRole('dialog', { name: '기록 공유', exact: true })
 }
 
@@ -351,4 +359,102 @@ test('transaction sheet keeps edit, share and delete reachable beside long memos
   await expect(share.getByText('0 / 2명 선택', { exact: true })).toBeVisible()
   await expect(share.getByRole('button', { name: '0명에게 공유 요청', exact: true })).toBeDisabled()
   expect(state.writes).toHaveLength(0)
+})
+
+const senderCategories=[{id:10,name:'식비',entryType:'EXPENSE',active:true,details:[{id:11,name:'외식',active:true}]},
+  {id:20,name:'수입',entryType:'INCOME',active:true,details:[{id:21,name:'정산',active:true}]}]
+const senderPayments=[{id:12,name:'가족 카드',active:true},{id:13,name:'현금',active:true}]
+
+test('sender can edit a share without editing their transaction and recipient confirms the edited copy', async ({page},testInfo)=>{
+  const state=await fixture(page,'LEDGER',false,{categories:senderCategories,payments:senderPayments,entries:[{...snapshot}]})
+  const dialog=await openShareDialog(page)
+  await expect(dialog.getByRole('radio',{name:'원본 그대로 공유',exact:true})).toBeChecked()
+  await dialog.getByRole('radio',{name:'내용을 수정해서 공유',exact:true}).check()
+  const title=dialog.getByLabel('공유 제목',{exact:true})
+  await expect(title).toHaveValue(snapshot.title)
+  await expect(dialog.getByRole('combobox',{name:'공유 대분류',exact:true})).toBeEnabled()
+  await title.fill('공유용 절반 식사')
+  await dialog.getByLabel('공유 금액 (원)',{exact:true}).fill('5000')
+  await dialog.getByLabel('공유 날짜',{exact:true}).fill('2026-10-14')
+  await dialog.getByLabel('공유 시간',{exact:true}).fill('18:24:00')
+  await dialog.getByLabel('공유 거래 메모',{exact:true}).fill('수정한 거래 메모')
+  await dialog.getByRole('combobox',{name:'공유 결제수단',exact:true}).selectOption('13')
+  await dialog.getByLabel('공유 메모 (선택)',{exact:true}).fill('함께 먹은 금액의 절반이에요.')
+  await dialog.getByRole('checkbox').check()
+  for (const theme of ['default', 'toss']) {
+    await page.evaluate(value=>{document.documentElement.dataset.theme=value},theme)
+    await dialog.evaluate(node=>{node.scrollTop=0})
+    await dialog.screenshot({path:testInfo.outputPath(`edited-share-fields-${theme}.png`)})
+    await dialog.getByRole('button',{name:'1명에게 공유 요청',exact:true}).scrollIntoViewIfNeeded()
+    await expect(dialog.getByRole('button',{name:'1명에게 공유 요청',exact:true})).toBeInViewport()
+    await dialog.screenshot({path:testInfo.outputPath(`edited-share-submit-${theme}.png`)})
+  }
+  const bounds=await dialog.boundingBox(), viewport=page.viewportSize()
+  expect(bounds.x).toBeGreaterThanOrEqual(0); expect(bounds.x+bounds.width).toBeLessThanOrEqual(viewport.width+1)
+  expect(await dialog.evaluate(node=>node.scrollWidth<=node.clientWidth+1)).toBe(true)
+  await dialog.getByRole('button',{name:'1명에게 공유 요청',exact:true}).click()
+  await expect.poll(()=>state.writes.length).toBe(1)
+  const sent=state.writes[0]
+  expect(sent.path).toBe('/api/record-shares')
+  expect(sent.body.ledgerOverride).toMatchObject({title:'공유용 절반 식사',amount:5000,entryDate:'2026-10-14',entryTime:'18:24:00',memo:'수정한 거래 메모',paymentMethodId:13,categoryGroupId:10,travelPlanId:null,travelRecordId:null})
+  expect(state.entries).toEqual([snapshot])
+  expect(await page.evaluate(()=>window.senderShareSource)).toEqual(snapshot)
+  await dialog.getByRole('button',{name:'닫기',exact:true}).click()
+  await page.getByRole('button',{name:'새로고침',exact:true}).click()
+  await expect(page.locator('.record-share-card')).toContainText('공유용 절반 식사')
+  state.categories=[{id:101,name:'식비',entryType:'EXPENSE',active:true,details:[{id:102,name:'외식',active:true}]}]
+  state.payments=[{id:103,name:'현금',active:true}]
+  await page.getByRole('button',{name:'확인 후 내 가계부에 기록',exact:true}).click()
+  const approval=page.getByRole('dialog',{name:'확인 후 내 가계부에 기록',exact:true})
+  await expect(approval.getByLabel('제목',{exact:true})).toHaveValue('공유용 절반 식사')
+  await expect(approval.getByLabel('금액 (원)',{exact:true})).toHaveValue('5000')
+  await expect(approval.getByLabel('메모',{exact:true})).toHaveValue('수정한 거래 메모')
+  await approval.getByRole('button',{name:'내 가계부에 등록',exact:true}).click()
+  await expect.poll(()=>state.writes.length).toBe(2)
+  expect(state.writes[1].body).toMatchObject({title:'공유용 절반 식사',amount:5000,categoryGroupId:101,paymentMethodId:103,travelPlanId:null})
+})
+
+test('switching back to original omits edited content and reset restores the source values', async ({page})=>{
+  const state=await fixture(page,'LEDGER',false,{categories:senderCategories,payments:senderPayments})
+  const dialog=await openShareDialog(page)
+  await dialog.getByRole('radio',{name:'내용을 수정해서 공유',exact:true}).check()
+  await dialog.getByLabel('공유 제목',{exact:true}).fill('전송하지 않을 제목')
+  await dialog.getByRole('button',{name:'원본 내용으로 되돌리기',exact:true}).click()
+  await expect(dialog.getByLabel('공유 제목',{exact:true})).toHaveValue(snapshot.title)
+  await dialog.getByLabel('공유 제목',{exact:true}).fill('다시 수정한 제목')
+  await dialog.getByRole('radio',{name:'원본 그대로 공유',exact:true}).check()
+  await dialog.getByRole('checkbox').check()
+  await dialog.getByRole('button',{name:'1명에게 공유 요청',exact:true}).click()
+  await expect.poll(()=>state.writes.length).toBe(1)
+  expect(state.writes[0].body).not.toHaveProperty('ledgerOverride')
+})
+
+test('edited foreign income shares preserve calculation and a failed draft can be retried', async ({page})=>{
+  const state=await fixture(page,'LEDGER',false,{categories:senderCategories,payments:senderPayments,failShareOnce:true})
+  const dialog=await openShareDialog(page)
+  await dialog.getByRole('radio',{name:'내용을 수정해서 공유',exact:true}).check()
+  await expect(dialog.getByRole('combobox',{name:'공유 대분류',exact:true})).toBeEnabled()
+  await dialog.getByRole('combobox',{name:'공유 수입/지출',exact:true}).selectOption('INCOME')
+  await dialog.getByRole('combobox',{name:'공유 통화',exact:true}).selectOption('USD')
+  await dialog.getByLabel('공유 외화 금액',{exact:true}).fill('10')
+  await dialog.getByLabel('공유 적용 환율',{exact:true}).fill('1300')
+  await dialog.getByLabel('공유 제목',{exact:true}).fill('공유용 정산')
+  await dialog.getByRole('checkbox').check()
+  await dialog.getByRole('button',{name:'1명에게 공유 요청',exact:true}).click()
+  await expect(dialog.getByRole('alert')).toContainText('일시적으로')
+  await expect(dialog.getByLabel('공유 제목',{exact:true})).toHaveValue('공유용 정산')
+  await expect(dialog.getByLabel('공유 외화 금액',{exact:true})).toHaveValue('10')
+  await dialog.getByRole('button',{name:'1명에게 공유 요청',exact:true}).click()
+  await expect.poll(()=>state.writes.length).toBe(2)
+  expect(state.writes[1].body.ledgerOverride).toMatchObject({entryType:'INCOME',categoryGroupId:20,paymentMethodId:null,foreignCurrencyCode:'USD',foreignAmount:10,exchangeRateToKrw:1300,amount:13000})
+})
+
+test('travel sharing stays reference-only without ledger editing options',async ({page})=>{
+  const state=await fixture(page,'TRAVEL')
+  const dialog=await openShareDialog(page,{id:100,name:'함께한 여행'},'TRAVEL')
+  await expect(dialog.getByRole('radiogroup',{name:'거래 공유 방식',exact:true})).toHaveCount(0)
+  await dialog.getByRole('checkbox').check()
+  await dialog.getByRole('button',{name:'1명에게 공유 요청',exact:true}).click()
+  await expect.poll(()=>state.writes.length).toBe(1)
+  expect(state.writes[0].body).not.toHaveProperty('ledgerOverride')
 })

@@ -33,7 +33,7 @@ class LedgerAiExcelJobServiceTest {
             return pending.subList(start, Math.min(start + 100, pending.size()));
         });
         var service = new LedgerAiExcelJobService(mock(LedgerAiExcelImportService.class), repository, leases,
-                new ObjectMapper(), mock(TaskExecutor.class));
+                new ObjectMapper(), mock(TaskExecutor.class), finalizer(repository));
 
         service.recover();
         verify(leases, never()).tryAcquire(eq("excel-job:500"), any());
@@ -55,7 +55,7 @@ class LedgerAiExcelJobServiceTest {
         when(repository.findRecoveryPage(eq("PROCESSING"), any(), isNull(), eq(""), any())).thenReturn(firstPage);
         when(repository.findRecoveryPage(eq("PROCESSING"), any(), eq(timestamp), eq("099"), any())).thenReturn(List.of(next));
         var service = new LedgerAiExcelJobService(mock(LedgerAiExcelImportService.class), repository, leases,
-                new ObjectMapper(), mock(TaskExecutor.class));
+                new ObjectMapper(), mock(TaskExecutor.class), finalizer(repository));
 
         service.recover();
 
@@ -72,7 +72,7 @@ class LedgerAiExcelJobServiceTest {
         when(lease.isValid()).thenReturn(true);
         when(leases.tryAcquire(anyString(), any())).thenReturn(lease);
         AtomicReference<LedgerExcelAnalysisJob> saved = new AtomicReference<>();
-        when(repository.saveAndFlush(any())).thenAnswer(call -> { saved.set(call.getArgument(0)); return saved.get(); });
+        when(repository.saveAndFlush(any())).thenAnswer(call -> { saved.set(call.getArgument(0)); saved.get().setVersion(0L); return saved.get(); });
         when(repository.findById(anyString())).thenAnswer(call -> Optional.ofNullable(saved.get()));
         when(repository.findByIdAndOwnerId(anyString(), eq(7L))).thenAnswer(call -> Optional.ofNullable(saved.get()));
         when(importer.prepareInput(eq(7L), any())).thenReturn("persisted workbook DTO");
@@ -80,7 +80,10 @@ class LedgerAiExcelJobServiceTest {
         when(importer.analyzePreparedInput("persisted workbook DTO")).thenReturn(expected);
         AtomicReference<Runnable> queued = new AtomicReference<>();
         TaskExecutor executor = queued::set;
-        var service = new LedgerAiExcelJobService(importer, repository, leases, new ObjectMapper(), executor);
+        when(repository.completeProcessing(anyString(), eq(7L), eq(0L), anyString())).thenAnswer(call -> {
+            saved.get().setResultJson(call.getArgument(3)); saved.get().setInputJson(null); saved.get().setStatus("COMPLETED"); saved.get().setVersion(1L); return 1;
+        });
+        var service = new LedgerAiExcelJobService(importer, repository, leases, new ObjectMapper(), executor, finalizer(repository));
         var response = service.start(7L, new MockMultipartFile("file", "file.xlsx", "application/octet-stream", new byte[]{1}));
         assertThat(response.status()).isEqualTo("PROCESSING");
         verify(importer, never()).analyzePreparedInput(anyString());
@@ -88,5 +91,9 @@ class LedgerAiExcelJobServiceTest {
         assertThat(service.get(7L, response.jobId()).result()).isEqualTo(expected);
         assertThat(saved.get().getInputJson()).isNull();
         assertThatThrownBy(() -> service.get(8L, response.jobId())).isInstanceOf(NotFoundException.class);
+    }
+    private com.playdata.calen.ledger.application.port.in.FinalizeLedgerAiJobUseCase finalizer(LedgerExcelAnalysisJobRepository repository) {
+        return new com.playdata.calen.ledger.application.service.FinalizeLedgerAiJobService(
+                new com.playdata.calen.ledger.adapter.out.persistence.JpaLedgerAiJobStateAdapter(null, null, repository));
     }
 }

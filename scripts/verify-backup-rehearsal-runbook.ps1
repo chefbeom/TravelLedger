@@ -1,4 +1,4 @@
-﻿Set-StrictMode -Version Latest
+Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $runbookPath = 'docs/backup_restore_rehearsal_runbook.md'
@@ -130,7 +130,7 @@ $requiredSetupPhrases = @(
     'BACKUP_AGE_RECIPIENTS=age1...',
     'BACKUP_ENCRYPTION_MODE=gpg',
     'BACKUP_GPG_RECIPIENT=backup-ops@example.com',
-    '.sha256 sidecar'
+    '`.sha256` sidecar'
 )
 foreach ($phrase in $requiredSetupPhrases) {
     Assert-Contains -Label 'DB backup setup guide' -Content $backupSetup -Needle $phrase

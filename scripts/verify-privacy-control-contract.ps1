@@ -1,4 +1,4 @@
-﻿Set-StrictMode -Version Latest
+Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $privacyDocPath = 'docs/privacy_control_panel.md'
@@ -93,8 +93,9 @@ if ($findings.Count -eq 0) {
     $requiredControllerSnippets = @(
         'SecondaryPinSessionSupport',
         'getVerifiedSecondaryPin(httpRequest)',
-        'exportUserDataArchive(currentUser.userId()',
-        'new BadRequestException("A verified secondary PIN session is required before exporting data.")'
+        'dataPortabilityExportService.exportUserDataArchive(',
+        'currentUser.userId(),',
+        'new BadRequestException("개인정보 관리 작업을 실행하려면 현재 비밀번호와 2차 PIN 검증이 필요합니다.")'
     )
     foreach ($snippet in $requiredControllerSnippets) {
         if (-not $privacyController.Contains($snippet)) {
@@ -112,11 +113,13 @@ if ($findings.Count -eq 0) {
         'manifest/travel-media.json',
         'manifest/family-media.json',
         'createPasswordProtectedZip',
-        'storedObjectPathsIncluded',
-        'signedUrlsIncluded',
-        'publicTokensIncluded',
-        'hasGpsMetadata',
-        'excludedFields'
+        '"storedObjectPathsIncluded", false',
+        '"publicLinksIncluded", false',
+        'omittedSensitiveData',
+        '"internal object locator"',
+        '"temporary download URL"',
+        '"raw sharing credential"',
+        'hasGpsMetadata'
     )
     foreach ($snippet in $requiredExportSnippets) {
         if (-not $dataExportService.Contains($snippet)) {

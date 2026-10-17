@@ -1,0 +1,171 @@
+package com.playdata.calen.travel.domain.policy;
+
+import com.playdata.calen.travel.domain.model.TravelPhotoClusterData;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.util.List;
+import org.junit.jupiter.api.Test;
+
+class TravelPhotoClusterPolicyTest {
+
+    private final TravelPhotoClusterPolicy clusterService = new TravelPhotoClusterPolicy();
+
+    @Test
+    void keepsPhotosAtSameCoordinateInSingleCluster() {
+        List<TravelPhotoClusterData.PhotoPoint> points = List.of(
+                point(1L, 37.5665000d, 126.9780000d, false, LocalDateTime.of(2026, 4, 4, 10, 0)),
+                point(2L, 37.5665000d, 126.9780000d, false, LocalDateTime.of(2026, 4, 4, 11, 0))
+        );
+
+        List<TravelPhotoClusterData.PhotoCluster> clusters = clusterService.cluster(points);
+
+        assertThat(clusters).hasSize(1);
+        assertThat(clusters.get(0).photoCount()).isEqualTo(2);
+    }
+
+    @Test
+    void splitsLongChainClusterWhenCentroidDistanceExceedsTenMeters() {
+        double baseLatitude = 37.5665000d;
+        double baseLongitude = 126.9780000d;
+
+        List<TravelPhotoClusterData.PhotoPoint> points = List.of(
+                point(1L, baseLatitude, baseLongitude, false, LocalDateTime.of(2026, 4, 4, 10, 0)),
+                point(2L, baseLatitude + toLatitudeDegrees(5.0d), baseLongitude, false, LocalDateTime.of(2026, 4, 4, 10, 1)),
+                point(3L, baseLatitude + toLatitudeDegrees(10.0d), baseLongitude, false, LocalDateTime.of(2026, 4, 4, 10, 2)),
+                point(4L, baseLatitude + toLatitudeDegrees(15.0d), baseLongitude, false, LocalDateTime.of(2026, 4, 4, 10, 3)),
+                point(5L, baseLatitude + toLatitudeDegrees(20.0d), baseLongitude, false, LocalDateTime.of(2026, 4, 4, 10, 4)),
+                point(6L, baseLatitude + toLatitudeDegrees(25.0d), baseLongitude, false, LocalDateTime.of(2026, 4, 4, 10, 5)),
+                point(7L, baseLatitude + toLatitudeDegrees(30.0d), baseLongitude, false, LocalDateTime.of(2026, 4, 4, 10, 6))
+        );
+
+        List<TravelPhotoClusterData.PhotoCluster> clusters = clusterService.cluster(points);
+
+        assertThat(clusters).hasSizeGreaterThan(1);
+        assertThat(clusters).allSatisfy(cluster ->
+                assertThat(cluster.maxDistanceMeters().doubleValue()).isLessThanOrEqualTo(10.01d)
+        );
+    }
+
+    @Test
+    void prefersRepresentativeOverrideOverCentroidSelection() {
+        List<TravelPhotoClusterData.PhotoPoint> points = List.of(
+                point(1L, 37.5665000d, 126.9780000d, false, LocalDateTime.of(2026, 4, 4, 10, 0)),
+                point(2L, 37.5665005d, 126.9780004d, true, LocalDateTime.of(2026, 4, 4, 11, 0)),
+                point(3L, 37.5665003d, 126.9780002d, false, LocalDateTime.of(2026, 4, 4, 12, 0))
+        );
+
+        List<TravelPhotoClusterData.PhotoCluster> clusters = clusterService.cluster(points);
+
+        assertThat(clusters).hasSize(1);
+        assertThat(clusters.get(0).representative().mediaId()).isEqualTo(2L);
+    }
+
+    @Test
+    void usesFirstOrderedPhotoAsRepresentativeWhenNoOverrideExists() {
+        List<TravelPhotoClusterData.PhotoPoint> points = List.of(
+                point(1L, 37.5665000d, 126.9780000d, false, LocalDateTime.of(2026, 4, 4, 9, 0)),
+                point(2L, 37.5665003d, 126.9780002d, false, LocalDateTime.of(2026, 4, 4, 11, 0)),
+                point(3L, 37.5665005d, 126.9780004d, false, LocalDateTime.of(2026, 4, 4, 10, 0))
+        );
+
+        List<TravelPhotoClusterData.PhotoCluster> clusters = clusterService.cluster(points);
+
+        assertThat(clusters).hasSize(1);
+        assertThat(clusters.get(0).representative().mediaId()).isEqualTo(2L);
+        assertThat(clusters.get(0).members().get(0).mediaId()).isEqualTo(2L);
+    }
+
+    @Test
+    void keepsClusterIdentifierStableWhenRepresentativeChanges() {
+        List<TravelPhotoClusterData.PhotoPoint> points = List.of(
+                point(4L, 37.5665000d, 126.9780000d, false, LocalDateTime.of(2026, 4, 4, 9, 0)),
+                point(9L, 37.5665003d, 126.9780002d, true, LocalDateTime.of(2026, 4, 4, 11, 0)),
+                point(12L, 37.5665005d, 126.9780004d, false, LocalDateTime.of(2026, 4, 4, 10, 0))
+        );
+
+        List<TravelPhotoClusterData.PhotoCluster> clusters = clusterService.cluster(points);
+
+        assertThat(clusters).hasSize(1);
+        assertThat(clusters.get(0).representative().mediaId()).isEqualTo(9L);
+        assertThat(clusters.get(0).id()).isEqualTo(4L);
+    }
+
+    @Test
+    void clustersPhotosWithinFiveMetersIntoSingleCluster() {
+        double baseLatitude = 37.5665000d;
+        double baseLongitude = 126.9780000d;
+
+        List<TravelPhotoClusterData.PhotoPoint> points = List.of(
+                point(1L, baseLatitude, baseLongitude, false, LocalDateTime.of(2026, 4, 4, 10, 0)),
+                point(2L, baseLatitude + toLatitudeDegrees(3.5d), baseLongitude, false, LocalDateTime.of(2026, 4, 4, 10, 1))
+        );
+
+        List<TravelPhotoClusterData.PhotoCluster> clusters = clusterService.cluster(points);
+
+        assertThat(clusters).hasSize(1);
+        assertThat(clusters.get(0).photoCount()).isEqualTo(2);
+    }
+
+    private TravelPhotoClusterData.PhotoPoint point(
+            Long mediaId,
+            double latitude,
+            double longitude,
+            boolean representativeOverride,
+            LocalDateTime uploadedAt
+    ) {
+        return new TravelPhotoClusterData.PhotoPoint(
+                mediaId,
+                mediaId,
+                1L,
+                "Test plan",
+                "#3182F6",
+                LocalDate.of(2026, 4, 4),
+                LocalTime.of(10, 0),
+                "Spot",
+                "Photo " + mediaId,
+                "KR",
+                "Seoul",
+                "Test",
+                BigDecimal.valueOf(latitude).setScale(7, java.math.RoundingMode.HALF_UP),
+                BigDecimal.valueOf(longitude).setScale(7, java.math.RoundingMode.HALF_UP),
+                uploadedAt,
+                representativeOverride
+        );
+    }
+
+    @Test
+    void spatialCandidatesPreserveConnectionsAcrossDateLineAndNearPole() {
+        var time = LocalDateTime.of(2026, 4, 4, 10, 0);
+        for (List<TravelPhotoClusterData.PhotoPoint> points : List.of(
+                List.of(point(1L, 0, 179.99999, false, time), point(2L, 0, -179.99999, false, time)),
+                List.of(point(1L, 89.99999, 90, false, time), point(2L, 89.99999, -90, false, time)))) {
+            List<?> components = org.springframework.test.util.ReflectionTestUtils.invokeMethod(
+                    clusterService, "buildConnectedComponents", points, 5d);
+            assertThat(components).hasSize(1);
+        }
+    }
+
+    @Test
+    void handlesTenThousandSparseAndDensePhotosWithinBoundedTime() {
+        org.junit.jupiter.api.Assertions.assertTimeoutPreemptively(java.time.Duration.ofSeconds(15), () -> {
+            var time = LocalDateTime.of(2026, 4, 4, 10, 0);
+            var sparse = new java.util.ArrayList<TravelPhotoClusterData.PhotoPoint>();
+            var dense = new java.util.ArrayList<TravelPhotoClusterData.PhotoPoint>();
+            for (long id = 1; id <= 10000; id++) {
+                sparse.add(point(id, 0.001 * id, 127, false, time));
+                dense.add(point(id, 37.5, 127, false, time));
+            }
+            assertThat(clusterService.cluster(sparse)).hasSize(10000);
+            assertThat(clusterService.cluster(dense)).hasSize(1);
+        });
+    }
+
+    private double toLatitudeDegrees(double meters) {
+        return meters / 111_320d;
+    }
+}

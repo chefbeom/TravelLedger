@@ -1,5 +1,7 @@
 package com.playdata.calen.ledger.ai;
 
+import com.playdata.calen.ledger.adapter.in.ai.LedgerAnalysisPreparedData;
+
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.math.BigDecimal;
@@ -18,13 +20,13 @@ class LedgerAiAnalysisPayloadBuilderTest {
     void limitsProviderEntriesAndReportsOverflowCounts() {
         String longTitle = "T".repeat(120);
         String longMemo = "M".repeat(220);
-        List<LedgerAiAnalysisService.ExpenseEntryPayload> entries = new ArrayList<>();
+        List<LedgerAnalysisPreparedData.ExpenseEntryPayload> entries = new ArrayList<>();
         entries.add(entry(longTitle, longMemo));
         entries.add(entry("Coffee", "Morning"));
         entries.add(entry("Lunch", "Team"));
 
-        List<LedgerAiAnalysisService.ExpenseEntryPayload> providerEntries = builder.providerExpenseEntries(entries, 2);
-        LedgerAiAnalysisService.PayloadMinimizationSummary summary = builder.buildPayloadMinimizationSummary(
+        List<LedgerAnalysisPreparedData.ExpenseEntryPayload> providerEntries = builder.providerExpenseEntries(entries, 2);
+        LedgerAnalysisPreparedData.PayloadMinimizationSummary summary = builder.buildPayloadMinimizationSummary(
                 entries.size(),
                 0,
                 providerEntries,
@@ -43,15 +45,15 @@ class LedgerAiAnalysisPayloadBuilderTest {
 
     @Test
     void weeklyDigestKeepsAtMostTwentyHighestTransactionsWithoutMemos() {
-        List<LedgerAiAnalysisService.ExpenseEntryPayload> entries = new ArrayList<>();
+        List<LedgerAnalysisPreparedData.ExpenseEntryPayload> entries = new ArrayList<>();
         for (int day = 1; day <= 25; day++) {
-            entries.add(new LedgerAiAnalysisService.ExpenseEntryPayload(
+            entries.add(new LedgerAnalysisPreparedData.ExpenseEntryPayload(
                     LocalDate.of(2026, 7, day), "Purchase " + day, "private memo",
                     BigDecimal.valueOf(day * 1000L), "Shopping", "General", "Card"
             ));
         }
 
-        List<LedgerAiAnalysisService.ExpenseEntryPayload> providerEntries =
+        List<LedgerAnalysisPreparedData.ExpenseEntryPayload> providerEntries =
                 builder.providerWeeklyDigestEntries(entries, 20);
 
         assertThat(providerEntries).hasSize(20);
@@ -62,7 +64,7 @@ class LedgerAiAnalysisPayloadBuilderTest {
 
     @Test
     void limitsRecurringCandidateTextWithoutChangingCountsOrDates() {
-        LedgerAiAnalysisService.RecurringExpenseCandidatePayload candidate = new LedgerAiAnalysisService.RecurringExpenseCandidatePayload(
+        LedgerAnalysisPreparedData.RecurringExpenseCandidatePayload candidate = new LedgerAnalysisPreparedData.RecurringExpenseCandidatePayload(
                 "S".repeat(120),
                 "생활비".repeat(40),
                 "구독".repeat(50),
@@ -75,10 +77,10 @@ class LedgerAiAnalysisPayloadBuilderTest {
                 List.of(LocalDate.of(2026, 6, 1), LocalDate.of(2026, 6, 11), LocalDate.of(2026, 6, 21))
         );
 
-        List<LedgerAiAnalysisService.RecurringExpenseCandidatePayload> providerCandidates = builder.providerRecurringCandidates(List.of(candidate));
+        List<LedgerAnalysisPreparedData.RecurringExpenseCandidatePayload> providerCandidates = builder.providerRecurringCandidates(List.of(candidate));
 
         assertThat(providerCandidates).hasSize(1);
-        LedgerAiAnalysisService.RecurringExpenseCandidatePayload result = providerCandidates.get(0);
+        LedgerAnalysisPreparedData.RecurringExpenseCandidatePayload result = providerCandidates.get(0);
         assertThat(result.title()).hasSize(80);
         assertThat(result.categoryGroupName()).hasSize(80);
         assertThat(result.categoryDetailName()).hasSize(80);
@@ -87,8 +89,8 @@ class LedgerAiAnalysisPayloadBuilderTest {
         assertThat(result.dates()).containsExactlyElementsOf(candidate.dates());
     }
 
-    private LedgerAiAnalysisService.ExpenseEntryPayload entry(String title, String memo) {
-        return new LedgerAiAnalysisService.ExpenseEntryPayload(
+    private LedgerAnalysisPreparedData.ExpenseEntryPayload entry(String title, String memo) {
+        return new LedgerAnalysisPreparedData.ExpenseEntryPayload(
                 LocalDate.of(2026, 6, 1),
                 title,
                 memo,

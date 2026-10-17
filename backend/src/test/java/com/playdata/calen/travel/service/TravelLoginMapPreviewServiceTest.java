@@ -29,14 +29,14 @@ import org.springframework.test.util.ReflectionTestUtils;
 class TravelLoginMapPreviewServiceTest {
 
     private JdbcTemplate jdbcTemplate;
-    private TravelService travelService;
+    private com.playdata.calen.travel.application.port.in.TravelMapLinksUseCase mapLinks;
     private TravelLoginMapPreviewService service;
 
     @BeforeEach
     void setUp() {
         jdbcTemplate = mock(JdbcTemplate.class);
-        travelService = mock(TravelService.class);
-        service = new TravelLoginMapPreviewService(jdbcTemplate, travelService);
+        mapLinks = mock(com.playdata.calen.travel.application.port.in.TravelMapLinksUseCase.class);
+        service = new TravelLoginMapPreviewService(jdbcTemplate, mapLinks);
     }
 
     @Test
@@ -49,7 +49,7 @@ class TravelLoginMapPreviewServiceTest {
         assertFalse(response.enabled());
         assertTrue(response.markers().isEmpty());
         assertTrue(response.routes().isEmpty());
-        verify(travelService, never()).getTravelMapShareLoginPreview(any());
+        verify(mapLinks, never()).preview(any());
     }
 
     @Test
@@ -73,7 +73,7 @@ class TravelLoginMapPreviewServiceTest {
                         new TravelLoginMapPreviewPointResponse(new BigDecimal("35.2"), new BigDecimal("129.8"))
                 )))
         );
-        when(travelService.getTravelMapShareLoginPreview("public-share-token-123456")).thenReturn(safePreview);
+        when(mapLinks.preview("public-share-token-123456")).thenReturn(value(safePreview));
 
         TravelLoginMapPreviewResponse response = service.getPublicPreview();
 
@@ -87,14 +87,14 @@ class TravelLoginMapPreviewServiceTest {
         assertEquals(1, response.routeCount());
         assertEquals(2, response.routes().get(0).points().size());
         assertEquals(new BigDecimal("35.1"), response.routes().get(0).points().get(0).latitude());
-        verify(travelService).getTravelMapShareLoginPreview(eq("public-share-token-123456"));
+        verify(mapLinks).preview(eq("public-share-token-123456"));
     }
 
     @Test
     void revokedShareFailsClosedWithoutReturningPrivateDetails() {
         ReflectionTestUtils.setField(service, "enabled", true);
         ReflectionTestUtils.setField(service, "shareToken", "revoked-share-token-123456");
-        when(travelService.getTravelMapShareLoginPreview("revoked-share-token-123456"))
+        when(mapLinks.preview("revoked-share-token-123456"))
                 .thenThrow(new IllegalStateException("share unavailable"));
 
         TravelLoginMapPreviewResponse response = service.getPublicPreview();
@@ -136,10 +136,10 @@ class TravelLoginMapPreviewServiceTest {
         String token = "public-share-token-123456";
         ReflectionTestUtils.setField(service, "enabled", false);
         ReflectionTestUtils.setField(service, "shareToken", null);
-        when(travelService.getTravelMapShareLoginPreview(token)).thenReturn(
-                new TravelLoginMapPreviewResponse(true, "여행 기록 미리보기", 1, 0,
+        when(mapLinks.preview(token)).thenReturn(
+                value(new TravelLoginMapPreviewResponse(true, "여행 기록 미리보기", 1, 0,
                         List.of(new TravelLoginMapPreviewMarkerResponse(1, BigDecimal.ONE, BigDecimal.ONE, null)),
-                        List.of())
+                        List.of()))
         );
 
         var status = service.updateAdminSettings(new AdminLoginMapPreviewUpdateRequest(
@@ -158,11 +158,11 @@ class TravelLoginMapPreviewServiceTest {
         String token = "public-share-token-123456";
         ReflectionTestUtils.setField(service, "enabled", true);
         ReflectionTestUtils.setField(service, "shareToken", token);
-        TravelService.MediaDownload expected = new TravelService.MediaDownload("object/photo.jpg", "image/jpeg", "photo.jpg");
-        when(travelService.getTravelMapShareLoginPreviewMarkerMediaDownload(token, 2)).thenReturn(expected);
+        com.playdata.calen.travel.domain.model.TravelMediaData.Download expected = new com.playdata.calen.travel.domain.model.TravelMediaData.Download("object/photo.jpg", "image/jpeg", "photo.jpg");
+        when(mapLinks.previewMedia(token, 2)).thenReturn(expected);
 
         assertEquals(expected, service.getPublicMarkerThumbnail(2));
-        verify(travelService).getTravelMapShareLoginPreviewMarkerMediaDownload(token, 2);
+        verify(mapLinks).previewMedia(token, 2);
     }
 
     @Test
@@ -171,6 +171,13 @@ class TravelLoginMapPreviewServiceTest {
         ReflectionTestUtils.setField(service, "shareToken", "public-share-token-123456");
 
         assertThrows(NotFoundException.class, () -> service.getPublicMarkerThumbnail(2));
-        verifyNoInteractions(travelService);
+        verifyNoInteractions(mapLinks);
+    }
+
+    private static com.playdata.calen.travel.domain.model.TravelMapLinkData.Preview value(TravelLoginMapPreviewResponse v) {
+        return new com.playdata.calen.travel.domain.model.TravelMapLinkData.Preview(v.enabled(),
+                v.markers().stream().map(m -> new com.playdata.calen.travel.domain.model.TravelMapLinkData.PreviewMarker(m.number(), m.latitude(), m.longitude(), m.thumbnailUrl() != null)).toList(),
+                v.routes().stream().map(r -> new com.playdata.calen.travel.domain.model.TravelMapLinkData.PreviewRoute(r.number(),
+                        r.points().stream().map(p -> new com.playdata.calen.travel.domain.model.TravelMapLinkData.PreviewPoint(p.latitude(), p.longitude())).toList())).toList());
     }
 }

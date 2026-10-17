@@ -1,4 +1,4 @@
-﻿-- Calen ledger dummy data for login_id = hana1234
+-- Calen ledger dummy data for login_id = hana1234
 -- This script seeds ledger-only data.
 -- If the account does not exist, no rows are inserted.
 -- Re-running the script removes previous DUMMYLEDGER rows for the same user and recreates them.

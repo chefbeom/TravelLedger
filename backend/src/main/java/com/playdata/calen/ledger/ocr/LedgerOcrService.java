@@ -1,6 +1,15 @@
 package com.playdata.calen.ledger.ocr;
 
+import com.playdata.calen.ledger.adapter.out.jobs.LedgerAiRecoverySources;
+import com.playdata.calen.ledger.application.port.in.RecoverLedgerAiJobsUseCase;
+import com.playdata.calen.ledger.application.service.RecoverLedgerAiJobsService;
+
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.playdata.calen.ledger.application.port.out.LedgerImageExtractionPort;
+import com.playdata.calen.ledger.adapter.in.image.MultipartLedgerImageContent;
+import com.playdata.calen.ledger.application.port.in.StoreLedgerImageInputUseCase;
+import com.playdata.calen.ledger.application.port.out.LedgerImageStoragePort;
+import com.playdata.calen.ledger.domain.model.LedgerImageStorageData;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.playdata.calen.account.domain.AppUser;
 import com.playdata.calen.account.service.AppUserService;
@@ -20,13 +29,16 @@ import com.playdata.calen.ledger.dto.LedgerImageAnalysisHistoryDeleteResponse;
 import com.playdata.calen.ledger.dto.LedgerOcrAnalyzeResponse;
 import com.playdata.calen.ledger.dto.LedgerOcrEntrySuggestionResponse;
 import com.playdata.calen.ledger.dto.LedgerOcrLineItemResponse;
-import com.playdata.calen.ledger.ocr.LedgerOcrRemoteClient.RemoteAnalyzeResponse;
-import com.playdata.calen.ledger.ocr.LedgerOcrRemoteClient.RemoteLineItem;
-import com.playdata.calen.ledger.ocr.LedgerOcrRemoteClient.RemoteParsedResult;
+import com.playdata.calen.ledger.domain.model.LedgerImageData.ImageExtraction;
+import com.playdata.calen.ledger.domain.model.LedgerImageData.ImageLineItem;
+import com.playdata.calen.ledger.domain.model.LedgerImageData.ParsedImageEntry;
 import com.playdata.calen.ledger.repository.CategoryDetailRepository;
 import com.playdata.calen.ledger.repository.CategoryGroupRepository;
 import com.playdata.calen.ledger.repository.LedgerImageAnalysisRequestRepository;
 import com.playdata.calen.ledger.repository.LedgerEntryRepository;
+import com.playdata.calen.ledger.application.port.in.FinalizeLedgerAiJobUseCase;
+import com.playdata.calen.ledger.domain.model.LedgerAiJobData.*;
+import com.playdata.calen.ledger.domain.policy.LedgerAiJobLifecyclePolicy;
 import com.playdata.calen.ledger.repository.LedgerEntryRepository.ExistingEntryStyleAggregate;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -101,18 +113,20 @@ public class LedgerOcrService {
     private final AppUserService appUserService;
     private final LedgerOcrProperties properties;
     private final LedgerAiAnalysisProperties aiProperties;
-    private final LedgerOcrRemoteClient remoteClient;
+    private final LedgerImageExtractionPort imageExtraction;
     private final LedgerImageAnalysisRequestRepository imageAnalysisRequestRepository;
     private final CategoryGroupRepository categoryGroupRepository;
     private final CategoryDetailRepository categoryDetailRepository;
     private final LedgerEntryRepository ledgerEntryRepository;
     private final ObjectMapper objectMapper;
+    private final FinalizeLedgerAiJobUseCase finalizer;
+    private final StoreLedgerImageInputUseCase imageInputWriter;
 
     @Autowired(required = false)
     private MeterRegistry meterRegistry;
 
     @Autowired(required = false)
-    private LedgerOcrImageStorageService imageStorageService;
+    private LedgerImageStoragePort imageStorageService;
 
     @Autowired(required = false)
     @Qualifier("ledgerOcrTaskExecutor")
@@ -208,6 +222,7 @@ public class LedgerOcrService {
         return processingAnalyzeResponse(history);
     }
 
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.NOT_SUPPORTED)
     public LedgerOcrAnalyzeResponse startReanalyzeHistoryImage(
             Long userId,
             Long historyId,
@@ -218,6 +233,7 @@ public class LedgerOcrService {
         return startReanalyzeHistoryImage(userId, historyId, documentType, prompt, useExistingEntryStyle, null, null);
     }
 
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.NOT_SUPPORTED)
     public LedgerOcrAnalyzeResponse startReanalyzeHistoryImage(
             Long userId,
             Long historyId,
@@ -230,7 +246,7 @@ public class LedgerOcrService {
         AppUser owner = appUserService.getRequiredUser(userId);
         LedgerImageAnalysisRequest history = imageAnalysisRequestRepository.findByIdAndOwnerId(historyId, owner.getId())
                 .orElseThrow(() -> new BadRequestException("Image analysis history was not found."));
-        LedgerOcrImageStorageService.StoredImageContent storedImage = loadStoredHistoryImage(history);
+        LedgerImageStorageData.StoredImageContent storedImage = loadStoredHistoryImage(history);
         String effectiveDocumentType = normalizeDocumentType(firstNonBlank(documentType, history.getDocumentType()));
         String clientRequestId = "image-analysis-rerun-" + history.getId() + "-" + System.currentTimeMillis();
         MultipartFile storedFile = new StoredImageMultipartFile(
@@ -245,14 +261,17 @@ public class LedgerOcrService {
         );
     }
 
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.NOT_SUPPORTED)
     public LedgerOcrAnalyzeResponse analyze(Long userId, MultipartFile file, String documentType, String clientRequestId, String prompt) {
         return analyze(userId, file, documentType, clientRequestId, prompt, false);
     }
 
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.NOT_SUPPORTED)
     public LedgerOcrAnalyzeResponse analyze(Long userId, MultipartFile file, String documentType, String clientRequestId, String prompt, boolean useExistingEntryStyle) {
         return analyze(userId, file, documentType, clientRequestId, prompt, useExistingEntryStyle, null, null);
     }
 
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.NOT_SUPPORTED)
     public LedgerOcrAnalyzeResponse analyze(
             Long userId,
             MultipartFile file,
@@ -266,6 +285,8 @@ public class LedgerOcrService {
         AppUser owner = appUserService.getRequiredUser(userId);
         Timer.Sample ocrRequestTimer = startOcrRequestTimer();
         LedgerImageAnalysisRequest history = null;
+        com.playdata.calen.common.jobs.WorkLeaseService.Lease jobLease = null;
+        boolean inferenceOwned = workLeases == null;
 
         try {
             validateReady();
@@ -279,66 +300,29 @@ public class LedgerOcrService {
                     existingEntryStyleMode, existingEntryStyleReferenceDate
             );
             history = createImageAnalysisRequest(owner, file, normalizedDocumentType, normalizedClientRequestId, effectiveUserPrompt);
+            jobLease = workLeases == null ? null : workLeases.tryAcquire("image-job:" + history.getId(), java.time.Duration.ofMinutes(2));
+            if (workLeases != null && jobLease == null)
+                throw new com.playdata.calen.common.exception.ServiceUnavailableException("이미지 분석 작업이 다른 서버에서 처리 중입니다. 잠시 후 다시 조회해 주세요.");
+            inferenceOwned = true;
             history = storeImageForHistory(owner.getId(), history, file);
-            RemoteAnalyzeResponse remoteResponse = remoteClient.analyze(file, normalizedDocumentType, effectiveUserPrompt);
-            String paymentCapturePlatform = resolvePaymentCapturePlatform(
-                    firstNonBlank(remoteResponse.documentType(), normalizedDocumentType),
-                    effectiveUserPrompt,
-                    remoteResponse
-            );
-            List<RemoteParsedResult> parsedEntries = resolveParsedEntries(remoteResponse);
-            RemoteParsedResult parsed = parsedEntries.isEmpty() ? remoteResponse.parsed() : parsedEntries.get(0);
-            EntryType entryType = parsed != null && parsed.entryType() == EntryType.INCOME
-                    ? EntryType.INCOME
-                    : EntryType.EXPENSE;
-
-            List<LedgerOcrLineItemResponse> lineItems = mapLineItems(parsed);
-            LedgerOcrEntrySuggestionResponse suggestion = parsed == null ? null : buildSuggestion(owner, parsed, entryType, lineItems, paymentCapturePlatform);
-            List<LedgerOcrEntrySuggestionResponse> suggestions = parsedEntries.stream()
-                    .filter(Objects::nonNull)
-                    .map(parsedEntry -> buildSuggestionForParsedEntry(owner, parsedEntry, paymentCapturePlatform))
-                    .toList();
-            List<String> validationWarnings = buildSuggestionValidationWarnings(suggestions);
-            if (!validationWarnings.isEmpty()) {
-                parsed = appendWarnings(parsed, validationWarnings);
-            }
-            if (suggestions.isEmpty() && suggestion != null) {
-                suggestions = List.of(suggestion);
-            }
-
-            LedgerOcrAnalyzeResponse response = new LedgerOcrAnalyzeResponse(
-                    history.getId(),
-                    history.getClientRequestId(),
-                    LedgerImageAnalysisStatus.COMPLETED.name(),
-                    firstNonBlank(remoteResponse.documentType(), normalizedDocumentType),
-                    remoteResponse.rawText() == null ? "" : remoteResponse.rawText(),
-                    suggestion,
-                    suggestions,
-                    lineItems,
-                    parsed != null ? parsed.confidence() : null,
-                    resolveResponseWarnings(parsed, validationWarnings),
-                    parsed != null ? limit(parsed.vendor(), MAX_TEXT_LENGTH) : null,
-                    parsed != null ? limit(parsed.paymentMethodText(), MAX_TEXT_LENGTH) : null,
-                    parsed != null ? limit(firstNonBlank(
-                            parsed.categoryText(),
-                            parsed.categoryGroupName(),
-                            parsed.categoryDetailName()
-                    ), MAX_TEXT_LENGTH) : null,
-                    remoteResponse.timing() == null ? java.util.Map.of() : remoteResponse.timing(),
-                    List.of(),
-                    List.of()
-            );
+            ImageExtraction remoteResponse = imageExtraction.analyze(new MultipartLedgerImageContent(file), normalizedDocumentType, effectiveUserPrompt);
+            if (jobLease != null && !jobLease.isValid())
+                throw new com.playdata.calen.common.exception.ServiceUnavailableException("이미지 분석 작업을 복구 중입니다. 잠시 후 다시 조회해 주세요.");
+            LedgerOcrAnalyzeResponse response = reviewImageExtraction(owner, history, remoteResponse,
+                    normalizedDocumentType, effectiveUserPrompt);
             completeImageAnalysisRequest(history, response);
             LedgerOcrAnalyzeResponse finalResponse = withCurrentHistoryStatus(response);
             recordOcrRequest(ocrRequestTimer, "success", "none");
             return finalResponse;
         } catch (RuntimeException exception) {
-            if (history != null) {
+            if (history != null && inferenceOwned && (jobLease == null || jobLease.isValid())) {
                 failImageAnalysisRequest(history, exception);
             }
             String failureReason = ocrFailureReason(exception);
             recordOcrRequest(ocrRequestTimer, "failure", failureReason);
             throw exception;
+        } finally {
+            if (jobLease != null) jobLease.close();
         }
     }
 
@@ -404,39 +388,18 @@ public class LedgerOcrService {
 
     @org.springframework.scheduling.annotation.Scheduled(fixedDelay = 60000, initialDelay = 60000)
     void recoverImageJobs() {
-        if (ledgerOcrTaskExecutor == null || workLeases == null) return;
-        long cursor = imageRecoveryCursor;
-        for (int batch = 0; batch < 5; batch++) {
-        var histories = imageAnalysisRequestRepository.findAllByStatusAndCreatedAtBeforeAndIdGreaterThanOrderByIdAsc(
-                LedgerImageAnalysisStatus.PROCESSING, LocalDateTime.now().minusMinutes(1), cursor, PageRequest.of(0, 100));
-        if (histories.isEmpty()) { imageRecoveryCursor = 0; return; }
-        cursor = histories.get(histories.size() - 1).getId();
-        for (LedgerImageAnalysisRequest history : histories) {
-            imageRecoveryCursor = history.getId();
-            if (imageAnalysisTasks.containsKey(history.getId())) continue;
-            if (!hasStoredImage(history) || history.getEffectivePrompt() == null) {
-                // Legacy jobs and temporary-only uploads cannot be reconstructed after restart.
-                try (var lease = workLeases.tryAcquire("image-job:" + history.getId(), java.time.Duration.ofMinutes(30))) {
-                    if (lease != null) failImageAnalysisRequest(history,
-                            new BadRequestException("서버 재시작으로 입력을 복구할 수 없습니다. 이미지를 다시 분석해 주세요."));
-                }
-                continue;
-            }
-            boolean reserved = false;
-            try {
-                reserveImageAnalysis(history.getOwner().getId());
-                reserved = true;
-                submitImageAnalysisTask(history.getOwner().getId(), history, null, history.getDocumentType(), history.getEffectivePrompt(), true);
-            } catch (TooManyRequestsException capacity) {
-                // Admission has no task cleanup when reservation itself failed.
-                if (!reserved) continue;
-                return;
-            }
-        }
-        if (histories.size() < 100) { imageRecoveryCursor = 0; return; }
-        }
+        jobRecovery.recoverImages(LedgerAiRecoverySources.images(imageAnalysisRequestRepository, workLeases,
+                () -> ledgerOcrTaskExecutor != null && workLeases != null,
+                () -> imageRecoveryCursor, cursor -> imageRecoveryCursor = cursor,
+                imageAnalysisTasks::containsKey, this::hasStoredImage,
+                history -> failImageAnalysisRequest(history,
+                        new BadRequestException("서버 재시작으로 입력을 복구할 수 없습니다. 이미지를 다시 분석해 주세요.")),
+                this::reserveImageAnalysis,
+                history -> submitImageAnalysisTask(history.getOwner().getId(), history, null,
+                        history.getDocumentType(), history.getEffectivePrompt(), true)));
     }
 
+    private final RecoverLedgerAiJobsUseCase jobRecovery = new RecoverLedgerAiJobsService();
     private volatile long imageRecoveryCursor;
 
     private void processImageAnalysisInBackground(
@@ -449,7 +412,7 @@ public class LedgerOcrService {
     ) {
         Timer.Sample ocrRequestTimer = startOcrRequestTimer();
         LedgerImageAnalysisRequest history = imageAnalysisRequestRepository.findByIdAndOwnerId(historyId, userId).orElse(null);
-        if (history == null || history.getStatus() != LedgerImageAnalysisStatus.PROCESSING) {
+        if (history == null || !LedgerAiJobLifecyclePolicy.isProcessing(history.getStatus() == null ? null : history.getStatus().name())) {
             recordOcrRequest(ocrRequestTimer, "cancelled", "cancelled");
             return;
         }
@@ -457,55 +420,10 @@ public class LedgerOcrService {
         try {
             AppUser owner = appUserService.getRequiredUser(userId);
             MultipartFile file = loadImageAnalysisInput(history, temporaryImage);
-            RemoteAnalyzeResponse remoteResponse = remoteClient.analyze(file, normalizedDocumentType, effectiveUserPrompt);
+            ImageExtraction remoteResponse = imageExtraction.analyze(new MultipartLedgerImageContent(file), normalizedDocumentType, effectiveUserPrompt);
             if (jobLease != null && !jobLease.isValid()) return;
-            String paymentCapturePlatform = resolvePaymentCapturePlatform(
-                    firstNonBlank(remoteResponse.documentType(), normalizedDocumentType),
-                    effectiveUserPrompt,
-                    remoteResponse
-            );
-            List<RemoteParsedResult> parsedEntries = resolveParsedEntries(remoteResponse);
-            RemoteParsedResult parsed = parsedEntries.isEmpty() ? remoteResponse.parsed() : parsedEntries.get(0);
-            EntryType entryType = parsed != null && parsed.entryType() == EntryType.INCOME
-                    ? EntryType.INCOME
-                    : EntryType.EXPENSE;
-
-            List<LedgerOcrLineItemResponse> lineItems = mapLineItems(parsed);
-            LedgerOcrEntrySuggestionResponse suggestion = parsed == null ? null : buildSuggestion(owner, parsed, entryType, lineItems, paymentCapturePlatform);
-            List<LedgerOcrEntrySuggestionResponse> suggestions = parsedEntries.stream()
-                    .filter(Objects::nonNull)
-                    .map(parsedEntry -> buildSuggestionForParsedEntry(owner, parsedEntry, paymentCapturePlatform))
-                    .toList();
-            List<String> validationWarnings = buildSuggestionValidationWarnings(suggestions);
-            if (!validationWarnings.isEmpty()) {
-                parsed = appendWarnings(parsed, validationWarnings);
-            }
-            if (suggestions.isEmpty() && suggestion != null) {
-                suggestions = List.of(suggestion);
-            }
-
-            LedgerOcrAnalyzeResponse response = new LedgerOcrAnalyzeResponse(
-                    history.getId(),
-                    history.getClientRequestId(),
-                    LedgerImageAnalysisStatus.COMPLETED.name(),
-                    firstNonBlank(remoteResponse.documentType(), normalizedDocumentType),
-                    remoteResponse.rawText() == null ? "" : remoteResponse.rawText(),
-                    suggestion,
-                    suggestions,
-                    lineItems,
-                    parsed != null ? parsed.confidence() : null,
-                    resolveResponseWarnings(parsed, validationWarnings),
-                    parsed != null ? limit(parsed.vendor(), MAX_TEXT_LENGTH) : null,
-                    parsed != null ? limit(parsed.paymentMethodText(), MAX_TEXT_LENGTH) : null,
-                    parsed != null ? limit(firstNonBlank(
-                            parsed.categoryText(),
-                            parsed.categoryGroupName(),
-                            parsed.categoryDetailName()
-                    ), MAX_TEXT_LENGTH) : null,
-                    remoteResponse.timing() == null ? java.util.Map.of() : remoteResponse.timing(),
-                    List.of(),
-                    List.of()
-            );
+            LedgerOcrAnalyzeResponse response = reviewImageExtraction(owner, history, remoteResponse,
+                    normalizedDocumentType, effectiveUserPrompt);
             completeImageAnalysisRequest(history, response);
             recordOcrRequest(ocrRequestTimer, "success", "none");
         } catch (RuntimeException exception) {
@@ -514,6 +432,57 @@ public class LedgerOcrService {
             log.warn("Ledger image analysis failed: historyId={}, failureType={}", historyId, exception.getClass().getSimpleName());
             if (jobLease == null || jobLease.isValid()) failImageAnalysisRequest(history, exception);
         }
+    }
+
+    private LedgerOcrAnalyzeResponse reviewImageExtraction(AppUser owner, LedgerImageAnalysisRequest history,
+            ImageExtraction remoteResponse, String normalizedDocumentType, String effectiveUserPrompt) {
+        String paymentCapturePlatform = resolvePaymentCapturePlatform(
+                firstNonBlank(remoteResponse.documentType(), normalizedDocumentType),
+                effectiveUserPrompt,
+                remoteResponse
+        );
+        List<ParsedImageEntry> parsedEntries = resolveParsedEntries(remoteResponse);
+        ParsedImageEntry parsed = parsedEntries.isEmpty() ? remoteResponse.parsed() : parsedEntries.get(0);
+        EntryType entryType = parsed != null && parsed.entryType() == EntryType.INCOME
+                ? EntryType.INCOME
+                : EntryType.EXPENSE;
+
+        List<LedgerOcrLineItemResponse> lineItems = mapLineItems(parsed);
+        LedgerOcrEntrySuggestionResponse suggestion = parsed == null ? null : buildSuggestion(owner, parsed, entryType, lineItems, paymentCapturePlatform);
+        List<LedgerOcrEntrySuggestionResponse> suggestions = parsedEntries.stream()
+                .filter(Objects::nonNull)
+                .map(parsedEntry -> buildSuggestionForParsedEntry(owner, parsedEntry, paymentCapturePlatform))
+                .toList();
+        List<String> validationWarnings = buildSuggestionValidationWarnings(suggestions);
+        if (!validationWarnings.isEmpty()) {
+            parsed = appendWarnings(parsed, validationWarnings);
+        }
+        if (suggestions.isEmpty() && suggestion != null) {
+            suggestions = List.of(suggestion);
+        }
+
+        return new LedgerOcrAnalyzeResponse(
+                history.getId(),
+                history.getClientRequestId(),
+                LedgerImageAnalysisStatus.COMPLETED.name(),
+                firstNonBlank(remoteResponse.documentType(), normalizedDocumentType),
+                remoteResponse.rawText() == null ? "" : remoteResponse.rawText(),
+                suggestion,
+                suggestions,
+                lineItems,
+                parsed != null ? parsed.confidence() : null,
+                resolveResponseWarnings(parsed, validationWarnings),
+                parsed != null ? limit(parsed.vendor(), MAX_TEXT_LENGTH) : null,
+                parsed != null ? limit(parsed.paymentMethodText(), MAX_TEXT_LENGTH) : null,
+                parsed != null ? limit(firstNonBlank(
+                        parsed.categoryText(),
+                        parsed.categoryGroupName(),
+                        parsed.categoryDetailName()
+                ), MAX_TEXT_LENGTH) : null,
+                remoteResponse.timing() == null ? java.util.Map.of() : remoteResponse.timing(),
+                List.of(),
+                List.of()
+        );
     }
 
     private LedgerOcrAnalyzeResponse processingAnalyzeResponse(LedgerImageAnalysisRequest history) {
@@ -585,6 +554,7 @@ public class LedgerOcrService {
         return new LedgerImageAnalysisHistoryDeleteResponse(1);
     }
 
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.NOT_SUPPORTED)
     public LedgerOcrAnalyzeResponse reanalyzeHistoryImage(
             Long userId,
             Long historyId,
@@ -595,6 +565,7 @@ public class LedgerOcrService {
         return reanalyzeHistoryImage(userId, historyId, documentType, prompt, useExistingEntryStyle, null, null);
     }
 
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.NOT_SUPPORTED)
     public LedgerOcrAnalyzeResponse reanalyzeHistoryImage(
             Long userId,
             Long historyId,
@@ -607,7 +578,7 @@ public class LedgerOcrService {
         AppUser owner = appUserService.getRequiredUser(userId);
         LedgerImageAnalysisRequest history = imageAnalysisRequestRepository.findByIdAndOwnerId(historyId, owner.getId())
                 .orElseThrow(() -> new BadRequestException("Image analysis history was not found."));
-        LedgerOcrImageStorageService.StoredImageContent storedImage = loadStoredHistoryImage(history);
+        LedgerImageStorageData.StoredImageContent storedImage = loadStoredHistoryImage(history);
         String effectiveDocumentType = normalizeDocumentType(firstNonBlank(documentType, history.getDocumentType()));
         String clientRequestId = "image-analysis-rerun-" + history.getId() + "-" + System.currentTimeMillis();
         MultipartFile storedFile = new StoredImageMultipartFile(
@@ -622,7 +593,7 @@ public class LedgerOcrService {
         );
     }
 
-    public LedgerOcrImageStorageService.StoredImageContent getHistoryImage(Long userId, Long historyId) {
+    public LedgerImageStorageData.StoredImageContent getHistoryImage(Long userId, Long historyId) {
         appUserService.getRequiredUser(userId);
         LedgerImageAnalysisRequest history = imageAnalysisRequestRepository.findByIdAndOwnerId(historyId, userId)
                 .orElseThrow(() -> new BadRequestException("Image analysis history was not found."));
@@ -714,9 +685,9 @@ public class LedgerOcrService {
             return toHistoryResponse(history);
         }
         // Persist cancellation before interrupting the worker, so its failure cannot win the race.
-        int cancelled = imageAnalysisRequestRepository.cancelProcessing(history.getId(), history.getOwner().getId(),
-                "사용자가 이미지 분석 요청을 취소했습니다.", LocalDateTime.now());
-        if (cancelled > 0) cancelRunningImageAnalysis(history.getId());
+        boolean cancelled = finalizer.cancel(new Cancellation(new ImageJob(history.getOwner().getId(), history.getId()),
+                "사용자가 이미지 분석 요청을 취소했습니다.", LocalDateTime.now()));
+        if (cancelled) cancelRunningImageAnalysis(history.getId());
         return imageAnalysisRequestRepository.findByIdAndOwnerId(history.getId(), history.getOwner().getId())
                 .map(this::toHistoryResponse)
                 .orElseThrow(() -> new NotFoundException("이미지 분석 기록을 찾을 수 없습니다."));
@@ -761,7 +732,7 @@ public class LedgerOcrService {
 
     private MultipartFile loadImageAnalysisInput(LedgerImageAnalysisRequest history, Path temporaryImage) {
         if (temporaryImage == null) {
-            LedgerOcrImageStorageService.StoredImageContent image = loadStoredHistoryImage(history);
+            LedgerImageStorageData.StoredImageContent image = loadStoredHistoryImage(history);
             return new StoredImageMultipartFile("file", image.fileName(), image.contentType(), image.bytes());
         }
         try {
@@ -780,23 +751,13 @@ public class LedgerOcrService {
         }
     }
     private LedgerImageAnalysisRequest storeImageForHistory(Long ownerId, LedgerImageAnalysisRequest history, MultipartFile file) {
-        if (history == null || imageStorageService == null || !imageStorageService.supportsStorage()) {
-            return history;
-        }
-        LedgerOcrImageStorageService.StoredImage storedImage = imageStorageService.store(ownerId, history.getId(), file);
-        // Uploading can take long enough for another request to cancel this job. Attach only
-        // the input reference, without merging the old version or overwriting its status.
-        int attached = imageAnalysisRequestRepository.attachStoredImage(history.getId(), ownerId,
-                storedImage.objectKey(), storedImage.storedAt());
-        if (attached == 0) {
-            imageStorageService.delete(storedImage.objectKey());
-            throw new NotFoundException("이미지 분석 기록을 찾을 수 없습니다.");
-        }
-        return imageAnalysisRequestRepository.findByIdAndOwnerId(history.getId(), ownerId)
+        if (history==null || imageStorageService==null) return history;
+        if (!imageInputWriter.store(ownerId,history.getId(),new MultipartLedgerImageContent(file))) return history;
+        return imageAnalysisRequestRepository.findByIdAndOwnerId(history.getId(),ownerId)
                 .orElseThrow(() -> new NotFoundException("이미지 분석 기록을 찾을 수 없습니다."));
     }
 
-    private LedgerOcrImageStorageService.StoredImageContent loadStoredHistoryImage(LedgerImageAnalysisRequest history) {
+    private LedgerImageStorageData.StoredImageContent loadStoredHistoryImage(LedgerImageAnalysisRequest history) {
         if (history == null || !isPresent(history.getImageObjectKey())) {
             throw new BadRequestException("Stored original image is not available for this analysis history.");
         }
@@ -833,15 +794,15 @@ public class LedgerOcrService {
     }
 
     private void completeImageAnalysisRequest(LedgerImageAnalysisRequest history, LedgerOcrAnalyzeResponse response) {
-        imageAnalysisRequestRepository.completeProcessing(history.getId(), history.getOwner().getId(),
-                normalizeDocumentType(firstNonBlank(response.documentType(), history.getDocumentType())),
-                response.rawText(), limit(summarizeResponse(response), 500), writeResponseJson(response), LocalDateTime.now());
+        finalizer.complete(new Completion(new ImageJob(history.getOwner().getId(), history.getId()),
+                limit(summarizeResponse(response), 500), writeResponseJson(response),
+                new ImageText(normalizeDocumentType(firstNonBlank(response.documentType(), history.getDocumentType())), response.rawText()), LocalDateTime.now()));
     }
 
     private void failImageAnalysisRequest(LedgerImageAnalysisRequest history, RuntimeException exception) {
         if (history == null || history.getId() == null) return;
-        imageAnalysisRequestRepository.failProcessing(history.getId(), history.getOwner().getId(),
-                limit(exception.getMessage(), 1000), "AI 이미지 분석 요청에 실패했습니다.", LocalDateTime.now());
+        finalizer.fail(new Failure(new ImageJob(history.getOwner().getId(), history.getId()),
+                limit(exception.getMessage(), 1000), "AI 이미지 분석 요청에 실패했습니다.", LocalDateTime.now()));
     }
 
     private LedgerImageAnalysisHistoryResponse toHistoryResponse(LedgerImageAnalysisRequest history) {
@@ -1216,7 +1177,7 @@ public class LedgerOcrService {
         };
     }
 
-    private List<RemoteParsedResult> resolveParsedEntries(RemoteAnalyzeResponse remoteResponse) {
+    private List<ParsedImageEntry> resolveParsedEntries(ImageExtraction remoteResponse) {
         if (remoteResponse.parsedEntries() != null && !remoteResponse.parsedEntries().isEmpty()) {
             return remoteResponse.parsedEntries().stream()
                     .filter(Objects::nonNull)
@@ -1228,7 +1189,7 @@ public class LedgerOcrService {
         return List.of();
     }
 
-    private List<String> resolveResponseWarnings(RemoteParsedResult parsed, List<String> validationWarnings) {
+    private List<String> resolveResponseWarnings(ParsedImageEntry parsed, List<String> validationWarnings) {
         List<String> warnings = new ArrayList<>();
         if (parsed != null && parsed.warnings() != null) {
             warnings.addAll(parsed.warnings());
@@ -1266,7 +1227,7 @@ public class LedgerOcrService {
         return warnings.stream().distinct().toList();
     }
 
-    private RemoteParsedResult appendWarnings(RemoteParsedResult parsed, List<String> extraWarnings) {
+    private ParsedImageEntry appendWarnings(ParsedImageEntry parsed, List<String> extraWarnings) {
         if (parsed == null || extraWarnings == null || extraWarnings.isEmpty()) {
             return parsed;
         }
@@ -1279,7 +1240,7 @@ public class LedgerOcrService {
                 warnings.add(warning);
             }
         }
-        return new RemoteParsedResult(
+        return new ParsedImageEntry(
                 parsed.entryDate(),
                 parsed.entryTime(),
                 parsed.entryType(),
@@ -1297,7 +1258,7 @@ public class LedgerOcrService {
         );
     }
 
-    private LedgerOcrEntrySuggestionResponse buildSuggestionForParsedEntry(AppUser owner, RemoteParsedResult parsed, String paymentCapturePlatform) {
+    private LedgerOcrEntrySuggestionResponse buildSuggestionForParsedEntry(AppUser owner, ParsedImageEntry parsed, String paymentCapturePlatform) {
         EntryType entryType = parsed != null && parsed.entryType() == EntryType.INCOME
                 ? EntryType.INCOME
                 : EntryType.EXPENSE;
@@ -1396,7 +1357,7 @@ public class LedgerOcrService {
         return true;
     }
 
-    private String resolvePaymentCapturePlatform(String documentType, String userPrompt, RemoteAnalyzeResponse response) {
+    private String resolvePaymentCapturePlatform(String documentType, String userPrompt, ImageExtraction response) {
         if (!"PAYMENT_CAPTURE".equalsIgnoreCase(firstNonBlank(documentType, ""))) {
             return null;
         }
@@ -1418,7 +1379,7 @@ public class LedgerOcrService {
         return null;
     }
 
-    private void addRemoteParsedPlatformClues(List<String> clues, RemoteParsedResult parsed) {
+    private void addRemoteParsedPlatformClues(List<String> clues, ParsedImageEntry parsed) {
         if (parsed == null) {
             return;
         }
@@ -1441,7 +1402,7 @@ public class LedgerOcrService {
                 || containsIgnoreCase(value, "n+");
     }
 
-    private String normalizeOcrTitle(RemoteParsedResult parsed, List<LedgerOcrLineItemResponse> lineItems, String paymentCapturePlatform) {
+    private String normalizeOcrTitle(ParsedImageEntry parsed, List<LedgerOcrLineItemResponse> lineItems, String paymentCapturePlatform) {
         String rawTitle = firstNonBlank(
                 parsed != null ? parsed.title() : null,
                 parsed != null ? parsed.vendor() : null,
@@ -1557,7 +1518,7 @@ public class LedgerOcrService {
     }
     private LedgerOcrEntrySuggestionResponse buildSuggestion(
             AppUser owner,
-            RemoteParsedResult parsed,
+            ParsedImageEntry parsed,
             EntryType entryType,
             List<LedgerOcrLineItemResponse> lineItems,
             String paymentCapturePlatform
@@ -1590,7 +1551,7 @@ public class LedgerOcrService {
     }
 
 
-    private String resolveForeignCurrencyCode(RemoteParsedResult parsed) {
+    private String resolveForeignCurrencyCode(ParsedImageEntry parsed) {
         if (parsed == null || !isPresent(parsed.currencyCode())) {
             return null;
         }
@@ -1601,7 +1562,7 @@ public class LedgerOcrService {
         return currencyCode;
     }
 
-    private BigDecimal resolveForeignAmount(RemoteParsedResult parsed, String foreignCurrencyCode, BigDecimal resolvedAmount) {
+    private BigDecimal resolveForeignAmount(ParsedImageEntry parsed, String foreignCurrencyCode, BigDecimal resolvedAmount) {
         if (parsed == null || foreignCurrencyCode == null) {
             return null;
         }
@@ -1611,7 +1572,7 @@ public class LedgerOcrService {
         }
         return positiveAmount(resolvedAmount);
     }
-    private BigDecimal resolveOcrAmount(RemoteParsedResult parsed, List<LedgerOcrLineItemResponse> lineItems) {
+    private BigDecimal resolveOcrAmount(ParsedImageEntry parsed, List<LedgerOcrLineItemResponse> lineItems) {
         if (parsed == null) {
             return null;
         }
@@ -1634,7 +1595,7 @@ public class LedgerOcrService {
         return parsedAmount;
     }
 
-    private BigDecimal resolveOrderHistoryAmount(RemoteParsedResult parsed, List<LedgerOcrLineItemResponse> lineItems, BigDecimal parsedAmount) {
+    private BigDecimal resolveOrderHistoryAmount(ParsedImageEntry parsed, List<LedgerOcrLineItemResponse> lineItems, BigDecimal parsedAmount) {
         if (!looksLikeOrderHistory(parsed)) {
             return null;
         }
@@ -1656,7 +1617,7 @@ public class LedgerOcrService {
         return null;
     }
 
-    private BigDecimal firstAnchoredAmount(RemoteParsedResult parsed) {
+    private BigDecimal firstAnchoredAmount(ParsedImageEntry parsed) {
         List<String> texts = ocrAmountSourceTexts(parsed);
         BigDecimal amount = firstAmountFromPatterns(texts, FINAL_TOTAL_AMOUNT_PATTERNS);
         if (amount != null) {
@@ -1669,7 +1630,7 @@ public class LedgerOcrService {
         return firstAmountFromPatterns(texts, PAYMENT_AMOUNT_PATTERNS);
     }
 
-    private List<String> ocrAmountSourceTexts(RemoteParsedResult parsed) {
+    private List<String> ocrAmountSourceTexts(ParsedImageEntry parsed) {
         List<String> texts = new ArrayList<>();
         if (parsed == null) {
             return texts;
@@ -1682,7 +1643,7 @@ public class LedgerOcrService {
     }
 
     private BigDecimal explicitCurrencyAmountNearEntry(
-            RemoteParsedResult parsed,
+            ParsedImageEntry parsed,
             List<LedgerOcrLineItemResponse> lineItems,
             List<String> texts
     ) {
@@ -1729,7 +1690,7 @@ public class LedgerOcrService {
         return amounts;
     }
 
-    private List<String> entryAmountKeywords(RemoteParsedResult parsed, List<LedgerOcrLineItemResponse> lineItems) {
+    private List<String> entryAmountKeywords(ParsedImageEntry parsed, List<LedgerOcrLineItemResponse> lineItems) {
         List<String> keywords = new ArrayList<>();
         if (parsed != null) {
             addAmountKeywords(keywords, parsed.title());
@@ -1845,7 +1806,7 @@ public class LedgerOcrService {
         }
     }
 
-    private boolean amountAppearsInParsedText(RemoteParsedResult parsed, BigDecimal amount) {
+    private boolean amountAppearsInParsedText(ParsedImageEntry parsed, BigDecimal amount) {
         if (parsed == null || amount == null) {
             return false;
         }
@@ -1863,7 +1824,7 @@ public class LedgerOcrService {
                 || containsIgnoreCase(joined, plain + " KRW");
     }
 
-    private boolean looksLikeOrderHistory(RemoteParsedResult parsed) {
+    private boolean looksLikeOrderHistory(ParsedImageEntry parsed) {
         if (parsed == null) {
             return false;
         }
@@ -1882,7 +1843,7 @@ public class LedgerOcrService {
                 || containsIgnoreCase(joined, "order")
                 || containsIgnoreCase(joined, "product amount");
     }
-    private ResolvedOcrCategory resolveOcrCategory(AppUser owner, EntryType entryType, RemoteParsedResult parsed) {
+    private ResolvedOcrCategory resolveOcrCategory(AppUser owner, EntryType entryType, ParsedImageEntry parsed) {
         if (owner == null || owner.getId() == null) {
             return new ResolvedOcrCategory(null, null, null, null);
         }
@@ -1947,7 +1908,7 @@ public class LedgerOcrService {
                 .orElse(null);
     }
 
-    private String buildMemo(RemoteParsedResult parsed, List<LedgerOcrLineItemResponse> lineItems) {
+    private String buildMemo(ParsedImageEntry parsed, List<LedgerOcrLineItemResponse> lineItems) {
         if (parsed == null) {
             return null;
         }
@@ -2000,7 +1961,7 @@ public class LedgerOcrService {
             parts.add(trimmed);
         }
     }
-    private List<LedgerOcrLineItemResponse> mapLineItems(RemoteParsedResult parsed) {
+    private List<LedgerOcrLineItemResponse> mapLineItems(ParsedImageEntry parsed) {
         if (parsed == null || parsed.lineItems() == null) {
             return List.of();
         }
@@ -2010,7 +1971,7 @@ public class LedgerOcrService {
                 .toList();
     }
 
-    private LedgerOcrLineItemResponse mapLineItem(RemoteLineItem item) {
+    private LedgerOcrLineItemResponse mapLineItem(ImageLineItem item) {
         return new LedgerOcrLineItemResponse(
                 limit(item.itemName(), 160),
                 item.quantity(),

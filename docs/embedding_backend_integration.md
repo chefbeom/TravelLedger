@@ -12,6 +12,8 @@
 
 ## 코드 구성
 
+2026-10-16 리팩토링에서 배치 준비·최신 claim 선별·upsert/delete 분기·완료/실패 조정을 `SynchronizeLedgerEmbeddingsUseCase`의 순수 코어로 분리했다. `LedgerEmbeddingSyncWorker`는 기존 스케줄·busy 제어·공유 리스·DB 트랜잭션 밖 전송 검사·안전 로그를 담당한다. `LedgerEmbeddingJobsPort`의 어댑터는 기존 JDBC store의 SQL·독립 트랜잭션·토큰/버전/리스 조건을 그대로 호출하고, `LedgerEmbeddingIndexPort`의 어댑터가 기존 HTTP 클라이언트/UUIDv5/전송 문서/제공자 오류를 변환한다. core 문서·claim에는 HTTP/JSON/JDBC 구현 타입이 없으며 실패에는 민감한 본문이나 원인 예외를 저장하지 않는다. 동기화 활성화·기존 자료 일괄 적재·검색/RAG 기능을 추가한 것은 아니다. 격리 H2·모의 HTTP 검증과 운영 검증의 구분은 [리팩토링 진행 문서](backend_refactoring_progress.md)를 따른다.
+
 경로는 저장소 루트 기준이다.
 
 | 위치 | 역할 |
@@ -185,7 +187,7 @@ Query:<원본 질문>
 
 ## 후속 구현과 남은 단계
 
-1. 기반 계약의 이전 검증은 `embedding_validation_report.md`를 확인한다. 2026-10-06 자동 동기화 후속 단계에서는 Java 컴파일만 확인했고, 새 테스트 추가·테스트 실행·운영 서버 접속·데이터 적재는 하지 않았다. 작업자와 MariaDB 런타임 검증은 별도 승인이 필요하다.
+1. 기반 계약의 이전 검증은 `embedding_validation_report.md`를 확인한다. 2026-10-06 자동 동기화 단계에서는 Java 컴파일만 확인했다. 2026-10-16 리팩토링에서 작업자/배치·원격 경계·H2 outbox 회귀를 추가했다. 이는 MariaDB·실제 OCI 수신 API 검증이나 데이터 적재를 의미하지 않는다. 운영 서버 검증은 별도 승인이 필요하다.
 2. 운영 환경변수, 수신 API 인증키 일치, 백엔드의 Tailscale 도달 가능성을 배포 단계에서 확인한다. Qdrant 컬렉션과 named vector 설정도 수신 API 측에서 확인한다.
 3. 거래·정기 규칙의 생성·수정·삭제·복구 outbox 연결은 2026-10-06에 구현했다. 런타임 검증·운영 반영은 미실행이다. 원격 fencing 제한과 활성화 조건은 `embedding_automatic_sync.md`를 따른다.
 4. 분류·결제수단 JPA 이름 변경 fan-out과 메타데이터 전용 변경의 동기화를 구현했다. text_hash 기반 갱신 생략은 하지 않는다.

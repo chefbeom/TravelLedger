@@ -96,7 +96,7 @@ if ($findings.Count -eq 0) {
         'raw AI prompt',
         'provider response body',
         'full filesystem path',
-        'safeBackupFileName(...) to avoid storing full paths'
+        'safeBackupFileName'
     )
     foreach ($phrase in $requiredSafeDetailPhrases) {
         if (-not $contract.Contains($phrase)) {

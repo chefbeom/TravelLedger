@@ -1,4 +1,4 @@
-﻿# PWA and Mobile Capture Baseline
+# PWA and Mobile Capture Baseline
 
 This slice makes the frontend more usable as an installable mobile workspace without changing server-side upload trust boundaries. `scripts/verify-pwa-mobile-baseline.ps1` now gates the installable app shell, API-cache exclusion, WCAG/mobile checklist anchors, and camera capture hints for the main image upload flows.
 

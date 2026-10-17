@@ -1,5 +1,7 @@
 package com.playdata.calen.ledger.ai;
 
+import com.playdata.calen.ledger.domain.model.LedgerAnalysisData.Result;
+
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.playdata.calen.ledger.dto.LedgerAiAnalysisReportResponse;
@@ -13,10 +15,10 @@ class LedgerAiAnalysisReportMergerTest {
     @Test
     void remoteReportFieldsOverrideFallbackReport() {
         LedgerAiAnalysisReportResponse fallback = report("fallback key", "fallback full", List.of("fallback action"));
-        LedgerAiRemoteResponse remote = new LedgerAiRemoteResponse(
+        Result remote = new Result(
                 true, null, "remote summary", List.of("remote highlight"), List.of(), List.of(), List.of("remote recommendation"),
                 List.of(), List.of(), List.of("remote trend"), List.of(), List.of(), null, null,
-                report("remote key", "", List.of("remote action"))
+                new com.playdata.calen.ledger.domain.model.LedgerAnalysisData.Report("remote key", "", "average insight", List.of("fallback notable"), List.of("fallback regular"), List.of("fallback abnormal"), "fallback payment", List.of("fallback subscription"), List.of("fallback fixed"), List.of("remote action"), List.of("fallback comparison"))
         );
 
         LedgerAiAnalysisReportResponse result = merger.merge(fallback, remote);
@@ -31,7 +33,7 @@ class LedgerAiAnalysisReportMergerTest {
     @Test
     void remoteSummaryAndListsFillBlankRemoteReportFields() {
         LedgerAiAnalysisReportResponse fallback = report("fallback key", "fallback full", List.of("fallback action"));
-        LedgerAiRemoteResponse remote = new LedgerAiRemoteResponse(
+        Result remote = new Result(
                 true, null, "provider summary only", List.of("provider highlight"), List.of("provider warning"), List.of(), List.of("provider recommendation"),
                 List.of(), List.of(), List.of(), List.of(), List.of(), null, null, null
         );

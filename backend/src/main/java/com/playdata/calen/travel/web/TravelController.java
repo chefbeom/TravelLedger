@@ -2,181 +2,37 @@ package com.playdata.calen.travel.web;
 
 import com.playdata.calen.account.security.AppUserPrincipal;
 import com.playdata.calen.sharing.service.RecordSharingService;
-import com.playdata.calen.ledger.dto.LedgerEntryResponse;
-import com.playdata.calen.travel.domain.TravelMediaType;
-import com.playdata.calen.travel.dto.TravelBudgetItemRequest;
-import com.playdata.calen.travel.dto.TravelBudgetItemResponse;
-import com.playdata.calen.travel.dto.TravelCategoryCatalogResponse;
-import com.playdata.calen.travel.dto.TravelCommunityFeedPageResponse;
-import com.playdata.calen.travel.dto.TravelCommunityPostResponse;
-import com.playdata.calen.travel.dto.TravelExchangeRateResponse;
-import com.playdata.calen.travel.dto.TravelExpenseRecordRequest;
-import com.playdata.calen.travel.dto.TravelExpenseRecordResponse;
-import com.playdata.calen.travel.dto.TravelMediaResponse;
-import com.playdata.calen.travel.dto.TravelMediaUploadCompleteRequest;
-import com.playdata.calen.travel.dto.TravelMediaUploadPrepareRequest;
-import com.playdata.calen.travel.dto.TravelMediaUploadPrepareResponse;
-import com.playdata.calen.travel.dto.TravelMyMapMarkerDetailBundleResponse;
-import com.playdata.calen.travel.dto.TravelMyMapClusterRepresentativeRequest;
-import com.playdata.calen.travel.dto.TravelMyMapOverviewResponse;
-import com.playdata.calen.travel.dto.TravelMyMapPhotoClusterPageResponse;
-import com.playdata.calen.travel.dto.TravelMemoryRecordRequest;
-import com.playdata.calen.travel.dto.TravelMemoryRecordResponse;
-import com.playdata.calen.travel.dto.TravelMapShareLinkRequest;
-import com.playdata.calen.travel.dto.TravelMapShareLinkResponse;
 import com.playdata.calen.travel.dto.TravelLoginMapPreviewResponse;
-import com.playdata.calen.travel.dto.TravelPhotoFrameMediaResponse;
-import com.playdata.calen.travel.dto.TravelPlanDetailResponse;
-import com.playdata.calen.travel.dto.TravelPlanPublicShareRequest;
-import com.playdata.calen.travel.dto.TravelPlanPublicShareResponse;
-import com.playdata.calen.travel.dto.TravelPlanRequest;
-import com.playdata.calen.travel.dto.TravelPlanShareRequest;
-import com.playdata.calen.travel.dto.TravelPlanShareResponse;
-import com.playdata.calen.travel.dto.TravelPlanSummaryResponse;
-import com.playdata.calen.travel.dto.TravelPortfolioResponse;
-import com.playdata.calen.travel.dto.TravelPublicTripsOverviewResponse;
-import com.playdata.calen.travel.dto.TravelPublicMapShareResponse;
 import com.playdata.calen.travel.dto.TravelReverseGeocodeResponse;
-import com.playdata.calen.travel.dto.TravelRouteGpxUploadAbortRequest;
-import com.playdata.calen.travel.dto.TravelRouteGpxUploadCompleteRequest;
-import com.playdata.calen.travel.dto.TravelRouteGpxUploadPrepareRequest;
-import com.playdata.calen.travel.dto.TravelRouteGpxUploadPrepareResponse;
-import com.playdata.calen.travel.dto.TravelRouteSegmentRequest;
-import com.playdata.calen.travel.dto.TravelRouteSegmentResponse;
-import com.playdata.calen.travel.dto.TravelShareGroupRequest;
-import com.playdata.calen.travel.dto.TravelShareGroupResponse;
-import com.playdata.calen.travel.dto.TravelShareRecipientResponse;
-import com.playdata.calen.travel.dto.TravelSharedExhibitDetailResponse;
-import com.playdata.calen.travel.dto.TravelSharedExhibitPageResponse;
-import com.playdata.calen.travel.dto.TravelSharedExhibitSummaryResponse;
-import com.playdata.calen.travel.service.TravelMediaStorageService;
+import com.playdata.calen.travel.adapter.in.web.TravelMediaHttpResponses;
 import com.playdata.calen.travel.service.TravelService;
 import com.playdata.calen.travel.service.TravelLoginMapPreviewService;
 import com.playdata.calen.travel.service.TravelReverseGeocodeService;
-import jakarta.validation.Valid;
-import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.util.List;
-import lombok.extern.slf4j.Slf4j;
 import lombok.RequiredArgsConstructor;
-import org.springframework.core.io.ByteArrayResource;
-import org.springframework.http.ContentDisposition;
 import org.springframework.http.CacheControl;
 import org.springframework.http.HttpHeaders;
-import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
-import org.springframework.core.io.Resource;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.PutMapping;
-import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.multipart.MultipartFile;
 
 @RestController
 @RequestMapping("/api/travel")
 @RequiredArgsConstructor
-@Slf4j
 public class TravelController {
 
-    @org.springframework.beans.factory.annotation.Autowired
-    @org.springframework.beans.factory.annotation.Qualifier("travelMapReadExecutor")
-    private org.springframework.core.task.TaskExecutor mapReadExecutor;
-
-    private final TravelService travelService;
     private final TravelLoginMapPreviewService travelLoginMapPreviewService;
-    private final TravelMediaStorageService travelMediaStorageService;
+    private final TravelMediaHttpResponses mediaResponses;
     private final TravelReverseGeocodeService travelReverseGeocodeService;
     private final RecordSharingService recordSharingService;
 
     @org.springframework.beans.factory.annotation.Autowired
     private com.playdata.calen.travel.service.TravelReverseGeocodeDispatcher travelReverseGeocodeDispatcher;
 
-    @GetMapping("/plans")
-    public List<TravelPlanSummaryResponse> getPlans(@AuthenticationPrincipal AppUserPrincipal currentUser) {
-        return travelService.getPlans(currentUser.userId());
-    }
 
-    @GetMapping("/photo-frame-media")
-    public List<TravelPhotoFrameMediaResponse> getPhotoFrameMedia(@AuthenticationPrincipal AppUserPrincipal currentUser) {
-        return travelService.getPhotoFrameMedia(currentUser.userId());
-    }
-
-    @GetMapping("/plans/{planId}")
-    public TravelPlanDetailResponse getPlan(
-            @AuthenticationPrincipal AppUserPrincipal currentUser,
-            @PathVariable Long planId
-    ) {
-        return travelService.getPlan(currentUser.userId(), planId);
-    }
-
-    @GetMapping("/portfolio")
-    public TravelPortfolioResponse getPortfolio(@AuthenticationPrincipal AppUserPrincipal currentUser) {
-        return travelService.getPortfolio(currentUser.userId());
-    }
-
-    @GetMapping("/my-map")
-    public java.util.concurrent.CompletableFuture<TravelMyMapOverviewResponse> getMyMapOverview(@AuthenticationPrincipal AppUserPrincipal currentUser) {
-        return java.util.concurrent.CompletableFuture.supplyAsync(() -> travelService.getMyMapOverview(currentUser.userId()), mapReadExecutor);
-    }
-
-    @GetMapping("/my-map/markers/{markerId}")
-    public TravelMyMapMarkerDetailBundleResponse getMyMapMarkerDetails(
-            @AuthenticationPrincipal AppUserPrincipal currentUser,
-            @PathVariable Long markerId
-    ) {
-        return travelService.getMyMapMarkerDetailBundle(currentUser.userId(), markerId);
-    }
-
-    @GetMapping("/my-map/photo-clusters/{clusterId}")
-    public java.util.concurrent.CompletableFuture<TravelMyMapPhotoClusterPageResponse> getMyMapPhotoCluster(
-            @AuthenticationPrincipal AppUserPrincipal currentUser,
-            @PathVariable Long clusterId,
-            @RequestParam(name = "page", defaultValue = "0") Integer page,
-            @RequestParam(name = "size", defaultValue = "12") Integer size,
-            @RequestParam(name = "focusMediaId", required = false) Long focusMediaId
-    ) {
-        return java.util.concurrent.CompletableFuture.supplyAsync(
-                () -> travelService.getMyMapPhotoClusterDetail(currentUser.userId(), clusterId, page, size, focusMediaId), mapReadExecutor);
-    }
-
-    @PostMapping("/map-shares")
-    public TravelMapShareLinkResponse createMapShare(
-            @AuthenticationPrincipal AppUserPrincipal currentUser,
-            @Valid @RequestBody TravelMapShareLinkRequest request
-    ) {
-        return travelService.createTravelMapShareLink(currentUser.userId(), request);
-    }
-
-    @GetMapping("/public/map-shares/{token}")
-    public TravelPublicMapShareResponse getPublicMapShare(@PathVariable String token) {
-        return travelService.getTravelMapShare(token);
-    }
-
-    @GetMapping("/public/map-shares/{token}/photo-clusters/{clusterId}")
-    public TravelMyMapPhotoClusterPageResponse getPublicMapSharePhotoCluster(
-            @PathVariable String token,
-            @PathVariable Long clusterId,
-            @RequestParam(name = "page", defaultValue = "0") Integer page,
-            @RequestParam(name = "size", defaultValue = "12") Integer size,
-            @RequestParam(name = "focusMediaId", required = false) Long focusMediaId
-    ) {
-        return travelService.getTravelMapSharePhotoCluster(token, clusterId, page, size, focusMediaId);
-    }
-
-    @PutMapping("/my-map/photo-clusters/{clusterId}/representative")
-    public TravelMyMapPhotoClusterPageResponse updateMyMapPhotoClusterRepresentative(
-            @AuthenticationPrincipal AppUserPrincipal currentUser,
-            @PathVariable Long clusterId,
-            @Valid @RequestBody TravelMyMapClusterRepresentativeRequest request
-    ) {
-        return travelService.updateMyMapPhotoClusterRepresentative(currentUser.userId(), clusterId, request.mediaId());
-    }
 
     @GetMapping("/geocode/reverse")
     public java.util.concurrent.CompletableFuture<TravelReverseGeocodeResponse> reverseGeocode(
@@ -187,24 +43,7 @@ public class TravelController {
         return travelReverseGeocodeDispatcher.reverseGeocode(latitude, longitude);
     }
 
-    @GetMapping("/categories")
-    public TravelCategoryCatalogResponse getCategoryCatalog(@AuthenticationPrincipal AppUserPrincipal currentUser) {
-        return travelService.getCategoryCatalog(currentUser.userId());
-    }
 
-    @GetMapping("/community-feed")
-    public TravelCommunityFeedPageResponse getCommunityFeed(
-            @AuthenticationPrincipal AppUserPrincipal currentUser,
-            @RequestParam(name = "page", required = false) Integer page,
-            @RequestParam(name = "size", required = false) Integer size
-    ) {
-        return travelService.getCommunityFeed(currentUser.userId(), page, size);
-    }
-
-    @GetMapping("/public-trips")
-    public TravelPublicTripsOverviewResponse getPublicTrips(@AuthenticationPrincipal AppUserPrincipal currentUser) {
-        return travelService.getPublicTripsOverview(currentUser.userId());
-    }
 
     @GetMapping("/public/login-map-preview")
     public ResponseEntity<TravelLoginMapPreviewResponse> getLoginMapPreview() {
@@ -215,372 +54,17 @@ public class TravelController {
 
     @GetMapping("/public/login-map-preview/markers/{markerNumber}/thumbnail")
     public ResponseEntity<?> getLoginMapPreviewMarkerThumbnail(@PathVariable int markerNumber) {
-        TravelService.MediaDownload download = travelLoginMapPreviewService.getPublicMarkerThumbnail(markerNumber);
-        return buildThumbnailOnlyResponse(download, 320);
-    }
-
-    @GetMapping("/public-trips/photo-clusters/{clusterId}")
-    public TravelMyMapPhotoClusterPageResponse getPublicTripPhotoCluster(
-            @AuthenticationPrincipal AppUserPrincipal currentUser,
-            @PathVariable Long clusterId,
-            @RequestParam(name = "page", defaultValue = "0") Integer page,
-            @RequestParam(name = "size", defaultValue = "12") Integer size,
-            @RequestParam(name = "focusMediaId", required = false) Long focusMediaId
-    ) {
-        return travelService.getPublicTripPhotoClusterDetail(currentUser.userId(), clusterId, page, size, focusMediaId);
-    }
-
-    @GetMapping("/share-recipients")
-    public List<TravelShareRecipientResponse> searchShareRecipients(
-            @AuthenticationPrincipal AppUserPrincipal currentUser,
-            @RequestParam(name = "q", defaultValue = "") String query
-    ) {
-        return travelService.searchShareRecipients(currentUser.userId(), query);
-    }
-
-    @GetMapping("/share-groups")
-    public List<TravelShareGroupResponse> getShareGroups(@AuthenticationPrincipal AppUserPrincipal currentUser) {
-        return travelService.getShareGroups(currentUser.userId());
-    }
-
-    @PostMapping("/share-groups")
-    public TravelShareGroupResponse saveShareGroup(
-            @AuthenticationPrincipal AppUserPrincipal currentUser,
-            @Valid @RequestBody TravelShareGroupRequest request
-    ) {
-        return travelService.saveShareGroup(currentUser.userId(), request);
-    }
-
-    @DeleteMapping("/share-groups/{groupId}")
-    public void deleteShareGroup(
-            @AuthenticationPrincipal AppUserPrincipal currentUser,
-            @PathVariable Long groupId
-    ) {
-        travelService.deleteShareGroup(currentUser.userId(), groupId);
-    }
-
-    @GetMapping("/shared-exhibits")
-    public TravelSharedExhibitPageResponse getSharedExhibits(
-            @AuthenticationPrincipal AppUserPrincipal currentUser,
-            @RequestParam(name = "page", required = false) Integer page,
-            @RequestParam(name = "size", required = false) Integer size
-    ) {
-        return travelService.getSharedExhibits(currentUser.userId(), page, size);
-    }
-
-    @GetMapping("/shared-exhibits/{shareId}")
-    public TravelSharedExhibitDetailResponse getSharedExhibit(
-            @AuthenticationPrincipal AppUserPrincipal currentUser,
-            @PathVariable Long shareId
-    ) {
-        return travelService.getSharedExhibit(currentUser.userId(), shareId);
-    }
-
-    @PostMapping("/plans")
-    public TravelPlanSummaryResponse createPlan(
-            @AuthenticationPrincipal AppUserPrincipal currentUser,
-            @Valid @RequestBody TravelPlanRequest request
-    ) {
-        return travelService.createPlan(currentUser.userId(), request);
-    }
-
-    @PutMapping("/plans/{planId}")
-    public TravelPlanSummaryResponse updatePlan(
-            @AuthenticationPrincipal AppUserPrincipal currentUser,
-            @PathVariable Long planId,
-            @Valid @RequestBody TravelPlanRequest request
-    ) {
-        return travelService.updatePlan(currentUser.userId(), planId, request);
-    }
-
-    @PostMapping("/plans/{planId}/shares")
-    public TravelPlanShareResponse sharePlan(
-            @AuthenticationPrincipal AppUserPrincipal currentUser,
-            @PathVariable Long planId,
-            @Valid @RequestBody TravelPlanShareRequest request
-    ) {
-        return travelService.shareCompletedPlan(currentUser.userId(), planId, request.loginId());
-    }
-
-    @GetMapping("/plans/{planId}/shares")
-    public List<TravelPlanShareResponse> getPlanShares(
-            @AuthenticationPrincipal AppUserPrincipal currentUser,
-            @PathVariable Long planId
-    ) {
-        return travelService.getPlanShares(currentUser.userId(), planId);
-    }
-
-    @DeleteMapping("/plans/{planId}/shares/{shareId}")
-    public void cancelPlanShare(
-            @AuthenticationPrincipal AppUserPrincipal currentUser,
-            @PathVariable Long planId,
-            @PathVariable Long shareId
-    ) {
-        travelService.cancelPlanShare(currentUser.userId(), planId, shareId);
-    }
-
-    @PutMapping("/plans/{planId}/public-share")
-    public TravelPlanPublicShareResponse updatePlanPublicShare(
-            @AuthenticationPrincipal AppUserPrincipal currentUser,
-            @PathVariable Long planId,
-            @Valid @RequestBody TravelPlanPublicShareRequest request
-    ) {
-        return travelService.updatePlanPublicShare(currentUser.userId(), planId, request.publicShared());
-    }
-
-    @DeleteMapping("/plans/{planId}")
-    public void deletePlan(
-            @AuthenticationPrincipal AppUserPrincipal currentUser,
-            @PathVariable Long planId
-    ) {
-        travelService.deletePlan(currentUser.userId(), planId);
-    }
-
-    @PostMapping("/plans/{planId}/routes")
-    public TravelRouteSegmentResponse createRouteSegment(
-            @AuthenticationPrincipal AppUserPrincipal currentUser,
-            @PathVariable Long planId,
-            @Valid @RequestBody TravelRouteSegmentRequest request
-    ) {
-        return travelService.createRouteSegment(currentUser.userId(), planId, request);
-    }
-
-    @PutMapping("/routes/{routeId}")
-    public TravelRouteSegmentResponse updateRouteSegment(
-            @AuthenticationPrincipal AppUserPrincipal currentUser,
-            @PathVariable Long routeId,
-            @Valid @RequestBody TravelRouteSegmentRequest request
-    ) {
-        return travelService.updateRouteSegment(currentUser.userId(), routeId, request);
-    }
-
-    @PostMapping(value = "/routes/{routeId}/gpx-files", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public TravelRouteSegmentResponse uploadRouteGpxFiles(
-            @AuthenticationPrincipal AppUserPrincipal currentUser,
-            @PathVariable Long routeId,
-            @RequestParam("files") List<MultipartFile> files
-    ) {
-        return travelService.uploadRouteGpxFiles(currentUser.userId(), routeId, files);
-    }
-
-    @PostMapping("/routes/{routeId}/gpx-files/presign")
-    public TravelRouteGpxUploadPrepareResponse prepareRouteGpxUpload(
-            @AuthenticationPrincipal AppUserPrincipal currentUser,
-            @PathVariable Long routeId,
-            @Valid @RequestBody TravelRouteGpxUploadPrepareRequest request
-    ) {
-        return travelService.prepareRouteGpxUpload(currentUser.userId(), routeId, request);
-    }
-
-    @PostMapping("/routes/{routeId}/gpx-files/complete")
-    public TravelRouteSegmentResponse completeRouteGpxUpload(
-            @AuthenticationPrincipal AppUserPrincipal currentUser,
-            @PathVariable Long routeId,
-            @Valid @RequestBody TravelRouteGpxUploadCompleteRequest request
-    ) {
-        return travelService.completeRouteGpxUpload(currentUser.userId(), routeId, request);
-    }
-
-    @PostMapping("/routes/{routeId}/gpx-files/abort")
-    public void abortRouteGpxUpload(
-            @AuthenticationPrincipal AppUserPrincipal currentUser,
-            @PathVariable Long routeId,
-            @Valid @RequestBody TravelRouteGpxUploadAbortRequest request
-    ) {
-        travelService.abortRouteGpxUpload(currentUser.userId(), routeId, request);
+        return mediaResponses.thumbnailOnly(travelLoginMapPreviewService.getPublicMarkerThumbnail(markerNumber), 320);
     }
 
 
-    @DeleteMapping("/routes/{routeId}")
-    public void deleteRouteSegment(
-            @AuthenticationPrincipal AppUserPrincipal currentUser,
-            @PathVariable Long routeId
-    ) {
-        travelService.deleteRouteSegment(currentUser.userId(), routeId);
-    }
 
-    @PostMapping("/plans/{planId}/budget-items")
-    public TravelBudgetItemResponse createBudgetItem(
-            @AuthenticationPrincipal AppUserPrincipal currentUser,
-            @PathVariable Long planId,
-            @Valid @RequestBody TravelBudgetItemRequest request
-    ) {
-        return travelService.createBudgetItem(currentUser.userId(), planId, request);
-    }
 
-    @PutMapping("/budget-items/{itemId}")
-    public TravelBudgetItemResponse updateBudgetItem(
-            @AuthenticationPrincipal AppUserPrincipal currentUser,
-            @PathVariable Long itemId,
-            @Valid @RequestBody TravelBudgetItemRequest request
-    ) {
-        return travelService.updateBudgetItem(currentUser.userId(), itemId, request);
-    }
 
-    @DeleteMapping("/budget-items/{itemId}")
-    public void deleteBudgetItem(
-            @AuthenticationPrincipal AppUserPrincipal currentUser,
-            @PathVariable Long itemId
-    ) {
-        travelService.deleteBudgetItem(currentUser.userId(), itemId);
-    }
 
-    @PostMapping("/plans/{planId}/records")
-    public TravelExpenseRecordResponse createExpenseRecord(
-            @AuthenticationPrincipal AppUserPrincipal currentUser,
-            @PathVariable Long planId,
-            @Valid @RequestBody TravelExpenseRecordRequest request
-    ) {
-        return travelService.createExpenseRecord(currentUser.userId(), planId, request);
-    }
 
-    @PutMapping("/records/{recordId}")
-    public TravelExpenseRecordResponse updateExpenseRecord(
-            @AuthenticationPrincipal AppUserPrincipal currentUser,
-            @PathVariable Long recordId,
-            @Valid @RequestBody TravelExpenseRecordRequest request
-    ) {
-        return travelService.updateExpenseRecord(currentUser.userId(), recordId, request);
-    }
 
-    @DeleteMapping("/records/{recordId}")
-    public void deleteExpenseRecord(
-            @AuthenticationPrincipal AppUserPrincipal currentUser,
-            @PathVariable Long recordId
-    ) {
-        travelService.deleteExpenseRecord(currentUser.userId(), recordId);
-    }
 
-    @PostMapping("/records/{recordId}/ledger-entry")
-    public LedgerEntryResponse reflectExpenseRecordToLedger(
-            @AuthenticationPrincipal AppUserPrincipal currentUser,
-            @PathVariable Long recordId
-    ) {
-        return travelService.reflectExpenseRecordToLedger(currentUser.userId(), recordId);
-    }
-
-    @PostMapping("/plans/{planId}/ledger-entries/{entryId}/record")
-    public TravelExpenseRecordResponse reflectLedgerEntryToTravelRecord(
-            @AuthenticationPrincipal AppUserPrincipal currentUser,
-            @PathVariable Long planId,
-            @PathVariable Long entryId
-    ) {
-        return travelService.reflectLedgerEntryToTravelRecord(currentUser.userId(), planId, entryId);
-    }
-
-    @PostMapping("/plans/{planId}/memories")
-    public TravelMemoryRecordResponse createMemoryRecord(
-            @AuthenticationPrincipal AppUserPrincipal currentUser,
-            @PathVariable Long planId,
-            @Valid @RequestBody TravelMemoryRecordRequest request
-    ) {
-        return travelService.createMemoryRecord(currentUser.userId(), planId, request);
-    }
-
-    @PutMapping("/memories/{memoryId}")
-    public TravelMemoryRecordResponse updateMemoryRecord(
-            @AuthenticationPrincipal AppUserPrincipal currentUser,
-            @PathVariable Long memoryId,
-            @Valid @RequestBody TravelMemoryRecordRequest request
-    ) {
-        return travelService.updateMemoryRecord(currentUser.userId(), memoryId, request);
-    }
-
-    @DeleteMapping("/memories/{memoryId}")
-    public void deleteMemoryRecord(
-            @AuthenticationPrincipal AppUserPrincipal currentUser,
-            @PathVariable Long memoryId
-    ) {
-        travelService.deleteMemoryRecord(currentUser.userId(), memoryId);
-    }
-
-    @PostMapping("/records/{recordId}/media/presign")
-    public TravelMediaUploadPrepareResponse prepareRecordMediaUpload(
-            @AuthenticationPrincipal AppUserPrincipal currentUser,
-            @PathVariable Long recordId,
-            @Valid @RequestBody TravelMediaUploadPrepareRequest request
-    ) {
-        return travelService.prepareRecordMediaUpload(currentUser.userId(), recordId, request);
-    }
-
-    @PostMapping("/records/{recordId}/media/complete")
-    public List<TravelMediaResponse> completeRecordMediaUpload(
-            @AuthenticationPrincipal AppUserPrincipal currentUser,
-            @PathVariable Long recordId,
-            @Valid @RequestBody TravelMediaUploadCompleteRequest request
-    ) {
-        return travelService.completeRecordMediaUpload(currentUser.userId(), recordId, request);
-    }
-
-    @PostMapping("/memories/{memoryId}/media/presign")
-    public TravelMediaUploadPrepareResponse prepareMemoryMediaUpload(
-            @AuthenticationPrincipal AppUserPrincipal currentUser,
-            @PathVariable Long memoryId,
-            @Valid @RequestBody TravelMediaUploadPrepareRequest request
-    ) {
-        return travelService.prepareMemoryMediaUpload(currentUser.userId(), memoryId, request);
-    }
-
-    @PostMapping("/memories/{memoryId}/media/complete")
-    public List<TravelMediaResponse> completeMemoryMediaUpload(
-            @AuthenticationPrincipal AppUserPrincipal currentUser,
-            @PathVariable Long memoryId,
-            @Valid @RequestBody TravelMediaUploadCompleteRequest request
-    ) {
-        return travelService.completeMemoryMediaUpload(currentUser.userId(), memoryId, request);
-    }
-
-    @DeleteMapping("/media/{mediaId}")
-    public void deleteMedia(
-            @AuthenticationPrincipal AppUserPrincipal currentUser,
-            @PathVariable Long mediaId
-    ) {
-        travelService.deleteMedia(currentUser.userId(), mediaId);
-    }
-
-    @GetMapping("/media/{mediaId}/content")
-    public ResponseEntity<?> downloadMedia(
-            @AuthenticationPrincipal AppUserPrincipal currentUser,
-            @PathVariable Long mediaId,
-            @RequestParam(name = "thumbnail", defaultValue = "false") boolean thumbnail,
-            @RequestParam(name = "w", required = false) Integer width
-    ) {
-        TravelService.MediaDownload download = travelService.getMediaDownload(currentUser.userId(), mediaId);
-        return buildMediaResponse(download, thumbnail, width);
-    }
-
-    @GetMapping("/public/map-shares/{token}/media/{mediaId}/content")
-    public ResponseEntity<?> downloadPublicMapShareMedia(
-            @PathVariable String token,
-            @PathVariable Long mediaId,
-            @RequestParam(name = "thumbnail", defaultValue = "false") boolean thumbnail,
-            @RequestParam(name = "w", required = false) Integer width
-    ) {
-        TravelService.MediaDownload download = travelService.getTravelMapShareMediaDownload(token, mediaId);
-        return buildMediaResponse(download, thumbnail, width);
-    }
-    @GetMapping("/public/media/{mediaId}/content")
-    public ResponseEntity<?> downloadSharedMedia(
-            @PathVariable Long mediaId,
-            @RequestParam("token") String token,
-            @RequestParam(name = "thumbnail", defaultValue = "false") boolean thumbnail,
-            @RequestParam(name = "w", required = false) Integer width
-    ) {
-        TravelService.MediaDownload download = travelService.getSharedMediaDownload(mediaId, token);
-        return buildMediaResponse(download, thumbnail, width);
-    }
-
-    @GetMapping("/shared-exhibits/{shareId}/media/{mediaId}/content")
-    public ResponseEntity<?> downloadSharedExhibitMedia(
-            @AuthenticationPrincipal AppUserPrincipal currentUser,
-            @PathVariable Long shareId,
-            @PathVariable Long mediaId,
-            @RequestParam(name = "thumbnail", defaultValue = "false") boolean thumbnail,
-            @RequestParam(name = "w", required = false) Integer width
-    ) {
-        TravelService.MediaDownload download = travelService.getSharedExhibitMediaDownload(currentUser.userId(), shareId, mediaId);
-        return buildMediaResponse(download, thumbnail, width);
-    }
 
     @GetMapping("/record-shares/{shareId}/media/{mediaId}/content")
     public ResponseEntity<?> downloadRecordSharedMedia(@AuthenticationPrincipal AppUserPrincipal currentUser,
@@ -596,83 +80,8 @@ public class TravelController {
     }
 
     private ResponseEntity<?> buildMediaResponse(TravelService.MediaDownload download, boolean thumbnail, Integer width) {
-        ContentDisposition disposition = buildContentDisposition(download);
-
-        if (thumbnail) {
-            byte[] thumbnailBytes = loadThumbnailBytes(download, width);
-            if (thumbnailBytes != null) {
-                return ResponseEntity.ok()
-                        .contentType(MediaType.parseMediaType(resolveThumbnailContentType(download.contentType())))
-                        .contentLength(thumbnailBytes.length)
-                        .header(HttpHeaders.CONTENT_DISPOSITION, disposition.toString())
-                        .header("Cache-Control", "public, max-age=86400")
-                        .header("X-Content-Type-Options", "nosniff")
-                        .body(new ByteArrayResource(thumbnailBytes));
-            }
-            log.warn("Travel thumbnail is unavailable; serving original media. path={}, requestedWidth={}", download.storagePath(), width);
-        }
-
-        Resource originalResource = travelMediaStorageService.loadAsResource(download.storagePath());
-        return ResponseEntity.ok()
-                .contentType(MediaType.parseMediaType(download.contentType()))
-                .header(HttpHeaders.CONTENT_DISPOSITION, disposition.toString())
-                .header("X-Content-Type-Options", "nosniff")
-                .body(originalResource);
+        return mediaResponses.render(new com.playdata.calen.travel.domain.model.TravelMediaData.Download(
+                download.storagePath(), download.contentType(), download.fileName()), thumbnail, width);
     }
 
-    private ResponseEntity<?> buildThumbnailOnlyResponse(TravelService.MediaDownload download, Integer width) {
-        byte[] thumbnailBytes = loadThumbnailBytes(download, width);
-        if (thumbnailBytes == null) {
-            return ResponseEntity.notFound()
-                    .cacheControl(CacheControl.noStore())
-                    .build();
-        }
-        return ResponseEntity.ok()
-                .cacheControl(CacheControl.noStore())
-                .contentType(MediaType.parseMediaType(resolveThumbnailContentType(download.contentType())))
-                .contentLength(thumbnailBytes.length)
-                .header("X-Content-Type-Options", "nosniff")
-                .body(new ByteArrayResource(thumbnailBytes));
-    }
-
-    private byte[] loadThumbnailBytes(TravelService.MediaDownload download, Integer width) {
-        try {
-            TravelMediaStorageService.PreparedThumbnail preparedThumbnail = travelMediaStorageService.loadThumbnail(
-                    download.storagePath(),
-                    download.contentType(),
-                    width
-            );
-            if (preparedThumbnail == null) {
-                return null;
-            }
-            try (var inputStream = preparedThumbnail.resource().getInputStream()) {
-                return inputStream.readAllBytes();
-            }
-        } catch (IOException | RuntimeException exception) {
-            log.warn("Failed to serve thumbnail for media path={}", download.storagePath(), exception);
-            return null;
-        }
-    }
-
-    private String resolveThumbnailContentType(String originalContentType) {
-        String normalized = String.valueOf(originalContentType).trim().toLowerCase();
-        return "image/png".equals(normalized) || "image/gif".equals(normalized) || "image/webp".equals(normalized)
-                ? "image/png"
-                : "image/jpeg";
-    }
-
-    private ContentDisposition buildContentDisposition(TravelService.MediaDownload download) {
-        String fileName = download.fileName() == null || download.fileName().isBlank() ? "media" : download.fileName();
-        return "application/pdf".equalsIgnoreCase(download.contentType())
-                ? ContentDisposition.attachment().filename(fileName, StandardCharsets.UTF_8).build()
-                : ContentDisposition.inline().filename(fileName, StandardCharsets.UTF_8).build();
-    }
-
-    @GetMapping("/exchange-rates")
-    public List<TravelExchangeRateResponse> getExchangeRates(
-            @AuthenticationPrincipal AppUserPrincipal currentUser,
-            @RequestParam(required = false) String currencies
-    ) {
-        return travelService.getExchangeRates(currentUser.userId(), currencies);
-    }
 }

@@ -157,7 +157,7 @@ if (-not (Test-Path -LiteralPath $retirementEvidencePath)) {
         'Blocker/exception note',
         'Ready rows must include concrete evidence references',
         'Blocked: staging Flyway startup proof, Flyway history proof, smoke evidence, and rollback/restore evidence are not recorded yet.',
-        'All seven legacy updaters have Flyway overlap, but none are marked `Ready` here.'
+        'Nine legacy updaters are tracked; some have partial Flyway overlap and none are marked `Ready` here.'
     )) {
         if (-not $retirementEvidence.Contains($snippet)) {
             $findings.Add("DB migration retirement evidence missing snippet: $snippet") | Out-Null
@@ -171,7 +171,9 @@ if (-not (Test-Path -LiteralPath $retirementEvidencePath)) {
         'TravelMediaAssetSchemaUpdater' = @('V20260630_010__travel_media_asset_metadata_fields.sql', 'Travel photo upload, GPS extraction')
         'TravelPhotoClusterSchemaUpdater' = @('V20260630_011__travel_photo_cluster_tables.sql', 'Map photo cluster rebuild')
         'TravelRouteSchemaUpdater' = @('V20260630_008__travel_route_segment_fields.sql', 'Travel route create/edit')
-        'HouseholdGoalSchemaUpdater' = @('V20260630_014__household_goals.sql', 'Household goal create, list, update, archive')
+        'HouseholdGoalSchemaUpdater' = @('V20260630_014__household_goals.sql', 'Household goal create, list, update, and archive')
+        'LedgerImageAnalysisRequestSchemaUpdater' = @('V20261003_024__image_job_recovery.sql', 'V20261003_027__analysis_job_versions.sql', 'ledger_image_analysis_requests')
+        'TravelMapShareLinkSchemaUpdater' = @('travel_map_share_links', 'No matching Flyway migration exists yet')
     }
     foreach ($entry in $requiredRetirementRows.GetEnumerator()) {
         if (-not $retirementEvidence.Contains("Pending | ``$($entry.Key)``")) {
@@ -254,7 +256,9 @@ $expectedLegacySchemaUpdaters = @(
     'backend/src/main/java/com/playdata/calen/travel/config/TravelMediaAssetSchemaUpdater.java',
     'backend/src/main/java/com/playdata/calen/travel/config/TravelPhotoClusterSchemaUpdater.java',
     'backend/src/main/java/com/playdata/calen/travel/config/TravelRouteSchemaUpdater.java',
-    'backend/src/main/java/com/playdata/calen/account/config/HouseholdGoalSchemaUpdater.java'
+    'backend/src/main/java/com/playdata/calen/account/config/HouseholdGoalSchemaUpdater.java',
+    'backend/src/main/java/com/playdata/calen/ledger/config/LedgerImageAnalysisRequestSchemaUpdater.java',
+    'backend/src/main/java/com/playdata/calen/travel/config/TravelMapShareLinkSchemaUpdater.java'
 )
 $repoRoot = (Get-Location).Path
 $sourceRoot = 'backend/src/main/java'
@@ -272,7 +276,7 @@ foreach ($path in $expectedLegacySchemaUpdaters) {
         $findings.Add("Documented legacy SchemaUpdater is missing; update docs/db_migration_strategy.md and this verifier when retiring it: $path") | Out-Null
     } else {
         $legacySource = Get-Content -LiteralPath $path -Raw
-        foreach ($snippet in @('@ConditionalOnProperty(prefix = "app.schema.legacy-updaters"', 'name = "enabled"', 'matchIfMissing = true')) {
+        foreach ($snippet in @('import com.playdata.calen.common.schema.LegacySchemaCompatibility;', '@LegacySchemaCompatibility')) {
             if (-not $legacySource.Contains($snippet)) {
                 $findings.Add("Documented legacy SchemaUpdater is missing toggle guard snippet ${snippet}: $path") | Out-Null
             }
@@ -286,14 +290,62 @@ foreach ($path in $currentLegacySchemaUpdaters) {
     }
 }
 
-$startupDdlPattern = [regex]'(?is)\b(ApplicationRunner|CommandLineRunner)\b.*\b(CREATE\s+TABLE|ALTER\s+TABLE|DROP\s+TABLE|CREATE\s+INDEX|ALTER\s+INDEX)\b'
+$compatibilityAnnotationPath = 'backend/src/main/java/com/playdata/calen/common/schema/LegacySchemaCompatibility.java'
+if (-not (Test-Path -LiteralPath $compatibilityAnnotationPath)) {
+    $findings.Add("Missing legacy compatibility condition: $compatibilityAnnotationPath") | Out-Null
+} else {
+    $compatibilityAnnotation = Get-Content -LiteralPath $compatibilityAnnotationPath -Raw
+    foreach ($snippet in @('@ConditionalOnProperty(prefix = "app.schema.legacy-updaters"', 'name = "enabled"', 'havingValue = "true"', 'matchIfMissing = true', '@Retention(RetentionPolicy.RUNTIME)', '@Target(ElementType.TYPE)')) {
+        if (-not $compatibilityAnnotation.Contains($snippet)) {
+            $findings.Add("Legacy compatibility condition changed; preserve the documented property contract: $snippet") | Out-Null
+        }
+    }
+}
+
+# Existing non-runner bootstraps are debt, not permission for new Java DDL.
+# The legacy switch does not guard these five sources; retain behavior until separately rehearsed.
+$existingNonUpdaterSchemaWriters = @(
+    'backend/src/main/java/com/playdata/calen/account/security/SecurityConfig.java',
+    'backend/src/main/java/com/playdata/calen/account/service/AdminOpsControlService.java',
+    'backend/src/main/java/com/playdata/calen/account/service/RegistrationPolicyService.java',
+    'backend/src/main/java/com/playdata/calen/travel/service/TravelLoginMapPreviewService.java',
+    'backend/src/main/java/com/playdata/calen/travel/service/TravelDriveLinkBackfillService.java'
+)
+$auditedSchemaWriterSet = @{}
+foreach ($path in @($expectedLegacySchemaUpdaters) + @($existingNonUpdaterSchemaWriters)) {
+    $auditedSchemaWriterSet[$path] = $true
+}
+$schemaAuditPath = 'docs/backend_schema_governance_audit.md'
+if (-not (Test-Path -LiteralPath $schemaAuditPath)) {
+    $findings.Add("Missing schema governance audit: $schemaAuditPath") | Out-Null
+} else {
+    $schemaAudit = Get-Content -LiteralPath $schemaAuditPath -Raw
+    foreach ($path in $auditedSchemaWriterSet.Keys) {
+        if (-not $schemaAudit.Contains($path)) {
+            $findings.Add("Schema governance audit missing existing writer path: $path") | Out-Null
+        }
+    }
+}
+
+# Conservative source scan also catches @Bean/@PostConstruct/event/helper DDL without runner names.
+# Compiled-string inventory and negative fixtures live in StartupSchemaGovernanceTest.
+$startupDdlPattern = [regex]'(?i)\b(?:CREATE\s+(?:UNIQUE\s+)?(?:TABLE|INDEX)|ALTER\s+(?:TABLE|INDEX)|DROP\s+(?:TABLE|INDEX))\b'
+$foundSchemaWriters = @{}
 if (Test-Path -LiteralPath $sourceRoot) {
     Get-ChildItem -LiteralPath $sourceRoot -Recurse -File -Filter '*.java' | ForEach-Object {
         $relativePath = [System.IO.Path]::GetRelativePath($repoRoot, $_.FullName) -replace '\\', '/'
         $source = Get-Content -LiteralPath $_.FullName -Raw
-        if ($startupDdlPattern.IsMatch($source) -and -not $expectedLegacySchemaUpdaterSet.ContainsKey($relativePath)) {
-            $findings.Add("Unexpected startup DDL runner found; add a Flyway migration instead of ApplicationRunner/CommandLineRunner schema mutation: $relativePath") | Out-Null
+        if ($startupDdlPattern.IsMatch($source)) {
+            $foundSchemaWriters[$relativePath] = $true
+            if (-not $auditedSchemaWriterSet.ContainsKey($relativePath)) {
+                $findings.Add("Unexpected Java DDL source found; add a Flyway migration instead of startup schema mutation: $relativePath") | Out-Null
+            }
         }
+    }
+}
+foreach ($path in $existingNonUpdaterSchemaWriters) {
+    if (-not $foundSchemaWriters.ContainsKey($path)) {
+        $findings.Add("Audited non-updater DDL source is missing; document migration/rehearsal evidence before updating the inventory: $path") | Out-Null
     }
 }
 

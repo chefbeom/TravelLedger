@@ -1,4 +1,4 @@
-﻿Set-StrictMode -Version Latest
+Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $contractPath = 'docs/travel_story_export.md'
@@ -12,10 +12,29 @@ $servicePath = 'backend/src/main/java/com/playdata/calen/travel/service/TravelSe
 $shareVisibilityTestPath = 'backend/src/test/java/com/playdata/calen/travel/service/TravelServiceShareVisibilityTest.java'
 $publicMediaTokenTestPath = 'backend/src/test/java/com/playdata/calen/travel/service/TravelPublicMediaTokenServiceTest.java'
 $privacyTestPath = 'backend/src/test/java/com/playdata/calen/account/PrivacyControllerIntegrationTest.java'
+$storyControllers = [ordered]@{
+    'backend/src/main/java/com/playdata/calen/travel/adapter/in/web/OwnedTravelPlansController.java' = @(
+        '@GetMapping("/plans/{planId}")', '@AuthenticationPrincipal AppUserPrincipal owner',
+        'reads.detail(owner.userId(), planId)'
+    )
+    'backend/src/main/java/com/playdata/calen/travel/adapter/in/web/OwnedTravelMapController.java' = @(
+        '@GetMapping("/my-map")', '@AuthenticationPrincipal AppUserPrincipal owner',
+        'reads.overview(owner.userId())'
+    )
+    'backend/src/main/java/com/playdata/calen/travel/adapter/in/web/TravelAtlasController.java' = @(
+        '@GetMapping("/public-trips")', '@GetMapping("/public-trips/photo-clusters/{clusterId}")',
+        '@AuthenticationPrincipal AppUserPrincipal viewer', 'reads.overview(viewer.userId())',
+        'reads.cluster(viewer.userId(), clusterId, page, size, focus)'
+    )
+    'backend/src/main/java/com/playdata/calen/travel/adapter/in/web/TravelExhibitController.java' = @(
+        '@GetMapping("/shared-exhibits")', '@AuthenticationPrincipal AppUserPrincipal viewer',
+        'exhibits.received(viewer.userId(), page, size)'
+    )
+}
 
 $findings = [System.Collections.Generic.List[string]]::new()
 
-foreach ($path in @($contractPath, $securityChecklistPath, $roadmapPath, $mediaContractPath, $privacyContractPath, $ciPath, $controllerPath, $servicePath, $shareVisibilityTestPath, $publicMediaTokenTestPath, $privacyTestPath)) {
+foreach ($path in (@($contractPath, $securityChecklistPath, $roadmapPath, $mediaContractPath, $privacyContractPath, $ciPath, $controllerPath, $servicePath, $shareVisibilityTestPath, $publicMediaTokenTestPath, $privacyTestPath) + @($storyControllers.Keys))) {
     if (-not (Test-Path -LiteralPath $path)) {
         $findings.Add("Missing travel story export contract input: $path") | Out-Null
     }
@@ -28,7 +47,6 @@ if ($findings.Count -eq 0) {
     $mediaContract = Get-Content -LiteralPath $mediaContractPath -Raw
     $privacyContract = Get-Content -LiteralPath $privacyContractPath -Raw
     $ci = Get-Content -LiteralPath $ciPath -Raw
-    $controller = Get-Content -LiteralPath $controllerPath -Raw
     $service = Get-Content -LiteralPath $servicePath -Raw
     $shareVisibilityTest = Get-Content -LiteralPath $shareVisibilityTestPath -Raw
     $publicMediaTokenTest = Get-Content -LiteralPath $publicMediaTokenTestPath -Raw
@@ -48,13 +66,16 @@ if ($findings.Count -eq 0) {
         }
     }
 
-    foreach ($snippet in @('@AuthenticationPrincipal AppUserPrincipal currentUser', '@GetMapping("/plans/{planId}")', '@GetMapping("/my-map")', '@GetMapping("/public-trips")', '@GetMapping("/shared-exhibits")', 'getPublicTripsOverview(currentUser.userId())', 'getSharedExhibits(currentUser.userId()', 'getPublicTripPhotoClusterDetail(currentUser.userId()')) {
-        if (-not $controller.Contains($snippet)) {
-            $findings.Add("TravelController missing story/share visibility snippet: $snippet") | Out-Null
+    foreach ($path in $storyControllers.Keys) {
+        $controller = Get-Content -LiteralPath $path -Raw
+        foreach ($snippet in (@('@RequestMapping("/api/travel")') + @($storyControllers[$path]))) {
+            if (-not $controller.Contains($snippet)) {
+                $findings.Add("${path} missing story/share visibility snippet: $snippet") | Out-Null
+            }
         }
     }
 
-    foreach ($snippet in @('getPublicTripsOverview', 'getPublicTripPhotoClusterDetail', 'getSharedExhibits', 'getSharedExhibit', 'updatePlanPublicShare', 'getMyMapOverview', 'getMyMapMarkerDetails', 'getMyMapPhotoClusterDetail')) {
+    foreach ($snippet in @('getPublicTripsOverview', 'getPublicTripPhotoClusterDetail', 'getSharedExhibits', 'getSharedExhibit', 'updatePlanPublicShare', 'getMyMapOverview', 'getMyMapMarkerDetailBundle', 'getMyMapPhotoClusterDetail')) {
         if (-not $service.Contains($snippet)) {
             $findings.Add("TravelService missing story assembly anchor: $snippet") | Out-Null
         }

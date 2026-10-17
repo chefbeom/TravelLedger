@@ -4,17 +4,19 @@ $ErrorActionPreference = 'Stop'
 $contractPath = 'docs/ledger_ai_coach_contract.md'
 $safetyPath = 'docs/ledger_ai_safety_hardening.md'
 $securityChecklistPath = 'docs/security_baseline_checklist.md'
+$roadmapPath = 'docs/project_improvement_roadmap.md'
 $ciPath = '.github/workflows/ci.yml'
 $reportDtoPath = 'backend/src/main/java/com/playdata/calen/ledger/dto/LedgerAiAnalysisReportResponse.java'
 $responseDtoPath = 'backend/src/main/java/com/playdata/calen/ledger/dto/LedgerAiAnalysisResponse.java'
 $servicePath = 'backend/src/main/java/com/playdata/calen/ledger/ai/LedgerAiAnalysisService.java'
-$validatorPath = 'backend/src/main/java/com/playdata/calen/ledger/ai/LedgerAiRemoteResponseValidator.java'
+$formatsPath = 'backend/src/main/java/com/playdata/calen/ledger/adapter/out/analysis/LedgerAnalysisFormats.java'
+$validatorPath = 'backend/src/main/java/com/playdata/calen/ledger/domain/policy/LedgerAiRemoteResponseValidator.java'
 $serviceTestPath = 'backend/src/test/java/com/playdata/calen/ledger/ai/LedgerAiAnalysisServiceTest.java'
-$validatorTestPath = 'backend/src/test/java/com/playdata/calen/ledger/ai/LedgerAiRemoteResponseValidatorTest.java'
+$validatorTestPath = 'backend/src/test/java/com/playdata/calen/ledger/domain/policy/LedgerAiRemoteResponseValidatorTest.java'
 
 $findings = [System.Collections.Generic.List[string]]::new()
 
-foreach ($path in @($contractPath, $safetyPath, $securityChecklistPath, $roadmapPath, $ciPath, $reportDtoPath, $responseDtoPath, $servicePath, $validatorPath, $serviceTestPath, $validatorTestPath)) {
+foreach ($path in @($contractPath, $safetyPath, $securityChecklistPath, $roadmapPath, $ciPath, $reportDtoPath, $responseDtoPath, $servicePath, $formatsPath, $validatorPath, $serviceTestPath, $validatorTestPath)) {
     if (-not (Test-Path -LiteralPath $path)) {
         $findings.Add("Missing ledger AI coach contract input: $path") | Out-Null
     }
@@ -29,6 +31,7 @@ if ($findings.Count -eq 0) {
     $reportDto = Get-Content -LiteralPath $reportDtoPath -Raw
     $responseDto = Get-Content -LiteralPath $responseDtoPath -Raw
     $service = Get-Content -LiteralPath $servicePath -Raw
+    $formats = Get-Content -LiteralPath $formatsPath -Raw
     $validator = Get-Content -LiteralPath $validatorPath -Raw
     $serviceTest = Get-Content -LiteralPath $serviceTestPath -Raw
     $validatorTest = Get-Content -LiteralPath $validatorTestPath -Raw
@@ -63,9 +66,14 @@ if ($findings.Count -eq 0) {
         }
     }
 
-    foreach ($snippet in @('report.abnormalSpending()', 'report.subscriptions()', 'report.fixedExpenses()', 'report.improvementActions()', 'remote.nextPeriodForecast()', 'remote.habitAssessment()', 'remote.unusualSpendingInsights()', 'remote.fixedCostInsights()', 'outputContract()', 'DUPLICATE_SUPPRESSION_WINDOW')) {
+    foreach ($snippet in @('report.abnormalSpending()', 'report.subscriptions()', 'report.fixedExpenses()', 'report.improvementActions()', 'remote.nextPeriodForecast()', 'remote.habitAssessment()', 'remote.unusualSpendingInsights()', 'remote.fixedCostInsights()', 'LedgerAiOutputContract.text()')) {
+        if (-not $formats.Contains($snippet)) {
+            $findings.Add("LedgerAnalysisFormats missing coach merge/safety snippet: $snippet") | Out-Null
+        }
+    }
+    foreach ($snippet in @('DUPLICATE_SUPPRESSION_WINDOW', 'analysisFormats.buildPayload(', 'analysisFormats.buildResponse(')) {
         if (-not $service.Contains($snippet)) {
-            $findings.Add("LedgerAiAnalysisService missing coach merge/safety snippet: $snippet") | Out-Null
+            $findings.Add("LedgerAiAnalysisService missing format/reuse delegation: $snippet") | Out-Null
         }
     }
 
@@ -75,7 +83,7 @@ if ($findings.Count -eq 0) {
         }
     }
 
-    foreach ($snippet in @('analyzeKeepsPromptInjectionLikeLedgerTextAsData', 'analyzeStoresFailedHistoryWithoutLeakingProviderSecrets', 'reusesRecentCompletedAnalysisForDuplicateRequest')) {
+    foreach ($snippet in @('analyzeKeepsPromptInjectionLikeLedgerTextAsData', 'analyzeStoresFailedHistoryWithoutLeakingProviderSecrets', 'analyzeReusesRecentCompletedHistoryWithoutCallingRemoteProvider')) {
         if (-not $serviceTest.Contains($snippet)) {
             $findings.Add("LedgerAiAnalysisServiceTest missing coach safety evidence: $snippet") | Out-Null
         }

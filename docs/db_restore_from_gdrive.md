@@ -1,4 +1,4 @@
-﻿# Google Drive????ν븳 DB 諛깆뾽 ?뚯씪???ㅼ떆 MariaDB??蹂듦뎄?섎뒗 媛?대뱶
+# Google Drive????ν븳 DB 諛깆뾽 ?뚯씪???ㅼ떆 MariaDB??蹂듦뎄?섎뒗 媛?대뱶
 
 ??臾몄꽌??`dbtogdrive.md` 諛⑹떇?쇰줈 Google Drive????ν븳 `.sql.gz` 諛깆뾽 ?뚯씪???ㅼ떆 MariaDB???곸슜?섎뒗 諛⑸쾿???뺣━??臾몄꽌?낅땲??
 
@@ -300,6 +300,8 @@ rclone lsd db-backup:
 ## 12. 암호화된 백업 복구
 
 `backup-to-gdrive.sh`에서 `BACKUP_ENCRYPTION_MODE=age` 또는 `gpg`를 사용한 경우, 테스트 DB에 import하기 전에 checksum 검증과 복호화를 먼저 수행합니다. 복호화 키나 passphrase는 명령 기록, 티켓, 채팅에 남기지 않습니다.
+
+백업 아카이브와 `.sha256 sidecar`는 함께 보관합니다. 복구 전에 해당 sidecar로 아카이브 무결성을 확인하고, sidecar가 없거나 검증에 실패하면 import를 진행하지 않습니다.
 
 ```bash
 cd /opt/calen-backup/restore

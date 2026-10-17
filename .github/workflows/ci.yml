@@ -325,15 +325,108 @@ jobs:
             --tests com.playdata.calen.drive.service.DriveDownloadLinkAccessLogServiceTest \
             --tests com.playdata.calen.travel.web.TravelControllerTest \
             --tests com.playdata.calen.travel.service.TravelServiceShareVisibilityTest \
+            --tests com.playdata.calen.travel.service.RecordSharedTravelAccessTest \
+            --tests com.playdata.calen.travel.TravelSharingRefactoringIntegrationTest \
+            --tests com.playdata.calen.travel.TravelExhibitReadRefactoringIntegrationTest \
+            --tests com.playdata.calen.travel.TravelOwnedMapReadRefactoringIntegrationTest \
+            --tests com.playdata.calen.travel.TravelMapLinkRefactoringIntegrationTest \
+            --tests com.playdata.calen.travel.TravelAtlasRefactoringIntegrationTest \
+            --tests com.playdata.calen.travel.OwnedTravelPlansIntegrationTest \
+            --tests com.playdata.calen.travel.TravelReferenceIntegrationTest \
+            --tests com.playdata.calen.travel.adapter.support.TravelReferenceDifferentialTest \
+            --tests com.playdata.calen.travel.application.service.ReadTravelReferenceServiceTest \
+            --tests com.playdata.calen.travel.adapter.support.OwnedTravelPlansDifferentialTest \
+            --tests com.playdata.calen.travel.application.service.ReadOwnedTravelPlansServiceTest \
+            --tests com.playdata.calen.ledger.TravelLedgerReflectionIntegrationTest \
+            --tests com.playdata.calen.ledger.adapter.support.LedgerTravelBridgeDifferentialTest \
+            --tests com.playdata.calen.ledger.application.service.ReflectTravelLedgerServiceTest \
+            --tests com.playdata.calen.ledger.domain.policy.LedgerTravelPolicyTest \
+            --tests com.playdata.calen.ledger.adapter.out.travel.TravelBridgeEffectsTest \
+            --tests com.playdata.calen.travel.adapter.support.TravelAtlasDifferentialTest \
+            --tests com.playdata.calen.travel.application.service.ReadTravelAtlasServiceTest \
+            --tests com.playdata.calen.travel.domain.policy.TravelAtlasPolicyTest \
+            --tests com.playdata.calen.travel.adapter.support.TravelMapLinkDifferentialTest \
+            --tests com.playdata.calen.travel.application.service.TravelMapLinksServiceTest \
+            --tests com.playdata.calen.travel.domain.policy.TravelMapLinkPolicyTest \
+            --tests com.playdata.calen.travel.adapter.out.security.TravelMapLinkRuntimeTest \
+            --tests com.playdata.calen.travel.application.service.ReadOwnedTravelMapServiceTest \
+            --tests com.playdata.calen.travel.adapter.support.TravelOwnedMapMapperTest \
+            --tests com.playdata.calen.travel.adapter.out.cache.OwnedTravelMapCacheTest \
+            --tests com.playdata.calen.travel.adapter.out.cluster.OwnedTravelMapClustersTest \
+            --tests com.playdata.calen.travel.domain.policy.TravelMapGeometryTest \
+            --tests com.playdata.calen.travel.repository.TravelNearestMemoryRepositoryTest \
+            --tests com.playdata.calen.travel.application.service.ReadTravelExhibitsServiceTest \
+            --tests com.playdata.calen.travel.adapter.out.persistence.JpaTravelExhibitReadAdapterTest \
+            --tests com.playdata.calen.travel.adapter.support.TravelPlanDetailMapperTest \
+            --tests com.playdata.calen.travel.application.service.ManageTravelSharingServiceTest \
+            --tests com.playdata.calen.travel.adapter.support.TravelSharingMapperTest \
             --tests com.playdata.calen.travel.service.TravelMediaStorageServiceTest \
+            --tests com.playdata.calen.travel.TravelMediaRefactoringIntegrationTest \
+            --tests com.playdata.calen.travel.application.service.ManageOwnedTravelMediaServiceTest \
+            --tests com.playdata.calen.travel.domain.policy.TravelMediaPolicyTest \
+            --tests com.playdata.calen.travel.adapter.out.cache.OwnedTravelMediaCacheTest \
+            --tests com.playdata.calen.travel.adapter.out.storage.TravelMediaStorageAdapterTest \
+            --tests com.playdata.calen.travel.adapter.support.TravelMediaUploadMapperTest \
+            --tests com.playdata.calen.travel.adapter.in.web.TravelMediaHttpResponsesTest \
             --tests com.playdata.calen.travel.service.TravelPublicMediaTokenServiceTest \
+            --tests com.playdata.calen.travel.TravelClusterProjectionIntegrationTest \
+            --tests com.playdata.calen.travel.application.service.ManageTravelPhotoClustersServiceTest \
+            --tests com.playdata.calen.travel.domain.policy.TravelClusterPagePolicyTest \
+            --tests com.playdata.calen.travel.adapter.out.persistence.JpaTravelClusterDetailAdapterTest \
+            --tests com.playdata.calen.travel.adapter.out.cluster.TravelClusterDetailSynchronizationAdapterTest \
+            --tests com.playdata.calen.travel.adapter.support.TravelClusterDetailMapperTest \
+            --tests com.playdata.calen.travel.adapter.in.web.TravelPhotoClusterControllerTest \
+            --tests com.playdata.calen.travel.TravelRouteRefactoringIntegrationTest \
+            --tests com.playdata.calen.travel.application.service.WriteTravelRouteServiceTest \
+            --tests com.playdata.calen.travel.domain.policy.TravelRoutePolicyTest \
+            --tests com.playdata.calen.travel.adapter.out.route.TravelRoutePayloadAdapterTest \
+            --tests com.playdata.calen.travel.adapter.support.TravelRouteMapperTest \
+            --tests com.playdata.calen.travel.application.service.ManageTravelRouteFilesServiceTest \
+            --tests com.playdata.calen.travel.adapter.out.storage.TravelRouteUploadAdapterTest \
+            --tests com.playdata.calen.travel.adapter.support.TravelRouteUploadMapperTest \
             --tests com.playdata.calen.familyalbum.web.FamilyAlbumControllerTest \
             --tests com.playdata.calen.ledger.ocr.LedgerOcrServiceTest \
-            --tests com.playdata.calen.ledger.ai.LedgerAiRemoteResponseValidatorTest \
-            --tests com.playdata.calen.ledger.ai.LedgerAiLmStudioClientTest \
+            --tests com.playdata.calen.ledger.domain.policy.LedgerAiRemoteResponseValidatorTest \
+            --tests com.playdata.calen.ledger.adapter.out.ai.LedgerAiLmStudioClientTest \
+            --tests com.playdata.calen.ledger.adapter.out.ai.LedgerAnalysisProviderBoundaryTest \
+            --tests com.playdata.calen.ledger.adapter.out.ai.LedgerAnalysisResponseCodecTest \
+            --tests com.playdata.calen.ledger.adapter.in.ai.LedgerAnalysisBoundaryMapperTest \
+            --tests com.playdata.calen.ledger.adapter.out.ai.ImageLedgerExtractionHttpAdapterTest \
+            --tests com.playdata.calen.ledger.adapter.out.ai.LedgerImageResponseCodecTest \
+            --tests com.playdata.calen.ledger.application.service.StoreLedgerImageInputServiceTest \
+            --tests com.playdata.calen.ledger.adapter.out.storage.MinioLedgerImageStorageAdapterTest \
+            --tests com.playdata.calen.ledger.web.LedgerOcrControllerTest \
+            --tests com.playdata.calen.ledger.adapter.in.image.MultipartLedgerImageContentTest \
+            --tests com.playdata.calen.ledger.ai.LedgerAiJobPersistenceTest \
+            --tests com.playdata.calen.common.embedding.EmbeddingApiClientTest \
+            --tests com.playdata.calen.common.embedding.EmbeddingPropertiesTest \
+            --tests com.playdata.calen.ledger.embedding.LedgerEmbeddingPointIdsTest \
+            --tests com.playdata.calen.ledger.embedding.LedgerEmbeddingDocumentFactoryTest \
+            --tests com.playdata.calen.ledger.embedding.LedgerEmbeddingDocumentServiceTest \
+            --tests com.playdata.calen.ledger.embedding.sync.LedgerEmbeddingSyncWorkerTest \
+            --tests com.playdata.calen.ledger.application.service.SynchronizeLedgerEmbeddingsServiceTest \
+            --tests com.playdata.calen.ledger.adapter.out.embedding.LedgerEmbeddingJobsAdapterTest \
+            --tests com.playdata.calen.ledger.adapter.out.embedding.LedgerEmbeddingIndexAdapterTest \
+            --tests com.playdata.calen.ledger.adapter.out.embedding.LedgerEmbeddingOutboxIntegrationTest \
+            --tests com.playdata.calen.architecture.BackendArchitectureTest \
             --tests com.playdata.calen.ledger.ai.LedgerAiAnalysisPropertiesTest \
             --tests com.playdata.calen.ledger.ai.LedgerAiAnalysisPayloadBuilderTest \
             --tests com.playdata.calen.ledger.ai.LedgerAiAnalysisReportMergerTest \
+            --tests com.playdata.calen.ledger.ai.LedgerLocalReportDifferentialTest \
+            --tests com.playdata.calen.ledger.domain.policy.LedgerLocalReportPolicyTest \
+            --tests com.playdata.calen.ledger.ai.LedgerAnalysisPreparationDifferentialTest \
+            --tests com.playdata.calen.ledger.domain.policy.LedgerAnalysisCalendarPolicyTest \
+            --tests com.playdata.calen.ledger.application.service.PrepareLedgerAnalysisDatasetServiceTest \
+            --tests com.playdata.calen.ledger.ai.LedgerAnalysisPreparationIntegrationTest \
+            --tests com.playdata.calen.ledger.application.service.RecoverLedgerAiJobsServiceTest \
+            --tests com.playdata.calen.ledger.adapter.out.jobs.LedgerAiRecoveryDifferentialTest \
+            --tests com.playdata.calen.ledger.application.service.ManageLedgerAnalysisHistoryServiceTest \
+            --tests com.playdata.calen.ledger.ai.LedgerAnalysisHistoryDifferentialTest \
+            --tests com.playdata.calen.ledger.ai.LedgerAnalysisHistoryIntegrationTest \
+            --tests com.playdata.calen.ledger.application.service.StartLedgerAnalysisServiceTest \
+            --tests com.playdata.calen.ledger.ai.LedgerAnalysisAdmissionDifferentialTest \
+            --tests com.playdata.calen.ledger.application.service.ExecuteLedgerAnalysisServiceTest \
+            --tests com.playdata.calen.ledger.ai.LedgerAnalysisExecutionDifferentialTest \
             --tests com.playdata.calen.ledger.ai.LedgerAiAnalysisHistoryRetentionServiceTest \
             --tests com.playdata.calen.ledger.ai.LedgerAiAnalysisServiceTest
 

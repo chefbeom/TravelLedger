@@ -2,6 +2,7 @@ package com.playdata.calen.travel.service;
 
 import com.playdata.calen.common.exception.ServiceUnavailableException;
 import com.playdata.calen.common.jobs.WorkLeaseService;
+import com.playdata.calen.travel.application.port.in.RefreshTravelPhotoClustersUseCase;
 import jakarta.annotation.PreDestroy;
 import java.time.Duration;
 import java.util.concurrent.CompletableFuture;
@@ -9,7 +10,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import javax.sql.DataSource;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -25,14 +25,14 @@ public class TravelClusterRefreshCoordinator {
     private final JdbcTemplate jdbc;
     private final TransactionTemplate writes;
     private final WorkLeaseService leases;
-    private final ObjectProvider<TravelService> services;
+    private final RefreshTravelPhotoClustersUseCase projection;
     private final ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
     private final ConcurrentHashMap<Long, CompletableFuture<Void>> tasks = new ConcurrentHashMap<>();
     private volatile long recoveryOwnerCursor;
 
     public TravelClusterRefreshCoordinator(DataSource dataSource, PlatformTransactionManager manager,
-            WorkLeaseService leases, ObjectProvider<TravelService> services) {
-        jdbc = new JdbcTemplate(dataSource); this.leases = leases; this.services = services;
+            WorkLeaseService leases, RefreshTravelPhotoClustersUseCase projection) {
+        jdbc = new JdbcTemplate(dataSource); this.leases = leases; this.projection = projection;
         writes = new TransactionTemplate(manager);
         writes.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
         executor.setCorePoolSize(1); executor.setMaxPoolSize(1); executor.setQueueCapacity(64);
@@ -103,12 +103,12 @@ public class TravelClusterRefreshCoordinator {
                 Status initial = status(userId, false);
                 if (initial == null || !initial.dirty() || !lease.isValid()) return;
                 // The service reads small point DTOs in a short transaction, then calculates outside it.
-                var clusters = services.getObject().computeFreshPhotoClusters(userId);
+                var clusters = projection.compute(userId);
                 if (!lease.isValid()) return;
                 writes.executeWithoutResult(transaction -> {
                     Status latest = status(userId, true);
                     if (latest == null || latest.generation() != initial.generation() || !lease.isValid()) return;
-                    services.getObject().applyFreshPhotoClusters(userId, clusters);
+                    projection.apply(userId, clusters);
                     jdbc.update("update travel_photo_cluster_refresh_jobs set processed_generation = generation, dirty = false where owner_id = ?", userId);
                 });
             }

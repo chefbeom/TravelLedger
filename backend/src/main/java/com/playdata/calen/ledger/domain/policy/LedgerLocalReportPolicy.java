@@ -1,0 +1,443 @@
+package com.playdata.calen.ledger.domain.policy;
+
+import com.playdata.calen.ledger.domain.model.LedgerAnalysisData.*;
+import com.playdata.calen.ledger.domain.model.LedgerLocalReportData.*;
+import com.playdata.calen.ledger.domain.model.LedgerLocalReportData.Report;
+import java.math.*;
+import java.text.NumberFormat;
+import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
+import java.util.*;
+
+/** Pure local reporting and grouping rules. No provider cap, persistence or job state belongs here. */
+public final class LedgerLocalReportPolicy {
+    public BigDecimal averageDailyExpense(BigDecimal expense, DateRange range) {
+        long days = Math.max(1, ChronoUnit.DAYS.between(range.from(), range.to()) + 1);
+        return nullToZero(expense).divide(BigDecimal.valueOf(days), 2, RoundingMode.HALF_UP);
+    }
+
+    public List<RecurringExpenseCandidatePayload> buildRecurringExpenseCandidates(List<ExpenseEntryPayload> entries) {
+        Map<String, RecurringExpenseAccumulator> groups = new LinkedHashMap<>();
+        for (ExpenseEntryPayload entry : entries) {
+            String key = recurringKey(entry);
+            groups.computeIfAbsent(key, ignored -> new RecurringExpenseAccumulator(entry)).add(entry);
+        }
+
+        return groups.values().stream()
+                .filter(candidate -> candidate.occurrenceCount() >= 2)
+                .map(RecurringExpenseAccumulator::toPayload)
+                .sorted(Comparator
+                        .comparing(RecurringExpenseCandidatePayload::totalAmount, Comparator.reverseOrder())
+                        .thenComparing(RecurringExpenseCandidatePayload::lastDate, Comparator.reverseOrder()))
+                .limit(10)
+                .toList();
+    }
+
+    private String recurringKey(ExpenseEntryPayload entry) {
+        return normalizeForRecurringKey(entry.title()) + "|"
+                + normalizeForRecurringKey(entry.categoryDetailName()) + "|"
+                + normalizeForRecurringKey(entry.paymentMethodName());
+    }
+
+    private String normalizeForRecurringKey(String value) {
+        return safeText(value).trim().replaceAll("\\s+", " ").toLowerCase(Locale.ROOT);
+    }
+
+    public Report buildFallbackReport(AnalysisPlan plan, AnalysisDataset dataset) {
+        DateRange primary = plan.primaryRange();
+        BigDecimal totalExpense = nullToZero(dataset.overview().expense());
+        BigDecimal averageExpense = averageDailyExpense(totalExpense, primary);
+        long expenseCount = dataset.expenseEntries().size();
+        List<PaymentSummaryPayload> expensePayments = buildExpensePaymentBreakdown(dataset.expenseEntries());
+        List<RecurringExpenseCandidatePayload> recurringCandidates = buildRecurringExpenseCandidates(dataset.expenseEntries());
+        List<String> comparisonFocus = buildComparisonFocus(plan, dataset);
+        String topPaymentMethod = buildTopPaymentMethodInsight(expensePayments, totalExpense);
+        String keySummary = buildKeySummary(plan, dataset, totalExpense, averageExpense, expenseCount, comparisonFocus);
+        List<String> notableSpending = buildNotableSpending(dataset);
+        List<String> regularSpending = buildRegularSpending(dataset, recurringCandidates);
+        List<String> abnormalSpending = buildAbnormalSpending(dataset, averageExpense);
+        List<String> subscriptions = buildSubscriptionInsights(recurringCandidates);
+        List<String> fixedExpenses = buildFixedExpenseInsights(recurringCandidates);
+        List<String> improvementActions = buildImprovementActions(plan, dataset, recurringCandidates, comparisonFocus);
+        String fullReport = buildFullReport(plan, dataset, totalExpense, averageExpense, expenseCount, topPaymentMethod, notableSpending, fixedExpenses, subscriptions, regularSpending, abnormalSpending, improvementActions, comparisonFocus);
+
+        return new Report(
+                keySummary,
+                fullReport,
+                "선택 기간의 하루 평균 지출은 " + formatWon(averageExpense) + "이고, 총 " + expenseCount + "건의 지출이 확인됩니다.",
+                notableSpending,
+                regularSpending,
+                abnormalSpending,
+                topPaymentMethod,
+                subscriptions,
+                fixedExpenses,
+                improvementActions,
+                comparisonFocus
+        );
+    }
+
+    private String buildKeySummary(AnalysisPlan plan, AnalysisDataset dataset, BigDecimal totalExpense, BigDecimal averageExpense, long expenseCount, List<String> comparisonFocus) {
+        if (expenseCount == 0) {
+            return "선택한 기간에는 지출 데이터가 없어 분석 근거가 충분하지 않습니다.";
+        }
+        String range = plan.primaryRange().from() + " ~ " + plan.primaryRange().to();
+        if (plan.comparison() && dataset.comparisonOverview() != null) {
+            BigDecimal compareExpense = nullToZero(dataset.comparisonOverview().expense());
+            BigDecimal delta = totalExpense.subtract(compareExpense);
+            return range + " 총 지출은 " + formatWon(totalExpense) + "이며, 비교 기간 대비 " + formatSignedWon(delta)
+                    + "(" + formatPercentChange(delta, compareExpense) + ")입니다. "
+                    + (comparisonFocus.isEmpty() ? "차이가 큰 항목부터 원인을 확인하세요." : comparisonFocus.get(0));
+        }
+        return range + " 총 지출은 " + formatWon(totalExpense) + ", 하루 평균 지출은 " + formatWon(averageExpense)
+                + "입니다. 총 " + expenseCount + "건의 지출을 기준으로 소비 패턴을 정리했습니다.";
+    }
+
+    private String buildFullReport(
+            AnalysisPlan plan,
+            AnalysisDataset dataset,
+            BigDecimal totalExpense,
+            BigDecimal averageExpense,
+            long expenseCount,
+            String topPaymentMethod,
+            List<String> notableSpending,
+            List<String> fixedExpenses,
+            List<String> subscriptions,
+            List<String> regularSpending,
+            List<String> abnormalSpending,
+            List<String> improvementActions,
+            List<String> comparisonFocus
+    ) {
+        StringBuilder report = new StringBuilder();
+        report.append("분석 기간은 ").append(plan.primaryRange().from()).append("부터 ").append(plan.primaryRange().to()).append("까지입니다. ")
+                .append("총 지출은 ").append(formatWon(totalExpense)).append(", 하루 평균 지출은 ").append(formatWon(averageExpense))
+                .append("이며 지출 거래는 ").append(expenseCount).append("건입니다. ");
+        if (plan.comparison() && dataset.comparisonOverview() != null) {
+            report.append("비교 기간은 ").append(plan.comparisonRange().from()).append("부터 ").append(plan.comparisonRange().to()).append("까지이며, 비교 기간 총 지출은 ")
+                    .append(formatWon(dataset.comparisonOverview().expense())).append("입니다. ");
+            appendSentences(report, comparisonFocus);
+        } else {
+            report.append("비교 기간이 없으므로 증가 또는 감소 판단은 제공하지 않습니다. ");
+        }
+        appendSentences(report, notableSpending);
+        if (hasText(topPaymentMethod)) {
+            report.append(topPaymentMethod).append(" ");
+        }
+        appendSentences(report, fixedExpenses);
+        appendSentences(report, subscriptions);
+        appendSentences(report, regularSpending);
+        appendSentences(report, abnormalSpending);
+        appendSentences(report, improvementActions);
+        return report.toString().trim();
+    }
+
+    private List<String> buildNotableSpending(AnalysisDataset dataset) {
+        List<String> items = new ArrayList<>();
+        dataset.categoryBreakdown().stream()
+                .limit(3)
+                .forEach(item -> items.add(categoryLabel(item.groupName(), item.detailName()) + "에 " + formatWon(item.totalAmount()) + "(" + item.entryCount() + "건)을 사용했습니다."));
+        dataset.topExpenses().stream()
+                .limit(5)
+                .forEach(item -> items.add("일회성 고액 지출 후보: " + item.entryDate() + " " + item.title() + " " + formatWon(item.amount()) + "."));
+        return items;
+    }
+
+    private List<String> buildRegularSpending(AnalysisDataset dataset, List<RecurringExpenseCandidatePayload> recurringCandidates) {
+        List<String> variableRepeats = recurringCandidates.stream()
+                .filter(this::isRecurringVariableCandidate)
+                .limit(5)
+                .map(item -> "반복성 변동비: " + item.title() + "은 " + item.firstDate() + "부터 " + item.lastDate() + "까지 " + item.occurrenceCount()
+                        + "회 반복되었고 누적 금액은 " + formatWon(item.totalAmount()) + "입니다. 고정비로 단정하지 말고 월 상한을 정해 관리하세요.")
+                .toList();
+        if (!variableRepeats.isEmpty()) {
+            return variableRepeats;
+        }
+        return dataset.categoryBreakdown().stream()
+                .sorted(Comparator.comparing(CategoryBreakdown::entryCount).reversed())
+                .limit(3)
+                .map(item -> categoryLabel(item.groupName(), item.detailName()) + "은 " + item.entryCount() + "건 반복되어 자주 발생하는 지출입니다. 고정비 여부는 결제 목적을 확인한 뒤 분류하세요.")
+                .toList();
+    }
+
+    private List<String> buildAbnormalSpending(AnalysisDataset dataset, BigDecimal averageExpense) {
+        List<String> items = new ArrayList<>();
+        BigDecimal highExpenseThreshold = averageExpense.max(BigDecimal.valueOf(100_000));
+        dataset.topExpenses().stream()
+                .filter(item -> item.amount().compareTo(highExpenseThreshold) > 0)
+                .limit(5)
+                .forEach(item -> items.add(item.entryDate() + " " + item.title() + "(" + formatWon(item.amount()) + ")은 평균 지출보다 큰 일회성 고액 지출 후보입니다."));
+        if (items.isEmpty() && !dataset.topExpenses().isEmpty()) {
+            ExpenseEntryPayload top = dataset.topExpenses().get(0);
+            items.add("가장 큰 지출은 " + top.entryDate() + " " + top.title() + " " + formatWon(top.amount()) + "입니다.");
+        }
+        return items;
+    }
+
+    private List<String> buildSubscriptionInsights(List<RecurringExpenseCandidatePayload> recurringCandidates) {
+        List<String> subscriptions = recurringCandidates.stream()
+                .filter(this::isSubscriptionCandidate)
+                .limit(5)
+                .map(item -> "구독비: " + item.title() + "은 " + item.occurrenceCount() + "회 반복되었고 누적 금액은 " + formatWon(item.totalAmount()) + "입니다. 최근 사용 빈도 기준으로 유지/해지 후보를 나누세요.")
+                .toList();
+        return subscriptions.isEmpty() ? List.of("명확한 구독비 후보는 아직 확인되지 않았습니다. 라프텔, 톡서랍, 멤버십, 클라우드 같은 정기 결제 항목을 별도로 점검하세요.") : subscriptions;
+    }
+
+    private List<String> buildFixedExpenseInsights(List<RecurringExpenseCandidatePayload> recurringCandidates) {
+        List<String> fixedExpenses = recurringCandidates.stream()
+                .filter(this::isFixedExpenseCandidate)
+                .limit(5)
+                .map(item -> "고정비: " + item.title() + "은 " + item.firstDate() + "부터 " + item.lastDate() + "까지 " + item.occurrenceCount()
+                        + "회 반복되었고 누적 금액은 " + formatWon(item.totalAmount()) + "입니다. 통신비, 보험, 관리비처럼 매월 필요한 지출인지 확인하세요.")
+                .toList();
+        return fixedExpenses.isEmpty() ? List.of("통신비, 보험, 관리비처럼 고정비로 분류할 만한 반복 지출 후보가 충분하지 않습니다.") : fixedExpenses;
+    }
+
+    private List<String> buildImprovementActions(AnalysisPlan plan, AnalysisDataset dataset, List<RecurringExpenseCandidatePayload> recurringCandidates, List<String> comparisonFocus) {
+        List<String> actions = new ArrayList<>();
+        dataset.categoryBreakdown().stream().findFirst().ifPresent(item -> {
+            BigDecimal suggestedLimit = nullToZero(item.totalAmount()).multiply(BigDecimal.valueOf(0.85)).setScale(0, RoundingMode.HALF_UP);
+            actions.add(categoryLabel(item.groupName(), item.detailName()) + " 지출은 " + formatWon(item.totalAmount()) + "입니다. 다음 기간 1차 관리 한도를 " + formatWon(suggestedLimit) + "로 두고, 초과하면 필수/선택 지출을 분리해 재검토하세요.");
+        });
+        dataset.topExpenses().stream().findFirst().ifPresent(item -> actions.add("일회성 고액 지출은 별도 '비정기 지출' 항목으로 분리하세요. 예: " + item.title() + " " + formatWon(item.amount()) + "은 월 생활비와 섞지 말고 월 한도 또는 분기 한도로 관리하세요."));
+        recurringCandidates.stream().filter(this::isSubscriptionCandidate).findFirst().ifPresent(item -> actions.add("구독 서비스는 사용 빈도를 기준으로 유지/해지 후보를 나누세요. " + item.title() + "은 누적 " + formatWon(item.totalAmount()) + "이므로 월 1회 이상 사용하지 않으면 해지 후보로 표시하세요."));
+        recurringCandidates.stream().filter(this::isRecurringVariableCandidate).findFirst().ifPresent(item -> actions.add("게임, 충전, 간편결제 같은 반복성 변동비는 월 상한을 정하세요. " + item.title() + "은 평균 결제액 " + formatWon(item.averageAmount()) + " 기준으로 허용 횟수를 정하고 초과 결제는 다음 달로 미루는 규칙을 두세요."));
+        if (plan.comparison() && !comparisonFocus.isEmpty()) {
+            actions.add("비교 기간 대비 증가한 항목은 원인을 확인한 뒤 다음 기간 예산에 반영하세요. 증가 원인이 일회성이라면 반복 예산에 포함하지 마세요.");
+        }
+        if (actions.isEmpty()) {
+            actions.add("지출 데이터가 충분하지 않습니다. 거래를 더 입력한 뒤 다시 분석하면 더 구체적인 예산 기준을 제안할 수 있습니다.");
+        }
+        return actions;
+    }
+
+    private boolean isSubscriptionCandidate(RecurringExpenseCandidatePayload item) {
+        String text = recurringText(item);
+        return containsAny(text, List.of("구독", "subscription", "subscribe", "멤버십", "프리미엄", "라프텔", "톡서랍", "넷플릭스", "유튜브", "웨이브", "티빙", "왓챠", "디즈니", "클라우드", "icloud", "apple", "google one", "쿠팡와우"));
+    }
+
+    private boolean isFixedExpenseCandidate(RecurringExpenseCandidatePayload item) {
+        String text = recurringText(item);
+        return containsAny(text, List.of("통신", "휴대폰", "인터넷", "보험", "관리비", "월세", "렌트", "대출", "이자", "전기", "가스", "수도", "요금", "정기권", "렌탈"));
+    }
+
+    private boolean isRecurringVariableCandidate(RecurringExpenseCandidatePayload item) {
+        return !isSubscriptionCandidate(item) && !isFixedExpenseCandidate(item);
+    }
+
+    private String recurringText(RecurringExpenseCandidatePayload item) {
+        return (item.title() + " " + item.categoryGroupName() + " " + item.categoryDetailName() + " " + item.paymentMethodName()).toLowerCase(Locale.ROOT);
+    }
+
+    private boolean containsAny(String text, List<String> keywords) {
+        for (String keyword : keywords) {
+            if (text.contains(keyword.toLowerCase(Locale.ROOT))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private List<String> buildComparisonFocus(AnalysisPlan plan, AnalysisDataset dataset) {
+        if (!plan.comparison() || dataset.comparisonOverview() == null) {
+            return List.of();
+        }
+        BigDecimal currentExpense = nullToZero(dataset.overview().expense());
+        BigDecimal compareExpense = nullToZero(dataset.comparisonOverview().expense());
+        BigDecimal delta = currentExpense.subtract(compareExpense);
+        List<String> insights = new ArrayList<>();
+        if (dataset.expenseEntries().isEmpty() && !dataset.comparisonExpenseEntries().isEmpty()) {
+            insights.add("비교 기간에는 지출이 있었지만 선택 기간에는 지출 데이터가 부족합니다. 누락된 거래가 있는지 먼저 확인하세요.");
+        } else {
+            insights.add("선택 기간의 지출은 비교 기간 대비 " + formatSignedWon(delta) + "(" + formatPercentChange(delta, compareExpense) + ")입니다.");
+        }
+        Map<String, BigDecimal> currentCategories = categoryAmountMap(dataset.categoryBreakdown());
+        Map<String, BigDecimal> compareCategories = categoryAmountMap(dataset.comparisonCategoryBreakdown());
+        List<String> categoryLabels = new ArrayList<>();
+        categoryLabels.addAll(currentCategories.keySet());
+        for (String label : compareCategories.keySet()) {
+            if (!categoryLabels.contains(label)) {
+                categoryLabels.add(label);
+            }
+        }
+        categoryLabels.stream()
+                .map(label -> new CategoryDelta(label, currentCategories.getOrDefault(label, BigDecimal.ZERO), compareCategories.getOrDefault(label, BigDecimal.ZERO)))
+                .sorted(Comparator.comparing(CategoryDelta::absDelta).reversed())
+                .limit(3)
+                .forEach(item -> insights.add(item.label() + " 카테고리 지출 변화 " + formatSignedWon(item.delta()) + "."));
+        return insights;
+    }
+
+    public List<PaymentSummaryPayload> buildExpensePaymentBreakdown(List<ExpenseEntryPayload> entries) {
+        Map<String, PaymentAccumulator> groups = new LinkedHashMap<>();
+        for (ExpenseEntryPayload entry : entries) {
+            String paymentName = hasText(entry.paymentMethodName()) ? entry.paymentMethodName() : "결제수단 미확인";
+            groups.computeIfAbsent(paymentName, PaymentAccumulator::new).add(entry.amount());
+        }
+        return groups.values().stream()
+                .map(PaymentAccumulator::toPayload)
+                .sorted(Comparator
+                        .comparing(PaymentSummaryPayload::totalAmount, Comparator.reverseOrder())
+                        .thenComparing(PaymentSummaryPayload::entryCount, Comparator.reverseOrder()))
+                .toList();
+    }
+
+    private String buildTopPaymentMethodInsight(List<PaymentSummaryPayload> expensePayments, BigDecimal totalExpense) {
+        if (expensePayments.isEmpty()) {
+            return "지출 결제수단 데이터가 부족해 주요 결제수단을 판단할 수 없습니다.";
+        }
+        PaymentSummaryPayload top = expensePayments.get(0);
+        return "지출 기준 결제수단 1위는 " + top.paymentMethodName() + "이며 " + formatWon(top.totalAmount()) + "(" + top.entryCount() + "건, 전체 지출의 " + formatPercentShare(top.totalAmount(), totalExpense) + ")입니다.";
+    }
+
+    private String formatPercentShare(BigDecimal amount, BigDecimal total) {
+        BigDecimal safeTotal = nullToZero(total);
+        if (safeTotal.compareTo(BigDecimal.ZERO) <= 0) {
+            return "비중 산정 불가";
+        }
+        return nullToZero(amount)
+                .multiply(BigDecimal.valueOf(100))
+                .divide(safeTotal, 1, RoundingMode.HALF_UP)
+                .stripTrailingZeros()
+                .toPlainString() + "%";
+    }
+
+    private Map<String, BigDecimal> categoryAmountMap(List<CategoryBreakdown> items) {
+        Map<String, BigDecimal> result = new LinkedHashMap<>();
+        for (CategoryBreakdown item : items) {
+            result.put(categoryLabel(item.groupName(), item.detailName()), nullToZero(item.totalAmount()));
+        }
+        return result;
+    }
+
+    private String categoryLabel(String groupName, String detailName) {
+        if (hasText(detailName)) {
+            return safeText(groupName) + " / " + detailName;
+        }
+        return safeText(groupName);
+    }
+
+    private void appendSentences(StringBuilder report, List<String> sentences) {
+        for (String sentence : sentences) {
+            if (hasText(sentence)) {
+                report.append(sentence).append(" ");
+            }
+        }
+    }
+
+    private String formatWon(BigDecimal value) {
+        NumberFormat formatter = NumberFormat.getNumberInstance(Locale.KOREA);
+        return "KRW " + formatter.format(nullToZero(value).setScale(0, RoundingMode.HALF_UP));
+    }
+
+    private String formatSignedWon(BigDecimal value) {
+        BigDecimal safeValue = nullToZero(value);
+        if (safeValue.signum() > 0) {
+            return "+" + formatWon(safeValue);
+        }
+        if (safeValue.signum() < 0) {
+            return "-" + formatWon(safeValue.abs());
+        }
+        return formatWon(BigDecimal.ZERO);
+    }
+
+    private String formatPercentChange(BigDecimal delta, BigDecimal base) {
+        BigDecimal safeBase = nullToZero(base);
+        if (safeBase.compareTo(BigDecimal.ZERO) == 0) {
+            return nullToZero(delta).compareTo(BigDecimal.ZERO) == 0 ? "0.00%" : "N/A";
+        }
+        return nullToZero(delta)
+                .multiply(BigDecimal.valueOf(100))
+                .divide(safeBase, 2, RoundingMode.HALF_UP)
+                .toPlainString() + "%";
+    }
+
+    private BigDecimal nullToZero(BigDecimal value) {
+        return value == null ? BigDecimal.ZERO : value;
+    }
+
+    private static BigDecimal nullToStaticZero(BigDecimal value) {
+        return value == null ? BigDecimal.ZERO : value;
+    }
+
+    private record CategoryDelta(String label, BigDecimal currentAmount, BigDecimal compareAmount) {
+        private BigDecimal delta() {
+            return currentAmount.subtract(compareAmount);
+        }
+
+        private BigDecimal absDelta() {
+            return delta().abs();
+        }
+    }
+
+    private static final class PaymentAccumulator {
+
+        private final String paymentMethodName;
+        private BigDecimal totalAmount = BigDecimal.ZERO;
+        private long entryCount;
+
+        private PaymentAccumulator(String paymentMethodName) {
+            this.paymentMethodName = paymentMethodName;
+        }
+
+        private void add(BigDecimal amount) {
+            totalAmount = totalAmount.add(nullToStaticZero(amount));
+            entryCount += 1;
+        }
+
+        private PaymentSummaryPayload toPayload() {
+            return new PaymentSummaryPayload(paymentMethodName, totalAmount, entryCount);
+        }
+    }
+
+    private static final class RecurringExpenseAccumulator {
+
+        private final String title;
+        private final String categoryGroupName;
+        private final String categoryDetailName;
+        private final String paymentMethodName;
+        private final List<LocalDate> dates = new ArrayList<>();
+        private BigDecimal totalAmount = BigDecimal.ZERO;
+        private LocalDate firstDate;
+        private LocalDate lastDate;
+
+        private RecurringExpenseAccumulator(ExpenseEntryPayload firstEntry) {
+            this.title = firstEntry.title();
+            this.categoryGroupName = firstEntry.categoryGroupName();
+            this.categoryDetailName = firstEntry.categoryDetailName();
+            this.paymentMethodName = firstEntry.paymentMethodName();
+        }
+
+        private void add(ExpenseEntryPayload entry) {
+            totalAmount = totalAmount.add(entry.amount());
+            dates.add(entry.entryDate());
+            if (firstDate == null || entry.entryDate().isBefore(firstDate)) {
+                firstDate = entry.entryDate();
+            }
+            if (lastDate == null || entry.entryDate().isAfter(lastDate)) {
+                lastDate = entry.entryDate();
+            }
+        }
+
+        private int occurrenceCount() {
+            return dates.size();
+        }
+
+        private RecurringExpenseCandidatePayload toPayload() {
+            BigDecimal averageAmount = totalAmount.divide(BigDecimal.valueOf(occurrenceCount()), 2, RoundingMode.HALF_UP);
+            return new RecurringExpenseCandidatePayload(
+                    title,
+                    categoryGroupName,
+                    categoryDetailName,
+                    paymentMethodName,
+                    occurrenceCount(),
+                    totalAmount,
+                    averageAmount,
+                    firstDate,
+                    lastDate,
+                    List.copyOf(dates)
+            );
+        }
+    }
+
+    private static String safeText(String value) { return value == null ? "" : value; }
+    private static boolean hasText(String value) { return value != null && !value.isBlank(); }
+}

@@ -1,4 +1,4 @@
-﻿$ErrorActionPreference = 'Stop'
+$ErrorActionPreference = 'Stop'
 
 function Read-RequiredFile([string]$Path) {
     if (-not (Test-Path -LiteralPath $Path)) {
@@ -15,7 +15,7 @@ function Assert-ContainsAll([string]$Name, [string]$Content, [string[]]$Snippets
     }
 }
 
-$contract$contract = Read-RequiredFile 'docs/drive_file_versioning.md'
+$contract = Read-RequiredFile 'docs/drive_file_versioning.md'
 $publicShareContract = Read-RequiredFile 'docs/public_share_authorization_contract.md'
 $securityChecklist = Read-RequiredFile 'docs/security_baseline_checklist.md'
 $roadmap = Read-RequiredFile 'docs/project_improvement_roadmap.md'

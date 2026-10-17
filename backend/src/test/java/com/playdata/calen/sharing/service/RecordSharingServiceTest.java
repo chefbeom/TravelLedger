@@ -15,6 +15,11 @@ import com.playdata.calen.ledger.dto.LedgerEntryResponse;
 import com.playdata.calen.ledger.domain.EntryType;
 import com.playdata.calen.ledger.service.LedgerEntryService;
 import com.playdata.calen.sharing.domain.*;
+import com.playdata.calen.sharing.adapter.in.transaction.TransactionalCreateRecordShare;
+import com.playdata.calen.sharing.adapter.out.persistence.JpaShareParticipantsAdapter;
+import com.playdata.calen.sharing.adapter.out.persistence.JpaShareRequestsAdapter;
+import com.playdata.calen.sharing.adapter.out.persistence.JpaShareSourceAdapter;
+import com.playdata.calen.sharing.adapter.out.persistence.ShareSnapshotCodec;
 import com.playdata.calen.sharing.dto.RecordShareDtos;
 import com.playdata.calen.sharing.repository.RecordShareRepository;
 import com.playdata.calen.travel.domain.*;
@@ -49,7 +54,10 @@ class RecordSharingServiceTest {
     TravelShareGroup group;
 
     @BeforeEach void setup() {
-        service = new RecordSharingService(shares, groups, members, users, ledger, travel, mapper, entityManager);
+        var codec = new ShareSnapshotCodec(mapper);
+        var creation = new TransactionalCreateRecordShare(new JpaShareParticipantsAdapter(users, groups, members),
+                new JpaShareSourceAdapter(entityManager, ledger, codec), new JpaShareRequestsAdapter(shares, users, codec));
+        service = new RecordSharingService(shares, groups, members, users, ledger, travel, mapper, creation);
         sender = user(1L); recipient = user(2L);
         group = new TravelShareGroup(); group.setId(5L); group.setOwner(sender); group.setName("가족");
         lenient().when(users.getRequiredUser(1L)).thenReturn(sender);
@@ -72,6 +80,48 @@ class RecordSharingServiceTest {
         assertThat(response.get(0).shareMemo()).isNull();
         verify(ledger, never()).create(anyLong(), any());
         verify(shares).save(any());
+    }
+
+    @Test void senderEditsOnlyTheSharedSnapshotAndRetryOfTheSameEditedSnapshotIsIdempotent() throws Exception {
+        var draft=request("공유용 제목",999L,888L);
+        var edited=mapper.readValue("""
+                {"id":100,"entryDate":"2026-10-03","title":"공유용 제목","memo":"공유용 메모","amount":7500,
+                 "entryType":"EXPENSE","categoryGroupId":22,"categoryGroupName":"식비","categoryDetailId":23,"paymentMethodId":24}
+                """,LedgerEntryResponse.class);
+        when(entityManager.find(LedgerEntry.class,100L,LockModeType.PESSIMISTIC_WRITE)).thenReturn(source(sender));
+        when(ledger.prepareEntryForSharing(1L,100L,draft)).thenReturn(edited);
+        when(shares.save(any())).thenAnswer(call->{RecordShare row=call.getArgument(0);row.setId(9L);return row;});
+        var payload=new RecordShareDtos.Create(5L,RecordShareKind.LEDGER,100L,List.of(2L),"별도 공유 메모",draft);
+        var first=service.create(1L,payload).get(0);
+        assertThat(first.ledger().title()).isEqualTo("공유용 제목");
+        assertThat(first.ledger().amount()).isEqualByComparingTo("7500");
+        assertThat(first.shareMemo()).isEqualTo("별도 공유 메모");
+        var captured=ArgumentCaptor.forClass(RecordShare.class);verify(shares).save(captured.capture());
+        when(shares.findLockedByKindAndSourceIdAndRecipientId(RecordShareKind.LEDGER,100L,2L)).thenReturn(Optional.of(captured.getValue()));
+        when(shares.findById(9L)).thenReturn(Optional.of(captured.getValue()));
+        var second=service.create(1L,payload).get(0);
+        assertThat(second.id()).isEqualTo(first.id()); verify(shares,times(1)).save(any());
+        verify(ledger,never()).create(anyLong(),any()); verify(ledger,never()).update(anyLong(),anyLong(),any());
+    }
+
+    @Test void differentEditedContentCannotSilentlyReplacePendingOrAlreadyAcceptedShares() throws Exception {
+        var draft=request("다른 내용",null,null);
+        when(entityManager.find(LedgerEntry.class,100L,LockModeType.PESSIMISTIC_WRITE)).thenReturn(source(sender));
+        when(ledger.prepareEntryForSharing(1L,100L,draft)).thenReturn(snapshot());
+        var existing=share(RecordShareKind.LEDGER); existing.setSnapshotJson("{}"); existing.setShareMemo("이전 공유 메모");
+        when(shares.findLockedByKindAndSourceIdAndRecipientId(RecordShareKind.LEDGER,100L,2L)).thenReturn(Optional.of(existing));
+        var input=new RecordShareDtos.Create(5L,RecordShareKind.LEDGER,100L,List.of(2L),null,draft);
+        assertThatThrownBy(()->service.create(1L,input)).isInstanceOf(BadRequestException.class).hasMessageContaining("기존 요청을 취소");
+        existing.setStatus(RecordShareStatus.ACCEPTED);existing.setImportedLedgerEntryId(300L);
+        assertThatThrownBy(()->service.create(1L,input)).isInstanceOf(BadRequestException.class).hasMessageContaining("이미 상대방 가계부에 등록");
+        assertThat(existing.getSnapshotJson()).isEqualTo("{}");assertThat(existing.getShareMemo()).isEqualTo("이전 공유 메모");
+        verify(shares,never()).save(any());
+    }
+
+    @Test void editedLedgerPayloadCannotBeUsedToModifyTravelSharing() {
+        assertThatThrownBy(()->service.create(1L,new RecordShareDtos.Create(5L,RecordShareKind.TRAVEL,100L,List.of(2L),null,request("x",null,null))))
+                .isInstanceOf(BadRequestException.class);
+        verifyNoInteractions(entityManager,shares,ledger,travel);
     }
 
     @Test void storesShareMemoForEachSelectedRecipientSeparatelyFromTheLedgerSnapshot() throws Exception {
@@ -116,6 +166,7 @@ class RecordSharingServiceTest {
         when(entityManager.find(LedgerEntry.class, 100L, LockModeType.PESSIMISTIC_WRITE)).thenReturn(source(sender));
         when(ledger.getEntryForSharing(1L, 100L)).thenReturn(snapshot());
         when(shares.findLockedByKindAndSourceIdAndRecipientId(RecordShareKind.LEDGER, 100L, 2L)).thenReturn(Optional.of(pending));
+        when(shares.findById(9L)).thenReturn(Optional.of(pending));
 
         var response = service.create(1L, new RecordShareDtos.Create(5L, RecordShareKind.LEDGER, 100L, List.of(2L), "새 메모"));
         assertThat(response.get(0).shareMemo()).isEqualTo("먼저 남긴 메모");
@@ -129,6 +180,7 @@ class RecordSharingServiceTest {
         when(entityManager.find(LedgerEntry.class, 100L, LockModeType.PESSIMISTIC_WRITE)).thenReturn(source(sender));
         when(ledger.getEntryForSharing(1L, 100L)).thenReturn(snapshot());
         when(shares.findLockedByKindAndSourceIdAndRecipientId(RecordShareKind.LEDGER, 100L, 2L)).thenReturn(Optional.of(canceled));
+        when(shares.findById(9L)).thenReturn(Optional.of(canceled));
         when(shares.save(canceled)).thenReturn(canceled);
 
         var first = service.create(1L, new RecordShareDtos.Create(5L, RecordShareKind.LEDGER, 100L, List.of(2L), "새 요청의 메모"));
@@ -218,6 +270,7 @@ class RecordSharingServiceTest {
         TravelPlan plan = new TravelPlan(); plan.setOwner(sender); plan.setName("여행");
         when(entityManager.find(TravelPlan.class, 100L, LockModeType.PESSIMISTIC_WRITE)).thenReturn(plan);
         when(shares.findLockedByKindAndSourceIdAndRecipientId(RecordShareKind.TRAVEL, 100L, 2L)).thenReturn(Optional.of(old));
+        when(shares.findById(9L)).thenReturn(Optional.of(old));
         when(shares.save(old)).thenReturn(old);
         var response = service.create(1L, new RecordShareDtos.Create(6L, RecordShareKind.TRAVEL, 100L, List.of(2L)));
         assertThat(response.get(0).status()).isEqualTo(RecordShareStatus.PENDING);
@@ -249,6 +302,7 @@ class RecordSharingServiceTest {
         when(entityManager.find(LedgerEntry.class, 100L, LockModeType.PESSIMISTIC_WRITE)).thenReturn(source(sender));
         when(ledger.getEntryForSharing(1L, 100L)).thenReturn(snapshot());
         when(shares.findLockedByKindAndSourceIdAndRecipientId(RecordShareKind.LEDGER, 100L, 2L)).thenReturn(Optional.of(accepted));
+        when(shares.findById(9L)).thenReturn(Optional.of(accepted));
 
         var result = service.create(1L, new RecordShareDtos.Create(6L, RecordShareKind.LEDGER, 100L, List.of(2L), "변경 시도"));
 

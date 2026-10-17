@@ -1,4 +1,4 @@
-﻿# Backup Restore Rehearsal Runbook
+# Backup Restore Rehearsal Runbook
 
 Updated: 2026-06-30
 

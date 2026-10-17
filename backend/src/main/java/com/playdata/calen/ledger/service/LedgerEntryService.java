@@ -7,6 +7,9 @@ import com.playdata.calen.account.domain.AppUser;
 import com.playdata.calen.account.service.AppUserService;
 import com.playdata.calen.common.exception.BadRequestException;
 import com.playdata.calen.common.exception.NotFoundException;
+import com.playdata.calen.ledger.adapter.support.LedgerPreparationMapper;
+import com.playdata.calen.ledger.application.port.in.PrepareLedgerEntryUseCase;
+import com.playdata.calen.ledger.application.port.out.LedgerReferencesPort;
 import com.playdata.calen.ledger.domain.CategoryDetail;
 import com.playdata.calen.ledger.domain.CategoryGroup;
 import com.playdata.calen.ledger.domain.EntryType;
@@ -36,7 +39,6 @@ import com.playdata.calen.ledger.repository.LedgerEntryRepository;
 import com.playdata.calen.ledger.repository.PaymentMethodRepository;
 import com.playdata.calen.ledger.search.LedgerSearchExpression;
 import com.playdata.calen.travel.dto.TravelExchangeRateResponse;
-import com.playdata.calen.travel.repository.TravelPlanRepository;
 import com.playdata.calen.travel.service.ExchangeRateService;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
@@ -52,7 +54,6 @@ import jakarta.persistence.criteria.Predicate;
 import jakarta.persistence.criteria.Root;
 import java.io.ByteArrayInputStream;
 import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -94,9 +95,10 @@ public class LedgerEntryService {
     private final CategoryGroupRepository categoryGroupRepository;
     private final CategoryDetailRepository categoryDetailRepository;
     private final PaymentMethodRepository paymentMethodRepository;
-    private final TravelPlanRepository travelPlanRepository;
     private final ExchangeRateService exchangeRateService;
     private final ObjectMapper objectMapper;
+    private final PrepareLedgerEntryUseCase preparation;
+    private final LedgerReferencesPort references;
 
     @PersistenceContext
     private EntityManager entityManager;
@@ -106,10 +108,6 @@ public class LedgerEntryService {
     private static final int MAX_TRASH_PAGE_SIZE = 100;
     private static final int MAX_HISTORY_PAGE_SIZE = 50;
     private static final String EMPTY_HISTORY_SNAPSHOT_JSON = "[]";
-    private static final int KRW_AMOUNT_SCALE = 0;
-    private static final int FOREIGN_AMOUNT_SCALE = 4;
-    private static final int EXCHANGE_RATE_SCALE = 6;
-    private static final String KRW_CURRENCY_CODE = "KRW";
     private static final String FIELD_ENTRY_DATE = "entryDate";
     private static final String FIELD_ENTRY_TIME = "entryTime";
     private static final String FIELD_TITLE = "title";
@@ -641,6 +639,15 @@ public class LedgerEntryService {
     public LedgerEntryResponse getEntryForSharing(Long userId, Long entryId) {
         return toResponse(ledgerEntryRepository.findByIdAndOwnerIdAndDeletedAtIsNull(entryId, userId)
                 .orElseThrow(() -> new NotFoundException("거래를 찾을 수 없습니다.")));
+    }
+
+    /** Validate a sender's edited share without modifying a managed ledger entity. */
+    public LedgerEntryResponse prepareEntryForSharing(Long userId, Long entryId, LedgerEntryRequest request) {
+        LedgerEntryResponse original = getEntryForSharing(userId, entryId);
+        LedgerEntry preview = new LedgerEntry(); // Not managed, persisted or merged.
+        preview.setId(original.id());
+        applyRequest(userId, preview, request, true);
+        return toResponse(preview);
     }
 
     @Transactional
@@ -1292,142 +1299,43 @@ public class LedgerEntryService {
     }
 
     private void applyRequest(Long userId, LedgerEntry ledgerEntry, LedgerEntryRequest request) {
-        CategoryGroup group = categoryGroupRepository.findByIdAndOwnerId(request.categoryGroupId(), userId)
-                .orElseThrow(() -> new NotFoundException("대분류를 찾을 수 없습니다."));
-        if (!group.getEntryType().equals(request.entryType())) {
-            throw new BadRequestException("대분류의 수입/지출 구분이 거래 타입과 일치하지 않습니다.");
+        applyRequest(userId, ledgerEntry, request, false);
+    }
+
+    private void applyRequest(Long userId, LedgerEntry ledgerEntry, LedgerEntryRequest request, boolean sharingPreview) {
+        var prepared = preparation.prepare(userId, LedgerPreparationMapper.draft(request), sharingPreview);
+        var draft = prepared.draft();
+        var exchange = prepared.exchange();
+        PaymentMethod paymentMethod;
+        if (sharingPreview && draft.entryType() == EntryType.INCOME) {
+            paymentMethod = new PaymentMethod();
+            paymentMethod.setName(prepared.payment().name());
+            paymentMethod.setKind(prepared.payment().kind());
+        } else {
+            paymentMethod = paymentMethodRepository.getReferenceById(prepared.payment().id());
         }
-
-        PaymentMethod paymentMethod = resolvePaymentMethod(userId, request.entryType(), request.paymentMethodId());
-
-        CategoryDetail detail = null;
-        if (request.categoryDetailId() != null) {
-            detail = categoryDetailRepository.findByIdAndGroupOwnerId(request.categoryDetailId(), userId)
-                    .orElseThrow(() -> new NotFoundException("소분류를 찾을 수 없습니다."));
-            if (!detail.getGroup().getId().equals(group.getId())) {
-                throw new BadRequestException("소분류가 선택한 대분류에 속하지 않습니다.");
-            }
-        }
-
-        LedgerEntryTextSanitizer.SanitizedLedgerText sanitizedText = LedgerEntryTextSanitizer.sanitize(request.title(), request.memo());
-        ForeignExchangeValues exchangeValues = resolveForeignExchange(request);
-        validateNewTravelLedgerDate(userId, request);
-
-        ledgerEntry.setEntryDate(request.entryDate());
-        ledgerEntry.setEntryTime(request.entryTime());
-        ledgerEntry.setTitle(sanitizedText.title());
-        ledgerEntry.setMemo(sanitizedText.memo());
-        ledgerEntry.setAmount(exchangeValues.krwAmount());
-        ledgerEntry.setForeignCurrencyCode(exchangeValues.currencyCode());
-        ledgerEntry.setForeignAmount(exchangeValues.foreignAmount());
-        ledgerEntry.setExchangeRateToKrw(exchangeValues.rateToKrw());
-        ledgerEntry.setExchangeRateDate(exchangeValues.rateDate());
-        ledgerEntry.setExchangeRateProvider(exchangeValues.provider());
-        ledgerEntry.setEntryType(request.entryType());
-        ledgerEntry.setCategoryGroup(group);
-        ledgerEntry.setCategoryDetail(detail);
+        ledgerEntry.setEntryDate(draft.entryDate());
+        ledgerEntry.setEntryTime(draft.entryTime());
+        ledgerEntry.setTitle(prepared.title());
+        ledgerEntry.setMemo(prepared.memo());
+        ledgerEntry.setAmount(exchange.krwAmount());
+        ledgerEntry.setForeignCurrencyCode(exchange.currencyCode());
+        ledgerEntry.setForeignAmount(exchange.foreignAmount());
+        ledgerEntry.setExchangeRateToKrw(exchange.rateToKrw());
+        ledgerEntry.setExchangeRateDate(exchange.rateDate());
+        ledgerEntry.setExchangeRateProvider(exchange.provider());
+        ledgerEntry.setEntryType(draft.entryType());
+        // References were ownership-checked by the preparation port in this transaction.
+        ledgerEntry.setCategoryGroup(categoryGroupRepository.getReferenceById(prepared.groupId()));
+        ledgerEntry.setCategoryDetail(prepared.detailId() == null ? null : categoryDetailRepository.getReferenceById(prepared.detailId()));
         ledgerEntry.setPaymentMethod(paymentMethod);
-        ledgerEntry.setTravelPlanId(request.travelPlanId());
-        ledgerEntry.setTravelRecordId(request.travelRecordId());
-    }
-
-    private void validateNewTravelLedgerDate(Long userId, LedgerEntryRequest request) {
-        if (request.travelPlanId() == null || request.travelRecordId() != null) {
-            return;
-        }
-        travelPlanRepository.findByIdAndOwnerId(request.travelPlanId(), userId)
-                .ifPresentOrElse(plan -> {
-                    if (request.entryDate().isBefore(plan.getStartDate()) || request.entryDate().isAfter(plan.getEndDate())) {
-                        throw new BadRequestException("Travel ledger entries must stay within the selected travel period.");
-                    }
-                }, () -> {
-                    throw new BadRequestException("Travel plan not found.");
-                });
-    }
-
-    private ForeignExchangeValues resolveForeignExchange(LedgerEntryRequest request) {
-        String currencyCode = normalizeForeignCurrencyCode(request.foreignCurrencyCode());
-        if (currencyCode == null || KRW_CURRENCY_CODE.equals(currencyCode)) {
-            return new ForeignExchangeValues(
-                    request.amount(),
-                    null,
-                    null,
-                    null,
-                    null,
-                    null
-            );
-        }
-
-        BigDecimal foreignAmount = request.foreignAmount();
-        if (foreignAmount == null || foreignAmount.compareTo(BigDecimal.ZERO) <= 0) {
-            throw new BadRequestException("Foreign amount must be greater than 0.");
-        }
-
-        BigDecimal rateToKrw = request.exchangeRateToKrw();
-        LocalDate rateDate = request.entryDate();
-        String provider = "Provided";
-        if (rateToKrw == null || rateToKrw.compareTo(BigDecimal.ZERO) <= 0) {
-            TravelExchangeRateResponse quote = exchangeRateService.getRequiredRateQuoteToKrw(currencyCode, resolveExchangeRateDate(request.entryDate(), request.entryTime()));
-            rateToKrw = quote.rateToKrw();
-            rateDate = quote.fetchedDate() != null ? quote.fetchedDate() : request.entryDate();
-            provider = quote.provider();
-        }
-
-        BigDecimal normalizedRate = rateToKrw.setScale(EXCHANGE_RATE_SCALE, RoundingMode.HALF_UP);
-        BigDecimal normalizedForeignAmount = foreignAmount.setScale(FOREIGN_AMOUNT_SCALE, RoundingMode.HALF_UP);
-        BigDecimal krwAmount = normalizedForeignAmount.multiply(normalizedRate).setScale(KRW_AMOUNT_SCALE, RoundingMode.HALF_UP);
-
-        return new ForeignExchangeValues(
-                krwAmount,
-                currencyCode,
-                normalizedForeignAmount,
-                normalizedRate,
-                rateDate,
-                provider
-        );
-    }
-
-    private LocalDate resolveExchangeRateDate(LocalDate entryDate, LocalTime entryTime) {
-        if (entryDate == null) {
-            return null;
-        }
-        return resolveExchangeRateDate(entryDate, LocalDateTime.of(entryDate, entryTime != null ? entryTime : LocalTime.MIDNIGHT));
-    }
-
-    private String normalizeForeignCurrencyCode(String currencyCode) {
-        if (currencyCode == null || currencyCode.isBlank()) {
-            return null;
-        }
-        String normalized = currencyCode.trim().toUpperCase(Locale.ROOT);
-        if (!normalized.matches("[A-Z]{3}")) {
-            throw new BadRequestException("Currency code must be a 3-letter ISO code.");
-        }
-        return normalized;
+        ledgerEntry.setTravelPlanId(draft.travelPlanId());
+        ledgerEntry.setTravelRecordId(draft.travelRecordId());
     }
 
     private PaymentMethod resolvePaymentMethod(Long userId, EntryType entryType, Long paymentMethodId) {
-        if (entryType == EntryType.INCOME) {
-            return paymentMethodRepository.findByOwnerIdAndNameIgnoreCase(userId, INCOME_PAYMENT_METHOD_NAME)
-                    .orElseGet(() -> createIncomePaymentMethod(userId));
-        }
-
-        if (paymentMethodId == null) {
-            throw new BadRequestException("결제수단을 선택해 주세요.");
-        }
-
-        return paymentMethodRepository.findByIdAndOwnerId(paymentMethodId, userId)
-                .orElseThrow(() -> new NotFoundException("결제수단을 찾을 수 없습니다."));
-    }
-
-    private PaymentMethod createIncomePaymentMethod(Long userId) {
-        AppUser owner = appUserService.getRequiredUser(userId);
-        PaymentMethod paymentMethod = new PaymentMethod();
-        paymentMethod.setOwner(owner);
-        paymentMethod.setName(INCOME_PAYMENT_METHOD_NAME);
-        paymentMethod.setKind(PaymentMethodKind.OTHER);
-        paymentMethod.setDisplayOrder(Integer.MAX_VALUE);
-        paymentMethod.setActive(false);
-        return paymentMethodRepository.save(paymentMethod);
+        var payment = references.payment(userId, entryType, paymentMethodId);
+        return paymentMethodRepository.getReferenceById(payment.id());
     }
 
     private DateRange normalizeRange(LocalDate from, LocalDate to) {
@@ -1510,16 +1418,6 @@ public class LedgerEntryService {
             Long travelPlanId,
             Long travelRecordId,
             LocalDateTime deletedAt
-    ) {
-    }
-
-    private record ForeignExchangeValues(
-            BigDecimal krwAmount,
-            String currencyCode,
-            BigDecimal foreignAmount,
-            BigDecimal rateToKrw,
-            LocalDate rateDate,
-            String provider
     ) {
     }
 

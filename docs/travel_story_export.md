@@ -1,4 +1,4 @@
-﻿# Travel Story Export Contract
+# Travel Story Export Contract
 
 Updated: 2026-06-30
 

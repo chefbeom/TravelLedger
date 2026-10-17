@@ -21,10 +21,16 @@ $roadmap = Read-RequiredFile 'docs/project_improvement_roadmap.md'
 $ci = Read-RequiredFile '.github/workflows/ci.yml'
 $ocrService = Read-RequiredFile 'backend/src/main/java/com/playdata/calen/ledger/ocr/LedgerOcrService.java'
 $ocrTest = Read-RequiredFile 'backend/src/test/java/com/playdata/calen/ledger/ocr/LedgerOcrServiceTest.java'
+$imageExtraction = Read-RequiredFile 'backend/src/main/java/com/playdata/calen/ledger/adapter/out/ai/ImageLedgerExtractionHttpAdapter.java'
+$routePayload = Read-RequiredFile 'backend/src/main/java/com/playdata/calen/travel/adapter/out/route/TravelRoutePayloadAdapter.java'
+$routePayloadTest = Read-RequiredFile 'backend/src/test/java/com/playdata/calen/travel/adapter/out/route/TravelRoutePayloadAdapterTest.java'
 $driveStorage = Read-RequiredFile 'backend/src/main/java/com/playdata/calen/drive/service/DriveStorageService.java'
 $driveTest = Read-RequiredFile 'backend/src/test/java/com/playdata/calen/drive/service/DriveStorageServiceTest.java'
 $travelStorage = Read-RequiredFile 'backend/src/main/java/com/playdata/calen/travel/service/TravelMediaStorageService.java'
 $travelTest = Read-RequiredFile 'backend/src/test/java/com/playdata/calen/travel/service/TravelMediaStorageServiceTest.java'
+$ownedMediaTest = Read-RequiredFile 'backend/src/test/java/com/playdata/calen/travel/TravelMediaRefactoringIntegrationTest.java'
+$mediaResponses = Read-RequiredFile 'backend/src/main/java/com/playdata/calen/travel/adapter/in/web/TravelMediaHttpResponses.java'
+$mediaResponseTest = Read-RequiredFile 'backend/src/test/java/com/playdata/calen/travel/adapter/in/web/TravelMediaHttpResponsesTest.java'
 $familyStorage = Read-RequiredFile 'backend/src/main/java/com/playdata/calen/familyalbum/service/FamilyMediaStorageService.java'
 $supportStorage = Read-RequiredFile 'backend/src/main/java/com/playdata/calen/account/service/SupportInquiryStorageService.java'
 $supportTest = Read-RequiredFile 'backend/src/test/java/com/playdata/calen/account/SupportInquiryIntegrationTest.java'
@@ -60,7 +66,9 @@ Assert-ContainsAll 'LedgerOcrService' $ocrService @(
     'isAllowedImageContentType',
     'hasAllowedImageSignature',
     'readImageHeader',
-    'remoteClient.analyze',
+    'LedgerImageExtractionPort imageExtraction',
+    'validateFile(file)',
+    'imageExtraction.analyze(new MultipartLedgerImageContent(file)',
     'invalid_file'
 )
 
@@ -73,6 +81,64 @@ Assert-ContainsAll 'LedgerOcrServiceTest' $ocrTest @(
     'analyzeRejectsFakeImageBytesBeforeRemoteCall',
     'analyzeRecordsInvalidFileMetricWhenUploadValidationFails',
     'verifyNoInteractions(remoteClient'
+)
+
+Assert-ContainsAll 'ImageLedgerExtractionHttpAdapter' $imageExtraction @(
+    'implements LedgerImageExtractionPort',
+    '@Transactional(propagation = Propagation.NOT_SUPPORTED)',
+    'requestQueue.execute'
+)
+
+Assert-ContainsAll 'TravelRoutePayloadAdapter GPX parser' $routePayload @(
+    'implements TravelRoutePayloadPort',
+    'parseGpxResource(Resource resource)',
+    'factory.setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true)',
+    'factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true)',
+    'factory.setFeature("http://xml.org/sax/features/external-general-entities", false)',
+    'factory.setFeature("http://xml.org/sax/features/external-parameter-entities", false)',
+    'factory.setXIncludeAware(false)',
+    'factory.setExpandEntityReferences(false)',
+    'return decode(routePathJson)'
+)
+
+Assert-ContainsAll 'TravelRoutePayloadAdapterTest' $routePayloadTest @(
+    'doctypeEntityInputIsRejectedAndManualReadsNeverOpenOriginalFiles',
+    'invalidMissingOrOutOfRangeOriginalGpxFallsBackToSnapshot',
+    'gpxParsingSkipsNonNumericOrMissingCoordinatesAndClosesItsStream'
+)
+
+Assert-ContainsAll 'GPX and OCR runtime checks stay in CI selection' $ci @(
+    '--tests com.playdata.calen.ledger.ocr.LedgerOcrServiceTest',
+    '--tests com.playdata.calen.ledger.adapter.out.ai.ImageLedgerExtractionHttpAdapterTest',
+    '--tests com.playdata.calen.travel.adapter.out.route.TravelRoutePayloadAdapterTest'
+)
+
+Assert-ContainsAll 'Owned travel media lifecycle regression' $ownedMediaTest @(
+    'foreignOwnerAndWrongRecordKindFailBeforeObjectVerificationOrMutation',
+    'secondObjectFailureRollsBackFirstInsertAndNeverLinksOrDeletesUnconfirmedFiles',
+    'batchLinksOnlyAfterAllInsertsAndCommitCallbacksAreNotRunOnOuterRollback',
+    'downloadAndDeleteEndpointsKeepOwnerCacheIsolationAndImmediateEviction',
+    'authenticationCsrfAndNestedBeanValidationRemainEnforced'
+)
+
+Assert-ContainsAll 'Travel thumbnail HTTP boundary' $mediaResponses @(
+    'thumbnailOnly(Download download, Integer width)',
+    'ResponseEntity.notFound()',
+    '.cacheControl(CacheControl.noStore())',
+    'try (var inputStream = preparedThumbnail.resource().getInputStream())'
+)
+
+Assert-ContainsAll 'Travel thumbnail policy distinctions stay explicit' $mediaResponseTest @(
+    'genericThumbnailFailureStillFallsBackToOriginalButLoginPreviewNeverDoes',
+    'missingOrRuntimeFailingPreviewIsNotFoundWithoutOriginalFallback',
+    'successfulLoginPreviewIsNoStoreAndHasNoDispositionHeader'
+)
+
+Assert-ContainsAll 'Owned media runtime checks stay in CI selection' $ci @(
+    '--tests com.playdata.calen.travel.TravelMediaRefactoringIntegrationTest',
+    '--tests com.playdata.calen.travel.adapter.in.web.TravelMediaHttpResponsesTest',
+    '--tests com.playdata.calen.travel.adapter.out.storage.TravelMediaStorageAdapterTest',
+    '--tests com.playdata.calen.travel.adapter.out.cache.OwnedTravelMediaCacheTest'
 )
 
 Assert-ContainsAll 'DriveStorageService' $driveStorage @(
@@ -103,6 +169,9 @@ Assert-ContainsAll 'TravelMediaStorageService' $travelStorage @(
     'verifyUploadedObject',
     'validateBinarySignature',
     'Only .gpx files are allowed.',
+    'validateRouteGpxObjectKey',
+    'private void validateRouteGpxFile',
+    'MAX_GPX_FILE_SIZE',
     'prepareDerivedThumbnailsQuietly',
     'Failed to prepare image thumbnails'
 )
@@ -111,7 +180,10 @@ Assert-ContainsAll 'TravelMediaStorageServiceTest' $travelTest @(
     'completePresignedUploadRejectsObjectKeyOutsideOwnerRecordScopeBeforeMinioStat',
     'completePresignedUploadRejectsAmbiguousObjectKeyBeforeMinioStat',
     'storesPreparedThumbnailsAlongsideOriginalImage',
-    'storesRouteGpxWithoutGeneratingPreparedThumbnails'
+    'storesRouteGpxWithoutGeneratingPreparedThumbnails',
+    'completePresignedGpxRejectsForeignOwnerPlanRouteAndAmbiguousKeysBeforeStat',
+    'abortPresignedGpxKeepsOwnerScopeAndExistingBestEffortSequentialOrder',
+    'gpxPortBridgeKeepsValidationBeforeLazyReadAndExistingIoErrorTranslation'
 )
 
 Assert-ContainsAll 'FamilyMediaStorageService' $familyStorage @(

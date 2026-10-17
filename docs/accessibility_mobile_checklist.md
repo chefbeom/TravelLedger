@@ -44,8 +44,8 @@ This checklist turns the accessibility/mobile UX improvement track into reviewab
 | --- | --- | --- | --- | --- |
 | Login, PIN, session expiry | Submit, clear, delete, recovery, and retry work from keyboard. | Focus starts on the first useful field, errors are announced, and focus returns to the trigger after session-expiry dialogs. | Numeric keyboard hints and 44x44 CSS px PIN/action targets. | `PinPadInput.vue` has labelled keypad controls and non-secret progress text. |
 | Admin dialogs and destructive actions | Confirm/cancel works without mouse and never depends on color alone. | Focus is trapped in the dialog, Escape/Cancel is available, and focus returns to the trigger. | Destructive and cancel actions remain separated and touch-safe at 360x640. | Manual checklist required before admin release. |
-| Dashboard drag widgets | Reorder/reset layout is available through buttons, menus, or forms. | Focus order follows visual order after reorder and reset. | Drag handles do not become the only touch target. | `DragDropGrid.vue` exposes keyboard move controls in edit mode for up/left/down/right movement. |
-| Drive/share/file upload | Select file, upload, revoke link, change permission, and copy link are reachable from keyboard. | Upload/share status is text-visible and focus moves to actionable recovery on failure. | Primary share/upload controls target 44x44 CSS px and fit at 360x640. | Security PIN forms expose mobile input hints; `InviteAccessPanel.vue` has labelled expiry controls, button types, generated-link live status, and alert/status feedback. |
+| Dashboard drag widgets | Reorder/reset layout is available through buttons, menus, or forms. | Focus order follows visual order after reorder and reset. | Drag handles do not become the only touch target. | Current gap: keyboard reordering is not implemented and remains in the Implementation Queue. |
+| Drive/share/file upload | Select file, upload, revoke link, change permission, and copy link are reachable from keyboard. | Upload/share status is text-visible and focus moves to actionable recovery on failure. | Primary share/upload controls target 44x44 CSS px and fit at 360x640. | Security PIN forms expose mobile input hints; `InviteAccessPanel.vue` has a labelled expiry control, typed actions, generated-link live status, and visible Korean labels. |
 | Maps and travel media | Route, marker, cluster, and photo data has list/table alternatives. | Focus can leave map controls and return to the selected list item. | Map gestures are optional for core read/review flows. | Implementation queued. |
 | AI/OCR result review | Retry, delete history, inspect source entries, and accept/reject recommendations are keyboard reachable. | Long AI/OCR output has headings and status summaries before detail sections. | Generated reports do not require horizontal scrolling at 360x640. | Manual checklist required before AI/OCR release. |
 
@@ -81,9 +81,9 @@ This checklist turns the accessibility/mobile UX improvement track into reviewab
 | --- | --- |
 | Global focus/touch/reduced-motion baseline | `frontend/src/style.css` provides global `:focus-visible`, 44px target sizing for common controls, `prefers-reduced-motion: reduce`, and `.sr-only`/`.visually-hidden` utilities. |
 | Login and invite PIN keypad | `PinPadInput.vue` exposes the keypad as a labelled group, gives digit/clear/delete buttons accessible names, and announces PIN entry progress without exposing digits. |
-| Dashboard drag widgets | `DragDropGrid.vue` exposes an edit-mode keyboard control panel with labelled up/left/down/right buttons and bounded movement. |
+| Dashboard drag widgets | `DragDropGrid.vue` uses GridStack pointer drag/resize in edit mode; keyboard reordering remains an explicit implementation gap in the queue. |
 | Profile and CalenDrive security PIN forms | PIN inputs use numeric input mode, numeric pattern hints, max length, and autocomplete hints so mobile keyboards and password managers behave predictably. |
-| Invite access panel | `InviteAccessPanel.vue` exposes a labelled expiry select, explicit button types, generated-link live status, copy action label, and separate success/error feedback semantics. |
+| Invite access panel | `InviteAccessPanel.vue` exposes a labelled expiry select, explicit button types, generated-link live status, and a copy action; this component does not declare a dedicated error alert region. |
 
 ## Release Evidence Template
 

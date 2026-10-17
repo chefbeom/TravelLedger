@@ -14,7 +14,7 @@ This contract records the shared upload security baseline for TravelLedger. It c
 | Travel GPX upload | `TravelMediaStorageService.storeRouteGpx` | Accepts only `.gpx`/XML route files and keeps route files out of image thumbnail generation. |
 | Family album upload | `FamilyMediaStorageService.store` | Requires file name, MIME/extension match, binary signature validation, owner/category object key scoping, and fail-closed thumbnail preparation. |
 | Support inquiry attachment | `SupportInquiryStorageService.store` | Limits attachments to 5MB, allows only image extensions/content types, verifies binary signatures, and stores under a normalized user directory. |
-| Thumbnail serving | `TravelController`, `FamilyAlbumController`, `ImageThumbnailService` | Thumbnail failures return no thumbnail response instead of falling back to original private bytes. |
+| Thumbnail serving | `TravelMediaHttpResponses`, `TravelController`, `FamilyAlbumController`, `ImageThumbnailService` | Fail-closed is the target policy. Family/login-preview paths enforce it; the generic travel renderer still has the legacy original fallback and public max-age on thumbnail success. See the known gap below. |
 
 ## Validation pipeline
 
@@ -34,7 +34,7 @@ flowchart TD
 
 | Invariant | Required behavior |
 | --- | --- |
-| Validate before external calls | OCR upload validation must finish before `LedgerOcrRemoteClient.analyze`; invalid uploads must not call remote OCR. |
+| Validate before external calls | OCR upload validation must finish before `LedgerImageExtractionPort.analyze`; invalid uploads must not call remote OCR. |
 | Validate before presign | Drive and travel upload preparation must reject known extension/content-type mismatches before generating presigned upload URLs. |
 | Validate before object stat | Travel presigned completion must validate owner/plan/record object-key scope and reject ambiguous path segments before MinIO `statObject`. |
 | Validate direct upload bytes | OCR, support attachments, family album, and direct travel uploads must inspect binary signatures for supported image types when backend receives bytes. |
@@ -59,6 +59,14 @@ flowchart TD
 | Fail-closed thumbnails | `FamilyAlbumControllerTest.shouldNotFallbackToOriginalImageWhenThumbnailIsUnavailable`, `TravelControllerTest`, and `ImageThumbnailServiceTest.shouldCreatePreparedThumbnailsForConfiguredWidths`. |
 
 ## Release gate
+
+Owned travel media refactoring (2026-10-16): `ManageOwnedTravelMediaUseCase` separates prepare/complete/delete/download from persistence, object storage, owner/id metadata cache and HTTP rendering. The existing storage validation body and owner/plan/record key checks are unchanged. Integration tests cover all six existing HTTP paths, auth/CSRF, owner/record-kind rejection, batch/link ordering, verified storage size, memory PHOTO coercion, caption/GPS rules, database rollback and immediate/after-commit cache/cluster timing. Pure-core dependency checks reject JPA/HTTP/SDK coupling. No operational object store or database is used by these tests.
+
+Known pre-existing gap, not fixed by this structural refactor: the generic travel thumbnail renderer falls back to the original when thumbnail loading fails and retains `public, max-age=86400` on success. Login-preview rendering instead returns 404/no-store and never original bytes; record-share rendering overrides cache to private/no-store. `TravelMediaHttpResponsesTest` freezes these differences rather than claiming all travel paths are fail-closed. The release-gate target below is not evidence that this gap is resolved. Owner/id metadata cache parent-delete and in-flight republish behavior, and atomic DB/object-store cleanup, also remain follow-ups.
+
+The GPX upload lifecycle now uses `ManageTravelRouteFilesUseCase` and `TravelRouteUploadPort`. The legacy storage validator still checks route-scoped object keys before stat, and metadata before reading MultipartFile bytes. Port bridges keep getBytes lazy and preserve IOException translation. Runtime tests cover foreign owner/plan/route keys, ambiguous path segments and sequential abort behavior. The core does not read bytes or perform network/file I/O; its Upload declaration alone may name IOException.
+
+Refactoring boundary (2026-10-16): OCR validation still runs in `LedgerOcrService` before `LedgerImageExtractionPort` is called through the multipart bridge. Provider HTTP is implemented by `ImageLedgerExtractionHttpAdapter` with NOT_SUPPORTED propagation; the rejected-upload tests still verify no extraction-port interaction. Route GPX parsing is now in `TravelRoutePayloadAdapter`, preserving secure processing, disabled DOCTYPE/external entities/XInclude and snapshot fallback. The static gate checks these new anchors and requires their runtime tests to remain selected in CI. This is not malware scanning or proof of production storage safety.
 
 The `file-upload-security-contract` CI job must pass before promoting changes that affect OCR upload, Drive upload, travel media upload, family album upload, support inquiry attachments, presigned object keys, upload status UI, thumbnail serving, or large-upload queue work.
 

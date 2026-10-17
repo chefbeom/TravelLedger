@@ -1,5 +1,7 @@
 package com.playdata.calen.ledger.ai;
 
+import com.playdata.calen.ledger.adapter.in.ai.LedgerAnalysisPreparedData;
+
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -13,8 +15,8 @@ public class LedgerAiAnalysisPayloadBuilder {
 
     private final LedgerAiAnalysisTextSanitizer aiText;
 
-    public List<LedgerAiAnalysisService.ExpenseEntryPayload> providerExpenseEntries(
-            List<LedgerAiAnalysisService.ExpenseEntryPayload> entries,
+    public List<LedgerAnalysisPreparedData.ExpenseEntryPayload> providerExpenseEntries(
+            List<LedgerAnalysisPreparedData.ExpenseEntryPayload> entries,
             int limit
     ) {
         return entries.stream()
@@ -23,13 +25,13 @@ public class LedgerAiAnalysisPayloadBuilder {
                 .toList();
     }
 
-    public List<LedgerAiAnalysisService.ExpenseEntryPayload> providerWeeklyDigestEntries(
-            List<LedgerAiAnalysisService.ExpenseEntryPayload> entries,
+    public List<LedgerAnalysisPreparedData.ExpenseEntryPayload> providerWeeklyDigestEntries(
+            List<LedgerAnalysisPreparedData.ExpenseEntryPayload> entries,
             int limit
     ) {
         return entries.stream()
                 .sorted(java.util.Comparator.comparing(
-                        LedgerAiAnalysisService.ExpenseEntryPayload::amount,
+                        LedgerAnalysisPreparedData.ExpenseEntryPayload::amount,
                         java.util.Comparator.nullsLast(java.util.Comparator.reverseOrder())
                 ))
                 .limit(Math.max(0, limit))
@@ -37,11 +39,11 @@ public class LedgerAiAnalysisPayloadBuilder {
                 .toList();
     }
 
-    public List<LedgerAiAnalysisService.RecurringExpenseCandidatePayload> providerRecurringCandidates(
-            List<LedgerAiAnalysisService.RecurringExpenseCandidatePayload> candidates
+    public List<LedgerAnalysisPreparedData.RecurringExpenseCandidatePayload> providerRecurringCandidates(
+            List<LedgerAnalysisPreparedData.RecurringExpenseCandidatePayload> candidates
     ) {
         return candidates.stream()
-                .map(candidate -> new LedgerAiAnalysisService.RecurringExpenseCandidatePayload(
+                .map(candidate -> new LedgerAnalysisPreparedData.RecurringExpenseCandidatePayload(
                         aiText.limitText(candidate.title(), PROVIDER_TEXT_LIMIT),
                         aiText.limitText(candidate.categoryGroupName(), PROVIDER_TEXT_LIMIT),
                         aiText.limitText(candidate.categoryDetailName(), PROVIDER_TEXT_LIMIT),
@@ -56,13 +58,13 @@ public class LedgerAiAnalysisPayloadBuilder {
                 .toList();
     }
 
-    public LedgerAiAnalysisService.PayloadMinimizationSummary buildPayloadMinimizationSummary(
+    public LedgerAnalysisPreparedData.PayloadMinimizationSummary buildPayloadMinimizationSummary(
             int expenseTotal,
             int comparisonTotal,
-            List<LedgerAiAnalysisService.ExpenseEntryPayload> providerExpenseEntries,
-            List<LedgerAiAnalysisService.ExpenseEntryPayload> providerComparisonExpenseEntries
+            List<LedgerAnalysisPreparedData.ExpenseEntryPayload> providerExpenseEntries,
+            List<LedgerAnalysisPreparedData.ExpenseEntryPayload> providerComparisonExpenseEntries
     ) {
-        return new LedgerAiAnalysisService.PayloadMinimizationSummary(
+        return new LedgerAnalysisPreparedData.PayloadMinimizationSummary(
                 expenseTotal,
                 providerExpenseEntries.size(),
                 Math.max(0, expenseTotal - providerExpenseEntries.size()),
@@ -74,17 +76,17 @@ public class LedgerAiAnalysisPayloadBuilder {
         );
     }
 
-    private LedgerAiAnalysisService.ExpenseEntryPayload sanitizeProviderExpenseEntry(
-            LedgerAiAnalysisService.ExpenseEntryPayload entry
+    private LedgerAnalysisPreparedData.ExpenseEntryPayload sanitizeProviderExpenseEntry(
+            LedgerAnalysisPreparedData.ExpenseEntryPayload entry
     ) {
         return sanitizeProviderExpenseEntry(entry, true);
     }
 
-    private LedgerAiAnalysisService.ExpenseEntryPayload sanitizeProviderExpenseEntry(
-            LedgerAiAnalysisService.ExpenseEntryPayload entry,
+    private LedgerAnalysisPreparedData.ExpenseEntryPayload sanitizeProviderExpenseEntry(
+            LedgerAnalysisPreparedData.ExpenseEntryPayload entry,
             boolean includeMemo
     ) {
-        return new LedgerAiAnalysisService.ExpenseEntryPayload(
+        return new LedgerAnalysisPreparedData.ExpenseEntryPayload(
                 entry.entryDate(),
                 aiText.limitText(entry.title(), PROVIDER_TEXT_LIMIT),
                 includeMemo ? aiText.limitText(entry.memo(), PROVIDER_MEMO_LIMIT) : null,

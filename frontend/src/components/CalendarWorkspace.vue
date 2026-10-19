@@ -4147,9 +4147,9 @@ defineExpose({
         <div class="panel__header">
           <div class="household-entry-panel__heading">
             <h2>{{ isEditingEntry ? '거래 수정' : '빠른 거래 입력' }}</h2>
+            <button type="button" class="button button--ghost household-entry-settings-button" data-no-drag="true" :aria-expanded="isQuickEntrySettingsOpen" aria-controls="quick-entry-sharing-settings" @click="isQuickEntrySettingsOpen = !isQuickEntrySettingsOpen">입력 설정</button>
           </div>
           <span class="panel__badge household-entry-panel__date-badge">{{ formatIsoDate(entryForm.entryDate) }}</span>
-          <button type="button" class="button button--ghost household-entry-settings-button" data-no-drag="true" :aria-expanded="isQuickEntrySettingsOpen" aria-controls="quick-entry-sharing-settings" @click="isQuickEntrySettingsOpen = !isQuickEntrySettingsOpen">입력 설정</button>
         </div>
 
         <section v-if="isQuickEntrySettingsOpen" id="quick-entry-sharing-settings" class="household-entry-settings" data-no-drag="true" aria-label="빠른 거래 입력 설정">

@@ -10020,7 +10020,18 @@ textarea {
   align-self: flex-start;
 }
 
+.household-entry-panel__heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+  width: 100%;
+}
+
 .household-entry-panel__heading h2 {
+  flex: 1;
+  min-width: 0;
   margin: 0;
   font-size: clamp(1.08rem, 1.45vw, 1.32rem);
   line-height: 1.25;
@@ -38023,7 +38034,8 @@ html body .travel-journey-controls .travel-journey-controls__speed-ticks .is-sel
   overscroll-behavior: contain;
 }
 
-.household-entry-settings-button { margin-left: auto; min-height: 32px; padding: 6px 10px; font-size: 0.8rem; }
+.household-entry-settings-button { flex: 0 0 auto; margin-left: auto; min-height: 32px; padding: 6px 10px; font-size: 0.8rem; white-space: nowrap; }
+:root[data-layout-mode='mobile'] .household-entry-panel .household-entry-settings-button { width: auto; white-space: nowrap; }
 .household-entry-settings { padding: 12px; margin-bottom: 14px; border: 1px solid var(--line); background: var(--panel-bg); }
 .household-entry-settings__toggle { display: flex; align-items: center; gap: 10px; font-weight: 700; }
 .household-entry-settings__toggle input { width: 18px; height: 18px; flex: 0 0 18px; }

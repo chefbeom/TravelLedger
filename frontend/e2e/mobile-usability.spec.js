@@ -116,9 +116,49 @@ async function expectAggregateHeaderLayout(header, stacked) {
   }
 }
 
+async function expectQuickEntryHeaderLayout(page, testInfo) {
+  const panel = page.locator('.household-entry-panel')
+  const header = panel.locator(':scope > .panel__header')
+  const settings = header.getByRole('button', { name: '입력 설정', exact: true })
+  const date = header.locator('.household-entry-panel__date-badge')
+  const originalDate = await date.textContent()
+  await expect(header.getByRole('heading', { name: '빠른 거래 입력', exact: true })).toBeVisible()
+  for (const theme of ['default', 'toss']) {
+    await page.evaluate(theme => document.documentElement.dataset.theme = theme, theme)
+    await settings.evaluate(element => element.scrollIntoView({ block: 'center', inline: 'nearest' }))
+    const geometry = await header.evaluate(element => {
+      const rect = selector => {
+        const { left, right, top, bottom, height } = element.querySelector(selector).getBoundingClientRect()
+        return { left, right, top, bottom, centerY: top + height / 2 }
+      }
+      return { title: rect('h2'), button: rect('button'), date: rect('.household-entry-panel__date-badge'), row: rect('.household-entry-panel__heading') }
+    })
+    expect(Math.abs(geometry.title.centerY - geometry.button.centerY), 'Title and settings must share the same row').toBeLessThanOrEqual(1)
+    expect(geometry.title.right).toBeLessThanOrEqual(geometry.button.left)
+    expect(Math.abs(geometry.button.right - geometry.row.right)).toBeLessThanOrEqual(1)
+    expect(geometry.date.top).toBeGreaterThanOrEqual(geometry.row.bottom)
+    await expect.poll(() => canTouch(settings)).toBe(true)
+    await header.screenshot({ path: testInfo.outputPath(`${theme}-quick-entry-header-${page.viewportSize().width}.png`) })
+    await settings.click()
+    await expect(settings).toHaveAttribute('aria-expanded', 'true')
+    await expect(panel.getByRole('region', { name: '빠른 거래 입력 설정', exact: true })).toBeVisible()
+    await settings.click()
+    await expect(settings).toHaveAttribute('aria-expanded', 'false')
+    await expect(date).toHaveText(originalDate)
+  }
+}
+
 for (const [width, height] of sizes) {
   test.describe(`mobile usability ${width}x${height}`, () => {
     test.use({ viewport: { width, height }, hasTouch: true, isMobile: true })
+
+    test('quick entry header aligns settings beside title on mobile', async ({ page }, testInfo) => {
+      const errors = await mock(page)
+      await page.goto('/#household')
+      await page.getByRole('button', { name: '달력 가계부', exact: true }).tap()
+      await expectQuickEntryHeaderLayout(page, testInfo)
+      expect(errors).toEqual([])
+    })
 
     test('aggregate header keeps title and edit controls readable', async ({ page }, testInfo) => {
       const errors = await mock(page)
@@ -248,6 +288,17 @@ for (const [width, height] of sizes) {
 
 test.describe('desktop aggregate header', () => {
   test.use({ viewport: { width: 1440, height: 900 }, hasTouch: false, isMobile: false })
+  test('quick entry header aligns settings beside title on desktop', async ({ page }, testInfo) => {
+    const errors = await mock(page)
+    for (const width of [1440, 1920]) {
+      await page.setViewportSize({ width, height: 1080 })
+      await page.goto('/#household')
+      await page.getByRole('button', { name: '달력 가계부', exact: true }).click()
+      await expectQuickEntryHeaderLayout(page, testInfo)
+    }
+    expect(errors).toEqual([])
+  })
+
   test('aggregate header preserves desktop horizontal layout', async ({ page }) => {
     const errors = await mock(page)
     await page.goto('/#household')

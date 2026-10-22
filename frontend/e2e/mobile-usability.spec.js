@@ -191,6 +191,8 @@ for (const [width, height] of sizes) {
       await page.getByLabel('조회 기준일', { exact: true }).fill('2026-10-03')
       await page.locator('.household-entry-panel').waitFor()
       const nextDay = page.getByRole('button', { name: '다음날', exact: true })
+      // Fixed-height WYSIWYG palettes scroll their own content before the page is positioned.
+      await nextDay.scrollIntoViewIfNeeded()
       await nextDay.evaluate(el => { const r = el.getBoundingClientRect(); window.scrollBy(0, r.y - (innerHeight - 100)) })
       await expect.poll(() => canTouch(nextDay)).toBe(true)
       await nextDay.tap()

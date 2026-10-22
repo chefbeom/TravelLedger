@@ -82,7 +82,11 @@ public class HouseholdAggregatePreferenceService {
                         widget.layoutX(), widget.layoutY(), widget.layoutW(), widget.layoutH(), widget.layoutOrder(),
                         widget.textSize(), widget.textColor(), input.title() == null ? previous.title() : input.title(),
                         input.hidden() == null ? previous.hidden() : input.hidden(),
-                        input.displaySize() == null ? previous.displaySize() : input.displaySize());
+                        input.displaySize() == null ? previous.displaySize() : input.displaySize(),
+                        input.cardWidth() == null ? previous.cardWidth() : input.cardWidth(),
+                        input.cardHeight() == null ? previous.cardHeight() : input.cardHeight(),
+                        input.showPeriod() == null ? previous.showPeriod() : input.showPeriod(),
+                        input.showDetails() == null ? previous.showDetails() : input.showDetails());
             }
             result.add(widget);
         }
@@ -111,7 +115,8 @@ public class HouseholdAggregatePreferenceService {
                 widget.layoutH(),
                 widget.layoutOrder(),
                 widget.textSize(),
-                widget.textColor(), widget.title(), widget.hidden(), widget.displaySize()
+                widget.textColor(), widget.title(), widget.hidden(), widget.displaySize(),
+                widget.cardWidth(), widget.cardHeight(), widget.showPeriod(), widget.showDetails()
         );
     }
 
@@ -161,7 +166,8 @@ public class HouseholdAggregatePreferenceService {
                                 widget.layoutH(),
                                 widget.layoutOrder(),
                                 widget.textSize(),
-                                widget.textColor(), widget.title(), widget.hidden(), widget.displaySize()
+                                widget.textColor(), widget.title(), widget.hidden(), widget.displaySize(),
+                                widget.cardWidth(), widget.cardHeight(), widget.showPeriod(), widget.showDetails()
                         ))
                         .toList()
         );
@@ -273,7 +279,11 @@ public class HouseholdAggregatePreferenceService {
                     textColor,
                     requestedWidget.title() == null ? "" : requestedWidget.title().trim().substring(0, Math.min(80, requestedWidget.title().trim().length())),
                     Boolean.TRUE.equals(requestedWidget.hidden()),
-                    normalizeAllowedValue(requestedWidget.displaySize(), Set.of("SMALL", "MEDIUM", "LARGE"), "MEDIUM")
+                    normalizeAllowedValue(requestedWidget.displaySize(), Set.of("SMALL", "MEDIUM", "LARGE"), "MEDIUM"),
+                    normalizeCardDimension(requestedWidget.cardWidth(), 200, 1200),
+                    normalizeCardDimension(requestedWidget.cardHeight(), 160, 800),
+                    normalizeBoolean(requestedWidget.showPeriod(), true),
+                    normalizeBoolean(requestedWidget.showDetails(), true)
             ));
         }
 
@@ -322,7 +332,8 @@ public class HouseholdAggregatePreferenceService {
                     height,
                     normalizeLayoutOrder(widget.layoutOrder(), index + 1),
                     widget.textSize(),
-                    widget.textColor(), widget.title(), widget.hidden(), widget.displaySize()
+                    widget.textColor(), widget.title(), widget.hidden(), widget.displaySize(),
+                    widget.cardWidth(), widget.cardHeight(), widget.showPeriod(), widget.showDetails()
             );
         }
 
@@ -369,6 +380,10 @@ public class HouseholdAggregatePreferenceService {
             return null;
         }
         return value;
+    }
+
+    private Integer normalizeCardDimension(Integer value, int min, int max) {
+        return value == null || value == 0 ? null : Math.max(min, Math.min(max, value));
     }
 
     private String normalizeAllowedValue(String value, Set<String> allowedValues, String fallback) {
@@ -425,8 +440,20 @@ public class HouseholdAggregatePreferenceService {
             String textColor,
             String title,
             Boolean hidden,
-            String displaySize
+            String displaySize,
+            Integer cardWidth,
+            Integer cardHeight,
+            Boolean showPeriod,
+            Boolean showDetails
     ) {
+        private StoredWidget(String kind, String period, Long paymentMethodId, String amountType, Long monthlyExpenseTarget,
+                Long singleExpenseLimit, Boolean showIncomeCumulative, Boolean showExpenseCumulative, Boolean comparePreviousPeriod,
+                Long chartMaxAmount, Integer layoutX, Integer layoutY, Integer layoutW, Integer layoutH, Integer layoutOrder,
+                String textSize, String textColor, String title, Boolean hidden, String displaySize) {
+            this(kind, period, paymentMethodId, amountType, monthlyExpenseTarget, singleExpenseLimit, showIncomeCumulative,
+                    showExpenseCumulative, comparePreviousPeriod, chartMaxAmount, layoutX, layoutY, layoutW, layoutH,
+                    layoutOrder, textSize, textColor, title, hidden, displaySize, null, null, true, true);
+        }
         private StoredWidget(String kind, String period, Long paymentMethodId, String amountType, Long monthlyExpenseTarget,
                 Long singleExpenseLimit, Boolean showIncomeCumulative, Boolean showExpenseCumulative, Boolean comparePreviousPeriod,
                 Long chartMaxAmount, Integer layoutX, Integer layoutY, Integer layoutW, Integer layoutH, Integer layoutOrder,

@@ -7,7 +7,9 @@ import { resolveRange, shiftRange, summarizeEntries } from '../lib/analytics'
 import { useTableSelection } from '../lib/tableSelection'
 import { fetchLayoutSetting, fetchHouseholdPersonalization, saveHouseholdPersonalization } from '../lib/api'
 import { clonePersonalization, personalizationChanged, packDashboardPanels } from '../lib/calendarPersonalization'
+import { widgetFrame, resizedWidgetFrame, reorderItem } from '../lib/calendarDirectEditing'
 import HouseholdPersonalizationDialog from './HouseholdPersonalizationDialog.vue'
+import CalendarInlineEditor from './CalendarInlineEditor.vue'
 import HouseholdTransactionSheet from './HouseholdTransactionSheet.vue'
 import ReceiptHistoryThumbnail from './ReceiptHistoryThumbnail.vue'
 import { pendingReceiptReviewIds, unreadReceiptReviewIds, receiptReviewPage, selectReceiptAnalysisItems } from '../lib/receiptReview'
@@ -133,7 +135,7 @@ const calendarPanelDefinitions = [
     minW: 4,
     maxW: 9,
     minH: CALENDAR_AGGREGATE_PANEL_ROWS,
-    maxH: 8,
+    maxH: 12,
   },
   {
     id: 'calendar',
@@ -141,15 +143,15 @@ const calendarPanelDefinitions = [
     minW: 4,
     maxW: 9,
     minH: 3,
-    maxH: 8,
+    maxH: 12,
   },
   {
     id: 'quick-entry',
     defaultLayout: { x: 6, y: CALENDAR_AGGREGATE_PANEL_ROWS, w: 3, h: CALENDAR_RECOMMENDED_CONTENT_ROWS },
     minW: 2,
-    maxW: 5,
+    maxW: 9,
     minH: 3,
-    maxH: 8,
+    maxH: 12,
   },
   {
     id: 'sheet',
@@ -157,7 +159,7 @@ const calendarPanelDefinitions = [
     minW: 4,
     maxW: 9,
     minH: 2,
-    maxH: 6,
+    maxH: 12,
   },
 ]
 
@@ -397,6 +399,10 @@ const personalizationNotice = ref('')
 const personalizationConflict = ref(false)
 const personalizationRevision = ref('')
 const personalizationSnapshot = ref(null)
+const inlineEditor = ref(null)
+const directGesture = ref(null)
+let stopDirectPointer = null
+const paletteNames = { aggregate: '사용자 설정 집계', calendar: '달력', 'quick-entry': '빠른 거래 입력', sheet: '거래 시트' }
 let personalizationLoadSequence = 0
 const isAggregatePanelEnabled = ref(true)
 const isReceiptOcrPanelEnabled = ref(true)
@@ -1227,12 +1233,16 @@ const personalizationCards = computed(() => normalizeAggregateConfigs(aggregateW
 const aggregateCards = computed(() => personalizationCards.value.filter(card => card.config.kind !== 'NONE' && !card.config.hidden))
 const personalizationDirty = computed(() => Boolean(personalizationSnapshot.value && personalizationChanged(personalizationSnapshot.value.baseline || personalizationSnapshot.value.settings, currentPersonalization())))
 const personalizationPreferences = computed(calendarViewPreferencePayload)
+const directGhostStyle = computed(() => ({
+  left: `${clamp((directGesture.value?.x || 0) + 12, 8, window.innerWidth - 228)}px`,
+  top: `${clamp((directGesture.value?.y || 0) + 12, 8, window.innerHeight - 64)}px`,
+}))
 const aggregateDisplayCardCount = computed(() => {
   const sourceConfigs = aggregateWidgetDraftConfigs.value
   return normalizeAggregateConfigs(sourceConfigs).filter((config) => config.kind !== 'NONE' && !config.hidden).length
 })
 const aggregateBadgeLabel = computed(() => (
-  isAggregateEditMode.value ? `${aggregateDisplayCardCount.value}/${aggregateWidgetMaxCount}개 표시` : `${aggregateDisplayCardCount.value}/${aggregateWidgetMaxCount}개`
+  `${aggregateDisplayCardCount.value}/${aggregateWidgetMaxCount}개`
 ))
 
 
@@ -1243,7 +1253,7 @@ const calendarLayoutPanels = computed(() => {
   })).filter((panel) => (
     (panel.id !== 'aggregate' || isAggregatePanelEnabled.value)
     && (panel.id !== 'quick-entry' || isQuickEntryPanelEnabled.value)
-    && (panel.id !== 'sheet' || transactionSheetViewMode.value === 'inline' || isLayoutEditMode.value)
+    && (panel.id !== 'sheet' || transactionSheetViewMode.value === 'inline')
   ))
 
   return panels
@@ -1507,6 +1517,7 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  stopDirectPointer?.()
   personalizationLoadSequence++
   window.removeEventListener('beforeunload', handlePersonalizationBeforeUnload)
   window.removeEventListener('calen:before-preference-navigation', handlePersonalizationNavigation)
@@ -1542,6 +1553,29 @@ function isEditableTarget(target) {
 }
 
 function handleWorkspaceKeydown(event) {
+  const resize = event.target.closest?.('[data-palette-resize]')
+  const move = event.target.closest?.('[data-palette-move]')
+  if (isLayoutEditMode.value && ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key) && (resize || move)) {
+    event.preventDefault()
+    if (personalizationLoading.value || personalizationSaving.value) return
+    const id = (resize || move).dataset[resize ? 'paletteResize' : 'paletteMove']
+    const panel = calendarPanelLayout.value.find(item => item.id === id)
+    if (!panel) return
+    const horizontal = ['ArrowLeft', 'ArrowRight'].includes(event.key)
+    const direction = ['ArrowLeft', 'ArrowUp'].includes(event.key) ? -1 : 1
+    if (isMobileLayoutMode.value) {
+      if (resize && horizontal) return // Mobile palettes always fill the viewport; preserve the desktop width.
+      if (move) {
+        const ordered = [...calendarLayoutPanels.value].sort((a, b) => a.y - b.y || a.x - b.x)
+        const from = ordered.findIndex(item => item.id === id)
+        applyMobilePaletteOrder(reorderItem(ordered, from, clamp(from + direction, 0, ordered.length - 1)))
+        return
+      }
+    }
+    const field = resize ? (horizontal ? 'w' : 'h') : (horizontal ? 'x' : 'y')
+    updatePersonalizationPanel({ id, field, value: panel[field] + direction })
+    return
+  }
   if (event.key !== 'Backspace') {
     return
   }
@@ -1640,6 +1674,8 @@ async function openPersonalization(section = 'dashboard', showDialog = true) {
 }
 
 function discardPersonalization() {
+  stopDirectPointer?.()
+  inlineEditor.value = null
   personalizationLoadSequence++
   if (personalizationSnapshot.value) {
     applyPersonalizationSettings(personalizationSnapshot.value.settings)
@@ -1674,6 +1710,7 @@ async function reloadPersonalization() {
 
 async function savePersonalization() {
   if (personalizationSaving.value || personalizationLoading.value || !personalizationDirty.value || !personalizationRevision.value) return
+  stopDirectPointer?.()
   personalizationSaving.value = true
   personalizationError.value = ''
   personalizationConflict.value = false
@@ -1688,6 +1725,7 @@ async function savePersonalization() {
     await nextTick()
     personalizationSnapshot.value = null
     personalizationOpen.value = false
+    inlineEditor.value = null
     isLayoutEditMode.value = false
     isAggregateEditMode.value = false
     await nextTick()
@@ -1717,7 +1755,10 @@ function handlePersonalizationNavigation(event) {
 
 function updatePersonalizationPreference({ key, value }) {
   if (personalizationSaving.value) return
+  const previous = new Set(calendarLayoutPanels.value.map(item => item.id))
   applyCalendarViewPreferences(normalizeCalendarViewPreferences({ ...calendarViewPreferencePayload(), [key]: value }))
+  const revealed = calendarLayoutPanels.value.find(item => !previous.has(item.id))
+  if (revealed) updatePersonalizationPanel({ id: revealed.id, field: 'y', value: revealed.y })
 }
 
 function updatePersonalizationWidget({ index, field, value }) {
@@ -1726,9 +1767,9 @@ function updatePersonalizationWidget({ index, field, value }) {
   else updateAggregateWidget(index, field, value)
 }
 
-function selectPersonalizationWidget(index) {
+function selectPersonalizationWidget(index, event) {
   personalizationSelectedIndex.value = index
-  openPersonalization('widgets')
+  openInlineEditor('widget', index, event)
 }
 
 function addPersonalizationWidget(duplicate = false) {
@@ -1748,22 +1789,193 @@ function deletePersonalizationWidget() {
 }
 
 function movePersonalizationWidget(direction) {
+  if (personalizationSaving.value || personalizationLoading.value) return
   const previous = personalizationSelectedIndex.value
   moveAggregateWidget(previous, direction)
   personalizationSelectedIndex.value = clamp(previous + direction, 0, aggregateWidgetMaxCount - 1)
 }
 
 function updatePersonalizationPanel({ id, field, value }) {
+  if (personalizationSaving.value || personalizationLoading.value) return
   const next = normalizeCalendarPanelLayout(calendarPanelLayout.value.map(item => item.id === id ? { ...item, [field]: value } : item))
-  calendarPanelLayout.value = packDashboardPanels(next, id)
+  const visible = new Set(calendarLayoutPanels.value.map(item => item.id))
+  const packed = new Map(packDashboardPanels(next.filter(item => visible.has(item.id)), id).map(item => [item.id, item]))
+  calendarPanelLayout.value = next.map(item => packed.get(item.id) || item)
   refreshCalendarMeasurements()
+}
+
+function openInlineEditor(type, id, event) {
+  if (personalizationSaving.value || personalizationLoading.value) return
+  if (type === 'widget') personalizationSelectedIndex.value = Number(id)
+  const selector = type === 'widget' ? `[data-aggregate-index="${id}"]` : `[data-calendar-panel-id="${id}"] .calendar-dashboard-panel`
+  const anchor = resolveElementRef(layoutGridRef.value)?.querySelector(selector) || event?.currentTarget
+  if (anchor) {
+    if (isMobileLayoutMode.value && type === 'widget') anchor.scrollIntoView({ block: 'start', behavior: 'instant' })
+    inlineEditor.value = { type, index: Number(id), panelId: type === 'panel' ? id : 'aggregate', title: paletteNames[id], anchor }
+  }
+}
+
+async function addDirectWidget(event) {
+  addPersonalizationWidget(false)
+  await nextTick()
+  openInlineEditor('widget', personalizationSelectedIndex.value, event)
+}
+
+function hidePalette(id) {
+  updatePersonalizationPreference({ key: id === 'aggregate' ? 'aggregatePanelEnabled' : 'quickEntryPanelEnabled', value: false })
+  inlineEditor.value = null
+}
+
+function trackDirectPointer(event, handlers) {
+  if (!isLayoutEditMode.value || personalizationLoading.value || personalizationSaving.value || event.button > 0) return
+  stopDirectPointer?.()
+  event.preventDefault()
+  event.stopPropagation()
+  const pointerId = event.pointerId, start = { x: event.clientX, y: event.clientY }
+  event.currentTarget.setPointerCapture?.(pointerId)
+  let point = start, moved = false, scrollFrame = 0
+  const scroll = () => {
+    if (handlers.autoScroll?.(point)) handlers.move(point.x - start.x, point.y - start.y, point)
+    scrollFrame = window.requestAnimationFrame(scroll)
+  }
+  const move = next => {
+    if (next.pointerId !== pointerId) return
+    point = { x: next.clientX, y: next.clientY }
+    moved ||= Math.hypot(point.x - start.x, point.y - start.y) > 4
+    if (moved) {
+      handlers.move(point.x - start.x, point.y - start.y, point)
+      if (handlers.autoScroll && !scrollFrame) scrollFrame = window.requestAnimationFrame(scroll)
+    }
+  }
+  const cleanup = cancelled => {
+    window.removeEventListener('pointermove', move)
+    window.removeEventListener('pointerup', end)
+    window.removeEventListener('pointercancel', cancel)
+    window.removeEventListener('keydown', key, true)
+    window.cancelAnimationFrame(scrollFrame)
+    stopDirectPointer = null
+    if (cancelled || !moved) handlers.cancel?.()
+    else handlers.finish(point.x - start.x, point.y - start.y, point)
+    directGesture.value = null
+  }
+  const end = next => { if (next.pointerId === pointerId) cleanup(false) }
+  const cancel = () => cleanup(true)
+  const key = next => { if (next.key === 'Escape') { next.preventDefault(); next.stopPropagation(); cancel() } }
+  stopDirectPointer = cancel
+  window.addEventListener('pointermove', move)
+  window.addEventListener('pointerup', end)
+  window.addEventListener('pointercancel', cancel)
+  window.addEventListener('keydown', key, true)
+}
+
+function resizeWidget(event, card) {
+  const element = event.currentTarget.closest('.household-aggregate-card'), rect = element.getBoundingClientRect()
+  const available = element.parentElement.clientWidth
+  const originalWidth = element.style.getPropertyValue('--calendar-widget-width'), originalHeight = element.style.getPropertyValue('--calendar-widget-height')
+  inlineEditor.value = null
+  trackDirectPointer(event, {
+    move(dx, dy) {
+      const size = resizedWidgetFrame(rect, dx, dy, available, Boolean(card.chart))
+      element.style.setProperty('--calendar-widget-width', `${size.cardWidth}px`)
+      element.style.setProperty('--calendar-widget-height', `${size.cardHeight}px`)
+      directGesture.value = { type: 'widget-resize', index: card.index, label: `${size.cardWidth} × ${size.cardHeight}px` }
+    },
+    finish(dx, dy) { updateAggregateWidgetLayout(card.index, resizedWidgetFrame(rect, dx, dy, available, Boolean(card.chart))) },
+    cancel() { element.style.setProperty('--calendar-widget-width', originalWidth); element.style.setProperty('--calendar-widget-height', originalHeight) },
+  })
+}
+
+function resizeWidgetByKey(event, card) {
+  if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) return
+  event.preventDefault()
+  const element = event.currentTarget.closest('.household-aggregate-card'), rect = element.getBoundingClientRect()
+  const step = event.shiftKey ? 10 : 20
+  updateAggregateWidgetLayout(card.index, resizedWidgetFrame(rect, event.key === 'ArrowRight' ? step : event.key === 'ArrowLeft' ? -step : 0, event.key === 'ArrowDown' ? step : event.key === 'ArrowUp' ? -step : 0, element.parentElement.clientWidth, Boolean(card.chart)))
+}
+
+function moveWidgetDirect(event, card) {
+  const grid = event.currentTarget.closest('.household-aggregate-grid')
+  let target = card.index
+  inlineEditor.value = null
+  trackDirectPointer(event, {
+    autoScroll: point => scrollDuringDirectMove(grid.closest('.household-aggregate-panel'), point),
+    move(_dx, _dy, point) {
+      const candidates = [...grid.querySelectorAll('.household-aggregate-card')]
+      target = candidates.sort((a, b) => {
+        const distance = element => { const r = element.getBoundingClientRect(); return Math.hypot(r.x + r.width / 2 - point.x, r.y + r.height / 2 - point.y) }
+        return distance(a) - distance(b)
+      })[0]?.dataset.aggregateIndex ?? card.index
+      directGesture.value = { type: 'widget-move', index: card.index, targetIndex: Number(target), x: point.x, y: point.y, label: card.config.title || card.title }
+    },
+    finish() {
+      aggregateWidgetDraftConfigs.value = normalizeAggregateConfigs(reorderItem(aggregateWidgetDraftConfigs.value, card.index, Number(target)).map((item, index) => ({ ...item, layoutOrder: index + 1 })))
+      personalizationSelectedIndex.value = Number(target)
+    },
+  })
+}
+
+function resizeMobilePalette(event, panel) {
+  const element = event.currentTarget.closest('[data-calendar-panel-id]')
+  const original = element.style.getPropertyValue('height')
+  let height = panel.h
+  trackDirectPointer(event, {
+    move(_dx, dy) {
+      height = clamp(panel.h + Math.round(dy / layoutCellHeight.value), panel.minH, panel.maxH)
+      element.style.setProperty('height', `${height * layoutCellHeight.value}px`, 'important')
+      directGesture.value = { type: 'palette-resize', label: `${paletteNames[panel.id]} · ${height}칸` }
+    },
+    finish() { element.style.removeProperty('height'); updatePersonalizationPanel({ id: panel.id, field: 'h', value: height }) },
+    cancel() { if (original) element.style.setProperty('height', original); else element.style.removeProperty('height') },
+  })
+}
+
+function moveMobilePalette(event, panel) {
+  if (!isMobileLayoutMode.value) return
+  const ordered = [...calendarLayoutPanels.value].sort((a, b) => a.y - b.y || a.x - b.x)
+  let target = ordered.findIndex(item => item.id === panel.id)
+  inlineEditor.value = null
+  trackDirectPointer(event, {
+    autoScroll: point => scrollDuringDirectMove(null, point),
+    move(_dx, _dy, point) {
+      const elements = [...resolveElementRef(layoutGridRef.value).querySelectorAll(':scope > [data-calendar-panel-id]')]
+      const nearest = elements.sort((a, b) => { const middle = element => { const r = element.getBoundingClientRect(); return Math.abs(r.top + r.height / 2 - point.y) }; return middle(a) - middle(b) })[0]
+      target = ordered.findIndex(item => item.id === nearest?.dataset.calendarPanelId)
+      directGesture.value = { type: 'palette-move', targetId: nearest?.dataset.calendarPanelId, x: point.x, y: point.y, label: paletteNames[panel.id] }
+    },
+    finish() {
+      applyMobilePaletteOrder(reorderItem(ordered, ordered.findIndex(item => item.id === panel.id), target))
+    },
+  })
+}
+
+function applyMobilePaletteOrder(ordered) {
+  let row = 0
+  const moved = new Map(ordered.map(item => { const result = { ...item, y: row }; row += item.h; return [item.id, result] }))
+  calendarPanelLayout.value = normalizeCalendarPanelLayout(calendarPanelLayout.value.map(item => moved.get(item.id) || item))
+}
+
+function scrollDuringDirectMove(element, point) {
+  if (element) {
+    const rect = element.getBoundingClientRect(), before = element.scrollTop
+    const delta = point.y < Math.max(80, rect.top) + 30 ? -16 : point.y > Math.min(window.innerHeight, rect.bottom) - 30 ? 16 : 0
+    element.scrollTop += delta
+    if (element.scrollTop !== before) return true
+  }
+  const before = window.scrollY
+  const delta = point.y < 100 ? -16 : point.y > window.innerHeight - 48 ? 16 : 0
+  if (delta) window.scrollBy({ top: delta, behavior: 'instant' })
+  return window.scrollY !== before
+}
+
+function handlePaletteHeaderPointer(event, panel) {
+  if (!isMobileLayoutMode.value || !isLayoutEditMode.value) return
+  if (event.target.closest('button, a, input, select, textarea, [role="button"], [contenteditable="plaintext-only"]')) return
+  if (event.target.closest('.panel__header, .household-calendar-panel-dragbar')) moveMobilePalette(event, panel)
 }
 
 function editPersonalizationLayout() {
   isLayoutEditMode.value = true
   personalizationOpen.value = false
-  // On mobile, numeric layout controls are the accessible alternative to desktop drag/resize.
-  if (isMobileLayoutMode.value) personalizationOpen.value = true
 }
 
 function resetPersonalization(scope) {
@@ -2123,13 +2335,9 @@ function calendarPanelAttrs(panel) {
 }
 
 function updateLayoutCellHeight() {
-  if (isMobileLayoutMode.value) {
-    return
-  }
-
   const layoutGridElement = resolveElementRef(layoutGridRef.value)
   const width = layoutGridElement?.clientWidth || layoutGridElement?.parentElement?.clientWidth || 0
-  if (!width || !layoutGrid) {
+  if (!width) {
     return
   }
 
@@ -2138,9 +2346,9 @@ function updateLayoutCellHeight() {
     - (CALENDAR_LAYOUT_GRID_MARGIN * 2)
     - ((CALENDAR_LAYOUT_GRID_COLUMNS - 1) * CALENDAR_LAYOUT_GRID_GAP)
   ) / CALENDAR_LAYOUT_GRID_COLUMNS
-  const nextHeight = Math.round(Math.max(108, Math.min(148, rawCellWidth * 0.88)))
+  const nextHeight = isMobileLayoutMode.value ? 112 : Math.round(Math.max(108, Math.min(148, rawCellWidth * 0.88)))
   layoutCellHeight.value = nextHeight
-  layoutGrid.cellHeight(nextHeight)
+  layoutGrid?.cellHeight(nextHeight)
 }
 
 function readLayoutGridSnapshot() {
@@ -2196,6 +2404,7 @@ function calendarPanelLayoutItemStyle(panel) {
   if (isMobileLayoutMode.value) {
     return {
       '--mobile-calendar-panel-order': String(Number(panel.y) * 9 + Number(panel.x)),
+      '--calendar-panel-rows': String(panel.h),
     }
   }
 
@@ -2210,6 +2419,7 @@ function calendarPanelLayoutItemStyle(panel) {
 
   return {
     '--mobile-calendar-panel-order': String(Number(panel.y) * 9 + Number(panel.x)),
+    '--calendar-panel-rows': String(panel.h),
     gridColumn: columnStart + ' / span ' + columnSpan,
     gridRow: rowStart + ' / span ' + rowSpan,
   }
@@ -2248,7 +2458,7 @@ function initLayoutGrid() {
     draggable: {
       appendTo: 'body',
       cancel: 'button,a,input,select,textarea,[data-no-drag="true"]',
-      handle: '.panel__header, .household-calendar-panel-dragbar',
+      handle: '.panel__header, .household-calendar-panel-dragbar, .calendar-palette-move-handle',
       scroll: false,
     },
     resizable: {
@@ -2259,6 +2469,14 @@ function initLayoutGrid() {
   layoutGrid.enableResize(isLayoutEditMode.value && !personalizationSaving.value && !personalizationLoading.value)
   layoutGrid.on('dragstop', handleLayoutGridStop)
   layoutGrid.on('resizestop', handleLayoutGridStop)
+  for (const handle of layoutGridElement.querySelectorAll(':scope > .grid-stack-item > .ui-resizable-se')) {
+    const id = handle.parentElement.dataset.calendarPanelId
+    handle.dataset.paletteResize = id
+    handle.setAttribute('role', 'button')
+    handle.setAttribute('tabindex', '0')
+    handle.setAttribute('aria-label', `${paletteNames[id]} 팔레트 크기 조절`)
+    handle.title = '모서리를 드래그하거나 방향키로 크기 조절'
+  }
   updateLayoutCellHeight()
 }
 
@@ -2288,7 +2506,6 @@ function queueLayoutGridRebuild() {
 async function toggleLayoutEditMode() {
   await openPersonalization('dashboard', false)
   if (personalizationRevision.value) isLayoutEditMode.value = true
-  if (isMobileLayoutMode.value) personalizationOpen.value = true
 }
 
 
@@ -2535,6 +2752,8 @@ function getAggregateCardGridStyle(card) {
   const row = normalizeAggregateGridPosition(config.layoutY, fallbackRow, getAggregateMaxRowForHeight(height))
   const order = normalizeAggregateLayoutOrder(config.layoutOrder, (card?.index ?? 0) + 1)
   return {
+    '--calendar-widget-width': `${widgetFrame(config).cardWidth || (config.kind === 'MONTHLY_CUMULATIVE_CHART' ? 480 + Math.max(0, config.layoutW - 2) * 120 : { SMALL: 240, MEDIUM: 260, LARGE: 360 }[config.displaySize] || 260)}px`,
+    '--calendar-widget-height': widgetFrame(config).cardHeight ? `${widgetFrame(config).cardHeight}px` : config.kind === 'MONTHLY_CUMULATIVE_CHART' ? '160px' : 'auto',
     '--aggregate-card-col-span': String(width),
     '--aggregate-card-row-span': String(height),
     '--aggregate-card-grid-column': `${column} / span ${width}`,
@@ -2736,7 +2955,7 @@ function normalizeAggregateConfigs(configs) {
     const title = String(current.title || '').slice(0, 80)
     const hidden = current.hidden === true
     const displaySize = ['SMALL', 'MEDIUM', 'LARGE'].includes(current.displaySize) ? current.displaySize : 'MEDIUM'
-    return { id: current.id || baseConfig.id, kind, period, paymentMethodId, amountType, monthlyExpenseTarget, singleExpenseLimit, showIncomeCumulative, showExpenseCumulative, comparePreviousPeriod, chartMaxAmount, textSize, textColor, layoutX, layoutY, layoutW, layoutH, layoutOrder, title, hidden, displaySize }
+    return { id: current.id || baseConfig.id, kind, period, paymentMethodId, amountType, monthlyExpenseTarget, singleExpenseLimit, showIncomeCumulative, showExpenseCumulative, comparePreviousPeriod, chartMaxAmount, textSize, textColor, layoutX, layoutY, layoutW, layoutH, layoutOrder, title, hidden, displaySize, ...widgetFrame(current) }
   })
 
   return packAggregateGridConfigs(orderAggregateConfigs(normalizedConfigs))
@@ -2746,6 +2965,7 @@ function updateAggregateWidget(index, field, value) {
     aggregateWidgetDraftConfigs.value.map((config, configIndex) => {
       if (configIndex !== index) return config
       const nextConfig = { ...config, [field]: value }
+      if (field === 'displaySize') nextConfig.cardWidth = 0
 
       if (field === 'kind') {
         const nextKind = String(value || 'NONE')
@@ -2800,6 +3020,7 @@ function updateAggregateWidgetSize(index, value) {
   const size = parseAggregateWidgetSize(value, currentConfig)
   updateAggregateWidgetLayout(index, {
     layoutW: size.width,
+    cardWidth: 0,
     layoutH: size.height,
     layoutX: Math.min(normalizeAggregateGridPosition(currentConfig.layoutX, 1, getAggregateMaxColumnForWidth(size.width)), getAggregateMaxColumnForWidth(size.width)),
     layoutY: Math.min(normalizeAggregateGridPosition(currentConfig.layoutY, 1, getAggregateMaxRowForHeight(size.height)), getAggregateMaxRowForHeight(size.height)),
@@ -2807,6 +3028,7 @@ function updateAggregateWidgetSize(index, value) {
 }
 
 function updateAggregateWidgetLayout(index, patch) {
+  if (personalizationSaving.value || personalizationLoading.value) return
   aggregateWidgetDraftConfigs.value = normalizeAggregateConfigs(
     aggregateWidgetDraftConfigs.value.map((config, configIndex) => (
       configIndex === index ? { ...config, ...patch } : config
@@ -2836,14 +3058,8 @@ function syncAggregateWidgetDraft() {
   aggregateWidgetDraftConfigs.value = normalizeAggregateConfigs(props.aggregateWidgetConfigs)
 }
 
-function startAggregateEdit() {
-  openPersonalization('widgets')
-}
-
-
-
 function serializeAggregateWidgetConfigs(configs) {
-  return normalizeAggregateConfigs(configs).slice(0, aggregateWidgetMaxCount).map(({ kind, period, paymentMethodId, amountType, monthlyExpenseTarget, singleExpenseLimit, showIncomeCumulative, showExpenseCumulative, comparePreviousPeriod, chartMaxAmount, textSize, textColor, layoutX, layoutY, layoutW, title, hidden, displaySize }, configIndex) => {
+  return normalizeAggregateConfigs(configs).slice(0, aggregateWidgetMaxCount).map(({ kind, period, paymentMethodId, amountType, monthlyExpenseTarget, singleExpenseLimit, showIncomeCumulative, showExpenseCumulative, comparePreviousPeriod, chartMaxAmount, textSize, textColor, layoutX, layoutY, layoutW, title, hidden, displaySize, cardWidth, cardHeight, showPeriod, showDetails }, configIndex) => {
     const normalizedWidth = kind === 'MONTHLY_CUMULATIVE_CHART'
       ? Math.min(4, Math.max(2, normalizeAggregateGridSpan(layoutW, 2, 4)))
       : aggregateDefaultWidgetWidth
@@ -2855,6 +3071,7 @@ function serializeAggregateWidgetConfigs(configs) {
     return {
       kind,
       title, hidden, displaySize,
+      cardWidth, cardHeight, showPeriod, showDetails,
       period: normalizedPeriod,
       paymentMethodId: kind === 'PAYMENT_METHOD' && paymentMethodId ? Number(paymentMethodId) : null,
       amountType: normalizedAmountType,
@@ -3895,13 +4112,22 @@ defineExpose({
       :notice="personalizationNotice"
       :conflict="personalizationConflict" :can-save="Boolean(personalizationRevision)"
       :preferences="personalizationPreferences" :widgets="aggregateWidgetDraftConfigs" :cards="personalizationCards"
-      :selected-index="personalizationSelectedIndex" :panels="calendarPanelDefinitions.map(item => ({ ...item, ...calendarPanelLayout.find(panel => panel.id === item.id) }))" :payment-methods="paymentMethods"
+      :selected-index="personalizationSelectedIndex" :panels="calendarPanelDefinitions.filter(item => item.id !== 'sheet' || transactionSheetViewMode === 'inline').map(item => ({ ...item, ...calendarPanelLayout.find(panel => panel.id === item.id) }))" :payment-methods="paymentMethods"
       @section="personalizationSection = $event" @close="cancelPersonalization" @save="savePersonalization"
       @reload="reloadPersonalization" @preference="updatePersonalizationPreference" @widget="updatePersonalizationWidget"
       @select-widget="personalizationSelectedIndex = $event" @add-widget="addPersonalizationWidget(false)"
       @duplicate-widget="addPersonalizationWidget(true)" @delete-widget="deletePersonalizationWidget"
       @move-widget="movePersonalizationWidget" @panel="updatePersonalizationPanel" @edit-layout="editPersonalizationLayout" @reset="resetPersonalization"
     />
+    <CalendarInlineEditor :editor="inlineEditor" :widget="aggregateWidgetDraftConfigs[inlineEditor?.index] || {}"
+      :panel="{ ...calendarPanelDefinitions.find(item => item.id === inlineEditor?.panelId), ...calendarPanelLayout.find(item => item.id === inlineEditor?.panelId) }"
+      :preferences="personalizationPreferences" :payment-methods="paymentMethods" :busy="personalizationSaving"
+      :can-duplicate="aggregateWidgetDraftConfigs.some(item => item.kind === 'NONE')"
+      :mobile="isMobileLayoutMode"
+      @close="inlineEditor = null" @widget="updatePersonalizationWidget" @preference="updatePersonalizationPreference" @panel="updatePersonalizationPanel" @hide="hidePalette"
+      @duplicate="addPersonalizationWidget(true); inlineEditor = null" @delete="deletePersonalizationWidget(); inlineEditor = null"
+      @move="movePersonalizationWidget($event); inlineEditor = null" />
+    <Teleport to="body"><div v-if="directGesture?.type?.endsWith('move')" class="calendar-direct-ghost" :style="directGhostStyle" aria-hidden="true">{{ directGesture.label }}</div></Teleport>
 
     <section class="calendar-overview-toolbar" aria-label="달력 조회와 개인화">
       <div class="calendar-overview-toolbar__date">
@@ -3924,8 +4150,8 @@ defineExpose({
     </section>
 
     <section v-if="isAggregateEditMode" id="household-calendar-layout-editor" class="calendar-draft-toolbar" aria-label="개인 설정 편집" aria-live="polite">
-      <div><strong>대시보드 편집 중</strong><span>{{ personalizationDirty ? '저장하지 않은 변경사항' : '변경사항 없음' }} · {{ isMobileLayoutMode ? '개인화 설정에서 순서와 크기를 조절하세요.' : '드래그 핸들과 오른쪽 아래 모서리로 배치를 조절하세요.' }}</span></div>
-      <div><button type="button" class="button button--secondary" @click="openPersonalization('dashboard')">설정 패널 열기</button><button type="button" class="button button--secondary" :disabled="personalizationSaving" @click="cancelPersonalization">취소</button><button type="button" class="button button--primary" :disabled="!personalizationDirty || personalizationLoading || personalizationSaving || !personalizationRevision" @click="savePersonalization">{{ personalizationSaving ? '저장 중…' : '변경사항 저장' }}</button></div>
+      <div><strong>대시보드 편집 중</strong><span>{{ personalizationDirty ? '저장하지 않은 변경사항' : '변경사항 없음' }} · 윗부분을 잡아 이동 · 모서리로 크기 조절 · 카드 옆에서 내용 편집</span><span v-if="directGesture?.label" role="status">{{ directGesture.label }}</span></div>
+      <div><button v-if="!isAggregatePanelEnabled" type="button" class="button button--secondary" @click="updatePersonalizationPreference({ key: 'aggregatePanelEnabled', value: true })">집계 팔레트 추가</button><button v-if="!isQuickEntryPanelEnabled" type="button" class="button button--secondary" @click="updatePersonalizationPreference({ key: 'quickEntryPanelEnabled', value: true })">입력 팔레트 추가</button><button v-for="card in personalizationCards.filter(item => item.config.hidden && item.config.kind !== 'NONE')" :key="card.id" type="button" class="button button--secondary" @click="updatePersonalizationWidget({ index: card.index, field: 'hidden', value: false })">{{ card.config.title || card.title }} 다시 표시</button><button type="button" class="button button--ghost" @click="openPersonalization('dashboard')">전체 설정</button><button type="button" class="button button--secondary" :disabled="personalizationSaving" @click="cancelPersonalization">취소</button><button type="button" class="button button--primary" :disabled="!personalizationDirty || personalizationLoading || personalizationSaving || !personalizationRevision" @click="savePersonalization">{{ personalizationSaving ? '저장 중…' : '변경사항 저장' }}</button></div>
     </section>
 
     <section
@@ -3945,6 +4171,7 @@ defineExpose({
     <section
       class="calendar-dashboard"
       :class="{
+        'calendar-dashboard--editing': isLayoutEditMode,
         'household-calendar-layout-board--editing': isLayoutEditMode && !isMobileLayoutMode,
         'household-calendar-layout-board--mobile-flow': isMobileLayoutMode,
       }"
@@ -3973,6 +4200,8 @@ defineExpose({
           :style="calendarPanelLayoutItemStyle(panel)"
           :gs-id="panel.id"
           :data-calendar-panel-id="panel.id"
+          :data-palette-drop-target="directGesture?.type === 'palette-move' && directGesture.targetId === panel.id"
+          :data-palette-selected="inlineEditor?.type === 'panel' && inlineEditor.panelId === panel.id"
           :gs-x="isCalendarGridStackActive ? calendarPanelAttrs(panel).x : null"
           :gs-y="isCalendarGridStackActive ? calendarPanelAttrs(panel).y : null"
           :gs-w="isCalendarGridStackActive ? calendarPanelAttrs(panel).w : null"
@@ -3989,16 +4218,22 @@ defineExpose({
           :ref="(element) => setCalendarPanelScrollTarget(panel.id, element)"
           tabindex="-1"
         >
+          <span v-if="isLayoutEditMode && isMobileLayoutMode" class="calendar-mobile-resize" role="button" tabindex="0" :data-palette-resize="panel.id" :aria-label="`${paletteNames[panel.id]} 팔레트 크기 조절`" @pointerdown="resizeMobilePalette($event, panel)"></span>
           <div :class="isCalendarGridStackActive ? 'grid-stack-item-content' : 'calendar-dashboard-content'">
             <div
               class="calendar-dashboard-panel"
+              @pointerdown="handlePaletteHeaderPointer($event, panel)"
             >
+              <span v-if="isLayoutEditMode" class="calendar-palette-move-handle" role="button" tabindex="0" :data-palette-move="panel.id" :aria-label="`${paletteNames[panel.id]} 팔레트 이동`" title="잡아 끌거나 방향키로 이동" @pointerdown="moveMobilePalette($event, panel)">⠿</span>
+              <div v-if="isLayoutEditMode" class="calendar-palette-tools" data-no-drag="true">
+                <button v-if="panel.id === 'aggregate'" type="button" class="button button--secondary" :disabled="!aggregateWidgetDraftConfigs.some(item => item.kind === 'NONE') || personalizationSaving" @click="addDirectWidget($event)">+ 위젯</button>
+                <button type="button" class="button button--secondary" data-inline-editor-trigger :disabled="personalizationSaving || personalizationLoading" @click="openInlineEditor('panel', panel.id, $event)">{{ panel.id === 'quick-entry' ? '입력 설정' : panel.id === 'calendar' ? '달력 설정' : '크기·설정' }}</button>
+              </div>
               <template v-if="panel.id === 'quick-entry'">
                 <section ref="quickEntryPanelRef" class="panel household-entry-panel">
         <div class="panel__header">
           <div class="household-entry-panel__heading">
             <h2>{{ isEditingEntry ? '거래 수정' : '빠른 거래 입력' }}</h2>
-            <button v-if="isAggregateEditMode" type="button" class="button button--ghost household-entry-settings-button" data-no-drag="true" @click="openPersonalization('input')">입력 설정</button>
           </div>
           <span class="panel__badge household-entry-panel__date-badge">{{ formatIsoDate(entryForm.entryDate) }}</span>
         </div>
@@ -4171,7 +4406,7 @@ defineExpose({
                   >
                     &lt;
                   </button>
-                  <input v-model="entryForm.entryDate" type="date" :min="entryDateMin" :max="entryDateMax" />
+                  <input v-model="entryForm.entryDate" type="date" aria-label="거래 날짜" :min="entryDateMin" :max="entryDateMax" />
                   <button
                     type="button"
                     class="entry-date-control__step"
@@ -4183,16 +4418,19 @@ defineExpose({
                 </div>
               </div>
 
-              <label class="field household-time-field">
-                <span class="field__label">시간</span>
-                <label class="checkbox-row household-time-toggle">
-                  <input
-                    :checked="isTimeEnabled"
-                    type="checkbox"
-                    @change="emit('update:timeEnabled', $event.target.checked)"
-                  />
-                  <span>시간 입력 사용</span>
-                </label>
+              <div class="field household-time-field">
+                <div class="field__label household-time-field__label">
+                  <span>시간</span>
+                  <label class="checkbox-row household-time-toggle">
+                    <input
+                      :checked="isTimeEnabled"
+                      type="checkbox"
+                      aria-label="시간 입력 사용"
+                      @change="emit('update:timeEnabled', $event.target.checked)"
+                    />
+                    <span>사용</span>
+                  </label>
+                </div>
                 <div class="household-time-selectors household-time-selectors--text" data-no-drag="true">
                   <input
                     v-model="entryTimeText"
@@ -4214,8 +4452,8 @@ defineExpose({
                     <option v-for="time in timeValueOptions" :key="time" :value="time" />
                   </datalist>
                 </div>
-                <small class="field__hint">24시간제로 저장되며, 시간 입력을 끄면 00:00으로 저장됩니다.</small>
-              </label>
+              </div>
+              <small class="field__hint entry-date-time-hint">24시간제로 저장되며, 시간 입력을 끄면 00:00으로 저장됩니다.</small>
             </div>
 
             <div class="field field--full entry-title-field">
@@ -4348,7 +4586,6 @@ defineExpose({
           </div>
           <div class="household-aggregate-header__actions">
             <span v-if="isAggregatePanelEnabled && aggregateSettingsReady" class="panel__badge">{{ aggregateBadgeLabel }}</span>
-            <button v-if="isAggregateEditMode" type="button" class="button button--secondary" :disabled="!aggregateSettingsReady" @click="startAggregateEdit">집계 위젯 관리</button>
           </div>
         </div>
         <div v-if="!isAggregatePanelEnabled" class="household-aggregate-empty household-aggregate-empty--off">
@@ -4368,7 +4605,7 @@ defineExpose({
           <article
             v-for="card in aggregateCards"
             :key="card.id"
-            class="household-aggregate-card"
+            class="household-aggregate-card calendar-widget"
             :class="{
               'household-aggregate-card--chart': card.config.kind === 'MONTHLY_CUMULATIVE_CHART',
               'household-aggregate-card--goal': card.config.kind === 'MONTHLY_GOAL',
@@ -4384,28 +4621,30 @@ defineExpose({
             :data-aggregate-text-size="normalizeAggregateTextSize(card.config.textSize)"
             :data-aggregate-text-color="normalizeAggregateTextColor(card.config.textColor)"
             :data-aggregate-index="card.index"
-            :data-aggregate-selected="isAggregateEditMode && personalizationSelectedIndex === card.index"
+            :data-aggregate-selected="isAggregateEditMode && ((inlineEditor?.type === 'widget' && inlineEditor.index === card.index) || directGesture?.index === card.index || (personalizationOpen && personalizationSection === 'widgets' && personalizationSelectedIndex === card.index))"
             :data-aggregate-display-size="card.config.displaySize"
+            :data-widget-drop-target="directGesture?.type === 'widget-move' && directGesture.targetIndex === card.index"
           >
-            <button v-if="isAggregateEditMode" type="button" class="button button--secondary calendar-widget-edit" @click="selectPersonalizationWidget(card.index)">위젯 설정</button>
+            <span v-if="isLayoutEditMode" class="calendar-widget-move-handle" role="button" tabindex="0" :aria-label="`${card.config.title || card.title} 위젯 이동`" data-no-drag="true" @pointerdown="moveWidgetDirect($event, card)" @keydown.left.prevent="personalizationSelectedIndex = card.index; movePersonalizationWidget(-1)" @keydown.up.prevent="personalizationSelectedIndex = card.index; movePersonalizationWidget(-1)" @keydown.right.prevent="personalizationSelectedIndex = card.index; movePersonalizationWidget(1)" @keydown.down.prevent="personalizationSelectedIndex = card.index; movePersonalizationWidget(1)">⠿</span>
+            <button v-if="isAggregateEditMode" type="button" class="button button--secondary calendar-widget-edit" data-no-drag="true" data-inline-editor-trigger :aria-label="`${card.config.title || card.title} 위젯 설정`" @click="selectPersonalizationWidget(card.index, $event)">설정</button>
+            <button v-if="isLayoutEditMode" type="button" class="calendar-widget-resize" data-no-drag="true" :aria-label="`${card.config.title || card.title} 위젯 크기 조절`" title="모서리를 끌거나 방향키로 크기 조절" @pointerdown="resizeWidget($event, card)" @keydown="resizeWidgetByKey($event, card)"></button>
             <div class="household-aggregate-card__copy">
-              <span class="household-aggregate-card__eyebrow">{{ card.config.title || card.title }}</span>
+              <span class="household-aggregate-card__eyebrow" :contenteditable="isLayoutEditMode ? 'plaintext-only' : 'false'" :role="isLayoutEditMode ? 'textbox' : null" :aria-label="isLayoutEditMode ? '위젯 제목 직접 수정' : null" data-no-drag="true" @blur="isLayoutEditMode && $event.target.textContent !== (card.config.title || card.title) && updatePersonalizationWidget({ index: card.index, field: 'title', value: $event.target.textContent })" @keydown.enter.prevent="$event.target.blur()" @keydown.esc.stop.prevent="$event.target.textContent = card.config.title || card.title; $event.target.blur()">{{ card.config.title || card.title }}</span>
               <template v-if="card.config.kind === 'NONE'">
                 <strong>-</strong>
                 <small>이 슬롯은 저장 후 화면에서 숨김 처리됩니다.</small>
               </template>
               <template v-else-if="card.chart">
                 <strong>{{ formatAggregateChartHeadline(card.chart.headlineAmount, card) }}</strong>
-                <small class="household-aggregate-card__chart-caption"><span>{{ card.chart.rangeLabel }}</span><span>{{ card.chart.headlineCaption }}</span></small>
+                <small v-if="card.config.showPeriod || card.config.showDetails" class="household-aggregate-card__chart-caption"><span v-if="card.config.showPeriod">{{ card.chart.rangeLabel }}</span><span v-if="card.config.showDetails">{{ card.chart.headlineCaption }}</span></small>
               </template>
               <template v-else-if="card.goal">
                 <strong>{{ formatCurrency(card.goal.expense) }}</strong>
-                <small v-if="card.goal.target">월 목표 {{ formatCurrency(card.goal.target) }} 중 {{ card.goal.progress }}%</small>
-                <small v-else>월 목표 금액을 설정하면 진행률을 표시합니다.</small>
+                <small v-if="card.config.showDetails">{{ card.goal.target ? `월 목표 ${formatCurrency(card.goal.target)} 중 ${card.goal.progress}%` : '월 목표 금액을 설정하면 진행률을 표시합니다.' }}</small>
               </template>
               <template v-else>
                 <strong>{{ formatCurrency(card.totalAmount) }}</strong>
-                <small>{{ card.periodLabel }} 기준 {{ card.overview.entryCount }}건</small>
+                <small v-if="card.config.showPeriod || card.config.showDetails"><span v-if="card.config.showPeriod">{{ card.periodLabel }} 기준 </span><span v-if="card.config.showDetails">{{ card.overview.entryCount }}건</span></small>
               </template>
             </div>
 
@@ -4438,7 +4677,7 @@ defineExpose({
                   <text v-for="(label, labelIndex) in buildAggregateChartLabelItems(card, 'preview')" :key="label.key || labelIndex" :x="label.x" :y="label.y" text-anchor="middle" :class="['household-aggregate-chart__value-label', 'household-aggregate-chart__value-label--preview', `household-aggregate-chart__value-label--${label.seriesClass}`]">{{ label.text }}</text>
                 </svg>
               </div>
-              <div class="household-aggregate-chart__legend household-aggregate-chart__legend--preview">
+              <div v-if="card.config.showDetails" class="household-aggregate-chart__legend household-aggregate-chart__legend--preview">
                 <span v-if="card.config.showIncomeCumulative"><i class="income"></i>수입 누적</span>
                 <span v-if="card.config.showExpenseCumulative"><i class="expense"></i>지출 누적</span>
                 <span v-if="card.config.comparePreviousPeriod"><i class="previous"></i>지난 기간</span>
@@ -4448,7 +4687,7 @@ defineExpose({
               <div class="household-aggregate-goal__bar" :aria-label="`월 목표 사용률 ${card.goal.progress}%`">
                 <span :style="{ width: `${card.goal.progressWidth}%` }"></span>
               </div>
-              <div class="household-aggregate-goal__stats">
+              <div v-if="card.config.showDetails" class="household-aggregate-goal__stats">
                 <span v-if="card.goal.target">{{ card.goal.remainingState === 'over' ? '목표 초과' : '남은 목표' }} {{ formatCurrency(card.goal.remainingAbs) }}</span>
                 <span v-else>월 목표 미설정</span>
                 <span v-if="card.goal.singleLimit">1회 기준 초과 {{ card.goal.overLimitCount }}건</span>
@@ -4456,7 +4695,7 @@ defineExpose({
               </div>
             </div>
 
-            <div v-if="card.config.kind !== 'NONE'" class="household-aggregate-card__meta">
+            <div v-if="card.config.kind !== 'NONE' && card.config.showDetails" class="household-aggregate-card__meta">
               <span>수입 {{ formatCurrency(card.overview.income) }}</span>
               <span>지출 {{ formatCurrency(card.overview.expense) }}</span>
             </div>
@@ -4468,7 +4707,7 @@ defineExpose({
         </div>
       </section>
 
-      <div
+      <Teleport to="body"><div
         v-if="aggregateChartDetailCard"
         class="household-aggregate-chart-modal"
         role="dialog"
@@ -4573,7 +4812,7 @@ defineExpose({
             <p v-else class="household-aggregate-chart-modal__transactions-empty">해당 날짜에 지출 내역이 없습니다.</p>
           </section>
         </section>
-      </div>
+      </div></Teleport>
 
               </template>
 
@@ -4587,7 +4826,7 @@ defineExpose({
       ]"
       :style="calendarLayoutStyle"
     >
-      <div v-if="isLayoutEditMode" class="household-calendar-panel-dragbar">
+      <div class="household-calendar-panel-dragbar">
         달력 영역
       </div>
       <div ref="calendarShellRef" class="calendar-shell">

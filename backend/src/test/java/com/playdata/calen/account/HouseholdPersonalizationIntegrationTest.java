@@ -167,6 +167,41 @@ class HouseholdPersonalizationIntegrationTest {
         } finally { start.countDown(); pool.shutdownNow(); }
     }
 
+    @Test void directWidgetSizeAndDetailsRoundTripAndSurviveLegacyWrites() throws Exception {
+        ObjectNode request = draft(owner);
+        ((ObjectNode) request.at("/widgets/0")).put("cardWidth", 360).put("cardHeight", 240)
+                .put("showPeriod", false).put("showDetails", false);
+        JsonNode committed = write(owner, request, 200);
+        assertThat(committed.at("/widgets/0/cardWidth").asInt()).isEqualTo(360);
+        assertThat(read(owner).at("/widgets/0/cardHeight").asInt()).isEqualTo(240);
+        ObjectNode legacy = mapper.createObjectNode();
+        var legacyWidgets = committed.path("widgets").deepCopy();
+        for (JsonNode widget : legacyWidgets) ((ObjectNode) widget).remove(List.of("cardWidth", "cardHeight", "showPeriod", "showDetails"));
+        legacy.set("widgets", legacyWidgets);
+        mvc.perform(put("/api/account/preferences/household-aggregates").with(user(AppUserPrincipal.from(owner)))
+                .with(csrf()).contentType(MediaType.APPLICATION_JSON).content(mapper.writeValueAsBytes(legacy))).andExpect(status().isOk());
+        JsonNode current = read(owner);
+        assertThat(current.at("/widgets/0/cardWidth").asInt()).isEqualTo(360);
+        assertThat(current.at("/widgets/0/cardHeight").asInt()).isEqualTo(240);
+        assertThat(current.at("/widgets/0/showPeriod").asBoolean()).isFalse();
+        assertThat(current.at("/widgets/0/showDetails").asBoolean()).isFalse();
+        ObjectNode reset = (ObjectNode) current;
+        ((ObjectNode) reset.at("/widgets/0")).put("cardWidth", 0).put("cardHeight", 0);
+        JsonNode automatic = write(owner, reset, 200);
+        assertThat(automatic.at("/widgets/0/cardWidth").isNull()).isTrue();
+        assertThat(automatic.at("/widgets/0/cardHeight").isNull()).isTrue();
+    }
+
+    @Test void invalidDirectWidgetDimensionsCannotChangeSavedSettings() throws Exception {
+        JsonNode before = read(owner);
+        for (String field : List.of("cardWidth", "cardHeight")) for (int value : List.of(-1, 1, 1201)) {
+            ObjectNode request = draft(owner);
+            ((ObjectNode) request.at("/widgets/0")).put(field, value);
+            write(owner, request, 400);
+        }
+        assertThat(read(owner)).isEqualTo(before);
+    }
+
     private AppUser createUser() {
         AppUser user = new AppUser();
         user.setLoginId("personal-" + UUID.randomUUID()); user.setDisplayName("개인화 검증"); user.setPasswordHash("test-only");

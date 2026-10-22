@@ -1,4 +1,4 @@
-/* Personalization uses one editor; result cards never contain their own forms. */
+/* Shared palette geometry and the optional full personalization dialog. Direct tools are overlays. */
 html body .app-shell.app-shell .calendar-overview-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; padding: 16px 18px; border-radius: 14px; background: var(--surface-panel); border: 1px solid var(--line); }
 html body .app-shell.app-shell .calendar-overview-toolbar > div { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; min-width: 0; }
 html body .app-shell.app-shell .calendar-overview-toolbar__settings { margin-left: auto; }
@@ -10,7 +10,7 @@ html body .app-shell.app-shell .calendar-draft-toolbar > div { display: flex; fl
 html body .app-shell.app-shell .calendar-draft-toolbar > div:first-child { flex: 1; }
 html body .app-shell.app-shell .calendar-draft-toolbar span { font-size: 12px; color: var(--text-soft); }
 html body .app-shell.app-shell .calendar-dashboard { position: relative; min-width: 0; }
-html body .app-shell.app-shell .calendar-dashboard-grid:not(.grid-stack) { display: grid; grid-template-columns: repeat(9, minmax(0, 1fr)); grid-auto-rows: minmax(0, auto); gap: 16px; align-items: start; min-width: 0; }
+html body .app-shell.app-shell .calendar-dashboard-grid:not(.grid-stack) { display: grid; grid-template-columns: repeat(9, minmax(0, 1fr)); grid-auto-rows: var(--calendar-layout-cell-height); gap: 0; align-items: stretch; min-width: 0; }
 /* The guide shares GridStack's origin, cell pitch and content insets; no legacy board padding. */
 html body .app-shell.app-shell .calendar-dashboard-grid.grid-stack > .household-calendar-layout-guide {
   left: var(--gs-item-margin-left);
@@ -21,13 +21,14 @@ html body .app-shell.app-shell .calendar-dashboard-grid.grid-stack > .household-
   grid-template-columns: repeat(var(--calendar-layout-grid-columns), minmax(0, 1fr));
   grid-auto-rows: calc(var(--gs-cell-height) - var(--gs-item-margin-top) - var(--gs-item-margin-bottom));
 }
-html body .app-shell.app-shell .calendar-dashboard-item, html body .app-shell.app-shell .calendar-dashboard-content, html body .app-shell.app-shell .calendar-dashboard-panel { min-width: 0; width: 100%; height: auto; max-height: none; }
-/* GridStack leaves inline dimensions after destroy(false). They must never size the read-only grid. */
-html body .app-shell.app-shell .calendar-dashboard .calendar-dashboard-item { width: 100% !important; height: auto !important; top: auto !important; left: auto !important; }
-html body .app-shell.app-shell .calendar-dashboard-panel { container-type: inline-size; }
-html body .app-shell.app-shell .calendar-dashboard .calendar-dashboard-panel > .panel { min-width: 0; height: auto; max-height: none; overflow: visible; border-radius: 14px; }
-html body .app-shell.app-shell .calendar-dashboard .calendar-dashboard-panel > .household-calendar-panel { container-type: inline-size !important; height: auto !important; }
-html body .app-shell.app-shell .calendar-dashboard .calendar-dashboard-panel > .household-aggregate-panel { display: block; container-type: inline-size; height: auto !important; max-height: none !important; overflow: visible !important; padding: 18px; }
+html body .app-shell.app-shell .calendar-dashboard-item, html body .app-shell.app-shell .calendar-dashboard-content, html body .app-shell.app-shell .calendar-dashboard-panel { min-width: 0; width: 100%; height: 100%; min-height: 0; }
+/* Read mode uses the very same cell pitch and insets as GridStack edit mode. */
+html body .app-shell.app-shell .calendar-dashboard .calendar-dashboard-item { position: relative; width: 100% !important; height: 100% !important; top: auto !important; left: auto !important; }
+html body .app-shell.app-shell .calendar-dashboard .calendar-dashboard-content { position: absolute; inset: var(--calendar-layout-grid-margin); width: auto; height: auto; overflow: hidden; border-radius: 14px; }
+html body .app-shell.app-shell .calendar-dashboard-panel { position: relative; container-type: inline-size; }
+html body .app-shell.app-shell .calendar-dashboard .calendar-dashboard-panel > .panel { box-sizing: border-box; min-width: 0; height: 100% !important; min-height: 0 !important; max-height: 100% !important; margin: 0; overflow-y: auto !important; overflow-x: hidden !important; border-radius: 14px; }
+html body .app-shell.app-shell .calendar-dashboard .calendar-dashboard-panel > .household-calendar-panel { container-type: inline-size !important; }
+html body .app-shell.app-shell .calendar-dashboard .calendar-dashboard-panel > .household-aggregate-panel { display: block; container-type: inline-size; padding: 18px; }
 html body .app-shell.app-shell .calendar-dashboard .household-aggregate-header { margin-bottom: 14px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; }
 html body .app-shell.app-shell .calendar-dashboard .household-aggregate-header h2 { min-width: 160px !important; font-size: 18px !important; line-height: 1.4; white-space: normal; word-break: keep-all; }
 html body .app-shell.app-shell .calendar-dashboard .household-aggregate-header > div:first-child { min-width: 160px; flex-shrink: 0; }
@@ -149,15 +150,31 @@ html body .app-shell.app-shell .calendar-dashboard .household-aggregate-panel .h
 html body .app-shell.app-shell .calendar-dashboard .household-aggregate-panel .household-aggregate-card__chart-caption { display: flex !important; flex-wrap: wrap; }
 html body .app-shell.app-shell .calendar-dashboard .household-aggregate-panel .household-aggregate-chart-preview-button { flex: none !important; height: auto !important; min-height: 150px; }
 html body .app-shell.app-shell .calendar-dashboard .household-entry-panel { container: calendar-entry / inline-size; }
-@container calendar-entry (max-width: 540px) {
-  html body .app-shell.app-shell .calendar-dashboard .entry-editor__field-row--date-time { grid-template-columns: minmax(0, 1fr) !important; }
+/* A single quick-entry form: amount and details do not create separate boxed sections. */
+html body .app-shell.app-shell .calendar-dashboard .entry-editor__amount,
+html body .app-shell.app-shell .calendar-dashboard .entry-editor__fields { padding: 0; border: 0; border-radius: 0; background: transparent !important; box-shadow: none; }
+html body .app-shell.app-shell .calendar-dashboard .entry-editor { gap: 16px; }
+html body .app-shell.app-shell .calendar-dashboard .entry-editor__field-row--date-time { grid-template-columns: minmax(0, 1.6fr) minmax(90px, 1fr) !important; gap: 8px 12px; align-items: start; }
+html body .app-shell.app-shell .calendar-dashboard .entry-editor__field-row--date-time > .field { align-content: start; gap: 6px; }
+html body .app-shell.app-shell .calendar-dashboard .entry-date-field__label,
+html body .app-shell.app-shell .calendar-dashboard .household-time-field__label { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 40px; }
+html body .app-shell.app-shell .calendar-dashboard .household-time-toggle { display: inline-flex; flex-wrap: nowrap; align-items: center; gap: 5px; min-height: 40px; margin: 0; white-space: nowrap; font-size: 12px; cursor: pointer; }
+html body .app-shell.app-shell .calendar-dashboard .household-time-toggle input { width: 16px; min-width: 16px; height: 16px; min-height: 16px; margin: 0; padding: 0; }
+html body .app-shell.app-shell .calendar-dashboard .entry-date-control input,
+html body .app-shell.app-shell .calendar-dashboard .household-time-selectors input { width: 100%; min-width: 0; max-width: 100%; height: 44px; min-height: 44px; padding-block: 8px; }
+html body .app-shell.app-shell .calendar-dashboard .entry-date-time-hint { grid-column: 1 / -1; font-size: 12px; line-height: 1.5; }
+@container calendar-entry (max-width: 400px) {
+  /* Keep both inputs side by side; date navigation uses a separate, touch-sized row. */
+  html body .app-shell.app-shell .calendar-dashboard .entry-date-control { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; }
+  html body .app-shell.app-shell .calendar-dashboard .entry-date-control input { grid-column: 1 / -1; grid-row: 1; padding-inline: 8px; font-size: 13px; }
+  html body .app-shell.app-shell .calendar-dashboard .entry-date-control__step { grid-row: 2; width: 100%; min-height: 44px; }
 }
 
 @media (max-width: 1100px) {
-  html body .app-shell.app-shell .calendar-dashboard-grid:not(.grid-stack) { display: flex; flex-direction: column; gap: 16px; }
-  html body .app-shell.app-shell .calendar-dashboard-item { order: var(--mobile-calendar-panel-order); }
   html body .app-shell.app-shell .calendar-overview-toolbar__settings { margin-left: 0; }
 }
+html body .app-shell.app-shell .calendar-dashboard-grid.household-calendar-layout-grid--mobile-flow { display: flex; flex-direction: column; gap: 8px; }
+html body .app-shell.app-shell .calendar-dashboard-grid.household-calendar-layout-grid--mobile-flow > .calendar-dashboard-item { flex: none; height: calc(var(--calendar-panel-rows) * var(--calendar-layout-cell-height)) !important; order: var(--mobile-calendar-panel-order); }
 @media (max-width: 760px) {
   html body .app-shell.app-shell .calendar-overview-toolbar { padding: 12px; gap: 10px; }
   html body .app-shell.app-shell .calendar-overview-toolbar > div { width: 100%; }

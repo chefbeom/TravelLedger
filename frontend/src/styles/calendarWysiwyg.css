@@ -1,0 +1,81 @@
+/* Edit tools are overlays. The palette and widget content has identical geometry in both modes. */
+/* Reserve grip space in both modes so the edit overlay never covers the first title characters. */
+html body .app-shell.app-shell .calendar-dashboard .panel__header > div:first-child { padding-left: 12px; }
+html body .app-shell.app-shell .calendar-dashboard .calendar-widget .household-aggregate-card__eyebrow { padding-left: 10px; padding-right: 38px; }
+html body .app-shell.app-shell .calendar-dashboard .calendar-palette-tools { position: absolute; top: 6px; right: 8px; z-index: 8; display: flex; gap: 4px; }
+html body .app-shell.app-shell .calendar-dashboard .calendar-palette-tools .button { min-height: 32px; padding: 5px 8px; font-size: 12px; white-space: nowrap; box-shadow: 0 2px 8px #0002; }
+.calendar-palette-move-handle { position: absolute; top: 8px; left: 2px; z-index: 9; display: grid; place-items: center; width: 20px; height: 36px; color: var(--text-soft); font-size: 24px; cursor: grab; touch-action: none; user-select: none; }
+.calendar-dashboard--editing .panel__header, .calendar-dashboard--editing .household-calendar-panel-dragbar { cursor: grab; touch-action: none; }
+.calendar-dashboard--editing .panel__header button, .calendar-dashboard--editing [data-no-drag] { touch-action: auto; }
+.calendar-dashboard--editing .panel__header button { cursor: pointer; }
+.calendar-palette-move-handle:active, .calendar-widget-move-handle:active, .household-calendar-layout-item--calendar.ui-draggable-dragging *, .household-calendar-layout-item--quick-entry.ui-draggable-dragging *, .household-calendar-layout-item--aggregate.ui-draggable-dragging * { cursor: grabbing !important; }
+.household-calendar-layout-item--sheet.ui-draggable-dragging * { cursor: grabbing !important; }
+[data-palette-selected='true'] > :is(.grid-stack-item-content, .calendar-dashboard-content) { outline: 2px solid var(--brand-readable-strong); outline-offset: -2px; }
+.calendar-palette-move-handle:focus-visible, .calendar-widget-move-handle:focus-visible, .calendar-mobile-resize:focus-visible { outline: 2px solid var(--brand-readable-strong); outline-offset: 1px; }
+.calendar-dashboard-grid.grid-stack > .grid-stack-placeholder > .placeholder-content { border: 2px dashed var(--brand-readable-strong); background: var(--brand-soft); border-radius: 14px; }
+.calendar-dashboard-grid.grid-stack > .grid-stack-placeholder > .placeholder-content::after { content: '여기에 배치'; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); padding: 8px 12px; border-radius: 8px; color: var(--text); background: var(--surface-panel); font-size: 13px; white-space: nowrap; }
+html body .app-shell.app-shell .calendar-dashboard .ui-resizable-se, .calendar-mobile-resize { position: absolute; right: 4px; bottom: 4px; z-index: 10; width: 24px; height: 24px; background: none; border-right: 3px solid var(--brand-readable-strong); border-bottom: 3px solid var(--brand-readable-strong); cursor: nwse-resize; touch-action: none; transform: none; }
+.calendar-mobile-resize { cursor: ns-resize; }
+.calendar-direct-ghost { position: fixed; z-index: 1700; pointer-events: none; box-sizing: border-box; width: 220px; max-width: calc(100vw - 16px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 14px 18px; background: var(--surface-panel); color: var(--text); border: 2px solid var(--brand-readable-strong); border-radius: 10px; box-shadow: 0 12px 32px #0004; }
+[data-palette-drop-target='true']::before { content: '여기에 배치'; position: absolute; inset: 0; z-index: 20; display: grid; place-items: center; border: 3px dashed var(--brand-readable-strong); background: var(--brand-soft); color: var(--text); font-weight: 700; pointer-events: none; }
+
+html body .app-shell.app-shell .calendar-dashboard .household-aggregate-panel .household-aggregate-grid > .household-aggregate-card.calendar-widget {
+  position: relative; flex: 0 0 min(var(--calendar-widget-width), 100%) !important;
+  width: min(var(--calendar-widget-width), 100%) !important; min-width: min(200px, 100%) !important; max-width: 100% !important;
+  height: var(--calendar-widget-height, auto) !important; min-height: 160px !important; align-self: flex-start;
+  overflow: auto !important; scroll-margin-top: 120px;
+}
+html body .app-shell.app-shell .calendar-dashboard .household-aggregate-panel .household-aggregate-grid > .household-aggregate-card.calendar-widget.household-aggregate-card--chart { min-width: min(280px, 100%) !important; }
+html body .app-shell.app-shell .calendar-dashboard .household-aggregate-panel .household-aggregate-grid > .calendar-widget.household-aggregate-card--chart { display: grid !important; grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr); grid-template-rows: minmax(0, 1fr) auto; gap: 8px 12px !important; }
+html body .app-shell.app-shell .calendar-dashboard .calendar-widget.household-aggregate-card--chart .household-aggregate-card__copy { grid-column: 1; grid-row: 1; align-self: start; }
+html body .app-shell.app-shell .calendar-dashboard .calendar-widget.household-aggregate-card--chart .household-aggregate-card__meta { grid-column: 1; grid-row: 2; margin-top: 0; }
+html body .app-shell.app-shell .calendar-dashboard .calendar-widget.household-aggregate-card--chart .household-aggregate-chart-preview-button { grid-column: 2 !important; grid-row: 1 / span 2 !important; display: flex !important; flex-direction: column; min-height: 0 !important; height: 100% !important; padding: 0 !important; }
+html body .app-shell.app-shell .calendar-dashboard .calendar-widget .household-aggregate-chart-preview-button__hint { display: none; }
+html body .app-shell.app-shell .calendar-dashboard .calendar-widget .household-aggregate-chart-preview-button { flex: 1 1 auto !important; height: auto !important; min-height: 80px; overflow: hidden !important; }
+html body .app-shell.app-shell .calendar-dashboard .calendar-widget .household-aggregate-chart--preview,
+html body .app-shell.app-shell .calendar-dashboard .calendar-widget .household-aggregate-chart--preview svg { height: 100% !important; min-height: 80px; max-height: none !important; }
+html body .app-shell.app-shell .calendar-dashboard .calendar-widget.household-aggregate-card--chart .household-aggregate-chart--preview,
+html body .app-shell.app-shell .calendar-dashboard .calendar-widget.household-aggregate-card--chart .household-aggregate-chart--preview svg { flex: 1 1 auto; min-height: 0 !important; }
+html body .app-shell.app-shell .calendar-dashboard .calendar-widget .household-aggregate-chart__legend { display: flex !important; flex-wrap: wrap; gap: 8px; font-size: 11px; }
+html body .app-shell.app-shell .calendar-dashboard .calendar-widget .household-aggregate-card__copy strong { color: var(--calendar-widget-color, var(--text)) !important; }
+.calendar-widget[data-aggregate-text-color='MINT'] { --calendar-widget-color: #047857; }
+.calendar-widget[data-aggregate-text-color='SKY'] { --calendar-widget-color: #0369a1; }
+.calendar-widget[data-aggregate-text-color='GOLD'] { --calendar-widget-color: #a16207; }
+.calendar-widget[data-aggregate-text-color='PINK'] { --calendar-widget-color: #be185d; }
+html[data-theme='toss'] .calendar-widget[data-aggregate-text-color='MINT'] { --calendar-widget-color: #6ee7b7; }
+html[data-theme='toss'] .calendar-widget[data-aggregate-text-color='SKY'] { --calendar-widget-color: #7dd3fc; }
+html[data-theme='toss'] .calendar-widget[data-aggregate-text-color='GOLD'] { --calendar-widget-color: #fcd34d; }
+html[data-theme='toss'] .calendar-widget[data-aggregate-text-color='PINK'] { --calendar-widget-color: #f9a8d4; }
+.calendar-widget [contenteditable='plaintext-only'] { cursor: text; outline-offset: 3px; }
+.calendar-widget [contenteditable='plaintext-only']:focus { outline: 1px dashed var(--brand-readable-strong); }
+html body .app-shell.app-shell .calendar-dashboard .calendar-widget-edit { position: absolute; top: 3px; right: 3px; z-index: 3; min-height: 28px; padding: 3px 7px; font-size: 11px; opacity: 0; }
+.calendar-widget-move-handle { position: absolute; top: 4px; left: 0; z-index: 3; width: 18px; height: 30px; display: grid; place-items: center; color: var(--text-soft); cursor: grab; touch-action: none !important; user-select: none; opacity: 0; }
+html body .app-shell.app-shell .calendar-dashboard .calendar-widget-resize { position: absolute; right: 3px; bottom: 3px; z-index: 3; width: 24px; height: 24px; min-height: 0; padding: 0; border: 0; border-right: 3px solid var(--brand-readable-strong); border-bottom: 3px solid var(--brand-readable-strong); border-radius: 0; background: transparent; cursor: nwse-resize; touch-action: none !important; opacity: 0; }
+html body .app-shell.app-shell .calendar-dashboard .calendar-widget:hover > .calendar-widget-edit,
+html body .app-shell.app-shell .calendar-dashboard .calendar-widget:focus-within > .calendar-widget-edit,
+html body .app-shell.app-shell .calendar-dashboard .calendar-widget[data-aggregate-selected='true'] > .calendar-widget-edit,
+.calendar-widget:is(:hover, :focus-within, [data-aggregate-selected='true']) > .calendar-widget-move-handle,
+html body .app-shell.app-shell .calendar-dashboard .calendar-widget:is(:hover, :focus-within, [data-aggregate-selected='true']) > .calendar-widget-resize { opacity: 1; }
+.calendar-widget[data-widget-drop-target='true'] { outline: 3px dashed var(--brand-readable-strong) !important; outline-offset: -3px; }
+
+.calendar-inline-editor { position: fixed; z-index: 1250; box-sizing: border-box; max-height: calc(100dvh - 24px); overflow: auto; padding: 16px; border: 2px solid var(--brand-readable-strong); border-radius: 14px; background: var(--surface-panel); color: var(--text); box-shadow: 0 16px 48px #0004; font-size: 13px; }
+.calendar-inline-editor * { box-sizing: border-box; }
+.calendar-inline-editor header { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; margin-bottom: 14px; }
+.calendar-inline-editor header > div { display: grid; gap: 5px; }
+.calendar-inline-editor header small, .calendar-inline-editor fieldset > small { color: var(--text-soft); font-size: 11px; line-height: 1.5; }
+.calendar-inline-editor fieldset { display: grid; gap: 12px; border: 0; padding: 0; margin: 0; min-width: 0; }
+.calendar-inline-editor label { display: grid; gap: 6px; min-width: 0; font-size: 12px; }
+.calendar-inline-editor label :is(input:not([type='checkbox']), select) { width: 100%; min-width: 0; min-height: 40px; padding: 8px 10px; border: 1px solid var(--field-border); border-radius: 7px; background: var(--field-bg); color: var(--text); font: inherit; }
+.calendar-inline-editor .calendar-inline-editor__check { display: flex; align-items: center; gap: 8px; min-height: 36px; }
+.calendar-inline-editor input[type='checkbox'] { flex: none; width: 18px; height: 18px; min-height: 18px; accent-color: var(--brand-readable-strong); }
+.calendar-inline-editor__columns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.calendar-inline-editor__actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.calendar-inline-editor .button { min-height: 36px; padding: 6px 10px; font-size: 12px; }
+.calendar-inline-editor footer { display: flex; justify-content: flex-end; padding-top: 14px; }
+@media (max-width: 760px) {
+  .calendar-inline-editor { max-height: 55dvh; }
+  .calendar-inline-editor .button, .calendar-inline-editor label :is(input:not([type='checkbox']), select) { min-height: 44px; }
+  .calendar-palette-move-handle { width: 24px; height: 44px; top: 4px; }
+  html body .app-shell.app-shell .calendar-dashboard .calendar-palette-tools .button { min-height: 40px; padding-inline: 7px; font-size: 11px; }
+  html body .app-shell.app-shell .calendar-dashboard .calendar-widget-edit, .calendar-widget-move-handle, html body .app-shell.app-shell .calendar-dashboard .calendar-widget-resize { opacity: 1; }
+}

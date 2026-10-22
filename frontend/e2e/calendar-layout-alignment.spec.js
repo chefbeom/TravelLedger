@@ -3,9 +3,9 @@ import { calendarSettings, mockPersonalization } from './fixtures/calendarPerson
 
 const gridSelector = '.calendar-dashboard-grid.grid-stack'
 
-async function openLayoutEditor(page) {
+async function openLayoutEditor(page, expectedPanels = 4) {
   await page.getByRole('button', { name: '대시보드 편집', exact: true }).click()
-  await expect.poll(() => page.locator(gridSelector).evaluate(grid => grid.gridstack?.engine?.nodes.length)).toBe(4)
+  await expect.poll(() => page.locator(gridSelector).evaluate(grid => grid.gridstack?.engine?.nodes.length)).toBe(expectedPanels)
 }
 
 async function layoutGeometry(page) {
@@ -127,7 +127,7 @@ test('dragged and resized cards snap to the same cells and retain their coordina
 test('switching to mobile hides the grid guides and returning to desktop restores alignment without saving', async ({ page }, testInfo) => {
   test.skip(testInfo.project.name !== 'chromium-desktop', 'The desktop context also verifies the mobile viewport transition.')
   const state = await mockPersonalization(page)
-  await openLayoutEditor(page)
+  await openLayoutEditor(page, 3)
   const before = (await layoutGeometry(page)).panels.map(({ id, x, y, w, h }) => ({ id, x, y, w, h }))
   await page.setViewportSize({ width: 390, height: 844 })
   await expect(page.locator(gridSelector)).toHaveCount(0)
@@ -138,7 +138,7 @@ test('switching to mobile hides the grid guides and returning to desktop restore
   }))
   for (const panel of panels) { expect(panel.left).toBeGreaterThanOrEqual(0); expect(panel.right).toBeLessThanOrEqual(391) }
   await page.setViewportSize({ width: 1440, height: 900 })
-  await expect.poll(() => page.locator(gridSelector).evaluate(grid => grid.gridstack?.engine?.nodes.length)).toBe(4)
+  await expect.poll(() => page.locator(gridSelector).evaluate(grid => grid.gridstack?.engine?.nodes.length)).toBe(3)
   await expectAligned(page)
   expect((await layoutGeometry(page)).panels.map(({ id, x, y, w, h }) => ({ id, x, y, w, h }))).toEqual(before)
   expect(state.writes).toEqual([])

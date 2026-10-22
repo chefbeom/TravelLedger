@@ -70,7 +70,9 @@ public class HouseholdPersonalizationService {
                     || (widget.layoutX() != null && (widget.layoutX() < 1 || widget.layoutX() > 8))
                     || (widget.monthlyExpenseTarget() != null && widget.monthlyExpenseTarget() < 0)
                     || (widget.singleExpenseLimit() != null && widget.singleExpenseLimit() < 0)
-                    || (widget.chartMaxAmount() != null && widget.chartMaxAmount() < 0))
+                    || (widget.chartMaxAmount() != null && widget.chartMaxAmount() < 0)
+                    || (widget.cardWidth() != null && widget.cardWidth() != 0 && (widget.cardWidth() < 200 || widget.cardWidth() > 1200))
+                    || (widget.cardHeight() != null && widget.cardHeight() != 0 && (widget.cardHeight() < 160 || widget.cardHeight() > 800)))
                 throw new BadRequestException("위젯 크기와 금액 범위를 확인해 주세요.");
         }
         lockOwner(ownerId);

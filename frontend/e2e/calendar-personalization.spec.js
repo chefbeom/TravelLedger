@@ -164,21 +164,20 @@ test('common preview follows text styles, visibility and the existing graph opti
   expect(state.writes).toEqual([])
 })
 
-test('desktop drag or mobile numeric positioning is a cancellable draft', async ({ page }) => {
+test('desktop drag or mobile direct resizing is a cancellable draft', async ({ page }) => {
   const state = await mockPersonalization(page)
   await page.getByRole('button', { name: '대시보드 편집', exact: true }).click()
   if (page.viewportSize().width < 760) {
-    await expect(dialog(page)).toHaveAttribute('aria-busy', 'false')
-    await dialog(page).getByText('고급 배치 좌표', { exact: true }).click()
-    await dialog(page).getByLabel('세로 위치 (0부터)', { exact: true }).fill('5')
-    await dialog(page).getByLabel('세로 위치 (0부터)', { exact: true }).press('Tab')
-    await expect(dialog(page).getByRole('button', { name: '변경사항 저장', exact: true })).toBeEnabled()
+    await expect(dialog(page)).toHaveCount(0)
+    await page.locator('[data-palette-resize="calendar"]').focus()
+    await page.keyboard.press('ArrowDown')
+    await expect(page.locator('.calendar-draft-toolbar').getByRole('button', { name: '변경사항 저장', exact: true })).toBeEnabled()
     page.once('dialog', prompt => prompt.accept())
-    await dialog(page).getByRole('button', { name: '취소', exact: true }).click()
+    await page.locator('.calendar-draft-toolbar').getByRole('button', { name: '취소', exact: true }).click()
   } else {
     const grid = page.locator('.calendar-dashboard-grid.grid-stack')
     await expect(grid).toBeVisible()
-    await expect.poll(() => grid.evaluate(element => element.gridstack?.engine?.nodes.length)).toBe(4)
+    await expect.poll(() => grid.evaluate(element => element.gridstack?.engine?.nodes.length)).toBe(3)
     const handle = grid.locator('[data-calendar-panel-id="quick-entry"] .panel__header h2')
     await handle.evaluate(element => element.scrollIntoView({ block: 'center', behavior: 'instant' }))
     const box = await handle.boundingBox()
@@ -244,8 +243,8 @@ test('inline sheet stays below full-sized calendar and input after ending layout
   expect(before.find(item => item.id === 'calendar').height).toBeGreaterThan(400)
   await page.getByRole('button', { name: '대시보드 편집', exact: true }).click()
   if (page.viewportSize().width < 760) {
-    await expect(dialog(page)).toHaveAttribute('aria-busy', 'false')
-    await dialog(page).getByRole('button', { name: '취소', exact: true }).click()
+    await expect(dialog(page)).toHaveCount(0)
+    await page.locator('.calendar-draft-toolbar').getByRole('button', { name: '취소', exact: true }).click()
   } else {
     await expect.poll(() => page.locator('.grid-stack').evaluate(element => element.gridstack?.engine?.nodes.length)).toBe(4)
     await page.locator('.calendar-draft-toolbar').getByRole('button', { name: '취소', exact: true }).click()

@@ -11,6 +11,16 @@ html body .app-shell.app-shell .calendar-draft-toolbar > div:first-child { flex:
 html body .app-shell.app-shell .calendar-draft-toolbar span { font-size: 12px; color: var(--text-soft); }
 html body .app-shell.app-shell .calendar-dashboard { position: relative; min-width: 0; }
 html body .app-shell.app-shell .calendar-dashboard-grid:not(.grid-stack) { display: grid; grid-template-columns: repeat(9, minmax(0, 1fr)); grid-auto-rows: minmax(0, auto); gap: 16px; align-items: start; min-width: 0; }
+/* The guide shares GridStack's origin, cell pitch and content insets; no legacy board padding. */
+html body .app-shell.app-shell .calendar-dashboard-grid.grid-stack > .household-calendar-layout-guide {
+  left: var(--gs-item-margin-left);
+  right: var(--gs-item-margin-right);
+  top: var(--gs-item-margin-top);
+  column-gap: calc(var(--gs-item-margin-left) + var(--gs-item-margin-right));
+  row-gap: calc(var(--gs-item-margin-top) + var(--gs-item-margin-bottom));
+  grid-template-columns: repeat(var(--calendar-layout-grid-columns), minmax(0, 1fr));
+  grid-auto-rows: calc(var(--gs-cell-height) - var(--gs-item-margin-top) - var(--gs-item-margin-bottom));
+}
 html body .app-shell.app-shell .calendar-dashboard-item, html body .app-shell.app-shell .calendar-dashboard-content, html body .app-shell.app-shell .calendar-dashboard-panel { min-width: 0; width: 100%; height: auto; max-height: none; }
 /* GridStack leaves inline dimensions after destroy(false). They must never size the read-only grid. */
 html body .app-shell.app-shell .calendar-dashboard .calendar-dashboard-item { width: 100% !important; height: auto !important; top: auto !important; left: auto !important; }
@@ -42,9 +52,10 @@ html body .app-shell.app-shell .calendar-dashboard .household-aggregate-chart-pr
 html body .app-shell.app-shell .calendar-dashboard .household-aggregate-chart--preview, html body .app-shell.app-shell .calendar-dashboard .household-aggregate-chart--preview svg { width: 100% !important; height: auto !important; min-height: 120px; max-height: 220px; }
 html body .app-shell.app-shell .calendar-dashboard .calendar-widget-edit { align-self: flex-end; min-height: 34px; padding: 5px 10px; }
 html body .app-shell.app-shell .calendar-dashboard .grid-stack-item-content { border-radius: 14px; }
-html body .app-shell.app-shell .calendar-dashboard .grid-stack-item .calendar-dashboard-panel { height: 100%; }
-html body .app-shell.app-shell .calendar-dashboard .grid-stack-item .calendar-dashboard-panel > .panel { height: 100%; overflow-y: auto; overflow-x: hidden; }
-html body .app-shell.app-shell .calendar-dashboard .grid-stack-item .calendar-dashboard-panel > .household-aggregate-panel { height: 100% !important; overflow-y: auto !important; overflow-x: hidden !important; }
+/* Edit-mode borders fill their slots; oversized content scrolls inside the card, not outside it. */
+html body .app-shell.app-shell .calendar-dashboard .grid-stack-item > .grid-stack-item-content { overflow: hidden; }
+html body .app-shell.app-shell .calendar-dashboard .grid-stack-item .calendar-dashboard-panel { height: 100%; min-height: 0; }
+html body .app-shell.app-shell .calendar-dashboard .grid-stack-item .calendar-dashboard-panel > .panel { box-sizing: border-box; height: 100% !important; min-height: 0 !important; max-height: 100%; margin: 0; overflow-y: auto !important; overflow-x: hidden !important; }
 html body .app-shell.app-shell .calendar-dashboard .household-calendar-panel-dragbar { padding: 10px 14px; color: var(--brand-readable-strong); cursor: move; background: var(--brand-soft); border-radius: 8px; }
 html body .app-shell.app-shell .calendar-dashboard .household-aggregate-chart-modal { z-index: 1200; }
 

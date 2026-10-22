@@ -1257,6 +1257,7 @@ const calendarLayoutGuideRowCount = computed(() => Math.max(
 ))
 const calendarLayoutGuideCellCount = computed(() => CALENDAR_LAYOUT_GRID_COLUMNS * calendarLayoutGuideRowCount.value)
 const calendarLayoutGridStyle = computed(() => ({
+  '--calendar-layout-grid-columns': String(CALENDAR_LAYOUT_GRID_COLUMNS),
   '--calendar-layout-cell-height': `${layoutCellHeight.value}px`,
   '--calendar-layout-grid-gap': `${CALENDAR_LAYOUT_GRID_GAP}px`,
   '--calendar-layout-grid-margin': `${CALENDAR_LAYOUT_GRID_MARGIN}px`,
@@ -3949,10 +3950,6 @@ defineExpose({
       }"
       :style="calendarLayoutGridStyle"
     >
-      <div v-if="isLayoutEditMode && !isMobileLayoutMode" class="household-calendar-layout-guide" aria-hidden="true">
-        <span v-for="index in calendarLayoutGuideCellCount" :key="index"></span>
-      </div>
-
       <div
         ref="layoutGridRef"
         class="calendar-dashboard-grid"
@@ -3963,6 +3960,9 @@ defineExpose({
           'household-calendar-layout-grid--mobile-flow': isMobileLayoutMode,
         }"
       >
+        <div v-if="isCalendarGridStackActive" class="household-calendar-layout-guide" aria-hidden="true">
+          <span v-for="index in calendarLayoutGuideCellCount" :key="index"></span>
+        </div>
         <div
           v-for="panel in calendarLayoutPanels"
           :key="panel.id"

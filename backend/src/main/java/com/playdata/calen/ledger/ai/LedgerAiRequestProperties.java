@@ -18,7 +18,7 @@ import org.springframework.validation.annotation.Validated;
 @Setter
 public class LedgerAiRequestProperties {
     @Min(1) @Max(1000)
-    private int maxConcurrent = 1;
+    private int maxConcurrent = 20;
     @Min(0) @Max(10000)
     private int maxWaiting = 20;
     @NotNull

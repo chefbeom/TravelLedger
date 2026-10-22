@@ -6,6 +6,7 @@ const CSRF_HEADER_NAME = 'X-XSRF-TOKEN'
 const MAX_TRAVEL_MEDIA_FILE_SIZE = 15 * 1024 * 1024
 const TRAVEL_MEDIA_PREPARATION_CONCURRENCY = 2
 const TRAVEL_MEDIA_UPLOAD_CONCURRENCY = 5
+let csrfTokenRequest = null
 
 function getCookie(name) {
   return document.cookie
@@ -16,11 +17,17 @@ function getCookie(name) {
 }
 
 async function ensureCsrfToken() {
-  let token = decodeURIComponent(getCookie(CSRF_COOKIE_NAME))
+  const token = decodeURIComponent(getCookie(CSRF_COOKIE_NAME))
   if (token) {
     return token
   }
+  // Parallel image requests must not race to replace the CSRF cookie.
+  if (!csrfTokenRequest) csrfTokenRequest = fetchCsrfToken().finally(() => { csrfTokenRequest = null })
+  return csrfTokenRequest
+}
 
+async function fetchCsrfToken() {
+  let token = ''
   const response = await fetch(`${API_BASE}/auth/csrf`, {
     credentials: 'include',
   })
@@ -717,12 +724,16 @@ export function analyzeLedgerReceipt(file, options = {}) {
     signal: options.signal,
   })
 }
-export function fetchLedgerImageAnalysisHistories(params = {}) {
-  return request(buildUrl('/ledger/image-analysis/history', params).replace(API_BASE, ''))
+export function fetchLedgerImageAnalysisHistories(params = {}, options = {}) {
+  return request(buildUrl('/ledger/image-analysis/history', params).replace(API_BASE, ''), options)
 }
 
-export function fetchLedgerImageAnalysisHistory(historyId) {
-  return request(`/ledger/image-analysis/history/${historyId}`)
+export function fetchLedgerImageAnalysisHistory(historyId, options = {}) {
+  return request(`/ledger/image-analysis/history/${historyId}`, options)
+}
+
+export function fetchLedgerImageReviewSummary(options = {}) {
+  return request('/ledger/image-analysis/history/review-summary', options)
 }
 
 export function buildLedgerImageAnalysisImageUrl(historyId) {

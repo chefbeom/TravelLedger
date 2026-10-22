@@ -18,6 +18,7 @@ class LedgerAiRequestQueueTest {
     @Test
     void saturatedProviderRejectsImmediatelyAndOtherProviderStillWorks() throws Exception {
         LedgerAiRequestProperties properties = new LedgerAiRequestProperties();
+        properties.setMaxConcurrent(1);
         properties.setMaxWaiting(0);
         LedgerAiRequestQueue queue = new LedgerAiRequestQueue(properties);
         CountDownLatch active = new CountDownLatch(1);
@@ -39,6 +40,7 @@ class LedgerAiRequestQueueTest {
     @Test
     void waitingExpiresWithoutCallingModelAndAdmissionIsReleased() throws Exception {
         LedgerAiRequestProperties properties = new LedgerAiRequestProperties();
+        properties.setMaxConcurrent(1);
         properties.setMaxWaiting(1);
         properties.setWaitTimeout(Duration.ofMillis(30));
         LedgerAiRequestQueue queue = new LedgerAiRequestQueue(properties);
@@ -60,7 +62,9 @@ class LedgerAiRequestQueueTest {
 
     @Test
     void cancelledWaitPreservesInterruptAndReleasesCapacity() throws Exception {
-        LedgerAiRequestQueue queue = new LedgerAiRequestQueue();
+        LedgerAiRequestProperties properties = new LedgerAiRequestProperties();
+        properties.setMaxConcurrent(1);
+        LedgerAiRequestQueue queue = new LedgerAiRequestQueue(properties);
         CountDownLatch active = new CountDownLatch(1);
         CountDownLatch release = new CountDownLatch(1);
         CountDownLatch waitingStarted = new CountDownLatch(1);
@@ -101,8 +105,41 @@ class LedgerAiRequestQueueTest {
     }
 
     @Test
+    void configuredSixRequestsEnterUpstreamTogetherWhileTheSeventhIsRejected() throws Exception {
+        var properties = new LedgerAiRequestProperties();
+        properties.setMaxConcurrent(6);
+        properties.setMaxWaiting(0);
+        var queue = new LedgerAiRequestQueue(properties);
+        var entered = new CountDownLatch(6);
+        var release = new CountDownLatch(1);
+        var pool = java.util.concurrent.Executors.newFixedThreadPool(6);
+        var tasks = new java.util.ArrayList<java.util.concurrent.Future<String>>();
+        try {
+            for (int i = 0; i < 6; i++) tasks.add(pool.submit(() -> queue.execute(config, () -> {
+                entered.countDown();
+                try {
+                    if (!release.await(10, TimeUnit.SECONDS)) throw new IllegalStateException("test timeout");
+                } catch (InterruptedException interrupted) {
+                    Thread.currentThread().interrupt();
+                    throw new CancellationException();
+                }
+                return "done";
+            })));
+            assertThat(entered.await(5, TimeUnit.SECONDS)).isTrue();
+            assertThatThrownBy(() -> queue.execute(config, () -> "overflow")).isInstanceOf(TooManyRequestsException.class);
+            release.countDown();
+            for (var task : tasks) assertThat(task.get(5, TimeUnit.SECONDS)).isEqualTo("done");
+            assertThat(queue.execute(config, () -> "next")).isEqualTo("next");
+        } finally {
+            release.countDown();
+            pool.shutdownNow();
+        }
+    }
+
+    @Test
     void trailingSlashCannotBypassProviderLimit() throws Exception {
         LedgerAiRequestProperties properties = new LedgerAiRequestProperties();
+        properties.setMaxConcurrent(1);
         properties.setMaxWaiting(0);
         LedgerAiRequestQueue queue = new LedgerAiRequestQueue(properties);
         CountDownLatch active = new CountDownLatch(1);

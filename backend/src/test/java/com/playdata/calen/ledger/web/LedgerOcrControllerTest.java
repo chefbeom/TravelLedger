@@ -37,4 +37,12 @@ class LedgerOcrControllerTest {
         var method=LedgerOcrController.class.getDeclaredMethod("getHistoryImage",AppUserPrincipal.class,Long.class);
         assertThat(method.getAnnotation(GetMapping.class).value()).containsExactly("/history/{historyId}/image");
     }
+    @Test void reviewSummaryUsesTheAuthenticatedOwnerAndItsOwnLiteralRoute() throws Exception {
+        var summary = new com.playdata.calen.ledger.dto.LedgerImageReviewSummaryResponse(java.util.List.of());
+        when(service.reviewSummary(7L)).thenReturn(summary);
+        assertThat(controller.reviewSummary(user)).isSameAs(summary);
+        verify(service).reviewSummary(7L);
+        assertThat(LedgerOcrController.class.getDeclaredMethod("reviewSummary", AppUserPrincipal.class)
+                .getAnnotation(GetMapping.class).value()).containsExactly("/history/review-summary");
+    }
 }

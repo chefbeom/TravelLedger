@@ -26,6 +26,7 @@ import com.playdata.calen.ledger.domain.LedgerImageAnalysisRequest;
 import com.playdata.calen.ledger.domain.LedgerImageAnalysisStatus;
 import com.playdata.calen.ledger.dto.LedgerImageAnalysisHistoryResponse;
 import com.playdata.calen.ledger.dto.LedgerImageAnalysisHistoryDeleteResponse;
+import com.playdata.calen.ledger.dto.LedgerImageReviewSummaryResponse;
 import com.playdata.calen.ledger.dto.LedgerOcrAnalyzeResponse;
 import com.playdata.calen.ledger.dto.LedgerOcrEntrySuggestionResponse;
 import com.playdata.calen.ledger.dto.LedgerOcrLineItemResponse;
@@ -510,6 +511,45 @@ public class LedgerOcrService {
         appUserService.getRequiredUser(userId);
         return imageAnalysisRequestRepository.findAllByOwnerIdOrderByCreatedAtDescIdDesc(userId, pageable)
                 .map(this::toHistoryResponse);
+    }
+
+    @Transactional(readOnly = true)
+    public LedgerImageReviewSummaryResponse reviewSummary(Long userId) {
+        appUserService.getRequiredUser(userId);
+        List<LedgerImageReviewSummaryResponse.ReviewRequest> requests = new ArrayList<>();
+        long afterId = 0;
+        // Keyset chunks avoid loading image/history entities or all result bodies
+        // at once. The browser receives only pending request IDs and usage metadata.
+        while (true) {
+            var rows = imageAnalysisRequestRepository.findCompletedReviewRows(userId, afterId, PageRequest.of(0, 64));
+            if (rows.isEmpty()) break;
+            for (var row : rows) {
+                afterId = row.getId();
+                if (row.getResultJson() == null || row.getResultJson().isBlank()) continue;
+                try {
+                    var result = objectMapper.readTree(row.getResultJson());
+                    if (result == null) continue;
+                    int total = result.path("suggestedEntries").isArray() ? result.path("suggestedEntries").size() : 0;
+                    if (total == 0 && result.hasNonNull("suggestedEntry")) total = 1;
+                    if (total == 0) continue;
+                    Set<Integer> approved = new LinkedHashSet<>();
+                    if (result.path("approvedEntryIndexes").isArray()) {
+                        for (var value : result.path("approvedEntryIndexes")) {
+                            if (!value.isIntegralNumber() && !value.isTextual()) continue;
+                            if (value.isTextual() && !value.asText().matches("\\d+")) continue;
+                            int index = value.asInt(-1);
+                            if (index >= 0 && index < total) approved.add(index);
+                        }
+                    }
+                    if (approved.size() < total) requests.add(new LedgerImageReviewSummaryResponse.ReviewRequest(
+                            row.getId(), total, List.copyOf(approved)));
+                } catch (JsonProcessingException exception) {
+                    log.warn("Cannot read image review summary: historyId={}", row.getId());
+                }
+            }
+            if (rows.size() < 64) break;
+        }
+        return new LedgerImageReviewSummaryResponse(List.copyOf(requests));
     }
 
     public LedgerImageAnalysisHistoryResponse getHistory(Long userId, Long historyId) {

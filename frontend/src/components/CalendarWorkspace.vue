@@ -7,6 +7,11 @@ import { resolveRange, shiftRange, summarizeEntries } from '../lib/analytics'
 import { useTableSelection } from '../lib/tableSelection'
 import { fetchLayoutSetting, saveLayoutSetting } from '../lib/api'
 import HouseholdTransactionSheet from './HouseholdTransactionSheet.vue'
+import ReceiptHistoryThumbnail from './ReceiptHistoryThumbnail.vue'
+import { countPendingReceiptReviews, receiptReviewPage, selectReceiptAnalysisItems } from '../lib/receiptReview'
+import { groupReceiptHistoryRequests } from '../lib/receiptHistoryGroups'
+import { formatReceiptHistoryRequestTime, normalizeReceiptHistoryView } from '../lib/receiptHistoryView'
+import { RECEIPT_MAX_CONCURRENCY } from '../lib/receiptRequestQueue'
 
 const CALENDAR_VIEW_PREFERENCE_STORAGE_PREFIX = 'calen-household-calendar-view:v3'
 const LEGACY_CALENDAR_VIEW_PREFERENCE_STORAGE_PREFIX = 'calen-household-calendar-view:v2'
@@ -336,6 +341,8 @@ const emit = defineEmits([
   'update-receipt-item-prompt',
   'select-receipt-files',
   'start-receipt-analysis',
+  'set-receipt-concurrency',
+  'retry-failed-receipt-analysis',
   'analyze-receipt',
   'update-receipt-review-entry',
   'remove-receipt-analysis',
@@ -345,6 +352,7 @@ const emit = defineEmits([
   'clear-receipt-analysis',
   'cancel-receipt-applied',
   'load-receipt-history',
+  'refresh-receipt-results',
   'reuse-receipt-history',
   'cancel-receipt-history',
   'delete-receipt-history',
@@ -660,7 +668,7 @@ function updateReceiptPromptRules(event) {
 }
 
 function canRerunReceiptItem(item) {
-  return Boolean(item && (item.sourceFile || (item.analysisId && item.storedImageAvailable)))
+  return !props.receiptOcr?.isAnalyzing && Boolean(item && (item.sourceFile || (item.analysisId && item.storedImageAvailable)))
 }
 
 function getReceiptRerunTitle(item) {
@@ -779,7 +787,8 @@ function getReceiptHistoryStatusLabel(status) {
   return '확인 필요'
 }
 
-function getReceiptHistoryRequestDateKey(history) {
+function getReceiptHistoryRequestDateKey(history, batch = null) {
+  if (batch) return getLocalIsoDate(new Date(batch.timestamp))
   const rawValue = String(history?.createdAt || history?.requestedAt || history?.updatedAt || history?.completedAt || '').trim()
   if (!rawValue) {
     return 'unknown'
@@ -894,25 +903,38 @@ function getReceiptHistoryUsageTitle(history) {
 }
 
 const receiptHistoryGroups = computed(() => {
-  const groups = new Map()
   const items = Array.isArray(props.receiptOcr?.historyItems) ? props.receiptOcr.historyItems : []
-  items.forEach((history) => {
-    const dateKey = getReceiptHistoryRequestDateKey(history)
-    if (!groups.has(dateKey)) {
-      groups.set(dateKey, {
-        key: dateKey,
-        label: formatReceiptHistoryRequestDateLabel(dateKey),
-        items: [],
-      })
-    }
-    groups.get(dateKey).items.push(history)
-  })
-  return Array.from(groups.values()).sort((left, right) => {
-    if (left.key === 'unknown') return 1
-    if (right.key === 'unknown') return -1
-    return String(right.key).localeCompare(String(left.key))
+  return groupReceiptHistoryRequests(items, {
+    getDateKey: getReceiptHistoryRequestDateKey,
+    getDateLabel: formatReceiptHistoryRequestDateLabel,
   })
 })
+const receiptHistoryView = ref(normalizeReceiptHistoryView())
+const receiptHistorySizes = [
+  { value: 'large', label: '크게 보기' },
+  { value: 'medium', label: '보통 보기' },
+  { value: 'small', label: '작게 보기' },
+]
+function updateReceiptHistoryView(patch) {
+  receiptHistoryView.value = normalizeReceiptHistoryView({ ...receiptHistoryView.value, ...patch })
+  try {
+    window.localStorage.setItem(`calen-household-receipt-history-view:v1:${userStorageId.value}`, JSON.stringify(receiptHistoryView.value))
+  } catch {
+    // Display preferences are optional when browser storage is unavailable.
+  }
+}
+function formatReceiptBatchTime(batch) {
+  return Number.isFinite(batch.timestamp)
+    ? new Intl.DateTimeFormat('ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).format(new Date(batch.timestamp))
+    : '시간 정보 없음'
+}
+function receiptBatchStatusLabel(batch) {
+  return [['COMPLETED', '완료'], ['PROCESSING', '처리 중'], ['FAILED', '실패'], ['CANCELLED', '취소']]
+    .map(([status, label]) => {
+      const count = batch.items.filter(item => normalizeReceiptHistoryStatus(item.status) === status).length
+      return count ? `${label} ${count}건` : ''
+    }).filter(Boolean).join(' · ') || '상태 확인 필요'
+}
 
 function formatReceiptOcrTiming(timing) {
   if (!timing || typeof timing !== 'object') {
@@ -1086,6 +1108,13 @@ const pagedNormalizedSelectedDateEntries = computed(() => {
 })
 const selectedDayEntrySelection = useTableSelection(pagedNormalizedSelectedDateEntries)
 const userStorageId = computed(() => props.currentUser?.id || props.currentUser?.loginId || 'anonymous')
+watch(userStorageId, userId => {
+  try {
+    receiptHistoryView.value = normalizeReceiptHistoryView(JSON.parse(window.localStorage.getItem(`calen-household-receipt-history-view:v1:${userId}`)))
+  } catch {
+    receiptHistoryView.value = normalizeReceiptHistoryView()
+  }
+}, { immediate: true })
 const calendarPanelLayoutStorageKey = computed(() => `${CALENDAR_PANEL_LAYOUT_STORAGE_KEY}:${userStorageId.value}`)
 const legacyCalendarPanelLayoutStorageKey = computed(() => `${LEGACY_CALENDAR_PANEL_LAYOUT_STORAGE_KEY}:${userStorageId.value}`)
 const calendarViewPreferenceStorageKey = computed(() => `${CALENDAR_VIEW_PREFERENCE_STORAGE_PREFIX}:${userStorageId.value}`)
@@ -1119,8 +1148,25 @@ const receiptReviewItems = computed(() => (
 const receiptOcrView = computed(() => (
   ['analyze', 'history', 'rules'].includes(props.receiptOcr?.activeView) ? props.receiptOcr.activeView : ''
 ))
-const receiptAnalyzeItems = computed(() => receiptReviewItems.value.filter((item) => item.status !== 'done' && !item.fromHistory))
+const receiptAnalyzeItems = computed(() => selectReceiptAnalysisItems(receiptReviewItems.value, props.receiptOcr?.batchItemIds))
+const receiptReviewPages = ref({})
+const receiptPendingReviewCount = computed(() => countPendingReceiptReviews(
+  props.receiptOcr?.reviewSummaryRequests, props.receiptOcr?.historyItems,
+  receiptReviewItems.value, props.receiptOcr?.appliedEntryMarkers,
+))
+function getReceiptReviewPage(item) {
+  return receiptReviewPageMap.value.get(item.id) || receiptReviewPage([])
+}
+function setReceiptReviewPage(item, page) {
+  receiptReviewPages.value[item.id] = receiptReviewPage(item.suggestedEntries || [], page).page
+}
+const receiptBatchSummary = computed(() => {
+  const items = receiptAnalyzeItems.value
+  const count = status => items.filter(item => item.status === status).length
+  return `현재 목록 ${items.length}장 · 완료 ${count('done')} · 분석 중 ${count('analyzing')} · 대기 ${count('queued') + count('selected')} · 실패 ${count('error')} · 취소 ${count('cancelled')}`
+})
 const receiptSelectedItems = computed(() => receiptAnalyzeItems.value.filter((item) => item.status === 'selected'))
+const receiptRetryableFailedItems = computed(() => receiptAnalyzeItems.value.filter(item => item.status === 'error' && item.sourceFile && !item.cancelled))
 const hasReceiptSelectedItems = computed(() => receiptSelectedItems.value.length > 0)
 const receiptPromptHistory = computed(() => (
   Array.isArray(props.receiptOcr?.requestPromptHistory) ? props.receiptOcr.requestPromptHistory : []
@@ -1152,15 +1198,11 @@ const receiptVisibleReviewItems = computed(() => {
   if (receiptOcrView.value === 'history') return receiptHistoryDetailItem.value ? [receiptHistoryDetailItem.value] : []
   return []
 })
+const receiptReviewPageMap = computed(() => new Map(receiptVisibleReviewItems.value.map(item => [
+  item.id, receiptReviewPage(item.suggestedEntries || [], receiptReviewPages.value[item.id]),
+])))
 const receiptPendingCount = computed(() => Number(props.receiptOcr?.pendingCount ?? receiptReviewItems.value.filter((item) => item.status === 'queued' || item.status === 'analyzing').length))
-const receiptBatchTotalCount = computed(() => Number(props.receiptOcr?.batchTotalCount || 0))
-const receiptBatchCompletedCount = computed(() => Number(props.receiptOcr?.batchCompletedCount || 0))
-const receiptBatchProgressLabel = computed(() => {
-  if (receiptBatchTotalCount.value > 0) {
-    return `${Math.min(receiptBatchCompletedCount.value, receiptBatchTotalCount.value)} / ${receiptBatchTotalCount.value}`
-  }
-  return `${Math.max(0, receiptReviewItems.value.filter((item) => item.status === 'done' || item.status === 'error' || item.status === 'cancelled').length)} / ${receiptReviewItems.value.length || receiptPendingCount.value}`
-})
+const receiptBatchProgress = computed(() => props.receiptOcr?.batchProgress)
 const receiptTotalSuggestionCount = computed(() => receiptReviewItems.value.reduce(
   (total, item) => total + (Array.isArray(item.suggestedEntries) ? item.suggestedEntries.length : 0),
   0,
@@ -4173,7 +4215,8 @@ defineExpose({
             </div>
           </div>
           <p v-if="receiptOcr?.isAnalyzing" class="receipt-ocr-panel__message">
-            {{ receiptPendingCount }}개 이미지 분석 중 · 완료된 결과는 모달에서 바로 수정할 수 있습니다.
+            <template v-if="receiptBatchProgress?.phase === 'refreshing'">분석 결과와 검수 대기 건수를 자동 새로고침 중입니다.</template>
+            <template v-else>요청 처리 {{ receiptBatchProgress?.settled || 0 }} / {{ receiptBatchProgress?.total || receiptPendingCount }}건 · 남은 {{ receiptBatchProgress?.remaining ?? receiptPendingCount }}건 · 완료된 결과는 모달에서 수정할 수 있습니다.</template>
           </p>
           <p v-else-if="receiptTotalSuggestionCount" class="receipt-ocr-panel__message">
             검토 가능한 거래 제안 {{ receiptTotalSuggestionCount }}건이 있습니다.
@@ -5065,13 +5108,14 @@ defineExpose({
             </section>
           </div>
         </Teleport>
+        <Teleport to=".app-shell">
         <div
       v-if="receiptOcr?.isOpen"
       class="receipt-ocr-modal"
       data-no-drag="true" @keydown.esc="closeReceiptOcrModal"
       @wheel="handleReceiptOcrModalWheel"
     >
-      <section :class="['receipt-ocr-modal__dialog', { 'receipt-ocr-modal__dialog--review-list': receiptOcrView !== 'rules' && receiptVisibleReviewItems.length, 'receipt-ocr-modal__dialog--history-detail': isReceiptHistoryDetailOpen }]" role="dialog" aria-modal="true" aria-labelledby="receipt-ocr-modal-title">
+      <section :class="['receipt-ocr-modal__dialog', { 'receipt-ocr-modal__dialog--batch-progress': receiptBatchProgress?.total, 'receipt-ocr-modal__dialog--review-list': receiptOcrView !== 'rules' && receiptVisibleReviewItems.length, 'receipt-ocr-modal__dialog--history-detail': isReceiptHistoryDetailOpen }]" role="dialog" aria-modal="true" aria-labelledby="receipt-ocr-modal-title">
         <header class="receipt-ocr-modal__header">
           <div>
             <p class="receipt-ocr-modal__eyebrow">거래 이미지 AI 분석</p>
@@ -5091,9 +5135,12 @@ defineExpose({
           <button
             type="button"
             :class="['receipt-ocr-modal__nav-button', { 'is-active': receiptOcrView === 'history' }]"
+            aria-label="분석 내용 확인 및 불러오기"
+            :aria-describedby="receiptPendingReviewCount ? 'receipt-review-pending-badge' : undefined"
             @click="setReceiptOcrModalView('history')"
           >
             분석 내용 확인 및 불러오기
+            <span v-if="receiptPendingReviewCount" id="receipt-review-pending-badge" class="receipt-ocr-review-badge" role="status" :aria-label="`검수 대기 요청 ${receiptPendingReviewCount}건`">{{ receiptPendingReviewCount }}</span>
           </button>
           <button
             type="button"
@@ -5103,6 +5150,45 @@ defineExpose({
             나만의 프롬프트 규칙 정하기
           </button>
         </nav>
+
+        <section v-if="receiptBatchProgress?.total" class="receipt-ocr-batch-progress" aria-label="이미지 분석 요청 진행 상태">
+          <div class="receipt-ocr-batch-progress__heading" role="status" aria-live="polite" aria-atomic="true">
+            <strong>요청 처리 {{ receiptBatchProgress.settled }} / {{ receiptBatchProgress.total }}건</strong>
+            <b>{{ receiptBatchProgress.percent }}%</b>
+          </div>
+          <progress :value="receiptBatchProgress.settled" :max="receiptBatchProgress.total" aria-label="이미지 분석 요청 처리 진행률"></progress>
+          <p>완료 {{ receiptBatchProgress.done }}건 · 실패 {{ receiptBatchProgress.failed }}건 · 취소 {{ receiptBatchProgress.cancelled }}건 · 남은 {{ receiptBatchProgress.remaining }}건</p>
+          <div class="receipt-ocr-batch-progress__refresh" role="status">
+            <small v-if="receiptBatchProgress.phase === 'processing'">최대 {{ receiptOcr.concurrency }}건을 동시에 요청하고 완료된 이미지부터 표시합니다. 서버 설정에 따라 실제 동시 분석 수는 제한될 수 있습니다.</small>
+            <small v-else-if="receiptBatchProgress.phase === 'refreshing'">분석 이력과 검수 대기 건수를 새로고침하고 있습니다.</small>
+            <small v-else-if="receiptBatchProgress.phase === 'completed'">분석 이력과 검수 대기 건수를 새로고침했습니다.</small>
+            <template v-else-if="receiptBatchProgress.phase === 'refresh-error'">
+              <small>요청 처리는 끝났지만 결과 새로고침에 실패했습니다. 현재 분석 결과는 유지됩니다.</small>
+              <button type="button" class="button button--secondary" @click="emit('refresh-receipt-results')">새로고침 재시도</button>
+            </template>
+          </div>
+        </section>
+
+        <section v-if="!receiptOcrView" class="receipt-ocr-welcome" aria-label="이미지 분석 시작 안내">
+          <div class="receipt-ocr-welcome__intro">
+            <p class="receipt-ocr-modal__eyebrow">이미지 선택 · AI 분석 · 검수 후 입력</p>
+            <h3>이미지에서 거래 내역을 간편하게 정리하세요.</h3>
+            <p>영수증이나 결제 내역을 선택해 분석하고, 내용을 확인한 뒤 가계부에 반영할 수 있습니다.</p>
+          </div>
+          <div v-if="receiptPendingReviewCount" class="receipt-ocr-welcome__pending" role="status">
+            <span class="receipt-ocr-review-dot" aria-hidden="true"></span>
+            <div><strong>완료된 분석 {{ receiptPendingReviewCount }}건이 검수를 기다리고 있습니다.</strong><p>아직 사용하지 않은 거래 후보가 있는 요청입니다. 내용을 열어 확인해 주세요.</p></div>
+            <button type="button" class="button button--primary" @click="setReceiptOcrModalView('history')">대기 결과 확인</button>
+          </div>
+          <p v-else-if="receiptOcr?.isReviewSummaryLoading" role="status">검수 대기 내역을 확인하고 있습니다.</p>
+          <p v-if="receiptOcr?.reviewSummaryError" class="receipt-ocr-welcome__error" role="alert">{{ receiptOcr.reviewSummaryError }}</p>
+          <div class="receipt-ocr-welcome__steps">
+            <article><span>01</span><h4>이미지 선택</h4><p>여러 장을 선택하고 이미지마다 요청사항을 추가할 수 있습니다.</p><button type="button" class="button button--secondary" @click="setReceiptOcrModalView('analyze')">이미지 분석 시작</button></article>
+            <article><span>02</span><h4>분석 결과 검수</h4><p>완료된 요청을 확인하고 날짜·금액·분류를 수정하세요.</p><button type="button" class="button button--secondary" @click="setReceiptOcrModalView('history')">분석 내역 보기</button></article>
+            <article><span>03</span><h4>나만의 입력 규칙</h4><p>자주 쓰는 요청사항과 정리 방식을 미리 설정하세요.</p><button type="button" class="button button--secondary" @click="setReceiptOcrModalView('rules')">프롬프트 규칙 설정</button></article>
+          </div>
+          <small>가계부 거래는 자동으로 등록되지 않습니다. 분석 결과를 검수한 뒤 ‘승인 후 기입’ 또는 ‘입력칸에 적용’을 선택해 주세요.</small>
+        </section>
 
         <input
           ref="receiptFileInputRef"
@@ -5136,6 +5222,12 @@ defineExpose({
               </button>
             </div>
             <div class="receipt-ocr-modal__upload">
+              <label class="receipt-ocr-concurrency">
+                <span>동시 요청</span>
+                <select :value="receiptOcr?.concurrency || 6" :disabled="receiptOcr?.isAnalyzing" @change="emit('set-receipt-concurrency', $event.target.value)">
+                  <option v-for="count in RECEIPT_MAX_CONCURRENCY" :key="count" :value="count">{{ count }}건</option>
+                </select>
+              </label>
               <span class="receipt-ocr-control-label receipt-ocr-control-label--upload">이미지 입력</span>
               <label class="receipt-ocr-toggle receipt-ocr-toggle--compact receipt-ocr-existing-style-toggle" title="기존 가계부 입력 형식을 참고합니다. 정확하지 않으면 끄세요.">
                 <input
@@ -5170,10 +5262,8 @@ defineExpose({
             </div>
           </div>
 
-          <div v-if="receiptOcr?.isAnalyzing" class="receipt-ocr-modal__progress">
-            <span></span>
-            선택된 이미지가 순서대로 자동 분석 중입니다. 진행 {{ receiptBatchProgressLabel }}, 남은 작업 {{ receiptPendingCount }}건.
-          </div>
+          <p v-if="receiptAnalyzeItems.length" class="receipt-ocr-modal__batch-summary" role="status">{{ receiptBatchSummary }}</p>
+          <button v-if="receiptRetryableFailedItems.length" type="button" class="button button--secondary receipt-ocr-retry-failed" :disabled="receiptOcr?.isAnalyzing" @click="emit('retry-failed-receipt-analysis')">실패 건만 재시도 ({{ receiptRetryableFailedItems.length }}건)</button>
           <p v-if="!receiptAnalyzeItems.length" class="receipt-ocr-modal__empty">
             이미지를 선택하면 이곳에 미리보기가 표시됩니다. 분석은 분석 요청하기를 눌러야 시작됩니다.
           </p>
@@ -5274,21 +5364,38 @@ defineExpose({
                   {{ receiptOcr?.isHistoryLoading ? '불러오는 중...' : '기록 새로고침' }}
                 </button>
               </div>
+              <div class="receipt-history-view-toolbar">
+                <div class="receipt-history-view-toolbar__modes" role="group" aria-label="분석 내역 보기 방식">
+                  <button type="button" :class="['button', { 'button--primary': receiptHistoryView.mode === 'list' }]" :aria-pressed="receiptHistoryView.mode === 'list'" @click="updateReceiptHistoryView({ mode: 'list' })">리스트로 보기</button>
+                  <button type="button" :class="['button', { 'button--primary': receiptHistoryView.mode === 'blocks' }]" :aria-pressed="receiptHistoryView.mode === 'blocks'" @click="updateReceiptHistoryView({ mode: 'blocks' })">블록으로 보기</button>
+                </div>
+                <div v-if="receiptHistoryView.mode === 'blocks'" class="receipt-history-view-toolbar__sizes" role="group" aria-label="분석 이미지 블록 크기">
+                  <button v-for="size in receiptHistorySizes" :key="size.value" type="button" :class="['button', { 'button--primary': receiptHistoryView.size === size.value }]" :aria-pressed="receiptHistoryView.size === size.value" @click="updateReceiptHistoryView({ size: size.value })">{{ size.label }}</button>
+                </div>
+              </div>
               <p v-if="receiptOcr?.historyError" class="receipt-ocr-history__error">{{ receiptOcr.historyError }}</p>
               <div v-if="receiptHistoryGroups.length" class="receipt-ocr-history__groups receipt-ocr-history__list--index">
                 <section v-for="group in receiptHistoryGroups" :key="group.key" class="receipt-ocr-history__date-group">
                   <header class="receipt-ocr-history__date-header">
                     <strong>{{ group.label }}</strong>
-                    <span>{{ group.items.length }}건</span>
+                    <span>이 페이지 {{ group.batches.length }}묶음 · {{ group.items.length }}건 표시</span>
                   </header>
+                  <section v-for="batch in group.batches" :key="batch.key" class="receipt-ocr-history__request-group" :data-request-count="batch.totalCount">
+                    <header class="receipt-ocr-history__request-header">
+                      <div><strong>{{ batch.isLegacy ? '개별 요청 1건' : `${batch.totalCount}건 요청 묶음` }}</strong><time>{{ formatReceiptBatchTime(batch) }}</time></div>
+                      <span>{{ batch.items.length < batch.totalCount ? '현재 페이지 · ' : '' }}{{ receiptBatchStatusLabel(batch) }}</span>
+                    </header>
+                    <p v-if="batch.isLegacy" class="receipt-ocr-history__request-note">묶음 정보가 없는 이전 내역 또는 개별 재요청입니다.</p>
+                    <p v-else-if="batch.items.length < batch.totalCount" class="receipt-ocr-history__request-note">이 페이지에 {{ batch.items.length }}/{{ batch.totalCount }}건 표시 · 나머지는 요청 대기·다른 페이지·삭제/취소 내역일 수 있습니다.</p>
+                  <template v-if="receiptHistoryView.mode === 'list'">
                   <article
-                    v-for="history in group.items"
+                    v-for="history in batch.items"
                     :key="history.id"
                     :class="['receipt-ocr-history__item', { 'is-disabled': normalizeReceiptHistoryStatus(history.status) === 'PROCESSING' }]"
                     @click="openReceiptHistoryDetail(history)"
                   >
                     <div>
-                      <strong>{{ history.fileName || ('분석 기록 #' + history.id) }}</strong>
+                      <strong class="receipt-history-row__file"><b>{{ history.fileName || ('분석 기록 #' + history.id) }}</b><time>요청 {{ formatReceiptHistoryRequestTime(history) }}</time></strong>
                       <span>{{ getReceiptDocumentLabel(history.documentType) }} / {{ getReceiptHistoryStatusLabel(history.status) }}</span>
                       <span
                         :class="['receipt-ocr-history__usage-badge', { 'is-used': getReceiptHistoryUsageState(history).isUsed, 'is-complete': getReceiptHistoryUsageState(history).isComplete }]"
@@ -5325,6 +5432,24 @@ defineExpose({
                       </button>
                     </div>
                   </article>
+                  </template>
+                  <div v-else :class="['receipt-history-blocks', `receipt-history-blocks--${receiptHistoryView.size}`]">
+                    <article v-for="history in batch.items" :key="history.id" class="receipt-history-tile" :data-history-id="history.id">
+                      <button type="button" class="receipt-history-tile__open" :aria-label="`${history.fileName || ('분석 기록 #' + history.id)} 내용 보기`" :disabled="isReceiptHistoryCancellable(history)" @click="openReceiptHistoryDetail(history)">
+                        <ReceiptHistoryThumbnail :history="history" />
+                        <div class="receipt-history-tile__caption">
+                          <strong :title="history.fileName || ('분석 기록 #' + history.id)">{{ history.fileName || ('분석 기록 #' + history.id) }}</strong>
+                          <div><b>{{ getReceiptHistoryStatusLabel(history.status) }}</b><time>{{ formatReceiptHistoryRequestTime(history) }}</time></div>
+                        </div>
+                      </button>
+                      <footer class="receipt-history-tile__footer">
+                        <small :title="getReceiptHistoryUsageTitle(history)">{{ getReceiptHistoryUsageLabel(history) }}</small>
+                        <button v-if="isReceiptHistoryCancellable(history)" type="button" class="button button--ghost" @click="emit('cancel-receipt-history', history.id)">요청 취소</button>
+                        <button v-else type="button" class="button button--danger" @click="emit('delete-receipt-history', history)">삭제</button>
+                      </footer>
+                    </article>
+                  </div>
+                  </section>
                 </section>
               </div>
               <p v-else-if="!receiptOcr?.isHistoryLoading" class="receipt-ocr-history__empty">
@@ -5457,12 +5582,13 @@ defineExpose({
                   재요청
                 </button>
                 <button type="button" class="button button--ghost" @click="removeReceiptAnalysis(item.id)">제거</button>
+                <button v-if="item.status === 'error' && item.sourceFile" type="button" class="button button--secondary" :disabled="receiptOcr?.isAnalyzing" @click="emit('retry-failed-receipt-analysis', { itemIds: [item.id] })">실패 재시도</button>
               </div>
             </div>
 
             <div class="receipt-ocr-review-card__body">
               <aside class="receipt-ocr-review-card__preview">
-                <img v-if="item.previewUrl" :src="item.previewUrl" :alt="item.fileName" />
+                <img v-if="item.previewUrl" :src="item.previewUrl" :alt="item.fileName" loading="lazy" decoding="async" />
                 <div v-else class="receipt-ocr-review-card__preview-empty">이미지 없음</div>
                 <div class="receipt-ocr-review-card__steps">
                   <span class="is-complete">이미지 업로드</span>
@@ -5512,7 +5638,7 @@ defineExpose({
                   </div>
                 </div>
                 <p v-else-if="item.status === 'queued'" class="receipt-ocr-review-card__message">
-                  앞선 이미지 분석이 끝나면 이 이미지를 AI 서버로 보냅니다.
+                  동시 요청 자리가 생기면 이 이미지를 AI 서버로 보냅니다.
                 </p>
                 <p v-else-if="item.status === 'analyzing'" class="receipt-ocr-review-card__message">
                   AI가 이미지에서 거래 항목을 추출하고 있습니다.
@@ -5533,8 +5659,13 @@ defineExpose({
                       <span>{{ formatReceiptLineItemSummary(item.lineItems) }}</span>
                     </div>
 
+                    <nav v-if="getReceiptReviewPage(item).totalPages > 1" class="receipt-ocr-review-pagination" aria-label="거래 후보 페이지">
+                      <button type="button" class="button button--ghost" :disabled="getReceiptReviewPage(item).page === 0" @click="setReceiptReviewPage(item, getReceiptReviewPage(item).page - 1)">이전 거래</button>
+                      <span>{{ getReceiptReviewPage(item).start + 1 }}–{{ getReceiptReviewPage(item).end }} / {{ getReceiptReviewPage(item).total }}건</span>
+                      <button type="button" class="button button--ghost" :disabled="getReceiptReviewPage(item).page + 1 >= getReceiptReviewPage(item).totalPages" @click="setReceiptReviewPage(item, getReceiptReviewPage(item).page + 1)">다음 거래</button>
+                    </nav>
                     <section
-                      v-for="(entry, entryIndex) in item.suggestedEntries"
+                      v-for="{ entry, entryIndex } in getReceiptReviewPage(item).entries"
                       :key="`${item.id}-${entryIndex}`"
                       :class="['receipt-ocr-review-entry', { 'is-applied': isReceiptReviewEntryAppliedToForm(item, entryIndex), 'is-approved': isReceiptReviewEntryApproved(item, entryIndex) }]"
                     >
@@ -5689,6 +5820,7 @@ defineExpose({
         </div>
       </section>
     </div>
+        </Teleport>
   </div>
 </template>
 

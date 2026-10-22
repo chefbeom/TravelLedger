@@ -3,6 +3,7 @@ package com.playdata.calen.ledger.web;
 import com.playdata.calen.account.security.AppUserPrincipal;
 import com.playdata.calen.ledger.dto.LedgerImageAnalysisHistoryResponse;
 import com.playdata.calen.ledger.dto.LedgerImageAnalysisHistoryDeleteResponse;
+import com.playdata.calen.ledger.dto.LedgerImageReviewSummaryResponse;
 import com.playdata.calen.ledger.dto.LedgerOcrAnalyzeResponse;
 import com.playdata.calen.ledger.domain.model.LedgerImageStorageData;
 import com.playdata.calen.ledger.ocr.LedgerOcrService;
@@ -56,6 +57,11 @@ public class LedgerOcrController {
             Pageable pageable
     ) {
         return ledgerOcrService.listHistories(currentUser.userId(), pageable);
+    }
+
+    @GetMapping("/history/review-summary")
+    public LedgerImageReviewSummaryResponse reviewSummary(@AuthenticationPrincipal AppUserPrincipal currentUser) {
+        return ledgerOcrService.reviewSummary(currentUser.userId());
     }
 
     @GetMapping("/history/{historyId}")

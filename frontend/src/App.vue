@@ -2,6 +2,7 @@
 import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import PinPadInput from './components/PinPadInput.vue'
 import { MOBILE_LAYOUT_QUERY, resolveLayoutMode } from './lib/responsiveLayout'
+import { createModalMutationFilter } from './lib/modalMutationFilter'
 import {
   acceptInvite,
   completeKakaoRegistration,
@@ -122,6 +123,7 @@ const MODAL_SCROLL_LOCK_SELECTOR = [
   '.public-map-share-photo-modal',
   '.drive-preview-modal',
 ].join(', ')
+const isModalStackMutation = createModalMutationFilter(`${MODAL_SCROLL_LOCK_SELECTOR}, .travel-map--fullscreen`)
 
 const routeMeta = {
   launcher: {
@@ -859,6 +861,11 @@ watch([currentUser, activeRoute], ([user, route]) => {
 }, { immediate: true })
 
 function isMobileModalScrollLockRequired() {
+  // Large result tables and animated map/pet nodes mutate frequently. Desktop
+  // must not scan the whole document for a mobile-only scroll lock each frame.
+  if (typeof window === 'undefined' || !window.matchMedia(MOBILE_MODAL_SCROLL_LOCK_QUERY).matches) {
+    return false
+  }
   const modal = typeof document === 'undefined'
     ? null
     : document.querySelector(MODAL_SCROLL_LOCK_SELECTOR)
@@ -866,9 +873,7 @@ function isMobileModalScrollLockRequired() {
     ? null
     : document.querySelector('.travel-map--fullscreen')
 
-  return typeof window !== 'undefined'
-    && window.matchMedia(MOBILE_MODAL_SCROLL_LOCK_QUERY).matches
-    && Boolean(modal)
+  return Boolean(modal)
     // A photo detail dialog inside a fullscreen map does not need to lock the
     // page behind it. On mobile, fixing the body here changes the visual
     // viewport repeatedly and makes the rendered photo flash.
@@ -1000,11 +1005,14 @@ onMounted(() => {
   window.addEventListener('resize', queueMobileModalBackgroundScrollSync)
   window.addEventListener('orientationchange', queueMobileModalBackgroundScrollSync)
   if (typeof MutationObserver !== 'undefined') {
-    mobileModalObserver = new MutationObserver(queueMobileModalBackgroundScrollSync)
+    mobileModalObserver = new MutationObserver(records => {
+      if (isModalStackMutation(records)) queueMobileModalBackgroundScrollSync()
+    })
     mobileModalObserver.observe(document.body, {
       childList: true,
       subtree: true,
       attributes: true,
+      attributeOldValue: true,
       attributeFilter: ['class', 'role', 'aria-modal'],
     })
   }

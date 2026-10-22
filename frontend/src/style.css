@@ -1471,6 +1471,31 @@ button {
   align-content: start;
 }
 
+.receipt-ocr-modal__batch-summary {
+  margin: 8px 0;
+  font-size: 0.85rem;
+  overflow-wrap: anywhere;
+}
+
+.receipt-ocr-review-pagination {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px;
+  border: 1px solid var(--field-border);
+  background: var(--field-bg);
+}
+
+.receipt-ocr-review-card {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 480px;
+}
+
 .receipt-ocr-review-entry {
   display: grid;
   gap: 12px;

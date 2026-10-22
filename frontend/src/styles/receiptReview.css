@@ -1,0 +1,206 @@
+/* Stable workspace size, including the landing state with no selected files. */
+html body .app-shell .receipt-ocr-modal { z-index: 2400 !important; }
+.receipt-ocr-modal .receipt-ocr-modal__nav-button { gap: 8px; }
+.receipt-ocr-concurrency { display: flex; align-items: center; gap: 6px; font-size: 0.8rem; white-space: nowrap; }
+.receipt-ocr-concurrency select { min-height: 44px; min-width: 72px; }
+.receipt-ocr-retry-failed { justify-self: start; min-height: 44px; }
+html body .app-shell .receipt-ocr-modal__dialog {
+  height: min(900px, calc(100dvh - 40px)) !important;
+  min-height: min(600px, calc(100dvh - 40px)) !important;
+  max-height: calc(100dvh - 40px) !important;
+  box-sizing: border-box;
+}
+.receipt-ocr-welcome {
+  display: grid;
+  align-content: start;
+  gap: 24px;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: clamp(16px, 3vw, 36px);
+  border: 1px solid var(--modal-border);
+  background: var(--modal-surface-soft);
+}
+.receipt-ocr-welcome__intro h3 { margin: 8px 0 12px; font-size: clamp(20px, 2vw, 28px); line-height: 1.4; }
+.receipt-ocr-welcome p { margin: 6px 0 0; line-height: 1.6; overflow-wrap: anywhere; }
+.receipt-ocr-welcome__steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.receipt-ocr-welcome__steps article { display: flex; flex-direction: column; gap: 8px; min-width: 0; padding: 20px; border: 1px solid var(--modal-border); background: var(--modal-surface); }
+.receipt-ocr-welcome__steps h4 { margin: 0; font-size: 18px; }
+.receipt-ocr-welcome__steps article > span { font-weight: 800; color: var(--text-soft); }
+.receipt-ocr-welcome__steps .button { margin-top: auto; min-height: 44px; }
+.receipt-ocr-welcome__pending { display: flex; align-items: center; flex-wrap: wrap; gap: 14px; padding: 18px; border: 1px solid var(--modal-border); border-left: 4px solid #c43547; background: var(--modal-surface); }
+.receipt-ocr-welcome__pending > div { flex: 1 1 240px; min-width: 0; }
+.receipt-ocr-welcome__pending .button { min-height: 44px; }
+html body .app-shell .receipt-ocr-modal .receipt-ocr-review-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  min-width: 24px;
+  height: 24px;
+  padding: 0 7px;
+  box-sizing: border-box;
+  border-radius: 999px !important;
+  background: #b42334 !important;
+  color: #fff !important;
+  -webkit-text-fill-color: #fff !important;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1;
+}
+.receipt-ocr-review-dot { flex: 0 0 10px; height: 10px; width: 10px; border-radius: 50% !important; background: #c43547; }
+.receipt-ocr-welcome__error { color: var(--expense); }
+.receipt-ocr-history__request-group { display: grid; gap: 8px; min-width: 0; padding: 12px; border: 1px solid var(--modal-border); border-left: 3px solid var(--brand); background: var(--modal-surface-soft); }
+.receipt-ocr-history__request-header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; min-width: 0; }
+.receipt-ocr-history__request-header > div { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 12px; }
+.receipt-ocr-history__request-header time, .receipt-ocr-history__request-header > span { font-size: 0.8rem; }
+.receipt-ocr-history__request-group .receipt-ocr-history__request-note { margin: 0; font-size: 0.78rem; line-height: 1.5; overflow-wrap: anywhere; }
+.receipt-history-view-toolbar, .receipt-history-view-toolbar__modes, .receipt-history-view-toolbar__sizes {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+}
+.receipt-history-view-toolbar { justify-content: space-between; }
+.receipt-history-view-toolbar .button { min-height: 44px; }
+html body .app-shell .receipt-ocr-history__item .receipt-history-row__file {
+  flex-direction: column;
+  align-items: flex-start !important;
+  justify-content: center;
+  gap: 5px;
+}
+.receipt-history-row__file time { font-size: 0.75rem; font-weight: 500; line-height: 1.4; }
+.receipt-history-blocks {
+  --receipt-tile-width: 200px;
+  --receipt-image-height: 210px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, var(--receipt-tile-width)), 1fr));
+  gap: 12px;
+  min-width: 0;
+  align-items: stretch;
+}
+.receipt-history-blocks--large { --receipt-tile-width: 290px; --receipt-image-height: 310px; }
+.receipt-history-blocks--small { --receipt-tile-width: 125px; --receipt-image-height: 140px; }
+.receipt-history-tile {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--modal-border);
+  background: var(--modal-surface);
+  color: var(--modal-text);
+}
+.receipt-history-tile__open {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.receipt-history-tile__open:disabled { cursor: default; }
+.receipt-history-tile__open:focus-visible { outline: 3px solid var(--modal-accent); outline-offset: -3px; }
+.receipt-history-thumbnail {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: var(--receipt-image-height);
+  overflow: hidden;
+  background: var(--modal-surface-soft);
+  border-bottom: 1px solid var(--modal-border);
+}
+.receipt-history-thumbnail img { position: absolute; inset: 0; display: block; width: 100%; height: 100%; min-height: 0; object-fit: contain; }
+.receipt-history-thumbnail__fallback { display: grid; align-content: center; justify-items: center; box-sizing: border-box; height: 100%; gap: 8px; padding: 12px; color: var(--modal-text-soft); }
+.receipt-history-thumbnail__fallback svg { width: 36px; height: 36px; }
+.receipt-history-thumbnail__fallback p { margin: 0; text-align: center; font-size: 0.75rem; line-height: 1.5; overflow-wrap: anywhere; }
+.receipt-history-tile__caption { display: grid; min-width: 0; gap: 8px; padding: 10px; }
+.receipt-history-tile__caption > strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.85rem; }
+.receipt-history-tile__caption > div { display: flex; align-items: center; flex-wrap: wrap; justify-content: space-between; gap: 4px 8px; font-size: 0.75rem; }
+.receipt-history-tile__caption time { color: var(--modal-text-soft); }
+.receipt-history-tile__footer { display: flex; align-items: center; gap: 6px; justify-content: space-between; padding: 0 10px 10px; margin-top: auto; }
+.receipt-history-tile__footer small { flex: 1; min-width: 0; font-size: 0.75rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+html body .app-shell .receipt-history-tile__footer .button { flex: 0 0 auto; width: auto; min-width: 44px; min-height: 44px; padding: 6px 8px; font-size: 0.8rem; }
+.receipt-history-blocks--small .receipt-history-tile__caption,
+.receipt-history-blocks--small .receipt-history-tile__footer { padding-left: 6px; padding-right: 6px; }
+html body .app-shell .receipt-ocr-modal__dialog--batch-progress {
+  grid-template-rows: auto auto auto minmax(0, 1fr) !important;
+}
+.receipt-ocr-batch-progress {
+  flex: 0 0 auto;
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--modal-border);
+  background: var(--modal-surface-soft);
+  overflow-wrap: anywhere;
+}
+.receipt-ocr-batch-progress__heading, .receipt-ocr-batch-progress__refresh {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+}
+.receipt-ocr-batch-progress__heading { font-size: 0.9rem; }
+.receipt-ocr-batch-progress progress {
+  appearance: none;
+  display: block;
+  width: 100%;
+  height: 10px;
+  border: 0;
+  background: var(--modal-border);
+  accent-color: var(--brand);
+}
+.receipt-ocr-batch-progress progress::-webkit-progress-bar { background: var(--modal-border); }
+.receipt-ocr-batch-progress progress::-webkit-progress-value { background: var(--brand); }
+.receipt-ocr-batch-progress progress::-moz-progress-bar { background: var(--brand); }
+.receipt-ocr-batch-progress p { margin: 0; font-size: 0.8rem; line-height: 1.5; }
+.receipt-ocr-batch-progress small { font-size: 0.75rem; line-height: 1.5; }
+.receipt-ocr-batch-progress__refresh .button { min-height: 36px; }
+@media (max-width: 760px), (max-height: 600px) {
+  html body .app-shell .receipt-ocr-modal { padding: 8px !important; }
+  html body .app-shell .receipt-ocr-modal__dialog { height: calc(100dvh - 16px) !important; max-height: calc(100dvh - 16px) !important; min-height: 0 !important; }
+  .receipt-ocr-welcome { gap: 16px; padding: 16px; }
+  .receipt-ocr-welcome__steps { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 760px) {
+  /* Keep room for result forms when the batch progress strip is present. */
+  html body .app-shell .receipt-ocr-modal__dialog--batch-progress { gap: 10px !important; }
+  .receipt-ocr-modal__dialog--batch-progress .receipt-ocr-modal__header {
+    flex-direction: row !important;
+    align-items: center !important;
+    gap: 8px;
+  }
+  .receipt-ocr-modal__dialog--batch-progress .receipt-ocr-modal__header > div { min-width: 0; }
+  html body .app-shell .receipt-ocr-modal__dialog--batch-progress .receipt-ocr-modal__header h2 {
+    margin: 0;
+    font-size: 20px !important;
+  }
+  .receipt-ocr-modal__dialog--batch-progress .receipt-ocr-modal__eyebrow { font-size: 11px; margin: 0 0 4px; }
+  html body .app-shell .receipt-ocr-modal__dialog--batch-progress .receipt-ocr-modal__header > .button {
+    width: auto !important;
+    flex: 0 0 auto;
+    min-height: 44px;
+    padding: 8px 12px;
+  }
+  html body .app-shell .receipt-ocr-modal__dialog--batch-progress .receipt-ocr-modal__nav {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+  }
+  html body .app-shell .receipt-ocr-modal__dialog--batch-progress .receipt-ocr-modal__nav-button {
+    min-height: 44px;
+    padding: 6px;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    font-size: 12px;
+    line-height: 1.4;
+  }
+  .receipt-ocr-batch-progress { padding: 8px; gap: 4px; }
+}

@@ -180,8 +180,8 @@ app:
       connect-timeout: ${LEDGER_OCR_CONNECT_TIMEOUT:3s}
       read-timeout: ${LEDGER_OCR_READ_TIMEOUT:90s}
       max-file-size: ${LEDGER_OCR_MAX_FILE_SIZE:10MB}
-      max-pending-per-user: ${LEDGER_OCR_MAX_PENDING_PER_USER:5}
-      workers: ${LEDGER_OCR_WORKERS:1}
+      max-pending-per-user: ${LEDGER_OCR_MAX_PENDING_PER_USER:20}
+      workers: ${LEDGER_OCR_WORKERS:6}
       queue-capacity: ${LEDGER_OCR_QUEUE_CAPACITY:100}
     ai:
       enabled: ${APP_LEDGER_AI_ENABLED:true}
@@ -205,7 +205,7 @@ app:
       connect-timeout: ${APP_LEDGER_AI_CONNECT_TIMEOUT:3s}
       read-timeout: ${APP_LEDGER_AI_READ_TIMEOUT:600s}
       requests:
-        max-concurrent: ${APP_LEDGER_AI_MAX_CONCURRENT:1}
+        max-concurrent: ${APP_LEDGER_AI_MAX_CONCURRENT:20}
         max-waiting: ${APP_LEDGER_AI_MAX_WAITING:20}
         wait-timeout: ${APP_LEDGER_AI_WAIT_TIMEOUT:30s}
       enforce-provider-url-allowlist: ${APP_LEDGER_AI_ENFORCE_PROVIDER_URL_ALLOWLIST:true}

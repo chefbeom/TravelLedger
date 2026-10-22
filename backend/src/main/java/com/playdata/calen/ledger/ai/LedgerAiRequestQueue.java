@@ -10,8 +10,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 /**
- * Bounds concurrency and waiting at each upstream model endpoint. Defaults
- * preserve one-at-a-time inference on local GPUs, with bounded admission.
+ * Bounds concurrency and waiting at each upstream model endpoint. AIConnect's
+ * default shared ceiling is 20; local GPU deployments should explicitly set 1.
  */
 @Component
 public class LedgerAiRequestQueue {

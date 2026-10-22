@@ -20,6 +20,22 @@ public interface LedgerImageAnalysisRequestRepository extends JpaRepository<Ledg
 
     Optional<LedgerImageAnalysisRequest> findByClientRequestIdAndOwnerId(String clientRequestId, Long ownerId);
 
+    interface CompletedReviewRow {
+        Long getId();
+        String getResultJson();
+    }
+
+    @Query("""
+            select request.id as id, request.resultJson as resultJson
+            from LedgerImageAnalysisRequest request
+            where request.owner.id = :ownerId
+              and request.status = com.playdata.calen.ledger.domain.LedgerImageAnalysisStatus.COMPLETED
+              and request.id > :afterId
+            order by request.id asc
+            """)
+    java.util.List<CompletedReviewRow> findCompletedReviewRows(@Param("ownerId") Long ownerId,
+            @Param("afterId") Long afterId, Pageable pageable);
+
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("""

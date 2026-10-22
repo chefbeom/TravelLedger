@@ -33,12 +33,12 @@
 
 | 설정 | 기본값 | 의미 |
 |---|---:|---|
-| `APP_LEDGER_AI_MAX_CONCURRENT` | 1 | 같은 제공자의 동시 추론 수, 공유 DB 기준 |
+| `APP_LEDGER_AI_MAX_CONCURRENT` | 20 | AIConnect 기준 같은 제공자의 동시 추론 상한, 공유 DB 기준. 로컬 단일 GPU는 1로 재설정 |
 | `APP_LEDGER_AI_MAX_WAITING` | 20 | 제공자 앞에서 대기할 요청 수, 인스턴스별 |
 | `APP_LEDGER_AI_WAIT_TIMEOUT` | 30s | 로컬·공유 추론 슬롯을 기다릴 최대 시간 |
 | `APP_LEDGER_AI_WORKERS` / `APP_LEDGER_AI_QUEUE_CAPACITY` | 1 / 100 | 일반·엑셀 AI 실행 풀과 대기 큐, 인스턴스별 |
-| `LEDGER_OCR_WORKERS` / `LEDGER_OCR_QUEUE_CAPACITY` | 1 / 100 | 이미지 AI 실행 풀과 대기 큐, 인스턴스별 |
-| `LEDGER_OCR_MAX_PENDING_PER_USER` | 5 | 이미지 AI 사용자별 접수 제한, 인스턴스별 |
+| `LEDGER_OCR_WORKERS` / `LEDGER_OCR_QUEUE_CAPACITY` | 6 / 100 | 이미지 AI 실행 풀과 대기 큐, 인스턴스별. 로컬 단일 GPU는 워커 1로 재설정 |
+| `LEDGER_OCR_MAX_PENDING_PER_USER` | 20 | 이미지 AI 사용자별 접수 제한, 인스턴스별 |
 | `APP_HTTP_ASYNC_WORKERS` / `APP_HTTP_ASYNC_QUEUE_CAPACITY` | 8 / 64 | 파일 스트리밍 실행 풀과 대기 큐 |
 | `APP_HTTP_ASYNC_TIMEOUT_MILLIS` | 600000 | HTTP 비동기 응답 제한 시간, 밀리초 |
 | `APP_HTTP_MAP_WORKERS` / `APP_HTTP_MAP_QUEUE_CAPACITY` | 4 / 32 | 지도 조회·갱신 대기 전용 실행 풀과 큐 |

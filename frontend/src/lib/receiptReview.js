@@ -15,6 +15,10 @@ export function summarizeReceiptBatch(items = []) {
 
 // Count requests, not transactions. A partially used request remains pending.
 export function countPendingReceiptReviews(requests = [], histories = [], items = [], appliedMarkers = []) {
+  return pendingReceiptReviewIds(requests, histories, items, appliedMarkers).length
+}
+
+export function pendingReceiptReviewIds(requests = [], histories = [], items = [], appliedMarkers = []) {
   const list = value => Array.isArray(value) ? value : []
   const byId = new Map(list(requests).filter(request => request?.analysisId).map(request => [String(request.analysisId), request]))
   const merge = (id, total, approved = []) => {
@@ -39,14 +43,19 @@ export function countPendingReceiptReviews(requests = [], histories = [], items 
     if (!appliedById.has(key)) appliedById.set(key, [])
     appliedById.get(key).push(marker.entryIndex)
   }
-  let pending = 0
+  const pending = []
   for (const request of byId.values()) {
     const total = Number(request.entryCount) || 0
     const used = new Set([...list(request.approvedEntryIndexes), ...list(appliedById.get(String(request.analysisId)))]
       .map(Number).filter(index => Number.isInteger(index) && index >= 0 && index < total))
-    if (total > used.size) pending++
+    if (total > used.size) pending.push(String(request.analysisId))
   }
   return pending
+}
+
+export function unreadReceiptReviewIds(pendingIds = [], seenIds = []) {
+  const seen = new Set((Array.isArray(seenIds) ? seenIds : []).map(String))
+  return [...new Set(pendingIds.map(String))].filter(id => !seen.has(id))
 }
 
 // Keep the current selection visible even after individual requests finish.

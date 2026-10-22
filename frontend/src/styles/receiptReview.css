@@ -62,8 +62,24 @@ html body .app-shell .receipt-ocr-modal .receipt-ocr-review-badge {
   gap: 8px;
   min-width: 0;
 }
-.receipt-history-view-toolbar { justify-content: space-between; }
-.receipt-history-view-toolbar .button { min-height: 44px; }
+html body .app-shell .receipt-ocr-history__header.receipt-history-view-toolbar {
+  flex-direction: row;
+  flex-wrap: nowrap;
+  justify-content: flex-start;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  max-width: 100%;
+  min-height: 48px;
+  box-sizing: border-box;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--modal-surface);
+}
+.receipt-history-view-toolbar > strong { flex: 0 0 auto; white-space: nowrap; }
+.receipt-history-view-toolbar__modes, .receipt-history-view-toolbar__sizes { flex: 0 0 auto; flex-wrap: nowrap; }
+.receipt-history-view-toolbar__sizes { margin-left: auto; }
+html body .app-shell .receipt-history-view-toolbar .button { flex: 0 0 auto; width: auto; min-height: 44px; white-space: nowrap; }
 html body .app-shell .receipt-ocr-history__item .receipt-history-row__file {
   flex-direction: column;
   align-items: flex-start !important;
@@ -71,21 +87,30 @@ html body .app-shell .receipt-ocr-history__item .receipt-history-row__file {
   gap: 5px;
 }
 .receipt-history-row__file time { font-size: 0.75rem; font-weight: 500; line-height: 1.4; }
-.receipt-history-blocks {
+.receipt-history-album, .receipt-history-blocks {
   --receipt-tile-width: 200px;
-  --receipt-image-height: 210px;
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(min(100%, var(--receipt-tile-width)), 1fr));
   gap: 12px;
   min-width: 0;
-  align-items: stretch;
+  align-items: start;
 }
-.receipt-history-blocks--large { --receipt-tile-width: 290px; --receipt-image-height: 310px; }
-.receipt-history-blocks--small { --receipt-tile-width: 125px; --receipt-image-height: 140px; }
+.receipt-history-size--large, .receipt-history-blocks--large { --receipt-tile-width: 290px; }
+.receipt-history-size--small, .receipt-history-blocks--small { --receipt-tile-width: 125px; }
+.receipt-history-album > .receipt-ocr-history__date-header,
+.receipt-history-album > .receipt-ocr-history__request-group { grid-column: 1 / -1; }
+/* Single-image requests share an album row instead of leaving a wide empty group. */
+.receipt-history-album > .receipt-ocr-history__request-group--single,
+.receipt-history-album .receipt-ocr-history__request-group--single > .receipt-history-blocks { display: contents; }
+.receipt-history-album .receipt-ocr-history__request-group--single > .receipt-ocr-history__request-header,
+.receipt-history-album .receipt-ocr-history__request-group--single > .receipt-ocr-history__request-note { display: none; }
 .receipt-history-tile {
   display: flex;
   flex-direction: column;
   min-width: 0;
+  width: 100%;
+  max-width: var(--receipt-tile-width);
+  box-sizing: border-box;
   overflow: hidden;
   border: 1px solid var(--modal-border);
   background: var(--modal-surface);
@@ -109,7 +134,9 @@ html body .app-shell .receipt-ocr-history__item .receipt-history-row__file {
   position: relative;
   display: block;
   width: 100%;
-  height: var(--receipt-image-height);
+  height: auto;
+  aspect-ratio: 1 / 1;
+  box-sizing: border-box;
   overflow: hidden;
   background: var(--modal-surface-soft);
   border-bottom: 1px solid var(--modal-border);
@@ -172,29 +199,29 @@ html body .app-shell .receipt-ocr-modal__dialog--batch-progress {
 @media (max-width: 760px) {
   /* Keep room for result forms when the batch progress strip is present. */
   html body .app-shell .receipt-ocr-modal__dialog--batch-progress { gap: 10px !important; }
-  .receipt-ocr-modal__dialog--batch-progress .receipt-ocr-modal__header {
+  .receipt-ocr-modal__header {
     flex-direction: row !important;
     align-items: center !important;
     gap: 8px;
   }
-  .receipt-ocr-modal__dialog--batch-progress .receipt-ocr-modal__header > div { min-width: 0; }
-  html body .app-shell .receipt-ocr-modal__dialog--batch-progress .receipt-ocr-modal__header h2 {
+  .receipt-ocr-modal__header > div { min-width: 0; }
+  html body .app-shell .receipt-ocr-modal__header h2 {
     margin: 0;
     font-size: 20px !important;
   }
-  .receipt-ocr-modal__dialog--batch-progress .receipt-ocr-modal__eyebrow { font-size: 11px; margin: 0 0 4px; }
-  html body .app-shell .receipt-ocr-modal__dialog--batch-progress .receipt-ocr-modal__header > .button {
+  .receipt-ocr-modal__eyebrow { font-size: 11px; margin: 0 0 4px; }
+  html body .app-shell .receipt-ocr-modal__header > .button {
     width: auto !important;
     flex: 0 0 auto;
     min-height: 44px;
     padding: 8px 12px;
   }
-  html body .app-shell .receipt-ocr-modal__dialog--batch-progress .receipt-ocr-modal__nav {
+  html body .app-shell .receipt-ocr-modal__nav {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 6px;
   }
-  html body .app-shell .receipt-ocr-modal__dialog--batch-progress .receipt-ocr-modal__nav-button {
+  html body .app-shell .receipt-ocr-modal__nav-button {
     min-height: 44px;
     padding: 6px;
     white-space: normal;

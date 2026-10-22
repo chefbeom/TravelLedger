@@ -102,7 +102,7 @@ async function setup(page, { entryCount = 1, holdFourth = false, initialHistorie
   await page.getByRole('button', { name: '분석 모달 열기', exact: true }).click()
   const modal = page.getByRole('dialog', { name: '이미지 분석 및 검수', exact: true })
   if (!landing) await modal.getByRole('button', { name: '이미지 분석하기', exact: true }).click()
-  return { modal, requests, errors, reads, imageReads, releaseFourth, releaseRefresh, releaseInitialSummary,
+  return { modal, requests, histories, errors, reads, imageReads, releaseFourth, releaseRefresh, releaseInitialSummary,
     releaseRequest: number => requestGates.get(number)?.release(), releaseHistory: id => historyGates.get(id)?.release() }
 }
 
@@ -131,7 +131,7 @@ test('ten image requests show zero, incremental and full progress then refresh w
     for (const type of ['history', 'summary']) expect(reads.some(read => read.type === type && read.afterRequests === 10)).toBe(true)
     releaseRefresh()
     await expect(panel).toContainText('새로고침했습니다')
-    await expect(modal.locator('.receipt-ocr-review-badge')).toHaveText('10')
+    await expect(modal.locator('.receipt-ocr-review-badge')).toHaveCount(0)
     await expect(modal.locator('.receipt-ocr-history__item')).toHaveCount(8)
     await modal.getByRole('button', { name: '이미지 분석하기', exact: true }).click()
     await expect(modal.locator('.receipt-ocr-review-card')).toHaveCount(10)
@@ -358,6 +358,8 @@ test('history switches between timestamped lists and three image block sizes whi
       return imageBox.height <= box.height + 1 && imageBox.width <= box.width + 1 && getComputedStyle(image).objectFit === 'contain'
     })).toBe(true)
     heights.push((await thumbnail.boundingBox()).height)
+    const square = await thumbnail.boundingBox()
+    expect(Math.abs(square.width - square.height)).toBeLessThanOrEqual(1)
     for (const theme of ['default', 'toss']) {
       await page.evaluate(theme => document.documentElement.dataset.theme = theme, theme)
       const grid = modal.locator('.receipt-history-blocks')
@@ -400,6 +402,7 @@ test('image blocks handle missing or failed previews and preserve cancellation a
   await expect(broken.getByRole('img')).toHaveAttribute('aria-label', '이미지 미리보기 불가')
   const processing = modal.locator('[data-history-id="303"]')
   await expect(processing.locator('.receipt-history-tile__open')).toBeDisabled()
+  await expect(processing.locator('.receipt-history-tile__caption strong')).toHaveText('분석 중')
   await processing.getByRole('button', { name: '요청 취소', exact: true }).click()
   await expect(processing.locator('.receipt-history-tile__open')).toBeEnabled()
   await expect(processing).toContainText('취소됨')
@@ -437,7 +440,7 @@ test('landing reserves workspace and shows pending requests beyond the first his
   }
   await modal.getByRole('button', { name: '대기 결과 확인', exact: true }).click()
   await expect(modal.locator('.receipt-ocr-history__item')).toHaveCount(8)
-  await expect(modal.locator('.receipt-ocr-review-badge')).toHaveText('1')
+  await expect(modal.locator('.receipt-ocr-review-badge')).toHaveCount(0)
   await modal.locator('.receipt-ocr-history__pagination').getByRole('button', { name: '다음', exact: true }).click()
   await modal.locator('.receipt-ocr-history__item', { hasText: 'pending.png' }).getByRole('button', { name: '내용 보기', exact: true }).click()
   await modal.locator('.receipt-ocr-review-entry').last().getByRole('button', { name: '입력칸에 적용', exact: true }).click()
@@ -453,6 +456,79 @@ test('empty landing is full sized and its starting actions work without a badge'
   await modal.getByRole('button', { name: '이미지 분석 시작', exact: true }).click()
   await expect(modal.locator('input[type=file][multiple]')).toHaveCount(1)
   await expect(modal.getByRole('button', { name: '파일에서 선택', exact: true })).toBeVisible()
+  expect(errors).toEqual([])
+})
+
+test('visiting history clears unread badges persistently without approving results and new completions notify again', async ({ page }) => {
+  const result = { analysisStatus: 'COMPLETED', suggestedEntries: [{ title: '미승인 거래', amount: 15000, entryType: 'EXPENSE', entryDate: '2026-10-21' }] }
+  await page.addInitScript(() => localStorage.setItem('calen-household-receipt-seen:v1:999', JSON.stringify(['501', '502'])))
+  const { modal, histories, errors } = await setup(page, { landing: true, initialHistories: [
+    { id: 501, status: 'COMPLETED', fileName: 'first.png', result },
+    { id: 502, status: 'COMPLETED', fileName: 'second.png', result },
+    { id: 500, status: 'PROCESSING', fileName: 'slow.png' },
+  ] })
+  const badge = modal.locator('.receipt-ocr-review-badge')
+  await expect(badge).toHaveText('2')
+  await modal.getByRole('button', { name: '분석 내용 확인 및 불러오기', exact: true }).click()
+  await expect(badge).toHaveCount(0)
+  await modal.getByRole('button', { name: '이미지 분석하기', exact: true }).click()
+  await expect(badge).toHaveCount(0)
+  await modal.getByRole('button', { name: '닫기', exact: true }).click()
+  await page.getByRole('button', { name: '분석 모달 열기', exact: true }).click()
+  await expect(badge).toHaveCount(0)
+  // An older request finishing later must notify too (not just IDs above a watermark).
+  await modal.getByRole('button', { name: '닫기', exact: true }).click()
+  Object.assign(histories.find(history => history.id === 500), { status: 'COMPLETED', result })
+  await page.getByRole('button', { name: '분석 모달 열기', exact: true }).click()
+  await expect(badge).toHaveText('1')
+  await modal.getByRole('button', { name: '분석 내용 확인 및 불러오기', exact: true }).click()
+  await expect(badge).toHaveCount(0)
+  await page.reload()
+  await page.getByRole('button', { name: '달력 가계부', exact: true }).click()
+  await page.getByRole('button', { name: '분석 모달 열기', exact: true }).click()
+  await expect(badge).toHaveCount(0)
+  await expect(modal.locator('.receipt-ocr-welcome__pending')).toContainText('완료된 분석 3건')
+  expect(histories.every(history => !history.result.approvedEntryIndexes?.length)).toBe(true)
+  expect(errors).toEqual([])
+})
+
+test('album packs individual requests into square photo rows with a horizontal history toolbar', async ({ page }, testInfo) => {
+  const { modal, errors } = await setup(page, { landing: true, initialHistories: Array.from({ length: 5 }, (_, index) => ({
+    id: 601 + index, status: index === 4 ? 'PROCESSING' : 'COMPLETED', imageAvailable: true,
+    fileName: `album-${index}.png`, createdAt: '2026-10-21T12:34:56',
+    result: index === 4 ? undefined : { suggestedEntries: [{ title: `간단한 결제 ${index}`, amount: 15000 }] },
+  })) })
+  await modal.getByRole('button', { name: '분석 내용 확인 및 불러오기', exact: true }).click()
+  const toolbar = modal.locator('.receipt-history-view-toolbar')
+  expect((await toolbar.boundingBox()).height).toBeGreaterThanOrEqual(48)
+  expect(await toolbar.evaluate(element => {
+    const items = [element.querySelector('strong'), ...element.querySelectorAll('button')]
+    const center = item => { const box = item.getBoundingClientRect(); return box.y + box.height / 2 }
+    return items.every(item => Math.abs(center(item) - center(items[0])) < 2)
+  })).toBe(true)
+  await modal.getByRole('button', { name: '블록으로 보기', exact: true }).click()
+  await modal.getByRole('button', { name: '작게 보기', exact: true }).click()
+  expect((await toolbar.boundingBox()).height).toBeGreaterThanOrEqual(48)
+  expect(await toolbar.getByRole('button', { name: '작게 보기', exact: true }).evaluate(element => {
+    const box = element.getBoundingClientRect()
+    return element.contains(document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2))
+  })).toBe(true)
+  const thumbnails = modal.locator('.receipt-history-thumbnail')
+  await expect(thumbnails).toHaveCount(5)
+  const first = await thumbnails.nth(0).boundingBox(), second = await thumbnails.nth(1).boundingBox()
+  expect(Math.abs(first.y - second.y)).toBeLessThanOrEqual(1)
+  for (const thumbnail of await thumbnails.all()) {
+    const box = await thumbnail.boundingBox()
+    expect(Math.abs(box.width - box.height)).toBeLessThanOrEqual(1)
+  }
+  await expect(modal.locator('[data-history-id="601"] .receipt-history-tile__caption strong')).toHaveText('간단한 결제 0')
+  await expect(modal.locator('[data-history-id="605"] .receipt-history-tile__caption strong')).toHaveText('분석 중')
+  await expect(modal.locator('[data-history-id="601"] time')).toHaveText('12:34:56')
+  for (const theme of ['default', 'toss']) {
+    await page.evaluate(theme => document.documentElement.dataset.theme = theme, theme)
+    expect(await modal.evaluate(element => element.scrollWidth <= element.clientWidth + 1)).toBe(true)
+    await modal.screenshot({ path: testInfo.outputPath(`${theme}-square-album.png`) })
+  }
   expect(errors).toEqual([])
 })
 

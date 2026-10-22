@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { countPendingReceiptReviews, receiptReviewPage, selectReceiptAnalysisItems, summarizeReceiptBatch } from '../../src/lib/receiptReview.js'
+import { countPendingReceiptReviews, pendingReceiptReviewIds, unreadReceiptReviewIds, receiptReviewPage, selectReceiptAnalysisItems, summarizeReceiptBatch } from '../../src/lib/receiptReview.js'
 
 test('batch progress counts only settled requests and separates failure and cancellation', () => {
   const items = Array.from({ length: 10 }, () => ({ status: 'queued' }))
@@ -38,6 +38,18 @@ test('all six selected images remain in order as their statuses change', () => {
   assert.equal(selectReceiptAnalysisItems(items, ids).length, 6)
   assert.deepEqual(selectReceiptAnalysisItems([...items, { id: 'old', status: 'done' }, { id: 'history', fromHistory: true }], ids), items)
   assert.equal(selectReceiptAnalysisItems(items.filter(item => item.id !== ids[2]), ids).length, 5)
+})
+
+test('read notifications are independent of approval and track new completions by request ID', () => {
+  const requests = [{ analysisId: 90, entryCount: 1 }, { analysisId: 91, entryCount: 2 }]
+  const ids = pendingReceiptReviewIds(requests)
+  assert.deepEqual(ids, ['90', '91'])
+  assert.deepEqual(unreadReceiptReviewIds(ids, []), ids)
+  assert.deepEqual(unreadReceiptReviewIds(ids, ids), [])
+  assert.equal(countPendingReceiptReviews(requests), 2)
+  assert.deepEqual(unreadReceiptReviewIds([...ids, '92', '92'], ids), ['92'])
+  assert.deepEqual(unreadReceiptReviewIds(ids, [90]), ['91'])
+  assert.deepEqual(unreadReceiptReviewIds(ids, null), ids)
 })
 
 test('candidate pagination bounds forms but retains original indexes and editable references', () => {

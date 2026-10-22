@@ -2,7 +2,7 @@ import base from './playwright.config.js'
 
 export default {
   ...base,
-  testMatch: 'receipt-analysis.spec.js',
+  testMatch: ['receipt-analysis.spec.js', 'receipt-admin-concurrency.spec.js'],
   workers: 1,
   outputDir: './artifacts/receipt-analysis/results',
   reporter: [['list'], ['html', { outputFolder: './artifacts/receipt-analysis/report', open: 'never' }]],

@@ -1,5 +1,5 @@
 export const RECEIPT_MAX_CONCURRENCY = 20
-export const RECEIPT_DEFAULT_CONCURRENCY = 6
+export const RECEIPT_DEFAULT_CONCURRENCY = 3
 
 export function normalizeReceiptConcurrency(value) {
   const number = Number(value)

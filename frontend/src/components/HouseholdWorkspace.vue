@@ -41,6 +41,7 @@ import {
   fetchLedgerImageAnalysisHistories,
   fetchLedgerImageAnalysisHistory,
   fetchLedgerImageReviewSummary,
+  fetchLedgerImageConcurrency,
   markLedgerImageAnalysisEntryApproved,
   fetchLedgerAiAnalysisStatus,
   fetchLatestLedgerAiAnalysis,
@@ -531,7 +532,8 @@ const receiptOcr = reactive({
   isAnalyzing: false,
   pendingCount: 0,
   batchProgress: null,
-  concurrency: normalizeReceiptConcurrency(import.meta.env.VITE_LEDGER_IMAGE_CONCURRENCY),
+  concurrency: normalizeReceiptConcurrency(),
+  concurrencyError: '',
   batchItemIds: [],
   error: '',
   items: [],
@@ -3325,6 +3327,26 @@ function openReceiptOcrModal() {
   receiptOcr.historyDetailAnalysisId = ''
   clearReceiptOcrHistoryAutoRefresh()
   loadReceiptOcrReviewSummary()
+  loadReceiptOcrConcurrency().catch(() => {})
+}
+
+let receiptConcurrencyLoadSequence = 0
+async function loadReceiptOcrConcurrency() {
+  const sequence = ++receiptConcurrencyLoadSequence
+  try {
+    const settings = await fetchLedgerImageConcurrency({ cache: 'no-store' })
+    if (!Number.isInteger(settings?.maxConcurrent) || settings.maxConcurrent < 1 || settings.maxConcurrent > 20) {
+      throw new Error('서버의 동시 분석 수 설정을 확인할 수 없습니다.')
+    }
+    if (sequence === receiptConcurrencyLoadSequence) {
+      receiptOcr.concurrency = settings.maxConcurrent
+      receiptOcr.concurrencyError = ''
+    }
+    return settings.maxConcurrent
+  } catch (error) {
+    if (sequence === receiptConcurrencyLoadSequence) receiptOcr.concurrencyError = error.message || '동시 분석 수 설정을 불러오지 못했습니다.'
+    throw error
+  }
 }
 
 function loadReceiptOcrReviewSummary({ fresh = false } = {}) {
@@ -4134,35 +4156,46 @@ async function startSelectedReceiptOcrAnalysis(payload = {}) {
   })
   await executeReceiptOcrJobs(jobs)
 }
-function setReceiptOcrConcurrency(value) {
-  if (!receiptOcr.isAnalyzing) receiptOcr.concurrency = normalizeReceiptConcurrency(value)
-}
 async function executeReceiptOcrJobs(jobs, visibleItemIds) {
   const items = jobs.map(job => job.item)
-  items.forEach(item => {
+  jobs.forEach(({ item, options }) => {
+    // Keep the original request options even if policy lookup fails before upload.
+    item.analysisOptions = { ...options }
+    item.analysisPrompt = options.prompt
     item.status = 'queued'
     item.analysisStatus = 'PROCESSING'
     item.error = ''
   })
   const sequence = beginReceiptOcrBatch(items, visibleItemIds)
-  const concurrency = receiptOcr.concurrency
   syncReceiptOcrBusyState()
-  await runReceiptRequestQueue(jobs, concurrency, async ({ item, options }) => {
-    if (sequence !== receiptOcrBatchSequence || !isReceiptOcrItemActive(item) || item.status !== 'queued') return
-    try {
-      await analyzeReceiptFile(item.sourceFile, normalizeOcrDocumentType(item.documentType || receiptOcr.documentType), item,
-        options.prompt, options.useExistingEntryStyle, options.existingEntryStyleMode, options.referenceDate)
-    } catch (error) {
-      // Isolate unexpected client-side errors as well as normal HTTP failures.
-      if (isReceiptOcrItemActive(item)) {
-        item.status = 'error'
-        item.analysisStatus = 'FAILED'
-        item.error = error.message || '이미지 분석 요청에 실패했습니다.'
+  try {
+    // Refresh the administrator policy for every batch, including failed-only retries.
+    const concurrency = await loadReceiptOcrConcurrency()
+    await runReceiptRequestQueue(jobs, concurrency, async ({ item, options }) => {
+      if (sequence !== receiptOcrBatchSequence || !isReceiptOcrItemActive(item) || item.status !== 'queued') return
+      try {
+        await analyzeReceiptFile(item.sourceFile, normalizeOcrDocumentType(item.documentType || receiptOcr.documentType), item,
+          options.prompt, options.useExistingEntryStyle, options.existingEntryStyleMode, options.referenceDate)
+      } catch (error) {
+        // Isolate unexpected client-side errors as well as normal HTTP failures.
+        if (isReceiptOcrItemActive(item)) {
+          item.status = 'error'
+          item.analysisStatus = 'FAILED'
+          item.error = error.message || '이미지 분석 요청에 실패했습니다.'
+        }
+      } finally {
+        syncReceiptOcrBusyState()
       }
-    } finally {
-      syncReceiptOcrBusyState()
+    })
+  } catch (error) {
+    for (const item of items) {
+      if (item.status !== 'queued' || !isReceiptOcrItemActive(item)) continue
+      item.status = 'error'
+      item.analysisStatus = 'FAILED'
+      item.error = error.message || '관리자 동시 분석 수 설정을 확인하지 못해 요청을 시작하지 않았습니다.'
     }
-  })
+    syncReceiptOcrBusyState()
+  }
   await finishReceiptOcrBatch(sequence)
 }
 async function retryFailedReceiptOcrItems(payload = {}) {
@@ -5710,7 +5743,6 @@ async function activatePayment(paymentId) {
       @add-amount="addAmount"
       @select-receipt-files="selectReceiptOcrFiles"
       @start-receipt-analysis="startSelectedReceiptOcrAnalysis"
-      @set-receipt-concurrency="setReceiptOcrConcurrency"
       @retry-failed-receipt-analysis="retryFailedReceiptOcrItems"
       @analyze-receipt="analyzeReceiptImage"
       @update-receipt-item-prompt="updateReceiptOcrItemPrompt"

@@ -5,7 +5,8 @@ const image = { name: 'same-name.png', mimeType: 'image/png', buffer: Buffer.fro
 
 async function setup(page, { entryCount = 1, holdFourth = false, initialHistories = [], landing = false,
   holdRequests = [], failRequests = [], holdFinalRefresh = 0, failRefreshOnce = false, holdInitialSummary = false, brokenImages = [],
-  asyncResponses = false, holdHistoryIds = [], distinctResults = false } = {}) {
+  asyncResponses = false, holdHistoryIds = [], distinctResults = false, maxConcurrent = 6, failSettings = false, admin = false } = {}) {
+  const policy = { maxConcurrent, fail: failSettings }
   const requests = [], histories = [...initialHistories], errors = [], reads = [], imageReads = []
   const requestGates = new Map(holdRequests.map(number => {
     let release
@@ -52,7 +53,15 @@ async function setup(page, { entryCount = 1, holdFourth = false, initialHistorie
       return route.fulfill({ json: asyncResponses || number === 3 ? { analysisId: number, analysisStatus: 'PROCESSING' } : result })
     }
     let json = []
-    if (path === '/api/auth/me') json = { id: 2, loginId: 'fixture', displayName: '검증용 사용자', active: true }
+    if (path === '/api/auth/me') json = { id: 2, loginId: 'fixture', displayName: '검증용 사용자', active: true, admin }
+    else if (path.endsWith('/image-analysis/settings') || path === '/api/admin/ops-control/image-analysis') {
+      if (policy.fail) return route.fulfill({ status: 503, json: { message: '설정 조회 실패' } })
+      if (route.request().method() === 'PATCH') policy.maxConcurrent = route.request().postDataJSON().maxConcurrent
+      json = { maxConcurrent: policy.maxConcurrent, minAllowed: 1, maxAllowed: 20 }
+    }
+    else if (path === '/api/admin/access/status') json = { verified: true }
+    else if (path === '/api/admin/dashboard') json = { summary: {}, users: [], blockedIps: [], recentLoginLogs: [] }
+    else if (path === '/api/admin/ops-control') json = { ai: { candidateServers: [], featureConnections: {} }, dataServer: {} }
     else if (path === '/api/auth/csrf') json = { token: 'fixture-csrf' }
     else if (path.startsWith('/api/categories')) json = [{ id: 101, name: '식비', entryType: 'EXPENSE', active: true, details: [{ id: 102, name: '외식', active: true }] }]
     else if (path.startsWith('/api/payment-methods')) json = [{ id: 103, name: '검증용 카드', active: true }]
@@ -102,7 +111,7 @@ async function setup(page, { entryCount = 1, holdFourth = false, initialHistorie
   await page.getByRole('button', { name: '분석 모달 열기', exact: true }).click()
   const modal = page.getByRole('dialog', { name: '이미지 분석 및 검수', exact: true })
   if (!landing) await modal.getByRole('button', { name: '이미지 분석하기', exact: true }).click()
-  return { modal, requests, histories, errors, reads, imageReads, releaseFourth, releaseRefresh, releaseInitialSummary,
+  return { modal, requests, histories, policy, errors, reads, imageReads, releaseFourth, releaseRefresh, releaseInitialSummary,
     releaseRequest: number => requestGates.get(number)?.release(), releaseHistory: id => historyGates.get(id)?.release() }
 }
 
@@ -166,12 +175,12 @@ test('six jobs occupy their slots through async polling and a freed slot admits 
   try {
     const files = Array.from({ length: 8 }, (_, index) => ({ ...image, name: `photo-${index + 1}.png` }))
     await modal.locator('input[type=file][multiple]').setInputFiles(files)
-    await expect(modal.getByRole('combobox', { name: '동시 요청', exact: true })).toHaveValue('6')
+    await expect(modal.locator('.receipt-ocr-concurrency')).toContainText('최대 동시 분석 6건')
     await modal.getByRole('button', { name: '분석 요청하기', exact: true }).click()
     await expect.poll(() => requests.length).toBe(6)
     await expect(modal.locator('.receipt-ocr-review-card__status', { hasText: '분석 중' })).toHaveCount(6)
     await expect(modal.locator('.receipt-ocr-review-card__status', { hasText: '대기 중' })).toHaveCount(2)
-    await expect(modal.getByRole('combobox', { name: '동시 요청', exact: true })).toBeDisabled()
+    await expect(modal.locator('.receipt-ocr-concurrency select')).toHaveCount(0)
     releaseHistory(6) // Finish a later job before the first five jobs.
     await expect.poll(() => requests.length).toBe(7)
     await expect(modal.locator('.receipt-ocr-batch-progress')).toContainText('요청 처리 1 / 8건')
@@ -216,10 +225,10 @@ test('retrying failed files sends only those files with new ids and preserves su
   expect(errors).toEqual([])
 })
 
-test('a selected concurrency of two is respected even when more images are selected', async ({ page }) => {
-  const { modal, requests, errors, releaseRequest } = await setup(page, { holdRequests: [1, 2, 3, 4] })
+test('an administrator concurrency of two is respected even when more images are selected', async ({ page }) => {
+  const { modal, requests, errors, releaseRequest } = await setup(page, { holdRequests: [1, 2, 3, 4], maxConcurrent: 2 })
   try {
-    await modal.getByRole('combobox', { name: '동시 요청', exact: true }).selectOption('2')
+    await expect(modal.locator('.receipt-ocr-concurrency')).toContainText('최대 동시 분석 2건')
     await modal.locator('input[type=file][multiple]').setInputFiles([image, image, image, image])
     await modal.getByRole('button', { name: '분석 요청하기', exact: true }).click()
     await expect.poll(() => requests.length).toBe(2)
@@ -230,6 +239,51 @@ test('a selected concurrency of two is respected even when more images are selec
     expect(requests).toHaveLength(4)
     expect(errors).toEqual([])
   } finally { for (let id = 1; id <= 4; id++) releaseRequest(id) }
+})
+
+test('default three is server controlled and a changed administrator policy applies to the next batch', async ({ page }) => {
+  const { modal, requests, policy, errors, releaseRequest } = await setup(page, {
+    maxConcurrent: 3, holdRequests: [1, 2, 3, 4, 5, 6, 7, 8, 9],
+  })
+  try {
+    await expect(modal.locator('.receipt-ocr-concurrency')).toContainText('최대 동시 분석 3건')
+    await expect(modal.locator('.receipt-ocr-concurrency select')).toHaveCount(0)
+    await modal.locator('input[type=file][multiple]').setInputFiles(Array.from({ length: 6 }, () => image))
+    await modal.getByRole('button', { name: '분석 요청하기', exact: true }).click()
+    await expect.poll(() => requests.length).toBe(3)
+    await expect(modal.locator('.receipt-ocr-review-card__status', { hasText: '대기 중' })).toHaveCount(3)
+    releaseRequest(2)
+    await expect.poll(() => requests.length).toBe(4)
+    for (let id = 1; id <= 6; id++) releaseRequest(id)
+    await expect(modal.locator('.receipt-ocr-batch-progress')).toContainText('새로고침했습니다')
+    policy.maxConcurrent = 1
+    await modal.locator('input[type=file][multiple]').setInputFiles([image, image, image])
+    await modal.getByRole('button', { name: '분석 요청하기', exact: true }).click()
+    await expect.poll(() => requests.length).toBe(7)
+    await expect(modal.locator('.receipt-ocr-concurrency')).toContainText('최대 동시 분석 1건')
+    await expect(modal.locator('.receipt-ocr-review-card__status', { hasText: '대기 중' })).toHaveCount(2)
+    for (let id = 7; id <= 9; id++) releaseRequest(id)
+    await expect(modal.locator('.receipt-ocr-batch-progress')).toContainText('새로고침했습니다')
+    expect(errors).toEqual([])
+  } finally { for (let id = 1; id <= 9; id++) releaseRequest(id) }
+})
+
+test('a failed server policy prevents inference and retry preserves the original image prompt', async ({ page }) => {
+  const { modal, requests, policy, errors } = await setup(page, { maxConcurrent: 3, failSettings: true })
+  await expect(modal.getByRole('alert')).toContainText('설정 조회 실패')
+  await modal.locator('input[type=file][multiple]').setInputFiles([image, image])
+  const first = modal.locator('.receipt-ocr-review-card').first()
+  await first.getByRole('checkbox', { name: '이 이미지 요청사항', exact: true }).check()
+  await first.locator('textarea').fill('첫 이미지 전용 요청사항 유지')
+  await modal.getByRole('button', { name: '분석 요청하기', exact: true }).click()
+  await expect(modal.locator('.receipt-ocr-review-card__status', { hasText: '실패' })).toHaveCount(2)
+  expect(requests).toHaveLength(0)
+  policy.fail = false
+  await modal.getByRole('button', { name: '실패 건만 재시도 (2건)', exact: true }).click()
+  await expect(modal.locator('.receipt-ocr-batch-progress')).toContainText('새로고침했습니다')
+  expect(requests).toHaveLength(2)
+  expect(requests.some(request => request.includes('첫 이미지 전용 요청사항 유지'))).toBe(true)
+  expect(errors).toEqual([])
 })
 
 test('cancelling one active image aborts only its polling and leaves other results intact', async ({ page }) => {

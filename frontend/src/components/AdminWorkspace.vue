@@ -1,6 +1,7 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, reactive } from 'vue'
 import InviteAccessPanel from './InviteAccessPanel.vue'
+import AdminImageAnalysisConcurrency from './AdminImageAnalysisConcurrency.vue'
 import { buildThumbnailUrl } from '../lib/mediaPreview'
 import {
   archiveAdminSupportInquiry,
@@ -2085,7 +2086,10 @@ onBeforeUnmount(() => {
               </button>
             </div>
 
-            <section v-if="state.opsControlModalView === 'menu'" class="admin-ops-modal__empty">
+            <button type="button" class="button button--secondary" @click="selectOpsControlModalView('image-concurrency')">이미지 분석 동시 수 설정</button>
+
+            <AdminImageAnalysisConcurrency v-if="state.opsControlModalView === 'image-concurrency'" />
+            <section v-else-if="state.opsControlModalView === 'menu'" class="admin-ops-modal__empty">
               <strong>작업할 기능을 선택하세요.</strong>
             </section>
 

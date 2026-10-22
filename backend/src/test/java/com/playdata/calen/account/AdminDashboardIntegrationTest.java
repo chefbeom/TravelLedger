@@ -44,6 +44,26 @@ class AdminDashboardIntegrationTest {
     private ObjectMapper objectMapper;
 
     @Test
+    void adminChangesImageConcurrencyThroughTheRealApplicationContext() throws Exception {
+        MockHttpSession session = login("admin", "test1234", "12345678");
+        String path = "/api/admin/ops-control/image-analysis";
+        mockMvc.perform(get("/api/ledger/image-analysis/settings").session(session))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.maxConcurrent").value(3));
+        mockMvc.perform(patch(path).session(session).with(csrf()).contentType(MediaType.APPLICATION_JSON).content("{\"maxConcurrent\":4}"))
+                .andExpect(status().isForbidden());
+        verifyAdminAccess(session);
+        try {
+            mockMvc.perform(patch(path).session(session).with(csrf()).contentType(MediaType.APPLICATION_JSON).content("{\"maxConcurrent\":4}"))
+                    .andExpect(status().isOk()).andExpect(jsonPath("$.maxConcurrent").value(4));
+            mockMvc.perform(get("/api/ledger/image-analysis/settings").session(session))
+                    .andExpect(status().isOk()).andExpect(jsonPath("$.maxConcurrent").value(4));
+        } finally {
+            mockMvc.perform(patch(path).session(session).with(csrf()).contentType(MediaType.APPLICATION_JSON).content("{\"maxConcurrent\":3}"))
+                    .andExpect(status().isOk());
+        }
+    }
+
+    @Test
     void adminAdditionalAuthenticationRequiresSecondaryPinInsteadOfPredictableDateCode() throws Exception {
         MockHttpSession adminSession = login("admin", "test1234", "12345678");
         String legacyDateCode = String.valueOf(

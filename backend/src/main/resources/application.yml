@@ -181,7 +181,7 @@ app:
       read-timeout: ${LEDGER_OCR_READ_TIMEOUT:90s}
       max-file-size: ${LEDGER_OCR_MAX_FILE_SIZE:10MB}
       max-pending-per-user: ${LEDGER_OCR_MAX_PENDING_PER_USER:20}
-      workers: ${LEDGER_OCR_WORKERS:6}
+      workers: ${LEDGER_OCR_WORKERS:3}
       queue-capacity: ${LEDGER_OCR_QUEUE_CAPACITY:100}
     ai:
       enabled: ${APP_LEDGER_AI_ENABLED:true}

@@ -11,7 +11,6 @@ import ReceiptHistoryThumbnail from './ReceiptHistoryThumbnail.vue'
 import { pendingReceiptReviewIds, unreadReceiptReviewIds, receiptReviewPage, selectReceiptAnalysisItems } from '../lib/receiptReview'
 import { groupReceiptHistoryRequests } from '../lib/receiptHistoryGroups'
 import { formatReceiptHistoryRequestTime, normalizeReceiptHistoryView, receiptHistoryTileSummary } from '../lib/receiptHistoryView'
-import { RECEIPT_MAX_CONCURRENCY } from '../lib/receiptRequestQueue'
 
 const CALENDAR_VIEW_PREFERENCE_STORAGE_PREFIX = 'calen-household-calendar-view:v3'
 const LEGACY_CALENDAR_VIEW_PREFERENCE_STORAGE_PREFIX = 'calen-household-calendar-view:v2'
@@ -341,7 +340,6 @@ const emit = defineEmits([
   'update-receipt-item-prompt',
   'select-receipt-files',
   'start-receipt-analysis',
-  'set-receipt-concurrency',
   'retry-failed-receipt-analysis',
   'analyze-receipt',
   'update-receipt-review-entry',
@@ -5228,6 +5226,7 @@ defineExpose({
         />
 
         <section v-if="receiptOcrView === 'analyze'" class="receipt-ocr-workspace receipt-ocr-workspace--analyze">
+          <p v-if="receiptOcr?.concurrencyError" class="receipt-ocr-history__error" role="alert">{{ receiptOcr.concurrencyError }}</p>
           <div class="receipt-ocr-modal__toolbar receipt-ocr-modal__toolbar--analyze">
             <div class="receipt-ocr-modal__type-group" role="group" aria-label="이미지 유형">
               <span class="receipt-ocr-control-label">분석 유형</span>
@@ -5242,12 +5241,7 @@ defineExpose({
               </button>
             </div>
             <div class="receipt-ocr-modal__upload">
-              <label class="receipt-ocr-concurrency">
-                <span>동시 요청</span>
-                <select :value="receiptOcr?.concurrency || 6" :disabled="receiptOcr?.isAnalyzing" @change="emit('set-receipt-concurrency', $event.target.value)">
-                  <option v-for="count in RECEIPT_MAX_CONCURRENCY" :key="count" :value="count">{{ count }}건</option>
-                </select>
-              </label>
+              <span class="receipt-ocr-concurrency">최대 동시 분석 {{ receiptOcr?.concurrency || 3 }}건 · 관리자 설정</span>
               <span class="receipt-ocr-control-label receipt-ocr-control-label--upload">이미지 입력</span>
               <label class="receipt-ocr-toggle receipt-ocr-toggle--compact receipt-ocr-existing-style-toggle" title="기존 가계부 입력 형식을 참고합니다. 정확하지 않으면 끄세요.">
                 <input

@@ -736,6 +736,18 @@ export function fetchLedgerImageReviewSummary(options = {}) {
   return request('/ledger/image-analysis/history/review-summary', options)
 }
 
+export function fetchLedgerImageConcurrency(options = {}) {
+  return request('/ledger/image-analysis/settings', options)
+}
+
+export function fetchAdminImageConcurrency() {
+  return request('/admin/ops-control/image-analysis', { cache: 'no-store' })
+}
+
+export function updateAdminImageConcurrency(maxConcurrent) {
+  return request('/admin/ops-control/image-analysis', { method: 'PATCH', body: JSON.stringify({ maxConcurrent }) })
+}
+
 export function buildLedgerImageAnalysisImageUrl(historyId) {
   return `${API_BASE}/ledger/image-analysis/history/${encodeURIComponent(historyId)}/image`
 }

@@ -140,6 +140,9 @@ public class LedgerOcrService {
     @Autowired(required = false)
     private com.playdata.calen.common.jobs.WorkLeaseService workLeases;
 
+    @Autowired
+    private LedgerImageConcurrencyService imageConcurrency;
+
     @Transactional(propagation = org.springframework.transaction.annotation.Propagation.NOT_SUPPORTED)
     public LedgerOcrAnalyzeResponse startAnalyze(Long userId, MultipartFile file, String documentType, String clientRequestId, String prompt, boolean useExistingEntryStyle) {
         return startAnalyze(userId, file, documentType, clientRequestId, prompt, useExistingEntryStyle, null, null);
@@ -306,7 +309,7 @@ public class LedgerOcrService {
                 throw new com.playdata.calen.common.exception.ServiceUnavailableException("이미지 분석 작업이 다른 서버에서 처리 중입니다. 잠시 후 다시 조회해 주세요.");
             inferenceOwned = true;
             history = storeImageForHistory(owner.getId(), history, file);
-            ImageExtraction remoteResponse = imageExtraction.analyze(new MultipartLedgerImageContent(file), normalizedDocumentType, effectiveUserPrompt);
+            ImageExtraction remoteResponse = extractImage(file, normalizedDocumentType, effectiveUserPrompt);
             if (jobLease != null && !jobLease.isValid())
                 throw new com.playdata.calen.common.exception.ServiceUnavailableException("이미지 분석 작업을 복구 중입니다. 잠시 후 다시 조회해 주세요.");
             LedgerOcrAnalyzeResponse response = reviewImageExtraction(owner, history, remoteResponse,
@@ -421,7 +424,7 @@ public class LedgerOcrService {
         try {
             AppUser owner = appUserService.getRequiredUser(userId);
             MultipartFile file = loadImageAnalysisInput(history, temporaryImage);
-            ImageExtraction remoteResponse = imageExtraction.analyze(new MultipartLedgerImageContent(file), normalizedDocumentType, effectiveUserPrompt);
+            ImageExtraction remoteResponse = extractImage(file, normalizedDocumentType, effectiveUserPrompt);
             if (jobLease != null && !jobLease.isValid()) return;
             LedgerOcrAnalyzeResponse response = reviewImageExtraction(owner, history, remoteResponse,
                     normalizedDocumentType, effectiveUserPrompt);
@@ -433,6 +436,12 @@ public class LedgerOcrService {
             log.warn("Ledger image analysis failed: historyId={}, failureType={}", historyId, exception.getClass().getSimpleName());
             if (jobLease == null || jobLease.isValid()) failImageAnalysisRequest(history, exception);
         }
+    }
+
+    private ImageExtraction extractImage(MultipartFile file, String documentType, String prompt) {
+        // Unit-constructed legacy service instances have no Spring-injected runtime policy.
+        return imageConcurrency == null ? imageExtraction.analyze(new MultipartLedgerImageContent(file), documentType, prompt)
+                : imageConcurrency.execute(() -> imageExtraction.analyze(new MultipartLedgerImageContent(file), documentType, prompt));
     }
 
     private LedgerOcrAnalyzeResponse reviewImageExtraction(AppUser owner, LedgerImageAnalysisRequest history,

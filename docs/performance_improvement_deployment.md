@@ -37,7 +37,8 @@
 | `APP_LEDGER_AI_MAX_WAITING` | 20 | 제공자 앞에서 대기할 요청 수, 인스턴스별 |
 | `APP_LEDGER_AI_WAIT_TIMEOUT` | 30s | 로컬·공유 추론 슬롯을 기다릴 최대 시간 |
 | `APP_LEDGER_AI_WORKERS` / `APP_LEDGER_AI_QUEUE_CAPACITY` | 1 / 100 | 일반·엑셀 AI 실행 풀과 대기 큐, 인스턴스별 |
-| `LEDGER_OCR_WORKERS` / `LEDGER_OCR_QUEUE_CAPACITY` | 6 / 100 | 이미지 AI 실행 풀과 대기 큐, 인스턴스별. 로컬 단일 GPU는 워커 1로 재설정 |
+| `LEDGER_OCR_WORKERS` / `LEDGER_OCR_QUEUE_CAPACITY` | 3 / 100 | 이미지 AI 실행 풀의 초기값과 인스턴스별 대기 큐. 실행 중 워커 수는 관리자 동시 분석 설정을 따름 |
+| 관리자 이미지 동시 분석 수 | 3 | 모든 사용자가 공유하는 이미지 분석 한도. 관리자 화면에서 1~20건으로 저장. 로컬 단일 GPU는 1로 설정 |
 | `LEDGER_OCR_MAX_PENDING_PER_USER` | 20 | 이미지 AI 사용자별 접수 제한, 인스턴스별 |
 | `APP_HTTP_ASYNC_WORKERS` / `APP_HTTP_ASYNC_QUEUE_CAPACITY` | 8 / 64 | 파일 스트리밍 실행 풀과 대기 큐 |
 | `APP_HTTP_ASYNC_TIMEOUT_MILLIS` | 600000 | HTTP 비동기 응답 제한 시간, 밀리초 |

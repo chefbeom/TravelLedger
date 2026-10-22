@@ -2,7 +2,6 @@
 html body .app-shell .receipt-ocr-modal { z-index: 2400 !important; }
 .receipt-ocr-modal .receipt-ocr-modal__nav-button { gap: 8px; }
 .receipt-ocr-concurrency { display: flex; align-items: center; gap: 6px; font-size: 0.8rem; white-space: nowrap; }
-.receipt-ocr-concurrency select { min-height: 44px; min-width: 72px; }
 .receipt-ocr-retry-failed { justify-self: start; min-height: 44px; }
 html body .app-shell .receipt-ocr-modal__dialog {
   height: min(900px, calc(100dvh - 40px)) !important;

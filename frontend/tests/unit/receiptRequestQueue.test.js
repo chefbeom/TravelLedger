@@ -9,8 +9,8 @@ const deferred = () => {
 }
 const tick = () => new Promise(resolve => setImmediate(resolve))
 
-test('receipt concurrency defaults to six and is bounded to twenty', () => {
-  for (const value of [undefined, null, 0, -1, 'bad', Infinity]) assert.equal(normalizeReceiptConcurrency(value), 6)
+test('receipt concurrency defaults to three and is bounded to the administrator safety range', () => {
+  for (const value of [undefined, null, 0, -1, 'bad', Infinity]) assert.equal(normalizeReceiptConcurrency(value), 3)
   assert.equal(normalizeReceiptConcurrency('1'), 1)
   assert.equal(normalizeReceiptConcurrency(6.9), 6)
   assert.equal(normalizeReceiptConcurrency(100), 20)

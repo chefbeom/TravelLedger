@@ -4,11 +4,14 @@ import com.playdata.calen.account.dto.HouseholdAggregatePreferencesRequest;
 import com.playdata.calen.account.dto.HouseholdAggregatePreferencesResponse;
 import com.playdata.calen.account.dto.HouseholdGoalRequest;
 import com.playdata.calen.account.dto.HouseholdGoalResponse;
+import com.playdata.calen.account.dto.HouseholdPersonalizationRequest;
+import com.playdata.calen.account.dto.HouseholdPersonalizationResponse;
 import com.playdata.calen.account.dto.UserLayoutSettingRequest;
 import com.playdata.calen.account.dto.UserLayoutSettingResponse;
 import com.playdata.calen.account.security.AppUserPrincipal;
 import com.playdata.calen.account.service.HouseholdAggregatePreferenceService;
 import com.playdata.calen.account.service.HouseholdGoalService;
+import com.playdata.calen.account.service.HouseholdPersonalizationService;
 import com.playdata.calen.account.service.UserLayoutSettingService;
 import jakarta.validation.Valid;
 import java.util.List;
@@ -32,6 +35,20 @@ public class AccountPreferenceController {
     private final HouseholdGoalService householdGoalService;
     private final HouseholdAggregatePreferenceService householdAggregatePreferenceService;
     private final UserLayoutSettingService userLayoutSettingService;
+    private final HouseholdPersonalizationService householdPersonalizationService;
+
+    @GetMapping("/household-personalization")
+    public HouseholdPersonalizationResponse getHouseholdPersonalization(
+            @AuthenticationPrincipal AppUserPrincipal currentUser) {
+        return householdPersonalizationService.get(currentUser.userId());
+    }
+
+    @PutMapping("/household-personalization")
+    public HouseholdPersonalizationResponse saveHouseholdPersonalization(
+            @AuthenticationPrincipal AppUserPrincipal currentUser,
+            @RequestBody HouseholdPersonalizationRequest request) {
+        return householdPersonalizationService.save(currentUser.userId(), request);
+    }
 
     @GetMapping("/household-aggregates")
     public HouseholdAggregatePreferencesResponse getHouseholdAggregatePreferences(
@@ -45,7 +62,7 @@ public class AccountPreferenceController {
             @AuthenticationPrincipal AppUserPrincipal currentUser,
             @RequestBody HouseholdAggregatePreferencesRequest request
     ) {
-        return householdAggregatePreferenceService.savePreferences(currentUser.userId(), request);
+        return householdPersonalizationService.saveCompatibleWidgets(currentUser.userId(), request);
     }
 
 
@@ -95,6 +112,9 @@ public class AccountPreferenceController {
             @PathVariable String scope,
             @RequestBody UserLayoutSettingRequest request
     ) {
+        if ("household-calendar".equals(scope) || "household-calendar-view".equals(scope)) {
+            return householdPersonalizationService.saveCompatibleLayout(currentUser.userId(), scope, request);
+        }
         return userLayoutSettingService.saveLayoutSetting(currentUser.userId(), scope, request);
     }
 }

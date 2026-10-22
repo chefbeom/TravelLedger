@@ -143,11 +143,11 @@ test('ten image requests show zero, incremental and full progress then refresh w
   try {
     await modal.locator('input[type=file][multiple]').setInputFiles(Array.from({ length: 10 }, () => image))
     await modal.getByRole('button', { name: '분석 요청하기', exact: true }).click()
-    await expect.poll(() => requests.length).toBe(6)
+    await expect.poll(() => requests.length).toBe(5)
     await expect(progress).toHaveAttribute('max', '10')
     await expect(progress).toHaveAttribute('value', '0')
     releaseRequest(1)
-    await expect.poll(() => requests.length).toBe(7)
+    await expect.poll(() => requests.length).toBe(5)
     await expect(progress).toHaveAttribute('value', '1')
     await expect(panel).toContainText('완료 1건 · 실패 0건 · 취소 0건 · 남은 9건')
     await modal.screenshot({ path: testInfo.outputPath('incremental-progress.png') })
@@ -175,6 +175,47 @@ test('ten image requests show zero, incremental and full progress then refresh w
   } finally { for (let number = 1; number <= 10; number++) releaseRequest(number); releaseRefresh() }
 })
 
+test('twelve images send sequential 5/5/2 groups using the configured concurrency and refreshed policy', async ({ page }, testInfo) => {
+  const { modal, requests, histories, policy, errors, releaseRequest } = await setup(page, {
+    maxConcurrent: 3, holdRequests: Array.from({ length: 12 }, (_, index) => index + 1),
+  })
+  const panel = modal.locator('.receipt-ocr-batch-progress')
+  try {
+    await modal.locator('input[type=file][multiple]').setInputFiles(Array.from({ length: 12 }, (_, index) => ({ ...image, name: `split-${index + 1}.png` })))
+    await modal.getByRole('button', { name: '분석 요청하기', exact: true }).click()
+    await expect.poll(() => requests.length).toBe(3)
+    await expect(panel).toContainText('1 / 3묶음 · 이번 묶음 5건')
+    releaseRequest(2)
+    await expect.poll(() => requests.length).toBe(4)
+    releaseRequest(1)
+    await expect.poll(() => requests.length).toBe(5)
+    releaseRequest(4); releaseRequest(5)
+    await expect(panel).toContainText('완료 4건')
+    expect(requests).toHaveLength(5) // Request 3 is still held; the next group must wait.
+    policy.maxConcurrent = 2
+    releaseRequest(3)
+    await expect.poll(() => requests.length).toBe(7)
+    await expect(panel).toContainText('2 / 3묶음 · 이번 묶음 5건')
+    await expect(modal.locator('.receipt-ocr-review-card__status', { hasText: '분석 중' })).toHaveCount(2)
+    for (let id = 6; id <= 12; id++) releaseRequest(id)
+    await expect(panel).toContainText('새로고침했습니다')
+    expect(requests).toHaveLength(12)
+    expect(histories).toHaveLength(12)
+    await expect(modal.locator('.receipt-ocr-review-card')).toHaveCount(12)
+    const groups = new Map()
+    for (const body of requests) {
+      expect(body.match(/name="file";/g)).toHaveLength(1)
+      const meta = parseReceiptBatchRequestId(/name="clientRequestId"\r\n\r\n([^\r]+)/.exec(body)?.[1])
+      if (!groups.has(meta.key)) groups.set(meta.key, [])
+      groups.get(meta.key).push(meta)
+    }
+    expect([...groups.values()].map(group => group.length)).toEqual([5, 5, 2])
+    for (const group of groups.values()) expect(group.every(meta => meta.totalCount === group.length)).toBe(true)
+    await modal.screenshot({ path: testInfo.outputPath('split-5-5-2-requests.png') })
+    expect(errors).toEqual([])
+  } finally { for (let id = 1; id <= 12; id++) releaseRequest(id) }
+})
+
 test('failed batches still finish and automatically refresh their history', async ({ page }) => {
   const { modal, requests, reads, errors } = await setup(page, { failRequests: [1, 2] })
   await modal.locator('input[type=file][multiple]').setInputFiles([image, image])
@@ -189,21 +230,20 @@ test('failed batches still finish and automatically refresh their history', asyn
   expect(errors).toEqual([])
 })
 
-test('six jobs occupy their slots through async polling and a freed slot admits the next image', async ({ page }) => {
+test('five-request groups hold their slots through async polling and wait before starting the next group', async ({ page }) => {
   const { modal, requests, errors, releaseHistory } = await setup(page, { asyncResponses: true, holdHistoryIds: [1, 2, 3, 4, 5, 6, 7, 8], distinctResults: true })
   try {
     const files = Array.from({ length: 8 }, (_, index) => ({ ...image, name: `photo-${index + 1}.png` }))
     await modal.locator('input[type=file][multiple]').setInputFiles(files)
     await expect(modal.locator('.receipt-ocr-concurrency')).toContainText('최대 동시 분석 6건')
     await modal.getByRole('button', { name: '분석 요청하기', exact: true }).click()
-    await expect.poll(() => requests.length).toBe(6)
-    await expect(modal.locator('.receipt-ocr-review-card__status', { hasText: '분석 중' })).toHaveCount(6)
-    await expect(modal.locator('.receipt-ocr-review-card__status', { hasText: '대기 중' })).toHaveCount(2)
+    await expect.poll(() => requests.length).toBe(5)
+    await expect(modal.locator('.receipt-ocr-review-card__status', { hasText: '분석 중' })).toHaveCount(5)
+    await expect(modal.locator('.receipt-ocr-review-card__status', { hasText: '대기 중' })).toHaveCount(3)
     await expect(modal.locator('.receipt-ocr-concurrency select')).toHaveCount(0)
-    releaseHistory(6) // Finish a later job before the first five jobs.
-    await expect.poll(() => requests.length).toBe(7)
+    releaseHistory(5) // A free slot must not admit a job from the next five-request group.
     await expect(modal.locator('.receipt-ocr-batch-progress')).toContainText('요청 처리 1 / 8건')
-    expect(requests).toHaveLength(7)
+    expect(requests).toHaveLength(5)
     for (let id = 1; id <= 8; id++) releaseHistory(id)
     await expect(modal.locator('.receipt-ocr-batch-progress')).toContainText('새로고침했습니다')
     await expect(modal.locator('.receipt-ocr-review-card')).toHaveCount(8)
@@ -388,7 +428,7 @@ test('removing a queued image counts cancellation without changing the original 
   try {
     await modal.locator('input[type=file][multiple]').setInputFiles(Array.from({ length: 8 }, () => image))
     await modal.getByRole('button', { name: '분석 요청하기', exact: true }).click()
-    await expect.poll(() => requests.length).toBe(6)
+    await expect.poll(() => requests.length).toBe(5)
     await modal.locator('.receipt-ocr-review-card').nth(6).getByRole('button', { name: '제거', exact: true }).click()
     const panel = modal.locator('.receipt-ocr-batch-progress')
     await expect(panel).toContainText('요청 처리 1 / 8건')
@@ -669,7 +709,7 @@ test('six selected images remain visible after three complete and one fails', as
     await modal.locator('input[type=file][multiple]').setInputFiles(Array.from({ length: 6 }, () => image))
     await expect(modal.locator('.receipt-ocr-review-card')).toHaveCount(6)
     await modal.getByRole('button', { name: '분석 요청하기', exact: true }).click()
-    await expect.poll(() => requests.length).toBe(6)
+    await expect.poll(() => requests.length).toBe(5)
     await expect(modal.locator('.receipt-ocr-review-card')).toHaveCount(6)
     await expect(modal.locator('.receipt-ocr-batch-progress')).toContainText('3 / 6')
     for (const rerun of await modal.getByRole('button', { name: '재요청', exact: true }).all()) await expect(rerun).toBeDisabled()
@@ -681,8 +721,9 @@ test('six selected images remain visible after three complete and one fails', as
     await expect(modal.locator('.receipt-ocr-batch-progress')).toContainText('새로고침했습니다')
     for (const body of requests) expect(body.match(/name="file";/g)).toHaveLength(1)
     const batchInfo = requests.map(body => parseReceiptBatchRequestId(/name="clientRequestId"\r\n\r\n([^\r]+)/.exec(body)?.[1]))
-    expect(new Set(batchInfo.map(info => info.key)).size).toBe(1)
-    expect(batchInfo.map(info => info.position).sort((a, b) => a - b)).toEqual([1, 2, 3, 4, 5, 6])
+    expect(new Set(batchInfo.map(info => info.key)).size).toBe(2)
+    expect(batchInfo.map(info => info.position)).toEqual([1, 2, 3, 4, 5, 1])
+    expect(batchInfo.map(info => info.totalCount)).toEqual([5, 5, 5, 5, 5, 1])
     await modal.screenshot({ path: testInfo.outputPath('six-image-batch.png') })
     await modal.locator('input[type=file][multiple]').setInputFiles(image)
     await expect(modal.locator('.receipt-ocr-review-card')).toHaveCount(1)

@@ -49,7 +49,7 @@ public class HouseholdAggregatePreferenceService {
             HouseholdAggregatePreferencesRequest request
     ) {
         AppUser user = getRequiredActiveUser(userId);
-        List<StoredWidget> normalizedWidgets = normalizeWidgets(mapRequestWidgets(request), userId);
+        List<StoredWidget> normalizedWidgets = normalizeWidgets(mapRequestWidgets(request, readWidgets(user.getHouseholdAggregateSettingsJson())), userId);
         user.setHouseholdAggregateSettingsJson(writeWidgets(normalizedWidgets));
         return toResponse(normalizedWidgets);
     }
@@ -60,7 +60,7 @@ public class HouseholdAggregatePreferenceService {
                 .orElseThrow(() -> new NotFoundException("사용자 계정을 찾을 수 없습니다."));
     }
 
-    private List<StoredWidget> mapRequestWidgets(HouseholdAggregatePreferencesRequest request) {
+    private List<StoredWidget> mapRequestWidgets(HouseholdAggregatePreferencesRequest request, List<StoredWidget> existing) {
         if (request == null || request.widgets() == null || request.widgets().isEmpty()) {
             return List.of();
         }
@@ -69,9 +69,24 @@ public class HouseholdAggregatePreferenceService {
             throw new BadRequestException("사용자 설정 집계는 최대 6개까지 저장할 수 있습니다.");
         }
 
-        return request.widgets().stream()
-                .map(this::toStoredWidget)
-                .toList();
+        List<StoredWidget> result = new ArrayList<>();
+        for (int index = 0; index < request.widgets().size(); index++) {
+            var input = request.widgets().get(index);
+            var widget = toStoredWidget(input);
+            // Older clients do not know these optional fields; do not erase the new editor's metadata.
+            if (input != null && index < existing.size()) {
+                var previous = existing.get(index);
+                widget = new StoredWidget(widget.kind(), widget.period(), widget.paymentMethodId(), widget.amountType(),
+                        widget.monthlyExpenseTarget(), widget.singleExpenseLimit(), widget.showIncomeCumulative(),
+                        widget.showExpenseCumulative(), widget.comparePreviousPeriod(), widget.chartMaxAmount(),
+                        widget.layoutX(), widget.layoutY(), widget.layoutW(), widget.layoutH(), widget.layoutOrder(),
+                        widget.textSize(), widget.textColor(), input.title() == null ? previous.title() : input.title(),
+                        input.hidden() == null ? previous.hidden() : input.hidden(),
+                        input.displaySize() == null ? previous.displaySize() : input.displaySize());
+            }
+            result.add(widget);
+        }
+        return result;
     }
 
     private StoredWidget toStoredWidget(HouseholdAggregateWidgetRequest widget) {
@@ -96,7 +111,7 @@ public class HouseholdAggregatePreferenceService {
                 widget.layoutH(),
                 widget.layoutOrder(),
                 widget.textSize(),
-                widget.textColor()
+                widget.textColor(), widget.title(), widget.hidden(), widget.displaySize()
         );
     }
 
@@ -146,7 +161,7 @@ public class HouseholdAggregatePreferenceService {
                                 widget.layoutH(),
                                 widget.layoutOrder(),
                                 widget.textSize(),
-                                widget.textColor()
+                                widget.textColor(), widget.title(), widget.hidden(), widget.displaySize()
                         ))
                         .toList()
         );
@@ -255,7 +270,10 @@ public class HouseholdAggregatePreferenceService {
                     layoutH,
                     layoutOrder,
                     textSize,
-                    textColor
+                    textColor,
+                    requestedWidget.title() == null ? "" : requestedWidget.title().trim().substring(0, Math.min(80, requestedWidget.title().trim().length())),
+                    Boolean.TRUE.equals(requestedWidget.hidden()),
+                    normalizeAllowedValue(requestedWidget.displaySize(), Set.of("SMALL", "MEDIUM", "LARGE"), "MEDIUM")
             ));
         }
 
@@ -304,7 +322,7 @@ public class HouseholdAggregatePreferenceService {
                     height,
                     normalizeLayoutOrder(widget.layoutOrder(), index + 1),
                     widget.textSize(),
-                    widget.textColor()
+                    widget.textColor(), widget.title(), widget.hidden(), widget.displaySize()
             );
         }
 
@@ -404,7 +422,18 @@ public class HouseholdAggregatePreferenceService {
             Integer layoutH,
             Integer layoutOrder,
             String textSize,
-            String textColor
+            String textColor,
+            String title,
+            Boolean hidden,
+            String displaySize
     ) {
+        private StoredWidget(String kind, String period, Long paymentMethodId, String amountType, Long monthlyExpenseTarget,
+                Long singleExpenseLimit, Boolean showIncomeCumulative, Boolean showExpenseCumulative, Boolean comparePreviousPeriod,
+                Long chartMaxAmount, Integer layoutX, Integer layoutY, Integer layoutW, Integer layoutH, Integer layoutOrder,
+                String textSize, String textColor) {
+            this(kind, period, paymentMethodId, amountType, monthlyExpenseTarget, singleExpenseLimit, showIncomeCumulative,
+                    showExpenseCumulative, comparePreviousPeriod, chartMaxAmount, layoutX, layoutY, layoutW, layoutH, layoutOrder,
+                    textSize, textColor, "", false, "MEDIUM");
+        }
     }
 }

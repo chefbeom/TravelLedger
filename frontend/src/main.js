@@ -3,6 +3,7 @@ import { createPinia } from 'pinia'
 import './style.css'
 import './styles/mobileUsability.css'
 import './styles/receiptReview.css'
+import './styles/calendarPersonalization.css'
 import App from './App.vue'
 
 createApp(App).use(createPinia()).mount('#app')

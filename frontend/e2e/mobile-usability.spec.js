@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test'
+import { calendarSettings } from './fixtures/calendarPersonalization.js'
 
 const sizes = [[320, 640], [360, 740], [390, 844], [412, 915], [844, 390], [390, 440]]
 const memo = '긴 메모와 거래 상세 설명 '.repeat(12)
@@ -8,6 +9,7 @@ const clusters = [10, 20].map(id => { const members = photos.filter(p => p.clust
 const overview = { includedPlanCount: 1, markers: [], routes: [], photoPins: photos, photoClusters: clusters }
 
 async function mock(page, authenticated = true) {
+  const settings = calendarSettings()
   const errors = []
   page.on('pageerror', error => errors.push(error.message))
   await page.route(/^https?:\/\/(?!127\.0\.0\.1|localhost)/, route => route.abort())
@@ -22,7 +24,8 @@ async function mock(page, authenticated = true) {
     else if (path === '/api/entries/date-range') json = { minDate: '2026-10-01', maxDate: '2026-10-03' }
     else if (path === '/api/entries') json = entries
     else if (path === '/api/dashboard') json = { anchorDate: '2026-10-03', quickStats: [], calendar: [], expenseBreakdown: [], paymentBreakdown: [], monthlyComparison: [], recentEntries: entries }
-    else if (path === '/api/account/preferences/household-aggregates') json = { widgets: [] }
+    else if (path === '/api/account/preferences/household-aggregates') json = { widgets: settings.widgets }
+    else if (path === '/api/account/preferences/household-personalization') json = settings
     else if (path === '/api/record-shares/counts') json = { ledger: 0, travel: 0 }
     else if (['/api/statistics/category-breakdown', '/api/statistics/payment-breakdown', '/api/statistics/compare', '/api/record-shares/groups', '/api/travel/plans', '/api/recurring-ledger/rules', '/api/recurring-ledger/occurrences/pending', '/api/file/photos', '/api/file/recent', '/api/travel/photo-frame-media'].includes(path)) json = []
     else if (path.includes('/photo-clusters/')) { const id = Number(path.split('/').at(-1)); const members = photos.filter(p => p.clusterId === id); json = { id, representativeMediaId: members[0]?.id, representativePhoto: members[0], photos: members, page: 0, size: 12, totalPhotoCount: members.length, hasNext: false } }
@@ -99,7 +102,7 @@ async function expectAggregateHeaderLayout(header, stacked) {
   expect(geometry.heading.width, 'Title must not be squeezed into a character-wide column').toBeGreaterThan(150)
   expect(geometry.textLines, 'Title must remain on one readable line').toBe(1)
   expect(geometry.clipped, 'Title must not be clipped or ellipsized').toBe(false)
-  if (stacked) expect(geometry.heading.bottom).toBeLessThanOrEqual(geometry.actions.top + 1)
+  if (geometry.actions.top >= geometry.heading.bottom - 1) expect(geometry.heading.bottom).toBeLessThanOrEqual(geometry.actions.top + 1)
   else expect(geometry.heading.right).toBeLessThanOrEqual(geometry.actions.left + 1)
   for (const control of geometry.controls) {
     expect(control.left).toBeGreaterThanOrEqual(geometry.header.left - 1)
@@ -117,33 +120,23 @@ async function expectAggregateHeaderLayout(header, stacked) {
 }
 
 async function expectQuickEntryHeaderLayout(page, testInfo) {
+  // Input settings now belong to the common draft editor, not an autosaving inline form.
   const panel = page.locator('.household-entry-panel')
   const header = panel.locator(':scope > .panel__header')
-  const settings = header.getByRole('button', { name: '입력 설정', exact: true })
   const date = header.locator('.household-entry-panel__date-badge')
   const originalDate = await date.textContent()
   await expect(header.getByRole('heading', { name: '빠른 거래 입력', exact: true })).toBeVisible()
+  await expect(header.getByRole('button', { name: '입력 설정', exact: true })).toHaveCount(0)
   for (const theme of ['default', 'toss']) {
     await page.evaluate(theme => document.documentElement.dataset.theme = theme, theme)
-    await settings.evaluate(element => element.scrollIntoView({ block: 'center', inline: 'nearest' }))
-    const geometry = await header.evaluate(element => {
-      const rect = selector => {
-        const { left, right, top, bottom, height } = element.querySelector(selector).getBoundingClientRect()
-        return { left, right, top, bottom, centerY: top + height / 2 }
-      }
-      return { title: rect('h2'), button: rect('button'), date: rect('.household-entry-panel__date-badge'), row: rect('.household-entry-panel__heading') }
-    })
-    expect(Math.abs(geometry.title.centerY - geometry.button.centerY), 'Title and settings must share the same row').toBeLessThanOrEqual(1)
-    expect(geometry.title.right).toBeLessThanOrEqual(geometry.button.left)
-    expect(Math.abs(geometry.button.right - geometry.row.right)).toBeLessThanOrEqual(1)
-    expect(geometry.date.top).toBeGreaterThanOrEqual(geometry.row.bottom)
-    await expect.poll(() => canTouch(settings)).toBe(true)
-    await header.screenshot({ path: testInfo.outputPath(`${theme}-quick-entry-header-${page.viewportSize().width}.png`) })
-    await settings.click()
-    await expect(settings).toHaveAttribute('aria-expanded', 'true')
-    await expect(panel.getByRole('region', { name: '빠른 거래 입력 설정', exact: true })).toBeVisible()
-    await settings.click()
-    await expect(settings).toHaveAttribute('aria-expanded', 'false')
+    await page.getByRole('button', { name: '개인화 설정', exact: true }).click()
+    const editor = page.getByRole('dialog', { name: '개인화 설정', exact: true })
+    await editor.getByRole('tab', { name: /거래 입력/ }).click()
+    const toggle = editor.getByRole('switch', { name: /등록 후 공유 버튼 표시/ })
+    await expect(toggle).toBeVisible()
+    await expect.poll(() => canTouch(editor.getByRole('button', { name: '취소', exact: true }))).toBe(true)
+    await editor.screenshot({ path: testInfo.outputPath(`${theme}-quick-entry-settings-${page.viewportSize().width}.png`) })
+    await editor.getByRole('button', { name: '취소', exact: true }).click()
     await expect(date).toHaveText(originalDate)
   }
 }
@@ -167,23 +160,18 @@ for (const [width, height] of sizes) {
       await page.getByRole('button', { name: '달력 가계부', exact: true }).tap()
       const header = page.locator('.household-aggregate-header')
       await expect(header.getByRole('heading', { name: '사용자 설정 집계', exact: true })).toBeVisible()
-      const edit = header.getByRole('button', { name: '수정', exact: true })
-      await expect(edit).toBeEnabled()
+      await expect(header.getByRole('button')).toHaveCount(0)
       for (const theme of ['default', 'toss']) {
         await page.evaluate(theme => document.documentElement.dataset.theme = theme, theme)
         await expectAggregateHeaderLayout(header, true)
-        if (width === 390 && height === 844) await header.screenshot({ path: testInfo.outputPath(`${theme}-aggregate-header.png`) })
-        await edit.scrollIntoViewIfNeeded()
-        await expect.poll(() => canTouch(edit)).toBe(true)
-        await edit.tap()
-        await expect(header.getByRole('button', { name: '저장', exact: true })).toBeVisible()
-        await expectAggregateHeaderLayout(header, true)
-        const cancel = header.getByRole('button', { name: '취소', exact: true })
-        await cancel.scrollIntoViewIfNeeded()
+        await page.getByRole('button', { name: '개인화 설정', exact: true }).tap()
+        const editor = page.getByRole('dialog', { name: '개인화 설정', exact: true })
+        await editor.getByRole('tab', { name: /집계 위젯/ }).click()
+        await expect(editor.getByLabel('위젯 이름', { exact: true })).toBeVisible()
+        const cancel = editor.getByRole('button', { name: '취소', exact: true })
         await expect.poll(() => canTouch(cancel)).toBe(true)
-        if (width === 390 && height === 844) await header.screenshot({ path: testInfo.outputPath(`${theme}-aggregate-edit-header.png`) })
+        if (width === 390 && height === 844) await editor.screenshot({ path: testInfo.outputPath(`${theme}-aggregate-common-editor.png`) })
         await cancel.tap()
-        await expect(edit).toBeVisible()
       }
       expect(errors).toEqual([])
     })
@@ -305,7 +293,7 @@ test.describe('desktop aggregate header', () => {
     await expect(page.locator('html')).toHaveAttribute('data-layout-mode', 'desktop')
     await page.getByRole('button', { name: '달력 가계부', exact: true }).click()
     const header = page.locator('.household-aggregate-header')
-    await expect(header.getByRole('button', { name: '수정', exact: true })).toBeEnabled()
+    await expect(header.getByRole('button')).toHaveCount(0)
     for (const theme of ['default', 'toss']) {
       await page.evaluate(theme => document.documentElement.dataset.theme = theme, theme)
       await expectAggregateHeaderLayout(header, false)

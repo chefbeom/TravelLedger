@@ -1,0 +1,194 @@
+package com.playdata.calen.account;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.playdata.calen.account.domain.AppUser;
+import com.playdata.calen.account.repository.AppUserRepository;
+import com.playdata.calen.account.security.AppUserPrincipal;
+import java.util.List;
+import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.http.MediaType;
+import org.springframework.test.web.servlet.MockMvc;
+
+@SpringBootTest(properties = {
+        "app.seed.enabled=false",
+        "spring.datasource.url=jdbc:h2:mem:personalization-test;MODE=MySQL;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE",
+        "spring.datasource.driver-class-name=org.h2.Driver",
+        "spring.datasource.username=sa", "spring.datasource.password="
+})
+@AutoConfigureMockMvc
+class HouseholdPersonalizationIntegrationTest {
+    private static final String PATH = "/api/account/preferences/household-personalization";
+    @Autowired MockMvc mvc;
+    @Autowired ObjectMapper mapper;
+    @Autowired AppUserRepository users;
+    AppUser owner;
+
+    @BeforeEach void createOwner() { owner = createUser(); }
+
+    @Test void readsLegacySettingsWithoutChangingThem() throws Exception {
+        owner.setHouseholdAggregateSettingsJson("[{\"kind\":\"TOTAL\",\"period\":\"YEAR\",\"amountType\":\"INCOME\"}]");
+        users.saveAndFlush(owner);
+        JsonNode initial = read(owner);
+        assertThat(initial.path("widgets").size()).isEqualTo(6);
+        assertThat(initial.at("/widgets/0/period").asText()).isEqualTo("YEAR");
+        assertThat(initial.at("/widgets/0/title").asText()).isEmpty();
+        assertThat(initial.at("/widgets/0/hidden").asBoolean()).isFalse();
+        assertThat(read(owner)).isEqualTo(initial);
+        assertThat(users.findById(owner.getId()).orElseThrow().getHouseholdAggregateSettingsJson()).isEqualTo(owner.getHouseholdAggregateSettingsJson());
+    }
+
+    @Test void savesOneBundleAndKeepsExistingApisCompatible() throws Exception {
+        ObjectNode draft = draft(owner);
+        ((ObjectNode) draft.at("/widgets/0")).put("title", "내 월간 합계").put("hidden", true).put("displaySize", "LARGE");
+        JsonNode saved = write(owner, draft, 200);
+        assertThat(saved.at("/widgets/0/title").asText()).isEqualTo("내 월간 합계");
+        assertThat(saved.at("/widgets/0/hidden").asBoolean()).isTrue();
+        assertThat(saved.at("/widgets/0/displaySize").asText()).isEqualTo("LARGE");
+        assertThat(saved.path("layout")).isEqualTo(draft.path("layout"));
+        assertThat(saved.path("preferences")).isEqualTo(draft.path("preferences"));
+        assertThat(read(owner)).isEqualTo(saved);
+        JsonNode old = mapper.readTree(mvc.perform(get("/api/account/preferences/household-aggregates").with(user(AppUserPrincipal.from(owner))))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
+        assertThat(old.path("widgets")).isEqualTo(saved.path("widgets"));
+    }
+
+    @Test void olderClientDoesNotEraseNewWidgetMetadata() throws Exception {
+        ObjectNode draft = draft(owner);
+        ((ObjectNode) draft.at("/widgets/0")).put("title", "사용자 제목").put("hidden", true).put("displaySize", "SMALL");
+        JsonNode saved = write(owner, draft, 200);
+        var widgets = saved.path("widgets").deepCopy();
+        for (var widget : widgets) ((ObjectNode) widget).remove(List.of("title", "hidden", "displaySize"));
+        var legacy = mapper.createObjectNode().set("widgets", widgets);
+        mvc.perform(put("/api/account/preferences/household-aggregates").with(user(AppUserPrincipal.from(owner))).with(csrf())
+                .contentType(MediaType.APPLICATION_JSON).content(mapper.writeValueAsBytes(legacy))).andExpect(status().isOk());
+        assertThat(read(owner).at("/widgets/0/title").asText()).isEqualTo("사용자 제목");
+        assertThat(read(owner).at("/widgets/0/hidden").asBoolean()).isTrue();
+        assertThat(read(owner).at("/widgets/0/displaySize").asText()).isEqualTo("SMALL");
+    }
+
+    @Test void staleRevisionCannotOverwriteAnotherWindow() throws Exception {
+        ObjectNode first = draft(owner), stale = first.deepCopy();
+        ((ObjectNode) first.path("preferences")).put("highlightMode", "income");
+        JsonNode committed = write(owner, first, 200);
+        ((ObjectNode) stale.path("preferences")).put("highlightMode", "expense");
+        write(owner, stale, 409);
+        assertThat(read(owner)).isEqualTo(committed);
+    }
+
+    @Test void legacyViewWritesPreserveNewDefaultsAndInvalidateTheModernRevision() throws Exception {
+        ObjectNode draft = draft(owner);
+        ((ObjectNode) draft.path("preferences")).put("quickEntryPanelEnabled", false).put("defaultWeekMode", "current");
+        JsonNode committed = write(owner, draft, 200);
+        ObjectNode legacy = ((ObjectNode) committed.path("preferences")).deepCopy();
+        legacy.remove(List.of("quickEntryPanelEnabled", "defaultWeekMode"));
+        legacy.put("highlightMode", "income");
+        ObjectNode request = mapper.createObjectNode().put("version", 2);
+        request.set("payload", legacy);
+        mvc.perform(put("/api/account/preferences/layout-settings/household-calendar-view")
+                        .with(user(AppUserPrincipal.from(owner))).with(csrf()).contentType(MediaType.APPLICATION_JSON)
+                        .content(mapper.writeValueAsBytes(request))).andExpect(status().isOk());
+        JsonNode current = read(owner);
+        assertThat(current.at("/preferences/quickEntryPanelEnabled").asBoolean()).isFalse();
+        assertThat(current.at("/preferences/defaultWeekMode").asText()).isEqualTo("current");
+        assertThat(current.at("/preferences/highlightMode").asText()).isEqualTo("income");
+        ObjectNode stale = (ObjectNode) committed;
+        write(owner, stale, 409);
+    }
+
+    @Test void settingsAreScopedToAuthenticatedOwner() throws Exception {
+        AppUser other = createUser();
+        JsonNode otherBefore = read(other);
+        ObjectNode wrongOwnerRevision = draft(owner);
+        wrongOwnerRevision.put("revision", otherBefore.path("revision").asText());
+        write(owner, wrongOwnerRevision, 409);
+        write(owner, draft(owner), 200);
+        assertThat(read(other)).isEqualTo(otherBefore);
+    }
+
+    @Test void invalidSettingsReturn400AndLeaveAllStoresUnchanged() throws Exception {
+        JsonNode before = read(owner);
+        ObjectNode invalid = draft(owner);
+        ((ObjectNode) invalid.at("/widgets/0")).putNull("kind");
+        write(owner, invalid, 400);
+        invalid = draft(owner);
+        ((ObjectNode) invalid.at("/layout/0")).put("w", 100);
+        write(owner, invalid, 400);
+        invalid = draft(owner);
+        ((ObjectNode) invalid.path("preferences")).put("receiptOcrPanelEnabled", "true");
+        write(owner, invalid, 400);
+        invalid = draft(owner);
+        ((ObjectNode) invalid.at("/widgets/0")).put("period", "INVALID");
+        write(owner, invalid, 400);
+        invalid = draft(owner);
+        ((ObjectNode) invalid.at("/widgets/0")).put("layoutW", -1);
+        write(owner, invalid, 400);
+        assertThat(read(owner)).isEqualTo(before);
+    }
+
+    @Test void downstreamSaveFailureRollsBackAggregateAndLayoutWritesTogether() throws Exception {
+        JsonNode before = read(owner);
+        ObjectNode invalid = draft(owner);
+        ((ObjectNode) invalid.at("/widgets/0")).put("title", "저장되면 안 됨");
+        ((ObjectNode) invalid.at("/layout/0")).put("oversized", "x".repeat(200_001));
+        write(owner, invalid, 400);
+        assertThat(read(owner)).isEqualTo(before);
+    }
+
+    @Test void concurrentEditorsOnlyCommitOneRevision() throws Exception {
+        ObjectNode first = draft(owner), second = first.deepCopy();
+        ((ObjectNode) first.path("preferences")).put("highlightMode", "income");
+        ((ObjectNode) second.path("preferences")).put("highlightMode", "expense");
+        var ready = new CountDownLatch(2);
+        var start = new CountDownLatch(1);
+        var pool = Executors.newFixedThreadPool(2);
+        try {
+            var firstResult = pool.submit(() -> { ready.countDown(); start.await(); return putStatus(owner, first); });
+            var secondResult = pool.submit(() -> { ready.countDown(); start.await(); return putStatus(owner, second); });
+            assertThat(ready.await(5, TimeUnit.SECONDS)).isTrue();
+            start.countDown();
+            assertThat(List.of(firstResult.get(15, TimeUnit.SECONDS), secondResult.get(15, TimeUnit.SECONDS))).containsExactlyInAnyOrder(200, 409);
+        } finally { start.countDown(); pool.shutdownNow(); }
+    }
+
+    private AppUser createUser() {
+        AppUser user = new AppUser();
+        user.setLoginId("personal-" + UUID.randomUUID()); user.setDisplayName("개인화 검증"); user.setPasswordHash("test-only");
+        return users.saveAndFlush(user);
+    }
+    private JsonNode read(AppUser user) throws Exception {
+        return mapper.readTree(mvc.perform(get(PATH).with(user(AppUserPrincipal.from(user))))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
+    }
+    private ObjectNode draft(AppUser user) throws Exception {
+        ObjectNode draft = (ObjectNode) read(user);
+        draft.set("preferences", mapper.readTree("{\"scalePreset\":\"fit\",\"highlightMode\":\"net\",\"defaultWeekMode\":\"month\",\"aggregatePanelEnabled\":true,\"quickEntryPanelEnabled\":true,\"receiptOcrPanelEnabled\":true,\"transactionSheetViewMode\":\"modal\",\"shareAfterSaveEnabled\":false}"));
+        draft.set("layout", mapper.readTree("[{\"id\":\"aggregate\",\"x\":0,\"y\":12,\"w\":9,\"h\":2},{\"id\":\"calendar\",\"x\":0,\"y\":0,\"w\":6,\"h\":6},{\"id\":\"quick-entry\",\"x\":6,\"y\":0,\"w\":3,\"h\":6},{\"id\":\"sheet\",\"x\":0,\"y\":15,\"w\":9,\"h\":3}]"));
+        return draft;
+    }
+    private JsonNode write(AppUser user, ObjectNode draft, int expected) throws Exception {
+        var result = mvc.perform(put(PATH).with(user(AppUserPrincipal.from(user))).with(csrf()).contentType(MediaType.APPLICATION_JSON).content(mapper.writeValueAsBytes(draft)))
+                .andExpect(status().is(expected)).andReturn();
+        return mapper.readTree(result.getResponse().getContentAsString());
+    }
+    private int putStatus(AppUser user, ObjectNode draft) throws Exception {
+        return mvc.perform(put(PATH).with(user(AppUserPrincipal.from(user))).with(csrf()).contentType(MediaType.APPLICATION_JSON).content(mapper.writeValueAsBytes(draft)))
+                .andReturn().getResponse().getStatus();
+    }
+}

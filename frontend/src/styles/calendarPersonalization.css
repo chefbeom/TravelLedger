@@ -1,0 +1,176 @@
+/* Personalization uses one editor; result cards never contain their own forms. */
+html body .app-shell.app-shell .calendar-overview-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; padding: 16px 18px; border-radius: 14px; background: var(--surface-panel); border: 1px solid var(--line); }
+html body .app-shell.app-shell .calendar-overview-toolbar > div { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; min-width: 0; }
+html body .app-shell.app-shell .calendar-overview-toolbar__settings { margin-left: auto; }
+html body .app-shell.app-shell .calendar-overview-toolbar select { width: auto; min-width: 0; min-height: 40px; padding: 7px 25px 7px 10px; }
+html body .app-shell.app-shell .calendar-overview-toolbar .button { min-height: 40px; padding: 7px 12px; white-space: nowrap; }
+html body .app-shell.app-shell .calendar-overview-toolbar__date > .button:first-child, html body .app-shell.app-shell .calendar-overview-toolbar__date > .button:nth-of-type(2) { font-size: 22px; padding: 2px 12px; }
+html body .app-shell.app-shell .calendar-draft-toolbar { position: sticky; top: 8px; z-index: 25; display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 14px 18px; background: var(--surface-panel); border: 2px solid var(--brand-readable-strong); border-radius: 12px; box-shadow: var(--shadow); }
+html body .app-shell.app-shell .calendar-draft-toolbar > div { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+html body .app-shell.app-shell .calendar-draft-toolbar > div:first-child { flex: 1; }
+html body .app-shell.app-shell .calendar-draft-toolbar span { font-size: 12px; color: var(--text-soft); }
+html body .app-shell.app-shell .calendar-dashboard { position: relative; min-width: 0; }
+html body .app-shell.app-shell .calendar-dashboard-grid:not(.grid-stack) { display: grid; grid-template-columns: repeat(9, minmax(0, 1fr)); grid-auto-rows: minmax(0, auto); gap: 16px; align-items: start; min-width: 0; }
+html body .app-shell.app-shell .calendar-dashboard-item, html body .app-shell.app-shell .calendar-dashboard-content, html body .app-shell.app-shell .calendar-dashboard-panel { min-width: 0; width: 100%; height: auto; max-height: none; }
+/* GridStack leaves inline dimensions after destroy(false). They must never size the read-only grid. */
+html body .app-shell.app-shell .calendar-dashboard .calendar-dashboard-item { width: 100% !important; height: auto !important; top: auto !important; left: auto !important; }
+html body .app-shell.app-shell .calendar-dashboard-panel { container-type: inline-size; }
+html body .app-shell.app-shell .calendar-dashboard .calendar-dashboard-panel > .panel { min-width: 0; height: auto; max-height: none; overflow: visible; border-radius: 14px; }
+html body .app-shell.app-shell .calendar-dashboard .calendar-dashboard-panel > .household-calendar-panel { container-type: inline-size !important; height: auto !important; }
+html body .app-shell.app-shell .calendar-dashboard .calendar-dashboard-panel > .household-aggregate-panel { display: block; container-type: inline-size; height: auto !important; max-height: none !important; overflow: visible !important; padding: 18px; }
+html body .app-shell.app-shell .calendar-dashboard .household-aggregate-header { margin-bottom: 14px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; }
+html body .app-shell.app-shell .calendar-dashboard .household-aggregate-header h2 { min-width: 160px !important; font-size: 18px !important; line-height: 1.4; white-space: normal; word-break: keep-all; }
+html body .app-shell.app-shell .calendar-dashboard .household-aggregate-header > div:first-child { min-width: 160px; flex-shrink: 0; }
+html body .app-shell.app-shell .calendar-dashboard .household-aggregate-header__actions { display: flex; gap: 8px; align-items: center; }
+html body .app-shell.app-shell .calendar-dashboard .household-aggregate-panel .household-aggregate-grid { display: flex !important; flex-wrap: wrap !important; align-items: stretch; gap: 12px !important; height: auto !important; min-height: 0 !important; max-height: none !important; padding: 0 !important; overflow: visible !important; }
+html body .app-shell.app-shell .calendar-dashboard .household-aggregate-grid::before, html body .app-shell.app-shell .calendar-dashboard .household-aggregate-grid::after { display: none !important; }
+html body .app-shell.app-shell .calendar-dashboard .household-aggregate-panel .household-aggregate-grid > .household-aggregate-card { display: flex !important; flex-direction: column; flex: 1 1 260px; width: auto !important; min-width: min(240px, 100%) !important; max-width: 100%; height: auto !important; min-height: 160px !important; max-height: none !important; overflow: visible !important; padding: 16px !important; gap: 10px; border-radius: 10px; container-type: inline-size; }
+html body .app-shell.app-shell .calendar-dashboard .household-aggregate-grid > .household-aggregate-card[data-aggregate-display-size='SMALL'] { flex-basis: 240px; }
+html body .app-shell.app-shell .calendar-dashboard .household-aggregate-grid > .household-aggregate-card[data-aggregate-display-size='LARGE'] { flex-basis: 360px; }
+html body .app-shell.app-shell .calendar-dashboard .household-aggregate-grid > .household-aggregate-card--chart { flex-basis: 480px !important; min-width: min(440px, 100%) !important; }
+html body .app-shell.app-shell .calendar-dashboard .household-aggregate-grid > .household-aggregate-card--chart[data-aggregate-width='3'] { flex-basis: 600px !important; }
+html body .app-shell.app-shell .calendar-dashboard .household-aggregate-grid > .household-aggregate-card--chart[data-aggregate-width='4'] { flex-basis: 740px !important; }
+html body .app-shell.app-shell .calendar-dashboard .household-aggregate-grid > .household-aggregate-card[data-aggregate-selected='true'] { outline: 2px solid var(--brand-readable-strong); outline-offset: 2px; }
+html body .app-shell.app-shell .calendar-dashboard .household-aggregate-card .household-aggregate-card__copy { display: grid !important; gap: 6px; min-width: 0; padding: 0 !important; }
+html body .app-shell.app-shell .calendar-dashboard .household-aggregate-card .household-aggregate-card__eyebrow { font-size: 14px !important; white-space: normal !important; overflow-wrap: anywhere; }
+html body .app-shell.app-shell .calendar-dashboard .household-aggregate-card .household-aggregate-card__copy strong { font-size: 24px !important; line-height: 1.35; white-space: normal; overflow-wrap: anywhere; }
+html body .app-shell.app-shell .calendar-dashboard .household-aggregate-card[data-aggregate-text-size='SMALL'] .household-aggregate-card__copy strong { font-size: 20px !important; }
+html body .app-shell.app-shell .calendar-dashboard .household-aggregate-card[data-aggregate-text-size='LARGE'] .household-aggregate-card__copy strong { font-size: 30px !important; }
+html body .app-shell.app-shell .calendar-dashboard .household-aggregate-card .household-aggregate-card__copy small { font-size: 12px !important; line-height: 1.5; }
+html body .app-shell.app-shell .calendar-dashboard .household-aggregate-card__meta { margin-top: auto; flex-wrap: wrap; }
+html body .app-shell.app-shell .calendar-dashboard .household-aggregate-chart-preview-button { width: 100%; min-height: 150px; height: auto; padding: 0; }
+html body .app-shell.app-shell .calendar-dashboard .household-aggregate-chart--preview, html body .app-shell.app-shell .calendar-dashboard .household-aggregate-chart--preview svg { width: 100% !important; height: auto !important; min-height: 120px; max-height: 220px; }
+html body .app-shell.app-shell .calendar-dashboard .calendar-widget-edit { align-self: flex-end; min-height: 34px; padding: 5px 10px; }
+html body .app-shell.app-shell .calendar-dashboard .grid-stack-item-content { border-radius: 14px; }
+html body .app-shell.app-shell .calendar-dashboard .grid-stack-item .calendar-dashboard-panel { height: 100%; }
+html body .app-shell.app-shell .calendar-dashboard .grid-stack-item .calendar-dashboard-panel > .panel { height: 100%; overflow-y: auto; overflow-x: hidden; }
+html body .app-shell.app-shell .calendar-dashboard .grid-stack-item .calendar-dashboard-panel > .household-aggregate-panel { height: 100% !important; overflow-y: auto !important; overflow-x: hidden !important; }
+html body .app-shell.app-shell .calendar-dashboard .household-calendar-panel-dragbar { padding: 10px 14px; color: var(--brand-readable-strong); cursor: move; background: var(--brand-soft); border-radius: 8px; }
+html body .app-shell.app-shell .calendar-dashboard .household-aggregate-chart-modal { z-index: 1200; }
+
+.personalization-backdrop { position: fixed; inset: 0; z-index: 1500; display: grid; place-items: center; padding: 24px; background: rgba(16, 28, 22, .55); }
+.personalization-dialog { position: relative; z-index: 1500; width: min(1080px, 100%); height: min(820px, calc(100dvh - 48px)); display: grid; grid-template-rows: auto minmax(0, 1fr) auto; border-radius: 18px; background: var(--surface-panel); color: var(--text); box-shadow: 0 24px 90px #0005; overflow: hidden; isolation: isolate; }
+.personalization-dialog *, .personalization-dialog *::before, .personalization-dialog *::after { box-sizing: border-box; }
+.personalization-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 22px 26px; border-bottom: 1px solid var(--line); }
+.personalization-header h2 { margin: 4px 0; font-size: 24px; line-height: 1.4; }
+.personalization-header > button { flex-shrink: 0; white-space: nowrap; }
+.personalization-header small { color: var(--brand-readable-strong); font-weight: 700; }
+.personalization-header p { margin: 0; color: var(--text-soft); font-size: 13px; line-height: 1.6; }
+.personalization-body { display: grid; grid-template-columns: 208px minmax(0, 1fr); min-height: 0; }
+.personalization-nav { display: flex; flex-direction: column; align-items: stretch; gap: 6px; background: var(--surface-soft); border-right: 1px solid var(--line); padding: 18px 12px; overflow-y: auto; }
+.personalization-nav button { display: grid; gap: 5px; text-align: left; padding: 13px 14px; border: 1px solid transparent; border-radius: 9px; background: transparent; color: var(--text-soft); }
+.personalization-nav button.is-active { background: var(--brand-soft); border-color: var(--brand-readable-strong); color: var(--text); }
+.personalization-nav small { font-size: 11px; font-weight: 400; line-height: 1.5; }
+.personalization-content { min-width: 0; overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; padding: 24px 28px; scrollbar-gutter: stable; }
+.personalization-content h3 { margin: 0 0 8px; font-size: 19px; }
+.personalization-fields { min-width: 0; border: 0; margin: 0; padding: 0; }
+.personalization-description { margin: 0 0 20px; color: var(--text-soft); font-size: 13px; line-height: 1.7; word-break: keep-all; }
+.personalization-section-title { display: flex; align-items: flex-start; gap: 12px; justify-content: space-between; }
+.personalization-section-title .button { white-space: nowrap; }
+.personalization-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; margin-top: 20px; }
+.personalization-field { display: grid; gap: 8px; min-width: 0; font-size: 13px; font-weight: 600; }
+.personalization-field--wide { grid-column: 1 / -1; }
+.personalization-dialog .personalization-field :is(input, select) { width: 100%; min-width: 0; min-height: 44px; padding: 10px 12px; font: inherit; color: var(--text); background: var(--field-bg); border: 1px solid var(--field-border); border-radius: 7px; }
+.personalization-check { display: flex; align-items: center; gap: 8px; min-height: 40px; font-size: 13px; }
+.personalization-check input { width: 18px; height: 18px; flex-shrink: 0; accent-color: var(--brand-readable-strong); }
+.personalization-switch-list { display: grid; margin: 12px 0 20px; }
+.personalization-switch-list > label { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 18px 0; border-bottom: 1px solid var(--line); }
+.personalization-switch-list label > span { display: grid; gap: 6px; }
+.personalization-switch-list strong { font-size: 14px; }
+.personalization-switch-list small { font-size: 12px; line-height: 1.6; color: var(--text-soft); }
+.personalization-dialog input[role='switch'] { appearance: none; flex-shrink: 0; width: 42px; height: 24px; padding: 3px; border: 0; border-radius: 20px; background: var(--text-muted); cursor: pointer; }
+.personalization-dialog input[role='switch']::after { content: ''; display: block; width: 18px; height: 18px; border-radius: 50%; background: #fff; transition: transform .12s; }
+.personalization-dialog input[role='switch']:checked { background: var(--brand-readable-strong); }
+.personalization-dialog input[role='switch']:checked::after { transform: translateX(18px); }
+.personalization-widget-list { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.personalization-widget-list button { display: grid; gap: 6px; min-width: 0; text-align: left; padding: 11px 12px; background: var(--surface-soft); border: 1px solid var(--line); border-radius: 8px; color: var(--text); }
+.personalization-widget-list strong { font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.personalization-widget-list small { font-size: 11px; color: var(--text-soft); }
+.personalization-widget-list button.is-active { border-color: var(--brand-readable-strong); background: var(--brand-soft); }
+.personalization-preview { display: grid; gap: 6px; margin-top: 20px; padding: 18px 20px; border-radius: 12px; background: var(--brand-soft); border: 1px solid var(--line); }
+.personalization-preview b { font-size: 28px; font-variant-numeric: tabular-nums; }
+.personalization-preview[data-text-size='SMALL'] b { font-size: 20px; }
+.personalization-preview[data-text-size='MEDIUM'] b { font-size: 24px; }
+.personalization-preview[data-text-size='LARGE'] b { font-size: 30px; }
+.personalization-preview[data-text-color='MINT'] { --preview-text: #047857; }
+.personalization-preview[data-text-color='SKY'] { --preview-text: #0369a1; }
+.personalization-preview[data-text-color='GOLD'] { --preview-text: #a16207; }
+.personalization-preview[data-text-color='PINK'] { --preview-text: #be185d; }
+:root[data-theme='toss'] .personalization-preview[data-text-color='MINT'] { --preview-text: #86efac; }
+:root[data-theme='toss'] .personalization-preview[data-text-color='SKY'] { --preview-text: #7dd3fc; }
+:root[data-theme='toss'] .personalization-preview[data-text-color='GOLD'] { --preview-text: #fcd34d; }
+:root[data-theme='toss'] .personalization-preview[data-text-color='PINK'] { --preview-text: #f9a8d4; }
+.personalization-preview > :is(strong, b) { color: var(--preview-text, var(--text)); }
+.personalization-preview small, .personalization-preview span { font-size: 12px; color: var(--text-soft); }
+.personalization-preview-chart { width: 100%; max-height: 180px; }
+.personalization-preview-chart polyline { fill: none; stroke-width: 3; vector-effect: non-scaling-stroke; }
+.personalization-preview-chart__income { stroke: var(--income); }
+.personalization-preview-chart__expense { stroke: var(--expense); }
+.personalization-preview-chart__previous { stroke-dasharray: 5 5; opacity: .6; }
+.personalization-advanced { margin-top: 20px; border-top: 1px solid var(--line); padding-top: 16px; font-size: 13px; }
+.personalization-advanced summary { cursor: pointer; font-weight: 600; }
+.personalization-advanced p { color: var(--text-soft); line-height: 1.6; }
+.personalization-widget-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 24px; border-top: 1px solid var(--line); padding-top: 18px; }
+.personalization-reset-list { display: grid; gap: 14px; }
+.personalization-reset-list article { padding: 18px; background: var(--surface-soft); border: 1px solid var(--line); border-radius: 10px; }
+.personalization-reset-list p { color: var(--text-soft); font-size: 13px; line-height: 1.6; }
+.personalization-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 26px; border-top: 1px solid var(--line); background: var(--surface-panel); }
+.personalization-footer span { color: var(--text-soft); font-size: 12px; }
+.personalization-footer > div { display: flex; gap: 8px; }
+.personalization-dialog .button { min-height: 42px; border-radius: 7px; font-size: 13px; padding: 9px 14px; }
+.personalization-dialog .button--primary { background: var(--brand-readable-strong); color: #fff; border-color: var(--brand-readable-strong); }
+.personalization-dialog .button--danger { background: var(--danger); color: #fff; }
+.personalization-dialog :focus-visible { outline: 3px solid var(--brand-readable-strong); outline-offset: 3px; }
+.personalization-error { display: grid; gap: 8px; padding: 14px; margin-bottom: 16px; background: var(--surface-soft); border: 1px solid var(--danger); border-radius: 8px; color: var(--danger); font-size: 13px; }
+.personalization-error p { margin: 0; }
+.personalization-error button { justify-self: start; }
+.personalization-notice { color: var(--text-soft); font-size: 13px; }
+.personalization-dialog[aria-busy='true'] .personalization-content { pointer-events: none; opacity: .65; }
+
+html body .app-shell.app-shell .calendar-dashboard .household-aggregate-grid,
+html body .app-shell.app-shell .calendar-dashboard .household-aggregate-card { aspect-ratio: auto !important; }
+html body .app-shell.app-shell .calendar-dashboard .calendar-dashboard-item { order: var(--mobile-calendar-panel-order) !important; }
+html body .app-shell.app-shell .calendar-dashboard .household-aggregate-panel .household-aggregate-grid > .household-aggregate-card { max-width: min(100%, 360px) !important; }
+html body .app-shell.app-shell .calendar-dashboard .household-aggregate-panel .household-aggregate-grid > .household-aggregate-card--chart { min-width: min(440px, 100%) !important; max-width: 100% !important; }
+html body .app-shell.app-shell .calendar-dashboard .household-aggregate-panel .household-aggregate-grid > .household-aggregate-card--payment { min-width: min(280px, 100%) !important; }
+html body .app-shell.app-shell .calendar-dashboard .household-aggregate-panel .household-aggregate-card__copy small { display: block !important; }
+html body .app-shell.app-shell .calendar-dashboard .household-aggregate-panel .household-aggregate-card__meta { display: flex !important; gap: 12px; font-size: 12px !important; }
+html body .app-shell.app-shell .calendar-dashboard .household-aggregate-panel .household-aggregate-card__chart-caption { display: flex !important; flex-wrap: wrap; }
+html body .app-shell.app-shell .calendar-dashboard .household-aggregate-panel .household-aggregate-chart-preview-button { flex: none !important; height: auto !important; min-height: 150px; }
+html body .app-shell.app-shell .calendar-dashboard .household-entry-panel { container: calendar-entry / inline-size; }
+@container calendar-entry (max-width: 540px) {
+  html body .app-shell.app-shell .calendar-dashboard .entry-editor__field-row--date-time { grid-template-columns: minmax(0, 1fr) !important; }
+}
+
+@media (max-width: 1100px) {
+  html body .app-shell.app-shell .calendar-dashboard-grid:not(.grid-stack) { display: flex; flex-direction: column; gap: 16px; }
+  html body .app-shell.app-shell .calendar-dashboard-item { order: var(--mobile-calendar-panel-order); }
+  html body .app-shell.app-shell .calendar-overview-toolbar__settings { margin-left: 0; }
+}
+@media (max-width: 760px) {
+  html body .app-shell.app-shell .calendar-overview-toolbar { padding: 12px; gap: 10px; }
+  html body .app-shell.app-shell .calendar-overview-toolbar > div { width: 100%; }
+  html body .app-shell.app-shell .calendar-overview-toolbar__filters > label { flex: 1; }
+  html body .app-shell.app-shell .calendar-overview-toolbar__filters select { width: 100%; }
+  html body .app-shell.app-shell .calendar-overview-toolbar__settings > button { flex: 1; }
+  html body .app-shell.app-shell .calendar-draft-toolbar { flex-direction: column; align-items: stretch; position: static; padding: 12px; }
+  html body .app-shell.app-shell .calendar-draft-toolbar > div:first-child { flex-direction: column; align-items: flex-start; }
+  html body .app-shell.app-shell .calendar-draft-toolbar .button { flex: 1; padding-inline: 8px; }
+  html body .app-shell.app-shell .calendar-dashboard .calendar-dashboard-panel > .household-aggregate-panel { padding: 14px; }
+  html body .app-shell.app-shell .calendar-dashboard .household-aggregate-panel .household-aggregate-grid > .household-aggregate-card { flex-basis: 100% !important; min-width: 0 !important; }
+  .personalization-backdrop { padding: 8px; }
+  .personalization-dialog { height: calc(100dvh - 16px); border-radius: 12px; }
+  .personalization-header { padding: 16px; }
+  .personalization-header h2 { font-size: 21px; }
+  .personalization-header p { font-size: 12px; }
+  .personalization-body { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
+  .personalization-nav { display: flex; flex-direction: row; flex-wrap: wrap; padding: 8px 12px; gap: 4px; border-right: 0; border-bottom: 1px solid var(--line); overflow: visible; }
+  .personalization-nav button { flex: 1 1 28%; padding: 9px 5px; text-align: center; font-size: 12px; }
+  .personalization-nav small { display: none; }
+  .personalization-content { padding: 18px 16px; }
+  .personalization-form-grid { grid-template-columns: minmax(0, 1fr); gap: 16px; }
+  .personalization-widget-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .personalization-footer { flex-wrap: wrap; padding: 12px 16px; gap: 8px; }
+  .personalization-footer > div { width: 100%; }
+  .personalization-footer .button { flex: 1; }
+}

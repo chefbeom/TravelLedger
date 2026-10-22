@@ -887,6 +887,17 @@ export function fetchHouseholdAggregatePreferences() {
   return request('/account/preferences/household-aggregates')
 }
 
+export function fetchHouseholdPersonalization() {
+  return request('/account/preferences/household-personalization')
+}
+
+export function saveHouseholdPersonalization(payload) {
+  return request('/account/preferences/household-personalization', {
+    method: 'PUT',
+    body: JSON.stringify(payload),
+  })
+}
+
 export function saveHouseholdAggregatePreferences(widgets) {
   return request('/account/preferences/household-aggregates', {
     method: 'PUT',

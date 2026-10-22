@@ -17,6 +17,17 @@ public record HouseholdAggregateWidgetRequest(
         Integer layoutH,
         Integer layoutOrder,
         String textSize,
-        String textColor
+        String textColor,
+        String title,
+        Boolean hidden,
+        String displaySize
 ) {
+    public HouseholdAggregateWidgetRequest(String kind, String period, Long paymentMethodId, String amountType,
+            Long monthlyExpenseTarget, Long singleExpenseLimit, Boolean showIncomeCumulative, Boolean showExpenseCumulative,
+            Boolean comparePreviousPeriod, Long chartMaxAmount, Integer layoutX, Integer layoutY, Integer layoutW,
+            Integer layoutH, Integer layoutOrder, String textSize, String textColor) {
+        this(kind, period, paymentMethodId, amountType, monthlyExpenseTarget, singleExpenseLimit, showIncomeCumulative,
+                showExpenseCumulative, comparePreviousPeriod, chartMaxAmount, layoutX, layoutY, layoutW, layoutH,
+                layoutOrder, textSize, textColor, null, null, null);
+    }
 }

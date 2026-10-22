@@ -1,5 +1,6 @@
 <script setup>
 import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { isPreferenceNavigationAllowed } from './lib/calendarPersonalization'
 import PinPadInput from './components/PinPadInput.vue'
 import { MOBILE_LAYOUT_QUERY, resolveLayoutMode } from './lib/responsiveLayout'
 import { createModalMutationFilter } from './lib/modalMutationFilter'
@@ -509,6 +510,7 @@ function buildCurrentHashRoute() {
 }
 
 function confirmRouteLeaveIfNeeded() {
+  if (!isPreferenceNavigationAllowed()) return false
   if (!routeLeaveGuard.active || typeof window === 'undefined') {
     return true
   }

@@ -5,11 +5,14 @@ import 'gridstack/dist/gridstack.min.css'
 import { formatCompactNumber } from '../lib/format'
 import { resolveRange, shiftRange, summarizeEntries } from '../lib/analytics'
 import { useTableSelection } from '../lib/tableSelection'
-import { fetchLayoutSetting, saveLayoutSetting } from '../lib/api'
+import { fetchLayoutSetting, fetchHouseholdPersonalization, saveHouseholdPersonalization } from '../lib/api'
+import { clonePersonalization, personalizationChanged, packDashboardPanels } from '../lib/calendarPersonalization'
+import HouseholdPersonalizationDialog from './HouseholdPersonalizationDialog.vue'
 import HouseholdTransactionSheet from './HouseholdTransactionSheet.vue'
 import ReceiptHistoryThumbnail from './ReceiptHistoryThumbnail.vue'
 import { pendingReceiptReviewIds, unreadReceiptReviewIds, receiptReviewPage, selectReceiptAnalysisItems } from '../lib/receiptReview'
 import { groupReceiptHistoryRequests } from '../lib/receiptHistoryGroups'
+import { RECEIPT_MAX_REQUEST_BATCH_SIZE } from '../lib/receiptRequestQueue'
 import { formatReceiptHistoryRequestTime, normalizeReceiptHistoryView, receiptHistoryTileSummary } from '../lib/receiptHistoryView'
 
 const CALENDAR_VIEW_PREFERENCE_STORAGE_PREFIX = 'calen-household-calendar-view:v3'
@@ -17,9 +20,7 @@ const LEGACY_CALENDAR_VIEW_PREFERENCE_STORAGE_PREFIX = 'calen-household-calendar
 const CALENDAR_PANEL_LAYOUT_STORAGE_KEY = 'calen-household-calendar-panel-layout:v3'
 const LEGACY_CALENDAR_PANEL_LAYOUT_STORAGE_KEY = 'calen-household-calendar-panel-layout:v2'
 const CALENDAR_PANEL_LAYOUT_SCOPE = 'household-calendar'
-const CALENDAR_PANEL_LAYOUT_VERSION = 3
 const CALENDAR_VIEW_PREFERENCE_SCOPE = 'household-calendar-view'
-const CALENDAR_VIEW_PREFERENCE_VERSION = 2
 const DEFAULT_CALENDAR_HIGHLIGHT_MODE = 'net'
 const DEFAULT_CALENDAR_VIEW_PREFERENCES = Object.freeze({
   scalePreset: 'fit',
@@ -28,6 +29,8 @@ const DEFAULT_CALENDAR_VIEW_PREFERENCES = Object.freeze({
   receiptOcrPanelEnabled: true,
   transactionSheetViewMode: 'modal',
   shareAfterSaveEnabled: false,
+  quickEntryPanelEnabled: true,
+  defaultWeekMode: 'month',
 })
 const CALENDAR_LAYOUT_GRID_COLUMNS = 9
 const CALENDAR_LAYOUT_GRID_MARGIN = 4
@@ -35,18 +38,9 @@ const CALENDAR_LAYOUT_GRID_GAP = CALENDAR_LAYOUT_GRID_MARGIN * 2
 const CALENDAR_AGGREGATE_PANEL_ROWS = 2
 const CALENDAR_RECOMMENDED_GRID_ROWS = 8
 const CALENDAR_RECOMMENDED_CONTENT_ROWS = CALENDAR_RECOMMENDED_GRID_ROWS - CALENDAR_AGGREGATE_PANEL_ROWS
-const RECOMMENDED_CALENDAR_PRESET_LABEL = '\uCD94\uCC9C \uAE30\uBCF8 \uBC30\uCE58 (9\u00D78)'
 const CALENDAR_AGGREGATE_EDIT_PANEL_ROWS = 4
-const LEGACY_CALENDAR_AGGREGATE_PANEL_ROWS = 6
-const REMOTE_LAYOUT_SAVE_DELAY_MS = 800
 const CALENDAR_DAY_LONG_PRESS_MS = 520
 const CALENDAR_DAY_CLICK_SUPPRESS_MS = 450
-
-const calendarScalePresets = [
-  { key: 'compact', label: '좁게', value: 74 },
-  { key: 'default', label: '기본', value: 112 },
-  { key: 'expanded', label: '넓게', value: 150 },
-]
 
 const calendarDisplayModes = [
   { key: 'default', label: '지금처럼 보기' },
@@ -139,7 +133,7 @@ const calendarPanelDefinitions = [
     minW: 4,
     maxW: 9,
     minH: CALENDAR_AGGREGATE_PANEL_ROWS,
-    maxH: CALENDAR_AGGREGATE_PANEL_ROWS,
+    maxH: 8,
   },
   {
     id: 'calendar',
@@ -167,12 +161,7 @@ const calendarPanelDefinitions = [
   },
 ]
 
-const LEGACY_CALENDAR_DEFAULT_LAYOUT = [
-  { id: 'aggregate', x: 0, y: 0, w: 9, h: CALENDAR_AGGREGATE_PANEL_ROWS },
-  { id: 'calendar', x: 0, y: CALENDAR_AGGREGATE_PANEL_ROWS, w: 6, h: 5 },
-  { id: 'quick-entry', x: 6, y: CALENDAR_AGGREGATE_PANEL_ROWS, w: 3, h: 5 },
-  { id: 'sheet', x: 0, y: CALENDAR_AGGREGATE_PANEL_ROWS + 5, w: 9, h: 3 },
-]
+
 
 const props = defineProps({
   currentUser: {
@@ -318,6 +307,8 @@ const props = defineProps({
 })
 
 const emit = defineEmits([
+  'personalization-saved',
+  'preview-aggregate-widget-configs',
   'update:amountInput',
   'update:timeEnabled',
   'fill-amount',
@@ -364,7 +355,6 @@ const emit = defineEmits([
   'apply-entry-suggestion',
   'apply-title-suggestion',
   'change-anchor-month',
-  'save-aggregate-widget-configs',
 ])
 
 function requestRecurringLedgerRegistration() {
@@ -388,14 +378,26 @@ const selectedDayAmountMode = ref('KRW')
 const selectedDayEntryPage = ref(0)
 const transactionSheetViewMode = ref(DEFAULT_CALENDAR_VIEW_PREFERENCES.transactionSheetViewMode)
 const isTransactionSheetModalOpen = ref(false)
-const isTransactionSheetSettingsOpen = ref(false)
-const isQuickEntrySettingsOpen = ref(false)
 const isShareAfterSaveEnabled = ref(DEFAULT_CALENDAR_VIEW_PREFERENCES.shareAfterSaveEnabled)
 const calendarScalePreset = ref(DEFAULT_CALENDAR_VIEW_PREFERENCES.scalePreset)
 const calendarWeekMode = ref('month')
 const calendarPreviousWeekOffset = ref(1)
 const calendarHighlightMode = ref(DEFAULT_CALENDAR_HIGHLIGHT_MODE)
+const calendarDefaultHighlightMode = ref(DEFAULT_CALENDAR_HIGHLIGHT_MODE)
+const calendarDefaultWeekMode = ref('month')
+const isQuickEntryPanelEnabled = ref(true)
 const isAggregateEditMode = ref(false)
+const personalizationOpen = ref(false)
+const personalizationSection = ref('dashboard')
+const personalizationSelectedIndex = ref(0)
+const personalizationLoading = ref(false)
+const personalizationSaving = ref(false)
+const personalizationError = ref('')
+const personalizationNotice = ref('')
+const personalizationConflict = ref(false)
+const personalizationRevision = ref('')
+const personalizationSnapshot = ref(null)
+let personalizationLoadSequence = 0
 const isAggregatePanelEnabled = ref(true)
 const isReceiptOcrPanelEnabled = ref(true)
 const isLayoutEditMode = ref(false)
@@ -411,11 +413,7 @@ const receiptFileInputRef = ref(null)
 const receiptCameraInputRef = ref(null)
 const selectedReceiptDocumentType = ref('AUTO')
 const aggregateWidgetDraftConfigs = ref(createDefaultAggregateConfigs())
-const aggregateGridDropCells = computed(() => Array.from({ length: aggregateGridColumnCount * aggregateGridRowCount }, (_, index) => ({
-  key: `aggregate-drop-${index + 1}`,
-  column: (index % aggregateGridColumnCount) + 1,
-  row: Math.floor(index / aggregateGridColumnCount) + 1,
-})))
+
 const calendarShellWidth = ref(0)
 const layoutCellHeight = ref(112)
 const calendarPanelLayout = ref(createDefaultCalendarPanelLayout())
@@ -426,15 +424,11 @@ let layoutGridResizeObserver = null
 let layoutModeObserver = null
 let layoutGridRebuildTimer = 0
 let layoutRemoteHydrationSequence = 0
-let layoutRemoteSaveTimer = 0
-let pendingLayoutRemotePayload = null
 let layoutChangedDuringRemoteHydration = false
 let calendarPanelLayoutLocalSavedAt = 0
+let localLayoutNeedsReview = false
 let viewPreferenceRemoteHydrationSequence = 0
-let viewPreferenceRemoteSaveTimer = 0
-let pendingViewPreferenceRemotePayload = null
 let viewPreferenceChangedDuringRemoteHydration = false
-let isApplyingCalendarViewPreferences = false
 let calendarDayLongPressTimer = 0
 let calendarDayClickSuppressUntil = 0
 
@@ -1229,49 +1223,18 @@ const hasReceiptAnalysis = computed(() => Boolean(
   receiptReviewItems.value.length || receiptSuggestion.value || props.receiptOcr?.rawText || props.receiptOcr?.error,
 ))
 
-const aggregateCards = computed(() => {
-  const sourceConfigs = isAggregateEditMode.value ? aggregateWidgetDraftConfigs.value : props.aggregateWidgetConfigs
-  const cards = normalizeAggregateConfigs(sourceConfigs).slice(0, aggregateWidgetMaxCount).map((config, index) => buildAggregateCard(config, index))
-  return isAggregateEditMode.value ? cards : cards.filter((card) => card.config.kind !== 'NONE')
-})
+const personalizationCards = computed(() => normalizeAggregateConfigs(aggregateWidgetDraftConfigs.value).map((config, index) => buildAggregateCard(config, index)))
+const aggregateCards = computed(() => personalizationCards.value.filter(card => card.config.kind !== 'NONE' && !card.config.hidden))
+const personalizationDirty = computed(() => Boolean(personalizationSnapshot.value && personalizationChanged(personalizationSnapshot.value.baseline || personalizationSnapshot.value.settings, currentPersonalization())))
+const personalizationPreferences = computed(calendarViewPreferencePayload)
 const aggregateDisplayCardCount = computed(() => {
-  const sourceConfigs = isAggregateEditMode.value ? aggregateWidgetDraftConfigs.value : props.aggregateWidgetConfigs
-  return normalizeAggregateConfigs(sourceConfigs).filter((config) => config.kind !== 'NONE').length
+  const sourceConfigs = aggregateWidgetDraftConfigs.value
+  return normalizeAggregateConfigs(sourceConfigs).filter((config) => config.kind !== 'NONE' && !config.hidden).length
 })
 const aggregateBadgeLabel = computed(() => (
   isAggregateEditMode.value ? `${aggregateDisplayCardCount.value}/${aggregateWidgetMaxCount}개 표시` : `${aggregateDisplayCardCount.value}/${aggregateWidgetMaxCount}개`
 ))
-function expandAggregateEditPanelLayout(panels) {
-  const aggregate = panels.find((panel) => panel.id === 'aggregate')
-  if (!aggregate || !isAggregateEditMode.value) {
-    return panels
-  }
 
-  const aggregateTop = Number(aggregate.y ?? 0) || 0
-  const normalBottom = aggregateTop + (Number(aggregate.h ?? CALENDAR_AGGREGATE_PANEL_ROWS) || CALENDAR_AGGREGATE_PANEL_ROWS)
-  const editBottom = aggregateTop + CALENDAR_AGGREGATE_EDIT_PANEL_ROWS
-  const rowShift = Math.max(0, editBottom - normalBottom)
-
-  return panels.map((panel) => {
-    if (panel.id === 'aggregate') {
-      return {
-        ...panel,
-        h: CALENDAR_AGGREGATE_EDIT_PANEL_ROWS,
-        minH: CALENDAR_AGGREGATE_EDIT_PANEL_ROWS,
-        maxH: CALENDAR_AGGREGATE_EDIT_PANEL_ROWS,
-      }
-    }
-
-    if (rowShift > 0 && Number(panel.y ?? 0) >= normalBottom) {
-      return {
-        ...panel,
-        y: Number(panel.y ?? 0) + rowShift,
-      }
-    }
-
-    return panel
-  })
-}
 
 const calendarLayoutPanels = computed(() => {
   const panels = calendarPanelDefinitions.map((definition) => ({
@@ -1279,10 +1242,11 @@ const calendarLayoutPanels = computed(() => {
     ...calendarPanelLayout.value.find((item) => item.id === definition.id),
   })).filter((panel) => (
     (panel.id !== 'aggregate' || isAggregatePanelEnabled.value)
+    && (panel.id !== 'quick-entry' || isQuickEntryPanelEnabled.value)
     && (panel.id !== 'sheet' || transactionSheetViewMode.value === 'inline' || isLayoutEditMode.value)
   ))
 
-  return expandAggregateEditPanelLayout(panels)
+  return panels
 })
 const calendarPanelLayoutKey = computed(() => (
   calendarLayoutPanels.value.map((panel) => `${panel.id}:${panel.x}:${panel.y}:${panel.w}:${panel.h}`).join('|')
@@ -1299,13 +1263,8 @@ const calendarLayoutGridStyle = computed(() => ({
   '--calendar-aggregate-panel-rows': String(CALENDAR_AGGREGATE_PANEL_ROWS),
   '--calendar-aggregate-edit-panel-rows': String(CALENDAR_AGGREGATE_EDIT_PANEL_ROWS),
 }))
-const isCalendarGridStackActive = computed(() => !isMobileLayoutMode.value)
-const mobileCalendarPanelOrder = {
-  'quick-entry': 1,
-  calendar: 2,
-  aggregate: 3,
-  sheet: 4,
-}
+const isCalendarGridStackActive = computed(() => !isMobileLayoutMode.value && isLayoutEditMode.value)
+
 const entryDateMin = computed(() => props.entryDateLimit?.min || '')
 const entryDateMax = computed(() => props.entryDateLimit?.max || '')
 
@@ -1410,19 +1369,14 @@ watch(
   },
 )
 
-watch(calendarScalePreset, persistCalendarViewPreferences)
-
-watch(calendarHighlightMode, persistCalendarViewPreferences)
-watch(isShareAfterSaveEnabled, persistCalendarViewPreferences)
+// The toolbar's highlight/week filters are temporary, not the saved defaults.
 
 watch(isAggregatePanelEnabled, () => {
-  persistCalendarViewPreferences()
   queueLayoutGridRebuild()
   refreshCalendarMeasurements()
 })
 
 watch(isReceiptOcrPanelEnabled, () => {
-  persistCalendarViewPreferences()
   refreshCalendarMeasurements()
 })
 
@@ -1430,7 +1384,6 @@ watch(transactionSheetViewMode, (value) => {
   if (value !== 'modal') {
     isTransactionSheetModalOpen.value = false
   }
-  persistCalendarViewPreferences()
   queueLayoutGridRebuild()
   refreshCalendarMeasurements()
 })
@@ -1439,8 +1392,8 @@ watch(calendarPanelLayoutKey, () => {
   queueLayoutGridRebuild()
 })
 
-watch(isLayoutEditMode, (value) => {
-  if (isMobileLayoutMode.value) {
+watch(isCalendarGridStackActive, (value) => {
+  if (!value) {
     destroyLayoutGrid()
     refreshCalendarMeasurements()
     return
@@ -1454,6 +1407,11 @@ watch(isLayoutEditMode, (value) => {
   layoutGrid.enableMove(value)
   layoutGrid.enableResize(value)
   refreshCalendarMeasurements()
+})
+
+watch([personalizationSaving, personalizationLoading], ([saving, loading]) => {
+  layoutGrid?.enableMove(isLayoutEditMode.value && !saving && !loading)
+  layoutGrid?.enableResize(isLayoutEditMode.value && !saving && !loading)
 })
 
 watch([calendarWeekMode, displayedCalendarWeeks], () => {
@@ -1495,10 +1453,16 @@ watch(
   { deep: true, immediate: true },
 )
 
+watch(() => aggregateWidgetDraftConfigs.value.map(item => `${item.kind}:${item.period}:${item.comparePreviousPeriod}`).join('|'), () => {
+  if (isAggregateEditMode.value) emit('preview-aggregate-widget-configs', serializeAggregateWidgetConfigs(aggregateWidgetDraftConfigs.value))
+})
+
 onMounted(() => {
   if (typeof window === 'undefined') {
     return
   }
+  window.addEventListener('beforeunload', handlePersonalizationBeforeUnload)
+  window.addEventListener('calen:before-preference-navigation', handlePersonalizationNavigation)
 
   hydrateCalendarPanelLayout()
   isMobileLayoutMode.value = readIsMobileLayoutMode()
@@ -1542,11 +1506,12 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  personalizationLoadSequence++
+  window.removeEventListener('beforeunload', handlePersonalizationBeforeUnload)
+  window.removeEventListener('calen:before-preference-navigation', handlePersonalizationNavigation)
   if (layoutGridRebuildTimer) {
     window.clearTimeout(layoutGridRebuildTimer)
   }
-  saveCalendarPanelLayoutRemoteNow()
-  saveCalendarViewPreferencesRemoteNow()
   layoutGridResizeObserver?.disconnect()
   destroyLayoutGrid()
 
@@ -1587,9 +1552,7 @@ function handleWorkspaceKeydown(event) {
   event.preventDefault()
 }
 
-function getPresetValue(presets, key, fallbackKey) {
-  return presets.find((item) => item.key === key)?.value ?? presets.find((item) => item.key === fallbackKey)?.value ?? presets[0].value
-}
+
 
 function normalizePresetKey(presets, value, fallbackKey) {
   if (value === 'compact' || value === 'amount-only') {
@@ -1617,6 +1580,198 @@ function normalizePresetKey(presets, value, fallbackKey) {
   }
 
   return fallbackKey
+}
+
+function currentPersonalization() {
+  return { preferences: calendarViewPreferencePayload(), layout: clone(calendarPanelLayout.value), widgets: serializeAggregateWidgetConfigs(aggregateWidgetDraftConfigs.value) }
+}
+
+function applyPersonalizationSettings(settings) {
+  applyCalendarViewPreferences(normalizeCalendarViewPreferences(settings.preferences) || defaultCalendarViewPreferences())
+  calendarPanelLayout.value = normalizeCalendarPanelLayout(settings.layout)
+  aggregateWidgetDraftConfigs.value = normalizeAggregateConfigs(settings.widgets)
+  refreshCalendarMeasurements()
+}
+
+async function loadPersonalizationSession() {
+  const sequence = ++personalizationLoadSequence
+  personalizationLoading.value = true
+  personalizationError.value = ''
+  personalizationNotice.value = ''
+  personalizationConflict.value = false
+  personalizationRevision.value = ''
+  try {
+    const saved = await fetchHouseholdPersonalization()
+    if (sequence !== personalizationLoadSequence || !isAggregateEditMode.value) return
+    if (!saved?.revision || !Array.isArray(saved.widgets)) throw new Error('개인 설정을 불러오지 못했습니다. 다시 시도해 주세요.')
+    // A null server value means this user only has a legacy local setting. Keep it until explicit Save.
+    const fallback = currentPersonalization()
+    const keepLocalLayout = localLayoutNeedsReview && Array.isArray(saved.layout) && personalizationChanged(normalizeCalendarPanelLayout(saved.layout), fallback.layout)
+    applyPersonalizationSettings({ preferences: saved.preferences || fallback.preferences, layout: keepLocalLayout ? fallback.layout : saved.layout || fallback.layout, widgets: saved.widgets })
+    personalizationRevision.value = saved.revision
+    personalizationSnapshot.value = {
+      settings: clonePersonalization(currentPersonalization()),
+      baseline: clonePersonalization({ ...currentPersonalization(), layout: normalizeCalendarPanelLayout(saved.layout || fallback.layout) }),
+      filters: personalizationSnapshot.value?.filters || { highlight: calendarHighlightMode.value, week: calendarWeekMode.value, offset: calendarPreviousWeekOffset.value },
+    }
+    // Restore the temporary view filters while keeping permanent defaults separate.
+    calendarHighlightMode.value = personalizationSnapshot.value.filters.highlight
+    calendarWeekMode.value = personalizationSnapshot.value.filters.week
+    if (keepLocalLayout) personalizationNotice.value = '이 브라우저에 보관된 배치가 서버 값과 다릅니다. 보관된 배치를 초안으로 유지했습니다. 저장하거나 서버 설정으로 다시 열 수 있습니다.'
+  } catch (error) {
+    if (sequence === personalizationLoadSequence) personalizationError.value = error.message || '개인 설정을 불러오지 못했습니다.'
+  } finally {
+    if (sequence === personalizationLoadSequence) personalizationLoading.value = false
+  }
+}
+
+async function openPersonalization(section = 'dashboard', showDialog = true) {
+  personalizationSection.value = section
+  personalizationOpen.value = showDialog
+  if (isAggregateEditMode.value) return
+  // Prevent late legacy hydration from overwriting a draft. All writes now require explicit Save.
+  layoutChangedDuringRemoteHydration = true
+  viewPreferenceChangedDuringRemoteHydration = true
+  personalizationSnapshot.value = { settings: clonePersonalization(currentPersonalization()), filters: { highlight: calendarHighlightMode.value, week: calendarWeekMode.value, offset: calendarPreviousWeekOffset.value } }
+  isAggregateEditMode.value = true
+  await loadPersonalizationSession()
+  if (!personalizationRevision.value) personalizationOpen.value = true
+}
+
+function discardPersonalization() {
+  personalizationLoadSequence++
+  if (personalizationSnapshot.value) {
+    applyPersonalizationSettings(personalizationSnapshot.value.settings)
+    calendarHighlightMode.value = personalizationSnapshot.value.filters.highlight
+    calendarWeekMode.value = personalizationSnapshot.value.filters.week
+    calendarPreviousWeekOffset.value = personalizationSnapshot.value.filters.offset
+  }
+  personalizationOpen.value = false
+  isLayoutEditMode.value = false
+  isAggregateEditMode.value = false
+  personalizationSnapshot.value = null
+  personalizationLoading.value = false
+  personalizationError.value = ''
+  personalizationRevision.value = ''
+}
+
+function cancelPersonalization() {
+  if (personalizationSaving.value) return
+  if (personalizationDirty.value && !window.confirm('저장하지 않은 개인 설정을 폐기할까요?')) return
+  discardPersonalization()
+}
+
+async function reloadPersonalization() {
+  if (personalizationSaving.value || (personalizationDirty.value && !window.confirm('편집 내용을 폐기하고 서버의 최신 설정을 불러올까요?'))) return
+  localLayoutNeedsReview = false
+  await loadPersonalizationSession()
+  if (personalizationRevision.value) {
+    persistCalendarViewPreferencesLocal(true)
+    persistCalendarPanelLayoutLocal(Date.now(), true)
+  }
+}
+
+async function savePersonalization() {
+  if (personalizationSaving.value || personalizationLoading.value || !personalizationDirty.value || !personalizationRevision.value) return
+  personalizationSaving.value = true
+  personalizationError.value = ''
+  personalizationConflict.value = false
+  try {
+    const saved = await saveHouseholdPersonalization({ revision: personalizationRevision.value, ...currentPersonalization() })
+    if (!saved?.revision || !Array.isArray(saved.widgets) || !Array.isArray(saved.layout) || !saved.preferences) throw new Error('저장 응답을 확인하지 못했습니다. 최신 설정을 다시 확인해 주세요. 초안은 유지됩니다.')
+    applyPersonalizationSettings(saved)
+    localLayoutNeedsReview = false
+    // Cache only a confirmed server commit. Cache failures must not turn a successful save into a retry.
+    try { persistCalendarViewPreferencesLocal(true); persistCalendarPanelLayoutLocal(Date.now(), true) } catch { /* Server is authoritative. */ }
+    emit('personalization-saved', saved.widgets)
+    await nextTick()
+    personalizationSnapshot.value = null
+    personalizationOpen.value = false
+    isLayoutEditMode.value = false
+    isAggregateEditMode.value = false
+    await nextTick()
+  } catch (error) {
+    personalizationError.value = error.message || '설정을 저장하지 못했습니다. 편집 내용은 유지됩니다.'
+    personalizationConflict.value = error.status === 409
+    personalizationOpen.value = true
+  } finally {
+    personalizationSaving.value = false
+  }
+}
+
+function handlePersonalizationBeforeUnload(event) {
+  if (!personalizationDirty.value && !personalizationSaving.value) return
+  event.preventDefault()
+  event.returnValue = ''
+}
+
+function handlePersonalizationNavigation(event) {
+  if (!isAggregateEditMode.value) return
+  if (personalizationSaving.value || (personalizationDirty.value && !window.confirm('저장하지 않은 개인 설정을 폐기하고 이동할까요?'))) {
+    event.preventDefault()
+    return
+  }
+  discardPersonalization()
+}
+
+function updatePersonalizationPreference({ key, value }) {
+  if (personalizationSaving.value) return
+  applyCalendarViewPreferences(normalizeCalendarViewPreferences({ ...calendarViewPreferencePayload(), [key]: value }))
+}
+
+function updatePersonalizationWidget({ index, field, value }) {
+  if (personalizationSaving.value) return
+  if (field === 'chartSize') updateAggregateWidgetSize(index, value)
+  else updateAggregateWidget(index, field, value)
+}
+
+function selectPersonalizationWidget(index) {
+  personalizationSelectedIndex.value = index
+  openPersonalization('widgets')
+}
+
+function addPersonalizationWidget(duplicate = false) {
+  const index = aggregateWidgetDraftConfigs.value.findIndex(item => item.kind === 'NONE')
+  if (index < 0 || personalizationSaving.value) return
+  const target = aggregateWidgetDraftConfigs.value[index]
+  const source = duplicate ? aggregateWidgetDraftConfigs.value[personalizationSelectedIndex.value] : { ...target, kind: 'TOTAL', hidden: false, title: '' }
+  aggregateWidgetDraftConfigs.value[index] = { ...clone(source), id: target.id, layoutOrder: target.layoutOrder, layoutX: target.layoutX, title: duplicate ? `${source.title || personalizationCards.value[personalizationSelectedIndex.value]?.title || '집계'} 복사`.slice(0, 80) : '' }
+  aggregateWidgetDraftConfigs.value = normalizeAggregateConfigs(aggregateWidgetDraftConfigs.value)
+  personalizationSelectedIndex.value = index
+  isAggregatePanelEnabled.value = true
+}
+
+function deletePersonalizationWidget() {
+  if (!window.confirm('이 집계 위젯을 제거할까요? 거래 내역은 삭제되지 않습니다.')) return
+  updateAggregateWidget(personalizationSelectedIndex.value, 'kind', 'NONE')
+}
+
+function movePersonalizationWidget(direction) {
+  const previous = personalizationSelectedIndex.value
+  moveAggregateWidget(previous, direction)
+  personalizationSelectedIndex.value = clamp(previous + direction, 0, aggregateWidgetMaxCount - 1)
+}
+
+function updatePersonalizationPanel({ id, field, value }) {
+  const next = normalizeCalendarPanelLayout(calendarPanelLayout.value.map(item => item.id === id ? { ...item, [field]: value } : item))
+  calendarPanelLayout.value = packDashboardPanels(next, id)
+  refreshCalendarMeasurements()
+}
+
+function editPersonalizationLayout() {
+  isLayoutEditMode.value = true
+  personalizationOpen.value = false
+  // On mobile, numeric layout controls are the accessible alternative to desktop drag/resize.
+  if (isMobileLayoutMode.value) personalizationOpen.value = true
+}
+
+function resetPersonalization(scope) {
+  const label = { layout: '위젯 배치만', preferences: '달력·입력 기본값만', widgets: '집계 위젯 구성만' }[scope]
+  if (!label || !window.confirm(`${label} 기본값으로 복원할까요? 거래 데이터는 변경되지 않으며 저장 전까지 취소할 수 있습니다.`)) return
+  if (scope === 'layout') calendarPanelLayout.value = createDefaultCalendarPanelLayout()
+  if (scope === 'preferences') applyCalendarViewPreferences(defaultCalendarViewPreferences())
+  if (scope === 'widgets') aggregateWidgetDraftConfigs.value = createDefaultAggregateConfigs()
+  refreshCalendarMeasurements()
 }
 
 function clamp(value, min, max) {
@@ -1693,11 +1848,13 @@ function updateCalendarShellWidth() {
 function calendarViewPreferencePayload() {
   return {
     scalePreset: calendarScalePreset.value,
-    highlightMode: calendarHighlightMode.value,
+    highlightMode: calendarDefaultHighlightMode.value,
     aggregatePanelEnabled: isAggregatePanelEnabled.value,
     receiptOcrPanelEnabled: isReceiptOcrPanelEnabled.value,
     transactionSheetViewMode: transactionSheetViewMode.value,
     shareAfterSaveEnabled: isShareAfterSaveEnabled.value,
+    quickEntryPanelEnabled: isQuickEntryPanelEnabled.value,
+    defaultWeekMode: calendarDefaultWeekMode.value,
   }
 }
 
@@ -1725,17 +1882,12 @@ function normalizeCalendarViewPreferences(payload) {
     receiptOcrPanelEnabled: payload.receiptOcrPanelEnabled !== false,
     transactionSheetViewMode: normalizeTransactionSheetViewMode(payload.transactionSheetViewMode),
     shareAfterSaveEnabled: payload.shareAfterSaveEnabled === true,
+    quickEntryPanelEnabled: payload.quickEntryPanelEnabled !== false,
+    defaultWeekMode: calendarWeekModes.some(item => item.key === payload.defaultWeekMode) ? payload.defaultWeekMode : 'month',
   }
 }
 
-function isLegacyDefaultCalendarViewPreferences(preferences) {
-  return preferences.scalePreset === 'default'
-    && preferences.highlightMode === DEFAULT_CALENDAR_HIGHLIGHT_MODE
-    && preferences.aggregatePanelEnabled
-    && preferences.receiptOcrPanelEnabled
-    && !preferences.shareAfterSaveEnabled
-    && preferences.transactionSheetViewMode === 'inline'
-}
+
 
 function applyCalendarViewPreferences(preferences) {
   if (!preferences) {
@@ -1744,69 +1896,37 @@ function applyCalendarViewPreferences(preferences) {
 
   calendarScalePreset.value = preferences.scalePreset
   calendarHighlightMode.value = preferences.highlightMode
+  calendarDefaultHighlightMode.value = preferences.highlightMode
+  calendarDefaultWeekMode.value = preferences.defaultWeekMode || 'month'
+  calendarWeekMode.value = calendarDefaultWeekMode.value
   isAggregatePanelEnabled.value = preferences.aggregatePanelEnabled
   isReceiptOcrPanelEnabled.value = preferences.receiptOcrPanelEnabled
   transactionSheetViewMode.value = preferences.transactionSheetViewMode
   isShareAfterSaveEnabled.value = preferences.shareAfterSaveEnabled
+  isQuickEntryPanelEnabled.value = preferences.quickEntryPanelEnabled !== false
 }
 
-function persistCalendarViewPreferencesLocal() {
-  if (typeof window === 'undefined') {
+function readLocalPreference(key) {
+  try { return window.localStorage.getItem(key) } catch { return null }
+}
+
+function writeLocalPreference(key, value) {
+  try { window.localStorage.setItem(key, JSON.stringify(value)) } catch { /* A full or disabled cache must not prevent using server settings. */ }
+}
+
+function persistCalendarViewPreferencesLocal(force = false) {
+  if (typeof window === 'undefined' || (isAggregateEditMode.value && !force)) {
     return
   }
 
-  window.localStorage.setItem(
-    calendarViewPreferenceStorageKey.value,
-    JSON.stringify(calendarViewPreferencePayload()),
-  )
+  writeLocalPreference(calendarViewPreferenceStorageKey.value, calendarViewPreferencePayload())
 }
 
-function scheduleCalendarViewPreferencesRemotePersist(payload = calendarViewPreferencePayload()) {
-  if (typeof window === 'undefined') {
-    return
-  }
 
-  if (viewPreferenceRemoteSaveTimer) {
-    window.clearTimeout(viewPreferenceRemoteSaveTimer)
-  }
-
-  pendingViewPreferenceRemotePayload = clone(payload)
-  viewPreferenceRemoteSaveTimer = window.setTimeout(() => {
-    saveCalendarViewPreferencesRemoteNow()
-  }, REMOTE_LAYOUT_SAVE_DELAY_MS)
-}
-
-function saveCalendarViewPreferencesRemoteNow(payload = pendingViewPreferenceRemotePayload) {
-  if (typeof window === 'undefined' || !payload) {
-    return Promise.resolve()
-  }
-
-  if (viewPreferenceRemoteSaveTimer) {
-    window.clearTimeout(viewPreferenceRemoteSaveTimer)
-    viewPreferenceRemoteSaveTimer = 0
-  }
-
-  const nextPayload = clone(payload)
-  pendingViewPreferenceRemotePayload = null
-  return saveLayoutSetting(CALENDAR_VIEW_PREFERENCE_SCOPE, nextPayload, CALENDAR_VIEW_PREFERENCE_VERSION).catch(() => {
-    // Local display preferences remain available if the backend is temporarily unavailable.
-  })
-}
-
-function persistCalendarViewPreferences() {
-  persistCalendarViewPreferencesLocal()
-  if (isApplyingCalendarViewPreferences) {
-    return
-  }
-
-  viewPreferenceChangedDuringRemoteHydration = true
-  scheduleCalendarViewPreferencesRemotePersist(calendarViewPreferencePayload())
-}
 
 function hydrateCalendarViewPreferencesFromLocal() {
   viewPreferenceRemoteHydrationSequence += 1
   viewPreferenceChangedDuringRemoteHydration = false
-  isApplyingCalendarViewPreferences = true
 
   let preferences = defaultCalendarViewPreferences()
   try {
@@ -1814,9 +1934,7 @@ function hydrateCalendarViewPreferencesFromLocal() {
     const legacyRaw = raw ? null : window.localStorage.getItem(legacyCalendarViewPreferenceStorageKey.value)
     const parsed = raw || legacyRaw ? JSON.parse(raw ?? legacyRaw) : null
     const restoredPreferences = normalizeCalendarViewPreferences(parsed)
-    preferences = legacyRaw && restoredPreferences && isLegacyDefaultCalendarViewPreferences(restoredPreferences)
-      ? defaultCalendarViewPreferences()
-      : restoredPreferences ?? preferences
+    preferences = restoredPreferences ?? preferences
   } catch {
     // An invalid per-user cache should never affect the first-use baseline.
   }
@@ -1824,9 +1942,6 @@ function hydrateCalendarViewPreferencesFromLocal() {
   applyCalendarViewPreferences(preferences)
 
   persistCalendarViewPreferencesLocal()
-  nextTick(() => {
-    isApplyingCalendarViewPreferences = false
-  })
 
   return viewPreferenceRemoteHydrationSequence
 }
@@ -1840,32 +1955,11 @@ async function hydrateRemoteCalendarViewPreferences(sequence, fallbackPayload) {
 
     const preferences = normalizeCalendarViewPreferences(response?.payload)
     if (preferences) {
-      const remoteVersion = Number(response?.version ?? 1) || 1
-      const nextPreferences = (
-        remoteVersion < CALENDAR_VIEW_PREFERENCE_VERSION
-        && isLegacyDefaultCalendarViewPreferences(preferences)
-      )
-        ? defaultCalendarViewPreferences()
-        : preferences
-      isApplyingCalendarViewPreferences = true
-      applyCalendarViewPreferences(nextPreferences)
+      applyCalendarViewPreferences(preferences)
       persistCalendarViewPreferencesLocal()
-      nextTick(() => {
-        isApplyingCalendarViewPreferences = false
-      })
-      if (remoteVersion < CALENDAR_VIEW_PREFERENCE_VERSION) {
-        await saveLayoutSetting(
-          CALENDAR_VIEW_PREFERENCE_SCOPE,
-          calendarViewPreferencePayload(),
-          CALENDAR_VIEW_PREFERENCE_VERSION,
-        )
-      }
       return
     }
 
-    if (fallbackPayload) {
-      await saveLayoutSetting(CALENDAR_VIEW_PREFERENCE_SCOPE, fallbackPayload, CALENDAR_VIEW_PREFERENCE_VERSION)
-    }
   } catch {
     // Remote display preferences should not block the calendar workspace.
   }
@@ -1912,7 +2006,7 @@ function parseRemoteUpdatedAt(value) {
 }
 
 function normalizeCalendarPanelLayout(layouts) {
-  const source = new Map((layouts ?? []).map((item) => [String(item.id), item]))
+  const source = new Map((Array.isArray(layouts) ? layouts : []).filter(item => item && typeof item === 'object').map((item) => [String(item.id), item]))
 
   const normalized = calendarPanelDefinitions.map((definition) => {
     const raw = source.get(definition.id) ?? definition.defaultLayout
@@ -1928,63 +2022,11 @@ function normalizeCalendarPanelLayout(layouts) {
     }
   })
 
-  const aggregate = normalized.find((item) => item.id === 'aggregate')
-  if (aggregate) {
-    aggregate.x = 0
-    aggregate.y = 0
-    aggregate.w = CALENDAR_LAYOUT_GRID_COLUMNS
-    aggregate.h = CALENDAR_AGGREGATE_PANEL_ROWS
-  }
-
-  const aggregateBottom = aggregate ? aggregate.y + aggregate.h : 0
-  const calendar = normalized.find((item) => item.id === 'calendar')
-  const quickEntry = normalized.find((item) => item.id === 'quick-entry')
-  const sheet = normalized.find((item) => item.id === 'sheet')
-  const legacyAggregateShift = aggregateBottom - LEGACY_CALENDAR_AGGREGATE_PANEL_ROWS
-  if (legacyAggregateShift < 0) {
-    for (const item of [calendar, quickEntry, sheet]) {
-      if (item && item.y >= LEGACY_CALENDAR_AGGREGATE_PANEL_ROWS) {
-        item.y = Math.max(aggregateBottom, item.y + legacyAggregateShift)
-      }
-    }
-  }
-
-  for (const item of [calendar, quickEntry]) {
-    if (item && item.y < aggregateBottom) {
-      item.y = aggregateBottom
-    }
-  }
-
-  const contentBottom = Math.max(
-    aggregateBottom,
-    calendar ? calendar.y + calendar.h : 0,
-    quickEntry ? quickEntry.y + quickEntry.h : 0,
-  )
-  if (sheet && sheet.y < contentBottom) {
-    sheet.y = contentBottom
-  }
-
+  // Validate each panel without shifting a user's saved rows or forcing the aggregate to the top.
   return normalized
 }
 
-function matchesCalendarPanelLayout(layout, expectedLayout) {
-  if (!Array.isArray(layout) || layout.length !== expectedLayout.length) return false
-  const panelsById = new Map(layout.map((panel) => [String(panel?.id ?? ''), panel]))
-  return expectedLayout.every((expected) => {
-    const panel = panelsById.get(expected.id)
-    return Boolean(
-      panel
-      && Number(panel.x) === expected.x
-      && Number(panel.y) === expected.y
-      && Number(panel.w) === expected.w
-      && Number(panel.h) === expected.h,
-    )
-  })
-}
 
-function isLegacyCalendarDefaultLayout(layout) {
-  return matchesCalendarPanelLayout(layout, LEGACY_CALENDAR_DEFAULT_LAYOUT)
-}
 
 function hydrateCalendarPanelLayout() {
   layoutRemoteHydrationSequence += 1
@@ -1994,10 +2036,9 @@ function hydrateCalendarPanelLayout() {
     return
   }
 
-  const savedLayout = window.localStorage.getItem(calendarPanelLayoutStorageKey.value)
-  const legacySavedLayout = savedLayout ? null : window.localStorage.getItem(legacyCalendarPanelLayoutStorageKey.value)
+  const savedLayout = readLocalPreference(calendarPanelLayoutStorageKey.value)
+  const legacySavedLayout = savedLayout ? null : readLocalPreference(legacyCalendarPanelLayoutStorageKey.value)
   const storedLayout = savedLayout ?? legacySavedLayout
-  const isLegacyStorage = !savedLayout && Boolean(legacySavedLayout)
   if (!storedLayout) {
     const recommendedLayout = createDefaultCalendarPanelLayout()
     calendarPanelLayout.value = recommendedLayout
@@ -2011,16 +2052,8 @@ function hydrateCalendarPanelLayout() {
     if (!restoredLayout) {
       throw new Error('Invalid calendar panel layout cache.')
     }
-    if (isLegacyStorage && isLegacyCalendarDefaultLayout(restoredLayout.layout)) {
-      const recommendedLayout = createDefaultCalendarPanelLayout()
-      calendarPanelLayout.value = recommendedLayout
-      calendarPanelLayoutLocalSavedAt = 0
-      persistCalendarPanelLayoutLocal()
-      hydrateRemoteCalendarPanelLayout(layoutRemoteHydrationSequence, clone(recommendedLayout))
-      return
-    }
-
     calendarPanelLayout.value = normalizeCalendarPanelLayout(restoredLayout.layout)
+    localLayoutNeedsReview = true
     calendarPanelLayoutLocalSavedAt = restoredLayout.savedAt
     persistCalendarPanelLayoutLocal(restoredLayout.savedAt)
     hydrateRemoteCalendarPanelLayout(layoutRemoteHydrationSequence, clone(calendarPanelLayout.value), { preferLocal: true })
@@ -2033,61 +2066,14 @@ function hydrateCalendarPanelLayout() {
   }
 }
 
-function persistCalendarPanelLayoutLocal(savedAt = Date.now()) {
-  if (typeof window !== 'undefined') {
+function persistCalendarPanelLayoutLocal(savedAt = Date.now(), force = false) {
+  if (typeof window !== 'undefined' && (!isAggregateEditMode.value || force)) {
     calendarPanelLayoutLocalSavedAt = savedAt
-    window.localStorage.setItem(
-      calendarPanelLayoutStorageKey.value,
-      JSON.stringify({
-        savedAt,
-        layout: calendarPanelLayout.value,
-      }),
-    )
+    writeLocalPreference(calendarPanelLayoutStorageKey.value, { savedAt, layout: calendarPanelLayout.value })
   }
 }
 
-function scheduleCalendarPanelLayoutRemotePersist(payload = clone(calendarPanelLayout.value)) {
-  if (typeof window === 'undefined') {
-    return
-  }
 
-  if (layoutRemoteSaveTimer) {
-    window.clearTimeout(layoutRemoteSaveTimer)
-  }
-
-  pendingLayoutRemotePayload = clone(payload)
-  layoutRemoteSaveTimer = window.setTimeout(() => {
-    saveCalendarPanelLayoutRemoteNow()
-  }, REMOTE_LAYOUT_SAVE_DELAY_MS)
-}
-
-function saveCalendarPanelLayoutRemoteNow(payload = pendingLayoutRemotePayload) {
-  if (typeof window === 'undefined' || !payload) {
-    return Promise.resolve()
-  }
-
-  if (layoutRemoteSaveTimer) {
-    window.clearTimeout(layoutRemoteSaveTimer)
-    layoutRemoteSaveTimer = 0
-  }
-
-  const nextPayload = clone(payload)
-  pendingLayoutRemotePayload = null
-  return saveLayoutSetting(CALENDAR_PANEL_LAYOUT_SCOPE, nextPayload, CALENDAR_PANEL_LAYOUT_VERSION).catch(() => {
-    // Local cache keeps the user's layout if the backend is temporarily unavailable.
-  })
-}
-
-function persistCalendarPanelLayout({ immediate = false } = {}) {
-  layoutChangedDuringRemoteHydration = true
-  const payload = clone(calendarPanelLayout.value)
-  persistCalendarPanelLayoutLocal()
-  if (immediate) {
-    saveCalendarPanelLayoutRemoteNow(payload)
-    return
-  }
-  scheduleCalendarPanelLayoutRemotePersist(payload)
-}
 
 async function hydrateRemoteCalendarPanelLayout(sequence, fallbackLayout, { preferLocal = false } = {}) {
   try {
@@ -2097,7 +2083,6 @@ async function hydrateRemoteCalendarPanelLayout(sequence, fallbackLayout, { pref
     }
 
     if (Array.isArray(response?.payload)) {
-      const remoteVersion = Number(response.version ?? 1) || 1
       const remoteUpdatedAt = parseRemoteUpdatedAt(response.updatedAt)
       if (
         preferLocal
@@ -2106,49 +2091,22 @@ async function hydrateRemoteCalendarPanelLayout(sequence, fallbackLayout, { pref
         && remoteUpdatedAt > 0
         && calendarPanelLayoutLocalSavedAt > remoteUpdatedAt
       ) {
-        await saveLayoutSetting(CALENDAR_PANEL_LAYOUT_SCOPE, fallbackLayout, CALENDAR_PANEL_LAYOUT_VERSION)
         return
       }
 
-      if (remoteVersion < CALENDAR_PANEL_LAYOUT_VERSION && isLegacyCalendarDefaultLayout(response.payload)) {
-        const recommendedLayout = createDefaultCalendarPanelLayout()
-        calendarPanelLayout.value = recommendedLayout
-        persistCalendarPanelLayoutLocal()
-        await saveLayoutSetting(CALENDAR_PANEL_LAYOUT_SCOPE, clone(recommendedLayout), CALENDAR_PANEL_LAYOUT_VERSION)
-        refreshCalendarMeasurements()
-        return
-      }
-
+      localLayoutNeedsReview = false
       calendarPanelLayout.value = normalizeCalendarPanelLayout(response.payload)
       persistCalendarPanelLayoutLocal(remoteUpdatedAt || Date.now())
-      if (remoteVersion < CALENDAR_PANEL_LAYOUT_VERSION) {
-        await saveLayoutSetting(CALENDAR_PANEL_LAYOUT_SCOPE, clone(calendarPanelLayout.value), CALENDAR_PANEL_LAYOUT_VERSION)
-      }
       refreshCalendarMeasurements()
       return
     }
 
-    if (fallbackLayout) {
-      await saveLayoutSetting(CALENDAR_PANEL_LAYOUT_SCOPE, fallbackLayout, CALENDAR_PANEL_LAYOUT_VERSION)
-    }
   } catch {
     // Remote layout sync should not block the calendar workspace.
   }
 }
 
-function applyRecommendedCalendarPreset() {
-  calendarPanelLayout.value = createDefaultCalendarPanelLayout()
-  viewPreferenceChangedDuringRemoteHydration = true
-  isApplyingCalendarViewPreferences = true
-  applyCalendarViewPreferences(defaultCalendarViewPreferences())
-  persistCalendarPanelLayout({ immediate: true })
-  persistCalendarViewPreferencesLocal()
-  saveCalendarViewPreferencesRemoteNow(calendarViewPreferencePayload())
-  nextTick(() => {
-    isApplyingCalendarViewPreferences = false
-  })
-  refreshCalendarMeasurements()
-}
+
 
 function calendarPanelAttrs(panel) {
   return {
@@ -2190,7 +2148,7 @@ function readLayoutGridSnapshot() {
   }
 
   return (layoutGrid.engine?.nodes ?? []).map((node) => ({
-    id: node.el?.getAttribute('gs-id') || node.el?.getAttribute('data-calendar-panel-id'),
+    id: node.id || node.el?.getAttribute('gs-id') || node.el?.getAttribute('data-calendar-panel-id'),
     x: node.x,
     y: node.y,
     w: node.w,
@@ -2198,16 +2156,15 @@ function readLayoutGridSnapshot() {
   })).filter((item) => item.id)
 }
 
-function applyCalendarPanelLayout(snapshot, { immediate = false } = {}) {
+function applyCalendarPanelLayout(snapshot) {
   const snapshotById = new Map((snapshot ?? []).map((item) => [String(item.id), item]))
   const mergedLayout = calendarPanelLayout.value.map((current) => snapshotById.get(String(current.id)) ?? current)
   calendarPanelLayout.value = normalizeCalendarPanelLayout(mergedLayout)
-  persistCalendarPanelLayout({ immediate })
   refreshCalendarMeasurements()
 }
 
 function handleLayoutGridStop() {
-  applyCalendarPanelLayout(readLayoutGridSnapshot(), { immediate: true })
+  if (!personalizationSaving.value) applyCalendarPanelLayout(readLayoutGridSnapshot())
 }
 
 function readIsMobileLayoutMode() {
@@ -2226,9 +2183,6 @@ function syncMobileLayoutMode() {
 
   isMobileLayoutMode.value = nextIsMobile
   if (nextIsMobile) {
-    if (isLayoutEditMode.value) {
-      isLayoutEditMode.value = false
-    }
     destroyLayoutGrid()
     refreshCalendarMeasurements()
     return
@@ -2240,7 +2194,7 @@ function syncMobileLayoutMode() {
 function calendarPanelLayoutItemStyle(panel) {
   if (isMobileLayoutMode.value) {
     return {
-      '--mobile-calendar-panel-order': String(mobileCalendarPanelOrder[panel.id] ?? 5),
+      '--mobile-calendar-panel-order': String(Number(panel.y) * 9 + Number(panel.x)),
     }
   }
 
@@ -2254,6 +2208,7 @@ function calendarPanelLayoutItemStyle(panel) {
   const rowSpan = Math.max(1, Number(panel.h ?? 1) || 1)
 
   return {
+    '--mobile-calendar-panel-order': String(Number(panel.y) * 9 + Number(panel.x)),
     gridColumn: columnStart + ' / span ' + columnSpan,
     gridRow: rowStart + ' / span ' + rowSpan,
   }
@@ -2271,7 +2226,7 @@ function destroyLayoutGrid() {
 }
 
 function initLayoutGrid() {
-  if (isMobileLayoutMode.value) {
+  if (!isCalendarGridStackActive.value) {
     destroyLayoutGrid()
     return
   }
@@ -2287,7 +2242,7 @@ function initLayoutGrid() {
     margin: CALENDAR_LAYOUT_GRID_MARGIN,
     cellHeight: layoutCellHeight.value,
     disableResize: false,
-    float: false,
+    float: true,
     animate: true,
     draggable: {
       appendTo: 'body',
@@ -2299,8 +2254,8 @@ function initLayoutGrid() {
       handles: 'se',
     },
   }, layoutGridElement)
-  layoutGrid.enableMove(isLayoutEditMode.value)
-  layoutGrid.enableResize(isLayoutEditMode.value)
+  layoutGrid.enableMove(isLayoutEditMode.value && !personalizationSaving.value && !personalizationLoading.value)
+  layoutGrid.enableResize(isLayoutEditMode.value && !personalizationSaving.value && !personalizationLoading.value)
   layoutGrid.on('dragstop', handleLayoutGridStop)
   layoutGrid.on('resizestop', handleLayoutGridStop)
   updateLayoutCellHeight()
@@ -2311,7 +2266,7 @@ function queueLayoutGridRebuild() {
     return
   }
 
-  if (isMobileLayoutMode.value) {
+  if (!isCalendarGridStackActive.value) {
     destroyLayoutGrid()
     refreshCalendarMeasurements()
     return
@@ -2329,34 +2284,13 @@ function queueLayoutGridRebuild() {
   }, 0)
 }
 
-function toggleLayoutEditMode() {
-  if (isMobileLayoutMode.value) {
-    return
-  }
-
-  if (isLayoutEditMode.value) {
-    if (isAggregateEditMode.value) {
-      cancelAggregateEdit()
-    }
-    const snapshot = readLayoutGridSnapshot()
-    if (snapshot.length) {
-      applyCalendarPanelLayout(snapshot, { immediate: true })
-    } else {
-      saveCalendarPanelLayoutRemoteNow(clone(calendarPanelLayout.value))
-    }
-    isLayoutEditMode.value = false
-    return
-  }
-
-  isLayoutEditMode.value = true
+async function toggleLayoutEditMode() {
+  await openPersonalization('dashboard', false)
+  if (personalizationRevision.value) isLayoutEditMode.value = true
+  if (isMobileLayoutMode.value) personalizationOpen.value = true
 }
 
-function toggleReceiptOcrPanelEnabled() {
-  isReceiptOcrPanelEnabled.value = !isReceiptOcrPanelEnabled.value
-  if (!isReceiptOcrPanelEnabled.value) {
-    emit('close-receipt-ocr')
-  }
-}
+
 
 function refreshCalendarMeasurements() {
   nextTick(() => {
@@ -2486,6 +2420,9 @@ function createDefaultAggregateConfigs() {
     chartMaxAmount: 0,
     textSize: 'MEDIUM',
     textColor: 'DEFAULT',
+    title: '',
+    hidden: false,
+    displaySize: 'MEDIUM',
     layoutY: 1,
     layoutW: 1,
     layoutH: 1,
@@ -2795,7 +2732,10 @@ function normalizeAggregateConfigs(configs) {
     layoutY = normalizeAggregateGridPosition(layoutY, baseConfig.layoutY, getAggregateMaxRowForHeight(layoutH))
     layoutOrder = normalizeAggregateLayoutOrder(layoutOrder, baseConfig.layoutOrder ?? index + 1)
 
-    return { id: current.id || baseConfig.id, kind, period, paymentMethodId, amountType, monthlyExpenseTarget, singleExpenseLimit, showIncomeCumulative, showExpenseCumulative, comparePreviousPeriod, chartMaxAmount, textSize, textColor, layoutX, layoutY, layoutW, layoutH, layoutOrder }
+    const title = String(current.title || '').slice(0, 80)
+    const hidden = current.hidden === true
+    const displaySize = ['SMALL', 'MEDIUM', 'LARGE'].includes(current.displaySize) ? current.displaySize : 'MEDIUM'
+    return { id: current.id || baseConfig.id, kind, period, paymentMethodId, amountType, monthlyExpenseTarget, singleExpenseLimit, showIncomeCumulative, showExpenseCumulative, comparePreviousPeriod, chartMaxAmount, textSize, textColor, layoutX, layoutY, layoutW, layoutH, layoutOrder, title, hidden, displaySize }
   })
 
   return packAggregateGridConfigs(orderAggregateConfigs(normalizedConfigs))
@@ -2896,17 +2836,13 @@ function syncAggregateWidgetDraft() {
 }
 
 function startAggregateEdit() {
-  syncAggregateWidgetDraft()
-  isAggregateEditMode.value = true
+  openPersonalization('widgets')
 }
 
-function cancelAggregateEdit() {
-  syncAggregateWidgetDraft()
-  isAggregateEditMode.value = false
-}
+
 
 function serializeAggregateWidgetConfigs(configs) {
-  return normalizeAggregateConfigs(configs).slice(0, aggregateWidgetMaxCount).map(({ kind, period, paymentMethodId, amountType, monthlyExpenseTarget, singleExpenseLimit, showIncomeCumulative, showExpenseCumulative, comparePreviousPeriod, chartMaxAmount, textSize, textColor, layoutX, layoutY, layoutW }, configIndex) => {
+  return normalizeAggregateConfigs(configs).slice(0, aggregateWidgetMaxCount).map(({ kind, period, paymentMethodId, amountType, monthlyExpenseTarget, singleExpenseLimit, showIncomeCumulative, showExpenseCumulative, comparePreviousPeriod, chartMaxAmount, textSize, textColor, layoutX, layoutY, layoutW, title, hidden, displaySize }, configIndex) => {
     const normalizedWidth = kind === 'MONTHLY_CUMULATIVE_CHART'
       ? Math.min(4, Math.max(2, normalizeAggregateGridSpan(layoutW, 2, 4)))
       : aggregateDefaultWidgetWidth
@@ -2917,6 +2853,7 @@ function serializeAggregateWidgetConfigs(configs) {
       : (kind === 'MONTHLY_CUMULATIVE_CHART' ? 'NET' : 'EXPENSE')
     return {
       kind,
+      title, hidden, displaySize,
       period: normalizedPeriod,
       paymentMethodId: kind === 'PAYMENT_METHOD' && paymentMethodId ? Number(paymentMethodId) : null,
       amountType: normalizedAmountType,
@@ -2937,23 +2874,14 @@ function serializeAggregateWidgetConfigs(configs) {
   })
 }
 
-function saveAggregateWidgetConfigs() {
-  emit('save-aggregate-widget-configs', serializeAggregateWidgetConfigs(aggregateWidgetDraftConfigs.value))
-  isAggregateEditMode.value = false
-}
-function toggleAggregatePanelEnabled() {
-  isAggregatePanelEnabled.value = !isAggregatePanelEnabled.value
 
-  if (!isAggregatePanelEnabled.value && isAggregateEditMode.value) {
-    cancelAggregateEdit()
-  }
-}
 
 async function restoreAggregatePanel() {
   if (isAggregatePanelEnabled.value) {
     return
   }
 
+  await openPersonalization('dashboard')
   isAggregatePanelEnabled.value = true
   await nextTick()
   await waitForLayoutFrame()
@@ -3223,32 +3151,14 @@ function closeAggregateChartDetail() {
   aggregateChartMaxAmountDraft.value = ''
 }
 
-function applyAggregateChartMaxAmount() {
+async function applyAggregateChartMaxAmount() {
   const detailCard = aggregateChartDetailCard.value
   if (!detailCard?.chart) return
-
-  const normalizedMaxAmount = normalizeAggregateChartMaxAmount(aggregateChartMaxAmountDraft.value)
-  aggregateChartMaxAmountDraft.value = normalizedMaxAmount > 0 ? String(normalizedMaxAmount) : ''
-  const selectedPoint = aggregateChartSelectedPoint.value
-  const nextCard = buildAggregateCard({
-    ...detailCard.config,
-    chartMaxAmount: normalizedMaxAmount,
-  }, detailCard.index)
-  aggregateChartDetailCard.value = nextCard
-  aggregateChartSelectedPoint.value = selectedPoint
-    ? visibleAggregateChartPoints(nextCard).find((point) => point.key === selectedPoint.key) || null
-    : null
-  aggregateChartHoveredPoint.value = null
-
-  const configs = normalizeAggregateConfigs(props.aggregateWidgetConfigs)
-  const targetIndex = configs.findIndex((config) => config.id === detailCard.config.id)
-  const resolvedIndex = targetIndex >= 0 ? targetIndex : detailCard.index
-  const nextConfigs = configs.map((config, index) => (
-    index === resolvedIndex
-      ? { ...config, chartMaxAmount: normalizedMaxAmount }
-      : config
-  ))
-  emit('save-aggregate-widget-configs', serializeAggregateWidgetConfigs(nextConfigs))
+  const nextAmount = normalizeAggregateChartMaxAmount(aggregateChartMaxAmountDraft.value)
+  closeAggregateChartDetail()
+  await openPersonalization('widgets')
+  personalizationSelectedIndex.value = detailCard.index
+  updateAggregateWidget(detailCard.index, 'chartMaxAmount', nextAmount)
 }
 
 function selectAggregateChartPoint(point) {
@@ -3907,16 +3817,10 @@ async function scrollToEntryEditor() {
 }
 
 function openTransactionSheetSettings() {
-  isTransactionSheetSettingsOpen.value = true
+  openPersonalization('calendar')
 }
 
-function closeTransactionSheetSettings() {
-  isTransactionSheetSettingsOpen.value = false
-}
 
-function setTransactionSheetViewMode(value) {
-  transactionSheetViewMode.value = normalizeTransactionSheetViewMode(value)
-}
 
 function closeTransactionSheetModal() {
   isTransactionSheetModalOpen.value = false
@@ -3984,155 +3888,43 @@ defineExpose({
 
 <template>
   <div class="workspace-stack household-calendar-workspace" @keydown.capture="handleWorkspaceKeydown">
+    <HouseholdPersonalizationDialog
+      :open="personalizationOpen" :section="personalizationSection" :busy="personalizationSaving"
+      :loading="personalizationLoading" :dirty="personalizationDirty" :error="personalizationError"
+      :notice="personalizationNotice"
+      :conflict="personalizationConflict" :can-save="Boolean(personalizationRevision)"
+      :preferences="personalizationPreferences" :widgets="aggregateWidgetDraftConfigs" :cards="personalizationCards"
+      :selected-index="personalizationSelectedIndex" :panels="calendarPanelDefinitions.map(item => ({ ...item, ...calendarPanelLayout.find(panel => panel.id === item.id) }))" :payment-methods="paymentMethods"
+      @section="personalizationSection = $event" @close="cancelPersonalization" @save="savePersonalization"
+      @reload="reloadPersonalization" @preference="updatePersonalizationPreference" @widget="updatePersonalizationWidget"
+      @select-widget="personalizationSelectedIndex = $event" @add-widget="addPersonalizationWidget(false)"
+      @duplicate-widget="addPersonalizationWidget(true)" @delete-widget="deletePersonalizationWidget"
+      @move-widget="movePersonalizationWidget" @panel="updatePersonalizationPanel" @edit-layout="editPersonalizationLayout" @reset="resetPersonalization"
+    />
 
-    <section
-      v-if="isLayoutEditMode"
-      id="household-calendar-layout-editor"
-      :class="[
-        'panel household-calendar-control-panel household-calendar-layout',
-        { 'household-calendar-layout--amount-only': isAmountOnlyCalendar },
-        { 'household-calendar-layout--fit': isFitCalendar },
-        { 'household-calendar-layout--week-view': calendarWeekMode !== 'month' },
-      ]"
-      :style="calendarLayoutStyle"
-    >
-      <div class="panel__header household-calendar-control-panel__header">
-        <div class="household-calendar-header-actions">
-          <span class="panel__badge">{{ anchorDate.slice(0, 7) }}</span>
-          <div class="household-calendar-layout-toolbar household-calendar-layout-toolbar--inline" data-no-drag="true">
-            <div class="household-calendar-layout-toolbar__status">
-              <strong>배치 편집</strong>
-              <span>{{ isLayoutEditMode ? '켜짐 · 카드를 드래그해서 크기와 위치를 수정할 수 있습니다.' : '꺼짐 · 추천 기본 배치(9×8)가 고정됩니다.' }}</span>
-            </div>
-            <div class="household-calendar-layout-toolbar__actions">
-              <button type="button" class="button button--secondary" @click="toggleAggregatePanelEnabled">
-                {{ isAggregatePanelEnabled ? '집계 숨기기' : '집계 보이기' }}
-              </button>
-              <button type="button" class="button button--secondary" @click="toggleReceiptOcrPanelEnabled">
-                {{ isReceiptOcrPanelEnabled ? '자동입력 숨기기' : '자동입력 보이기' }}
-              </button>
-              <button type="button" class="button button--secondary" @click="applyRecommendedCalendarPreset">
-                {{ RECOMMENDED_CALENDAR_PRESET_LABEL }}
-              </button>
-              <button
-                type="button"
-                class="button button--primary"
-                aria-pressed="true"
-                :disabled="isMobileLayoutMode"
-                @click="toggleLayoutEditMode"
-              >
-                배치 편집 끄기
-              </button>
-            </div>
-          </div>
-        </div>
+    <section class="calendar-overview-toolbar" aria-label="달력 조회와 개인화">
+      <div class="calendar-overview-toolbar__date">
+        <button type="button" class="button button--secondary" aria-label="이전 월" @click="shiftAnchorMonth(-1)">‹</button>
+        <label><span class="sr-only">연도</span><select :value="calendarYear" aria-label="연도" @change="handleChangeYear"><option v-for="year in yearOptions" :key="year" :value="year">{{ year }}년</option></select></label>
+        <label><span class="sr-only">월</span><select :value="calendarMonth" aria-label="월" @change="handleChangeMonth"><option v-for="month in 12" :key="month" :value="month">{{ month }}월</option></select></label>
+        <button type="button" class="button button--secondary" aria-label="다음 월" @click="shiftAnchorMonth(1)">›</button>
+        <button type="button" class="button button--ghost" @click="emit('change-anchor-month', todayIso); selectedDate = todayIso">오늘</button>
       </div>
+      <div class="calendar-overview-toolbar__filters">
+        <label><span class="sr-only">달력 보기</span><select v-model="calendarWeekMode" aria-label="달력 보기"><option v-for="mode in calendarWeekModes" :key="mode.key" :value="mode.key">{{ mode.label }}</option></select></label>
+        <label v-if="calendarWeekMode === 'previous'"><span class="sr-only">이전 주 범위</span><select v-model.number="calendarPreviousWeekOffset" aria-label="이전 주 범위"><option :value="1">1주 전</option><option :value="2">2주 전</option></select></label>
+        <label><span class="sr-only">표시 기준</span><select v-model="calendarHighlightMode" aria-label="표시 기준"><option v-for="mode in calendarHighlightModes" :key="mode.key" :value="mode.key">{{ mode.label }}</option></select></label>
+        <button type="button" class="button button--secondary" @click="openTransactionSheet">거래 시트 열기</button>
+      </div>
+      <div class="calendar-overview-toolbar__settings">
+        <button type="button" class="button button--secondary" @click="openPersonalization('dashboard')">개인화 설정</button>
+        <button type="button" class="button button--primary" @click="toggleLayoutEditMode">대시보드 편집</button>
+      </div>
+    </section>
 
-      <div class="calendar-toolbar">
-        <div class="calendar-stepper">
-          <span class="calendar-stepper__label">연도</span>
-          <div class="calendar-stepper__controls">
-            <button type="button" class="calendar-stepper__arrow" aria-label="이전 연도" @click="shiftAnchorYear(-1)">&lt;</button>
-            <label class="field calendar-stepper__field">
-              <select :value="calendarYear" @change="handleChangeYear">
-                <option v-for="year in yearOptions" :key="year" :value="year">{{ year }}년</option>
-              </select>
-            </label>
-            <button type="button" class="calendar-stepper__arrow" aria-label="다음 연도" @click="shiftAnchorYear(1)">&gt;</button>
-          </div>
-        </div>
-        <div class="calendar-stepper">
-          <span class="calendar-stepper__label">월</span>
-          <div class="calendar-stepper__controls">
-            <button type="button" class="calendar-stepper__arrow" aria-label="이전 월" @click="shiftAnchorMonth(-1)">&lt;</button>
-            <label class="field calendar-stepper__field">
-              <select :value="calendarMonth" @change="handleChangeMonth">
-                <option v-for="month in 12" :key="month" :value="month">{{ month }}월</option>
-              </select>
-            </label>
-            <button type="button" class="calendar-stepper__arrow" aria-label="다음 월" @click="shiftAnchorMonth(1)">&gt;</button>
-          </div>
-        </div>
-      </div>
-
-      <div class="calendar-size-toolbar">
-        <div class="calendar-size-toolbar__block">
-          <span class="calendar-size-toolbar__label">달력 크기</span>
-          <div class="calendar-size-toggle">
-            <button
-              v-for="preset in calendarDisplayModes"
-              :key="preset.key"
-              type="button"
-              class="calendar-size-toggle__button"
-              :class="{ 'is-active': calendarScalePreset === preset.key }"
-              @click="calendarScalePreset = preset.key"
-            >
-              {{ preset.label }}
-            </button>
-          </div>
-        </div>
-        <div class="calendar-size-toolbar__block">
-          <span class="calendar-size-toolbar__label">주차 보기</span>
-          <div class="calendar-size-toggle">
-            <button
-              v-for="mode in calendarWeekModes"
-              :key="mode.key"
-              type="button"
-              class="calendar-size-toggle__button"
-              :class="{ 'is-active': calendarWeekMode === mode.key }"
-              @click="calendarWeekMode = mode.key"
-            >
-              {{ mode.label }}
-            </button>
-          </div>
-          <div
-            class="calendar-size-toggle"
-            :class="{ 'calendar-size-toggle--inactive': calendarWeekMode !== 'previous' }"
-            aria-hidden="true"
-          >
-            <button
-              v-for="offset in [1, 2]"
-              :key="offset"
-              type="button"
-              class="calendar-size-toggle__button"
-              :class="{ 'is-active': calendarPreviousWeekOffset === offset }"
-              :disabled="calendarWeekMode !== 'previous'"
-              @click="calendarPreviousWeekOffset = offset"
-            >
-              {{ offset }}주 전
-            </button>
-          </div>
-        </div>
-        <div class="calendar-size-toolbar__block">
-          <span class="calendar-size-toolbar__label">표시 기준</span>
-          <div class="calendar-size-toggle">
-            <button
-              v-for="mode in calendarHighlightModes"
-              :key="mode.key"
-              type="button"
-              class="calendar-size-toggle__button"
-              :class="{ 'is-active': calendarHighlightMode === mode.key }"
-              @click="calendarHighlightMode = mode.key"
-            >
-              {{ mode.label }}
-            </button>
-          </div>
-        </div>
-        <div class="calendar-size-toolbar__block calendar-size-toolbar__block--sheet">
-          <span class="calendar-size-toolbar__label">거래 시트</span>
-          <div class="calendar-size-toggle">
-            <button type="button" class="calendar-size-toggle__button is-active" @click="openTransactionSheet">거래 시트 열기</button>
-            <button type="button" class="calendar-size-toggle__button" @click="openTransactionSheetSettings">거래 시트 설정</button>
-          </div>
-        </div>
-        <strong class="calendar-size-toolbar__hint">
-          현재 {{ calendarDisplayModes.find((item) => item.key === calendarScalePreset)?.label }}
-          <template v-if="calendarWeekMode !== 'month'">
-            · {{ calendarWeekModes.find((item) => item.key === calendarWeekMode)?.label }}
-            <template v-if="calendarWeekMode === 'previous'"> (이번 주 포함 {{ calendarPreviousWeekOffset + 1 }}주)</template>
-          </template>
-        </strong>
-      </div>
+    <section v-if="isAggregateEditMode" id="household-calendar-layout-editor" class="calendar-draft-toolbar" aria-label="개인 설정 편집" aria-live="polite">
+      <div><strong>대시보드 편집 중</strong><span>{{ personalizationDirty ? '저장하지 않은 변경사항' : '변경사항 없음' }} · {{ isMobileLayoutMode ? '개인화 설정에서 순서와 크기를 조절하세요.' : '드래그 핸들과 오른쪽 아래 모서리로 배치를 조절하세요.' }}</span></div>
+      <div><button type="button" class="button button--secondary" @click="openPersonalization('dashboard')">설정 패널 열기</button><button type="button" class="button button--secondary" :disabled="personalizationSaving" @click="cancelPersonalization">취소</button><button type="button" class="button button--primary" :disabled="!personalizationDirty || personalizationLoading || personalizationSaving || !personalizationRevision" @click="savePersonalization">{{ personalizationSaving ? '저장 중…' : '변경사항 저장' }}</button></div>
     </section>
 
     <section
@@ -4150,7 +3942,7 @@ defineExpose({
     </section>
 
     <section
-      class="household-calendar-layout-board"
+      class="calendar-dashboard"
       :class="{
         'household-calendar-layout-board--editing': isLayoutEditMode && !isMobileLayoutMode,
         'household-calendar-layout-board--mobile-flow': isMobileLayoutMode,
@@ -4163,11 +3955,11 @@ defineExpose({
 
       <div
         ref="layoutGridRef"
-        class="household-calendar-layout-grid"
+        class="calendar-dashboard-grid"
         :class="{
           'grid-stack': isCalendarGridStackActive,
           'household-calendar-layout-grid--editing': isLayoutEditMode && !isMobileLayoutMode,
-          'household-calendar-layout-grid--static': !isCalendarGridStackActive && !isMobileLayoutMode,
+          'calendar-dashboard-grid--static': !isCalendarGridStackActive && !isMobileLayoutMode,
           'household-calendar-layout-grid--mobile-flow': isMobileLayoutMode,
         }"
       >
@@ -4175,7 +3967,7 @@ defineExpose({
           v-for="panel in calendarLayoutPanels"
           :key="panel.id"
           :class="[
-            isMobileLayoutMode ? 'household-calendar-layout-flow-item' : (isCalendarGridStackActive ? 'grid-stack-item' : 'household-calendar-layout-static-item'),
+            isCalendarGridStackActive ? 'grid-stack-item' : 'calendar-dashboard-item',
             `household-calendar-layout-item--${panel.id}`,
           ]"
           :style="calendarPanelLayoutItemStyle(panel)"
@@ -4197,25 +3989,21 @@ defineExpose({
           :ref="(element) => setCalendarPanelScrollTarget(panel.id, element)"
           tabindex="-1"
         >
-          <div :class="isMobileLayoutMode ? 'household-calendar-layout-flow-content' : (isCalendarGridStackActive ? 'grid-stack-item-content' : 'household-calendar-layout-static-content')">
+          <div :class="isCalendarGridStackActive ? 'grid-stack-item-content' : 'calendar-dashboard-content'">
             <div
-              class="household-calendar-layout-panel-shell"
-              :class="{ 'household-calendar-layout-panel-shell--editing': isLayoutEditMode }"
+              class="calendar-dashboard-panel"
             >
               <template v-if="panel.id === 'quick-entry'">
                 <section ref="quickEntryPanelRef" class="panel household-entry-panel">
         <div class="panel__header">
           <div class="household-entry-panel__heading">
             <h2>{{ isEditingEntry ? '거래 수정' : '빠른 거래 입력' }}</h2>
-            <button type="button" class="button button--ghost household-entry-settings-button" data-no-drag="true" :aria-expanded="isQuickEntrySettingsOpen" aria-controls="quick-entry-sharing-settings" @click="isQuickEntrySettingsOpen = !isQuickEntrySettingsOpen">입력 설정</button>
+            <button v-if="isAggregateEditMode" type="button" class="button button--ghost household-entry-settings-button" data-no-drag="true" @click="openPersonalization('input')">입력 설정</button>
           </div>
           <span class="panel__badge household-entry-panel__date-badge">{{ formatIsoDate(entryForm.entryDate) }}</span>
         </div>
 
-        <section v-if="isQuickEntrySettingsOpen" id="quick-entry-sharing-settings" class="household-entry-settings" data-no-drag="true" aria-label="빠른 거래 입력 설정">
-          <label class="household-entry-settings__toggle"><input v-model="isShareAfterSaveEnabled" type="checkbox" /><span>등록 후 공유 버튼 표시</span></label>
-          <p>기본은 거래 등록만 합니다. 저장한 내역의 ‘공유’ 버튼으로 받는 사람을 선택할 수 있습니다. 이 옵션을 켜도 자동으로 공유되지는 않습니다.</p>
-        </section>
+
 
         <section v-if="isReceiptOcrPanelEnabled" class="receipt-ocr-panel receipt-ocr-panel--launcher" data-no-drag="true">
           <div class="receipt-ocr-panel__header">
@@ -4552,7 +4340,7 @@ defineExpose({
                 <section
                   ref="aggregatePanelRef"
                   class="panel household-quickstats-panel household-aggregate-panel"
-                  :class="{ 'household-aggregate-panel--editing': isAggregateEditMode }"
+                  :class="{ 'calendar-aggregate-results--editing': isAggregateEditMode }"
                 >
         <div class="panel__header household-aggregate-header">
           <div>
@@ -4560,44 +4348,7 @@ defineExpose({
           </div>
           <div class="household-aggregate-header__actions">
             <span v-if="isAggregatePanelEnabled && aggregateSettingsReady" class="panel__badge">{{ aggregateBadgeLabel }}</span>
-            <template v-if="isAggregatePanelEnabled && isAggregateEditMode">
-              <button
-                type="button"
-                class="button button--primary"
-                :disabled="aggregateSettingsSaving"
-                @click="saveAggregateWidgetConfigs"
-              >
-                {{ aggregateSettingsSaving ? '저장 중...' : '저장' }}
-              </button>
-              <button
-                type="button"
-                class="button button--secondary"
-                :disabled="aggregateSettingsSaving"
-                @click="cancelAggregateEdit"
-              >
-                취소
-              </button>
-            </template>
-            <button
-              v-else-if="isAggregatePanelEnabled"
-              type="button"
-              class="button button--secondary"
-              :disabled="!aggregateSettingsReady"
-              @click="startAggregateEdit"
-            >
-              수정
-            </button>
-            <button
-              v-if="!isLayoutEditMode"
-              type="button"
-              class="button button--secondary"
-              aria-controls="household-calendar-layout-editor"
-              :aria-expanded="false"
-              :disabled="isMobileLayoutMode"
-              @click="toggleLayoutEditMode"
-            >
-              배치 편집 켜기
-            </button>
+            <button v-if="isAggregateEditMode" type="button" class="button button--secondary" :disabled="!aggregateSettingsReady" @click="startAggregateEdit">집계 위젯 관리</button>
           </div>
         </div>
         <div v-if="!isAggregatePanelEnabled" class="household-aggregate-empty household-aggregate-empty--off">
@@ -4621,6 +4372,7 @@ defineExpose({
             :class="{
               'household-aggregate-card--chart': card.config.kind === 'MONTHLY_CUMULATIVE_CHART',
               'household-aggregate-card--goal': card.config.kind === 'MONTHLY_GOAL',
+              'household-aggregate-card--payment': card.config.kind === 'PAYMENT_METHOD',
               'household-aggregate-card--empty': card.config.kind === 'NONE',
             }"
             :style="getAggregateCardGridStyle(card)"
@@ -4632,110 +4384,12 @@ defineExpose({
             :data-aggregate-text-size="normalizeAggregateTextSize(card.config.textSize)"
             :data-aggregate-text-color="normalizeAggregateTextColor(card.config.textColor)"
             :data-aggregate-index="card.index"
+            :data-aggregate-selected="isAggregateEditMode && personalizationSelectedIndex === card.index"
+            :data-aggregate-display-size="card.config.displaySize"
           >
-            <div v-if="isAggregateEditMode" class="household-aggregate-order-controls" aria-label="집계 순서 변경">
-              <button type="button" class="button button--secondary" :disabled="aggregateSettingsSaving || card.index <= 0" aria-label="왼쪽으로 이동" title="왼쪽으로 이동" @click="moveAggregateWidget(card.index, -1)">←</button>
-              <span>{{ card.index + 1 }} / {{ aggregateCards.length }}</span>
-              <button type="button" class="button button--secondary" :disabled="aggregateSettingsSaving || card.index >= aggregateCards.length - 1" aria-label="오른쪽으로 이동" title="오른쪽으로 이동" @click="moveAggregateWidget(card.index, 1)">→</button>
-            </div>
-            <div v-if="isAggregateEditMode" class="household-aggregate-card__controls">
-              <label class="field household-aggregate-card__field">
-                <span class="field__label">집계</span>
-                <select :value="card.config.kind" @change="updateAggregateWidget(card.index, 'kind', $event.target.value)">
-                  <option v-for="option in aggregateWidgetKinds" :key="option.value" :value="option.value">
-                    {{ option.label }}
-                  </option>
-                </select>
-              </label>
-              <label v-if="isAggregatePeriodEditable(card.config.kind)" class="field household-aggregate-card__field">
-                <span class="field__label">기간</span>
-                <select :value="card.config.period" @change="updateAggregateWidget(card.index, 'period', $event.target.value)">
-                  <option v-for="option in aggregateWidgetPeriods" :key="option.value" :value="option.value">
-                    {{ option.label }}
-                  </option>
-                </select>
-              </label>
-              <label v-if="isAggregateAmountTypeEditable(card.config.kind)" class="field household-aggregate-card__field">
-                <span class="field__label">기준</span>
-                <select :value="card.config.amountType" @change="updateAggregateWidget(card.index, 'amountType', $event.target.value)">
-                  <option v-for="option in aggregateWidgetAmountTypes" :key="option.value" :value="option.value">
-                    {{ option.label }}
-                  </option>
-                </select>
-              </label>
-              <label v-if="card.config.kind === 'MONTHLY_CUMULATIVE_CHART'" class="field household-aggregate-card__field">
-                <span class="field__label">크기</span>
-                <select :value="getAggregateWidgetSizeValue(card.config)" @change="updateAggregateWidgetSize(card.index, $event.target.value)">
-                  <option v-for="option in getAggregateWidgetSizeOptions(card.config.kind)" :key="option.value" :value="option.value">
-                    {{ option.label }}
-                  </option>
-                </select>
-              </label>
-              </div>
-
-            <div v-if="isAggregateEditMode && card.config.kind !== 'NONE'" class="household-aggregate-text-settings">
-              <span class="household-aggregate-text-settings__title">&#44544;&#51088; &#54364;&#49884;</span>
-              <label class="field household-aggregate-card__field">
-                <span class="field__label">&#44544;&#51088; &#53356;&#44592;</span>
-                <select :value="normalizeAggregateTextSize(card.config.textSize)" @change="updateAggregateWidget(card.index, 'textSize', $event.target.value)">
-                  <option v-for="option in aggregateWidgetTextSizeOptions" :key="option.value" :value="option.value">
-                    {{ option.label }}
-                  </option>
-                </select>
-              </label>
-              <label class="field household-aggregate-card__field">
-                <span class="field__label">&#44544;&#51088; &#49353;&#49345;</span>
-                <select :value="normalizeAggregateTextColor(card.config.textColor)" @change="updateAggregateWidget(card.index, 'textColor', $event.target.value)">
-                  <option v-for="option in aggregateWidgetTextColorOptions" :key="option.value" :value="option.value">
-                    {{ option.label }}
-                  </option>
-                </select>
-              </label>
-            </div>
-
-            <label v-if="isAggregateEditMode && card.config.kind === 'PAYMENT_METHOD'" class="field household-aggregate-card__field">
-              <span class="field__label">결제수단</span>
-              <select :value="card.config.paymentMethodId" @change="updateAggregateWidget(card.index, 'paymentMethodId', $event.target.value)">
-                <option v-for="payment in paymentMethods" :key="payment.id" :value="String(payment.id)">
-                  {{ payment.name }}
-                </option>
-              </select>
-            </label>
-
-            <div v-if="isAggregateEditMode && card.config.kind === 'MONTHLY_GOAL'" class="household-aggregate-goal-fields">
-              <label class="field household-aggregate-card__field">
-                <span class="field__label">월 지출 목표</span>
-                <input type="number" min="0" step="10000" inputmode="numeric" :value="card.config.monthlyExpenseTarget || ''" placeholder="예: 800000" @input="updateAggregateWidget(card.index, 'monthlyExpenseTarget', $event.target.value)">
-              </label>
-              <label class="field household-aggregate-card__field">
-                <span class="field__label">1회 지출 기준</span>
-                <input type="number" min="0" step="10000" inputmode="numeric" :value="card.config.singleExpenseLimit || ''" placeholder="예: 100000" @input="updateAggregateWidget(card.index, 'singleExpenseLimit', $event.target.value)">
-              </label>
-            </div>
-
-
-            <div v-if="isAggregateEditMode && card.config.kind === 'MONTHLY_CUMULATIVE_CHART'" class="household-aggregate-chart-options">
-              <span class="household-aggregate-chart-options__title">그래프 표시</span>
-              <label>
-                <input type="checkbox" :checked="card.config.showIncomeCumulative" @change="updateAggregateWidget(card.index, 'showIncomeCumulative', $event.target.checked)">
-                수입 누적
-              </label>
-              <label>
-                <input type="checkbox" :checked="card.config.showExpenseCumulative" @change="updateAggregateWidget(card.index, 'showExpenseCumulative', $event.target.checked)">
-                지출 누적
-              </label>
-              <label>
-                <input type="checkbox" :checked="card.config.comparePreviousPeriod" @change="updateAggregateWidget(card.index, 'comparePreviousPeriod', $event.target.checked)">
-                지난 기간 비교
-              </label>
-              <label class="field household-aggregate-chart-options__max-field">
-                <span class="field__label">&#89;&#52629; &#52572;&#45824; &#44552;&#50529;</span>
-                <input type="number" min="0" step="10000" inputmode="numeric" :value="card.config.chartMaxAmount || ''" placeholder="&#51088;&#46041;" @input="updateAggregateWidget(card.index, 'chartMaxAmount', $event.target.value)">
-                <small>&#48708;&#50864;&#47732; &#54364;&#49884; &#51473;&#51064; &#45572;&#51201;&#44050; &#44592;&#51456;&#51004;&#47196; &#51088;&#46041; &#44228;&#49328;&#54616;&#44256;, &#49444;&#51221;&#44050;&#48372;&#45796; &#49892;&#51228; &#45936;&#51060;&#53552;&#44032; &#53356;&#47732; &#52629;&#51012; &#51088;&#46041; &#54869;&#51109;&#54633;&#45768;&#45796;.</small>
-              </label>
-            </div>
-            <div v-if="!isAggregateEditMode" class="household-aggregate-card__copy">
-              <span class="household-aggregate-card__eyebrow">{{ card.title }}</span>
+            <button v-if="isAggregateEditMode" type="button" class="button button--secondary calendar-widget-edit" @click="selectPersonalizationWidget(card.index)">위젯 설정</button>
+            <div class="household-aggregate-card__copy">
+              <span class="household-aggregate-card__eyebrow">{{ card.config.title || card.title }}</span>
               <template v-if="card.config.kind === 'NONE'">
                 <strong>-</strong>
                 <small>이 슬롯은 저장 후 화면에서 숨김 처리됩니다.</small>
@@ -4756,7 +4410,7 @@ defineExpose({
             </div>
 
             <button
-              v-if="!isAggregateEditMode && card.chart"
+              v-if="card.chart"
               type="button"
               class="household-aggregate-chart-preview-button"
               :aria-label="`${card.title} 상세 보기`"
@@ -4790,7 +4444,7 @@ defineExpose({
                 <span v-if="card.config.comparePreviousPeriod"><i class="previous"></i>지난 기간</span>
               </div>
             </button>
-            <div v-if="!isAggregateEditMode && card.goal" class="household-aggregate-goal">
+            <div v-if="card.goal" class="household-aggregate-goal">
               <div class="household-aggregate-goal__bar" :aria-label="`월 목표 사용률 ${card.goal.progress}%`">
                 <span :style="{ width: `${card.goal.progressWidth}%` }"></span>
               </div>
@@ -4802,7 +4456,7 @@ defineExpose({
               </div>
             </div>
 
-            <div v-if="!isAggregateEditMode && card.config.kind !== 'NONE'" class="household-aggregate-card__meta">
+            <div v-if="card.config.kind !== 'NONE'" class="household-aggregate-card__meta">
               <span>수입 {{ formatCurrency(card.overview.income) }}</span>
               <span>지출 {{ formatCurrency(card.overview.expense) }}</span>
             </div>
@@ -4810,7 +4464,7 @@ defineExpose({
         </div>
         <div v-else class="household-aggregate-empty">
           <strong>표시 중인 집계가 없습니다.</strong>
-          <span>우측 상단 수정 버튼에서 필요한 집계만 골라 등록하면 이 영역에 바로 나타납니다.</span>
+          <span>개인화 설정의 ‘집계 위젯’에서 필요한 집계를 추가하거나 다시 표시할 수 있습니다.</span>
         </div>
       </section>
 
@@ -5091,41 +4745,7 @@ defineExpose({
           </div>
         </Teleport>
 
-        <Teleport to="body">
-          <div
-            v-if="isTransactionSheetSettingsOpen"
-            class="transaction-sheet-settings-modal"
-            data-no-drag="true" @keydown.esc="closeTransactionSheetSettings"
-          >
-            <section class="transaction-sheet-settings-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="transaction-sheet-settings-title">
-              <header class="transaction-sheet-settings-modal__header">
-                <div>
-                  <span>거래 시트</span>
-                  <h2 id="transaction-sheet-settings-title">거래 시트 보기 설정</h2>
-                </div>
-                <button type="button" class="button button--ghost" data-modal-close @click="closeTransactionSheetSettings">닫기</button>
-              </header>
-              <div class="transaction-sheet-settings-modal__options" role="radiogroup" aria-label="거래 시트 표시 방식">
-                <button
-                  v-for="mode in transactionSheetViewModes"
-                  :key="mode.value"
-                  type="button"
-                  :class="['transaction-sheet-settings-modal__option', { 'is-active': transactionSheetViewMode === mode.value }]"
-                  role="radio"
-                  :aria-checked="transactionSheetViewMode === mode.value"
-                  @click="setTransactionSheetViewMode(mode.value)"
-                >
-                  <strong>{{ mode.label }}</strong>
-                  <span>{{ mode.description }}</span>
-                </button>
-              </div>
-              <footer class="transaction-sheet-settings-modal__actions">
-                <span>선택한 표시 방식은 바로 저장됩니다.</span>
-                <button type="button" class="button button--primary" @click="closeTransactionSheetSettings">확인</button>
-              </footer>
-            </section>
-          </div>
-        </Teleport>
+
         <Teleport to=".app-shell">
         <div
       v-if="receiptOcr?.isOpen"
@@ -5177,7 +4797,10 @@ defineExpose({
           <progress :value="receiptBatchProgress.settled" :max="receiptBatchProgress.total" aria-label="이미지 분석 요청 처리 진행률"></progress>
           <p>완료 {{ receiptBatchProgress.done }}건 · 실패 {{ receiptBatchProgress.failed }}건 · 취소 {{ receiptBatchProgress.cancelled }}건 · 남은 {{ receiptBatchProgress.remaining }}건</p>
           <div class="receipt-ocr-batch-progress__refresh" role="status">
-            <small v-if="receiptBatchProgress.phase === 'processing'">최대 {{ receiptOcr.concurrency }}건을 동시에 요청하고 완료된 이미지부터 표시합니다. 서버 설정에 따라 실제 동시 분석 수는 제한될 수 있습니다.</small>
+            <small v-if="receiptBatchProgress.phase === 'processing'">
+              <template v-if="receiptBatchProgress.currentBatch">{{ receiptBatchProgress.currentBatch }} / {{ receiptBatchProgress.totalBatches }}묶음 · 이번 묶음 {{ receiptBatchProgress.batchSize }}건 · </template>
+              관리자 설정에 따라 최대 {{ receiptOcr.concurrency }}건을 동시에 분석합니다. 최대 {{ RECEIPT_MAX_REQUEST_BATCH_SIZE }}건씩 나누어 현재 묶음 처리가 끝나면 다음 묶음을 요청합니다.
+            </small>
             <small v-else-if="receiptBatchProgress.phase === 'refreshing'">분석 이력과 검수 대기 건수를 새로고침하고 있습니다.</small>
             <small v-else-if="receiptBatchProgress.phase === 'completed'">분석 이력과 검수 대기 건수를 새로고침했습니다.</small>
             <template v-else-if="receiptBatchProgress.phase === 'refresh-error'">
@@ -5277,6 +4900,7 @@ defineExpose({
           </div>
 
           <p v-if="receiptAnalyzeItems.length" class="receipt-ocr-modal__batch-summary" role="status">{{ receiptBatchSummary }}</p>
+          <p class="receipt-ocr-modal__empty receipt-ocr-modal__empty--compact">이미지는 최대 {{ RECEIPT_MAX_REQUEST_BATCH_SIZE }}건씩 나누어 요청합니다. {{ RECEIPT_MAX_REQUEST_BATCH_SIZE }}건을 초과하면 다음 묶음으로 자동으로 이어집니다.</p>
           <button v-if="receiptRetryableFailedItems.length" type="button" class="button button--secondary receipt-ocr-retry-failed" :disabled="receiptOcr?.isAnalyzing" @click="emit('retry-failed-receipt-analysis')">실패 건만 재시도 ({{ receiptRetryableFailedItems.length }}건)</button>
           <p v-if="!receiptAnalyzeItems.length" class="receipt-ocr-modal__empty">
             이미지를 선택하면 이곳에 미리보기가 표시됩니다. 분석은 분석 요청하기를 눌러야 시작됩니다.

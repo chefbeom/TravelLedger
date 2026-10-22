@@ -1,8 +1,17 @@
+import { splitReceiptRequestBatches } from './receiptRequestQueue.js'
+
 // Display metadata travels in the existing, unique per-image clientRequestId.
 // No batch API, new database column, or shared AI inference request is needed.
 export function createReceiptBatchRequestIds(count, { timestamp = Date.now(), token } = {}) {
   const batchToken = token || globalThis.crypto?.randomUUID?.() || Math.random().toString(36).slice(2)
   return Array.from({ length: count }, (_, index) => `image-analysis-batch-${timestamp}-${batchToken}--${index + 1}-${count}`)
+}
+
+// A larger selection creates separate 5/5/... request groups. Parsing old larger groups is unchanged.
+export function createReceiptSelectionRequestIds(count, options = {}) {
+  return splitReceiptRequestBatches(Array.from({ length: count })).flatMap((batch, index) =>
+    createReceiptBatchRequestIds(batch.length, { ...options,
+      token: options.token ? `${options.token}-part-${index + 1}` : undefined }))
 }
 
 export function parseReceiptBatchRequestId(value) {

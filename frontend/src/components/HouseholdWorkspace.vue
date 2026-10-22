@@ -1,5 +1,6 @@
 <script setup>
 import { computed, defineAsyncComponent, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { isPreferenceNavigationAllowed } from '../lib/calendarPersonalization'
 import {
   activateCategoryDetail,
   activateCategoryGroup,
@@ -63,7 +64,6 @@ import {
   reorderPaymentMethods,
   restoreEntry,
   restoreLedgerEntryHistory,
-  saveHouseholdAggregatePreferences,
   updateEntry,
 } from '../lib/api'
 import {
@@ -93,9 +93,9 @@ import CalendarWorkspace from './CalendarWorkspace.vue'
 import RecurringLedgerWorkspace from './RecurringLedgerWorkspace.vue'
 import RecordShareDialog from './RecordShareDialog.vue'
 import { useRecordShareNotifications } from '../lib/useRecordShareNotifications'
-import { createReceiptBatchRequestIds } from '../lib/receiptHistoryGroups'
+import { createReceiptSelectionRequestIds } from '../lib/receiptHistoryGroups'
 import { summarizeReceiptBatch } from '../lib/receiptReview'
-import { normalizeReceiptConcurrency, runReceiptRequestQueue } from '../lib/receiptRequestQueue'
+import { normalizeReceiptConcurrency, runReceiptRequestBatches } from '../lib/receiptRequestQueue'
 
 const RecordSharingWorkspace = defineAsyncComponent(() => import('./RecordSharingWorkspace.vue'))
 const entryToShare = ref(null)
@@ -459,6 +459,8 @@ const dashboard = ref({
 })
 const monthEntries = ref([])
 const calendarAggregateEntries = ref([])
+let calendarAggregateLoadSequence = 0
+let aggregatePreviewTimer = 0
 const statsEntries = ref([])
 const statsOverview = ref({
   from: today,
@@ -812,6 +814,7 @@ function resolveHouseholdStatisticsRoute(tab = householdTab.value) {
 }
 
 function setHouseholdTab(tab) {
+  if (tab !== householdTab.value && !isPreferenceNavigationAllowed()) return
   const nextTab = String(tab || '').trim()
   if (nextTab !== 'recurring-ledger') {
     recurringLedgerPrefill.value = null
@@ -1414,6 +1417,8 @@ onMounted(async () => {
 })
 
 onBeforeUnmount(() => {
+  window.clearTimeout(aggregatePreviewTimer)
+  calendarAggregateLoadSequence++
   window.removeEventListener('pointerdown', handleGlobalPointerDown)
   receiptOcr.items.forEach((item) => {
     item.abortController?.abort()
@@ -2270,12 +2275,22 @@ function buildCalendarAggregateEntryRange(configs = aggregateWidgetConfigs.value
   }), { from: '', to: '' })
 }
 
-async function loadCalendarAggregateEntries() {
-  const range = buildCalendarAggregateEntryRange()
-  calendarAggregateEntries.value = await fetchEntries(range.from, range.to)
+async function loadCalendarAggregateEntries(configs = aggregateWidgetConfigs.value) {
+  const sequence = ++calendarAggregateLoadSequence
+  const range = buildCalendarAggregateEntryRange(configs)
+  const entries = await fetchEntries(range.from, range.to)
+  if (sequence === calendarAggregateLoadSequence) calendarAggregateEntries.value = entries
+}
+
+function previewAggregatePreferences(widgets) {
+  window.clearTimeout(aggregatePreviewTimer)
+  aggregatePreviewTimer = window.setTimeout(() => {
+    if (householdTab.value === 'calendar') loadCalendarAggregateEntries(widgets).catch(error => setFeedback('', `집계 미리보기 새로고침 실패: ${error.message}`))
+  }, 200)
 }
 
 async function loadCalendarData() {
+  const aggregateSequence = ++calendarAggregateLoadSequence
   const range = buildCalendarEntryRange(calendarAnchorDate.value)
   const aggregateRange = buildCalendarAggregateEntryRange()
   const entryItemsPromise = fetchEntries(range.from, range.to)
@@ -2289,7 +2304,7 @@ async function loadCalendarData() {
   ])
   dashboard.value = dashboardResponse
   monthEntries.value = entryItems
-  calendarAggregateEntries.value = aggregateItems
+  if (aggregateSequence === calendarAggregateLoadSequence) calendarAggregateEntries.value = aggregateItems
 }
 
 async function loadStatisticsData({ route = resolveHouseholdStatisticsRoute() } = {}) {
@@ -3466,7 +3481,7 @@ function createReceiptOcrItem(file, documentType) {
   }
 }
 function beginReceiptOcrBatch(items, visibleItemIds = items.map(item => item.id)) {
-  const requestIds = createReceiptBatchRequestIds(items.length)
+  const requestIds = createReceiptSelectionRequestIds(items.length)
   items.forEach((item, index) => {
     if (item.sourceFile && !item.analysisId && !item.analysisOptions?.rerun) item.clientRequestId = requestIds[index]
   })
@@ -3482,7 +3497,7 @@ function syncReceiptOcrBusyState() {
       if (!entry.outcome && ['done', 'error', 'cancelled'].includes(entry.item.status)) entry.outcome = entry.item.status
       return { status: entry.outcome || entry.item.status }
     })
-    receiptOcr.batchProgress = { ...summarizeReceiptBatch(statuses), phase }
+    receiptOcr.batchProgress = { ...receiptOcr.batchProgress, ...summarizeReceiptBatch(statuses), phase }
   }
   receiptOcr.pendingCount = receiptOcr.items.filter((item) => item.status === 'queued' || item.status === 'analyzing').length
   receiptOcr.isAnalyzing = receiptOcr.pendingCount > 0 || phase === 'processing' || phase === 'refreshing'
@@ -4159,9 +4174,8 @@ async function executeReceiptOcrJobs(jobs, visibleItemIds) {
   const sequence = beginReceiptOcrBatch(items, visibleItemIds)
   syncReceiptOcrBusyState()
   try {
-    // Refresh the administrator policy for every batch, including failed-only retries.
-    const concurrency = await loadReceiptOcrConcurrency()
-    await runReceiptRequestQueue(jobs, concurrency, async ({ item, options }) => {
+    // Apply the latest administrator policy to each sequential group of at most five.
+    await runReceiptRequestBatches(jobs, loadReceiptOcrConcurrency, async ({ item, options }) => {
       if (sequence !== receiptOcrBatchSequence || !isReceiptOcrItemActive(item) || item.status !== 'queued') return
       try {
         await analyzeReceiptFile(item.sourceFile, normalizeOcrDocumentType(item.documentType || receiptOcr.documentType), item,
@@ -4176,6 +4190,12 @@ async function executeReceiptOcrJobs(jobs, visibleItemIds) {
       } finally {
         syncReceiptOcrBusyState()
       }
+    }, {
+      shouldContinue: () => sequence === receiptOcrBatchSequence,
+      onBatchStart: batch => {
+        Object.assign(receiptOcr.batchProgress, batch)
+        syncReceiptOcrBusyState()
+      },
     })
   } catch (error) {
     for (const item of items) {
@@ -4849,22 +4869,14 @@ async function exportEntriesToCsv() {
   }
 }
 
-async function updateAggregatePreferences(widgets) {
-  isSubmitting.value = true
-  activeSubmit.value = 'aggregate-settings'
-  setFeedback()
-  try {
-    const response = await saveHouseholdAggregatePreferences(widgets)
-    aggregateWidgetConfigs.value = Array.isArray(response?.widgets) ? response.widgets : []
-    await loadCalendarAggregateEntries()
-    setFeedback('사용자 지정 집계를 저장했습니다.')
-  } catch (error) {
-    setFeedback('', error.message)
-  } finally {
-    isSubmitting.value = false
-    activeSubmit.value = ''
-  }
+async function applySavedPersonalization(widgets) {
+  window.clearTimeout(aggregatePreviewTimer)
+  aggregateWidgetConfigs.value = widgets
+  setFeedback('개인 설정을 저장했습니다.')
+  try { await loadCalendarAggregateEntries() } catch (error) { setFeedback('설정은 저장되었습니다.', `집계 새로고침 실패: ${error.message}`) }
 }
+
+
 
 async function submitEntry(shareAfterSave = false) {
   isSubmitting.value = true
@@ -5669,7 +5681,8 @@ async function activatePayment(paymentId) {
       @apply-entry-suggestion="applyEntrySuggestion"
       @apply-title-suggestion="applyEntryTitleSuggestion"
       @change-anchor-month="handleChangeCalendarMonth"
-      @save-aggregate-widget-configs="updateAggregatePreferences"
+      @personalization-saved="applySavedPersonalization"
+      @preview-aggregate-widget-configs="previewAggregatePreferences"
     />
 
     <HouseholdTravelLedgerWorkspace

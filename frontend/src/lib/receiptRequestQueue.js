@@ -1,5 +1,31 @@
 export const RECEIPT_MAX_CONCURRENCY = 20
 export const RECEIPT_DEFAULT_CONCURRENCY = 3
+export const RECEIPT_MAX_REQUEST_BATCH_SIZE = 5
+
+export function splitReceiptRequestBatches(items) {
+  const batches = []
+  for (let offset = 0; offset < items.length; offset += RECEIPT_MAX_REQUEST_BATCH_SIZE) {
+    batches.push(items.slice(offset, offset + RECEIPT_MAX_REQUEST_BATCH_SIZE))
+  }
+  return batches
+}
+
+// Finish all five (including async polling) before admitting the next batch.
+// The administrator limit may be refreshed between batches; retries keep their existing IDs.
+export async function runReceiptRequestBatches(items, concurrency, worker, { onBatchStart = () => {}, shouldContinue = () => true } = {}) {
+  const batches = splitReceiptRequestBatches(items)
+  const results = []
+  for (let index = 0; index < batches.length; index++) {
+    if (!shouldContinue()) break
+    const limit = typeof concurrency === 'function' ? await concurrency() : concurrency
+    if (!shouldContinue()) break
+    const batch = batches[index]
+    onBatchStart({ currentBatch: index + 1, totalBatches: batches.length, batchSize: batch.length })
+    results.push(...await runReceiptRequestQueue(batch, limit,
+      (item, position) => worker(item, index * RECEIPT_MAX_REQUEST_BATCH_SIZE + position)))
+  }
+  return results
+}
 
 export function normalizeReceiptConcurrency(value) {
   const number = Number(value)

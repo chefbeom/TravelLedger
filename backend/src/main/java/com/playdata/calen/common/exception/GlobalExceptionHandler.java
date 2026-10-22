@@ -93,6 +93,11 @@ public class GlobalExceptionHandler {
     }
 
 
+    @ExceptionHandler(PreferenceConflictException.class)
+    public ResponseEntity<Map<String, Object>> handlePreferenceConflict(PreferenceConflictException exception) {
+        return buildResponse(HttpStatus.CONFLICT, exception.getMessage(), null);
+    }
+
     @ExceptionHandler(ServiceUnavailableException.class)
     public ResponseEntity<Map<String, Object>> handleServiceUnavailable(ServiceUnavailableException exception) {
         log.error("Service unavailable: {}", exception.getMessage());

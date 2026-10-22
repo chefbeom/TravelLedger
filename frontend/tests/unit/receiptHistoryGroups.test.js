@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { createReceiptBatchRequestIds, groupReceiptHistoryRequests, parseReceiptBatchRequestId } from '../../src/lib/receiptHistoryGroups.js'
+import { createReceiptBatchRequestIds, createReceiptSelectionRequestIds, groupReceiptHistoryRequests, parseReceiptBatchRequestId } from '../../src/lib/receiptHistoryGroups.js'
 
 const options = {
   getDateKey: (history, batch) => batch ? new Date(batch.timestamp).toISOString().slice(0, 10) : history.createdAt?.slice(0, 10) || 'unknown',
@@ -58,4 +58,20 @@ test('retries retain their original date, batch and positions when the same hist
   assert.equal(after.batches[0].key, before.batches[0].key)
   assert.equal(after.batches[0].totalCount, 3)
   assert.deepEqual(after.batches[0].items.map(row => row.id), [1, 2, 3])
+})
+
+test('new selections split their history IDs into unique groups of at most five without changing older batches', () => {
+  const ids = createReceiptSelectionRequestIds(12, { timestamp: Date.parse('2026-10-20T09:00:00Z'), token: '12345678-1234-1234-1234-123456789abc' })
+  const parsed = ids.map(parseReceiptBatchRequestId)
+  assert.equal(new Set(ids).size, 12)
+  assert.ok(ids.every(id => id.length <= 120))
+  assert.deepEqual(parsed.map(batch => batch.totalCount), [5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 2, 2])
+  assert.deepEqual(parsed.map(batch => batch.position), [1, 2, 3, 4, 5, 1, 2, 3, 4, 5, 1, 2])
+  assert.equal(new Set(parsed.map(batch => batch.key)).size, 3)
+  const [day] = groupReceiptHistoryRequests(ids.map((clientRequestId, index) => ({ id: index + 1, clientRequestId })), options)
+  assert.deepEqual(day.batches.map(batch => batch.totalCount), [5, 5, 2])
+  const old = createReceiptBatchRequestIds(12, { token: 'legacy' }).map(parseReceiptBatchRequestId)
+  assert.equal(new Set(old.map(batch => batch.key)).size, 1)
+  assert.ok(old.every(batch => batch.totalCount === 12))
+  assert.deepEqual(createReceiptSelectionRequestIds(0), [])
 })

@@ -1,10 +1,24 @@
 /* Shared palette geometry and the optional full personalization dialog. Direct tools are overlays. */
 html body .app-shell.app-shell .calendar-overview-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; padding: 16px 18px; border-radius: 14px; background: var(--surface-panel); border: 1px solid var(--line); }
 html body .app-shell.app-shell .calendar-overview-toolbar > div { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; min-width: 0; }
+html body .app-shell.app-shell .calendar-overview-toolbar__intro { flex: 1; gap: 8px 14px; }
+html body .app-shell.app-shell .calendar-overview-toolbar__intro strong { font-size: 15px; }
+html body .app-shell.app-shell .calendar-overview-toolbar__intro span { font-size: 12px; color: var(--text-soft); }
 html body .app-shell.app-shell .calendar-overview-toolbar__settings { margin-left: auto; }
-html body .app-shell.app-shell .calendar-overview-toolbar select { width: auto; min-width: 0; min-height: 40px; padding: 7px 25px 7px 10px; }
-html body .app-shell.app-shell .calendar-overview-toolbar .button { min-height: 40px; padding: 7px 12px; white-space: nowrap; }
-html body .app-shell.app-shell .calendar-overview-toolbar__date > .button:first-child, html body .app-shell.app-shell .calendar-overview-toolbar__date > .button:nth-of-type(2) { font-size: 22px; padding: 2px 12px; }
+html body .app-shell.app-shell :is(.calendar-overview-toolbar, .calendar-query-toolbar) .button { min-height: 40px; padding: 7px 12px; white-space: nowrap; }
+html body .app-shell.app-shell .calendar-query-toolbar { flex: none; min-width: 0; padding-bottom: 12px; margin-bottom: 12px; border-bottom: 1px solid var(--line); scroll-margin-top: 100px; }
+html body .app-shell.app-shell .calendar-query-toolbar__heading { position: relative; display: flex; align-items: center; min-height: 34px; padding-left: 12px; padding-right: 96px; margin-bottom: 10px; }
+html body .app-shell.app-shell .calendar-query-toolbar__heading h2 { margin: 0; min-width: 0; font-size: 18px; line-height: 26px; overflow-wrap: anywhere; }
+html body .app-shell.app-shell .calendar-query-toolbar__title--editing { visibility: hidden; }
+html body .app-shell.app-shell .calendar-dashboard .calendar-query-toolbar__heading .household-calendar-panel-dragbar { position: absolute; inset: 0 96px 0 12px; min-height: 34px; margin: 0; padding: 4px 12px; justify-content: flex-start; cursor: grab; }
+html body .app-shell.app-shell .calendar-query-toolbar__controls,
+html body .app-shell.app-shell .calendar-query-toolbar__date,
+html body .app-shell.app-shell .calendar-query-toolbar__filters { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; min-width: 0; }
+html body .app-shell.app-shell .calendar-query-toolbar__controls { gap: 8px 14px; }
+html body .app-shell.app-shell .calendar-query-toolbar label { min-width: 0; }
+html body .app-shell.app-shell .calendar-query-toolbar select { width: auto; min-width: 0; max-width: 100%; min-height: 40px; padding: 7px 25px 7px 10px; }
+html body .app-shell.app-shell .calendar-query-toolbar__date > .button:first-child,
+html body .app-shell.app-shell .calendar-query-toolbar__date > .button:nth-of-type(2) { font-size: 22px; padding: 2px 12px; }
 html body .app-shell.app-shell .calendar-draft-toolbar { position: sticky; top: 8px; z-index: 25; display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 14px 18px; background: var(--surface-panel); border: 2px solid var(--brand-readable-strong); border-radius: 12px; box-shadow: var(--shadow); }
 html body .app-shell.app-shell .calendar-draft-toolbar > div { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 html body .app-shell.app-shell .calendar-draft-toolbar > div:first-child { flex: 1; }
@@ -43,12 +57,6 @@ html body .app-shell.app-shell .calendar-dashboard .household-aggregate-grid > .
 html body .app-shell.app-shell .calendar-dashboard .household-aggregate-grid > .household-aggregate-card--chart[data-aggregate-width='4'] { flex-basis: 740px !important; }
 html body .app-shell.app-shell .calendar-dashboard .household-aggregate-grid > .household-aggregate-card[data-aggregate-selected='true'] { outline: 2px solid var(--brand-readable-strong); outline-offset: 2px; }
 html body .app-shell.app-shell .calendar-dashboard .household-aggregate-card .household-aggregate-card__copy { display: grid !important; gap: 6px; min-width: 0; padding: 0 !important; }
-html body .app-shell.app-shell .calendar-dashboard .household-aggregate-card .household-aggregate-card__eyebrow { font-size: 14px !important; white-space: normal !important; overflow-wrap: anywhere; }
-html body .app-shell.app-shell .calendar-dashboard .household-aggregate-card .household-aggregate-card__copy strong { font-size: 24px !important; line-height: 1.35; white-space: normal; overflow-wrap: anywhere; }
-html body .app-shell.app-shell .calendar-dashboard .household-aggregate-card[data-aggregate-text-size='SMALL'] .household-aggregate-card__copy strong { font-size: 20px !important; }
-html body .app-shell.app-shell .calendar-dashboard .household-aggregate-card[data-aggregate-text-size='LARGE'] .household-aggregate-card__copy strong { font-size: 30px !important; }
-html body .app-shell.app-shell .calendar-dashboard .household-aggregate-card .household-aggregate-card__copy small { font-size: 12px !important; line-height: 1.5; }
-html body .app-shell.app-shell .calendar-dashboard .household-aggregate-card__meta { margin-top: auto; flex-wrap: wrap; }
 html body .app-shell.app-shell .calendar-dashboard .household-aggregate-chart-preview-button { width: 100%; min-height: 150px; height: auto; padding: 0; }
 html body .app-shell.app-shell .calendar-dashboard .household-aggregate-chart--preview, html body .app-shell.app-shell .calendar-dashboard .household-aggregate-chart--preview svg { width: 100% !important; height: auto !important; min-height: 120px; max-height: 220px; }
 html body .app-shell.app-shell .calendar-dashboard .calendar-widget-edit { align-self: flex-end; min-height: 34px; padding: 5px 10px; }
@@ -100,19 +108,7 @@ html body .app-shell.app-shell .calendar-dashboard .household-aggregate-chart-mo
 .personalization-widget-list small { font-size: 11px; color: var(--text-soft); }
 .personalization-widget-list button.is-active { border-color: var(--brand-readable-strong); background: var(--brand-soft); }
 .personalization-preview { display: grid; gap: 6px; margin-top: 20px; padding: 18px 20px; border-radius: 12px; background: var(--brand-soft); border: 1px solid var(--line); }
-.personalization-preview b { font-size: 28px; font-variant-numeric: tabular-nums; }
-.personalization-preview[data-text-size='SMALL'] b { font-size: 20px; }
-.personalization-preview[data-text-size='MEDIUM'] b { font-size: 24px; }
-.personalization-preview[data-text-size='LARGE'] b { font-size: 30px; }
-.personalization-preview[data-text-color='MINT'] { --preview-text: #047857; }
-.personalization-preview[data-text-color='SKY'] { --preview-text: #0369a1; }
-.personalization-preview[data-text-color='GOLD'] { --preview-text: #a16207; }
-.personalization-preview[data-text-color='PINK'] { --preview-text: #be185d; }
-:root[data-theme='toss'] .personalization-preview[data-text-color='MINT'] { --preview-text: #86efac; }
-:root[data-theme='toss'] .personalization-preview[data-text-color='SKY'] { --preview-text: #7dd3fc; }
-:root[data-theme='toss'] .personalization-preview[data-text-color='GOLD'] { --preview-text: #fcd34d; }
-:root[data-theme='toss'] .personalization-preview[data-text-color='PINK'] { --preview-text: #f9a8d4; }
-.personalization-preview > :is(strong, b) { color: var(--preview-text, var(--text)); }
+.personalization-preview b { font-variant-numeric: tabular-nums; }
 .personalization-preview small, .personalization-preview span { font-size: 12px; color: var(--text-soft); }
 .personalization-preview-chart { width: 100%; max-height: 180px; }
 .personalization-preview-chart polyline { fill: none; stroke-width: 3; vector-effect: non-scaling-stroke; }
@@ -146,7 +142,6 @@ html body .app-shell.app-shell .calendar-dashboard .household-aggregate-panel .h
 html body .app-shell.app-shell .calendar-dashboard .household-aggregate-panel .household-aggregate-grid > .household-aggregate-card--chart { min-width: min(440px, 100%) !important; max-width: 100% !important; }
 html body .app-shell.app-shell .calendar-dashboard .household-aggregate-panel .household-aggregate-grid > .household-aggregate-card--payment { min-width: min(280px, 100%) !important; }
 html body .app-shell.app-shell .calendar-dashboard .household-aggregate-panel .household-aggregate-card__copy small { display: block !important; }
-html body .app-shell.app-shell .calendar-dashboard .household-aggregate-panel .household-aggregate-card__meta { display: flex !important; gap: 12px; font-size: 12px !important; }
 html body .app-shell.app-shell .calendar-dashboard .household-aggregate-panel .household-aggregate-card__chart-caption { display: flex !important; flex-wrap: wrap; }
 html body .app-shell.app-shell .calendar-dashboard .household-aggregate-panel .household-aggregate-chart-preview-button { flex: none !important; height: auto !important; min-height: 150px; }
 html body .app-shell.app-shell .calendar-dashboard .household-entry-panel { container: calendar-entry / inline-size; }
@@ -178,8 +173,6 @@ html body .app-shell.app-shell .calendar-dashboard-grid.household-calendar-layou
 @media (max-width: 760px) {
   html body .app-shell.app-shell .calendar-overview-toolbar { padding: 12px; gap: 10px; }
   html body .app-shell.app-shell .calendar-overview-toolbar > div { width: 100%; }
-  html body .app-shell.app-shell .calendar-overview-toolbar__filters > label { flex: 1; }
-  html body .app-shell.app-shell .calendar-overview-toolbar__filters select { width: 100%; }
   html body .app-shell.app-shell .calendar-overview-toolbar__settings > button { flex: 1; }
   html body .app-shell.app-shell .calendar-draft-toolbar { flex-direction: column; align-items: stretch; position: static; padding: 12px; }
   html body .app-shell.app-shell .calendar-draft-toolbar > div:first-child { flex-direction: column; align-items: flex-start; }
@@ -202,3 +195,19 @@ html body .app-shell.app-shell .calendar-dashboard-grid.household-calendar-layou
   .personalization-footer > div { width: 100%; }
   .personalization-footer .button { flex: 1; }
 }
+
+@container (max-width: 600px) {
+  html body .app-shell.app-shell .calendar-query-toolbar__date,
+  html body .app-shell.app-shell .calendar-query-toolbar__filters { width: 100%; }
+  html body .app-shell.app-shell .calendar-query-toolbar__filters > label { flex: 1 1 145px; }
+  html body .app-shell.app-shell .calendar-query-toolbar__filters select { width: 100%; }
+  html body .app-shell.app-shell .calendar-query-toolbar__filters > .button { flex: 1 1 auto; }
+  html body .app-shell.app-shell .calendar-query-toolbar :is(.button, select) { min-height: 44px; }
+  html body .app-shell.app-shell .calendar-query-toolbar select { font-size: 13px; padding-left: 8px; }
+  html body .app-shell.app-shell .calendar-query-toolbar .button { padding-inline: 10px; }
+}
+
+/* Calendar tools use real palette space. Scroll the palette instead of squeezing transaction details out of each day. */
+html:not([data-layout-mode='mobile']) body .app-shell.app-shell .calendar-dashboard .household-calendar-panel .calendar-shell { flex: 1 0 auto; height: auto; overflow: visible; }
+html:not([data-layout-mode='mobile']) body .app-shell.app-shell .calendar-dashboard .household-calendar-panel :is(.calendar-scale-frame, .calendar-scale-content, .calendar__weeks) { height: auto; }
+html:not([data-layout-mode='mobile']) body .app-shell.app-shell .calendar-dashboard .household-calendar-panel .calendar__weeks { grid-auto-rows: minmax(max(128px, var(--calendar-day-min-height)), auto); }

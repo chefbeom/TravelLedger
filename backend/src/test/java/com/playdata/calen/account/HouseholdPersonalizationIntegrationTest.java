@@ -24,6 +24,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
+import org.springframework.mock.web.MockHttpSession;
 import org.springframework.test.web.servlet.MockMvc;
 
 @SpringBootTest(properties = {
@@ -190,6 +191,27 @@ class HouseholdPersonalizationIntegrationTest {
         JsonNode automatic = write(owner, reset, 200);
         assertThat(automatic.at("/widgets/0/cardWidth").isNull()).isTrue();
         assertThat(automatic.at("/widgets/0/cardHeight").isNull()).isTrue();
+    }
+
+    @Test void anotherAuthenticatedDeviceRestoresTheCompleteAccountPaletteFromTheDatabase() throws Exception {
+        var firstDevice = new MockHttpSession();
+        var secondDevice = new MockHttpSession();
+        ObjectNode request = draft(owner);
+        ((ObjectNode) request.at("/widgets/0")).put("title", "다른 컴퓨터에서도 유지").put("cardWidth", 310).put("cardHeight", 230)
+                .put("textSize", "LARGE").put("textColor", "SKY").put("showPeriod", false).put("showDetails", false);
+        ((ObjectNode) request.at("/layout/1")).put("w", 5).put("h", 7);
+        ((ObjectNode) request.path("preferences")).put("receiptOcrPanelEnabled", false).put("highlightMode", "income");
+        JsonNode committed = mapper.readTree(mvc.perform(put(PATH).session(firstDevice)
+                        .with(user(AppUserPrincipal.from(owner))).with(csrf()).contentType(MediaType.APPLICATION_JSON)
+                        .content(mapper.writeValueAsBytes(request)))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
+        AppUser freshlyLoadedOwner = users.findById(owner.getId()).orElseThrow();
+        JsonNode restored = mapper.readTree(mvc.perform(get(PATH).session(secondDevice)
+                        .with(user(AppUserPrincipal.from(freshlyLoadedOwner))))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
+        assertThat(firstDevice.getId()).isNotEqualTo(secondDevice.getId());
+        assertThat(restored).isEqualTo(committed);
+        assertThat(read(createUser()).at("/widgets/0/title").asText()).isNotEqualTo("다른 컴퓨터에서도 유지");
     }
 
     @Test void invalidDirectWidgetDimensionsCannotChangeSavedSettings() throws Exception {

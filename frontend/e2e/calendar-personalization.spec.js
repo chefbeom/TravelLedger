@@ -128,18 +128,21 @@ test('custom saved rows are not rearranged by reading, resize or cancel', async 
   expect(state.saved.layout).toEqual(saved.layout)
 })
 
-test('a newer browser-only layout is preserved for explicit review rather than overwritten', async ({ page }) => {
+test('server layout wins over a stale browser cache even when its computer clock is ahead', async ({ page }) => {
   const saved = calendarSettings()
   const local = saved.layout.map(panel => ({ ...panel, y: panel.y + 7 }))
   await page.addInitScript(layout => localStorage.setItem('calen-household-calendar-panel-layout:v3:2', JSON.stringify({ savedAt: Date.parse('2026-10-22T12:00:00Z'), layout })), local)
   const state = await mockPersonalization(page, { saved, layoutUpdatedAt: '2026-10-21T12:00:00Z' })
   await page.getByRole('button', { name: '개인화 설정', exact: true }).click()
-  await expect(dialog(page)).toContainText('이 브라우저에 보관된 배치가 서버 값과 다릅니다')
+  await expect(dialog(page)).toHaveAttribute('aria-busy', 'false')
+  await expect(dialog(page)).not.toContainText('이 브라우저에 보관된 배치가 서버 값과 다릅니다')
   await dialog(page).getByText('고급 배치 좌표', { exact: true }).click()
-  await expect(dialog(page).getByLabel('세로 위치 (0부터)', { exact: true })).toHaveValue('9')
-  await dialog(page).getByRole('button', { name: '변경사항 저장', exact: true }).click()
+  await expect(dialog(page).getByLabel('세로 위치 (0부터)', { exact: true })).toHaveValue('2')
+  await expect(dialog(page).getByRole('button', { name: '변경사항 저장', exact: true })).toBeDisabled()
+  await dialog(page).getByRole('button', { name: '취소', exact: true }).click()
   await expect(dialog(page)).toHaveCount(0)
-  expect(state.writes[0].layout).toEqual(local)
+  expect(state.writes).toEqual([])
+  expect(state.saved.layout).toEqual(saved.layout)
 })
 
 test('common preview follows text styles, visibility and the existing graph options', async ({ page }) => {

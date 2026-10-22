@@ -13,9 +13,9 @@ export function calendarSettings() {
   }
 }
 
-export async function mockPersonalization(page, { saved = calendarSettings(), failSave = false, conflict = false, layoutUpdatedAt = null } = {}) {
-  const state = { saved, writes: [], reads: [], failSave, conflict, errors: [] }
-  const entry = { id: 7, entryDate: '2026-10-22', entryTime: '12:30', entryType: 'EXPENSE', amount: 15000, title: '검증용 식사', categoryGroupId: 101, categoryDetailId: 102, paymentMethodId: 103 }
+export async function mockPersonalization(page, { saved = calendarSettings(), failSave = false, conflict = false, layoutUpdatedAt = null, sharedStore = null, entryOverrides = {} } = {}) {
+  const state = sharedStore || { saved, writes: [], reads: [], failSave, conflict, errors: [] }
+  const entry = { id: 7, entryDate: '2026-10-22', entryTime: '12:30', entryType: 'EXPENSE', amount: 15000, title: '검증용 식사', categoryGroupId: 101, categoryDetailId: 102, paymentMethodId: 103, ...entryOverrides }
   page.on('pageerror', error => state.errors.push(error.message))
   await page.route(/^https?:\/\/(?!127\.0\.0\.1|localhost)/, route => route.abort())
   await page.route('**/api/**', async route => {

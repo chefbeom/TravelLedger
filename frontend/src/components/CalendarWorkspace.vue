@@ -431,8 +431,6 @@ let layoutModeObserver = null
 let layoutGridRebuildTimer = 0
 let layoutRemoteHydrationSequence = 0
 let layoutChangedDuringRemoteHydration = false
-let calendarPanelLayoutLocalSavedAt = 0
-let localLayoutNeedsReview = false
 let viewPreferenceRemoteHydrationSequence = 0
 let viewPreferenceChangedDuringRemoteHydration = false
 let calendarDayLongPressTimer = 0
@@ -1519,6 +1517,8 @@ onMounted(() => {
 onBeforeUnmount(() => {
   stopDirectPointer?.()
   personalizationLoadSequence++
+  layoutRemoteHydrationSequence++
+  viewPreferenceRemoteHydrationSequence++
   window.removeEventListener('beforeunload', handlePersonalizationBeforeUnload)
   window.removeEventListener('calen:before-preference-navigation', handlePersonalizationNavigation)
   if (layoutGridRebuildTimer) {
@@ -1639,20 +1639,26 @@ async function loadPersonalizationSession() {
     const saved = await fetchHouseholdPersonalization()
     if (sequence !== personalizationLoadSequence || !isAggregateEditMode.value) return
     if (!saved?.revision || !Array.isArray(saved.widgets)) throw new Error('개인 설정을 불러오지 못했습니다. 다시 시도해 주세요.')
-    // A null server value means this user only has a legacy local setting. Keep it until explicit Save.
+    // Account settings are authoritative across devices. Only use legacy local values when the server has none.
     const fallback = currentPersonalization()
-    const keepLocalLayout = localLayoutNeedsReview && Array.isArray(saved.layout) && personalizationChanged(normalizeCalendarPanelLayout(saved.layout), fallback.layout)
-    applyPersonalizationSettings({ preferences: saved.preferences || fallback.preferences, layout: keepLocalLayout ? fallback.layout : saved.layout || fallback.layout, widgets: saved.widgets })
+    applyPersonalizationSettings({ preferences: saved.preferences || fallback.preferences, layout: saved.layout || fallback.layout, widgets: saved.widgets })
     personalizationRevision.value = saved.revision
+    const baseline = {
+      ...currentPersonalization(),
+      preferences: normalizeCalendarViewPreferences(saved.preferences) || defaultCalendarViewPreferences(),
+      layout: normalizeCalendarPanelLayout(saved.layout),
+    }
     personalizationSnapshot.value = {
       settings: clonePersonalization(currentPersonalization()),
-      baseline: clonePersonalization({ ...currentPersonalization(), layout: normalizeCalendarPanelLayout(saved.layout || fallback.layout) }),
+      baseline: clonePersonalization(baseline),
       filters: personalizationSnapshot.value?.filters || { highlight: calendarHighlightMode.value, week: calendarWeekMode.value, offset: calendarPreviousWeekOffset.value },
     }
     // Restore the temporary view filters while keeping permanent defaults separate.
     calendarHighlightMode.value = personalizationSnapshot.value.filters.highlight
     calendarWeekMode.value = personalizationSnapshot.value.filters.week
-    if (keepLocalLayout) personalizationNotice.value = '이 브라우저에 보관된 배치가 서버 값과 다릅니다. 보관된 배치를 초안으로 유지했습니다. 저장하거나 서버 설정으로 다시 열 수 있습니다.'
+    if ((!saved.layout || !saved.preferences) && personalizationChanged(baseline, currentPersonalization())) {
+      personalizationNotice.value = '이 브라우저에만 보관된 설정이 있습니다. 변경사항 저장을 누르면 계정에 저장되어 다른 컴퓨터에서도 사용할 수 있습니다.'
+    }
   } catch (error) {
     if (sequence === personalizationLoadSequence) personalizationError.value = error.message || '개인 설정을 불러오지 못했습니다.'
   } finally {
@@ -1700,7 +1706,6 @@ function cancelPersonalization() {
 
 async function reloadPersonalization() {
   if (personalizationSaving.value || (personalizationDirty.value && !window.confirm('편집 내용을 폐기하고 서버의 최신 설정을 불러올까요?'))) return
-  localLayoutNeedsReview = false
   await loadPersonalizationSession()
   if (personalizationRevision.value) {
     persistCalendarViewPreferencesLocal(true)
@@ -1718,7 +1723,6 @@ async function savePersonalization() {
     const saved = await saveHouseholdPersonalization({ revision: personalizationRevision.value, ...currentPersonalization() })
     if (!saved?.revision || !Array.isArray(saved.widgets) || !Array.isArray(saved.layout) || !saved.preferences) throw new Error('저장 응답을 확인하지 못했습니다. 최신 설정을 다시 확인해 주세요. 초안은 유지됩니다.')
     applyPersonalizationSettings(saved)
-    localLayoutNeedsReview = false
     // Cache only a confirmed server commit. Cache failures must not turn a successful save into a retry.
     try { persistCalendarViewPreferencesLocal(true); persistCalendarPanelLayoutLocal(Date.now(), true) } catch { /* Server is authoritative. */ }
     emit('personalization-saved', saved.widgets)
@@ -2256,7 +2260,7 @@ function hydrateCalendarPanelLayout() {
     const recommendedLayout = createDefaultCalendarPanelLayout()
     calendarPanelLayout.value = recommendedLayout
     persistCalendarPanelLayoutLocal()
-    hydrateRemoteCalendarPanelLayout(layoutRemoteHydrationSequence, clone(recommendedLayout))
+    hydrateRemoteCalendarPanelLayout(layoutRemoteHydrationSequence)
     return
   }
 
@@ -2266,29 +2270,25 @@ function hydrateCalendarPanelLayout() {
       throw new Error('Invalid calendar panel layout cache.')
     }
     calendarPanelLayout.value = normalizeCalendarPanelLayout(restoredLayout.layout)
-    localLayoutNeedsReview = true
-    calendarPanelLayoutLocalSavedAt = restoredLayout.savedAt
     persistCalendarPanelLayoutLocal(restoredLayout.savedAt)
-    hydrateRemoteCalendarPanelLayout(layoutRemoteHydrationSequence, clone(calendarPanelLayout.value), { preferLocal: true })
+    hydrateRemoteCalendarPanelLayout(layoutRemoteHydrationSequence)
   } catch (_error) {
     const recommendedLayout = createDefaultCalendarPanelLayout()
     calendarPanelLayout.value = recommendedLayout
-    calendarPanelLayoutLocalSavedAt = 0
     persistCalendarPanelLayoutLocal()
-    hydrateRemoteCalendarPanelLayout(layoutRemoteHydrationSequence, clone(recommendedLayout))
+    hydrateRemoteCalendarPanelLayout(layoutRemoteHydrationSequence)
   }
 }
 
 function persistCalendarPanelLayoutLocal(savedAt = Date.now(), force = false) {
   if (typeof window !== 'undefined' && (!isAggregateEditMode.value || force)) {
-    calendarPanelLayoutLocalSavedAt = savedAt
     writeLocalPreference(calendarPanelLayoutStorageKey.value, { savedAt, layout: calendarPanelLayout.value })
   }
 }
 
 
 
-async function hydrateRemoteCalendarPanelLayout(sequence, fallbackLayout, { preferLocal = false } = {}) {
+async function hydrateRemoteCalendarPanelLayout(sequence) {
   try {
     const response = await fetchLayoutSetting(CALENDAR_PANEL_LAYOUT_SCOPE)
     if (sequence !== layoutRemoteHydrationSequence || layoutChangedDuringRemoteHydration) {
@@ -2297,17 +2297,8 @@ async function hydrateRemoteCalendarPanelLayout(sequence, fallbackLayout, { pref
 
     if (Array.isArray(response?.payload)) {
       const remoteUpdatedAt = parseRemoteUpdatedAt(response.updatedAt)
-      if (
-        preferLocal
-        && fallbackLayout
-        && calendarPanelLayoutLocalSavedAt > 0
-        && remoteUpdatedAt > 0
-        && calendarPanelLayoutLocalSavedAt > remoteUpdatedAt
-      ) {
-        return
-      }
-
-      localLayoutNeedsReview = false
+      // Browser timestamps are not comparable with server time (clock skew and other-device saves).
+      // A local copy is only a loading/offline fallback, never a reason to override saved account settings.
       calendarPanelLayout.value = normalizeCalendarPanelLayout(response.payload)
       persistCalendarPanelLayoutLocal(remoteUpdatedAt || Date.now())
       refreshCalendarMeasurements()
@@ -4121,7 +4112,7 @@ defineExpose({
     />
     <CalendarInlineEditor :editor="inlineEditor" :widget="aggregateWidgetDraftConfigs[inlineEditor?.index] || {}"
       :panel="{ ...calendarPanelDefinitions.find(item => item.id === inlineEditor?.panelId), ...calendarPanelLayout.find(item => item.id === inlineEditor?.panelId) }"
-      :preferences="personalizationPreferences" :payment-methods="paymentMethods" :busy="personalizationSaving"
+      :preferences="personalizationPreferences" :payment-methods="paymentMethods" :busy="personalizationSaving || personalizationLoading"
       :can-duplicate="aggregateWidgetDraftConfigs.some(item => item.kind === 'NONE')"
       :mobile="isMobileLayoutMode"
       @close="inlineEditor = null" @widget="updatePersonalizationWidget" @preference="updatePersonalizationPreference" @panel="updatePersonalizationPanel" @hide="hidePalette"
@@ -4129,19 +4120,9 @@ defineExpose({
       @move="movePersonalizationWidget($event); inlineEditor = null" />
     <Teleport to="body"><div v-if="directGesture?.type?.endsWith('move')" class="calendar-direct-ghost" :style="directGhostStyle" aria-hidden="true">{{ directGesture.label }}</div></Teleport>
 
-    <section class="calendar-overview-toolbar" aria-label="달력 조회와 개인화">
-      <div class="calendar-overview-toolbar__date">
-        <button type="button" class="button button--secondary" aria-label="이전 월" @click="shiftAnchorMonth(-1)">‹</button>
-        <label><span class="sr-only">연도</span><select :value="calendarYear" aria-label="연도" @change="handleChangeYear"><option v-for="year in yearOptions" :key="year" :value="year">{{ year }}년</option></select></label>
-        <label><span class="sr-only">월</span><select :value="calendarMonth" aria-label="월" @change="handleChangeMonth"><option v-for="month in 12" :key="month" :value="month">{{ month }}월</option></select></label>
-        <button type="button" class="button button--secondary" aria-label="다음 월" @click="shiftAnchorMonth(1)">›</button>
-        <button type="button" class="button button--ghost" @click="emit('change-anchor-month', todayIso); selectedDate = todayIso">오늘</button>
-      </div>
-      <div class="calendar-overview-toolbar__filters">
-        <label><span class="sr-only">달력 보기</span><select v-model="calendarWeekMode" aria-label="달력 보기"><option v-for="mode in calendarWeekModes" :key="mode.key" :value="mode.key">{{ mode.label }}</option></select></label>
-        <label v-if="calendarWeekMode === 'previous'"><span class="sr-only">이전 주 범위</span><select v-model.number="calendarPreviousWeekOffset" aria-label="이전 주 범위"><option :value="1">1주 전</option><option :value="2">2주 전</option></select></label>
-        <label><span class="sr-only">표시 기준</span><select v-model="calendarHighlightMode" aria-label="표시 기준"><option v-for="mode in calendarHighlightModes" :key="mode.key" :value="mode.key">{{ mode.label }}</option></select></label>
-        <button type="button" class="button button--secondary" @click="openTransactionSheet">거래 시트 열기</button>
+    <section class="calendar-overview-toolbar" aria-label="대시보드 설정">
+      <div class="calendar-overview-toolbar__intro">
+        <strong>나의 대시보드</strong><span>팔레트 배치와 위젯 설정</span>
       </div>
       <div class="calendar-overview-toolbar__settings">
         <button type="button" class="button button--secondary" @click="openPersonalization('dashboard')">개인화 설정</button>
@@ -4225,8 +4206,7 @@ defineExpose({
               @pointerdown="handlePaletteHeaderPointer($event, panel)"
             >
               <span v-if="isLayoutEditMode" class="calendar-palette-move-handle" role="button" tabindex="0" :data-palette-move="panel.id" :aria-label="`${paletteNames[panel.id]} 팔레트 이동`" title="잡아 끌거나 방향키로 이동" @pointerdown="moveMobilePalette($event, panel)">⠿</span>
-              <div v-if="isLayoutEditMode" class="calendar-palette-tools" data-no-drag="true">
-                <button v-if="panel.id === 'aggregate'" type="button" class="button button--secondary" :disabled="!aggregateWidgetDraftConfigs.some(item => item.kind === 'NONE') || personalizationSaving" @click="addDirectWidget($event)">+ 위젯</button>
+              <div v-if="isLayoutEditMode && panel.id !== 'aggregate'" class="calendar-palette-tools" data-no-drag="true">
                 <button type="button" class="button button--secondary" data-inline-editor-trigger :disabled="personalizationSaving || personalizationLoading" @click="openInlineEditor('panel', panel.id, $event)">{{ panel.id === 'quick-entry' ? '입력 설정' : panel.id === 'calendar' ? '달력 설정' : '크기·설정' }}</button>
               </div>
               <template v-if="panel.id === 'quick-entry'">
@@ -4586,6 +4566,11 @@ defineExpose({
           </div>
           <div class="household-aggregate-header__actions">
             <span v-if="isAggregatePanelEnabled && aggregateSettingsReady" class="panel__badge">{{ aggregateBadgeLabel }}</span>
+            <!-- Keep the header footprint identical in view/edit; controls never cover the count badge. -->
+            <div class="calendar-palette-tools calendar-aggregate-tools" :class="{ 'calendar-aggregate-tools--hidden': !isLayoutEditMode }" :aria-hidden="!isLayoutEditMode" :inert="!isLayoutEditMode" data-no-drag="true">
+              <button type="button" class="button button--secondary" :disabled="!isLayoutEditMode || !aggregateWidgetDraftConfigs.some(item => item.kind === 'NONE') || personalizationSaving || personalizationLoading" @click="addDirectWidget($event)">+ 위젯</button>
+              <button type="button" class="button button--secondary calendar-aggregate-settings" aria-label="집계 영역 설정" title="집계 영역 크기·설정" data-inline-editor-trigger :disabled="!isLayoutEditMode || personalizationSaving || personalizationLoading" @click="openInlineEditor('panel', 'aggregate', $event)"><span class="calendar-aggregate-settings__label">집계 영역 설정</span><svg aria-hidden="true" viewBox="0 0 20 20" width="18" height="18"><path d="M3 6h14M3 14h14M7 3v6M13 11v6" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" /></svg></button>
+            </div>
           </div>
         </div>
         <div v-if="!isAggregatePanelEnabled" class="household-aggregate-empty household-aggregate-empty--off">
@@ -4640,11 +4625,11 @@ defineExpose({
               </template>
               <template v-else-if="card.goal">
                 <strong>{{ formatCurrency(card.goal.expense) }}</strong>
-                <small v-if="card.config.showDetails">{{ card.goal.target ? `월 목표 ${formatCurrency(card.goal.target)} 중 ${card.goal.progress}%` : '월 목표 금액을 설정하면 진행률을 표시합니다.' }}</small>
+                <small v-if="card.config.showPeriod || card.config.showDetails"><span v-if="card.config.showPeriod">{{ card.periodLabel }} 기준 </span><span v-if="card.config.showDetails">{{ card.goal.target ? `월 목표 ${formatCurrency(card.goal.target)} 중 ${card.goal.progress}%` : '월 목표 금액을 설정하면 진행률을 표시합니다.' }}</span></small>
               </template>
               <template v-else>
                 <strong>{{ formatCurrency(card.totalAmount) }}</strong>
-                <small v-if="card.config.showPeriod || card.config.showDetails"><span v-if="card.config.showPeriod">{{ card.periodLabel }} 기준 </span><span v-if="card.config.showDetails">{{ card.overview.entryCount }}건</span></small>
+                <small v-if="card.config.showPeriod || card.config.showDetails"><span v-if="card.config.showPeriod">{{ card.periodLabel }} 기준 </span><span v-if="card.config.showDetails">{{ card.overview.count }}건</span></small>
               </template>
             </div>
 
@@ -4826,9 +4811,27 @@ defineExpose({
       ]"
       :style="calendarLayoutStyle"
     >
-      <div class="household-calendar-panel-dragbar">
-        달력 영역
-      </div>
+      <section class="calendar-query-toolbar" aria-label="달력 조회">
+        <div class="calendar-query-toolbar__heading">
+          <h2 :class="{ 'calendar-query-toolbar__title--editing': isLayoutEditMode }">{{ monthLabel }}</h2>
+          <div v-if="isLayoutEditMode" class="household-calendar-panel-dragbar">달력 영역</div>
+        </div>
+        <div class="calendar-query-toolbar__controls" data-no-drag="true">
+          <div class="calendar-query-toolbar__date">
+            <button type="button" class="button button--secondary" aria-label="이전 월" @click="shiftAnchorMonth(-1)">‹</button>
+            <label><span class="sr-only">연도</span><select :value="calendarYear" aria-label="연도" @change="handleChangeYear"><option v-for="year in yearOptions" :key="year" :value="year">{{ year }}년</option></select></label>
+            <label><span class="sr-only">월</span><select :value="calendarMonth" aria-label="월" @change="handleChangeMonth"><option v-for="month in 12" :key="month" :value="month">{{ month }}월</option></select></label>
+            <button type="button" class="button button--secondary" aria-label="다음 월" @click="shiftAnchorMonth(1)">›</button>
+            <button type="button" class="button button--ghost" @click="emit('change-anchor-month', todayIso); selectedDate = todayIso">오늘</button>
+          </div>
+          <div class="calendar-query-toolbar__filters">
+            <label><span class="sr-only">달력 보기</span><select v-model="calendarWeekMode" aria-label="달력 보기"><option v-for="mode in calendarWeekModes" :key="mode.key" :value="mode.key">{{ mode.label }}</option></select></label>
+            <label v-if="calendarWeekMode === 'previous'"><span class="sr-only">이전 주 범위</span><select v-model.number="calendarPreviousWeekOffset" aria-label="이전 주 범위"><option :value="1">1주 전</option><option :value="2">2주 전</option></select></label>
+            <label><span class="sr-only">표시 기준</span><select v-model="calendarHighlightMode" aria-label="표시 기준"><option v-for="mode in calendarHighlightModes" :key="mode.key" :value="mode.key">{{ mode.label }}</option></select></label>
+            <button type="button" class="button button--secondary" @click="openTransactionSheet">거래 시트 열기</button>
+          </div>
+        </div>
+      </section>
       <div ref="calendarShellRef" class="calendar-shell">
         <div class="calendar-scale-frame">
           <div class="calendar-scale-content">
